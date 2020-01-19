@@ -1,0 +1,34 @@
+
+pipeline:
+
+  set_sdk:
+    action: sdk.set
+    target: $target
+    sdk: go:1.12
+
+  deploy:
+    package:
+      action: exec:run
+      comments: vendor build for deployment speedup
+      target: $target
+      checkError: true
+      commands:
+        - export GIT_TERMINAL_PROMPT=1
+        - export GO111MODULE=on
+        - unset GOPATH
+        - cd ${appPath}/
+        - mkdir -p ${buildPath}
+        - cp -r . ${buildPath}
+        - go mod vendor
+        - cd app/standalone
+        - go build datly.go
+        - mkdir -p ${runPath}/config
+        - cp datly ${runPath}
+
+  uploadConfig:
+    action: storage:copy
+    expand: true
+    source:
+      URL: ${appPath}/e2e/config/standalone
+    dest:
+      URL: ${runPath}/config

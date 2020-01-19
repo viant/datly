@@ -1,0 +1,24 @@
+pipeline:
+
+
+  test:
+    tag: $pathMatch
+    description: '@info'
+    subPath: 'cases/${index}_*'
+    range: 1..001
+    template:
+      setVars:
+        action: nop
+        comments: use case init
+        skip: $HasResource(${path}/skip.txt)
+
+      test:
+        when: $HasResource(${path}/test.yaml)
+        action: run
+        request: '@test'
+
+
+    post-test-sleep:
+      action: nop
+      sleepTimeMs: 1000
+      comments: sleep for extra debuging

@@ -1,0 +1,34 @@
+init:
+  app: datly
+  sdk: go:1.12
+  appPath: $Pwd(..)
+  buildPath: /tmp/build/datly
+  runPath:  /tmp/app/datly
+  bqCredentials: gcp-e2e
+  mysqlCredentials: mysql-e2e
+  mysqlSecrets: ${secrets.$mysqlCredentials}
+  dbIP:
+    mysql: 127.0.0.1
+
+pipeline:
+  init:
+    system:
+      action: run
+      request: '@system'
+      tasks: '*'
+
+    datastore:
+      action: run
+      request: '@datastore'
+      tasks: '*'
+
+    app:
+      action: run
+      request: '@app'
+      tasks: '*'
+
+  test:
+    action: run
+    request: '@regression/regression'
+    tasks: '*'
+

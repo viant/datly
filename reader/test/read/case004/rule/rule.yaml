@@ -1,0 +1,4 @@
+URI: /case004/
+views:
+  - table: events
+    connector: db

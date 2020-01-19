@@ -1,0 +1,12 @@
+URI: /case003/
+views:
+  - table: events
+    connector: db
+
+  - table: event_types
+    connector: db
+
+output:
+  - dataView: events
+  - dataView: event_types
+    key: types

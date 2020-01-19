@@ -1,0 +1,27 @@
+URI: /case007/
+views:
+  - table: event_types
+    alias: t
+    connector: db
+    refs:
+      - name: evnts
+        cardinality: Many
+        dataView: events
+        'on':
+          - column: id
+            refColumn: event_type_id
+
+      - name: account
+        cardinality: One
+        dataView: accounts
+        'on':
+          - column: account_id
+            refColumn: id
+
+  - table: events
+    alias: e
+    connector: db
+
+  - table: accounts
+    alias: a
+    connector: db

@@ -1,0 +1,4 @@
+.idea
+mydb.db
+vendor
+go.sum

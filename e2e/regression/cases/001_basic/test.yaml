@@ -1,0 +1,5 @@
+
+pipeline:
+  init:
+    action: print
+    message: test started ...
