@@ -21,7 +21,7 @@ import (
 	_ "github.com/adrianwit/fsc"
 	_ "github.com/adrianwit/mgc"
 )
-var configURL = flag.String("configURL", "config.json", "schedule URL")
+var configURL = flag.String("configURL", "config.json", "config URL")
 
 func main()  {
 	flag.Parse()

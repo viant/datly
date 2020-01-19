@@ -37,4 +37,4 @@ pipeline:
       action: process:start
       directory: ${runPath}
       immuneToHangups: true
-      command: ./datly -configURR=config/config.json -debug=true
+      command: ./datly -configURL=config/config.json -debug=true
