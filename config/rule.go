@@ -6,6 +6,8 @@ import (
 	"datly/data"
 	"github.com/go-errors/errors"
 	"github.com/viant/afs"
+	"github.com/viant/afs/file"
+	"github.com/viant/afs/url"
 	"golang.org/x/net/context"
 	"io/ioutil"
 	"strings"
@@ -33,7 +35,12 @@ func (r *Rule) Init(ctx context.Context, fs afs.Service) (err error) {
 	if len(r.Views) > 0 {
 		for i, view := range r.Views {
 			if view.FromURL != "" && view.From == "" {
-				view.From, err = loadAsset(fs, ctx, view.FromURL)
+				viewURL :=  view.FromURL
+				if url.IsRelative(viewURL) {
+					parentURL, _ := url.Split(r.Info.URL, file.Scheme)
+					viewURL = url.Join(parentURL, viewURL)
+				}
+				view.From, err = loadAsset(fs, ctx, viewURL)
 				if err != nil {
 					return err
 				}

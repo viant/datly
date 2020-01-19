@@ -32,3 +32,9 @@ pipeline:
       URL: ${appPath}/e2e/config/standalone
     dest:
       URL: ${runPath}/config
+  start:
+    transfer:
+      action: process:start
+      directory: ${runPath}
+      immuneToHangups: true
+      command: ./datly -configURR=config/config.json -debug=true
