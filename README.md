@@ -1,4 +1,4 @@
-# Datly - codeless rule based REST/Micro data layer service
+# Datly - codeless rule based data layer service
 
 
 This library is compatible with Go 1.11+
