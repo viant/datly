@@ -1,97 +1,80 @@
 package config
 
 import (
-	"datly/base"
 	"datly/config/rule"
 	"datly/data"
-	"github.com/go-errors/errors"
+	"github.com/pkg/errors"
 	"github.com/viant/afs"
-	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"golang.org/x/net/context"
-	"io/ioutil"
 	"strings"
 )
 
 //Rules represents data rule
 type Rule struct {
-	Info      rule.Info
-	URI       string `json:",omitempty"`
-	URIPrefix string `json:",omitempty"`
-	UseCache  bool   `json:",omitempty"`
+	Info       rule.Info
+	Path       string `json:",omitempty"`
+	PathPrefix string `json:",omitempty"`
+	UseCache   bool   `json:",omitempty"`
 	data.Meta
 }
 
+//Validate checks if rule is valid
 func (r *Rule) Validate() error {
-	if r.URI == "" {
-		return errors.Errorf("URI was empty, %v", r.Info.URL)
+	if r.Path == "" {
+		return errors.Errorf("Path was empty, %v", r.Info.URL)
 	}
 	return r.Meta.Validate()
 }
 
-
-
+//Init initialise rule
 func (r *Rule) Init(ctx context.Context, fs afs.Service) (err error) {
+	if r.TemplateURL != "" {
+		err = r.initTemplate(ctx, fs)
+		if err != nil {
+			return errors.Wrapf(err, "failed to initialise template: %v", r.TemplateURL)
+		}
+	}
+	return r.initRule(ctx, fs)
+}
+
+func (r *Rule) initTemplate(ctx context.Context, fs afs.Service) error {
+	parentURL, _ := url.Split(r.Info.URL, "")
+	templateURL := r.TemplateURL
+	if url.IsRelative(templateURL) {
+		templateURL = url.JoinUNC(parentURL, templateURL)
+	}
+	rule, err := loadRule(ctx, fs, templateURL)
+	if err != nil {
+		return err
+	}
+	r.Meta.SetTemplate(&rule.Meta)
+	return nil
+}
+
+
+func (r *Rule) initRule(ctx context.Context, fs afs.Service) error {
+	parentURL, _ := url.Split(r.Info.URL, "")
+	var err error
 	if len(r.Views) > 0 {
-		for i, view := range r.Views {
-			if view.FromURL != "" && view.From == "" {
-				viewURL :=  view.FromURL
-				if url.IsRelative(viewURL) {
-					parentURL, _ := url.Split(r.Info.URL, file.Scheme)
-					viewURL = url.Join(parentURL, viewURL)
-				}
-				view.From, err = loadAsset(fs, ctx, viewURL)
-				if err != nil {
-					return err
-				}
+		for i, _ := range r.Views {
+			if err = r.Views[i].LoadSQL(ctx, fs, parentURL); err != nil {
+				return err
 			}
-			view.Init()
-			if i > 0 && view.Selector.Prefix == "" {
-				view.Selector.Prefix = view.Name
-			}
+			r.Views [i].Init(i > 0)
 		}
 	}
-
-	if r.URIPrefix == "" && r.URI != "" {
-		uriPrefix := r.URI
-		if index := strings.Index(string(uriPrefix[1:]), "{"); index != -1 {
-			uriPrefix = string(uriPrefix[:index+1])
-		}
-		r.URIPrefix = uriPrefix
-	}
-
-	if len(r.Output) == 0 && len(r.Views) > 0 {
-		key := r.Views[0].Table
-		if key == "" {
-			if key = r.Views[0].Name; key == "" {
-				key = base.DefaultDataOutputKey
-			}
-		}
-		r.Output = []*data.Output{
-			{
-				DataView: r.Views[0].Name,
-				Key:      key,
-			},
-		}
-	}
-
-	if len(r.Output) > 0 {
-		for i := range r.Output {
-			r.Output[i].Init()
-		}
-	}
+	r.Meta.ApplyTemplate()
+	r.initPathPrefix()
 	return r.Meta.Init()
 }
 
-func loadAsset(fs afs.Service, ctx context.Context, URL string) (string, error) {
-	reader, err := fs.DownloadWithURL(ctx, URL)
-	if err != nil {
-		return "", err
+func (r *Rule) initPathPrefix() {
+	if r.PathPrefix == "" && r.Path != "" {
+		uriPrefix := r.Path
+		if index := strings.Index(string(uriPrefix[1:]), "{"); index != -1 {
+			uriPrefix = string(uriPrefix[:index+1])
+		}
+		r.PathPrefix = uriPrefix
 	}
-	defer reader.Close()
-	sql, err := ioutil.ReadAll(reader)
-	if err != nil {
-		return "", err
-	}
-	return string(sql), err
 }

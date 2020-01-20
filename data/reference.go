@@ -61,6 +61,9 @@ func (a *Reference) Columns() []string {
 	return result
 }
 
+
+
+
 //RefColumns returns owner match columns
 func (a *Reference) Criteria(alias string) string {
 	var result = make([]string, 0)

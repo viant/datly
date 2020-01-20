@@ -9,7 +9,7 @@ type Response struct {
 	StatusInfo
 	Registry
 	Headers http.Header `json:",omitempty"`
-
+	TimeTakenMs int
 }
 
 

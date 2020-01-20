@@ -81,9 +81,9 @@ func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {
 	}
 	fs := afs.New()
 	cfs := fs
-	exists, _ := fs.Exists(ctx, URL)
+	exists, err := fs.Exists(ctx, URL)
 	if !exists {
-		return nil, errors.Errorf("not found: %v", URL)
+		return nil, errors.Wrapf(err, "not found: %v", URL)
 	}
 	reader, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {

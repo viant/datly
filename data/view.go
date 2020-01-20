@@ -1,51 +1,121 @@
 package data
 
 import (
+	"context"
+	"datly/generic"
 	"fmt"
-	"github.com/go-errors/errors"
+	"github.com/pkg/errors"
+	"github.com/viant/afs"
+	"github.com/viant/afs/url"
 	"github.com/viant/toolbox/data"
+	"io/ioutil"
 	"strings"
 )
 
 //View represents a data view
 type View struct {
-	Connector     string
-	Name          string
-	Alias         string
-	Table         string        `json:",omitempty"`
-	From          string        `json:",omitempty"`
-	FromURL       string        `json:",omitempty"`
-	Columns       []*Column     `json:",omitempty"`
-	Bindings      []*Binding    `json:",omitempty"`
-	Criteria      *Criteria     `json:",omitempty"`
-	Selector      Selector      `json:",omitempty"`
-	Joins         []*Join       `json:",omitempty"`
-	Refs          []*Reference  `json:",omitempty"`
-	Params        []interface{} `json:",omitempty"`
-}
-
-//AddJoin add join
-func (v *View) AddJoin(join *Join) {
-	v.Joins = append(v.Joins, join)
-
+	Connector  string
+	Name       string
+	Alias      string
+	Table      string        `json:",omitempty"`
+	From       string        `json:",omitempty"`
+	FromURL    string        `json:",omitempty"`
+	Columns    []*Column     `json:",omitempty"`
+	Bindings   []*Binding    `json:",omitempty"`
+	Criteria   *Criteria     `json:",omitempty"`
+	Selector   Selector      `json:",omitempty"`
+	Joins      []*Join       `json:",omitempty"`
+	Refs       []*Reference  `json:",omitempty"`
+	Params     []interface{} `json:",omitempty"`
+	CaseFormat string        `json:",omitempty"`
+	HideRefIDs bool          `json:",omitempty"`
 }
 
 //Clone creates a view clone
 func (v *View) Clone() *View {
 	return &View{
-		Connector: v.Connector,
-		Name:      v.Name,
-		Alias:     v.Alias,
-		Table:     v.Table,
-		From:      v.From,
-		FromURL:   v.FromURL,
-		Columns:   v.Columns,
-		Bindings:  v.Bindings,
-		Criteria:  v.Criteria,
-		Selector:  v.Selector,
-		Refs:      v.Refs,
-		Params:    v.Params,
+		Connector:  v.Connector,
+		Name:       v.Name,
+		Alias:      v.Alias,
+		Table:      v.Table,
+		From:       v.From,
+		FromURL:    v.FromURL,
+		Columns:    v.Columns,
+		Bindings:   v.Bindings,
+		Criteria:   v.Criteria,
+		Selector:   v.Selector,
+		Refs:       v.Refs,
+		Params:     v.Params,
+		CaseFormat: v.CaseFormat,
+		HideRefIDs: v.HideRefIDs,
 	}
+}
+
+//MergeFrom merges from template view
+func (v *View) MergeFrom(tmpl *View) {
+	if v.From == "" {
+		v.From = tmpl.From
+	}
+	if v.Table == "" {
+		v.Table = tmpl.Table
+	}
+	if v.CaseFormat == "" {
+		v.CaseFormat = tmpl.CaseFormat
+	}
+	if v.HideRefIDs {
+		v.HideRefIDs = tmpl.HideRefIDs
+	}
+	if v.Alias == "" {
+		v.Alias = tmpl.Alias
+	}
+	if v.Connector == "" {
+		v.Connector = tmpl.Connector
+	}
+
+	if len(v.Columns) == 0 {
+		v.Columns = tmpl.Columns
+	}
+	if len(v.Refs) == 0 {
+		v.Refs = tmpl.Refs
+	}
+	if len(v.Bindings) == 0 {
+		v.Bindings = tmpl.Bindings
+	}
+	if len(v.Joins) == 0 {
+		v.Joins = tmpl.Joins
+	}
+	if len(v.Params) == 0 {
+		v.Params = tmpl.Params
+	}
+	if v.Criteria == nil {
+		v.Criteria = tmpl.Criteria
+	}
+}
+
+//AddJoin add join
+func (v *View) AddJoin(join *Join) {
+	v.Joins = append(v.Joins, join)
+}
+
+//LoadSQL loads fromSQL
+func (v *View) LoadSQL(ctx context.Context, fs afs.Service, parentURL string) error {
+	if v.FromURL == "" || v.From != "" {
+		return nil
+	}
+	fromURL := v.FromURL
+	if url.IsRelative(v.FromURL) {
+		fromURL = url.JoinUNC(parentURL, v.FromURL)
+	}
+	reader, err := fs.DownloadWithURL(ctx, fromURL)
+	if err != nil {
+		return err
+	}
+	data, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return errors.Wrapf(err, "failed to read: %v", fromURL)
+	}
+	v.From = string(data)
+	return nil
 }
 
 //Validate checks if view is valid
@@ -70,18 +140,27 @@ func (v View) Validate() error {
 			}
 		}
 	}
+
+	if v.CaseFormat != "" {
+		if err := generic.ValidateCaseFormat(v.CaseFormat);err != nil {
+			return errors.Wrapf(err, "invalid view: %v", v.Name)
+		}
+	}
 	return nil
 }
 
-//Init intializes view
-func (v *View) Init() {
+//Init initializes view
+func (v *View) Init(setPrefix bool) {
+
 	if v.Name == "" && v.Table != "" {
 		v.Name = v.Table
 	}
 	if v.Alias == "" {
 		v.Alias = "t"
 	}
-
+	if setPrefix && v.Selector.Prefix == "" {
+		v.Selector.Prefix = v.Name
+	}
 	if len(v.Bindings) > 0 {
 		for i := range v.Bindings {
 			v.Bindings[i].Init()
@@ -101,6 +180,7 @@ const (
 FROM $from ${alias}${joins}${criteria}${orderBy}${limit}`
 )
 
+//BuildSQL build data view SQL
 func (v View) BuildSQL(selector *Selector, bindings map[string]interface{}) (string, []interface{}, error) {
 	projection := v.buildSQLProjection(selector)
 	from := v.buildSQLFom(bindings)
@@ -129,10 +209,8 @@ func (v View) buildSQLFom(bindings data.Map) string {
 	return bindings.ExpandAsText(from)
 }
 
-
 func (v View) buildSQLProjection(selector *Selector) string {
 	projection := v.Alias + ".*"
-
 
 	if len(selector.Columns) > 0 {
 		var columns = make([]string, 0)

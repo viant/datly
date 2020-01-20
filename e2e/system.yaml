@@ -1,17 +1,41 @@
 tasks: $tasks
 pipeline:
-  destroy:
-    stop-images:
-      action: docker:stop
-      images:
-        - mysql
-  run:
-    services:
-      mysql:
-        action: docker:run
-        image: mysql:5.7
-        name: dbsync
-        ports:
-          3306: 3306
-        env:
-          MYSQL_ROOT_PASSWORD: ${mysqlSecrets.Password}
+  runStandAlone:
+    when: $runStandAlone
+    destroy:
+      stop-images:
+        action: docker:stop
+        images:
+          - mysql
+          - postgres
+    run:
+      services:
+        mysql:
+          action: docker:run
+          image: mysql:5.7
+          name: mysqldb1
+          ports:
+            3306: 3306
+          env:
+            MYSQL_ROOT_PASSWORD: ${mysqlSecrets.Password}
+
+        postgres:
+          action: docker:run
+          image: postgres:9.6-alpine
+          name: pgdb2
+          ports:
+            5432: 5432
+          env:
+            POSTGRES_USER: ${pgSecrets.Username}
+            POSTGRES_PASSWORD: ${pgSecrets.Password}
+
+  runOnAws:
+    when: $runOnAws
+    uploadConifg:
+      action: storage:copy
+      expand: true
+      source:
+        URL: config/aws
+      dest:
+        URL: $awsConfigURL
+        credentials: $awsCredentials

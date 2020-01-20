@@ -1,6 +1,7 @@
 pipeline:
   create-db:
     db1:
+      when: $runStandAlone
       action: dsunit:init
       datastore: db1
       recreate: true
@@ -17,3 +18,40 @@ pipeline:
           credentials: $mysqlCredentials
       scripts:
         - URL: datastore/db1/schema.sql
+
+    db2:
+      when: $runStandAlone
+      action: dsunit:init
+      datastore: db2
+      config:
+        driverName: postgres
+        descriptor: host=${dbIP.pg} port=5432 user=[username] password=[password] dbname=[dbname] sslmode=disable
+        credentials: $pgCredentials
+      admin:
+        datastore: postgres
+        config:
+          driverName: postgres
+          descriptor: host=${dbIP.pg} port=5432 user=[username] password=[password] dbname=[dbname] sslmode=disable
+          credentials: $pgCredentials
+          ping: true
+      recreate: true
+      scripts:
+        - URL: datastore/db2/schema.sql
+    db:
+      when: $runOnAws
+      action: dsunit:init
+      datastore: db
+      recreate: false
+      config:
+        driverName: mysql
+        descriptor: '[username]:[password]@tcp(${dbIP.awsMysql}:3306)/[dbname]?parseTime=true'
+        credentials: $awsMysqlCredentials
+      admin:
+        datastore: mysql
+        ping: true
+        config:
+          driverName: mysql
+          descriptor: '[username]:[password]@tcp(${dbIP.awsMysql}:3306)/[dbname]?parseTime=true'
+          credentials: $awsMysqlCredentials
+      scripts:
+        - URL: datastore/db/schema.sql

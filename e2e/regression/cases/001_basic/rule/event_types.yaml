@@ -1,0 +1,6 @@
+path: /case_${parentIndex}/event_type/{id}
+views:
+  - table: event_types
+    connector: db1
+    criteria:
+      expression: id = $id

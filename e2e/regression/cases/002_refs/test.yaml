@@ -1,0 +1,81 @@
+init:
+  parentIndex: ${parent.index}
+
+pipeline:
+  run:
+    when: $runStandAlone
+    prepare:
+      db1:
+        register:
+          action: dsunit:register
+          datastore: db1
+          config:
+            driverName: mysql
+            descriptor: '[username]:[password]@tcp(${dbIP.mysql}:3306)/[dbname]?parseTime=true'
+            credentials: $mysqlCredentials
+        populate:
+          action: dsunit:prepare
+          datastore: db1
+          URL:  ${parent.path}/db1/prepare
+      db2:
+        register:
+          action: dsunit:register
+          datastore: db2
+          config:
+            driverName: postgres
+            descriptor: host=${dbIP.pg} port=5432 user=[username] password=[password] dbname=[dbname] sslmode=disable
+            credentials: $pgCredentials
+        populate:
+          action: dsunit:prepare
+          datastore: db2
+          URL:  ${parent.path}/db2/prepare
+
+    cleanUp:
+      action: storage:remove
+      sleepTimeMs: 1000
+      assets:
+        - URL: '${local.ruleURL}/case_${parentIndex}'
+
+    setupRule:
+      action: storage:copy
+      expand: true
+      source:
+        URL: ${parent.path}/rule/
+      dest:
+        URL: ${local.ruleURL}/case_${parentIndex}
+
+    test:
+      readAllEvents:
+        action: 'rest/runner:send'
+        Method: GET
+        URL: ${local.endpoint}/case_${parentIndex}/events
+        expect:
+          Status: ok
+          '@assertPath@Data.events[0].id': 1
+          '@assertPath@Data.events[10].type.id': 5
+          '@length@Data.events': 11
+
+      applySelector:
+        action: 'rest/runner:send'
+        Method: GET
+        URL: ${local.endpoint}/case_${parentIndex}/events?_fields=id,quantity,event_type_id&_orderBy=id&_criteria=id>3&event_types_fields=id,name&acc_fields=id,name
+        expect:
+          Status: ok
+          '@assertPath@Data.events[0].id': 4
+          '@length@Data.events': 8
+
+      readAllEventType:
+        action: 'rest/runner:send'
+        Method: GET
+        URL: ${local.endpoint}/case_${parentIndex}/event_types
+        expect:
+          Status: ok
+          '@assertPath@Data.event_types[0].id': 1
+          '@length@Data.event_types[0].evnts': 0
+          '@assertPath@Data.event_types[1].id': 2
+          '@length@Data.event_types[1].evnts': 3
+
+  #
+  #  info:
+  #    action: print
+  #    message: $AsJSON(${readAllEventType})

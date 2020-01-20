@@ -32,7 +32,7 @@ func (r *StatusInfo) AddError(location, errType string, err error) {
 	info := &ErrorInfo{
 		Location:location,
 		Type:errType,
-		Message:errType,
+		Message:err.Error(),
 	}
 	r.Errors = append(r.Errors, info)
 }

@@ -1,0 +1,59 @@
+init:
+  parentIndex: ${parent.index}
+
+pipeline:
+  run:
+    when: $runStandAlone
+    prepare:
+      db1:
+        register:
+          action: dsunit:register
+          datastore: db1
+          config:
+            driverName: mysql
+            descriptor: '[username]:[password]@tcp(${dbIP.mysql}:3306)/[dbname]?parseTime=true'
+            credentials: $mysqlCredentials
+        populate:
+          action: dsunit:prepare
+          datastore: db1
+          URL:  ${parent.path}/db1/prepare
+
+
+    cleanUp:
+      action: storage:remove
+      sleepTimeMs: 1000
+      assets:
+        - URL: '${local.ruleURL}/case_${parentIndex}'
+
+    setupRule:
+      action: storage:copy
+      expand: true
+      source:
+        URL: ${parent.path}/rule/
+      dest:
+        URL: ${local.ruleURL}/case_${parentIndex}
+
+    test:
+      events:
+        action: 'rest/runner:send'
+        Method: GET
+        URL: ${local.endpoint}/case_${parentIndex}/events
+        expect:
+          Status: ok
+          '@assertPath@Data.events[0].id': 1
+          '@assertPath@Data.events[0].eventTypeId': 2
+          '@length@Data.events': 11
+
+      eventTypes:
+        action: 'rest/runner:send'
+        Method: GET
+        URL: ${local.endpoint}/case_${parentIndex}/event_types
+        expect:
+          Status: ok
+          '@assertPath@Data.event_types[0].Id': 1
+          '@assertPath@Data.event_types[0].AccountId': 33
+          '@length@Data.event_types': 5
+
+  #  info:
+  #    action: print
+  #    message: $AsJSON(${eventTypes})

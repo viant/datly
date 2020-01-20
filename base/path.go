@@ -5,58 +5,58 @@ import (
 	"strings"
 )
 
-//MatchURI parses URIs to match and extract {<param>} defined in rule.URI from request.URI,
-//it returns extracted parameters and flag if requestURI matched templateURI
-func MatchURI(templateURI, requestURI string) (map[string]string, bool) {
+//MatchPath parses Paths to match and extract {<param>} defined in rule.Path from request.Path,
+//it returns extracted parameters and flag if requestPath matched templatePath
+func MatchPath(templatePath, requestPath string) (map[string]string, bool) {
 	var expectingValue, expectingName bool
 	var name, value string
 	var uriParameters = make(map[string]string)
-	maxLength := len(templateURI) + len(requestURI)
-	var requestURIIndex, templateURIIndex int
+	maxLength := len(templatePath) + len(requestPath)
+	var requestPathIndex, templatePathIndex int
 
-	questionMarkPosition := strings.Index(requestURI, "?")
+	questionMarkPosition := strings.Index(requestPath, "?")
 	if questionMarkPosition != -1 {
-		requestURI = string(requestURI[:questionMarkPosition])
+		requestPath = string(requestPath[:questionMarkPosition])
 	}
 
 	for k := 0; k < maxLength; k++ {
 		var requestChar, routingChar string
-		if requestURIIndex < len(requestURI) {
-			requestChar = requestURI[requestURIIndex : requestURIIndex+1]
+		if requestPathIndex < len(requestPath) {
+			requestChar = requestPath[requestPathIndex : requestPathIndex+1]
 		}
 
-		if templateURIIndex < len(templateURI) {
-			routingChar = templateURI[templateURIIndex : templateURIIndex+1]
+		if templatePathIndex < len(templatePath) {
+			routingChar = templatePath[templatePathIndex : templatePathIndex+1]
 		}
 		if (!expectingValue && !expectingName) && requestChar == routingChar && routingChar != "" {
-			requestURIIndex++
-			templateURIIndex++
+			requestPathIndex++
+			templatePathIndex++
 			continue
 		}
 
 		if routingChar == "}" {
 			expectingName = false
-			templateURIIndex++
+			templatePathIndex++
 		}
 
 		if expectingValue && requestChar == "/" {
 			expectingValue = false
 		}
 
-		if expectingName && templateURIIndex < len(templateURI) {
+		if expectingName && templatePathIndex < len(templatePath) {
 			name += routingChar
-			templateURIIndex++
+			templatePathIndex++
 		}
 
 		if routingChar == "{" {
 			expectingValue = true
 			expectingName = true
-			templateURIIndex++
+			templatePathIndex++
 		}
 
-		if expectingValue && requestURIIndex < len(requestURI) {
+		if expectingValue && requestPathIndex < len(requestPath) {
 			value += requestChar
-			requestURIIndex++
+			requestPathIndex++
 		}
 
 		if !expectingValue && !expectingName && len(name) > 0 {
@@ -70,7 +70,7 @@ func MatchURI(templateURI, requestURI string) (map[string]string, bool) {
 	if len(name) > 0 && len(value) > 0 {
 		uriParameters[name] = value
 	}
-	matched := requestURIIndex == len(requestURI) && templateURIIndex == len(templateURI)
+	matched := requestPathIndex == len(requestPath) && templatePathIndex == len(templatePath)
 	return uriParameters, matched
 }
 

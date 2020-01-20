@@ -18,7 +18,6 @@ CREATE TABLE event_types (
 );
 
 
-
 DROP TABLE IF EXISTS accounts;
 CREATE TABLE accounts (
     id         INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,

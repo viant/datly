@@ -1,16 +1,24 @@
 pipeline:
 
+  getAwsEndpointURL:
+    when: $runOnAws
+    action: aws/apigateway:getRestAPI
+    '@name': DataAPI
+    credentials: $awsCredentials
+    post:
+      awsEndpointURL: ${EndpointURL}
 
   test:
     tag: $pathMatch
     description: '@info'
     subPath: 'cases/${index}_*'
-    range: 1..001
+    range: 1..006
     template:
       setVars:
         action: nop
         comments: use case init
         skip: $HasResource(${path}/skip.txt)
+
 
       test:
         when: $HasResource(${path}/test.yaml)

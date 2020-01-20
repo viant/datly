@@ -17,8 +17,8 @@ const (
 )
 
 const ( //Binding soures
-	//BindingURI binding URI source
-	BindingURI = "URI"
+	//BindingPath binding Path source
+	BindingPath = "Path"
 	//BindingQueryString binding query string source
 	BindingQueryString = "QueryString"
 	//BindingDataView binding data view source
@@ -82,3 +82,5 @@ const ( //Selector keys
 	//OffsetKey offset key
 	OffsetKey = "_offset"
 )
+
+

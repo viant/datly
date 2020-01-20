@@ -25,11 +25,13 @@ type service struct {
 	baseURL string
 }
 
+//Put puts value to cache
 func (s *service) Put(ctx context.Context, key string, data []byte) error {
 	URL := url.Join(s.baseURL, key)
 	return s.fs.Upload(ctx, URL, file.DefaultFileOsMode, bytes.NewReader(data))
 }
 
+//Get returns value from a cache
 func (s *service) Get(ctx context.Context, key string) ([]byte, *time.Time, error) {
 	URL := url.Join(s.baseURL, key)
 	object, _ := s.fs.Object(ctx, URL, option.NewObjectKind(true))
@@ -49,6 +51,7 @@ func (s *service) Get(ctx context.Context, key string) ([]byte, *time.Time, erro
 	return data, &modified, nil
 }
 
+//Delete deletes cache value
 func (s *service) Delete(ctx context.Context, key string) error {
 	URL := url.Join(s.baseURL, key)
 	return s.fs.Delete(ctx, URL, option.NewObjectKind(true))

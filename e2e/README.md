@@ -7,7 +7,7 @@
 
 1. Install endly e2e runner as [binary](https://github.com/viant/endly/releases) or endly docker image:
 
-This instruction was prepared with endly version 0.46.2
+This instruction was prepared with endly version 0.47.0
 
 **Docker**
 
@@ -21,6 +21,7 @@ endly -v
 endly -c=localhost #provide user root and password dev
 ```
 
+
 **Local machine**
 
 To download endly on your machine use the following [link](https://github.com/viant/endly/releases)
@@ -28,11 +29,74 @@ Once endly is installed on your machine enable and add [SSH Credetials](https://
 
 ##### Setting up test credentials
 
-1. Create mysql credentials:
-
+**Create local database credentials:**
 ```bash
 # use user root with password dev
 endly -c=mysql-e2e  
+# use user root with password dev
+endly -c=pq-e2e
+
+```
+**Create AWS databases/credentials (optional)**
+- Create RDS MySQL with password based auth and public endpoint (testing only)
+- Create credentials file
+```bash
+endly -c=aws-mysql-e2e
+````
+- Modify credential ~/.secret/aws-mysql-e2e.json file with database Endpoint
+@~/.secret/aws-mysql-e2e.json
+```json
+{ "Endpoint": "db.xxxxxxx.us-west-1.rds.amazonaws.com", "Username":"root","EncryptedPassword":"*****"}
+```
+
+
+##### Clone the this project:
+```bash
+git clone https://github.com/viant/datly.git
+cd datly/e2e
+```
+
+Update in run.yaml:
+
+For AWS test cases:
+- awsConfigBucket
+- runOnAws set to true (false by default)
+
+When using endly docker image:
+
+- useDockerDBIP set to true
+
+## Use cases
+
+To run all test use the following command:
+
+```bash
+endly run.yaml
+```
+
+To run individual use cases run first init task,  followed by individual case run.
+
+```json
+endly -t=init
+```
+
+- [Basic Data View](regression/cases/001_basic)
+
+```bash
+    endly -t=test -i=basic
+```
+
+- [Data View References](regression/cases/002_refs)
+
+```bash
+    endly -t=test -i=refs
+```
+
+
+- [Data View Templates](regression/cases/003_templates)
+
+```bash
+    endly -t=test -i=templates
 ```
 
 

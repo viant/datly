@@ -11,6 +11,8 @@ type Field struct {
 	Type  reflect.Type
 	provider *Provider
 	index int
+	formattedName string
+	hidden bool
 }
 
 //Init sets a field value

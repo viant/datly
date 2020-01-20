@@ -9,7 +9,7 @@ import (
 type Binding struct {
 	Name          string `json:",omitempty"`
 	Placeholder   string `json:",omitempty"`
-	Type          string `json:",omitempty"` //URI,QueryString,DataView,Parent
+	Type          string `json:",omitempty"` //Path,QueryString,DataView,Parent
 	DataType      string `json:",o mitempty"`
 	ComponentType string `json:",omitempty"`
 	DataView      string `json:",omitempty"`
@@ -34,7 +34,7 @@ func (b *Binding) Init() {
 //Validate checks if binding is valid
 func (b Binding) Validate() error {
 	switch b.Type {
-	case base.BindingQueryString, base.BindingURI, base.BindingData, base.BindingHeader:
+	case base.BindingQueryString, base.BindingPath, base.BindingData, base.BindingHeader:
 	case base.BindingDataView:
 		if b.DataView == "" {
 			return errors.Errorf("dataView was empty for %v binding type", b.Type)

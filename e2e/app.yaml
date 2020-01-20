@@ -1,4 +1,6 @@
-
+init:
+  readerAppArchive: ${buildPath}/app/aws/reader/reader.zip
+  readerPrivilegePolicy: policy/reader.json
 pipeline:
 
   set_sdk:
@@ -6,7 +8,7 @@ pipeline:
     target: $target
     sdk: go:1.12
 
-  deploy:
+  build:
     package:
       action: exec:run
       comments: vendor build for deployment speedup
@@ -18,23 +20,84 @@ pipeline:
         - unset GOPATH
         - cd ${appPath}/
         - mkdir -p ${buildPath}
+        - rm -rf ${buildPath}
+        - mkdir -p ${buildPath}
         - cp -r . ${buildPath}
+        - cd ${buildPath}
         - go mod vendor
+        - echo 'Building standalone app'
         - cd app/standalone
         - go build datly.go
         - mkdir -p ${runPath}/config
+        - rm -rf ${runPath}/config
+        - mkdir -p ${runPath}/config
         - cp datly ${runPath}
+        - echo 'Building lambda reader'
+        - cd ${buildPath}
+        - cd app/aws/reader
+        - export GOOS=linux
+        - export GOARCH=amd64
+        - go build reader.go
+        - zip -j reader.zip reader
 
-  uploadConfig:
-    action: storage:copy
-    expand: true
-    source:
-      URL: ${appPath}/e2e/config/standalone
-    dest:
-      URL: ${runPath}/config
-  start:
-    transfer:
-      action: process:start
-      directory: ${runPath}
-      immuneToHangups: true
-      command: ./datly -configURL=config/config.json -debug=true
+  deploy:
+    standAlone:
+      when: $runStandAlone
+      uploadConfig:
+        action: storage:copy
+        expand: true
+        source:
+          URL: ${appPath}/e2e/config/standalone
+        dest:
+          URL: ${runPath}/config
+      start:
+        transfer:
+          action: process:start
+          directory: ${runPath}
+          immuneToHangups: true
+          command: ./datly -configURL=config/config.json
+
+    onAws:
+      when: $runOnAws
+      deploy:
+        action: aws/lambda:deploy
+        credentials: $awsCredentials
+#        vpcMatcher:
+#          vpc:
+#            name: mysql-e2e
+
+        functionname: DataReader
+        runtime:  go1.x
+        timeout: 540
+        environment:
+          variables:
+            CONFIG: ${awsConfigURL}/config.json
+            LOGGING: true
+        handler: reader
+        code:
+          zipfile: $LoadBinary(${readerAppArchive})
+        rolename: DataReaderRole
+        define:
+          - policyname: lambda-reader-execution-role
+            policydocument: $Cat('${readerPrivilegePolicy}')
+        attach:
+          - policyarn: arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - policyarn: arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+
+      deployGatewayAPI:
+        redeploy: true
+        action: aws/apigateway:setupRestAPI
+        credentials: $awsCredentials
+        '@name': DataAPI
+        resources:
+          - path: /
+            methods:
+              - httpMethod: GET
+                functionname: DataReader
+          - path: /{proxy+}
+            methods:
+              - httpMethod: GET
+                functionname: DataReader
+
+post:
+  awsEndpointURL: ${deployGatewayAPI.EndpointURL}

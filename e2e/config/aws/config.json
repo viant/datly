@@ -1,0 +1,8 @@
+{
+  "Rules": {
+    "URL": "${awsLocation.ruleURL}"
+  },
+  "Connectors": {
+    "URL": "${awsLocation.connectorURL}"
+  }
+}

@@ -11,4 +11,7 @@ type Collection interface {
 	Objects(handler func(item *Object) (toContinue bool,  err error)) error
 	//Size returns collection size
 	Size() int
+	//Proto return collection component prototype
+	Proto() *Proto
+
 }

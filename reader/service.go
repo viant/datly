@@ -31,12 +31,19 @@ type service struct {
 	cfs    afs.Service
 }
 
-//Read reads data for matched request URI
+//Read reads data for matched request Path
 func (s *service) Read(ctx context.Context, request *Request) *Response {
 	response := NewResponse()
+	defer response.OnDone()
+	if base.IsLoggingEnabled() {
+		toolbox.Dump(request)
+	}
 	err := s.read(ctx, request, response)
 	if err != nil {
 		response.AddError(base.ErrorTypeException, "service.Read", err)
+	}
+	if base.IsLoggingEnabled() {
+		toolbox.Dump(response)
 	}
 	return response
 }
@@ -46,13 +53,13 @@ func (s *service) read(ctx context.Context, request *Request, response *Response
 	if err != nil {
 		response.RuleError = err.Error()
 	}
-	rule, uriParams := s.config.Rules.Match(request.URI)
+	rule, uriParams := s.config.Rules.Match(request.Path)
 	if rule == nil {
 		response.Status = base.StatusNoMatch
 		return nil
 	}
 	response.Rule = rule
-	request.URIParams = uriParams
+	request.PathParams = uriParams
 
 	waitGroup := &sync.WaitGroup{}
 	waitGroup.Add(len(rule.Output))
@@ -78,6 +85,7 @@ func (s *service) readOutputData(rule *config.Rule, output *data.Output, ctx con
 	selector := view.Selector.Clone()
 	genericProvider := generic.NewProvider()
 	collection := genericProvider.NewSlice()
+	selector.CaseFormat = output.CaseFormat
 	err = s.readViewData(ctx, collection, selector, view, rule, request, response)
 	if err == nil {
 		response.Put(output.Key, collection)
@@ -116,6 +124,9 @@ func (s *service) readViewData(ctx context.Context, collection generic.Collectio
 	})
 	query.FetchTimeMs = base.ElapsedInMs(startTime)
 	response.Metrics.AddQuery(query)
+	if selector.CaseFormat != view.CaseFormat {
+		collection.Proto().OutputCaseFormat(view.CaseFormat, selector.CaseFormat)
+	}
 	if err != nil {
 		return errors.Wrapf(err, "failed to read data with rule: %v", rule.Info.URL)
 	}
@@ -145,7 +156,7 @@ func (s *service) assembleBinding(ctx context.Context, view *data.View, rule *co
 	var result = make(map[string]interface{})
 	base.MergeValues(request.QueryParams, result)
 	base.MergeMap(request.Data, result)
-	base.MergeValues(request.URIParams, result)
+	base.MergeValues(request.PathParams, result)
 	var err error
 	if len(view.Bindings) > 0 {
 
@@ -162,8 +173,8 @@ func (s *service) assembleBinding(ctx context.Context, view *data.View, rule *co
 				value = request.Data[binding.Name]
 			case base.BindingQueryString:
 				value = request.QueryParams.Get(binding.Name)
-			case base.BindingURI:
-				value = request.URIParams.Get(binding.Name)
+			case base.BindingPath:
+				value = request.PathParams.Get(binding.Name)
 			default:
 				return nil, errors.Errorf("unsupported binding source: %v", binding.Type)
 			}
@@ -241,10 +252,17 @@ func (s *service) readRefs(ctx context.Context, owner *data.View, selector *data
 	if len(refs) == 0 {
 		return
 	}
-	for i := range refs {
+
+	for i, ref := range refs {
+		if ! selector.IsSelected(ref.Columns()){//when selector comes with columns, make sure that reference is within that list.
+			group.Done()
+			continue
+		}
 		go s.readRefData(owner, refs[i], selector, bindings, response, ctx, rule, request, refData, group)
 	}
 }
+
+
 
 func (s *service) readRefData(owner *data.View, ref *data.Reference, selector *data.Selector, bindings map[string]interface{}, response *Response, ctx context.Context, rule *config.Rule, request *Request, refData *base.Registry, group *sync.WaitGroup) {
 	defer group.Done()
@@ -260,8 +278,11 @@ func (s *service) readRefData(owner *data.View, ref *data.Reference, selector *d
 	} else {
 		collection = provider.NewMultimap(ref.RefIndex())
 	}
-
-	err = s.readViewData(ctx, collection, view.Selector.Clone(), view, rule, request, response)
+	refViewSelector := view.Selector.Clone()
+	if refViewSelector.CaseFormat == "" {
+		refViewSelector.CaseFormat = selector.CaseFormat
+	}
+	err = s.readViewData(ctx, collection, refViewSelector, view, rule, request, response)
 	if err != nil {
 		response.AddError(base.ErrorTypeException, "service.readViewData", err)
 	}
@@ -295,9 +316,14 @@ func (s *service) buildRefView(owner *data.View, ref *data.Reference, selector *
 }
 
 
-func (s *service) assignRefs(view *data.View, ownerCollection generic.Collection, refData map[string]generic.Collection) error {
+func (s *service) assignRefs(owner *data.View, ownerCollection generic.Collection, refData map[string]generic.Collection) error {
 	return ownerCollection.Objects(func(item *generic.Object) (b bool, err error) {
-		for _, ref := range view.Refs {
+		for _, ref := range owner.Refs {
+			if owner.HideRefIDs {
+				for _, column := range ref.Columns() {
+					ownerCollection.Proto().Hide(column)
+				}
+			}
 			data, ok := refData[ref.Name]
 			if !ok {
 				continue

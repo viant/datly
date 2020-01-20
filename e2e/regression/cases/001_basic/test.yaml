@@ -1,5 +1,70 @@
+init:
+  parentIndex: ${parent.index}
 
 pipeline:
-  init:
-    action: print
-    message: test started ...
+  run:
+    when: $runStandAlone
+    prepare:
+      db1:
+        register:
+          action: dsunit:register
+          datastore: db1
+          config:
+            driverName: mysql
+            descriptor: '[username]:[password]@tcp(${dbIP.mysql}:3306)/[dbname]?parseTime=true'
+            credentials: $mysqlCredentials
+        populate:
+          action: dsunit:prepare
+          datastore: db1
+          URL:  ${parent.path}/db1/prepare
+
+
+    cleanUp:
+      action: storage:remove
+      sleepTimeMs: 1000
+      assets:
+        - URL: '${local.ruleURL}/case_${parentIndex}'
+
+    setupRule:
+      action: storage:copy
+      expand: true
+      source:
+        URL: ${parent.path}/rule/
+      dest:
+        URL: ${local.ruleURL}/case_${parentIndex}
+
+    test:
+      matchEvents:
+        action: 'rest/runner:send'
+        Method: GET
+        URL: ${local.endpoint}/case_${parentIndex}/events
+        expect:
+          Status: ok
+          '@assertPath@Data.events[0].id': 1
+          '@length@Data.events': 11
+
+      matchEventsEventTypes:
+        action: 'rest/runner:send'
+        Method: GET
+        URL: ${local.endpoint}/case_${parentIndex}/event_type/1
+        expect:
+          Status: ok
+          '@assertPath@Data.event_types[0].id': 1
+          '@length@Data.event_types': 1
+
+      matchEventsEventAndTypes:
+        action: 'rest/runner:send'
+        Method: GET
+        URL: ${local.endpoint}/case_${parentIndex}/events_and_types?_limit=3&event_types_limit=4
+        expect:
+          Status: ok
+          '@assertPath@Data.types[0].id': 1
+          '@length@Data.types': 4
+          '@assertPath@Data.events[0].id': 1
+          '@length@Data.events': 3
+
+
+
+  #  info:
+  #    action: print
+  #    message: $AsJSON(${readAll})

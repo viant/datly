@@ -15,7 +15,7 @@ func TestMap_Object(t *testing.T) {
 
 	}{
 		{
-			description: "single field  imdex",
+			description: "single field index",
 			values: []map[string]interface{}{
 				{
 					"k1": "v1",

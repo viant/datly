@@ -7,19 +7,27 @@ import (
 	"net/http"
 	"net/url"
 )
+
 //Request represents base request
 type Request struct {
 	TraceID string
-	URI string
+	Path string
 	Headers http.Header
-	URIParams url.Values
+	PathParams url.Values
 	QueryParams url.Values
 	Data map[string]interface{}
+	CaseFormat string `json:",omitempty"` //source data case format
 }
-//Init initialises reqeust
+
+
+//Init initialises request
 func (r *Request) Init(request *http.Request) error {
 	if request.URL != nil {
-		r.URI = request.RequestURI
+		r.Path = request.RequestURI
+	}
+	if URL := request.URL;URL != nil {
+		r.QueryParams = URL.Query()
+		r.Path = URL.Path
 	}
 	r.Headers = request.Header
 	if request.Body != nil {
@@ -28,18 +36,21 @@ func (r *Request) Init(request *http.Request) error {
 			return err
 		}
 		_ = request.Body.Close()
-		err = json.Unmarshal(data, &r.Data)
-		if err != nil {
-			return errors.Wrapf(err, "failed to decode body: %s", data)
+		if len(data) > 0 && json.Valid(data) {
+			err = json.Unmarshal(data, &r.Data)
+			if err != nil {
+				return errors.Wrapf(err, "failed to decode body: '%s'", data)
+			}
 		}
 	}
 	return nil
 }
 
+
 //Validate checks if request is valid
 func (r *Request) Validate() error {
-	if r.URI == "" {
-		return errors.Errorf("URI was empty")
+	if r.Path == "" {
+		return errors.Errorf("Path was empty")
 	}
 	return nil
 }

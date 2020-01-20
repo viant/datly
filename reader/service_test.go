@@ -29,13 +29,13 @@ func TestService_Read(t *testing.T) {
 		config         *config.Config
 		hasConfigError bool
 		hasReadError   bool
-		caseDataURI    string
+		caseDataPath    string
 		request        *Request
 		expect         interface{}
 	}{
 		{
 			description: "basic data read",
-			caseDataURI: "/case001/",
+			caseDataPath: "/case001/",
 			config: &config.Config{
 				Connectors: config.Connectors{
 					URL: connectorURL,
@@ -47,7 +47,7 @@ func TestService_Read(t *testing.T) {
 			request: &Request{
 						Request: base.Request{
 							TraceID: "case 001",
-							URI:     "/case001/",
+							Path:     "/case001/",
 						},
 			},
 
@@ -62,7 +62,7 @@ func TestService_Read(t *testing.T) {
 
 		{
 			description: "data view binding",
-			caseDataURI: "/case002/",
+			caseDataPath: "/case002/",
 			config: &config.Config{
 				Connectors: config.Connectors{
 					URL: connectorURL,
@@ -74,7 +74,7 @@ func TestService_Read(t *testing.T) {
 			request: &Request{
 				Request: base.Request{
 					TraceID: "case 002",
-					URI:     "/case002/36/blah",
+					Path:     "/case002/36/blah",
 				},
 			},
 
@@ -88,7 +88,7 @@ func TestService_Read(t *testing.T) {
 		},
 		{
 			description: "multi data selection",
-			caseDataURI: "/case003/",
+			caseDataPath: "/case003/",
 			config: &config.Config{
 				Connectors: config.Connectors{
 					URL: connectorURL,
@@ -100,7 +100,7 @@ func TestService_Read(t *testing.T) {
 			request: &Request{
 				Request: base.Request{
 					TraceID: "case 003",
-					URI:     "/case003/",
+					Path:     "/case003/",
 				},
 			},
 
@@ -116,7 +116,7 @@ func TestService_Read(t *testing.T) {
 
 		{
 			description: "query selector",
-			caseDataURI: "/case004/",
+			caseDataPath: "/case004/",
 			config: &config.Config{
 				Connectors: config.Connectors{
 					URL: connectorURL,
@@ -128,7 +128,7 @@ func TestService_Read(t *testing.T) {
 			request: &Request{
 				Request: base.Request{
 					TraceID: "case 004",
-					URI:     "/case004/",
+					Path:     "/case004/",
 					QueryParams: url.Values{
 						"_fields":  []string{"id,timestamp"},
 						"_orderBy": []string{"timestamp"},
@@ -148,7 +148,7 @@ func TestService_Read(t *testing.T) {
 		},
 		{
 			description: "selector criteria",
-			caseDataURI: "/case005/",
+			caseDataPath: "/case005/",
 			config: &config.Config{
 				Connectors: config.Connectors{
 					URL: connectorURL,
@@ -160,7 +160,7 @@ func TestService_Read(t *testing.T) {
 			request: &Request{
 				Request: base.Request{
 					TraceID: "case 005",
-					URI:     "/case005/",
+					Path:     "/case005/",
 					Headers: http.Header{
 						"User-Id": []string{
 							"2",
@@ -183,7 +183,7 @@ func TestService_Read(t *testing.T) {
 
 		{
 			description: "multi selector",
-			caseDataURI: "/case006/",
+			caseDataPath: "/case006/",
 			config: &config.Config{
 				Connectors: config.Connectors{
 					URL: connectorURL,
@@ -195,7 +195,7 @@ func TestService_Read(t *testing.T) {
 			request: &Request{
 				Request: base.Request{
 					TraceID: "case 006",
-					URI:     "/case006/",
+					Path:     "/case006/",
 					QueryParams: url.Values{
 						"_fields":      []string{"id,timestamp"},
 						"_limit":       []string{"3"},
@@ -215,7 +215,7 @@ func TestService_Read(t *testing.T) {
 		},
 		{
 			description: "one to many reference",
-			caseDataURI: "/case007/",
+			caseDataPath: "/case007/",
 			config: &config.Config{
 				Connectors: config.Connectors{
 					URL: connectorURL,
@@ -227,7 +227,7 @@ func TestService_Read(t *testing.T) {
 			request: &Request{
 				Request: base.Request{
 					TraceID: "case 007",
-					URI:     "/case007/",
+					Path:     "/case007/",
 					QueryParams: url.Values{
 						"_criteria": []string{"account_id IN(33, 37)"},
 					},
@@ -238,14 +238,14 @@ func TestService_Read(t *testing.T) {
 	  "Status": "ok",
 	  "Data": {
 		"@length@event_types": 3,
-		"@assertPath@event_types[0].account.id": 34
+		"@assertPath@event_types[0].account.id": 33
 	  }
 }`,
 		},
 
 		{
 			description: "one to one reference",
-			caseDataURI: "/case008/",
+			caseDataPath: "/case008/",
 			config: &config.Config{
 				Connectors: config.Connectors{
 					URL: connectorURL,
@@ -257,7 +257,7 @@ func TestService_Read(t *testing.T) {
 			request: &Request{
 				Request: base.Request{
 					TraceID: "case 008",
-					URI:     "/case008/events/1",
+					Path:     "/case008/events/1",
 				},
 			},
 
@@ -274,7 +274,7 @@ func TestService_Read(t *testing.T) {
 		if !dsunit.InitFromURL(t, path.Join(testLocation, "test", "config.yaml")) {
 			return
 		}
-		initDataset := dsunit.NewDatasetResource("db", path.Join(testLocation, fmt.Sprintf("test/read%vprepare", useCase.caseDataURI)), "", "")
+		initDataset := dsunit.NewDatasetResource("db", path.Join(testLocation, fmt.Sprintf("test/read%vprepare", useCase.caseDataPath)), "", "")
 		if !dsunit.Prepare(t, dsunit.NewPrepareRequest(initDataset)) {
 			return
 		}

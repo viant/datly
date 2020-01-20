@@ -1,0 +1,4 @@
+name: db
+config:
+  driverName: mysql
+  descriptor: '${awsMysqlSecrets.Username}:${awsMysqlSecrets.Password}@tcp(${dbIP.awsMysql}:3306)/db?parseTime=true'

@@ -2,9 +2,14 @@ package generic
 
 //Map represents generic map
 type Map struct {
-	proto *Proto
-	_map  map[string][]interface{}
-	index Index
+	_proto *Proto
+	_map   map[string][]interface{}
+	index  Index
+}
+
+//Proto returns map _proto
+func (m *Map) Proto() *Proto {
+	return m._proto
 }
 
 //Range call handler with every slice element
@@ -18,7 +23,7 @@ func (s Map) Range(handler func(item interface{}) (bool, error)) error {
 
 //Add add item to a map
 func (m *Map) Add(values map[string]interface{}) {
-	object := &Object{proto: m.proto, _data: make([]interface{}, 0)}
+	object := &Object{_proto: m._proto, _data: make([]interface{}, 0)}
 	object.Init(values)
 	key := m.index(values)
 	m._map[key] = object._data
@@ -33,7 +38,7 @@ func (m Map) Size() int {
 //Pairs iterate over object slice, any update to objects are applied to the slice
 func (m *Map) Pairs(handler func(key string, item *Object) (bool, error)) error {
 	aMap := m._map
-	object := &Object{proto: m.proto}
+	object := &Object{_proto: m._proto}
 	for key, item := range aMap {
 		object._data = item
 		next, err := handler(key, object)
@@ -48,7 +53,7 @@ func (m *Map) Pairs(handler func(key string, item *Object) (bool, error)) error 
 //Objects iterate over object slice, any update to objects are applied to the slice
 func (m *Map) Objects(handler func(item *Object) (bool, error)) error {
 	aMap := m._map
-	object := &Object{proto: m.proto}
+	object := &Object{_proto: m._proto}
 	for key, item := range aMap {
 		object._data = item
 		next, err := handler(object)
@@ -68,6 +73,6 @@ func (m *Map) Object(key string) *Object {
 	if ! ok {
 		return nil
 	}
-	return &Object{proto: m.proto, _data: data}
+	return &Object{_proto: m._proto, _data: data}
 }
 

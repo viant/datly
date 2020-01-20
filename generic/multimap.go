@@ -2,14 +2,21 @@ package generic
 
 //Multimap represents generic  multi map
 type Multimap struct {
-	proto *Proto
-	_map  map[string][][]interface{}
+	_proto *Proto
+	_map   map[string][][]interface{}
 	index Index
 }
 
+
+//Proto returns multimap _proto
+func (m *Multimap) Proto() *Proto {
+	return m._proto
+}
+
+
 //Add add item to a map
 func (m *Multimap) Add(values map[string]interface{}) {
-	object := &Object{proto: m.proto, _data: make([]interface{}, 0)}
+	object := &Object{_proto: m._proto, _data: make([]interface{}, 0)}
 	object.Init(values)
 	key := m.index(values)
 	if _, ok := m._map[key]; !ok {
@@ -41,7 +48,7 @@ func (m *Multimap) Objects(handler func(item *Object) (bool, error)) error {
 	next := false
 	var err error
 	for key, item := range aMap {
-		slice := &Slice{proto: m.proto, _data: item}
+		slice := &Slice{_proto: m._proto, _data: item}
 		err = slice.Objects(func(item *Object) (b bool, err error) {
 			next, err = handler(item)
 			return next, err
@@ -58,7 +65,7 @@ func (m *Multimap) Objects(handler func(item *Object) (bool, error)) error {
 func (m *Multimap) Slices(handler func(key string, value *Slice) (bool, error)) error {
 	aMap := m._map
 	for key, item := range aMap {
-		slice := &Slice{proto: m.proto, _data: item}
+		slice := &Slice{_proto: m._proto, _data: item}
 		next, err := handler(key, slice)
 		aMap[key] = slice._data
 		if !next || err != nil {
@@ -74,5 +81,5 @@ func (m *Multimap) Slice(key string) *Slice {
 	if ! ok {
 		return nil
 	}
-	return &Slice{proto: m.proto, _data: data}
+	return &Slice{_proto: m._proto, _data: data}
 }

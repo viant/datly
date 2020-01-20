@@ -1,0 +1,4 @@
+path: /case_${parentIndex}/events
+views:
+  - table: events
+    connector: db1

@@ -12,23 +12,22 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	_ "github.com/viant/asc"
 	_ "github.com/viant/bgc"
+	_ "github.com/viant/afsc/s3"
+	_ "github.com/viant/afsc/gs"
+	"github.com/viant/toolbox/url"
 	"log"
 	"net/http"
 	"os"
 
-	_ "github.com/adrianwit/dyndb"
-	_ "github.com/adrianwit/fbc"
-	_ "github.com/adrianwit/fsc"
-	_ "github.com/adrianwit/mgc"
 )
 var configURL = flag.String("configURL", "config.json", "config URL")
 
 func main()  {
 	flag.Parse()
 	ctx := context.Background()
-
-	fmt.Printf("config: %v\n", *configURL)
-	service, err  := singleton.Reader(ctx, *configURL)
+	URL := url.NewResource(*configURL).URL
+	fmt.Printf("using config: %v\n", URL)
+	service, err  := singleton.Reader(ctx, URL)
 	if err != nil {
 		log.Fatal(err)
 	}

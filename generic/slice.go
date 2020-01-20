@@ -7,13 +7,19 @@ import (
 
 //Slice represents dynamic object slice
 type Slice struct {
-	proto *Proto
-	_data [][]interface{}
+	_proto *Proto
+	_data  [][]interface{}
+}
+
+
+//Proto returns slice _proto
+func (s *Slice) Proto() *Proto {
+	return s._proto
 }
 
 //Add add elements to a slice
 func (s *Slice) Add(aMap map[string]interface{}) {
-	values := s.proto.asValues(aMap)
+	values := s._proto.asValues(aMap)
 	data := s._data
 	data = append(data, values)
 	s._data = data
@@ -27,7 +33,7 @@ func (s Slice) Size() int {
 //Objects iterate over object slice, any update to objects are applied to the slice
 func (s *Slice) Objects(handler func(item *Object) (bool, error)) error {
 	data := s._data
-	object := &Object{proto: s.proto}
+	object := &Object{_proto: s._proto}
 	for i, item := range data {
 		object._data = item
 		next, err := handler(object)

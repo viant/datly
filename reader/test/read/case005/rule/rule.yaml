@@ -1,4 +1,4 @@
-URI: /case005/
+Path: /case005/
 views:
   - table: events
     connector: db

@@ -1,4 +1,4 @@
-URI: /case007/
+Path: /case007/
 views:
   - table: event_types
     alias: t

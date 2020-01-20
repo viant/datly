@@ -1,4 +1,4 @@
-URI: /case008/events/{id}/type
+Path: /case008/events/{id}/type
 views:
   - table: event_types
     connector: db

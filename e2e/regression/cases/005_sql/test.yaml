@@ -1,0 +1,50 @@
+init:
+  parentIndex: ${parent.index}
+
+pipeline:
+  run:
+    when: $runStandAlone
+    prepare:
+      db1:
+        register:
+          action: dsunit:register
+          datastore: db1
+          config:
+            driverName: mysql
+            descriptor: '[username]:[password]@tcp(${dbIP.mysql}:3306)/[dbname]?parseTime=true'
+            credentials: $mysqlCredentials
+        populate:
+          action: dsunit:prepare
+          datastore: db1
+          URL:  ${parent.path}/db1/prepare
+
+
+    cleanUp:
+      action: storage:remove
+      sleepTimeMs: 1000
+      assets:
+        - URL: '${local.ruleURL}/case_${parentIndex}'
+
+    setupRule:
+      action: storage:copy
+      expand: true
+      source:
+        URL: ${parent.path}/rule/
+      dest:
+        URL: ${local.ruleURL}/case_${parentIndex}
+
+    test:
+      readAll:
+        action: 'rest/runner:send'
+        Method: GET
+        URL: ${local.endpoint}/case_${parentIndex}/vevents
+        expect:
+          Status: ok
+          '@assertPath@Data.vevents[0].id': 1
+          '@assertPath@Data.vevents[0].account_id': 33
+          '@assertPath@Data.vevents[0].event_type_name': type 2
+          '@length@Data.vevents': 11
+
+#    info:
+#      action: print
+#      message: $AsJSON(${readAll})

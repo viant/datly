@@ -20,7 +20,6 @@ type Rules struct {
 	Loader   *base.Loader
 }
 
-
 // Len is the number of elements in the collection.
 func (o Rules) Len() int {
 	return len(o.rules)
@@ -36,9 +35,8 @@ func (o Rules) Swap(i, j int) {
 // Less reports whether the element with
 // index i should sort before the element with index j.
 func (o Rules) Less(i, j int) bool {
-	return  len(o.rules[i].URI) > len(o.rules[j].URI)
+	return len(o.rules[i].Path) > len(o.rules[j].Path)
 }
-
 
 func (r *Rules) Init(ctx context.Context, fs afs.Service) error {
 	r.registry = make(map[string]*Rule)
@@ -47,16 +45,15 @@ func (r *Rules) Init(ctx context.Context, fs afs.Service) error {
 	return err
 }
 
-
 //TODO optimize matching
-func (r Rules) Match(URI string) (*Rule, url.Values) {
+func (r Rules) Match(Path string) (*Rule, url.Values) {
 	if len(r.rules) == 0 {
 		return nil, nil
 	}
 	values := url.Values{}
 	for _, rule := range r.rules {
-		if strings.HasPrefix(URI, rule.URIPrefix) {
-			params, matched := base.MatchURI(rule.URI, URI)
+		if strings.HasPrefix(Path, rule.PathPrefix) {
+			params, matched := base.MatchPath(rule.Path, Path)
 			if ! matched {
 				continue
 			}
@@ -69,11 +66,9 @@ func (r Rules) Match(URI string) (*Rule, url.Values) {
 	return nil, nil
 }
 
-
-
 func (r *Rules) modify(ctx context.Context, fs afs.Service, URL string) error {
-	 err := r.Load(ctx, fs, URL)
-	 return err
+	err := r.Load(ctx, fs, URL)
+	return err
 }
 
 func (r *Rules) remove(ctx context.Context, fs afs.Service, URL string) error {
@@ -81,49 +76,51 @@ func (r *Rules) remove(ctx context.Context, fs afs.Service, URL string) error {
 	return nil
 }
 
-
 func (r *Rules) Load(ctx context.Context, fs afs.Service, URL string) error {
-	reader, err := fs.DownloadWithURL(ctx, URL)
-	if err != nil {
-		return errors.Wrapf(err, "failed to load resource: %v", URL)
-	}
+
 	if len(r.rules) == 0 {
 		r.rules = make([]*Rule, 0)
 	}
+	rule, err := loadRule(ctx, fs, URL)
+	if err == nil {
+		err = rule.Validate()
+	}
+	if err != nil {
+		return err
+	}
 
+	r.registry[rule.Info.URL] = rule
+	var rules = make([]*Rule, 0)
+	for k := range r.registry {
+		rules = append(rules, r.registry[k])
+	}
+	sort.Sort(&Rules{rules: rules})
+	r.rules = rules
+	return err
+}
 
-
+func loadRule(ctx context.Context, fs afs.Service, URL string) (*Rule, error) {
+	reader, err := fs.DownloadWithURL(ctx, URL)
+	if err != nil {
+		return  nil, errors.Wrapf(err, "failed to load resource: %v", URL)
+	}
 	defer func() {
 		_ = reader.Close()
 	}()
 	data, err := ioutil.ReadAll(reader)
 	if err != nil {
-		return err
+		return  nil, err
 	}
+	var rule *Rule
 	err = loadTarget(data, path.Ext(URL), func() interface{} {
 		return &Rule{}
 	}, func(target interface{}) error {
-		rule, ok := target.(*Rule)
-		if ! ok {
+		rule, _ = target.(*Rule)
+		if rule == nil {
 			return errors.Errorf("invalid rule type %T", target)
 		}
 		rule.Info.URL = URL
-		err := rule.Init(ctx, fs)
-		if err == nil {
-			if err = rule.Validate(); err == nil {
-				r.registry[rule.Info.URL] = rule
-			}
-		}
-		return err
+		return rule.Init(ctx, fs)
 	})
-	if err != nil {
-		return err
-	}
-	var rules = make([]*Rule, 0)
-	for k := range r.registry {
-		rules = append(rules, r.registry[k])
-	}
-	sort.Sort(&Rules{rules:rules})
-	r.rules = rules
-	return err
+	return rule, err
 }

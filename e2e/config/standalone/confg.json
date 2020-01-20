@@ -1,8 +1,0 @@
-{
-  "Rules": {
-    "URL": "${runPath}/config/rules"
-  },
-  "Connectors": {
-    "URL": "${runPath}/config/connectors"
-  }
-}

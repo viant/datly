@@ -1,0 +1,9 @@
+templateURL: ../../tmpl/case_${parentIndex}/events.yaml
+Path: /case_{$parentIndex}/events/{id}
+output:
+  - dataView: events
+
+views:
+  - table: events
+    criteria:
+      expression: id = ${id}

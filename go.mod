@@ -10,20 +10,22 @@ require (
 	github.com/adrianwit/fsc v0.2.0
 	github.com/adrianwit/mgc v0.2.0
 	github.com/aerospike/aerospike-client-go v2.7.0+incompatible // indirect
+	github.com/aws/aws-lambda-go v1.13.3
 	github.com/aws/aws-sdk-go v1.28.4 // indirect
 	github.com/globalsign/mgo v0.0.0-20181015135952-eeefdecb41b8 // indirect
 	github.com/go-errors/errors v1.0.1
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gocql/gocql v0.0.0-20200115135732-617765adbe2d // indirect
-	github.com/googleapis/gax-go v2.0.2+incompatible // indirect
 	github.com/lib/pq v1.3.0
 	github.com/lunixbochs/vtclean v1.0.0 // indirect
 	github.com/mattn/go-sqlite3 v2.0.2+incompatible
+	github.com/onsi/ginkgo v1.11.0 // indirect
+	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/pkg/errors v0.9.0
 	github.com/stretchr/testify v1.4.0
-	github.com/viant/afs v0.12.2
+	github.com/viant/afs v0.14.0
 	github.com/viant/asc v0.5.0
-	github.com/viant/assertly v0.5.1
+	github.com/viant/assertly v0.5.3
 	github.com/viant/bgc v0.7.4
 	github.com/viant/dsc v0.14.1
 	github.com/viant/dsunit v0.10.8

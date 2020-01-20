@@ -11,6 +11,7 @@ import (
 	"strings"
 )
 
+//GetKey returns key
 func GetKey(view string, sql *dsc.ParametrizedSQL) string {
 	name := getHash(sql) +".cache"
 	return path.Join(view, name)
