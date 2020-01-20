@@ -3,6 +3,8 @@
 
 ## Prerequisites
 
+This project uses [endly](https://github.com/viant/endly/) end to end test runner.
+
 ##### Installation
 
 1. Install endly e2e runner as [binary](https://github.com/viant/endly/releases) or endly docker image:
@@ -56,21 +58,23 @@ git clone https://github.com/viant/datly.git
 cd datly/e2e
 ```
 
-Update in run.yaml:
+Update datly/e2e/run.yaml:
 
-For AWS test cases:
-- awsConfigBucket
+To enable AWS test cases update the following:
+- awsConfigBucket 
 - runOnAws set to true (false by default)
 
-When using endly docker image:
+When using endly docker image set
+- useDockerDBIP
 
-- useDockerDBIP set to true
+
 
 ## Use cases
 
 To run all test use the following command:
 
 ```bash
+cd datly/e2e
 endly run.yaml
 ```
 
@@ -97,6 +101,25 @@ endly -t=init
 
 ```bash
     endly -t=test -i=templates
+```
+
+
+- [Data View Case Format Control](regression/cases/004_case_format)
+
+```bash
+    endly -t=test -i=case_format
+```
+
+- [SQL based Data View](regression/cases/005_sql)
+
+```bash
+    endly -t=test -i=sql
+```
+
+- [AWS API Gateway Case](regression/cases/006_apigw_reader)
+
+```bash
+    endly -t=test -i=apigw_reader
 ```
 
 

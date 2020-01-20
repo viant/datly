@@ -24,6 +24,16 @@ This project can be deployed as standalone or serverless with REST or Micro serv
 
 
 
+## End to end testing
+
+Datly is end to end tested, including stand-alone and serverless mode (AWS API Gateway)
+
+You can try on all data ingestion by simply running e2e test cases:
+
+- [Prerequisites](e2e/README.md#prerequisites)
+- [Use cases](e2e/README.md#use-cases)
+
+
 ## Contributing to datly
 
 Datly is an open source project and contributors are welcome!
