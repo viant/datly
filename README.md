@@ -203,14 +203,15 @@ You can access any parameters pool with ${variable}.
 ### Binding
 
 Binding allows to define/redefine parameter pool
- 
+
+
 - Name: source parameter name
 - Placeholder: name in the parameter pool
-- Type: one of the following:
-   * Path, path source where path uses {} to define parameters
-   * QueryString
-   * DataView
-   * Header
+- Type: one of the following
+       * Path, path source where path uses {} to define parameters
+       * QueryString
+       * DataView
+       * Header
 - Default: default value
 
 #### Selector
