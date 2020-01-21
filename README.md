@@ -237,6 +237,8 @@ DataView: source data view name
 Key: output data key:
 
 
+Use [e2e test](e2e/README.md#use-cases) case rule to see acual rule examples.
+
 ## Deployment
 
 TODO add section here
