@@ -54,6 +54,6 @@ pipeline:
           '@assertPath@Data.event_types[0].AccountId': 33
           '@length@Data.event_types': 5
 
-  #  info:
-  #    action: print
-  #    message: $AsJSON(${eventTypes})
+    info:
+      action: print
+      message: $AsJSON(${eventTypes})

@@ -15,7 +15,7 @@ type Connector struct {
 	Config             *dsc.Config
 }
 
-//TODO securing credentials
+//Init initialise connector
 func (c *Connector) Init() error {
 	if c.Dialect == "" {
 		c.Dialect = base.DialectSQL
@@ -23,6 +23,7 @@ func (c *Connector) Init() error {
 	return nil
 }
 
+//Validate checks if connector is valid
 func (c *Connector) Validate() error {
 	if c.Config == nil {
 		return errors.Errorf("config was empty, %v", c.URL)

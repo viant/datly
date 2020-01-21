@@ -12,20 +12,23 @@ import (
 	"time"
 )
 
+//Connectors represents connectors pool
 type Connectors struct {
 	registry map[string]*Connector
 	URL      string
 	Loader   *base.Loader
 }
 
+//Get returns a connector for supplied name
 func (c Connectors) Get(name string) (*Connector, error) {
 	result, ok := c.registry[name]
-	if ! ok {
+	if !ok {
 		return nil, errors.Errorf("failed to lookup connector for %v", name)
 	}
 	return result, nil
 }
 
+//Init initialises connector
 func (c *Connectors) Init(ctx context.Context, fs afs.Service) error {
 	c.registry = make(map[string]*Connector)
 	c.Loader = base.NewLoader(c.URL, time.Second, fs, c.modify, c.remove)
@@ -43,6 +46,7 @@ func (c *Connectors) remove(ctx context.Context, fs afs.Service, URL string) err
 	return nil
 }
 
+//Load load connector
 func (c *Connectors) Load(ctx context.Context, fs afs.Service, URL string) error {
 	reader, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
@@ -59,7 +63,7 @@ func (c *Connectors) Load(ctx context.Context, fs afs.Service, URL string) error
 		return &Connector{}
 	}, func(target interface{}) error {
 		connector, ok := target.(*Connector)
-		if ! ok {
+		if !ok {
 			return errors.Errorf("invalid connector type %T", target)
 		}
 		connector.URL = URL

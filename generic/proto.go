@@ -20,14 +20,14 @@ type Proto struct {
 func (s *Proto) OutputCaseFormat(source, target string) error {
 	var ok bool
 	s.caseFormat, ok = CaseFormat[source]
-	if ! ok {
+	if !ok {
 		return errors.Errorf("invalid case format: %v", source)
 	}
 	s.targetCaseFormat, ok = CaseFormat[target]
-	if ! ok {
+	if !ok {
 		return errors.Errorf("invalid case format: %v", target)
 	}
-	for i, field:= range s.fields {
+	for i, field := range s.fields {
 		s.fields[i].formattedName = toolbox.ToCaseFormat(field.Name, s.caseFormat, s.targetCaseFormat)
 	}
 	return nil
@@ -89,8 +89,6 @@ func (s *Proto) asMap(values []interface{}) map[string]interface{} {
 	}
 	return result
 }
-
-
 
 func reallocateIfNeeded(size int, data []interface{}) []interface{} {
 	if size >= len(data) {

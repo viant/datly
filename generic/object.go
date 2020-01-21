@@ -10,13 +10,12 @@ type Object struct {
 	_data  []interface{}
 }
 
-
 //Proto returns object _proto
 func (o *Object) Proto() *Proto {
 	return o._proto
 }
 
-///Init initialise entire object
+//Init initialise entire object
 func (o *Object) Init(values map[string]interface{}) {
 	o._data = o._proto.asValues(values)
 }
@@ -32,8 +31,8 @@ func (o *Object) SetValue(name string, value interface{}) {
 	field.Set(value, &o._data)
 }
 
-//GetValue get values
-func (o *Object) GetValue(name string) interface{} {
+//Value get values
+func (o *Object) Value(name string) interface{} {
 	field := o._proto.Field(name)
 	if field == nil {
 		return nil
@@ -42,7 +41,7 @@ func (o *Object) GetValue(name string) interface{} {
 }
 
 //MarshalJSON converts object to JSON object
-func (d Object) MarshalJSON() ([]byte, error) {
-	aMap := d._proto.asMap(d._data)
+func (o Object) MarshalJSON() ([]byte, error) {
+	aMap := o._proto.asMap(o._data)
 	return json.Marshal(aMap)
 }

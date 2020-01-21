@@ -15,7 +15,7 @@ type Meta struct {
 	template    *Meta
 }
 
-//AssociationViews returns join views
+//Init initialises views and outputs.
 func (m *Meta) Init() error {
 	m.initOutput()
 	return m.initViews()
@@ -63,8 +63,6 @@ func (m *Meta) initOutput() {
 		}
 	}
 }
-
-
 
 //Validate checks if rules are valid
 func (m *Meta) Validate() error {

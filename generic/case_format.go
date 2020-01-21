@@ -6,7 +6,7 @@ import (
 )
 
 //CaseFormat defines case format map
-var CaseFormat = map[string]int {
+var CaseFormat = map[string]int{
 	CaseUpper:           toolbox.CaseUpper,
 	CaseLower:           toolbox.CaseLower,
 	CaseUpperCamel:      toolbox.CaseUpperCamel,

@@ -14,6 +14,3 @@ const (
 	//CaseLowerUnderscore lower underscore
 	CaseLowerUnderscore = "LowerUnderscore"
 )
-
-
-

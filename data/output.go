@@ -8,8 +8,8 @@ import (
 
 //Output data output
 type Output struct {
-	DataView string `json:",omitempty"`
-	Key string `json:",omitempty"`
+	DataView   string `json:",omitempty"`
+	Key        string `json:",omitempty"`
 	CaseFormat string `json:",omitempty"`
 }
 

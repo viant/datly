@@ -12,14 +12,12 @@ func (m *Map) Proto() *Proto {
 	return m._proto
 }
 
-//Range call handler with every slice element
-func (s Map) Range(handler func(item interface{}) (bool, error)) error {
-	return s.Objects(func(item *Object) (b bool, err error) {
+//Range calls handler with every slice element
+func (m Map) Range(handler func(item interface{}) (bool, error)) error {
+	return m.Objects(func(item *Object) (b bool, err error) {
 		return handler(item.AsMap())
 	})
 }
-
-
 
 //Add add item to a map
 func (m *Map) Add(values map[string]interface{}) {
@@ -33,7 +31,6 @@ func (m *Map) Add(values map[string]interface{}) {
 func (m Map) Size() int {
 	return len(m._map)
 }
-
 
 //Pairs iterate over object slice, any update to objects are applied to the slice
 func (m *Map) Pairs(handler func(key string, item *Object) (bool, error)) error {
@@ -65,14 +62,11 @@ func (m *Map) Objects(handler func(item *Object) (bool, error)) error {
 	return nil
 }
 
-
-
 //Object returns an object for specified key or nil
 func (m *Map) Object(key string) *Object {
 	data, ok := m._map[key]
-	if ! ok {
+	if !ok {
 		return nil
 	}
 	return &Object{_proto: m._proto, _data: data}
 }
-

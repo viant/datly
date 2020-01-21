@@ -67,7 +67,7 @@ func (s *service) read(ctx context.Context, request *Request, response *Response
 	for i := range rule.Output {
 		go func(output *data.Output) {
 			defer waitGroup.Done()
-			err := s.readOutputData(rule, output, ctx, request, response)
+			err := s.readOutputData(ctx, rule, output, request, response)
 			if err != nil {
 				response.AddError(base.ErrorTypeException, "service.readOutputData", err)
 			}
@@ -77,7 +77,7 @@ func (s *service) read(ctx context.Context, request *Request, response *Response
 	return nil
 }
 
-func (s *service) readOutputData(rule *config.Rule, output *data.Output, ctx context.Context, request *Request, response *Response) error {
+func (s *service) readOutputData(ctx context.Context, rule *config.Rule, output *data.Output, request *Request, response *Response) error {
 	view, err := rule.View(output.DataView)
 	if err != nil {
 		return err
@@ -114,7 +114,7 @@ func (s *service) readViewData(ctx context.Context, collection generic.Collectio
 	started := false
 	err = s.readData(ctx, SQL, parameters, view.Connector, func(record data.Record) error {
 		query.Count++
-		if ! started {
+		if !started {
 			started = true
 			query.ExecutionTimeMs = base.ElapsedInMs(startTime)
 			startTime = time.Now()
@@ -224,7 +224,7 @@ func (s *service) loadBindingData(ctx context.Context, rule *config.Rule, bindin
 	query := metric.NewQuery(parametrizedSQL)
 	err = manager.ReadAllWithHandler(SQL, parameters, func(scanner dsc.Scanner) (toContinue bool, err error) {
 		query.Count++
-		if ! started {
+		if !started {
 			started = true
 			query.ExecutionTimeMs = base.ElapsedInMs(startTime)
 			startTime = time.Now()
@@ -254,17 +254,15 @@ func (s *service) readRefs(ctx context.Context, owner *data.View, selector *data
 	}
 
 	for i, ref := range refs {
-		if ! selector.IsSelected(ref.Columns()){//when selector comes with columns, make sure that reference is within that list.
+		if !selector.IsSelected(ref.Columns()) { //when selector comes with columns, make sure that reference is within that list.
 			group.Done()
 			continue
 		}
-		go s.readRefData(owner, refs[i], selector, bindings, response, ctx, rule, request, refData, group)
+		go s.readRefData(ctx, owner, refs[i], selector, bindings, response, rule, request, refData, group)
 	}
 }
 
-
-
-func (s *service) readRefData(owner *data.View, ref *data.Reference, selector *data.Selector, bindings map[string]interface{}, response *Response, ctx context.Context, rule *config.Rule, request *Request, refData *base.Registry, group *sync.WaitGroup) {
+func (s *service) readRefData(ctx context.Context, owner *data.View, ref *data.Reference, selector *data.Selector, bindings map[string]interface{}, response *Response, rule *config.Rule, request *Request, refData *base.Registry, group *sync.WaitGroup) {
 	defer group.Done()
 	view, err := s.buildRefView(owner.Clone(), ref, selector, bindings)
 	if err != nil {
@@ -315,7 +313,6 @@ func (s *service) buildRefView(owner *data.View, ref *data.Reference, selector *
 	return refView, nil
 }
 
-
 func (s *service) assignRefs(owner *data.View, ownerCollection generic.Collection, refData map[string]generic.Collection) error {
 	return ownerCollection.Objects(func(item *generic.Object) (b bool, err error) {
 		for _, ref := range owner.Refs {
@@ -333,14 +330,14 @@ func (s *service) assignRefs(owner *data.View, ownerCollection generic.Collectio
 
 			if ref.Cardinality == base.CardinalityOne {
 				aMap, ok := data.(*generic.Map)
-				if ! ok {
+				if !ok {
 					return false, errors.Errorf("invalid collection: expected : %T, but had %T", aMap, data)
 				}
 				value := aMap.Object(key)
 				item.SetValue(ref.Name, value)
 			} else {
 				aMultimap, ok := data.(*generic.Multimap)
-				if ! ok {
+				if !ok {
 					return false, errors.Errorf("invalid collection: expected : %T, but had %T", aMultimap, data)
 				}
 				value := aMultimap.Slice(key)

@@ -11,7 +11,6 @@ type Slice struct {
 	_data  [][]interface{}
 }
 
-
 //Proto returns slice _proto
 func (s *Slice) Proto() *Proto {
 	return s._proto
@@ -53,14 +52,14 @@ func (s Slice) Range(handler func(item interface{}) (bool, error)) error {
 }
 
 //MarshalJSON converts slice item to JSON array.
-func (d Slice) MarshalJSON() ([]byte, error) {
+func (s Slice) MarshalJSON() ([]byte, error) {
 	buf := new(bytes.Buffer)
 	_, err := buf.Write([]byte("["))
 	if err != nil {
 		return nil, err
 	}
 	i := 0
-	if err = d.Objects(func(object *Object) (b bool, err error) {
+	if err = s.Objects(func(object *Object) (b bool, err error) {
 		if i > 0 {
 			_, err := buf.Write([]byte(","))
 			if err != nil {
@@ -68,13 +67,13 @@ func (d Slice) MarshalJSON() ([]byte, error) {
 			}
 		}
 		i++
-		data, err :=json.Marshal(object)
+		data, err := json.Marshal(object)
 		if err != nil {
 			return false, err
 		}
 		_, err = buf.Write(data)
 		return err == nil, err
-	});err != nil {
+	}); err != nil {
 		return nil, err
 	}
 	if _, err := buf.Write([]byte("]")); err != nil {
@@ -82,6 +81,3 @@ func (d Slice) MarshalJSON() ([]byte, error) {
 	}
 	return buf.Bytes(), nil
 }
-
-
-

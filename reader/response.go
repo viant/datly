@@ -10,10 +10,10 @@ import (
 //Response represents
 type Response struct {
 	base.Response
-	startTime  time.Time
-	RuleError string          `json:",omitempty"`
-	Metrics   *metric.Metrics `json:",omitempty"`
-	Rule      *config.Rule    `json:",omitempty"`
+	startTime   time.Time
+	RuleError   string          `json:",omitempty"`
+	Metrics     *metric.Metrics `json:",omitempty"`
+	Rule        *config.Rule    `json:",omitempty"`
 	TimeTakenMs int
 }
 
@@ -26,7 +26,7 @@ func (r *Response) OnDone() {
 func NewResponse() *Response {
 	return &Response{
 		startTime: time.Now(),
-		Response: *base.NewResponse(),
-		Metrics:  metric.NewMetrics(),
+		Response:  *base.NewResponse(),
+		Metrics:   metric.NewMetrics(),
 	}
 }

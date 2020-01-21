@@ -1,8 +1,8 @@
 package base
 
 import (
-"sync"
-"time"
+	"sync"
+	"time"
 )
 
 //Resources represents a resource
@@ -65,4 +65,3 @@ func NewResources() *Resources {
 		elements: make(map[string]time.Time),
 	}
 }
-

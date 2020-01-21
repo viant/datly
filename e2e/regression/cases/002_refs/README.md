@@ -7,7 +7,7 @@ This use case [test](test.yaml) various aspects data view references:
 The [events.yaml](rule/events.yaml) rule defines an event complex object with:
 - cardinality One
 - hideRefIds flag only on event_type data view thus events object will return both event_type_id field and type object,
-but type object will only return account object but not account_id field.  
+but event_type object will only return account object but not account_id field.  
 
 
 [events.yaml](rule/events.yaml):
@@ -22,9 +22,9 @@ views:
       - name: type
         cardinality: One
         dataView: event_types
-        'on':
-          - column: event_type_id
-            refColumn: id
+            'on':
+              - column: event_type_id
+                refColumn: id
 
   - table: event_types
     hideRefIds: true
@@ -49,7 +49,7 @@ views:
 
 Apply selector test controls data view behaviour with with the following query string parameters:
 
-- client side data view selector: 
+- client side query string based data view selector: 
     * _fields=id,quantity,event_type_id (applied to main events data view)   
     * _orderBy=id   (applied to main events data view)
     * _criteria=id>3 (applied to main events data view)

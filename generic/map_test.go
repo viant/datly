@@ -7,12 +7,10 @@ import (
 
 func TestMap_Object(t *testing.T) {
 
-
 	var useCases = []struct {
 		description string
-		index Index
+		index       Index
 		values      []map[string]interface{}
-
 	}{
 		{
 			description: "single field index",
@@ -31,22 +29,20 @@ func TestMap_Object(t *testing.T) {
 	}
 
 	for _, useCase := range useCases {
-			provider := NewProvider()
-			aMap := provider.NewMap(useCase.index)
-			for _, item := range useCase.values {
-				aMap.Add(item)
-			}
+		provider := NewProvider()
+		aMap := provider.NewMap(useCase.index)
+		for _, item := range useCase.values {
+			aMap.Add(item)
+		}
 
-			for _, item := range useCase.values {
-				key := useCase.index(item)
-				object := aMap.Object(key)
-				objectKey := useCase.index(object)
-				assert.EqualValues(t, key, objectKey, useCase.description)
-				assert.EqualValues(t, item, object.AsMap(), useCase.description)
-			}
-
+		for _, item := range useCase.values {
+			key := useCase.index(item)
+			object := aMap.Object(key)
+			objectKey := useCase.index(object)
+			assert.EqualValues(t, key, objectKey, useCase.description)
+			assert.EqualValues(t, item, object.AsMap(), useCase.description)
+		}
 
 	}
-
 
 }

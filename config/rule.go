@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-//Rules represents data rule
+//Rule represents data rule
 type Rule struct {
 	Info       rule.Info
 	Path       string `json:",omitempty"`
@@ -52,16 +52,15 @@ func (r *Rule) initTemplate(ctx context.Context, fs afs.Service) error {
 	return nil
 }
 
-
 func (r *Rule) initRule(ctx context.Context, fs afs.Service) error {
 	parentURL, _ := url.Split(r.Info.URL, "")
 	var err error
 	if len(r.Views) > 0 {
-		for i, _ := range r.Views {
+		for i := range r.Views {
 			if err = r.Views[i].LoadSQL(ctx, fs, parentURL); err != nil {
 				return err
 			}
-			r.Views [i].Init(i > 0)
+			r.Views[i].Init(i > 0)
 		}
 	}
 	r.Meta.ApplyTemplate()

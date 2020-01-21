@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-//RefIndex represents index function
+//Index represents index function
 type Index func(values interface{}) string
 
 //NewIndex returns an index for supplied keys
@@ -22,11 +22,10 @@ func NewIndex(keys []string) Index {
 	}
 }
 
-
 func indexWithObject(keys []string, object *Object) []string {
 	var result = make([]string, 0)
 	for _, key := range keys {
-		value := object.GetValue(key)
+		value := object.Value(key)
 		if value == nil {
 			result = append(result, "")
 			continue
@@ -44,7 +43,7 @@ func indexFromMap(keys []string, values map[string]interface{}) []string {
 	var result = make([]string, 0)
 	for _, key := range keys {
 		value, ok := values[key]
-		if ! ok {
+		if !ok {
 			result = append(result, "")
 			continue
 		}

@@ -13,7 +13,7 @@ import (
 
 //GetKey returns key
 func GetKey(view string, sql *dsc.ParametrizedSQL) string {
-	name := getHash(sql) +".cache"
+	name := getHash(sql) + ".cache"
 	return path.Join(view, name)
 }
 
@@ -27,12 +27,11 @@ func getHash(sql *dsc.ParametrizedSQL) string {
 	return fmt.Sprintf("%v_%v", fnvHash(expr), md5Hash(expr))
 }
 
-
 //Hash returns fnv fnvHash value
 func md5Hash(key string) string {
 	h := md5.New()
 	_, _ = h.Write([]byte(key))
-	data :=  h.Sum(nil)
+	data := h.Sum(nil)
 	return base64.StdEncoding.EncodeToString(data)
 }
 
@@ -57,4 +56,3 @@ func fnvHash(key string) int {
 	}
 	return int(keyNumeric)
 }
-

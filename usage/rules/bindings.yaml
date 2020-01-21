@@ -1,0 +1,18 @@
+path: /v1/api/account/{accountID}/events
+views:
+  - table: events
+    connector: bigquery_dw
+    criteria:
+      expression: event_type_id IN ($types)
+    bindings:
+      - placeholder: types
+        dataView: event_types
+        default: 0
+
+  - table: event_types
+    connector: myslql_meta
+    selector:
+      columns: [id]
+    criteria:
+      expression: account_id = $accountID
+

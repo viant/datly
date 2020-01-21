@@ -63,8 +63,8 @@ pipeline:
           '@assertPath@Data.events[0].id': 1
           '@length@Data.events': 3
 
-
-
-  #  info:
-  #    action: print
-  #    message: $AsJSON(${readAll})
+#
+#
+#    info:
+#      action: print
+#      message: $AsJSON(${readAll})

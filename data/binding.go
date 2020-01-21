@@ -7,12 +7,12 @@ import (
 
 //Binding represents data binding
 type Binding struct {
-	Name          string `json:",omitempty"`
-	Placeholder   string `json:",omitempty"`
-	Type          string `json:",omitempty"` //Path,QueryString,DataView,Parent
-	DataType      string `json:",o mitempty"`
-	ComponentType string `json:",omitempty"`
-	DataView      string `json:",omitempty"`
+	Name          string      `json:",omitempty"`
+	Placeholder   string      `json:",omitempty"`
+	Type          string      `json:",omitempty"` //Path,QueryString,DataView,Parent
+	DataType      string      `json:",o mitempty"`
+	ComponentType string      `json:",omitempty"`
+	DataView      string      `json:",omitempty"`
 	Default       interface{} `json:",omitempty"`
 }
 

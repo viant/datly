@@ -7,8 +7,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-
-
 func loadTarget(data []byte, ext string, provider func() interface{}, onLoaded func(target interface{}) error) error {
 	target := provider()
 	switch ext {
@@ -18,7 +16,7 @@ func loadTarget(data []byte, ext string, provider func() interface{}, onLoaded f
 		if err != nil {
 			return err
 		}
-		if err := toolbox.DefaultConverter.AssignConverted(target, ruleMap);err != nil {
+		if err := toolbox.DefaultConverter.AssignConverted(target, ruleMap); err != nil {
 			return err
 		}
 	default:

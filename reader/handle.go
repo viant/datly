@@ -13,7 +13,7 @@ func HandleRead(srv Service, filters ...base.Filter) base.Handle {
 	return func(writer http.ResponseWriter, httpRequest *http.Request) {
 		err := handleRequest(httpRequest, writer, filters, srv)
 		if err != nil {
-			http.Error(writer,err.Error(), http.StatusInternalServerError)
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
 		}
 	}
 }
@@ -29,7 +29,7 @@ func handleRequest(httpRequest *http.Request, writer http.ResponseWriter, filter
 	var toContinue bool
 	for i := range filters {
 		toContinue, err = filters[i](&request.Request)
-		if ! toContinue || err != nil {
+		if !toContinue || err != nil {
 			break
 		}
 	}
@@ -47,4 +47,3 @@ func handleRequest(httpRequest *http.Request, writer http.ResponseWriter, filter
 	}
 	return json.NewEncoder(writer).Encode(response)
 }
-

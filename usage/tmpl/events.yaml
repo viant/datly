@@ -1,9 +1,7 @@
-path: /case_${parentIndex}/events
 views:
   - table: events
     alias: e
     connector: db1
-    hideRefIds: true
     refs:
       - name: type
         cardinality: One
@@ -13,7 +11,6 @@ views:
             refColumn: id
 
   - table: event_types
-    hideRefIds: true
     alias: t
     connector: db1
     refs:
@@ -26,6 +23,4 @@ views:
 
   - table: accounts
     alias: a
-    selector:
-      prefix: acc
     connector: db1

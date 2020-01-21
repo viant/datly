@@ -1,12 +1,12 @@
 package base
 
 import (
-"context"
-"github.com/viant/afs"
-"github.com/viant/afs/option"
-"github.com/viant/afs/storage"
-"path"
-"time"
+	"context"
+	"github.com/viant/afs"
+	"github.com/viant/afs/option"
+	"github.com/viant/afs/storage"
+	"path"
+	"time"
 )
 
 //Notify represent notify function
@@ -34,12 +34,10 @@ func (m *Loader) isCheckDue(now time.Time) bool {
 func (m *Loader) notify(ctx context.Context, currentSnapshot []storage.Object) (notified bool, err error) {
 	snapshot := indexResources(currentSnapshot)
 
-
-
 	for URL, lastModified := range snapshot {
 		modTime := m.rules.Get(URL)
 		if modTime == nil {
-			if e := m.onChange(ctx, m.fs, URL);e != nil {
+			if e := m.onChange(ctx, m.fs, URL); e != nil {
 				err = e
 				continue
 			}
@@ -49,7 +47,7 @@ func (m *Loader) notify(ctx context.Context, currentSnapshot []storage.Object) (
 		}
 		if !modTime.Equal(lastModified) {
 			notified = true
-			if e := m.onChange(ctx, m.fs, URL);e != nil {
+			if e := m.onChange(ctx, m.fs, URL); e != nil {
 				err = e
 			}
 		}
@@ -106,4 +104,3 @@ func indexResources(objects []storage.Object) map[string]time.Time {
 	}
 	return indexed
 }
-

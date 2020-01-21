@@ -12,11 +12,11 @@ const (
 	StatusOK = "ok"
 	//StatusNoMatch response rule no matched status
 	StatusNoMatch = "moMatch"
-	//StatusNoMatch response error status
+	//StatusError response error status
 	StatusError = "error"
 )
 
-const ( //Binding soures
+const ( //Binding source types
 	//BindingPath binding Path source
 	BindingPath = "Path"
 	//BindingQueryString binding query string source
@@ -34,8 +34,8 @@ const (
 	DefaultDataOutputKey = "Root"
 )
 
+//The following section defines constant for pagination template dialect (https://en.wikipedia.org/wiki/Select_(SQL)#FETCH_FIRST_clause)
 const (
-	//The following section defines constant for pagination template dialect (https://en.wikipedia.org/wiki/Select_(SQL)#FETCH_FIRST_clause)
 	//DialectSQL dialect supporting LIMIT/OFFSET keyword
 	DialectSQL = "SQL" //regular LIMIT/OFFSET
 	//DialectSQL2008 dialect SQL 2008
@@ -44,8 +44,11 @@ const (
 
 const (
 
-	ErrorTypeException   = "exception"
+	//ErrorTypeException unexpected error
+	ErrorTypeException = "exception"
+	//ErrorTypeInvalidRule invalid rule
 	ErrorTypeInvalidRule = "invalidRule"
+	//ErrorTypeDataValidation invalid validation
 	ErrorTypeDataValidation = "invalid"
 )
 
@@ -82,5 +85,3 @@ const ( //Selector keys
 	//OffsetKey offset key
 	OffsetKey = "_offset"
 )
-
-

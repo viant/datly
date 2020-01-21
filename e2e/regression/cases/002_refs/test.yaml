@@ -75,7 +75,7 @@ pipeline:
           '@assertPath@Data.event_types[1].id': 2
           '@length@Data.event_types[1].evnts': 3
 
-  #
-  #  info:
-  #    action: print
-  #    message: $AsJSON(${readAllEventType})
+
+#    info:
+#      action: print
+#      message: $AsJSON(${readAllEvents})

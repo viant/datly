@@ -1,0 +1,17 @@
+path: /v1/api/events
+views:
+  - table: events
+    alias: e
+    connector: bigquery_dw
+    refs:
+      - name: type
+        cardinality: One
+        dataView: event_types
+        'on':
+          - column: event_type_id
+            refColumn: id
+
+  - table: event_types
+    connector: myslql_meta
+    selector:
+      prefix: tpy

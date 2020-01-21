@@ -1,5 +1,5 @@
-templateURL: ../../tmpl/case_${parentIndex}/events.yaml
-path: /case_${parentIndex}/events/{id}/type
+templateURL: ../../tmpl/events.yaml
+path: /v1/api/events/{id}/type
 output:
   - dataView: event_types
 views:

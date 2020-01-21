@@ -1,0 +1,4 @@
+path: /v1/api/events
+views:
+  - table: evnet_types
+    connector: myslql_meta

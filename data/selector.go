@@ -21,13 +21,13 @@ type Selector struct {
 //Clone clones this selector
 func (s Selector) Clone() *Selector {
 	return &Selector{
-		Prefix:   s.Prefix,
-		Columns:  s.Columns,
-		Criteria: s.Criteria,
-		Limit:    s.Limit,
-		Offset:   s.Offset,
-		CaseFormat:s.CaseFormat,
-		selected: s.selected,
+		Prefix:     s.Prefix,
+		Columns:    s.Columns,
+		Criteria:   s.Criteria,
+		Limit:      s.Limit,
+		Offset:     s.Offset,
+		CaseFormat: s.CaseFormat,
+		selected:   s.selected,
 	}
 }
 
@@ -71,7 +71,7 @@ func (s *Selector) IsSelected(columns []string) bool {
 		return true
 	}
 	for _, column := range columns {
-		if ! s.selected[column] {
+		if !s.selected[column] {
 			return false
 		}
 	}

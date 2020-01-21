@@ -5,10 +5,10 @@ go 1.12
 require (
 	firebase.google.com/go v3.12.0+incompatible // indirect
 	github.com/MichaelS11/go-cql-driver v0.0.0-20190914174813-cf3b3196aa43
-	github.com/adrianwit/dyndb v0.1.0
-	github.com/adrianwit/fbc v0.1.1
-	github.com/adrianwit/fsc v0.2.0
-	github.com/adrianwit/mgc v0.2.0
+	github.com/adrianwit/dyndb v0.1.0 // indirect
+	github.com/adrianwit/fbc v0.1.1 // indirect
+	github.com/adrianwit/fsc v0.2.0 // indirect
+	github.com/adrianwit/mgc v0.2.0 // indirect
 	github.com/aerospike/aerospike-client-go v2.7.0+incompatible // indirect
 	github.com/aws/aws-lambda-go v1.13.3
 	github.com/aws/aws-sdk-go v1.28.4 // indirect
@@ -24,6 +24,7 @@ require (
 	github.com/pkg/errors v0.9.0
 	github.com/stretchr/testify v1.4.0
 	github.com/viant/afs v0.14.0
+	github.com/viant/afsc v0.12.0
 	github.com/viant/asc v0.5.0
 	github.com/viant/assertly v0.5.3
 	github.com/viant/bgc v0.7.4

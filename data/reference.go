@@ -18,7 +18,7 @@ type Reference struct {
 	_view       *View
 	_alias      string
 	_refIndex   generic.Index
-	_index   generic.Index
+	_index      generic.Index
 }
 
 //View returns association view
@@ -31,12 +31,10 @@ func (a *Reference) Index() generic.Index {
 	return a._index
 }
 
-
 //RefIndex returns ref index
 func (a *Reference) RefIndex() generic.Index {
 	return a._refIndex
 }
-
 
 //Alias returns alias
 func (a *Reference) Alias() string {
@@ -61,10 +59,7 @@ func (a *Reference) Columns() []string {
 	return result
 }
 
-
-
-
-//RefColumns returns owner match columns
+//Criteria reference criteria
 func (a *Reference) Criteria(alias string) string {
 	var result = make([]string, 0)
 	for _, on := range a.On {
@@ -73,15 +68,14 @@ func (a *Reference) Criteria(alias string) string {
 	return strings.Join(result, " AND ")
 }
 
-
-//Reference checks if reference is valid
+//Validate checks if reference is valid
 func (a Reference) Validate() error {
 	if a.Name == "" {
 		info, _ := json.Marshal(a)
 		return errors.Errorf("reference 'name' was empty for %s", info)
 	}
 	switch a.Cardinality {
-		case base.CardinalityMany, base.CardinalityOne:
+	case base.CardinalityMany, base.CardinalityOne:
 	default:
 		return errors.Errorf("unsupported reference cardinality: '%s', supported: %v, %v", a.Cardinality, a.Name, base.CardinalityMany, base.CardinalityOne)
 	}

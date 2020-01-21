@@ -4,15 +4,13 @@ package generic
 type Multimap struct {
 	_proto *Proto
 	_map   map[string][][]interface{}
-	index Index
+	index  Index
 }
-
 
 //Proto returns multimap _proto
 func (m *Multimap) Proto() *Proto {
 	return m._proto
 }
-
 
 //Add add item to a map
 func (m *Multimap) Add(values map[string]interface{}) {
@@ -30,9 +28,9 @@ func (m Multimap) Size() int {
 	return len(m._map)
 }
 
-//Range call handler with every slice element
-func (s Multimap) Range(handler func(item interface{}) (bool, error)) error {
-	return s.Slices(func(key string, slice *Slice) (b bool, err error) {
+//Range calls handler with every slice element
+func (m Multimap) Range(handler func(item interface{}) (bool, error)) error {
+	return m.Slices(func(key string, slice *Slice) (b bool, err error) {
 		cont := false
 		err = slice.Objects(func(item *Object) (b bool, err error) {
 			cont, err = handler(item.AsMap())
@@ -61,7 +59,7 @@ func (m *Multimap) Objects(handler func(item *Object) (bool, error)) error {
 	return err
 }
 
-//Objects iterate over object slice, any update to objects are applied to the slice
+//Slices iterate over object slice, any update to objects are applied to the slice
 func (m *Multimap) Slices(handler func(key string, value *Slice) (bool, error)) error {
 	aMap := m._map
 	for key, item := range aMap {
@@ -75,10 +73,10 @@ func (m *Multimap) Slices(handler func(key string, value *Slice) (bool, error)) 
 	return nil
 }
 
-//Object returns a slice for specified key or nil
+//Slice returns a slice for specified key or nil
 func (m *Multimap) Slice(key string) *Slice {
 	data, ok := m._map[key]
-	if ! ok {
+	if !ok {
 		return nil
 	}
 	return &Slice{_proto: m._proto, _data: data}

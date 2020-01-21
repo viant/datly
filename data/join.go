@@ -7,4 +7,3 @@ type Join struct {
 	Table string `json:",omitempty"`
 	On    string `json:",omitempty"`
 }
-

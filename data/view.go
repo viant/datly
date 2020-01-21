@@ -142,7 +142,7 @@ func (v View) Validate() error {
 	}
 
 	if v.CaseFormat != "" {
-		if err := generic.ValidateCaseFormat(v.CaseFormat);err != nil {
+		if err := generic.ValidateCaseFormat(v.CaseFormat); err != nil {
 			return errors.Wrapf(err, "invalid view: %v", v.Name)
 		}
 	}
@@ -215,7 +215,7 @@ func (v View) buildSQLProjection(selector *Selector) string {
 	if len(selector.Columns) > 0 {
 		var columns = make([]string, 0)
 		for i := range selector.Columns {
-			columns = append(columns, fmt.Sprintf("\t%v.%v", v.Alias, selector.Columns [i]))
+			columns = append(columns, fmt.Sprintf("\t%v.%v", v.Alias, selector.Columns[i]))
 		}
 		projection = strings.Join(columns, ",\n")
 	}
@@ -236,7 +236,8 @@ func (v View) buildSQLCriteria(selector *Selector, bindings data.Map) (string, [
 	}
 	var parameters = make([]interface{}, 0)
 	if v.Criteria != nil {
-		result = "\nWHERE (" + bindings.ExpandAsText(v.Criteria.Expression) + ")"
+		criteria := v.Criteria.Expression
+		result = "\nWHERE (" + bindings.ExpandAsText(criteria) + ")"
 		parameters = addCriteriaParams(v.Criteria.Params, bindings, parameters)
 	}
 
@@ -248,7 +249,13 @@ func (v View) buildSQLCriteria(selector *Selector, bindings data.Map) (string, [
 	} else {
 		result += "\n AND "
 	}
-	result += "(" + bindings.ExpandAsText(selector.Criteria.Expression) + ")"
+	criteria := selector.Criteria.Expression
+	if !strings.Contains(criteria, "=") {
+		criteria = strings.Replace(criteria, ":", "=", len(criteria))
+	}
+	result = "\nWHERE (" + bindings.ExpandAsText(criteria) + ")"
+
+	result += "(" + criteria + ")"
 	parameters = addCriteriaParams(selector.Criteria.Params, bindings, parameters)
 	return result, parameters
 }
@@ -259,7 +266,7 @@ func addCriteriaParams(nameParams []string, bindings data.Map, valueParams []int
 	}
 	for _, key := range nameParams {
 		value, ok := bindings[key]
-		if ! ok {
+		if !ok {
 			value, _ = bindings.GetValue(key)
 		}
 		valueParams = append(valueParams, value)

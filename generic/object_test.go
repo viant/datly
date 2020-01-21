@@ -12,21 +12,19 @@ func TestObject_SetValue(t *testing.T) {
 		values      map[string]interface{}
 	}{
 		{
-			description:"single value",
-			values:map[string]interface{} {
+			description: "single value",
+			values: map[string]interface{}{
 				"K1": "123",
 			},
 		},
 		{
-			description:"multi value",
-			values:map[string]interface{} {
+			description: "multi value",
+			values: map[string]interface{}{
 				"K1": "123",
 				"K2": nil,
 				"K3": 4.5,
 			},
 		},
-
-
 	}
 
 	for _, useCase := range useCases {
@@ -38,13 +36,12 @@ func TestObject_SetValue(t *testing.T) {
 			object.SetValue(k, v)
 		}
 		for k, v := range useCase.values {
-			assert.Equal(t, v, object.GetValue(k), useCase.description)
+			assert.Equal(t, v, object.Value(k), useCase.description)
 		}
 
 	}
 
 }
-
 
 func TestObject_Set(t *testing.T) {
 
@@ -53,21 +50,19 @@ func TestObject_Set(t *testing.T) {
 		values      map[string]interface{}
 	}{
 		{
-			description:"single value",
-			values:map[string]interface{} {
+			description: "single value",
+			values: map[string]interface{}{
 				"K1": "123",
 			},
 		},
 		{
-			description:"multi value",
-			values:map[string]interface{} {
+			description: "multi value",
+			values: map[string]interface{}{
 				"K1": "123",
 				"K2": nil,
 				"K3": 4.5,
 			},
 		},
-
-
 	}
 
 	for _, useCase := range useCases {
@@ -75,7 +70,7 @@ func TestObject_Set(t *testing.T) {
 		object := provider.NewObject()
 		object.Init(useCase.values)
 		for k, v := range useCase.values {
-			assert.Equal(t, v, object.GetValue(k), useCase.description)
+			assert.Equal(t, v, object.Value(k), useCase.description)
 		}
 
 	}

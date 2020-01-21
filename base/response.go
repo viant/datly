@@ -8,13 +8,12 @@ import (
 type Response struct {
 	StatusInfo
 	Registry
-	Headers http.Header `json:",omitempty"`
+	Headers     http.Header `json:",omitempty"`
 	TimeTakenMs int
 }
 
-
 //WriteHeaders writes headers
-func (r Response) WriteHeaders(writer http.ResponseWriter)  {
+func (r Response) WriteHeaders(writer http.ResponseWriter) {
 	if len(r.Headers) == 0 {
 		return
 	}
@@ -24,9 +23,6 @@ func (r Response) WriteHeaders(writer http.ResponseWriter)  {
 		}
 	}
 }
-
-
-
 
 //NewResponse creates a response
 func NewResponse() *Response {
