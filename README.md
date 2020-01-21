@@ -204,14 +204,14 @@ You can access any parameters pool with ${variable}.
 
 Binding allows to define/redefine parameter pool
  
-Name: source parameter name
-Placeholder: name in the parameter pool
-Type: one of the following:
+- Name: source parameter name
+- Placeholder: name in the parameter pool
+- Type: one of the following:
    * Path, path source where path uses {} to define parameters
    * QueryString
    * DataView
    * Header
-Default: default value
+- Default: default value
 
 #### Selector
 
@@ -219,22 +219,31 @@ Selector is client side control for data projection (columns) and selection (cri
 Selector is assembled for each data view from parameters pool, data view can control selector prefix with
 selector.prefix attribute.  
 
+- Prefix: parameter pool matching pregix
+- Columns: coma separated list of columns  
+- Criteria: where clause, note that you can not run SQL injection when dataView criteria is used.  
+- OrderBy: coma separated list of columns  
+- Limit: output limit     
+- Offset: output offset
+ 
+
 #### Reference
 
 Reference define association between an owner and reference data view.
 
-Name: output field name
-Cardinality: reference cardinality: One or Many
-DataView: reference data view
-On: owner and reference keys match array
+- Name: output field name
+- Cardinality: reference cardinality: One or Many
+- DataView: reference data view
+- On: owner and reference keys match array
 
 #### Output
 
 Output defines collection of data output keys
 If left empty if uses firs view name as output.
 
-DataView: source data view name 
-Key: output data key:
+- DataView: source data view name 
+- Key: output data key
+- CaseFormat: output case format
 
 
 Use [e2e test](e2e/README.md#use-cases) case rule to see acual rule examples.
