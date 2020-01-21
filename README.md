@@ -33,6 +33,7 @@ For example:
 - [MySQL Connector](usage/connectors/myslql_meta.yaml)
 - [BigQuery Connector](usage/connectors/bigquery_dw.yaml)
 
+A rule control a data tier  
 
 #### Simple rule
 
