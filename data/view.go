@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/afs"
-	"github.com/viant/afs/url"
 	"github.com/viant/datly/cache"
 	"github.com/viant/datly/generic"
 	"github.com/viant/toolbox/data"
-	"io/ioutil"
 	"strings"
 )
 
@@ -19,8 +17,7 @@ type View struct {
 	Name          string
 	Alias         string
 	Table         string        `json:",omitempty"`
-	From          string        `json:",omitempty"`
-	FromURL       string        `json:",omitempty"`
+	From          *From         `json:",omitempty"`
 	Columns       []*Column     `json:",omitempty"`
 	Bindings      []*Binding    `json:",omitempty"`
 	Criteria      *Criteria     `json:",omitempty"`
@@ -43,7 +40,6 @@ func (v *View) Clone() *View {
 		Alias:      v.Alias,
 		Table:      v.Table,
 		From:       v.From,
-		FromURL:    v.FromURL,
 		Columns:    v.Columns,
 		Bindings:   v.Bindings,
 		Criteria:   v.Criteria,
@@ -58,7 +54,7 @@ func (v *View) Clone() *View {
 
 //MergeFrom merges from template view
 func (v *View) MergeFrom(tmpl *View) {
-	if v.From == "" {
+	if v.From == nil {
 		v.From = tmpl.From
 	}
 	if v.Table == "" {
@@ -107,28 +103,29 @@ func (v *View) AddJoin(join *Join) {
 
 //LoadSQL loads fromSQL
 func (v *View) LoadSQL(ctx context.Context, fs afs.Service, parentURL string) error {
-	if v.FromURL == "" || v.From != "" {
+	if v.From == nil {
 		return nil
 	}
-	fromURL := v.FromURL
-	if url.IsRelative(v.FromURL) {
-		fromURL = url.JoinUNC(parentURL, v.FromURL)
-	}
-	reader, err := fs.DownloadWithURL(ctx, fromURL)
-	if err != nil {
+	if err := v.From.Fragment.LoadSQL(ctx, fs, parentURL); err != nil {
 		return err
 	}
-	data, err := ioutil.ReadAll(reader)
-	if err != nil {
-		return errors.Wrapf(err, "failed to read: %v", fromURL)
+
+	var fragments = data.NewMap()
+	if len(v.From.Fragments) > 0 {
+		for _, fragment := range v.From.Fragments {
+			if err := fragment.LoadSQL(ctx, fs, parentURL); err != nil {
+				return err
+			}
+			fragments[fragment.Key] = fragments.ExpandAsText(fragment.SQL)
+		}
 	}
-	v.From = string(data)
+	v.From.SQL = fragments.ExpandAsText(v.From.SQL)
 	return nil
 }
 
 //Validate checks if view is valid
 func (v View) Validate() error {
-	if v.Table == "" && v.From == "" {
+	if v.Table == "" && (v.From == nil || v.From.SQL == "") {
 		return errors.Errorf("table was empty")
 	}
 	if v.Connector == "" {
@@ -200,7 +197,7 @@ const (
 FROM $from ${alias}${joins}${criteria}${orderBy}${limit}`
 )
 
-//BuildSQL build data view SQL
+//BuildSQL build data view FromFragments
 func (v View) BuildSQL(selector *Selector, bindings map[string]interface{}) (string, []interface{}, error) {
 	projection := v.buildSQLProjection(selector)
 	from := v.buildSQLFom(bindings)
@@ -223,8 +220,8 @@ func (v View) BuildSQL(selector *Selector, bindings map[string]interface{}) (str
 
 func (v View) buildSQLFom(bindings data.Map) string {
 	from := v.Table
-	if v.From != "" {
-		from = "(" + v.From + ")"
+	if v.From != nil && v.From.SQL != "" {
+		from = "(" + v.From.SQL + ")"
 	}
 	return bindings.ExpandAsText(from)
 }

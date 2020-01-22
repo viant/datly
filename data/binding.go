@@ -3,6 +3,7 @@ package data
 import (
 	"github.com/go-errors/errors"
 	"github.com/viant/datly/base"
+	"strings"
 )
 
 //Binding represents data binding
@@ -13,6 +14,7 @@ type Binding struct {
 	DataType      string      `json:",o mitempty"`
 	ComponentType string      `json:",omitempty"`
 	DataView      string      `json:",omitempty"`
+	Expression    string      `json:",omitempty"`
 	Default       interface{} `json:",omitempty"`
 }
 
@@ -41,6 +43,10 @@ func (b Binding) Validate() error {
 		}
 	default:
 		return errors.Errorf("unsupported binding.type: '%v'", b.Type)
+	}
+
+	if b.Expression != "" && strings.Contains(b.Expression, "$value") {
+		return errors.Errorf("invalid expression: %v, expected '$value' expression", b.Expression)
 	}
 	return nil
 }

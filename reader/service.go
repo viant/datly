@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/metric"
 	"github.com/viant/dsc"
 	"github.com/viant/toolbox"
+	"strings"
 	"sync"
 	"time"
 )
@@ -101,7 +102,7 @@ func (s *service) readViewData(ctx context.Context, collection generic.Collectio
 	go s.readRefs(ctx, view, selector, bindings, rule, request, response, waitGroup, refData)
 	SQL, parameters, err := view.BuildSQL(selector, bindings)
 	if err != nil {
-		return errors.Wrapf(err, "failed to build SQL with rule: %v", rule.Info.URL)
+		return errors.Wrapf(err, "failed to build FromFragments with rule: %v", rule.Info.URL)
 	}
 
 	parametrizedSQL := &dsc.ParametrizedSQL{SQL: SQL, Values: parameters}
@@ -186,8 +187,10 @@ func (s *service) assembleBinding(ctx context.Context, view *data.View, rule *co
 			} else if text, ok := value.(string); ok && text == "" {
 				value = binding.Default
 			}
+			if binding.Expression != "" {
+				value = strings.Replace(binding.Expression, "$value", toolbox.AsString(value), len(binding.Expression))
+			}
 			result[binding.Placeholder] = value
-
 		}
 	}
 	return result, nil

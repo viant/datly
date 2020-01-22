@@ -30,7 +30,7 @@ init:
     templateURL: ${awsConfigURL}/tmpl
 
   runStandAlone: true
-  runOnAws: true
+  runOnAws: false
   useDockerDBIP: false
 
 
