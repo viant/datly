@@ -1,4 +1,4 @@
-package reader
+package server
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 
 var configURL = flag.String("configURL", "config.json", "config URL")
 
-func StartReader() {
+func StartServer() {
 
 	flag.Parse()
 	ctx := context.Background()

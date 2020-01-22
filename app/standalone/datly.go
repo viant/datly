@@ -1,7 +1,7 @@
 package main
 
 import (
-	"datly/app/standalone/reader"
+	"datly/app/standalone/server"
 	_ "github.com/MichaelS11/go-cql-driver"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
@@ -13,5 +13,5 @@ import (
 )
 
 func main() {
-	reader.StartReader()
+	server.StartServer()
 }
