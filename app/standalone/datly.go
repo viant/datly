@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/viant/datly/app/standalone/server"
 	_ "github.com/MichaelS11/go-cql-driver"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
@@ -10,6 +9,7 @@ import (
 	_ "github.com/viant/afsc/s3"
 	_ "github.com/viant/asc"
 	_ "github.com/viant/bgc"
+	"github.com/viant/datly/app/standalone/server"
 )
 
 func main() {

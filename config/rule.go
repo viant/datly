@@ -1,11 +1,11 @@
 package config
 
 import (
-	"github.com/viant/datly/config/rule"
-	"github.com/viant/datly/data"
 	"github.com/pkg/errors"
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/config/rule"
+	"github.com/viant/datly/data"
 	"golang.org/x/net/context"
 	"strings"
 )

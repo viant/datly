@@ -2,9 +2,9 @@ package singleton
 
 import (
 	"context"
+	"github.com/pkg/errors"
 	rconfig "github.com/viant/datly/config"
 	"github.com/viant/datly/reader"
-	"github.com/pkg/errors"
 )
 
 var readerService reader.Service

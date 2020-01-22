@@ -1,9 +1,9 @@
 package data
 
 import (
-	"github.com/viant/datly/generic"
 	"fmt"
 	"github.com/pkg/errors"
+	"github.com/viant/datly/generic"
 )
 
 //Output data output

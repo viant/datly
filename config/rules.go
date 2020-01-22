@@ -2,9 +2,9 @@ package config
 
 import (
 	"context"
-	"github.com/viant/datly/base"
 	"github.com/pkg/errors"
 	"github.com/viant/afs"
+	"github.com/viant/datly/base"
 	"io/ioutil"
 	"net/url"
 	"path"

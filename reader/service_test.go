@@ -2,13 +2,13 @@ package reader
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/viant/datly/base"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/generic"
 	"github.com/viant/datly/visitor"
-	"encoding/json"
-	"fmt"
-	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
@@ -65,7 +65,7 @@ func TestService_Read(t *testing.T) {
 		},
 
 		{
-			description:  "data view binding",
+			description:  "data view bindingData",
 			caseDataPath: "/case002/",
 			config: &config.Config{
 				Connectors: config.Connectors{

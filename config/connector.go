@@ -1,8 +1,8 @@
 package config
 
 import (
-	"github.com/viant/datly/base"
 	"github.com/go-errors/errors"
+	"github.com/viant/datly/base"
 	"github.com/viant/dsc"
 )
 

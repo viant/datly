@@ -1,8 +1,8 @@
 package data
 
 import (
-	"github.com/viant/datly/base"
 	"github.com/go-errors/errors"
+	"github.com/viant/datly/base"
 )
 
 //Binding represents data binding

@@ -3,7 +3,7 @@ views:
   - table: events
     connector: db
     criteria:
-      expression: event_type_id IN ($types)
+      expression: event_type_id IN ($types.id)
     bindings:
       - placeholder: types
         dataView: event_types

@@ -2,18 +2,17 @@ package reader
 
 import (
 	"context"
+	"fmt"
+	"github.com/pkg/errors"
+	"github.com/viant/afs"
+	fcache "github.com/viant/afs/cache"
 	"github.com/viant/datly/base"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/generic"
 	"github.com/viant/datly/metric"
-	"fmt"
-	"github.com/pkg/errors"
-	"github.com/viant/afs"
-	fcache "github.com/viant/afs/cache"
 	"github.com/viant/dsc"
 	"github.com/viant/toolbox"
-	"strings"
 	"sync"
 	"time"
 )
@@ -93,7 +92,7 @@ func (s *service) readOutputData(ctx context.Context, rule *config.Rule, output 
 func (s *service) readViewData(ctx context.Context, collection generic.Collection, selector *data.Selector, view *data.View, rule *config.Rule, request *Request, response *Response) error {
 	bindings, err := s.assembleBinding(ctx, view, rule, request, response.Metrics)
 	if err != nil {
-		return errors.Wrapf(err, "failed to assemble bindings with rule: %v", rule.Info.URL)
+		return errors.Wrapf(err, "failed to assemble bindingData with rule: %v", rule.Info.URL)
 	}
 	selector.Apply(bindings)
 	waitGroup := &sync.WaitGroup{}
@@ -180,7 +179,7 @@ func (s *service) assembleBinding(ctx context.Context, view *data.View, rule *co
 			case base.BindingPath:
 				value = request.PathParams.Get(binding.Name)
 			default:
-				return nil, errors.Errorf("unsupported binding source: %v", binding.Type)
+				return nil, errors.Errorf("unsupported bindingData source: %v", binding.Type)
 			}
 			if value == nil {
 				value = binding.Default
@@ -220,8 +219,7 @@ func (s *service) loadBindingData(ctx context.Context, rule *config.Rule, bindin
 	if err != nil {
 		return nil, err
 	}
-	var result = make([]string, 0)
-
+	data := &bindingData{}
 	startTime := time.Now()
 	started := false
 	parametrizedSQL := &dsc.ParametrizedSQL{SQL: SQL, Values: parameters}
@@ -233,24 +231,19 @@ func (s *service) loadBindingData(ctx context.Context, rule *config.Rule, bindin
 			query.ExecutionTimeMs = base.ElapsedInMs(startTime)
 			startTime = time.Now()
 		}
-		return s.fetchIntoSlice(scanner, &result)
+		return s.fetchBindingData(scanner, data)
 	}
 	err = manager.ReadAllWithHandler(SQL, parameters, readHandler)
 	query.FetchTimeMs = base.ElapsedInMs(startTime)
 	metrics.AddQuery(query)
-	return strings.Join(result, ","), err
+	return data.Data(), err
 }
 
-func (s *service) fetchIntoSlice(scanner dsc.Scanner, result *[]string) (bool, error) {
-	var data = make([]interface{}, 1)
-	err := scanner.Scan(&data[0])
+func (s *service) fetchBindingData(scanner dsc.Scanner, data *bindingData) (bool, error) {
+	record := map[string]interface{}{}
+	err := scanner.Scan(&record)
 	if err == nil {
-		text, ok := data[0].(string)
-		if ok {
-			*result = append(*result, "'"+text+"'")
-		} else {
-			*result = append(*result, toolbox.AsString(data[0]))
-		}
+		data.Add(record)
 	}
 	return err == nil, err
 }

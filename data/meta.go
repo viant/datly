@@ -1,10 +1,10 @@
 package data
 
 import (
-	"github.com/viant/datly/base"
-	"github.com/viant/datly/generic"
 	"fmt"
 	"github.com/pkg/errors"
+	"github.com/viant/datly/base"
+	"github.com/viant/datly/generic"
 )
 
 //Meta represents an abstraction describing data access rules

@@ -2,9 +2,9 @@ package reader
 
 import (
 	"context"
-	"github.com/viant/datly/base"
 	"encoding/json"
 	"github.com/pkg/errors"
+	"github.com/viant/datly/base"
 	"net/http"
 )
 

@@ -1,8 +1,8 @@
 package config
 
 import (
-	"github.com/viant/datly/base"
 	"encoding/json"
+	"github.com/viant/datly/base"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v2"
 )

@@ -1,11 +1,11 @@
 package data
 
 import (
-	"github.com/viant/datly/base"
-	"github.com/viant/datly/generic"
 	"encoding/json"
 	"fmt"
 	"github.com/go-errors/errors"
+	"github.com/viant/datly/base"
+	"github.com/viant/datly/generic"
 	"strings"
 )
 
