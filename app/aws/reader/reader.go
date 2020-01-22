@@ -1,7 +1,7 @@
 package main
 
 import (
-	"datly/app/aws/lambda"
+	"github.com/viant/datly/app/aws/lambda"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"

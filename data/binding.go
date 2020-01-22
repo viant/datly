@@ -1,7 +1,7 @@
 package data
 
 import (
-	"datly/base"
+	"github.com/viant/datly/base"
 	"github.com/go-errors/errors"
 )
 

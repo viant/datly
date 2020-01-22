@@ -1,7 +1,7 @@
 package base
 
 import (
-	"datly/generic"
+	"github.com/viant/datly/generic"
 	"sync"
 )
 

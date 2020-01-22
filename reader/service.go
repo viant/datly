@@ -2,11 +2,11 @@ package reader
 
 import (
 	"context"
-	"datly/base"
-	"datly/config"
-	"datly/data"
-	"datly/generic"
-	"datly/metric"
+	"github.com/viant/datly/base"
+	"github.com/viant/datly/config"
+	"github.com/viant/datly/data"
+	"github.com/viant/datly/generic"
+	"github.com/viant/datly/metric"
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/afs"

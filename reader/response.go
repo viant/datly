@@ -1,9 +1,9 @@
 package reader
 
 import (
-	"datly/base"
-	"datly/config"
-	"datly/metric"
+	"github.com/viant/datly/base"
+	"github.com/viant/datly/config"
+	"github.com/viant/datly/metric"
 	"time"
 )
 

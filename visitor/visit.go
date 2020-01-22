@@ -2,7 +2,7 @@ package visitor
 
 import (
 	"context"
-	"datly/generic"
+	"github.com/viant/datly/generic"
 )
 
 //Visit represent an object visitor

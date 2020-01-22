@@ -2,10 +2,10 @@ package reader
 
 import (
 	"context"
-	"datly/base"
-	"datly/config"
-	"datly/generic"
-	"datly/visitor"
+	"github.com/viant/datly/base"
+	"github.com/viant/datly/config"
+	"github.com/viant/datly/generic"
+	"github.com/viant/datly/visitor"
 	"encoding/json"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"

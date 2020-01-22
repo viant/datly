@@ -1,6 +1,6 @@
 package reader
 
-import "datly/base"
+import "github.com/viant/datly/base"
 
 var _filters = base.NewFilters()
 

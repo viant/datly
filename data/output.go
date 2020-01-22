@@ -1,7 +1,7 @@
 package data
 
 import (
-	"datly/generic"
+	"github.com/viant/datly/generic"
 	"fmt"
 	"github.com/pkg/errors"
 )

@@ -2,8 +2,8 @@ package data
 
 import (
 	"context"
-	"datly/cache"
-	"datly/generic"
+	"github.com/viant/datly/cache"
+	"github.com/viant/datly/generic"
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/afs"

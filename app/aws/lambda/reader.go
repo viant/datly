@@ -2,10 +2,10 @@ package lambda
 
 import (
 	"context"
-	"datly/app/aws/bridge"
-	"datly/base"
-	"datly/reader"
-	"datly/singleton"
+	"github.com/viant/datly/app/aws/bridge"
+	"github.com/viant/datly/base"
+	"github.com/viant/datly/reader"
+	"github.com/viant/datly/singleton"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/pkg/errors"

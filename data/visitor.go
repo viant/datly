@@ -2,8 +2,8 @@ package data
 
 import (
 	"context"
-	"datly/generic"
-	"datly/visitor"
+	"github.com/viant/datly/generic"
+	"github.com/viant/datly/visitor"
 )
 
 type Visitor struct {

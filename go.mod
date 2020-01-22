@@ -1,4 +1,4 @@
-module datly
+module github.com/viant/datly
 
 go 1.12
 

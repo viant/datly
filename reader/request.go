@@ -1,7 +1,7 @@
 package reader
 
 import (
-	"datly/base"
+	"github.com/viant/datly/base"
 )
 
 //Request represents read request

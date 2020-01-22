@@ -2,8 +2,8 @@ package singleton
 
 import (
 	"context"
-	rconfig "datly/config"
-	"datly/reader"
+	rconfig "github.com/viant/datly/config"
+	"github.com/viant/datly/reader"
 	"github.com/pkg/errors"
 )
 

@@ -2,7 +2,7 @@ package config
 
 import (
 	"context"
-	"datly/base"
+	"github.com/viant/datly/base"
 	"github.com/pkg/errors"
 	"github.com/viant/afs"
 	"io/ioutil"
