@@ -1,9 +1,12 @@
 package base
 
-import "net/http"
+import (
+	"context"
+	"net/http"
+)
 
 //Filter request filter
-type Filter func(request *Request, writer http.ResponseWriter) (toContinue bool, err error)
+type Filter func(ctx context.Context, request *Request, writer http.ResponseWriter) (toContinue bool, err error)
 
 //Filters represents filters
 type Filters struct {

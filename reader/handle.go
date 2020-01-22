@@ -30,7 +30,7 @@ func handleRequest(httpRequest *http.Request, writer http.ResponseWriter, filter
 
 	var toContinue bool
 	for i := range filters {
-		toContinue, err = filters[i](&request.Request, writer)
+		toContinue, err = filters[i](ctx, &request.Request, writer)
 		if !toContinue {
 			break
 		}

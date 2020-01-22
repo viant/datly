@@ -174,7 +174,7 @@ views:
 
 Request filter has the following signature
 ```go
-type Filter func(request *Request, writer http.ResponseWriter) (toContinue bool, err error)
+type Filter func(ctx context.Context, request *Request, writer http.ResponseWriter) (toContinue bool, err error)
 ```
 
 Request filters run data service is invoked, so you can add custom authentication, permission check logic.  
