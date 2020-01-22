@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"datly/cache"
 	"datly/generic"
 	"fmt"
 	"github.com/pkg/errors"
@@ -14,21 +15,24 @@ import (
 
 //View represents a data view
 type View struct {
-	Connector  string
-	Name       string
-	Alias      string
-	Table      string        `json:",omitempty"`
-	From       string        `json:",omitempty"`
-	FromURL    string        `json:",omitempty"`
-	Columns    []*Column     `json:",omitempty"`
-	Bindings   []*Binding    `json:",omitempty"`
-	Criteria   *Criteria     `json:",omitempty"`
-	Selector   Selector      `json:",omitempty"`
-	Joins      []*Join       `json:",omitempty"`
-	Refs       []*Reference  `json:",omitempty"`
-	Params     []interface{} `json:",omitempty"`
-	CaseFormat string        `json:",omitempty"`
-	HideRefIDs bool          `json:",omitempty"`
+	Connector     string
+	Name          string
+	Alias         string
+	Table         string        `json:",omitempty"`
+	From          string        `json:",omitempty"`
+	FromURL       string        `json:",omitempty"`
+	Columns       []*Column     `json:",omitempty"`
+	Bindings      []*Binding    `json:",omitempty"`
+	Criteria      *Criteria     `json:",omitempty"`
+	Selector      Selector      `json:",omitempty"`
+	Joins         []*Join       `json:",omitempty"`
+	Refs          []*Reference  `json:",omitempty"`
+	Params        []interface{} `json:",omitempty"`
+	CaseFormat    string        `json:",omitempty"`
+	HideRefIDs    bool          `json:",omitempty"`
+	Cache         *Cache        `json:",omitempty"`
+	OnRead        *Visitor      `json:",omitempty"`
+	_cacheService cache.Service
 }
 
 //Clone creates a view clone
@@ -48,6 +52,7 @@ func (v *View) Clone() *View {
 		Params:     v.Params,
 		CaseFormat: v.CaseFormat,
 		HideRefIDs: v.HideRefIDs,
+		OnRead:     v.OnRead,
 	}
 }
 
@@ -89,6 +94,9 @@ func (v *View) MergeFrom(tmpl *View) {
 	}
 	if v.Criteria == nil {
 		v.Criteria = tmpl.Criteria
+	}
+	if v.OnRead == nil {
+		v.OnRead = tmpl.OnRead
 	}
 }
 
@@ -140,7 +148,6 @@ func (v View) Validate() error {
 			}
 		}
 	}
-
 	if v.CaseFormat != "" {
 		if err := generic.ValidateCaseFormat(v.CaseFormat); err != nil {
 			return errors.Wrapf(err, "invalid view: %v", v.Name)
@@ -150,7 +157,7 @@ func (v View) Validate() error {
 }
 
 //Init initializes view
-func (v *View) Init(setPrefix bool) {
+func (v *View) Init(setPrefix bool) error {
 
 	if v.Name == "" && v.Table != "" {
 		v.Name = v.Table
@@ -166,6 +173,19 @@ func (v *View) Init(setPrefix bool) {
 			v.Bindings[i].Init()
 		}
 	}
+
+	if v.OnRead != nil {
+		if err := v.OnRead.Init(); err != nil {
+			return err
+		}
+	}
+	if v.Cache != nil && v.Cache.Service != "" {
+		var err error
+		if v._cacheService, err = cache.Registry().Get(v.Cache.Service); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 const (
@@ -236,8 +256,7 @@ func (v View) buildSQLCriteria(selector *Selector, bindings data.Map) (string, [
 	}
 	var parameters = make([]interface{}, 0)
 	if v.Criteria != nil {
-		criteria := v.Criteria.Expression
-		result = "\nWHERE (" + bindings.ExpandAsText(criteria) + ")"
+		result = "\nWHERE " + expendCriteria(bindings, v.Criteria)
 		parameters = addCriteriaParams(v.Criteria.Params, bindings, parameters)
 	}
 
@@ -249,15 +268,17 @@ func (v View) buildSQLCriteria(selector *Selector, bindings data.Map) (string, [
 	} else {
 		result += "\n AND "
 	}
-	criteria := selector.Criteria.Expression
-	if !strings.Contains(criteria, "=") {
-		criteria = strings.Replace(criteria, ":", "=", len(criteria))
-	}
-	result = "\nWHERE (" + bindings.ExpandAsText(criteria) + ")"
-
-	result += "(" + criteria + ")"
+	result += expendCriteria(bindings, selector.Criteria)
 	parameters = addCriteriaParams(selector.Criteria.Params, bindings, parameters)
 	return result, parameters
+}
+
+func expendCriteria(bindings data.Map, criteria *Criteria) string {
+	expression := bindings.ExpandAsText(criteria.Expression)
+	if !strings.Contains(expression, "=") {
+		expression = strings.Replace(expression, ":", "=", len(expression))
+	}
+	return "(" + bindings.ExpandAsText(expression) + ")"
 }
 
 func addCriteriaParams(nameParams []string, bindings data.Map, valueParams []interface{}) []interface{} {

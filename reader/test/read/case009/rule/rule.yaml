@@ -1,0 +1,6 @@
+Path: /case009/
+views:
+  - table: events
+    connector: db
+    onRead:
+      visitor: EventColors

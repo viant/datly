@@ -4,6 +4,8 @@ import (
 	"context"
 	"datly/base"
 	"datly/config"
+	"datly/generic"
+	"datly/visitor"
 	"encoding/json"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
@@ -29,6 +31,8 @@ func TestService_Read(t *testing.T) {
 		config         *config.Config
 		hasConfigError bool
 		hasReadError   bool
+		visitor        string
+		visit          visitor.Visit
 		caseDataPath   string
 		request        *Request
 		expect         interface{}
@@ -268,6 +272,54 @@ func TestService_Read(t *testing.T) {
 	  }
 }`,
 		},
+
+		{
+			description:  "read with visitor",
+			caseDataPath: "/case001/",
+			visitor:      "EventColors",
+			visit: func(ctx context.Context, object *generic.Object) (b bool, err error) {
+				quantity, err := object.FloatValue("quantity")
+				if err != nil || quantity == nil {
+					return true, err
+				}
+				if *quantity > 10 {
+					object.SetValue("color", "orange")
+				} else {
+					object.SetValue("color", "green")
+				}
+				return true, nil
+			},
+			config: &config.Config{
+				Connectors: config.Connectors{
+					URL: connectorURL,
+				},
+				Rules: config.Rules{
+					URL: path.Join(basePath, "case009/rule"),
+				},
+			},
+			request: &Request{
+				Request: base.Request{
+					TraceID: "case 009",
+					Path:    "/case009/",
+				},
+			},
+
+			expect: `{
+	  "Status": "ok",
+	  "Data": {
+		"@length@events": 11,
+		"@assertPath@events[0].id": 1,
+		"@assertPath@events[0].color": "orange"
+	  }
+}`,
+		},
+	}
+
+	//Set visitors
+	for _, useCase := range useCases {
+		if useCase.visitor != "" {
+			visitor.Registry().Register(useCase.visitor, useCase.visit)
+		}
 	}
 
 	for _, useCase := range useCases {
@@ -300,6 +352,7 @@ func TestService_Read(t *testing.T) {
 		}
 		jsonResponse, _ := json.Marshal(response)
 		if !assertly.AssertValues(t, useCase.expect, string(jsonResponse), useCase.description) {
+			fmt.Printf("read: %s\n", jsonResponse)
 			toolbox.DumpIndent(response, true)
 		}
 	}

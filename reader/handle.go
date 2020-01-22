@@ -10,6 +10,8 @@ import (
 
 //HandleRead handles read request
 func HandleRead(srv Service, filters ...base.Filter) base.Handle {
+	readerFilters := Filters()
+	filters = append(filters, readerFilters.Items...)
 	return func(writer http.ResponseWriter, httpRequest *http.Request) {
 		err := handleRequest(httpRequest, writer, filters, srv)
 		if err != nil {
@@ -28,9 +30,12 @@ func handleRequest(httpRequest *http.Request, writer http.ResponseWriter, filter
 
 	var toContinue bool
 	for i := range filters {
-		toContinue, err = filters[i](&request.Request)
-		if !toContinue || err != nil {
+		toContinue, err = filters[i](&request.Request, writer)
+		if !toContinue {
 			break
+		}
+		if err != nil {
+			return err
 		}
 	}
 	response := srv.Read(ctx, request)

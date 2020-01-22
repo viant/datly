@@ -3,7 +3,6 @@ package reader
 import (
 	"context"
 	"datly/base"
-	"datly/cache"
 	"datly/config"
 	"datly/data"
 	"datly/generic"
@@ -25,7 +24,6 @@ type Service interface {
 }
 
 type service struct {
-	cache  cache.Service
 	config *config.Config
 	fs     afs.Service
 	cfs    afs.Service
@@ -60,7 +58,6 @@ func (s *service) read(ctx context.Context, request *Request, response *Response
 	}
 	response.Rule = rule
 	request.PathParams = uriParams
-
 	waitGroup := &sync.WaitGroup{}
 	waitGroup.Add(len(rule.Output))
 
@@ -112,6 +109,7 @@ func (s *service) readViewData(ctx context.Context, collection generic.Collectio
 	query := metric.NewQuery(parametrizedSQL)
 	startTime := time.Now()
 	started := false
+
 	err = s.readData(ctx, SQL, parameters, view.Connector, func(record data.Record) error {
 		query.Count++
 		if !started {
@@ -122,17 +120,23 @@ func (s *service) readViewData(ctx context.Context, collection generic.Collectio
 		collection.Add(record)
 		return nil
 	})
+
 	query.FetchTimeMs = base.ElapsedInMs(startTime)
 	response.Metrics.AddQuery(query)
-	if selector.CaseFormat != view.CaseFormat {
-		collection.Proto().OutputCaseFormat(view.CaseFormat, selector.CaseFormat)
-	}
 	if err != nil {
 		return errors.Wrapf(err, "failed to read data with rule: %v", rule.Info.URL)
+	}
+	if selector.CaseFormat != view.CaseFormat {
+		collection.Proto().OutputCaseFormat(view.CaseFormat, selector.CaseFormat)
 	}
 	waitGroup.Wait()
 	if len(refData.Data) > 0 {
 		s.assignRefs(view, collection, refData.Data)
+	}
+	if view.OnRead != nil {
+		collection.Objects(func(item *generic.Object) (toContinue bool, err error) {
+			return view.OnRead.Visit(ctx, item)
+		})
 	}
 	return err
 }
@@ -222,28 +226,33 @@ func (s *service) loadBindingData(ctx context.Context, rule *config.Rule, bindin
 	started := false
 	parametrizedSQL := &dsc.ParametrizedSQL{SQL: SQL, Values: parameters}
 	query := metric.NewQuery(parametrizedSQL)
-	err = manager.ReadAllWithHandler(SQL, parameters, func(scanner dsc.Scanner) (toContinue bool, err error) {
+	readHandler := func(scanner dsc.Scanner) (toContinue bool, err error) {
 		query.Count++
 		if !started {
 			started = true
 			query.ExecutionTimeMs = base.ElapsedInMs(startTime)
 			startTime = time.Now()
 		}
-		var data = make([]interface{}, 1)
-		err = scanner.Scan(&data[0])
-		if err == nil {
-			text, ok := data[0].(string)
-			if ok {
-				result = append(result, "'"+text+"'")
-			} else {
-				result = append(result, toolbox.AsString(data[0]))
-			}
-		}
-		return err == nil, err
-	})
+		return s.fetchIntoSlice(scanner, &result)
+	}
+	err = manager.ReadAllWithHandler(SQL, parameters, readHandler)
 	query.FetchTimeMs = base.ElapsedInMs(startTime)
 	metrics.AddQuery(query)
 	return strings.Join(result, ","), err
+}
+
+func (s *service) fetchIntoSlice(scanner dsc.Scanner, result *[]string) (bool, error) {
+	var data = make([]interface{}, 1)
+	err := scanner.Scan(&data[0])
+	if err == nil {
+		text, ok := data[0].(string)
+		if ok {
+			*result = append(*result, "'"+text+"'")
+		} else {
+			*result = append(*result, toolbox.AsString(data[0]))
+		}
+	}
+	return err == nil, err
 }
 
 func (s *service) readRefs(ctx context.Context, owner *data.View, selector *data.Selector, bindings map[string]interface{}, rule *config.Rule, request *Request, response *Response, group *sync.WaitGroup, refData *base.Registry) {
@@ -360,7 +369,6 @@ func New(ctx context.Context, config *config.Config) (Service, error) {
 		config: config,
 		fs:     fs,
 		cfs:    cfs,
-		cache:  cache.New(config.DataCacheURL, fs),
 	}
 	return srv, err
 }

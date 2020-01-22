@@ -6,9 +6,11 @@ import (
 
 //StatusInfo represents status
 type StatusInfo struct {
-	Status string
-	Errors []*ErrorInfo `json:",omitempty"`
-	mux    sync.Mutex
+	Status     string
+	CacheError string       `json:",omitempty"`
+	RuleError  string       `json:",omitempty"`
+	Errors     []*ErrorInfo `json:",omitempty"`
+	mux        sync.Mutex
 }
 
 //ErrorInfo represents an error info

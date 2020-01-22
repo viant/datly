@@ -171,10 +171,55 @@ views:
 
 
 #### Request filters
-TODO add section here
+
+Request filter has the following signature
+```go
+type Filter func(request *Request, writer http.ResponseWriter) (toContinue bool, err error)
+```
+
+Request filters run data service is invoked, so you can add custom authentication, permission check logic.  
+
+To register filter for reader service:
+
+```go
+    reader.Filters().Add(myFitler)
+```
 
 #### Data view hooks
-TODO add section here
+
+Each data view can enrich result dataset with custom visitor code, the following rule uses
+SetColor visitor function to modify data view output.
+
+
+[events.yaml](usage/rules/onread.yaml)
+```yaml
+path: /v1/api/events
+views:
+  - table: events
+    connector: db
+    onRead:
+      visitor: EventsColor
+```
+
+
+```go
+func SetEventsColor(ctx context.Context, object *generic.Object) (toContinue bool, err error) {
+    quantity, err := object.FloatValue("quantity")
+    if err != nil || quantity == nil {
+        return true, err
+    }
+    if *quantity > 10 {
+        object.SetValue("color", "orange")
+    } else {
+        object.SetValue("color", "green")
+    }
+    return true, nil
+}
+
+visitor.Registry().Register("EventsColor", SetEventsColor)
+
+```
+
 
 
 ## Configuration Rule
@@ -194,7 +239,12 @@ Data view defines data source:
 - CaseFormat: data view storage case format
 - Refs data view references
 - HideRefIDs: flag to hide reference id column 
+- Cache: optional caching options
 
+### Caching option
+
+- Service: registered cache service name
+- TTLMs: time to live
 
 ### Parameter pool
 Parameter pool is a map assembled from query string parameters, request body, path parameters.
@@ -203,7 +253,6 @@ You can access any parameters pool with ${variable}.
 ### Binding
 
 Binding allows to define/redefine parameter pool
-
 
 - Name: source parameter name
 - Placeholder: name in the parameter pool

@@ -60,7 +60,9 @@ func (r *Rule) initRule(ctx context.Context, fs afs.Service) error {
 			if err = r.Views[i].LoadSQL(ctx, fs, parentURL); err != nil {
 				return err
 			}
-			r.Views[i].Init(i > 0)
+			if err := r.Views[i].Init(i > 0); err != nil {
+				return err
+			}
 		}
 	}
 	r.Meta.ApplyTemplate()

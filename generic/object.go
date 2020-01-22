@@ -2,6 +2,7 @@ package generic
 
 import (
 	"encoding/json"
+	"github.com/viant/toolbox"
 )
 
 //Object represents dynamic object
@@ -31,13 +32,43 @@ func (o *Object) SetValue(name string, value interface{}) {
 	field.Set(value, &o._data)
 }
 
-//Value get values
+//Value get value for supplied name
 func (o *Object) Value(name string) interface{} {
 	field := o._proto.Field(name)
 	if field == nil {
 		return nil
 	}
 	return field.Get(o._data)
+}
+
+//FloatValue return float for supplied name
+func (o *Object) FloatValue(name string) (*float64, error) {
+	val := o.Value(name)
+	if val == nil {
+		return nil, nil
+	}
+	casted, err := toolbox.ToFloat(val)
+	return &casted, err
+}
+
+//IntValue returns int value
+func (o *Object) IntValue(name string) (*int, error) {
+	val := o.Value(name)
+	if val == nil {
+		return nil, nil
+	}
+	casted, err := toolbox.ToInt(val)
+	return &casted, err
+}
+
+//IntValue returns int value
+func (o *Object) StringValue(name string) *string {
+	val := o.Value(name)
+	if val == nil {
+		return nil
+	}
+	casted := toolbox.AsString(val)
+	return &casted
 }
 
 //MarshalJSON converts object to JSON object

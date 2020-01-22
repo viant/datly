@@ -1,0 +1,6 @@
+path: /v1/api/events
+views:
+  - table: events
+    connector: db
+    onRead:
+      visitor: EventsColor

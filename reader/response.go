@@ -11,7 +11,6 @@ import (
 type Response struct {
 	base.Response
 	startTime   time.Time
-	RuleError   string          `json:",omitempty"`
 	Metrics     *metric.Metrics `json:",omitempty"`
 	Rule        *config.Rule    `json:",omitempty"`
 	TimeTakenMs int
