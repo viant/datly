@@ -19,6 +19,16 @@ type Request struct {
 	CaseFormat  string `json:",omitempty"` //source data case format
 }
 
+
+// BasicAuth returns the username and password provided in the request's
+// Authorization header, if the request uses HTTP Basic Authentication.
+// See RFC 2617, Section 2.
+func (r *Request) BasicAuth() (username, password string, ok bool) {
+	request := &http.Request{Header: r.Headers}
+	return request.BasicAuth()
+}
+
+
 //Init initialises request
 func (r *Request) Init(request *http.Request) error {
 	if request.URL != nil {
