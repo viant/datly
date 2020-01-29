@@ -1,11 +1,6 @@
 package data
 
-import (
-	"context"
-	"github.com/viant/datly/db"
-	"github.com/viant/datly/generic"
-)
-
+//Visitor represents a visitor
 type Visitor struct {
 	Visitor string
 	_visit  Visit
@@ -19,6 +14,6 @@ func (v *Visitor) Init() error {
 }
 
 //Visit visit an object
-func (v *Visitor) Visit(ctx context.Context, db db.Service, view *View,  object *generic.Object) (bool, error) {
-	return v._visit(ctx, db, view, object)
+func (v *Visitor) Visit(ctx *Context, value *Value) (bool, error) {
+	return v._visit(ctx, value)
 }

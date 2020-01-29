@@ -68,7 +68,6 @@ func (p *service) patch(ctx context.Context, req *Request, resp *writer.Response
 		}
 		io.SetOutput(collection, resp)
 	}
-
 	return nil
 }
 
@@ -85,11 +84,22 @@ func (p *service) writeInputData(ctx context.Context, rule *config.Rule, io *dat
 		return errors.Wrapf(err, "failed to build collection for data view: %v", view.Name)
 	}
 	patched.Put(view.Name, collection)
-	dataPool, err := p.BuildDataPool(ctx, req.Request, view, rule, resp.Metrics, shared.BindingPath)
+	var filterTypes = make([]string, 0)
+	if len(view.Bindings) == 0 { //if binding specified  use explicit binding only
+		filterTypes = append(filterTypes, shared.BindingPath)
+	}
+	dataPool, err := p.BuildDataPool(ctx, req.Request, view, rule, resp.Metrics, filterTypes...)
 	if err != nil {
 		return errors.Wrapf(err, "failed to build data pool for data view: %v", view.Name)
 	}
 
+	collection.Objects(func(item *generic.Object) (toContinue bool, err error) {
+		//TODO check with specified, data type validation, date formatting, beforePath visitor call
+		for k, v := range dataPool {
+			item.SetValue(k, v)
+		}
+		return true, nil
+	})
 
 	return p.patchDataView(ctx, view, collection, dataPool, req, resp.Metrics)
 }
@@ -115,9 +125,6 @@ func (p *service) patchDataView(ctx context.Context, view *data.View, collection
 		_ = dbConn.Close()
 	}()
 	indexer := db.NewIndexer(view)
-	if len(dataPool) > 0 {
-
-	}
 	index := indexer.Index(collection)
 	if checkErr := p.removeNonExisting(ctx, manager, dbConn, view, index, metrics); checkErr != nil {
 		return errors.Wrapf(checkErr, "failed to index existing record on %v", view.Table)

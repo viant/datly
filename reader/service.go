@@ -118,8 +118,9 @@ func (s *service) readViewData(ctx context.Context, collection generic.Collectio
 		s.assignRefs(view, collection, refData.Data)
 	}
 	if view.OnRead != nil {
+		context := data.NewContext(ctx, view, s)
 		collection.Objects(func(item *generic.Object) (toContinue bool, err error) {
-			return view.OnRead.Visit(ctx, s.Service, view, item)
+			return view.OnRead.Visit(context, data.NewValue(item, nil))
 		})
 	}
 	return err

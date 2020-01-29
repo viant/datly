@@ -29,7 +29,7 @@ type service struct {
 }
 
 //BuildDataPool build data pool
-func (s *service) BuildDataPool(ctx context.Context, request contract.Request, view *data.View, rule *config.Rule, metrics *metric.Metrics, filterType ... string) (data.Pool, error) {
+func (s *service) BuildDataPool(ctx context.Context, request contract.Request, view *data.View, rule *config.Rule, metrics *metric.Metrics, filterType ...string) (data.Pool, error) {
 	return s.binder.BuildDataPool(ctx, request, view, rule, metrics, filterType...)
 }
 

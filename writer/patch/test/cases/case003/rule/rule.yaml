@@ -1,0 +1,11 @@
+path: /case003/event_type/{id}/
+
+input:
+  - key: eventy_type
+    dataView: event_types
+    cardinality: One
+
+views:
+  - table: event_types
+    primaryKey: [id]
+    connector: db

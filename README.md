@@ -204,7 +204,7 @@ views:
 
 
 ```go
-func SetEventsColor(ctx context.Context, db db.Service, view *data.View, object *generic.Object) (toContinue bool, err error) {
+func SetEventsColor(ctx *data.Context, object *data.Value) (b bool, err error) { {
     quantity, err := object.FloatValue("quantity")
     if err != nil || quantity == nil {
         return true, err
@@ -287,7 +287,7 @@ Reference define association between an owner and reference data view.
 - DataView: reference data view
 - On: owner and reference keys match array
 
-#### Output
+#### Input/Output
 
 Output defines collection of data output keys
 If left empty if uses firs view name as output.
@@ -295,7 +295,7 @@ If left empty if uses firs view name as output.
 - DataView: source data view name 
 - Key: output data key
 - CaseFormat: output case format
-
+- Cardinality: cardinality of input or output
 
 Use [e2e test](e2e/README.md#use-cases) case rule to see acual rule examples.
 

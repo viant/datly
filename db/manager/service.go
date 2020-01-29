@@ -52,4 +52,3 @@ func New(config *config.Config) db.Service {
 		registry: make(map[string]dsc.Manager),
 	}
 }
-

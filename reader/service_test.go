@@ -8,8 +8,6 @@ import (
 	"github.com/viant/datly/base/contract"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/data"
-	"github.com/viant/datly/db"
-	"github.com/viant/datly/generic"
 	"github.com/viant/datly/shared"
 
 	"github.com/stretchr/testify/assert"
@@ -279,7 +277,7 @@ func TestService_Read(t *testing.T) {
 			description:  "read with visitor",
 			caseDataPath: "/case001/",
 			visitor:      "EventColors",
-			visit: func(ctx context.Context, db db.Service, view *data.View, object *generic.Object) (b bool, err error) {
+			visit: func(ctx *data.Context, object *data.Value) (b bool, err error) {
 				quantity, err := object.FloatValue("quantity")
 				if err != nil || quantity == nil {
 					return true, err
