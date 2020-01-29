@@ -31,7 +31,7 @@ type View struct {
 	HideRefIDs    bool          `json:",omitempty"`
 	Cache         *Cache        `json:",omitempty"`
 	OnRead        *Visitor      `json:",omitempty"`
-	BeforePatch   *Visitor      `json:",omitempty"`
+	OnPath        *Visitor      `json:",omitempty"`
 	_cacheService cache.Service
 }
 
