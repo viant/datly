@@ -1,7 +1,7 @@
 path: /case003/event_type/{id}/
 
 input:
-  - key: eventy_type
+  - key: event_type
     dataView: event_types
     cardinality: One
 

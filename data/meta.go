@@ -58,8 +58,13 @@ func (m *Meta) initOutput() {
 				Key:      key,
 			},
 		}
+		if len(m.Input) > 0 {
+			m.Output[0].Cardinality = m.Input[0].Cardinality
+			m.Output[0].Key = m.Input[0].Key
+		}
 	}
 	if len(m.Output) > 0 {
+
 		for i := range m.Output {
 			m.Output[i].Init()
 		}

@@ -129,6 +129,40 @@ func TestService_Path(t *testing.T) {
 	  }
 }`,
 		},
+		{
+			description:   " patch with URI path param",
+			caseDataPath:  "/case003/",
+			checkDatabase: true,
+			prepareData:   true,
+			config: &config.Config{
+				Connectors: config.Connectors{
+					URL: connectorURL,
+				},
+				Rules: config.Rules{
+					URL: path.Join(basePath, "case003/rule"),
+				},
+			},
+			request: &Request{
+				Request: contract.Request{
+					TraceID: "case 003",
+					Path:    "/case003/event_type/2/",
+					Data: map[string]interface{}{
+						"event_type":
+						map[string]interface{}{
+							"name":       "type X",
+							"account_id": 5,
+						},
+					},
+				},
+			},
+
+			expect: `{
+	  "Status": "ok",
+	  "Data": {
+		"@assertPath@event_type.id": 2
+	  }
+}`,
+		},
 	}
 
 	for _, useCase := range useCases {

@@ -1,6 +1,7 @@
 package writer
 
 import (
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/generic"
@@ -13,6 +14,9 @@ func NewCollection(data map[string]interface{}, view *data.View, io *data.IO) (g
 	result := generic.NewProvider().NewSlice()
 	values, ok := data[io.Key]
 	if !ok {
+		if shared.IsLoggingEnabled() {
+			fmt.Printf("no input data for %v\n", io.Key)
+		}
 		return result, nil
 	}
 
@@ -27,6 +31,7 @@ func NewCollection(data map[string]interface{}, view *data.View, io *data.IO) (g
 		if !ok {
 			return nil, errors.Errorf("invalid input data: %v, expected: %T, but had: %T", io.Key, aMap, values)
 		}
+
 		result.Add(aMap)
 	default:
 		//TODO optimize storage in the original json decoding, and add optimized data type support here

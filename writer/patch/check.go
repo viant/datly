@@ -13,6 +13,9 @@ import (
 const existingTemplate = "SELECT %v FROM %v WHERE (%v) IN (%v)"
 
 func (p *service) removeNonExisting(ctx context.Context, manager dsc.Manager, conn dsc.Connection, view *data.View, index map[string][]interface{}, metrics *metric.Metrics) error {
+	if len(index) == 0 {
+		return nil
+	}
 	var SQLValues = make([]interface{}, 0)
 	var placeholders = make([]string, 0)
 	var repeat = "?"
