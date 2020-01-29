@@ -5,10 +5,10 @@ import (
 	"strings"
 )
 
-//Index represents index function
+//Index represents Index function
 type Index func(values interface{}) string
 
-//NewIndex returns an index for supplied keys
+//NewIndex returns an Index for supplied keys
 func NewIndex(keys []string) Index {
 	return func(values interface{}) string {
 		object, isObject := values.(*Object)

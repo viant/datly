@@ -24,7 +24,10 @@ func (r *Rule) Validate() error {
 	if r.Path == "" {
 		return errors.Errorf("Path was empty, %v", r.Info.URL)
 	}
-	return r.Meta.Validate()
+	if err := r.Meta.Validate(); err != nil {
+		return errors.Wrapf(err, "failed to validate rule: %v", r.Info.URL)
+	}
+	return nil
 }
 
 //Init initialise rule

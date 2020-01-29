@@ -5,7 +5,7 @@ views:
     criteria:
       expression: event_type_id IN ($types.id)
     bindings:
-      - placeholder: types
+      - name: types
         dataView: event_types
         default: 0
 

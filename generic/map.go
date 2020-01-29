@@ -12,6 +12,17 @@ func (m *Map) Proto() *Proto {
 	return m._proto
 }
 
+//First return a  map elements
+func (s Map) First() *Object {
+	if s.Size() == 0 {
+		return nil
+	}
+	for _, v := range s._map {
+		return &Object{_proto: s._proto, _data: v}
+	}
+	return nil
+}
+
 //Range calls handler with every slice element
 func (m Map) Range(handler func(item interface{}) (bool, error)) error {
 	return m.Objects(func(item *Object) (b bool, err error) {

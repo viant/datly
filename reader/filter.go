@@ -1,10 +1,10 @@
 package reader
 
-import "github.com/viant/datly/base"
+import "github.com/viant/datly/filter"
 
-var _filters = base.NewFilters()
+var _filters = filter.NewFilters()
 
 //Filters returns a reader filter singleton
-func Filters() *base.Filters {
+func Filters() *filter.Filters {
 	return _filters
 }

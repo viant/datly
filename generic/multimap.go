@@ -12,6 +12,17 @@ func (m *Multimap) Proto() *Proto {
 	return m._proto
 }
 
+//First returns an element from multimap
+func (s Multimap) First() *Object {
+	if s.Size() == 0 {
+		return nil
+	}
+	for _, v := range s._map {
+		return &Object{_proto: s._proto, _data: v[0]}
+	}
+	return nil
+}
+
 //Add add item to a map
 func (m *Multimap) Add(values map[string]interface{}) {
 	object := &Object{_proto: m._proto, _data: make([]interface{}, 0)}

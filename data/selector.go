@@ -1,7 +1,7 @@
 package data
 
 import (
-	"github.com/viant/datly/base"
+	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox"
 	"strings"
 )
@@ -33,7 +33,7 @@ func (s Selector) Clone() *Selector {
 
 //Apply applies selector values
 func (s *Selector) Apply(bindings map[string]interface{}) {
-	if value, ok := bindings[s.Prefix+base.FieldsKey]; ok {
+	if value, ok := bindings[s.Prefix+shared.FieldsKey]; ok {
 		if fields := toolbox.AsString(value); value != "" {
 			s.Columns = asStringSlice(fields)
 			s.selected = make(map[string]bool)
@@ -42,25 +42,25 @@ func (s *Selector) Apply(bindings map[string]interface{}) {
 			}
 		}
 	}
-	if value, ok := bindings[s.Prefix+base.OrderByKey]; ok {
+	if value, ok := bindings[s.Prefix+shared.OrderByKey]; ok {
 		s.OrderBy = toolbox.AsString(value)
 	}
 
-	if value, ok := bindings[s.Prefix+base.CriteriaKey]; ok {
+	if value, ok := bindings[s.Prefix+shared.CriteriaKey]; ok {
 		if s.Criteria == nil {
 			s.Criteria = &Criteria{}
 		}
 		s.Criteria.Expression = toolbox.AsString(value)
-		if value, ok := bindings[s.Prefix+base.ParamsKey]; ok {
+		if value, ok := bindings[s.Prefix+shared.ParamsKey]; ok {
 			if fields := toolbox.AsString(value); value != "" {
 				s.Criteria.Params = asStringSlice(fields)
 			}
 		}
 	}
-	if value, ok := bindings[s.Prefix+base.LimitKey]; ok {
+	if value, ok := bindings[s.Prefix+shared.LimitKey]; ok {
 		s.Limit = toolbox.AsInt(value)
 	}
-	if value, ok := bindings[s.Prefix+base.OffsetKey]; ok {
+	if value, ok := bindings[s.Prefix+shared.OffsetKey]; ok {
 		s.Offset = toolbox.AsInt(value)
 	}
 }

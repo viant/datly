@@ -3,8 +3,7 @@ package data
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/go-errors/errors"
-	"github.com/viant/datly/base"
+	"github.com/pkg/errors"
 	"github.com/viant/datly/generic"
 	"strings"
 )
@@ -22,68 +21,66 @@ type Reference struct {
 }
 
 //View returns association view
-func (a *Reference) View() *View {
-	return a._view
+func (r *Reference) View() *View {
+	return r._view
 }
 
 //Index returns index
-func (a *Reference) Index() generic.Index {
-	return a._index
+func (r *Reference) Index() generic.Index {
+	return r._index
 }
 
 //RefIndex returns ref index
-func (a *Reference) RefIndex() generic.Index {
-	return a._refIndex
+func (r *Reference) RefIndex() generic.Index {
+	return r._refIndex
 }
 
 //Alias returns alias
-func (a *Reference) Alias() string {
-	return a._alias
+func (r *Reference) Alias() string {
+	return r._alias
 }
 
 //RefColumns returns reference match columns
-func (a *Reference) RefColumns() []string {
+func (r *Reference) RefColumns() []string {
 	var result = make([]string, 0)
-	for _, on := range a.On {
+	for _, on := range r.On {
 		result = append(result, on.RefColumn)
 	}
 	return result
 }
 
 //Columns returns owner match columns
-func (a *Reference) Columns() []string {
+func (r *Reference) Columns() []string {
 	var result = make([]string, 0)
-	for _, on := range a.On {
+	for _, on := range r.On {
 		result = append(result, on.Column)
 	}
 	return result
 }
 
 //Criteria reference criteria
-func (a *Reference) Criteria(alias string) string {
+func (r *Reference) Criteria(alias string) string {
 	var result = make([]string, 0)
-	for _, on := range a.On {
-		result = append(result, fmt.Sprintf("%v.%v = %v.%v", a._alias, on.Column, alias, on.RefColumn))
+	for _, on := range r.On {
+		result = append(result, fmt.Sprintf("%v.%v = %v.%v", r._alias, on.Column, alias, on.RefColumn))
 	}
 	return strings.Join(result, " AND ")
 }
 
 //Validate checks if reference is valid
-func (a Reference) Validate() error {
-	if a.Name == "" {
-		info, _ := json.Marshal(a)
+func (r Reference) Validate() error {
+	if r.Name == "" {
+		info, _ := json.Marshal(r)
 		return errors.Errorf("reference 'name' was empty for %s", info)
 	}
-	switch a.Cardinality {
-	case base.CardinalityMany, base.CardinalityOne:
-	default:
-		return errors.Errorf("unsupported reference cardinality: '%s', supported: %v, %v", a.Cardinality, a.Name, base.CardinalityMany, base.CardinalityOne)
+	if err := ValidateCardinality(r.Cardinality); err != nil {
+		return errors.Wrapf(err, "invalid reference: %v", r.Name)
 	}
-	if a.DataView == "" {
-		return errors.Errorf("reference 'dataView' was empty for %v", a.Name)
+	if r.DataView == "" {
+		return errors.Errorf("reference 'dataView' was empty for %v", r.Name)
 	}
-	if len(a.On) == 0 {
-		return errors.Errorf("reference 'on' criteria was empty for %v", a.Name)
+	if len(r.On) == 0 {
+		return errors.Errorf("reference 'on' criteria was empty for %v", r.Name)
 	}
 	return nil
 }

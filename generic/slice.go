@@ -30,6 +30,14 @@ func (s Slice) Size() int {
 }
 
 //Objects iterate over object slice, any update to objects are applied to the slice
+func (s Slice) First() *Object {
+	if s.Size() == 0 {
+		return nil
+	}
+	return &Object{_proto: s._proto, _data: s._data[0]}
+}
+
+//Objects iterate over object slice, any update to objects are applied to the slice
 func (s *Slice) Objects(handler func(item *Object) (bool, error)) error {
 	data := s._data
 	object := &Object{_proto: s._proto}

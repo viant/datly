@@ -13,7 +13,7 @@ func TestMap_Object(t *testing.T) {
 		values      []map[string]interface{}
 	}{
 		{
-			description: "single field index",
+			description: "single field Index",
 			values: []map[string]interface{}{
 				{
 					"k1": "v1",

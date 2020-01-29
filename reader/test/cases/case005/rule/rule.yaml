@@ -1,0 +1,13 @@
+Path: /case005/
+views:
+  - table: events
+    connector: db
+    criteria:
+      expression: user_id = ?
+      params: [userID]
+
+    bindings:
+      - name: userID
+        type: Header
+        from: User-Id
+        default: -1

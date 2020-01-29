@@ -32,13 +32,29 @@ func (o *Object) SetValue(name string, value interface{}) {
 	field.Set(value, &o._data)
 }
 
-//Value get value for supplied name
+//Values get value for supplied name
 func (o *Object) Value(name string) interface{} {
 	field := o._proto.Field(name)
 	if field == nil {
 		return nil
 	}
 	return field.Get(o._data)
+}
+
+//ValueAt get value for supplied filed Index
+func (o *Object) ValueAt(index int) interface{} {
+	if index >= len(o._data) {
+		return nil
+	}
+	return Value(o._data[index])
+}
+
+//HasAt returns true if has value
+func (o *Object) HasAt(index int) bool {
+	if index >= len(o._data) {
+		return false
+	}
+	return o._data[index] != nil
 }
 
 //FloatValue return float for supplied name

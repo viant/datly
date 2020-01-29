@@ -3,20 +3,22 @@ package data
 import (
 	"fmt"
 	"github.com/pkg/errors"
-	"github.com/viant/datly/base"
 	"github.com/viant/datly/generic"
+	"github.com/viant/datly/shared"
 )
 
 //Meta represents an abstraction describing data access rules
 type Meta struct {
-	Output      []*Output `json:",omitempty"`
-	Views       []*View   `json:",omitempty"`
-	TemplateURL string    `json:",omitempty"`
+	Input       []*IO   `json:",omitempty"`
+	Output      []*IO   `json:",omitempty"`
+	Views       []*View `json:",omitempty"`
+	TemplateURL string  `json:",omitempty"`
 	template    *Meta
 }
 
 //Init initialises views and outputs.
 func (m *Meta) Init() error {
+	m.initInput()
 	m.initOutput()
 	return m.initViews()
 }
@@ -47,10 +49,10 @@ func (m *Meta) initOutput() {
 		key := m.Views[0].Table
 		if key == "" {
 			if key = m.Views[0].Name; key == "" {
-				key = base.DefaultDataOutputKey
+				key = shared.DefaultDataOutputKey
 			}
 		}
-		m.Output = []*Output{
+		m.Output = []*IO{
 			{
 				DataView: m.Views[0].Name,
 				Key:      key,
@@ -60,6 +62,28 @@ func (m *Meta) initOutput() {
 	if len(m.Output) > 0 {
 		for i := range m.Output {
 			m.Output[i].Init()
+		}
+	}
+}
+
+func (m *Meta) initInput() {
+	if len(m.Input) == 0 && len(m.Views) > 0 {
+		key := m.Views[0].Table
+		if key == "" {
+			if key = m.Views[0].Name; key == "" {
+				key = shared.DefaultDataOutputKey
+			}
+		}
+		m.Input = []*IO{
+			{
+				DataView: m.Views[0].Name,
+				Key:      key,
+			},
+		}
+	}
+	if len(m.Input) > 0 {
+		for i := range m.Input {
+			m.Input[i].Init()
 		}
 	}
 }
@@ -79,7 +103,12 @@ func (m *Meta) Validate() error {
 	}
 	for _, output := range m.Output {
 		if err := output.Validate(); err != nil {
-			return err
+			return errors.Wrapf(err, "invalid output")
+		}
+	}
+	for _, input := range m.Input {
+		if err := input.Validate(); err != nil {
+			return errors.Wrapf(err, "invalid input")
 		}
 	}
 	return nil

@@ -2,7 +2,7 @@ package config
 
 import (
 	"github.com/go-errors/errors"
-	"github.com/viant/datly/base"
+	"github.com/viant/datly/shared"
 	"github.com/viant/dsc"
 )
 
@@ -18,7 +18,7 @@ type Connector struct {
 //Init initialise connector
 func (c *Connector) Init() error {
 	if c.Dialect == "" {
-		c.Dialect = base.DialectSQL
+		c.Dialect = shared.DialectSQL
 	}
 	return nil
 }

@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/viant/datly/base"
+	"github.com/viant/datly/base/contract"
 	"github.com/viant/datly/config"
+	"github.com/viant/datly/data"
 	"github.com/viant/datly/generic"
-	"github.com/viant/datly/visitor"
+	"github.com/viant/datly/shared"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
@@ -23,7 +24,7 @@ import (
 func TestService_Read(t *testing.T) {
 
 	testLocation := toolbox.CallerDirectory(3)
-	basePath := path.Join(testLocation, "test/read/")
+	basePath := path.Join(testLocation, "test/cases/")
 	connectorURL := path.Join(basePath, "connectors")
 
 	var useCases = []struct {
@@ -32,7 +33,7 @@ func TestService_Read(t *testing.T) {
 		hasConfigError bool
 		hasReadError   bool
 		visitor        string
-		visit          visitor.Visit
+		visit          data.Visit
 		caseDataPath   string
 		request        *Request
 		expect         interface{}
@@ -49,7 +50,7 @@ func TestService_Read(t *testing.T) {
 				},
 			},
 			request: &Request{
-				Request: base.Request{
+				Request: contract.Request{
 					TraceID: "case 001",
 					Path:    "/case001/",
 				},
@@ -76,7 +77,7 @@ func TestService_Read(t *testing.T) {
 				},
 			},
 			request: &Request{
-				Request: base.Request{
+				Request: contract.Request{
 					TraceID: "case 002",
 					Path:    "/case002/36/blah",
 				},
@@ -102,7 +103,7 @@ func TestService_Read(t *testing.T) {
 				},
 			},
 			request: &Request{
-				Request: base.Request{
+				Request: contract.Request{
 					TraceID: "case 003",
 					Path:    "/case003/",
 				},
@@ -130,7 +131,7 @@ func TestService_Read(t *testing.T) {
 				},
 			},
 			request: &Request{
-				Request: base.Request{
+				Request: contract.Request{
 					TraceID: "case 004",
 					Path:    "/case004/",
 					QueryParams: url.Values{
@@ -162,7 +163,7 @@ func TestService_Read(t *testing.T) {
 				},
 			},
 			request: &Request{
-				Request: base.Request{
+				Request: contract.Request{
 					TraceID: "case 005",
 					Path:    "/case005/",
 					Headers: http.Header{
@@ -197,7 +198,7 @@ func TestService_Read(t *testing.T) {
 				},
 			},
 			request: &Request{
-				Request: base.Request{
+				Request: contract.Request{
 					TraceID: "case 006",
 					Path:    "/case006/",
 					QueryParams: url.Values{
@@ -229,7 +230,7 @@ func TestService_Read(t *testing.T) {
 				},
 			},
 			request: &Request{
-				Request: base.Request{
+				Request: contract.Request{
 					TraceID: "case 007",
 					Path:    "/case007/",
 					QueryParams: url.Values{
@@ -259,7 +260,7 @@ func TestService_Read(t *testing.T) {
 				},
 			},
 			request: &Request{
-				Request: base.Request{
+				Request: contract.Request{
 					TraceID: "case 008",
 					Path:    "/case008/events/1",
 				},
@@ -277,7 +278,7 @@ func TestService_Read(t *testing.T) {
 			description:  "read with visitor",
 			caseDataPath: "/case001/",
 			visitor:      "EventColors",
-			visit: func(ctx context.Context, object *generic.Object) (b bool, err error) {
+			visit: func(ctx context.Context, view *data.View, object *generic.Object) (b bool, err error) {
 				quantity, err := object.FloatValue("quantity")
 				if err != nil || quantity == nil {
 					return true, err
@@ -298,7 +299,7 @@ func TestService_Read(t *testing.T) {
 				},
 			},
 			request: &Request{
-				Request: base.Request{
+				Request: contract.Request{
 					TraceID: "case 009",
 					Path:    "/case009/",
 				},
@@ -318,7 +319,7 @@ func TestService_Read(t *testing.T) {
 	//Set visitors
 	for _, useCase := range useCases {
 		if useCase.visitor != "" {
-			visitor.Registry().Register(useCase.visitor, useCase.visit)
+			data.VisitorRegistry().Register(useCase.visitor, useCase.visit)
 		}
 	}
 
@@ -326,7 +327,7 @@ func TestService_Read(t *testing.T) {
 		if !dsunit.InitFromURL(t, path.Join(testLocation, "test", "config.yaml")) {
 			return
 		}
-		initDataset := dsunit.NewDatasetResource("db", path.Join(testLocation, fmt.Sprintf("test/read%vprepare", useCase.caseDataPath)), "", "")
+		initDataset := dsunit.NewDatasetResource("db", path.Join(testLocation, fmt.Sprintf("test/cases%vprepare", useCase.caseDataPath)), "", "")
 		if !dsunit.Prepare(t, dsunit.NewPrepareRequest(initDataset)) {
 			return
 		}
@@ -344,7 +345,7 @@ func TestService_Read(t *testing.T) {
 
 		response := srv.Read(ctx, useCase.request)
 		if useCase.hasReadError {
-			assert.EqualValues(t, base.StatusError, response.Status, useCase.description)
+			assert.EqualValues(t, shared.StatusError, response.Status, useCase.description)
 			continue
 		}
 		if !assert.Nil(t, err, useCase.description) {
@@ -353,7 +354,7 @@ func TestService_Read(t *testing.T) {
 		jsonResponse, _ := json.Marshal(response)
 		if !assertly.AssertValues(t, useCase.expect, string(jsonResponse), useCase.description) {
 			fmt.Printf("read: %s\n", jsonResponse)
-			toolbox.DumpIndent(response, true)
+			toolbox.DumpIndent(response, false)
 		}
 	}
 

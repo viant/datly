@@ -2,7 +2,7 @@ package cache
 
 var cacheRegistry ServiceRegistry
 
-//Registry returns cache registry singleton
+//Data returns cache registry singleton
 func Registry() ServiceRegistry {
 	if cacheRegistry != nil {
 		return cacheRegistry

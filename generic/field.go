@@ -7,12 +7,12 @@ import (
 
 //Field represents dynamic filed
 type Field struct {
-	Name          string
-	Type          reflect.Type
-	provider      *Provider
-	index         int
-	formattedName string
-	hidden        bool
+	Name       string
+	Type       reflect.Type
+	Index      int
+	provider   *Provider
+	outputName string
+	hidden     bool
 }
 
 //Set sets a field value
@@ -29,16 +29,19 @@ func (f *Field) Set(value interface{}, result *[]interface{}) {
 			object.Init(toolbox.AsMap(value))
 		}
 	}
+	if value == nil {
+		value = nilValue
+	}
 	values := *result
-	values = reallocateIfNeeded(f.index+1, values)
-	values[f.index] = value
+	values = reallocateIfNeeded(f.Index+1, values)
+	values[f.Index] = value
 	*result = values
 }
 
 //Get returns field value
 func (f *Field) Get(values []interface{}) interface{} {
-	if f.index < len(values) {
-		return values[f.index]
+	if f.Index < len(values) {
+		return Value(values[f.Index])
 	}
 	return nil
 }

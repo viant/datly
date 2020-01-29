@@ -2,13 +2,13 @@ package lambda
 
 import (
 	"context"
-	"github.com/viant/datly/app/aws/bridge"
-	"github.com/viant/datly/base"
-	"github.com/viant/datly/reader"
-	"github.com/viant/datly/singleton"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/pkg/errors"
+	"github.com/viant/datly/app/aws/bridge"
+	"github.com/viant/datly/reader"
+	"github.com/viant/datly/shared"
+	"github.com/viant/datly/singleton"
 	"os"
 )
 
@@ -27,7 +27,7 @@ func handleRequest(ctx context.Context, apiRequest events.APIGatewayProxyRequest
 }
 
 func handleRead(ctx context.Context, apiRequest events.APIGatewayProxyRequest, response *events.APIGatewayProxyResponse) error {
-	config := os.Getenv(base.ConfigKey)
+	config := os.Getenv(shared.ConfigKey)
 	service, err := singleton.Reader(ctx, config)
 	if err != nil {
 		return errors.Wrapf(err, "failed to create reader with config: %v", config)

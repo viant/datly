@@ -1,0 +1,4 @@
+name: db
+config:
+  driverName: sqlite3
+  descriptor: ./test/db/mydb.db

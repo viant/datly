@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/pkg/errors"
 	"github.com/viant/afs"
-	"github.com/viant/datly/base"
 	"io/ioutil"
 	"net/url"
 	"path"
@@ -18,7 +17,7 @@ type Rules struct {
 	URL      string
 	registry map[string]*Rule
 	rules    []*Rule
-	Loader   *base.Loader
+	Loader   *Loader
 }
 
 // Len is the number of elements in the collection.
@@ -42,7 +41,7 @@ func (r Rules) Less(i, j int) bool {
 //Init initialises rules
 func (r *Rules) Init(ctx context.Context, fs afs.Service) error {
 	r.registry = make(map[string]*Rule)
-	r.Loader = base.NewLoader(r.URL, time.Second, fs, r.modify, r.remove)
+	r.Loader = NewLoader(r.URL, time.Second, fs, r.modify, r.remove)
 	_, err := r.Loader.Notify(ctx, fs)
 	return err
 }
@@ -56,7 +55,7 @@ func (r Rules) Match(Path string) (*Rule, url.Values) {
 	values := url.Values{}
 	for _, rule := range r.rules {
 		if strings.HasPrefix(Path, rule.PathPrefix) {
-			params, matched := base.MatchPath(rule.Path, Path)
+			params, matched := MatchPath(rule.Path, Path)
 			if !matched {
 				continue
 			}

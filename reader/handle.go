@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/pkg/errors"
-	"github.com/viant/datly/base"
+	"github.com/viant/datly/base/contract"
+	"github.com/viant/datly/filter"
+	"github.com/viant/datly/shared"
 	"net/http"
 )
 
 //HandleRead handles read request
-func HandleRead(srv Service, filters ...base.Filter) base.Handle {
+func HandleRead(srv Service, filters ...filter.Filter) shared.Handle {
 	readerFilters := Filters()
 	filters = append(filters, readerFilters.Items...)
 	return func(writer http.ResponseWriter, httpRequest *http.Request) {
@@ -20,7 +22,7 @@ func HandleRead(srv Service, filters ...base.Filter) base.Handle {
 	}
 }
 
-func handleRequest(httpRequest *http.Request, writer http.ResponseWriter, filters []base.Filter, srv Service) error {
+func handleRequest(httpRequest *http.Request, writer http.ResponseWriter, filters []filter.Filter, srv Service) error {
 	ctx := context.Background()
 	request := &Request{}
 	err := request.Init(httpRequest)
@@ -42,10 +44,10 @@ func handleRequest(httpRequest *http.Request, writer http.ResponseWriter, filter
 	response.WriteHeaders(writer)
 	if request.DataOnly {
 		output := struct {
-			base.Registry
-			base.StatusInfo
+			Data map[string]interface{}
+			contract.StatusInfo
 		}{
-			Registry:   response.Registry,
+			Data:       response.Data,
 			StatusInfo: response.StatusInfo,
 		}
 		return json.NewEncoder(writer).Encode(output)

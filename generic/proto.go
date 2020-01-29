@@ -13,22 +13,37 @@ type Proto struct {
 	fieldNames       map[string]*Field
 	fields           []*Field
 	caseFormat       int
-	targetCaseFormat int
+	outputCaseFormat int
+	inputCaseFormat  int
 }
 
 //OutputCaseFormat set output case format
-func (s *Proto) OutputCaseFormat(source, target string) error {
+func (s *Proto) OutputCaseFormat(source, output string) error {
 	var ok bool
 	s.caseFormat, ok = CaseFormat[source]
 	if !ok {
 		return errors.Errorf("invalid case format: %v", source)
 	}
-	s.targetCaseFormat, ok = CaseFormat[target]
+	s.outputCaseFormat, ok = CaseFormat[output]
 	if !ok {
-		return errors.Errorf("invalid case format: %v", target)
+		return errors.Errorf("invalid output case format: %v", output)
 	}
 	for i, field := range s.fields {
-		s.fields[i].formattedName = toolbox.ToCaseFormat(field.Name, s.caseFormat, s.targetCaseFormat)
+		s.fields[i].outputName = toolbox.ToCaseFormat(field.Name, s.caseFormat, s.outputCaseFormat)
+	}
+	return nil
+}
+
+//InputCaseFormat set output case format
+func (s *Proto) InputCaseFormat(source, input string) error {
+	var ok bool
+	s.caseFormat, ok = CaseFormat[source]
+	if !ok {
+		return errors.Errorf("invalid case format: %v", source)
+	}
+	s.inputCaseFormat, ok = CaseFormat[input]
+	if !ok {
+		return errors.Errorf("invalid input case format: %v", input)
 	}
 	return nil
 }
@@ -54,7 +69,7 @@ func (s *Proto) Show(name string) {
 //Size returns _proto size
 func (s *Proto) Size() int {
 	s.lock.RLock()
-	result := len(s.fieldNames)
+	result := len(s.fields)
 	s.lock.RUnlock()
 	return result
 }
@@ -78,12 +93,13 @@ func (s *Proto) asMap(values []interface{}) map[string]interface{} {
 			continue
 		}
 		var value interface{}
-		if field.index < len(values) {
-			value = values[field.index]
+		if field.Index < len(values) {
+			value = values[field.Index]
 		}
+		value = Value(value)
 		fieldName := field.Name
-		if field.formattedName != "" {
-			fieldName = field.formattedName
+		if field.outputName != "" {
+			fieldName = field.outputName
 		}
 		result[fieldName] = value
 	}
@@ -123,13 +139,23 @@ func (s *Proto) getField(fieldName string, value interface{}) *Field {
 	if value != nil && toolbox.IsMap(value) && toolbox.IsSlice(value) {
 		field.provider = NewProvider()
 	}
-	field = &Field{Name: fieldName, index: len(s.fieldNames), Type: reflect.TypeOf(value)}
-	if s.caseFormat != s.targetCaseFormat {
-		field.formattedName = toolbox.ToCaseFormat(field.Name, s.caseFormat, s.targetCaseFormat)
+
+	inputFieldName := ""
+	if s.inputCaseFormat != s.caseFormat {
+		inputFieldName = fieldName
+		fieldName = toolbox.ToCaseFormat(fieldName, s.inputCaseFormat, s.caseFormat)
+	}
+
+	field = &Field{Name: fieldName, Index: len(s.fieldNames), Type: reflect.TypeOf(value)}
+	if s.caseFormat != s.outputCaseFormat {
+		field.outputName = toolbox.ToCaseFormat(field.Name, s.caseFormat, s.outputCaseFormat)
 	}
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	s.fieldNames[fieldName] = field
+	if inputFieldName != "" {
+		s.fieldNames[inputFieldName] = field
+	}
 	s.fields = append(s.fields, field)
 	return field
 }

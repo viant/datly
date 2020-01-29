@@ -2,14 +2,15 @@ package data
 
 import (
 	"github.com/go-errors/errors"
-	"github.com/viant/datly/base"
+	"github.com/viant/datly/shared"
 	"strings"
 )
 
 //Binding represents data binding
 type Binding struct {
-	Name          string      `json:",omitempty"`
-	Placeholder   string      `json:",omitempty"`
+	Name          string      `json:",omitempty"` //placeholder name
+	When          string      `json:",omitempty"` //applies binding when criteria is met
+	From          string      `json:",omitempty"`
 	Type          string      `json:",omitempty"` //Path,QueryString,DataView,Parent
 	DataType      string      `json:",o mitempty"`
 	ComponentType string      `json:",omitempty"`
@@ -22,22 +23,22 @@ type Binding struct {
 func (b *Binding) Init() {
 	if b.Type == "" {
 		if b.DataView != "" {
-			b.Type = base.BindingDataView
+			b.Type = shared.BindingDataView
 		}
 	}
-	if b.Name == "" && b.Placeholder != "" {
-		b.Name = b.Placeholder
+	if b.From == "" && b.Name != "" {
+		b.From = b.Name
 	}
-	if b.Name != "" && b.Placeholder == "" {
-		b.Placeholder = b.Name
+	if b.From != "" && b.Name == "" {
+		b.Name = b.From
 	}
 }
 
 //Validate checks if binding is valid
 func (b Binding) Validate() error {
 	switch b.Type {
-	case base.BindingQueryString, base.BindingPath, base.BindingData, base.BindingHeader:
-	case base.BindingDataView:
+	case shared.BindingQueryString, shared.BindingPath, shared.BindingDataPool, shared.BindingBodyData, shared.BindingHeader:
+	case shared.BindingDataView:
 		if b.DataView == "" {
 			return errors.Errorf("dataView was empty for %v binding type", b.Type)
 		}
@@ -45,7 +46,7 @@ func (b Binding) Validate() error {
 		return errors.Errorf("unsupported binding.type: '%v'", b.Type)
 	}
 
-	if b.Expression != "" && strings.Contains(b.Expression, "$value") {
+	if b.Expression != "" && !strings.Contains(b.Expression, "$value") {
 		return errors.Errorf("invalid expression: %v, expected '$value' expression", b.Expression)
 	}
 	return nil

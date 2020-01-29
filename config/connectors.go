@@ -5,7 +5,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/base"
 	"io/ioutil"
 	"path"
 	"strings"
@@ -16,7 +15,7 @@ import (
 type Connectors struct {
 	registry map[string]*Connector
 	URL      string
-	Loader   *base.Loader
+	Loader   *Loader
 }
 
 //Get returns a connector for supplied name
@@ -31,7 +30,7 @@ func (c Connectors) Get(name string) (*Connector, error) {
 //Init initialises connector
 func (c *Connectors) Init(ctx context.Context, fs afs.Service) error {
 	c.registry = make(map[string]*Connector)
-	c.Loader = base.NewLoader(c.URL, time.Second, fs, c.modify, c.remove)
+	c.Loader = NewLoader(c.URL, time.Second, fs, c.modify, c.remove)
 	_, err := c.Loader.Notify(ctx, fs)
 	return err
 }

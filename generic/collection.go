@@ -12,4 +12,6 @@ type Collection interface {
 	Size() int
 	//Proto return collection component prototype
 	Proto() *Proto
+	//First returns first object
+	First() *Object
 }

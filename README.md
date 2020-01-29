@@ -204,7 +204,7 @@ views:
 
 
 ```go
-func SetEventsColor(ctx context.Context, object *generic.Object) (toContinue bool, err error) {
+func SetEventsColor(ctx context.Context, view *data.View,  object *generic.Object) (toContinue bool, err error) {
     quantity, err := object.FloatValue("quantity")
     if err != nil || quantity == nil {
         return true, err
@@ -217,7 +217,7 @@ func SetEventsColor(ctx context.Context, object *generic.Object) (toContinue boo
     return true, nil
 }
 
-visitor.Registry().Register("EventsColor", SetEventsColor)
+data.VisitorRegistry().Register(useCase.visitor, useCase.visit)
 
 ```
 

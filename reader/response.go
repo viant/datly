@@ -1,31 +1,17 @@
 package reader
 
 import (
-	"github.com/viant/datly/base"
-	"github.com/viant/datly/config"
-	"github.com/viant/datly/metric"
-	"time"
+	"github.com/viant/datly/base/contract"
 )
 
 //Response represents
 type Response struct {
-	base.Response
-	startTime   time.Time
-	Metrics     *metric.Metrics `json:",omitempty"`
-	Rule        *config.Rule    `json:",omitempty"`
-	TimeTakenMs int
-}
-
-//OnDone computes time taken
-func (r *Response) OnDone() {
-	r.TimeTakenMs = int(time.Now().Sub(r.startTime) / time.Millisecond)
+	contract.Response
 }
 
 //NewResponse creates a response
 func NewResponse() *Response {
 	return &Response{
-		startTime: time.Now(),
-		Response:  *base.NewResponse(),
-		Metrics:   metric.NewMetrics(),
+		Response: *contract.NewResponse(),
 	}
 }

@@ -15,8 +15,10 @@ import (
 type View struct {
 	Connector     string
 	Name          string
-	Alias         string
+	Alias         string        `json:",omitempty"`
 	Table         string        `json:",omitempty"`
+	PrimaryKey    []string      `json:",omitempty"`
+	Mutable       *bool         `json:",omitempty"`
 	From          *From         `json:",omitempty"`
 	Columns       []*Column     `json:",omitempty"`
 	Bindings      []*Binding    `json:",omitempty"`
@@ -39,6 +41,8 @@ func (v *View) Clone() *View {
 		Name:       v.Name,
 		Alias:      v.Alias,
 		Table:      v.Table,
+		PrimaryKey: v.PrimaryKey,
+		Mutable:    v.Mutable,
 		From:       v.From,
 		Columns:    v.Columns,
 		Bindings:   v.Bindings,
@@ -59,6 +63,12 @@ func (v *View) MergeFrom(tmpl *View) {
 	}
 	if v.Table == "" {
 		v.Table = tmpl.Table
+	}
+	if len(v.PrimaryKey) == 0 {
+		v.PrimaryKey = tmpl.PrimaryKey
+	}
+	if v.Mutable == nil {
+		v.Mutable = tmpl.Mutable
 	}
 	if v.CaseFormat == "" {
 		v.CaseFormat = tmpl.CaseFormat
@@ -94,6 +104,14 @@ func (v *View) MergeFrom(tmpl *View) {
 	if v.OnRead == nil {
 		v.OnRead = tmpl.OnRead
 	}
+}
+
+//IsMutable returns true if mutable
+func (v *View) IsMutable() bool {
+	if v.Mutable == nil {
+		return false
+	}
+	return *v.Mutable
 }
 
 //AddJoin add join
@@ -150,6 +168,16 @@ func (v View) Validate() error {
 			return errors.Wrapf(err, "invalid view: %v", v.Name)
 		}
 	}
+
+	if v.Mutable != nil && *v.Mutable {
+		if len(v.PrimaryKey) == 0 {
+			return errors.Errorf("primaryKey was empty on data view %v", v.Name)
+		}
+		if v.Table == "" {
+			return errors.Errorf("table was empty on data view %v", v.Name)
+		}
+	}
+
 	return nil
 }
 
@@ -181,6 +209,10 @@ func (v *View) Init(setPrefix bool) error {
 		if v._cacheService, err = cache.Registry().Get(v.Cache.Service); err != nil {
 			return err
 		}
+	}
+	//If primary key is specified set mutable flag be default
+	if isMutable := len(v.PrimaryKey) > 0; isMutable && v.Mutable == nil {
+		v.Mutable = &isMutable
 	}
 	return nil
 }
