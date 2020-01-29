@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/db"
+	"github.com/viant/datly/db/manager"
 	"github.com/viant/datly/matcher"
 	"github.com/viant/datly/metric"
 	"github.com/viant/dsc"
@@ -28,8 +29,8 @@ type service struct {
 }
 
 //BuildDataPool build data pool
-func (s *service) BuildDataPool(ctx context.Context, request contract.Request, view *data.View, rule *config.Rule, metrics *metric.Metrics) (data.Pool, error) {
-	return s.binder.BuildDataPool(ctx, request, view, rule, metrics)
+func (s *service) BuildDataPool(ctx context.Context, request contract.Request, view *data.View, rule *config.Rule, metrics *metric.Metrics, filterType ... string) (data.Pool, error) {
+	return s.binder.BuildDataPool(ctx, request, view, rule, metrics, filterType...)
 }
 
 //Manager returns db manager
@@ -48,7 +49,7 @@ func New(ctx context.Context, config *config.Config) (Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	dbService := db.New(config)
+	dbService := manager.New(config)
 	return &service{
 		Service: matcher,
 		db:      dbService,

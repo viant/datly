@@ -17,18 +17,25 @@ import (
 
 //Service represents binding service
 type Service interface {
-	BuildDataPool(ctx context.Context, request contract.Request, view *data.View, rule *config.Rule, metrics *metric.Metrics) (data.Pool, error)
+	BuildDataPool(ctx context.Context, request contract.Request, view *data.View, rule *config.Rule, metrics *metric.Metrics, sourceType ...string) (data.Pool, error)
 }
 
 type service struct {
 	db db.Service
 }
 
-func (s *service) BuildDataPool(ctx context.Context, request contract.Request, view *data.View, rule *config.Rule, metrics *metric.Metrics) (data.Pool, error) {
+func (s *service) BuildDataPool(ctx context.Context, request contract.Request, view *data.View, rule *config.Rule, metrics *metric.Metrics, sourceType ...string) (data.Pool, error) {
 	var result = data.Pool{}
-	config.MergeValues(request.QueryParams, result)
-	config.MergeMap(request.Data, result)
-	config.MergeValues(request.PathParams, result)
+	filter := indexFilter(sourceType)
+	if len(filter) == 0 || filter[shared.BindingQueryString] {
+		config.MergeValues(request.QueryParams, result)
+	}
+	if len(filter) == 0 || filter[shared.BindingBodyData] {
+		config.MergeMap(request.Data, result)
+	}
+	if len(filter) == 0 || filter[shared.BindingPath] {
+		config.MergeValues(request.PathParams, result)
+	}
 	var err error
 	if len(view.Bindings) > 0 {
 
@@ -65,6 +72,14 @@ func (s *service) BuildDataPool(ctx context.Context, request contract.Request, v
 		}
 	}
 	return result, nil
+}
+
+func indexFilter(sourceType []string) map[string]bool {
+	whiteList := make(map[string]bool)
+	for _, bindingType := range sourceType {
+		whiteList[bindingType] = true
+	}
+	return whiteList
 }
 
 func (s *service) loadViewData(ctx context.Context, binding *data.Binding, dataPool data.Pool, rule *config.Rule, metrics *metric.Metrics) (interface{}, error) {

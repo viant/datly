@@ -85,14 +85,16 @@ func (p *service) writeInputData(ctx context.Context, rule *config.Rule, io *dat
 		return errors.Wrapf(err, "failed to build collection for data view: %v", view.Name)
 	}
 	patched.Put(view.Name, collection)
-	dataPool, err := p.BuildDataPool(ctx, req.Request, view, rule, resp.Metrics)
+	dataPool, err := p.BuildDataPool(ctx, req.Request, view, rule, resp.Metrics, shared.BindingPath)
 	if err != nil {
 		return errors.Wrapf(err, "failed to build data pool for data view: %v", view.Name)
 	}
-	return p.patchDataView(ctx, view, collection, dataPool, resp.Metrics)
+
+
+	return p.patchDataView(ctx, view, collection, dataPool, req, resp.Metrics)
 }
 
-func (p *service) patchDataView(ctx context.Context, view *data.View, collection generic.Collection, pool data.Pool, metrics *metric.Metrics) (err error) {
+func (p *service) patchDataView(ctx context.Context, view *data.View, collection generic.Collection, dataPool data.Pool, request *Request, metrics *metric.Metrics) (err error) {
 	manager, err := p.Manager(ctx, view.Connector)
 	if err != nil {
 		return err
@@ -113,6 +115,9 @@ func (p *service) patchDataView(ctx context.Context, view *data.View, collection
 		_ = dbConn.Close()
 	}()
 	indexer := db.NewIndexer(view)
+	if len(dataPool) > 0 {
+
+	}
 	index := indexer.Index(collection)
 	if checkErr := p.removeNonExisting(ctx, manager, dbConn, view, index, metrics); checkErr != nil {
 		return errors.Wrapf(checkErr, "failed to index existing record on %v", view.Table)
@@ -120,7 +125,7 @@ func (p *service) patchDataView(ctx context.Context, view *data.View, collection
 
 	err = dbConn.Begin()
 	if err != nil {
-		return errors.Wrapf(err, "failed to open transacion on %v", view.Table)
+		return errors.Wrapf(err, "failed to open transaction on %v", view.Table)
 	}
 	inTransaction = true
 	if len(index) != collection.Size() {

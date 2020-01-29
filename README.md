@@ -204,7 +204,7 @@ views:
 
 
 ```go
-func SetEventsColor(ctx context.Context, view *data.View,  object *generic.Object) (toContinue bool, err error) {
+func SetEventsColor(ctx context.Context, db db.Service, view *data.View, object *generic.Object) (toContinue bool, err error) {
     quantity, err := object.FloatValue("quantity")
     if err != nil || quantity == nil {
         return true, err

@@ -119,7 +119,7 @@ func (s *service) readViewData(ctx context.Context, collection generic.Collectio
 	}
 	if view.OnRead != nil {
 		collection.Objects(func(item *generic.Object) (toContinue bool, err error) {
-			return view.OnRead.Visit(ctx, view, item)
+			return view.OnRead.Visit(ctx, s.Service, view, item)
 		})
 	}
 	return err

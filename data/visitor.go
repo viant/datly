@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"github.com/viant/datly/db"
 	"github.com/viant/datly/generic"
 )
 
@@ -18,6 +19,6 @@ func (v *Visitor) Init() error {
 }
 
 //Visit visit an object
-func (v *Visitor) Visit(ctx context.Context, view *View, object *generic.Object) (bool, error) {
-	return v._visit(ctx, view, object)
+func (v *Visitor) Visit(ctx context.Context, db db.Service, view *View,  object *generic.Object) (bool, error) {
+	return v._visit(ctx, db, view, object)
 }
