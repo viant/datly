@@ -34,12 +34,10 @@ func handleRead(ctx context.Context, apiRequest events.APIGatewayProxyRequest, r
 	}
 	httpRequest, err := bridge.NewHTTPRequest(&apiRequest)
 	if err != nil {
-		return  errors.Wrapf(err, "failed to create http.Request")
+		return errors.Wrapf(err, "failed to create http.Request")
 	}
 	writer := bridge.NewHTTPWriter(response)
 	handle := reader.HandleRead(service)
 	handle(writer, httpRequest)
 	return nil
 }
-
-

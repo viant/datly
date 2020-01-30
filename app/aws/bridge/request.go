@@ -22,7 +22,7 @@ func NewHTTPRequest(apiRequest *events.APIGatewayProxyRequest) (*http.Request, e
 		values := url.Values(apiRequest.MultiValueQueryStringParameters)
 		apiURI += "?" + values.Encode()
 	}
-	if ! strings.HasPrefix(apiURI, "/") {
+	if !strings.HasPrefix(apiURI, "/") {
 		apiURI = "/" + apiURI
 	}
 	URL, err := url.Parse(fmt.Sprintf("https://localhost%v", apiURI))

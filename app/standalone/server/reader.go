@@ -2,10 +2,10 @@ package server
 
 import (
 	"context"
-	"github.com/viant/datly/reader"
-	"github.com/viant/datly/singleton"
 	"flag"
 	"fmt"
+	"github.com/viant/datly/reader"
+	"github.com/viant/datly/singleton"
 	"github.com/viant/toolbox/url"
 	"log"
 	"net/http"

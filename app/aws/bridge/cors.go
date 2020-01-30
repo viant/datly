@@ -7,7 +7,7 @@ import (
 //SetCORSHeaderIfNeeded sets CORS headers
 func SetCORSHeaderIfNeeded(apiRequest *events.APIGatewayProxyRequest, response *events.APIGatewayProxyResponse) {
 	origin, ok := apiRequest.Headers["Origin"]
-	if ! ok {
+	if !ok {
 		return
 	}
 	if len(response.Headers) == 0 {

@@ -6,7 +6,7 @@ import (
 )
 
 //ErrorAPIGatewayResponse returns error api gateway response
-func ErrorAPIGatewayResponse(err error) (events.APIGatewayProxyResponse) {
+func ErrorAPIGatewayResponse(err error) events.APIGatewayProxyResponse {
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusInternalServerError,
 		Body:       err.Error(),

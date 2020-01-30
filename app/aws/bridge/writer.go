@@ -15,7 +15,7 @@ func (r *responseWriter) Header() http.Header {
 }
 
 //Write write response data
-func (r *responseWriter) Write(bs []byte) (int, error){
+func (r *responseWriter) Write(bs []byte) (int, error) {
 	r.proxy.Body += string(bs)
 	return len(bs), nil
 }
@@ -28,7 +28,7 @@ func (r *responseWriter) WriteHeader(statusCode int) {
 //NewHTTPWriter creates an http writer
 func NewHTTPWriter(proxy *events.APIGatewayProxyResponse) http.ResponseWriter {
 	proxy.StatusCode = http.StatusOK
-	return  &responseWriter{
-		proxy:proxy,
+	return &responseWriter{
+		proxy: proxy,
 	}
 }
