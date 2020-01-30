@@ -289,7 +289,7 @@ Reference define association between an owner and reference data view.
 
 #### Input/Output
 
-Output defines collection of data output keys
+Input/Output defines collection of data input and output rule
 If left empty if uses firs view name as output.
 
 - DataView: source data view name 
@@ -297,7 +297,8 @@ If left empty if uses firs view name as output.
 - CaseFormat: output case format
 - Cardinality: cardinality of input or output
 
-Use [e2e test](e2e/README.md#use-cases) case rule to see acual rule examples.
+
+Use [e2e test](e2e/README.md#use-cases) case rule to see actual rule examples.
 
 ## Deployment
 

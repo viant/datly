@@ -104,7 +104,6 @@ func (p *service) writeInputData(ctx context.Context, rule *config.Rule, io *dat
 	return p.patchDataView(ctx, view, collection, dataPool, req, resp.Metrics)
 }
 
-
 func (p *service) patchDataView(ctx context.Context, view *data.View, collection generic.Collection, dataPool data.Pool, request *Request, metrics *metric.Metrics) (err error) {
 	manager, err := p.Manager(ctx, view.Connector)
 	if err != nil {
@@ -147,7 +146,6 @@ func (p *service) patchDataView(ctx context.Context, view *data.View, collection
 	err = p.updateData(collection, indexer, index, view, manager, dbConn, metrics)
 	return err
 }
-
 
 func (p *service) updateData(collection generic.Collection, indexer *db.Indexer, index map[string][]interface{}, view *data.View, manager dsc.Manager, dbConn dsc.Connection, metrics *metric.Metrics) error {
 	updatable := db.Newupdatable(collection, indexer, index)

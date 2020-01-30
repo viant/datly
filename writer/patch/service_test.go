@@ -147,8 +147,7 @@ func TestService_Path(t *testing.T) {
 					TraceID: "case 003",
 					Path:    "/case003/event_type/2/",
 					Data: map[string]interface{}{
-						"event_type":
-						map[string]interface{}{
+						"event_type": map[string]interface{}{
 							"name":       "type X",
 							"account_id": 5,
 						},
