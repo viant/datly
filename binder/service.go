@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/dsc"
 	"github.com/viant/toolbox"
+	tdata "github.com/viant/toolbox/data"
 	"strings"
 )
 
@@ -53,7 +54,8 @@ func (s *service) BuildDataPool(ctx context.Context, request contract.Request, v
 			case shared.BindingQueryString:
 				value = request.QueryParams.Get(binding.From)
 			case shared.BindingDataPool:
-				value = result[binding.From]
+				aMap := tdata.Map(request.Data)
+				value, _ = aMap.GetValue(binding.From)
 			case shared.BindingPath:
 				value = request.PathParams.Get(binding.From)
 			default:
