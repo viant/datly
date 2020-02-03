@@ -54,8 +54,9 @@ func (s *service) BuildDataPool(ctx context.Context, request contract.Request, v
 			case shared.BindingQueryString:
 				value = request.QueryParams.Get(binding.From)
 			case shared.BindingDataPool:
-				aMap := tdata.Map(request.Data)
+				aMap := tdata.Map(result)
 				value, _ = aMap.GetValue(binding.From)
+
 			case shared.BindingPath:
 				value = request.PathParams.Get(binding.From)
 			default:
