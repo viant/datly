@@ -3,12 +3,14 @@ package storage
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/option"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cache"
+	"github.com/viant/toolbox"
 	"io/ioutil"
 	"time"
 )
@@ -22,27 +24,38 @@ type service struct {
 //Put puts value to cache
 func (s *service) Put(ctx context.Context, key string, data []byte, ttl time.Duration) error {
 	URL := url.Join(s.baseURL, key)
-	return s.fs.Upload(ctx, URL, file.DefaultFileOsMode, bytes.NewReader(data))
+	expiryAt := time.Now().Add(ttl)
+	expiry := fmt.Sprintf("%19d", expiryAt.UnixNano())
+	buf := new(bytes.Buffer)
+	buf.WriteString(expiry)
+	buf.Write(data)
+	return s.fs.Upload(ctx, URL, file.DefaultFileOsMode, buf)
 }
 
 //Get returns value from a cache
-func (s *service) Get(ctx context.Context, key string) ([]byte, *time.Time, error) {
+func (s *service) Get(ctx context.Context, key string) ([]byte, error) {
+
 	URL := url.Join(s.baseURL, key)
-	object, _ := s.fs.Object(ctx, URL, option.NewObjectKind(true))
-	if object == nil {
-		return nil, nil, nil
+	exists, err := s.fs.Exists(ctx, URL, option.NewObjectKind(true))
+	if ! exists {
+		return nil, err
 	}
 	reader, err := s.fs.DownloadWithURL(ctx, URL, option.NewObjectKind(true))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	_ = reader.Close()
 	data, err := ioutil.ReadAll(reader)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "failed to load cache %v", URL)
+		return nil, errors.Wrapf(err, "failed to load cache %v", URL)
 	}
-	modified := object.ModTime()
-	return data, &modified, nil
+	unixExpiry := toolbox.AsInt(string(data[0:19]))
+	expiryTime := time.Unix(0, int64(unixExpiry))
+	if time.Now().After(expiryTime) {
+		err := s.Delete(ctx, key)
+		return nil, err
+	}
+	return data[19:], nil
 }
 
 //Delete deletes cache value

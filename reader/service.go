@@ -2,6 +2,7 @@ package reader
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/datly/base"
@@ -14,6 +15,7 @@ import (
 	"github.com/viant/dsc"
 	"github.com/viant/toolbox"
 	"sync"
+	"time"
 )
 
 //Service represents a reader service
@@ -99,12 +101,8 @@ func (s *service) readViewData(ctx context.Context, collection generic.Collectio
 	}
 	parametrizedSQL := &dsc.ParametrizedSQL{SQL: SQL, Values: parameters}
 	query := metric.NewQuery(parametrizedSQL)
+	err = s.readData(ctx, view, query, collection, response)
 
-	err = s.readData(ctx, SQL, parameters, view.Connector, func(record data.Record) error {
-		query.Increment()
-		collection.Add(record)
-		return nil
-	})
 	query.SetFetchTime()
 	response.Metrics.AddQuery(query)
 	if err != nil {
@@ -126,19 +124,72 @@ func (s *service) readViewData(ctx context.Context, collection generic.Collectio
 	return err
 }
 
-func (s *service) readData(ctx context.Context, SQL string, parameters []interface{}, connector string, onRecord func(record data.Record) error) error {
-	manager, err := s.Manager(ctx, connector)
+func (s *service) readData(ctx context.Context, view *data.View, query *metric.Query, collection generic.Collection, response *Response) error {
+	useCache := view.Cache != nil
+	var key string
+	if useCache {
+		key = shared.GetKey(view.Name, query.ParametrizedSQL)
+		hit, err := s.readDataFromCache(ctx, key, view, query, collection)
+		if err != nil {
+			response.CacheError = err.Error()
+		}
+		if hit {
+			return nil
+		}
+	}
+	manager, err := s.Manager(ctx, view.Connector)
 	if err != nil {
 		return err
 	}
-	return manager.ReadAllWithHandler(SQL, parameters, func(scanner dsc.Scanner) (toContinue bool, err error) {
+	err =  manager.ReadAllWithHandler(query.SQL, query.Values, func(scanner dsc.Scanner) (toContinue bool, err error) {
 		record := map[string]interface{}{}
 		err = scanner.Scan(&record)
 		if err == nil {
-			err = onRecord(record)
+			query.Increment()
+			collection.Add(record)
 		}
 		return err == nil, err
 	})
+
+	if err == nil && useCache {
+		if err := s.updateCache(ctx, collection, view, key);err != nil {
+			response.CacheError = err.Error()
+		}
+	}
+	return err
+}
+
+
+func (s *service) updateCache(ctx context.Context, collection generic.Collection, view *data.View, key string) error {
+	JSON, err := json.Marshal(collection)
+	if err == nil {
+		err = view.Cacher().Put(ctx, key, JSON, view.Cache.TTL)
+	}
+	return err
+}
+
+func (s *service) readDataFromCache(ctx context.Context, key string, view *data.View, query *metric.Query, collection generic.Collection) (bool, error) {
+	now := time.Now()
+	defer query.SetCacheGetTime(now)
+	cached, err := view.Cacher().Get(ctx, key)
+	if err != nil {
+		return false, err
+	}
+	if len(cached) == 0 {
+		query.CacheMiss = true
+		return false, nil
+	}
+	result := []map[string]interface{}{}
+	if err := json.Unmarshal(cached, &result); err != nil {
+		return false, errors.Wrapf(err, "failed to decode cache entry for key: %s", key)
+	}
+	for i:= range result {
+		query.Increment()
+		collection.Add(result[i])
+	}
+	query.CacheHit = true
+	query.SetFetchTime()
+	return true,  nil
 }
 
 func (s *service) readRefs(ctx context.Context, owner *data.View, selector *data.Selector, bindings map[string]interface{}, rule *config.Rule, request *Request, response *Response, group *sync.WaitGroup, refData *contract.Data) {

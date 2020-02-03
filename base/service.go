@@ -2,12 +2,13 @@ package base
 
 import (
 	"context"
+	"github.com/viant/afs"
 	"github.com/viant/datly/base/contract"
 	"github.com/viant/datly/binder"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/db"
-	"github.com/viant/datly/db/manager"
+	dbservice "github.com/viant/datly/db/service"
 	"github.com/viant/datly/matcher"
 	"github.com/viant/datly/metric"
 	"github.com/viant/dsc"
@@ -49,7 +50,7 @@ func New(ctx context.Context, config *config.Config) (Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	dbService := manager.New(config)
+	dbService := dbservice.New(config, afs.New())
 	return &service{
 		Service: matcher,
 		db:      dbService,

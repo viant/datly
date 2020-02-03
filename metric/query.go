@@ -13,10 +13,16 @@ type Query struct {
 	Count           uint32 `json:",omitempty"`
 	CacheGetTimeMs  int    `json:",omitempty"`
 	CacheHit        bool   `json:",omitempty"`
+	CacheMiss       bool   `json:",omitempty"`
 	ExecutionTimeMs int    `json:",omitempty"`
 	FetchTimeMs     int    `json:",omitempty"`
 	checkpoint      time.Time
 }
+
+func (q *Query) SetCacheGetTime(time time.Time) {
+	q.CacheGetTimeMs = shared.ElapsedInMs(time)
+}
+
 
 //SetFetchTime sets fetch time
 func (q *Query) SetExecutionTime() {

@@ -1,8 +1,6 @@
 package config
 
+import "github.com/viant/datly/secret/access"
+
 //Secret represents a secret config
-type Secret struct {
-	URL       string `json:",omitempty"`
-	Parameter string `json:",omitempty"`
-	Key       string `json:",omitempty"`
-}
+type Secret access.Request

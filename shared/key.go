@@ -1,4 +1,4 @@
-package cache
+package shared
 
 import (
 	"crypto/md5"
@@ -16,6 +16,7 @@ func GetKey(view string, sql *dsc.ParametrizedSQL) string {
 	name := getHash(sql) + ".cache"
 	return path.Join(view, name)
 }
+
 
 func getHash(sql *dsc.ParametrizedSQL) string {
 	expr := sql.SQL

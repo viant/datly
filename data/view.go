@@ -35,6 +35,11 @@ type View struct {
 	_cacheService cache.Service
 }
 
+//Cacher returns a cache service
+func (v *View) Cacher() cache.Service {
+	return v._cacheService
+}
+
 //Clone creates a view clone
 func (v *View) Clone() *View {
 	return &View{
@@ -210,6 +215,7 @@ func (v *View) Init(setPrefix bool) error {
 		if v._cacheService, err = cache.Registry().Get(v.Cache.Service); err != nil {
 			return err
 		}
+		v.Cache.Init()
 	}
 	//If primary key is specified set mutable flag be default
 	if isMutable := len(v.PrimaryKey) > 0; isMutable && v.Mutable == nil {
