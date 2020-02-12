@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestSlice_Add(t *testing.T) {
+func TestanArray_Add(t *testing.T) {
 	var useCases = []struct {
 		description string
 		values      []map[string]interface{}
@@ -39,12 +39,12 @@ func TestSlice_Add(t *testing.T) {
 	for _, useCase := range useCases {
 
 		provider := NewProvider()
-		slice := provider.NewSlice()
+		anArray := provider.NewArray()
 		for _, v := range useCase.values {
-			slice.Add(v)
+			anArray.Add(v)
 		}
 		count := 0
-		slice.Objects(func(object *Object) (b bool, err error) {
+		anArray.Objects(func(object *Object) (b bool, err error) {
 			assert.EqualValues(t, useCase.values[count], object.AsMap())
 			count++
 			return true, nil
@@ -55,7 +55,7 @@ func TestSlice_Add(t *testing.T) {
 
 }
 
-func TestSlice_Objects(t *testing.T) {
+func TestanArray_Objects(t *testing.T) {
 	var useCases = []struct {
 		description string
 		values      map[string]interface{}
@@ -77,11 +77,11 @@ func TestSlice_Objects(t *testing.T) {
 	for _, useCase := range useCases {
 		expect := mergeMap(useCase.values, useCase.changes)
 		provider := NewProvider()
-		slice := provider.NewSlice()
-		slice.Add(useCase.values)
-		assert.EqualValues(t, 1, slice.Size(), useCase.description)
+		anArray := provider.NewArray()
+		anArray.Add(useCase.values)
+		assert.EqualValues(t, 1, anArray.Size(), useCase.description)
 
-		slice.Objects(func(item *Object) (b bool, err error) {
+		anArray.Objects(func(item *Object) (b bool, err error) {
 			for k, v := range useCase.changes {
 				item.SetValue(k, v)
 			}
@@ -89,7 +89,7 @@ func TestSlice_Objects(t *testing.T) {
 		})
 
 		count := 0
-		slice.Objects(func(item *Object) (b bool, err error) {
+		anArray.Objects(func(item *Object) (b bool, err error) {
 			count++
 			assert.EqualValues(t, expect, item.AsMap(), useCase.description)
 			return true, nil
@@ -99,6 +99,60 @@ func TestSlice_Objects(t *testing.T) {
 
 	}
 
+}
+
+func TestArray_AddObject(t *testing.T) {
+	var useCases = []struct {
+		description string
+		values      []map[string]interface{}
+	}{
+		{
+			description: "single item value",
+			values: []map[string]interface{}{
+				{
+					"K1": "123",
+					"K2": "123",
+				},
+			},
+		},
+		{
+			description: "single item value",
+			values: []map[string]interface{}{
+				{
+					"K21": "1",
+					"K2":  "2",
+					"K7":  "3",
+				},
+				{
+					"K21": "4",
+					"K2":  "5",
+					"K7":  "",
+				},
+			},
+		},
+	}
+
+	for _, useCase := range useCases {
+
+		provider := NewProvider()
+		anArray := provider.NewArray()
+		for _, v := range useCase.values {
+			anArray.Add(v)
+		}
+
+		compacted := anArray.Compact()
+
+		array2 := NewProvider().NewArray()
+		compacted.Update(array2)
+		count := 0
+		array2.Objects(func(object *Object) (b bool, err error) {
+			assert.EqualValues(t, useCase.values[count], object.AsMap())
+			count++
+			return true, nil
+		})
+		assert.Equal(t, len(useCase.values), count)
+
+	}
 }
 
 func mergeMap(maps ...map[string]interface{}) map[string]interface{} {

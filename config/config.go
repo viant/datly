@@ -14,10 +14,10 @@ import (
 //Config represents a config
 type Config struct {
 	URL          string
-	UseRuleCache bool
+	CacheRules   bool `json:",omitempty"`
 	Rules        Rules
 	Connectors   Connectors
-	DataCacheURL string
+	DataCacheURL string `json:",omitempty"`
 }
 
 //Init initialises config
@@ -95,7 +95,7 @@ func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {
 		return nil, errors.Wrapf(err, "failed to decode config :%s", URL)
 	}
 	cfg.URL = URL
-	if cfg.UseRuleCache {
+	if cfg.CacheRules {
 		cfs = cache.Singleton(URL)
 	}
 	if err = cfg.Init(ctx, cfs); err != nil {

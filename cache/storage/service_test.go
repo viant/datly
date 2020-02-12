@@ -10,49 +10,46 @@ import (
 
 func TestService_Get(t *testing.T) {
 
-	var useCases = []struct{
+	var useCases = []struct {
 		description string
 		baseURL     string
 		key         string
-		prepare bool
+		prepare     bool
 		data        []byte
 		ttl         time.Duration
 		sleepTime   time.Duration
-		hasData bool
+		hasData     bool
 	}{
 		{
-			description:"get cached entry",
-			prepare:true,
-			baseURL:"mem://localhost/cache/case001/",
-			key:"k1",
-			data:[]byte("test is test 1"),
-			hasData:true,
-			ttl:100 * time.Millisecond,
+			description: "get cached entry",
+			prepare:     true,
+			baseURL:     "mem://localhost/cache/case001/",
+			key:         "k1",
+			data:        []byte("test is test 1"),
+			hasData:     true,
+			ttl:         100 * time.Millisecond,
 		},
 
 		{
-			description:"expired cached entry",
-			baseURL:"mem://localhost/cache/case002/",
-			prepare:true,
-			key:"k1",
-			data:[]byte("test is test 2"),
-			hasData:false,
-			ttl:1 * time.Millisecond,
-			sleepTime:10 * time.Millisecond,
+			description: "expired cached entry",
+			baseURL:     "mem://localhost/cache/case002/",
+			prepare:     true,
+			key:         "k1",
+			data:        []byte("test is test 2"),
+			hasData:     false,
+			ttl:         1 * time.Millisecond,
+			sleepTime:   10 * time.Millisecond,
 		},
 
 		{
-			description:"missing cached entry",
-			baseURL:"mem://localhost/cache/case003/",
-			key:"k1",
-			hasData:false,
+			description: "missing cached entry",
+			baseURL:     "mem://localhost/cache/case003/",
+			key:         "k1",
+			hasData:     false,
 		},
-
-
 	}
 
 	ctx := context.Background()
-
 
 	for _, useCase := range useCases {
 		srv := New(useCase.baseURL, afs.New())
@@ -61,13 +58,12 @@ func TestService_Get(t *testing.T) {
 			assert.Nil(t, err, useCase.data)
 		}
 
-
 		if useCase.sleepTime > 0 {
 			time.Sleep(useCase.sleepTime)
 		}
 
 		value, err := srv.Get(ctx, useCase.key)
-		if ! assert.Nil(t, err, useCase.data) {
+		if !assert.Nil(t, err, useCase.data) {
 			return
 		}
 		if useCase.hasData {

@@ -1,7 +1,6 @@
 package generic
 
 import (
-	"encoding/json"
 	"github.com/viant/toolbox"
 )
 
@@ -28,7 +27,7 @@ func (o *Object) AsMap() map[string]interface{} {
 
 //SetValue sets values
 func (o *Object) SetValue(name string, value interface{}) {
-	field := o._proto.getField(name, value)
+	field := o._proto.FieldWithValue(name, value)
 	field.Set(value, &o._data)
 }
 
@@ -87,8 +86,12 @@ func (o *Object) StringValue(name string) *string {
 	return &casted
 }
 
-//MarshalJSON converts object to JSON object
-func (o Object) MarshalJSON() ([]byte, error) {
-	aMap := o._proto.asMap(o._data)
-	return json.Marshal(aMap)
+//IsNil returns true if object is nil
+func (u *Object) IsNil() bool {
+	for i := range u._data {
+		if !u._proto.fields[i].IsEmpty(u._proto, u._data[i]) {
+			return false
+		}
+	}
+	return true
 }

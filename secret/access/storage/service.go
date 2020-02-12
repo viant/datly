@@ -45,7 +45,6 @@ func (s *service) Access(ctx context.Context, request *access.Request) ([]byte, 
 	return []byte(plainText), nil
 }
 
-
 func (s *service) decryptWithGCPKMS(ctx context.Context, request *access.Request, plainText string) ([]byte, error) {
 	kmsService, err := cloudkms.NewService(ctx, option.WithScopes(cloudkms.CloudPlatformScope, cloudkms.CloudkmsScope))
 	if err != nil {

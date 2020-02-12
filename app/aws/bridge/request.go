@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"github.com/aws/aws-lambda-go/events"
+	"github.com/viant/datly/app/aws/apigw"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -12,7 +12,7 @@ import (
 )
 
 //NewHTTPRequest create a request for supplied apiRequest
-func NewHTTPRequest(apiRequest *events.APIGatewayProxyRequest) (*http.Request, error) {
+func NewHTTPRequest(apiRequest *apigw.ProxyRequest) (*http.Request, error) {
 	request := &http.Request{
 		Method: apiRequest.HTTPMethod,
 		Header: http.Header{},

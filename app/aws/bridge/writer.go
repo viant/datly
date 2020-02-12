@@ -1,12 +1,12 @@
 package bridge
 
 import (
-	"github.com/aws/aws-lambda-go/events"
+	"github.com/viant/datly/app/aws/apigw"
 	"net/http"
 )
 
 type responseWriter struct {
-	proxy *events.APIGatewayProxyResponse
+	proxy *apigw.ProxyResponse
 }
 
 //Header returns response headers
@@ -26,7 +26,7 @@ func (r *responseWriter) WriteHeader(statusCode int) {
 }
 
 //NewHTTPWriter creates an http writer
-func NewHTTPWriter(proxy *events.APIGatewayProxyResponse) http.ResponseWriter {
+func NewHTTPWriter(proxy *apigw.ProxyResponse) http.ResponseWriter {
 	proxy.StatusCode = http.StatusOK
 	return &responseWriter{
 		proxy: proxy,

@@ -8,11 +8,11 @@ import (
 
 //Connector represents database connector
 type Connector struct {
-	Name               string
-	URL                string
-	Dialect            string
-	SecuredCredentials *Secret
-	Config             *dsc.Config
+	Name    string
+	URL     string
+	Dialect string
+	Secrets *Secret `json:",omitempty"`
+	Config  *dsc.Config
 }
 
 //Init initialise connector

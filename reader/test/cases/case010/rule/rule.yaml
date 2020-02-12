@@ -1,0 +1,7 @@
+Path: /case010/
+views:
+  - table: events
+    connector: db
+    cache:
+      service: tmp
+      TTLMS: 300

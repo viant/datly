@@ -73,7 +73,7 @@ func TestService_Path(t *testing.T) {
 
 			expect: `{
 	  "Status": "ok",
-	  "Data": {
+	  "Collections": {
 		"@length@events": 2,
 		"@assertPath@events[0].id": 1
 	  }
@@ -123,7 +123,7 @@ func TestService_Path(t *testing.T) {
 
 			expect: `{
 	  "Status": "ok",
-	  "Data": {
+	  "Collections": {
 		"@length@events": 3,
 		"@assertPath@events[0].id": 1
 	  }
@@ -157,7 +157,7 @@ func TestService_Path(t *testing.T) {
 
 			expect: `{
 	  "Status": "ok",
-	  "Data": {
+	  "Collections": {
 		"@assertPath@event_type.id": 2
 	  }
 }`,

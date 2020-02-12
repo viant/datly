@@ -1,7 +1,7 @@
 package access
 
 const (
-	MethodStorage = "storage"
-	MethodAWSSystemManager = "ssm"
+	MethodStorage            = "storage"
+	MethodAWSSystemManager   = "ssm"
 	MethodGCPSecurityManager = "gsm"
 )

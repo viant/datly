@@ -44,11 +44,11 @@ func (s *service) newManager(ctx context.Context, name string) (dsc.Manager, err
 		return nil, err
 	}
 
-	if connector.SecuredCredentials != nil && connector.Config.CredConfig == nil {
-		accessRequest := access.Request(*connector.SecuredCredentials)
+	if connector.Secrets != nil && connector.Config.CredConfig == nil {
+		accessRequest := access.Request(*connector.Secrets)
 		data, err := s.secret.Access(ctx, &accessRequest)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get secret for connector: %v", name)
+			return nil, errors.Wrapf(err, "failed to get secret for connector: %v, %+v", connector.Name, connector.Secrets)
 		}
 		credConfig := &cred.Config{}
 		err = json.Unmarshal(data, credConfig)

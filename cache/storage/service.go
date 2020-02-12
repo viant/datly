@@ -34,17 +34,18 @@ func (s *service) Put(ctx context.Context, key string, data []byte, ttl time.Dur
 
 //Get returns value from a cache
 func (s *service) Get(ctx context.Context, key string) ([]byte, error) {
-
 	URL := url.Join(s.baseURL, key)
 	exists, err := s.fs.Exists(ctx, URL, option.NewObjectKind(true))
-	if ! exists {
+	if !exists {
 		return nil, err
 	}
 	reader, err := s.fs.DownloadWithURL(ctx, URL, option.NewObjectKind(true))
 	if err != nil {
 		return nil, err
 	}
-	_ = reader.Close()
+	defer func() {
+		_ = reader.Close()
+	}()
 	data, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load cache %v", URL)

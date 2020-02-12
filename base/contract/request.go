@@ -2,10 +2,13 @@ package contract
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/pkg/errors"
+	"github.com/viant/datly/shared"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 //Request represents base request
@@ -15,7 +18,9 @@ type Request struct {
 	Headers     http.Header
 	PathParams  url.Values
 	QueryParams url.Values
+	EventTime   time.Time
 	Data        map[string]interface{}
+	Metrics     string `json:",omitempty"`
 	CaseFormat  string `json:",omitempty"` //source data case format
 }
 
@@ -35,6 +40,15 @@ func (r *Request) Init(request *http.Request) error {
 	if URL := request.URL; URL != nil {
 		r.QueryParams = URL.Query()
 		r.Path = URL.Path
+	}
+
+	fmt.Printf("PATH: %v\n", r.Path)
+
+	r.EventTime = time.Now()
+	if len(r.Headers) > 0 {
+		if created, ok := r.Headers[shared.EventCreateTimeHeader]; ok {
+			r.EventTime, _ = time.Parse(time.RFC3339, created[0])
+		}
 	}
 	r.Headers = request.Header
 	if request.Body != nil {

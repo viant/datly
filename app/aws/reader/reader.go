@@ -9,8 +9,15 @@ import (
 	_ "github.com/viant/asc"
 	_ "github.com/viant/bgc"
 	"github.com/viant/datly/app/aws/lambda"
+	"os"
 )
 
 func main() {
-	lambda.StartReader()
+
+	//CACHE_URL is to serve content over 6MB and for caching vi s3, see lambda 6MB limits
+	cacheURL := os.Getenv("CACHE_URL")
+	if cacheURL == "" {
+		cacheURL = "mem://localhost/cache"
+	}
+	lambda.StartReader(cacheURL)
 }

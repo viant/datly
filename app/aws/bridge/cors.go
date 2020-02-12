@@ -1,11 +1,11 @@
 package bridge
 
 import (
-	"github.com/aws/aws-lambda-go/events"
+	"github.com/viant/datly/app/aws/apigw"
 )
 
 //SetCORSHeaderIfNeeded sets CORS headers
-func SetCORSHeaderIfNeeded(apiRequest *events.APIGatewayProxyRequest, response *events.APIGatewayProxyResponse) {
+func SetCORSHeaderIfNeeded(apiRequest *apigw.ProxyRequest, response *apigw.ProxyResponse) {
 	origin, ok := apiRequest.Headers["Origin"]
 	if !ok {
 		return

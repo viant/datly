@@ -26,12 +26,14 @@ func StartServer() {
 	}
 
 	http.HandleFunc("/", reader.HandleRead(service))
-	http.HandleFunc("/status/", func(writer http.ResponseWriter, request *http.Request) {
-		if request.ContentLength > 0 {
-			_ = request.Body.Close()
+	http.HandleFunc("/status/", func(writer http.ResponseWriter, httpRequest *http.Request) {
+		fmt.Printf("/status/ %+v\n", httpRequest)
+		if httpRequest.ContentLength > 0 {
+			_ = httpRequest.Body.Close()
 		}
 		_, _ = writer.Write([]byte("up"))
 	})
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"

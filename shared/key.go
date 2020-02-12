@@ -14,9 +14,12 @@ import (
 //GetKey returns key
 func GetKey(view string, sql *dsc.ParametrizedSQL) string {
 	name := getHash(sql) + ".cache"
+	if count := strings.Count(name, " "); count > 0 {
+		name = strings.Replace(name, " ", "", count)
+	}
+	name = strings.Replace(name, "==", "", 1)
 	return path.Join(view, name)
 }
-
 
 func getHash(sql *dsc.ParametrizedSQL) string {
 	expr := sql.SQL

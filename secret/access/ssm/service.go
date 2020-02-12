@@ -5,6 +5,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/pkg/errors"
 	"github.com/viant/datly/secret/access"
 )
 
@@ -23,14 +24,13 @@ func (s *service) getParameters(name string, withDecryption bool) (*ssm.Paramete
 	return output.Parameter, nil
 }
 
-
 func (s *service) Access(ctx context.Context, request *access.Request) ([]byte, error) {
 	output, err := s.GetParameterWithContext(ctx, &ssm.GetParameterInput{
 		Name:           aws.String(request.Parameter),
 		WithDecryption: aws.Bool(true),
 	})
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "failed to get secrets for '%v'", request.Parameter)
 	}
 	var value []byte
 	if output.Parameter != nil {

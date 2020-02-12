@@ -32,10 +32,10 @@ func (s *service) Count() int {
 func (s *service) Match(ctx context.Context, request *contract.Request, response *contract.Response) (*config.Rule, error) {
 	rule, uriParams, err := s.match(ctx, request.Path)
 	if err != nil {
-		response.RuleError = err.Error()
+		response.AddError(shared.ErrorTypeRule, "match", err)
 		return nil, nil
 	}
-	response.RuleCount = s.Count()
+	response.Rules = s.Count()
 	if rule == nil {
 		response.Status = shared.StatusNoMatch
 		return nil, nil
@@ -57,7 +57,7 @@ func (s *service) match(ctx context.Context, path string) (*config.Rule, url.Val
 //New creates a service
 func New(ctx context.Context, config *config.Config) (Service, error) {
 	fs := afs.New()
-	if config.UseRuleCache && config.URL != "" {
+	if config.CacheRules && config.URL != "" {
 		fs = cache.Singleton(config.URL)
 	}
 	err := config.Init(ctx, fs)

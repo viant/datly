@@ -18,6 +18,28 @@ func (m *Metrics) AddQuery(query *Query) {
 	m.Queries = append(m.Queries, query)
 }
 
+func (m Metrics) Clone() *Metrics {
+	var result = &Metrics{
+		Queries: make([]*Query, 0),
+		mux:     &sync.Mutex{},
+	}
+	for i := range m.Queries {
+		query := *m.Queries[i]
+		result.Queries = append(result.Queries, &query)
+	}
+	return result
+}
+
+//AddQuery adds query
+func (m *Metrics) IncludeSQL() {
+	if len(m.Queries) == 0 {
+		return
+	}
+	for _, query := range m.Queries {
+		query.SQL = query.parametrizedSQL
+	}
+}
+
 //NewMetrics creates a metrics
 func NewMetrics() *Metrics {
 	return &Metrics{

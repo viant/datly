@@ -13,5 +13,6 @@ import (
 )
 
 func main() {
+	//TODO register filter, and view hooks here
 	server.StartServer()
 }

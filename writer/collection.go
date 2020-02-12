@@ -11,7 +11,7 @@ import (
 
 //NewCollection create a collection for data view
 func NewCollection(data map[string]interface{}, view *data.View, io *data.IO) (generic.Collection, error) {
-	result := generic.NewProvider().NewSlice()
+	result := generic.NewProvider().NewArray()
 	values, ok := data[io.Key]
 	if !ok {
 		if shared.IsLoggingEnabled() {

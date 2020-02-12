@@ -9,7 +9,7 @@ import (
 	"github.com/viant/datly/secret/access/storage"
 )
 
-type service struct {fs afs.Service}
+type service struct{ fs afs.Service }
 
 //Access returns access secrets or error
 func (s *service) Access(ctx context.Context, request *access.Request) ([]byte, error) {

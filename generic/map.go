@@ -38,6 +38,11 @@ func (m *Map) Add(values map[string]interface{}) {
 	m._map[key] = object._data
 }
 
+func (m *Map) AddObject(object *Object) {
+	key := m.index(object)
+	m._map[key] = object._data
+}
+
 //Size return slice size
 func (m Map) Size() int {
 	return len(m._map)
@@ -80,4 +85,12 @@ func (m *Map) Object(key string) *Object {
 		return nil
 	}
 	return &Object{_proto: m._proto, _data: data}
+}
+
+func (m Map) Compact() *Compatcted {
+	result := &Compatcted{Fields: m._proto.fields, Data: make([][]interface{}, 0)}
+	for k := range m._map {
+		result.Data = append(result.Data, m._map[k])
+	}
+	return result
 }

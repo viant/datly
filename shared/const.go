@@ -10,6 +10,8 @@ const (
 const (
 	//StatusOK response status ok
 	StatusOK = "ok"
+	//StatusRunning represents running status
+	StatusRunning = "running"
 	//StatusNoMatch response rule no matched status
 	StatusNoMatch = "moMatch"
 	//StatusError response error status
@@ -39,8 +41,8 @@ const (
 //The following section defines constant for pagination template dialect (https://en.wikipedia.org/wiki/Select_(SQL)#FETCH_FIRST_clause)
 const (
 	//DialectSQL dialect supporting LIMIT/OFFSET keyword
-	DialectSQL = "SQL" //regular LIMIT/OFFSET
-	//DialectSQL2008 dialect SQL 2008
+	DialectSQL = "ParametrizedSQL" //regular LIMIT/OFFSET
+	//DialectSQL2008 dialect ParametrizedSQL 2008
 	DialectSQL2008 = "SQL2008" //FETCH
 )
 
@@ -52,6 +54,10 @@ const (
 	ErrorTypeInvalidRule = "invalidRule"
 	//ErrorTypeDataValidation invalid validation
 	ErrorTypeDataValidation = "invalid"
+	//ErrorTypeCache cache error
+	ErrorTypeCache = "cache"
+	//ErrorTypeRule rule error
+	ErrorTypeRule = "rule"
 )
 
 const (
@@ -86,4 +92,23 @@ const ( //Selector keys
 	LimitKey = "_limit"
 	//OffsetKey offset key
 	OffsetKey = "_offset"
+	//Metrics data only query strning
+	Metrics = "_metrics"
+)
+
+const (
+	MetricsAll   = "all"
+	MetricsBasic = "basic"
+)
+
+const (
+	//EventCreateTimeHeader
+	EventCreateTimeHeader = "Event-Create-Time"
+)
+
+const (
+	//EncodingGzip encoding gzip
+	EncodingGzip = "gzip"
+	//ContentType JSON
+	ContentTypeJSON = "application/json"
 )

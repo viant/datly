@@ -93,7 +93,7 @@ func (s *service) loadViewData(ctx context.Context, binding *data.Binding, dataP
 	selector := view.Selector.Clone()
 	SQL, parameters, sqlErr := view.BuildSQL(selector, dataPool)
 	if shared.IsLoggingEnabled() {
-		fmt.Printf("=====SQL======\n%v, \n\tparams: %v, \n\tdataPool: %+v\n", SQL, parameters, dataPool)
+		fmt.Printf("=====ParametrizedSQL======\n%v, \n\tparams: %v, \n\tdataPool: %+v\n", SQL, parameters, dataPool)
 	}
 	if sqlErr != nil {
 		return nil, sqlErr
@@ -103,8 +103,8 @@ func (s *service) loadViewData(ctx context.Context, binding *data.Binding, dataP
 		return nil, err
 	}
 	data := newBindingData(view.Selector.Columns)
-	parametrizedSQL := &dsc.ParametrizedSQL{SQL: SQL, Values: parameters}
-	query := metric.NewQuery(parametrizedSQL)
+	parametrized := &dsc.ParametrizedSQL{SQL: SQL, Values: parameters}
+	query := metric.NewQuery(view.Name, parametrized)
 	readHandler := func(scanner dsc.Scanner) (toContinue bool, err error) {
 		query.Increment()
 		return s.fetchBindingData(scanner, data)

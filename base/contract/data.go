@@ -1,40 +1,28 @@
 package contract
 
 import (
+	"bytes"
+	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/generic"
-	"sync"
+	ogojay "github.com/viant/datly/generic/gojay"
 )
 
-//Data represents a registry
-type Data struct {
-	Data map[string]generic.Collection `json:",omitempty"`
-	mux  sync.Mutex
-}
+//Data represents data
+type Data map[string]interface{}
 
-//Put add data key
-func (r *Data) Put(key string, value generic.Collection) {
-	r.mux.Lock()
-	defer r.mux.Unlock()
-	if len(r.Data) == 0 {
-		r.Data = make(map[string]generic.Collection)
+func (r Data) MarshalJSON() ([]byte, error) {
+	builder := new(bytes.Buffer)
+	enc := gojay.NewEncoder(builder)
+	provider := generic.NewProvider()
+	provider.SetOmitEmpty(true)
+	genericResponse, err := provider.Object(r)
+	if err != nil {
+		return nil, err
 	}
-	r.Data[key] = value
-}
-
-//Get returns a collection for provided key
-func (r *Data) Get(key string) generic.Collection {
-	r.mux.Lock()
-	defer r.mux.Unlock()
-	if len(r.Data) == 0 {
-		return nil
+	marshaler := &ogojay.Object{genericResponse}
+	err = enc.Encode(marshaler)
+	if err != nil {
+		return nil, err
 	}
-	return r.Data[key]
-}
-
-//NewData creates new data
-func NewData() *Data {
-	return &Data{
-		Data: make(map[string]generic.Collection),
-		mux:  sync.Mutex{},
-	}
+	return builder.Bytes(), err
 }

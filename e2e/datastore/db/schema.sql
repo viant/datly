@@ -1,4 +1,4 @@
-DROP TABLE IF EXISTS events;
+    DROP TABLE IF EXISTS events;
 CREATE TABLE events
 (
   id           INT AUTO_INCREMENT PRIMARY KEY,

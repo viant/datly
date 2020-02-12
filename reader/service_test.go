@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/viant/afs"
 	"github.com/viant/datly/base/contract"
+	"github.com/viant/datly/cache"
+	"github.com/viant/datly/cache/storage"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/shared"
@@ -33,6 +36,7 @@ func TestService_Read(t *testing.T) {
 		hasReadError   bool
 		visitor        string
 		visit          data.Visit
+		cachePath      string
 		caseDataPath   string
 		request        *Request
 		expect         interface{}
@@ -217,6 +221,7 @@ func TestService_Read(t *testing.T) {
 	  }
 }`,
 		},
+
 		{
 			description:  "one to many reference",
 			caseDataPath: "/case007/",
@@ -313,6 +318,34 @@ func TestService_Read(t *testing.T) {
 	  }
 }`,
 		},
+
+		{
+			description:  "read with cache",
+			caseDataPath: "/case010/",
+			cachePath:    "mem://localhost/cache",
+			config: &config.Config{
+				Connectors: config.Connectors{
+					URL: connectorURL,
+				},
+				Rules: config.Rules{
+					URL: path.Join(basePath, "case010/rule"),
+				},
+			},
+			request: &Request{
+				Request: contract.Request{
+					TraceID: "case 010",
+					Path:    "/case010/",
+				},
+			},
+
+			expect: `{
+	  "Status": "ok",
+	  "Data": {
+		"@length@events": 12,
+		"@assertPath@events[0].id": 1
+	  }
+}`,
+		},
 	}
 
 	//Set visitors
@@ -320,9 +353,13 @@ func TestService_Read(t *testing.T) {
 		if useCase.visitor != "" {
 			data.VisitorRegistry().Register(useCase.visitor, useCase.visit)
 		}
+		if useCase.cachePath != "" {
+			cache.Registry().Register("tmp", storage.New(useCase.cachePath, afs.New()))
+		}
 	}
 
 	for _, useCase := range useCases {
+
 		if !dsunit.InitFromURL(t, path.Join(testLocation, "test", "config.yaml")) {
 			return
 		}
@@ -350,6 +387,11 @@ func TestService_Read(t *testing.T) {
 		if !assert.Nil(t, err, useCase.description) {
 			continue
 		}
+
+		if useCase.cachePath != "" {
+			response = srv.Read(ctx, useCase.request)
+		}
+
 		jsonResponse, _ := json.Marshal(response)
 		if !assertly.AssertValues(t, useCase.expect, string(jsonResponse), useCase.description) {
 			fmt.Printf("read: %s\n", jsonResponse)

@@ -9,7 +9,9 @@ import (
 
 //Query represents query metrics
 type Query struct {
-	*dsc.ParametrizedSQL
+	parametrizedSQL *dsc.ParametrizedSQL
+	SQL             *dsc.ParametrizedSQL `json:",omitempty"`
+	DatView         string
 	Count           uint32 `json:",omitempty"`
 	CacheGetTimeMs  int    `json:",omitempty"`
 	CacheHit        bool   `json:",omitempty"`
@@ -19,10 +21,13 @@ type Query struct {
 	checkpoint      time.Time
 }
 
+func (q *Query) ParametrizedSQL() *dsc.ParametrizedSQL {
+	return q.parametrizedSQL
+}
+
 func (q *Query) SetCacheGetTime(time time.Time) {
 	q.CacheGetTimeMs = shared.ElapsedInMs(time)
 }
-
 
 //SetFetchTime sets fetch time
 func (q *Query) SetExecutionTime() {
@@ -35,17 +40,20 @@ func (q *Query) SetFetchTime() {
 }
 
 //Increment increments record count
-func (q *Query) Increment() {
-	if atomic.AddUint32(&q.Count, 1) == 1 {
+func (q *Query) Increment() int {
+	count := atomic.AddUint32(&q.Count, 1)
+	if count == 1 {
 		q.ExecutionTimeMs = shared.ElapsedInMs(q.checkpoint)
 		q.checkpoint = time.Now()
 	}
+	return int(count)
 }
 
 //NewQuery returns new query
-func NewQuery(sql *dsc.ParametrizedSQL) *Query {
+func NewQuery(dataView string, sql *dsc.ParametrizedSQL) *Query {
 	return &Query{
+		DatView:         dataView,
 		checkpoint:      time.Now(),
-		ParametrizedSQL: sql,
+		parametrizedSQL: sql,
 	}
 }

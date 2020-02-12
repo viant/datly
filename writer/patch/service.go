@@ -71,7 +71,7 @@ func (p *service) patch(ctx context.Context, req *Request, resp *writer.Response
 	return nil
 }
 
-func (p *service) writeInputData(ctx context.Context, rule *config.Rule, io *data.IO, req *Request, resp *writer.Response, patched *contract.Data) error {
+func (p *service) writeInputData(ctx context.Context, rule *config.Rule, io *data.IO, req *Request, resp *writer.Response, patched *contract.Collections) error {
 	view, err := rule.View(io.DataView)
 	if err != nil {
 		return err
