@@ -86,7 +86,7 @@ pipeline:
 
       deployGatewayAPI:
         redeploy: true
-        action: aws/apigateway:setupRestAPI
+        action: aws/apigateway:deployAPI
         credentials: $awsCredentials
         '@name': DataAPI
         resources:
