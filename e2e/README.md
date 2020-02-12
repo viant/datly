@@ -9,7 +9,7 @@ This project uses [endly](https://github.com/viant/endly/) end to end test runne
 
 1. Install endly e2e runner as [binary](https://github.com/viant/endly/releases) or endly docker image:
 
-This instruction was prepared with endly version 0.48.0
+Automation/e2e workflows require endly version 0.48.0
 
 **Docker**
 
