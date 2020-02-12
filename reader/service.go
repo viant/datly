@@ -74,6 +74,11 @@ func (s *service) readOutputData(ctx context.Context, rule *config.Rule, io *dat
 	selector := view.Selector.Clone()
 	genericProvider := generic.NewProvider()
 	collection := genericProvider.NewArray()
+	if io.OmitEmpty {
+		selector.OmitEmpty = io.OmitEmpty
+		collection.Proto().SetOmitEmpty(io.OmitEmpty)
+	}
+
 	selector.CaseFormat = io.CaseFormat
 	err = s.readViewData(ctx, collection, selector, view, rule, request, response)
 	if err == nil {
@@ -114,6 +119,7 @@ func (s *service) readViewData(ctx context.Context, collection generic.Collectio
 	}
 	waitGroup.Wait()
 	if len(refData.Data) > 0 {
+
 		s.assignRefs(view, collection, refData.Data)
 	}
 	if view.OnRead != nil {
@@ -237,6 +243,11 @@ func (s *service) readRefData(ctx context.Context, owner *data.View, ref *data.R
 	} else {
 		collection = provider.NewMultimap(ref.RefIndex())
 	}
+
+	if selector.OmitEmpty {
+		collection.Proto().SetOmitEmpty(selector.OmitEmpty)
+	}
+
 	refViewSelector := view.Selector.Clone()
 	if refViewSelector.CaseFormat == "" {
 		refViewSelector.CaseFormat = selector.CaseFormat
@@ -275,6 +286,8 @@ func (s *service) buildRefView(owner *data.View, ref *data.Reference, selector *
 }
 
 func (s *service) assignRefs(owner *data.View, ownerCollection generic.Collection, refData map[string]generic.Collection) error {
+
+
 	return ownerCollection.Objects(func(item *generic.Object) (b bool, err error) {
 		for _, ref := range owner.Refs {
 			if owner.HideRefIDs {

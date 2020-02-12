@@ -280,7 +280,7 @@ func TestService_Read(t *testing.T) {
 
 		{
 			description:  "read with visitor",
-			caseDataPath: "/case001/",
+			caseDataPath: "/case009/",
 			visitor:      "EventColors",
 			visit: func(ctx *data.Context, object *data.Value) (b bool, err error) {
 				quantity, err := object.FloatValue("quantity")
@@ -341,8 +341,36 @@ func TestService_Read(t *testing.T) {
 			expect: `{
 	  "Status": "ok",
 	  "Data": {
-		"@length@events": 12,
+		"@length@events": 11,
 		"@assertPath@events[0].id": 1
+	  }
+}`,
+		},
+
+		{
+			description:  "omit empty",
+			caseDataPath: "/case011/",
+			config: &config.Config{
+				Connectors: config.Connectors{
+					URL: connectorURL,
+				},
+				Rules: config.Rules{
+					URL: path.Join(basePath, "case011/rule"),
+				},
+			},
+			request: &Request{
+				Request: contract.Request{
+					TraceID: "case 011",
+					Path:    "/case011/",
+				},
+			},
+
+			expect: `{
+	  "Status": "ok",
+	  "Data": {
+		"@length@events": 11,
+		"@assertPath@events[0].id": 1,
+		"@assertPath@events[0].quantity": "@!exists@"
 	  }
 }`,
 		},

@@ -15,6 +15,7 @@ type Selector struct {
 	Limit      int       `json:",omitempty"`
 	Offset     int       `json:",omitempty"`
 	CaseFormat string    `json:",omitempty"`
+	OmitEmpty  bool      `json:",omitempty"`
 	selected   map[string]bool
 }
 
@@ -27,6 +28,7 @@ func (s Selector) Clone() *Selector {
 		Limit:      s.Limit,
 		Offset:     s.Offset,
 		CaseFormat: s.CaseFormat,
+		OmitEmpty:     s.OmitEmpty,
 		selected:   s.selected,
 	}
 }

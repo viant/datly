@@ -1,0 +1,8 @@
+Path: /case011/
+output:
+  - dataView: events
+    omitEmpty: true
+
+views:
+  - table: events
+    connector: db

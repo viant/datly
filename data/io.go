@@ -14,6 +14,7 @@ type IO struct {
 	Key         string `json:",omitempty"`
 	CaseFormat  string `json:",omitempty"`
 	Cardinality string `json:",omitempty"`
+	OmitEmpty bool `json:",omitempty"`
 }
 
 //SetOutput sets output with specified cardinality
