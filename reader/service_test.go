@@ -374,6 +374,33 @@ func TestService_Read(t *testing.T) {
 	  }
 }`,
 		},
+
+		{
+			description:  "case format",
+			caseDataPath: "/case012/",
+			config: &config.Config{
+				Connectors: config.Connectors{
+					URL: connectorURL,
+				},
+				Rules: config.Rules{
+					URL: path.Join(basePath, "case012/rule"),
+				},
+			},
+			request: &Request{
+				Request: contract.Request{
+					TraceID: "case 012",
+					Path:    "/case012/",
+				},
+			},
+			expect: `{
+	  "Status": "ok",
+	  "Data": {
+		"@length@events": 11,
+		"@assertPath@events[0].Id": 1,
+		"@assertPath@events[0].EventTypeId": 2
+	  }
+}`,
+		},
 	}
 
 	//Set visitors

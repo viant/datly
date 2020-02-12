@@ -1,0 +1,9 @@
+Path: /case012/
+output:
+  - dataView: events
+    caseFormat: UpperCamel
+
+views:
+  - table: events
+    caseFormat: LowerUnderscore
+    connector: db

@@ -2,7 +2,6 @@ package gojay
 
 import (
 	"encoding/base64"
-	"fmt"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/generic"
 	"github.com/viant/toolbox"
@@ -35,16 +34,17 @@ func (o Object) MarshalJSONObject(enc *gojay.Encoder) {
 }
 
 func (o *Object) encodeJSONValue(field *generic.Field, value interface{}, enc *gojay.Encoder) {
+	filedName := field.OutputName()
 	switch field.DataType {
 	case generic.FieldTypeInt:
-		enc.IntKey(field.Name, toolbox.AsInt(value))
+		enc.IntKey(filedName, toolbox.AsInt(value))
 		return
 	case generic.FieldTypeFloat:
-		enc.FloatKey(field.Name, toolbox.AsFloat(value))
+		enc.FloatKey(filedName, toolbox.AsFloat(value))
 		return
 	case generic.FieldTypeBool:
 
-		enc.BoolKey(field.Name, toolbox.AsBoolean(value))
+		enc.BoolKey(filedName, toolbox.AsBoolean(value))
 		return
 	case generic.FieldTypeBytes:
 		bs, ok := value.([]byte)
@@ -73,10 +73,9 @@ func (o *Object) encodeJSONValue(field *generic.Field, value interface{}, enc *g
 			}
 			marshaler = &Collection{collection}
 		} else {
-			fmt.Printf("collection fallback %T (%s)  !%s!\n", value, field.Name, value)
 			marshaler = NewSlice(value)
 		}
-		enc.ArrayKeyOmitEmpty(field.Name, marshaler)
+		enc.ArrayKeyOmitEmpty(filedName, marshaler)
 
 		return
 	case generic.FieldTypeObject:
@@ -91,7 +90,7 @@ func (o *Object) encodeJSONValue(field *generic.Field, value interface{}, enc *g
 			}
 		}
 		marshaler := &Object{object}
-		enc.ObjectKeyOmitEmpty(field.Name, marshaler)
+		enc.ObjectKeyOmitEmpty(filedName, marshaler)
 		return
 	case generic.FieldTypeTime:
 		timeLayout := field.TimeLayout(o.Proto())
@@ -102,8 +101,8 @@ func (o *Object) encodeJSONValue(field *generic.Field, value interface{}, enc *g
 		}
 	}
 	if field.ShallOmitEmpty(o.Proto()) {
-		enc.StringKeyOmitEmpty(field.Name, toolbox.AsString(value))
+		enc.StringKeyOmitEmpty(filedName, toolbox.AsString(value))
 		return
 	}
-	enc.StringKey(field.Name, toolbox.AsString(value))
+	enc.StringKey(filedName, toolbox.AsString(value))
 }
