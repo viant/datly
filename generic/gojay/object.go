@@ -22,6 +22,7 @@ func (o Object) MarshalJSONObject(enc *gojay.Encoder) {
 				continue
 			}
 		}
+
 		if value == nil {
 			enc.AddNullKey(field.OutputName())
 			continue

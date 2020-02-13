@@ -28,7 +28,7 @@ func (s Selector) Clone() *Selector {
 		Limit:      s.Limit,
 		Offset:     s.Offset,
 		CaseFormat: s.CaseFormat,
-		OmitEmpty:     s.OmitEmpty,
+		OmitEmpty:  s.OmitEmpty,
 		selected:   s.selected,
 	}
 }

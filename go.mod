@@ -21,8 +21,8 @@ require (
 	github.com/viant/afsc v0.14.3
 	github.com/viant/asc v0.5.0
 	github.com/viant/assertly v0.5.3
-	github.com/viant/bgc v0.7.5
-	github.com/viant/dsc v0.15.0
+	github.com/viant/bgc v0.8.0
+	github.com/viant/dsc v0.16.0
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/toolbox v0.29.2
 	github.com/yuin/gopher-lua v0.0.0-20191220021717-ab39c6098bdb // indirect

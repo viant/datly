@@ -155,10 +155,10 @@ func (s *service) readData(ctx context.Context, view *data.View, query *metric.Q
 	proto := collection.Proto()
 
 	err = manager.ReadAllWithHandler(parametrized.SQL, parametrized.Values, func(scanner dsc.Scanner) (toContinue bool, err error) {
-
 		if record == nil {
 			columns, _ := scanner.Columns()
-			record = NewRecord(proto, columns)
+			columnTypes, _ := scanner.ColumnTypes()
+			record = NewRecord(proto, columns, columnTypes)
 		}
 		record.Reset()
 		err = scanner.Scan(record.valuePointers...)
@@ -183,8 +183,9 @@ func (s *service) readData(ctx context.Context, view *data.View, query *metric.Q
 }
 
 func (s *service) updateCache(ctx context.Context, collection generic.Collection, view *data.View, key string) error {
-	encodable := collection.Compact()
-	JSON, err := json.Marshal(encodable)
+	compacted := collection.Compact()
+	compacted.TransformBinary()
+	JSON, err := json.Marshal(compacted)
 	if err == nil {
 		err = view.Cacher().Put(ctx, key, JSON, view.Cache.TTL)
 	}
@@ -286,7 +287,6 @@ func (s *service) buildRefView(owner *data.View, ref *data.Reference, selector *
 }
 
 func (s *service) assignRefs(owner *data.View, ownerCollection generic.Collection, refData map[string]generic.Collection) error {
-
 
 	return ownerCollection.Objects(func(item *generic.Object) (b bool, err error) {
 		for _, ref := range owner.Refs {

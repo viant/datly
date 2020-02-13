@@ -414,7 +414,6 @@ func TestService_Read(t *testing.T) {
 	}
 
 	for _, useCase := range useCases {
-
 		if !dsunit.InitFromURL(t, path.Join(testLocation, "test", "config.yaml")) {
 			return
 		}

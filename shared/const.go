@@ -112,3 +112,33 @@ const (
 	//ContentType JSON
 	ContentTypeJSON = "application/json"
 )
+
+const (
+	ColumnTypeBit     = "BIT"
+	ColumnTypeBoolean = "BOOLEAN"
+	ColumnTypeTinyInt = "TINYINT"
+
+	ColumnTypeInt      = "INT"
+	ColumnTypeInteger  = "INTEGER"
+	ColumnTypeInt64    = "INT64"
+	ColumnTypeSmallInt = "SMALLINT"
+	ColumnTypeBigInt   = "BigNT"
+
+	ColumnTypeDecimal = "DECIMAL"
+	ColumnTypeFloat   = "FLOAT"
+	ColumnTypeFloat64 = "FLOAT64"
+	ColumnTypeNumeric = "NUMERIC"
+	ColumnTypeNumber  = "NUMBER"
+
+	ColumnTypeChar     = "CHAR"
+	ColumnTypeVarchar  = "VARCHAR"
+	ColumnTypeVarchar2 = "VARCHAR2"
+	ColumnTypeString   = "STRING"
+	ColumnTypeCBlob    = "CBLOB"
+	ColumnTypeText     = "TEXT"
+
+	ColumnTypeDate        = "DATE"
+	ColumnTypeDateTime    = "DATETIME"
+	ColumnTypeTimestamp   = "TIMESTAMP"
+	ColumnTypeTimestampTz = "TIMESTAMPTZ"
+)

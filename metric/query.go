@@ -10,7 +10,7 @@ import (
 //Query represents query metrics
 type Query struct {
 	parametrizedSQL *dsc.ParametrizedSQL
-	SQL             *dsc.ParametrizedSQL `json:",omitempty"`
+	Query           *dsc.ParametrizedSQL `json:",omitempty"`
 	DatView         string
 	Count           uint32 `json:",omitempty"`
 	CacheGetTimeMs  int    `json:",omitempty"`

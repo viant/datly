@@ -36,7 +36,7 @@ func (m *Metrics) IncludeSQL() {
 		return
 	}
 	for _, query := range m.Queries {
-		query.SQL = query.parametrizedSQL
+		query.Query = query.parametrizedSQL
 	}
 }
 

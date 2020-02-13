@@ -28,10 +28,10 @@ type Field struct {
 	DateFormat    string
 	DataLayout    string
 	DataType      string
+	InputName     string
 	ComponentType string
 	provider      *Provider
 	outputName    string
-	inputName     string
 	hidden        bool
 }
 
@@ -145,7 +145,7 @@ func (f *Field) InitType(value interface{}) {
 }
 
 func getBaseType(value interface{}) string {
-	switch value.(type) {
+	switch val := value.(type) {
 	case float32, float64, *float32, *float64:
 		return FieldTypeFloat
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, *int, *int8, *int16, *int32, *int64, *uint, *uint8, *uint16, *uint32, *uint64:
@@ -154,9 +154,12 @@ func getBaseType(value interface{}) string {
 		return FieldTypeTime
 	case bool, *bool:
 		return FieldTypeBool
-	default:
-		return FieldTypeString
+	case []byte:
+		if _, err := toolbox.ToFloat(val); err == nil {
+			return FieldTypeFloat
+		}
 	}
+	return FieldTypeString
 }
 
 //Set sets a field value

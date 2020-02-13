@@ -182,16 +182,12 @@ func (p *Proto) FieldWithValue(fieldName string, value interface{}) *Field {
 		return field
 	}
 
-	inputFieldName := ""
+	field = &Field{Name: fieldName, Index: len(p.fieldNames)}
 	if p.inputCaseFormat != p.caseFormat {
-		inputFieldName = fieldName
-		fieldName = toolbox.ToCaseFormat(fieldName, p.inputCaseFormat, p.caseFormat)
+		field.InputName = field.Name
+		field.Name = toolbox.ToCaseFormat(fieldName, p.inputCaseFormat, p.caseFormat)
 	}
-	field = &Field{Name: fieldName, Index: len(p.fieldNames), inputName: inputFieldName}
 	field.InitType(value)
-	if p.caseFormat != p.outputCaseFormat {
-		field.outputName = toolbox.ToCaseFormat(field.Name, p.caseFormat, p.outputCaseFormat)
-	}
 	if value == nil {
 		p.addNilType(field.Index)
 	}
@@ -202,9 +198,12 @@ func (p *Proto) FieldWithValue(fieldName string, value interface{}) *Field {
 func (p *Proto) AddField(field *Field) *Field {
 	p.lock.Lock()
 	defer p.lock.Unlock()
+	if p.caseFormat != p.outputCaseFormat {
+		field.outputName = toolbox.ToCaseFormat(field.Name, p.caseFormat, p.outputCaseFormat)
+	}
 	p.fieldNames[field.Name] = field
-	if field.inputName != "" {
-		p.fieldNames[field.inputName] = field
+	if field.InputName != "" {
+		p.fieldNames[field.InputName] = field
 	}
 	if field.outputName != "" {
 		p.fieldNames[field.outputName] = field
