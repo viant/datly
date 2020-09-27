@@ -17,13 +17,14 @@ require (
 	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/pkg/errors v0.9.0
 	github.com/stretchr/testify v1.4.0
-	github.com/viant/afs v0.15.2
-	github.com/viant/afsc v0.14.3
+	github.com/viant/afs v1.0.4
+	github.com/viant/afsc v1.0.0
 	github.com/viant/asc v0.5.0
 	github.com/viant/assertly v0.5.3
 	github.com/viant/bgc v0.8.0
 	github.com/viant/dsc v0.16.0
 	github.com/viant/dsunit v0.10.8
+	github.com/viant/gtly v0.0.0-20200927172514-d1417cac563d
 	github.com/viant/toolbox v0.29.2
 	github.com/yuin/gopher-lua v0.0.0-20191220021717-ab39c6098bdb // indirect
 	golang.org/x/crypto v0.0.0-20200109152110-61a87790db17 // indirect

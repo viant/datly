@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/datly/data/io"
-	"github.com/viant/datly/generic"
+	"github.com/viant/gtly"
 	"github.com/viant/datly/shared"
 )
 
@@ -18,7 +18,7 @@ type IO struct {
 }
 
 //SetOutput sets output with specified cardinality
-func (o IO) SetOutput(collection generic.Collection, output io.Output) {
+func (o IO) SetOutput(collection gtly.Collection, output io.Output) {
 	switch o.Cardinality {
 	case shared.CardinalityOne:
 		output.Put(o.Key, collection.First())
@@ -33,7 +33,7 @@ func (o IO) Validate() error {
 		return fmt.Errorf("dataView was empty")
 	}
 	if o.CaseFormat != "" {
-		if err := generic.ValidateCaseFormat(o.CaseFormat); err != nil {
+		if err := gtly.ValidateCaseFormat(o.CaseFormat); err != nil {
 			return errors.Wrapf(err, "invalid case format for data view: %v", o.DataView)
 		}
 	}

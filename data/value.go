@@ -1,17 +1,17 @@
 package data
 
 import (
-	"github.com/viant/datly/generic"
+	"github.com/viant/gtly"
 )
 
 //Value represents visitor value
 type Value struct {
-	*generic.Object
-	Prev *generic.Object
+	*gtly.Object
+	Prev *gtly.Object
 }
 
 //NewValue creates a value
-func NewValue(object, prev *generic.Object) *Value {
+func NewValue(object, prev *gtly.Object) *Value {
 	return &Value{
 		Object: object,
 		Prev:   prev,

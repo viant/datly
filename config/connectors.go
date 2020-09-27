@@ -47,7 +47,7 @@ func (c *Connectors) remove(ctx context.Context, fs afs.Service, URL string) err
 
 //Load load connector
 func (c *Connectors) Load(ctx context.Context, fs afs.Service, URL string) error {
-	reader, err := fs.DownloadWithURL(ctx, URL)
+	reader, err := fs.OpenURL(ctx, URL)
 	if err != nil {
 		return errors.Wrapf(err, "failed to load resource: %v", URL)
 	}

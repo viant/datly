@@ -6,7 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/viant/afs"
 	"github.com/viant/datly/cache"
-	"github.com/viant/datly/generic"
+	"github.com/viant/gtly"
 	"github.com/viant/toolbox/data"
 	"strings"
 )
@@ -170,7 +170,7 @@ func (v View) Validate() error {
 		}
 	}
 	if v.CaseFormat != "" {
-		if err := generic.ValidateCaseFormat(v.CaseFormat); err != nil {
+		if err := gtly.ValidateCaseFormat(v.CaseFormat); err != nil {
 			return errors.Wrapf(err, "invalid view: %v", v.Name)
 		}
 	}

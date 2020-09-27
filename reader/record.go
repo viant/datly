@@ -2,7 +2,7 @@ package reader
 
 import (
 	"fmt"
-	"github.com/viant/datly/generic"
+	"github.com/viant/gtly"
 	"github.com/viant/datly/shared"
 	"github.com/viant/dsc"
 	"strings"
@@ -11,7 +11,7 @@ import (
 
 //Record represents a record
 type Record struct {
-	proto         *generic.Proto
+	proto         *gtly.Proto
 	columns       []string
 	values        []interface{}
 	valuePointers []interface{}
@@ -26,14 +26,14 @@ func (r *Record) Reset() {
 }
 
 //Object returns record object
-func (r *Record) Object() (*generic.Object, error) {
+func (r *Record) Object() (*gtly.Object, error) {
 	var objectValues = make([]interface{}, len(r.columns))
 	copy(objectValues, r.values)
 	return r.proto.Object(objectValues)
 }
 
 //NewRecord creates a record
-func NewRecord(proto *generic.Proto, columns []string, columnTypes []dsc.ColumnType) *Record {
+func NewRecord(proto *gtly.Proto, columns []string, columnTypes []dsc.ColumnType) *Record {
 	result := &Record{
 		proto:         proto,
 		columns:       columns,

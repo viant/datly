@@ -9,7 +9,7 @@ import (
 	"github.com/viant/datly/base/contract"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/data"
-	"github.com/viant/datly/generic"
+	"github.com/viant/gtly"
 	"github.com/viant/datly/metric"
 	"github.com/viant/datly/shared"
 	"github.com/viant/dsc"
@@ -72,7 +72,7 @@ func (s *service) readOutputData(ctx context.Context, rule *config.Rule, io *dat
 		return err
 	}
 	selector := view.Selector.Clone()
-	genericProvider := generic.NewProvider()
+	genericProvider := gtly.NewProvider(view.Name)
 	collection := genericProvider.NewArray()
 	if io.OmitEmpty {
 		selector.OmitEmpty = io.OmitEmpty
@@ -87,7 +87,7 @@ func (s *service) readOutputData(ctx context.Context, rule *config.Rule, io *dat
 	return err
 }
 
-func (s *service) readViewData(ctx context.Context, collection generic.Collection, selector *data.Selector, view *data.View, rule *config.Rule, request *Request, response *Response) error {
+func (s *service) readViewData(ctx context.Context, collection gtly.Collection, selector *data.Selector, view *data.View, rule *config.Rule, request *Request, response *Response) error {
 	dataPool, err := s.BuildDataPool(ctx, request.Request, view, rule, response.Metrics)
 	if err != nil {
 		return errors.Wrapf(err, "failed to assemble bindingData with rule: %v", rule.Info.URL)
@@ -124,14 +124,14 @@ func (s *service) readViewData(ctx context.Context, collection generic.Collectio
 	}
 	if view.OnRead != nil {
 		context := data.NewContext(ctx, view, s)
-		collection.Objects(func(item *generic.Object) (toContinue bool, err error) {
+		collection.Objects(func(item *gtly.Object) (toContinue bool, err error) {
 			return view.OnRead.Visit(context, data.NewValue(item, nil))
 		})
 	}
 	return err
 }
 
-func (s *service) readData(ctx context.Context, view *data.View, query *metric.Query, collection generic.Collection, response *Response) error {
+func (s *service) readData(ctx context.Context, view *data.View, query *metric.Query, collection gtly.Collection, response *Response) error {
 	useCache := view.Cache != nil
 	var key string
 	parametrized := query.ParametrizedSQL()
@@ -182,8 +182,9 @@ func (s *service) readData(ctx context.Context, view *data.View, query *metric.Q
 	return err
 }
 
-func (s *service) updateCache(ctx context.Context, collection generic.Collection, view *data.View, key string) error {
+func (s *service) updateCache(ctx context.Context, collection gtly.Collection, view *data.View, key string) error {
 	compacted := collection.Compact()
+	//TO we still need it
 	compacted.TransformBinary()
 	JSON, err := json.Marshal(compacted)
 	if err == nil {
@@ -192,7 +193,7 @@ func (s *service) updateCache(ctx context.Context, collection generic.Collection
 	return err
 }
 
-func (s *service) readDataFromCache(ctx context.Context, key string, view *data.View, query *metric.Query, collection generic.Collection) (bool, error) {
+func (s *service) readDataFromCache(ctx context.Context, key string, view *data.View, query *metric.Query, collection gtly.Collection) (bool, error) {
 	now := time.Now()
 	defer query.SetCacheGetTime(now)
 	cached, err := view.Cacher().Get(ctx, key)
@@ -203,7 +204,7 @@ func (s *service) readDataFromCache(ctx context.Context, key string, view *data.
 		query.CacheMiss = true
 		return false, nil
 	}
-	compacted := &generic.Compatcted{}
+	compacted := &gtly.Compacted{}
 	if err := json.Unmarshal(cached, &compacted); err != nil {
 		return false, errors.Wrapf(err, "failed to decode cache entry for key: %s", key)
 	}
@@ -237,8 +238,8 @@ func (s *service) readRefData(ctx context.Context, owner *data.View, ref *data.R
 		response.AddError(shared.ErrorTypeException, "service.readOutputData", err)
 		return
 	}
-	provider := generic.NewProvider()
-	var collection generic.Collection
+	provider := gtly.NewProvider(view.Name)
+	var collection gtly.Collection
 	if ref.Cardinality == shared.CardinalityOne {
 		collection = provider.NewMap(ref.RefIndex())
 	} else {
@@ -286,9 +287,9 @@ func (s *service) buildRefView(owner *data.View, ref *data.Reference, selector *
 	return refView, nil
 }
 
-func (s *service) assignRefs(owner *data.View, ownerCollection generic.Collection, refData map[string]generic.Collection) error {
+func (s *service) assignRefs(owner *data.View, ownerCollection gtly.Collection, refData map[string]gtly.Collection) error {
 
-	return ownerCollection.Objects(func(item *generic.Object) (b bool, err error) {
+	return ownerCollection.Objects(func(item *gtly.Object) (b bool, err error) {
 		for _, ref := range owner.Refs {
 			if owner.HideRefIDs {
 				for _, column := range ref.Columns() {
@@ -303,14 +304,14 @@ func (s *service) assignRefs(owner *data.View, ownerCollection generic.Collectio
 			key := index(item)
 
 			if ref.Cardinality == shared.CardinalityOne {
-				aMap, ok := data.(*generic.Map)
+				aMap, ok := data.(*gtly.Map)
 				if !ok {
 					return false, errors.Errorf("invalid collection: expected : %T, but had %T", aMap, data)
 				}
 				value := aMap.Object(key)
 				item.SetValue(ref.Name, value)
 			} else {
-				aMultimap, ok := data.(*generic.Multimap)
+				aMultimap, ok := data.(*gtly.Multimap)
 				if !ok {
 					return false, errors.Errorf("invalid collection: expected : %T, but had %T", aMultimap, data)
 				}

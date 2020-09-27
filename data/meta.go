@@ -3,7 +3,7 @@ package data
 import (
 	"fmt"
 	"github.com/pkg/errors"
-	"github.com/viant/datly/generic"
+	"github.com/viant/gtly"
 	"github.com/viant/datly/shared"
 )
 
@@ -36,8 +36,8 @@ func (m *Meta) initViews() error {
 				refView.Joins = make([]*Join, 0)
 				view.Refs[i]._view = refView
 				view.Refs[i]._alias = fmt.Sprintf("a%02v", i)
-				view.Refs[i]._refIndex = generic.NewIndex(ref.RefColumns())
-				view.Refs[i]._index = generic.NewIndex(ref.Columns())
+				view.Refs[i]._refIndex = gtly.NewIndex(ref.RefColumns())
+				view.Refs[i]._index = gtly.NewIndex(ref.Columns())
 			}
 		}
 	}

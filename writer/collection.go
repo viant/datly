@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/datly/data"
-	"github.com/viant/datly/generic"
+	"github.com/viant/gtly"
 	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox"
 )
 
 //NewCollection create a collection for data view
-func NewCollection(data map[string]interface{}, view *data.View, io *data.IO) (generic.Collection, error) {
-	result := generic.NewProvider().NewArray()
+func NewCollection(data map[string]interface{}, view *data.View, io *data.IO) (gtly.Collection, error) {
+	result := gtly.NewProvider(view.Name).NewArray()
 	values, ok := data[io.Key]
 	if !ok {
 		if shared.IsLoggingEnabled() {

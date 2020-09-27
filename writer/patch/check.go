@@ -31,7 +31,7 @@ func (p *service) removeNonExisting(ctx context.Context, manager dsc.Manager, co
 	SQL := fmt.Sprintf(existingTemplate, strings.Join(view.PrimaryKey, ","), view.Table, strings.Join(view.PrimaryKey, ","), strings.Join(placeholders, ","))
 	var record = make([]interface{}, len(view.PrimaryKey))
 	var keys = make([]string, len(view.PrimaryKey))
-	query := metric.NewQuery(&dsc.ParametrizedSQL{SQL: SQL, Values: SQLValues})
+	query := metric.NewQuery(view.Name, &dsc.ParametrizedSQL{SQL: SQL, Values: SQLValues})
 	err := manager.ReadAllOnWithHandlerOnConnection(conn, SQL, SQLValues, func(scanner dsc.Scanner) (toContinue bool, err error) {
 		query.Increment()
 		var values = make([]interface{}, len(record))

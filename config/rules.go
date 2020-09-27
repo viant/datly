@@ -103,7 +103,7 @@ func (r *Rules) Load(ctx context.Context, fs afs.Service, URL string) error {
 }
 
 func loadRule(ctx context.Context, fs afs.Service, URL string) (*Rule, error) {
-	reader, err := fs.DownloadWithURL(ctx, URL)
+	reader, err := fs.OpenURL(ctx, URL)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load resource: %v", URL)
 	}

@@ -39,7 +39,7 @@ func (s *service) Get(ctx context.Context, key string) ([]byte, error) {
 	if !exists {
 		return nil, err
 	}
-	reader, err := s.fs.DownloadWithURL(ctx, URL, option.NewObjectKind(true))
+	reader, err := s.fs.OpenURL(ctx, URL, option.NewObjectKind(true))
 	if err != nil {
 		return nil, err
 	}

@@ -2,7 +2,7 @@ package db
 
 import (
 	"github.com/viant/datly/data"
-	"github.com/viant/datly/generic"
+	"github.com/viant/gtly"
 	"github.com/viant/toolbox"
 	"strings"
 )
@@ -12,7 +12,7 @@ type Indexer struct {
 	view *data.View
 }
 
-func (i Indexer) Key(item *generic.Object) (string, bool) {
+func (i Indexer) Key(item *gtly.Object) (string, bool) {
 	var values = make([]string, len(i.view.PrimaryKey))
 	for i, pk := range i.view.PrimaryKey {
 		value := item.Value(pk)
@@ -24,7 +24,7 @@ func (i Indexer) Key(item *generic.Object) (string, bool) {
 	return strings.Join(values, "-"), true
 }
 
-func (i Indexer) Values(item *generic.Object) []interface{} {
+func (i Indexer) Values(item *gtly.Object) []interface{} {
 	var values = make([]interface{}, len(i.view.PrimaryKey))
 	for i, pk := range i.view.PrimaryKey {
 		values[i] = item.Value(pk)
@@ -32,9 +32,9 @@ func (i Indexer) Values(item *generic.Object) []interface{} {
 	return values
 }
 
-func (i Indexer) Index(collection generic.Collection) map[string][]interface{} {
+func (i Indexer) Index(collection gtly.Collection) map[string][]interface{} {
 	var index = make(map[string][]interface{})
-	collection.Objects(func(item *generic.Object) (toContinue bool, err error) {
+	collection.Objects(func(item *gtly.Object) (toContinue bool, err error) {
 		key, ok := i.Key(item)
 		if !ok {
 			return true, nil

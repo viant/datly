@@ -2,7 +2,7 @@ package db
 
 import (
 	"github.com/viant/datly/data"
-	"github.com/viant/datly/generic"
+	"github.com/viant/gtly"
 	"github.com/viant/dsc"
 )
 
@@ -13,7 +13,7 @@ type keySetter struct {
 
 //SetKey sets autoincrement/sql value to the application domain instance.
 func (s keySetter) SetKey(instance interface{}, seq int64) {
-	obj := instance.(generic.Object)
+	obj := instance.(gtly.Object)
 	obj.SetValue(s.view.PrimaryKey[0], seq)
 }
 

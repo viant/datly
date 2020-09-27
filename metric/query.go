@@ -49,6 +49,13 @@ func (q *Query) Increment() int {
 	return int(count)
 }
 
+func (q *Query) AppendValues(values []interface{}) {
+	if len(q.parametrizedSQL.Values) == 0 {
+		q.parametrizedSQL.Values = make([]interface{}, 0)
+	}
+	q.parametrizedSQL.Values = append(q.parametrizedSQL.Values, values)
+}
+
 //NewQuery returns new query
 func NewQuery(dataView string, sql *dsc.ParametrizedSQL) *Query {
 	return &Query{

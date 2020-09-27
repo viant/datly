@@ -23,7 +23,7 @@ func (v *Fragment) LoadSQL(ctx context.Context, fs afs.Service, parentURL string
 	if url.IsRelative(v.URL) {
 		fromURL = url.JoinUNC(parentURL, v.URL)
 	}
-	reader, err := fs.DownloadWithURL(ctx, fromURL)
+	reader, err := fs.OpenURL(ctx, fromURL)
 	if err != nil {
 		return err
 	}

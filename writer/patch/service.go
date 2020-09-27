@@ -7,7 +7,7 @@ import (
 	"github.com/viant/datly/base/contract"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/data"
-	"github.com/viant/datly/generic"
+	"github.com/viant/gtly"
 	"github.com/viant/datly/metric"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/writer"
@@ -93,7 +93,7 @@ func (p *service) writeInputData(ctx context.Context, rule *config.Rule, io *dat
 		return errors.Wrapf(err, "failed to build data pool for data view: %v", view.Name)
 	}
 
-	collection.Objects(func(item *generic.Object) (toContinue bool, err error) {
+	collection.Objects(func(item *gtly.Object) (toContinue bool, err error) {
 		//TODO check with specified, data type validation, date formatting, beforePath visitor call
 		for k, v := range dataPool {
 			item.SetValue(k, v)
@@ -104,7 +104,7 @@ func (p *service) writeInputData(ctx context.Context, rule *config.Rule, io *dat
 	return p.patchDataView(ctx, view, collection, dataPool, req, resp.Metrics)
 }
 
-func (p *service) patchDataView(ctx context.Context, view *data.View, collection generic.Collection, dataPool data.Pool, request *Request, metrics *metric.Metrics) (err error) {
+func (p *service) patchDataView(ctx context.Context, view *data.View, collection gtly.Collection, dataPool data.Pool, request *Request, metrics *metric.Metrics) (err error) {
 	manager, err := p.Manager(ctx, view.Connector)
 	if err != nil {
 		return err
@@ -147,7 +147,7 @@ func (p *service) patchDataView(ctx context.Context, view *data.View, collection
 	return err
 }
 
-func (p *service) updateData(collection generic.Collection, indexer *db.Indexer, index map[string][]interface{}, view *data.View, manager dsc.Manager, dbConn dsc.Connection, metrics *metric.Metrics) error {
+func (p *service) updateData(collection gtly.Collection, indexer *db.Indexer, index map[string][]interface{}, view *data.View, manager dsc.Manager, dbConn dsc.Connection, metrics *metric.Metrics) error {
 	updatable := db.Newupdatable(collection, indexer, index)
 	update := db.NewUpdate(view)
 	keySetter := db.NewKeySetter(view)
@@ -162,7 +162,7 @@ func (p *service) updateData(collection generic.Collection, indexer *db.Indexer,
 	return err
 }
 
-func (p *service) insertData(collection generic.Collection, index map[string][]interface{}, view *data.View, manager dsc.Manager, dbConn dsc.Connection, metrics *metric.Metrics) error {
+func (p *service) insertData(collection gtly.Collection, index map[string][]interface{}, view *data.View, manager dsc.Manager, dbConn dsc.Connection, metrics *metric.Metrics) error {
 	keySetter := db.NewKeySetter(view)
 	indexer := db.NewIndexer(view)
 

@@ -3,7 +3,7 @@ package db
 import (
 	"fmt"
 	"github.com/viant/datly/data"
-	"github.com/viant/datly/generic"
+	"github.com/viant/gtly"
 	"github.com/viant/datly/metric"
 	"github.com/viant/dsc"
 	"strings"
@@ -17,8 +17,9 @@ type Update struct {
 	pk      map[string]bool
 }
 
+
 func (u *Update) DML(item interface{}) *dsc.ParametrizedSQL {
-	obj := item.(*generic.Object)
+	obj := item.(*gtly.Object)
 	var values = make([]interface{}, 0)
 	var columns = make([]string, 0)
 	var whereColumns = make([]string, 0)
@@ -39,7 +40,7 @@ func (u *Update) DML(item interface{}) *dsc.ParametrizedSQL {
 	}
 	SQL := fmt.Sprintf(updateTemplate, u.view.Table, strings.Join(columns, ",\n"), strings.Join(whereColumns, "."))
 	result := &dsc.ParametrizedSQL{SQL: SQL, Values: values}
-	query := metric.NewQuery(result)
+	query := metric.NewQuery(u.view.Name, result)
 	query.Count++
 	u.Queries = append(u.Queries, query)
 	return result

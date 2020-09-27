@@ -18,10 +18,10 @@ type StatusInfo struct {
 	RuleURL         string          `json:",omitempty"`
 	Rule            *config.Rule    `json:",omitempty"`
 	Rules           int             `json:",omitempty"`
-	ServiceTimeMs   int
-	ExecutionTimeMs int
-	CreateTime      time.Time
-	StartTime       time.Time
+	ServiceTimeMs   int             `json:",omitempty"`
+	ExecutionTimeMs int             `json:",omitempty"`
+	CreateTime      time.Time       `json:",omitempty"`
+	StartTime       time.Time       `json:",omitempty"`
 	mux             sync.Mutex
 }
 

@@ -1,18 +1,18 @@
 package db
 
 import (
-	"github.com/viant/datly/generic"
+	"github.com/viant/gtly"
 	"github.com/viant/toolbox"
 )
 
 type insertable struct {
 	indexer    *Indexer
 	index      map[string][]interface{}
-	collection generic.Collection
+	collection gtly.Collection
 }
 
 func (i *insertable) Range(handler func(item interface{}) (bool, error)) error {
-	return i.collection.Objects(func(item *generic.Object) (toContinue bool, err error) {
+	return i.collection.Objects(func(item *gtly.Object) (toContinue bool, err error) {
 		if len(i.index) == 0 {
 			return handler(item)
 		}
@@ -26,7 +26,7 @@ func (i *insertable) Range(handler func(item interface{}) (bool, error)) error {
 }
 
 //NewInsertable creates an insertable collection
-func NewInsertable(collection generic.Collection, indexer *Indexer, index map[string][]interface{}) toolbox.Ranger {
+func NewInsertable(collection gtly.Collection, indexer *Indexer, index map[string][]interface{}) toolbox.Ranger {
 	return &insertable{
 		indexer:    indexer,
 		index:      index,

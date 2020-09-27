@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/pkg/errors"
-	"github.com/viant/datly/generic"
+	"github.com/viant/gtly"
 	"strings"
 )
 
@@ -16,8 +16,8 @@ type Reference struct {
 	On          []*ColumnMatch
 	_view       *View
 	_alias      string
-	_refIndex   generic.Index
-	_index      generic.Index
+	_refIndex   gtly.Index
+	_index      gtly.Index
 }
 
 //View returns association view
@@ -26,12 +26,12 @@ func (r *Reference) View() *View {
 }
 
 //Index returns index
-func (r *Reference) Index() generic.Index {
+func (r *Reference) Index() gtly.Index {
 	return r._index
 }
 
 //RefIndex returns ref index
-func (r *Reference) RefIndex() generic.Index {
+func (r *Reference) RefIndex() gtly.Index {
 	return r._refIndex
 }
 
