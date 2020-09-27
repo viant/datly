@@ -3,8 +3,8 @@ package data
 import (
 	"fmt"
 	"github.com/pkg/errors"
-	"github.com/viant/gtly"
 	"github.com/viant/datly/shared"
+	"github.com/viant/gtly"
 )
 
 //Meta represents an abstraction describing data access rules

@@ -2,8 +2,8 @@ package db
 
 import (
 	"github.com/viant/datly/data"
-	"github.com/viant/gtly"
 	"github.com/viant/dsc"
+	"github.com/viant/gtly"
 )
 
 //keySetter represents id/key mutator.

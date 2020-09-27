@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/datly/data/io"
-	"github.com/viant/gtly"
 	"github.com/viant/datly/shared"
+	"github.com/viant/gtly"
 )
 
 //IO represents data input/output

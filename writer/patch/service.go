@@ -7,12 +7,12 @@ import (
 	"github.com/viant/datly/base/contract"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/data"
-	"github.com/viant/gtly"
 	"github.com/viant/datly/metric"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/writer"
 	"github.com/viant/datly/writer/db"
 	"github.com/viant/dsc"
+	"github.com/viant/gtly"
 	"github.com/viant/toolbox"
 	"sync"
 )

@@ -2,9 +2,9 @@ package reader
 
 import (
 	"fmt"
-	"github.com/viant/gtly"
 	"github.com/viant/datly/shared"
 	"github.com/viant/dsc"
+	"github.com/viant/gtly"
 	"strings"
 	"time"
 )

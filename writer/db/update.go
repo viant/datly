@@ -3,9 +3,9 @@ package db
 import (
 	"fmt"
 	"github.com/viant/datly/data"
-	"github.com/viant/gtly"
 	"github.com/viant/datly/metric"
 	"github.com/viant/dsc"
+	"github.com/viant/gtly"
 	"strings"
 )
 
@@ -16,7 +16,6 @@ type Update struct {
 	view    *data.View
 	pk      map[string]bool
 }
-
 
 func (u *Update) DML(item interface{}) *dsc.ParametrizedSQL {
 	obj := item.(*gtly.Object)

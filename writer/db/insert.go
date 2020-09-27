@@ -3,9 +3,9 @@ package db
 import (
 	"fmt"
 	"github.com/viant/datly/data"
-	"github.com/viant/gtly"
 	"github.com/viant/datly/metric"
 	"github.com/viant/dsc"
+	"github.com/viant/gtly"
 	"strings"
 )
 
@@ -16,7 +16,6 @@ type Insert struct {
 	view  *data.View
 	_SQL  string
 }
-
 
 func (i *Insert) DML(item interface{}) *dsc.ParametrizedSQL {
 	obj := item.(*gtly.Object)
@@ -42,7 +41,6 @@ func (i *Insert) DML(item interface{}) *dsc.ParametrizedSQL {
 	i.Query.Count++
 	return &dsc.ParametrizedSQL{SQL: i._SQL, Values: values}
 }
-
 
 //NewInsert creates a new insert
 func NewInsert(view *data.View) *Insert {
