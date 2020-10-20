@@ -9,6 +9,14 @@ import (
 
 var readerService reader.Service
 
+func Singleton(ctx context.Context, config *rconfig.Config) (reader.Service, error) {
+	if readerService != nil {
+		return readerService, nil
+	}
+	readerService, err := reader.New(ctx, config)
+	return readerService, err
+}
+
 //Reader returns reader service singleton
 func Reader(ctx context.Context, source string) (reader.Service, error) {
 	if readerService != nil {
@@ -18,6 +26,5 @@ func Reader(ctx context.Context, source string) (reader.Service, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create config for %v", source)
 	}
-	readerService, err := reader.New(ctx, config)
-	return readerService, err
+	return Singleton(ctx, config)
 }

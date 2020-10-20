@@ -7,5 +7,6 @@ output:
 views:
   - table: events
     connector: db1
+
   - table: event_types
     connector: db1

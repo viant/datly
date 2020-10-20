@@ -4,7 +4,7 @@ go 1.12
 
 require (
 	github.com/MichaelS11/go-cql-driver v0.0.0-20190914174813-cf3b3196aa43
-	github.com/aerospike/aerospike-client-go v2.7.0+incompatible // indirect
+	github.com/aerospike/aerospike-client-go v2.7.0+incompatible
 	github.com/aws/aws-lambda-go v1.13.3
 	github.com/aws/aws-sdk-go v1.28.4
 	github.com/francoispqt/gojay v1.2.13

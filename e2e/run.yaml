@@ -1,6 +1,6 @@
 init:
   app: datly
-  sdk: go:1.12
+  sdk: go:1.15
   appPath: $Pwd(..)
   buildPath: /tmp/build/datly
   runPath:  /tmp/app/datly

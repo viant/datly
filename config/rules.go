@@ -40,9 +40,14 @@ func (r Rules) Less(i, j int) bool {
 
 //Init initialises rules
 func (r *Rules) Init(ctx context.Context, fs afs.Service) error {
-	r.registry = make(map[string]*Rule)
-	r.Loader = NewLoader(r.URL, time.Second, fs, r.modify, r.remove)
-	_, err := r.Loader.Notify(ctx, fs)
+	if len(r.registry) == 0 {
+		r.registry = make(map[string]*Rule)
+	}
+	var err error
+	if r.URL != "" {
+		r.Loader = NewLoader(r.URL, time.Second, fs, r.modify, r.remove)
+		_, err = r.Loader.Notify(ctx, fs)
+	}
 	return err
 }
 
@@ -91,7 +96,14 @@ func (r *Rules) Load(ctx context.Context, fs afs.Service, URL string) error {
 	if err != nil {
 		return err
 	}
+	r.Add(rule)
+	return err
+}
 
+func (r *Rules) Add(rule *Rule) error {
+	if err := rule.Validate(); err != nil {
+		return err
+	}
 	r.registry[rule.Info.URL] = rule
 	var rules = make([]*Rule, 0)
 	for k := range r.registry {
@@ -99,7 +111,7 @@ func (r *Rules) Load(ctx context.Context, fs afs.Service, URL string) error {
 	}
 	sort.Sort(&Rules{rules: rules})
 	r.rules = rules
-	return err
+	return nil
 }
 
 func loadRule(ctx context.Context, fs afs.Service, URL string) (*Rule, error) {

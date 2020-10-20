@@ -31,13 +31,13 @@ func (c *Config) Init(ctx context.Context, fs afs.Service) error {
 
 //Validate checks if config is valid
 func (c Config) Validate() error {
-	if c.Rules.URL == "" {
+	if c.Rules.URL == "" && len(c.Rules.registry) == 0 {
 		return errors.Errorf("rules.url was empty")
 	}
-	if c.Connectors.URL == "" {
+	if c.Connectors.URL == "" && len(c.Connectors.registry) == 0 {
 		return errors.Errorf("connectors.url was empty")
 	}
-	if c.Rules.URL == c.Connectors.URL {
+	if c.Rules.URL == c.Connectors.URL && c.Connectors.URL != "" {
 		return errors.Errorf("connectors and rule URL can not be the same: %v", c.Rules.URL)
 	}
 	return nil

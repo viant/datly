@@ -30,6 +30,9 @@ func (c Connectors) Get(name string) (*Connector, error) {
 //Init initialises connector
 func (c *Connectors) Init(ctx context.Context, fs afs.Service) error {
 	c.registry = make(map[string]*Connector)
+	if c.URL == "" {
+		return nil
+	}
 	c.Loader = NewLoader(c.URL, time.Second, fs, c.modify, c.remove)
 	_, err := c.Loader.Notify(ctx, fs)
 	return err
@@ -42,6 +45,18 @@ func (c *Connectors) modify(ctx context.Context, fs afs.Service, URL string) err
 
 func (c *Connectors) remove(ctx context.Context, fs afs.Service, URL string) error {
 	delete(c.registry, URL)
+	return nil
+}
+
+func (c *Connectors) Add(connector *Connector) error {
+	if len(c.registry) == 0 {
+		c.registry = make(map[string]*Connector)
+	}
+	err := connector.Validate()
+	if err != nil {
+		return err
+	}
+	c.registry[connector.Name] = connector
 	return nil
 }
 
@@ -69,10 +84,7 @@ func (c *Connectors) Load(ctx context.Context, fs afs.Service, URL string) error
 		if connector.Name == "" {
 			connector.Name = extractBasicName(URL)
 		}
-		if err = connector.Validate(); err == nil {
-			c.registry[connector.Name] = connector
-		}
-		return err
+		return c.Add(connector)
 	})
 
 }
