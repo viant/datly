@@ -29,7 +29,6 @@ func (c Connectors) Get(name string) (*Connector, error) {
 
 //Init initialises connector
 func (c *Connectors) Init(ctx context.Context, fs afs.Service) error {
-	c.registry = make(map[string]*Connector)
 	if c.URL == "" {
 		return nil
 	}
