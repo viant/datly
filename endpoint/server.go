@@ -3,6 +3,7 @@ package endpoint
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/shared"
 	"log"
 	"net/http"
 	"os"
@@ -42,10 +43,10 @@ func (r *Server) shutdownOnInterrupt() {
 }
 
 //New creates a new server
-func New(port int, handlers map[string]http.Handler) *Server {
+func New(port int, handlers map[string]shared.Handle) *Server {
 	mux := http.NewServeMux()
 	for k, v := range handlers {
-		mux.Handle(k, v)
+		mux.HandleFunc(k, v)
 	}
 	result := &Server{port: port}
 	result.Server.Addr = ":" + fmt.Sprintf("%d", port)
