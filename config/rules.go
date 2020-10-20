@@ -104,6 +104,9 @@ func (r *Rules) Add(rule *Rule) error {
 	if err := rule.Validate(); err != nil {
 		return err
 	}
+	if len(r.registry) == 0 {
+		r.registry = make(map[string]*Rule)
+	}
 	r.registry[rule.Info.URL] = rule
 	var rules = make([]*Rule, 0)
 	for k := range r.registry {
