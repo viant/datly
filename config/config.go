@@ -44,9 +44,13 @@ func (c Config) Validate() error {
 }
 
 //ReloadChanged reload changes if needed
-func (c *Config) ReloadChanged(ctx context.Context, fs afs.Service) error {
-	_, err := c.Rules.Loader.Notify(ctx, fs)
-	if err == nil {
+func (c *Config) ReloadChanged(ctx context.Context, fs afs.Service) (err error) {
+	if c.Rules.Loader != nil {
+		if _, err = c.Rules.Loader.Notify(ctx, fs);err != nil {
+			return err
+		}
+	}
+	if c.Connectors.Loader != nil {
 		_, err = c.Connectors.Loader.Notify(ctx, fs)
 	}
 	return err
