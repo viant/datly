@@ -1,6 +1,0 @@
-name: bigquery_dw
-config:
-  driverName: bigquery
-  credentials: $bqCredentials
-  parameters:
-    datasetId: dw

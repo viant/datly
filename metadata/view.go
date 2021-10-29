@@ -1,11 +1,15 @@
-package data
+package metadata
 
 import (
 	"context"
 	"fmt"
-	"github.com/pkg/errors"
 	"github.com/viant/afs"
+	"github.com/viant/datly/cache"
 	"github.com/viant/toolbox/data"
+	"github.com/viant/toolbox/format"
+	"github.com/viant/xunsafe"
+	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -18,7 +22,7 @@ type View struct {
 	PrimaryKey    []string      `json:",omitempty"`
 	Mutable       *bool         `json:",omitempty"`
 	From          *From         `json:",omitempty"`
-	Columns       []*Column     `json:",omitempty"`
+	Columns       []Column      `json:",omitempty"`
 	Bindings      []*Binding    `json:",omitempty"`
 	Criteria      *Criteria     `json:",omitempty"`
 	Selector      Selector      `json:",omitempty"`
@@ -30,8 +34,30 @@ type View struct {
 	Cache         *Cache        `json:",omitempty"`
 	OnRead        *Visitor      `json:",omitempty"`
 	OnPath        *Visitor      `json:",omitempty"`
+	reflectType   reflect.Type
+	_cacheService cache.Service
 }
 
+func (v *View) AddRef(ref *Reference) {
+	v.Refs = append(v.Refs, ref)
+}
+
+//Cacher returns a cache service
+func (v *View) Cacher() cache.Service {
+	return v._cacheService
+}
+
+func (v *View) SetConnector(conn string) {
+	v.Connector = conn
+	if len(v.Refs) > 0 {
+		for _, ref := range v.Refs {
+			refView := ref.View()
+			if refView.Connector == "" {
+				refView.Connector = conn
+			}
+		}
+	}
+}
 
 //Clone creates a view clone
 func (v *View) Clone() *View {
@@ -83,7 +109,8 @@ func (v *View) MergeFrom(tmpl *View) {
 	}
 
 	if len(v.Columns) == 0 {
-		v.Columns = tmpl.Columns
+		v.Columns = make([]Column, len(tmpl.Columns))
+		copy(v.Columns, tmpl.Columns)
 	}
 	if len(v.Refs) == 0 {
 		v.Refs = tmpl.Refs
@@ -103,6 +130,17 @@ func (v *View) MergeFrom(tmpl *View) {
 	if v.OnRead == nil {
 		v.OnRead = tmpl.OnRead
 	}
+	if v.reflectType == nil {
+		v.reflectType = tmpl.reflectType
+	}
+}
+
+func (v *View) ReflectType() reflect.Type {
+	return v.reflectType
+}
+
+func (v *View) SetReflectType(aType reflect.Type) {
+	v.reflectType = aType
 }
 
 //IsMutable returns true if mutable
@@ -143,10 +181,10 @@ func (v *View) LoadSQL(ctx context.Context, fs afs.Service, parentURL string) er
 //Validate checks if view is valid
 func (v View) Validate() error {
 	if v.Table == "" && (v.From == nil || v.From.SQL == "") {
-		return errors.Errorf("table was empty")
+		return fmt.Errorf("table was empty")
 	}
 	if v.Connector == "" {
-		return errors.Errorf("connector was empty")
+		return fmt.Errorf("connector was empty")
 	}
 	if len(v.Bindings) > 0 {
 		for i := range v.Bindings {
@@ -162,21 +200,36 @@ func (v View) Validate() error {
 			}
 		}
 	}
-	if v.Mutable != nil && *v.Mutable {
-		if len(v.PrimaryKey) == 0 {
-			return errors.Errorf("primaryKey was empty on data view %v", v.Name)
-		}
-		if v.Table == "" {
-			return errors.Errorf("table was empty on data view %v", v.Name)
+	if v.CaseFormat != "" {
+		if _, err := format.NewCase(v.CaseFormat); err != nil {
+			return fmt.Errorf("%w on view: %v", err, v.Name)
 		}
 	}
 
+	if v.Mutable != nil && *v.Mutable {
+		if len(v.PrimaryKey) == 0 {
+			return fmt.Errorf("primaryKey was empty on data view %v", v.Name)
+		}
+		if v.Table == "" {
+			return fmt.Errorf("table was empty on data view %v", v.Name)
+		}
+	}
 	return nil
+}
+
+func (v *View) GetColumns() Columns {
+	if len(v.Columns) > 0 || v.reflectType == nil {
+		return v.Columns
+	}
+	viewCase, _ := format.NewCase(v.CaseFormat)
+	if columns, err := DiscoverColumns(v.reflectType, viewCase); err == nil {
+		v.Columns = columns
+	}
+	return v.Columns
 }
 
 //Init initializes view
 func (v *View) Init(setPrefix bool) error {
-
 	if v.Name == "" && v.Table != "" {
 		v.Name = v.Table
 	}
@@ -197,11 +250,64 @@ func (v *View) Init(setPrefix bool) error {
 			return err
 		}
 	}
+
+	if v.Cache != nil && v.Cache.Service != "" {
+		var err error
+		if v._cacheService, err = cache.Registry().Get(v.Cache.Service); err != nil {
+			return err
+		}
+		v.Cache.Init()
+	}
 	//If primary key is specified set mutable flag be default
 	if isMutable := len(v.PrimaryKey) > 0; isMutable && v.Mutable == nil {
 		v.Mutable = &isMutable
 	}
+
+	var err error
+	if len(v.Refs) > 0 && v.reflectType != nil {
+		viewColumns := v.GetColumns().Index()
+		for i, ref := range v.Refs {
+			if ref._view == nil {
+				return fmt.Errorf("ref %v view was empty", ref.Name)
+			}
+			if ref._view.reflectType == nil {
+				return fmt.Errorf("ref %v view reflection type empty", ref.Name)
+			}
+			ref._alias = strings.ToLower(ref.Name[0:1]) + strconv.Itoa(i)
+
+			if ref._key == nil {
+				if ref._key, err = v.buildKeyFunction(v.reflectType, ref.Columns(), viewColumns); err != nil {
+					return err
+				}
+			}
+			if ref._refKey == nil {
+				if ref._refKey, err = v.buildKeyFunction(ref._view.reflectType, ref.RefColumns(), ref._view.GetColumns().Index()); err != nil {
+					return err
+				}
+			}
+			if err = ref._view.Init(true); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
+}
+
+func (v *View) buildKeyFunction(viewType reflect.Type, columns []string, indexedViewColumns map[string]*Column) (func(o interface{}) interface{}, error) {
+	var fields []*xunsafe.Field
+	for _, col := range columns {
+		column, ok := indexedViewColumns[col]
+		if !ok {
+			var keys []string
+			for k := range indexedViewColumns {
+				keys = append(keys, k)
+			}
+			return nil, fmt.Errorf("failed to lookup column: %v on %v, avail: %v", col, viewType.Name(), keys)
+		}
+		field := xunsafe.FieldByIndex(viewType, column.FieldIndex)
+		fields = append(fields, field)
+	}
+	return KeyFunc(fields), nil
 }
 
 const (

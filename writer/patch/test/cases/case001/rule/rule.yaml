@@ -1,5 +1,0 @@
-Path: /case001/
-views:
-  - table: events
-    primaryKey: [id]
-    connector: db

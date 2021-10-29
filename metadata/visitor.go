@@ -1,4 +1,4 @@
-package data
+package metadata
 
 import "context"
 
@@ -16,6 +16,6 @@ func (v *Visitor) Init() error {
 }
 
 //Visit visit an object
-func (v *Visitor) Visit(ctx *context.Context, value *Value) (bool, error) {
+func (v *Visitor) Visit(ctx context.Context, value interface{}) error {
 	return v._visit(ctx, value)
 }

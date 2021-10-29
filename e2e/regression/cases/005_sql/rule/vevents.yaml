@@ -1,6 +1,0 @@
-path: /case_${parentIndex}/vevents
-views:
-  - name: vevents
-    from:
-      URL: sql/events.sql
-    connector: db1

@@ -1,0 +1,21 @@
+openapi: "3.0.0"
+info:
+  version: 1.0.0
+  title: Swagger Petstore
+  description: Multi-file boilerplate for OpenAPI Specification.
+  license:
+    name: MIT
+servers:
+  - url: http://petstore.swagger.io/v1
+paths:
+  /pets:
+    $ref: "./paths/pets.yaml"
+  /pets/{petId}:
+    $ref: "./paths/pet.yaml"
+components:
+  parameters:
+    $ref: "./parameters/index.yaml"
+  schemas:
+    $ref: "./schemas/index.yaml"
+  responses:
+    $ref: "./responses/index.yaml"

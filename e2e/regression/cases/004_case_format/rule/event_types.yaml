@@ -1,9 +1,0 @@
-path: /case_${parentIndex}/event_types
-output:
-  - dataView: event_types
-    caseFormat: UpperCamel
-
-views:
-  - table: event_types
-    caseFormat: LowerUnderscore
-    connector: db1
