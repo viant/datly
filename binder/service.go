@@ -38,10 +38,10 @@ func (s *service) BuildDataPool(ctx context.Context, request contract.Request, v
 		config.MergeValues(request.PathParams, result)
 	}
 	var err error
-	if len(view.Bindings) > 0 {
+	if len(view.Parameters) > 0 {
 
 		var value interface{}
-		for _, binding := range view.Bindings {
+		for _, binding := range view.Parameters {
 			switch binding.Type {
 			case shared.BindingDataView:
 				if value, err = s.loadViewData(ctx, binding, result, rule, metrics); err != nil {
@@ -85,7 +85,7 @@ func indexFilter(sourceType []string) map[string]bool {
 	return whiteList
 }
 
-func (s *service) loadViewData(ctx context.Context, binding *data.Binding, dataPool data.Pool, rule *config.Rule, metrics *metric.Metrics) (interface{}, error) {
+func (s *service) loadViewData(ctx context.Context, binding *data.Parameter, dataPool data.Pool, rule *config.Rule, metrics *metric.Metrics) (interface{}, error) {
 	view, err := rule.View(binding.DataView)
 	if err != nil {
 		return nil, err

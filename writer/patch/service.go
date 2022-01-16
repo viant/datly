@@ -85,7 +85,7 @@ func (p *service) writeInputData(ctx context.Context, rule *config.Rule, io *dat
 	}
 	patched.Put(view.Name, collection)
 	var filterTypes = make([]string, 0)
-	if len(view.Bindings) == 0 { //if binding specified  use explicit binding only
+	if len(view.Parameters) == 0 { //if binding specified  use explicit binding only
 		filterTypes = append(filterTypes, shared.BindingPath)
 	}
 	dataPool, err := p.BuildDataPool(ctx, req.Request, view, rule, resp.Metrics, filterTypes...)

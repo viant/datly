@@ -13,25 +13,26 @@ import (
 
 //View represents a data view
 type View struct {
-	Connector     string
-	Name          string
-	Alias         string        `json:",omitempty"`
-	Table         string        `json:",omitempty"`
-	PrimaryKey    []string      `json:",omitempty"`
-	Mutable       *bool         `json:",omitempty"`
-	From          *From         `json:",omitempty"`
-	Columns       []*Column     `json:",omitempty"`
-	Bindings      []*Binding    `json:",omitempty"`
-	Criteria      *Criteria     `json:",omitempty"`
-	Selector      Selector      `json:",omitempty"`
-	Joins         []*Join       `json:",omitempty"`
-	Refs          []*Reference  `json:",omitempty"`
-	Params        []interface{} `json:",omitempty"`
-	CaseFormat    string        `json:",omitempty"`
-	HideRefIDs    bool          `json:",omitempty"`
-	Cache         *Cache        `json:",omitempty"`
-	OnRead        *Visitor      `json:",omitempty"`
-	OnPath        *Visitor      `json:",omitempty"`
+	Connector  string
+	Name       string
+	Alias      string        `json:",omitempty"`
+	Table      string        `json:",omitempty"`
+	From       *From         `json:",omitempty"`
+	Criteria   *Criteria     `json:",omitempty"`
+	Selector   Selector      `json:",omitempty"`
+	Joins      []*Join       `json:",omitempty"`
+	Refs       []*Reference  `json:",omitempty"`
+	Params     []interface{} `json:",omitempty"`
+	CaseFormat string        `json:",omitempty"`
+	HideRefIDs bool          `json:",omitempty"`
+
+	PrimaryKey    []string     `json:",omitempty"`
+	Mutable       *bool        `json:",omitempty"`
+	Columns       []*Column    `json:",omitempty"`
+	Parameters    []*Parameter `json:",omitempty"`
+	Cache         *Cache       `json:",omitempty"`
+	OnRead        *Visitor     `json:",omitempty"`
+	OnPath        *Visitor     `json:",omitempty"`
 	_cacheService cache.Service
 }
 
@@ -51,7 +52,7 @@ func (v *View) Clone() *View {
 		Mutable:    v.Mutable,
 		From:       v.From,
 		Columns:    v.Columns,
-		Bindings:   v.Bindings,
+		Parameters: v.Parameters,
 		Criteria:   v.Criteria,
 		Selector:   v.Selector,
 		Refs:       v.Refs,
@@ -95,8 +96,8 @@ func (v *View) MergeFrom(tmpl *View) {
 	if len(v.Refs) == 0 {
 		v.Refs = tmpl.Refs
 	}
-	if len(v.Bindings) == 0 {
-		v.Bindings = tmpl.Bindings
+	if len(v.Parameters) == 0 {
+		v.Parameters = tmpl.Parameters
 	}
 	if len(v.Joins) == 0 {
 		v.Joins = tmpl.Joins
@@ -155,9 +156,9 @@ func (v View) Validate() error {
 	if v.Connector == "" {
 		return errors.Errorf("connector was empty")
 	}
-	if len(v.Bindings) > 0 {
-		for i := range v.Bindings {
-			if err := v.Bindings[i].Validate(); err != nil {
+	if len(v.Parameters) > 0 {
+		for i := range v.Parameters {
+			if err := v.Parameters[i].Validate(); err != nil {
 				return err
 			}
 		}
@@ -199,9 +200,9 @@ func (v *View) Init(setPrefix bool) error {
 	if setPrefix && v.Selector.Prefix == "" {
 		v.Selector.Prefix = v.Name
 	}
-	if len(v.Bindings) > 0 {
-		for i := range v.Bindings {
-			v.Bindings[i].Init()
+	if len(v.Parameters) > 0 {
+		for i := range v.Parameters {
+			v.Parameters[i].Init()
 		}
 	}
 

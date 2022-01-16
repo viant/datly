@@ -1,4 +1,5 @@
 Path: /case008/events/{id}
+
 views:
   - table: events
     alias: e

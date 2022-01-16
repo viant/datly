@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-//Binding represents data binding
-type Binding struct {
+//Parameter represents data binding
+type Parameter struct {
 	Name          string      `json:",omitempty"` //placeholder name
 	When          string      `json:",omitempty"` //applies binding when criteria is met
 	From          string      `json:",omitempty"`
@@ -20,7 +20,7 @@ type Binding struct {
 }
 
 //Init initialises binding
-func (b *Binding) Init() {
+func (b *Parameter) Init() {
 	if b.Type == "" {
 		if b.DataView != "" {
 			b.Type = shared.BindingDataView
@@ -35,7 +35,7 @@ func (b *Binding) Init() {
 }
 
 //Validate checks if binding is valid
-func (b Binding) Validate() error {
+func (b Parameter) Validate() error {
 	switch b.Type {
 	case shared.BindingQueryString, shared.BindingPath, shared.BindingDataPool, shared.BindingBodyData, shared.BindingHeader:
 	case shared.BindingDataView:
