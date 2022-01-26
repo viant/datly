@@ -11,6 +11,10 @@ type Service struct {
 	connections map[string]*sql.DB
 }
 
+func (s *Service) Connection(name string) *sql.DB {
+	return s.connections[name]
+}
+
 //New creates a connection service
 func New(connectors ...*config.Connector) (*Service, error) {
 	res := &Service{

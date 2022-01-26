@@ -46,7 +46,7 @@ func (c Config) Validate() error {
 //ReloadChanged reload changes if needed
 func (c *Config) ReloadChanged(ctx context.Context, fs afs.Service) (err error) {
 	if c.Rules.Loader != nil {
-		if _, err = c.Rules.Loader.Notify(ctx, fs);err != nil {
+		if _, err = c.Rules.Loader.Notify(ctx, fs); err != nil {
 			return err
 		}
 	}

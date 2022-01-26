@@ -17,6 +17,7 @@ type (
 	}
 )
 
+//NewComponent creates Component instance
 func NewComponent(cType reflect.Type) *Component {
 	res := &Component{
 		compType: cType,
@@ -25,6 +26,16 @@ func NewComponent(cType reflect.Type) *Component {
 	return res
 }
 
+//ComponentType returns struct type built based on Fields
+func (c *Component) ComponentType() reflect.Type {
+	if c.compType == nil {
+		c.Init()
+	}
+
+	return c.compType
+}
+
+//Init build struct type from Fields
 func (c *Component) Init() {
 	if c.compType != nil && len(c.Fields) == 0 {
 		c.Fields = make([]Field, c.compType.NumField())
@@ -38,5 +49,4 @@ func (c *Component) Init() {
 			}
 		}
 	}
-
 }
