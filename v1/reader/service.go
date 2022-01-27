@@ -29,7 +29,6 @@ type Service struct {
 // TODO: update view columns with metadata columns
 
 //Read select data from database based on View and assign it to dest. Dest has to be pointer.
-//It is possible to create type based on database column types - in that case, dest has to be pointer to interface{}
 func (s *Service) Read(ctx context.Context, view *data.View, dest interface{}) error {
 	db := s.connection.Connection(view.Connector)
 	columns, dataType, err := s.metadata(view, db)
@@ -125,11 +124,10 @@ func (s *Service) detectColumns(db *sql.DB, tableName string) ([]*sql.ColumnType
 }
 
 func (s *Service) ensureDest(dest interface{}, dataType reflect.Type) interface{} {
-	valueOf := reflect.ValueOf(dest)
-	if valueOf.Elem().Interface() != nil {
-		return dest
+	if _, ok := dest.(*interface{}); ok {
+		return reflect.New(reflect.SliceOf(dataType)).Interface()
 	}
-	return reflect.New(reflect.SliceOf(dataType)).Interface()
+	return dest
 }
 
 func (s *Service) filterColumns(types []*sql.ColumnType, view *data.View) []*sql.ColumnType {
