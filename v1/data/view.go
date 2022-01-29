@@ -14,7 +14,7 @@ type View struct {
 	Columns   []*Column `json:",omitempty"`
 
 	Criteria *data.Criteria `json:",omitempty"`
-	Selector data.Selector  `json:",omitempty"`
+	Selector Selector       `json:",omitempty"`
 
 	PrimaryKey []string `json:",omitempty"`
 	Mutable    *bool    `json:",omitempty"`

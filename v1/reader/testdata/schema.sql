@@ -4,8 +4,7 @@ CREATE TABLE events (
     timestamp  DATETIME,
     event_type_id INTEGER,
     quantity   DECIMAL(7, 2) DEFAULT NULL,
-    user_id    INTEGER,
-    modified   TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+    user_id    INTEGER
 );
 
 
