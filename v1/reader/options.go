@@ -5,3 +5,5 @@ type Options []interface{}
 
 //Option represent a reader option
 type Option interface{}
+
+type AllowUnmapped bool
