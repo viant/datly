@@ -1,6 +1,6 @@
 package data
 
-//Column represents data view column
+//Column represents data View column
 type Column struct {
 	Name       string `json:",omitempty"`
 	DataType   string `json:",omitempty"`

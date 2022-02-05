@@ -3,46 +3,147 @@ package reader
 import (
 	"context"
 	"database/sql"
-	"github.com/viant/datly/v1/config"
-	"github.com/viant/datly/v1/connection"
 	"github.com/viant/datly/v1/data"
+	"github.com/viant/datly/v1/meta"
+	"github.com/viant/datly/v1/utils"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/read"
 	"github.com/viant/xunsafe"
 	"reflect"
-	"strings"
-	"unsafe"
+	"sync"
 )
 
 //Service represents reader service
 type Service struct {
-	connection      *connection.Service
-	sqlBuilder      *Builder
-	computeMetadata bool
+	metaService   *meta.Service
+	views         []*data.View
+	sqlBuilder    *Builder
+	AllowUnmapped AllowUnmapped
 }
 
-// TODO: ReadUnmapped
-// TODO: support option selector
-// TODO: get columns for SQL
-// TODO: Compute metadata () len(columns)
-// TODO: control option deliver selection with respect column that can be queryable projected
-// TODO: update view columns with metadata columns
+type Views struct {
+	views []*data.View
+}
 
+//TODO: batch table records
 //Read select data from database based on View and assign it to dest. Dest has to be pointer.
-func (s *Service) Read(ctx context.Context, view *data.View, dest interface{}) error {
-	db := s.connection.Connection(view.Connector)
-	columns, dataType, err := s.metadata(view, db)
+//TODO: Select with join when connector is the same for one to one relation
+func (s *Service) Read(ctx context.Context, session *Session) error {
+	err := s.checkIfRegistered(session)
 	if err != nil {
 		return err
 	}
 
-	ensuredDest := s.ensureDest(dest, dataType)
-	SQL := s.sqlBuilder.Build(columns, view.Table)
+	err = session.MergeViewWithSelector()
+	if err != nil {
+		return err
+	}
 
-	appender := s.appender(ensuredDest)
+	result, err := s.collectData(ctx, session)
+	if err != nil {
+		return err
+	}
+
+	if dest, ok := session.Dest.(*interface{}); ok {
+		*dest = result
+	}
+
+	return nil
+}
+
+func (s *Service) appender(dest interface{}) *xunsafe.Appender {
+	strType := s.actualStructType(dest)
+	slice := xunsafe.NewSlice(strType)
+	appender := slice.Appender(xunsafe.AsPointer(dest))
+	return appender
+}
+
+func (s *Service) actualStructType(dest interface{}) reflect.Type {
+	rType := reflect.TypeOf(dest).Elem()
+	if rType.Kind() == reflect.Slice {
+		rType = rType.Elem()
+	}
+
+	return rType
+}
+
+func (s *Service) ensureDest(dest interface{}, dataType reflect.Type) interface{} {
+	if _, ok := dest.(*interface{}); ok {
+		return s.dest(dataType)
+	}
+
+	return dest
+}
+
+func (s *Service) collectData(ctx context.Context, session *Session) (interface{}, error) {
+	dataType, err := s.destType(session)
+	if err != nil {
+		return nil, err
+	}
+
+	ensuredDest := s.ensureDest(session.Dest, dataType)
+	resolver := s.sessionResolver(session)
+	db, err := s.metaService.Connection(session.View.Connector)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.read(ctx, session.View, db, ensuredDest, resolver.Resolve)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(session.RefRelations) == 0 {
+		return ensuredDest, nil
+	}
+
+	collector := NewCollector(session.RefRelations, resolver, ensuredDest)
+	err = s.collectRefViews(ctx, session, collector, err)
+	if err != nil {
+		return nil, err
+	}
+
+	return ensuredDest, nil
+}
+
+func (s *Service) collectRefViews(ctx context.Context, session *Session, collector *Collector, err error) error {
+	wg := sync.WaitGroup{}
+	dataSize := len(session.RefRelations)
+	wg.Add(dataSize)
+	errors := utils.NewErrors(dataSize)
+	for i := range session.RefRelations {
+		iCoppy := i
+		go func() {
+			defer wg.Done()
+			// TODO: use resolver column values and pass them as sql placeholders
+			db, err := s.metaService.Connection(session.RefRelations[iCoppy].Child.Connector)
+			if err != nil {
+				errors.AddError(err, iCoppy+1)
+				return
+			}
+			visitor := func(row interface{}) {
+				collector.Collect(row, session.RefRelations[iCoppy].Ref.On.RefHolder)
+			}
+			errors.AddError(s.readRefView(ctx, session.RefRelations[iCoppy].Child, db, visitor), iCoppy)
+		}()
+	}
+
+	wg.Wait()
+	err = errors.Error()
+	return err
+}
+
+func (s *Service) dest(rType reflect.Type) interface{} {
+	return reflect.New(reflect.SliceOf(rType)).Interface()
+}
+
+func (s *Service) read(ctx context.Context, view *data.View, db *sql.DB, dest interface{}, resolve io.Resolve) error {
+	SQL := s.sqlBuilder.Build(view)
+
+	appender := s.appender(dest)
 	reader, err := read.New(ctx, db, SQL, func() interface{} {
 		return appender.Add()
-	})
+	}, resolve)
 
 	if err != nil {
 		return err
@@ -52,112 +153,84 @@ func (s *Service) Read(ctx context.Context, view *data.View, dest interface{}) e
 		return nil
 	})
 
+	return err
+}
+
+func (s *Service) readRefView(ctx context.Context, view *data.View, db *sql.DB, visitor func(row interface{})) error {
+	SQL := s.sqlBuilder.Build(view)
+
+	reader, err := read.New(ctx, db, SQL, func() interface{} {
+		return reflect.New(view.DataType().Elem()).Interface()
+	})
+
 	if err != nil {
 		return err
 	}
 
-	destWasNilInterface := dest != ensuredDest
-	if destWasNilInterface {
-		*dest.(*interface{}) = ensuredDest
-	}
-	return nil
-}
+	err = reader.QueryAll(ctx, func(row interface{}) error {
+		//fmt.Printf("Row: %v, pointer %p\n", row, row)
+		visitor(row)
+		return nil
+	})
 
-func (s *Service) metadata(view *data.View, db *sql.DB) ([]string, reflect.Type, error) {
-	var columnNames []string
-	var dataType reflect.Type
-	var err error
-
-	if view.Columns != nil && len(view.Columns) != 0 {
-		columnNames = DataColumnsToNames(view.Columns)
-	}
-
-	if view.Component != nil {
-		dataType = view.Component.ComponentType()
-	}
-
-	if columnNames == nil || dataType == nil {
-		var detectedTypes []*sql.ColumnType
-		detectedTypes, err = s.detectColumns(db, view.Table)
-		if err != nil {
-			return nil, nil, err
-		}
-		filteredColumns := s.filterColumns(detectedTypes, view)
-		columnNames = make([]string, len(filteredColumns))
-		for i := range filteredColumns {
-			columnNames[i] = filteredColumns[i].Name()
-		}
-		dataType = TypeOf(io.TypesToColumns(filteredColumns))
-	}
-
-	return columnNames, dataType, err
-}
-
-func (s *Service) appender(dest interface{}) *xunsafe.Appender {
-	structType := s.actualStructType(dest)
-	slice := xunsafe.NewSlice(structType, xunsafe.UseItemAddrOpt(false))
-	appender := slice.Appender(unsafe.Pointer(reflect.ValueOf(dest).Pointer()))
-	return appender
-}
-
-func (s *Service) actualStructType(dest interface{}) reflect.Type {
-	rType := reflect.TypeOf(dest).Elem() // Dest has to be a pointer
-	if rType.Kind() == reflect.Slice {
-		rType = rType.Elem()
-	}
-
-	return rType
-}
-
-func (s *Service) detectColumns(db *sql.DB, tableName string) ([]*sql.ColumnType, error) {
-	rows, err := db.Query("SELECT * FROM " + tableName + " WHERE 1=2")
-	if err != nil {
-		return nil, err
-	}
-
-	types, err := rows.ColumnTypes()
-	if err != nil {
-		return nil, err
-
-	}
-	return types, nil
-}
-
-func (s *Service) ensureDest(dest interface{}, dataType reflect.Type) interface{} {
-	if _, ok := dest.(*interface{}); ok {
-		return reflect.New(reflect.SliceOf(dataType)).Interface()
-	}
-	return dest
-}
-
-func (s *Service) filterColumns(types []*sql.ColumnType, view *data.View) []*sql.ColumnType {
-	columns := make(map[string]bool)
-	for _, column := range view.Selector.ExcludedColumns {
-		columns[strings.ToLower(column)] = true
-	}
-
-	filteredTypes := make([]*sql.ColumnType, 0)
-	for i := range types {
-		if val, ok := columns[strings.ToLower(types[i].Name())]; ok && val {
-			continue
-		}
-		filteredTypes = append(filteredTypes, types[i])
-	}
-	return filteredTypes
+	return err
 }
 
 //Apply configures Service
 func (s *Service) Apply(options Options) {
+	for i := 0; i < len(options); i++ {
+		switch actual := options[i].(type) {
+		case AllowUnmapped:
+			s.AllowUnmapped = actual
+		}
+	}
 }
 
-//New creates Service instance
-func New(connectors ...*config.Connector) (*Service, error) {
-	conn, err := connection.New(connectors...)
+func (s *Service) checkIfRegistered(session *Session) error {
+	err := s.metaService.IsViewRegistered(session.View)
+	if err != nil {
+		return err
+	}
+
+	for i := range session.RefRelations {
+		err = s.metaService.IsViewRegistered(session.RefRelations[i].Child)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) sessionResolver(session *Session) *Resolver {
+	if s.AllowUnmapped {
+		return NewResolver(nil)
+	}
+
+	allowedColumns := make([]string, len(session.RefRelations))
+	for i := range session.RefRelations {
+		allowedColumns[i] = session.RefRelations[i].Ref.On.Column
+	}
+	return NewResolver(allowedColumns)
+}
+
+func (s *Service) destType(session *Session) (reflect.Type, error) {
+	if len(session.RefRelations) == 0 {
+		return session.View.DataType(), nil
+	}
+
+	complexView, err := data.AssembleView(session.View, session.RefRelations...)
 	if err != nil {
 		return nil, err
 	}
+
+	return complexView.DataType(), nil
+}
+
+//New creates Service instance
+func New(service *meta.Service) *Service {
 	return &Service{
-		connection: conn,
-		sqlBuilder: NewBuilder(),
-	}, nil
+		metaService: service,
+		sqlBuilder:  NewBuilder(),
+	}
 }

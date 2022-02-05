@@ -1,0 +1,28 @@
+[
+  {},
+  {
+    "id": 1,
+    "name" : "type 1",
+    "account_id": 33
+  },
+  {
+    "id": 11,
+    "name" : "type 2",
+    "account_id": 33
+  },
+  {
+    "id": 111,
+    "name" : "type 3",
+    "account_id": 36
+  },
+  {
+    "id": 4,
+    "name" : "type 4",
+    "account_id": 36
+  },
+  {
+    "id": 5,
+    "name" : "type 5",
+    "account_id": 37
+  }
+]

@@ -2,19 +2,23 @@ package reader
 
 import (
 	"github.com/viant/datly/v1/data"
+	"strconv"
 	"strings"
 )
 
 const (
-	selectFragment    = "SELECT "
-	separatorFragment = ", "
-	fromFragment      = " FROM "
+	selectFragment      = "SELECT "
+	separatorFragment   = ", "
+	fromFragment        = " FROM ("
+	fromEncloseFragment = ")"
+	asFragment          = " AS "
+	limitFragment       = " LIMIT "
+	orderByFragment     = " ORDER BY "
+	offsetFragment      = " OFFSET "
 )
 
 //Builder represent SQL Builder
-// TODO: use cases for selector attributes from client side
 type Builder struct {
-	view data.View
 }
 
 //NewBuilder creates Builder instance
@@ -23,16 +27,48 @@ func NewBuilder() *Builder {
 }
 
 //Build builds SQL Select statement
-func (b *Builder) Build(columns []string, tableName string) string {
+// TODO: add client selector
+func (b *Builder) Build(view *data.View) string {
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
-	for i := 0; i < len(columns); i++ {
+
+	var col *data.Column
+	var foundCol bool
+	var columnName string
+	for i := 0; i < len(view.Selector.Columns); i++ {
 		if i != 0 {
 			sb.WriteString(separatorFragment)
 		}
-		sb.WriteString(columns[i])
+		columnName = view.Selector.Columns[i]
+		col, foundCol = view.ColumnByName(columnName)
+		if foundCol && col.Expression != "" {
+			sb.WriteString(col.Expression)
+			sb.WriteString(" AS ")
+		}
+
+		sb.WriteString(columnName)
 	}
 	sb.WriteString(fromFragment)
-	sb.WriteString(tableName)
+	sb.WriteString(view.Source())
+	sb.WriteString(fromEncloseFragment)
+	if view.Alias != "" {
+		sb.WriteString(asFragment)
+		sb.WriteString(view.Alias)
+	}
+
+	if view.Selector.OrderBy != "" {
+		sb.WriteString(orderByFragment)
+		sb.WriteString(view.Selector.OrderBy)
+	}
+
+	if view.Selector.Limit > 0 {
+		sb.WriteString(limitFragment)
+		sb.WriteString(strconv.Itoa(view.Selector.Limit))
+	}
+
+	if view.Selector.Offset > 0 {
+		sb.WriteString(offsetFragment)
+		sb.WriteString(strconv.Itoa(view.Selector.Offset))
+	}
 	return sb.String()
 }

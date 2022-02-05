@@ -7,18 +7,29 @@ import (
 	"strings"
 )
 
+//type ClientSelector struct {
+//	Columns    []string `json:",omitempty"`
+//	Prefix     string   `json:",omitempty"`
+//	OrderBy    string   `json:",omitempty"`
+//	Offset     int      `json:",omitempty"`
+//	CaseFormat string   `json:",omitempty"`
+//	Limit      int      `json:",omitempty"`
+//	OmitEmpty  bool     `json:",omitempty"`
+//}
+
 //Selector represent a data selector for projection and selection
 type Selector struct {
-	Prefix          string         `json:",omitempty"`
 	Columns         []string       `json:",omitempty"`
-	ExcludedColumns []string       `json:",omitempty"`
-	Criteria        *data.Criteria `json:",omitempty"`
+	Prefix          string         `json:",omitempty"`
 	OrderBy         string         `json:",omitempty"`
-	Limit           int            `json:",omitempty"`
 	Offset          int            `json:",omitempty"`
 	CaseFormat      string         `json:",omitempty"`
+	Limit           int            `json:",omitempty"`
 	OmitEmpty       bool           `json:",omitempty"`
+	ExcludedColumns []string       `json:",omitempty"`
+	Criteria        *data.Criteria `json:",omitempty"`
 	selected        map[string]bool
+	excludedColumns map[string]bool
 }
 
 //Clone clones this selector
@@ -80,6 +91,37 @@ func (s *Selector) IsSelected(columns []string) bool {
 		}
 	}
 	return true
+}
+
+//SetColumns filters passed columns by ExcludedColumns and sets Selector Columns
+func (s *Selector) SetColumns(columns []*Column) {
+	excludedMap := s.excludedColumnsAsMap()
+
+	columnsLen := len(columns)
+	s.Columns = make([]string, columnsLen-len(excludedMap))
+	counter := 0
+	for i := 0; i < columnsLen; i++ {
+		title := strings.Title(columns[i].Name)
+		if _, ok := excludedMap[title]; ok {
+			continue
+		}
+		s.Columns[counter] = columns[i].Name
+		counter++
+	}
+}
+
+func (s *Selector) excludedColumnsAsMap() map[string]bool {
+	if s.excludedColumns != nil {
+		return s.excludedColumns
+	}
+
+	excluded := make(map[string]bool)
+	excludedLen := len(s.ExcludedColumns)
+	for i := 0; i < excludedLen; i++ {
+		excluded[strings.Title(s.ExcludedColumns[i])] = true
+	}
+	s.excludedColumns = excluded
+	return excluded
 }
 
 func asStringSlice(text string) []string {
