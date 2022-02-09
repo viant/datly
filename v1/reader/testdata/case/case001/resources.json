@@ -1,0 +1,31 @@
+{
+  "Views": [
+    {
+      "Connector": "mydb",
+      "Name": "events",
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "Int"
+        },
+        {
+          "Name": "quantity",
+          "DataType": "Float"
+        },
+        {
+          "Name": "event_type_id",
+          "DataType": "Int"
+        }
+      ],
+      "Default": {}
+    }
+  ],
+
+  "Connectors": [
+    {
+      "Name": "mydb",
+      "Driver": "sqlite3",
+      "DSN": "./testdata/db/mydb.db"
+    }
+  ]
+}

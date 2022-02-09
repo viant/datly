@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"github.com/viant/datly/v1/data"
-	"github.com/viant/datly/v1/meta"
 	"github.com/viant/datly/v1/utils"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/read"
@@ -15,7 +14,7 @@ import (
 
 //Service represents reader service
 type Service struct {
-	metaService   *meta.Service
+	metaService   *data.Service
 	views         []*data.View
 	sqlBuilder    *Builder
 	AllowUnmapped AllowUnmapped
@@ -29,12 +28,7 @@ type Views struct {
 //Read select data from database based on View and assign it to dest. Dest has to be pointer.
 //TODO: Select with join when connector is the same for one to one relation
 func (s *Service) Read(ctx context.Context, session *Session) error {
-	err := s.checkIfRegistered(session)
-	if err != nil {
-		return err
-	}
-
-	err = session.MergeViewWithSelector()
+	err := session.View.IsValid()
 	if err != nil {
 		return err
 	}
@@ -76,11 +70,7 @@ func (s *Service) ensureDest(dest interface{}, dataType reflect.Type) interface{
 }
 
 func (s *Service) collectData(ctx context.Context, session *Session) (interface{}, error) {
-	dataType, err := s.destType(session)
-	if err != nil {
-		return nil, err
-	}
-
+	dataType := session.DataType()
 	ensuredDest := s.ensureDest(session.Dest, dataType)
 	resolver := s.sessionResolver(session)
 	db, err := s.metaService.Connection(session.View.Connector)
@@ -88,16 +78,16 @@ func (s *Service) collectData(ctx context.Context, session *Session) (interface{
 		return nil, err
 	}
 
-	err = s.read(ctx, session.View, db, ensuredDest, resolver.Resolve)
+	err = s.read(ctx, session, db, ensuredDest, resolver.Resolve)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(session.RefRelations) == 0 {
+	if len(session.View.References) == 0 {
 		return ensuredDest, nil
 	}
 
-	collector := NewCollector(session.RefRelations, resolver, ensuredDest)
+	collector := NewCollector(session.View.References, resolver, ensuredDest)
 	err = s.collectRefViews(ctx, session, collector, err)
 	if err != nil {
 		return nil, err
@@ -108,23 +98,23 @@ func (s *Service) collectData(ctx context.Context, session *Session) (interface{
 
 func (s *Service) collectRefViews(ctx context.Context, session *Session, collector *Collector, err error) error {
 	wg := sync.WaitGroup{}
-	dataSize := len(session.RefRelations)
+	dataSize := len(session.View.References)
 	wg.Add(dataSize)
 	errors := utils.NewErrors(dataSize)
-	for i := range session.RefRelations {
+	for i := range session.View.References {
 		iCoppy := i
 		go func() {
 			defer wg.Done()
 			// TODO: use resolver column values and pass them as sql placeholders
-			db, err := s.metaService.Connection(session.RefRelations[iCoppy].Child.Connector)
+			db, err := s.metaService.Connection(session.View.References[iCoppy].Child.Connector)
 			if err != nil {
 				errors.AddError(err, iCoppy+1)
 				return
 			}
 			visitor := func(row interface{}) {
-				collector.Collect(row, session.RefRelations[iCoppy].Ref.On.RefHolder)
+				collector.Collect(row, session.View.References[iCoppy].RefHolder)
 			}
-			errors.AddError(s.readRefView(ctx, session.RefRelations[iCoppy].Child, db, visitor), iCoppy)
+			errors.AddError(s.readRefView(ctx, session.View.References[iCoppy].Child, db, visitor), iCoppy)
 		}()
 	}
 
@@ -137,8 +127,8 @@ func (s *Service) dest(rType reflect.Type) interface{} {
 	return reflect.New(reflect.SliceOf(rType)).Interface()
 }
 
-func (s *Service) read(ctx context.Context, view *data.View, db *sql.DB, dest interface{}, resolve io.Resolve) error {
-	SQL := s.sqlBuilder.Build(view)
+func (s *Service) read(ctx context.Context, session *Session, db *sql.DB, dest interface{}, resolve io.Resolve) error {
+	SQL := s.sqlBuilder.Build(session.View, session.SelectorInUse())
 
 	appender := s.appender(dest)
 	reader, err := read.New(ctx, db, SQL, func() interface{} {
@@ -157,7 +147,7 @@ func (s *Service) read(ctx context.Context, view *data.View, db *sql.DB, dest in
 }
 
 func (s *Service) readRefView(ctx context.Context, view *data.View, db *sql.DB, visitor func(row interface{})) error {
-	SQL := s.sqlBuilder.Build(view)
+	SQL := s.sqlBuilder.Build(view, view.Default)
 
 	reader, err := read.New(ctx, db, SQL, func() interface{} {
 		return reflect.New(view.DataType().Elem()).Interface()
@@ -168,7 +158,6 @@ func (s *Service) readRefView(ctx context.Context, view *data.View, db *sql.DB, 
 	}
 
 	err = reader.QueryAll(ctx, func(row interface{}) error {
-		//fmt.Printf("Row: %v, pointer %p\n", row, row)
 		visitor(row)
 		return nil
 	})
@@ -186,49 +175,20 @@ func (s *Service) Apply(options Options) {
 	}
 }
 
-func (s *Service) checkIfRegistered(session *Session) error {
-	err := s.metaService.IsViewRegistered(session.View)
-	if err != nil {
-		return err
-	}
-
-	for i := range session.RefRelations {
-		err = s.metaService.IsViewRegistered(session.RefRelations[i].Child)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (s *Service) sessionResolver(session *Session) *Resolver {
 	if s.AllowUnmapped {
 		return NewResolver(nil)
 	}
 
-	allowedColumns := make([]string, len(session.RefRelations))
-	for i := range session.RefRelations {
-		allowedColumns[i] = session.RefRelations[i].Ref.On.Column
+	allowedColumns := make([]string, len(session.View.References))
+	for i := range session.View.References {
+		allowedColumns[i] = session.View.References[i].Column
 	}
 	return NewResolver(allowedColumns)
 }
 
-func (s *Service) destType(session *Session) (reflect.Type, error) {
-	if len(session.RefRelations) == 0 {
-		return session.View.DataType(), nil
-	}
-
-	complexView, err := data.AssembleView(session.View, session.RefRelations...)
-	if err != nil {
-		return nil, err
-	}
-
-	return complexView.DataType(), nil
-}
-
 //New creates Service instance
-func New(service *meta.Service) *Service {
+func New(service *data.Service) *Service {
 	return &Service{
 		metaService: service,
 		sqlBuilder:  NewBuilder(),

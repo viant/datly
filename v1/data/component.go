@@ -48,7 +48,6 @@ func (c *Component) ComponentType() reflect.Type {
 }
 
 func (c *Component) setType(rType reflect.Type) {
-
 	switch rType.Kind() {
 	case reflect.Struct:
 		rType = reflect.PtrTo(rType)
@@ -73,7 +72,7 @@ func (c *Component) Init() {
 	}
 }
 
-func (c *Component) ensureType(types []io.Column, selector *Selector) {
+func (c *Component) ensureType(types []io.Column) {
 	if c.compType != nil {
 		return
 	}
@@ -84,7 +83,7 @@ func (c *Component) ensureType(types []io.Column, selector *Selector) {
 		return
 	}
 
-	c.initTypeAndFields(types, selector)
+	c.initTypeAndFields(types)
 }
 
 func (c *Component) initType(types []io.Column, fieldsLen int) {
@@ -114,19 +113,13 @@ func (c *Component) initType(types []io.Column, fieldsLen int) {
 	c.setType(reflect.StructOf(structFields))
 }
 
-func (c *Component) initTypeAndFields(types []io.Column, selector *Selector) {
-	excluded := selector.excludedColumnsAsMap()
-	filteredLen := len(types) - len(excluded)
-	structFields := make([]reflect.StructField, filteredLen)
-	fields := make([]Field, filteredLen)
+func (c *Component) initTypeAndFields(types []io.Column) {
+	structFields := make([]reflect.StructField, len(types))
+	fields := make([]Field, len(types))
 
 	counter := 0
 	for i := 0; i < len(types); i++ {
 		structFieldName := strings.Title(types[i].Name())
-		if _, ok := excluded[structFieldName]; ok {
-			continue
-		}
-
 		scanType := types[i].ScanType()
 		structFields[counter] = reflect.StructField{
 			Name:  structFieldName,

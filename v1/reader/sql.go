@@ -28,25 +28,17 @@ func NewBuilder() *Builder {
 
 //Build builds SQL Select statement
 // TODO: add client selector
-func (b *Builder) Build(view *data.View) string {
+func (b *Builder) Build(view *data.View, selectorInUse data.Selector) string {
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
 
 	var col *data.Column
-	var foundCol bool
-	var columnName string
-	for i := 0; i < len(view.Selector.Columns); i++ {
+	var i int
+	for i, col = range selectorInUse.GetColumns() {
 		if i != 0 {
 			sb.WriteString(separatorFragment)
 		}
-		columnName = view.Selector.Columns[i]
-		col, foundCol = view.ColumnByName(columnName)
-		if foundCol && col.Expression != "" {
-			sb.WriteString(col.Expression)
-			sb.WriteString(" AS ")
-		}
-
-		sb.WriteString(columnName)
+		sb.WriteString(col.SqlExpression())
 	}
 	sb.WriteString(fromFragment)
 	sb.WriteString(view.Source())
@@ -56,19 +48,19 @@ func (b *Builder) Build(view *data.View) string {
 		sb.WriteString(view.Alias)
 	}
 
-	if view.Selector.OrderBy != "" {
+	if selectorInUse.GetOrderBy() != "" {
 		sb.WriteString(orderByFragment)
-		sb.WriteString(view.Selector.OrderBy)
+		sb.WriteString(selectorInUse.GetOrderBy())
 	}
 
-	if view.Selector.Limit > 0 {
+	if selectorInUse.GetLimit() > 0 {
 		sb.WriteString(limitFragment)
-		sb.WriteString(strconv.Itoa(view.Selector.Limit))
+		sb.WriteString(strconv.Itoa(selectorInUse.GetLimit()))
 	}
 
-	if view.Selector.Offset > 0 {
+	if selectorInUse.GetOffset() > 0 {
 		sb.WriteString(offsetFragment)
-		sb.WriteString(strconv.Itoa(view.Selector.Offset))
+		sb.WriteString(strconv.Itoa(selectorInUse.GetOffset()))
 	}
 	return sb.String()
 }

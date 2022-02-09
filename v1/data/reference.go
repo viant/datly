@@ -6,9 +6,14 @@ import (
 
 //Reference represents  data View reference
 type Reference struct {
+	Child     *View
+	ChildName string
+
 	Name        string
 	Cardinality string //One, or Many
-	On          *ColumnMatch
+	Column      string
+	RefColumn   string
+	RefHolder   string
 
 	_view     *View
 	_alias    string
@@ -34,11 +39,4 @@ func (r *Reference) RefIndex() gtly.Index {
 //Alias returns alias
 func (r *Reference) Alias() string {
 	return r._alias
-}
-
-//ColumnMatch represents a column match
-type ColumnMatch struct {
-	Column    string
-	RefColumn string
-	RefHolder string
 }

@@ -2,25 +2,27 @@ package reader
 
 import (
 	"github.com/viant/datly/v1/data"
+	"reflect"
 )
 
 type Session struct {
-	Dest         interface{} //  slice
-	View         *data.View
-	RefRelations []*data.Relation
-	Selector     *data.Selector
+	Dest     interface{} //  slice
+	View     *data.View
+	Selector *data.ClientSelector
 }
 
-func (s *Session) MergeViewWithSelector() error {
-	if s.Selector == nil {
-		return nil
+func (s *Session) SelectorInUse() data.Selector {
+	if s.Selector != nil {
+		return s.Selector
+	} else {
+		return s.View.Default
 	}
+}
 
-	newView, err := s.View.MergeWithSelector(s.Selector)
-	if err != nil {
-		return err
+func (s *Session) DataType() reflect.Type {
+	if s.Selector != nil {
+		return s.Selector.GetType()
+	} else {
+		return s.View.DataType()
 	}
-
-	s.View = newView
-	return err
 }

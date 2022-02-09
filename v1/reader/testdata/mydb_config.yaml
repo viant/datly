@@ -4,4 +4,4 @@ config:
   descriptor: ./testdata/db/mydb.db
 recreate: true
 scripts:
-  - URL: testdata/schema.sql
+  - URL: testdata/mydb_schema.sql

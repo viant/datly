@@ -40,3 +40,18 @@ CREATE TABLE foos
     name  VARCHAR(255),
     price DECIMAL(7, 2)
 );
+
+DROP TABLE IF EXISTS dual;
+CREATE TABLE dual
+(
+    id    INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT
+);
+
+DROP TABLE IF EXISTS articles;
+CREATE TABLE articles
+(
+    id    INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    content VARCHAR(255),
+    lang_id INTEGER
+);
+

@@ -1,0 +1,27 @@
+{
+  "Views": [
+    {
+      "Connector": "mydb",
+      "Name": "foos",
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "Int"
+        },
+        {
+          "Name": "name",
+          "Expression": "Upper(Name)",
+          "DataType": "String"
+        }
+      ],
+      "Default": {}
+    }
+  ],
+  "Connectors": [
+    {
+      "Name": "mydb",
+      "Driver": "sqlite3",
+      "DSN": "./testdata/db/mydb.db"
+    }
+  ]
+}

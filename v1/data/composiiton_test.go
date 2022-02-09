@@ -44,8 +44,8 @@ func TestAssembleViews(t *testing.T) {
 	testCases := []struct {
 		description string
 		main        View
-		relations   []*Relation
-		result      ComplexView
+		relations   []*Reference
+		result      View
 		expectError bool
 	}{
 		{
@@ -65,7 +65,7 @@ func TestAssembleViews(t *testing.T) {
 				},
 				Component: NewComponent(reflect.TypeOf(Employee{})),
 			},
-			relations: []*Relation{
+			relations: []*Reference{
 				{
 					Child: &View{
 						Name: "departments",
@@ -75,19 +75,13 @@ func TestAssembleViews(t *testing.T) {
 						},
 						Component: NewComponent(reflect.TypeOf(Department{})),
 					},
-					Ref: &Reference{
-						Name:        "departments",
-						Cardinality: "One",
-						On: &ColumnMatch{
-							Column:    "departmentId",
-							RefColumn: "id",
-							RefHolder: "department",
-						},
-					},
-					RefId: "",
+					Cardinality: "One",
+					Column:      "departmentId",
+					RefColumn:   "id",
+					RefHolder:   "department",
 				},
 			},
-			result: ComplexView{
+			result: View{
 				Component: NewComponent(reflect.TypeOf(EmployeeAssembled{})),
 			},
 		},
@@ -106,7 +100,7 @@ func TestAssembleViews(t *testing.T) {
 				},
 				Component: NewComponent(reflect.TypeOf(Foo{})),
 			},
-			relations: []*Relation{
+			relations: []*Reference{
 				{
 					Child: &View{
 						Name: "boos",
@@ -117,18 +111,14 @@ func TestAssembleViews(t *testing.T) {
 						},
 						Component: NewComponent(reflect.TypeOf(Boo{})),
 					},
-					Ref: &Reference{
-						Name:        "departments",
-						Cardinality: "Many",
-						On: &ColumnMatch{
-							Column:    "id",
-							RefColumn: "fooId",
-							RefHolder: "boos",
-						},
-					},
+					Name:        "departments",
+					Cardinality: "Many",
+					Column:      "id",
+					RefColumn:   "fooId",
+					RefHolder:   "boos",
 				},
 			},
-			result: ComplexView{
+			result: View{
 				Component: NewComponent(reflect.TypeOf(FooBooAssembled{})),
 			},
 		},
