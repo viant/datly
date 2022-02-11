@@ -1,0 +1,7 @@
+datastore: other
+config:
+  driverName: sqlite3
+  descriptor: ./testdata/db/other.db
+recreate: true
+scripts:
+  - URL: testdata/other_schema.sql

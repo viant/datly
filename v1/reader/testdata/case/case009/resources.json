@@ -1,0 +1,36 @@
+{
+  "Views": [
+    {
+      "Connector": "mydb",
+      "Name": "users",
+      "Table": "users",
+      "Default": {},
+      "RefNames": [
+        "user_accounts"
+      ]
+    },
+    {
+      "Connector": "mydb",
+      "Name": "accounts",
+      "Table": "accounts",
+      "Default": {}
+    }
+  ],
+  "References": [
+    {
+      "Name": "user_accounts",
+      "ChildName": "accounts",
+      "Cardinality": "Many",
+      "Column": "id",
+      "RefColumn": "user_id",
+      "RefHolder": "Accounts"
+    }
+  ],
+  "Connectors": [
+    {
+      "Name": "mydb",
+      "Driver": "sqlite3",
+      "DSN": "./testdata/db/mydb.db"
+    }
+  ]
+}

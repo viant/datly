@@ -19,7 +19,7 @@ type ColumnMatcher struct {
 	columnField    *xunsafe.Field
 }
 
-func NewMatcher(columnMatch *data.ColumnMatch, parentType reflect.Type, childType reflect.Type) (*ColumnMatcher, error) {
+func NewMatcher(columnMatch *data.Reference, parentType reflect.Type, childType reflect.Type) (*ColumnMatcher, error) {
 	if parentType.Kind() == reflect.Ptr {
 		parentType = parentType.Elem()
 	}

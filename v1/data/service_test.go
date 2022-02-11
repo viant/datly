@@ -1,10 +1,9 @@
-package meta
+package data
 
 import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/datly/v1/config"
-	"github.com/viant/datly/v1/data"
 	"github.com/viant/dsunit"
 	"github.com/viant/toolbox"
 	"path"
@@ -14,15 +13,14 @@ import (
 func TestConfigure(t *testing.T) {
 	testCases := []struct {
 		description string
-		references  []*data.Reference
+		references  []*Reference
 		connectors  []*config.Connector
-		views       []*data.View
-		relations   []*data.Relation
+		views       []*View
 		expectError bool
 	}{
 		{
 			description: "references",
-			references: []*data.Reference{
+			references: []*Reference{
 				{
 					Name: "employee_departments",
 				},
@@ -30,13 +28,7 @@ func TestConfigure(t *testing.T) {
 					Name: "department_address",
 				},
 			},
-			relations: []*data.Relation{
-				{
-					RefId:     "department_address",
-					ChildName: "addresses",
-				},
-			},
-			views: []*data.View{
+			views: []*View{
 				{
 					Name:      "addresses",
 					Connector: "mydb",
@@ -48,7 +40,7 @@ func TestConfigure(t *testing.T) {
 				{
 					Name:      "foos",
 					Connector: "mydb",
-					Columns: []*data.Column{
+					Columns: []*Column{
 						{Name: "Id"},
 					},
 				},
@@ -68,24 +60,21 @@ func TestConfigure(t *testing.T) {
 		if !dsunit.InitFromURL(t, path.Join(testLocation, "testdata", "config.yaml")) {
 			return
 		}
-		metaService, err := Configure(testCase.connectors, testCase.views, testCase.relations, testCase.references)
+		metaService, err := Configure(&Resource{
+			Connectors: testCase.connectors,
+			Views:      testCase.views,
+			References: testCase.references,
+		})
 		if testCase.expectError {
 			assert.NotNil(t, err, testCase.description)
 			continue
 		}
 
 		assert.Nil(t, err, testCase.description)
-
-		assert.Equal(t, len(testCase.relations), len(metaService.relations), testCase.description)
-		for _, relation := range metaService.relations {
-			assert.NotNil(t, relation.Child, testCase.description)
-			assert.NotNil(t, relation.Ref, testCase.description)
-		}
-
 		for _, view := range metaService.views {
 			assert.True(t, len(view.Columns) != 0, testCase.description)
 			assert.True(t, view.Columns != nil, testCase.description)
-			assert.True(t, len(view.Selector.Columns) > 0, testCase.description)
+			assert.True(t, len(view.Default.Columns) > 0, testCase.description)
 		}
 	}
 }

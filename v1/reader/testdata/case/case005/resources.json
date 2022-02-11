@@ -1,0 +1,18 @@
+{
+  "Views": [
+    {
+      "Connector": "mydb",
+      "Name": "foos",
+      "Columns": [],
+      "Default": {}
+    }
+  ],
+
+  "Connectors": [
+    {
+      "Name": "mydb",
+      "Driver": "sqlite3",
+      "DSN": "./testdata/db/mydb.db"
+    }
+  ]
+}
