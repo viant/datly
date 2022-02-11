@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"fmt"
 	"github.com/viant/datly/v1/data"
 	"strconv"
 	"strings"
@@ -28,13 +29,16 @@ func NewBuilder() *Builder {
 
 //Build builds SQL Select statement
 // TODO: add client selector
-func (b *Builder) Build(view *data.View, selectorInUse data.Selector) string {
+func (b *Builder) Build(view *data.View, selector *data.Selector) (string, error) {
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
 
-	var col *data.Column
-	var i int
-	for i, col = range selectorInUse.GetColumns() {
+	columns, err := view.SelectedColumns(selector)
+	if err != nil {
+		return "", err
+	}
+
+	for i, col := range columns {
 		if i != 0 {
 			sb.WriteString(separatorFragment)
 		}
@@ -48,19 +52,40 @@ func (b *Builder) Build(view *data.View, selectorInUse data.Selector) string {
 		sb.WriteString(view.Alias)
 	}
 
-	if selectorInUse.GetOrderBy() != "" {
+	orderBy := view.Selector.OrderBy
+	limit := view.Selector.Limit
+	offset := 0
+
+	if selector != nil {
+		if selector.OrderBy != "" {
+			orderBy = selector.OrderBy
+		}
+		if selector.Limit != 0 {
+			limit = selector.Limit
+		}
+
+		if selector.Offset > 0 {
+			offset = selector.Offset
+		}
+	}
+
+	if orderBy != "" {
+		if _, ok := view.ColumnByName(orderBy); !ok {
+			return "", fmt.Errorf("invalid orderBy column: %v", orderBy)
+		}
 		sb.WriteString(orderByFragment)
-		sb.WriteString(selectorInUse.GetOrderBy())
+		sb.WriteString(orderBy)
 	}
 
-	if selectorInUse.GetLimit() > 0 {
+	if limit > 0 {
 		sb.WriteString(limitFragment)
-		sb.WriteString(strconv.Itoa(selectorInUse.GetLimit()))
+		sb.WriteString(strconv.Itoa(limit))
 	}
 
-	if selectorInUse.GetOffset() > 0 {
+	if offset > 0 {
 		sb.WriteString(offsetFragment)
-		sb.WriteString(strconv.Itoa(selectorInUse.GetOffset()))
+		sb.WriteString(strconv.Itoa(selector.Offset))
 	}
-	return sb.String()
+
+	return sb.String(), nil
 }

@@ -1,0 +1,8 @@
+Views:
+  - Connector:
+      Ref: mydb
+    Name: foos
+Connectors:
+  - Name: mydb
+    Driver: sqlite3
+    DSN: "./testdata/db/mydb.db"
