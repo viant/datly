@@ -1,0 +1,12 @@
+Views:
+  - Connector:
+      Ref: mydb
+    Name: events
+    Default: {}
+    Exclude:
+      - id
+      - event_type_id
+Connectors:
+  - Name: mydb
+    Driver: sqlite3
+    DSN: "./testdata/db/mydb.db"

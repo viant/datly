@@ -27,8 +27,8 @@ require (
 	github.com/viant/gtly v0.0.0-20200927172514-d1417cac563d
 	github.com/viant/parsly v0.0.0-20210920114115-45d5c1558d16 // indirect
 	github.com/viant/sqlx v0.0.0-20220107182258-867b12abf923
-	github.com/viant/toolbox v0.29.2
-	github.com/viant/xunsafe v0.7.1-0.20220209175539-b6f8da00a2ea
+	github.com/viant/toolbox v0.34.5
+	github.com/viant/xunsafe v0.7.1-0.20220212003656-b273e91a3fa7
 	github.com/yuin/gopher-lua v0.0.0-20191220021717-ab39c6098bdb // indirect
 	golang.org/x/crypto v0.0.0-20200109152110-61a87790db17 // indirect
 	golang.org/x/net v0.0.0-20190503192946-f4e77d36d62c
@@ -37,4 +37,5 @@ require (
 	google.golang.org/genproto v0.0.0-20200117163144-32f20d992d24 // indirect
 	google.golang.org/grpc v1.26.0 // indirect
 	gopkg.in/yaml.v2 v2.2.7
+	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
 )

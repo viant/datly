@@ -14,14 +14,14 @@ type Column struct {
 	Expression string `json:",omitempty"`
 
 	oldName       string
-	reference     *Reference
+	reference     *Relation
 	rType         reflect.Type
 	structField   *reflect.StructField
 	sqlExpression string
 }
 
-func (c *Column) setReference(reference *Reference) {
-	rType := reference.Child.DataType()
+func (c *Column) setReference(reference *Relation) {
+	rType := reference.Of.DataType()
 	if reference.Cardinality == "Many" {
 		rType = reflect.SliceOf(rType)
 	}
@@ -29,12 +29,12 @@ func (c *Column) setReference(reference *Reference) {
 	c.rType = rType
 
 	c.structField = &reflect.StructField{
-		Name: strings.Title(reference.RefHolder),
+		Name: strings.Title(reference.Holder),
 		Type: rType,
 		Tag:  reflect.StructTag(`sqlx:"name="` + c.Name),
 	}
 	c.oldName = c.Name
-	c.Name = strings.Title(reference.RefHolder)
+	c.Name = strings.Title(reference.Holder)
 	c.reference = reference
 }
 
@@ -68,17 +68,13 @@ func parseType(dataType string) (reflect.Type, error) {
 	switch strings.Title(dataType) {
 	case "Int":
 		return reflect.TypeOf(0), nil
-	case "Float":
-		return reflect.TypeOf(0.0), nil
-	case "Float64":
+	case "Float", "Float64":
 		return reflect.TypeOf(0.0), nil
 	case "Bool":
 		return reflect.TypeOf(false), nil
 	case "String":
 		return reflect.TypeOf(""), nil
-	case "Date":
-		return reflect.TypeOf(time.Time{}), nil
-	case "Time":
+	case "Date", "Time":
 		return reflect.TypeOf(time.Time{}), nil
 	}
 	return nil, fmt.Errorf("unsupported column type: %v", dataType)
@@ -108,4 +104,18 @@ func (c *Column) StructField() (*reflect.StructField, error) {
 	}
 
 	return c.structField, nil
+}
+
+func (c *Column) Init() error {
+	if c.Name == "" {
+		return fmt.Errorf("column name was empty")
+	}
+
+	rType, err := parseType(c.DataType)
+	if err != nil {
+		return err
+	}
+
+	c.rType = rType
+	return nil
 }

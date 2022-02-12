@@ -1,49 +1,22 @@
 package data
 
 import (
-	"github.com/viant/sqlx/io"
+	"github.com/viant/toolbox/format"
+	"github.com/viant/xunsafe"
 	"reflect"
-	"strings"
 )
 
-type (
-	Component struct {
-		Name     string
-		Fields   []Field
-		compType reflect.Type
-	}
-
-	Field struct {
-		Name      string
-		DataType  string
-		fieldType reflect.Type
-		Tag       reflect.StructTag
-	}
-)
-
-//NewComponent creates Component instance
-func NewComponent(cType reflect.Type) *Component {
-	if cType.Kind() != reflect.Ptr {
-		cType = reflect.New(cType).Type()
-	}
-
-	res := &Component{
-		compType: cType,
-	}
-	res.Init()
-	return res
+type Component struct {
+	Name      string
+	compType  reflect.Type
+	slice     *xunsafe.Slice
+	sliceType reflect.Type
+	autoGen   bool
+	OmitEmpty bool
 }
 
-//ComponentType returns struct type
-func (c *Component) ComponentType() reflect.Type {
-	if c.compType == nil {
-		c.Init()
-	}
-
-	if c.compType.Kind() != reflect.Ptr {
-		panic("component type has to be a pointer")
-	}
-
+//Type returns struct type
+func (c *Component) Type() reflect.Type {
 	return c.compType
 }
 
@@ -53,90 +26,69 @@ func (c *Component) setType(rType reflect.Type) {
 		rType = reflect.PtrTo(rType)
 	}
 	c.compType = rType
+	c.slice = xunsafe.NewSlice(c.compType)
+	c.sliceType = c.slice.Type
 }
 
 //Init build struct type from Fields
-func (c *Component) Init() {
-	if c.compType != nil && len(c.Fields) == 0 {
-		elem := c.compType.Elem()
-		c.Fields = make([]Field, elem.NumField())
-		for i := range c.Fields {
-			field := elem.Field(i)
-			c.Fields[i] = Field{
-				Name:      field.Name,
-				DataType:  field.Type.Name(),
-				fieldType: field.Type,
-				Tag:       field.Tag,
-			}
-		}
-	}
-}
-
-func (c *Component) ensureType(types []io.Column) {
+func (c *Component) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case) {
 	if c.compType != nil {
 		return
 	}
 
-	fieldsLen := len(c.Fields)
-	if fieldsLen != 0 {
-		c.initType(types, fieldsLen)
-		return
+	excluded := make(map[string]bool)
+	for _, rel := range relations {
+		if !rel.IncludeColumn && rel.Cardinality == "One" {
+			excluded[rel.Column] = true
+		}
 	}
 
-	c.initTypeAndFields(types)
-}
-
-func (c *Component) initType(types []io.Column, fieldsLen int) {
-	includedColumns := make(map[string]bool)
-
-	for i := 0; i < fieldsLen; i++ {
-		includedColumns[strings.Title(c.Fields[i].Name)] = true
+	omitEmptyTag := ""
+	if c.OmitEmpty {
+		omitEmptyTag = `json:",omitempty" `
 	}
 
-	structFields := make([]reflect.StructField, fieldsLen)
-	counter := 0
+	fieldsLen := len(columns)
+	structFields := make([]reflect.StructField, 0)
 	for i := 0; i < fieldsLen; i++ {
-		structFieldName := strings.Title(types[i].Name())
-		if _, ok := includedColumns[structFieldName]; !ok {
+		if _, ok := excluded[columns[i].Name]; ok {
 			continue
 		}
-		structFields[i] = reflect.StructField{
+
+		structFieldName := viewCaseFormat.Format(columns[i].Name, format.CaseUpperCamel)
+		structFields = append(structFields, reflect.StructField{
 			Name:  structFieldName,
-			Type:  types[i].ScanType(),
-			Index: []int{counter},
-			Tag:   `sqlx:"name="`,
+			Type:  columns[i].rType,
+			Index: []int{i},
+			Tag:   reflect.StructTag(omitEmptyTag + `sqlx:"name="` + columns[i].Name + "`"),
+		})
+	}
+
+	for _, rel := range relations {
+		rType := rel.Of.DataType()
+		if rel.Cardinality == "Many" {
+			rType = reflect.SliceOf(rType)
 		}
 
-		counter++
+		structFields = append(structFields, reflect.StructField{
+			Name: rel.Holder,
+			Type: rType,
+			Tag:  reflect.StructTag(omitEmptyTag),
+		})
 	}
 
 	c.setType(reflect.StructOf(structFields))
+	c.autoGen = true
 }
 
-func (c *Component) initTypeAndFields(types []io.Column) {
-	structFields := make([]reflect.StructField, len(types))
-	fields := make([]Field, len(types))
+func (c *Component) AutoGen() bool {
+	return c.autoGen
+}
 
-	counter := 0
-	for i := 0; i < len(types); i++ {
-		structFieldName := strings.Title(types[i].Name())
-		scanType := types[i].ScanType()
-		structFields[counter] = reflect.StructField{
-			Name:  structFieldName,
-			Type:  scanType,
-			Index: []int{counter},
-		}
+func (c *Component) Slice() *xunsafe.Slice {
+	return c.slice
+}
 
-		fields[counter] = Field{
-			Name:      structFieldName,
-			DataType:  scanType.Name(),
-			fieldType: scanType,
-			Tag:       "",
-		}
-
-		counter++
-	}
-
-	c.setType(reflect.StructOf(structFields))
-	c.Fields = fields
+func (c *Component) SliceType() reflect.Type {
+	return c.sliceType
 }

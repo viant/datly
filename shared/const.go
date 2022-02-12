@@ -79,7 +79,7 @@ const (
 	JoinTypeInner = "INNER"
 )
 
-const ( //Selector keys
+const ( //Selectors keys
 	//FieldsKey fields key
 	FieldsKey = "_fields"
 	//OrderByKey order by key

@@ -12,7 +12,7 @@ func TestView_MergeWithSelector(t *testing.T) {
 		shouldReturnError bool
 	}{
 		{
-			description: "merge when all selector columns overlap View columns",
+			description: "merge when all selector _columns overlap View _columns",
 			view: &View{
 				Columns: []*Column{
 					{
@@ -33,7 +33,7 @@ func TestView_MergeWithSelector(t *testing.T) {
 			shouldReturnError: false,
 		},
 		{
-			description: "selector columns doesn't overlap View columns",
+			description: "selector _columns doesn't overlap View _columns",
 			view: &View{
 				Columns: []*Column{
 					{
@@ -54,7 +54,7 @@ func TestView_MergeWithSelector(t *testing.T) {
 			shouldReturnError: true,
 		},
 		{
-			description: "selector order by doesn't overlap View columns",
+			description: "selector order by doesn't overlap View _columns",
 			view: &View{
 				Columns: []*Column{
 					{
@@ -81,7 +81,7 @@ func TestView_MergeWithSelector(t *testing.T) {
 		//if !testCase.shouldReturnError {
 		//	assert.Nil(t, err, testCase.description)
 		//	view := *testCase.view
-		//	view.Default = *testCase.selector
+		//	view.Selectors = *testCase.selector
 		//	assert.EqualValues(t, &view, newView, testCase.description)
 		//	continue
 		//}

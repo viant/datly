@@ -2,19 +2,15 @@ package reader
 
 import (
 	"context"
-	"database/sql"
+	"fmt"
 	"github.com/viant/datly/v1/data"
-	"github.com/viant/datly/v1/utils"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/read"
-	"github.com/viant/xunsafe"
 	"reflect"
-	"sync"
 )
 
 //Service represents reader service
 type Service struct {
-	metaService   *data.Service
 	views         []*data.View
 	sqlBuilder    *Builder
 	AllowUnmapped AllowUnmapped
@@ -25,31 +21,40 @@ type Views struct {
 }
 
 //TODO: batch table records
-//Read select data from database based on View and assign it to dest. Dest has to be pointer.
+//Read select data from database based on View and assign it to dest. ParentDest has to be pointer.
 //TODO: Select with join when connector is the same for one to one relation
-func (s *Service) Read(ctx context.Context, session *Session) error {
-	err := session.View.IsValid()
-	if err != nil {
-		return err
+func (s *Service) Read(ctx context.Context, session *data.Session) error {
+	session.Allocate()
+
+	if isSlice(session.Dest) {
+		session.ViewsDest()[0] = session.Dest
 	}
 
-	result, err := s.collectData(ctx, session)
+	err := s.read(ctx, session, session.View, nil)
 	if err != nil {
 		return err
 	}
 
 	if dest, ok := session.Dest.(*interface{}); ok {
-		*dest = result
+		*dest = session.ViewsDest()[0]
 	}
 
 	return nil
 }
 
-func (s *Service) appender(dest interface{}) *xunsafe.Appender {
-	strType := s.actualStructType(dest)
-	slice := xunsafe.NewSlice(strType)
-	appender := slice.Appender(xunsafe.AsPointer(dest))
-	return appender
+func isSlice(dest interface{}) bool {
+	_, err := sliceType(reflect.TypeOf(dest))
+	return err == nil
+}
+
+func sliceType(rType reflect.Type) (reflect.Type, error) {
+	switch rType.Kind() {
+	case reflect.Ptr:
+		return sliceType(rType.Elem())
+	case reflect.Slice:
+		return rType, nil
+	}
+	return nil, fmt.Errorf("invalid type %v", rType.String())
 }
 
 func (s *Service) actualStructType(dest interface{}) reflect.Type {
@@ -61,106 +66,40 @@ func (s *Service) actualStructType(dest interface{}) reflect.Type {
 	return rType
 }
 
-func (s *Service) ensureDest(dest interface{}, dataType reflect.Type) interface{} {
-	if _, ok := dest.(*interface{}); ok {
-		return s.dest(dataType)
-	}
-
-	return dest
-}
-
-func (s *Service) collectData(ctx context.Context, session *Session) (interface{}, error) {
-	dataType := session.DataType()
-	ensuredDest := s.ensureDest(session.Dest, dataType)
-	resolver := s.sessionResolver(session)
-	db, err := s.metaService.Connection(session.View.Connector)
+func (s *Service) read(ctx context.Context, session *data.Session, view *data.View, parent *data.Collector) error {
+	db, err := view.Db()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	err = s.read(ctx, session, db, ensuredDest, resolver.Resolve)
+	SQL, err := s.sqlBuilder.Build(view, session.Selectors.Lookup(view.Name))
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if len(session.View.References) == 0 {
-		return ensuredDest, nil
-	}
+	collector := view.Collector(session)
 
-	collector := NewCollector(session.View.References, resolver, ensuredDest)
-	err = s.collectRefViews(ctx, session, collector, err)
-	if err != nil {
-		return nil, err
-	}
-
-	return ensuredDest, nil
-}
-
-func (s *Service) collectRefViews(ctx context.Context, session *Session, collector *Collector, err error) error {
-	wg := sync.WaitGroup{}
-	dataSize := len(session.View.References)
-	wg.Add(dataSize)
-	errors := utils.NewErrors(dataSize)
-	for i := range session.View.References {
-		iCoppy := i
-		go func() {
-			defer wg.Done()
-			// TODO: use resolver column values and pass them as sql placeholders
-			db, err := s.metaService.Connection(session.View.References[iCoppy].Child.Connector)
-			if err != nil {
-				errors.AddError(err, iCoppy+1)
-				return
-			}
-			visitor := func(row interface{}) {
-				collector.Collect(row, session.View.References[iCoppy].RefHolder)
-			}
-			errors.AddError(s.readRefView(ctx, session.View.References[iCoppy].Child, db, visitor), iCoppy)
-		}()
-	}
-
-	wg.Wait()
-	err = errors.Error()
-	return err
-}
-
-func (s *Service) dest(rType reflect.Type) interface{} {
-	return reflect.New(reflect.SliceOf(rType)).Interface()
-}
-
-func (s *Service) read(ctx context.Context, session *Session, db *sql.DB, dest interface{}, resolve io.Resolve) error {
-	SQL := s.sqlBuilder.Build(session.View, session.SelectorInUse())
-
-	appender := s.appender(dest)
-	reader, err := read.New(ctx, db, SQL, func() interface{} {
-		return appender.Add()
-	}, resolve)
+	reader, err := read.New(ctx, db, SQL, collector.NewItem(session, view), io.Resolve(collector.Resolve))
 
 	if err != nil {
 		return err
 	}
 
-	err = reader.QueryAll(ctx, func(row interface{}) error {
+	visitor := collector.Visitor(session, view)
+	if parent != nil {
+		visitor = parent.Visitor(session, view)
+	}
+	err = reader.QueryAll(ctx, visitor)
+
+	if len(view.With) == 0 {
 		return nil
-	})
-
-	return err
-}
-
-func (s *Service) readRefView(ctx context.Context, view *data.View, db *sql.DB, visitor func(row interface{})) error {
-	SQL := s.sqlBuilder.Build(view, view.Default)
-
-	reader, err := read.New(ctx, db, SQL, func() interface{} {
-		return reflect.New(view.DataType().Elem()).Interface()
-	})
-
-	if err != nil {
-		return err
 	}
 
-	err = reader.QueryAll(ctx, func(row interface{}) error {
-		visitor(row)
-		return nil
-	})
+	for i := range view.With {
+		if err := s.read(ctx, session, &view.With[i].Of.View, collector); err != nil {
+			return err
+		}
+	}
 
 	return err
 }
@@ -175,22 +114,9 @@ func (s *Service) Apply(options Options) {
 	}
 }
 
-func (s *Service) sessionResolver(session *Session) *Resolver {
-	if s.AllowUnmapped {
-		return NewResolver(nil)
-	}
-
-	allowedColumns := make([]string, len(session.View.References))
-	for i := range session.View.References {
-		allowedColumns[i] = session.View.References[i].Column
-	}
-	return NewResolver(allowedColumns)
-}
-
 //New creates Service instance
-func New(service *data.Service) *Service {
+func New() *Service {
 	return &Service{
-		metaService: service,
-		sqlBuilder:  NewBuilder(),
+		sqlBuilder: NewBuilder(),
 	}
 }
