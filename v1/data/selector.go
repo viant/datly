@@ -6,6 +6,7 @@ type Selector struct {
 	Offset       int
 	Limit        int
 	_columnNames map[string]bool
+	Criteria     *Criteria
 }
 
 func (s *Selector) Init() {

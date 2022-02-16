@@ -6,21 +6,22 @@ import (
 	"reflect"
 )
 
-type Component struct {
+type Schema struct {
 	Name      string
 	compType  reflect.Type
 	slice     *xunsafe.Slice
 	sliceType reflect.Type
 	autoGen   bool
 	OmitEmpty bool
+	DataType  string
 }
 
 //Type returns struct type
-func (c *Component) Type() reflect.Type {
+func (c *Schema) Type() reflect.Type {
 	return c.compType
 }
 
-func (c *Component) setType(rType reflect.Type) {
+func (c *Schema) setType(rType reflect.Type) {
 	switch rType.Kind() {
 	case reflect.Struct:
 		rType = reflect.PtrTo(rType)
@@ -31,7 +32,7 @@ func (c *Component) setType(rType reflect.Type) {
 }
 
 //Init build struct type from Fields
-func (c *Component) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case) {
+func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case) {
 	if c.compType != nil {
 		return
 	}
@@ -81,14 +82,16 @@ func (c *Component) Init(columns []*Column, relations []*Relation, viewCaseForma
 	c.autoGen = true
 }
 
-func (c *Component) AutoGen() bool {
+//AutoGen indicates whether Schema was generated using ColumnTypes fetched from DB or was passed programmatically.
+func (c *Schema) AutoGen() bool {
 	return c.autoGen
 }
 
-func (c *Component) Slice() *xunsafe.Slice {
+//Slice returns slice
+func (c *Schema) Slice() *xunsafe.Slice {
 	return c.slice
 }
 
-func (c *Component) SliceType() reflect.Type {
+func (c *Schema) SliceType() reflect.Type {
 	return c.sliceType
 }

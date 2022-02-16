@@ -3,11 +3,12 @@ package data
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/v1/config"
 )
 
+//Views represents views registry indexed by view name.
 type Views map[string]*View
 
+//Register registers view in registry using View name.
 func (v *Views) Register(view *View) {
 	if len(*v) == 0 {
 		*v = make(map[string]*View)
@@ -19,17 +20,19 @@ func (v *Views) Register(view *View) {
 	}
 }
 
-func (v Views) Lookup(ref string) (*View, error) {
+//Lookup returns view by given name or error if view is not present.
+func (v Views) Lookup(viewName string) (*View, error) {
 	if len(v) == 0 {
-		return nil, fmt.Errorf("failed to lookup view %v", ref)
+		return nil, fmt.Errorf("failed to lookup view %v", viewName)
 	}
-	ret, ok := v[ref]
+	ret, ok := v[viewName]
 	if !ok {
-		return nil, fmt.Errorf("failed to lookup view %v", ref)
+		return nil, fmt.Errorf("failed to lookup view %v", viewName)
 	}
 	return ret, nil
 }
 
+//ViewSlice wraps slice of Views
 type ViewSlice []*View
 
 func (v ViewSlice) Index() Views {
@@ -40,9 +43,10 @@ func (v ViewSlice) Index() Views {
 	return result
 }
 
-func (v ViewSlice) Init(ctx context.Context, views Views, connectors config.Connectors, types Types) error {
+//Init initializes views.
+func (v ViewSlice) Init(ctx context.Context, resource *Resource) error {
 	for i := range v {
-		if err := v[i].Init(ctx, views, connectors, types); err != nil {
+		if err := v[i].Init(ctx, resource); err != nil {
 			return err
 		}
 	}

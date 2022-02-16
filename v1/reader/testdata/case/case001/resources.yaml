@@ -9,7 +9,7 @@ Views:
         DataType: Float
       - Name: event_type_id
         DataType: Int
-    Component:
+    Schema:
       Name: events
 Connectors:
   - Name: mydb

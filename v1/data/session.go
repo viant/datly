@@ -1,49 +1,48 @@
 package data
 
 import (
+	"github.com/viant/datly/v1/shared"
+	rdata "github.com/viant/toolbox/data"
 	"reflect"
 )
 
 type Session struct {
-	Dest          interface{} //  slice
-	dest          []interface{}
+	Dest          interface{} //slice
 	View          *View
 	Selectors     Selectors
 	AllowUnmapped bool
-	relations     []*Relation
+	Subject       string
+
+	errors *shared.Errors
 }
 
 func (s *Session) DataType() reflect.Type {
 	return s.View.DataType()
 }
 
+func (s *Session) NewReplacement(view *View) rdata.Map {
+	aMap := rdata.NewMap()
+	aMap.SetValue(string(shared.DataViewName), view.Name)
+	aMap.SetValue(string(shared.SubjectName), s.Subject)
+
+	return aMap
+}
+
 func (s *Session) Init() {
 	s.Selectors.Init()
 }
 
-func (s *Session) ViewsDest() []interface{} {
-	return s.dest
-}
-
-func (s *Session) Allocate() {
-	destCount := s.View.DestCount()
-	s.dest = make([]interface{}, destCount)
-	s.relations = make([]*Relation, destCount)
-	s.updateRelations(s.View.With)
-}
-
-func (s *Session) updateRelations(relations []*Relation) {
-	if len(relations) == 0 {
-		return
+func (s *Session) CollectError(err error) {
+	if s.errors == nil {
+		s.errors = shared.NewErrors(0)
 	}
 
-	for i := range relations {
-		relation := relations[i]
-		s.relations[relation.Of.destIndex] = relation
-		s.updateRelations(relation.Of.With)
-	}
+	s.errors.Append(err)
 }
 
-func (s *Session) RelationOwner(view *View) *Relation {
-	return s.relations[view.destIndex]
+func (s *Session) Error() error {
+	if s.errors == nil {
+		return nil
+	}
+	return s.errors.Error()
 }
