@@ -3,6 +3,7 @@ package data
 import (
 	"github.com/viant/datly/v1/shared"
 	rdata "github.com/viant/toolbox/data"
+	"net/http"
 	"reflect"
 )
 
@@ -12,6 +13,7 @@ type Session struct {
 	Selectors     Selectors
 	AllowUnmapped bool
 	Subject       string
+	HttpRequest   *http.Request
 
 	errors *shared.Errors
 }

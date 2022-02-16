@@ -20,7 +20,6 @@ type Service struct {
 	Resource      *data.Resource
 }
 
-//TODO: batch table records
 //Read select data from database based on View and assign it to dest. ParentDest has to be pointer.
 //TODO: Select with join when connector is the same for one to one relation
 func (s *Service) Read(ctx context.Context, session *data.Session) error {
@@ -74,12 +73,12 @@ func (s *Service) readAll(ctx context.Context, session *data.Session, collector 
 	batchData := s.batchData(limit, view, collector)
 
 	if !collector.SupportsParallel() {
-		err = s.readExhaust(ctx, view, selector, upstream, params, batchData, db, collector)
+		err = s.exhaustRead(ctx, view, selector, upstream, params, batchData, db, collector)
 	} else {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := s.readExhaust(ctx, view, selector, upstream, params, batchData, db, collector)
+			err := s.exhaustRead(ctx, view, selector, upstream, params, batchData, db, collector)
 			if err != nil {
 				session.CollectError(err)
 			}
@@ -108,7 +107,7 @@ func (s *Service) batchData(limit int, view *data.View, collector *data.Collecto
 	return batchData
 }
 
-func (s *Service) readExhaust(ctx context.Context, view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData, db *sql.DB, collector *data.Collector) error {
+func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData, db *sql.DB, collector *data.Collector) error {
 	readData := 0
 	limit := view.LimitWithSelector(selector)
 
@@ -157,6 +156,7 @@ func (s *Service) flush(ctx context.Context, db *sql.DB, SQL string, collector *
 
 func (s *Service) prepareSQL(view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData) (string, error) {
 	SQL, err := s.sqlBuilder.Build(view, selector, batchData)
+	//fmt.Println(SQL)
 	if err != nil {
 		return "", err
 	}

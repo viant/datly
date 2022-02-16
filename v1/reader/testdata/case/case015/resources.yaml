@@ -1,0 +1,40 @@
+Views:
+- Connector:
+    Ref: mydb
+  Name: articles
+  Table: articles
+  MatchStrategy: read_all
+
+- Connector:
+    Ref: otherdb
+  Name: languages
+  Table: languages
+  MatchStrategy: read_all
+  BatchReadSize: 4
+  Selector:
+    Limit: 14
+
+- Connector:
+    Ref: mydb
+  Name: articles_languages
+  Ref: articles
+  Schema:
+    Name: article
+  With:
+  - Name: articles_languages-rel
+    Holder: Language
+    Column: lang_id
+    IncludeColumn: false
+    Cardinality: One
+    Of:
+      Ref: languages
+      Column: id
+
+Connectors:
+- Name: mydb
+  Driver: sqlite3
+  DSN: "./testdata/db/mydb.db"
+
+- Name: otherdb
+  Driver: sqlite3
+  DSN: "./testdata/db/other.db"

@@ -29,6 +29,18 @@ func TestRead(t *testing.T) {
 		Name string
 	}
 
+	type Language struct {
+		Id   int
+		Code string
+	}
+
+	type Article struct {
+		Id       int
+		Content  string
+		LangId   int
+		Language Language
+	}
+
 	testLocation := toolbox.CallerDirectory(3)
 
 	var useCases = []struct {
@@ -40,18 +52,18 @@ func TestRead(t *testing.T) {
 		errorOnClientSelector bool
 		view                  string
 		options               Options
-		compType              reflect.Type
-		compTypeName          string
+		compTypes             map[string]reflect.Type
 		subject               string
 	}{
 		{
-			description:  "read all data with specified columns",
-			dataURI:      "case001/",
-			dest:         new([]*Event),
-			view:         "events",
-			expect:       `[{"ID":1,"EventTypeID":2,"Quantity":33.23432374000549,"Timestamp":"0001-01-01T00:00:00Z"},{"ID":10,"EventTypeID":11,"Quantity":21.957962334156036,"Timestamp":"0001-01-01T00:00:00Z"},{"ID":100,"EventTypeID":111,"Quantity":5.084940046072006,"Timestamp":"0001-01-01T00:00:00Z"}]`,
-			compTypeName: "events",
-			compType:     reflect.TypeOf(&Event{}),
+			description: "read all data with specified columns",
+			dataURI:     "case001/",
+			dest:        new([]*Event),
+			view:        "events",
+			expect:      `[{"ID":1,"EventTypeID":2,"Quantity":33.23432374000549,"Timestamp":"0001-01-01T00:00:00Z"},{"ID":10,"EventTypeID":11,"Quantity":21.957962334156036,"Timestamp":"0001-01-01T00:00:00Z"},{"ID":100,"EventTypeID":111,"Quantity":5.084940046072006,"Timestamp":"0001-01-01T00:00:00Z"}]`,
+			compTypes: map[string]reflect.Type{
+				"events": reflect.TypeOf(&Event{}),
+			},
 		},
 		{
 			description: "read all data with specified columns",
@@ -88,6 +100,9 @@ func TestRead(t *testing.T) {
 				AllowUnmapped(true),
 			},
 			expect: `[{"Id":1,"Name":"foo"},{"Id":2,"Name":"another foo"},{"Id":3,"Name":"yet another foo"}]`,
+			compTypes: map[string]reflect.Type{
+				"foo": reflect.TypeOf(&Foo{}),
+			},
 		},
 		{
 			description: "columns expression",
@@ -95,6 +110,9 @@ func TestRead(t *testing.T) {
 			view:        "foos",
 			dest:        new([]*Foo),
 			expect:      `[{"Id":1,"Name":"FOO"},{"Id":2,"Name":"ANOTHER FOO"},{"Id":3,"Name":"YET ANOTHER FOO"}]`,
+			compTypes: map[string]reflect.Type{
+				"foo": reflect.TypeOf(&Foo{}),
+			},
 		},
 		{
 			description: "custom selector",
@@ -161,9 +179,29 @@ func TestRead(t *testing.T) {
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Content":"Lorem ipsum","Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","Language":{"Id":9,"Code":"zh-CN"}}]`,
 		},
+		{
+			description: "T type one to one relation",
+			dataURI:     "case015/",
+			view:        "articles_languages",
+			dest:        new([]Article),
+			expect:      `[{"Id":1,"Content":"Lorem ipsum","LangId":2,"Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","LangId":12,"Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","LangId":13,"Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","LangId":9,"Language":{"Id":9,"Code":"zh-CN"}},{"Id":5,"Content":"content without lang","LangId":0,"Language":{"Id":0,"Code":""}}]`,
+			compTypes: map[string]reflect.Type{
+				"article": reflect.TypeOf(Article{}),
+			},
+		},
+		{
+			description: "T type one to one relation",
+			dataURI:     "case015/",
+			view:        "articles_languages",
+			dest:        new([]Article),
+			expect:      `[{"Id":1,"Content":"Lorem ipsum","LangId":2,"Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","LangId":12,"Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","LangId":13,"Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","LangId":9,"Language":{"Id":9,"Code":"zh-CN"}},{"Id":5,"Content":"content without lang","LangId":0,"Language":{"Id":0,"Code":""}}]`,
+			compTypes: map[string]reflect.Type{
+				"article": reflect.TypeOf(Article{}),
+			},
+		},
 	}
 
-	for _, testCase := range useCases[:14] {
+	for _, testCase := range useCases[:15] {
 		if initDb(t, path.Join(testLocation, "testdata", "mydb_config.yaml"), path.Join(testLocation, fmt.Sprintf("testdata/case/populate_mydb")), "db") {
 			return
 		}
@@ -173,9 +211,11 @@ func TestRead(t *testing.T) {
 		}
 
 		types := data.Types{}
-		if testCase.compType != nil {
-			types.Register(testCase.compTypeName, testCase.compType)
+
+		for key, rType := range testCase.compTypes {
+			types.Register(key, rType)
 		}
+
 		resource, err := data.NewResourceFromURL(context.TODO(), path.Join(testLocation, fmt.Sprintf("testdata/case/"+testCase.dataURI+"/resources.yaml")), types)
 		if err != nil {
 			t.Fatalf(err.Error())
@@ -205,6 +245,7 @@ func TestRead(t *testing.T) {
 		assert.Nil(t, err, testCase.description)
 		b, _ := json.Marshal(testCase.dest)
 		result := string(b)
+
 		if !assertly.AssertValues(t, testCase.expect, result, testCase.description) {
 			fmt.Println(result)
 			fmt.Println(testCase.expect)

@@ -30,19 +30,19 @@ type View struct {
 	Selector   *Config      `json:",omitempty"`
 	Parameters []*Parameter `json:",omitempty"`
 
-	Prefix string
-	Schema *Schema
+	Prefix string  `json:",omitempty"`
+	Schema *Schema `json:",omitempty"`
 
 	With       []*Relation `json:",omitempty"`
 	ParamField *xunsafe.Field
 
-	MatchStrategy MatchStrategy
-	BatchReadSize *int
+	MatchStrategy MatchStrategy `json:",omitempty"`
+	BatchReadSize *int          `json:",omitempty"`
 
 	_columns  map[string]*Column
 	_excluded map[string]bool
 
-	Caser        format.Case
+	Caser        format.Case `json:",omitempty"`
 	initialized  bool
 	isValid      bool
 	typeRebuilt  bool
@@ -124,7 +124,7 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 	if err := v.ensureCaseFormat(); err != nil {
 		return err
 	}
-	v.ensureComponent(resource.types)
+	v.ensureSchema(resource.types)
 	if err = v.initParams(ctx, resource); err != nil {
 		return err
 	}
@@ -141,6 +141,8 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 	if err = v.MatchStrategy.Validate(); err != nil {
 		return err
 	}
+
+	v.propagateTypeIfNeeded()
 
 	return nil
 }
@@ -221,7 +223,7 @@ func (v *View) Source() string {
 	return v.Name
 }
 
-func (v *View) ensureComponent(types Types) {
+func (v *View) ensureSchema(types Types) {
 	if v.Schema == nil {
 		v.Schema = &Schema{
 			Name: v.Name,
@@ -450,4 +452,14 @@ func (v *View) LimitWithSelector(selector *Selector) int {
 		return selector.Limit
 	}
 	return v.Selector.Limit
+}
+
+func (v *View) propagateTypeIfNeeded() {
+	if v.Schema.AutoGen() {
+		return
+	}
+
+	for _, childView := range v.With {
+		childView.Of.Schema.inheritType(childView.holderField.Type)
+	}
 }

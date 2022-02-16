@@ -134,11 +134,11 @@ func ensureDest(dest interface{}, view *View) interface{} {
 func (r *Collector) Visitor() func(value interface{}) error {
 	relation := r.relation
 	visitorRelations := RelationsSlice(r.view.With).PopulateWithVisitor()
-	if len(visitorRelations) == 0 && relation == nil {
-		return func(value interface{}) error {
-			return nil
-		}
-	}
+	//if len(visitorRelations) == 0 && relation == nil {
+	//	return func(value interface{}) error {
+	//		return nil
+	//	}
+	//}
 
 	for _, rel := range visitorRelations {
 		r.valuePosition[rel.Column] = map[interface{}][]int{}
@@ -201,7 +201,6 @@ func (r *Collector) visitorOne(relation *Relation, visitors ...Visitor) func(val
 			return nil
 		}
 
-		r.appender.Append(dest)
 		for _, index := range positions {
 			item := r.parent.slice.ValuePointerAt(destPtr, index)
 			holderField.SetValue(xunsafe.AsPointer(item), owner)
@@ -237,7 +236,6 @@ func (r *Collector) visitorMany(relation *Relation, visitors ...Visitor) func(va
 			return nil
 		}
 
-		r.appender.Append(owner)
 		for _, index := range positions {
 			parentItem := r.parent.slice.ValuePointerAt(destPtr, index)
 			sliceAddPtr := holderField.Pointer(xunsafe.AsPointer(parentItem))
@@ -254,12 +252,8 @@ func (r *Collector) visitorMany(relation *Relation, visitors ...Visitor) func(va
 //If view has no relations or is the main view, created item will be automatically appended to a slice.
 func (r *Collector) NewItem() func() interface{} {
 	return func() interface{} {
-		if r.parent == nil || r.parent.SupportsParallel() {
-			add := r.appender.Add()
-			return add
-		}
-
-		return reflect.New(r.view.DataType().Elem()).Interface()
+		add := r.appender.Add()
+		return add
 	}
 }
 
@@ -349,7 +343,13 @@ func (r *Collector) mergeToParent() {
 		for _, position := range positions {
 			parentValue := parentSlice.ValuePointerAt(parentDestPtr, position)
 			if r.relation.Cardinality == "One" {
-				holderField.SetValue(xunsafe.AsPointer(parentValue), r.slice.ValuePointerAt(destPtr, i))
+				//fmt.Printf("Holder field type: %v\nRslice type: %v\n", holderField.Type.String(), r.slice.Type.String())
+
+				at := r.slice.ValuePointerAt(destPtr, i)
+				//fmt.Printf("ValuePtrAt: %v, %T\n", at, at)
+
+				//fmt.Println(newType.Type().String())
+				holderField.SetValue(xunsafe.AsPointer(parentValue), at)
 			} else if r.relation.Cardinality == "Many" {
 				appender := r.slice.Appender(holderField.ValuePointer(xunsafe.AsPointer(parentValue)))
 				appender.Append(value)
