@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/v1/data"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/read"
+	"github.com/viant/toolbox"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -23,7 +24,9 @@ type Service struct {
 //Read select data from database based on View and assign it to dest. ParentDest has to be pointer.
 //TODO: Select with join when connector is the same for one to one relation
 func (s *Service) Read(ctx context.Context, session *data.Session) error {
-	session.Init()
+	if err := session.Init(); err != nil {
+		return err
+	}
 
 	wg := sync.WaitGroup{}
 
@@ -156,7 +159,6 @@ func (s *Service) flush(ctx context.Context, db *sql.DB, SQL string, collector *
 
 func (s *Service) prepareSQL(view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData) (string, error) {
 	SQL, err := s.sqlBuilder.Build(view, selector, batchData)
-	//fmt.Println(SQL)
 	if err != nil {
 		return "", err
 	}
@@ -192,8 +194,16 @@ func (s *Service) buildViewParams(ctx context.Context, session *data.Session, vi
 			if err := s.addViewParams(ctx, params, param, session); err != nil {
 				return nil, err
 			}
+		case data.PathKind:
+			s.addPathParam(session, param, &params)
+		case data.QueryKind:
+			s.addQueryParam(session, param, &params)
+		case data.HeaderKind:
+			s.addHeaderParam(session, param, &params)
+		case data.CookieKind:
+			s.addCookieParam(session, param, &params)
 		default:
-			return nil, fmt.Errorf("unsupported location kind %v", param.In.Kind)
+			return nil, fmt.Errorf("unsupported location Kind %v", param.In.Kind)
 		}
 	}
 
@@ -237,6 +247,26 @@ func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *
 	}
 
 	return nil
+}
+
+func (s *Service) addQueryParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
+	paramValue := toolbox.QueryValue(session.HttpRequest.URL, param.In.Name, "")
+	params.SetValue(string(data.QueryKind)+"."+param.In.Name, paramValue)
+}
+
+func (s *Service) addHeaderParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
+	header := session.Header(param.In.Name)
+	params.SetValue(string(data.HeaderKind)+"."+param.In.Name, header)
+}
+
+func (s *Service) addCookieParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
+	cookie := session.Cookie(param.In.Name)
+	params.SetValue(string(data.CookieKind)+"."+param.In.Name, cookie)
+}
+
+func (s *Service) addPathParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
+	pathVariable := session.PathVariable(param.In.Name)
+	params.SetValue(string(data.PathKind)+"."+param.In.Name, pathVariable)
 }
 
 //New creates Service instance

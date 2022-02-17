@@ -10,13 +10,15 @@ type Kind string
 const (
 	DataViewKind Kind = "data_view"
 	HeaderKind   Kind = "header"
-	QueryString  Kind = "query_string"
+	QueryKind    Kind = "query"
+	PathKind     Kind = "path"
+	CookieKind   Kind = "cookie"
 )
 
 //Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case DataViewKind:
+	case DataViewKind, PathKind, QueryKind, HeaderKind, CookieKind:
 		return nil
 	}
 
@@ -33,7 +35,7 @@ func (p ParamName) Validate(kind Kind) error {
 	}
 
 	switch kind {
-	case DataViewKind:
+	case DataViewKind, PathKind, QueryKind, HeaderKind, CookieKind:
 		return nil
 	}
 

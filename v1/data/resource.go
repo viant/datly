@@ -16,8 +16,6 @@ type Resource struct {
 	Parameters  []*Parameter
 	_parameters Parameters
 	types       Types
-
-	indexView int
 }
 
 func (r *Resource) GetViews() Views {

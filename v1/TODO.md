@@ -1,10 +1,10 @@
 1. Support for parameter dependencies: header, location, post, test cases, each of them separately
 2. Sanitize Criteria against SQL Injection
-3. Check dest and component type of master view, throw error if different
-4. Integrate with secret manager system
-5. Documentation
-6. Endpoint integration
-7. Caching
-8. Create the relationship fetch strategy
-9. Utility relation generator
-10. Patch
+3. Integrate with secret manager system
+4. Documentation
+5. Endpoint integration
+6. Caching
+7. Create the relationship fetch strategy
+8. Utility relation generator
+9. Patch
+10. Support for single object (/users/:userId should return single record)

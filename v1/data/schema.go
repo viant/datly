@@ -29,9 +29,6 @@ func (c *Schema) setType(rType reflect.Type) {
 	c.compType = rType
 	c.slice = xunsafe.NewSlice(c.compType)
 	c.sliceType = c.slice.Type
-
-	//fmt.Printf("Slice type: %v\n", c.slice.Type.String())
-	//fmt.Printf("Comp type : %v\n", c.compType.String())
 }
 
 //Init build struct type from Fields

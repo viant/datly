@@ -25,7 +25,7 @@ require (
 	github.com/viant/dsc v0.16.0
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/gtly v0.0.0-20200927172514-d1417cac563d
-	github.com/viant/parsly v0.0.0-20210920114115-45d5c1558d16 // indirect
+	github.com/viant/parsly v0.0.0-20220217014340-e175a9d31551 // indirect
 	github.com/viant/sqlx v0.0.0-20220107182258-867b12abf923
 	github.com/viant/toolbox v0.34.5
 	github.com/viant/xunsafe v0.7.1-0.20220212003656-b273e91a3fa7

@@ -10,6 +10,8 @@ import (
 	"github.com/viant/datly/v1/data"
 	"github.com/viant/dsunit"
 	"github.com/viant/toolbox"
+	"net/http"
+	"net/url"
 	"path"
 	"reflect"
 	"testing"
@@ -54,6 +56,7 @@ func TestRead(t *testing.T) {
 		options               Options
 		compTypes             map[string]reflect.Type
 		subject               string
+		request               *http.Request
 	}{
 		{
 			description: "read all data with specified columns",
@@ -199,9 +202,62 @@ func TestRead(t *testing.T) {
 				"article": reflect.TypeOf(Article{}),
 			},
 		},
+		{
+			description: "path parameter",
+			dataURI:     "case016/",
+			view:        "users",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Name":"John","Role":""}]`,
+			request: &http.Request{
+				RequestURI: "/users/{userId}",
+				URL: &url.URL{
+					Path: "/users/1",
+				},
+			},
+		},
+		{
+			description: "query parameter",
+			dataURI:     "case017/",
+			view:        "languages",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Code":"en-GB"},{"Id":2,"Code":"en-US"}]`,
+			request: &http.Request{
+				RequestURI: "/languages",
+				URL: &url.URL{
+					Path:     "/languages",
+					RawQuery: "lang=en",
+				},
+			},
+		},
+		{
+			description: "header parameter",
+			dataURI:     "case018/",
+			view:        "users",
+			dest:        new(interface{}),
+			expect:      `[{"Id":3,"Name":"Anna","Role":""}]`,
+			request: &http.Request{
+				Header: map[string][]string{
+					"user-name": {"Anna"},
+				},
+				URL: &url.URL{},
+			},
+		},
+		{
+			description: "cookie parameter",
+			dataURI:     "case019/",
+			view:        "users",
+			dest:        new(interface{}),
+			expect:      `[{"Id":2,"Name":"David","Role":""}]`,
+			request: &http.Request{
+				Header: map[string][]string{
+					"Cookie": {"user-id=2"},
+				},
+				URL: &url.URL{},
+			},
+		},
 	}
 
-	for _, testCase := range useCases[:15] {
+	for _, testCase := range useCases {
 		if initDb(t, path.Join(testLocation, "testdata", "mydb_config.yaml"), path.Join(testLocation, fmt.Sprintf("testdata/case/populate_mydb")), "db") {
 			return
 		}
@@ -235,10 +291,11 @@ func TestRead(t *testing.T) {
 		}
 
 		session := &data.Session{
-			Dest:      testCase.dest,
-			View:      dataView,
-			Selectors: testCase.selectors,
-			Subject:   testCase.subject,
+			Dest:        testCase.dest,
+			View:        dataView,
+			Selectors:   testCase.selectors,
+			Subject:     testCase.subject,
+			HttpRequest: testCase.request,
 		}
 
 		err = service.Read(context.TODO(), session)

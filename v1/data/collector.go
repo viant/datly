@@ -343,12 +343,7 @@ func (r *Collector) mergeToParent() {
 		for _, position := range positions {
 			parentValue := parentSlice.ValuePointerAt(parentDestPtr, position)
 			if r.relation.Cardinality == "One" {
-				//fmt.Printf("Holder field type: %v\nRslice type: %v\n", holderField.Type.String(), r.slice.Type.String())
-
 				at := r.slice.ValuePointerAt(destPtr, i)
-				//fmt.Printf("ValuePtrAt: %v, %T\n", at, at)
-
-				//fmt.Println(newType.Type().String())
 				holderField.SetValue(xunsafe.AsPointer(parentValue), at)
 			} else if r.relation.Cardinality == "Many" {
 				appender := r.slice.Appender(holderField.ValuePointer(xunsafe.AsPointer(parentValue)))
