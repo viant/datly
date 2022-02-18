@@ -12,32 +12,13 @@ type Column struct {
 	Name       string `json:",omitempty"`
 	DataType   string `json:",omitempty"`
 	Expression string `json:",omitempty"`
+	Filterable bool   `json:",omitempty"`
 
-	oldName       string
-	reference     *Relation
 	rType         reflect.Type
-	structField   *reflect.StructField
 	sqlExpression string
 }
 
-func (c *Column) setReference(reference *Relation) {
-	rType := reference.Of.DataType()
-	if reference.Cardinality == "Many" {
-		rType = reflect.SliceOf(rType)
-	}
-
-	c.rType = rType
-
-	c.structField = &reflect.StructField{
-		Name: strings.Title(reference.Holder),
-		Type: rType,
-		Tag:  reflect.StructTag(`sqlx:"name="` + c.Name),
-	}
-	c.oldName = c.Name
-	c.Name = strings.Title(reference.Holder)
-	c.reference = reference
-}
-
+//Type parses and returns column DataType.
 func (c *Column) Type() (reflect.Type, error) {
 	if c.rType != nil {
 		return c.rType, nil
@@ -51,14 +32,15 @@ func (c *Column) Type() (reflect.Type, error) {
 	return c.rType, nil
 }
 
+//SqlExpression builds column sql expression if any expression specified in format: Expression AS Name
 func (c *Column) SqlExpression() string {
 	if c.sqlExpression != "" {
 		return c.sqlExpression
 	}
 
-	c.sqlExpression = c.SqlColumnName()
+	c.sqlExpression = c.ColumnName()
 	if c.Expression != "" {
-		c.sqlExpression = c.Expression + " AS " + c.SqlColumnName()
+		c.sqlExpression = c.Expression + " AS " + c.ColumnName()
 	}
 
 	return c.sqlExpression
@@ -80,32 +62,12 @@ func parseType(dataType string) (reflect.Type, error) {
 	return nil, fmt.Errorf("unsupported column type: %v", dataType)
 }
 
-func (c *Column) SqlColumnName() string {
-	if c.oldName != "" {
-		return c.oldName
-	}
-
+//ColumnName returns Column Name
+func (c *Column) ColumnName() string {
 	return c.Name
 }
 
-func (c *Column) StructField() (*reflect.StructField, error) {
-	if c.structField != nil {
-		return c.structField, nil
-	}
-
-	rType, err := c.Type()
-	if err != nil {
-		return nil, err
-	}
-
-	c.structField = &reflect.StructField{
-		Name: strings.Title(c.Name),
-		Type: rType,
-	}
-
-	return c.structField, nil
-}
-
+//Init initializes Column
 func (c *Column) Init() error {
 	if c.Name == "" {
 		return fmt.Errorf("column name was empty")

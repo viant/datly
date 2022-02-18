@@ -1,0 +1,23 @@
+Views:
+- Connector:
+    Ref: mydb
+  Name: users
+  Table: users
+  Criteria:
+    Expression: id = ${user_id}
+
+
+  Parameters:
+  - Ref: user_id
+
+Connectors:
+- Name: mydb
+  Driver: sqlite3
+  DSN: "./testdata/db/mydb.db"
+
+Parameters:
+- Name: user_id
+  In:
+    Kind: path
+    Name: userId
+  Required: true

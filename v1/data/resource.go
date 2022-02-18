@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/v1/config"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
-	"reflect"
 )
 
 type Resource struct {
@@ -14,7 +13,9 @@ type Resource struct {
 	Views       []*View
 	_views      Views
 	_connectors config.Connectors
-	types       map[string]reflect.Type
+	Parameters  []*Parameter
+	_parameters Parameters
+	types       Types
 }
 
 func (r *Resource) GetViews() Views {
@@ -37,7 +38,7 @@ func (r *Resource) GetConnectors() config.Connectors {
 	return r._connectors
 }
 
-func (r *Resource) Init(ctx context.Context, types Types) error {
+func (r *Resource) Init(ctx context.Context) error {
 	r._views = ViewSlice(r.Views).Index()
 	r._connectors = config.ConnectorSlice(r.Connectors).Index()
 
@@ -45,7 +46,7 @@ func (r *Resource) Init(ctx context.Context, types Types) error {
 		return err
 	}
 
-	if err := ViewSlice(r.Views).Init(ctx, r._views, r._connectors, types); err != nil {
+	if err := ViewSlice(r.Views).Init(ctx, r); err != nil {
 		return err
 	}
 
@@ -69,7 +70,10 @@ func NewResourceFromURL(ctx context.Context, url string, types Types) (*Resource
 	}
 
 	aMap := map[string]interface{}{}
-	yaml.Unmarshal(data, &aMap)
+	if err := yaml.Unmarshal(data, &aMap); err != nil {
+		return nil, err
+	}
+
 	resource := &Resource{}
 	err = toolbox.DefaultConverter.AssignConverted(resource, aMap)
 	if err != nil {
@@ -77,7 +81,8 @@ func NewResourceFromURL(ctx context.Context, url string, types Types) (*Resource
 	}
 
 	resource.types = types
-	err = resource.Init(ctx, types)
+	resource._parameters = ParametersSlice(resource.Parameters).Index()
+	err = resource.Init(ctx)
 
 	return resource, err
 }

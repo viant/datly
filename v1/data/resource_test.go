@@ -46,7 +46,7 @@ func TestNewResourceFromURL(t *testing.T) {
 					"Name": "event_type_id"
 				}
 			],
-			"Component": {
+			"Schema": {
 				"Name": "events"
 			},
 			"Connector": {

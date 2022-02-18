@@ -2,6 +2,8 @@ Views:
   - Connector:
       Ref: mydb
     Name: foos
+    Schema:
+      Name: foo
 Connectors:
   - Name: mydb
     Driver: sqlite3

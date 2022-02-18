@@ -2,7 +2,6 @@ Views:
   - Connector:
       Ref: mydb
     Name: events
-    Default: {}
 Connectors:
   - Name: mydb
     Driver: sqlite3

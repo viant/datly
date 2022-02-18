@@ -1,0 +1,20 @@
+Views:
+- Connector:
+    Ref: otherdb
+  Name: languages
+  Criteria:
+    Expression: code LIKE '${language}%'
+  Parameters:
+  - Ref: language
+
+Connectors:
+- Name: otherdb
+  Driver: sqlite3
+  DSN: "./testdata/db/other.db"
+
+Parameters:
+- Name: language
+  In:
+    Kind: query
+    Name: lang
+  Required: true

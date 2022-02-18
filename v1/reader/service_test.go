@@ -10,6 +10,8 @@ import (
 	"github.com/viant/datly/v1/data"
 	"github.com/viant/dsunit"
 	"github.com/viant/toolbox"
+	"net/http"
+	"net/url"
 	"path"
 	"reflect"
 	"testing"
@@ -29,6 +31,18 @@ func TestRead(t *testing.T) {
 		Name string
 	}
 
+	type Language struct {
+		Id   int
+		Code string
+	}
+
+	type Article struct {
+		Id       int
+		Content  string
+		LangId   int
+		Language Language
+	}
+
 	testLocation := toolbox.CallerDirectory(3)
 
 	var useCases = []struct {
@@ -40,17 +54,20 @@ func TestRead(t *testing.T) {
 		errorOnClientSelector bool
 		view                  string
 		options               Options
-		compType              reflect.Type
-		compTypeName          string
+		compTypes             map[string]reflect.Type
+		subject               string
+		request               *http.Request
+		path                  string
 	}{
 		{
-			description:  "read all data with specified columns",
-			dataURI:      "case001/",
-			dest:         new([]*Event),
-			view:         "events",
-			expect:       `[{"ID":1,"EventTypeID":2,"Quantity":33.23432374000549,"Timestamp":"0001-01-01T00:00:00Z"},{"ID":10,"EventTypeID":11,"Quantity":21.957962334156036,"Timestamp":"0001-01-01T00:00:00Z"},{"ID":100,"EventTypeID":111,"Quantity":5.084940046072006,"Timestamp":"0001-01-01T00:00:00Z"}]`,
-			compTypeName: "events",
-			compType:     reflect.TypeOf(&Event{}),
+			description: "read all data with specified columns",
+			dataURI:     "case001/",
+			dest:        new([]*Event),
+			view:        "events",
+			expect:      `[{"ID":1,"EventTypeID":2,"Quantity":33.23432374000549,"Timestamp":"0001-01-01T00:00:00Z"},{"ID":10,"EventTypeID":11,"Quantity":21.957962334156036,"Timestamp":"0001-01-01T00:00:00Z"},{"ID":100,"EventTypeID":111,"Quantity":5.084940046072006,"Timestamp":"0001-01-01T00:00:00Z"}]`,
+			compTypes: map[string]reflect.Type{
+				"events": reflect.TypeOf(&Event{}),
+			},
 		},
 		{
 			description: "read all data with specified columns",
@@ -87,6 +104,9 @@ func TestRead(t *testing.T) {
 				AllowUnmapped(true),
 			},
 			expect: `[{"Id":1,"Name":"foo"},{"Id":2,"Name":"another foo"},{"Id":3,"Name":"yet another foo"}]`,
+			compTypes: map[string]reflect.Type{
+				"foo": reflect.TypeOf(&Foo{}),
+			},
 		},
 		{
 			description: "columns expression",
@@ -94,6 +114,9 @@ func TestRead(t *testing.T) {
 			view:        "foos",
 			dest:        new([]*Foo),
 			expect:      `[{"Id":1,"Name":"FOO"},{"Id":2,"Name":"ANOTHER FOO"},{"Id":3,"Name":"YET ANOTHER FOO"}]`,
+			compTypes: map[string]reflect.Type{
+				"foo": reflect.TypeOf(&Foo{}),
+			},
 		},
 		{
 			description: "custom selector",
@@ -117,14 +140,6 @@ func TestRead(t *testing.T) {
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventType":null,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventType":{"Id":11,"Name":"type 2","AccountId":33},"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventType":{"Id":111,"Name":"type 3","AccountId":36},"Quantity":5.084940046072006,"UserId":3}]`,
 		},
-
-		{
-			description: "one to one, include join column true",
-			dataURI:     "case014/",
-			view:        "event_event-types",
-			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventType":null,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventType":{"Id":11,"Name":"type 2","AccountId":33},"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventType":{"Id":111,"Name":"type 3","AccountId":36},"Quantity":5.084940046072006,"UserId":3}]`,
-		},
 		{
 			dataURI:     "case009/",
 			view:        "users_accounts",
@@ -132,91 +147,119 @@ func TestRead(t *testing.T) {
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Name":"John","Accounts":[{"Id":1,"Name":"John account","UserId":1},{"Id":3,"Name":"Another John account","UserId":1}]},{"Id":2,"Name":"David","Accounts":[{"Id":2,"Name":"Anna account","UserId":2}]},{"Id":3,"Name":"Anna","Accounts":null}]`,
 		},
-		//{
-		//	dataURI:     "case010/",
-		//	view:        "events",
-		//	description: "expressions as columns",
-		//	dest:        new(interface{}),
-		//	expect:      `[{"Id":1,"Quantity":33.23432374000549,"EventTypeId":2,"Current_time":"2022-02-06"},{"Id":10,"Quantity":21.957962334156036,"EventTypeId":11,"Current_time":"2022-02-06"},{"Id":100,"Quantity":5.084940046072006,"EventTypeId":111,"Current_time":"2022-02-06"}]`,
-		//},
-		//{
-		//	dataURI:     "case011/",
-		//	view:        "dual",
-		//	description: "read from dual like table",
-		//	dest:        new(interface{}),
-		//	expect:      `[{"Id":123,"Quantity":255.5,"Registered":false,"Name":"abc"}]`,
-		//},
-		//{
-		//	dataURI:     "case012/",
-		//	view:        "event_event-types",
-		//	description: "read from dual like table",
-		//	dest:        new(interface{}),
-		//	expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventType":null,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventType":{"Id":11,"Name":"type 2","AccountId":33},"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventType":{"Id":111,"Name":"type 3","AccountId":36},"Quantity":5.084940046072006,"UserId":3}]`,
-		//},
-		//{
-		//	dataURI:     "case013/",
-		//	view:        "articles_languages",
-		//	description: "read from dual like table",
-		//	dest:        new(interface{}),
-		//	expect:      `[{"Id":1,"Content":"Lorem ipsum","Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","Language":{"Id":9,"Code":"zh-CN"}}]`,
-		//},
-
-		//{
-		//	description: "selector columns doesn't overlap view columns",
-		//	dataURI:     "case007/",
-		//	view:        "foos",
-		//	selectors: &view.Request{
-		//		DataColumns: []string{"Id", "abcdef"},
-		//	},
-		//	options:        []interface{}{AllowUnmapped(true)},
-		//	errorOnClientSelector: false,
-		//	dest:           new([]*Foo),
-		//},
-		//
-		//{
-		//	description: "client selector should be used instead of view selector",
-		//	dataURI:     "case001/",
-		//	view: &view.view{
-		//		Connector: "mydb",
-		//		Name:      "foos",
-		//		Table:     "foos",
-		//		selector: view.selector{
-		//			Columns: []string{"Id", "Name"},
-		//			OrderBy: "Id",
-		//			Offset:  0,
-		//			Limit:   100,
-		//		},
-		//		Columns: []*data.Column{
-		//			{
-		//				Name: "Id",
-		//			},
-		//			{
-		//				Name: "Name",
-		//			},
-		//		},
-		//	},
-		//	selectors: &view.Request{
-		//		DataColumns: []string{"Name"},
-		//		DataOrderBy: "Name",
-		//		DataOffset:  1,
-		//	},
-		//	options:        []interface{}{AllowUnmapped(true)},
-		//	errorOnClientSelector: true,
-		//	connectors: []*config.Connector{
-		//		{
-		//			Name:   "mydb",
-		//			Driver: "sqlite3",
-		//			DSN:    "./testdata/db/mydb.db",
-		//		},
-		//	},
-		//	dest:   new(interface{}),
-		//	expect: ``,
-		//},
-		//
-
+		{
+			description: "one to one, include join column true",
+			dataURI:     "case010/",
+			view:        "event_event-types",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventType":null,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventType":{"Id":11,"Name":"type 2","AccountId":33},"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventType":{"Id":111,"Name":"type 3","AccountId":36},"Quantity":5.084940046072006,"UserId":3}]`,
+		},
+		{
+			dataURI:     "case011/",
+			view:        "users_accounts",
+			description: "parameters",
+			dest:        new(interface{}),
+			expect:      `[{"Id":4,"Name":"Kamil","Role":"ADMIN"},{"Id":5,"Name":"Bob","Role":"ADMIN"}]`,
+			subject:     "Kamil",
+		},
+		{
+			description: "read all strategy, one to one",
+			dataURI:     "case012/",
+			view:        "event_event-types",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventType":null,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventType":{"Id":11,"Name":"type 2","AccountId":33},"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventType":{"Id":111,"Name":"type 3","AccountId":36},"Quantity":5.084940046072006,"UserId":3}]`,
+		},
+		{
+			description: "read all strategy, many to one",
+			dataURI:     "case013/",
+			view:        "users_accounts",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Name":"John","Accounts":[{"Id":1,"Name":"John account","UserId":1},{"Id":3,"Name":"Another John account","UserId":1}]},{"Id":2,"Name":"David","Accounts":[{"Id":2,"Name":"Anna account","UserId":2}]},{"Id":3,"Name":"Anna","Accounts":null}]`,
+		},
+		{
+			description: "read all strategy, batch size",
+			dataURI:     "case014/",
+			view:        "articles_languages",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Content":"Lorem ipsum","Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","Language":{"Id":9,"Code":"zh-CN"}}]`,
+		},
+		{
+			description: "T type one to one relation",
+			dataURI:     "case015/",
+			view:        "articles_languages",
+			dest:        new([]Article),
+			expect:      `[{"Id":1,"Content":"Lorem ipsum","LangId":2,"Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","LangId":12,"Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","LangId":13,"Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","LangId":9,"Language":{"Id":9,"Code":"zh-CN"}},{"Id":5,"Content":"content without lang","LangId":0,"Language":{"Id":0,"Code":""}}]`,
+			compTypes: map[string]reflect.Type{
+				"article": reflect.TypeOf(Article{}),
+			},
+		},
+		{
+			description: "T type one to one relation",
+			dataURI:     "case015/",
+			view:        "articles_languages",
+			dest:        new([]Article),
+			expect:      `[{"Id":1,"Content":"Lorem ipsum","LangId":2,"Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","LangId":12,"Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","LangId":13,"Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","LangId":9,"Language":{"Id":9,"Code":"zh-CN"}},{"Id":5,"Content":"content without lang","LangId":0,"Language":{"Id":0,"Code":""}}]`,
+			compTypes: map[string]reflect.Type{
+				"article": reflect.TypeOf(Article{}),
+			},
+		},
+		{
+			description: "path parameter",
+			dataURI:     "case016/",
+			view:        "users",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Name":"John","Role":""}]`,
+			request: &http.Request{
+				URL: &url.URL{
+					Path: "/users/1",
+				},
+			},
+			path: "/users/{userId}",
+		},
+		{
+			description: "query parameter",
+			dataURI:     "case017/",
+			view:        "languages",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Code":"en-GB"},{"Id":2,"Code":"en-US"}]`,
+			request: &http.Request{
+				RequestURI: "/languages",
+				URL: &url.URL{
+					RawQuery: "lang=en",
+					Path:     "/languages",
+				},
+			},
+			path: "/languages",
+		},
+		{
+			description: "header parameter",
+			dataURI:     "case018/",
+			view:        "users",
+			dest:        new(interface{}),
+			expect:      `[{"Id":3,"Name":"Anna","Role":""}]`,
+			request: &http.Request{
+				Header: map[string][]string{
+					"user-name": {"Anna"},
+				},
+				URL: &url.URL{},
+			},
+		},
+		{
+			description: "cookie parameter",
+			dataURI:     "case019/",
+			view:        "users",
+			dest:        new(interface{}),
+			expect:      `[{"Id":2,"Name":"David","Role":""}]`,
+			request: &http.Request{
+				Header: map[string][]string{
+					"Cookie": {"user-id=2"},
+				},
+				URL: &url.URL{},
+			},
+		},
 	}
 
-	for _, testCase := range useCases[:10] {
+	for _, testCase := range useCases {
 		if initDb(t, path.Join(testLocation, "testdata", "mydb_config.yaml"), path.Join(testLocation, fmt.Sprintf("testdata/case/populate_mydb")), "db") {
 			return
 		}
@@ -226,35 +269,43 @@ func TestRead(t *testing.T) {
 		}
 
 		types := data.Types{}
-		if testCase.compType != nil {
-			types.Register(testCase.compTypeName, testCase.compType)
+
+		for key, rType := range testCase.compTypes {
+			types.Register(key, rType)
 		}
+
 		resource, err := data.NewResourceFromURL(context.TODO(), path.Join(testLocation, fmt.Sprintf("testdata/case/"+testCase.dataURI+"/resources.yaml")), types)
 		if err != nil {
 			t.Fatalf(err.Error())
 		}
 
-		service := New()
+		service := New(resource)
 		service.Apply(testCase.options)
 
-		dataView, _ := resource.View(testCase.view)
+		dataView, err := resource.View(testCase.view)
+
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		if (err != nil) && testCase.errorOnClientSelector {
 			t.Fatal(err)
 		}
 
 		session := &data.Session{
-			Dest:      testCase.dest,
-			View:      dataView,
-			Selectors: testCase.selectors,
+			Dest:        testCase.dest,
+			View:        dataView,
+			Selectors:   testCase.selectors,
+			Subject:     testCase.subject,
+			HttpRequest: testCase.request,
+			MatchedPath: testCase.path,
 		}
-
-		session.Init()
 
 		err = service.Read(context.TODO(), session)
 		assert.Nil(t, err, testCase.description)
 		b, _ := json.Marshal(testCase.dest)
 		result := string(b)
+
 		if !assertly.AssertValues(t, testCase.expect, result, testCase.description) {
 			fmt.Println(result)
 			fmt.Println(testCase.expect)

@@ -13,15 +13,3 @@ type Config struct {
 	Limit    int            `json:",omitempty"`
 	Criteria *data.Criteria `json:",omitempty"`
 }
-
-func (c *Config) GetOrderBy() string {
-	return c.OrderBy
-}
-
-func (c *Config) GetOffset() int {
-	return 0
-}
-
-func (c *Config) GetLimit() int {
-	return c.Limit
-}

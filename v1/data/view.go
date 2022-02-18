@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/viant/datly/data"
 	"github.com/viant/datly/v1/config"
 	"github.com/viant/datly/v1/shared"
 	"github.com/viant/sqlx/io"
@@ -27,35 +26,53 @@ type View struct {
 	Columns    []*Column `json:",omitempty"`
 	CaseFormat string    `json:",omitempty"`
 
-	Criteria  *data.Criteria `json:",omitempty"`
-	Selector  Config         `json:",omitempty"`
-	Prefix    string
-	Component *Component
+	Criteria *Criteria `json:",omitempty"`
 
-	With      []*Relation `json:",omitempty"`
+	Selector            *Config      `json:",omitempty"`
+	SelectorConstraints *Constraints `json:",omitempty"`
+	Parameters          []*Parameter `json:",omitempty"`
+
+	Prefix string  `json:",omitempty"`
+	Schema *Schema `json:",omitempty"`
+
+	With       []*Relation `json:",omitempty"`
+	ParamField *xunsafe.Field
+
+	MatchStrategy MatchStrategy `json:",omitempty"`
+	BatchReadSize *int          `json:",omitempty"`
+
 	_columns  map[string]*Column
 	_excluded map[string]bool
 
-	placeholdersReferences map[string]*Relation
-	initialized            bool
-	isValid                bool
-	typeRebuilt            bool
-	Caser                  format.Case
-	newCollector           func(session *Session) *Collector
-	destIndex              int
+	Caser        format.Case `json:",omitempty"`
+	initialized  bool
+	isValid      bool
+	typeRebuilt  bool
+	newCollector func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector
+}
+
+type Constraints struct {
+	Criteria  *bool
+	_criteria bool
+	OrderBy   *bool
+	_orderBy  bool
+	Limit     *bool
+	_limit    bool
+	Columns   *bool
+	_columns  bool
 }
 
 //DataType returns struct type.
 func (v *View) DataType() reflect.Type {
-	return v.Component.Type()
+	return v.Schema.Type()
 }
 
-func (v *View) Init(ctx context.Context, views Views, connectors config.Connectors, types Types) error {
+func (v *View) Init(ctx context.Context, resource *Resource) error {
 	if v.initialized {
 		return nil
 	}
 
-	err := v.init(ctx, views, connectors, types)
+	err := v.init(ctx, resource)
 	if err == nil {
 		v.initialized = true
 	}
@@ -63,7 +80,7 @@ func (v *View) Init(ctx context.Context, views Views, connectors config.Connecto
 	return err
 }
 
-func (v *View) init(ctx context.Context, views Views, connectors config.Connectors, types Types) error {
+func (v *View) init(ctx context.Context, resource *Resource) error {
 	if v.Name == v.Ref {
 		return fmt.Errorf("view name and ref cannot be the same")
 	}
@@ -73,31 +90,33 @@ func (v *View) init(ctx context.Context, views Views, connectors config.Connecto
 	}
 
 	if v.Ref != "" {
-		view, err := views.Lookup(v.Ref)
+		view, err := resource._views.Lookup(v.Ref)
 		if err != nil {
 			return err
 		}
 
-		err = view.Init(ctx, views, connectors, types)
+		err = view.Init(ctx, resource)
 		if err != nil {
 			return err
 		}
 
 		v.inherit(view)
 	}
-
+	if v.Selector == nil {
+		v.Selector = &Config{}
+	}
+	//v.destIndex = resource.AddAndIncrement()
 	v.Alias = notEmptyOf(v.Alias, "t")
 	if v.Connector == nil {
 		return fmt.Errorf("connector was empty")
 	}
 
-	err := v.Connector.Init(ctx, connectors)
-	if err != nil {
+	var err error
+	if err = v.Connector.Init(ctx, resource._connectors); err != nil {
 		return err
 	}
 
-	err = v.Connector.Validate()
-	if err != nil {
+	if err = v.Connector.Validate(); err != nil {
 		return err
 	}
 
@@ -106,31 +125,42 @@ func (v *View) init(ctx context.Context, views Views, connectors config.Connecto
 	}
 
 	v.ensureIndexExcluded()
-	err = v.ensureColumns(ctx)
-	v._columns = Columns(v.Columns).Index()
-	if err != nil {
+
+	if err = v.ensureColumns(ctx); err != nil {
 		return err
 	}
-
-	err = v.initRelations(ctx, views, connectors, types)
-	if err != nil {
+	v._columns = Columns(v.Columns).Index()
+	if err = v.initRelations(ctx, resource); err != nil {
 		return err
 	}
 
 	if err := v.ensureCaseFormat(); err != nil {
 		return err
 	}
-	v.ensureComponent(types)
-	v.initializeDestIndex(0)
-	if err != nil {
+	v.ensureSchema(resource.types)
+	if err = v.initParams(ctx, resource); err != nil {
 		return err
 	}
 
 	v.ensureCollector()
-	return v.initHolders()
+	if err = v.initHolders(); err != nil {
+		return err
+	}
+
+	if v.MatchStrategy == "" {
+		v.MatchStrategy = ReadMatched
+	}
+
+	if err = v.MatchStrategy.Validate(); err != nil {
+		return err
+	}
+
+	v.propagateTypeIfNeeded()
+
+	return nil
 }
 
-func (v *View) initRelations(ctx context.Context, views Views, connectors config.Connectors, types Types) error {
+func (v *View) initRelations(ctx context.Context, resource *Resource) error {
 	var err error
 	if len(v.With) == 0 {
 		return nil
@@ -138,7 +168,7 @@ func (v *View) initRelations(ctx context.Context, views Views, connectors config
 
 	for i := range v.With {
 
-		err = v.With[i].Init(ctx, views, connectors, types)
+		err = v.With[i].Init(ctx, resource)
 		if err != nil {
 			return err
 		}
@@ -147,7 +177,6 @@ func (v *View) initRelations(ctx context.Context, views Views, connectors config
 	return nil
 }
 
-//TODO: Split it to 2 methods, ensure _columns and types
 func (v *View) ensureColumns(ctx context.Context) error {
 	if len(v.Columns) != 0 {
 		return Columns(v.Columns).Init()
@@ -186,7 +215,7 @@ func convertIoColumnsToColumns(ioColumns []io.Column) []*Column {
 }
 
 func (v *View) ColumnByName(name string) (*Column, bool) {
-	v.createColumnMapIfNeeded(false)
+	v.createColumnMapIfNeeded()
 
 	if column, ok := v._columns[name]; ok {
 		return column, true
@@ -207,25 +236,25 @@ func (v *View) Source() string {
 	return v.Name
 }
 
-func (v *View) ensureComponent(types Types) {
-	if v.Component == nil {
-		v.Component = &Component{
+func (v *View) ensureSchema(types Types) {
+	if v.Schema == nil {
+		v.Schema = &Schema{
 			Name: v.Name,
 		}
 	}
 
-	if v.Component.Name != "" {
-		componentType := types.Lookup(v.Component.Name)
+	if v.Schema.Name != "" {
+		componentType := types.Lookup(v.Schema.Name)
 		if componentType != nil {
-			v.Component.setType(componentType)
+			v.Schema.setType(componentType)
 		}
 	}
 
-	v.Component.Init(v.Columns, v.With, v.Caser)
+	v.Schema.Init(v.Columns, v.With, v.Caser)
 }
 
-func (v *View) createColumnMapIfNeeded(force bool) {
-	if v._columns != nil && !force {
+func (v *View) createColumnMapIfNeeded() {
+	if v._columns != nil {
 		return
 	}
 
@@ -258,17 +287,6 @@ func (v *View) exclude(columns []io.Column) []io.Column {
 	return filtered
 }
 
-func (v *View) ensurePlaceholderReferences() {
-	if v.placeholdersReferences != nil {
-		return
-	}
-
-	v.placeholdersReferences = make(map[string]*Relation)
-	for i := range v.With {
-		v.placeholdersReferences[strings.Title(v.With[i].Name)] = v.With[i]
-	}
-}
-
 func (v *View) inherit(view *View) {
 	if v.Connector == nil {
 		v.Connector = view.Connector
@@ -290,8 +308,8 @@ func (v *View) inherit(view *View) {
 		v.With = view.With
 	}
 
-	if v.Component == nil && len(v.With) == 0 {
-		v.Component = view.Component
+	if v.Schema == nil && len(v.With) == 0 {
+		v.Schema = view.Schema
 	}
 
 	if len(v.Exclude) == 0 {
@@ -305,6 +323,22 @@ func (v *View) inherit(view *View) {
 
 	if v.newCollector == nil && len(v.With) == 0 {
 		v.newCollector = view.newCollector
+	}
+
+	if v.Parameters == nil {
+		v.Parameters = view.Parameters
+	}
+
+	if v.MatchStrategy == "" {
+		v.MatchStrategy = view.MatchStrategy
+	}
+
+	if v.BatchReadSize == nil {
+		v.BatchReadSize = view.BatchReadSize
+	}
+
+	if v.Selector == nil {
+		v.Selector = view.Selector
 	}
 }
 
@@ -342,19 +376,19 @@ func (v *View) ensureCaseFormat() error {
 }
 
 func (v *View) ensureCollector() {
-	relations := Relations(v.With).PopulateWithResolve()
-	resolverColumns := Relations(relations).Columns()
+	relations := RelationsSlice(v.With).PopulateWithResolve()
+	resolverColumns := RelationsSlice(relations).Columns()
 
-	v.newCollector = func(session *Session) *Collector {
-		if session.AllowUnmapped {
-			return NewCollector(nil, v.Component.slice, v, session)
+	v.newCollector = func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector {
+		if allowUnmapped {
+			return NewCollector(nil, v.Schema.slice, v, dest, supportParallel)
 		}
-		return NewCollector(resolverColumns, v.Component.slice, v, session)
+		return NewCollector(resolverColumns, v.Schema.slice, v, dest, supportParallel)
 	}
 }
 
-func (v *View) Collector(session *Session) *Collector {
-	return v.newCollector(session)
+func (v *View) Collector(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector {
+	return v.newCollector(allowUnmapped, dest, supportParallel)
 }
 
 func notEmptyOf(values ...string) string {
@@ -377,28 +411,15 @@ func (v *View) DestCount() int {
 		counter += v.With[i].Of.DestCount()
 	}
 
+	if len(v.Parameters) > 0 {
+		for _, param := range v.Parameters {
+			if param.view != nil {
+				counter += param.view.DestCount()
+			}
+		}
+	}
+
 	return counter
-}
-
-func (v *View) initializeDestIndex(count int) {
-	v.destIndex = count
-	count++
-
-	if len(v.With) == 0 {
-		return
-	}
-
-	for i := range v.With {
-		v.With[i].Of.initializeDestIndex(count)
-	}
-}
-
-func (v *View) DestIndex() int {
-	return v.destIndex
-}
-
-func (v *View) UseTransientSlice() bool {
-	return v.destIndex == 0 || len(v.With) > 0
 }
 
 func (v *View) initHolders() error {
@@ -424,4 +445,34 @@ func (v *View) initHolders() error {
 	}
 
 	return nil
+}
+
+func (v *View) initParams(ctx context.Context, resource *Resource) error {
+	if v.Criteria == nil {
+		return nil
+	}
+
+	for _, param := range v.Parameters {
+		if err := param.Init(ctx, resource); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (v *View) LimitWithSelector(selector *Selector) int {
+	if selector != nil && selector.Limit > 0 {
+		return selector.Limit
+	}
+	return v.Selector.Limit
+}
+
+func (v *View) propagateTypeIfNeeded() {
+	if v.Schema.AutoGen() {
+		return
+	}
+
+	for _, childView := range v.With {
+		childView.Of.Schema.inheritType(childView.holderField.Type)
+	}
 }

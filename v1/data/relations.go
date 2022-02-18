@@ -1,8 +1,10 @@
 package data
 
-type Relations []*Relation
+//RelationsSlice represents slice of Relation
+type RelationsSlice []*Relation
 
-func (r Relations) Index() map[string]*Relation {
+//Index indexes Relations by Relation.Holder
+func (r RelationsSlice) Index() map[string]*Relation {
 	result := make(map[string]*Relation)
 	for i, rel := range r {
 		keys := KeysOf(rel.Holder, true)
@@ -15,7 +17,7 @@ func (r Relations) Index() map[string]*Relation {
 	return result
 }
 
-func (r Relations) PopulateWithResolve() []*Relation {
+func (r RelationsSlice) PopulateWithResolve() []*Relation {
 	result := make([]*Relation, 0)
 	for i, rel := range r {
 		if !rel.HasColumnField {
@@ -26,7 +28,7 @@ func (r Relations) PopulateWithResolve() []*Relation {
 	return result
 }
 
-func (r Relations) Columns() []string {
+func (r RelationsSlice) Columns() []string {
 	resolverColumns := make([]string, 0)
 	for i := range r {
 		resolverColumns = append(resolverColumns, r[i].Column)
@@ -34,7 +36,7 @@ func (r Relations) Columns() []string {
 	return resolverColumns
 }
 
-func (r Relations) PopulateWithVisitor() []*Relation {
+func (r RelationsSlice) PopulateWithVisitor() []*Relation {
 	result := make([]*Relation, 0)
 	for i, rel := range r {
 		if rel.HasColumnField {

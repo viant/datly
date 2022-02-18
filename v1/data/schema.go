@@ -6,32 +6,33 @@ import (
 	"reflect"
 )
 
-type Component struct {
-	Name      string
+type Schema struct {
+	Name string
+
 	compType  reflect.Type
-	slice     *xunsafe.Slice
 	sliceType reflect.Type
+
+	slice *xunsafe.Slice
+	xType *xunsafe.Type
+
 	autoGen   bool
 	OmitEmpty bool
+	DataType  string
 }
 
 //Type returns struct type
-func (c *Component) Type() reflect.Type {
+func (c *Schema) Type() reflect.Type {
 	return c.compType
 }
 
-func (c *Component) setType(rType reflect.Type) {
-	switch rType.Kind() {
-	case reflect.Struct:
-		rType = reflect.PtrTo(rType)
-	}
+func (c *Schema) setType(rType reflect.Type) {
 	c.compType = rType
 	c.slice = xunsafe.NewSlice(c.compType)
 	c.sliceType = c.slice.Type
 }
 
 //Init build struct type from Fields
-func (c *Component) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case) {
+func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case) {
 	if c.compType != nil {
 		return
 	}
@@ -66,6 +67,11 @@ func (c *Component) Init(columns []*Column, relations []*Relation, viewCaseForma
 
 	for _, rel := range relations {
 		rType := rel.Of.DataType()
+		if rType.Kind() == reflect.Struct {
+			rType = reflect.PtrTo(rType)
+			rel.Of.Schema.setType(rType)
+		}
+
 		if rel.Cardinality == "Many" {
 			rType = reflect.SliceOf(rType)
 		}
@@ -79,16 +85,28 @@ func (c *Component) Init(columns []*Column, relations []*Relation, viewCaseForma
 
 	c.setType(reflect.StructOf(structFields))
 	c.autoGen = true
+
 }
 
-func (c *Component) AutoGen() bool {
+//AutoGen indicates whether Schema was generated using ColumnTypes fetched from DB or was passed programmatically.
+func (c *Schema) AutoGen() bool {
 	return c.autoGen
 }
 
-func (c *Component) Slice() *xunsafe.Slice {
+//Slice returns slice
+func (c *Schema) Slice() *xunsafe.Slice {
 	return c.slice
 }
 
-func (c *Component) SliceType() reflect.Type {
+func (c *Schema) SliceType() reflect.Type {
 	return c.sliceType
+}
+
+func (c *Schema) inheritType(rType reflect.Type) {
+	c.setType(rType)
+	c.autoGen = false
+}
+
+func (c *Schema) XType() *xunsafe.Type {
+	return c.xType
 }
