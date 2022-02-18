@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	data2 "github.com/viant/datly/data"
+	"github.com/viant/datly/data"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/read"
 	"github.com/viant/toolbox"
@@ -18,12 +18,12 @@ import (
 type Service struct {
 	sqlBuilder    *Builder
 	AllowUnmapped AllowUnmapped
-	Resource      *data2.Resource
+	Resource      *data.Resource
 }
 
 //Read select data from database based on View and assign it to dest. ParentDest has to be pointer.
 //TODO: Select with join when connector is the same for one to one relation
-func (s *Service) Read(ctx context.Context, session *data2.Session) error {
+func (s *Service) Read(ctx context.Context, session *data.Session) error {
 	if err := session.Init(); err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func (s *Service) actualStructType(dest interface{}) reflect.Type {
 	return rType
 }
 
-func (s *Service) readAll(ctx context.Context, session *data2.Session, collector *data2.Collector, upstream rdata.Map, wg *sync.WaitGroup) error {
+func (s *Service) readAll(ctx context.Context, session *data.Session, collector *data.Collector, upstream rdata.Map, wg *sync.WaitGroup) error {
 	view := collector.View()
 
 	db, err := view.Db()
@@ -88,14 +88,18 @@ func (s *Service) readAll(ctx context.Context, session *data2.Session, collector
 		}()
 	}
 
-	if err = s.readRelations(ctx, session, collector, params, wg); err != nil {
+	if err != nil {
+		return err
+	}
+
+	if err = s.readRelations(ctx, session, collector, params, wg, selector); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *Service) batchData(limit int, view *data2.View, collector *data2.Collector) *BatchData {
+func (s *Service) batchData(limit int, view *data.View, collector *data.Collector) *BatchData {
 	batchData := &BatchData{
 		CurrentlyRead: 0,
 		BatchReadSize: limit,
@@ -110,7 +114,7 @@ func (s *Service) batchData(limit int, view *data2.View, collector *data2.Collec
 	return batchData
 }
 
-func (s *Service) exhaustRead(ctx context.Context, view *data2.View, selector *data2.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData, db *sql.DB, collector *data2.Collector) error {
+func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData, db *sql.DB, collector *data.Collector) error {
 	readData := 0
 	limit := view.LimitWithSelector(selector)
 
@@ -136,7 +140,7 @@ func (s *Service) exhaustRead(ctx context.Context, view *data2.View, selector *d
 	return nil
 }
 
-func (s *Service) flush(ctx context.Context, db *sql.DB, SQL string, collector *data2.Collector, batchData *BatchData) (int, error) {
+func (s *Service) flush(ctx context.Context, db *sql.DB, SQL string, collector *data.Collector, batchData *BatchData) (int, error) {
 	reader, err := read.New(ctx, db, SQL, collector.NewItem(), io.Resolve(collector.Resolve))
 	if err != nil {
 		return 0, err
@@ -157,7 +161,7 @@ func (s *Service) flush(ctx context.Context, db *sql.DB, SQL string, collector *
 	return readData, nil
 }
 
-func (s *Service) prepareSQL(view *data2.View, selector *data2.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData) (string, error) {
+func (s *Service) prepareSQL(view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData) (string, error) {
 	SQL, err := s.sqlBuilder.Build(view, selector, batchData)
 	if err != nil {
 		return "", err
@@ -173,8 +177,8 @@ func (s *Service) prepareSQL(view *data2.View, selector *data2.Selector, upstrea
 	return SQL, nil
 }
 
-func (s *Service) readRelations(ctx context.Context, session *data2.Session, collector *data2.Collector, params rdata.Map, wg *sync.WaitGroup) error {
-	collectorChildren := collector.Relations()
+func (s *Service) readRelations(ctx context.Context, session *data.Session, collector *data.Collector, params rdata.Map, wg *sync.WaitGroup, selector *data.Selector) error {
+	collectorChildren := collector.Relations(selector)
 	for i := range collectorChildren {
 		if err := s.readAll(ctx, session, collectorChildren[i], params, wg); err != nil {
 			return err
@@ -183,24 +187,24 @@ func (s *Service) readRelations(ctx context.Context, session *data2.Session, col
 	return nil
 }
 
-func (s *Service) buildViewParams(ctx context.Context, session *data2.Session, view *data2.View) (rdata.Map, error) {
+func (s *Service) buildViewParams(ctx context.Context, session *data.Session, view *data.View) (rdata.Map, error) {
 	if len(view.Parameters) == 0 {
 		return nil, nil
 	}
 	params := session.NewReplacement(view)
 	for _, param := range view.Parameters {
 		switch param.In.Kind {
-		case data2.DataViewKind:
+		case data.DataViewKind:
 			if err := s.addViewParams(ctx, params, param, session); err != nil {
 				return nil, err
 			}
-		case data2.PathKind:
+		case data.PathKind:
 			s.addPathParam(session, param, &params)
-		case data2.QueryKind:
+		case data.QueryKind:
 			s.addQueryParam(session, param, &params)
-		case data2.HeaderKind:
+		case data.HeaderKind:
 			s.addHeaderParam(session, param, &params)
-		case data2.CookieKind:
+		case data.CookieKind:
 			s.addCookieParam(session, param, &params)
 		default:
 			return nil, fmt.Errorf("unsupported location Kind %v", param.In.Kind)
@@ -220,7 +224,7 @@ func (s *Service) Apply(options Options) {
 	}
 }
 
-func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *data2.Parameter, session *data2.Session) error {
+func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *data.Parameter, session *data.Session) error {
 	view := param.View()
 	destSlice := reflect.New(view.Schema.SliceType()).Interface()
 
@@ -249,28 +253,28 @@ func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *
 	return nil
 }
 
-func (s *Service) addQueryParam(session *data2.Session, param *data2.Parameter, params *rdata.Map) {
+func (s *Service) addQueryParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
 	paramValue := toolbox.QueryValue(session.HttpRequest.URL, param.In.Name, "")
 	params.SetValue(param.Name, paramValue)
 }
 
-func (s *Service) addHeaderParam(session *data2.Session, param *data2.Parameter, params *rdata.Map) {
+func (s *Service) addHeaderParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
 	header := session.Header(param.In.Name)
 	params.SetValue(param.Name, header)
 }
 
-func (s *Service) addCookieParam(session *data2.Session, param *data2.Parameter, params *rdata.Map) {
+func (s *Service) addCookieParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
 	cookie := session.Cookie(param.In.Name)
 	params.SetValue(param.Name, cookie)
 }
 
-func (s *Service) addPathParam(session *data2.Session, param *data2.Parameter, params *rdata.Map) {
+func (s *Service) addPathParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
 	pathVariable := session.PathVariable(param.In.Name)
 	params.SetValue(param.Name, pathVariable)
 }
 
 //New creates Service instance
-func New(resource *data2.Resource) *Service {
+func New(resource *data.Resource) *Service {
 	return &Service{
 		sqlBuilder: NewBuilder(),
 		Resource:   resource,

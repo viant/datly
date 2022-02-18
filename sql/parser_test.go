@@ -31,22 +31,22 @@ func TestNewParser(t *testing.T) {
 		{
 			description: "criteria - binary literal - brackets",
 			criteria:    "(true = true)",
-			expect:      `{"P":{"X":{"Value":"true", "Kind": 1},"Operator":"=","Y":{"Value":"true", "Kind": 1}}}`,
+			expect:      `{"P":{"X":{"Value":"true", "Kind": 3},"Operator":"=","Y":{"Value":"true", "Kind": 3}}}`,
 		},
 		{
 			description: "criteria selector literal",
 			criteria:    "column_name = '123'",
-			expect:      `{"X":{"Name":"column_name"},"Operator":"=","Y":{"Value":"'123'","Kind":24}}`,
+			expect:      `{"X":{"Name":"column_name"},"Operator":"=","Y":{"Value":"'123'","Kind":2}}`,
 		},
 
 		{
 			description: "logical operator",
 			criteria:    "column_name = '123' OR column_z = 5",
-			expect:      `{"X":{"Name":"column_name"},"Operator":"=","Y":{"X":{"Value":"'123'","Kind":24},"Operator":"OR","Y":{"X":{"Name":"column_z"},"Operator":"=","Y":{"Value":"5","Kind":2}}}}`,
+			expect:      `{"X":{"Name":"column_name"},"Operator":"=","Y":{"X":{"Value":"'123'","Kind":2},"Operator":"OR","Y":{"X":{"Name":"column_z"},"Operator":"=","Y":{"Value":"5","Kind":1}}}}`,
 		},
 		{
 			description: "criteria selector literal",
-			criteria:    "column_name = ''-- Drop table  ;''",
+			criteria:    "column_name = ''; Drop table  ;--''",
 			hasError:    true,
 		},
 		{
@@ -77,12 +77,18 @@ func TestNewParser(t *testing.T) {
 		{
 			description: "in",
 			criteria:    "column_name in (null,'abc',null,'cdef')",
-			expect:      `{"X":{"Name":"column_name"},"Operator":"in","Y":{"Value":"null,'abc',null,'cdef'","Kind":24}}`,
+			expect:      `{"X":{"Name":"column_name"},"Operator":"in","Y":{"Value":"null,'abc',null,'cdef'","Kind":2}}`,
 		},
-		//{
-		//	description: "not in",
-		//	criteria:    "column_name not in (null,'abc',null,'cdef')",
-		//},
+		{
+			description: "not in",
+			criteria:    "column_name not in (null,'abc',null,'cdef')",
+			expect:      `{"X":{"Name":"column_name"},"Operator":"not in","Y":{"Value":"null,'abc',null,'cdef'","Kind":2}}`,
+		},
+		{
+			description: "not is",
+			criteria:    "column_name not is (null,'abc',null,'cdef')",
+			hasError:    true,
+		},
 	}
 
 	for _, useCase := range useCases {

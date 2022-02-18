@@ -4,6 +4,6 @@ type Selector struct {
 	Name string
 }
 
-func (s *Selector) Validate(allowed map[string]int) error {
+func (s *Selector) Validate(_ map[string]Kind) error {
 	return nil
 }

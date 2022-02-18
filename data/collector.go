@@ -276,13 +276,19 @@ func (r *Collector) indexParentPositions(name string) {
 	}
 }
 
-func (r *Collector) Relations() []*Collector {
+func (r *Collector) Relations(selector *Selector) []*Collector {
 	result := make([]*Collector, len(r.view.With))
-	for i := range r.view.With {
-		dest := reflect.MakeSlice(r.view.With[i].Of.View.Schema.SliceType(), 0, 1).Interface()
-		slice := r.view.With[i].Of.View.Schema.Slice()
 
-		result[i] = &Collector{
+	counter := 0
+	for i := range r.view.With {
+		if selector != nil && !selector.Has(r.view.With[i].Holder) {
+			continue
+		}
+
+		dest := reflect.MakeSlice(r.view.With[counter].Of.View.Schema.SliceType(), 0, 1).Interface()
+		slice := r.view.With[counter].Of.View.Schema.Slice()
+
+		result[counter] = &Collector{
 			parent:          r,
 			dest:            dest,
 			appender:        slice.Appender(xunsafe.AsPointer(dest)),
@@ -290,14 +296,15 @@ func (r *Collector) Relations() []*Collector {
 			types:           make(map[string]*xunsafe.Type),
 			values:          make(map[string]*[]interface{}),
 			slice:           slice,
-			view:            &r.view.With[i].Of.View,
-			relation:        r.view.With[i],
-			supportParallel: r.view.With[i].Of.MatchStrategy.SupportsParallel(),
+			view:            &r.view.With[counter].Of.View,
+			relation:        r.view.With[counter],
+			supportParallel: r.view.With[counter].Of.MatchStrategy.SupportsParallel(),
 		}
+		counter++
 	}
 
-	r.relations = result
-	return result
+	r.relations = result[:counter]
+	return result[:counter]
 }
 
 func (r *Collector) View() *View {

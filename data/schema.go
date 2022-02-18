@@ -34,6 +34,7 @@ func (c *Schema) setType(rType reflect.Type) {
 //Init build struct type from Fields
 func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case) {
 	if c.compType != nil {
+		c.setType(c.compType)
 		return
 	}
 

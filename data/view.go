@@ -9,8 +9,8 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
+	"net/http"
 	"reflect"
-	"strings"
 )
 
 //View represents a data View
@@ -41,8 +41,14 @@ type View struct {
 	MatchStrategy MatchStrategy `json:",omitempty"`
 	BatchReadSize *int          `json:",omitempty"`
 
-	_columns  map[string]*Column
-	_excluded map[string]bool
+	_columns    Columns
+	_excluded   map[string]bool
+	_parameters Parameters
+
+	_cookiesKind Parameters
+	_headerKind  Parameters
+	_pathKind    Parameters
+	_queryKind   Parameters
 
 	Caser        format.Case `json:",omitempty"`
 	initialized  bool
@@ -60,6 +66,8 @@ type Constraints struct {
 	_limit    bool
 	Columns   *bool
 	_columns  bool
+	Offset    *bool
+	_offset   bool
 }
 
 //DataType returns struct type.
@@ -125,18 +133,18 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 	}
 
 	v.ensureIndexExcluded()
+	if err := v.ensureCaseFormat(); err != nil {
+		return err
+	}
 
 	if err = v.ensureColumns(ctx); err != nil {
 		return err
 	}
-	v._columns = Columns(v.Columns).Index()
+	v._columns = ColumnSlice(v.Columns).Index(v.Caser)
 	if err = v.initRelations(ctx, resource); err != nil {
 		return err
 	}
 
-	if err := v.ensureCaseFormat(); err != nil {
-		return err
-	}
 	v.ensureSchema(resource.types)
 	if err = v.initParams(ctx, resource); err != nil {
 		return err
@@ -156,7 +164,10 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 	}
 
 	v.propagateTypeIfNeeded()
-
+	v.ensureSelectorConstraints()
+	if err = v.registerHolders(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -179,7 +190,7 @@ func (v *View) initRelations(ctx context.Context, resource *Resource) error {
 
 func (v *View) ensureColumns(ctx context.Context) error {
 	if len(v.Columns) != 0 {
-		return Columns(v.Columns).Init()
+		return ColumnSlice(v.Columns).Init()
 	}
 
 	db, err := v.Connector.Db()
@@ -215,8 +226,6 @@ func convertIoColumnsToColumns(ioColumns []io.Column) []*Column {
 }
 
 func (v *View) ColumnByName(name string) (*Column, bool) {
-	v.createColumnMapIfNeeded()
-
 	if column, ok := v._columns[name]; ok {
 		return column, true
 	}
@@ -253,20 +262,6 @@ func (v *View) ensureSchema(types Types) {
 	v.Schema.Init(v.Columns, v.With, v.Caser)
 }
 
-func (v *View) createColumnMapIfNeeded() {
-	if v._columns != nil {
-		return
-	}
-
-	v._columns = make(map[string]*Column)
-	for i := range v.Columns {
-		v._columns[v.Columns[i].Name] = v.Columns[i]
-		v._columns[strings.Title(v.Columns[i].Name)] = v.Columns[i]
-		v._columns[strings.ToLower(v.Columns[i].Name)] = v.Columns[i]
-		v._columns[strings.ToUpper(v.Columns[i].Name)] = v.Columns[i]
-	}
-}
-
 func (v *View) Db() (*sql.DB, error) {
 	return v.Connector.Db()
 }
@@ -278,7 +273,6 @@ func (v *View) exclude(columns []io.Column) []io.Column {
 
 	filtered := make([]io.Column, 0, len(columns))
 	for i := range columns {
-		//TODO: add method that normalizes the keys
 		if _, ok := v._excluded[columns[i].Name()]; ok {
 			continue
 		}
@@ -340,6 +334,10 @@ func (v *View) inherit(view *View) {
 	if v.Selector == nil {
 		v.Selector = view.Selector
 	}
+
+	if v.SelectorConstraints == nil {
+		v.SelectorConstraints = view.SelectorConstraints
+	}
 }
 
 func (v *View) ensureIndexExcluded() {
@@ -351,7 +349,7 @@ func (v *View) ensureIndexExcluded() {
 }
 
 func (v *View) SelectedColumns(selector *Selector) ([]*Column, error) {
-	if selector == nil || len(selector.Columns) == 0 {
+	if !v.CanUseClientColumns() || selector == nil || len(selector.Columns) == 0 {
 		return v.Columns, nil
 	}
 
@@ -447,6 +445,15 @@ func (v *View) initHolders() error {
 	return nil
 }
 
+func (v *View) registerHolders() error {
+	for i := range v.With {
+		if err := v._columns.RegisterHolder(v.With[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (v *View) initParams(ctx context.Context, resource *Resource) error {
 	if v.Criteria == nil {
 		return nil
@@ -457,11 +464,18 @@ func (v *View) initParams(ctx context.Context, resource *Resource) error {
 			return err
 		}
 	}
+
+	v._parameters = ParametersSlice(v.Parameters).Index()
+	v._cookiesKind = ParametersSlice(v.Parameters).Filter(CookieKind)
+	v._headerKind = ParametersSlice(v.Parameters).Filter(HeaderKind)
+	v._pathKind = ParametersSlice(v.Parameters).Filter(PathKind)
+	v._queryKind = ParametersSlice(v.Parameters).Filter(QueryKind)
+
 	return nil
 }
 
 func (v *View) LimitWithSelector(selector *Selector) int {
-	if selector != nil && selector.Limit > 0 {
+	if v.CanUseClientLimit() && selector != nil && selector.Limit > 0 {
 		return selector.Limit
 	}
 	return v.Selector.Limit
@@ -475,4 +489,92 @@ func (v *View) propagateTypeIfNeeded() {
 	for _, childView := range v.With {
 		childView.Of.Schema.inheritType(childView.holderField.Type)
 	}
+}
+
+func (v *View) shouldIndexCookie(cookie *http.Cookie) bool {
+	param, _ := v._cookiesKind.Lookup(cookie.Name)
+	if param != nil {
+		return true
+	}
+
+	for i := range v.With {
+		if (&v.With[i].Of.View).shouldIndexCookie(cookie) {
+			return true
+		}
+	}
+	return false
+}
+
+func (v *View) shouldIndexUriParam(key string) bool {
+	param, _ := v._pathKind.Lookup(key)
+	if param != nil {
+		return true
+	}
+
+	for i := range v.With {
+		if (&v.With[i].Of.View).shouldIndexUriParam(key) {
+			return true
+		}
+	}
+	return false
+}
+
+func (v *View) shouldIndexHeader(key string) bool {
+	param, _ := v._headerKind.Lookup(key)
+	if param != nil {
+		return true
+	}
+
+	for i := range v.With {
+		if (&v.With[i].Of.View).shouldIndexHeader(key) {
+			return true
+		}
+	}
+	return false
+}
+
+func (v *View) shouldIndexQueryParam(key string) bool {
+	param, _ := v._queryKind.Lookup(key)
+	if param != nil {
+		return true
+	}
+
+	for i := range v.With {
+		if (&v.With[i].Of.View).shouldIndexQueryParam(key) {
+			return true
+		}
+	}
+	return false
+}
+
+func (v *View) ensureSelectorConstraints() {
+	if v.SelectorConstraints == nil {
+		v.SelectorConstraints = &Constraints{}
+	}
+
+	v.SelectorConstraints._criteria = v.SelectorConstraints.Criteria != nil && *v.SelectorConstraints.Criteria == true
+	v.SelectorConstraints._columns = v.SelectorConstraints.Columns != nil && *v.SelectorConstraints.Columns == true
+	v.SelectorConstraints._orderBy = v.SelectorConstraints.OrderBy != nil && *v.SelectorConstraints.OrderBy == true
+	v.SelectorConstraints._limit = v.SelectorConstraints.Limit != nil && *v.SelectorConstraints.Limit == true
+	v.SelectorConstraints._offset = v.SelectorConstraints.Offset != nil && *v.SelectorConstraints.Offset == true
+}
+
+func (v *View) CanUseClientCriteria() bool {
+	return v.SelectorConstraints._criteria
+}
+
+func (v *View) CanUseClientColumns() bool {
+	return v.SelectorConstraints._columns
+}
+
+func (v *View) CanUseClientLimit() bool {
+	return v.SelectorConstraints._limit
+}
+
+func (v *View) CanUseClientOrderBy() bool {
+	return v.SelectorConstraints._orderBy
+}
+
+func (v *View) CanUseClientOffset() bool {
+	return v.SelectorConstraints._offset
 }

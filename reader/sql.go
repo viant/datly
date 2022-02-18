@@ -86,7 +86,7 @@ func (b *Builder) Build(view *data2.View, selector *data2.Selector, batchData *B
 		hasCriteria = true
 	}
 
-	if selector != nil && selector.Criteria != nil {
+	if view.CanUseClientCriteria() && selector != nil && selector.Criteria != nil {
 		if hasCriteria {
 			sb.WriteString(" AND (")
 			sb.WriteString(selector.Criteria.Expression)
@@ -105,11 +105,11 @@ func (b *Builder) Build(view *data2.View, selector *data2.Selector, batchData *B
 	offset := 0
 
 	if selector != nil {
-		if selector.OrderBy != "" {
+		if view.CanUseClientOrderBy() && selector.OrderBy != "" {
 			orderBy = selector.OrderBy
 		}
 
-		if selector.Offset > 0 {
+		if view.CanUseClientOffset() && selector.Offset > 0 {
 			offset = selector.Offset
 		}
 	}

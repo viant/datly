@@ -3,6 +3,7 @@ package data
 import (
 	"fmt"
 	shared2 "github.com/viant/datly/shared"
+	"github.com/viant/datly/sql"
 	"github.com/viant/toolbox"
 	rdata "github.com/viant/toolbox/data"
 	"net/http"
@@ -18,8 +19,12 @@ type Session struct {
 	HttpRequest   *http.Request
 	MatchedPath   string
 
-	errors        *shared2.Errors
+	errors *shared2.Errors
+
 	pathVariables map[string]string
+	cookies       map[string]string
+	headers       map[string]string
+	queryParams   map[string]string
 }
 
 func (s *Session) DataType() reflect.Type {
@@ -46,12 +51,34 @@ func (s *Session) Init() error {
 	}
 
 	if s.HttpRequest != nil {
-		var ok bool
-		s.pathVariables, ok = toolbox.ExtractURIParameters(s.MatchedPath, s.HttpRequest.URL.Path)
+		uriParams, ok := toolbox.ExtractURIParameters(s.MatchedPath, s.HttpRequest.URL.Path)
 		if !ok {
 			return fmt.Errorf("route path doesn't match %v request URI %v", s.MatchedPath, s.HttpRequest.URL.Path)
 		}
 
+		if err := s.indexUriParams(uriParams); err != nil {
+			return err
+		}
+
+		if err := s.indexCookies(); err != nil {
+			return err
+		}
+
+		if err := s.indexHeaders(); err != nil {
+			return err
+		}
+
+		if err := s.indexQueryParams(); err != nil {
+			return err
+		}
+	}
+
+	for _, selector := range s.Selectors {
+		if selector.Criteria != nil {
+			if _, err := sql.Parse([]byte(selector.Criteria.Expression)); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -83,13 +110,72 @@ func (s *Session) Header(name string) string {
 }
 
 func (s *Session) Cookie(name string) string {
-	cookie, err := s.HttpRequest.Cookie(name)
-	if err != nil {
-		return ""
-	}
-	return cookie.Value
+	return s.cookies[name]
 }
 
 func (s *Session) PathVariable(name string) string {
 	return s.pathVariables[name]
+}
+
+func (s *Session) shouldIndexCookie(cookie *http.Cookie) bool {
+	return s.View.shouldIndexCookie(cookie)
+}
+
+func (s *Session) indexCookies() error {
+	s.cookies = make(map[string]string)
+	cookies := s.HttpRequest.Cookies()
+	for i := range cookies {
+		if s.shouldIndexCookie(cookies[i]) {
+			_, err := sql.Parse([]byte(cookies[i].Value))
+			if err != nil {
+				return err
+			}
+			s.cookies[cookies[i].Name] = cookies[i].Value
+		}
+	}
+	return nil
+}
+
+func (s *Session) indexUriParams(params map[string]string) error {
+	s.pathVariables = make(map[string]string)
+	for key, val := range params {
+		if s.View.shouldIndexUriParam(key) {
+			_, err := sql.Parse([]byte(val))
+			if err != nil {
+				return err
+			}
+			s.pathVariables[key] = val
+		}
+	}
+	return nil
+}
+
+func (s *Session) indexHeaders() error {
+	s.headers = make(map[string]string)
+	for key, val := range s.HttpRequest.Header {
+		if s.View.shouldIndexHeader(key) {
+			_, err := sql.Parse([]byte(val[0]))
+			if err != nil {
+				return err
+			}
+			s.headers[key] = val[0]
+		}
+	}
+
+	return nil
+}
+
+func (s *Session) indexQueryParams() error {
+	values := s.HttpRequest.URL.Query()
+	s.queryParams = make(map[string]string)
+	for k, val := range values {
+		if s.View.shouldIndexQueryParam(k) {
+			_, err := sql.Parse([]byte(val[0]))
+			if err != nil {
+				return err
+			}
+			s.queryParams[k] = val[0]
+		}
+	}
+	return nil
 }

@@ -23,6 +23,24 @@ func (p ParametersSlice) Index() Parameters {
 	return result
 }
 
+func (p ParametersSlice) Filter(kind Kind) Parameters {
+	result := make(map[string]*Parameter)
+
+	for parameterIndex := range p {
+		if p[parameterIndex].In.Kind != kind {
+			continue
+		}
+
+		keys := KeysOf(p[parameterIndex].In.Name, false)
+
+		for _, key := range keys {
+			result[key] = p[parameterIndex]
+		}
+	}
+
+	return result
+}
+
 //Lookup returns Parameter with given name
 func (p Parameters) Lookup(paramName string) (*Parameter, error) {
 	if param, ok := p[paramName]; ok {
