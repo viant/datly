@@ -57,6 +57,7 @@ func TestRead(t *testing.T) {
 		compTypes             map[string]reflect.Type
 		subject               string
 		request               *http.Request
+		path                  string
 	}{
 		{
 			description: "read all data with specified columns",
@@ -209,11 +210,11 @@ func TestRead(t *testing.T) {
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Name":"John","Role":""}]`,
 			request: &http.Request{
-				RequestURI: "/users/{userId}",
 				URL: &url.URL{
 					Path: "/users/1",
 				},
 			},
+			path: "/users/{userId}",
 		},
 		{
 			description: "query parameter",
@@ -224,10 +225,11 @@ func TestRead(t *testing.T) {
 			request: &http.Request{
 				RequestURI: "/languages",
 				URL: &url.URL{
-					Path:     "/languages",
 					RawQuery: "lang=en",
+					Path:     "/languages",
 				},
 			},
+			path: "/languages",
 		},
 		{
 			description: "header parameter",
@@ -296,6 +298,7 @@ func TestRead(t *testing.T) {
 			Selectors:   testCase.selectors,
 			Subject:     testCase.subject,
 			HttpRequest: testCase.request,
+			MatchedPath: testCase.path,
 		}
 
 		err = service.Read(context.TODO(), session)

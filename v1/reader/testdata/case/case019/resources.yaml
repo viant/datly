@@ -4,7 +4,7 @@ Views:
   Name: users
   Table: users
   Criteria:
-    Expression: id = ${cookie.user-id}
+    Expression: id = ${user_id}
   Parameters:
   - Ref: user_id
 

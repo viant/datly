@@ -3,7 +3,7 @@ Views:
     Ref: otherdb
   Name: languages
   Criteria:
-    Expression: code LIKE '${query.lang}%'
+    Expression: code LIKE '${language}%'
   Parameters:
   - Ref: language
 

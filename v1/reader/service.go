@@ -251,22 +251,22 @@ func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *
 
 func (s *Service) addQueryParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
 	paramValue := toolbox.QueryValue(session.HttpRequest.URL, param.In.Name, "")
-	params.SetValue(string(data.QueryKind)+"."+param.In.Name, paramValue)
+	params.SetValue(param.Name, paramValue)
 }
 
 func (s *Service) addHeaderParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
 	header := session.Header(param.In.Name)
-	params.SetValue(string(data.HeaderKind)+"."+param.In.Name, header)
+	params.SetValue(param.Name, header)
 }
 
 func (s *Service) addCookieParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
 	cookie := session.Cookie(param.In.Name)
-	params.SetValue(string(data.CookieKind)+"."+param.In.Name, cookie)
+	params.SetValue(param.Name, cookie)
 }
 
 func (s *Service) addPathParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
 	pathVariable := session.PathVariable(param.In.Name)
-	params.SetValue(string(data.PathKind)+"."+param.In.Name, pathVariable)
+	params.SetValue(param.Name, pathVariable)
 }
 
 //New creates Service instance

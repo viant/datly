@@ -4,7 +4,7 @@ Views:
   Name: users
   Table: users
   Criteria:
-    Expression: name LIKE '${header.user-name}%'
+    Expression: name LIKE '${user_name}%'
   Parameters:
   - Ref: user_name
 

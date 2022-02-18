@@ -57,13 +57,6 @@ func (r *Resource) View(view string) (*View, error) {
 	return r._views.Lookup(view)
 }
 
-//
-//func (r *Resource) AddAndIncrement() int {
-//	indexView := r.indexView
-//	r.indexView++
-//	return indexView
-//}
-
 func NewResourceFromURL(ctx context.Context, url string, types Types) (*Resource, error) {
 	fs := afs.New()
 	data, err := fs.DownloadWithURL(ctx, url)
@@ -93,8 +86,3 @@ func NewResourceFromURL(ctx context.Context, url string, types Types) (*Resource
 
 	return resource, err
 }
-
-// Event -> Event type -> Account -> data_acl
-// Employee -> data_acl
-//NewSession.allocate() 2
-//NewSession.allocate() 4

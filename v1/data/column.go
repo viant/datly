@@ -12,6 +12,7 @@ type Column struct {
 	Name       string `json:",omitempty"`
 	DataType   string `json:",omitempty"`
 	Expression string `json:",omitempty"`
+	Filterable bool   `json:",omitempty"`
 
 	rType         reflect.Type
 	sqlExpression string

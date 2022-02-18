@@ -16,6 +16,7 @@ type Session struct {
 	AllowUnmapped bool
 	Subject       string
 	HttpRequest   *http.Request
+	MatchedPath   string
 
 	errors        *shared.Errors
 	pathVariables map[string]string
@@ -46,9 +47,9 @@ func (s *Session) Init() error {
 
 	if s.HttpRequest != nil {
 		var ok bool
-		s.pathVariables, ok = toolbox.ExtractURIParameters(s.HttpRequest.RequestURI, s.HttpRequest.URL.Path)
+		s.pathVariables, ok = toolbox.ExtractURIParameters(s.MatchedPath, s.HttpRequest.URL.Path)
 		if !ok {
-			return fmt.Errorf("route path doesn't match %v request URI %v", s.HttpRequest.RequestURI, s.HttpRequest.URL.Path)
+			return fmt.Errorf("route path doesn't match %v request URI %v", s.MatchedPath, s.HttpRequest.URL.Path)
 		}
 
 	}

@@ -26,9 +26,11 @@ type View struct {
 	Columns    []*Column `json:",omitempty"`
 	CaseFormat string    `json:",omitempty"`
 
-	Criteria   *Criteria    `json:",omitempty"`
-	Selector   *Config      `json:",omitempty"`
-	Parameters []*Parameter `json:",omitempty"`
+	Criteria *Criteria `json:",omitempty"`
+
+	Selector            *Config      `json:",omitempty"`
+	SelectorConstraints *Constraints `json:",omitempty"`
+	Parameters          []*Parameter `json:",omitempty"`
 
 	Prefix string  `json:",omitempty"`
 	Schema *Schema `json:",omitempty"`
@@ -47,6 +49,17 @@ type View struct {
 	isValid      bool
 	typeRebuilt  bool
 	newCollector func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector
+}
+
+type Constraints struct {
+	Criteria  *bool
+	_criteria bool
+	OrderBy   *bool
+	_orderBy  bool
+	Limit     *bool
+	_limit    bool
+	Columns   *bool
+	_columns  bool
 }
 
 //DataType returns struct type.
