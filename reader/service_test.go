@@ -5,452 +5,322 @@ import (
 	"encoding/json"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/viant/afs"
-	"github.com/viant/datly/base/contract"
-	"github.com/viant/datly/cache"
-	"github.com/viant/datly/cache/storage"
-	"github.com/viant/datly/config"
-	"github.com/viant/datly/data"
-	"github.com/viant/datly/shared"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
+	data2 "github.com/viant/datly/data"
 	"github.com/viant/dsunit"
 	"github.com/viant/toolbox"
 	"net/http"
 	"net/url"
 	"path"
+	"reflect"
 	"testing"
+	"time"
 )
 
-func TestService_Read(t *testing.T) {
+func TestRead(t *testing.T) {
+	type Event struct {
+		ID          int
+		EventTypeID int
+		Quantity    float64
+		Timestamp   time.Time
+	}
+
+	type Foo struct {
+		Id   int
+		Name string
+	}
+
+	type Language struct {
+		Id   int
+		Code string
+	}
+
+	type Article struct {
+		Id       int
+		Content  string
+		LangId   int
+		Language Language
+	}
 
 	testLocation := toolbox.CallerDirectory(3)
-	basePath := path.Join(testLocation, "test/cases/")
-	connectorURL := path.Join(basePath, "connectors")
 
 	var useCases = []struct {
-		description    string
-		config         *config.Config
-		hasConfigError bool
-		hasReadError   bool
-		visitor        string
-		visit          data.Visit
-		cachePath      string
-		caseDataPath   string
-		request        *Request
-		expect         interface{}
+		selectors   data2.Selectors
+		description string
+		dataURI               string
+		expect                string
+		dest                  interface{}
+		errorOnClientSelector bool
+		view        string
+		options     Options
+		compTypes   map[string]reflect.Type
+		subject               string
+		request               *http.Request
+		path                  string
 	}{
 		{
-			description:  "basic data read",
-			caseDataPath: "/case001/",
-			config: &config.Config{
-				Connectors: config.Connectors{
-					URL: connectorURL,
-				},
-				Rules: config.Rules{
-					URL: path.Join(basePath, "case001/rule"),
-				},
+			description: "read all data with specified columns",
+			dataURI:     "case001/",
+			dest:        new([]*Event),
+			view:        "events",
+			expect:      `[{"ID":1,"EventTypeID":2,"Quantity":33.23432374000549,"Timestamp":"0001-01-01T00:00:00Z"},{"ID":10,"EventTypeID":11,"Quantity":21.957962334156036,"Timestamp":"0001-01-01T00:00:00Z"},{"ID":100,"EventTypeID":111,"Quantity":5.084940046072006,"Timestamp":"0001-01-01T00:00:00Z"}]`,
+			compTypes: map[string]reflect.Type{
+				"events": reflect.TypeOf(&Event{}),
 			},
-			request: &Request{
-				Request: contract.Request{
-					TraceID: "case 001",
-					Path:    "/case001/",
-				},
-			},
-
-			expect: `{
-	  "Status": "ok",
-	  "Data": {
-		"@length@events": 11,
-		"@assertPath@events[0].id": 1
-	  }
-}`,
-		},
-
-		{
-			description:  "data view bindingData",
-			caseDataPath: "/case002/",
-			config: &config.Config{
-				Connectors: config.Connectors{
-					URL: connectorURL,
-				},
-				Rules: config.Rules{
-					URL: path.Join(basePath, "case002/rule"),
-				},
-			},
-			request: &Request{
-				Request: contract.Request{
-					TraceID: "case 002",
-					Path:    "/case002/36/blah",
-				},
-			},
-
-			expect: `{
-	  "Status": "ok",
-	  "Data": {
-		"@length@events": 5,
-		"@assertPath@events[0].id": 4
-	  }
-}`,
 		},
 		{
-			description:  "multi data selection",
-			caseDataPath: "/case003/",
-			config: &config.Config{
-				Connectors: config.Connectors{
-					URL: connectorURL,
-				},
-				Rules: config.Rules{
-					URL: path.Join(basePath, "case003/rule"),
-				},
-			},
-			request: &Request{
-				Request: contract.Request{
-					TraceID: "case 003",
-					Path:    "/case003/",
-				},
-			},
-
-			expect: `{
-	  "Status": "ok",
-	  "Data": {
-		"@length@events": 11,
-		"@length@types": 5,
-		"@assertPath@events[0].id": 1
-	  }
-}`,
-		},
-
-		{
-			description:  "query selector",
-			caseDataPath: "/case004/",
-			config: &config.Config{
-				Connectors: config.Connectors{
-					URL: connectorURL,
-				},
-				Rules: config.Rules{
-					URL: path.Join(basePath, "case004/rule"),
-				},
-			},
-			request: &Request{
-				Request: contract.Request{
-					TraceID: "case 004",
-					Path:    "/case004/",
-					QueryParams: url.Values{
-						"_fields":  []string{"id,timestamp"},
-						"_orderBy": []string{"timestamp"},
-						"_limit":   []string{"3"},
-						"_offset":  []string{"1"},
-					},
-				},
-			},
-
-			expect: `{
-	  "Status": "ok",
-	  "Data": {
-		"@length@events": 3,
-		"@assertPath@events[0].id": 6
-	  }
-}`,
+			description: "read all data with specified columns",
+			dataURI:     "case002/",
+			dest:        new(interface{}),
+			view:        "events",
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 		},
 		{
-			description:  "selector criteria",
-			caseDataPath: "/case005/",
-			config: &config.Config{
-				Connectors: config.Connectors{
-					URL: connectorURL,
-				},
-				Rules: config.Rules{
-					URL: path.Join(basePath, "case005/rule"),
-				},
-			},
-			request: &Request{
-				Request: contract.Request{
-					TraceID: "case 005",
-					Path:    "/case005/",
-					Headers: http.Header{
-						"User-Id": []string{
-							"2",
-						},
-					},
-					QueryParams: url.Values{
-						"_criteria": []string{"quantity > 10"},
-					},
-				},
-			},
-
-			expect: `{
-	  "Status": "ok",
-	  "Data": {
-		"@length@events": 2,
-		"@assertPath@events[0].id": 7
-	  }
-}`,
+			description: "excluded columns",
+			dataURI:     "case003/",
+			dest:        new(interface{}),
+			view:        "events",
+			expect:      `[{"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1},{"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2},{"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3}]`,
 		},
-
 		{
-			description:  "multi selector",
-			caseDataPath: "/case006/",
-			config: &config.Config{
-				Connectors: config.Connectors{
-					URL: connectorURL,
-				},
-				Rules: config.Rules{
-					URL: path.Join(basePath, "case006/rule"),
-				},
-			},
-			request: &Request{
-				Request: contract.Request{
-					TraceID: "case 006",
-					Path:    "/case006/",
-					QueryParams: url.Values{
-						"_fields":      []string{"id,timestamp"},
-						"_limit":       []string{"3"},
-						"types_fields": []string{"id,name"},
-						"types_limit":  []string{"3"},
-					},
+			description: "more complex selector",
+			dataURI:     "case004/",
+			view:        "events",
+			dest:        new(interface{}),
+			expect:      `[{"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2},{"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3}]`,
+			selectors: map[string]*data2.Selector{
+				"events": {
+					Offset: 1,
 				},
 			},
-
-			expect: `{
-	  "Status": "ok",
-	  "Data": {
-		"@length@events": 3,
-		"@length@event_types": 3
-	  }
-}`,
 		},
-
 		{
-			description:  "one to many reference",
-			caseDataPath: "/case007/",
-			config: &config.Config{
-				Connectors: config.Connectors{
-					URL: connectorURL,
-				},
-				Rules: config.Rules{
-					URL: path.Join(basePath, "case007/rule"),
-				},
+			description: "read unmapped",
+			dataURI:     "case005/",
+			view:        "foos",
+			dest:        new([]*Foo),
+			options: Options{
+				AllowUnmapped(true),
 			},
-			request: &Request{
-				Request: contract.Request{
-					TraceID: "case 007",
-					Path:    "/case007/",
-					QueryParams: url.Values{
-						"_criteria": []string{"account_id IN(33, 37)"},
-					},
-				},
+			expect: `[{"Id":1,"Name":"foo"},{"Id":2,"Name":"another foo"},{"Id":3,"Name":"yet another foo"}]`,
+			compTypes: map[string]reflect.Type{
+				"foo": reflect.TypeOf(&Foo{}),
 			},
-
-			expect: `{
-	  "Status": "ok",
-	  "Data": {
-		"@length@event_types": 3,
-		"@assertPath@event_types[0].account.id": 33
-	  }
-}`,
 		},
-
 		{
-			description:  "one to one reference",
-			caseDataPath: "/case008/",
-			config: &config.Config{
-				Connectors: config.Connectors{
-					URL: connectorURL,
-				},
-				Rules: config.Rules{
-					URL: path.Join(basePath, "case008/rule"),
-				},
+			description: "columns expression",
+			dataURI:     "case006/",
+			view:        "foos",
+			dest:        new([]*Foo),
+			expect:      `[{"Id":1,"Name":"FOO"},{"Id":2,"Name":"ANOTHER FOO"},{"Id":3,"Name":"YET ANOTHER FOO"}]`,
+			compTypes: map[string]reflect.Type{
+				"foo": reflect.TypeOf(&Foo{}),
 			},
-			request: &Request{
-				Request: contract.Request{
-					TraceID: "case 008",
-					Path:    "/case008/events/1",
-				},
-			},
-
-			expect: `{
-	  "Status": "ok",
-	  "Data": {
-		"@length@events": 1
-	  }
-}`,
 		},
-
 		{
-			description:  "read with visitor",
-			caseDataPath: "/case009/",
-			visitor:      "EventColors",
-			visit: func(ctx *data.Context, object *data.Value) (b bool, err error) {
-				quantity, err := object.FloatValue("quantity")
-				if err != nil || quantity == nil {
-					return true, err
-				}
-				if *quantity > 10 {
-					object.SetValue("color", "orange")
-				} else {
-					object.SetValue("color", "green")
-				}
-				return true, nil
-			},
-			config: &config.Config{
-				Connectors: config.Connectors{
-					URL: connectorURL,
-				},
-				Rules: config.Rules{
-					URL: path.Join(basePath, "case009/rule"),
+			description: "custom selector",
+			dataURI:     "case007/",
+			view:        "events",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Quantity":33.23432374000549},{"Id":10,"Quantity":21.957962334156036},{"Id":100,"Quantity":5.084940046072006}]`,
+			selectors: map[string]*data2.Selector{
+				"events": {
+					Columns: []string{"id", "quantity"},
+					OrderBy: "id",
+					Offset:  0,
+					Limit:   0,
 				},
 			},
-			request: &Request{
-				Request: contract.Request{
-					TraceID: "case 009",
-					Path:    "/case009/",
-				},
-			},
-
-			expect: `{
-	  "Status": "ok",
-	  "Data": {
-		"@length@events": 11,
-		"@assertPath@events[0].id": 1,
-		"@assertPath@events[0].color": "orange"
-	  }
-}`,
 		},
-
 		{
-			description:  "read with cache",
-			caseDataPath: "/case010/",
-			cachePath:    "mem://localhost/cache",
-			config: &config.Config{
-				Connectors: config.Connectors{
-					URL: connectorURL,
-				},
-				Rules: config.Rules{
-					URL: path.Join(basePath, "case010/rule"),
-				},
-			},
-			request: &Request{
-				Request: contract.Request{
-					TraceID: "case 010",
-					Path:    "/case010/",
-				},
-			},
-
-			expect: `{
-	  "Status": "ok",
-	  "Data": {
-		"@length@events": 11,
-		"@assertPath@events[0].id": 1
-	  }
-}`,
+			description: "one to one, include false",
+			dataURI:     "case008/",
+			view:        "event_event-types",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventType":null,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventType":{"Id":11,"Name":"type 2","AccountId":33},"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventType":{"Id":111,"Name":"type 3","AccountId":36},"Quantity":5.084940046072006,"UserId":3}]`,
 		},
-
 		{
-			description:  "omit empty",
-			caseDataPath: "/case011/",
-			config: &config.Config{
-				Connectors: config.Connectors{
-					URL: connectorURL,
-				},
-				Rules: config.Rules{
-					URL: path.Join(basePath, "case011/rule"),
-				},
-			},
-			request: &Request{
-				Request: contract.Request{
-					TraceID: "case 011",
-					Path:    "/case011/",
-				},
-			},
-
-			expect: `{
-	  "Status": "ok",
-	  "Data": {
-		"@length@events": 11,
-		"@assertPath@events[0].id": 1,
-		"@assertPath@events[0].quantity": "@!exists@"
-	  }
-}`,
+			dataURI:     "case009/",
+			view:        "users_accounts",
+			description: "many to one",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Name":"John","Accounts":[{"Id":1,"Name":"John account","UserId":1},{"Id":3,"Name":"Another John account","UserId":1}]},{"Id":2,"Name":"David","Accounts":[{"Id":2,"Name":"Anna account","UserId":2}]},{"Id":3,"Name":"Anna","Accounts":null}]`,
 		},
-
 		{
-			description:  "case format",
-			caseDataPath: "/case012/",
-			config: &config.Config{
-				Connectors: config.Connectors{
-					URL: connectorURL,
-				},
-				Rules: config.Rules{
-					URL: path.Join(basePath, "case012/rule"),
+			description: "one to one, include join column true",
+			dataURI:     "case010/",
+			view:        "event_event-types",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventType":null,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventType":{"Id":11,"Name":"type 2","AccountId":33},"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventType":{"Id":111,"Name":"type 3","AccountId":36},"Quantity":5.084940046072006,"UserId":3}]`,
+		},
+		{
+			dataURI:     "case011/",
+			view:        "users_accounts",
+			description: "parameters",
+			dest:        new(interface{}),
+			expect:      `[{"Id":4,"Name":"Kamil","Role":"ADMIN"},{"Id":5,"Name":"Bob","Role":"ADMIN"}]`,
+			subject:     "Kamil",
+		},
+		{
+			description: "read all strategy, one to one",
+			dataURI:     "case012/",
+			view:        "event_event-types",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventType":null,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventType":{"Id":11,"Name":"type 2","AccountId":33},"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventType":{"Id":111,"Name":"type 3","AccountId":36},"Quantity":5.084940046072006,"UserId":3}]`,
+		},
+		{
+			description: "read all strategy, many to one",
+			dataURI:     "case013/",
+			view:        "users_accounts",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Name":"John","Accounts":[{"Id":1,"Name":"John account","UserId":1},{"Id":3,"Name":"Another John account","UserId":1}]},{"Id":2,"Name":"David","Accounts":[{"Id":2,"Name":"Anna account","UserId":2}]},{"Id":3,"Name":"Anna","Accounts":null}]`,
+		},
+		{
+			description: "read all strategy, batch size",
+			dataURI:     "case014/",
+			view:        "articles_languages",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Content":"Lorem ipsum","Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","Language":{"Id":9,"Code":"zh-CN"}}]`,
+		},
+		{
+			description: "T type one to one relation",
+			dataURI:     "case015/",
+			view:        "articles_languages",
+			dest:        new([]Article),
+			expect:      `[{"Id":1,"Content":"Lorem ipsum","LangId":2,"Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","LangId":12,"Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","LangId":13,"Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","LangId":9,"Language":{"Id":9,"Code":"zh-CN"}},{"Id":5,"Content":"content without lang","LangId":0,"Language":{"Id":0,"Code":""}}]`,
+			compTypes: map[string]reflect.Type{
+				"article": reflect.TypeOf(Article{}),
+			},
+		},
+		{
+			description: "T type one to one relation",
+			dataURI:     "case015/",
+			view:        "articles_languages",
+			dest:        new([]Article),
+			expect:      `[{"Id":1,"Content":"Lorem ipsum","LangId":2,"Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","LangId":12,"Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","LangId":13,"Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","LangId":9,"Language":{"Id":9,"Code":"zh-CN"}},{"Id":5,"Content":"content without lang","LangId":0,"Language":{"Id":0,"Code":""}}]`,
+			compTypes: map[string]reflect.Type{
+				"article": reflect.TypeOf(Article{}),
+			},
+		},
+		{
+			description: "path parameter",
+			dataURI:     "case016/",
+			view:        "users",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Name":"John","Role":""}]`,
+			request: &http.Request{
+				URL: &url.URL{
+					Path: "/users/1",
 				},
 			},
-			request: &Request{
-				Request: contract.Request{
-					TraceID: "case 012",
-					Path:    "/case012/",
+			path: "/users/{userId}",
+		},
+		{
+			description: "query parameter",
+			dataURI:     "case017/",
+			view:        "languages",
+			dest:        new(interface{}),
+			expect:      `[{"Id":1,"Code":"en-GB"},{"Id":2,"Code":"en-US"}]`,
+			request: &http.Request{
+				RequestURI: "/languages",
+				URL: &url.URL{
+					RawQuery: "lang=en",
+					Path:     "/languages",
 				},
 			},
-			expect: `{
-	  "Status": "ok",
-	  "Data": {
-		"@length@events": 11,
-		"@assertPath@events[0].Id": 1,
-		"@assertPath@events[0].EventTypeId": 2
-	  }
-}`,
+			path: "/languages",
+		},
+		{
+			description: "header parameter",
+			dataURI:     "case018/",
+			view:        "users",
+			dest:        new(interface{}),
+			expect:      `[{"Id":3,"Name":"Anna","Role":""}]`,
+			request: &http.Request{
+				Header: map[string][]string{
+					"user-name": {"Anna"},
+				},
+				URL: &url.URL{},
+			},
+		},
+		{
+			description: "cookie parameter",
+			dataURI:     "case019/",
+			view:        "users",
+			dest:        new(interface{}),
+			expect:      `[{"Id":2,"Name":"David","Role":""}]`,
+			request: &http.Request{
+				Header: map[string][]string{
+					"Cookie": {"user-id=2"},
+				},
+				URL: &url.URL{},
+			},
 		},
 	}
 
-	//Set visitors
-	for _, useCase := range useCases {
-		if useCase.visitor != "" {
-			data.VisitorRegistry().Register(useCase.visitor, useCase.visit)
-		}
-		if useCase.cachePath != "" {
-			cache.Registry().Register("tmp", storage.New(useCase.cachePath, afs.New()))
-		}
-	}
-
-	for _, useCase := range useCases {
-		if !dsunit.InitFromURL(t, path.Join(testLocation, "test", "config.yaml")) {
-			return
-		}
-		initDataset := dsunit.NewDatasetResource("db", path.Join(testLocation, fmt.Sprintf("test/cases%vprepare", useCase.caseDataPath)), "", "")
-		if !dsunit.Prepare(t, dsunit.NewPrepareRequest(initDataset)) {
+	for _, testCase := range useCases {
+		if initDb(t, path.Join(testLocation, "testdata", "mydb_config.yaml"), path.Join(testLocation, fmt.Sprintf("testdata/case/populate_mydb")), "db") {
 			return
 		}
 
-		ctx := context.Background()
-		srv, err := New(ctx, useCase.config)
-		if useCase.hasConfigError {
-			assert.NotNil(t, err, useCase.description)
-			continue
-		}
-		if !assert.Nil(t, err, useCase.description) {
-			fmt.Printf("%v\n", err)
-			continue
+		if initDb(t, path.Join(testLocation, "testdata", "other_config.yaml"), path.Join(testLocation, fmt.Sprintf("testdata/case/populate_other")), "other") {
+			return
 		}
 
-		response := srv.Read(ctx, useCase.request)
-		if useCase.hasReadError {
-			assert.EqualValues(t, shared.StatusError, response.Status, useCase.description)
-			continue
-		}
-		if !assert.Nil(t, err, useCase.description) {
-			continue
+		types := data2.Types{}
+
+		for key, rType := range testCase.compTypes {
+			types.Register(key, rType)
 		}
 
-		if useCase.cachePath != "" {
-			response = srv.Read(ctx, useCase.request)
+		resource, err := data2.NewResourceFromURL(context.TODO(), path.Join(testLocation, fmt.Sprintf("testdata/case/"+testCase.dataURI+"/resources.yaml")), types)
+		if err != nil {
+			t.Fatalf(err.Error())
 		}
 
-		jsonResponse, _ := json.Marshal(response)
-		if !assertly.AssertValues(t, useCase.expect, string(jsonResponse), useCase.description) {
-			fmt.Printf("read: %s\n", jsonResponse)
-			toolbox.DumpIndent(response, false)
+		service := New(resource)
+		service.Apply(testCase.options)
+
+		dataView, err := resource.View(testCase.view)
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if (err != nil) && testCase.errorOnClientSelector {
+			t.Fatal(err)
+		}
+
+		session := &data2.Session{
+			Dest:        testCase.dest,
+			View:        dataView,
+			Selectors:   testCase.selectors,
+			Subject:     testCase.subject,
+			HttpRequest: testCase.request,
+			MatchedPath: testCase.path,
+		}
+
+		err = service.Read(context.TODO(), session)
+		assert.Nil(t, err, testCase.description)
+		b, _ := json.Marshal(testCase.dest)
+		result := string(b)
+
+		if !assertly.AssertValues(t, testCase.expect, result, testCase.description) {
+			fmt.Println(result)
+			fmt.Println(testCase.expect)
 		}
 	}
+}
 
+func initDb(t *testing.T, configPath, datasetPath, dataStore string) bool {
+	if !dsunit.InitFromURL(t, configPath) {
+		return true
+	}
+
+	initDataset := dsunit.NewDatasetResource(dataStore, datasetPath, "", "")
+	if !dsunit.Prepare(t, dsunit.NewPrepareRequest(initDataset)) {
+		return true
+	}
+	return false
 }

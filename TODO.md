@@ -1,7 +1,10 @@
-
-
-- Update documentation
-- Add hooks support (at various processing stages for behaviour customization)
-- Use JSON event driven parser
-- Add post, put,delete operations 
-- Updated deployment scripts
+* Sanitize Criteria against SQL Injection 
+* Integrate with secret manager system 
+* Documentation 
+* Endpoint integration (paths/lambda/CF/standalon/micro service/reset service, etc ..)
+  * open API documentation style
+* Caching 
+* Fetch strategy with SQL Join. 
+* Utility (rule, struct, relation generation etc ...) 
+* Patch/Create/Update
+* Metrics for Views

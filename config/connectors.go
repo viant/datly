@@ -2,96 +2,45 @@ package config
 
 import (
 	"context"
-	"github.com/pkg/errors"
-	"github.com/viant/afs"
-	"github.com/viant/afs/url"
-	"io/ioutil"
-	"path"
-	"strings"
-	"time"
+	"fmt"
 )
 
-//Connectors represents connectors pool
-type Connectors struct {
-	registry map[string]*Connector
-	URL      string
-	Loader   *Loader
+type Connectors map[string]*Connector
+
+func (v *Connectors) Register(connector *Connector) {
+	if len(*v) == 0 {
+		*v = make(map[string]*Connector)
+	}
+	(*v)[connector.Name] = connector
 }
 
-//Get returns a connector for supplied name
-func (c Connectors) Get(name string) (*Connector, error) {
-	result, ok := c.registry[name]
+func (v Connectors) Lookup(ref string) (*Connector, error) {
+	if len(v) == 0 {
+		return nil, fmt.Errorf("failed to lookup connector %v", ref)
+	}
+	ret, ok := v[ref]
 	if !ok {
-		return nil, errors.Errorf("failed to lookup connector for %v", name)
+		return nil, fmt.Errorf("failed to lookup connector %v", ref)
 	}
-	return result, nil
+	return ret, nil
 }
 
-//Init initialises connector
-func (c *Connectors) Init(ctx context.Context, fs afs.Service) error {
-	if c.URL == "" {
-		return nil
+type ConnectorSlice []*Connector
+
+func (c ConnectorSlice) Index() Connectors {
+	result := Connectors(map[string]*Connector{})
+
+	for i := range c {
+		result.Register(c[i])
 	}
-	c.Loader = NewLoader(c.URL, time.Second, fs, c.modify, c.remove)
-	_, err := c.Loader.Notify(ctx, fs)
-	return err
+	return result
 }
 
-func (c *Connectors) modify(ctx context.Context, fs afs.Service, URL string) error {
-	err := c.Load(ctx, fs, URL)
-	return err
-}
-
-func (c *Connectors) remove(ctx context.Context, fs afs.Service, URL string) error {
-	delete(c.registry, URL)
-	return nil
-}
-
-func (c *Connectors) Add(connector *Connector) error {
-	if len(c.registry) == 0 {
-		c.registry = make(map[string]*Connector)
-	}
-	err := connector.Validate()
-	if err != nil {
-		return err
-	}
-	c.registry[connector.Name] = connector
-	return nil
-}
-
-//Load load connector
-func (c *Connectors) Load(ctx context.Context, fs afs.Service, URL string) error {
-	reader, err := fs.OpenURL(ctx, URL)
-	if err != nil {
-		return errors.Wrapf(err, "failed to load resource: %v", URL)
-	}
-	defer func() {
-		_ = reader.Close()
-	}()
-	data, err := ioutil.ReadAll(reader)
-	if err != nil {
-		return err
-	}
-	return loadTarget(data, path.Ext(URL), func() interface{} {
-		return &Connector{}
-	}, func(target interface{}) error {
-		connector, ok := target.(*Connector)
-		if !ok {
-			return errors.Errorf("invalid connector type %T", target)
+func (c ConnectorSlice) Init(ctx context.Context, connectors Connectors) error {
+	for i := range c {
+		if err := c[i].Init(ctx, connectors); err != nil {
+			return err
 		}
-		connector.URL = URL
-		if connector.Name == "" {
-			connector.Name = extractBasicName(URL)
-		}
-		return c.Add(connector)
-	})
-
-}
-
-func extractBasicName(URL string) string {
-	_, name := url.Split(URL, "")
-	if index := strings.Index(name, "."); index != -1 {
-		name = string(name[:index])
 	}
-	return name
+	return nil
 }

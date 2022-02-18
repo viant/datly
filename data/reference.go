@@ -1,92 +1,117 @@
 package data
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/viant/gtly"
+	"github.com/viant/toolbox/format"
+	"github.com/viant/xunsafe"
 	"strings"
 )
 
-//Reference represents  data view reference
-type Reference struct {
-	Name        string
-	Cardinality string //One, or Many
-	DataView    string
-	On          []*ColumnMatch
-	_view       *View
-	_alias      string
-	_refIndex   gtly.Index
-	_index      gtly.Index
-}
+//Relation represents  data View reference
+type (
+	Relation struct {
+		Name string
+		Of   *ReferenceView
 
-//View returns association view
-func (r *Reference) View() *View {
-	return r._view
-}
+		Cardinality    string //One, or Many
+		Column         string //event_Type_id, employee#id
+		Holder         string //holderField holding ref,
+		IncludeColumn  bool   //tells if Column field should be in the struct type.
+		HasColumnField bool
 
-//Index returns index
-func (r *Reference) Index() gtly.Index {
-	return r._index
-}
-
-//RefIndex returns ref index
-func (r *Reference) RefIndex() gtly.Index {
-	return r._refIndex
-}
-
-//Alias returns alias
-func (r *Reference) Alias() string {
-	return r._alias
-}
-
-//RefColumns returns reference match columns
-func (r *Reference) RefColumns() []string {
-	var result = make([]string, 0)
-	for _, on := range r.On {
-		result = append(result, on.RefColumn)
+		holderField *xunsafe.Field
+		columnField *xunsafe.Field
 	}
-	return result
+
+	ReferenceView struct {
+		View          // event type
+		Column string // EventType.id
+		field  *xunsafe.Field
+	}
+
+	MatchStrategy string
+)
+
+func (s MatchStrategy) Validate() error {
+	switch s {
+	case ReadAll, ReadMatched, ReadDerived:
+		return nil
+	}
+	return fmt.Errorf("unsupported match strategy %v", s)
 }
 
-//Columns returns owner match columns
-func (r *Reference) Columns() []string {
-	var result = make([]string, 0)
-	for _, on := range r.On {
-		result = append(result, on.Column)
-	}
-	return result
+func (s MatchStrategy) SupportsParallel() bool {
+	return s == ReadAll
 }
 
-//Criteria reference criteria
-func (r *Reference) Criteria(alias string) string {
-	var result = make([]string, 0)
-	for _, on := range r.On {
-		result = append(result, fmt.Sprintf("%v.%v = %v.%v", r._alias, on.Column, alias, on.RefColumn))
+const (
+	ReadAll     MatchStrategy = "read_all"     // read all and later we match on backend side
+	ReadMatched MatchStrategy = "read_matched" // read parent data and then filter id to match with the current view
+	ReadDerived MatchStrategy = "read_derived" // use parent sql selector to add criteria to the relation view, this can only work if the connector of the relation view and parent view is the same
+)
+
+//Init initializes ReferenceView
+func (r *ReferenceView) Init(ctx context.Context, resource *Resource) error {
+	if r.View.Ref != "" {
+		view, err := resource._views.Lookup(r.View.Ref)
+		if err != nil {
+			return err
+		}
+
+		if err := view.Init(ctx, resource); err != nil {
+			return err
+		}
+		r.View.inherit(view)
 	}
-	return strings.Join(result, " AND ")
+
+	r2 := r.Schema.Type()
+	r.field = xunsafe.FieldByName(r2, r.Caser.Format(r.Column, format.CaseUpperCamel))
+	return r.Validate()
 }
 
-//Validate checks if reference is valid
-func (r Reference) Validate() error {
-	if r.Name == "" {
-		info, _ := json.Marshal(r)
-		return errors.Errorf("reference 'name' was empty for %s", info)
-	}
-	if err := ValidateCardinality(r.Cardinality); err != nil {
-		return errors.Wrapf(err, "invalid reference: %v", r.Name)
-	}
-	if r.DataView == "" {
-		return errors.Errorf("reference 'dataView' was empty for %v", r.Name)
-	}
-	if len(r.On) == 0 {
-		return errors.Errorf("reference 'on' criteria was empty for %v", r.Name)
+//Validate checks if ReferenceView is valid
+func (r *ReferenceView) Validate() error {
+	if r.Column == "" {
+		return fmt.Errorf("reference column can't be empty")
 	}
 	return nil
 }
 
-//ColumnMatch represents a column match
-type ColumnMatch struct {
-	Column    string
-	RefColumn string
+//Init initializes Relation
+func (r *Relation) Init(ctx context.Context, resource *Resource) error {
+	if err := r.Of.Init(ctx, resource); err != nil {
+		return err
+	}
+
+	return r.Validate()
+}
+
+//Validate checks if Relation is valid
+func (r *Relation) Validate() error {
+	if r.Cardinality != "Many" && r.Cardinality != "One" {
+		return fmt.Errorf("cardinality has to be Many or One")
+	}
+
+	if r.Column == "" {
+		return fmt.Errorf("column can't be empty")
+	}
+
+	if r.Of == nil {
+		return fmt.Errorf("relation of can't be nil")
+	}
+
+	if r.Holder == "" {
+		return fmt.Errorf("refHolder can't be empty")
+	}
+
+	if strings.Title(r.Holder)[0] != r.Holder[0] {
+		return fmt.Errorf("holder has to start with uppercase")
+	}
+
+	if r.Of.field == nil {
+		return fmt.Errorf("could not fount holderField with name: %v", r.Of.Caser.Format(r.Column, format.CaseUpperCamel))
+	}
+
+	return nil
 }

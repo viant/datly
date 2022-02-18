@@ -2,357 +2,477 @@ package data
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/viant/afs"
-	"github.com/viant/datly/cache"
-	"github.com/viant/gtly"
-	"github.com/viant/toolbox/data"
+	"github.com/viant/datly/config"
+	"github.com/viant/datly/shared"
+	"github.com/viant/sqlx/io"
+	"github.com/viant/toolbox/format"
+	"github.com/viant/xunsafe"
+	"reflect"
 	"strings"
 )
 
-//View represents a data view
+//View represents a data View
 type View struct {
-	Connector  string
-	Name       string
-	Alias      string        `json:",omitempty"`
-	Table      string        `json:",omitempty"`
-	From       *From         `json:",omitempty"`
-	Criteria   *Criteria     `json:",omitempty"`
-	Selector   Selector      `json:",omitempty"`
-	Joins      []*Join       `json:",omitempty"`
-	Refs       []*Reference  `json:",omitempty"`
-	Params     []interface{} `json:",omitempty"`
-	CaseFormat string        `json:",omitempty"`
-	HideRefIDs bool          `json:",omitempty"`
+	shared.Reference
+	Connector *config.Connector
+	Name      string
+	Alias     string `json:",omitempty"`
+	Table     string `json:",omitempty"`
+	From      string `json:",omitempty"`
 
-	PrimaryKey    []string     `json:",omitempty"`
-	Mutable       *bool        `json:",omitempty"`
-	Columns       []*Column    `json:",omitempty"`
-	Parameters    []*Parameter `json:",omitempty"`
-	Cache         *Cache       `json:",omitempty"`
-	OnRead        *Visitor     `json:",omitempty"`
-	OnPath        *Visitor     `json:",omitempty"`
-	_cacheService cache.Service
+	Exclude    []string  `json:",omitempty"`
+	Columns    []*Column `json:",omitempty"`
+	CaseFormat string    `json:",omitempty"`
+
+	Criteria *Criteria `json:",omitempty"`
+
+	Selector            *Config      `json:",omitempty"`
+	SelectorConstraints *Constraints `json:",omitempty"`
+	Parameters          []*Parameter `json:",omitempty"`
+
+	Prefix string  `json:",omitempty"`
+	Schema *Schema `json:",omitempty"`
+
+	With       []*Relation `json:",omitempty"`
+	ParamField *xunsafe.Field
+
+	MatchStrategy MatchStrategy `json:",omitempty"`
+	BatchReadSize *int          `json:",omitempty"`
+
+	_columns  map[string]*Column
+	_excluded map[string]bool
+
+	Caser        format.Case `json:",omitempty"`
+	initialized  bool
+	isValid      bool
+	typeRebuilt  bool
+	newCollector func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector
 }
 
-//Cacher returns a cache service
-func (v *View) Cacher() cache.Service {
-	return v._cacheService
+type Constraints struct {
+	Criteria  *bool
+	_criteria bool
+	OrderBy   *bool
+	_orderBy  bool
+	Limit     *bool
+	_limit    bool
+	Columns   *bool
+	_columns  bool
 }
 
-//Clone creates a view clone
-func (v *View) Clone() *View {
-	return &View{
-		Connector:  v.Connector,
-		Name:       v.Name,
-		Alias:      v.Alias,
-		Table:      v.Table,
-		PrimaryKey: v.PrimaryKey,
-		Mutable:    v.Mutable,
-		From:       v.From,
-		Columns:    v.Columns,
-		Parameters: v.Parameters,
-		Criteria:   v.Criteria,
-		Selector:   v.Selector,
-		Refs:       v.Refs,
-		Params:     v.Params,
-		CaseFormat: v.CaseFormat,
-		HideRefIDs: v.HideRefIDs,
-		OnRead:     v.OnRead,
-	}
+//DataType returns struct type.
+func (v *View) DataType() reflect.Type {
+	return v.Schema.Type()
 }
 
-//MergeFrom merges from template view
-func (v *View) MergeFrom(tmpl *View) {
-	if v.From == nil {
-		v.From = tmpl.From
-	}
-	if v.Table == "" {
-		v.Table = tmpl.Table
-	}
-	if len(v.PrimaryKey) == 0 {
-		v.PrimaryKey = tmpl.PrimaryKey
-	}
-	if v.Mutable == nil {
-		v.Mutable = tmpl.Mutable
-	}
-	if v.CaseFormat == "" {
-		v.CaseFormat = tmpl.CaseFormat
-	}
-	if v.HideRefIDs {
-		v.HideRefIDs = tmpl.HideRefIDs
-	}
-	if v.Alias == "" {
-		v.Alias = tmpl.Alias
-	}
-	if v.Connector == "" {
-		v.Connector = tmpl.Connector
-	}
-
-	if len(v.Columns) == 0 {
-		v.Columns = tmpl.Columns
-	}
-	if len(v.Refs) == 0 {
-		v.Refs = tmpl.Refs
-	}
-	if len(v.Parameters) == 0 {
-		v.Parameters = tmpl.Parameters
-	}
-	if len(v.Joins) == 0 {
-		v.Joins = tmpl.Joins
-	}
-	if len(v.Params) == 0 {
-		v.Params = tmpl.Params
-	}
-	if v.Criteria == nil {
-		v.Criteria = tmpl.Criteria
-	}
-	if v.OnRead == nil {
-		v.OnRead = tmpl.OnRead
-	}
-}
-
-//IsMutable returns true if mutable
-func (v *View) IsMutable() bool {
-	if v.Mutable == nil {
-		return false
-	}
-	return *v.Mutable
-}
-
-//AddJoin add join
-func (v *View) AddJoin(join *Join) {
-	v.Joins = append(v.Joins, join)
-}
-
-//LoadSQL loads fromSQL
-func (v *View) LoadSQL(ctx context.Context, fs afs.Service, parentURL string) error {
-	if v.From == nil {
+func (v *View) Init(ctx context.Context, resource *Resource) error {
+	if v.initialized {
 		return nil
 	}
-	if err := v.From.Fragment.LoadSQL(ctx, fs, parentURL); err != nil {
+
+	err := v.init(ctx, resource)
+	if err == nil {
+		v.initialized = true
+	}
+
+	return err
+}
+
+func (v *View) init(ctx context.Context, resource *Resource) error {
+	if v.Name == v.Ref {
+		return fmt.Errorf("view name and ref cannot be the same")
+	}
+
+	if v.Name == "" {
+		return fmt.Errorf("view name was empty")
+	}
+
+	if v.Ref != "" {
+		view, err := resource._views.Lookup(v.Ref)
+		if err != nil {
+			return err
+		}
+
+		err = view.Init(ctx, resource)
+		if err != nil {
+			return err
+		}
+
+		v.inherit(view)
+	}
+	if v.Selector == nil {
+		v.Selector = &Config{}
+	}
+	//v.destIndex = resource.AddAndIncrement()
+	v.Alias = notEmptyOf(v.Alias, "t")
+	if v.Connector == nil {
+		return fmt.Errorf("connector was empty")
+	}
+
+	var err error
+	if err = v.Connector.Init(ctx, resource._connectors); err != nil {
 		return err
 	}
 
-	var fragments = data.NewMap()
-	if len(v.From.Fragments) > 0 {
-		for _, fragment := range v.From.Fragments {
-			if err := fragment.LoadSQL(ctx, fs, parentURL); err != nil {
-				return err
-			}
-			fragments[fragment.Key] = fragments.ExpandAsText(fragment.SQL)
-		}
-	}
-	v.From.SQL = fragments.ExpandAsText(v.From.SQL)
-	return nil
-}
-
-//Validate checks if view is valid
-func (v View) Validate() error {
-	if v.Table == "" && (v.From == nil || v.From.SQL == "") {
-		return errors.Errorf("table was empty")
-	}
-	if v.Connector == "" {
-		return errors.Errorf("connector was empty")
-	}
-	if len(v.Parameters) > 0 {
-		for i := range v.Parameters {
-			if err := v.Parameters[i].Validate(); err != nil {
-				return err
-			}
-		}
-	}
-	if len(v.Refs) > 0 {
-		for i := range v.Refs {
-			if err := v.Refs[i].Validate(); err != nil {
-				return err
-			}
-		}
-	}
-	if v.CaseFormat != "" {
-		if err := gtly.ValidateCaseFormat(v.CaseFormat); err != nil {
-			return errors.Wrapf(err, "invalid view: %v", v.Name)
-		}
+	if err = v.Connector.Validate(); err != nil {
+		return err
 	}
 
-	if v.Mutable != nil && *v.Mutable {
-		if len(v.PrimaryKey) == 0 {
-			return errors.Errorf("primaryKey was empty on data view %v", v.Name)
-		}
-		if v.Table == "" {
-			return errors.Errorf("table was empty on data view %v", v.Name)
-		}
+	if v.Table == "" {
+		v.Table = v.Name
 	}
+
+	v.ensureIndexExcluded()
+
+	if err = v.ensureColumns(ctx); err != nil {
+		return err
+	}
+	v._columns = Columns(v.Columns).Index()
+	if err = v.initRelations(ctx, resource); err != nil {
+		return err
+	}
+
+	if err := v.ensureCaseFormat(); err != nil {
+		return err
+	}
+	v.ensureSchema(resource.types)
+	if err = v.initParams(ctx, resource); err != nil {
+		return err
+	}
+
+	v.ensureCollector()
+	if err = v.initHolders(); err != nil {
+		return err
+	}
+
+	if v.MatchStrategy == "" {
+		v.MatchStrategy = ReadMatched
+	}
+
+	if err = v.MatchStrategy.Validate(); err != nil {
+		return err
+	}
+
+	v.propagateTypeIfNeeded()
 
 	return nil
 }
 
-//Init initializes view
-func (v *View) Init(setPrefix bool) error {
-
-	if v.Name == "" && v.Table != "" {
-		v.Name = v.Table
-	}
-	if v.Alias == "" {
-		v.Alias = "t"
-	}
-	if setPrefix && v.Selector.Prefix == "" {
-		v.Selector.Prefix = v.Name
-	}
-	if len(v.Parameters) > 0 {
-		for i := range v.Parameters {
-			v.Parameters[i].Init()
-		}
+func (v *View) initRelations(ctx context.Context, resource *Resource) error {
+	var err error
+	if len(v.With) == 0 {
+		return nil
 	}
 
-	if v.OnRead != nil {
-		if err := v.OnRead.Init(); err != nil {
+	for i := range v.With {
+
+		err = v.With[i].Init(ctx, resource)
+		if err != nil {
 			return err
 		}
-	}
-	if v.Cache != nil && v.Cache.Service != "" {
-		var err error
-		if v._cacheService, err = cache.Registry().Get(v.Cache.Service); err != nil {
-			return err
-		}
-		v.Cache.Init()
-	}
-	//If primary key is specified set mutable flag be default
-	if isMutable := len(v.PrimaryKey) > 0; isMutable && v.Mutable == nil {
-		v.Mutable = &isMutable
+
 	}
 	return nil
 }
 
-const (
-	projectionKey = "projection"
-	fromKey       = "from"
-	aliasKey      = "alias"
-	criteriaKey   = "criteria"
-	joinsKey      = "joins"
-	limitKey      = "limit"
-	orderByKey    = "orderBy"
-	sqlTemplate   = `SELECT $projection 
-FROM $from ${alias}${joins}${criteria}${orderBy}${limit}`
-)
-
-//BuildSQL build data view FromFragments
-func (v View) BuildSQL(selector *Selector, bindings map[string]interface{}) (string, []interface{}, error) {
-	projection := v.buildSQLProjection(selector)
-	from := v.buildSQLFom(bindings)
-	orderBy := v.buildSQLOrderBy(selector)
-	criteria, parameters := v.buildSQLCriteria(selector, bindings)
-	limit := v.buildSQLLimit(selector, bindings)
-	joins := v.buildSQLJoins(selector, bindings)
-
-	var replacements = data.NewMap()
-	replacements.Put(projectionKey, projection)
-	replacements.Put(fromKey, from)
-	replacements.Put(aliasKey, v.Alias)
-	replacements.Put(criteriaKey, criteria)
-	replacements.Put(limitKey, limit)
-	replacements.Put(orderByKey, orderBy)
-	replacements.Put(joinsKey, joins)
-	SQL := replacements.ExpandAsText(sqlTemplate)
-	return SQL, parameters, nil
-}
-
-func (v View) buildSQLFom(bindings data.Map) string {
-	from := v.Table
-	if v.From != nil && v.From.SQL != "" {
-		from = "(" + v.From.SQL + ")"
+func (v *View) ensureColumns(ctx context.Context) error {
+	if len(v.Columns) != 0 {
+		return Columns(v.Columns).Init()
 	}
-	return bindings.ExpandAsText(from)
+
+	db, err := v.Connector.Db()
+	if err != nil {
+		return err
+	}
+
+	query, err := db.QueryContext(ctx, "SELECT * FROM "+v.Source()+" WHERE 1=2")
+	if err != nil {
+		return err
+	}
+
+	types, err := query.ColumnTypes()
+	if err != nil {
+		return err
+	}
+
+	ioColumns := v.exclude(io.TypesToColumns(types))
+	v.Columns = convertIoColumnsToColumns(ioColumns)
+	return nil
 }
 
-func (v View) buildSQLProjection(selector *Selector) string {
-	projection := v.Alias + ".*"
+func convertIoColumnsToColumns(ioColumns []io.Column) []*Column {
+	columns := make([]*Column, 0)
+	for i := 0; i < len(ioColumns); i++ {
+		columns = append(columns, &Column{
+			Name:     ioColumns[i].Name(),
+			DataType: ioColumns[i].ScanType().Name(),
+			rType:    ioColumns[i].ScanType(),
+		})
+	}
+	return columns
+}
 
-	if len(selector.Columns) > 0 {
-		var columns = make([]string, 0)
-		for i := range selector.Columns {
-			columns = append(columns, fmt.Sprintf("\t%v.%v", v.Alias, selector.Columns[i]))
+func (v *View) ColumnByName(name string) (*Column, bool) {
+	v.createColumnMapIfNeeded()
+
+	if column, ok := v._columns[name]; ok {
+		return column, true
+	}
+
+	return nil, false
+}
+
+func (v *View) Source() string {
+	if v.From != "" {
+		return v.From
+	}
+
+	if v.Table != "" {
+		return v.Table
+	}
+
+	return v.Name
+}
+
+func (v *View) ensureSchema(types Types) {
+	if v.Schema == nil {
+		v.Schema = &Schema{
+			Name: v.Name,
 		}
-		projection = strings.Join(columns, ",\n")
 	}
-	return projection
+
+	if v.Schema.Name != "" {
+		componentType := types.Lookup(v.Schema.Name)
+		if componentType != nil {
+			v.Schema.setType(componentType)
+		}
+	}
+
+	v.Schema.Init(v.Columns, v.With, v.Caser)
 }
 
-func (v View) buildSQLOrderBy(selector *Selector) string {
-	if selector.OrderBy == "" {
-		return ""
+func (v *View) createColumnMapIfNeeded() {
+	if v._columns != nil {
+		return
 	}
-	return "\nORDER BY " + selector.OrderBy
+
+	v._columns = make(map[string]*Column)
+	for i := range v.Columns {
+		v._columns[v.Columns[i].Name] = v.Columns[i]
+		v._columns[strings.Title(v.Columns[i].Name)] = v.Columns[i]
+		v._columns[strings.ToLower(v.Columns[i].Name)] = v.Columns[i]
+		v._columns[strings.ToUpper(v.Columns[i].Name)] = v.Columns[i]
+	}
 }
 
-func (v View) buildSQLCriteria(selector *Selector, bindings data.Map) (string, []interface{}) {
-	result := ""
-	if v.Criteria == nil && selector.Criteria == nil {
-		return result, nil
-	}
-	var parameters = make([]interface{}, 0)
-	if v.Criteria != nil {
-		result = "\nWHERE " + expendCriteria(bindings, v.Criteria)
-		parameters = addCriteriaParams(v.Criteria.Params, bindings, parameters)
-	}
-
-	if selector.Criteria == nil {
-		return result, parameters
-	}
-	if result == "" {
-		result += "\nWHERE "
-	} else {
-		result += "\n AND "
-	}
-	result += expendCriteria(bindings, selector.Criteria)
-	parameters = addCriteriaParams(selector.Criteria.Params, bindings, parameters)
-	return result, parameters
+func (v *View) Db() (*sql.DB, error) {
+	return v.Connector.Db()
 }
 
-func expendCriteria(bindings data.Map, criteria *Criteria) string {
-	expression := bindings.ExpandAsText(criteria.Expression)
-	if !strings.Contains(expression, "=") {
-		expression = strings.Replace(expression, ":", "=", len(expression))
+func (v *View) exclude(columns []io.Column) []io.Column {
+	if len(v.Exclude) == 0 {
+		return columns
 	}
-	return "(" + bindings.ExpandAsText(expression) + ")"
+
+	filtered := make([]io.Column, 0, len(columns))
+	for i := range columns {
+		//TODO: add method that normalizes the keys
+		if _, ok := v._excluded[columns[i].Name()]; ok {
+			continue
+		}
+		filtered = append(filtered, columns[i])
+	}
+	return filtered
 }
 
-func addCriteriaParams(nameParams []string, bindings data.Map, valueParams []interface{}) []interface{} {
-	if len(nameParams) == 0 {
-		return valueParams
+func (v *View) inherit(view *View) {
+	if v.Connector == nil {
+		v.Connector = view.Connector
 	}
-	for _, key := range nameParams {
-		value, ok := bindings[key]
+
+	v.Alias = notEmptyOf(v.Alias, view.Alias)
+	v.Table = notEmptyOf(v.Table, view.Table)
+	v.From = notEmptyOf(v.From, view.From)
+
+	if len(v.Columns) == 0 {
+		v.Columns = view.Columns
+	}
+
+	if v.Criteria == nil {
+		v.Criteria = view.Criteria
+	}
+
+	if len(v.With) == 0 {
+		v.With = view.With
+	}
+
+	if v.Schema == nil && len(v.With) == 0 {
+		v.Schema = view.Schema
+	}
+
+	if len(v.Exclude) == 0 {
+		v.Exclude = view.Exclude
+	}
+
+	if v.CaseFormat == "" {
+		v.CaseFormat = view.CaseFormat
+		v.Caser = view.Caser
+	}
+
+	if v.newCollector == nil && len(v.With) == 0 {
+		v.newCollector = view.newCollector
+	}
+
+	if v.Parameters == nil {
+		v.Parameters = view.Parameters
+	}
+
+	if v.MatchStrategy == "" {
+		v.MatchStrategy = view.MatchStrategy
+	}
+
+	if v.BatchReadSize == nil {
+		v.BatchReadSize = view.BatchReadSize
+	}
+
+	if v.Selector == nil {
+		v.Selector = view.Selector
+	}
+}
+
+func (v *View) ensureIndexExcluded() {
+	if len(v.Exclude) == 0 {
+		return
+	}
+
+	v._excluded = Names(v.Exclude).Index()
+}
+
+func (v *View) SelectedColumns(selector *Selector) ([]*Column, error) {
+	if selector == nil || len(selector.Columns) == 0 {
+		return v.Columns, nil
+	}
+
+	result := make([]*Column, len(selector.Columns))
+	for i, name := range selector.Columns {
+		column, ok := v._columns[name]
 		if !ok {
-			value, _ = bindings.GetValue(key)
+			return nil, fmt.Errorf("invalid column name: %v", name)
 		}
-		valueParams = append(valueParams, value)
+		result[i] = column
 	}
-	return valueParams
+	return result, nil
 }
 
-func (v View) buildSQLLimit(selector *Selector, bindings map[string]interface{}) string {
-	if selector.Limit == 0 && selector.Offset == 0 {
-		return ""
+func (v *View) ensureCaseFormat() error {
+	if v.CaseFormat == "" {
+		v.CaseFormat = "lu"
 	}
-	result := ""
-	if selector.Limit > 0 {
-		result = fmt.Sprint(" LIMIT  ", selector.Limit)
-	}
-	if selector.Offset > 0 {
-		result += fmt.Sprint(" OFFSET  ", selector.Offset)
-	}
-	return result
+	var err error
+	v.Caser, err = format.NewCase(v.CaseFormat)
+	return err
 }
 
-func (v *View) buildSQLJoins(selector *Selector, bindings map[string]interface{}) string {
-	if len(v.Joins) == 0 {
-		return ""
+func (v *View) ensureCollector() {
+	relations := RelationsSlice(v.With).PopulateWithResolve()
+	resolverColumns := RelationsSlice(relations).Columns()
+
+	v.newCollector = func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector {
+		if allowUnmapped {
+			return NewCollector(nil, v.Schema.slice, v, dest, supportParallel)
+		}
+		return NewCollector(resolverColumns, v.Schema.slice, v, dest, supportParallel)
 	}
-	var joins = make([]string, 0)
-	for _, join := range v.Joins {
-		joins = append(joins, fmt.Sprintf(" %v JOIN %v %v ON %v", join.Type, join.Table, join.Alias, join.On))
+}
+
+func (v *View) Collector(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector {
+	return v.newCollector(allowUnmapped, dest, supportParallel)
+}
+
+func notEmptyOf(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
 	}
-	return "\n" + strings.Join(joins, "\n")
+
+	return ""
+}
+
+func (v *View) DestCount() int {
+	counter := 1
+	if len(v.With) == 0 {
+		return counter
+	}
+
+	for i := range v.With {
+		counter += v.With[i].Of.DestCount()
+	}
+
+	if len(v.Parameters) > 0 {
+		for _, param := range v.Parameters {
+			if param.view != nil {
+				counter += param.view.DestCount()
+			}
+		}
+	}
+
+	return counter
+}
+
+func (v *View) initHolders() error {
+	if len(v.With) == 0 {
+		return nil
+	}
+
+	for i := range v.With {
+		relation := v.With[i]
+
+		relation.holderField = xunsafe.FieldByName(v.DataType(), relation.Holder)
+		if relation.holderField == nil {
+			return fmt.Errorf("failed to lookup holderField %v", relation.Holder)
+		}
+
+		columnName := v.Caser.Format(relation.Column, format.CaseUpperCamel)
+		relation.columnField = xunsafe.FieldByName(v.DataType(), columnName)
+
+		relation.HasColumnField = relation.columnField != nil
+		if relation.Cardinality == "Many" && !relation.HasColumnField {
+			return fmt.Errorf("column %v doesn't have corresponding field in the struct: %v", columnName, v.DataType().String())
+		}
+	}
+
+	return nil
+}
+
+func (v *View) initParams(ctx context.Context, resource *Resource) error {
+	if v.Criteria == nil {
+		return nil
+	}
+
+	for _, param := range v.Parameters {
+		if err := param.Init(ctx, resource); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (v *View) LimitWithSelector(selector *Selector) int {
+	if selector != nil && selector.Limit > 0 {
+		return selector.Limit
+	}
+	return v.Selector.Limit
+}
+
+func (v *View) propagateTypeIfNeeded() {
+	if v.Schema.AutoGen() {
+		return
+	}
+
+	for _, childView := range v.With {
+		childView.Of.Schema.inheritType(childView.holderField.Type)
+	}
 }
