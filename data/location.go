@@ -4,7 +4,8 @@ import (
 	"fmt"
 )
 
-//Kind represents parameter location, i.e. header, query parameters.
+//Kind represents parameter location
+//Parameter value can be retrieved from the i.e. HTTP Header, Path Variable or using other View
 type Kind string
 
 const (
@@ -25,7 +26,9 @@ func (k Kind) Validate() error {
 	return fmt.Errorf("unsupported location Kind %v", k)
 }
 
-//ParamName represents ParamName possible values
+//ParamName represents name of parameter in given Location.Kind
+//i.e. if you want to extract lang from query string: ?foo=bar&lang=eng
+//required Kind is QueryKind and ParamName `lang`
 type ParamName string
 
 //Validate checks if ParamName is valid

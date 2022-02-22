@@ -2,7 +2,7 @@ package data
 
 import (
 	"fmt"
-	shared2 "github.com/viant/datly/shared"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/sql"
 	"github.com/viant/toolbox"
 	rdata "github.com/viant/toolbox/data"
@@ -10,6 +10,7 @@ import (
 	"reflect"
 )
 
+//Session groups data required to Read data
 type Session struct {
 	Dest          interface{} //slice
 	View          *View
@@ -19,26 +20,27 @@ type Session struct {
 	HttpRequest   *http.Request
 	MatchedPath   string
 
-	errors *shared2.Errors
-
 	pathVariables map[string]string
 	cookies       map[string]string
 	headers       map[string]string
 	queryParams   map[string]string
 }
 
+//DataType returns Parent View.DataType
 func (s *Session) DataType() reflect.Type {
 	return s.View.DataType()
 }
 
+//NewReplacement creates parameter map common for all the views in session.
 func (s *Session) NewReplacement(view *View) rdata.Map {
 	aMap := rdata.NewMap()
-	aMap.SetValue(string(shared2.DataViewName), view.Name)
-	aMap.SetValue(string(shared2.SubjectName), s.Subject)
+	aMap.SetValue(string(shared.DataViewName), view.Name)
+	aMap.SetValue(string(shared.SubjectName), s.Subject)
 
 	return aMap
 }
 
+//Init initializes session
 func (s *Session) Init() error {
 	s.Selectors.Init()
 
@@ -73,6 +75,10 @@ func (s *Session) Init() error {
 		}
 	}
 
+	if err := s.isAnyRequiredParamMissing(); err != nil {
+		return err
+	}
+
 	for _, selector := range s.Selectors {
 		if selector.Criteria != nil {
 			if _, err := sql.Parse([]byte(selector.Criteria.Expression)); err != nil {
@@ -84,22 +90,12 @@ func (s *Session) Init() error {
 	return nil
 }
 
-func (s *Session) CollectError(err error) {
-	if s.errors == nil {
-		s.errors = shared2.NewErrors(0)
-	}
-
-	s.errors.Append(err)
-}
-
-func (s *Session) Error() error {
-	if s.errors == nil {
-		return nil
-	}
-	return s.errors.Error()
-}
-
+//Header returns header value from http.Request bound with Session
 func (s *Session) Header(name string) string {
+	if s.HttpRequest == nil {
+		return ""
+	}
+
 	headerValues := s.HttpRequest.Header[name]
 	headerValue := ""
 	if len(headerValues) > 0 {
@@ -109,10 +105,12 @@ func (s *Session) Header(name string) string {
 	return headerValue
 }
 
+//Cookie returns cookie value from http.Request bound with Session
 func (s *Session) Cookie(name string) string {
 	return s.cookies[name]
 }
 
+//PathVariable returns path variable from URL
 func (s *Session) PathVariable(name string) string {
 	return s.pathVariables[name]
 }
@@ -178,4 +176,36 @@ func (s *Session) indexQueryParams() error {
 		}
 	}
 	return nil
+}
+
+func (s *Session) isAnyRequiredParamMissing() error {
+	params := s.View.filterRequiredParams()
+	var paramValue string
+
+	for i := range params {
+		switch params[i].In.Kind {
+		case QueryKind:
+			paramValue = s.QueryParam(params[i].In.Name)
+		case PathKind:
+			paramValue = s.PathVariable(params[i].In.Name)
+		case HeaderKind:
+			paramValue = s.Header(params[i].In.Name)
+		case CookieKind:
+			paramValue = s.Cookie(params[i].In.Name)
+		case DataViewKind:
+			//Parameter already contains View, if it wouldn't error would be thrown during View Initialization.
+			continue
+		}
+
+		if paramValue == "" {
+			return fmt.Errorf("parameter %v is required in %v but was not found, or was empty", params[i].In.Name, string(params[i].In.Kind))
+		}
+	}
+
+	return nil
+}
+
+//QueryParam returns query parameter value
+func (s *Session) QueryParam(name string) string {
+	return s.queryParams[name]
 }

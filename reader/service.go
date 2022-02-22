@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/read"
-	"github.com/viant/toolbox"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -31,7 +31,8 @@ func (s *Service) Read(ctx context.Context, session *data.Session) error {
 	wg := sync.WaitGroup{}
 
 	collector := session.View.Collector(session.AllowUnmapped, session.Dest, session.View.MatchStrategy.SupportsParallel())
-	err := s.readAll(ctx, session, collector, nil, &wg)
+	errors := shared.NewErrors(0)
+	err := s.readAll(ctx, session, collector, nil, &wg, errors)
 	if err != nil {
 		return err
 	}
@@ -39,7 +40,7 @@ func (s *Service) Read(ctx context.Context, session *data.Session) error {
 	wg.Wait()
 	collector.MergeData()
 
-	if err = session.Error(); err != nil {
+	if err = errors.Error(); err != nil {
 		return err
 	}
 
@@ -58,7 +59,7 @@ func (s *Service) actualStructType(dest interface{}) reflect.Type {
 	return rType
 }
 
-func (s *Service) readAll(ctx context.Context, session *data.Session, collector *data.Collector, upstream rdata.Map, wg *sync.WaitGroup) error {
+func (s *Service) readAll(ctx context.Context, session *data.Session, collector *data.Collector, upstream rdata.Map, wg *sync.WaitGroup, errors *shared.Errors) error {
 	view := collector.View()
 
 	db, err := view.Db()
@@ -83,7 +84,7 @@ func (s *Service) readAll(ctx context.Context, session *data.Session, collector 
 			defer wg.Done()
 			err := s.exhaustRead(ctx, view, selector, upstream, params, batchData, db, collector)
 			if err != nil {
-				session.CollectError(err)
+				errors.Append(err)
 			}
 		}()
 	}
@@ -92,7 +93,7 @@ func (s *Service) readAll(ctx context.Context, session *data.Session, collector 
 		return err
 	}
 
-	if err = s.readRelations(ctx, session, collector, params, wg, selector); err != nil {
+	if err = s.readRelations(ctx, session, collector, params, wg, selector, errors); err != nil {
 		return err
 	}
 
@@ -177,10 +178,10 @@ func (s *Service) prepareSQL(view *data.View, selector *data.Selector, upstream 
 	return SQL, nil
 }
 
-func (s *Service) readRelations(ctx context.Context, session *data.Session, collector *data.Collector, params rdata.Map, wg *sync.WaitGroup, selector *data.Selector) error {
+func (s *Service) readRelations(ctx context.Context, session *data.Session, collector *data.Collector, params rdata.Map, wg *sync.WaitGroup, selector *data.Selector, errors *shared.Errors) error {
 	collectorChildren := collector.Relations(selector)
 	for i := range collectorChildren {
-		if err := s.readAll(ctx, session, collectorChildren[i], params, wg); err != nil {
+		if err := s.readAll(ctx, session, collectorChildren[i], params, wg, errors); err != nil {
 			return err
 		}
 	}
@@ -229,7 +230,7 @@ func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *
 	destSlice := reflect.New(view.Schema.SliceType()).Interface()
 
 	collector := view.Collector(false, destSlice, false)
-	if err := s.readAll(ctx, session, collector, paramMap, nil); err != nil {
+	if err := s.readAll(ctx, session, collector, paramMap, nil, shared.NewErrors(0)); err != nil {
 		return err
 	}
 
@@ -254,7 +255,7 @@ func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *
 }
 
 func (s *Service) addQueryParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
-	paramValue := toolbox.QueryValue(session.HttpRequest.URL, param.In.Name, "")
+	paramValue := session.QueryParam(param.Name)
 	params.SetValue(param.Name, paramValue)
 }
 

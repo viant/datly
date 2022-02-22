@@ -1,19 +1,23 @@
 package data
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/viant/datly/shared"
+)
 
-//Parameters represents Parameters indexed by Parameter.Name
+//Parameters represents Parameter map indexed by Parameter.Name
 type Parameters map[string]*Parameter
 
 //ParametersSlice represents slice of parameters
 type ParametersSlice []*Parameter
 
 //Index indexes parameters by Parameter.Name
+//Uses shared.KeysOf
 func (p ParametersSlice) Index() Parameters {
 	result := make(map[string]*Parameter)
 
 	for parameterIndex := range p {
-		keys := KeysOf(p[parameterIndex].Name, false)
+		keys := shared.KeysOf(p[parameterIndex].Name, false)
 
 		for _, key := range keys {
 			result[key] = p[parameterIndex]
@@ -23,6 +27,8 @@ func (p ParametersSlice) Index() Parameters {
 	return result
 }
 
+//Filter filters ParametersSlice with given Kind and creates Parameters
+//Uses shared.KeysOf
 func (p ParametersSlice) Filter(kind Kind) Parameters {
 	result := make(map[string]*Parameter)
 
@@ -31,7 +37,7 @@ func (p ParametersSlice) Filter(kind Kind) Parameters {
 			continue
 		}
 
-		keys := KeysOf(p[parameterIndex].In.Name, false)
+		keys := shared.KeysOf(p[parameterIndex].In.Name, false)
 
 		for _, key := range keys {
 			result[key] = p[parameterIndex]

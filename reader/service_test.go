@@ -399,7 +399,7 @@ func TestRead(t *testing.T) {
 			},
 		},
 		{
-			description: "one to one, without relation",
+			description: "one to one, without relation, by field name",
 			dataURI:     "case008/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
@@ -411,7 +411,7 @@ func TestRead(t *testing.T) {
 			},
 		},
 		{
-			description: "one to one, include column by name",
+			description: "one to one, include column, by field name",
 			dataURI:     "case008/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
@@ -421,6 +421,34 @@ func TestRead(t *testing.T) {
 					Columns: []string{"Id", "Timestamp", "EventType"},
 				},
 			},
+		},
+		{
+			description: "query parameter, required",
+			dataURI:     "case020/",
+			view:        "events",
+			dest:        new(interface{}),
+			expectError: true,
+		},
+		{
+			description: "path parameter, required",
+			dataURI:     "case021/",
+			view:        "events",
+			dest:        new(interface{}),
+			expectError: true,
+		},
+		{
+			description: "cookie parameter, required",
+			dataURI:     "case022/",
+			view:        "events",
+			dest:        new(interface{}),
+			expectError: true,
+		},
+		{
+			description: "header parameter, required",
+			dataURI:     "case023/",
+			view:        "events",
+			dest:        new(interface{}),
+			expectError: true,
 		},
 	}
 
@@ -487,8 +515,10 @@ func initDb(t *testing.T, configPath, datasetPath, dataStore string) bool {
 	}
 
 	initDataset := dsunit.NewDatasetResource(dataStore, datasetPath, "", "")
-	if !dsunit.Prepare(t, dsunit.NewPrepareRequest(initDataset)) {
+	request := dsunit.NewPrepareRequest(initDataset)
+	if !dsunit.Prepare(t, request) {
 		return true
 	}
+
 	return false
 }

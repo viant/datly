@@ -18,20 +18,6 @@ type Column struct {
 	sqlExpression string
 }
 
-//Type parses and returns column DataType.
-func (c *Column) Type() (reflect.Type, error) {
-	if c.rType != nil {
-		return c.rType, nil
-	}
-	var err error
-	c.rType, err = parseType(c.DataType)
-
-	if err != nil {
-		return nil, err
-	}
-	return c.rType, nil
-}
-
 //SqlExpression builds column sql expression if any expression specified in format: Expression AS Name
 func (c *Column) SqlExpression() string {
 	if c.sqlExpression != "" {

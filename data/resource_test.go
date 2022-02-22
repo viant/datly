@@ -17,7 +17,7 @@ func TestNewResourceFromURL(t *testing.T) {
 	testCases := []struct {
 		description string
 		url         string
-		expect      interface{}
+		expect      string
 	}{
 		{
 			url: "case001",
@@ -32,32 +32,44 @@ func TestNewResourceFromURL(t *testing.T) {
 	"Views": [
 		{
 			"Alias": "t",
+			"BatchReadSize": null,
+			"CaseFormat": "lu",
+			"Caser": 5,
 			"Columns": [
 				{
 					"DataType": "Int",
+					"Filterable": false,
 					"Name": "id"
 				},
 				{
 					"DataType": "Float",
+					"Filterable": false,
 					"Name": "quantity"
 				},
 				{
 					"DataType": "Int",
+					"Filterable": false,
 					"Name": "event_type_id"
 				}
 			],
-			"Schema": {
-				"Name": "events"
-			},
 			"Connector": {
 				"DSN": "./testdata/db/mydb.db",
 				"Driver": "sqlite3",
 				"Name": "mydb",
 				"Ref": "mydb"
 			},
+			"MatchStrategy": "read_matched",
 			"Name": "events",
-			"Selector": {
+			"Schema": {
+				"Name": "events",
 				"OmitEmpty": false
+			},
+			"SelectorConstraints": {
+				"Columns": null,
+				"Criteria": null,
+				"Limit": null,
+				"Offset": null,
+				"OrderBy": null
 			},
 			"Table": "events"
 		}
@@ -75,6 +87,7 @@ func TestNewResourceFromURL(t *testing.T) {
 		if !assert.Nil(t, err, testCase.description) {
 			continue
 		}
+
 		if !assertly.AssertValues(t, testCase.expect, resource, testCase.description) {
 			toolbox.DumpIndent(resource, true)
 		}
