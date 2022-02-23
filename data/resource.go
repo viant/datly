@@ -49,6 +49,7 @@ func (r *Resource) GetConnectors() config.Connectors {
 func (r *Resource) Init(ctx context.Context) error {
 	r._views = ViewSlice(r.Views).Index()
 	r._connectors = config.ConnectorSlice(r.Connectors).Index()
+	r._parameters = ParametersSlice(r.Parameters).Index()
 
 	if err := config.ConnectorSlice(r.Connectors).Init(ctx, r._connectors); err != nil {
 		return err
@@ -91,8 +92,47 @@ func NewResourceFromURL(ctx context.Context, url string, types Types) (*Resource
 	}
 
 	resource.types = types
-	resource._parameters = ParametersSlice(resource.Parameters).Index()
 	err = resource.Init(ctx)
 
 	return resource, err
+}
+
+func EmptyResource() *Resource {
+	return &Resource{
+		Connectors:  make([]*config.Connector, 0),
+		_connectors: config.Connectors{},
+		Views:       make([]*View, 0),
+		_views:      Views{},
+		Parameters:  make([]*Parameter, 0),
+		_parameters: Parameters{},
+		types:       Types{},
+	}
+}
+
+func NewResource(types Types) *Resource {
+	return &Resource{types: types}
+}
+
+func (r *Resource) AddViews(views ...*View) {
+	if r.Views == nil {
+		r.Views = make([]*View, 0)
+	}
+
+	r.Views = append(r.Views, views...)
+}
+
+func (r *Resource) AddConnectors(connectors ...*config.Connector) {
+	if r.Connectors == nil {
+		r.Connectors = make([]*config.Connector, 0)
+	}
+
+	r.Connectors = append(r.Connectors, connectors...)
+}
+
+func (r *Resource) AddParameters(parameters ...*Parameter) {
+	if r.Parameters == nil {
+		r.Parameters = make([]*Parameter, 0)
+	}
+
+	r.Parameters = append(r.Parameters, parameters...)
 }

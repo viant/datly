@@ -88,9 +88,13 @@ func (s *Session) Init(ctx context.Context, resource *Resource) error {
 
 	for _, selector := range s.Selectors {
 		if selector.Criteria != nil {
-			if _, err = sql.Parse([]byte(selector.Criteria.Expression)); err != nil {
+			_, err := sql.Parse([]byte(selector.Criteria.Expression))
+			if err != nil {
 				return err
 			}
+			//TODO: validate filterable columns and Kinds.
+			//TODO: add another method that check any Column Kind in case not filterable columns are defined
+			//root.Validate()
 		}
 	}
 

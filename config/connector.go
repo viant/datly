@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/datly/shared"
+	"github.com/viant/scy"
 )
 
 //Connector represents database/sql named connection config
 type Connector struct {
 	shared.Reference
+	Secret *scy.Resource
 	Name   string
 	Driver string
 	DSN    string
@@ -55,7 +57,18 @@ func (c *Connector) Db() (*sql.DB, error) {
 	}
 
 	var err error
-	c.db, err = sql.Open(c.Driver, c.DSN)
+	dsn := c.DSN
+	if c.Secret != nil {
+		secrets := scy.New()
+		secret, err := secrets.Load(context.Background(), c.Secret)
+		if err != nil {
+			return nil, err
+		}
+
+		dsn = secret.Expand(dsn)
+	}
+
+	c.db, err = sql.Open(c.Driver, dsn)
 	return c.db, err
 }
 
