@@ -6,6 +6,7 @@ import (
 	"reflect"
 )
 
+//Schema represents View as Go type.
 type Schema struct {
 	Name string
 
@@ -20,6 +21,17 @@ type Schema struct {
 	DataType  string
 }
 
+func NewSchema(compType reflect.Type) *Schema {
+	result := &Schema{
+		Name:      "",
+		autoGen:   true,
+		OmitEmpty: false,
+	}
+
+	result.setType(compType)
+	return result
+}
+
 //Type returns struct type
 func (c *Schema) Type() reflect.Type {
 	return c.compType
@@ -31,9 +43,10 @@ func (c *Schema) setType(rType reflect.Type) {
 	c.sliceType = c.slice.Type
 }
 
-//Init build struct type from Fields
+//Init build struct type
 func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case) {
 	if c.compType != nil {
+		c.setType(c.compType)
 		return
 	}
 
@@ -93,11 +106,12 @@ func (c *Schema) AutoGen() bool {
 	return c.autoGen
 }
 
-//Slice returns slice
+//Slice returns slice as xunsafe.Slice
 func (c *Schema) Slice() *xunsafe.Slice {
 	return c.slice
 }
 
+//SliceType returns reflect.SliceOf() Schema type
 func (c *Schema) SliceType() reflect.Type {
 	return c.sliceType
 }
@@ -107,6 +121,7 @@ func (c *Schema) inheritType(rType reflect.Type) {
 	c.autoGen = false
 }
 
+//XType returns structType as *xunsafe.Type
 func (c *Schema) XType() *xunsafe.Type {
 	return c.xType
 }

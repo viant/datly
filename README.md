@@ -21,16 +21,15 @@ This project can be deployed as standalone or serverless with REST or Micro serv
 
 ## Usage
 
+For read views from external file, see: [yaml_usage](./yaml_usage.md)
 
-
-
-
+For creating views programmatically, see: [go_usage](./go_usage.md)
 
 ## Contributing to datly
 
 Datly is an open source project and contributors are welcome!
 
-See [TODO](../TODO.md) list
+See [TODO](./TODO.md) list
 
 ## License
 

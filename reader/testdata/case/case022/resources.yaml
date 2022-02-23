@@ -2,14 +2,19 @@ Views:
   - Connector:
       Ref: mydb
     Name: events
-    Table: events
     Columns:
       - Name: id
         DataType: Int
-      - Name: timestamp
-        DataType: String
       - Name: quantity
         DataType: Float
+      - Name: event_type_id
+        DataType: Int
+    Parameters:
+    - Name: user_id
+      Required: true
+      In:
+        Kind: cookie
+        Name: userId
 Connectors:
   - Name: mydb
     Driver: sqlite3

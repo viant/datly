@@ -11,7 +11,9 @@ import (
 //Visitor represents visitor function
 type Visitor func(value interface{}) error
 
-//Collector represents unmatched column resolver
+//Collector collects and build result from data fetched from Database
+//If View or any of the View.With MatchStrategy support Parallel fetching, it is important to call MergeData
+//when all needed data was fetched
 type Collector struct {
 	parent *Collector
 
@@ -87,8 +89,8 @@ func (r *Collector) columnAllowed(column io.Column) bool {
 	return false
 }
 
-//parentValuesPositions returns positions in the main slice by given column name.
-//After first use, it is not possible to index new resolved column indexes by Resolve method.
+//parentValuesPositions returns positions in the parent main slice by given column name
+//After first use, it is not possible to index new resolved column indexes by Resolve method
 func (r *Collector) parentValuesPositions(columnName string) map[interface{}][]int {
 	result, ok := r.parent.valuePosition[columnName]
 	if !ok {
@@ -134,12 +136,6 @@ func ensureDest(dest interface{}, view *View) interface{} {
 func (r *Collector) Visitor() func(value interface{}) error {
 	relation := r.relation
 	visitorRelations := RelationsSlice(r.view.With).PopulateWithVisitor()
-	//if len(visitorRelations) == 0 && relation == nil {
-	//	return func(value interface{}) error {
-	//		return nil
-	//	}
-	//}
-
 	for _, rel := range visitorRelations {
 		r.valuePosition[rel.Column] = map[interface{}][]int{}
 	}
@@ -248,12 +244,11 @@ func (r *Collector) visitorMany(relation *Relation, visitors ...Visitor) func(va
 	}
 }
 
-//NewItem creates and return item provider.
-//If view has no relations or is the main view, created item will be automatically appended to a slice.
+//NewItem creates and return item provider
+//Each produced item is automatically appended to the dest
 func (r *Collector) NewItem() func() interface{} {
 	return func() interface{} {
-		add := r.appender.Add()
-		return add
+		return r.appender.Add()
 	}
 }
 
@@ -276,13 +271,20 @@ func (r *Collector) indexParentPositions(name string) {
 	}
 }
 
-func (r *Collector) Relations() []*Collector {
+//Relations creates and register new Collector for each Relation present in the Selector.Columns if View allows use Selector.Columns
+func (r *Collector) Relations(selector *Selector) []*Collector {
 	result := make([]*Collector, len(r.view.With))
-	for i := range r.view.With {
-		dest := reflect.MakeSlice(r.view.With[i].Of.View.Schema.SliceType(), 0, 1).Interface()
-		slice := r.view.With[i].Of.View.Schema.Slice()
 
-		result[i] = &Collector{
+	counter := 0
+	for i := range r.view.With {
+		if r.view.CanUseClientColumns() && selector != nil && !selector.Has(r.view.With[i].Holder) {
+			continue
+		}
+
+		dest := reflect.MakeSlice(r.view.With[counter].Of.View.Schema.SliceType(), 0, 1).Interface()
+		slice := r.view.With[counter].Of.View.Schema.Slice()
+
+		result[counter] = &Collector{
 			parent:          r,
 			dest:            dest,
 			appender:        slice.Appender(xunsafe.AsPointer(dest)),
@@ -290,28 +292,35 @@ func (r *Collector) Relations() []*Collector {
 			types:           make(map[string]*xunsafe.Type),
 			values:          make(map[string]*[]interface{}),
 			slice:           slice,
-			view:            &r.view.With[i].Of.View,
-			relation:        r.view.With[i],
-			supportParallel: r.view.With[i].Of.MatchStrategy.SupportsParallel(),
+			view:            &r.view.With[counter].Of.View,
+			relation:        r.view.With[counter],
+			supportParallel: r.view.With[counter].Of.MatchStrategy.SupportsParallel(),
 		}
+		counter++
 	}
 
-	r.relations = result
-	return result
+	r.relations = result[:counter]
+	return result[:counter]
 }
 
+//View returns View assigned to the Collector
 func (r *Collector) View() *View {
 	return r.view
 }
 
+//Dest returns collector slice
 func (r *Collector) Dest() interface{} {
 	return r.dest
 }
 
+//SupportsParallel if Collector supports parallelism, it means that his Relations can fetch data in the same time
+//Later on it will be merged with the parent Collector
 func (r *Collector) SupportsParallel() bool {
 	return r.supportParallel
 }
 
+//MergeData merges data with Collectors produced via Relations
+//It is sufficient to call it on the most Parent Collector to produce result
 func (r *Collector) MergeData() {
 	for i := range r.relations {
 		r.relations[i].MergeData()
@@ -353,6 +362,10 @@ func (r *Collector) mergeToParent() {
 	}
 }
 
+//ParentPlaceholders if Collector doesn't support parallel fetching and has a Parent, it will return a parent field values and column name
+//that the relation was created from, otherwise empty slice and empty string
+//i.e. if Parent Collector collects Employee{AccountId: int}, Column.Name is account_id and Collector collects Account
+//it will extract and return all the AccountId that were accumulated and account_id
 func (r *Collector) ParentPlaceholders() ([]interface{}, string) {
 	if r.parent == nil || r.parent.SupportsParallel() {
 		return []interface{}{}, ""

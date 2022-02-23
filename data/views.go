@@ -3,17 +3,19 @@ package data
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/shared"
 )
 
 //Views represents views registry indexed by view name.
 type Views map[string]*View
 
 //Register registers view in registry using View name.
+//uses shared.KeysOf
 func (v *Views) Register(view *View) {
 	if len(*v) == 0 {
 		*v = make(map[string]*View)
 	}
-	keys := KeysOf(view.Name, false)
+	keys := shared.KeysOf(view.Name, false)
 
 	for _, key := range keys {
 		(*v)[key] = view
@@ -35,6 +37,7 @@ func (v Views) Lookup(viewName string) (*View, error) {
 //ViewSlice wraps slice of Views
 type ViewSlice []*View
 
+//Index indexes ViewSlice by View.Name
 func (v ViewSlice) Index() Views {
 	result := Views(make(map[string]*View))
 	for i := range v {

@@ -3,30 +3,43 @@ package config
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/shared"
 )
 
+//Connectors represents Connector registry
+//Key was produced based on Connector.Name
 type Connectors map[string]*Connector
 
+//Register registers connector
+//Uses shared.KeysOf
 func (v *Connectors) Register(connector *Connector) {
 	if len(*v) == 0 {
 		*v = make(map[string]*Connector)
 	}
-	(*v)[connector.Name] = connector
+
+	keys := shared.KeysOf(connector.Name, false)
+	for i := range keys {
+		(*v)[keys[i]] = connector
+	}
 }
 
-func (v Connectors) Lookup(ref string) (*Connector, error) {
+//Lookup returns Connector by Connector.Name
+func (v Connectors) Lookup(name string) (*Connector, error) {
 	if len(v) == 0 {
-		return nil, fmt.Errorf("failed to lookup connector %v", ref)
+		return nil, fmt.Errorf("failed to lookup connector %v", name)
 	}
-	ret, ok := v[ref]
+	ret, ok := v[name]
 	if !ok {
-		return nil, fmt.Errorf("failed to lookup connector %v", ref)
+		return nil, fmt.Errorf("failed to lookup connector %v", name)
 	}
 	return ret, nil
 }
 
+//ConnectorSlice represents Slice of *Connector
 type ConnectorSlice []*Connector
 
+//Index indexes Connectors by Connector.Name.
+//Uses shared.KeysOf to produce keys.
 func (c ConnectorSlice) Index() Connectors {
 	result := Connectors(map[string]*Connector{})
 
@@ -36,6 +49,7 @@ func (c ConnectorSlice) Index() Connectors {
 	return result
 }
 
+//Init initializes each connector
 func (c ConnectorSlice) Init(ctx context.Context, connectors Connectors) error {
 	for i := range c {
 		if err := c[i].Init(ctx, connectors); err != nil {

@@ -5,6 +5,6 @@ type Unary struct {
 	Operator string
 }
 
-func (u *Unary) Validate(allowed map[string]int) error {
+func (u *Unary) Validate(allowed map[string]Kind) error {
 	return u.X.Validate(allowed)
 }

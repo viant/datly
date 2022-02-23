@@ -8,47 +8,32 @@ import (
 	"strings"
 )
 
-//Relation represents  data View reference
 type (
+	//Relation used to build more complex View that represents database tables with relations one-to-one or many-to-many
+	//In order to understand it better our example is:
+	//Parent View represents Employee{AccountId: int}, Relation represents Account{Id: int}
+	//We want to create result like:  Employee{Account{Id:int}}
 	Relation struct {
 		Name string
 		Of   *ReferenceView
 
-		Cardinality    string //One, or Many
-		Column         string //event_Type_id, employee#id
-		Holder         string //holderField holding ref,
-		IncludeColumn  bool   //tells if Column field should be in the struct type.
-		HasColumnField bool
+		Cardinality   string //One, or Many
+		Column        string //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
+		Holder        string //Represents column created due to the merging. In our example it would be Employee#Account
+		IncludeColumn bool   //tells if Column field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId field
 
-		holderField *xunsafe.Field
-		columnField *xunsafe.Field
+		hasColumnField bool
+		holderField    *xunsafe.Field
+		columnField    *xunsafe.Field
 	}
 
+	//ReferenceView represents referenced View
+	//In our example it would be Account
 	ReferenceView struct {
 		View          // event type
 		Column string // EventType.id
 		field  *xunsafe.Field
 	}
-
-	MatchStrategy string
-)
-
-func (s MatchStrategy) Validate() error {
-	switch s {
-	case ReadAll, ReadMatched, ReadDerived:
-		return nil
-	}
-	return fmt.Errorf("unsupported match strategy %v", s)
-}
-
-func (s MatchStrategy) SupportsParallel() bool {
-	return s == ReadAll
-}
-
-const (
-	ReadAll     MatchStrategy = "read_all"     // read all and later we match on backend side
-	ReadMatched MatchStrategy = "read_matched" // read parent data and then filter id to match with the current view
-	ReadDerived MatchStrategy = "read_derived" // use parent sql selector to add criteria to the relation view, this can only work if the connector of the relation view and parent view is the same
 )
 
 //Init initializes ReferenceView

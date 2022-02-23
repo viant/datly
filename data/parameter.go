@@ -9,7 +9,7 @@ import (
 )
 
 type (
-	//Parameter describes parameters used by the Criteria
+	//Parameter describes parameters used by the Criteria to filter the data.
 	Parameter struct {
 		shared.Reference
 		Name            string
@@ -24,6 +24,7 @@ type (
 		view        *View
 	}
 
+	//Location tells how to retrieve parameter value.
 	Location struct {
 		Kind Kind
 		Name string
@@ -114,4 +115,8 @@ func (l *Location) Validate() error {
 	}
 
 	return nil
+}
+
+func (p *Parameter) IsRequired() bool {
+	return p.Required != nil && *p.Required == true
 }

@@ -4,6 +4,6 @@ type Parentheses struct {
 	P Node
 }
 
-func (p *Parentheses) Validate(allowed map[string]int) error {
+func (p *Parentheses) Validate(allowed map[string]Kind) error {
 	return p.P.Validate(allowed)
 }

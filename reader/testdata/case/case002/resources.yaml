@@ -2,6 +2,8 @@ Views:
   - Connector:
       Ref: mydb
     Name: events
+    SelectorConstraints:
+      Criteria: true
 Connectors:
   - Name: mydb
     Driver: sqlite3

@@ -3,12 +3,12 @@ package sql
 import (
 	"fmt"
 	"github.com/viant/parsly"
-	"reflect"
 	"strings"
 )
 
 func Parse(input []byte) (Node, error) {
 	var err error
+	var matchedToken int
 
 	cursor := parsly.NewCursor("", input, 0)
 	var parent = &Binary{}
@@ -37,18 +37,18 @@ func Parse(input []byte) (Node, error) {
 		expectLogicalOperator = true
 	}
 
-	operator, err = expectOperator(cursor, expectLogicalOperator)
+	operator, matchedToken, err = expectOperator(cursor, expectLogicalOperator)
 	if err != nil || operator == "" {
 		return parent.X, err
 	}
 
 	parent.Operator = operator
-	if strings.ToLower(operator) == "in" {
+	if matchedToken == inToken {
 		parent.Y, err = expectDataset(cursor)
 		if err != nil {
 			return nil, err
 		}
-		operator, err = expectOperator(cursor, true)
+		operator, _, err = expectOperator(cursor, true)
 		if err != nil || operator == "" {
 			return parent, err
 		}
@@ -67,7 +67,7 @@ func addParentheses(input []byte, cursor *parsly.Cursor, parent *Binary) (Node, 
 		return nil, err
 	}
 
-	operator, err := expectOperator(cursor, true)
+	operator, _, err := expectOperator(cursor, true)
 	if err != nil || operator == "" {
 		return x, err
 	}
@@ -119,11 +119,11 @@ outer:
 		nextLiteral := node.(*Literal)
 		values = append(values, nextLiteral.Value)
 
-		if kind == -1 {
+		if kind == Null {
 			kind = nextLiteral.Kind
 		}
 
-		if nextLiteral.Kind != -1 && kind != nextLiteral.Kind {
+		if nextLiteral.Kind != Null && kind != nextLiteral.Kind {
 			return nil, fmt.Errorf("inconsistent value type")
 		}
 
@@ -160,20 +160,37 @@ func expectIsExpression(cursor *parsly.Cursor) (string, error) {
 	return "", nil
 }
 
-func expectOperator(cursor *parsly.Cursor, expectLogicalOperator bool) (string, error) {
-	var expectedTokens = []*parsly.Token{LogicalOperator, BinaryOperator, InKeyword}
+func expectOperator(cursor *parsly.Cursor, expectLogicalOperator bool) (string, int, error) {
+	var expectedTokens = []*parsly.Token{LogicalOperator, BinaryOperator, InKeyword, NotKeyword}
 	if expectLogicalOperator {
 		expectedTokens = []*parsly.Token{LogicalOperator, InKeyword}
 	}
 	matched := cursor.MatchAfterOptional(Whitespace, expectedTokens...)
 	if matched.Code == parsly.EOF {
-		return "", nil
+		return "", matched.Code, nil
 	}
 	switch matched.Code {
 	case operatorLogicalToken, binaryOperator, inToken:
-		return matched.Text(cursor), nil
+		return matched.Text(cursor), matched.Code, nil
+	case notToken:
+		operator := matched.Text(cursor)
+		negetable, token, err := expectNegeteable(cursor)
+		if err != nil {
+			return "", -1, err
+		}
+
+		return operator + " " + negetable, token, nil
 	}
-	return "", cursor.NewError(expectedTokens...)
+	return "", -1, cursor.NewError(expectedTokens...)
+}
+
+func expectNegeteable(cursor *parsly.Cursor) (string, int, error) {
+	matched := cursor.MatchAfterOptional(Whitespace, InKeyword)
+	switch matched.Code {
+	case inToken:
+		return matched.Text(cursor), inToken, nil
+	}
+	return "", -1, cursor.NewError(InKeyword)
 }
 
 func expectLiteralOrSelector(cursor *parsly.Cursor, isRequired bool) (Node, error) {
@@ -188,13 +205,13 @@ func expectLiteralOrSelector(cursor *parsly.Cursor, isRequired bool) (Node, erro
 
 	switch matched.Code {
 	case booleanLiteralToken:
-		return &Literal{Value: matched.Text(cursor), Kind: int(reflect.Bool)}, nil
+		return &Literal{Value: matched.Text(cursor), Kind: Bool}, nil
 	case numberToken:
-		return &Literal{Value: matched.Text(cursor), Kind: int(reflect.Int)}, nil
+		return &Literal{Value: matched.Text(cursor), Kind: Int}, nil
 	case selectorToken:
 		return &Selector{Name: matched.Text(cursor)}, nil
 	case stringLiteralToken:
-		return &Literal{Value: matched.Text(cursor), Kind: int(reflect.String)}, nil
+		return &Literal{Value: matched.Text(cursor), Kind: String}, nil
 	case nullToken:
 		return &Literal{Value: matched.Text(cursor), Kind: -1}, nil
 	}

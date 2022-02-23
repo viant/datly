@@ -2,7 +2,7 @@ package reader
 
 import (
 	"fmt"
-	data2 "github.com/viant/datly/data"
+	"github.com/viant/datly/data"
 	"strconv"
 	"strings"
 )
@@ -18,26 +18,32 @@ const (
 	offsetFragment      = " OFFSET "
 	whereFragment       = " WHERE "
 	inFragment          = " IN ("
+	andFragment         = " AND ("
+	placeholderFragment = "?"
+	encloseFragment     = ")"
 )
 
-//Builder represent SQL Builder
-type Builder struct {
-}
+type (
+
+	//Builder represent SQL Builder
+	Builder struct{}
+
+	//BatchData groups data needed to use various data.MatchStrategy
+	BatchData struct {
+		BatchReadSize int
+		CurrentlyRead int
+		ColumnName    string
+		Placeholders  []interface{}
+	}
+)
 
 //NewBuilder creates Builder instance
 func NewBuilder() *Builder {
 	return &Builder{}
 }
 
-type BatchData struct {
-	BatchReadSize int
-	CurrentlyRead int
-	ColumnName    string
-	Placeholders  []interface{}
-}
-
 //Build builds SQL Select statement
-func (b *Builder) Build(view *data2.View, selector *data2.Selector, batchData *BatchData) (string, error) {
+func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *BatchData) (string, error) {
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
 
@@ -72,7 +78,7 @@ func (b *Builder) Build(view *data2.View, selector *data2.Selector, batchData *B
 			if i != 0 {
 				sb.WriteString(separatorFragment)
 			}
-			sb.WriteString("?")
+			sb.WriteString(placeholderFragment)
 		}
 		sb.WriteString(")")
 	}
@@ -86,11 +92,11 @@ func (b *Builder) Build(view *data2.View, selector *data2.Selector, batchData *B
 		hasCriteria = true
 	}
 
-	if selector != nil && selector.Criteria != nil {
+	if view.CanUseClientCriteria() && selector != nil && selector.Criteria != nil {
 		if hasCriteria {
-			sb.WriteString(" AND (")
+			sb.WriteString(andFragment)
 			sb.WriteString(selector.Criteria.Expression)
-			sb.WriteString(")")
+			sb.WriteString(encloseFragment)
 		} else {
 			if !whereFragmentAdded {
 				sb.WriteString(whereFragment)
@@ -105,11 +111,11 @@ func (b *Builder) Build(view *data2.View, selector *data2.Selector, batchData *B
 	offset := 0
 
 	if selector != nil {
-		if selector.OrderBy != "" {
+		if view.CanUseClientOrderBy() && selector.OrderBy != "" {
 			orderBy = selector.OrderBy
 		}
 
-		if selector.Offset > 0 {
+		if view.CanUseClientOffset() && selector.Offset > 0 {
 			offset = selector.Offset
 		}
 	}

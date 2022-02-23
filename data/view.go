@@ -9,64 +9,79 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
+	"net/http"
 	"reflect"
-	"strings"
 )
 
-//View represents a data View
-type View struct {
-	shared.Reference
-	Connector *config.Connector
-	Name      string
-	Alias     string `json:",omitempty"`
-	Table     string `json:",omitempty"`
-	From      string `json:",omitempty"`
+type (
+	//View represents a data View
+	View struct {
+		shared.Reference
+		Connector *config.Connector
+		Name      string
+		Alias     string `json:",omitempty"`
+		Table     string `json:",omitempty"`
+		From      string `json:",omitempty"`
 
-	Exclude    []string  `json:",omitempty"`
-	Columns    []*Column `json:",omitempty"`
-	CaseFormat string    `json:",omitempty"`
+		Exclude    []string  `json:",omitempty"`
+		Columns    []*Column `json:",omitempty"`
+		CaseFormat string    `json:",omitempty"`
 
-	Criteria *Criteria `json:",omitempty"`
+		Criteria *Criteria `json:",omitempty"`
 
-	Selector            *Config      `json:",omitempty"`
-	SelectorConstraints *Constraints `json:",omitempty"`
-	Parameters          []*Parameter `json:",omitempty"`
+		Selector            *Config      `json:",omitempty"`
+		SelectorConstraints *Constraints `json:",omitempty"`
+		Parameters          []*Parameter `json:",omitempty"`
 
-	Prefix string  `json:",omitempty"`
-	Schema *Schema `json:",omitempty"`
+		Prefix string  `json:",omitempty"`
+		Schema *Schema `json:",omitempty"`
 
-	With       []*Relation `json:",omitempty"`
-	ParamField *xunsafe.Field
+		With       []*Relation `json:",omitempty"`
+		ParamField *xunsafe.Field `json:"_,omitempty"`
 
-	MatchStrategy MatchStrategy `json:",omitempty"`
-	BatchReadSize *int          `json:",omitempty"`
+		MatchStrategy MatchStrategy `json:",omitempty"`
+		BatchReadSize *int          `json:",omitempty"`
 
-	_columns  map[string]*Column
-	_excluded map[string]bool
+		_columns    Columns
+		_excluded   map[string]bool
+		_parameters Parameters
 
-	Caser        format.Case `json:",omitempty"`
-	initialized  bool
-	isValid      bool
-	typeRebuilt  bool
-	newCollector func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector
-}
+		_cookiesKind           Parameters
+		_headerKind            Parameters
+		_pathKind              Parameters
+		_queryKind             Parameters
+		_allRequiredParameters []*Parameter
 
-type Constraints struct {
-	Criteria  *bool
-	_criteria bool
-	OrderBy   *bool
-	_orderBy  bool
-	Limit     *bool
-	_limit    bool
-	Columns   *bool
-	_columns  bool
-}
+		Caser        format.Case `json:",omitempty"`
+		initialized  bool
+		isValid      bool
+		newCollector func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector
+	}
+
+	//Constraints configure what can be selected by Selector
+	//For each field, default value is `false`
+	Constraints struct {
+		Criteria  *bool
+		_criteria bool
+		OrderBy   *bool
+		_orderBy  bool
+		Limit     *bool
+		_limit    bool
+		Columns   *bool
+		_columns  bool
+		Offset    *bool
+		_offset   bool
+	}
+)
 
 //DataType returns struct type.
 func (v *View) DataType() reflect.Type {
 	return v.Schema.Type()
 }
 
+//Init initializes View using data provided in Resource.
+//i.e. If View, Connector etc. should inherit from others - it has te bo included in Resource.
+//It is important to call Init for every View because it also initializes due to the optimization reasons.
 func (v *View) Init(ctx context.Context, resource *Resource) error {
 	if v.initialized {
 		return nil
@@ -105,7 +120,6 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 	if v.Selector == nil {
 		v.Selector = &Config{}
 	}
-	//v.destIndex = resource.AddAndIncrement()
 	v.Alias = notEmptyOf(v.Alias, "t")
 	if v.Connector == nil {
 		return fmt.Errorf("connector was empty")
@@ -125,18 +139,18 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 	}
 
 	v.ensureIndexExcluded()
+	if err := v.ensureCaseFormat(); err != nil {
+		return err
+	}
 
 	if err = v.ensureColumns(ctx); err != nil {
 		return err
 	}
-	v._columns = Columns(v.Columns).Index()
+	v._columns = ColumnSlice(v.Columns).Index(v.Caser)
 	if err = v.initRelations(ctx, resource); err != nil {
 		return err
 	}
 
-	if err := v.ensureCaseFormat(); err != nil {
-		return err
-	}
 	v.ensureSchema(resource.types)
 	if err = v.initParams(ctx, resource); err != nil {
 		return err
@@ -156,7 +170,10 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 	}
 
 	v.propagateTypeIfNeeded()
-
+	v.ensureSelectorConstraints()
+	if err = v.registerHolders(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -179,7 +196,7 @@ func (v *View) initRelations(ctx context.Context, resource *Resource) error {
 
 func (v *View) ensureColumns(ctx context.Context) error {
 	if len(v.Columns) != 0 {
-		return Columns(v.Columns).Init()
+		return ColumnSlice(v.Columns).Init()
 	}
 
 	db, err := v.Connector.Db()
@@ -214,9 +231,8 @@ func convertIoColumnsToColumns(ioColumns []io.Column) []*Column {
 	return columns
 }
 
+//ColumnByName returns Column by Column.Name
 func (v *View) ColumnByName(name string) (*Column, bool) {
-	v.createColumnMapIfNeeded()
-
 	if column, ok := v._columns[name]; ok {
 		return column, true
 	}
@@ -224,6 +240,7 @@ func (v *View) ColumnByName(name string) (*Column, bool) {
 	return nil, false
 }
 
+//Source returns database data source. It prioritizes From, Table then View.Name
 func (v *View) Source() string {
 	if v.From != "" {
 		return v.From
@@ -253,20 +270,7 @@ func (v *View) ensureSchema(types Types) {
 	v.Schema.Init(v.Columns, v.With, v.Caser)
 }
 
-func (v *View) createColumnMapIfNeeded() {
-	if v._columns != nil {
-		return
-	}
-
-	v._columns = make(map[string]*Column)
-	for i := range v.Columns {
-		v._columns[v.Columns[i].Name] = v.Columns[i]
-		v._columns[strings.Title(v.Columns[i].Name)] = v.Columns[i]
-		v._columns[strings.ToLower(v.Columns[i].Name)] = v.Columns[i]
-		v._columns[strings.ToUpper(v.Columns[i].Name)] = v.Columns[i]
-	}
-}
-
+//Db returns database connection that View was assigned to.
 func (v *View) Db() (*sql.DB, error) {
 	return v.Connector.Db()
 }
@@ -278,7 +282,6 @@ func (v *View) exclude(columns []io.Column) []io.Column {
 
 	filtered := make([]io.Column, 0, len(columns))
 	for i := range columns {
-		//TODO: add method that normalizes the keys
 		if _, ok := v._excluded[columns[i].Name()]; ok {
 			continue
 		}
@@ -304,12 +307,12 @@ func (v *View) inherit(view *View) {
 		v.Criteria = view.Criteria
 	}
 
-	if len(v.With) == 0 {
-		v.With = view.With
-	}
-
 	if v.Schema == nil && len(v.With) == 0 {
 		v.Schema = view.Schema
+	}
+
+	if len(v.With) == 0 {
+		v.With = view.With
 	}
 
 	if len(v.Exclude) == 0 {
@@ -340,6 +343,10 @@ func (v *View) inherit(view *View) {
 	if v.Selector == nil {
 		v.Selector = view.Selector
 	}
+
+	if v.SelectorConstraints == nil {
+		v.SelectorConstraints = view.SelectorConstraints
+	}
 }
 
 func (v *View) ensureIndexExcluded() {
@@ -350,8 +357,10 @@ func (v *View) ensureIndexExcluded() {
 	v._excluded = Names(v.Exclude).Index()
 }
 
+//SelectedColumns returns columns selected by Selector if it is allowed by the View to use Selector.Columns
+//(see Constraints.Columns) or View.Columns
 func (v *View) SelectedColumns(selector *Selector) ([]*Column, error) {
-	if selector == nil || len(selector.Columns) == 0 {
+	if !v.CanUseClientColumns() || selector == nil || len(selector.Columns) == 0 {
 		return v.Columns, nil
 	}
 
@@ -387,6 +396,7 @@ func (v *View) ensureCollector() {
 	}
 }
 
+//Collector creates new Collector for View.DataType
 func (v *View) Collector(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector {
 	return v.newCollector(allowUnmapped, dest, supportParallel)
 }
@@ -399,27 +409,6 @@ func notEmptyOf(values ...string) string {
 	}
 
 	return ""
-}
-
-func (v *View) DestCount() int {
-	counter := 1
-	if len(v.With) == 0 {
-		return counter
-	}
-
-	for i := range v.With {
-		counter += v.With[i].Of.DestCount()
-	}
-
-	if len(v.Parameters) > 0 {
-		for _, param := range v.Parameters {
-			if param.view != nil {
-				counter += param.view.DestCount()
-			}
-		}
-	}
-
-	return counter
 }
 
 func (v *View) initHolders() error {
@@ -438,12 +427,21 @@ func (v *View) initHolders() error {
 		columnName := v.Caser.Format(relation.Column, format.CaseUpperCamel)
 		relation.columnField = xunsafe.FieldByName(v.DataType(), columnName)
 
-		relation.HasColumnField = relation.columnField != nil
-		if relation.Cardinality == "Many" && !relation.HasColumnField {
+		relation.hasColumnField = relation.columnField != nil
+		if relation.Cardinality == "Many" && !relation.hasColumnField {
 			return fmt.Errorf("column %v doesn't have corresponding field in the struct: %v", columnName, v.DataType().String())
 		}
 	}
 
+	return nil
+}
+
+func (v *View) registerHolders() error {
+	for i := range v.With {
+		if err := v._columns.RegisterHolder(v.With[i]); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -457,11 +455,22 @@ func (v *View) initParams(ctx context.Context, resource *Resource) error {
 			return err
 		}
 	}
+
+	v._parameters = ParametersSlice(v.Parameters).Index()
+	v._cookiesKind = ParametersSlice(v.Parameters).Filter(CookieKind)
+	v._headerKind = ParametersSlice(v.Parameters).Filter(HeaderKind)
+	v._pathKind = ParametersSlice(v.Parameters).Filter(PathKind)
+	v._queryKind = ParametersSlice(v.Parameters).Filter(QueryKind)
+
+	v._allRequiredParameters = v.filterRequiredParams()
+
+	v.appendReferencesParameters()
 	return nil
 }
 
+//LimitWithSelector returns Selector.Limit if it is allowed by the View to use Selector.Columns (see Constraints.Limit)
 func (v *View) LimitWithSelector(selector *Selector) int {
-	if selector != nil && selector.Limit > 0 {
+	if v.CanUseClientLimit() && selector != nil && selector.Limit > 0 {
 		return selector.Limit
 	}
 	return v.Selector.Limit
@@ -475,4 +484,108 @@ func (v *View) propagateTypeIfNeeded() {
 	for _, childView := range v.With {
 		childView.Of.Schema.inheritType(childView.holderField.Type)
 	}
+}
+
+func (v *View) shouldIndexCookie(cookie *http.Cookie) bool {
+	param, _ := v._cookiesKind.Lookup(cookie.Name)
+	if param != nil {
+		return true
+	}
+
+	return false
+}
+
+func (v *View) shouldIndexUriParam(key string) bool {
+	param, _ := v._pathKind.Lookup(key)
+	if param != nil {
+		return true
+	}
+
+	return false
+}
+
+func (v *View) shouldIndexHeader(key string) bool {
+	param, _ := v._headerKind.Lookup(key)
+	if param != nil {
+		return true
+	}
+	return false
+}
+
+func (v *View) shouldIndexQueryParam(key string) bool {
+	param, _ := v._queryKind.Lookup(key)
+	if param != nil {
+		return true
+	}
+	return false
+}
+
+func (v *View) ensureSelectorConstraints() {
+	if v.SelectorConstraints == nil {
+		v.SelectorConstraints = &Constraints{}
+	}
+
+	v.SelectorConstraints._criteria = v.SelectorConstraints.Criteria != nil && *v.SelectorConstraints.Criteria == true
+	v.SelectorConstraints._columns = v.SelectorConstraints.Columns != nil && *v.SelectorConstraints.Columns == true
+	v.SelectorConstraints._orderBy = v.SelectorConstraints.OrderBy != nil && *v.SelectorConstraints.OrderBy == true
+	v.SelectorConstraints._limit = v.SelectorConstraints.Limit != nil && *v.SelectorConstraints.Limit == true
+	v.SelectorConstraints._offset = v.SelectorConstraints.Offset != nil && *v.SelectorConstraints.Offset == true
+}
+
+//CanUseClientCriteria indicates if Selector.Criteria can be used
+func (v *View) CanUseClientCriteria() bool {
+	return v.SelectorConstraints._criteria
+}
+
+//CanUseClientColumns indicates if Selector.Columns can be used
+func (v *View) CanUseClientColumns() bool {
+	return v.SelectorConstraints._columns
+}
+
+//CanUseClientLimit indicates if Selector.Limit can be used
+func (v *View) CanUseClientLimit() bool {
+	return v.SelectorConstraints._limit
+}
+
+//CanUseClientOrderBy indicates if Selector.OrderBy can be used
+func (v *View) CanUseClientOrderBy() bool {
+	return v.SelectorConstraints._orderBy
+}
+
+//CanUseClientOffset indicates if Selector.Offset can be used
+func (v *View) CanUseClientOffset() bool {
+	return v.SelectorConstraints._offset
+}
+
+func (v *View) filterRequiredParams() []*Parameter {
+	if v._allRequiredParameters != nil {
+		return v._allRequiredParameters
+	}
+
+	result := make([]*Parameter, 0)
+	for i := range v.Parameters {
+		if v.Parameters[i].IsRequired() {
+			result = append(result, v.Parameters[i])
+		}
+	}
+
+	for i := range v.With {
+		result = append(result, (&v.With[i].Of.View).filterRequiredParams()...)
+	}
+
+	return result
+}
+
+func (v *View) appendReferencesParameters() {
+	for _, rel := range v.With {
+		(&rel.Of.View).appendReferencesParameters()
+		v.mergeParams(&rel.Of.View)
+	}
+}
+
+func (v *View) mergeParams(view *View) {
+	v._cookiesKind.merge(view._cookiesKind)
+	v._pathKind.merge(view._pathKind)
+	v._headerKind.merge(view._headerKind)
+	v._queryKind.merge(view._queryKind)
 }

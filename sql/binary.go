@@ -11,7 +11,7 @@ type Binary struct {
 
 }
 
-func (b *Binary) Validate(allowed map[string]int) error {
+func (b *Binary) Validate(allowed map[string]Kind) error {
 
 	err := validate(b, allowed)
 	if err != nil {
@@ -21,7 +21,7 @@ func (b *Binary) Validate(allowed map[string]int) error {
 	return nil
 }
 
-func validate(b *Binary, allowed map[string]int) error {
+func validate(b *Binary, allowed map[string]Kind) error {
 	switch x := b.X.(type) {
 	case *Binary:
 		return x.Validate(allowed)

@@ -7,10 +7,10 @@ import (
 
 type Literal struct {
 	Value string
-	Kind  int
+	Kind  Kind
 }
 
-func (l *Literal) Validate(allowed map[string]int) error {
+func (l *Literal) Validate(_ map[string]Kind) error {
 	newLines := strings.Count(l.Value, "\n")
 	if newLines > 0 {
 		return fmt.Errorf("new lines in literal: %v not supported", l.Value)
