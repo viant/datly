@@ -9,7 +9,6 @@ Views:
     Ref: otherdb
   Name: languages
   Table: languages
-  MatchStrategy: read_all
   BatchReadSize: 4
   Selector:
     Limit: 14

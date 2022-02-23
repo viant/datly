@@ -14,21 +14,16 @@ type ParametersSlice []*Parameter
 //Index indexes parameters by Parameter.Name
 //Uses shared.KeysOf
 func (p ParametersSlice) Index() Parameters {
-	result := make(map[string]*Parameter)
+	result := Parameters(make(map[string]*Parameter))
 
 	for parameterIndex := range p {
-		keys := shared.KeysOf(p[parameterIndex].Name, false)
-
-		for _, key := range keys {
-			result[key] = p[parameterIndex]
-		}
+		result.Register(p[parameterIndex])
 	}
 
 	return result
 }
 
 //Filter filters ParametersSlice with given Kind and creates Parameters
-//Uses shared.KeysOf
 func (p ParametersSlice) Filter(kind Kind) Parameters {
 	result := make(map[string]*Parameter)
 
@@ -36,15 +31,17 @@ func (p ParametersSlice) Filter(kind Kind) Parameters {
 		if p[parameterIndex].In.Kind != kind {
 			continue
 		}
+		result[p[parameterIndex].In.Name] = p[parameterIndex]
 
-		keys := shared.KeysOf(p[parameterIndex].In.Name, false)
-
-		for _, key := range keys {
-			result[key] = p[parameterIndex]
-		}
 	}
 
 	return result
+}
+
+func (p Parameters) merge(with Parameters) {
+	for s := range with {
+		p[s] = with[s]
+	}
 }
 
 //Lookup returns Parameter with given name
@@ -54,5 +51,14 @@ func (p Parameters) Lookup(paramName string) (*Parameter, error) {
 	}
 
 	return nil, fmt.Errorf("not found parameter %v", paramName)
+}
 
+//Register registers parameter
+//Uses shared.KeysOf
+func (p Parameters) Register(parameter *Parameter) {
+	keys := shared.KeysOf(parameter.Name, false)
+
+	for _, key := range keys {
+		p[key] = parameter
+	}
 }

@@ -9,7 +9,6 @@ Views:
       Ref: mydb
     Name: event_types
     Table: event_types
-    MatchStrategy: read_all
 
   - Connector:
       Ref: mydb

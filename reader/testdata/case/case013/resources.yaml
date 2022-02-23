@@ -9,7 +9,6 @@ Views:
     Ref: mydb
   Name: accounts
   Table: accounts
-  MatchStrategy: read_all
 
 - Connector:
     Ref: mydb

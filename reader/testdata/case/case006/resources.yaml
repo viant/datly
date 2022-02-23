@@ -8,7 +8,7 @@ Views:
           - Name: id
             DataType: Int
           - Name: name
-            Expression: Upper(Name)
+            Expression: Upper(name)
             DataType: String
 Connectors:
     - Name: mydb

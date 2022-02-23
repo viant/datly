@@ -21,6 +21,17 @@ type Schema struct {
 	DataType  string
 }
 
+func NewSchema(compType reflect.Type) *Schema {
+	result := &Schema{
+		Name:      "",
+		autoGen:   true,
+		OmitEmpty: false,
+	}
+
+	result.setType(compType)
+	return result
+}
+
 //Type returns struct type
 func (c *Schema) Type() reflect.Type {
 	return c.compType

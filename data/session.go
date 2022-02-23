@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/sql"
@@ -41,7 +42,13 @@ func (s *Session) NewReplacement(view *View) rdata.Map {
 }
 
 //Init initializes session
-func (s *Session) Init() error {
+func (s *Session) Init(ctx context.Context, resource *Resource) error {
+	var err error
+
+	if err = s.View.Init(ctx, resource); err != nil {
+		return err
+	}
+
 	s.Selectors.Init()
 
 	if _, ok := s.Dest.(*interface{}); !ok {
@@ -58,30 +65,30 @@ func (s *Session) Init() error {
 			return fmt.Errorf("route path doesn't match %v request URI %v", s.MatchedPath, s.HttpRequest.URL.Path)
 		}
 
-		if err := s.indexUriParams(uriParams); err != nil {
+		if err = s.indexUriParams(uriParams); err != nil {
 			return err
 		}
 
-		if err := s.indexCookies(); err != nil {
+		if err = s.indexCookies(); err != nil {
 			return err
 		}
 
-		if err := s.indexHeaders(); err != nil {
+		if err = s.indexHeaders(); err != nil {
 			return err
 		}
 
-		if err := s.indexQueryParams(); err != nil {
+		if err = s.indexQueryParams(); err != nil {
 			return err
 		}
 	}
 
-	if err := s.isAnyRequiredParamMissing(); err != nil {
+	if err = s.isAnyRequiredParamMissing(); err != nil {
 		return err
 	}
 
 	for _, selector := range s.Selectors {
 		if selector.Criteria != nil {
-			if _, err := sql.Parse([]byte(selector.Criteria.Expression)); err != nil {
+			if _, err = sql.Parse([]byte(selector.Criteria.Expression)); err != nil {
 				return err
 			}
 		}

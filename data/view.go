@@ -37,7 +37,7 @@ type (
 		Schema *Schema `json:",omitempty"`
 
 		With       []*Relation `json:",omitempty"`
-		ParamField *xunsafe.Field
+		ParamField *xunsafe.Field `json:"_,omitempty"`
 
 		MatchStrategy MatchStrategy `json:",omitempty"`
 		BatchReadSize *int          `json:",omitempty"`
@@ -55,7 +55,6 @@ type (
 		Caser        format.Case `json:",omitempty"`
 		initialized  bool
 		isValid      bool
-		typeRebuilt  bool
 		newCollector func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector
 	}
 
@@ -308,12 +307,12 @@ func (v *View) inherit(view *View) {
 		v.Criteria = view.Criteria
 	}
 
-	if len(v.With) == 0 {
-		v.With = view.With
-	}
-
 	if v.Schema == nil && len(v.With) == 0 {
 		v.Schema = view.Schema
+	}
+
+	if len(v.With) == 0 {
+		v.With = view.With
 	}
 
 	if len(v.Exclude) == 0 {
@@ -465,6 +464,7 @@ func (v *View) initParams(ctx context.Context, resource *Resource) error {
 
 	v._allRequiredParameters = v.filterRequiredParams()
 
+	v.appendReferencesParameters()
 	return nil
 }
 
@@ -492,11 +492,6 @@ func (v *View) shouldIndexCookie(cookie *http.Cookie) bool {
 		return true
 	}
 
-	for i := range v.With {
-		if (&v.With[i].Of.View).shouldIndexCookie(cookie) {
-			return true
-		}
-	}
 	return false
 }
 
@@ -506,11 +501,6 @@ func (v *View) shouldIndexUriParam(key string) bool {
 		return true
 	}
 
-	for i := range v.With {
-		if (&v.With[i].Of.View).shouldIndexUriParam(key) {
-			return true
-		}
-	}
 	return false
 }
 
@@ -519,12 +509,6 @@ func (v *View) shouldIndexHeader(key string) bool {
 	if param != nil {
 		return true
 	}
-
-	for i := range v.With {
-		if (&v.With[i].Of.View).shouldIndexHeader(key) {
-			return true
-		}
-	}
 	return false
 }
 
@@ -532,12 +516,6 @@ func (v *View) shouldIndexQueryParam(key string) bool {
 	param, _ := v._queryKind.Lookup(key)
 	if param != nil {
 		return true
-	}
-
-	for i := range v.With {
-		if (&v.With[i].Of.View).shouldIndexQueryParam(key) {
-			return true
-		}
 	}
 	return false
 }
@@ -596,4 +574,18 @@ func (v *View) filterRequiredParams() []*Parameter {
 	}
 
 	return result
+}
+
+func (v *View) appendReferencesParameters() {
+	for _, rel := range v.With {
+		(&rel.Of.View).appendReferencesParameters()
+		v.mergeParams(&rel.Of.View)
+	}
+}
+
+func (v *View) mergeParams(view *View) {
+	v._cookiesKind.merge(view._cookiesKind)
+	v._pathKind.merge(view._pathKind)
+	v._headerKind.merge(view._headerKind)
+	v._queryKind.merge(view._queryKind)
 }

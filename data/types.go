@@ -3,6 +3,7 @@ package data
 import "reflect"
 
 //Types represents reflect.Type registry
+//map key should match Schema.Name
 type Types map[string]reflect.Type
 
 //Register registers Type
