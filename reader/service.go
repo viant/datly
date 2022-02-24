@@ -244,7 +244,7 @@ func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *
 	case 1:
 		holder := view.Schema.Slice().ValuePointerAt(ptr, 0)
 		holderPtr := xunsafe.AsPointer(holder)
-		value := view.ParamField.Interface(holderPtr)
+		value := view.ParamField().Interface(holderPtr)
 
 		paramMap.SetValue(param.Name, value)
 	default:
@@ -255,7 +255,7 @@ func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *
 }
 
 func (s *Service) addQueryParam(session *Session, param *data.Parameter, params *rdata.Map) {
-	paramValue := session.QueryParam(param.Name)
+	paramValue := session.QueryParam(param.In.Name)
 	params.SetValue(param.Name, paramValue)
 }
 

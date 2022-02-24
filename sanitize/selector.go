@@ -10,7 +10,7 @@ type Selector struct {
 	Name string
 }
 
-func (s *Selector) Adjust(sb *strings.Builder, columns data.Columns) error {
+func (s *Selector) Sanitize(sb *strings.Builder, columns data.Columns) error {
 	col, err := columns.Lookup(s.Name)
 	if err != nil {
 		return err

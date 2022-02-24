@@ -3,6 +3,7 @@ package data
 import (
 	"fmt"
 	"github.com/viant/datly/sql"
+	"github.com/viant/sqlx/io"
 	"reflect"
 	"strings"
 	"time"
@@ -16,8 +17,10 @@ type Column struct {
 	Filterable bool   `json:",omitempty"`
 
 	rType         reflect.Type
+	tag           *io.Tag
 	sqlExpression string
 	criteriaKind  sql.Kind
+	field         *reflect.StructField
 }
 
 //SqlExpression builds column sql expression if any expression specified in format: Expression AS Name

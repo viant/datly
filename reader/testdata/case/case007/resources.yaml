@@ -10,6 +10,8 @@ Views:
         DataType: String
       - Name: quantity
         DataType: Float
+    SelectorConstraints:
+        Columns: true
 Connectors:
   - Name: mydb
     Driver: sqlite3

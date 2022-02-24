@@ -12,8 +12,8 @@ type Binary struct {
 
 }
 
-func (b *Binary) Adjust(sb *strings.Builder, columns data.Columns) error {
-	err := b.X.Adjust(sb, columns)
+func (b *Binary) Sanitize(sb *strings.Builder, columns data.Columns) error {
+	err := b.X.Sanitize(sb, columns)
 	if err != nil {
 		return err
 	}
@@ -22,7 +22,7 @@ func (b *Binary) Adjust(sb *strings.Builder, columns data.Columns) error {
 	sb.WriteString(b.Operator)
 	sb.WriteString(" ")
 
-	err = b.Y.Adjust(sb, columns)
+	err = b.Y.Sanitize(sb, columns)
 	if err != nil {
 		return err
 	}

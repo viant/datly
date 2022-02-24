@@ -7,10 +7,12 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io"
+	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
+	"strings"
 )
 
 type (
@@ -23,9 +25,10 @@ type (
 		Table     string `json:",omitempty"`
 		From      string `json:",omitempty"`
 
-		Exclude    []string  `json:",omitempty"`
-		Columns    []*Column `json:",omitempty"`
-		CaseFormat string    `json:",omitempty"`
+		Exclude              []string  `json:",omitempty"`
+		Columns              []*Column `json:",omitempty"`
+		InheritSchemaColumns bool      `json:",omitempty"`
+		CaseFormat           string    `json:",omitempty"`
 
 		Criteria *Criteria `json:",omitempty"`
 
@@ -36,8 +39,7 @@ type (
 		Prefix string  `json:",omitempty"`
 		Schema *Schema `json:",omitempty"`
 
-		With       []*Relation    `json:",omitempty"`
-		ParamField *xunsafe.Field `json:"_,omitempty"`
+		With []*Relation `json:",omitempty"`
 
 		MatchStrategy MatchStrategy `json:",omitempty"`
 		BatchReadSize *int          `json:",omitempty"`
@@ -45,6 +47,7 @@ type (
 		_columns    Columns
 		_excluded   map[string]bool
 		_parameters Parameters
+		_paramField *xunsafe.Field
 
 		//For optimization reasons. All of those Parameters and _allRequiredParameters contains also relation parameters
 		//same goes to the views.
@@ -183,7 +186,10 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	v.propagateTypeIfNeeded()
+	if err = v.propagateTypeIfNeeded(); err != nil {
+		return err
+	}
+
 	if err = v.registerHolders(); err != nil {
 		return err
 	}
@@ -197,7 +203,6 @@ func (v *View) initRelations(ctx context.Context, resource *Resource) error {
 	}
 
 	for i := range v.With {
-
 		err = v.With[i].Init(ctx, resource)
 		if err != nil {
 			return err
@@ -282,6 +287,13 @@ func (v *View) ensureSchema(types Types) error {
 	}
 
 	v.Schema.Init(v.Columns, v.With, v.Caser)
+	if err := v.indexColumnsFields(); err != nil {
+		return err
+	}
+
+	if err := v.deriveColumnsFromSchema(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -487,14 +499,22 @@ func (v *View) LimitWithSelector(selector *Selector) int {
 	return v.Selector.Limit
 }
 
-func (v *View) propagateTypeIfNeeded() {
+func (v *View) propagateTypeIfNeeded() error {
 	if v.Schema.AutoGen() {
-		return
+		return nil
 	}
 
 	for _, childView := range v.With {
 		childView.Of.Schema.inheritType(childView.holderField.Type)
+		if err := (&childView.Of.View).propagateTypeIfNeeded(); err != nil {
+			return err
+		}
+
+		if err := (&childView.Of.View).deriveColumnsFromSchema(); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 //UsesCookie returns true if View or any of relations View Parameter uses cookie.
@@ -638,4 +658,61 @@ func (v *View) markColumnsAsFilterable() error {
 		column.Filterable = true
 	}
 	return nil
+}
+
+func (v *View) indexColumnsFields() error {
+	rType := v.Schema.DereferencedType()
+	for i := 0; i < rType.NumField(); i++ {
+		field := rType.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+
+		tag := io.ParseTag(field.Tag.Get(option.TagSqlx))
+		//TODO: support anonymous fields
+		if tag.Column != "" {
+			column, err := v._columns.Lookup(strings.ToLower(tag.Column))
+			if err != nil {
+				return err
+			}
+
+			column.tag = tag
+			column.field = &field
+			v._columns.RegisterWithName(field.Name, column)
+		}
+	}
+
+	return nil
+}
+
+func (v *View) deriveColumnsFromSchema() error {
+	if !v.InheritSchemaColumns {
+		return nil
+	}
+
+	newColumns := make([]*Column, 0)
+
+	rType := v.Schema.DereferencedType()
+	for i := 0; i < rType.NumField(); i++ {
+		field := rType.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+
+		column, err := v._columns.Lookup(field.Name)
+		if err != nil {
+			return err
+		}
+
+		newColumns = append(newColumns, column)
+	}
+
+	v.Columns = newColumns
+	v._columns = ColumnSlice(newColumns).Index(v.Caser)
+
+	return nil
+}
+
+func (v *View) ParamField() *xunsafe.Field {
+	return v._paramField
 }

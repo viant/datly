@@ -27,7 +27,6 @@ type Collector struct {
 	values map[string]*[]interface{} //acts as a buffer. Value resolved with Resolve method can't be put to the value position map
 	// because value fetched from database was not scanned into yet. Putting value to the map as a key, would create key as a pointer to the zero value.
 
-	err       error
 	slice     *xunsafe.Slice
 	view      *View
 	relations []*Collector
@@ -52,10 +51,6 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 	}
 	r.types[column.Name()] = xunsafe.NewType(scanType)
 	return func(ptr unsafe.Pointer) interface{} {
-		if !r.columnAllowed(column) {
-			r.err = fmt.Errorf("can't resolve column %v", column.Name())
-		}
-
 		var valuePtr interface{}
 		switch kind {
 		case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64:

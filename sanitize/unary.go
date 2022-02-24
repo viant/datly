@@ -10,9 +10,9 @@ type Unary struct {
 	Operator string
 }
 
-func (u *Unary) Adjust(sb *strings.Builder, columns data.Columns) error {
+func (u *Unary) Sanitize(sb *strings.Builder, columns data.Columns) error {
 	sb.WriteString(u.Operator)
-	err := u.X.Adjust(sb, columns)
+	err := u.X.Sanitize(sb, columns)
 	if err != nil {
 		return err
 	}

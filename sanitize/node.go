@@ -6,5 +6,5 @@ import (
 )
 
 type Node interface {
-	Adjust(sb *strings.Builder, columns data.Columns) error
+	Sanitize(sb *strings.Builder, columns data.Columns) error
 }
