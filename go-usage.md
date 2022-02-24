@@ -1,4 +1,4 @@
-#Create Views programmatically
+###Create Views programmatically
 
 One of the most important concept used across the datly, are `Views`. `View `represents database table, and also allows
 filtering rows and columns. You can load them from `.yaml` files, as one of the Resources:
@@ -267,3 +267,82 @@ Default `MatchStrategy` is `read_matched` - referenced View will wait until Pare
 to only needed records (by `Column in (?,?,?)`). The other supported is `read_all` - the all specified parent values and all referenced view values will be fetched at the same time
 then filtered and merged at the backend. You can also specify `BatchReadSize` - in example above, datly will fetch no more than 14 languages
 in chunks no bigger than 4.
+
+###Create Resource programmatically
+If you want to load `Views` from yaml file, you are doing it indirectly by loading `Resource` and then you can find `View` by its name.
+You can also create `Resource` programmatically:
+
+First, you need to prepare Types and create empty `Resource` with specified types:
+```go
+type Foo struct {
+	Id    int
+	Name  string
+	Price float64
+}
+
+types := Types{}
+types.Register("foo", reflect.TypeOf(Foo{}))
+resource := NewResource(types)
+```
+
+Then you need to create and register `Views`:
+```go
+fooView := &View{
+	Name: "foos",
+	Connector: &config.Connector{
+		Reference: shared.Reference{
+			Ref: "mydb",
+		},
+	},
+	Parameters: []*Parameter{
+		{
+			Reference: shared.Reference{
+				Ref: "user_id",
+			},
+		},
+	},
+	Schema: &Schema{
+		Name: "foo",
+	},
+}
+	
+fooViewInherited := &View{
+	Reference: shared.Reference{
+		Ref: "foos",
+	},
+	Name:  "foos_referenced", 
+	Table: "foos",
+}	
+resource.AddViews(fooView, fooViewInherited)
+```
+
+Then you need to create and register `mydb` connector used by View `foos`.
+```go
+mydbConnector := &config.Connector{
+	Name:   "mydb",
+	DSN:    "./testdata/db/mydb.db",
+	Driver: "sqlite3",
+}
+resource.AddConnectors(mydbConnector)
+```
+
+And also you need to create and register `user_id` parameter used by `foos`.
+```go
+userIdParameter := &Parameter{
+	Name: "user_id",
+	In: &Location{
+		Kind: QueryKind,
+		Name: "user-id",
+	},
+}
+resource.AddParameters(userIdParameter)
+```
+At the end you need to call `Init` on `Resource`:
+```go
+err := resource.Init(context.TODO())
+if err != nil {
+	//handle error
+}
+```
+After initialization `Resource`, all `Views`, `Connectors` and `Parameters` will be fully initialized and ready to use,
+including `fooView`, `fooViewInherited`, `mydbConnector`, and `userIdParameter`.

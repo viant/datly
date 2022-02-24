@@ -22,6 +22,12 @@ func (v *Views) Register(view *View) {
 	}
 }
 
+func (v *Views) merge(views *Views) {
+	for key, _ := range *views {
+		(*v)[key] = (*views)[key]
+	}
+}
+
 //Lookup returns view by given name or error if view is not present.
 func (v Views) Lookup(viewName string) (*View, error) {
 	if len(v) == 0 {

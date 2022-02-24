@@ -23,7 +23,7 @@ type Service struct {
 
 //Read select data from database based on View and assign it to dest. ParentDest has to be pointer.
 //TODO: Select with join when connector is the same for one to one relation
-func (s *Service) Read(ctx context.Context, session *data.Session) error {
+func (s *Service) Read(ctx context.Context, session *Session) error {
 	if err := session.Init(ctx, s.Resource); err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func (s *Service) actualStructType(dest interface{}) reflect.Type {
 	return rType
 }
 
-func (s *Service) readAll(ctx context.Context, session *data.Session, collector *data.Collector, upstream rdata.Map, wg *sync.WaitGroup, errors *shared.Errors) error {
+func (s *Service) readAll(ctx context.Context, session *Session, collector *data.Collector, upstream rdata.Map, wg *sync.WaitGroup, errors *shared.Errors) error {
 	view := collector.View()
 
 	db, err := view.Db()
@@ -178,7 +178,7 @@ func (s *Service) prepareSQL(view *data.View, selector *data.Selector, upstream 
 	return SQL, nil
 }
 
-func (s *Service) readRelations(ctx context.Context, session *data.Session, collector *data.Collector, params rdata.Map, wg *sync.WaitGroup, selector *data.Selector, errors *shared.Errors) error {
+func (s *Service) readRelations(ctx context.Context, session *Session, collector *data.Collector, params rdata.Map, wg *sync.WaitGroup, selector *data.Selector, errors *shared.Errors) error {
 	collectorChildren := collector.Relations(selector)
 	for i := range collectorChildren {
 		if err := s.readAll(ctx, session, collectorChildren[i], params, wg, errors); err != nil {
@@ -188,7 +188,7 @@ func (s *Service) readRelations(ctx context.Context, session *data.Session, coll
 	return nil
 }
 
-func (s *Service) buildViewParams(ctx context.Context, session *data.Session, view *data.View) (rdata.Map, error) {
+func (s *Service) buildViewParams(ctx context.Context, session *Session, view *data.View) (rdata.Map, error) {
 	if len(view.Parameters) == 0 {
 		return nil, nil
 	}
@@ -225,7 +225,7 @@ func (s *Service) Apply(options Options) {
 	}
 }
 
-func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *data.Parameter, session *data.Session) error {
+func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *data.Parameter, session *Session) error {
 	view := param.View()
 	destSlice := reflect.New(view.Schema.SliceType()).Interface()
 
@@ -254,22 +254,22 @@ func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *
 	return nil
 }
 
-func (s *Service) addQueryParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
+func (s *Service) addQueryParam(session *Session, param *data.Parameter, params *rdata.Map) {
 	paramValue := session.QueryParam(param.Name)
 	params.SetValue(param.Name, paramValue)
 }
 
-func (s *Service) addHeaderParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
+func (s *Service) addHeaderParam(session *Session, param *data.Parameter, params *rdata.Map) {
 	header := session.Header(param.In.Name)
 	params.SetValue(param.Name, header)
 }
 
-func (s *Service) addCookieParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
+func (s *Service) addCookieParam(session *Session, param *data.Parameter, params *rdata.Map) {
 	cookie := session.Cookie(param.In.Name)
 	params.SetValue(param.Name, cookie)
 }
 
-func (s *Service) addPathParam(session *data.Session, param *data.Parameter, params *rdata.Map) {
+func (s *Service) addPathParam(session *Session, param *data.Parameter, params *rdata.Map) {
 	pathVariable := session.PathVariable(param.In.Name)
 	params.SetValue(param.Name, pathVariable)
 }

@@ -6,6 +6,9 @@ Views:
     Exclude:
       - id
       - event_type_id
+    SelectorConstraints:
+        FilterableColumns:
+        - quantity
 Connectors:
   - Name: mydb
     Driver: sqlite3

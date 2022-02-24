@@ -1,7 +1,8 @@
-package sql
+package sanitize
 
 import (
 	"fmt"
+	"github.com/viant/datly/sql"
 	"github.com/viant/parsly"
 	"strings"
 )
@@ -119,11 +120,11 @@ outer:
 		nextLiteral := node.(*Literal)
 		values = append(values, nextLiteral.Value)
 
-		if kind == Null {
+		if kind == sql.Null {
 			kind = nextLiteral.Kind
 		}
 
-		if nextLiteral.Kind != Null && kind != nextLiteral.Kind {
+		if nextLiteral.Kind != sql.Null && kind != nextLiteral.Kind {
 			return nil, fmt.Errorf("inconsistent value type")
 		}
 
@@ -205,13 +206,13 @@ func expectLiteralOrSelector(cursor *parsly.Cursor, isRequired bool) (Node, erro
 
 	switch matched.Code {
 	case booleanLiteralToken:
-		return &Literal{Value: matched.Text(cursor), Kind: Bool}, nil
+		return &Literal{Value: matched.Text(cursor), Kind: sql.Bool}, nil
 	case numberToken:
-		return &Literal{Value: matched.Text(cursor), Kind: Int}, nil
+		return &Literal{Value: matched.Text(cursor), Kind: sql.Int}, nil
 	case selectorToken:
 		return &Selector{Name: matched.Text(cursor)}, nil
 	case stringLiteralToken:
-		return &Literal{Value: matched.Text(cursor), Kind: String}, nil
+		return &Literal{Value: matched.Text(cursor), Kind: sql.String}, nil
 	case nullToken:
 		return &Literal{Value: matched.Text(cursor), Kind: -1}, nil
 	}

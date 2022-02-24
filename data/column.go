@@ -2,6 +2,7 @@ package data
 
 import (
 	"fmt"
+	"github.com/viant/datly/sql"
 	"reflect"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ type Column struct {
 
 	rType         reflect.Type
 	sqlExpression string
+	criteriaKind  sql.Kind
 }
 
 //SqlExpression builds column sql expression if any expression specified in format: Expression AS Name
@@ -65,5 +67,22 @@ func (c *Column) Init() error {
 	}
 
 	c.rType = rType
+
+	switch c.rType.Kind() {
+	case reflect.Int, reflect.Int64, reflect.Int32, reflect.Int16, reflect.Int8,
+		reflect.Uint, reflect.Uint64, reflect.Uint32, reflect.Uint16, reflect.Uint8:
+		c.criteriaKind = sql.Int
+	case reflect.Float64, reflect.Float32:
+		c.criteriaKind = sql.Float
+	case reflect.String:
+		c.criteriaKind = sql.String
+	case reflect.Bool:
+		c.criteriaKind = sql.Bool
+	}
 	return nil
+}
+
+//Kind returns  Column sql.Kind
+func (c *Column) Kind() sql.Kind {
+	return c.criteriaKind
 }

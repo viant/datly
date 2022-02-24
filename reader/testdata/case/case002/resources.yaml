@@ -4,6 +4,8 @@ Views:
     Name: events
     SelectorConstraints:
       Criteria: true
+      FilterableColumns:
+      - event_type_id
 Connectors:
   - Name: mydb
     Driver: sqlite3

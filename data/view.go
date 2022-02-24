@@ -36,7 +36,7 @@ type (
 		Prefix string  `json:",omitempty"`
 		Schema *Schema `json:",omitempty"`
 
-		With       []*Relation `json:",omitempty"`
+		With       []*Relation    `json:",omitempty"`
 		ParamField *xunsafe.Field `json:"_,omitempty"`
 
 		MatchStrategy MatchStrategy `json:",omitempty"`
@@ -46,11 +46,15 @@ type (
 		_excluded   map[string]bool
 		_parameters Parameters
 
+		//For optimization reasons. All of those Parameters and _allRequiredParameters contains also relation parameters
+		//same goes to the views.
+		//If View has 4 Relations, lookup would take 4 times longer.
 		_cookiesKind           Parameters
 		_headerKind            Parameters
 		_pathKind              Parameters
 		_queryKind             Parameters
 		_allRequiredParameters []*Parameter
+		_views                 *Views
 
 		Caser        format.Case `json:",omitempty"`
 		initialized  bool
@@ -61,16 +65,17 @@ type (
 	//Constraints configure what can be selected by Selector
 	//For each field, default value is `false`
 	Constraints struct {
-		Criteria  *bool
-		_criteria bool
-		OrderBy   *bool
-		_orderBy  bool
-		Limit     *bool
-		_limit    bool
-		Columns   *bool
-		_columns  bool
-		Offset    *bool
-		_offset   bool
+		Criteria          *bool
+		_criteria         bool
+		OrderBy           *bool
+		_orderBy          bool
+		Limit             *bool
+		_limit            bool
+		Columns           *bool
+		_columns          bool
+		Offset            *bool
+		_offset           bool
+		FilterableColumns []string
 	}
 )
 
@@ -139,6 +144,8 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 	}
 
 	v.ensureIndexExcluded()
+	v.ensureSelectorConstraints()
+
 	if err := v.ensureCaseFormat(); err != nil {
 		return err
 	}
@@ -146,13 +153,20 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 	if err = v.ensureColumns(ctx); err != nil {
 		return err
 	}
+
 	v._columns = ColumnSlice(v.Columns).Index(v.Caser)
+	if err = v.markColumnsAsFilterable(); err != nil {
+		return err
+	}
+
 	if err = v.initRelations(ctx, resource); err != nil {
 		return err
 	}
 
-	v.ensureSchema(resource.types)
-	if err = v.initParams(ctx, resource); err != nil {
+	if err = v.ensureSchema(resource.types); err != nil {
+		return err
+	}
+	if err = v.collectFromRelations(ctx, resource); err != nil {
 		return err
 	}
 
@@ -170,7 +184,6 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 	}
 
 	v.propagateTypeIfNeeded()
-	v.ensureSelectorConstraints()
 	if err = v.registerHolders(); err != nil {
 		return err
 	}
@@ -253,21 +266,23 @@ func (v *View) Source() string {
 	return v.Name
 }
 
-func (v *View) ensureSchema(types Types) {
+func (v *View) ensureSchema(types Types) error {
 	if v.Schema == nil {
-		v.Schema = &Schema{
-			Name: v.Name,
-		}
+		v.Schema = &Schema{}
 	}
 
 	if v.Schema.Name != "" {
 		componentType := types.Lookup(v.Schema.Name)
+		if componentType == nil {
+			return fmt.Errorf("not found type for Schema %v", v.Schema.Name)
+		}
 		if componentType != nil {
 			v.Schema.setType(componentType)
 		}
 	}
 
 	v.Schema.Init(v.Columns, v.With, v.Caser)
+	return nil
 }
 
 //Db returns database connection that View was assigned to.
@@ -445,11 +460,7 @@ func (v *View) registerHolders() error {
 	return nil
 }
 
-func (v *View) initParams(ctx context.Context, resource *Resource) error {
-	if v.Criteria == nil {
-		return nil
-	}
-
+func (v *View) collectFromRelations(ctx context.Context, resource *Resource) error {
 	for _, param := range v.Parameters {
 		if err := param.Init(ctx, resource); err != nil {
 			return err
@@ -461,9 +472,9 @@ func (v *View) initParams(ctx context.Context, resource *Resource) error {
 	v._headerKind = ParametersSlice(v.Parameters).Filter(HeaderKind)
 	v._pathKind = ParametersSlice(v.Parameters).Filter(PathKind)
 	v._queryKind = ParametersSlice(v.Parameters).Filter(QueryKind)
+	v._allRequiredParameters = v.FilterRequiredParams()
 
-	v._allRequiredParameters = v.filterRequiredParams()
-
+	v.ensureViewIndexed()
 	v.appendReferencesParameters()
 	return nil
 }
@@ -486,7 +497,8 @@ func (v *View) propagateTypeIfNeeded() {
 	}
 }
 
-func (v *View) shouldIndexCookie(cookie *http.Cookie) bool {
+//UsesCookie returns true if View or any of relations View Parameter uses cookie.
+func (v *View) UsesCookie(cookie *http.Cookie) bool {
 	param, _ := v._cookiesKind.Lookup(cookie.Name)
 	if param != nil {
 		return true
@@ -495,8 +507,9 @@ func (v *View) shouldIndexCookie(cookie *http.Cookie) bool {
 	return false
 }
 
-func (v *View) shouldIndexUriParam(key string) bool {
-	param, _ := v._pathKind.Lookup(key)
+//UsesUriParam returns true if View or any of relations View Parameter uses path variable param.
+func (v *View) UsesUriParam(paramName string) bool {
+	param, _ := v._pathKind.Lookup(paramName)
 	if param != nil {
 		return true
 	}
@@ -504,16 +517,18 @@ func (v *View) shouldIndexUriParam(key string) bool {
 	return false
 }
 
-func (v *View) shouldIndexHeader(key string) bool {
-	param, _ := v._headerKind.Lookup(key)
+//UsesHeader returns true if View or any of relations View Parameter uses header.
+func (v *View) UsesHeader(headerName string) bool {
+	param, _ := v._headerKind.Lookup(headerName)
 	if param != nil {
 		return true
 	}
 	return false
 }
 
-func (v *View) shouldIndexQueryParam(key string) bool {
-	param, _ := v._queryKind.Lookup(key)
+//UsesQueryParam returns true if View or any of relations View Parameter uses query param.
+func (v *View) UsesQueryParam(paramName string) bool {
+	param, _ := v._queryKind.Lookup(paramName)
 	if param != nil {
 		return true
 	}
@@ -557,7 +572,8 @@ func (v *View) CanUseClientOffset() bool {
 	return v.SelectorConstraints._offset
 }
 
-func (v *View) filterRequiredParams() []*Parameter {
+//FilterRequiredParams returns all required parameters, including relations View
+func (v *View) FilterRequiredParams() []*Parameter {
 	if v._allRequiredParameters != nil {
 		return v._allRequiredParameters
 	}
@@ -570,7 +586,7 @@ func (v *View) filterRequiredParams() []*Parameter {
 	}
 
 	for i := range v.With {
-		result = append(result, (&v.With[i].Of.View).filterRequiredParams()...)
+		result = append(result, (&v.With[i].Of.View).FilterRequiredParams()...)
 	}
 
 	return result
@@ -578,8 +594,10 @@ func (v *View) filterRequiredParams() []*Parameter {
 
 func (v *View) appendReferencesParameters() {
 	for _, rel := range v.With {
-		(&rel.Of.View).appendReferencesParameters()
-		v.mergeParams(&rel.Of.View)
+		relationView := &rel.Of.View
+		relationView.appendReferencesParameters()
+		relationView.ensureViewIndexed()
+		v.mergeParams(relationView)
 	}
 }
 
@@ -588,4 +606,36 @@ func (v *View) mergeParams(view *View) {
 	v._pathKind.merge(view._pathKind)
 	v._headerKind.merge(view._headerKind)
 	v._queryKind.merge(view._queryKind)
+	v._views.merge(view._views)
+}
+
+//AnyOfViews returns View or any of his relation View by View.Name
+func (v *View) AnyOfViews(name string) (*View, error) {
+	return v._views.Lookup(name)
+}
+
+//IndexedColumns returns Columns
+func (v *View) IndexedColumns() Columns {
+	return v._columns
+}
+
+func (v *View) ensureViewIndexed() {
+	if v._views != nil {
+		return
+	}
+
+	v._views = &Views{}
+	v._views.Register(v)
+}
+
+func (v *View) markColumnsAsFilterable() error {
+	for _, colName := range v.SelectorConstraints.FilterableColumns {
+		column, err := v._columns.Lookup(colName)
+		if err != nil {
+			return err
+		}
+
+		column.Filterable = true
+	}
+	return nil
 }
