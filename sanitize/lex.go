@@ -1,7 +1,7 @@
-package sql
+package sanitize
 
 import (
-	lMatcher "github.com/viant/datly/sql/matcher"
+	lMatcher "github.com/viant/datly/sanitize/matcher"
 	"github.com/viant/parsly"
 	"github.com/viant/parsly/matcher"
 )
@@ -39,6 +39,3 @@ var NullKeyword = parsly.NewToken(nullToken, "NullKeyword", matcher.NewFragments
 
 var InKeyword = parsly.NewToken(inToken, "InKeyword", matcher.NewFragmentsFold([]byte("in")))
 var Next = parsly.NewToken(nextToken, "Next", matcher.NewChar(','))
-
-var PlaceholderKeyword = parsly.NewToken(placeholderToken, "PlaceholderKeyword", matcher.NewFragmentsFold([]byte("?")))
-var DataSet = parsly.NewToken(dataSetToken, "DataSet", matcher.NewFragmentsFold([]byte("in")))

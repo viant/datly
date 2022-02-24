@@ -1,4 +1,4 @@
-# Load Views from yaml
+### Load Views from yaml
 
 One of the most important concept used across the datly, are `Views`. `View `represents database table, and also allows
 filtering rows and columns. You can also pass `Types`, in this case key has to match `Schema.Name`:

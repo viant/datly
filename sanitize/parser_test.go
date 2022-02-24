@@ -1,4 +1,4 @@
-package sql
+package sanitize
 
 import (
 	"encoding/json"

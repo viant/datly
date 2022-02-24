@@ -7,3 +7,4 @@
 * Fetch strategy with SQL Join. 
 * Utility (rule, struct, relation generation etc ...) 
 * Patch/Create/Update
+* Add possibility to derive column names from struct
