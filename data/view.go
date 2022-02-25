@@ -193,6 +193,7 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 	if err = v.registerHolders(); err != nil {
 		return err
 	}
+
 	return nil
 }
 

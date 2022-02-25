@@ -5,6 +5,7 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/xunsafe"
 	"reflect"
+	"sync"
 	"unsafe"
 )
 
@@ -24,14 +25,16 @@ type Collector struct {
 	types          map[string]*xunsafe.Type
 	relation       *Relation
 
-	values map[string]*[]interface{} //acts as a buffer. Value resolved with Resolve method can't be put to the value position map
+	values map[string]*[]interface{} //acts like a buffer. Value resolved with Resolve method can't be put to the value position map
 	// because value fetched from database was not scanned into yet. Putting value to the map as a key, would create key as a pointer to the zero value.
 
 	slice     *xunsafe.Slice
 	view      *View
 	relations []*Collector
 
+	wg              *sync.WaitGroup
 	supportParallel bool
+	wgDelta         int
 }
 
 //Resolve resolved unmapped column
@@ -106,6 +109,13 @@ func NewCollector(columns []string, slice *xunsafe.Slice, view *View, dest inter
 	}
 
 	ensuredDest := ensureDest(dest, view)
+	wg := sync.WaitGroup{}
+	wgDelta := 0
+	if !supportParallel {
+		wgDelta = 1
+	}
+
+	wg.Add(wgDelta)
 
 	return &Collector{
 		dest:            ensuredDest,
@@ -117,6 +127,8 @@ func NewCollector(columns []string, slice *xunsafe.Slice, view *View, dest inter
 		types:           make(map[string]*xunsafe.Type),
 		values:          make(map[string]*[]interface{}),
 		supportParallel: supportParallel,
+		wg:              &wg,
+		wgDelta:         wgDelta,
 	}
 }
 
@@ -278,6 +290,13 @@ func (r *Collector) Relations(selector *Selector) []*Collector {
 
 		dest := reflect.MakeSlice(r.view.With[counter].Of.View.Schema.SliceType(), 0, 1).Interface()
 		slice := r.view.With[counter].Of.View.Schema.Slice()
+		wg := sync.WaitGroup{}
+
+		delta := 0
+		if !r.SupportsParallel() {
+			delta = 1
+		}
+		wg.Add(delta)
 
 		result[counter] = &Collector{
 			parent:          r,
@@ -290,6 +309,8 @@ func (r *Collector) Relations(selector *Selector) []*Collector {
 			view:            &r.view.With[counter].Of.View,
 			relation:        r.view.With[counter],
 			supportParallel: r.view.With[counter].Of.MatchStrategy.SupportsParallel(),
+			wg:              &wg,
+			wgDelta:         delta,
 		}
 		counter++
 	}
@@ -375,4 +396,17 @@ func (r *Collector) ParentPlaceholders() ([]interface{}, string) {
 	}
 
 	return result, r.relation.Of.Column
+}
+
+func (r *Collector) WaitIfNeeded() {
+	if r.parent != nil {
+		r.parent.wg.Wait()
+	}
+}
+
+func (r *Collector) Fetched() {
+	if r.wgDelta > 0 {
+		r.wg.Done()
+		r.wgDelta--
+	}
 }

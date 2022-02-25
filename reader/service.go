@@ -32,12 +32,12 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 
 	collector := session.View.Collector(session.AllowUnmapped, session.Dest, session.View.MatchStrategy.SupportsParallel())
 	errors := shared.NewErrors(0)
-	err := s.readAll(ctx, session, collector, nil, &wg, errors)
+	s.readAll(ctx, session, collector, nil, &wg, errors)
+	wg.Wait()
+	err := errors.Error()
 	if err != nil {
 		return err
 	}
-
-	wg.Wait()
 	collector.MergeData()
 
 	if err = errors.Error(); err != nil {
@@ -59,45 +59,41 @@ func (s *Service) actualStructType(dest interface{}) reflect.Type {
 	return rType
 }
 
-func (s *Service) readAll(ctx context.Context, session *Session, collector *data.Collector, upstream rdata.Map, wg *sync.WaitGroup, errors *shared.Errors) error {
+func (s *Service) readAll(ctx context.Context, session *Session, collector *data.Collector, upstream rdata.Map, wg *sync.WaitGroup, errors *shared.Errors) {
+	defer collector.Fetched()
+
 	view := collector.View()
-
-	db, err := view.Db()
-	if err != nil {
-		return err
-	}
-
 	params, err := s.buildViewParams(ctx, session, view)
+
 	if err != nil {
-		return err
+		errors.Append(err)
+		return
 	}
 
 	selector := session.Selectors.Lookup(view.Name)
+	collectorChildren := collector.Relations(selector)
+	wg.Add(len(collectorChildren))
+	for i := range collectorChildren {
+		go func(i int) {
+			defer wg.Done()
+			s.readAll(ctx, session, collectorChildren[i], params, wg, errors)
+		}(i)
+	}
+
+	collector.WaitIfNeeded()
+
+	db, err := view.Db()
+	if err != nil {
+		errors.Append(err)
+		return
+	}
+
 	limit := view.LimitWithSelector(selector)
 	batchData := s.batchData(limit, view, collector)
-
-	if !collector.SupportsParallel() {
-		err = s.exhaustRead(ctx, view, selector, upstream, params, batchData, db, collector)
-	} else {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			err := s.exhaustRead(ctx, view, selector, upstream, params, batchData, db, collector)
-			if err != nil {
-				errors.Append(err)
-			}
-		}()
-	}
-
+	err = s.exhaustRead(ctx, view, selector, upstream, params, batchData, db, collector)
 	if err != nil {
-		return err
+		errors.Append(err)
 	}
-
-	if err = s.readRelations(ctx, session, collector, params, wg, selector, errors); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (s *Service) batchData(limit int, view *data.View, collector *data.Collector) *BatchData {
@@ -178,16 +174,6 @@ func (s *Service) prepareSQL(view *data.View, selector *data.Selector, upstream 
 	return SQL, nil
 }
 
-func (s *Service) readRelations(ctx context.Context, session *Session, collector *data.Collector, params rdata.Map, wg *sync.WaitGroup, selector *data.Selector, errors *shared.Errors) error {
-	collectorChildren := collector.Relations(selector)
-	for i := range collectorChildren {
-		if err := s.readAll(ctx, session, collectorChildren[i], params, wg, errors); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (s *Service) buildViewParams(ctx context.Context, session *Session, view *data.View) (rdata.Map, error) {
 	if len(view.Parameters) == 0 {
 		return nil, nil
@@ -230,8 +216,13 @@ func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *
 	destSlice := reflect.New(view.Schema.SliceType()).Interface()
 
 	collector := view.Collector(false, destSlice, false)
-	if err := s.readAll(ctx, session, collector, paramMap, nil, shared.NewErrors(0)); err != nil {
-		return err
+	errors := shared.NewErrors(0)
+
+	wg := sync.WaitGroup{}
+	s.readAll(ctx, session, collector, paramMap, &wg, errors)
+	wg.Wait()
+	if errors.Error() != nil {
+		return errors.Error()
 	}
 
 	ptr := xunsafe.AsPointer(destSlice)
