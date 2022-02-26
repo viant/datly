@@ -1,0 +1,41 @@
+Views:
+  - Name: audiences
+    Table: audiences
+    Connector:
+      Ref: otherdb
+
+  - Name: deals
+    Connector:
+      Ref: otherdb
+
+  - Name: audiences_deals
+    Connector:
+      Ref: otherdb
+    Ref: audiences
+    Schema:
+      Name: audience
+    With:
+    - Name: audiences_deals_ints
+      Of:
+        Ref: deals
+        Column: id
+
+      Cardinality: Many
+      Column: deals_id
+      Holder: Deals
+      IncludeColumn: false
+
+    - Name: audiences_deals_strings
+      Of:
+        Ref: deals
+        Column: deal_id
+
+      Cardinality: Many
+      Column: string_deals_id
+      Holder: Deals
+      IncludeColumn: false
+
+Connectors:
+  - Name: otherdb
+    Driver: sqlite3
+    DSN: "./testdata/db/other.db"

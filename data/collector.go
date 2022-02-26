@@ -5,6 +5,7 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/xunsafe"
 	"reflect"
+	"sync"
 	"unsafe"
 )
 
@@ -15,6 +16,7 @@ type Visitor func(value interface{}) error
 //If View or any of the View.With MatchStrategy support Parallel fetching, it is important to call MergeData
 //when all needed data was fetched
 type Collector struct {
+	mutex  sync.Mutex
 	parent *Collector
 
 	dest           interface{}
@@ -24,15 +26,16 @@ type Collector struct {
 	types          map[string]*xunsafe.Type
 	relation       *Relation
 
-	values map[string]*[]interface{} //acts as a buffer. Value resolved with Resolve method can't be put to the value position map
+	values map[string]*[]interface{} //acts like a buffer. Value resolved with Resolve method can't be put to the value position map
 	// because value fetched from database was not scanned into yet. Putting value to the map as a key, would create key as a pointer to the zero value.
 
-	err       error
 	slice     *xunsafe.Slice
 	view      *View
 	relations []*Collector
 
+	wg              *sync.WaitGroup
 	supportParallel bool
+	wgDelta         int
 }
 
 //Resolve resolved unmapped column
@@ -52,10 +55,6 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 	}
 	r.types[column.Name()] = xunsafe.NewType(scanType)
 	return func(ptr unsafe.Pointer) interface{} {
-		if !r.columnAllowed(column) {
-			r.err = fmt.Errorf("can't resolve column %v", column.Name())
-		}
-
 		var valuePtr interface{}
 		switch kind {
 		case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64:
@@ -111,6 +110,13 @@ func NewCollector(columns []string, slice *xunsafe.Slice, view *View, dest inter
 	}
 
 	ensuredDest := ensureDest(dest, view)
+	wg := sync.WaitGroup{}
+	wgDelta := 0
+	if !supportParallel {
+		wgDelta = 1
+	}
+
+	wg.Add(wgDelta)
 
 	return &Collector{
 		dest:            ensuredDest,
@@ -122,6 +128,8 @@ func NewCollector(columns []string, slice *xunsafe.Slice, view *View, dest inter
 		types:           make(map[string]*xunsafe.Type),
 		values:          make(map[string]*[]interface{}),
 		supportParallel: supportParallel,
+		wg:              &wg,
+		wgDelta:         wgDelta,
 	}
 }
 
@@ -162,16 +170,34 @@ func (r *Collector) parentVisitor(visitorRelations []*Relation) func(value inter
 		ptr := xunsafe.AsPointer(value)
 		for _, rel := range visitorRelations {
 			fieldValue := rel.columnField.Value(ptr)
-			_, ok := r.valuePosition[rel.Column][fieldValue]
-			if !ok {
-				r.valuePosition[rel.Column][fieldValue] = []int{counter}
-			} else {
-				r.valuePosition[rel.Column][fieldValue] = append(r.valuePosition[rel.Column][fieldValue], counter)
+
+			switch acutal := fieldValue.(type) {
+			case []int:
+				for _, v := range acutal {
+					r.indexValueToPostition(rel, v, counter)
+				}
+			case []string:
+				for _, v := range acutal {
+					r.indexValueToPostition(rel, v, counter)
+				}
+			default:
+				r.indexValueToPostition(rel, fieldValue, counter)
 			}
+
 			counter++
 		}
 		return nil
 	}
+}
+
+func (r *Collector) indexValueToPostition(rel *Relation, fieldValue interface{}, counter int) {
+	_, ok := r.valuePosition[rel.Column][fieldValue]
+	if !ok {
+		r.valuePosition[rel.Column][fieldValue] = []int{counter}
+	} else {
+		r.valuePosition[rel.Column][fieldValue] = append(r.valuePosition[rel.Column][fieldValue], counter)
+	}
+	counter++
 }
 
 func (r *Collector) visitorOne(relation *Relation, visitors ...Visitor) func(value interface{}) error {
@@ -234,10 +260,14 @@ func (r *Collector) visitorMany(relation *Relation, visitors ...Visitor) func(va
 
 		for _, index := range positions {
 			parentItem := r.parent.slice.ValuePointerAt(destPtr, index)
+
+			r.mutex.Lock()
 			sliceAddPtr := holderField.Pointer(xunsafe.AsPointer(parentItem))
 			slice := relation.Of.Schema.Slice()
 			appender := slice.Appender(sliceAddPtr)
+
 			appender.Append(owner)
+			r.mutex.Unlock()
 		}
 
 		return nil
@@ -283,6 +313,13 @@ func (r *Collector) Relations(selector *Selector) []*Collector {
 
 		dest := reflect.MakeSlice(r.view.With[counter].Of.View.Schema.SliceType(), 0, 1).Interface()
 		slice := r.view.With[counter].Of.View.Schema.Slice()
+		wg := sync.WaitGroup{}
+
+		delta := 0
+		if !r.SupportsParallel() {
+			delta = 1
+		}
+		wg.Add(delta)
 
 		result[counter] = &Collector{
 			parent:          r,
@@ -295,6 +332,8 @@ func (r *Collector) Relations(selector *Selector) []*Collector {
 			view:            &r.view.With[counter].Of.View,
 			relation:        r.view.With[counter],
 			supportParallel: r.view.With[counter].Of.MatchStrategy.SupportsParallel(),
+			wg:              &wg,
+			wgDelta:         delta,
 		}
 		counter++
 	}
@@ -380,4 +419,17 @@ func (r *Collector) ParentPlaceholders() ([]interface{}, string) {
 	}
 
 	return result, r.relation.Of.Column
+}
+
+func (r *Collector) WaitIfNeeded() {
+	if r.parent != nil {
+		r.parent.wg.Wait()
+	}
+}
+
+func (r *Collector) Fetched() {
+	if r.wgDelta > 0 {
+		r.wg.Done()
+		r.wgDelta--
+	}
 }

@@ -101,7 +101,7 @@ func (s *Session) sanitizeSelectors() error {
 			}
 
 			if view.CanUseClientCriteria() {
-				err = node.Adjust(sb, view.IndexedColumns())
+				err = node.Sanitize(sb, view.IndexedColumns())
 				if err != nil {
 					return err
 				}

@@ -12,7 +12,7 @@ type Literal struct {
 	Kind  sql.Kind
 }
 
-func (l *Literal) Adjust(sb *strings.Builder, _ data.Columns) error {
+func (l *Literal) Sanitize(sb *strings.Builder, _ data.Columns) error {
 	newLines := strings.Count(l.Value, "\n")
 	if newLines > 0 {
 		return fmt.Errorf("new lines in literal: %v not supported", l.Value)

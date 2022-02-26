@@ -15,9 +15,43 @@ import (
 	"path"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
+
+type audience struct {
+	Id            int
+	Info          string
+	Info2         string
+	DealsId       []int
+	Deals         []Deal
+	StringDealsId []string
+}
+
+type Deal struct {
+	Id     int
+	Name   string
+	DealId string
+}
+
+func (a *audience) OnFetch(ctx context.Context) error {
+	if a.Info == "" && a.Info2 == "" {
+		return nil
+	}
+	for _, item := range strings.Split(a.Info, ",") {
+		i, err := strconv.Atoi(item)
+		if err != nil {
+			return err
+		}
+		a.DealsId = append(a.DealsId, i)
+	}
+
+	for _, item := range strings.Split(a.Info2, ",") {
+		a.StringDealsId = append(a.StringDealsId, item)
+	}
+	return nil
+}
 
 func TestRead(t *testing.T) {
 	type Event struct {
@@ -25,6 +59,18 @@ func TestRead(t *testing.T) {
 		EventTypeID int
 		Quantity    float64
 		Timestamp   time.Time
+	}
+
+	type EventType struct {
+		Id   int
+		Name string
+	}
+
+	type Boo struct {
+		ID        int
+		Quantity  float64
+		EventType *EventType
+		Timestamp time.Time
 	}
 
 	type Foo struct {
@@ -42,6 +88,11 @@ func TestRead(t *testing.T) {
 		Content  string
 		LangId   int
 		Language Language
+	}
+
+	type AclRecord struct {
+		DatlyCriteria string `sqlx:"name=criteria"`
+		Subject       string
 	}
 
 	testLocation := toolbox.CallerDirectory(3)
@@ -183,7 +234,7 @@ func TestRead(t *testing.T) {
 			dataURI:     "case007/",
 			view:        "events",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Quantity":33.23432374000549},{"Id":10,"Quantity":21.957962334156036},{"Id":100,"Quantity":5.084940046072006}]`,
+			expect:      `[{"Id":1,"Timestamp":"","Quantity":33.23432374000549},{"Id":10,"Timestamp":"","Quantity":21.957962334156036},{"Id":100,"Timestamp":"","Quantity":5.084940046072006}]`,
 			selectors: map[string]*data.Selector{
 				"events": {
 					Columns: []string{"id", "quantity"},
@@ -198,14 +249,14 @@ func TestRead(t *testing.T) {
 			dataURI:     "case008/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventType":null,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventType":{"Id":11,"Name":"type 2","AccountId":33},"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventType":{"Id":111,"Name":"type 3","AccountId":36},"Quantity":5.084940046072006,"UserId":3}]`,
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1,"EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2,"EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3,"EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
 		},
 		{
 			description: "one to one, include column, by field name",
 			dataURI:     "case008/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventType":null},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":0,"UserId":0,"EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":0,"UserId":0,"EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":0,"UserId":0,"EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
 			selectors: map[string]*data.Selector{
 				"event_event-types": {
 					Columns: []string{"Id", "Timestamp", "EventType"},
@@ -217,7 +268,7 @@ func TestRead(t *testing.T) {
 			dataURI:     "case008/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","UserId":3}]`,
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":0,"UserId":1,"EventType":null},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":0,"UserId":2,"EventType":null},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":0,"UserId":3,"EventType":null}]`,
 			selectors: map[string]*data.Selector{
 				"event_event-types": {
 					Columns: []string{"Id", "Timestamp", "UserId"},
@@ -229,21 +280,21 @@ func TestRead(t *testing.T) {
 			view:        "users_accounts",
 			description: "many to one",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Name":"John","Accounts":[{"Id":1,"Name":"John account","UserId":1},{"Id":3,"Name":"Another John account","UserId":1}]},{"Id":2,"Name":"David","Accounts":[{"Id":2,"Name":"Anna account","UserId":2}]},{"Id":3,"Name":"Anna","Accounts":null}]`,
+			expect:      `[{"Id":1,"Name":"John","Accounts":[{"Id":1,"Name":"John account","UserId":1},{"Id":3,"Name":"Another John account","UserId":1}]},{"Id":2,"Name":"David","Accounts":[{"Id":2,"Name":"Anna account","UserId":2}]},{"Id":3,"Name":"Anna","Accounts":null},{"Id":4,"Name":"Kamil","Accounts":null},{"Id":5,"Name":"Bob","Accounts":null}]`,
 		},
 		{
-			description: "one to one, include join column true",
+			description: "one to one, include column true",
 			dataURI:     "case010/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventType":null,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventType":{"Id":11,"Name":"type 2","AccountId":33},"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventType":{"Id":111,"Name":"type 3","AccountId":36},"Quantity":5.084940046072006,"UserId":3}]`,
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1,"EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2,"EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3,"EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
 		},
 		{
 			dataURI:     "case011/",
 			view:        "users_accounts",
 			description: "parameters",
 			dest:        new(interface{}),
-			expect:      `[{"Id":4,"Name":"Kamil","Role":"ADMIN"},{"Id":5,"Name":"Bob","Role":"ADMIN"}]`,
+			expect:      `[{"Id":4,"Name":"Kamil","Role":"ADMIN","Accounts":null},{"Id":5,"Name":"Bob","Role":"ADMIN","Accounts":null}]`,
 			subject:     "Kamil",
 		},
 		{
@@ -251,21 +302,21 @@ func TestRead(t *testing.T) {
 			dataURI:     "case012/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventType":null,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventType":{"Id":11,"Name":"type 2","AccountId":33},"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventType":{"Id":111,"Name":"type 3","AccountId":36},"Quantity":5.084940046072006,"UserId":3}]`,
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1,"EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2,"EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3,"EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
 		},
 		{
 			description: "read all strategy, many to one",
 			dataURI:     "case013/",
 			view:        "users_accounts",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Name":"John","Accounts":[{"Id":1,"Name":"John account","UserId":1},{"Id":3,"Name":"Another John account","UserId":1}]},{"Id":2,"Name":"David","Accounts":[{"Id":2,"Name":"Anna account","UserId":2}]},{"Id":3,"Name":"Anna","Accounts":null}]`,
+			expect:      `[{"Id":1,"Name":"John","Role":"","Accounts":[{"Id":1,"Name":"John account","UserId":1},{"Id":3,"Name":"Another John account","UserId":1}]},{"Id":2,"Name":"David","Role":"","Accounts":[{"Id":2,"Name":"Anna account","UserId":2}]},{"Id":3,"Name":"Anna","Role":"","Accounts":null},{"Id":4,"Name":"Kamil","Role":"ADMIN","Accounts":null},{"Id":5,"Name":"Bob","Role":"ADMIN","Accounts":null}]`,
 		},
 		{
 			description: "read all strategy, batch size",
 			dataURI:     "case014/",
 			view:        "articles_languages",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Content":"Lorem ipsum","Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","Language":{"Id":9,"Code":"zh-CN"}}]`,
+			expect:      `[{"Id":1,"Content":"Lorem ipsum","Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","Language":{"Id":9,"Code":"zh-CN"}},{"Id":5,"Content":"content without lang","Language":null}]`,
 		},
 		{
 			description: "T type one to one relation",
@@ -479,9 +530,40 @@ func TestRead(t *testing.T) {
 			dest:        new(interface{}),
 			expectError: true,
 		},
+		{
+			description: "derive columns from schema type",
+			dataURI:     "case024/",
+			view:        "datly_acl",
+			dest:        new([]AclRecord),
+			compTypes: map[string]reflect.Type{
+				"datly_acl": reflect.TypeOf(AclRecord{}),
+			},
+			expect: `[{"DatlyCriteria":"ROLE IN ('ADMIN')","Subject":"Kamil"}]`,
+		},
+		{
+			description: "derive columns from schema type with relation",
+			dataURI:     "case025/",
+			view:        "event_event-types",
+			dest:        new([]Boo),
+			compTypes: map[string]reflect.Type{
+				"event_event-type": reflect.TypeOf(Boo{}),
+			},
+			expect: `[{"ID":1,"Quantity":33.23432374000549,"EventType":{"Id":2,"Name":"type 6"},"Timestamp":"2019-03-11T02:20:33Z"},{"ID":10,"Quantity":21.957962334156036,"EventType":{"Id":11,"Name":"type 2"},"Timestamp":"2019-03-15T12:07:33Z"},{"ID":100,"Quantity":5.084940046072006,"EventType":{"Id":111,"Name":"type 3"},"Timestamp":"2019-04-10T05:15:33Z"}]`,
+		},
+		{
+			description: "derive columns from schema type with relation",
+			dataURI:     "case026/",
+			view:        "audiences_deals",
+			dest:        new([]audience),
+			compTypes: map[string]reflect.Type{
+				"audience": reflect.TypeOf(audience{}),
+			},
+			expect: `[{"Id":1,"Info":"1,2","DealsId":[1,2],"Deals":[{"Id":1,"Name":"deal 1"},{"Id":2,"Name":"deal 2"}]},{"Id":2,"Info":"2,3","DealsId":[2,3],"Deals":[{"Id":2,"Name":"deal 2"},{"Id":3,"Name":"deal 3"}]}]`,
+		},
 	}
 
-	for index, testCase := range useCases {
+	for index, testCase := range useCases[len(useCases)-1:] {
+		//for index, testCase := range useCases[:len(useCases)-1] {
 		fmt.Println("Running testcase nr: " + strconv.Itoa(index))
 		if initDb(t, path.Join(testLocation, "testdata", "mydb_config.yaml"), path.Join(testLocation, fmt.Sprintf("testdata/case/populate_mydb")), "db") {
 			return
@@ -506,6 +588,9 @@ func TestRead(t *testing.T) {
 		service.Apply(testCase.options)
 
 		dataView, err := resource.View(testCase.view)
+		if dataView.InheritSchemaColumns {
+			assert.Equalf(t, dataView.Schema.DereferencedType().NumField(), len(dataView.Columns), testCase.description)
+		}
 
 		if err != nil {
 			t.Fatal(err)
@@ -532,6 +617,11 @@ func TestRead(t *testing.T) {
 		result := string(b)
 
 		if !assertly.AssertValues(t, testCase.expect, result, testCase.description) {
+			fmt.Println(result)
+			fmt.Println(testCase.expect)
+		}
+
+		if !assertly.AssertValues(t, result, testCase.expect, testCase.description) {
 			fmt.Println(result)
 			fmt.Println(testCase.expect)
 		}

@@ -3,6 +3,8 @@ Views:
     Ref: mydb
   Name: users
   Table: users
+  Exclude:
+  - role
 - Connector:
     Ref: mydb
   Name: accounts

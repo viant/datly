@@ -125,3 +125,14 @@ func (c *Schema) inheritType(rType reflect.Type) {
 func (c *Schema) XType() *xunsafe.Type {
 	return c.xType
 }
+
+func (c *Schema) DereferencedType() reflect.Type {
+	return deref(c.compType)
+}
+
+func deref(rType reflect.Type) reflect.Type {
+	if rType.Kind() == reflect.Ptr {
+		return deref(rType.Elem())
+	}
+	return rType
+}

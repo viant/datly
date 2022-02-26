@@ -29,6 +29,10 @@ func (c Columns) Register(caser format.Case, column *Column) {
 		c[key] = column
 	}
 	c[caser.Format(column.Name, format.CaseUpperCamel)] = column
+
+	if column.field != nil {
+		c[column.field.Name] = column
+	}
 }
 
 //RegisterHolder looks for the Column by Relation.Column name.
@@ -37,7 +41,8 @@ func (c Columns) Register(caser format.Case, column *Column) {
 func (c Columns) RegisterHolder(relation *Relation) error {
 	column, err := c.Lookup(relation.Column)
 	if err != nil {
-		return err
+		//TODO: evaluate later
+		return nil
 	}
 
 	c[relation.Holder] = column
@@ -53,10 +58,19 @@ func (c Columns) RegisterHolder(relation *Relation) error {
 func (c Columns) Lookup(name string) (*Column, error) {
 	column, ok := c[name]
 	if !ok {
-		return column, fmt.Errorf("not found column with name %v", name)
+		err := fmt.Errorf("not found column with name %v", name)
+		//panic(err)
+		return column, err
 	}
 
 	return column, nil
+}
+
+func (c Columns) RegisterWithName(name string, column *Column) {
+	keys := shared.KeysOf(name, true)
+	for _, key := range keys {
+		c[key] = column
+	}
 }
 
 //Init initializes each Column in the slice.

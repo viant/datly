@@ -61,7 +61,7 @@ func (p *Parameter) Init(ctx context.Context, resource *Resource) error {
 			}
 
 			p.view = view
-			p.view.ParamField = xunsafe.FieldByName(p.view.DataType(), view.Caser.Format(view.Columns[0].Name, format.CaseUpperCamel))
+			p.view._paramField = xunsafe.FieldByName(p.view.DataType(), view.Caser.Format(view.Columns[0].Name, format.CaseUpperCamel))
 		}
 	}
 
