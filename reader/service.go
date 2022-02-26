@@ -148,6 +148,12 @@ func (s *Service) flush(ctx context.Context, db *sql.DB, SQL string, collector *
 	readData := 0
 	err = reader.QueryAll(ctx, func(row interface{}) error {
 		readData++
+		if actualn, ok := row.(OnFetcher); ok {
+			if err = actualn.OnFetch(ctx); err != nil {
+				return err
+			}
+		}
+
 		return visitor(row)
 	}, batchData.Placeholders...)
 

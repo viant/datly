@@ -41,7 +41,8 @@ func (c Columns) Register(caser format.Case, column *Column) {
 func (c Columns) RegisterHolder(relation *Relation) error {
 	column, err := c.Lookup(relation.Column)
 	if err != nil {
-		return err
+		//TODO: evaluate later
+		return nil
 	}
 
 	c[relation.Holder] = column
@@ -57,7 +58,9 @@ func (c Columns) RegisterHolder(relation *Relation) error {
 func (c Columns) Lookup(name string) (*Column, error) {
 	column, ok := c[name]
 	if !ok {
-		return column, fmt.Errorf("not found column with name %v", name)
+		err := fmt.Errorf("not found column with name %v", name)
+		//panic(err)
+		return column, err
 	}
 
 	return column, nil

@@ -16,6 +16,7 @@ type Visitor func(value interface{}) error
 //If View or any of the View.With MatchStrategy support Parallel fetching, it is important to call MergeData
 //when all needed data was fetched
 type Collector struct {
+	mutex  sync.Mutex
 	parent *Collector
 
 	dest           interface{}
@@ -169,16 +170,34 @@ func (r *Collector) parentVisitor(visitorRelations []*Relation) func(value inter
 		ptr := xunsafe.AsPointer(value)
 		for _, rel := range visitorRelations {
 			fieldValue := rel.columnField.Value(ptr)
-			_, ok := r.valuePosition[rel.Column][fieldValue]
-			if !ok {
-				r.valuePosition[rel.Column][fieldValue] = []int{counter}
-			} else {
-				r.valuePosition[rel.Column][fieldValue] = append(r.valuePosition[rel.Column][fieldValue], counter)
+
+			switch acutal := fieldValue.(type) {
+			case []int:
+				for _, v := range acutal {
+					r.indexValueToPostition(rel, v, counter)
+				}
+			case []string:
+				for _, v := range acutal {
+					r.indexValueToPostition(rel, v, counter)
+				}
+			default:
+				r.indexValueToPostition(rel, fieldValue, counter)
 			}
+
 			counter++
 		}
 		return nil
 	}
+}
+
+func (r *Collector) indexValueToPostition(rel *Relation, fieldValue interface{}, counter int) {
+	_, ok := r.valuePosition[rel.Column][fieldValue]
+	if !ok {
+		r.valuePosition[rel.Column][fieldValue] = []int{counter}
+	} else {
+		r.valuePosition[rel.Column][fieldValue] = append(r.valuePosition[rel.Column][fieldValue], counter)
+	}
+	counter++
 }
 
 func (r *Collector) visitorOne(relation *Relation, visitors ...Visitor) func(value interface{}) error {
@@ -241,10 +260,14 @@ func (r *Collector) visitorMany(relation *Relation, visitors ...Visitor) func(va
 
 		for _, index := range positions {
 			parentItem := r.parent.slice.ValuePointerAt(destPtr, index)
+
+			r.mutex.Lock()
 			sliceAddPtr := holderField.Pointer(xunsafe.AsPointer(parentItem))
 			slice := relation.Of.Schema.Slice()
 			appender := slice.Appender(sliceAddPtr)
+
 			appender.Append(owner)
+			r.mutex.Unlock()
 		}
 
 		return nil

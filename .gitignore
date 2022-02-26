@@ -4,3 +4,6 @@ other.db
 vendor
 go.sum
 datly
+
+other
+mydb

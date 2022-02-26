@@ -15,9 +15,43 @@ import (
 	"path"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
+
+type audience struct {
+	Id            int
+	Info          string
+	Info2         string
+	DealsId       []int
+	Deals         []Deal
+	StringDealsId []string
+}
+
+type Deal struct {
+	Id     int
+	Name   string
+	DealId string
+}
+
+func (a *audience) OnFetch(ctx context.Context) error {
+	if a.Info == "" && a.Info2 == "" {
+		return nil
+	}
+	for _, item := range strings.Split(a.Info, ",") {
+		i, err := strconv.Atoi(item)
+		if err != nil {
+			return err
+		}
+		a.DealsId = append(a.DealsId, i)
+	}
+
+	for _, item := range strings.Split(a.Info2, ",") {
+		a.StringDealsId = append(a.StringDealsId, item)
+	}
+	return nil
+}
 
 func TestRead(t *testing.T) {
 	type Event struct {
@@ -516,10 +550,20 @@ func TestRead(t *testing.T) {
 			},
 			expect: `[{"ID":1,"Quantity":33.23432374000549,"EventType":{"Id":2,"Name":"type 6"},"Timestamp":"2019-03-11T02:20:33Z"},{"ID":10,"Quantity":21.957962334156036,"EventType":{"Id":11,"Name":"type 2"},"Timestamp":"2019-03-15T12:07:33Z"},{"ID":100,"Quantity":5.084940046072006,"EventType":{"Id":111,"Name":"type 3"},"Timestamp":"2019-04-10T05:15:33Z"}]`,
 		},
+		{
+			description: "derive columns from schema type with relation",
+			dataURI:     "case026/",
+			view:        "audiences_deals",
+			dest:        new([]audience),
+			compTypes: map[string]reflect.Type{
+				"audience": reflect.TypeOf(audience{}),
+			},
+			expect: `[{"Id":1,"Info":"1,2","DealsId":[1,2],"Deals":[{"Id":1,"Name":"deal 1"},{"Id":2,"Name":"deal 2"}]},{"Id":2,"Info":"2,3","DealsId":[2,3],"Deals":[{"Id":2,"Name":"deal 2"},{"Id":3,"Name":"deal 3"}]}]`,
+		},
 	}
 
-	//for index, testCase := range useCases[len(useCases)-1:] {
-	for index, testCase := range useCases {
+	for index, testCase := range useCases[len(useCases)-1:] {
+		//for index, testCase := range useCases[:len(useCases)-1] {
 		fmt.Println("Running testcase nr: " + strconv.Itoa(index))
 		if initDb(t, path.Join(testLocation, "testdata", "mydb_config.yaml"), path.Join(testLocation, fmt.Sprintf("testdata/case/populate_mydb")), "db") {
 			return
