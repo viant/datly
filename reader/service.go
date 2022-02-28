@@ -271,9 +271,9 @@ func (s *Service) addPathParam(session *Session, param *data.Parameter, params *
 }
 
 //New creates Service instance
-func New(resource *data.Resource) *Service {
+func New() *Service {
 	return &Service{
 		sqlBuilder: NewBuilder(),
-		Resource:   resource,
+		Resource:   data.EmptyResource(),
 	}
 }
