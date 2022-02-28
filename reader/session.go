@@ -270,3 +270,15 @@ func (s *Session) isAnyRequiredParamMissing() error {
 func (s *Session) QueryParam(name string) string {
 	return s.queryParams[name]
 }
+
+//NewSession creates a session
+func NewSession(dest interface{}, view *data.View) *Session {
+	return &Session{
+		Dest:          dest,
+		View:          view,
+		pathVariables: map[string]string{},
+		cookies:       map[string]string{},
+		headers:       map[string]string{},
+		queryParams:   map[string]string{},
+	}
+}
