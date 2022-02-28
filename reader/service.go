@@ -121,7 +121,7 @@ func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *da
 			return err
 		}
 
-		readData, err = s.flush(ctx, db, SQL, collector, batchData)
+		readData, err = s.query(ctx, db, SQL, collector, batchData)
 		if err != nil {
 			return err
 		}
@@ -137,7 +137,7 @@ func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *da
 	return nil
 }
 
-func (s *Service) flush(ctx context.Context, db *sql.DB, SQL string, collector *data.Collector, batchData *BatchData) (int, error) {
+func (s *Service) query(ctx context.Context, db *sql.DB, SQL string, collector *data.Collector, batchData *BatchData) (int, error) {
 	reader, err := read.New(ctx, db, SQL, collector.NewItem(), io.Resolve(collector.Resolve))
 	if err != nil {
 		return 0, err
@@ -153,12 +153,11 @@ func (s *Service) flush(ctx context.Context, db *sql.DB, SQL string, collector *
 				return err
 			}
 		}
-
 		return visitor(row)
 	}, batchData.Placeholders...)
 
 	if err != nil {
-		return 0, nil
+		return 0, err
 	}
 
 	return readData, nil

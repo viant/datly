@@ -39,16 +39,20 @@ func (a *audience) OnFetch(ctx context.Context) error {
 	if a.Info == "" && a.Info2 == "" {
 		return nil
 	}
-	for _, item := range strings.Split(a.Info, ",") {
-		i, err := strconv.Atoi(item)
-		if err != nil {
-			return err
+	if a.Info != "" {
+		for _, item := range strings.Split(a.Info, ",") {
+			i, err := strconv.Atoi(item)
+			if err != nil {
+				return err
+			}
+			a.DealsId = append(a.DealsId, i)
 		}
-		a.DealsId = append(a.DealsId, i)
 	}
 
-	for _, item := range strings.Split(a.Info2, ",") {
-		a.StringDealsId = append(a.StringDealsId, item)
+	if a.Info2 != "" {
+		for _, item := range strings.Split(a.Info2, ",") {
+			a.StringDealsId = append(a.StringDealsId, item)
+		}
 	}
 	return nil
 }
@@ -558,11 +562,11 @@ func TestRead(t *testing.T) {
 			compTypes: map[string]reflect.Type{
 				"audience": reflect.TypeOf(audience{}),
 			},
-			expect: `[{"Id":1,"Info":"1,2","DealsId":[1,2],"Deals":[{"Id":1,"Name":"deal 1"},{"Id":2,"Name":"deal 2"}]},{"Id":2,"Info":"2,3","DealsId":[2,3],"Deals":[{"Id":2,"Name":"deal 2"},{"Id":3,"Name":"deal 3"}]}]`,
+			expect: `[{"Id":1,"Info":"1,2","Info2":"","DealsId":[1,2],"Deals":[{"Id":1,"Name":"deal 1","DealId":""},{"Id":2,"Name":"deal 2","DealId":""}],"StringDealsId":null},{"Id":2,"Info":"","Info2":"20,30","DealsId":null,"Deals":[{"Id":5,"Name":"deal 5","DealId":"20"},{"Id":6,"Name":"deal 6","DealId":"30"}],"StringDealsId":["20","30"]}]`,
 		},
 	}
 
-	for index, testCase := range useCases[len(useCases)-1:] {
+	for index, testCase := range useCases {
 		//for index, testCase := range useCases[:len(useCases)-1] {
 		fmt.Println("Running testcase nr: " + strconv.Itoa(index))
 		if initDb(t, path.Join(testLocation, "testdata", "mydb_config.yaml"), path.Join(testLocation, fmt.Sprintf("testdata/case/populate_mydb")), "db") {
@@ -613,7 +617,8 @@ func TestRead(t *testing.T) {
 		}
 
 		assert.Nil(t, err, testCase.description)
-		b, _ := json.Marshal(testCase.dest)
+		d := testCase.dest
+		b, _ := json.Marshal(d)
 		result := string(b)
 
 		if !assertly.AssertValues(t, testCase.expect, result, testCase.description) {
@@ -621,10 +626,6 @@ func TestRead(t *testing.T) {
 			fmt.Println(testCase.expect)
 		}
 
-		if !assertly.AssertValues(t, result, testCase.expect, testCase.description) {
-			fmt.Println(result)
-			fmt.Println(testCase.expect)
-		}
 	}
 }
 

@@ -38,6 +38,13 @@ type Collector struct {
 	wgDelta         int
 }
 
+func (r *Collector) Lock() *sync.Mutex {
+	if r.parent == nil {
+		return &r.mutex
+	}
+	return &r.parent.mutex
+}
+
 //Resolve resolved unmapped column
 func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface{} {
 	buffer, ok := r.values[column.Name()]
@@ -183,9 +190,8 @@ func (r *Collector) parentVisitor(visitorRelations []*Relation) func(value inter
 			default:
 				r.indexValueToPostition(rel, fieldValue, counter)
 			}
-
-			counter++
 		}
+		counter++
 		return nil
 	}
 }
@@ -197,7 +203,6 @@ func (r *Collector) indexValueToPostition(rel *Relation, fieldValue interface{},
 	} else {
 		r.valuePosition[rel.Column][fieldValue] = append(r.valuePosition[rel.Column][fieldValue], counter)
 	}
-	counter++
 }
 
 func (r *Collector) visitorOne(relation *Relation, visitors ...Visitor) func(value interface{}) error {
@@ -261,13 +266,12 @@ func (r *Collector) visitorMany(relation *Relation, visitors ...Visitor) func(va
 		for _, index := range positions {
 			parentItem := r.parent.slice.ValuePointerAt(destPtr, index)
 
-			r.mutex.Lock()
+			r.Lock().Lock()
 			sliceAddPtr := holderField.Pointer(xunsafe.AsPointer(parentItem))
 			slice := relation.Of.Schema.Slice()
 			appender := slice.Appender(sliceAddPtr)
-
 			appender.Append(owner)
-			r.mutex.Unlock()
+			r.Lock().Unlock()
 		}
 
 		return nil
@@ -394,8 +398,10 @@ func (r *Collector) mergeToParent() {
 				at := r.slice.ValuePointerAt(destPtr, i)
 				holderField.SetValue(xunsafe.AsPointer(parentValue), at)
 			} else if r.relation.Cardinality == "Many" {
+				r.Lock().Lock()
 				appender := r.slice.Appender(holderField.ValuePointer(xunsafe.AsPointer(parentValue)))
 				appender.Append(value)
+				r.Lock().Unlock()
 			}
 		}
 	}

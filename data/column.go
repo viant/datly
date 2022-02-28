@@ -25,16 +25,19 @@ type Column struct {
 
 //SqlExpression builds column sql expression if any expression specified in format: Expression AS Name
 func (c *Column) SqlExpression() string {
+	return c.sqlExpression
+}
+
+func (c *Column) init() (string, bool) {
 	if c.sqlExpression != "" {
-		return c.sqlExpression
+		return c.sqlExpression, true
 	}
 
 	c.sqlExpression = c.ColumnName()
 	if c.Expression != "" {
 		c.sqlExpression = c.Expression + " AS " + c.ColumnName()
 	}
-
-	return c.sqlExpression
+	return "", false
 }
 
 func parseType(dataType string) (reflect.Type, error) {
@@ -81,6 +84,10 @@ func (c *Column) Init() error {
 		c.criteriaKind = sql.String
 	case reflect.Bool:
 		c.criteriaKind = sql.Bool
+	}
+	c.sqlExpression = c.ColumnName()
+	if c.Expression != "" {
+		c.sqlExpression = c.Expression + " AS " + c.ColumnName()
 	}
 	return nil
 }

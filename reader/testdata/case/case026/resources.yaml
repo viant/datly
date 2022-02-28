@@ -23,7 +23,6 @@ Views:
       Cardinality: Many
       Column: deals_id
       Holder: Deals
-      IncludeColumn: false
 
     - Name: audiences_deals_strings
       Of:
@@ -33,7 +32,7 @@ Views:
       Cardinality: Many
       Column: string_deals_id
       Holder: Deals
-      IncludeColumn: false
+
 
 Connectors:
   - Name: otherdb

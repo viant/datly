@@ -156,7 +156,9 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 	if err = v.ensureColumns(ctx); err != nil {
 		return err
 	}
-
+	if err = ColumnSlice(v.Columns).Init(); err != nil {
+		return err
+	}
 	v._columns = ColumnSlice(v.Columns).Index(v.Caser)
 	if err = v.markColumnsAsFilterable(); err != nil {
 		return err

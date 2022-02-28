@@ -2,28 +2,31 @@
   {},
   {
     "id": 1,
+    "deal_id":"",
     "name": "deal 1"
   },
   {
     "id": 2,
+    "deal_id":"",
     "name": "deal 2"
   },
   {
     "id": 3,
+    "deal_id":"",
     "name": "deal 3"
   },
   {
-    "deal_id": 10,
+    "deal_id": "10",
     "id": 4,
     "name": "deal 4"
   },
   {
-    "deal_id": 20,
+    "deal_id":"20",
     "id": 5,
     "name": "deal 5"
   },
   {
-    "deal_id": 30,
+    "deal_id": "30",
     "id": 6,
     "name": "deal 6"
   }

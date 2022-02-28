@@ -29,7 +29,7 @@ require (
 	github.com/viant/scy v0.0.0-20220223165437-725359877ec0
 	github.com/viant/sqlx v0.0.0-20220107182258-867b12abf923
 	github.com/viant/toolbox v0.34.5
-	github.com/viant/xunsafe v0.7.1-0.20220226001247-b3cfd4e9e196
+	github.com/viant/xunsafe v0.7.1-0.20220228210536-20bce86415bb
 	github.com/yuin/gopher-lua v0.0.0-20191220021717-ab39c6098bdb // indirect
 	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f
 	google.golang.org/api v0.66.0
