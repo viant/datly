@@ -225,7 +225,7 @@ func (v *View) ensureColumns(ctx context.Context) error {
 		return err
 	}
 
-	query, err := db.QueryContext(ctx, "SELECT * FROM "+v.Source()+" WHERE 1=2")
+	query, err := db.QueryContext(ctx, "SELECT t.* FROM ("+v.Source()+") t WHERE 1=0")
 	if err != nil {
 		return err
 	}
