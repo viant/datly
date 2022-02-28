@@ -732,3 +732,11 @@ func (v *View) updateColumn(rType reflect.Type, columns *[]*Column) error {
 func (v *View) ParamField() *xunsafe.Field {
 	return v._paramField
 }
+
+//ViewReference creates a view reference
+func ViewReference(name, ref string) *View {
+	return &View{
+		Name:      name,
+		Reference: shared.Reference{Ref: ref},
+	}
+}
