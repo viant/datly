@@ -588,7 +588,7 @@ func TestRead(t *testing.T) {
 			t.Fatalf(err.Error())
 		}
 
-		service := New(resource)
+		service := New()
 		service.Apply(testCase.options)
 
 		dataView, err := resource.View(testCase.view)

@@ -696,23 +696,34 @@ func (v *View) deriveColumnsFromSchema() error {
 	newColumns := make([]*Column, 0)
 
 	rType := v.Schema.DereferencedType()
+
+	if err := v.updateColumn(rType, &newColumns); err != nil {
+		return err
+	}
+	v.Columns = newColumns
+	v._columns = ColumnSlice(newColumns).Index(v.Caser)
+
+	return nil
+}
+
+func (v *View) updateColumn(rType reflect.Type, columns *[]*Column) error {
 	for i := 0; i < rType.NumField(); i++ {
 		field := rType.Field(i)
 		if !field.IsExported() {
 			continue
 		}
-
+		if field.Anonymous {
+			if err := v.updateColumn(field.Type, columns); err != nil {
+				return err
+			}
+			continue
+		}
 		column, err := v._columns.Lookup(field.Name)
 		if err != nil {
 			return err
 		}
-
-		newColumns = append(newColumns, column)
+		*columns = append(*columns, column)
 	}
-
-	v.Columns = newColumns
-	v._columns = ColumnSlice(newColumns).Index(v.Caser)
-
 	return nil
 }
 
