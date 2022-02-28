@@ -156,6 +156,7 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 	if err = v.ensureColumns(ctx); err != nil {
 		return err
 	}
+
 	if err = ColumnSlice(v.Columns).Init(); err != nil {
 		return err
 	}
@@ -229,7 +230,6 @@ func (v *View) ensureColumns(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
 	types, err := query.ColumnTypes()
 	if err != nil {
 		return err
@@ -243,10 +243,12 @@ func (v *View) ensureColumns(ctx context.Context) error {
 func convertIoColumnsToColumns(ioColumns []io.Column) []*Column {
 	columns := make([]*Column, 0)
 	for i := 0; i < len(ioColumns); i++ {
+		scanType := ioColumns[i].ScanType()
+		dataTypeName := ioColumns[i].DatabaseTypeName()
 		columns = append(columns, &Column{
 			Name:     ioColumns[i].Name(),
-			DataType: ioColumns[i].ScanType().Name(),
-			rType:    ioColumns[i].ScanType(),
+			DataType: dataTypeName,
+			rType:    scanType,
 		})
 	}
 	return columns

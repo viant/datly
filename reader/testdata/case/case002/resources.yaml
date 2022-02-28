@@ -2,6 +2,7 @@ Views:
   - Connector:
       Ref: mydb
     Name: events
+    From: SELECT COALESCE(id,0) AS id, quantity, event_type_id, timestamp, user_id FROM events
     SelectorConstraints:
       Criteria: true
       FilterableColumns:

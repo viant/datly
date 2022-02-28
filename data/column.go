@@ -28,18 +28,6 @@ func (c *Column) SqlExpression() string {
 	return c.sqlExpression
 }
 
-func (c *Column) init() (string, bool) {
-	if c.sqlExpression != "" {
-		return c.sqlExpression, true
-	}
-
-	c.sqlExpression = c.ColumnName()
-	if c.Expression != "" {
-		c.sqlExpression = c.Expression + " AS " + c.ColumnName()
-	}
-	return "", false
-}
-
 func parseType(dataType string) (reflect.Type, error) {
 	switch strings.Title(dataType) {
 	case "Int":
@@ -67,12 +55,13 @@ func (c *Column) Init() error {
 		return fmt.Errorf("column name was empty")
 	}
 
-	rType, err := parseType(c.DataType)
-	if err != nil {
-		return err
+	if c.rType == nil {
+		rType, err := parseType(c.DataType)
+		if err != nil {
+			return err
+		}
+		c.rType = rType
 	}
-
-	c.rType = rType
 
 	switch c.rType.Kind() {
 	case reflect.Int, reflect.Int64, reflect.Int32, reflect.Int16, reflect.Int8,
@@ -85,9 +74,9 @@ func (c *Column) Init() error {
 	case reflect.Bool:
 		c.criteriaKind = sql.Bool
 	}
-	c.sqlExpression = c.ColumnName()
+	c.sqlExpression = c.Name
 	if c.Expression != "" {
-		c.sqlExpression = c.Expression + " AS " + c.ColumnName()
+		c.sqlExpression = c.Expression + " AS " + c.Name
 	}
 	return nil
 }

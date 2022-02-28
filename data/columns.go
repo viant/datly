@@ -77,9 +77,8 @@ func (c Columns) RegisterWithName(name string, column *Column) {
 func (c ColumnSlice) Init() error {
 	for i := range c {
 		if err := c[i].Init(); err != nil {
-			return nil
+			return err
 		}
 	}
-
 	return nil
 }

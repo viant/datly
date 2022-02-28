@@ -51,7 +51,6 @@ func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *Bat
 	if err != nil {
 		return "", err
 	}
-
 	for i, col := range columns {
 		if i != 0 {
 			sb.WriteString(separatorFragment)
