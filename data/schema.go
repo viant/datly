@@ -24,7 +24,7 @@ type Schema struct {
 func NewSchema(compType reflect.Type) *Schema {
 	result := &Schema{
 		Name:      "",
-		autoGen:   true,
+		autoGen:   false,
 		OmitEmpty: false,
 	}
 
@@ -52,7 +52,7 @@ func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat f
 
 	excluded := make(map[string]bool)
 	for _, rel := range relations {
-		if !rel.IncludeColumn && rel.Cardinality == "One" {
+		if !rel.IncludeColumn && rel.Cardinality == One {
 			excluded[rel.Column] = true
 		}
 	}
@@ -85,7 +85,7 @@ func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat f
 			rel.Of.Schema.setType(rType)
 		}
 
-		if rel.Cardinality == "Many" {
+		if rel.Cardinality == Many {
 			rType = reflect.SliceOf(rType)
 		}
 

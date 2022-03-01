@@ -456,7 +456,8 @@ func (v *View) initHolders() error {
 	for i := range v.With {
 		relation := v.With[i]
 
-		relation.holderField = xunsafe.FieldByName(v.DataType(), relation.Holder)
+		dataType := v.DataType()
+		relation.holderField = xunsafe.FieldByName(dataType, relation.Holder)
 		if relation.holderField == nil {
 			return fmt.Errorf("failed to lookup holderField %v", relation.Holder)
 		}
@@ -465,7 +466,7 @@ func (v *View) initHolders() error {
 		relation.columnField = xunsafe.FieldByName(v.DataType(), columnName)
 
 		relation.hasColumnField = relation.columnField != nil
-		if relation.Cardinality == "Many" && !relation.hasColumnField {
+		if relation.Cardinality == Many && !relation.hasColumnField {
 			return fmt.Errorf("column %v doesn't have corresponding field in the struct: %v", columnName, v.DataType().String())
 		}
 	}
@@ -514,15 +515,13 @@ func (v *View) propagateTypeIfNeeded() error {
 		return nil
 	}
 
-	for _, childView := range v.With {
-		childView.Of.Schema.inheritType(childView.holderField.Type)
-		if err := (&childView.Of.View).propagateTypeIfNeeded(); err != nil {
+	for _, rel := range v.With {
+		rel.Of.Schema.inheritType(rel.holderField.Type)
+		if err := (&rel.Of.View).propagateTypeIfNeeded(); err != nil {
 			return err
 		}
 
-		if err := (&childView.Of.View).deriveColumnsFromSchema(); err != nil {
-			return err
-		}
+		rel.inheritType(rel.holderField.Type)
 	}
 	return nil
 }
