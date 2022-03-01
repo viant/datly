@@ -120,7 +120,6 @@ func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *da
 		if err != nil {
 			return err
 		}
-		shared.Log("SQL: %v\n", SQL)
 		readData, err = s.query(ctx, db, SQL, collector, batchData)
 		if err != nil {
 			return err
@@ -146,6 +145,9 @@ func (s *Service) query(ctx context.Context, db *sql.DB, SQL string, collector *
 	visitor := collector.Visitor()
 
 	readData := 0
+
+	shared.Log("SQL: %v, params: %v\n", SQL, batchData.Placeholders)
+
 	err = reader.QueryAll(ctx, func(row interface{}) error {
 		readData++
 		if actualn, ok := row.(OnFetcher); ok {
