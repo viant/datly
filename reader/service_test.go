@@ -566,7 +566,7 @@ func TestRead(t *testing.T) {
 		},
 	}
 
-	for index, testCase := range useCases[1:2] {
+	for index, testCase := range useCases {
 		//for index, testCase := range useCases[:len(useCases)-1] {
 		fmt.Println("Running testcase nr: " + strconv.Itoa(index))
 		if initDb(t, path.Join(testLocation, "testdata", "mydb_config.yaml"), path.Join(testLocation, fmt.Sprintf("testdata/case/populate_mydb")), "db") {
