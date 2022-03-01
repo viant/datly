@@ -226,7 +226,7 @@ func (v *View) ensureColumns(ctx context.Context) error {
 		return err
 	}
 
-	SQL := "SELECT t.* FROM (" + v.Source() + ") t WHERE 1=0"
+	SQL := "SELECT t.* FROM " + v.Source() + " t WHERE 1=0"
 	shared.Log("ensureColumns: %v\n", SQL)
 	query, err := db.QueryContext(ctx, SQL)
 	if err != nil {
