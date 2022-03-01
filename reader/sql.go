@@ -10,8 +10,7 @@ import (
 const (
 	selectFragment      = "SELECT "
 	separatorFragment   = ", "
-	fromFragment        = " FROM ("
-	fromEncloseFragment = ")"
+	fromFragment        = " FROM "
 	asFragment          = " AS "
 	limitFragment       = " LIMIT "
 	orderByFragment     = " ORDER BY "
@@ -59,7 +58,6 @@ func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *Bat
 	}
 	sb.WriteString(fromFragment)
 	sb.WriteString(view.Source())
-	sb.WriteString(fromEncloseFragment)
 	if view.Alias != "" {
 		sb.WriteString(asFragment)
 		sb.WriteString(view.Alias)

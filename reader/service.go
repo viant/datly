@@ -121,7 +121,6 @@ func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *da
 			return err
 		}
 
-		shared.Log("SQL: %v\n", SQL)
 		readData, err = s.query(ctx, db, SQL, collector, batchData)
 		if err != nil {
 			return err

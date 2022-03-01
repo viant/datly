@@ -268,7 +268,10 @@ func (v *View) ColumnByName(name string) (*Column, bool) {
 //Source returns database data source. It prioritizes From, Table then View.Name
 func (v *View) Source() string {
 	if v.From != "" {
-		return v.From
+		if v.From[0] == '(' {
+			return v.From
+		}
+		return "(" + v.From + ")"
 	}
 
 	if v.Table != "" {
