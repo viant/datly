@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
+	"reflect"
 	"strings"
 )
 
 type (
+	Cardinality string
 	//Relation used to build more complex View that represents database tables with relations one-to-one or many-to-many
 	//In order to understand it better our example is:
 	//Parent View represents Employee{AccountId: int}, Relation represents Account{Id: int}
@@ -17,10 +19,10 @@ type (
 		Name string
 		Of   *ReferenceView
 
-		Cardinality   string //One, or Many
-		Column        string //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
-		Holder        string //Represents column created due to the merging. In our example it would be Employee#Account
-		IncludeColumn bool   //tells if Column field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId field
+		Cardinality   Cardinality //One, or Many
+		Column        string      //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
+		Holder        string      //Represents column created due to the merging. In our example it would be Employee#Account
+		IncludeColumn bool        //tells if Column field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId field
 
 		hasColumnField bool
 		holderField    *xunsafe.Field
@@ -36,6 +38,11 @@ type (
 	}
 )
 
+const (
+	One  Cardinality = "One"
+	Many Cardinality = "Many"
+)
+
 //Init initializes ReferenceView
 func (r *ReferenceView) Init(ctx context.Context, resource *Resource) error {
 	if r.View.Ref != "" {
@@ -48,11 +55,24 @@ func (r *ReferenceView) Init(ctx context.Context, resource *Resource) error {
 			return err
 		}
 		r.View.inherit(view)
+	} else {
+		if err := r.View.Init(ctx, resource); err != nil {
+			return err
+		}
 	}
 
-	r2 := r.Schema.Type()
-	r.field = xunsafe.FieldByName(r2, r.Caser.Format(r.Column, format.CaseUpperCamel))
+	r.initializeField()
 	return r.Validate()
+}
+
+func (r *Relation) inheritType(rType reflect.Type) {
+	r.Of.Schema.inheritType(rType)
+	r.Of.initializeField()
+}
+
+func (r *ReferenceView) initializeField() {
+	rType := r.Schema.Type()
+	r.field = xunsafe.FieldByName(rType, r.Caser.Format(r.Column, format.CaseUpperCamel))
 }
 
 //Validate checks if ReferenceView is valid
@@ -74,7 +94,7 @@ func (r *Relation) Init(ctx context.Context, resource *Resource) error {
 
 //Validate checks if Relation is valid
 func (r *Relation) Validate() error {
-	if r.Cardinality != "Many" && r.Cardinality != "One" {
+	if r.Cardinality != Many && r.Cardinality != One {
 		return fmt.Errorf("cardinality has to be Many or One")
 	}
 
@@ -92,10 +112,6 @@ func (r *Relation) Validate() error {
 
 	if strings.Title(r.Holder)[0] != r.Holder[0] {
 		return fmt.Errorf("holder has to start with uppercase")
-	}
-
-	if r.Of.field == nil {
-		return fmt.Errorf("could not fount holderField with name: %v", r.Of.Caser.Format(r.Column, format.CaseUpperCamel))
 	}
 
 	return nil

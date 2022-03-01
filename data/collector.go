@@ -239,9 +239,18 @@ func (r *Collector) visitorOne(relation *Relation, visitors ...Visitor) func(val
 func (r *Collector) visitorMany(relation *Relation, visitors ...Visitor) func(value interface{}) error {
 	keyField := relation.Of.field
 	holderField := relation.holderField
+	counter := 0
+	var xType *xunsafe.Type
+	var values *[]interface{}
+
 	return func(owner interface{}) error {
 		if r.parent != nil && r.parent.SupportsParallel() {
 			return nil
+		}
+
+		if keyField == nil && xType == nil {
+			xType = r.types[relation.Of.Column]
+			values = r.values[relation.Of.Column]
 		}
 
 		for i := range visitors {
@@ -256,7 +265,13 @@ func (r *Collector) visitorMany(relation *Relation, visitors ...Visitor) func(va
 			return fmt.Errorf("dest was nil")
 		}
 
-		key := keyField.Interface(xunsafe.AsPointer(owner))
+		var key interface{}
+		if keyField != nil {
+			key = keyField.Interface(xunsafe.AsPointer(owner))
+		} else {
+			key = xType.Deref((*values)[counter])
+			counter++
+		}
 		valuePosition := r.parentValuesPositions(relation.Column)
 		positions, ok := valuePosition[key]
 		if !ok {
@@ -265,7 +280,6 @@ func (r *Collector) visitorMany(relation *Relation, visitors ...Visitor) func(va
 
 		for _, index := range positions {
 			parentItem := r.parent.slice.ValuePointerAt(destPtr, index)
-
 			r.Lock().Lock()
 			sliceAddPtr := holderField.Pointer(xunsafe.AsPointer(parentItem))
 			slice := relation.Of.Schema.Slice()
@@ -394,10 +408,10 @@ func (r *Collector) mergeToParent() {
 
 		for _, position := range positions {
 			parentValue := parentSlice.ValuePointerAt(parentDestPtr, position)
-			if r.relation.Cardinality == "One" {
+			if r.relation.Cardinality == One {
 				at := r.slice.ValuePointerAt(destPtr, i)
 				holderField.SetValue(xunsafe.AsPointer(parentValue), at)
-			} else if r.relation.Cardinality == "Many" {
+			} else if r.relation.Cardinality == Many {
 				r.Lock().Lock()
 				appender := r.slice.Appender(holderField.ValuePointer(xunsafe.AsPointer(parentValue)))
 				appender.Append(value)

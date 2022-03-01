@@ -1,4 +1,4 @@
-package reader
+package reader_test
 
 import (
 	"context"
@@ -7,7 +7,9 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/reader"
 	"github.com/viant/dsunit"
 	"github.com/viant/toolbox"
 	"net/http"
@@ -57,6 +59,22 @@ func (a *audience) OnFetch(ctx context.Context) error {
 	return nil
 }
 
+type usecase struct {
+	selectors   data.Selectors
+	description string
+	dataURI     string
+	expect      string
+	dest        interface{}
+	view        string
+	options     reader.Options
+	compTypes   map[string]reflect.Type
+	subject     string
+	request     *http.Request
+	path        string
+	expectError bool
+	resource    *data.Resource
+}
+
 func TestRead(t *testing.T) {
 	type Event struct {
 		ID          int
@@ -101,20 +119,7 @@ func TestRead(t *testing.T) {
 
 	testLocation := toolbox.CallerDirectory(3)
 
-	var useCases = []struct {
-		selectors   data.Selectors
-		description string
-		dataURI     string
-		expect      string
-		dest        interface{}
-		view        string
-		options     Options
-		compTypes   map[string]reflect.Type
-		subject     string
-		request     *http.Request
-		path        string
-		expectError bool
-	}{
+	var useCases = []usecase{
 		{
 			description: "read all data with specified columns",
 			dataURI:     "case001/",
@@ -215,8 +220,8 @@ func TestRead(t *testing.T) {
 			dataURI:     "case005/",
 			view:        "foos",
 			dest:        new([]*Foo),
-			options: Options{
-				AllowUnmapped(true),
+			options: reader.Options{
+				reader.AllowUnmapped(true),
 			},
 			expect: `[{"Id":1,"Name":"foo"},{"Id":2,"Name":"another foo"},{"Id":3,"Name":"yet another foo"}]`,
 			compTypes: map[string]reflect.Type{
@@ -564,10 +569,11 @@ func TestRead(t *testing.T) {
 			},
 			expect: `[{"Id":1,"Info":"1,2","Info2":"","DealsId":[1,2],"Deals":[{"Id":1,"Name":"deal 1","DealId":""},{"Id":2,"Name":"deal 2","DealId":""}],"StringDealsId":null},{"Id":2,"Info":"","Info2":"20,30","DealsId":null,"Deals":[{"Id":5,"Name":"deal 5","DealId":"20"},{"Id":6,"Name":"deal 6","DealId":"30"}],"StringDealsId":["20","30"]}]`,
 		},
+		eventTypeView(),
 	}
 
 	for index, testCase := range useCases {
-		//for index, testCase := range useCases[:len(useCases)-1] {
+		//for index, testCase := range useCases[len(useCases)-1:] {
 		fmt.Println("Running testcase nr: " + strconv.Itoa(index))
 		if initDb(t, path.Join(testLocation, "testdata", "mydb_config.yaml"), path.Join(testLocation, fmt.Sprintf("testdata/case/populate_mydb")), "db") {
 			return
@@ -583,12 +589,21 @@ func TestRead(t *testing.T) {
 			types.Register(key, rType)
 		}
 
-		resource, err := data.NewResourceFromURL(context.TODO(), path.Join(testLocation, fmt.Sprintf("testdata/case/"+testCase.dataURI+"/resources.yaml")), types)
-		if err != nil {
-			t.Fatalf(err.Error())
+		var resource *data.Resource
+		var err error
+		if testCase.dataURI != "" {
+			resource, err = data.NewResourceFromURL(context.TODO(), path.Join(testLocation, fmt.Sprintf("testdata/case/"+testCase.dataURI+"/resources.yaml")), types)
+			if err != nil {
+				t.Fatalf(err.Error())
+			}
+		} else {
+			resource = testCase.resource
+			if err = resource.Init(context.TODO()); err != nil {
+				t.Fatalf(err.Error())
+			}
 		}
 
-		service := New()
+		service := reader.New()
 		service.Apply(testCase.options)
 
 		dataView, err := resource.View(testCase.view)
@@ -600,7 +615,7 @@ func TestRead(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		session := &Session{
+		session := &reader.Session{
 			Dest:        testCase.dest,
 			View:        dataView,
 			Selectors:   testCase.selectors,
@@ -626,6 +641,58 @@ func TestRead(t *testing.T) {
 			fmt.Println(testCase.expect)
 		}
 
+	}
+}
+
+func eventTypeView() usecase {
+	type Event struct {
+		Id        int
+		Quantity  float64
+		Timestamp time.Time
+	}
+
+	type EventType struct {
+		Id     int
+		Name   string
+		Events []*Event
+	}
+
+	resource := data.EmptyResource()
+	connector := &config.Connector{
+		Name:   "mydb",
+		DSN:    "./testdata/db/mydb.db",
+		Driver: "sqlite3",
+	}
+
+	resource.AddViews(&data.View{
+		Connector: connector,
+		Name:      "event-type_events",
+		Table:     "event_types",
+		Schema:    data.NewSchema(reflect.TypeOf(&EventType{})),
+		With: []*data.Relation{
+			{
+				Name: "event-type_rel",
+				Of: &data.ReferenceView{
+					View: data.View{
+						Connector: connector,
+						Name:      "events",
+						Table:     "events",
+					},
+					Column: "event_type_id",
+				},
+				Cardinality: data.Many,
+				Column:      "Id",
+				Holder:      "Events",
+			},
+		},
+	})
+
+	return usecase{
+		description: "event type -> events, many to one, programmatically",
+		expect:      `[{"Id":1,"Name":"type 1","Events":null},{"Id":2,"Name":"type 6","Events":[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z"}]},{"Id":4,"Name":"type 4","Events":null},{"Id":5,"Name":"type 5","Events":null},{"Id":11,"Name":"type 2","Events":[{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z"}]},{"Id":111,"Name":"type 3","Events":[{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z"}]}]`,
+		dest:        new([]*EventType),
+		view:        "event-type_events",
+		resource:    resource,
 	}
 }
 
