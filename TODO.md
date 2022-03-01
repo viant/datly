@@ -7,5 +7,6 @@
 * Caching 
 * Fetch strategy with SQL Join. 
 * Patch/Create/Update
-
+* Add Logger to rader (debug logger)
+* 
 * Utility (rule, struct, relation generation etc ...)
