@@ -141,23 +141,18 @@ func (s *Service) query(ctx context.Context, db *sql.DB, SQL string, collector *
 	if err != nil {
 		return 0, err
 	}
-
 	visitor := collector.Visitor()
-
 	readData := 0
-
-	shared.Log("SQL: %v, params: %v\n", SQL, batchData.Placeholders)
-
 	err = reader.QueryAll(ctx, func(row interface{}) error {
 		readData++
-		if actualn, ok := row.(OnFetcher); ok {
-			if err = actualn.OnFetch(ctx); err != nil {
+		if fetcher, ok := row.(OnFetcher); ok {
+			if err = fetcher.OnFetch(ctx); err != nil {
 				return err
 			}
 		}
 		return visitor(row)
 	}, batchData.Placeholders...)
-
+	shared.Log("SQL: %v, params: %v, read: %v, err: %v\n", SQL, batchData.Placeholders, readData, err)
 	if err != nil {
 		return 0, err
 	}
