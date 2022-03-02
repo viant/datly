@@ -48,6 +48,11 @@ func (r *Collector) Lock() *sync.Mutex {
 
 //Resolve resolved unmapped column
 func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface{} {
+	var rel string
+	if r.relation != nil {
+		rel = r.relation.Of.Column
+	}
+	fmt.Printf("Resolving %v of relation %v\n", column.Name(), rel)
 	buffer, ok := r.values[column.Name()]
 	if !ok {
 		localSlice := make([]interface{}, 0)
@@ -58,17 +63,17 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 	scanType := column.ScanType()
 	kind := column.ScanType().Kind()
 	switch kind {
-	case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64:
+	case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64, reflect.Uint32, reflect.Int32, reflect.Uint16, reflect.Int16, reflect.Uint8, reflect.Int8:
 		scanType = reflect.TypeOf(0)
 	}
 	r.types[column.Name()] = xunsafe.NewType(scanType)
 	return func(ptr unsafe.Pointer) interface{} {
 		var valuePtr interface{}
 		switch kind {
-		case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64:
+		case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64, reflect.Uint32, reflect.Int32, reflect.Uint16, reflect.Int16, reflect.Uint8, reflect.Int8:
 			value := 0
 			valuePtr = &value
-		case reflect.Float64:
+		case reflect.Float64, reflect.Float32:
 			value := 0.0
 			valuePtr = &value
 		case reflect.Bool:
@@ -252,6 +257,11 @@ func (r *Collector) visitorMany(relation *Relation, visitors ...Visitor) func(va
 		if keyField == nil && xType == nil {
 			xType = r.types[relation.Of.Column]
 			values = r.values[relation.Of.Column]
+
+			fmt.Printf("Initializing xType: %v\n", xType)
+			fmt.Printf("RTypes: %v\n", r.types)
+			fmt.Printf("RelColumnOf: %v\n", r.relation.Of.Column)
+			fmt.Printf("Relation: %v\n", r.relation.Of.DataType().String())
 		}
 
 		for i := range visitors {
@@ -273,6 +283,10 @@ func (r *Collector) visitorMany(relation *Relation, visitors ...Visitor) func(va
 			key = xType.Deref((*values)[counter])
 			counter++
 		}
+
+		fmt.Printf("Key: %v, %T\n", key, key)
+		fmt.Printf("Values: %v\n", values)
+
 		valuePosition := r.parentValuesPositions(relation.Column)
 		positions, ok := valuePosition[key]
 		if !ok {

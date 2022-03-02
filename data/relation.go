@@ -3,7 +3,7 @@ package data
 import (
 	"context"
 	"fmt"
-	"github.com/viant/toolbox/format"
+	"github.com/viant/datly/shared"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -65,14 +65,18 @@ func (r *ReferenceView) Init(ctx context.Context, resource *Resource) error {
 	return r.Validate()
 }
 
-func (r *Relation) inheritType(rType reflect.Type) {
+func (r *Relation) inheritType(rType reflect.Type) error {
 	r.Of.Schema.inheritType(rType)
 	r.Of.initializeField()
+	if err := r.Of.View.deriveColumnsFromSchema(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *ReferenceView) initializeField() {
-	rType := r.Schema.Type()
-	r.field = xunsafe.FieldByName(rType, r.Caser.Format(r.Column, format.CaseUpperCamel))
+	rType := deref(r.Schema.Type())
+	r.field = shared.MatchField(rType, r.Column, r.Caser)
 }
 
 //Validate checks if ReferenceView is valid

@@ -570,6 +570,8 @@ func TestRead(t *testing.T) {
 			expect: `[{"Id":1,"Info":"1,2","Info2":"","DealsId":[1,2],"Deals":[{"Id":1,"Name":"deal 1","DealId":""},{"Id":2,"Name":"deal 2","DealId":""}],"StringDealsId":null},{"Id":2,"Info":"","Info2":"20,30","DealsId":null,"Deals":[{"Id":5,"Name":"deal 5","DealId":"20"},{"Id":6,"Name":"deal 6","DealId":"30"}],"StringDealsId":["20","30"]}]`,
 		},
 		eventTypeView(),
+		inheritColumnsView(),
+		sqlxColumnNames(),
 	}
 
 	for index, testCase := range useCases {
@@ -607,10 +609,6 @@ func TestRead(t *testing.T) {
 		service.Apply(testCase.options)
 
 		dataView, err := resource.View(testCase.view)
-		if dataView.InheritSchemaColumns {
-			assert.Equalf(t, dataView.Schema.DereferencedType().NumField(), len(dataView.Columns), testCase.description)
-		}
-
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -644,17 +642,11 @@ func TestRead(t *testing.T) {
 	}
 }
 
-func eventTypeView() usecase {
+func sqlxColumnNames() usecase {
 	type Event struct {
-		Id        int
-		Quantity  float64
-		Timestamp time.Time
-	}
-
-	type EventType struct {
-		Id     int
-		Name   string
-		Events []*Event
+		Id             int
+		EventQuantity  float64   `sqlx:"name=quantity"`
+		EventTimestamp time.Time `sqlx:"name=timestamp"`
 	}
 
 	resource := data.EmptyResource()
@@ -665,18 +657,90 @@ func eventTypeView() usecase {
 	}
 
 	resource.AddViews(&data.View{
-		Connector: connector,
-		Name:      "event-type_events",
-		Table:     "event_types",
-		Schema:    data.NewSchema(reflect.TypeOf(&EventType{})),
+		Connector:            connector,
+		Name:                 "events",
+		Table:                "events",
+		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
+		InheritSchemaColumns: true,
+	})
+
+	return usecase{
+		view:        "events",
+		description: "sqlx column names programmatically",
+		resource:    resource,
+		expect:      `[{"Id":1,"EventQuantity":33.23432374000549,"EventTimestamp":"2019-03-11T02:20:33Z"},{"Id":10,"EventQuantity":21.957962334156036,"EventTimestamp":"2019-03-15T12:07:33Z"},{"Id":100,"EventQuantity":5.084940046072006,"EventTimestamp":"2019-04-10T05:15:33Z"}]`,
+		dest:        new([]*Event),
+	}
+}
+
+func inheritColumnsView() usecase {
+	type Event struct {
+		Id        int
+		Quantity  float64
+		Timestamp time.Time
+	}
+
+	resource := data.EmptyResource()
+	connector := &config.Connector{
+		Name:   "mydb",
+		DSN:    "./testdata/db/mydb.db",
+		Driver: "sqlite3",
+	}
+
+	resource.AddViews(&data.View{
+		Connector:            connector,
+		Name:                 "events",
+		Table:                "events",
+		Alias:                "e",
+		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
+		InheritSchemaColumns: true,
+	})
+
+	return usecase{
+		description: "inherit columns",
+		view:        "events",
+		resource:    resource,
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z"},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z"},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z"}]`,
+		dest:        new([]*Event),
+	}
+}
+
+func eventTypeView() usecase {
+	type Event struct {
+		Id        int
+		Quantity  float64
+		Timestamp time.Time
+		TypeId    int `sqlx:"name=event_type_id"`
+	}
+
+	type EventType struct {
+		Id     int
+		Events []*Event
+		Name   string
+	}
+
+	resource := data.EmptyResource()
+	connector := &config.Connector{
+		Name:   "mydb",
+		DSN:    "./testdata/db/mydb.db",
+		Driver: "sqlite3",
+	}
+
+	resource.AddViews(&data.View{
+		Connector:            connector,
+		Name:                 "event-type_events",
+		Table:                "event_types",
+		InheritSchemaColumns: true,
+		Schema:               data.NewSchema(reflect.TypeOf(&EventType{})),
 		With: []*data.Relation{
 			{
 				Name: "event-type_rel",
 				Of: &data.ReferenceView{
 					View: data.View{
-						Connector: connector,
-						Name:      "events",
-						Table:     "events",
+						Connector:            connector,
+						Name:                 "events",
+						Table:                "events",
+						InheritSchemaColumns: true,
 					},
 					Column: "event_type_id",
 				},

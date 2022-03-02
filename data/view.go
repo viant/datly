@@ -59,10 +59,11 @@ type (
 		_allRequiredParameters []*Parameter
 		_views                 *Views
 
-		Caser        format.Case `json:",omitempty"`
-		initialized  bool
-		isValid      bool
-		newCollector func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector
+		Caser              format.Case `json:",omitempty"`
+		initialized        bool
+		holdersInitialized bool
+		isValid            bool
+		newCollector       func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector
 	}
 
 	//Constraints configure what can be selected by Selector
@@ -125,6 +126,13 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 
 		v.inherit(view)
 	}
+
+	if v.Schema != nil && (!v.Schema.autoGen || v.Schema.Name != "") {
+		if err := v.propagateTypeIfNeeded(); err != nil {
+			return err
+		}
+	}
+
 	if v.Selector == nil {
 		v.Selector = &Config{}
 	}
@@ -189,10 +197,6 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err = v.propagateTypeIfNeeded(); err != nil {
-		return err
-	}
-
 	if err = v.registerHolders(); err != nil {
 		return err
 	}
@@ -218,7 +222,7 @@ func (v *View) initRelations(ctx context.Context, resource *Resource) error {
 
 func (v *View) ensureColumns(ctx context.Context) error {
 	if len(v.Columns) != 0 {
-		return ColumnSlice(v.Columns).Init()
+		return nil
 	}
 
 	db, err := v.Connector.Db()
@@ -282,10 +286,7 @@ func (v *View) Source() string {
 }
 
 func (v *View) ensureSchema(types Types) error {
-	if v.Schema == nil {
-		v.Schema = &Schema{}
-	}
-
+	v.initSchemaIfNeeded()
 	if v.Schema.Name != "" {
 		componentType := types.Lookup(v.Schema.Name)
 		if componentType == nil {
@@ -449,7 +450,7 @@ func notEmptyOf(values ...string) string {
 }
 
 func (v *View) initHolders() error {
-	if len(v.With) == 0 {
+	if len(v.With) == 0 || v.holdersInitialized {
 		return nil
 	}
 
@@ -457,13 +458,13 @@ func (v *View) initHolders() error {
 		relation := v.With[i]
 
 		dataType := v.DataType()
-		relation.holderField = xunsafe.FieldByName(dataType, relation.Holder)
+		relation.holderField = shared.MatchField(dataType, relation.Holder, v.Caser)
 		if relation.holderField == nil {
 			return fmt.Errorf("failed to lookup holderField %v", relation.Holder)
 		}
 
 		columnName := v.Caser.Format(relation.Column, format.CaseUpperCamel)
-		relation.columnField = xunsafe.FieldByName(v.DataType(), columnName)
+		relation.columnField = shared.MatchField(v.DataType(), columnName, v.Caser)
 
 		relation.hasColumnField = relation.columnField != nil
 		if relation.Cardinality == Many && !relation.hasColumnField {
@@ -471,6 +472,7 @@ func (v *View) initHolders() error {
 		}
 	}
 
+	v.holdersInitialized = true
 	return nil
 }
 
@@ -511,17 +513,26 @@ func (v *View) LimitWithSelector(selector *Selector) int {
 }
 
 func (v *View) propagateTypeIfNeeded() error {
+	v.initSchemaIfNeeded()
+
 	if v.Schema.AutoGen() {
 		return nil
 	}
 
+	if v.DataType() != nil {
+		if err := v.initHolders(); err != nil {
+			return err
+		}
+	}
+
 	for _, rel := range v.With {
-		rel.Of.Schema.inheritType(rel.holderField.Type)
 		if err := (&rel.Of.View).propagateTypeIfNeeded(); err != nil {
 			return err
 		}
 
-		rel.inheritType(rel.holderField.Type)
+		if err := rel.inheritType(rel.holderField.Type); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -703,38 +714,48 @@ func (v *View) deriveColumnsFromSchema() error {
 
 	rType := v.Schema.DereferencedType()
 
-	if err := v.updateColumn(rType, &newColumns); err != nil {
-		return err
-	}
+	v.updateColumn(rType, &newColumns)
 	v.Columns = newColumns
 	v._columns = ColumnSlice(newColumns).Index(v.Caser)
 
 	return nil
 }
 
-func (v *View) updateColumn(rType reflect.Type, columns *[]*Column) error {
+func (v *View) updateColumn(rType reflect.Type, columns *[]*Column) {
 	for i := 0; i < rType.NumField(); i++ {
 		field := rType.Field(i)
 		if !field.IsExported() {
 			continue
 		}
 		if field.Anonymous {
-			if err := v.updateColumn(field.Type, columns); err != nil {
-				return err
-			}
+			v.updateColumn(field.Type, columns)
 			continue
 		}
 		column, err := v._columns.Lookup(field.Name)
-		if err != nil {
-			return err
+		if err == nil {
+			*columns = append(*columns, column)
 		}
-		*columns = append(*columns, column)
+
+		tag := io.ParseTag(field.Tag.Get(option.TagSqlx))
+		column, err = v._columns.Lookup(tag.Column)
+		if err == nil {
+			*columns = append(*columns, column)
+		}
+
 	}
-	return nil
+	return
 }
 
 func (v *View) ParamField() *xunsafe.Field {
 	return v._paramField
+}
+
+func (v *View) initSchemaIfNeeded() {
+	if v.Schema == nil {
+		v.Schema = &Schema{
+			autoGen: true,
+		}
+	}
 }
 
 //ViewReference creates a view reference

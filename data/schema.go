@@ -78,7 +78,12 @@ func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat f
 		})
 	}
 
+	holders := make(map[string]bool)
 	for _, rel := range relations {
+		if _, ok := holders[rel.Holder]; ok {
+			continue
+		}
+
 		rType := rel.Of.DataType()
 		if rType.Kind() == reflect.Struct {
 			rType = reflect.PtrTo(rType)
@@ -88,6 +93,8 @@ func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat f
 		if rel.Cardinality == Many {
 			rType = reflect.SliceOf(rType)
 		}
+
+		holders[rel.Holder] = true
 
 		structFields = append(structFields, reflect.StructField{
 			Name: rel.Holder,
@@ -131,7 +138,8 @@ func (c *Schema) DereferencedType() reflect.Type {
 }
 
 func deref(rType reflect.Type) reflect.Type {
-	if rType.Kind() == reflect.Ptr {
+	switch rType.Kind() {
+	case reflect.Ptr, reflect.Slice:
 		return deref(rType.Elem())
 	}
 	return rType
