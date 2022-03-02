@@ -1,7 +1,6 @@
 package shared
 
 import (
-	"fmt"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
@@ -11,6 +10,8 @@ import (
 )
 
 func MatchField(rType reflect.Type, name string, sourceCase format.Case) *xunsafe.Field {
+	rType = Elem(rType)
+
 	field := xunsafe.FieldByName(rType, sourceCase.Format(name, format.CaseUpperCamel))
 	if field != nil {
 		return field
@@ -28,7 +29,7 @@ func MatchField(rType reflect.Type, name string, sourceCase format.Case) *xunsaf
 			continue
 		}
 
-		if name == strings.ToLower(tag.Column) {
+		if doesTagMatch(tag, name) {
 			return xunsafe.NewField(sField)
 		}
 	}
@@ -38,7 +39,7 @@ func MatchField(rType reflect.Type, name string, sourceCase format.Case) *xunsaf
 		if tag.Column == "" || tag.Transient {
 			continue
 		}
-		if name == strings.ToLower(tag.Column) {
+		if doesTagMatch(tag, name) {
 			return xunsafe.NewField(sField)
 		}
 	}
@@ -53,11 +54,20 @@ func MatchField(rType reflect.Type, name string, sourceCase format.Case) *xunsaf
 		if name == nameToLower {
 			return xunsafe.NewField(sField)
 		}
-		if strings.ReplaceAll(name, "_", "") == strings.ReplaceAll(nameToLower, "_", "") {
+		if doesTagMatch(tag, sField.Name) {
 			return xunsafe.NewField(sField)
 		}
 	}
 
-	fmt.Printf("not found field for name:%v, %v \n", name, rType.String())
 	return nil
+}
+
+func doesTagMatch(tag *io.Tag, columnName string) bool {
+	columnName = strings.ToLower(columnName)
+	columnName = strings.ReplaceAll(columnName, "_", "")
+
+	tagName := strings.ToLower(tag.Column)
+	tagName = strings.ReplaceAll(tagName, "_", "")
+
+	return columnName == tagName
 }

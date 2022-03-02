@@ -39,6 +39,11 @@ func (c *Schema) Type() reflect.Type {
 
 func (c *Schema) setType(rType reflect.Type) {
 	c.compType = rType
+	c.updateSliceType()
+
+}
+
+func (c *Schema) updateSliceType() {
 	c.slice = xunsafe.NewSlice(c.compType)
 	c.sliceType = c.slice.Type
 }
@@ -46,7 +51,7 @@ func (c *Schema) setType(rType reflect.Type) {
 //Init build struct type
 func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case) {
 	if c.compType != nil {
-		c.setType(c.compType)
+		c.updateSliceType()
 		return
 	}
 
@@ -131,16 +136,4 @@ func (c *Schema) inheritType(rType reflect.Type) {
 //XType returns structType as *xunsafe.Type
 func (c *Schema) XType() *xunsafe.Type {
 	return c.xType
-}
-
-func (c *Schema) DereferencedType() reflect.Type {
-	return deref(c.compType)
-}
-
-func deref(rType reflect.Type) reflect.Type {
-	switch rType.Kind() {
-	case reflect.Ptr, reflect.Slice:
-		return deref(rType.Elem())
-	}
-	return rType
 }

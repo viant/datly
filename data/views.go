@@ -35,6 +35,7 @@ func (v Views) Lookup(viewName string) (*View, error) {
 	}
 	ret, ok := v[viewName]
 	if !ok {
+
 		return nil, fmt.Errorf("failed to lookup view %v", viewName)
 	}
 	return ret, nil

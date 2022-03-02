@@ -120,13 +120,14 @@ func (v *View) initViews(ctx context.Context, resource *Resource, relations []*R
 			return err
 		}
 
+		if err := refView.initViews(ctx, resource, refView.With); err != nil {
+			return err
+		}
+
 		if err := refView.initView(ctx, resource); err != nil {
 			return err
 		}
 
-		if err := refView.initViews(ctx, resource, refView.With); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -138,6 +139,7 @@ func (v *View) generateNameIfNeeded(refView *View, rel *Relation) {
 }
 
 func (v *View) initView(ctx context.Context, resource *Resource) error {
+	v.ensureViewIndexed()
 	if err := v.inheritFromViewIfNeeded(ctx, resource); err != nil {
 		return err
 	}
@@ -307,6 +309,7 @@ func (v *View) ensureSchema(types Types) error {
 		if componentType == nil {
 			return fmt.Errorf("not found type for Schema %v", v.Schema.Name)
 		}
+
 		if componentType != nil {
 			v.Schema.setType(componentType)
 		}
@@ -484,7 +487,6 @@ func (v *View) collectFromRelations(ctx context.Context, resource *Resource) err
 	v._queryKind = ParametersSlice(v.Parameters).Filter(QueryKind)
 	v._allRequiredParameters = v.FilterRequiredParams()
 
-	v.ensureViewIndexed()
 	v.appendReferencesParameters()
 	return nil
 }
@@ -641,7 +643,7 @@ func (v *View) markColumnsAsFilterable() error {
 }
 
 func (v *View) indexColumnsFields() error {
-	rType := v.Schema.DereferencedType()
+	rType := shared.Elem(v.Schema.Type())
 	for i := 0; i < rType.NumField(); i++ {
 		field := rType.Field(i)
 		if !field.IsExported() {
@@ -672,9 +674,7 @@ func (v *View) deriveColumnsFromSchema() error {
 
 	newColumns := make([]*Column, 0)
 
-	rType := v.Schema.DereferencedType()
-
-	v.updateColumn(rType, &newColumns)
+	v.updateColumn(shared.Elem(v.Schema.Type()), &newColumns)
 	v.Columns = newColumns
 	v._columns = ColumnSlice(newColumns).Index(v.Caser)
 
@@ -682,6 +682,8 @@ func (v *View) deriveColumnsFromSchema() error {
 }
 
 func (v *View) updateColumn(rType reflect.Type, columns *[]*Column) {
+	index := ColumnSlice(*columns).Index(v.Caser)
+
 	for i := 0; i < rType.NumField(); i++ {
 		field := rType.Field(i)
 		if !field.IsExported() {
@@ -691,6 +693,11 @@ func (v *View) updateColumn(rType reflect.Type, columns *[]*Column) {
 			v.updateColumn(field.Type, columns)
 			continue
 		}
+
+		if _, ok := index[field.Name]; ok {
+			continue
+		}
+
 		column, err := v._columns.Lookup(field.Name)
 		if err == nil {
 			*columns = append(*columns, column)
@@ -700,8 +707,8 @@ func (v *View) updateColumn(rType reflect.Type, columns *[]*Column) {
 		column, err = v._columns.Lookup(tag.Column)
 		if err == nil {
 			*columns = append(*columns, column)
+			index.Register(v.Caser, column)
 		}
-
 	}
 	return
 }

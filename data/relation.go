@@ -60,8 +60,7 @@ func (r *Relation) inheritType(rType reflect.Type) error {
 }
 
 func (r *ReferenceView) initializeField() {
-	rType := deref(r.Schema.Type())
-	r.field = shared.MatchField(rType, r.Column, r.Caser)
+	r.field = shared.MatchField(r.Schema.Type(), r.Column, r.Caser)
 }
 
 //Validate checks if ReferenceView is valid
@@ -74,11 +73,13 @@ func (r *ReferenceView) Validate() error {
 
 //Init initializes Relation
 func (r *Relation) Init(ctx context.Context, resource *Resource, parent *View) error {
-	if err := r.initHolder(parent); err != nil {
+	field := shared.MatchField(parent.DataType(), r.Holder, r.Of.View.Caser)
+
+	if err := r.inheritType(field.Type); err != nil {
 		return err
 	}
 
-	if err := r.inheritType(r.holderField.Type); err != nil {
+	if err := r.initHolder(parent); err != nil {
 		return err
 	}
 
