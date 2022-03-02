@@ -152,6 +152,7 @@ func (s *Service) query(ctx context.Context, db *sql.DB, SQL string, collector *
 		}
 		return visitor(row)
 	}, batchData.Placeholders...)
+
 	shared.Log("SQL: %v, params: %v, read: %v, err: %v\n", SQL, batchData.Placeholders, readData, err)
 	if err != nil {
 		return 0, err
