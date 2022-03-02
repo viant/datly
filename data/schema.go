@@ -39,6 +39,11 @@ func (c *Schema) Type() reflect.Type {
 
 func (c *Schema) setType(rType reflect.Type) {
 	c.compType = rType
+	c.updateSliceType()
+
+}
+
+func (c *Schema) updateSliceType() {
 	c.slice = xunsafe.NewSlice(c.compType)
 	c.sliceType = c.slice.Type
 }
@@ -46,7 +51,7 @@ func (c *Schema) setType(rType reflect.Type) {
 //Init build struct type
 func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case) {
 	if c.compType != nil {
-		c.setType(c.compType)
+		c.updateSliceType()
 		return
 	}
 
@@ -78,7 +83,12 @@ func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat f
 		})
 	}
 
+	holders := make(map[string]bool)
 	for _, rel := range relations {
+		if _, ok := holders[rel.Holder]; ok {
+			continue
+		}
+
 		rType := rel.Of.DataType()
 		if rType.Kind() == reflect.Struct {
 			rType = reflect.PtrTo(rType)
@@ -88,6 +98,8 @@ func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat f
 		if rel.Cardinality == Many {
 			rType = reflect.SliceOf(rType)
 		}
+
+		holders[rel.Holder] = true
 
 		structFields = append(structFields, reflect.StructField{
 			Name: rel.Holder,
@@ -124,15 +136,4 @@ func (c *Schema) inheritType(rType reflect.Type) {
 //XType returns structType as *xunsafe.Type
 func (c *Schema) XType() *xunsafe.Type {
 	return c.xType
-}
-
-func (c *Schema) DereferencedType() reflect.Type {
-	return deref(c.compType)
-}
-
-func deref(rType reflect.Type) reflect.Type {
-	if rType.Kind() == reflect.Ptr {
-		return deref(rType.Elem())
-	}
-	return rType
 }

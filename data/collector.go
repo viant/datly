@@ -58,17 +58,17 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 	scanType := column.ScanType()
 	kind := column.ScanType().Kind()
 	switch kind {
-	case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64:
+	case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64, reflect.Uint32, reflect.Int32, reflect.Uint16, reflect.Int16, reflect.Uint8, reflect.Int8:
 		scanType = reflect.TypeOf(0)
 	}
 	r.types[column.Name()] = xunsafe.NewType(scanType)
 	return func(ptr unsafe.Pointer) interface{} {
 		var valuePtr interface{}
 		switch kind {
-		case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64:
+		case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64, reflect.Uint32, reflect.Int32, reflect.Uint16, reflect.Int16, reflect.Uint8, reflect.Int8:
 			value := 0
 			valuePtr = &value
-		case reflect.Float64:
+		case reflect.Float64, reflect.Float32:
 			value := 0.0
 			valuePtr = &value
 		case reflect.Bool:
@@ -157,14 +157,16 @@ func (r *Collector) Visitor() func(value interface{}) error {
 	}
 
 	if relation == nil {
-		return r.parentVisitor(visitorRelations)
+		return r.valueIndexer(visitorRelations)
 	}
 
 	switch relation.Cardinality {
 	case "One":
-		return r.visitorOne(relation)
+		valueIndexer := r.valueIndexer(visitorRelations)
+		return r.visitorOne(relation, valueIndexer)
 	case "Many":
-		return r.visitorMany(relation)
+		valueIndexer := r.valueIndexer(visitorRelations)
+		return r.visitorMany(relation, valueIndexer)
 	}
 
 	return func(owner interface{}) error {
@@ -172,28 +174,31 @@ func (r *Collector) Visitor() func(value interface{}) error {
 	}
 }
 
-func (r *Collector) parentVisitor(visitorRelations []*Relation) func(value interface{}) error {
+func (r *Collector) valueIndexer(visitorRelations []*Relation) func(value interface{}) error {
 	counter := 0
 	return func(value interface{}) error {
 		ptr := xunsafe.AsPointer(value)
 		for _, rel := range visitorRelations {
 			fieldValue := rel.columnField.Value(ptr)
-
-			switch acutal := fieldValue.(type) {
-			case []int:
-				for _, v := range acutal {
-					r.indexValueToPostition(rel, v, counter)
-				}
-			case []string:
-				for _, v := range acutal {
-					r.indexValueToPostition(rel, v, counter)
-				}
-			default:
-				r.indexValueToPostition(rel, fieldValue, counter)
-			}
+			r.indexValueByRel(fieldValue, rel, counter)
 		}
 		counter++
 		return nil
+	}
+}
+
+func (r *Collector) indexValueByRel(fieldValue interface{}, rel *Relation, counter int) {
+	switch acutal := fieldValue.(type) {
+	case []int:
+		for _, v := range acutal {
+			r.indexValueToPostition(rel, v, counter)
+		}
+	case []string:
+		for _, v := range acutal {
+			r.indexValueToPostition(rel, v, counter)
+		}
+	default:
+		r.indexValueToPostition(rel, fieldValue, counter)
 	}
 }
 
@@ -273,6 +278,7 @@ func (r *Collector) visitorMany(relation *Relation, visitors ...Visitor) func(va
 			key = xType.Deref((*values)[counter])
 			counter++
 		}
+
 		valuePosition := r.parentValuesPositions(relation.Column)
 		positions, ok := valuePosition[key]
 		if !ok {
@@ -308,6 +314,10 @@ func (r *Collector) indexParentPositions(name string) {
 	}
 
 	values := r.parent.values[name]
+	if values == nil {
+		return
+	}
+
 	xType := r.parent.types[name]
 	r.parent.valuePosition[name] = map[interface{}][]int{}
 	for position, v := range *values {
@@ -434,15 +444,42 @@ func (r *Collector) ParentPlaceholders() ([]interface{}, string) {
 		return []interface{}{}, ""
 	}
 
-	positions := r.parentValuesPositions(r.relation.Column)
-	result := make([]interface{}, len(positions))
-	counter := 0
-	for key := range positions {
-		result[counter] = key
-		counter++
-	}
+	column := r.relation.Of.Column
 
-	return result, r.relation.Of.Column
+	if r.relation.columnField != nil {
+		destPtr := xunsafe.AsPointer(r.parent.dest)
+		sliceLen := r.parent.slice.Len(destPtr)
+		result := make([]interface{}, 0)
+		for i := 0; i < sliceLen; i++ {
+			parent := r.parent.slice.ValuePointerAt(destPtr, i)
+			fieldValue := r.relation.columnField.Value(xunsafe.AsPointer(parent))
+			switch actual := fieldValue.(type) {
+			case []int:
+				for j := range actual {
+					result = append(result, actual[j])
+				}
+			case []string:
+				for j := range actual {
+					result = append(result, actual[j])
+				}
+			default:
+				result = append(result, fieldValue)
+			}
+		}
+
+		return result, column
+	} else {
+		positions := r.parentValuesPositions(r.relation.Column)
+		result := make([]interface{}, len(positions))
+		counter := 0
+
+		for key := range positions {
+			result[counter] = key
+			counter++
+		}
+		return result, column
+
+	}
 }
 
 func (r *Collector) WaitIfNeeded() {

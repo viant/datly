@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -45,34 +46,21 @@ const (
 
 //Init initializes ReferenceView
 func (r *ReferenceView) Init(ctx context.Context, resource *Resource) error {
-	if r.View.Ref != "" {
-		view, err := resource._views.Lookup(r.View.Ref)
-		if err != nil {
-			return err
-		}
-
-		if err := view.Init(ctx, resource); err != nil {
-			return err
-		}
-		r.View.inherit(view)
-	} else {
-		if err := r.View.Init(ctx, resource); err != nil {
-			return err
-		}
-	}
-
 	r.initializeField()
 	return r.Validate()
 }
 
-func (r *Relation) inheritType(rType reflect.Type) {
+func (r *Relation) inheritType(rType reflect.Type) error {
 	r.Of.Schema.inheritType(rType)
 	r.Of.initializeField()
+	if err := r.Of.View.deriveColumnsFromSchema(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *ReferenceView) initializeField() {
-	rType := r.Schema.Type()
-	r.field = xunsafe.FieldByName(rType, r.Caser.Format(r.Column, format.CaseUpperCamel))
+	r.field = shared.MatchField(r.Schema.Type(), r.Column, r.Caser)
 }
 
 //Validate checks if ReferenceView is valid
@@ -84,12 +72,36 @@ func (r *ReferenceView) Validate() error {
 }
 
 //Init initializes Relation
-func (r *Relation) Init(ctx context.Context, resource *Resource) error {
-	if err := r.Of.Init(ctx, resource); err != nil {
+func (r *Relation) Init(ctx context.Context, resource *Resource, parent *View) error {
+	field := shared.MatchField(parent.DataType(), r.Holder, r.Of.View.Caser)
+
+	if err := r.inheritType(field.Type); err != nil {
+		return err
+	}
+
+	if err := r.initHolder(parent); err != nil {
 		return err
 	}
 
 	return r.Validate()
+}
+
+func (r *Relation) initHolder(v *View) error {
+	dataType := v.DataType()
+	r.holderField = shared.MatchField(dataType, r.Holder, v.Caser)
+	if r.holderField == nil {
+		return fmt.Errorf("failed to lookup holderField %v", r.Holder)
+	}
+
+	columnName := v.Caser.Format(r.Column, format.CaseUpperCamel)
+	r.columnField = shared.MatchField(v.DataType(), columnName, v.Caser)
+
+	r.hasColumnField = r.columnField != nil
+	if r.Cardinality == Many && !r.hasColumnField {
+		return fmt.Errorf("column %v doesn't have corresponding field in the struct: %v", columnName, v.DataType().String())
+	}
+
+	return nil
 }
 
 //Validate checks if Relation is valid

@@ -50,15 +50,6 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 	return nil
 }
 
-func (s *Service) actualStructType(dest interface{}) reflect.Type {
-	rType := reflect.TypeOf(dest).Elem()
-	if rType.Kind() == reflect.Slice {
-		rType = rType.Elem()
-	}
-
-	return rType
-}
-
 func (s *Service) readAll(ctx context.Context, session *Session, collector *data.Collector, upstream rdata.Map, wg *sync.WaitGroup, errors *shared.Errors) {
 	defer collector.Fetched()
 
@@ -88,18 +79,22 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 		return
 	}
 
-	limit := view.LimitWithSelector(selector)
-	batchData := s.batchData(limit, view, collector)
+	batchData := s.batchData(selector, view, collector)
+
+	if batchData.ColumnName != "" && len(batchData.Placeholders) == 0 {
+		return
+	}
+
 	err = s.exhaustRead(ctx, view, selector, upstream, params, batchData, db, collector)
 	if err != nil {
 		errors.Append(err)
 	}
 }
 
-func (s *Service) batchData(limit int, view *data.View, collector *data.Collector) *BatchData {
+func (s *Service) batchData(selector *data.Selector, view *data.View, collector *data.Collector) *BatchData {
 	batchData := &BatchData{
 		CurrentlyRead: 0,
-		BatchReadSize: limit,
+		BatchReadSize: view.LimitWithSelector(selector),
 	}
 
 	if view.BatchReadSize != nil {
@@ -152,6 +147,7 @@ func (s *Service) query(ctx context.Context, db *sql.DB, SQL string, collector *
 		}
 		return visitor(row)
 	}, batchData.Placeholders...)
+
 	shared.Log("SQL: %v, params: %v, read: %v, err: %v\n", SQL, batchData.Placeholders, readData, err)
 	if err != nil {
 		return 0, err

@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
-	"github.com/viant/toolbox/format"
-	"github.com/viant/xunsafe"
 )
 
 type (
@@ -61,7 +59,7 @@ func (p *Parameter) Init(ctx context.Context, resource *Resource) error {
 			}
 
 			p.view = view
-			p.view._paramField = xunsafe.FieldByName(p.view.DataType(), view.Caser.Format(view.Columns[0].Name, format.CaseUpperCamel))
+			p.view._paramField = shared.MatchField(p.view.DataType(), view.Columns[0].Name, view.Caser)
 		}
 	}
 

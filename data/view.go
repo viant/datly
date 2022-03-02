@@ -59,10 +59,11 @@ type (
 		_allRequiredParameters []*Parameter
 		_views                 *Views
 
-		Caser        format.Case `json:",omitempty"`
-		initialized  bool
-		isValid      bool
-		newCollector func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector
+		Caser              format.Case `json:",omitempty"`
+		initialized        bool
+		holdersInitialized bool
+		isValid            bool
+		newCollector       func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector
 	}
 
 	//Constraints configure what can be selected by Selector
@@ -95,15 +96,72 @@ func (v *View) Init(ctx context.Context, resource *Resource) error {
 		return nil
 	}
 
-	err := v.init(ctx, resource)
-	if err == nil {
-		v.initialized = true
+	if err := v.initViews(ctx, resource, v.With); err != nil {
+		return err
 	}
 
-	return err
+	if err := v.initView(ctx, resource); err != nil {
+		return err
+	}
+
+	if err := v.initAfterViewsInitialized(ctx, resource, v.With); err != nil {
+		return err
+	}
+	v.initialized = true
+
+	return nil
 }
 
-func (v *View) init(ctx context.Context, resource *Resource) error {
+func (v *View) initViews(ctx context.Context, resource *Resource, relations []*Relation) error {
+	for _, rel := range relations {
+		refView := &rel.Of.View
+		v.generateNameIfNeeded(refView, rel)
+		if err := refView.inheritFromViewIfNeeded(ctx, resource); err != nil {
+			return err
+		}
+
+		if err := refView.initViews(ctx, resource, refView.With); err != nil {
+			return err
+		}
+
+		if err := refView.initView(ctx, resource); err != nil {
+			return err
+		}
+
+	}
+	return nil
+}
+
+func (v *View) generateNameIfNeeded(refView *View, rel *Relation) {
+	if refView.Name == "" {
+		refView.Name = v.Name + "#rel:" + rel.Name
+	}
+}
+
+func (v *View) initView(ctx context.Context, resource *Resource) error {
+	v.ensureViewIndexed()
+	if err := v.inheritFromViewIfNeeded(ctx, resource); err != nil {
+		return err
+	}
+
+	if v.MatchStrategy == "" {
+		v.MatchStrategy = ReadMatched
+	}
+	if err := v.MatchStrategy.Validate(); err != nil {
+		return err
+	}
+
+	v.Alias = notEmptyOf(v.Alias, "t")
+	v.Table = notEmptyOf(v.Table, v.Name)
+
+	if v.Selector == nil {
+		v.Selector = &Config{}
+	}
+
+	if v.SelectorConstraints == nil {
+		v.SelectorConstraints = &Constraints{}
+	}
+
 	if v.Name == v.Ref {
 		return fmt.Errorf("view name and ref cannot be the same")
 	}
@@ -112,23 +170,6 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 		return fmt.Errorf("view name was empty")
 	}
 
-	if v.Ref != "" {
-		view, err := resource._views.Lookup(v.Ref)
-		if err != nil {
-			return err
-		}
-
-		err = view.Init(ctx, resource)
-		if err != nil {
-			return err
-		}
-
-		v.inherit(view)
-	}
-	if v.Selector == nil {
-		v.Selector = &Config{}
-	}
-	v.Alias = notEmptyOf(v.Alias, "t")
 	if v.Connector == nil {
 		return fmt.Errorf("connector was empty")
 	}
@@ -141,13 +182,6 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 	if err = v.Connector.Validate(); err != nil {
 		return err
 	}
-
-	if v.Table == "" {
-		v.Table = v.Name
-	}
-
-	v.ensureIndexExcluded()
-	v.ensureSelectorConstraints()
 
 	if err := v.ensureCaseFormat(); err != nil {
 		return err
@@ -165,60 +199,47 @@ func (v *View) init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err = v.initRelations(ctx, resource); err != nil {
-		return err
-	}
+	v.ensureIndexExcluded()
+	v.ensureSelectorConstraints()
 
 	if err = v.ensureSchema(resource.types); err != nil {
-		return err
-	}
-	if err = v.collectFromRelations(ctx, resource); err != nil {
-		return err
-	}
-
-	v.ensureCollector()
-	if err = v.initHolders(); err != nil {
-		return err
-	}
-
-	if v.MatchStrategy == "" {
-		v.MatchStrategy = ReadMatched
-	}
-
-	if err = v.MatchStrategy.Validate(); err != nil {
-		return err
-	}
-
-	if err = v.propagateTypeIfNeeded(); err != nil {
-		return err
-	}
-
-	if err = v.registerHolders(); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (v *View) initRelations(ctx context.Context, resource *Resource) error {
-	var err error
-	if len(v.With) == 0 {
-		return nil
+func (v *View) initAfterViewsInitialized(ctx context.Context, resource *Resource, relations []*Relation) error {
+	v.ensureCollector()
+	if err := v.deriveColumnsFromSchema(); err != nil {
+		return err
 	}
 
-	for i := range v.With {
-		err = v.With[i].Init(ctx, resource)
-		if err != nil {
+	for _, rel := range relations {
+		if err := rel.Init(ctx, resource, v); err != nil {
 			return err
 		}
 
+		refView := rel.Of.View
+		if err := refView.initAfterViewsInitialized(ctx, resource, refView.With); err != nil {
+			return err
+		}
 	}
+
+	if err := v.collectFromRelations(ctx, resource); err != nil {
+		return err
+	}
+
+	if err := v.registerHolders(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (v *View) ensureColumns(ctx context.Context) error {
 	if len(v.Columns) != 0 {
-		return ColumnSlice(v.Columns).Init()
+		return nil
 	}
 
 	db, err := v.Connector.Db()
@@ -282,15 +303,13 @@ func (v *View) Source() string {
 }
 
 func (v *View) ensureSchema(types Types) error {
-	if v.Schema == nil {
-		v.Schema = &Schema{}
-	}
-
+	v.initSchemaIfNeeded()
 	if v.Schema.Name != "" {
 		componentType := types.Lookup(v.Schema.Name)
 		if componentType == nil {
 			return fmt.Errorf("not found type for Schema %v", v.Schema.Name)
 		}
+
 		if componentType != nil {
 			v.Schema.setType(componentType)
 		}
@@ -301,9 +320,6 @@ func (v *View) ensureSchema(types Types) error {
 		return err
 	}
 
-	if err := v.deriveColumnsFromSchema(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -448,32 +464,6 @@ func notEmptyOf(values ...string) string {
 	return ""
 }
 
-func (v *View) initHolders() error {
-	if len(v.With) == 0 {
-		return nil
-	}
-
-	for i := range v.With {
-		relation := v.With[i]
-
-		dataType := v.DataType()
-		relation.holderField = xunsafe.FieldByName(dataType, relation.Holder)
-		if relation.holderField == nil {
-			return fmt.Errorf("failed to lookup holderField %v", relation.Holder)
-		}
-
-		columnName := v.Caser.Format(relation.Column, format.CaseUpperCamel)
-		relation.columnField = xunsafe.FieldByName(v.DataType(), columnName)
-
-		relation.hasColumnField = relation.columnField != nil
-		if relation.Cardinality == Many && !relation.hasColumnField {
-			return fmt.Errorf("column %v doesn't have corresponding field in the struct: %v", columnName, v.DataType().String())
-		}
-	}
-
-	return nil
-}
-
 func (v *View) registerHolders() error {
 	for i := range v.With {
 		if err := v._columns.RegisterHolder(v.With[i]); err != nil {
@@ -497,7 +487,6 @@ func (v *View) collectFromRelations(ctx context.Context, resource *Resource) err
 	v._queryKind = ParametersSlice(v.Parameters).Filter(QueryKind)
 	v._allRequiredParameters = v.FilterRequiredParams()
 
-	v.ensureViewIndexed()
 	v.appendReferencesParameters()
 	return nil
 }
@@ -508,22 +497,6 @@ func (v *View) LimitWithSelector(selector *Selector) int {
 		return selector.Limit
 	}
 	return v.Selector.Limit
-}
-
-func (v *View) propagateTypeIfNeeded() error {
-	if v.Schema.AutoGen() {
-		return nil
-	}
-
-	for _, rel := range v.With {
-		rel.Of.Schema.inheritType(rel.holderField.Type)
-		if err := (&rel.Of.View).propagateTypeIfNeeded(); err != nil {
-			return err
-		}
-
-		rel.inheritType(rel.holderField.Type)
-	}
-	return nil
 }
 
 //UsesCookie returns true if View or any of relations View Parameter uses cookie.
@@ -670,7 +643,7 @@ func (v *View) markColumnsAsFilterable() error {
 }
 
 func (v *View) indexColumnsFields() error {
-	rType := v.Schema.DereferencedType()
+	rType := shared.Elem(v.Schema.Type())
 	for i := 0; i < rType.NumField(); i++ {
 		field := rType.Field(i)
 		if !field.IsExported() {
@@ -701,40 +674,70 @@ func (v *View) deriveColumnsFromSchema() error {
 
 	newColumns := make([]*Column, 0)
 
-	rType := v.Schema.DereferencedType()
-
-	if err := v.updateColumn(rType, &newColumns); err != nil {
-		return err
-	}
+	v.updateColumn(shared.Elem(v.Schema.Type()), &newColumns)
 	v.Columns = newColumns
 	v._columns = ColumnSlice(newColumns).Index(v.Caser)
 
 	return nil
 }
 
-func (v *View) updateColumn(rType reflect.Type, columns *[]*Column) error {
+func (v *View) updateColumn(rType reflect.Type, columns *[]*Column) {
+	index := ColumnSlice(*columns).Index(v.Caser)
+
 	for i := 0; i < rType.NumField(); i++ {
 		field := rType.Field(i)
 		if !field.IsExported() {
 			continue
 		}
 		if field.Anonymous {
-			if err := v.updateColumn(field.Type, columns); err != nil {
-				return err
-			}
+			v.updateColumn(field.Type, columns)
 			continue
 		}
-		column, err := v._columns.Lookup(field.Name)
-		if err != nil {
-			return err
+
+		if _, ok := index[field.Name]; ok {
+			continue
 		}
-		*columns = append(*columns, column)
+
+		column, err := v._columns.Lookup(field.Name)
+		if err == nil {
+			*columns = append(*columns, column)
+		}
+
+		tag := io.ParseTag(field.Tag.Get(option.TagSqlx))
+		column, err = v._columns.Lookup(tag.Column)
+		if err == nil {
+			*columns = append(*columns, column)
+			index.Register(v.Caser, column)
+		}
 	}
-	return nil
+	return
 }
 
 func (v *View) ParamField() *xunsafe.Field {
 	return v._paramField
+}
+
+func (v *View) initSchemaIfNeeded() {
+	if v.Schema == nil {
+		v.Schema = &Schema{
+			autoGen: true,
+		}
+	}
+}
+
+func (v *View) inheritFromViewIfNeeded(ctx context.Context, resource *Resource) error {
+	if v.Ref != "" {
+		view, err := resource._views.Lookup(v.Ref)
+		if err != nil {
+			return err
+		}
+
+		if err = view.initView(ctx, resource); err != nil {
+			return err
+		}
+		v.inherit(view)
+	}
+	return nil
 }
 
 //ViewReference creates a view reference
