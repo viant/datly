@@ -27,7 +27,7 @@ require (
 	github.com/viant/gtly v0.0.0-20200927172514-d1417cac563d
 	github.com/viant/parsly v0.0.0-20220217213746-bb166fe746b9
 	github.com/viant/scy v0.0.0-20220223165437-725359877ec0
-	github.com/viant/sqlx v0.0.0-20220107182258-867b12abf923
+	github.com/viant/sqlx v0.0.0-20220219185920-46207a7286ea
 	github.com/viant/toolbox v0.34.5
 	github.com/viant/xunsafe v0.7.1-0.20220228210536-20bce86415bb
 	github.com/yuin/gopher-lua v0.0.0-20191220021717-ab39c6098bdb // indirect

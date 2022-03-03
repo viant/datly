@@ -12,7 +12,6 @@ import (
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
-	"strings"
 )
 
 type (
@@ -25,10 +24,10 @@ type (
 		Table     string `json:",omitempty"`
 		From      string `json:",omitempty"`
 
-		Exclude              []string  `json:",omitempty"`
-		Columns              []*Column `json:",omitempty"`
-		InheritSchemaColumns bool      `json:",omitempty"`
-		CaseFormat           string    `json:",omitempty"`
+		Exclude              []string   `json:",omitempty"`
+		Columns              []*Column  `json:",omitempty"`
+		InheritSchemaColumns bool       `json:",omitempty"`
+		CaseFormat           CaseFormat `json:",omitempty"`
 
 		Criteria *Criteria `json:",omitempty"`
 
@@ -206,12 +205,33 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
+	v.updateColumnTypes()
 	return nil
 }
 
+func (v *View) updateColumnTypes() {
+	rType := shared.Elem(v.DataType())
+	for i := 0; i < rType.NumField(); i++ {
+		field := rType.Field(i)
+
+		column, err := v._columns.Lookup(field.Name)
+		if err != nil {
+			continue
+		}
+
+		column.setField(field)
+	}
+}
+
 func (v *View) initAfterViewsInitialized(ctx context.Context, resource *Resource, relations []*Relation) error {
+	v.indexColumns()
+	if err := v.indexSqlxColumnsByFieldName(); err != nil {
+		return err
+	}
+
 	v.ensureCollector()
-	if err := v.deriveColumnsFromSchema(); err != nil {
+
+	if err := v.deriveColumnsFromSchema(nil); err != nil {
 		return err
 	}
 
@@ -316,9 +336,6 @@ func (v *View) ensureSchema(types Types) error {
 	}
 
 	v.Schema.Init(v.Columns, v.With, v.Caser)
-	if err := v.indexColumnsFields(); err != nil {
-		return err
-	}
 
 	return nil
 }
@@ -429,23 +446,18 @@ func (v *View) SelectedColumns(selector *Selector) ([]*Column, error) {
 }
 
 func (v *View) ensureCaseFormat() error {
-	if v.CaseFormat == "" {
-		v.CaseFormat = "lu"
+	if err := v.CaseFormat.Init(); err != nil {
+		return err
 	}
+
 	var err error
-	v.Caser, err = format.NewCase(v.CaseFormat)
+	v.Caser, err = v.CaseFormat.Caser()
 	return err
 }
 
 func (v *View) ensureCollector() {
-	relations := RelationsSlice(v.With).PopulateWithResolve()
-	resolverColumns := RelationsSlice(relations).Columns()
-
 	v.newCollector = func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector {
-		if allowUnmapped {
-			return NewCollector(nil, v.Schema.slice, v, dest, supportParallel)
-		}
-		return NewCollector(resolverColumns, v.Schema.slice, v, dest, supportParallel)
+		return NewCollector(v.Schema.slice, v, dest, supportParallel)
 	}
 }
 
@@ -642,7 +654,7 @@ func (v *View) markColumnsAsFilterable() error {
 	return nil
 }
 
-func (v *View) indexColumnsFields() error {
+func (v *View) indexSqlxColumnsByFieldName() error {
 	rType := shared.Elem(v.Schema.Type())
 	for i := 0; i < rType.NumField(); i++ {
 		field := rType.Field(i)
@@ -653,13 +665,10 @@ func (v *View) indexColumnsFields() error {
 		tag := io.ParseTag(field.Tag.Get(option.TagSqlx))
 		//TODO: support anonymous fields
 		if tag.Column != "" {
-			column, err := v._columns.Lookup(strings.ToLower(tag.Column))
+			column, err := v._columns.Lookup(tag.Column)
 			if err != nil {
 				return err
 			}
-
-			column.tag = tag
-			column.field = &field
 			v._columns.RegisterWithName(field.Name, column)
 		}
 	}
@@ -667,21 +676,24 @@ func (v *View) indexColumnsFields() error {
 	return nil
 }
 
-func (v *View) deriveColumnsFromSchema() error {
+func (v *View) deriveColumnsFromSchema(relation *Relation) error {
 	if !v.InheritSchemaColumns {
 		return nil
 	}
 
 	newColumns := make([]*Column, 0)
 
-	v.updateColumn(shared.Elem(v.Schema.Type()), &newColumns)
+	if err := v.updateColumn(shared.Elem(v.Schema.Type()), &newColumns, relation); err != nil {
+		return err
+	}
+
 	v.Columns = newColumns
 	v._columns = ColumnSlice(newColumns).Index(v.Caser)
 
 	return nil
 }
 
-func (v *View) updateColumn(rType reflect.Type, columns *[]*Column) {
+func (v *View) updateColumn(rType reflect.Type, columns *[]*Column, relation *Relation) error {
 	index := ColumnSlice(*columns).Index(v.Caser)
 
 	for i := 0; i < rType.NumField(); i++ {
@@ -690,7 +702,9 @@ func (v *View) updateColumn(rType reflect.Type, columns *[]*Column) {
 			continue
 		}
 		if field.Anonymous {
-			v.updateColumn(field.Type, columns)
+			if err := v.updateColumn(field.Type, columns, relation); err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -710,7 +724,32 @@ func (v *View) updateColumn(rType reflect.Type, columns *[]*Column) {
 			index.Register(v.Caser, column)
 		}
 	}
-	return
+
+	for _, rel := range v.With {
+		if _, ok := index[rel.Of.Column]; ok {
+			continue
+		}
+
+		col, err := v._columns.Lookup(rel.Column)
+		if err != nil {
+			return err
+		}
+
+		*columns = append(*columns, col)
+	}
+
+	if relation != nil {
+		_, err := index.Lookup(relation.Of.Column)
+		if err != nil {
+			col, err := v._columns.Lookup(relation.Of.Column)
+			if err != nil {
+				return err
+			}
+			*columns = append(*columns, col)
+		}
+	}
+
+	return nil
 }
 
 func (v *View) ParamField() *xunsafe.Field {
@@ -738,6 +777,10 @@ func (v *View) inheritFromViewIfNeeded(ctx context.Context, resource *Resource) 
 		v.inherit(view)
 	}
 	return nil
+}
+
+func (v *View) indexColumns() {
+	v._columns = ColumnSlice(v.Columns).Index(v.Caser)
 }
 
 //ViewReference creates a view reference

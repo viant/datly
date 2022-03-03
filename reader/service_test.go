@@ -66,7 +66,6 @@ type usecase struct {
 	expect      string
 	dest        interface{}
 	view        string
-	options     reader.Options
 	compTypes   map[string]reflect.Type
 	subject     string
 	request     *http.Request
@@ -213,19 +212,6 @@ func TestRead(t *testing.T) {
 				"events": {
 					Offset: 1,
 				},
-			},
-		},
-		{
-			description: "read unmapped",
-			dataURI:     "case005/",
-			view:        "foos",
-			dest:        new([]*Foo),
-			options: reader.Options{
-				reader.AllowUnmapped(true),
-			},
-			expect: `[{"Id":1,"Name":"foo"},{"Id":2,"Name":"another foo"},{"Id":3,"Name":"yet another foo"}]`,
-			compTypes: map[string]reflect.Type{
-				"foo": reflect.TypeOf(&Foo{}),
 			},
 		},
 		{
@@ -569,7 +555,8 @@ func TestRead(t *testing.T) {
 			},
 			expect: `[{"Id":1,"Info":"1,2","Info2":"","DealsId":[1,2],"Deals":[{"Id":1,"Name":"deal 1","DealId":""},{"Id":2,"Name":"deal 2","DealId":""}],"StringDealsId":null},{"Id":2,"Info":"","Info2":"20,30","DealsId":null,"Deals":[{"Id":5,"Name":"deal 5","DealId":"20"},{"Id":6,"Name":"deal 6","DealId":"30"}],"StringDealsId":["20","30"]}]`,
 		},
-		eventTypeView(),
+		eventTypeViewWithEventTypeIdColumn(),
+		eventTypeViewWithoutEventTypeIdColumn(),
 		inheritColumnsView(),
 		sqlxColumnNames(),
 		nestedRelation(),
@@ -608,7 +595,6 @@ func TestRead(t *testing.T) {
 		}
 
 		service := reader.New()
-		service.Apply(testCase.options)
 
 		dataView, err := resource.View(testCase.view)
 		if err != nil {
@@ -823,7 +809,7 @@ func inheritColumnsView() usecase {
 	}
 }
 
-func eventTypeView() usecase {
+func eventTypeViewWithEventTypeIdColumn() usecase {
 	type Event struct {
 		Id        int
 		Quantity  float64
@@ -870,8 +856,62 @@ func eventTypeView() usecase {
 	})
 
 	return usecase{
-		description: "event type -> events, many to one, programmatically",
-		expect:      `[{"Id":1,"Name":"type 1","Events":null},{"Id":2,"Name":"type 6","Events":[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z"}]},{"Id":4,"Name":"type 4","Events":null},{"Id":5,"Name":"type 5","Events":null},{"Id":11,"Name":"type 2","Events":[{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z"}]},{"Id":111,"Name":"type 3","Events":[{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z"}]}]`,
+		description: "event type -> events, many to one, programmatically, with EventTypeId column",
+		expect:      `[{"Id":1,"Events":null,"Name":"type 1"},{"Id":2,"Events":[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2}],"Name":"type 6"},{"Id":4,"Events":null,"Name":"type 4"},{"Id":5,"Events":null,"Name":"type 5"},{"Id":11,"Events":[{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11}],"Name":"type 2"},{"Id":111,"Events":[{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111}],"Name":"type 3"}]`,
+		dest:        new([]*EventType),
+		view:        "event-type_events",
+		resource:    resource,
+	}
+}
+
+func eventTypeViewWithoutEventTypeIdColumn() usecase {
+	type Event struct {
+		Id        int
+		Quantity  float64
+		Timestamp time.Time
+	}
+
+	type EventType struct {
+		Id     int
+		Events []*Event
+		Name   string
+	}
+
+	resource := data.EmptyResource()
+	connector := &config.Connector{
+		Name:   "mydb",
+		DSN:    "./testdata/db/mydb.db",
+		Driver: "sqlite3",
+	}
+
+	resource.AddViews(&data.View{
+		Connector:            connector,
+		Name:                 "event-type_events",
+		Table:                "event_types",
+		InheritSchemaColumns: true,
+		Schema:               data.NewSchema(reflect.TypeOf(&EventType{})),
+		With: []*data.Relation{
+			{
+				Name: "event-type_rel",
+				Of: &data.ReferenceView{
+					View: data.View{
+						Connector:            connector,
+						Name:                 "events",
+						Table:                "events",
+						InheritSchemaColumns: true,
+					},
+					Column: "event_type_id",
+				},
+				Cardinality: data.Many,
+				Column:      "Id",
+				Holder:      "Events",
+			},
+		},
+	})
+
+	return usecase{
+		description: "event type -> events, many to one, programmatically, without EventTypeId column",
+		expect:      `[{"Id":1,"Events":null,"Name":"type 1"},{"Id":2,"Events":[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z"}],"Name":"type 6"},{"Id":4,"Events":null,"Name":"type 4"},{"Id":5,"Events":null,"Name":"type 5"},{"Id":11,"Events":[{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z"}],"Name":"type 2"},{"Id":111,"Events":[{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z"}],"Name":"type 3"}]`,
 		dest:        new([]*EventType),
 		view:        "event-type_events",
 		resource:    resource,

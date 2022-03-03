@@ -16,9 +16,8 @@ import (
 
 //Service represents reader service
 type Service struct {
-	sqlBuilder    *Builder
-	AllowUnmapped AllowUnmapped
-	Resource      *data.Resource
+	sqlBuilder *Builder
+	Resource   *data.Resource
 }
 
 //Read select data from database based on View and assign it to dest. ParentDest has to be pointer.
@@ -72,16 +71,14 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 	}
 
 	collector.WaitIfNeeded()
+	batchData := s.batchData(selector, view, collector)
+	if batchData.ColumnName != "" && len(batchData.Placeholders) == 0 {
+		return
+	}
 
 	db, err := view.Db()
 	if err != nil {
 		errors.Append(err)
-		return
-	}
-
-	batchData := s.batchData(selector, view, collector)
-
-	if batchData.ColumnName != "" && len(batchData.Placeholders) == 0 {
 		return
 	}
 
@@ -197,16 +194,6 @@ func (s *Service) buildViewParams(ctx context.Context, session *Session, view *d
 	}
 
 	return params, nil
-}
-
-//Apply configures Service
-func (s *Service) Apply(options Options) {
-	for i := 0; i < len(options); i++ {
-		switch actual := options[i].(type) {
-		case AllowUnmapped:
-			s.AllowUnmapped = actual
-		}
-	}
 }
 
 func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *data.Parameter, session *Session) error {

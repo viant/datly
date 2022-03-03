@@ -1,7 +1,6 @@
 package data
 
 import (
-	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/xunsafe"
@@ -20,12 +19,11 @@ type Collector struct {
 	mutex  sync.Mutex
 	parent *Collector
 
-	dest           interface{}
-	appender       *xunsafe.Appender
-	allowedColumns map[string]bool
-	valuePosition  map[string]map[interface{}][]int //stores positions in main slice, based on field name, indexed by field value.
-	types          map[string]*xunsafe.Type
-	relation       *Relation
+	dest          interface{}
+	appender      *xunsafe.Appender
+	valuePosition map[string]map[interface{}][]int //stores positions in main slice, based on field name, indexed by field value.
+	types         map[string]*xunsafe.Type
+	relation      *Relation
 
 	values map[string]*[]interface{} //acts like a buffer. Value resolved with Resolve method can't be put to the value position map
 	// because value fetched from database was not scanned into yet. Putting value to the map as a key, would create key as a pointer to the zero value.
@@ -86,16 +84,6 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 	}
 }
 
-func (r *Collector) columnAllowed(column io.Column) bool {
-	if len(r.allowedColumns) == 0 {
-		return true
-	}
-	if _, ok := r.allowedColumns[column.Name()]; ok {
-		return true
-	}
-	return false
-}
-
 //parentValuesPositions returns positions in the parent main slice by given column name
 //After first use, it is not possible to index new resolved column indexes by Resolve method
 func (r *Collector) parentValuesPositions(columnName string) map[interface{}][]int {
@@ -108,15 +96,7 @@ func (r *Collector) parentValuesPositions(columnName string) map[interface{}][]i
 }
 
 //NewCollector creates a collector
-func NewCollector(columns []string, slice *xunsafe.Slice, view *View, dest interface{}, supportParallel bool) *Collector {
-	var allowedColumns map[string]bool
-	if len(columns) != 0 {
-		allowedColumns = make(map[string]bool)
-		for i := range columns {
-			allowedColumns[columns[i]] = true
-		}
-	}
-
+func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, supportParallel bool) *Collector {
 	ensuredDest := ensureDest(dest, view)
 	wg := sync.WaitGroup{}
 	wgDelta := 0
@@ -128,7 +108,6 @@ func NewCollector(columns []string, slice *xunsafe.Slice, view *View, dest inter
 
 	return &Collector{
 		dest:            ensuredDest,
-		allowedColumns:  allowedColumns,
 		valuePosition:   make(map[string]map[interface{}][]int),
 		appender:        slice.Appender(xunsafe.AsPointer(ensuredDest)),
 		slice:           slice,
@@ -149,27 +128,32 @@ func ensureDest(dest interface{}, view *View) interface{} {
 }
 
 //Visitor creates visitor function
-func (r *Collector) Visitor() func(value interface{}) error {
+func (r *Collector) Visitor() Visitor {
 	relation := r.relation
 	visitorRelations := RelationsSlice(r.view.With).PopulateWithVisitor()
 	for _, rel := range visitorRelations {
 		r.valuePosition[rel.Column] = map[interface{}][]int{}
 	}
 
-	if relation == nil {
-		return r.valueIndexer(visitorRelations)
+	visitors := make([]Visitor, 1)
+	visitors[0] = r.valueIndexer(visitorRelations)
+
+	if relation != nil {
+		switch relation.Cardinality {
+		case "One":
+			visitors = append(visitors, r.visitorOne(relation))
+		case "Many":
+			visitors = append(visitors, r.visitorMany(relation))
+		}
 	}
 
-	switch relation.Cardinality {
-	case "One":
-		valueIndexer := r.valueIndexer(visitorRelations)
-		return r.visitorOne(relation, valueIndexer)
-	case "Many":
-		valueIndexer := r.valueIndexer(visitorRelations)
-		return r.visitorMany(relation, valueIndexer)
-	}
-
-	return func(owner interface{}) error {
+	return func(value interface{}) error {
+		var err error
+		for _, visitor := range visitors {
+			if err = visitor(value); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 }
@@ -211,22 +195,16 @@ func (r *Collector) indexValueToPostition(rel *Relation, fieldValue interface{},
 	}
 }
 
-func (r *Collector) visitorOne(relation *Relation, visitors ...Visitor) func(value interface{}) error {
+func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error {
 	keyField := relation.Of.field
 	holderField := relation.holderField
+	dest := r.parent.Dest()
+	destPtr := xunsafe.AsPointer(dest)
+
 	return func(owner interface{}) error {
 		if r.parent != nil && r.parent.SupportsParallel() {
 			return nil
 		}
-
-		for i := range visitors {
-			if err := visitors[i](owner); err != nil {
-				return err
-			}
-		}
-
-		dest := r.parent.Dest()
-		destPtr := xunsafe.AsPointer(dest)
 		key := keyField.Interface(xunsafe.AsPointer(owner))
 		valuePosition := r.parentValuesPositions(relation.Column)
 		positions, ok := valuePosition[key]
@@ -242,12 +220,14 @@ func (r *Collector) visitorOne(relation *Relation, visitors ...Visitor) func(val
 	}
 }
 
-func (r *Collector) visitorMany(relation *Relation, visitors ...Visitor) func(value interface{}) error {
+func (r *Collector) visitorMany(relation *Relation) func(value interface{}) error {
 	keyField := relation.Of.field
 	holderField := relation.holderField
 	counter := 0
 	var xType *xunsafe.Type
 	var values *[]interface{}
+	dest := r.parent.Dest()
+	destPtr := xunsafe.AsPointer(dest)
 
 	return func(owner interface{}) error {
 		if r.parent != nil && r.parent.SupportsParallel() {
@@ -257,18 +237,6 @@ func (r *Collector) visitorMany(relation *Relation, visitors ...Visitor) func(va
 		if keyField == nil && xType == nil {
 			xType = r.types[relation.Of.Column]
 			values = r.values[relation.Of.Column]
-		}
-
-		for i := range visitors {
-			if err := visitors[i](owner); err != nil {
-				return err
-			}
-		}
-
-		dest := r.parent.Dest()
-		destPtr := xunsafe.AsPointer(dest)
-		if dest == nil {
-			return fmt.Errorf("dest was nil")
 		}
 
 		var key interface{}
