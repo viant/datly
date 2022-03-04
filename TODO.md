@@ -11,3 +11,6 @@
 * Fetch strategy with SQL Join.
 
 * Utility (rule, struct, relation generation etc ...)
+
+* Reorganize testcases
+* Add Criteria support

@@ -72,7 +72,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 
 	collector.WaitIfNeeded()
 	batchData := s.batchData(selector, view, collector)
-	if batchData.ColumnName != "" && len(batchData.Placeholders) == 0 {
+	if batchData.ColumnName != "" && len(batchData.Values) == 0 {
 		return
 	}
 
@@ -98,7 +98,7 @@ func (s *Service) batchData(selector *data.Selector, view *data.View, collector 
 		batchData.BatchReadSize = *view.BatchReadSize
 	}
 
-	batchData.Placeholders, batchData.ColumnName = collector.ParentPlaceholders()
+	batchData.Values, batchData.ColumnName = collector.ParentPlaceholders()
 
 	return batchData
 }
@@ -143,9 +143,9 @@ func (s *Service) query(ctx context.Context, db *sql.DB, SQL string, collector *
 			}
 		}
 		return visitor(row)
-	}, batchData.Placeholders...)
+	}, batchData.Values...)
 
-	shared.Log("SQL: %v, params: %v, read: %v, err: %v\n", SQL, batchData.Placeholders, readData, err)
+	shared.Log("SQL: %v, params: %v, read: %v, err: %v\n", SQL, batchData.Values, readData, err)
 	if err != nil {
 		return 0, err
 	}

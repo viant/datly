@@ -1,0 +1,28 @@
+[
+  {},
+  {
+    "Id": 1,
+    "Name": "John",
+    "Role": ""
+  },
+  {
+    "Id": 2,
+    "Name": "David",
+    "Role": ""
+  },
+  {
+    "Id": 3,
+    "Name": "Anna",
+    "Role": ""
+  },
+  {
+    "Id": 4,
+    "Name": "Kamil",
+    "Role": "ADMIN"
+  },
+  {
+    "Id": 5,
+    "Name": "Bob",
+    "Role": "ADMIN"
+  }
+]

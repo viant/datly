@@ -3,6 +3,7 @@ package reader
 import (
 	"fmt"
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/shared"
 	"strconv"
 	"strings"
 )
@@ -32,7 +33,7 @@ type (
 		BatchReadSize int
 		CurrentlyRead int
 		ColumnName    string
-		Placeholders  []interface{}
+		Values        []interface{}
 	}
 )
 
@@ -46,16 +47,11 @@ func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *Bat
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
 
-	columns, err := view.SelectedColumns(selector)
-	if err != nil {
+	var err error
+	if err = b.addColumns(view, selector, &sb); err != nil {
 		return "", err
 	}
-	for i, col := range columns {
-		if i != 0 {
-			sb.WriteString(separatorFragment)
-		}
-		sb.WriteString(col.SqlExpression())
-	}
+
 	sb.WriteString(fromFragment)
 	sb.WriteString(view.Source())
 	if view.Alias != "" {
@@ -65,19 +61,14 @@ func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *Bat
 
 	hasCriteria := false
 	whereFragmentAdded := false
+	shouldPutColumnsToSource := false
 
 	if batchData.ColumnName != "" {
-		sb.WriteString(whereFragment)
-		whereFragmentAdded = true
-		sb.WriteString(batchData.ColumnName)
-		sb.WriteString(inFragment)
-		for i := range batchData.Placeholders {
-			if i != 0 {
-				sb.WriteString(separatorFragment)
-			}
-			sb.WriteString(placeholderFragment)
+		if shouldPutColumnsToSource = strings.Contains(view.Source(), string(shared.ColumnPosition)); !shouldPutColumnsToSource {
+			whereFragmentAdded = true
+			sb.WriteString(whereFragment)
+			sb.WriteString(b.buildColumnsIn(batchData, view.Alias+"."))
 		}
-		sb.WriteString(")")
 	}
 
 	if view.Criteria != nil {
@@ -103,21 +94,54 @@ func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *Bat
 		}
 	}
 
-	orderBy := view.Selector.OrderBy
-	limit := view.LimitWithSelector(selector)
-	offset := 0
-
-	if selector != nil {
-		if view.CanUseClientOrderBy() && selector.OrderBy != "" {
-			orderBy = selector.OrderBy
-		}
-
-		if view.CanUseClientOffset() && selector.Offset > 0 {
-			offset = selector.Offset
-		}
+	if err = b.addOrderBy(view, selector, &sb); err != nil {
+		return "", err
 	}
 
-	offset += batchData.CurrentlyRead
+	b.addLimit(view, selector, batchData, &sb)
+	b.addOffset(view, selector, batchData, &sb)
+
+	result := sb.String()
+	if shouldPutColumnsToSource {
+		columnsIn := b.buildColumnsIn(batchData, "")
+		result = strings.Replace(result, string(shared.ColumnPosition), columnsIn, 1)
+	}
+
+	return result, nil
+}
+
+func (b *Builder) addColumns(view *data.View, selector *data.Selector, sb *strings.Builder) error {
+	columns, err := view.SelectedColumns(selector)
+	if err != nil {
+		return err
+	}
+	for i, col := range columns {
+		if i != 0 {
+			sb.WriteString(separatorFragment)
+		}
+		sb.WriteString(col.SqlExpression())
+	}
+	return nil
+}
+
+func (b *Builder) addOrderBy(view *data.View, selector *data.Selector, sb *strings.Builder) error {
+	orderBy := view.Selector.OrderBy
+	if view.CanUseClientOrderBy() && selector != nil && selector.OrderBy != "" {
+		orderBy = selector.OrderBy
+	}
+
+	if orderBy != "" {
+		if _, ok := view.ColumnByName(orderBy); !ok {
+			return fmt.Errorf("invalid orderBy column: %v", orderBy)
+		}
+		sb.WriteString(orderByFragment)
+		sb.WriteString(orderBy)
+	}
+	return nil
+}
+
+func (b *Builder) addLimit(view *data.View, selector *data.Selector, batchData *BatchData, sb *strings.Builder) {
+	limit := view.LimitWithSelector(selector)
 	if limit == 0 {
 		limit = batchData.BatchReadSize
 	} else if limit != 0 {
@@ -129,23 +153,39 @@ func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *Bat
 		}
 	}
 
-	if orderBy != "" {
-		if _, ok := view.ColumnByName(orderBy); !ok {
-			return "", fmt.Errorf("invalid orderBy column: %v", orderBy)
-		}
-		sb.WriteString(orderByFragment)
-		sb.WriteString(orderBy)
-	}
-
 	if limit > 0 {
 		sb.WriteString(limitFragment)
 		sb.WriteString(strconv.Itoa(limit))
 	}
+}
 
+func (b *Builder) addOffset(view *data.View, selector *data.Selector, batchData *BatchData, sb *strings.Builder) {
+	offset := 0
+	if selector != nil {
+
+		if view.CanUseClientOffset() && selector.Offset > 0 {
+			offset = selector.Offset
+		}
+	}
+
+	offset += batchData.CurrentlyRead
 	if offset > 0 {
 		sb.WriteString(offsetFragment)
 		sb.WriteString(strconv.Itoa(offset))
 	}
+}
 
-	return sb.String(), nil
+func (b *Builder) buildColumnsIn(batchData *BatchData, alias string) string {
+	sb := strings.Builder{}
+	sb.WriteString(alias)
+	sb.WriteString(batchData.ColumnName)
+	sb.WriteString(inFragment)
+	for i := range batchData.Values {
+		if i != 0 {
+			sb.WriteString(separatorFragment)
+		}
+		sb.WriteString(placeholderFragment)
+	}
+	sb.WriteString(") ")
+	return sb.String()
 }

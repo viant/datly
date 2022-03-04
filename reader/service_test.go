@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
 	"github.com/viant/datly/config"
@@ -14,6 +15,7 @@ import (
 	"github.com/viant/toolbox"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"reflect"
 	"strconv"
@@ -121,7 +123,7 @@ func TestRead(t *testing.T) {
 	var useCases = []usecase{
 		{
 			description: "read all data with specified columns",
-			dataURI:     "case001/",
+			dataURI:     "case001_schema/",
 			dest:        new([]*Event),
 			view:        "events",
 			expect:      `[{"ID":1,"EventTypeID":2,"Quantity":33.23432374000549,"Timestamp":"0001-01-01T00:00:00Z"},{"ID":10,"EventTypeID":11,"Quantity":21.957962334156036,"Timestamp":"0001-01-01T00:00:00Z"},{"ID":100,"EventTypeID":111,"Quantity":5.084940046072006,"Timestamp":"0001-01-01T00:00:00Z"}]`,
@@ -131,14 +133,14 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "read all data with specified columns",
-			dataURI:     "case002/",
+			dataURI:     "case002_from/",
 			dest:        new(interface{}),
 			view:        "events",
 			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 		},
 		{
 			description: "selector sql injection",
-			dataURI:     "case002/",
+			dataURI:     "case002_from/",
 			dest:        new(interface{}),
 			view:        "events",
 			selectors: map[string]*data.Selector{
@@ -153,7 +155,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "criteria for non existing column",
-			dataURI:     "case002/",
+			dataURI:     "case002_from/",
 			dest:        new(interface{}),
 			view:        "events",
 			selectors: map[string]*data.Selector{
@@ -167,7 +169,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "criteria for column, by field name",
-			dataURI:     "case002/",
+			dataURI:     "case002_from/",
 			dest:        new(interface{}),
 			view:        "events",
 			selectors: map[string]*data.Selector{
@@ -181,14 +183,14 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "excluded columns",
-			dataURI:     "case003/",
+			dataURI:     "case003_exclude/",
 			dest:        new(interface{}),
 			view:        "events",
 			expect:      `[{"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1},{"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2},{"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3}]`,
 		},
 		{
 			description: "disabled client criteria",
-			dataURI:     "case003/",
+			dataURI:     "case003_exclude/",
 			dest:        new(interface{}),
 			view:        "events",
 			expect:      `[{"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1},{"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2},{"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3}]`,
@@ -204,7 +206,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "more complex selector",
-			dataURI:     "case004/",
+			dataURI:     "case004_selector/",
 			view:        "events",
 			dest:        new(interface{}),
 			expect:      `[{"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2},{"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3}]`,
@@ -216,7 +218,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "columns expression",
-			dataURI:     "case006/",
+			dataURI:     "case005_column_expression/",
 			view:        "foos",
 			dest:        new([]*Foo),
 			expect:      `[{"Id":1,"Name":"FOO"},{"Id":2,"Name":"ANOTHER FOO"},{"Id":3,"Name":"YET ANOTHER FOO"}]`,
@@ -226,7 +228,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "custom selector",
-			dataURI:     "case007/",
+			dataURI:     "case006_client_selector/",
 			view:        "events",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Timestamp":"","Quantity":33.23432374000549},{"Id":10,"Timestamp":"","Quantity":21.957962334156036},{"Id":100,"Timestamp":"","Quantity":5.084940046072006}]`,
@@ -241,14 +243,14 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "one to one, include false",
-			dataURI:     "case008/",
+			dataURI:     "case007_one_to_one/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1,"EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2,"EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3,"EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
 		},
 		{
 			description: "one to one, include column, by field name",
-			dataURI:     "case008/",
+			dataURI:     "case007_one_to_one/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":0,"UserId":0,"EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":0,"UserId":0,"EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":0,"UserId":0,"EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
@@ -260,7 +262,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "one to one, without relation, by field name",
-			dataURI:     "case008/",
+			dataURI:     "case007_one_to_one/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":0,"UserId":1,"EventType":null},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":0,"UserId":2,"EventType":null},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":0,"UserId":3,"EventType":null}]`,
@@ -271,7 +273,7 @@ func TestRead(t *testing.T) {
 			},
 		},
 		{
-			dataURI:     "case009/",
+			dataURI:     "case008_many_to_one/",
 			view:        "users_accounts",
 			description: "many to one",
 			dest:        new(interface{}),
@@ -279,13 +281,13 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "one to one, include column true",
-			dataURI:     "case010/",
+			dataURI:     "case009_without_column/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1,"EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2,"EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3,"EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
 		},
 		{
-			dataURI:     "case011/",
+			dataURI:     "case010_view_parameter/",
 			view:        "users_accounts",
 			description: "parameters",
 			dest:        new(interface{}),
@@ -294,38 +296,28 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "read all strategy, one to one",
-			dataURI:     "case012/",
+			dataURI:     "case011_read_all_one_to_one/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1,"EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2,"EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3,"EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
 		},
 		{
 			description: "read all strategy, many to one",
-			dataURI:     "case013/",
+			dataURI:     "case012_many_to_one/",
 			view:        "users_accounts",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Name":"John","Role":"","Accounts":[{"Id":1,"Name":"John account","UserId":1},{"Id":3,"Name":"Another John account","UserId":1}]},{"Id":2,"Name":"David","Role":"","Accounts":[{"Id":2,"Name":"Anna account","UserId":2}]},{"Id":3,"Name":"Anna","Role":"","Accounts":null},{"Id":4,"Name":"Kamil","Role":"ADMIN","Accounts":null},{"Id":5,"Name":"Bob","Role":"ADMIN","Accounts":null}]`,
 		},
 		{
 			description: "read all strategy, batch size",
-			dataURI:     "case014/",
+			dataURI:     "case013_read_all_batch_size/",
 			view:        "articles_languages",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Content":"Lorem ipsum","Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","Language":{"Id":9,"Code":"zh-CN"}},{"Id":5,"Content":"content without lang","Language":null}]`,
 		},
 		{
 			description: "T type one to one relation",
-			dataURI:     "case015/",
-			view:        "articles_languages",
-			dest:        new([]Article),
-			expect:      `[{"Id":1,"Content":"Lorem ipsum","LangId":2,"Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","LangId":12,"Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","LangId":13,"Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","LangId":9,"Language":{"Id":9,"Code":"zh-CN"}},{"Id":5,"Content":"content without lang","LangId":0,"Language":{"Id":0,"Code":""}}]`,
-			compTypes: map[string]reflect.Type{
-				"article": reflect.TypeOf(Article{}),
-			},
-		},
-		{
-			description: "T type one to one relation",
-			dataURI:     "case015/",
+			dataURI:     "case014_T_one_to_one/",
 			view:        "articles_languages",
 			dest:        new([]Article),
 			expect:      `[{"Id":1,"Content":"Lorem ipsum","LangId":2,"Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","LangId":12,"Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","LangId":13,"Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","LangId":9,"Language":{"Id":9,"Code":"zh-CN"}},{"Id":5,"Content":"content without lang","LangId":0,"Language":{"Id":0,"Code":""}}]`,
@@ -335,7 +327,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "path parameter",
-			dataURI:     "case016/",
+			dataURI:     "case015_path_parameter/",
 			view:        "users",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Name":"John","Role":""}]`,
@@ -348,7 +340,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "path parameter sql injection",
-			dataURI:     "case016/",
+			dataURI:     "case015_path_parameter/",
 			view:        "users",
 			dest:        new(interface{}),
 			request: &http.Request{
@@ -361,7 +353,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "query parameter",
-			dataURI:     "case017/",
+			dataURI:     "case016_query_parameter/",
 			view:        "languages",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Code":"en-GB"},{"Id":2,"Code":"en-US"}]`,
@@ -375,8 +367,8 @@ func TestRead(t *testing.T) {
 			path: "/languages",
 		},
 		{
-			description: "query parameter",
-			dataURI:     "case017/",
+			description: "query parameter, not used param wrong format",
+			dataURI:     "case016_query_parameter/",
 			view:        "languages",
 			dest:        new(interface{}),
 			request: &http.Request{
@@ -391,7 +383,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "query sql injection parameter",
-			dataURI:     "case017/",
+			dataURI:     "case016_query_parameter/",
 			view:        "languages",
 			dest:        new(interface{}),
 			request: &http.Request{
@@ -406,7 +398,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "header parameter",
-			dataURI:     "case018/",
+			dataURI:     "case017_header_parameter/",
 			view:        "users",
 			dest:        new(interface{}),
 			expect:      `[{"Id":3,"Name":"Anna","Role":""}]`,
@@ -419,7 +411,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "header parameter union sql injection",
-			dataURI:     "case018/",
+			dataURI:     "case017_header_parameter/",
 			view:        "users",
 			dest:        new(interface{}),
 			request: &http.Request{
@@ -432,7 +424,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "not used header",
-			dataURI:     "case018/",
+			dataURI:     "case017_header_parameter/",
 			view:        "users",
 			dest:        new(interface{}),
 			request: &http.Request{
@@ -446,7 +438,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "cookie parameter",
-			dataURI:     "case019/",
+			dataURI:     "case018_cookie_parameter/",
 			view:        "users",
 			dest:        new(interface{}),
 			expect:      `[{"Id":2,"Name":"David","Role":""}]`,
@@ -459,7 +451,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "cookie parameter union sql injection",
-			dataURI:     "case019/",
+			dataURI:     "case018_cookie_parameter/",
 			view:        "users",
 			dest:        new(interface{}),
 			request: &http.Request{
@@ -472,7 +464,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "cookie parameter drop table sql injection",
-			dataURI:     "case019/",
+			dataURI:     "case018_cookie_parameter/",
 			view:        "users",
 			dest:        new(interface{}),
 			expect:      `[{"Id":2,"Name":"David","Role":""}]`,
@@ -486,7 +478,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "not used cookie",
-			dataURI:     "case019/",
+			dataURI:     "case018_cookie_parameter/",
 			view:        "users",
 			dest:        new(interface{}),
 			expect:      `[{"Id":2,"Name":"David","Role":""}]`,
@@ -499,35 +491,35 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "query parameter, required",
-			dataURI:     "case020/",
+			dataURI:     "case019_query_required/",
 			view:        "events",
 			dest:        new(interface{}),
 			expectError: true,
 		},
 		{
 			description: "path parameter, required",
-			dataURI:     "case021/",
+			dataURI:     "case020_path_required/",
 			view:        "events",
 			dest:        new(interface{}),
 			expectError: true,
 		},
 		{
 			description: "cookie parameter, required",
-			dataURI:     "case022/",
+			dataURI:     "case021_cookie_required/",
 			view:        "events",
 			dest:        new(interface{}),
 			expectError: true,
 		},
 		{
 			description: "header parameter, required",
-			dataURI:     "case023/",
+			dataURI:     "case022_header_required/",
 			view:        "events",
 			dest:        new(interface{}),
 			expectError: true,
 		},
 		{
 			description: "derive columns from schema type",
-			dataURI:     "case024/",
+			dataURI:     "case023_derive_columns/",
 			view:        "datly_acl",
 			dest:        new([]AclRecord),
 			compTypes: map[string]reflect.Type{
@@ -537,7 +529,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "derive columns from schema type with relation",
-			dataURI:     "case025/",
+			dataURI:     "case024_derive_columns_relation/",
 			view:        "event_event-types",
 			dest:        new([]Boo),
 			compTypes: map[string]reflect.Type{
@@ -547,7 +539,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "derive columns from schema type with relation",
-			dataURI:     "case026/",
+			dataURI:     "case025_on_fetch/",
 			view:        "audiences_deals",
 			dest:        new([]audience),
 			compTypes: map[string]reflect.Type{
@@ -561,16 +553,19 @@ func TestRead(t *testing.T) {
 		sqlxColumnNames(),
 		nestedRelation(),
 		inheritTypeForReferencedView(),
+		columnsInSource(),
 	}
 
 	for index, testCase := range useCases {
 		//for index, testCase := range useCases[len(useCases)-1:] {
 		fmt.Println("Running testcase nr: " + strconv.Itoa(index))
-		if initDb(t, path.Join(testLocation, "testdata", "mydb_config.yaml"), path.Join(testLocation, fmt.Sprintf("testdata/case/populate_mydb")), "db") {
+		resourcePath := path.Join(testLocation, "testdata", "cases", testCase.dataURI, "populate")
+
+		if initDb(t, path.Join(testLocation, "testdata", "mydb_config.yaml"), resourcePath, "db") {
 			return
 		}
 
-		if initDb(t, path.Join(testLocation, "testdata", "other_config.yaml"), path.Join(testLocation, fmt.Sprintf("testdata/case/populate_other")), "other") {
+		if initDb(t, path.Join(testLocation, "testdata", "other_config.yaml"), resourcePath, "other") {
 			return
 		}
 
@@ -583,7 +578,7 @@ func TestRead(t *testing.T) {
 		var resource *data.Resource
 		var err error
 		if testCase.dataURI != "" {
-			resource, err = data.NewResourceFromURL(context.TODO(), path.Join(testLocation, fmt.Sprintf("testdata/case/"+testCase.dataURI+"/resources.yaml")), types)
+			resource, err = data.NewResourceFromURL(context.TODO(), path.Join(testLocation, fmt.Sprintf("testdata/cases/"+testCase.dataURI+"/resources.yaml")), types)
 			if err != nil {
 				t.Fatalf(err.Error())
 			}
@@ -627,6 +622,50 @@ func TestRead(t *testing.T) {
 			fmt.Println(testCase.expect)
 		}
 
+	}
+}
+
+func columnsInSource() usecase {
+	resource := data.EmptyResource()
+	connector := &config.Connector{
+		Name:   "mydb",
+		DSN:    "./testdata/db/mydb.db",
+		Driver: "sqlite3",
+	}
+
+	resource.AddViews(&data.View{
+		Connector:            connector,
+		Name:                 "events",
+		Table:                "events",
+		InheritSchemaColumns: true,
+		With: []*data.Relation{
+			{
+				Name: "event-event_types",
+				Of: &data.ReferenceView{
+					View: data.View{
+						Connector: connector,
+						From:      "SELECT * FROM EVENT_TYPES WHERE $COLUMNS_IN",
+						Name:      "event_types",
+						Criteria: &data.Criteria{
+							Expression: "name like '%2%'",
+						},
+					},
+					Column: "id",
+				},
+				Cardinality: data.One,
+				Column:      "event_type_id",
+				Holder:      "EventType",
+			},
+		},
+		Schema: data.NewSchema(reflect.TypeOf(&event{})),
+	})
+
+	return usecase{
+		description: "parent column values in the source position",
+		dest:        new([]*event),
+		view:        "events",
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":0,"Events":null,"Name":""}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":0,"Events":null,"Name":""}}]`,
+		resource:    resource,
 	}
 }
 
@@ -919,6 +958,16 @@ func eventTypeViewWithoutEventTypeIdColumn() usecase {
 }
 
 func initDb(t *testing.T, configPath, datasetPath, dataStore string) bool {
+	datasetPath = datasetPath + "_" + dataStore
+	resourceExist, err := exists(datasetPath)
+	if err != nil {
+		return true
+	}
+
+	if !resourceExist {
+		return false
+	}
+
 	if !dsunit.InitFromURL(t, configPath) {
 		return true
 	}
@@ -930,4 +979,16 @@ func initDb(t *testing.T, configPath, datasetPath, dataStore string) bool {
 	}
 
 	return false
+}
+
+func exists(name string) (bool, error) {
+	_, err := os.Stat(name)
+	if err == nil {
+		return true, nil
+	}
+
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	return false, err
 }
