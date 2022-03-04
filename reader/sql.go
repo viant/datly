@@ -64,7 +64,7 @@ func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *Bat
 	shouldPutColumnsToSource := false
 
 	if batchData.ColumnName != "" {
-		if shouldPutColumnsToSource = strings.Contains(view.Source(), string(shared.ColumnPosition)); !shouldPutColumnsToSource {
+		if shouldPutColumnsToSource = strings.Contains(view.Source(), string(shared.ColumnInPosition)); !shouldPutColumnsToSource {
 			whereFragmentAdded = true
 			sb.WriteString(whereFragment)
 			sb.WriteString(b.buildColumnsIn(batchData, view.Alias+"."))
@@ -104,7 +104,7 @@ func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *Bat
 	result := sb.String()
 	if shouldPutColumnsToSource {
 		columnsIn := b.buildColumnsIn(batchData, "")
-		result = strings.Replace(result, string(shared.ColumnPosition), columnsIn, 1)
+		result = strings.Replace(result, string(shared.ColumnInPosition), columnsIn, 1)
 	}
 
 	return result, nil

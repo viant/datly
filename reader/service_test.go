@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/reader"
+	"github.com/viant/datly/shared"
 	"github.com/viant/dsunit"
 	"github.com/viant/toolbox"
 	"net/http"
@@ -644,7 +645,7 @@ func columnsInSource() usecase {
 				Of: &data.ReferenceView{
 					View: data.View{
 						Connector: connector,
-						From:      "SELECT * FROM EVENT_TYPES WHERE $COLUMNS_IN",
+						From:      "SELECT * FROM EVENT_TYPES WHERE " + string(shared.ColumnInPosition),
 						Name:      "event_types",
 						Criteria: &data.Criteria{
 							Expression: "name like '%2%'",

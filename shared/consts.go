@@ -10,8 +10,8 @@ const (
 	SubjectName BuiltInKey = "session.Subject"
 )
 
-type ColumnInPosition string
+type SqlPosition string
 
 const (
-	ColumnPosition ColumnInPosition = "$COLUMNS_IN"
+	ColumnInPosition SqlPosition = "$COLUMN_IN"
 )
