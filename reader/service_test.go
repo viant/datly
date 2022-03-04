@@ -75,6 +75,7 @@ type usecase struct {
 	path        string
 	expectError bool
 	resource    *data.Resource
+	dataset     string
 }
 
 func TestRead(t *testing.T) {
@@ -561,8 +562,11 @@ func TestRead(t *testing.T) {
 		//for index, testCase := range useCases[len(useCases)-1:] {
 		fmt.Println("Running testcase nr: " + strconv.Itoa(index))
 		resourcePath := path.Join(testLocation, "testdata", "cases", testCase.dataURI, "populate")
+		if testCase.dataset != "" {
+			resourcePath = path.Join(testLocation, "testdata", "datasets", testCase.dataset, "populate")
+		}
 
-		if initDb(t, path.Join(testLocation, "testdata", "mydb_config.yaml"), resourcePath, "db") {
+		if initDb(t, path.Join(testLocation, "testdata", "db_config.yaml"), resourcePath, "db") {
 			return
 		}
 
@@ -629,8 +633,8 @@ func TestRead(t *testing.T) {
 func columnsInSource() usecase {
 	resource := data.EmptyResource()
 	connector := &config.Connector{
-		Name:   "mydb",
-		DSN:    "./testdata/db/mydb.db",
+		Name:   "db",
+		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
@@ -665,6 +669,7 @@ func columnsInSource() usecase {
 		description: "parent column values in the source position",
 		dest:        new([]*event),
 		view:        "events",
+		dataset:     "dataset001_events/",
 		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":0,"Events":null,"Name":""}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":0,"Events":null,"Name":""}}]`,
 		resource:    resource,
 	}
@@ -687,8 +692,8 @@ type eventType struct {
 func inheritTypeForReferencedView() usecase {
 	resource := data.EmptyResource()
 	connector := &config.Connector{
-		Name:   "mydb",
-		DSN:    "./testdata/db/mydb.db",
+		Name:   "db",
+		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
@@ -722,6 +727,7 @@ func inheritTypeForReferencedView() usecase {
 		description: "inherit type for reference view",
 		dest:        new([]*event),
 		view:        "events",
+		dataset:     "dataset001_events/",
 		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":2,"Events":null,"Name":"type 6"}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":111,"Events":null,"Name":"type 3"}}]`,
 		resource:    resource,
 	}
@@ -730,8 +736,8 @@ func inheritTypeForReferencedView() usecase {
 func nestedRelation() usecase {
 	resource := data.EmptyResource()
 	connector := &config.Connector{
-		Name:   "mydb",
-		DSN:    "./testdata/db/mydb.db",
+		Name:   "db",
+		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
@@ -781,6 +787,7 @@ func nestedRelation() usecase {
 		description: "event type -> events -> event type, many to one, programmatically",
 		dest:        new([]*eventType),
 		view:        "event-type_events",
+		dataset:     "dataset001_events/",
 		expect:      `[{"Id":1,"Events":null,"Name":"type 1"},{"Id":2,"Events":[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":2,"Events":null,"Name":"type 6"}}],"Name":"type 6"},{"Id":4,"Events":null,"Name":"type 4"},{"Id":5,"Events":null,"Name":"type 5"},{"Id":11,"Events":[{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}}],"Name":"type 2"},{"Id":111,"Events":[{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":111,"Events":null,"Name":"type 3"}}],"Name":"type 3"}]`,
 		resource:    resource,
 	}
@@ -795,8 +802,8 @@ func sqlxColumnNames() usecase {
 
 	resource := data.EmptyResource()
 	connector := &config.Connector{
-		Name:   "mydb",
-		DSN:    "./testdata/db/mydb.db",
+		Name:   "db",
+		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
@@ -810,6 +817,7 @@ func sqlxColumnNames() usecase {
 
 	return usecase{
 		view:        "events",
+		dataset:     "dataset001_events/",
 		description: "sqlx column names programmatically",
 		resource:    resource,
 		expect:      `[{"Id":1,"EventQuantity":33.23432374000549,"EventTimestamp":"2019-03-11T02:20:33Z"},{"Id":10,"EventQuantity":21.957962334156036,"EventTimestamp":"2019-03-15T12:07:33Z"},{"Id":100,"EventQuantity":5.084940046072006,"EventTimestamp":"2019-04-10T05:15:33Z"}]`,
@@ -826,8 +834,8 @@ func inheritColumnsView() usecase {
 
 	resource := data.EmptyResource()
 	connector := &config.Connector{
-		Name:   "mydb",
-		DSN:    "./testdata/db/mydb.db",
+		Name:   "db",
+		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
@@ -844,6 +852,7 @@ func inheritColumnsView() usecase {
 		description: "inherit columns",
 		view:        "events",
 		resource:    resource,
+		dataset:     "dataset001_events/",
 		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z"},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z"},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z"}]`,
 		dest:        new([]*Event),
 	}
@@ -865,8 +874,8 @@ func eventTypeViewWithEventTypeIdColumn() usecase {
 
 	resource := data.EmptyResource()
 	connector := &config.Connector{
-		Name:   "mydb",
-		DSN:    "./testdata/db/mydb.db",
+		Name:   "db",
+		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
@@ -900,6 +909,7 @@ func eventTypeViewWithEventTypeIdColumn() usecase {
 		expect:      `[{"Id":1,"Events":null,"Name":"type 1"},{"Id":2,"Events":[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2}],"Name":"type 6"},{"Id":4,"Events":null,"Name":"type 4"},{"Id":5,"Events":null,"Name":"type 5"},{"Id":11,"Events":[{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11}],"Name":"type 2"},{"Id":111,"Events":[{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111}],"Name":"type 3"}]`,
 		dest:        new([]*EventType),
 		view:        "event-type_events",
+		dataset:     "dataset001_events/",
 		resource:    resource,
 	}
 }
@@ -919,8 +929,8 @@ func eventTypeViewWithoutEventTypeIdColumn() usecase {
 
 	resource := data.EmptyResource()
 	connector := &config.Connector{
-		Name:   "mydb",
-		DSN:    "./testdata/db/mydb.db",
+		Name:   "db",
+		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
@@ -954,6 +964,7 @@ func eventTypeViewWithoutEventTypeIdColumn() usecase {
 		expect:      `[{"Id":1,"Events":null,"Name":"type 1"},{"Id":2,"Events":[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z"}],"Name":"type 6"},{"Id":4,"Events":null,"Name":"type 4"},{"Id":5,"Events":null,"Name":"type 5"},{"Id":11,"Events":[{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z"}],"Name":"type 2"},{"Id":111,"Events":[{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z"}],"Name":"type 3"}]`,
 		dest:        new([]*EventType),
 		view:        "event-type_events",
+		dataset:     "dataset001_events/",
 		resource:    resource,
 	}
 }

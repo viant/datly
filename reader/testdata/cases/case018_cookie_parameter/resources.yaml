@@ -1,6 +1,6 @@
 Views:
 - Connector:
-    Ref: mydb
+    Ref: db
   Name: users
   Table: users
   Criteria:
@@ -9,9 +9,9 @@ Views:
   - Ref: user_id
 
 Connectors:
-- Name: mydb
+- Name: db
   Driver: sqlite3
-  DSN: "./testdata/db/mydb.db"
+  DSN: "./testdata/db/db.db"
 
 Parameters:
 - Name: user_id

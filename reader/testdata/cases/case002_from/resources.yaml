@@ -1,6 +1,6 @@
 Views:
   - Connector:
-      Ref: mydb
+      Ref: db
     Name: events
     From: SELECT COALESCE(id,0) AS id, quantity, event_type_id, timestamp, user_id FROM events
     SelectorConstraints:
@@ -8,6 +8,6 @@ Views:
       FilterableColumns:
       - event_type_id
 Connectors:
-  - Name: mydb
+  - Name: db
     Driver: sqlite3
-    DSN: "./testdata/db/mydb.db"
+    DSN: "./testdata/db/db.db"

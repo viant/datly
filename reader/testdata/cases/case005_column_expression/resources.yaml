@@ -1,6 +1,6 @@
 Views:
     - Connector:
-          Ref: mydb
+          Ref: db
       Name: foos
       Schema:
             Name: foo
@@ -11,6 +11,6 @@ Views:
             Expression: Upper(name)
             DataType: String
 Connectors:
-    - Name: mydb
+    - Name: db
       Driver: sqlite3
-      DSN: "./testdata/db/mydb.db"
+      DSN: "./testdata/db/db.db"

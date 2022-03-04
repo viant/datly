@@ -1,6 +1,7 @@
 .idea
-mydb.db
-other.db
+
+*.db
+
 vendor
 go.sum
 datly

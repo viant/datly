@@ -1,17 +1,17 @@
 Views:
 - Connector:
-    Ref: mydb
+    Ref: db
   Name: users
   Table: users
   MatchStrategy: read_all
 
 - Connector:
-    Ref: mydb
+    Ref: db
   Name: accounts
   Table: accounts
 
 - Connector:
-    Ref: mydb
+    Ref: db
   Name: users_accounts
   Ref: users
   With:
@@ -24,6 +24,6 @@ Views:
       Ref: accounts
       Column: user_id
 Connectors:
-- Name: mydb
+- Name: db
   Driver: sqlite3
-  DSN: "./testdata/db/mydb.db"
+  DSN: "./testdata/db/db.db"

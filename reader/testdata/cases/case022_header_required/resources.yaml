@@ -1,6 +1,6 @@
 Views:
   - Connector:
-      Ref: mydb
+      Ref: db
     Name: events
     Columns:
       - Name: id
@@ -16,6 +16,6 @@ Views:
         Kind: header
         Name: userId
 Connectors:
-  - Name: mydb
+  - Name: db
     Driver: sqlite3
-    DSN: "./testdata/db/mydb.db"
+    DSN: "./testdata/db/db.db"

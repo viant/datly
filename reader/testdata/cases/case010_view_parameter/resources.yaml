@@ -1,6 +1,6 @@
 Views:
 - Connector:
-    Ref: mydb
+    Ref: db
   Name: users
   Table: users
   Criteria:
@@ -9,12 +9,12 @@ Views:
   - Ref: datly_acl_criteria
 
 - Connector:
-    Ref: mydb
+    Ref: db
   Name: accounts
   Table: accounts
 
 - Connector:
-    Ref: mydb
+    Ref: db
   Name: datly_acl
   Table: datly_acl
   Columns:
@@ -24,7 +24,7 @@ Views:
     Expression: data_view='${session.View.Name}' AND subject='${session.Subject}'
 
 - Connector:
-    Ref: mydb
+    Ref: db
   Name: users_accounts
   Ref: users
   With:
@@ -37,9 +37,9 @@ Views:
       Ref: accounts
       Column: user_id
 Connectors:
-- Name: mydb
+- Name: db
   Driver: sqlite3
-  DSN: "./testdata/db/mydb.db"
+  DSN: "./testdata/db/db.db"
 
 Parameters:
 - Name: datly_acl_criteria

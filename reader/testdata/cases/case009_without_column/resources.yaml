@@ -1,16 +1,16 @@
 Views:
   - Connector:
-      Ref: mydb
+      Ref: db
     Name: events
     Table: events
 
   - Connector:
-      Ref: mydb
+      Ref: db
     Name: event_types
     Table: event_types
 
   - Connector:
-      Ref: mydb
+      Ref: db
     Name: event_event-types
     Ref: events
     With:
@@ -25,6 +25,6 @@ Views:
         IncludeColumn: true
 
 Connectors:
-  - Name: mydb
+  - Name: db
     Driver: sqlite3
-    DSN: "./testdata/db/mydb.db"
+    DSN: "./testdata/db/db.db"

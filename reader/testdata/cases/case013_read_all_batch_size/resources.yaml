@@ -1,6 +1,6 @@
 Views:
 - Connector:
-    Ref: mydb
+    Ref: db
   Name: articles
   Table: articles
   MatchStrategy: read_all
@@ -14,7 +14,7 @@ Views:
     Limit: 14
 
 - Connector:
-    Ref: mydb
+    Ref: db
   Name: articles_languages
   Ref: articles
   With:
@@ -28,9 +28,9 @@ Views:
       Column: id
 
 Connectors:
-- Name: mydb
+- Name: db
   Driver: sqlite3
-  DSN: "./testdata/db/mydb.db"
+  DSN: "./testdata/db/db.db"
 
 - Name: otherdb
   Driver: sqlite3
