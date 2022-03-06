@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox/format"
+	"strings"
 )
 
 //ColumnSlice wrap slice of Column
@@ -56,6 +57,8 @@ func (c Columns) RegisterHolder(relation *Relation) error {
 
 //Lookup returns Column with given name.
 func (c Columns) Lookup(name string) (*Column, error) {
+	name = strings.ToLower(name)
+
 	column, ok := c[name]
 	if !ok {
 		err := fmt.Errorf("not found column with name %v", name)

@@ -1,0 +1,18 @@
+[
+  {},
+  {
+    "Id": 1,
+    "User_id": 1,
+    "Name": "John account"
+  },
+  {
+    "Id": 2,
+    "Name": "Anna account",
+    "User_id": 2
+  },
+  {
+    "Id": 3,
+    "Name": "Another John account",
+    "User_id": 1
+  }
+]

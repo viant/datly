@@ -1,0 +1,32 @@
+Views:
+  - Connector:
+      Ref: db
+    Name: events
+    Table: events
+    SelectorConstraints:
+      Columns: true
+
+  - Connector:
+      Ref: db
+    Name: event_types
+    Table: event_types
+
+  - Connector:
+      Ref: db
+    Name: event_event-types
+    Ref: events
+    With:
+      - Name: event_event-types
+        Of:
+          Ref: event_types
+          Column: id
+
+        Cardinality: One
+        Column: event_type_id
+        Holder: EventType
+        IncludeColumn: false
+
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: "./testdata/db/db.db"

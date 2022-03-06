@@ -1,0 +1,17 @@
+Views:
+  - Connector:
+      Ref: db
+    Name: events
+    Columns:
+      - Name: id
+        DataType: Int
+      - Name: quantity
+        DataType: Float
+      - Name: event_type_id
+        DataType: Int
+    Schema:
+      Name: events
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: "./testdata/db/db.db"

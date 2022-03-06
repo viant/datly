@@ -1,0 +1,29 @@
+Views:
+- Connector:
+    Ref: db
+  Name: users
+  Table: users
+  MatchStrategy: read_all
+
+- Connector:
+    Ref: db
+  Name: accounts
+  Table: accounts
+
+- Connector:
+    Ref: db
+  Name: users_accounts
+  Ref: users
+  With:
+  - Name: user_accounts-rel
+    Holder: Accounts
+    Column: id
+    IncludeColumn: false
+    Cardinality: Many
+    Of:
+      Ref: accounts
+      Column: user_id
+Connectors:
+- Name: db
+  Driver: sqlite3
+  DSN: "./testdata/db/db.db"

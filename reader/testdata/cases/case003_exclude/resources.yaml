@@ -1,0 +1,15 @@
+Views:
+  - Connector:
+      Ref: db
+    Name: events
+    Default: {}
+    Exclude:
+      - id
+      - event_type_id
+    SelectorConstraints:
+        FilterableColumns:
+        - quantity
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: "./testdata/db/db.db"

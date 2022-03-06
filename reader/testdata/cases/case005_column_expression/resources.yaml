@@ -1,0 +1,16 @@
+Views:
+    - Connector:
+          Ref: db
+      Name: foos
+      Schema:
+            Name: foo
+      Columns:
+          - Name: id
+            DataType: Int
+          - Name: name
+            Expression: Upper(name)
+            DataType: String
+Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"

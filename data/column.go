@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/sql"
 	"github.com/viant/sqlx/io"
+	"github.com/viant/sqlx/option"
 	"reflect"
 	"strings"
 	"time"
@@ -84,4 +85,9 @@ func (c *Column) Init() error {
 //Kind returns  Column sql.Kind
 func (c *Column) Kind() sql.Kind {
 	return c.criteriaKind
+}
+
+func (c *Column) setField(field reflect.StructField) {
+	c.field = &field
+	c.tag = io.ParseTag(field.Tag.Get(option.TagSqlx))
 }

@@ -16,9 +16,8 @@ import (
 
 //Service represents reader service
 type Service struct {
-	sqlBuilder    *Builder
-	AllowUnmapped AllowUnmapped
-	Resource      *data.Resource
+	sqlBuilder *Builder
+	Resource   *data.Resource
 }
 
 //Read select data from database based on View and assign it to dest. ParentDest has to be pointer.
@@ -72,16 +71,14 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 	}
 
 	collector.WaitIfNeeded()
+	batchData := s.batchData(selector, view, collector)
+	if batchData.ColumnName != "" && len(batchData.Values) == 0 {
+		return
+	}
 
 	db, err := view.Db()
 	if err != nil {
 		errors.Append(err)
-		return
-	}
-
-	batchData := s.batchData(selector, view, collector)
-
-	if batchData.ColumnName != "" && len(batchData.Placeholders) == 0 {
 		return
 	}
 
@@ -101,7 +98,7 @@ func (s *Service) batchData(selector *data.Selector, view *data.View, collector 
 		batchData.BatchReadSize = *view.BatchReadSize
 	}
 
-	batchData.Placeholders, batchData.ColumnName = collector.ParentPlaceholders()
+	batchData.Values, batchData.ColumnName = collector.ParentPlaceholders()
 
 	return batchData
 }
@@ -146,9 +143,9 @@ func (s *Service) query(ctx context.Context, db *sql.DB, SQL string, collector *
 			}
 		}
 		return visitor(row)
-	}, batchData.Placeholders...)
+	}, batchData.Values...)
 
-	shared.Log("SQL: %v, params: %v, read: %v, err: %v\n", SQL, batchData.Placeholders, readData, err)
+	shared.Log("SQL: %v, params: %v, read: %v, err: %v\n", SQL, batchData.Values, readData, err)
 	if err != nil {
 		return 0, err
 	}
@@ -197,16 +194,6 @@ func (s *Service) buildViewParams(ctx context.Context, session *Session, view *d
 	}
 
 	return params, nil
-}
-
-//Apply configures Service
-func (s *Service) Apply(options Options) {
-	for i := 0; i < len(options); i++ {
-		switch actual := options[i].(type) {
-		case AllowUnmapped:
-			s.AllowUnmapped = actual
-		}
-	}
 }
 
 func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *data.Parameter, session *Session) error {

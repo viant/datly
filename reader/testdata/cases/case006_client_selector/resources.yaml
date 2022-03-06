@@ -1,0 +1,18 @@
+Views:
+  - Connector:
+      Ref: db
+    Name: events
+    Table: events
+    Columns:
+      - Name: id
+        DataType: Int
+      - Name: timestamp
+        DataType: String
+      - Name: quantity
+        DataType: Float
+    SelectorConstraints:
+        Columns: true
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: "./testdata/db/db.db"

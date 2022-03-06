@@ -86,6 +86,7 @@ func (s *Session) sanitizeSelectors() error {
 	var view *data.View
 	var err error
 	//TODO: Replace with sqlx buffer, improved reset.
+
 	sb := &strings.Builder{}
 
 	for viewName, selector := range s.Selectors {

@@ -5,8 +5,12 @@
 * Endpoint integration (paths/lambda/CF/standalon/micro service/reset service, etc ..)
 * open API documentation style
 * Caching 
-* Fetch strategy with SQL Join. 
 * Patch/Create/Update
-* Add Logger to rader (debug logger)
-* 
+
+* Add Logger to reader (debug logger)
+* Fetch strategy with SQL Join.
+
 * Utility (rule, struct, relation generation etc ...)
+
+* Reorganize testcases
+* Add Criteria support

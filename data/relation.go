@@ -53,7 +53,7 @@ func (r *ReferenceView) Init(ctx context.Context, resource *Resource) error {
 func (r *Relation) inheritType(rType reflect.Type) error {
 	r.Of.Schema.inheritType(rType)
 	r.Of.initializeField()
-	if err := r.Of.View.deriveColumnsFromSchema(); err != nil {
+	if err := r.Of.View.deriveColumnsFromSchema(r); err != nil {
 		return err
 	}
 	return nil
@@ -83,6 +83,14 @@ func (r *Relation) Init(ctx context.Context, resource *Resource, parent *View) e
 		return err
 	}
 
+	view := &r.Of.View
+	view.updateColumnTypes()
+
+	if err := view.indexSqlxColumnsByFieldName(); err != nil {
+		return err
+	}
+
+	view.indexColumns()
 	return r.Validate()
 }
 
