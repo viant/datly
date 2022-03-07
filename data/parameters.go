@@ -12,7 +12,6 @@ type Parameters map[string]*Parameter
 type ParametersSlice []*Parameter
 
 //Index indexes parameters by Parameter.Name
-//Uses shared.KeysOf
 func (p ParametersSlice) Index() Parameters {
 	result := Parameters(make(map[string]*Parameter))
 
@@ -54,7 +53,6 @@ func (p Parameters) Lookup(paramName string) (*Parameter, error) {
 }
 
 //Register registers parameter
-//Uses shared.KeysOf
 func (p Parameters) Register(parameter *Parameter) {
 	keys := shared.KeysOf(parameter.Name, false)
 

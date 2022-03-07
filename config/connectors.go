@@ -11,7 +11,6 @@ import (
 type Connectors map[string]*Connector
 
 //Register registers connector
-//Uses shared.KeysOf
 func (v *Connectors) Register(connector *Connector) {
 	if len(*v) == 0 {
 		*v = make(map[string]*Connector)
@@ -39,7 +38,6 @@ func (v Connectors) Lookup(name string) (*Connector, error) {
 type ConnectorSlice []*Connector
 
 //Index indexes Connectors by Connector.Name.
-//Uses shared.KeysOf to produce keys.
 func (c ConnectorSlice) Index() Connectors {
 	result := Connectors(map[string]*Connector{})
 

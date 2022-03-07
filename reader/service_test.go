@@ -556,6 +556,7 @@ func TestRead(t *testing.T) {
 		nestedRelation(),
 		inheritTypeForReferencedView(),
 		columnsInSource(),
+		inheritConnector(),
 	}
 
 	for index, testCase := range useCases {
@@ -627,6 +628,49 @@ func TestRead(t *testing.T) {
 			fmt.Println(testCase.expect)
 		}
 
+	}
+}
+
+func inheritConnector() usecase {
+	resource := data.EmptyResource()
+	connector := &config.Connector{
+		Name:   "db",
+		DSN:    "./testdata/db/db.db",
+		Driver: "sqlite3",
+	}
+
+	resource.AddViews(&data.View{
+		Table: "event_types",
+		Name:  "event-types",
+	})
+
+	resource.AddViews(&data.View{
+		Connector:            connector,
+		Name:                 "events",
+		Table:                "events",
+		InheritSchemaColumns: true,
+		With: []*data.Relation{
+			{
+				Name: "event-event_types",
+				Of: &data.ReferenceView{
+					View:   *data.ViewReference("event-event_types", "event-types"),
+					Column: "id",
+				},
+				Cardinality: data.One,
+				Column:      "event_type_id",
+				Holder:      "EventType",
+			},
+		},
+		Schema: data.NewSchema(reflect.TypeOf(&event{})),
+	})
+
+	return usecase{
+		description: "inherit connector",
+		dest:        new([]*event),
+		view:        "events",
+		dataset:     "dataset001_events/",
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":2,"Events":null,"Name":"type 6"}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":111,"Events":null,"Name":"type 3"}}]`,
+		resource:    resource,
 	}
 }
 

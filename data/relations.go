@@ -6,7 +6,6 @@ import "github.com/viant/datly/shared"
 type RelationsSlice []*Relation
 
 //Index indexes Relations by Relation.Holder
-//Uses shared.KeysOf
 func (r RelationsSlice) Index() map[string]*Relation {
 	result := make(map[string]*Relation)
 	for i, rel := range r {
@@ -43,7 +42,7 @@ func (r RelationsSlice) Columns() []string {
 }
 
 //PopulateWithVisitor filters RelationsSlice by the columns that will be present in Database, and because of that
-//they wouldn't be resolved as unmapped columns. 
+//they wouldn't be resolved as unmapped columns.
 func (r RelationsSlice) PopulateWithVisitor() []*Relation {
 	result := make([]*Relation, 0)
 	for i, rel := range r {

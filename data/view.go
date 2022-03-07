@@ -139,15 +139,16 @@ func (v *View) generateNameIfNeeded(refView *View, rel *Relation) {
 }
 
 func (v *View) initView(ctx context.Context, resource *Resource) error {
+	var err error
 	v.ensureViewIndexed()
-	if err := v.inheritFromViewIfNeeded(ctx, resource); err != nil {
+	if err = v.inheritFromViewIfNeeded(ctx, resource); err != nil {
 		return err
 	}
 
 	if v.MatchStrategy == "" {
 		v.MatchStrategy = ReadMatched
 	}
-	if err := v.MatchStrategy.Validate(); err != nil {
+	if err = v.MatchStrategy.Validate(); err != nil {
 		return err
 	}
 
@@ -170,11 +171,10 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return fmt.Errorf("view name was empty")
 	}
 
-	if v.Connector == nil {
-		return fmt.Errorf("connector was empty")
+	if v.Connector, err = resource.FindConnector(v); err != nil {
+		return err
 	}
 
-	var err error
 	if err = v.Connector.Init(ctx, resource._connectors); err != nil {
 		return err
 	}
@@ -183,7 +183,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err := v.ensureCaseFormat(); err != nil {
+	if err = v.ensureCaseFormat(); err != nil {
 		return err
 	}
 
@@ -274,7 +274,7 @@ func (v *View) ensureColumns(ctx context.Context) error {
 		source = source + " WHERE 1 = 0)"
 	}
 	SQL := "SELECT t.* FROM " + source + " t WHERE 1=0"
-	shared.Log("metaSQL: %v\n", SQL)
+	shared.Log("table columns SQL: %v", SQL)
 	query, err := db.QueryContext(ctx, SQL)
 	if err != nil {
 		return err

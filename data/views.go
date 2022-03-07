@@ -10,7 +10,6 @@ import (
 type Views map[string]*View
 
 //Register registers view in registry using View name.
-//uses shared.KeysOf
 func (v *Views) Register(view *View) {
 	if len(*v) == 0 {
 		*v = make(map[string]*View)

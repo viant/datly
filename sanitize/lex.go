@@ -20,8 +20,6 @@ const (
 	nullToken
 	inToken
 	nextToken
-	dataSetToken
-	placeholderToken
 )
 
 var Whitespace = parsly.NewToken(whitespaceToken, "Whitespace", matcher.NewWhiteSpace())
