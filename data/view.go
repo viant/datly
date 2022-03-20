@@ -652,7 +652,7 @@ func (v *View) markColumnsAsFilterable() error {
 	for _, colName := range v.SelectorConstraints.FilterableColumns {
 		column, err := v._columns.Lookup(colName)
 		if err != nil {
-			return fmt.Errorf("invalid viwe: %v %w", v.Name, err)
+			return fmt.Errorf("invalid view: %v %w", v.Name, err)
 		}
 		column.Filterable = true
 	}
@@ -672,7 +672,7 @@ func (v *View) indexSqlxColumnsByFieldName() error {
 		if tag.Column != "" {
 			column, err := v._columns.Lookup(tag.Column)
 			if err != nil {
-				return fmt.Errorf("invalid viwe: %v %w", v.Name, err)
+				return fmt.Errorf("invalid view: %v %w", v.Name, err)
 			}
 			v._columns.RegisterWithName(field.Name, column)
 		}
