@@ -62,7 +62,7 @@ func (c Columns) Lookup(name string) (*Column, error) {
 	column, ok := c[name]
 	if !ok {
 		err := fmt.Errorf("not found column with name %v", name)
-		//panic(err)
+		panic(err)
 		return column, err
 	}
 
