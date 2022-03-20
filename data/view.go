@@ -652,9 +652,8 @@ func (v *View) markColumnsAsFilterable() error {
 	for _, colName := range v.SelectorConstraints.FilterableColumns {
 		column, err := v._columns.Lookup(colName)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid viwe: %v %w", v.Name, err)
 		}
-
 		column.Filterable = true
 	}
 	return nil
@@ -673,7 +672,7 @@ func (v *View) indexSqlxColumnsByFieldName() error {
 		if tag.Column != "" {
 			column, err := v._columns.Lookup(tag.Column)
 			if err != nil {
-				return err
+				return fmt.Errorf("invalid viwe: %v %w", v.Name, err)
 			}
 			v._columns.RegisterWithName(field.Name, column)
 		}
@@ -738,7 +737,7 @@ func (v *View) updateColumn(rType reflect.Type, columns *[]*Column, relation *Re
 
 		col, err := v._columns.Lookup(rel.Column)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid rel: %v %w", rel.Name, err)
 		}
 
 		*columns = append(*columns, col)
@@ -749,7 +748,7 @@ func (v *View) updateColumn(rType reflect.Type, columns *[]*Column, relation *Re
 		if err != nil {
 			col, err := v._columns.Lookup(relation.Of.Column)
 			if err != nil {
-				return err
+				return fmt.Errorf("invalid ref: %v %w", relation.Name, err)
 			}
 			*columns = append(*columns, col)
 		}
