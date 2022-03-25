@@ -57,7 +57,11 @@ func (s *Session) Init(ctx context.Context, resource *data.Resource) error {
 	if _, ok := s.Dest.(*interface{}); !ok {
 		viewType := reflect.PtrTo(s.View.Schema.SliceType())
 		destType := reflect.TypeOf(s.Dest)
-		if viewType != destType {
+		if viewType.Kind() == reflect.Ptr && destType.Kind() == reflect.Ptr {
+			if ! viewType.Elem().ConvertibleTo(destType.Elem()) {
+				return fmt.Errorf("type mismatch, view slice type is: %v while destination type is %v", viewType.String(), destType.String())
+			}
+		} else if ! viewType.ConvertibleTo(destType) {
 			return fmt.Errorf("type mismatch, view slice type is: %v while destination type is %v", viewType.String(), destType.String())
 		}
 	}

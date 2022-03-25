@@ -13,7 +13,7 @@ type Selector struct {
 func (s *Selector) Sanitize(sb *strings.Builder, columns data.Columns) error {
 	col, err := columns.Lookup(s.Name)
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid selector: %w", err)
 	}
 
 	if !col.Filterable {
