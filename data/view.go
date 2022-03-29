@@ -69,6 +69,7 @@ type (
 		hasCriteriaReplacement bool
 		hasColumnInReplacement bool
 		hasWhereClause         bool
+		hasPagination          bool
 	}
 
 	//Constraints configure what can be selected by Selector
@@ -289,13 +290,21 @@ func (v *View) ensureColumns(ctx context.Context) error {
 func (v *View) columnsSource() string {
 	source := v.Source()
 	if strings.Contains(source, string(shared.Criteria)) {
-		return strings.ReplaceAll(source, string(shared.Criteria), " WHERE 1 = 0")
+		if v.hasWhereClause {
+			source = strings.ReplaceAll(source, string(shared.Criteria), " AND 1 = 0")
+		} else {
+			source = strings.ReplaceAll(source, string(shared.Criteria), " WHERE 1 = 0")
+		}
 	}
 
-	if index := strings.Index(source, "WHERE"); index > 0 {
-		source = source[:index]
-		source = source + " WHERE 1 = 0)"
+	if strings.Contains(source, string(shared.ColumnInPosition)) {
+		source = strings.ReplaceAll(source, string(shared.ColumnInPosition), " 1 = 0")
 	}
+
+	if strings.Contains(source, string(shared.Pagination)) {
+		source = strings.ReplaceAll(source, string(shared.Pagination), " ")
+	}
+
 	return source
 }
 
@@ -818,10 +827,15 @@ func (v *View) initColumnsPositions() {
 	v.hasCriteriaReplacement = strings.Contains(v.Source(), string(shared.Criteria))
 	v.hasColumnInReplacement = strings.Contains(v.Source(), string(shared.ColumnInPosition))
 	v.hasWhereClause = ast.HasWhere([]byte(v.Source()))
+	v.hasPagination = strings.Contains(v.Source(), string(shared.Pagination))
 }
 
 func (v *View) HasWhereClause() bool {
 	return v.hasWhereClause
+}
+
+func (v *View) HasPaginationReplacement() bool {
+	return v.hasPagination
 }
 
 //ViewReference creates a view reference
