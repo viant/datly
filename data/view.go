@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/datly/config"
+	"github.com/viant/datly/data/ast"
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
@@ -64,8 +65,11 @@ type (
 		holdersInitialized bool
 		isValid            bool
 		newCollector       func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector
-		hasWhereClause     bool
-		hasColumnIn        bool
+
+		hasCriteriaReplacement bool
+		hasColumnInReplacement bool
+		hasWhereClause         bool
+		hasPagination          bool
 	}
 
 	//Constraints configure what can be selected by Selector
@@ -286,13 +290,21 @@ func (v *View) ensureColumns(ctx context.Context) error {
 func (v *View) columnsSource() string {
 	source := v.Source()
 	if strings.Contains(source, string(shared.Criteria)) {
-		return strings.ReplaceAll(source, string(shared.Criteria), " WHERE 1 = 0")
+		if v.hasWhereClause {
+			source = strings.ReplaceAll(source, string(shared.Criteria), " AND 1 = 0")
+		} else {
+			source = strings.ReplaceAll(source, string(shared.Criteria), " WHERE 1 = 0")
+		}
 	}
 
-	if index := strings.Index(source, "WHERE"); index > 0 {
-		source = source[:index]
-		source = source + " WHERE 1 = 0)"
+	if strings.Contains(source, string(shared.ColumnInPosition)) {
+		source = strings.ReplaceAll(source, string(shared.ColumnInPosition), " 1 = 0")
 	}
+
+	if strings.Contains(source, string(shared.Pagination)) {
+		source = strings.ReplaceAll(source, string(shared.Pagination), " ")
+	}
+
 	return source
 }
 
@@ -804,16 +816,26 @@ func (v *View) AliasWith(selector *Selector) string {
 }
 
 func (v *View) HasCriteriaReplacement() bool {
-	return v.hasWhereClause
+	return v.hasCriteriaReplacement
 }
 
 func (v *View) HasColumnInReplacement() bool {
-	return v.hasColumnIn
+	return v.hasColumnInReplacement
 }
 
 func (v *View) initColumnsPositions() {
-	v.hasWhereClause = strings.Contains(v.Source(), string(shared.Criteria))
-	v.hasColumnIn = strings.Contains(v.Source(), string(shared.ColumnInPosition))
+	v.hasCriteriaReplacement = strings.Contains(v.Source(), string(shared.Criteria))
+	v.hasColumnInReplacement = strings.Contains(v.Source(), string(shared.ColumnInPosition))
+	v.hasWhereClause = ast.HasWhere([]byte(v.Source()))
+	v.hasPagination = strings.Contains(v.Source(), string(shared.Pagination))
+}
+
+func (v *View) HasWhereClause() bool {
+	return v.hasWhereClause
+}
+
+func (v *View) HasPaginationReplacement() bool {
+	return v.hasPagination
 }
 
 //ViewReference creates a view reference

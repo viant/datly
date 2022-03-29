@@ -130,7 +130,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:     "dataset001_events/",
 			description: `criteria replacement`,
-			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev  WHERE ev.ID IN (?, ?, ?)  LIMIT 10 OFFSET 2) AS f`,
+			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev  WHERE ev.ID IN (?, ?, ?) ) AS f  LIMIT 10 OFFSET 2`,
 			view: &data.View{
 				Columns: []*data.Column{
 					{
@@ -305,6 +305,39 @@ func TestBuilder_Build(t *testing.T) {
 			batchData: &BatchData{
 				ColumnName: "id",
 				Values:     []interface{}{1, 2, 3},
+			},
+			selector: &data.Selector{
+				Alias: "ev",
+			},
+		},
+		{
+			dataset:     "dataset001_events/",
+			description: `pagination replacement`,
+			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev  LIMIT 10 OFFSET 2) AS f  WHERE ev.ID IN (?, ?, ?)`,
+			view: &data.View{
+				Columns: []*data.Column{
+					{
+						Name:     "ID",
+						DataType: "Int",
+					},
+					{
+						Name:     "Price",
+						DataType: "Float",
+					},
+				},
+				SelectorConstraints: &data.Constraints{
+					Alias: true,
+				},
+				Selector: &data.Config{},
+				From:     "SELECT * FROM EVENTS as ev " + string(shared.Pagination),
+				Name:     "events",
+				Alias:    "f",
+			},
+			batchData: &BatchData{
+				BatchReadSize: 10,
+				Read:          2,
+				ColumnName:    "ID",
+				Values:        []interface{}{1, 2, 3},
 			},
 			selector: &data.Selector{
 				Alias: "ev",

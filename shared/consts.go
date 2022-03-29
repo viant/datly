@@ -15,4 +15,5 @@ type SqlPosition string
 const (
 	ColumnInPosition SqlPosition = "$COLUMN_IN"
 	Criteria         SqlPosition = "$CRITERIA"
+	Pagination       SqlPosition = "$PAGINATION"
 )

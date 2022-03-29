@@ -68,12 +68,20 @@ func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *Bat
 		return "", err
 	}
 
-	if !view.HasCriteriaReplacement() {
+	if !view.HasPaginationReplacement() {
 		b.appendLimit(view, selector, batchData, &sb)
 		b.appendOffset(view, selector, batchData, &sb)
 	}
 
-	return sb.String(), nil
+	result := sb.String()
+	if view.HasPaginationReplacement() {
+		paginationSb := strings.Builder{}
+		b.appendLimit(view, selector, batchData, &paginationSb)
+		b.appendOffset(view, selector, batchData, &paginationSb)
+		result = strings.ReplaceAll(result, string(shared.Pagination), paginationSb.String())
+	}
+
+	return result, nil
 }
 
 func (b *Builder) appendWhereClause(whereClause string, sb *strings.Builder) {
@@ -191,7 +199,7 @@ func (b *Builder) appendSource(sb *strings.Builder, view *data.View, selector *d
 
 	if view.HasCriteriaReplacement() {
 		whereClause := b.buildWhereClause(view, true, selector, alias, batchData)
-		hasWhere := hasWhereClause(view.From)
+		hasWhere := view.HasWhereClause()
 
 		if whereClause != "" {
 			if !hasWhere {
@@ -203,8 +211,6 @@ func (b *Builder) appendSource(sb *strings.Builder, view *data.View, selector *d
 
 		whereBuilder := strings.Builder{}
 		whereBuilder.WriteString(whereClause)
-		b.appendLimit(view, selector, batchData, &whereBuilder)
-		b.appendOffset(view, selector, batchData, &whereBuilder)
 
 		sb.WriteString(strings.ReplaceAll(view.Source(), string(shared.Criteria), whereBuilder.String()))
 	} else if view.HasColumnInReplacement() {
@@ -218,10 +224,6 @@ func (b *Builder) appendSource(sb *strings.Builder, view *data.View, selector *d
 		sb.WriteString(view.Alias)
 		sb.WriteString(" ")
 	}
-}
-
-func hasWhereClause(from string) bool {
-	return strings.Contains(strings.ToUpper(from), "WHERE")
 }
 
 func (b *Builder) buildWhereClause(view *data.View, useColumnsIn bool, selector *data.Selector, alias string, batchData *BatchData) string {
