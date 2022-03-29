@@ -56,30 +56,33 @@ func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *Bat
 	sb.WriteString(fromFragment)
 	b.appendSource(&sb, view, selector, batchData)
 
-	if !view.HasColumnIn() && !view.HasWhereClause() {
+	if !view.HasColumnInReplacement() && !view.HasCriteriaReplacement() {
 		whereClause := b.buildWhereClause(view, true, selector, alias, batchData)
-		if whereClause != "" {
-			sb.WriteString(whereFragment)
-			sb.WriteString(whereClause)
-		}
-	} else if view.HasColumnIn() {
+		b.appendWhereClause(whereClause, &sb)
+	} else if view.HasColumnInReplacement() {
 		whereClause := b.buildWhereClause(view, false, selector, alias, batchData)
-		if whereClause != "" {
-			sb.WriteString(whereFragment)
-			sb.WriteString(whereClause)
-		}
+		b.appendWhereClause(whereClause, &sb)
 	}
 
 	if err = b.appendOrderBy(view, selector, &sb); err != nil {
 		return "", err
 	}
 
-	if !view.HasWhereClause() {
+	if !view.HasCriteriaReplacement() {
 		b.appendLimit(view, selector, batchData, &sb)
 		b.appendOffset(view, selector, batchData, &sb)
 	}
 
 	return sb.String(), nil
+}
+
+func (b *Builder) appendWhereClause(whereClause string, sb *strings.Builder) {
+	if whereClause == "" {
+		return
+	}
+
+	sb.WriteString(whereFragment)
+	sb.WriteString(whereClause)
 }
 
 func (b *Builder) appendColumns(view *data.View, selector *data.Selector, sb *strings.Builder) error {
@@ -186,10 +189,16 @@ func (b *Builder) appendSource(sb *strings.Builder, view *data.View, selector *d
 		alias = selector.Alias
 	}
 
-	if view.HasWhereClause() {
+	if view.HasCriteriaReplacement() {
 		whereClause := b.buildWhereClause(view, true, selector, alias, batchData)
+		hasWhere := hasWhereClause(view.From)
+
 		if whereClause != "" {
-			whereClause = whereFragment + whereClause
+			if !hasWhere {
+				whereClause = whereFragment + whereClause
+			} else {
+				whereClause = andFragment + whereClause + encloseFragment + " "
+			}
 		}
 
 		whereBuilder := strings.Builder{}
@@ -197,8 +206,8 @@ func (b *Builder) appendSource(sb *strings.Builder, view *data.View, selector *d
 		b.appendLimit(view, selector, batchData, &whereBuilder)
 		b.appendOffset(view, selector, batchData, &whereBuilder)
 
-		sb.WriteString(strings.ReplaceAll(view.Source(), string(shared.WhereClause), whereBuilder.String()))
-	} else if view.HasColumnIn() {
+		sb.WriteString(strings.ReplaceAll(view.Source(), string(shared.Criteria), whereBuilder.String()))
+	} else if view.HasColumnInReplacement() {
 		sb.WriteString(strings.ReplaceAll(view.Source(), string(shared.ColumnInPosition), b.buildColumnsIn(batchData, alias)))
 	} else {
 		sb.WriteString(view.Source())
@@ -209,6 +218,10 @@ func (b *Builder) appendSource(sb *strings.Builder, view *data.View, selector *d
 		sb.WriteString(view.Alias)
 		sb.WriteString(" ")
 	}
+}
+
+func hasWhereClause(from string) bool {
+	return strings.Contains(strings.ToUpper(from), "WHERE")
 }
 
 func (b *Builder) buildWhereClause(view *data.View, useColumnsIn bool, selector *data.Selector, alias string, batchData *BatchData) string {

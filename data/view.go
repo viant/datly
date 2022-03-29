@@ -285,8 +285,8 @@ func (v *View) ensureColumns(ctx context.Context) error {
 
 func (v *View) columnsSource() string {
 	source := v.Source()
-	if strings.Contains(source, string(shared.WhereClause)) {
-		return strings.ReplaceAll(source, string(shared.WhereClause), " WHERE 1 = 0")
+	if strings.Contains(source, string(shared.Criteria)) {
+		return strings.ReplaceAll(source, string(shared.Criteria), " WHERE 1 = 0")
 	}
 
 	if index := strings.Index(source, "WHERE"); index > 0 {
@@ -803,16 +803,16 @@ func (v *View) AliasWith(selector *Selector) string {
 	return selector.Alias
 }
 
-func (v *View) HasWhereClause() bool {
+func (v *View) HasCriteriaReplacement() bool {
 	return v.hasWhereClause
 }
 
-func (v *View) HasColumnIn() bool {
+func (v *View) HasColumnInReplacement() bool {
 	return v.hasColumnIn
 }
 
 func (v *View) initColumnsPositions() {
-	v.hasWhereClause = strings.Contains(v.Source(), string(shared.WhereClause))
+	v.hasWhereClause = strings.Contains(v.Source(), string(shared.Criteria))
 	v.hasColumnIn = strings.Contains(v.Source(), string(shared.ColumnInPosition))
 }
 

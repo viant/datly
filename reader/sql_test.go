@@ -129,7 +129,7 @@ func TestBuilder_Build(t *testing.T) {
 		},
 		{
 			dataset:     "dataset001_events/",
-			description: `where clause`,
+			description: `criteria replacement`,
 			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev  WHERE ev.ID IN (?, ?, ?)  LIMIT 10 OFFSET 2) AS f`,
 			view: &data.View{
 				Columns: []*data.Column{
@@ -146,7 +146,7 @@ func TestBuilder_Build(t *testing.T) {
 					Alias: true,
 				},
 				Selector: &data.Config{},
-				From:     "SELECT * FROM EVENTS as ev " + string(shared.WhereClause),
+				From:     "SELECT * FROM EVENTS as ev " + string(shared.Criteria),
 				Name:     "events",
 				Alias:    "f",
 			},
@@ -158,6 +158,65 @@ func TestBuilder_Build(t *testing.T) {
 			},
 			selector: &data.Selector{
 				Alias: "ev",
+			},
+		},
+		{
+			dataset:     "dataset001_events/",
+			description: `empty criteria replacement`,
+			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev ) AS f`,
+			view: &data.View{
+				Columns: []*data.Column{
+					{
+						Name:     "ID",
+						DataType: "Int",
+					},
+					{
+						Name:     "Price",
+						DataType: "Float",
+					},
+				},
+				SelectorConstraints: &data.Constraints{
+					Alias: true,
+				},
+				Selector: &data.Config{},
+				From:     "SELECT * FROM EVENTS as ev " + string(shared.Criteria),
+				Name:     "events",
+				Alias:    "f",
+			},
+			batchData: &BatchData{
+				Values: []interface{}{},
+			},
+			selector: &data.Selector{
+				Alias: "ev",
+			},
+		},
+		{
+			dataset:     "dataset001_events/",
+			description: `batch data`,
+			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev ) AS f  WHERE f.ID IN (?, ?, ?)  LIMIT 10 OFFSET 8`,
+			view: &data.View{
+				Columns: []*data.Column{
+					{
+						Name:     "ID",
+						DataType: "Int",
+					},
+					{
+						Name:     "Price",
+						DataType: "Float",
+					},
+				},
+				Selector:      &data.Config{},
+				From:          "SELECT * FROM EVENTS as ev ",
+				Name:          "events",
+				Alias:         "f",
+				MatchStrategy: data.ReadMatched,
+				BatchReadSize: intPtr(10),
+			},
+			batchData: &BatchData{
+				BatchReadSize: 10,
+				Read:          8,
+				ColumnName:    "ID",
+				Values:        []interface{}{1, 2, 3},
 			},
 		},
 		{
@@ -218,6 +277,37 @@ func TestBuilder_Build(t *testing.T) {
 				Read:          8,
 				ColumnName:    "ID",
 				Values:        []interface{}{1, 2, 3},
+			},
+		},
+		{
+			dataset:     "dataset001_events/",
+			description: `criteria replacement with where clause`,
+			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev WHERE 0=1  AND (ev.id IN (?, ?, ?) ) ) AS f`,
+			view: &data.View{
+				Columns: []*data.Column{
+					{
+						Name:     "ID",
+						DataType: "Int",
+					},
+					{
+						Name:     "Price",
+						DataType: "Float",
+					},
+				},
+				SelectorConstraints: &data.Constraints{
+					Alias: true,
+				},
+				Selector: &data.Config{},
+				From:     "SELECT * FROM EVENTS as ev WHERE 0=1 " + string(shared.Criteria),
+				Name:     "events",
+				Alias:    "f",
+			},
+			batchData: &BatchData{
+				ColumnName: "id",
+				Values:     []interface{}{1, 2, 3},
+			},
+			selector: &data.Selector{
+				Alias: "ev",
 			},
 		},
 	}

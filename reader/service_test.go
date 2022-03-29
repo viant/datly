@@ -650,7 +650,7 @@ func criteriaWhere() usecase {
 		Connector: connector,
 		Name:      "events",
 		Alias:     "ev",
-		From:      `SELECT * FROM events as e ` + string(shared.WhereClause),
+		From:      `SELECT * FROM events as e ` + string(shared.Criteria),
 		Schema:    data.NewSchema(reflect.TypeOf(&Event{})),
 		SelectorConstraints: &data.Constraints{
 			Alias: true,

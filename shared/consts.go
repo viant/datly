@@ -14,5 +14,5 @@ type SqlPosition string
 
 const (
 	ColumnInPosition SqlPosition = "$COLUMN_IN"
-	WhereClause      SqlPosition = "$WHERE_CLAUSE"
+	Criteria         SqlPosition = "$CRITERIA"
 )
