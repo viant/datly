@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/datly/config"
 	"github.com/viant/toolbox"
@@ -95,6 +96,54 @@ func NewResourceFromURL(ctx context.Context, url string, types Types) (*Resource
 	err = resource.Init(ctx)
 
 	return resource, err
+}
+
+func (r *Resource) FindConnector(view *View) (*config.Connector, error) {
+	if view.Connector == nil {
+		var connector *config.Connector
+
+		for _, relView := range r.Views {
+			if relView.Name == view.Name {
+				continue
+			}
+
+			if isChildOfAny(view, relView.With) {
+				connector = relView.Connector
+				break
+			}
+		}
+
+		if connector != nil {
+			result := *connector
+			return &result, nil
+		}
+	}
+
+	if view.Connector != nil {
+		if view.Connector.Ref != "" {
+			return r._connectors.Lookup(view.Connector.Ref)
+		}
+
+		if err := view.Connector.Validate(); err == nil {
+			return view.Connector, nil
+		}
+	}
+
+	return nil, fmt.Errorf("couldn't inherit connector for view %v from any other parent views", view.Name)
+}
+
+func isChildOfAny(view *View, with []*Relation) bool {
+	for _, relation := range with {
+		if relation.Of.View.Ref == view.Name {
+			return true
+		}
+
+		if isChildOfAny(view, relation.Of.With) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func EmptyResource() *Resource {

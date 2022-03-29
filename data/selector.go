@@ -8,6 +8,7 @@ type Selector struct {
 	Limit        int
 	_columnNames map[string]bool
 	Criteria     *Criteria
+	Alias        string
 }
 
 //Init initializes Selector

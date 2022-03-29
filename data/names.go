@@ -6,7 +6,6 @@ import "github.com/viant/datly/shared"
 type Names []string
 
 //Index creates presence map.
-//Uses shared.KeysOf
 func (c Names) Index() map[string]bool {
 	result := make(map[string]bool)
 	for _, column := range c {

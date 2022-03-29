@@ -23,7 +23,6 @@ func (c ColumnSlice) Index(caser format.Case) Columns {
 }
 
 //Register registers *Column
-//Uses shared.KeysOf and format.Case to produce registry keys
 func (c Columns) Register(caser format.Case, column *Column) {
 	keys := shared.KeysOf(column.Name, true)
 	for _, key := range keys {
@@ -38,7 +37,6 @@ func (c Columns) Register(caser format.Case, column *Column) {
 
 //RegisterHolder looks for the Column by Relation.Column name.
 //If it finds registers that Column with Relation.Holder key.
-//Uses shared.KeysOf
 func (c Columns) RegisterHolder(relation *Relation) error {
 	column, err := c.Lookup(relation.Column)
 	if err != nil {

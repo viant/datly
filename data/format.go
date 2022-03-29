@@ -8,20 +8,31 @@ import (
 type CaseFormat string
 
 const (
-	UpperUnderscore CaseFormat = "uu"
-	LowerUnderscore CaseFormat = "lu"
-	UpperCamel      CaseFormat = "uc"
-	LowerCamel      CaseFormat = "lc"
-	Lower           CaseFormat = "l"
-	Upper           CaseFormat = "u"
+	UpperUnderscoreShort CaseFormat = "uu"
+	UpperUnderscore      CaseFormat = "upperunderscore"
+	LowerUnderscoreShort CaseFormat = "lu"
+	LowerUnderscore      CaseFormat = "lowerunderscore"
+	UpperCamelShort      CaseFormat = "uc"
+	UpperCamel           CaseFormat = "uppercamel"
+	LowerCamelShort      CaseFormat = "lc"
+	LowerCamel           CaseFormat = "lowercamel"
+	LowerShort           CaseFormat = "l"
+	Lower                CaseFormat = "lower"
+	UpperShort           CaseFormat = "u"
+	Upper                CaseFormat = "upper"
 )
 
 func (f *CaseFormat) Init() error {
 	switch *f {
-	case UpperUnderscore, LowerUnderscore, UpperCamel, LowerCamel, Lower, Upper:
+	case UpperUnderscoreShort, UpperUnderscore,
+		LowerUnderscoreShort, LowerUnderscore,
+		UpperCamelShort, UpperCamel,
+		LowerCamelShort, LowerCamel,
+		LowerShort, Lower,
+		UpperShort, Upper:
 		return nil
 	case "":
-		*f = LowerUnderscore
+		*f = LowerUnderscoreShort
 		return nil
 	}
 

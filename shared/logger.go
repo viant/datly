@@ -5,9 +5,18 @@ import (
 	"os"
 )
 
-func Log(message string, args ...interface{}) {
+var logFn func(format string, args []interface{})
+
+func init() {
 	if os.Getenv("DATLY_DEBUG") == "" {
-		return
+		logFn = func(format string, args []interface{}) {}
+	} else {
+		logFn = func(format string, args []interface{}) {
+			fmt.Printf("[Logger] "+format+"\n", args...)
+		}
 	}
-	fmt.Printf(message, args...)
+}
+
+func Log(message string, args ...interface{}) {
+	logFn(message, args)
 }
