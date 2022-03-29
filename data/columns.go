@@ -59,8 +59,11 @@ func (c Columns) Lookup(name string) (*Column, error) {
 
 	column, ok := c[name]
 	if !ok {
-		err := fmt.Errorf("not found column with name %v", name)
-		//panic(err)
+		keys := []string{}
+		for k:= range c {
+			keys = append(keys, k)
+		}
+		err := fmt.Errorf("undefied columnname %v, avails: %+v", name, strings.Join(keys, ","))
 		return column, err
 	}
 
