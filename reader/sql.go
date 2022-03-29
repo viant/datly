@@ -31,7 +31,7 @@ type (
 	//BatchData groups data needed to use various data.MatchStrategy
 	BatchData struct {
 		BatchReadSize int
-		CurrentlyRead int
+		Read          int
 		ColumnName    string
 		Values        []interface{}
 	}
@@ -46,71 +46,43 @@ func NewBuilder() *Builder {
 func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *BatchData) (string, error) {
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
+	alias := view.AliasWith(selector)
 
 	var err error
-	if err = b.addColumns(view, selector, &sb); err != nil {
+	if err = b.appendColumns(view, selector, &sb); err != nil {
 		return "", err
 	}
 
 	sb.WriteString(fromFragment)
-	sb.WriteString(view.Source())
-	if view.Alias != "" {
-		sb.WriteString(asFragment)
-		sb.WriteString(view.Alias)
-	}
+	b.appendSource(&sb, view, selector, batchData)
 
-	hasCriteria := false
-	whereFragmentAdded := false
-	shouldPutColumnsToSource := false
-
-	if batchData.ColumnName != "" {
-		if shouldPutColumnsToSource = strings.Contains(view.Source(), string(shared.ColumnInPosition)); !shouldPutColumnsToSource {
-			whereFragmentAdded = true
+	if !view.HasColumnIn() && !view.HasWhereClause() {
+		whereClause := b.buildWhereClause(view, true, selector, alias, batchData)
+		if whereClause != "" {
 			sb.WriteString(whereFragment)
-			sb.WriteString(b.buildColumnsIn(batchData, view.Alias+"."))
+			sb.WriteString(whereClause)
 		}
-	}
-
-	if view.Criteria != nil {
-		if !whereFragmentAdded {
+	} else if view.HasColumnIn() {
+		whereClause := b.buildWhereClause(view, false, selector, alias, batchData)
+		if whereClause != "" {
 			sb.WriteString(whereFragment)
-			whereFragmentAdded = true
-		}
-		sb.WriteString(view.Criteria.Expression)
-		hasCriteria = true
-	}
-
-	if view.CanUseClientCriteria() && selector != nil && selector.Criteria != nil {
-		if hasCriteria {
-			sb.WriteString(andFragment)
-			sb.WriteString(selector.Criteria.Expression)
-			sb.WriteString(encloseFragment)
-		} else {
-			if !whereFragmentAdded {
-				sb.WriteString(whereFragment)
-				whereFragmentAdded = true
-			}
-			sb.WriteString(selector.Criteria.Expression)
+			sb.WriteString(whereClause)
 		}
 	}
 
-	if err = b.addOrderBy(view, selector, &sb); err != nil {
+	if err = b.appendOrderBy(view, selector, &sb); err != nil {
 		return "", err
 	}
 
-	b.addLimit(view, selector, batchData, &sb)
-	b.addOffset(view, selector, batchData, &sb)
-
-	result := sb.String()
-	if shouldPutColumnsToSource {
-		columnsIn := b.buildColumnsIn(batchData, "")
-		result = strings.Replace(result, string(shared.ColumnInPosition), columnsIn, 1)
+	if !view.HasWhereClause() {
+		b.appendLimit(view, selector, batchData, &sb)
+		b.appendOffset(view, selector, batchData, &sb)
 	}
 
-	return result, nil
+	return sb.String(), nil
 }
 
-func (b *Builder) addColumns(view *data.View, selector *data.Selector, sb *strings.Builder) error {
+func (b *Builder) appendColumns(view *data.View, selector *data.Selector, sb *strings.Builder) error {
 	columns, err := view.SelectedColumns(selector)
 	if err != nil {
 		return err
@@ -119,14 +91,23 @@ func (b *Builder) addColumns(view *data.View, selector *data.Selector, sb *strin
 		if i != 0 {
 			sb.WriteString(separatorFragment)
 		}
-		sb.WriteString(col.SqlExpression())
+
+		if col.Expression != "" {
+			sb.WriteString(col.SqlExpression())
+		} else {
+			if view.Alias != "" {
+				sb.WriteString(view.Alias)
+				sb.WriteString(".")
+			}
+			sb.WriteString(col.Name)
+		}
 	}
 	return nil
 }
 
-func (b *Builder) addOrderBy(view *data.View, selector *data.Selector, sb *strings.Builder) error {
+func (b *Builder) appendOrderBy(view *data.View, selector *data.Selector, sb *strings.Builder) error {
 	orderBy := view.Selector.OrderBy
-	if view.CanUseClientOrderBy() && selector != nil && selector.OrderBy != "" {
+	if view.CanUseSelectorOrderBy() && selector != nil && selector.OrderBy != "" {
 		orderBy = selector.OrderBy
 	}
 
@@ -140,12 +121,12 @@ func (b *Builder) addOrderBy(view *data.View, selector *data.Selector, sb *strin
 	return nil
 }
 
-func (b *Builder) addLimit(view *data.View, selector *data.Selector, batchData *BatchData, sb *strings.Builder) {
+func (b *Builder) appendLimit(view *data.View, selector *data.Selector, batchData *BatchData, sb *strings.Builder) {
 	limit := view.LimitWithSelector(selector)
 	if limit == 0 {
 		limit = batchData.BatchReadSize
 	} else if limit != 0 {
-		toRead := limit - batchData.BatchReadSize - batchData.CurrentlyRead
+		toRead := limit - batchData.BatchReadSize - batchData.Read
 		if toRead >= 0 {
 			limit = batchData.BatchReadSize
 		} else if toRead < 0 {
@@ -159,16 +140,16 @@ func (b *Builder) addLimit(view *data.View, selector *data.Selector, batchData *
 	}
 }
 
-func (b *Builder) addOffset(view *data.View, selector *data.Selector, batchData *BatchData, sb *strings.Builder) {
+func (b *Builder) appendOffset(view *data.View, selector *data.Selector, batchData *BatchData, sb *strings.Builder) {
 	offset := 0
 	if selector != nil {
 
-		if view.CanUseClientOffset() && selector.Offset > 0 {
+		if view.CanUseSelectorOffset() && selector.Offset > 0 {
 			offset = selector.Offset
 		}
 	}
 
-	offset += batchData.CurrentlyRead
+	offset += batchData.Read
 	if offset > 0 {
 		sb.WriteString(offsetFragment)
 		sb.WriteString(strconv.Itoa(offset))
@@ -176,8 +157,17 @@ func (b *Builder) addOffset(view *data.View, selector *data.Selector, batchData 
 }
 
 func (b *Builder) buildColumnsIn(batchData *BatchData, alias string) string {
+	if batchData.ColumnName == "" {
+		return ""
+	}
+
 	sb := strings.Builder{}
-	sb.WriteString(alias)
+
+	if alias != "" {
+		sb.WriteString(alias)
+		sb.WriteString(".")
+	}
+
 	sb.WriteString(batchData.ColumnName)
 	sb.WriteString(inFragment)
 	for i := range batchData.Values {
@@ -187,5 +177,76 @@ func (b *Builder) buildColumnsIn(batchData *BatchData, alias string) string {
 		sb.WriteString(placeholderFragment)
 	}
 	sb.WriteString(") ")
+	return sb.String()
+}
+
+func (b *Builder) appendSource(sb *strings.Builder, view *data.View, selector *data.Selector, batchData *BatchData) {
+	var alias string
+	if view.CanUseSelectorAlias() && selector != nil && selector.Alias != "" {
+		alias = selector.Alias
+	}
+
+	if view.HasWhereClause() {
+		whereClause := b.buildWhereClause(view, true, selector, alias, batchData)
+		if whereClause != "" {
+			whereClause = whereFragment + whereClause
+		}
+
+		whereBuilder := strings.Builder{}
+		whereBuilder.WriteString(whereClause)
+		b.appendLimit(view, selector, batchData, &whereBuilder)
+		b.appendOffset(view, selector, batchData, &whereBuilder)
+
+		sb.WriteString(strings.ReplaceAll(view.Source(), string(shared.WhereClause), whereBuilder.String()))
+	} else if view.HasColumnIn() {
+		sb.WriteString(strings.ReplaceAll(view.Source(), string(shared.ColumnInPosition), b.buildColumnsIn(batchData, alias)))
+	} else {
+		sb.WriteString(view.Source())
+	}
+
+	if view.Alias != "" {
+		sb.WriteString(asFragment)
+		sb.WriteString(view.Alias)
+		sb.WriteString(" ")
+	}
+}
+
+func (b *Builder) buildWhereClause(view *data.View, useColumnsIn bool, selector *data.Selector, alias string, batchData *BatchData) string {
+	sb := strings.Builder{}
+
+	addAnd := false
+	columnsIn := b.buildColumnsIn(batchData, alias)
+	if columnsIn != "" && useColumnsIn {
+		sb.WriteString(columnsIn)
+		addAnd = true
+	}
+
+	if view.Criteria != nil && view.Criteria.Expression != "" {
+		if addAnd {
+			sb.WriteString(andFragment)
+		}
+
+		sb.WriteString(view.Criteria.Expression)
+		if addAnd {
+			sb.WriteString(encloseFragment)
+		}
+
+		addAnd = true
+	}
+
+	if view.CanUseSelectorCriteria() && selector != nil && selector.Criteria != nil && selector.Criteria.Expression != "" {
+		if addAnd {
+			sb.WriteString(andFragment)
+		}
+
+		sb.WriteString(selector.Criteria.Expression)
+
+		if addAnd {
+			sb.WriteString(encloseFragment)
+		}
+
+		addAnd = true
+	}
+
 	return sb.String()
 }

@@ -557,6 +557,7 @@ func TestRead(t *testing.T) {
 		inheritTypeForReferencedView(),
 		columnsInSource(),
 		inheritConnector(),
+		criteriaWhere(),
 	}
 
 	for index, testCase := range useCases {
@@ -628,6 +629,47 @@ func TestRead(t *testing.T) {
 			fmt.Println(testCase.expect)
 		}
 
+	}
+}
+
+func criteriaWhere() usecase {
+	type Event struct {
+		Id          int
+		Quantity    float64
+		EventTypeId int
+	}
+
+	resource := data.EmptyResource()
+	connector := &config.Connector{
+		Name:   "db",
+		DSN:    "./testdata/db/db.db",
+		Driver: "sqlite3",
+	}
+
+	resource.AddViews(&data.View{
+		Connector: connector,
+		Name:      "events",
+		Alias:     "ev",
+		From:      `SELECT * FROM events as e ` + string(shared.WhereClause),
+		Schema:    data.NewSchema(reflect.TypeOf(&Event{})),
+		SelectorConstraints: &data.Constraints{
+			Alias: true,
+		},
+		InheritSchemaColumns: true,
+	})
+
+	return usecase{
+		view:        "events",
+		dataset:     "dataset001_events/",
+		description: "where criteria",
+		selectors: map[string]*data.Selector{
+			"events": {
+				Alias: "e",
+			},
+		},
+		resource: resource,
+		expect:   `[{"Id":1,"Quantity":33.23432374000549,"EventTypeId":2},{"Id":10,"Quantity":21.957962334156036,"EventTypeId":11},{"Id":100,"Quantity":5.084940046072006,"EventTypeId":111}]`,
+		dest:     new([]*Event),
 	}
 }
 

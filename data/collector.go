@@ -305,7 +305,7 @@ func (r *Collector) Relations(selector *Selector) []*Collector {
 
 	counter := 0
 	for i := range r.view.With {
-		if r.view.CanUseClientColumns() && selector != nil && !selector.Has(r.view.With[i].Holder) {
+		if r.view.CanUseSelectorColumns() && selector != nil && !selector.Has(r.view.With[i].Holder) {
 			continue
 		}
 

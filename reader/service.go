@@ -90,7 +90,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 
 func (s *Service) batchData(selector *data.Selector, view *data.View, collector *data.Collector) *BatchData {
 	batchData := &BatchData{
-		CurrentlyRead: 0,
+		Read:          0,
 		BatchReadSize: view.LimitWithSelector(selector),
 	}
 
@@ -117,9 +117,9 @@ func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *da
 			return err
 		}
 
-		batchData.CurrentlyRead = batchData.CurrentlyRead + readData
+		batchData.Read = batchData.Read + readData
 
-		if batchData.BatchReadSize == 0 || batchData.CurrentlyRead == limit || readData < batchData.BatchReadSize {
+		if batchData.BatchReadSize == 0 || batchData.Read == limit || readData < batchData.BatchReadSize {
 			break
 		}
 

@@ -64,22 +64,20 @@ type (
 		holdersInitialized bool
 		isValid            bool
 		newCollector       func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector
+		hasWhereClause     bool
+		hasColumnIn        bool
 	}
 
 	//Constraints configure what can be selected by Selector
 	//For each field, default value is `false`
 	Constraints struct {
-		Criteria          *bool
-		_criteria         bool
-		OrderBy           *bool
-		_orderBy          bool
-		Limit             *bool
-		_limit            bool
-		Columns           *bool
-		_columns          bool
-		Offset            *bool
-		_offset           bool
+		Criteria          bool
+		OrderBy           bool
+		Limit             bool
+		Columns           bool
+		Offset            bool
 		FilterableColumns []string
+		Alias             bool
 	}
 )
 
@@ -205,7 +203,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 	if err = v.ensureSchema(resource.types); err != nil {
 		return err
 	}
-
+	v.initColumnsPositions()
 	v.updateColumnTypes()
 	return nil
 }
@@ -268,11 +266,7 @@ func (v *View) ensureColumns(ctx context.Context) error {
 		return err
 	}
 
-	source := v.Source()
-	if index := strings.Index(source, "WHERE"); index > 0 {
-		source = source[:index]
-		source = source + " WHERE 1 = 0)"
-	}
+	source := v.columnsSource()
 	SQL := "SELECT t.* FROM " + source + " t WHERE 1=0"
 	shared.Log("table columns SQL: %v", SQL)
 	query, err := db.QueryContext(ctx, SQL)
@@ -287,6 +281,19 @@ func (v *View) ensureColumns(ctx context.Context) error {
 	ioColumns := v.exclude(io.TypesToColumns(types))
 	v.Columns = convertIoColumnsToColumns(ioColumns)
 	return nil
+}
+
+func (v *View) columnsSource() string {
+	source := v.Source()
+	if strings.Contains(source, string(shared.WhereClause)) {
+		return strings.ReplaceAll(source, string(shared.WhereClause), " WHERE 1 = 0")
+	}
+
+	if index := strings.Index(source, "WHERE"); index > 0 {
+		source = source[:index]
+		source = source + " WHERE 1 = 0)"
+	}
+	return source
 }
 
 func convertIoColumnsToColumns(ioColumns []io.Column) []*Column {
@@ -436,7 +443,7 @@ func (v *View) ensureIndexExcluded() {
 //SelectedColumns returns columns selected by Selector if it is allowed by the View to use Selector.Columns
 //(see Constraints.Columns) or View.Columns
 func (v *View) SelectedColumns(selector *Selector) ([]*Column, error) {
-	if !v.CanUseClientColumns() || selector == nil || len(selector.Columns) == 0 {
+	if !v.CanUseSelectorColumns() || selector == nil || len(selector.Columns) == 0 {
 		return v.Columns, nil
 	}
 
@@ -511,7 +518,7 @@ func (v *View) collectFromRelations(ctx context.Context, resource *Resource) err
 
 //LimitWithSelector returns Selector.Limit if it is allowed by the View to use Selector.Columns (see Constraints.Limit)
 func (v *View) LimitWithSelector(selector *Selector) int {
-	if v.CanUseClientLimit() && selector != nil && selector.Limit > 0 {
+	if v.CanUseSelectorLimit() && selector != nil && selector.Limit > 0 {
 		return selector.Limit
 	}
 	return v.Selector.Limit
@@ -560,36 +567,36 @@ func (v *View) ensureSelectorConstraints() {
 		v.SelectorConstraints = &Constraints{}
 	}
 
-	v.SelectorConstraints._criteria = v.SelectorConstraints.Criteria != nil && *v.SelectorConstraints.Criteria == true
-	v.SelectorConstraints._columns = v.SelectorConstraints.Columns != nil && *v.SelectorConstraints.Columns == true
-	v.SelectorConstraints._orderBy = v.SelectorConstraints.OrderBy != nil && *v.SelectorConstraints.OrderBy == true
-	v.SelectorConstraints._limit = v.SelectorConstraints.Limit != nil && *v.SelectorConstraints.Limit == true
-	v.SelectorConstraints._offset = v.SelectorConstraints.Offset != nil && *v.SelectorConstraints.Offset == true
 }
 
-//CanUseClientCriteria indicates if Selector.Criteria can be used
-func (v *View) CanUseClientCriteria() bool {
-	return v.SelectorConstraints._criteria
+//CanUseSelectorCriteria indicates if Selector.Criteria can be used
+func (v *View) CanUseSelectorCriteria() bool {
+	return v.SelectorConstraints.Criteria
 }
 
-//CanUseClientColumns indicates if Selector.Columns can be used
-func (v *View) CanUseClientColumns() bool {
-	return v.SelectorConstraints._columns
+//CanUseSelectorColumns indicates if Selector.Columns can be used
+func (v *View) CanUseSelectorColumns() bool {
+	return v.SelectorConstraints.Columns
 }
 
-//CanUseClientLimit indicates if Selector.Limit can be used
-func (v *View) CanUseClientLimit() bool {
-	return v.SelectorConstraints._limit
+//CanUseSelectorAlias indicates if Selector.Alias can be used
+func (v *View) CanUseSelectorAlias() bool {
+	return v.SelectorConstraints.Alias
 }
 
-//CanUseClientOrderBy indicates if Selector.OrderBy can be used
-func (v *View) CanUseClientOrderBy() bool {
-	return v.SelectorConstraints._orderBy
+//CanUseSelectorLimit indicates if Selector.Limit can be used
+func (v *View) CanUseSelectorLimit() bool {
+	return v.SelectorConstraints.Limit
 }
 
-//CanUseClientOffset indicates if Selector.Offset can be used
-func (v *View) CanUseClientOffset() bool {
-	return v.SelectorConstraints._offset
+//CanUseSelectorOrderBy indicates if Selector.OrderBy can be used
+func (v *View) CanUseSelectorOrderBy() bool {
+	return v.SelectorConstraints.OrderBy
+}
+
+//CanUseSelectorOffset indicates if Selector.Offset can be used
+func (v *View) CanUseSelectorOffset() bool {
+	return v.SelectorConstraints.Offset
 }
 
 //FilterRequiredParams returns all required parameters, including relations View
@@ -787,6 +794,27 @@ func (v *View) inheritFromViewIfNeeded(ctx context.Context, resource *Resource) 
 
 func (v *View) indexColumns() {
 	v._columns = ColumnSlice(v.Columns).Index(v.Caser)
+}
+
+func (v *View) AliasWith(selector *Selector) string {
+	if !v.SelectorConstraints.Alias || selector == nil || selector.Alias == "" {
+		return v.Alias
+	}
+
+	return selector.Alias
+}
+
+func (v *View) HasWhereClause() bool {
+	return v.hasWhereClause
+}
+
+func (v *View) HasColumnIn() bool {
+	return v.hasColumnIn
+}
+
+func (v *View) initColumnsPositions() {
+	v.hasWhereClause = strings.Contains(v.Source(), string(shared.WhereClause))
+	v.hasColumnIn = strings.Contains(v.Source(), string(shared.ColumnInPosition))
 }
 
 //ViewReference creates a view reference

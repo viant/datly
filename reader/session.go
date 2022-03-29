@@ -101,7 +101,7 @@ func (s *Session) sanitizeSelectors() error {
 				return err
 			}
 
-			if view.CanUseClientCriteria() {
+			if view.CanUseSelectorCriteria() {
 				err = node.Sanitize(sb, view.IndexedColumns())
 				if err != nil {
 					return err
@@ -110,7 +110,7 @@ func (s *Session) sanitizeSelectors() error {
 				sb.Reset()
 			}
 
-			if view.CanUseClientOrderBy() && selector.OrderBy != "" {
+			if view.CanUseSelectorOrderBy() && selector.OrderBy != "" {
 				column, ok := view.ColumnByName(selector.OrderBy)
 				if !ok {
 					return fmt.Errorf("not found order by column %v", selector.OrderBy)
