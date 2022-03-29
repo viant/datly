@@ -191,7 +191,7 @@ func (b *Builder) appendSource(sb *strings.Builder, view *data.View, selector *d
 
 	if view.HasCriteriaReplacement() {
 		whereClause := b.buildWhereClause(view, true, selector, alias, batchData)
-		hasWhere := hasWhereClause(view.From)
+		hasWhere := view.HasWhereClause()
 
 		if whereClause != "" {
 			if !hasWhere {
@@ -218,10 +218,6 @@ func (b *Builder) appendSource(sb *strings.Builder, view *data.View, selector *d
 		sb.WriteString(view.Alias)
 		sb.WriteString(" ")
 	}
-}
-
-func hasWhereClause(from string) bool {
-	return strings.Contains(strings.ToUpper(from), "WHERE")
 }
 
 func (b *Builder) buildWhereClause(view *data.View, useColumnsIn bool, selector *data.Selector, alias string, batchData *BatchData) string {
