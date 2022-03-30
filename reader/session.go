@@ -15,10 +15,9 @@ import (
 
 //Session groups data required to Read data
 type Session struct {
-	Dest          interface{} //slice
-	View          *data.View
-	Selectors     data.Selectors
-	AllowUnmapped bool
+	Dest      interface{} //slice
+	View      *data.View
+	Selectors data.Selectors
 
 	Subject     string
 	HttpRequest *http.Request
@@ -58,10 +57,10 @@ func (s *Session) Init(ctx context.Context, resource *data.Resource) error {
 		viewType := reflect.PtrTo(s.View.Schema.SliceType())
 		destType := reflect.TypeOf(s.Dest)
 		if viewType.Kind() == reflect.Ptr && destType.Kind() == reflect.Ptr {
-			if ! viewType.Elem().ConvertibleTo(destType.Elem()) {
+			if !viewType.Elem().ConvertibleTo(destType.Elem()) {
 				return fmt.Errorf("type mismatch, view slice type is: %v while destination type is %v", viewType.String(), destType.String())
 			}
-		} else if ! viewType.ConvertibleTo(destType) {
+		} else if !viewType.ConvertibleTo(destType) {
 			return fmt.Errorf("type mismatch, view slice type is: %v while destination type is %v", viewType.String(), destType.String())
 		}
 	}

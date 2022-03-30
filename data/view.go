@@ -64,7 +64,7 @@ type (
 		initialized        bool
 		holdersInitialized bool
 		isValid            bool
-		newCollector       func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector
+		newCollector       func(dest interface{}, supportParallel bool) *Collector
 
 		hasCriteriaReplacement bool
 		hasColumnInReplacement bool
@@ -263,24 +263,28 @@ func (v *View) ensureColumns(ctx context.Context) error {
 		return nil
 	}
 
-	db, err := v.Connector.Db()
-	if err != nil {
-		return err
-	}
-
-	SQL := detectColumnsSQL(v)
+	SQL := detectColumnsSQL(v.Source(), v)
 	shared.Log("table columns SQL: %v", SQL)
-	query, err := db.QueryContext(ctx, SQL)
-	if err != nil {
-		return err
-	}
-	types, err := query.ColumnTypes()
+	columns, err := detectColumns(ctx, SQL, v)
+
 	if err != nil {
 		return err
 	}
 
-	ioColumns := v.exclude(io.TypesToColumns(types))
-	v.Columns = convertIoColumnsToColumns(ioColumns)
+	if v.From != "" && v.Table != "" {
+		tableSQL := detectColumnsSQL(v.Table, v)
+		shared.Log("table columns SQL: %v", tableSQL)
+		tableColumns, err := detectColumns(ctx, tableSQL, v)
+		if err != nil {
+			return err
+		}
+
+		ColumnSlice(columns).updateTypes(tableColumns, v.Caser)
+		v.Columns = columns
+	} else {
+		v.Columns = columns
+	}
+
 	return nil
 }
 
@@ -457,14 +461,14 @@ func (v *View) ensureCaseFormat() error {
 }
 
 func (v *View) ensureCollector() {
-	v.newCollector = func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector {
+	v.newCollector = func(dest interface{}, supportParallel bool) *Collector {
 		return NewCollector(v.Schema.slice, v, dest, supportParallel)
 	}
 }
 
 //Collector creates new Collector for View.DataType
-func (v *View) Collector(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector {
-	return v.newCollector(allowUnmapped, dest, supportParallel)
+func (v *View) Collector(dest interface{}, supportParallel bool) *Collector {
+	return v.newCollector(dest, supportParallel)
 }
 
 func notEmptyOf(values ...string) string {

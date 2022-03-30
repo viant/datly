@@ -29,7 +29,7 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 
 	wg := sync.WaitGroup{}
 
-	collector := session.View.Collector(session.AllowUnmapped, session.Dest, session.View.MatchStrategy.SupportsParallel())
+	collector := session.View.Collector(session.Dest, session.View.MatchStrategy.SupportsParallel())
 	errors := shared.NewErrors(0)
 	s.readAll(ctx, session, collector, nil, &wg, errors)
 	wg.Wait()
@@ -200,7 +200,7 @@ func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *
 	view := param.View()
 	destSlice := reflect.New(view.Schema.SliceType()).Interface()
 
-	collector := view.Collector(false, destSlice, false)
+	collector := view.Collector(destSlice, false)
 	errors := shared.NewErrors(0)
 
 	wg := sync.WaitGroup{}
