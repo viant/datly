@@ -42,13 +42,20 @@ func TestHasWhere(t *testing.T) {
 			contains:    false,
 		},
 		{
-			description: `inner select, with where`,
+			description: `inner select, with where #1`,
 			input:       `SELECT * FROM (SELECT * FROM EVENTS WHERE ID = 10) WHERE 1=1`,
 			contains:    true,
+		},
+		{
+			description: `inner select, with where #2`,
+			input: `SELECT * FROM (
+SELECT * FROM EVENTS
+) WHERE (id = 1 OR id = 2) $CRITERIA`,
+			contains: true,
 		},
 	}
 
 	for _, testcase := range testcases {
-		assert.Equal(t, testcase.contains, HasWhere([]byte(testcase.input)), testcase.description)
+		assert.Equal(t, testcase.contains, ContainsWhereClause([]byte(testcase.input)), testcase.description)
 	}
 }
