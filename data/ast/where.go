@@ -1,37 +1,37 @@
 package ast
 
 import (
+	"bytes"
 	"github.com/viant/parsly"
 )
 
-func HasWhere(source []byte) bool {
+var where = []byte("where")
+
+func ContainsWhereClause(source []byte) bool {
 	cursor := parsly.NewCursor("", source, 0)
 	candidates := []*parsly.Token{Block}
 
 	matched := cursor.MatchAfterOptional(Whitespace, candidates...)
 	if matched.Code == blockToken {
 		text := matched.Text(cursor)
-		return HasWhere([]byte(text[1 : len(text)-1]))
+		return ContainsWhereClause([]byte(text[1 : len(text)-1]))
 	}
 
-	candidates = []*parsly.Token{BlockStart, WhereStartUC, WhereStartLC}
+	candidates = []*parsly.Token{Block, WhitespaceTerminator}
 outer:
 	for {
-		matched = cursor.MatchAny(candidates...)
+		matched = cursor.MatchAfterOptional(Whitespace, candidates...)
 		switch matched.Code {
-		case blockStartToken:
+		case blockToken:
 			matched = cursor.MatchAfterOptional(Whitespace, Block)
 			continue outer
-		case whereStartToken:
-			matched = cursor.MatchOne(Where)
-			if matched.Code == whereToken {
-				whitespaceAfter := cursor.MatchOne(Whitespace)
-				if whitespaceAfter.Code == whitespaceToken {
-					return true
-				}
+		case whitespaceTerminateToken:
+			text := matched.Text(cursor)
+			if bytes.EqualFold([]byte(text), where) {
+				return true
 			}
 		case parsly.EOF, parsly.Invalid:
-			return false
+			return bytes.EqualFold([]byte(matched.Text(cursor)), where)
 		}
 	}
 }

@@ -7,16 +7,10 @@ import (
 
 const (
 	whitespaceToken = iota
+	whitespaceTerminateToken
 	blockToken
-	blockStartToken
-	whereToken
-	whereStartToken
 )
 
 var Whitespace = parsly.NewToken(whitespaceToken, "Whitespace", matcher.NewWhiteSpace())
 var Block = parsly.NewToken(blockToken, "Parentheses", matcher.NewBlock('(', ')', '\\'))
-var Where = parsly.NewToken(whereToken, "Where", matcher.NewFragmentsFold([]byte("where")))
-
-var BlockStart = parsly.NewToken(blockStartToken, "Block start", matcher.NewTerminator('(', false))
-var WhereStartLC = parsly.NewToken(whereStartToken, "Where start", matcher.NewTerminator('W', false))
-var WhereStartUC = parsly.NewToken(whereStartToken, "Where start", matcher.NewTerminator('w', false))
+var WhitespaceTerminator = parsly.NewToken(whitespaceTerminateToken, "Whitespace terminate", newTerminatorAny(false, []byte{' ', '\n', '\t', '\r', '\v', '\f', 0x85, 0xA0}))

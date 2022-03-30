@@ -143,9 +143,14 @@ func (v *View) generateNameIfNeeded(refView *View, rel *Relation) {
 func (v *View) initView(ctx context.Context, resource *Resource) error {
 	var err error
 	v.ensureViewIndexed()
+
 	if err = v.inheritFromViewIfNeeded(ctx, resource); err != nil {
 		return err
 	}
+
+	v.initColumnsPositions()
+	v.Alias = notEmptyOf(v.Alias, "t")
+	v.Table = notEmptyOf(v.Table, v.Name)
 
 	if v.MatchStrategy == "" {
 		v.MatchStrategy = ReadMatched
@@ -154,16 +159,11 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	v.Alias = notEmptyOf(v.Alias, "t")
-	v.Table = notEmptyOf(v.Table, v.Name)
-
 	if v.Selector == nil {
 		v.Selector = &Config{}
 	}
 
-	if v.SelectorConstraints == nil {
-		v.SelectorConstraints = &Constraints{}
-	}
+	v.ensureSelectorConstraints()
 
 	if v.Name == v.Ref {
 		return fmt.Errorf("view name and ref cannot be the same")
@@ -202,12 +202,10 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 	}
 
 	v.ensureIndexExcluded()
-	v.ensureSelectorConstraints()
 
 	if err = v.ensureSchema(resource.types); err != nil {
 		return err
 	}
-	v.initColumnsPositions()
 	v.updateColumnTypes()
 	return nil
 }
@@ -270,8 +268,7 @@ func (v *View) ensureColumns(ctx context.Context) error {
 		return err
 	}
 
-	source := v.columnsSource()
-	SQL := "SELECT t.* FROM " + source + " t WHERE 1=0"
+	SQL := detectColumnsSQL(v)
 	shared.Log("table columns SQL: %v", SQL)
 	query, err := db.QueryContext(ctx, SQL)
 	if err != nil {
@@ -285,27 +282,6 @@ func (v *View) ensureColumns(ctx context.Context) error {
 	ioColumns := v.exclude(io.TypesToColumns(types))
 	v.Columns = convertIoColumnsToColumns(ioColumns)
 	return nil
-}
-
-func (v *View) columnsSource() string {
-	source := v.Source()
-	if strings.Contains(source, string(shared.Criteria)) {
-		if v.hasWhereClause {
-			source = strings.ReplaceAll(source, string(shared.Criteria), " AND 1 = 0")
-		} else {
-			source = strings.ReplaceAll(source, string(shared.Criteria), " WHERE 1 = 0")
-		}
-	}
-
-	if strings.Contains(source, string(shared.ColumnInPosition)) {
-		source = strings.ReplaceAll(source, string(shared.ColumnInPosition), " 1 = 0")
-	}
-
-	if strings.Contains(source, string(shared.Pagination)) {
-		source = strings.ReplaceAll(source, string(shared.Pagination), " ")
-	}
-
-	return source
 }
 
 func convertIoColumnsToColumns(ioColumns []io.Column) []*Column {
@@ -826,7 +802,7 @@ func (v *View) HasColumnInReplacement() bool {
 func (v *View) initColumnsPositions() {
 	v.hasCriteriaReplacement = strings.Contains(v.Source(), string(shared.Criteria))
 	v.hasColumnInReplacement = strings.Contains(v.Source(), string(shared.ColumnInPosition))
-	v.hasWhereClause = ast.HasWhere([]byte(v.Source()))
+	v.hasWhereClause = ast.ContainsWhereClause([]byte(v.Source()))
 	v.hasPagination = strings.Contains(v.Source(), string(shared.Pagination))
 }
 
