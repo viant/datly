@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -135,4 +136,25 @@ func (r *Relation) Validate() error {
 	}
 
 	return nil
+}
+
+//ViewReference creates a view reference
+func ViewReference(name, ref string, options ...Option) *View {
+	viewRef := &View{
+		Name:      name,
+		Reference: shared.Reference{Ref: ref},
+	}
+
+	viewRef.applyOptions(options)
+
+	return viewRef
+}
+
+func (v *View) applyOptions(options []Option) {
+	for _, option := range options {
+		switch actual := option.(type) {
+		case logger.Logger:
+			v.Logger = actual
+		}
+	}
 }

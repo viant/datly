@@ -1,7 +1,6 @@
 package data
 
 import (
-	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -255,7 +254,7 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 			appender := slice.Appender(sliceAddPtr)
 			appender.Append(owner)
 			r.Lock().Unlock()
-			shared.Log("reconciling src:(%T):%+v with dest: (%T):%+v  pos:%v, item:(%T):%+v", owner, owner, dest, dest, index, parentItem, parentItem)
+			r.view.Logger.ObjectReconciling(dest, owner, parentItem, index)
 		}
 
 		return nil
@@ -390,8 +389,7 @@ func (r *Collector) mergeToParent() {
 				appender := r.slice.Appender(holderField.ValuePointer(xunsafe.AsPointer(parentValue)))
 				appender.Append(value)
 				r.Lock().Unlock()
-				shared.Log("reconciling src:(%T):%+v with dest: (%T):%+v  pos:%v, item:(%T):%+v", value, value, r.dest, r.dest, position, parentValue, parentValue)
-
+				r.view.Logger.ObjectReconciling(r.dest, value, parentValue, position)
 			}
 		}
 	}

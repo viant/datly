@@ -12,6 +12,7 @@ import (
 	"github.com/viant/xunsafe"
 	"reflect"
 	"sync"
+	"time"
 )
 
 //Service represents reader service
@@ -112,7 +113,7 @@ func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *da
 		if err != nil {
 			return err
 		}
-		readData, err = s.query(ctx, db, SQL, collector, batchData)
+		readData, err = s.query(ctx, view, db, SQL, collector, batchData)
 		if err != nil {
 			return err
 		}
@@ -128,7 +129,8 @@ func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *da
 	return nil
 }
 
-func (s *Service) query(ctx context.Context, db *sql.DB, SQL string, collector *data.Collector, batchData *BatchData) (int, error) {
+func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL string, collector *data.Collector, batchData *BatchData) (int, error) {
+	begin := time.Now()
 	reader, err := read.New(ctx, db, SQL, collector.NewItem(), io.Resolve(collector.Resolve))
 	if err != nil {
 		return 0, err
@@ -145,7 +147,8 @@ func (s *Service) query(ctx context.Context, db *sql.DB, SQL string, collector *
 		return visitor(row)
 	}, batchData.Values...)
 
-	shared.Log("reading data SQL: %v, params: %v, read: %v, err: %v", SQL, batchData.Values, readData, err)
+	end := time.Now()
+	view.Logger.ReadingData(end.Sub(begin), SQL, readData, batchData.Values, err)
 	if err != nil {
 		return 0, err
 	}

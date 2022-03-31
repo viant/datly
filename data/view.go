@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/data/ast"
+	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
@@ -44,6 +45,7 @@ type (
 
 		MatchStrategy MatchStrategy `json:",omitempty"`
 		BatchReadSize *int          `json:",omitempty"`
+		Logger        logger.Logger `json:"-"`
 
 		_columns    Columns
 		_excluded   map[string]bool
@@ -106,11 +108,11 @@ func (v *View) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err := v.initAfterViewsInitialized(ctx, resource, v.With); err != nil {
+	if err := v.updateRelations(ctx, resource, v.With); err != nil {
 		return err
 	}
-	v.initialized = true
 
+	v.initialized = true
 	return nil
 }
 
@@ -141,6 +143,10 @@ func (v *View) generateNameIfNeeded(refView *View, rel *Relation) {
 }
 
 func (v *View) initView(ctx context.Context, resource *Resource) error {
+	if v.Logger == nil {
+		v.Logger = logger.NewLogger()
+	}
+
 	var err error
 	v.ensureViewIndexed()
 
@@ -206,6 +212,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 	if err = v.ensureSchema(resource.types); err != nil {
 		return err
 	}
+
 	v.updateColumnTypes()
 	return nil
 }
@@ -224,7 +231,7 @@ func (v *View) updateColumnTypes() {
 	}
 }
 
-func (v *View) initAfterViewsInitialized(ctx context.Context, resource *Resource, relations []*Relation) error {
+func (v *View) updateRelations(ctx context.Context, resource *Resource, relations []*Relation) error {
 	v.indexColumns()
 	if err := v.indexSqlxColumnsByFieldName(); err != nil {
 		return err
@@ -242,7 +249,7 @@ func (v *View) initAfterViewsInitialized(ctx context.Context, resource *Resource
 		}
 
 		refView := rel.Of.View
-		if err := refView.initAfterViewsInitialized(ctx, resource, refView.With); err != nil {
+		if err := refView.updateRelations(ctx, resource, refView.With); err != nil {
 			return err
 		}
 	}
@@ -264,7 +271,7 @@ func (v *View) ensureColumns(ctx context.Context) error {
 	}
 
 	SQL := detectColumnsSQL(v.Source(), v)
-	shared.Log("table columns SQL: %v", SQL)
+	v.Logger.ColumnsDetection(SQL, v.Source())
 	columns, err := detectColumns(ctx, SQL, v)
 
 	if err != nil {
@@ -273,7 +280,7 @@ func (v *View) ensureColumns(ctx context.Context) error {
 
 	if v.From != "" && v.Table != "" {
 		tableSQL := detectColumnsSQL(v.Table, v)
-		shared.Log("table columns SQL: %v", tableSQL)
+		v.Logger.ColumnsDetection(tableSQL, v.Table)
 		tableColumns, err := detectColumns(ctx, tableSQL, v)
 		if err != nil {
 			return err
@@ -421,6 +428,10 @@ func (v *View) inherit(view *View) {
 
 	if v.SelectorConstraints == nil {
 		v.SelectorConstraints = view.SelectorConstraints
+	}
+
+	if v.Logger == nil {
+		v.Logger = view.Logger
 	}
 }
 
@@ -816,12 +827,4 @@ func (v *View) HasWhereClause() bool {
 
 func (v *View) HasPaginationReplacement() bool {
 	return v.hasPagination
-}
-
-//ViewReference creates a view reference
-func ViewReference(name, ref string) *View {
-	return &View{
-		Name:      name,
-		Reference: shared.Reference{Ref: ref},
-	}
 }
