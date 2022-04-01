@@ -8,6 +8,10 @@ import (
 type defaultLogger struct {
 }
 
+func (d *defaultLogger) ReadTime(duration time.Duration, err error) {
+	fmt.Printf("[LOGGER] Reading and reconciling data took: %v, err: %v\n", duration, err)
+}
+
 func (d *defaultLogger) ColumnsDetection(sql, source string) {
 	fmt.Printf("[LOGGER] table columns SQL: %v, source: %v \n", sql, source)
 }

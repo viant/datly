@@ -1,6 +1,6 @@
 * Documentation 
 * Utility (rule, struct, relation generation etc ...)
-* Metrics for Views
+* Update Gmetric version
 * open API documentation style
 
 * Endpoint integration (paths/lambda/CF/standalon/micro service/reset service, etc ..)

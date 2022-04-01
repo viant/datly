@@ -45,7 +45,9 @@ type (
 
 		MatchStrategy MatchStrategy `json:",omitempty"`
 		BatchReadSize *int          `json:",omitempty"`
-		Logger        logger.Logger `json:"-"`
+
+		Logger  logger.Logger  `json:"-"`
+		Counter logger.Counter `json:"-"`
 
 		_columns    Columns
 		_excluded   map[string]bool
@@ -143,15 +145,18 @@ func (v *View) generateNameIfNeeded(refView *View, rel *Relation) {
 }
 
 func (v *View) initView(ctx context.Context, resource *Resource) error {
+	var err error
+	v.ensureViewIndexed()
+	if err = v.inheritFromViewIfNeeded(ctx, resource); err != nil {
+		return err
+	}
+
 	if v.Logger == nil {
 		v.Logger = logger.NewLogger()
 	}
 
-	var err error
-	v.ensureViewIndexed()
-
-	if err = v.inheritFromViewIfNeeded(ctx, resource); err != nil {
-		return err
+	if v.Counter == nil {
+		v.Counter = logger.NewCounter()
 	}
 
 	v.initColumnsPositions()

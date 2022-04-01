@@ -155,6 +155,8 @@ func (v *View) applyOptions(options []Option) {
 		switch actual := option.(type) {
 		case logger.Logger:
 			v.Logger = actual
+		case logger.Counter:
+			v.Counter = actual
 		}
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/shared"
 	"github.com/viant/dsunit"
+	"github.com/viant/gmetric/counter/base"
 	"github.com/viant/toolbox"
 	"net/http"
 	"net/url"
@@ -40,7 +41,7 @@ type Deal struct {
 	DealId string
 }
 
-func (a *audience) OnFetch(ctx context.Context) error {
+func (a *audience) OnFetch(_ context.Context) error {
 	if a.Info == "" && a.Info2 == "" {
 		return nil
 	}
@@ -76,6 +77,7 @@ type usecase struct {
 	expectError bool
 	resource    *data.Resource
 	dataset     string
+	provider    *base.Provider
 }
 
 func TestRead(t *testing.T) {

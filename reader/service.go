@@ -24,7 +24,21 @@ type Service struct {
 //Read select data from database based on View and assign it to dest. ParentDest has to be pointer.
 //TODO: Select with join when connector is the same for one to one relation
 func (s *Service) Read(ctx context.Context, session *Session) error {
-	if err := session.Init(ctx, s.Resource); err != nil {
+	var err error
+	begin := time.Now()
+	onFinish := session.View.Counter.Begin(begin)
+	defer func() {
+		end := time.Now()
+		session.View.Logger.ReadTime(end.Sub(begin), err)
+		if err != nil {
+			session.View.Counter.IncrementValue(Error)
+		} else {
+			session.View.Counter.IncrementValue(Success)
+		}
+		onFinish(end)
+	}()
+
+	if err = session.Init(ctx, s.Resource); err != nil {
 		return err
 	}
 
@@ -34,7 +48,7 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 	errors := shared.NewErrors(0)
 	s.readAll(ctx, session, collector, nil, &wg, errors)
 	wg.Wait()
-	err := errors.Error()
+	err = errors.Error()
 	if err != nil {
 		return err
 	}
@@ -83,6 +97,8 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 		return
 	}
 
+	session.View.Counter.IncrementValue(Pending)
+	defer session.View.Counter.DecrementValue(Pending)
 	err = s.exhaustRead(ctx, view, selector, upstream, params, batchData, db, collector)
 	if err != nil {
 		errorCollector.Append(err)

@@ -16,7 +16,7 @@ require (
 	github.com/onsi/ginkgo v1.11.0 // indirect
 	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/pkg/errors v0.9.1
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 	github.com/viant/afs v1.16.0
 	github.com/viant/afsc v1.0.0
 	github.com/viant/asc v0.5.0
@@ -24,6 +24,7 @@ require (
 	github.com/viant/bgc v0.8.0
 	github.com/viant/dsc v0.16.0
 	github.com/viant/dsunit v0.10.8
+	github.com/viant/gmetric v0.2.6
 	github.com/viant/gtly v0.0.0-20200927172514-d1417cac563d
 	github.com/viant/parsly v0.0.0-20220217213746-bb166fe746b9
 	github.com/viant/scy v0.0.0-20220223165437-725359877ec0
@@ -31,8 +32,8 @@ require (
 	github.com/viant/toolbox v0.34.5
 	github.com/viant/xunsafe v0.7.1-0.20220228210536-20bce86415bb
 	github.com/yuin/gopher-lua v0.0.0-20191220021717-ab39c6098bdb // indirect
-	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f
+	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
 	google.golang.org/api v0.66.0
-	gopkg.in/yaml.v2 v2.2.8
+	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
 )
