@@ -167,7 +167,7 @@ func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *da
 	limit := view.LimitWithSelector(selector)
 
 	for {
-		SQL, err := s.prepareSQL(view, selector, upstream, params, batchData)
+		SQL, err := s.prepareSQL(view, selector, upstream, params, batchData, collector.Relation())
 		if err != nil {
 			return err
 		}
@@ -214,8 +214,8 @@ func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL st
 	return readData, nil
 }
 
-func (s *Service) prepareSQL(view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData) (string, error) {
-	SQL, err := s.sqlBuilder.Build(view, selector, batchData)
+func (s *Service) prepareSQL(view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData, relation *data.Relation) (string, error) {
+	SQL, err := s.sqlBuilder.Build(view, selector, batchData, relation)
 	if err != nil {
 		return "", err
 	}

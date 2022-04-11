@@ -85,7 +85,6 @@ type (
 		Columns           bool
 		Offset            bool
 		FilterableColumns []string
-		Alias             bool
 	}
 )
 
@@ -587,11 +586,6 @@ func (v *View) CanUseSelectorColumns() bool {
 	return v.SelectorConstraints.Columns
 }
 
-//CanUseSelectorAlias indicates if Selector.Alias can be used
-func (v *View) CanUseSelectorAlias() bool {
-	return v.SelectorConstraints.Alias
-}
-
 //CanUseSelectorLimit indicates if Selector.Limit can be used
 func (v *View) CanUseSelectorLimit() bool {
 	return v.SelectorConstraints.Limit
@@ -801,14 +795,6 @@ func (v *View) inheritFromViewIfNeeded(ctx context.Context, resource *Resource) 
 
 func (v *View) indexColumns() {
 	v._columns = ColumnSlice(v.Columns).Index(v.Caser)
-}
-
-func (v *View) AliasWith(selector *Selector) string {
-	if !v.SelectorConstraints.Alias || selector == nil || selector.Alias == "" {
-		return v.Alias
-	}
-
-	return selector.Alias
 }
 
 func (v *View) HasCriteriaReplacement() bool {

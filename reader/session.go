@@ -10,7 +10,6 @@ import (
 	rdata "github.com/viant/toolbox/data"
 	"net/http"
 	"reflect"
-	"strings"
 )
 
 //Session groups data required to Read data
@@ -73,55 +72,10 @@ func (s *Session) Init(ctx context.Context, resource *data.Resource) error {
 		return err
 	}
 
-	if err = s.sanitizeSelectors(); err != nil {
+	if err = ValidateSessionSelectors(s); err != nil {
 		return err
 	}
 
-	return nil
-}
-
-func (s *Session) sanitizeSelectors() error {
-	if len(s.Selectors) == 0 {
-		return nil
-	}
-
-	var node sanitize.Node
-	var view *data.View
-	var err error
-	//TODO: Replace with sqlx buffer, improved reset.
-
-	sb := &strings.Builder{}
-
-	for viewName, selector := range s.Selectors {
-		if selector.Criteria != nil {
-			node, err = sanitize.Parse([]byte(selector.Criteria.Expression))
-			if err != nil {
-				return err
-			}
-
-			view, err = s.View.AnyOfViews(viewName)
-			if err != nil {
-				return err
-			}
-
-			if view.CanUseSelectorCriteria() {
-				err = node.Sanitize(sb, view.IndexedColumns())
-				if err != nil {
-					return err
-				}
-				selector.Criteria.Expression = sb.String()
-				sb.Reset()
-			}
-
-			if view.CanUseSelectorOrderBy() && selector.OrderBy != "" {
-				column, ok := view.ColumnByName(selector.OrderBy)
-				if !ok {
-					return fmt.Errorf("not found order by column %v", selector.OrderBy)
-				}
-				selector.OrderBy = column.Name
-			}
-		}
-	}
 	return nil
 }
 

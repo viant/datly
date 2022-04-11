@@ -23,6 +23,7 @@ type (
 
 		Cardinality   Cardinality //One, or Many
 		Column        string      //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
+		ColumnAlias   string      //Represents column alias, can be specified if $shared.Criteria / $shared.ColumnInPosition is inside the "from" statement
 		Holder        string      //Represents column created due to the merging. In our example it would be Employee#Account
 		IncludeColumn bool        //tells if Column field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId field
 
@@ -46,7 +47,7 @@ const (
 )
 
 //Init initializes ReferenceView
-func (r *ReferenceView) Init(ctx context.Context, resource *Resource) error {
+func (r *ReferenceView) Init(_ context.Context, _ *Resource) error {
 	r.initializeField()
 	return r.Validate()
 }

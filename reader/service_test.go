@@ -202,7 +202,6 @@ func TestRead(t *testing.T) {
 			dataURI:     "case003_exclude/",
 			dest:        new(interface{}),
 			view:        "events",
-			expect:      `[{"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1},{"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2},{"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3}]`,
 			selectors: map[string]*data.Selector{
 				"events": {
 					Columns:  []string{"quantity"},
@@ -212,9 +211,10 @@ func TestRead(t *testing.T) {
 					Criteria: &data.Criteria{Expression: "quantity > 30"},
 				},
 			},
+			expectError: true,
 		},
 		{
-			description: "more complex selector",
+			description: "events selector",
 			dataURI:     "case004_selector/",
 			view:        "events",
 			dest:        new(interface{}),
@@ -245,8 +245,6 @@ func TestRead(t *testing.T) {
 				"events": {
 					Columns: []string{"id", "quantity"},
 					OrderBy: "id",
-					Offset:  0,
-					Limit:   0,
 				},
 			},
 		},
@@ -688,15 +686,12 @@ func criteriaWhere() usecase {
 	}
 
 	resource.AddViews(&data.View{
-		Connector: connector,
-		Name:      "events",
-		Alias:     "ev",
-		Table:     "events",
-		From:      `SELECT * FROM events as e ` + string(shared.Criteria),
-		Schema:    data.NewSchema(reflect.TypeOf(&Event{})),
-		SelectorConstraints: &data.Constraints{
-			Alias: true,
-		},
+		Connector:            connector,
+		Name:                 "events",
+		Alias:                "ev",
+		Table:                "events",
+		From:                 `SELECT * FROM events as e ` + string(shared.Criteria),
+		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 	})
 
@@ -704,14 +699,9 @@ func criteriaWhere() usecase {
 		view:        "events",
 		dataset:     "dataset001_events/",
 		description: "where criteria",
-		selectors: map[string]*data.Selector{
-			"events": {
-				Alias: "e",
-			},
-		},
-		resource: resource,
-		expect:   `[{"Id":1,"Quantity":33.23432374000549,"EventTypeId":2},{"Id":10,"Quantity":21.957962334156036,"EventTypeId":11},{"Id":100,"Quantity":5.084940046072006,"EventTypeId":111}]`,
-		dest:     new([]*Event),
+		resource:    resource,
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"EventTypeId":2},{"Id":10,"Quantity":21.957962334156036,"EventTypeId":11},{"Id":100,"Quantity":5.084940046072006,"EventTypeId":111}]`,
+		dest:        new([]*Event),
 	}
 }
 

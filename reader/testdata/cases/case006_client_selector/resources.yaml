@@ -12,6 +12,10 @@ Views:
         DataType: Float
     SelectorConstraints:
         Columns: true
+        OrderBy: true
+        FilterableColumns:
+          - id
+          - quantity
 Connectors:
   - Name: db
     Driver: sqlite3

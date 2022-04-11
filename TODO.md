@@ -7,10 +7,5 @@
 * Caching 
 * Patch/Create/Update
 
-* Add Logger to reader (debug logger)
 * Fetch strategy with SQL Join.
-* Add NewItem factory method
-* Add Append method
-
 * Sanitize Criteria against SQL Injection
-* Add Criteria support

@@ -458,3 +458,7 @@ func (r *Collector) Fetched() {
 func (r *Collector) Slice() (unsafe.Pointer, *xunsafe.Slice) {
 	return xunsafe.AsPointer(r.dest), r.slice
 }
+
+func (r *Collector) Relation() *Relation {
+	return r.relation
+}
