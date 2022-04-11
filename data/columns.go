@@ -55,6 +55,9 @@ func (c Columns) RegisterHolder(relation *Relation) error {
 
 //Lookup returns Column with given name.
 func (c Columns) Lookup(name string) (*Column, error) {
+	if dotPos := strings.Index(name, ".");dotPos !=-1 {
+		name = name[dotPos:]
+	}
 	name = strings.ToLower(name)
 
 	column, ok := c[name]
