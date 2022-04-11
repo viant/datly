@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/data/ast"
+	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
@@ -45,6 +46,9 @@ type (
 		MatchStrategy MatchStrategy `json:",omitempty"`
 		BatchReadSize *int          `json:",omitempty"`
 
+		Logger  *logger.Adapter `json:"-"`
+		Counter logger.Counter  `json:"-"`
+
 		_columns    Columns
 		_excluded   map[string]bool
 		_parameters Parameters
@@ -64,7 +68,7 @@ type (
 		initialized        bool
 		holdersInitialized bool
 		isValid            bool
-		newCollector       func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector
+		newCollector       func(dest interface{}, supportParallel bool) *Collector
 
 		hasCriteriaReplacement bool
 		hasColumnInReplacement bool
@@ -81,7 +85,6 @@ type (
 		Columns           bool
 		Offset            bool
 		FilterableColumns []string
-		Alias             bool
 	}
 )
 
@@ -106,11 +109,11 @@ func (v *View) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err := v.initAfterViewsInitialized(ctx, resource, v.With); err != nil {
+	if err := v.updateRelations(ctx, resource, v.With); err != nil {
 		return err
 	}
-	v.initialized = true
 
+	v.initialized = true
 	return nil
 }
 
@@ -143,9 +146,16 @@ func (v *View) generateNameIfNeeded(refView *View, rel *Relation) {
 func (v *View) initView(ctx context.Context, resource *Resource) error {
 	var err error
 	v.ensureViewIndexed()
-
 	if err = v.inheritFromViewIfNeeded(ctx, resource); err != nil {
 		return err
+	}
+
+	if v.Logger == nil {
+		v.Logger = logger.New()
+	}
+
+	if v.Counter == nil {
+		v.Counter = logger.NewCounter(nil)
 	}
 
 	v.initColumnsPositions()
@@ -206,6 +216,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 	if err = v.ensureSchema(resource.types); err != nil {
 		return err
 	}
+
 	v.updateColumnTypes()
 	return nil
 }
@@ -224,7 +235,7 @@ func (v *View) updateColumnTypes() {
 	}
 }
 
-func (v *View) initAfterViewsInitialized(ctx context.Context, resource *Resource, relations []*Relation) error {
+func (v *View) updateRelations(ctx context.Context, resource *Resource, relations []*Relation) error {
 	v.indexColumns()
 	if err := v.indexSqlxColumnsByFieldName(); err != nil {
 		return err
@@ -242,7 +253,7 @@ func (v *View) initAfterViewsInitialized(ctx context.Context, resource *Resource
 		}
 
 		refView := rel.Of.View
-		if err := refView.initAfterViewsInitialized(ctx, resource, refView.With); err != nil {
+		if err := refView.updateRelations(ctx, resource, refView.With); err != nil {
 			return err
 		}
 	}
@@ -263,24 +274,28 @@ func (v *View) ensureColumns(ctx context.Context) error {
 		return nil
 	}
 
-	db, err := v.Connector.Db()
+	SQL := detectColumnsSQL(v.Source(), v)
+	v.Logger.ColumnsDetection(SQL, v.Source())
+	columns, err := detectColumns(ctx, SQL, v)
+
 	if err != nil {
 		return err
 	}
 
-	SQL := detectColumnsSQL(v)
-	shared.Log("table columns SQL: %v", SQL)
-	query, err := db.QueryContext(ctx, SQL)
-	if err != nil {
-		return err
-	}
-	types, err := query.ColumnTypes()
-	if err != nil {
-		return err
+	if v.From != "" && v.Table != "" {
+		tableSQL := detectColumnsSQL(v.Table, v)
+		v.Logger.ColumnsDetection(tableSQL, v.Table)
+		tableColumns, err := detectColumns(ctx, tableSQL, v)
+		if err != nil {
+			return err
+		}
+
+		ColumnSlice(columns).updateTypes(tableColumns, v.Caser)
+		v.Columns = columns
+	} else {
+		v.Columns = columns
 	}
 
-	ioColumns := v.exclude(io.TypesToColumns(types))
-	v.Columns = convertIoColumnsToColumns(ioColumns)
 	return nil
 }
 
@@ -418,6 +433,10 @@ func (v *View) inherit(view *View) {
 	if v.SelectorConstraints == nil {
 		v.SelectorConstraints = view.SelectorConstraints
 	}
+
+	if v.Logger == nil {
+		v.Logger = view.Logger
+	}
 }
 
 func (v *View) ensureIndexExcluded() {
@@ -457,14 +476,14 @@ func (v *View) ensureCaseFormat() error {
 }
 
 func (v *View) ensureCollector() {
-	v.newCollector = func(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector {
+	v.newCollector = func(dest interface{}, supportParallel bool) *Collector {
 		return NewCollector(v.Schema.slice, v, dest, supportParallel)
 	}
 }
 
 //Collector creates new Collector for View.DataType
-func (v *View) Collector(allowUnmapped bool, dest interface{}, supportParallel bool) *Collector {
-	return v.newCollector(allowUnmapped, dest, supportParallel)
+func (v *View) Collector(dest interface{}, supportParallel bool) *Collector {
+	return v.newCollector(dest, supportParallel)
 }
 
 func notEmptyOf(values ...string) string {
@@ -565,11 +584,6 @@ func (v *View) CanUseSelectorCriteria() bool {
 //CanUseSelectorColumns indicates if Selector.Columns can be used
 func (v *View) CanUseSelectorColumns() bool {
 	return v.SelectorConstraints.Columns
-}
-
-//CanUseSelectorAlias indicates if Selector.Alias can be used
-func (v *View) CanUseSelectorAlias() bool {
-	return v.SelectorConstraints.Alias
 }
 
 //CanUseSelectorLimit indicates if Selector.Limit can be used
@@ -783,14 +797,6 @@ func (v *View) indexColumns() {
 	v._columns = ColumnSlice(v.Columns).Index(v.Caser)
 }
 
-func (v *View) AliasWith(selector *Selector) string {
-	if !v.SelectorConstraints.Alias || selector == nil || selector.Alias == "" {
-		return v.Alias
-	}
-
-	return selector.Alias
-}
-
 func (v *View) HasCriteriaReplacement() bool {
 	return v.hasCriteriaReplacement
 }
@@ -812,12 +818,4 @@ func (v *View) HasWhereClause() bool {
 
 func (v *View) HasPaginationReplacement() bool {
 	return v.hasPagination
-}
-
-//ViewReference creates a view reference
-func ViewReference(name, ref string) *View {
-	return &View{
-		Name:      name,
-		Reference: shared.Reference{Ref: ref},
-	}
 }

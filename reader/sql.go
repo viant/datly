@@ -43,10 +43,10 @@ func NewBuilder() *Builder {
 }
 
 //Build builds SQL Select statement
-func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *BatchData) (string, error) {
+func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *BatchData, relation *data.Relation) (string, error) {
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
-	alias := view.AliasWith(selector)
+	alias := view.Alias
 
 	var err error
 	if err = b.appendColumns(view, selector, &sb); err != nil {
@@ -54,7 +54,7 @@ func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *Bat
 	}
 
 	sb.WriteString(fromFragment)
-	b.appendSource(&sb, view, selector, batchData)
+	b.appendSource(&sb, view, selector, batchData, relation)
 
 	if !view.HasColumnInReplacement() && !view.HasCriteriaReplacement() {
 		whereClause := b.buildWhereClause(view, true, selector, alias, batchData)
@@ -191,10 +191,10 @@ func (b *Builder) buildColumnsIn(batchData *BatchData, alias string) string {
 	return sb.String()
 }
 
-func (b *Builder) appendSource(sb *strings.Builder, view *data.View, selector *data.Selector, batchData *BatchData) {
+func (b *Builder) appendSource(sb *strings.Builder, view *data.View, selector *data.Selector, batchData *BatchData, relation *data.Relation) {
 	var alias string
-	if view.CanUseSelectorAlias() && selector != nil && selector.Alias != "" {
-		alias = selector.Alias
+	if relation != nil && relation.ColumnAlias != "" {
+		alias = relation.ColumnAlias
 	}
 
 	if view.HasCriteriaReplacement() {

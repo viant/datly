@@ -1,12 +1,31 @@
 package data
 
 import (
+	"context"
 	"github.com/viant/datly/shared"
+	"github.com/viant/sqlx/io"
 	"strings"
 )
 
-func detectColumnsSQL(v *View) string {
-	source := v.Source()
+func detectColumns(ctx context.Context, SQL string, v *View) ([]*Column, error) {
+	db, err := v.Connector.Db()
+	if err != nil {
+		return nil, err
+	}
+
+	query, err := db.QueryContext(ctx, SQL)
+	if err != nil {
+		return nil, err
+	}
+	types, err := query.ColumnTypes()
+	if err != nil {
+		return nil, err
+	}
+
+	return convertIoColumnsToColumns(v.exclude(io.TypesToColumns(types))), nil
+}
+
+func detectColumnsSQL(source string, v *View) string {
 	if strings.Contains(source, string(shared.Criteria)) {
 		if v.hasWhereClause {
 			source = strings.ReplaceAll(source, string(shared.Criteria), " AND 1 = 0")

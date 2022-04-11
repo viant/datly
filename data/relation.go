@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -22,6 +23,7 @@ type (
 
 		Cardinality   Cardinality //One, or Many
 		Column        string      //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
+		ColumnAlias   string      //Represents column alias, can be specified if $shared.Criteria / $shared.ColumnInPosition is inside the "from" statement
 		Holder        string      //Represents column created due to the merging. In our example it would be Employee#Account
 		IncludeColumn bool        //tells if Column field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId field
 
@@ -45,7 +47,7 @@ const (
 )
 
 //Init initializes ReferenceView
-func (r *ReferenceView) Init(ctx context.Context, resource *Resource) error {
+func (r *ReferenceView) Init(_ context.Context, _ *Resource) error {
 	r.initializeField()
 	return r.Validate()
 }
@@ -135,4 +137,27 @@ func (r *Relation) Validate() error {
 	}
 
 	return nil
+}
+
+//ViewReference creates a view reference
+func ViewReference(name, ref string, options ...Option) *View {
+	viewRef := &View{
+		Name:      name,
+		Reference: shared.Reference{Ref: ref},
+	}
+
+	viewRef.applyOptions(options)
+
+	return viewRef
+}
+
+func (v *View) applyOptions(options []Option) {
+	for _, option := range options {
+		switch actual := option.(type) {
+		case logger.Logger:
+			v.Logger = logger.LoggerOf(actual)
+		case logger.Counter:
+			v.Counter = actual
+		}
+	}
 }

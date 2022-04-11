@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/shared"
 	"github.com/viant/dsunit"
+	"github.com/viant/gmetric/counter/base"
 	"github.com/viant/toolbox"
 	"net/http"
 	"net/url"
@@ -32,6 +33,11 @@ type audience struct {
 	DealsId       []int
 	Deals         []Deal
 	StringDealsId []string
+	DealsSize     int
+}
+
+func (a *audience) AfterRelationsComplete(ctx context.Context) {
+	a.DealsSize = len(a.Deals)
 }
 
 type Deal struct {
@@ -40,7 +46,7 @@ type Deal struct {
 	DealId string
 }
 
-func (a *audience) OnFetch(ctx context.Context) error {
+func (a *audience) OnFetch(_ context.Context) error {
 	if a.Info == "" && a.Info2 == "" {
 		return nil
 	}
@@ -76,6 +82,7 @@ type usecase struct {
 	expectError bool
 	resource    *data.Resource
 	dataset     string
+	provider    *base.Provider
 }
 
 func TestRead(t *testing.T) {
@@ -195,7 +202,6 @@ func TestRead(t *testing.T) {
 			dataURI:     "case003_exclude/",
 			dest:        new(interface{}),
 			view:        "events",
-			expect:      `[{"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1},{"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2},{"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3}]`,
 			selectors: map[string]*data.Selector{
 				"events": {
 					Columns:  []string{"quantity"},
@@ -205,9 +211,10 @@ func TestRead(t *testing.T) {
 					Criteria: &data.Criteria{Expression: "quantity > 30"},
 				},
 			},
+			expectError: true,
 		},
 		{
-			description: "more complex selector",
+			description: "events selector",
 			dataURI:     "case004_selector/",
 			view:        "events",
 			dest:        new(interface{}),
@@ -238,8 +245,6 @@ func TestRead(t *testing.T) {
 				"events": {
 					Columns: []string{"id", "quantity"},
 					OrderBy: "id",
-					Offset:  0,
-					Limit:   0,
 				},
 			},
 		},
@@ -547,7 +552,7 @@ func TestRead(t *testing.T) {
 			compTypes: map[string]reflect.Type{
 				"audience": reflect.TypeOf(audience{}),
 			},
-			expect: `[{"Id":1,"Info":"1,2","Info2":"","DealsId":[1,2],"Deals":[{"Id":1,"Name":"deal 1","DealId":""},{"Id":2,"Name":"deal 2","DealId":""}],"StringDealsId":null},{"Id":2,"Info":"","Info2":"20,30","DealsId":null,"Deals":[{"Id":5,"Name":"deal 5","DealId":"20"},{"Id":6,"Name":"deal 6","DealId":"30"}],"StringDealsId":["20","30"]}]`,
+			expect: `[{"Id":1,"Info":"1,2","Info2":"","DealsId":[1,2],"Deals":[{"Id":1,"Name":"deal 1","DealId":""},{"Id":2,"Name":"deal 2","DealId":""}],"StringDealsId":null,"DealsSize":2},{"Id":2,"Info":"","Info2":"20,30","DealsId":null,"Deals":[{"Id":5,"Name":"deal 5","DealId":"20"},{"Id":6,"Name":"deal 6","DealId":"30"}],"StringDealsId":["20","30"],"DealsSize":2}]`,
 		},
 		eventTypeViewWithEventTypeIdColumn(),
 		eventTypeViewWithoutEventTypeIdColumn(),
@@ -558,10 +563,11 @@ func TestRead(t *testing.T) {
 		columnsInSource(),
 		inheritConnector(),
 		criteriaWhere(),
+		inheritCoalesceTypes(),
 	}
 
+	//for index, testCase := range useCases[len(useCases)-1:] {
 	for index, testCase := range useCases {
-		//for index, testCase := range useCases[len(useCases)-1:] {
 		fmt.Println("Running testcase nr: " + strconv.Itoa(index))
 		resourcePath := path.Join(testLocation, "testdata", "cases", testCase.dataURI, "populate")
 		if testCase.dataset != "" {
@@ -632,6 +638,39 @@ func TestRead(t *testing.T) {
 	}
 }
 
+func inheritCoalesceTypes() usecase {
+	type Event struct {
+		Id          int
+		Quantity    float64
+		EventTypeId int
+	}
+
+	resource := data.EmptyResource()
+	connector := &config.Connector{
+		Name:   "db",
+		DSN:    "./testdata/db/db.db",
+		Driver: "sqlite3",
+	}
+
+	resource.AddViews(&data.View{
+		Connector:            connector,
+		Name:                 "events",
+		Alias:                "ev",
+		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity FROM events as e `,
+		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
+		InheritSchemaColumns: true,
+	})
+
+	return usecase{
+		view:        "events",
+		dataset:     "dataset001_events/",
+		description: "where criteria",
+		resource:    resource,
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"EventTypeId":0},{"Id":10,"Quantity":21.957962334156036,"EventTypeId":0},{"Id":100,"Quantity":5.084940046072006,"EventTypeId":0}]`,
+		dest:        new([]*Event),
+	}
+}
+
 func criteriaWhere() usecase {
 	type Event struct {
 		Id          int
@@ -647,14 +686,12 @@ func criteriaWhere() usecase {
 	}
 
 	resource.AddViews(&data.View{
-		Connector: connector,
-		Name:      "events",
-		Alias:     "ev",
-		From:      `SELECT * FROM events as e ` + string(shared.Criteria),
-		Schema:    data.NewSchema(reflect.TypeOf(&Event{})),
-		SelectorConstraints: &data.Constraints{
-			Alias: true,
-		},
+		Connector:            connector,
+		Name:                 "events",
+		Alias:                "ev",
+		Table:                "events",
+		From:                 `SELECT * FROM events as e ` + string(shared.Criteria),
+		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 	})
 
@@ -662,14 +699,9 @@ func criteriaWhere() usecase {
 		view:        "events",
 		dataset:     "dataset001_events/",
 		description: "where criteria",
-		selectors: map[string]*data.Selector{
-			"events": {
-				Alias: "e",
-			},
-		},
-		resource: resource,
-		expect:   `[{"Id":1,"Quantity":33.23432374000549,"EventTypeId":2},{"Id":10,"Quantity":21.957962334156036,"EventTypeId":11},{"Id":100,"Quantity":5.084940046072006,"EventTypeId":111}]`,
-		dest:     new([]*Event),
+		resource:    resource,
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"EventTypeId":2},{"Id":10,"Quantity":21.957962334156036,"EventTypeId":11},{"Id":100,"Quantity":5.084940046072006,"EventTypeId":111}]`,
+		dest:        new([]*Event),
 	}
 }
 

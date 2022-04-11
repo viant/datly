@@ -21,7 +21,7 @@ func TestBuilder_Build(t *testing.T) {
 	useCases := []struct {
 		batchData   *BatchData
 		view        *data.View
-		selector    *data.Selector
+		relation    *data.Relation
 		description string
 		output      string
 		dataset     string
@@ -142,22 +142,19 @@ func TestBuilder_Build(t *testing.T) {
 						DataType: "Float",
 					},
 				},
-				SelectorConstraints: &data.Constraints{
-					Alias: true,
-				},
 				Selector: &data.Config{},
 				From:     "SELECT * FROM EVENTS as ev " + string(shared.Criteria),
 				Name:     "events",
 				Alias:    "f",
+			},
+			relation: &data.Relation{
+				ColumnAlias: "ev",
 			},
 			batchData: &BatchData{
 				BatchReadSize: 10,
 				Read:          2,
 				ColumnName:    "ID",
 				Values:        []interface{}{1, 2, 3},
-			},
-			selector: &data.Selector{
-				Alias: "ev",
 			},
 		},
 		{
@@ -175,19 +172,14 @@ func TestBuilder_Build(t *testing.T) {
 						DataType: "Float",
 					},
 				},
-				SelectorConstraints: &data.Constraints{
-					Alias: true,
-				},
 				Selector: &data.Config{},
 				From:     "SELECT * FROM EVENTS as ev " + string(shared.Criteria),
 				Name:     "events",
 				Alias:    "f",
 			},
+			relation: &data.Relation{ColumnAlias: "ev"},
 			batchData: &BatchData{
 				Values: []interface{}{},
-			},
-			selector: &data.Selector{
-				Alias: "ev",
 			},
 		},
 		{
@@ -294,9 +286,6 @@ func TestBuilder_Build(t *testing.T) {
 						DataType: "Float",
 					},
 				},
-				SelectorConstraints: &data.Constraints{
-					Alias: true,
-				},
 				Selector: &data.Config{},
 				From:     "SELECT * FROM EVENTS as ev WHERE 0=1 " + string(shared.Criteria),
 				Name:     "events",
@@ -306,14 +295,12 @@ func TestBuilder_Build(t *testing.T) {
 				ColumnName: "id",
 				Values:     []interface{}{1, 2, 3},
 			},
-			selector: &data.Selector{
-				Alias: "ev",
-			},
+			relation: &data.Relation{ColumnAlias: "ev"},
 		},
 		{
 			dataset:     "dataset001_events/",
 			description: `pagination replacement`,
-			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev  LIMIT 10 OFFSET 2) AS f  WHERE ev.ID IN (?, ?, ?)`,
+			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev  LIMIT 10 OFFSET 2) AS f  WHERE f.ID IN (?, ?, ?)`,
 			view: &data.View{
 				Columns: []*data.Column{
 					{
@@ -325,22 +312,16 @@ func TestBuilder_Build(t *testing.T) {
 						DataType: "Float",
 					},
 				},
-				SelectorConstraints: &data.Constraints{
-					Alias: true,
-				},
-				Selector: &data.Config{},
-				From:     "SELECT * FROM EVENTS as ev " + string(shared.Pagination),
-				Name:     "events",
-				Alias:    "f",
+				From:  "SELECT * FROM EVENTS as ev " + string(shared.Pagination),
+				Name:  "events",
+				Alias: "f",
 			},
+			relation: &data.Relation{ColumnAlias: "ev"},
 			batchData: &BatchData{
 				BatchReadSize: 10,
 				Read:          2,
 				ColumnName:    "ID",
 				Values:        []interface{}{1, 2, 3},
-			},
-			selector: &data.Selector{
-				Alias: "ev",
 			},
 		},
 	}
@@ -364,7 +345,7 @@ func TestBuilder_Build(t *testing.T) {
 		}
 
 		builder := NewBuilder()
-		sql, err := builder.Build(useCase.view, useCase.selector, useCase.batchData)
+		sql, err := builder.Build(useCase.view, nil, useCase.batchData, useCase.relation)
 		assert.Nil(t, err, useCase.description)
 		assert.Equal(t, useCase.output, strings.TrimSpace(sql), useCase.description)
 	}

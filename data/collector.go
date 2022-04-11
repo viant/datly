@@ -1,7 +1,6 @@
 package data
 
 import (
-	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -138,7 +137,7 @@ func (r *Collector) Visitor() Visitor {
 	visitors := make([]Visitor, 1)
 	visitors[0] = r.valueIndexer(visitorRelations)
 
-	if relation != nil {
+	if relation != nil && (r.parent == nil || !r.parent.SupportsParallel()) {
 		switch relation.Cardinality {
 		case "One":
 			visitors = append(visitors, r.visitorOne(relation))
@@ -200,12 +199,10 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 	holderField := relation.holderField
 	dest := r.parent.Dest()
 	destPtr := xunsafe.AsPointer(dest)
+	var key interface{}
 
 	return func(owner interface{}) error {
-		if r.parent != nil && r.parent.SupportsParallel() {
-			return nil
-		}
-		key := keyField.Interface(xunsafe.AsPointer(owner))
+		key = keyField.Interface(xunsafe.AsPointer(owner))
 		valuePosition := r.parentValuesPositions(relation.Column)
 		positions, ok := valuePosition[key]
 		if !ok {
@@ -226,20 +223,16 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 	counter := 0
 	var xType *xunsafe.Type
 	var values *[]interface{}
+	var key interface{}
 	dest := r.parent.Dest()
 	destPtr := xunsafe.AsPointer(dest)
 
 	return func(owner interface{}) error {
-		if r.parent != nil && r.parent.SupportsParallel() {
-			return nil
-		}
-
 		if keyField == nil && xType == nil {
 			xType = r.types[relation.Of.Column]
 			values = r.values[relation.Of.Column]
 		}
 
-		var key interface{}
 		if keyField != nil {
 			key = keyField.Interface(xunsafe.AsPointer(owner))
 		} else {
@@ -261,7 +254,7 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 			appender := slice.Appender(sliceAddPtr)
 			appender.Append(owner)
 			r.Lock().Unlock()
-			shared.Log("reconciling src:(%T):%+v with dest: (%T):%+v  pos:%v, item:(%T):%+v", owner, owner, dest, dest, index, parentItem, parentItem)
+			r.view.Logger.ObjectReconciling(dest, owner, parentItem, index)
 		}
 
 		return nil
@@ -396,8 +389,7 @@ func (r *Collector) mergeToParent() {
 				appender := r.slice.Appender(holderField.ValuePointer(xunsafe.AsPointer(parentValue)))
 				appender.Append(value)
 				r.Lock().Unlock()
-				shared.Log("reconciling src:(%T):%+v with dest: (%T):%+v  pos:%v, item:(%T):%+v", value, value, r.dest, r.dest, position, parentValue, parentValue)
-
+				r.view.Logger.ObjectReconciling(r.dest, value, parentValue, position)
 			}
 		}
 	}
@@ -461,4 +453,12 @@ func (r *Collector) Fetched() {
 		r.wg.Done()
 		r.wgDelta--
 	}
+}
+
+func (r *Collector) Slice() (unsafe.Pointer, *xunsafe.Slice) {
+	return xunsafe.AsPointer(r.dest), r.slice
+}
+
+func (r *Collector) Relation() *Relation {
+	return r.relation
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox/format"
+	"reflect"
 	"strings"
 )
 
@@ -55,15 +56,12 @@ func (c Columns) RegisterHolder(relation *Relation) error {
 
 //Lookup returns Column with given name.
 func (c Columns) Lookup(name string) (*Column, error) {
-	if dotPos := strings.Index(name, ".");dotPos !=-1 {
-		name = name[dotPos:]
-	}
 	name = strings.ToLower(name)
 
 	column, ok := c[name]
 	if !ok {
-		keys := []string{}
-		for k:= range c {
+		var keys []string
+		for k := range c {
 			keys = append(keys, k)
 		}
 		err := fmt.Errorf("undefied columnname %v, avails: %+v", name, strings.Join(keys, ","))
@@ -88,4 +86,19 @@ func (c ColumnSlice) Init() error {
 		}
 	}
 	return nil
+}
+
+func (c ColumnSlice) updateTypes(columns []*Column, caser format.Case) {
+	index := ColumnSlice(columns).Index(caser)
+
+	for _, column := range c {
+		if column.rType == nil || shared.Elem(column.rType).Kind() == reflect.Interface {
+			newCol, err := index.Lookup(column.Name)
+			if err != nil {
+				continue
+			}
+
+			column.rType = newCol.rType
+		}
+	}
 }

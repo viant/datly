@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/shared"
+	"github.com/viant/gmetric/counter"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/read"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"sync"
+	"time"
 )
 
 //Service represents reader service
@@ -23,17 +25,22 @@ type Service struct {
 //Read select data from database based on View and assign it to dest. ParentDest has to be pointer.
 //TODO: Select with join when connector is the same for one to one relation
 func (s *Service) Read(ctx context.Context, session *Session) error {
-	if err := session.Init(ctx, s.Resource); err != nil {
+	var err error
+	begin := time.Now()
+	onFinish := session.View.Counter.Begin(begin)
+	defer s.afterRead(session, begin, err, onFinish)
+
+	if err = session.Init(ctx, s.Resource); err != nil {
 		return err
 	}
 
 	wg := sync.WaitGroup{}
 
-	collector := session.View.Collector(session.AllowUnmapped, session.Dest, session.View.MatchStrategy.SupportsParallel())
+	collector := session.View.Collector(session.Dest, session.View.MatchStrategy.SupportsParallel())
 	errors := shared.NewErrors(0)
 	s.readAll(ctx, session, collector, nil, &wg, errors)
 	wg.Wait()
-	err := errors.Error()
+	err = errors.Error()
 	if err != nil {
 		return err
 	}
@@ -49,8 +56,20 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 	return nil
 }
 
+func (s *Service) afterRead(session *Session, begin time.Time, err error, onFinish counter.OnDone) {
+	end := time.Now()
+	session.View.Logger.ReadTime(end.Sub(begin), err)
+	if err != nil {
+		session.View.Counter.IncrementValue(Error)
+	} else {
+		session.View.Counter.IncrementValue(Success)
+	}
+	onFinish(end)
+}
+
 func (s *Service) readAll(ctx context.Context, session *Session, collector *data.Collector, upstream rdata.Map, wg *sync.WaitGroup, errorCollector *shared.Errors) {
-	defer collector.Fetched()
+	var collectorFetchEmitted bool
+	defer s.afterReadAll(collectorFetchEmitted, collector)
 
 	view := collector.View()
 	params, err := s.buildViewParams(ctx, session, view)
@@ -63,9 +82,14 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 	selector := session.Selectors.Lookup(view.Name)
 	collectorChildren := collector.Relations(selector)
 	wg.Add(len(collectorChildren))
+
+	relationGroup := sync.WaitGroup{}
+	if !collector.SupportsParallel() {
+		relationGroup.Add(len(collectorChildren))
+	}
 	for i := range collectorChildren {
 		go func(i int) {
-			defer wg.Done()
+			defer s.afterRelationCompleted(wg, collector, &relationGroup)
 			s.readAll(ctx, session, collectorChildren[i], params, wg, errorCollector)
 		}(i)
 	}
@@ -82,10 +106,45 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 		return
 	}
 
+	session.View.Counter.IncrementValue(Pending)
+	defer session.View.Counter.DecrementValue(Pending)
 	err = s.exhaustRead(ctx, view, selector, upstream, params, batchData, db, collector)
 	if err != nil {
 		errorCollector.Append(err)
 	}
+
+	if collector.SupportsParallel() {
+		return
+	}
+
+	collectorFetchEmitted = true
+	collector.Fetched()
+
+	relationGroup.Wait()
+	ptr, xslice := collector.Slice()
+	for i := 0; i < xslice.Len(ptr); i++ {
+		if actual, ok := xslice.ValuePointerAt(ptr, i).(AfterRelationCompleter); ok {
+			actual.AfterRelationsComplete(ctx)
+			continue
+		}
+
+		break
+	}
+}
+
+func (s *Service) afterRelationCompleted(wg *sync.WaitGroup, collector *data.Collector, relationGroup *sync.WaitGroup) {
+	wg.Done()
+	if collector.SupportsParallel() {
+		return
+	}
+	relationGroup.Done()
+}
+
+func (s *Service) afterReadAll(collectorFetchEmitted bool, collector *data.Collector) {
+	if collectorFetchEmitted {
+		return
+	}
+	collector.Fetched()
 }
 
 func (s *Service) batchData(selector *data.Selector, view *data.View, collector *data.Collector) *BatchData {
@@ -108,11 +167,11 @@ func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *da
 	limit := view.LimitWithSelector(selector)
 
 	for {
-		SQL, err := s.prepareSQL(view, selector, upstream, params, batchData)
+		SQL, err := s.prepareSQL(view, selector, upstream, params, batchData, collector.Relation())
 		if err != nil {
 			return err
 		}
-		readData, err = s.query(ctx, db, SQL, collector, batchData)
+		readData, err = s.query(ctx, view, db, SQL, collector, batchData)
 		if err != nil {
 			return err
 		}
@@ -128,7 +187,8 @@ func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *da
 	return nil
 }
 
-func (s *Service) query(ctx context.Context, db *sql.DB, SQL string, collector *data.Collector, batchData *BatchData) (int, error) {
+func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL string, collector *data.Collector, batchData *BatchData) (int, error) {
+	begin := time.Now()
 	reader, err := read.New(ctx, db, SQL, collector.NewItem(), io.Resolve(collector.Resolve))
 	if err != nil {
 		return 0, err
@@ -145,7 +205,8 @@ func (s *Service) query(ctx context.Context, db *sql.DB, SQL string, collector *
 		return visitor(row)
 	}, batchData.Values...)
 
-	shared.Log("reading data SQL: %v, params: %v, read: %v, err: %v", SQL, batchData.Values, readData, err)
+	end := time.Now()
+	view.Logger.ReadingData(end.Sub(begin), SQL, readData, batchData.Values, err)
 	if err != nil {
 		return 0, err
 	}
@@ -153,8 +214,8 @@ func (s *Service) query(ctx context.Context, db *sql.DB, SQL string, collector *
 	return readData, nil
 }
 
-func (s *Service) prepareSQL(view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData) (string, error) {
-	SQL, err := s.sqlBuilder.Build(view, selector, batchData)
+func (s *Service) prepareSQL(view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData, relation *data.Relation) (string, error) {
+	SQL, err := s.sqlBuilder.Build(view, selector, batchData, relation)
 	if err != nil {
 		return "", err
 	}
@@ -200,7 +261,7 @@ func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *
 	view := param.View()
 	destSlice := reflect.New(view.Schema.SliceType()).Interface()
 
-	collector := view.Collector(false, destSlice, false)
+	collector := view.Collector(destSlice, false)
 	errors := shared.NewErrors(0)
 
 	wg := sync.WaitGroup{}
