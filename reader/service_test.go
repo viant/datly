@@ -33,6 +33,11 @@ type audience struct {
 	DealsId       []int
 	Deals         []Deal
 	StringDealsId []string
+	DealsSize     int
+}
+
+func (a *audience) AfterRelationsComplete(ctx context.Context) {
+	a.DealsSize = len(a.Deals)
 }
 
 type Deal struct {
@@ -549,7 +554,7 @@ func TestRead(t *testing.T) {
 			compTypes: map[string]reflect.Type{
 				"audience": reflect.TypeOf(audience{}),
 			},
-			expect: `[{"Id":1,"Info":"1,2","Info2":"","DealsId":[1,2],"Deals":[{"Id":1,"Name":"deal 1","DealId":""},{"Id":2,"Name":"deal 2","DealId":""}],"StringDealsId":null},{"Id":2,"Info":"","Info2":"20,30","DealsId":null,"Deals":[{"Id":5,"Name":"deal 5","DealId":"20"},{"Id":6,"Name":"deal 6","DealId":"30"}],"StringDealsId":["20","30"]}]`,
+			expect: `[{"Id":1,"Info":"1,2","Info2":"","DealsId":[1,2],"Deals":[{"Id":1,"Name":"deal 1","DealId":""},{"Id":2,"Name":"deal 2","DealId":""}],"StringDealsId":null,"DealsSize":2},{"Id":2,"Info":"","Info2":"20,30","DealsId":null,"Deals":[{"Id":5,"Name":"deal 5","DealId":"20"},{"Id":6,"Name":"deal 6","DealId":"30"}],"StringDealsId":["20","30"],"DealsSize":2}]`,
 		},
 		eventTypeViewWithEventTypeIdColumn(),
 		eventTypeViewWithoutEventTypeIdColumn(),

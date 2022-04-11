@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/shared"
+	"github.com/viant/gmetric/counter"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/read"
 	rdata "github.com/viant/toolbox/data"
@@ -27,16 +28,7 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 	var err error
 	begin := time.Now()
 	onFinish := session.View.Counter.Begin(begin)
-	defer func() {
-		end := time.Now()
-		session.View.Logger.ReadTime(end.Sub(begin), err)
-		if err != nil {
-			session.View.Counter.IncrementValue(Error)
-		} else {
-			session.View.Counter.IncrementValue(Success)
-		}
-		onFinish(end)
-	}()
+	defer s.afterRead(session, begin, err, onFinish)
 
 	if err = session.Init(ctx, s.Resource); err != nil {
 		return err
@@ -64,8 +56,20 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 	return nil
 }
 
+func (s *Service) afterRead(session *Session, begin time.Time, err error, onFinish counter.OnDone) {
+	end := time.Now()
+	session.View.Logger.ReadTime(end.Sub(begin), err)
+	if err != nil {
+		session.View.Counter.IncrementValue(Error)
+	} else {
+		session.View.Counter.IncrementValue(Success)
+	}
+	onFinish(end)
+}
+
 func (s *Service) readAll(ctx context.Context, session *Session, collector *data.Collector, upstream rdata.Map, wg *sync.WaitGroup, errorCollector *shared.Errors) {
-	defer collector.Fetched()
+	var collectorFetchEmitted bool
+	defer s.afterReadAll(collectorFetchEmitted, collector)
 
 	view := collector.View()
 	params, err := s.buildViewParams(ctx, session, view)
@@ -78,9 +82,14 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 	selector := session.Selectors.Lookup(view.Name)
 	collectorChildren := collector.Relations(selector)
 	wg.Add(len(collectorChildren))
+
+	relationGroup := sync.WaitGroup{}
+	if !collector.SupportsParallel() {
+		relationGroup.Add(len(collectorChildren))
+	}
 	for i := range collectorChildren {
 		go func(i int) {
-			defer wg.Done()
+			defer s.afterRelationCompleted(wg, collector, &relationGroup)
 			s.readAll(ctx, session, collectorChildren[i], params, wg, errorCollector)
 		}(i)
 	}
@@ -103,6 +112,39 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 	if err != nil {
 		errorCollector.Append(err)
 	}
+
+	if collector.SupportsParallel() {
+		return
+	}
+
+	collectorFetchEmitted = true
+	collector.Fetched()
+
+	relationGroup.Wait()
+	ptr, xslice := collector.Slice()
+	for i := 0; i < xslice.Len(ptr); i++ {
+		if actual, ok := xslice.ValuePointerAt(ptr, i).(AfterRelationCompleter); ok {
+			actual.AfterRelationsComplete(ctx)
+			continue
+		}
+
+		break
+	}
+}
+
+func (s *Service) afterRelationCompleted(wg *sync.WaitGroup, collector *data.Collector, relationGroup *sync.WaitGroup) {
+	wg.Done()
+	if collector.SupportsParallel() {
+		return
+	}
+	relationGroup.Done()
+}
+
+func (s *Service) afterReadAll(collectorFetchEmitted bool, collector *data.Collector) {
+	if collectorFetchEmitted {
+		return
+	}
+	collector.Fetched()
 }
 
 func (s *Service) batchData(selector *data.Selector, view *data.View, collector *data.Collector) *BatchData {

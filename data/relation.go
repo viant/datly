@@ -154,7 +154,7 @@ func (v *View) applyOptions(options []Option) {
 	for _, option := range options {
 		switch actual := option.(type) {
 		case logger.Logger:
-			v.Logger = actual
+			v.Logger = logger.LoggerOf(actual)
 		case logger.Counter:
 			v.Counter = actual
 		}

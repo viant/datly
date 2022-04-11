@@ -46,8 +46,8 @@ type (
 		MatchStrategy MatchStrategy `json:",omitempty"`
 		BatchReadSize *int          `json:",omitempty"`
 
-		Logger  logger.Logger  `json:"-"`
-		Counter logger.Counter `json:"-"`
+		Logger  *logger.Adapter `json:"-"`
+		Counter logger.Counter  `json:"-"`
 
 		_columns    Columns
 		_excluded   map[string]bool
@@ -152,11 +152,11 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 	}
 
 	if v.Logger == nil {
-		v.Logger = logger.NewLogger()
+		v.Logger = logger.New()
 	}
 
 	if v.Counter == nil {
-		v.Counter = logger.NewCounter()
+		v.Counter = logger.NewCounter(nil)
 	}
 
 	v.initColumnsPositions()

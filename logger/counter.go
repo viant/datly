@@ -11,24 +11,40 @@ type Counter interface {
 	IncrementValue(value interface{}) int64
 }
 
-func NewCounter() Counter {
-	return &nopMetric{}
+func NewCounter(counter Counter) *CounterAdapter {
+	return &CounterAdapter{
+		counter: counter,
+	}
 }
 
-type nopMetric struct{}
-
-func (n *nopMetric) IncrementValue(_ interface{}) int64 {
-	return 0
+type CounterAdapter struct {
+	counter Counter
 }
 
-func (n *nopMetric) DecrementValue(_ interface{}) int64 {
-	return 0
+func (c *CounterAdapter) Begin(started time.Time) counter.OnDone {
+	if c.counter == nil {
+		return nopOnDone
+	}
+
+	return c.counter.Begin(started)
+}
+
+func (c *CounterAdapter) DecrementValue(value interface{}) int64 {
+	if c.counter == nil {
+		return 0
+	}
+
+	return c.DecrementValue(value)
+}
+
+func (c *CounterAdapter) IncrementValue(value interface{}) int64 {
+	if c.counter == nil {
+		return 0
+	}
+
+	return c.IncrementValue(value)
 }
 
 func nopOnDone(_ time.Time, _ ...interface{}) int64 {
 	return 0
-}
-
-func (n *nopMetric) Begin(_ time.Time) counter.OnDone {
-	return nopOnDone
 }

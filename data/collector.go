@@ -454,3 +454,7 @@ func (r *Collector) Fetched() {
 		r.wgDelta--
 	}
 }
+
+func (r *Collector) Slice() (unsafe.Pointer, *xunsafe.Slice) {
+	return xunsafe.AsPointer(r.dest), r.slice
+}
