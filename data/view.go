@@ -160,7 +160,9 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 
 	v.initColumnsPositions()
 	v.Alias = notEmptyOf(v.Alias, "t")
-	v.Table = notEmptyOf(v.Table, v.Name)
+	if v.From == "" {
+		v.Table = notEmptyOf(v.Table, v.Name)
+	}
 
 	if v.MatchStrategy == "" {
 		v.MatchStrategy = ReadMatched
