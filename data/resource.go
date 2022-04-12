@@ -22,8 +22,9 @@ type Resource struct {
 	Parameters  []*Parameter
 	_parameters Parameters
 
-	types   Types
-	Loggers []*logger.Adapter
+	types    Types
+	Loggers  logger.Adapters
+	_loggers logger.AdapterIndex
 }
 
 //GetViews returns Views supplied with the Resource
@@ -53,6 +54,7 @@ func (r *Resource) Init(ctx context.Context) error {
 	r._views = ViewSlice(r.Views).Index()
 	r._connectors = config.ConnectorSlice(r.Connectors).Index()
 	r._parameters = ParametersSlice(r.Parameters).Index()
+	r._loggers = r.Loggers.Index()
 
 	if err := config.ConnectorSlice(r.Connectors).Init(ctx, r._connectors); err != nil {
 		return err
@@ -160,10 +162,12 @@ func EmptyResource() *Resource {
 	}
 }
 
+//NewResource creates a Resource and register provided Types
 func NewResource(types Types) *Resource {
 	return &Resource{types: types}
 }
 
+//AddViews register views in the resource
 func (r *Resource) AddViews(views ...*View) {
 	if r.Views == nil {
 		r.Views = make([]*View, 0)
@@ -172,6 +176,7 @@ func (r *Resource) AddViews(views ...*View) {
 	r.Views = append(r.Views, views...)
 }
 
+//AddConnectors register connectors in the resource
 func (r *Resource) AddConnectors(connectors ...*config.Connector) {
 	if r.Connectors == nil {
 		r.Connectors = make([]*config.Connector, 0)
@@ -180,10 +185,16 @@ func (r *Resource) AddConnectors(connectors ...*config.Connector) {
 	r.Connectors = append(r.Connectors, connectors...)
 }
 
+//AddParameters register parameters in the resource
 func (r *Resource) AddParameters(parameters ...*Parameter) {
 	if r.Parameters == nil {
 		r.Parameters = make([]*Parameter, 0)
 	}
 
 	r.Parameters = append(r.Parameters, parameters...)
+}
+
+//AddLoggers register loggers in the resource
+func (r *Resource) AddLoggers(loggers ...*logger.Adapter) {
+	r.Loggers = append(r.Loggers, loggers...)
 }

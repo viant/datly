@@ -82,7 +82,6 @@ type (
 		Criteria          bool
 		OrderBy           bool
 		Limit             bool
-		Columns           bool
 		Offset            bool
 		FilterableColumns []string
 	}
@@ -125,6 +124,10 @@ func (v *View) initViews(ctx context.Context, resource *Resource, relations []*R
 			return err
 		}
 
+		if err := rel.BeforeViewInit(ctx); err != nil {
+			return err
+		}
+
 		if err := refView.initViews(ctx, resource, refView.With); err != nil {
 			return err
 		}
@@ -150,8 +153,8 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if v.Logger == nil {
-		v.Logger = logger.Default()
+	if err = v.ensureLogger(resource); err != nil {
+		return err
 	}
 
 	if v.Counter == nil {
@@ -585,7 +588,7 @@ func (v *View) CanUseSelectorCriteria() bool {
 
 //CanUseSelectorColumns indicates if Selector.Columns can be used
 func (v *View) CanUseSelectorColumns() bool {
-	return v.SelectorConstraints.Columns
+	return len(v.SelectorConstraints.FilterableColumns) != 0
 }
 
 //CanUseSelectorLimit indicates if Selector.Limit can be used
@@ -660,6 +663,14 @@ func (v *View) ensureViewIndexed() {
 }
 
 func (v *View) markColumnsAsFilterable() error {
+	if len(v.SelectorConstraints.FilterableColumns) == 1 && strings.TrimSpace(v.SelectorConstraints.FilterableColumns[0]) == "*" {
+		for _, column := range v.Columns {
+			column.Filterable = true
+		}
+
+		return nil
+	}
+
 	for _, colName := range v.SelectorConstraints.FilterableColumns {
 		column, err := v._columns.Lookup(colName)
 		if err != nil {
@@ -820,4 +831,22 @@ func (v *View) HasWhereClause() bool {
 
 func (v *View) HasPaginationReplacement() bool {
 	return v.hasPagination
+}
+
+func (v *View) ensureLogger(resource *Resource) error {
+	if v.Logger == nil {
+		v.Logger = logger.Default()
+		return nil
+	}
+
+	if v.Logger.Ref != "" {
+		adapter, ok := resource._loggers.Lookup(v.Logger.Ref)
+		if !ok {
+			return fmt.Errorf("not found Logger %v in Resource", v.Logger.Ref)
+		}
+
+		v.Logger.Inherit(adapter)
+	}
+
+	return nil
 }

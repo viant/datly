@@ -39,7 +39,9 @@ func ValidateSessionSelectors(s *Session) error {
 			return err
 		}
 
-		err = sanitizeColumns(selector, view, sb)
+		if err = sanitizeColumns(selector, view, sb); err != nil {
+			return err
+		}
 
 	}
 	return nil
@@ -71,15 +73,20 @@ func validateOffset(selector *data.Selector, view *data.View) error {
 }
 
 func sanitizeColumns(selector *data.Selector, view *data.View, sb *strings.Builder) error {
-	if len(selector.Columns) > 0 && !view.SelectorConstraints.Columns {
-		return fmt.Errorf("it is not allowed to use selector columns on view %v", view.Name)
-	}
-
 	if selector.Columns == nil {
 		return nil
 	}
 
 	for i, column := range selector.Columns {
+		viewColumn, ok := view.ColumnByName(column)
+		if !ok {
+			return fmt.Errorf("not found column %v in view %v", column, view.Name)
+		}
+
+		if !viewColumn.Filterable {
+			return fmt.Errorf("column %v is not filterable", column)
+		}
+
 		node, err := sanitize.Parse([]byte(column))
 		if err != nil {
 			return err

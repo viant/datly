@@ -6,6 +6,6 @@ type OnFetcher interface {
 	OnFetch(ctx context.Context) error
 }
 
-type AfterRelationCompleter interface {
-	AfterRelationsComplete(ctx context.Context)
+type OnRelationCompleter interface {
+	OnRelationComplete(ctx context.Context)
 }

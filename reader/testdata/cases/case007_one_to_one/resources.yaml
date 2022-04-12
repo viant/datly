@@ -4,7 +4,8 @@ Views:
     Name: events
     Table: events
     SelectorConstraints:
-      Columns: true
+      FilterableColumns:
+        - "*"
 
   - Connector:
       Ref: db

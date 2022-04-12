@@ -6,15 +6,37 @@ import (
 	"time"
 )
 
-type Adapter struct {
-	shared.Reference
+type (
+	Adapters     []*Adapter
+	AdapterIndex map[string]*Adapter
 
-	readTime          ReadTime
-	readingData       ReadingData
-	objectReconciling ObjectReconciling
-	columnsDetection  ColumnsDetection
+	Adapter struct {
+		shared.Reference
+		Name string
 
-	wasSet bool
+		readTime          ReadTime
+		readingData       ReadingData
+		objectReconciling ObjectReconciling
+		columnsDetection  ColumnsDetection
+	}
+)
+
+func (i AdapterIndex) Lookup(name string) (*Adapter, bool) {
+	adapter, ok := i[name]
+	return adapter, ok
+}
+
+func (i AdapterIndex) Register(adapter *Adapter) {
+	i[adapter.Name] = adapter
+}
+
+func (a Adapters) Index() AdapterIndex {
+	result := AdapterIndex{}
+	for i := range a {
+		result[a[i].Name] = a[i]
+	}
+
+	return result
 }
 
 func (l *Adapter) ColumnsDetection(sql, source string) {
@@ -49,12 +71,22 @@ func (l *Adapter) ReadTime(viewName string, start, end *time.Time, err error) {
 	l.readTime(viewName, start, end, err)
 }
 
-func NewLogger(logger Logger) *Adapter {
+func (l *Adapter) Inherit(adapter *Adapter) {
+	l.readTime = adapter.readTime
+	l.readingData = adapter.readingData
+	l.objectReconciling = adapter.objectReconciling
+	l.columnsDetection = adapter.columnsDetection
+}
+
+func NewLogger(name string, logger Logger) *Adapter {
 	if logger == nil {
-		return &Adapter{}
+		return &Adapter{
+			Name: name,
+		}
 	}
 
 	return &Adapter{
+		Name:              name,
 		Reference:         shared.Reference{},
 		readTime:          logger.ViewReadTime(),
 		readingData:       logger.ReadingData(),
@@ -65,7 +97,7 @@ func NewLogger(logger Logger) *Adapter {
 
 func Default() *Adapter {
 	if os.Getenv("DATLY_DEBUG") == "" {
-		return NewLogger(nil)
+		return NewLogger("", nil)
 	}
-	return NewLogger(&defaultLogger{})
+	return NewLogger("", &defaultLogger{})
 }

@@ -93,7 +93,16 @@ func (r *Relation) Init(ctx context.Context, resource *Resource, parent *View) e
 	}
 
 	view.indexColumns()
+
 	return r.Validate()
+}
+
+func (r *Relation) BeforeViewInit(ctx context.Context) error {
+	if err := r.ensureColumnAliasIfNeeded(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *Relation) initHolder(v *View) error {
@@ -139,6 +148,22 @@ func (r *Relation) Validate() error {
 	return nil
 }
 
+func (r *Relation) ensureColumnAliasIfNeeded() error {
+	columnSegments := strings.Split(r.Column, ".")
+	if len(columnSegments) > 2 {
+		return fmt.Errorf("invalid column name, supported only 0 or 1 dots are allowed")
+	}
+
+	if len(columnSegments) == 1 {
+		return nil
+	}
+
+	r.Column = columnSegments[1]
+	r.ColumnAlias = columnSegments[0]
+
+	return nil
+}
+
 //ViewReference creates a view reference
 func ViewReference(name, ref string, options ...Option) *View {
 	viewRef := &View{
@@ -155,7 +180,7 @@ func (v *View) applyOptions(options []Option) {
 	for _, option := range options {
 		switch actual := option.(type) {
 		case logger.Logger:
-			v.Logger = logger.NewLogger(actual)
+			v.Logger = logger.NewLogger("", actual)
 		case logger.Counter:
 			v.Counter = actual
 		}

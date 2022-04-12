@@ -10,6 +10,7 @@ import (
 	"github.com/viant/assertly"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/logger"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/shared"
 	"github.com/viant/dsunit"
@@ -37,7 +38,7 @@ type audience struct {
 	DealsSize     int
 }
 
-func (a *audience) AfterRelationsComplete(ctx context.Context) {
+func (a *audience) OnRelationComplete(ctx context.Context) {
 	a.DealsSize = len(a.Deals)
 }
 
@@ -562,9 +563,13 @@ func TestRead(t *testing.T) {
 		nestedRelation(),
 		inheritTypeForReferencedView(),
 		columnsInSource(),
+		detectColumnAlias(),
 		inheritConnector(),
 		criteriaWhere(),
 		inheritCoalesceTypes(),
+		inheritLogger(),
+		filterableColumns(),
+		wildcradAllowedFilterableColumns(),
 	}
 
 	//for index, testCase := range useCases[len(useCases)-1:] {
@@ -638,6 +643,129 @@ func TestRead(t *testing.T) {
 	}
 }
 
+func wildcradAllowedFilterableColumns() usecase {
+	type Event struct {
+		Id          int
+		Quantity    float64
+		EventTypeId int
+	}
+
+	resource := data.EmptyResource()
+	connector := &config.Connector{
+		Name:   "db",
+		DSN:    "./testdata/db/db.db",
+		Driver: "sqlite3",
+	}
+
+	resource.AddViews(&data.View{
+		Connector:            connector,
+		Name:                 "events",
+		Alias:                "ev",
+		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
+		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
+		InheritSchemaColumns: true,
+		Caser:                format.CaseUpperUnderscore,
+		SelectorConstraints: &data.Constraints{
+			FilterableColumns: []string{"*"},
+		},
+	})
+
+	return usecase{
+		view:        "events",
+		dataset:     "dataset001_events/",
+		description: "inherit coalesce types",
+		selectors: map[string]*data.Selector{
+			"events": {
+				Columns: []string{"ID", "QUANTITY"},
+			},
+		},
+		expect:   `[{"Id":1,"Quantity":33.23432374000549,"EventTypeId":0},{"Id":10,"Quantity":21.957962334156036,"EventTypeId":0},{"Id":100,"Quantity":5.084940046072006,"EventTypeId":0}]`,
+		resource: resource,
+		dest:     new([]*Event),
+	}
+}
+
+func filterableColumns() usecase {
+	type Event struct {
+		Id          int
+		Quantity    float64
+		EventTypeId int
+	}
+
+	resource := data.EmptyResource()
+	connector := &config.Connector{
+		Name:   "db",
+		DSN:    "./testdata/db/db.db",
+		Driver: "sqlite3",
+	}
+
+	resource.AddViews(&data.View{
+		Connector:            connector,
+		Name:                 "events",
+		Alias:                "ev",
+		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
+		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
+		InheritSchemaColumns: true,
+		Caser:                format.CaseUpperUnderscore,
+	})
+
+	return usecase{
+		view:        "events",
+		dataset:     "dataset001_events/",
+		description: "inherit coalesce types",
+		selectors: map[string]*data.Selector{
+			"events": {
+				Columns: []string{"ID", "QUANTITY"},
+			},
+		},
+		expectError: true,
+		resource:    resource,
+		dest:        new([]*Event),
+	}
+}
+
+func inheritLogger() usecase {
+	type Event struct {
+		Id          int
+		Quantity    float64
+		EventTypeId int
+	}
+
+	resource := data.EmptyResource()
+	connector := &config.Connector{
+		Name:   "db",
+		DSN:    "./testdata/db/db.db",
+		Driver: "sqlite3",
+	}
+
+	resource.AddLoggers(logger.NewLogger("logger", nil))
+
+	resource.AddViews(&data.View{
+		Logger: &logger.Adapter{
+			Reference: shared.Reference{
+				Ref: "logger",
+			},
+			Name: "events_logger",
+		},
+		Connector:            connector,
+		Name:                 "events",
+		Alias:                "ev",
+		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
+		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
+		InheritSchemaColumns: true,
+		Caser:                format.CaseUpperUnderscore,
+	})
+
+	return usecase{
+		view:        "events",
+		dataset:     "dataset001_events/",
+		description: "inherit coalesce types",
+		resource:    resource,
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"EventTypeId":2},{"Id":10,"Quantity":21.957962334156036,"EventTypeId":11},{"Id":100,"Quantity":5.084940046072006,"EventTypeId":111}]`,
+		dest:        new([]*Event),
+	}
+}
+
 func inheritCoalesceTypes() usecase {
 	type Event struct {
 		Id          int
@@ -656,7 +784,7 @@ func inheritCoalesceTypes() usecase {
 		Connector:            connector,
 		Name:                 "events",
 		Alias:                "ev",
-		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as QUANTITY, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
+		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
 		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 		Caser:                format.CaseUpperUnderscore,
@@ -665,7 +793,7 @@ func inheritCoalesceTypes() usecase {
 	return usecase{
 		view:        "events",
 		dataset:     "dataset001_events/",
-		description: "where criteria",
+		description: "inherit coalesce types",
 		resource:    resource,
 		expect:      `[{"Id":1,"Quantity":33.23432374000549,"EventTypeId":2},{"Id":10,"Quantity":21.957962334156036,"EventTypeId":11},{"Id":100,"Quantity":5.084940046072006,"EventTypeId":111}]`,
 		dest:        new([]*Event),
@@ -750,6 +878,32 @@ func inheritConnector() usecase {
 }
 
 func columnsInSource() usecase {
+	viewName, resource := columnsInResource("event_type_id", "et")
+
+	return usecase{
+		description: "parent column values in the source position",
+		dest:        new([]*event),
+		view:        viewName,
+		dataset:     "dataset001_events/",
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":0,"Events":null,"Name":""}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":0,"Events":null,"Name":""}}]`,
+		resource:    resource,
+	}
+}
+
+func detectColumnAlias() usecase {
+	viewName, resource := columnsInResource("et.event_type_id", "")
+
+	return usecase{
+		description: "detect column alias",
+		dest:        new([]*event),
+		view:        viewName,
+		dataset:     "dataset001_events/",
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":0,"Events":null,"Name":""}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":0,"Events":null,"Name":""}}]`,
+		resource:    resource,
+	}
+}
+
+func columnsInResource(column, alias string) (string, *data.Resource) {
 	resource := data.EmptyResource()
 	connector := &config.Connector{
 		Name:   "db",
@@ -768,7 +922,7 @@ func columnsInSource() usecase {
 				Of: &data.ReferenceView{
 					View: data.View{
 						Connector: connector,
-						From:      "SELECT * FROM EVENT_TYPES WHERE " + string(shared.ColumnInPosition),
+						From:      "SELECT * FROM EVENT_TYPES as et WHERE " + string(shared.ColumnInPosition),
 						Name:      "event_types",
 						Criteria: &data.Criteria{
 							Expression: "name like '%2%'",
@@ -777,21 +931,14 @@ func columnsInSource() usecase {
 					Column: "id",
 				},
 				Cardinality: data.One,
-				Column:      "event_type_id",
+				Column:      column,
+				ColumnAlias: alias,
 				Holder:      "EventType",
 			},
 		},
 		Schema: data.NewSchema(reflect.TypeOf(&event{})),
 	})
-
-	return usecase{
-		description: "parent column values in the source position",
-		dest:        new([]*event),
-		view:        "events",
-		dataset:     "dataset001_events/",
-		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":0,"Events":null,"Name":""}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":0,"Events":null,"Name":""}}]`,
-		resource:    resource,
-	}
+	return "events", resource
 }
 
 type event struct {

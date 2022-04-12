@@ -72,7 +72,7 @@ func (c Columns) Lookup(name string) (*Column, error) {
 		keys[counter] = k
 		counter++
 	}
-	err := fmt.Errorf("undefied columnname %v, avails: %+v", name, strings.Join(keys, ","))
+	err := fmt.Errorf("undefined column name %v, avails: %+v", name, strings.Join(keys, ","))
 	return nil, err
 }
 
