@@ -193,6 +193,8 @@ func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL st
 	if err != nil {
 		return 0, err
 	}
+
+	defer reader.Stmt().Close()
 	visitor := collector.Visitor()
 	readData := 0
 	err = reader.QueryAll(ctx, func(row interface{}) error {
