@@ -26,9 +26,9 @@ type Service struct {
 //TODO: Select with join when connector is the same for one to one relation
 func (s *Service) Read(ctx context.Context, session *Session) error {
 	var err error
-	begin := time.Now()
-	onFinish := session.View.Counter.Begin(begin)
-	defer s.afterRead(session, begin, err, onFinish)
+	start := time.Now()
+	onFinish := session.View.Counter.Begin(start)
+	defer s.afterRead(session, &start, err, onFinish)
 
 	if err = session.Init(ctx, s.Resource); err != nil {
 		return err
@@ -56,9 +56,9 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 	return nil
 }
 
-func (s *Service) afterRead(session *Session, begin time.Time, err error, onFinish counter.OnDone) {
+func (s *Service) afterRead(session *Session, start *time.Time, err error, onFinish counter.OnDone) {
 	end := time.Now()
-	session.View.Logger.ReadTime(end.Sub(begin), err)
+	session.View.Logger.ReadTime(session.View.Name, start, &end, err)
 	if err != nil {
 		session.View.Counter.IncrementValue(Error)
 	} else {

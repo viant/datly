@@ -56,19 +56,24 @@ func (c Columns) RegisterHolder(relation *Relation) error {
 
 //Lookup returns Column with given name.
 func (c Columns) Lookup(name string) (*Column, error) {
-	name = strings.ToLower(name)
-
-	column, ok := c[name]
-	if !ok {
-		var keys []string
-		for k := range c {
-			keys = append(keys, k)
-		}
-		err := fmt.Errorf("undefied columnname %v, avails: %+v", name, strings.Join(keys, ","))
-		return column, err
+	column, ok := c[strings.ToUpper(name)]
+	if ok {
+		return column, nil
 	}
 
-	return column, nil
+	column, ok = c[strings.ToLower(name)]
+	if ok {
+		return column, nil
+	}
+
+	keys := make([]string, len(c))
+	counter := 0
+	for k := range c {
+		keys[counter] = k
+		counter++
+	}
+	err := fmt.Errorf("undefied columnname %v, avails: %+v", name, strings.Join(keys, ","))
+	return nil, err
 }
 
 func (c Columns) RegisterWithName(name string, column *Column) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/datly/config"
+	"github.com/viant/datly/logger"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 )
@@ -21,7 +22,8 @@ type Resource struct {
 	Parameters  []*Parameter
 	_parameters Parameters
 
-	types Types
+	types   Types
+	Loggers []*logger.Adapter
 }
 
 //GetViews returns Views supplied with the Resource

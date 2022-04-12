@@ -15,6 +15,7 @@ import (
 	"github.com/viant/dsunit"
 	"github.com/viant/gmetric/counter/base"
 	"github.com/viant/toolbox"
+	"github.com/viant/toolbox/format"
 	"net/http"
 	"net/url"
 	"os"
@@ -619,7 +620,6 @@ func TestRead(t *testing.T) {
 		}
 
 		err = service.Read(context.TODO(), session)
-
 		if testCase.expectError {
 			assert.NotNil(t, err, testCase.description)
 			continue
@@ -656,9 +656,10 @@ func inheritCoalesceTypes() usecase {
 		Connector:            connector,
 		Name:                 "events",
 		Alias:                "ev",
-		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity FROM events as e `,
+		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as QUANTITY, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
 		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
+		Caser:                format.CaseUpperUnderscore,
 	})
 
 	return usecase{
@@ -666,7 +667,7 @@ func inheritCoalesceTypes() usecase {
 		dataset:     "dataset001_events/",
 		description: "where criteria",
 		resource:    resource,
-		expect:      `[{"Id":1,"Quantity":33.23432374000549,"EventTypeId":0},{"Id":10,"Quantity":21.957962334156036,"EventTypeId":0},{"Id":100,"Quantity":5.084940046072006,"EventTypeId":0}]`,
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"EventTypeId":2},{"Id":10,"Quantity":21.957962334156036,"EventTypeId":11},{"Id":100,"Quantity":5.084940046072006,"EventTypeId":111}]`,
 		dest:        new([]*Event),
 	}
 }

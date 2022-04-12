@@ -151,7 +151,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 	}
 
 	if v.Logger == nil {
-		v.Logger = logger.New()
+		v.Logger = logger.Default()
 	}
 
 	if v.Counter == nil {
