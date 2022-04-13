@@ -208,6 +208,11 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
+	//columnsMetadata := map[string]io.Column{}
+	if v.Source() == v.Table {
+
+	}
+
 	if err = ColumnSlice(v.Columns).Init(); err != nil {
 		return err
 	}
@@ -304,7 +309,7 @@ func (v *View) ensureColumns(ctx context.Context) error {
 	return nil
 }
 
-func convertIoColumnsToColumns(ioColumns []io.Column) []*Column {
+func convertIoColumnsToColumns(ioColumns []io.Column, nullable map[string]bool) []*Column {
 	columns := make([]*Column, 0)
 	for i := 0; i < len(ioColumns); i++ {
 		scanType := ioColumns[i].ScanType()
@@ -313,6 +318,7 @@ func convertIoColumnsToColumns(ioColumns []io.Column) []*Column {
 			Name:     ioColumns[i].Name(),
 			DataType: dataTypeName,
 			rType:    scanType,
+			Nullable: nullable[ioColumns[i].Name()],
 		})
 	}
 	return columns

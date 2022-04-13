@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/dsunit"
 	"github.com/viant/gmetric/counter/base"
+	_ "github.com/viant/sqlx/metadata/product/sqlite"
 	"github.com/viant/toolbox"
 	"github.com/viant/toolbox/format"
 	"net/http"
@@ -569,7 +570,8 @@ func TestRead(t *testing.T) {
 		inheritCoalesceTypes(),
 		inheritLogger(),
 		filterableColumns(),
-		wildcradAllowedFilterableColumns(),
+		wildcardAllowedFilterableColumns(),
+		autoCoalesce(),
 	}
 
 	//for index, testCase := range useCases[len(useCases)-1:] {
@@ -643,7 +645,40 @@ func TestRead(t *testing.T) {
 	}
 }
 
-func wildcradAllowedFilterableColumns() usecase {
+func autoCoalesce() usecase {
+	type Event struct {
+		Id          int
+		Quantity    float64
+		EventTypeId int
+	}
+
+	resource := data.EmptyResource()
+	connector := &config.Connector{
+		Name:   "db",
+		DSN:    "./testdata/db/db.db",
+		Driver: "sqlite3",
+	}
+
+	resource.AddViews(&data.View{
+		Connector:            connector,
+		Name:                 "events",
+		Table:                "events",
+		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
+		InheritSchemaColumns: true,
+		Caser:                format.CaseUpperUnderscore,
+	})
+
+	return usecase{
+		view:        "events",
+		dataset:     "dataset002_nils/",
+		description: "inherit coalesce types",
+		expect:      `[{"Id":1,"Quantity":0,"EventTypeId":0}]`,
+		resource:    resource,
+		dest:        new([]*Event),
+	}
+}
+
+func wildcardAllowedFilterableColumns() usecase {
 	type Event struct {
 		Id          int
 		Quantity    float64

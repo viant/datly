@@ -9,9 +9,9 @@ require (
 	github.com/aws/aws-sdk-go v1.28.4
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/go-errors/errors v1.4.2
-	github.com/go-sql-driver/mysql v1.5.0
+	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gocql/gocql v0.0.0-20200115135732-617765adbe2d // indirect
-	github.com/lib/pq v1.3.0
+	github.com/lib/pq v1.10.4
 	github.com/mattn/go-sqlite3 v2.0.2+incompatible
 	github.com/onsi/ginkgo v1.11.0 // indirect
 	github.com/onsi/gomega v1.8.1 // indirect
@@ -28,7 +28,7 @@ require (
 	github.com/viant/gtly v0.0.0-20200927172514-d1417cac563d
 	github.com/viant/parsly v0.0.0-20220217213746-bb166fe746b9
 	github.com/viant/scy v0.0.0-20220223165437-725359877ec0
-	github.com/viant/sqlx v0.0.0-20220412001108-a69e03ec7d4f
+	github.com/viant/sqlx v0.0.0-20220412215625-85e6fb65daba
 	github.com/viant/toolbox v0.34.5
 	github.com/viant/xunsafe v0.7.1-0.20220228210536-20bce86415bb
 	github.com/yuin/gopher-lua v0.0.0-20191220021717-ab39c6098bdb // indirect

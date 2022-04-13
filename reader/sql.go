@@ -103,7 +103,7 @@ func (b *Builder) appendColumns(view *data.View, selector *data.Selector, sb *st
 			sb.WriteString(separatorFragment)
 		}
 
-		if col.Expression != "" {
+		if col.SqlExpression() != col.Name {
 			sb.WriteString(col.SqlExpression())
 		} else {
 			if view.Alias != "" {
