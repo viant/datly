@@ -158,13 +158,14 @@ func (s *Service) batchData(collector *data.Collector) *BatchData {
 
 func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData, db *sql.DB, collector *data.Collector) error {
 	batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
+	visitor := collector.Visitor()
 
 	for {
 		SQL, err := s.prepareSQL(view, selector, upstream, params, batchData, collector.Relation())
 		if err != nil {
 			return err
 		}
-		err = s.query(ctx, view, db, SQL, collector, batchData)
+		err = s.query(ctx, view, db, SQL, collector, batchData, visitor)
 		if err != nil {
 			return err
 		}
@@ -180,7 +181,7 @@ func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *da
 	return nil
 }
 
-func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL string, collector *data.Collector, batchData *BatchData) error {
+func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL string, collector *data.Collector, batchData *BatchData, visitor data.Visitor) error {
 	begin := time.Now()
 	reader, err := read.New(ctx, db, SQL, collector.NewItem(), io.Resolve(collector.Resolve))
 	if err != nil {
@@ -188,7 +189,6 @@ func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL st
 	}
 
 	defer reader.Stmt().Close()
-	visitor := collector.Visitor()
 	readData := 0
 	err = reader.QueryAll(ctx, func(row interface{}) error {
 		readData++

@@ -88,7 +88,6 @@ type (
 	}
 
 	Batch struct {
-		Read   int
 		Parent int
 	}
 )

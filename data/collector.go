@@ -34,6 +34,9 @@ type Collector struct {
 	wg              *sync.WaitGroup
 	supportParallel bool
 	wgDelta         int
+
+	indexCounter int
+	manyCounter  int
 }
 
 func (r *Collector) Lock() *sync.Mutex {
@@ -158,14 +161,13 @@ func (r *Collector) Visitor() Visitor {
 }
 
 func (r *Collector) valueIndexer(visitorRelations []*Relation) func(value interface{}) error {
-	counter := 0
 	return func(value interface{}) error {
 		ptr := xunsafe.AsPointer(value)
 		for _, rel := range visitorRelations {
 			fieldValue := rel.columnField.Value(ptr)
-			r.indexValueByRel(fieldValue, rel, counter)
+			r.indexValueByRel(fieldValue, rel, r.indexCounter)
 		}
-		counter++
+		r.indexCounter++
 		return nil
 	}
 }
@@ -174,18 +176,18 @@ func (r *Collector) indexValueByRel(fieldValue interface{}, rel *Relation, count
 	switch acutal := fieldValue.(type) {
 	case []int:
 		for _, v := range acutal {
-			r.indexValueToPostition(rel, v, counter)
+			r.indexValueToPosition(rel, v, counter)
 		}
 	case []string:
 		for _, v := range acutal {
-			r.indexValueToPostition(rel, v, counter)
+			r.indexValueToPosition(rel, v, counter)
 		}
 	default:
-		r.indexValueToPostition(rel, fieldValue, counter)
+		r.indexValueToPosition(rel, fieldValue, counter)
 	}
 }
 
-func (r *Collector) indexValueToPostition(rel *Relation, fieldValue interface{}, counter int) {
+func (r *Collector) indexValueToPosition(rel *Relation, fieldValue interface{}, counter int) {
 	_, ok := r.valuePosition[rel.Column][fieldValue]
 	if !ok {
 		r.valuePosition[rel.Column][fieldValue] = []int{counter}
@@ -220,7 +222,6 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 func (r *Collector) visitorMany(relation *Relation) func(value interface{}) error {
 	keyField := relation.Of.field
 	holderField := relation.holderField
-	counter := 0
 	var xType *xunsafe.Type
 	var values *[]interface{}
 	var key interface{}
@@ -236,8 +237,8 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 		if keyField != nil {
 			key = keyField.Interface(xunsafe.AsPointer(owner))
 		} else {
-			key = xType.Deref((*values)[counter])
-			counter++
+			key = xType.Deref((*values)[r.manyCounter])
+			r.manyCounter++
 		}
 
 		valuePosition := r.parentValuesPositions(relation.Column)

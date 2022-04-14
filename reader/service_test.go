@@ -88,6 +88,7 @@ type usecase struct {
 	provider    *base.Provider
 }
 
+//TODO: Refactor in order to run each test twice, with default BatchSize, and BatchSize = 1 to double check.
 func TestRead(t *testing.T) {
 	type Event struct {
 		ID          int
@@ -618,31 +619,34 @@ func TestRead(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		session := &reader.Session{
-			Dest:        testCase.dest,
-			View:        dataView,
-			Selectors:   testCase.selectors,
-			Subject:     testCase.subject,
-			HttpRequest: testCase.request,
-			MatchedPath: testCase.path,
-		}
+		testView(t, testCase, dataView, err, service)
+	}
+}
 
-		err = service.Read(context.TODO(), session)
-		if testCase.expectError {
-			assert.NotNil(t, err, testCase.description)
-			continue
-		}
+func testView(t *testing.T, testCase usecase, dataView *data.View, err error, service *reader.Service) {
+	session := &reader.Session{
+		Dest:        testCase.dest,
+		View:        dataView,
+		Selectors:   testCase.selectors,
+		Subject:     testCase.subject,
+		HttpRequest: testCase.request,
+		MatchedPath: testCase.path,
+	}
 
-		assert.Nil(t, err, testCase.description)
-		d := testCase.dest
-		b, _ := json.Marshal(d)
-		result := string(b)
+	err = service.Read(context.TODO(), session)
+	if testCase.expectError {
+		assert.NotNil(t, err, testCase.description)
+		return
+	}
 
-		if !assertly.AssertValues(t, testCase.expect, result, testCase.description) {
-			fmt.Println(result)
-			fmt.Println(testCase.expect)
-		}
+	assert.Nil(t, err, testCase.description)
+	d := testCase.dest
+	b, _ := json.Marshal(d)
+	result := string(b)
 
+	if !assertly.AssertValues(t, testCase.expect, result, testCase.description) {
+		fmt.Println(result)
+		fmt.Println(testCase.expect)
 	}
 }
 
