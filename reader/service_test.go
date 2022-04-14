@@ -648,7 +648,6 @@ func TestRead(t *testing.T) {
 
 func batchParent() usecase {
 	resource, viewName := eventsResource(&data.Batch{
-		Read:   2,
 		Parent: 1,
 	})
 	return usecase{

@@ -95,7 +95,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 	}
 
 	collector.WaitIfNeeded()
-	batchData := s.batchData(selector, view, collector)
+	batchData := s.batchData(collector)
 	if batchData.ColumnName != "" && len(batchData.Values) == 0 {
 		return
 	}
@@ -147,11 +147,8 @@ func (s *Service) afterReadAll(collectorFetchEmitted bool, collector *data.Colle
 	collector.Fetched()
 }
 
-func (s *Service) batchData(selector *data.Selector, view *data.View, collector *data.Collector) *BatchData {
-	batchData := &BatchData{
-		Read:          0,
-		BatchReadSize: view.LimitWithSelector(selector),
-	}
+func (s *Service) batchData(collector *data.Collector) *BatchData {
+	batchData := &BatchData{}
 
 	batchData.Values, batchData.ColumnName = collector.ParentPlaceholders()
 	batchData.ParentReadSize = len(batchData.Values)
@@ -160,7 +157,6 @@ func (s *Service) batchData(selector *data.Selector, view *data.View, collector 
 }
 
 func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData, db *sql.DB, collector *data.Collector) error {
-	limit := view.LimitWithSelector(selector)
 	batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
 
 	for {
@@ -168,32 +164,27 @@ func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *da
 		if err != nil {
 			return err
 		}
-		readSoFar, err := s.query(ctx, view, db, SQL, collector, batchData)
+		err = s.query(ctx, view, db, SQL, collector, batchData)
 		if err != nil {
 			return err
 		}
 
-		batchData.Read = batchData.Read + readSoFar
-
-		if batchData.BatchReadSize == 0 || batchData.Read == limit || readSoFar < batchData.BatchReadSize {
-			if batchData.ParentReadSize != batchData.Parent {
-				var nextParents int
-				batchData.Read = 0
-				batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
-				batchData.Parent += nextParents
-				continue
-			}
+		if batchData.Parent == batchData.ParentReadSize {
 			break
 		}
+
+		var nextParents int
+		batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
+		batchData.Parent += nextParents
 	}
 	return nil
 }
 
-func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL string, collector *data.Collector, batchData *BatchData) (int, error) {
+func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL string, collector *data.Collector, batchData *BatchData) error {
 	begin := time.Now()
 	reader, err := read.New(ctx, db, SQL, collector.NewItem(), io.Resolve(collector.Resolve))
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	defer reader.Stmt().Close()
@@ -212,10 +203,10 @@ func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL st
 	end := time.Now()
 	view.Logger.ReadingData(end.Sub(begin), SQL, readData, batchData.ValuesBatch, err)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	return readData, nil
+	return nil
 }
 
 func (s *Service) prepareSQL(view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData, relation *data.Relation) (string, error) {

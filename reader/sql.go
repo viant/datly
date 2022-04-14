@@ -30,9 +30,6 @@ type (
 
 	//BatchData groups data needed to use various data.MatchStrategy
 	BatchData struct {
-		BatchReadSize int
-		Read          int
-
 		ColumnName     string
 		Parent         int
 		ParentReadSize int
@@ -139,17 +136,6 @@ func (b *Builder) appendOrderBy(view *data.View, selector *data.Selector, sb *st
 
 func (b *Builder) appendLimit(view *data.View, selector *data.Selector, batchData *BatchData, sb *strings.Builder) {
 	limit := view.LimitWithSelector(selector)
-	if limit == 0 {
-		limit = batchData.BatchReadSize
-	} else if limit != 0 {
-		toRead := limit - batchData.BatchReadSize - batchData.Read
-		if toRead >= 0 {
-			limit = batchData.BatchReadSize
-		} else if toRead < 0 {
-			limit = batchData.BatchReadSize + toRead
-		}
-	}
-
 	if limit > 0 {
 		sb.WriteString(limitFragment)
 		sb.WriteString(strconv.Itoa(limit))
@@ -165,7 +151,6 @@ func (b *Builder) appendOffset(view *data.View, selector *data.Selector, batchDa
 		}
 	}
 
-	offset += batchData.Read
 	if offset > 0 {
 		sb.WriteString(offsetFragment)
 		sb.WriteString(strconv.Itoa(offset))

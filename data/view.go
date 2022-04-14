@@ -871,7 +871,6 @@ func (v *View) ensureBatch() {
 	}
 
 	v.Batch = &Batch{
-		Read:   100000,
 		Parent: 10000,
 	}
 }

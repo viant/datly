@@ -74,7 +74,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:     "dataset001_events/",
 			description: `columns in`,
-			output:      `SELECT f.ID, f.Price FROM Events AS f  WHERE f.ID IN (?, ?, ?)  LIMIT 10 OFFSET 2`,
+			output:      `SELECT f.ID, f.Price FROM Events AS f  WHERE f.ID IN (?, ?, ?)`,
 			view: &data.View{
 				Columns: []*data.Column{
 					{
@@ -93,16 +93,14 @@ func TestBuilder_Build(t *testing.T) {
 				Alias:               "f",
 			},
 			batchData: &BatchData{
-				BatchReadSize: 10,
-				Read:          2,
-				ColumnName:    "ID",
-				ValuesBatch:   []interface{}{1, 2, 3},
+				ColumnName:  "ID",
+				ValuesBatch: []interface{}{1, 2, 3},
 			},
 		},
 		{
 			dataset:     "dataset001_events/",
 			description: `columns in source`,
-			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS WHERE ID IN (?, ?, ?) ) AS f  LIMIT 10 OFFSET 2`,
+			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS WHERE ID IN (?, ?, ?) ) AS f`,
 			view: &data.View{
 				Columns: []*data.Column{
 					{
@@ -121,16 +119,14 @@ func TestBuilder_Build(t *testing.T) {
 				Alias:               "f",
 			},
 			batchData: &BatchData{
-				BatchReadSize: 10,
-				Read:          2,
-				ColumnName:    "ID",
-				ValuesBatch:   []interface{}{1, 2, 3},
+				ColumnName:  "ID",
+				ValuesBatch: []interface{}{1, 2, 3},
 			},
 		},
 		{
 			dataset:     "dataset001_events/",
 			description: `criteria replacement`,
-			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev  WHERE ev.ID IN (?, ?, ?) ) AS f  LIMIT 10 OFFSET 2`,
+			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev  WHERE ev.ID IN (?, ?, ?) ) AS f`,
 			view: &data.View{
 				Columns: []*data.Column{
 					{
@@ -151,10 +147,8 @@ func TestBuilder_Build(t *testing.T) {
 				ColumnAlias: "ev",
 			},
 			batchData: &BatchData{
-				BatchReadSize: 10,
-				Read:          2,
-				ColumnName:    "ID",
-				ValuesBatch:   []interface{}{1, 2, 3},
+				ColumnName:  "ID",
+				ValuesBatch: []interface{}{1, 2, 3},
 			},
 		},
 		{
@@ -180,102 +174,6 @@ func TestBuilder_Build(t *testing.T) {
 			relation: &data.Relation{ColumnAlias: "ev"},
 			batchData: &BatchData{
 				ValuesBatch: []interface{}{},
-			},
-		},
-		{
-			dataset:     "dataset001_events/",
-			description: `batch data`,
-			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev ) AS f  WHERE f.ID IN (?, ?, ?)  LIMIT 10 OFFSET 8`,
-			view: &data.View{
-				Columns: []*data.Column{
-					{
-						Name:     "ID",
-						DataType: "Int",
-					},
-					{
-						Name:     "Price",
-						DataType: "Float",
-					},
-				},
-				Selector:      &data.Config{},
-				From:          "SELECT * FROM EVENTS as ev ",
-				Name:          "events",
-				Alias:         "f",
-				MatchStrategy: data.ReadMatched,
-				Batch: &data.Batch{
-					Read:   10,
-					Parent: 0,
-				},
-			},
-			batchData: &BatchData{
-				BatchReadSize: 10,
-				Read:          8,
-				ColumnName:    "ID",
-				ValuesBatch:   []interface{}{1, 2, 3},
-			},
-		},
-		{
-			dataset:     "dataset001_events/",
-			description: `batch data`,
-			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev ) AS f  WHERE f.ID IN (?, ?, ?)  LIMIT 10 OFFSET 8`,
-			view: &data.View{
-				Columns: []*data.Column{
-					{
-						Name:     "ID",
-						DataType: "Int",
-					},
-					{
-						Name:     "Price",
-						DataType: "Float",
-					},
-				},
-				Selector:      &data.Config{},
-				From:          "SELECT * FROM EVENTS as ev ",
-				Name:          "events",
-				Alias:         "f",
-				MatchStrategy: data.ReadMatched,
-				Batch: &data.Batch{
-					Read: 10,
-				},
-			},
-			batchData: &BatchData{
-				BatchReadSize: 10,
-				Read:          8,
-				ColumnName:    "ID",
-				ValuesBatch:   []interface{}{1, 2, 3},
-			},
-		},
-		{
-			dataset:     "dataset001_events/",
-			description: `batch data with default limit`,
-			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev ) AS f  WHERE f.ID IN (?, ?, ?)  LIMIT 2 OFFSET 8`,
-			view: &data.View{
-				Columns: []*data.Column{
-					{
-						Name:     "ID",
-						DataType: "Int",
-					},
-					{
-						Name:     "Price",
-						DataType: "Float",
-					},
-				},
-				Selector: &data.Config{
-					Limit: 10,
-				},
-				From:          "SELECT * FROM EVENTS as ev ",
-				Name:          "events",
-				Alias:         "f",
-				MatchStrategy: data.ReadMatched,
-				Batch: &data.Batch{
-					Read: 10,
-				},
-			},
-			batchData: &BatchData{
-				BatchReadSize: 10,
-				Read:          8,
-				ColumnName:    "ID",
-				ValuesBatch:   []interface{}{1, 2, 3},
 			},
 		},
 		{
@@ -307,7 +205,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:     "dataset001_events/",
 			description: `pagination replacement`,
-			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev  LIMIT 10 OFFSET 2) AS f  WHERE f.ID IN (?, ?, ?)`,
+			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev ) AS f  WHERE f.ID IN (?, ?, ?)`,
 			view: &data.View{
 				Columns: []*data.Column{
 					{
@@ -325,10 +223,8 @@ func TestBuilder_Build(t *testing.T) {
 			},
 			relation: &data.Relation{ColumnAlias: "ev"},
 			batchData: &BatchData{
-				BatchReadSize: 10,
-				Read:          2,
-				ColumnName:    "ID",
-				ValuesBatch:   []interface{}{1, 2, 3},
+				ColumnName:  "ID",
+				ValuesBatch: []interface{}{1, 2, 3},
 			},
 		},
 	}
@@ -371,8 +267,4 @@ func initDb(t *testing.T, configPath, datasetPath, dataStore string) bool {
 	}
 
 	return false
-}
-
-func intPtr(i int) *int {
-	return &i
 }
