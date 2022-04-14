@@ -30,7 +30,7 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 	onFinish := session.View.Counter.Begin(start)
 	defer s.afterRead(session, &start, err, onFinish)
 
-	if err = session.Init(ctx, s.Resource); err != nil {
+	if err = session.Init(); err != nil {
 		return err
 	}
 
@@ -153,36 +153,38 @@ func (s *Service) batchData(selector *data.Selector, view *data.View, collector 
 		BatchReadSize: view.LimitWithSelector(selector),
 	}
 
-	if view.BatchReadSize != nil {
-		batchData.BatchReadSize = *view.BatchReadSize
-	}
-
 	batchData.Values, batchData.ColumnName = collector.ParentPlaceholders()
+	batchData.ParentReadSize = len(batchData.Values)
 
 	return batchData
 }
 
 func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData, db *sql.DB, collector *data.Collector) error {
-	readData := 0
 	limit := view.LimitWithSelector(selector)
+	batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
 
 	for {
 		SQL, err := s.prepareSQL(view, selector, upstream, params, batchData, collector.Relation())
 		if err != nil {
 			return err
 		}
-		readData, err = s.query(ctx, view, db, SQL, collector, batchData)
+		readSoFar, err := s.query(ctx, view, db, SQL, collector, batchData)
 		if err != nil {
 			return err
 		}
 
-		batchData.Read = batchData.Read + readData
+		batchData.Read = batchData.Read + readSoFar
 
-		if batchData.BatchReadSize == 0 || batchData.Read == limit || readData < batchData.BatchReadSize {
+		if batchData.BatchReadSize == 0 || batchData.Read == limit || readSoFar < batchData.BatchReadSize {
+			if batchData.ParentReadSize != batchData.Parent {
+				var nextParents int
+				batchData.Read = 0
+				batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
+				batchData.Parent += nextParents
+				continue
+			}
 			break
 		}
-
-		readData = 0
 	}
 	return nil
 }
@@ -205,10 +207,10 @@ func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL st
 			}
 		}
 		return visitor(row)
-	}, batchData.Values...)
+	}, batchData.ValuesBatch...)
 
 	end := time.Now()
-	view.Logger.ReadingData(end.Sub(begin), SQL, readData, batchData.Values, err)
+	view.Logger.ReadingData(end.Sub(begin), SQL, readData, batchData.ValuesBatch, err)
 	if err != nil {
 		return 0, err
 	}

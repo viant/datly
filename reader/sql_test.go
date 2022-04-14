@@ -96,7 +96,7 @@ func TestBuilder_Build(t *testing.T) {
 				BatchReadSize: 10,
 				Read:          2,
 				ColumnName:    "ID",
-				Values:        []interface{}{1, 2, 3},
+				ValuesBatch:   []interface{}{1, 2, 3},
 			},
 		},
 		{
@@ -124,7 +124,7 @@ func TestBuilder_Build(t *testing.T) {
 				BatchReadSize: 10,
 				Read:          2,
 				ColumnName:    "ID",
-				Values:        []interface{}{1, 2, 3},
+				ValuesBatch:   []interface{}{1, 2, 3},
 			},
 		},
 		{
@@ -154,7 +154,7 @@ func TestBuilder_Build(t *testing.T) {
 				BatchReadSize: 10,
 				Read:          2,
 				ColumnName:    "ID",
-				Values:        []interface{}{1, 2, 3},
+				ValuesBatch:   []interface{}{1, 2, 3},
 			},
 		},
 		{
@@ -179,7 +179,7 @@ func TestBuilder_Build(t *testing.T) {
 			},
 			relation: &data.Relation{ColumnAlias: "ev"},
 			batchData: &BatchData{
-				Values: []interface{}{},
+				ValuesBatch: []interface{}{},
 			},
 		},
 		{
@@ -202,13 +202,16 @@ func TestBuilder_Build(t *testing.T) {
 				Name:          "events",
 				Alias:         "f",
 				MatchStrategy: data.ReadMatched,
-				BatchReadSize: intPtr(10),
+				Batch: &data.Batch{
+					Read:   10,
+					Parent: 0,
+				},
 			},
 			batchData: &BatchData{
 				BatchReadSize: 10,
 				Read:          8,
 				ColumnName:    "ID",
-				Values:        []interface{}{1, 2, 3},
+				ValuesBatch:   []interface{}{1, 2, 3},
 			},
 		},
 		{
@@ -231,13 +234,15 @@ func TestBuilder_Build(t *testing.T) {
 				Name:          "events",
 				Alias:         "f",
 				MatchStrategy: data.ReadMatched,
-				BatchReadSize: intPtr(10),
+				Batch: &data.Batch{
+					Read: 10,
+				},
 			},
 			batchData: &BatchData{
 				BatchReadSize: 10,
 				Read:          8,
 				ColumnName:    "ID",
-				Values:        []interface{}{1, 2, 3},
+				ValuesBatch:   []interface{}{1, 2, 3},
 			},
 		},
 		{
@@ -262,13 +267,15 @@ func TestBuilder_Build(t *testing.T) {
 				Name:          "events",
 				Alias:         "f",
 				MatchStrategy: data.ReadMatched,
-				BatchReadSize: intPtr(10),
+				Batch: &data.Batch{
+					Read: 10,
+				},
 			},
 			batchData: &BatchData{
 				BatchReadSize: 10,
 				Read:          8,
 				ColumnName:    "ID",
-				Values:        []interface{}{1, 2, 3},
+				ValuesBatch:   []interface{}{1, 2, 3},
 			},
 		},
 		{
@@ -292,8 +299,8 @@ func TestBuilder_Build(t *testing.T) {
 				Alias:    "f",
 			},
 			batchData: &BatchData{
-				ColumnName: "id",
-				Values:     []interface{}{1, 2, 3},
+				ColumnName:  "id",
+				ValuesBatch: []interface{}{1, 2, 3},
 			},
 			relation: &data.Relation{ColumnAlias: "ev"},
 		},
@@ -321,7 +328,7 @@ func TestBuilder_Build(t *testing.T) {
 				BatchReadSize: 10,
 				Read:          2,
 				ColumnName:    "ID",
-				Values:        []interface{}{1, 2, 3},
+				ValuesBatch:   []interface{}{1, 2, 3},
 			},
 		},
 	}

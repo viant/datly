@@ -9,7 +9,8 @@ Views:
     Ref: otherdb
   Name: languages
   Table: languages
-  BatchReadSize: 4
+  Batch:
+    Read: 4
   Selector:
     Limit: 14
 

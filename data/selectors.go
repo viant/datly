@@ -14,3 +14,15 @@ func (s Selectors) Init() {
 		selector.Init()
 	}
 }
+
+func (s Selectors) GetOrCreate(viewName string) *Selector {
+	selector, ok := s[viewName]
+	if ok {
+		return selector
+	}
+
+	selector = &Selector{}
+	s[viewName] = selector
+
+	return selector
+}

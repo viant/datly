@@ -32,8 +32,13 @@ type (
 	BatchData struct {
 		BatchReadSize int
 		Read          int
-		ColumnName    string
-		Values        []interface{}
+
+		ColumnName     string
+		Parent         int
+		ParentReadSize int
+
+		Values      []interface{}
+		ValuesBatch []interface{}
 	}
 )
 
@@ -181,7 +186,7 @@ func (b *Builder) buildColumnsIn(batchData *BatchData, alias string) string {
 
 	sb.WriteString(batchData.ColumnName)
 	sb.WriteString(inFragment)
-	for i := range batchData.Values {
+	for i := range batchData.ValuesBatch {
 		if i != 0 {
 			sb.WriteString(separatorFragment)
 		}

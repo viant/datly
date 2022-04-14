@@ -1,7 +1,6 @@
 package reader
 
 import (
-	"context"
 	"fmt"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/sanitize"
@@ -43,13 +42,8 @@ func (s *Session) NewReplacement(view *data.View) rdata.Map {
 }
 
 //Init initializes session
-func (s *Session) Init(ctx context.Context, resource *data.Resource) error {
+func (s *Session) Init() error {
 	var err error
-
-	if err = s.View.Init(ctx, resource); err != nil {
-		return err
-	}
-
 	s.Selectors.Init()
 
 	if _, ok := s.Dest.(*interface{}); !ok {

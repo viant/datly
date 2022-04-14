@@ -44,7 +44,8 @@ type (
 		With []*Relation `json:",omitempty"`
 
 		MatchStrategy MatchStrategy `json:",omitempty"`
-		BatchReadSize *int          `json:",omitempty"`
+		Batch         *Batch
+		//BatchReadSize *int `json:",omitempty"`
 
 		Logger  *logger.Adapter `json:"-"`
 		Counter logger.Counter  `json:"-"`
@@ -84,6 +85,11 @@ type (
 		Limit             bool
 		Offset            bool
 		FilterableColumns []string
+	}
+
+	Batch struct {
+		Read   int
+		Parent int
 	}
 )
 
@@ -152,6 +158,8 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 	if err = v.inheritFromViewIfNeeded(ctx, resource); err != nil {
 		return err
 	}
+
+	v.ensureBatch()
 
 	if err = v.ensureLogger(resource); err != nil {
 		return err
@@ -433,10 +441,6 @@ func (v *View) inherit(view *View) {
 		v.MatchStrategy = view.MatchStrategy
 	}
 
-	if v.BatchReadSize == nil {
-		v.BatchReadSize = view.BatchReadSize
-	}
-
 	if v.Selector == nil {
 		v.Selector = view.Selector
 	}
@@ -447,6 +451,10 @@ func (v *View) inherit(view *View) {
 
 	if v.Logger == nil {
 		v.Logger = view.Logger
+	}
+
+	if v.Batch == nil {
+		v.Batch = view.Batch
 	}
 }
 
@@ -855,4 +863,15 @@ func (v *View) ensureLogger(resource *Resource) error {
 	}
 
 	return nil
+}
+
+func (v *View) ensureBatch() {
+	if v.Batch != nil {
+		return
+	}
+
+	v.Batch = &Batch{
+		Read:   100000,
+		Parent: 10000,
+	}
 }

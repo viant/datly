@@ -572,6 +572,7 @@ func TestRead(t *testing.T) {
 		filterableColumns(),
 		wildcardAllowedFilterableColumns(),
 		autoCoalesce(),
+		batchParent(),
 	}
 
 	//for index, testCase := range useCases[len(useCases)-1:] {
@@ -642,6 +643,21 @@ func TestRead(t *testing.T) {
 			fmt.Println(testCase.expect)
 		}
 
+	}
+}
+
+func batchParent() usecase {
+	resource, viewName := eventsResource(&data.Batch{
+		Read:   2,
+		Parent: 1,
+	})
+	return usecase{
+		description: "batch parent",
+		dest:        new([]*event),
+		view:        viewName,
+		dataset:     "dataset001_events/",
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":2,"Events":null,"Name":"type 6"}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":111,"Events":null,"Name":"type 3"}}]`,
+		resource:    resource,
 	}
 }
 
@@ -870,6 +886,18 @@ func criteriaWhere() usecase {
 }
 
 func inheritConnector() usecase {
+	resource, viewName := eventsResource(nil)
+	return usecase{
+		description: "inherit connector",
+		dest:        new([]*event),
+		view:        viewName,
+		dataset:     "dataset001_events/",
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":2,"Events":null,"Name":"type 6"}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":111,"Events":null,"Name":"type 3"}}]`,
+		resource:    resource,
+	}
+}
+
+func eventsResource(batch *data.Batch) (*data.Resource, string) {
 	resource := data.EmptyResource()
 	connector := &config.Connector{
 		Name:   "db",
@@ -891,7 +919,11 @@ func inheritConnector() usecase {
 			{
 				Name: "event-event_types",
 				Of: &data.ReferenceView{
-					View:   *data.ViewReference("event-event_types", "event-types"),
+					View: data.View{
+						Name:      "event-event_types",
+						Reference: shared.Reference{Ref: "event-types"},
+						Batch:     batch,
+					},
 					Column: "id",
 				},
 				Cardinality: data.One,
@@ -901,15 +933,7 @@ func inheritConnector() usecase {
 		},
 		Schema: data.NewSchema(reflect.TypeOf(&event{})),
 	})
-
-	return usecase{
-		description: "inherit connector",
-		dest:        new([]*event),
-		view:        "events",
-		dataset:     "dataset001_events/",
-		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":2,"Events":null,"Name":"type 6"}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":111,"Events":null,"Name":"type 3"}}]`,
-		resource:    resource,
-	}
+	return resource, "events"
 }
 
 func columnsInSource() usecase {
