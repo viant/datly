@@ -124,7 +124,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 	ptr, xslice := collector.Slice()
 	for i := 0; i < xslice.Len(ptr); i++ {
 		if actual, ok := xslice.ValuePointerAt(ptr, i).(OnRelationCompleter); ok {
-			actual.OnRelationComplete(ctx)
+			actual.OnRelation(ctx)
 			continue
 		}
 

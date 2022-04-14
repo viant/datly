@@ -7,5 +7,5 @@ type OnFetcher interface {
 }
 
 type OnRelationCompleter interface {
-	OnRelationComplete(ctx context.Context)
+	OnRelation(ctx context.Context)
 }

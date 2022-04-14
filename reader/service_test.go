@@ -39,7 +39,7 @@ type audience struct {
 	DealsSize     int
 }
 
-func (a *audience) OnRelationComplete(ctx context.Context) {
+func (a *audience) OnRelation(ctx context.Context) {
 	a.DealsSize = len(a.Deals)
 }
 
