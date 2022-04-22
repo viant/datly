@@ -110,3 +110,22 @@ func (c *Connector) inherit(connector *Connector) {
 		c.Name = connector.Name
 	}
 }
+
+//Reset reset connector
+func (c *Connector) Reset() {
+	if c.db == nil {
+		return
+	}
+	_ = c.db.Close()
+	c.db = nil
+}
+
+//Close closes connector
+func (c *Connector) Close() error {
+	if c.db == nil {
+		return nil
+	}
+	err := c.db.Close()
+	c.db = nil
+	return err
+}
