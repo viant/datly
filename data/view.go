@@ -215,11 +215,6 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	//columnsMetadata := map[string]io.Column{}
-	if v.Source() == v.Table {
-
-	}
-
 	if err = ColumnSlice(v.Columns).Init(); err != nil {
 		return err
 	}

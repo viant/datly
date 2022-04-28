@@ -198,3 +198,7 @@ func (r *Resource) AddParameters(parameters ...*Parameter) {
 func (r *Resource) AddLoggers(loggers ...*logger.Adapter) {
 	r.Loggers = append(r.Loggers, loggers...)
 }
+
+func (r *Resource) SetTypes(types Types) {
+	r.types = types
+}

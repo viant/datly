@@ -4,6 +4,8 @@ Routes:
     View:
       Ref: events_ref
       Name: events
+    Visitor:
+      Ref: event_visitor
 
 Resource:
   Views:
@@ -11,13 +13,8 @@ Resource:
       Connector:
         Ref: db
       Table: events
-      SelectorConstraints:
-        OrderBy: true
-        Limit: true
-        Offset: true
-        Criteria: true
-        FilterableColumns:
-          - '*'
+      Schema:
+        Name: event
 
   Connectors:
     - Name: db

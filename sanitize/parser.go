@@ -129,7 +129,7 @@ outer:
 		}
 
 	}
-	return &Literal{Value: strings.Join(values, ","), Kind: kind}, nil
+	return &Parentheses{P: &Literal{Value: strings.Join(values, ","), Kind: kind}}, nil
 }
 
 func expectIsExpression(cursor *parsly.Cursor) (string, error) {

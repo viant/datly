@@ -1,9 +1,10 @@
 Routes:
-  - URI: "/api/events"
+  - URI: "/api/events/{eventId}"
     Method: GET
     View:
       Ref: events_ref
       Name: events
+    ReturnSingle: true
 
 Resource:
   Views:
@@ -11,13 +12,13 @@ Resource:
       Connector:
         Ref: db
       Table: events
-      SelectorConstraints:
-        OrderBy: true
-        Limit: true
-        Offset: true
-        Criteria: true
-        FilterableColumns:
-          - '*'
+      Criteria:
+        Expression: "id = $eventId"
+      Parameters:
+        - Name: eventId
+          In:
+            Kind: path
+            Name: eventId
 
   Connectors:
     - Name: db

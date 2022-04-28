@@ -12,6 +12,8 @@ type Resource struct {
 	Routes     Routes
 	Resource   *data.Resource
 	ViewPrefix map[string]string
+
+	_visitors Visitors
 }
 
 func (r *Resource) Init(ctx context.Context) error {
@@ -20,7 +22,7 @@ func (r *Resource) Init(ctx context.Context) error {
 	}
 
 	for _, route := range r.Routes {
-		if err := route.View.Init(ctx, r.Resource); err != nil {
+		if err := route.Init(ctx, r); err != nil {
 			return err
 		}
 	}
@@ -32,7 +34,7 @@ func (r *Resource) Init(ctx context.Context) error {
 	return nil
 }
 
-func NewResourceFromURL(ctx context.Context, url string) (*Resource, error) {
+func NewResourceFromURL(ctx context.Context, url string, visitors Visitors, types data.Types) (*Resource, error) {
 	fs := afs.New()
 	resourceData, err := fs.DownloadWithURL(ctx, url)
 	if err != nil {
@@ -50,10 +52,14 @@ func NewResourceFromURL(ctx context.Context, url string) (*Resource, error) {
 	}
 
 	resource := &Resource{}
+
 	err = toolbox.DefaultConverter.AssignConverted(resource, aMap)
 	if err != nil {
 		return nil, err
 	}
+
+	resource._visitors = visitors
+	resource.Resource.SetTypes(types)
 
 	if err := resource.Init(ctx); err != nil {
 		return nil, err

@@ -10,7 +10,5 @@
 * Fetch strategy with SQL Join.
 * Sanitize Criteria against SQL Injection
 
-
 * Alias in columns
-* Coalesce
-* Filterable all columns with *start
+* Add $WHERE_CRITERIA

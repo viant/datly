@@ -88,7 +88,6 @@ type usecase struct {
 	provider    *base.Provider
 }
 
-//TODO: Refactor in order to run each test twice, with default BatchSize, and BatchSize = 1 to double check.
 func TestRead(t *testing.T) {
 	type Event struct {
 		ID          int

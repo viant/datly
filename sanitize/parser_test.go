@@ -77,12 +77,12 @@ func TestNewParser(t *testing.T) {
 		{
 			description: "in",
 			criteria:    "column_name in (null,'abc',null,'cdef')",
-			expect:      `{"X":{"Name":"column_name"},"Operator":"in","Y":{"Value":"null,'abc',null,'cdef'","Kind":2}}`,
+			expect:      `{"X":{"Name":"column_name"},"Operator":"in","Y":{"P": {"Value":"null,'abc',null,'cdef'","Kind":2}}}`,
 		},
 		{
 			description: "not in",
 			criteria:    "column_name not in (null,'abc',null,'cdef')",
-			expect:      `{"X":{"Name":"column_name"},"Operator":"not in","Y":{"Value":"null,'abc',null,'cdef'","Kind":2}}`,
+			expect:      `{"X":{"Name":"column_name"},"Operator":"not in","Y":{"P": {"Value":"null,'abc',null,'cdef'","Kind":2}}}`,
 		},
 		{
 			description: "not is",
