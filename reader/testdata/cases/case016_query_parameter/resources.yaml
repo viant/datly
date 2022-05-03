@@ -2,8 +2,7 @@ Views:
 - Connector:
     Ref: otherdb
   Name: languages
-  Criteria:
-    Expression: code LIKE '${Params.Language}%'
+  Criteria: code LIKE '${Unsafe.Language}%'
   Template:
     Schema:
       Name: lang_params

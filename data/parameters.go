@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
-	"github.com/viant/velty"
 	"github.com/viant/xunsafe"
 	"reflect"
 )
@@ -144,7 +143,7 @@ func (p *Parameter) IsRequired() bool {
 
 func (p *Parameter) initSchema(types Types, xfield *xunsafe.Field) error {
 	if xfield != nil {
-		return p.initSchemaFromStructType(xfield.Type)
+		return p.initSchemaFromXField(xfield)
 	}
 
 	if p.Schema == nil {
@@ -158,38 +157,14 @@ func (p *Parameter) initSchema(types Types, xfield *xunsafe.Field) error {
 	return p.Schema.Init(nil, nil, 0, types)
 }
 
-func (p *Parameter) initSchemaFromStructType(structType reflect.Type) error {
+func (p *Parameter) initSchemaFromXField(xfield *xunsafe.Field) error {
 	if p.Schema == nil {
 		p.Schema = &Schema{}
 	}
 
-	elem := shared.Elem(structType)
-
-	structField, ok := elem.FieldByName(p.Name)
-	if !ok {
-		structField, ok = findFieldByTagName(elem, p.Name)
-		if !ok {
-			return fmt.Errorf("not found %v field at type %v", p.Name, structType.String())
-		}
-	}
-
-	p.Schema.setType(structField.Type)
-	p.xfield = xunsafe.FieldByName(structType, p.Name)
+	p.Schema.setType(xfield.Type)
+	p.xfield = xfield
 	return nil
-}
-
-func findFieldByTagName(elem reflect.Type, name string) (reflect.StructField, bool) {
-	for i := 0; i < elem.NumField(); i++ {
-		field := elem.Field(i)
-		tag := velty.Parse(field.Tag.Get("velty"))
-		for _, veltyName := range tag.Names {
-			if veltyName == name {
-				return field, true
-			}
-		}
-	}
-
-	return reflect.StructField{}, false
 }
 
 func (p *Parameter) Mutator() *xunsafe.Field {
@@ -198,4 +173,24 @@ func (p *Parameter) Mutator() *xunsafe.Field {
 
 func (p *Parameter) PresenceMutator() *xunsafe.Field {
 	return p.presenceXfield
+}
+
+func (p *Parameter) Value(values interface{}) (interface{}, error) {
+	pointer := xunsafe.AsPointer(values)
+
+	//TODO: add support for the rest objects
+	switch p.xfield.Type.Kind() {
+	case reflect.Int:
+		return p.xfield.Int(pointer), nil
+	case reflect.Float64:
+		return p.xfield.Float64(pointer), nil
+	case reflect.Bool:
+		return p.xfield.Bool(pointer), nil
+	case reflect.String:
+		return p.xfield.String(pointer), nil
+	case reflect.Ptr, reflect.Struct:
+		return p.xfield.Value(pointer), nil
+	default:
+		return nil, fmt.Errorf("unsupported field type %v", p.xfield.Type.String())
+	}
 }

@@ -30,9 +30,8 @@ func TestDetectColumnsSQL(t *testing.T) {
 		{
 			description: `Criteria with where`,
 			view: &View{
-				From:           "SELECT * FROM FOOS  WHERE id = 10 $CRITERIA",
-				Alias:          "t",
-				hasWhereClause: true,
+				From:  "SELECT * FROM FOOS  WHERE id = 10 $CRITERIA",
+				Alias: "t",
 			},
 			sql: `SELECT t.* FROM (SELECT * FROM FOOS  WHERE id = 10  AND 1 = 0) t WHERE 1=0`,
 		},

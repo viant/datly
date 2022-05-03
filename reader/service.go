@@ -8,7 +8,6 @@ import (
 	"github.com/viant/gmetric/counter"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/read"
-	rdata "github.com/viant/toolbox/data"
 	"sync"
 	"time"
 )
@@ -35,7 +34,7 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 
 	collector := session.View.Collector(session.Dest, session.View.MatchStrategy.SupportsParallel())
 	errors := shared.NewErrors(0)
-	s.readAll(ctx, session, collector, nil, &wg, errors)
+	s.readAll(ctx, session, collector, &wg, errors)
 	wg.Wait()
 	err = errors.Error()
 	if err != nil {
@@ -64,12 +63,11 @@ func (s *Service) afterRead(session *Session, start *time.Time, err error, onFin
 	onFinish(end)
 }
 
-func (s *Service) readAll(ctx context.Context, session *Session, collector *data.Collector, upstream rdata.Map, wg *sync.WaitGroup, errorCollector *shared.Errors) {
+func (s *Service) readAll(ctx context.Context, session *Session, collector *data.Collector, wg *sync.WaitGroup, errorCollector *shared.Errors) {
 	var collectorFetchEmitted bool
 	defer s.afterReadAll(collectorFetchEmitted, collector)
 
 	view := collector.View()
-	params := rdata.Map{}
 	selector := session.Selectors.Lookup(view)
 	collectorChildren := collector.Relations(selector)
 	wg.Add(len(collectorChildren))
@@ -81,7 +79,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 	for i := range collectorChildren {
 		go func(i int) {
 			defer s.afterRelationCompleted(wg, collector, &relationGroup)
-			s.readAll(ctx, session, collectorChildren[i], params, wg, errorCollector)
+			s.readAll(ctx, session, collectorChildren[i], wg, errorCollector)
 		}(i)
 	}
 
@@ -99,7 +97,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 
 	session.View.Counter.IncrementValue(Pending)
 	defer session.View.Counter.DecrementValue(Pending)
-	err = s.exhaustRead(ctx, view, selector, upstream, params, batchData, db, collector)
+	err = s.exhaustRead(ctx, view, selector, batchData, db, collector)
 	if err != nil {
 		errorCollector.Append(err)
 	}
@@ -147,16 +145,16 @@ func (s *Service) batchData(collector *data.Collector) *BatchData {
 	return batchData
 }
 
-func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData, db *sql.DB, collector *data.Collector) error {
+func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *data.Selector, batchData *BatchData, db *sql.DB, collector *data.Collector) error {
 	batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
 	visitor := collector.Visitor()
 
 	for {
-		SQL, err := s.prepareSQL(view, selector, upstream, params, batchData, collector.Relation())
+		SQL, args, err := s.sqlBuilder.Build(view, selector, batchData, collector.Relation())
 		if err != nil {
 			return err
 		}
-		err = s.query(ctx, view, db, SQL, collector, batchData, visitor)
+		err = s.query(ctx, view, db, SQL, collector, args, visitor)
 		if err != nil {
 			return err
 		}
@@ -172,7 +170,7 @@ func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *da
 	return nil
 }
 
-func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL string, collector *data.Collector, batchData *BatchData, visitor data.Visitor) error {
+func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL string, collector *data.Collector, args []interface{}, visitor data.Visitor) error {
 	begin := time.Now()
 	reader, err := read.New(ctx, db, SQL, collector.NewItem(), io.Resolve(collector.Resolve))
 	if err != nil {
@@ -189,31 +187,15 @@ func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL st
 			}
 		}
 		return visitor(row)
-	}, batchData.ValuesBatch...)
+	}, args...)
 
 	end := time.Now()
-	view.Logger.ReadingData(end.Sub(begin), SQL, readData, batchData.ValuesBatch, err)
+	view.Logger.ReadingData(end.Sub(begin), SQL, readData, args, err)
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func (s *Service) prepareSQL(view *data.View, selector *data.Selector, upstream rdata.Map, params rdata.Map, batchData *BatchData, relation *data.Relation) (string, error) {
-	SQL, err := s.sqlBuilder.Build(view, selector, batchData, relation)
-	if err != nil {
-		return "", err
-	}
-
-	if len(upstream) > 0 {
-		SQL = upstream.ExpandAsText(SQL)
-	}
-
-	if len(params) > 0 {
-		SQL = params.ExpandAsText(SQL)
-	}
-	return SQL, nil
 }
 
 //New creates Service instance

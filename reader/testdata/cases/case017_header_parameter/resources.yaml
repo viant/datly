@@ -3,8 +3,7 @@ Views:
     Ref: db
   Name: users
   Table: users
-  Criteria:
-    Expression: name LIKE '${Params.User_name}%'
+  Criteria: name LIKE '${Unsafe.User_name}%'
   Template:
     Schema:
       Name: header_params

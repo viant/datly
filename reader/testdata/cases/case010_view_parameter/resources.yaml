@@ -3,8 +3,7 @@ Views:
     Ref: db
   Name: users
   Table: users
-  Criteria:
-    Expression: ${Params.DATLY_ACL}
+  Criteria: ${Unsafe.DATLY_ACL}
   Template:
     Schema:
       Name: user_params
@@ -23,8 +22,7 @@ Views:
   Columns:
   - Name: criteria
     DataType: string
-  Criteria:
-    Expression: data_view='${session.View.Name}' AND subject='${session.Subject}'
+  Criteria: data_view='${session.View.Name}' AND subject='${session.Subject}'
 
 - Connector:
     Ref: db

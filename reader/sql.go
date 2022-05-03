@@ -3,7 +3,9 @@ package reader
 import (
 	"fmt"
 	"github.com/viant/datly/data"
-	"github.com/viant/datly/shared"
+	rdata "github.com/viant/toolbox/data"
+	"github.com/viant/velty/ast/expr"
+	"github.com/viant/velty/parser"
 	"strconv"
 	"strings"
 )
@@ -45,254 +47,303 @@ func NewBuilder() *Builder {
 }
 
 //Build builds SQL Select statement
-func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *BatchData, relation *data.Relation) (string, error) {
+func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *BatchData, relation *data.Relation) (string, []interface{}, error) {
+	template, err := view.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has)
+	if err != nil {
+		return "", nil, err
+	}
+
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
-	alias := view.Alias
-
-	var err error
-	if err = b.appendColumns(view, selector, &sb); err != nil {
-		return "", err
+	if err = b.appendColumns(&sb, view, selector); err != nil {
+		return "", nil, err
 	}
 
 	sb.WriteString(fromFragment)
-	if err = b.appendSource(&sb, view, selector, batchData, relation); err != nil {
-		return "", err
+	sb.WriteString(template)
+	b.appendViewAlias(&sb, view)
+
+	hasColumnsIn := strings.Contains(template, data.ColumnsIn)
+	commonParams := data.CommonParams{}
+
+	b.updateColumnsIn(&commonParams, view, relation, batchData, hasColumnsIn)
+
+	hasCriteria := strings.Contains(template, data.Criteria)
+
+	if err = b.updatePagination(&commonParams, view, selector); err != nil {
+		return "", nil, err
 	}
 
-	if !view.HasColumnInReplacement() && !view.HasCriteriaReplacement() {
-		whereClause, err := b.buildWhereClause(view, true, selector, alias, batchData)
-		if err != nil {
-			return "", err
-		}
-		b.appendWhereClause(whereClause, &sb)
-	} else if view.HasColumnInReplacement() {
-		whereClause, err := b.buildWhereClause(view, false, selector, alias, batchData)
-		if err != nil {
-			return "", err
-		}
-		b.appendWhereClause(whereClause, &sb)
+	if err = b.updateCriteria(&commonParams, view, selector, relation, hasColumnsIn); err != nil {
+		return "", nil, err
 	}
 
-	if err = b.appendOrderBy(view, selector, &sb); err != nil {
-		return "", err
+	if !hasCriteria {
+		sb.WriteString(" ")
+		sb.WriteString(data.Criteria)
+		sb.WriteString(" ")
 	}
 
-	if !view.HasPaginationReplacement() {
-		b.appendLimit(view, selector, batchData, &sb)
-		b.appendOffset(view, selector, batchData, &sb)
+	hasPagination := strings.Contains(template, data.Pagination)
+	if !hasPagination {
+		sb.WriteString(" ")
+		sb.WriteString(data.Pagination)
+		sb.WriteString(" ")
 	}
 
-	result := sb.String()
-	if view.HasPaginationReplacement() {
-		paginationSb := strings.Builder{}
-		b.appendLimit(view, selector, batchData, &paginationSb)
-		b.appendOffset(view, selector, batchData, &paginationSb)
-		result = strings.ReplaceAll(result, string(shared.Pagination), paginationSb.String())
-	}
-
-	return result, nil
+	return b.expand(sb.String(), view, selector, commonParams, batchData)
 }
 
-func (b *Builder) appendWhereClause(whereClause string, sb *strings.Builder) {
-	if whereClause == "" {
-		return
+func (b *Builder) appendColumns(sb *strings.Builder, view *data.View, selector *data.Selector) error {
+	if len(selector.Columns) == 0 {
+		b.appendViewColumns(sb, view)
+		return nil
 	}
 
-	sb.WriteString(whereFragment)
-	sb.WriteString(whereClause)
+	return b.appendSelectorColumns(sb, view, selector)
 }
 
-func (b *Builder) appendColumns(view *data.View, selector *data.Selector, sb *strings.Builder) error {
-	columns, err := view.SelectedColumns(selector)
-	if err != nil {
-		return err
-	}
-	for i, col := range columns {
+func (b *Builder) appendSelectorColumns(sb *strings.Builder, view *data.View, selector *data.Selector) error {
+	alias := b.viewAlias(view)
+
+	for i, column := range selector.Columns {
+		viewColumn, ok := view.ColumnByName(column)
+		if !ok {
+			return fmt.Errorf("not found column %v at view %v", column, view.Name)
+		}
+
 		if i != 0 {
 			sb.WriteString(separatorFragment)
 		}
 
-		if col.SqlExpression() != col.Name {
-			sb.WriteString(col.SqlExpression())
-		} else {
-			if view.Alias != "" {
-				sb.WriteString(view.Alias)
-				sb.WriteString(".")
-			}
-			sb.WriteString(col.Name)
+		sb.WriteString(" ")
+		if viewColumn.SqlExpression() == view.Name {
+			sb.WriteString(alias)
 		}
+		sb.WriteString(viewColumn.SqlExpression())
 	}
+
 	return nil
 }
 
-func (b *Builder) appendOrderBy(view *data.View, selector *data.Selector, sb *strings.Builder) error {
-	orderBy := view.Selector.OrderBy
-	if view.CanUseSelectorOrderBy() && selector != nil && selector.OrderBy != "" {
-		orderBy = selector.OrderBy
+func (b *Builder) viewAlias(view *data.View) string {
+	var alias string
+	if view.Alias != "" {
+		alias = view.Alias + "."
+	}
+	return alias
+}
+
+func (b *Builder) appendViewColumns(sb *strings.Builder, view *data.View) {
+	alias := b.viewAlias(view)
+
+	for i, column := range view.Columns {
+		if i != 0 {
+			sb.WriteString(separatorFragment)
+		}
+
+		sb.WriteString(" ")
+		if column.Name == column.SqlExpression() {
+			sb.WriteString(alias)
+		}
+
+		sb.WriteString(column.SqlExpression())
+	}
+}
+
+func (b *Builder) appendViewAlias(sb *strings.Builder, view *data.View) {
+	if view.Alias == "" {
+		return
 	}
 
-	if orderBy != "" {
-		if _, ok := view.ColumnByName(orderBy); !ok {
-			return fmt.Errorf("invalid orderBy column: %v", orderBy)
-		}
-		sb.WriteString(orderByFragment)
-		sb.WriteString(orderBy)
+	sb.WriteString(asFragment)
+	sb.WriteString(view.Alias)
+}
+
+func (b *Builder) updatePagination(params *data.CommonParams, view *data.View, selector *data.Selector) error {
+	sb := strings.Builder{}
+	if err := b.appendOrderBy(&sb, view, selector); err != nil {
+		return err
 	}
+	b.appendLimit(&sb, view, selector)
+	b.appendOffset(&sb, selector)
+	params.Pagination = sb.String()
 	return nil
 }
 
-func (b *Builder) appendLimit(view *data.View, selector *data.Selector, batchData *BatchData, sb *strings.Builder) {
-	limit := view.LimitWithSelector(selector)
-	if limit > 0 {
+func (b *Builder) appendLimit(sb *strings.Builder, view *data.View, selector *data.Selector) {
+	if selector.Limit != 0 && (selector.Limit < view.Selector.Limit || view.Selector.Limit == 0) {
 		sb.WriteString(limitFragment)
-		sb.WriteString(strconv.Itoa(limit))
+		sb.WriteString(strconv.Itoa(selector.Limit))
+		return
+	}
+
+	if view.Selector.Limit != 0 {
+		sb.WriteString(limitFragment)
+		sb.WriteString(strconv.Itoa(view.Selector.Limit))
+		return
 	}
 }
 
-func (b *Builder) appendOffset(view *data.View, selector *data.Selector, batchData *BatchData, sb *strings.Builder) {
-	offset := 0
-	if selector != nil {
+func (b *Builder) appendOffset(sb *strings.Builder, selector *data.Selector) {
+	if selector.Offset == 0 {
+		return
+	}
 
-		if view.CanUseSelectorOffset() && selector.Offset > 0 {
-			offset = selector.Offset
+	sb.WriteString(offsetFragment)
+	sb.WriteString(strconv.Itoa(selector.Offset))
+}
+
+func (b *Builder) expand(sql string, view *data.View, selector *data.Selector, params data.CommonParams, batchData *BatchData) (string, []interface{}, error) {
+	placeholders := make([]interface{}, 0)
+
+	block, err := parser.Parse([]byte(sql))
+	if err != nil {
+		return "", nil, err
+	}
+
+	replacement := rdata.Map{}
+
+	for _, statement := range block.Stmt {
+		switch actual := statement.(type) {
+		case *expr.Select:
+			key := extractSelectorName(actual.FullName)
+
+			switch key {
+			case data.Pagination[1:]:
+				replacement[key] = params.Pagination
+			case data.Criteria[1:]:
+				criteriaExpanded, criteriaPlaceholders, err := b.expand(params.WhereClause, view, selector, params, batchData)
+				if err != nil {
+					return "", nil, err
+				}
+				replacement[key] = criteriaExpanded
+				placeholders = append(placeholders, criteriaPlaceholders...)
+			case data.ColumnsIn[1:]:
+				replacement[key] = params.ColumnsIn
+				placeholders = append(placeholders, batchData.ValuesBatch...)
+
+			default:
+				replacement[key] = `?`
+				param, err := view.Template.ParamByName(key)
+				if err != nil {
+					return "", nil, err
+				}
+
+				value, err := param.Value(selector.Parameters.Values)
+				if err != nil {
+					return "", nil, err
+				}
+				placeholders = append(placeholders, value)
+			}
 		}
 	}
 
-	if offset > 0 {
-		sb.WriteString(offsetFragment)
-		sb.WriteString(strconv.Itoa(offset))
+	return replacement.ExpandAsText(sql), placeholders, err
+}
+
+func (b *Builder) updateCriteria(params *data.CommonParams, view *data.View, selector *data.Selector, relation *data.Relation, hasColumnsIn bool) error {
+	sb := strings.Builder{}
+	addAnd := false
+	if !hasColumnsIn && params.ColumnsIn != "" {
+		b.appendCriteria(&sb, data.ColumnsIn, false)
+		addAnd = true
+	}
+
+	if view.Criteria != "" {
+		criteria, err := b.viewCriteria(view, selector)
+		if err != nil {
+			return err
+		}
+
+		b.appendCriteria(&sb, criteria, addAnd)
+		addAnd = true
+	}
+
+	if selector.Criteria != "" {
+		b.appendCriteria(&sb, selector.Criteria, addAnd)
+		addAnd = true
+	}
+
+	params.WhereClause = sb.String()
+	return nil
+}
+
+func (b *Builder) appendCriteria(sb *strings.Builder, criteria string, addAnd bool) {
+	if addAnd {
+		sb.WriteString(andFragment)
+	} else {
+		sb.WriteString(whereFragment)
+	}
+
+	sb.WriteString(criteria)
+
+	if addAnd {
+		sb.WriteString(encloseFragment)
 	}
 }
 
-func (b *Builder) buildColumnsIn(batchData *BatchData, alias string) string {
-	if batchData.ColumnName == "" {
-		return ""
+func (b *Builder) viewCriteria(view *data.View, selector *data.Selector) (string, error) {
+	criteria, err := view.Template.EvaluateCriteria(selector.Parameters.Values, selector.Parameters.Has)
+	if err != nil {
+		return "", err
+	}
+
+	return criteria, nil
+}
+
+func (b *Builder) updateColumnsIn(params *data.CommonParams, view *data.View, relation *data.Relation, batchData *BatchData, hasColumnsIn bool) {
+	if batchData == nil || batchData.ColumnName == "" {
+		return
+	}
+
+	alias := b.viewAlias(view)
+	if hasColumnsIn && relation.ColumnAlias != "" {
+		alias = relation.ColumnAlias + "."
 	}
 
 	sb := strings.Builder{}
-
-	if alias != "" {
-		sb.WriteString(alias)
-		sb.WriteString(".")
-	}
-
+	sb.WriteString(" ")
+	sb.WriteString(alias)
 	sb.WriteString(batchData.ColumnName)
 	sb.WriteString(inFragment)
+
 	for i := range batchData.ValuesBatch {
 		if i != 0 {
 			sb.WriteString(separatorFragment)
 		}
 		sb.WriteString(placeholderFragment)
 	}
-	sb.WriteString(") ")
-	return sb.String()
+	sb.WriteString(encloseFragment)
+	params.ColumnsIn = sb.String()
 }
 
-func (b *Builder) appendSource(sb *strings.Builder, view *data.View, selector *data.Selector, batchData *BatchData, relation *data.Relation) error {
-	var alias string
-	if relation != nil && relation.ColumnAlias != "" {
-		alias = relation.ColumnAlias
+func (b *Builder) appendOrderBy(sb *strings.Builder, view *data.View, selector *data.Selector) error {
+	if selector.OrderBy != "" {
+		col, ok := view.ColumnByName(selector.OrderBy)
+		if !ok {
+			return fmt.Errorf("not found column %v at view %v", selector.OrderBy, view.Name)
+		}
+
+		sb.WriteString(orderByFragment)
+		sb.WriteString(col.Name)
+		return nil
 	}
 
-	err := b.evaluateAndAppendSource(sb, view, selector, batchData, alias)
-	if err != nil {
-		return err
+	if view.Selector.OrderBy != "" {
+		sb.WriteString(orderByFragment)
+		sb.WriteString(view.Selector.OrderBy)
+		return nil
 	}
 
-	if view.Alias != "" {
-		sb.WriteString(asFragment)
-		sb.WriteString(view.Alias)
-		sb.WriteString(" ")
-	}
 	return nil
 }
 
-func (b *Builder) evaluateAndAppendSource(sb *strings.Builder, view *data.View, selector *data.Selector, batchData *BatchData, alias string) error {
-	params := data.CommonParams{}
-	if view.HasCriteriaReplacement() {
-		whereClause, err := b.buildWhereClause(view, true, selector, alias, batchData)
-		if err != nil {
-			return err
-		}
-		hasWhere := view.HasWhereClause()
+func extractSelectorName(name string) string {
+	i := 1 // all names starts with the '$'
 
-		if whereClause != "" {
-			if !hasWhere {
-				whereClause = whereFragment + whereClause
-			} else {
-				whereClause = andFragment + whereClause + encloseFragment + " "
-			}
-		}
-		params.WhereClause = whereClause
-	}
+	for ; i < len(name) && name[i] == '{'; i++ {
+	} // skip the select block i.e. ${foo.Name}
 
-	if view.HasColumnInReplacement() {
-		params.ColumnsIn = b.buildColumnsIn(batchData, alias)
-	}
-
-	source, err := view.Template.EvaluateSource(params, selector.Parameters.Values, selector.Parameters.Has)
-	if err != nil {
-		return err
-	}
-
-	sb.WriteString(source)
-	return nil
-}
-
-func (b *Builder) buildWhereClause(view *data.View, useColumnsIn bool, selector *data.Selector, alias string, batchData *BatchData) (string, error) {
-	sb := strings.Builder{}
-
-	addAnd := false
-	columnsIn := b.buildColumnsIn(batchData, alias)
-	if columnsIn != "" && useColumnsIn {
-		sb.WriteString(columnsIn)
-		addAnd = true
-	}
-
-	if view.Criteria != nil && view.Criteria.Expression != "" {
-		if addAnd {
-			sb.WriteString(andFragment)
-		}
-
-		criteria, err := b.viewCriteria(view, selector)
-		if err != nil {
-			return "", err
-		}
-
-		sb.WriteString(criteria)
-		if addAnd {
-			sb.WriteString(encloseFragment)
-		}
-
-		addAnd = true
-	}
-
-	if selector != nil && selector.Criteria != "" {
-		if addAnd {
-			sb.WriteString(andFragment)
-		}
-
-		sb.WriteString(selector.Criteria)
-
-		if addAnd {
-			sb.WriteString(encloseFragment)
-		}
-
-		addAnd = true
-	}
-
-	return sb.String(), nil
-}
-
-func (b *Builder) viewCriteria(view *data.View, selector *data.Selector) (string, error) {
-	if selector == nil {
-		return view.Criteria.Expression, nil
-	}
-
-	criteria, err := view.Template.EvaluateCriteria(selector.Parameters.Values, selector.Parameters.Has)
-	if err != nil {
-		return "", err
-	}
-	return criteria, nil
+	return name[i : len(name)-i+1]
 }

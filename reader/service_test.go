@@ -804,9 +804,7 @@ func columnsInResource(column, alias string) (string, *data.Resource) {
 						Connector: connector,
 						From:      "SELECT * FROM EVENT_TYPES as et WHERE " + string(shared.ColumnInPosition),
 						Name:      "event_types",
-						Criteria: &data.Criteria{
-							Expression: "name like '%2%'",
-						},
+						Criteria:  "name like '%2%'",
 					},
 					Column: "id",
 				},

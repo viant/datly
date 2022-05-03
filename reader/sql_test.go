@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"github.com/viant/assertly"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/data"
-	"github.com/viant/datly/shared"
 	"github.com/viant/dsunit"
 	"github.com/viant/toolbox"
 	"path"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -18,18 +19,27 @@ import (
 func TestBuilder_Build(t *testing.T) {
 	testLocation := toolbox.CallerDirectory(3)
 
+	type Params struct {
+		EventId int
+	}
+
+	type PresenceMap struct {
+	}
+
 	useCases := []struct {
-		batchData   *BatchData
-		view        *data.View
-		relation    *data.Relation
-		description string
-		output      string
-		dataset     string
+		batchData    *BatchData
+		view         *data.View
+		relation     *data.Relation
+		selector     *data.Selector
+		placeholders []interface{}
+		description  string
+		output       string
+		dataset      string
 	}{
 		{
 			dataset:     "dataset001_events/",
-			description: `basic select statement`,
-			output:      `SELECT t.ID, t.Price FROM Events AS t`,
+			description: `select statement`,
+			output:      `SELECT  t.ID,  t.Price FROM events AS t`,
 			view: &data.View{
 				Columns: []*data.Column{
 					{
@@ -41,190 +51,333 @@ func TestBuilder_Build(t *testing.T) {
 						DataType: "Float",
 					},
 				},
-				Name:                "events",
-				SelectorConstraints: &data.Constraints{},
-				Selector:            &data.Config{},
-				Table:               "Events",
-			},
-			batchData: &BatchData{},
-		},
-		{
-			dataset:     "dataset001_events/",
-			description: `from`,
-			output:      `SELECT f.ID, f.Price FROM (SELECT 1 as ID, 25.2 as Price) AS f`,
-			view: &data.View{
-				Columns: []*data.Column{
-					{
-						Name:     "ID",
-						DataType: "Int",
-					},
-					{
-						Name:     "Price",
-						DataType: "Float",
-					},
-				},
-				SelectorConstraints: &data.Constraints{},
-				Selector:            &data.Config{},
-				Name:                "events",
-				From:                "SELECT 1 as ID, 25.2 as Price",
-				Alias:               "f",
-			},
-			batchData: &BatchData{},
-		},
-		{
-			dataset:     "dataset001_events/",
-			description: `columns in`,
-			output:      `SELECT f.ID, f.Price FROM Events AS f  WHERE f.ID IN (?, ?, ?)`,
-			view: &data.View{
-				Columns: []*data.Column{
-					{
-						Name:     "ID",
-						DataType: "Int",
-					},
-					{
-						Name:     "Price",
-						DataType: "Float",
-					},
-				},
-				SelectorConstraints: &data.Constraints{},
-				Selector:            &data.Config{},
-				Table:               "Events",
-				Name:                "events",
-				Alias:               "f",
-			},
-			batchData: &BatchData{
-				ColumnName:  "ID",
-				ValuesBatch: []interface{}{1, 2, 3},
-			},
-		},
-		{
-			dataset:     "dataset001_events/",
-			description: `columns in source`,
-			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS WHERE ID IN (?, ?, ?) ) AS f`,
-			view: &data.View{
-				Columns: []*data.Column{
-					{
-						Name:     "ID",
-						DataType: "Int",
-					},
-					{
-						Name:     "Price",
-						DataType: "Float",
-					},
-				},
-				SelectorConstraints: &data.Constraints{},
-				Selector:            &data.Config{},
-				From:                "SELECT * FROM EVENTS WHERE " + string(shared.ColumnInPosition),
-				Name:                "events",
-				Alias:               "f",
-			},
-			batchData: &BatchData{
-				ColumnName:  "ID",
-				ValuesBatch: []interface{}{1, 2, 3},
-			},
-		},
-		{
-			dataset:     "dataset001_events/",
-			description: `criteria replacement`,
-			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev  WHERE ev.ID IN (?, ?, ?) ) AS f`,
-			view: &data.View{
-				Columns: []*data.Column{
-					{
-						Name:     "ID",
-						DataType: "Int",
-					},
-					{
-						Name:     "Price",
-						DataType: "Float",
-					},
-				},
-				Selector: &data.Config{},
-				From:     "SELECT * FROM EVENTS as ev " + string(shared.Criteria),
-				Name:     "events",
-				Alias:    "f",
-			},
-			relation: &data.Relation{
-				ColumnAlias: "ev",
-			},
-			batchData: &BatchData{
-				ColumnName:  "ID",
-				ValuesBatch: []interface{}{1, 2, 3},
-			},
-		},
-		{
-			dataset:     "dataset001_events/",
-			description: `empty criteria replacement`,
-			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev ) AS f`,
-			view: &data.View{
-				Columns: []*data.Column{
-					{
-						Name:     "ID",
-						DataType: "Int",
-					},
-					{
-						Name:     "Price",
-						DataType: "Float",
-					},
-				},
-				Selector: &data.Config{},
-				From:     "SELECT * FROM EVENTS as ev " + string(shared.Criteria),
-				Name:     "events",
-				Alias:    "f",
-			},
-			relation: &data.Relation{ColumnAlias: "ev"},
-			batchData: &BatchData{
-				ValuesBatch: []interface{}{},
-			},
-		},
-		{
-			dataset:     "dataset001_events/",
-			description: `criteria replacement with where clause`,
-			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev WHERE 0=1  AND (ev.id IN (?, ?, ?) ) ) AS f`,
-			view: &data.View{
-				Columns: []*data.Column{
-					{
-						Name:     "ID",
-						DataType: "Int",
-					},
-					{
-						Name:     "Price",
-						DataType: "Float",
-					},
-				},
-				Selector: &data.Config{},
-				From:     "SELECT * FROM EVENTS as ev WHERE 0=1 " + string(shared.Criteria),
-				Name:     "events",
-				Alias:    "f",
-			},
-			batchData: &BatchData{
-				ColumnName:  "id",
-				ValuesBatch: []interface{}{1, 2, 3},
-			},
-			relation: &data.Relation{ColumnAlias: "ev"},
-		},
-		{
-			dataset:     "dataset001_events/",
-			description: `pagination replacement`,
-			output:      `SELECT f.ID, f.Price FROM (SELECT * FROM EVENTS as ev ) AS f  WHERE f.ID IN (?, ?, ?)`,
-			view: &data.View{
-				Columns: []*data.Column{
-					{
-						Name:     "ID",
-						DataType: "Int",
-					},
-					{
-						Name:     "Price",
-						DataType: "Float",
-					},
-				},
-				From:  "SELECT * FROM EVENTS as ev " + string(shared.Pagination),
 				Name:  "events",
-				Alias: "f",
+				Table: "events",
+				Template: &data.Template{
+					Schema:         data.NewSchema(reflect.TypeOf(Params{})),
+					PresenceSchema: data.NewSchema(reflect.TypeOf(PresenceMap{})),
+				},
 			},
-			relation: &data.Relation{ColumnAlias: "ev"},
+			batchData: &BatchData{},
+			selector: &data.Selector{Parameters: data.ParamState{
+				Values: Params{},
+				Has:    PresenceMap{},
+			}},
+		},
+		{
+			dataset:     "dataset001_events/",
+			description: `select statement with offset and limit`,
+			output:      `SELECT  t.ID,  t.Price FROM events AS t    LIMIT 10 OFFSET 5`,
+			view: &data.View{
+				Columns: []*data.Column{
+					{
+						Name:     "ID",
+						DataType: "Int",
+					},
+					{
+						Name:     "Price",
+						DataType: "Float",
+					},
+				},
+				Name: "events",
+				Selector: &data.Config{
+					Limit: 10,
+				},
+				Table: "events",
+				Template: &data.Template{
+					Schema:         data.NewSchema(reflect.TypeOf(Params{})),
+					PresenceSchema: data.NewSchema(reflect.TypeOf(PresenceMap{})),
+				},
+			},
+			batchData: &BatchData{},
+			selector: &data.Selector{
+				Parameters: data.ParamState{
+					Values: Params{},
+					Has:    PresenceMap{},
+				},
+				Offset: 5,
+			},
+		},
+		{
+			dataset:     "dataset001_events/",
+			description: `select statement with $PAGINATION`,
+			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS  LIMIT 10 OFFSET 5) AS t`,
+			view: &data.View{
+				Columns: []*data.Column{
+					{
+						Name:     "ID",
+						DataType: "Int",
+					},
+					{
+						Name:     "Price",
+						DataType: "Float",
+					},
+				},
+				Name: "events",
+				Selector: &data.Config{
+					Limit: 10,
+				},
+				From:  "SELECT * FROM EVENTS $PAGINATION",
+				Table: "events",
+				Template: &data.Template{
+					Schema:         data.NewSchema(reflect.TypeOf(Params{})),
+					PresenceSchema: data.NewSchema(reflect.TypeOf(PresenceMap{})),
+				},
+			},
+			batchData: &BatchData{},
+			selector: &data.Selector{
+				Parameters: data.ParamState{
+					Values: Params{},
+					Has:    PresenceMap{},
+				},
+				Offset: 5,
+			},
+		},
+		{
+			dataset:     "dataset001_events/",
+			description: `select statement with View Criteria`,
+			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ) AS t  WHERE ID = 1`,
+			view: &data.View{
+				Criteria: "ID = 1",
+				Columns: []*data.Column{
+					{
+						Name:     "ID",
+						DataType: "Int",
+					},
+					{
+						Name:     "Price",
+						DataType: "Float",
+					},
+				},
+				Name:  "events",
+				From:  "SELECT * FROM EVENTS $PAGINATION",
+				Table: "Events",
+				Template: &data.Template{
+					Schema:         data.NewSchema(reflect.TypeOf(Params{})),
+					PresenceSchema: data.NewSchema(reflect.TypeOf(PresenceMap{})),
+				},
+			},
+			batchData: &BatchData{},
+			selector: &data.Selector{
+				Parameters: data.ParamState{
+					Values: Params{},
+					Has:    PresenceMap{},
+				},
+			},
+		},
+		{
+			dataset:     "dataset001_events/",
+			description: `select statement with $CRITERIA`,
+			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS  WHERE ID = 1) AS t`,
+			view: &data.View{
+				Criteria: "ID = 1",
+				Columns: []*data.Column{
+					{
+						Name:     "ID",
+						DataType: "Int",
+					},
+					{
+						Name:     "Price",
+						DataType: "Float",
+					},
+				},
+				Name:  "events",
+				From:  "SELECT * FROM EVENTS $CRITERIA",
+				Table: "Events",
+				Template: &data.Template{
+					Schema:         data.NewSchema(reflect.TypeOf(Params{})),
+					PresenceSchema: data.NewSchema(reflect.TypeOf(PresenceMap{})),
+				},
+			},
+			batchData: &BatchData{},
+			selector: &data.Selector{
+				Parameters: data.ParamState{
+					Values: Params{},
+					Has:    PresenceMap{},
+				},
+			},
+		},
+		{
+			dataset:     "dataset001_events/",
+			description: `select statement with parameters`,
+			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS  WHERE ID = ?) AS t`,
+			view: &data.View{
+				Criteria: "ID = $EventId",
+				Columns: []*data.Column{
+					{
+						Name:     "ID",
+						DataType: "Int",
+					},
+					{
+						Name:     "Price",
+						DataType: "Float",
+					},
+				},
+				Name:  "events",
+				From:  "SELECT * FROM EVENTS $CRITERIA",
+				Table: "Events",
+				Template: &data.Template{
+					Schema: data.NewSchema(reflect.TypeOf(Params{})),
+					Parameters: []*data.Parameter{
+						{
+							Name: "EventId",
+							In: &data.Location{
+								Kind: data.PathKind,
+								Name: "eventId",
+							},
+							Schema: &data.Schema{
+								DataType: "int",
+							},
+						},
+					},
+				},
+			},
+			placeholders: []interface{}{10},
+			batchData:    &BatchData{},
+			selector: &data.Selector{
+				Parameters: data.ParamState{
+					Values: Params{EventId: 10},
+					Has:    PresenceMap{},
+				},
+			},
+		},
+		{
+			dataset:      "dataset001_events/",
+			description:  `select statement with $COLUMN_IN`,
+			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ? AND  ev.user_id IN (?, ?, ?, ?)) AS t`,
+			placeholders: []interface{}{10, 4, 5, 9, 2},
+			relation:     &data.Relation{ColumnAlias: "ev"},
+			view: &data.View{
+				Columns: []*data.Column{
+					{
+						Name:     "ID",
+						DataType: "Int",
+					},
+					{
+						Name:     "Price",
+						DataType: "Float",
+					},
+				},
+				Name:  "events",
+				From:  "SELECT * FROM EVENTS ev WHERE ev.ID = $EventId AND $COLUMN_IN",
+				Table: "Events",
+				Template: &data.Template{
+					Schema: data.NewSchema(reflect.TypeOf(Params{})),
+					Parameters: []*data.Parameter{
+						{
+							Name: "EventId",
+							In: &data.Location{
+								Kind: data.PathKind,
+								Name: "eventId",
+							},
+							Schema: &data.Schema{
+								DataType: "int",
+							},
+						},
+					},
+				},
+			},
 			batchData: &BatchData{
-				ColumnName:  "ID",
-				ValuesBatch: []interface{}{1, 2, 3},
+				ColumnName:  "user_id",
+				ValuesBatch: []interface{}{4, 5, 9, 2},
+			},
+			selector: &data.Selector{
+				Parameters: data.ParamState{
+					Values: Params{EventId: 10},
+					Has:    PresenceMap{},
+				},
+			},
+		},
+		{
+			dataset:      "dataset001_events/",
+			description:  `select statement without $COLUMN_IN`,
+			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ?) AS t  WHERE  t.user_id IN (?, ?, ?, ?)`,
+			placeholders: []interface{}{10, 4, 5, 9, 2},
+			relation:     &data.Relation{ColumnAlias: "ev"},
+			view: &data.View{
+				Columns: []*data.Column{
+					{
+						Name:     "ID",
+						DataType: "Int",
+					},
+					{
+						Name:     "Price",
+						DataType: "Float",
+					},
+				},
+				Name:  "events",
+				From:  "SELECT * FROM EVENTS ev WHERE ev.ID = $EventId",
+				Table: "Events",
+				Template: &data.Template{
+					Schema: data.NewSchema(reflect.TypeOf(Params{})),
+					Parameters: []*data.Parameter{
+						{
+							Name: "EventId",
+							In: &data.Location{
+								Kind: data.PathKind,
+								Name: "eventId",
+							},
+							Schema: &data.Schema{
+								DataType: "int",
+							},
+						},
+					},
+				},
+			},
+			batchData: &BatchData{
+				ColumnName:  "user_id",
+				ValuesBatch: []interface{}{4, 5, 9, 2},
+			},
+			selector: &data.Selector{
+				Parameters: data.ParamState{
+					Values: Params{EventId: 10},
+					Has:    PresenceMap{},
+				},
+			},
+		},
+		{
+			dataset:     "dataset001_events/",
+			description: `select statement | selectors`,
+			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS) AS t  WHERE price > 10   ORDER BY Price LIMIT 100 OFFSET 10`,
+			view: &data.View{
+				Columns: []*data.Column{
+					{
+						Name:     "ID",
+						DataType: "Int",
+					},
+					{
+						Name:     "Price",
+						DataType: "Float",
+					},
+				},
+				Name:  "events",
+				From:  "SELECT * FROM EVENTS",
+				Table: "Events",
+				Template: &data.Template{
+					Schema: data.NewSchema(reflect.TypeOf(Params{})),
+					Parameters: []*data.Parameter{
+						{
+							Name: "EventId",
+							In: &data.Location{
+								Kind: data.PathKind,
+								Name: "eventId",
+							},
+							Schema: &data.Schema{
+								DataType: "int",
+							},
+						},
+					},
+				},
+			},
+			selector: &data.Selector{
+				OrderBy:  "price",
+				Criteria: "price > 10",
+				Limit:    100,
+				Offset:   10,
+				Parameters: data.ParamState{
+					Values: Params{},
+					Has:    PresenceMap{},
+				},
 			},
 		},
 	}
@@ -248,8 +401,12 @@ func TestBuilder_Build(t *testing.T) {
 		}
 
 		builder := NewBuilder()
-		sql, err := builder.Build(useCase.view, nil, useCase.batchData, useCase.relation)
+
+		useCase.selector.Init()
+		sql, placeholders, err := builder.Build(useCase.view, useCase.selector, useCase.batchData, useCase.relation)
+
 		assert.Nil(t, err, useCase.description)
+		assertly.AssertValues(t, useCase.placeholders, placeholders, useCase.description)
 		assert.Equal(t, useCase.output, strings.TrimSpace(sql), useCase.description)
 	}
 }

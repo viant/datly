@@ -656,7 +656,6 @@ func (r *Router) addViewParam(ctx context.Context, paramsPtr, presencePtr unsafe
 }
 
 func convertAndSet(paramPtr, presencePtr unsafe.Pointer, parameter *data.Parameter, rawValue string) error {
-	xField := parameter.Mutator()
 	if parameter.IsRequired() && rawValue == "" {
 		return fmt.Errorf("query parameter %v is required", parameter.Name)
 	}
@@ -665,6 +664,7 @@ func convertAndSet(paramPtr, presencePtr unsafe.Pointer, parameter *data.Paramet
 		return nil
 	}
 
+	xField := parameter.Mutator()
 	if err := updateParamValue(paramPtr, xField, rawValue); err != nil {
 		return err
 	}

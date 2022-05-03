@@ -16,13 +16,13 @@ Resource:
         Ref: db
       Table: events
       Template:
-        SQL: "        
+        Source: "        
           SELECT * FROM EVENTS WHERE 0=0 
           #if($Has.QUANTITY)
-          AND quantity > $Params.QUANTITY
+          AND quantity > $Unsafe.QUANTITY
           #end
           #if($Has.USER_ID)
-          AND user_id = $Params.USER_ID
+          AND user_id = $Unsafe.USER_ID
           #end
         "
         Parameters:

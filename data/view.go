@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/datly/config"
-	"github.com/viant/datly/data/ast"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io"
@@ -30,7 +29,7 @@ type (
 		InheritSchemaColumns bool       `json:",omitempty"`
 		CaseFormat           CaseFormat `json:",omitempty"`
 
-		Criteria *Criteria `json:",omitempty"`
+		Criteria string `json:",omitempty"`
 
 		Selector            *Config      `json:",omitempty"`
 		SelectorConstraints *Constraints `json:",omitempty"`
@@ -54,11 +53,6 @@ type (
 		holdersInitialized bool
 		isValid            bool
 		newCollector       func(dest interface{}, supportParallel bool) *Collector
-
-		hasCriteriaReplacement bool
-		hasColumnInReplacement bool
-		hasWhereClause         bool
-		hasPagination          bool
 	}
 
 	//Constraints configure what can be selected by Selector
@@ -151,7 +145,6 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		v.Counter = logger.NewCounter(nil)
 	}
 
-	v.initColumnsPositions()
 	v.Alias = notEmptyOf(v.Alias, "t")
 	if v.From == "" {
 		v.Table = notEmptyOf(v.Table, v.Name)
@@ -194,6 +187,10 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
+	if err = v.initTemplate(ctx, resource); err != nil {
+		return err
+	}
+
 	if err = v.ensureColumns(ctx); err != nil {
 		return err
 	}
@@ -204,10 +201,6 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 
 	v._columns = ColumnSlice(v.Columns).Index(v.Caser)
 	if err = v.markColumnsAsFilterable(); err != nil {
-		return err
-	}
-
-	if err = v.initTemplate(ctx, resource); err != nil {
 		return err
 	}
 
@@ -386,9 +379,7 @@ func (v *View) inherit(view *View) {
 		v.Columns = view.Columns
 	}
 
-	if v.Criteria == nil {
-		v.Criteria = view.Criteria
-	}
+	v.Criteria = notEmptyOf(v.Criteria, view.Criteria)
 
 	if v.Schema == nil && len(v.With) == 0 {
 		v.Schema = view.Schema
@@ -690,29 +681,6 @@ func (v *View) inheritFromViewIfNeeded(ctx context.Context, resource *Resource) 
 
 func (v *View) indexColumns() {
 	v._columns = ColumnSlice(v.Columns).Index(v.Caser)
-}
-
-func (v *View) HasCriteriaReplacement() bool {
-	return v.hasCriteriaReplacement
-}
-
-func (v *View) HasColumnInReplacement() bool {
-	return v.hasColumnInReplacement
-}
-
-func (v *View) initColumnsPositions() {
-	v.hasCriteriaReplacement = strings.Contains(v.Source(), string(shared.Criteria))
-	v.hasColumnInReplacement = strings.Contains(v.Source(), string(shared.ColumnInPosition))
-	v.hasWhereClause = ast.ContainsWhereClause([]byte(v.Source()))
-	v.hasPagination = strings.Contains(v.Source(), string(shared.Pagination))
-}
-
-func (v *View) HasWhereClause() bool {
-	return v.hasWhereClause
-}
-
-func (v *View) HasPaginationReplacement() bool {
-	return v.hasPagination
 }
 
 func (v *View) ensureLogger(resource *Resource) error {

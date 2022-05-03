@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/datly/data/ast"
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
@@ -70,7 +71,7 @@ func columnsMetadata(ctx context.Context, db *sql.DB, v *View, columns []io.Colu
 
 func detectColumnsSQL(source string, v *View) string {
 	if strings.Contains(source, string(shared.Criteria)) {
-		if v.hasWhereClause {
+		if ast.ContainsWhereClause([]byte(source)) {
 			source = strings.ReplaceAll(source, string(shared.Criteria), " AND 1 = 0")
 		} else {
 			source = strings.ReplaceAll(source, string(shared.Criteria), " WHERE 1 = 0")

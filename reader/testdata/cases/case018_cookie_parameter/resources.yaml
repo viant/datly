@@ -3,8 +3,7 @@ Views:
     Ref: db
   Name: users
   Table: users
-  Criteria:
-    Expression: id = ${Params.UserId}
+  Criteria: id = ${Unsafe.UserId}
   Template:
     Schema:
       Name: user_params

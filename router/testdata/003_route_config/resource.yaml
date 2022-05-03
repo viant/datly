@@ -16,8 +16,7 @@ Resource:
       Connector:
         Ref: db
       Table: events
-      Criteria:
-        Expression: "id = ${Params.EventId}"
+      Criteria: "id = ${Unsafe.EventId}"
       Template:
         Parameters:
           - Name: EventId

@@ -3,22 +3,33 @@ package data
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/shared"
 	"github.com/viant/velty"
 	"github.com/viant/velty/est"
 	"github.com/viant/xunsafe"
 	"reflect"
 )
 
+var boolType = reflect.TypeOf(true)
+
+const (
+	paramsMetadataKey = "Has"
+	paramsKey         = "Unsafe"
+
+	Pagination = "$PAGINATION"
+	Criteria   = "$CRITERIA"
+	ColumnsIn  = "$COLUMN_IN"
+)
+
 type (
 	Template struct {
-		SQL string
+		Source string
 
 		Schema         *Schema
 		PresenceSchema *Schema
 
 		Parameters []*Parameter
 
-		fromEvaluator     *Evaluator
 		criteriaEvaluator *Evaluator
 		sqlEvaluator      *Evaluator
 
@@ -33,7 +44,6 @@ type (
 		planner       *velty.Planner
 		executor      *est.Execution
 		stateProvider func() *est.State
-
 		parameterized bool
 	}
 
@@ -42,9 +52,14 @@ type (
 		WhereClause string `velty:"CRITERIA"`
 		Pagination  string `velty:"PAGINATION"`
 	}
-)
 
-var boolType = reflect.TypeOf(true)
+	paramsPosition struct {
+		columnsIn      bool
+		criteria       bool
+		pagination     bool
+		hasWhereClause bool
+	}
+)
 
 func (t *Template) Init(ctx context.Context, resource *Resource, view *View) error {
 	if t.initialized {
@@ -52,19 +67,20 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 	}
 
 	t.initialized = true
-
 	t._parametersIndex = ParametersSlice(t.Parameters).Index()
 	t._fieldIndex = map[string]int{}
+
+	if t.Source != "" {
+		t.Source = "( " + t.Source + " )"
+	} else {
+		t.Source = view.Source()
+	}
 
 	if err := t.initTypes(ctx, resource); err != nil {
 		return err
 	}
 
 	if err := t.initPresenceType(); err != nil {
-		return err
-	}
-
-	if err := t.initFromEvaluator(view); err != nil {
 		return err
 	}
 
@@ -76,13 +92,15 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 		return err
 	}
 
-	t.updateParametersFields()
+	if err := t.updateParametersFields(); err != nil {
+		return err
+	}
 
 	return nil
 }
 
 func (t *Template) initTypes(ctx context.Context, resource *Resource) error {
-	if t.Schema == nil || t.Schema.Name == "" {
+	if t.Schema == nil || (t.Schema.Name == "" && t.Schema.Type() == nil) {
 		return t.createSchemaFromParams(ctx, resource)
 	}
 
@@ -103,13 +121,13 @@ func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resourc
 	}
 
 	structType := reflect.StructOf(t._fields)
-	for _, param := range t.Parameters {
-		xfield := xunsafe.FieldByName(structType, param.Name)
-		param.xfield = xfield
-	}
-
 	t.Schema.setType(structType)
+
 	return nil
+}
+
+func (t *Template) ParamByName(name string) (*Parameter, error) {
+	return t._parametersIndex.Lookup(name)
 }
 
 func (t *Template) addField(name string, rType reflect.Type) error {
@@ -138,46 +156,39 @@ func TemplateField(name string, rType reflect.Type) (reflect.StructField, error)
 	if name[0] < 'A' || name[0] > 'Z' {
 		pkgPath = "github.com/viant/datly/router"
 	}
+
 	field := reflect.StructField{Name: name, Type: rType, PkgPath: pkgPath}
 	return field, nil
 }
 
 func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Resource) error {
-	rType, err := resource.types.Lookup(t.Schema.Name)
-	if err != nil {
-		return err
+	if t.Schema.Type() == nil {
+		rType, err := resource.types.Lookup(t.Schema.Name)
+		if err != nil {
+			return err
+		}
+		t.Schema.setType(rType)
 	}
 
-	if rType.Kind() == reflect.Ptr {
+	if t.Schema.Type().Kind() == reflect.Ptr {
 		return fmt.Errorf("params schema %v type can't be a pointer", t.Schema.Name)
 	}
 
-	t.Schema.setType(rType)
 	for _, parameter := range t.Parameters {
 		if err := t.inheritAndInitParam(ctx, resource, parameter); err != nil {
 			return err
 		}
 
-		field, err := TemplateField(parameter.Name, t.Schema.Type())
+		field, err := fieldByTemplateName(t.Schema.Type(), parameter.Name)
 		if err != nil {
 			return err
 		}
 
-		if err := parameter.Init(ctx, resource, xunsafe.NewField(field)); err != nil {
+		if err := parameter.Init(ctx, resource, field); err != nil {
 			return err
 		}
 	}
 
-	return nil
-}
-
-func (t *Template) initFromEvaluator(view *View) error {
-	evaluator, err := t.newEvaluator(view.Source(), view.Source() != view.Table)
-	if err != nil {
-		return err
-	}
-
-	t.fromEvaluator = evaluator
 	return nil
 }
 
@@ -189,16 +200,11 @@ func (t *Template) newEvaluator(template string, parameterized bool) (*Evaluator
 
 	evaluator.planner = velty.New(velty.BufferSize(len(template)))
 	if parameterized {
-		//TODO: Embed params without name
-		if err = evaluator.planner.DefineVariable("Params", t.Schema.Type()); err != nil {
+		if err = evaluator.planner.DefineVariable(paramsKey, t.Schema.Type()); err != nil {
 			return nil, err
 		}
 
-		if err = evaluator.planner.EmbedVariable(CommonParams{}); err != nil {
-			return nil, err
-		}
-
-		if err = evaluator.planner.DefineVariable("Has", t.PresenceSchema.Type()); err != nil {
+		if err = evaluator.planner.DefineVariable(paramsMetadataKey, t.PresenceSchema.Type()); err != nil {
 			return nil, err
 		}
 	}
@@ -212,22 +218,14 @@ func (t *Template) newEvaluator(template string, parameterized bool) (*Evaluator
 }
 
 func (t *Template) EvaluateCriteria(externalParams, presenceMap interface{}) (string, error) {
-	return t.evaluate(t.criteriaEvaluator, CommonParams{}, externalParams, presenceMap)
+	return t.evaluate(t.criteriaEvaluator, externalParams, presenceMap)
 }
 
-func (t *Template) EvaluateSource(commonParams CommonParams, externalParams, presenceMap interface{}) (string, error) {
-	if t.SQL == "" {
-		return t.evaluate(t.fromEvaluator, commonParams, externalParams, presenceMap)
-	}
-
-	return t.evaluate(t.sqlEvaluator, commonParams, externalParams, presenceMap)
+func (t *Template) EvaluateSource(externalParams, presenceMap interface{}) (string, error) {
+	return t.evaluate(t.sqlEvaluator, externalParams, presenceMap)
 }
 
-func (t *Template) EvaluateFrom(commonParams CommonParams, externalParams, presenceMap interface{}) (string, error) {
-	return t.evaluate(t.fromEvaluator, commonParams, externalParams, presenceMap)
-}
-
-func (t *Template) evaluate(evaluator *Evaluator, params CommonParams, externalParams, presenceMap interface{}) (string, error) {
+func (t *Template) evaluate(evaluator *Evaluator, externalParams, presenceMap interface{}) (string, error) {
 	if t.Schema.Type() != reflect.TypeOf(externalParams) {
 		return "", fmt.Errorf("inompactible types, wanted %v got %T", t.Schema.Type().String(), externalParams)
 	}
@@ -235,19 +233,15 @@ func (t *Template) evaluate(evaluator *Evaluator, params CommonParams, externalP
 	newState := evaluator.stateProvider()
 	if evaluator.parameterized {
 		if externalParams != nil {
-			if err := newState.SetValue("Params", externalParams); err != nil {
+			if err := newState.SetValue(paramsKey, externalParams); err != nil {
 				return "", err
 			}
 		}
 
 		if presenceMap != nil {
-			if err := newState.SetValue("Has", presenceMap); err != nil {
+			if err := newState.SetValue(paramsMetadataKey, presenceMap); err != nil {
 				return "", err
 			}
-		}
-
-		if err := newState.EmbedValue(params); err != nil {
-			return "", err
 		}
 	}
 
@@ -256,11 +250,11 @@ func (t *Template) evaluate(evaluator *Evaluator, params CommonParams, externalP
 }
 
 func (t *Template) initCriteriaEvaluator(view *View) error {
-	if view.Criteria == nil {
+	if view.Criteria == "" {
 		return nil
 	}
 
-	evaluator, err := t.newEvaluator(view.Criteria.Expression, true)
+	evaluator, err := t.newEvaluator(view.Criteria, true)
 	if err != nil {
 		return err
 	}
@@ -288,7 +282,7 @@ func (t *Template) inheritAndInitParam(ctx context.Context, resource *Resource, 
 }
 
 func (t *Template) initSqlEvaluator() error {
-	evaluator, err := t.newEvaluator(" ( "+t.SQL+" ) ", true)
+	evaluator, err := t.newEvaluator(t.Source, true)
 	if err != nil {
 		return err
 	}
@@ -302,8 +296,7 @@ func (t *Template) initPresenceType() error {
 		return t.initPresenceSchemaFromParams()
 	}
 
-	//TODO: add parameter PresenceXField generation
-	return fmt.Errorf("presence schema was nil, TODO: add parameter PresenceXField generation")
+	return nil
 }
 
 func (t *Template) initPresenceSchemaFromParams() error {
@@ -322,8 +315,42 @@ func (t *Template) initPresenceSchemaFromParams() error {
 	return nil
 }
 
-func (t *Template) updateParametersFields() {
+func (t *Template) updateParametersFields() error {
 	for _, parameter := range t.Parameters {
-		parameter.presenceXfield = xunsafe.FieldByName(t.PresenceSchema.Type(), parameter.Name)
+		presenceField, err := fieldByTemplateName(t.PresenceSchema.Type(), parameter.PresenceName)
+		if err != nil {
+			return err
+		}
+
+		parameter.presenceXfield = presenceField
+		field, err := fieldByTemplateName(t.Schema.Type(), parameter.Name)
+		if err != nil {
+			return err
+		}
+
+		parameter.xfield = field
 	}
+
+	return nil
+}
+
+func fieldByTemplateName(structType reflect.Type, name string) (*xunsafe.Field, error) {
+	structType = shared.Elem(structType)
+
+	field, ok := structType.FieldByName(name)
+	if !ok {
+		for i := 0; i < structType.NumField(); i++ {
+			field = structType.Field(i)
+			veltyTag := velty.Parse(field.Tag.Get("velty"))
+			for _, fieldName := range veltyTag.Names {
+				if fieldName == name {
+					return xunsafe.NewField(field), nil
+				}
+			}
+		}
+
+		return nil, fmt.Errorf("not found field %v at type %v", name, structType.String())
+	}
+
+	return xunsafe.NewField(field), nil
 }
