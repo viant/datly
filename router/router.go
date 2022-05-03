@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/sanitize"
 	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox"
+	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -19,6 +20,12 @@ import (
 type viewHandler func(response http.ResponseWriter, request *http.Request)
 
 type (
+	Router struct {
+		resource      *Resource
+		serviceRouter *toolbox.ServiceRouter
+		reader        *reader.Service
+	}
+
 	Routes []*Route
 	Route  struct {
 		Visitor *Visitor
@@ -26,6 +33,8 @@ type (
 		Method  string
 		View    *data.View
 		Config
+
+		Index Index
 	}
 
 	Config struct {
@@ -36,11 +45,6 @@ type (
 		shared.Reference
 		Name     string
 		_visitor LifecycleVisitor
-	}
-
-	Router struct {
-		*Resource
-		serviceRouter *toolbox.ServiceRouter
 	}
 )
 
@@ -57,6 +61,10 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	}
 
 	if err := r.initVisitor(resource); err != nil {
+		return err
+	}
+
+	if err := r.Index.Init(r); err != nil {
 		return err
 	}
 
@@ -81,6 +89,15 @@ func (r *Route) initVisitor(resource *Resource) error {
 	return nil
 }
 
+func (r *Route) ViewByPrefix(prefix string) (*data.View, error) {
+	view, ok := r.Index._viewsByPrefix[prefix]
+	if !ok {
+		return nil, fmt.Errorf("not found view with prefix %v", prefix)
+	}
+
+	return view, nil
+}
+
 func (v *Visitor) inherit(visitor *Visitor) {
 	v._visitor = visitor._visitor
 }
@@ -95,7 +112,7 @@ func (r *Router) Handle(response http.ResponseWriter, request *http.Request) err
 
 func New(resource *Resource) *Router {
 	router := &Router{
-		Resource: resource,
+		resource: resource,
 	}
 
 	router.Init(resource.Routes)
@@ -105,6 +122,7 @@ func New(resource *Resource) *Router {
 
 func (r *Router) Init(routes Routes) {
 	r.initServiceRouter(routes)
+	r.reader = reader.New()
 }
 
 func (r *Router) initServiceRouter(routes Routes) {
@@ -141,10 +159,10 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 		destValue := reflect.New(route.View.Schema.SliceType())
 		dest := destValue.Interface()
 		session := reader.NewSession(dest, route.View)
-		session.HttpRequest = request
-		session.MatchedPath = route.URI
 
-		selectors, err := r.createSelectors(route, request)
+		ctx := context.Background()
+
+		selectors, err := r.createSelectors(ctx, route, request)
 		if err != nil {
 			response.Write([]byte(err.Error()))
 			response.WriteHeader(http.StatusBadRequest)
@@ -153,8 +171,7 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 
 		session.Selectors = selectors
 
-		service := reader.New()
-		if err := service.Read(context.TODO(), session); err != nil {
+		if err := r.reader.Read(context.TODO(), session); err != nil {
 			response.WriteHeader(http.StatusBadRequest)
 			response.Write([]byte(err.Error()))
 			return
@@ -242,11 +259,16 @@ func (r *Router) result(route *Route, request *http.Request, destValue reflect.V
 	}
 }
 
-func (r *Router) createSelectors(route *Route, request *http.Request) (data.Selectors, error) {
+func (r *Router) createSelectors(ctx context.Context, route *Route, request *http.Request) (data.Selectors, error) {
 	selectors := data.Selectors{}
 
-	params := request.URL.Query()
-	for paramName, paramValue := range params {
+	requestParams := NewRequestParameters(request, route.URI)
+
+	if err := r.buildParameters(ctx, &selectors, route, requestParams); err != nil {
+		return nil, err
+	}
+
+	for paramName, paramValue := range requestParams.queryIndex {
 		paramName = strings.ToLower(paramName)
 
 		switch paramName {
@@ -291,7 +313,7 @@ func (r *Router) buildFields(selectors *data.Selectors, route *Route, fieldsQuer
 				return err
 			}
 
-			selector := selectors.GetOrCreate(route.View.Name)
+			selector := selectors.Lookup(route.View)
 			selector.Columns = append(selector.Columns, field)
 
 		case 2:
@@ -304,7 +326,7 @@ func (r *Router) buildFields(selectors *data.Selectors, route *Route, fieldsQuer
 				return err
 			}
 
-			selector := selectors.GetOrCreate(view.Name)
+			selector := selectors.Lookup(view)
 			selector.Columns = append(selector.Columns, viewField[1])
 
 		default:
@@ -329,17 +351,7 @@ func (r *Router) canUseColumn(view *data.View, columnName string) error {
 }
 
 func (r *Router) viewByPrefix(prefix string, route *Route) (*data.View, error) {
-	viewName, ok := r.ViewPrefix[prefix]
-	if !ok {
-		return nil, NewUnspecifiedPrefix(prefix)
-	}
-
-	view, err := route.View.AnyOfViews(viewName)
-	if err != nil {
-		return nil, err
-	}
-
-	return view, nil
+	return route.ViewByPrefix(prefix)
 }
 
 func (r *Router) buildOffset(selectors *data.Selectors, route *Route, offsetQuery string) error {
@@ -351,7 +363,7 @@ func (r *Router) buildOffset(selectors *data.Selectors, route *Route, offsetQuer
 				return fmt.Errorf("can't use selector offset on %v view", route.View.Name)
 			}
 
-			if err := r.updateSelectorOffset(selectors, viewOffset[1], route.View.Name); err != nil {
+			if err := r.updateSelectorOffset(selectors, viewOffset[1], route.View); err != nil {
 				return err
 			}
 
@@ -365,7 +377,7 @@ func (r *Router) buildOffset(selectors *data.Selectors, route *Route, offsetQuer
 				return fmt.Errorf("can't use selector offset on %v view", route.View.Name)
 			}
 
-			if err = r.updateSelectorOffset(selectors, viewOffset[1], view.Name); err != nil {
+			if err = r.updateSelectorOffset(selectors, viewOffset[1], view); err != nil {
 				return err
 			}
 
@@ -377,13 +389,13 @@ func (r *Router) buildOffset(selectors *data.Selectors, route *Route, offsetQuer
 	return nil
 }
 
-func (r *Router) updateSelectorOffset(selectors *data.Selectors, offset string, viewName string) error {
+func (r *Router) updateSelectorOffset(selectors *data.Selectors, offset string, view *data.View) error {
 	offsetConv, err := strconv.Atoi(offset)
 	if err != nil {
 		return err
 	}
 
-	selector := selectors.GetOrCreate(viewName)
+	selector := selectors.Lookup(view)
 	selector.Offset = offsetConv
 	return nil
 }
@@ -397,7 +409,7 @@ func (r *Router) buildLimit(selectors *data.Selectors, route *Route, limitQuery 
 				return fmt.Errorf("can't use selector limit on %v view", route.View.Name)
 			}
 
-			if err := r.updateSelectorLimit(selectors, viewLimit[0], route.View.Name); err != nil {
+			if err := r.updateSelectorLimit(selectors, viewLimit[0], route.View); err != nil {
 				return err
 			}
 
@@ -411,7 +423,7 @@ func (r *Router) buildLimit(selectors *data.Selectors, route *Route, limitQuery 
 				return fmt.Errorf("can't use selector limit on %v view", route.View.Name)
 			}
 
-			if err = r.updateSelectorLimit(selectors, viewLimit[1], view.Name); err != nil {
+			if err = r.updateSelectorLimit(selectors, viewLimit[1], view); err != nil {
 				return err
 			}
 
@@ -423,13 +435,13 @@ func (r *Router) buildLimit(selectors *data.Selectors, route *Route, limitQuery 
 	return nil
 }
 
-func (r *Router) updateSelectorLimit(selectors *data.Selectors, limit string, viewName string) error {
+func (r *Router) updateSelectorLimit(selectors *data.Selectors, limit string, view *data.View) error {
 	limitConv, err := strconv.Atoi(limit)
 	if err != nil {
 		return err
 	}
 
-	selector := selectors.GetOrCreate(viewName)
+	selector := selectors.Lookup(view)
 	selector.Limit = limitConv
 	return nil
 }
@@ -444,7 +456,7 @@ func (r *Router) buildOrderBy(selectors *data.Selectors, route *Route, orderByQu
 				return err
 			}
 
-			selector := selectors.GetOrCreate(route.View.Name)
+			selector := selectors.Lookup(route.View)
 			selector.OrderBy = viewOrderBy[0]
 
 		case 2:
@@ -457,7 +469,7 @@ func (r *Router) buildOrderBy(selectors *data.Selectors, route *Route, orderByQu
 				return err
 			}
 
-			selector := selectors.GetOrCreate(route.View.Name)
+			selector := selectors.Lookup(view)
 			selector.OrderBy = viewOrderBy[1]
 
 		default:
@@ -518,10 +530,8 @@ func (r *Router) addSelectorCriteria(selectors *data.Selectors, view *data.View,
 		return err
 	}
 
-	selector := selectors.GetOrCreate(view.Name)
-	selector.Criteria = &data.Criteria{
-		Expression: criteriaSanitized,
-	}
+	selector := selectors.Lookup(view)
+	selector.Criteria = criteriaSanitized
 	return nil
 }
 
@@ -537,4 +547,160 @@ func (r *Router) sanitizeCriteria(criteria string, view *data.View) (string, err
 	}
 
 	return sb.String(), nil
+}
+
+func (r *Router) buildParameters(ctx context.Context, selectors *data.Selectors, route *Route, requestParams *RequestParams) error {
+	//TODO: run with goroutines, specially for the Parameter View Location
+	for _, view := range route.Index._views {
+		if view.Template == nil || len(view.Template.Parameters) == 0 {
+			continue
+		}
+
+		selector := selectors.Lookup(view)
+		selectorParams := reflect.New(view.Template.Schema.Type())
+		presenceParams := getPresenceMap(view)
+
+		if err := r.buildSelectorParameters(ctx, xunsafe.AsPointer(selectorParams.Interface()), xunsafe.AsPointer(presenceParams.Interface()), view.Template.Parameters, requestParams); err != nil {
+			return err
+		}
+
+		selector.Parameters.Values = selectorParams.Elem().Interface()
+		selector.Parameters.Has = presenceParams.Elem().Interface()
+	}
+
+	return nil
+}
+
+func getPresenceMap(view *data.View) reflect.Value {
+	if view.Template.PresenceSchema.Type().Kind() == reflect.Ptr {
+		return reflect.New(view.Template.PresenceSchema.Type().Elem())
+	}
+
+	return reflect.New(view.Template.PresenceSchema.Type())
+}
+
+func (r *Router) buildSelectorParameters(ctx context.Context, paramsPtr, presencePtr unsafe.Pointer, parameters []*data.Parameter, requestParams *RequestParams) error {
+	var err error
+	for _, parameter := range parameters {
+		switch parameter.In.Kind {
+		case data.QueryKind:
+			if err = addQueryParam(paramsPtr, presencePtr, parameter, requestParams); err != nil {
+				return err
+			}
+
+		case data.PathKind:
+			if err = addPathParam(paramsPtr, presencePtr, parameter, requestParams); err != nil {
+				return err
+			}
+
+		case data.HeaderKind:
+			if err = addHeaderParam(paramsPtr, presencePtr, parameter, requestParams); err != nil {
+				return err
+			}
+
+		case data.CookieKind:
+			if err = addCookieParam(paramsPtr, presencePtr, parameter, requestParams); err != nil {
+				return err
+			}
+
+		case data.DataViewKind:
+			if err = r.addViewParam(ctx, paramsPtr, presencePtr, parameter); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func addCookieParam(ptr unsafe.Pointer, presencePtr unsafe.Pointer, parameter *data.Parameter, params *RequestParams) error {
+	return convertAndSet(ptr, presencePtr, parameter, params.cookie(parameter.In.Name))
+}
+
+func addHeaderParam(ptr unsafe.Pointer, presencePtr unsafe.Pointer, parameter *data.Parameter, params *RequestParams) error {
+	return convertAndSet(ptr, presencePtr, parameter, params.header(parameter.In.Name))
+}
+
+func addQueryParam(ptr unsafe.Pointer, presencePtr unsafe.Pointer, parameter *data.Parameter, params *RequestParams) error {
+	return convertAndSet(ptr, presencePtr, parameter, params.queryParam(parameter.In.Name, ""))
+}
+
+func addPathParam(ptr unsafe.Pointer, presencePtr unsafe.Pointer, parameter *data.Parameter, params *RequestParams) error {
+	return convertAndSet(ptr, presencePtr, parameter, params.pathVariable(parameter.In.Name, ""))
+}
+
+func (r *Router) addViewParam(ctx context.Context, paramsPtr, presencePtr unsafe.Pointer, param *data.Parameter) error {
+	view := param.View()
+	destSlice := reflect.New(view.Schema.SliceType()).Interface()
+	err := r.reader.Read(ctx, reader.NewSession(destSlice, view))
+	if err != nil {
+		return err
+	}
+
+	ptr := xunsafe.AsPointer(destSlice)
+	paramLen := view.Schema.Slice().Len(ptr)
+	switch paramLen {
+	case 0:
+		if param.Required != nil && *param.Required {
+			return fmt.Errorf("parameter %v value is required but no data was found", param.Name)
+		}
+	case 1:
+		holder := view.Schema.Slice().ValuePointerAt(ptr, 0)
+		param.Mutator().SetValue(paramsPtr, holder)
+		return nil
+
+	default:
+		return fmt.Errorf("parameter %v return more than one value", param.Name)
+	}
+
+	return nil
+}
+
+func convertAndSet(paramPtr, presencePtr unsafe.Pointer, parameter *data.Parameter, rawValue string) error {
+	xField := parameter.Mutator()
+	if parameter.IsRequired() && rawValue == "" {
+		return fmt.Errorf("query parameter %v is required", parameter.Name)
+	}
+
+	if rawValue == "" {
+		return nil
+	}
+
+	if err := updateParamValue(paramPtr, xField, rawValue); err != nil {
+		return err
+	}
+
+	parameter.PresenceMutator().SetBool(presencePtr, true)
+	return nil
+}
+
+func updateParamValue(paramPtr unsafe.Pointer, xField *xunsafe.Field, rawValue string) error {
+	//TODO: Add remaining types
+	switch xField.Type.Kind() {
+	case reflect.String:
+		xField.SetValue(paramPtr, rawValue)
+		return nil
+
+	case reflect.Int:
+		asInt, err := strconv.Atoi(rawValue)
+		if err != nil {
+			return err
+		}
+		xField.SetInt(paramPtr, asInt)
+		return nil
+
+	case reflect.Bool:
+		xField.SetBool(paramPtr, strings.EqualFold(rawValue, "true"))
+		return nil
+
+	case reflect.Float64:
+		asFloat, err := strconv.ParseFloat(rawValue, 64)
+		if err != nil {
+			return err
+		}
+
+		xField.SetFloat64(paramPtr, asFloat)
+		return nil
+	}
+
+	return fmt.Errorf("unsupported query parameter type %v", xField.Type.String())
 }

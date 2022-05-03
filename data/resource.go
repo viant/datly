@@ -20,7 +20,7 @@ type Resource struct {
 	_views Views
 
 	Parameters  []*Parameter
-	_parameters Parameters
+	_parameters ParametersIndex
 
 	types    Types
 	Loggers  logger.Adapters
@@ -157,7 +157,7 @@ func EmptyResource() *Resource {
 		Views:       make([]*View, 0),
 		_views:      Views{},
 		Parameters:  make([]*Parameter, 0),
-		_parameters: Parameters{},
+		_parameters: ParametersIndex{},
 		types:       Types{},
 	}
 }

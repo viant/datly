@@ -4,9 +4,12 @@ Views:
   Name: users
   Table: users
   Criteria:
-    Expression: id = ${user_id}
-  Parameters:
-  - Ref: user_id
+    Expression: id = ${Params.UserId}
+  Template:
+    Schema:
+      Name: user_params
+    Parameters:
+    - Ref: UserId
 
 Connectors:
 - Name: db
@@ -14,8 +17,10 @@ Connectors:
   DSN: "./testdata/db/db.db"
 
 Parameters:
-- Name: user_id
+- Name: UserId
   In:
     Kind: cookie
     Name: user-id
   Required: true
+  Schema:
+    DataType: int

@@ -1,120 +1,63 @@
 package data
 
 import (
-	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
 )
 
-type (
-	//Parameter describes parameters used by the Criteria to filter the data.
-	Parameter struct {
-		shared.Reference
-		Name            string
-		In              *Location
-		Required        *bool
-		Description     string
-		Style           string
-		AllowEmptyValue bool
-		Schema          Schema
+//ParametersIndex represents Parameter map indexed by Parameter.Name
+type ParametersIndex map[string]*Parameter
 
-		initialized bool
-		view        *View
+//ParametersSlice represents slice of parameters
+type ParametersSlice []*Parameter
+
+//Index indexes parameters by Parameter.Name
+func (p ParametersSlice) Index() ParametersIndex {
+	result := ParametersIndex(make(map[string]*Parameter))
+
+	for parameterIndex := range p {
+		result.Register(p[parameterIndex])
 	}
 
-	//Location tells how to retrieve parameter value.
-	Location struct {
-		Kind Kind
-		Name string
-	}
-)
+	return result
+}
 
-//Init initializes Parameter
-func (p *Parameter) Init(ctx context.Context, resource *Resource) error {
-	if p.initialized == true {
-		return nil
-	}
+//Filter filters ParametersSlice with given Kind and creates Template
+func (p ParametersSlice) Filter(kind Kind) ParametersIndex {
+	result := make(map[string]*Parameter)
 
-	p.initialized = true
-	if p.Ref != "" && p.Name == "" {
-		param, err := resource._parameters.Lookup(p.Ref)
-		if err != nil {
-			return err
+	for parameterIndex := range p {
+		if p[parameterIndex].In.Kind != kind {
+			continue
 		}
+		result[p[parameterIndex].In.Name] = p[parameterIndex]
 
-		if err = param.Init(ctx, resource); err != nil {
-			return err
-		}
-
-		p.inherit(param)
-
-		if p.In.Kind == DataViewKind {
-			view, err := resource.View(p.In.Name)
-			if err != nil {
-				return fmt.Errorf("failed to lookup parameter %v view %w", p.Name, err)
-			}
-
-			if err = view.Init(ctx, resource); err != nil {
-				return err
-			}
-
-			p.view = view
-			p.view._paramField = shared.MatchField(p.view.DataType(), view.Columns[0].Name, view.Caser)
-		}
 	}
 
-	return p.Validate()
+	return result
 }
 
-func (p *Parameter) inherit(param *Parameter) {
-	p.Name = notEmptyOf(p.Name, param.Name)
-	p.Description = notEmptyOf(p.Description, param.Description)
-	p.Style = notEmptyOf(p.Style, param.Style)
-
-	if p.In == nil {
-		p.In = param.In
-	}
-
-	if p.Required == nil {
-		p.Required = param.Required
+func (p ParametersIndex) merge(with ParametersIndex) {
+	for s := range with {
+		p[s] = with[s]
 	}
 }
 
-//Validate checks if parameter is valid
-func (p *Parameter) Validate() error {
-	if p.Name == "" {
-		return fmt.Errorf("parameter name can't be empty")
+//Lookup returns Parameter with given name
+func (p ParametersIndex) Lookup(paramName string) (*Parameter, error) {
+
+	if param, ok := p[paramName]; ok {
+		return param, nil
 	}
 
-	if p.In == nil {
-		return fmt.Errorf("parameter location can't be empty")
-	}
-
-	if err := p.In.Validate(); err != nil {
-		return err
-	}
-
-	return nil
+	return nil, fmt.Errorf("not found parameter %v", paramName)
 }
 
-//View returns View related with Parameter if Location.Kind is set to data_view
-func (p *Parameter) View() *View {
-	return p.view
-}
+//Register registers parameter
+func (p ParametersIndex) Register(parameter *Parameter) {
+	keys := shared.KeysOf(parameter.Name, false)
 
-//Validate checks if Location is valid
-func (l *Location) Validate() error {
-	if err := l.Kind.Validate(); err != nil {
-		return err
+	for _, key := range keys {
+		p[key] = parameter
 	}
-
-	if err := ParamName(l.Name).Validate(l.Kind); err != nil {
-		return fmt.Errorf("unsupported param name")
-	}
-
-	return nil
-}
-
-func (p *Parameter) IsRequired() bool {
-	return p.Required != nil && *p.Required == true
 }

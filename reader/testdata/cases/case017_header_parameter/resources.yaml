@@ -4,9 +4,12 @@ Views:
   Name: users
   Table: users
   Criteria:
-    Expression: name LIKE '${user_name}%'
-  Parameters:
-  - Ref: user_name
+    Expression: name LIKE '${Params.User_name}%'
+  Template:
+    Schema:
+      Name: header_params
+    Parameters:
+      - Ref: User_name
 
 Connectors:
 - Name: db
@@ -14,8 +17,10 @@ Connectors:
   DSN: "./testdata/db/db.db"
 
 Parameters:
-- Name: user_name
+- Name: User_name
   In:
     Kind: header
     Name: user-name
   Required: true
+  Schema:
+    DataType: string

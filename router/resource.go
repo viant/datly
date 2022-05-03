@@ -9,9 +9,8 @@ import (
 )
 
 type Resource struct {
-	Routes     Routes
-	Resource   *data.Resource
-	ViewPrefix map[string]string
+	Routes   Routes
+	Resource *data.Resource
 
 	_visitors Visitors
 }
@@ -25,10 +24,6 @@ func (r *Resource) Init(ctx context.Context) error {
 		if err := route.Init(ctx, r); err != nil {
 			return err
 		}
-	}
-
-	if r.ViewPrefix == nil {
-		r.ViewPrefix = map[string]string{}
 	}
 
 	return nil

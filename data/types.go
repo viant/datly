@@ -1,6 +1,9 @@
 package data
 
-import "reflect"
+import (
+	"fmt"
+	"reflect"
+)
 
 //Types represents reflect.Type registry
 //map key should match Schema.Name
@@ -12,6 +15,10 @@ func (r Types) Register(name string, rType reflect.Type) {
 }
 
 //Lookup returns Type
-func (r Types) Lookup(name string) reflect.Type {
-	return r[name]
+func (r Types) Lookup(name string) (reflect.Type, error) {
+	rType, ok := r[name]
+	if !ok {
+		return nil, fmt.Errorf("not found type %v", name)
+	}
+	return rType, nil
 }

@@ -56,13 +56,21 @@ func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *Bat
 	}
 
 	sb.WriteString(fromFragment)
-	b.appendSource(&sb, view, selector, batchData, relation)
+	if err = b.appendSource(&sb, view, selector, batchData, relation); err != nil {
+		return "", err
+	}
 
 	if !view.HasColumnInReplacement() && !view.HasCriteriaReplacement() {
-		whereClause := b.buildWhereClause(view, true, selector, alias, batchData)
+		whereClause, err := b.buildWhereClause(view, true, selector, alias, batchData)
+		if err != nil {
+			return "", err
+		}
 		b.appendWhereClause(whereClause, &sb)
 	} else if view.HasColumnInReplacement() {
-		whereClause := b.buildWhereClause(view, false, selector, alias, batchData)
+		whereClause, err := b.buildWhereClause(view, false, selector, alias, batchData)
+		if err != nil {
+			return "", err
+		}
 		b.appendWhereClause(whereClause, &sb)
 	}
 
@@ -181,14 +189,32 @@ func (b *Builder) buildColumnsIn(batchData *BatchData, alias string) string {
 	return sb.String()
 }
 
-func (b *Builder) appendSource(sb *strings.Builder, view *data.View, selector *data.Selector, batchData *BatchData, relation *data.Relation) {
+func (b *Builder) appendSource(sb *strings.Builder, view *data.View, selector *data.Selector, batchData *BatchData, relation *data.Relation) error {
 	var alias string
 	if relation != nil && relation.ColumnAlias != "" {
 		alias = relation.ColumnAlias
 	}
 
+	err := b.evaluateAndAppendSource(sb, view, selector, batchData, alias)
+	if err != nil {
+		return err
+	}
+
+	if view.Alias != "" {
+		sb.WriteString(asFragment)
+		sb.WriteString(view.Alias)
+		sb.WriteString(" ")
+	}
+	return nil
+}
+
+func (b *Builder) evaluateAndAppendSource(sb *strings.Builder, view *data.View, selector *data.Selector, batchData *BatchData, alias string) error {
+	params := data.CommonParams{}
 	if view.HasCriteriaReplacement() {
-		whereClause := b.buildWhereClause(view, true, selector, alias, batchData)
+		whereClause, err := b.buildWhereClause(view, true, selector, alias, batchData)
+		if err != nil {
+			return err
+		}
 		hasWhere := view.HasWhereClause()
 
 		if whereClause != "" {
@@ -198,25 +224,23 @@ func (b *Builder) appendSource(sb *strings.Builder, view *data.View, selector *d
 				whereClause = andFragment + whereClause + encloseFragment + " "
 			}
 		}
-
-		whereBuilder := strings.Builder{}
-		whereBuilder.WriteString(whereClause)
-
-		sb.WriteString(strings.ReplaceAll(view.Source(), string(shared.Criteria), whereBuilder.String()))
-	} else if view.HasColumnInReplacement() {
-		sb.WriteString(strings.ReplaceAll(view.Source(), string(shared.ColumnInPosition), b.buildColumnsIn(batchData, alias)))
-	} else {
-		sb.WriteString(view.Source())
+		params.WhereClause = whereClause
 	}
 
-	if view.Alias != "" {
-		sb.WriteString(asFragment)
-		sb.WriteString(view.Alias)
-		sb.WriteString(" ")
+	if view.HasColumnInReplacement() {
+		params.ColumnsIn = b.buildColumnsIn(batchData, alias)
 	}
+
+	source, err := view.Template.EvaluateSource(params, selector.Parameters.Values, selector.Parameters.Has)
+	if err != nil {
+		return err
+	}
+
+	sb.WriteString(source)
+	return nil
 }
 
-func (b *Builder) buildWhereClause(view *data.View, useColumnsIn bool, selector *data.Selector, alias string, batchData *BatchData) string {
+func (b *Builder) buildWhereClause(view *data.View, useColumnsIn bool, selector *data.Selector, alias string, batchData *BatchData) (string, error) {
 	sb := strings.Builder{}
 
 	addAnd := false
@@ -231,7 +255,12 @@ func (b *Builder) buildWhereClause(view *data.View, useColumnsIn bool, selector 
 			sb.WriteString(andFragment)
 		}
 
-		sb.WriteString(view.Criteria.Expression)
+		criteria, err := b.viewCriteria(view, selector)
+		if err != nil {
+			return "", err
+		}
+
+		sb.WriteString(criteria)
 		if addAnd {
 			sb.WriteString(encloseFragment)
 		}
@@ -239,12 +268,12 @@ func (b *Builder) buildWhereClause(view *data.View, useColumnsIn bool, selector 
 		addAnd = true
 	}
 
-	if view.CanUseSelectorCriteria() && selector != nil && selector.Criteria != nil && selector.Criteria.Expression != "" {
+	if selector != nil && selector.Criteria != "" {
 		if addAnd {
 			sb.WriteString(andFragment)
 		}
 
-		sb.WriteString(selector.Criteria.Expression)
+		sb.WriteString(selector.Criteria)
 
 		if addAnd {
 			sb.WriteString(encloseFragment)
@@ -253,5 +282,17 @@ func (b *Builder) buildWhereClause(view *data.View, useColumnsIn bool, selector 
 		addAnd = true
 	}
 
-	return sb.String()
+	return sb.String(), nil
+}
+
+func (b *Builder) viewCriteria(view *data.View, selector *data.Selector) (string, error) {
+	if selector == nil {
+		return view.Criteria.Expression, nil
+	}
+
+	criteria, err := view.Template.EvaluateCriteria(selector.Parameters.Values, selector.Parameters.Has)
+	if err != nil {
+		return "", err
+	}
+	return criteria, nil
 }

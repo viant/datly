@@ -1,0 +1,45 @@
+Routes:
+  - URI: "/api/events"
+    Method: GET
+    View:
+      Ref: events_ref
+      Name: events
+    Index:
+      ViewPrefix:
+        ev: events
+
+
+Resource:
+  Views:
+    - Name: events_ref
+      Connector:
+        Ref: db
+      Table: events
+      Template:
+        SQL: "        
+          SELECT * FROM EVENTS WHERE 0=0 
+          #if($Has.QUANTITY)
+          AND quantity > $Params.QUANTITY
+          #end
+          #if($Has.USER_ID)
+          AND user_id = $Params.USER_ID
+          #end
+        "
+        Parameters:
+          - Name: QUANTITY
+            In:
+              Kind: query
+              Name: quantity
+            Schema:
+              DataType: float
+          - Name: USER_ID
+            In:
+              Kind: query
+              Name: user_id
+            Schema:
+              DataType: int
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"

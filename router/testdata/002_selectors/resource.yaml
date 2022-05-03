@@ -4,6 +4,9 @@ Routes:
     View:
       Ref: events_ref
       Name: events
+    Index:
+      ViewPrefix:
+        ev: events
 
 Resource:
   Views:
@@ -24,5 +27,3 @@ Resource:
       Driver: sqlite3
       DSN: "./testdata/db/db.db"
 
-ViewPrefix:
-  ev: events

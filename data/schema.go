@@ -40,7 +40,6 @@ func (c *Schema) Type() reflect.Type {
 func (c *Schema) setType(rType reflect.Type) {
 	c.compType = rType
 	c.updateSliceType()
-
 }
 
 func (c *Schema) updateSliceType() {
@@ -49,12 +48,32 @@ func (c *Schema) updateSliceType() {
 }
 
 //Init build struct type
-func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case) {
+func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case, types Types) error {
 	if c.compType != nil {
 		c.updateSliceType()
-		return
+		return nil
 	}
 
+	if c.DataType != "" {
+		rType, err := parseType(c.DataType)
+		if err != nil {
+			rType, err = types.Lookup(c.DataType)
+			if err != nil {
+				return err
+			}
+		}
+
+		c.setType(rType)
+		return nil
+	}
+
+	c.initByColumns(columns, relations, viewCaseFormat)
+	c.autoGen = true
+
+	return nil
+}
+
+func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCaseFormat format.Case) {
 	excluded := make(map[string]bool)
 	for _, rel := range relations {
 		if !rel.IncludeColumn && rel.Cardinality == One {
@@ -109,8 +128,6 @@ func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat f
 	}
 
 	c.setType(reflect.StructOf(structFields))
-	c.autoGen = true
-
 }
 
 //AutoGen indicates whether Schema was generated using ColumnTypes fetched from DB or was passed programmatically.
@@ -136,4 +153,16 @@ func (c *Schema) inheritType(rType reflect.Type) {
 //XType returns structType as *xunsafe.Type
 func (c *Schema) XType() *xunsafe.Type {
 	return c.xType
+}
+
+func (c *Schema) copy() *Schema {
+	newSchema := &Schema{
+		Name:      c.Name,
+		autoGen:   c.autoGen,
+		OmitEmpty: c.OmitEmpty,
+		DataType:  c.DataType,
+	}
+
+	newSchema.setType(c.compType)
+	return c
 }

@@ -4,11 +4,13 @@ Views:
   Name: users
   Table: users
   Criteria:
-    Expression: id = ${user_id}
+    Expression: id = ${Params.UserId}
 
-
-  Parameters:
-  - Ref: user_id
+  Template:
+    Schema:
+      Name: user_params
+    Parameters:
+      - Ref: UserId
 
 Connectors:
 - Name: db
@@ -16,8 +18,10 @@ Connectors:
   DSN: "./testdata/db/db.db"
 
 Parameters:
-- Name: user_id
+- Name: UserId
   In:
     Kind: path
     Name: userId
   Required: true
+  Schema:
+    DataType: int

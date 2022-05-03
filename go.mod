@@ -20,17 +20,18 @@ require (
 	github.com/viant/afs v1.16.0
 	github.com/viant/afsc v1.0.0
 	github.com/viant/asc v0.5.0
-	github.com/viant/assertly v0.5.3
+	github.com/viant/assertly v0.9.1-0.20220308232634-4242424ccaf5
 	github.com/viant/bgc v0.8.0
 	github.com/viant/dsc v0.16.0
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/gmetric v0.2.6
 	github.com/viant/gtly v0.0.0-20200927172514-d1417cac563d
-	github.com/viant/parsly v0.0.0-20220217213746-bb166fe746b9
+	github.com/viant/parsly v0.0.0-20220309230857-3a8c3e9c4030
 	github.com/viant/scy v0.0.0-20220223165437-725359877ec0
 	github.com/viant/sqlx v0.0.0-20220412215625-85e6fb65daba
 	github.com/viant/toolbox v0.34.5
-	github.com/viant/xunsafe v0.7.1-0.20220228210536-20bce86415bb
+	github.com/viant/velty v0.1.1-0.20220503010932-07018e0c8053
+	github.com/viant/xunsafe v0.8.1-0.20220402174902-a83e92a39ead
 	github.com/yuin/gopher-lua v0.0.0-20191220021717-ab39c6098bdb // indirect
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
 	google.golang.org/api v0.66.0

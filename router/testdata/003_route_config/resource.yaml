@@ -5,6 +5,10 @@ Routes:
       Ref: events_ref
       Name: events
     ReturnSingle: true
+    Index:
+      ViewPrefix:
+        ev: events
+
 
 Resource:
   Views:
@@ -13,17 +17,17 @@ Resource:
         Ref: db
       Table: events
       Criteria:
-        Expression: "id = $eventId"
-      Parameters:
-        - Name: eventId
-          In:
-            Kind: path
-            Name: eventId
+        Expression: "id = ${Params.EventId}"
+      Template:
+        Parameters:
+          - Name: EventId
+            In:
+              Kind: path
+              Name: eventId
+            Schema:
+              DataType: int
 
   Connectors:
     - Name: db
       Driver: sqlite3
       DSN: "./testdata/db/db.db"
-
-ViewPrefix:
-  ev: events

@@ -18,8 +18,6 @@ import (
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
 	"github.com/viant/toolbox"
 	"github.com/viant/toolbox/format"
-	"net/http"
-	"net/url"
 	"os"
 	"path"
 	"reflect"
@@ -79,9 +77,6 @@ type usecase struct {
 	dest        interface{}
 	view        string
 	compTypes   map[string]reflect.Type
-	subject     string
-	request     *http.Request
-	path        string
 	expectError bool
 	resource    *data.Resource
 	dataset     string
@@ -130,6 +125,22 @@ func TestRead(t *testing.T) {
 		Subject       string
 	}
 
+	type UserViewParams struct {
+		AclCriteria string `velty:"DATLY_ACL"`
+	}
+
+	type UserIdParam struct {
+		Id int `velty:"UserId"`
+	}
+
+	type LangQueryParams struct {
+		Language string `velty:"Language"`
+	}
+
+	type UserHeaderParams struct {
+		UserName string `velty:"User_name"`
+	}
+
 	testLocation := toolbox.CallerDirectory(3)
 
 	var useCases = []usecase{
@@ -151,30 +162,13 @@ func TestRead(t *testing.T) {
 			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 		},
 		{
-			description: "selector sql injection",
-			dataURI:     "case002_from/",
-			dest:        new(interface{}),
-			view:        "events",
-			selectors: map[string]*data.Selector{
-				"events": {
-					Limit: 1,
-					Criteria: &data.Criteria{
-						Expression: "1=1;--",
-					},
-				},
-			},
-			expectError: true,
-		},
-		{
 			description: "criteria for non existing column",
 			dataURI:     "case002_from/",
 			dest:        new(interface{}),
 			view:        "events",
 			selectors: map[string]*data.Selector{
 				"events": {
-					Criteria: &data.Criteria{
-						Expression: "foo_column = 'abc'",
-					},
+					Criteria: "foo_column = 'abc'",
 				},
 			},
 			expectError: true,
@@ -186,9 +180,7 @@ func TestRead(t *testing.T) {
 			view:        "events",
 			selectors: map[string]*data.Selector{
 				"events": {
-					Criteria: &data.Criteria{
-						Expression: "EventTypeId = 11",
-					},
+					Criteria: "event_type_id = 11",
 				},
 			},
 			expect: `[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}]`,
@@ -199,22 +191,6 @@ func TestRead(t *testing.T) {
 			dest:        new(interface{}),
 			view:        "events",
 			expect:      `[{"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1},{"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2},{"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3}]`,
-		},
-		{
-			description: "disabled client criteria",
-			dataURI:     "case003_exclude/",
-			dest:        new(interface{}),
-			view:        "events",
-			selectors: map[string]*data.Selector{
-				"events": {
-					Columns:  []string{"quantity"},
-					OrderBy:  "user_id",
-					Offset:   2,
-					Limit:    1,
-					Criteria: &data.Criteria{Expression: "quantity > 30"},
-				},
-			},
-			expectError: true,
 		},
 		{
 			description: "events selector",
@@ -301,8 +277,17 @@ func TestRead(t *testing.T) {
 			view:        "users_accounts",
 			description: "parameters",
 			dest:        new(interface{}),
-			expect:      `[{"Id":4,"Name":"Kamil","Role":"ADMIN","Accounts":null},{"Id":5,"Name":"Bob","Role":"ADMIN","Accounts":null}]`,
-			subject:     "Kamil",
+			compTypes: map[string]reflect.Type{
+				"user_params": reflect.TypeOf(UserViewParams{}),
+			},
+			expect: `[{"Id":4,"Name":"Kamil","Role":"ADMIN","Accounts":null},{"Id":5,"Name":"Bob","Role":"ADMIN","Accounts":null}]`,
+			selectors: map[string]*data.Selector{
+				"users_accounts": {
+					Parameters: data.ParamState{
+						Values: UserViewParams{AclCriteria: "ROLE IN ('ADMIN')"},
+					},
+				},
+			},
 		},
 		{
 			description: "read all strategy, one to one",
@@ -341,25 +326,16 @@ func TestRead(t *testing.T) {
 			view:        "users",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Name":"John","Role":""}]`,
-			request: &http.Request{
-				URL: &url.URL{
-					Path: "/users/1",
+			compTypes: map[string]reflect.Type{
+				"user_params": reflect.TypeOf(UserIdParam{}),
+			},
+			selectors: map[string]*data.Selector{
+				"users": {
+					Parameters: data.ParamState{
+						Values: UserIdParam{Id: 1},
+					},
 				},
 			},
-			path: "/users/{userId}",
-		},
-		{
-			description: "path parameter sql injection",
-			dataURI:     "case015_path_parameter/",
-			view:        "users",
-			dest:        new(interface{}),
-			request: &http.Request{
-				URL: &url.URL{
-					Path: "/users/1 UNION SELECT 10 as Id, 'Abc' as Name, 'ADMIN' as Role",
-				},
-			},
-			expectError: true,
-			path:        "/users/{userId}",
 		},
 		{
 			description: "query parameter",
@@ -367,44 +343,16 @@ func TestRead(t *testing.T) {
 			view:        "languages",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Code":"en-GB"},{"Id":2,"Code":"en-US"}]`,
-			request: &http.Request{
-				RequestURI: "/languages",
-				URL: &url.URL{
-					RawQuery: "lang=en",
-					Path:     "/languages",
+			compTypes: map[string]reflect.Type{
+				"lang_params": reflect.TypeOf(LangQueryParams{}),
+			},
+			selectors: map[string]*data.Selector{
+				"languages": {
+					Parameters: data.ParamState{
+						Values: LangQueryParams{Language: "en"},
+					},
 				},
 			},
-			path: "/languages",
-		},
-		{
-			description: "query parameter, not used param wrong format",
-			dataURI:     "case016_query_parameter/",
-			view:        "languages",
-			dest:        new(interface{}),
-			request: &http.Request{
-				RequestURI: "/languages",
-				URL: &url.URL{
-					RawQuery: "lang=en&otherParam=%20UNION%20SELECT%201%20as%20Id%2C%20'abc'%20as%20Code%3B--'",
-					Path:     "/languages",
-				},
-			},
-			expect: `[{"Id":1,"Code":"en-GB"},{"Id":2,"Code":"en-US"}]`,
-			path:   "/languages",
-		},
-		{
-			description: "query sql injection parameter",
-			dataURI:     "case016_query_parameter/",
-			view:        "languages",
-			dest:        new(interface{}),
-			request: &http.Request{
-				RequestURI: "/languages",
-				URL: &url.URL{
-					RawQuery: "lang=en'%20UNION%20SELECT%201%20as%20Id%2C%20'abc'%20as%20Code%3B--'",
-					Path:     "/languages",
-				},
-			},
-			path:        "/languages",
-			expectError: true,
 		},
 		{
 			description: "header parameter",
@@ -412,39 +360,16 @@ func TestRead(t *testing.T) {
 			view:        "users",
 			dest:        new(interface{}),
 			expect:      `[{"Id":3,"Name":"Anna","Role":""}]`,
-			request: &http.Request{
-				Header: map[string][]string{
-					"user-name": {"Anna"},
-				},
-				URL: &url.URL{},
+			compTypes: map[string]reflect.Type{
+				"header_params": reflect.TypeOf(UserHeaderParams{}),
 			},
-		},
-		{
-			description: "header parameter union sql injection",
-			dataURI:     "case017_header_parameter/",
-			view:        "users",
-			dest:        new(interface{}),
-			request: &http.Request{
-				Header: map[string][]string{
-					"user-name": {"'Anna' UNION SELECT 1 as Id, 'Abc' as Name, 'ADMIN' as Role; --"},
+			selectors: map[string]*data.Selector{
+				"users": {
+					Parameters: data.ParamState{
+						Values: UserHeaderParams{UserName: "Anna"},
+					},
 				},
-				URL: &url.URL{},
 			},
-			expectError: true,
-		},
-		{
-			description: "not used header",
-			dataURI:     "case017_header_parameter/",
-			view:        "users",
-			dest:        new(interface{}),
-			request: &http.Request{
-				Header: map[string][]string{
-					"user-name":    {"Anna"},
-					"other-header": {"#--DROP"},
-				},
-				URL: &url.URL{},
-			},
-			expect: `[{"Id":3,"Name":"Anna","Role":""}]`,
 		},
 		{
 			description: "cookie parameter",
@@ -452,84 +377,21 @@ func TestRead(t *testing.T) {
 			view:        "users",
 			dest:        new(interface{}),
 			expect:      `[{"Id":2,"Name":"David","Role":""}]`,
-			request: &http.Request{
-				Header: map[string][]string{
-					"Cookie": {"user-id=2"},
-				},
-				URL: &url.URL{},
+			compTypes: map[string]reflect.Type{
+				"user_params": reflect.TypeOf(UserIdParam{}),
 			},
-		},
-		{
-			description: "cookie parameter union sql injection",
-			dataURI:     "case018_cookie_parameter/",
-			view:        "users",
-			dest:        new(interface{}),
-			request: &http.Request{
-				Header: map[string][]string{
-					"Cookie": {"user-id=2 UNION Select 1 as Id, 'abc' as Name, 'ADMIN' as Role"},
+			selectors: map[string]*data.Selector{
+				"users": {
+					Parameters: data.ParamState{
+						Values: UserIdParam{Id: 2},
+						Has:    nil,
+					},
 				},
-				URL: &url.URL{},
 			},
-			expectError: true,
-		},
-		{
-			description: "cookie parameter drop table sql injection",
-			dataURI:     "case018_cookie_parameter/",
-			view:        "users",
-			dest:        new(interface{}),
-			expect:      `[{"Id":2,"Name":"David","Role":""}]`,
-			request: &http.Request{
-				Header: map[string][]string{
-					"Cookie": {`user-id=2%3BDROP TABLE USERS`},
-				},
-				URL: &url.URL{},
-			},
-			expectError: true,
-		},
-		{
-			description: "not used cookie",
-			dataURI:     "case018_cookie_parameter/",
-			view:        "users",
-			dest:        new(interface{}),
-			expect:      `[{"Id":2,"Name":"David","Role":""}]`,
-			request: &http.Request{
-				Header: map[string][]string{
-					"Cookie": {`user-id=2;other-cookie="--#DROP"`},
-				},
-				URL: &url.URL{},
-			},
-		},
-		{
-			description: "query parameter, required",
-			dataURI:     "case019_query_required/",
-			view:        "events",
-			dest:        new(interface{}),
-			expectError: true,
-		},
-		{
-			description: "path parameter, required",
-			dataURI:     "case020_path_required/",
-			view:        "events",
-			dest:        new(interface{}),
-			expectError: true,
-		},
-		{
-			description: "cookie parameter, required",
-			dataURI:     "case021_cookie_required/",
-			view:        "events",
-			dest:        new(interface{}),
-			expectError: true,
-		},
-		{
-			description: "header parameter, required",
-			dataURI:     "case022_header_required/",
-			view:        "events",
-			dest:        new(interface{}),
-			expectError: true,
 		},
 		{
 			description: "derive columns from schema type",
-			dataURI:     "case023_derive_columns/",
+			dataURI:     "case019_derive_columns/",
 			view:        "datly_acl",
 			dest:        new([]AclRecord),
 			compTypes: map[string]reflect.Type{
@@ -539,7 +401,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "derive columns from schema type with relation",
-			dataURI:     "case024_derive_columns_relation/",
+			dataURI:     "case020_derive_columns_relation/",
 			view:        "event_event-types",
 			dest:        new([]Boo),
 			compTypes: map[string]reflect.Type{
@@ -549,7 +411,7 @@ func TestRead(t *testing.T) {
 		},
 		{
 			description: "derive columns from schema type with relation",
-			dataURI:     "case025_on_fetch/",
+			dataURI:     "case021_on_fetch/",
 			view:        "audiences_deals",
 			dest:        new([]audience),
 			compTypes: map[string]reflect.Type{
@@ -569,7 +431,6 @@ func TestRead(t *testing.T) {
 		criteriaWhere(),
 		inheritCoalesceTypes(),
 		inheritLogger(),
-		filterableColumns(),
 		wildcardAllowedFilterableColumns(),
 		autoCoalesce(),
 		batchParent(),
@@ -624,12 +485,9 @@ func TestRead(t *testing.T) {
 
 func testView(t *testing.T, testCase usecase, dataView *data.View, err error, service *reader.Service) {
 	session := &reader.Session{
-		Dest:        testCase.dest,
-		View:        dataView,
-		Selectors:   testCase.selectors,
-		Subject:     testCase.subject,
-		HttpRequest: testCase.request,
-		MatchedPath: testCase.path,
+		Dest:      testCase.dest,
+		View:      dataView,
+		Selectors: testCase.selectors,
 	}
 
 	err = service.Read(context.TODO(), session)
@@ -689,7 +547,7 @@ func autoCoalesce() usecase {
 	return usecase{
 		view:        "events",
 		dataset:     "dataset002_nils/",
-		description: "inherit coalesce types",
+		description: "inherit coalesce types | Int, Float64, Int",
 		expect:      `[{"Id":1,"Quantity":0,"EventTypeId":0}]`,
 		resource:    resource,
 		dest:        new([]*Event),
@@ -726,7 +584,7 @@ func wildcardAllowedFilterableColumns() usecase {
 	return usecase{
 		view:        "events",
 		dataset:     "dataset001_events/",
-		description: "inherit coalesce types",
+		description: "inherit coalesce types | filtered columns",
 		selectors: map[string]*data.Selector{
 			"events": {
 				Columns: []string{"ID", "QUANTITY"},
@@ -735,45 +593,6 @@ func wildcardAllowedFilterableColumns() usecase {
 		expect:   `[{"Id":1,"Quantity":33.23432374000549,"EventTypeId":0},{"Id":10,"Quantity":21.957962334156036,"EventTypeId":0},{"Id":100,"Quantity":5.084940046072006,"EventTypeId":0}]`,
 		resource: resource,
 		dest:     new([]*Event),
-	}
-}
-
-func filterableColumns() usecase {
-	type Event struct {
-		Id          int
-		Quantity    float64
-		EventTypeId int
-	}
-
-	resource := data.EmptyResource()
-	connector := &config.Connector{
-		Name:   "db",
-		DSN:    "./testdata/db/db.db",
-		Driver: "sqlite3",
-	}
-
-	resource.AddViews(&data.View{
-		Connector:            connector,
-		Name:                 "events",
-		Alias:                "ev",
-		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
-		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
-		InheritSchemaColumns: true,
-		Caser:                format.CaseUpperUnderscore,
-	})
-
-	return usecase{
-		view:        "events",
-		dataset:     "dataset001_events/",
-		description: "inherit coalesce types",
-		selectors: map[string]*data.Selector{
-			"events": {
-				Columns: []string{"ID", "QUANTITY"},
-			},
-		},
-		expectError: true,
-		resource:    resource,
-		dest:        new([]*Event),
 	}
 }
 
@@ -812,7 +631,7 @@ func inheritLogger() usecase {
 	return usecase{
 		view:        "events",
 		dataset:     "dataset001_events/",
-		description: "inherit coalesce types",
+		description: "inherit logger",
 		resource:    resource,
 		expect:      `[{"Id":1,"Quantity":33.23432374000549,"EventTypeId":2},{"Id":10,"Quantity":21.957962334156036,"EventTypeId":11},{"Id":100,"Quantity":5.084940046072006,"EventTypeId":111}]`,
 		dest:        new([]*Event),

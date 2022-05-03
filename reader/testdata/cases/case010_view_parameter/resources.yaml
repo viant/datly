@@ -4,9 +4,12 @@ Views:
   Name: users
   Table: users
   Criteria:
-    Expression: ${datly_acl_criteria}
-  Parameters:
-  - Ref: datly_acl_criteria
+    Expression: ${Params.DATLY_ACL}
+  Template:
+    Schema:
+      Name: user_params
+    Parameters:
+    - Ref: DATLY_ACL
 
 - Connector:
     Ref: db
@@ -42,8 +45,10 @@ Connectors:
   DSN: "./testdata/db/db.db"
 
 Parameters:
-- Name: datly_acl_criteria
+- Name: DATLY_ACL
   In:
     Kind: data_view
     Name: datly_acl
   Required: true
+  Schema:
+    DataType: string

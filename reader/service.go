@@ -3,15 +3,12 @@ package reader
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/shared"
 	"github.com/viant/gmetric/counter"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/read"
 	rdata "github.com/viant/toolbox/data"
-	"github.com/viant/xunsafe"
-	"reflect"
 	"sync"
 	"time"
 )
@@ -72,14 +69,8 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 	defer s.afterReadAll(collectorFetchEmitted, collector)
 
 	view := collector.View()
-	params, err := s.buildViewParams(ctx, session, view)
-
-	if err != nil {
-		errorCollector.Append(err)
-		return
-	}
-
-	selector := session.Selectors.Lookup(view.Name)
+	params := rdata.Map{}
+	selector := session.Selectors.Lookup(view)
 	collectorChildren := collector.Relations(selector)
 	wg.Add(len(collectorChildren))
 
@@ -223,87 +214,6 @@ func (s *Service) prepareSQL(view *data.View, selector *data.Selector, upstream 
 		SQL = params.ExpandAsText(SQL)
 	}
 	return SQL, nil
-}
-
-func (s *Service) buildViewParams(ctx context.Context, session *Session, view *data.View) (rdata.Map, error) {
-	if len(view.Parameters) == 0 {
-		return nil, nil
-	}
-	params := session.NewReplacement(view)
-	for _, param := range view.Parameters {
-		switch param.In.Kind {
-		case data.DataViewKind:
-			if err := s.addViewParams(ctx, params, param, session); err != nil {
-				return nil, err
-			}
-		case data.PathKind:
-			s.addPathParam(session, param, &params)
-		case data.QueryKind:
-			s.addQueryParam(session, param, &params)
-		case data.HeaderKind:
-			s.addHeaderParam(session, param, &params)
-		case data.CookieKind:
-			s.addCookieParam(session, param, &params)
-		default:
-			return nil, fmt.Errorf("unsupported location Kind %v", param.In.Kind)
-		}
-	}
-
-	return params, nil
-}
-
-func (s *Service) addViewParams(ctx context.Context, paramMap rdata.Map, param *data.Parameter, session *Session) error {
-	view := param.View()
-	destSlice := reflect.New(view.Schema.SliceType()).Interface()
-
-	collector := view.Collector(destSlice, false)
-	errors := shared.NewErrors(0)
-
-	wg := sync.WaitGroup{}
-	s.readAll(ctx, session, collector, paramMap, &wg, errors)
-	wg.Wait()
-	if errors.Error() != nil {
-		return errors.Error()
-	}
-
-	ptr := xunsafe.AsPointer(destSlice)
-	paramLen := view.Schema.Slice().Len(ptr)
-	switch paramLen {
-	case 0:
-		if param.Required != nil && *param.Required {
-			return fmt.Errorf("parameter %v value is required but no data was found", param.Name)
-		}
-	case 1:
-		holder := view.Schema.Slice().ValuePointerAt(ptr, 0)
-		holderPtr := xunsafe.AsPointer(holder)
-		value := view.ParamField().Interface(holderPtr)
-
-		paramMap.SetValue(param.Name, value)
-	default:
-		return fmt.Errorf("parameter %v return more than one value", param.Name)
-	}
-
-	return nil
-}
-
-func (s *Service) addQueryParam(session *Session, param *data.Parameter, params *rdata.Map) {
-	paramValue := session.QueryParam(param.In.Name)
-	params.SetValue(param.Name, paramValue)
-}
-
-func (s *Service) addHeaderParam(session *Session, param *data.Parameter, params *rdata.Map) {
-	header := session.Header(param.In.Name)
-	params.SetValue(param.Name, header)
-}
-
-func (s *Service) addCookieParam(session *Session, param *data.Parameter, params *rdata.Map) {
-	cookie := session.Cookie(param.In.Name)
-	params.SetValue(param.Name, cookie)
-}
-
-func (s *Service) addPathParam(session *Session, param *data.Parameter, params *rdata.Map) {
-	pathVariable := session.PathVariable(param.In.Name)
-	params.SetValue(param.Name, pathVariable)
 }
 
 //New creates Service instance

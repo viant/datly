@@ -1,11 +1,25 @@
 package data
 
+import (
+	"reflect"
+)
+
 //Selectors represents Selector registry
 type Selectors map[string]*Selector
 
-//Lookup returns Selector attached to View
-func (s Selectors) Lookup(viewName string) *Selector {
-	return s[viewName]
+//Lookup returns and initializes Selector attached to View. Creates new one if doesn't exist.
+func (s Selectors) Lookup(view *View) *Selector {
+	selector, ok := s[view.Name]
+	if !ok {
+		selector = &Selector{}
+		s[view.Name] = selector
+	}
+
+	if selector.Parameters.Values == nil {
+		selector.Parameters.Values = reflect.New(view.Template.Schema.Type()).Elem().Interface()
+	}
+
+	return selector
 }
 
 //Init initializes each Selector
@@ -13,16 +27,4 @@ func (s Selectors) Init() {
 	for _, selector := range s {
 		selector.Init()
 	}
-}
-
-func (s Selectors) GetOrCreate(viewName string) *Selector {
-	selector, ok := s[viewName]
-	if ok {
-		return selector
-	}
-
-	selector = &Selector{}
-	s[viewName] = selector
-
-	return selector
 }
