@@ -77,8 +77,31 @@ func (r *Service) ReloadIfNeeded(ctx context.Context) error {
 	fs := r.reloadFs()
 	var resources map[string]*router.Resource
 	hasChanged := false
-	err := r.tracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
-		hasChanged = true
+	err := r.tracker.Notify(ctx, fs, r.handleResourceChange(ctx, &hasChanged, resources, fs))
+	if err != nil || !hasChanged {
+		return err
+	}
+	var updatedResource []*router.Resource
+	index := map[string]*router.Router{}
+	for k := range resources {
+		item := resources[k]
+		key := strings.Trim(item.URI, "/")
+		if _, ok := index[key]; ok {
+			return fmt.Errorf("duplicate resource URI: %v,-> %v", key, item.SourceURL)
+		}
+		index[key] = router.New(item)
+		updatedResource = append(updatedResource, item)
+	}
+	r.mux.Lock()
+	defer r.mux.Unlock()
+	r.resources = updatedResource
+	r.routers = index
+	return nil
+}
+
+func (r *Service) handleResourceChange(ctx context.Context, hasChanged *bool, resources map[string]*router.Resource, fs afs.Service) func(URL string, operation resource.Operation) {
+	return func(URL string, operation resource.Operation) {
+		*hasChanged = true
 		if len(resources) == 0 {
 			resources = make(map[string]*router.Resource)
 			r.mux.RLock()
@@ -99,27 +122,7 @@ func (r *Service) ReloadIfNeeded(ctx context.Context) error {
 		case resource.Deleted:
 			delete(resources, URL)
 		}
-		return
-	})
-	if err != nil || !hasChanged {
-		return err
 	}
-	var updatedResource []*router.Resource
-	index := map[string]*router.Router{}
-	for k := range resources {
-		item := resources[k]
-		key := strings.Trim(item.URI, "/")
-		if _, ok := index[key]; ok {
-			return fmt.Errorf("duplicate resource URI: %v,-> %v", key, item.SourceURL)
-		}
-		index[key] = router.New(item)
-		updatedResource = append(updatedResource, item)
-	}
-	r.mux.Lock()
-	defer r.mux.Unlock()
-	r.resources = updatedResource
-	r.routers = index
-	return nil
 }
 
 func (r *Service) loadResource(ctx context.Context, URL string, fs afs.Service) (*router.Resource, error) {
