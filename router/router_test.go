@@ -70,6 +70,26 @@ type event struct {
 func TestRouter(t *testing.T) {
 	testLocation := toolbox.CallerDirectory(3)
 
+	type FooParam struct {
+		QUANTITY float64
+		USER_ID  int
+	}
+
+	type params struct {
+		FOO           *FooParam
+		EVENT_TYPE_ID int
+	}
+
+	type FooPresence struct {
+		QUANTITY bool
+		USER_ID  bool
+	}
+
+	type presenceParams struct {
+		FOO           *FooPresence
+		EVENT_TYPE_ID bool
+	}
+
 	testcases := []*testcase{
 		{
 			description: "regular http",
@@ -165,7 +185,7 @@ func TestRouter(t *testing.T) {
 			method:   http.MethodGet,
 		},
 		{
-			description: "templates | user_id set",
+			description: "templates | user_id",
 			resourceURI: "005_templates",
 			uri:         "/api/events?user_id=1",
 			visitors: router.NewVisitors(
@@ -175,6 +195,63 @@ func TestRouter(t *testing.T) {
 				"event": reflect.TypeOf(&event{}),
 			},
 			expected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}]`,
+			method:   http.MethodGet,
+		},
+		{
+			description: "templates | quantity",
+			resourceURI: "005_templates",
+			uri:         "/api/events?quantity=10",
+			visitors: router.NewVisitors(
+				router.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+			),
+			types: map[string]reflect.Type{
+				"event": reflect.TypeOf(&event{}),
+			},
+			expected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}]`,
+			method:   http.MethodGet,
+		},
+		{
+			description: "param path | all set",
+			resourceURI: "006_param_path",
+			uri:         "/api/events?quantity=10&event_type_id=2&user_id=1",
+			types: map[string]reflect.Type{
+				"event": reflect.TypeOf(&event{}),
+			},
+			expected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}]`,
+			method:   http.MethodGet,
+		},
+		{
+			description: "param path | user_id",
+			resourceURI: "006_param_path",
+			uri:         "/api/events?user_id=3",
+			types: map[string]reflect.Type{
+				"event": reflect.TypeOf(&event{}),
+			},
+			expected: `[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
+			method:   http.MethodGet,
+		},
+		{
+			description: "param path typed | user_id, non-pointers",
+			resourceURI: "007_param_path_typed",
+			uri:         "/api/events?user_id=3",
+			types: map[string]reflect.Type{
+				"event":           reflect.TypeOf(&event{}),
+				"params":          reflect.TypeOf(params{}),
+				"presence_params": reflect.TypeOf(presenceParams{}),
+			},
+			expected: `[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
+			method:   http.MethodGet,
+		},
+		{
+			description: "param path typed | user_id, pointers",
+			resourceURI: "007_param_path_typed",
+			uri:         "/api/events?user_id=3",
+			types: map[string]reflect.Type{
+				"event":           reflect.TypeOf(&event{}),
+				"params":          reflect.TypeOf(&params{}),
+				"presence_params": reflect.TypeOf(&presenceParams{}),
+			},
+			expected: `[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			method:   http.MethodGet,
 		},
 	}

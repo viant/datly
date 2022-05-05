@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"unsafe"
 )
 
@@ -552,33 +553,47 @@ func (r *Router) sanitizeCriteria(criteria string, view *data.View) (string, err
 }
 
 func (r *Router) buildParameters(ctx context.Context, selectors *data.Selectors, route *Route, requestParams *RequestParams) error {
-	//TODO: run with goroutines, specially for the Parameter View Location
+	wg := sync.WaitGroup{}
+	errors := shared.NewErrors(0)
 	for _, view := range route.Index._views {
 		if view.Template == nil || len(view.Template.Parameters) == 0 {
 			continue
 		}
 
-		selector := selectors.Lookup(view)
-		selectorParams := reflect.New(view.Template.Schema.Type())
-		presenceParams := getPresenceMap(view)
+		wg.Add(1)
+		go func(view *data.View) {
+			defer wg.Done()
+			selector := selectors.Lookup(view)
+			selectorParams := getValue(view.Template.Schema)
+			presenceParams := getValue(view.Template.PresenceSchema)
 
-		if err := r.buildSelectorParameters(ctx, xunsafe.AsPointer(selectorParams.Interface()), xunsafe.AsPointer(presenceParams.Interface()), view.Template.Parameters, requestParams); err != nil {
-			return err
-		}
+			if err := r.buildSelectorParameters(ctx, xunsafe.AsPointer(selectorParams.Interface()), xunsafe.AsPointer(presenceParams.Interface()), view.Template.Parameters, requestParams); err != nil {
+				errors.Append(err)
+			}
 
-		selector.Parameters.Values = selectorParams.Elem().Interface()
-		selector.Parameters.Has = presenceParams.Elem().Interface()
+			selector.Parameters.Has = dereferenceIfNeeded(view.Template.PresenceSchema, presenceParams)
+			selector.Parameters.Values = dereferenceIfNeeded(view.Template.Schema, selectorParams)
+		}(view)
 	}
 
-	return nil
+	wg.Wait()
+	return errors.Error()
 }
 
-func getPresenceMap(view *data.View) reflect.Value {
-	if view.Template.PresenceSchema.Type().Kind() == reflect.Ptr {
-		return reflect.New(view.Template.PresenceSchema.Type().Elem())
+func dereferenceIfNeeded(schema *data.Schema, params reflect.Value) interface{} {
+	if schema.Type().Kind() == reflect.Ptr {
+		return params.Interface()
 	}
 
-	return reflect.New(view.Template.PresenceSchema.Type())
+	return params.Elem().Interface()
+}
+
+func getValue(schema *data.Schema) reflect.Value {
+	if schema.Type().Kind() == reflect.Ptr {
+		return reflect.New(schema.Type().Elem())
+	}
+
+	return reflect.New(schema.Type())
 }
 
 func (r *Router) buildSelectorParameters(ctx context.Context, paramsPtr, presencePtr unsafe.Pointer, parameters []*data.Parameter, requestParams *RequestParams) error {
@@ -647,8 +662,7 @@ func (r *Router) addViewParam(ctx context.Context, paramsPtr, presencePtr unsafe
 		}
 	case 1:
 		holder := view.Schema.Slice().ValuePointerAt(ptr, 0)
-		param.Mutator().SetValue(paramsPtr, holder)
-		return nil
+		return param.Set(paramsPtr, holder)
 
 	default:
 		return fmt.Errorf("parameter %v return more than one value", param.Name)
@@ -666,43 +680,10 @@ func convertAndSet(paramPtr, presencePtr unsafe.Pointer, parameter *data.Paramet
 		return nil
 	}
 
-	xField := parameter.Mutator()
-	if err := updateParamValue(paramPtr, xField, rawValue); err != nil {
+	if err := parameter.SetValue(paramPtr, rawValue); err != nil {
 		return err
 	}
 
-	parameter.PresenceMutator().SetBool(presencePtr, true)
+	parameter.UpdatePresence(presencePtr)
 	return nil
-}
-
-func updateParamValue(paramPtr unsafe.Pointer, xField *xunsafe.Field, rawValue string) error {
-	//TODO: Add remaining types
-	switch xField.Type.Kind() {
-	case reflect.String:
-		xField.SetValue(paramPtr, rawValue)
-		return nil
-
-	case reflect.Int:
-		asInt, err := strconv.Atoi(rawValue)
-		if err != nil {
-			return err
-		}
-		xField.SetInt(paramPtr, asInt)
-		return nil
-
-	case reflect.Bool:
-		xField.SetBool(paramPtr, strings.EqualFold(rawValue, "true"))
-		return nil
-
-	case reflect.Float64:
-		asFloat, err := strconv.ParseFloat(rawValue, 64)
-		if err != nil {
-			return err
-		}
-
-		xField.SetFloat64(paramPtr, asFloat)
-		return nil
-	}
-
-	return fmt.Errorf("unsupported query parameter type %v", xField.Type.String())
 }

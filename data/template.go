@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/data/parameter"
 	"github.com/viant/datly/shared"
 	"github.com/viant/velty"
 	"github.com/viant/velty/est"
@@ -52,13 +53,6 @@ type (
 		WhereClause string `velty:"CRITERIA"`
 		Pagination  string `velty:"PAGINATION"`
 	}
-
-	paramsPosition struct {
-		columnsIn      bool
-		criteria       bool
-		pagination     bool
-		hasWhereClause bool
-	}
 )
 
 func (t *Template) Init(ctx context.Context, resource *Resource, view *View) error {
@@ -80,7 +74,7 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 		return err
 	}
 
-	if err := t.initPresenceType(); err != nil {
+	if err := t.initPresenceType(resource); err != nil {
 		return err
 	}
 
@@ -110,18 +104,19 @@ func (t *Template) initTypes(ctx context.Context, resource *Resource) error {
 func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resource) error {
 	t.Schema = &Schema{}
 
+	builder := parameter.NewBuilder("")
+
 	for _, param := range t.Parameters {
 		if err := t.inheritAndInitParam(ctx, resource, param); err != nil {
 			return err
 		}
 
-		if err := t.addField(param.Name, param.Schema.Type()); err != nil {
+		if err := builder.AddType(param.Name, param.Schema.Type()); err != nil {
 			return err
 		}
 	}
 
-	structType := reflect.StructOf(t._fields)
-	t.Schema.setType(structType)
+	t.Schema.setType(builder.Build())
 
 	return nil
 }
@@ -170,21 +165,12 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 		t.Schema.setType(rType)
 	}
 
-	if t.Schema.Type().Kind() == reflect.Ptr {
-		return fmt.Errorf("params schema %v type can't be a pointer", t.Schema.Name)
-	}
-
-	for _, parameter := range t.Parameters {
-		if err := t.inheritAndInitParam(ctx, resource, parameter); err != nil {
+	for _, param := range t.Parameters {
+		if err := t.inheritAndInitParam(ctx, resource, param); err != nil {
 			return err
 		}
 
-		field, err := fieldByTemplateName(t.Schema.Type(), parameter.Name)
-		if err != nil {
-			return err
-		}
-
-		if err := parameter.Init(ctx, resource, field); err != nil {
+		if err := param.Init(ctx, resource, t.Schema.Type()); err != nil {
 			return err
 		}
 	}
@@ -291,44 +277,44 @@ func (t *Template) initSqlEvaluator() error {
 	return nil
 }
 
-func (t *Template) initPresenceType() error {
+func (t *Template) initPresenceType(resource *Resource) error {
 	if t.PresenceSchema == nil {
 		return t.initPresenceSchemaFromParams()
 	}
 
+	rType, err := resource.types.Lookup(t.PresenceSchema.Name)
+	if err != nil {
+		return err
+	}
+
+	t.PresenceSchema.setType(rType)
 	return nil
 }
 
 func (t *Template) initPresenceSchemaFromParams() error {
-	var err error
-	fields := make([]reflect.StructField, len(t.Parameters))
-	for i, parameter := range t.Parameters {
-		fields[i], err = TemplateField(parameter.Name, boolType)
-		if err != nil {
+	builder := parameter.NewBuilder("")
+
+	for _, param := range t.Parameters {
+		if err := builder.AddType(param.PresenceName, boolType); err != nil {
 			return err
 		}
 	}
 
 	t.PresenceSchema = &Schema{}
-	t.PresenceSchema.setType(reflect.StructOf(fields))
+	t.PresenceSchema.setType(builder.Build())
 
 	return nil
 }
 
 func (t *Template) updateParametersFields() error {
-	for _, parameter := range t.Parameters {
-		presenceField, err := fieldByTemplateName(t.PresenceSchema.Type(), parameter.PresenceName)
-		if err != nil {
+	for _, param := range t.Parameters {
+		if err := param.SetPresenceField(t.PresenceSchema.Type()); err != nil {
 			return err
 		}
 
-		parameter.presenceXfield = presenceField
-		field, err := fieldByTemplateName(t.Schema.Type(), parameter.Name)
-		if err != nil {
+		if err := param.SetField(t.Schema.Type()); err != nil {
 			return err
 		}
-
-		parameter.xfield = field
 	}
 
 	return nil
