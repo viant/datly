@@ -130,7 +130,7 @@ func TestService_Path(t *testing.T) {
 }`,
 		},
 		{
-			description:   " patch with URI path param",
+			description:   " patch with APIURI path param",
 			caseDataPath:  "/case003/",
 			checkDatabase: true,
 			prepareData:   true,

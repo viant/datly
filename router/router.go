@@ -40,6 +40,7 @@ type (
 	Output struct {
 		//TODO rename ReturnSingle to Cardinality
 		ReturnSingle bool
+		Style        string //enum Basic, Comprehensice , Status: ok, error, + error with structre
 		//TODO add CaseFormat attribute to control output
 		//TODO add output key
 		//TODO make if output key non empty pass Status, and Error info in the response

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
+	"github.com/viant/afs"
 	"github.com/viant/assertly"
 	"github.com/viant/datly/data"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
@@ -208,12 +209,12 @@ func TestRouter(t *testing.T) {
 
 func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, bool) {
 	resourceURI := path.Join(testDataLocation, c.resourceURI)
-
+	fs := afs.New()
 	if !initDb(t, testDataLocation, c.resourceURI) {
 		return nil, false
 	}
 
-	resource, err := router.NewResourceFromURL(context.TODO(), path.Join(resourceURI, "resource.yaml"), c.visitors, c.types)
+	resource, err := router.NewResourceFromURL(context.TODO(), fs, path.Join(resourceURI, "resource.yaml"), c.visitors, c.types)
 	if !assert.Nil(t, err, c.description) {
 		return nil, false
 	}

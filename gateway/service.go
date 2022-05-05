@@ -41,11 +41,12 @@ func (r *Service) handle(writer http.ResponseWriter, request *http.Request) erro
 		return err
 	}
 	URI := request.RequestURI
-	URIPath := URI
+	routePath := URI
 	if idx := strings.Index(URI, "?"); idx != -1 {
-		URIPath = URI[:idx]
+		routePath = URI[:idx]
 	}
-	router, err := r.Match(URIPath)
+	routePath = strings.Replace(routePath, r.Config.APIPrefix, "", 1)
+	router, err := r.Match(routePath)
 	if err == nil {
 		err = router.Handle(writer, request)
 	}
@@ -63,31 +64,33 @@ func (r *Service) Match(URI string) (*router.Router, error) {
 	r.mux.RLock()
 	index := r.routers
 	r.mux.RUnlock()
+
 	parts := strings.Split(URI, "/")
 	for i := len(parts); i > 0; i-- {
-		result, ok := index[strings.Join(parts[:i], "/")]
+		key := strings.Join(parts[:i], "/")
+		result, ok := index[key]
 		if ok {
 			return result, nil
 		}
 	}
-	return nil, fmt.Errorf("failed to match URI: %v", URI)
+	return nil, fmt.Errorf("failed to match APIURI: %v", r.Config.APIPrefix+URI)
 }
 
 func (r *Service) ReloadIfNeeded(ctx context.Context) error {
 	fs := r.reloadFs()
-	var resources map[string]*router.Resource
+	var resourcesSnapshot map[string]*router.Resource
 	hasChanged := false
-	err := r.tracker.Notify(ctx, fs, r.handleResourceChange(ctx, &hasChanged, resources, fs))
+	err := r.tracker.Notify(ctx, fs, r.handleResourceChange(ctx, &hasChanged, resourcesSnapshot, fs))
 	if err != nil || !hasChanged {
 		return err
 	}
 	var updatedResource []*router.Resource
 	index := map[string]*router.Router{}
-	for k := range resources {
-		item := resources[k]
-		key := strings.Trim(item.URI, "/")
+	for k := range resourcesSnapshot {
+		item := resourcesSnapshot[k]
+		key := strings.Trim(item.APIURI, "/")
 		if _, ok := index[key]; ok {
-			return fmt.Errorf("duplicate resource URI: %v,-> %v", key, item.SourceURL)
+			return fmt.Errorf("duplicate resource APIURI: %v,-> %v", key, item.SourceURL)
 		}
 		index[key] = router.New(item)
 		updatedResource = append(updatedResource, item)
@@ -99,14 +102,14 @@ func (r *Service) ReloadIfNeeded(ctx context.Context) error {
 	return nil
 }
 
-func (r *Service) handleResourceChange(ctx context.Context, hasChanged *bool, resources map[string]*router.Resource, fs afs.Service) func(URL string, operation resource.Operation) {
+func (r *Service) handleResourceChange(ctx context.Context, hasChanged *bool, resourcesSnapshot map[string]*router.Resource, fs afs.Service) func(URL string, operation resource.Operation) {
 	return func(URL string, operation resource.Operation) {
 		*hasChanged = true
-		if len(resources) == 0 {
-			resources = make(map[string]*router.Resource)
+		if len(resourcesSnapshot) == 0 {
+			resourcesSnapshot = make(map[string]*router.Resource)
 			r.mux.RLock()
 			for i, item := range r.resources {
-				resources[item.SourceURL] = r.resources[i]
+				resourcesSnapshot[item.SourceURL] = r.resources[i]
 			}
 			r.mux.RUnlock()
 		}
@@ -118,15 +121,15 @@ func (r *Service) handleResourceChange(ctx context.Context, hasChanged *bool, re
 				return
 			}
 			res.SourceURL = URL
-			resources[res.SourceURL] = res
+			resourcesSnapshot[res.SourceURL] = res
 		case resource.Deleted:
-			delete(resources, URL)
+			delete(resourcesSnapshot, URL)
 		}
 	}
 }
 
 func (r *Service) loadResource(ctx context.Context, URL string, fs afs.Service) (*router.Resource, error) {
-	resource, err := router.NewResourceFromURL(ctx, URL, router.Visitors{}, data.Types{})
+	resource, err := router.NewResourceFromURL(ctx, fs, URL, router.Visitors{}, data.Types{})
 	if err != nil {
 		return nil, err
 	}
@@ -138,12 +141,12 @@ func (r *Service) loadResource(ctx context.Context, URL string, fs afs.Service) 
 
 func (r *Service) initResource(ctx context.Context, resource *router.Resource, URL string) error {
 	resource.SourceURL = URL
-	if resource.URI == "" {
-		relative := URL[len(r.BaseURL):]
-		if index := strings.LastIndex(relative, "."); index != -1 {
-			relative = relative[:index-1]
+	if resource.APIURI == "" {
+		appURI := strings.Trim(URL[len(r.BaseURL):], "/")
+		if index := strings.Index(appURI, "."); index != -1 {
+			appURI = appURI[:index-1]
 		}
-		resource.URI = relative
+		resource.APIURI = appURI
 	}
 	return resource.Init(ctx)
 }

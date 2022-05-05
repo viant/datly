@@ -9,12 +9,14 @@ import (
 )
 
 type Resource struct {
-	URI       string
+	APIURI    string
 	SourceURL string
 	Routes    Routes
 	Resource  *data.Resource
 	_visitors Visitors
 }
+
+//TODO invloke and check, reconcile if all routes APIURI have Resource.APIURI
 
 func (r *Resource) Init(ctx context.Context) error {
 	if err := r.Resource.Init(ctx); err != nil {
@@ -30,9 +32,8 @@ func (r *Resource) Init(ctx context.Context) error {
 	return nil
 }
 
-func NewResourceFromURL(ctx context.Context, url string, visitors Visitors, types data.Types) (*Resource, error) {
-	fs := afs.New()
-	resourceData, err := fs.DownloadWithURL(ctx, url)
+func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, visitors Visitors, types data.Types) (*Resource, error) {
+	resourceData, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, err
 	}

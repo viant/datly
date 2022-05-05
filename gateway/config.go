@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+	APIPrefix       string //like /v1/api/
 	BaseURL         string
 	UseCacheFS      bool
 	SyncFrequencyMs int
