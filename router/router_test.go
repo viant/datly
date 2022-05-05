@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/visitor"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
 	"io/ioutil"
 	"math"
@@ -29,7 +30,7 @@ type testcase struct {
 	uri         string
 	method      string
 	expected    string
-	visitors    router.Visitors
+	visitors    visitor.Visitors
 	types       data.Types
 }
 
@@ -136,8 +137,8 @@ func TestRouter(t *testing.T) {
 			description: "visitors | AfterFetcher",
 			resourceURI: "004_visitors",
 			uri:         "/api/events",
-			visitors: router.NewVisitors(
-				router.NewVisitor("event_visitor", &eventAfterFetcher{}),
+			visitors: visitor.NewVisitors(
+				visitor.NewVisitor("event_visitor", &eventAfterFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -149,8 +150,8 @@ func TestRouter(t *testing.T) {
 			description: "visitors | BeforeFetcher",
 			resourceURI: "004_visitors",
 			uri:         "/api/events",
-			visitors: router.NewVisitors(
-				router.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+			visitors: visitor.NewVisitors(
+				visitor.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -165,8 +166,8 @@ func TestRouter(t *testing.T) {
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
 			},
-			visitors: router.NewVisitors(
-				router.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+			visitors: visitor.NewVisitors(
+				visitor.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			expected: `[]`,
 			method:   http.MethodGet,
@@ -175,8 +176,8 @@ func TestRouter(t *testing.T) {
 			description: "templates | none value set",
 			resourceURI: "005_templates",
 			uri:         "/api/events",
-			visitors: router.NewVisitors(
-				router.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+			visitors: visitor.NewVisitors(
+				visitor.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -188,8 +189,8 @@ func TestRouter(t *testing.T) {
 			description: "templates | user_id",
 			resourceURI: "005_templates",
 			uri:         "/api/events?user_id=1",
-			visitors: router.NewVisitors(
-				router.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+			visitors: visitor.NewVisitors(
+				visitor.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -201,8 +202,8 @@ func TestRouter(t *testing.T) {
 			description: "templates | quantity",
 			resourceURI: "005_templates",
 			uri:         "/api/events?quantity=10",
-			visitors: router.NewVisitors(
-				router.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+			visitors: visitor.NewVisitors(
+				visitor.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -254,9 +255,15 @@ func TestRouter(t *testing.T) {
 			expected: `[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			method:   http.MethodGet,
 		},
+		{
+			description: "view acl | ",
+			resourceURI: "008_acl",
+			uri:         "/api/events?user_id=3",
+			method:      http.MethodGet,
+		},
 	}
 
-	//for i, testcase := range testcases[len(testcases)-1:] {
+	//for i, testcase := range testcases[:len(testcases)-1] {
 	for i, testcase := range testcases {
 		fmt.Println("Running testcase " + strconv.Itoa(i))
 		testUri := path.Join(testLocation, "testdata")

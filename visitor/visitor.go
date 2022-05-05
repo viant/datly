@@ -1,7 +1,8 @@
-package router
+package visitor
 
 import (
 	"fmt"
+	"github.com/viant/datly/shared"
 	"net/http"
 )
 
@@ -25,7 +26,33 @@ type (
 		//data is type of *[]T or *[]*T
 		AfterFetch(data interface{}, response http.ResponseWriter, request *http.Request) (responseClosed bool, err error)
 	}
+
+	//RawTransformer transforms raw parameter value to string
+	RawTransformer interface {
+		TransformRaw(raw string) (string, error)
+	}
+
+	ValueTransformer interface {
+		TransformIntoValue(raw string) (interface{}, error)
+	}
+
+	Visitor struct {
+		shared.Reference
+		Name     string
+		_visitor LifecycleVisitor
+	}
 )
+
+func (v *Visitor) Visitor() LifecycleVisitor {
+	return v._visitor
+}
+
+func NewVisitor(name string, visitor LifecycleVisitor) *Visitor {
+	return &Visitor{
+		Name:     name,
+		_visitor: visitor,
+	}
+}
 
 type Visitors map[string]*Visitor
 
@@ -49,4 +76,8 @@ func NewVisitors(visitors ...*Visitor) Visitors {
 	}
 
 	return result
+}
+
+func (v *Visitor) Inherit(visitor *Visitor) {
+	v._visitor = visitor._visitor
 }

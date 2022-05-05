@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/sanitize"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
 	"github.com/viant/xunsafe"
 	"net/http"
@@ -28,7 +29,7 @@ type (
 
 	Routes []*Route
 	Route  struct {
-		Visitor *Visitor
+		Visitor *visitor.Visitor
 		URI     string
 		Method  string
 		View    *data.View
@@ -44,20 +45,7 @@ type (
 		//TODO add output key
 		//TODO make if output key non empty pass Status, and Error info in the response
 	}
-
-	Visitor struct {
-		shared.Reference
-		Name     string
-		_visitor LifecycleVisitor
-	}
 )
-
-func NewVisitor(name string, visitor LifecycleVisitor) *Visitor {
-	return &Visitor{
-		Name:     name,
-		_visitor: visitor,
-	}
-}
 
 func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if err := r.View.Init(ctx, resource.Resource); err != nil {
@@ -75,7 +63,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 
 func (r *Route) initVisitor(resource *Resource) error {
 	if r.Visitor == nil {
-		r.Visitor = &Visitor{}
+		r.Visitor = &visitor.Visitor{}
 		return nil
 	}
 
@@ -85,7 +73,7 @@ func (r *Route) initVisitor(resource *Resource) error {
 			return err
 		}
 
-		r.Visitor.inherit(refVisitor)
+		r.Visitor.Inherit(refVisitor)
 	}
 
 	return nil
@@ -98,10 +86,6 @@ func (r *Route) ViewByPrefix(prefix string) (*data.View, error) {
 	}
 
 	return view, nil
-}
-
-func (v *Visitor) inherit(visitor *Visitor) {
-	v._visitor = visitor._visitor
 }
 
 func (r *Router) Handle(response http.ResponseWriter, request *http.Request) error {
@@ -187,7 +171,7 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 }
 
 func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Request, route *Route) (shouldContinue bool) {
-	if actual, ok := route.Visitor._visitor.(BeforeFetcher); ok {
+	if actual, ok := route.Visitor.Visitor().(visitor.BeforeFetcher); ok {
 		closed, err := actual.BeforeFetch(response, request)
 		if closed {
 			return false
@@ -203,7 +187,7 @@ func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Requ
 }
 
 func (r *Router) runAfterFetch(response http.ResponseWriter, request *http.Request, route *Route, dest interface{}) (shouldContinue bool) {
-	if actual, ok := route.Visitor._visitor.(AfterFetcher); ok {
+	if actual, ok := route.Visitor.Visitor().(visitor.AfterFetcher); ok {
 		responseClosed, err := actual.AfterFetch(dest, response, request)
 		if responseClosed {
 			return false

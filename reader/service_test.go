@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/visitor"
 	"github.com/viant/dsunit"
 	"github.com/viant/gmetric/counter/base"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
@@ -81,6 +82,7 @@ type usecase struct {
 	resource    *data.Resource
 	dataset     string
 	provider    *base.Provider
+	visitors    visitor.Visitors
 }
 
 func TestRead(t *testing.T) {
@@ -468,13 +470,13 @@ func TestRead(t *testing.T) {
 		var resource *data.Resource
 		var err error
 		if testCase.dataURI != "" {
-			resource, err = data.NewResourceFromURL(context.TODO(), path.Join(testLocation, fmt.Sprintf("testdata/cases/"+testCase.dataURI+"/resources.yaml")), types)
+			resource, err = data.NewResourceFromURL(context.TODO(), path.Join(testLocation, fmt.Sprintf("testdata/cases/"+testCase.dataURI+"/resources.yaml")), types, testCase.visitors)
 			if err != nil {
 				t.Fatalf(err.Error())
 			}
 		} else {
 			resource = testCase.resource
-			if err = resource.Init(context.TODO(), types); err != nil {
+			if err = resource.Init(context.TODO(), types, testCase.visitors); err != nil {
 				t.Fatalf(err.Error())
 			}
 		}

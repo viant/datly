@@ -59,5 +59,6 @@ func (v ViewSlice) Init(ctx context.Context, resource *Resource) error {
 			return err
 		}
 	}
+
 	return nil
 }

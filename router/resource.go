@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/viant/afs"
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 )
@@ -13,12 +14,11 @@ type Resource struct {
 	SourceURL string
 	Routes    Routes
 	Resource  *data.Resource
-	_visitors Visitors
+	_visitors visitor.Visitors
 }
 
-func (r *Resource) Init(ctx context.Context) error {
-	//TODO: pass types as argument
-	if err := r.Resource.Init(ctx, data.Types{}); err != nil {
+func (r *Resource) Init(ctx context.Context, types data.Types, visitors visitor.Visitors) error {
+	if err := r.Resource.Init(ctx, types, visitors); err != nil {
 		return err
 	}
 
@@ -31,7 +31,7 @@ func (r *Resource) Init(ctx context.Context) error {
 	return nil
 }
 
-func NewResourceFromURL(ctx context.Context, url string, visitors Visitors, types data.Types) (*Resource, error) {
+func NewResourceFromURL(ctx context.Context, url string, visitors visitor.Visitors, types data.Types) (*Resource, error) {
 	fs := afs.New()
 	resourceData, err := fs.DownloadWithURL(ctx, url)
 	if err != nil {
@@ -58,7 +58,7 @@ func NewResourceFromURL(ctx context.Context, url string, visitors Visitors, type
 	resource._visitors = visitors
 	resource.Resource.SetTypes(types)
 
-	if err := resource.Init(ctx); err != nil {
+	if err := resource.Init(ctx, types, visitors); err != nil {
 		return nil, err
 	}
 
