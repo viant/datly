@@ -5,9 +5,8 @@ go 1.12
 require (
 	github.com/MichaelS11/go-cql-driver v0.0.0-20190914174813-cf3b3196aa43
 	github.com/aerospike/aerospike-client-go v2.7.0+incompatible // indirect
-	github.com/aws/aws-lambda-go v1.13.3
-	github.com/aws/aws-sdk-go v1.28.4
-	github.com/francoispqt/gojay v1.2.13 // indirect
+	github.com/aws/aws-lambda-go v1.23.0
+	github.com/aws/aws-sdk-go v1.37.33
 	github.com/go-errors/errors v1.4.2
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gocql/gocql v0.0.0-20200115135732-617765adbe2d // indirect
@@ -18,15 +17,17 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.1
 	github.com/viant/afs v1.16.0
-	github.com/viant/afsc v1.0.0
+	github.com/viant/afsc v1.3.0
 	github.com/viant/asc v0.5.0
 	github.com/viant/assertly v0.9.1-0.20220308232634-4242424ccaf5
 	github.com/viant/bgc v0.8.0
+	github.com/viant/cloudless v1.1.1-0.20220302185825-1e29705ac362
 	github.com/viant/dsc v0.16.0
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/gmetric v0.2.6
 	github.com/viant/gtly v0.0.0-20200927172514-d1417cac563d
 	github.com/viant/parsly v0.0.0-20220309230857-3a8c3e9c4030
+	github.com/viant/ptrie v0.3.0
 	github.com/viant/scy v0.0.0-20220223165437-725359877ec0
 	github.com/viant/sqlx v0.0.0-20220412215625-85e6fb65daba
 	github.com/viant/toolbox v0.34.5
@@ -36,5 +37,5 @@ require (
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
 	google.golang.org/api v0.66.0
 	gopkg.in/yaml.v2 v2.4.0
-	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
+	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 )

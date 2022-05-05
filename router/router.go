@@ -32,13 +32,17 @@ type (
 		URI     string
 		Method  string
 		View    *data.View
-		Config
+		Output
 
 		Index Index
 	}
 
-	Config struct {
+	Output struct {
+		//TODO rename ReturnSingle to Cardinality
 		ReturnSingle bool
+		//TODO add CaseFormat attribute to control output
+		//TODO add output key
+		//TODO make if output key non empty pass Status, and Error info in the response
 	}
 
 	Visitor struct {
@@ -59,11 +63,9 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if err := r.View.Init(ctx, resource.Resource); err != nil {
 		return err
 	}
-
 	if err := r.initVisitor(resource); err != nil {
 		return err
 	}
-
 	if err := r.Index.Init(r); err != nil {
 		return err
 	}

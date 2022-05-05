@@ -9,9 +9,10 @@ import (
 )
 
 type Resource struct {
-	Routes   Routes
-	Resource *data.Resource
-
+	URI       string
+	SourceURL string
+	Routes    Routes
+	Resource  *data.Resource
 	_visitors Visitors
 }
 

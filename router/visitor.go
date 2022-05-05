@@ -12,7 +12,7 @@ type (
 	//BeforeFetcher represents Lifecycle hook which is called before data was read from the Database.
 	BeforeFetcher interface {
 		//BeforeFetch one of the lifecycle hooks, returns bool if response was closed (i.e. response.WriteHeader())
-		//or just an error if it is needed to stop the router flow.
+		//or just an error if it is needed to stop the routers flow.
 		BeforeFetch(response http.ResponseWriter, request *http.Request) (responseClosed bool, err error)
 	}
 
@@ -21,7 +21,7 @@ type (
 	AfterFetcher interface {
 
 		//AfterFetch one of the lifecycle hooks, returns bool if response was closed (i.e. response.WriteHeader())
-		//or just an error if it is needed to stop the router flow.
+		//or just an error if it is needed to stop the routers flow.
 		//data is type of *[]T or *[]*T
 		AfterFetch(data interface{}, response http.ResponseWriter, request *http.Request) (responseClosed bool, err error)
 	}

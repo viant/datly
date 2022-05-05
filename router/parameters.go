@@ -21,9 +21,7 @@ func NewRequestParameters(request *http.Request, url string) *RequestParams {
 		cookies: request.Cookies(),
 		request: request,
 	}
-
 	parameters.init(request, url)
-
 	return parameters
 }
 
