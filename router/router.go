@@ -24,7 +24,6 @@ type (
 	Router struct {
 		resource      *Resource
 		serviceRouter *toolbox.ServiceRouter
-		reader        *reader.Service
 	}
 
 	Routes []*Route
@@ -125,7 +124,6 @@ func New(resource *Resource) *Router {
 
 func (r *Router) Init(routes Routes) {
 	r.initServiceRouter(routes)
-	r.reader = reader.New()
 }
 
 func (r *Router) initServiceRouter(routes Routes) {
@@ -174,7 +172,7 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 
 		session.Selectors = selectors
 
-		if err := r.reader.Read(context.TODO(), session); err != nil {
+		if err := reader.New().Read(context.TODO(), session); err != nil {
 			response.WriteHeader(http.StatusBadRequest)
 			response.Write([]byte(err.Error()))
 			return
@@ -648,7 +646,7 @@ func addPathParam(ptr unsafe.Pointer, presencePtr unsafe.Pointer, parameter *dat
 func (r *Router) addViewParam(ctx context.Context, paramsPtr, presencePtr unsafe.Pointer, param *data.Parameter) error {
 	view := param.View()
 	destSlice := reflect.New(view.Schema.SliceType()).Interface()
-	err := r.reader.Read(ctx, reader.NewSession(destSlice, view))
+	err := reader.New().Read(ctx, reader.NewSession(destSlice, view))
 	if err != nil {
 		return err
 	}

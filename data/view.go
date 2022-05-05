@@ -206,7 +206,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 
 	v.ensureIndexExcluded()
 
-	if err = v.ensureSchema(resource.types); err != nil {
+	if err = v.ensureSchema(resource._types); err != nil {
 		return err
 	}
 

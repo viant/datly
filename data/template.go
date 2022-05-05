@@ -158,7 +158,7 @@ func TemplateField(name string, rType reflect.Type) (reflect.StructField, error)
 
 func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Resource) error {
 	if t.Schema.Type() == nil {
-		rType, err := resource.types.Lookup(t.Schema.Name)
+		rType, err := resource._types.Lookup(t.Schema.Name)
 		if err != nil {
 			return err
 		}
@@ -282,7 +282,7 @@ func (t *Template) initPresenceType(resource *Resource) error {
 		return t.initPresenceSchemaFromParams()
 	}
 
-	rType, err := resource.types.Lookup(t.PresenceSchema.Name)
+	rType, err := resource._types.Lookup(t.PresenceSchema.Name)
 	if err != nil {
 		return err
 	}

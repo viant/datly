@@ -22,7 +22,8 @@ type Resource struct {
 	Parameters  []*Parameter
 	_parameters ParametersIndex
 
-	types    Types
+	Types    []*Definition
+	_types   Types
 	Loggers  logger.Adapters
 	_loggers logger.AdapterIndex
 }
@@ -50,7 +51,22 @@ func (r *Resource) GetConnectors() config.Connectors {
 }
 
 //Init initializes Resource
-func (r *Resource) Init(ctx context.Context) error {
+func (r *Resource) Init(ctx context.Context, types Types) error {
+	r._types = types.copy()
+
+	for _, definition := range r.Types {
+		if err := definition.Init(ctx, types); err != nil {
+			return err
+		}
+
+		_, err := r._types.Lookup(definition.Name)
+		if err == nil {
+			return fmt.Errorf("%v type is already registered", definition.Name)
+		}
+
+		r._types.Register(definition.Name, definition.Type())
+	}
+
 	r._views = ViewSlice(r.Views).Index()
 	r._connectors = config.ConnectorSlice(r.Connectors).Index()
 	r._parameters = ParametersSlice(r.Parameters).Index()
@@ -96,8 +112,7 @@ func NewResourceFromURL(ctx context.Context, url string, types Types) (*Resource
 		return nil, err
 	}
 
-	resource.types = types
-	err = resource.Init(ctx)
+	err = resource.Init(ctx, types)
 
 	return resource, err
 }
@@ -158,13 +173,13 @@ func EmptyResource() *Resource {
 		_views:      Views{},
 		Parameters:  make([]*Parameter, 0),
 		_parameters: ParametersIndex{},
-		types:       Types{},
+		_types:      Types{},
 	}
 }
 
 //NewResource creates a Resource and register provided Types
 func NewResource(types Types) *Resource {
-	return &Resource{types: types}
+	return &Resource{_types: types}
 }
 
 //AddViews register views in the resource
@@ -200,5 +215,5 @@ func (r *Resource) AddLoggers(loggers ...*logger.Adapter) {
 }
 
 func (r *Resource) SetTypes(types Types) {
-	r.types = types
+	r._types = types
 }

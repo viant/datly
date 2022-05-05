@@ -24,8 +24,9 @@ type (
 		Style       string
 		Schema      *Schema
 
-		initialized     bool
-		view            *View
+		initialized bool
+		view        *View
+
 		xfields         []*xunsafe.Field
 		presenceXfields []*xunsafe.Field
 	}
@@ -69,7 +70,7 @@ func (p *Parameter) Init(ctx context.Context, resource *Resource, structType ref
 		p.view = view
 	}
 
-	if err := p.initSchema(resource.types, structType); err != nil {
+	if err := p.initSchema(resource._types, structType); err != nil {
 		return err
 	}
 

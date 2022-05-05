@@ -17,7 +17,8 @@ type Resource struct {
 }
 
 func (r *Resource) Init(ctx context.Context) error {
-	if err := r.Resource.Init(ctx); err != nil {
+	//TODO: pass types as argument
+	if err := r.Resource.Init(ctx, data.Types{}); err != nil {
 		return err
 	}
 

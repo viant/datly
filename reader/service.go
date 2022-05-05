@@ -19,7 +19,6 @@ type Service struct {
 }
 
 //Read select data from database based on View and assign it to dest. ParentDest has to be pointer.
-//TODO: Select with join when connector is the same for one to one relation
 func (s *Service) Read(ctx context.Context, session *Session) error {
 	var err error
 	start := time.Now()
