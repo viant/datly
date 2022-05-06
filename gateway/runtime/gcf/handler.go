@@ -3,7 +3,7 @@ package gcf
 import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/viant/afs/gs"
+	_ "github.com/viant/afsc/gs"
 	_ "github.com/viant/bigquery"
 	"github.com/viant/datly/gateway/app"
 	"net/http"
