@@ -27,14 +27,14 @@ require (
 	github.com/viant/gmetric v0.2.6
 	github.com/viant/gtly v0.0.0-20200927172514-d1417cac563d
 	github.com/viant/parsly v0.0.0-20220309230857-3a8c3e9c4030
-	github.com/viant/scy v0.0.0-20220223165437-725359877ec0
+	github.com/viant/scy v0.0.0-20220505220527-99d548592141
 	github.com/viant/sqlx v0.0.0-20220412215625-85e6fb65daba
 	github.com/viant/toolbox v0.34.5
 	github.com/viant/velty v0.1.1-0.20220505183530-cfd67bcb2f53
 	github.com/viant/xunsafe v0.8.1-0.20220402174902-a83e92a39ead
 	github.com/yuin/gopher-lua v0.0.0-20191220021717-ab39c6098bdb // indirect
-	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
-	google.golang.org/api v0.66.0
+	golang.org/x/net v0.0.0-20220412020605-290c469a71a5
+	google.golang.org/api v0.77.0
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 )

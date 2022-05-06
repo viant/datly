@@ -1,6 +1,7 @@
 package visitor
 
 import (
+	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
 	"net/http"
@@ -33,7 +34,7 @@ type (
 	}
 
 	ValueTransformer interface {
-		TransformIntoValue(raw string) (interface{}, error)
+		TransformIntoValue(ctx context.Context, raw string) (interface{}, error)
 	}
 
 	Visitor struct {
@@ -47,7 +48,7 @@ func (v *Visitor) Visitor() LifecycleVisitor {
 	return v._visitor
 }
 
-func NewVisitor(name string, visitor LifecycleVisitor) *Visitor {
+func New(name string, visitor LifecycleVisitor) *Visitor {
 	return &Visitor{
 		Name:     name,
 		_visitor: visitor,

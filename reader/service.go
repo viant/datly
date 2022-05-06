@@ -96,7 +96,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 
 	session.View.Counter.IncrementValue(Pending)
 	defer session.View.Counter.DecrementValue(Pending)
-	err = s.exhaustRead(ctx, view, selector, batchData, db, collector)
+	err = s.exhaustRead(ctx, view, selector, batchData, db, collector, session)
 	if err != nil {
 		errorCollector.Append(err)
 	}
@@ -144,12 +144,12 @@ func (s *Service) batchData(collector *data.Collector) *BatchData {
 	return batchData
 }
 
-func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *data.Selector, batchData *BatchData, db *sql.DB, collector *data.Collector) error {
+func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *data.Selector, batchData *BatchData, db *sql.DB, collector *data.Collector, session *Session) error {
 	batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
 	visitor := collector.Visitor()
 
 	for {
-		SQL, args, err := s.sqlBuilder.Build(view, selector, batchData, collector.Relation())
+		SQL, args, err := s.sqlBuilder.Build(view, selector, batchData, collector.Relation(), session.Parent)
 		if err != nil {
 			return err
 		}

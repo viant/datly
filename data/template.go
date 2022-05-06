@@ -16,6 +16,7 @@ var boolType = reflect.TypeOf(true)
 const (
 	paramsMetadataKey = "Has"
 	paramsKey         = "Unsafe"
+	viewKey           = "View"
 
 	Pagination = "$PAGINATION"
 	Criteria   = "$CRITERIA"
@@ -34,24 +35,27 @@ type (
 		criteriaEvaluator *Evaluator
 		sqlEvaluator      *Evaluator
 
+		accessors        *Accessors
 		_fields          []reflect.StructField
 		_fieldIndex      map[string]int
 		_parametersIndex ParametersIndex
-
-		initialized bool
+		initialized      bool
 	}
 
 	Evaluator struct {
 		planner       *velty.Planner
 		executor      *est.Execution
 		stateProvider func() *est.State
-		parameterized bool
 	}
 
 	CommonParams struct {
 		ColumnsIn   string `velty:"COLUMN_IN"`
 		WhereClause string `velty:"CRITERIA"`
 		Pagination  string `velty:"PAGINATION"`
+	}
+
+	ViewParam struct {
+		Name string
 	}
 )
 
@@ -86,6 +90,8 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 		return err
 	}
 
+	t.initAccessors()
+
 	if err := t.updateParametersFields(); err != nil {
 		return err
 	}
@@ -119,10 +125,6 @@ func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resourc
 	t.Schema.setType(builder.Build())
 
 	return nil
-}
-
-func (t *Template) ParamByName(name string) (*Parameter, error) {
-	return t._parametersIndex.Lookup(name)
 }
 
 func (t *Template) addField(name string, rType reflect.Type) error {
@@ -178,21 +180,21 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 	return nil
 }
 
-func (t *Template) newEvaluator(template string, parameterized bool) (*Evaluator, error) {
-	evaluator := &Evaluator{
-		parameterized: parameterized,
-	}
+func (t *Template) newEvaluator(template string) (*Evaluator, error) {
+	evaluator := &Evaluator{}
 	var err error
 
 	evaluator.planner = velty.New(velty.BufferSize(len(template)))
-	if parameterized {
-		if err = evaluator.planner.DefineVariable(paramsKey, t.Schema.Type()); err != nil {
-			return nil, err
-		}
+	if err = evaluator.planner.DefineVariable(paramsKey, t.Schema.Type()); err != nil {
+		return nil, err
+	}
 
-		if err = evaluator.planner.DefineVariable(paramsMetadataKey, t.PresenceSchema.Type()); err != nil {
-			return nil, err
-		}
+	if err = evaluator.planner.DefineVariable(paramsMetadataKey, t.PresenceSchema.Type()); err != nil {
+		return nil, err
+	}
+
+	if err = evaluator.planner.DefineVariable(viewKey, reflect.TypeOf(&ViewParam{})); err != nil {
+		return nil, err
 	}
 
 	evaluator.executor, evaluator.stateProvider, err = evaluator.planner.Compile([]byte(template))
@@ -203,31 +205,36 @@ func (t *Template) newEvaluator(template string, parameterized bool) (*Evaluator
 	return evaluator, nil
 }
 
-func (t *Template) EvaluateCriteria(externalParams, presenceMap interface{}) (string, error) {
-	return t.evaluate(t.criteriaEvaluator, externalParams, presenceMap)
+func (t *Template) EvaluateCriteria(externalParams, presenceMap interface{}, parent *View) (string, error) {
+	return t.evaluate(t.criteriaEvaluator, externalParams, presenceMap, parent)
 }
 
-func (t *Template) EvaluateSource(externalParams, presenceMap interface{}) (string, error) {
-	return t.evaluate(t.sqlEvaluator, externalParams, presenceMap)
+func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parent *View) (string, error) {
+	return t.evaluate(t.sqlEvaluator, externalParams, presenceMap, parent)
 }
 
-func (t *Template) evaluate(evaluator *Evaluator, externalParams, presenceMap interface{}) (string, error) {
+func (t *Template) evaluate(evaluator *Evaluator, externalParams, presenceMap interface{}, parent *View) (string, error) {
 	if t.Schema.Type() != reflect.TypeOf(externalParams) {
 		return "", fmt.Errorf("inompactible types, wanted %v got %T", t.Schema.Type().String(), externalParams)
 	}
 
 	newState := evaluator.stateProvider()
-	if evaluator.parameterized {
-		if externalParams != nil {
-			if err := newState.SetValue(paramsKey, externalParams); err != nil {
-				return "", err
-			}
+	if externalParams != nil {
+		if err := newState.SetValue(paramsKey, externalParams); err != nil {
+			return "", err
 		}
+	}
 
-		if presenceMap != nil {
-			if err := newState.SetValue(paramsMetadataKey, presenceMap); err != nil {
-				return "", err
-			}
+	if presenceMap != nil {
+		if err := newState.SetValue(paramsMetadataKey, presenceMap); err != nil {
+			return "", err
+		}
+	}
+
+	if parent != nil {
+		viewParam := &ViewParam{Name: parent.Name}
+		if err := newState.SetValue(viewKey, viewParam); err != nil {
+			return "", err
 		}
 	}
 
@@ -240,7 +247,7 @@ func (t *Template) initCriteriaEvaluator(view *View) error {
 		return nil
 	}
 
-	evaluator, err := t.newEvaluator(view.Criteria, true)
+	evaluator, err := t.newEvaluator(view.Criteria)
 	if err != nil {
 		return err
 	}
@@ -250,25 +257,11 @@ func (t *Template) initCriteriaEvaluator(view *View) error {
 }
 
 func (t *Template) inheritAndInitParam(ctx context.Context, resource *Resource, param *Parameter) error {
-	if param.Ref == "" {
-		return param.Init(ctx, resource, nil)
-	}
-
-	paramRef, err := resource._parameters.Lookup(param.Ref)
-	if err != nil {
-		return err
-	}
-
-	if err = paramRef.Init(ctx, resource, nil); err != nil {
-		return err
-	}
-
-	param.inherit(paramRef)
-	return nil
+	return param.Init(ctx, resource, nil)
 }
 
 func (t *Template) initSqlEvaluator() error {
-	evaluator, err := t.newEvaluator(t.Source, true)
+	evaluator, err := t.newEvaluator(t.Source)
 	if err != nil {
 		return err
 	}
@@ -280,6 +273,10 @@ func (t *Template) initSqlEvaluator() error {
 func (t *Template) initPresenceType(resource *Resource) error {
 	if t.PresenceSchema == nil {
 		return t.initPresenceSchemaFromParams()
+	}
+
+	if t.PresenceSchema.Type() != nil {
+		return nil
 	}
 
 	rType, err := resource._types.Lookup(t.PresenceSchema.Name)
@@ -312,12 +309,32 @@ func (t *Template) updateParametersFields() error {
 			return err
 		}
 
-		if err := param.SetField(t.Schema.Type()); err != nil {
+		accessor, err := t.AccessorByName(param.Name)
+		if err != nil {
 			return err
 		}
+
+		param.SetAccessor(accessor)
 	}
 
 	return nil
+}
+
+func (t *Template) initAccessors() {
+	if t.accessors == nil {
+		t.accessors = &Accessors{index: map[string]int{}}
+	}
+
+	t.accessors.init(t.Schema.Type())
+}
+
+func (t *Template) AccessorByName(name string) (*Accessor, error) {
+	i, ok := t.accessors.index[name]
+	if !ok {
+		return nil, fmt.Errorf("not found accessor for param %v", name)
+	}
+
+	return t.accessors.accessors[i], nil
 }
 
 func fieldByTemplateName(structType reflect.Type, name string) (*xunsafe.Field, error) {

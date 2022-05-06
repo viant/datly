@@ -10,7 +10,6 @@ import (
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/router"
-	"github.com/viant/datly/visitors"
 	"log"
 	"net/http"
 	"strings"

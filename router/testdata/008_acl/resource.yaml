@@ -1,29 +1,90 @@
 Routes:
-  - URI: "/api/events"
+  - URI: "/api/employees"
     Method: GET
     View:
-      Ref: events_ref
-      Name: events
+      Ref: employees_ref
+      Name: employees
 
 
 
 Resource:
   Views:
-    - Name: events_ref
+    - Name: employees_ref
       Connector:
         Ref: db
-      Table: events
+      Table: employees
       Template:
         Parameters:
-          - Name: UserId
-            Schema:
-              DataType: int
-            In:
-              Kind: query
-              Name: Authorization
+          - Ref: JWT
+          - Ref: CRITERIA_ALC
+        Source: "SELECT * FROM employees e WHERE $Unsafe.CRITERIA_ALC.Criteria"
 
+
+    - Name: roles_acl
+      Connector:
+        Ref: db
+      Table: acl_role_criteria
+      Columns:
+        - Name: criteria
+          DataType: string
+      Template:
+        Source: "
+          SELECT ac.criteria 
+          FROM acl_user_criteria ac 
+          JOIN employees em ON em.id = ac.employee_id
+          WHERE em.email = $JWT.Email
+          AND ac.view = '$View.Name'
+          
+          UNION ALL
+        
+          SELECT rc.criteria FROM acl_role_criteria rc 
+          JOIN ROLES r ON rc.role_id = r.id
+          JOIN EMP_ROLES er ON er.role_id = r.id
+          JOIN EMPLOYEES e ON e.id = er.employee_id
+          WHERE e.email = $JWT.Email
+          AND rc.view = '$View.Name'
+          
+          LIMIT 1
+        "
+        Parameters:
+          - Ref: JWT
+          - Ref: Dummy
+
+  Parameters:
+    - Name: JWT
+      Required: true
+      ValueVisitor:
+        Name: jwt
+      Schema:
+        Name: JWT
+      In:
+        Kind: header
+        Name: Authorization
+
+    - Name: CRITERIA_ALC
+      Required: true
+      In:
+        Kind: data_view
+        Name: roles_acl
+      Schema:
+        Name: criteria_acl
+
+    - Name: Dummy
+      In:
+        Kind: query
+        Name: _dummy
+      Schema:
+        DataType: string
 
   Connectors:
     - Name: db
       Driver: sqlite3
       DSN: "./testdata/db/db.db"
+
+  Types:
+    - Name: criteria_acl
+      Fields:
+        - Name: Criteria
+          Column: criteria
+          Schema:
+            DataType: string

@@ -13,6 +13,7 @@ type Session struct {
 	Dest      interface{} //slice
 	View      *data.View
 	Selectors data.Selectors
+	Parent    *data.View
 }
 
 //DataType returns Parent View.DataType

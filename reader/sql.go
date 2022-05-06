@@ -47,8 +47,8 @@ func NewBuilder() *Builder {
 }
 
 //Build builds SQL Select statement
-func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *BatchData, relation *data.Relation) (string, []interface{}, error) {
-	template, err := view.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has)
+func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *BatchData, relation *data.Relation, parent *data.View) (string, []interface{}, error) {
+	template, err := view.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parent)
 	if err != nil {
 		return "", nil, err
 	}
@@ -74,7 +74,7 @@ func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *Bat
 		return "", nil, err
 	}
 
-	if err = b.updateCriteria(&commonParams, view, selector, relation, hasColumnsIn); err != nil {
+	if err = b.updateCriteria(&commonParams, view, selector, hasColumnsIn, parent); err != nil {
 		return "", nil, err
 	}
 
@@ -196,7 +196,6 @@ func (b *Builder) appendOffset(sb *strings.Builder, selector *data.Selector) {
 
 func (b *Builder) expand(sql string, view *data.View, selector *data.Selector, params data.CommonParams, batchData *BatchData) (string, []interface{}, error) {
 	placeholders := make([]interface{}, 0)
-
 	block, err := parser.Parse([]byte(sql))
 	if err != nil {
 		return "", nil, err
@@ -208,29 +207,28 @@ func (b *Builder) expand(sql string, view *data.View, selector *data.Selector, p
 		switch actual := statement.(type) {
 		case *expr.Select:
 			key := extractSelectorName(actual.FullName)
-
 			switch key {
 			case data.Pagination[1:]:
-				replacement[key] = params.Pagination
+				replacement.SetValue(key, params.Pagination)
 			case data.Criteria[1:]:
 				criteriaExpanded, criteriaPlaceholders, err := b.expand(params.WhereClause, view, selector, params, batchData)
 				if err != nil {
 					return "", nil, err
 				}
-				replacement[key] = criteriaExpanded
+				replacement.SetValue(key, criteriaExpanded)
 				placeholders = append(placeholders, criteriaPlaceholders...)
 			case data.ColumnsIn[1:]:
-				replacement[key] = params.ColumnsIn
+				replacement.SetValue(key, params.ColumnsIn)
 				placeholders = append(placeholders, batchData.ValuesBatch...)
 
 			default:
-				replacement[key] = `?`
-				param, err := view.Template.ParamByName(key)
+				replacement.SetValue(key, `?`)
+				accessor, err := view.Template.AccessorByName(key)
 				if err != nil {
 					return "", nil, err
 				}
 
-				value, err := param.Value(selector.Parameters.Values)
+				value, err := accessor.Value(selector.Parameters.Values)
 				if err != nil {
 					return "", nil, err
 				}
@@ -242,7 +240,7 @@ func (b *Builder) expand(sql string, view *data.View, selector *data.Selector, p
 	return replacement.ExpandAsText(sql), placeholders, err
 }
 
-func (b *Builder) updateCriteria(params *data.CommonParams, view *data.View, selector *data.Selector, relation *data.Relation, hasColumnsIn bool) error {
+func (b *Builder) updateCriteria(params *data.CommonParams, view *data.View, selector *data.Selector, hasColumnsIn bool, parent *data.View) error {
 	sb := strings.Builder{}
 	addAnd := false
 	if !hasColumnsIn && params.ColumnsIn != "" {
@@ -251,7 +249,7 @@ func (b *Builder) updateCriteria(params *data.CommonParams, view *data.View, sel
 	}
 
 	if view.Criteria != "" {
-		criteria, err := b.viewCriteria(view, selector)
+		criteria, err := b.viewCriteria(view, selector, parent)
 		if err != nil {
 			return err
 		}
@@ -283,8 +281,8 @@ func (b *Builder) appendCriteria(sb *strings.Builder, criteria string, addAnd bo
 	}
 }
 
-func (b *Builder) viewCriteria(view *data.View, selector *data.Selector) (string, error) {
-	criteria, err := view.Template.EvaluateCriteria(selector.Parameters.Values, selector.Parameters.Has)
+func (b *Builder) viewCriteria(view *data.View, selector *data.Selector, parent *data.View) (string, error) {
+	criteria, err := view.Template.EvaluateCriteria(selector.Parameters.Values, selector.Parameters.Has, parent)
 	if err != nil {
 		return "", err
 	}

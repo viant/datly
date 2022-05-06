@@ -7,7 +7,6 @@ import (
 	"github.com/viant/datly/visitor"
 	"github.com/viant/xunsafe"
 	"reflect"
-	"strconv"
 	"strings"
 	"unsafe"
 )
@@ -31,8 +30,8 @@ type (
 		initialized bool
 		view        *View
 
-		xfields         []*xunsafe.Field
-		presenceXfields []*xunsafe.Field
+		valueAccessor    *Accessor
+		presenceAccessor *Accessor
 	}
 
 	//Location tells how to get parameter value.
@@ -47,7 +46,7 @@ type (
 		_visitorFn RawVisitorFn
 	}
 
-	ValueVisitorFn func(rawValue string) (interface{}, error)
+	ValueVisitorFn func(context context.Context, rawValue string) (interface{}, error)
 	ValueSetterFn  func(field *xunsafe.Field, parentPtr unsafe.Pointer, value interface{}) error
 	ValueVisitor   struct {
 		Name         string
@@ -144,7 +143,7 @@ func (p *Parameter) Init(ctx context.Context, resource *Resource, structType ref
 	}
 	p.initialized = true
 
-	if p.Ref != "" && p.Name == "" {
+	if p.Ref != "" {
 		param, err := resource._parameters.Lookup(p.Ref)
 		if err != nil {
 			return err
@@ -188,6 +187,7 @@ func (p *Parameter) inherit(param *Parameter) {
 	p.Name = notEmptyOf(p.Name, param.Name)
 	p.Description = notEmptyOf(p.Description, param.Description)
 	p.Style = notEmptyOf(p.Style, param.Style)
+	p.PresenceName = notEmptyOf(p.PresenceName, param.PresenceName)
 
 	if p.In == nil {
 		p.In = param.In
@@ -199,6 +199,18 @@ func (p *Parameter) inherit(param *Parameter) {
 
 	if p.Schema == nil {
 		p.Schema = param.Schema.copy()
+	}
+
+	if p.ValueVisitor == nil {
+		p.ValueVisitor = param.ValueVisitor
+	}
+
+	if p.RawVisitor == nil {
+		p.RawVisitor = param.RawVisitor
+	}
+
+	if p.view == nil {
+		p.view = param.view
 	}
 }
 
@@ -250,8 +262,27 @@ func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
 		return fmt.Errorf("parameter %v schema can't be empty", p.Name)
 	}
 
-	if p.Schema.DataType == "" {
-		return fmt.Errorf("parameter %v schema DataType can't be empty", p.Name)
+	if p.Schema.DataType == "" && p.Schema.Name == "" {
+		return fmt.Errorf("parameter %v either schema DataType or Name has to be specified", p.Name)
+	}
+
+	if p.Schema.Name != "" {
+		lookup, err := types.Lookup(p.Schema.Name)
+		if err != nil {
+			return err
+		}
+
+		p.Schema.setType(lookup)
+		return nil
+	}
+
+	if p.Schema.DataType != "" {
+		rType, err := parseType(p.Schema.DataType)
+		if err != nil {
+			return err
+		}
+		p.Schema.setType(rType)
+		return nil
 	}
 
 	return p.Schema.Init(nil, nil, 0, types)
@@ -269,22 +300,15 @@ func (p *Parameter) initSchemaFromType(structType reflect.Type) error {
 	}
 
 	p.Schema.setType(field.Type)
-	return p.SetField(structType)
+	return nil
 }
 
 func (p *Parameter) UpdatePresence(presencePtr unsafe.Pointer) {
-	presencePtr = p.actualStruct(p.presenceXfields, presencePtr)
-	p.presenceXfields[len(p.presenceXfields)-1].SetBool(presencePtr, true)
+	p.presenceAccessor.setBool(presencePtr, true)
 }
 
-func (p *Parameter) SetField(structType reflect.Type) error {
-	xFields, err := p.pathFields(p.Name, structType)
-	if err != nil {
-		return err
-	}
-
-	p.xfields = xFields
-	return nil
+func (p *Parameter) SetAccessor(accessor *Accessor) {
+	p.valueAccessor = accessor
 }
 
 func (p *Parameter) pathFields(path string, structType reflect.Type) ([]*xunsafe.Field, error) {
@@ -312,89 +336,12 @@ func (p *Parameter) pathFields(path string, structType reflect.Type) ([]*xunsafe
 }
 
 func (p *Parameter) Value(values interface{}) (interface{}, error) {
-	pointer := xunsafe.AsPointer(values)
-	for i := 0; i < len(p.xfields)-1; i++ {
-		pointer = p.xfields[i].ValuePointer(pointer)
-	}
-
-	xField := p.xfields[len(p.xfields)-1]
-	//TODO: Add remaining types
-	switch xField.Type.Kind() {
-	case reflect.Int:
-		return xField.Int(pointer), nil
-	case reflect.Float64:
-		return xField.Float64(pointer), nil
-	case reflect.Bool:
-		return xField.Bool(pointer), nil
-	case reflect.String:
-		return xField.String(pointer), nil
-	case reflect.Ptr, reflect.Struct:
-		return xField.Value(pointer), nil
-	default:
-		return nil, fmt.Errorf("unsupported field type %v", xField.Type.String())
-	}
+	return p.valueAccessor.Value(values)
 }
 
-func (p *Parameter) SetValue(paramPtr unsafe.Pointer, rawValue string) error {
-	paramPtr = p.actualStruct(p.xfields, paramPtr)
-	//TODO: Add remaining types
-	xField := p.xfields[len(p.xfields)-1]
-	switch xField.Type.Kind() {
-	case reflect.String:
-		xField.SetValue(paramPtr, rawValue)
-		return nil
-
-	case reflect.Int:
-		asInt, err := strconv.Atoi(rawValue)
-		if err != nil {
-			return err
-		}
-		xField.SetInt(paramPtr, asInt)
-		return nil
-
-	case reflect.Bool:
-		xField.SetBool(paramPtr, strings.EqualFold(rawValue, "true"))
-		return nil
-
-	case reflect.Float64:
-		asFloat, err := strconv.ParseFloat(rawValue, 64)
-		if err != nil {
-			return err
-		}
-
-		xField.SetFloat64(paramPtr, asFloat)
-		return nil
-	}
-
-	return fmt.Errorf("unsupported query parameter type %v", xField.Type.String())
-}
-
-func (p *Parameter) actualStruct(fields []*xunsafe.Field, paramPtr unsafe.Pointer) unsafe.Pointer {
-	prev := paramPtr
-	for i := 0; i < len(fields)-1; i++ {
-		paramPtr = fields[i].ValuePointer(paramPtr)
-		if paramPtr == nil {
-			paramPtr = p.initValue(fields[i], prev)
-		}
-
-		prev = paramPtr
-	}
-
-	if paramPtr == nil && len(fields)-1 >= 0 {
-		paramPtr = p.initValue(fields[len(fields)-1], prev)
-	}
-
-	return paramPtr
-}
-
-func (p *Parameter) initValue(field *xunsafe.Field, prev unsafe.Pointer) unsafe.Pointer {
-	value := reflect.New(elem(field.Type))
-	if field.Type.Kind() != reflect.Ptr {
-		value = value.Elem()
-	}
-
-	field.SetValue(prev, value.Interface())
-	return unsafe.Pointer(value.Pointer())
+func (p *Parameter) ConvertAndSet(ctx context.Context, paramPtr unsafe.Pointer, rawValue string) error {
+	paramPtr = p.valueAccessor.actualStruct(paramPtr)
+	return p.valueAccessor.setValue(ctx, paramPtr, rawValue, p.RawVisitor, p.ValueVisitor)
 }
 
 func elem(rType reflect.Type) reflect.Type {
@@ -406,8 +353,7 @@ func elem(rType reflect.Type) reflect.Type {
 }
 
 func (p *Parameter) Set(ptr unsafe.Pointer, value interface{}) error {
-	ptr = p.actualStruct(p.xfields, ptr)
-	p.xfields[len(p.xfields)-1].Set(ptr, value)
+	p.valueAccessor.set(ptr, value)
 	return nil
 }
 
@@ -417,7 +363,10 @@ func (p *Parameter) SetPresenceField(structType reflect.Type) error {
 		return err
 	}
 
-	p.presenceXfields = fields
+	p.presenceAccessor = &Accessor{
+		xFields: fields,
+	}
+
 	return nil
 }
 

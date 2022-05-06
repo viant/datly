@@ -48,11 +48,9 @@ type (
 		_columns  Columns
 		_excluded map[string]bool
 
-		Caser              format.Case `json:",omitempty"`
-		initialized        bool
-		holdersInitialized bool
-		isValid            bool
-		newCollector       func(dest interface{}, supportParallel bool) *Collector
+		Caser        format.Case `json:",omitempty"`
+		initialized  bool
+		newCollector func(dest interface{}, supportParallel bool) *Collector
 	}
 
 	//Constraints configure what can be selected by Selector

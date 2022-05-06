@@ -2,18 +2,22 @@ package router_test
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/visitor"
+	"github.com/viant/scy/auth/gcp"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
+	"google.golang.org/api/oauth2/v2"
 	"io/ioutil"
 	"math"
 	"net/http/httptest"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/viant/datly/router"
@@ -32,12 +36,33 @@ type testcase struct {
 	expected    string
 	visitors    visitor.Visitors
 	types       data.Types
+
+	headers http.Header
 }
 
 type (
 	eventAfterFetcher  struct{}
 	eventBeforeFetcher struct{}
+	jwtVisitor         struct{}
 )
+
+func (j *jwtVisitor) TransformIntoValue(ctx context.Context, raw string) (interface{}, error) {
+	if last := strings.LastIndexByte(raw, ' '); last != -1 {
+		raw = raw[last+1:]
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := gcp.TokenInfo(ctx, string(decoded), false)
+	if err != nil {
+		return nil, err
+	}
+
+	return info, nil
+}
 
 func (e *eventBeforeFetcher) BeforeFetch(response http.ResponseWriter, request *http.Request) (responseClosed bool, err error) {
 	response.Write([]byte("[]"))
@@ -138,7 +163,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "004_visitors",
 			uri:         "/api/events",
 			visitors: visitor.NewVisitors(
-				visitor.NewVisitor("event_visitor", &eventAfterFetcher{}),
+				visitor.New("event_visitor", &eventAfterFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -151,7 +176,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "004_visitors",
 			uri:         "/api/events",
 			visitors: visitor.NewVisitors(
-				visitor.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+				visitor.New("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -167,7 +192,7 @@ func TestRouter(t *testing.T) {
 				"event": reflect.TypeOf(&event{}),
 			},
 			visitors: visitor.NewVisitors(
-				visitor.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+				visitor.New("event_visitor", &eventBeforeFetcher{}),
 			),
 			expected: `[]`,
 			method:   http.MethodGet,
@@ -177,7 +202,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "005_templates",
 			uri:         "/api/events",
 			visitors: visitor.NewVisitors(
-				visitor.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+				visitor.New("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -190,7 +215,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "005_templates",
 			uri:         "/api/events?user_id=1",
 			visitors: visitor.NewVisitors(
-				visitor.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+				visitor.New("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -203,7 +228,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "005_templates",
 			uri:         "/api/events?quantity=10",
 			visitors: visitor.NewVisitors(
-				visitor.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+				visitor.New("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -256,14 +281,59 @@ func TestRouter(t *testing.T) {
 			method:   http.MethodGet,
 		},
 		{
-			description: "view acl | ",
+			description: "view acl | role leader",
 			resourceURI: "008_acl",
-			uri:         "/api/events?user_id=3",
+			uri:         "/api/employees",
 			method:      http.MethodGet,
+			expected:    `[{"Id":1,"DepId":1,"Email":"abc@example.com"},{"Id":3,"DepId":1,"Email":"tom@example.com"}]`,
+			headers: map[string][]string{
+				//ID: 1, Email: abc@example.com
+				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MSwiRW1haWwiOiJhYmNAZXhhbXBsZS5jb20ifQ.dm3jSSuqy9wf4BsjU1dElRQQEySC5nn6fCUTmTKqt2")},
+			},
+			visitors: visitor.NewVisitors(
+				visitor.New("jwt", &jwtVisitor{}),
+			),
+			types: map[string]reflect.Type{
+				"JWT": reflect.TypeOf(&oauth2.Tokeninfo{}),
+			},
+		},
+		{
+			description: "view acl | role engineer",
+			resourceURI: "008_acl",
+			uri:         "/api/employees",
+			method:      http.MethodGet,
+			expected:    `[{"Id":2,"DepId":2,"Email":"example@gmail.com"}]`,
+			headers: map[string][]string{
+				//ID: 1
+				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MiwiRW1haWwiOiJleGFtcGxlQGdtYWlsLmNvbSJ9.XsZ115KqQK8uQE9for6NaphYS1VHdJc_famKWHo1Dcw")},
+			},
+			visitors: visitor.NewVisitors(
+				visitor.New("jwt", &jwtVisitor{}),
+			),
+			types: map[string]reflect.Type{
+				"JWT": reflect.TypeOf(&oauth2.Tokeninfo{}),
+			},
+		},
+		{
+			description: "view acl | user acl",
+			resourceURI: "008_acl",
+			uri:         "/api/employees",
+			method:      http.MethodGet,
+			expected:    `[{"Id":1,"DepId":1,"Email":"abc@example.com"},{"Id":2,"DepId":2,"Email":"example@gmail.com"},{"Id":3,"DepId":1,"Email":"tom@example.com"},{"Id":4,"DepId":2,"Email":"Ann@example.com"}]`,
+			headers: map[string][]string{
+				//ID: 4
+				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6IkFubkBleGFtcGxlLmNvbSIsImlkIjoiNCJ9.gxhP-M5t5Iqcz7yK635rs93jqKXEkPNNTcY0sOJGC3s")},
+			},
+			visitors: visitor.NewVisitors(
+				visitor.New("jwt", &jwtVisitor{}),
+			),
+			types: map[string]reflect.Type{
+				"JWT": reflect.TypeOf(&oauth2.Tokeninfo{}),
+			},
 		},
 	}
 
-	//for i, testcase := range testcases[:len(testcases)-1] {
+	//for i, testcase := range testcases[len(testcases)-1:] {
 	for i, testcase := range testcases {
 		fmt.Println("Running testcase " + strconv.Itoa(i))
 		testUri := path.Join(testLocation, "testdata")
@@ -273,6 +343,10 @@ func TestRouter(t *testing.T) {
 		}
 
 		httpRequest := httptest.NewRequest(testcase.method, testcase.uri, nil)
+		for header, values := range testcase.headers {
+			httpRequest.Header.Add(header, values[0])
+		}
+
 		responseWriter := httptest.NewRecorder()
 		err := routingHandler.Handle(responseWriter, httpRequest)
 		if !assert.Nil(t, err, testcase.description) {
@@ -319,4 +393,8 @@ func initDb(t *testing.T, datasetPath string, resourceURI string) bool {
 	}
 
 	return true
+}
+
+func encodeToken(token string) string {
+	return base64.StdEncoding.EncodeToString([]byte(token))
 }
