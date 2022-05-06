@@ -385,7 +385,6 @@ func initDb(t *testing.T, datasetPath string, resourceURI string) bool {
 	if !dsunit.InitFromURL(t, configPath) {
 		return false
 	}
-
 	datasetURI := path.Join(datasetPath, resourceURI, "populate")
 	initDataset := dsunit.NewDatasetResource("db", datasetURI, "", "")
 	request := dsunit.NewPrepareRequest(initDataset)

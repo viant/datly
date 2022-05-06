@@ -560,7 +560,8 @@ func (v *View) indexSqlxColumnsByFieldName() error {
 	rType := shared.Elem(v.Schema.Type())
 	for i := 0; i < rType.NumField(); i++ {
 		field := rType.Field(i)
-		if !field.IsExported() {
+		isExported := field.PkgPath == ""
+		if !isExported {
 			continue
 		}
 
@@ -600,7 +601,8 @@ func (v *View) updateColumn(rType reflect.Type, columns *[]*Column, relation *Re
 
 	for i := 0; i < rType.NumField(); i++ {
 		field := rType.Field(i)
-		if !field.IsExported() {
+		isExported := field.PkgPath == ""
+		if !isExported {
 			continue
 		}
 		if field.Anonymous {
