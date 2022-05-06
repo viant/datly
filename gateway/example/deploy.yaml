@@ -1,0 +1,22 @@
+init:
+  appPath: $Pwd(./../..)
+
+  '!gcpCredentials': $params.authWith
+  gcp: ${secrets.$gcpCredentials}
+  projectID: $gcp.ProjectID
+  prefix: $Replace(${projectID},'-','_')
+  configBucket: ${prefix}_config
+  appName: Datly
+
+pipeline:
+  info:
+    action: print
+    message: $appPath
+  uploadConfig:
+    action: storage:copy
+    expand: true
+    source:
+      URL: ${appPath}/gateway/example/dual.yaml
+    dest:
+      URL: gs://${configBucket}/${appName}/Routes/test/dual.yaml
+      credentials: $gcpCredentials

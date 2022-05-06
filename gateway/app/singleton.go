@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/viant/datly/gateway"
 	"sync"
-	"time"
 )
 
 var service *gateway.Service
@@ -13,8 +12,7 @@ var once sync.Once
 func Singleton(configURL string) (*gateway.Service, error) {
 	var err error
 	once.Do(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
+		ctx := context.Background()
 		var config *gateway.Config
 		if config, err = gateway.NewConfigFromURL(ctx, configURL); err != nil {
 			return

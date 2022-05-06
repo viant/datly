@@ -21,6 +21,7 @@ require (
 	github.com/viant/asc v0.5.0
 	github.com/viant/assertly v0.9.1-0.20220308232634-4242424ccaf5
 	github.com/viant/bgc v0.8.0
+	github.com/viant/bigquery v0.0.0-20220506224408-511343c10e7e
 	github.com/viant/cloudless v1.1.1-0.20220302185825-1e29705ac362
 	github.com/viant/dsc v0.16.0
 	github.com/viant/dsunit v0.10.8

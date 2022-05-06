@@ -1,0 +1,19 @@
+Routes:
+  - URI: "/v1/api/test/dual"
+    Method: GET
+    View:
+      Ref: dual_view
+      Name: dual
+
+
+Resource:
+  Views:
+    - Name: dual_view
+      Connector:
+        Ref: bq
+      Table: dual
+
+  Connectors:
+    - Name: bq
+      Driver: bigquery
+      DSN: bigquery://${projectID}/test

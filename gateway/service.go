@@ -42,11 +42,18 @@ func (r *Service) handle(writer http.ResponseWriter, request *http.Request) erro
 		return err
 	}
 	URI := request.RequestURI
+	if strings.Contains(URI, "://") {
+		_, URI = url.Base(URI, "https")
+	}
+
+	if index := strings.Index(URI, r.Config.APIPrefix); index != -1 {
+		URI = URI[index+len(r.Config.APIPrefix):]
+		request.RequestURI = r.Config.APIPrefix + URI
+	}
 	routePath := URI
 	if idx := strings.Index(URI, "?"); idx != -1 {
 		routePath = URI[:idx]
 	}
-	routePath = strings.Replace(routePath, r.Config.APIPrefix, "", 1)
 	router, err := r.match(routePath)
 	if err == nil {
 		err = router.Handle(writer, request)
@@ -79,7 +86,7 @@ func (r *Service) match(URI string) (*router.Router, error) {
 
 func (r *Service) reloadIfNeeded(ctx context.Context) error {
 	fs := r.reloadFs()
-	var resourcesSnapshot map[string]*router.Resource
+	var resourcesSnapshot = map[string]*router.Resource{}
 	hasChanged := false
 	err := r.tracker.Notify(ctx, fs, r.handleResourceChange(ctx, &hasChanged, resourcesSnapshot, fs))
 	if err != nil || !hasChanged {
@@ -107,7 +114,6 @@ func (r *Service) handleResourceChange(ctx context.Context, hasChanged *bool, re
 	return func(URL string, operation resource.Operation) {
 		*hasChanged = true
 		if len(resourcesSnapshot) == 0 {
-			resourcesSnapshot = make(map[string]*router.Resource)
 			r.mux.RLock()
 			for i, item := range r.resources {
 				resourcesSnapshot[item.SourceURL] = r.resources[i]
@@ -145,7 +151,7 @@ func (r *Service) initResource(ctx context.Context, resource *router.Resource, U
 	if resource.APIURI == "" {
 		appURI := strings.Trim(URL[len(r.Config.BaseURL):], "/")
 		if index := strings.Index(appURI, "."); index != -1 {
-			appURI = appURI[:index-1]
+			appURI = appURI[:index]
 		}
 		resource.APIURI = appURI
 	}
