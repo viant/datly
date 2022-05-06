@@ -10,6 +10,7 @@ import (
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/visitor"
 	"log"
 	"net/http"
 	"strings"
@@ -129,7 +130,7 @@ func (r *Service) handleResourceChange(ctx context.Context, hasChanged *bool, re
 }
 
 func (r *Service) loadResource(ctx context.Context, URL string, fs afs.Service) (*router.Resource, error) {
-	resource, err := router.NewResourceFromURL(ctx, fs, URL, router.Visitors{}, data.Types{})
+	resource, err := router.NewResourceFromURL(ctx, fs, URL, visitor.Visitors{}, data.Types{})
 	if err != nil {
 		return nil, err
 	}
