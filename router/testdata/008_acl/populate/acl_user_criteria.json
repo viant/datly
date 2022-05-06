@@ -1,0 +1,9 @@
+[
+  {},
+  {
+    "Id": 1,
+    "employee_id": 4,
+    "Criteria": "1 = 1",
+    "View": "employees"
+  }
+]

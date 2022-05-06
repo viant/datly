@@ -1,0 +1,34 @@
+Views:
+  - Connector:
+      Ref: db
+    Name: events
+    InheritSchemaColumns: true
+    Schema:
+      Name: events
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: "./testdata/db/db.db"
+
+Types:
+  - Name: events
+    Fields:
+      - Name: Id
+        Schema:
+          DataType: int
+
+      - Name: EventTypeId
+        Schema:
+          DataType: int
+
+      - Name: Data
+        Embed: true
+        Fields:
+          - Name: Quantity
+            Schema:
+              DataType: float
+
+          - Name: Date
+            Column: timestamp
+            Schema:
+              DataType: date

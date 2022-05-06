@@ -403,7 +403,7 @@ func TestBuilder_Build(t *testing.T) {
 		builder := NewBuilder()
 
 		useCase.selector.Init()
-		sql, placeholders, err := builder.Build(useCase.view, useCase.selector, useCase.batchData, useCase.relation)
+		sql, placeholders, err := builder.Build(useCase.view, useCase.selector, useCase.batchData, useCase.relation, nil)
 
 		assert.Nil(t, err, useCase.description)
 		assertly.AssertValues(t, useCase.placeholders, placeholders, useCase.description)

@@ -48,11 +48,9 @@ type (
 		_columns  Columns
 		_excluded map[string]bool
 
-		Caser              format.Case `json:",omitempty"`
-		initialized        bool
-		holdersInitialized bool
-		isValid            bool
-		newCollector       func(dest interface{}, supportParallel bool) *Collector
+		Caser        format.Case `json:",omitempty"`
+		initialized  bool
+		newCollector func(dest interface{}, supportParallel bool) *Collector
 	}
 
 	//Constraints configure what can be selected by Selector
@@ -206,7 +204,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 
 	v.ensureIndexExcluded()
 
-	if err = v.ensureSchema(resource.types); err != nil {
+	if err = v.ensureSchema(resource._types); err != nil {
 		return err
 	}
 

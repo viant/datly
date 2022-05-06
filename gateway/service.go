@@ -19,7 +19,7 @@ import (
 
 //Service represents gateway service
 type Service struct {
-	*Config
+	Config    *Config
 	mux       sync.RWMutex
 	resources []*router.Resource
 	routers   map[string]*router.Router
@@ -36,7 +36,7 @@ func (r *Service) Handle(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (r *Service) handle(writer http.ResponseWriter, request *http.Request) error {
-	err := r.ReloadIfNeeded(context.Background())
+	err := r.reloadIfNeeded(context.Background())
 	if err != nil {
 		return err
 	}
@@ -46,7 +46,7 @@ func (r *Service) handle(writer http.ResponseWriter, request *http.Request) erro
 		routePath = URI[:idx]
 	}
 	routePath = strings.Replace(routePath, r.Config.APIPrefix, "", 1)
-	router, err := r.Match(routePath)
+	router, err := r.match(routePath)
 	if err == nil {
 		err = router.Handle(writer, request)
 	}
@@ -54,13 +54,13 @@ func (r *Service) handle(writer http.ResponseWriter, request *http.Request) erro
 }
 
 func (r *Service) reloadFs() afs.Service {
-	if r.UseCacheFS {
+	if r.Config.UseCacheFS {
 		return r.cfs
 	}
 	return r.fs
 }
 
-func (r *Service) Match(URI string) (*router.Router, error) {
+func (r *Service) match(URI string) (*router.Router, error) {
 	r.mux.RLock()
 	index := r.routers
 	r.mux.RUnlock()
@@ -76,7 +76,7 @@ func (r *Service) Match(URI string) (*router.Router, error) {
 	return nil, fmt.Errorf("failed to match APIURI: %v", r.Config.APIPrefix+URI)
 }
 
-func (r *Service) ReloadIfNeeded(ctx context.Context) error {
+func (r *Service) reloadIfNeeded(ctx context.Context) error {
 	fs := r.reloadFs()
 	var resourcesSnapshot map[string]*router.Resource
 	hasChanged := false
@@ -142,7 +142,7 @@ func (r *Service) loadResource(ctx context.Context, URL string, fs afs.Service) 
 func (r *Service) initResource(ctx context.Context, resource *router.Resource, URL string) error {
 	resource.SourceURL = URL
 	if resource.APIURI == "" {
-		appURI := strings.Trim(URL[len(r.BaseURL):], "/")
+		appURI := strings.Trim(URL[len(r.Config.BaseURL):], "/")
 		if index := strings.Index(appURI, "."); index != -1 {
 			appURI = appURI[:index-1]
 		}
@@ -165,6 +165,6 @@ func New(ctx context.Context, config *Config) (*Service, error) {
 		cfs:     cache.Singleton(URL),
 		tracker: resource.New(config.BaseURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
 	}
-	err = srv.ReloadIfNeeded(ctx)
+	err = srv.reloadIfNeeded(ctx)
 	return srv, err
 }

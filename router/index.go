@@ -12,9 +12,9 @@ type Index struct {
 	_views         []*data.View
 }
 
-func (i *Index) Init(route *Route) error {
+func (i *Index) Init(view *data.View) error {
 	i.ensureIndexes()
-	i.indexViews(route.View)
+	i.indexViews(view)
 
 	if err := i.indexViewsByPrefix(); err != nil {
 		return err

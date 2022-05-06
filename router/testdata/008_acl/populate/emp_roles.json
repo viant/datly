@@ -1,0 +1,23 @@
+[
+  {},
+  {
+    "Id": 1,
+    "employee_id": 1,
+    "role_id": 2
+  },
+  {
+    "Id": 2,
+    "employee_id": 2,
+    "role_id": 1
+  },
+  {
+    "Id": 3,
+    "employee_id": 3,
+    "role_id": 1
+  },
+  {
+    "Id": 4,
+    "employee_id": 4,
+    "role_id": 2
+  }
+]

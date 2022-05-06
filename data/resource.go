@@ -6,6 +6,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/logger"
+	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 )
@@ -22,9 +23,13 @@ type Resource struct {
 	Parameters  []*Parameter
 	_parameters ParametersIndex
 
-	types    Types
+	Types  []*Definition
+	_types Types
+
 	Loggers  logger.Adapters
 	_loggers logger.AdapterIndex
+
+	_visitors visitor.Visitors
 }
 
 //GetViews returns Views supplied with the Resource
@@ -50,7 +55,23 @@ func (r *Resource) GetConnectors() config.Connectors {
 }
 
 //Init initializes Resource
-func (r *Resource) Init(ctx context.Context) error {
+func (r *Resource) Init(ctx context.Context, types Types, visitors visitor.Visitors) error {
+	r._types = types.copy()
+	r._visitors = visitors
+
+	for _, definition := range r.Types {
+		if err := definition.Init(ctx, types); err != nil {
+			return err
+		}
+
+		_, err := r._types.Lookup(definition.Name)
+		if err == nil {
+			return fmt.Errorf("%v type is already registered", definition.Name)
+		}
+
+		r._types.Register(definition.Name, definition.Type())
+	}
+
 	r._views = ViewSlice(r.Views).Index()
 	r._connectors = config.ConnectorSlice(r.Connectors).Index()
 	r._parameters = ParametersSlice(r.Parameters).Index()
@@ -73,7 +94,7 @@ func (r *Resource) View(name string) (*View, error) {
 }
 
 //NewResourceFromURL loads and initializes Resource from file .yaml
-func NewResourceFromURL(ctx context.Context, url string, types Types) (*Resource, error) {
+func NewResourceFromURL(ctx context.Context, url string, types Types, visitors visitor.Visitors) (*Resource, error) {
 	fs := afs.New()
 	data, err := fs.DownloadWithURL(ctx, url)
 	if err != nil {
@@ -96,8 +117,7 @@ func NewResourceFromURL(ctx context.Context, url string, types Types) (*Resource
 		return nil, err
 	}
 
-	resource.types = types
-	err = resource.Init(ctx)
+	err = resource.Init(ctx, types, visitors)
 
 	return resource, err
 }
@@ -158,13 +178,13 @@ func EmptyResource() *Resource {
 		_views:      Views{},
 		Parameters:  make([]*Parameter, 0),
 		_parameters: ParametersIndex{},
-		types:       Types{},
+		_types:      Types{},
 	}
 }
 
 //NewResource creates a Resource and register provided Types
 func NewResource(types Types) *Resource {
-	return &Resource{types: types}
+	return &Resource{_types: types}
 }
 
 //AddViews register views in the resource
@@ -200,5 +220,9 @@ func (r *Resource) AddLoggers(loggers ...*logger.Adapter) {
 }
 
 func (r *Resource) SetTypes(types Types) {
-	r.types = types
+	r._types = types
+}
+
+func (r *Resource) GetTypes() Types {
+	return r._types
 }

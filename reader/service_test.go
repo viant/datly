@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/visitor"
 	"github.com/viant/dsunit"
 	"github.com/viant/gmetric/counter/base"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
@@ -81,6 +82,7 @@ type usecase struct {
 	resource    *data.Resource
 	dataset     string
 	provider    *base.Provider
+	visitors    visitor.Visitors
 }
 
 func TestRead(t *testing.T) {
@@ -434,6 +436,13 @@ func TestRead(t *testing.T) {
 		wildcardAllowedFilterableColumns(),
 		autoCoalesce(),
 		batchParent(),
+		{
+			description: "type definition",
+			dataURI:     "case022_types/",
+			dest:        new(interface{}),
+			view:        "events",
+			expect:      `[{"Id":1,"EventTypeId":2,"Quantity":33.23432374000549,"Date":"2019-03-11T02:20:33Z"},{"Id":10,"EventTypeId":11,"Quantity":21.957962334156036,"Date":"2019-03-15T12:07:33Z"},{"Id":100,"EventTypeId":111,"Quantity":5.084940046072006,"Date":"2019-04-10T05:15:33Z"}]`,
+		},
 	}
 
 	//for index, testCase := range useCases[len(useCases)-1:] {
@@ -461,13 +470,13 @@ func TestRead(t *testing.T) {
 		var resource *data.Resource
 		var err error
 		if testCase.dataURI != "" {
-			resource, err = data.NewResourceFromURL(context.TODO(), path.Join(testLocation, fmt.Sprintf("testdata/cases/"+testCase.dataURI+"/resources.yaml")), types)
+			resource, err = data.NewResourceFromURL(context.TODO(), path.Join(testLocation, fmt.Sprintf("testdata/cases/"+testCase.dataURI+"/resources.yaml")), types, testCase.visitors)
 			if err != nil {
 				t.Fatalf(err.Error())
 			}
 		} else {
 			resource = testCase.resource
-			if err = resource.Init(context.TODO()); err != nil {
+			if err = resource.Init(context.TODO(), types, testCase.visitors); err != nil {
 				t.Fatalf(err.Error())
 			}
 		}

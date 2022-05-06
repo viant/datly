@@ -1,0 +1,6 @@
+{
+  "APIPrefix": "/v1/api/",
+  "BaseURL": "gs://${configBucket}/${appName}/Routes/",
+  "UseCacheFS": true,
+  "SyncFrequencyMs": 2000
+}

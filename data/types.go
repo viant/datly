@@ -22,3 +22,13 @@ func (r Types) Lookup(name string) (reflect.Type, error) {
 	}
 	return rType, nil
 }
+
+func (r Types) copy() Types {
+	rCopy := Types{}
+
+	for key := range r {
+		rCopy[key] = r[key]
+	}
+
+	return rCopy
+}

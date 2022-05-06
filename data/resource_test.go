@@ -5,6 +5,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
+	"github.com/viant/datly/visitor"
 	"github.com/viant/dsunit"
 	"github.com/viant/toolbox"
 	"path"
@@ -83,7 +84,7 @@ func TestNewResourceFromURL(t *testing.T) {
 			return
 		}
 
-		resource, err := NewResourceFromURL(context.TODO(), path.Join(testLocation, "testdata", testCase.url, "resource.yaml"), Types{})
+		resource, err := NewResourceFromURL(context.TODO(), path.Join(testLocation, "testdata", testCase.url, "resource.yaml"), Types{}, visitor.Visitors{})
 		if !assert.Nil(t, err, testCase.description) {
 			continue
 		}

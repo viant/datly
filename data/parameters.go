@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/visitor"
 	"github.com/viant/xunsafe"
 	"reflect"
+	"strings"
+	"unsafe"
 )
 
 type (
@@ -21,10 +24,14 @@ type (
 		Style       string
 		Schema      *Schema
 
-		initialized    bool
-		view           *View
-		xfield         *xunsafe.Field
-		presenceXfield *xunsafe.Field
+		RawVisitor   *RawVisitor
+		ValueVisitor *ValueVisitor
+
+		initialized bool
+		view        *View
+
+		valueAccessor    *Accessor
+		presenceAccessor *Accessor
 	}
 
 	//Location tells how to get parameter value.
@@ -32,25 +39,124 @@ type (
 		Kind Kind
 		Name string
 	}
+
+	RawVisitorFn func(raw string) (string, error)
+	RawVisitor   struct {
+		Name       string
+		_visitorFn RawVisitorFn
+	}
+
+	ValueVisitorFn func(context context.Context, rawValue string) (interface{}, error)
+	ValueSetterFn  func(field *xunsafe.Field, parentPtr unsafe.Pointer, value interface{}) error
+	ValueVisitor   struct {
+		Name         string
+		_visitorFn   ValueVisitorFn
+		_valueSetter ValueSetterFn
+	}
 )
 
+func (v *ValueVisitor) Init(resource *Resource, paramType reflect.Type) error {
+	vVisitor, err := resource._visitors.Lookup(v.Name)
+	if err != nil {
+		return err
+	}
+
+	switch actual := vVisitor.Visitor().(type) {
+	case visitor.ValueTransformer:
+		v._visitorFn = actual.TransformIntoValue
+		v.initValueSetter(paramType)
+		return nil
+	default:
+		return fmt.Errorf("expected %T to implement ValueVisitor", actual)
+	}
+}
+
+func (v *ValueVisitor) initValueSetter(paramType reflect.Type) {
+	switch paramType.Kind() {
+	case reflect.Int:
+		v._valueSetter = func(field *xunsafe.Field, parentPtr unsafe.Pointer, value interface{}) error {
+			if actual, ok := value.(int); ok {
+				field.SetInt(parentPtr, actual)
+				return nil
+			}
+			return typeMissmatchErr("int", value)
+		}
+
+	case reflect.String:
+		v._valueSetter = func(field *xunsafe.Field, parentPtr unsafe.Pointer, value interface{}) error {
+			if actual, ok := value.(string); ok {
+				field.SetString(parentPtr, actual)
+				return nil
+			}
+			return typeMissmatchErr("string", value)
+		}
+
+	case reflect.Bool:
+		v._valueSetter = func(field *xunsafe.Field, parentPtr unsafe.Pointer, value interface{}) error {
+			if actual, ok := value.(bool); ok {
+				field.SetBool(parentPtr, actual)
+				return nil
+			}
+			return typeMissmatchErr("bool", value)
+		}
+
+	case reflect.Float64:
+		v._valueSetter = func(field *xunsafe.Field, parentPtr unsafe.Pointer, value interface{}) error {
+			if actual, ok := value.(float64); ok {
+				field.SetFloat64(parentPtr, actual)
+				return nil
+			}
+			return typeMissmatchErr("float64", value)
+		}
+
+	default:
+		v._valueSetter = func(field *xunsafe.Field, parentPtr unsafe.Pointer, value interface{}) error {
+			field.SetValue(parentPtr, value)
+			return nil
+		}
+	}
+}
+
+func typeMissmatchErr(wanted string, value interface{}) error {
+	return fmt.Errorf("type missmatch, wanted %v got %T", wanted, value)
+}
+
+func (v *RawVisitor) Init(resource *Resource) error {
+	lookup, err := resource._visitors.Lookup(v.Name)
+	if err != nil {
+		return err
+	}
+
+	switch actual := lookup.Visitor().(type) {
+	case visitor.RawTransformer:
+		v._visitorFn = actual.TransformRaw
+		return nil
+	default:
+		return fmt.Errorf("expected %T to implement RawTransformer interface", actual)
+	}
+}
+
 //Init initializes Parameter
-func (p *Parameter) Init(ctx context.Context, resource *Resource, xfield *xunsafe.Field) error {
+func (p *Parameter) Init(ctx context.Context, resource *Resource, structType reflect.Type) error {
 	if p.initialized == true {
 		return nil
 	}
+	p.initialized = true
 
-	if p.Ref != "" && p.Name == "" {
+	if p.Ref != "" {
 		param, err := resource._parameters.Lookup(p.Ref)
 		if err != nil {
 			return err
 		}
 
-		if err = param.Init(ctx, resource, xfield); err != nil {
+		if err = param.Init(ctx, resource, structType); err != nil {
 			return err
 		}
 
 		p.inherit(param)
+	}
+	if p.PresenceName == "" {
+		p.PresenceName = p.Name
 	}
 
 	if p.In.Kind == DataViewKind {
@@ -66,28 +172,22 @@ func (p *Parameter) Init(ctx context.Context, resource *Resource, xfield *xunsaf
 		p.view = view
 	}
 
-	if err := p.initSchema(resource.types, xfield); err != nil {
+	if err := p.initSchema(resource._types, structType); err != nil {
 		return err
 	}
 
-	err := p.Validate()
-	if err != nil {
+	if err := p.initVisitors(resource); err != nil {
 		return err
 	}
 
-	if p.PresenceName == "" {
-		p.PresenceName = p.Name
-	}
-
-	p.xfield = xfield
-	p.initialized = true
-	return nil
+	return p.Validate()
 }
 
 func (p *Parameter) inherit(param *Parameter) {
 	p.Name = notEmptyOf(p.Name, param.Name)
 	p.Description = notEmptyOf(p.Description, param.Description)
 	p.Style = notEmptyOf(p.Style, param.Style)
+	p.PresenceName = notEmptyOf(p.PresenceName, param.PresenceName)
 
 	if p.In == nil {
 		p.In = param.In
@@ -99,6 +199,18 @@ func (p *Parameter) inherit(param *Parameter) {
 
 	if p.Schema == nil {
 		p.Schema = param.Schema.copy()
+	}
+
+	if p.ValueVisitor == nil {
+		p.ValueVisitor = param.ValueVisitor
+	}
+
+	if p.RawVisitor == nil {
+		p.RawVisitor = param.RawVisitor
+	}
+
+	if p.view == nil {
+		p.view = param.view
 	}
 }
 
@@ -141,56 +253,153 @@ func (p *Parameter) IsRequired() bool {
 	return p.Required != nil && *p.Required == true
 }
 
-func (p *Parameter) initSchema(types Types, xfield *xunsafe.Field) error {
-	if xfield != nil {
-		return p.initSchemaFromXField(xfield)
+func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
+	if structType != nil {
+		return p.initSchemaFromType(structType)
 	}
 
 	if p.Schema == nil {
 		return fmt.Errorf("parameter %v schema can't be empty", p.Name)
 	}
 
-	if p.Schema.DataType == "" {
-		return fmt.Errorf("parameter %v schema DataType can't be empty", p.Name)
+	if p.Schema.DataType == "" && p.Schema.Name == "" {
+		return fmt.Errorf("parameter %v either schema DataType or Name has to be specified", p.Name)
+	}
+
+	if p.Schema.Name != "" {
+		lookup, err := types.Lookup(p.Schema.Name)
+		if err != nil {
+			return err
+		}
+
+		p.Schema.setType(lookup)
+		return nil
+	}
+
+	if p.Schema.DataType != "" {
+		rType, err := parseType(p.Schema.DataType)
+		if err != nil {
+			return err
+		}
+		p.Schema.setType(rType)
+		return nil
 	}
 
 	return p.Schema.Init(nil, nil, 0, types)
 }
 
-func (p *Parameter) initSchemaFromXField(xfield *xunsafe.Field) error {
+func (p *Parameter) initSchemaFromType(structType reflect.Type) error {
 	if p.Schema == nil {
 		p.Schema = &Schema{}
 	}
 
-	p.Schema.setType(xfield.Type)
-	p.xfield = xfield
+	segments := strings.Split(p.Name, ".")
+	field, err := fieldByTemplateName(structType, segments[0])
+	if err != nil {
+		return err
+	}
+
+	p.Schema.setType(field.Type)
 	return nil
 }
 
-func (p *Parameter) Mutator() *xunsafe.Field {
-	return p.xfield
+func (p *Parameter) UpdatePresence(presencePtr unsafe.Pointer) {
+	p.presenceAccessor.setBool(presencePtr, true)
 }
 
-func (p *Parameter) PresenceMutator() *xunsafe.Field {
-	return p.presenceXfield
+func (p *Parameter) SetAccessor(accessor *Accessor) {
+	p.valueAccessor = accessor
+}
+
+func (p *Parameter) pathFields(path string, structType reflect.Type) ([]*xunsafe.Field, error) {
+	segments := strings.Split(path, ".")
+	if len(segments) == 0 {
+		return nil, fmt.Errorf("path can't be empty")
+	}
+
+	xFields := make([]*xunsafe.Field, len(segments))
+
+	xField, err := fieldByTemplateName(structType, segments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	xFields[0] = xField
+	for i := 1; i < len(segments); i++ {
+		newField, err := fieldByTemplateName(xFields[i-1].Type, segments[i])
+		if err != nil {
+			return nil, err
+		}
+		xFields[i] = newField
+	}
+	return xFields, nil
 }
 
 func (p *Parameter) Value(values interface{}) (interface{}, error) {
-	pointer := xunsafe.AsPointer(values)
+	return p.valueAccessor.Value(values)
+}
 
-	//TODO: add support for the rest objects
-	switch p.xfield.Type.Kind() {
-	case reflect.Int:
-		return p.xfield.Int(pointer), nil
-	case reflect.Float64:
-		return p.xfield.Float64(pointer), nil
-	case reflect.Bool:
-		return p.xfield.Bool(pointer), nil
-	case reflect.String:
-		return p.xfield.String(pointer), nil
-	case reflect.Ptr, reflect.Struct:
-		return p.xfield.Value(pointer), nil
-	default:
-		return nil, fmt.Errorf("unsupported field type %v", p.xfield.Type.String())
+func (p *Parameter) ConvertAndSet(ctx context.Context, paramPtr unsafe.Pointer, rawValue string) error {
+	paramPtr = p.valueAccessor.actualStruct(paramPtr)
+	return p.valueAccessor.setValue(ctx, paramPtr, rawValue, p.RawVisitor, p.ValueVisitor)
+}
+
+func elem(rType reflect.Type) reflect.Type {
+	for rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
 	}
+
+	return rType
+}
+
+func (p *Parameter) Set(ptr unsafe.Pointer, value interface{}) error {
+	p.valueAccessor.set(ptr, value)
+	return nil
+}
+
+func (p *Parameter) SetPresenceField(structType reflect.Type) error {
+	fields, err := p.pathFields(p.PresenceName, structType)
+	if err != nil {
+		return err
+	}
+
+	p.presenceAccessor = &Accessor{
+		xFields: fields,
+	}
+
+	return nil
+}
+
+func (p *Parameter) initVisitors(resource *Resource) error {
+	if err := p.initRawVisitor(resource); err != nil {
+		return err
+	}
+
+	if err := p.initValueVisitor(resource); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (p *Parameter) initValueVisitor(resource *Resource) error {
+	if p.ValueVisitor == nil {
+		return nil
+	}
+
+	if err := p.ValueVisitor.Init(resource, p.Schema.Type()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *Parameter) initRawVisitor(resource *Resource) error {
+	if p.RawVisitor == nil {
+		return nil
+	}
+
+	if err := p.RawVisitor.Init(resource); err != nil {
+		return err
+	}
+	return nil
 }

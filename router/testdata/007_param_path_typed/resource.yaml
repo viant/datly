@@ -18,24 +18,40 @@ Resource:
       Template:
         Source: "        
           SELECT * FROM EVENTS WHERE 0=0 
-          #if($Has.QUANTITY)
-          AND quantity > $QUANTITY
+          #if($Has.FOO.QUANTITY)
+          AND quantity > $Unsafe.FOO.QUANTITY
           #end
-          #if($Has.USER_ID)
-          AND user_id = $Unsafe.USER_ID
+          #if($Has.FOO.USER_ID)
+          AND user_id = $Unsafe.FOO.USER_ID
+          #end
+          #if($Has.EVENT_TYPE_ID)
+          AND event_type_id = $Unsafe.EVENT_TYPE_ID
           #end
         "
+
+        Schema:
+          Name: params
+        PresenceSchema:
+          Name: presence_params
         Parameters:
-          - Name: QUANTITY
+          - Name: FOO.QUANTITY
             In:
               Kind: query
               Name: quantity
             Schema:
               DataType: float
-          - Name: USER_ID
+
+          - Name: FOO.USER_ID
             In:
               Kind: query
               Name: user_id
+            Schema:
+              DataType: int
+
+          - Name: EVENT_TYPE_ID
+            In:
+              Kind: query
+              Name: event_type_id
             Schema:
               DataType: int
 
