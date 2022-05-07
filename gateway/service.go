@@ -20,15 +20,17 @@ import (
 
 //Service represents gateway service
 type Service struct {
-	Config    *Config
-	visitors  visitor.Visitors
-	types     data.Types
-	mux       sync.RWMutex
-	resources []*router.Resource
-	routers   map[string]*router.Router
-	fs        afs.Service
-	cfs       afs.Service //cache file system
-	tracker   *resource.Tracker
+	Config          *Config
+	visitors        visitor.Visitors
+	types           data.Types
+	mux             sync.RWMutex
+	routerResources []*router.Resource
+	routers         map[string]*router.Router
+	fs              afs.Service
+	cfs             afs.Service //cache file system
+	routeTracker    *resource.Tracker
+	resourceTracker *resource.Tracker
+	dataResources   map[string]*data.Resource
 }
 
 func (r *Service) Handle(writer http.ResponseWriter, request *http.Request) {
@@ -39,7 +41,7 @@ func (r *Service) Handle(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (r *Service) handle(writer http.ResponseWriter, request *http.Request) error {
-	err := r.reloadIfNeeded(context.Background())
+	err := r.reloadRouterResourcesIfNeeded(context.Background())
 	if err != nil {
 		return err
 	}
@@ -74,7 +76,6 @@ func (r *Service) match(URI string) (*router.Router, error) {
 	r.mux.RLock()
 	index := r.routers
 	r.mux.RUnlock()
-
 	parts := strings.Split(URI, "/")
 	for i := len(parts); i > 0; i-- {
 		key := strings.Join(parts[:i], "/")
@@ -86,11 +87,11 @@ func (r *Service) match(URI string) (*router.Router, error) {
 	return nil, fmt.Errorf("failed to match APIURI: %v", r.Config.APIPrefix+URI)
 }
 
-func (r *Service) reloadIfNeeded(ctx context.Context) error {
+func (r *Service) reloadRouterResourcesIfNeeded(ctx context.Context) error {
 	fs := r.reloadFs()
 	var resourcesSnapshot = map[string]*router.Resource{}
 	hasChanged := false
-	err := r.tracker.Notify(ctx, fs, r.handleResourceChange(ctx, &hasChanged, resourcesSnapshot, fs))
+	err := r.routeTracker.Notify(ctx, fs, r.handleRouterResourceChange(ctx, &hasChanged, resourcesSnapshot, fs))
 	if err != nil || !hasChanged {
 		return err
 	}
@@ -107,24 +108,24 @@ func (r *Service) reloadIfNeeded(ctx context.Context) error {
 	}
 	r.mux.Lock()
 	defer r.mux.Unlock()
-	r.resources = updatedResource
+	r.routerResources = updatedResource
 	r.routers = index
 	return nil
 }
 
-func (r *Service) handleResourceChange(ctx context.Context, hasChanged *bool, resourcesSnapshot map[string]*router.Resource, fs afs.Service) func(URL string, operation resource.Operation) {
+func (r *Service) handleRouterResourceChange(ctx context.Context, hasChanged *bool, resourcesSnapshot map[string]*router.Resource, fs afs.Service) func(URL string, operation resource.Operation) {
 	return func(URL string, operation resource.Operation) {
 		*hasChanged = true
 		if len(resourcesSnapshot) == 0 {
 			r.mux.RLock()
-			for i, item := range r.resources {
-				resourcesSnapshot[item.SourceURL] = r.resources[i]
+			for i, item := range r.routerResources {
+				resourcesSnapshot[item.SourceURL] = r.routerResources[i]
 			}
 			r.mux.RUnlock()
 		}
 		switch operation {
 		case resource.Added, resource.Modified:
-			res, err := r.loadResource(ctx, URL, fs)
+			res, err := r.loadRouterResource(ctx, URL, fs)
 			if err != nil {
 				log.Printf("failed to load %v, %v\n", URL, err)
 				return
@@ -137,8 +138,47 @@ func (r *Service) handleResourceChange(ctx context.Context, hasChanged *bool, re
 	}
 }
 
-func (r *Service) loadResource(ctx context.Context, URL string, fs afs.Service) (*router.Resource, error) {
-	resource, err := router.NewResourceFromURL(ctx, fs, URL, r.visitors, r.types)
+func (r *Service) reloadDataResourceIfNeeded(ctx context.Context) error {
+	fs := r.reloadFs()
+	var resourcesSnapshot = map[string]*data.Resource{}
+	hasChanged := false
+	err := r.routeTracker.Notify(ctx, fs, r.handleDataResourceChange(ctx, &hasChanged, resourcesSnapshot, fs))
+	if err != nil || !hasChanged {
+		return err
+	}
+	r.mux.Lock()
+	defer r.mux.Unlock()
+	r.dataResources = resourcesSnapshot
+	return nil
+}
+
+func (r *Service) handleDataResourceChange(ctx context.Context, hasChanged *bool, resourcesSnapshot map[string]*data.Resource, fs afs.Service) func(URL string, operation resource.Operation) {
+	return func(URL string, operation resource.Operation) {
+		*hasChanged = true
+		if len(resourcesSnapshot) == 0 {
+			r.mux.RLock()
+			for i, item := range r.dataResources {
+				resourcesSnapshot[item.SourceURL] = r.dataResources[i]
+			}
+			r.mux.RUnlock()
+		}
+		switch operation {
+		case resource.Added, resource.Modified:
+			res, err := data.LoadResourceFromURL(ctx, URL, fs)
+			if err != nil {
+				log.Printf("failed to load %v, %v\n", URL, err)
+				return
+			}
+			res.SourceURL = URL
+			resourcesSnapshot[res.SourceURL] = res
+		case resource.Deleted:
+			delete(resourcesSnapshot, URL)
+		}
+	}
+}
+
+func (r *Service) loadRouterResource(ctx context.Context, URL string, fs afs.Service) (*router.Resource, error) {
+	resource, err := router.NewResourceFromURL(ctx, fs, URL, r.visitors, r.types, r.dataResources)
 	if err != nil {
 		return nil, err
 	}
@@ -168,14 +208,16 @@ func New(ctx context.Context, config *Config, visitors visitor.Visitors, types d
 	}
 	URL, _ := url.Split(config.RouteURL, file.Scheme)
 	srv := &Service{
-		visitors: visitors,
-		types:    types,
-		Config:   config,
-		mux:      sync.RWMutex{},
-		fs:       afs.New(),
-		cfs:      cache.Singleton(URL),
-		tracker:  resource.New(config.RouteURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
+		visitors:        visitors,
+		types:           types,
+		Config:          config,
+		mux:             sync.RWMutex{},
+		fs:              afs.New(),
+		cfs:             cache.Singleton(URL),
+		dataResources:   map[string]*data.Resource{},
+		routeTracker:    resource.New(config.RouteURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
+		resourceTracker: resource.New(config.ResourceURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
 	}
-	err = srv.reloadIfNeeded(ctx)
+	err = srv.reloadRouterResourcesIfNeeded(ctx)
 	return srv, err
 }

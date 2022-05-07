@@ -14,6 +14,7 @@ import (
 //Resource represents grouped data needed to build the View
 //can be loaded from i.e. yaml file
 type Resource struct {
+	SourceURL   string
 	Connectors  []*config.Connector
 	_connectors config.Connectors
 
@@ -30,6 +31,84 @@ type Resource struct {
 	_loggers logger.AdapterIndex
 
 	_visitors visitor.Visitors
+}
+
+func (r *Resource) MergeFrom(resource *Resource) {
+	r.mergeViews(resource)
+	r.mergeParameters(resource)
+	r.mergeTypes(resource)
+}
+
+func (r *Resource) mergeViews(resource *Resource) {
+	if len(resource.Views) == 0 {
+		return
+	}
+	views := r.viewByName()
+	for i, candidate := range resource.Views {
+		if _, ok := views[candidate.Name]; !ok {
+			view := *resource.Views[i]
+			r.Views = append(r.Views, &view)
+		}
+	}
+}
+
+func (r *Resource) mergeParameters(resource *Resource) {
+	if len(resource.Parameters) == 0 {
+		return
+	}
+	views := r.paramByName()
+	for i, candidate := range resource.Parameters {
+		if _, ok := views[candidate.Name]; !ok {
+			param := *resource.Parameters[i]
+			r.Parameters = append(r.Parameters, &param)
+		}
+	}
+}
+
+func (r *Resource) mergeTypes(resource *Resource) {
+	if len(resource.Types) == 0 {
+		return
+	}
+	views := r.typeByName()
+	for i, candidate := range resource.Types {
+		if _, ok := views[candidate.Name]; !ok {
+			typeDef := *resource.Types[i]
+			r.Types = append(r.Types, &typeDef)
+		}
+	}
+}
+
+func (r *Resource) viewByName() map[string]*View {
+	index := map[string]*View{}
+	if len(r.Views) == 0 {
+		return index
+	}
+	for i, view := range r.Views {
+		index[view.Name] = r.Views[i]
+	}
+	return index
+}
+
+func (r *Resource) paramByName() map[string]*Parameter {
+	index := map[string]*Parameter{}
+	if len(r.Parameters) == 0 {
+		return index
+	}
+	for i, param := range r.Parameters {
+		index[param.Name] = r.Parameters[i]
+	}
+	return index
+}
+
+func (r *Resource) typeByName() map[string]*Definition {
+	index := map[string]*Definition{}
+	if len(r.Parameters) == 0 {
+		return index
+	}
+	for i, param := range r.Types {
+		index[param.Name] = r.Types[i]
+	}
+	return index
 }
 
 //GetViews returns Views supplied with the Resource
@@ -95,30 +174,33 @@ func (r *Resource) View(name string) (*View, error) {
 
 //NewResourceFromURL loads and initializes Resource from file .yaml
 func NewResourceFromURL(ctx context.Context, url string, types Types, visitors visitor.Visitors) (*Resource, error) {
-	fs := afs.New()
-	data, err := fs.DownloadWithURL(ctx, url)
+	resource, err := LoadResourceFromURL(ctx, url, afs.New())
 	if err != nil {
 		return nil, err
 	}
+	err = resource.Init(ctx, types, visitors)
+	return resource, err
+}
 
+//LoadResourceFromURL load resource from URL
+func LoadResourceFromURL(ctx context.Context, URL string, fs afs.Service) (*Resource, error) {
+	data, err := fs.DownloadWithURL(ctx, URL)
+	if err != nil {
+		return nil, err
+	}
 	transient := map[string]interface{}{}
 	if err := yaml.Unmarshal(data, &transient); err != nil {
 		return nil, err
 	}
-
 	aMap := map[string]interface{}{}
 	if err := yaml.Unmarshal(data, &aMap); err != nil {
 		return nil, err
 	}
-
 	resource := &Resource{}
 	err = toolbox.DefaultConverter.AssignConverted(resource, aMap)
 	if err != nil {
 		return nil, err
 	}
-
-	err = resource.Init(ctx, types, visitors)
-
 	return resource, err
 }
 

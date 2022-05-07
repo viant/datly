@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/visitor"
@@ -32,7 +33,7 @@ func (r *Resource) Init(ctx context.Context) error {
 	return nil
 }
 
-func NewResourceFromURL(ctx context.Context, fs afs.Service, url string, visitors visitor.Visitors, types data.Types) (*Resource, error) {
+func NewResourceFromURL(ctx context.Context, fs afs.Service, url string, visitors visitor.Visitors, types data.Types, resources map[string]*data.Resource) (*Resource, error) {
 	resourceData, err := fs.DownloadWithURL(ctx, url)
 	if err != nil {
 		return nil, err
@@ -49,9 +50,11 @@ func NewResourceFromURL(ctx context.Context, fs afs.Service, url string, visitor
 	}
 
 	resource := &Resource{}
-
 	err = toolbox.DefaultConverter.AssignConverted(resource, aMap)
 	if err != nil {
+		return nil, err
+	}
+	if err = mergeResources(resource, resources); err != nil {
 		return nil, err
 	}
 
@@ -61,4 +64,17 @@ func NewResourceFromURL(ctx context.Context, fs afs.Service, url string, visitor
 		return nil, err
 	}
 	return resource, err
+}
+
+func mergeResources(resource *Resource, resources map[string]*data.Resource) error {
+	if len(resource.With) > 0 {
+		for _, ref := range resource.With {
+			refResource, ok := resources[ref]
+			if !ok {
+				return fmt.Errorf("invalid 'with' resource ref: %v", ref)
+			}
+			resource.Resource.MergeFrom(refResource)
+		}
+	}
+	return nil
 }

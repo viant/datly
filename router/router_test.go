@@ -37,8 +37,7 @@ type testcase struct {
 	expected    string
 	visitors    visitor.Visitors
 	types       data.Types
-
-	headers http.Header
+	headers     http.Header
 }
 
 type (
@@ -355,7 +354,7 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 		return nil, false
 	}
 
-	resource, err := router.NewResourceFromURL(context.TODO(), fs, path.Join(resourceURI, "resource.yaml"), c.visitors, c.types)
+	resource, err := router.NewResourceFromURL(context.TODO(), fs, path.Join(resourceURI, "resource.yaml"), c.visitors, c.types, nil)
 	if !assert.Nil(t, err, c.description) {
 		return nil, false
 	}
