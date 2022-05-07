@@ -6,6 +6,7 @@ import (
 	_ "github.com/viant/afsc/gs"
 	_ "github.com/viant/bigquery"
 	"github.com/viant/datly/gateway/app"
+	"github.com/viant/datly/gateway/registry"
 	"net/http"
 	"os"
 )
@@ -23,7 +24,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if configURL == "" {
 		return fmt.Errorf("config was emrty")
 	}
-	service, err := app.Singleton(configURL)
+	service, err := app.Singleton(configURL, registry.Visitors, registry.Types)
 	if err != nil {
 		return err
 	}

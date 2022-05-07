@@ -28,13 +28,13 @@ type (
 		AfterFetch(data interface{}, response http.ResponseWriter, request *http.Request) (responseClosed bool, err error)
 	}
 
-	//RawTransformer transforms raw parameter value to string
-	RawTransformer interface {
-		TransformRaw(raw string) (string, error)
+	//Transformer transforms raw parameter value to string
+	Transformer interface {
+		String(raw string) (string, error)
 	}
 
 	ValueTransformer interface {
-		TransformIntoValue(ctx context.Context, raw string) (interface{}, error)
+		Value(ctx context.Context, raw string) (interface{}, error)
 	}
 
 	Visitor struct {

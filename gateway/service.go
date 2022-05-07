@@ -21,6 +21,8 @@ import (
 //Service represents gateway service
 type Service struct {
 	Config    *Config
+	visitors  visitor.Visitors
+	types     data.Types
 	mux       sync.RWMutex
 	resources []*router.Resource
 	routers   map[string]*router.Router
@@ -136,7 +138,7 @@ func (r *Service) handleResourceChange(ctx context.Context, hasChanged *bool, re
 }
 
 func (r *Service) loadResource(ctx context.Context, URL string, fs afs.Service) (*router.Resource, error) {
-	resource, err := router.NewResourceFromURL(ctx, fs, URL, visitor.Visitors{}, data.Types{})
+	resource, err := router.NewResourceFromURL(ctx, fs, URL, r.visitors, r.types)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +160,7 @@ func (r *Service) initResource(ctx context.Context, resource *router.Resource, U
 	return resource.Init(ctx)
 }
 
-func New(ctx context.Context, config *Config) (*Service, error) {
+func New(ctx context.Context, config *Config, visitors visitor.Visitors, types data.Types) (*Service, error) {
 	config.Init()
 	err := config.Validate()
 	if err != nil {
@@ -166,11 +168,13 @@ func New(ctx context.Context, config *Config) (*Service, error) {
 	}
 	URL, _ := url.Split(config.BaseURL, file.Scheme)
 	srv := &Service{
-		Config:  config,
-		mux:     sync.RWMutex{},
-		fs:      afs.New(),
-		cfs:     cache.Singleton(URL),
-		tracker: resource.New(config.BaseURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
+		visitors: visitors,
+		types:    types,
+		Config:   config,
+		mux:      sync.RWMutex{},
+		fs:       afs.New(),
+		cfs:      cache.Singleton(URL),
+		tracker:  resource.New(config.BaseURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
 	}
 	err = srv.reloadIfNeeded(ctx)
 	return srv, err

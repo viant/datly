@@ -8,9 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/afs"
 	"github.com/viant/assertly"
+	"github.com/viant/datly/auth/gcp"
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/visitor"
-	"github.com/viant/scy/auth/gcp"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
 	"google.golang.org/api/oauth2/v2"
 	"io/ioutil"
@@ -18,7 +19,6 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/viant/datly/router"
@@ -44,26 +44,7 @@ type testcase struct {
 type (
 	eventAfterFetcher  struct{}
 	eventBeforeFetcher struct{}
-	jwtVisitor         struct{}
 )
-
-func (j *jwtVisitor) TransformIntoValue(ctx context.Context, raw string) (interface{}, error) {
-	if last := strings.LastIndexByte(raw, ' '); last != -1 {
-		raw = raw[last+1:]
-	}
-
-	decoded, err := base64.StdEncoding.DecodeString(raw)
-	if err != nil {
-		return nil, err
-	}
-
-	info, err := gcp.TokenInfo(ctx, string(decoded), false)
-	if err != nil {
-		return nil, err
-	}
-
-	return info, nil
-}
 
 func (e *eventBeforeFetcher) BeforeFetch(response http.ResponseWriter, request *http.Request) (responseClosed bool, err error) {
 	response.Write([]byte("[]"))
@@ -95,7 +76,9 @@ type event struct {
 
 //TODO: add testcases against sql injection
 func TestRouter(t *testing.T) {
+
 	testLocation := toolbox.CallerDirectory(3)
+	_ = toolbox.CreateDirIfNotExist(path.Join(testLocation, "router/testdata/db"))
 
 	type FooParam struct {
 		QUANTITY float64
@@ -292,10 +275,10 @@ func TestRouter(t *testing.T) {
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MSwiRW1haWwiOiJhYmNAZXhhbXBsZS5jb20ifQ.dm3jSSuqy9wf4BsjU1dElRQQEySC5nn6fCUTmTKqt2")},
 			},
 			visitors: visitor.NewVisitors(
-				visitor.New("jwt", &jwtVisitor{}),
+				visitor.New(registry.VisitorKeyIdJwtTokenInfo, &gcp.IdJwtTokenInfo{}),
 			),
 			types: map[string]reflect.Type{
-				"JWT": reflect.TypeOf(&oauth2.Tokeninfo{}),
+				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
 			},
 		},
 		{
@@ -309,10 +292,10 @@ func TestRouter(t *testing.T) {
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MiwiRW1haWwiOiJleGFtcGxlQGdtYWlsLmNvbSJ9.XsZ115KqQK8uQE9for6NaphYS1VHdJc_famKWHo1Dcw")},
 			},
 			visitors: visitor.NewVisitors(
-				visitor.New("jwt", &jwtVisitor{}),
+				visitor.New(registry.VisitorKeyIdJwtTokenInfo, &gcp.IdJwtTokenInfo{}),
 			),
 			types: map[string]reflect.Type{
-				"JWT": reflect.TypeOf(&oauth2.Tokeninfo{}),
+				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
 			},
 		},
 		{
@@ -326,10 +309,10 @@ func TestRouter(t *testing.T) {
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6IkFubkBleGFtcGxlLmNvbSIsImlkIjoiNCJ9.gxhP-M5t5Iqcz7yK635rs93jqKXEkPNNTcY0sOJGC3s")},
 			},
 			visitors: visitor.NewVisitors(
-				visitor.New("jwt", &jwtVisitor{}),
+				visitor.New(registry.VisitorKeyIdJwtTokenInfo, &gcp.IdJwtTokenInfo{}),
 			),
 			types: map[string]reflect.Type{
-				"JWT": reflect.TypeOf(&oauth2.Tokeninfo{}),
+				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
 			},
 		},
 	}

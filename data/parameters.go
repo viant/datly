@@ -63,7 +63,7 @@ func (v *ValueVisitor) Init(resource *Resource, paramType reflect.Type) error {
 
 	switch actual := vVisitor.Visitor().(type) {
 	case visitor.ValueTransformer:
-		v._visitorFn = actual.TransformIntoValue
+		v._visitorFn = actual.Value
 		v.initValueSetter(paramType)
 		return nil
 	default:
@@ -128,11 +128,11 @@ func (v *RawVisitor) Init(resource *Resource) error {
 	}
 
 	switch actual := lookup.Visitor().(type) {
-	case visitor.RawTransformer:
-		v._visitorFn = actual.TransformRaw
+	case visitor.Transformer:
+		v._visitorFn = actual.String
 		return nil
 	default:
-		return fmt.Errorf("expected %T to implement RawTransformer interface", actual)
+		return fmt.Errorf("expected %T to implement Transformer interface", actual)
 	}
 }
 
