@@ -1,0 +1,42 @@
+
+Views:
+  - Name: acl_view_criteria
+    Connector:
+      Ref: acl
+    Table: acl_view_criteria
+    Columns:
+      - Name: criteria
+        DataType: string
+    Template:
+      Source: SELECT criteria 
+               FROM datly.acl_view_criteria 
+               WHERE subject = $Jwt.Email AND view = '$View.Name' LIMIT 1
+      Parameters:
+        - Ref: Jwt
+
+Parameters:
+  - Name: Jwt
+    Required: true
+    Codec:
+      Name: JwtClaim
+    Schema:
+      Name: JwtTokenInfo
+    In:
+      Kind: header
+      Name: Authorization
+
+  - Name: ViewAcl
+    Required: true
+    In:
+      Kind: data_view
+      Name: acl_view_criteria
+    Schema:
+      Name: ViewAcl
+
+Types:
+  - Name: ViewAcl
+    Fields:
+      - Name: Criteria
+        Column: criteria
+        Schema:
+          DataType: string

@@ -12,6 +12,7 @@ import (
 type Resource struct {
 	APIURI    string
 	SourceURL string
+	With      []string //list of resource to inherit from
 	Routes    Routes
 	Resource  *data.Resource
 	_visitors visitor.Visitors

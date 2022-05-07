@@ -29,20 +29,20 @@ Resource:
           DataType: string
       Template:
         Source: "
-          SELECT ac.criteria 
-          FROM acl_user_criteria ac 
-          JOIN employees em ON em.id = ac.employee_id
-          WHERE em.email = $JWT.Email
-          AND ac.view = '$View.Name'
+            SELECT ac.criteria 
+            FROM acl_user_criteria ac 
+            JOIN employees em ON em.id = ac.employee_id
+            WHERE em.email = $JWT.Email
+            AND ac.view = '$View.Name'
+            
+            UNION ALL
           
-          UNION ALL
-        
-          SELECT rc.criteria FROM acl_role_criteria rc 
-          JOIN ROLES r ON rc.role_id = r.id
-          JOIN EMP_ROLES er ON er.role_id = r.id
-          JOIN EMPLOYEES e ON e.id = er.employee_id
-          WHERE e.email = $JWT.Email
-          AND rc.view = '$View.Name'
+            SELECT rc.criteria FROM acl_role_criteria rc 
+            JOIN ROLES r ON rc.role_id = r.id
+            JOIN EMP_ROLES er ON er.role_id = r.id
+            JOIN EMPLOYEES e ON e.id = er.employee_id
+            WHERE e.email = $JWT.Email
+            AND rc.view = '$View.Name'
           
           LIMIT 1
         "
@@ -54,7 +54,7 @@ Resource:
     - Name: JWT
       Required: true
       Codec:
-        Name: IdJwtTokenInfo
+        Name: JwtClaim
       Schema:
         Name: JwtTokenInfo
       In:

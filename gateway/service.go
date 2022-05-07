@@ -151,7 +151,7 @@ func (r *Service) loadResource(ctx context.Context, URL string, fs afs.Service) 
 func (r *Service) initResource(ctx context.Context, resource *router.Resource, URL string) error {
 	resource.SourceURL = URL
 	if resource.APIURI == "" {
-		appURI := strings.Trim(URL[len(r.Config.BaseURL):], "/")
+		appURI := strings.Trim(URL[len(r.Config.RouteURL):], "/")
 		if index := strings.Index(appURI, "."); index != -1 {
 			appURI = appURI[:index]
 		}
@@ -166,7 +166,7 @@ func New(ctx context.Context, config *Config, visitors visitor.Visitors, types d
 	if err != nil {
 		return nil, err
 	}
-	URL, _ := url.Split(config.BaseURL, file.Scheme)
+	URL, _ := url.Split(config.RouteURL, file.Scheme)
 	srv := &Service{
 		visitors: visitors,
 		types:    types,
@@ -174,7 +174,7 @@ func New(ctx context.Context, config *Config, visitors visitor.Visitors, types d
 		mux:      sync.RWMutex{},
 		fs:       afs.New(),
 		cfs:      cache.Singleton(URL),
-		tracker:  resource.New(config.BaseURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
+		tracker:  resource.New(config.RouteURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
 	}
 	err = srv.reloadIfNeeded(ctx)
 	return srv, err

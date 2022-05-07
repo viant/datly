@@ -7,10 +7,10 @@ import (
 	"strings"
 )
 
-//IdJwtTokenInfo represents IDJWT visitor
-type IdJwtTokenInfo struct{}
+//JwtClaim represents IDJWT visitor
+type JwtClaim struct{}
 
-func (j *IdJwtTokenInfo) Value(ctx context.Context, raw string) (interface{}, error) {
+func (j *JwtClaim) Value(ctx context.Context, raw string) (interface{}, error) {
 	if last := strings.LastIndexByte(raw, ' '); last != -1 {
 		raw = raw[last+1:]
 	}

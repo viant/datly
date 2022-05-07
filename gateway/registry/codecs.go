@@ -6,9 +6,9 @@ import (
 )
 
 const (
-	CodecKeyIdJwtTokenInfo = "IdJwtTokenInfo"
+	CodecKeyJwtClaim = "JwtClaim"
 )
 
 var Codecs = visitor.NewVisitors(
-	visitor.New(CodecKeyIdJwtTokenInfo, &gcp.IdJwtTokenInfo{}),
+	visitor.New(CodecKeyJwtClaim, &gcp.JwtClaim{}),
 )

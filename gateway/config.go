@@ -10,14 +10,15 @@ import (
 
 type Config struct {
 	APIPrefix       string //like /v1/api/
-	BaseURL         string
+	RouteURL        string
+	ResourceURL     string
 	UseCacheFS      bool
 	SyncFrequencyMs int
 }
 
 func (c *Config) Validate() error {
-	if c.BaseURL == "" {
-		return fmt.Errorf("BaseURL was empty")
+	if c.RouteURL == "" {
+		return fmt.Errorf("RouteURL was empty")
 	}
 	return nil
 }
