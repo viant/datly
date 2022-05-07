@@ -275,7 +275,7 @@ func TestRouter(t *testing.T) {
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MSwiRW1haWwiOiJhYmNAZXhhbXBsZS5jb20ifQ.dm3jSSuqy9wf4BsjU1dElRQQEySC5nn6fCUTmTKqt2")},
 			},
 			visitors: visitor.NewVisitors(
-				visitor.New(registry.VisitorKeyIdJwtTokenInfo, &gcp.IdJwtTokenInfo{}),
+				visitor.New(registry.CodecKeyIdJwtTokenInfo, &gcp.IdJwtTokenInfo{}),
 			),
 			types: map[string]reflect.Type{
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
@@ -292,7 +292,7 @@ func TestRouter(t *testing.T) {
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MiwiRW1haWwiOiJleGFtcGxlQGdtYWlsLmNvbSJ9.XsZ115KqQK8uQE9for6NaphYS1VHdJc_famKWHo1Dcw")},
 			},
 			visitors: visitor.NewVisitors(
-				visitor.New(registry.VisitorKeyIdJwtTokenInfo, &gcp.IdJwtTokenInfo{}),
+				visitor.New(registry.CodecKeyIdJwtTokenInfo, &gcp.IdJwtTokenInfo{}),
 			),
 			types: map[string]reflect.Type{
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
@@ -309,7 +309,7 @@ func TestRouter(t *testing.T) {
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6IkFubkBleGFtcGxlLmNvbSIsImlkIjoiNCJ9.gxhP-M5t5Iqcz7yK635rs93jqKXEkPNNTcY0sOJGC3s")},
 			},
 			visitors: visitor.NewVisitors(
-				visitor.New(registry.VisitorKeyIdJwtTokenInfo, &gcp.IdJwtTokenInfo{}),
+				visitor.New(registry.CodecKeyIdJwtTokenInfo, &gcp.IdJwtTokenInfo{}),
 			),
 			types: map[string]reflect.Type{
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),

@@ -24,7 +24,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if configURL == "" {
 		return fmt.Errorf("config was emrty")
 	}
-	service, err := app.Singleton(configURL, registry.Visitors, registry.Types)
+	service, err := app.Singleton(configURL, registry.Codecs, registry.Types)
 	if err != nil {
 		return err
 	}

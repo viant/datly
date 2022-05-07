@@ -53,7 +53,7 @@ Resource:
   Parameters:
     - Name: JWT
       Required: true
-      ValueVisitor:
+      Codec:
         Name: IdJwtTokenInfo
       Schema:
         Name: JwtTokenInfo

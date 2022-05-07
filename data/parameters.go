@@ -24,8 +24,8 @@ type (
 		Style       string
 		Schema      *Schema
 
-		RawVisitor   *RawVisitor
-		ValueVisitor *ValueVisitor
+		RawVisitor *RawVisitor
+		Codec      *Codec
 
 		initialized bool
 		view        *View
@@ -48,14 +48,14 @@ type (
 
 	ValueVisitorFn func(context context.Context, rawValue string) (interface{}, error)
 	ValueSetterFn  func(field *xunsafe.Field, parentPtr unsafe.Pointer, value interface{}) error
-	ValueVisitor   struct {
+	Codec          struct {
 		Name         string
 		_visitorFn   ValueVisitorFn
 		_valueSetter ValueSetterFn
 	}
 )
 
-func (v *ValueVisitor) Init(resource *Resource, paramType reflect.Type) error {
+func (v *Codec) Init(resource *Resource, paramType reflect.Type) error {
 	vVisitor, err := resource._visitors.Lookup(v.Name)
 	if err != nil {
 		return err
@@ -67,11 +67,11 @@ func (v *ValueVisitor) Init(resource *Resource, paramType reflect.Type) error {
 		v.initValueSetter(paramType)
 		return nil
 	default:
-		return fmt.Errorf("expected %T to implement ValueVisitor", actual)
+		return fmt.Errorf("expected %T to implement Codec", actual)
 	}
 }
 
-func (v *ValueVisitor) initValueSetter(paramType reflect.Type) {
+func (v *Codec) initValueSetter(paramType reflect.Type) {
 	switch paramType.Kind() {
 	case reflect.Int:
 		v._valueSetter = func(field *xunsafe.Field, parentPtr unsafe.Pointer, value interface{}) error {
@@ -79,7 +79,7 @@ func (v *ValueVisitor) initValueSetter(paramType reflect.Type) {
 				field.SetInt(parentPtr, actual)
 				return nil
 			}
-			return typeMissmatchErr("int", value)
+			return typeMismatchErr("int", value)
 		}
 
 	case reflect.String:
@@ -88,7 +88,7 @@ func (v *ValueVisitor) initValueSetter(paramType reflect.Type) {
 				field.SetString(parentPtr, actual)
 				return nil
 			}
-			return typeMissmatchErr("string", value)
+			return typeMismatchErr("string", value)
 		}
 
 	case reflect.Bool:
@@ -97,7 +97,7 @@ func (v *ValueVisitor) initValueSetter(paramType reflect.Type) {
 				field.SetBool(parentPtr, actual)
 				return nil
 			}
-			return typeMissmatchErr("bool", value)
+			return typeMismatchErr("bool", value)
 		}
 
 	case reflect.Float64:
@@ -106,7 +106,7 @@ func (v *ValueVisitor) initValueSetter(paramType reflect.Type) {
 				field.SetFloat64(parentPtr, actual)
 				return nil
 			}
-			return typeMissmatchErr("float64", value)
+			return typeMismatchErr("float64", value)
 		}
 
 	default:
@@ -117,7 +117,7 @@ func (v *ValueVisitor) initValueSetter(paramType reflect.Type) {
 	}
 }
 
-func typeMissmatchErr(wanted string, value interface{}) error {
+func typeMismatchErr(wanted string, value interface{}) error {
 	return fmt.Errorf("type missmatch, wanted %v got %T", wanted, value)
 }
 
@@ -201,8 +201,8 @@ func (p *Parameter) inherit(param *Parameter) {
 		p.Schema = param.Schema.copy()
 	}
 
-	if p.ValueVisitor == nil {
-		p.ValueVisitor = param.ValueVisitor
+	if p.Codec == nil {
+		p.Codec = param.Codec
 	}
 
 	if p.RawVisitor == nil {
@@ -341,7 +341,7 @@ func (p *Parameter) Value(values interface{}) (interface{}, error) {
 
 func (p *Parameter) ConvertAndSet(ctx context.Context, paramPtr unsafe.Pointer, rawValue string) error {
 	paramPtr = p.valueAccessor.actualStruct(paramPtr)
-	return p.valueAccessor.setValue(ctx, paramPtr, rawValue, p.RawVisitor, p.ValueVisitor)
+	return p.valueAccessor.setValue(ctx, paramPtr, rawValue, p.RawVisitor, p.Codec)
 }
 
 func elem(rType reflect.Type) reflect.Type {
@@ -383,11 +383,11 @@ func (p *Parameter) initVisitors(resource *Resource) error {
 }
 
 func (p *Parameter) initValueVisitor(resource *Resource) error {
-	if p.ValueVisitor == nil {
+	if p.Codec == nil {
 		return nil
 	}
 
-	if err := p.ValueVisitor.Init(resource, p.Schema.Type()); err != nil {
+	if err := p.Codec.Init(resource, p.Schema.Type()); err != nil {
 		return err
 	}
 	return nil

@@ -24,13 +24,13 @@ pipeline:
  deploy:
   action: gcp/cloudfunctions:deploy
   credentials: $gcpCredentials
-  '@name': Datly
+  '@name': datly
   environmentVariables:
    CONFIG_URL: 'gs://${configBucket}/${appName}/config.json'
   timeout: 540s
-  public: true
-#  members:
-#   - user:awitas@vindicotech.com
+  members:
+   - user:awitas@vindicotech.com
+
   availableMemoryMb: 256
   entryPoint: Handle
   runtime: go116

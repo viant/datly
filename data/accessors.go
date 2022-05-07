@@ -55,7 +55,7 @@ func (a *Accessor) initValue(field *xunsafe.Field, prev unsafe.Pointer) unsafe.P
 	return unsafe.Pointer(value.Pointer())
 }
 
-func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue string, rawVisitor *RawVisitor, valueVisitor *ValueVisitor) error {
+func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue string, rawVisitor *RawVisitor, valueVisitor *Codec) error {
 	xField := a.xFields[len(a.xFields)-1]
 
 	var err error
