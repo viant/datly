@@ -6,7 +6,7 @@ init:
   projectID: $gcp.ProjectID
   prefix: $Replace(${projectID},'-','_')
   configBucket: ${prefix}_config
-  appName: datly
+  appName: Datly
 
 pipeline:
   info:

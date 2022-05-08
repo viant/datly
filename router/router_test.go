@@ -354,7 +354,7 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 		return nil, false
 	}
 
-	resource, err := router.NewResourceFromURL(context.TODO(), fs, path.Join(resourceURI, "resource.yaml"), c.visitors, c.types, nil)
+	resource, err := router.NewResourceFromURL(context.TODO(), fs, path.Join(resourceURI, "resource.yaml"), c.visitors, c.types, nil, nil)
 	if !assert.Nil(t, err, c.description) {
 		return nil, false
 	}

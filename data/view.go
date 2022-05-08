@@ -7,11 +7,13 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
+	"github.com/viant/gmetric/provider"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
 	"reflect"
 	"strings"
+	"time"
 )
 
 type (
@@ -139,9 +141,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if v.Counter == nil {
-		v.Counter = logger.NewCounter(nil)
-	}
+	v.ensureCounter(resource)
 
 	v.Alias = notEmptyOf(v.Alias, "t")
 	if v.From == "" {
@@ -210,6 +210,24 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 
 	v.updateColumnTypes()
 	return nil
+}
+
+func (v *View) ensureCounter(resource *Resource) {
+	if v.Counter != nil {
+		return
+	}
+	var counter logger.Counter
+	if metric := resource.Metrics; metric != nil {
+		name := v.Name
+		if metric.URIPart != "" {
+			name = metric.URIPart + name
+		}
+		if metric.Service.LookupCounter(name) == nil {
+			counter = metric.Service.MultiOperationCounter(metricLocation(), name, name+" performance", time.Microsecond, time.Minute, 2, provider.NewBasic())
+		}
+	}
+	v.Counter = logger.NewCounter(counter)
+
 }
 
 func (v *View) updateColumnTypes() {

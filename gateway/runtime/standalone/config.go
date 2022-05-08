@@ -1,34 +1,36 @@
-package gateway
+package standalone
 
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/datly/gateway"
+	"github.com/viant/datly/gateway/runtime/standalone/endpoint"
+	"github.com/viant/datly/gateway/runtime/standalone/meta"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"strings"
 )
 
-type Config struct {
-	APIPrefix       string //like /v1/api/
-	RouteURL        string
-	ResourceURL     string
-	UseCacheFS      bool
-	SyncFrequencyMs int
-}
-
-func (c *Config) Validate() error {
-	if c.RouteURL == "" {
-		return fmt.Errorf("RouteURL was empty")
+type (
+	//Config defines standalone app config
+	Config struct {
+		Version  string
+		Gateway  *gateway.Config
+		Endpoint endpoint.Config
+		Meta     *meta.Config
 	}
-	return nil
-}
+)
 
+//Init initialises config
 func (c *Config) Init() {
-	if c.SyncFrequencyMs == 0 {
-		c.SyncFrequencyMs = 5000
-	}
+	c.Meta.Init()
+	c.Endpoint.Init()
+}
+
+//Validate validates config
+func (c *Config) Validate() error {
+	return nil
 }
 
 func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {

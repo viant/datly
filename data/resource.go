@@ -14,6 +14,7 @@ import (
 //Resource represents grouped data needed to build the View
 //can be loaded from i.e. yaml file
 type Resource struct {
+	Metrics     *Metrics
 	SourceURL   string
 	Connectors  []*config.Connector
 	_connectors config.Connectors

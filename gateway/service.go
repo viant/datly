@@ -11,8 +11,10 @@ import (
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/visitor"
+	"github.com/viant/gmetric"
 	"log"
 	"net/http"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +33,7 @@ type Service struct {
 	routeResourceTracker *resource.Tracker
 	dataResourceTracker  *resource.Tracker
 	dataResources        map[string]*data.Resource
+	metrics              *gmetric.Service
 }
 
 func (r *Service) Handle(writer http.ResponseWriter, request *http.Request) {
@@ -194,7 +197,17 @@ func (r *Service) loadRouterResource(ctx context.Context, URL string, fs afs.Ser
 	for k, v := range r.types {
 		types[k] = v
 	}
-	resource, err := router.NewResourceFromURL(ctx, fs, URL, r.visitors, types, r.dataResources)
+
+	var metrics *data.Metrics
+	if r.metrics != nil {
+		appURI := r.apiURI(URL)
+		URIPart, _ := path.Split(appURI)
+		metrics = &data.Metrics{
+			Service: r.metrics,
+			URIPart: URIPart,
+		}
+	}
+	resource, err := router.NewResourceFromURL(ctx, fs, URL, r.visitors, types, r.dataResources, metrics)
 	if err != nil {
 		return nil, err
 	}
@@ -207,16 +220,22 @@ func (r *Service) loadRouterResource(ctx context.Context, URL string, fs afs.Ser
 func (r *Service) initResource(ctx context.Context, resource *router.Resource, URL string) error {
 	resource.SourceURL = URL
 	if resource.APIURI == "" {
-		appURI := strings.Trim(URL[len(r.Config.RouteURL):], "/")
-		if index := strings.Index(appURI, "."); index != -1 {
-			appURI = appURI[:index]
-		}
+		appURI := r.apiURI(URL)
 		resource.APIURI = appURI
 	}
 	return resource.Init(ctx)
 }
 
-func New(ctx context.Context, config *Config, visitors visitor.Visitors, types data.Types) (*Service, error) {
+func (r *Service) apiURI(URL string) string {
+	appURI := strings.Trim(URL[len(r.Config.RouteURL):], "/")
+	if index := strings.Index(appURI, "."); index != -1 {
+		appURI = appURI[:index]
+	}
+	return appURI
+}
+
+//New creates a gateway service
+func New(ctx context.Context, config *Config, visitors visitor.Visitors, types data.Types, metrics *gmetric.Service) (*Service, error) {
 	config.Init()
 	err := config.Validate()
 	if err != nil {
@@ -226,6 +245,7 @@ func New(ctx context.Context, config *Config, visitors visitor.Visitors, types d
 	parentURL, _ := url.Split(URL, file.Scheme)
 	srv := &Service{
 		visitors:             visitors,
+		metrics:              metrics,
 		types:                types,
 		Config:               config,
 		mux:                  sync.RWMutex{},

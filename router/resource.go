@@ -10,15 +10,28 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Resource struct {
-	initialised bool
-	APIURI      string
-	SourceURL   string
-	With        []string //list of resource to inherit from
-	Routes      Routes
-	Resource    *data.Resource
-	_visitors   visitor.Visitors
-}
+type (
+	Resource struct {
+		initialised bool
+		APIURI      string
+		SourceURL   string
+		With        []string //list of resource to inherit from
+		Routes      Routes
+		Resource    *data.Resource
+		_visitors   visitor.Visitors
+		Compression *Compression
+		Redirect    *Redirect
+	}
+
+	Compression struct {
+		MinSizeKb int
+	}
+
+	Redirect struct {
+		Bucket    string
+		MinSizeKb int
+	}
+)
 
 func (r *Resource) Init(ctx context.Context) error {
 	if r.initialised {
@@ -36,7 +49,7 @@ func (r *Resource) Init(ctx context.Context) error {
 	return nil
 }
 
-func NewResourceFromURL(ctx context.Context, fs afs.Service, url string, visitors visitor.Visitors, types data.Types, resources map[string]*data.Resource) (*Resource, error) {
+func NewResourceFromURL(ctx context.Context, fs afs.Service, url string, visitors visitor.Visitors, types data.Types, resources map[string]*data.Resource, metrics *data.Metrics) (*Resource, error) {
 	resourceData, err := fs.DownloadWithURL(ctx, url)
 	if err != nil {
 		return nil, err
@@ -61,8 +74,8 @@ func NewResourceFromURL(ctx context.Context, fs afs.Service, url string, visitor
 	if err = mergeResources(resource, resources, types); err != nil {
 		return nil, err
 	}
-
 	resource._visitors = visitors
+	resource.Resource.Metrics = metrics
 	resource.Resource.SetTypes(types)
 	if err := resource.Init(ctx); err != nil {
 		return nil, err

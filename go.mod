@@ -25,7 +25,7 @@ require (
 	github.com/viant/cloudless v1.1.1-0.20220302185825-1e29705ac362
 	github.com/viant/dsc v0.16.0
 	github.com/viant/dsunit v0.10.8
-	github.com/viant/gmetric v0.2.6
+	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/gtly v0.0.0-20200927172514-d1417cac563d
 	github.com/viant/parsly v0.0.0-20220309230857-3a8c3e9c4030
 	github.com/viant/scy v0.0.0-20220507161616-7f2a2c3fb147
