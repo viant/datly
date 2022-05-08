@@ -46,16 +46,15 @@ type (
 )
 
 func (e *eventBeforeFetcher) BeforeFetch(response http.ResponseWriter, request *http.Request) (responseClosed bool, err error) {
-	response.Write([]byte("[]"))
 	response.WriteHeader(http.StatusBadRequest)
-
+	response.Write([]byte("[]"))
 	return true, nil
 }
 
 func (e *eventAfterFetcher) AfterFetch(data interface{}, response http.ResponseWriter, request *http.Request) (responseClosed bool, err error) {
 	if _, ok := data.(*[]*event); !ok {
-		response.Write([]byte("unexpected data type"))
 		response.WriteHeader(http.StatusInternalServerError)
+		response.Write([]byte("unexpected data type"))
 		return true, nil
 	}
 

@@ -43,12 +43,12 @@ func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {
 		if err := yaml.Unmarshal(data, &transient); err != nil {
 			return nil, err
 		}
-		aMap := map[string]interface{}{}
+		aMap = map[string]interface{}{}
 		if err := yaml.Unmarshal(data, &aMap); err != nil {
 			return nil, err
 		}
 	} else {
-		aMap := map[string]interface{}{}
+		aMap = map[string]interface{}{}
 		if err := json.Unmarshal(data, &aMap); err != nil {
 			return nil, err
 		}

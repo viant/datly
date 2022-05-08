@@ -31,6 +31,7 @@ var onceWithConfig sync.Once
 
 func SingletonWithConfig(config *Config, visitors visitor.Visitors, types data.Types, metric *gmetric.Service) (*Service, error) {
 	var err error
+
 	onceWithConfig.Do(func() {
 		ctx := context.Background()
 		service, err = New(ctx, config, visitors, types, metric)

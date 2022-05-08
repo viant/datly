@@ -10,6 +10,7 @@ require (
 	github.com/go-errors/errors v1.4.2
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gocql/gocql v0.0.0-20200115135732-617765adbe2d // indirect
+	github.com/jessevdk/go-flags v1.5.0 // indirect
 	github.com/lib/pq v1.10.4
 	github.com/mattn/go-sqlite3 v2.0.2+incompatible
 	github.com/onsi/ginkgo v1.11.0 // indirect

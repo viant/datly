@@ -222,8 +222,9 @@ func (v *View) ensureCounter(resource *Resource) {
 		if metric.URIPart != "" {
 			name = metric.URIPart + name
 		}
+		name = strings.ReplaceAll(name, "/", ".")
 		if metric.Service.LookupCounter(name) == nil {
-			counter = metric.Service.MultiOperationCounter(metricLocation(), name, name+" performance", time.Microsecond, time.Minute, 2, provider.NewBasic())
+			counter = metric.Service.MultiOperationCounter(metricLocation(), name, name+" performance", time.Millisecond, time.Minute, 2, provider.NewBasic())
 		}
 	}
 	v.Counter = logger.NewCounter(counter)

@@ -2,6 +2,7 @@ package standalone
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/gateway/runtime/standalone/handler"
@@ -38,16 +39,19 @@ func New(config *Config) (*Server, error) {
 	config.Init()
 	mux := http.NewServeMux()
 	metric := gmetric.New()
-	service, err := gateway.SingletonWithConfig(config.Gateway, registry.Codecs, registry.Types, metric)
+	if config.Config == nil {
+		return nil, fmt.Errorf("gateway config was empty")
+	}
+	service, err := gateway.SingletonWithConfig(config.Config, registry.Codecs, registry.Types, metric)
 	if err != nil {
 		return nil, err
 	}
 	mux.Handle(config.Meta.MetricURI, gmetric.NewHandler(config.Meta.MetricURI, metric))
-	mux.Handle(config.Meta.ConfigURI, handler.NewConfig(config.Gateway, &config.Endpoint, config.Meta))
-	mux.Handle(config.Meta.StatusURI, handler.NewStatus(config.Version, config.Meta))
+	mux.Handle(config.Meta.ConfigURI, handler.NewConfig(config.Config, &config.Endpoint, &config.Meta))
+	mux.Handle(config.Meta.StatusURI, handler.NewStatus(config.Version, &config.Meta))
 
 	//actual datly handler
-	mux.HandleFunc(config.Gateway.APIPrefix, service.Handle)
+	mux.HandleFunc(config.Config.APIPrefix, service.Handle)
 	server := &Server{
 		Server: http.Server{
 			Addr:           ":" + strconv.Itoa(config.Endpoint.Port),

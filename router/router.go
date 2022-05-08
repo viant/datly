@@ -150,8 +150,8 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 
 		selectors, err := CreateSelectorsFromRoute(ctx, route, request, route.Index._views...)
 		if err != nil {
-			response.Write([]byte(err.Error()))
 			response.WriteHeader(http.StatusBadRequest)
+			response.Write([]byte(err.Error()))
 			return
 		}
 
@@ -208,13 +208,12 @@ func (r *Router) writeResponse(route *Route, request *http.Request, response htt
 	asBytes, httpStatus, err := r.result(route, request, destValue)
 
 	if err != nil {
-		response.Write([]byte(err.Error()))
 		response.WriteHeader(httpStatus)
+		response.Write([]byte(err.Error()))
 		return
 	}
-
-	response.Write(asBytes)
 	response.WriteHeader(httpStatus)
+	response.Write(asBytes)
 }
 
 func (r *Router) result(route *Route, request *http.Request, destValue reflect.Value) ([]byte, int, error) {

@@ -33,16 +33,14 @@ func (c *CounterAdapter) DecrementValue(value interface{}) int64 {
 	if c.counter == nil {
 		return 0
 	}
-
-	return c.DecrementValue(value)
+	return c.counter.DecrementValue(value)
 }
 
 func (c *CounterAdapter) IncrementValue(value interface{}) int64 {
 	if c.counter == nil {
 		return 0
 	}
-
-	return c.IncrementValue(value)
+	return c.counter.IncrementValue(value)
 }
 
 func nopOnDone(_ time.Time, _ ...interface{}) int64 {
