@@ -11,25 +11,28 @@ import (
 )
 
 type Resource struct {
-	APIURI    string
-	SourceURL string
-	With      []string //list of resource to inherit from
-	Routes    Routes
-	Resource  *data.Resource
-	_visitors visitor.Visitors
+	initialised bool
+	APIURI      string
+	SourceURL   string
+	With        []string //list of resource to inherit from
+	Routes      Routes
+	Resource    *data.Resource
+	_visitors   visitor.Visitors
 }
 
 func (r *Resource) Init(ctx context.Context) error {
+	if r.initialised {
+		return nil
+	}
 	if err := r.Resource.Init(ctx, r.Resource.GetTypes(), r._visitors); err != nil {
 		return err
 	}
-
 	for _, route := range r.Routes {
 		if err := route.Init(ctx, r); err != nil {
 			return err
 		}
 	}
-
+	r.initialised = true
 	return nil
 }
 
@@ -54,7 +57,8 @@ func NewResourceFromURL(ctx context.Context, fs afs.Service, url string, visitor
 	if err != nil {
 		return nil, err
 	}
-	if err = mergeResources(resource, resources); err != nil {
+
+	if err = mergeResources(resource, resources, types); err != nil {
 		return nil, err
 	}
 
@@ -66,14 +70,14 @@ func NewResourceFromURL(ctx context.Context, fs afs.Service, url string, visitor
 	return resource, err
 }
 
-func mergeResources(resource *Resource, resources map[string]*data.Resource) error {
+func mergeResources(resource *Resource, resources map[string]*data.Resource, types data.Types) error {
 	if len(resource.With) > 0 {
 		for _, ref := range resource.With {
 			refResource, ok := resources[ref]
 			if !ok {
 				return fmt.Errorf("invalid 'with' resource ref: %v", ref)
 			}
-			resource.Resource.MergeFrom(refResource)
+			resource.Resource.MergeFrom(refResource, types)
 		}
 	}
 	return nil

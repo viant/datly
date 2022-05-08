@@ -27,6 +27,7 @@ Resource:
           #if($Has.EVENT_TYPE_ID)
           AND event_type_id = $Unsafe.EVENT_TYPE_ID
           #end
+          ORDER BY 1
         "
 
         Schema:

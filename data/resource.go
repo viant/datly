@@ -33,10 +33,10 @@ type Resource struct {
 	_visitors visitor.Visitors
 }
 
-func (r *Resource) MergeFrom(resource *Resource) {
+func (r *Resource) MergeFrom(resource *Resource, types Types) {
 	r.mergeViews(resource)
 	r.mergeParameters(resource)
-	r.mergeTypes(resource)
+	r.mergeTypes(resource, types)
 }
 
 func (r *Resource) mergeViews(resource *Resource) {
@@ -65,12 +65,15 @@ func (r *Resource) mergeParameters(resource *Resource) {
 	}
 }
 
-func (r *Resource) mergeTypes(resource *Resource) {
+func (r *Resource) mergeTypes(resource *Resource, types Types) {
 	if len(resource.Types) == 0 {
 		return
 	}
 	views := r.typeByName()
 	for i, candidate := range resource.Types {
+		if _, ok := types[candidate.Name]; ok {
+			continue
+		}
 		if _, ok := views[candidate.Name]; !ok {
 			typeDef := *resource.Types[i]
 			r.Types = append(r.Types, &typeDef)

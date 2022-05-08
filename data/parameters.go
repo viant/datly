@@ -340,7 +340,6 @@ func (p *Parameter) Value(values interface{}) (interface{}, error) {
 }
 
 func (p *Parameter) ConvertAndSet(ctx context.Context, paramPtr unsafe.Pointer, rawValue string) error {
-	paramPtr = p.valueAccessor.actualStruct(paramPtr)
 	return p.valueAccessor.setValue(ctx, paramPtr, rawValue, p.RawVisitor, p.Codec)
 }
 

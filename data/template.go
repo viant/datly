@@ -210,11 +210,13 @@ func (t *Template) EvaluateCriteria(externalParams, presenceMap interface{}, par
 }
 
 func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parent *View) (string, error) {
-	return t.evaluate(t.sqlEvaluator, externalParams, presenceMap, parent)
+	SQL, err := t.evaluate(t.sqlEvaluator, externalParams, presenceMap, parent)
+	return SQL, err
 }
 
 func (t *Template) evaluate(evaluator *Evaluator, externalParams, presenceMap interface{}, parent *View) (string, error) {
-	if t.Schema.Type() != reflect.TypeOf(externalParams) {
+	externalType := reflect.TypeOf(externalParams)
+	if t.Schema.Type() != externalType {
 		return "", fmt.Errorf("inompactible types, wanted %v got %T", t.Schema.Type().String(), externalParams)
 	}
 

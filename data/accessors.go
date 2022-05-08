@@ -23,41 +23,13 @@ type (
 )
 
 func (a *Accessor) set(ptr unsafe.Pointer, value interface{}) {
-	ptr = a.actualStruct(ptr)
+	ptr = a.upstream(ptr)
 	a.xFields[len(a.xFields)-1].SetValue(ptr, value)
 }
 
-func (a *Accessor) actualStruct(ptr unsafe.Pointer) unsafe.Pointer {
-	prev := ptr
-	for i := 0; i < len(a.xFields)-1; i++ {
-		ptr = a.xFields[i].ValuePointer(ptr)
-		if ptr == nil {
-			ptr = a.initValue(a.xFields[i], prev)
-		}
-
-		prev = ptr
-	}
-
-	if ptr == nil && len(a.xFields)-1 >= 0 {
-		ptr = a.initValue(a.xFields[len(a.xFields)-1], prev)
-	}
-
-	return ptr
-}
-
-func (a *Accessor) initValue(field *xunsafe.Field, prev unsafe.Pointer) unsafe.Pointer {
-	value := reflect.New(elem(field.Type))
-	if field.Type.Kind() != reflect.Ptr {
-		value = value.Elem()
-	}
-
-	field.SetValue(prev, value.Interface())
-	return unsafe.Pointer(value.Pointer())
-}
-
 func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue string, rawVisitor *RawVisitor, valueVisitor *Codec) error {
+	ptr = a.upstream(ptr)
 	xField := a.xFields[len(a.xFields)-1]
-
 	var err error
 	if rawVisitor != nil {
 		rawValue, err = rawVisitor._visitorFn(rawValue)
@@ -71,7 +43,6 @@ func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue st
 		if err != nil {
 			return err
 		}
-
 		if err = valueVisitor._valueSetter(xField, ptr, transformed); err != nil {
 			return err
 		}
@@ -109,29 +80,36 @@ func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue st
 	return fmt.Errorf("unsupported parameter type %v", xField.Type.String())
 }
 
-func (a *Accessor) Value(values interface{}) (interface{}, error) {
-	asPointer := xunsafe.AsPointer(values)
-	pointer := a.actualStruct(asPointer)
-	xField := a.xFields[len(a.xFields)-1]
-	//TODO: Add remaining types
-	switch xField.Type.Kind() {
-	case reflect.Int:
-		return xField.Int(pointer), nil
-	case reflect.Float64:
-		return xField.Float64(pointer), nil
-	case reflect.Bool:
-		return xField.Bool(pointer), nil
-	case reflect.String:
-		return xField.String(pointer), nil
-	case reflect.Ptr, reflect.Struct:
-		return xField.Value(pointer), nil
-	default:
-		return nil, fmt.Errorf("unsupported field type %v", xField.Type.String())
+func (a *Accessor) upstream(ptr unsafe.Pointer) unsafe.Pointer {
+	if len(a.xFields) == 1 {
+		return ptr
 	}
+	for i := 0; i < len(a.xFields)-1; i++ {
+		field := a.xFields[i]
+		p := field.Pointer(ptr)
+		if field.Kind() == reflect.Ptr && field.ValuePointer(ptr) == nil {
+			newValue := reflect.New(field.Type.Elem()).Interface()
+			field.SetValue(ptr, newValue)
+		}
+		p = field.Pointer(ptr)
+		if field.Kind() == reflect.Ptr {
+			p = xunsafe.DerefPointer(p)
+		}
+		ptr = p
+	}
+	return ptr
+}
+
+func (a *Accessor) Value(values interface{}) (interface{}, error) {
+	ptr := xunsafe.AsPointer(values)
+	pointer := a.upstream(ptr)
+	xField := a.xFields[len(a.xFields)-1]
+	v := xField.Value(pointer)
+	return v, nil
 }
 
 func (a *Accessor) setBool(ptr unsafe.Pointer, value bool) {
-	ptr = a.actualStruct(ptr)
+	ptr = a.upstream(ptr)
 	a.xFields[len(a.xFields)-1].SetBool(ptr, value)
 }
 
@@ -167,7 +145,6 @@ func (a *Accessors) indexAccessor(name string, fields []*xunsafe.Field) {
 	fieldAccessor := &Accessor{
 		xFields: fields,
 	}
-
 	a.index[name] = len(a.accessors)
 	a.accessors = append(a.accessors, fieldAccessor)
 }

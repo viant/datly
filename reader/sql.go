@@ -227,7 +227,6 @@ func (b *Builder) expand(sql string, view *data.View, selector *data.Selector, p
 				if err != nil {
 					return "", nil, err
 				}
-
 				value, err := accessor.Value(selector.Parameters.Values)
 				if err != nil {
 					return "", nil, err

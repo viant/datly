@@ -8,7 +8,7 @@ Views:
       - Name: criteria
         DataType: string
     Template:
-      Source: SELECT criteria 
+      Source: SELECT Criteria 
                FROM datly.acl_view_criteria 
                WHERE subject = $Jwt.Email AND view = '$View.Name' LIMIT 1
       Parameters:
@@ -25,7 +25,7 @@ Parameters:
       Kind: header
       Name: Authorization
 
-  - Name: ViewAcl
+  - Name: Acl
     Required: true
     In:
       Kind: data_view
@@ -37,6 +37,6 @@ Types:
   - Name: ViewAcl
     Fields:
       - Name: Criteria
-        Column: criteria
+        Column: Criteria
         Schema:
           DataType: string

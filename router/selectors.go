@@ -86,14 +86,11 @@ func buildParameters(ctx context.Context, requestMetadata *RequestMetadata, sele
 		go func(view *data.View) {
 			defer wg.Done()
 			selector := selectors.Lookup(view)
-			selectorParams := getValue(view.Template.Schema)
-			presenceParams := getValue(view.Template.PresenceSchema)
-			if err := buildSelectorParameters(ctx, view, xunsafe.AsPointer(selectorParams.Interface()), xunsafe.AsPointer(presenceParams.Interface()), view.Template.Parameters, requestParams, requestMetadata); err != nil {
+			selector.Parameters.Init(view)
+			params := &selector.Parameters
+			if err := buildSelectorParameters(ctx, view, xunsafe.AsPointer(params.Values), xunsafe.AsPointer(params.Has), view.Template.Parameters, requestParams, requestMetadata); err != nil {
 				errors.Append(err)
 			}
-
-			selector.Parameters.Has = dereferenceIfNeeded(view.Template.PresenceSchema, presenceParams)
-			selector.Parameters.Values = dereferenceIfNeeded(view.Template.Schema, selectorParams)
 		}(view)
 	}
 

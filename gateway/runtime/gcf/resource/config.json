@@ -1,7 +1,7 @@
 {
   "APIPrefix": "/v1/api/",
-  "RouteURL": "gs://${configBucket}/${appName}/Routes/",
-  "ResourceURL": "gs://${configBucket}/${appName}/Resource/",
+  "RouteURL": "gs://${configBucket}/${appName}/routes/",
+  "ResourceURL": "gs://${configBucket}/${appName}/resources/",
   "UseCacheFS": true,
   "SyncFrequencyMs": 2000
 }

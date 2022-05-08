@@ -1,0 +1,38 @@
+With:
+  - acl
+
+Routes:
+  - URI: /v1/api/test/performance
+    Method: GET
+    View:
+      Ref: performanceView
+      Name: performance
+
+
+Resource:
+  Views:
+    - Name: performanceView
+      Connector:
+        Ref: bq
+      Table: performance
+      Template:
+        Parameters:
+          - Ref: Jwt
+          - Ref: Acl
+        Source: SELECT account_id,
+                  date,
+                  campaign_id,
+                  SUM(impressions) AS impressions,
+                  SUM(charge) charge,
+                  SUM(payment) AS payment
+                  FROM test.performance
+                  WHERE $Unsafe.Acl.Criteria
+                  GROUP BY 1, 2, 3
+
+  Connectors:
+    - Name: bq
+      Driver: bigquery
+      DSN: bigquery://${projectID}/test
+    - Name: acl
+      Driver: bigquery
+      DSN: bigquery://${projectID}/datly

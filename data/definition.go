@@ -129,6 +129,5 @@ func buildTypeFromFields(fields []*Field) reflect.Type {
 	}
 
 	of := reflect.StructOf(rFields)
-	fmt.Println(of.String())
 	return of
 }
