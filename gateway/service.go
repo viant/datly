@@ -6,7 +6,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/cache"
 	"github.com/viant/afs/file"
-	"github.com/viant/afs/url"
+	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/router"
@@ -14,6 +14,8 @@ import (
 	"github.com/viant/gmetric"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
 	"path"
 	"strings"
 	"sync"
@@ -63,9 +65,15 @@ func (r *Service) handle(writer http.ResponseWriter, request *http.Request) erro
 	}
 	URI := request.RequestURI
 	if strings.Contains(URI, "://") {
-		_, URI = url.Base(URI, "https")
+		_, URI = furl.Base(URI, "https")
 	}
-
+	if request.URL == nil {
+		host := os.Getenv("FUNCTION_NAME")
+		if host == "" {
+			host = "localhost"
+		}
+		request.URL, _ = url.Parse("https://" + host + "/" + URI)
+	}
 	if index := strings.Index(URI, r.Config.APIPrefix); index != -1 {
 		URI = URI[index+len(r.Config.APIPrefix):]
 		request.RequestURI = r.Config.APIPrefix + URI
@@ -178,7 +186,7 @@ func (r *Service) reloadDataResourceIfNeeded(ctx context.Context) error {
 
 func (r *Service) handleDataResourceChange(ctx context.Context, hasChanged *bool, resourcesSnapshot map[string]*data.Resource, fs afs.Service) func(URL string, operation resource.Operation) {
 	return func(URL string, operation resource.Operation) {
-		_, key := url.Split(URL, file.Scheme)
+		_, key := furl.Split(URL, file.Scheme)
 		if index := strings.Index(key, "."); index != -1 {
 			key = key[:index]
 		}
@@ -254,8 +262,8 @@ func New(ctx context.Context, config *Config, visitors visitor.Visitors, types d
 	if err != nil {
 		return nil, err
 	}
-	URL, _ := url.Split(config.RouteURL, file.Scheme)
-	parentURL, _ := url.Split(URL, file.Scheme)
+	URL, _ := furl.Split(config.RouteURL, file.Scheme)
+	parentURL, _ := furl.Split(URL, file.Scheme)
 	srv := &Service{
 		visitors:             visitors,
 		metrics:              metrics,

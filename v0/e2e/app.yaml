@@ -1,6 +1,6 @@
 init:
   readerAppArchive: ${buildPath}/app/lambda/reader/reader.zip
-  readerPrivilegePolicy: policy/reader.json
+  readerPrivilegePolicy: policy/datly.json
 pipeline:
 
   set_sdk:

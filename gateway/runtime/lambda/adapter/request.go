@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -18,7 +19,7 @@ func (r *Request) Request() *http.Request {
 	req.Header = make(http.Header)
 	if len(r.Headers) > 0 {
 		for k, v := range r.Headers {
-			req.Header[k] = []string{v}
+			req.Header[k] = strings.Split(v, ",")
 		}
 	}
 	if r.Body != "" {
@@ -36,6 +37,13 @@ func (r *Request) Request() *http.Request {
 		req.Body = reader
 	}
 	req.Method = r.RequestContext.HTTP.Method
-
+	req.URL, _ = url.Parse("https://" + r.RequestContext.DomainName + "/?" + r.RawQueryString)
+	if len(r.QueryStringParameters) > 0 {
+		req.Form = map[string][]string{}
+		for k, v := range r.QueryStringParameters {
+			req.Form.Set(k, v)
+		}
+		return &req
+	}
 	return &req
 }
