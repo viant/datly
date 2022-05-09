@@ -12,8 +12,8 @@ init:
   pgCredentials: pg-e2e
   pgSecrets: ${secrets.$pgCredentials}
 
-  awsCredentials: aws-e2e
-  awsMysqlCredentials: aws-mysql-e2e
+  awsCredentials: lambda-e2e
+  awsMysqlCredentials: lambda-mysql-e2e
   awsMysqlSecrets: ${secrets.$awsMysqlCredentials}
   awsConfigBucket: viant-e2e-config
 

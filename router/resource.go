@@ -23,7 +23,7 @@ type (
 		Redirect         *Redirect
 		Cache            *Cache
 		Logger           *Logger //connect, dataview, time, SQL with params if exceeded time
-		EnableCORSHeader bool    //TODO github.com/viant/datly/v0/app/aws/bridge/cors.go
+		EnableCORSHeader bool    //TODO github.com/viant/datly/v0/app/lambda/bridge/cors.go
 
 	}
 
@@ -37,11 +37,11 @@ type (
 	}
 
 	Compression struct {
-		MinSizeKb int //github.com/viant/datly/v0/app/aws/lambda/compress.go
+		MinSizeKb int //github.com/viant/datly/v0/app/lambda/lambda/compress.go
 	}
 
 	Redirect struct {
-		StorageURL string ///github.com/viant/datly/v0/app/aws/lambda/proxy.go
+		StorageURL string ///github.com/viant/datly/v0/app/lambda/lambda/proxy.go
 		MinSizeKb  int
 	}
 )

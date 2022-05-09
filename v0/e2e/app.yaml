@@ -1,5 +1,5 @@
 init:
-  readerAppArchive: ${buildPath}/app/aws/reader/reader.zip
+  readerAppArchive: ${buildPath}/app/lambda/reader/reader.zip
   readerPrivilegePolicy: policy/reader.json
 pipeline:
 
@@ -34,7 +34,7 @@ pipeline:
         - cp datly ${runPath}
         - echo 'Building lambda reader'
         - cd ${buildPath}
-        - cd app/aws/reader
+        - cd app/lambda/reader
         - export GOOS=linux
         - export GOARCH=amd64
         - go build reader.go
@@ -60,7 +60,7 @@ pipeline:
     onAws:
       when: $runOnAws
       deploy:
-        action: aws/lambda:deploy
+        action: lambda/lambda:deploy
         credentials: $awsCredentials
 #        vpcMatcher:
 #          vpc:
@@ -81,12 +81,12 @@ pipeline:
           - policyname: lambda-reader-execution-role
             policydocument: $Cat('${readerPrivilegePolicy}')
         attach:
-          - policyarn: arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-          - policyarn: arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+          - policyarn: arn:lambda:iam::lambda:policy/service-role/AWSLambdaBasicExecutionRole
+          - policyarn: arn:lambda:iam::lambda:policy/service-role/AWSLambdaVPCAccessExecutionRole
 
       deployGatewayAPI:
         redeploy: true
-        action: aws/apigateway:deployAPI
+        action: lambda/apigateway:deployAPI
         credentials: $awsCredentials
         '@name': DataAPI
         resources:

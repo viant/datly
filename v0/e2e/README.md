@@ -43,7 +43,7 @@ endly -c=pq-e2e
 - Create RDS MySQL with password based auth and public endpoint (testing only)
 - Create credentials file
 ```bash
-endly -c=aws-mysql-e2e
+endly -c=lambda-mysql-e2e
 ````
 - Modify credential ~/.secret/aws-mysql-e2e.json file with database Endpoint
 @~/.secret/aws-mysql-e2e.json

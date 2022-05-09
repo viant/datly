@@ -2,7 +2,7 @@ pipeline:
 
   getAwsEndpointURL:
     when: $runOnAws
-    action: aws/apigateway:getRestAPI
+    action: lambda/apigateway:getRestAPI
     '@name': DataAPI
     credentials: $awsCredentials
     post:

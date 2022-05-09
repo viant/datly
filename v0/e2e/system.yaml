@@ -35,7 +35,7 @@ pipeline:
       action: storage:copy
       expand: true
       source:
-        URL: config/aws
+        URL: config/lambda
       dest:
         URL: $awsConfigURL
         credentials: $awsCredentials

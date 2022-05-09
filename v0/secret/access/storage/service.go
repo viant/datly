@@ -41,7 +41,7 @@ func (s *service) Access(ctx context.Context, request *access2.Request) ([]byte,
 	if url.Scheme(request.URL, "") == gs.Scheme {
 		return s.decryptWithGCPKMS(ctx, request, plainText)
 	}
-	//TODO aws kms
+	//TODO lambda kms
 	return []byte(plainText), nil
 }
 
