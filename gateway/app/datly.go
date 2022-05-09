@@ -1,6 +1,10 @@
 package main
 
 import (
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
+	_ "github.com/viant/afsc/gs"
+	_ "github.com/viant/bigquery"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"os"
 )

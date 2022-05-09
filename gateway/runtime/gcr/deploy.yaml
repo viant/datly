@@ -1,0 +1,112 @@
+init:
+  appPath: $WorkingDirectory(./../../..)
+  '!gcpCredentials': $params.authWith
+  gcp: ${secrets.$gcpCredentials}
+  projectID: $gcp.ProjectID
+  prefix: $Replace(${projectID},'-','_')
+  configBucket: ${prefix}_config
+  appName: Datly
+  configURL: 'gs://${configBucket}/${appName}/config.json'
+  Version: $Cat(${appPath}/gateway/runtime/docker/Version}
+  buildPath: /tmp/datly
+  target:
+    URL: ssh://127.0.0.1/
+    credentials: localhost
+
+pipeline:
+
+  setSdk:
+    action: sdk.set
+    target: $target
+    sdk: go:1.17
+
+  deploy:
+    buildBinary:
+      action: exec:run
+      target: $target
+      checkError: true
+      commands:
+        - mkdir -p $buildPath
+        - rm -rf $buildPath
+        - cp -rf ${appPath} $buildPath
+        - export CGO_ENABLED=0
+        - export GOOS=linux
+        - cd  $buildPath/gateway/app
+        - go build datly.go
+        - cp datly $buildPath
+
+    copyScript:
+      action: storage.copy
+      expand: true
+      source:
+        URL: ${appPath}/gateway/runtime/docker/Dockerfile
+      dest:
+        URL: $buildPath/Dockerfile
+
+    buildContainer:
+      action: docker:build
+      path: ${buildPath}/
+      nocache: true
+      tag:
+        image: datly
+        version: ${Version}
+
+    tagContainer:
+      version:
+        action: docker:tag
+        sourceTag:
+          image: datly
+          version: ${Version}
+        targetTag:
+          image: datly
+          username: $projectID
+          registry: us.gcr.io
+          version: ${Version}
+
+      latest:
+        action: docker:tag
+        sourceTag:
+          image: datly
+          version: ${Version}
+        targetTag:
+          image: datly
+          username: $projectID
+          registry: us.gcr.io
+          version: latest
+
+    publishContainer:
+      auth:
+        action: docker:login
+        repository: us.gcr.io/${projectID}
+        credentials: ${projectID}
+      datly:
+ # for dev purpose do not push the actual version
+#        version:
+#          action: docker:push
+#          tag:
+#            image: datly
+#            username: ${projectID}
+#            registry: us.gcr.io
+#            version: ${Version}
+        latest:
+          action: docker:push
+          tag:
+            image: datly
+            username: ${projectID}
+            registry: us.gcr.io
+            version: latest
+
+    cloudRun:
+      action: gcp/run:deploy
+      credentials: $gcpCredentials
+      '@name': datly
+      serviceAccountName: ${gcp.serviceAccount}
+      image: us.gcr.io/${projectID}/datly:latest
+      memoryMb: 512
+      env:
+        CONFIG_URL:  $configURL
+      #replace: true   #if service already exist, redeploy
+      #public: true
+      #replace: false
+      members:
+        - user:${env.USER}@vindicotech.com

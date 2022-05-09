@@ -1,0 +1,83 @@
+init:
+  appPath: $WorkingDirectory(..)
+  Version: $Cat(${appPath}/Version}
+  buildPath: /tmp/sitelist
+  target:
+    URL: ssh://127.0.0.1/
+    credentials: localhost
+
+pipeline:
+  deploy:
+    buildBinary:
+      action: exec:run
+      target: $target
+      checkError: true
+      secrets:
+        gitSecrets: git
+      commands:
+        - mkdir -p $buildPath
+        - rm -rf $buildPath
+        - cp -rf ${appPath} $buildPath
+        - cp ${appPath}/docker/Dockerfile ${buildPath}/app
+        - unset GOPATH
+        - export GO111MODULE=on
+        - export CGO_ENABLED=0
+        - export GOOS=linux
+        - cd  $buildPath/app
+        - go build endpoint.go
+        - cp endpoint app
+
+    buildContainer:
+      action: docker:build
+      path: ${buildPath}/app
+      nocache: true
+      tag:
+        image: sitelist
+        version: ${Version}
+
+
+    tagContainer:
+      sitelist:
+        version:
+          action: docker:tag
+          sourceTag:
+            image: sitelist
+            version: ${Version}
+          targetTag:
+            image: sitelist
+            username: viant-siteprofile
+            registry: us.gcr.io
+            version: ${Version}
+
+        latest:
+          action: docker:tag
+          sourceTag:
+            image: sitelist
+            version: ${Version}
+          targetTag:
+            image: sitelist
+            username: viant-siteprofile
+            registry: us.gcr.io
+            version: latest
+
+    publishContainer:
+      auth:
+        action: docker:login
+        repository: us.gcr.io/viant-siteprofile
+        credentials: viant-siteprofile
+      sitelist:
+        version:
+          action: docker:push
+          tag:
+            image: sitelist
+            username: viant-siteprofile
+            registry: us.gcr.io
+            version: ${Version}
+        latest:
+          action: docker:push
+          tag:
+            image: sitelist
+            username: viant-siteprofile
+            registry: us.gcr.io
+            version: latest
+

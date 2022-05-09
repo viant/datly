@@ -2,10 +2,7 @@ package standalone
 
 import (
 	"context"
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/jessevdk/go-flags"
-	_ "github.com/viant/afsc/gs"
-	_ "github.com/viant/bigquery"
 	"log"
 )
 

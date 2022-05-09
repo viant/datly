@@ -29,7 +29,7 @@ pipeline:
    CONFIG_URL: 'gs://${configBucket}/${appName}/config.json'
   timeout: 540s
   members:
-   - user:awitas@vindicotech.com
+   - user:${env.USER}@vindicotech.com
 
   availableMemoryMb: 256
   entryPoint: Handle
