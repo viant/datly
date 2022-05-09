@@ -33,9 +33,11 @@ func newValue(p reflect.Type) interface{} {
 	}
 	result := reflect.New(p)
 
+	ptr := xunsafe.ValuePointer(&result)
 	//initialise pointers
+	//if struct has one filed, go returns value of the first field, if pointer it would return nil
+	//	//to workaround we initialise value of the struct
 	for i := 0; i < p.NumField(); i++ {
-		ptr := xunsafe.ValuePointer(&result)
 		field := p.Field(i)
 		if field.Type.Kind() == reflect.Ptr {
 			newValue := reflect.New(field.Type.Elem()).Interface()
@@ -43,18 +45,6 @@ func newValue(p reflect.Type) interface{} {
 			xField.SetValue(ptr, newValue)
 		}
 	}
-	//if p.NumField() == 1 { //if struct has one filed, go returns value of the first field, if pointer it would return nil
-	//	//to workaround we initialise value of the struct
-	//	ptr := xunsafe.ValuePointer(&result)
-	//	field := p.Field(0)
-	//	xField := xunsafe.NewField(field)
-	//	if field.Type.Kind() == reflect.Ptr {
-	//		newValue := reflect.New(field.Type.Elem()).Interface()
-	//		xField.SetValue(ptr, newValue)
-	//	} else {
-	//		xField.SetValue(ptr, reflect.New(field.Type).Elem().Interface())
-	//	}
-	//}
 	ret := result.Elem().Interface()
 	return ret
 }

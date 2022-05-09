@@ -1,19 +1,21 @@
-* Documentation 
+
+* Output (style , JSON encode,case format, cardinality)
+    * more then one view in out output nice to have for now
+  
+* In gateway
+    - Add to resource/config logger setting to inform about long running querties 
+    - Add CORS
+    - Add Compression
+    - Add Caching with (cloud storage) 
+    - Add Cloud Storage redirection if size to large
+
+    - Add Lambda/API GW app + deployment AW, Google Store AFS Presing URL
+
+
+* Documentation
 * Utility (rule, struct, relation generation etc ...)
-* Update Gmetric version
 * open API documentation style
-
-
-* Endpoint integration (paths/lambda/CF/standalon/micro service/reset service, etc ..)
-* Caching 
+* Caching
 * Patch/Create/Update
 
 * Add $WHERE_CRITERIA ?
-
-* In gateway
-    - Add CORS
-    - Add Compression
-    - Add Cloud Storage redirection if size to large
-    - Add Caching with (cloud storage)
-    - Add Lambda/API GW app + deployment
-    - Add to resource/config logger setting to inform about long running querties

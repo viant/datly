@@ -33,7 +33,7 @@ type (
 		String(raw string) (string, error)
 	}
 
-	ValueTransformer interface {
+	Codec interface {
 		Value(ctx context.Context, raw string) (interface{}, error)
 	}
 

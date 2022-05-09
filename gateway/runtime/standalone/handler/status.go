@@ -42,6 +42,7 @@ func NewStatus(version string, meta *meta.Config) http.Handler {
 	handler := &status{}
 	handler.info.Version = version
 	handler.info.StartTime = time.Now()
+	handler.info.Status = "UP"
 	handler.meta = meta
 	return handler
 }

@@ -40,6 +40,7 @@ type (
 		Name string
 	}
 
+	//Do we really need it ?
 	RawVisitorFn func(raw string) (string, error)
 	RawVisitor   struct {
 		Name       string
@@ -50,8 +51,8 @@ type (
 	ValueSetterFn  func(field *xunsafe.Field, parentPtr unsafe.Pointer, value interface{}) error
 	Codec          struct {
 		Name         string
-		_visitorFn   ValueVisitorFn
-		_valueSetter ValueSetterFn
+		_visitorFn   ValueVisitorFn //shall rename to codec ?
+		_valueSetter ValueSetterFn  //do we need  it ?
 	}
 )
 
@@ -62,7 +63,7 @@ func (v *Codec) Init(resource *Resource, paramType reflect.Type) error {
 	}
 
 	switch actual := vVisitor.Visitor().(type) {
-	case visitor.ValueTransformer:
+	case visitor.Codec:
 		v._visitorFn = actual.Value
 		v.initValueSetter(paramType)
 		return nil

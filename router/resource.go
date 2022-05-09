@@ -12,24 +12,37 @@ import (
 
 type (
 	Resource struct {
-		initialised bool
-		APIURI      string
-		SourceURL   string
-		With        []string //list of resource to inherit from
-		Routes      Routes
-		Resource    *data.Resource
-		_visitors   visitor.Visitors
-		Compression *Compression
-		Redirect    *Redirect
+		initialised      bool
+		APIURI           string
+		SourceURL        string
+		With             []string //list of resource to inherit from
+		Routes           Routes
+		Resource         *data.Resource
+		_visitors        visitor.Visitors
+		Compression      *Compression
+		Redirect         *Redirect
+		Cache            *Cache
+		Logger           *Logger //connect, dataview, time, SQL with params if exceeded time
+		EnableCORSHeader bool    //TODO github.com/viant/datly/v0/app/aws/bridge/cors.go
+
+	}
+
+	Cache struct {
+		TimeToLiveMs int
+		StorageURL   string
+	}
+
+	Logger struct {
+		MinExecutionMs int
 	}
 
 	Compression struct {
-		MinSizeKb int
+		MinSizeKb int //github.com/viant/datly/v0/app/aws/lambda/compress.go
 	}
 
 	Redirect struct {
-		Bucket    string
-		MinSizeKb int
+		StorageURL string ///github.com/viant/datly/v0/app/aws/lambda/proxy.go
+		MinSizeKb  int
 	}
 )
 
