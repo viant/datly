@@ -58,11 +58,11 @@ type (
 	//Constraints configure what can be selected by Selector
 	//For each field, default value is `false`
 	Constraints struct {
-		Criteria          bool     `json:",omitempty"`
-		OrderBy           bool     `json:",omitempty"`
-		Limit             bool     `json:",omitempty"`
-		Offset            bool     `json:",omitempty"`
-		FilterableColumns []string `json:",omitempty"`
+		Criteria          bool
+		OrderBy           bool
+		Limit             bool
+		Offset            bool
+		FilterableColumns []string
 	}
 
 	Batch struct {
