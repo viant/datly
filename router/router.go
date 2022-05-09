@@ -85,6 +85,10 @@ func (i *Index) ViewByPrefix(prefix string) (*data.View, error) {
 	return view, nil
 }
 
+func (r *Router) View(name string) (*data.View, error) {
+	return r.resource.Resource.View(name)
+}
+
 func (r *Router) Handle(response http.ResponseWriter, request *http.Request) error {
 	if err := r.serviceRouter.Route(response, request); err != nil {
 		return err

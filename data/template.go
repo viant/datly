@@ -25,12 +25,12 @@ const (
 
 type (
 	Template struct {
-		Source string
+		Source string `json:",omitempty"`
 
-		Schema         *Schema
-		PresenceSchema *Schema
+		Schema         *Schema `json:",omitempty"`
+		PresenceSchema *Schema `json:",omitempty"`
 
-		Parameters []*Parameter
+		Parameters []*Parameter `json:",omitempty"`
 
 		criteriaEvaluator *Evaluator
 		sqlEvaluator      *Evaluator

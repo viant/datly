@@ -36,6 +36,19 @@ type Service struct {
 	metrics              *gmetric.Service
 }
 
+func (r *Service) View(location string) (*data.View, error) {
+	URI := strings.ReplaceAll(location, ".", "/")
+	router, err := r.match(URI)
+	if err != nil {
+		return nil, err
+	}
+	name := URI
+	if index := strings.LastIndex(name, "/"); index != -1 {
+		name = name[index+1:]
+	}
+	return router.View(name)
+}
+
 func (r *Service) Handle(writer http.ResponseWriter, request *http.Request) {
 	err := r.handle(writer, request)
 	if err != nil {

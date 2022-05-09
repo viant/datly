@@ -11,7 +11,7 @@ import (
 //Connector represents database/sql named connection config
 type Connector struct {
 	shared.Reference
-	Secret *scy.Resource
+	Secret *scy.Resource `json:",omitempty"`
 	Name   string
 	Driver string
 	DSN    string

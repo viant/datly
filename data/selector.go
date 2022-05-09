@@ -3,18 +3,18 @@ package data
 //Selector allows customizing data fetched from Database
 type (
 	Selector struct {
-		Columns      []string
-		OrderBy      string
-		Offset       int
-		Limit        int
-		Parameters   ParamState
+		Columns      []string   `json:",omitempty"`
+		OrderBy      string     `json:",omitempty"`
+		Offset       int        `json:",omitempty"`
+		Limit        int        `json:",omitempty"`
+		Parameters   ParamState `json:",omitempty"`
 		_columnNames map[string]bool
-		Criteria     string
+		Criteria     string `json:",omitempty"`
 	}
 
 	ParamState struct {
-		Values interface{}
-		Has    interface{}
+		Values interface{} `json:",omitempty"`
+		Has    interface{} `json:",omitempty"`
 	}
 )
 

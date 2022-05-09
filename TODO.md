@@ -10,16 +10,10 @@
 
 * Add $WHERE_CRITERIA ?
 
-
-* In Routes
-    - add gmetrics
-
 * In gateway
-    - Add Gmetics
     - Add CORS
     - Add Compression
-    - Add Cloud Storage Redirection
+    - Add Cloud Storage redirection if size to large
     - Add Caching with (cloud storage)
     - Add Lambda/API GW app + deployment
     - Add to resource/config logger setting to inform about long running querties
-    - Add cloud run entry point

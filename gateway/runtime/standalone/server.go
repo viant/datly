@@ -49,6 +49,7 @@ func New(config *Config) (*Server, error) {
 	mux.Handle(config.Meta.MetricURI, gmetric.NewHandler(config.Meta.MetricURI, metric))
 	mux.Handle(config.Meta.ConfigURI, handler.NewConfig(config.Config, &config.Endpoint, &config.Meta))
 	mux.Handle(config.Meta.StatusURI, handler.NewStatus(config.Version, &config.Meta))
+	mux.Handle(config.Meta.ViewURI, handler.NewView(config.Meta.ViewURI, &config.Meta, service.View))
 
 	//actual datly handler
 	mux.HandleFunc(config.Config.APIPrefix, service.Handle)

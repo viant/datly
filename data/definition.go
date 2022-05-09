@@ -10,17 +10,17 @@ const pkgPath = "github.com/viant/datly/data"
 
 type (
 	Definition struct {
-		Name   string
+		Name   string `json:",omitempty"`
 		Fields []*Field
 		*Schema
 	}
 
 	Field struct {
-		Name   string
-		Embed  bool
-		Column string
-		Schema *Schema
-		Fields []*Field
+		Name   string   `json:",omitempty"`
+		Embed  bool     `json:",omitempty"`
+		Column string   `json:",omitempty"`
+		Schema *Schema  `json:",omitempty"`
+		Fields []*Field `json:",omitempty"`
 	}
 )
 

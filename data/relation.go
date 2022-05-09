@@ -18,14 +18,14 @@ type (
 	//Parent View represents Employee{AccountId: int}, Relation represents Account{Id: int}
 	//We want to create result like:  Employee{Account{Id:int}}
 	Relation struct {
-		Name string
-		Of   *ReferenceView
+		Name string         `json:",omitempty"`
+		Of   *ReferenceView `json:",omitempty"`
 
-		Cardinality   Cardinality //One, or Many
-		Column        string      //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
-		ColumnAlias   string      //Represents column alias, can be specified if $shared.Criteria / $shared.ColumnInPosition is inside the "from" statement
-		Holder        string      //Represents column created due to the merging. In our example it would be Employee#Account
-		IncludeColumn bool        //tells if Column field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId field
+		Cardinality   Cardinality `json:",omitempty"` //One, or Many
+		Column        string      `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
+		ColumnAlias   string      `json:",omitempty"` //Represents column alias, can be specified if $shared.Criteria / $shared.ColumnInPosition is inside the "from" statement
+		Holder        string      `json:",omitempty"` //Represents column created due to the merging. In our example it would be Employee#Account
+		IncludeColumn bool        `json:",omitempty"` //tells if Column field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId field
 
 		hasColumnField bool
 		holderField    *xunsafe.Field

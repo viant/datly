@@ -1,12 +1,14 @@
 package meta
 
 const (
-	//MetricURI represents default metric URI
-	MetricURI = "/v1/api/metric/"
-	//StatusURI represents status URI
-	StatusURI = "/v1/api/status"
-	//ConfigURI represents default config URI
-	ConfigURI = "/v1/api/config"
+	//MetricURI represents default metric URIPrefix
+	MetricURI = "/v1/api/meta/metric/"
+	//StatusURI represents status URIPrefix
+	StatusURI = "/v1/api/meta/status"
+	//ConfigURI represents default config URIPrefix
+	ConfigURI = "/v1/api/meta/config"
+	//ViewURI represents default config view URIPrefix
+	ViewURI = "/v1/api/meta/view/"
 )
 
 //Config represents meta config
@@ -15,6 +17,7 @@ type Config struct {
 	MetricURI     string
 	ConfigURI     string
 	StatusURI     string
+	ViewURI       string
 	AllowedSubnet []string
 }
 
@@ -28,5 +31,8 @@ func (m *Config) Init() {
 	}
 	if m.ConfigURI == "" {
 		m.ConfigURI = ConfigURI
+	}
+	if m.ViewURI == "" {
+		m.ViewURI = ViewURI
 	}
 }

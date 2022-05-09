@@ -8,7 +8,7 @@ import (
 
 //Schema represents View as Go type.
 type Schema struct {
-	Name string
+	Name string `json:",omitempty"`
 
 	compType  reflect.Type
 	sliceType reflect.Type
@@ -17,8 +17,8 @@ type Schema struct {
 	xType *xunsafe.Type
 
 	autoGen   bool
-	OmitEmpty bool
-	DataType  string
+	OmitEmpty bool   `json:",omitempty"`
+	DataType  string `json:",omitempty"`
 }
 
 func NewSchema(compType reflect.Type) *Schema {
