@@ -1,8 +1,8 @@
 
 
-* Output (style , JSON encode,case format)
+* Output (style=basic|comprehensive), timeLayout, on Field, default (like ommit empty)
+      * _fields update impt without omitempty
     * more then one view in out output nice to have for now
-    * _fields update impt without omitempty
  
 * In gateway
     
@@ -11,11 +11,10 @@
     - Add Caching with (cloud storage) 
     - Add Cloud Storage redirection if size to large
 
+* OpernAPI handler/Swagger
 
 * Documentation ()
-* open API documentation style
 * Utility (rule, struct, relation generation etc ...)
 * 
+* 
 * Patch/Create/Update
-
-* Add $WHERE_CRITERIA ?
