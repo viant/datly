@@ -16,16 +16,14 @@ type Schema struct {
 	slice *xunsafe.Slice
 	xType *xunsafe.Type
 
-	autoGen   bool
-	OmitEmpty bool   `json:",omitempty"`
-	DataType  string `json:",omitempty"`
+	autoGen  bool
+	DataType string `json:",omitempty"`
 }
 
 func NewSchema(compType reflect.Type) *Schema {
 	result := &Schema{
-		Name:      "",
-		autoGen:   false,
-		OmitEmpty: false,
+		Name:    "",
+		autoGen: false,
 	}
 
 	result.setType(compType)
@@ -81,11 +79,6 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 		}
 	}
 
-	omitEmptyTag := ""
-	if c.OmitEmpty {
-		omitEmptyTag = `json:",omitempty" `
-	}
-
 	fieldsLen := len(columns)
 	structFields := make([]reflect.StructField, 0)
 	for i := 0; i < fieldsLen; i++ {
@@ -98,7 +91,7 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 			Name:  structFieldName,
 			Type:  columns[i].rType,
 			Index: []int{i},
-			Tag:   reflect.StructTag(omitEmptyTag + `sqlx:"name="` + columns[i].Name + "`"),
+			Tag:   reflect.StructTag(`sqlx:"name="` + columns[i].Name + "`"),
 		})
 	}
 
@@ -123,7 +116,6 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 		structFields = append(structFields, reflect.StructField{
 			Name: rel.Holder,
 			Type: rType,
-			Tag:  reflect.StructTag(omitEmptyTag),
 		})
 	}
 
@@ -157,10 +149,9 @@ func (c *Schema) XType() *xunsafe.Type {
 
 func (c *Schema) copy() *Schema {
 	newSchema := &Schema{
-		Name:      c.Name,
-		autoGen:   c.autoGen,
-		OmitEmpty: c.OmitEmpty,
-		DataType:  c.DataType,
+		Name:     c.Name,
+		autoGen:  c.autoGen,
+		DataType: c.DataType,
 	}
 
 	newSchema.setType(c.compType)

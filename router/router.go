@@ -11,10 +11,23 @@ import (
 	"github.com/viant/toolbox"
 	"net/http"
 	"reflect"
+	"strconv"
+	"strings"
 	"unsafe"
 )
 
 type viewHandler func(response http.ResponseWriter, request *http.Request)
+
+const (
+	AllowOriginHeader      = "Access-Control-Allow-Origin"
+	AllowHeadersHeader     = "Access-Control-Allow-Headers"
+	AllowMethodsHeader     = "Access-Control-Allow-Methods"
+	AllowCredentialsHeader = "Access-Control-Allow-Credentials"
+	ExposeHeadersHeader    = "Access-Control-Expose-Headers"
+	MaxAgeHeader           = "Access-Control-Max-Age"
+
+	Separator = " "
+)
 
 type (
 	Router struct {
@@ -28,11 +41,21 @@ type (
 		URI     string
 		Method  string
 		View    *data.View
+		Cors    *Cors
 		Output
 
 		Index Index
 
 		_resource *data.Resource
+	}
+
+	Cors struct {
+		AllowCredentials *bool
+		AllowHeaders     *[]string
+		AllowMethods     *[]string
+		AllowOrigins     *[]string
+		ExposeHeaders    *[]string
+		MaxAge           *int64
 	}
 
 	Output struct {
@@ -47,6 +70,36 @@ type (
 		//TODO make if output key non empty pass Status, and Error info in the response
 	}
 )
+
+func (c *Cors) inherit(cors *Cors) {
+	if cors == nil {
+		return
+	}
+
+	if c.ExposeHeaders == nil {
+		c.ExposeHeaders = cors.ExposeHeaders
+	}
+
+	if c.AllowMethods == nil {
+		c.AllowMethods = cors.AllowMethods
+	}
+
+	if c.AllowHeaders == nil {
+		c.AllowHeaders = cors.AllowHeaders
+	}
+
+	if c.AllowOrigins == nil {
+		c.AllowOrigins = cors.AllowOrigins
+	}
+
+	if c.AllowCredentials == nil {
+		c.AllowCredentials = cors.AllowCredentials
+	}
+
+	if c.MaxAge == nil {
+		c.MaxAge = cors.MaxAge
+	}
+}
 
 func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if err := r.View.Init(ctx, resource.Resource); err != nil {
@@ -66,6 +119,8 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if err := r.initCaser(); err != nil {
 		return err
 	}
+
+	r.initCors(resource)
 
 	return nil
 }
@@ -123,6 +178,15 @@ func (r *Route) initCaser() error {
 	return nil
 }
 
+func (r *Route) initCors(resource *Resource) {
+	if r.Cors == nil {
+		r.Cors = resource.Cors
+		return
+	}
+
+	r.Cors.inherit(resource.Cors)
+}
+
 func (i *Index) ViewByPrefix(prefix string) (*data.View, error) {
 	view, ok := i._viewsByPrefix[prefix]
 	if !ok {
@@ -163,17 +227,60 @@ func (r *Router) Init(routes Routes) {
 }
 
 func (r *Router) initServiceRouter(routes Routes) {
-	routings := make([]toolbox.ServiceRouting, len(routes))
+	routings := make([]toolbox.ServiceRouting, 0)
+
 	for i, route := range routes {
-		routings[i] = toolbox.ServiceRouting{
+		routings = append(routings, toolbox.ServiceRouting{
 			URI:        route.URI,
 			Handler:    r.viewHandler(routes[i]),
 			HTTPMethod: route.Method,
 			Parameters: []string{"@httpResponseWriter", "@httpRequest"},
+		})
+
+		if route.Cors != nil {
+			routings = append(routings, corsRouting(route))
 		}
 	}
 
 	r.serviceRouter = toolbox.NewServiceRouter(routings...)
+}
+
+func corsRouting(route *Route) toolbox.ServiceRouting {
+	return toolbox.ServiceRouting{
+		URI:        route.URI,
+		Handler:    corsHandler(route.Cors),
+		HTTPMethod: http.MethodOptions,
+		Parameters: []string{"@httpResponseWriter"},
+	}
+}
+
+func corsHandler(cors *Cors) func(writer http.ResponseWriter) {
+	return func(writer http.ResponseWriter) {
+		if cors.AllowOrigins != nil {
+			writer.Header().Set(AllowOriginHeader, strings.Join(*cors.AllowOrigins, Separator))
+		}
+
+		if cors.AllowMethods != nil {
+			writer.Header().Set(AllowMethodsHeader, strings.Join(*cors.AllowMethods, Separator))
+		}
+
+		if cors.AllowHeaders != nil {
+			writer.Header().Set(AllowHeadersHeader, strings.Join(*cors.AllowHeaders, Separator))
+		}
+
+		if cors.AllowCredentials != nil {
+			writer.Header().Set(AllowCredentialsHeader, strconv.FormatBool(*cors.AllowCredentials))
+		}
+
+		if cors.MaxAge != nil {
+			writer.Header().Set(MaxAgeHeader, strconv.Itoa(int(*cors.MaxAge)))
+		}
+
+		if cors.ExposeHeaders != nil {
+			writer.Header().Set(ExposeHeadersHeader, strings.Join(*cors.ExposeHeaders, Separator))
+		}
+
+	}
 }
 
 func (r *Router) Serve(serverPath string) error {

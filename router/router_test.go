@@ -38,6 +38,8 @@ type testcase struct {
 	visitors    visitor.Visitors
 	types       data.Types
 	headers     http.Header
+
+	corsHeaders map[string]string
 }
 
 type (
@@ -313,6 +315,21 @@ func TestRouter(t *testing.T) {
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
 			},
 		},
+		{
+			description: "CORS",
+			resourceURI: "009_cors",
+			uri:         "/api/events",
+			method:      http.MethodGet,
+			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
+			corsHeaders: map[string]string{
+				router.AllowCredentialsHeader: "true",
+				router.AllowHeadersHeader:     "Header-1 Header-2",
+				router.AllowOriginHeader:      "*",
+				router.ExposeHeadersHeader:    "Header-Exposed-1 Header-Exposed-2",
+				router.MaxAgeHeader:           "10500",
+				router.AllowMethodsHeader:     "POST PATCH",
+			},
+		},
 	}
 
 	//for i, testcase := range testcases[len(testcases)-1:] {
@@ -322,6 +339,18 @@ func TestRouter(t *testing.T) {
 		routingHandler, ok := testcase.init(t, testUri)
 		if !ok {
 			continue
+		}
+
+		if testcase.corsHeaders != nil {
+			corsRequest := httptest.NewRequest(http.MethodOptions, testcase.uri, nil)
+			corsWriter := httptest.NewRecorder()
+			err := routingHandler.Handle(corsWriter, corsRequest)
+			assert.Nil(t, err, testcase.description)
+
+			headers := corsWriter.Header()
+			for headerName, headerValue := range testcase.corsHeaders {
+				assert.Equal(t, headerValue, headers.Get(headerName), testcase.description)
+			}
 		}
 
 		httpRequest := httptest.NewRequest(testcase.method, testcase.uri, nil)

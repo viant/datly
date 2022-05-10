@@ -12,18 +12,18 @@ import (
 
 type (
 	Resource struct {
-		initialised      bool
-		APIURI           string
-		SourceURL        string
-		With             []string //list of resource to inherit from
-		Routes           Routes
-		Resource         *data.Resource
-		_visitors        visitor.Visitors
-		Compression      *Compression
-		Redirect         *Redirect
-		Cache            *Cache
-		Logger           *Logger //connect, dataview, time, SQL with params if exceeded time
-		EnableCORSHeader bool    //TODO github.com/viant/datly/v0/app/lambda/bridge/cors.go
+		initialised bool
+		APIURI      string
+		SourceURL   string
+		With        []string //list of resource to inherit from
+		Routes      Routes
+		Resource    *data.Resource
+		_visitors   visitor.Visitors
+		Compression *Compression
+		Redirect    *Redirect
+		Cache       *Cache
+		Logger      *Logger //connect, dataview, time, SQL with params if exceeded time
+		Cors        *Cors   //TODO github.com/viant/datly/v0/app/lambda/bridge/cors.go
 		/*
 			See https://cloud.google.com/functions/docs/writing/http#writing_http_content-go
 

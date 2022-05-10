@@ -1,0 +1,33 @@
+Routes:
+  - URI: "/api/events"
+    Method: GET
+    View:
+      Ref: events_ref
+      Name: events
+
+Resource:
+  Views:
+    - Name: events_ref
+      Connector:
+        Ref: db
+      Table: events
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"
+
+Cors:
+  AllowCredentials: true
+  AllowHeaders:
+    - 'Header-1'
+    - 'Header-2'
+  AllowMethods:
+    - POST
+    - PATCH
+  AllowOrigins:
+    - '*'
+  ExposeHeaders:
+    - 'Header-Exposed-1'
+    - 'Header-Exposed-2'
+  MaxAge: 10500
