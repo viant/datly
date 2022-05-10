@@ -1,0 +1,35 @@
+init:
+  appPath: $Pwd(./../..)
+  awsCredentials: aws-e2e
+  projectID: viant-e2e
+  configBucket: viant-e2e-config
+  appName: Datly
+
+pipeline:
+  info:
+    action: print
+    message: $appPath
+  uploadRoutes:
+    action: storage:copy
+    expand: true
+    source:
+      URL: ${appPath}/gateway/example/routes/
+    dest:
+      URL: s3://${configBucket}/${appName}/routes/
+      credentials: $awsCredentials
+  upload:
+    action: storage:copy
+    expand: true
+    source:
+      URL: ${appPath}/gateway/example/resources/
+    dest:
+      URL: s3://${configBucket}/${appName}/resources/
+      credentials: $awsCredentials
+  uploadConfig:
+    action: storage:copy
+    expand: true
+    source:
+      URL: ${appPath}/gateway/runtime/lambda/resource/config.json
+    dest:
+      URL: s3://${configBucket}/${appName}/config.json
+      credentials: $awsCredentials

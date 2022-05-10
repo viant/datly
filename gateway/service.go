@@ -8,6 +8,7 @@ import (
 	"github.com/viant/afs/file"
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/resource"
+	"github.com/viant/datly/auth/secret"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/visitor"
@@ -263,7 +264,6 @@ func New(ctx context.Context, config *Config, visitors visitor.Visitors, types d
 		return nil, err
 	}
 	URL, _ := furl.Split(config.RouteURL, file.Scheme)
-	parentURL, _ := furl.Split(URL, file.Scheme)
 	srv := &Service{
 		visitors:             visitors,
 		metrics:              metrics,
@@ -271,11 +271,27 @@ func New(ctx context.Context, config *Config, visitors visitor.Visitors, types d
 		Config:               config,
 		mux:                  sync.RWMutex{},
 		fs:                   afs.New(),
-		cfs:                  cache.Singleton(parentURL),
+		cfs:                  cache.Singleton(URL),
 		dataResources:        map[string]*data.Resource{},
 		routeResourceTracker: resource.New(config.RouteURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
 		dataResourceTracker:  resource.New(config.ResourceURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
 	}
+	if err = initSecrets(ctx, config); err != nil {
+		return nil, err
+	}
 	err = srv.reloadResourceIfNeeded(ctx)
 	return srv, err
+}
+
+func initSecrets(ctx context.Context, config *Config) error {
+	if len(config.Secrets) == 0 {
+		return nil
+	}
+	secrets := secret.New()
+	for _, sec := range config.Secrets {
+		if err := secrets.Apply(ctx, sec); err != nil {
+			return err
+		}
+	}
+	return nil
 }

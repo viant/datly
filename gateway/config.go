@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/datly/auth/secret"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"strings"
@@ -16,6 +17,7 @@ type Config struct {
 	ResourceURL     string
 	UseCacheFS      bool
 	SyncFrequencyMs int
+	Secrets         []*secret.Resource
 }
 
 func (c *Config) Validate() error {

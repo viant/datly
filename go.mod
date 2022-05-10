@@ -3,6 +3,7 @@ module github.com/viant/datly
 go 1.12
 
 require (
+	cloud.google.com/go/secretmanager v1.4.0 // indirect
 	github.com/MichaelS11/go-cql-driver v0.0.0-20190914174813-cf3b3196aa43
 	github.com/aerospike/aerospike-client-go v2.7.0+incompatible // indirect
 	github.com/aws/aws-lambda-go v1.31.0
@@ -17,8 +18,8 @@ require (
 	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.1
-	github.com/viant/afs v1.16.0
-	github.com/viant/afsc v1.3.0
+	github.com/viant/afs v1.16.1-0.20220510031408-8a85f167c87d
+	github.com/viant/afsc v1.7.3-0.20220223021232-368524419ac5
 	github.com/viant/asc v0.5.0
 	github.com/viant/assertly v0.9.1-0.20220308232634-4242424ccaf5
 	github.com/viant/bgc v0.8.0

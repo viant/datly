@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func NewResponse(writer proxy.Writer) *events.LambdaFunctionURLResponse {
+func NewResponse(writer *proxy.Writer) *events.LambdaFunctionURLResponse {
 	response := &events.LambdaFunctionURLResponse{}
 	response.Headers = map[string]string{}
 	for k, v := range writer.HeaderMap {
@@ -15,9 +15,6 @@ func NewResponse(writer proxy.Writer) *events.LambdaFunctionURLResponse {
 
 	//TODO check Content-Type to determin response type and redo it, with Content-Length
 	response.Body = writer.Body.String()
-
 	response.StatusCode = writer.Code
 	return response
 }
-
-

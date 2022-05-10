@@ -197,7 +197,7 @@ func addViewParam(ctx context.Context, parent *data.View, paramsPtr, presencePtr
 
 func convertAndSet(ctx context.Context, paramPtr, presencePtr unsafe.Pointer, parameter *data.Parameter, rawValue string) error {
 	if parameter.IsRequired() && rawValue == "" {
-		return fmt.Errorf("query parameter %v is required", parameter.Name)
+		return fmt.Errorf("parameter %v is required", parameter.Name)
 	}
 
 	if rawValue == "" {

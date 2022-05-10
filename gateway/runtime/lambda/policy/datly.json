@@ -8,7 +8,8 @@
         "ssm:*",
         "kms:*",
         "s3:*",
-        "lambda:*"
+        "lambda:*",
+        "secretsmanager:*"
       ],
       "Resource": "*"
     }
