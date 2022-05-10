@@ -2,10 +2,11 @@ package router
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/reader"
+	"github.com/viant/datly/router/marshal"
+	cusJson "github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
 	"net/http"
@@ -35,9 +36,12 @@ type (
 	}
 
 	Output struct {
-		//TODO rename ReturnSingle to Cardinality
-		ReturnSingle bool
-		Style        string //enum Basic, Comprehensice , Status: ok, error, + error with structre
+		Cardinality data.Cardinality
+		CaseFormat  data.CaseFormat
+		OmitEmpty   bool
+
+		_marshaller *cusJson.Marshaller
+		Style       string //enum Basic, Comprehensice , Status: ok, error, + error with structre
 		//TODO add CaseFormat attribute to control output
 		//TODO add output key
 		//TODO make if output key non empty pass Status, and Error info in the response
@@ -52,6 +56,14 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 	if err := r.Index.Init(r.View); err != nil {
+		return err
+	}
+
+	if err := r.initCardinality(); err != nil {
+		return err
+	}
+
+	if err := r.initCaser(); err != nil {
 		return err
 	}
 
@@ -73,6 +85,41 @@ func (r *Route) initVisitor(resource *Resource) error {
 		r.Visitor.Inherit(refVisitor)
 	}
 
+	return nil
+}
+
+func (r *Route) initCardinality() error {
+	switch r.Cardinality {
+	case data.One, data.Many:
+		return nil
+	case "":
+		r.Cardinality = data.Many
+		return nil
+	default:
+		return fmt.Errorf("unsupported cardinality type %v\n", r.Cardinality)
+	}
+}
+
+func (r *Route) initCaser() error {
+	if r.CaseFormat == "" {
+		r.CaseFormat = data.UpperCamel
+	}
+
+	caser, err := r.CaseFormat.Caser()
+	if err != nil {
+		return err
+	}
+
+	marshaller, err := cusJson.New(r.View.Schema.Type(), marshal.Default{
+		OmitEmpty:  r.OmitEmpty,
+		CaseFormat: caser,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	r._marshaller = marshaller
 	return nil
 }
 
@@ -221,8 +268,8 @@ func (r *Router) writeResponse(route *Route, request *http.Request, response htt
 }
 
 func (r *Router) result(route *Route, request *http.Request, destValue reflect.Value) ([]byte, int, error) {
-	if !route.ReturnSingle {
-		asBytes, err := json.Marshal(destValue.Elem().Interface())
+	if route.Cardinality == data.Many {
+		asBytes, err := route._marshaller.Marshal(destValue.Elem().Interface())
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
@@ -236,7 +283,7 @@ func (r *Router) result(route *Route, request *http.Request, destValue reflect.V
 	case 0:
 		return nil, http.StatusNotFound, nil
 	case 1:
-		asBytes, err := json.Marshal(route.View.Schema.Slice().ValuePointerAt(slicePtr, 0))
+		asBytes, err := route._marshaller.Marshal(route.View.Schema.Slice().ValueAt(slicePtr, 0))
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}

@@ -1,5 +1,6 @@
 
-* Output (style , JSON encode,case format, cardinality)
+
+* Output (style , JSON encode,case format)
     * more then one view in out output nice to have for now
   
 * In gateway
