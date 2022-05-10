@@ -23,14 +23,13 @@ func (n *identity) Match(cursor *parsly.Cursor) (matched int) {
 		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '_':
 			matched++
 			continue
-		case '\n', '\r', ' ':
-			return matched
 		default:
 			if IsLetter(input[i]) {
 				matched++
 				continue
 			}
-			return 0
+
+			return matched
 		}
 	}
 

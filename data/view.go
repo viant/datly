@@ -20,11 +20,12 @@ type (
 	//View represents a data View
 	View struct {
 		shared.Reference
-		Connector *config.Connector
-		Name      string
-		Alias     string `json:",omitempty"`
-		Table     string `json:",omitempty"`
-		From      string `json:",omitempty"`
+		Connector  *config.Connector
+		Standalone bool `json:",omitempty"`
+		Name       string
+		Alias      string `json:",omitempty"`
+		Table      string `json:",omitempty"`
+		From       string `json:",omitempty"`
 
 		Exclude              []string   `json:",omitempty"`
 		Columns              []*Column  `json:",omitempty"`
@@ -161,7 +162,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 
 	v.ensureSelectorConstraints()
 
-	if v.Name == v.Ref {
+	if v.Name == v.Ref && !v.Standalone {
 		return fmt.Errorf("view name and ref cannot be the same")
 	}
 

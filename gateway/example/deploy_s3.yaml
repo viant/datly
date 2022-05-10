@@ -21,9 +21,9 @@ pipeline:
     action: storage:copy
     expand: true
     source:
-      URL: ${appPath}/gateway/example/resources/
+      URL: ${appPath}/gateway/example/dependencies/
     dest:
-      URL: s3://${configBucket}/${appName}/resources/
+      URL: s3://${configBucket}/${appName}/dependencies/
       credentials: $awsCredentials
   uploadConfig:
     action: storage:copy

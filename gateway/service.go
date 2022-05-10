@@ -68,12 +68,14 @@ func (r *Service) handle(writer http.ResponseWriter, request *http.Request) erro
 	if strings.Contains(URI, "://") {
 		_, URI = furl.Base(URI, "https")
 	}
+
 	if request.URL == nil {
 		host := os.Getenv("FUNCTION_NAME")
 		if host == "" {
 			host = "localhost"
 		}
-		request.URL, _ = url.Parse("https://" + host + "/" + URI)
+		URL := "https://" + host + "/" + URI
+		request.URL, err = url.Parse(URL)
 	}
 	if index := strings.Index(URI, r.Config.APIPrefix); index != -1 {
 		URI = URI[index+len(r.Config.APIPrefix):]

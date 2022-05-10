@@ -24,7 +24,12 @@ pipeline:
     action: storage:copy
     expand: true
     source:
-      URL: ${appPath}/gateway/example/resources/
+      URL: ${appPath}/gateway/example/dependencies/
     dest:
-      URL: gs://${configBucket}/${appName}/resources/
+      URL: gs://${configBucket}/${appName}/dependencies/
       credentials: $gcpCredentials
+  deleteCache:
+    action: storage:remove
+    Assets:
+      - URL: gs://viant_e2e_config/Datly/_.cache
+        Credentials: $gcpCredentials

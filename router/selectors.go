@@ -83,7 +83,7 @@ func buildParameters(ctx context.Context, requestMetadata *RequestMetadata, sele
 		}
 
 		wg.Add(1)
-		go func(view *data.View) {
+		go func(view *data.View, requestMetadata *RequestMetadata) {
 			defer wg.Done()
 			selector := selectors.Lookup(view)
 			selector.Parameters.Init(view)
@@ -91,7 +91,7 @@ func buildParameters(ctx context.Context, requestMetadata *RequestMetadata, sele
 			if err := buildSelectorParameters(ctx, view, xunsafe.AsPointer(params.Values), xunsafe.AsPointer(params.Has), view.Template.Parameters, requestParams, requestMetadata); err != nil {
 				errors.Append(err)
 			}
-		}(view)
+		}(view, requestMetadata)
 	}
 
 	wg.Wait()

@@ -2,10 +2,11 @@
 
 * Output (style , JSON encode,case format)
     * more then one view in out output nice to have for now
-  
+    * _fields update impt without omitempty
+ 
 * In gateway
+    
     - Add to resource/config logger setting to inform about long running querties 
-    - Add CORS
     - Add Compression
     - Add Caching with (cloud storage) 
     - Add Cloud Storage redirection if size to large

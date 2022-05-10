@@ -1,10 +1,11 @@
 With:
   - acl
-  - site
 
 Routes:
   - URI: /v1/api/test/performance
     Method: GET
+    OmitEmpty: true
+    CaseFormat: lu
     View:
       Ref: performance
 

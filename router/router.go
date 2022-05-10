@@ -102,6 +102,7 @@ func (c *Cors) inherit(cors *Cors) {
 }
 
 func (r *Route) Init(ctx context.Context, resource *Resource) error {
+	r.View.Standalone = true
 	if r.View.Name == "" {
 		r.View.Name = r.View.Ref
 	}

@@ -58,7 +58,7 @@ func (r *Resources) GetMissing(snapshot map[string]time.Time) []string {
 	return missing
 }
 
-//NewResources creates a resources container
+//NewResources creates a dependencies container
 func NewResources() *Resources {
 	return &Resources{
 		mutex:    &sync.RWMutex{},

@@ -28,9 +28,9 @@ pipeline:
   environmentVariables:
    CONFIG_URL: 'gs://${configBucket}/${appName}/config.json'
   timeout: 540s
+  #public: true
   members:
    - user:${env.USER}@vindicotech.com
-
   availableMemoryMb: 256
   entryPoint: Handle
   runtime: go116

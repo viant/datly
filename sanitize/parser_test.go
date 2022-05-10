@@ -89,6 +89,12 @@ func TestNewParser(t *testing.T) {
 			criteria:    "column_name not is (null,'abc',null,'cdef')",
 			hasError:    true,
 		},
+		{
+			description: "equal",
+			criteria:    "campaignId = 321468",
+			hasError:    false,
+			expect:      `{"X":{"Name":"campaignId"},"Operator":"=","Y":{"Value":"321468","Kind":1}}`,
+		},
 	}
 
 	for _, useCase := range useCases {
