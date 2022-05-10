@@ -28,11 +28,3 @@ pipeline:
     dest:
       URL: gs://${configBucket}/${appName}/resources/
       credentials: $gcpCredentials
-  uploadConfig:
-    action: storage:copy
-    expand: true
-    source:
-      URL: ${appPath}/gateway/runtime/gcf/resource/config.json
-    dest:
-      URL: gs://${configBucket}/${appName}/config.json
-      credentials: $gcpCredentials

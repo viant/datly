@@ -10,13 +10,11 @@
     - Add Caching with (cloud storage) 
     - Add Cloud Storage redirection if size to large
 
-    - Add Lambda/API GW app + deployment AW, Google Store AFS Presing URL
 
-
-* Documentation
-* Utility (rule, struct, relation generation etc ...)
+* Documentation ()
 * open API documentation style
-* Caching
+* Utility (rule, struct, relation generation etc ...)
+* 
 * Patch/Create/Update
 
 * Add $WHERE_CRITERIA ?

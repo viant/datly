@@ -274,7 +274,7 @@ func New(ctx context.Context, config *Config, visitors visitor.Visitors, types d
 		cfs:                  cache.Singleton(URL),
 		dataResources:        map[string]*data.Resource{},
 		routeResourceTracker: resource.New(config.RouteURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
-		dataResourceTracker:  resource.New(config.ResourceURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
+		dataResourceTracker:  resource.New(config.DependencyURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
 	}
 	if err = initSecrets(ctx, config); err != nil {
 		return nil, err

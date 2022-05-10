@@ -14,7 +14,7 @@ import (
 type Config struct {
 	APIPrefix       string //like /v1/api/
 	RouteURL        string
-	ResourceURL     string
+	DependencyURL   string
 	UseCacheFS      bool
 	SyncFrequencyMs int
 	Secrets         []*secret.Resource

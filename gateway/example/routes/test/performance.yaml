@@ -1,23 +1,27 @@
 With:
   - acl
+  - site
 
 Routes:
   - URI: /v1/api/test/performance
     Method: GET
     View:
-      Ref: performanceView
-      Name: performance
-
+      Ref: performance
 
 Resource:
   Views:
-    - Name: performanceView
+    - Name: performance
       Connector:
         Ref: bq
       Table: performance
+      SelectorConstraints:
+        Criteria: true
+        FilterableColumns: ['*']
+        Limit: true
+        Offset: true
+        OrderBy: true
       Template:
         Parameters:
-          - Ref: Jwt
           - Ref: Acl
         Source: SELECT account_id,
                   date,
