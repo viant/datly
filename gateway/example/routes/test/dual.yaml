@@ -2,9 +2,7 @@ Routes:
   - URI: "/v1/api/test/dual"
     Method: GET
     View:
-      Ref: dual_view
-      Name: dual
-
+      Ref: dual
 
 Resource:
   Views:

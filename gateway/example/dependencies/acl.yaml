@@ -1,6 +1,6 @@
 
 Views:
-  - Name: acl_view_criteria
+  - Name: AclCriteria
     Connector:
       Ref: acl
     Table: acl_view_criteria
@@ -29,7 +29,7 @@ Parameters:
     Required: true
     In:
       Kind: data_view
-      Name: acl_view_criteria
+      Name: AclCriteria
     Schema:
       Name: ViewAcl
 
