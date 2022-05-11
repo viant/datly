@@ -6,7 +6,7 @@ Routes:
 
 Resource:
   Views:
-    - Name: dual_view
+    - Name: dual
       Connector:
         Ref: bq
       Table: dual
