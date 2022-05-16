@@ -97,6 +97,7 @@ func TestNewParser(t *testing.T) {
 		},
 	}
 
+	//for _, useCase := range useCases[len(useCases)-1:] {
 	for _, useCase := range useCases {
 		actual, err := Parse([]byte(useCase.criteria))
 		if useCase.hasError {

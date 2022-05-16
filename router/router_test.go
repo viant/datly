@@ -76,7 +76,6 @@ type event struct {
 
 //TODO: add testcases against sql injection
 func TestRouter(t *testing.T) {
-
 	testLocation := toolbox.CallerDirectory(3)
 	_ = toolbox.CreateDirIfNotExist(path.Join(testLocation, "router/testdata/db"))
 
@@ -125,7 +124,7 @@ func TestRouter(t *testing.T) {
 		{
 			description: "selectors | orderBy, criteria",
 			resourceURI: "002_selectors",
-			uri:         fmt.Sprintf("/api/events?%v=Id&%v=ev.ID%%20in%%20(1,100)", router.OrderBy, router.Criteria),
+			uri:         fmt.Sprintf("/api/events?%v=Id&%v=ev.(ID%%20in%%20(1,100))", router.OrderBy, router.Criteria),
 			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			method:      http.MethodGet,
 		},

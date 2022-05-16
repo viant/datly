@@ -25,8 +25,9 @@ const (
 
 type (
 	Template struct {
-		Source string `json:",omitempty"`
+		_view *View
 
+		Source         string  `json:",omitempty"`
 		Schema         *Schema `json:",omitempty"`
 		PresenceSchema *Schema `json:",omitempty"`
 
@@ -55,7 +56,9 @@ type (
 	}
 
 	ViewParam struct {
-		Name string
+		Name  string
+		Alias string
+		Table string
 	}
 )
 
@@ -64,6 +67,7 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 		return nil
 	}
 
+	t._view = view
 	t.initialized = true
 	t._parametersIndex = ParametersSlice(t.Parameters).Index()
 	t._fieldIndex = map[string]int{}
@@ -233,15 +237,29 @@ func (t *Template) evaluate(evaluator *Evaluator, externalParams, presenceMap in
 		}
 	}
 
+	viewParam := &ViewParam{}
 	if parent != nil {
-		viewParam := &ViewParam{Name: parent.Name}
-		if err := newState.SetValue(viewKey, viewParam); err != nil {
-			return "", err
-		}
+		viewParam = asParam(parent)
+	} else {
+		viewParam = asParam(t._view)
+	}
+
+	if err := newState.SetValue(viewKey, viewParam); err != nil {
+		return "", err
 	}
 
 	evaluator.executor.Exec(newState)
 	return newState.Buffer.String(), nil
+}
+
+func asParam(parent *View) *ViewParam {
+	viewParam := &ViewParam{
+		Name:  parent.Name,
+		Alias: parent.Alias,
+		Table: parent.Table,
+	}
+
+	return viewParam
 }
 
 func (t *Template) initCriteriaEvaluator(view *View) error {

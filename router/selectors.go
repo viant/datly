@@ -213,41 +213,36 @@ func convertAndSet(ctx context.Context, paramPtr, presencePtr unsafe.Pointer, pa
 }
 
 func buildFields(selectors *data.Selectors, requestMetadata *RequestMetadata, fieldsQuery string) error {
-	for _, field := range strings.Split(fieldsQuery, "|") {
-		viewField := strings.Split(field, ".")
-
-		switch len(viewField) {
-		case 1:
-			if requestMetadata.MainView == nil {
-				continue
-			}
-
-			if err := canUseColumn(requestMetadata.MainView, viewField[0]); err != nil {
-				return err
-			}
-
-			selector := selectors.Lookup(requestMetadata.MainView)
-			selector.Columns = append(selector.Columns, field)
-
-		case 2:
-			view, err := viewByPrefix(viewField[0], requestMetadata)
-			if err != nil {
-				continue
-			}
-
-			if err = canUseColumn(view, viewField[1]); err != nil {
-				return err
-			}
-
-			selector := selectors.Lookup(view)
-			selector.Columns = append(selector.Columns, viewField[1])
-
-		default:
-			return NewUnsupportedFormat(string(Fields), field)
+	fieldIt := NewParamIt(fieldsQuery)
+	for fieldIt.Has() {
+		param, err := fieldIt.Next()
+		if err != nil {
+			return err
 		}
+
+		aView, ok := paramView(param, requestMetadata)
+		if !ok {
+			continue
+		}
+
+		if err = canUseColumn(aView, param.Value); err != nil {
+			return err
+		}
+
+		selector := selectors.Lookup(aView)
+		selector.Columns = append(selector.Columns, param.Value)
 	}
 
 	return nil
+}
+
+func paramView(param Param, requestMetadata *RequestMetadata) (*data.View, bool) {
+	if param.Prefix == "" {
+		return requestMetadata.MainView, requestMetadata.MainView != nil
+	}
+
+	view, _ := viewByPrefix(param.Prefix, requestMetadata)
+	return view, view != nil
 }
 
 func viewByPrefix(prefix string, requestMetadata *RequestMetadata) (*data.View, error) {
@@ -268,38 +263,24 @@ func canUseColumn(view *data.View, columnName string) error {
 }
 
 func buildOffset(selectors *data.Selectors, requestMetadata *RequestMetadata, offsetQuery string) error {
-	for _, offset := range strings.Split(offsetQuery, "|") {
-		viewOffset := strings.Split(offset, ".")
-		switch len(viewOffset) {
-		case 1:
-			if requestMetadata.MainView == nil {
-				continue
-			}
+	fieldIt := NewParamIt(offsetQuery)
+	for fieldIt.Has() {
+		param, err := fieldIt.Next()
+		if err != nil {
+			return err
+		}
 
-			if !requestMetadata.MainView.CanUseSelectorOffset() {
-				return fmt.Errorf("can't use selector offset on %v view", requestMetadata.MainView.Name)
-			}
+		aView, ok := paramView(param, requestMetadata)
+		if !ok {
+			continue
+		}
 
-			if err := updateSelectorOffset(selectors, viewOffset[1], requestMetadata.MainView); err != nil {
-				return err
-			}
+		if !aView.CanUseSelectorOffset() {
+			return fmt.Errorf("can't use selector offset on %v view", requestMetadata.MainView.Name)
+		}
 
-		case 2:
-			view, err := viewByPrefix(viewOffset[0], requestMetadata)
-			if err != nil {
-				continue
-			}
-
-			if !view.CanUseSelectorOffset() {
-				return fmt.Errorf("can't use selector offset on %v view", view.Name)
-			}
-
-			if err = updateSelectorOffset(selectors, viewOffset[1], view); err != nil {
-				return err
-			}
-
-		default:
-			return NewUnsupportedFormat(string(Offset), offset)
+		if err = updateSelectorOffset(selectors, param.Value, requestMetadata.MainView); err != nil {
+			return err
 		}
 	}
 
@@ -318,39 +299,26 @@ func updateSelectorOffset(selectors *data.Selectors, offset string, view *data.V
 }
 
 func buildLimit(selectors *data.Selectors, requestMetadata *RequestMetadata, limitQuery string) error {
-	for _, limit := range strings.Split(limitQuery, "|") {
-		viewLimit := strings.Split(limit, ".")
-		switch len(viewLimit) {
-		case 1:
-			if requestMetadata.MainView == nil {
-				continue
-			}
-
-			if !requestMetadata.MainView.CanUseSelectorLimit() {
-				return fmt.Errorf("can't use selector limit on %v view", requestMetadata.MainView.Name)
-			}
-
-			if err := updateSelectorLimit(selectors, viewLimit[0], requestMetadata.MainView); err != nil {
-				return err
-			}
-
-		case 2:
-			view, err := viewByPrefix(viewLimit[0], requestMetadata)
-			if err != nil {
-				continue
-			}
-
-			if !view.CanUseSelectorLimit() {
-				return fmt.Errorf("can't use selector limit on %v view", view.Name)
-			}
-
-			if err = updateSelectorLimit(selectors, viewLimit[1], view); err != nil {
-				return err
-			}
-
-		default:
-			return NewUnsupportedFormat(string(Limit), limit)
+	fieldIt := NewParamIt(limitQuery)
+	for fieldIt.Has() {
+		param, err := fieldIt.Next()
+		if err != nil {
+			return err
 		}
+
+		aView, ok := paramView(param, requestMetadata)
+		if !ok {
+			continue
+		}
+
+		if !aView.CanUseSelectorLimit() {
+			return fmt.Errorf("can't use selector limit on %v view", requestMetadata.MainView.Name)
+		}
+
+		if err = updateSelectorLimit(selectors, param.Value, requestMetadata.MainView); err != nil {
+			return err
+		}
+
 	}
 
 	return nil
@@ -368,38 +336,26 @@ func updateSelectorLimit(selectors *data.Selectors, limit string, view *data.Vie
 }
 
 func buildOrderBy(selectors *data.Selectors, requestMetadata *RequestMetadata, orderByQuery string) error {
-	for _, orderBy := range strings.Split(orderByQuery, "|") {
-		viewOrderBy := strings.Split(orderBy, ".")
-		switch len(viewOrderBy) {
-		case 1:
-			if requestMetadata.MainView == nil {
-				continue
-			}
-
-			if err := canUseOrderBy(requestMetadata.MainView, viewOrderBy[0]); err != nil {
-				return err
-			}
-
-			selector := selectors.Lookup(requestMetadata.MainView)
-			selector.OrderBy = viewOrderBy[0]
-
-		case 2:
-			view, err := viewByPrefix(viewOrderBy[0], requestMetadata)
-			if err != nil {
-				continue
-			}
-
-			if err = canUseOrderBy(view, viewOrderBy[1]); err != nil {
-				return err
-			}
-
-			selector := selectors.Lookup(view)
-			selector.OrderBy = viewOrderBy[1]
-
-		default:
-			return NewUnsupportedFormat(string(OrderBy), orderBy)
+	fieldIt := NewParamIt(orderByQuery)
+	for fieldIt.Has() {
+		param, err := fieldIt.Next()
+		if err != nil {
+			return err
 		}
+
+		aView, ok := paramView(param, requestMetadata)
+		if !ok {
+			continue
+		}
+
+		if err = canUseOrderBy(aView, param.Value); err != nil {
+			return err
+		}
+
+		selector := selectors.Lookup(aView)
+		selector.OrderBy = param.Value
 	}
+
 	return nil
 }
 
@@ -417,31 +373,20 @@ func canUseOrderBy(view *data.View, orderBy string) error {
 }
 
 func buildCriteria(selectors *data.Selectors, requestMetadata *RequestMetadata, criteriaQuery string) error {
-	for _, criteria := range strings.Split(criteriaQuery, "|") {
-		viewCriteria := strings.Split(criteria, ".")
+	fieldIt := NewParamIt(criteriaQuery)
+	for fieldIt.Has() {
+		param, err := fieldIt.Next()
+		if err != nil {
+			return err
+		}
 
-		switch len(viewCriteria) {
-		case 1:
-			if requestMetadata.MainView == nil {
-				continue
-			}
+		aView, ok := paramView(param, requestMetadata)
+		if !ok {
+			continue
+		}
 
-			if err := addSelectorCriteria(selectors, requestMetadata.MainView, viewCriteria[0]); err != nil {
-				return err
-			}
-
-		case 2:
-			view, err := viewByPrefix(viewCriteria[0], requestMetadata)
-			if err != nil {
-				continue
-			}
-
-			if err = addSelectorCriteria(selectors, view, viewCriteria[1]); err != nil {
-				return err
-			}
-
-		default:
-			return NewUnsupportedFormat(string(Criteria), criteria)
+		if err = addSelectorCriteria(selectors, aView, param.Value); err != nil {
+			return err
 		}
 	}
 
@@ -475,20 +420,4 @@ func sanitizeCriteria(criteria string, view *data.View) (string, error) {
 	}
 
 	return sb.String(), nil
-}
-
-func dereferenceIfNeeded(schema *data.Schema, params reflect.Value) interface{} {
-	if schema.Type().Kind() == reflect.Ptr {
-		return params.Interface()
-	}
-
-	return params.Elem().Interface()
-}
-
-func getValue(schema *data.Schema) reflect.Value {
-	if schema.Type().Kind() == reflect.Ptr {
-		return reflect.New(schema.Type().Elem())
-	}
-
-	return reflect.New(schema.Type())
 }

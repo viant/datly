@@ -1,6 +1,7 @@
 package json_test
 
 import (
+	goJson "encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/datly/router/marshal"
@@ -305,4 +306,95 @@ func eventPtr() interface{} {
 		Float64: &float64V,
 		Bool:    &boolV,
 	}
+}
+
+//Benchmarks
+type Event struct {
+	ID    int
+	Name  string
+	Price float64
+	Types []EventType
+}
+
+type EventType struct {
+	TypeID int
+	Type   string
+}
+
+var benchEvents []*Event
+var benchMarshaller *json.Marshaller
+
+func init() {
+	benchEvents = []*Event{
+		{
+			ID:    1,
+			Name:  "Event - 1",
+			Price: 123,
+			Types: []EventType{
+				{
+					TypeID: 1,
+					Type:   "Type - 1",
+				},
+				{
+					TypeID: 2,
+					Type:   "Type - 2",
+				},
+			},
+		},
+		{
+			ID:    2,
+			Name:  "Event - 2",
+			Price: 226,
+			Types: []EventType{
+				{
+					TypeID: 2,
+					Type:   "Type - 2",
+				},
+				{
+					TypeID: 3,
+					Type:   "Type - 3",
+				},
+				{
+					TypeID: 4,
+					Type:   "Type - 4",
+				},
+				{
+					TypeID: 5,
+					Type:   "Type - 5",
+				},
+				{
+					TypeID: 6,
+					Type:   "Type - 6",
+				},
+				{
+					TypeID: 7,
+					Type:   "Type - 7",
+				},
+			},
+		},
+	}
+
+	benchMarshaller, _ = json.New(reflect.TypeOf(&Event{}), marshal.Default{})
+}
+
+func BenchmarkMarshal(b *testing.B) {
+	var bytes []byte
+	var err error
+	for i := 0; i < b.N; i++ {
+		bytes, err = benchMarshaller.Marshal(benchEvents)
+	}
+
+	assert.Nil(b, err)
+	assert.Equal(b, `[{"ID":1,"Name":"Event - 1","Price":123,"Types":[{"TypeID":1,"Type":"Type - 1"},{"TypeID":2,"Type":"Type - 2"}]},{"ID":2,"Name":"Event - 2","Price":226,"Types":[{"TypeID":2,"Type":"Type - 2"},{"TypeID":3,"Type":"Type - 3"},{"TypeID":4,"Type":"Type - 4"},{"TypeID":5,"Type":"Type - 5"},{"TypeID":6,"Type":"Type - 6"},{"TypeID":7,"Type":"Type - 7"}]}]`, string(bytes))
+}
+
+func BenchmarkJson_Marshal(b *testing.B) {
+	var bytes []byte
+	var err error
+	for i := 0; i < b.N; i++ {
+		bytes, err = goJson.Marshal(benchEvents)
+	}
+
+	assert.Nil(b, err)
+	assert.Equal(b, `[{"ID":1,"Name":"Event - 1","Price":123,"Types":[{"TypeID":1,"Type":"Type - 1"},{"TypeID":2,"Type":"Type - 2"}]},{"ID":2,"Name":"Event - 2","Price":226,"Types":[{"TypeID":2,"Type":"Type - 2"},{"TypeID":3,"Type":"Type - 3"},{"TypeID":4,"Type":"Type - 4"},{"TypeID":5,"Type":"Type - 5"},{"TypeID":6,"Type":"Type - 6"},{"TypeID":7,"Type":"Type - 7"}]}]`, string(bytes))
 }
