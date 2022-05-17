@@ -84,9 +84,9 @@ func (c Columns) RegisterWithName(name string, column *Column) {
 }
 
 //Init initializes each Column in the slice.
-func (c ColumnSlice) Init() error {
+func (c ColumnSlice) Init(caser format.Case) error {
 	for i := range c {
-		if err := c[i].Init(); err != nil {
+		if err := c[i].Init(caser); err != nil {
 			return err
 		}
 	}

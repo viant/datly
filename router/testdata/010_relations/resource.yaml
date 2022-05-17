@@ -1,0 +1,46 @@
+Routes:
+  - URI: "/api/events"
+    Method: GET
+    View:
+      Ref: events
+    Index:
+      ViewPrefix:
+        ev: events
+        typ: event_types
+
+Resource:
+  Views:
+    - Name: events
+      Connector:
+        Ref: db
+      Table: events
+      SelectorConstraints:
+        OrderBy: true
+        Limit: true
+        Offset: true
+        Criteria: true
+        FilterableColumns:
+          - '*'
+      With:
+        - Name: events_event-types
+          Cardinality: One
+          Column: event_type_id
+          Holder: EventType
+          Of:
+            Ref: event_types#ref
+            Name: event_types
+            Column: id
+
+    - Name: event_types#ref
+      Table: event_types
+      SelectorConstraints:
+        FilterableColumns:
+          - '*'
+      Connector:
+        Ref: db
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"
+

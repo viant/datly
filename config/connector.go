@@ -23,6 +23,11 @@ type Connector struct {
 //Init initializes connector. It is possible to inherit from other Connector using Ref field.
 //If Ref is specified, then Connector with the name has to be registered in Connectors
 func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
+	if c.initialized {
+		return nil
+	}
+	c.initialized = true
+
 	if c.Ref != "" {
 		connector, err := connectors.Lookup(c.Ref)
 		if err != nil {

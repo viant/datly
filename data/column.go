@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/sql"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
+	"github.com/viant/toolbox/format"
 	"reflect"
 	"strings"
 	"time"
@@ -16,13 +17,15 @@ type Column struct {
 	DataType   string `json:",omitempty"`
 	Expression string `json:",omitempty"`
 	Filterable bool   `json:",omitempty"`
+	Nullable   bool
 
 	rType         reflect.Type
 	tag           *io.Tag
 	sqlExpression string
 	criteriaKind  sql.Kind
 	field         *reflect.StructField
-	Nullable      bool
+	initialized   bool
+	_fieldName    string
 }
 
 //SqlExpression builds column sql expression if any expression specified in format: Expression AS Name
@@ -52,7 +55,12 @@ func (c *Column) ColumnName() string {
 }
 
 //Init initializes Column
-func (c *Column) Init() error {
+func (c *Column) Init(caser format.Case) error {
+	if c.initialized {
+		return nil
+	}
+	c.initialized = true
+
 	if c.Name == "" {
 		return fmt.Errorf("column name was empty")
 	}
@@ -80,6 +88,8 @@ func (c *Column) Init() error {
 	if err := c.buildSQLExpression(); err != nil {
 		return err
 	}
+
+	c._fieldName = caser.Format(c.Name, format.CaseUpperCamel)
 
 	return nil
 }
@@ -129,4 +139,8 @@ func (c *Column) defaultValue(rType reflect.Type) string {
 	default:
 		return ""
 	}
+}
+
+func (c *Column) FieldName() string {
+	return c._fieldName
 }

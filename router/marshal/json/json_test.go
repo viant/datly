@@ -17,9 +17,9 @@ func TestJson_Marshal(t *testing.T) {
 	testcases := []struct {
 		description   string
 		data          func() interface{}
-		metadata      json.StructMetadata
 		expect        string
 		defaultConfig marshal.Default
+		filters       *json.Filters
 	}{
 		{
 			description: "primitive",
@@ -60,6 +60,15 @@ func TestJson_Marshal(t *testing.T) {
 				CaseFormat: format.CaseLowerUnderscore,
 			},
 		},
+		{
+			description: "filtered fields",
+			data:        sliceWithRelations,
+			expect:      `{"Int":100,"EventType":{"Type":"event-type-1"}}`,
+			filters: json.NewFilters(
+				&json.FilterEntry{Fields: []string{"Int", "EventType"}},
+				&json.FilterEntry{Path: "EventType", Fields: []string{"Type"}},
+			),
+		},
 	}
 
 	//for i, testcase := range testcases[len(testcases)-1:] {
@@ -72,7 +81,7 @@ func TestJson_Marshal(t *testing.T) {
 			return
 		}
 
-		result, err := marshaller.Marshal(data)
+		result, err := marshaller.Marshal(data, testcase.filters)
 		if !assert.Nil(t, err, testcase.description) {
 			t.Fail()
 			return
@@ -380,8 +389,9 @@ func init() {
 func BenchmarkMarshal(b *testing.B) {
 	var bytes []byte
 	var err error
+	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		bytes, err = benchMarshaller.Marshal(benchEvents)
+		bytes, err = benchMarshaller.Marshal(benchEvents, nil)
 	}
 
 	assert.Nil(b, err)
@@ -391,6 +401,7 @@ func BenchmarkMarshal(b *testing.B) {
 func BenchmarkJson_Marshal(b *testing.B) {
 	var bytes []byte
 	var err error
+	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		bytes, err = goJson.Marshal(benchEvents)
 	}

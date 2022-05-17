@@ -77,7 +77,7 @@ type event struct {
 //TODO: add testcases against sql injection
 func TestRouter(t *testing.T) {
 	testLocation := toolbox.CallerDirectory(3)
-	_ = toolbox.CreateDirIfNotExist(path.Join(testLocation, "router/testdata/db"))
+	_ = toolbox.CreateDirIfNotExist(path.Join(testLocation, "testdata/db"))
 
 	type FooParam struct {
 		QUANTITY float64
@@ -328,6 +328,27 @@ func TestRouter(t *testing.T) {
 				router.MaxAgeHeader:           "10500",
 				router.AllowMethodsHeader:     "POST PATCH",
 			},
+		},
+		{
+			description: "relations | with specified fields",
+			resourceURI: "010_relations",
+			uri:         fmt.Sprintf("/api/events?%v=ev.Id|ev.Quantity|ev.EventType|typ.Id|typ.Code&%v=ev.1&%v=2", router.Fields, router.Offset, router.Limit),
+			method:      http.MethodGet,
+			expected:    `[{"Id":10,"Quantity":21.957962334156036,"EventType":{"Id":11,"Code":"code - 11"}},{"Id":100,"Quantity":5.084940046072006,"EventType":{"Id":111,"Code":"code - 111"}}]`,
+		},
+		{
+			description: "relations | with specified fields, without relation Id",
+			resourceURI: "010_relations",
+			expected:    `[{"Id":10,"Quantity":21.957962334156036,"EventType":{"Code":"code - 11"}},{"Id":100,"Quantity":5.084940046072006,"EventType":{"Code":"code - 111"}}]`,
+			uri:         fmt.Sprintf("/api/events?%v=ev.Id|ev.Quantity|ev.EventType|typ.Code&%v=ev.1&%v=2", router.Fields, router.Offset, router.Limit),
+			method:      http.MethodGet,
+		},
+		{
+			description: "relations | with specified fields, without relation",
+			resourceURI: "010_relations",
+			expected:    `[{"Id":10,"Quantity":21.957962334156036},{"Id":100,"Quantity":5.084940046072006}]`,
+			uri:         fmt.Sprintf("/api/events?%v=ev.Id|ev.Quantity&%v=ev.1&%v=2", router.Fields, router.Offset, router.Limit),
+			method:      http.MethodGet,
 		},
 	}
 

@@ -71,9 +71,11 @@ func (r *Resource) Init(ctx context.Context) error {
 	if r.initialised {
 		return nil
 	}
+
 	if err := r.Resource.Init(ctx, r.Resource.GetTypes(), r._visitors); err != nil {
 		return err
 	}
+
 	for _, route := range r.Routes {
 		if err := route.Init(ctx, r); err != nil {
 			return err

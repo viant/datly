@@ -470,7 +470,7 @@ func TestRead(t *testing.T) {
 		var resource *data.Resource
 		var err error
 		if testCase.dataURI != "" {
-			resource, err = data.NewResourceFromURL(context.TODO(), path.Join(testLocation, fmt.Sprintf("testdata/cases/"+testCase.dataURI+"/dependencies.yaml")), types, testCase.visitors)
+			resource, err = data.NewResourceFromURL(context.TODO(), path.Join(testLocation, fmt.Sprintf("testdata/cases/"+testCase.dataURI+"/resources.yaml")), types, testCase.visitors)
 			if err != nil {
 				t.Fatalf(err.Error())
 			}

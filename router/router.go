@@ -65,7 +65,6 @@ type (
 
 		_marshaller *cusJson.Marshaller
 		Style       string //enum Basic, Comprehensice , Status: ok, error, + error with structre
-		//TODO add CaseFormat attribute to control output
 		//TODO add output key
 		//TODO make if output key non empty pass Status, and Error info in the response
 	}
@@ -106,6 +105,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if r.View.Name == "" {
 		r.View.Name = r.View.Ref
 	}
+
 	if err := r.View.Init(ctx, resource.Resource); err != nil {
 		return err
 	}
@@ -329,7 +329,7 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 			return
 		}
 
-		r.writeResponse(route, request, response, destValue)
+		r.writeResponse(route, request, response, destValue, session.Selectors)
 	}
 }
 
@@ -366,8 +366,15 @@ func (r *Router) runAfterFetch(response http.ResponseWriter, request *http.Reque
 	return true
 }
 
-func (r *Router) writeResponse(route *Route, request *http.Request, response http.ResponseWriter, destValue reflect.Value) {
-	asBytes, httpStatus, err := r.result(route, request, destValue)
+func (r *Router) writeResponse(route *Route, request *http.Request, response http.ResponseWriter, destValue reflect.Value, selectors data.Selectors) {
+	filters, err := r.buildJsonFilters(route, selectors)
+	if err != nil {
+		response.Write([]byte(err.Error()))
+		response.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	asBytes, httpStatus, err := r.result(route, request, destValue, filters)
 
 	if err != nil {
 		response.WriteHeader(httpStatus)
@@ -378,9 +385,9 @@ func (r *Router) writeResponse(route *Route, request *http.Request, response htt
 	response.Write(asBytes)
 }
 
-func (r *Router) result(route *Route, request *http.Request, destValue reflect.Value) ([]byte, int, error) {
+func (r *Router) result(route *Route, request *http.Request, destValue reflect.Value, filters *cusJson.Filters) ([]byte, int, error) {
 	if route.Cardinality == data.Many {
-		asBytes, err := route._marshaller.Marshal(destValue.Elem().Interface())
+		asBytes, err := route._marshaller.Marshal(destValue.Elem().Interface(), filters)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
@@ -394,7 +401,7 @@ func (r *Router) result(route *Route, request *http.Request, destValue reflect.V
 	case 0:
 		return nil, http.StatusNotFound, nil
 	case 1:
-		asBytes, err := route._marshaller.Marshal(route.View.Schema.Slice().ValueAt(slicePtr, 0))
+		asBytes, err := route._marshaller.Marshal(route.View.Schema.Slice().ValueAt(slicePtr, 0), filters)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
@@ -404,4 +411,42 @@ func (r *Router) result(route *Route, request *http.Request, destValue reflect.V
 	default:
 		return nil, http.StatusInternalServerError, fmt.Errorf("for route %v expected query to return zero or one result but returned %v", request.RequestURI, sliceSize)
 	}
+}
+
+func (r *Router) buildJsonFilters(route *Route, selectors data.Selectors) (*cusJson.Filters, error) {
+	entries := make([]*cusJson.FilterEntry, 0)
+	for viewName, selector := range selectors {
+		if len(selector.Columns) == 0 {
+			continue
+		}
+
+		var path string
+		var view *data.View
+
+		viewByName, ok := route.Index.viewByName(viewName)
+		if !ok {
+			path = ""
+			view = route.View
+		} else {
+			path = viewByName.path
+			view = viewByName.view
+		}
+
+		fields := make([]string, len(selector.Columns))
+		for i, column := range selector.Columns {
+			col, ok := view.ColumnByName(column)
+			if !ok {
+				return nil, fmt.Errorf("not found column %v at view %v", col.FieldName(), view.Name)
+			}
+			fields[i] = column
+		}
+
+		entries = append(entries, &cusJson.FilterEntry{
+			Path:   path,
+			Fields: fields,
+		})
+
+	}
+
+	return cusJson.NewFilters(entries...), nil
 }

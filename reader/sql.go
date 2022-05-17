@@ -55,7 +55,7 @@ func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *Bat
 
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
-	if err = b.appendColumns(&sb, view, selector); err != nil {
+	if err = b.appendColumns(&sb, view, selector, relation); err != nil {
 		return "", nil, err
 	}
 
@@ -94,18 +94,16 @@ func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *Bat
 	return b.expand(sb.String(), view, selector, commonParams, batchData)
 }
 
-func (b *Builder) appendColumns(sb *strings.Builder, view *data.View, selector *data.Selector) error {
+func (b *Builder) appendColumns(sb *strings.Builder, view *data.View, selector *data.Selector, relation *data.Relation) error {
 	if len(selector.Columns) == 0 {
 		b.appendViewColumns(sb, view)
 		return nil
 	}
 
-	return b.appendSelectorColumns(sb, view, selector)
+	return b.appendSelectorColumns(sb, view, selector, relation)
 }
 
-func (b *Builder) appendSelectorColumns(sb *strings.Builder, view *data.View, selector *data.Selector) error {
-	alias := b.viewAlias(view)
-
+func (b *Builder) appendSelectorColumns(sb *strings.Builder, view *data.View, selector *data.Selector, relation *data.Relation) error {
 	for i, column := range selector.Columns {
 		viewColumn, ok := view.ColumnByName(column)
 		if !ok {
@@ -117,10 +115,17 @@ func (b *Builder) appendSelectorColumns(sb *strings.Builder, view *data.View, se
 		}
 
 		sb.WriteString(" ")
-		if viewColumn.SqlExpression() == view.Name {
-			sb.WriteString(alias)
-		}
 		sb.WriteString(viewColumn.SqlExpression())
+	}
+
+	if relation != nil && !selector.Has(relation.Of.Column) {
+		sb.WriteString(separatorFragment)
+		sb.WriteString(" ")
+		col, ok := view.ColumnByName(relation.Of.Column)
+		if !ok {
+			return fmt.Errorf("not found column %v at view %v", relation.Of.Column, view.Name)
+		}
+		sb.WriteString(col.SqlExpression())
 	}
 
 	return nil

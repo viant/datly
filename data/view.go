@@ -194,7 +194,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err = ColumnSlice(v.Columns).Init(); err != nil {
+	if err = ColumnSlice(v.Columns).Init(v.Caser); err != nil {
 		return err
 	}
 

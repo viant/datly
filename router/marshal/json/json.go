@@ -1,8 +1,8 @@
 package json
 
 import (
+	"bytes"
 	"fmt"
-	"github.com/viant/datly/data"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox/format"
@@ -17,8 +17,6 @@ import (
 const null = `null`
 const defaultCaser = format.CaseUpperCamel
 
-var timeType = reflect.TypeOf(time.Time{})
-
 type (
 	Marshaller struct {
 		rType        reflect.Type
@@ -27,26 +25,22 @@ type (
 	}
 
 	fieldStringifier struct {
-		rType  reflect.Type
-		xField *xunsafe.Field
-		strFn  func(unsafe.Pointer, *strings.Builder) error
-		fields []*fieldStringifier
+		xField   *xunsafe.Field
+		marshall marshallFieldFn
+		fields   []*fieldStringifier
 
-		emptyChecker func(value interface{}) bool
-		fieldName    string
-		omitEmpty    bool
+		outputName string
+		fieldName  string
+		omitEmpty  bool
 
+		path         string
 		isComparable bool
 		nilValue     interface{}
 		zeroValue    interface{}
 	}
 
-	StructMetadata map[string]*FieldMetadata
-	FieldMetadata  struct {
-		OmitEmpty  bool
-		CaseFormat data.CaseFormat
-		StructMetadata
-	}
+	marshallObjFn   func(ptr unsafe.Pointer, fields []*fieldStringifier, sb *bytes.Buffer, filters *Filters, path string) error
+	marshallFieldFn func(unsafe.Pointer, *bytes.Buffer, *Filters) error
 )
 
 func New(rType reflect.Type, config marshal.Default) (*Marshaller, error) {
@@ -63,7 +57,7 @@ func New(rType reflect.Type, config marshal.Default) (*Marshaller, error) {
 }
 
 func (j *Marshaller) init() error {
-	stringifiers, err := structStringifiers(j.rType, j.config)
+	stringifiers, err := structStringifiers(j.rType, j.config, "")
 	if err != nil {
 		return err
 	}
@@ -72,13 +66,13 @@ func (j *Marshaller) init() error {
 	return nil
 }
 
-func structStringifiers(rType reflect.Type, config marshal.Default) ([]*fieldStringifier, error) {
+func structStringifiers(rType reflect.Type, config marshal.Default, path string) ([]*fieldStringifier, error) {
 	elem := shared.Elem(rType)
 	numField := elem.NumField()
 
 	stringifiers := make([]*fieldStringifier, 0)
 	for i := 0; i < numField; i++ {
-		stringifier, err := newStringifier(elem.Field(i), config)
+		stringifier, err := newStringifier(elem.Field(i), config, path)
 		if err != nil {
 			return nil, err
 		}
@@ -93,28 +87,35 @@ func structStringifiers(rType reflect.Type, config marshal.Default) ([]*fieldStr
 	return stringifiers, nil
 }
 
-func newStringifier(field reflect.StructField, config marshal.Default) (*fieldStringifier, error) {
+func newStringifier(field reflect.StructField, config marshal.Default, path string) (*fieldStringifier, error) {
 	tag := Parse(field.Tag.Get(TagName))
 	if tag.FieldName == "-" {
 		return nil, nil
 	}
 
-	fieldName := field.Name
-	if fieldName[0] > 'Z' || fieldName[0] < 'A' && tag.FieldName == "" {
+	outputField := field.Name
+	if outputField[0] > 'Z' || outputField[0] < 'A' && tag.FieldName == "" {
 		return nil, nil
 	}
 
 	if tag.FieldName != "" {
-		fieldName = tag.FieldName
+		outputField = tag.FieldName
 	} else if config.CaseFormat != 0 {
-		fieldName = defaultCaser.Format(fieldName, config.CaseFormat)
+		outputField = defaultCaser.Format(outputField, config.CaseFormat)
+	}
+
+	if path == "" {
+		path = field.Name
+	} else {
+		path = path + "." + field.Name
 	}
 
 	stringifier := &fieldStringifier{
-		rType:     field.Type,
-		fieldName: fieldName,
-		xField:    xunsafe.NewField(field),
-		omitEmpty: tag.OmitEmpty || config.OmitEmpty,
+		outputName: outputField,
+		fieldName:  field.Name,
+		xField:     xunsafe.NewField(field),
+		omitEmpty:  tag.OmitEmpty || config.OmitEmpty,
+		path:       path,
 	}
 
 	if err := stringifier.init(field, config); err != nil {
@@ -172,8 +173,16 @@ func (f *fieldStringifier) init(field reflect.StructField, config marshal.Defaul
 		if rType == timeType {
 			updateTimeStringifier(f, wasPtr)
 		} else {
-			updateNonPrimitiveStringifier(f)
-			stringifiers, err := structStringifiers(rType, config)
+			if err := updateNonPrimitiveStringifier(f); err != nil {
+				return err
+			}
+
+			childrenPath := f.fieldName
+			if f.path != "" {
+				childrenPath = f.path + "." + f.fieldName
+			}
+
+			stringifiers, err := structStringifiers(rType, config, childrenPath)
 			if err != nil {
 				return err
 			}
@@ -188,7 +197,7 @@ func (f *fieldStringifier) init(field reflect.StructField, config marshal.Defaul
 
 func updateTimeStringifier(f *fieldStringifier, wasPtr bool) {
 	if wasPtr {
-		f.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+		f.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			timePtr := f.xField.TimePtr(ptr)
 			if timePtr == nil {
 				sb.WriteString(null)
@@ -202,7 +211,7 @@ func updateTimeStringifier(f *fieldStringifier, wasPtr bool) {
 		return
 	}
 
-	f.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+	f.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 		sb.WriteByte('"')
 		sb.WriteString(f.xField.Time(ptr).Format(time.RFC3339))
 		sb.WriteByte('"')
@@ -210,17 +219,22 @@ func updateTimeStringifier(f *fieldStringifier, wasPtr bool) {
 	}
 }
 
-func updateNonPrimitiveStringifier(stringifier *fieldStringifier) {
-	rType := stringifier.xField.Type
-	stringifier.strFn = func(pointer unsafe.Pointer, sb *strings.Builder) error {
-		return stringifyNonPrimitive(rType, xunsafe.AsPointer(stringifier.xField.Value(pointer)), stringifier.fields, sb)
+func updateNonPrimitiveStringifier(stringifier *fieldStringifier) error {
+	marshaller, err := stringifyNonPrimitive(stringifier.xField.Type)
+
+	if err != nil {
+		return err
 	}
-	return
+
+	stringifier.marshall = func(pointer unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+		return marshaller(xunsafe.AsPointer(stringifier.xField.Value(pointer)), stringifier.fields, sb, filters, stringifier.path)
+	}
+	return nil
 }
 
 func updateFloat32Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 	if wasPtr {
-		stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+		stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			float32Ptr := stringifier.xField.Float32Ptr(ptr)
 			if float32Ptr == nil {
 				sb.WriteString(null)
@@ -233,7 +247,7 @@ func updateFloat32Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 		return
 	}
 
-	stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+	stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 		stringifyFloat(sb, float64(stringifier.xField.Float32(ptr)))
 		return nil
 	}
@@ -241,7 +255,7 @@ func updateFloat32Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 
 func updateFloat64Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 	if wasPtr {
-		stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+		stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			floatPtr := stringifier.xField.Float64Ptr(ptr)
 			if floatPtr == nil {
 				sb.WriteString(null)
@@ -254,19 +268,19 @@ func updateFloat64Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 		return
 	}
 
-	stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+	stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 		stringifyFloat(sb, stringifier.xField.Float64(ptr))
 		return nil
 	}
 }
 
-func stringifyFloat(sb *strings.Builder, f float64) {
+func stringifyFloat(sb *bytes.Buffer, f float64) {
 	sb.WriteString(strconv.FormatFloat(f, 'f', -1, 64))
 }
 
 func updateStringStringifier(stringifier *fieldStringifier, wasPtr bool) {
 	if wasPtr {
-		stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+		stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			stringPtr := stringifier.xField.StringPtr(ptr)
 			if stringPtr == nil {
 				sb.WriteString(null)
@@ -280,22 +294,27 @@ func updateStringStringifier(stringifier *fieldStringifier, wasPtr bool) {
 		return
 	}
 
-	stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+	stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 		stringifyString(sb, stringifier.xField.String(ptr))
 		return nil
 	}
 }
 
-func stringifyString(sb *strings.Builder, asString string) {
+func stringifyString(sb *bytes.Buffer, asString string) {
 	//TODO: revise for unicode
 	sb.WriteByte('"')
-	sb.WriteString(strings.ReplaceAll(strings.ReplaceAll(asString, `\`, `\\`), `"`, `\"`))
+	if strings.Contains(asString, `"`) {
+		sb.WriteString(strings.ReplaceAll(strings.ReplaceAll(asString, `\`, `\\`), `"`, `\"`))
+	} else {
+		sb.WriteString(asString)
+	}
+
 	sb.WriteByte('"')
 }
 
 func updateBoolStringifier(stringifier *fieldStringifier, wasPtr bool) {
 	if wasPtr {
-		stringifier.strFn = func(pointer unsafe.Pointer, sb *strings.Builder) error {
+		stringifier.marshall = func(pointer unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			bPtr := stringifier.xField.BoolPtr(pointer)
 			if bPtr == nil {
 				sb.WriteString(null)
@@ -309,13 +328,13 @@ func updateBoolStringifier(stringifier *fieldStringifier, wasPtr bool) {
 		return
 	}
 
-	stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+	stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 		stringifyBool(stringifier.xField.Bool(ptr), sb)
 		return nil
 	}
 }
 
-func stringifyBool(b bool, sb *strings.Builder) {
+func stringifyBool(b bool, sb *bytes.Buffer) {
 	if b == true {
 		sb.WriteString(`true`)
 	} else {
@@ -325,7 +344,7 @@ func stringifyBool(b bool, sb *strings.Builder) {
 
 func updateUint64Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 	if wasPtr {
-		stringifier.strFn = func(pointer unsafe.Pointer, sb *strings.Builder) error {
+		stringifier.marshall = func(pointer unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			intPtr := stringifier.xField.Uint64Ptr(pointer)
 			if intPtr != nil {
 				sb.WriteString(strconv.Itoa(int(*intPtr)))
@@ -337,7 +356,7 @@ func updateUint64Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 		return
 	}
 
-	stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+	stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 		sb.WriteString(strconv.Itoa(int(stringifier.xField.Uint64(ptr))))
 		return nil
 	}
@@ -345,7 +364,7 @@ func updateUint64Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 
 func updateUint32Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 	if wasPtr {
-		stringifier.strFn = func(pointer unsafe.Pointer, sb *strings.Builder) error {
+		stringifier.marshall = func(pointer unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			intPtr := stringifier.xField.Uint32Ptr(pointer)
 			if intPtr != nil {
 				sb.WriteString(strconv.Itoa(int(*intPtr)))
@@ -357,7 +376,7 @@ func updateUint32Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 		return
 	}
 
-	stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+	stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 		sb.WriteString(strconv.Itoa(int(stringifier.xField.Uint32(ptr))))
 		return nil
 	}
@@ -365,7 +384,7 @@ func updateUint32Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 
 func updateUint16Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 	if wasPtr {
-		stringifier.strFn = func(pointer unsafe.Pointer, sb *strings.Builder) error {
+		stringifier.marshall = func(pointer unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			intPtr := stringifier.xField.Uint16Ptr(pointer)
 			if intPtr != nil {
 				sb.WriteString(strconv.Itoa(int(*intPtr)))
@@ -377,7 +396,7 @@ func updateUint16Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 		return
 	}
 
-	stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+	stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 		sb.WriteString(strconv.Itoa(int(stringifier.xField.Uint16(ptr))))
 		return nil
 	}
@@ -385,7 +404,7 @@ func updateUint16Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 
 func updateUint8Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 	if wasPtr {
-		stringifier.strFn = func(pointer unsafe.Pointer, sb *strings.Builder) error {
+		stringifier.marshall = func(pointer unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			intPtr := stringifier.xField.Uint8Ptr(pointer)
 			if intPtr != nil {
 				sb.WriteString(strconv.Itoa(int(*intPtr)))
@@ -397,7 +416,7 @@ func updateUint8Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 		return
 	}
 
-	stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+	stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 		sb.WriteString(strconv.Itoa(int(stringifier.xField.Uint8(ptr))))
 		return nil
 	}
@@ -405,7 +424,7 @@ func updateUint8Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 
 func updateUintStringifier(stringifier *fieldStringifier, wasPtr bool) {
 	if wasPtr {
-		stringifier.strFn = func(pointer unsafe.Pointer, sb *strings.Builder) error {
+		stringifier.marshall = func(pointer unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			intPtr := stringifier.xField.UintPtr(pointer)
 			if intPtr != nil {
 				sb.WriteString(strconv.Itoa(int(*intPtr)))
@@ -418,7 +437,7 @@ func updateUintStringifier(stringifier *fieldStringifier, wasPtr bool) {
 		return
 	}
 
-	stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+	stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 		sb.WriteString(strconv.Itoa(int(stringifier.xField.Uint(ptr))))
 		return nil
 	}
@@ -426,7 +445,7 @@ func updateUintStringifier(stringifier *fieldStringifier, wasPtr bool) {
 
 func updateInt64Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 	if wasPtr {
-		stringifier.strFn = func(pointer unsafe.Pointer, sb *strings.Builder) error {
+		stringifier.marshall = func(pointer unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			intPtr := stringifier.xField.Int64Ptr(pointer)
 			if intPtr != nil {
 				sb.WriteString(strconv.Itoa(int(*intPtr)))
@@ -439,7 +458,7 @@ func updateInt64Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 		return
 	}
 
-	stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+	stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 		sb.WriteString(strconv.Itoa(int(stringifier.xField.Int64(ptr))))
 		return nil
 	}
@@ -447,7 +466,7 @@ func updateInt64Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 
 func updateInt32Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 	if wasPtr {
-		stringifier.strFn = func(pointer unsafe.Pointer, sb *strings.Builder) error {
+		stringifier.marshall = func(pointer unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			intPtr := stringifier.xField.Int32Ptr(pointer)
 			if intPtr != nil {
 				sb.WriteString(strconv.Itoa(int(*intPtr)))
@@ -460,7 +479,7 @@ func updateInt32Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 		return
 	}
 
-	stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+	stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 		sb.WriteString(strconv.Itoa(int(stringifier.xField.Int32(ptr))))
 		return nil
 	}
@@ -468,7 +487,7 @@ func updateInt32Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 
 func updateInt16Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 	if wasPtr {
-		stringifier.strFn = func(pointer unsafe.Pointer, sb *strings.Builder) error {
+		stringifier.marshall = func(pointer unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			intPtr := stringifier.xField.Int16Ptr(pointer)
 			if intPtr != nil {
 				sb.WriteString(strconv.Itoa(int(*intPtr)))
@@ -481,7 +500,7 @@ func updateInt16Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 		return
 	}
 
-	stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+	stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 		sb.WriteString(strconv.Itoa(int(stringifier.xField.Int16(ptr))))
 		return nil
 	}
@@ -489,7 +508,7 @@ func updateInt16Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 
 func updateInt8Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 	if wasPtr {
-		stringifier.strFn = func(pointer unsafe.Pointer, sb *strings.Builder) error {
+		stringifier.marshall = func(pointer unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			intPtr := stringifier.xField.Int8Ptr(pointer)
 			if intPtr != nil {
 				sb.WriteString(strconv.Itoa(int(*intPtr)))
@@ -502,7 +521,7 @@ func updateInt8Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 		return
 	}
 
-	stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+	stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 		sb.WriteString(strconv.Itoa(int(stringifier.xField.Int8(ptr))))
 		return nil
 	}
@@ -510,7 +529,7 @@ func updateInt8Stringifier(stringifier *fieldStringifier, wasPtr bool) {
 
 func updateIntStringifier(stringifier *fieldStringifier, wasPtr bool) {
 	if wasPtr {
-		stringifier.strFn = func(pointer unsafe.Pointer, sb *strings.Builder) error {
+		stringifier.marshall = func(pointer unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			intPtr := stringifier.xField.IntPtr(pointer)
 			if intPtr != nil {
 				sb.WriteString(strconv.Itoa(*intPtr))
@@ -523,40 +542,29 @@ func updateIntStringifier(stringifier *fieldStringifier, wasPtr bool) {
 		return
 	}
 
-	stringifier.strFn = func(ptr unsafe.Pointer, sb *strings.Builder) error {
+	stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 		sb.WriteString(strconv.Itoa(stringifier.xField.Int(ptr)))
 		return nil
 	}
 }
 
-func asObject(ptr unsafe.Pointer, fields []*fieldStringifier, sb *strings.Builder) error {
+func asObject(ptr unsafe.Pointer, fields []*fieldStringifier, sb *bytes.Buffer, filters *Filters, path string) error {
 	if ptr == nil {
 		sb.WriteString(null)
 		return nil
 	}
 
+	filter, _ := filterByPath(filters, path)
+
 	counter := 0
 	sb.WriteByte('{')
 	for _, stringifier := range fields {
-		value := stringifier.xField.Value(ptr)
-		var isZeroValue, isNil bool
-		if stringifier.isComparable {
-			isZeroValue = stringifier.zeroValue == value
-			isNil = stringifier.nilValue == value
-		} else {
-			t := stringifier.xField.Type
-			valuePtr := stringifier.xField.Pointer(ptr)
-			switch t.Kind() {
-			case reflect.Ptr:
-				isNil = valuePtr == nil
-			case reflect.Slice:
-				s := (*reflect.SliceHeader)(valuePtr)
-				isZeroValue = s != nil && s.Len == 0
-				isNil = s != nil && s.Data == 0
-			}
-			//isZeroValue, isNil = rValue.IsZero(), (rValue.Kind() == reflect.Ptr || rValue.Kind() == reflect.Slice) && rValue.IsNil()
+		if isExcluded(filter, stringifier.fieldName) {
+			continue
 		}
 
+		value := stringifier.xField.Value(ptr)
+		isZeroValue, isNil := checkValue(ptr, stringifier, value)
 		if stringifier.omitEmpty && isZeroValue {
 			continue
 		}
@@ -566,12 +574,12 @@ func asObject(ptr unsafe.Pointer, fields []*fieldStringifier, sb *strings.Builde
 		}
 
 		sb.WriteByte('"')
-		sb.WriteString(stringifier.fieldName)
+		sb.WriteString(stringifier.outputName)
 		sb.WriteString(`":`)
 		if isNil {
 			sb.WriteString(null)
 		} else {
-			if err := stringifier.strFn(ptr, sb); err != nil {
+			if err := stringifier.marshall(ptr, sb, filters); err != nil {
 				return err
 			}
 		}
@@ -583,7 +591,35 @@ func asObject(ptr unsafe.Pointer, fields []*fieldStringifier, sb *strings.Builde
 	return nil
 }
 
-func (j *Marshaller) Marshal(value interface{}) ([]byte, error) {
+func checkValue(ptr unsafe.Pointer, stringifier *fieldStringifier, value interface{}) (isZeroValue bool, isNil bool) {
+	if stringifier.isComparable {
+		return stringifier.zeroValue == value, stringifier.nilValue == value
+	}
+
+	t := stringifier.xField.Type
+	valuePtr := stringifier.xField.Pointer(ptr)
+	switch t.Kind() {
+	case reflect.Ptr:
+		return valuePtr == nil, valuePtr == nil
+	case reflect.Slice:
+		s := (*reflect.SliceHeader)(valuePtr)
+		return s != nil && s.Len == 0, s != nil && s.Data == 0
+	}
+
+	//this should not happen, all the cases should be covered earlier
+	return false, false
+}
+
+func isExcluded(filter Filter, name string) bool {
+	if filter == nil {
+		return false
+	}
+
+	_, ok := filter[name]
+	return !ok
+}
+
+func (j *Marshaller) Marshal(value interface{}, filters *Filters) ([]byte, error) {
 	if value == nil {
 		return []byte(null), nil
 	}
@@ -597,45 +633,79 @@ func (j *Marshaller) Marshal(value interface{}) ([]byte, error) {
 		rType = rType.Elem()
 	}
 
-	sb := &strings.Builder{}
-	err := stringifyNonPrimitive(rType, xunsafe.AsPointer(value), j.stringifiers, sb)
+	sb := bufferPool.Get()
+	stringifier, err := stringifyNonPrimitive(rType)
 	if err != nil {
 		return nil, err
 	}
 
-	//TODO: reimplement strings.Builder
-	return []byte(sb.String()), nil
+	if err = stringifier(xunsafe.AsPointer(value), j.stringifiers, sb, filters, ""); err != nil {
+		return nil, err
+	}
+
+	output := make([]byte, len(sb.Bytes()))
+	copy(output, sb.Bytes())
+
+	bufferPool.Put(sb)
+	return output, nil
 }
 
-//TODO: remove switch
-func stringifyNonPrimitive(rType reflect.Type, ptr unsafe.Pointer, stringifiers []*fieldStringifier, sb *strings.Builder) error {
+func stringifyNonPrimitive(rType reflect.Type) (marshallObjFn, error) {
+	for rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
+
 	switch rType.Kind() {
 	case reflect.Struct:
-		return asObject(ptr, stringifiers, sb)
+		return asObject, nil
 	case reflect.Slice:
-		return asSlice(rType, ptr, stringifiers, sb)
+		return storeOrLoadSliceMarshaller(rType)
 	default:
-		return fmt.Errorf("unsupported type %v", rType)
+		return nil, fmt.Errorf("unsupported type %v", rType)
 	}
 }
 
-func asSlice(rType reflect.Type, ptr unsafe.Pointer, stringifiers []*fieldStringifier, sb *strings.Builder) error {
-	if ptr == nil {
-		sb.WriteString(null)
+func storeOrLoadSliceMarshaller(rType reflect.Type) (marshallObjFn, error) {
+	encoder, ok := sliceStringifier.Load(rType)
+	if ok {
+		if marshaler, ok := encoder.(marshallObjFn); ok {
+			return marshaler, nil
+		}
+	}
+
+	marshaler := asSlice(rType)
+	sliceStringifier.Store(rType, marshaler)
+	return marshaler, nil
+}
+
+func asSlice(rType reflect.Type) marshallObjFn {
+	xslice := xunsafe.NewSlice(rType)
+	return func(ptr unsafe.Pointer, fields []*fieldStringifier, sb *bytes.Buffer, filters *Filters, path string) error {
+		if ptr == nil {
+			sb.WriteString(null)
+			return nil
+		}
+
+		sb.WriteByte('[')
+		for i := 0; i < xslice.Len(ptr); i++ {
+			if i != 0 {
+				sb.WriteByte(',')
+			}
+			if err := asObject(xunsafe.AsPointer(xslice.ValuePointerAt(ptr, i)), fields, sb, filters, path); err != nil {
+				return err
+			}
+		}
+		sb.WriteByte(']')
+
 		return nil
 	}
+}
 
-	xslice := xunsafe.NewSlice(rType)
-
-	sb.WriteByte('[')
-	for i := 0; i < xslice.Len(ptr); i++ {
-		if i != 0 {
-			sb.WriteByte(',')
-		}
-		if err := asObject(xunsafe.AsPointer(xslice.ValuePointerAt(ptr, i)), stringifiers, sb); err != nil {
-			return err
-		}
+func filterByPath(filters *Filters, path string) (Filter, bool) {
+	if filters == nil {
+		return nil, false
 	}
-	sb.WriteByte(']')
-	return nil
+
+	filter, ok := filters.fields[path]
+	return filter, ok
 }
