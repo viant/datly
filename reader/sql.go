@@ -94,13 +94,13 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *Ba
 	return b.expand(sb.String(), aView, selector, commonParams, batchData)
 }
 
-func (b *Builder) appendColumns(sb *strings.Builder, view *view.View, selector *view.Selector, relation *view.Relation) error {
+func (b *Builder) appendColumns(sb *strings.Builder, aView *view.View, selector *view.Selector, relation *view.Relation) error {
 	if len(selector.Columns) == 0 {
-		b.appendViewColumns(sb, view)
+		b.appendViewColumns(sb, aView)
 		return nil
 	}
 
-	return b.appendSelectorColumns(sb, view, selector, relation)
+	return b.appendSelectorColumns(sb, aView, selector, relation)
 }
 
 func (b *Builder) appendSelectorColumns(sb *strings.Builder, view *view.View, selector *view.Selector, relation *view.Relation) error {
@@ -252,7 +252,7 @@ func (b *Builder) updateCriteria(params *view.CommonParams, aView *view.View, se
 		addAnd = true
 	}
 
-	if view.Criteria != "" {
+	if aView.Criteria != "" {
 		criteria, err := b.viewCriteria(aView, selector, parent)
 		if err != nil {
 			return err

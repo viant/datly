@@ -2,7 +2,6 @@ package router
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/viant/toolbox"
 	"io"
 	"net/http"
@@ -106,6 +105,5 @@ func (p *RequestParams) initRequestBody(request *http.Request, route *Route) err
 		p.requestBody = requestBody.Elem().Interface()
 	}
 
-	fmt.Printf("%v, %T\n", p.requestBody, p.requestBody)
 	return nil
 }
