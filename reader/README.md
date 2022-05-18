@@ -43,5 +43,5 @@ if err != nil {
 	// ... handle error
 }
 
-toolbox.DumpIndent(session.Dest, false) //prints data fetched from database
+toolbox.DumpIndent(session.Dest, false) //prints view fetched from database
 ```

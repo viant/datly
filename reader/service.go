@@ -3,8 +3,8 @@ package reader
 import (
 	"context"
 	"database/sql"
-	"github.com/viant/datly/data"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view"
 	"github.com/viant/gmetric/counter"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/read"
@@ -15,10 +15,10 @@ import (
 //Service represents reader service
 type Service struct {
 	sqlBuilder *Builder
-	Resource   *data.Resource
+	Resource   *view.Resource
 }
 
-//Read select data from database based on View and assign it to dest. ParentDest has to be pointer.
+//Read select view from database based on View and assign it to dest. ParentDest has to be pointer.
 func (s *Service) Read(ctx context.Context, session *Session) error {
 	var err error
 	start := time.Now()
@@ -62,7 +62,7 @@ func (s *Service) afterRead(session *Session, start *time.Time, err error, onFin
 	onFinish(end)
 }
 
-func (s *Service) readAll(ctx context.Context, session *Session, collector *data.Collector, wg *sync.WaitGroup, errorCollector *shared.Errors) {
+func (s *Service) readAll(ctx context.Context, session *Session, collector *view.Collector, wg *sync.WaitGroup, errorCollector *shared.Errors) {
 	var collectorFetchEmitted bool
 	defer s.afterReadAll(collectorFetchEmitted, collector)
 
@@ -120,7 +120,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *data
 	}
 }
 
-func (s *Service) afterRelationCompleted(wg *sync.WaitGroup, collector *data.Collector, relationGroup *sync.WaitGroup) {
+func (s *Service) afterRelationCompleted(wg *sync.WaitGroup, collector *view.Collector, relationGroup *sync.WaitGroup) {
 	wg.Done()
 	if collector.SupportsParallel() {
 		return
@@ -128,14 +128,14 @@ func (s *Service) afterRelationCompleted(wg *sync.WaitGroup, collector *data.Col
 	relationGroup.Done()
 }
 
-func (s *Service) afterReadAll(collectorFetchEmitted bool, collector *data.Collector) {
+func (s *Service) afterReadAll(collectorFetchEmitted bool, collector *view.Collector) {
 	if collectorFetchEmitted {
 		return
 	}
 	collector.Fetched()
 }
 
-func (s *Service) batchData(collector *data.Collector) *BatchData {
+func (s *Service) batchData(collector *view.Collector) *BatchData {
 	batchData := &BatchData{}
 
 	batchData.Values, batchData.ColumnName = collector.ParentPlaceholders()
@@ -144,7 +144,7 @@ func (s *Service) batchData(collector *data.Collector) *BatchData {
 	return batchData
 }
 
-func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *data.Selector, batchData *BatchData, db *sql.DB, collector *data.Collector, session *Session) error {
+func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.Selector, batchData *BatchData, db *sql.DB, collector *view.Collector, session *Session) error {
 	batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
 	visitor := collector.Visitor()
 
@@ -169,7 +169,7 @@ func (s *Service) exhaustRead(ctx context.Context, view *data.View, selector *da
 	return nil
 }
 
-func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL string, collector *data.Collector, args []interface{}, visitor data.Visitor) error {
+func (s *Service) query(ctx context.Context, view *view.View, db *sql.DB, SQL string, collector *view.Collector, args []interface{}, visitor view.Visitor) error {
 	begin := time.Now()
 	reader, err := read.New(ctx, db, SQL, collector.NewItem(), io.Resolve(collector.Resolve))
 	if err != nil {
@@ -201,6 +201,6 @@ func (s *Service) query(ctx context.Context, view *data.View, db *sql.DB, SQL st
 func New() *Service {
 	return &Service{
 		sqlBuilder: NewBuilder(),
-		Resource:   data.EmptyResource(),
+		Resource:   view.EmptyResource(),
 	}
 }

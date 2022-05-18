@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/afs"
-	"github.com/viant/datly/data"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
@@ -17,7 +17,7 @@ type (
 		SourceURL   string
 		With        []string //list of resource to inherit from
 		Routes      Routes
-		Resource    *data.Resource
+		Resource    *view.Resource
 		_visitors   visitor.Visitors
 		Compression *Compression
 		Redirect    *Redirect
@@ -85,7 +85,7 @@ func (r *Resource) Init(ctx context.Context) error {
 	return nil
 }
 
-func NewResourceFromURL(ctx context.Context, fs afs.Service, url string, visitors visitor.Visitors, types data.Types, resources map[string]*data.Resource, metrics *data.Metrics) (*Resource, error) {
+func NewResourceFromURL(ctx context.Context, fs afs.Service, url string, visitors visitor.Visitors, types view.Types, resources map[string]*view.Resource, metrics *view.Metrics) (*Resource, error) {
 	resourceData, err := fs.DownloadWithURL(ctx, url)
 	if err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func NewResourceFromURL(ctx context.Context, fs afs.Service, url string, visitor
 	return resource, err
 }
 
-func mergeResources(resource *Resource, resources map[string]*data.Resource, types data.Types) error {
+func mergeResources(resource *Resource, resources map[string]*view.Resource, types view.Types) error {
 	if len(resource.With) > 0 {
 		for _, ref := range resource.With {
 			refResource, ok := resources[ref]

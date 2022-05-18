@@ -17,7 +17,7 @@ import (
 	"sync"
 )
 
-//Service represents data service
+//Service represents view service
 type Service interface {
 	Patch(ctx context.Context, request *Request) *writer2.Response
 }
@@ -77,11 +77,11 @@ func (p *service) writeInputData(ctx context.Context, rule *config2.Rule, io *da
 		return err
 	}
 	if !view.IsMutable() {
-		return errors.Errorf("data view: %v is immutable", view.Name)
+		return errors.Errorf("view view: %v is immutable", view.Name)
 	}
 	collection, err := writer2.NewCollection(req.Data, view, io)
 	if err != nil {
-		return errors.Wrapf(err, "failed to build collection for data view: %v", view.Name)
+		return errors.Wrapf(err, "failed to build collection for view view: %v", view.Name)
 	}
 	patched.Put(view.Name, collection)
 	var filterTypes = make([]string, 0)
@@ -90,11 +90,11 @@ func (p *service) writeInputData(ctx context.Context, rule *config2.Rule, io *da
 	}
 	dataPool, err := p.BuildDataPool(ctx, req.Request, view, rule, resp.Metrics, filterTypes...)
 	if err != nil {
-		return errors.Wrapf(err, "failed to build data pool for data view: %v", view.Name)
+		return errors.Wrapf(err, "failed to build view pool for view view: %v", view.Name)
 	}
 
 	collection.Objects(func(item *gtly.Object) (toContinue bool, err error) {
-		//TODO check with specified, data type validation, date formatting, beforePath visitor call
+		//TODO check with specified, view type validation, date formatting, beforePath visitor call
 		for k, v := range dataPool {
 			item.SetValue(k, v)
 		}
@@ -174,7 +174,7 @@ func (p *service) insertData(collection gtly.Collection, index map[string][]inte
 		metrics.AddQuery(insert.Query)
 	}
 	if err != nil {
-		return errors.Wrapf(err, "failed to insert data to %v", view.Table)
+		return errors.Wrapf(err, "failed to insert view to %v", view.Table)
 	}
 	return nil
 }

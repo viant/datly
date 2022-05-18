@@ -21,7 +21,7 @@ type Request struct {
 	EventTime   time.Time
 	Data        map[string]interface{}
 	Metrics     string `json:",omitempty"`
-	CaseFormat  string `json:",omitempty"` //source data case format
+	CaseFormat  string `json:",omitempty"` //source view case format
 }
 
 // BasicAuth returns the username and password provided in the request's

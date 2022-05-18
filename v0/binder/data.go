@@ -12,7 +12,7 @@ type bindingData struct {
 	data    map[string][]string
 }
 
-//Add adds bindingData data
+//Add adds bindingData view
 func (b *bindingData) Add(record data.Record) {
 	if len(b.data) == 0 {
 		b.data = make(map[string][]string)
@@ -40,7 +40,7 @@ func (b *bindingData) Add(record data.Record) {
 	}
 }
 
-//Data returns bindingData data
+//Data returns bindingData view
 func (b *bindingData) Data() map[string]string {
 	var result = make(map[string]string)
 	if len(b.data) == 0 {

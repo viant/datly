@@ -9,8 +9,8 @@ import (
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/auth/secret"
-	"github.com/viant/datly/data"
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/gmetric"
 	"log"
@@ -27,7 +27,7 @@ import (
 type Service struct {
 	Config               *Config
 	visitors             visitor.Visitors
-	types                data.Types
+	types                view.Types
 	mux                  sync.RWMutex
 	routerResources      []*router.Resource
 	routers              map[string]*router.Router
@@ -35,11 +35,11 @@ type Service struct {
 	cfs                  afs.Service //cache file system
 	routeResourceTracker *resource.Tracker
 	dataResourceTracker  *resource.Tracker
-	dataResources        map[string]*data.Resource
+	dataResources        map[string]*view.Resource
 	metrics              *gmetric.Service
 }
 
-func (r *Service) View(location string) (*data.View, error) {
+func (r *Service) View(location string) (*view.View, error) {
 	URI := strings.ReplaceAll(location, ".", "/")
 	router, err := r.match(URI)
 	if err != nil {
@@ -119,7 +119,7 @@ func (r *Service) match(URI string) (*router.Router, error) {
 
 func (r *Service) reloadResourceIfNeeded(ctx context.Context) error {
 	if err := r.reloadDataResourceIfNeeded(ctx); err != nil {
-		log.Printf("failed to reload data reousrces: %v", err)
+		log.Printf("failed to reload view reousrces: %v", err)
 	}
 	return r.reloadRouterResourcesIfNeeded(ctx)
 }
@@ -179,7 +179,7 @@ func (r *Service) handleRouterResourceChange(ctx context.Context, hasChanged *bo
 
 func (r *Service) reloadDataResourceIfNeeded(ctx context.Context) error {
 	fs := r.reloadFs()
-	var resourcesSnapshot = map[string]*data.Resource{}
+	var resourcesSnapshot = map[string]*view.Resource{}
 	hasChanged := false
 	err := r.dataResourceTracker.Notify(ctx, fs, r.handleDataResourceChange(ctx, &hasChanged, resourcesSnapshot, fs))
 	if err != nil || !hasChanged {
@@ -191,7 +191,7 @@ func (r *Service) reloadDataResourceIfNeeded(ctx context.Context) error {
 	return nil
 }
 
-func (r *Service) handleDataResourceChange(ctx context.Context, hasChanged *bool, resourcesSnapshot map[string]*data.Resource, fs afs.Service) func(URL string, operation resource.Operation) {
+func (r *Service) handleDataResourceChange(ctx context.Context, hasChanged *bool, resourcesSnapshot map[string]*view.Resource, fs afs.Service) func(URL string, operation resource.Operation) {
 	return func(URL string, operation resource.Operation) {
 		_, key := furl.Split(URL, file.Scheme)
 		if index := strings.Index(key, "."); index != -1 {
@@ -207,12 +207,11 @@ func (r *Service) handleDataResourceChange(ctx context.Context, hasChanged *bool
 		}
 		switch operation {
 		case resource.Added, resource.Modified:
-			res, err := data.LoadResourceFromURL(ctx, URL, fs)
+			res, err := view.LoadResourceFromURL(ctx, URL, fs)
 			if err != nil {
 				log.Printf("failed to load %v, %v\n", URL, err)
 				return
 			}
-			res.SourceURL = URL
 			resourcesSnapshot[key] = res
 		case resource.Deleted:
 			delete(resourcesSnapshot, URL)
@@ -221,16 +220,16 @@ func (r *Service) handleDataResourceChange(ctx context.Context, hasChanged *bool
 }
 
 func (r *Service) loadRouterResource(ctx context.Context, URL string, fs afs.Service) (*router.Resource, error) {
-	types := data.Types{}
+	types := view.Types{}
 	for k, v := range r.types {
 		types[k] = v
 	}
 
-	var metrics *data.Metrics
+	var metrics *view.Metrics
 	if r.metrics != nil {
 		appURI := r.apiURI(URL)
 		URIPart, _ := path.Split(appURI)
-		metrics = &data.Metrics{
+		metrics = &view.Metrics{
 			Service: r.metrics,
 			URIPart: URIPart,
 		}
@@ -263,7 +262,7 @@ func (r *Service) apiURI(URL string) string {
 }
 
 //New creates a gateway service
-func New(ctx context.Context, config *Config, visitors visitor.Visitors, types data.Types, metrics *gmetric.Service) (*Service, error) {
+func New(ctx context.Context, config *Config, visitors visitor.Visitors, types view.Types, metrics *gmetric.Service) (*Service, error) {
 	config.Init()
 	err := config.Validate()
 	if err != nil {
@@ -278,7 +277,7 @@ func New(ctx context.Context, config *Config, visitors visitor.Visitors, types d
 		mux:                  sync.RWMutex{},
 		fs:                   afs.New(),
 		cfs:                  cache.Singleton(URL),
-		dataResources:        map[string]*data.Resource{},
+		dataResources:        map[string]*view.Resource{},
 		routeResourceTracker: resource.New(config.RouteURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
 		dataResourceTracker:  resource.New(config.DependencyURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
 	}

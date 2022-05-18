@@ -3,9 +3,9 @@ package router
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/data"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/xunsafe"
 	"net/http"
@@ -31,18 +31,18 @@ type (
 		URI     string
 		Method  string
 		Service ServiceType
-		View    *data.View
+		View    *view.View
 		Cors    *Cors
 		Output
 		Index Index
 
 		_requestBodyType reflect.Type
-		_resource        *data.Resource
+		_resource        *view.Resource
 	}
 
 	Output struct {
-		Cardinality data.Cardinality
-		CaseFormat  data.CaseFormat
+		Cardinality view.Cardinality
+		CaseFormat  view.CaseFormat
 		OmitEmpty   bool
 
 		_marshaller     *json.Marshaller
@@ -126,10 +126,10 @@ func (r *Route) initVisitor(resource *Resource) error {
 
 func (r *Route) initCardinality() error {
 	switch r.Cardinality {
-	case data.One, data.Many:
+	case view.One, view.Many:
 		return nil
 	case "":
-		r.Cardinality = data.Many
+		r.Cardinality = view.Many
 		return nil
 	default:
 		return fmt.Errorf("unsupported cardinality type %v\n", r.Cardinality)
@@ -138,7 +138,7 @@ func (r *Route) initCardinality() error {
 
 func (r *Route) initMarshaller() error {
 	if r.CaseFormat == "" {
-		r.CaseFormat = data.UpperCamel
+		r.CaseFormat = view.UpperCamel
 	}
 
 	caser, err := r.CaseFormat.Caser()
@@ -206,7 +206,7 @@ func (r *Route) initStyle() error {
 }
 
 func (r *Route) cardinalityType() reflect.Type {
-	if r.Cardinality == data.Many {
+	if r.Cardinality == view.Many {
 		return r.View.Schema.SliceType()
 	}
 
@@ -246,7 +246,7 @@ func (r *Route) initRequestBody() error {
 }
 
 func (r *Route) initRequestBodyFromParams() error {
-	params := make([]*data.Parameter, 0)
+	params := make([]*view.Parameter, 0)
 	r.findRequestBodyParams(r.View, &params)
 
 	if len(params) == 0 {
@@ -264,10 +264,10 @@ func (r *Route) initRequestBodyFromParams() error {
 	return nil
 }
 
-func (r *Route) findRequestBodyParams(view *data.View, params *[]*data.Parameter) {
-	for i, parameter := range view.Template.Parameters {
-		if parameter.In.Kind == data.RequestBodyKind {
-			*params = append(*params, view.Template.Parameters[i])
+func (r *Route) findRequestBodyParams(aView *view.View, params *[]*view.Parameter) {
+	for i, parameter := range aView.Template.Parameters {
+		if parameter.In.Kind == view.RequestBodyKind {
+			*params = append(*params, aView.Template.Parameters[i])
 		}
 
 		if parameter.View() != nil {
@@ -275,12 +275,12 @@ func (r *Route) findRequestBodyParams(view *data.View, params *[]*data.Parameter
 		}
 	}
 
-	for _, relation := range view.With {
+	for _, relation := range aView.With {
 		r.findRequestBodyParams(&relation.Of.View, params)
 	}
 }
 
-func (i *Index) ViewByPrefix(prefix string) (*data.View, error) {
+func (i *Index) ViewByPrefix(prefix string) (*view.View, error) {
 	view, ok := i._viewsByPrefix[prefix]
 	if !ok {
 		return nil, fmt.Errorf("not found view with prefix %v", prefix)

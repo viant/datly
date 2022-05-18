@@ -3,10 +3,10 @@ package router
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/data"
 	"github.com/viant/datly/reader"
-	"github.com/viant/datly/sanitize"
+	"github.com/viant/datly/router/sanitize"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
@@ -19,10 +19,10 @@ import (
 type RequestMetadata struct {
 	URI      string
 	Index    Index
-	MainView *data.View
+	MainView *view.View
 }
 
-func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, views ...*data.View) (data.Selectors, error) {
+func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, views ...*view.View) (view.Selectors, error) {
 	requestMetadata := &RequestMetadata{
 		URI:      route.URI,
 		Index:    route.Index,
@@ -37,8 +37,8 @@ func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.R
 	return CreateSelectors(ctx, requestMetadata, requestParams, views...)
 }
 
-func CreateSelectors(ctx context.Context, requestMetadata *RequestMetadata, requestParams *RequestParams, views ...*data.View) (data.Selectors, error) {
-	selectors := data.Selectors{}
+func CreateSelectors(ctx context.Context, requestMetadata *RequestMetadata, requestParams *RequestParams, views ...*view.View) (view.Selectors, error) {
+	selectors := view.Selectors{}
 
 	if err := buildParameters(ctx, requestMetadata, &selectors, views, requestParams); err != nil {
 		return nil, err
@@ -78,60 +78,60 @@ func CreateSelectors(ctx context.Context, requestMetadata *RequestMetadata, requ
 	return selectors, nil
 }
 
-func buildParameters(ctx context.Context, requestMetadata *RequestMetadata, selectors *data.Selectors, views []*data.View, requestParams *RequestParams) error {
+func buildParameters(ctx context.Context, requestMetadata *RequestMetadata, selectors *view.Selectors, views []*view.View, requestParams *RequestParams) error {
 	wg := sync.WaitGroup{}
 	errors := shared.NewErrors(0)
-	for _, view := range views {
-		if view.Template == nil || len(view.Template.Parameters) == 0 {
+	for _, aView := range views {
+		if aView.Template == nil || len(aView.Template.Parameters) == 0 {
 			continue
 		}
 
 		wg.Add(1)
-		go func(view *data.View, requestMetadata *RequestMetadata) {
+		go func(aView *view.View, requestMetadata *RequestMetadata) {
 			defer wg.Done()
-			selector := selectors.Lookup(view)
-			selector.Parameters.Init(view)
+			selector := selectors.Lookup(aView)
+			selector.Parameters.Init(aView)
 			params := &selector.Parameters
-			if err := buildSelectorParameters(ctx, view, xunsafe.AsPointer(params.Values), xunsafe.AsPointer(params.Has), view.Template.Parameters, requestParams, requestMetadata); err != nil {
+			if err := buildSelectorParameters(ctx, aView, xunsafe.AsPointer(params.Values), xunsafe.AsPointer(params.Has), aView.Template.Parameters, requestParams, requestMetadata); err != nil {
 				errors.Append(err)
 			}
-		}(view, requestMetadata)
+		}(aView, requestMetadata)
 	}
 
 	wg.Wait()
 	return errors.Error()
 }
 
-func buildSelectorParameters(ctx context.Context, parent *data.View, paramsPtr, presencePtr unsafe.Pointer, parameters []*data.Parameter, requestParams *RequestParams, requestMetadata *RequestMetadata) error {
+func buildSelectorParameters(ctx context.Context, parent *view.View, paramsPtr, presencePtr unsafe.Pointer, parameters []*view.Parameter, requestParams *RequestParams, requestMetadata *RequestMetadata) error {
 	var err error
 	for _, parameter := range parameters {
 		switch parameter.In.Kind {
-		case data.QueryKind:
+		case view.QueryKind:
 			if err = addQueryParam(ctx, paramsPtr, presencePtr, parameter, requestParams); err != nil {
 				return err
 			}
 
-		case data.PathKind:
+		case view.PathKind:
 			if err = addPathParam(ctx, paramsPtr, presencePtr, parameter, requestParams); err != nil {
 				return err
 			}
 
-		case data.HeaderKind:
+		case view.HeaderKind:
 			if err = addHeaderParam(ctx, paramsPtr, presencePtr, parameter, requestParams); err != nil {
 				return err
 			}
 
-		case data.CookieKind:
+		case view.CookieKind:
 			if err = addCookieParam(ctx, paramsPtr, presencePtr, parameter, requestParams); err != nil {
 				return err
 			}
 
-		case data.DataViewKind:
+		case view.DataViewKind:
 			if err = addViewParam(ctx, parent, paramsPtr, presencePtr, parameter, requestParams, requestMetadata); err != nil {
 				return err
 			}
 
-		case data.RequestBodyKind:
+		case view.RequestBodyKind:
 			if err = addRequestBodyParam(paramsPtr, presencePtr, parameter, requestParams); err != nil {
 				return err
 			}
@@ -140,7 +140,7 @@ func buildSelectorParameters(ctx context.Context, parent *data.View, paramsPtr, 
 	return nil
 }
 
-func addRequestBodyParam(paramsPtr unsafe.Pointer, presencePtr unsafe.Pointer, param *data.Parameter, requestParams *RequestParams) error {
+func addRequestBodyParam(paramsPtr unsafe.Pointer, presencePtr unsafe.Pointer, param *view.Parameter, requestParams *RequestParams) error {
 	if err := param.Set(paramsPtr, requestParams.requestBody); err != nil {
 		return err
 	}
@@ -149,23 +149,23 @@ func addRequestBodyParam(paramsPtr unsafe.Pointer, presencePtr unsafe.Pointer, p
 	return nil
 }
 
-func addCookieParam(ctx context.Context, ptr unsafe.Pointer, presencePtr unsafe.Pointer, parameter *data.Parameter, params *RequestParams) error {
+func addCookieParam(ctx context.Context, ptr unsafe.Pointer, presencePtr unsafe.Pointer, parameter *view.Parameter, params *RequestParams) error {
 	return convertAndSet(ctx, ptr, presencePtr, parameter, params.cookie(parameter.In.Name))
 }
 
-func addHeaderParam(ctx context.Context, ptr unsafe.Pointer, presencePtr unsafe.Pointer, parameter *data.Parameter, params *RequestParams) error {
+func addHeaderParam(ctx context.Context, ptr unsafe.Pointer, presencePtr unsafe.Pointer, parameter *view.Parameter, params *RequestParams) error {
 	return convertAndSet(ctx, ptr, presencePtr, parameter, params.header(parameter.In.Name))
 }
 
-func addQueryParam(ctx context.Context, ptr unsafe.Pointer, presencePtr unsafe.Pointer, parameter *data.Parameter, params *RequestParams) error {
+func addQueryParam(ctx context.Context, ptr unsafe.Pointer, presencePtr unsafe.Pointer, parameter *view.Parameter, params *RequestParams) error {
 	return convertAndSet(ctx, ptr, presencePtr, parameter, params.queryParam(parameter.In.Name, ""))
 }
 
-func addPathParam(ctx context.Context, ptr unsafe.Pointer, presencePtr unsafe.Pointer, parameter *data.Parameter, params *RequestParams) error {
+func addPathParam(ctx context.Context, ptr unsafe.Pointer, presencePtr unsafe.Pointer, parameter *view.Parameter, params *RequestParams) error {
 	return convertAndSet(ctx, ptr, presencePtr, parameter, params.pathVariable(parameter.In.Name, ""))
 }
 
-func addViewParam(ctx context.Context, parent *data.View, paramsPtr, presencePtr unsafe.Pointer, param *data.Parameter, params *RequestParams, requestMetadata *RequestMetadata) error {
+func addViewParam(ctx context.Context, parent *view.View, paramsPtr, presencePtr unsafe.Pointer, param *view.Parameter, params *RequestParams, requestMetadata *RequestMetadata) error {
 	view := param.View()
 	destSlice := reflect.New(view.Schema.SliceType()).Interface()
 	session := reader.NewSession(destSlice, view)
@@ -195,7 +195,7 @@ func addViewParam(ctx context.Context, parent *data.View, paramsPtr, presencePtr
 	switch paramLen {
 	case 0:
 		if param.Required != nil && *param.Required {
-			return fmt.Errorf("parameter %v value is required but no data was found", param.Name)
+			return fmt.Errorf("parameter %v value is required but no view was found", param.Name)
 		}
 	case 1:
 		holder := view.Schema.Slice().ValuePointerAt(ptr, 0)
@@ -213,7 +213,7 @@ func addViewParam(ctx context.Context, parent *data.View, paramsPtr, presencePtr
 	return nil
 }
 
-func convertAndSet(ctx context.Context, paramPtr, presencePtr unsafe.Pointer, parameter *data.Parameter, rawValue string) error {
+func convertAndSet(ctx context.Context, paramPtr, presencePtr unsafe.Pointer, parameter *view.Parameter, rawValue string) error {
 	if parameter.IsRequired() && rawValue == "" {
 		return fmt.Errorf("parameter %v is required", parameter.Name)
 	}
@@ -230,7 +230,7 @@ func convertAndSet(ctx context.Context, paramPtr, presencePtr unsafe.Pointer, pa
 	return nil
 }
 
-func buildFields(selectors *data.Selectors, requestMetadata *RequestMetadata, fieldsQuery string) error {
+func buildFields(selectors *view.Selectors, requestMetadata *RequestMetadata, fieldsQuery string) error {
 	fieldIt := NewParamIt(fieldsQuery)
 	for fieldIt.Has() {
 		param, err := fieldIt.Next()
@@ -254,7 +254,7 @@ func buildFields(selectors *data.Selectors, requestMetadata *RequestMetadata, fi
 	return nil
 }
 
-func paramView(param Param, requestMetadata *RequestMetadata) (*data.View, bool) {
+func paramView(param Param, requestMetadata *RequestMetadata) (*view.View, bool) {
 	if param.Prefix == "" {
 		return requestMetadata.MainView, requestMetadata.MainView != nil
 	}
@@ -263,11 +263,11 @@ func paramView(param Param, requestMetadata *RequestMetadata) (*data.View, bool)
 	return view, view != nil
 }
 
-func viewByPrefix(prefix string, requestMetadata *RequestMetadata) (*data.View, error) {
+func viewByPrefix(prefix string, requestMetadata *RequestMetadata) (*view.View, error) {
 	return requestMetadata.Index.ViewByPrefix(prefix)
 }
 
-func canUseColumn(view *data.View, columnName string) error {
+func canUseColumn(view *view.View, columnName string) error {
 	column, ok := view.ColumnByName(columnName)
 	if !ok {
 		return fmt.Errorf("not found column %v in view %v", columnName, view.Name)
@@ -280,7 +280,7 @@ func canUseColumn(view *data.View, columnName string) error {
 	return nil
 }
 
-func buildOffset(selectors *data.Selectors, requestMetadata *RequestMetadata, offsetQuery string) error {
+func buildOffset(selectors *view.Selectors, requestMetadata *RequestMetadata, offsetQuery string) error {
 	fieldIt := NewParamIt(offsetQuery)
 	for fieldIt.Has() {
 		param, err := fieldIt.Next()
@@ -305,7 +305,7 @@ func buildOffset(selectors *data.Selectors, requestMetadata *RequestMetadata, of
 	return nil
 }
 
-func updateSelectorOffset(selectors *data.Selectors, offset string, view *data.View) error {
+func updateSelectorOffset(selectors *view.Selectors, offset string, view *view.View) error {
 	offsetConv, err := strconv.Atoi(offset)
 	if err != nil {
 		return err
@@ -316,7 +316,7 @@ func updateSelectorOffset(selectors *data.Selectors, offset string, view *data.V
 	return nil
 }
 
-func buildLimit(selectors *data.Selectors, requestMetadata *RequestMetadata, limitQuery string) error {
+func buildLimit(selectors *view.Selectors, requestMetadata *RequestMetadata, limitQuery string) error {
 	fieldIt := NewParamIt(limitQuery)
 	for fieldIt.Has() {
 		param, err := fieldIt.Next()
@@ -342,7 +342,7 @@ func buildLimit(selectors *data.Selectors, requestMetadata *RequestMetadata, lim
 	return nil
 }
 
-func updateSelectorLimit(selectors *data.Selectors, limit string, view *data.View) error {
+func updateSelectorLimit(selectors *view.Selectors, limit string, view *view.View) error {
 	limitConv, err := strconv.Atoi(limit)
 	if err != nil {
 		return err
@@ -353,7 +353,7 @@ func updateSelectorLimit(selectors *data.Selectors, limit string, view *data.Vie
 	return nil
 }
 
-func buildOrderBy(selectors *data.Selectors, requestMetadata *RequestMetadata, orderByQuery string) error {
+func buildOrderBy(selectors *view.Selectors, requestMetadata *RequestMetadata, orderByQuery string) error {
 	fieldIt := NewParamIt(orderByQuery)
 	for fieldIt.Has() {
 		param, err := fieldIt.Next()
@@ -377,7 +377,7 @@ func buildOrderBy(selectors *data.Selectors, requestMetadata *RequestMetadata, o
 	return nil
 }
 
-func canUseOrderBy(view *data.View, orderBy string) error {
+func canUseOrderBy(view *view.View, orderBy string) error {
 	if !view.CanUseSelectorOrderBy() {
 		return fmt.Errorf("can't use orderBy %v on view %v", orderBy, view.Name)
 	}
@@ -390,7 +390,7 @@ func canUseOrderBy(view *data.View, orderBy string) error {
 	return nil
 }
 
-func buildCriteria(selectors *data.Selectors, requestMetadata *RequestMetadata, criteriaQuery string) error {
+func buildCriteria(selectors *view.Selectors, requestMetadata *RequestMetadata, criteriaQuery string) error {
 	fieldIt := NewParamIt(criteriaQuery)
 	for fieldIt.Has() {
 		param, err := fieldIt.Next()
@@ -411,7 +411,7 @@ func buildCriteria(selectors *data.Selectors, requestMetadata *RequestMetadata, 
 	return nil
 }
 
-func addSelectorCriteria(selectors *data.Selectors, view *data.View, criteria string) error {
+func addSelectorCriteria(selectors *view.Selectors, view *view.View, criteria string) error {
 	if !view.CanUseSelectorCriteria() {
 		return fmt.Errorf("can't use criteria on view %v", view.Name)
 	}
@@ -426,7 +426,7 @@ func addSelectorCriteria(selectors *data.Selectors, view *data.View, criteria st
 	return nil
 }
 
-func sanitizeCriteria(criteria string, view *data.View) (string, error) {
+func sanitizeCriteria(criteria string, view *view.View) (string, error) {
 	node, err := sanitize.Parse([]byte(criteria))
 	if err != nil {
 		return "", err

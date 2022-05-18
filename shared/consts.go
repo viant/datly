@@ -1,6 +1,6 @@
 package shared
 
-//BuiltInKey represents keys that are provided as parameters for every data.View in data.Session
+//BuiltInKey represents keys that are provided as parameters for every view.View in view.Session
 type BuiltInKey string
 
 const (

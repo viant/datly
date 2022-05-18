@@ -2,24 +2,24 @@ package router
 
 import (
 	"fmt"
-	"github.com/viant/datly/data"
+	"github.com/viant/datly/view"
 )
 
 type (
 	Index struct {
 		ViewPrefix     map[string]string
-		_viewsByPrefix map[string]*data.View
+		_viewsByPrefix map[string]*view.View
 		_viewsByName   map[string]*viewDetails
-		_views         []*data.View
+		_views         []*view.View
 	}
 
 	viewDetails struct {
-		view *data.View
+		view *view.View
 		path string
 	}
 )
 
-func (i *Index) Init(view *data.View, path string) error {
+func (i *Index) Init(view *view.View, path string) error {
 	i.ensureIndexes()
 	i.indexViews(view, path)
 
@@ -36,7 +36,7 @@ func (i *Index) ensureIndexes() {
 	}
 
 	if i._viewsByPrefix == nil {
-		i._viewsByPrefix = map[string]*data.View{}
+		i._viewsByPrefix = map[string]*view.View{}
 	}
 
 	if i._viewsByName == nil {
@@ -44,7 +44,7 @@ func (i *Index) ensureIndexes() {
 	}
 }
 
-func (i *Index) indexViews(view *data.View, path string) {
+func (i *Index) indexViews(view *view.View, path string) {
 	i._viewsByName[view.Name] = &viewDetails{
 		view: view,
 		path: path,

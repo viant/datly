@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-//Parameter represents data binding
+//Parameter represents view binding
 type Parameter struct {
 	Name          string      `json:",omitempty"` //placeholder name
 	When          string      `json:",omitempty"` //applies binding when criteria is met

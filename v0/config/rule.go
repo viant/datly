@@ -10,12 +10,12 @@ import (
 	"strings"
 )
 
-//Rule represents data rule
+//Rule represents view rule
 type Rule struct {
-	Info     rule.Info
-	Path     string `json:",omitempty"`
+	Info       rule.Info
+	Path       string `json:",omitempty"`
 	PathPrefix string `json:",omitempty"`
-	UseCache bool   `json:",omitempty"`
+	UseCache   bool   `json:",omitempty"`
 	data.Meta
 }
 

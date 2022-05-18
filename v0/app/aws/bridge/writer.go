@@ -14,7 +14,7 @@ func (r *responseWriter) Header() http.Header {
 	return r.proxy.MultiValueHeaders
 }
 
-//Write write response data
+//Write write response view
 func (r *responseWriter) Write(bs []byte) (int, error) {
 	r.proxy.Body += string(bs)
 	return len(bs), nil

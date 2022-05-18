@@ -1,4 +1,4 @@
 package data
 
-//Pool represents a data pool
+//Pool represents a view pool
 type Pool map[string]interface{}

@@ -11,18 +11,18 @@ import (
 	"strings"
 )
 
-//View represents a data view
+//View represents a view view
 type View struct {
 	Connector  string
 	Name       string
 	Alias      string        `json:",omitempty"`
-	Table    string        `json:",omitempty"`
-	From     *From         `json:",omitempty"`
-	Criteria *Criteria     `json:",omitempty"`
-	Selector Selector      `json:",omitempty"`
-	Joins    []*Join       `json:",omitempty"`
-	Refs     []*Reference  `json:",omitempty"`
-	Params   []interface{} `json:",omitempty"`
+	Table      string        `json:",omitempty"`
+	From       *From         `json:",omitempty"`
+	Criteria   *Criteria     `json:",omitempty"`
+	Selector   Selector      `json:",omitempty"`
+	Joins      []*Join       `json:",omitempty"`
+	Refs       []*Reference  `json:",omitempty"`
+	Params     []interface{} `json:",omitempty"`
 	CaseFormat string        `json:",omitempty"`
 	HideRefIDs bool          `json:",omitempty"`
 
@@ -178,10 +178,10 @@ func (v View) Validate() error {
 
 	if v.Mutable != nil && *v.Mutable {
 		if len(v.PrimaryKey) == 0 {
-			return errors.Errorf("primaryKey was empty on data view %v", v.Name)
+			return errors.Errorf("primaryKey was empty on view view %v", v.Name)
 		}
 		if v.Table == "" {
-			return errors.Errorf("table was empty on data view %v", v.Name)
+			return errors.Errorf("table was empty on view view %v", v.Name)
 		}
 	}
 
@@ -237,7 +237,7 @@ const (
 FROM $from ${alias}${joins}${criteria}${orderBy}${limit}`
 )
 
-//BuildSQL build data view FromFragments
+//BuildSQL build view view FromFragments
 func (v View) BuildSQL(selector *Selector, bindings map[string]interface{}) (string, []interface{}, error) {
 	projection := v.buildSQLProjection(selector)
 	from := v.buildSQLFom(bindings)

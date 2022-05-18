@@ -11,7 +11,7 @@ type Collections struct {
 	mux  sync.Mutex
 }
 
-//Put add data key
+//Put add view key
 func (r *Collections) Put(key string, value gtly.Collection) {
 	r.mux.Lock()
 	defer r.mux.Unlock()
@@ -31,7 +31,7 @@ func (r *Collections) Get(key string) gtly.Collection {
 	return r.Data[key]
 }
 
-//NewData creates new data
+//NewData creates new view
 func NewData() *Collections {
 	return &Collections{
 		Data: make(map[string]gtly.Collection),

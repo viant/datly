@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-//Selector represent a data selector for projection and selection
+//Selector represent a view selector for projection and selection
 type Selector struct {
 	Prefix     string    `json:",omitempty"`
 	Columns    []string  `json:",omitempty"`

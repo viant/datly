@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//Reference represents  data view reference
+//Reference represents  view view reference
 type Reference struct {
 	Name        string
 	Cardinality string //One, or Many

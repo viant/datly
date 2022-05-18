@@ -7,7 +7,7 @@ import (
 	"github.com/viant/gtly"
 )
 
-//Meta represents an abstraction describing data access rules
+//Meta represents an abstraction describing view access rules
 type Meta struct {
 	Input       []*IO   `json:",omitempty"`
 	Output      []*IO   `json:",omitempty"`

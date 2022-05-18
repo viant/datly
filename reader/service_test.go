@@ -8,11 +8,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
-	"github.com/viant/datly/config"
-	"github.com/viant/datly/data"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/dsunit"
 	"github.com/viant/gmetric/counter/base"
@@ -71,7 +70,7 @@ func (a *audience) OnFetch(_ context.Context) error {
 }
 
 type usecase struct {
-	selectors   data.Selectors
+	selectors   view.Selectors
 	description string
 	dataURI     string
 	expect      string
@@ -79,7 +78,7 @@ type usecase struct {
 	view        string
 	compTypes   map[string]reflect.Type
 	expectError bool
-	resource    *data.Resource
+	resource    *view.Resource
 	dataset     string
 	provider    *base.Provider
 	visitors    visitor.Visitors
@@ -147,7 +146,7 @@ func TestRead(t *testing.T) {
 
 	var useCases = []usecase{
 		{
-			description: "read all data with specified columns",
+			description: "read all view with specified columns",
 			dataURI:     "case001_schema/",
 			dest:        new([]*Event),
 			view:        "events",
@@ -157,7 +156,7 @@ func TestRead(t *testing.T) {
 			},
 		},
 		{
-			description: "read all data with specified columns",
+			description: "read all view with specified columns",
 			dataURI:     "case002_from/",
 			dest:        new(interface{}),
 			view:        "events",
@@ -168,7 +167,7 @@ func TestRead(t *testing.T) {
 			dataURI:     "case002_from/",
 			dest:        new(interface{}),
 			view:        "events",
-			selectors: map[string]*data.Selector{
+			selectors: map[string]*view.Selector{
 				"events": {
 					Criteria: "foo_column = 'abc'",
 				},
@@ -180,7 +179,7 @@ func TestRead(t *testing.T) {
 			dataURI:     "case002_from/",
 			dest:        new(interface{}),
 			view:        "events",
-			selectors: map[string]*data.Selector{
+			selectors: map[string]*view.Selector{
 				"events": {
 					Criteria: "event_type_id = 11",
 				},
@@ -200,7 +199,7 @@ func TestRead(t *testing.T) {
 			view:        "events",
 			dest:        new(interface{}),
 			expect:      `[{"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2},{"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3}]`,
-			selectors: map[string]*data.Selector{
+			selectors: map[string]*view.Selector{
 				"events": {
 					Offset: 1,
 				},
@@ -222,7 +221,7 @@ func TestRead(t *testing.T) {
 			view:        "events",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Timestamp":"","Quantity":33.23432374000549},{"Id":10,"Timestamp":"","Quantity":21.957962334156036},{"Id":100,"Timestamp":"","Quantity":5.084940046072006}]`,
-			selectors: map[string]*data.Selector{
+			selectors: map[string]*view.Selector{
 				"events": {
 					Columns: []string{"id", "quantity"},
 					OrderBy: "id",
@@ -242,7 +241,7 @@ func TestRead(t *testing.T) {
 			view:        "event_event-types",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":0,"UserId":0,"EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":0,"UserId":0,"EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":0,"UserId":0,"EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
-			selectors: map[string]*data.Selector{
+			selectors: map[string]*view.Selector{
 				"event_event-types": {
 					Columns: []string{"Id", "Timestamp", "EventType"},
 				},
@@ -254,7 +253,7 @@ func TestRead(t *testing.T) {
 			view:        "event_event-types",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":0,"UserId":1,"EventType":null},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":0,"UserId":2,"EventType":null},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":0,"UserId":3,"EventType":null}]`,
-			selectors: map[string]*data.Selector{
+			selectors: map[string]*view.Selector{
 				"event_event-types": {
 					Columns: []string{"Id", "Timestamp", "UserId"},
 				},
@@ -283,9 +282,9 @@ func TestRead(t *testing.T) {
 				"user_params": reflect.TypeOf(UserViewParams{}),
 			},
 			expect: `[{"Id":4,"Name":"Kamil","Role":"ADMIN","Accounts":null},{"Id":5,"Name":"Bob","Role":"ADMIN","Accounts":null}]`,
-			selectors: map[string]*data.Selector{
+			selectors: map[string]*view.Selector{
 				"users_accounts": {
-					Parameters: data.ParamState{
+					Parameters: view.ParamState{
 						Values: UserViewParams{AclCriteria: "ROLE IN ('ADMIN')"},
 					},
 				},
@@ -331,9 +330,9 @@ func TestRead(t *testing.T) {
 			compTypes: map[string]reflect.Type{
 				"user_params": reflect.TypeOf(UserIdParam{}),
 			},
-			selectors: map[string]*data.Selector{
+			selectors: map[string]*view.Selector{
 				"users": {
-					Parameters: data.ParamState{
+					Parameters: view.ParamState{
 						Values: UserIdParam{Id: 1},
 					},
 				},
@@ -348,9 +347,9 @@ func TestRead(t *testing.T) {
 			compTypes: map[string]reflect.Type{
 				"lang_params": reflect.TypeOf(LangQueryParams{}),
 			},
-			selectors: map[string]*data.Selector{
+			selectors: map[string]*view.Selector{
 				"languages": {
-					Parameters: data.ParamState{
+					Parameters: view.ParamState{
 						Values: LangQueryParams{Language: "en"},
 					},
 				},
@@ -365,9 +364,9 @@ func TestRead(t *testing.T) {
 			compTypes: map[string]reflect.Type{
 				"header_params": reflect.TypeOf(UserHeaderParams{}),
 			},
-			selectors: map[string]*data.Selector{
+			selectors: map[string]*view.Selector{
 				"users": {
-					Parameters: data.ParamState{
+					Parameters: view.ParamState{
 						Values: UserHeaderParams{UserName: "Anna"},
 					},
 				},
@@ -382,9 +381,9 @@ func TestRead(t *testing.T) {
 			compTypes: map[string]reflect.Type{
 				"user_params": reflect.TypeOf(UserIdParam{}),
 			},
-			selectors: map[string]*data.Selector{
+			selectors: map[string]*view.Selector{
 				"users": {
-					Parameters: data.ParamState{
+					Parameters: view.ParamState{
 						Values: UserIdParam{Id: 2},
 						Has:    nil,
 					},
@@ -461,16 +460,16 @@ func TestRead(t *testing.T) {
 			return
 		}
 
-		types := data.Types{}
+		types := view.Types{}
 
 		for key, rType := range testCase.compTypes {
 			types.Register(key, rType)
 		}
 
-		var resource *data.Resource
+		var resource *view.Resource
 		var err error
 		if testCase.dataURI != "" {
-			resource, err = data.NewResourceFromURL(context.TODO(), path.Join(testLocation, fmt.Sprintf("testdata/cases/"+testCase.dataURI+"/resources.yaml")), types, testCase.visitors)
+			resource, err = view.NewResourceFromURL(context.TODO(), path.Join(testLocation, fmt.Sprintf("testdata/cases/"+testCase.dataURI+"/resources.yaml")), types, testCase.visitors)
 			if err != nil {
 				t.Fatalf(err.Error())
 			}
@@ -492,7 +491,7 @@ func TestRead(t *testing.T) {
 	}
 }
 
-func testView(t *testing.T, testCase usecase, dataView *data.View, err error, service *reader.Service) {
+func testView(t *testing.T, testCase usecase, dataView *view.View, err error, service *reader.Service) {
 	session := &reader.Session{
 		Dest:      testCase.dest,
 		View:      dataView,
@@ -517,7 +516,7 @@ func testView(t *testing.T, testCase usecase, dataView *data.View, err error, se
 }
 
 func batchParent() usecase {
-	resource, viewName := eventsResource(&data.Batch{
+	resource, viewName := eventsResource(&view.Batch{
 		Parent: 1,
 	})
 	return usecase{
@@ -537,18 +536,18 @@ func autoCoalesce() usecase {
 		EventTypeId int
 	}
 
-	resource := data.EmptyResource()
-	connector := &config.Connector{
+	resource := view.EmptyResource()
+	connector := &view.Connector{
 		Name:   "db",
 		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
-	resource.AddViews(&data.View{
+	resource.AddViews(&view.View{
 		Connector:            connector,
 		Name:                 "events",
 		Table:                "events",
-		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
+		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 		Caser:                format.CaseUpperUnderscore,
 	})
@@ -570,22 +569,22 @@ func wildcardAllowedFilterableColumns() usecase {
 		EventTypeId int
 	}
 
-	resource := data.EmptyResource()
-	connector := &config.Connector{
+	resource := view.EmptyResource()
+	connector := &view.Connector{
 		Name:   "db",
 		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
-	resource.AddViews(&data.View{
+	resource.AddViews(&view.View{
 		Connector:            connector,
 		Name:                 "events",
 		Alias:                "ev",
 		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
-		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
+		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 		Caser:                format.CaseUpperUnderscore,
-		SelectorConstraints: &data.Constraints{
+		SelectorConstraints: &view.Constraints{
 			FilterableColumns: []string{"*"},
 		},
 	})
@@ -594,7 +593,7 @@ func wildcardAllowedFilterableColumns() usecase {
 		view:        "events",
 		dataset:     "dataset001_events/",
 		description: "inherit coalesce types | filtered columns",
-		selectors: map[string]*data.Selector{
+		selectors: map[string]*view.Selector{
 			"events": {
 				Columns: []string{"ID", "QUANTITY"},
 			},
@@ -612,8 +611,8 @@ func inheritLogger() usecase {
 		EventTypeId int
 	}
 
-	resource := data.EmptyResource()
-	connector := &config.Connector{
+	resource := view.EmptyResource()
+	connector := &view.Connector{
 		Name:   "db",
 		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
@@ -621,7 +620,7 @@ func inheritLogger() usecase {
 
 	resource.AddLoggers(logger.NewLogger("logger", nil))
 
-	resource.AddViews(&data.View{
+	resource.AddViews(&view.View{
 		Logger: &logger.Adapter{
 			Reference: shared.Reference{
 				Ref: "logger",
@@ -632,7 +631,7 @@ func inheritLogger() usecase {
 		Name:                 "events",
 		Alias:                "ev",
 		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
-		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
+		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 		Caser:                format.CaseUpperUnderscore,
 	})
@@ -654,19 +653,19 @@ func inheritCoalesceTypes() usecase {
 		EventTypeId int
 	}
 
-	resource := data.EmptyResource()
-	connector := &config.Connector{
+	resource := view.EmptyResource()
+	connector := &view.Connector{
 		Name:   "db",
 		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
-	resource.AddViews(&data.View{
+	resource.AddViews(&view.View{
 		Connector:            connector,
 		Name:                 "events",
 		Alias:                "ev",
 		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
-		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
+		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 		Caser:                format.CaseUpperUnderscore,
 	})
@@ -688,20 +687,20 @@ func criteriaWhere() usecase {
 		EventTypeId int
 	}
 
-	resource := data.EmptyResource()
-	connector := &config.Connector{
+	resource := view.EmptyResource()
+	connector := &view.Connector{
 		Name:   "db",
 		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
-	resource.AddViews(&data.View{
+	resource.AddViews(&view.View{
 		Connector:            connector,
 		Name:                 "events",
 		Alias:                "ev",
 		Table:                "events",
 		From:                 `SELECT * FROM events as e ` + string(shared.Criteria),
-		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
+		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 	})
 
@@ -727,41 +726,41 @@ func inheritConnector() usecase {
 	}
 }
 
-func eventsResource(batch *data.Batch) (*data.Resource, string) {
-	resource := data.EmptyResource()
-	connector := &config.Connector{
+func eventsResource(batch *view.Batch) (*view.Resource, string) {
+	resource := view.EmptyResource()
+	connector := &view.Connector{
 		Name:   "db",
 		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
-	resource.AddViews(&data.View{
+	resource.AddViews(&view.View{
 		Table: "event_types",
 		Name:  "event-types",
 	})
 
-	resource.AddViews(&data.View{
+	resource.AddViews(&view.View{
 		Connector:            connector,
 		Name:                 "events",
 		Table:                "events",
 		InheritSchemaColumns: true,
-		With: []*data.Relation{
+		With: []*view.Relation{
 			{
 				Name: "event-event_types",
-				Of: &data.ReferenceView{
-					View: data.View{
+				Of: &view.ReferenceView{
+					View: view.View{
 						Name:      "event-event_types",
 						Reference: shared.Reference{Ref: "event-types"},
 						Batch:     batch,
 					},
 					Column: "id",
 				},
-				Cardinality: data.One,
+				Cardinality: view.One,
 				Column:      "event_type_id",
 				Holder:      "EventType",
 			},
 		},
-		Schema: data.NewSchema(reflect.TypeOf(&event{})),
+		Schema: view.NewSchema(reflect.TypeOf(&event{})),
 	})
 	return resource, "events"
 }
@@ -792,24 +791,24 @@ func detectColumnAlias() usecase {
 	}
 }
 
-func columnsInResource(column, alias string) (string, *data.Resource) {
-	resource := data.EmptyResource()
-	connector := &config.Connector{
+func columnsInResource(column, alias string) (string, *view.Resource) {
+	resource := view.EmptyResource()
+	connector := &view.Connector{
 		Name:   "db",
 		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
-	resource.AddViews(&data.View{
+	resource.AddViews(&view.View{
 		Connector:            connector,
 		Name:                 "events",
 		Table:                "events",
 		InheritSchemaColumns: true,
-		With: []*data.Relation{
+		With: []*view.Relation{
 			{
 				Name: "event-event_types",
-				Of: &data.ReferenceView{
-					View: data.View{
+				Of: &view.ReferenceView{
+					View: view.View{
 						Connector: connector,
 						From:      "SELECT * FROM EVENT_TYPES as et WHERE " + string(shared.ColumnInPosition),
 						Name:      "event_types",
@@ -817,13 +816,13 @@ func columnsInResource(column, alias string) (string, *data.Resource) {
 					},
 					Column: "id",
 				},
-				Cardinality: data.One,
+				Cardinality: view.One,
 				Column:      column,
 				ColumnAlias: alias,
 				Holder:      "EventType",
 			},
 		},
-		Schema: data.NewSchema(reflect.TypeOf(&event{})),
+		Schema: view.NewSchema(reflect.TypeOf(&event{})),
 	})
 	return "events", resource
 }
@@ -843,37 +842,37 @@ type eventType struct {
 }
 
 func inheritTypeForReferencedView() usecase {
-	resource := data.EmptyResource()
-	connector := &config.Connector{
+	resource := view.EmptyResource()
+	connector := &view.Connector{
 		Name:   "db",
 		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
-	resource.AddViews(&data.View{
+	resource.AddViews(&view.View{
 		Connector: connector,
 		Table:     "event_types",
 		Name:      "event-types",
 	})
 
-	resource.AddViews(&data.View{
+	resource.AddViews(&view.View{
 		Connector:            connector,
 		Name:                 "events",
 		Table:                "events",
 		InheritSchemaColumns: true,
-		With: []*data.Relation{
+		With: []*view.Relation{
 			{
 				Name: "event-event_types",
-				Of: &data.ReferenceView{
-					View:   *data.ViewReference("event-event_types", "event-types"),
+				Of: &view.ReferenceView{
+					View:   *view.ViewReference("event-event_types", "event-types"),
 					Column: "id",
 				},
-				Cardinality: data.One,
+				Cardinality: view.One,
 				Column:      "event_type_id",
 				Holder:      "EventType",
 			},
 		},
-		Schema: data.NewSchema(reflect.TypeOf(&event{})),
+		Schema: view.NewSchema(reflect.TypeOf(&event{})),
 	})
 
 	return usecase{
@@ -887,33 +886,33 @@ func inheritTypeForReferencedView() usecase {
 }
 
 func nestedRelation() usecase {
-	resource := data.EmptyResource()
-	connector := &config.Connector{
+	resource := view.EmptyResource()
+	connector := &view.Connector{
 		Name:   "db",
 		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
-	resource.AddViews(&data.View{
+	resource.AddViews(&view.View{
 		Connector:            connector,
 		Name:                 "event-type_events",
 		Table:                "event_types",
 		InheritSchemaColumns: true,
-		Schema:               data.NewSchema(reflect.TypeOf(&eventType{})),
-		With: []*data.Relation{
+		Schema:               view.NewSchema(reflect.TypeOf(&eventType{})),
+		With: []*view.Relation{
 			{
 				Name: "event-type_rel",
-				Of: &data.ReferenceView{
-					View: data.View{
+				Of: &view.ReferenceView{
+					View: view.View{
 						Connector:            connector,
 						Name:                 "events",
 						Table:                "events",
 						InheritSchemaColumns: true,
-						With: []*data.Relation{
+						With: []*view.Relation{
 							{
 								Name: "event-event_types",
-								Of: &data.ReferenceView{
-									View: data.View{
+								Of: &view.ReferenceView{
+									View: view.View{
 										Connector:            connector,
 										Name:                 "event-event_types",
 										Table:                "event_types",
@@ -921,7 +920,7 @@ func nestedRelation() usecase {
 									},
 									Column: "id",
 								},
-								Cardinality: data.One,
+								Cardinality: view.One,
 								Column:      "event_type_id",
 								Holder:      "EventType",
 							},
@@ -929,7 +928,7 @@ func nestedRelation() usecase {
 					},
 					Column: "event_type_id",
 				},
-				Cardinality: data.Many,
+				Cardinality: view.Many,
 				Column:      "Id",
 				Holder:      "Events",
 			},
@@ -953,18 +952,18 @@ func sqlxColumnNames() usecase {
 		EventTimestamp time.Time `sqlx:"name=timestamp"`
 	}
 
-	resource := data.EmptyResource()
-	connector := &config.Connector{
+	resource := view.EmptyResource()
+	connector := &view.Connector{
 		Name:   "db",
 		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
-	resource.AddViews(&data.View{
+	resource.AddViews(&view.View{
 		Connector:            connector,
 		Name:                 "events",
 		Table:                "events",
-		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
+		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 	})
 
@@ -985,19 +984,19 @@ func inheritColumnsView() usecase {
 		Timestamp time.Time
 	}
 
-	resource := data.EmptyResource()
-	connector := &config.Connector{
+	resource := view.EmptyResource()
+	connector := &view.Connector{
 		Name:   "db",
 		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
-	resource.AddViews(&data.View{
+	resource.AddViews(&view.View{
 		Connector:            connector,
 		Name:                 "events",
 		Table:                "events",
 		Alias:                "e",
-		Schema:               data.NewSchema(reflect.TypeOf(&Event{})),
+		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 	})
 
@@ -1025,24 +1024,24 @@ func eventTypeViewWithEventTypeIdColumn() usecase {
 		Name   string
 	}
 
-	resource := data.EmptyResource()
-	connector := &config.Connector{
+	resource := view.EmptyResource()
+	connector := &view.Connector{
 		Name:   "db",
 		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
-	resource.AddViews(&data.View{
+	resource.AddViews(&view.View{
 		Connector:            connector,
 		Name:                 "event-type_events",
 		Table:                "event_types",
 		InheritSchemaColumns: true,
-		Schema:               data.NewSchema(reflect.TypeOf(&EventType{})),
-		With: []*data.Relation{
+		Schema:               view.NewSchema(reflect.TypeOf(&EventType{})),
+		With: []*view.Relation{
 			{
 				Name: "event-type_rel",
-				Of: &data.ReferenceView{
-					View: data.View{
+				Of: &view.ReferenceView{
+					View: view.View{
 						Connector:            connector,
 						Name:                 "events",
 						Table:                "events",
@@ -1050,7 +1049,7 @@ func eventTypeViewWithEventTypeIdColumn() usecase {
 					},
 					Column: "event_type_id",
 				},
-				Cardinality: data.Many,
+				Cardinality: view.Many,
 				Column:      "Id",
 				Holder:      "Events",
 			},
@@ -1080,24 +1079,24 @@ func eventTypeViewWithoutEventTypeIdColumn() usecase {
 		Name   string
 	}
 
-	resource := data.EmptyResource()
-	connector := &config.Connector{
+	resource := view.EmptyResource()
+	connector := &view.Connector{
 		Name:   "db",
 		DSN:    "./testdata/db/db.db",
 		Driver: "sqlite3",
 	}
 
-	resource.AddViews(&data.View{
+	resource.AddViews(&view.View{
 		Connector:            connector,
 		Name:                 "event-type_events",
 		Table:                "event_types",
 		InheritSchemaColumns: true,
-		Schema:               data.NewSchema(reflect.TypeOf(&EventType{})),
-		With: []*data.Relation{
+		Schema:               view.NewSchema(reflect.TypeOf(&EventType{})),
+		With: []*view.Relation{
 			{
 				Name: "event-type_rel",
-				Of: &data.ReferenceView{
-					View: data.View{
+				Of: &view.ReferenceView{
+					View: view.View{
 						Connector:            connector,
 						Name:                 "events",
 						Table:                "events",
@@ -1105,7 +1104,7 @@ func eventTypeViewWithoutEventTypeIdColumn() usecase {
 					},
 					Column: "event_type_id",
 				},
-				Cardinality: data.Many,
+				Cardinality: view.Many,
 				Column:      "Id",
 				Holder:      "Events",
 			},

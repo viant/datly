@@ -2,7 +2,7 @@ package reader
 
 import (
 	"fmt"
-	"github.com/viant/datly/data"
+	"github.com/viant/datly/view"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
@@ -30,7 +30,7 @@ type (
 	//Builder represent SQL Builder
 	Builder struct{}
 
-	//BatchData groups data needed to use various data.MatchStrategy
+	//BatchData groups view needed to use various view.MatchStrategy
 	BatchData struct {
 		ColumnName     string
 		Parent         int
@@ -47,54 +47,54 @@ func NewBuilder() *Builder {
 }
 
 //Build builds SQL Select statement
-func (b *Builder) Build(view *data.View, selector *data.Selector, batchData *BatchData, relation *data.Relation, parent *data.View) (string, []interface{}, error) {
-	template, err := view.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parent)
+func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *BatchData, relation *view.Relation, parent *view.View) (string, []interface{}, error) {
+	template, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parent)
 	if err != nil {
 		return "", nil, err
 	}
 
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
-	if err = b.appendColumns(&sb, view, selector, relation); err != nil {
+	if err = b.appendColumns(&sb, aView, selector, relation); err != nil {
 		return "", nil, err
 	}
 
 	sb.WriteString(fromFragment)
 	sb.WriteString(template)
-	b.appendViewAlias(&sb, view)
+	b.appendViewAlias(&sb, aView)
 
-	hasColumnsIn := strings.Contains(template, data.ColumnsIn)
-	commonParams := data.CommonParams{}
+	hasColumnsIn := strings.Contains(template, view.ColumnsIn)
+	commonParams := view.CommonParams{}
 
-	b.updateColumnsIn(&commonParams, view, relation, batchData, hasColumnsIn)
+	b.updateColumnsIn(&commonParams, aView, relation, batchData, hasColumnsIn)
 
-	hasCriteria := strings.Contains(template, data.Criteria)
+	hasCriteria := strings.Contains(template, view.Criteria)
 
-	if err = b.updatePagination(&commonParams, view, selector); err != nil {
+	if err = b.updatePagination(&commonParams, aView, selector); err != nil {
 		return "", nil, err
 	}
 
-	if err = b.updateCriteria(&commonParams, view, selector, hasColumnsIn, parent); err != nil {
+	if err = b.updateCriteria(&commonParams, aView, selector, hasColumnsIn, parent); err != nil {
 		return "", nil, err
 	}
 
 	if !hasCriteria {
 		sb.WriteString(" ")
-		sb.WriteString(data.Criteria)
+		sb.WriteString(view.Criteria)
 		sb.WriteString(" ")
 	}
 
-	hasPagination := strings.Contains(template, data.Pagination)
+	hasPagination := strings.Contains(template, view.Pagination)
 	if !hasPagination {
 		sb.WriteString(" ")
-		sb.WriteString(data.Pagination)
+		sb.WriteString(view.Pagination)
 		sb.WriteString(" ")
 	}
 
-	return b.expand(sb.String(), view, selector, commonParams, batchData)
+	return b.expand(sb.String(), aView, selector, commonParams, batchData)
 }
 
-func (b *Builder) appendColumns(sb *strings.Builder, view *data.View, selector *data.Selector, relation *data.Relation) error {
+func (b *Builder) appendColumns(sb *strings.Builder, view *view.View, selector *view.Selector, relation *view.Relation) error {
 	if len(selector.Columns) == 0 {
 		b.appendViewColumns(sb, view)
 		return nil
@@ -103,7 +103,7 @@ func (b *Builder) appendColumns(sb *strings.Builder, view *data.View, selector *
 	return b.appendSelectorColumns(sb, view, selector, relation)
 }
 
-func (b *Builder) appendSelectorColumns(sb *strings.Builder, view *data.View, selector *data.Selector, relation *data.Relation) error {
+func (b *Builder) appendSelectorColumns(sb *strings.Builder, view *view.View, selector *view.Selector, relation *view.Relation) error {
 	for i, column := range selector.Columns {
 		viewColumn, ok := view.ColumnByName(column)
 		if !ok {
@@ -131,7 +131,7 @@ func (b *Builder) appendSelectorColumns(sb *strings.Builder, view *data.View, se
 	return nil
 }
 
-func (b *Builder) viewAlias(view *data.View) string {
+func (b *Builder) viewAlias(view *view.View) string {
 	var alias string
 	if view.Alias != "" {
 		alias = view.Alias + "."
@@ -139,7 +139,7 @@ func (b *Builder) viewAlias(view *data.View) string {
 	return alias
 }
 
-func (b *Builder) appendViewColumns(sb *strings.Builder, view *data.View) {
+func (b *Builder) appendViewColumns(sb *strings.Builder, view *view.View) {
 	alias := b.viewAlias(view)
 
 	for i, column := range view.Columns {
@@ -156,7 +156,7 @@ func (b *Builder) appendViewColumns(sb *strings.Builder, view *data.View) {
 	}
 }
 
-func (b *Builder) appendViewAlias(sb *strings.Builder, view *data.View) {
+func (b *Builder) appendViewAlias(sb *strings.Builder, view *view.View) {
 	if view.Alias == "" {
 		return
 	}
@@ -165,7 +165,7 @@ func (b *Builder) appendViewAlias(sb *strings.Builder, view *data.View) {
 	sb.WriteString(view.Alias)
 }
 
-func (b *Builder) updatePagination(params *data.CommonParams, view *data.View, selector *data.Selector) error {
+func (b *Builder) updatePagination(params *view.CommonParams, view *view.View, selector *view.Selector) error {
 	sb := strings.Builder{}
 	if err := b.appendOrderBy(&sb, view, selector); err != nil {
 		return err
@@ -176,7 +176,7 @@ func (b *Builder) updatePagination(params *data.CommonParams, view *data.View, s
 	return nil
 }
 
-func (b *Builder) appendLimit(sb *strings.Builder, view *data.View, selector *data.Selector) {
+func (b *Builder) appendLimit(sb *strings.Builder, view *view.View, selector *view.Selector) {
 	if selector.Limit != 0 && (selector.Limit < view.Selector.Limit || view.Selector.Limit == 0) {
 		sb.WriteString(limitFragment)
 		sb.WriteString(strconv.Itoa(selector.Limit))
@@ -190,7 +190,7 @@ func (b *Builder) appendLimit(sb *strings.Builder, view *data.View, selector *da
 	}
 }
 
-func (b *Builder) appendOffset(sb *strings.Builder, selector *data.Selector) {
+func (b *Builder) appendOffset(sb *strings.Builder, selector *view.Selector) {
 	if selector.Offset == 0 {
 		return
 	}
@@ -199,7 +199,7 @@ func (b *Builder) appendOffset(sb *strings.Builder, selector *data.Selector) {
 	sb.WriteString(strconv.Itoa(selector.Offset))
 }
 
-func (b *Builder) expand(sql string, view *data.View, selector *data.Selector, params data.CommonParams, batchData *BatchData) (string, []interface{}, error) {
+func (b *Builder) expand(sql string, aView *view.View, selector *view.Selector, params view.CommonParams, batchData *BatchData) (string, []interface{}, error) {
 	placeholders := make([]interface{}, 0)
 	block, err := parser.Parse([]byte(sql))
 	if err != nil {
@@ -213,22 +213,22 @@ func (b *Builder) expand(sql string, view *data.View, selector *data.Selector, p
 		case *expr.Select:
 			key := extractSelectorName(actual.FullName)
 			switch key {
-			case data.Pagination[1:]:
+			case view.Pagination[1:]:
 				replacement.SetValue(key, params.Pagination)
-			case data.Criteria[1:]:
-				criteriaExpanded, criteriaPlaceholders, err := b.expand(params.WhereClause, view, selector, params, batchData)
+			case view.Criteria[1:]:
+				criteriaExpanded, criteriaPlaceholders, err := b.expand(params.WhereClause, aView, selector, params, batchData)
 				if err != nil {
 					return "", nil, err
 				}
 				replacement.SetValue(key, criteriaExpanded)
 				placeholders = append(placeholders, criteriaPlaceholders...)
-			case data.ColumnsIn[1:]:
+			case view.ColumnsIn[1:]:
 				replacement.SetValue(key, params.ColumnsIn)
 				placeholders = append(placeholders, batchData.ValuesBatch...)
 
 			default:
 				replacement.SetValue(key, `?`)
-				accessor, err := view.Template.AccessorByName(key)
+				accessor, err := aView.Template.AccessorByName(key)
 				if err != nil {
 					return "", nil, err
 				}
@@ -244,16 +244,16 @@ func (b *Builder) expand(sql string, view *data.View, selector *data.Selector, p
 	return replacement.ExpandAsText(sql), placeholders, err
 }
 
-func (b *Builder) updateCriteria(params *data.CommonParams, view *data.View, selector *data.Selector, hasColumnsIn bool, parent *data.View) error {
+func (b *Builder) updateCriteria(params *view.CommonParams, aView *view.View, selector *view.Selector, hasColumnsIn bool, parent *view.View) error {
 	sb := strings.Builder{}
 	addAnd := false
 	if !hasColumnsIn && params.ColumnsIn != "" {
-		b.appendCriteria(&sb, data.ColumnsIn, false)
+		b.appendCriteria(&sb, view.ColumnsIn, false)
 		addAnd = true
 	}
 
 	if view.Criteria != "" {
-		criteria, err := b.viewCriteria(view, selector, parent)
+		criteria, err := b.viewCriteria(aView, selector, parent)
 		if err != nil {
 			return err
 		}
@@ -285,7 +285,7 @@ func (b *Builder) appendCriteria(sb *strings.Builder, criteria string, addAnd bo
 	}
 }
 
-func (b *Builder) viewCriteria(view *data.View, selector *data.Selector, parent *data.View) (string, error) {
+func (b *Builder) viewCriteria(view *view.View, selector *view.Selector, parent *view.View) (string, error) {
 	criteria, err := view.Template.EvaluateCriteria(selector.Parameters.Values, selector.Parameters.Has, parent)
 	if err != nil {
 		return "", err
@@ -294,7 +294,7 @@ func (b *Builder) viewCriteria(view *data.View, selector *data.Selector, parent 
 	return criteria, nil
 }
 
-func (b *Builder) updateColumnsIn(params *data.CommonParams, view *data.View, relation *data.Relation, batchData *BatchData, hasColumnsIn bool) {
+func (b *Builder) updateColumnsIn(params *view.CommonParams, view *view.View, relation *view.Relation, batchData *BatchData, hasColumnsIn bool) {
 	if batchData == nil || batchData.ColumnName == "" {
 		return
 	}
@@ -320,7 +320,7 @@ func (b *Builder) updateColumnsIn(params *data.CommonParams, view *data.View, re
 	params.ColumnsIn = sb.String()
 }
 
-func (b *Builder) appendOrderBy(sb *strings.Builder, view *data.View, selector *data.Selector) error {
+func (b *Builder) appendOrderBy(sb *strings.Builder, view *view.View, selector *view.Selector) error {
 	if selector.OrderBy != "" {
 		col, ok := view.ColumnByName(selector.OrderBy)
 		if !ok {

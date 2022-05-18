@@ -27,7 +27,7 @@ type service struct {
 	base.Service
 }
 
-//Read reads data for matched request Path
+//Read reads view for matched request Path
 func (s *service) Read(ctx context.Context, request *Request) *Response {
 	response := NewResponse()
 	response.CreateTime = request.EventTime
@@ -112,7 +112,7 @@ func (s *service) readViewData(ctx context.Context, collection gtly.Collection, 
 	query.SetFetchTime()
 	response.Metrics.AddQuery(query)
 	if err != nil {
-		return errors.Wrapf(err, "failed to read data with rule: %v", rule.Info.URL)
+		return errors.Wrapf(err, "failed to read view with rule: %v", rule.Info.URL)
 	}
 	if selector.CaseFormat != view.CaseFormat {
 		collection.Proto().OutputCaseFormat(view.CaseFormat, selector.CaseFormat)

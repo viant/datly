@@ -9,13 +9,13 @@ import (
 	"github.com/viant/toolbox"
 )
 
-//NewCollection create a collection for data view
+//NewCollection create a collection for view view
 func NewCollection(data map[string]interface{}, view *data2.View, io *data2.IO) (gtly.Collection, error) {
 	result := gtly.NewProvider(view.Name).NewArray()
 	values, ok := data[io.Key]
 	if !ok {
 		if shared2.IsLoggingEnabled() {
-			fmt.Printf("no input data for %v\n", io.Key)
+			fmt.Printf("no input view for %v\n", io.Key)
 		}
 		return result, nil
 	}
@@ -29,12 +29,12 @@ func NewCollection(data map[string]interface{}, view *data2.View, io *data2.IO) 
 	case shared2.CardinalityOne:
 		aMap, ok := values.(map[string]interface{})
 		if !ok {
-			return nil, errors.Errorf("invalid input data: %v, expected: %T, but had: %T", io.Key, aMap, values)
+			return nil, errors.Errorf("invalid input view: %v, expected: %T, but had: %T", io.Key, aMap, values)
 		}
 
 		result.Add(aMap)
 	default:
-		//TODO optimize storage in the original json decoding, and add optimized data type support here
+		//TODO optimize storage in the original json decoding, and add optimized view type support here
 		aSlice := toolbox.AsSlice(values)
 		for i := range aSlice {
 			result.Add(toolbox.AsMap(aSlice[i]))

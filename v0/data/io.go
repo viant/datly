@@ -8,7 +8,7 @@ import (
 	"github.com/viant/gtly"
 )
 
-//IO represents data input/output
+//IO represents view input/output
 type IO struct {
 	DataView    string `json:",omitempty"`
 	Key         string `json:",omitempty"`
@@ -34,7 +34,7 @@ func (o IO) Validate() error {
 	}
 	if o.CaseFormat != "" {
 		if err := gtly.ValidateCaseFormat(o.CaseFormat); err != nil {
-			return errors.Wrapf(err, "invalid case format for data view: %v", o.DataView)
+			return errors.Wrapf(err, "invalid case format for view view: %v", o.DataView)
 		}
 	}
 	if o.Cardinality != "" {

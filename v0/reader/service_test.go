@@ -42,7 +42,7 @@ func TestService_Read(t *testing.T) {
 		expect         interface{}
 	}{
 		{
-			description:  "basic data read",
+			description:  "basic view read",
 			caseDataPath: "/case001/",
 			config: &config2.Config{
 				Connectors: config2.Connectors{
@@ -69,7 +69,7 @@ func TestService_Read(t *testing.T) {
 		},
 
 		{
-			description:  "data view bindingData",
+			description:  "view view bindingData",
 			caseDataPath: "/case002/",
 			config: &config2.Config{
 				Connectors: config2.Connectors{
@@ -95,7 +95,7 @@ func TestService_Read(t *testing.T) {
 }`,
 		},
 		{
-			description:  "multi data selection",
+			description:  "multi view selection",
 			caseDataPath: "/case003/",
 			config: &config2.Config{
 				Connectors: config2.Connectors{

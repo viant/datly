@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"github.com/viant/datly/data"
 	"github.com/viant/datly/gateway/runtime/standalone/meta"
 	"gopkg.in/yaml.v3"
 	"net/http"
@@ -12,7 +11,7 @@ import (
 type view struct {
 	URIPrefix string
 	meta      *meta.Config
-	lookup    func(location string) (*data.View, error)
+	lookup    func(location string) (*view.View, error)
 }
 
 func (v *view) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -51,7 +50,7 @@ func (v *view) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 }
 
 //NewView creates view handler
-func NewView(URI string, meta *meta.Config, lookup func(location string) (*data.View, error)) http.Handler {
+func NewView(URI string, meta *meta.Config, lookup func(location string) (*view.View, error)) http.Handler {
 	handler := &view{lookup: lookup, meta: meta, URIPrefix: URI}
 	return handler
 }

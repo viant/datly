@@ -1,27 +1,24 @@
 package router_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/golang-jwt/jwt/v4"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/afs"
 	"github.com/viant/assertly"
-	"github.com/viant/datly/data"
+	"github.com/viant/datly/auth/gcp"
 	"github.com/viant/datly/gateway/registry"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
 	"google.golang.org/api/oauth2/v2"
-	"io"
 	"io/ioutil"
 	"math"
 	"net/http/httptest"
 	"reflect"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/viant/datly/router"
@@ -39,9 +36,8 @@ type testcase struct {
 	method      string
 	expected    string
 	visitors    visitor.Visitors
-	types       data.Types
+	types       view.Types
 	headers     http.Header
-	requestBody string
 
 	corsHeaders map[string]string
 }
@@ -49,35 +45,7 @@ type testcase struct {
 type (
 	eventAfterFetcher  struct{}
 	eventBeforeFetcher struct{}
-	gcpMockDecoder     struct{}
 )
-
-func (g *gcpMockDecoder) Value(ctx context.Context, raw string) (interface{}, error) {
-	tokenType := "Bearer "
-	if index := strings.Index(raw, tokenType); index != -1 {
-		raw = raw[index+len(tokenType):]
-		decoded, err := base64.URLEncoding.DecodeString(raw)
-		if err != nil {
-			return nil, err
-		}
-
-		claims := jwt.MapClaims{}
-		_, _ = jwt.ParseWithClaims(string(decoded), claims, func(token *jwt.Token) (interface{}, error) {
-			return nil, nil
-		})
-
-		email := claims["Email"]
-		if emailAsString, ok := email.(string); ok {
-			return &oauth2.Tokeninfo{
-				Email: emailAsString,
-			}, nil
-		}
-
-		return &oauth2.Tokeninfo{}, err
-	}
-
-	return nil, fmt.Errorf("unsupported token type")
-}
 
 func (e *eventBeforeFetcher) BeforeFetch(response http.ResponseWriter, request *http.Request) (responseClosed bool, err error) {
 	response.WriteHeader(http.StatusBadRequest)
@@ -88,7 +56,7 @@ func (e *eventBeforeFetcher) BeforeFetch(response http.ResponseWriter, request *
 func (e *eventAfterFetcher) AfterFetch(data interface{}, response http.ResponseWriter, request *http.Request) (responseClosed bool, err error) {
 	if _, ok := data.(*[]*event); !ok {
 		response.WriteHeader(http.StatusInternalServerError)
-		response.Write([]byte("unexpected data type"))
+		response.Write([]byte("unexpected view type"))
 		return true, nil
 	}
 
@@ -306,7 +274,7 @@ func TestRouter(t *testing.T) {
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MSwiRW1haWwiOiJhYmNAZXhhbXBsZS5jb20ifQ.dm3jSSuqy9wf4BsjU1dElRQQEySC5nn6fCUTmTKqt2")},
 			},
 			visitors: visitor.NewVisitors(
-				visitor.New(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
+				visitor.New(registry.CodecKeyJwtClaim, &gcp.JwtClaim{}),
 			),
 			types: map[string]reflect.Type{
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
@@ -323,7 +291,7 @@ func TestRouter(t *testing.T) {
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MiwiRW1haWwiOiJleGFtcGxlQGdtYWlsLmNvbSJ9.XsZ115KqQK8uQE9for6NaphYS1VHdJc_famKWHo1Dcw")},
 			},
 			visitors: visitor.NewVisitors(
-				visitor.New(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
+				visitor.New(registry.CodecKeyJwtClaim, &gcp.JwtClaim{}),
 			),
 			types: map[string]reflect.Type{
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
@@ -337,10 +305,10 @@ func TestRouter(t *testing.T) {
 			expected:    `[{"Id":1,"DepId":1,"Email":"abc@example.com"},{"Id":2,"DepId":2,"Email":"example@gmail.com"},{"Id":3,"DepId":1,"Email":"tom@example.com"},{"Id":4,"DepId":2,"Email":"Ann@example.com"}]`,
 			headers: map[string][]string{
 				//ID: 4
-				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJFbWFpbCI6IkFubkBleGFtcGxlLmNvbSIsIklkIjo0fQ.9A0LWtsh_tskG-hLBFVNj7PNRQE8qWc5ZioqLWPS1gQ")},
+				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6IkFubkBleGFtcGxlLmNvbSIsImlkIjoiNCJ9.gxhP-M5t5Iqcz7yK635rs93jqKXEkPNNTcY0sOJGC3s")},
 			},
 			visitors: visitor.NewVisitors(
-				visitor.New(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
+				visitor.New(registry.CodecKeyJwtClaim, &gcp.JwtClaim{}),
 			),
 			types: map[string]reflect.Type{
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
@@ -382,35 +350,6 @@ func TestRouter(t *testing.T) {
 			uri:         fmt.Sprintf("/api/events?%v=ev.Id|ev.Quantity&%v=ev.1&%v=2", router.Fields, router.Offset, router.Limit),
 			method:      http.MethodGet,
 		},
-		{
-			description: "styles | error",
-			resourceURI: "011_style",
-			uri:         "/api/events?_criteria=(id%20=%201%20UNION%20ALL%20SELECT%209%20as%20id%2C%20To_Date%28%222019-03-11T02%3A20%3A33Z%22%29%20as%20timestamp%2C%2010%20as%20event_type_id%2C%2020%20as%20quantity%2C%206%20as%20user_id)",
-			expected:    `{"Status":"error","Message":"can't use criteria on view events"}`,
-			method:      http.MethodGet,
-		},
-		{
-			description: "styles | response",
-			resourceURI: "011_style",
-			uri:         "/api/events?_fields=Id|Timestamp|EventTypeId",
-			expected:    `{"Status":"ok","Result":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111}]}`,
-			method:      http.MethodGet,
-		},
-		{
-			description: "default | default tag",
-			resourceURI: "012_default",
-			uri:         "/api/events",
-			expected:    `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11"},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15"},{"Id":100,"Quantity":10.5,"Timestamp":"2019-04-10"}]`,
-			method:      http.MethodGet,
-		},
-		{
-			description: "reader post | request body param",
-			resourceURI: "013_reader_post",
-			uri:         "/api/events",
-			expected:    `[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}]`,
-			method:      http.MethodPost,
-			requestBody: `{"UserId":2,"Id":10}`,
-		},
 	}
 
 	//for i, testcase := range testcases[len(testcases)-1:] {
@@ -434,12 +373,7 @@ func TestRouter(t *testing.T) {
 			}
 		}
 
-		var body io.Reader
-		if testcase.method != http.MethodGet {
-			body = bytes.NewReader([]byte(testcase.requestBody))
-		}
-
-		httpRequest := httptest.NewRequest(testcase.method, testcase.uri, body)
+		httpRequest := httptest.NewRequest(testcase.method, testcase.uri, nil)
 		for header, values := range testcase.headers {
 			httpRequest.Header.Add(header, values[0])
 		}

@@ -23,11 +23,11 @@ const ( //Binding source types
 	BindingPath = "Path"
 	//BindingQueryString binding query string source
 	BindingQueryString = "QueryString"
-	//BindingDataView binding data view source
+	//BindingDataView binding view view source
 	BindingDataView = "DataView"
-	//BindingBodyData binding data source
+	//BindingBodyData binding view source
 	BindingBodyData = "BodyData"
-	//BindingDataPool binding data source
+	//BindingDataPool binding view source
 	BindingDataPool = "DataPool"
 	//BindingHeader binding header source
 	BindingHeader = "Header"
@@ -92,7 +92,7 @@ const ( //Selectors keys
 	LimitKey = "_limit"
 	//OffsetKey offset key
 	OffsetKey = "_offset"
-	//Metrics data only query strning
+	//Metrics view only query strning
 	Metrics = "_metrics"
 )
 

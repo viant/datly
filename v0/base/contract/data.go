@@ -5,7 +5,7 @@ import (
 	"github.com/viant/gtly/codec/json"
 )
 
-//Data represents data
+//Data represents view
 type Data map[string]interface{}
 
 func (r Data) MarshalJSON() ([]byte, error) {

@@ -3,9 +3,9 @@ package router
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/data"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
 	"net/http"
@@ -36,7 +36,7 @@ type Router struct {
 	serviceRouter *toolbox.ServiceRouter
 }
 
-func (r *Router) View(name string) (*data.View, error) {
+func (r *Router) View(name string) (*view.View, error) {
 	return r.resource.Resource.View(name)
 }
 
@@ -200,7 +200,7 @@ func (r *Router) runAfterFetch(response http.ResponseWriter, request *http.Reque
 	return true
 }
 
-func (r *Router) writeResponse(route *Route, request *http.Request, response http.ResponseWriter, destValue reflect.Value, selectors data.Selectors) {
+func (r *Router) writeResponse(route *Route, request *http.Request, response http.ResponseWriter, destValue reflect.Value, selectors view.Selectors) {
 	filters, err := r.buildJsonFilters(route, selectors)
 	if err != nil {
 		r.writeErr(response, route, err, http.StatusBadRequest)
@@ -219,7 +219,7 @@ func (r *Router) writeResponse(route *Route, request *http.Request, response htt
 }
 
 func (r *Router) result(route *Route, request *http.Request, destValue reflect.Value, filters *json.Filters) ([]byte, int, error) {
-	if route.Cardinality == data.Many {
+	if route.Cardinality == view.Many {
 		result := r.wrapWithResponseIfNeeded(destValue.Elem().Interface(), route)
 		asBytes, err := route._marshaller.Marshal(result, filters)
 		if err != nil {
@@ -248,7 +248,7 @@ func (r *Router) result(route *Route, request *http.Request, destValue reflect.V
 	}
 }
 
-func (r *Router) buildJsonFilters(route *Route, selectors data.Selectors) (*json.Filters, error) {
+func (r *Router) buildJsonFilters(route *Route, selectors view.Selectors) (*json.Filters, error) {
 	entries := make([]*json.FilterEntry, 0)
 	for viewName, selector := range selectors {
 		if len(selector.Columns) == 0 {
@@ -256,7 +256,7 @@ func (r *Router) buildJsonFilters(route *Route, selectors data.Selectors) (*json
 		}
 
 		var path string
-		var view *data.View
+		var view *view.View
 
 		viewByName, ok := route.Index.viewByName(viewName)
 		if !ok {

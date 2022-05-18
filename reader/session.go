@@ -2,18 +2,18 @@ package reader
 
 import (
 	"fmt"
-	"github.com/viant/datly/data"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view"
 	rdata "github.com/viant/toolbox/data"
 	"reflect"
 )
 
-//Session groups data required to Read data
+//Session groups view required to Read view
 type Session struct {
 	Dest      interface{} //slice
-	View      *data.View
-	Selectors data.Selectors
-	Parent    *data.View
+	View      *view.View
+	Selectors view.Selectors
+	Parent    *view.View
 }
 
 //DataType returns Parent View.DataType
@@ -22,7 +22,7 @@ func (s *Session) DataType() reflect.Type {
 }
 
 //NewReplacement creates parameter map common for all the views in session.
-func (s *Session) NewReplacement(view *data.View) rdata.Map {
+func (s *Session) NewReplacement(view *view.View) rdata.Map {
 	aMap := rdata.NewMap()
 	aMap.SetValue(string(shared.DataViewName), view.Name)
 
@@ -32,7 +32,7 @@ func (s *Session) NewReplacement(view *data.View) rdata.Map {
 //Init initializes session
 func (s *Session) Init() error {
 	if s.Selectors == nil {
-		s.Selectors = data.Selectors{}
+		s.Selectors = view.Selectors{}
 	}
 
 	s.Selectors.Init()
@@ -52,7 +52,7 @@ func (s *Session) Init() error {
 }
 
 //NewSession creates a session
-func NewSession(dest interface{}, view *data.View) *Session {
+func NewSession(dest interface{}, view *view.View) *Session {
 	return &Session{
 		Dest: dest,
 		View: view,

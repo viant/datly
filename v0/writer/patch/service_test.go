@@ -38,7 +38,7 @@ func TestService_Path(t *testing.T) {
 		checkDatabase     bool
 	}{
 		{
-			description:   "basic data patch - inserts",
+			description:   "basic view patch - inserts",
 			caseDataPath:  "/case001/",
 			checkDatabase: true,
 			config: &config2.Config{
@@ -81,7 +81,7 @@ func TestService_Path(t *testing.T) {
 		},
 
 		{
-			description:   "basic data patch - inserts/updates",
+			description:   "basic view patch - inserts/updates",
 			caseDataPath:  "/case002/",
 			checkDatabase: true,
 			prepareData:   true,

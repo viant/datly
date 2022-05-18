@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
-	"github.com/viant/datly/config"
-	"github.com/viant/datly/data"
+	"github.com/viant/datly/view"
 	"github.com/viant/dsunit"
 	"github.com/viant/toolbox"
 	"path"
@@ -28,9 +27,9 @@ func TestBuilder_Build(t *testing.T) {
 
 	useCases := []struct {
 		batchData    *BatchData
-		view         *data.View
-		relation     *data.Relation
-		selector     *data.Selector
+		view         *view.View
+		relation     *view.Relation
+		selector     *view.Selector
 		placeholders []interface{}
 		description  string
 		output       string
@@ -40,8 +39,8 @@ func TestBuilder_Build(t *testing.T) {
 			dataset:     "dataset001_events/",
 			description: `select statement`,
 			output:      `SELECT  t.ID,  t.Price FROM events AS t`,
-			view: &data.View{
-				Columns: []*data.Column{
+			view: &view.View{
+				Columns: []*view.Column{
 					{
 						Name:     "ID",
 						DataType: "Int",
@@ -53,13 +52,13 @@ func TestBuilder_Build(t *testing.T) {
 				},
 				Name:  "events",
 				Table: "events",
-				Template: &data.Template{
-					Schema:         data.NewSchema(reflect.TypeOf(Params{})),
-					PresenceSchema: data.NewSchema(reflect.TypeOf(PresenceMap{})),
+				Template: &view.Template{
+					Schema:         view.NewSchema(reflect.TypeOf(Params{})),
+					PresenceSchema: view.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
 			batchData: &BatchData{},
-			selector: &data.Selector{Parameters: data.ParamState{
+			selector: &view.Selector{Parameters: view.ParamState{
 				Values: Params{},
 				Has:    PresenceMap{},
 			}},
@@ -68,8 +67,8 @@ func TestBuilder_Build(t *testing.T) {
 			dataset:     "dataset001_events/",
 			description: `select statement with offset and limit`,
 			output:      `SELECT  t.ID,  t.Price FROM events AS t    LIMIT 10 OFFSET 5`,
-			view: &data.View{
-				Columns: []*data.Column{
+			view: &view.View{
+				Columns: []*view.Column{
 					{
 						Name:     "ID",
 						DataType: "Int",
@@ -80,18 +79,18 @@ func TestBuilder_Build(t *testing.T) {
 					},
 				},
 				Name: "events",
-				Selector: &data.Config{
+				Selector: &view.Config{
 					Limit: 10,
 				},
 				Table: "events",
-				Template: &data.Template{
-					Schema:         data.NewSchema(reflect.TypeOf(Params{})),
-					PresenceSchema: data.NewSchema(reflect.TypeOf(PresenceMap{})),
+				Template: &view.Template{
+					Schema:         view.NewSchema(reflect.TypeOf(Params{})),
+					PresenceSchema: view.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
 			batchData: &BatchData{},
-			selector: &data.Selector{
-				Parameters: data.ParamState{
+			selector: &view.Selector{
+				Parameters: view.ParamState{
 					Values: Params{},
 					Has:    PresenceMap{},
 				},
@@ -102,8 +101,8 @@ func TestBuilder_Build(t *testing.T) {
 			dataset:     "dataset001_events/",
 			description: `select statement with $PAGINATION`,
 			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS  LIMIT 10 OFFSET 5) AS t`,
-			view: &data.View{
-				Columns: []*data.Column{
+			view: &view.View{
+				Columns: []*view.Column{
 					{
 						Name:     "ID",
 						DataType: "Int",
@@ -114,19 +113,19 @@ func TestBuilder_Build(t *testing.T) {
 					},
 				},
 				Name: "events",
-				Selector: &data.Config{
+				Selector: &view.Config{
 					Limit: 10,
 				},
 				From:  "SELECT * FROM EVENTS $PAGINATION",
 				Table: "events",
-				Template: &data.Template{
-					Schema:         data.NewSchema(reflect.TypeOf(Params{})),
-					PresenceSchema: data.NewSchema(reflect.TypeOf(PresenceMap{})),
+				Template: &view.Template{
+					Schema:         view.NewSchema(reflect.TypeOf(Params{})),
+					PresenceSchema: view.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
 			batchData: &BatchData{},
-			selector: &data.Selector{
-				Parameters: data.ParamState{
+			selector: &view.Selector{
+				Parameters: view.ParamState{
 					Values: Params{},
 					Has:    PresenceMap{},
 				},
@@ -137,9 +136,9 @@ func TestBuilder_Build(t *testing.T) {
 			dataset:     "dataset001_events/",
 			description: `select statement with View Criteria`,
 			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ) AS t  WHERE ID = 1`,
-			view: &data.View{
+			view: &view.View{
 				Criteria: "ID = 1",
-				Columns: []*data.Column{
+				Columns: []*view.Column{
 					{
 						Name:     "ID",
 						DataType: "Int",
@@ -152,14 +151,14 @@ func TestBuilder_Build(t *testing.T) {
 				Name:  "events",
 				From:  "SELECT * FROM EVENTS $PAGINATION",
 				Table: "Events",
-				Template: &data.Template{
-					Schema:         data.NewSchema(reflect.TypeOf(Params{})),
-					PresenceSchema: data.NewSchema(reflect.TypeOf(PresenceMap{})),
+				Template: &view.Template{
+					Schema:         view.NewSchema(reflect.TypeOf(Params{})),
+					PresenceSchema: view.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
 			batchData: &BatchData{},
-			selector: &data.Selector{
-				Parameters: data.ParamState{
+			selector: &view.Selector{
+				Parameters: view.ParamState{
 					Values: Params{},
 					Has:    PresenceMap{},
 				},
@@ -169,9 +168,9 @@ func TestBuilder_Build(t *testing.T) {
 			dataset:     "dataset001_events/",
 			description: `select statement with $CRITERIA`,
 			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS  WHERE ID = 1) AS t`,
-			view: &data.View{
+			view: &view.View{
 				Criteria: "ID = 1",
-				Columns: []*data.Column{
+				Columns: []*view.Column{
 					{
 						Name:     "ID",
 						DataType: "Int",
@@ -184,14 +183,14 @@ func TestBuilder_Build(t *testing.T) {
 				Name:  "events",
 				From:  "SELECT * FROM EVENTS $CRITERIA",
 				Table: "Events",
-				Template: &data.Template{
-					Schema:         data.NewSchema(reflect.TypeOf(Params{})),
-					PresenceSchema: data.NewSchema(reflect.TypeOf(PresenceMap{})),
+				Template: &view.Template{
+					Schema:         view.NewSchema(reflect.TypeOf(Params{})),
+					PresenceSchema: view.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
 			batchData: &BatchData{},
-			selector: &data.Selector{
-				Parameters: data.ParamState{
+			selector: &view.Selector{
+				Parameters: view.ParamState{
 					Values: Params{},
 					Has:    PresenceMap{},
 				},
@@ -201,9 +200,9 @@ func TestBuilder_Build(t *testing.T) {
 			dataset:     "dataset001_events/",
 			description: `select statement with parameters`,
 			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS  WHERE ID = ?) AS t`,
-			view: &data.View{
+			view: &view.View{
 				Criteria: "ID = $EventId",
-				Columns: []*data.Column{
+				Columns: []*view.Column{
 					{
 						Name:     "ID",
 						DataType: "Int",
@@ -216,16 +215,16 @@ func TestBuilder_Build(t *testing.T) {
 				Name:  "events",
 				From:  "SELECT * FROM EVENTS $CRITERIA",
 				Table: "Events",
-				Template: &data.Template{
-					Schema: data.NewSchema(reflect.TypeOf(Params{})),
-					Parameters: []*data.Parameter{
+				Template: &view.Template{
+					Schema: view.NewSchema(reflect.TypeOf(Params{})),
+					Parameters: []*view.Parameter{
 						{
 							Name: "EventId",
-							In: &data.Location{
-								Kind: data.PathKind,
+							In: &view.Location{
+								Kind: view.PathKind,
 								Name: "eventId",
 							},
-							Schema: &data.Schema{
+							Schema: &view.Schema{
 								DataType: "int",
 							},
 						},
@@ -234,8 +233,8 @@ func TestBuilder_Build(t *testing.T) {
 			},
 			placeholders: []interface{}{10},
 			batchData:    &BatchData{},
-			selector: &data.Selector{
-				Parameters: data.ParamState{
+			selector: &view.Selector{
+				Parameters: view.ParamState{
 					Values: Params{EventId: 10},
 					Has:    PresenceMap{},
 				},
@@ -246,9 +245,9 @@ func TestBuilder_Build(t *testing.T) {
 			description:  `select statement with $COLUMN_IN`,
 			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ? AND  ev.user_id IN (?, ?, ?, ?)) AS t`,
 			placeholders: []interface{}{10, 4, 5, 9, 2},
-			relation:     &data.Relation{ColumnAlias: "ev"},
-			view: &data.View{
-				Columns: []*data.Column{
+			relation:     &view.Relation{ColumnAlias: "ev"},
+			view: &view.View{
+				Columns: []*view.Column{
 					{
 						Name:     "ID",
 						DataType: "Int",
@@ -261,16 +260,16 @@ func TestBuilder_Build(t *testing.T) {
 				Name:  "events",
 				From:  "SELECT * FROM EVENTS ev WHERE ev.ID = $EventId AND $COLUMN_IN",
 				Table: "Events",
-				Template: &data.Template{
-					Schema: data.NewSchema(reflect.TypeOf(Params{})),
-					Parameters: []*data.Parameter{
+				Template: &view.Template{
+					Schema: view.NewSchema(reflect.TypeOf(Params{})),
+					Parameters: []*view.Parameter{
 						{
 							Name: "EventId",
-							In: &data.Location{
-								Kind: data.PathKind,
+							In: &view.Location{
+								Kind: view.PathKind,
 								Name: "eventId",
 							},
-							Schema: &data.Schema{
+							Schema: &view.Schema{
 								DataType: "int",
 							},
 						},
@@ -281,8 +280,8 @@ func TestBuilder_Build(t *testing.T) {
 				ColumnName:  "user_id",
 				ValuesBatch: []interface{}{4, 5, 9, 2},
 			},
-			selector: &data.Selector{
-				Parameters: data.ParamState{
+			selector: &view.Selector{
+				Parameters: view.ParamState{
 					Values: Params{EventId: 10},
 					Has:    PresenceMap{},
 				},
@@ -293,9 +292,9 @@ func TestBuilder_Build(t *testing.T) {
 			description:  `select statement without $COLUMN_IN`,
 			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ?) AS t  WHERE  t.user_id IN (?, ?, ?, ?)`,
 			placeholders: []interface{}{10, 4, 5, 9, 2},
-			relation:     &data.Relation{ColumnAlias: "ev"},
-			view: &data.View{
-				Columns: []*data.Column{
+			relation:     &view.Relation{ColumnAlias: "ev"},
+			view: &view.View{
+				Columns: []*view.Column{
 					{
 						Name:     "ID",
 						DataType: "Int",
@@ -308,16 +307,16 @@ func TestBuilder_Build(t *testing.T) {
 				Name:  "events",
 				From:  "SELECT * FROM EVENTS ev WHERE ev.ID = $EventId",
 				Table: "Events",
-				Template: &data.Template{
-					Schema: data.NewSchema(reflect.TypeOf(Params{})),
-					Parameters: []*data.Parameter{
+				Template: &view.Template{
+					Schema: view.NewSchema(reflect.TypeOf(Params{})),
+					Parameters: []*view.Parameter{
 						{
 							Name: "EventId",
-							In: &data.Location{
-								Kind: data.PathKind,
+							In: &view.Location{
+								Kind: view.PathKind,
 								Name: "eventId",
 							},
-							Schema: &data.Schema{
+							Schema: &view.Schema{
 								DataType: "int",
 							},
 						},
@@ -328,8 +327,8 @@ func TestBuilder_Build(t *testing.T) {
 				ColumnName:  "user_id",
 				ValuesBatch: []interface{}{4, 5, 9, 2},
 			},
-			selector: &data.Selector{
-				Parameters: data.ParamState{
+			selector: &view.Selector{
+				Parameters: view.ParamState{
 					Values: Params{EventId: 10},
 					Has:    PresenceMap{},
 				},
@@ -339,8 +338,8 @@ func TestBuilder_Build(t *testing.T) {
 			dataset:     "dataset001_events/",
 			description: `select statement | selectors`,
 			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS) AS t  WHERE price > 10   ORDER BY Price LIMIT 100 OFFSET 10`,
-			view: &data.View{
-				Columns: []*data.Column{
+			view: &view.View{
+				Columns: []*view.Column{
 					{
 						Name:     "ID",
 						DataType: "Int",
@@ -353,28 +352,28 @@ func TestBuilder_Build(t *testing.T) {
 				Name:  "events",
 				From:  "SELECT * FROM EVENTS",
 				Table: "Events",
-				Template: &data.Template{
-					Schema: data.NewSchema(reflect.TypeOf(Params{})),
-					Parameters: []*data.Parameter{
+				Template: &view.Template{
+					Schema: view.NewSchema(reflect.TypeOf(Params{})),
+					Parameters: []*view.Parameter{
 						{
 							Name: "EventId",
-							In: &data.Location{
-								Kind: data.PathKind,
+							In: &view.Location{
+								Kind: view.PathKind,
 								Name: "eventId",
 							},
-							Schema: &data.Schema{
+							Schema: &view.Schema{
 								DataType: "int",
 							},
 						},
 					},
 				},
 			},
-			selector: &data.Selector{
+			selector: &view.Selector{
 				OrderBy:  "price",
 				Criteria: "price > 10",
 				Limit:    100,
 				Offset:   10,
-				Parameters: data.ParamState{
+				Parameters: view.ParamState{
 					Values: Params{},
 					Has:    PresenceMap{},
 				},
@@ -390,13 +389,13 @@ func TestBuilder_Build(t *testing.T) {
 			return
 		}
 
-		useCase.view.Connector = &config.Connector{
+		useCase.view.Connector = &view.Connector{
 			Name:   "db",
 			DSN:    "./testdata/db/db.db",
 			Driver: "sqlite3",
 		}
 
-		if !assert.Nil(t, useCase.view.Init(context.TODO(), data.EmptyResource()), useCase.description) {
+		if !assert.Nil(t, useCase.view.Init(context.TODO(), view.EmptyResource()), useCase.description) {
 			continue
 		}
 
