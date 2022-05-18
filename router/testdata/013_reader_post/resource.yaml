@@ -1,0 +1,44 @@
+Routes:
+  - URI: "/api/events"
+    Method: POST
+    Service: Reader
+    View:
+      Ref: events
+
+Resource:
+  Views:
+    - Name: events
+      Connector:
+        Ref: db
+      Table: events
+      Template:
+        Source: '
+          SELECT * FROM events WHERE 1=1 
+          #if($Unsafe.RequestBody.Id != 0)
+          AND id = $RequestBody.Id
+          #end
+          #if($Unsafe.RequestBody.UserId != 0)
+          AND user_id = $RequestBody.UserId
+          #end 
+        '
+        Parameters:
+          - Name: RequestBody
+            In:
+              Kind: request_body
+            Schema:
+              Name: RequestBody
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"
+
+  Types:
+    - Name: RequestBody
+      Fields:
+        - Name: Id
+          Schema:
+            DataType: int
+        - Name: UserId
+          Schema:
+            DataType: int

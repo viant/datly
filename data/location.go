@@ -9,17 +9,18 @@ import (
 type Kind string
 
 const (
-	DataViewKind Kind = "data_view"
-	HeaderKind   Kind = "header"
-	QueryKind    Kind = "query"
-	PathKind     Kind = "path"
-	CookieKind   Kind = "cookie"
+	DataViewKind    Kind = "data_view"
+	HeaderKind      Kind = "header"
+	QueryKind       Kind = "query"
+	PathKind        Kind = "path"
+	CookieKind      Kind = "cookie"
+	RequestBodyKind Kind = "request_body"
 )
 
 //Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case DataViewKind, PathKind, QueryKind, HeaderKind, CookieKind:
+	case DataViewKind, PathKind, QueryKind, HeaderKind, CookieKind, RequestBodyKind:
 		return nil
 	}
 
@@ -33,12 +34,12 @@ type ParamName string
 
 //Validate checks if ParamName is valid
 func (p ParamName) Validate(kind Kind) error {
-	if p == "" {
+	if p == "" && kind != RequestBodyKind {
 		return fmt.Errorf("param name can't be empty")
 	}
 
 	switch kind {
-	case DataViewKind, PathKind, QueryKind, HeaderKind, CookieKind:
+	case DataViewKind, PathKind, QueryKind, HeaderKind, CookieKind, RequestBodyKind:
 		return nil
 	}
 

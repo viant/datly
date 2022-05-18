@@ -8,16 +8,20 @@ import (
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/xunsafe"
+	"net/http"
 	"reflect"
 )
 
 type Style string
+type ServiceType string
 
 const pkgPath = "github.com/viant/datly/router"
 
 const (
 	BasicStyle         Style = "Basic"
 	ComprehensiveStyle Style = "Comprehensive"
+
+	ReaderServiceType ServiceType = "Reader"
 )
 
 type (
@@ -26,13 +30,14 @@ type (
 		Visitor *visitor.Visitor
 		URI     string
 		Method  string
+		Service ServiceType
 		View    *data.View
 		Cors    *Cors
 		Output
-
 		Index Index
 
-		_resource *data.Resource
+		_requestBodyType reflect.Type
+		_resource        *data.Resource
 	}
 
 	Output struct {
@@ -85,6 +90,14 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	}
 
 	if err := r.initMarshaller(); err != nil {
+		return err
+	}
+
+	if err := r.initServiceType(); err != nil {
+		return err
+	}
+
+	if err := r.initRequestBody(); err != nil {
 		return err
 	}
 
@@ -206,6 +219,65 @@ func (r *Route) responseType() reflect.Type {
 	}
 
 	return r.View.Schema.Type()
+}
+
+func (r *Route) initServiceType() error {
+	switch r.Service {
+	case "", ReaderServiceType:
+		r.Service = ReaderServiceType
+		return nil
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		r.Service = ReaderServiceType
+		return nil
+	default:
+		return fmt.Errorf("http method %v unsupported", r.Method)
+	}
+}
+
+func (r *Route) initRequestBody() error {
+	if r.Method == http.MethodGet {
+		return nil
+	}
+
+	return r.initRequestBodyFromParams()
+}
+
+func (r *Route) initRequestBodyFromParams() error {
+	params := make([]*data.Parameter, 0)
+	r.findRequestBodyParams(r.View, &params)
+
+	if len(params) == 0 {
+		return nil
+	}
+
+	rType := params[0].Schema.Type()
+	for i := 1; i < len(params); i++ {
+		if params[i].Schema.Type() != rType {
+			return fmt.Errorf("parameters request body type missmatch: wanted %v got %v", rType.String(), params[i].Schema.Type().String())
+		}
+	}
+
+	r._requestBodyType = rType
+	return nil
+}
+
+func (r *Route) findRequestBodyParams(view *data.View, params *[]*data.Parameter) {
+	for i, parameter := range view.Template.Parameters {
+		if parameter.In.Kind == data.RequestBodyKind {
+			*params = append(*params, view.Template.Parameters[i])
+		}
+
+		if parameter.View() != nil {
+			r.findRequestBodyParams(parameter.View(), params)
+		}
+	}
+
+	for _, relation := range view.With {
+		r.findRequestBodyParams(&relation.Of.View, params)
+	}
 }
 
 func (i *Index) ViewByPrefix(prefix string) (*data.View, error) {

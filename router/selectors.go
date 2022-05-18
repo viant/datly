@@ -29,7 +29,11 @@ func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.R
 		MainView: route.View,
 	}
 
-	requestParams := NewRequestParameters(request, route.URI)
+	requestParams, err := NewRequestParameters(request, route)
+	if err != nil {
+		return nil, err
+	}
+
 	return CreateSelectors(ctx, requestMetadata, requestParams, views...)
 }
 
@@ -126,8 +130,22 @@ func buildSelectorParameters(ctx context.Context, parent *data.View, paramsPtr, 
 			if err = addViewParam(ctx, parent, paramsPtr, presencePtr, parameter, requestParams, requestMetadata); err != nil {
 				return err
 			}
+
+		case data.RequestBodyKind:
+			if err = addRequestBodyParam(paramsPtr, presencePtr, parameter, requestParams); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
+}
+
+func addRequestBodyParam(paramsPtr unsafe.Pointer, presencePtr unsafe.Pointer, param *data.Parameter, requestParams *RequestParams) error {
+	if err := param.Set(paramsPtr, requestParams.requestBody); err != nil {
+		return err
+	}
+
+	param.UpdatePresence(presencePtr)
 	return nil
 }
 
