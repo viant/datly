@@ -6,14 +6,20 @@ init:
   appArchive: ${appPath}/gateway/runtime/lambda/app/datly.zip
   privilegePolicy: policy/datly.json
   awsCredentials: aws-e2e
+  cognito: $LoadJSON('resource/secrets.json')
+  configMap: $LoadJSON('resource/config.json')
+  'configMap.Cognito': $cognito
+  datlyConfig:  $AsJSON(${configMap})
 pipeline:
 
+  info:
+    action: print
+    message: $AsJSON(${datlyConfig})
 
   uploadConfig:
-    action: storage:copy
+    action: storage:upload
     expand: true
-    source:
-      URL: ${appPath}/gateway/runtime/lambda/resource/config.json
+    sourceKey: datlyConfig
     dest:
       URL: s3://${configBucket}/${appName}/config.json
       credentials: $awsCredentials
@@ -49,6 +55,18 @@ pipeline:
       timeout: 540
       http:
         AuthType: NONE
+#        CORS:
+#          allowCredentials: true
+#          allowHeaders:
+#            - '*'
+#          allowMethods:
+#            - '*'
+#          allowOrigins:
+#            - '*'
+#          exposeHeaders:
+#            - 'WWW-Authenticate'
+#          maxAge: 0
+
       environment:
         variables:
           CONFIG_URL:  s3://${configBucket}/${appName}/config.json

@@ -18,7 +18,7 @@ func (j *JwtClaim) Value(ctx context.Context, raw string) (interface{}, error) {
 	if decoded, err := base64.StdEncoding.DecodeString(raw); err == nil {
 		data = string(decoded)
 	}
-	info, err := gcp.TokenInfo(ctx, data, false)
+	info, err := gcp.JwtClaims(ctx, data)
 	if err != nil {
 		return nil, err
 	}

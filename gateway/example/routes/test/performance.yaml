@@ -3,9 +3,10 @@ With:
 
 Routes:
   - URI: /v1/api/test/performance
+    Operation: read
     Method: GET
     OmitEmpty: true
-    CaseFormat: lu
+    CaseFormat: lc
     View:
       Ref: performance
 

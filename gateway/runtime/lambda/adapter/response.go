@@ -12,8 +12,6 @@ func NewResponse(writer *proxy.Writer) *events.LambdaFunctionURLResponse {
 	for k, v := range writer.HeaderMap {
 		response.Headers[k] = strings.Join(v, ",")
 	}
-
-	//TODO check Content-Type to determin response type and redo it, with Content-Length
 	response.Body = writer.Body.String()
 	response.StatusCode = writer.Code
 	return response

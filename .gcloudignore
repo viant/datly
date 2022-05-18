@@ -6,3 +6,4 @@ e2e/
 .gitignore
 *.yaml
 *.md
+secrets.json

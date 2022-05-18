@@ -25,7 +25,7 @@ endly deploy authWith=$GCP_PROJECT (i.e viant-e2e)
 
 Generate identity token
 ```bash
- gcloud auth print-identity-token
+ gcloud tmpl print-identity-token
  ```
 
 

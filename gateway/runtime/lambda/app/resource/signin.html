@@ -1,0 +1,28 @@
+<html>
+<style>
+    form {
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        grid-gap: 16px;
+    }
+    label {
+        grid-column: 1 / 2;
+    }
+
+    input,
+    button {
+        grid-column: 2 / 3;
+    }
+</style>
+<form action="/signin" method="post">
+    <fieldset>
+        <legend>Cognito Singin:</legend>
+        <label for="username">Email</label>
+        <input type="text" id="username" name="username"><br><br>
+        <label for="password">Password<label>
+        <input type="password" id="password" name="password"><br><br>
+        <input type="hidden" name="redirect" value="$redirect" >
+            <button type="submit" >Submit</button>
+    </fieldset>
+</form>
+</html>

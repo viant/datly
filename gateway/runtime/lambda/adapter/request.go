@@ -14,36 +14,43 @@ import (
 type Request events.LambdaFunctionURLRequest
 
 func (r *Request) Request() *http.Request {
-	req := http.Request{}
-	req.RequestURI = r.RawPath
-	req.Header = make(http.Header)
+	req := http.Request{
+		Method:     r.RequestContext.HTTP.Method,
+		Header:     http.Header{},
+		RequestURI: r.RawPath,
+	}
 	if len(r.Headers) > 0 {
 		for k, v := range r.Headers {
-			req.Header[k] = strings.Split(v, ",")
+			req.Header.Set(k, v)
 		}
 	}
 	if r.Body != "" {
-		var reader io.ReadCloser
 		if r.IsBase64Encoded {
 			if data, err := base64.StdEncoding.DecodeString(r.Body); err == nil {
-				reader = io.NopCloser(bytes.NewReader(data))
-				req.Header.Set("Content-Length", strconv.Itoa(len(data)))
+				req.Body = io.NopCloser(bytes.NewReader(data))
+				req.Header.Set("content-length", strconv.Itoa(len(data)))
 			}
 		}
-		if reader == nil {
-			reader = io.NopCloser(strings.NewReader(r.Body))
+
+		if req.Body == nil {
+			req.Body = io.NopCloser(strings.NewReader(r.Body))
 			req.Header.Set("Content-Length", strconv.Itoa(len(r.Body)))
 		}
-		req.Body = reader
 	}
-	req.Method = r.RequestContext.HTTP.Method
-	req.URL, _ = url.Parse("https://" + r.RequestContext.DomainName + "/?" + r.RawQueryString)
-	if len(r.QueryStringParameters) > 0 {
-		req.Form = map[string][]string{}
-		for k, v := range r.QueryStringParameters {
-			req.Form.Set(k, v)
-		}
-		return &req
+
+	host := req.Header.Get("Host")
+	if host == "" {
+		host = r.RequestContext.DomainName
 	}
+	req.Host = host
+	URI := r.RawPath
+	if URI != "" && URI[0] == '/' {
+		URI = URI[1:]
+	}
+
+	if r.RawQueryString != "" {
+		URI += "?" + r.RawQueryString
+	}
+	req.URL, _ = url.Parse("https://" + host + "/" + URI)
 	return &req
 }

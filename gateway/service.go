@@ -88,6 +88,9 @@ func (r *Service) handle(writer http.ResponseWriter, request *http.Request) erro
 	router, err := r.match(routePath)
 	if err == nil {
 		err = router.Handle(writer, request)
+		if err != nil {
+			err = fmt.Errorf("failed to route: %v, %v, %v %w", request.Method, request.RequestURI, request.URL.String(), err)
+		}
 	}
 	return err
 }
@@ -167,6 +170,7 @@ func (r *Service) handleRouterResourceChange(ctx context.Context, hasChanged *bo
 			}
 			res.SourceURL = URL
 			resourcesSnapshot[res.SourceURL] = res
+
 		case resource.Deleted:
 			delete(resourcesSnapshot, URL)
 		}

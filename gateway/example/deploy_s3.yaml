@@ -25,11 +25,8 @@ pipeline:
     dest:
       URL: s3://${configBucket}/${appName}/dependencies/
       credentials: $awsCredentials
-  uploadConfig:
-    action: storage:copy
-    expand: true
-    source:
-      URL: ${appPath}/gateway/runtime/lambda/resource/config.json
-    dest:
-      URL: s3://${configBucket}/${appName}/config.json
-      credentials: $awsCredentials
+  deleteCache:
+    action: storage:remove
+    Assets:
+      - URL: s3://${configBucket}/${appName}/_.cache
+        Credentials: $awsCredentials

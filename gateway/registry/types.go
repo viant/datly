@@ -1,7 +1,7 @@
 package registry
 
 import (
-	"google.golang.org/api/oauth2/v2"
+	"github.com/viant/scy/auth/jwt"
 	"reflect"
 )
 
@@ -10,5 +10,5 @@ const (
 )
 
 var Types = map[string]reflect.Type{
-	TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
+	TypeJwtTokenInfo: reflect.TypeOf(&jwt.Claims{}),
 }
