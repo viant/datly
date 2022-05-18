@@ -17,7 +17,9 @@ type Column struct {
 	DataType   string `json:",omitempty"`
 	Expression string `json:",omitempty"`
 	Filterable bool   `json:",omitempty"`
-	Nullable   bool
+	Nullable   bool   `json:",omitempty"`
+	Default    string `json:",omitempty"`
+	Format     string `json:",omitempty"`
 
 	rType         reflect.Type
 	tag           *io.Tag

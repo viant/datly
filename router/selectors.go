@@ -153,7 +153,7 @@ func addViewParam(ctx context.Context, parent *data.View, paramsPtr, presencePtr
 	session := reader.NewSession(destSlice, view)
 	session.Parent = parent
 	newIndex := Index{}
-	if err := newIndex.Init(view); err != nil {
+	if err := newIndex.Init(view, ""); err != nil {
 		return err
 	}
 

@@ -1,0 +1,23 @@
+Routes:
+  - URI: "/api/events"
+    Method: GET
+    View:
+      Ref: events_ref
+      Name: events
+    Style: Comprehensive
+    ResponseField: Result
+
+Resource:
+  Views:
+    - Name: events_ref
+      Connector:
+        Ref: db
+      Table: events
+      SelectorConstraints:
+        FilterableColumns:
+          - '*'
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"

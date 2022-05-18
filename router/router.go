@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/reader"
-	"github.com/viant/datly/router/marshal"
-	cusJson "github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
 	"net/http"
@@ -25,179 +24,16 @@ const (
 	AllowCredentialsHeader = "Access-Control-Allow-Credentials"
 	ExposeHeadersHeader    = "Access-Control-Expose-Headers"
 	MaxAgeHeader           = "Access-Control-Max-Age"
-
-	Separator = " "
+	Separator              = " "
 )
 
-type (
-	Router struct {
-		resource      *Resource
-		serviceRouter *toolbox.ServiceRouter
-	}
+var errorFilters = json.NewFilters(&json.FilterEntry{
+	Fields: []string{"Status", "Message"},
+})
 
-	Routes []*Route
-	Route  struct {
-		Visitor *visitor.Visitor
-		URI     string
-		Method  string
-		View    *data.View
-		Cors    *Cors
-		Output
-
-		Index Index
-
-		_resource *data.Resource
-	}
-
-	Cors struct {
-		AllowCredentials *bool
-		AllowHeaders     *[]string
-		AllowMethods     *[]string
-		AllowOrigins     *[]string
-		ExposeHeaders    *[]string
-		MaxAge           *int64
-	}
-
-	Output struct {
-		Cardinality data.Cardinality
-		CaseFormat  data.CaseFormat
-		OmitEmpty   bool
-
-		_marshaller *cusJson.Marshaller
-		Style       string //enum Basic, Comprehensice , Status: ok, error, + error with structre
-		//TODO add output key
-		//TODO make if output key non empty pass Status, and Error info in the response
-	}
-)
-
-func (c *Cors) inherit(cors *Cors) {
-	if cors == nil {
-		return
-	}
-
-	if c.ExposeHeaders == nil {
-		c.ExposeHeaders = cors.ExposeHeaders
-	}
-
-	if c.AllowMethods == nil {
-		c.AllowMethods = cors.AllowMethods
-	}
-
-	if c.AllowHeaders == nil {
-		c.AllowHeaders = cors.AllowHeaders
-	}
-
-	if c.AllowOrigins == nil {
-		c.AllowOrigins = cors.AllowOrigins
-	}
-
-	if c.AllowCredentials == nil {
-		c.AllowCredentials = cors.AllowCredentials
-	}
-
-	if c.MaxAge == nil {
-		c.MaxAge = cors.MaxAge
-	}
-}
-
-func (r *Route) Init(ctx context.Context, resource *Resource) error {
-	r.View.Standalone = true
-	if r.View.Name == "" {
-		r.View.Name = r.View.Ref
-	}
-
-	if err := r.View.Init(ctx, resource.Resource); err != nil {
-		return err
-	}
-	if err := r.initVisitor(resource); err != nil {
-		return err
-	}
-	if err := r.Index.Init(r.View); err != nil {
-		return err
-	}
-
-	if err := r.initCardinality(); err != nil {
-		return err
-	}
-
-	if err := r.initCaser(); err != nil {
-		return err
-	}
-
-	r.initCors(resource)
-
-	return nil
-}
-
-func (r *Route) initVisitor(resource *Resource) error {
-	if r.Visitor == nil {
-		r.Visitor = &visitor.Visitor{}
-		return nil
-	}
-
-	if r.Visitor.Reference.Ref != "" {
-		refVisitor, err := resource._visitors.Lookup(r.Visitor.Ref)
-		if err != nil {
-			return err
-		}
-
-		r.Visitor.Inherit(refVisitor)
-	}
-
-	return nil
-}
-
-func (r *Route) initCardinality() error {
-	switch r.Cardinality {
-	case data.One, data.Many:
-		return nil
-	case "":
-		r.Cardinality = data.Many
-		return nil
-	default:
-		return fmt.Errorf("unsupported cardinality type %v\n", r.Cardinality)
-	}
-}
-
-func (r *Route) initCaser() error {
-	if r.CaseFormat == "" {
-		r.CaseFormat = data.UpperCamel
-	}
-
-	caser, err := r.CaseFormat.Caser()
-	if err != nil {
-		return err
-	}
-
-	marshaller, err := cusJson.New(r.View.Schema.Type(), marshal.Default{
-		OmitEmpty:  r.OmitEmpty,
-		CaseFormat: caser,
-	})
-
-	if err != nil {
-		return err
-	}
-
-	r._marshaller = marshaller
-	return nil
-}
-
-func (r *Route) initCors(resource *Resource) {
-	if r.Cors == nil {
-		r.Cors = resource.Cors
-		return
-	}
-
-	r.Cors.inherit(resource.Cors)
-}
-
-func (i *Index) ViewByPrefix(prefix string) (*data.View, error) {
-	view, ok := i._viewsByPrefix[prefix]
-	if !ok {
-		return nil, fmt.Errorf("not found view with prefix %v", prefix)
-	}
-
-	return view, nil
+type Router struct {
+	resource      *Resource
+	serviceRouter *toolbox.ServiceRouter
 }
 
 func (r *Router) View(name string) (*data.View, error) {
@@ -312,16 +148,14 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 
 		selectors, err := CreateSelectorsFromRoute(ctx, route, request, route.Index._views...)
 		if err != nil {
-			response.WriteHeader(http.StatusBadRequest)
-			response.Write([]byte(err.Error()))
+			r.writeErr(response, route, err, http.StatusBadRequest)
 			return
 		}
 
 		session.Selectors = selectors
 
 		if err := reader.New().Read(context.TODO(), session); err != nil {
-			response.WriteHeader(http.StatusBadRequest)
-			response.Write([]byte(err.Error()))
+			r.writeErr(response, route, err, http.StatusBadRequest)
 			return
 		}
 
@@ -369,25 +203,25 @@ func (r *Router) runAfterFetch(response http.ResponseWriter, request *http.Reque
 func (r *Router) writeResponse(route *Route, request *http.Request, response http.ResponseWriter, destValue reflect.Value, selectors data.Selectors) {
 	filters, err := r.buildJsonFilters(route, selectors)
 	if err != nil {
-		response.Write([]byte(err.Error()))
-		response.WriteHeader(http.StatusBadRequest)
+		r.writeErr(response, route, err, http.StatusBadRequest)
 		return
 	}
 
 	asBytes, httpStatus, err := r.result(route, request, destValue, filters)
 
 	if err != nil {
-		response.WriteHeader(httpStatus)
-		response.Write([]byte(err.Error()))
+		r.writeErr(response, route, err, http.StatusBadRequest)
 		return
 	}
+
 	response.WriteHeader(httpStatus)
 	response.Write(asBytes)
 }
 
-func (r *Router) result(route *Route, request *http.Request, destValue reflect.Value, filters *cusJson.Filters) ([]byte, int, error) {
+func (r *Router) result(route *Route, request *http.Request, destValue reflect.Value, filters *json.Filters) ([]byte, int, error) {
 	if route.Cardinality == data.Many {
-		asBytes, err := route._marshaller.Marshal(destValue.Elem().Interface(), filters)
+		result := r.wrapWithResponseIfNeeded(destValue.Elem().Interface(), route)
+		asBytes, err := route._marshaller.Marshal(result, filters)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
@@ -401,7 +235,8 @@ func (r *Router) result(route *Route, request *http.Request, destValue reflect.V
 	case 0:
 		return nil, http.StatusNotFound, nil
 	case 1:
-		asBytes, err := route._marshaller.Marshal(route.View.Schema.Slice().ValueAt(slicePtr, 0), filters)
+		result := r.wrapWithResponseIfNeeded(route.View.Schema.Slice().ValueAt(slicePtr, 0), route)
+		asBytes, err := route._marshaller.Marshal(result, filters)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
@@ -413,8 +248,8 @@ func (r *Router) result(route *Route, request *http.Request, destValue reflect.V
 	}
 }
 
-func (r *Router) buildJsonFilters(route *Route, selectors data.Selectors) (*cusJson.Filters, error) {
-	entries := make([]*cusJson.FilterEntry, 0)
+func (r *Router) buildJsonFilters(route *Route, selectors data.Selectors) (*json.Filters, error) {
+	entries := make([]*json.FilterEntry, 0)
 	for viewName, selector := range selectors {
 		if len(selector.Columns) == 0 {
 			continue
@@ -441,12 +276,51 @@ func (r *Router) buildJsonFilters(route *Route, selectors data.Selectors) (*cusJ
 			fields[i] = column
 		}
 
-		entries = append(entries, &cusJson.FilterEntry{
+		entries = append(entries, &json.FilterEntry{
 			Path:   path,
 			Fields: fields,
 		})
 
 	}
 
-	return cusJson.NewFilters(entries...), nil
+	return json.NewFilters(entries...), nil
+}
+
+func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, statusCode int) {
+	if route._responseSetter == nil {
+		w.Write([]byte(err.Error()))
+		w.WriteHeader(statusCode)
+		return
+	}
+
+	response := reflect.New(route._responseSetter.rType)
+	r.setResponseStatus(route, response, ResponseStatus{
+		Status:  "error",
+		Message: err.Error(),
+	})
+
+	asBytes, marErr := route._marshaller.Marshal(response.Elem().Interface(), errorFilters)
+	if marErr != nil {
+		w.Write([]byte(marErr.Error()))
+		w.WriteHeader(statusCode)
+		return
+	}
+
+	w.Write(asBytes)
+	w.WriteHeader(statusCode)
+}
+
+func (r *Router) setResponseStatus(route *Route, response reflect.Value, responseStatus ResponseStatus) {
+	route._responseSetter.statusField.SetValue(unsafe.Pointer(response.Pointer()), responseStatus)
+}
+
+func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route) interface{} {
+	if route._responseSetter == nil {
+		return response
+	}
+
+	newResponse := reflect.New(route._responseSetter.rType)
+	route._responseSetter.bodyField.SetValue(unsafe.Pointer(newResponse.Pointer()), response)
+	r.setResponseStatus(route, newResponse, ResponseStatus{Status: "ok"})
+	return newResponse.Elem().Interface()
 }

@@ -359,9 +359,7 @@ func (v *View) ensureSchema(types Types) error {
 		}
 	}
 
-	v.Schema.Init(v.Columns, v.With, v.Caser, types)
-
-	return nil
+	return v.Schema.Init(v.Columns, v.With, v.Caser, types)
 }
 
 //Db returns database connection that View was assigned to.

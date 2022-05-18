@@ -1,0 +1,29 @@
+Routes:
+  - URI: "/api/events"
+    Method: GET
+    View:
+      Ref: events_ref
+      Name: events
+
+Resource:
+  Views:
+    - Name: events_ref
+      Connector:
+        Ref: db
+      Table: events
+      Columns:
+        - Name: id
+          DataType: int
+
+        - Name: quantity
+          DataType: float
+          Default: 10.5
+
+        - Name: timestamp
+          DataType: time
+          Format: '2006-01-02'
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"

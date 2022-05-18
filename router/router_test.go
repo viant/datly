@@ -350,6 +350,27 @@ func TestRouter(t *testing.T) {
 			uri:         fmt.Sprintf("/api/events?%v=ev.Id|ev.Quantity&%v=ev.1&%v=2", router.Fields, router.Offset, router.Limit),
 			method:      http.MethodGet,
 		},
+		{
+			description: "styles | error",
+			resourceURI: "011_style",
+			uri:         "/api/events?_criteria=(id%20=%201%20UNION%20ALL%20SELECT%209%20as%20id%2C%20To_Date%28%222019-03-11T02%3A20%3A33Z%22%29%20as%20timestamp%2C%2010%20as%20event_type_id%2C%2020%20as%20quantity%2C%206%20as%20user_id)",
+			expected:    `{"Status":"error","Message":"can't use criteria on view events"}`,
+			method:      http.MethodGet,
+		},
+		{
+			description: "styles | response",
+			resourceURI: "011_style",
+			uri:         "/api/events?_fields=Id|Timestamp|EventTypeId",
+			expected:    `{"Status":"ok","Result":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111}]}`,
+			method:      http.MethodGet,
+		},
+		{
+			description: "default | default tag",
+			resourceURI: "012_default",
+			uri:         "/api/events",
+			expected:    `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11"},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15"},{"Id":100,"Quantity":10.5,"Timestamp":"2019-04-10"}]`,
+			method:      http.MethodGet,
+		},
 	}
 
 	//for i, testcase := range testcases[len(testcases)-1:] {

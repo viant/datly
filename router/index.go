@@ -19,9 +19,9 @@ type (
 	}
 )
 
-func (i *Index) Init(view *data.View) error {
+func (i *Index) Init(view *data.View, path string) error {
 	i.ensureIndexes()
-	i.indexViews(view, "")
+	i.indexViews(view, path)
 
 	if err := i.indexViewsByPrefix(); err != nil {
 		return err

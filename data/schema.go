@@ -1,9 +1,11 @@
 package data
 
 import (
+	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
+	"strings"
 )
 
 //Schema represents View as Go type.
@@ -86,12 +88,22 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 			continue
 		}
 
+		defaultTag := createDefaultTagIfNeeded(columns[i])
+		sqlxTag := `sqlx:"name=` + columns[i].Name + `"`
+
+		var aTag string
+		if defaultTag == "" {
+			aTag = sqlxTag
+		} else {
+			aTag = sqlxTag + " " + defaultTag
+		}
+
 		structFieldName := viewCaseFormat.Format(columns[i].Name, format.CaseUpperCamel)
 		structFields = append(structFields, reflect.StructField{
 			Name:  structFieldName,
 			Type:  columns[i].rType,
 			Index: []int{i},
-			Tag:   reflect.StructTag(`sqlx:"name="` + columns[i].Name + "`"),
+			Tag:   reflect.StructTag(aTag),
 		})
 	}
 
@@ -120,6 +132,23 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 	}
 
 	c.setType(reflect.StructOf(structFields))
+}
+
+func createDefaultTagIfNeeded(column *Column) string {
+	attributes := make([]string, 0)
+	if column.Format != "" {
+		attributes = append(attributes, json.FormatAttribute+"="+column.Format)
+	}
+
+	if column.Default != "" {
+		attributes = append(attributes, json.ValueAttribute+"="+column.Default)
+	}
+
+	if len(attributes) == 0 {
+		return ""
+	}
+
+	return json.DefaultTagName + `:"` + strings.Join(attributes, ",") + `"`
 }
 
 //AutoGen indicates whether Schema was generated using ColumnTypes fetched from DB or was passed programmatically.

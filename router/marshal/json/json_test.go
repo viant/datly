@@ -69,6 +69,28 @@ func TestJson_Marshal(t *testing.T) {
 				&json.FilterEntry{Path: "EventType", Fields: []string{"Type"}},
 			),
 		},
+		{
+			description: "interface",
+			data:        withInterface,
+			expect:      `{"Int":100,"EventType":{"Type":"event-type-1"}}`,
+			filters: json.NewFilters(
+				&json.FilterEntry{Fields: []string{"Int", "EventType"}},
+				&json.FilterEntry{Path: "EventType", Fields: []string{"Type"}},
+			),
+		},
+		{
+			description: "anonymous",
+			data:        anonymous,
+			expect:      `{"Id":10,"Quantity":125.5}`,
+			filters: json.NewFilters(
+				&json.FilterEntry{Fields: []string{"Id", "Quantity"}},
+			),
+		},
+		{
+			description: "default tag",
+			data:        defaultTag,
+			expect:      `[{"Int":1,"Int8":2,"Int16":3,"Int32":4,"Int64":5,"Uint":6,"Uint8":7,"Uint16":8,"Uint32":9,"Uint64":10,"IntPtr":1,"Int8Ptr":2,"Int16Ptr":3,"Int32Ptr":4,"Int64Ptr":5,"UintPtr":6,"Uint8Ptr":7,"Uint16Ptr":8,"Uint32Ptr":9,"Uint64Ptr":10,"String":"empty","StringPtr":empty,"Bool":false,"BoolPtr":false,"Float32":10.5,"Float32Ptr":10.5,"Float64":20.5,"Float64Ptr":20.5,"Time":"2012-07-12","TimePtr":"2022-02-08"}]`,
+		},
 	}
 
 	//for i, testcase := range testcases[len(testcases)-1:] {
@@ -90,6 +112,67 @@ func TestJson_Marshal(t *testing.T) {
 		if !assert.Equal(t, testcase.expect, string(result), testcase.description) {
 			toolbox.Dump(string(result))
 		}
+	}
+}
+
+func defaultTag() interface{} {
+	type event struct {
+		Int        int        `default:"value=1"`
+		Int8       int8       `default:"value=2"`
+		Int16      int16      `default:"value=3"`
+		Int32      int32      `default:"value=4"`
+		Int64      int64      `default:"value=5"`
+		Uint       uint       `default:"value=6"`
+		Uint8      uint8      `default:"value=7"`
+		Uint16     uint16     `default:"value=8"`
+		Uint32     uint32     `default:"value=9"`
+		Uint64     uint64     `default:"value=10"`
+		IntPtr     *int       `default:"value=1"`
+		Int8Ptr    *int8      `default:"value=2"`
+		Int16Ptr   *int16     `default:"value=3"`
+		Int32Ptr   *int32     `default:"value=4"`
+		Int64Ptr   *int64     `default:"value=5"`
+		UintPtr    *uint      `default:"value=6"`
+		Uint8Ptr   *uint8     `default:"value=7"`
+		Uint16Ptr  *uint16    `default:"value=8"`
+		Uint32Ptr  *uint32    `default:"value=9"`
+		Uint64Ptr  *uint64    `default:"value=10"`
+		String     string     `default:"value=empty"`
+		StringPtr  *string    `default:"value=empty"`
+		Bool       bool       `default:"value=false"`
+		BoolPtr    *bool      `default:"value=false"`
+		Float32    float32    `default:"value=10.5"`
+		Float32Ptr *float32   `default:"value=10.5"`
+		Float64    float64    `default:"value=20.5"`
+		Float64Ptr *float64   `default:"value=20.5"`
+		Time       time.Time  `default:"format=2006-01-02"`
+		TimePtr    *time.Time `default:"value=2022-02-08,format=2006-01-02"`
+	}
+
+	return []event{
+		{
+			Time: newTime("12-07-2012"),
+		},
+	}
+}
+
+func anonymous() interface{} {
+	type Event struct {
+		Id       int
+		Name     string
+		Quantity float64
+	}
+
+	type eventHolder struct {
+		Event
+	}
+
+	return eventHolder{
+		Event{
+			Id:       10,
+			Name:     "event - name",
+			Quantity: 125.5,
+		},
 	}
 }
 
@@ -156,6 +239,29 @@ func nilNonPrimitives() interface{} {
 					Type: "t - 3",
 				},
 			},
+		},
+	}
+}
+
+func withInterface() interface{} {
+	type eventType struct {
+		Id   int
+		Type string
+	}
+
+	type event struct {
+		Int       int
+		String    string
+		Float64   float64
+		EventType interface{}
+	}
+
+	return event{
+		Int:    100,
+		String: "abc",
+		EventType: eventType{
+			Id:   200,
+			Type: "event-type-1",
 		},
 	}
 }
@@ -334,6 +440,7 @@ var benchEvents []*Event
 var benchMarshaller *json.Marshaller
 
 func init() {
+	//return
 	benchEvents = []*Event{
 		{
 			ID:    1,
