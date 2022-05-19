@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
@@ -21,7 +22,7 @@ type (
 		_visitors   visitor.Visitors
 		Compression *Compression
 		Redirect    *Redirect
-		Cache       *Cache
+		Cache       *cache.Cache
 		Logger      *Logger //connect, dataview, time, SQL with params if exceeded time
 		Cors        *Cors   //TODO github.com/viant/datly/v0/app/lambda/bridge/cors.go
 		/*
@@ -46,11 +47,6 @@ type (
 				}
 		*/
 
-	}
-
-	Cache struct {
-		TimeToLiveMs int
-		StorageURL   string
 	}
 
 	Logger struct {

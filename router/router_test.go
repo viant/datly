@@ -2,6 +2,7 @@ package router_test
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -9,8 +10,10 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/afs"
+	"github.com/viant/afs/option/content"
 	"github.com/viant/assertly"
 	"github.com/viant/datly/gateway/registry"
+	"github.com/viant/datly/v0/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
@@ -33,15 +36,17 @@ import (
 )
 
 type testcase struct {
-	description string
-	resourceURI string
-	uri         string
-	method      string
-	expected    string
-	visitors    visitor.Visitors
-	types       view.Types
-	headers     http.Header
-	requestBody string
+	description      string
+	resourceURI      string
+	uri              string
+	method           string
+	expected         string
+	visitors         visitor.Visitors
+	types            view.Types
+	headers          http.Header
+	requestBody      string
+	shouldDecompress bool
+	extraRequests    int
 
 	corsHeaders map[string]string
 }
@@ -411,52 +416,49 @@ func TestRouter(t *testing.T) {
 			method:      http.MethodPost,
 			requestBody: `{"UserId":2,"Id":10}`,
 		},
+		{
+			description:      "reader post | compressed",
+			resourceURI:      "013_reader_post",
+			uri:              "/api/events",
+			expected:         `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
+			method:           http.MethodPost,
+			shouldDecompress: true,
+		},
+		{
+			description:   "cache | fields, offset, limit",
+			resourceURI:   "014_cache",
+			uri:           fmt.Sprintf("/api/events?%v=ev.Id|ev.Quantity&%v=ev.1&%v=2", router.Fields, router.Offset, router.Limit),
+			expected:      `[{"Id":10,"Quantity":21.957962334156036},{"Id":100,"Quantity":5.084940046072006}]`,
+			method:        http.MethodGet,
+			extraRequests: 1,
+		},
 	}
 
-	//for i, testcase := range testcases[len(testcases)-1:] {
-	for i, testcase := range testcases {
+	//for i, tCase := range testcases[len(testcases)-1:] {
+	for i, tCase := range testcases {
 		fmt.Println("Running testcase " + strconv.Itoa(i))
 		testUri := path.Join(testLocation, "testdata")
-		routingHandler, ok := testcase.init(t, testUri)
+		routingHandler, ok := tCase.init(t, testUri)
 		if !ok {
 			continue
 		}
 
-		if testcase.corsHeaders != nil {
-			corsRequest := httptest.NewRequest(http.MethodOptions, testcase.uri, nil)
+		if tCase.corsHeaders != nil {
+			corsRequest := httptest.NewRequest(http.MethodOptions, tCase.uri, nil)
 			corsWriter := httptest.NewRecorder()
 			err := routingHandler.Handle(corsWriter, corsRequest)
-			assert.Nil(t, err, testcase.description)
+			assert.Nil(t, err, tCase.description)
 
 			headers := corsWriter.Header()
-			for headerName, headerValue := range testcase.corsHeaders {
-				assert.Equal(t, headerValue, headers.Get(headerName), testcase.description)
+			for headerName, headerValue := range tCase.corsHeaders {
+				assert.Equal(t, headerValue, headers.Get(headerName), tCase.description)
 			}
 		}
 
-		var body io.Reader
-		if testcase.method != http.MethodGet {
-			body = bytes.NewReader([]byte(testcase.requestBody))
-		}
-
-		httpRequest := httptest.NewRequest(testcase.method, testcase.uri, body)
-		for header, values := range testcase.headers {
-			httpRequest.Header.Add(header, values[0])
-		}
-
-		responseWriter := httptest.NewRecorder()
-		err := routingHandler.Handle(responseWriter, httpRequest)
-		if !assert.Nil(t, err, testcase.description) {
-			continue
-		}
-
-		response, err := ioutil.ReadAll(responseWriter.Result().Body)
-		if !assert.Nil(t, err, testcase.description) {
-			continue
-		}
-
-		if !assertly.AssertValues(t, testcase.expected, string(response), testcase.description) {
-			fmt.Println(string(response))
+		for j := 0; j < tCase.extraRequests+1; j++ {
+			if !tCase.sendHttpRequest(t, routingHandler) {
+				return
+			}
 		}
 	}
 }
@@ -474,6 +476,43 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 	}
 
 	return router.New(resource), true
+}
+
+func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router) bool {
+	var body io.Reader
+	if c.method != http.MethodGet {
+		body = bytes.NewReader([]byte(c.requestBody))
+	}
+	httpRequest := httptest.NewRequest(c.method, c.uri, body)
+	for header, values := range c.headers {
+		httpRequest.Header.Add(header, values[0])
+	}
+
+	responseWriter := httptest.NewRecorder()
+	err := handler.Handle(responseWriter, httpRequest)
+	if !assert.Nil(t, err, c.description) {
+		return false
+	}
+
+	response, err := ioutil.ReadAll(responseWriter.Result().Body)
+	if !assert.Nil(t, err, c.description) {
+		return false
+	}
+
+	if c.shouldDecompress {
+		assert.Equal(t, shared.EncodingGzip, responseWriter.Header().Get(content.Encoding), c.description)
+		reader, err := gzip.NewReader(bytes.NewReader(response))
+		assert.Nil(t, err, c.description)
+		decompressed, err := ioutil.ReadAll(reader)
+		assert.Nil(t, err, c.description)
+		response = decompressed
+	}
+
+	if !assertly.AssertValues(t, c.expected, string(response), c.description) {
+		fmt.Println(string(response))
+	}
+
+	return true
 }
 
 func initDb(t *testing.T, datasetPath string, resourceURI string) bool {

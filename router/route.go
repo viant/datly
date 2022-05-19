@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
@@ -34,20 +35,22 @@ type (
 		View    *view.View
 		Cors    *Cors
 		Output
-		Index Index
+		Index
 
+		Cache            *cache.Cache
 		_requestBodyType reflect.Type
 		_resource        *view.Resource
 	}
 
 	Output struct {
-		Cardinality view.Cardinality
-		CaseFormat  view.CaseFormat
-		OmitEmpty   bool
+		Cardinality     view.Cardinality `json:",omitempty"`
+		CaseFormat      view.CaseFormat  `json:",omitempty"`
+		OmitEmpty       bool             `json:",omitempty"`
+		Style           Style            `json:",omitempty"`
+		ResponseField   string           `json:",omitempty"`
+		CompressionSize int              `json:",omitempty"`
 
 		_marshaller     *json.Marshaller
-		Style           Style //enum Basic, Comprehensice , Status: ok, error, + error with structre
-		ResponseField   string
 		_responseSetter *responseSetter
 	}
 
@@ -98,6 +101,10 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	}
 
 	if err := r.initRequestBody(); err != nil {
+		return err
+	}
+
+	if err := r.initCache(ctx); err != nil {
 		return err
 	}
 
@@ -280,11 +287,19 @@ func (r *Route) findRequestBodyParams(aView *view.View, params *[]*view.Paramete
 	}
 }
 
+func (r *Route) initCache(ctx context.Context) error {
+	if r.Cache == nil {
+		return nil
+	}
+
+	return r.Cache.Init(ctx)
+}
+
 func (i *Index) ViewByPrefix(prefix string) (*view.View, error) {
-	view, ok := i._viewsByPrefix[prefix]
+	aView, ok := i.viewByPrefix(prefix)
 	if !ok {
 		return nil, fmt.Errorf("not found view with prefix %v", prefix)
 	}
 
-	return view, nil
+	return aView, nil
 }

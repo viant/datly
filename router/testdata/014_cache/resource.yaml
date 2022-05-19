@@ -6,6 +6,9 @@ Routes:
       Name: events
     SelectorPrefix:
       ev: events
+    Cache:
+      TimeToLiveMs: 100000
+      StorageUrl: 'mem://localhost/cache/014_cache/'
 
 Resource:
   Views:

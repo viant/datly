@@ -3,10 +3,9 @@ Routes:
     Method: GET
     View:
       Ref: events
-    Index:
-      ViewPrefix:
-        ev: events
-        typ: event_types
+    SelectorPrefix:
+      ev: events
+      typ: event_types
 
 Resource:
   Views:

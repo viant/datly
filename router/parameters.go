@@ -86,8 +86,11 @@ func (p *RequestParams) initRequestBody(request *http.Request, route *Route) err
 		return err
 	}
 
-	destType := route._requestBodyType
+	if len(body) == 0 {
+		return nil
+	}
 
+	destType := route._requestBodyType
 	var wasPtr bool
 	if destType.Kind() == reflect.Ptr {
 		destType = destType.Elem()
