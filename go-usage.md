@@ -121,7 +121,7 @@ if err != nil {
 }
 ```
 
-You can use `Client Selector` and specify what can be used using `SelectorConstraints`:
+You can use `Client Selector` and specify what can be used using `Selector.Constraints`:
 
 ```go
 view := &View{
@@ -131,12 +131,14 @@ view := &View{
 		Driver: "sqlite", 
 		DSN:    "./mydb.db",
 	}, 
-	SelectorConstraints: &Constraints{
-		Criteria:  ptrToBool(true), 
-		OrderBy:   ptrToBool(true), 
-		Limit:     ptrToBool(true), 
-		Columns:   ptrToBool(true), 
-		Offset:    ptrToBool(true),
+	Selector: &Config{
+        Constraints: &Constraints{
+            Criteria:  ptrToBool(true),
+            OrderBy:   ptrToBool(true),
+            Limit:     ptrToBool(true),
+            Columns:   ptrToBool(true),
+            Offset:    ptrToBool(true),
+        },
 	},
 }
 

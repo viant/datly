@@ -13,9 +13,10 @@ Resource:
       Connector:
         Ref: db
       Table: events
-      SelectorConstraints:
-        FilterableColumns:
-          - '*'
+      Selector:
+        Constraints:
+          Filterables:
+            - '*'
 
   Connectors:
     - Name: db

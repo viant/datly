@@ -5,10 +5,10 @@ Views:
     Selector:
       Limit: 2
       OrderBy: timestamp
-    SelectorConstraints:
-      Limit: true
-      OrderBy: true
-      Offset: true
+      Constraints:
+        Limit: true
+        OrderBy: true
+        Offset: true
     Exclude:
       - id
       - event_type_id

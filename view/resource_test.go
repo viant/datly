@@ -65,12 +65,14 @@ func TestNewResourceFromURL(t *testing.T) {
 				"Name": "events",
 				"OmitEmpty": false
 			},
-			"SelectorConstraints": {
+			"Selector": {
+				"Constraints": {
 				"Columns": null,
 				"Criteria": null,
 				"Limit": null,
 				"Offset": null,
 				"OrderBy": null
+				}
 			},
 			"Table": "events"
 		}

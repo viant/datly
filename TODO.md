@@ -4,7 +4,6 @@
     - Add Caching with (cloud storage) 
     - Add Cloud Storage redirection if size to large
 
-* Move View.SelectorConstraints: -> View.Selector.Constraints
 
       
 

@@ -3,10 +3,11 @@ Views:
       Ref: db
     Name: events
     From: SELECT COALESCE(id,0) AS id, quantity, event_type_id, timestamp, user_id FROM events
-    SelectorConstraints:
-      Criteria: true
-      FilterableColumns:
-      - event_type_id
+    Selector:
+      Constraints:
+        Criteria: true
+        Filterables:
+        - event_type_id
 Connectors:
   - Name: db
     Driver: sqlite3

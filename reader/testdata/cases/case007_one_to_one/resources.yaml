@@ -3,9 +3,10 @@ Views:
       Ref: db
     Name: events
     Table: events
-    SelectorConstraints:
-      FilterableColumns:
-        - "*"
+    Selector:
+      Constraints:
+        Filterables:
+          - "*"
 
   - Connector:
       Ref: db

@@ -34,9 +34,8 @@ type (
 
 		Criteria string `json:",omitempty"`
 
-		Selector            *Config      `json:",omitempty"`
-		SelectorConstraints *Constraints `json:",omitempty"`
-		Template            *Template    `json:",omitempty"`
+		Selector *Config   `json:",omitempty"`
+		Template *Template `json:",omitempty"`
 
 		Schema *Schema `json:",omitempty"`
 
@@ -59,11 +58,11 @@ type (
 	//Constraints configure what can be selected by Selector
 	//For each field, default value is `false`
 	Constraints struct {
-		Criteria          bool
-		OrderBy           bool
-		Limit             bool
-		Offset            bool
-		FilterableColumns []string
+		Criteria    bool
+		OrderBy     bool
+		Limit       bool
+		Offset      bool
+		Filterables []string
 	}
 
 	Batch struct {
@@ -171,8 +170,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 	if v.Selector == nil {
 		v.Selector = &Config{}
 	}
-
-	v.ensureSelectorConstraints()
+	v.Selector.ensureConstraints()
 
 	if v.Name == v.Ref && !v.Standalone {
 		return fmt.Errorf("view name and ref cannot be the same")
@@ -472,10 +470,6 @@ func (v *View) inherit(view *View) {
 		v.Selector = view.Selector
 	}
 
-	if v.SelectorConstraints == nil {
-		v.SelectorConstraints = view.SelectorConstraints
-	}
-
 	if v.Logger == nil {
 		v.Logger = view.Logger
 	}
@@ -560,36 +554,36 @@ func (v *View) LimitWithSelector(selector *Selector) int {
 	return v.Selector.Limit
 }
 
-func (v *View) ensureSelectorConstraints() {
-	if v.SelectorConstraints == nil {
-		v.SelectorConstraints = &Constraints{}
+func (v *Config) ensureConstraints() {
+	if v.Constraints == nil {
+		v.Constraints = &Constraints{}
 	}
 
 }
 
 //CanUseSelectorCriteria indicates if Selector.Criteria can be used
 func (v *View) CanUseSelectorCriteria() bool {
-	return v.SelectorConstraints.Criteria
+	return v.Selector.Constraints.Criteria
 }
 
 //CanUseSelectorColumns indicates if Selector.Columns can be used
 func (v *View) CanUseSelectorColumns() bool {
-	return len(v.SelectorConstraints.FilterableColumns) != 0
+	return len(v.Selector.Constraints.Filterables) != 0
 }
 
 //CanUseSelectorLimit indicates if Selector.Limit can be used
 func (v *View) CanUseSelectorLimit() bool {
-	return v.SelectorConstraints.Limit
+	return v.Selector.Constraints.Limit
 }
 
 //CanUseSelectorOrderBy indicates if Selector.OrderBy can be used
 func (v *View) CanUseSelectorOrderBy() bool {
-	return v.SelectorConstraints.OrderBy
+	return v.Selector.Constraints.OrderBy
 }
 
 //CanUseSelectorOffset indicates if Selector.Offset can be used
 func (v *View) CanUseSelectorOffset() bool {
-	return v.SelectorConstraints.Offset
+	return v.Selector.Constraints.Offset
 }
 
 //IndexedColumns returns Columns
@@ -598,7 +592,7 @@ func (v *View) IndexedColumns() Columns {
 }
 
 func (v *View) markColumnsAsFilterable() error {
-	if len(v.SelectorConstraints.FilterableColumns) == 1 && strings.TrimSpace(v.SelectorConstraints.FilterableColumns[0]) == "*" {
+	if len(v.Selector.Constraints.Filterables) == 1 && strings.TrimSpace(v.Selector.Constraints.Filterables[0]) == "*" {
 		for _, column := range v.Columns {
 			column.Filterable = true
 		}
@@ -606,7 +600,7 @@ func (v *View) markColumnsAsFilterable() error {
 		return nil
 	}
 
-	for _, colName := range v.SelectorConstraints.FilterableColumns {
+	for _, colName := range v.Selector.Constraints.Filterables {
 		column, err := v._columns.Lookup(colName)
 		if err != nil {
 			return fmt.Errorf("invalid view: %v %w", v.Name, err)

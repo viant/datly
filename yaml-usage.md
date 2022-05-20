@@ -95,19 +95,20 @@ Connectors:
     DSN: "./testdata/db/mydb.db"
 ```
 
-You can use `Client Selector` and specify what can be used using `SelectorConstraints`:
+You can use `Client Selector` and define  `Selector.Constraints` to control what can be used by client:
 ```yaml
 Views:
   - Connector:
       Ref: mydb
     Name: events
     Table: events
-    SelectorConstraints:
-      Criteria: true
-      OrderBy: true
-      Limit: true
-      Columns: true
-      Offset: true
+    Selector:
+      Constraints:
+          Criteria: true
+          OrderBy: true
+          Limit: true
+          Columns: true
+          Offset: true
 Connectors:
   - Name: mydb
     Driver: sqlite3
@@ -121,8 +122,9 @@ Views:
       Ref: mydb
     Name: events
     Table: events
-    SelectorConstraints:
-      Columns: true
+    Selector:
+      Constraints:
+          Columns: true
 
   - Connector:
       Ref: mydb

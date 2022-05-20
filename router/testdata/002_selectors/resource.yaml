@@ -13,12 +13,13 @@ Resource:
       Connector:
         Ref: db
       Table: events
-      SelectorConstraints:
-        OrderBy: true
-        Limit: true
-        Offset: true
-        Criteria: true
-        FilterableColumns:
+      Selector:
+        Constraints:
+          OrderBy: true
+          Limit: true
+          Offset: true
+          Criteria: true
+          Filterables:
           - '*'
 
   Connectors:

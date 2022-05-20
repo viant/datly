@@ -6,8 +6,9 @@ Views:
     Exclude:
       - id
       - event_type_id
-    SelectorConstraints:
-        FilterableColumns:
+    Selector:
+      Constraints:
+        Filterables:
         - quantity
 Connectors:
   - Name: db

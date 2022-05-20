@@ -3,8 +3,9 @@ Views:
       Ref: db
     Name: events
     Table: events
-    SelectorConstraints:
-      Columns: true
+    Selector:
+      Constraints:
+        Columns: true
 
   - Connector:
       Ref: db

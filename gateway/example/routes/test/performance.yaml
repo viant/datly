@@ -16,12 +16,13 @@ Resource:
       Connector:
         Ref: bq
       Table: performance
-      SelectorConstraints:
-        Criteria: true
-        FilterableColumns: ['*']
-        Limit: true
-        Offset: true
-        OrderBy: true
+      Selector:
+        Constraints:
+          Criteria: true
+          Filterables: ['*']
+          Limit: true
+          Offset: true
+          OrderBy: true
       Template:
         Parameters:
           - Ref: Acl

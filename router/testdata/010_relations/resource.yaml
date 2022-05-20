@@ -13,13 +13,14 @@ Resource:
       Connector:
         Ref: db
       Table: events
-      SelectorConstraints:
-        OrderBy: true
-        Limit: true
-        Offset: true
-        Criteria: true
-        FilterableColumns:
-          - '*'
+      Selector:
+        Constraints:
+          OrderBy: true
+          Limit: true
+          Offset: true
+          Criteria: true
+          Filterables:
+            - '*'
       With:
         - Name: events_event-types
           Cardinality: One
@@ -32,9 +33,10 @@ Resource:
 
     - Name: event_types#ref
       Table: event_types
-      SelectorConstraints:
-        FilterableColumns:
-          - '*'
+      Selector:
+        Constraints:
+          Filterables:
+            - '*'
       Connector:
         Ref: db
 

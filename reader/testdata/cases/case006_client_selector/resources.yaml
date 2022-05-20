@@ -10,10 +10,11 @@ Views:
         DataType: String
       - Name: quantity
         DataType: Float
-    SelectorConstraints:
+    Selector:
+      Constraints:
         Columns: true
         OrderBy: true
-        FilterableColumns:
+        Filterables:
           - id
           - quantity
 Connectors:
