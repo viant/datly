@@ -102,6 +102,9 @@ func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, visitor
 	if err != nil {
 		return nil, err
 	}
+	if resource.Resource == nil {
+		return nil, fmt.Errorf("resource was empty: %v", URL)
+	}
 	if err = mergeResources(resource, resources, types); err != nil {
 		return nil, err
 	}

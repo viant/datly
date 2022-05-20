@@ -50,6 +50,7 @@ func (r *Resource) MergeFrom(resource *Resource, types Types) {
 	r.mergeViews(resource)
 	r.mergeParameters(resource)
 	r.mergeTypes(resource, types)
+	r.mergeConnectors(resource)
 }
 
 func (r *Resource) mergeViews(resource *Resource) {
@@ -61,6 +62,19 @@ func (r *Resource) mergeViews(resource *Resource) {
 		if _, ok := views[candidate.Name]; !ok {
 			view := *resource.Views[i]
 			r.Views = append(r.Views, &view)
+		}
+	}
+}
+
+func (r *Resource) mergeConnectors(resource *Resource) {
+	if len(resource.Connectors) == 0 {
+		return
+	}
+	connectors := r.connectorByName()
+	for i, candidate := range resource.Connectors {
+		if _, ok := connectors[candidate.Name]; !ok {
+			connector := *resource.Connectors[i]
+			r.Connectors = append(r.Connectors, &connector)
 		}
 	}
 }
@@ -101,6 +115,17 @@ func (r *Resource) viewByName() map[string]*View {
 	}
 	for i, view := range r.Views {
 		index[view.Name] = r.Views[i]
+	}
+	return index
+}
+
+func (r *Resource) connectorByName() map[string]*Connector {
+	index := map[string]*Connector{}
+	if len(r.Connectors) == 0 {
+		return index
+	}
+	for i, item := range r.Connectors {
+		index[item.Name] = r.Connectors[i]
 	}
 	return index
 }
