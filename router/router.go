@@ -103,6 +103,9 @@ func corsRouting(route *Route) toolbox.ServiceRouting {
 
 func corsHandler(cors *Cors) func(writer http.ResponseWriter) {
 	return func(writer http.ResponseWriter) {
+		if cors == nil {
+			return
+		}
 		if cors.AllowOrigins != nil {
 			writer.Header().Set(AllowOriginHeader, strings.Join(*cors.AllowOrigins, Separator))
 		}

@@ -3,7 +3,7 @@ package router
 import "fmt"
 
 const (
-	ValuesSeparator = '|'
+	ValuesSeparator = ','
 )
 
 type (
@@ -34,7 +34,7 @@ func (s *SelectorParamIt) Has() bool {
 func (s *SelectorParamIt) Next() (Param, error) {
 	s.resetNext()
 	if s.start != 0 {
-		if s.paramValue[s.start] != '|' {
+		if s.paramValue[s.start] != ValuesSeparator {
 			return s.next, fmt.Errorf("expected at %v position value separator (%v) but got %v", s.start, string(ValuesSeparator), string(s.paramValue[s.start]))
 		}
 		s.start++
