@@ -4,7 +4,7 @@ Routes:
     View:
       Ref: events_ref
       Name: events
-    SelectorPrefix:
+    Namespace:
       ev: events
     Cache:
       TimeToLiveMs: 100000
@@ -22,7 +22,7 @@ Resource:
           Limit: true
           Offset: true
           Criteria: true
-          Filterables:
+          Filterable:
             - '*'
 
   Connectors:

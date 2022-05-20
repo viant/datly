@@ -19,7 +19,7 @@ Resource:
       Selector:
         Constraints:
           Criteria: true
-          Filterables: ['*']
+          Filterable: ['*']
           Limit: true
           Offset: true
           OrderBy: true

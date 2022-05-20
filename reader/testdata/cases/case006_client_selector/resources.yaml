@@ -14,7 +14,7 @@ Views:
       Constraints:
         Columns: true
         OrderBy: true
-        Filterables:
+        Filterable:
           - id
           - quantity
 Connectors:

@@ -7,7 +7,7 @@ import (
 
 type (
 	Index struct {
-		SelectorPrefix map[string]string
+		Namespace      map[string]string
 		_viewsByPrefix map[string]int
 		_viewsByName   map[string]int
 
@@ -32,8 +32,8 @@ func (i *Index) Init(view *view.View, path string) error {
 }
 
 func (i *Index) ensureIndexes() {
-	if i.SelectorPrefix == nil {
-		i.SelectorPrefix = map[string]string{}
+	if i.Namespace == nil {
+		i.Namespace = map[string]string{}
 	}
 
 	if i._viewsByPrefix == nil {
@@ -64,10 +64,10 @@ func (i *Index) indexViews(view *view.View, path string) {
 }
 
 func (i *Index) indexViewsByPrefix() error {
-	for prefix, viewName := range i.SelectorPrefix {
+	for prefix, viewName := range i.Namespace {
 		index, ok := i._viewsByName[viewName]
 		if !ok {
-			return fmt.Errorf("not found view %v with prefix %v", viewName, prefix)
+			return fmt.Errorf("not found view %v with prefix %v, %v", viewName, prefix, i._viewsByName)
 		}
 
 		i._viewsByPrefix[prefix] = index

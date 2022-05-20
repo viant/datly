@@ -6,7 +6,7 @@ Views:
     Selector:
       Constraints:
         Criteria: true
-        Filterables:
+        Filterable:
         - event_type_id
 Connectors:
   - Name: db

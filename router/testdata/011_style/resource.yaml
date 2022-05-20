@@ -15,7 +15,7 @@ Resource:
       Table: events
       Selector:
         Constraints:
-          Filterables:
+          Filterable:
             - '*'
 
   Connectors:

@@ -2,8 +2,7 @@ Routes:
   - URI: "/api/events"
     Method: GET
     View:
-      Ref: events_ref
-      Name: events
+      Ref: events
     Index:
       ViewPrefix:
         ev: events
@@ -11,12 +10,12 @@ Routes:
 
 Resource:
   Views:
-    - Name: events_ref
+    - Name: events
       Connector:
         Ref: db
       Table: events
       Template:
-        Source: "        
+        Source: '        
           SELECT * FROM EVENTS WHERE 0=0 
           #if($Has.QUANTITY)
           AND quantity > $QUANTITY
@@ -24,7 +23,7 @@ Resource:
           #if($Has.USER_ID)
           AND user_id = $Unsafe.USER_ID
           #end
-        "
+        '
         Parameters:
           - Name: QUANTITY
             In:

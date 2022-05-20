@@ -3,7 +3,7 @@ Routes:
     Method: GET
     View:
       Ref: events
-    SelectorPrefix:
+    Namespace:
       ev: events
       typ: event_types
 
@@ -19,7 +19,7 @@ Resource:
           Limit: true
           Offset: true
           Criteria: true
-          Filterables:
+          Filterable:
             - '*'
       With:
         - Name: events_event-types
@@ -35,7 +35,7 @@ Resource:
       Table: event_types
       Selector:
         Constraints:
-          Filterables:
+          Filterable:
             - '*'
       Connector:
         Ref: db

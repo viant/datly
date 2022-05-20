@@ -58,11 +58,11 @@ type (
 	//Constraints configure what can be selected by Selector
 	//For each field, default value is `false`
 	Constraints struct {
-		Criteria    bool
-		OrderBy     bool
-		Limit       bool
-		Offset      bool
-		Filterables []string
+		Criteria   bool
+		OrderBy    bool
+		Limit      bool
+		Offset     bool
+		Filterable []string
 	}
 
 	Batch struct {
@@ -568,7 +568,7 @@ func (v *View) CanUseSelectorCriteria() bool {
 
 //CanUseSelectorColumns indicates if Selector.Columns can be used
 func (v *View) CanUseSelectorColumns() bool {
-	return len(v.Selector.Constraints.Filterables) != 0
+	return len(v.Selector.Constraints.Filterable) != 0
 }
 
 //CanUseSelectorLimit indicates if Selector.Limit can be used
@@ -592,7 +592,7 @@ func (v *View) IndexedColumns() Columns {
 }
 
 func (v *View) markColumnsAsFilterable() error {
-	if len(v.Selector.Constraints.Filterables) == 1 && strings.TrimSpace(v.Selector.Constraints.Filterables[0]) == "*" {
+	if len(v.Selector.Constraints.Filterable) == 1 && strings.TrimSpace(v.Selector.Constraints.Filterable[0]) == "*" {
 		for _, column := range v.Columns {
 			column.Filterable = true
 		}
@@ -600,7 +600,7 @@ func (v *View) markColumnsAsFilterable() error {
 		return nil
 	}
 
-	for _, colName := range v.Selector.Constraints.Filterables {
+	for _, colName := range v.Selector.Constraints.Filterable {
 		column, err := v._columns.Lookup(colName)
 		if err != nil {
 			return fmt.Errorf("invalid view: %v %w", v.Name, err)

@@ -432,7 +432,7 @@ func TestRead(t *testing.T) {
 		criteriaWhere(),
 		inheritCoalesceTypes(),
 		inheritLogger(),
-		wildcardAllowedFilterables(),
+		wildcardAllowedFilterable(),
 		autoCoalesce(),
 		batchParent(),
 		{
@@ -562,7 +562,7 @@ func autoCoalesce() usecase {
 	}
 }
 
-func wildcardAllowedFilterables() usecase {
+func wildcardAllowedFilterable() usecase {
 	type Event struct {
 		Id          int
 		Quantity    float64
@@ -586,7 +586,7 @@ func wildcardAllowedFilterables() usecase {
 		Caser:                format.CaseUpperUnderscore,
 		Selector: &view.Config{
 			Constraints: &view.Constraints{
-				Filterables: []string{"*"},
+				Filterable: []string{"*"},
 			},
 		},
 	})
