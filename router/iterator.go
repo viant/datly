@@ -42,13 +42,6 @@ func (s *SelectorParamIt) Next() (Param, error) {
 
 	for i := s.start; i < len(s.paramValue); i++ {
 		switch s.paramValue[i] {
-		case '.':
-			if !s.updatedViewPrefix {
-				s.next.Prefix = s.paramValue[s.start:i]
-				s.updatedViewPrefix = true
-				s.start = i
-			}
-
 		case ValuesSeparator:
 			s.next.Value = s.sliceParamValue(s.start, i, s.updatedViewPrefix)
 			if i == 0 {

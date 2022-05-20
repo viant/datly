@@ -147,21 +147,21 @@ func TestRouter(t *testing.T) {
 		{
 			description: "selectors | fields, offset, limit",
 			resourceURI: "002_selectors",
-			uri:         fmt.Sprintf("/api/events?%v=ev.Id|ev.Quantity&%v=ev.1&%v=2", router.Fields, router.Offset, router.Limit),
+			uri:         fmt.Sprintf("/api/events?ev%v=Id,Quantity&ev%v=1&%v=2", router.Fields, router.Offset, router.Limit),
 			expected:    `[{"Id":10,"Quantity":21.957962334156036},{"Id":100,"Quantity":5.084940046072006}]`,
 			method:      http.MethodGet,
 		},
 		{
 			description: "selectors | orderBy, offset, limit",
 			resourceURI: "002_selectors",
-			uri:         fmt.Sprintf("/api/events?%v=ev.Quantity&%v=ev.1&%v=ev.3", router.OrderBy, router.Offset, router.Limit),
+			uri:         fmt.Sprintf("/api/events?ev%v=Quantity&ev%v=1&ev%v=3", router.OrderBy, router.Offset, router.Limit),
 			expected:    `[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}]`,
 			method:      http.MethodGet,
 		},
 		{
 			description: "selectors | orderBy, criteria",
 			resourceURI: "002_selectors",
-			uri:         fmt.Sprintf("/api/events?%v=Id&%v=ev.(ID%%20in%%20(1,100))", router.OrderBy, router.Criteria),
+			uri:         fmt.Sprintf("/api/events?%v=Id&ev%v=(ID%%20in%%20(1,100))", router.OrderBy, router.Criteria),
 			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			method:      http.MethodGet,
 		},
@@ -369,7 +369,7 @@ func TestRouter(t *testing.T) {
 		{
 			description: "relations | with specified fields",
 			resourceURI: "010_relations",
-			uri:         fmt.Sprintf("/api/events?%v=ev.Id|ev.Quantity|ev.EventType|typ.Id|typ.Code&%v=ev.1&%v=2", router.Fields, router.Offset, router.Limit),
+			uri:         fmt.Sprintf("/api/events?ev%v=Id,Quantity,EventType&typ%v=Id,Code&ev%v=1&%v=2", router.Fields, router.Fields, router.Offset, router.Limit),
 			method:      http.MethodGet,
 			expected:    `[{"Id":10,"Quantity":21.957962334156036,"EventType":{"Id":11,"Code":"code - 11"}},{"Id":100,"Quantity":5.084940046072006,"EventType":{"Id":111,"Code":"code - 111"}}]`,
 		},
@@ -377,14 +377,14 @@ func TestRouter(t *testing.T) {
 			description: "relations | with specified fields, without relation Id",
 			resourceURI: "010_relations",
 			expected:    `[{"Id":10,"Quantity":21.957962334156036,"EventType":{"Code":"code - 11"}},{"Id":100,"Quantity":5.084940046072006,"EventType":{"Code":"code - 111"}}]`,
-			uri:         fmt.Sprintf("/api/events?%v=ev.Id|ev.Quantity|ev.EventType|typ.Code&%v=ev.1&%v=2", router.Fields, router.Offset, router.Limit),
+			uri:         fmt.Sprintf("/api/events?ev%v=Id,Quantity,EventType&typ%v=Code&ev%v=1&%v=2", router.Fields, router.Fields, router.Offset, router.Limit),
 			method:      http.MethodGet,
 		},
 		{
 			description: "relations | with specified fields, without relation",
 			resourceURI: "010_relations",
 			expected:    `[{"Id":10,"Quantity":21.957962334156036},{"Id":100,"Quantity":5.084940046072006}]`,
-			uri:         fmt.Sprintf("/api/events?%v=ev.Id|ev.Quantity&%v=ev.1&%v=2", router.Fields, router.Offset, router.Limit),
+			uri:         fmt.Sprintf("/api/events?ev%v=Id,Quantity&ev%v=1&%v=2", router.Fields, router.Offset, router.Limit),
 			method:      http.MethodGet,
 		},
 		{
@@ -397,7 +397,7 @@ func TestRouter(t *testing.T) {
 		{
 			description: "styles | response",
 			resourceURI: "011_style",
-			uri:         "/api/events?_fields=Id|Timestamp|EventTypeId",
+			uri:         "/api/events?_fields=Id,Timestamp,EventTypeId",
 			expected:    `{"Status":"ok","Result":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111}]}`,
 			method:      http.MethodGet,
 		},
@@ -427,10 +427,24 @@ func TestRouter(t *testing.T) {
 		{
 			description:   "cache | fields, offset, limit",
 			resourceURI:   "014_cache",
-			uri:           fmt.Sprintf("/api/events?%v=ev.Id|ev.Quantity&%v=ev.1&%v=2", router.Fields, router.Offset, router.Limit),
+			uri:           fmt.Sprintf("/api/events?ev%v=Id,Quantity&ev%v=1&%v=2", router.Fields, router.Offset, router.Limit),
 			expected:      `[{"Id":10,"Quantity":21.957962334156036},{"Id":100,"Quantity":5.084940046072006}]`,
 			method:        http.MethodGet,
 			extraRequests: 1,
+		},
+		{
+			description: "relations | with specified fields, without relation Id",
+			resourceURI: "015_relations_many",
+			expected:    `[{"Id":1,"Events":null},{"Id":2,"Events":[{"UserId":1},{"UserId":10}]},{"Id":11,"Events":[{"UserId":2}]},{"Id":111,"Events":[{"UserId":3}]}]`,
+			uri:         "/api/event-types?_fields=Events,Id&ev_fields=UserId",
+			method:      http.MethodGet,
+		},
+		{
+			description: "case format | with specified fields",
+			resourceURI: "016_case_format",
+			expected:    `[{"id":1,"events":null},{"id":2,"events":[{"user_id":1},{"user_id":10}]},{"id":11,"events":[{"user_id":2}]},{"id":111,"events":[{"user_id":3}]}]`,
+			uri:         "/api/event-types?_fields=events,id&ev_fields=user_id",
+			method:      http.MethodGet,
 		},
 	}
 

@@ -325,8 +325,8 @@ func (r *Collector) Relations(selector *Selector) []*Collector {
 			continue
 		}
 
-		dest := reflect.MakeSlice(r.view.With[counter].Of.View.Schema.SliceType(), 0, 1).Interface()
-		slice := r.view.With[counter].Of.View.Schema.Slice()
+		dest := reflect.MakeSlice(r.view.With[i].Of.View.Schema.SliceType(), 0, 1).Interface()
+		slice := r.view.With[i].Of.View.Schema.Slice()
 		wg := sync.WaitGroup{}
 
 		delta := 0
@@ -343,9 +343,9 @@ func (r *Collector) Relations(selector *Selector) []*Collector {
 			types:           make(map[string]*xunsafe.Type),
 			values:          make(map[string]*[]interface{}),
 			slice:           slice,
-			view:            &r.view.With[counter].Of.View,
-			relation:        r.view.With[counter],
-			supportParallel: r.view.With[counter].Of.MatchStrategy.SupportsParallel(),
+			view:            &r.view.With[i].Of.View,
+			relation:        r.view.With[i],
+			supportParallel: r.view.With[i].Of.MatchStrategy.SupportsParallel(),
 			wg:              &wg,
 			wgDelta:         delta,
 		}

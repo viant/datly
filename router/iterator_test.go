@@ -19,51 +19,46 @@ func TestSelectorParamIt(t *testing.T) {
 		},
 		{
 			description: "view prefix",
-			value:       "ev.10",
+			value:       "10",
 			expected: []router.Param{
 				{
-					Prefix: "ev",
-					Value:  "10",
+					Value: "10",
 				},
 			},
 		},
 		{
 			description: "multi param value",
-			value:       "20|ev.10",
+			value:       "20,10",
 			expected: []router.Param{
 				{
 					Value: "20",
 				},
 				{
-					Prefix: "ev",
-					Value:  "10",
+					Value: "10",
 				},
 			},
 		},
 		{
 			description: "multi param value, all with prefix",
-			value:       "dep.20|ev.10",
+			value:       "20,10",
 			expected: []router.Param{
 				{
-					Prefix: "dep",
-					Value:  "20",
+					Value: "20",
 				},
 				{
-					Prefix: "ev",
-					Value:  "10",
+					Value: "10",
 				},
 			},
 		},
 		{
 			description: "value block",
-			value:       "(SELECT * FROM public.abc)|ev.(SELECT * FROM public.ev where (1=1) AND (2=2))",
+			value:       "(SELECT * FROM public.abc),(SELECT * FROM public.ev where (1=1) AND (2=2))",
 			expected: []router.Param{
 				{
 					Value: "SELECT * FROM public.abc",
 				},
 				{
-					Prefix: "ev",
-					Value:  "SELECT * FROM public.ev where (1=1) AND (2=2)",
+					Value: "SELECT * FROM public.ev where (1=1) AND (2=2)",
 				},
 			},
 		},
@@ -71,11 +66,6 @@ func TestSelectorParamIt(t *testing.T) {
 			description: "empty string",
 			value:       "",
 			expected:    []router.Param{},
-		},
-		{
-			description: "empty prefix and value",
-			value:       "." + "|" + ".",
-			expected:    []router.Param{{}, {}},
 		},
 		{
 			description: "multiple empty values",

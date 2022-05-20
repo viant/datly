@@ -7,7 +7,8 @@ import (
 
 type (
 	Index struct {
-		Namespace      map[string]string
+		Namespace map[string]string
+
 		_viewsByPrefix map[string]int
 		_viewsByName   map[string]int
 
@@ -15,16 +16,17 @@ type (
 	}
 
 	ViewDetails struct {
-		View *view.View
-		Path string
+		View     *view.View
+		Path     string
+		Prefixes []string
 	}
 )
 
-func (i *Index) Init(view *view.View, path string) error {
+func (i *Index) Init(aView *view.View, path string) error {
 	i.ensureIndexes()
-	i.indexViews(view, path)
+	i.indexViews(aView, path, aView)
 
-	if err := i.indexViewsByPrefix(); err != nil {
+	if err := i.indexViewsByPrefix(aView); err != nil {
 		return err
 	}
 
@@ -45,12 +47,18 @@ func (i *Index) ensureIndexes() {
 	}
 }
 
-func (i *Index) indexViews(view *view.View, path string) {
+func (i *Index) indexViews(view *view.View, path string, mainView *view.View) {
 	i._viewsByName[view.Name] = len(i._viewDetails)
-	i._viewDetails = append(i._viewDetails, &ViewDetails{
+	viewDetails := &ViewDetails{
 		View: view,
 		Path: path,
-	})
+	}
+
+	if mainView == view {
+		viewDetails.Prefixes = []string{""}
+	}
+
+	i._viewDetails = append(i._viewDetails, viewDetails)
 
 	for relationIndex := range view.With {
 		aPath := path
@@ -60,11 +68,11 @@ func (i *Index) indexViews(view *view.View, path string) {
 			aPath += "." + view.With[relationIndex].Holder
 		}
 
-		i.indexViews(&view.With[relationIndex].Of.View, aPath)
+		i.indexViews(&view.With[relationIndex].Of.View, aPath, mainView)
 	}
 }
 
-func (i *Index) indexViewsByPrefix() error {
+func (i *Index) indexViewsByPrefix(mainView *view.View) error {
 	for prefix, viewName := range i.Namespace {
 		index, ok := i._viewsByName[viewName]
 		if !ok {
@@ -72,6 +80,11 @@ func (i *Index) indexViewsByPrefix() error {
 		}
 
 		i._viewsByPrefix[prefix] = index
+		viewDetails := i._viewDetails[index]
+		viewDetails.Prefixes = []string{prefix}
+		if viewDetails.View == mainView {
+			viewDetails.Prefixes = append(viewDetails.Prefixes, "")
+		}
 	}
 
 	return nil

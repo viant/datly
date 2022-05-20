@@ -1,0 +1,37 @@
+Routes:
+  - URI: "/api/event-types"
+    Method: GET
+    View:
+      Ref: event_types
+    Namespace:
+      ev: events
+      typ: event_types
+
+Resource:
+  Views:
+    - Name: event_types
+      Connector:
+        Ref: db
+      Table: event_types
+      With:
+        - Name: event_event-types
+          Cardinality: Many
+          Column: id
+          Holder: Events
+          Of:
+            Ref: events#ref
+            Name: events
+            Column: event_type_id
+            Exclude:
+              - event_type_id
+
+    - Name: events#ref
+      Table: events
+      Connector:
+        Ref: db
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"
+

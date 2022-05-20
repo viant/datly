@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
+	"github.com/viant/toolbox/format"
 	"net/http"
 	"os"
 	"reflect"
@@ -348,7 +349,12 @@ func (r *Router) buildJsonFilters(route *Route, selectors view.Selectors) (*json
 			if !ok {
 				return nil, fmt.Errorf("not found column %v at view %v", col.FieldName(), aView.Name)
 			}
-			fields[i] = column
+
+			if route._caser == format.CaseUpperCamel {
+				fields[i] = column
+			} else {
+				fields[i] = route._caser.Format(column, format.CaseUpperCamel)
+			}
 		}
 
 		entries = append(entries, &json.FilterEntry{

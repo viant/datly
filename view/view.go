@@ -147,6 +147,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
+	v.ensureIndexExcluded()
 	v.ensureBatch()
 
 	if err = v.ensureLogger(resource); err != nil {
@@ -212,8 +213,6 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 	if err = v.markColumnsAsFilterable(); err != nil {
 		return err
 	}
-
-	v.ensureIndexExcluded()
 
 	if err = v.ensureSchema(resource._types); err != nil {
 		return err
@@ -308,11 +307,9 @@ func (v *View) ensureColumns(ctx context.Context) error {
 		}
 
 		ColumnSlice(columns).updateTypes(tableColumns, v.Caser)
-		v.Columns = columns
-	} else {
-		v.Columns = columns
 	}
 
+	v.Columns = columns
 	return nil
 }
 
@@ -431,15 +428,17 @@ func (v *View) inherit(view *View) {
 	v.Table = notEmptyOf(v.Table, view.Table)
 	v.From = notEmptyOf(v.From, view.From)
 
-	if len(v.Columns) == 0 {
-		v.Columns = view.Columns
+	if stringsSliceEqual(v.Exclude, view.Exclude) {
+		if len(v.Columns) == 0 {
+			v.Columns = view.Columns
+		}
+
+		if v.Schema == nil && len(v.With) == 0 {
+			v.Schema = view.Schema
+		}
 	}
 
 	v.Criteria = notEmptyOf(v.Criteria, view.Criteria)
-
-	if v.Schema == nil && len(v.With) == 0 {
-		v.Schema = view.Schema
-	}
 
 	if len(v.With) == 0 {
 		v.With = view.With
@@ -477,6 +476,20 @@ func (v *View) inherit(view *View) {
 	if v.Batch == nil {
 		v.Batch = view.Batch
 	}
+}
+
+func stringsSliceEqual(x []string, y []string) bool {
+	if len(x) != len(y) {
+		return false
+	}
+
+	for index, value := range x {
+		if y[index] != value {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (v *View) ensureIndexExcluded() {

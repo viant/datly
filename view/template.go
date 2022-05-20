@@ -56,7 +56,7 @@ type (
 		Pagination  string `velty:"PAGINATION"`
 	}
 
-	ViewParam struct {
+	Param struct {
 		Name  string
 		Alias string
 		Table string
@@ -210,7 +210,7 @@ func (t *Template) newEvaluator(template string) (*Evaluator, error) {
 		return nil, err
 	}
 
-	if err = evaluator.planner.DefineVariable(viewKey, reflect.TypeOf(&ViewParam{})); err != nil {
+	if err = evaluator.planner.DefineVariable(viewKey, reflect.TypeOf(&Param{})); err != nil {
 		return nil, err
 	}
 
@@ -250,7 +250,7 @@ func (t *Template) evaluate(evaluator *Evaluator, externalParams, presenceMap in
 		}
 	}
 
-	viewParam := &ViewParam{}
+	viewParam := &Param{}
 	if parent != nil {
 		viewParam = asParam(parent)
 	} else {
@@ -265,8 +265,8 @@ func (t *Template) evaluate(evaluator *Evaluator, externalParams, presenceMap in
 	return newState.Buffer.String(), nil
 }
 
-func asParam(parent *View) *ViewParam {
-	viewParam := &ViewParam{
+func asParam(parent *View) *Param {
+	viewParam := &Param{
 		Name:  parent.Name,
 		Alias: parent.Alias,
 		Table: parent.Table,

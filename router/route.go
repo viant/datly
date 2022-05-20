@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
+	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
@@ -50,6 +51,7 @@ type (
 		ResponseField   string           `json:",omitempty"`
 		CompressionSize int              `json:",omitempty"`
 
+		_caser          format.Case
 		_marshaller     *json.Marshaller
 		_responseSetter *responseSetter
 	}
@@ -145,14 +147,15 @@ func (r *Route) initMarshaller() error {
 		r.CaseFormat = view.UpperCamel
 	}
 
-	caser, err := r.CaseFormat.Caser()
+	var err error
+	r._caser, err = r.CaseFormat.Caser()
 	if err != nil {
 		return err
 	}
 
 	marshaller, err := json.New(r.responseType(), marshal.Default{
 		OmitEmpty:  r.OmitEmpty,
-		CaseFormat: caser,
+		CaseFormat: r._caser,
 	})
 
 	if err != nil {

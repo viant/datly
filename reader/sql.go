@@ -47,8 +47,8 @@ func NewBuilder() *Builder {
 }
 
 //Build builds SQL Select statement
-func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *BatchData, relation *view.Relation, parent *view.View) (string, []interface{}, error) {
-	template, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parent)
+func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *BatchData, relation *view.Relation, parentOfAclView *view.View) (string, []interface{}, error) {
+	template, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parentOfAclView)
 	if err != nil {
 		return "", nil, err
 	}
@@ -56,6 +56,10 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *Ba
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
 	if err = b.appendColumns(&sb, aView, selector, relation); err != nil {
+		return "", nil, err
+	}
+
+	if err = b.appendRelationColumn(&sb, aView, selector, relation); err != nil {
 		return "", nil, err
 	}
 
@@ -74,7 +78,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *Ba
 		return "", nil, err
 	}
 
-	if err = b.updateCriteria(&commonParams, aView, selector, hasColumnsIn, parent); err != nil {
+	if err = b.updateCriteria(&commonParams, aView, selector, hasColumnsIn, parentOfAclView); err != nil {
 		return "", nil, err
 	}
 
@@ -116,16 +120,6 @@ func (b *Builder) appendSelectorColumns(sb *strings.Builder, view *view.View, se
 
 		sb.WriteString(" ")
 		sb.WriteString(viewColumn.SqlExpression())
-	}
-
-	if relation != nil && !selector.Has(relation.Of.Column) {
-		sb.WriteString(separatorFragment)
-		sb.WriteString(" ")
-		col, ok := view.ColumnByName(relation.Of.Column)
-		if !ok {
-			return fmt.Errorf("not found column %v at view %v", relation.Of.Column, view.Name)
-		}
-		sb.WriteString(col.SqlExpression())
 	}
 
 	return nil
@@ -336,6 +330,49 @@ func (b *Builder) appendOrderBy(sb *strings.Builder, view *view.View, selector *
 		sb.WriteString(orderByFragment)
 		sb.WriteString(view.Selector.OrderBy)
 		return nil
+	}
+
+	return nil
+}
+
+func (b *Builder) appendRelationColumn(sb *strings.Builder, aView *view.View, selector *view.Selector, relation *view.Relation) error {
+	if relation == nil {
+		return nil
+	}
+
+	if len(selector.Columns) > 0 {
+		return b.checkSelectorAndAppendRelColumn(sb, aView, selector, relation)
+	}
+
+	return b.checkViewAndAppendRelColumn(sb, aView, relation)
+}
+
+func (b *Builder) checkViewAndAppendRelColumn(sb *strings.Builder, aView *view.View, relation *view.Relation) error {
+	if _, ok := aView.ColumnByName(relation.Of.Column); ok {
+		return nil
+	}
+
+	sb.WriteString(separatorFragment)
+	sb.WriteString(aView.Alias)
+	sb.WriteString(".")
+	sb.WriteString(relation.Of.Column)
+	sb.WriteString(" ")
+
+	return nil
+}
+
+func (b *Builder) checkSelectorAndAppendRelColumn(sb *strings.Builder, aView *view.View, selector *view.Selector, relation *view.Relation) error {
+	if relation == nil || selector.Has(relation.Of.Column) {
+		return nil
+	}
+
+	sb.WriteString(separatorFragment)
+	sb.WriteString(" ")
+	col, ok := aView.ColumnByName(relation.Of.Column)
+	if !ok {
+		sb.WriteString(relation.Of.Column)
+	} else {
+		sb.WriteString(col.SqlExpression())
 	}
 
 	return nil
