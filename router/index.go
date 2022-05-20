@@ -53,13 +53,14 @@ func (i *Index) indexViews(view *view.View, path string) {
 	})
 
 	for relationIndex := range view.With {
-		if path == "" {
-			path = view.With[relationIndex].Holder
+		aPath := path
+		if aPath == "" {
+			aPath = view.With[relationIndex].Holder
 		} else {
-			path += "." + view.With[relationIndex].Holder
+			aPath += "." + view.With[relationIndex].Holder
 		}
 
-		i.indexViews(&view.With[relationIndex].Of.View, path)
+		i.indexViews(&view.With[relationIndex].Of.View, aPath)
 	}
 }
 
