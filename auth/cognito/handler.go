@@ -79,7 +79,7 @@ func (s *Service) authorizeRequest(w http.ResponseWriter, r *http.Request) bool 
 			return true
 		}
 	default:
-		if strings.ToLower(r.Method) == "post" && strings.Contains(r.RequestURI, "signin") {
+		if strings.ToLower(r.Method) == "post" && strings.Contains(r.RequestURI, "signin") { //TODO put singing fragment to config
 			r.ParseForm() //try to get credentials from a form
 			username := r.FormValue("username")
 			password := r.FormValue("password")

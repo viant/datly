@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-//Compress comrpess
+//Compress compress
 func Compress(reader io.Reader) (*bytes.Buffer, error) {
 	buffer := new(bytes.Buffer)
 	writer := gzip.NewWriter(buffer)

@@ -126,6 +126,7 @@ func buildTypeFromFields(fields []*Field) reflect.Type {
 			Tag:       tag,
 			Anonymous: field.Embed,
 		}
+
 	}
 
 	of := reflect.StructOf(rFields)

@@ -163,12 +163,14 @@ func (r *Service) handleRouterResourceChange(ctx context.Context, hasChanged *bo
 		}
 		switch operation {
 		case resource.Added, resource.Modified:
+			if strings.HasSuffix(URL, "sql") {
+				return
+			}
 			res, err := r.loadRouterResource(ctx, URL, fs)
 			if err != nil {
 				log.Printf("failed to load %v, %v\n", URL, err)
 				return
 			}
-			res.SourceURL = URL
 			resourcesSnapshot[res.SourceURL] = res
 
 		case resource.Deleted:

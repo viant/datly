@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/viant/afs"
 	"github.com/viant/datly/auth/cognito"
+	"github.com/viant/datly/gateway/runtime/standalone/handler"
 	"github.com/viant/datly/visitor"
 	"net/http"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	_ "github.com/viant/bigquery"
 	"github.com/viant/datly/gateway"
 	dlambda "github.com/viant/datly/gateway/runtime/lambda"
+	_ "github.com/viant/scy/kms/blowfish"
 
 	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/gateway/runtime/lambda/adapter"
@@ -30,16 +32,26 @@ import (
 )
 
 func main() {
-	lambda.Start(handleRequest)
+	lambda.Start(HandleRequest)
 }
 
 var config *dlambda.Config
 var configInit sync.Once
 
-func handleRequest(ctx context.Context, request *adapter.Request) (*events.LambdaFunctionURLResponse, error) {
+func HandleRequest(ctx context.Context, request *adapter.Request) (*events.LambdaFunctionURLResponse, error) {
+	httpRequest := request.Request()
+	writer := proxy.NewWriter()
+	if err := handleRequest(writer, httpRequest); err != nil {
+		return nil, err
+	}
+	return adapter.NewResponse(writer), nil
+}
+
+func handleRequest(writer http.ResponseWriter, httpRequest *http.Request) error {
+
 	configURL := os.Getenv("CONFIG_URL")
 	if configURL == "" {
-		return nil, fmt.Errorf("config was emty")
+		return fmt.Errorf("config was emty")
 	}
 	var err error
 	configInit.Do(func() {
@@ -48,30 +60,34 @@ func handleRequest(ctx context.Context, request *adapter.Request) (*events.Lambd
 
 	if err != nil {
 		configInit = sync.Once{}
-		return nil, err
+		return err
 	}
 	if err = initAuthService(config); err != nil {
-		return nil, err
+		return err
 	}
-
 	service, err := gateway.SingletonWithConfig(&config.Config, registry.Codecs, registry.Types, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	writer := proxy.NewWriter()
-	handler := service.Handle
+	httpHandler := service.Handle
 	if authService != nil {
-		handler = authService.Auth(service.Handle)
+		httpHandler = authService.Auth(service.Handle)
 	}
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if strings.HasSuffix(request.RawPath, ".ico") {
+	if strings.Contains(httpRequest.RequestURI, config.Meta.ViewURI) {
+		viewHandler := handler.NewView(config.Meta.ViewURI, &config.Meta, service.View)
+		viewHandler.ServeHTTP(writer, httpRequest)
+		return nil
+	}
+
+	if strings.HasSuffix(httpRequest.RequestURI, ".ico") {
 		writer.WriteHeader(http.StatusNotFound)
 	} else {
-		handler(writer, request.Request())
+		httpHandler(writer, httpRequest)
 	}
-	return adapter.NewResponse(writer), nil
+	return nil
 }
 
 var authService *cognito.Service

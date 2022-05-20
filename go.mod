@@ -11,6 +11,7 @@ require (
 	github.com/go-errors/errors v1.4.2
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gocql/gocql v0.0.0-20200115135732-617765adbe2d // indirect
+	github.com/golang-jwt/jwt/v4 v4.4.1
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/lib/pq v1.10.4
 	github.com/mattn/go-sqlite3 v2.0.2+incompatible
@@ -32,7 +33,7 @@ require (
 	github.com/viant/parsly v0.0.0-20220309230857-3a8c3e9c4030
 	github.com/viant/scy v0.0.0-20220515172612-27c4a63e8065
 	github.com/viant/sqlx v0.0.0-20220412215625-85e6fb65daba
-	github.com/viant/toolbox v0.34.5
+	github.com/viant/toolbox v0.34.6-0.20220520032100-91daa519c2a2
 	github.com/viant/velty v0.1.1-0.20220505183530-cfd67bcb2f53
 	github.com/viant/xunsafe v0.8.1-0.20220517184704-270ed1a5aec9
 	github.com/yuin/gopher-lua v0.0.0-20191220021717-ab39c6098bdb // indirect

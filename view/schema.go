@@ -130,7 +130,6 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 			Type: rType,
 		})
 	}
-
 	c.setType(reflect.StructOf(structFields))
 }
 

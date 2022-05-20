@@ -85,6 +85,9 @@ func detectColumnsSQL(source string, v *View) string {
 	if strings.Contains(source, string(shared.Pagination)) {
 		source = strings.ReplaceAll(source, string(shared.Pagination), " ")
 	}
+	if strings.Contains(source, string(shared.Pagination)) {
+		source = strings.ReplaceAll(source, string(shared.Pagination), " ")
+	}
 
 	SQL := "SELECT " + v.Alias + ".* FROM " + source + " " + v.Alias + " WHERE 1=0"
 	return SQL

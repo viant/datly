@@ -187,7 +187,6 @@ func (s *Service) query(ctx context.Context, view *view.View, db *sql.DB, SQL st
 		}
 		return visitor(row)
 	}, args...)
-
 	end := time.Now()
 	view.Logger.ReadingData(end.Sub(begin), SQL, readData, args, err)
 	if err != nil {

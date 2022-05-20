@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/visitor"
@@ -35,8 +36,9 @@ type Resource struct {
 }
 
 func (r *Resource) LoadText(ctx context.Context, URL string) (string, error) {
-	if url.Scheme(URL, "empty") == "empty" && r.SourceURL != "" {
-		URL = url.Join(r.SourceURL, URL)
+	if url.Scheme(URL, "") == "" && r.SourceURL != "" {
+		parent, _ := url.Split(r.SourceURL, file.Scheme)
+		URL = url.Join(parent, URL)
 	}
 	fs := afs.New()
 	data, err := fs.DownloadWithURL(ctx, URL)
@@ -237,6 +239,14 @@ func (r *Resource) FindConnector(view *View) (*Connector, error) {
 		if connector != nil {
 			result := *connector
 			return &result, nil
+		}
+	}
+
+	if view.Connector == nil {
+		if view.Ref != "" {
+			if refView, _ := r.View(view.Ref); refView != nil {
+				view.Connector = refView.Connector
+			}
 		}
 	}
 

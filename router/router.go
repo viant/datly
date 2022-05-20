@@ -146,11 +146,8 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 		if !r.runBeforeFetch(response, request, route) {
 			return
 		}
-
 		ctx := context.Background()
-
 		selectors, err := CreateSelectorsFromRoute(ctx, route, request, route.Index._viewDetails...)
-
 		if err != nil {
 			r.writeErr(response, route, err, http.StatusBadRequest)
 			return
@@ -269,7 +266,6 @@ func (r *Router) writeResponse(route *Route, request *http.Request, response htt
 	}
 
 	asBytes, httpStatus, err := r.result(route, request, destValue, filters)
-
 	if err != nil {
 		r.writeErr(response, route, err, http.StatusBadRequest)
 		return
@@ -284,10 +280,13 @@ func (r *Router) writeResponse(route *Route, request *http.Request, response htt
 		}
 
 		response.WriteHeader(httpStatus)
+		//TODO move to route config
+		response.Header().Set(content.Type, shared.ContentTypeJSON)
 		response.Header().Set(content.Encoding, shared.EncodingGzip)
 		response.Write(buffer.Bytes())
 	} else {
 		response.WriteHeader(httpStatus)
+		response.Header().Set(content.Type, shared.ContentTypeJSON)
 		response.Write(asBytes)
 	}
 }

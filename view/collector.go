@@ -1,6 +1,7 @@
 package view
 
 import (
+	"fmt"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -56,7 +57,8 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 	}
 
 	scanType := column.ScanType()
-	kind := column.ScanType().Kind()
+	scanType = remapScanType(scanType, column.DatabaseTypeName())
+	kind := scanType.Kind()
 	switch kind {
 	case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64, reflect.Uint32, reflect.Int32, reflect.Uint16, reflect.Int16, reflect.Uint8, reflect.Int8:
 		scanType = reflect.TypeOf(0)
@@ -91,6 +93,7 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 func (r *Collector) parentValuesPositions(columnName string) map[interface{}][]int {
 	result, ok := r.parent.valuePosition[columnName]
 	if !ok {
+		fmt.Printf("INDEXING PAREN POS\n")
 		r.indexParentPositions(columnName)
 		result = r.parent.valuePosition[columnName]
 	}
@@ -173,13 +176,26 @@ func (r *Collector) valueIndexer(visitorRelations []*Relation) func(value interf
 }
 
 func (r *Collector) indexValueByRel(fieldValue interface{}, rel *Relation, counter int) {
-	switch acutal := fieldValue.(type) {
+	switch actual := fieldValue.(type) {
 	case []int:
-		for _, v := range acutal {
+		for _, v := range actual {
 			r.indexValueToPosition(rel, v, counter)
 		}
+	case []*int64:
+		for _, v := range actual {
+			r.indexValueToPosition(rel, int(*v), counter)
+		}
+	case []int64:
+		for _, v := range actual {
+			r.indexValueToPosition(rel, int(v), counter)
+		}
+	case int32:
+		r.indexValueToPosition(rel, int(actual), counter)
+
+	case *int64:
+		r.indexValueToPosition(rel, int(*actual), counter)
 	case []string:
-		for _, v := range acutal {
+		for _, v := range actual {
 			r.indexValueToPosition(rel, v, counter)
 		}
 	default:
@@ -205,6 +221,9 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 
 	return func(owner interface{}) error {
 		key = keyField.Interface(xunsafe.AsPointer(owner))
+		if k, ok := key.(*int64); ok && k != nil {
+			key = int(*k)
+		}
 		valuePosition := r.parentValuesPositions(relation.Column)
 		positions, ok := valuePosition[key]
 		if !ok {
@@ -242,6 +261,8 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 		}
 
 		valuePosition := r.parentValuesPositions(relation.Column)
+
+		key = normalizeKey(key)
 		positions, ok := valuePosition[key]
 		if !ok {
 			return nil
@@ -284,6 +305,7 @@ func (r *Collector) indexParentPositions(name string) {
 	r.parent.valuePosition[name] = map[interface{}][]int{}
 	for position, v := range *values {
 		val := xType.Deref(v)
+		val = normalizeKey(val)
 		_, ok := r.parent.valuePosition[name][val]
 		if !ok {
 			r.parent.valuePosition[name][val] = make([]int, 0)
@@ -415,6 +437,14 @@ func (r *Collector) ParentPlaceholders() ([]interface{}, string) {
 			parent := r.parent.slice.ValuePointerAt(destPtr, i)
 			fieldValue := r.relation.columnField.Value(xunsafe.AsPointer(parent))
 			switch actual := fieldValue.(type) {
+			case []*int64:
+				for j := range actual {
+					result = append(result, int(*actual[j]))
+				}
+			case []int64:
+				for j := range actual {
+					result = append(result, int(actual[j]))
+				}
 			case []int:
 				for j := range actual {
 					result = append(result, actual[j])

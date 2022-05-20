@@ -75,6 +75,7 @@ func (j *Marshaller) init(initialPath string) error {
 
 func (j *Marshaller) structMarshallers(rType reflect.Type, config marshal.Default, path string) ([]*fieldMarshaller, error) {
 	elem := shared.Elem(rType)
+
 	numField := elem.NumField()
 
 	marshallers := make([]*fieldMarshaller, 0)
@@ -190,7 +191,10 @@ func (f *fieldMarshaller) init(field reflect.StructField, config marshal.Default
 	case reflect.Float32:
 		updateFloat32Marshaller(f, wasPtr, defaultTag)
 	case reflect.Slice, reflect.Struct:
-		if rType == timeType {
+
+		if rType.Kind() == reflect.Slice && rType.Elem().Kind() == reflect.Uint8 {
+			updateBytesMarshaller(f, wasPtr, defaultTag)
+		} else if rType == timeType {
 			updateTimeMarshaller(f, wasPtr, defaultTag)
 		} else {
 			if err := updateNonPrimitiveMarshaller(f); err != nil {
@@ -362,6 +366,38 @@ func updateStringMarshaller(stringifier *fieldMarshaller, wasPtr bool, tag *Defa
 			}
 
 			marshallString(sb, *stringPtr)
+			return nil
+		}
+
+		return
+	}
+
+	stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
+		aString := stringifier.xField.String(ptr)
+		if aString == "" && tag._value != nil {
+			aString = tag._value.(string)
+		}
+
+		marshallString(sb, aString)
+		return nil
+	}
+}
+
+func updateBytesMarshaller(stringifier *fieldMarshaller, wasPtr bool, tag *DefaultTag) {
+	if wasPtr {
+		stringifier.marshall = func(ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
+			bytesPtr := stringifier.xField.BytesPtr(ptr)
+			if bytesPtr == nil {
+				if tag._value != nil {
+					sb.Write(tag._value.([]byte))
+					return nil
+				}
+
+				sb.WriteString(null)
+				return nil
+			}
+
+			marshallString(sb, string(*bytesPtr))
 			return nil
 		}
 

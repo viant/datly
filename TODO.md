@@ -4,6 +4,9 @@
     - Add Caching with (cloud storage) 
     - Add Cloud Storage redirection if size to large
 
+* Move View.SelectorConstraints: -> View.Selector.Constraints
+
+      
 
 * Renames/break down visitor
   - codec / lifecyle  ?

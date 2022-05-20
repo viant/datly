@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/viant/afs"
-	"github.com/viant/afs/url"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
 	"github.com/viant/gmetric/provider"
@@ -106,19 +104,12 @@ func (v *View) Init(ctx context.Context, resource *Resource) error {
 }
 
 func (v *View) loadFromWithURL(ctx context.Context, resource *Resource) error {
-	if v.FromURL == "" {
+	if v.FromURL == "" || v.From != "" {
 		return nil
 	}
-	if url.Scheme(v.FromURL, "empty") == "empty" && resource.SourceURL != "" {
-		v.FromURL = url.Join(resource.SourceURL, v.FromURL)
-	}
-	fs := afs.New()
-	data, err := fs.DownloadWithURL(ctx, v.FromURL)
-	if err != nil {
-		return err
-	}
-	v.FromURL = string(data)
-	return nil
+	var err error
+	v.From, err = resource.LoadText(ctx, v.FromURL)
+	return err
 }
 
 func (v *View) initViews(ctx context.Context, resource *Resource, relations []*Relation) error {
@@ -331,6 +322,7 @@ func convertIoColumnsToColumns(ioColumns []io.Column, nullable map[string]bool) 
 	columns := make([]*Column, 0)
 	for i := 0; i < len(ioColumns); i++ {
 		scanType := ioColumns[i].ScanType()
+		scanType = remapScanType(scanType, ioColumns[i].DatabaseTypeName())
 		dataTypeName := ioColumns[i].DatabaseTypeName()
 		columns = append(columns, &Column{
 			Name:     ioColumns[i].Name(),
@@ -340,6 +332,35 @@ func convertIoColumnsToColumns(ioColumns []io.Column, nullable map[string]bool) 
 		})
 	}
 	return columns
+}
+
+var (
+	sqlNullInt64Type   = reflect.TypeOf(sql.NullInt64{})
+	sqlNullFloat64Type = reflect.TypeOf(sql.NullFloat64{})
+	sqlRawBytesType    = reflect.TypeOf(sql.RawBytes{})
+	sqlNullTimeType    = reflect.TypeOf(sql.NullTime{})
+)
+
+func remapScanType(scanType reflect.Type, name string) reflect.Type {
+	switch scanType {
+	case sqlNullInt64Type:
+		v := int64(0)
+		scanType = reflect.TypeOf(&v)
+	case sqlNullTimeType:
+		t := time.Time{}
+		scanType = reflect.TypeOf(&t)
+	case sqlNullFloat64Type:
+		f := float64(0)
+		scanType = reflect.TypeOf(&f)
+	case sqlRawBytesType:
+		switch name {
+		case "BIT":
+			scanType = reflect.TypeOf([]byte{})
+		default:
+			scanType = reflect.TypeOf("")
+		}
+	}
+	return scanType
 }
 
 //ColumnByName returns Column by Column.Name

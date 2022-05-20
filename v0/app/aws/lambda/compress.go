@@ -2,7 +2,6 @@ package lambda
 
 import (
 	"encoding/base64"
-	"fmt"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/datly/v0/app/aws/apigw"
 	shared2 "github.com/viant/datly/v0/shared"
@@ -10,7 +9,6 @@ import (
 )
 
 func compressIfNeeded(response *apigw.ProxyResponse) {
-	fmt.Printf("response size : %v\n", len(response.Body))
 	if len(response.Body) > CompressionLimit {
 		if compressed, err := shared2.Compress(strings.NewReader(response.Body)); err == nil {
 			response.RawBody = compressed.Bytes()

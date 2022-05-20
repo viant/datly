@@ -3,18 +3,19 @@ package handler
 import (
 	"encoding/json"
 	"github.com/viant/datly/gateway/runtime/standalone/meta"
+	"github.com/viant/datly/view"
 	"gopkg.in/yaml.v3"
 	"net/http"
 	"strings"
 )
 
-type view struct {
+type metaView struct {
 	URIPrefix string
 	meta      *meta.Config
 	lookup    func(location string) (*view.View, error)
 }
 
-func (v *view) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+func (v *metaView) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	if !meta.IsAuthorized(request, v.meta.AllowedSubnet) {
 		writer.WriteHeader(http.StatusForbidden)
 		return
@@ -51,6 +52,6 @@ func (v *view) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 //NewView creates view handler
 func NewView(URI string, meta *meta.Config, lookup func(location string) (*view.View, error)) http.Handler {
-	handler := &view{lookup: lookup, meta: meta, URIPrefix: URI}
+	handler := &metaView{lookup: lookup, meta: meta, URIPrefix: URI}
 	return handler
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/datly/auth/cognito"
 	"github.com/viant/datly/gateway"
+	"github.com/viant/datly/gateway/runtime/standalone/meta"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"strings"
@@ -14,6 +15,7 @@ import (
 type Config struct {
 	gateway.Config
 	Cognito *cognito.Config
+	Meta    meta.Config
 }
 
 func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {
@@ -40,5 +42,6 @@ func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {
 		return nil, err
 	}
 	cfg.Init()
+	cfg.Meta.Init()
 	return cfg, cfg.Validate()
 }
