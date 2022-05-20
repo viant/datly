@@ -37,6 +37,31 @@ if err != nil {
 }
 ```
 
+To address complex data transformation at the fetch or  assembly time
+your go struct type can optionally implement the following [lifecycle](reader/lifecycle.go) interfaces:
+
+-- **OnFetcher**
+
+```go
+type OnFetcher interface{
+	OnFetch(ctx context.Context) error
+}
+
+```
+-- **OnRelationer**
+```go
+type OnRelationer interface {
+    OnRelation(ctx context.Context)
+}
+
+```
+
+
+
+
+
+
+
 If no `Schema` is provided, `View` type will be created using database table column types. Iti s handy, but it allows you only to serialize objects. Type assertion will not be able to use.
 
 You can explicitly say which columns do you want to fetch by specifying `Columns`, you need to also specify each `Column#DataType` 

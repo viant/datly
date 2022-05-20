@@ -16,6 +16,7 @@ Please refer to [`CHANGELOG.md`](../CHANGELOG.md) if you encounter breaking chan
 ## Motivation
 
 The goal of this project is to simplify and speed up data layer prototyping and development.
+It can be used as golang ORM or purely rule based.
 This is achieved by utilising rules to govern data mapping and binding for all data interaction.
 This project can be deployed as standalone or serverless with REST or Micro service style.
 

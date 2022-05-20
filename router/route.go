@@ -70,16 +70,13 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if err := r.initCardinality(); err != nil {
 		return err
 	}
-
 	r.View.Standalone = true
 	if r.View.Name == "" {
 		r.View.Name = r.View.Ref
 	}
-
 	if err := r.View.Init(ctx, resource.Resource); err != nil {
 		return err
 	}
-
 	if err := r.initVisitor(resource); err != nil {
 		return err
 	}
