@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/router/sanitize"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
+	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
@@ -29,7 +30,7 @@ func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.R
 		return nil, err
 	}
 
-	return CreateSelectors(ctx, requestMetadata, requestParams, views...)
+	return CreateSelectors(ctx, route._caser, requestMetadata, requestParams, views...)
 }
 
 func NewRequestMetadata(route *Route) *RequestMetadata {
@@ -41,17 +42,17 @@ func NewRequestMetadata(route *Route) *RequestMetadata {
 	return requestMetadata
 }
 
-func CreateSelectors(ctx context.Context, requestMetadata *RequestMetadata, requestParams *RequestParams, views ...*ViewDetails) (view.Selectors, error) {
+func CreateSelectors(ctx context.Context, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, views ...*ViewDetails) (view.Selectors, error) {
 	selectors := view.Selectors{}
 
-	if err := buildSelectors(ctx, requestMetadata, &selectors, views, requestParams); err != nil {
+	if err := buildSelectors(ctx, inputFormat, requestMetadata, &selectors, views, requestParams); err != nil {
 		return nil, err
 	}
 
 	return selectors, nil
 }
 
-func buildSelectors(ctx context.Context, requestMetadata *RequestMetadata, selectors *view.Selectors, viewsDetails []*ViewDetails, requestParams *RequestParams) error {
+func buildSelectors(ctx context.Context, inputFormat format.Case, requestMetadata *RequestMetadata, selectors *view.Selectors, viewsDetails []*ViewDetails, requestParams *RequestParams) error {
 	wg := sync.WaitGroup{}
 	errors := shared.NewErrors(0)
 	for _, details := range viewsDetails {
@@ -59,7 +60,7 @@ func buildSelectors(ctx context.Context, requestMetadata *RequestMetadata, selec
 		wg.Add(1)
 		go func(details *ViewDetails, requestMetadata *RequestMetadata, requestParams *RequestParams, selector *view.Selector) {
 			defer wg.Done()
-			if err := populateSelector(selector, details, requestParams); err != nil {
+			if err := populateSelector(selector, inputFormat, details, requestParams); err != nil {
 				errors.Append(err)
 				return
 			}
@@ -70,7 +71,7 @@ func buildSelectors(ctx context.Context, requestMetadata *RequestMetadata, selec
 
 			selector.Parameters.Init(details.View)
 			params := &selector.Parameters
-			if err := buildSelectorParameters(ctx, details, xunsafe.AsPointer(params.Values), xunsafe.AsPointer(params.Has), details.View.Template.Parameters, requestParams, requestMetadata); err != nil {
+			if err := buildSelectorParameters(ctx, inputFormat, details, xunsafe.AsPointer(params.Values), xunsafe.AsPointer(params.Has), details.View.Template.Parameters, requestParams, requestMetadata); err != nil {
 				errors.Append(err)
 				return
 			}
@@ -81,10 +82,10 @@ func buildSelectors(ctx context.Context, requestMetadata *RequestMetadata, selec
 	return errors.Error()
 }
 
-func populateSelector(selector *view.Selector, details *ViewDetails, params *RequestParams) error {
+func populateSelector(selector *view.Selector, inputFormat format.Case, details *ViewDetails, params *RequestParams) error {
 	for _, ns := range details.Prefixes {
 		if fields := params.queryParam(ns+string(Fields), ""); fields != "" {
-			if err := buildFields(details.View, selector, fields); err != nil {
+			if err := buildFields(inputFormat, details.View, selector, fields); err != nil {
 				return err
 			}
 		}
@@ -117,7 +118,7 @@ func populateSelector(selector *view.Selector, details *ViewDetails, params *Req
 	return nil
 }
 
-func buildSelectorParameters(ctx context.Context, parent *ViewDetails, paramsPtr, presencePtr unsafe.Pointer, parameters []*view.Parameter, requestParams *RequestParams, requestMetadata *RequestMetadata) error {
+func buildSelectorParameters(ctx context.Context, inputFormat format.Case, parent *ViewDetails, paramsPtr, presencePtr unsafe.Pointer, parameters []*view.Parameter, requestParams *RequestParams, requestMetadata *RequestMetadata) error {
 	var err error
 	for _, parameter := range parameters {
 		switch parameter.In.Kind {
@@ -142,7 +143,7 @@ func buildSelectorParameters(ctx context.Context, parent *ViewDetails, paramsPtr
 			}
 
 		case view.DataViewKind:
-			if err = addViewParam(ctx, parent, paramsPtr, presencePtr, parameter, requestParams, requestMetadata); err != nil {
+			if err = addViewParam(ctx, inputFormat, parent, paramsPtr, presencePtr, parameter, requestParams, requestMetadata); err != nil {
 				return err
 			}
 
@@ -188,7 +189,7 @@ func addPathParam(ctx context.Context, ptr unsafe.Pointer, presencePtr unsafe.Po
 	return convertAndSet(ctx, ptr, presencePtr, parameter, params.pathVariable(parameter.In.Name, ""))
 }
 
-func addViewParam(ctx context.Context, viewDetails *ViewDetails, paramsPtr, presencePtr unsafe.Pointer, param *view.Parameter, params *RequestParams, requestMetadata *RequestMetadata) error {
+func addViewParam(ctx context.Context, inputFormat format.Case, viewDetails *ViewDetails, paramsPtr, presencePtr unsafe.Pointer, param *view.Parameter, params *RequestParams, requestMetadata *RequestMetadata) error {
 	aView := param.View()
 	destSlice := reflect.New(aView.Schema.SliceType()).Interface()
 	session := reader.NewSession(destSlice, aView)
@@ -204,7 +205,7 @@ func addViewParam(ctx context.Context, viewDetails *ViewDetails, paramsPtr, pres
 		MainView: nil,
 	}
 
-	selectors, err := CreateSelectors(ctx, newRequestMetadata, params, &ViewDetails{View: aView})
+	selectors, err := CreateSelectors(ctx, inputFormat, newRequestMetadata, params, &ViewDetails{View: aView})
 	if err != nil {
 		return err
 	}
@@ -253,17 +254,29 @@ func convertAndSet(ctx context.Context, paramPtr, presencePtr unsafe.Pointer, pa
 	return nil
 }
 
-func buildFields(aView *view.View, selector *view.Selector, fieldsQuery string) error {
+func buildFields(inputFormat format.Case, aView *view.View, selector *view.Selector, fieldsQuery string) error {
 	fieldIt := NewParamIt(fieldsQuery)
 	for fieldIt.Has() {
 		param, err := fieldIt.Next()
 		if err != nil {
 			return err
 		}
-		if err = canUseColumn(aView, param.Value); err != nil {
+
+		columnName := param.Value
+		if !aView.IsHolder(columnName) {
+			columnName = inputFormat.Format(param.Value, aView.Caser)
+		}
+
+		if err = canUseColumn(aView, columnName); err != nil {
 			return err
 		}
-		selector.Columns = append(selector.Columns, param.Value)
+
+		selector.Columns = append(selector.Columns, columnName)
+		if !aView.IsHolder(param.Value) {
+			selector.Fields = append(selector.Fields, inputFormat.Format(param.Value, format.CaseUpperCamel))
+		} else {
+			selector.Fields = append(selector.Fields, param.Value)
+		}
 	}
 
 	return nil

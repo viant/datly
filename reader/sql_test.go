@@ -166,7 +166,7 @@ func TestBuilder_Build(t *testing.T) {
 		},
 		{
 			dataset:     "dataset001_events/",
-			description: `select statement with $CRITERIA`,
+			description: `select statement with $WHERE_CRITERIA`,
 			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS  WHERE ID = 1) AS t`,
 			view: &view.View{
 				Criteria: "ID = 1",
@@ -181,7 +181,7 @@ func TestBuilder_Build(t *testing.T) {
 					},
 				},
 				Name:  "events",
-				From:  "SELECT * FROM EVENTS $CRITERIA",
+				From:  "SELECT * FROM EVENTS $WHERE_CRITERIA",
 				Table: "Events",
 				Template: &view.Template{
 					Schema:         view.NewSchema(reflect.TypeOf(Params{})),
@@ -213,7 +213,7 @@ func TestBuilder_Build(t *testing.T) {
 					},
 				},
 				Name:  "events",
-				From:  "SELECT * FROM EVENTS $CRITERIA",
+				From:  "SELECT * FROM EVENTS $WHERE_CRITERIA",
 				Table: "Events",
 				Template: &view.Template{
 					Schema: view.NewSchema(reflect.TypeOf(Params{})),
@@ -242,10 +242,10 @@ func TestBuilder_Build(t *testing.T) {
 		},
 		{
 			dataset:      "dataset001_events/",
-			description:  `select statement with $COLUMN_IN`,
-			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ? AND  ev.user_id IN (?, ?, ?, ?)) AS t`,
+			description:  `select statement with $AND_COLUMN_IN`,
+			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ?  AND ( ev.user_id IN (?, ?, ?, ?))) AS t`,
 			placeholders: []interface{}{10, 4, 5, 9, 2},
-			relation:     &view.Relation{ColumnAlias: "ev"},
+			relation:     &view.Relation{ColumnAlias: "ev", Of: &view.ReferenceView{Column: "ID"}},
 			view: &view.View{
 				Columns: []*view.Column{
 					{
@@ -258,7 +258,7 @@ func TestBuilder_Build(t *testing.T) {
 					},
 				},
 				Name:  "events",
-				From:  "SELECT * FROM EVENTS ev WHERE ev.ID = $EventId AND $COLUMN_IN",
+				From:  "SELECT * FROM EVENTS ev WHERE ev.ID = $EventId $AND_COLUMN_IN",
 				Table: "Events",
 				Template: &view.Template{
 					Schema: view.NewSchema(reflect.TypeOf(Params{})),
@@ -292,7 +292,7 @@ func TestBuilder_Build(t *testing.T) {
 			description:  `select statement without $COLUMN_IN`,
 			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ?) AS t  WHERE  t.user_id IN (?, ?, ?, ?)`,
 			placeholders: []interface{}{10, 4, 5, 9, 2},
-			relation:     &view.Relation{ColumnAlias: "ev"},
+			relation:     &view.Relation{ColumnAlias: "ev", Of: &view.ReferenceView{Column: "ID"}},
 			view: &view.View{
 				Columns: []*view.Column{
 					{

@@ -359,11 +359,11 @@ func TestRouter(t *testing.T) {
 			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			corsHeaders: map[string]string{
 				router.AllowCredentialsHeader: "true",
-				router.AllowHeadersHeader:     "Header-1 Header-2",
+				router.AllowHeadersHeader:     "Header-1, Header-2",
 				router.AllowOriginHeader:      "*",
-				router.ExposeHeadersHeader:    "Header-Exposed-1 Header-Exposed-2",
+				router.ExposeHeadersHeader:    "Header-Exposed-1, Header-Exposed-2",
 				router.MaxAgeHeader:           "10500",
-				router.AllowMethodsHeader:     "POST PATCH",
+				router.AllowMethodsHeader:     "POST, PATCH",
 			},
 		},
 		{
@@ -409,12 +409,13 @@ func TestRouter(t *testing.T) {
 			method:      http.MethodGet,
 		},
 		{
-			description: "reader post | request body param",
-			resourceURI: "013_reader_post",
-			uri:         "/api/events",
-			expected:    `[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}]`,
-			method:      http.MethodPost,
-			requestBody: `{"UserId":2,"Id":10}`,
+			description:      "reader post | request body param",
+			resourceURI:      "013_reader_post",
+			uri:              "/api/events",
+			expected:         `[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}]`,
+			method:           http.MethodPost,
+			requestBody:      `{"UserId":2,"Id":10}`,
+			shouldDecompress: true,
 		},
 		{
 			description:      "reader post | compressed",
@@ -442,9 +443,17 @@ func TestRouter(t *testing.T) {
 		{
 			description: "case format | with specified fields",
 			resourceURI: "016_case_format",
-			expected:    `[{"id":1,"events":null},{"id":2,"events":[{"user_id":1},{"user_id":10}]},{"id":11,"events":[{"user_id":2}]},{"id":111,"events":[{"user_id":3}]}]`,
-			uri:         "/api/event-types?_fields=events,id&ev_fields=user_id",
+			expected:    `[{"id":1,"events":null},{"id":2,"events":[{"userId":1},{"userId":10}]},{"id":11,"events":[{"userId":2}]},{"id":111,"events":[{"userId":3}]}]`,
+			uri:         "/api/event-types?_fields=events,id&ev_fields=userId",
 			method:      http.MethodGet,
+		},
+		{
+			description: "case format | criteria",
+			resourceURI: "016_case_format",
+			expected:    `[{"id":1,"events":null},{"id":2,"events":[{"id":123,"timestamp":"2019-04-10T05:15:33Z","quantity":5,"userId":10}]},{"id":11,"events":[{"id":10,"timestamp":"2019-03-15T12:07:33Z","quantity":21.957962334156036,"userId":2}]},{"id":111,"events":[{"id":100,"timestamp":"2019-04-10T05:15:33Z","quantity":5.084940046072006,"userId":3}]}]`,
+			//(userId in (10,2,3))
+			uri:    "/api/event-types?_fields=events,id&ev_criteria=%28userId%20in%20%2810%2C2%2C3%29%29",
+			method: http.MethodGet,
 		},
 	}
 

@@ -785,3 +785,13 @@ func (v *View) initTemplate(ctx context.Context, res *Resource) error {
 
 	return v.Template.Init(ctx, res, v)
 }
+
+func (v *View) IsHolder(value string) bool {
+	for _, relation := range v.With {
+		if relation.Holder == value {
+			return true
+		}
+	}
+
+	return false
+}

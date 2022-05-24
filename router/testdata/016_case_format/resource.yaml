@@ -1,7 +1,7 @@
 Routes:
   - URI: "/api/event-types"
     Method: GET
-    CaseFormat: lu
+    CaseFormat: lc
     View:
       Ref: event_types
     Namespace:
@@ -28,6 +28,10 @@ Resource:
 
     - Name: events#ref
       Table: events
+      Selector:
+        Constraints:
+          Criteria: true
+          Filterable: [ '*' ]
       Connector:
         Ref: db
 

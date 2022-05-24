@@ -3,15 +3,30 @@ package view
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"github.com/viant/datly/shared"
-	"github.com/viant/datly/view/ast"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
+	rdata "github.com/viant/toolbox/data"
+	"github.com/viant/velty/ast/expr"
+	"github.com/viant/velty/parser"
 	"strings"
 )
 
 func detectColumns(ctx context.Context, SQL string, v *View) ([]*Column, error) {
+	parse, err := parser.Parse([]byte(SQL))
+	if err != nil {
+		return nil, err
+	}
+
+	replacement := rdata.Map{}
+	for _, statement := range parse.Stmt {
+		switch actual := statement.(type) {
+		case *expr.Select:
+			replacement.Put(actual.ID, "")
+		}
+	}
+
+	SQL = replacement.ExpandAsText(SQL)
+
 	db, err := v.Connector.Db()
 	if err != nil {
 		return nil, err
@@ -64,31 +79,9 @@ func columnsMetadata(ctx context.Context, db *sql.DB, v *View, columns []io.Colu
 		result[column.Name] = strings.EqualFold(column.Nullable, "YES") || strings.EqualFold(column.Nullable, "1") || strings.EqualFold(column.Nullable, "TRUE")
 	}
 
-	fmt.Println(sinkColumns)
-
 	return result, nil
 }
 
 func detectColumnsSQL(source string, v *View) string {
-	if strings.Contains(source, string(shared.Criteria)) {
-		if ast.ContainsWhereClause([]byte(source)) {
-			source = strings.ReplaceAll(source, string(shared.Criteria), " AND 1 = 0")
-		} else {
-			source = strings.ReplaceAll(source, string(shared.Criteria), " WHERE 1 = 0")
-		}
-	}
-
-	if strings.Contains(source, string(shared.ColumnInPosition)) {
-		source = strings.ReplaceAll(source, string(shared.ColumnInPosition), " 1 = 0")
-	}
-
-	if strings.Contains(source, string(shared.Pagination)) {
-		source = strings.ReplaceAll(source, string(shared.Pagination), " ")
-	}
-	if strings.Contains(source, string(shared.Pagination)) {
-		source = strings.ReplaceAll(source, string(shared.Pagination), " ")
-	}
-
-	SQL := "SELECT " + v.Alias + ".* FROM " + source + " " + v.Alias + " WHERE 1=0"
-	return SQL
+	return "SELECT " + v.Alias + ".* FROM " + source + " " + v.Alias + " WHERE 1=0"
 }

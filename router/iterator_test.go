@@ -75,7 +75,7 @@ func TestSelectorParamIt(t *testing.T) {
 		{
 			description: "expression blocks",
 			value:       "()" + string(router.ValuesSeparator) + "()" + string(router.ValuesSeparator),
-			expected:    []router.Param{{}, {}, {}},
+			expected:    []router.Param{{}, {}},
 		},
 	}
 

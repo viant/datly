@@ -18,9 +18,14 @@ const (
 	paramsKey         = "Unsafe"
 	viewKey           = "View"
 
-	Pagination = "$PAGINATION"
-	Criteria   = "$CRITERIA"
-	ColumnsIn  = "$COLUMN_IN"
+	Pagination    = "$PAGINATION"
+	Criteria      = "$CRITERIA"
+	WhereCriteria = "$WHERE_CRITERIA"
+	ColumnsIn     = "$COLUMN_IN"
+
+	WherePrefix = "WHERE_"
+	AndPrefix   = "AND_"
+	OrPrefix    = "OR_"
 )
 
 type (

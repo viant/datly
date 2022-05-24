@@ -13,7 +13,6 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
-	"github.com/viant/toolbox/format"
 	"net/http"
 	"os"
 	"reflect"
@@ -31,7 +30,7 @@ const (
 	AllowCredentialsHeader = "Access-Control-Allow-Credentials"
 	ExposeHeadersHeader    = "Access-Control-Expose-Headers"
 	MaxAgeHeader           = "Access-Control-Max-Age"
-	Separator              = " "
+	Separator              = ", "
 )
 
 var errorFilters = json.NewFilters(&json.FilterEntry{
@@ -104,33 +103,37 @@ func corsRouting(route *Route) toolbox.ServiceRouting {
 
 func corsHandler(cors *Cors) func(writer http.ResponseWriter) {
 	return func(writer http.ResponseWriter) {
-		if cors == nil {
-			return
-		}
-		if cors.AllowOrigins != nil {
-			writer.Header().Set(AllowOriginHeader, strings.Join(*cors.AllowOrigins, Separator))
-		}
+		enableCors(writer, cors, true)
+	}
+}
 
-		if cors.AllowMethods != nil {
-			writer.Header().Set(AllowMethodsHeader, strings.Join(*cors.AllowMethods, Separator))
-		}
+func enableCors(writer http.ResponseWriter, cors *Cors, allHeaders bool) {
+	if cors == nil {
+		return
+	}
 
-		if cors.AllowHeaders != nil {
-			writer.Header().Set(AllowHeadersHeader, strings.Join(*cors.AllowHeaders, Separator))
-		}
+	if cors.AllowOrigins != nil {
+		writer.Header().Set(AllowOriginHeader, strings.Join(*cors.AllowOrigins, Separator))
+	}
 
-		if cors.AllowCredentials != nil {
-			writer.Header().Set(AllowCredentialsHeader, strconv.FormatBool(*cors.AllowCredentials))
-		}
+	if cors.AllowMethods != nil && allHeaders {
+		writer.Header().Set(AllowMethodsHeader, strings.Join(*cors.AllowMethods, Separator))
+	}
 
-		if cors.MaxAge != nil {
-			writer.Header().Set(MaxAgeHeader, strconv.Itoa(int(*cors.MaxAge)))
-		}
+	if cors.AllowHeaders != nil && allHeaders {
+		writer.Header().Set(AllowHeadersHeader, strings.Join(*cors.AllowHeaders, Separator))
+	}
 
-		if cors.ExposeHeaders != nil {
-			writer.Header().Set(ExposeHeadersHeader, strings.Join(*cors.ExposeHeaders, Separator))
-		}
+	if cors.AllowCredentials != nil && allHeaders {
+		writer.Header().Set(AllowCredentialsHeader, strconv.FormatBool(*cors.AllowCredentials))
+	}
 
+	if cors.MaxAge != nil && allHeaders {
+		writer.Header().Set(MaxAgeHeader, strconv.Itoa(int(*cors.MaxAge)))
+	}
+
+	if cors.ExposeHeaders != nil && allHeaders {
+		writer.Header().Set(ExposeHeadersHeader, strings.Join(*cors.ExposeHeaders, Separator))
 	}
 }
 
@@ -147,6 +150,10 @@ func (r *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 func (r *Router) viewHandler(route *Route) viewHandler {
 	return func(response http.ResponseWriter, request *http.Request) {
+		if route.Cors != nil {
+			enableCors(response, route.Cors, false)
+		}
+
 		if !r.runBeforeFetch(response, request, route) {
 			return
 		}
@@ -275,7 +282,7 @@ func (r *Router) writeResponse(route *Route, request *http.Request, response htt
 		return
 	}
 
-	if route.CompressionSize != 0 && len(asBytes) > route.CompressionSize {
+	if route.Compression != nil && len(asBytes) > route.Compression.MinSizeKb {
 		bytesReader := bytes.NewReader(asBytes)
 		buffer, err := Compress(bytesReader)
 		if err != nil {
@@ -328,38 +335,21 @@ func (r *Router) result(route *Route, request *http.Request, destValue reflect.V
 func (r *Router) buildJsonFilters(route *Route, selectors view.Selectors) (*json.Filters, error) {
 	entries := make([]*json.FilterEntry, 0)
 	for viewName, selector := range selectors {
-		if len(selector.Columns) == 0 {
+		if len(selector.Fields) == 0 {
 			continue
 		}
 
 		var path string
-		var aView *view.View
 		viewByName, ok := route.Index.viewByName(viewName)
 		if !ok {
 			path = ""
-			aView = route.View
 		} else {
 			path = viewByName.Path
-			aView = viewByName.View
-		}
-
-		fields := make([]string, len(selector.Columns))
-		for i, column := range selector.Columns {
-			col, ok := aView.ColumnByName(column)
-			if !ok {
-				return nil, fmt.Errorf("not found column %v at view %v", col.FieldName(), aView.Name)
-			}
-
-			if route._caser == format.CaseUpperCamel {
-				fields[i] = column
-			} else {
-				fields[i] = route._caser.Format(column, format.CaseUpperCamel)
-			}
 		}
 
 		entries = append(entries, &json.FilterEntry{
 			Path:   path,
-			Fields: fields,
+			Fields: selector.Fields,
 		})
 
 	}

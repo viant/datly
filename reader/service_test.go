@@ -812,7 +812,7 @@ func columnsInResource(column, alias string) (string, *view.Resource) {
 				Of: &view.ReferenceView{
 					View: view.View{
 						Connector: connector,
-						From:      "SELECT * FROM EVENT_TYPES as et WHERE " + string(shared.ColumnInPosition),
+						From:      "SELECT * FROM EVENT_TYPES as et " + string(shared.WhereColumnInPosition),
 						Name:      "event_types",
 						Criteria:  "name like '%2%'",
 					},

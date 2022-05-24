@@ -13,7 +13,8 @@ const (
 type SqlPosition string
 
 const (
-	ColumnInPosition SqlPosition = "$COLUMN_IN"
-	Criteria         SqlPosition = "$CRITERIA"
-	Pagination       SqlPosition = "$PAGINATION"
+	ColumnInPosition      SqlPosition = "$COLUMN_IN"
+	WhereColumnInPosition SqlPosition = "$WHERE_COLUMN_IN"
+	Criteria              SqlPosition = "$CRITERIA"
+	Pagination            SqlPosition = "$PAGINATION"
 )

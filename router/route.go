@@ -38,18 +38,19 @@ type (
 		Output
 		Index
 
-		Cache            *cache.Cache
+		Cache       *cache.Cache
+		Compression *Compression
+
 		_requestBodyType reflect.Type
 		_resource        *view.Resource
 	}
 
 	Output struct {
-		Cardinality     view.Cardinality `json:",omitempty"`
-		CaseFormat      view.CaseFormat  `json:",omitempty"`
-		OmitEmpty       bool             `json:",omitempty"`
-		Style           Style            `json:",omitempty"`
-		ResponseField   string           `json:",omitempty"`
-		CompressionSize int              `json:",omitempty"`
+		Cardinality   view.Cardinality `json:",omitempty"`
+		CaseFormat    view.CaseFormat  `json:",omitempty"`
+		OmitEmpty     bool             `json:",omitempty"`
+		Style         Style            `json:",omitempty"`
+		ResponseField string           `json:",omitempty"`
 
 		_caser          format.Case
 		_marshaller     *json.Marshaller
@@ -108,6 +109,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	}
 
 	r.initCors(resource)
+	r.initCompression(resource)
 
 	return nil
 }
@@ -293,6 +295,14 @@ func (r *Route) initCache(ctx context.Context) error {
 	}
 
 	return r.Cache.Init(ctx)
+}
+
+func (r *Route) initCompression(resource *Resource) {
+	if r.Compression != nil {
+		return
+	}
+
+	r.Compression = resource.Compression
 }
 
 func (i *Index) ViewByPrefix(prefix string) (*view.View, error) {

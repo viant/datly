@@ -4,6 +4,7 @@ package view
 type (
 	Selector struct {
 		Columns      []string   `json:",omitempty"`
+		Fields       []string   `json:",omitempty"`
 		OrderBy      string     `json:",omitempty"`
 		Offset       int        `json:",omitempty"`
 		Limit        int        `json:",omitempty"`

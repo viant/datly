@@ -2,7 +2,8 @@ Routes:
   - URI: "/api/events"
     Method: POST
     Service: Reader
-    CompressionSize: 250
+    Compression:
+      MinSizeKb: 0
     View:
       Ref: events
 
