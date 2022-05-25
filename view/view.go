@@ -293,7 +293,10 @@ func (v *View) ensureColumns(ctx context.Context) error {
 		return nil
 	}
 
-	SQL := detectColumnsSQL(v.Source(), v)
+	SQL, err := detectColumnsSQL(v.Source(), v)
+	if err != nil {
+		return err
+	}
 	v.Logger.ColumnsDetection(SQL, v.Source())
 	columns, err := detectColumns(ctx, SQL, v)
 
@@ -302,7 +305,10 @@ func (v *View) ensureColumns(ctx context.Context) error {
 	}
 
 	if v.From != "" && v.Table != "" {
-		tableSQL := detectColumnsSQL(v.Table, v)
+		tableSQL, errr := detectColumnsSQL(v.Table, v)
+		if errr != nil {
+			return errr
+		}
 		v.Logger.ColumnsDetection(tableSQL, v.Table)
 		tableColumns, err := detectColumns(ctx, tableSQL, v)
 		if err != nil {

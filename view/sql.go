@@ -12,21 +12,6 @@ import (
 )
 
 func detectColumns(ctx context.Context, SQL string, v *View) ([]*Column, error) {
-	parse, err := parser.Parse([]byte(SQL))
-	if err != nil {
-		return nil, err
-	}
-
-	replacement := rdata.Map{}
-	for _, statement := range parse.Stmt {
-		switch actual := statement.(type) {
-		case *expr.Select:
-			replacement.Put(actual.ID, "")
-		}
-	}
-
-	SQL = replacement.ExpandAsText(SQL)
-
 	db, err := v.Connector.Db()
 	if err != nil {
 		return nil, err
@@ -82,6 +67,22 @@ func columnsMetadata(ctx context.Context, db *sql.DB, v *View, columns []io.Colu
 	return result, nil
 }
 
-func detectColumnsSQL(source string, v *View) string {
-	return "SELECT " + v.Alias + ".* FROM " + source + " " + v.Alias + " WHERE 1=0"
+func detectColumnsSQL(source string, v *View) (string, error) {
+	SQL := "SELECT " + v.Alias + ".* FROM " + source + " " + v.Alias + " WHERE 1=0"
+	parse, err := parser.Parse([]byte(SQL))
+	if err != nil {
+		return "", err
+	}
+
+	replacement := rdata.Map{}
+	for _, statement := range parse.Stmt {
+		switch actual := statement.(type) {
+		case *expr.Select:
+			replacement.Put(actual.ID, "")
+		}
+	}
+
+	SQL = replacement.ExpandAsText(SQL)
+
+	return SQL, nil
 }
