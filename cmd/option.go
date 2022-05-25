@@ -42,6 +42,15 @@ type (
 var mysqlDev string
 
 func (o *Options) Init() {
+	if o.ConfigURL != "" {
+		o.ConfigURL = normalizeURL(o.ConfigURL)
+	}
+	if o.RouteURL != "" {
+		o.RouteURL = normalizeURL(o.RouteURL)
+	}
+	if o.DependencyURL != "" {
+		o.DependencyURL = normalizeURL(o.DependencyURL)
+	}
 	o.Connector.Init()
 	switch o.Output {
 	case "o":

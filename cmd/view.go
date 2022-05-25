@@ -11,8 +11,6 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/metadata"
-	"os"
-	"path"
 )
 
 func buildViewWithRouter(options *Options, config *standalone.Config, connectors map[string]*view.Connector) error {
@@ -28,8 +26,7 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	if options.SQLLocation != "" && url.Scheme(options.SQLLocation, "e") == "e" {
 		parent, _ := url.Split(options.RouterURL(), file.Scheme)
 		destURL := url.Join(parent, options.SQLLocation)
-		baseDir, _ := os.Getwd()
-		sourceURL := path.Join(baseDir, options.SQLLocation)
+		sourceURL := normalizeURL(options.SQLLocation)
 		if err := fs.Copy(context.Background(), sourceURL, destURL); err != nil {
 			return err
 		}
