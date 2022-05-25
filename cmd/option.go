@@ -51,6 +51,13 @@ func (c *Options) Init() {
 	}
 }
 
+func (c *Connector) ResponseField() string {
+	if c.Output == "Basic" {
+		return ""
+	}
+	return "Data"
+}
+
 func (c *Connector) Init() {
 	if c.Driver == "" {
 		c.Driver = "mysql"
