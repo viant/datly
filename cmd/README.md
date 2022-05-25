@@ -1,4 +1,4 @@
-## Command line generator
+## Command line datly executor
 
 
 ```go
