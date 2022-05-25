@@ -6,8 +6,6 @@ local/
 vendor
 go.sum
 datly
-
 other
 mydb
-
 .DS_Store

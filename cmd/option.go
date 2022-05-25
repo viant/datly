@@ -26,11 +26,12 @@ type (
 		Driver string `short:"D" long:"driver" description:"driver" `
 		DSN    string `short:"A" long:"dsn" description:"DSN" `
 		Secret string `short:"E" long:"secret" description:"Database secret" `
+		Output string `short:"O" long:"output" description:"output style" choice:"c" choice:"b" `
 	}
 
 	Generate struct {
 		Name        string   `short:"N" long:"name" description:"View DbName/Route URI" `
-		Parameters  []string `short:"P" long:"params" description:"parameters in form name:type" `
+		Parameters  []string `short:"P" long:"params" description:"parameters in form name[:type:location]" `
 		Table       string   `short:"T" long:"table" description:"table" `
 		SQLLocation string   `short:"S" long:"sql" description:"SQL location" `
 		Relations   []string `short:"R" long:"relation" description:"Relation in form of viewName:tableName" `
@@ -39,6 +40,16 @@ type (
 
 //go:embed resource/mysql.json
 var mysqlDev string
+
+func (c *Options) Init() {
+	c.Connector.Init()
+	switch c.Output {
+	case "c":
+		c.Output = "Comprehensive"
+	default:
+		c.Output = "Basic"
+	}
+}
 
 func (c *Connector) Init() {
 	if c.Driver == "" {

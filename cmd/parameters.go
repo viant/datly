@@ -2,45 +2,59 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/view"
-	"reflect"
 	"strings"
 )
 
-func addParameters(options *Options, route *router.Resource, aView *view.View) error {
-	if len(options.Parameters) > 0 {
-		var parameters = []*view.Parameter{}
-		for _, param := range options.Parameters {
-			if !strings.Contains(param, ":") {
-				return fmt.Errorf("invalid param: %v, expected format: name:type", param)
-			}
-			pair := strings.SplitN(param, ":", 2)
-			aParam := &view.Parameter{
-				Name: pair[0],
-				In: &view.Location{
-					Kind: view.QueryKind,
-				},
-				Schema: &view.Schema{
-					DataType: pair[1],
-				},
-			}
+type paramLiteral string
 
-			switch pair[1] {
-			case "int":
-				registry.Types[pair[1]] = reflect.TypeOf(0)
-			case "string":
-				registry.Types[pair[1]] = reflect.TypeOf("")
-
-			}
-			parameters = append(parameters, aParam)
-		}
-		from := aView.From
-		if from == "" {
-			from = "SELECT * FROM " + aView.Table
-		}
-		aView.Template = &view.Template{Parameters: parameters, Source: from}
+func (p paramLiteral) Name() string {
+	return strings.Split(string(p), ":")[0]
+}
+func (p paramLiteral) Schema() *view.Schema {
+	parts := strings.Split(string(p), ":")
+	if len(parts) == 1 {
+		return &view.Schema{DataType: "string"}
 	}
+	return &view.Schema{
+		DataType: parts[1],
+	}
+}
+
+func (p paramLiteral) In() *view.Location {
+	parts := strings.Split(string(p), ":")
+	if len(parts) <= 2 {
+		return &view.Location{Kind: view.QueryKind, Name: p.Name()}
+	}
+	return &view.Location{Kind: view.Kind(parts[2])}
+}
+
+func addParameters(options *Options, route *router.Resource, aView *view.View) error {
+	if len(options.Parameters) == 0 {
+		return nil
+	}
+	var SQLSuffix = ""
+	var parameters = []*view.Parameter{}
+	for i := range options.Parameters {
+		item := paramLiteral(options.Parameters[i])
+		paramName := strings.Title(item.Name())
+		aParam := &view.Parameter{
+			Name:   paramName,
+			In:     item.In(),
+			Schema: item.Schema(),
+		}
+		parameters = append(parameters, aParam)
+		SQLSuffix += fmt.Sprintf(`#if $Has.%v{
+-- $%v			
+}`, paramName, paramName)
+	}
+
+	from := aView.From
+	if from == "" {
+		from = "SELECT * FROM " + aView.Table
+	}
+	aView.Template = &view.Template{Parameters: parameters, Source: from + "\n" + SQLSuffix}
+
 	return nil
 }

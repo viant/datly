@@ -75,9 +75,10 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 			AllowOrigins:     stringsPtr("*"),
 			ExposeHeaders:    stringsPtr("*"),
 		},
-		URI:   config.APIPrefix + options.RouterURI(),
-		View:  &view.View{Reference: shared.Reference{Ref: aView.Name}},
-		Index: router.Index{Namespace: map[string]string{}},
+		URI:    config.APIPrefix + options.RouterURI(),
+		View:   &view.View{Reference: shared.Reference{Ref: aView.Name}},
+		Index:  router.Index{Namespace: map[string]string{}},
+		Output: router.Output{Style: router.Style(options.Output), Cardinality: view.Many, ResponseField: "Data"},
 	}
 	if options.Table != "" {
 		viewRoute.Index.Namespace[options.Namespace()] = options.Generate.Name
