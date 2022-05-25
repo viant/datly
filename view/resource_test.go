@@ -27,7 +27,7 @@ func TestNewResourceFromURL(t *testing.T) {
 		{
 			"DSN": "./testdata/db/mydb.db",
 			"Driver": "sqlite3",
-			"Name": "mydb"
+			"DbName": "mydb"
 		}
 	],
 	"Views": [
@@ -40,29 +40,29 @@ func TestNewResourceFromURL(t *testing.T) {
 				{
 					"DataType": "Int",
 					"Filterable": false,
-					"Name": "id"
+					"DbName": "id"
 				},
 				{
 					"DataType": "Float",
 					"Filterable": false,
-					"Name": "quantity"
+					"DbName": "quantity"
 				},
 				{
 					"DataType": "Int",
 					"Filterable": false,
-					"Name": "event_type_id"
+					"DbName": "event_type_id"
 				}
 			],
 			"Connector": {
 				"DSN": "./testdata/db/mydb.db",
 				"Driver": "sqlite3",
-				"Name": "mydb",
+				"DbName": "mydb",
 				"Ref": "mydb"
 			},
 			"MatchStrategy": "read_matched",
-			"Name": "events",
+			"DbName": "events",
 			"Schema": {
-				"Name": "events",
+				"DbName": "events",
 				"OmitEmpty": false
 			},
 			"Selector": {

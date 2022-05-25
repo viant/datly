@@ -1,10 +1,9 @@
-package main
+package lambda
 
 import (
 	"context"
 	"embed"
 	"fmt"
-	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/viant/afs"
 	"github.com/viant/datly/auth/cognito"
 	"github.com/viant/datly/gateway/runtime/standalone/handler"
@@ -13,16 +12,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/viant/afs/embed"
-	_ "github.com/viant/afsc/aws"
-	_ "github.com/viant/afsc/gcp"
-	_ "github.com/viant/afsc/gs"
-	_ "github.com/viant/afsc/s3"
-	_ "github.com/viant/bigquery"
 	"github.com/viant/datly/gateway"
-	dlambda "github.com/viant/datly/gateway/runtime/lambda"
-	_ "github.com/viant/scy/kms/blowfish"
 
 	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/gateway/runtime/lambda/adapter"
@@ -31,11 +21,7 @@ import (
 	"sync"
 )
 
-func main() {
-	lambda.Start(HandleRequest)
-}
-
-var config *dlambda.Config
+var config *gateway.Config
 var configInit sync.Once
 
 func HandleRequest(ctx context.Context, request *adapter.Request) (*events.LambdaFunctionURLResponse, error) {
@@ -55,17 +41,17 @@ func handleRequest(writer http.ResponseWriter, httpRequest *http.Request) error 
 	}
 	var err error
 	configInit.Do(func() {
-		config, err = dlambda.NewConfigFromURL(context.Background(), configURL)
+		config, err = gateway.NewConfigFromURL(context.Background(), configURL)
 	})
 
 	if err != nil {
 		configInit = sync.Once{}
 		return err
 	}
-	if err = initAuthService(config); err != nil {
+	if _, err = InitAuthService(config); err != nil {
 		return err
 	}
-	service, err := gateway.SingletonWithConfig(&config.Config, registry.Codecs, registry.Types, nil)
+	service, err := gateway.SingletonWithConfig(config, registry.Codecs, registry.Types, nil)
 	if err != nil {
 		return err
 	}
@@ -96,9 +82,9 @@ var authServiceInit sync.Once
 //go:embed resource/*
 var embedFs embed.FS
 
-func initAuthService(config *dlambda.Config) error {
+func InitAuthService(config *gateway.Config) (*cognito.Service, error) {
 	if config.Cognito == nil {
-		return nil
+		return nil, nil
 	}
 	fs := afs.New()
 	var err error
@@ -111,7 +97,8 @@ func initAuthService(config *dlambda.Config) error {
 	})
 	if err != nil {
 		authServiceInit = sync.Once{}
-		return err
+		authService = nil
+		return nil, err
 	}
-	return nil
+	return authService, nil
 }

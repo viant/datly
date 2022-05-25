@@ -72,6 +72,9 @@ func (r *Service) handle(writer http.ResponseWriter, request *http.Request) erro
 	if request.URL == nil {
 		host := os.Getenv("FUNCTION_NAME")
 		if host == "" {
+			host = request.Host
+		}
+		if host == "" {
 			host = "localhost"
 		}
 		URL := "https://" + host + "/" + URI

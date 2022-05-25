@@ -184,7 +184,7 @@ func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
 	}
 
 	if p.Schema.DataType == "" && p.Schema.Name == "" {
-		return fmt.Errorf("parameter %v either schema DataType or Name has to be specified", p.Name)
+		return fmt.Errorf("parameter %v either schema DataType or DbName has to be specified", p.Name)
 	}
 
 	if p.Schema.Name != "" {

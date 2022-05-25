@@ -448,7 +448,7 @@ func extractSelectorName(name string) string {
 	i := 1 // all names starts with the '$'
 
 	for ; i < len(name) && name[i] == '{'; i++ {
-	} // skip the select block i.e. ${foo.Name}
+	} // skip the select block i.e. ${foo.DbName}
 
 	return name[i : len(name)-i+1]
 }

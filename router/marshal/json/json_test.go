@@ -49,7 +49,7 @@ func TestJson_Marshal(t *testing.T) {
 		{
 			description: "nil slice and *T",
 			data:        nilNonPrimitives,
-			expect:      `[{"Id":231,"EventTypesEmpty":null,"EventTypes":[{"Id":1,"Type":"t - 1"},null,{"Id":1,"Type":"t - 3"}],"Name":"","EventType":null}]`,
+			expect:      `[{"Id":231,"EventTypesEmpty":null,"EventTypes":[{"Id":1,"Type":"t - 1"},null,{"Id":1,"Type":"t - 3"}],"DbName":"","EventType":null}]`,
 		},
 		{
 			description: "caser and json tags",
@@ -502,7 +502,7 @@ func BenchmarkMarshal(b *testing.B) {
 	}
 
 	assert.Nil(b, err)
-	assert.Equal(b, `[{"ID":1,"Name":"Event - 1","Price":123,"Types":[{"TypeID":1,"Type":"Type - 1"},{"TypeID":2,"Type":"Type - 2"}]},{"ID":2,"Name":"Event - 2","Price":226,"Types":[{"TypeID":2,"Type":"Type - 2"},{"TypeID":3,"Type":"Type - 3"},{"TypeID":4,"Type":"Type - 4"},{"TypeID":5,"Type":"Type - 5"},{"TypeID":6,"Type":"Type - 6"},{"TypeID":7,"Type":"Type - 7"}]}]`, string(bytes))
+	assert.Equal(b, `[{"ID":1,"DbName":"Event - 1","Price":123,"Types":[{"TypeID":1,"Type":"Type - 1"},{"TypeID":2,"Type":"Type - 2"}]},{"ID":2,"DbName":"Event - 2","Price":226,"Types":[{"TypeID":2,"Type":"Type - 2"},{"TypeID":3,"Type":"Type - 3"},{"TypeID":4,"Type":"Type - 4"},{"TypeID":5,"Type":"Type - 5"},{"TypeID":6,"Type":"Type - 6"},{"TypeID":7,"Type":"Type - 7"}]}]`, string(bytes))
 }
 
 func BenchmarkJson_Marshal(b *testing.B) {
@@ -514,5 +514,5 @@ func BenchmarkJson_Marshal(b *testing.B) {
 	}
 
 	assert.Nil(b, err)
-	assert.Equal(b, `[{"ID":1,"Name":"Event - 1","Price":123,"Types":[{"TypeID":1,"Type":"Type - 1"},{"TypeID":2,"Type":"Type - 2"}]},{"ID":2,"Name":"Event - 2","Price":226,"Types":[{"TypeID":2,"Type":"Type - 2"},{"TypeID":3,"Type":"Type - 3"},{"TypeID":4,"Type":"Type - 4"},{"TypeID":5,"Type":"Type - 5"},{"TypeID":6,"Type":"Type - 6"},{"TypeID":7,"Type":"Type - 7"}]}]`, string(bytes))
+	assert.Equal(b, `[{"ID":1,"DbName":"Event - 1","Price":123,"Types":[{"TypeID":1,"Type":"Type - 1"},{"TypeID":2,"Type":"Type - 2"}]},{"ID":2,"DbName":"Event - 2","Price":226,"Types":[{"TypeID":2,"Type":"Type - 2"},{"TypeID":3,"Type":"Type - 3"},{"TypeID":4,"Type":"Type - 4"},{"TypeID":5,"Type":"Type - 5"},{"TypeID":6,"Type":"Type - 6"},{"TypeID":7,"Type":"Type - 7"}]}]`, string(bytes))
 }

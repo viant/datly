@@ -35,7 +35,10 @@ func (r *Server) shutdownOnInterrupt() {
 	}()
 }
 
-func New(config *Config) (*Server, error) {
+func NewWithAuth(config *Config, auth AuthHandler) (*Server, error) {
+	if auth == nil {
+		auth = &noAuth{}
+	}
 	config.Init()
 	mux := http.NewServeMux()
 	metric := gmetric.New()
@@ -46,13 +49,14 @@ func New(config *Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	mux.Handle(config.Meta.MetricURI, gmetric.NewHandler(config.Meta.MetricURI, metric))
-	mux.Handle(config.Meta.ConfigURI, handler.NewConfig(config.Config, &config.Endpoint, &config.Meta))
-	mux.Handle(config.Meta.StatusURI, handler.NewStatus(config.Version, &config.Meta))
-	mux.Handle(config.Meta.ViewURI, handler.NewView(config.Meta.ViewURI, &config.Meta, service.View))
+
+	mux.Handle(config.Meta.MetricURI, auth.Auth(gmetric.NewHandler(config.Meta.MetricURI, metric).ServeHTTP))
+	mux.Handle(config.Meta.ConfigURI, auth.Auth(handler.NewConfig(config.Config, &config.Endpoint, &config.Meta).ServeHTTP))
+	mux.Handle(config.Meta.StatusURI, auth.Auth(handler.NewStatus(config.Version, &config.Meta).ServeHTTP))
+	mux.Handle(config.Meta.ViewURI, auth.Auth(handler.NewView(config.Meta.ViewURI, &config.Meta, service.View).ServeHTTP))
 
 	//actual datly handler
-	mux.HandleFunc(config.Config.APIPrefix, service.Handle)
+	mux.HandleFunc(config.Config.APIPrefix, auth.Auth(service.Handle))
 	server := &Server{
 		Server: http.Server{
 			Addr:           ":" + strconv.Itoa(config.Endpoint.Port),
@@ -64,4 +68,8 @@ func New(config *Config) (*Server, error) {
 	}
 	server.shutdownOnInterrupt()
 	return server, nil
+}
+
+func New(config *Config) (*Server, error) {
+	return NewWithAuth(config, nil)
 }

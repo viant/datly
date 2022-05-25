@@ -6,7 +6,6 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone/endpoint"
-	"github.com/viant/datly/gateway/runtime/standalone/meta"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"strings"
@@ -15,17 +14,21 @@ import (
 type (
 	//Config defines standalone app config
 	Config struct {
+		URL     string
 		Version string
 		*gateway.Config
 		Endpoint endpoint.Config
-		Meta     meta.Config
 	}
 )
 
 //Init initialises config
 func (c *Config) Init() {
-	c.Meta.Init()
+	c.Config.Init()
 	c.Endpoint.Init()
+	if c.Cognito != nil {
+		c.Cognito.Init()
+	}
+
 }
 
 //Validate validates config
@@ -60,6 +63,7 @@ func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	cfg.URL = URL
 	cfg.Init()
 	return cfg, cfg.Validate()
 }

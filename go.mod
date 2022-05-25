@@ -26,6 +26,7 @@ require (
 	github.com/viant/bgc v0.8.0
 	github.com/viant/bigquery v0.0.0-20220507180926-9c5390aabbbd
 	github.com/viant/cloudless v1.1.1-0.20220302185825-1e29705ac362
+	github.com/viant/dm v0.0.0-20220524161756-4ca57620e259 // indirect
 	github.com/viant/dsc v0.16.0
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446

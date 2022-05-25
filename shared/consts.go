@@ -4,8 +4,8 @@ package shared
 type BuiltInKey string
 
 const (
-	//DataViewName represents View.Name parameter
-	DataViewName BuiltInKey = "session.View.Name"
+	//DataViewName represents View.DbName parameter
+	DataViewName BuiltInKey = "session.View.DbName"
 	//SubjectName represents Subject parameter
 	SubjectName BuiltInKey = "session.Subject"
 )

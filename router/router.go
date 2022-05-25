@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
+	"github.com/viant/toolbox/format"
 	"net/http"
 	"os"
 	"reflect"
@@ -30,7 +31,7 @@ const (
 	AllowCredentialsHeader = "Access-Control-Allow-Credentials"
 	ExposeHeadersHeader    = "Access-Control-Expose-Headers"
 	MaxAgeHeader           = "Access-Control-Max-Age"
-	Separator              = ", "
+	Separator              = " "
 )
 
 var errorFilters = json.NewFilters(&json.FilterEntry{
@@ -150,9 +151,6 @@ func (r *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 func (r *Router) viewHandler(route *Route) viewHandler {
 	return func(response http.ResponseWriter, request *http.Request) {
-		if route.Cors != nil {
-			enableCors(response, route.Cors, false)
-		}
 
 		if !r.runBeforeFetch(response, request, route) {
 			return
@@ -276,30 +274,39 @@ func (r *Router) writeResponse(route *Route, request *http.Request, response htt
 		return
 	}
 
-	asBytes, httpStatus, err := r.result(route, request, destValue, filters)
+	payload, httpStatus, err := r.result(route, request, destValue, filters)
 	if err != nil {
 		r.writeErr(response, route, err, http.StatusBadRequest)
 		return
 	}
 
-	if route.Compression != nil && len(asBytes) > route.Compression.MinSizeKb {
-		bytesReader := bytes.NewReader(asBytes)
+	if route.Cors != nil {
+		enableCors(response, route.Cors, false)
+	}
+	var encoding string
+	if compression := route.Compression; compression != nil && compression.MinSizeKb != 0 && len(payload) > compression.MinSizeKb*1024 {
+		bytesReader := bytes.NewReader(payload)
 		buffer, err := Compress(bytesReader)
 		if err != nil {
 			r.writeErr(response, route, err, http.StatusInternalServerError)
 			return
 		}
-
-		response.WriteHeader(httpStatus)
-		//TODO move to route config
-		response.Header().Set(content.Type, shared.ContentTypeJSON)
-		response.Header().Set(content.Encoding, shared.EncodingGzip)
-		response.Write(buffer.Bytes())
-	} else {
-		response.WriteHeader(httpStatus)
-		response.Header().Set(content.Type, shared.ContentTypeJSON)
-		response.Write(asBytes)
+		encoding = shared.EncodingGzip
+		payload = buffer.Bytes()
 	}
+	r.writePayload(response, payload, httpStatus, encoding)
+}
+
+func (r *Router) writePayload(response http.ResponseWriter, payload []byte, httpStatus int, encoding string) {
+	response.Header().Add(content.Type, shared.ContentTypeJSON)
+	response.Header().Add(content.Type, shared.CharsetUTF8)
+	response.Header().Add(shared.ContentLength, strconv.Itoa(len(payload)))
+	if encoding != "" {
+		response.Header().Set(content.Encoding, encoding)
+	}
+	response.WriteHeader(httpStatus)
+
+	response.Write(payload)
 }
 
 func (r *Router) result(route *Route, request *http.Request, destValue reflect.Value, filters *json.Filters) ([]byte, int, error) {
@@ -335,21 +342,38 @@ func (r *Router) result(route *Route, request *http.Request, destValue reflect.V
 func (r *Router) buildJsonFilters(route *Route, selectors view.Selectors) (*json.Filters, error) {
 	entries := make([]*json.FilterEntry, 0)
 	for viewName, selector := range selectors {
-		if len(selector.Fields) == 0 {
+		if len(selector.Columns) == 0 {
 			continue
 		}
 
 		var path string
+		var aView *view.View
 		viewByName, ok := route.Index.viewByName(viewName)
 		if !ok {
 			path = ""
+			aView = route.View
 		} else {
 			path = viewByName.Path
+			aView = viewByName.View
+		}
+
+		fields := make([]string, len(selector.Columns))
+		for i, column := range selector.Columns {
+			col, ok := aView.ColumnByName(column)
+			if !ok {
+				return nil, fmt.Errorf("not found column %v at view %v", col.FieldName(), aView.Name)
+			}
+
+			if route._caser == format.CaseUpperCamel {
+				fields[i] = column
+			} else {
+				fields[i] = route._caser.Format(column, format.CaseUpperCamel)
+			}
 		}
 
 		entries = append(entries, &json.FilterEntry{
 			Path:   path,
-			Fields: selector.Fields,
+			Fields: fields,
 		})
 
 	}
@@ -359,8 +383,8 @@ func (r *Router) buildJsonFilters(route *Route, selectors view.Selectors) (*json
 
 func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, statusCode int) {
 	if route._responseSetter == nil {
-		w.Write([]byte(err.Error()))
 		w.WriteHeader(statusCode)
+		w.Write([]byte(err.Error()))
 		return
 	}
 

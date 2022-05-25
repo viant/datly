@@ -70,7 +70,7 @@ func (r *Resource) mergeConnectors(resource *Resource) {
 	if len(resource.Connectors) == 0 {
 		return
 	}
-	connectors := r.connectorByName()
+	connectors := r.ConnectorByName()
 	for i, candidate := range resource.Connectors {
 		if _, ok := connectors[candidate.Name]; !ok {
 			connector := *resource.Connectors[i]
@@ -119,7 +119,7 @@ func (r *Resource) viewByName() map[string]*View {
 	return index
 }
 
-func (r *Resource) connectorByName() map[string]*Connector {
+func (r *Resource) ConnectorByName() map[string]*Connector {
 	index := map[string]*Connector{}
 	if len(r.Connectors) == 0 {
 		return index

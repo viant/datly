@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/datly/auth/cognito"
 	"github.com/viant/datly/auth/secret"
+	"github.com/viant/datly/gateway/runtime/meta"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"strings"
@@ -18,6 +20,8 @@ type Config struct {
 	UseCacheFS      bool
 	SyncFrequencyMs int
 	Secrets         []*secret.Resource
+	Cognito         *cognito.Config
+	Meta            meta.Config
 }
 
 func (c *Config) Validate() error {
@@ -31,6 +35,7 @@ func (c *Config) Init() {
 	if c.SyncFrequencyMs == 0 {
 		c.SyncFrequencyMs = 5000
 	}
+	c.Meta.Init()
 }
 
 func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {

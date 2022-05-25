@@ -10,3 +10,10 @@ type Config struct {
 	AuthCookie string
 	SignInURL  string
 }
+
+func (c *Config) Init() {
+	if c.AuthCookie == "" {
+		c.AuthCookie = "Datly-OIDC"
+	}
+
+}

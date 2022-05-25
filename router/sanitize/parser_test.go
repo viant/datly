@@ -36,13 +36,13 @@ func TestNewParser(t *testing.T) {
 		{
 			description: "criteria selector literal",
 			criteria:    "column_name = '123'",
-			expect:      `{"X":{"Name":"column_name"},"Operator":"=","Y":{"Value":"'123'","Kind":2}}`,
+			expect:      `{"X":{"DbName":"column_name"},"Operator":"=","Y":{"Value":"'123'","Kind":2}}`,
 		},
 
 		{
 			description: "logical operator",
 			criteria:    "column_name = '123' OR column_z = 5",
-			expect:      `{"X":{"Name":"column_name"},"Operator":"=","Y":{"X":{"Value":"'123'","Kind":2},"Operator":"OR","Y":{"X":{"Name":"column_z"},"Operator":"=","Y":{"Value":"5","Kind":1}}}}`,
+			expect:      `{"X":{"DbName":"column_name"},"Operator":"=","Y":{"X":{"Value":"'123'","Kind":2},"Operator":"OR","Y":{"X":{"DbName":"column_z"},"Operator":"=","Y":{"Value":"5","Kind":1}}}}`,
 		},
 		{
 			description: "criteria selector literal",
@@ -51,13 +51,13 @@ func TestNewParser(t *testing.T) {
 		},
 		{
 			description: "criteria selector literal",
-			criteria:    "SELECT Name from Foos",
+			criteria:    "SELECT DbName from Foos",
 			hasError:    true,
 		},
 		{
 			description: "null check",
 			criteria:    "column_name is null",
-			expect:      `{"X":{"Name":"column_name"},"Operator":"is null"}`,
+			expect:      `{"X":{"DbName":"column_name"},"Operator":"is null"}`,
 		},
 		{
 			description: "not proper null check",
@@ -67,7 +67,7 @@ func TestNewParser(t *testing.T) {
 		{
 			description: "not null check",
 			criteria:    "column_name is not null",
-			expect:      `{"X":{"Name":"column_name"},"Operator":"is not null"}`,
+			expect:      `{"X":{"DbName":"column_name"},"Operator":"is not null"}`,
 		},
 		{
 			description: "in - inconsistent values types",
@@ -77,12 +77,12 @@ func TestNewParser(t *testing.T) {
 		{
 			description: "in",
 			criteria:    "column_name in (null,'abc',null,'cdef')",
-			expect:      `{"X":{"Name":"column_name"},"Operator":"in","Y":{"P": {"Value":"null,'abc',null,'cdef'","Kind":2}}}`,
+			expect:      `{"X":{"DbName":"column_name"},"Operator":"in","Y":{"P": {"Value":"null,'abc',null,'cdef'","Kind":2}}}`,
 		},
 		{
 			description: "not in",
 			criteria:    "column_name not in (null,'abc',null,'cdef')",
-			expect:      `{"X":{"Name":"column_name"},"Operator":"not in","Y":{"P": {"Value":"null,'abc',null,'cdef'","Kind":2}}}`,
+			expect:      `{"X":{"DbName":"column_name"},"Operator":"not in","Y":{"P": {"Value":"null,'abc',null,'cdef'","Kind":2}}}`,
 		},
 		{
 			description: "not is",
@@ -93,7 +93,7 @@ func TestNewParser(t *testing.T) {
 			description: "equal",
 			criteria:    "campaignId = 321468",
 			hasError:    false,
-			expect:      `{"X":{"Name":"campaignId"},"Operator":"=","Y":{"Value":"321468","Kind":1}}`,
+			expect:      `{"X":{"DbName":"campaignId"},"Operator":"=","Y":{"Value":"321468","Kind":1}}`,
 		},
 	}
 

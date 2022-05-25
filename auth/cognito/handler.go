@@ -2,6 +2,7 @@ package cognito
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/auth"
@@ -45,11 +46,34 @@ func (s *Service) handleSignIn(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	output := string(data)
-	landingURL := r.URL.String()
+	landingURL := landingPageURL(r)
 	output = strings.ReplaceAll(string(data), "$redirect", landingURL)
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(output))
 	return nil
+}
+
+func hostname(r *http.Request) string {
+	return strings.Split(r.Host, ":")[0]
+}
+
+func requestURI(r *http.Request) string {
+	if r.RequestURI != "" {
+		return r.RequestURI
+	}
+	return r.URL.String()
+}
+
+func landingPageURL(r *http.Request) string {
+	if r.URL.Host == "" {
+		if r.URL.Scheme == "" {
+			r.URL.Scheme = "http"
+		}
+		landingPage := fmt.Sprintf("%s://%v%v", r.URL.Scheme, r.Host, r.RequestURI)
+		return landingPage
+	}
+	landingURL := r.URL.String()
+	return landingURL
 }
 
 func (s *Service) authorizeRequest(w http.ResponseWriter, r *http.Request) bool {
@@ -79,7 +103,7 @@ func (s *Service) authorizeRequest(w http.ResponseWriter, r *http.Request) bool 
 			return true
 		}
 	default:
-		if strings.ToLower(r.Method) == "post" && strings.Contains(r.RequestURI, "signin") { //TODO put singing fragment to config
+		if strings.ToLower(r.Method) == "post" && strings.Contains(requestURI(r), "signin") { //TODO put singing fragment to config
 			r.ParseForm() //try to get credentials from a form
 			username := r.FormValue("username")
 			password := r.FormValue("password")
@@ -105,7 +129,8 @@ func (s *Service) Value(ctx context.Context, raw string) (interface{}, error) {
 func (s *Service) authenticateCredentials(w http.ResponseWriter, r *http.Request, username string, password string) bool {
 	token, err := s.Service.InitiateBasicAuth(username, password)
 	if err == nil && s.Config.AuthCookie != "" {
-		cookie := &http.Cookie{Name: s.Config.AuthCookie, Value: AuthTypeBearer + " " + token.IDToken, Domain: r.Host, Expires: time.Now().Add(55 * time.Minute)}
+		domain := hostname(r)
+		cookie := &http.Cookie{Name: s.Config.AuthCookie, Value: AuthTypeBearer + " " + token.IDToken, Domain: domain, Expires: time.Now().Add(55 * time.Minute)}
 		w.Header().Set(HeaderCookie, cookie.String())
 		r.Header.Set(HeaderAuthorization, cookie.Value)
 		return true

@@ -110,7 +110,7 @@ func buildTypeFromFields(fields []*Field) reflect.Type {
 	for i, field := range fields {
 		var tag reflect.StructTag
 		if field.Column != "" {
-			//reflect.StructTag(omitEmptyTag + `sqlx:"name="` + columns[i].Name + "`"
+			//reflect.StructTag(omitEmptyTag + `sqlx:"name="` + columns[i].DbName + "`"
 			tag = reflect.StructTag(fmt.Sprintf(`sqlx:"name=%v"`, field.Column))
 		}
 
