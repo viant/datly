@@ -3,6 +3,7 @@
     - Add to resource/config logger setting to inform about long running querties 
     - Add Caching with (cloud storage) 
     - Add Cloud Storage redirection if size to large
+    - push criteria value as binding variable
     - lazy init  
 
 * OpernAPI handler/Swagger

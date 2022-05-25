@@ -4,8 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/bigquery"
 	"github.com/viant/datly/shared"
 	"github.com/viant/scy"
+	"github.com/viant/scy/auth/gcp"
+	"github.com/viant/scy/auth/gcp/client"
+	"google.golang.org/api/option"
 )
 
 //Connector represents database/sql named connection config
@@ -71,7 +75,11 @@ func (c *Connector) Db() (*sql.DB, error) {
 		}
 		dsn = secret.Expand(dsn)
 	}
+	if secret != nil {
+		c.setDriverOptions(secret)
+	}
 	c.db, err = sql.Open(c.Driver, dsn)
+	c.db.Driver()
 	return c.db, err
 }
 
@@ -131,4 +139,18 @@ func (c *Connector) Close() error {
 	err := c.db.Close()
 	c.db = nil
 	return err
+}
+
+func (c *Connector) setDriverOptions(secret *scy.Secret) {
+	if secret == nil || c.initialized {
+		return
+	}
+	switch c.Driver { //TODO remove globel exposure toward actual database/sql driver
+	case "bigquery":
+		gcpService := gcp.New(client.NewGCloud())
+		client, err := gcpService.AuthClient(context.Background(), append(gcp.Scopes, "https://www.googleapis.com/auth/bigquery", "https://www.googleapis.com/auth/bigquery.insertdata")...)
+		if err == nil && client != nil {
+			bigquery.SetOptions(option.WithHTTPClient(client))
+		}
+	}
 }
