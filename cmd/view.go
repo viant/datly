@@ -1,16 +1,22 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/afs/file"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/metadata"
+	"os"
+	"path"
 )
 
 func buildViewWithRouter(options *Options, config *standalone.Config, connectors map[string]*view.Connector) error {
+	fs := afs.New()
 	generate := options.Generate
 	if generate.Name == "" {
 		return nil
@@ -18,6 +24,18 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	route := &router.Resource{
 		Resource: &view.Resource{},
 	}
+
+	if options.SQLLocation != "" && url.Scheme(options.SQLLocation, "e") == "e" {
+		parent, _ := url.Split(options.RouterURL(), file.Scheme)
+		destURL := url.Join(parent, options.SQLLocation)
+		baseDir, _ := os.Getwd()
+		sourceURL := path.Join(baseDir, options.SQLLocation)
+		if err := fs.Copy(context.Background(), sourceURL, destURL); err != nil {
+			return err
+		}
+
+	}
+
 	aView := &view.View{
 		Name:    generate.Name,
 		Table:   generate.Table,
@@ -80,7 +98,7 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 
 	route.Resource.AddViews(aView)
 	route.Routes = append(route.Routes, viewRoute)
-	return fsAddYAML(afs.New(), options.RouterURL(), route)
+	return fsAddYAML(fs, options.RouterURL(), route)
 }
 func stringsPtr(args ...string) *[]string {
 	return &args
