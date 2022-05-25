@@ -13,7 +13,6 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
-	"github.com/viant/toolbox/format"
 	"net/http"
 	"os"
 	"reflect"
@@ -31,7 +30,7 @@ const (
 	AllowCredentialsHeader = "Access-Control-Allow-Credentials"
 	ExposeHeadersHeader    = "Access-Control-Expose-Headers"
 	MaxAgeHeader           = "Access-Control-Max-Age"
-	Separator              = " "
+	Separator              = ", "
 )
 
 var errorFilters = json.NewFilters(&json.FilterEntry{
@@ -347,28 +346,16 @@ func (r *Router) buildJsonFilters(route *Route, selectors view.Selectors) (*json
 		}
 
 		var path string
-		var aView *view.View
 		viewByName, ok := route.Index.viewByName(viewName)
 		if !ok {
 			path = ""
-			aView = route.View
 		} else {
 			path = viewByName.Path
-			aView = viewByName.View
 		}
 
-		fields := make([]string, len(selector.Columns))
-		for i, column := range selector.Columns {
-			col, ok := aView.ColumnByName(column)
-			if !ok {
-				return nil, fmt.Errorf("not found column %v at view %v", col.FieldName(), aView.Name)
-			}
-
-			if route._caser == format.CaseUpperCamel {
-				fields[i] = column
-			} else {
-				fields[i] = route._caser.Format(column, format.CaseUpperCamel)
-			}
+		fields := make([]string, len(selector.Fields))
+		for i := range selector.Fields {
+			fields[i] = selector.Fields[i]
 		}
 
 		entries = append(entries, &json.FilterEntry{

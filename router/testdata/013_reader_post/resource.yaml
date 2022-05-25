@@ -3,7 +3,7 @@ Routes:
     Method: POST
     Service: Reader
     Compression:
-      MinSizeKb: 0
+      MinSizeKb: -1
     View:
       Ref: events
 

@@ -27,13 +27,13 @@ var configInit sync.Once
 func HandleRequest(ctx context.Context, request *adapter.Request) (*events.LambdaFunctionURLResponse, error) {
 	httpRequest := request.Request()
 	writer := proxy.NewWriter()
-	if err := handleRequest(writer, httpRequest); err != nil {
+	if err := HandleHttpRequest(writer, httpRequest); err != nil {
 		return nil, err
 	}
 	return adapter.NewResponse(writer), nil
 }
 
-func handleRequest(writer http.ResponseWriter, httpRequest *http.Request) error {
+func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) error {
 
 	configURL := os.Getenv("CONFIG_URL")
 	if configURL == "" {

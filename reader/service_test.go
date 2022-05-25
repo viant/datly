@@ -210,7 +210,7 @@ func TestRead(t *testing.T) {
 			dataURI:     "case005_column_expression/",
 			view:        "foos",
 			dest:        new([]*Foo),
-			expect:      `[{"Id":1,"DbName":"FOO"},{"Id":2,"DbName":"ANOTHER FOO"},{"Id":3,"DbName":"YET ANOTHER FOO"}]`,
+			expect:      `[{"Id":1,"Name":"FOO"},{"Id":2,"Name":"ANOTHER FOO"},{"Id":3,"Name":"YET ANOTHER FOO"}]`,
 			compTypes: map[string]reflect.Type{
 				"foo": reflect.TypeOf(&Foo{}),
 			},
@@ -233,14 +233,14 @@ func TestRead(t *testing.T) {
 			dataURI:     "case007_one_to_one/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1,"EventType":{"Id":2,"DbName":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2,"EventType":{"Id":11,"DbName":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3,"EventType":{"Id":111,"DbName":"type 3","AccountId":36}}]`,
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1,"EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2,"EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3,"EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
 		},
 		{
 			description: "one to one, include column, by field name",
 			dataURI:     "case007_one_to_one/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":0,"UserId":0,"EventType":{"Id":2,"DbName":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":0,"UserId":0,"EventType":{"Id":11,"DbName":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":0,"UserId":0,"EventType":{"Id":111,"DbName":"type 3","AccountId":36}}]`,
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":0,"UserId":0,"EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":0,"UserId":0,"EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":0,"UserId":0,"EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
 			selectors: map[string]*view.Selector{
 				"event_event-types": {
 					Columns: []string{"Id", "Timestamp", "EventType"},
@@ -264,14 +264,14 @@ func TestRead(t *testing.T) {
 			view:        "users_accounts",
 			description: "many to one",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"DbName":"John","Accounts":[{"Id":1,"DbName":"John account","UserId":1},{"Id":3,"DbName":"Another John account","UserId":1}]},{"Id":2,"DbName":"David","Accounts":[{"Id":2,"DbName":"Anna account","UserId":2}]},{"Id":3,"DbName":"Anna","Accounts":null},{"Id":4,"DbName":"Kamil","Accounts":null},{"Id":5,"DbName":"Bob","Accounts":null}]`,
+			expect:      `[{"Id":1,"Name":"John","Accounts":[{"Id":1,"Name":"John account","UserId":1},{"Id":3,"Name":"Another John account","UserId":1}]},{"Id":2,"Name":"David","Accounts":[{"Id":2,"Name":"Anna account","UserId":2}]},{"Id":3,"Name":"Anna","Accounts":null},{"Id":4,"Name":"Kamil","Accounts":null},{"Id":5,"Name":"Bob","Accounts":null}]`,
 		},
 		{
 			description: "one to one, include column true",
 			dataURI:     "case009_without_column/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1,"EventType":{"Id":2,"DbName":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2,"EventType":{"Id":11,"DbName":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3,"EventType":{"Id":111,"DbName":"type 3","AccountId":36}}]`,
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1,"EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2,"EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3,"EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
 		},
 		{
 			dataURI:     "case010_view_parameter/",
@@ -281,7 +281,7 @@ func TestRead(t *testing.T) {
 			compTypes: map[string]reflect.Type{
 				"user_params": reflect.TypeOf(UserViewParams{}),
 			},
-			expect: `[{"Id":4,"DbName":"Kamil","Role":"ADMIN","Accounts":null},{"Id":5,"DbName":"Bob","Role":"ADMIN","Accounts":null}]`,
+			expect: `[{"Id":4,"Name":"Kamil","Role":"ADMIN","Accounts":null},{"Id":5,"Name":"Bob","Role":"ADMIN","Accounts":null}]`,
 			selectors: map[string]*view.Selector{
 				"users_accounts": {
 					Parameters: view.ParamState{
@@ -295,14 +295,14 @@ func TestRead(t *testing.T) {
 			dataURI:     "case011_read_all_one_to_one/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1,"EventType":{"Id":2,"DbName":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2,"EventType":{"Id":11,"DbName":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3,"EventType":{"Id":111,"DbName":"type 3","AccountId":36}}]`,
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1,"EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2,"EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3,"EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
 		},
 		{
 			description: "read all strategy, many to one",
 			dataURI:     "case012_many_to_one/",
 			view:        "users_accounts",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"DbName":"John","Role":"","Accounts":[{"Id":1,"DbName":"John account","UserId":1},{"Id":3,"DbName":"Another John account","UserId":1}]},{"Id":2,"DbName":"David","Role":"","Accounts":[{"Id":2,"DbName":"Anna account","UserId":2}]},{"Id":3,"DbName":"Anna","Role":"","Accounts":null},{"Id":4,"DbName":"Kamil","Role":"ADMIN","Accounts":null},{"Id":5,"DbName":"Bob","Role":"ADMIN","Accounts":null}]`,
+			expect:      `[{"Id":1,"Name":"John","Role":"","Accounts":[{"Id":1,"Name":"John account","UserId":1},{"Id":3,"Name":"Another John account","UserId":1}]},{"Id":2,"Name":"David","Role":"","Accounts":[{"Id":2,"Name":"Anna account","UserId":2}]},{"Id":3,"Name":"Anna","Role":"","Accounts":null},{"Id":4,"Name":"Kamil","Role":"ADMIN","Accounts":null},{"Id":5,"Name":"Bob","Role":"ADMIN","Accounts":null}]`,
 		},
 		{
 			description: "read all strategy, batch size",
@@ -326,7 +326,7 @@ func TestRead(t *testing.T) {
 			dataURI:     "case015_path_parameter/",
 			view:        "users",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"DbName":"John","Role":""}]`,
+			expect:      `[{"Id":1,"Name":"John","Role":""}]`,
 			compTypes: map[string]reflect.Type{
 				"user_params": reflect.TypeOf(UserIdParam{}),
 			},
@@ -360,7 +360,7 @@ func TestRead(t *testing.T) {
 			dataURI:     "case017_header_parameter/",
 			view:        "users",
 			dest:        new(interface{}),
-			expect:      `[{"Id":3,"DbName":"Anna","Role":""}]`,
+			expect:      `[{"Id":3,"Name":"Anna","Role":""}]`,
 			compTypes: map[string]reflect.Type{
 				"header_params": reflect.TypeOf(UserHeaderParams{}),
 			},
@@ -377,7 +377,7 @@ func TestRead(t *testing.T) {
 			dataURI:     "case018_cookie_parameter/",
 			view:        "users",
 			dest:        new(interface{}),
-			expect:      `[{"Id":2,"DbName":"David","Role":""}]`,
+			expect:      `[{"Id":2,"Name":"David","Role":""}]`,
 			compTypes: map[string]reflect.Type{
 				"user_params": reflect.TypeOf(UserIdParam{}),
 			},
@@ -408,7 +408,7 @@ func TestRead(t *testing.T) {
 			compTypes: map[string]reflect.Type{
 				"event_event-type": reflect.TypeOf(Boo{}),
 			},
-			expect: `[{"ID":1,"Quantity":33.23432374000549,"EventType":{"Id":2,"DbName":"type 6"},"Timestamp":"2019-03-11T02:20:33Z"},{"ID":10,"Quantity":21.957962334156036,"EventType":{"Id":11,"DbName":"type 2"},"Timestamp":"2019-03-15T12:07:33Z"},{"ID":100,"Quantity":5.084940046072006,"EventType":{"Id":111,"DbName":"type 3"},"Timestamp":"2019-04-10T05:15:33Z"}]`,
+			expect: `[{"ID":1,"Quantity":33.23432374000549,"EventType":{"Id":2,"Name":"type 6"},"Timestamp":"2019-03-11T02:20:33Z"},{"ID":10,"Quantity":21.957962334156036,"EventType":{"Id":11,"Name":"type 2"},"Timestamp":"2019-03-15T12:07:33Z"},{"ID":100,"Quantity":5.084940046072006,"EventType":{"Id":111,"Name":"type 3"},"Timestamp":"2019-04-10T05:15:33Z"}]`,
 		},
 		{
 			description: "derive columns from schema type with relation",
@@ -418,7 +418,7 @@ func TestRead(t *testing.T) {
 			compTypes: map[string]reflect.Type{
 				"audience": reflect.TypeOf(audience{}),
 			},
-			expect: `[{"Id":1,"Info":"1,2","Info2":"","DealsId":[1,2],"Deals":[{"Id":1,"DbName":"deal 1","DealId":""},{"Id":2,"DbName":"deal 2","DealId":""}],"StringDealsId":null,"DealsSize":2},{"Id":2,"Info":"","Info2":"20,30","DealsId":null,"Deals":[{"Id":5,"DbName":"deal 5","DealId":"20"},{"Id":6,"DbName":"deal 6","DealId":"30"}],"StringDealsId":["20","30"],"DealsSize":2}]`,
+			expect: `[{"Id":1,"Info":"1,2","Info2":"","DealsId":[1,2],"Deals":[{"Id":1,"Name":"deal 1","DealId":""},{"Id":2,"Name":"deal 2","DealId":""}],"StringDealsId":null,"DealsSize":2},{"Id":2,"Info":"","Info2":"20,30","DealsId":null,"Deals":[{"Id":5,"Name":"deal 5","DealId":"20"},{"Id":6,"Name":"deal 6","DealId":"30"}],"StringDealsId":["20","30"],"DealsSize":2}]`,
 		},
 		eventTypeViewWithEventTypeIdColumn(),
 		eventTypeViewWithoutEventTypeIdColumn(),
@@ -524,7 +524,7 @@ func batchParent() usecase {
 		dest:        new([]*event),
 		view:        viewName,
 		dataset:     "dataset001_events/",
-		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":2,"Events":null,"DbName":"type 6"}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"DbName":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":111,"Events":null,"DbName":"type 3"}}]`,
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":2,"Events":null,"Name":"type 6"}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":111,"Events":null,"Name":"type 3"}}]`,
 		resource:    resource,
 	}
 }
@@ -723,7 +723,7 @@ func inheritConnector() usecase {
 		dest:        new([]*event),
 		view:        viewName,
 		dataset:     "dataset001_events/",
-		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":2,"Events":null,"DbName":"type 6"}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"DbName":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":111,"Events":null,"DbName":"type 3"}}]`,
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":2,"Events":null,"Name":"type 6"}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":111,"Events":null,"Name":"type 3"}}]`,
 		resource:    resource,
 	}
 }
@@ -775,7 +775,7 @@ func columnsInSource() usecase {
 		dest:        new([]*event),
 		view:        viewName,
 		dataset:     "dataset001_events/",
-		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":0,"Events":null,"DbName":""}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"DbName":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":0,"Events":null,"DbName":""}}]`,
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":0,"Events":null,"Name":""}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":0,"Events":null,"Name":""}}]`,
 		resource:    resource,
 	}
 }
@@ -788,7 +788,7 @@ func detectColumnAlias() usecase {
 		dest:        new([]*event),
 		view:        viewName,
 		dataset:     "dataset001_events/",
-		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":0,"Events":null,"DbName":""}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"DbName":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":0,"Events":null,"DbName":""}}]`,
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":0,"Events":null,"Name":""}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":0,"Events":null,"Name":""}}]`,
 		resource:    resource,
 	}
 }
@@ -882,7 +882,7 @@ func inheritTypeForReferencedView() usecase {
 		dest:        new([]*event),
 		view:        "events",
 		dataset:     "dataset001_events/",
-		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":2,"Events":null,"DbName":"type 6"}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"DbName":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":111,"Events":null,"DbName":"type 3"}}]`,
+		expect:      `[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":2,"Events":null,"Name":"type 6"}},{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}},{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":111,"Events":null,"Name":"type 3"}}]`,
 		resource:    resource,
 	}
 }
@@ -942,7 +942,7 @@ func nestedRelation() usecase {
 		dest:        new([]*eventType),
 		view:        "event-type_events",
 		dataset:     "dataset001_events/",
-		expect:      `[{"Id":1,"Events":null,"DbName":"type 1"},{"Id":2,"Events":[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":2,"Events":null,"DbName":"type 6"}}],"DbName":"type 6"},{"Id":4,"Events":null,"DbName":"type 4"},{"Id":5,"Events":null,"DbName":"type 5"},{"Id":11,"Events":[{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"DbName":"type 2"}}],"DbName":"type 2"},{"Id":111,"Events":[{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":111,"Events":null,"DbName":"type 3"}}],"DbName":"type 3"}]`,
+		expect:      `[{"Id":1,"Events":null,"Name":"type 1"},{"Id":2,"Events":[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2,"EventType":{"Id":2,"Events":null,"Name":"type 6"}}],"Name":"type 6"},{"Id":4,"Events":null,"Name":"type 4"},{"Id":5,"Events":null,"Name":"type 5"},{"Id":11,"Events":[{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11,"EventType":{"Id":11,"Events":null,"Name":"type 2"}}],"Name":"type 2"},{"Id":111,"Events":[{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111,"EventType":{"Id":111,"Events":null,"Name":"type 3"}}],"Name":"type 3"}]`,
 		resource:    resource,
 	}
 }
@@ -1060,7 +1060,7 @@ func eventTypeViewWithEventTypeIdColumn() usecase {
 
 	return usecase{
 		description: "event type -> events, many to one, programmatically, with EventTypeId column",
-		expect:      `[{"Id":1,"Events":null,"DbName":"type 1"},{"Id":2,"Events":[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2}],"DbName":"type 6"},{"Id":4,"Events":null,"DbName":"type 4"},{"Id":5,"Events":null,"DbName":"type 5"},{"Id":11,"Events":[{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11}],"DbName":"type 2"},{"Id":111,"Events":[{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111}],"DbName":"type 3"}]`,
+		expect:      `[{"Id":1,"Events":null,"Name":"type 1"},{"Id":2,"Events":[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2}],"Name":"type 6"},{"Id":4,"Events":null,"Name":"type 4"},{"Id":5,"Events":null,"Name":"type 5"},{"Id":11,"Events":[{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11}],"Name":"type 2"},{"Id":111,"Events":[{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111}],"Name":"type 3"}]`,
 		dest:        new([]*EventType),
 		view:        "event-type_events",
 		dataset:     "dataset001_events/",
@@ -1115,7 +1115,7 @@ func eventTypeViewWithoutEventTypeIdColumn() usecase {
 
 	return usecase{
 		description: "event type -> events, many to one, programmatically, without EventTypeId column",
-		expect:      `[{"Id":1,"Events":null,"DbName":"type 1"},{"Id":2,"Events":[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z"}],"DbName":"type 6"},{"Id":4,"Events":null,"DbName":"type 4"},{"Id":5,"Events":null,"DbName":"type 5"},{"Id":11,"Events":[{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z"}],"DbName":"type 2"},{"Id":111,"Events":[{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z"}],"DbName":"type 3"}]`,
+		expect:      `[{"Id":1,"Events":null,"Name":"type 1"},{"Id":2,"Events":[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z"}],"Name":"type 6"},{"Id":4,"Events":null,"Name":"type 4"},{"Id":5,"Events":null,"Name":"type 5"},{"Id":11,"Events":[{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z"}],"Name":"type 2"},{"Id":111,"Events":[{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z"}],"Name":"type 3"}]`,
 		dest:        new([]*EventType),
 		view:        "event-type_events",
 		dataset:     "dataset001_events/",
