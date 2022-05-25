@@ -1,0 +1,11 @@
+{
+  "APIPrefix": "/v1/api/",
+  "RouteURL": "s3://${configBucket}/${appName}/routes/",
+  "DependencyURL": "s3://${configBucket}/${appName}/dependencies/",
+  "UseCacheFS": true,
+  "SyncFrequencyMs": 2000,
+  "Secrets": [{
+    "Kind": "gcp",
+    "URL": "aws://secretmanager/us-west-1/secret/dev/gcp/viant-e2e"
+  }]
+}

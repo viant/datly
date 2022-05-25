@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-func NewResponse(writer *proxy.Writer) *events.LambdaFunctionURLResponse {
-	response := &events.LambdaFunctionURLResponse{}
+func NewResponse(writer *proxy.Writer) *events.APIGatewayProxyResponse {
+	response := &events.APIGatewayProxyResponse{}
 	response.Headers = map[string]string{}
 	for k, v := range writer.HeaderMap {
 		response.Headers[k] = strings.Join(v, ",")
