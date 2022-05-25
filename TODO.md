@@ -7,5 +7,4 @@
 
 * OpernAPI handler/Swagger
 * Documentation ()
-* Utility (rule, struct, relation generation etc ...)
 * Patch/Create/Update
