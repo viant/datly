@@ -63,16 +63,14 @@ func (c *Connector) Db() (*sql.DB, error) {
 
 	var err error
 	dsn := c.DSN
+	var secret *scy.Secret
 	if c.Secret != nil {
 		secrets := scy.New()
-		secret, err := secrets.Load(context.Background(), c.Secret)
-		if err != nil {
+		if secret, err = secrets.Load(context.Background(), c.Secret); err != nil {
 			return nil, err
 		}
-
 		dsn = secret.Expand(dsn)
 	}
-
 	c.db, err = sql.Open(c.Driver, dsn)
 	return c.db, err
 }
