@@ -66,8 +66,8 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 	var collectorFetchEmitted bool
 	defer s.afterReadAll(collectorFetchEmitted, collector)
 
-	view := collector.View()
-	selector := session.Selectors.Lookup(view)
+	aView := collector.View()
+	selector := session.Selectors.Lookup(aView)
 	collectorChildren := collector.Relations(selector)
 	wg.Add(len(collectorChildren))
 
@@ -88,7 +88,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 		return
 	}
 
-	db, err := view.Db()
+	db, err := aView.Db()
 	if err != nil {
 		errorCollector.Append(err)
 		return
@@ -96,7 +96,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 
 	session.View.Counter.IncrementValue(Pending)
 	defer session.View.Counter.DecrementValue(Pending)
-	err = s.exhaustRead(ctx, view, selector, batchData, db, collector, session)
+	err = s.exhaustRead(ctx, aView, selector, batchData, db, collector, session)
 	if err != nil {
 		errorCollector.Append(err)
 	}

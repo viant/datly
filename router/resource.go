@@ -19,12 +19,13 @@ type (
 		With        []string //list of resource to inherit from
 		Routes      Routes
 		Resource    *view.Resource
-		_visitors   visitor.Visitors
 		Compression *Compression
 		Redirect    *Redirect
 		Cache       *cache.Cache
 		Logger      *Logger //connect, dataview, time, SQL with params if exceeded time
 		Cors        *Cors   //TODO github.com/viant/datly/v0/app/lambda/bridge/cors.go
+
+		_visitors visitor.Visitors
 	}
 
 	Logger struct {

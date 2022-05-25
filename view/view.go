@@ -46,11 +46,11 @@ type (
 
 		Logger  *logger.Adapter `json:"-"`
 		Counter logger.Counter  `json:"-"`
+		Caser   format.Case     `json:",omitempty"`
 
 		_columns  Columns
 		_excluded map[string]bool
 
-		Caser        format.Case `json:",omitempty"`
 		initialized  bool
 		newCollector func(dest interface{}, supportParallel bool) *Collector
 	}
