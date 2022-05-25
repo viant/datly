@@ -233,8 +233,6 @@ func (v *View) ensureCounter(resource *Resource) {
 			name = metric.URIPart + name
 		}
 		name = strings.ReplaceAll(name, "/", ".")
-
-		fmt.Printf("counter: %v %v\n", name, counter)
 		cnt := metric.Service.LookupOperation(name)
 		if cnt == nil {
 			counter = metric.Service.MultiOperationCounter(metricLocation(), name, name+" performance", time.Millisecond, time.Minute, 2, provider.NewBasic())
@@ -242,8 +240,6 @@ func (v *View) ensureCounter(resource *Resource) {
 			counter = cnt
 		}
 	}
-	fmt.Printf("zzzz: %v %p\n", v.Name, counter)
-
 	v.Counter = logger.NewCounter(counter)
 
 }
