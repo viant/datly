@@ -70,6 +70,10 @@ type (
 )
 
 func (r *Route) Init(ctx context.Context, resource *Resource) error {
+	if r.Style == BasicStyle {
+		r.ResponseField = ""
+	}
+
 	if err := r.initCardinality(); err != nil {
 		return err
 	}

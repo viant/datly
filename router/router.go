@@ -150,10 +150,14 @@ func (r *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 func (r *Router) viewHandler(route *Route) viewHandler {
 	return func(response http.ResponseWriter, request *http.Request) {
+		if route.Cors != nil {
+			enableCors(response, route.Cors, false)
+		}
 
 		if !r.runBeforeFetch(response, request, route) {
 			return
 		}
+
 		ctx := context.Background()
 		selectors, err := CreateSelectorsFromRoute(ctx, route, request, route.Index._viewDetails...)
 		if err != nil {
@@ -279,9 +283,6 @@ func (r *Router) writeResponse(route *Route, request *http.Request, response htt
 		return
 	}
 
-	if route.Cors != nil {
-		enableCors(response, route.Cors, false)
-	}
 	var encoding string
 	if compression := route.Compression; compression != nil && compression.MinSizeKb != 0 && len(payload) > compression.MinSizeKb*1024 {
 		bytesReader := bytes.NewReader(payload)

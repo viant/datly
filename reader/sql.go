@@ -19,7 +19,6 @@ const (
 	limitFragment       = " LIMIT "
 	orderByFragment     = " ORDER BY "
 	offsetFragment      = " OFFSET "
-	whereFragment       = " WHERE "
 	inFragment          = " IN ("
 	andFragment         = " AND ("
 	placeholderFragment = "?"

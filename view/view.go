@@ -164,6 +164,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 	if v.MatchStrategy == "" {
 		v.MatchStrategy = ReadMatched
 	}
+
 	if err = v.MatchStrategy.Validate(); err != nil {
 		return err
 	}
@@ -233,6 +234,7 @@ func (v *View) ensureCounter(resource *Resource) {
 			name = metric.URIPart + name
 		}
 		name = strings.ReplaceAll(name, "/", ".")
+
 		cnt := metric.Service.LookupOperation(name)
 		if cnt == nil {
 			counter = metric.Service.MultiOperationCounter(metricLocation(), name, name+" performance", time.Millisecond, time.Minute, 2, provider.NewBasic())
@@ -240,6 +242,7 @@ func (v *View) ensureCounter(resource *Resource) {
 			counter = cnt
 		}
 	}
+
 	v.Counter = logger.NewCounter(counter)
 
 }

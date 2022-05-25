@@ -9,3 +9,5 @@
 * OpernAPI handler/Swagger
 * Documentation ()
 * Patch/Create/Update
+
+* Retrun empty slice if not a single result returned

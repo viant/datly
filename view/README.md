@@ -53,6 +53,29 @@ or [yaml usage](../yaml-usage.md)
 | Default    | Default output value that will be replaced when zero value occur                                                                                                      | string                                                            | false    |         |
 | Format     | Date output format                                                                                                                                                    | string                                                            | false    |         |
 
+### SelectorConfig
+
+SelectorConfig holds information about what can be used on specific View using Selectors built from the Request data.
+
+| Section     | Description                                            | Type                                   | Required | Default                      |
+|-------------|--------------------------------------------------------|----------------------------------------|----------|------------------------------|
+| OrderBy     | Default Column that will be used to Sorted             | string                                 | false    |                              |
+| Limit       | Maximum and default limit that can be used on the View | int                                    | false    | No default and maximum limit |
+| Constraints | Selector constraints                                   | [Constraints](./README.md#Constraints) | false    | everything disabled          |
+
+### Constraints
+
+By default everything is forbidden. In order to allow datly create and populate Selectors from Http requests, it need to
+be explicitly enabled.
+
+| Section    | Description                                                                    | Type     | Required | Default |
+|------------|--------------------------------------------------------------------------------|----------|----------|---------|
+| Criteria   | Allows to parse _criteria into SQL statement                                   | boolean  | false    | false   |
+| OrderBy    | Allows to parse _orderBy into SQL `order by`                                   | boolean  | false    | false   |
+| Limit      | Allows to parse _limit into SQL `limit`                                        | boolean  | false    | false   |
+| Offset     | Allows to parse _orrset into SQL `offset`                                      | boolean  | false    | false   |
+| Filterable | Allowed columns to be used in the criteria, `*` in case of allowed all columns | []string | false    |         |
+
 ### Parameter
 
 Parameters are defined in order to read data specific for the given http request.
@@ -121,6 +144,28 @@ be accessible programmatically. The usage for them might be f.e. parsing Request
 | Schema  | Field schema                                                                                                                                 | [Schema](./README.md#Schema) | Schema or Fields need to be specified                      |         |
 | Fields  | Describes non-primitive field type                                                                                                           | [[]Field](./README.md#Field) | Schema or Fields need to be specified                      | ---     |
 
+### Template
+
+In order to create more complex and optimized SQL statements, the [velty](https://github.com/viant/velty)  syntax can be
+used to produce SQL dynamically based on the Parameters created based on f.e. http request.
+
+Namespace:
+
+* `Has` - the parameter presence can be checked using the prefix `$Has`.
+* `Unsafe` - to access raw parameter value in the template, you can use prefix `$Unsafe`. This namespace should be used
+  extremely careful. It should be used only for the parameters `data_view` Kind, or only to check value using velty
+  statements. The parameters without `$Unsafe` prefix will be replaced with placeholders.
+* `View` - to access basic details about the current View in template, you can use `$View` prefix. Those values will be
+  expanded as is. They will not be pushed as placeholders so it is important to wrap them with quotes.
+
+| Section        | Description                                                                                                                                  | Type                                 | Required                                                   | Default |
+|----------------|----------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------|------------------------------------------------------------|---------|
+| Source         | The actual SQL template                                                                                                                      | string                               | true                                                       |         |
+| SourceURL      | Indicates whether field should be Anonymous (i.e. while parsing JSON, if field is Anonymous and type of Struct the Struct will be flattened) | string                               | false                                                      | false   |
+| Schema         | The actual type holder of the combined parameters. Each parameter name and type has to match the current Schema Type                         | [Schema](./README.md#Schema)         | false                                                      | false   |
+| PresenceSchema | Similar to the Schema, but each Parameter name has to match field in the struct and every non primitive type has to be a boolean             | [Schema](./README.md#Schema)         | false                                                      | false   |
+| Parameters     | Parameters that can be used inside the template                                                                                              | [[]Parameter](./README.md#Parameter) | false                                                      | false   |
+
 ### Connector
 
 In order to communicate with database, database credentials need to be specified. To provide secure credentials store,
@@ -155,23 +200,27 @@ Programmatically created and provided logger.
 | Name    | Logger name                                              | string | true     |
 
 ### Batch
+
 Batches data fetched from database.
 
 | Section | Description                                                                                           | Type | Required |
 |---------|-------------------------------------------------------------------------------------------------------|------|----------|
 | Parent  | Number of parent placeholders in `column in (?,?,?,?)` statement if View is a child of any other View | int  | false    |
 
-
 ### CaseFormat
+
 Enum, possible values:
-* `uu`, `upperunderscore` - i.e. EMPLOYEE_ID 
-* `lu`, `lowerunderscore` - i.e. employee_id 
-* `uc`, `uppercamel` - i.e. EmployeeId 
+
+* `uu`, `upperunderscore` - i.e. EMPLOYEE_ID
+* `lu`, `lowerunderscore` - i.e. employee_id
+* `uc`, `uppercamel` - i.e. EmployeeId
 * `lc`, `lowercamel` - i.e. employeeId
 * `l`, `lower` - i.e. employeeid
 * `u`, `upper` - i.e. EMPLOYEEID
 
 ### MatchStrategy
+
 Enum, possible values:
+
 * `read_matched`
 * `read_all`

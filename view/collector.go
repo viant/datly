@@ -164,9 +164,20 @@ func (r *Collector) Visitor() Visitor {
 }
 
 func (r *Collector) valueIndexer(visitorRelations []*Relation) func(value interface{}) error {
+	distinctRelations := make([]*Relation, 0)
+	presenceMap := map[string]bool{}
+
+	for i := range visitorRelations {
+		if _, ok := presenceMap[visitorRelations[i].Column]; ok {
+			continue
+		}
+		distinctRelations = append(distinctRelations, visitorRelations[i])
+		presenceMap[visitorRelations[i].Column] = true
+	}
+
 	return func(value interface{}) error {
 		ptr := xunsafe.AsPointer(value)
-		for _, rel := range visitorRelations {
+		for _, rel := range distinctRelations {
 			fieldValue := rel.columnField.Value(ptr)
 			r.indexValueByRel(fieldValue, rel, r.indexCounter)
 		}

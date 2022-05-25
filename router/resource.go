@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/afs"
+	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
+	"time"
 )
 
 type (
@@ -29,7 +31,7 @@ type (
 	}
 
 	Logger struct {
-		MinExecutionMs int
+		MinExecutionMs *int
 	}
 
 	Compression struct {
@@ -47,6 +49,8 @@ func (r *Resource) Init(ctx context.Context) error {
 		return nil
 	}
 
+	r.initialised = true
+
 	if err := r.Resource.Init(ctx, r.Resource.GetTypes(), r._visitors); err != nil {
 		return err
 	}
@@ -56,8 +60,40 @@ func (r *Resource) Init(ctx context.Context) error {
 			return err
 		}
 	}
-	r.initialised = true
+
+	if err := r.addLoggersIfNeeded(); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (r *Resource) addLoggersIfNeeded() error {
+	if r.Logger == nil {
+		return nil
+	}
+
+	if r.Logger.MinExecutionMs == nil {
+		return fmt.Errorf("unspecified logger MinExecutionMs")
+	}
+
+	duration := time.Millisecond * (time.Duration(*r.Logger.MinExecutionMs))
+	timeLogger := logger.NewLogger("TimeLogger", logger.NewTimeLogger(duration, duration))
+
+	for _, aRoute := range r.Routes {
+		r.addLogger(aRoute.View, timeLogger)
+	}
+
+	return nil
+}
+
+func (r *Resource) addLogger(aView *view.View, timeLogger *logger.Adapter) {
+	if aView.Logger != nil {
+		aView.Logger = timeLogger
+	}
+
+	for _, relation := range aView.With {
+		r.addLogger(&relation.Of.View, timeLogger)
+	}
 }
 
 func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, visitors visitor.Visitors, types view.Types, resources map[string]*view.Resource, metrics *view.Metrics) (*Resource, error) {
