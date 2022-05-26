@@ -1,11 +1,11 @@
 * more then one view in out output nice to have for now
 * In gateway
-    - Add to resource/config logger setting to inform about long running querties 
     - Add Caching with (cloud storage) 
-    - Add Cloud Storage redirection if size to large
     - push criteria value as binding variable
+    - parame status code (resource global)
+    - params.Validation struct (require, min, max, pattern)
     - lazy init  
-
+   
 * OpernAPI handler/Swagger
 * Documentation ()
 * Patch/Create/Update

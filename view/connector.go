@@ -79,7 +79,6 @@ func (c *Connector) Db() (*sql.DB, error) {
 		c.setDriverOptions(secret)
 	}
 	c.db, err = sql.Open(c.Driver, dsn)
-	c.db.Driver()
 	return c.db, err
 }
 
