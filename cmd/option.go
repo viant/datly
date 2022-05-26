@@ -53,7 +53,7 @@ func (o *Options) Init() {
 	}
 	o.Connector.Init()
 	switch o.Output {
-	case "o":
+	case "c":
 		o.Output = "Comprehensive"
 	default:
 		o.Output = "Basic"
