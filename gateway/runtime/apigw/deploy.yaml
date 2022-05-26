@@ -1,6 +1,6 @@
 init:
   '!configBucket': $params.configBucket
-  appName: DatlyGwAPI
+  appName: DatlyAPIGW
   appPath: $WorkingDirectory(./../../..)
   appArchive: ${appPath}/gateway/runtime/apigw/app/datly.zip
   privilegePolicy: policy/datly.json
