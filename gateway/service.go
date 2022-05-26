@@ -259,11 +259,16 @@ func (r *Service) initResource(ctx context.Context, resource *router.Resource, U
 }
 
 func (r *Service) apiURI(URL string) string {
-	appURI := strings.Trim(URL[len(r.Config.RouteURL):], "/")
-	if index := strings.Index(appURI, "."); index != -1 {
-		appURI = appURI[:index]
+	path := furl.Path(r.Config.RouteURL)
+	URI := URL
+	index := strings.Index(URL, path)
+	if index != -1 {
+		URI = strings.Trim(URL[index+len(path):], "/")
 	}
-	return appURI
+	if index := strings.Index(URI, "."); index != -1 {
+		URI = URI[:index]
+	}
+	return URI
 }
 
 //New creates a gateway service

@@ -11,6 +11,7 @@ import (
 )
 
 func loadConfig(ctx context.Context, options *Options) (cfg *standalone.Config, err error) {
+
 	if options.ConfigURL == "" {
 		cfg = &standalone.Config{
 			Config: &gateway.Config{
@@ -21,6 +22,7 @@ func loadConfig(ctx context.Context, options *Options) (cfg *standalone.Config, 
 		cfg.Init()
 		return cfg, nil
 	}
+	options.ConfigURL = normalizeURL(options.ConfigURL)
 	cfg, err = standalone.NewConfigFromURL(ctx, options.ConfigURL)
 	return cfg, err
 }
