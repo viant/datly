@@ -3,6 +3,7 @@ package adapter
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"io"
 	"net/http"
@@ -31,21 +32,30 @@ func (r *Request) Request() *http.Request {
 				req.Header.Set("content-length", strconv.Itoa(len(data)))
 			}
 		}
-
 		if req.Body == nil {
 			req.Body = io.NopCloser(strings.NewReader(r.Body))
 			req.Header.Set("Content-Length", strconv.Itoa(len(r.Body)))
 		}
 	}
+	apiURI := r.Path
+	if len(r.MultiValueQueryStringParameters) > 0 {
+		values := url.Values(r.MultiValueQueryStringParameters)
+		apiURI += "?" + values.Encode()
+	}
+	if strings.HasPrefix(apiURI, "/") {
+		apiURI = apiURI[1:]
+	}
 	host := req.Header.Get("Host")
 	if host == "" {
-		host = r.RequestContext.DomainName
+		if host = r.RequestContext.DomainName; host == "" {
+			host = "localhost"
+		}
+	}
+	URL, err := url.Parse(fmt.Sprintf("https://%v/%v", host, apiURI))
+	if err == nil {
+		req.URL = URL
+		req.RequestURI = URL.RawPath
 	}
 	req.Host = host
-	URI := r.Path
-	if URI != "" && URI[0] == '/' {
-		URI = URI[1:]
-	}
-	req.URL, _ = url.Parse("https://" + host + "/" + URI)
 	return &req
 }
