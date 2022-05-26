@@ -9,7 +9,6 @@ import (
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal/json"
-	"github.com/viant/datly/v0/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
@@ -291,16 +290,16 @@ func (r *Router) writeResponse(route *Route, request *http.Request, response htt
 			r.writeErr(response, route, err, http.StatusInternalServerError)
 			return
 		}
-		encoding = shared.EncodingGzip
+		encoding = EncodingGzip
 		payload = buffer.Bytes()
 	}
 	r.writePayload(response, payload, httpStatus, encoding)
 }
 
 func (r *Router) writePayload(response http.ResponseWriter, payload []byte, httpStatus int, encoding string) {
-	response.Header().Add(content.Type, shared.ContentTypeJSON)
-	response.Header().Add(content.Type, shared.CharsetUTF8)
-	response.Header().Add(shared.ContentLength, strconv.Itoa(len(payload)))
+	response.Header().Add(content.Type, ContentTypeJSON)
+	response.Header().Add(content.Type, CharsetUTF8)
+	response.Header().Add(ContentLength, strconv.Itoa(len(payload)))
 	if encoding != "" {
 		response.Header().Set(content.Encoding, encoding)
 	}

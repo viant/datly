@@ -37,6 +37,7 @@ func (r *Request) Request() *http.Request {
 			req.Header.Set("Content-Length", strconv.Itoa(len(r.Body)))
 		}
 	}
+	req.RequestURI = r.Path
 	apiURI := r.Path
 	if len(r.MultiValueQueryStringParameters) > 0 {
 		values := url.Values(r.MultiValueQueryStringParameters)
@@ -54,7 +55,6 @@ func (r *Request) Request() *http.Request {
 	URL, err := url.Parse(fmt.Sprintf("https://%v/%v", host, apiURI))
 	if err == nil {
 		req.URL = URL
-		req.RequestURI = URL.RawPath
 	}
 	req.Host = host
 	return &req

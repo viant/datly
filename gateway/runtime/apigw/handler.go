@@ -34,7 +34,6 @@ func HandleRequest(ctx context.Context, request *adapter.Request) (*events.APIGa
 }
 
 func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) error {
-
 	configURL := os.Getenv("CONFIG_URL")
 	if configURL == "" {
 		return fmt.Errorf("config was emty")
@@ -64,6 +63,11 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 	}
 	if strings.Contains(httpRequest.RequestURI, config.Meta.ViewURI) {
 		viewHandler := handler.NewView(config.Meta.ViewURI, &config.Meta, service.View)
+		viewHandler.ServeHTTP(writer, httpRequest)
+		return nil
+	}
+	if strings.Contains(httpRequest.RequestURI, config.Meta.ConfigURI) {
+		viewHandler := handler.NewConfig(config, nil, &config.Meta)
 		viewHandler.ServeHTTP(writer, httpRequest)
 		return nil
 	}

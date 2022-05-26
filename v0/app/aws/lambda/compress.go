@@ -3,6 +3,7 @@ package lambda
 import (
 	"encoding/base64"
 	"github.com/viant/afs/option/content"
+	"github.com/viant/datly/router"
 	"github.com/viant/datly/v0/app/aws/apigw"
 	shared2 "github.com/viant/datly/v0/shared"
 	"strings"
@@ -16,8 +17,8 @@ func compressIfNeeded(response *apigw.ProxyResponse) {
 			compressed := true
 			response.Compressed = &compressed
 			response.IsBase64Encoded = true
-			response.Headers[content.Encoding] = shared2.EncodingGzip
-			response.Headers[content.Type] = shared2.ContentTypeJSON
+			response.Headers[content.Encoding] = router.EncodingGzip
+			response.Headers[content.Type] = router.ContentTypeJSON
 		}
 	}
 }

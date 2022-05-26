@@ -13,7 +13,6 @@ import (
 	"github.com/viant/afs/option/content"
 	"github.com/viant/assertly"
 	"github.com/viant/datly/gateway/registry"
-	"github.com/viant/datly/v0/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
@@ -530,7 +529,7 @@ func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router) bool {
 	}
 
 	if c.shouldDecompress {
-		assert.Equal(t, shared.EncodingGzip, responseWriter.Header().Get(content.Encoding), c.description)
+		assert.Equal(t, router.EncodingGzip, responseWriter.Header().Get(content.Encoding), c.description)
 		reader, err := gzip.NewReader(bytes.NewReader(response))
 		assert.Nil(t, err, c.description)
 		decompressed, err := ioutil.ReadAll(reader)

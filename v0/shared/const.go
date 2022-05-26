@@ -107,15 +107,6 @@ const (
 )
 
 const (
-	//EncodingGzip encoding gzip
-	EncodingGzip = "gzip"
-	//ContentType JSON
-	ContentTypeJSON = "application/json"
-	CharsetUTF8     = "charset=utf-8"
-	ContentLength   = "Content-Length"
-)
-
-const (
 	ColumnTypeBit     = "BIT"
 	ColumnTypeBoolean = "BOOLEAN"
 	ColumnTypeTinyInt = "TINYINT"
