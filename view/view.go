@@ -4,12 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
 	"github.com/viant/gmetric/provider"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
+
 	"reflect"
 	"strings"
 	"time"
@@ -50,6 +52,7 @@ type (
 
 		_columns  Columns
 		_excluded map[string]bool
+		_id       uuid.UUID
 
 		initialized  bool
 		newCollector func(dest interface{}, supportParallel bool) *Collector
@@ -82,6 +85,9 @@ func (v *View) Init(ctx context.Context, resource *Resource) error {
 	if v.initialized {
 		return nil
 	}
+
+	v._id = uuid.New()
+	v.initialized = true
 	err := v.loadFromWithURL(ctx, resource)
 	if err != nil {
 		return err
@@ -98,7 +104,6 @@ func (v *View) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	v.initialized = true
 	return nil
 }
 
@@ -806,4 +811,8 @@ func (v *View) IsHolder(value string) bool {
 	}
 
 	return false
+}
+
+func (v *View) ID() uuid.UUID {
+	return v._id
 }

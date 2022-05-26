@@ -12,6 +12,9 @@ const (
 	whitespaceToken int = iota
 	parenthesesToken
 
+	andToken
+	orToken
+
 	comaToken
 
 	fieldToken
@@ -20,6 +23,7 @@ const (
 	intToken
 	numericToken
 	stringToken
+	timeToken
 
 	equalToken
 	notEqualToken
@@ -34,6 +38,9 @@ const (
 var whitespaceMatcher = parsly.NewToken(whitespaceToken, "Whitespace", matcher.NewWhiteSpace())
 var parenthesesMatcher = parsly.NewToken(parenthesesToken, "Parentheses", matcher.NewBlock('(', ')', '\\'))
 
+var andMatcher = parsly.NewToken(andToken, "And", matcher.NewFragmentsFold([]byte("and")))
+var orMatcher = parsly.NewToken(orToken, "Or", matcher.NewFragmentsFold([]byte("or")))
+
 var comaMatcher = parsly.NewToken(comaToken, "Coma", matcher.NewTerminator(',', true))
 
 var fieldMatcher = parsly.NewToken(fieldToken, "Field", matcher2.NewIdentity())
@@ -42,6 +49,7 @@ var booleanMatcher = parsly.NewToken(booleanToken, "Boolean", matcher.NewFragmen
 var intMatcher = parsly.NewToken(intToken, "Int", matcher2.NewIntMatcher())
 var numericMatcher = parsly.NewToken(numericToken, "Float", matcher.NewNumber())
 var stringMatcher = parsly.NewToken(stringToken, "String", matcher2.NewStringMatcher('\''))
+var timeMatcher = parsly.NewToken(timeToken, "Time", matcher2.NewStringMatcher('\''))
 
 var equalMatcher = parsly.NewToken(equalToken, "Equal", matcher.NewByte('='))
 var notEqualMatcher = parsly.NewToken(notEqualToken, "Not equal", matcher.NewFragments([]byte("!="), []byte("<>")))

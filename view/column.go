@@ -2,7 +2,6 @@ package view
 
 import (
 	"fmt"
-	"github.com/viant/datly/router/sanitize/sql"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
@@ -24,7 +23,6 @@ type Column struct {
 	rType         reflect.Type
 	tag           *io.Tag
 	sqlExpression string
-	criteriaKind  sql.Kind
 	field         *reflect.StructField
 	initialized   bool
 	_fieldName    string
@@ -75,18 +73,6 @@ func (c *Column) Init(caser format.Case) error {
 		c.rType = rType
 	}
 
-	switch c.rType.Kind() {
-	case reflect.Int, reflect.Int64, reflect.Int32, reflect.Int16, reflect.Int8,
-		reflect.Uint, reflect.Uint64, reflect.Uint32, reflect.Uint16, reflect.Uint8:
-		c.criteriaKind = sql.Int
-	case reflect.Float64, reflect.Float32:
-		c.criteriaKind = sql.Float
-	case reflect.String:
-		c.criteriaKind = sql.String
-	case reflect.Bool:
-		c.criteriaKind = sql.Bool
-	}
-
 	if err := c.buildSQLExpression(); err != nil {
 		return err
 	}
@@ -111,11 +97,6 @@ func (c *Column) buildSQLExpression() error {
 	}
 
 	return nil
-}
-
-//Kind returns  Column sql.Kind
-func (c *Column) Kind() sql.Kind {
-	return c.criteriaKind
 }
 
 func (c *Column) setField(field reflect.StructField) {

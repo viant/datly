@@ -85,7 +85,7 @@ Parameters are defined in order to read data specific for the given http request
 | Ref          | Other Parameter name that given Parameter will inherit from    | string                           | false    |              |
 | Name         | Identifier used to access parameter value in the templates     | string                           | true     |              |
 | PresenceName | Identifier used to check if parameter was set in the templates | string                           | false    | same as Name |
-| In           | Source of the parameter                                        | [Location](./README.md#Location) | false    |              |
+| In           | Source of the parameter                                        | [Location](./README.md#Location) | true     |              |
 | Required     | Indicates if parameter is required or not                      | boolean                          | false    | false        |
 | Description  | Parameter description                                          | string                           | false    |              |
 | Schema       | Schema configuration                                           | [Schema](./README.md#Schema)     | true     |              |

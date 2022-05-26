@@ -10,7 +10,8 @@ type (
 		Limit        int        `json:",omitempty"`
 		Parameters   ParamState `json:",omitempty"`
 		_columnNames map[string]bool
-		Criteria     string `json:",omitempty"`
+		Criteria     string        `json:",omitempty"`
+		Placeholders []interface{} `json:",omitempty"`
 	}
 
 	ParamState struct {

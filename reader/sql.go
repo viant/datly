@@ -214,7 +214,9 @@ func (b *Builder) expand(sql string, aView *view.View, selector *view.Selector, 
 		}
 
 		replacement.SetValue(key, val)
-		placeholders = append(placeholders, addedPlaceholders...)
+		if len(addedPlaceholders) > 0 {
+			placeholders = append(placeholders, addedPlaceholders...)
+		}
 	}
 
 	return replacement.ExpandAsText(sql), placeholders, err
@@ -248,6 +250,8 @@ func (b *Builder) replacementEntry(key string, params view.CommonParams, aView *
 		return key, criteriaExpanded, criteriaPlaceholders, nil
 	case view.ColumnsIn[1:]:
 		return key, params.ColumnsIn, batchData.ValuesBatch, nil
+	case view.SelectorCriteria[1:]:
+		return key, selector.Criteria, selector.Placeholders, nil
 	default:
 		if strings.HasPrefix(key, view.WherePrefix) {
 			_, aValue, aPlaceholders, err := b.replacementEntry(key[len(view.WherePrefix):], params, aView, selector, batchData)
@@ -321,9 +325,13 @@ func (b *Builder) updateCriteria(params *view.CommonParams, aView *view.View, se
 		addAnd = true
 	}
 
-	if selector.Criteria != "" {
-		b.appendCriteria(&sb, selector.Criteria, addAnd)
-		addAnd = true
+	if strings.TrimSpace(selector.Criteria) != "" {
+		if sb.Len() == 0 {
+			sb.WriteString(view.SelectorCriteria)
+		} else {
+			sb.WriteString(" ")
+			sb.WriteString(view.AndSelectorCriteria)
+		}
 	}
 
 	params.WhereClause = sb.String()

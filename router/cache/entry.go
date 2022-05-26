@@ -1,6 +1,9 @@
 package cache
 
-import "github.com/viant/datly/view"
+import (
+	"github.com/google/uuid"
+	"github.com/viant/datly/view"
+)
 
 type (
 	Entry struct {
@@ -16,6 +19,7 @@ type (
 	Value struct {
 		Selectors []byte
 		Data      []byte
+		ViewId    uuid.UUID
 	}
 )
 

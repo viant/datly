@@ -8,10 +8,8 @@ import (
 	"github.com/viant/parsly"
 	"reflect"
 	"strings"
-	"time"
 )
 
-var timeType = reflect.TypeOf(time.Time{})
 var numericTokens = []*parsly.Token{notEqualMatcher, equalMatcher, greaterEqualMatcher, greaterMatcher, lowerEqualMatcher, lowerMatcher, inMatcher}
 
 func Parse(criteria string, columns view.Columns) (*Criteria, error) {
@@ -26,7 +24,8 @@ func Parse(criteria string, columns view.Columns) (*Criteria, error) {
 		}, nil
 	}
 
-	if err := parse([]byte(criteria), &buffer, &placeholders, columns); err != nil {
+	cursor := parsly.NewCursor("", []byte(criteria), 0)
+	if err := parse(cursor, &buffer, &placeholders, columns); err != nil {
 		return nil, err
 	}
 
@@ -36,16 +35,47 @@ func Parse(criteria string, columns view.Columns) (*Criteria, error) {
 	}, nil
 }
 
-func parse(expression []byte, buffer *bytes.Buffer, placeholders *[]interface{}, columns view.Columns) error {
-	cursor := parsly.NewCursor("", expression, 0)
-
+func parse(cursor *parsly.Cursor, buffer *bytes.Buffer, placeholders *[]interface{}, columns view.Columns) error {
+	isFirstTime := true
 	for cursor.Pos < cursor.InputSize {
+		if !isFirstTime {
+			if err := matchOperator(cursor, buffer); err != nil {
+				return err
+			}
+		}
+		isFirstTime = false
+
+		matched := cursor.MatchAfterOptional(whitespaceMatcher, parenthesesMatcher)
+		if matched.Code == parenthesesToken {
+			aBlock := matched.Text(cursor)
+			buffer.WriteString(" (")
+			aBlockCursor := parsly.NewCursor("", []byte(aBlock[1:len(aBlock)-1]), 0)
+			if err := parse(aBlockCursor, buffer, placeholders, columns); err != nil {
+				return err
+			}
+			buffer.WriteByte(')')
+			continue
+		}
+
 		if err := matchExpression(cursor, columns, buffer, placeholders); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func matchOperator(cursor *parsly.Cursor, buffer *bytes.Buffer) error {
+	matched := cursor.MatchAfterOptional(whitespaceMatcher, andMatcher, orMatcher)
+	switch matched.Code {
+	case orToken, andToken:
+		buffer.WriteByte(' ')
+		operator := matched.Text(cursor)
+		buffer.WriteString(operator)
+		return nil
+	default:
+		return cursor.NewError(andMatcher, orMatcher)
+	}
 }
 
 func matchExpression(cursor *parsly.Cursor, columns view.Columns, buffer *bytes.Buffer, placeholders *[]interface{}) error {
@@ -138,15 +168,20 @@ func matchFieldValue(cursor *parsly.Cursor, columns view.Columns, column *view.C
 	case parsly.EOF, parsly.Invalid:
 		return cursor.NewError(valueCandidates...)
 
-	case stringToken:
+	case stringToken, timeToken:
 		cursorText := matched.Text(cursor)
 		buffer.WriteByte(' ')
 		buffer.WriteByte('?')
-		*placeholders = append(*placeholders, cursorText[1:len(cursorText)-1])
+
+		converted, err := converter.Convert(cursorText[1:len(cursorText)-1], column.ColumnType(), column.Format)
+		if err != nil {
+			return err
+		}
+		*placeholders = append(*placeholders, converted)
 		return nil
 	default:
 		rawValue := matched.Text(cursor)
-		converted, err := converter.Convert(rawValue, column.ColumnType())
+		converted, err := converter.Convert(rawValue, column.ColumnType(), column.Format)
 		if err != nil {
 			return err
 		}
@@ -173,7 +208,17 @@ func matchColumn(cursor *parsly.Cursor, columns view.Columns) (*view.Column, err
 
 func findColumn(cursor *parsly.Cursor, matched *parsly.TokenMatch, columns view.Columns) (*view.Column, error) {
 	fieldName := matched.Text(cursor)
-	return columns.Lookup(fieldName)
+	lookup, err := columns.Lookup(fieldName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !lookup.Filterable {
+		return nil, fmt.Errorf("can't use %v field in expression", fieldName)
+	}
+
+	return lookup, err
 }
 
 func matchExpressionToken(cursor *parsly.Cursor, fieldType reflect.Type) (int, string, error) {
@@ -210,7 +255,7 @@ func expressionTokenCandidates(fieldType reflect.Type) ([]*parsly.Token, error) 
 		return []*parsly.Token{notEqualMatcher, equalMatcher, likeMatcher, inMatcher}, nil
 
 	case reflect.Struct:
-		if fieldType == timeType {
+		if fieldType == converter.TimeType {
 			return numericTokens, nil
 		}
 	}
@@ -232,6 +277,11 @@ func expressionValueCandidates(columnType reflect.Type) ([]*parsly.Token, error)
 
 	case reflect.String:
 		return []*parsly.Token{stringMatcher, fieldMatcher}, nil
+
+	case reflect.Struct:
+		if columnType == converter.TimeType {
+			return []*parsly.Token{timeMatcher, fieldMatcher}, nil
+		}
 	}
 
 	return nil, fmt.Errorf("unsupported field criteria type %v", columnType.String())
