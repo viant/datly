@@ -1,15 +1,23 @@
 package router
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/viant/afs"
+	"github.com/viant/afs/file"
+	"github.com/viant/afs/option"
+	"github.com/viant/afs/option/content"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
+	"net/http"
+	"strings"
 	"time"
 )
 
@@ -39,10 +47,35 @@ type (
 	}
 
 	Redirect struct {
-		StorageURL string ///github.com/viant/datly/v0/app/lambda/lambda/proxy.go
-		MinSizeKb  int
+		StorageURL   string ///github.com/viant/datly/v0/app/lambda/lambda/proxy.go
+		MinSizeKb    int
+		TimeToLiveMs int
 	}
 )
+
+func normalizeStorageURL(part string) string {
+	part = strings.ReplaceAll(part, "-", "")
+	part = strings.ReplaceAll(part, "_", "")
+	return part
+}
+
+func (r *Redirect) TimeToLive() time.Duration {
+	return time.Duration(r.TimeToLiveMs) * time.Millisecond
+}
+
+func (r *Redirect) Apply(ctx context.Context, viewName string, payload []byte, encoding string, response http.ResponseWriter) (*option.PreSign, error) {
+	fs := afs.New()
+	UUID := uuid.New()
+	URL := url.Join(r.StorageURL, normalizeStorageURL(viewName), normalizeStorageURL(UUID.String())) + ".json"
+	preSign := option.NewPreSign(r.TimeToLive())
+	kv := []string{content.Type, ContentTypeJSON}
+	if encoding != "" {
+		kv = append(kv, content.Encoding, encoding)
+	}
+	meta := content.NewMeta(kv...)
+	err := fs.Upload(ctx, URL, file.DefaultFileOsMode, bytes.NewReader(payload), preSign, meta)
+	return preSign, err
+}
 
 func (r *Resource) Init(ctx context.Context) error {
 	if r.initialised {

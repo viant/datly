@@ -77,6 +77,9 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		Index:  router.Index{Namespace: map[string]string{}},
 		Output: router.Output{Style: router.Style(options.Output), Cardinality: view.Many, ResponseField: options.ResponseField()},
 	}
+	if options.RedirectSizeKb > 0 && options.RedirectURL != "" {
+		route.Redirect = &router.Redirect{TimeToLiveMs: 10000, MinSizeKb: options.RedirectSizeKb, StorageURL: options.RedirectURL}
+	}
 	if options.Table != "" {
 		viewRoute.Index.Namespace[options.Namespace()] = options.Generate.Name
 	}

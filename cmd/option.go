@@ -19,6 +19,7 @@ type (
 		ConfigURL     string `short:"c" long:"config" description:"configuration URL" `
 		Generate
 		Connector
+		Content
 	}
 
 	Connector struct {
@@ -26,7 +27,6 @@ type (
 		Driver string `short:"D" long:"driver" description:"driver" `
 		DSN    string `short:"A" long:"dsn" description:"DSN" `
 		Secret string `short:"E" long:"secret" description:"database secret" `
-		Output string `short:"O" long:"output" description:"output style" choice:"c" choice:"b" `
 	}
 
 	Generate struct {
@@ -35,6 +35,11 @@ type (
 		Table       string   `short:"T" long:"table" description:"table" `
 		SQLLocation string   `short:"S" long:"sql" description:"SQL location" `
 		Relations   []string `short:"R" long:"relation" description:"relation in form of viewName:tableName" `
+	}
+	Content struct {
+		Output         string `short:"O" long:"output" description:"output style" choice:"c" choice:"b" `
+		RedirectSizeKb int    `short:"M" long:"redirect" description:"redirectMinSize" `
+		RedirectURL    string `short:"L" long:"redirectURL" description:"redirectURL" `
 	}
 )
 
@@ -60,7 +65,7 @@ func (o *Options) Init() {
 	}
 }
 
-func (c *Connector) ResponseField() string {
+func (c *Options) ResponseField() string {
 	if c.Output == "Basic" {
 		return ""
 	}

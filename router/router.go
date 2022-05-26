@@ -3,9 +3,11 @@ package router
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	goJson "encoding/json"
 	"fmt"
 	"github.com/viant/afs/option/content"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal/json"
@@ -175,7 +177,7 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 			return
 		}
 
-		r.writeResponse(route, request, response, destValue, selectors)
+		r.writeHttpResponse(route, request, response, destValue, selectors)
 	}
 }
 
@@ -269,17 +271,22 @@ func (r *Router) runAfterFetch(response http.ResponseWriter, request *http.Reque
 	return true
 }
 
-func (r *Router) writeResponse(route *Route, request *http.Request, response http.ResponseWriter, destValue reflect.Value, selectors view.Selectors) {
-	filters, err := r.buildJsonFilters(route, selectors)
+func (r *Router) writeHttpResponse(route *Route, request *http.Request, response http.ResponseWriter, destValue reflect.Value, selectors view.Selectors) {
+	statusCode, err := r.writeResponse(route, request, response, destValue, selectors)
 	if err != nil {
-		r.writeErr(response, route, err, http.StatusBadRequest)
-		return
+		r.writeErr(response, route, err, statusCode)
 	}
 
+}
+
+func (r *Router) writeResponse(route *Route, request *http.Request, response http.ResponseWriter, destValue reflect.Value, selectors view.Selectors) (int, error) {
+	filters, err := r.buildJsonFilters(route, selectors)
+	if err != nil {
+		return http.StatusBadRequest, err
+	}
 	payload, httpStatus, err := r.result(route, request, destValue, filters)
 	if err != nil {
-		r.writeErr(response, route, err, http.StatusBadRequest)
-		return
+		return http.StatusBadRequest, err
 	}
 
 	var encoding string
@@ -287,13 +294,34 @@ func (r *Router) writeResponse(route *Route, request *http.Request, response htt
 		bytesReader := bytes.NewReader(payload)
 		buffer, err := Compress(bytesReader)
 		if err != nil {
-			r.writeErr(response, route, err, http.StatusInternalServerError)
-			return
+			return http.StatusInternalServerError, err
 		}
 		encoding = EncodingGzip
 		payload = buffer.Bytes()
 	}
+
+	if redirect := r.resource.Redirect; redirect != nil {
+		payloadSize := len(payload)
+		if r.inAWS() { //in lambda if payload is binary, it has to be base64 encoded, (in adapter)
+			payloadSize = base64.StdEncoding.EncodedLen(payloadSize)
+		}
+		if redirect := r.resource.Redirect; redirect.MinSizeKb*1024 <= payloadSize {
+			preSign, err := redirect.Apply(context.Background(), route.View.Name, payload, encoding, response)
+			if err != nil {
+				return http.StatusInternalServerError, err
+			}
+			http.Redirect(response, request, preSign.URL, http.StatusMovedPermanently)
+			return http.StatusOK, nil
+		}
+	}
 	r.writePayload(response, payload, httpStatus, encoding)
+	return http.StatusOK, nil
+
+}
+
+func (r *Router) inAWS() bool {
+	scheme := url.Scheme(r.resource.SourceURL, "s3")
+	return scheme == "s3"
 }
 
 func (r *Router) writePayload(response http.ResponseWriter, payload []byte, httpStatus int, encoding string) {
