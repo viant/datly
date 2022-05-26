@@ -1,4 +1,0 @@
-Path: /case004/
-views:
-  - table: events
-    connector: db

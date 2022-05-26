@@ -1,8 +1,0 @@
-{
-  "Rules": {
-    "URL": "${local.ruleURL}"
-  },
-  "Connectors": {
-    "URL": "${local.connectorURL}"
-  }
-}

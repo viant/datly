@@ -1,5 +1,0 @@
-templateURL: ../../tmpl/events.yaml
-path: /v1/api/events
-output:
-  - dataView: events
-

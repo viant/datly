@@ -1,5 +1,0 @@
-name: myslql_meta
-config:
-  driverName: mysql
-  descriptor: '[username]:[password]@tcp(${dbIP.mysql}:3306)/db1?parseTime=true'
-  credentials: $mysqlCredentials

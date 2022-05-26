@@ -1,5 +1,0 @@
-name: db1
-config:
-  driverName: mysql
-  descriptor: '[username]:[password]@tcp(${dbIP.mysql}:3306)/db1?parseTime=true'
-  credentials: $mysqlCredentials

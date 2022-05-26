@@ -1,6 +1,0 @@
-Path: /case008/events/{id}/type
-views:
-  - table: event_types
-    connector: db
-    criteria:
-      expression: id IN (SELECT event_type_id FROM events WHERE id = ${id})

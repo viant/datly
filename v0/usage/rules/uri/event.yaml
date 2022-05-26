@@ -1,9 +1,0 @@
-templateURL: ../../tmpl/events.yaml
-path: /v1/api/events/{id}
-output:
-  - dataView: events
-
-views:
-  - table: events
-    criteria:
-      expression: id = ${id}
