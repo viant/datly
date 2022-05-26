@@ -146,3 +146,7 @@ func (c *Column) defaultValue(rType reflect.Type) string {
 func (c *Column) FieldName() string {
 	return c._fieldName
 }
+
+func (c *Column) ColumnType() reflect.Type {
+	return c.rType
+}
