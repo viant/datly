@@ -517,24 +517,6 @@ func (v *View) ensureIndexExcluded() {
 	v._excluded = Names(v.Exclude).Index()
 }
 
-//SelectedColumns returns columns selected by Selector if it is allowed by the View to use Selector.Columns
-//(see Constraints.Columns) or View.Columns
-func (v *View) SelectedColumns(selector *Selector) ([]*Column, error) {
-	if !v.CanUseSelectorColumns() || selector == nil || len(selector.Columns) == 0 {
-		return v.Columns, nil
-	}
-
-	result := make([]*Column, len(selector.Columns))
-	for i, name := range selector.Columns {
-		column, ok := v._columns[name]
-		if !ok {
-			return nil, fmt.Errorf("invalid column name: %v", name)
-		}
-		result[i] = column
-	}
-	return result, nil
-}
-
 func (v *View) ensureCaseFormat() error {
 	if err := v.CaseFormat.Init(); err != nil {
 		return err
