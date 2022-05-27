@@ -51,6 +51,13 @@ func (s *Session) Init() error {
 	return nil
 }
 
+//AddCriteria adds the supplied view criteria
+func (s *Session) AddCriteria(aView *view.View, criteria string, placeholders ...interface{}) {
+	sel := s.Selectors.Lookup(aView)
+	sel.Criteria = criteria
+	sel.Placeholders = placeholders
+}
+
 //NewSession creates a session
 func NewSession(dest interface{}, view *view.View) *Session {
 	return &Session{
