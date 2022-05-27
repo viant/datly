@@ -142,6 +142,10 @@ func TestRead(t *testing.T) {
 		UserName string `velty:"User_name"`
 	}
 
+	type AclParams struct {
+		Subject string
+	}
+
 	testLocation := toolbox.CallerDirectory(3)
 
 	var useCases = []usecase{
@@ -279,13 +283,19 @@ func TestRead(t *testing.T) {
 			description: "parameters",
 			dest:        new(interface{}),
 			compTypes: map[string]reflect.Type{
-				"user_params": reflect.TypeOf(UserViewParams{}),
+				"user_params":      reflect.TypeOf(UserViewParams{}),
+				"datly_acl_params": reflect.TypeOf(AclParams{}),
 			},
 			expect: `[{"Id":4,"Name":"Kamil","Role":"ADMIN","Accounts":null},{"Id":5,"Name":"Bob","Role":"ADMIN","Accounts":null}]`,
 			selectors: map[string]*view.Selector{
 				"users_accounts": {
 					Parameters: view.ParamState{
 						Values: UserViewParams{AclCriteria: "ROLE IN ('ADMIN')"},
+					},
+				},
+				"datly_acl": {
+					Parameters: view.ParamState{
+						Values: AclParams{Subject: "Kamil"},
 					},
 				},
 			},
@@ -701,7 +711,7 @@ func criteriaWhere() usecase {
 		Name:                 "events",
 		Alias:                "ev",
 		Table:                "events",
-		From:                 `SELECT * FROM events as e ` + string(shared.Criteria),
+		From:                 `SELECT * FROM events as e ` + string(view.WhereCriteria),
 		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 	})
@@ -812,9 +822,8 @@ func columnsInResource(column, alias string) (string, *view.Resource) {
 				Of: &view.ReferenceView{
 					View: view.View{
 						Connector: connector,
-						From:      "SELECT * FROM EVENT_TYPES as et " + string(shared.WhereColumnInPosition),
+						From:      "SELECT * FROM EVENT_TYPES as et WHERE name like '%2%' " + string(view.AndColumnInPosition),
 						Name:      "event_types",
-						Criteria:  "name like '%2%'",
 					},
 					Column: "id",
 				},

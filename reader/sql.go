@@ -316,21 +316,10 @@ func (b *Builder) valueWithPrefix(key string, aValue, prefix string, aPlaceholde
 
 func (b *Builder) updateCriteria(params *view.CommonParams, aView *view.View, selector *view.Selector, columnsInMeta *reservedMeta, parent *view.View) error {
 	sb := strings.Builder{}
-	addAnd := false
 	hasColumnsIn := columnsInMeta.has()
+
 	if !hasColumnsIn && params.ColumnsIn != "" {
 		b.appendCriteria(&sb, view.ColumnsIn, false)
-		addAnd = true
-	}
-
-	if aView.Criteria != "" {
-		criteria, err := b.viewCriteria(aView, selector, parent)
-		if err != nil {
-			return err
-		}
-
-		b.appendCriteria(&sb, criteria, addAnd)
-		addAnd = true
 	}
 
 	params.WhereClause = sb.String()
@@ -349,15 +338,6 @@ func (b *Builder) appendCriteria(sb *strings.Builder, criteria string, addAnd bo
 	}
 }
 
-func (b *Builder) viewCriteria(view *view.View, selector *view.Selector, parent *view.View) (string, error) {
-	criteria, err := view.Template.EvaluateCriteria(selector.Parameters.Values, selector.Parameters.Has, parent)
-	if err != nil {
-		return "", err
-	}
-
-	return criteria, nil
-}
-
 func (b *Builder) updateColumnsIn(params *view.CommonParams, view *view.View, relation *view.Relation, batchData *BatchData, columnsInMeta *reservedMeta, hasCriteria bool) {
 	columnsIn := columnsInMeta.has()
 
@@ -366,8 +346,12 @@ func (b *Builder) updateColumnsIn(params *view.CommonParams, view *view.View, re
 	}
 
 	alias := b.viewAlias(view)
-	if (hasCriteria || columnsIn) && relation.ColumnAlias != "" {
-		alias = relation.ColumnAlias + "."
+	if hasCriteria || columnsIn {
+		if relation.ColumnAlias != "" {
+			alias = relation.ColumnAlias + "."
+		} else {
+			alias = ""
+		}
 	}
 
 	sb := strings.Builder{}

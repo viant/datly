@@ -2,8 +2,8 @@ Views:
 - Connector:
     Ref: otherdb
   Name: languages
-  Criteria: code LIKE '${Unsafe.Language}%'
   Template:
+    Source: "SELECT * FROM LANGUAGES WHERE code LIKE '${Unsafe.Language}%'"
     Schema:
       Name: lang_params
     Parameters:

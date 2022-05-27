@@ -9,12 +9,3 @@ const (
 	//SubjectName represents Subject parameter
 	SubjectName BuiltInKey = "session.Subject"
 )
-
-type SqlPosition string
-
-const (
-	ColumnInPosition      SqlPosition = "$COLUMN_IN"
-	WhereColumnInPosition SqlPosition = "$WHERE_COLUMN_IN"
-	Criteria              SqlPosition = "$CRITERIA"
-	Pagination            SqlPosition = "$PAGINATION"
-)

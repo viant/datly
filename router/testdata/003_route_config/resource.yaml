@@ -16,8 +16,8 @@ Resource:
       Connector:
         Ref: db
       Table: events
-      Criteria: "id = ${Unsafe.EventId}"
       Template:
+        Source: "SELECT * FROM events WHERE id = ${Unsafe.EventId}"
         Parameters:
           - Name: EventId
             In:

@@ -3,8 +3,8 @@ Views:
     Ref: db
   Name: users
   Table: users
-  Criteria: id = ${Unsafe.UserId}
   Template:
+    Source: "SELECT * FROM USERS WHERE ID = ${Unsafe.UserId}"
     Schema:
       Name: user_params
     Parameters:

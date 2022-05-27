@@ -455,8 +455,6 @@ func (v *View) inherit(view *View) {
 		}
 	}
 
-	v.Criteria = notEmptyOf(v.Criteria, view.Criteria)
-
 	if len(v.With) == 0 {
 		v.With = view.With
 	}

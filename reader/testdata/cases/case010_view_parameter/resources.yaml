@@ -1,52 +1,55 @@
 Views:
-- Connector:
-    Ref: db
-  Name: users
-  Table: users
-  Criteria: ${Unsafe.DATLY_ACL}
-  Template:
-    Schema:
-      Name: user_params
-    Parameters:
-    - Ref: DATLY_ACL
+  - Connector:
+      Ref: db
+    Name: users
+    Table: users
+    Template:
+      Source: 'SELECT * FROM USERS WHERE ${Unsafe.DATLY_ACL}'
+      Schema:
+        Name: user_params
+      Parameters:
+        - Ref: DATLY_ACL
 
-- Connector:
-    Ref: db
-  Name: accounts
-  Table: accounts
+  - Connector:
+      Ref: db
+    Name: accounts
+    Table: accounts
 
-- Connector:
-    Ref: db
-  Name: datly_acl
-  Table: datly_acl
-  Columns:
-  - Name: criteria
-    DataType: string
-  Criteria: data_view='${session.View.Name}' AND subject='${session.Subject}'
+  - Connector:
+      Ref: db
+    Name: datly_acl
+    Table: datly_acl
+    Template:
+      Source: "SELECT criteria FROM datly_acl WHERE data_view='${View.Name}' AND subject='${Subject}'"
+      Schema:
+        Name: datly_acl_params
+    Columns:
+      - Name: criteria
+        DataType: string
 
-- Connector:
-    Ref: db
-  Name: users_accounts
-  Ref: users
-  With:
-  - Name: user_accounts-rel
-    Holder: Accounts
-    Column: id
-    IncludeColumn: false
-    Cardinality: Many
-    Of:
-      Ref: accounts
-      Column: user_id
+  - Connector:
+      Ref: db
+    Name: users_accounts
+    Ref: users
+    With:
+      - Name: user_accounts-rel
+        Holder: Accounts
+        Column: id
+        IncludeColumn: false
+        Cardinality: Many
+        Of:
+          Ref: accounts
+          Column: user_id
 Connectors:
-- Name: db
-  Driver: sqlite3
-  DSN: "./testdata/db/db.db"
+  - Name: db
+    Driver: sqlite3
+    DSN: "./testdata/db/db.db"
 
 Parameters:
-- Name: DATLY_ACL
-  In:
-    Kind: data_view
-    Name: datly_acl
-  Required: true
-  Schema:
-    DataType: string
+  - Name: DATLY_ACL
+    In:
+      Kind: data_view
+      Name: datly_acl
+    Required: true
+    Schema:
+      DataType: string

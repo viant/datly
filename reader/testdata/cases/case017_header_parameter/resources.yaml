@@ -3,8 +3,8 @@ Views:
     Ref: db
   Name: users
   Table: users
-  Criteria: name LIKE '${Unsafe.User_name}%'
   Template:
+    Source: "SELECT * FROM USERS WHERE NAME LIKE '${Unsafe.User_name}%'"
     Schema:
       Name: header_params
     Parameters:

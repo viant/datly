@@ -21,7 +21,10 @@ const (
 	Pagination    = "$PAGINATION"
 	Criteria      = "$CRITERIA"
 	WhereCriteria = "$WHERE_CRITERIA"
-	ColumnsIn     = "$COLUMN_IN"
+
+	ColumnsIn             = "$COLUMN_IN"
+	WhereColumnInPosition = "$WHERE_COLUMN_IN"
+	AndColumnInPosition   = "$AND_COLUMN_IN"
 
 	SelectorCriteria      = "$SELECTOR_CRITERIA"
 	WhereSelectorCriteria = "$WHERE_SELECTOR_CRITERIA"
@@ -43,8 +46,7 @@ type (
 
 		Parameters []*Parameter `json:",omitempty"`
 
-		criteriaEvaluator *Evaluator
-		sqlEvaluator      *Evaluator
+		sqlEvaluator *Evaluator
 
 		accessors        *Accessors
 		_fields          []reflect.StructField
@@ -96,10 +98,6 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 	}
 
 	if err := t.initPresenceType(resource); err != nil {
-		return err
-	}
-
-	if err := t.initCriteriaEvaluator(view); err != nil {
 		return err
 	}
 
@@ -231,10 +229,6 @@ func (t *Template) newEvaluator(template string) (*Evaluator, error) {
 	return evaluator, nil
 }
 
-func (t *Template) EvaluateCriteria(externalParams, presenceMap interface{}, parent *View) (string, error) {
-	return t.evaluate(t.criteriaEvaluator, externalParams, presenceMap, parent)
-}
-
 func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parent *View) (string, error) {
 	SQL, err := t.evaluate(t.sqlEvaluator, externalParams, presenceMap, parent)
 	return SQL, err
@@ -282,20 +276,6 @@ func asParam(parent *View) *Param {
 	}
 
 	return viewParam
-}
-
-func (t *Template) initCriteriaEvaluator(view *View) error {
-	if view.Criteria == "" {
-		return nil
-	}
-
-	evaluator, err := t.newEvaluator(view.Criteria)
-	if err != nil {
-		return err
-	}
-
-	t.criteriaEvaluator = evaluator
-	return nil
 }
 
 func (t *Template) inheritAndInitParam(ctx context.Context, resource *Resource, param *Parameter) error {
