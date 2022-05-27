@@ -240,7 +240,7 @@ func TestRead(t *testing.T) {
 			dataURI:     "case007_one_to_one/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":0,"UserId":0,"EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":0,"UserId":0,"EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":0,"UserId":0,"EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
 			selectors: map[string]*view.Selector{
 				"event_event-types": {
 					Columns: []string{"Id", "Timestamp", "EventType"},
@@ -252,7 +252,7 @@ func TestRead(t *testing.T) {
 			dataURI:     "case007_one_to_one/",
 			view:        "event_event-types",
 			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":0,"UserId":1,"EventType":null},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":0,"UserId":2,"EventType":null},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":0,"UserId":3,"EventType":null}]`,
+			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","UserId":1,"EventType":null},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","UserId":2,"EventType":null},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","UserId":3,"EventType":null}]`,
 			selectors: map[string]*view.Selector{
 				"event_event-types": {
 					Columns: []string{"Id", "Timestamp", "UserId"},

@@ -208,7 +208,7 @@ func (r *Collector) indexValueByRel(fieldValue interface{}, rel *Relation, count
 			r.indexValueToPosition(rel, v, counter)
 		}
 	default:
-		r.indexValueToPosition(rel, fieldValue, counter)
+		r.indexValueToPosition(rel, normalizeKey(fieldValue), counter)
 	}
 }
 
@@ -403,7 +403,7 @@ func (r *Collector) mergeToParent() {
 
 	for i := 0; i < r.slice.Len(destPtr); i++ {
 		value := r.slice.ValuePointerAt(destPtr, i)
-		key := field.Value(xunsafe.AsPointer(value))
+		key := normalizeKey(field.Value(xunsafe.AsPointer(value)))
 		positions, ok := valuePositions[key]
 		if !ok {
 			continue

@@ -100,10 +100,8 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 
 		structFieldName := viewCaseFormat.Format(columns[i].Name, format.CaseUpperCamel)
 		rType := columns[i].rType
-		if columns[i].Nullable {
-			if rType.Kind() != reflect.Ptr {
-				rType = reflect.PtrTo(rType)
-			}
+		if columns[i].Nullable && rType.Kind() != reflect.Ptr {
+			rType = reflect.PtrTo(rType)
 		}
 		structFields = append(structFields, reflect.StructField{
 			Name:  structFieldName,
