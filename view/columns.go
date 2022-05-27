@@ -56,7 +56,12 @@ func (c Columns) RegisterHolder(relation *Relation) error {
 
 //Lookup returns Column with given name.
 func (c Columns) Lookup(name string) (*Column, error) {
-	column, ok := c[strings.ToUpper(name)]
+	column, ok := c[name]
+	if ok {
+		return column, nil
+	}
+
+	column, ok = c[strings.ToUpper(name)]
 	if ok {
 		return column, nil
 	}

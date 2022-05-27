@@ -1,7 +1,6 @@
 package view
 
 import (
-	"fmt"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -93,7 +92,6 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 func (r *Collector) parentValuesPositions(columnName string) map[interface{}][]int {
 	result, ok := r.parent.valuePosition[columnName]
 	if !ok {
-		fmt.Printf("INDEXING PAREN POS\n")
 		r.indexParentPositions(columnName)
 		result = r.parent.valuePosition[columnName]
 	}
@@ -233,9 +231,6 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 	return func(owner interface{}) error {
 		key = keyField.Interface(xunsafe.AsPointer(owner))
 		key = normalizeKey(key)
-		if k, ok := key.(*int64); ok && k != nil {
-			key = int(*k)
-		}
 		valuePosition := r.parentValuesPositions(relation.Column)
 		positions, ok := valuePosition[key]
 		if !ok {

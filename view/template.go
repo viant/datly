@@ -23,6 +23,10 @@ const (
 	WhereCriteria = "$WHERE_CRITERIA"
 	ColumnsIn     = "$COLUMN_IN"
 
+	SelectorCriteria      = "$SELECTOR_CRITERIA"
+	WhereSelectorCriteria = "$WHERE_SELECTOR_CRITERIA"
+	AndSelectorCriteria   = "$AND_SELECTOR_CRITERIA"
+
 	WherePrefix = "WHERE_"
 	AndPrefix   = "AND_"
 	OrPrefix    = "OR_"

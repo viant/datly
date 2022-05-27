@@ -87,7 +87,7 @@ func (c *Cache) Get(ctx context.Context, entry *Entry) error {
 		return err
 	}
 
-	if !bytes.Equal(value.Selectors, entry.Selectors) {
+	if !bytes.Equal(value.Selectors, entry.Selectors) || value.ViewId != entry.View.ID() {
 		return c.Delete(ctx, cacheUri, option.NewObjectKind(true))
 	}
 
@@ -123,6 +123,7 @@ func (c *Cache) Put(ctx context.Context, entry *Entry) error {
 	cacheValue := Value{
 		Selectors: entry.Selectors,
 		Data:      dataBytes,
+		ViewId:    entry.View.ID(),
 	}
 
 	valueBytes, err := goJson.Marshal(cacheValue)

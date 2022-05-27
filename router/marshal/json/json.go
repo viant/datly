@@ -344,7 +344,7 @@ func appendFloat(sb *bytes.Buffer, f float64, wasNull bool, tag *DefaultTag) err
 	}
 
 	if wasNull {
-		sb.WriteString(null)
+		sb.WriteString("0")
 		return nil
 	}
 
@@ -362,7 +362,7 @@ func updateStringMarshaller(stringifier *fieldMarshaller, wasPtr bool, tag *Defa
 					return nil
 				}
 
-				sb.WriteString(null)
+				sb.WriteString(`""`)
 				return nil
 			}
 
@@ -440,7 +440,7 @@ func updateBoolMarshaller(stringifier *fieldMarshaller, wasPtr bool, tag *Defaul
 					return nil
 				}
 
-				sb.WriteString(null)
+				sb.WriteString("false")
 				return nil
 			}
 
@@ -652,7 +652,7 @@ func appendInt(value int, wasNull bool, aTag *DefaultTag, sb *bytes.Buffer) erro
 	}
 
 	if wasNull {
-		sb.WriteString(null)
+		sb.WriteString("0")
 		return nil
 	}
 

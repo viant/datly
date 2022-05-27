@@ -4,12 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
 	"github.com/viant/gmetric/provider"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
+
 	"reflect"
 	"strings"
 	"time"
@@ -50,6 +52,7 @@ type (
 
 		_columns  Columns
 		_excluded map[string]bool
+		_id       uuid.UUID
 
 		initialized  bool
 		newCollector func(dest interface{}, supportParallel bool) *Collector
@@ -82,6 +85,9 @@ func (v *View) Init(ctx context.Context, resource *Resource) error {
 	if v.initialized {
 		return nil
 	}
+
+	v._id = uuid.New()
+	v.initialized = true
 	err := v.loadFromWithURL(ctx, resource)
 	if err != nil {
 		return err
@@ -98,7 +104,6 @@ func (v *View) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	v.initialized = true
 	return nil
 }
 
@@ -512,24 +517,6 @@ func (v *View) ensureIndexExcluded() {
 	v._excluded = Names(v.Exclude).Index()
 }
 
-//SelectedColumns returns columns selected by Selector if it is allowed by the View to use Selector.Columns
-//(see Constraints.Columns) or View.Columns
-func (v *View) SelectedColumns(selector *Selector) ([]*Column, error) {
-	if !v.CanUseSelectorColumns() || selector == nil || len(selector.Columns) == 0 {
-		return v.Columns, nil
-	}
-
-	result := make([]*Column, len(selector.Columns))
-	for i, name := range selector.Columns {
-		column, ok := v._columns[name]
-		if !ok {
-			return nil, fmt.Errorf("invalid column name: %v", name)
-		}
-		result[i] = column
-	}
-	return result, nil
-}
-
 func (v *View) ensureCaseFormat() error {
 	if err := v.CaseFormat.Init(); err != nil {
 		return err
@@ -806,4 +793,8 @@ func (v *View) IsHolder(value string) bool {
 	}
 
 	return false
+}
+
+func (v *View) ID() uuid.UUID {
+	return v._id
 }

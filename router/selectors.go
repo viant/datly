@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/reader"
-	"github.com/viant/datly/router/sanitize"
+	"github.com/viant/datly/router/criteria"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox/format"
@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync"
 	"unsafe"
 )
@@ -381,41 +380,24 @@ func canUseOrderBy(view *view.View, orderBy string) error {
 func buildCriteria(aView *view.View, selector *view.Selector, criteriaQuery string) error {
 	fieldIt := NewParamIt(criteriaQuery)
 	for fieldIt.Has() {
+
 		param, err := fieldIt.Next()
 		if err != nil {
 			return err
 		}
-		if err = addSelectorCriteria(selector, aView, param.Value); err != nil {
+
+		if !aView.CanUseSelectorCriteria() {
+			return fmt.Errorf("can't use criteria on view %v", aView.Name)
+		}
+
+		sanitized, err := criteria.Parse(param.Value, aView.IndexedColumns())
+		if err != nil {
 			return err
 		}
+
+		selector.Criteria = sanitized.Expression
+		selector.Placeholders = sanitized.Placeholders
 	}
+
 	return nil
-}
-
-func addSelectorCriteria(selector *view.Selector, view *view.View, criteria string) error {
-	if !view.CanUseSelectorCriteria() {
-		return fmt.Errorf("can't use criteria on view %v", view.Name)
-	}
-
-	criteriaSanitized, err := sanitizeCriteria(criteria, view)
-	if err != nil {
-		return err
-	}
-
-	selector.Criteria = criteriaSanitized
-	return nil
-}
-
-func sanitizeCriteria(criteria string, view *view.View) (string, error) {
-	node, err := sanitize.Parse([]byte(criteria))
-	if err != nil {
-		return "", err
-	}
-
-	sb := strings.Builder{}
-	if err = node.Sanitize(&sb, view.IndexedColumns()); err != nil {
-		return "", err
-	}
-
-	return sb.String(), nil
 }
