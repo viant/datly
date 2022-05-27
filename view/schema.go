@@ -105,7 +105,6 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 				rType = reflect.PtrTo(rType)
 			}
 		}
-
 		structFields = append(structFields, reflect.StructField{
 			Name:  structFieldName,
 			Type:  rType,
