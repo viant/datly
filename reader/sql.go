@@ -367,12 +367,10 @@ func (b *Builder) updateColumnsIn(params *view.CommonParams, view *view.View, re
 	}
 
 	alias := b.viewAlias(view)
-	if columnsIn && relation.ColumnAlias != "" {
+	if (hasCriteria || columnsIn) && relation.ColumnAlias != "" {
 		alias = relation.ColumnAlias + "."
 	}
-	if hasCriteria {
-		alias = ""
-	}
+
 	sb := strings.Builder{}
 	sb.WriteString(" ")
 	sb.WriteString(alias)
