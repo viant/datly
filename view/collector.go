@@ -232,6 +232,7 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 
 	return func(owner interface{}) error {
 		key = keyField.Interface(xunsafe.AsPointer(owner))
+		key = normalizeKey(key)
 		if k, ok := key.(*int64); ok && k != nil {
 			key = int(*k)
 		}

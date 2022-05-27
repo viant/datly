@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unsafe"
 )
 
@@ -416,7 +417,9 @@ func updateBytesMarshaller(stringifier *fieldMarshaller, wasPtr bool, tag *Defau
 }
 
 func marshallString(sb *bytes.Buffer, asString string) {
-	//TODO: revise for unicode
+	asString = strings.TrimFunc(asString, func(r rune) bool {
+		return !unicode.IsGraphic(r)
+	})
 	sb.WriteByte('"')
 	if strings.Contains(asString, `"`) {
 		sb.WriteString(strings.ReplaceAll(strings.ReplaceAll(asString, `\`, `\\`), `"`, `\"`))
