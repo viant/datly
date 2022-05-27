@@ -70,10 +70,10 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *Ba
 	columnsInMeta := hasReserved(template, view.ColumnsIn)
 	commonParams := view.CommonParams{}
 
-	b.updateColumnsIn(&commonParams, aView, relation, batchData, columnsInMeta)
-
 	criteriaMeta := hasReserved(template, view.Criteria)
 	hasCriteria := criteriaMeta.has()
+
+	b.updateColumnsIn(&commonParams, aView, relation, batchData, columnsInMeta, hasCriteria)
 
 	if err = b.updatePagination(&commonParams, aView, selector); err != nil {
 		return "", nil, err
@@ -359,7 +359,7 @@ func (b *Builder) viewCriteria(view *view.View, selector *view.Selector, parent 
 	return criteria, nil
 }
 
-func (b *Builder) updateColumnsIn(params *view.CommonParams, view *view.View, relation *view.Relation, batchData *BatchData, columnsInMeta *reservedMeta) {
+func (b *Builder) updateColumnsIn(params *view.CommonParams, view *view.View, relation *view.Relation, batchData *BatchData, columnsInMeta *reservedMeta, hasCriteria bool) {
 	columnsIn := columnsInMeta.has()
 
 	if batchData == nil || batchData.ColumnName == "" {
@@ -370,7 +370,9 @@ func (b *Builder) updateColumnsIn(params *view.CommonParams, view *view.View, re
 	if columnsIn && relation.ColumnAlias != "" {
 		alias = relation.ColumnAlias + "."
 	}
-
+	if hasCriteria {
+		alias = ""
+	}
 	sb := strings.Builder{}
 	sb.WriteString(" ")
 	sb.WriteString(alias)
