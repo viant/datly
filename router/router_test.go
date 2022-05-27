@@ -435,31 +435,38 @@ func TestRouter(t *testing.T) {
 		{
 			description: "relations | with specified fields, without relation Id",
 			resourceURI: "015_relations_many",
-			expected:    `[{"Id":1,"Events":null},{"Id":2,"Events":[{"UserId":1},{"UserId":10}]},{"Id":11,"Events":[{"UserId":2}]},{"Id":111,"Events":[{"UserId":3}]}]`,
+			expected:    `[{"Id":1,"Events":[]},{"Id":2,"Events":[{"UserId":1},{"UserId":10}]},{"Id":11,"Events":[{"UserId":2}]},{"Id":111,"Events":[{"UserId":3}]}]`,
 			uri:         "/api/event-types?_fields=Events,Id&ev_fields=UserId",
 			method:      http.MethodGet,
 		},
 		{
 			description: "case format | with specified fields",
 			resourceURI: "016_case_format",
-			expected:    `[{"id":1,"events":null},{"id":2,"events":[{"userId":1},{"userId":10}]},{"id":11,"events":[{"userId":2}]},{"id":111,"events":[{"userId":3}]}]`,
+			expected:    `[{"id":1,"events":[]},{"id":2,"events":[{"userId":1},{"userId":10}]},{"id":11,"events":[{"userId":2}]},{"id":111,"events":[{"userId":3}]}]`,
 			uri:         "/api/event-types?_fields=events,id&ev_fields=userId",
 			method:      http.MethodGet,
 		},
 		{
 			description: "case format | criteria",
 			resourceURI: "016_case_format",
-			expected:    `[{"id":1,"events":null},{"id":2,"events":[{"id":123,"timestamp":"2019-04-10T05:15:33Z","quantity":5,"userId":10}]},{"id":11,"events":[{"id":10,"timestamp":"2019-03-15T12:07:33Z","quantity":21.957962334156036,"userId":2}]},{"id":111,"events":[{"id":100,"timestamp":"2019-04-10T05:15:33Z","quantity":5.084940046072006,"userId":3}]}]`,
+			expected:    `[{"id":1,"events":[]},{"id":2,"events":[{"id":123,"timestamp":"2019-04-10T05:15:33Z","quantity":5,"userId":10}]},{"id":11,"events":[{"id":10,"timestamp":"2019-03-15T12:07:33Z","quantity":21.957962334156036,"userId":2}]},{"id":111,"events":[{"id":100,"timestamp":"2019-04-10T05:15:33Z","quantity":5.084940046072006,"userId":3}]}]`,
 			//(userId in (10,2,3))
 			uri:    "/api/event-types?_fields=events,id&ev_criteria=%28userId%20in%20%2810%2C2%2C3%29%29",
 			method: http.MethodGet,
 		},
 		{
-			description: "time_logger | ",
+			description: "time_logger ",
 			resourceURI: "017_time_logger",
 			uri:         "/api/events",
 			method:      http.MethodGet,
 			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
+		},
+		{
+			description: "relations_template | dicover criteria",
+			resourceURI: "018_relations_template",
+			uri:         "/api/events?eventTypeId=2",
+			method:      http.MethodGet,
+			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1,"EventType":{"Id":2,"Type":"type - 2","Code":"code - 2"}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2,"EventType":null},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3,"EventType":null}]`,
 		},
 	}
 

@@ -1,0 +1,57 @@
+Routes:
+  - URI: "/api/events"
+    Method: GET
+    View:
+      Ref: events
+    Namespace:
+      ev: events
+      typ: event_types
+
+Resource:
+  Views:
+    - Name: events
+      Connector:
+        Ref: db
+      Table: events
+      Selector:
+        Constraints:
+          OrderBy: true
+          Limit: true
+          Offset: true
+          Criteria: true
+          Filterable:
+            - '*'
+      With:
+        - Name: events_event-types
+          Cardinality: One
+          Column: event_type_id
+          Holder: EventType
+          Of:
+            Ref: event_types#ref
+            Name: event_types
+            Column: id
+            Template:
+              Source: 'SELECT * FROM EVENT_TYPES WHERE id = $Id'
+              Parameters:
+                - Name: Id
+                  In:
+                    Kind: query
+                    Name: eventTypeId
+                  Required: true
+                  Schema:
+                    DataType: int
+
+    - Name: event_types#ref
+      Table: event_types
+      Selector:
+        Constraints:
+          Filterable:
+            - '*'
+      Connector:
+        Ref: db
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"
+

@@ -9,7 +9,7 @@ type reservedMeta struct {
 	raw   bool
 }
 
-func hasReserved(SQL, keyword string) *reservedMeta {
+func hasKeyword(SQL, keyword string) *reservedMeta {
 	return &reservedMeta{
 		or:    strings.Contains(SQL, "$OR_"+keyword[1:]),
 		and:   strings.Contains(SQL, "$AND_"+keyword[1:]),

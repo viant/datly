@@ -2,7 +2,9 @@ package reader
 
 import (
 	"fmt"
+	"github.com/viant/datly/reader/metadata"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/keywords"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty/ast"
 	"github.com/viant/velty/ast/expr"
@@ -53,6 +55,10 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *Ba
 		return "", nil, err
 	}
 
+	if aView.Template.IsActualTemplate() && relation != nil && aView.ShouldTryDiscover() {
+		template = metadata.EnrichWithDiscover(template, true)
+	}
+
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
 	if err = b.appendColumns(&sb, aView, selector, relation); err != nil {
@@ -67,10 +73,10 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *Ba
 	sb.WriteString(template)
 	b.appendViewAlias(&sb, aView)
 
-	columnsInMeta := hasReserved(template, view.ColumnsIn)
+	columnsInMeta := hasKeyword(template, keywords.ColumnsIn)
 	commonParams := view.CommonParams{}
 
-	criteriaMeta := hasReserved(template, view.Criteria)
+	criteriaMeta := hasKeyword(template, keywords.Criteria)
 	hasCriteria := criteriaMeta.has()
 
 	b.updateColumnsIn(&commonParams, aView, relation, batchData, columnsInMeta, hasCriteria)
@@ -79,28 +85,28 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *Ba
 		return "", nil, err
 	}
 
-	if err = b.updateCriteria(&commonParams, aView, selector, columnsInMeta, parentOfAclView); err != nil {
+	if err = b.updateCriteria(&commonParams, columnsInMeta, selector); err != nil {
 		return "", nil, err
 	}
 
 	if !hasCriteria {
 		sb.WriteString(" ")
 		if strings.TrimSpace(commonParams.WhereClause) != "" {
-			sb.WriteString(view.WhereCriteria)
+			sb.WriteString(keywords.WhereCriteria)
 			sb.WriteString(" ")
-			sb.WriteString(view.AndSelectorCriteria)
+			sb.WriteString(keywords.AndSelectorCriteria)
 		} else {
-			sb.WriteString(view.WhereSelectorCriteria)
+			sb.WriteString(keywords.WhereSelectorCriteria)
 			sb.WriteString(" ")
 		}
 	} else {
-		sb.WriteString(view.WhereSelectorCriteria)
+		sb.WriteString(keywords.WhereSelectorCriteria)
 	}
 
-	hasPagination := strings.Contains(template, view.Pagination)
+	hasPagination := strings.Contains(template, keywords.Pagination)
 	if !hasPagination {
 		sb.WriteString(" ")
-		sb.WriteString(view.Pagination)
+		sb.WriteString(keywords.Pagination)
 		sb.WriteString(" ")
 	}
 
@@ -247,22 +253,22 @@ func (b *Builder) prepareExpanded(statement ast.Statement, params view.CommonPar
 
 func (b *Builder) replacementEntry(key string, params view.CommonParams, aView *view.View, selector *view.Selector, batchData *BatchData) (string, string, []interface{}, error) {
 	switch key {
-	case view.Pagination[1:]:
+	case keywords.Pagination[1:]:
 		return key, params.Pagination, []interface{}{}, nil
-	case view.Criteria[1:]:
+	case keywords.Criteria[1:]:
 		criteriaExpanded, criteriaPlaceholders, err := b.expand(params.WhereClause, aView, selector, params, batchData)
 		if err != nil {
 			return "", "", nil, err
 		}
 
 		return key, criteriaExpanded, criteriaPlaceholders, nil
-	case view.ColumnsIn[1:]:
+	case keywords.ColumnsIn[1:]:
 		return key, params.ColumnsIn, batchData.ValuesBatch, nil
-	case view.SelectorCriteria[1:]:
+	case keywords.SelectorCriteria[1:]:
 		return key, selector.Criteria, selector.Placeholders, nil
 	default:
-		if strings.HasPrefix(key, view.WherePrefix) {
-			_, aValue, aPlaceholders, err := b.replacementEntry(key[len(view.WherePrefix):], params, aView, selector, batchData)
+		if strings.HasPrefix(key, keywords.WherePrefix) {
+			_, aValue, aPlaceholders, err := b.replacementEntry(key[len(keywords.WherePrefix):], params, aView, selector, batchData)
 			if err != nil {
 				return "", "", nil, err
 			}
@@ -270,8 +276,8 @@ func (b *Builder) replacementEntry(key string, params view.CommonParams, aView *
 			return b.valueWithPrefix(key, aValue, " WHERE ", aPlaceholders, false)
 		}
 
-		if strings.HasPrefix(key, view.AndPrefix) {
-			_, aValue, aPlaceholders, err := b.replacementEntry(key[len(view.AndPrefix):], params, aView, selector, batchData)
+		if strings.HasPrefix(key, keywords.AndPrefix) {
+			_, aValue, aPlaceholders, err := b.replacementEntry(key[len(keywords.AndPrefix):], params, aView, selector, batchData)
 			if err != nil {
 				return "", "", nil, err
 			}
@@ -279,8 +285,8 @@ func (b *Builder) replacementEntry(key string, params view.CommonParams, aView *
 			return b.valueWithPrefix(key, aValue, " AND ", aPlaceholders, true)
 		}
 
-		if strings.HasPrefix(key, view.OrPrefix) {
-			_, aValue, aPlaceholders, err := b.replacementEntry(key[len(view.OrPrefix):], params, aView, selector, batchData)
+		if strings.HasPrefix(key, keywords.OrPrefix) {
+			_, aValue, aPlaceholders, err := b.replacementEntry(key[len(keywords.OrPrefix):], params, aView, selector, batchData)
 			if err != nil {
 				return "", "", nil, err
 			}
@@ -314,12 +320,24 @@ func (b *Builder) valueWithPrefix(key string, aValue, prefix string, aPlaceholde
 	return key, prefix + aValue, aPlaceholders, nil
 }
 
-func (b *Builder) updateCriteria(params *view.CommonParams, aView *view.View, selector *view.Selector, columnsInMeta *reservedMeta, parent *view.View) error {
+func (b *Builder) updateCriteria(params *view.CommonParams, columnsInMeta *reservedMeta, selector *view.Selector) error {
 	sb := strings.Builder{}
 	hasColumnsIn := columnsInMeta.has()
 
 	if !hasColumnsIn && params.ColumnsIn != "" {
-		b.appendCriteria(&sb, view.ColumnsIn, false)
+		b.appendCriteria(&sb, keywords.ColumnsIn, false)
+	}
+
+	if selector.Criteria != "" {
+		if sb.Len() > 0 {
+			sb.WriteByte(' ')
+			sb.WriteString(keywords.AndSelectorCriteria)
+			sb.WriteByte(' ')
+		} else {
+			sb.WriteByte(' ')
+			sb.WriteString(keywords.SelectorCriteria)
+			sb.WriteByte(' ')
+		}
 	}
 
 	params.WhereClause = sb.String()

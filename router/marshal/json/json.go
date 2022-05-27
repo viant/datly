@@ -798,7 +798,7 @@ func asSlice(rType reflect.Type) marshallObjFn {
 	return func(ptr unsafe.Pointer, fields []*fieldMarshaller, sb *bytes.Buffer, filters *Filters, path string) error {
 		s := (*reflect.SliceHeader)(ptr)
 		if s != nil && s.Data == 0 {
-			sb.WriteString(null)
+			sb.WriteString("[]")
 			return nil
 		}
 

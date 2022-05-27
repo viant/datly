@@ -1,4 +1,4 @@
-package ast
+package metadata
 
 import (
 	"bytes"
@@ -9,21 +9,16 @@ var where = []byte("where")
 
 func ContainsWhereClause(source []byte) bool {
 	cursor := parsly.NewCursor("", source, 0)
-	candidates := []*parsly.Token{Block}
+	candidates := []*parsly.Token{parenthesesMatcher}
 
-	matched := cursor.MatchAfterOptional(Whitespace, candidates...)
-	if matched.Code == blockToken {
-		text := matched.Text(cursor)
-		return ContainsWhereClause([]byte(text[1 : len(text)-1]))
-	}
-
-	candidates = []*parsly.Token{Block, WhitespaceTerminator}
+	matched := cursor.MatchAfterOptional(whitespaceMatcher, candidates...)
+	candidates = []*parsly.Token{parenthesesMatcher, WhitespaceTerminator}
 outer:
 	for {
-		matched = cursor.MatchAfterOptional(Whitespace, candidates...)
+		matched = cursor.MatchAfterOptional(whitespaceMatcher, candidates...)
 		switch matched.Code {
-		case blockToken:
-			matched = cursor.MatchAfterOptional(Whitespace, Block)
+		case parenthesesToken:
+			matched = cursor.MatchAfterOptional(whitespaceMatcher, parenthesesMatcher)
 			continue outer
 		case whitespaceTerminateToken:
 			text := matched.Text(cursor)

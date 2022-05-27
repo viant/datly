@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/parameter"
 	"github.com/viant/velty"
 	"github.com/viant/velty/est"
@@ -12,28 +13,6 @@ import (
 )
 
 var boolType = reflect.TypeOf(true)
-
-const (
-	paramsMetadataKey = "Has"
-	paramsKey         = "Unsafe"
-	viewKey           = "View"
-
-	Pagination    = "$PAGINATION"
-	Criteria      = "$CRITERIA"
-	WhereCriteria = "$WHERE_CRITERIA"
-
-	ColumnsIn             = "$COLUMN_IN"
-	WhereColumnInPosition = "$WHERE_COLUMN_IN"
-	AndColumnInPosition   = "$AND_COLUMN_IN"
-
-	SelectorCriteria      = "$SELECTOR_CRITERIA"
-	WhereSelectorCriteria = "$WHERE_SELECTOR_CRITERIA"
-	AndSelectorCriteria   = "$AND_SELECTOR_CRITERIA"
-
-	WherePrefix = "WHERE_"
-	AndPrefix   = "AND_"
-	OrPrefix    = "OR_"
-)
 
 type (
 	Template struct {
@@ -53,6 +32,7 @@ type (
 		_fieldIndex      map[string]int
 		_parametersIndex ParametersIndex
 		initialized      bool
+		isTemplate       bool
 	}
 
 	Evaluator struct {
@@ -92,6 +72,8 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 	} else {
 		t.Source = view.Source()
 	}
+
+	t.isTemplate = t.Source != view.Name && t.Source != view.Table
 
 	if err := t.initTypes(ctx, resource); err != nil {
 		return err
@@ -209,15 +191,15 @@ func (t *Template) newEvaluator(template string) (*Evaluator, error) {
 	var err error
 
 	evaluator.planner = velty.New(velty.BufferSize(len(template)))
-	if err = evaluator.planner.DefineVariable(paramsKey, t.Schema.Type()); err != nil {
+	if err = evaluator.planner.DefineVariable(keywords.ParamsKey, t.Schema.Type()); err != nil {
 		return nil, err
 	}
 
-	if err = evaluator.planner.DefineVariable(paramsMetadataKey, t.PresenceSchema.Type()); err != nil {
+	if err = evaluator.planner.DefineVariable(keywords.ParamsMetadataKey, t.PresenceSchema.Type()); err != nil {
 		return nil, err
 	}
 
-	if err = evaluator.planner.DefineVariable(viewKey, reflect.TypeOf(&Param{})); err != nil {
+	if err = evaluator.planner.DefineVariable(keywords.ViewKey, reflect.TypeOf(&Param{})); err != nil {
 		return nil, err
 	}
 
@@ -242,13 +224,13 @@ func (t *Template) evaluate(evaluator *Evaluator, externalParams, presenceMap in
 
 	newState := evaluator.stateProvider()
 	if externalParams != nil {
-		if err := newState.SetValue(paramsKey, externalParams); err != nil {
+		if err := newState.SetValue(keywords.ParamsKey, externalParams); err != nil {
 			return "", err
 		}
 	}
 
 	if presenceMap != nil {
-		if err := newState.SetValue(paramsMetadataKey, presenceMap); err != nil {
+		if err := newState.SetValue(keywords.ParamsMetadataKey, presenceMap); err != nil {
 			return "", err
 		}
 	}
@@ -260,7 +242,7 @@ func (t *Template) evaluate(evaluator *Evaluator, externalParams, presenceMap in
 		viewParam = asParam(t._view)
 	}
 
-	if err := newState.SetValue(viewKey, viewParam); err != nil {
+	if err := newState.SetValue(keywords.ViewKey, viewParam); err != nil {
 		return "", err
 	}
 
@@ -378,4 +360,8 @@ func fieldByTemplateName(structType reflect.Type, name string) (*xunsafe.Field, 
 	}
 
 	return xunsafe.NewField(field), nil
+}
+
+func (t *Template) IsActualTemplate() bool {
+	return t.isTemplate
 }

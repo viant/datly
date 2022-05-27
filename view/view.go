@@ -54,6 +54,8 @@ type (
 		_excluded map[string]bool
 		_id       uuid.UUID
 
+		DiscoverCriteria *bool
+
 		initialized  bool
 		newCollector func(dest interface{}, supportParallel bool) *Collector
 	}
@@ -795,4 +797,8 @@ func (v *View) IsHolder(value string) bool {
 
 func (v *View) ID() uuid.UUID {
 	return v._id
+}
+
+func (v *View) ShouldTryDiscover() bool {
+	return v.DiscoverCriteria == nil || *v.DiscoverCriteria
 }

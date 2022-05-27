@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/visitor"
 	"github.com/viant/dsunit"
 	"github.com/viant/gmetric/counter/base"
@@ -711,7 +712,7 @@ func criteriaWhere() usecase {
 		Name:                 "events",
 		Alias:                "ev",
 		Table:                "events",
-		From:                 `SELECT * FROM events as e ` + string(view.WhereCriteria),
+		From:                 `SELECT * FROM events as e ` + string(keywords.WhereCriteria),
 		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 	})
@@ -822,7 +823,7 @@ func columnsInResource(column, alias string) (string, *view.Resource) {
 				Of: &view.ReferenceView{
 					View: view.View{
 						Connector: connector,
-						From:      "SELECT * FROM EVENT_TYPES as et WHERE name like '%2%' " + string(view.AndColumnInPosition),
+						From:      "SELECT * FROM EVENT_TYPES as et WHERE name like '%2%' " + string(keywords.AndColumnInPosition),
 						Name:      "event_types",
 					},
 					Column: "id",

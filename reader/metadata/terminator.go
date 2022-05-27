@@ -1,4 +1,4 @@
-package ast
+package metadata
 
 import (
 	"github.com/viant/parsly"

@@ -3,6 +3,8 @@ package view
 import (
 	"context"
 	"database/sql"
+	"github.com/viant/datly/reader/metadata"
+	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
 	rdata "github.com/viant/toolbox/data"
@@ -69,6 +71,14 @@ func columnsMetadata(ctx context.Context, db *sql.DB, v *View, columns []io.Colu
 
 func detectColumnsSQL(source string, v *View) (string, error) {
 	SQL := "SELECT " + v.Alias + ".* FROM " + source + " " + v.Alias + " WHERE 1=0"
+	if source != v.Name && source != v.Table {
+		discover := metadata.EnrichWithDiscover(source, false)
+		replacement := rdata.Map{}
+		replacement.Put(keywords.AndCriteria, " AND 1=0 ")
+		replacement.Put(keywords.WhereCriteria, " WHERE 1=0 ")
+		SQL = replacement.ExpandAsText(discover)
+	}
+
 	parse, err := parser.Parse([]byte(SQL))
 	if err != nil {
 		return "", err

@@ -11,3 +11,4 @@
 * Patch/Create/Update
 
 * Retrun empty slice if not a single result returned
+* Restore Criteria

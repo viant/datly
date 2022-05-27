@@ -1,4 +1,4 @@
-package ast
+package metadata
 
 import (
 	"github.com/viant/parsly"
@@ -8,9 +8,9 @@ import (
 const (
 	whitespaceToken = iota
 	whitespaceTerminateToken
-	blockToken
+	parenthesesToken
 )
 
-var Whitespace = parsly.NewToken(whitespaceToken, "Whitespace", matcher.NewWhiteSpace())
-var Block = parsly.NewToken(blockToken, "Parentheses", matcher.NewBlock('(', ')', '\\'))
+var whitespaceMatcher = parsly.NewToken(whitespaceToken, "Whitespace", matcher.NewWhiteSpace())
+var parenthesesMatcher = parsly.NewToken(parenthesesToken, "Parentheses", matcher.NewBlock('(', ')', '\\'))
 var WhitespaceTerminator = parsly.NewToken(whitespaceTerminateToken, "Whitespace terminate", newTerminatorAny(false, []byte{' ', '\n', '\t', '\r', '\v', '\f', 0x85, 0xA0}))
