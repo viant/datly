@@ -59,9 +59,10 @@ func (s *Session) AddCriteria(aView *view.View, criteria string, placeholders ..
 }
 
 //NewSession creates a session
-func NewSession(dest interface{}, view *view.View) *Session {
+func NewSession(dest interface{}, aView *view.View) *Session {
 	return &Session{
-		Dest: dest,
-		View: view,
+		Dest:      dest,
+		View:      aView,
+		Selectors: make(map[string]*view.Selector),
 	}
 }
