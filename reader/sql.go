@@ -85,8 +85,16 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *Ba
 
 	if !hasCriteria {
 		sb.WriteString(" ")
-		sb.WriteString(view.WhereCriteria)
-		sb.WriteString(" ")
+		if strings.TrimSpace(commonParams.WhereClause) != "" {
+			sb.WriteString(view.WhereCriteria)
+			sb.WriteString(" ")
+			sb.WriteString(view.AndSelectorCriteria)
+		} else {
+			sb.WriteString(view.WhereSelectorCriteria)
+			sb.WriteString(" ")
+		}
+	} else {
+		sb.WriteString(view.WhereSelectorCriteria)
 	}
 
 	hasPagination := strings.Contains(template, view.Pagination)
@@ -323,15 +331,6 @@ func (b *Builder) updateCriteria(params *view.CommonParams, aView *view.View, se
 
 		b.appendCriteria(&sb, criteria, addAnd)
 		addAnd = true
-	}
-
-	if strings.TrimSpace(selector.Criteria) != "" {
-		if sb.Len() == 0 {
-			sb.WriteString(view.SelectorCriteria)
-		} else {
-			sb.WriteString(" ")
-			sb.WriteString(view.AndSelectorCriteria)
-		}
 	}
 
 	params.WhereClause = sb.String()
