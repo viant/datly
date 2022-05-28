@@ -13,6 +13,7 @@ type (
 
 		next              Param
 		updatedViewPrefix bool
+		separator         int32
 	}
 
 	Param struct {
@@ -20,9 +21,15 @@ type (
 	}
 )
 
-func NewParamIt(value string) *SelectorParamIt {
+func NewParamIt(value string, separators ...int32) *SelectorParamIt {
+	separator := ValuesSeparator
+	if len(separators) > 0 {
+		separator = separators[0]
+	}
+
 	return &SelectorParamIt{
 		queryParamValue: value,
+		separator:       separator,
 	}
 }
 
@@ -37,6 +44,7 @@ func (s *SelectorParamIt) Next() (Param, error) {
 		if end == -1 {
 			return Param{}, fmt.Errorf(`value "%v" contains unclosed expressions`, s.queryParamValue[s.start:])
 		}
+
 		s.next.Value = s.sliceParamValue(s.start, end, true)
 		s.start = end + 2
 		return s.next, nil
@@ -44,7 +52,7 @@ func (s *SelectorParamIt) Next() (Param, error) {
 
 	for i := s.start; i < len(s.queryParamValue); i++ {
 		switch s.queryParamValue[i] {
-		case ValuesSeparator:
+		case byte(s.separator):
 			s.next.Value = s.sliceParamValue(s.start, i, s.updatedViewPrefix)
 			s.start = i + 1
 			return s.next, nil

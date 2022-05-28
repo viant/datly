@@ -1,0 +1,85 @@
+Routes:
+  - URI: "/api/events"
+    Method: GET
+    View:
+      Ref: events_ref
+      Name: events
+
+Resource:
+  Views:
+    - Name: events_ref
+      Connector:
+        Ref: db
+      Table: events
+      Template:
+        Source: 'SELECT ${Unsafe.Alias}.* FROM ${Unsafe.Table} AS $Unsafe.Alias'
+        Parameters:
+          - Ref: Alias
+          - Ref: Table
+      Selector:
+        Constraints:
+          OrderBy: true
+          Limit: true
+          Criteria: true
+          Offset: true
+          Filterable: [ '*' ]
+
+        LimitParam:
+          Ref: Limit
+        OffsetParam:
+          Ref: Offset
+        FieldsParam:
+          Ref: Fields
+        OrderByParam:
+          Ref: OrderBy
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"
+
+  Parameters:
+    - Name: Alias
+      In:
+        Kind: env_variable
+        Name: alias
+      Required: true
+      Schema:
+        DataType: string
+
+    - Name: Table
+      In:
+        Kind: env_variable
+        Name: table
+      Required: true
+      Schema:
+        DataType: string
+
+    - Name: Limit
+      In:
+        Kind: query
+        Name: limit
+      Schema:
+        DataType: int
+
+    - Name: Offset
+      In:
+        Kind: query
+        Name: skip
+      Schema:
+        DataType: int
+
+    - Name: Fields
+      In:
+        Kind: query
+        Name: names
+      Schema:
+        DataType: string
+
+    - Name: OrderBy
+      In:
+        Kind: query
+        Name: sort
+      Schema:
+        DataType: string
+

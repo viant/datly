@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/criteria"
 	"github.com/viant/datly/shared"
@@ -10,6 +11,7 @@ import (
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"net/http"
+	"os"
 	"reflect"
 	"strconv"
 	"sync"
@@ -59,7 +61,7 @@ func buildSelectors(ctx context.Context, inputFormat format.Case, requestMetadat
 		wg.Add(1)
 		go func(details *ViewDetails, requestMetadata *RequestMetadata, requestParams *RequestParams, selector *view.Selector) {
 			defer wg.Done()
-			if err := populateSelector(selector, inputFormat, details, requestParams); err != nil {
+			if err := populateSelector(ctx, selector, inputFormat, details, requestParams, requestMetadata); err != nil {
 				errors.Append(err)
 				return
 			}
@@ -81,40 +83,258 @@ func buildSelectors(ctx context.Context, inputFormat format.Case, requestMetadat
 	return errors.Error()
 }
 
-func populateSelector(selector *view.Selector, inputFormat format.Case, details *ViewDetails, params *RequestParams) error {
-	for _, ns := range details.Prefixes {
-		if fields := params.queryParam(ns+string(Fields), ""); fields != "" {
-			if err := buildFields(inputFormat, details.View, selector, fields); err != nil {
+func populateSelector(ctx context.Context, selector *view.Selector, inputFormat format.Case, details *ViewDetails, params *RequestParams, metadata *RequestMetadata) error {
+
+	for i, ns := range details.Prefixes {
+		if i == 0 || details.View.Selector.FieldsParam == nil {
+			if err := populateFields(ctx, selector, inputFormat, details, params, ns, metadata); err != nil {
 				return err
 			}
 		}
 
-		if offset := params.queryParam(ns+string(Offset), ""); offset != "" {
-			if err := buildOffset(details.View, selector, offset); err != nil {
+		if i == 0 || details.View.Selector.OffsetParam == nil {
+			if err := populateOffset(ctx, selector, inputFormat, details, params, ns, metadata); err != nil {
 				return err
 			}
 		}
 
-		if offset := params.queryParam(ns+string(Limit), ""); offset != "" {
-			if err := buildLimit(details.View, selector, offset); err != nil {
+		if i == 0 || details.View.Selector.OrderByParam == nil {
+			if err := populateOrderBy(ctx, selector, inputFormat, details, params, ns, metadata); err != nil {
 				return err
 			}
 		}
 
-		if orderBy := params.queryParam(ns+string(OrderBy), ""); orderBy != "" {
-			if err := buildOrderBy(details.View, selector, orderBy); err != nil {
+		if i == 0 || details.View.Selector.LimitParam == nil {
+			if err := populateLimit(ctx, selector, inputFormat, details, params, ns, metadata); err != nil {
 				return err
 			}
 		}
 
-		if criteria := params.queryParam(ns+string(Criteria), ""); criteria != "" {
-			if err := buildCriteria(details.View, selector, criteria); err != nil {
+		if i == 0 || details.View.Selector.CriteriaParam == nil {
+			if err := populateCriteria(ctx, selector, inputFormat, details, params, ns, metadata); err != nil {
 				return err
 			}
 		}
 	}
 
 	return nil
+}
+
+func populateCriteria(ctx context.Context, selector *view.Selector, inputFormat format.Case, details *ViewDetails, params *RequestParams, ns string, metadata *RequestMetadata) error {
+	criteriaExpression, err := criteriaValue(ctx, inputFormat, details, params, ns, metadata)
+	if err != nil || criteriaExpression == "" {
+		return err
+	}
+
+	if !details.View.Selector.Constraints.Criteria {
+		return fmt.Errorf("can't use criteria on view %v", details.View.Name)
+	}
+
+	sanitizedCriteria, err := criteria.Parse(criteriaExpression, details.View.IndexedColumns())
+	if err != nil {
+		return err
+	}
+
+	selector.Criteria = sanitizedCriteria.Expression
+	selector.Placeholders = sanitizedCriteria.Placeholders
+	return nil
+}
+
+func criteriaValue(ctx context.Context, inputFormat format.Case, details *ViewDetails, params *RequestParams, ns string, metadata *RequestMetadata) (string, error) {
+	param := details.View.Selector.CriteriaParam
+	if param == nil {
+		return params.queryParam(ns+string(Criteria), ""), nil
+	}
+
+	paramValue, err := extractParamValue(ctx, param, details, inputFormat, params, metadata)
+	if err != nil {
+		return "", err
+	}
+
+	if actual, ok := paramValue.(string); ok {
+		return actual, nil
+	}
+
+	return "", typeMismatchError(param, paramValue)
+}
+
+func populateLimit(ctx context.Context, selector *view.Selector, inputFormat format.Case, details *ViewDetails, params *RequestParams, ns string, metadata *RequestMetadata) error {
+	limit, err := limitValue(ctx, inputFormat, details, params, ns, metadata)
+	if err != nil || limit == 0 {
+		return err
+	}
+
+	if !details.View.Selector.Constraints.Limit {
+		return fmt.Errorf("can't use Limit on view %v", details.View.Name)
+	}
+
+	if limit <= details.View.Selector.Limit || details.View.Selector.Limit == 0 {
+		selector.Limit = limit
+	}
+
+	return nil
+}
+
+func limitValue(ctx context.Context, inputFormat format.Case, details *ViewDetails, params *RequestParams, ns string, metadata *RequestMetadata) (int, error) {
+	param := details.View.Selector.LimitParam
+	if param == nil {
+		return parseInt(params.queryParam(ns+string(Limit), ""))
+	}
+
+	paramValue, err := extractParamValue(ctx, param, details, inputFormat, params, metadata)
+	if err != nil {
+		return 0, err
+	}
+
+	return asInt(paramValue, param)
+}
+
+func parseInt(queryParam string) (int, error) {
+	if queryParam == "" {
+		return 0, nil
+	}
+	return strconv.Atoi(queryParam)
+}
+
+func populateOrderBy(ctx context.Context, selector *view.Selector, inputFormat format.Case, details *ViewDetails, params *RequestParams, ns string, metadata *RequestMetadata) error {
+	orderBy, err := orderByValue(ctx, inputFormat, details, params, ns, metadata)
+	if err != nil {
+		return err
+	}
+
+	if orderBy == "" {
+		return nil
+	}
+
+	if !details.View.Selector.Constraints.OrderBy {
+		return fmt.Errorf("can't use offset on view %v", details.View.Name)
+	}
+
+	col, ok := details.View.ColumnByName(orderBy)
+	if !ok {
+		return fmt.Errorf("not found column %v at view %v", orderBy, details.View.Name)
+	}
+
+	selector.OrderBy = col.Name
+	return nil
+}
+
+func orderByValue(ctx context.Context, inputFormat format.Case, details *ViewDetails, params *RequestParams, ns string, metadata *RequestMetadata) (string, error) {
+	param := details.View.Selector.OrderByParam
+	if param == nil {
+		return params.queryParam(ns+string(OrderBy), ""), nil
+	}
+
+	value, err := extractParamValue(ctx, param, details, inputFormat, params, metadata)
+	if err != nil {
+		return "", err
+	}
+
+	if actual, ok := value.(string); ok {
+		return actual, nil
+	}
+	return "", typeMismatchError(param, value)
+}
+
+func populateOffset(ctx context.Context, selector *view.Selector, inputFormat format.Case, details *ViewDetails, params *RequestParams, ns string, metadata *RequestMetadata) error {
+	offset, err := offsetValue(ctx, details, inputFormat, params, metadata, ns)
+	if err != nil || offset == 0 {
+		return err
+	}
+
+	if !details.View.Selector.Constraints.Offset {
+		return fmt.Errorf("can't use offset on view %v", details.View.Name)
+	}
+
+	selector.Offset = offset
+	return nil
+}
+
+func offsetValue(ctx context.Context, details *ViewDetails, inputFormat format.Case, params *RequestParams, metadata *RequestMetadata, ns string) (int, error) {
+	param := details.View.Selector.OffsetParam
+	if param == nil {
+		return parseInt(params.queryParam(ns+string(Offset), ""))
+	}
+
+	value, err := extractParamValue(ctx, param, details, inputFormat, params, metadata)
+	if err != nil {
+		return 0, err
+	}
+
+	return asInt(value, param)
+}
+
+func asInt(value interface{}, param *view.Parameter) (int, error) {
+	if actual, ok := value.(int); ok {
+		return actual, nil
+	}
+
+	return 0, typeMismatchError(param, value)
+}
+
+func populateFields(ctx context.Context, selector *view.Selector, inputFormat format.Case, details *ViewDetails, params *RequestParams, ns string, metadata *RequestMetadata) error {
+	fieldValue, separator, err := fieldRawValue(ctx, details, inputFormat, params, metadata, ns)
+	if err != nil {
+		return err
+	}
+
+	if fieldValue == "" {
+		return err
+	}
+
+	if err = buildFields(inputFormat, details.View, selector, fieldValue, separator); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func fieldRawValue(ctx context.Context, details *ViewDetails, inputFormat format.Case, params *RequestParams, metadata *RequestMetadata, ns string) (string, int32, error) {
+	param := details.View.Selector.FieldsParam
+	if param == nil {
+		return params.queryParam(ns+string(Fields), ""), ValuesSeparator, nil
+	}
+
+	paramValue, err := extractParamValue(ctx, param, details, inputFormat, params, metadata)
+	if err != nil {
+		return "", ValuesSeparator, err
+	}
+
+	if actual, ok := paramValue.(string); ok {
+		separator := ValuesSeparator
+		return actual, separator, nil
+	}
+
+	return "", ValuesSeparator, typeMismatchError(param, paramValue)
+}
+
+func extractParamValue(ctx context.Context, param *view.Parameter, details *ViewDetails, inputFormat format.Case, params *RequestParams, metadata *RequestMetadata) (interface{}, error) {
+	switch param.In.Kind {
+	case view.DataViewKind:
+		return viewParamValue(ctx, inputFormat, details, param, params, metadata)
+	case view.PathKind:
+		return convertAndTransform(ctx, params.pathVariable(param.In.Name, ""), param)
+	case view.QueryKind:
+		return convertAndTransform(ctx, params.queryParam(param.In.Name, ""), param)
+	case view.RequestBodyKind:
+		return params.requestBody, nil
+	case view.EnvironmentKind:
+		return convertAndTransform(ctx, os.Getenv(param.In.Name), param)
+	case view.HeaderKind:
+		return convertAndTransform(ctx, params.header(param.In.Name), param)
+	case view.CookieKind:
+		return convertAndTransform(ctx, params.cookie(param.In.Name), param)
+	}
+
+	return nil, fmt.Errorf("unsupported param kind %v", param.In.Kind)
+}
+
+func convertAndTransform(ctx context.Context, raw string, param *view.Parameter) (interface{}, error) {
+	if param.Codec == nil {
+		return converter.Convert(raw, param.Schema.Type(), "")
+	}
+
+	return param.Codec.Transform(ctx, raw)
 }
 
 func buildSelectorParameters(ctx context.Context, inputFormat format.Case, parent *ViewDetails, paramsPtr, presencePtr unsafe.Pointer, parameters []*view.Parameter, requestParams *RequestParams, requestMetadata *RequestMetadata) error {
@@ -150,9 +370,18 @@ func buildSelectorParameters(ctx context.Context, inputFormat format.Case, paren
 			if err = addRequestBodyParam(paramsPtr, presencePtr, parameter, requestParams); err != nil {
 				return err
 			}
+
+		case view.EnvironmentKind:
+			if err = addEnvVariableParam(ctx, paramsPtr, presencePtr, parameter); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+func addEnvVariableParam(ctx context.Context, paramsPtr unsafe.Pointer, presencePtr unsafe.Pointer, parameter *view.Parameter) error {
+	return convertAndSet(ctx, paramsPtr, presencePtr, parameter, os.Getenv(parameter.In.Name))
 }
 
 func addRequestBodyParam(paramsPtr unsafe.Pointer, presencePtr unsafe.Pointer, param *view.Parameter, requestParams *RequestParams) error {
@@ -189,13 +418,31 @@ func addPathParam(ctx context.Context, ptr unsafe.Pointer, presencePtr unsafe.Po
 }
 
 func addViewParam(ctx context.Context, inputFormat format.Case, viewDetails *ViewDetails, paramsPtr, presencePtr unsafe.Pointer, param *view.Parameter, params *RequestParams, requestMetadata *RequestMetadata) error {
+	paramValue, err := viewParamValue(ctx, inputFormat, viewDetails, param, params, requestMetadata)
+	if err != nil {
+		return err
+	}
+
+	if paramValue == nil {
+		return nil
+	}
+
+	if err = param.Set(paramsPtr, paramValue); err != nil {
+		return err
+	}
+
+	param.UpdatePresence(presencePtr)
+	return nil
+}
+
+func viewParamValue(ctx context.Context, inputFormat format.Case, viewDetails *ViewDetails, param *view.Parameter, params *RequestParams, requestMetadata *RequestMetadata) (interface{}, error) {
 	aView := param.View()
 	destSlice := reflect.New(aView.Schema.SliceType()).Interface()
 	session := reader.NewSession(destSlice, aView)
 	session.Parent = viewDetails.View
 	newIndex := Index{}
 	if err := newIndex.Init(aView, ""); err != nil {
-		return err
+		return nil, err
 	}
 
 	newRequestMetadata := &RequestMetadata{
@@ -206,34 +453,28 @@ func addViewParam(ctx context.Context, inputFormat format.Case, viewDetails *Vie
 
 	selectors, err := CreateSelectors(ctx, inputFormat, newRequestMetadata, params, &ViewDetails{View: aView})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	session.Selectors = selectors
 	if err = reader.New().Read(ctx, session); err != nil {
-		return err
+		return nil, err
 	}
 	ptr := xunsafe.AsPointer(destSlice)
 	paramLen := aView.Schema.Slice().Len(ptr)
 	switch paramLen {
 	case 0:
 		if param.Required != nil && *param.Required {
-			return fmt.Errorf("parameter %v value is required but no view was found", param.Name)
+			return nil, fmt.Errorf("parameter %v value is required but no view was found", param.Name)
 		}
+
+		return nil, err
 	case 1:
 		holder := aView.Schema.Slice().ValuePointerAt(ptr, 0)
-		if err = param.Set(paramsPtr, holder); err != nil {
-			return err
-		}
-
-		param.UpdatePresence(presencePtr)
-		return nil
-
+		return holder, nil
 	default:
-		return fmt.Errorf("parameter %v return more than one value", param.Name)
+		return nil, fmt.Errorf("parameter %v return more than one value", param.Name)
 	}
-
-	return nil
 }
 
 func convertAndSet(ctx context.Context, paramPtr, presencePtr unsafe.Pointer, parameter *view.Parameter, rawValue string) error {
@@ -253,8 +494,9 @@ func convertAndSet(ctx context.Context, paramPtr, presencePtr unsafe.Pointer, pa
 	return nil
 }
 
-func buildFields(inputFormat format.Case, aView *view.View, selector *view.Selector, fieldsQuery string) error {
-	fieldIt := NewParamIt(fieldsQuery)
+//TODO: Distinct fields
+func buildFields(inputFormat format.Case, aView *view.View, selector *view.Selector, fieldsQuery string, separator int32) error {
+	fieldIt := NewParamIt(fieldsQuery, separator)
 	for fieldIt.Has() {
 		param, err := fieldIt.Next()
 		if err != nil {
@@ -289,115 +531,6 @@ func canUseColumn(aView *view.View, columnName string) error {
 	return nil
 }
 
-func buildOffset(aView *view.View, selector *view.Selector, offsetQuery string) error {
-	fieldIt := NewParamIt(offsetQuery)
-	for fieldIt.Has() {
-		param, err := fieldIt.Next()
-		if err != nil {
-			return err
-		}
-		if !aView.CanUseSelectorOffset() {
-			return fmt.Errorf("can't use selector offset on %v view", aView.Name)
-		}
-
-		if err = updateSelectorOffset(selector, param.Value); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func updateSelectorOffset(selector *view.Selector, offset string) error {
-	offsetConv, err := strconv.Atoi(offset)
-	if err != nil {
-		return err
-	}
-
-	selector.Offset = offsetConv
-	return nil
-}
-
-func buildLimit(aView *view.View, selector *view.Selector, limitQuery string) error {
-	fieldIt := NewParamIt(limitQuery)
-	for fieldIt.Has() {
-		param, err := fieldIt.Next()
-		if err != nil {
-			return err
-		}
-		if !aView.CanUseSelectorLimit() {
-			return fmt.Errorf("can't use selector limit on %v view", aView.Name)
-		}
-
-		if err = updateSelectorLimit(selector, param.Value); err != nil {
-			return err
-		}
-
-	}
-
-	return nil
-}
-
-func updateSelectorLimit(selector *view.Selector, limit string) error {
-	limitConv, err := strconv.Atoi(limit)
-	if err != nil {
-		return err
-	}
-
-	selector.Limit = limitConv
-	return nil
-}
-
-func buildOrderBy(aView *view.View, selector *view.Selector, orderByQuery string) error {
-	fieldIt := NewParamIt(orderByQuery)
-	for fieldIt.Has() {
-		param, err := fieldIt.Next()
-		if err != nil {
-			return err
-		}
-		if err = canUseOrderBy(aView, param.Value); err != nil {
-			return err
-		}
-
-		selector.OrderBy = param.Value
-	}
-	return nil
-}
-
-func canUseOrderBy(view *view.View, orderBy string) error {
-	if !view.CanUseSelectorOrderBy() {
-		return fmt.Errorf("can't use orderBy %v on view %v", orderBy, view.Name)
-	}
-
-	_, ok := view.ColumnByName(orderBy)
-	if !ok {
-		return fmt.Errorf("not found column %v on view %v", orderBy, view.Name)
-	}
-
-	return nil
-}
-
-func buildCriteria(aView *view.View, selector *view.Selector, criteriaQuery string) error {
-	fieldIt := NewParamIt(criteriaQuery)
-	for fieldIt.Has() {
-
-		param, err := fieldIt.Next()
-		if err != nil {
-			return err
-		}
-
-		if !aView.CanUseSelectorCriteria() {
-			return fmt.Errorf("can't use criteria on view %v", aView.Name)
-		}
-
-		sanitized, err := criteria.Parse(param.Value, aView.IndexedColumns())
-		if err != nil {
-			return err
-		}
-
-		selector.Criteria = sanitized.Expression
-		selector.Placeholders = sanitized.Placeholders
-	}
-
-	return nil
+func typeMismatchError(param *view.Parameter, value interface{}) error {
+	return fmt.Errorf("parameter %v value type missmatch, wanted %v but got %T", param.Name, param.Schema.Type().String(), value)
 }

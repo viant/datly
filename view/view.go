@@ -179,7 +179,10 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 	if v.Selector == nil {
 		v.Selector = &Config{}
 	}
-	v.Selector.ensureConstraints()
+
+	if err = v.Selector.Init(ctx, resource); err != nil {
+		return err
+	}
 
 	if v.Name == v.Ref && !v.Standalone {
 		return fmt.Errorf("view name and ref cannot be the same")
@@ -564,13 +567,6 @@ func (v *View) LimitWithSelector(selector *Selector) int {
 		return selector.Limit
 	}
 	return v.Selector.Limit
-}
-
-func (v *Config) ensureConstraints() {
-	if v.Constraints == nil {
-		v.Constraints = &Constraints{}
-	}
-
 }
 
 //CanUseSelectorCriteria indicates if Selector.Criteria can be used

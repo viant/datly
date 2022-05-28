@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"math"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -46,6 +47,7 @@ type testcase struct {
 	requestBody      string
 	shouldDecompress bool
 	extraRequests    int
+	envVariables     map[string]string
 
 	corsHeaders map[string]string
 }
@@ -468,10 +470,37 @@ func TestRouter(t *testing.T) {
 			method:      http.MethodGet,
 			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","Quantity":33.23432374000549,"UserId":1,"EventType":{"Id":2,"Type":"type - 2","Code":"code - 2"}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2,"EventType":null},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3,"EventType":null}]`,
 		},
+		{
+			description: "custom selector | environment variables",
+			resourceURI: "019_custom_selector",
+			uri:         "/api/events",
+			method:      http.MethodGet,
+			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
+			envVariables: map[string]string{
+				"alias": "t",
+				"table": "events",
+			},
+		},
+		{
+			description: "custom selector | custom selector params",
+			resourceURI: "019_custom_selector",
+			uri:         "/api/events?limit=2&skip=1&names=Id,Quantity&sort=Quantity",
+			method:      http.MethodGet,
+			envVariables: map[string]string{
+				"alias": "t",
+				"table": "events",
+			},
+			expected: `[{"Id":10,"Quantity":21.957962334156036},{"Id":1,"Quantity":33.23432374000549}]`,
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {
 	for i, tCase := range testcases {
+		if i != 0 {
+			testcases[i-1].cleanup()
+		}
+
+		//for i, tCase := range testcases {
 		fmt.Println("Running testcase " + strconv.Itoa(i))
 		testUri := path.Join(testLocation, "testdata")
 		routingHandler, ok := tCase.init(t, testUri)
@@ -500,6 +529,9 @@ func TestRouter(t *testing.T) {
 }
 
 func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, bool) {
+	for name, value := range c.envVariables {
+		os.Setenv(name, value)
+	}
 	resourceURI := path.Join(testDataLocation, c.resourceURI)
 	fs := afs.New()
 	if !initDb(t, testDataLocation, c.resourceURI) {
@@ -549,6 +581,12 @@ func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router) bool {
 	}
 
 	return true
+}
+
+func (c *testcase) cleanup() {
+	for key := range c.envVariables {
+		os.Unsetenv(key)
+	}
 }
 
 func initDb(t *testing.T, datasetPath string, resourceURI string) bool {

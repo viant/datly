@@ -61,6 +61,10 @@ func (v *Codec) Init(resource *Resource, paramType reflect.Type) error {
 	}
 }
 
+func (v *Codec) Transform(ctx context.Context, raw string) (interface{}, error) {
+	return v._visitorFn(ctx, raw)
+}
+
 //Init initializes Parameter
 func (p *Parameter) Init(ctx context.Context, resource *Resource, structType reflect.Type) error {
 	if p.initialized == true {
@@ -164,7 +168,7 @@ func (l *Location) Validate() error {
 	}
 
 	if err := ParamName(l.Name).Validate(l.Kind); err != nil {
-		return fmt.Errorf("unsupported param name")
+		return fmt.Errorf("unsupported param name %w", err)
 	}
 
 	return nil

@@ -2,6 +2,7 @@ package view
 
 import (
 	"fmt"
+	"os"
 )
 
 //Kind represents parameter location
@@ -15,12 +16,13 @@ const (
 	PathKind        Kind = "path"
 	CookieKind      Kind = "cookie"
 	RequestBodyKind Kind = "request_body"
+	EnvironmentKind Kind = "env_variable"
 )
 
 //Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case DataViewKind, PathKind, QueryKind, HeaderKind, CookieKind, RequestBodyKind:
+	case DataViewKind, PathKind, QueryKind, HeaderKind, CookieKind, RequestBodyKind, EnvironmentKind:
 		return nil
 	}
 
@@ -40,6 +42,12 @@ func (p ParamName) Validate(kind Kind) error {
 
 	switch kind {
 	case DataViewKind, PathKind, QueryKind, HeaderKind, CookieKind, RequestBodyKind:
+		return nil
+	case EnvironmentKind:
+		if os.Getenv(string(p)) == "" {
+			return fmt.Errorf("env variable %s not set", p)
+		}
+
 		return nil
 	}
 
