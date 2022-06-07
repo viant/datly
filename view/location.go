@@ -15,8 +15,8 @@ const (
 	QueryKind       Kind = "query"
 	PathKind        Kind = "path"
 	CookieKind      Kind = "cookie"
-	RequestBodyKind Kind = "request_body"
-	EnvironmentKind Kind = "env_variable"
+	RequestBodyKind Kind = "body"
+	EnvironmentKind Kind = "env"
 )
 
 //Validate checks if Kind is valid.
