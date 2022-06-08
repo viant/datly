@@ -11,7 +11,6 @@ import (
 )
 
 func loadConfig(ctx context.Context, options *Options) (cfg *standalone.Config, err error) {
-
 	if options.ConfigURL == "" {
 		cfg = &standalone.Config{
 			Config: &gateway.Config{

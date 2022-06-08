@@ -8,12 +8,14 @@ import (
 )
 
 func normalizeURL(loc string) string {
-	if strings.HasSuffix(loc, "/") {
+	if strings.HasSuffix(loc, "/") || strings.HasPrefix(loc, "/") {
 		return loc
 	}
+
 	if url.Scheme(loc, "e") != "e" {
 		return loc
 	}
 	baseDir, _ := os.Getwd()
+
 	return path.Join(baseDir, loc)
 }

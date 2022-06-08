@@ -26,7 +26,7 @@ func buildRelations(options *Options, meta *metadata.Service, db *sql.DB, route 
 			relTable := pair[1]
 			fk, err := readForeignKeys(options, meta, db, relTable)
 			if err != nil {
-				fmt.Printf("skiping relation: %v due to %w", rel, err)
+				fmt.Printf("skiping relation: %v due to %v", rel, err)
 				continue
 			}
 			relView := &view.View{
