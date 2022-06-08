@@ -49,7 +49,8 @@ type testcase struct {
 	extraRequests    int
 	envVariables     map[string]string
 
-	corsHeaders map[string]string
+	corsHeaders     map[string]string
+	dependenciesUrl map[string]string
 }
 
 type (
@@ -58,7 +59,7 @@ type (
 	gcpMockDecoder     struct{}
 )
 
-func (g *gcpMockDecoder) Value(ctx context.Context, raw string) (interface{}, error) {
+func (g *gcpMockDecoder) Value(_ context.Context, raw string, _ ...interface{}) (interface{}, error) {
 	tokenType := "Bearer "
 	if index := strings.Index(raw, tokenType); index != -1 {
 		raw = raw[index+len(tokenType):]
@@ -111,6 +112,19 @@ type event struct {
 	Quantity  float64
 	Timestamp time.Time
 }
+
+type (
+	filtersSchemaType struct {
+		Columns []Filter `json:"column"`
+	}
+
+	Filter struct {
+		SearchValues []int  `json:"search_values"`
+		Column       string `json:"column_name"`
+		Inclusive    bool   `json:"inclusive"`
+		Radius       int    `json:"radius"`
+	}
+)
 
 //TODO: add testcases against sql injection
 func TestRouter(t *testing.T) {
@@ -492,6 +506,29 @@ func TestRouter(t *testing.T) {
 			},
 			expected: `[{"Id":10,"Quantity":21.957962334156036},{"Id":1,"Quantity":33.23432374000549}]`,
 		},
+		//{
+		//	description: "slices | filters",
+		//	resourceURI: "020_slices",
+		//	uri:         "/api/events?filters=%7B%22columns%22:%5B%7B%22column_name%22:%22user_id%22,%22search_values%22:%5B2,11%5D%7D,%7B%22column_name%22:%22user_id%22,%22search_values%22:%5B2,11%5D,%22inclusive%22:true%7D%5D%7D",
+		//	method:      http.MethodGet,
+		//	envVariables: map[string]string{
+		//		"alias": "t",
+		//		"table": "events",
+		//	},
+		//	types: map[string]reflect.Type{
+		//		"filters": reflect.TypeOf(filtersSchemaType{}),
+		//	},
+		//},
+		{
+			description: "param query | user_id",
+			resourceURI: "021_param_query",
+			uri:         "/api/events?user_id=3",
+			method:      http.MethodGet,
+			dependenciesUrl: map[string]string{
+				"connections": "connections",
+			},
+			expected: `[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {
@@ -532,18 +569,46 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 	for name, value := range c.envVariables {
 		os.Setenv(name, value)
 	}
+
 	resourceURI := path.Join(testDataLocation, c.resourceURI)
 	fs := afs.New()
 	if !initDb(t, testDataLocation, c.resourceURI) {
 		return nil, false
 	}
 
-	resource, err := router.NewResourceFromURL(context.TODO(), fs, path.Join(resourceURI, "resource.yaml"), c.visitors, c.types, nil, nil)
-	if !assert.Nil(t, err, c.description) {
+	dependencies := map[string]*view.Resource{}
+	for name, URL := range c.dependenciesUrl {
+		resourceUrl := path.Join(resourceURI, fmt.Sprintf("%v.yaml", URL))
+		resource, ok := c.readViewResource(t, resourceUrl, c.types, c.visitors)
+		if !ok {
+			return nil, false
+		}
+		dependencies[name] = resource
+	}
+
+	resourceUrl := path.Join(resourceURI, "resource.yaml")
+	resource, ok := c.readResource(t, fs, resourceUrl, dependencies)
+	if !ok {
 		return nil, false
 	}
 
 	return router.New(resource), true
+}
+
+func (c *testcase) readResource(t *testing.T, fs afs.Service, resourceUrl string, dependencies map[string]*view.Resource) (*router.Resource, bool) {
+	resource, err := router.NewResourceFromURL(context.TODO(), fs, resourceUrl, c.visitors, c.types, dependencies, nil)
+	if !assert.Nil(t, err, c.description) {
+		return nil, false
+	}
+	return resource, true
+}
+
+func (c *testcase) readViewResource(t *testing.T, resourceUrl string, types view.Types, visitors visitor.Visitors) (*view.Resource, bool) {
+	resource, err := view.NewResourceFromURL(context.TODO(), resourceUrl, types, visitors)
+	if !assert.Nil(t, err, c.description) {
+		return nil, false
+	}
+	return resource, true
 }
 
 func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router) bool {

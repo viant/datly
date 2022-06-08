@@ -118,7 +118,7 @@ func (s *Service) authorizeRequest(w http.ResponseWriter, r *http.Request) bool 
 	return false
 }
 
-func (s *Service) Value(ctx context.Context, raw string) (interface{}, error) {
+func (s *Service) Value(ctx context.Context, raw string, options ...interface{}) (interface{}, error) {
 	if index := strings.Index(raw, " "); index != -1 {
 		raw = raw[index+1:]
 	}

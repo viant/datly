@@ -93,10 +93,10 @@ Parameters are defined in order to read data specific for the given http request
 
 ### Location
 
-| Section | Description                                                     | Type                                                          | Required |
-|---------|-----------------------------------------------------------------|---------------------------------------------------------------|----------|
-| Kind    | Represents the source of the parameter i.e. Header, QueryParam. | enum: `query`,`header`, `cookie`, `data_view`, `request_body` | true     |
-| Name    | Parameter source identifier i.e. Authorization, userId          | string                                                        | true     |
+| Section | Description                                                     | Type                                                         | Required |
+|---------|-----------------------------------------------------------------|--------------------------------------------------------------|----------|
+| Kind    | Represents the source of the parameter i.e. Header, QueryParam. | enum: `query`,`header`, `cookie`, `data_view`, `body`, `env` | true     |
+| Name    | Parameter source identifier i.e. Authorization, userId          | string                                                       | true     |
 
 ### Codec
 

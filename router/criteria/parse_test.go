@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/router/criteria"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox/format"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -18,6 +19,7 @@ func TestParse(t *testing.T) {
 		sanitizedCriteria string
 		placeholders      []interface{}
 		expectErr         bool
+		methods           map[string]*view.Method
 	}{
 		{
 			description: "boolean criteria | equal true",
@@ -258,14 +260,19 @@ func TestParse(t *testing.T) {
 			placeholders:      []interface{}{true, 32.5},
 		},
 		{
-			description: "bool and float with parentheses",
-			input:       "Price > 2.5 AND ((IsActive = true AND Price > 32.5) OR IsActive = false)",
+			description:       "bool and float with parentheses",
+			input:             "Price = round(Price, 2)",
+			sanitizedCriteria: ` price = round( price,  ?)`,
 			columns: map[string]*view.Column{
-				"IsActive": {Name: "is_active", DataType: "bool", Filterable: true},
-				"Price":    {Name: "price", DataType: "float", Filterable: true},
+				"Price": {Name: "price", DataType: "float", Filterable: true},
 			},
-			sanitizedCriteria: ` price > ? AND ( ( is_active = ? AND price > ?) OR is_active = ?)`,
-			placeholders:      []interface{}{2.5, true, 32.5, false},
+			methods: map[string]*view.Method{
+				"round": {
+					Name: "round",
+					Args: []*view.Schema{view.NewSchema(reflect.TypeOf(0.0)), view.NewSchema(reflect.TypeOf(0))},
+				},
+			},
+			placeholders: []interface{}{2},
 		},
 	}
 
@@ -279,7 +286,7 @@ func TestParse(t *testing.T) {
 			}
 		}
 
-		parse, err := criteria.Parse(testCase.input, testCase.columns)
+		parse, err := criteria.Parse(testCase.input, testCase.columns, testCase.methods)
 		if testCase.expectErr {
 			assert.NotNil(t, err, testCase.input)
 			continue

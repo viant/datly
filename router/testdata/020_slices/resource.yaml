@@ -1,0 +1,43 @@
+Routes:
+  - URI: "/api/events"
+    Method: GET
+    View:
+      Ref: events_ref
+      Name: events
+
+Resource:
+  Views:
+    - Name: events_ref
+      Connector:
+        Ref: db
+      Table: events
+      Template:
+        Source: '
+        SELECT * FROM events WHERE 1 = 1
+        #set($i = 0)
+        #foreach($filter in $filters.columns)
+        \${filters[$i].column_name} = abc
+        
+        
+        #set($i = $i + 1)
+        #end
+        '
+        Parameters:
+          - Ref: Filters
+      Selector:
+        Constraints:
+          Criteria: true
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"
+
+  Parameters:
+    - Name: Filters
+      In:
+        Kind: query
+        Name: filters
+      Required: true
+      Schema:
+        Name: filters

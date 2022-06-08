@@ -39,7 +39,7 @@ type (
 		Name string
 	}
 
-	CodecFn func(context context.Context, rawValue string) (interface{}, error)
+	CodecFn func(context context.Context, rawValue string, options ...interface{}) (interface{}, error)
 	Codec   struct {
 		Name       string
 		_visitorFn CodecFn //shall rename to codec ?
@@ -61,8 +61,8 @@ func (v *Codec) Init(resource *Resource, paramType reflect.Type) error {
 	}
 }
 
-func (v *Codec) Transform(ctx context.Context, raw string) (interface{}, error) {
-	return v._visitorFn(ctx, raw)
+func (v *Codec) Transform(ctx context.Context, raw string, options ...interface{}) (interface{}, error) {
+	return v._visitorFn(ctx, raw, options)
 }
 
 //Init initializes Parameter
@@ -264,8 +264,8 @@ func (p *Parameter) Value(values interface{}) (interface{}, error) {
 	return p.valueAccessor.Value(values)
 }
 
-func (p *Parameter) ConvertAndSet(ctx context.Context, paramPtr unsafe.Pointer, value string) error {
-	return p.valueAccessor.setValue(ctx, paramPtr, value, p.Codec)
+func (p *Parameter) ConvertAndSet(ctx context.Context, paramPtr unsafe.Pointer, value string, selector *Selector) error {
+	return p.valueAccessor.setValue(ctx, paramPtr, value, p.Codec, selector)
 }
 
 func elem(rType reflect.Type) reflect.Type {

@@ -1,0 +1,35 @@
+with:
+  - 'connections'
+
+Routes:
+  - URI: "/api/events"
+    Method: GET
+    View:
+      Ref: events_ref
+      Name: events
+
+Resource:
+  Views:
+    - Name: events_ref
+      Connector:
+        Ref: db
+      Table: events
+      Template:
+        SourceUrl: source.sql
+        Parameters:
+          - Ref: UserId
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"
+
+  Parameters:
+    - Name: UserId
+      In:
+        Kind: query
+        Name: user_id
+      Schema:
+        DataType: int
+      Required: true
+

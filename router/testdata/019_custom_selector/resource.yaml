@@ -41,7 +41,7 @@ Resource:
   Parameters:
     - Name: Alias
       In:
-        Kind: env_variable
+        Kind: env
         Name: alias
       Required: true
       Schema:
@@ -49,7 +49,7 @@ Resource:
 
     - Name: Table
       In:
-        Kind: env_variable
+        Kind: env
         Name: table
       Required: true
       Schema:

@@ -10,7 +10,7 @@ import (
 //JwtClaim represents IDJWT visitor
 type JwtClaim struct{}
 
-func (j *JwtClaim) Value(ctx context.Context, raw string) (interface{}, error) {
+func (j *JwtClaim) Value(ctx context.Context, raw string, options ...interface{}) (interface{}, error) {
 	if last := strings.LastIndexByte(raw, ' '); last != -1 {
 		raw = raw[last+1:]
 	}

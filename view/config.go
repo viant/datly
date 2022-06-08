@@ -26,7 +26,10 @@ type (
 )
 
 func (c *Config) Init(ctx context.Context, resource *Resource) error {
-	c.ensureConstraints()
+	if err := c.ensureConstraints(resource); err != nil {
+		return err
+	}
+
 	if err := c.initCustomParams(ctx, resource); err != nil {
 		return err
 	}
@@ -34,10 +37,12 @@ func (c *Config) Init(ctx context.Context, resource *Resource) error {
 	return nil
 }
 
-func (c *Config) ensureConstraints() {
+func (c *Config) ensureConstraints(resource *Resource) error {
 	if c.Constraints == nil {
 		c.Constraints = &Constraints{}
 	}
+
+	return c.Constraints.init(resource)
 }
 
 func (c *Config) initCustomParams(ctx context.Context, resource *Resource) error {

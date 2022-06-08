@@ -2,6 +2,7 @@ package view
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/velty"
 	"github.com/viant/xunsafe"
@@ -27,12 +28,12 @@ func (a *Accessor) set(ptr unsafe.Pointer, value interface{}) {
 	a.xFields[len(a.xFields)-1].SetValue(ptr, value)
 }
 
-func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue string, valueVisitor *Codec) error {
+func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue string, valueVisitor *Codec, selector *Selector) error {
 	ptr = a.upstream(ptr)
 	xField := a.xFields[len(a.xFields)-1]
 
 	if valueVisitor != nil {
-		transformed, err := valueVisitor._visitorFn(ctx, rawValue)
+		transformed, err := valueVisitor._visitorFn(ctx, rawValue, selector)
 		if err != nil {
 			return err
 		}
@@ -67,6 +68,14 @@ func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue st
 		xField.SetFloat64(ptr, asFloat)
 		return nil
 
+	case reflect.Struct:
+		dest := reflect.New(xField.Type)
+		if err := json.Unmarshal([]byte(rawValue), dest.Interface()); err != nil {
+			return err
+		}
+
+		xField.SetValue(ptr, dest.Elem().Interface())
+		return nil
 	}
 
 	return fmt.Errorf("unsupported parameter type %v", xField.Type.String())
@@ -76,6 +85,7 @@ func (a *Accessor) upstream(ptr unsafe.Pointer) unsafe.Pointer {
 	if len(a.xFields) == 1 {
 		return ptr
 	}
+
 	for i := 0; i < len(a.xFields)-1; i++ {
 		field := a.xFields[i]
 		p := field.Pointer(ptr)

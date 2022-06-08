@@ -58,12 +58,13 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 	if t.initialized {
 		return nil
 	}
+	t.initialized = true
+
 	err := t.loadSourceFromURL(ctx, resource)
 	if err != nil {
 		return err
 	}
 	t._view = view
-	t.initialized = true
 	t._parametersIndex = ParametersSlice(t.Parameters).Index()
 	t._fieldIndex = map[string]int{}
 

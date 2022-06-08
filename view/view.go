@@ -63,17 +63,58 @@ type (
 	//Constraints configure what can be selected by Selector
 	//For each field, default value is `false`
 	Constraints struct {
-		Criteria   bool
-		OrderBy    bool
-		Limit      bool
-		Offset     bool
-		Filterable []string
+		Criteria    bool
+		OrderBy     bool
+		Limit       bool
+		Offset      bool
+		Filterable  []string
+		SqlMethods  []*Method
+		_sqlMethods map[string]*Method
 	}
 
 	Batch struct {
 		Parent int `json:",omitempty"`
 	}
+
+	Method struct {
+		Name string
+		Args []*Schema
+	}
 )
+
+func (m *Method) init(resource *Resource) error {
+	if m.Name == "" {
+		return fmt.Errorf("method name can't be empty")
+	}
+
+	for _, arg := range m.Args {
+		//TODO: Check format
+		if err := arg.Init(nil, nil, format.CaseUpperCamel, resource.GetTypes()); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *Constraints) init(resource *Resource) error {
+	c._sqlMethods = map[string]*Method{}
+	for i, method := range c.SqlMethods {
+		c._sqlMethods[method.Name] = c.SqlMethods[i]
+	}
+
+	for _, method := range c.SqlMethods {
+		if err := method.init(resource); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *Constraints) SqlMethodsIndexed() map[string]*Method {
+	return c._sqlMethods
+}
 
 //DataType returns struct type.
 func (v *View) DataType() reflect.Type {
@@ -90,10 +131,11 @@ func (v *View) Init(ctx context.Context, resource *Resource) error {
 
 	v._id = uuid.New()
 	v.initialized = true
-	err := v.loadFromWithURL(ctx, resource)
-	if err != nil {
+
+	if err := v.loadFromWithURL(ctx, resource); err != nil {
 		return err
 	}
+
 	if err := v.initViews(ctx, resource, v.With); err != nil {
 		return err
 	}
