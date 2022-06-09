@@ -25,12 +25,12 @@ type (
 	}
 )
 
-func (c *Config) Init(ctx context.Context, resource *Resource) error {
+func (c *Config) Init(ctx context.Context, resource *Resource, parent *View) error {
 	if err := c.ensureConstraints(resource); err != nil {
 		return err
 	}
 
-	if err := c.initCustomParams(ctx, resource); err != nil {
+	if err := c.initCustomParams(ctx, resource, parent); err != nil {
 		return err
 	}
 
@@ -45,36 +45,36 @@ func (c *Config) ensureConstraints(resource *Resource) error {
 	return c.Constraints.init(resource)
 }
 
-func (c *Config) initCustomParams(ctx context.Context, resource *Resource) error {
-	if err := c.initParamIfNeeded(ctx, c.CriteriaParam, resource, stringType); err != nil {
+func (c *Config) initCustomParams(ctx context.Context, resource *Resource, parent *View) error {
+	if err := c.initParamIfNeeded(ctx, c.CriteriaParam, resource, stringType, parent); err != nil {
 		return err
 	}
 
-	if err := c.initParamIfNeeded(ctx, c.LimitParam, resource, intType); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.LimitParam, resource, intType, parent); err != nil {
 		return err
 	}
 
-	if err := c.initParamIfNeeded(ctx, c.OrderByParam, resource, stringType); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.OrderByParam, resource, stringType, parent); err != nil {
 		return err
 	}
 
-	if err := c.initParamIfNeeded(ctx, c.OffsetParam, resource, intType); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.OffsetParam, resource, intType, parent); err != nil {
 		return err
 	}
 
-	if err := c.initParamIfNeeded(ctx, c.FieldsParam, resource, stringType); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.FieldsParam, resource, stringType, parent); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (c *Config) initParamIfNeeded(ctx context.Context, param *Parameter, resource *Resource, requiredType reflect.Type) error {
+func (c *Config) initParamIfNeeded(ctx context.Context, param *Parameter, resource *Resource, requiredType reflect.Type, view *View) error {
 	if param == nil {
 		return nil
 	}
 
-	if err := param.Init(ctx, resource, nil); err != nil {
+	if err := param.Init(ctx, view, resource, nil); err != nil {
 		return err
 	}
 

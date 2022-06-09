@@ -11,22 +11,11 @@ Resource:
       Connector:
         Ref: db
       Table: events
-      Template:
-        Source: '
-        SELECT * FROM events WHERE 1 = 1
-        #set($i = 0)
-        #foreach($filter in $filters.columns)
-        \${filters[$i].column_name} = abc
-        
-        
-        #set($i = $i + 1)
-        #end
-        '
-        Parameters:
-          - Ref: Filters
       Selector:
         Constraints:
           Criteria: true
+        CriteriaParam:
+          Ref: Filters
 
   Connectors:
     - Name: db
@@ -40,4 +29,29 @@ Resource:
         Name: filters
       Required: true
       Schema:
-        Name: filters
+        DataType: string
+      Codec:
+        Name: VeltyCriteria
+        Schema:
+          DataType: filters
+        Source: '
+          #set($i = 0)
+          #set($inclusive = "")
+          #foreach($column in $Unsafe.Columns)
+            $inclusive
+            #set($j = 0)
+            ${Safe_Column.Columns[$i].Column} IN (
+            #foreach($searchValue in $column.SearchValues)
+              #if($j != 0),#end
+              ${Safe_Value.Columns[$i].SearchValues[$j]}
+            #set($j = $j + 1)
+            #end
+            )
+            #set($i = $i + 1)
+            #if($column.Inclusive == true)
+            #set($inclusive = "AND")
+            #else
+            #set($inclusive = "OR")
+            #end
+          #end
+        '

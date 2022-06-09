@@ -222,10 +222,6 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		v.Selector = &Config{}
 	}
 
-	if err = v.Selector.Init(ctx, resource); err != nil {
-		return err
-	}
-
 	if v.Name == v.Ref && !v.Standalone {
 		return fmt.Errorf("view name and ref cannot be the same")
 	}
@@ -250,10 +246,6 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err = v.initTemplate(ctx, resource); err != nil {
-		return err
-	}
-
 	if err = v.ensureColumns(ctx); err != nil {
 		return err
 	}
@@ -263,15 +255,25 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 	}
 
 	v._columns = ColumnSlice(v.Columns).Index(v.Caser)
-	if err = v.markColumnsAsFilterable(); err != nil {
-		return err
-	}
 
 	if err = v.ensureSchema(resource._types); err != nil {
 		return err
 	}
 
+	if err = v.Selector.Init(ctx, resource, v); err != nil {
+		return err
+	}
+
+	if err = v.markColumnsAsFilterable(); err != nil {
+		return err
+	}
+
 	v.updateColumnTypes()
+
+	if err = v.initTemplate(ctx, resource); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -483,7 +485,7 @@ func (v *View) exclude(columns []io.Column) []io.Column {
 	return filtered
 }
 
-func (v *View) inherit(view *View) {
+func (v *View) inherit(ctx context.Context, resource *Resource, view *View) error {
 	if v.Connector == nil {
 		v.Connector = view.Connector
 	}
@@ -519,15 +521,24 @@ func (v *View) inherit(view *View) {
 		v.newCollector = view.newCollector
 	}
 
-	if v.Template == nil {
-		v.Template = view.Template
+	if v.Template == nil && view.Template != nil {
+		tempCopy := *view.Template
+		tempCopy._view = v
+		v.Template = &tempCopy
 	}
 
 	if v.MatchStrategy == "" {
 		v.MatchStrategy = view.MatchStrategy
 	}
 
-	if v.Selector == nil {
+	if v.Selector == nil && view.Selector != nil {
+		//v.Selector = &Config{}
+		//if err := v.Selector.Inherit(view.Selector); err != nil {
+		//	return err
+		//}
+		//if err := v.Selector.Init(ctx, resource, v); err != nil {
+		//	return err
+		//}
 		v.Selector = view.Selector
 	}
 
@@ -538,6 +549,7 @@ func (v *View) inherit(view *View) {
 	if v.Batch == nil {
 		v.Batch = view.Batch
 	}
+	return nil
 }
 
 func stringsSliceEqual(x []string, y []string) bool {
@@ -709,6 +721,7 @@ func (v *View) updateColumn(rType reflect.Type, columns *[]*Column, relation *Re
 		if !isExported {
 			continue
 		}
+
 		if field.Anonymous {
 			if err := v.updateColumn(field.Type, columns, relation); err != nil {
 				return err
@@ -778,7 +791,10 @@ func (v *View) inheritFromViewIfNeeded(ctx context.Context, resource *Resource) 
 		if err = view.initView(ctx, resource); err != nil {
 			return err
 		}
-		v.inherit(view)
+
+		if err = v.inherit(ctx, resource, view); err != nil {
+			return err
+		}
 	}
 	return nil
 }

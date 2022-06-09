@@ -5,10 +5,15 @@ import (
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/visitor"
+	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
 	"unsafe"
+)
+
+const (
+	VeltyCriteriaCodec = "VeltyCriteria"
 )
 
 type (
@@ -41,32 +46,65 @@ type (
 
 	CodecFn func(context context.Context, rawValue string, options ...interface{}) (interface{}, error)
 	Codec   struct {
-		Name       string
-		_visitorFn CodecFn //shall rename to codec ?
+		Name     string
+		Source   string
+		Schema   *Schema
+		_codecFn CodecFn //shall rename to codec ?
 	}
 )
 
-func (v *Codec) Init(resource *Resource, paramType reflect.Type) error {
-	vVisitor, err := resource._visitors.Lookup(v.Name)
+func (v *Codec) Init(resource *Resource, view *View, paramType reflect.Type) error {
+	v.ensureSchema(paramType)
+
+	if err := v.Schema.Init(nil, nil, format.CaseUpperCamel, resource._types); err != nil {
+		return err
+	}
+
+	fn, err := v.extractCodecFn(resource, v.Schema.Type(), view)
 	if err != nil {
 		return err
 	}
 
+	v._codecFn = fn
+	return nil
+}
+
+func (v *Codec) ensureSchema(paramType reflect.Type) {
+	if v.Schema == nil {
+		v.Schema = &Schema{}
+		v.Schema.setType(paramType)
+	}
+}
+
+func (v *Codec) extractCodecFn(resource *Resource, paramType reflect.Type, view *View) (CodecFn, error) {
+	switch v.Name {
+	case VeltyCriteriaCodec:
+		veltyCodec, err := NewVeltyCodec(v.Source, paramType, view)
+		if err != nil {
+			return nil, err
+		}
+		return veltyCodec.Value, nil
+	}
+
+	vVisitor, err := resource._visitors.Lookup(v.Name)
+	if err != nil {
+		return nil, err
+	}
+
 	switch actual := vVisitor.Visitor().(type) {
 	case visitor.Codec:
-		v._visitorFn = actual.Value
-		return nil
+		return actual.Value, nil
 	default:
-		return fmt.Errorf("expected %T to implement Codec", actual)
+		return nil, fmt.Errorf("expected %T to implement Codec", actual)
 	}
 }
 
 func (v *Codec) Transform(ctx context.Context, raw string, options ...interface{}) (interface{}, error) {
-	return v._visitorFn(ctx, raw, options)
+	return v._codecFn(ctx, raw, options...)
 }
 
 //Init initializes Parameter
-func (p *Parameter) Init(ctx context.Context, resource *Resource, structType reflect.Type) error {
+func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, structType reflect.Type) error {
 	if p.initialized == true {
 		return nil
 	}
@@ -78,7 +116,7 @@ func (p *Parameter) Init(ctx context.Context, resource *Resource, structType ref
 			return err
 		}
 
-		if err = param.Init(ctx, resource, structType); err != nil {
+		if err = param.Init(ctx, view, resource, structType); err != nil {
 			return err
 		}
 
@@ -105,7 +143,7 @@ func (p *Parameter) Init(ctx context.Context, resource *Resource, structType ref
 		return err
 	}
 
-	if err := p.initVisitors(resource); err != nil {
+	if err := p.initCodec(resource, view, p.Schema.Type()); err != nil {
 		return err
 	}
 
@@ -269,7 +307,7 @@ func (p *Parameter) ConvertAndSet(ctx context.Context, paramPtr unsafe.Pointer, 
 }
 
 func elem(rType reflect.Type) reflect.Type {
-	for rType.Kind() == reflect.Ptr {
+	for rType.Kind() == reflect.Ptr || rType.Kind() == reflect.Slice {
 		rType = rType.Elem()
 	}
 
@@ -294,19 +332,12 @@ func (p *Parameter) SetPresenceField(structType reflect.Type) error {
 	return nil
 }
 
-func (p *Parameter) initVisitors(resource *Resource) error {
-	if err := p.initCodec(resource); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (p *Parameter) initCodec(resource *Resource) error {
+func (p *Parameter) initCodec(resource *Resource, view *View, paramType reflect.Type) error {
 	if p.Codec == nil {
 		return nil
 	}
 
-	if err := p.Codec.Init(resource, p.Schema.Type()); err != nil {
+	if err := p.Codec.Init(resource, view, paramType); err != nil {
 		return err
 	}
 	return nil

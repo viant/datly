@@ -506,32 +506,23 @@ func TestRouter(t *testing.T) {
 			},
 			expected: `[{"Id":10,"Quantity":21.957962334156036},{"Id":1,"Quantity":33.23432374000549}]`,
 		},
-		//{
-		//	description: "slices | filters",
-		//	resourceURI: "020_slices",
-		//	uri:         "/api/events?filters=%7B%22columns%22:%5B%7B%22column_name%22:%22user_id%22,%22search_values%22:%5B2,11%5D%7D,%7B%22column_name%22:%22user_id%22,%22search_values%22:%5B2,11%5D,%22inclusive%22:true%7D%5D%7D",
-		//	method:      http.MethodGet,
-		//	envVariables: map[string]string{
-		//		"alias": "t",
-		//		"table": "events",
-		//	},
-		//	types: map[string]reflect.Type{
-		//		"filters": reflect.TypeOf(filtersSchemaType{}),
-		//	},
-		//},
 		{
-			description: "param query | user_id",
-			resourceURI: "021_param_query",
-			uri:         "/api/events?user_id=3",
+			description: "slices | filters",
+			resourceURI: "020_slices",
+			uri:         "/api/events?filters=%7B%22column%22:%5B%7B%22column_name%22:%22user_id%22,%22search_values%22:%5B2,11%5D,%22inclusive%22:true%7D,%7B%22column_name%22:%22event_type_id%22,%22search_values%22:%5B2,11%5D,%22inclusive%22:true%7D%5D%7D",
 			method:      http.MethodGet,
-			dependenciesUrl: map[string]string{
-				"connections": "connections",
+			envVariables: map[string]string{
+				"alias": "t",
+				"table": "events",
 			},
-			expected: `[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
+			types: map[string]reflect.Type{
+				"filters": reflect.TypeOf(filtersSchemaType{}),
+			},
+			expected: `[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}]`,
 		},
 	}
 
-	//for i, tCase := range testcases[len(testcases)-1:] {
+	//for i, tCase := range testcases[len(testcases)-1 : ] {
 	for i, tCase := range testcases {
 		if i != 0 {
 			testcases[i-1].cleanup()

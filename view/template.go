@@ -179,7 +179,7 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 			return err
 		}
 
-		if err := param.Init(ctx, resource, t.Schema.Type()); err != nil {
+		if err := param.Init(ctx, t._view, resource, t.Schema.Type()); err != nil {
 			return err
 		}
 	}
@@ -262,7 +262,7 @@ func asParam(parent *View) *Param {
 }
 
 func (t *Template) inheritAndInitParam(ctx context.Context, resource *Resource, param *Parameter) error {
-	return param.Init(ctx, resource, nil)
+	return param.Init(ctx, t._view, resource, nil)
 }
 
 func (t *Template) initSqlEvaluator() error {
@@ -334,12 +334,7 @@ func (t *Template) initAccessors() {
 }
 
 func (t *Template) AccessorByName(name string) (*Accessor, error) {
-	i, ok := t.accessors.index[name]
-	if !ok {
-		return nil, fmt.Errorf("not found accessor for param %v", name)
-	}
-
-	return t.accessors.accessors[i], nil
+	return t.accessors.AccessorByName(name)
 }
 
 func fieldByTemplateName(structType reflect.Type, name string) (*xunsafe.Field, error) {

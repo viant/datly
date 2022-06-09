@@ -147,7 +147,7 @@ func criteriaValue(ctx context.Context, inputFormat format.Case, details *ViewDe
 	}
 
 	paramValue, err := extractParamValue(ctx, param, details, inputFormat, params, metadata, selector)
-	if err != nil {
+	if err != nil || paramValue == nil {
 		return "", err
 	}
 

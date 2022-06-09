@@ -16,11 +16,12 @@ type (
 	}
 
 	Field struct {
-		Name   string   `json:",omitempty"`
-		Embed  bool     `json:",omitempty"`
-		Column string   `json:",omitempty"`
-		Schema *Schema  `json:",omitempty"`
-		Fields []*Field `json:",omitempty"`
+		Name        string      `json:",omitempty"`
+		Embed       bool        `json:",omitempty"`
+		Column      string      `json:",omitempty"`
+		Cardinality Cardinality `json:",omitempty"`
+		Schema      *Schema     `json:",omitempty"`
+		Fields      []*Field    `json:",omitempty"`
 	}
 )
 
@@ -119,10 +120,15 @@ func buildTypeFromFields(fields []*Field) reflect.Type {
 			fieldPath = pkgPath
 		}
 
+		fieldType := field.Schema.Type()
+		if field.Cardinality == Many {
+			fieldType = reflect.SliceOf(fieldType)
+		}
+
 		rFields[i] = reflect.StructField{
 			Name:      field.Name,
 			PkgPath:   fieldPath,
-			Type:      field.Schema.Type(),
+			Type:      fieldType,
 			Tag:       tag,
 			Anonymous: field.Embed,
 		}
