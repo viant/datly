@@ -714,16 +714,16 @@ func (j *Marshaller) asObject(ptr unsafe.Pointer, fields []*fieldMarshaller, sb 
 				}
 
 				raw := strings.Trim(string(asBytes), `"`)
+
 				transformed, err := lookup.Visitor().Value(context.TODO(), raw)
 				if err != nil {
 					return err
 				}
-
 				asBytes, err = json.Marshal(transformed)
 				if err != nil {
 					return err
 				}
-				sb.WriteString(raw)
+				sb.WriteString(string(asBytes))
 				continue
 			}
 		}
