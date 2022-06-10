@@ -35,6 +35,7 @@ Resource:
         Schema:
           DataType: Filters
         Source: '
+          #set($id = 10)
           #set($i = 0)
           #set($inclusive = "")
           #foreach($Column in $Unsafe.Columns)
@@ -54,6 +55,11 @@ Resource:
             #set($inclusive = "OR")
             #end
           #end
+          
+          #if($i != 0)
+          AND
+          #end
+          id = $Safe_Int($id)
         '
 
   Types:

@@ -16,7 +16,43 @@ import (
 const (
 	SafeColumn = "Safe_Column"
 	SafeValue  = "Safe_Value"
+	SafeInt    = "Safe_Int"
+	SafeString = "Safe_String"
+	SafeBool   = "Safe_Bool"
+	SafeFloat  = "Safe_Float"
 )
+
+type Sanitizer struct {
+	sanitize func(id, criteria string, value interface{}, placeholders *[]interface{}, columns *Columns) (string, error)
+	keyword  string
+}
+
+var sanitizers = []*Sanitizer{
+	{
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns *Columns) (string, error) {
+			columnName, ok := value.(string)
+			if !ok {
+				return "", fmt.Errorf("expected column name to be type of string but was %T", value)
+			}
+
+			column, err := columns.Lookup(columnName)
+			if err != nil {
+				return "", err
+			}
+			return strings.Replace(criteria, id, column.Name, 1), nil
+		},
+		keyword: SafeColumn,
+	},
+	{
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns *Columns) (string, error) {
+			*placeholders = append(*placeholders, value)
+			return strings.Replace(criteria, id, "?", 1), nil
+		},
+		keyword: SafeValue,
+	},
+
+	//SafeInt, SafeString, SafeBool, SafeFloat}
+}
 
 type VeltyCodec struct {
 	template  string
@@ -199,10 +235,11 @@ func NewVeltyCodec(template string, paramType reflect.Type, view *View) (*VeltyC
 }
 
 func escapeSafeKeywords(template string) string {
-	template = strings.ReplaceAll(template, "${"+SafeColumn, "#[[$]]#{"+SafeColumn)
-	template = strings.ReplaceAll(template, "$"+SafeColumn, "#[[$]]#"+SafeColumn)
-	template = strings.ReplaceAll(template, "${"+SafeValue, "#[[$]]#{"+SafeValue)
-	template = strings.ReplaceAll(template, "$"+SafeValue, "#[[$]]#"+SafeValue)
+	for _, keyword := range sanitizers {
+		template = strings.ReplaceAll(template, "${"+keyword.keyword, "#[[$]]#{"+keyword.keyword)
+		template = strings.ReplaceAll(template, "$"+keyword.keyword, "#[[$]]#"+keyword.keyword)
+	}
+
 	return template
 }
 

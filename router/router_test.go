@@ -519,8 +519,8 @@ func TestRouter(t *testing.T) {
 		},
 	}
 
-	//for i, tCase := range testcases[len(testcases)-1:] {
-	for i, tCase := range testcases {
+	for i, tCase := range testcases[len(testcases)-1:] {
+		//for i, tCase := range testcases {
 		if i != 0 {
 			testcases[i-1].cleanup()
 		}
