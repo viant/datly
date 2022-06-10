@@ -19,6 +19,7 @@ type (
 		Name        string      `json:",omitempty"`
 		Embed       bool        `json:",omitempty"`
 		Column      string      `json:",omitempty"`
+		JSON        string      `json:",omitempty"`
 		Cardinality Cardinality `json:",omitempty"`
 		Schema      *Schema     `json:",omitempty"`
 		Fields      []*Field    `json:",omitempty"`
@@ -84,6 +85,7 @@ func (f *Field) initSchemaType(types Types) error {
 		if err != nil {
 			return err
 		}
+
 		f.Schema.setType(rType)
 		return nil
 	}
@@ -110,11 +112,18 @@ func buildTypeFromFields(fields []*Field) reflect.Type {
 	rFields := make([]reflect.StructField, len(fields))
 	for i, field := range fields {
 		var tag reflect.StructTag
-		if field.Column != "" {
-			//reflect.StructTag(omitEmptyTag + `sqlx:"name="` + columns[i].DbName + "`"
-			tag = reflect.StructTag(fmt.Sprintf(`sqlx:"name=%v"`, field.Column))
+
+		jsonName := field.Name
+		if field.JSON != "" {
+			jsonName = field.JSON
 		}
 
+		aTagValue := jsonTagValue(jsonName, field)
+		if field.Column != "" {
+			aTagValue += fmt.Sprintf(`sqlx:"name=%v" `, field.Column)
+		}
+
+		tag = reflect.StructTag(aTagValue)
 		var fieldPath string
 		if field.Name[0] > 'Z' || field.Name[0] < 'A' {
 			fieldPath = pkgPath
@@ -137,4 +146,12 @@ func buildTypeFromFields(fields []*Field) reflect.Type {
 
 	of := reflect.StructOf(rFields)
 	return of
+}
+
+func jsonTagValue(jsonName string, field *Field) string {
+	if field.Embed {
+		return ""
+	}
+
+	return fmt.Sprintf(`json:"%v" `, jsonName)
 }

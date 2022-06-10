@@ -34,7 +34,6 @@ func (v *VeltyCodec) Value(ctx context.Context, raw string, options ...interface
 	}
 
 	dest := reflect.New(v.paramType)
-
 	if err := json.Unmarshal([]byte(raw), dest.Interface()); err != nil {
 		return nil, err
 	}
@@ -44,6 +43,7 @@ func (v *VeltyCodec) Value(ctx context.Context, raw string, options ...interface
 		return nil, err
 	}
 
+	criteria = strings.TrimSpace(criteria)
 	block, err := parser.Parse([]byte(criteria))
 	if err != nil {
 		return nil, err

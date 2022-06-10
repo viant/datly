@@ -515,14 +515,11 @@ func TestRouter(t *testing.T) {
 				"alias": "t",
 				"table": "events",
 			},
-			types: map[string]reflect.Type{
-				"filters": reflect.TypeOf(filtersSchemaType{}),
-			},
 			expected: `[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}]`,
 		},
 	}
 
-	//for i, tCase := range testcases[len(testcases)-1 : ] {
+	//for i, tCase := range testcases[len(testcases)-1:] {
 	for i, tCase := range testcases {
 		if i != 0 {
 			testcases[i-1].cleanup()

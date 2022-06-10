@@ -33,25 +33,46 @@ Resource:
       Codec:
         Name: VeltyCriteria
         Schema:
-          DataType: filters
+          DataType: Filters
         Source: '
           #set($i = 0)
           #set($inclusive = "")
-          #foreach($column in $Unsafe.Columns)
+          #foreach($Column in $Unsafe.Columns)
             $inclusive
             #set($j = 0)
-            ${Safe_Column.Columns[$i].Column} IN (
-            #foreach($searchValue in $column.SearchValues)
+            ${Safe_Column.Columns[$i].ColumnName} IN (
+            #foreach($SearchValue in $Column.SearchValues)
               #if($j != 0),#end
               ${Safe_Value.Columns[$i].SearchValues[$j]}
             #set($j = $j + 1)
             #end
             )
             #set($i = $i + 1)
-            #if($column.Inclusive == true)
+            #if($Column.Inclusive == true)
             #set($inclusive = "AND")
             #else
             #set($inclusive = "OR")
             #end
           #end
         '
+
+  Types:
+    - Name: Filters
+      Fields:
+        - Name: Columns
+          JSON: column
+          Cardinality: Many
+          Fields:
+            - Name: ColumnName
+              JSON: column_name
+              Schema:
+                DataType: string
+            - Name: Inclusive
+              JSON: inclusive
+              Schema:
+                DataType: bool
+            - Name: SearchValues
+              JSON: search_values
+              Cardinality: Many
+              Schema:
+                DataType: interface

@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+type foo struct {
+	Interface interface{}
+}
+
 //Column represents view View column
 type Column struct {
 	Name       string `json:",omitempty"`
@@ -45,8 +49,12 @@ func parseType(dataType string) (reflect.Type, error) {
 		return reflect.TypeOf(""), nil
 	case "Date", "Time":
 		return reflect.TypeOf(time.Time{}), nil
+	case "Interface":
+		t := reflect.ValueOf(interface{}(foo{})).FieldByName("Interface").Type()
+		return t, nil
 	}
-	return nil, fmt.Errorf("unsupported column type: %v", dataType)
+
+	return nil, fmt.Errorf("unsupported type: %v", dataType)
 }
 
 //ColumnName returns Column Name
