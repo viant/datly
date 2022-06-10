@@ -31,10 +31,10 @@ func initConfig(cfg *standalone.Config, options *Options) error {
 		cfg.Endpoint.Port = options.Port
 	}
 	if URL := options.RouteURL; URL != "" {
-		cfg.RouteURL = URL
+		cfg.RouteURL = normalizeURL(URL)
 	}
 	if URL := options.DependencyURL; URL != "" {
-		cfg.DependencyURL = URL
+		cfg.DependencyURL = normalizeURL(URL)
 	}
 	cfg.Init()
 	connectors, err := loadConnectors(cfg, options)
@@ -43,6 +43,10 @@ func initConfig(cfg *standalone.Config, options *Options) error {
 	}
 	if options.RouteURL != "" {
 		cfg.RouteURL = options.RouteURL
+	} else {
+		cfg.RouteURL = normalizeURL(cfg.RouteURL)
+		cfg.DependencyURL = normalizeURL(cfg.DependencyURL)
+
 	}
 	err = buildDefaultConfig(cfg, options)
 	if err != nil {
