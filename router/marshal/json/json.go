@@ -686,6 +686,20 @@ func (j *Marshaller) asObject(ptr unsafe.Pointer, fields []*fieldMarshaller, sb 
 		}
 
 		value := stringifier.xField.Value(ptr)
+		isZeroVal := isZeroValue(ptr, stringifier, value)
+		if stringifier.omitEmpty && isZeroVal {
+			continue
+		}
+
+		if counter > 0 {
+			sb.WriteByte(',')
+		}
+		counter++
+
+		sb.WriteByte('"')
+		sb.WriteString(stringifier.outputName)
+		sb.WriteString(`":`)
+
 		if j.config.Transforms != nil {
 
 			if codec, ok := j.config.Transforms[fullPath]; ok {
@@ -699,7 +713,8 @@ func (j *Marshaller) asObject(ptr unsafe.Pointer, fields []*fieldMarshaller, sb 
 					return err
 				}
 
-				transformed, err := lookup.Visitor().Value(context.TODO(), string(asBytes))
+				raw := strings.Trim(string(asBytes), `"`)
+				transformed, err := lookup.Visitor().Value(context.TODO(), raw)
 				if err != nil {
 					return err
 				}
@@ -708,28 +723,15 @@ func (j *Marshaller) asObject(ptr unsafe.Pointer, fields []*fieldMarshaller, sb 
 				if err != nil {
 					return err
 				}
-				sb.WriteString(string(asBytes))
+				sb.WriteString(raw)
 				continue
 			}
 		}
 
-		isZeroVal := isZeroValue(ptr, stringifier, value)
-		if stringifier.omitEmpty && isZeroVal {
-			continue
-		}
-
-		if counter > 0 {
-			sb.WriteByte(',')
-		}
-
-		sb.WriteByte('"')
-		sb.WriteString(stringifier.outputName)
-		sb.WriteString(`":`)
 		if err := stringifier.marshall(ptr, sb, filters); err != nil {
 			return err
 		}
 
-		counter++
 	}
 
 	sb.WriteByte('}')
