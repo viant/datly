@@ -8,7 +8,9 @@ import (
 
 type (
 	//LifecycleVisitor visitor can implement BeforeFetcher and/or AfterFetcher
-	LifecycleVisitor interface{}
+	LifecycleVisitor interface {
+		Codec
+	}
 
 	//BeforeFetcher represents Lifecycle hook which is called before view was read from the Database.
 	BeforeFetcher interface {

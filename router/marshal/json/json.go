@@ -2,7 +2,10 @@ package json
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox/format"
@@ -671,11 +674,45 @@ func (j *Marshaller) asObject(ptr unsafe.Pointer, fields []*fieldMarshaller, sb 
 	counter := 0
 	sb.WriteByte('{')
 	for _, stringifier := range fields {
-		if isExcluded(filter, stringifier.fieldName) {
+		var fullPath string
+		if path == "" {
+			fullPath = stringifier.outputName
+		} else {
+			fullPath = path + "." + stringifier.outputName
+		}
+
+		if isExcluded(filter, stringifier.fieldName, j.config, fullPath) {
 			continue
 		}
 
 		value := stringifier.xField.Value(ptr)
+		if j.config.Transforms != nil {
+
+			if codec, ok := j.config.Transforms[fullPath]; ok {
+				lookup, err := registry.Codecs.Lookup(codec.Codec)
+				if err != nil {
+					return err
+				}
+
+				asBytes, err := json.Marshal(value)
+				if err != nil {
+					return err
+				}
+
+				transformed, err := lookup.Visitor().Value(context.TODO(), string(asBytes))
+				if err != nil {
+					return err
+				}
+
+				asBytes, err = json.Marshal(transformed)
+				if err != nil {
+					return err
+				}
+				sb.WriteString(string(asBytes))
+				continue
+			}
+		}
+
 		isZeroVal := isZeroValue(ptr, stringifier, value)
 		if stringifier.omitEmpty && isZeroVal {
 			continue
@@ -718,7 +755,13 @@ func isZeroValue(ptr unsafe.Pointer, stringifier *fieldMarshaller, value interfa
 	return false
 }
 
-func isExcluded(filter Filter, name string) bool {
+func isExcluded(filter Filter, name string, config marshal.Default, path string) bool {
+	if config.Exclude != nil {
+		if _, ok := config.Exclude[path]; ok {
+			return true
+		}
+	}
+
 	if filter == nil {
 		return false
 	}

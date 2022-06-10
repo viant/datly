@@ -50,8 +50,70 @@ var sanitizers = []*Sanitizer{
 		},
 		keyword: SafeValue,
 	},
+	{
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns *Columns) (string, error) {
+			raw, ok := value.(string)
+			if !ok {
+				return "", fmt.Errorf("expected value to be type of string but was %T", value)
+			}
 
-	//SafeInt, SafeString, SafeBool, SafeFloat}
+			asInt, err := strconv.Atoi(raw)
+
+			if err != nil {
+				return "", err
+			}
+
+			*placeholders = append(*placeholders, asInt)
+			return strings.Replace(criteria, id, "?", 1), nil
+		},
+		keyword: SafeInt,
+	},
+	{
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns *Columns) (string, error) {
+			raw, ok := value.(string)
+			if !ok {
+				return "", fmt.Errorf("expected value to be type of string but was %T", value)
+			}
+
+			*placeholders = append(*placeholders, raw)
+			return strings.Replace(criteria, id, "?", 1), nil
+		},
+		keyword: SafeString,
+	},
+	{
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns *Columns) (string, error) {
+			raw, ok := value.(string)
+			if !ok {
+				return "", fmt.Errorf("expected value to be type of string but was %T", value)
+			}
+
+			asBool, err := strconv.ParseBool(raw)
+			if err != nil {
+				return "", err
+			}
+
+			*placeholders = append(*placeholders, asBool)
+			return strings.Replace(criteria, id, "?", 1), nil
+		},
+		keyword: SafeBool,
+	},
+	{
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns *Columns) (string, error) {
+			raw, ok := value.(string)
+			if !ok {
+				return "", fmt.Errorf("expected value to be type of string but was %T", value)
+			}
+
+			asFloat, err := strconv.ParseFloat(raw, 64)
+			if err != nil {
+				return "", err
+			}
+
+			*placeholders = append(*placeholders, asFloat)
+			return strings.Replace(criteria, id, "?", 1), nil
+		},
+		keyword: SafeFloat,
+	},
 }
 
 type VeltyCodec struct {
@@ -95,10 +157,6 @@ func (v *VeltyCodec) Value(ctx context.Context, raw string, options ...interface
 			var prefix string
 			if dotIndex != -1 {
 				prefix = selectName[:dotIndex]
-			}
-
-			if prefix == SafeColumn || prefix == SafeValue {
-				selectName = selectName[dotIndex+1:]
 			}
 
 			value, err := v.extractValue(selectName, dest)
