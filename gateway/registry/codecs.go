@@ -2,13 +2,15 @@ package registry
 
 import (
 	"github.com/viant/datly/auth/gcp"
-	"github.com/viant/datly/visitor"
+	"github.com/viant/datly/codec"
 )
 
 const (
-	CodecKeyJwtClaim = "JwtClaim"
+	CodecKeyJwtClaim  = "JwtClaim"
+	CodecKeyAsStrings = "AsStrings"
 )
 
-var Codecs = visitor.NewVisitors(
-	visitor.New(CodecKeyJwtClaim, &gcp.JwtClaim{}),
+var Codecs = codec.NewVisitors(
+	codec.New(CodecKeyJwtClaim, &gcp.JwtClaim{}),
+	codec.New(CodecKeyAsStrings, &AsStrings{}),
 )

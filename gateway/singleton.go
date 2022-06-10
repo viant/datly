@@ -2,8 +2,8 @@ package gateway
 
 import (
 	"context"
+	"github.com/viant/datly/codec"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/visitor"
 	"github.com/viant/gmetric"
 	"sync"
 )
@@ -11,7 +11,7 @@ import (
 var service *Service
 var once sync.Once
 
-func Singleton(configURL string, visitors visitor.Visitors, types view.Types, metric *gmetric.Service) (*Service, error) {
+func Singleton(configURL string, visitors codec.Visitors, types view.Types, metric *gmetric.Service) (*Service, error) {
 	var err error
 	once.Do(func() {
 		ctx := context.Background()
@@ -29,7 +29,7 @@ func Singleton(configURL string, visitors visitor.Visitors, types view.Types, me
 
 var onceWithConfig sync.Once
 
-func SingletonWithConfig(config *Config, visitors visitor.Visitors, types view.Types, metric *gmetric.Service) (*Service, error) {
+func SingletonWithConfig(config *Config, visitors codec.Visitors, types view.Types, metric *gmetric.Service) (*Service, error) {
 	var err error
 
 	onceWithConfig.Do(func() {

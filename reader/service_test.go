@@ -8,12 +8,12 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
+	"github.com/viant/datly/codec"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
-	"github.com/viant/datly/visitor"
 	"github.com/viant/dsunit"
 	"github.com/viant/gmetric/counter/base"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
@@ -82,7 +82,7 @@ type usecase struct {
 	resource    *view.Resource
 	dataset     string
 	provider    *base.Provider
-	visitors    visitor.Visitors
+	visitors    codec.Visitors
 }
 
 func TestRead(t *testing.T) {

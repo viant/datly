@@ -6,8 +6,8 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/codec"
 	"github.com/viant/datly/logger"
-	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 )
@@ -32,7 +32,7 @@ type Resource struct {
 	Loggers  logger.Adapters
 	_loggers logger.AdapterIndex
 
-	_visitors visitor.Visitors
+	_visitors codec.Visitors
 }
 
 func (r *Resource) LoadText(ctx context.Context, URL string) (string, error) {
@@ -175,7 +175,7 @@ func (r *Resource) GetConnectors() Connectors {
 }
 
 //Init initializes Resource
-func (r *Resource) Init(ctx context.Context, types Types, visitors visitor.Visitors) error {
+func (r *Resource) Init(ctx context.Context, types Types, visitors codec.Visitors) error {
 	r._types = types.copy()
 	r._visitors = visitors
 
@@ -214,7 +214,7 @@ func (r *Resource) View(name string) (*View, error) {
 }
 
 //NewResourceFromURL loads and initializes Resource from file .yaml
-func NewResourceFromURL(ctx context.Context, url string, types Types, visitors visitor.Visitors) (*Resource, error) {
+func NewResourceFromURL(ctx context.Context, url string, types Types, visitors codec.Visitors) (*Resource, error) {
 	resource, err := LoadResourceFromURL(ctx, url, afs.New())
 	if err != nil {
 		return nil, err

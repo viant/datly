@@ -9,9 +9,9 @@ import (
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/auth/secret"
+	"github.com/viant/datly/codec"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/visitor"
 	"github.com/viant/gmetric"
 	"log"
 	"net/http"
@@ -26,7 +26,7 @@ import (
 //Service represents gateway service
 type Service struct {
 	Config               *Config
-	visitors             visitor.Visitors
+	visitors             codec.Visitors
 	types                view.Types
 	mux                  sync.RWMutex
 	routerResources      []*router.Resource
@@ -272,7 +272,7 @@ func (r *Service) apiURI(URL string) string {
 }
 
 //New creates a gateway service
-func New(ctx context.Context, config *Config, visitors visitor.Visitors, types view.Types, metrics *gmetric.Service) (*Service, error) {
+func New(ctx context.Context, config *Config, visitors codec.Visitors, types view.Types, metrics *gmetric.Service) (*Service, error) {
 	config.Init()
 	err := config.Validate()
 	if err != nil {

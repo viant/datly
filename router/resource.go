@@ -10,10 +10,10 @@ import (
 	"github.com/viant/afs/option"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/codec"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"net/http"
@@ -35,7 +35,7 @@ type (
 		Logger      *Logger //connect, dataview, time, SQL with params if exceeded time
 		Cors        *Cors   //TODO github.com/viant/datly/v0/app/lambda/bridge/cors.go
 
-		_visitors visitor.Visitors
+		_visitors codec.Visitors
 	}
 
 	Logger struct {
@@ -129,7 +129,7 @@ func (r *Resource) addLogger(aView *view.View, timeLogger *logger.Adapter) {
 	}
 }
 
-func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, visitors visitor.Visitors, types view.Types, resources map[string]*view.Resource, metrics *view.Metrics) (*Resource, error) {
+func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, visitors codec.Visitors, types view.Types, resources map[string]*view.Resource, metrics *view.Metrics) (*Resource, error) {
 	resourceData, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, err

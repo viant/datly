@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/datly/auth/cognito"
+	"github.com/viant/datly/codec"
 	"github.com/viant/datly/gateway/runtime/standalone/handler"
-	"github.com/viant/datly/visitor"
 	"net/http"
 	"strings"
 
@@ -90,8 +90,8 @@ func InitAuthService(config *gateway.Config) (*cognito.Service, error) {
 	var err error
 	authServiceInit.Do(func() {
 		if authService, err = cognito.New(config.Cognito, fs, &embedFs); err == nil {
-			codec := visitor.Codec(authService)
-			registry.Codecs.Register(visitor.New(registry.CodecKeyJwtClaim, codec))
+			authCodec := codec.Codec(authService)
+			registry.Codecs.Register(codec.New(registry.CodecKeyJwtClaim, authCodec))
 		}
 
 	})

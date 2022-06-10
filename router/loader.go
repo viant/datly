@@ -3,8 +3,8 @@ package router
 import (
 	"context"
 	"github.com/viant/afs"
+	"github.com/viant/datly/codec"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/visitor"
 )
 
 type Loader struct {
@@ -12,7 +12,7 @@ type Loader struct {
 	Path string
 
 	types        view.Types
-	visitors     visitor.Visitors
+	visitors     codec.Visitors
 	metrics      *view.Metrics
 	afsService   afs.Service
 	dependencies map[string]*view.Resource
@@ -30,7 +30,7 @@ func (l *Loader) SetTypes(types view.Types) *Loader {
 	return l
 }
 
-func (l *Loader) SetVisitors(visitors visitor.Visitors) *Loader {
+func (l *Loader) SetVisitors(visitors codec.Visitors) *Loader {
 	l.visitors = visitors
 	return l
 }

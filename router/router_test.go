@@ -12,9 +12,9 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/assertly"
+	"github.com/viant/datly/codec"
 	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/visitor"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
 	"google.golang.org/api/oauth2/v2"
 	"io"
@@ -41,7 +41,7 @@ type testcase struct {
 	uri              string
 	method           string
 	expected         string
-	visitors         visitor.Visitors
+	visitors         codec.Visitors
 	types            view.Types
 	headers          http.Header
 	requestBody      string
@@ -197,8 +197,8 @@ func TestRouter(t *testing.T) {
 			description: "visitors | AfterFetcher",
 			resourceURI: "004_visitors",
 			uri:         "/api/events",
-			visitors: visitor.NewVisitors(
-				visitor.New("event_visitor", &eventAfterFetcher{}),
+			visitors: codec.NewVisitors(
+				codec.New("event_visitor", &eventAfterFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -210,8 +210,8 @@ func TestRouter(t *testing.T) {
 			description: "visitors | BeforeFetcher",
 			resourceURI: "004_visitors",
 			uri:         "/api/events",
-			visitors: visitor.NewVisitors(
-				visitor.New("event_visitor", &eventBeforeFetcher{}),
+			visitors: codec.NewVisitors(
+				codec.New("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -226,8 +226,8 @@ func TestRouter(t *testing.T) {
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
 			},
-			visitors: visitor.NewVisitors(
-				visitor.New("event_visitor", &eventBeforeFetcher{}),
+			visitors: codec.NewVisitors(
+				codec.New("event_visitor", &eventBeforeFetcher{}),
 			),
 			expected: `[]`,
 			method:   http.MethodGet,
@@ -236,8 +236,8 @@ func TestRouter(t *testing.T) {
 			description: "templates | none value set",
 			resourceURI: "005_templates",
 			uri:         "/api/events",
-			visitors: visitor.NewVisitors(
-				visitor.New("event_visitor", &eventBeforeFetcher{}),
+			visitors: codec.NewVisitors(
+				codec.New("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -249,8 +249,8 @@ func TestRouter(t *testing.T) {
 			description: "templates | user_id",
 			resourceURI: "005_templates",
 			uri:         "/api/events?user_id=1",
-			visitors: visitor.NewVisitors(
-				visitor.New("event_visitor", &eventBeforeFetcher{}),
+			visitors: codec.NewVisitors(
+				codec.New("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -262,8 +262,8 @@ func TestRouter(t *testing.T) {
 			description: "templates | quantity",
 			resourceURI: "005_templates",
 			uri:         "/api/events?quantity=10",
-			visitors: visitor.NewVisitors(
-				visitor.New("event_visitor", &eventBeforeFetcher{}),
+			visitors: codec.NewVisitors(
+				codec.New("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -325,8 +325,8 @@ func TestRouter(t *testing.T) {
 				//ID: 1, Email: abc@example.com
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MSwiRW1haWwiOiJhYmNAZXhhbXBsZS5jb20ifQ.dm3jSSuqy9wf4BsjU1dElRQQEySC5nn6fCUTmTKqt2")},
 			},
-			visitors: visitor.NewVisitors(
-				visitor.New(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
+			visitors: codec.NewVisitors(
+				codec.New(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
 			),
 			types: map[string]reflect.Type{
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
@@ -342,8 +342,8 @@ func TestRouter(t *testing.T) {
 				//ID: 1
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MiwiRW1haWwiOiJleGFtcGxlQGdtYWlsLmNvbSJ9.XsZ115KqQK8uQE9for6NaphYS1VHdJc_famKWHo1Dcw")},
 			},
-			visitors: visitor.NewVisitors(
-				visitor.New(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
+			visitors: codec.NewVisitors(
+				codec.New(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
 			),
 			types: map[string]reflect.Type{
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
@@ -359,8 +359,8 @@ func TestRouter(t *testing.T) {
 				//ID: 4
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJFbWFpbCI6IkFubkBleGFtcGxlLmNvbSIsIklkIjo0fQ.9A0LWtsh_tskG-hLBFVNj7PNRQE8qWc5ZioqLWPS1gQ")},
 			},
-			visitors: visitor.NewVisitors(
-				visitor.New(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
+			visitors: codec.NewVisitors(
+				codec.New(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
 			),
 			types: map[string]reflect.Type{
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
@@ -591,7 +591,7 @@ func (c *testcase) readResource(t *testing.T, fs afs.Service, resourceUrl string
 	return resource, true
 }
 
-func (c *testcase) readViewResource(t *testing.T, resourceUrl string, types view.Types, visitors visitor.Visitors) (*view.Resource, bool) {
+func (c *testcase) readViewResource(t *testing.T, resourceUrl string, types view.Types, visitors codec.Visitors) (*view.Resource, bool) {
 	resource, err := view.NewResourceFromURL(context.TODO(), resourceUrl, types, visitors)
 	if !assert.Nil(t, err, c.description) {
 		return nil, false

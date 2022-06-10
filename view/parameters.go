@@ -3,8 +3,8 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/codec"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -92,7 +92,7 @@ func (v *Codec) extractCodecFn(resource *Resource, paramType reflect.Type, view 
 	}
 
 	switch actual := vVisitor.Visitor().(type) {
-	case visitor.Codec:
+	case codec.Codec:
 		return actual.Value, nil
 	default:
 		return nil, fmt.Errorf("expected %T to implement Codec", actual)

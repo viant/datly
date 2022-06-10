@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/codec"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox"
 	"net/http"
 	"os"
@@ -239,7 +239,7 @@ func (r *Router) putCache(ctx context.Context, route *Route, cacheEntry *cache.E
 }
 
 func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Request, route *Route) (shouldContinue bool) {
-	if actual, ok := route.Visitor.Visitor().(visitor.BeforeFetcher); ok {
+	if actual, ok := route.Visitor.Visitor().(codec.BeforeFetcher); ok {
 		closed, err := actual.BeforeFetch(response, request)
 		if closed {
 			return false
@@ -255,7 +255,7 @@ func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Requ
 }
 
 func (r *Router) runAfterFetch(response http.ResponseWriter, request *http.Request, route *Route, dest interface{}) (shouldContinue bool) {
-	if actual, ok := route.Visitor.Visitor().(visitor.AfterFetcher); ok {
+	if actual, ok := route.Visitor.Visitor().(codec.AfterFetcher); ok {
 		responseClosed, err := actual.AfterFetch(dest, response, request)
 		if responseClosed {
 			return false

@@ -3,11 +3,11 @@ package router
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/codec"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/visitor"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"net/http"
@@ -29,7 +29,7 @@ const (
 type (
 	Routes []*Route
 	Route  struct {
-		Visitor *visitor.Visitor
+		Visitor *codec.Visitor
 		URI     string
 		Method  string
 		Service ServiceType
@@ -46,12 +46,13 @@ type (
 	}
 
 	Output struct {
-		Cardinality   view.Cardinality `json:",omitempty"`
-		CaseFormat    view.CaseFormat  `json:",omitempty"`
-		OmitEmpty     bool             `json:",omitempty"`
-		Style         Style            `json:",omitempty"`
-		ResponseField string           `json:",omitempty"`
-
+		Cardinality     view.Cardinality `json:",omitempty"`
+		CaseFormat      view.CaseFormat  `json:",omitempty"`
+		OmitEmpty       bool             `json:",omitempty"`
+		Style           Style            `json:",omitempty"`
+		ResponseField   string           `json:",omitempty"`
+		Transforms      marshal.Transforms
+		Exclude         []string
 		_caser          format.Case
 		_marshaller     *json.Marshaller
 		_responseSetter *responseSetter
@@ -120,7 +121,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 
 func (r *Route) initVisitor(resource *Resource) error {
 	if r.Visitor == nil {
-		r.Visitor = &visitor.Visitor{}
+		r.Visitor = &codec.Visitor{}
 		return nil
 	}
 
@@ -162,6 +163,8 @@ func (r *Route) initMarshaller() error {
 	marshaller, err := json.New(r.responseType(), marshal.Default{
 		OmitEmpty:  r.OmitEmpty,
 		CaseFormat: r._caser,
+		Transforms: r.Transforms.Index(),
+		Exclude:    marshal.Exclude(r.Exclude).Index(),
 	})
 
 	if err != nil {
