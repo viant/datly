@@ -311,6 +311,10 @@ func (r *Collector) indexParentPositions(name string) {
 	xType := r.parent.types[name]
 	r.parent.valuePosition[name] = map[interface{}][]int{}
 	for position, v := range *values {
+		if v == nil {
+			continue
+		}
+
 		val := xType.Deref(v)
 		val = normalizeKey(val)
 		_, ok := r.parent.valuePosition[name][val]

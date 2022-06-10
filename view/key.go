@@ -1,6 +1,10 @@
 package view
 
 func normalizeKey(key interface{}) interface{} {
+	if key == nil {
+		return nil
+	}
+
 	switch actual := key.(type) {
 	case *int64:
 		if actual == nil {

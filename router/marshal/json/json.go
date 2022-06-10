@@ -198,7 +198,7 @@ func (f *fieldMarshaller) init(field reflect.StructField, config marshal.Default
 		} else if rType == timeType {
 			updateTimeMarshaller(f, wasPtr, defaultTag)
 		} else {
-			if err := updateNonPrimitiveMarshaller(f); err != nil {
+			if err := j.updateNonPrimitiveMarshaller(f); err != nil {
 				return err
 			}
 			childrenPath := f.fullPath()
@@ -286,8 +286,8 @@ func appendTime(sb *bytes.Buffer, aTime *time.Time, tag *DefaultTag, timeFormat 
 	return nil
 }
 
-func updateNonPrimitiveMarshaller(stringifier *fieldMarshaller) error {
-	marshaller, err := stringifyNonPrimitive(stringifier.xField.Type)
+func (j *Marshaller) updateNonPrimitiveMarshaller(stringifier *fieldMarshaller) error {
+	marshaller, err := j.stringifyNonPrimitive(stringifier.xField.Type)
 
 	if err != nil {
 		return err
@@ -660,7 +660,7 @@ func appendInt(value int, wasNull bool, aTag *DefaultTag, sb *bytes.Buffer) erro
 	return nil
 }
 
-func asObject(ptr unsafe.Pointer, fields []*fieldMarshaller, sb *bytes.Buffer, filters *Filters, path string) error {
+func (j *Marshaller) asObject(ptr unsafe.Pointer, fields []*fieldMarshaller, sb *bytes.Buffer, filters *Filters, path string) error {
 	if ptr == nil {
 		sb.WriteString(null)
 		return nil
@@ -754,7 +754,7 @@ func (j *Marshaller) Marshal(value interface{}, filters *Filters) ([]byte, error
 }
 
 func (j *Marshaller) stringifyValue(ptr unsafe.Pointer, filters *Filters, rType reflect.Type, buffer *bytes.Buffer, path string) error {
-	stringifier, err := stringifyNonPrimitive(rType)
+	stringifier, err := j.stringifyNonPrimitive(rType)
 	if err != nil {
 		return err
 	}
@@ -765,22 +765,22 @@ func (j *Marshaller) stringifyValue(ptr unsafe.Pointer, filters *Filters, rType 
 	return nil
 }
 
-func stringifyNonPrimitive(rType reflect.Type) (marshallObjFn, error) {
+func (j *Marshaller) stringifyNonPrimitive(rType reflect.Type) (marshallObjFn, error) {
 	for rType.Kind() == reflect.Ptr {
 		rType = rType.Elem()
 	}
 
 	switch rType.Kind() {
 	case reflect.Struct:
-		return asObject, nil
+		return j.asObject, nil
 	case reflect.Slice:
-		return storeOrLoadSliceMarshaller(rType)
+		return j.storeOrLoadSliceMarshaller(rType)
 	default:
 		return nil, fmt.Errorf("unsupported type %v", rType)
 	}
 }
 
-func storeOrLoadSliceMarshaller(rType reflect.Type) (marshallObjFn, error) {
+func (j *Marshaller) storeOrLoadSliceMarshaller(rType reflect.Type) (marshallObjFn, error) {
 	encoder, ok := sliceStringifier.Load(rType)
 	if ok {
 		if marshaller, ok := encoder.(marshallObjFn); ok {
@@ -788,12 +788,12 @@ func storeOrLoadSliceMarshaller(rType reflect.Type) (marshallObjFn, error) {
 		}
 	}
 
-	marshaller := asSlice(rType)
+	marshaller := j.asSlice(rType)
 	sliceStringifier.Store(rType, marshaller)
 	return marshaller, nil
 }
 
-func asSlice(rType reflect.Type) marshallObjFn {
+func (j *Marshaller) asSlice(rType reflect.Type) marshallObjFn {
 	xslice := xunsafe.NewSlice(rType)
 	return func(ptr unsafe.Pointer, fields []*fieldMarshaller, sb *bytes.Buffer, filters *Filters, path string) error {
 		s := (*reflect.SliceHeader)(ptr)
@@ -807,7 +807,7 @@ func asSlice(rType reflect.Type) marshallObjFn {
 			if i != 0 {
 				sb.WriteByte(',')
 			}
-			if err := asObject(xunsafe.AsPointer(xslice.ValuePointerAt(ptr, i)), fields, sb, filters, path); err != nil {
+			if err := j.asObject(xunsafe.AsPointer(xslice.ValuePointerAt(ptr, i)), fields, sb, filters, path); err != nil {
 				return err
 			}
 		}
