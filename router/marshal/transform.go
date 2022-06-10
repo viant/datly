@@ -1,8 +1,8 @@
 package marshal
 
 type Transform struct {
-	FieldName string
-	Codec     string
+	Path  string
+	Codec string
 }
 
 type Transforms []*Transform
@@ -10,7 +10,7 @@ type Transforms []*Transform
 func (t Transforms) Index() map[string]*Transform {
 	var result = map[string]*Transform{}
 	for i, item := range t {
-		result[item.FieldName] = t[i]
+		result[item.Path] = t[i]
 	}
 	return result
 }

@@ -21,7 +21,7 @@ func NewUnsupportedFormat(paramName, paramValue string) *UnsupportedFormat {
 }
 
 func (u *UnsupportedFormat) Error() string {
-	return fmt.Sprintf("unsupported value %v of query param '%v' format, supported formats: [fieldName] || [prefix.FieldName]", u.paramValue, u.paramName)
+	return fmt.Sprintf("unsupported value %v of query param '%v' format, supported formats: [fieldName] || [prefix.Path]", u.paramValue, u.paramName)
 }
 
 func NewUnspecifiedPrefix(prefix string) *UnspecifiedPrefix {
