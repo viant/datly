@@ -59,6 +59,14 @@ type (
 	gcpMockDecoder     struct{}
 )
 
+func (e *eventBeforeFetcher) Value(ctx context.Context, raw string, options ...interface{}) (interface{}, error) {
+	return nil, nil
+}
+
+func (e *eventAfterFetcher) Value(ctx context.Context, raw string, options ...interface{}) (interface{}, error) {
+	return nil, nil
+}
+
 func (g *gcpMockDecoder) Value(_ context.Context, raw string, _ ...interface{}) (interface{}, error) {
 	tokenType := "Bearer "
 	if index := strings.Index(raw, tokenType); index != -1 {
