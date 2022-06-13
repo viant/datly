@@ -48,6 +48,7 @@ type (
 	Codec   struct {
 		Name     string
 		Source   string
+		SourceURL string
 		Schema   *Schema
 		_codecFn CodecFn //shall rename to codec ?
 	}
@@ -55,7 +56,13 @@ type (
 
 func (v *Codec) Init(resource *Resource, view *View, paramType reflect.Type) error {
 	v.ensureSchema(paramType)
-
+	if v.SourceURL != "" && v.Source == ""{
+		data, err := resource.LoadText(context.Background(), v.SourceURL)
+		if err != nil {
+			return err
+		}
+		v.Source = data
+	}
 	if err := v.Schema.Init(nil, nil, format.CaseUpperCamel, resource._types); err != nil {
 		return err
 	}
