@@ -14,7 +14,6 @@ type ParametersSlice []*Parameter
 //Index indexes parameters by Parameter.Name
 func (p ParametersSlice) Index() ParametersIndex {
 	result := ParametersIndex(make(map[string]*Parameter))
-
 	for parameterIndex := range p {
 		result.Register(p[parameterIndex])
 	}
@@ -56,7 +55,6 @@ func (p ParametersIndex) Lookup(paramName string) (*Parameter, error) {
 //Register registers parameter
 func (p ParametersIndex) Register(parameter *Parameter) {
 	keys := shared.KeysOf(parameter.Name, false)
-
 	for _, key := range keys {
 		p[key] = parameter
 	}

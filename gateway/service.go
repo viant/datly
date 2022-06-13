@@ -166,7 +166,7 @@ func (r *Service) handleRouterResourceChange(ctx context.Context, hasChanged *bo
 		}
 		switch operation {
 		case resource.Added, resource.Modified:
-			if strings.HasSuffix(URL, "sql") {
+			if !strings.HasSuffix(URL, "yaml") {
 				return
 			}
 			res, err := r.loadRouterResource(ctx, URL, fs)
