@@ -328,18 +328,6 @@ func (b *Builder) updateCriteria(params *view.CommonParams, columnsInMeta *reser
 		b.appendCriteria(&sb, keywords.ColumnsIn, false)
 	}
 
-	if selector.Criteria != "" {
-		if sb.Len() > 0 {
-			sb.WriteByte(' ')
-			sb.WriteString(keywords.AndSelectorCriteria)
-			sb.WriteByte(' ')
-		} else {
-			sb.WriteByte(' ')
-			sb.WriteString(keywords.SelectorCriteria)
-			sb.WriteByte(' ')
-		}
-	}
-
 	params.WhereClause = sb.String()
 	return nil
 }

@@ -23,13 +23,14 @@ const (
 )
 
 type Sanitizer struct {
-	sanitize func(id, criteria string, value interface{}, placeholders *[]interface{}, columns *Columns) (string, error)
-	keyword  string
+	sanitize   func(id, criteria string, value interface{}, placeholders *[]interface{}, columns Columns) (string, error)
+	keyword    string
+	isFunction bool
 }
 
 var sanitizers = []*Sanitizer{
 	{
-		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns *Columns) (string, error) {
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns Columns) (string, error) {
 			columnName, ok := value.(string)
 			if !ok {
 				return "", fmt.Errorf("expected column name to be type of string but was %T", value)
@@ -44,14 +45,14 @@ var sanitizers = []*Sanitizer{
 		keyword: SafeColumn,
 	},
 	{
-		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns *Columns) (string, error) {
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns Columns) (string, error) {
 			*placeholders = append(*placeholders, value)
 			return strings.Replace(criteria, id, "?", 1), nil
 		},
 		keyword: SafeValue,
 	},
 	{
-		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns *Columns) (string, error) {
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns Columns) (string, error) {
 			raw, ok := value.(string)
 			if !ok {
 				return "", fmt.Errorf("expected value to be type of string but was %T", value)
@@ -66,10 +67,11 @@ var sanitizers = []*Sanitizer{
 			*placeholders = append(*placeholders, asInt)
 			return strings.Replace(criteria, id, "?", 1), nil
 		},
-		keyword: SafeInt,
+		keyword:    SafeInt,
+		isFunction: true,
 	},
 	{
-		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns *Columns) (string, error) {
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns Columns) (string, error) {
 			raw, ok := value.(string)
 			if !ok {
 				return "", fmt.Errorf("expected value to be type of string but was %T", value)
@@ -78,10 +80,11 @@ var sanitizers = []*Sanitizer{
 			*placeholders = append(*placeholders, raw)
 			return strings.Replace(criteria, id, "?", 1), nil
 		},
-		keyword: SafeString,
+		keyword:    SafeString,
+		isFunction: true,
 	},
 	{
-		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns *Columns) (string, error) {
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns Columns) (string, error) {
 			raw, ok := value.(string)
 			if !ok {
 				return "", fmt.Errorf("expected value to be type of string but was %T", value)
@@ -95,10 +98,11 @@ var sanitizers = []*Sanitizer{
 			*placeholders = append(*placeholders, asBool)
 			return strings.Replace(criteria, id, "?", 1), nil
 		},
-		keyword: SafeBool,
+		keyword:    SafeBool,
+		isFunction: true,
 	},
 	{
-		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns *Columns) (string, error) {
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns Columns) (string, error) {
 			raw, ok := value.(string)
 			if !ok {
 				return "", fmt.Errorf("expected value to be type of string but was %T", value)
@@ -112,7 +116,8 @@ var sanitizers = []*Sanitizer{
 			*placeholders = append(*placeholders, asFloat)
 			return strings.Replace(criteria, id, "?", 1), nil
 		},
-		keyword: SafeFloat,
+		keyword:    SafeFloat,
+		isFunction: true,
 	},
 }
 
@@ -153,10 +158,25 @@ func (v *VeltyCodec) Value(ctx context.Context, raw string, options ...interface
 			actualId := extractActualId(actual.FullName)
 
 			selectName := actualId
-			dotIndex := strings.Index(selectName, ".")
-			var prefix string
-			if dotIndex != -1 {
-				prefix = selectName[:dotIndex]
+			var selectorSanitizer *Sanitizer
+			for _, sanitizer := range sanitizers {
+				if strings.HasPrefix(selectName, sanitizer.keyword) {
+					if sanitizer.isFunction {
+						selectName = selectName[len(sanitizer.keyword)+1 : len(selectName)-1]
+					} else {
+						selectName = selectName[len(sanitizer.keyword)+1 : len(selectName)]
+					}
+					selectorSanitizer = sanitizer
+					break
+				}
+			}
+
+			if selectorSanitizer.isFunction {
+				criteria, err = selectorSanitizer.sanitize(actual.FullName, criteria, selectName, &selector.Placeholders, v.columns)
+				if err != nil {
+					return nil, err
+				}
+				continue
 			}
 
 			value, err := v.extractValue(selectName, dest)
@@ -164,17 +184,9 @@ func (v *VeltyCodec) Value(ctx context.Context, raw string, options ...interface
 				return nil, err
 			}
 
-			switch prefix {
-			case SafeColumn:
-				columnName := value.(string)
-				_, err = v.columns.Lookup(columnName)
-				if err != nil {
-					return nil, err
-				}
-				criteria = strings.Replace(criteria, actual.FullName, columnName, 1)
-			default:
-				selector.Placeholders = append(selector.Placeholders, value)
-				criteria = strings.Replace(criteria, actual.FullName, "?", 1)
+			criteria, err = selectorSanitizer.sanitize(actual.FullName, criteria, value, &selector.Placeholders, v.columns)
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
