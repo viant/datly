@@ -15,7 +15,16 @@ import (
 	_ "github.com/viant/sqlx/metadata/product/pg"
 	"os"
 )
+import (
+	"github.com/google/gops/agent"
+	"log"
+)
 
 func main() {
+	go func() {
+		if err := agent.Listen(agent.Options{}); err != nil {
+			log.Fatal(err)
+		}
+	}()
 	cmd.Run(os.Args[1:])
 }
