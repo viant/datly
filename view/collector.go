@@ -20,7 +20,7 @@ type Collector struct {
 
 	dest          interface{}
 	appender      *xunsafe.Appender
-	valuePosition map[string]map[interface{}][]int //stores positions in main slice, based on field name, indexed by field value.
+	valuePosition map[string]map[interface{}][]int //stores positions in main slice, based on _field name, indexed by _field value.
 	types         map[string]*xunsafe.Type
 	relation      *Relation
 
@@ -222,7 +222,7 @@ func (r *Collector) indexValueToPosition(rel *Relation, fieldValue interface{}, 
 }
 
 func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error {
-	keyField := relation.Of.field
+	keyField := relation.Of._field
 	holderField := relation.holderField
 	dest := r.parent.Dest()
 	destPtr := xunsafe.AsPointer(dest)
@@ -246,7 +246,7 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 }
 
 func (r *Collector) visitorMany(relation *Relation) func(value interface{}) error {
-	keyField := relation.Of.field
+	keyField := relation.Of._field
 	holderField := relation.holderField
 	var xType *xunsafe.Type
 	var values *[]interface{}
@@ -400,7 +400,7 @@ func (r *Collector) MergeData() {
 func (r *Collector) mergeToParent() {
 	valuePositions := r.parentValuesPositions(r.relation.Column)
 	destPtr := xunsafe.AsPointer(r.dest)
-	field := r.relation.Of.field
+	field := r.relation.Of._field
 	holderField := r.relation.holderField
 	parentSlice := r.parent.slice
 	parentDestPtr := xunsafe.AsPointer(r.parent.dest)
@@ -429,7 +429,7 @@ func (r *Collector) mergeToParent() {
 	}
 }
 
-//ParentPlaceholders if Collector doesn't support parallel fetching and has a Parent, it will return a parent field values and column name
+//ParentPlaceholders if Collector doesn't support parallel fetching and has a Parent, it will return a parent _field values and column name
 //that the relation was created from, otherwise empty slice and empty string
 //i.e. if Parent Collector collects Employee{AccountId: int}, Column.Name is account_id and Collector collects Account
 //it will extract and return all the AccountId that were accumulated and account_id

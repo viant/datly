@@ -137,7 +137,7 @@ func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resourc
 func (t *Template) addField(name string, rType reflect.Type) error {
 	_, ok := t._fieldIndex[name]
 	if ok {
-		return fmt.Errorf("field with %v name already exists", name)
+		return fmt.Errorf("_field with %v name already exists", name)
 	}
 
 	field, err := TemplateField(name, rType)
@@ -153,7 +153,7 @@ func (t *Template) addField(name string, rType reflect.Type) error {
 
 func TemplateField(name string, rType reflect.Type) (reflect.StructField, error) {
 	if len(name) == 0 {
-		return reflect.StructField{}, fmt.Errorf("template field name can't be empty")
+		return reflect.StructField{}, fmt.Errorf("template _field name can't be empty")
 	}
 
 	pkgPath := ""
@@ -352,7 +352,7 @@ func fieldByTemplateName(structType reflect.Type, name string) (*xunsafe.Field, 
 			}
 		}
 
-		return nil, fmt.Errorf("not found field %v at type %v", name, structType.String())
+		return nil, fmt.Errorf("not found _field %v at type %v", name, structType.String())
 	}
 
 	return xunsafe.NewField(field), nil

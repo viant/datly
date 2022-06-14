@@ -24,7 +24,7 @@ type Connector struct {
 	initialized bool
 }
 
-//Init initializes connector. It is possible to inherit from other Connector using Ref field.
+//Init initializes connector. It is possible to inherit from other Connector using Ref _field.
 //If Ref is specified, then Connector with the name has to be registered in Connectors
 func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 	if c.initialized {

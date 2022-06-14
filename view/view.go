@@ -61,7 +61,7 @@ type (
 	}
 
 	//Constraints configure what can be selected by Selector
-	//For each field, default value is `false`
+	//For each _field, default value is `false`
 	Constraints struct {
 		Criteria    bool
 		OrderBy     bool

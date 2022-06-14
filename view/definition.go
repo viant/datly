@@ -60,7 +60,7 @@ func (f *Field) Init(ctx context.Context, types Types) error {
 
 func (f *Field) initType(types Types) error {
 	if f.Schema == nil && len(f.Fields) == 0 {
-		return fmt.Errorf("field definition has to have schema or defined other fields")
+		return fmt.Errorf("_field definition has to have schema or defined other fields")
 	}
 
 	if f.Schema != nil {
@@ -98,7 +98,7 @@ func (f *Field) initSchemaType(types Types) error {
 		f.Schema.setType(rType)
 	}
 
-	return fmt.Errorf("field %v schema can't be empty", f.Name)
+	return fmt.Errorf("_field %v schema can't be empty", f.Name)
 }
 
 func (f *Field) buildSchemaFromFields() error {

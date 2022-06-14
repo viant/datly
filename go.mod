@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-lambda-go v1.31.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang-jwt/jwt/v4 v4.4.1
+	github.com/google/gops v0.3.23
 	github.com/google/uuid v1.2.0
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/lib/pq v1.10.4
