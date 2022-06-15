@@ -66,19 +66,19 @@ Resource:
     - Name: Filters
       Fields:
         - Name: Columns
-          JSON: column
+          FromName: column
           Cardinality: Many
           Fields:
             - Name: ColumnName
-              JSON: column_name
+              FromName: column_name
               Schema:
                 DataType: string
             - Name: Inclusive
-              JSON: inclusive
+              FromName: inclusive
               Schema:
                 DataType: bool
             - Name: SearchValues
-              JSON: search_values
+              FromName: search_values
               Cardinality: Many
               Schema:
                 DataType: interface

@@ -172,7 +172,7 @@ func matchFieldValue(cursor *parsly.Cursor, columns view.Columns, columnType ref
 		buffer.WriteByte(' ')
 		buffer.WriteByte('?')
 
-		converted, err := converter.Convert(cursorText[1:len(cursorText)-1], columnType, format)
+		converted, _, err := converter.Convert(cursorText[1:len(cursorText)-1], columnType, format)
 		if err != nil {
 			return err
 		}
@@ -180,7 +180,7 @@ func matchFieldValue(cursor *parsly.Cursor, columns view.Columns, columnType ref
 		return nil
 	default:
 		rawValue := matched.Text(cursor)
-		converted, err := converter.Convert(rawValue, columnType, format)
+		converted, _, err := converter.Convert(rawValue, columnType, format)
 		if err != nil {
 			return err
 		}

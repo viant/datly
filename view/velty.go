@@ -2,8 +2,8 @@ package view
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/viant/datly/converter"
 	"github.com/viant/velty"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/est"
@@ -123,7 +123,7 @@ var sanitizers = []*Sanitizer{
 
 type VeltyCodec struct {
 	template  string
-	paramType reflect.Type
+	codecType reflect.Type
 	newState  func() *est.State
 	executor  *est.Execution
 	columns   Columns
@@ -137,14 +137,12 @@ func (v *VeltyCodec) Value(ctx context.Context, raw string, options ...interface
 		return nil, fmt.Errorf("expected selector not to be nil")
 	}
 
-	dest := reflect.New(v.paramType)
-	if raw != "" {
-		if err := json.Unmarshal([]byte(raw), dest.Interface()); err != nil {
-			return nil, err
-		}
+	aValue, wasNil, err := converter.Convert(raw, v.codecType, "")
+	if err != nil {
+		return nil, err
 	}
 
-	criteria, err := v.evaluateCriteria(dest)
+	criteria, err := v.evaluateCriteria(aValue, wasNil)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +180,7 @@ func (v *VeltyCodec) Value(ctx context.Context, raw string, options ...interface
 				continue
 			}
 
-			value, err := v.extractValue(selectName, dest)
+			value, err := v.extractValue(selectName, aValue)
 			if err != nil {
 				return nil, err
 			}
@@ -199,10 +197,10 @@ func (v *VeltyCodec) Value(ctx context.Context, raw string, options ...interface
 	return nil, nil
 }
 
-func (v *VeltyCodec) evaluateCriteria(dest reflect.Value) (string, error) {
+func (v *VeltyCodec) evaluateCriteria(dest interface{}, wasNil bool) (string, error) {
 	state := v.newState()
-	if !dest.IsNil() {
-		if err := state.SetValue("Unsafe", dest.Elem().Interface()); err != nil {
+	if !wasNil {
+		if err := state.SetValue("Unsafe", dest); err != nil {
 			return "", err
 		}
 	}
@@ -236,7 +234,7 @@ func (v *VeltyCodec) selector(options []interface{}) *Selector {
 	return selector
 }
 
-func (v *VeltyCodec) extractValue(selectName string, dest reflect.Value) (interface{}, error) {
+func (v *VeltyCodec) extractValue(selectName string, dest interface{}) (interface{}, error) {
 	path, indexes, err := extractIndexes(selectName)
 	if err != nil {
 		return nil, err
@@ -247,7 +245,7 @@ func (v *VeltyCodec) extractValue(selectName string, dest reflect.Value) (interf
 		return nil, err
 	}
 
-	value, err := accessor.Value(dest.Elem().Interface(), indexes...)
+	value, err := accessor.Value(dest, indexes...)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +286,7 @@ func NewVeltyCodec(template string, paramType reflect.Type, view *View) (*VeltyC
 
 	codec := &VeltyCodec{
 		template:  template,
-		paramType: paramType,
+		codecType: paramType,
 		columns:   columns,
 	}
 
@@ -310,12 +308,12 @@ func escapeSafeKeywords(template string) string {
 
 func (v *VeltyCodec) init() error {
 	v.accessors = &Accessors{index: map[string]int{}}
-	v.accessors.init(v.paramType)
+	v.accessors.init(v.codecType)
 
 	planner := velty.New()
 
 	var err error
-	if err = planner.DefineVariable("Unsafe", v.paramType); err != nil {
+	if err = planner.DefineVariable("Unsafe", v.codecType); err != nil {
 		return err
 	}
 

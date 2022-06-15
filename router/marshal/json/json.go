@@ -28,7 +28,9 @@ type (
 		marshallers []*fieldMarshaller
 		config      marshal.Default
 
-		cache sync.Map
+		cache              sync.Map
+		_marshallersOutput map[string]int
+		_marshallersInput  map[string]int
 	}
 
 	fieldMarshaller struct {
@@ -44,6 +46,7 @@ type (
 		isComparable bool
 		nilValue     interface{}
 		zeroValue    interface{}
+		outputPath   string
 	}
 
 	marshallObjFn   func(ptr unsafe.Pointer, fields []*fieldMarshaller, sb *bytes.Buffer, filters *Filters, path string) error
@@ -68,23 +71,24 @@ func newMarshaller(rType reflect.Type, config marshal.Default, initialPath strin
 }
 
 func (j *Marshaller) init(initialPath string) error {
-	marshallers, err := j.structMarshallers(j.rType, j.config, initialPath)
+	marshallers, err := j.structMarshallers(j.rType, j.config, initialPath, initialPath)
 	if err != nil {
 		return err
 	}
 
 	j.marshallers = marshallers
+	j.indexMarshallers()
 	return nil
 }
 
-func (j *Marshaller) structMarshallers(rType reflect.Type, config marshal.Default, path string) ([]*fieldMarshaller, error) {
+func (j *Marshaller) structMarshallers(rType reflect.Type, config marshal.Default, path, outputPath string) ([]*fieldMarshaller, error) {
 	elem := shared.Elem(rType)
 
 	numField := elem.NumField()
 
 	marshallers := make([]*fieldMarshaller, 0)
 	for i := 0; i < numField; i++ {
-		err := j.newFieldMarshaller(&marshallers, elem.Field(i), config, path)
+		err := j.newFieldMarshaller(&marshallers, elem.Field(i), config, path, outputPath)
 		if err != nil {
 			return nil, err
 		}
@@ -94,9 +98,9 @@ func (j *Marshaller) structMarshallers(rType reflect.Type, config marshal.Defaul
 	return marshallers, nil
 }
 
-func (j *Marshaller) newFieldMarshaller(marshallers *[]*fieldMarshaller, field reflect.StructField, config marshal.Default, path string) error {
+func (j *Marshaller) newFieldMarshaller(marshallers *[]*fieldMarshaller, field reflect.StructField, config marshal.Default, path, outputPath string) error {
 	if field.Anonymous {
-		anonymousMarshallers, err := j.structMarshallers(field.Type, config, path)
+		anonymousMarshallers, err := j.structMarshallers(field.Type, config, path, outputPath)
 		if err != nil {
 			return err
 		}
@@ -121,11 +125,7 @@ func (j *Marshaller) newFieldMarshaller(marshallers *[]*fieldMarshaller, field r
 		outputField = defaultCaser.Format(outputField, config.CaseFormat)
 	}
 
-	if path == "" {
-		path = field.Name
-	} else {
-		path = path + "." + field.Name
-	}
+	path, outputPath = addToPath(path, field.Name), addToPath(outputPath, outputField)
 
 	xField := xunsafe.NewField(field)
 	marshaller := &fieldMarshaller{
@@ -134,6 +134,7 @@ func (j *Marshaller) newFieldMarshaller(marshallers *[]*fieldMarshaller, field r
 		xField:     xField,
 		omitEmpty:  tag.OmitEmpty || config.OmitEmpty,
 		path:       path,
+		outputPath: outputPath,
 	}
 
 	if err := marshaller.init(field, config, j); err != nil {
@@ -143,6 +144,13 @@ func (j *Marshaller) newFieldMarshaller(marshallers *[]*fieldMarshaller, field r
 	*marshallers = append(*marshallers, marshaller)
 
 	return nil
+}
+
+func addToPath(path, field string) string {
+	if path == "" {
+		return field
+	}
+	return path + "." + field
 }
 
 func (f *fieldMarshaller) init(field reflect.StructField, config marshal.Default, j *Marshaller) error {
@@ -204,9 +212,7 @@ func (f *fieldMarshaller) init(field reflect.StructField, config marshal.Default
 			if err := j.updateNonPrimitiveMarshaller(f); err != nil {
 				return err
 			}
-			childrenPath := f.fullPath()
-
-			marshallers, err := j.structMarshallers(rType, config, childrenPath)
+			marshallers, err := j.structMarshallers(rType, config, f.path, f.outputPath)
 			if err != nil {
 				return err
 			}
@@ -236,21 +242,17 @@ func (f *fieldMarshaller) updateInterfaceMarshaller(config marshal.Default, j *M
 
 		marshaller, ok := j.cache.Load(interfaceType)
 		if ok {
-			return marshaller.(*Marshaller).stringifyValue(xunsafe.AsPointer(asInterface), filters, interfaceType, buffer, f.fullPath())
+			return marshaller.(*Marshaller).stringifyValue(xunsafe.AsPointer(asInterface), filters, interfaceType, buffer, f.path)
 		}
 
-		interfaceMarshaller, err := newMarshaller(interfaceType, config, f.fullPath())
+		interfaceMarshaller, err := newMarshaller(interfaceType, config, f.path)
 		if err != nil {
 			return err
 		}
 
 		j.cache.Store(interfaceType, interfaceMarshaller)
-		return interfaceMarshaller.stringifyValue(xunsafe.AsPointer(asInterface), filters, interfaceType, buffer, f.fullPath())
+		return interfaceMarshaller.stringifyValue(xunsafe.AsPointer(asInterface), filters, interfaceType, buffer, f.path)
 	}
-}
-
-func (f *fieldMarshaller) fullPath() string {
-	return f.path
 }
 
 func updateTimeMarshaller(f *fieldMarshaller, wasPtr bool, tag *DefaultTag) {
@@ -674,14 +676,7 @@ func (j *Marshaller) asObject(ptr unsafe.Pointer, fields []*fieldMarshaller, sb 
 	counter := 0
 	sb.WriteByte('{')
 	for _, stringifier := range fields {
-		var fullPath string
-		if path == "" {
-			fullPath = stringifier.outputName
-		} else {
-			fullPath = path + "." + stringifier.outputName
-		}
-
-		if isExcluded(filter, stringifier.fieldName, j.config, fullPath) {
+		if isExcluded(filter, stringifier.fieldName, j.config, stringifier.path) {
 			continue
 		}
 
@@ -702,7 +697,7 @@ func (j *Marshaller) asObject(ptr unsafe.Pointer, fields []*fieldMarshaller, sb 
 
 		if j.config.Transforms != nil {
 
-			if codec, ok := j.config.Transforms[fullPath]; ok {
+			if codec, ok := j.config.Transforms[stringifier.path]; ok {
 				lookup, err := registry.Codecs.Lookup(codec.Codec)
 				if err != nil {
 					return err
@@ -862,6 +857,15 @@ func (j *Marshaller) asSlice(rType reflect.Type) marshallObjFn {
 	}
 }
 
+func (j *Marshaller) indexMarshallers() {
+	j._marshallersOutput = map[string]int{}
+	j._marshallersInput = map[string]int{}
+	for i := range j.marshallers {
+		j._marshallersOutput[j.marshallers[i].outputPath] = i
+		j._marshallersInput[j.marshallers[i].path] = i
+	}
+}
+
 func filterByPath(filters *Filters, path string) (Filter, bool) {
 	if filters == nil {
 		return nil, false
@@ -869,4 +873,13 @@ func filterByPath(filters *Filters, path string) (Filter, bool) {
 
 	filter, ok := filters.fields[path]
 	return filter, ok
+}
+
+func (j *Marshaller) AsOutputPath(fieldPath string) (string, error) {
+	index, ok := j._marshallersInput[fieldPath]
+	if !ok {
+		return "", fmt.Errorf("not found path %v", fieldPath)
+	}
+
+	return j.marshallers[index].outputPath, nil
 }

@@ -1,7 +1,7 @@
 package converter
 
 import (
-	"fmt"
+	"encoding/json"
 	"reflect"
 	"strconv"
 	"time"
@@ -9,145 +9,179 @@ import (
 
 var TimeType = reflect.TypeOf(time.Time{})
 
-func Convert(raw string, toType reflect.Type, format string) (interface{}, error) {
+func Convert(raw string, toType reflect.Type, format string) (value interface{}, wasNil bool, err error) {
 	switch toType.Kind() {
 	case reflect.Bool:
-		return strconv.ParseBool(raw)
+		parseBool, err := strconv.ParseBool(raw)
+		return parseBool, false, err
 	case reflect.Int:
 		if raw == "" {
-			return 0, nil
+			return 0, false, nil
 		}
 
-		return strconv.Atoi(raw)
+		atoi, err := strconv.Atoi(raw)
+		return atoi, false, err
 	case reflect.Int8:
 		if raw == "" {
-			return int8(0), nil
+			return int8(0), false, nil
 		}
 
 		asInt, err := strconv.Atoi(raw)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return int8(asInt), nil
+		return int8(asInt), false, nil
 
 	case reflect.Int16:
 		if raw == "" {
-			return int16(0), nil
+			return int16(0), false, nil
 		}
 
 		asInt, err := strconv.Atoi(raw)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return int16(asInt), nil
+		return int16(asInt), false, nil
 
 	case reflect.Int32:
 		if raw == "" {
-			return int32(0), nil
+			return int32(0), false, nil
 		}
 
 		asInt, err := strconv.Atoi(raw)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return int32(asInt), nil
+		return int32(asInt), false, nil
 
 	case reflect.Int64:
 		if raw == "" {
-			return int64(0), nil
+			return int64(0), false, nil
 		}
 
 		asInt, err := strconv.Atoi(raw)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return int64(asInt), nil
+		return int64(asInt), false, nil
 
 	case reflect.Uint:
 		if raw == "" {
-			return uint(0), nil
+			return uint(0), false, nil
 		}
 
 		asInt, err := strconv.Atoi(raw)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
-		return uint(asInt), err
+		return uint(asInt), false, err
 	case reflect.Uint8:
 		if raw == "" {
-			return uint8(0), nil
+			return uint8(0), false, nil
 		}
 
 		asInt, err := strconv.Atoi(raw)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return uint8(asInt), nil
+		return uint8(asInt), false, nil
 
 	case reflect.Uint16:
 		if raw == "" {
-			return uint16(0), nil
+			return uint16(0), false, nil
 		}
 
 		asInt, err := strconv.Atoi(raw)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return uint16(asInt), nil
+		return uint16(asInt), false, nil
 
 	case reflect.Uint32:
 		if raw == "" {
-			return uint32(0), nil
+			return uint32(0), false, nil
 		}
 
 		asInt, err := strconv.Atoi(raw)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return uint32(asInt), nil
+		return uint32(asInt), false, nil
 
 	case reflect.Uint64:
 		if raw == "" {
-			return uint64(0), nil
+			return uint64(0), false, nil
 		}
 
 		asInt, err := strconv.Atoi(raw)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return uint64(asInt), nil
+		return uint64(asInt), false, nil
 
 	case reflect.Float64:
 		if raw == "" {
-			return 0.0, nil
+			return 0.0, false, nil
 		}
 
-		return strconv.ParseFloat(raw, 64)
+		asFloat, err := strconv.ParseFloat(raw, 64)
+		return asFloat, false, err
 
 	case reflect.Float32:
 		if raw == "" {
-			return float32(0.0), nil
+			return float32(0.0), false, nil
 		}
 
 		asFloat, err := strconv.ParseFloat(raw, 64)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
-		return float32(asFloat), nil
+		return float32(asFloat), false, nil
 
 	case reflect.String:
-		return raw, nil
+		return raw, false, nil
 	case reflect.Struct:
 		if toType == TimeType {
 			if format == "" {
 				format = time.RFC3339
 			}
 
-			return time.Parse(format, raw)
+			asTime, err := time.Parse(format, raw)
+			return asTime, false, err
 		}
 	}
 
-	return nil, fmt.Errorf("unsupported convert dest type %v", toType)
+	var wasPtr bool
+	if toType.Kind() == reflect.Ptr {
+		toType = toType.Elem()
+		wasPtr = true
+	}
+
+	dest := reflect.New(toType)
+
+	if raw != "" {
+		err = json.Unmarshal([]byte(raw), dest.Interface())
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
+	isNil := dest.IsNil()
+	if !wasPtr {
+		dest = dest.Elem()
+	}
+
+	result := dest.Interface()
+	if isNil {
+		return result, isNil, nil
+	}
+
+	validationErr := aValidator.Struct(result)
+	if validationErr != nil {
+		return nil, false, validationErr
+	}
+
+	return result, isNil, nil
 }

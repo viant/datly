@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/afs"
 	"github.com/viant/afs/option/content"
-	"github.com/viant/assertly"
 	"github.com/viant/datly/codec"
 	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/view"
@@ -120,19 +119,6 @@ type event struct {
 	Quantity  float64
 	Timestamp time.Time
 }
-
-type (
-	filtersSchemaType struct {
-		Columns []Filter `json:"column"`
-	}
-
-	Filter struct {
-		SearchValues []int  `json:"search_values"`
-		Column       string `json:"column_name"`
-		Inclusive    bool   `json:"inclusive"`
-		Radius       int    `json:"radius"`
-	}
-)
 
 //TODO: add testcases against sql injection
 func TestRouter(t *testing.T) {
@@ -414,7 +400,7 @@ func TestRouter(t *testing.T) {
 			description: "styles | error",
 			resourceURI: "011_style",
 			uri:         "/api/events?_criteria=(id%20=%201%20UNION%20ALL%20SELECT%209%20as%20id%2C%20To_Date%28%222019-03-11T02%3A20%3A33Z%22%29%20as%20timestamp%2C%2010%20as%20event_type_id%2C%2020%20as%20quantity%2C%206%20as%20user_id)",
-			expected:    `{"Status":"error","Message":"can't use criteria on view events"}`,
+			expected:    `{"Status":"error","Message":{"Errors":[{"ViewName":"events","ParamName":"_criteria","Message":"can't use criteria on view events"}]}}`,
 			method:      http.MethodGet,
 		},
 		{
@@ -524,6 +510,14 @@ func TestRouter(t *testing.T) {
 				"table": "events",
 			},
 			expected: `[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}]`,
+		},
+		{
+			description: "slices | filters",
+			resourceURI: "021_validator",
+			uri:         "/api/events",
+			method:      http.MethodPost,
+			requestBody: `{"Id":0,"Quantity":0}`,
+			expected:    `{"Errors":[{"ParamName":"RequestBody","Object":[{"Value":0,"Field":"Id","Tag":"required"}]}]}`,
 		},
 	}
 
@@ -637,7 +631,7 @@ func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router) bool {
 		response = decompressed
 	}
 
-	if !assertly.AssertValues(t, c.expected, string(response), c.description) {
+	if !assert.Equal(t, c.expected, string(response), c.description) {
 		fmt.Println(string(response))
 	}
 

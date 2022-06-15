@@ -2,9 +2,7 @@ package reader
 
 import (
 	"fmt"
-	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
-	rdata "github.com/viant/toolbox/data"
 	"reflect"
 )
 
@@ -14,19 +12,6 @@ type Session struct {
 	View      *view.View
 	Selectors view.Selectors
 	Parent    *view.View
-}
-
-//DataType returns Parent View.DataType
-func (s *Session) DataType() reflect.Type {
-	return s.View.DataType()
-}
-
-//NewReplacement creates parameter map common for all the views in session.
-func (s *Session) NewReplacement(view *view.View) rdata.Map {
-	aMap := rdata.NewMap()
-	aMap.SetValue(string(shared.DataViewName), view.Name)
-
-	return aMap
 }
 
 //Init initializes session

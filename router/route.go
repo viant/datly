@@ -12,6 +12,7 @@ import (
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
+	"strings"
 )
 
 type Style string
@@ -46,16 +47,17 @@ type (
 	}
 
 	Output struct {
-		Cardinality     view.Cardinality `json:",omitempty"`
-		CaseFormat      view.CaseFormat  `json:",omitempty"`
-		OmitEmpty       bool             `json:",omitempty"`
-		Style           Style            `json:",omitempty"`
-		ResponseField   string           `json:",omitempty"`
-		Transforms      marshal.Transforms
-		Exclude         []string
-		_caser          format.Case
-		_marshaller     *json.Marshaller
-		_responseSetter *responseSetter
+		Cardinality      view.Cardinality `json:",omitempty"`
+		CaseFormat       view.CaseFormat  `json:",omitempty"`
+		OmitEmpty        bool             `json:",omitempty"`
+		Style            Style            `json:",omitempty"`
+		ResponseField    string           `json:",omitempty"`
+		Transforms       marshal.Transforms
+		Exclude          []string
+		NormalizeExclude *bool
+		_caser           format.Case
+		_marshaller      *json.Marshaller
+		_responseSetter  *responseSetter
 	}
 
 	responseSetter struct {
@@ -65,8 +67,8 @@ type (
 	}
 
 	ResponseStatus struct {
-		Status  string `json:",omitempty"`
-		Message string `json:",omitempty"`
+		Status  string      `json:",omitempty"`
+		Message interface{} `json:",omitempty"`
 	}
 )
 
@@ -110,6 +112,10 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	}
 
 	if err := r.initCache(ctx); err != nil {
+		return err
+	}
+
+	if err := r.normalizeExclude(); err != nil {
 		return err
 	}
 
@@ -319,4 +325,24 @@ func (i *Index) ViewByPrefix(prefix string) (*view.View, error) {
 	}
 
 	return aView, nil
+}
+
+func (r *Route) ShouldNormalizeExclude() bool {
+	return r.NormalizeExclude == nil || *r.NormalizeExclude
+}
+
+func (r *Route) normalizeExclude() error {
+	if !r.ShouldNormalizeExclude() {
+		return nil
+	}
+
+	for i, excluded := range r.Exclude {
+		lastDot := strings.LastIndex(excluded, ".")
+		if lastDot == -1 {
+			r.Exclude[i] = r._caser.Format(excluded, format.CaseUpperCamel)
+		} else {
+			r.Exclude[i] = excluded[:lastDot] + r._caser.Format(excluded[lastDot+1:], format.CaseUpperCamel)
+		}
+	}
+	return nil
 }

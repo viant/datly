@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	goJson "encoding/json"
 	"fmt"
+	"github.com/go-playground/validator"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/codec"
@@ -397,6 +398,8 @@ func (r *Router) buildJsonFilters(route *Route, selectors view.Selectors) (*json
 }
 
 func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, statusCode int) {
+	err = r.normalizeErr(err)
+
 	if route._responseSetter == nil {
 		w.WriteHeader(statusCode)
 		w.Write([]byte(err.Error()))
@@ -406,7 +409,7 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 	response := reflect.New(route._responseSetter.rType)
 	r.setResponseStatus(route, response, ResponseStatus{
 		Status:  "error",
-		Message: err.Error(),
+		Message: err,
 	})
 
 	asBytes, marErr := route._marshaller.Marshal(response.Elem().Interface(), errorFilters)
@@ -451,4 +454,22 @@ func (r *Router) createCacheEntry(route *Route, selectors view.Selectors) (*cach
 		View:      route.View,
 		Selectors: marshalled,
 	}, nil
+}
+
+func (r *Router) normalizeErr(err error) error {
+	asErrors, ok := err.(*Errors)
+	if !ok {
+		return err
+	}
+
+	for _, anError := range asErrors.Errors {
+		switch actual := anError.Error.(type) {
+		case validator.ValidationErrors:
+			anError.Object = NewParamErrors(actual)
+		default:
+			anError.Message = actual.Error()
+		}
+	}
+
+	return asErrors
 }

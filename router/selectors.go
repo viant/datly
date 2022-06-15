@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/criteria"
-	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -53,9 +52,9 @@ func CreateSelectors(ctx context.Context, inputFormat format.Case, requestMetada
 	return selectors, nil
 }
 
-func buildSelectors(ctx context.Context, inputFormat format.Case, requestMetadata *RequestMetadata, selectors *view.Selectors, viewsDetails []*ViewDetails, requestParams *RequestParams) error {
+func buildSelectors(ctx context.Context, inputFormat format.Case, requestMetadata *RequestMetadata, selectors *view.Selectors, viewsDetails []*ViewDetails, requestParams *RequestParams) *Errors {
 	wg := sync.WaitGroup{}
-	errors := shared.NewErrors(0)
+	errors := NewErrors()
 	for _, details := range viewsDetails {
 		selector := selectors.Lookup(details.View)
 		selector.OutputFormat = inputFormat
@@ -64,8 +63,8 @@ func buildSelectors(ctx context.Context, inputFormat format.Case, requestMetadat
 		wg.Add(1)
 		go func(details *ViewDetails, requestMetadata *RequestMetadata, requestParams *RequestParams, selector *view.Selector) {
 			defer wg.Done()
-			if err := populateSelector(ctx, selector, inputFormat, details, requestParams, requestMetadata); err != nil {
-				errors.Append(err)
+			if paramName, err := populateSelector(ctx, selector, inputFormat, details, requestParams, requestMetadata); err != nil {
+				errors.AddError(details.View.Name, paramName, err)
 				return
 			}
 
@@ -75,52 +74,55 @@ func buildSelectors(ctx context.Context, inputFormat format.Case, requestMetadat
 
 			selector.Parameters.Init(details.View)
 			params := &selector.Parameters
-			if err := buildSelectorParameters(ctx, selector, inputFormat, details, xunsafe.AsPointer(params.Values), xunsafe.AsPointer(params.Has), details.View.Template.Parameters, requestParams, requestMetadata); err != nil {
-				errors.Append(err)
+			if paramName, err := buildSelectorParameters(ctx, selector, inputFormat, details, xunsafe.AsPointer(params.Values), xunsafe.AsPointer(params.Has), details.View.Template.Parameters, requestParams, requestMetadata); err != nil {
+				errors.AddError(details.View.Name, paramName, err)
 				return
 			}
 		}(details, requestMetadata, requestParams, selector)
 	}
 
 	wg.Wait()
-	return errors.Error()
+	if len(errors.Errors) == 0 {
+		return nil
+	}
+
+	return errors
 }
 
-func populateSelector(ctx context.Context, selector *view.Selector, inputFormat format.Case, details *ViewDetails, params *RequestParams, metadata *RequestMetadata) error {
-
+func populateSelector(ctx context.Context, selector *view.Selector, inputFormat format.Case, details *ViewDetails, params *RequestParams, metadata *RequestMetadata) (string, error) {
 	for i, ns := range details.Prefixes {
 		if i == 0 || details.View.Selector.FieldsParam == nil {
 			if err := populateFields(ctx, selector, inputFormat, details, params, ns, metadata); err != nil {
-				return err
+				return string(Fields), err
 			}
 		}
 
 		if i == 0 || details.View.Selector.OffsetParam == nil {
 			if err := populateOffset(ctx, selector, inputFormat, details, params, ns, metadata, selector); err != nil {
-				return err
+				return string(Offset), err
 			}
 		}
 
 		if i == 0 || details.View.Selector.OrderByParam == nil {
 			if err := populateOrderBy(ctx, selector, inputFormat, details, params, ns, metadata); err != nil {
-				return err
+				return string(OrderBy), err
 			}
 		}
 
 		if i == 0 || details.View.Selector.LimitParam == nil {
 			if err := populateLimit(ctx, selector, inputFormat, details, params, ns, metadata); err != nil {
-				return err
+				return string(Limit), err
 			}
 		}
 
 		if i == 0 || details.View.Selector.CriteriaParam == nil {
 			if err := populateCriteria(ctx, selector, inputFormat, details, params, ns, metadata); err != nil {
-				return err
+				return string(Criteria), err
 			}
 		}
 	}
 
-	return nil
+	return "", nil
 }
 
 func populateCriteria(ctx context.Context, selector *view.Selector, inputFormat format.Case, details *ViewDetails, params *RequestParams, ns string, metadata *RequestMetadata) error {
@@ -334,50 +336,59 @@ func extractParamValue(ctx context.Context, param *view.Parameter, details *View
 
 func convertAndTransform(ctx context.Context, raw string, param *view.Parameter, selector *view.Selector) (interface{}, error) {
 	if param.Codec == nil {
-		return converter.Convert(raw, param.Schema.Type(), "")
+		convert, _, err := converter.Convert(raw, param.Schema.Type(), "")
+		return convert, err
 	}
 
 	return param.Codec.Transform(ctx, raw, selector)
 }
 
-func buildSelectorParameters(ctx context.Context, selector *view.Selector, inputFormat format.Case, parent *ViewDetails, paramsPtr, presencePtr unsafe.Pointer, parameters []*view.Parameter, requestParams *RequestParams, requestMetadata *RequestMetadata) error {
+func buildSelectorParameters(ctx context.Context, selector *view.Selector, inputFormat format.Case, parent *ViewDetails, paramsPtr, presencePtr unsafe.Pointer, parameters []*view.Parameter, requestParams *RequestParams, requestMetadata *RequestMetadata) (string, error) {
 	var err error
 	for _, parameter := range parameters {
-		switch parameter.In.Kind {
-		case view.QueryKind:
-			if err = addQueryParam(ctx, selector, paramsPtr, presencePtr, parameter, requestParams); err != nil {
-				return err
-			}
+		err = handleParam(ctx, selector, inputFormat, parent, paramsPtr, presencePtr, parameter, err, requestParams, requestMetadata)
+		if err != nil {
+			return parameter.Name, err
+		}
+	}
+	return "", nil
+}
 
-		case view.PathKind:
-			if err = addPathParam(ctx, selector, paramsPtr, presencePtr, parameter, requestParams); err != nil {
-				return err
-			}
+func handleParam(ctx context.Context, selector *view.Selector, inputFormat format.Case, parent *ViewDetails, paramsPtr unsafe.Pointer, presencePtr unsafe.Pointer, parameter *view.Parameter, err error, requestParams *RequestParams, requestMetadata *RequestMetadata) error {
+	switch parameter.In.Kind {
+	case view.QueryKind:
+		if err = addQueryParam(ctx, selector, paramsPtr, presencePtr, parameter, requestParams); err != nil {
+			return err
+		}
 
-		case view.HeaderKind:
-			if err = addHeaderParam(ctx, selector, paramsPtr, presencePtr, parameter, requestParams); err != nil {
-				return err
-			}
+	case view.PathKind:
+		if err = addPathParam(ctx, selector, paramsPtr, presencePtr, parameter, requestParams); err != nil {
+			return err
+		}
 
-		case view.CookieKind:
-			if err = addCookieParam(ctx, selector, paramsPtr, presencePtr, parameter, requestParams); err != nil {
-				return err
-			}
+	case view.HeaderKind:
+		if err = addHeaderParam(ctx, selector, paramsPtr, presencePtr, parameter, requestParams); err != nil {
+			return err
+		}
 
-		case view.DataViewKind:
-			if err = addViewParam(ctx, selector, inputFormat, parent, paramsPtr, presencePtr, parameter, requestParams, requestMetadata); err != nil {
-				return err
-			}
+	case view.CookieKind:
+		if err = addCookieParam(ctx, selector, paramsPtr, presencePtr, parameter, requestParams); err != nil {
+			return err
+		}
 
-		case view.RequestBodyKind:
-			if err = addRequestBodyParam(selector, paramsPtr, presencePtr, parameter, requestParams); err != nil {
-				return err
-			}
+	case view.DataViewKind:
+		if err = addViewParam(ctx, selector, inputFormat, parent, paramsPtr, presencePtr, parameter, requestParams, requestMetadata); err != nil {
+			return err
+		}
 
-		case view.EnvironmentKind:
-			if err = addEnvVariableParam(ctx, selector, paramsPtr, presencePtr, parameter); err != nil {
-				return err
-			}
+	case view.RequestBodyKind:
+		if err = addRequestBodyParam(selector, paramsPtr, presencePtr, parameter, requestParams); err != nil {
+			return err
+		}
+
+	case view.EnvironmentKind:
+		if err = addEnvVariableParam(ctx, selector, paramsPtr, presencePtr, parameter); err != nil {
+			return err
 		}
 	}
 	return nil

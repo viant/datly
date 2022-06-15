@@ -19,10 +19,11 @@ type (
 		Name        string      `json:",omitempty"`
 		Embed       bool        `json:",omitempty"`
 		Column      string      `json:",omitempty"`
-		JSON        string      `json:",omitempty"`
+		FromName    string      `json:",omitempty"`
 		Cardinality Cardinality `json:",omitempty"`
 		Schema      *Schema     `json:",omitempty"`
 		Fields      []*Field    `json:",omitempty"`
+		Tag         string
 	}
 )
 
@@ -114,13 +115,17 @@ func buildTypeFromFields(fields []*Field) reflect.Type {
 		var tag reflect.StructTag
 
 		jsonName := field.Name
-		if field.JSON != "" {
-			jsonName = field.JSON
+		if field.FromName != "" {
+			jsonName = field.FromName
 		}
 
 		aTagValue := jsonTagValue(jsonName, field)
 		if field.Column != "" {
 			aTagValue += fmt.Sprintf(`sqlx:"name=%v" `, field.Column)
+		}
+
+		if field.Tag != "" {
+			aTagValue += " " + field.Tag
 		}
 
 		tag = reflect.StructTag(aTagValue)

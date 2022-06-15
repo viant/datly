@@ -1,12 +1,11 @@
 package router
 
 import (
-	"encoding/json"
+	"github.com/viant/datly/converter"
 	"github.com/viant/toolbox"
 	"io"
 	"net/http"
 	"net/url"
-	"reflect"
 )
 
 type RequestParams struct {
@@ -27,8 +26,11 @@ func NewRequestParameters(request *http.Request, route *Route) (*RequestParams, 
 	}
 
 	if err := parameters.init(request, route); err != nil {
-		return nil, err
+		errors := NewErrors()
+		errors.AddError("", "RequestBody", err)
+		return nil, errors
 	}
+
 	return parameters, nil
 }
 
@@ -90,23 +92,11 @@ func (p *RequestParams) initRequestBody(request *http.Request, route *Route) err
 		return nil
 	}
 
-	destType := route._requestBodyType
-	var wasPtr bool
-	if destType.Kind() == reflect.Ptr {
-		destType = destType.Elem()
-		wasPtr = true
-	}
-
-	requestBody := reflect.New(destType)
-	if err = json.Unmarshal(body, requestBody.Interface()); err != nil {
+	convert, _, err := converter.Convert(string(body), route._requestBodyType, "")
+	if err != nil {
 		return err
 	}
 
-	if wasPtr {
-		p.requestBody = requestBody.Interface()
-	} else {
-		p.requestBody = requestBody.Elem().Interface()
-	}
-
+	p.requestBody = convert
 	return nil
 }
