@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/google/gops/agent"
 	_ "github.com/viant/afs/embed"
 	_ "github.com/viant/afsc/aws"
 	_ "github.com/viant/afsc/gcp"
@@ -13,11 +14,8 @@ import (
 	_ "github.com/viant/sqlx/metadata/product/bigquery"
 	_ "github.com/viant/sqlx/metadata/product/mysql"
 	_ "github.com/viant/sqlx/metadata/product/pg"
-	"os"
-)
-import (
-	"github.com/google/gops/agent"
 	"log"
+	"os"
 )
 
 func main() {

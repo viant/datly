@@ -58,6 +58,9 @@ func buildSelectors(ctx context.Context, inputFormat format.Case, requestMetadat
 	errors := shared.NewErrors(0)
 	for _, details := range viewsDetails {
 		selector := selectors.Lookup(details.View)
+		selector.OutputFormat = inputFormat
+		selector.DatabaseFormat = details.View.Caser
+
 		wg.Add(1)
 		go func(details *ViewDetails, requestMetadata *RequestMetadata, requestParams *RequestParams, selector *view.Selector) {
 			defer wg.Done()
@@ -503,21 +506,12 @@ func buildFields(inputFormat format.Case, aView *view.View, selector *view.Selec
 			return err
 		}
 
-		columnName := param.Value
-		if !aView.IsHolder(columnName) {
-			columnName = inputFormat.Format(param.Value, aView.Caser)
-		}
-
-		if err = canUseColumn(aView, columnName); err != nil {
+		fieldName := inputFormat.Format(param.Value, format.CaseUpperCamel)
+		if err = canUseColumn(aView, fieldName); err != nil {
 			return err
 		}
 
-		selector.Columns = append(selector.Columns, columnName)
-		if !aView.IsHolder(param.Value) {
-			selector.Fields = append(selector.Fields, inputFormat.Format(param.Value, format.CaseUpperCamel))
-		} else {
-			selector.Fields = append(selector.Fields, param.Value)
-		}
+		selector.Add(fieldName, aView.IsHolder(fieldName))
 	}
 
 	return nil

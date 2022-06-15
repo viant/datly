@@ -12,11 +12,18 @@ type Selectors map[string]*Selector
 func (s Selectors) Lookup(view *View) *Selector {
 	selector, ok := s[view.Name]
 	if !ok {
-		selector = &Selector{}
+		selector = NewSelector()
 		s[view.Name] = selector
 	}
 	selector.Parameters.Init(view)
 	return selector
+}
+
+func NewSelector() *Selector {
+	return &Selector{
+		_columnNames: map[string]bool{},
+		initialized:  true,
+	}
 }
 
 func (s *ParamState) Init(view *View) {

@@ -131,14 +131,17 @@ type VeltyCodec struct {
 }
 
 func (v *VeltyCodec) Value(ctx context.Context, raw string, options ...interface{}) (interface{}, error) {
+	raw = strings.TrimSpace(raw)
 	selector := v.selector(options)
 	if selector == nil {
 		return nil, fmt.Errorf("expected selector not to be nil")
 	}
 
 	dest := reflect.New(v.paramType)
-	if err := json.Unmarshal([]byte(raw), dest.Interface()); err != nil {
-		return nil, err
+	if raw != "" {
+		if err := json.Unmarshal([]byte(raw), dest.Interface()); err != nil {
+			return nil, err
+		}
 	}
 
 	criteria, err := v.evaluateCriteria(dest)
@@ -202,14 +205,6 @@ func (v *VeltyCodec) evaluateCriteria(dest reflect.Value) (string, error) {
 		if err := state.SetValue("Unsafe", dest.Elem().Interface()); err != nil {
 			return "", err
 		}
-	}
-
-	if err := state.SetValue(SafeColumn, "$COLUMN_NAME"); err != nil {
-		return "", err
-	}
-
-	if err := state.SetValue(SafeValue, "$COLUMN_VALUE"); err != nil {
-		return "", err
 	}
 
 	v.executor.Exec(state)
