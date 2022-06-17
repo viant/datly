@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view/keywords"
 	"github.com/viant/gmetric/provider"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
@@ -208,6 +209,11 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 	v.Alias = notEmptyOf(v.Alias, "t")
 	if v.From == "" {
 		v.Table = notEmptyOf(v.Table, v.Name)
+	} else {
+		if strings.Contains(v.From, keywords.WhereCriteria) {
+			flag := false
+			v.DiscoverCriteria = &flag
+		}
 	}
 
 	if v.MatchStrategy == "" {
