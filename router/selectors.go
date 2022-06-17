@@ -23,7 +23,7 @@ type RequestMetadata struct {
 	MainView *view.View
 }
 
-func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, views ...*ViewDetails) (view.Selectors, error) {
+func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, views ...*ViewDetails) (*view.Selectors, error) {
 	requestMetadata := NewRequestMetadata(route)
 	requestParams, err := NewRequestParameters(request, route)
 	if err != nil {
@@ -42,14 +42,13 @@ func NewRequestMetadata(route *Route) *RequestMetadata {
 	return requestMetadata
 }
 
-func CreateSelectors(ctx context.Context, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, views ...*ViewDetails) (view.Selectors, error) {
+func CreateSelectors(ctx context.Context, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, views ...*ViewDetails) (*view.Selectors, error) {
 	selectors := view.Selectors{}
-
 	if err := buildSelectors(ctx, inputFormat, requestMetadata, &selectors, views, requestParams); err != nil {
 		return nil, err
 	}
 
-	return selectors, nil
+	return &selectors, nil
 }
 
 func buildSelectors(ctx context.Context, inputFormat format.Case, requestMetadata *RequestMetadata, selectors *view.Selectors, viewsDetails []*ViewDetails, requestParams *RequestParams) *Errors {

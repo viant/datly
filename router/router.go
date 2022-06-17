@@ -182,7 +182,7 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 	}
 }
 
-func (r *Router) readOrLoadFromCache(ctx context.Context, route *Route, selectors view.Selectors) (reflect.Value, error) {
+func (r *Router) readOrLoadFromCache(ctx context.Context, route *Route, selectors *view.Selectors) (reflect.Value, error) {
 	destValue := reflect.New(route.View.Schema.SliceType())
 	dest := destValue.Interface()
 	cacheEntry, err := r.cacheEntry(ctx, route, selectors)
@@ -217,7 +217,7 @@ func (r *Router) updateCache(ctx context.Context, route *Route, cacheEntry *cach
 	r.putCache(ctx, route, cacheEntry)
 }
 
-func (r *Router) cacheEntry(ctx context.Context, route *Route, selectors view.Selectors) (*cache.Entry, error) {
+func (r *Router) cacheEntry(ctx context.Context, route *Route, selectors *view.Selectors) (*cache.Entry, error) {
 	if route.Cache == nil {
 		return nil, nil
 	}
@@ -272,7 +272,7 @@ func (r *Router) runAfterFetch(response http.ResponseWriter, request *http.Reque
 	return true
 }
 
-func (r *Router) writeHttpResponse(route *Route, request *http.Request, response http.ResponseWriter, destValue reflect.Value, selectors view.Selectors) {
+func (r *Router) writeHttpResponse(route *Route, request *http.Request, response http.ResponseWriter, destValue reflect.Value, selectors *view.Selectors) {
 	statusCode, err := r.writeResponse(route, request, response, destValue, selectors)
 	if err != nil {
 		r.writeErr(response, route, err, statusCode)
@@ -280,7 +280,7 @@ func (r *Router) writeHttpResponse(route *Route, request *http.Request, response
 
 }
 
-func (r *Router) writeResponse(route *Route, request *http.Request, response http.ResponseWriter, destValue reflect.Value, selectors view.Selectors) (int, error) {
+func (r *Router) writeResponse(route *Route, request *http.Request, response http.ResponseWriter, destValue reflect.Value, selectors *view.Selectors) (int, error) {
 	filters, err := r.buildJsonFilters(route, selectors)
 	if err != nil {
 		return http.StatusBadRequest, err
@@ -367,9 +367,12 @@ func (r *Router) result(route *Route, request *http.Request, destValue reflect.V
 	}
 }
 
-func (r *Router) buildJsonFilters(route *Route, selectors view.Selectors) (*json.Filters, error) {
+func (r *Router) buildJsonFilters(route *Route, selectors *view.Selectors) (*json.Filters, error) {
 	entries := make([]*json.FilterEntry, 0)
-	for viewName, selector := range selectors {
+
+	selectors.Lock()
+	defer selectors.Unlock()
+	for viewName, selector := range selectors.Index {
 		if len(selector.Columns) == 0 {
 			continue
 		}
@@ -438,18 +441,18 @@ func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route) in
 	return newResponse.Elem().Interface()
 }
 
-func (r *Router) createCacheEntry(route *Route, selectors view.Selectors) (*cache.Entry, error) {
-	selectorSlice := make([]*view.Selector, len(selectors))
-	for viewName := range selectors {
+func (r *Router) createCacheEntry(route *Route, selectors *view.Selectors) (*cache.Entry, error) {
+	selectors.RWMutex.RLock()
+	defer selectors.RWMutex.RUnlock()
+	selectorSlice := make([]*view.Selector, len(selectors.Index))
+	for viewName := range selectors.Index {
 		index, _ := route.viewIndex(viewName)
-		selectorSlice[index] = selectors[viewName]
+		selectorSlice[index] = selectors.Index[viewName]
 	}
-
 	marshalled, err := goJson.Marshal(selectorSlice)
 	if err != nil {
 		return nil, err
 	}
-
 	return &cache.Entry{
 		View:      route.View,
 		Selectors: marshalled,

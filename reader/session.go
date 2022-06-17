@@ -10,16 +10,12 @@ import (
 type Session struct {
 	Dest      interface{} //slice
 	View      *view.View
-	Selectors view.Selectors
+	Selectors *view.Selectors
 	Parent    *view.View
 }
 
 //Init initializes session
 func (s *Session) Init() error {
-	if s.Selectors == nil {
-		s.Selectors = view.Selectors{}
-	}
-
 	s.Selectors.Init()
 	if _, ok := s.Dest.(*interface{}); !ok {
 		viewType := reflect.PtrTo(s.View.Schema.SliceType())
@@ -48,6 +44,6 @@ func NewSession(dest interface{}, aView *view.View) *Session {
 	return &Session{
 		Dest:      dest,
 		View:      aView,
-		Selectors: make(map[string]*view.Selector),
+		Selectors: &view.Selectors{Index: make(map[string]*view.Selector)},
 	}
 }

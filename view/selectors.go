@@ -3,17 +3,26 @@ package view
 import (
 	"github.com/viant/xunsafe"
 	"reflect"
+	"sync"
 )
 
 //Selectors represents Selector registry
-type Selectors map[string]*Selector
+type Selectors struct {
+	Index map[string]*Selector
+	sync.RWMutex
+}
 
 //Lookup returns and initializes Selector attached to View. Creates new one if doesn't exist.
 func (s Selectors) Lookup(view *View) *Selector {
-	selector, ok := s[view.Name]
+	s.RWMutex.Lock()
+	defer s.RWMutex.Unlock()
+	if len(s.Index) == 0 {
+		s.Index = map[string]*Selector{}
+	}
+	selector, ok := s.Index[view.Name]
 	if !ok {
 		selector = NewSelector()
-		s[view.Name] = selector
+		s.Index[view.Name] = selector
 	}
 	selector.Parameters.Init(view)
 	return selector
@@ -58,7 +67,9 @@ func newValue(p reflect.Type) interface{} {
 
 //Init initializes each Selector
 func (s Selectors) Init() {
-	for _, selector := range s {
+	s.RWMutex.Lock()
+	s.RWMutex.Unlock()
+	for _, selector := range s.Index {
 		selector.Init()
 	}
 }
