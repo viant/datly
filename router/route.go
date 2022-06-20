@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -42,8 +43,8 @@ type (
 		Cache       *cache.Cache
 		Compression *Compression
 
-		_requestBodyType reflect.Type
-		_resource        *view.Resource
+		_resource         *view.Resource
+		_requestBodyParam *view.Parameter
 	}
 
 	Output struct {
@@ -55,7 +56,9 @@ type (
 		Transforms       marshal.Transforms
 		Exclude          []string
 		NormalizeExclude *bool
+		Info             openapi3.Info
 		_caser           format.Case
+		_excluded        map[string]bool
 		_marshaller      *json.Marshaller
 		_responseSetter  *responseSetter
 	}
@@ -121,6 +124,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 
 	r.initCors(resource)
 	r.initCompression(resource)
+	r.indexExcluded()
 
 	return nil
 }
@@ -282,7 +286,7 @@ func (r *Route) initRequestBodyFromParams() error {
 		}
 	}
 
-	r._requestBodyType = rType
+	r._requestBodyParam = params[0]
 	return nil
 }
 
@@ -345,4 +349,15 @@ func (r *Route) normalizeExclude() error {
 		}
 	}
 	return nil
+}
+
+func (r *Route) PrefixByView(aView *view.View) (string, bool) {
+	return r.Index.prefixByView(aView)
+}
+
+func (r *Route) indexExcluded() {
+	r._excluded = map[string]bool{}
+	for _, excluded := range r.Exclude {
+		r._excluded[excluded] = true
+	}
 }

@@ -10,11 +10,11 @@ import (
 
 type (
 	Error struct {
-		ViewName  string      `json:",omitempty"`
-		ParamName string      `json:",omitempty"`
-		Error     error       `json:"-"`
-		Message   string      `json:",omitempty"`
-		Object    interface{} `json:",omitempty"`
+		View    string      `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
+		Param   string      `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
+		Err     error       `json:"-"`
+		Message string      `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
+		Object  interface{} `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
 	}
 
 	Errors struct {
@@ -30,6 +30,13 @@ type (
 	}
 )
 
+func (e *Error) Error() string {
+	if e.Message != "" {
+		return e.Message
+	}
+	return e.Err.Error()
+}
+
 func NewErrors() *Errors {
 	return &Errors{mutex: sync.Mutex{}}
 }
@@ -37,9 +44,9 @@ func NewErrors() *Errors {
 func (e *Errors) AddError(view, param string, err error) {
 	e.mutex.Lock()
 	e.Errors = append(e.Errors, &Error{
-		ViewName:  view,
-		ParamName: param,
-		Error:     err,
+		View:  view,
+		Param: param,
+		Err:   err,
 	})
 	e.mutex.Unlock()
 }

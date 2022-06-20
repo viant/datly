@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/logger"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
+	"reflect"
 )
 
 //Resource represents grouped view needed to build the View
@@ -26,8 +27,9 @@ type Resource struct {
 	Parameters  []*Parameter
 	_parameters ParametersIndex
 
-	Types  []*Definition
-	_types Types
+	Types       []*Definition
+	_types      Types
+	_typesIndex map[reflect.Type]string
 
 	Loggers  logger.Adapters
 	_loggers logger.AdapterIndex
@@ -176,6 +178,7 @@ func (r *Resource) GetConnectors() Connectors {
 
 //Init initializes Resource
 func (r *Resource) Init(ctx context.Context, types Types, visitors codec.Visitors) error {
+	r._typesIndex = map[reflect.Type]string{}
 	r._types = types.copy()
 	r._visitors = visitors
 
@@ -190,6 +193,7 @@ func (r *Resource) Init(ctx context.Context, types Types, visitors codec.Visitor
 		}
 
 		r._types.Register(definition.Name, definition.Type())
+		r._typesIndex[definition.Type()] = definition.Name
 	}
 
 	r._views = ViewSlice(r.Views).Index()
@@ -311,6 +315,7 @@ func EmptyResource() *Resource {
 		Parameters:  make([]*Parameter, 0),
 		_parameters: ParametersIndex{},
 		_types:      Types{},
+		_typesIndex: map[reflect.Type]string{},
 	}
 }
 
@@ -357,4 +362,9 @@ func (r *Resource) SetTypes(types Types) {
 
 func (r *Resource) GetTypes() Types {
 	return r._types
+}
+
+func (r *Resource) TypeName(p reflect.Type) (string, bool) {
+	name, ok := r._typesIndex[p]
+	return name, ok
 }

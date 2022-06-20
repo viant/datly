@@ -9,6 +9,7 @@ type (
 	Index struct {
 		Namespace map[string]string
 
+		_nameToPrefix  map[string]string
 		_viewsByPrefix map[string]int
 		_viewsByName   map[string]int
 
@@ -45,6 +46,10 @@ func (i *Index) ensureIndexes() {
 	if i._viewsByName == nil {
 		i._viewsByName = map[string]int{}
 	}
+
+	if i._nameToPrefix == nil {
+		i._nameToPrefix = map[string]string{}
+	}
 }
 
 func (i *Index) indexViews(view *view.View, path string, mainView *view.View) {
@@ -69,6 +74,10 @@ func (i *Index) indexViews(view *view.View, path string, mainView *view.View) {
 		}
 
 		i.indexViews(&view.With[relationIndex].Of.View, aPath, mainView)
+	}
+
+	for prefix, viewName := range i.Namespace {
+		i._nameToPrefix[viewName] = prefix
 	}
 }
 
@@ -111,4 +120,9 @@ func (i *Index) viewByPrefix(prefix string) (*view.View, bool) {
 	}
 
 	return i._viewDetails[index].View, ok
+}
+
+func (i *Index) prefixByView(aView *view.View) (string, bool) {
+	name, ok := i._nameToPrefix[aView.Name]
+	return name, ok
 }

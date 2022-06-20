@@ -25,16 +25,16 @@ func NewRequestParameters(request *http.Request, route *Route) (*RequestParams, 
 		request: request,
 	}
 
-	if err := parameters.init(request, route); err != nil {
+	if paramName, err := parameters.init(request, route); err != nil {
 		errors := NewErrors()
-		errors.AddError("", "RequestBody", err)
+		errors.AddError("", paramName, err)
 		return nil, errors
 	}
 
 	return parameters, nil
 }
 
-func (p *RequestParams) init(request *http.Request, route *Route) error {
+func (p *RequestParams) init(request *http.Request, route *Route) (string, error) {
 	p.pathIndex, _ = toolbox.ExtractURIParameters(route.URI, request.RequestURI)
 	p.queryIndex = request.URL.Query()
 
@@ -77,26 +77,26 @@ func (p *RequestParams) cookie(name string) string {
 	return cookie.Value
 }
 
-func (p *RequestParams) initRequestBody(request *http.Request, route *Route) error {
-	if route._requestBodyType == nil {
-		return nil
+func (p *RequestParams) initRequestBody(request *http.Request, route *Route) (string, error) {
+	if route._requestBodyParam == nil {
+		return "", nil
 	}
 
 	defer request.Body.Close()
 	body, err := io.ReadAll(request.Body)
 	if err != nil {
-		return err
+		return route._requestBodyParam.Name, err
 	}
 
 	if len(body) == 0 {
-		return nil
+		return "", nil
 	}
 
-	convert, _, err := converter.Convert(string(body), route._requestBodyType, "")
+	convert, _, err := converter.Convert(string(body), route._requestBodyParam.Schema.Type(), "")
 	if err != nil {
-		return err
+		return route._requestBodyParam.Name, err
 	}
 
 	p.requestBody = convert
-	return nil
+	return "", nil
 }

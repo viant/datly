@@ -20,7 +20,7 @@ require (
 	github.com/stretchr/testify v1.7.1
 	github.com/viant/afs v1.16.1-0.20220518012503-f9275dcadc3d
 	github.com/viant/afsc v1.8.1-0.20220525154204-272d99aaa19a
-	github.com/viant/assertly v0.9.1-0.20220308232634-4242424ccaf5
+	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.0.0-20220525183022-c2f9e012181a
 	github.com/viant/cloudless v1.1.1-0.20220302185825-1e29705ac362
 	github.com/viant/dsc v0.16.0 // indirect

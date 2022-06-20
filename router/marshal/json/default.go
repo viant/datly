@@ -10,14 +10,18 @@ import (
 )
 
 const (
-	DefaultTagName  = "default"
-	FormatAttribute = "format"
-	ValueAttribute  = "value"
+	DefaultTagName    = "default"
+	FormatAttribute   = "format"
+	ValueAttribute    = "value"
+	NullableAttribute = "nullable"
+	RequiredAttribute = "required"
 )
 
 type DefaultTag struct {
-	Format string
-	Value  string
+	Format   string
+	Value    string
+	Nullable *bool
+	Required *bool
 
 	_value interface{}
 	_ptr   unsafe.Pointer
@@ -51,6 +55,10 @@ func (t *DefaultTag) Init(field reflect.StructField) error {
 			t.Value = keyValue[1]
 		case FormatAttribute:
 			t.Format = keyValue[1]
+		case NullableAttribute:
+			t.Nullable = booleanPtr(keyValue[1] == "true")
+		case RequiredAttribute:
+			t.Required = booleanPtr(keyValue[1] == "true")
 		}
 	}
 
@@ -63,6 +71,10 @@ func (t *DefaultTag) Init(field reflect.StructField) error {
 	}
 
 	return nil
+}
+
+func booleanPtr(b bool) *bool {
+	return &b
 }
 
 func parseValue(rType reflect.Type, rawValue string, timeFormat string) (interface{}, unsafe.Pointer, error) {
@@ -109,4 +121,12 @@ func parseValue(rType reflect.Type, rawValue string, timeFormat string) (interfa
 	}
 
 	return nil, nil, fmt.Errorf("unsupported type %v", rType.String())
+}
+
+func (t *DefaultTag) IsRequired() bool {
+	return t.Required != nil && *t.Required
+}
+
+func (t *DefaultTag) IsNullable() bool {
+	return t.Nullable != nil && *t.Nullable
 }

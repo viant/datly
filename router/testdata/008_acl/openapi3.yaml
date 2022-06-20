@@ -1,0 +1,136 @@
+---
+openapi: 3.1.0
+components:
+  schemas:
+    events:
+      type: object
+      properties:
+        EventTypeId:
+          type: integer
+          format: int64
+        Id:
+          type: integer
+          format: int64
+        Quantity:
+          type: number
+          format: double
+        Timestamp:
+          type: string
+          format: 2006-01-02T15:04:05Z07:00
+        UserId:
+          type: integer
+          format: int64
+  parameters:
+    EVENT_TYPE_ID:
+      name: EVENT_TYPE_ID
+      in: query
+      required: true
+      schema:
+        type: integer
+        description: Parameter EVENT_TYPE_ID schema
+        format: int64
+    FOO.QUANTITY:
+      name: FOO.QUANTITY
+      in: query
+      required: true
+      schema:
+        type: number
+        description: Parameter FOO.QUANTITY schema
+        format: double
+    FOO.USER_ID:
+      name: FOO.USER_ID
+      in: query
+      required: true
+      schema:
+        type: integer
+        description: Parameter FOO.USER_ID schema
+        format: int64
+    _fields:
+      name: _fields
+      in: query
+      description: allows to control view events fields present in response
+      schema:
+        type: string
+info:
+  title: ''
+  version: ''
+paths:
+  "/api/events":
+    get:
+      parameters:
+        - name: FOO.QUANTITY
+          in: query
+          required: true
+          schema:
+            type: number
+            description: Parameter FOO.QUANTITY schema
+            format: double
+        - name: FOO.USER_ID
+          in: query
+          required: true
+          schema:
+            type: integer
+            description: Parameter FOO.USER_ID schema
+            format: int64
+        - name: EVENT_TYPE_ID
+          in: query
+          required: true
+          schema:
+            type: integer
+            description: Parameter EVENT_TYPE_ID schema
+            format: int64
+        - name: _fields
+          in: query
+          description: allows to control view events fields present in response
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  EventTypeId:
+                    type: integer
+                    format: int64
+                  Id:
+                    type: integer
+                    format: int64
+                  Quantity:
+                    type: number
+                    format: double
+                  Timestamp:
+                    type: string
+                    format: 2006-01-02T15:04:05Z07:00
+                  UserId:
+                    type: integer
+                    format: int64
+                description: Success object schema
+        '401':
+          description: Error response. The view and param may be empty, but one of
+            the message or object should be specified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Message:
+                    type: string
+                    nullable: true
+                  Object:
+                    anyOf:
+                      - type: string
+                      - type: object
+                      - type: array
+                      - type: number
+                      - type: boolean
+                    nullable: true
+                  Param:
+                    type: string
+                    nullable: true
+                  View:
+                    type: string
+                    nullable: true
+                description: Error object schema

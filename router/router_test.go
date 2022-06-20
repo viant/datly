@@ -11,11 +11,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/afs"
 	"github.com/viant/afs/option/content"
+	"github.com/viant/assertly"
 	"github.com/viant/datly/codec"
 	"github.com/viant/datly/gateway/registry"
+	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
 	"google.golang.org/api/oauth2/v2"
+	"gopkg.in/yaml.v3"
 	"io"
 	"io/ioutil"
 	"math"
@@ -522,7 +525,7 @@ func TestRouter(t *testing.T) {
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {
-	for i, tCase := range testcases {
+	for i, tCase := range testcases[16:17] {
 		if i != 0 {
 			testcases[i-1].cleanup()
 		}
@@ -557,7 +560,7 @@ func TestRouter(t *testing.T) {
 
 func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, bool) {
 	for name, value := range c.envVariables {
-		os.Setenv(name, value)
+		_ = os.Setenv(name, value)
 	}
 
 	resourceURI := path.Join(testDataLocation, c.resourceURI)
@@ -582,7 +585,26 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 		return nil, false
 	}
 
-	return router.New(resource), true
+	actualOpenApi, err := loadOpenApi(context.TODO(), path.Join(resourceURI, "openapi3.yaml"), fs)
+	if !assert.Nil(t, err, c.description) {
+		return nil, false
+	}
+
+	aRouter := router.New(resource)
+
+	route := resource.Routes[0]
+	generated, err := router.GenerateOpenAPI3Spec(route)
+	if !assert.Nil(t, err, c.description) {
+		return nil, false
+	}
+
+	if !assertly.AssertValues(t, generated, actualOpenApi, c.description) {
+		toolbox.Dump(actualOpenApi)
+		toolbox.Dump(generated)
+		t.Fatal()
+	}
+
+	return aRouter, true
 }
 
 func (c *testcase) readResource(t *testing.T, fs afs.Service, resourceUrl string, dependencies map[string]*view.Resource) (*router.Resource, bool) {
@@ -661,4 +683,25 @@ func initDb(t *testing.T, datasetPath string, resourceURI string) bool {
 
 func encodeToken(token string) string {
 	return base64.StdEncoding.EncodeToString([]byte(token))
+}
+
+func loadOpenApi(ctx context.Context, URL string, fs afs.Service) (*openapi3.OpenAPI, error) {
+	data, err := fs.DownloadWithURL(ctx, URL)
+	if err != nil {
+		return nil, err
+	}
+	transient := map[string]interface{}{}
+	if err := yaml.Unmarshal(data, &transient); err != nil {
+		return nil, err
+	}
+	aMap := map[string]interface{}{}
+	if err := yaml.Unmarshal(data, &aMap); err != nil {
+		return nil, err
+	}
+	openApi := &openapi3.OpenAPI{}
+	err = toolbox.DefaultConverter.AssignConverted(openApi, aMap)
+	if err != nil {
+		return nil, err
+	}
+	return openApi, err
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	goJson "encoding/json"
+	"errors"
 	"fmt"
 	"github.com/go-playground/validator"
 	"github.com/viant/afs/option/content"
@@ -24,6 +25,8 @@ import (
 )
 
 type viewHandler func(response http.ResponseWriter, request *http.Request)
+
+var stringErrorType = errors.New("")
 
 const (
 	AllowOriginHeader      = "Access-Control-Allow-Origin"
@@ -460,18 +463,28 @@ func (r *Router) createCacheEntry(route *Route, selectors *view.Selectors) (*cac
 }
 
 func (r *Router) normalizeErr(err error) error {
+	switch actual := err.(type) {
+	case *Errors:
+		for _, anError := range actual.Errors {
+			switch actual := anError.Err.(type) {
+			case validator.ValidationErrors:
+				anError.Object = NewParamErrors(actual)
+			default:
+				anError.Message = actual.Error()
+			}
+		}
+	default:
+		errType := reflect.TypeOf(err)
+		if errType == stringType {
+			return &Error{
+				Message: actual.Error(),
+			}
+		}
+	}
+
 	asErrors, ok := err.(*Errors)
 	if !ok {
 		return err
-	}
-
-	for _, anError := range asErrors.Errors {
-		switch actual := anError.Error.(type) {
-		case validator.ValidationErrors:
-			anError.Object = NewParamErrors(actual)
-		default:
-			anError.Message = actual.Error()
-		}
 	}
 
 	return asErrors

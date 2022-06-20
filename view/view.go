@@ -634,11 +634,6 @@ func (v *View) CanUseSelectorCriteria() bool {
 	return v.Selector.Constraints.Criteria
 }
 
-//CanUseSelectorColumns indicates if Selector.Columns can be used
-func (v *View) CanUseSelectorColumns() bool {
-	return len(v.Selector.Constraints.Filterable) != 0
-}
-
 //CanUseSelectorLimit indicates if Selector.Limit can be used
 func (v *View) CanUseSelectorLimit() bool {
 	return v.Selector.Constraints.Limit
