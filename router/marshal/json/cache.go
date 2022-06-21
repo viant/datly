@@ -9,7 +9,6 @@ import (
 
 var timeType = reflect.TypeOf(time.Time{})
 var bufferPool *BufferPool
-var sliceStringifier = sync.Map{}
 
 type BufferPool struct {
 	pool *sync.Pool

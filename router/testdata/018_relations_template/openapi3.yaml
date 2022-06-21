@@ -1,4 +1,15 @@
 openapi: 3.1.0
+components:
+    parameters:
+        Id:
+            name: Id
+            in: query
+            description: Parameter Id, Located in query with name eventTypeId
+            required: true
+            schema:
+                type: integer
+                description: Parameter Id schema
+                format: int64
 info:
     title: ""
     version: ""
@@ -60,6 +71,19 @@ paths:
                   description: allows to control view events fields present in response
                   schema:
                     type: string
+                - name: Id
+                  in: query
+                  description: Parameter Id, Located in query with name eventTypeId
+                  required: true
+                  schema:
+                    type: integer
+                    description: Parameter Id schema
+                    format: int64
+                - name: typ_fields
+                  in: query
+                  description: allows to control view event_types fields present in response
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: Success response
@@ -68,9 +92,16 @@ paths:
                             schema:
                                 type: object
                                 properties:
-                                    EventTypeId:
-                                        type: integer
-                                        format: int64
+                                    EventType:
+                                        type: object
+                                        properties:
+                                            Code:
+                                                type: string
+                                            Id:
+                                                type: integer
+                                                format: int64
+                                            Type:
+                                                type: string
                                     Id:
                                         type: integer
                                         format: int64

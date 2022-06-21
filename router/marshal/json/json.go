@@ -29,6 +29,7 @@ type (
 		config      marshal.Default
 
 		cache              sync.Map
+		sliceStringifier   sync.Map
 		_marshallersOutput map[string]int
 		_marshallersInput  map[string]int
 	}
@@ -59,8 +60,10 @@ func New(rType reflect.Type, config marshal.Default) (*Marshaller, error) {
 
 func newMarshaller(rType reflect.Type, config marshal.Default, initialPath string) (*Marshaller, error) {
 	json := &Marshaller{
-		rType:  rType,
-		config: config,
+		rType:            rType,
+		config:           config,
+		sliceStringifier: sync.Map{},
+		cache:            sync.Map{},
 	}
 
 	if err := json.init(initialPath); err != nil {
@@ -821,7 +824,7 @@ func (j *Marshaller) stringifyNonPrimitive(rType reflect.Type) (marshallObjFn, e
 }
 
 func (j *Marshaller) storeOrLoadSliceMarshaller(rType reflect.Type) (marshallObjFn, error) {
-	encoder, ok := sliceStringifier.Load(rType)
+	encoder, ok := j.sliceStringifier.Load(rType)
 	if ok {
 		if marshaller, ok := encoder.(marshallObjFn); ok {
 			return marshaller, nil
@@ -829,7 +832,7 @@ func (j *Marshaller) storeOrLoadSliceMarshaller(rType reflect.Type) (marshallObj
 	}
 
 	marshaller := j.asSlice(rType)
-	sliceStringifier.Store(rType, marshaller)
+	j.sliceStringifier.Store(rType, marshaller)
 	return marshaller, nil
 }
 

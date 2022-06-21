@@ -19,21 +19,15 @@ paths:
                             schema:
                                 type: object
                                 properties:
-                                    EventTypeId:
-                                        type: integer
-                                        format: int64
-                                    Id:
-                                        type: integer
-                                        format: int64
-                                    Quantity:
-                                        type: number
-                                        format: double
-                                    Timestamp:
+                                    Message:
+                                        anyOf:
+                                            - type: string
+                                            - type: object
+                                            - type: array
+                                            - type: number
+                                            - type: boolean
+                                    Status:
                                         type: string
-                                        format: 2006-01-02T15:04:05Z07:00
-                                    UserId:
-                                        type: integer
-                                        format: int64
                                 description: Success object schema
                 "401":
                     description: Error response. The view and param may be empty, but one of the message or object should be specified

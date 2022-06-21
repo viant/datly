@@ -1,106 +1,81 @@
----
 openapi: 3.1.0
 components:
-  schemas:
-    events:
-      type: object
-      properties:
-        EventTypeId:
-          type: integer
-          format: int64
-        Id:
-          type: integer
-          format: int64
-        Quantity:
-          type: number
-          format: double
-        Timestamp:
-          type: string
-          format: 2006-01-02T15:04:05Z07:00
-        UserId:
-          type: integer
-          format: int64
-  parameters:
-    EventId:
-      name: EventId
-      in: path
-      required: true
-      schema:
-        type: integer
-        description: Parameter EventId schema
-        format: int64
-    _fields:
-      name: _fields
-      in: query
-      description: allows to control view events fields present in response
-      schema:
-        type: string
+    parameters:
+        EventId:
+            name: EventId
+            in: path
+            description: Parameter EventId, Located in path with name eventId
+            required: true
+            schema:
+                type: integer
+                description: Parameter EventId schema
+                format: int64
 info:
-  title: ''
-  version: ''
+    title: ""
+    version: ""
 paths:
-  "/api/events/{eventId}":
-    get:
-      parameters:
-        - name: EventId
-          in: path
-          required: true
-          schema:
-            type: integer
-            description: Parameter EventId schema
-            format: int64
-        - name: _fields
-          in: query
-          description: allows to control view events fields present in response
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Success response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  EventTypeId:
+    /api/events/{eventId}:
+        get:
+            parameters:
+                - name: EventId
+                  in: path
+                  description: Parameter EventId, Located in path with name eventId
+                  required: true
+                  schema:
                     type: integer
+                    description: Parameter EventId schema
                     format: int64
-                  Id:
-                    type: integer
-                    format: int64
-                  Quantity:
-                    type: number
-                    format: double
-                  Timestamp:
+                - name: _fields
+                  in: query
+                  description: allows to control view events fields present in response
+                  schema:
                     type: string
-                    format: 2006-01-02T15:04:05Z07:00
-                  UserId:
-                    type: integer
-                    format: int64
-                description: Success object schema
-        '401':
-          description: Error response. The view and param may be empty, but one of
-            the message or object should be specified
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  Message:
-                    type: string
-                    nullable: true
-                  Object:
-                    anyOf:
-                      - type: string
-                      - type: object
-                      - type: array
-                      - type: number
-                      - type: boolean
-                    nullable: true
-                  Param:
-                    type: string
-                    nullable: true
-                  View:
-                    type: string
-                    nullable: true
-                description: Error object schema
+            responses:
+                "200":
+                    description: Success response
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    EventTypeId:
+                                        type: integer
+                                        format: int64
+                                    Id:
+                                        type: integer
+                                        format: int64
+                                    Quantity:
+                                        type: number
+                                        format: double
+                                    Timestamp:
+                                        type: string
+                                        format: 2006-01-02T15:04:05Z07:00
+                                    UserId:
+                                        type: integer
+                                        format: int64
+                                description: Success object schema
+                "401":
+                    description: Error response. The view and param may be empty, but one of the message or object should be specified
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    Message:
+                                        type: string
+                                        nullable: true
+                                    Object:
+                                        anyOf:
+                                            - type: string
+                                            - type: object
+                                            - type: array
+                                            - type: number
+                                            - type: boolean
+                                        nullable: true
+                                    Param:
+                                        type: string
+                                        nullable: true
+                                    View:
+                                        type: string
+                                        nullable: true
+                                description: Error object schema

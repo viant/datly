@@ -1,63 +1,24 @@
 openapi: 3.1.0
-components:
-    parameters:
-        JWT:
-            name: JWT
-            in: header
-            description: Parameter JWT, Located in header with name Authorization
-            required: true
-            schema:
-                type: object
-                properties:
-                    Audience:
-                        type: string
-                    Email:
-                        type: string
-                    ExpiresIn:
-                        type: integer
-                        format: int64
-                    IssuedTo:
-                        type: string
-                    Scope:
-                        type: string
-                    UserId:
-                        type: string
-                    VerifiedEmail:
-                        type: boolean
-                description: Parameter JWT schema
 info:
     title: ""
     version: ""
 paths:
-    /api/employees:
+    /api/event-types:
         get:
             parameters:
-                - name: JWT
-                  in: header
-                  description: Parameter JWT, Located in header with name Authorization
-                  required: true
-                  schema:
-                    type: object
-                    properties:
-                        Audience:
-                            type: string
-                        Email:
-                            type: string
-                        ExpiresIn:
-                            type: integer
-                            format: int64
-                        IssuedTo:
-                            type: string
-                        Scope:
-                            type: string
-                        UserId:
-                            type: string
-                        VerifiedEmail:
-                            type: boolean
-                    description: Parameter JWT schema
                 - name: _fields
                   in: query
-                  description: allows to control view employees fields present in response
+                  description: allows to control view event_types fields present in response
+                  schema:
+                    type: string
+                - name: typ_fields
+                  in: query
+                  description: allows to control view event_types fields present in response
+                  schema:
+                    type: string
+                - name: ev_fields
+                  in: query
+                  description: allows to control view events fields present in response
                   schema:
                     type: string
             responses:
@@ -68,14 +29,30 @@ paths:
                             schema:
                                 type: object
                                 properties:
-                                    DepId:
-                                        type: integer
-                                        format: int64
-                                    Email:
+                                    Code:
                                         type: string
+                                    Events:
+                                        type: array
+                                        items:
+                                            type: object
+                                            properties:
+                                                Id:
+                                                    type: integer
+                                                    format: int64
+                                                Quantity:
+                                                    type: number
+                                                    format: double
+                                                Timestamp:
+                                                    type: string
+                                                    format: 2006-01-02T15:04:05Z07:00
+                                                UserId:
+                                                    type: integer
+                                                    format: int64
                                     Id:
                                         type: integer
                                         format: int64
+                                    Type:
+                                        type: string
                                 description: Success object schema
                 "401":
                     description: Error response. The view and param may be empty, but one of the message or object should be specified

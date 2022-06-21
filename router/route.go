@@ -102,6 +102,14 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
+	if err := r.initCaser(); err != nil {
+		return err
+	}
+
+	if err := r.normalizeExclude(); err != nil {
+		return err
+	}
+
 	if err := r.initMarshaller(); err != nil {
 		return err
 	}
@@ -115,10 +123,6 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	}
 
 	if err := r.initCache(ctx); err != nil {
-		return err
-	}
-
-	if err := r.normalizeExclude(); err != nil {
 		return err
 	}
 
@@ -160,16 +164,6 @@ func (r *Route) initCardinality() error {
 }
 
 func (r *Route) initMarshaller() error {
-	if r.CaseFormat == "" {
-		r.CaseFormat = view.UpperCamel
-	}
-
-	var err error
-	r._caser, err = r.CaseFormat.Caser()
-	if err != nil {
-		return err
-	}
-
 	marshaller, err := json.New(r.responseType(), marshal.Default{
 		OmitEmpty:  r.OmitEmpty,
 		CaseFormat: r._caser,
@@ -345,7 +339,7 @@ func (r *Route) normalizeExclude() error {
 		if lastDot == -1 {
 			r.Exclude[i] = r._caser.Format(excluded, format.CaseUpperCamel)
 		} else {
-			r.Exclude[i] = excluded[:lastDot] + r._caser.Format(excluded[lastDot+1:], format.CaseUpperCamel)
+			r.Exclude[i] = excluded[:lastDot+1] + r._caser.Format(excluded[lastDot+1:], format.CaseUpperCamel)
 		}
 	}
 	return nil
@@ -360,4 +354,18 @@ func (r *Route) indexExcluded() {
 	for _, excluded := range r.Exclude {
 		r._excluded[excluded] = true
 	}
+}
+
+func (r *Route) initCaser() error {
+	if r.CaseFormat == "" {
+		r.CaseFormat = view.UpperCamel
+	}
+
+	var err error
+	r._caser, err = r.CaseFormat.Caser()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

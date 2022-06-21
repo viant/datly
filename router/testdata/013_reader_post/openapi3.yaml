@@ -4,62 +4,26 @@ info:
     version: ""
 paths:
     /api/events:
-        get:
+        post:
             parameters:
-                - name: _criteria
-                  in: query
-                  description: allows to filter view events data that matches given criteria
-                  schema:
-                    type: string
-                - name: ev_criteria
-                  in: query
-                  description: allows to filter view events data that matches given criteria
-                  schema:
-                    type: string
-                - name: _limit
-                  in: query
-                  description: allows to limit events view data returned from db
-                  schema:
-                    type: integer
-                    format: int64
-                - name: ev_limit
-                  in: query
-                  description: allows to limit events view data returned from db
-                  schema:
-                    type: integer
-                    format: int64
-                - name: _offset
-                  in: query
-                  description: allows to skip first n  view events records, it has to be used alongside the limit
-                  schema:
-                    type: integer
-                    format: int64
-                - name: ev_offset
-                  in: query
-                  description: allows to skip first n  view events records, it has to be used alongside the limit
-                  schema:
-                    type: integer
-                    format: int64
-                - name: _orderby
-                  in: query
-                  description: allows to sort view events results
-                  schema:
-                    type: string
-                - name: ev_orderby
-                  in: query
-                  description: allows to sort view events results
-                  schema:
-                    type: string
                 - name: _fields
                   in: query
                   description: allows to control view events fields present in response
                   schema:
                     type: string
-                - name: ev_fields
-                  in: query
-                  description: allows to control view events fields present in response
-                  schema:
-                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                Id:
+                                    type: integer
+                                    format: int64
+                                UserId:
+                                    type: integer
+                                    format: int64
+                            description: RequestBody
             responses:
                 "200":
                     description: Success response

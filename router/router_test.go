@@ -403,7 +403,7 @@ func TestRouter(t *testing.T) {
 			description: "styles | error",
 			resourceURI: "011_style",
 			uri:         "/api/events?_criteria=(id%20=%201%20UNION%20ALL%20SELECT%209%20as%20id%2C%20To_Date%28%222019-03-11T02%3A20%3A33Z%22%29%20as%20timestamp%2C%2010%20as%20event_type_id%2C%2020%20as%20quantity%2C%206%20as%20user_id)",
-			expected:    `{"Status":"error","Message":{"Errors":[{"ViewName":"events","ParamName":"_criteria","Message":"can't use criteria on view events"}]}}`,
+			expected:    `{"Status":"error","Message":{"Errors":[{"View":"events","Param":"_criteria","Message":"can't use criteria on view events"}]}}`,
 			method:      http.MethodGet,
 		},
 		{
@@ -475,7 +475,7 @@ func TestRouter(t *testing.T) {
 			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 		},
 		{
-			description: "relations_template | dicover criteria",
+			description: "relations_template | discover criteria",
 			resourceURI: "018_relations_template",
 			uri:         "/api/events?eventTypeId=2",
 			method:      http.MethodGet,
@@ -515,17 +515,24 @@ func TestRouter(t *testing.T) {
 			expected: `[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}]`,
 		},
 		{
-			description: "slices | filters",
+			description: "validator | error",
 			resourceURI: "021_validator",
 			uri:         "/api/events",
 			method:      http.MethodPost,
 			requestBody: `{"Id":0,"Quantity":0}`,
-			expected:    `{"Errors":[{"ParamName":"RequestBody","Object":[{"Value":0,"Field":"Id","Tag":"required"}]}]}`,
+			expected:    `{"Errors":[{"Param":"EventFilter","Object":[{"Value":0,"Field":"Id","Tag":"required"}]}]}`,
+		},
+		{
+			description: "exclude | remove columns",
+			resourceURI: "022_exclude",
+			expected:    `[{"id":1,"quantity":33.23432374000549,"event_type":{"id":2,"type":"type - 2"}},{"id":10,"quantity":21.957962334156036,"event_type":{"id":11,"type":"type - 11"}},{"id":100,"quantity":5.084940046072006,"event_type":{"id":111,"type":"type - 111"}}]`,
+			uri:         "/api/events",
+			method:      http.MethodGet,
 		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {
-	for i, tCase := range testcases[16:17] {
+	for i, tCase := range testcases {
 		if i != 0 {
 			testcases[i-1].cleanup()
 		}
@@ -585,11 +592,6 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 		return nil, false
 	}
 
-	actualOpenApi, err := loadOpenApi(context.TODO(), path.Join(resourceURI, "openapi3.yaml"), fs)
-	if !assert.Nil(t, err, c.description) {
-		return nil, false
-	}
-
 	aRouter := router.New(resource)
 
 	route := resource.Routes[0]
@@ -598,10 +600,15 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 		return nil, false
 	}
 
+	openAPIURI := path.Join(resourceURI, "openapi3.yaml")
+	actualOpenApi, err := loadOpenApi(context.TODO(), openAPIURI, fs)
+
+	if !assert.Nil(t, err, c.description) {
+		return nil, false
+	}
 	if !assertly.AssertValues(t, generated, actualOpenApi, c.description) {
 		toolbox.Dump(actualOpenApi)
 		toolbox.Dump(generated)
-		t.Fatal()
 	}
 
 	return aRouter, true
