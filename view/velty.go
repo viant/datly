@@ -205,7 +205,10 @@ func (v *VeltyCodec) evaluateCriteria(dest interface{}, wasNil bool) (string, er
 		}
 	}
 
-	v.executor.Exec(state)
+	if err := v.executor.Exec(state); err != nil {
+		return "", err
+	}
+
 	return state.Buffer.String(), nil
 }
 

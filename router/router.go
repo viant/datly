@@ -26,7 +26,7 @@ import (
 
 type viewHandler func(response http.ResponseWriter, request *http.Request)
 
-var stringErrorType = errors.New("")
+var stringErrorType = reflect.TypeOf(errors.New(""))
 
 const (
 	AllowOriginHeader      = "Access-Control-Allow-Origin"
@@ -407,8 +407,15 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 	err = r.normalizeErr(err)
 
 	if route._responseSetter == nil {
+		errAsBytes, marshalErr := goJson.Marshal(err)
+		if marshalErr != nil {
+			w.Write([]byte("could not parse error message"))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
 		w.WriteHeader(statusCode)
-		w.Write([]byte(err.Error()))
+		w.Write(errAsBytes)
 		return
 	}
 
@@ -420,7 +427,7 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 
 	asBytes, marErr := route._marshaller.Marshal(response.Elem().Interface(), errorFilters)
 	if marErr != nil {
-		w.Write([]byte(marErr.Error()))
+		w.Write(asBytes)
 		w.WriteHeader(statusCode)
 		return
 	}
@@ -475,7 +482,7 @@ func (r *Router) normalizeErr(err error) error {
 		}
 	default:
 		errType := reflect.TypeOf(err)
-		if errType == stringType {
+		if errType == stringErrorType {
 			return &Error{
 				Message: actual.Error(),
 			}
