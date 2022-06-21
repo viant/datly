@@ -13,7 +13,7 @@ type Selectors struct {
 }
 
 //Lookup returns and initializes Selector attached to View. Creates new one if doesn't exist.
-func (s Selectors) Lookup(view *View) *Selector {
+func (s *Selectors) Lookup(view *View) *Selector {
 	s.RWMutex.Lock()
 	defer s.RWMutex.Unlock()
 	if len(s.Index) == 0 {
@@ -66,7 +66,7 @@ func newValue(p reflect.Type) interface{} {
 }
 
 //Init initializes each Selector
-func (s Selectors) Init() {
+func (s *Selectors) Init() {
 	s.RWMutex.Lock()
 	s.RWMutex.Unlock()
 	for _, selector := range s.Index {

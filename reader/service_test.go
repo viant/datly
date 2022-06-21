@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -71,7 +72,7 @@ func (a *audience) OnFetch(_ context.Context) error {
 }
 
 type usecase struct {
-	selectors   view.Selectors
+	selectors   map[string]*view.Selector
 	description string
 	dataURI     string
 	expect      string
@@ -503,10 +504,15 @@ func TestRead(t *testing.T) {
 }
 
 func testView(t *testing.T, testCase usecase, dataView *view.View, err error, service *reader.Service) {
+	selectors := view.Selectors{
+		Index:   testCase.selectors,
+		RWMutex: sync.RWMutex{},
+	}
+
 	session := &reader.Session{
 		Dest:      testCase.dest,
 		View:      dataView,
-		Selectors: testCase.selectors,
+		Selectors: &selectors,
 	}
 
 	err = service.Read(context.TODO(), session)
