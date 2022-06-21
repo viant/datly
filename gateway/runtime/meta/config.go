@@ -26,12 +26,15 @@ func (m *Config) Init() {
 	if m.MetricURI == "" {
 		m.MetricURI = MetricURI
 	}
+
 	if m.StatusURI == "" {
 		m.StatusURI = StatusURI
 	}
+
 	if m.ConfigURI == "" {
 		m.ConfigURI = ConfigURI
 	}
+
 	if m.ViewURI == "" {
 		m.ViewURI = ViewURI
 	}

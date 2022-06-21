@@ -1,16 +1,18 @@
+---
 openapi: 3.1.0
+components: {}
 info:
-    title: ""
-    version: ""
+    title: ''
+    version: ''
 paths:
-    /api/events:
+    "/api/events":
         post:
             parameters:
                 - name: _fields
                   in: query
                   description: allows to control view events fields present in response
                   schema:
-                    type: string
+                      type: string
             requestBody:
                 content:
                     application/json:
@@ -25,7 +27,7 @@ paths:
                                     format: double
                             description: EventFilter
             responses:
-                "200":
+                '200':
                     description: Success response
                     content:
                         application/json:
@@ -41,15 +43,10 @@ paths:
                                     quantity:
                                         type: number
                                         format: double
-                                    timestamp:
-                                        type: string
-                                        format: 2006-01-02T15:04:05Z07:00
-                                    userId:
-                                        type: integer
-                                        format: int64
                                 description: Success object schema
-                "401":
-                    description: Error response. The view and param may be empty, but one of the message or object should be specified
+                '401':
+                    description: Error response. The view and param may be empty, but one of
+                        the message or object should be specified
                     content:
                         application/json:
                             schema:

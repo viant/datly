@@ -16,6 +16,7 @@ import (
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox"
+	"gopkg.in/yaml.v3"
 	"net/http"
 	"os"
 	"reflect"
@@ -36,6 +37,17 @@ const (
 	ExposeHeadersHeader    = "Access-Control-Expose-Headers"
 	MaxAgeHeader           = "Access-Control-Max-Age"
 	Separator              = ", "
+
+	ContentType = "Content-Type"
+	AppYaml     = "application/x-yaml"
+)
+
+const (
+	getIndex int = iota
+	postIndex
+
+	//If any index need to be added, add before lastIndex
+	lastIndex
 )
 
 var errorFilters = json.NewFilters(&json.FilterEntry{
@@ -46,6 +58,8 @@ var debugEnabled = os.Getenv("DATLY_DEBUG") != ""
 type Router struct {
 	resource      *Resource
 	serviceRouter *toolbox.ServiceRouter
+	index         map[string][lastIndex]int
+	routes        Routes
 }
 
 func (r *Router) View(name string) (*view.View, error) {
@@ -63,6 +77,8 @@ func (r *Router) Handle(response http.ResponseWriter, request *http.Request) err
 func New(resource *Resource) *Router {
 	router := &Router{
 		resource: resource,
+		index:    map[string][lastIndex]int{},
+		routes:   resource.Routes,
 	}
 
 	router.Init(resource.Routes)
@@ -75,16 +91,17 @@ func (r *Router) Init(routes Routes) {
 		route._resource = r.resource.Resource
 	}
 
-	r.initServiceRouter(routes)
+	r.indexRoutes()
+	r.initServiceRouter()
 }
 
-func (r *Router) initServiceRouter(routes Routes) {
+func (r *Router) initServiceRouter() {
 	routings := make([]toolbox.ServiceRouting, 0)
 
-	for i, route := range routes {
+	for i, route := range r.routes {
 		routings = append(routings, toolbox.ServiceRouting{
 			URI:        route.URI,
-			Handler:    r.viewHandler(routes[i]),
+			Handler:    r.viewHandler(r.routes[i]),
 			HTTPMethod: route.Method,
 			Parameters: []string{"@httpResponseWriter", "@httpRequest"},
 		})
@@ -93,6 +110,8 @@ func (r *Router) initServiceRouter(routes Routes) {
 			routings = append(routings, corsRouting(route))
 		}
 	}
+
+	routings = append(routings, r.openApiRouting())
 
 	r.serviceRouter = toolbox.NewServiceRouter(routings...)
 }
@@ -495,4 +514,85 @@ func (r *Router) normalizeErr(err error) error {
 	}
 
 	return asErrors
+}
+
+func (r *Router) indexRoutes() {
+	for i, route := range r.routes {
+		methods, ok := r.index[route.URI]
+		if !ok {
+			r.index[route.URI] = methods
+		}
+
+		methodIndex, _ := r.methodIndex(route.Method)
+		methods[methodIndex] = i
+	}
+}
+
+func (r *Router) methodIndex(method string) (int, error) {
+	switch method {
+	case http.MethodGet:
+		return getIndex, nil
+	case http.MethodPost:
+		return postIndex, nil
+	}
+
+	return -1, fmt.Errorf("unsupported method %v", method)
+}
+
+func (r *Router) openApiRouting() toolbox.ServiceRouting {
+	return toolbox.ServiceRouting{
+		URI:                 r.resource.APIURI + "/openapi",
+		Handler:             r.openApiHandler,
+		HTTPMethod:          http.MethodGet,
+		Parameters:          []string{"@httpResponseWriter", "@httpRequest"},
+		ContentTypeEncoders: nil,
+		ContentTypeDecoders: nil,
+		HandlerInvoker:      nil,
+	}
+}
+
+func (r *Router) openApiHandler(writer http.ResponseWriter, req *http.Request) {
+	query := req.URL.Query()
+	routeURI := query.Get("route")
+	if routeURI == "" {
+		writer.Write([]byte("param route is required"))
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	method := query.Get("method")
+	if method == "" {
+		method = http.MethodGet
+	}
+
+	index, err := r.methodIndex(method)
+	if err != nil {
+		writer.Write([]byte(err.Error()))
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	route := r.routes[r.index[routeURI][index]]
+	openapi, err := GenerateOpenAPI3Spec(route)
+	if err != nil {
+		writer.Write([]byte(err.Error()))
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	asBytes, err := yaml.Marshal(openapi)
+	if err != nil {
+		writer.Write([]byte(err.Error()))
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	writer.Header().Set(ContentType, AppYaml)
+	writer.Header().Set(ContentLength, strconv.Itoa(len(asBytes)))
+	writer.Write(asBytes)
+	writer.WriteHeader(http.StatusOK)
+}
+
+func (r *Router) ApiPrefix() string {
+	return r.resource.APIURI
 }

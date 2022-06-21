@@ -594,8 +594,7 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 
 	aRouter := router.New(resource)
 
-	route := resource.Routes[0]
-	generated, err := router.GenerateOpenAPI3Spec(route)
+	generated, err := c.readOpenAPI(resource, aRouter)
 	if !assert.Nil(t, err, c.description) {
 		return nil, false
 	}
@@ -606,12 +605,30 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 	if !assert.Nil(t, err, c.description) {
 		return nil, false
 	}
-	if !assertly.AssertValues(t, generated, actualOpenApi, c.description) {
+	if !assertly.AssertValues(t, actualOpenApi, generated, c.description) {
 		toolbox.Dump(actualOpenApi)
 		toolbox.Dump(generated)
 	}
 
 	return aRouter, true
+}
+
+func (c *testcase) readOpenAPI(resource *router.Resource, aRouter *router.Router) (*openapi3.OpenAPI, error) {
+	route := resource.Routes[0]
+	buffer := &bytes.Buffer{}
+	openApiWriter := &httptest.ResponseRecorder{
+		Body: buffer,
+	}
+
+	openApiRequest := httptest.NewRequest(http.MethodGet, fmt.Sprintf("%v/openapi?route=%v&method=%v", aRouter.ApiPrefix(), route.URI, route.Method), nil)
+	aRouter.ServeHTTP(openApiWriter, openApiRequest)
+
+	openApi := new(openapi3.OpenAPI)
+	if err := yaml.Unmarshal(buffer.Bytes(), openApi); err != nil {
+		return nil, err
+	}
+
+	return openApi, nil
 }
 
 func (c *testcase) readResource(t *testing.T, fs afs.Service, resourceUrl string, dependencies map[string]*view.Resource) (*router.Resource, bool) {
