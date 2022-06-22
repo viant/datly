@@ -54,6 +54,7 @@ func NewWithAuth(config *Config, auth AuthHandler) (*Server, error) {
 	mux.Handle(config.Meta.ConfigURI, auth.Auth(handler.NewConfig(config.Config, &config.Endpoint, &config.Meta).ServeHTTP))
 	mux.Handle(config.Meta.StatusURI, auth.Auth(handler.NewStatus(config.Version, &config.Meta).ServeHTTP))
 	mux.Handle(config.Meta.ViewURI, auth.Auth(handler.NewView(config.Meta.ViewURI, &config.Meta, service.View).ServeHTTP))
+	mux.Handle(config.Meta.OpenApiURI, auth.Auth(handler.NewOpenApi(config.Info, service.Routes).ServeHTTP))
 
 	//actual datly handler
 	mux.HandleFunc(config.Config.APIPrefix, auth.Auth(service.Handle))

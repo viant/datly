@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/keywords"
@@ -51,9 +50,8 @@ type (
 		Counter logger.Counter  `json:"-"`
 		Caser   format.Case     `json:",omitempty"`
 
-		_columns  Columns
+		_columns  ColumnIndex
 		_excluded map[string]bool
-		_id       uuid.UUID
 
 		DiscoverCriteria *bool
 
@@ -130,7 +128,6 @@ func (v *View) Init(ctx context.Context, resource *Resource) error {
 		return nil
 	}
 
-	v._id = uuid.New()
 	v.initialized = true
 
 	if err := v.loadFromWithURL(ctx, resource); err != nil {
@@ -252,15 +249,15 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err = v.ensureColumns(ctx); err != nil {
+	if err = v.ensureColumns(ctx, resource); err != nil {
 		return err
 	}
 
-	if err = ColumnSlice(v.Columns).Init(v.Caser); err != nil {
+	if err = Columns(v.Columns).Init(v.Caser); err != nil {
 		return err
 	}
 
-	v._columns = ColumnSlice(v.Columns).Index(v.Caser)
+	v._columns = Columns(v.Columns).Index(v.Caser)
 
 	if err = v.ensureSchema(resource._types); err != nil {
 		return err
@@ -351,7 +348,11 @@ func (v *View) updateRelations(ctx context.Context, resource *Resource, relation
 	return nil
 }
 
-func (v *View) ensureColumns(ctx context.Context) error {
+func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
+	if cachedColumns, ok := resource._columnsCache[v.Name]; ok {
+		v.Columns = cachedColumns
+	}
+
 	if len(v.Columns) != 0 {
 		return nil
 	}
@@ -378,10 +379,11 @@ func (v *View) ensureColumns(ctx context.Context) error {
 			return err
 		}
 
-		ColumnSlice(columns).updateTypes(tableColumns, v.Caser)
+		Columns(columns).updateTypes(tableColumns, v.Caser)
 	}
 
 	v.Columns = columns
+	resource._columnsCache[v.Name] = v.Columns
 	return nil
 }
 
@@ -650,7 +652,7 @@ func (v *View) CanUseSelectorOffset() bool {
 }
 
 //IndexedColumns returns Columns
-func (v *View) IndexedColumns() Columns {
+func (v *View) IndexedColumns() ColumnIndex {
 	return v._columns
 }
 
@@ -708,13 +710,13 @@ func (v *View) deriveColumnsFromSchema(relation *Relation) error {
 	}
 
 	v.Columns = newColumns
-	v._columns = ColumnSlice(newColumns).Index(v.Caser)
+	v._columns = Columns(newColumns).Index(v.Caser)
 
 	return nil
 }
 
 func (v *View) updateColumn(rType reflect.Type, columns *[]*Column, relation *Relation) error {
-	index := ColumnSlice(*columns).Index(v.Caser)
+	index := Columns(*columns).Index(v.Caser)
 
 	for i := 0; i < rType.NumField(); i++ {
 		field := rType.Field(i)
@@ -801,7 +803,7 @@ func (v *View) inheritFromViewIfNeeded(ctx context.Context, resource *Resource) 
 }
 
 func (v *View) indexColumns() {
-	v._columns = ColumnSlice(v.Columns).Index(v.Caser)
+	v._columns = Columns(v.Columns).Index(v.Caser)
 }
 
 func (v *View) ensureLogger(resource *Resource) error {
@@ -848,10 +850,6 @@ func (v *View) IsHolder(value string) bool {
 	}
 
 	return false
-}
-
-func (v *View) ID() uuid.UUID {
-	return v._id
 }
 
 func (v *View) ShouldTryDiscover() bool {

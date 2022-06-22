@@ -9,6 +9,8 @@ const (
 	ConfigURI = "/v1/api/meta/config"
 	//ViewURI represents default config view URIPrefix
 	ViewURI = "/v1/api/meta/view/"
+	//OpenApiURI represents default config openapi URIPrefix
+	OpenApiURI = "/v1/api/meta/openapi"
 )
 
 //Config represents meta config
@@ -18,6 +20,7 @@ type Config struct {
 	ConfigURI     string
 	StatusURI     string
 	ViewURI       string
+	OpenApiURI    string
 	AllowedSubnet []string
 }
 
@@ -37,5 +40,9 @@ func (m *Config) Init() {
 
 	if m.ViewURI == "" {
 		m.ViewURI = ViewURI
+	}
+
+	if m.OpenApiURI == "" {
+		m.OpenApiURI = OpenApiURI
 	}
 }

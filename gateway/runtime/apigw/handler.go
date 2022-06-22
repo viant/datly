@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/auth/cognito"
 	"github.com/viant/datly/codec"
 	"github.com/viant/datly/gateway/runtime/standalone/handler"
+	"github.com/viant/datly/router/openapi3"
 	"net/http"
 	"strings"
 
@@ -69,6 +70,13 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 	if strings.Contains(httpRequest.RequestURI, config.Meta.ConfigURI) {
 		viewHandler := handler.NewConfig(config, nil, &config.Meta)
 		viewHandler.ServeHTTP(writer, httpRequest)
+		return nil
+	}
+
+	if strings.Contains(httpRequest.RequestURI, config.Meta.OpenApiURI) {
+		//TODO: add openapi3.Info to Config
+		openApiHandler := handler.NewOpenApi(openapi3.Info{}, service.Routes)
+		openApiHandler.ServeHTTP(writer, httpRequest)
 		return nil
 	}
 

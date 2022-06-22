@@ -14,14 +14,15 @@ import (
 )
 
 type Config struct {
-	APIPrefix       string //like /v1/api/
-	RouteURL        string
-	DependencyURL   string
-	UseCacheFS      bool
-	SyncFrequencyMs int
-	Secrets         []*secret.Resource
-	Cognito         *cognito.Config
-	Meta            meta.Config
+	APIPrefix        string //like /v1/api/
+	RouteURL         string
+	DependencyURL    string
+	UseCacheFS       bool
+	SyncFrequencyMs  int
+	Secrets          []*secret.Resource
+	Cognito          *cognito.Config
+	Meta             meta.Config
+	DiscoveryColumns *bool
 }
 
 func (c *Config) Validate() error {
@@ -29,6 +30,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("RouteURL was empty")
 	}
 	return nil
+}
+
+func (c *Config) Discovery() bool {
+	return c.DiscoveryColumns == nil || *c.DiscoveryColumns
 }
 
 func (c *Config) Init() {

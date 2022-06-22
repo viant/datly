@@ -7,7 +7,6 @@ import (
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/json"
-	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -56,7 +55,6 @@ type (
 		Transforms       marshal.Transforms
 		Exclude          []string
 		NormalizeExclude *bool
-		Info             openapi3.Info
 		_caser           format.Case
 		_excluded        map[string]bool
 		_marshaller      *json.Marshaller

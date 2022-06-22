@@ -11,10 +11,10 @@ require (
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang-jwt/jwt/v4 v4.4.1
 	github.com/google/gops v0.3.23
-	github.com/google/uuid v1.2.0
+	github.com/google/uuid v1.3.0
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/leodido/go-urn v1.2.1 // indirect
-	github.com/lib/pq v1.10.4
+	github.com/lib/pq v1.10.6
 	github.com/mattn/go-sqlite3 v2.0.2+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.1
@@ -28,7 +28,7 @@ require (
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/parsly v0.0.0-20220309230857-3a8c3e9c4030
 	github.com/viant/scy v0.0.0-20220525181307-5c0db5da0082
-	github.com/viant/sqlx v0.0.0-20220412215625-85e6fb65daba
+	github.com/viant/sqlx v0.0.0-20220609201420-5ad8104f506c
 	github.com/viant/toolbox v0.34.6-0.20220520032100-91daa519c2a2
 	github.com/viant/velty v0.1.1-0.20220615222300-d36908b3bf21
 	github.com/viant/xunsafe v0.8.1-0.20220609224231-1d3e1fcf7bb6

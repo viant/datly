@@ -8,15 +8,15 @@ import (
 	"strings"
 )
 
-//ColumnSlice wrap slice of Column
-type ColumnSlice []*Column
+//Columns wrap slice of Column
+type Columns []*Column
 
-//Columns represents *Column registry.
-type Columns map[string]*Column
+//ColumnIndex represents *Column registry.
+type ColumnIndex map[string]*Column
 
 //Index indexes columns by Column.Name
-func (c ColumnSlice) Index(caser format.Case) Columns {
-	result := Columns{}
+func (c Columns) Index(caser format.Case) ColumnIndex {
+	result := ColumnIndex{}
 	for i, _ := range c {
 		result.Register(caser, c[i])
 	}
@@ -24,7 +24,7 @@ func (c ColumnSlice) Index(caser format.Case) Columns {
 }
 
 //Register registers *Column
-func (c Columns) Register(caser format.Case, column *Column) {
+func (c ColumnIndex) Register(caser format.Case, column *Column) {
 	keys := shared.KeysOf(column.Name, true)
 	for _, key := range keys {
 		c[key] = column
@@ -38,7 +38,7 @@ func (c Columns) Register(caser format.Case, column *Column) {
 
 //RegisterHolder looks for the Column by Relation.Column name.
 //If it finds registers that Column with Relation.Holder key.
-func (c Columns) RegisterHolder(relation *Relation) error {
+func (c ColumnIndex) RegisterHolder(relation *Relation) error {
 	column, err := c.Lookup(relation.Column)
 	if err != nil {
 		//TODO: evaluate later
@@ -55,7 +55,7 @@ func (c Columns) RegisterHolder(relation *Relation) error {
 }
 
 //Lookup returns Column with given name.
-func (c Columns) Lookup(name string) (*Column, error) {
+func (c ColumnIndex) Lookup(name string) (*Column, error) {
 	column, ok := c[name]
 	if ok {
 		return column, nil
@@ -81,7 +81,7 @@ func (c Columns) Lookup(name string) (*Column, error) {
 	return nil, err
 }
 
-func (c Columns) RegisterWithName(name string, column *Column) {
+func (c ColumnIndex) RegisterWithName(name string, column *Column) {
 	keys := shared.KeysOf(name, true)
 	for _, key := range keys {
 		c[key] = column
@@ -89,7 +89,7 @@ func (c Columns) RegisterWithName(name string, column *Column) {
 }
 
 //Init initializes each Column in the slice.
-func (c ColumnSlice) Init(caser format.Case) error {
+func (c Columns) Init(caser format.Case) error {
 	for i := range c {
 		if err := c[i].Init(caser); err != nil {
 			return err
@@ -98,8 +98,8 @@ func (c ColumnSlice) Init(caser format.Case) error {
 	return nil
 }
 
-func (c ColumnSlice) updateTypes(columns []*Column, caser format.Case) {
-	index := ColumnSlice(columns).Index(caser)
+func (c Columns) updateTypes(columns []*Column, caser format.Case) {
+	index := Columns(columns).Index(caser)
 
 	for _, column := range c {
 		if column.rType == nil || shared.Elem(column.rType).Kind() == reflect.Interface {

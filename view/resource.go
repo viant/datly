@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
+	"github.com/viant/afs/storage"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/codec"
 	"github.com/viant/datly/logger"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"reflect"
+	"strings"
+	"time"
 )
 
 //Resource represents grouped view needed to build the View
@@ -34,7 +37,9 @@ type Resource struct {
 	Loggers  logger.Adapters
 	_loggers logger.AdapterIndex
 
-	_visitors codec.Visitors
+	_visitors     codec.Visitors
+	ModTime       time.Time
+	_columnsCache map[string]Columns
 }
 
 func (r *Resource) LoadText(ctx context.Context, URL string) (string, error) {
@@ -42,10 +47,43 @@ func (r *Resource) LoadText(ctx context.Context, URL string) (string, error) {
 		parent, _ := url.Split(r.SourceURL, file.Scheme)
 		URL = url.Join(parent, URL)
 	}
+
 	fs := afs.New()
 	data, err := fs.DownloadWithURL(ctx, URL)
-	return string(data), err
 
+	if err = r.updateTime(ctx, URL, err); err != nil {
+		return "", err
+	}
+
+	return string(data), err
+}
+
+func (r *Resource) updateTime(ctx context.Context, URL string, err error) error {
+	if !strings.HasSuffix(URL, ".sql") {
+		return nil
+	}
+
+	object, err := r.LoadObject(ctx, URL)
+	if err != nil {
+		return err
+	}
+
+	if object.ModTime().After(r.ModTime) {
+		r.ModTime = object.ModTime()
+	}
+
+	return nil
+}
+
+func (r *Resource) LoadObject(ctx context.Context, URL string) (storage.Object, error) {
+	if url.Scheme(URL, "") == "" && r.SourceURL != "" {
+		parent, _ := url.Split(r.SourceURL, file.Scheme)
+		URL = url.Join(parent, URL)
+	}
+
+	fs := afs.New()
+	data, err := fs.Object(ctx, URL)
+	return data, err
 }
 
 func (r *Resource) MergeFrom(resource *Resource, types Types) {
@@ -177,10 +215,11 @@ func (r *Resource) GetConnectors() Connectors {
 }
 
 //Init initializes Resource
-func (r *Resource) Init(ctx context.Context, types Types, visitors codec.Visitors) error {
+func (r *Resource) Init(ctx context.Context, types Types, visitors codec.Visitors, cache map[string]Columns) error {
 	r._typesIndex = map[reflect.Type]string{}
 	r._types = types.copy()
 	r._visitors = visitors
+	r._columnsCache = cache
 
 	for _, definition := range r.Types {
 		if err := definition.Init(ctx, types); err != nil {
@@ -223,7 +262,7 @@ func NewResourceFromURL(ctx context.Context, url string, types Types, visitors c
 	if err != nil {
 		return nil, err
 	}
-	err = resource.Init(ctx, types, visitors)
+	err = resource.Init(ctx, types, visitors, map[string]Columns{})
 	return resource, err
 }
 
@@ -234,6 +273,11 @@ func LoadResourceFromURL(ctx context.Context, URL string, fs afs.Service) (*Reso
 		return nil, err
 	}
 	transient := map[string]interface{}{}
+	object, err := fs.Object(ctx, URL)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := yaml.Unmarshal(data, &transient); err != nil {
 		return nil, err
 	}
@@ -246,7 +290,9 @@ func LoadResourceFromURL(ctx context.Context, URL string, fs afs.Service) (*Reso
 	if err != nil {
 		return nil, err
 	}
+
 	resource.SourceURL = URL
+	resource.ModTime = object.ModTime()
 	return resource, err
 }
 

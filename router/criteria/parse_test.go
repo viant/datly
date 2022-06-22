@@ -15,7 +15,7 @@ func TestParse(t *testing.T) {
 	testCases := []struct {
 		description       string
 		input             string
-		columns           view.Columns
+		columns           view.ColumnIndex
 		sanitizedCriteria string
 		placeholders      []interface{}
 		expectErr         bool

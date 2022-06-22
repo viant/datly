@@ -239,7 +239,8 @@ func (r *Service) loadRouterResource(ctx context.Context, URL string, fs afs.Ser
 			URIPart: URIPart,
 		}
 	}
-	resource, err := router.NewResourceFromURL(ctx, fs, URL, r.visitors, types, r.dataResources, metrics)
+
+	resource, err := router.NewResourceFromURL(ctx, fs, URL, r.visitors, types, r.dataResources, metrics, r.Config.Discovery())
 	if err != nil {
 		return nil, err
 	}
@@ -269,6 +270,16 @@ func (r *Service) apiURI(URL string) string {
 		URI = URI[:index]
 	}
 	return URI
+}
+
+func (r *Service) Routes(route string) []*router.Route {
+	routes := make([]*router.Route, 0)
+
+	for _, viewRouter := range r.routers {
+		routes = append(routes, viewRouter.Route(route)...)
+	}
+
+	return routes
 }
 
 //New creates a gateway service

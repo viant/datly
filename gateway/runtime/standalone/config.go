@@ -6,6 +6,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone/endpoint"
+	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"strings"
@@ -18,6 +19,7 @@ type (
 		Version string
 		*gateway.Config
 		Endpoint endpoint.Config
+		Info     openapi3.Info
 	}
 )
 

@@ -131,7 +131,7 @@ paths:
                                         type: integer
                                         format: int64
                                 description: Success object schema
-                "401":
+                "Default":
                     description: Error response. The view and param may be empty, but one of the message or object should be specified
                     content:
                         application/json:

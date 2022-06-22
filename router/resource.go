@@ -13,7 +13,9 @@ import (
 	"github.com/viant/datly/codec"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/cache"
+	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/discover"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"net/http"
@@ -23,19 +25,23 @@ import (
 
 type (
 	Resource struct {
-		initialised bool
-		APIURI      string
-		SourceURL   string
-		With        []string //list of resource to inherit from
-		Routes      Routes
-		Resource    *view.Resource
-		Compression *Compression
-		Redirect    *Redirect
-		Cache       *cache.Cache
-		Logger      *Logger //connect, dataview, time, SQL with params if exceeded time
-		Cors        *Cors   //TODO github.com/viant/datly/v0/app/lambda/bridge/cors.go
+		initialised  bool
+		APIURI       string
+		MetaCacheURI string
+		SourceURL    string
+		With         []string //list of resource to inherit from
+		Routes       Routes
+		Resource     *view.Resource
+		Compression  *Compression
+		Redirect     *Redirect
+		Cache        *cache.Cache
+		Logger       *Logger //connect, dataview, time, SQL with params if exceeded time
+		Cors         *Cors
 
-		_visitors codec.Visitors
+		ColumnsCache     *discover.Cache
+		Info             openapi3.Info
+		_visitors        codec.Visitors
+		ColumnsDiscovery bool
 	}
 
 	Logger struct {
@@ -81,10 +87,24 @@ func (r *Resource) Init(ctx context.Context) error {
 	if r.initialised {
 		return nil
 	}
-
 	r.initialised = true
 
-	if err := r.Resource.Init(ctx, r.Resource.GetTypes(), r._visitors); err != nil {
+	var columnCacheExists bool
+	if r.ColumnsDiscovery {
+		r.ColumnsCache = discover.New(strings.Replace(r.SourceURL, ".yaml", "_meta.yml", 1))
+		if columnCacheExists = r.ColumnsCache.Exists(ctx); columnCacheExists {
+			if err := r.ColumnsCache.Load(ctx); err != nil {
+				return err
+			}
+		}
+	}
+
+	columnsCache := map[string]view.Columns{}
+	if r.ColumnsDiscovery {
+		columnsCache = r.ColumnsCache.Items
+	}
+
+	if err := r.Resource.Init(ctx, r.Resource.GetTypes(), r._visitors, columnsCache); err != nil {
 		return err
 	}
 
@@ -97,6 +117,14 @@ func (r *Resource) Init(ctx context.Context) error {
 	if err := r.addLoggersIfNeeded(); err != nil {
 		return err
 	}
+
+	if r.ColumnsDiscovery && (!columnCacheExists || r.Resource.ModTime.After(r.ColumnsCache.ModTime)) {
+		r.ColumnsCache.ModTime = r.Resource.ModTime
+		if err := r.ColumnsCache.Store(ctx); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -129,7 +157,7 @@ func (r *Resource) addLogger(aView *view.View, timeLogger *logger.Adapter) {
 	}
 }
 
-func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, visitors codec.Visitors, types view.Types, resources map[string]*view.Resource, metrics *view.Metrics) (*Resource, error) {
+func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, visitors codec.Visitors, types view.Types, resources map[string]*view.Resource, metrics *view.Metrics, useColumnCache bool) (*Resource, error) {
 	resourceData, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, err
@@ -161,6 +189,11 @@ func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, visitor
 	resource.Resource.Metrics = metrics
 	resource.Resource.SourceURL = URL
 	resource.Resource.SetTypes(types)
+	resource.ColumnsDiscovery = useColumnCache
+
+	object, _ := fs.Object(ctx, URL)
+	resource.Resource.ModTime = object.ModTime()
+
 	if err := resource.Init(ctx); err != nil {
 		return nil, err
 	}

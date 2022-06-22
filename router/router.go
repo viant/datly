@@ -16,7 +16,6 @@ import (
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox"
-	"gopkg.in/yaml.v3"
 	"net/http"
 	"os"
 	"reflect"
@@ -42,24 +41,16 @@ const (
 	AppYaml     = "application/x-yaml"
 )
 
-const (
-	getIndex int = iota
-	postIndex
-
-	//If any index need to be added, add before lastIndex
-	lastIndex
-)
-
 var errorFilters = json.NewFilters(&json.FilterEntry{
 	Fields: []string{"Status", "Message"},
 })
 var debugEnabled = os.Getenv("DATLY_DEBUG") != ""
 
 type Router struct {
-	resource      *Resource
-	serviceRouter *toolbox.ServiceRouter
-	index         map[string][lastIndex]int
-	routes        Routes
+	resource   *Resource
+	viewRouter *toolbox.ServiceRouter
+	index      map[string][]int
+	routes     Routes
 }
 
 func (r *Router) View(name string) (*view.View, error) {
@@ -67,7 +58,7 @@ func (r *Router) View(name string) (*view.View, error) {
 }
 
 func (r *Router) Handle(response http.ResponseWriter, request *http.Request) error {
-	if err := r.serviceRouter.Route(response, request); err != nil {
+	if err := r.viewRouter.Route(response, request); err != nil {
 		return err
 	}
 
@@ -77,7 +68,7 @@ func (r *Router) Handle(response http.ResponseWriter, request *http.Request) err
 func New(resource *Resource) *Router {
 	router := &Router{
 		resource: resource,
-		index:    map[string][lastIndex]int{},
+		index:    map[string][]int{},
 		routes:   resource.Routes,
 	}
 
@@ -111,9 +102,7 @@ func (r *Router) initServiceRouter() {
 		}
 	}
 
-	routings = append(routings, r.openApiRouting())
-
-	r.serviceRouter = toolbox.NewServiceRouter(routings...)
+	r.viewRouter = toolbox.NewServiceRouter(routings...)
 }
 
 func corsRouting(route *Route) toolbox.ServiceRouting {
@@ -166,7 +155,7 @@ func (r *Router) Serve(serverPath string) error {
 }
 
 func (r *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	err := r.serviceRouter.Route(writer, request)
+	err := r.viewRouter.Route(writer, request)
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
 	}
@@ -518,81 +507,30 @@ func (r *Router) normalizeErr(err error) error {
 
 func (r *Router) indexRoutes() {
 	for i, route := range r.routes {
-		methods, ok := r.index[route.URI]
-		if !ok {
-			r.index[route.URI] = methods
-		}
-
-		methodIndex, _ := r.methodIndex(route.Method)
-		methods[methodIndex] = i
+		methods, _ := r.index[route.URI]
+		methods = append(methods, i)
+		r.index[route.URI] = methods
 	}
-}
-
-func (r *Router) methodIndex(method string) (int, error) {
-	switch method {
-	case http.MethodGet:
-		return getIndex, nil
-	case http.MethodPost:
-		return postIndex, nil
-	}
-
-	return -1, fmt.Errorf("unsupported method %v", method)
-}
-
-func (r *Router) openApiRouting() toolbox.ServiceRouting {
-	return toolbox.ServiceRouting{
-		URI:                 r.resource.APIURI + "/openapi",
-		Handler:             r.openApiHandler,
-		HTTPMethod:          http.MethodGet,
-		Parameters:          []string{"@httpResponseWriter", "@httpRequest"},
-		ContentTypeEncoders: nil,
-		ContentTypeDecoders: nil,
-		HandlerInvoker:      nil,
-	}
-}
-
-func (r *Router) openApiHandler(writer http.ResponseWriter, req *http.Request) {
-	query := req.URL.Query()
-	routeURI := query.Get("route")
-	if routeURI == "" {
-		writer.Write([]byte("param route is required"))
-		writer.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	method := query.Get("method")
-	if method == "" {
-		method = http.MethodGet
-	}
-
-	index, err := r.methodIndex(method)
-	if err != nil {
-		writer.Write([]byte(err.Error()))
-		writer.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	route := r.routes[r.index[routeURI][index]]
-	openapi, err := GenerateOpenAPI3Spec(route)
-	if err != nil {
-		writer.Write([]byte(err.Error()))
-		writer.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	asBytes, err := yaml.Marshal(openapi)
-	if err != nil {
-		writer.Write([]byte(err.Error()))
-		writer.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	writer.Header().Set(ContentType, AppYaml)
-	writer.Header().Set(ContentLength, strconv.Itoa(len(asBytes)))
-	writer.Write(asBytes)
-	writer.WriteHeader(http.StatusOK)
 }
 
 func (r *Router) ApiPrefix() string {
 	return r.resource.APIURI
+}
+
+func (r *Router) Route(route string) []*Route {
+	if route == "" {
+		return r.routes
+	}
+
+	uriRoutes, ok := r.index[route]
+	if !ok {
+		return []*Route{}
+	}
+
+	routes := make([]*Route, len(uriRoutes))
+	for i, routeIndex := range uriRoutes {
+		routes[i] = r.routes[routeIndex]
+	}
+
+	return routes
 }

@@ -487,7 +487,7 @@ func TestRead(t *testing.T) {
 			}
 		} else {
 			resource = testCase.resource
-			if err = resource.Init(context.TODO(), types, testCase.visitors); err != nil {
+			if err = resource.Init(context.TODO(), types, testCase.visitors, map[string]view.Columns{}); err != nil {
 				t.Fatalf(err.Error())
 			}
 		}

@@ -49,7 +49,7 @@ type (
 	}
 )
 
-func (g *generator) GenerateSpec(route *Route) (*openapi3.OpenAPI, error) {
+func (g *generator) GenerateSpec(info openapi3.Info, route ...*Route) (*openapi3.OpenAPI, error) {
 	components := g.generateComponents()
 
 	paths, err := g.generatePaths(route)
@@ -63,7 +63,7 @@ func (g *generator) GenerateSpec(route *Route) (*openapi3.OpenAPI, error) {
 	return &openapi3.OpenAPI{
 		OpenAPI:      "3.1.0",
 		Components:   *components,
-		Info:         &route.Info,
+		Info:         &info,
 		Paths:        paths,
 		Security:     nil,
 		Servers:      nil,
@@ -72,12 +72,12 @@ func (g *generator) GenerateSpec(route *Route) (*openapi3.OpenAPI, error) {
 	}, nil
 }
 
-func GenerateOpenAPI3Spec(route *Route) (*openapi3.OpenAPI, error) {
+func GenerateOpenAPI3Spec(info openapi3.Info, routes ...*Route) (*openapi3.OpenAPI, error) {
 	return (&generator{
 		_schemasIndex:    map[string]*openapi3.Schema{},
 		commonSchemas:    map[string]*openapi3.Schema{},
 		commonParameters: map[string]*openapi3.Parameter{},
-	}).GenerateSpec(route)
+	}).GenerateSpec(info, routes...)
 }
 
 func (g *generator) generateComponents() *openapi3.Components {
@@ -310,23 +310,25 @@ func (g *generator) toOpenApiType(rType reflect.Type) (string, string, error) {
 	return empty, empty, fmt.Errorf("unsupported openapi3 type %v", rType.String())
 }
 
-func (g *generator) generatePaths(route *Route) (openapi3.Paths, error) {
+func (g *generator) generatePaths(routes []*Route) (openapi3.Paths, error) {
 	paths := openapi3.Paths{}
 
-	pathItem := &openapi3.PathItem{}
-	operation, err := g.generateOperation(route, route.Method)
-	if err != nil {
-		return nil, err
-	}
+	for _, route := range routes {
+		pathItem := &openapi3.PathItem{}
+		operation, err := g.generateOperation(route, route.Method)
+		if err != nil {
+			return nil, err
+		}
 
-	switch route.Method {
-	case http.MethodGet:
-		pathItem.Get = operation
-	case http.MethodPost:
-		pathItem.Post = operation
-	}
+		switch route.Method {
+		case http.MethodGet:
+			pathItem.Get = operation
+		case http.MethodPost:
+			pathItem.Post = operation
+		}
 
-	paths[route.URI] = pathItem
+		paths[route.URI] = pathItem
+	}
 	return paths, nil
 }
 
@@ -480,6 +482,13 @@ func (g *generator) appendDefaultParam(params *[]*openapi3.Parameter, route *Rou
 	paramType := paramName.ParamType()
 	prefixes := g.getViewPrefixes(mainView, route, aView)
 
+	var style string
+	var explode *bool
+	if paramName == Fields {
+		style = "form"
+		aFalse := false
+		explode = &aFalse
+	}
 	for _, prefix := range prefixes {
 		schema, err := g.getOrGenerateSchema(route, paramType, false, "", "")
 		if err != nil {
@@ -489,8 +498,9 @@ func (g *generator) appendDefaultParam(params *[]*openapi3.Parameter, route *Rou
 			Name:        prefix + string(paramName),
 			In:          string(view.QueryKind),
 			Description: paramName.Description(aView.Name),
-			Style:       "",
+			Style:       style,
 			Schema:      schema,
+			Explode:     explode,
 			Example:     nil,
 			Examples:    nil,
 			Content:     nil,
@@ -585,7 +595,7 @@ func (g *generator) responses(route *Route, method string) (openapi3.Responses, 
 		return nil, err
 	}
 
-	responses["401"] = &openapi3.Response{
+	responses["Default"] = &openapi3.Response{
 		Description: stringPtr("Error response. The view and param may be empty, but one of the message or object should be specified"),
 		Content: map[string]*openapi3.MediaType{
 			applicationJson: {

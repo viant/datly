@@ -9,11 +9,15 @@ paths:
                 - name: _fields
                   in: query
                   description: allows to control view event_types fields present in response
+                  style: form
+                  explode: false
                   schema:
                     type: string
                 - name: typ_fields
                   in: query
                   description: allows to control view event_types fields present in response
+                  style: form
+                  explode: false
                   schema:
                     type: string
                 - name: ev_criteria
@@ -24,6 +28,8 @@ paths:
                 - name: ev_fields
                   in: query
                   description: allows to control view events fields present in response
+                  style: form
+                  explode: false
                   schema:
                     type: string
             responses:
@@ -59,7 +65,7 @@ paths:
                                     type:
                                         type: string
                                 description: Success object schema
-                "401":
+                Default:
                     description: Error response. The view and param may be empty, but one of the message or object should be specified
                     content:
                         application/json:

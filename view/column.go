@@ -38,18 +38,23 @@ func (c *Column) SqlExpression() string {
 }
 
 func parseType(dataType string) (reflect.Type, error) {
-	switch strings.Title(dataType) {
-	case "Int":
+	precisionIndex := strings.Index(dataType, "(")
+	if precisionIndex != -1 {
+		dataType = dataType[:precisionIndex]
+	}
+
+	switch strings.ToLower(dataType) {
+	case "int", "integer":
 		return reflect.TypeOf(0), nil
-	case "Float", "Float64":
+	case "float", "float64", "numeric":
 		return reflect.TypeOf(0.0), nil
-	case "Bool":
+	case "bool", "boolean":
 		return reflect.TypeOf(false), nil
-	case "String":
+	case "string", "varchar", "char":
 		return reflect.TypeOf(""), nil
-	case "Date", "Time":
+	case "date", "time", "timestamp", "datetime":
 		return reflect.TypeOf(time.Time{}), nil
-	case "Interface":
+	case "interface":
 		t := reflect.ValueOf(interface{}(foo{})).FieldByName("Interface").Type()
 		return t, nil
 	}

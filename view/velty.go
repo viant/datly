@@ -23,14 +23,14 @@ const (
 )
 
 type Sanitizer struct {
-	sanitize   func(id, criteria string, value interface{}, placeholders *[]interface{}, columns Columns) (string, error)
+	sanitize   func(id, criteria string, value interface{}, placeholders *[]interface{}, columns ColumnIndex) (string, error)
 	keyword    string
 	isFunction bool
 }
 
 var sanitizers = []*Sanitizer{
 	{
-		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns Columns) (string, error) {
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns ColumnIndex) (string, error) {
 			columnName, ok := value.(string)
 			if !ok {
 				return "", fmt.Errorf("expected column name to be type of string but was %T", value)
@@ -45,14 +45,14 @@ var sanitizers = []*Sanitizer{
 		keyword: SafeColumn,
 	},
 	{
-		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns Columns) (string, error) {
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns ColumnIndex) (string, error) {
 			*placeholders = append(*placeholders, value)
 			return strings.Replace(criteria, id, "?", 1), nil
 		},
 		keyword: SafeValue,
 	},
 	{
-		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns Columns) (string, error) {
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns ColumnIndex) (string, error) {
 			raw, ok := value.(string)
 			if !ok {
 				return "", fmt.Errorf("expected value to be type of string but was %T", value)
@@ -71,7 +71,7 @@ var sanitizers = []*Sanitizer{
 		isFunction: true,
 	},
 	{
-		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns Columns) (string, error) {
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns ColumnIndex) (string, error) {
 			raw, ok := value.(string)
 			if !ok {
 				return "", fmt.Errorf("expected value to be type of string but was %T", value)
@@ -84,7 +84,7 @@ var sanitizers = []*Sanitizer{
 		isFunction: true,
 	},
 	{
-		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns Columns) (string, error) {
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns ColumnIndex) (string, error) {
 			raw, ok := value.(string)
 			if !ok {
 				return "", fmt.Errorf("expected value to be type of string but was %T", value)
@@ -102,7 +102,7 @@ var sanitizers = []*Sanitizer{
 		isFunction: true,
 	},
 	{
-		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns Columns) (string, error) {
+		sanitize: func(id, criteria string, value interface{}, placeholders *[]interface{}, columns ColumnIndex) (string, error) {
 			raw, ok := value.(string)
 			if !ok {
 				return "", fmt.Errorf("expected value to be type of string but was %T", value)
@@ -126,7 +126,7 @@ type VeltyCodec struct {
 	codecType reflect.Type
 	newState  func() *est.State
 	executor  *est.Execution
-	columns   Columns
+	columns   ColumnIndex
 	accessors *Accessors
 }
 
@@ -282,7 +282,7 @@ func extractIndexes(name string) (string, []int, error) {
 func NewVeltyCodec(template string, paramType reflect.Type, view *View) (*VeltyCodec, error) {
 	template = escapeSafeKeywords(template)
 
-	var columns Columns
+	var columns ColumnIndex
 	if view != nil {
 		columns = view._columns
 	}

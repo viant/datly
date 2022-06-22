@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"github.com/google/uuid"
 	"github.com/viant/datly/view"
 )
 
@@ -19,7 +18,7 @@ type (
 	Value struct {
 		Selectors []byte
 		Data      []byte
-		ViewId    uuid.UUID
+		ViewName  string
 	}
 )
 

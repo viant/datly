@@ -12,7 +12,7 @@ import (
 
 var numericTokens = []*parsly.Token{notEqualMatcher, equalMatcher, greaterEqualMatcher, greaterMatcher, lowerEqualMatcher, lowerMatcher, inMatcher}
 
-func Parse(criteria string, columns view.Columns, methods map[string]*view.Method) (*Criteria, error) {
+func Parse(criteria string, columns view.ColumnIndex, methods map[string]*view.Method) (*Criteria, error) {
 	buffer := bytes.Buffer{}
 	placeholders := make([]interface{}, 0)
 
@@ -35,7 +35,7 @@ func Parse(criteria string, columns view.Columns, methods map[string]*view.Metho
 	}, nil
 }
 
-func parse(cursor *parsly.Cursor, buffer *bytes.Buffer, placeholders *[]interface{}, columns view.Columns, methods map[string]*view.Method) error {
+func parse(cursor *parsly.Cursor, buffer *bytes.Buffer, placeholders *[]interface{}, columns view.ColumnIndex, methods map[string]*view.Method) error {
 	isFirstTime := true
 	for cursor.Pos < cursor.InputSize {
 		if !isFirstTime {
@@ -78,7 +78,7 @@ func matchOperator(cursor *parsly.Cursor, buffer *bytes.Buffer) error {
 	}
 }
 
-func matchExpression(cursor *parsly.Cursor, columns view.Columns, buffer *bytes.Buffer, placeholders *[]interface{}, methods map[string]*view.Method) error {
+func matchExpression(cursor *parsly.Cursor, columns view.ColumnIndex, buffer *bytes.Buffer, placeholders *[]interface{}, methods map[string]*view.Method) error {
 	column, err := matchColumn(cursor, columns)
 	if err != nil {
 		return err
@@ -103,7 +103,7 @@ func matchExpression(cursor *parsly.Cursor, columns view.Columns, buffer *bytes.
 	}
 }
 
-func matchDataSet(cursor *parsly.Cursor, columns view.Columns, column *view.Column, buffer *bytes.Buffer, placeholders *[]interface{}, methods map[string]*view.Method) error {
+func matchDataSet(cursor *parsly.Cursor, columns view.ColumnIndex, column *view.Column, buffer *bytes.Buffer, placeholders *[]interface{}, methods map[string]*view.Method) error {
 	matched := cursor.MatchAfterOptional(whitespaceMatcher, parenthesesMatcher)
 	switch matched.Code {
 	case parenthesesToken:
@@ -143,7 +143,7 @@ func matchDataSet(cursor *parsly.Cursor, columns view.Columns, column *view.Colu
 	}
 }
 
-func matchFieldValue(cursor *parsly.Cursor, columns view.Columns, columnType reflect.Type, format string, buffer *bytes.Buffer, placeholders *[]interface{}, methods map[string]*view.Method) error {
+func matchFieldValue(cursor *parsly.Cursor, columns view.ColumnIndex, columnType reflect.Type, format string, buffer *bytes.Buffer, placeholders *[]interface{}, methods map[string]*view.Method) error {
 	valueCandidates, err := expressionValueCandidates(columnType)
 	if err != nil {
 		return err
@@ -192,7 +192,7 @@ func matchFieldValue(cursor *parsly.Cursor, columns view.Columns, columnType ref
 	}
 }
 
-func appendMethod(cursor *parsly.Cursor, methods map[string]*view.Method, method *view.Method, columns view.Columns, buffer *bytes.Buffer, placeholders *[]interface{}) error {
+func appendMethod(cursor *parsly.Cursor, methods map[string]*view.Method, method *view.Method, columns view.ColumnIndex, buffer *bytes.Buffer, placeholders *[]interface{}) error {
 	buffer.WriteByte(' ')
 	buffer.WriteString(method.Name)
 	matched := cursor.MatchOne(parenthesesMatcher)
@@ -212,7 +212,7 @@ func appendMethod(cursor *parsly.Cursor, methods map[string]*view.Method, method
 	return cursor.NewError(parenthesesMatcher)
 }
 
-func matchMethod(cursor *parsly.Cursor, methods map[string]*view.Method, args []*view.Schema, columns view.Columns, buffer *bytes.Buffer, placeholders *[]interface{}) error {
+func matchMethod(cursor *parsly.Cursor, methods map[string]*view.Method, args []*view.Schema, columns view.ColumnIndex, buffer *bytes.Buffer, placeholders *[]interface{}) error {
 	for i, arg := range args {
 		if i != 0 {
 			buffer.WriteString(", ")
@@ -244,7 +244,7 @@ func matchMethod(cursor *parsly.Cursor, methods map[string]*view.Method, args []
 	}
 }
 
-func appendField(value string, columns view.Columns, columnType reflect.Type, buffer *bytes.Buffer) error {
+func appendField(value string, columns view.ColumnIndex, columnType reflect.Type, buffer *bytes.Buffer) error {
 	valueColumn, err := findColumn(value, columns)
 	if err != nil {
 		return err
@@ -259,7 +259,7 @@ func appendField(value string, columns view.Columns, columnType reflect.Type, bu
 	return nil
 }
 
-func matchColumn(cursor *parsly.Cursor, columns view.Columns) (*view.Column, error) {
+func matchColumn(cursor *parsly.Cursor, columns view.ColumnIndex) (*view.Column, error) {
 	candidates := []*parsly.Token{fieldMatcher}
 	matched := cursor.MatchAfterOptional(whitespaceMatcher, candidates...)
 
@@ -273,7 +273,7 @@ func matchColumn(cursor *parsly.Cursor, columns view.Columns) (*view.Column, err
 	}
 }
 
-func findColumn(fieldName string, columns view.Columns) (*view.Column, error) {
+func findColumn(fieldName string, columns view.ColumnIndex) (*view.Column, error) {
 	lookup, err := columns.Lookup(fieldName)
 
 	if err != nil {

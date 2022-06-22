@@ -2,9 +2,7 @@
 * In gateway
     - view -> add caching with (cloud storage)
     - parame status code (resource global)
-    - table schema discovery
 
-* OpernAPI handler/Swagger
 * Documentation ()
 * Patch/Create/Update
 - parameters with golang/js codec
