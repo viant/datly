@@ -39,8 +39,9 @@ type (
 		Output
 		Index
 
-		Cache       *cache.Cache
-		Compression *Compression
+		ParamStatusError *int
+		Cache            *cache.Cache
+		Compression      *Compression
 
 		_resource         *view.Resource
 		_requestBodyParam *view.Parameter

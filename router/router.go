@@ -36,9 +36,6 @@ const (
 	ExposeHeadersHeader    = "Access-Control-Expose-Headers"
 	MaxAgeHeader           = "Access-Control-Max-Age"
 	Separator              = ", "
-
-	ContentType = "Content-Type"
-	AppYaml     = "application/x-yaml"
 )
 
 var errorFilters = json.NewFilters(&json.FilterEntry{
@@ -174,7 +171,12 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 		ctx := context.Background()
 		selectors, err := CreateSelectorsFromRoute(ctx, route, request, route.Index._viewDetails...)
 		if err != nil {
-			r.writeErr(response, route, err, http.StatusBadRequest)
+			status := http.StatusBadRequest
+			if route.ParamStatusError != nil && (*route.ParamStatusError%100 >= 4) {
+				status = *route.ParamStatusError
+			}
+
+			r.writeErr(response, route, err, status)
 			return
 		}
 

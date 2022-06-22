@@ -1,7 +1,6 @@
 * more then one view in out output nice to have for now
 * In gateway
     - view -> add caching with (cloud storage)
-    - parame status code (resource global)
 
 * Documentation ()
 * Patch/Create/Update

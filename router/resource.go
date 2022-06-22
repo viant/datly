@@ -39,6 +39,8 @@ type (
 		Cors         *Cors
 
 		ColumnsCache     *discover.Cache
+		ParamStatusError *int
+
 		Info             openapi3.Info
 		_visitors        codec.Visitors
 		ColumnsDiscovery bool
@@ -109,6 +111,10 @@ func (r *Resource) Init(ctx context.Context) error {
 	}
 
 	for _, route := range r.Routes {
+		if route.ParamStatusError == nil {
+			route.ParamStatusError = r.ParamStatusError
+		}
+		
 		if err := route.Init(ctx, r); err != nil {
 			return err
 		}
