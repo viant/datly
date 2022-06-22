@@ -224,3 +224,14 @@ Enum, possible values:
 
 * `read_matched`
 * `read_all`
+
+### Parameters Codecs
+
+Supported built in datly codecs:
+
+* `VeltyCriteria` - parses template using velocity syntax to sanitize criteria built from templates. Supported prefixes:
+    * `Unsafe` - in order to access parameter values in the template, it is needed to use `Unsafe` prefix.
+    * `Safe_Column` - if column with given parameter value doesn't exist the error will be thrown.
+      i.e. `$Safe_Column.Columns[$i].Name`
+    * `Safe_Value` - the parameter values with this prefix will be passed as binding parameters.
+* `Strings` - splits string using `,` into `[]string`
