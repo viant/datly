@@ -215,7 +215,8 @@ func (r *Resource) GetConnectors() Connectors {
 }
 
 //Init initializes Resource
-func (r *Resource) Init(ctx context.Context, types Types, visitors codec.Visitors, cache map[string]Columns) error {
+func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
+	types, visitors, cache := r.readOptions(options)
 	r._typesIndex = map[reflect.Type]string{}
 	r._types = types.copy()
 	r._visitors = visitors
@@ -249,6 +250,29 @@ func (r *Resource) Init(ctx context.Context, types Types, visitors codec.Visitor
 	}
 
 	return nil
+}
+
+func (r *Resource) readOptions(options []interface{}) (Types, codec.Visitors, map[string]Columns) {
+	var types Types
+	var visitors codec.Visitors
+	var cache map[string]Columns
+
+	if len(options) > 0 {
+		for _, option := range options {
+			if option == nil {
+				continue
+			}
+			switch actual := option.(type) {
+			case codec.Visitors:
+				visitors = actual
+			case map[string]Columns:
+				cache = actual
+			case Types:
+				types = actual
+			}
+		}
+	}
+	return types, visitors, cache
 }
 
 //View returns View with given name
