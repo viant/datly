@@ -253,8 +253,8 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 }
 
 func (r *Resource) readOptions(options []interface{}) (Types, codec.Visitors, map[string]Columns) {
-	var types Types
-	var visitors codec.Visitors
+	var types Types = Types{}
+	var visitors = codec.Visitors{}
 	var cache map[string]Columns
 
 	if len(options) > 0 {
