@@ -5,6 +5,7 @@ go 1.16
 require (
 	cloud.google.com/go/secretmanager v1.4.0 // indirect
 	cloud.google.com/go/storage v1.22.0 // indirect
+	github.com/antlr/antlr4 v4.10.1+incompatible // indirect
 	github.com/aws/aws-lambda-go v1.31.0
 	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/go-playground/validator v9.31.0+incompatible

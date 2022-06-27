@@ -349,8 +349,10 @@ func (v *View) updateRelations(ctx context.Context, resource *Resource, relation
 }
 
 func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
-	if cachedColumns, ok := resource._columnsCache[v.Name]; ok {
-		v.Columns = cachedColumns
+	if resource._columnsCache != nil {
+		if cachedColumns, ok := resource._columnsCache[v.Name]; ok {
+			v.Columns = cachedColumns
+		}
 	}
 
 	if len(v.Columns) != 0 {
@@ -383,7 +385,9 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 	}
 
 	v.Columns = columns
-	resource._columnsCache[v.Name] = v.Columns
+	if resource._columnsCache != nil {
+		resource._columnsCache[v.Name] = v.Columns
+	}
 	return nil
 }
 
