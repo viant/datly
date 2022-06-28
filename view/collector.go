@@ -437,9 +437,7 @@ func (r *Collector) ParentPlaceholders() ([]interface{}, string) {
 	if r.parent == nil || r.parent.SupportsParallel() {
 		return []interface{}{}, ""
 	}
-
 	column := r.relation.Of.Column
-
 	if r.relation.columnField != nil {
 		destPtr := xunsafe.AsPointer(r.parent.dest)
 		sliceLen := r.parent.slice.Len(destPtr)

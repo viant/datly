@@ -75,7 +75,7 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 
 	if strings.Contains(httpRequest.RequestURI, config.Meta.OpenApiURI) {
 		//TODO: add openapi3.Info to Config
-		openApiHandler := handler.NewOpenApi(openapi3.Info{}, service.Routes)
+		openApiHandler := handler.NewOpenApi(config.Meta.OpenApiURI, openapi3.Info{}, service.Routes)
 		openApiHandler.ServeHTTP(writer, httpRequest)
 		return nil
 	}

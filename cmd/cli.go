@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"github.com/jessevdk/go-flags"
 	"github.com/viant/afs"
+	"github.com/viant/afs/file"
+	"github.com/viant/afs/modifier"
 	"github.com/viant/datly/auth/cognito"
 	"github.com/viant/datly/gateway/runtime/lambda"
 	"github.com/viant/datly/gateway/runtime/standalone"
-	"os"
-
 	"log"
+	"os"
 )
 
 func Run(args []string) {
@@ -33,7 +34,7 @@ func Run(args []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	reportContent("using config: "+options.ConfigURL, options.ConfigURL)
+	reportContent("------------ config ------------\n\t "+options.ConfigURL, options.ConfigURL)
 	var authService *cognito.Service
 	if config.Cognito != nil {
 		if authService, err = lambda.InitAuthService(config.Config); err != nil {
@@ -41,9 +42,19 @@ func Run(args []string) {
 		}
 		fmt.Printf("with auth Service: %T\n", authService)
 	}
-	if URL := options.RouterURL(); URL != "" {
-		reportContent("view route: "+URL, URL)
+
+	if URL := options.DepURL("connections"); URL != "" {
+		reportContent("---------- connections: -----------\n\t"+URL, URL)
 	}
+
+	if URL := options.RouterURL(); URL != "" {
+		reportContent("-------------- view --- -----------\n\t"+URL, URL)
+	}
+	if options.WriteLocation != "" {
+		dumpConfiguration(options)
+		return
+	}
+
 	var srv *standalone.Server
 	if authService == nil {
 		srv, err = standalone.New(config)
@@ -55,6 +66,16 @@ func Run(args []string) {
 	}
 	fmt.Printf("starting endpoint: %v\n", config.Endpoint.Port)
 	_ = srv.ListenAndServe()
+}
+
+func dumpConfiguration(options *Options) {
+	fs := afs.New()
+	destURL := normalizeURL(options.WriteLocation)
+	os.MkdirAll(destURL, file.DefaultDirOsMode)
+	srcURL := "mem://localhost/dev"
+	fs.Copy(context.Background(), "mem://localhost/dev", destURL, modifier.Replace(map[string]string{
+		srcURL: destURL,
+	}))
 }
 
 func reportContent(message string, URL string) {

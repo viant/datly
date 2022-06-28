@@ -14,15 +14,15 @@ import (
 )
 
 type Config struct {
-	APIPrefix        string //like /v1/api/
-	RouteURL         string
-	DependencyURL    string
-	UseCacheFS       bool
-	SyncFrequencyMs  int
-	Secrets          []*secret.Resource
-	Cognito          *cognito.Config
-	Meta             meta.Config
-	DiscoveryColumns *bool
+	APIPrefix       string //like /v1/api/
+	RouteURL        string
+	DependencyURL   string
+	UseCacheFS      bool
+	SyncFrequencyMs int
+	Secrets         []*secret.Resource
+	Cognito         *cognito.Config
+	Meta            meta.Config
+	AutoDiscovery   *bool
 }
 
 func (c *Config) Validate() error {
@@ -33,7 +33,7 @@ func (c *Config) Validate() error {
 }
 
 func (c *Config) Discovery() bool {
-	return c.DiscoveryColumns == nil || *c.DiscoveryColumns
+	return c.AutoDiscovery == nil || *c.AutoDiscovery
 }
 
 func (c *Config) Init() {

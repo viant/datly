@@ -19,6 +19,8 @@ func loadConfig(ctx context.Context, options *Options) (cfg *standalone.Config, 
 			Endpoint: endpoint.Config{},
 		}
 		cfg.Init()
+		disable := false
+		cfg.AutoDiscovery = &disable
 		return cfg, nil
 	}
 	options.ConfigURL = normalizeURL(options.ConfigURL)
@@ -33,6 +35,7 @@ func initConfig(cfg *standalone.Config, options *Options) error {
 	if URL := options.RouteURL; URL != "" {
 		cfg.RouteURL = normalizeURL(URL)
 	}
+
 	if URL := options.DependencyURL; URL != "" {
 		cfg.DependencyURL = normalizeURL(URL)
 	}
@@ -43,7 +46,7 @@ func initConfig(cfg *standalone.Config, options *Options) error {
 	}
 	if options.RouteURL != "" {
 		cfg.RouteURL = options.RouteURL
-	} else {
+	} else if cfg.RouteURL != "" {
 		cfg.RouteURL = normalizeURL(cfg.RouteURL)
 		cfg.DependencyURL = normalizeURL(cfg.DependencyURL)
 
@@ -51,6 +54,9 @@ func initConfig(cfg *standalone.Config, options *Options) error {
 	err = buildDefaultConfig(cfg, options)
 	if err != nil {
 		return err
+	}
+	if cfg.DependencyURL != "" && options.DependencyURL == "" {
+		options.DependencyURL = cfg.DependencyURL
 	}
 	return buildViewWithRouter(options, cfg, connectors)
 }

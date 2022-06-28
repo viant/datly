@@ -17,6 +17,7 @@ type (
 		RouteURL      string `short:"r" long:"mode" description:"route URL"  `
 		DependencyURL string `short:"d" long:"deps" description:"dependencies URL" `
 		ConfigURL     string `short:"c" long:"config" description:"configuration URL" `
+		WriteLocation string `short:"w" long:"write" description:"dump all config files to specified location" `
 		Generate
 		Connector
 		Content
@@ -30,11 +31,12 @@ type (
 	}
 
 	Generate struct {
-		Name        string   `short:"N" long:"name" description:"view DbName/route URI" `
-		Parameters  []string `short:"P" long:"params" description:"parameters in form name[:type:location]" `
-		Table       string   `short:"T" long:"table" description:"table" `
-		SQLLocation string   `short:"S" long:"sql" description:"SQL location" `
-		Relations   []string `short:"R" long:"relation" description:"relation in form of viewName:tableName" `
+		Name         string   `short:"N" long:"name" description:"view DbName/route URI" `
+		Parameters   []string `short:"P" long:"params" description:"parameters in form name[:type:location]" `
+		Table        string   `short:"T" long:"table" description:"table" `
+		SQLLocation  string   `short:"S" long:"sql" description:"SQL location" `
+		SQLXLocation string   `short:"X" long:"sqlx" description:"SQLX (extension for relation) location" `
+		Relations    []string `short:"R" long:"relation" description:"relation in form of viewName:tableName" `
 	}
 	Content struct {
 		Output         string `short:"O" long:"output" description:"output style" choice:"c" choice:"b" `
@@ -117,6 +119,17 @@ func (o *Options) RouterURL() string {
 		return ""
 	}
 	return url.Join(o.RouteURL, o.RouterURI()+".yaml")
+}
+
+func (o *Options) DepURL(uri string) string {
+	if o.Generate.Name == "" {
+		return ""
+	}
+	return url.Join(o.DependencyURL, uri+".yaml")
+}
+
+func (o *Options) SQLURL(name string) string {
+	return url.Join(o.RouteURL, "dev/"+name+".sql")
 }
 
 func (g *Generate) Namespace() string {

@@ -20,25 +20,25 @@ import (
 //can be loaded from i.e. yaml file
 type Resource struct {
 	Metrics     *Metrics
-	SourceURL   string
+	SourceURL   string `json:",omitempty"`
 	Connectors  []*Connector
 	_connectors Connectors
 
-	Views  []*View
+	Views  []*View `json:",omitempty"`
 	_views Views
 
-	Parameters  []*Parameter
+	Parameters  []*Parameter `json:",omitempty"`
 	_parameters ParametersIndex
 
 	Types       []*Definition
 	_types      Types
 	_typesIndex map[reflect.Type]string
 
-	Loggers  logger.Adapters
+	Loggers  logger.Adapters `json:",omitempty"`
 	_loggers logger.AdapterIndex
 
 	_visitors     codec.Visitors
-	ModTime       time.Time
+	ModTime       time.Time `json:",omitempty"`
 	_columnsCache map[string]Columns
 }
 
@@ -256,7 +256,6 @@ func (r *Resource) readOptions(options []interface{}) (Types, codec.Visitors, ma
 	var types Types = Types{}
 	var visitors = codec.Visitors{}
 	var cache map[string]Columns
-
 	if len(options) > 0 {
 		for _, option := range options {
 			if option == nil {

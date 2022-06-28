@@ -1,15 +1,18 @@
 package handler
 
 import (
+	"fmt"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/openapi3"
 	"gopkg.in/yaml.v3"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 type (
 	OpenAPI struct {
+		baseURL  string
 		routesFn RoutesFn
 		info     openapi3.Info
 	}
@@ -18,7 +21,14 @@ type (
 )
 
 func (o *OpenAPI) ServeHTTP(writer http.ResponseWriter, req *http.Request) {
+	URI := req.RequestURI
+	if index := strings.Index(URI, o.baseURL); index != -1 {
+		URI = URI[index+len(o.baseURL):]
+	}
+	fmt.Printf("URI: %v\n", URI)
+
 	query := req.URL.Query()
+
 	routeURL := query.Get("route")
 
 	routes := o.routesFn(routeURL)
@@ -47,9 +57,10 @@ func (o *OpenAPI) ServeHTTP(writer http.ResponseWriter, req *http.Request) {
 	writer.Write(specMarshal)
 }
 
-func NewOpenApi(info openapi3.Info, routesFn RoutesFn) *OpenAPI {
+func NewOpenApi(baseURL string, info openapi3.Info, routesFn RoutesFn) *OpenAPI {
 	return &OpenAPI{
 		routesFn: routesFn,
 		info:     info,
+		baseURL:  baseURL,
 	}
 }

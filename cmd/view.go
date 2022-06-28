@@ -11,18 +11,20 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/metadata"
+	"github.com/viant/toolbox/format"
+	"log"
+	"time"
 )
 
 func buildViewWithRouter(options *Options, config *standalone.Config, connectors map[string]*view.Connector) error {
 	fs := afs.New()
-	generate := options.Generate
+	generate := &options.Generate
 	if generate.Name == "" {
 		return nil
 	}
 	route := &router.Resource{
 		Resource: &view.Resource{},
 	}
-
 	if options.SQLLocation != "" && url.Scheme(options.SQLLocation, "e") == "e" {
 		parent, _ := url.Split(options.RouterURL(), file.Scheme)
 		destURL := url.Join(parent, options.SQLLocation)
@@ -30,26 +32,29 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		if err := fs.Copy(context.Background(), sourceURL, destURL); err != nil {
 			return err
 		}
-
 	}
 
-	aView := &view.View{
-		Name:    generate.Name,
-		Table:   generate.Table,
-		FromURL: options.SQLLocation,
-		Selector: &view.Config{
-			Limit: 40,
-			Constraints: &view.Constraints{
-				Filterable: []string{"*"},
-				Criteria:   true,
-				Limit:      true,
-				Offset:     true,
-			},
-		},
+	var xTable *Table
+	if options.SQLXLocation != "" && url.Scheme(options.SQLLocation, "e") == "e" {
+		sourceURL := normalizeURL(options.SQLXLocation)
+		SQL, err := fs.DownloadWithURL(context.Background(), sourceURL)
+		if err != nil {
+			return err
+		}
+		if xTable, err = ParseSQLx(string(SQL)); err != nil {
+			log.Println(err)
+		}
+		if xTable != nil {
+			updateGenerate(generate, xTable)
+		}
 	}
+	aView := buildMainView(options, generate, route)
+	updateViewSQL(options, xTable, aView)
+
 	var conn *view.Connector
 	var ok bool
 	connector := options.Connector
+
 	if connector.DbName != "" {
 		if conn, ok = connectors[connector.DbName]; !ok {
 			if conn = connector.New(); conn.Name == connector.DbName {
@@ -80,10 +85,34 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	if options.RedirectSizeKb > 0 && options.RedirectURL != "" {
 		route.Redirect = &router.Redirect{TimeToLiveMs: 10000, MinSizeKb: options.RedirectSizeKb, StorageURL: options.RedirectURL}
 	}
+
 	if options.Table != "" {
 		viewRoute.Index.Namespace[options.Namespace()] = options.Generate.Name
 	}
 
+	viewRoute.CaseFormat = "lc"
+	if xTable != nil {
+		if len(xTable.Joins) > 0 {
+			if err := buildXRelations(options, route, viewRoute, xTable); err != nil {
+				return err
+			}
+		}
+
+		for _, column := range xTable.Columns {
+			if len(column.Except) == 0 {
+				continue
+			}
+			if column.Ns == xTable.Alias {
+				for _, except := range column.Except {
+					//TODO detect view case
+					viewCaser, _ := format.NewCase("uu")
+					outputCaser, _ := format.NewCase(string(viewRoute.CaseFormat))
+					viewRoute.Exclude = append(viewRoute.Exclude, viewCaser.Format(except, outputCaser))
+				}
+			}
+		}
+
+	}
 	if len(options.Relations) > 0 && conn != nil {
 		db, _ := conn.Db()
 		meta := metadata.New()
@@ -97,10 +126,45 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		return err
 	}
 
-	route.Resource.AddViews(aView)
 	route.Routes = append(route.Routes, viewRoute)
+
+	route.With = []string{"connections"}
+	dependency := &view.Resource{ModTime: time.Now()}
+	dependency.Connectors = route.Resource.Connectors
+	depURL := options.DepURL("connections")
+	_ = fsAddYAML(fs, depURL, dependency)
+	route.Resource.Connectors = nil
 	return fsAddYAML(fs, options.RouterURL(), route)
 }
+
+func buildMainView(options *Options, generate *Generate, route *router.Resource) *view.View {
+	aView := &view.View{
+		Name:    generate.Name,
+		Table:   generate.Table,
+		FromURL: options.SQLLocation,
+		Selector: &view.Config{
+			Limit: 40,
+			Constraints: &view.Constraints{
+				Filterable: []string{"*"},
+				Criteria:   true,
+				Limit:      true,
+				Offset:     true,
+			},
+		},
+	}
+
+	route.Resource.AddViews(aView)
+	return aView
+}
+
+func updateGenerate(generate *Generate, table *Table) {
+	if table == nil {
+		return
+	}
+	table.Ref = generate.Name
+	generate.Table = table.Name
+}
+
 func stringsPtr(args ...string) *[]string {
 	return &args
 }

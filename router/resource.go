@@ -93,7 +93,10 @@ func (r *Resource) Init(ctx context.Context) error {
 
 	var columnCacheExists bool
 	if r.ColumnsDiscovery {
-		r.ColumnsCache = discover.New(strings.Replace(r.SourceURL, ".yaml", "_meta.yml", 1))
+
+		parent, name := url.Split(r.SourceURL, file.Scheme)
+		metaURL := url.Join(parent, ".meta", name)
+		r.ColumnsCache = discover.New(metaURL)
 		if columnCacheExists = r.ColumnsCache.Exists(ctx); columnCacheExists {
 			if err := r.ColumnsCache.Load(ctx); err != nil {
 				return err
@@ -114,7 +117,7 @@ func (r *Resource) Init(ctx context.Context) error {
 		if route.ParamStatusError == nil {
 			route.ParamStatusError = r.ParamStatusError
 		}
-		
+
 		if err := route.Init(ctx, r); err != nil {
 			return err
 		}

@@ -156,6 +156,9 @@ func (r *Service) reloadRouterResourcesIfNeeded(ctx context.Context) error {
 
 func (r *Service) handleRouterResourceChange(ctx context.Context, hasChanged *bool, resourcesSnapshot map[string]*router.Resource, fs afs.Service) func(URL string, operation resource.Operation) {
 	return func(URL string, operation resource.Operation) {
+		if strings.Contains(URL, ".meta/") {
+			return
+		}
 		*hasChanged = true
 		if len(resourcesSnapshot) == 0 {
 			r.mux.RLock()
@@ -198,6 +201,9 @@ func (r *Service) reloadDataResourceIfNeeded(ctx context.Context) error {
 
 func (r *Service) handleDataResourceChange(ctx context.Context, hasChanged *bool, resourcesSnapshot map[string]*view.Resource, fs afs.Service) func(URL string, operation resource.Operation) {
 	return func(URL string, operation resource.Operation) {
+		if strings.Contains(URL, ".meta/") {
+			return
+		}
 		_, key := furl.Split(URL, file.Scheme)
 		if index := strings.Index(key, "."); index != -1 {
 			key = key[:index]

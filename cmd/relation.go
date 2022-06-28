@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/afs"
+	"github.com/viant/afs/file"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -13,6 +16,67 @@ import (
 	"github.com/viant/sqlx/option"
 	"strings"
 )
+
+func lookupView(resource *view.Resource, name string) *view.View {
+	for _, candidate := range resource.Views {
+		if candidate.Name == name {
+			return candidate
+		}
+	}
+	return nil
+}
+
+func buildXRelations(options *Options, route *router.Resource, viewRoute *router.Route, xTable *Table) error {
+	if len(xTable.Joins) == 0 {
+		return nil
+	}
+	for _, join := range xTable.Joins {
+		relView := &view.View{
+			Name:  join.Table.Alias,
+			Table: join.Table.Name,
+			Selector: &view.Config{
+				Limit: 40,
+			},
+		}
+		updateViewSQL(options, join.Table, relView)
+
+		route.Resource.AddViews(relView)
+		var cardinality = view.Many
+		if join.ToOne {
+			cardinality = view.One
+		}
+		aView := lookupView(route.Resource, join.Owner.Ref)
+		if aView == nil {
+			return fmt.Errorf("failed to lookup view: %v", join.Owner.Name)
+		}
+		aView.With = append(aView.With, &view.Relation{
+			Name: aView.Name + "_" + join.Table.Alias,
+			Of: &view.ReferenceView{
+				View:   view.View{Reference: shared.Reference{Ref: join.Table.Alias}, Name: join.Table.Alias + "#"},
+				Column: join.Key,
+				Field:  join.Field,
+			},
+			Cardinality: cardinality,
+			Column:      join.OwnerKey,
+			ColumnAlias: join.KeyAlias,
+			Holder:      strings.Title(join.Table.Alias),
+
+			IncludeColumn: true,
+		})
+		viewRoute.Index.Namespace[namespace(join.Table.Alias)] = join.Table.Alias + "#"
+	}
+	return nil
+}
+
+func updateViewSQL(options *Options, table *Table, relView *view.View) {
+	if SQL := table.SQL; SQL != "" {
+		SQLURL := options.SQLURL(table.Alias)
+		fs := afs.New()
+		fs.Upload(context.Background(), SQLURL, file.DefaultFileOsMode, strings.NewReader(SQL))
+		_, URI := url.Split(SQLURL, file.Scheme)
+		relView.FromURL = URI
+	}
+}
 
 func buildRelations(options *Options, meta *metadata.Service, db *sql.DB, route *router.Resource, aView *view.View, viewRoute *router.Route) error {
 	pk := []sink.Key{}

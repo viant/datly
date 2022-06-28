@@ -505,6 +505,7 @@ func (v *View) inherit(ctx context.Context, resource *Resource, view *View) erro
 	v.Alias = notEmptyOf(v.Alias, view.Alias)
 	v.Table = notEmptyOf(v.Table, view.Table)
 	v.From = notEmptyOf(v.From, view.From)
+	v.FromURL = notEmptyOf(v.From, view.FromURL)
 
 	if stringsSliceEqual(v.Exclude, view.Exclude) {
 		if len(v.Columns) == 0 {

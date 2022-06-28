@@ -44,13 +44,13 @@ func parseType(dataType string) (reflect.Type, error) {
 	}
 
 	switch strings.ToLower(dataType) {
-	case "int", "integer":
+	case "int", "integer", "bigint", "smallint", "tinyint":
 		return reflect.TypeOf(0), nil
-	case "float", "float64", "numeric":
+	case "float", "float64", "numeric", "decimal":
 		return reflect.TypeOf(0.0), nil
 	case "bool", "boolean":
 		return reflect.TypeOf(false), nil
-	case "string", "varchar", "char":
+	case "string", "varchar", "char", "text":
 		return reflect.TypeOf(""), nil
 	case "date", "time", "timestamp", "datetime":
 		return reflect.TypeOf(time.Time{}), nil
