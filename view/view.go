@@ -374,6 +374,7 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 	if err != nil {
 		return err
 	}
+
 	v.Logger.ColumnsDetection(SQL, v.Source())
 	columns, err := detectColumns(ctx, SQL, v)
 
@@ -408,11 +409,12 @@ func convertIoColumnsToColumns(ioColumns []io.Column, nullable map[string]bool) 
 		scanType := ioColumns[i].ScanType()
 		scanType = remapScanType(scanType, ioColumns[i].DatabaseTypeName())
 		dataTypeName := ioColumns[i].DatabaseTypeName()
+		isNullable, _ := ioColumns[i].Nullable()
 		columns = append(columns, &Column{
 			Name:     ioColumns[i].Name(),
 			DataType: dataTypeName,
 			rType:    scanType,
-			Nullable: nullable[ioColumns[i].Name()],
+			Nullable: nullable[ioColumns[i].Name()] || isNullable,
 		})
 	}
 	return columns
