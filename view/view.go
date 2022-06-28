@@ -134,10 +134,6 @@ func (v *View) Init(ctx context.Context, resource *Resource) error {
 		v.Name: true,
 	}
 
-	if err := v.loadFromWithURL(ctx, resource); err != nil {
-		return err
-	}
-
 	if err := v.initViews(ctx, resource, v.With, nameTaken); err != nil {
 		return err
 	}
@@ -200,6 +196,10 @@ func (v *View) generateNameIfNeeded(refView *View, rel *Relation) {
 
 func (v *View) initView(ctx context.Context, resource *Resource) error {
 	var err error
+	if err := v.loadFromWithURL(ctx, resource); err != nil {
+		return err
+	}
+
 	if err = v.inheritFromViewIfNeeded(ctx, resource); err != nil {
 		return err
 	}

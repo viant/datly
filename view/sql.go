@@ -74,8 +74,8 @@ func detectColumnsSQL(source string, v *View) (string, error) {
 	if source != v.Name && source != v.Table {
 		discover := metadata.EnrichWithDiscover(source, false)
 		replacement := rdata.Map{}
-		replacement.Put(keywords.AndCriteria, " AND 1=0 ")
-		replacement.Put(keywords.WhereCriteria, " WHERE 1=0 ")
+		replacement.Put(keywords.AndCriteria[1:], " AND 1=0 ")
+		replacement.Put(keywords.WhereCriteria[1:], " WHERE 1=0 ")
 		SQL = replacement.ExpandAsText(discover)
 	}
 

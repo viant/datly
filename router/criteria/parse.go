@@ -87,7 +87,12 @@ func matchExpression(cursor *parsly.Cursor, columns view.ColumnIndex, buffer *by
 	buffer.WriteByte(' ')
 	buffer.WriteString(column.Name)
 
-	matchedToken, tokenValue, err := matchExpressionToken(cursor, column.ColumnType())
+	columnType := column.ColumnType()
+	for columnType.Kind() == reflect.Ptr {
+		columnType = columnType.Elem()
+	}
+
+	matchedToken, tokenValue, err := matchExpressionToken(cursor, columnType)
 	if err != nil {
 		return err
 	}
@@ -99,7 +104,7 @@ func matchExpression(cursor *parsly.Cursor, columns view.ColumnIndex, buffer *by
 	case inToken:
 		return matchDataSet(cursor, columns, column, buffer, placeholders, methods)
 	default:
-		return matchFieldValue(cursor, columns, column.ColumnType(), column.Format, buffer, placeholders, methods)
+		return matchFieldValue(cursor, columns, columnType, column.Format, buffer, placeholders, methods)
 	}
 }
 
