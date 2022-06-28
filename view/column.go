@@ -68,7 +68,7 @@ func (c *Column) ColumnName() string {
 }
 
 //Init initializes Column
-func (c *Column) Init(caser format.Case) error {
+func (c *Column) Init(caser format.Case, allowNulls bool) error {
 	if c.initialized {
 		return nil
 	}
@@ -86,7 +86,7 @@ func (c *Column) Init(caser format.Case) error {
 		c.rType = rType
 	}
 
-	if err := c.buildSQLExpression(); err != nil {
+	if err := c.buildSQLExpression(allowNulls); err != nil {
 		return err
 	}
 
@@ -95,18 +95,17 @@ func (c *Column) Init(caser format.Case) error {
 	return nil
 }
 
-func (c *Column) buildSQLExpression() error {
+func (c *Column) buildSQLExpression(allowNulls bool) error {
 	defaultValue := c.defaultValue(c.rType)
 	c.sqlExpression = c.Name
 	if c.Expression != "" {
 		c.sqlExpression = c.Expression
 	}
 
-	if defaultValue != "" {
+	if defaultValue != "" && !allowNulls {
 		c.sqlExpression = "COALESCE(" + c.sqlExpression + "," + defaultValue + ") AS " + c.Name
 	} else if c.Expression != "" {
 		c.sqlExpression = c.sqlExpression + " AS " + c.Name
-
 	}
 
 	return nil

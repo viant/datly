@@ -54,6 +54,7 @@ type (
 		_excluded map[string]bool
 
 		DiscoverCriteria *bool
+		AllowNulls       *bool
 
 		initialized  bool
 		newCollector func(dest interface{}, supportParallel bool) *Collector
@@ -263,7 +264,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err = Columns(v.Columns).Init(v.Caser); err != nil {
+	if err = Columns(v.Columns).Init(v.Caser, v.AllowNulls != nil && !*v.AllowNulls); err != nil {
 		return err
 	}
 
@@ -565,6 +566,11 @@ func (v *View) inherit(ctx context.Context, resource *Resource, view *View) erro
 	if v.Batch == nil {
 		v.Batch = view.Batch
 	}
+
+	if v.AllowNulls == nil {
+		v.AllowNulls = view.AllowNulls
+	}
+
 	return nil
 }
 
