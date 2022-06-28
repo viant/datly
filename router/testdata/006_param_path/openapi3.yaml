@@ -1,33 +1,4 @@
 openapi: 3.1.0
-components:
-    parameters:
-        EVENT_TYPE_ID:
-            name: EVENT_TYPE_ID
-            in: query
-            description: Parameter EVENT_TYPE_ID, Located in query with name event_type_id
-            required: true
-            schema:
-                type: integer
-                description: Parameter EVENT_TYPE_ID schema
-                format: int64
-        FOO.QUANTITY:
-            name: FOO.QUANTITY
-            in: query
-            description: Parameter FOO.QUANTITY, Located in query with name quantity
-            required: true
-            schema:
-                type: number
-                description: Parameter FOO.QUANTITY schema
-                format: double
-        FOO.USER_ID:
-            name: FOO.USER_ID
-            in: query
-            description: Parameter FOO.USER_ID, Located in query with name user_id
-            required: true
-            schema:
-                type: integer
-                description: Parameter FOO.USER_ID schema
-                format: int64
 info:
     title: ""
     version: ""

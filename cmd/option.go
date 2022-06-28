@@ -21,6 +21,7 @@ type (
 		Generate
 		Connector
 		Content
+		OpenApiURL string `short:"o" long:"openapi"`
 	}
 
 	Connector struct {
@@ -145,5 +146,4 @@ func namespace(name string) string {
 		return parts[len(parts)-2][0:1] + parts[len(parts)-1][0:1]
 	}
 	return parts[len(parts)-1][0:2]
-
 }

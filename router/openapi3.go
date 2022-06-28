@@ -40,6 +40,7 @@ type (
 		commonSchemas    openapi3.Schemas
 		_schemasIndex    map[string]*openapi3.Schema
 		commonParameters openapi3.ParametersMap
+		_parametersIndex map[string]*openapi3.Parameter
 	}
 
 	schemaNamed struct {
@@ -77,6 +78,7 @@ func GenerateOpenAPI3Spec(info openapi3.Info, routes ...*Route) (*openapi3.OpenA
 		_schemasIndex:    map[string]*openapi3.Schema{},
 		commonSchemas:    map[string]*openapi3.Schema{},
 		commonParameters: map[string]*openapi3.Parameter{},
+		_parametersIndex: map[string]*openapi3.Parameter{},
 	}).GenerateSpec(info, routes...)
 }
 
@@ -437,17 +439,17 @@ func (g *generator) appendBuiltInParam(params *[]*openapi3.Parameter, route *Rou
 }
 
 func (g *generator) convertParam(route *Route, param *view.Parameter, description string) (*openapi3.Parameter, bool, error) {
-	if param.In.Kind == view.DataViewKind || param.In.Kind == view.RequestBodyKind {
+	if param.In.Kind == view.DataViewKind || param.In.Kind == view.RequestBodyKind || param.In.Kind == view.EnvironmentKind {
 		return nil, false, nil
 	}
 
-	cachedParam, ok := g.commonParameters[param.Name]
+	cachedParam, ok := g._parametersIndex[param.Name]
 	if ok {
 		if param != nil {
 			original := *cachedParam
 			g.commonParameters[param.Name] = &original
 			*cachedParam = openapi3.Parameter{Ref: "#/components/parameters/" + param.Name}
-			g.commonParameters[param.Name] = nil
+			g._parametersIndex[param.Name] = nil
 		}
 		return &openapi3.Parameter{Ref: "#/components/parameters/" + param.Name}, true, nil
 	}
@@ -474,7 +476,7 @@ func (g *generator) convertParam(route *Route, param *view.Parameter, descriptio
 		Schema:      schema,
 	}
 
-	g.commonParameters[param.Name] = convertedParam
+	g._parametersIndex[param.Name] = convertedParam
 	return convertedParam, true, nil
 }
 

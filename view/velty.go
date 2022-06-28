@@ -20,7 +20,28 @@ const (
 	SafeString = "Safe_String"
 	SafeBool   = "Safe_Bool"
 	SafeFloat  = "Safe_Float"
+
+	Criteria = "criteria"
 )
+
+type CriteriaSanitizer struct {
+	Columns      ColumnIndex
+	Placeholders []interface{}
+}
+
+func (c *CriteriaSanitizer) AsBinding(value interface{}) string {
+	c.Placeholders = append(c.Placeholders, value)
+	return "?"
+}
+
+func (c *CriteriaSanitizer) AsColumn(columnName string) (string, error) {
+	lookup, err := c.Columns.Lookup(columnName)
+	if err != nil {
+		return "", err
+	}
+
+	return lookup.Name, nil
+}
 
 type Sanitizer struct {
 	sanitize   func(id, criteria string, value interface{}, placeholders *[]interface{}, columns ColumnIndex) (string, error)
@@ -142,7 +163,7 @@ func (v *VeltyCodec) Value(ctx context.Context, raw string, options ...interface
 		return nil, err
 	}
 
-	criteria, err := v.evaluateCriteria(aValue, wasNil)
+	criteria, err := v.evaluateCriteria(selector, aValue, wasNil)
 	if err != nil {
 		return nil, err
 	}
@@ -172,6 +193,10 @@ func (v *VeltyCodec) Value(ctx context.Context, raw string, options ...interface
 				}
 			}
 
+			if selectorSanitizer == nil {
+				continue
+			}
+
 			if selectorSanitizer.isFunction {
 				criteria, err = selectorSanitizer.sanitize(actual.FullName, criteria, selectName, &selector.Placeholders, v.columns)
 				if err != nil {
@@ -197,7 +222,7 @@ func (v *VeltyCodec) Value(ctx context.Context, raw string, options ...interface
 	return nil, nil
 }
 
-func (v *VeltyCodec) evaluateCriteria(dest interface{}, wasNil bool) (string, error) {
+func (v *VeltyCodec) evaluateCriteria(selector *Selector, dest interface{}, wasNil bool) (string, error) {
 	state := v.newState()
 	if !wasNil {
 		if err := state.SetValue("Unsafe", dest); err != nil {
@@ -205,11 +230,25 @@ func (v *VeltyCodec) evaluateCriteria(dest interface{}, wasNil bool) (string, er
 		}
 	}
 
+	criteriaSanitizer := NewCriteria(v.columns)
+	if err := state.SetValue(Criteria, criteriaSanitizer); err != nil {
+		return "", err
+	}
+
 	if err := v.executor.Exec(state); err != nil {
 		return "", err
 	}
 
+	selector.Placeholders = append(selector.Placeholders, criteriaSanitizer.Placeholders...)
+
 	return state.Buffer.String(), nil
+}
+
+func NewCriteria(columns ColumnIndex) *CriteriaSanitizer {
+	return &CriteriaSanitizer{
+		Columns:      columns,
+		Placeholders: []interface{}{},
+	}
 }
 
 func extractActualId(name string) string {
@@ -321,6 +360,10 @@ func (v *VeltyCodec) init() error {
 	}
 
 	if err = planner.DefineVariable(SafeColumn, ""); err != nil {
+		return err
+	}
+
+	if err = planner.DefineVariable(Criteria, &CriteriaSanitizer{}); err != nil {
 		return err
 	}
 

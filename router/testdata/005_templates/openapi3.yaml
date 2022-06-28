@@ -1,24 +1,4 @@
 openapi: 3.1.0
-components:
-    parameters:
-        QUANTITY:
-            name: QUANTITY
-            in: query
-            description: Parameter QUANTITY, Located in query with name quantity
-            required: true
-            schema:
-                type: number
-                description: Parameter QUANTITY schema
-                format: double
-        USER_ID:
-            name: USER_ID
-            in: query
-            description: Parameter USER_ID, Located in query with name user_id
-            required: true
-            schema:
-                type: integer
-                description: Parameter USER_ID schema
-                format: int64
 info:
     title: ""
     version: ""

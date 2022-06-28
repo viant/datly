@@ -464,6 +464,7 @@ func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route) in
 func (r *Router) createCacheEntry(route *Route, selectors *view.Selectors) (*cache.Entry, error) {
 	selectors.RWMutex.RLock()
 	defer selectors.RWMutex.RUnlock()
+
 	selectorSlice := make([]*view.Selector, len(selectors.Index))
 	for viewName := range selectors.Index {
 		index, _ := route.viewIndex(viewName)
@@ -490,21 +491,12 @@ func (r *Router) normalizeErr(err error) error {
 				anError.Message = actual.Error()
 			}
 		}
-	default:
-		errType := reflect.TypeOf(err)
-		if errType == stringErrorType {
-			return &Error{
-				Message: actual.Error(),
-			}
-		}
-	}
-
-	asErrors, ok := err.(*Errors)
-	if !ok {
 		return err
 	}
 
-	return asErrors
+	return &Error{
+		Message: err.Error(),
+	}
 }
 
 func (r *Router) indexRoutes() {

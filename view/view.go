@@ -130,11 +130,15 @@ func (v *View) Init(ctx context.Context, resource *Resource) error {
 
 	v.initialized = true
 
+	nameTaken := map[string]bool{
+		v.Name: true,
+	}
+
 	if err := v.loadFromWithURL(ctx, resource); err != nil {
 		return err
 	}
 
-	if err := v.initViews(ctx, resource, v.With); err != nil {
+	if err := v.initViews(ctx, resource, v.With, nameTaken); err != nil {
 		return err
 	}
 
@@ -158,10 +162,16 @@ func (v *View) loadFromWithURL(ctx context.Context, resource *Resource) error {
 	return err
 }
 
-func (v *View) initViews(ctx context.Context, resource *Resource, relations []*Relation) error {
+func (v *View) initViews(ctx context.Context, resource *Resource, relations []*Relation, notUnique map[string]bool) error {
 	for _, rel := range relations {
 		refView := &rel.Of.View
 		v.generateNameIfNeeded(refView, rel)
+		isNotUnique := notUnique[rel.Of.View.Name]
+		if isNotUnique {
+			return fmt.Errorf("not unique view name: %v", rel.Of.View.Name)
+		}
+		notUnique[rel.Of.View.Name] = true
+
 		if err := refView.inheritFromViewIfNeeded(ctx, resource); err != nil {
 			return err
 		}
@@ -170,7 +180,7 @@ func (v *View) initViews(ctx context.Context, resource *Resource, relations []*R
 			return err
 		}
 
-		if err := refView.initViews(ctx, resource, refView.With); err != nil {
+		if err := refView.initViews(ctx, resource, refView.With, notUnique); err != nil {
 			return err
 		}
 
@@ -545,13 +555,6 @@ func (v *View) inherit(ctx context.Context, resource *Resource, view *View) erro
 	}
 
 	if v.Selector == nil && view.Selector != nil {
-		//v.Selector = &Config{}
-		//if err := v.Selector.Inherit(view.Selector); err != nil {
-		//	return err
-		//}
-		//if err := v.Selector.Init(ctx, resource, v); err != nil {
-		//	return err
-		//}
 		v.Selector = view.Selector
 	}
 

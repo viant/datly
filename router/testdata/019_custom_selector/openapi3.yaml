@@ -1,56 +1,4 @@
 openapi: 3.1.0
-components:
-    parameters:
-        Alias:
-            name: Alias
-            in: env
-            description: Parameter Alias, Located in env with name alias
-            required: true
-            schema:
-                type: string
-                description: Parameter Alias schema
-        Fields:
-            name: Fields
-            in: query
-            description: allows to control view events fields present in response
-            required: true
-            schema:
-                type: string
-                description: Parameter Fields schema
-        Limit:
-            name: Limit
-            in: query
-            description: allows to limit events view data returned from db
-            required: true
-            schema:
-                type: integer
-                description: Parameter Limit schema
-                format: int64
-        Offset:
-            name: Offset
-            in: query
-            description: allows to skip first n  view events records, it has to be used alongside the limit
-            required: true
-            schema:
-                type: integer
-                description: Parameter Offset schema
-                format: int64
-        OrderBy:
-            name: OrderBy
-            in: query
-            description: allows to sort view events results
-            required: true
-            schema:
-                type: string
-                description: Parameter OrderBy schema
-        Table:
-            name: Table
-            in: env
-            description: Parameter Table, Located in env with name table
-            required: true
-            schema:
-                type: string
-                description: Parameter Table schema
 info:
     title: ""
     version: ""
@@ -58,20 +6,6 @@ paths:
     /api/events:
         get:
             parameters:
-                - name: Alias
-                  in: env
-                  description: Parameter Alias, Located in env with name alias
-                  required: true
-                  schema:
-                    type: string
-                    description: Parameter Alias schema
-                - name: Table
-                  in: env
-                  description: Parameter Table, Located in env with name table
-                  required: true
-                  schema:
-                    type: string
-                    description: Parameter Table schema
                 - name: _criteria
                   in: query
                   description: allows to filter view events data that matches given criteria
@@ -131,7 +65,7 @@ paths:
                                         type: integer
                                         format: int64
                                 description: Success object schema
-                "Default":
+                Default:
                     description: Error response. The view and param may be empty, but one of the message or object should be specified
                     content:
                         application/json:

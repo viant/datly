@@ -1,15 +1,4 @@
 openapi: 3.1.0
-components:
-    parameters:
-        Id:
-            name: Id
-            in: query
-            description: Parameter Id, Located in query with name eventTypeId
-            required: true
-            schema:
-                type: integer
-                description: Parameter Id schema
-                format: int64
 info:
     title: ""
     version: ""

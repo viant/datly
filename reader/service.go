@@ -153,6 +153,7 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 		if err != nil {
 			return err
 		}
+
 		err = s.query(ctx, view, db, SQL, collector, args, visitor)
 		if err != nil {
 			return err

@@ -1,15 +1,4 @@
 openapi: 3.1.0
-components:
-    parameters:
-        EventId:
-            name: EventId
-            in: path
-            description: Parameter EventId, Located in path with name eventId
-            required: true
-            schema:
-                type: integer
-                description: Parameter EventId schema
-                format: int64
 info:
     title: ""
     version: ""

@@ -1,30 +1,4 @@
 openapi: 3.1.0
-components:
-    parameters:
-        JWT:
-            name: JWT
-            in: header
-            description: Parameter JWT, Located in header with name Authorization
-            required: true
-            schema:
-                type: object
-                properties:
-                    Audience:
-                        type: string
-                    Email:
-                        type: string
-                    ExpiresIn:
-                        type: integer
-                        format: int64
-                    IssuedTo:
-                        type: string
-                    Scope:
-                        type: string
-                    UserId:
-                        type: string
-                    VerifiedEmail:
-                        type: boolean
-                description: Parameter JWT schema
 info:
     title: ""
     version: ""

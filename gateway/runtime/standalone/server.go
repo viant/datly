@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/gateway/runtime/standalone/handler"
+	"github.com/viant/datly/router"
 	"github.com/viant/gmetric"
 	"log"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 
 type Server struct {
 	http.Server
+	Service *gateway.Service
 }
 
 //shutdownOnInterrupt server on interupts
@@ -35,10 +37,15 @@ func (r *Server) shutdownOnInterrupt() {
 	}()
 }
 
+func (r *Server) Routes() []*router.Route {
+	return r.Service.Routes("")
+}
+
 func NewWithAuth(config *Config, auth AuthHandler) (*Server, error) {
 	if auth == nil {
 		auth = &noAuth{}
 	}
+
 	config.Init()
 	mux := http.NewServeMux()
 	metric := gmetric.New()
@@ -59,6 +66,7 @@ func NewWithAuth(config *Config, auth AuthHandler) (*Server, error) {
 	//actual datly handler
 	mux.HandleFunc(config.Config.APIPrefix, auth.Auth(service.Handle))
 	server := &Server{
+		Service: service,
 		Server: http.Server{
 			Addr:           ":" + strconv.Itoa(config.Endpoint.Port),
 			Handler:        mux,

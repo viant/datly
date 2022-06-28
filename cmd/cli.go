@@ -10,6 +10,9 @@ import (
 	"github.com/viant/datly/auth/cognito"
 	"github.com/viant/datly/gateway/runtime/lambda"
 	"github.com/viant/datly/gateway/runtime/standalone"
+	"github.com/viant/datly/router"
+	"github.com/viant/datly/router/openapi3"
+	"gopkg.in/yaml.v3"
 	"log"
 	"os"
 )
@@ -61,6 +64,14 @@ func Run(args []string) {
 	} else {
 		srv, err = standalone.NewWithAuth(config, authService)
 	}
+
+	if options.OpenApiURL != "" {
+		//TODO: add opeanpi3.Info to Config
+		openapiSpec, _ := router.GenerateOpenAPI3Spec(openapi3.Info{}, srv.Routes()...)
+		openApiMarshal, _ := yaml.Marshal(openapiSpec)
+		_ = os.WriteFile(options.OpenApiURL, openApiMarshal, file.DefaultFileOsMode)
+	}
+
 	if err != nil {
 		log.Fatal(err)
 	}
