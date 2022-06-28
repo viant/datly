@@ -23,7 +23,7 @@ func EnrichWithDiscover(template string, withParentheses bool) string {
 	}
 
 	buffer.Write(tempAsBytes)
-	appendAutoDiscover(tempAsBytes, buffer)
+	appendAutoDiscover(tempAsBytes, &buffer)
 
 	if withParentheses {
 		buffer.WriteByte(')')
@@ -32,7 +32,7 @@ func EnrichWithDiscover(template string, withParentheses bool) string {
 	return buffer.String()
 }
 
-func appendAutoDiscover(tempAsBytes []byte, buffer bytes.Buffer) {
+func appendAutoDiscover(tempAsBytes []byte, buffer *bytes.Buffer) {
 	if containsAnyCriteria(tempAsBytes) {
 		return
 	}

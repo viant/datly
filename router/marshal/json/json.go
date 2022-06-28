@@ -346,6 +346,11 @@ func updateFloat64Marshaller(stringifier *fieldMarshaller, wasPtr bool, tag *Def
 }
 
 func appendFloat(sb *bytes.Buffer, f float64, wasNull bool, tag *DefaultTag) error {
+	if wasNull {
+		sb.WriteString(null)
+		return nil
+	}
+
 	if f == 0 && tag._value != nil {
 		sb.WriteString(strconv.FormatFloat(tag._value.(float64), 'f', -1, 64))
 		return nil
@@ -448,7 +453,7 @@ func updateBoolMarshaller(stringifier *fieldMarshaller, wasPtr bool, tag *Defaul
 					return nil
 				}
 
-				sb.WriteString("false")
+				sb.WriteString(null)
 				return nil
 			}
 
@@ -654,6 +659,11 @@ func updateIntMarshaller(stringifier *fieldMarshaller, wasPtr bool, tag *Default
 }
 
 func appendInt(value int, wasNull bool, aTag *DefaultTag, sb *bytes.Buffer) error {
+	if wasNull {
+		sb.WriteString(null)
+		return nil
+	}
+
 	if aTag._value != nil && value == 0 {
 		sb.WriteString(strconv.Itoa(aTag._value.(int)))
 		return nil
