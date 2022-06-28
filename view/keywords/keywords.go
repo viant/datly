@@ -16,6 +16,7 @@ const (
 	WhereSelectorCriteria = "$WHERE_SELECTOR_CRITERIA"
 	AndSelectorCriteria   = "$AND_SELECTOR_CRITERIA"
 	AndCriteria           = "$AND_CRITERIA"
+	OrCriteria            = "$OR_CRITERIA"
 
 	WherePrefix = "WHERE_"
 	AndPrefix   = "AND_"

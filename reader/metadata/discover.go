@@ -23,6 +23,20 @@ func EnrichWithDiscover(template string, withParentheses bool) string {
 	}
 
 	buffer.Write(tempAsBytes)
+	appendAutoDiscover(tempAsBytes, buffer)
+
+	if withParentheses {
+		buffer.WriteByte(')')
+	}
+
+	return buffer.String()
+}
+
+func appendAutoDiscover(tempAsBytes []byte, buffer bytes.Buffer) {
+	if containsAnyCriteria(tempAsBytes) {
+		return
+	}
+
 	if ContainsWhereClause(tempAsBytes) {
 		buffer.WriteByte(' ')
 		buffer.WriteString(keywords.AndCriteria)
@@ -30,10 +44,8 @@ func EnrichWithDiscover(template string, withParentheses bool) string {
 		buffer.WriteByte(' ')
 		buffer.WriteString(keywords.WhereCriteria)
 	}
+}
 
-	if withParentheses {
-		buffer.WriteByte(')')
-	}
-
-	return buffer.String()
+func containsAnyCriteria(asBytes []byte) bool {
+	return bytes.Contains(asBytes, []byte(keywords.WhereCriteria)) || bytes.Contains(asBytes, []byte(keywords.AndCriteria)) || bytes.Contains(asBytes, []byte(keywords.OrCriteria))
 }
