@@ -28,7 +28,7 @@ require (
 	github.com/viant/parsly v0.0.0-20220627184754-7b29249ed1e8
 	github.com/viant/scy v0.0.0-20220525181307-5c0db5da0082
 	github.com/viant/sqlx v0.0.0-20220628125203-98c9336edb63
-	github.com/viant/toolbox v0.34.6-0.20220520032100-91daa519c2a2
+	github.com/viant/toolbox v0.34.6-0.20220630003140-fb2bf82657c1
 	github.com/viant/velty v0.1.1-0.20220615222300-d36908b3bf21
 	github.com/viant/xunsafe v0.8.1-0.20220609224231-1d3e1fcf7bb6
 	golang.org/x/oauth2 v0.0.0-20220608161450-d0670ef3b1eb

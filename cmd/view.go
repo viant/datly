@@ -13,6 +13,7 @@ import (
 	"github.com/viant/sqlx/metadata"
 	"github.com/viant/toolbox/format"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -89,28 +90,15 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	if options.Table != "" {
 		viewRoute.Index.Namespace[options.Namespace()] = options.Generate.Name
 	}
-
 	viewRoute.CaseFormat = "lc"
 	if xTable != nil {
+		aView.CaseFormat = detectCaseFormat(xTable)
 		if len(xTable.Joins) > 0 {
 			if err := buildXRelations(options, route, viewRoute, xTable); err != nil {
 				return err
 			}
 		}
-
-		for _, column := range xTable.Columns {
-			if len(column.Except) == 0 {
-				continue
-			}
-			if column.Ns == xTable.Alias {
-				for _, except := range column.Except {
-					//TODO detect view case
-					viewCaser, _ := format.NewCase("uu")
-					outputCaser, _ := format.NewCase(string(viewRoute.CaseFormat))
-					viewRoute.Exclude = append(viewRoute.Exclude, viewCaser.Format(except, outputCaser))
-				}
-			}
-		}
+		buildExcludeColumn(xTable, aView, viewRoute)
 
 	}
 	if len(options.Relations) > 0 && conn != nil {
@@ -135,6 +123,45 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	_ = fsAddYAML(fs, depURL, dependency)
 	route.Resource.Connectors = nil
 	return fsAddYAML(fs, options.RouterURL(), route)
+}
+
+func buildExcludeColumn(xTable *Table, aView *view.View, viewRoute *router.Route) {
+
+	joins := xTable.Joins.Index()
+	viewCaser, _ := aView.CaseFormat.Caser()
+	outputCaser, _ := format.NewCase(string(viewRoute.CaseFormat))
+
+	for _, column := range xTable.Columns {
+		if len(column.Except) == 0 {
+			continue
+		}
+		if column.Ns == xTable.Alias {
+			for _, except := range column.Except {
+				viewRoute.Exclude = append(viewRoute.Exclude, viewCaser.Format(except, outputCaser))
+			}
+			continue
+		}
+		join := joins[column.Ns]
+		for _, except := range column.Except {
+			holder := strings.Title(join.Table.Alias)
+			viewRoute.Exclude = append(viewRoute.Exclude, holder+"."+viewCaser.Format(except, outputCaser))
+		}
+	}
+}
+
+func detectCaseFormat(xTable *Table) view.CaseFormat {
+	var result = "lc"
+	if len(xTable.Inner) > 0 {
+		result = view.DetectCase(xTable.Inner[0].Name)
+		for _, candidate := range xTable.Inner {
+			if len(candidate.Name) > 3 {
+				result = view.DetectCase(xTable.Inner[0].Name)
+				break
+			}
+		}
+	}
+	return view.CaseFormat(result)
+
 }
 
 func buildMainView(options *Options, generate *Generate, route *router.Resource) *view.View {

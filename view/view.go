@@ -256,11 +256,11 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err = v.ensureCaseFormat(); err != nil {
+	if err = v.ensureColumns(ctx, resource); err != nil {
 		return err
 	}
 
-	if err = v.ensureColumns(ctx, resource); err != nil {
+	if err = v.ensureCaseFormat(); err != nil {
 		return err
 	}
 
@@ -597,6 +597,16 @@ func (v *View) ensureIndexExcluded() {
 }
 
 func (v *View) ensureCaseFormat() error {
+	if v.CaseFormat == "" && len(v.Columns) > 0 {
+		v.CaseFormat = CaseFormat(DetectCase(v.Columns[0].Name))
+		for _, column := range v.Columns {
+			if len(column.Name) > 3 {
+				v.CaseFormat = CaseFormat(DetectCase(v.Columns[0].Name))
+				break
+			}
+		}
+	}
+
 	if err := v.CaseFormat.Init(); err != nil {
 		return err
 	}

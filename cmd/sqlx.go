@@ -19,7 +19,7 @@ type (
 		Columns    Columns
 		Name       string
 		SQL        string
-		Joins      []*Join
+		Joins      Joins
 		Alias      string
 	}
 
@@ -42,8 +42,9 @@ type (
 
 		ToOne bool
 		Table *Table
-		Alias string
 	}
+
+	Joins []*Join
 )
 
 func (c Columns) StarExpr(ns string) *Column {
@@ -85,6 +86,15 @@ func (c Columns) ByAlias() map[string]*Column {
 		}
 		result[alias] = c[i]
 	}
+	return result
+}
+
+func (j *Joins) Index() map[string]*Join {
+	var result = make(map[string]*Join)
+	for _, join := range *j {
+		result[join.Table.Alias] = join
+	}
+
 	return result
 }
 

@@ -3,6 +3,7 @@ package view
 import (
 	"fmt"
 	"github.com/viant/toolbox/format"
+	"strings"
 )
 
 type CaseFormat string
@@ -41,4 +42,25 @@ func (f *CaseFormat) Init() error {
 
 func (f CaseFormat) Caser() (format.Case, error) {
 	return format.NewCase(string(f))
+}
+
+//DetectCase detect case format
+func DetectCase(text string) string {
+	if len(text) == 0 {
+		return "lc" ///default
+	}
+	result := ""
+	if text[0:1] == strings.ToUpper(text[0:1]) {
+		result = "u"
+	} else {
+		result = "l"
+	}
+	if strings.Contains(text, "_") {
+		result += "u"
+	} else if text[1:2] != strings.ToUpper(text[1:2]) {
+		result += "c"
+	} else {
+		result += "u"
+	}
+	return result
 }
