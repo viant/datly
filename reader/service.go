@@ -100,7 +100,6 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 	if err != nil {
 		errorCollector.Append(err)
 	}
-
 	if collector.SupportsParallel() {
 		return
 	}
