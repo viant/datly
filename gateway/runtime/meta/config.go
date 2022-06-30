@@ -10,7 +10,7 @@ const (
 	//ViewURI represents default config view URIPrefix
 	ViewURI = "/v1/api/meta/view/"
 	//OpenApiURI represents default config openapi URIPrefix
-	OpenApiURI = "/v1/api/meta/openapi"
+	OpenApiURI = "/v1/api/meta/openapi/"
 )
 
 //Config represents meta config

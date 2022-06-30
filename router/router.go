@@ -515,7 +515,6 @@ func (r *Router) Route(route string) []*Route {
 	if route == "" {
 		return r.routes
 	}
-
 	uriRoutes, ok := r.index[route]
 	if !ok {
 		return []*Route{}

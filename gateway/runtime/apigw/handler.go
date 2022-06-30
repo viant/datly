@@ -62,6 +62,7 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 	if err != nil {
 		return err
 	}
+
 	if strings.Contains(httpRequest.RequestURI, config.Meta.ViewURI) {
 		viewHandler := handler.NewView(config.Meta.ViewURI, &config.Meta, service.View)
 		viewHandler.ServeHTTP(writer, httpRequest)
@@ -75,7 +76,7 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 
 	if strings.Contains(httpRequest.RequestURI, config.Meta.OpenApiURI) {
 		//TODO: add openapi3.Info to Config
-		openApiHandler := handler.NewOpenApi(config.Meta.OpenApiURI, openapi3.Info{}, service.Routes)
+		openApiHandler := handler.NewOpenApi(config.APIPrefix, config.Meta.OpenApiURI, openapi3.Info{}, service.Routes)
 		openApiHandler.ServeHTTP(writer, httpRequest)
 		return nil
 	}
