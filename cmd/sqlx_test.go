@@ -13,8 +13,13 @@ func TestParseSQLx(t *testing.T) {
 	}{
 		{
 			SQL: `SELECT ad.*, au.* 
-					FROM T1 ad 
-					JOIN T2 au ON au.X_ID = ad.ID`,
+					FROM
+(
+)
+		T1 ad 
+					JOIN T2 au ON au.X_ID = ad.ID
+					WHERE ad.id = 10
+`,
 		},
 	}
 

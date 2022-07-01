@@ -110,7 +110,17 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *Ba
 		sb.WriteString(" ")
 	}
 
-	return b.expand(sb.String(), aView, selector, commonParams, batchData)
+	placeholders, err := b.getInitialPlaceholders(aView, selector)
+	if err != nil {
+		return "", nil, err
+	}
+
+	SQL, err := b.expand(sb.String(), aView, selector, commonParams, batchData, &placeholders)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return SQL, placeholders, err
 }
 
 func (b *Builder) appendColumns(sb *strings.Builder, aView *view.View, selector *view.Selector, relation *view.Relation) error {
@@ -208,19 +218,18 @@ func (b *Builder) appendOffset(sb *strings.Builder, selector *view.Selector) {
 	sb.WriteString(strconv.Itoa(selector.Offset))
 }
 
-func (b *Builder) expand(sql string, aView *view.View, selector *view.Selector, params view.CommonParams, batchData *BatchData) (string, []interface{}, error) {
-	placeholders := make([]interface{}, 0)
+func (b *Builder) expand(sql string, aView *view.View, selector *view.Selector, params view.CommonParams, batchData *BatchData, placeholders *[]interface{}) (string, error) {
 	block, err := parser.Parse([]byte(sql))
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 
 	replacement := rdata.Map{}
 
 	for _, statement := range block.Stmt {
-		key, val, addedPlaceholders, err := b.prepareExpanded(statement, params, aView, selector, batchData)
+		key, val, err := b.prepareExpanded(statement, params, aView, selector, batchData, placeholders)
 		if err != nil {
-			return "", nil, err
+			return "", err
 		}
 
 		if key == "" {
@@ -228,96 +237,96 @@ func (b *Builder) expand(sql string, aView *view.View, selector *view.Selector, 
 		}
 
 		replacement.SetValue(key, val)
-		if len(addedPlaceholders) > 0 {
-			placeholders = append(placeholders, addedPlaceholders...)
-		}
 	}
 
-	return replacement.ExpandAsText(sql), placeholders, err
+	return replacement.ExpandAsText(sql), err
 }
 
-func (b *Builder) prepareExpanded(statement ast.Statement, params view.CommonParams, aView *view.View, selector *view.Selector, batchData *BatchData) (string, string, []interface{}, error) {
+func (b *Builder) prepareExpanded(statement ast.Statement, params view.CommonParams, aView *view.View, selector *view.Selector, batchData *BatchData, placeholders *[]interface{}) (string, string, error) {
 	switch actual := statement.(type) {
 	case *expr.Select:
 		key := extractSelectorName(actual.FullName)
-		mapKey, mapValue, mapPlaceholders, err := b.replacementEntry(key, params, aView, selector, batchData)
+		mapKey, mapValue, err := b.replacementEntry(key, params, aView, selector, batchData, placeholders)
 		if err != nil {
-			return "", "", nil, err
+			return "", "", err
 		}
 
-		return mapKey, mapValue, mapPlaceholders, nil
+		return mapKey, mapValue, nil
 	}
 
-	return "", "", nil, nil
+	return "", "", nil
 }
 
-func (b *Builder) replacementEntry(key string, params view.CommonParams, aView *view.View, selector *view.Selector, batchData *BatchData) (string, string, []interface{}, error) {
+func (b *Builder) replacementEntry(key string, params view.CommonParams, aView *view.View, selector *view.Selector, batchData *BatchData, placeholders *[]interface{}) (string, string, error) {
 	switch key {
 	case keywords.Pagination[1:]:
-		return key, params.Pagination, []interface{}{}, nil
+		return key, params.Pagination, nil
 	case keywords.Criteria[1:]:
-		criteriaExpanded, criteriaPlaceholders, err := b.expand(params.WhereClause, aView, selector, params, batchData)
+		criteriaExpanded, err := b.expand(params.WhereClause, aView, selector, params, batchData, placeholders)
 		if err != nil {
-			return "", "", nil, err
+			return "", "", err
 		}
 
-		return key, criteriaExpanded, criteriaPlaceholders, nil
+		return key, criteriaExpanded, nil
 	case keywords.ColumnsIn[1:]:
-		return key, params.ColumnsIn, batchData.ValuesBatch, nil
+		*placeholders = append(*placeholders, batchData.ValuesBatch...)
+		return key, params.ColumnsIn, nil
 	case keywords.SelectorCriteria[1:]:
-		return key, selector.Criteria, selector.Placeholders, nil
+		*placeholders = append(*placeholders, selector.Placeholders...)
+		return key, selector.Criteria, nil
 	default:
 		if strings.HasPrefix(key, keywords.WherePrefix) {
-			_, aValue, aPlaceholders, err := b.replacementEntry(key[len(keywords.WherePrefix):], params, aView, selector, batchData)
+			_, aValue, err := b.replacementEntry(key[len(keywords.WherePrefix):], params, aView, selector, batchData, placeholders)
 			if err != nil {
-				return "", "", nil, err
+				return "", "", err
 			}
 
-			return b.valueWithPrefix(key, aValue, " WHERE ", aPlaceholders, false)
+			return b.valueWithPrefix(key, aValue, " WHERE ", false)
 		}
 
 		if strings.HasPrefix(key, keywords.AndPrefix) {
-			_, aValue, aPlaceholders, err := b.replacementEntry(key[len(keywords.AndPrefix):], params, aView, selector, batchData)
+			_, aValue, err := b.replacementEntry(key[len(keywords.AndPrefix):], params, aView, selector, batchData, placeholders)
 			if err != nil {
-				return "", "", nil, err
+				return "", "", err
 			}
 
-			return b.valueWithPrefix(key, aValue, " AND ", aPlaceholders, true)
+			return b.valueWithPrefix(key, aValue, " AND ", true)
 		}
 
 		if strings.HasPrefix(key, keywords.OrPrefix) {
-			_, aValue, aPlaceholders, err := b.replacementEntry(key[len(keywords.OrPrefix):], params, aView, selector, batchData)
+			_, aValue, err := b.replacementEntry(key[len(keywords.OrPrefix):], params, aView, selector, batchData, placeholders)
 			if err != nil {
-				return "", "", nil, err
+				return "", "", err
 			}
 
-			return b.valueWithPrefix(key, aValue, " OR ", aPlaceholders, true)
+			return b.valueWithPrefix(key, aValue, " OR ", true)
 		}
 
 		accessor, err := aView.Template.AccessorByName(key)
 		if err != nil {
-			return "", "", nil, err
+			return "", "", err
 		}
 
 		value, err := accessor.Value(selector.Parameters.Values)
 		if err != nil {
-			return "", "", nil, err
+			return "", "", err
 		}
 
-		return key, "?", []interface{}{value}, nil
+		*placeholders = append(*placeholders, value)
+		return key, "?", nil
 	}
 }
 
-func (b *Builder) valueWithPrefix(key string, aValue, prefix string, aPlaceholders []interface{}, wrapWithParentheses bool) (string, string, []interface{}, error) {
+func (b *Builder) valueWithPrefix(key string, aValue, prefix string, wrapWithParentheses bool) (string, string, error) {
 	if aValue == "" {
-		return key, "", aPlaceholders, nil
+		return key, "", nil
 	}
 
 	if wrapWithParentheses {
-		return key, prefix + "(" + aValue + ")", aPlaceholders, nil
+		return key, prefix + "(" + aValue + ")", nil
 	}
 
-	return key, prefix + aValue, aPlaceholders, nil
+	return key, prefix + aValue, nil
 }
 
 func (b *Builder) updateCriteria(params *view.CommonParams, columnsInMeta *reservedMeta, selector *view.Selector) error {
@@ -438,6 +447,31 @@ func (b *Builder) checkSelectorAndAppendRelColumn(sb *strings.Builder, aView *vi
 	}
 
 	return nil
+}
+
+func (b *Builder) getInitialPlaceholders(aView *view.View, selector *view.Selector) ([]interface{}, error) {
+	if !aView.UseParamBindingPositions() {
+		return make([]interface{}, 0), nil
+	}
+
+	totalLen := 0
+	for _, parameter := range aView.Template.Parameters {
+		totalLen += len(parameter.Positions)
+	}
+
+	placeholders := make([]interface{}, totalLen)
+	for _, parameter := range aView.Template.Parameters {
+		value, err := parameter.Value(selector.Parameters.Values)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, position := range parameter.Positions {
+			placeholders[position] = value
+		}
+	}
+
+	return placeholders, nil
 }
 
 func extractSelectorName(name string) string {

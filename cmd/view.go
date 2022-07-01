@@ -50,7 +50,9 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		}
 	}
 	aView := buildMainView(options, generate, route)
-	updateViewSQL(options, xTable, aView)
+	if err := updateViewSQL(options, xTable, aView); err != nil {
+		return err
+	}
 
 	var conn *view.Connector
 	var ok bool

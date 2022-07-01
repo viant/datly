@@ -1,0 +1,28 @@
+parameters:
+  - id: ID
+    name: id
+    kind: query
+    type: int
+    positions:
+      - 0
+  - id: quantity
+    name: quantity
+    kind: path
+    required: true
+    type: string
+    positions:
+      - 1
+source: |-
+  SELECT *, (
+      SELECT abc
+      FROM T2
+      WHERE 1=2
+  ) as abc FROM T1
+  WHERE 1=1
+  #if($Has.ID)
+  AND ID = $ID
+  #end
+  #if($Has.quantiy)
+  AND quantity = $quantity
+  #end
+hasveltysyntax: true

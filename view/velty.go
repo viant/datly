@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/converter"
+	"github.com/viant/datly/view/keywords"
 	"github.com/viant/velty"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/est"
@@ -225,7 +226,7 @@ func (v *VeltyCodec) Value(ctx context.Context, raw string, options ...interface
 func (v *VeltyCodec) evaluateCriteria(selector *Selector, dest interface{}, wasNil bool) (string, error) {
 	state := v.newState()
 	if !wasNil {
-		if err := state.SetValue("Unsafe", dest); err != nil {
+		if err := state.SetValue(keywords.ParamsKey, dest); err != nil {
 			return "", err
 		}
 	}
@@ -355,7 +356,7 @@ func (v *VeltyCodec) init() error {
 	planner := velty.New()
 
 	var err error
-	if err = planner.DefineVariable("Unsafe", v.codecType); err != nil {
+	if err = planner.DefineVariable(keywords.ParamsKey, v.codecType); err != nil {
 		return err
 	}
 

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/viant/datly/cmd/ast"
 	"github.com/viant/sqlx/metadata/ast/expr"
 	"github.com/viant/sqlx/metadata/ast/node"
 	"github.com/viant/sqlx/metadata/ast/parser"
@@ -21,6 +22,8 @@ type (
 		SQL        string
 		Joins      Joins
 		Alias      string
+
+		ViewMeta *ast.ViewMeta
 	}
 
 	Column struct {
@@ -104,7 +107,11 @@ func ParseSQLx(SQL string) (*Table, error) {
 		return nil, err
 	}
 	var tables = map[string]*Table{}
-	table := buildTable(aQuery.From.X)
+	table, err := buildTable(aQuery.From.X)
+	if err != nil {
+		return nil, err
+	}
+
 	table.Alias = aQuery.From.Alias
 	table.Columns = selectItemToColumn(aQuery)
 	if star := table.Columns.StarExpr(table.Alias); star != nil {
@@ -121,7 +128,8 @@ func ParseSQLx(SQL string) (*Table, error) {
 	return table, nil
 }
 
-func buildTable(x node.Node) *Table {
+func buildTable(x node.Node) (*Table, error) {
+	var err error
 	table := &Table{}
 	switch actual := x.(type) {
 	case *expr.Raw:
@@ -134,14 +142,22 @@ func buildTable(x node.Node) *Table {
 			fmt.Printf("SQL: %v\n", table.SQL)
 			toolbox.Dump(table.Inner)
 		}
+		table.ViewMeta, err = ast.Parse(table.SQL)
+		if err != nil {
+			return nil, err
+		}
 	case *expr.Selector, *expr.Ident:
 		table.Name = parser.Stringify(actual)
 	}
-	return table
+	return table, nil
 }
 
 func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns) error {
-	relTable := buildTable(join.With)
+	relTable, err := buildTable(join.With)
+	if err != nil {
+		return err
+	}
+
 	relTable.Alias = join.Alias
 	relTable.Ref = relTable.Name
 	tables[relTable.Alias] = relTable

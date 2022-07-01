@@ -82,7 +82,7 @@ func (f *Field) initChildren(ctx context.Context, types Types) error {
 
 func (f *Field) initSchemaType(types Types) error {
 	if f.Schema.DataType != "" {
-		rType, err := parseType(f.Schema.DataType)
+		rType, err := ParseType(f.Schema.DataType)
 		if err != nil {
 			return err
 		}

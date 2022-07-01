@@ -1,0 +1,3 @@
+SELECT * FROM T2
+WHERE 1=1
+AND ev.Id = 10

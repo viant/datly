@@ -34,6 +34,7 @@ type (
 		initialized bool
 		view        *View
 
+		Positions        []int `json:",omitempty"`
 		valueAccessor    *Accessor
 		presenceAccessor *Accessor
 	}
@@ -46,17 +47,17 @@ type (
 
 	CodecFn func(context context.Context, rawValue string, options ...interface{}) (interface{}, error)
 	Codec   struct {
-		Name     string
-		Source   string
+		Name      string
+		Source    string
 		SourceURL string
-		Schema   *Schema
-		_codecFn CodecFn //shall rename to codec ?
+		Schema    *Schema
+		_codecFn  CodecFn //shall rename to codec ?
 	}
 )
 
 func (v *Codec) Init(resource *Resource, view *View, paramType reflect.Type) error {
 	v.ensureSchema(paramType)
-	if v.SourceURL != "" && v.Source == ""{
+	if v.SourceURL != "" && v.Source == "" {
 		data, err := resource.LoadText(context.Background(), v.SourceURL)
 		if err != nil {
 			return err
@@ -247,7 +248,7 @@ func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
 	}
 
 	if p.Schema.DataType != "" {
-		rType, err := parseType(p.Schema.DataType)
+		rType, err := ParseType(p.Schema.DataType)
 		if err != nil {
 			return err
 		}

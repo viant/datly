@@ -1,0 +1,14 @@
+parameters:
+  - id: Id
+    name: Id
+    kind: query
+    type: string
+    positions:
+      - 0
+from: |-
+  SELECT *, (
+      SELECT abc
+      FROM T2
+      WHERE 1=2
+  ) as abc FROM T1
+  WHERE id = ?

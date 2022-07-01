@@ -1,0 +1,35 @@
+parameters:
+  - id: ID
+    name: id
+    kind: query
+    type: int
+    positions:
+      - 0
+  - id: quantity
+    name: quantity
+    kind: query
+    type: string
+    positions:
+      - 1
+      - 2
+source: |
+  SELECT *, (
+      SELECT abc
+      FROM T2
+      WHERE 1=2
+  ) as abc FROM T1
+  WHERE 1=1
+  #set($valueSet = 123)
+  #if($Has.ID)
+  AND ID = $ID
+  #end
+  
+  #foreach($column in $Columns)
+      $column.Id
+  #end
+  
+  #if($Has.quantiy)
+  AND quantity = $quantity
+  AND quantity = $Unsafe.quantity
+  #end
+hasveltysyntax: true

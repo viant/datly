@@ -37,7 +37,7 @@ func (c *Column) SqlExpression() string {
 	return c.sqlExpression
 }
 
-func parseType(dataType string) (reflect.Type, error) {
+func ParseType(dataType string) (reflect.Type, error) {
 	precisionIndex := strings.Index(dataType, "(")
 	if precisionIndex != -1 {
 		dataType = dataType[:precisionIndex]
@@ -79,7 +79,7 @@ func (c *Column) Init(caser format.Case, allowNulls bool) error {
 	}
 
 	if c.rType == nil {
-		rType, err := parseType(c.DataType)
+		rType, err := ParseType(c.DataType)
 		if err != nil {
 			return err
 		}

@@ -53,8 +53,9 @@ type (
 		_columns  ColumnIndex
 		_excluded map[string]bool
 
-		DiscoverCriteria *bool
-		AllowNulls       *bool
+		DiscoverCriteria    *bool
+		AllowNulls          *bool
+		UseBindingPositions *bool
 
 		initialized  bool
 		newCollector func(dest interface{}, supportParallel bool) *Collector
@@ -376,7 +377,7 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 	}
 
 	v.Logger.ColumnsDetection(SQL, v.Source())
-	columns, err := detectColumns(ctx, SQL, v)
+	columns, err := detectColumns(ctx, resource, SQL, v, v.UseParamBindingPositions())
 
 	if err != nil {
 		return err
@@ -388,7 +389,7 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 			return errr
 		}
 		v.Logger.ColumnsDetection(tableSQL, v.Table)
-		tableColumns, err := detectColumns(ctx, tableSQL, v)
+		tableColumns, err := detectColumns(ctx, resource, tableSQL, v, false)
 		if err != nil {
 			return err
 		}
@@ -401,6 +402,10 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 		resource._columnsCache[v.Name] = v.Columns
 	}
 	return nil
+}
+
+func (v *View) UseParamBindingPositions() bool {
+	return v.UseBindingPositions != nil && *v.UseBindingPositions
 }
 
 func convertIoColumnsToColumns(ioColumns []io.Column, nullable map[string]bool) []*Column {
@@ -571,6 +576,10 @@ func (v *View) inherit(ctx context.Context, resource *Resource, view *View) erro
 
 	if v.AllowNulls == nil {
 		v.AllowNulls = view.AllowNulls
+	}
+
+	if v.UseBindingPositions == nil {
+		v.UseBindingPositions = view.UseBindingPositions
 	}
 
 	return nil

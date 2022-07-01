@@ -33,6 +33,7 @@ type (
 		_parametersIndex ParametersIndex
 		initialized      bool
 		isTemplate       bool
+		wasEmpty         bool
 	}
 
 	Evaluator struct {
@@ -58,6 +59,8 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 	if t.initialized {
 		return nil
 	}
+
+	t.wasEmpty = t.Source == "" && t.SourceURL == ""
 	t.initialized = true
 
 	err := t.loadSourceFromURL(ctx, resource)
@@ -187,16 +190,16 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 	return nil
 }
 
-func (t *Template) newEvaluator(template string) (*Evaluator, error) {
+func NewEvaluator(paramSchema, presenceSchema reflect.Type, template string, options ...interface{}) (*Evaluator, error) {
 	evaluator := &Evaluator{}
 	var err error
 
 	evaluator.planner = velty.New(velty.BufferSize(len(template)))
-	if err = evaluator.planner.DefineVariable(keywords.ParamsKey, t.Schema.Type()); err != nil {
+	if err = evaluator.planner.DefineVariable(keywords.ParamsKey, paramSchema); err != nil {
 		return nil, err
 	}
 
-	if err = evaluator.planner.DefineVariable(keywords.ParamsMetadataKey, t.PresenceSchema.Type()); err != nil {
+	if err = evaluator.planner.DefineVariable(keywords.ParamsMetadataKey, presenceSchema); err != nil {
 		return nil, err
 	}
 
@@ -213,17 +216,28 @@ func (t *Template) newEvaluator(template string) (*Evaluator, error) {
 }
 
 func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parent *View) (string, error) {
-	SQL, err := t.evaluate(t.sqlEvaluator, externalParams, presenceMap, parent)
+	if t.wasEmpty {
+		return t.Source, nil
+	}
+
+	viewParam := &Param{}
+	if parent != nil {
+		viewParam = asParam(parent)
+	} else {
+		viewParam = asParam(t._view)
+	}
+
+	SQL, err := t.sqlEvaluator.Evaluate(t.Schema.Type(), externalParams, presenceMap, viewParam)
 	return SQL, err
 }
 
-func (t *Template) evaluate(evaluator *Evaluator, externalParams, presenceMap interface{}, parent *View) (string, error) {
+func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMap interface{}, viewParam *Param) (string, error) {
 	externalType := reflect.TypeOf(externalParams)
-	if t.Schema.Type() != externalType {
-		return "", fmt.Errorf("inompactible types, wanted %v got %T", t.Schema.Type().String(), externalParams)
+	if schemaType != externalType {
+		return "", fmt.Errorf("inompactible types, wanted %v got %T", schemaType.String(), externalParams)
 	}
 
-	newState := evaluator.stateProvider()
+	newState := e.stateProvider()
 	if externalParams != nil {
 		if err := newState.SetValue(keywords.ParamsKey, externalParams); err != nil {
 			return "", err
@@ -236,18 +250,14 @@ func (t *Template) evaluate(evaluator *Evaluator, externalParams, presenceMap in
 		}
 	}
 
-	viewParam := &Param{}
-	if parent != nil {
-		viewParam = asParam(parent)
-	} else {
-		viewParam = asParam(t._view)
-	}
-
 	if err := newState.SetValue(keywords.ViewKey, viewParam); err != nil {
 		return "", err
 	}
 
-	evaluator.executor.Exec(newState)
+	if err := e.executor.Exec(newState); err != nil {
+		return "", err
+	}
+
 	return newState.Buffer.String(), nil
 }
 
@@ -266,7 +276,11 @@ func (t *Template) inheritAndInitParam(ctx context.Context, resource *Resource, 
 }
 
 func (t *Template) initSqlEvaluator() error {
-	evaluator, err := t.newEvaluator(t.Source)
+	if t.wasEmpty {
+		return nil
+	}
+
+	evaluator, err := NewEvaluator(t.Schema.Type(), t.PresenceSchema.Type(), t.Source)
 	if err != nil {
 		return err
 	}

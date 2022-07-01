@@ -513,12 +513,8 @@ func (g *generator) appendDefaultParam(params *[]*openapi3.Parameter, route *Rou
 
 func (g *generator) getViewPrefixes(mainView bool, route *Route, aView *view.View) []string {
 	var prefixes []string
-	if mainView {
-		prefixes = append(prefixes, "")
-	}
-
 	prefix, ok := route.PrefixByView(aView)
-	if ok {
+	if ok || mainView {
 		prefixes = append(prefixes, prefix)
 	}
 	return prefixes
