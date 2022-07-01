@@ -116,7 +116,7 @@ func (r *Relation) initHolder(v *View) error {
 		return fmt.Errorf("failed to lookup holderField %v", r.Holder)
 	}
 
-	columnName := v.Caser.Format(r.Column, format.CaseUpperCamel)
+	columnName := r.Of.Caser.Format(r.Column, format.CaseUpperCamel)
 	r.columnField = shared.MatchField(v.DataType(), columnName, v.Caser)
 
 	r.hasColumnField = r.columnField != nil
