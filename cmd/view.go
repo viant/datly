@@ -173,6 +173,7 @@ func buildMainView(options *Options, generate *Generate, route *router.Resource)
 				Criteria:   true,
 				Limit:      true,
 				Offset:     true,
+				Projection: true,
 			},
 		},
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/viant/toolbox/format"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -419,6 +420,10 @@ func (g *generator) appendBuiltInParam(params *[]*openapi3.Parameter, route *Rou
 		if !aView.CanUseSelectorOffset() {
 			return nil
 		}
+	case Fields:
+		if !aView.CanUseSelectorProjection() {
+			return nil
+		}
 	}
 
 	if param == nil {
@@ -426,6 +431,13 @@ func (g *generator) appendBuiltInParam(params *[]*openapi3.Parameter, route *Rou
 			return err
 		}
 	} else {
+		if strings.HasPrefix(param.Name, "_") {
+			if ns := route.Index.ViewNamespace(aView); ns != "" {
+				tempParam := *param
+				tempParam.Name = ns + tempParam.Name
+				param = &tempParam
+			}
+		}
 		converted, ok, err := g.convertParam(route, param, paramName.Description(aView.Name))
 		if err != nil {
 			return err

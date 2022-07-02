@@ -9,9 +9,9 @@ type (
 	Index struct {
 		Namespace map[string]string
 
-		_nameToPrefix  map[string]string
-		_viewsByPrefix map[string]int
-		_viewsByName   map[string]int
+		_nameToNamespace map[string]string
+		_viewsByPrefix   map[string]int
+		_viewsByName     map[string]int
 
 		_viewDetails []*ViewDetails
 	}
@@ -47,8 +47,8 @@ func (i *Index) ensureIndexes() {
 		i._viewsByName = map[string]int{}
 	}
 
-	if i._nameToPrefix == nil {
-		i._nameToPrefix = map[string]string{}
+	if i._nameToNamespace == nil {
+		i._nameToNamespace = map[string]string{}
 	}
 }
 
@@ -76,9 +76,13 @@ func (i *Index) indexViews(view *view.View, path string, mainView *view.View) {
 		i.indexViews(&view.With[relationIndex].Of.View, aPath, mainView)
 	}
 
-	for prefix, viewName := range i.Namespace {
-		i._nameToPrefix[viewName] = prefix
+	for namespace, viewName := range i.Namespace {
+		i._nameToNamespace[viewName] = namespace
 	}
+}
+
+func (i *Index) ViewNamespace(aView *view.View) string {
+	return i._nameToNamespace[aView.Name]
 }
 
 func (i *Index) indexViewsByPrefix(mainView *view.View) error {
@@ -123,6 +127,6 @@ func (i *Index) viewByPrefix(prefix string) (*view.View, bool) {
 }
 
 func (i *Index) prefixByView(aView *view.View) (string, bool) {
-	name, ok := i._nameToPrefix[aView.Name]
+	name, ok := i._nameToNamespace[aView.Name]
 	return name, ok
 }

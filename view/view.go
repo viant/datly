@@ -68,8 +68,9 @@ type (
 		OrderBy     bool
 		Limit       bool
 		Offset      bool
+		Projection  bool //enables columns projection from client (default ${NS}_fields= query param)
 		Filterable  []string
-		SqlMethods  []*Method
+		SQLMethods  []*Method
 		_sqlMethods map[string]*Method
 	}
 
@@ -100,11 +101,11 @@ func (m *Method) init(resource *Resource) error {
 
 func (c *Constraints) init(resource *Resource) error {
 	c._sqlMethods = map[string]*Method{}
-	for i, method := range c.SqlMethods {
-		c._sqlMethods[method.Name] = c.SqlMethods[i]
+	for i, method := range c.SQLMethods {
+		c._sqlMethods[method.Name] = c.SQLMethods[i]
 	}
 
-	for _, method := range c.SqlMethods {
+	for _, method := range c.SQLMethods {
 		if err := method.init(resource); err != nil {
 			return err
 		}
@@ -683,6 +684,11 @@ func (v *View) CanUseSelectorOrderBy() bool {
 //CanUseSelectorOffset indicates if Selector.Offset can be used
 func (v *View) CanUseSelectorOffset() bool {
 	return v.Selector.Constraints.Offset
+}
+
+//CanUseSelectorProjection indicates if Selector.Fields can be used
+func (v *View) CanUseSelectorProjection() bool {
+	return v.Selector.Constraints.Projection
 }
 
 //IndexedColumns returns Columns
