@@ -7,21 +7,22 @@ import (
 	"github.com/viant/sqlx/metadata/ast/node"
 	"github.com/viant/sqlx/metadata/ast/parser"
 	"github.com/viant/sqlx/metadata/ast/query"
-	"github.com/viant/toolbox"
 	"strings"
 )
 
 type (
 	Table struct {
-		Ref        string
-		StarExpr   bool
-		Inner      Columns
-		InnerAlias string
-		Columns    Columns
-		Name       string
-		SQL        string
-		Joins      Joins
-		Alias      string
+		Ref         string
+		StarExpr    bool
+		Inner       Columns
+		ColumnTypes map[string]string
+		InnerAlias  string
+		InnerSQL    string
+		Columns     Columns
+		Name        string
+		SQL         string
+		Joins       Joins
+		Alias       string
 
 		ViewMeta *ast.ViewMeta
 	}
@@ -134,18 +135,20 @@ func buildTable(x node.Node) (*Table, error) {
 	switch actual := x.(type) {
 	case *expr.Raw:
 		table.SQL = actual.Raw[1 : len(actual.Raw)-2]
-		innerQuery, _ := parser.ParseQuery(table.SQL)
+		innerSQL, condBlocks := ast.ExtractCondBlock(table.SQL)
+		innerQuery, _ := parser.ParseQuery(innerSQL)
 		if innerQuery != nil && innerQuery.From.X != nil {
 			table.Name = parser.Stringify(innerQuery.From.X)
 			table.Inner = selectItemToColumn(innerQuery)
+			table.InnerSQL = innerSQL
 			table.InnerAlias = innerQuery.From.Alias
-			fmt.Printf("SQL: %v\n", table.SQL)
-			toolbox.Dump(table.Inner)
 		}
 		table.ViewMeta, err = ast.Parse(table.SQL)
 		if err != nil {
 			return nil, err
 		}
+		table.ViewMeta.Expressions = condBlocks
+
 	case *expr.Selector, *expr.Ident:
 		table.Name = parser.Stringify(actual)
 	}

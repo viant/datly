@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
+	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/metadata"
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/metadata/sink"
@@ -41,7 +42,7 @@ func buildXRelations(options *Options, route *router.Resource, viewRoute *router
 				Limit: 40,
 			},
 		}
-		if err := updateViewSQL(options, join.Table, relView); err != nil {
+		if err := updateView(options, join.Table, relView); err != nil {
 			return err
 		}
 
@@ -73,7 +74,10 @@ func buildXRelations(options *Options, route *router.Resource, viewRoute *router
 	return nil
 }
 
-func updateViewSQL(options *Options, table *Table, relView *view.View) error {
+func updateView(options *Options, table *Table, aView *view.View) error {
+	updateTableColumnTypes(options, table)
+	updateParameterTypes(table)
+
 	if viewMeta := table.ViewMeta; viewMeta != nil {
 		var SQL string
 		var err error
@@ -87,7 +91,7 @@ func updateViewSQL(options *Options, table *Table, relView *view.View) error {
 			return err
 		}
 
-		relView.UseBindingPositions = boolPtr(!viewMeta.HasVeltySyntax)
+		aView.UseBindingPositions = boolPtr(!viewMeta.HasVeltySyntax)
 
 		SQLURL := options.SQLURL(table.Alias + "_from")
 		fs := afs.New()
@@ -95,11 +99,16 @@ func updateViewSQL(options *Options, table *Table, relView *view.View) error {
 			return err
 		}
 		_, URI := url.Split(SQLURL, file.Scheme)
-		relView.FromURL = URI
+		aView.FromURL = URI
 
 		if len(viewMeta.Parameters) > 0 || viewMeta.Source != "" {
 			templateParameters := make([]*view.Parameter, len(viewMeta.Parameters))
 			for i, parameter := range viewMeta.Parameters {
+				if table != nil {
+					if paramType, ok := table.ViewMeta.ParameterTypes[parameter.Name]; ok {
+						parameter.Type = paramType
+					}
+				}
 				templateParameters[i] = &view.Parameter{
 					Name: parameter.Id,
 					In: &view.Location{
@@ -112,7 +121,7 @@ func updateViewSQL(options *Options, table *Table, relView *view.View) error {
 				}
 			}
 
-			relView.Template = &view.Template{
+			aView.Template = &view.Template{
 				Source:     "",
 				Parameters: templateParameters,
 			}
@@ -126,13 +135,50 @@ func updateViewSQL(options *Options, table *Table, relView *view.View) error {
 			}
 
 			_, URI = url.Split(sourceURL, file.Scheme)
-			relView.Template.SourceURL = URI
+			aView.Template.SourceURL = URI
 		}
 	}
+
 	return nil
 }
 
+func updateTableColumnTypes(options *Options, table *Table) {
+
+	//TODO read all column per alias from main and join table
+	table.ColumnTypes = map[string]string{}
+	db, _ := options.Connector.New().Db()
+	SQL := "SELECT * FROM " + table.Name + " WHERE 1 = 0"
+	if strings.Contains(strings.ToUpper(table.InnerSQL), "JOIN") {
+		SQL = table.InnerSQL
+		if strings.Contains(strings.ToUpper(table.InnerSQL), "WHERE") {
+			SQL += " AND  1 = 0"
+		}
+	}
+
+	query, err := db.QueryContext(context.Background(), SQL)
+	if err == nil {
+		if types, err := query.ColumnTypes(); err == nil {
+			ioColumns := io.TypesToColumns(types)
+			for _, column := range ioColumns {
+				columnType := column.ScanType().String()
+				if strings.HasPrefix(columnType, "*") {
+					columnType = columnType[1:]
+				}
+				if columnType == "sql.RawBytes" {
+					columnType = "string"
+				}
+				if strings.Contains(columnType, "int") {
+					columnType = "int"
+				}
+				table.ColumnTypes[column.Name()] = columnType
+			}
+		}
+	}
+	fmt.Printf("ColumnTypes: %v\n", table.ColumnTypes)
+}
+
 func createAndEvalauteTemplate(meta *ast.ViewMeta) (string, error) {
+
 	schemaFields := make([]reflect.StructField, len(meta.Parameters))
 	presenceFields := make([]reflect.StructField, len(meta.Parameters))
 

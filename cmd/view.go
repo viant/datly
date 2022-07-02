@@ -46,14 +46,14 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 			log.Println(err)
 		}
 		if xTable != nil {
-			updateGenerate(generate, xTable)
+			updateGenerateOption(generate, xTable)
 		}
 	}
+
 	aView := buildMainView(options, generate, route)
-	if err := updateViewSQL(options, xTable, aView); err != nil {
+	if err := updateView(options, xTable, aView); err != nil {
 		return err
 	}
-
 	var conn *view.Connector
 	var ok bool
 	connector := options.Connector
@@ -101,7 +101,6 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 			}
 		}
 		buildExcludeColumn(xTable, aView, viewRoute)
-
 	}
 	if len(options.Relations) > 0 && conn != nil {
 		db, _ := conn.Db()
@@ -110,10 +109,6 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		if err != nil {
 			return err
 		}
-	}
-	err := addParameters(options, route, aView)
-	if err != nil {
-		return err
 	}
 
 	route.Routes = append(route.Routes, viewRoute)
@@ -186,7 +181,7 @@ func buildMainView(options *Options, generate *Generate, route *router.Resource)
 	return aView
 }
 
-func updateGenerate(generate *Generate, table *Table) {
+func updateGenerateOption(generate *Generate, table *Table) {
 	if table == nil {
 		return
 	}

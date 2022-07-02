@@ -46,12 +46,29 @@ func (f CaseFormat) Caser() (format.Case, error) {
 
 //DetectCase detect case format
 func DetectCase(data ...string) string {
-	if len(data) == 0 || len(data[0]) == 0 {
+	result := "lc"
+	if len(data) > 0 {
+		result = detectCase(data[0])
+	}
+	for i := 1; i < len(data); i++ {
+		if len(data) < 3 {
+			continue
+		}
+		result = detectCase(data[i])
+		if strings.Contains(data[i], "_") {
+			break
+		}
+	}
+	return result
+}
+
+//DetectCase detect case format
+func detectCase(data string) string {
+	if len(data) == 0 || len(data) == 0 {
 		return "lc" ///default
 	}
-
 	result := ""
-	if data[0][0:1] == strings.ToUpper(data[0][0:1]) {
+	if data[0:1] == strings.ToUpper(data[0:1]) {
 		result = "u"
 	} else {
 		result = "l"
@@ -59,7 +76,7 @@ func DetectCase(data ...string) string {
 
 	var hasUnderscore bool
 	for _, text := range data {
-		if strings.Contains(text, "_") {
+		if text == '_' {
 			hasUnderscore = true
 			break
 		}
@@ -67,7 +84,7 @@ func DetectCase(data ...string) string {
 
 	if hasUnderscore {
 		result += "u"
-	} else if data[0][1:2] != strings.ToUpper(data[0][1:2]) {
+	} else if data[1:2] != strings.ToUpper(data[1:2]) {
 		result += "c"
 	} else {
 		result += "u"

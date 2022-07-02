@@ -33,7 +33,6 @@ type (
 
 	Generate struct {
 		Name         string   `short:"N" long:"name" description:"view DbName/route URI" `
-		Parameters   []string `short:"P" long:"params" description:"parameters in form name[:type:location]" `
 		Table        string   `short:"T" long:"table" description:"table" `
 		SQLLocation  string   `short:"S" long:"sql" description:"SQL location" `
 		SQLXLocation string   `short:"X" long:"sqlx" description:"SQLX (extension for relation) location" `

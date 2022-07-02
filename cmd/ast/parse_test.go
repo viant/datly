@@ -76,3 +76,27 @@ func TestParse(t *testing.T) {
 		}
 	}
 }
+
+func TestExtractCondBlock(t *testing.T) {
+	var testCases = []struct {
+		description string
+		SQL         string
+		expect      string
+		exprs       []string
+	}{
+		{
+			SQL: `SELECT * FROM x WHERE 1=1 #if($Has.Id) 
+	id = $Id
+#end`,
+			expect: "SELECT * FROM x WHERE 1=1 ",
+			exprs:  []string{"id = $Id"},
+		},
+	}
+
+	for _, testCase := range testCases {
+		actual, exprs := ast.ExtractCondBlock(testCase.SQL)
+		assert.EqualValues(t, testCase.expect, actual, testCase.description)
+		assert.EqualValues(t, testCase.exprs, exprs, testCase.description)
+
+	}
+}

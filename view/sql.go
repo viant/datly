@@ -17,21 +17,20 @@ import (
 )
 
 func detectColumns(ctx context.Context, resource *Resource, SQL string, v *View, usePlaceholders bool) ([]*Column, error) {
+
 	db, err := v.Connector.Db()
+
 	var args []interface{}
 	if usePlaceholders && v.Template != nil && v.Template.Schema == nil {
 		totalLength := 0
 		for _, parameter := range v.Template.Parameters {
 			totalLength += len(parameter.Positions)
 		}
-
 		args = make([]interface{}, totalLength)
-
 		for _, parameter := range v.Template.Parameters {
 			if err = parameter.Init(ctx, v, resource, nil); err != nil {
 				return nil, err
 			}
-
 			var value interface{}
 			switch parameter.Schema.Type().Kind() {
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,

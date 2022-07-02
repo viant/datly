@@ -2,11 +2,12 @@ package ast
 
 type (
 	ViewMeta struct {
-		Parameters     []*Parameter `json:",omitempty" yaml:",omitempty"`
-		Source         string       `json:",omitempty" yaml:",omitempty"`
-		From           string       `json:",omitempty" yaml:",omitempty"`
-		HasVeltySyntax bool         `json:",omitempty" yaml:",omitempty"`
-
+		Parameters          []*Parameter `json:",omitempty" yaml:",omitempty"`
+		Source              string       `json:",omitempty" yaml:",omitempty"`
+		From                string       `json:",omitempty" yaml:",omitempty"`
+		HasVeltySyntax      bool         `json:",omitempty" yaml:",omitempty"`
+		Expressions         []string
+		ParameterTypes      map[string]string
 		index               map[string]int
 		actualParametersLen int
 	}

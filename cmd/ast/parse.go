@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"bytes"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/parsly"
 	"github.com/viant/velty/ast"
@@ -63,7 +64,6 @@ outer:
 		}
 		viewMeta.From = actualSource
 	}
-
 	return viewMeta, nil
 }
 
@@ -221,4 +221,33 @@ func addParamLocation(cursor *parsly.Cursor, parameter *Parameter) error {
 		}
 		i++
 	}
+}
+
+func ExtractCondBlock(SQL string) (string, []string) {
+	builder := new(bytes.Buffer)
+	var expressions []string
+	cursor := parsly.NewCursor("", []byte(SQL), 0)
+outer:
+	for i := 0; i < len(cursor.Input); i++ {
+		match := cursor.MatchOne(condBlockMatcher)
+		switch match.Code {
+		case parsly.EOF:
+			break outer
+		case condBlockToken:
+			block := match.Text(cursor)[3:]
+			cur := parsly.NewCursor("", []byte(block), 0)
+			match = cur.MatchAfterOptional(whitespaceMatcher, exprGroupMatcher)
+			if match.Code == exprGroupToken {
+				matched := string(cur.Input[cur.Pos:])
+				if index := strings.Index(matched, "#"); index != -1 {
+					expressions = append(expressions, strings.TrimSpace(matched[:index]))
+				}
+			}
+		default:
+			builder.WriteByte(cursor.Input[cursor.Pos])
+			cursor.Pos++
+		}
+	}
+
+	return builder.String(), expressions
 }

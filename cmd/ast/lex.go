@@ -10,13 +10,13 @@ const (
 	whitespaceToken int = iota
 	wordToken
 	colonToken
-
+	condBlockToken
 	squareBracketsToken
 
 	templateHeaderToken
 	templateEndToken
 	paramToken
-
+	exprGroupToken
 	identityToken
 )
 
@@ -31,3 +31,5 @@ var templateEndMatcher = parsly.NewToken(templateEndToken, "Template end", match
 var paramMatcher = parsly.NewToken(paramToken, "Parameter", matcher.NewFragmentsFold([]byte("PARAMETER")))
 
 var identityMatcher = parsly.NewToken(identityToken, "Identity", matchers.NewIdentity())
+var condBlockMatcher = parsly.NewToken(condBlockToken, "#if .... #end", matcher.NewSeqBlock("#if", "#end"))
+var exprGroupMatcher = parsly.NewToken(exprGroupToken, "( .... )", matcher.NewBlock('(', ')', '\\'))
