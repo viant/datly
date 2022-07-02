@@ -102,7 +102,7 @@ datly -N=dept -X=rule.sql
 
 
 
-#### Persisting routes/config in the dist
+#### Persisting routes/config to the local folder
 
 Use -w=location switch
 
