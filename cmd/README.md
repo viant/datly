@@ -100,6 +100,35 @@ datly -N=dept -X=rule.sql
 
 
 
+###### View SQL with velty template and query parameters
+
+```sql
+SELECT 
+    dept.* EXCEPT ORG_ID
+    employee.* EXCEPT DEPT_ID, 
+    organization.* 
+FROM (SELECT * FROM DEPARMENT t) dept
+JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee ON dept.ID = employee.DEPT_ID
+JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
+WHERE 1=1
+#if ($Has.Id)
+AND ID = $Id
+#end
+```
+
+
+###### View SQL with query parameters
+
+```sql
+SELECT 
+    dept.* EXCEPT ORG_ID
+    employee.* EXCEPT DEPT_ID, 
+    organization.* 
+FROM (SELECT * FROM DEPARMENT t) dept
+JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee ON dept.ID = employee.DEPT_ID
+JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
+WHERE ID = $Id
+```
 
 
 #### Persisting routes/config to the local folder
