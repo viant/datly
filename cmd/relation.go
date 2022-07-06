@@ -75,6 +75,10 @@ func buildXRelations(options *Options, route *router.Resource, viewRoute *router
 }
 
 func updateView(options *Options, table *Table, aView *view.View) error {
+	if table == nil {
+		return nil
+	}
+
 	updateTableColumnTypes(options, table)
 	updateParameterTypes(table)
 
@@ -143,7 +147,6 @@ func updateView(options *Options, table *Table, aView *view.View) error {
 }
 
 func updateTableColumnTypes(options *Options, table *Table) {
-
 	//TODO read all column per alias from main and join table
 	table.ColumnTypes = map[string]string{}
 	db, _ := options.Connector.New().Db()
