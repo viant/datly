@@ -18,6 +18,9 @@ Resource:
           - Ref: JWT
           - Ref: CRITERIA_ALC
         Source: "SELECT * FROM employees e WHERE $Unsafe.CRITERIA_ALC.Criteria"
+      Selector:
+        Constraints:
+          Projection: true
 
 
     - Name: roles_acl

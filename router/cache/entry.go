@@ -1,31 +1,61 @@
 package cache
 
 import (
-	"github.com/viant/datly/view"
+	"io"
+	"time"
 )
 
 type (
 	Entry struct {
-		View      *view.View
-		Selectors []byte
-		Data      interface{}
+		meta   Meta
+		id     string
+		key    uint64
+		reader *LineReadCloser
 
-		result []byte
-		key    string
-		found  bool
+		closed bool
+		cache  *Cache
 	}
 
-	Value struct {
-		Selectors []byte
-		Data      []byte
-		ViewName  string
+	Meta struct {
+		View            string
+		Selectors       []byte
+		ExpireAt        time.Time
+		Size            int
+		CompressionType string
+
+		url string
 	}
 )
 
-func (e *Entry) Result() []byte {
-	return e.result
+func (e *Entry) Size() int {
+	return e.meta.Size
 }
 
-func (e *Entry) Found() bool {
-	return e.found
+func (e *Entry) CompressionType() string {
+	return e.meta.CompressionType
+}
+
+func (e *Entry) Close() error {
+	if e.closed {
+		return nil
+	}
+
+	e.closed = true
+	return e.reader.readCloser.Close()
+}
+
+func (e *Entry) Read(p []byte) (int, error) {
+	return e.reader.reader.Read(p)
+}
+
+func (e *Entry) Reader() (io.Reader, bool) {
+	if e.reader != nil {
+		return e.reader.reader, true
+	}
+
+	return nil, false
+}
+
+func (e *Entry) Has() bool {
+	return e.reader != nil
 }

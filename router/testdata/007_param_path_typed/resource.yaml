@@ -15,6 +15,9 @@ Resource:
       Connector:
         Ref: db
       Table: events
+      Selector:
+        Constraints:
+          Projection: true
       Template:
         Source: "        
           SELECT * FROM EVENTS WHERE 0=0 

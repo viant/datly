@@ -11,9 +11,14 @@ Resource:
       Connector:
         Ref: db
       Table: events
+      Selector:
+        Constraints:
+          Projection: true
       Cache:
-        URL: /
+        Location: mem:///cache
         TimeToLiveMs: 100000
+        PartSize: 1024
+        Size: 1024
 
   Connectors:
     - Name: db

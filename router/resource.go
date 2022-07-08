@@ -1,7 +1,6 @@
 package router
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"github.com/google/uuid"
@@ -18,7 +17,6 @@ import (
 	"github.com/viant/datly/view/discover"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
-	"net/http"
 	"strings"
 	"time"
 )
@@ -71,17 +69,19 @@ func (r *Redirect) TimeToLive() time.Duration {
 	return time.Duration(r.TimeToLiveMs) * time.Millisecond
 }
 
-func (r *Redirect) Apply(ctx context.Context, viewName string, payload []byte, encoding string, response http.ResponseWriter) (*option.PreSign, error) {
+func (r *Redirect) Apply(ctx context.Context, viewName string, payload PayloadReader) (*option.PreSign, error) {
 	fs := afs.New()
 	UUID := uuid.New()
 	URL := url.Join(r.StorageURL, normalizeStorageURL(viewName), normalizeStorageURL(UUID.String())) + ".json"
 	preSign := option.NewPreSign(r.TimeToLive())
 	kv := []string{content.Type, ContentTypeJSON}
-	if encoding != "" {
-		kv = append(kv, content.Encoding, encoding)
+	compressionType := payload.CompressionType()
+
+	if compressionType != "" {
+		kv = append(kv, content.Encoding, compressionType)
 	}
 	meta := content.NewMeta(kv...)
-	err := fs.Upload(ctx, URL, file.DefaultFileOsMode, bytes.NewReader(payload), preSign, meta)
+	err := fs.Upload(ctx, URL, file.DefaultFileOsMode, payload, preSign, meta)
 	return preSign, err
 }
 

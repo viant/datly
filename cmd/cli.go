@@ -13,16 +13,17 @@ import (
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/openapi3"
 	"gopkg.in/yaml.v3"
+	"io"
 	"log"
 	"os"
 )
 
-func Run(args []string) {
+func New(args []string, logger io.Writer) *standalone.Server {
 	os.Setenv("AWS_SDK_LOAD_CONFIG", "true")
 	options := &Options{}
 	_, err := flags.ParseArgs(options, args)
 	if isHelOption(args) {
-		return
+		return nil
 	}
 	if err != nil {
 		log.Fatal(err)
@@ -37,7 +38,7 @@ func Run(args []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	reportContent("------------ config ------------\n\t "+options.ConfigURL, options.ConfigURL)
+	reportContent(logger, "------------ config ------------\n\t "+options.ConfigURL, options.ConfigURL)
 	var authService *cognito.Service
 	if config.Cognito != nil {
 		if authService, err = lambda.InitAuthService(config.Config); err != nil {
@@ -47,15 +48,15 @@ func Run(args []string) {
 	}
 
 	if URL := options.DepURL("connections"); URL != "" {
-		reportContent("---------- connections: -----------\n\t"+URL, URL)
+		reportContent(logger, "---------- connections: -----------\n\t"+URL, URL)
 	}
 
 	if URL := options.RouterURL(); URL != "" {
-		reportContent("-------------- view --- -----------\n\t"+URL, URL)
+		reportContent(logger, "-------------- view --- -----------\n\t"+URL, URL)
 	}
 	if options.WriteLocation != "" {
 		dumpConfiguration(options)
-		return
+		return nil
 	}
 
 	var srv *standalone.Server
@@ -75,8 +76,9 @@ func Run(args []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("starting endpoint: %v\n", config.Endpoint.Port)
-	_ = srv.ListenAndServe()
+
+	_, _ = logger.Write([]byte(fmt.Sprintf("starting endpoint: %v\n", config.Endpoint.Port)))
+	return srv
 }
 
 func dumpConfiguration(options *Options) {
@@ -89,11 +91,11 @@ func dumpConfiguration(options *Options) {
 	}))
 }
 
-func reportContent(message string, URL string) {
-	fmt.Println(message)
+func reportContent(logger io.Writer, message string, URL string) {
+	_, _ = logger.Write([]byte(message))
 	fs := afs.New()
 	data, _ := fs.DownloadWithURL(context.Background(), URL)
-	fmt.Printf("%s\n", data)
+	_, _ = logger.Write([]byte(fmt.Sprintf("%s\n", data)))
 }
 
 func isHelOption(args []string) bool {

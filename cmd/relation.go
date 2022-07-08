@@ -249,14 +249,33 @@ func buildRelations(options *Options, meta *metadata.Service, db *sql.DB, route 
 			if !strings.Contains(rel, ":") {
 				return fmt.Errorf("invalid relation: %v, expected name:table", rel)
 			}
-			pair := strings.SplitN(rel, ":", 2)
+			pair := strings.SplitN(rel, ":", 3)
 			relName := pair[0]
 			relTable := pair[1]
-			fk, err := readForeignKeys(options, meta, db, relTable)
+			relationCardinality := view.Many
+			if len(pair) > 2 {
+				relationCardinality = view.Cardinality(pair[2])
+			}
+
+			if relationCardinality == "" {
+				relationCardinality = view.Many
+			}
+
+			fk, err := readForeignKeys(options, meta, db, relTable, relationCardinality)
 			if err != nil {
 				fmt.Printf("skiping relation: %v due to %v", rel, err)
 				continue
 			}
+
+			var childColumn, parentColumn string
+			if relationCardinality == view.Many {
+				parentColumn = fk[0].ReferenceColumn
+				childColumn = fk[0].Column
+			} else {
+				childColumn = fk[0].ReferenceColumn
+				parentColumn = fk[0].Column
+			}
+
 			relView := &view.View{
 				Name:  relName,
 				Table: relTable,
@@ -269,10 +288,10 @@ func buildRelations(options *Options, meta *metadata.Service, db *sql.DB, route 
 				Name: aView.Name + relName,
 				Of: &view.ReferenceView{
 					View:   view.View{Reference: shared.Reference{Ref: relName}, Name: relName + "#"},
-					Column: fk[0].Column,
+					Column: childColumn,
 				},
 				Cardinality: view.Many,
-				Column:      fk[0].ReferenceColumn,
+				Column:      parentColumn,
 				Holder:      strings.Title(relName),
 			})
 
@@ -282,17 +301,29 @@ func buildRelations(options *Options, meta *metadata.Service, db *sql.DB, route 
 	return nil
 }
 
-func readForeignKeys(options *Options, meta *metadata.Service, db *sql.DB, relTable string) ([]sink.Key, error) {
-	fk := []sink.Key{}
-	err := meta.Info(context.Background(), db, info.KindForeignKeys, &fk, option.NewArgs("", options.Connector.DbName, relTable))
+func readForeignKeys(options *Options, meta *metadata.Service, db *sql.DB, relTable string, cardinality view.Cardinality) ([]sink.Key, error) {
+	var fk []sink.Key
+
+	var table, referencedTable string
+	if strings.Title(string(cardinality)) == string(view.One) {
+		table = options.Table
+		referencedTable = relTable
+	} else {
+		table = relTable
+		referencedTable = options.Table
+	}
+
+	err := meta.Info(context.Background(), db, info.KindForeignKeys, &fk, option.NewArgs("", options.Connector.DbName, table))
 	if err != nil {
 		return nil, err
 	}
+
 	var result = make([]sink.Key, 0)
 	for i, candidate := range fk {
-		if candidate.ReferenceTable == options.Table {
+		if candidate.ReferenceTable == referencedTable {
 			result = append(result, fk[i])
 		}
 	}
+
 	return result, err
 }

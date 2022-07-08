@@ -8,6 +8,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/go-playground/validator v9.31.0+incompatible
 	github.com/go-sql-driver/mysql v1.6.0
+	github.com/goccy/go-json v0.9.7
 	github.com/golang-jwt/jwt/v4 v4.4.1
 	github.com/google/gops v0.3.23
 	github.com/google/uuid v1.3.0
@@ -27,7 +28,7 @@ require (
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/parsly v0.0.0-20220701205749-237fda4a6158
 	github.com/viant/scy v0.0.0-20220525181307-5c0db5da0082
-	github.com/viant/sqlx v0.0.0-20220701215819-77ed20f3782f
+	github.com/viant/sqlx v0.0.0-20220708214042-a307a6b010bf
 	github.com/viant/toolbox v0.34.6-0.20220630003140-fb2bf82657c1
 	github.com/viant/velty v0.1.1-0.20220615222300-d36908b3bf21
 	github.com/viant/xunsafe v0.8.1-0.20220609224231-1d3e1fcf7bb6
@@ -36,3 +37,5 @@ require (
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+replace github.com/viant/sqlx => /Users/klarysz/Documents/open_source/sqlx

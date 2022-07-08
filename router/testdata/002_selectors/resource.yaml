@@ -19,6 +19,7 @@ Resource:
           Limit: true
           Offset: true
           Criteria: true
+          Projection: true
           Filterable:
           - '*'
 

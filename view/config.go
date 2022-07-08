@@ -13,15 +13,15 @@ var stringType = reflect.TypeOf("")
 type (
 	Config struct {
 		//TODO: Should order by be a slice?
-		OrderBy     string `json:",omitempty"`
-		Limit       int    `json:",omitempty"`
-		Constraints *Constraints
+		OrderBy     string       `json:",omitempty"`
+		Limit       int          `json:",omitempty"`
+		Constraints *Constraints `json:",omitempty"`
 
-		LimitParam    *Parameter
-		OffsetParam   *Parameter
-		FieldsParam   *Parameter
-		OrderByParam  *Parameter
-		CriteriaParam *Parameter
+		LimitParam    *Parameter `json:",omitempty"`
+		OffsetParam   *Parameter `json:",omitempty"`
+		FieldsParam   *Parameter `json:",omitempty"`
+		OrderByParam  *Parameter `json:",omitempty"`
+		CriteriaParam *Parameter `json:",omitempty"`
 	}
 )
 

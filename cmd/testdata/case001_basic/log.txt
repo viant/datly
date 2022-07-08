@@ -1,0 +1,82 @@
+------------ config ------------
+	 mem://localhost/dev/Datly/config.json{
+	"URL": "mem://localhost/dev/Datly/config.json",
+	"Version": "",
+	"APIPrefix": "/v1/api/",
+	"RouteURL": "mem://localhost/dev/Datly/routes",
+	"DependencyURL": "mem://localhost/dev/Datly/dependencies",
+	"UseCacheFS": false,
+	"SyncFrequencyMs": 5000,
+	"Secrets": null,
+	"Cognito": null,
+	"Meta": {
+		"Version": "",
+		"MetricURI": "/v1/api/meta/metric/",
+		"ConfigURI": "/v1/api/meta/config",
+		"StatusURI": "/v1/api/meta/status",
+		"ViewURI": "/v1/api/meta/view/",
+		"OpenApiURI": "/v1/api/meta/openapi/",
+		"AllowedSubnet": null
+	},
+	"AutoDiscovery": false,
+	"Endpoint": {
+		"Port": 8080,
+		"ReadTimeoutMs": 0,
+		"WriteTimeoutMs": 0,
+		"MaxHeaderBytes": 0
+	},
+	"Info": {
+		"title": "",
+		"version": ""
+	}
+}
+---------- connections: -----------
+	mem://localhost/dev/Datly/dependencies/connections.yamlConnectors:
+    - DSN: /tmp/datly/generator/db.db
+      Driver: sqlite3
+      Name: dev
+      Secret:
+        Key: blowfish://default
+        URL: mem://localhost/resource/mysql.json
+ModTime: "2014-11-12T11:45:26Z"
+
+-------------- view --- -----------
+	mem://localhost/dev/Datly/routes/dev/foos.yamlColumnsDiscovery: false
+Resource:
+    ModTime: "0001-01-01T00:00:00Z"
+    Views:
+        - Connector:
+            Ref: dev
+          Name: foos
+          Selector:
+            Constraints:
+                Criteria: true
+                Filterable:
+                    - '*'
+                Limit: true
+                Offset: true
+                OrderBy: false
+                Projection: true
+            Limit: 40
+Routes:
+    - Cardinality: Many
+      CaseFormat: lc
+      Cors:
+        AllowCredentials: true
+        AllowHeaders:
+            - '*'
+        AllowMethods:
+            - '*'
+        AllowOrigins:
+            - '*'
+        ExposeHeaders:
+            - '*'
+      Method: GET
+      Style: Basic
+      URI: /v1/api/dev/foos
+      View:
+        Ref: foos
+With:
+    - connections
+
+starting endpoint: 8080

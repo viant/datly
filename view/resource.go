@@ -304,10 +304,12 @@ func LoadResourceFromURL(ctx context.Context, URL string, fs afs.Service) (*Reso
 	if err := yaml.Unmarshal(data, &transient); err != nil {
 		return nil, err
 	}
+
 	aMap := map[string]interface{}{}
 	if err := yaml.Unmarshal(data, &aMap); err != nil {
 		return nil, err
 	}
+
 	resource := &Resource{}
 	err = toolbox.DefaultConverter.AssignConverted(resource, aMap)
 	if err != nil {

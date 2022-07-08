@@ -21,13 +21,13 @@ type (
 	//View represents a view View
 	View struct {
 		shared.Reference
-		Connector  *Connector
-		Standalone bool `json:",omitempty"`
-		Name       string
-		Alias      string `json:",omitempty"`
-		Table      string `json:",omitempty"`
-		From       string `json:",omitempty"`
-		FromURL    string
+		Connector  *Connector `json:",omitempty"`
+		Standalone bool       `json:",omitempty"`
+		Name       string     `json:",omitempty"`
+		Alias      string     `json:",omitempty"`
+		Table      string     `json:",omitempty"`
+		From       string     `json:",omitempty"`
+		FromURL    string     `json:",omitempty"`
 
 		Exclude              []string   `json:",omitempty"`
 		Columns              []*Column  `json:",omitempty"`
@@ -46,16 +46,17 @@ type (
 		MatchStrategy MatchStrategy `json:",omitempty"`
 		Batch         *Batch        `json:",omitempty"`
 
-		Logger  *logger.Adapter `json:"-"`
+		Logger  *logger.Adapter `json:",omitempty"`
 		Counter logger.Counter  `json:"-"`
 		Caser   format.Case     `json:",omitempty"`
 
 		_columns  ColumnIndex
 		_excluded map[string]bool
 
-		DiscoverCriteria    *bool
-		AllowNulls          *bool
-		UseBindingPositions *bool
+		DiscoverCriteria    *bool  `json:",omitempty"`
+		AllowNulls          *bool  `json:",omitempty"`
+		UseBindingPositions *bool  `json:",omitempty"`
+		Cache               *Cache `json:",omitempty"`
 
 		initialized  bool
 		newCollector func(dest interface{}, supportParallel bool) *Collector
@@ -70,7 +71,7 @@ type (
 		Offset      bool
 		Projection  bool //enables columns projection from client (default ${NS}_fields= query param)
 		Filterable  []string
-		SQLMethods  []*Method
+		SQLMethods  []*Method `json:",omitempty"`
 		_sqlMethods map[string]*Method
 	}
 
@@ -79,8 +80,8 @@ type (
 	}
 
 	Method struct {
-		Name string
-		Args []*Schema
+		Name string    `json:",omitempty"`
+		Args []*Schema `json:",omitempty"`
 	}
 )
 
@@ -288,6 +289,12 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 
 	if err = v.initTemplate(ctx, resource); err != nil {
 		return err
+	}
+
+	if v.Cache != nil {
+		if err = v.Cache.init(ctx, v.Name); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -581,6 +588,11 @@ func (v *View) inherit(ctx context.Context, resource *Resource, view *View) erro
 
 	if v.UseBindingPositions == nil {
 		v.UseBindingPositions = view.UseBindingPositions
+	}
+
+	if v.Cache == nil && view.Cache != nil {
+		shallowCopy := *view.Cache
+		v.Cache = &shallowCopy
 	}
 
 	return nil

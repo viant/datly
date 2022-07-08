@@ -16,6 +16,7 @@ import (
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox"
+	"io"
 	"net/http"
 	"os"
 	"reflect"
@@ -24,6 +25,7 @@ import (
 	"unsafe"
 )
 
+//TODO: Add to meta response size
 type viewHandler func(response http.ResponseWriter, request *http.Request)
 
 var stringErrorType = reflect.TypeOf(errors.New(""))
@@ -43,11 +45,25 @@ var errorFilters = json.NewFilters(&json.FilterEntry{
 })
 var debugEnabled = os.Getenv("DATLY_DEBUG") != ""
 
-type Router struct {
-	resource   *Resource
-	viewRouter *toolbox.ServiceRouter
-	index      map[string][]int
-	routes     Routes
+type (
+	Router struct {
+		resource   *Resource
+		viewRouter *toolbox.ServiceRouter
+		index      map[string][]int
+		routes     Routes
+	}
+
+	BytesReadCloser struct {
+		bytes *bytes.Buffer
+	}
+)
+
+func (b *BytesReadCloser) Read(p []byte) (int, error) {
+	return b.bytes.Read(p)
+}
+
+func (b *BytesReadCloser) Close() error {
+	return nil
 }
 
 func (r *Router) View(name string) (*view.View, error) {
@@ -180,54 +196,78 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 			return
 		}
 
-		destValue, err := r.readOrLoadFromCache(ctx, route, selectors)
-
+		cacheEntry, err := r.cacheEntry(ctx, route, selectors)
 		if err != nil {
-			r.writeErr(response, route, err, http.StatusBadRequest)
+			r.writeErr(response, route, err, http.StatusInternalServerError)
+		}
+
+		if cacheEntry != nil && cacheEntry.Has() {
+			r.writeResponse(ctx, route, response, request, cacheEntry)
 			return
 		}
 
-		if !r.runAfterFetch(response, request, route, destValue.Interface()) {
-			return
-		}
-
-		r.writeHttpResponse(route, request, response, destValue, selectors)
+		r.writeResponseWithErrorHandler(response, request, ctx, route, selectors, cacheEntry)
 	}
 }
 
-func (r *Router) readOrLoadFromCache(ctx context.Context, route *Route, selectors *view.Selectors) (reflect.Value, error) {
-	destValue := reflect.New(route.View.Schema.SliceType())
-	dest := destValue.Interface()
-	cacheEntry, err := r.cacheEntry(ctx, route, selectors)
+func (r *Router) writeResponseWithErrorHandler(response http.ResponseWriter, request *http.Request, ctx context.Context, route *Route, selectors *view.Selectors, cacheEntry *cache.Entry) {
+	httpCode, err := r.readAndWriteResponse(response, request, ctx, route, selectors, cacheEntry)
 	if err != nil {
-		return destValue, err
+		err = r.normalizeErr(err)
+		message, _ := goJson.Marshal(err)
+		response.Write(message)
+		response.WriteHeader(httpCode)
+	}
+}
+
+func (r *Router) readAndWriteResponse(response http.ResponseWriter, request *http.Request, ctx context.Context, route *Route, selectors *view.Selectors, entry *cache.Entry) (statusCode int, err error) {
+	rValue, err := r.readValue(route, selectors)
+	if err != nil {
+		return http.StatusInternalServerError, err
 	}
 
-	if cacheEntry != nil && cacheEntry.Found() {
-		return destValue, goJson.Unmarshal(cacheEntry.Result(), dest)
+	if !r.runAfterFetch(response, request, route, rValue.Interface()) {
+		return -1, nil
 	}
+
+	resultMarshalled, statusCode, err := r.marshalResult(route, request, selectors, rValue)
+	if err != nil {
+		return statusCode, err
+	}
+
+	payloadReader, err := r.compressIfNeeded(resultMarshalled, route)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	if entry != nil {
+		r.updateCache(ctx, route, entry, payloadReader)
+	}
+
+	r.writeResponse(ctx, route, response, request, payloadReader)
+	return -1, nil
+}
+
+func (r *Router) readValue(route *Route, selectors *view.Selectors) (reflect.Value, error) {
+	destValue := reflect.New(route.View.Schema.SliceType())
+	dest := destValue.Interface()
 
 	session := reader.NewSession(dest, route.View)
 	session.Selectors = selectors
-	if err = reader.New().Read(context.TODO(), session); err != nil {
+	if err := reader.New().Read(context.TODO(), session); err != nil {
 		return destValue, err
-	}
-
-	if cacheEntry != nil {
-		cacheEntry.Data = dest
-		r.updateCache(ctx, route, cacheEntry)
 	}
 
 	return destValue, nil
 }
 
-func (r *Router) updateCache(ctx context.Context, route *Route, cacheEntry *cache.Entry) {
+func (r *Router) updateCache(ctx context.Context, route *Route, cacheEntry *cache.Entry, response *BytesReader) {
 	if !debugEnabled {
-		go r.putCache(ctx, route, cacheEntry)
+		go r.putCache(ctx, route, cacheEntry, response)
 		return
 	}
 
-	r.putCache(ctx, route, cacheEntry)
+	r.putCache(ctx, route, cacheEntry, response)
 }
 
 func (r *Router) cacheEntry(ctx context.Context, route *Route, selectors *view.Selectors) (*cache.Entry, error) {
@@ -235,12 +275,7 @@ func (r *Router) cacheEntry(ctx context.Context, route *Route, selectors *view.S
 		return nil, nil
 	}
 
-	cacheEntry, err := r.createCacheEntry(route, selectors)
-	if err != nil {
-		return nil, err
-	}
-
-	err = route.Cache.Get(ctx, cacheEntry)
+	cacheEntry, err := r.createCacheEntry(ctx, route, selectors)
 	if err != nil {
 		return nil, err
 	}
@@ -248,8 +283,8 @@ func (r *Router) cacheEntry(ctx context.Context, route *Route, selectors *view.S
 	return cacheEntry, nil
 }
 
-func (r *Router) putCache(ctx context.Context, route *Route, cacheEntry *cache.Entry) {
-	_ = route.Cache.Put(ctx, cacheEntry)
+func (r *Router) putCache(ctx context.Context, route *Route, cacheEntry *cache.Entry, payloadReader *BytesReader) {
+	_ = route.Cache.Put(ctx, cacheEntry, payloadReader.buffer.Bytes(), payloadReader.CompressionType())
 }
 
 func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Request, route *Route) (shouldContinue bool) {
@@ -285,52 +320,16 @@ func (r *Router) runAfterFetch(response http.ResponseWriter, request *http.Reque
 	return true
 }
 
-func (r *Router) writeHttpResponse(route *Route, request *http.Request, response http.ResponseWriter, destValue reflect.Value, selectors *view.Selectors) {
-	statusCode, err := r.writeResponse(route, request, response, destValue, selectors)
-	if err != nil {
-		r.writeErr(response, route, err, statusCode)
-	}
-
-}
-
-func (r *Router) writeResponse(route *Route, request *http.Request, response http.ResponseWriter, destValue reflect.Value, selectors *view.Selectors) (int, error) {
+func (r *Router) marshalResult(route *Route, request *http.Request, selectors *view.Selectors, destValue reflect.Value) (result []byte, statusCode int, err error) {
 	filters, err := r.buildJsonFilters(route, selectors)
 	if err != nil {
-		return http.StatusBadRequest, err
+		return nil, http.StatusBadRequest, err
 	}
 	payload, httpStatus, err := r.result(route, request, destValue, filters)
 	if err != nil {
-		return http.StatusBadRequest, err
+		return nil, httpStatus, err
 	}
-
-	var encoding string
-	if compression := route.Compression; compression != nil && compression.MinSizeKb != 0 && len(payload) > compression.MinSizeKb*1024 {
-		bytesReader := bytes.NewReader(payload)
-		buffer, err := Compress(bytesReader)
-		if err != nil {
-			return http.StatusInternalServerError, err
-		}
-		encoding = EncodingGzip
-		payload = buffer.Bytes()
-	}
-
-	if redirect := r.resource.Redirect; redirect != nil {
-		payloadSize := len(payload)
-		if r.inAWS() { //in lambda if payload is binary, it has to be base64 encoded, (in adapter)
-			payloadSize = base64.StdEncoding.EncodedLen(payloadSize)
-		}
-		if redirect := r.resource.Redirect; redirect.MinSizeKb*1024 <= payloadSize {
-			preSign, err := redirect.Apply(context.Background(), route.View.Name, payload, encoding, response)
-			if err != nil {
-				return http.StatusInternalServerError, err
-			}
-			http.Redirect(response, request, preSign.URL, http.StatusMovedPermanently)
-			return http.StatusOK, nil
-		}
-	}
-	r.writePayload(response, payload, httpStatus, encoding)
-	return http.StatusOK, nil
-
+	return payload, httpStatus, nil
 }
 
 func (r *Router) inAWS() bool {
@@ -461,7 +460,7 @@ func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route) in
 	return newResponse.Elem().Interface()
 }
 
-func (r *Router) createCacheEntry(route *Route, selectors *view.Selectors) (*cache.Entry, error) {
+func (r *Router) createCacheEntry(ctx context.Context, route *Route, selectors *view.Selectors) (*cache.Entry, error) {
 	selectors.RWMutex.RLock()
 	defer selectors.RWMutex.RUnlock()
 
@@ -474,10 +473,8 @@ func (r *Router) createCacheEntry(route *Route, selectors *view.Selectors) (*cac
 	if err != nil {
 		return nil, err
 	}
-	return &cache.Entry{
-		View:      route.View,
-		Selectors: marshalled,
-	}, nil
+
+	return route.Cache.Get(ctx, marshalled, route.View.Name)
 }
 
 func (r *Router) normalizeErr(err error) error {
@@ -511,10 +508,11 @@ func (r *Router) ApiPrefix() string {
 	return r.resource.APIURI
 }
 
-func (r *Router) Route(route string) []*Route {
+func (r *Router) Routes(route string) []*Route {
 	if route == "" {
 		return r.routes
 	}
+
 	uriRoutes, ok := r.index[route]
 	if !ok {
 		return []*Route{}
@@ -526,4 +524,67 @@ func (r *Router) Route(route string) []*Route {
 	}
 
 	return routes
+}
+
+func (r *Router) writeResponse(ctx context.Context, route *Route, response http.ResponseWriter, request *http.Request, payloadReader PayloadReader) {
+	defer payloadReader.Close()
+
+	redirected, err := r.redirectIfNeeded(ctx, route, response, request, payloadReader)
+	if redirected {
+		return
+	}
+
+	if err != nil {
+		r.writeErr(response, route, err, http.StatusInternalServerError)
+		return
+	}
+
+	response.Header().Add(content.Type, ContentTypeJSON)
+	response.Header().Add(content.Type, CharsetUTF8)
+	response.Header().Add(ContentLength, strconv.Itoa(payloadReader.Size()))
+	compressionType := payloadReader.CompressionType()
+	if compressionType != "" {
+		response.Header().Set(content.Encoding, compressionType)
+	}
+
+	response.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(response, payloadReader)
+}
+
+func (r *Router) redirectIfNeeded(ctx context.Context, route *Route, response http.ResponseWriter, request *http.Request, payloadReader PayloadReader) (redirected bool, err error) {
+	redirect := r.resource.Redirect
+	if redirect == nil {
+		return false, nil
+	}
+
+	if redirect.MinSizeKb*1024 > payloadReader.Size() {
+		return false, nil
+	}
+
+	preSign, err := redirect.Apply(ctx, route.View.Name, payloadReader)
+	if err != nil {
+		return false, err
+	}
+
+	http.Redirect(response, request, preSign.URL, http.StatusMovedPermanently)
+	return true, nil
+}
+
+func (r *Router) compressIfNeeded(marshalled []byte, route *Route) (*BytesReader, error) {
+	compression := route.Compression
+	if compression == nil || (compression.MinSizeKb > 0 && len(marshalled) <= compression.MinSizeKb*1024) {
+		return NewBytesReader(marshalled, ""), nil
+	}
+
+	buffer, err := Compress(bytes.NewReader(marshalled))
+	if err != nil {
+		return nil, err
+	}
+
+	payloadSize := buffer.Len()
+	if r.inAWS() {
+		payloadSize = base64.StdEncoding.EncodedLen(payloadSize)
+	}
+
+	return AsBytesReader(buffer, EncodingGzip, payloadSize), nil
 }

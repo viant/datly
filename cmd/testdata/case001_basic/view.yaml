@@ -1,0 +1,46 @@
+Alias: t
+Batch:
+  Parent: 10000
+CaseFormat: lc
+Caser: 3
+Columns:
+  - DataType: INTEGER
+    Filterable: true
+    Name: id
+    Nullable: true
+  - DataType: text
+    Filterable: true
+    Name: name
+    Nullable: true
+  - DataType: numeric
+    Filterable: true
+    Name: price
+    Nullable: true
+Connector:
+  DSN: /tmp/datly/generator/db.db
+  Driver: sqlite3
+  Name: dev
+  Secret:
+    Data: null
+    Key: blowfish://default
+    URL: mem://localhost/resource/mysql.json
+Logger:
+  Name: ""
+MatchStrategy: read_matched
+Name: foos
+Schema: {}
+Selector:
+  Constraints:
+    Criteria: true
+    Filterable:
+      - '*'
+    Limit: true
+    Offset: true
+    OrderBy: false
+    Projection: true
+  Limit: 40
+Table: foos
+Template:
+  PresenceSchema: {}
+  Schema: {}
+  Source: foos

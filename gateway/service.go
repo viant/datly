@@ -282,7 +282,7 @@ func (r *Service) Routes(route string) []*router.Route {
 	routes := make([]*router.Route, 0)
 
 	for _, viewRouter := range r.routers {
-		routes = append(routes, viewRouter.Route(route)...)
+		routes = append(routes, viewRouter.Routes(route)...)
 	}
 
 	return routes

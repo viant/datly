@@ -36,8 +36,8 @@ type (
 	//In our example it would be Account
 	ReferenceView struct {
 		View          // event type
-		Column string //
-		Field  string //
+		Column string `json:",omitempty"`
+		Field  string `json:",omitempty"`
 		_field *xunsafe.Field
 	}
 )

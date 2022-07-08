@@ -700,7 +700,7 @@ func inheritCoalesceTypes() usecase {
 }
 
 func criteriaWhere() usecase {
-	type Event struct {
+	type Event3 struct {
 		Id          int
 		Quantity    float64
 		EventTypeId int
@@ -719,7 +719,7 @@ func criteriaWhere() usecase {
 		Alias:                "ev",
 		Table:                "events",
 		From:                 `SELECT * FROM events as e ` + string(keywords.WhereCriteria),
-		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
+		Schema:               view.NewSchema(reflect.TypeOf(&Event3{})),
 		InheritSchemaColumns: true,
 	})
 
@@ -729,7 +729,7 @@ func criteriaWhere() usecase {
 		description: "where criteria",
 		resource:    resource,
 		expect:      `[{"Id":1,"Quantity":33.23432374000549,"EventTypeId":2},{"Id":10,"Quantity":21.957962334156036,"EventTypeId":11},{"Id":100,"Quantity":5.084940046072006,"EventTypeId":111}]`,
-		dest:        new([]*Event),
+		dest:        new([]*Event3),
 	}
 }
 
@@ -1029,16 +1029,16 @@ func inheritColumnsView() usecase {
 }
 
 func eventTypeViewWithEventTypeIdColumn() usecase {
-	type Event struct {
+	type Event2 struct {
 		Id        int
 		Quantity  float64
 		Timestamp time.Time
 		TypeId    int `sqlx:"name=event_type_id"`
 	}
 
-	type EventType struct {
+	type EventType2 struct {
 		Id     int
-		Events []*Event
+		Events []*Event2
 		Name   string
 	}
 
@@ -1054,7 +1054,7 @@ func eventTypeViewWithEventTypeIdColumn() usecase {
 		Name:                 "event-type_events",
 		Table:                "event_types",
 		InheritSchemaColumns: true,
-		Schema:               view.NewSchema(reflect.TypeOf(&EventType{})),
+		Schema:               view.NewSchema(reflect.TypeOf(&EventType2{})),
 		With: []*view.Relation{
 			{
 				Name: "event-type_rel",
@@ -1077,7 +1077,7 @@ func eventTypeViewWithEventTypeIdColumn() usecase {
 	return usecase{
 		description: "event type -> events, many to one, programmatically, with EventTypeId column",
 		expect:      `[{"Id":1,"Events":null,"Name":"type 1"},{"Id":2,"Events":[{"Id":1,"Quantity":33.23432374000549,"Timestamp":"2019-03-11T02:20:33Z","TypeId":2}],"Name":"type 6"},{"Id":4,"Events":null,"Name":"type 4"},{"Id":5,"Events":null,"Name":"type 5"},{"Id":11,"Events":[{"Id":10,"Quantity":21.957962334156036,"Timestamp":"2019-03-15T12:07:33Z","TypeId":11}],"Name":"type 2"},{"Id":111,"Events":[{"Id":100,"Quantity":5.084940046072006,"Timestamp":"2019-04-10T05:15:33Z","TypeId":111}],"Name":"type 3"}]`,
-		dest:        new([]*EventType),
+		dest:        new([]*EventType2),
 		view:        "event-type_events",
 		dataset:     "dataset001_events/",
 		resource:    resource,

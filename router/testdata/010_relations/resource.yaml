@@ -19,6 +19,7 @@ Resource:
           Limit: true
           Offset: true
           Criteria: true
+          Projection: true
           Filterable:
             - '*'
       With:
@@ -28,6 +29,9 @@ Resource:
           Holder: EventType
           Of:
             Ref: event_types#ref
+            Selector:
+              Constraints:
+                Projection: true
             Name: event_types
             Column: id
 

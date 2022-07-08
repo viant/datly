@@ -1,0 +1,94 @@
+openapi: 3.1.0
+info:
+  title: ""
+  version: ""
+paths:
+  /v1/api/dev/events:
+    get:
+      parameters:
+        - name: _criteria
+          in: query
+          description: allows to filter view events data that matches given criteria
+          schema:
+            type: string
+        - name: _limit
+          in: query
+          description: allows to limit events view data returned from db
+          schema:
+            type: integer
+            format: int64
+        - name: _offset
+          in: query
+          description: allows to skip first n  view events records, it has to be used alongside the limit
+          schema:
+            type: integer
+            format: int64
+        - name: _fields
+          in: query
+          description: allows to control view events fields present in response
+          style: form
+          explode: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  event_types:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        accountId:
+                          type: integer
+                          format: int64
+                        id:
+                          type: integer
+                          format: int64
+                        name:
+                          type: string
+                  eventTypeId:
+                    type: integer
+                    format: int64
+                  id:
+                    type: integer
+                    format: int64
+                  quantity:
+                    type: number
+                    format: double
+                  timestamp:
+                    type: string
+                    format: 2006-01-02T15:04:05Z07:00
+                  userId:
+                    type: integer
+                    format: int64
+                description: Success object schema
+        Default:
+          description: Error response. The view and param may be empty, but one of the message or object should be specified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Message:
+                    type: string
+                    nullable: true
+                  Object:
+                    anyOf:
+                      - type: string
+                      - type: object
+                      - type: array
+                      - type: number
+                      - type: boolean
+                    nullable: true
+                  Param:
+                    type: string
+                    nullable: true
+                  View:
+                    type: string
+                    nullable: true
+                description: Error object schema

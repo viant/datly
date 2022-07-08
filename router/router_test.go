@@ -540,17 +540,18 @@ func TestRouter(t *testing.T) {
 			},
 			expected: `[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}]`,
 		},
-		//{
-		//	description: "slices | filters",
-		//	resourceURI: "024_view_cache",
-		//	uri:         "/api/events?filters=%7B%22column%22:%5B%7B%22column_name%22:%22user_id%22,%22search_values%22:%5B2,11%5D,%22inclusive%22:true%7D,%7B%22column_name%22:%22event_type_id%22,%22search_values%22:%5B2,11%5D,%22inclusive%22:true%7D%5D%7D",
-		//	method:      http.MethodGet,
-		//	envVariables: map[string]string{
-		//		"alias": "t",
-		//		"table": "events",
-		//	},
-		//	extraRequests: 1,
-		//},
+		{
+			description: "slices | filters",
+			resourceURI: "024_view_cache",
+			uri:         "/api/events?filters=%7B%22column%22:%5B%7B%22column_name%22:%22user_id%22,%22search_values%22:%5B2,11%5D,%22inclusive%22:true%7D,%7B%22column_name%22:%22event_type_id%22,%22search_values%22:%5B2,11%5D,%22inclusive%22:true%7D%5D%7D",
+			method:      http.MethodGet,
+			envVariables: map[string]string{
+				"alias": "t",
+				"table": "events",
+			},
+			extraRequests: 1,
+			expected:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {
@@ -559,7 +560,6 @@ func TestRouter(t *testing.T) {
 			testcases[i-1].cleanup()
 		}
 
-		//for i, tCase := range testcases {
 		fmt.Println("Running testcase " + strconv.Itoa(i) + ", " + tCase.description)
 		testUri := path.Join(testLocation, "testdata")
 		routingHandler, ok := tCase.init(t, testUri)
@@ -629,7 +629,8 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 	}
 	if !assertly.AssertValues(t, actualOpenApi, generated, c.description) {
 		toolbox.Dump(actualOpenApi)
-		toolbox.Dump(generated)
+		actBytes, _ := yaml.Marshal(actualOpenApi)
+		toolbox.Dump(string(actBytes))
 	}
 
 	return aRouter, true

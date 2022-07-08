@@ -16,9 +16,9 @@ import (
 type Connector struct {
 	shared.Reference
 	Secret *scy.Resource `json:",omitempty"`
-	Name   string
-	Driver string
-	DSN    string
+	Name   string        `json:",omitempty"`
+	Driver string        `json:",omitempty"`
+	DSN    string        `json:",omitempty"`
 	//TODO add secure password storage
 	db          *sql.DB
 	initialized bool

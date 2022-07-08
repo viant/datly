@@ -24,6 +24,7 @@ Resource:
           Limit: true
           Offset: true
           Criteria: true
+          Projection: true
           Filterable:
             - '*'
       With:
@@ -40,6 +41,7 @@ Resource:
       Table: event_types
       Selector:
         Constraints:
+          Projection: true
           Filterable:
             - '*'
       Connector:

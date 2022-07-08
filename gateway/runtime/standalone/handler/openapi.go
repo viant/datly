@@ -24,7 +24,11 @@ func (o *OpenAPI) ServeHTTP(writer http.ResponseWriter, req *http.Request) {
 	if index := strings.Index(URI, o.baseURL); index != -1 {
 		URI = URI[index+len(o.baseURL):]
 	}
-	routeURL := o.APIPrefix + URI
+
+	var routeURL string
+	if URI != "" {
+		routeURL = o.APIPrefix + URI
+	}
 	routes := o.routesFn(routeURL)
 	if len(routes) == 0 {
 		writer.WriteHeader(http.StatusNotFound)
@@ -46,6 +50,7 @@ func (o *OpenAPI) ServeHTTP(writer http.ResponseWriter, req *http.Request) {
 	}
 	writer.Header().Set("Content-Type", "text/yaml")
 	writer.Write(specMarshal)
+	writer.WriteHeader(http.StatusOK)
 }
 
 func NewOpenApi(aPIPrefix, baseURL string, info openapi3.Info, routesFn RoutesFn) *OpenAPI {

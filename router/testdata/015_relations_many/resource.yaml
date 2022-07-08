@@ -13,6 +13,9 @@ Resource:
       Connector:
         Ref: db
       Table: event_types
+      Selector:
+        Constraints:
+          Projection: true
       With:
         - Name: event_event-types
           Cardinality: Many
@@ -27,6 +30,9 @@ Resource:
 
     - Name: events#ref
       Table: events
+      Selector:
+        Constraints:
+          Projection: true
       Connector:
         Ref: db
 

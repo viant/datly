@@ -17,6 +17,7 @@ Resource:
         Constraints:
           Filterable:
             - '*'
+          Projection: true
 
   Connectors:
     - Name: db

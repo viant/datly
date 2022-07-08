@@ -8,6 +8,7 @@ import (
 	"github.com/viant/gmetric/counter"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/read"
+	"github.com/viant/sqlx/option"
 	"sync"
 	"time"
 )
@@ -171,7 +172,13 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 
 func (s *Service) query(ctx context.Context, view *view.View, db *sql.DB, SQL string, collector *view.Collector, args []interface{}, visitor view.Visitor) error {
 	begin := time.Now()
-	reader, err := read.New(ctx, db, SQL, collector.NewItem(), io.Resolve(collector.Resolve))
+
+	var options = []option.Option{io.Resolve(collector.Resolve)}
+	if view.Cache != nil {
+		options = append(options, view.Cache.Service())
+	}
+
+	reader, err := read.New(ctx, db, SQL, collector.NewItem(), options...)
 	if err != nil {
 		return err
 	}

@@ -12,7 +12,7 @@ paths:
                   style: form
                   explode: false
                   schema:
-                    type: string
+                      type: string
             responses:
                 "200":
                     description: Success response

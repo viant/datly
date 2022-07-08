@@ -16,17 +16,13 @@ var boolType = reflect.TypeOf(true)
 
 type (
 	Template struct {
-		_view *View
+		Source         string       `json:",omitempty" yaml:"source,omitempty"`
+		SourceURL      string       `json:",omitempty" yaml:"sourceURL,omitempty"`
+		Schema         *Schema      `json:",omitempty" yaml:"schema,omitempty"`
+		PresenceSchema *Schema      `json:",omitempty" yaml:"presenceSchema,omitempty"`
+		Parameters     []*Parameter `json:",omitempty" yaml:"parameters,omitempty"`
 
-		Source         string  `json:",omitempty"`
-		SourceURL      string  `json:",omitempty"`
-		Schema         *Schema `json:",omitempty"`
-		PresenceSchema *Schema `json:",omitempty"`
-
-		Parameters []*Parameter `json:",omitempty"`
-
-		sqlEvaluator *Evaluator
-
+		sqlEvaluator     *Evaluator
 		accessors        *Accessors
 		_fields          []reflect.StructField
 		_fieldIndex      map[string]int
@@ -34,6 +30,7 @@ type (
 		initialized      bool
 		isTemplate       bool
 		wasEmpty         bool
+		_view            *View
 	}
 
 	Evaluator struct {

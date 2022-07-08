@@ -13,6 +13,7 @@ Resource:
       Table: events
       Selector:
         Constraints:
+          Projection: true
           Criteria: true
         CriteriaParam:
           Ref: Filters

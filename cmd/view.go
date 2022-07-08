@@ -14,7 +14,6 @@ import (
 	"github.com/viant/toolbox/format"
 	"log"
 	"strings"
-	"time"
 )
 
 func buildViewWithRouter(options *Options, config *standalone.Config, connectors map[string]*view.Connector) error {
@@ -114,7 +113,7 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	route.Routes = append(route.Routes, viewRoute)
 
 	route.With = []string{"connections"}
-	dependency := &view.Resource{ModTime: time.Now()}
+	dependency := &view.Resource{ModTime: TimeNow()}
 	dependency.Connectors = route.Resource.Connectors
 	depURL := options.DepURL("connections")
 	_ = fsAddYAML(fs, depURL, dependency)

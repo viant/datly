@@ -16,6 +16,9 @@ Resource:
       Connector:
         Ref: db
       Table: events
+      Selector:
+        Constraints:
+          Projection: true
       Template:
         Source: "SELECT * FROM events WHERE id = ${Unsafe.EventId}"
         Parameters:

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/gops/agent"
 	_ "github.com/viant/afs/embed"
@@ -18,11 +19,23 @@ import (
 	"os"
 )
 
+type ConsoleWriter struct {
+}
+
+func (c *ConsoleWriter) Write(data []byte) (n int, err error) {
+	fmt.Println(string(data))
+	return len(data), nil
+}
+
 func main() {
 	go func() {
 		if err := agent.Listen(agent.Options{}); err != nil {
 			log.Fatal(err)
 		}
 	}()
-	cmd.Run(os.Args[1:])
+
+	server := cmd.New(os.Args[1:], &ConsoleWriter{})
+	if err := server.ListenAndServe(); err != nil {
+		panic(err.Error())
+	}
 }

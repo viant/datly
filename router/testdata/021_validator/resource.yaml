@@ -21,6 +21,9 @@ Resource:
         Source: 'SELECT * FROM EVENTS'
         Parameters:
           - Ref: EventFilter
+      Selector:
+        Constraints:
+          Projection: true
 
   Connectors:
     - Name: db

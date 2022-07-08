@@ -36,8 +36,16 @@ func SingletonWithConfig(config *Config, visitors codec.Visitors, types view.Typ
 		ctx := context.Background()
 		service, err = New(ctx, config, visitors, types, metric)
 	})
+
 	if err != nil {
 		onceWithConfig = sync.Once{}
 	}
+
 	return service, err
+}
+
+func ResetSingleton() {
+	service = nil
+	once = sync.Once{}
+	onceWithConfig = sync.Once{}
 }

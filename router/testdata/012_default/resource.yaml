@@ -11,6 +11,9 @@ Resource:
       Connector:
         Ref: db
       Table: events
+      Selector:
+        Constraints:
+          Projection: true
       Columns:
         - Name: id
           DataType: int

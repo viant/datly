@@ -1,0 +1,105 @@
+Alias: t
+Batch:
+  Parent: 10000
+CaseFormat: lu
+Caser: 5
+Columns:
+  - DataType: INTEGER
+    Filterable: true
+    Name: id
+    Nullable: true
+  - DataType: DATETIME
+    Filterable: true
+    Name: timestamp
+    Nullable: true
+  - DataType: INTEGER
+    Filterable: true
+    Name: event_type_id
+    Nullable: true
+  - DataType: DECIMAL(7, 2)
+    Filterable: true
+    Name: quantity
+    Nullable: true
+  - DataType: INTEGER
+    Filterable: true
+    Name: user_id
+    Nullable: true
+Connector:
+  DSN: /tmp/datly/generator/db.db
+  Driver: sqlite3
+  Name: dev
+  Secret:
+    Data: null
+    Key: blowfish://default
+    URL: mem://localhost/resource/mysql.json
+Logger:
+  Name: ""
+MatchStrategy: read_matched
+Name: events
+Schema: {}
+Selector:
+  Constraints:
+    Criteria: true
+    Filterable:
+      - '*'
+    Limit: true
+    Offset: true
+    OrderBy: false
+    Projection: true
+  Limit: 40
+Table: events
+Template:
+  PresenceSchema: {}
+  Schema: {}
+  Source: events
+With:
+  - Cardinality: Many
+    Column: event_type_id
+    Holder: Event_types
+    Name: eventsevent_types
+    Of:
+      Alias: t
+      Batch:
+        Parent: 10000
+      CaseFormat: lu
+      Caser: 5
+      Column: id
+      Columns:
+        - DataType: INTEGER
+          Name: id
+          Nullable: true
+        - DataType: VARCHAR(255)
+          Name: name
+          Nullable: true
+        - DataType: INTEGER
+          Name: account_id
+          Nullable: true
+      Connector:
+        DSN: /tmp/datly/generator/db.db
+        Driver: sqlite3
+        Name: dev
+        Secret:
+          Data: null
+          Key: blowfish://default
+          URL: mem://localhost/resource/mysql.json
+      Field: id
+      Logger:
+        Name: ""
+      MatchStrategy: read_matched
+      Name: event_types#
+      Ref: event_types
+      Schema: {}
+      Selector:
+        Constraints:
+          Criteria: false
+          Filterable: null
+          Limit: false
+          Offset: false
+          OrderBy: false
+          Projection: false
+        Limit: 40
+      Table: event_types
+      Template:
+        PresenceSchema: {}
+        Schema: {}
+        Source: event_types

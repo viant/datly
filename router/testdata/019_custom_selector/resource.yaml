@@ -18,6 +18,7 @@ Resource:
           - Ref: Table
       Selector:
         Constraints:
+          Projection: true
           OrderBy: true
           Limit: true
           Criteria: true

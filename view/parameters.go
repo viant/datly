@@ -20,16 +20,16 @@ type (
 	//Parameter describes parameters used by the Criteria to filter the view.
 	Parameter struct {
 		shared.Reference
-		Name         string
-		PresenceName string
+		Name         string `json:",omitempty"`
+		PresenceName string `json:",omitempty"`
 
-		In          *Location
-		Required    *bool
-		Description string
-		Style       string
-		Schema      *Schema
+		In          *Location `json:",omitempty"`
+		Required    *bool     `json:",omitempty"`
+		Description string    `json:",omitempty"`
+		Style       string    `json:",omitempty"`
+		Schema      *Schema   `json:",omitempty"`
 
-		Codec *Codec
+		Codec *Codec `json:",omitempty"`
 
 		initialized bool
 		view        *View
@@ -41,16 +41,16 @@ type (
 
 	//Location tells how to get parameter value.
 	Location struct {
-		Kind Kind
-		Name string
+		Kind Kind   `json:",omitempty"`
+		Name string `json:",omitempty"`
 	}
 
 	CodecFn func(context context.Context, rawValue string, options ...interface{}) (interface{}, error)
 	Codec   struct {
-		Name      string
-		Source    string
-		SourceURL string
-		Schema    *Schema
+		Name      string  `json:",omitempty"`
+		Source    string  `json:",omitempty"`
+		SourceURL string  `json:",omitempty"`
+		Schema    *Schema `json:",omitempty"`
 		_codecFn  CodecFn //shall rename to codec ?
 	}
 )

@@ -286,6 +286,10 @@ func populateFields(ctx context.Context, selector *view.Selector, inputFormat fo
 		return err
 	}
 
+	if fieldValue != "" && !details.View.Selector.Constraints.Projection {
+		return fmt.Errorf("can't use projection on view %v", details.View.Name)
+	}
+
 	if err = buildFields(inputFormat, details.View, selector, fieldValue, separator); err != nil {
 		return err
 	}

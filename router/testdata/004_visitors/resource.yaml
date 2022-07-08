@@ -16,6 +16,9 @@ Resource:
       Connector:
         Ref: db
       Table: events
+      Selector:
+        Constraints:
+          Projection: true
       Schema:
         Name: event
 
