@@ -118,11 +118,16 @@ func (s *Service) authorizeRequest(w http.ResponseWriter, r *http.Request) bool 
 	return false
 }
 
-func (s *Service) Value(ctx context.Context, raw string, options ...interface{}) (interface{}, error) {
-	if index := strings.Index(raw, " "); index != -1 {
-		raw = raw[index+1:]
+func (s *Service) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+	rawString, ok := raw.(string)
+	if !ok {
+		return nil, fmt.Errorf("expected to got string but got %T", raw)
 	}
-	claims, err := s.VerifyIdentity(ctx, raw)
+
+	if index := strings.Index(rawString, " "); index != -1 {
+		rawString = rawString[index+1:]
+	}
+	claims, err := s.VerifyIdentity(ctx, rawString)
 	return claims, err
 }
 

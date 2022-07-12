@@ -86,6 +86,18 @@ type usecase struct {
 	visitors    codec.Visitors
 }
 
+type StringsCodec struct {
+}
+
+func (s *StringsCodec) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+	rawString, ok := raw.(string)
+	if !ok {
+		return nil, fmt.Errorf("expected to got string but got %T", raw)
+	}
+
+	return strings.Split(rawString, ","), nil
+}
+
 func TestRead(t *testing.T) {
 	type Event struct {
 		ID          int
@@ -453,6 +465,16 @@ func TestRead(t *testing.T) {
 			dest:        new(interface{}),
 			view:        "events",
 			expect:      `[{"Id":1,"EventTypeId":2,"Quantity":33.23432374000549,"Date":"2019-03-11T02:20:33Z"},{"Id":10,"EventTypeId":11,"Quantity":21.957962334156036,"Date":"2019-03-15T12:07:33Z"},{"Id":100,"EventTypeId":111,"Quantity":5.084940046072006,"Date":"2019-04-10T05:15:33Z"}]`,
+		},
+		{
+			description: "type definition",
+			dataURI:     "case023_columns_codec/",
+			dest:        new(interface{}),
+			view:        "events",
+			visitors: map[string]*codec.Visitor{
+				"Strings": codec.New("Strings", &StringsCodec{}),
+			},
+			expect: `[{"Name":["John","David","Anna"]}]`,
 		},
 	}
 

@@ -18,8 +18,9 @@ type Schema struct {
 	slice *xunsafe.Slice
 	xType *xunsafe.Type
 
-	autoGen  bool
-	DataType string `json:",omitempty" yaml:"dataType,omitempty"`
+	autoGen     bool
+	DataType    string `json:",omitempty" yaml:"dataType,omitempty"`
+	Cardinality Cardinality
 }
 
 func NewSchema(compType reflect.Type) *Schema {
@@ -38,6 +39,10 @@ func (c *Schema) Type() reflect.Type {
 }
 
 func (c *Schema) setType(rType reflect.Type) {
+	if c.Cardinality == Many {
+		rType = reflect.SliceOf(rType)
+	}
+
 	c.compType = rType
 	c.updateSliceType()
 }
@@ -49,6 +54,10 @@ func (c *Schema) updateSliceType() {
 
 //Init build struct type
 func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case, types Types) error {
+	if c.Cardinality != Many {
+		c.Cardinality = One
+	}
+
 	if c.compType != nil {
 		c.updateSliceType()
 		return nil
@@ -103,6 +112,11 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 		if columns[i].Nullable && rType.Kind() != reflect.Ptr {
 			rType = reflect.PtrTo(rType)
 		}
+
+		if columns[i].Codec != nil {
+			rType = columns[i].Codec.Schema.Type()
+		}
+
 		structFields = append(structFields, reflect.StructField{
 			Name:  structFieldName,
 			Type:  rType,
@@ -134,7 +148,9 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 			Type: rType,
 		})
 	}
-	c.setType(reflect.StructOf(structFields))
+
+	structType := reflect.StructOf(structFields)
+	c.setType(structType)
 }
 
 func createDefaultTagIfNeeded(column *Column) string {

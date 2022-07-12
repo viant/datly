@@ -61,19 +61,24 @@ type (
 	gcpMockDecoder     struct{}
 )
 
-func (e *eventBeforeFetcher) Value(ctx context.Context, raw string, options ...interface{}) (interface{}, error) {
+func (e *eventBeforeFetcher) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
 	return nil, nil
 }
 
-func (e *eventAfterFetcher) Value(ctx context.Context, raw string, options ...interface{}) (interface{}, error) {
+func (e *eventAfterFetcher) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
 	return nil, nil
 }
 
-func (g *gcpMockDecoder) Value(_ context.Context, raw string, _ ...interface{}) (interface{}, error) {
+func (g *gcpMockDecoder) Value(_ context.Context, raw interface{}, _ ...interface{}) (interface{}, error) {
+	rawString, ok := raw.(string)
+	if !ok {
+		return nil, fmt.Errorf("expected to get string but got %T", raw)
+	}
+
 	tokenType := "Bearer "
-	if index := strings.Index(raw, tokenType); index != -1 {
-		raw = raw[index+len(tokenType):]
-		decoded, err := base64.URLEncoding.DecodeString(raw)
+	if index := strings.Index(rawString, tokenType); index != -1 {
+		rawString = rawString[index+len(tokenType):]
+		decoded, err := base64.URLEncoding.DecodeString(rawString)
 		if err != nil {
 			return nil, err
 		}
@@ -541,17 +546,18 @@ func TestRouter(t *testing.T) {
 			expected: `[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}]`,
 		},
 		{
-			description: "slices | filters",
+			description: "view_cache",
 			resourceURI: "024_view_cache",
 			uri:         "/api/events?filters=%7B%22column%22:%5B%7B%22column_name%22:%22user_id%22,%22search_values%22:%5B2,11%5D,%22inclusive%22:true%7D,%7B%22column_name%22:%22event_type_id%22,%22search_values%22:%5B2,11%5D,%22inclusive%22:true%7D%5D%7D",
 			method:      http.MethodGet,
-			envVariables: map[string]string{
-				"alias": "t",
-				"table": "events",
-			},
-			extraRequests: 1,
-			expected:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
+			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 		},
+		//{
+		//	description: "transforms",
+		//	resourceURI: "025_transforms",
+		//	uri:         "/api/employees",
+		//	method:      http.MethodGet,
+		//},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {

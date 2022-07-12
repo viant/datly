@@ -17,7 +17,6 @@ import (
 )
 
 func detectColumns(ctx context.Context, resource *Resource, SQL string, v *View, usePlaceholders bool) ([]*Column, error) {
-
 	db, err := v.Connector.Db()
 
 	var args []interface{}

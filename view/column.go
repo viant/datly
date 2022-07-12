@@ -24,6 +24,8 @@ type Column struct {
 	Default    string `json:",omitempty"`
 	Format     string `json:",omitempty"`
 
+	Codec *Codec `json:",omitempty"`
+
 	rType         reflect.Type
 	tag           *io.Tag
 	sqlExpression string
@@ -68,10 +70,15 @@ func (c *Column) ColumnName() string {
 }
 
 //Init initializes Column
-func (c *Column) Init(caser format.Case, allowNulls bool) error {
+func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, config *ColumnConfig) error {
 	if c.initialized {
 		return nil
 	}
+
+	if config != nil {
+		c.inherit(config)
+	}
+
 	c.initialized = true
 
 	if c.Name == "" {
@@ -91,6 +98,12 @@ func (c *Column) Init(caser format.Case, allowNulls bool) error {
 	}
 
 	c._fieldName = caser.Format(c.Name, format.CaseUpperCamel)
+
+	if c.Codec != nil {
+		if err := c.Codec.Init(resource, nil, nil); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -142,4 +155,14 @@ func (c *Column) FieldName() string {
 
 func (c *Column) ColumnType() reflect.Type {
 	return c.rType
+}
+
+func (c *Column) inherit(config *ColumnConfig) {
+	if config.Codec != nil {
+		c.Codec = config.Codec
+	}
+
+	if config.DataType != nil {
+		c.DataType = *config.DataType
+	}
 }

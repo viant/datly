@@ -152,14 +152,19 @@ type VeltyCodec struct {
 	accessors *Accessors
 }
 
-func (v *VeltyCodec) Value(ctx context.Context, raw string, options ...interface{}) (interface{}, error) {
-	raw = strings.TrimSpace(raw)
+func (v *VeltyCodec) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+	rawString, ok := raw.(string)
+	if !ok {
+		return nil, fmt.Errorf("expected to get string but got %T", raw)
+	}
+
+	rawString = strings.TrimSpace(rawString)
 	selector := v.selector(options)
 	if selector == nil {
 		return nil, fmt.Errorf("expected selector not to be nil")
 	}
 
-	aValue, wasNil, err := converter.Convert(raw, v.codecType, "")
+	aValue, wasNil, err := converter.Convert(rawString, v.codecType, "")
 	if err != nil {
 		return nil, err
 	}
@@ -378,4 +383,16 @@ func (v *VeltyCodec) init() error {
 	}
 
 	return nil
+}
+
+type VeltyNamer struct {
+}
+
+func (v *VeltyNamer) Names(rField reflect.StructField) []string {
+	veltyTag := velty.Parse(rField.Tag.Get("velty"))
+	if len(veltyTag.Names) == 0 {
+		return []string{rField.Name}
+	}
+
+	return veltyTag.Names
 }

@@ -1,6 +1,7 @@
 package view
 
 import (
+	"context"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -35,8 +36,11 @@ type Collector struct {
 	supportParallel bool
 	wgDelta         int
 
-	indexCounter int
-	manyCounter  int
+	indexCounter   int
+	manyCounter    int
+	codecSlice     *xunsafe.Slice
+	codecSliceDest interface{}
+	codecAppender  *xunsafe.Appender
 }
 
 func (r *Collector) Lock() *sync.Mutex {
@@ -131,7 +135,7 @@ func ensureDest(dest interface{}, view *View) interface{} {
 }
 
 //Visitor creates visitor function
-func (r *Collector) Visitor() Visitor {
+func (r *Collector) Visitor(ctx context.Context) Visitor {
 	relation := r.relation
 	visitorRelations := RelationsSlice(r.view.With).PopulateWithVisitor()
 	for _, rel := range visitorRelations {
@@ -139,7 +143,7 @@ func (r *Collector) Visitor() Visitor {
 	}
 
 	visitors := make([]Visitor, 1)
-	visitors[0] = r.valueIndexer(visitorRelations)
+	visitors[0] = r.valueIndexer(ctx, visitorRelations)
 
 	if relation != nil && (r.parent == nil || !r.parent.SupportsParallel()) {
 		switch relation.Cardinality {
@@ -161,7 +165,7 @@ func (r *Collector) Visitor() Visitor {
 	}
 }
 
-func (r *Collector) valueIndexer(visitorRelations []*Relation) func(value interface{}) error {
+func (r *Collector) valueIndexer(ctx context.Context, visitorRelations []*Relation) func(value interface{}) error {
 	distinctRelations := make([]*Relation, 0)
 	presenceMap := map[string]bool{}
 
@@ -179,7 +183,12 @@ func (r *Collector) valueIndexer(visitorRelations []*Relation) func(value interf
 			fieldValue := rel.columnField.Value(ptr)
 			r.indexValueByRel(fieldValue, rel, r.indexCounter)
 		}
+
 		r.indexCounter++
+		if r.view.codec != nil {
+			r.appender.Append(value)
+		}
+
 		return nil
 	}
 }
@@ -291,10 +300,22 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 }
 
 //NewItem creates and return item provider
-//Each produced item is automatically appended to the dest
 func (r *Collector) NewItem() func() interface{} {
+	if r.view.codec == nil {
+		return func() interface{} {
+			return r.appender.Add()
+		}
+	}
+
+	codecSlice := reflect.SliceOf(r.view.DatabaseType())
+	r.codecSlice = xunsafe.NewSlice(codecSlice)
+	codecSliceDest := reflect.New(codecSlice)
+	r.codecSliceDest = codecSliceDest.Interface()
+	r.codecAppender = r.codecSlice.Appender(unsafe.Pointer(codecSliceDest.Pointer()))
+
+	//Adding elements to slice using xunsafe is 2.5x faster than reflect.New
 	return func() interface{} {
-		return r.appender.Add()
+		return r.codecAppender.Add()
 	}
 }
 

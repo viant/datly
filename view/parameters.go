@@ -45,7 +45,7 @@ type (
 		Name string `json:",omitempty"`
 	}
 
-	CodecFn func(context context.Context, rawValue string, options ...interface{}) (interface{}, error)
+	CodecFn func(context context.Context, rawValue interface{}, options ...interface{}) (interface{}, error)
 	Codec   struct {
 		Name      string  `json:",omitempty"`
 		Source    string  `json:",omitempty"`

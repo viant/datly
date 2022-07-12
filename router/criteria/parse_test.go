@@ -281,7 +281,7 @@ func TestParse(t *testing.T) {
 		fmt.Printf("Running testcase %v\n", i)
 
 		for _, column := range testCase.columns {
-			if !assert.Nil(t, column.Init(format.CaseLowerUnderscore, true), testCase.input) {
+			if !assert.Nil(t, column.Init(view.EmptyResource(), format.CaseLowerUnderscore, true, nil), testCase.input) {
 				continue
 			}
 		}

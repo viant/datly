@@ -89,12 +89,15 @@ func (c ColumnIndex) RegisterWithName(name string, column *Column) {
 }
 
 //Init initializes each Column in the slice.
-func (c Columns) Init(caser format.Case, allowNulls bool) error {
+func (c Columns) Init(resource *Resource, config map[string]*ColumnConfig, caser format.Case, allowNulls bool) error {
 	for i := range c {
-		if err := c[i].Init(caser, allowNulls); err != nil {
+		columnConfig := config[c[i].Name]
+
+		if err := c[i].Init(resource, caser, allowNulls, columnConfig); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -111,4 +114,11 @@ func (c Columns) updateTypes(columns []*Column, caser format.Case) {
 			column.rType = newCol.rType
 		}
 	}
+}
+
+type ColumnConfig struct {
+	Name       string
+	Expression *string
+	Codec      *Codec
+	DataType   *string
 }

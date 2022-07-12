@@ -1,0 +1,17 @@
+Views:
+  - Connector:
+      Ref: db
+    Name: events
+    From: "SELECT name FROM users"
+    ColumnsConfig:
+      name:
+        Codec:
+          Name: Strings
+          Schema:
+            DataType: string
+            Cardinality: Many
+
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: "./testdata/db/db.db"

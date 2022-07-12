@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/viant/velty"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 type (
 	Accessors struct {
 		index     map[string]int
+		namer     Namer
 		accessors []*Accessor
 	}
 
@@ -141,20 +141,14 @@ func (a *Accessors) indexAccessors(prefix string, parentType reflect.Type, field
 
 	for i := 0; i < parentType.NumField(); i++ {
 		field := parentType.Field(i)
-		fieldTag := velty.Parse(field.Tag.Get("velty"))
+		names := a.namer.Names(field)
 
 		accessorFields := make([]*xunsafe.Field, len(fields)+1)
 		copy(accessorFields, fields)
 		accessorFields[len(accessorFields)-1] = xunsafe.NewField(field)
 
-		if len(fieldTag.Names) > 0 {
-			for _, name := range fieldTag.Names {
-				accessorName := prefix + name
-				a.indexAccessor(accessorName, accessorFields)
-				a.indexAccessors(accessorName+".", field.Type, accessorFields)
-			}
-		} else {
-			accessorName := prefix + field.Name
+		for _, name := range names {
+			accessorName := prefix + name
 			a.indexAccessor(accessorName, accessorFields)
 			a.indexAccessors(accessorName+".", field.Type, accessorFields)
 		}
@@ -178,8 +172,12 @@ func (a *Accessors) indexAccessor(name string, fields []*xunsafe.Field) {
 	a.accessors = append(a.accessors, fieldAccessor)
 }
 
-func (a *Accessors) init(templateType reflect.Type) {
-	a.indexAccessors("", templateType, []*xunsafe.Field{})
+func (a *Accessors) init(rType reflect.Type) {
+	if a.namer == nil {
+		a.namer = &VeltyNamer{}
+	}
+
+	a.indexAccessors("", rType, []*xunsafe.Field{})
 }
 
 func (a *Accessors) AccessorByName(name string) (*Accessor, error) {

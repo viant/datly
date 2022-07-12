@@ -11,6 +11,7 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xunsafe"
 
 	"reflect"
 	"strings"
@@ -58,8 +59,12 @@ type (
 		UseBindingPositions *bool  `json:",omitempty"`
 		Cache               *Cache `json:",omitempty"`
 
+		ColumnsConfig map[string]*ColumnConfig `json:",omitempty"`
+
 		initialized  bool
 		newCollector func(dest interface{}, supportParallel bool) *Collector
+
+		codec *columnsCodec
 	}
 
 	//Constraints configure what can be selected by Selector
@@ -199,6 +204,10 @@ func (v *View) generateNameIfNeeded(refView *View, rel *Relation) {
 }
 
 func (v *View) initView(ctx context.Context, resource *Resource) error {
+	if v.ColumnsConfig == nil {
+		v.ColumnsConfig = map[string]*ColumnConfig{}
+	}
+
 	var err error
 	if err := v.loadFromWithURL(ctx, resource); err != nil {
 		return err
@@ -267,7 +276,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err = Columns(v.Columns).Init(v.Caser, v.AllowNulls != nil && !*v.AllowNulls); err != nil {
+	if err = Columns(v.Columns).Init(resource, v.ColumnsConfig, v.Caser, v.AllowNulls != nil && !*v.AllowNulls); err != nil {
 		return err
 	}
 
@@ -295,6 +304,11 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		if err = v.Cache.init(ctx, v.Name); err != nil {
 			return err
 		}
+	}
+
+	v.codec, err = newColumnsCodec(v.Schema.Type(), v.Columns)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -523,7 +537,7 @@ func (v *View) exclude(columns []io.Column) []io.Column {
 	return filtered
 }
 
-func (v *View) inherit(ctx context.Context, resource *Resource, view *View) error {
+func (v *View) inherit(view *View) error {
 	if v.Connector == nil {
 		v.Connector = view.Connector
 	}
@@ -847,7 +861,7 @@ func (v *View) inheritFromViewIfNeeded(ctx context.Context, resource *Resource) 
 			return err
 		}
 
-		if err = v.inherit(ctx, resource, view); err != nil {
+		if err = v.inherit(view); err != nil {
 			return err
 		}
 	}
@@ -906,4 +920,24 @@ func (v *View) IsHolder(value string) bool {
 
 func (v *View) ShouldTryDiscover() bool {
 	return v.DiscoverCriteria == nil || *v.DiscoverCriteria
+}
+
+func (v *View) DatabaseType() reflect.Type {
+	if v.codec != nil {
+		return v.codec.actualType
+	}
+
+	return v.Schema.Type()
+}
+
+func (v *View) UnwrapDatabaseType(ctx context.Context, value interface{}) (interface{}, error) {
+	if v.codec != nil {
+		if err := v.codec.updateValue(ctx, value); err != nil {
+			return nil, err
+		}
+
+		return v.codec.unwrapper.Value(xunsafe.AsPointer(value)), nil
+	}
+
+	return value, nil
 }

@@ -105,7 +105,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err := r.normalizeExclude(); err != nil {
+	if err := r.normalizePaths(); err != nil {
 		return err
 	}
 
@@ -328,7 +328,7 @@ func (r *Route) ShouldNormalizeExclude() bool {
 	return r.NormalizeExclude == nil || *r.NormalizeExclude
 }
 
-func (r *Route) normalizeExclude() error {
+func (r *Route) normalizePaths() error {
 	if !r.ShouldNormalizeExclude() {
 		return nil
 	}
@@ -341,6 +341,17 @@ func (r *Route) normalizeExclude() error {
 			r.Exclude[i] = excluded[:lastDot+1] + r._caser.Format(excluded[lastDot+1:], format.CaseUpperCamel)
 		}
 	}
+
+	for i, transform := range r.Transforms {
+		path := transform.Path
+		lastDot := strings.LastIndex(path, ".")
+		if lastDot == -1 {
+			r.Transforms[i].Path = r._caser.Format(path, format.CaseUpperCamel)
+		} else {
+			r.Transforms[i].Path = path[:lastDot+1] + r._caser.Format(path[lastDot+1:], format.CaseUpperCamel)
+		}
+	}
+
 	return nil
 }
 
