@@ -131,6 +131,29 @@ WHERE ID = $Id
 ```
 
 
+###### View SQL column type codec 
+
+```sql
+SELECT 
+    dept.* EXCEPT ORG_ID
+    employee.* EXCEPT DEPT_ID, 
+    organization.* 
+FROM (SELECT * FROM DEPARMENT t) dept
+JOIN (SELECT ID, NAME, DEPT_ID, 
+    (CASE WHEN COLUMN_X = 1 THEN
+            'x1,x2'
+             WHEN COLUMN_X = 2 THEN
+            'x3,x4'
+       END) AS SLICE /* {"Codec":{"Ref":"AsStrings"}}  */  
+    FROM EMP t) employee ON dept.ID = employee.DEPT_ID
+JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
+WHERE ID = $Id
+```
+
+###### Supported conversion Codecs
+    - AsStrings: converts coma separated value into []string
+
+
 #### Persisting routes/config to the local folder
 
 Use -w=location switch
