@@ -1,8 +1,6 @@
-* more than one view in out output nice to have for now
-
-* Documentation ()
-* Patch/Create/Update
+- strinigfy golang type in meta/view endpoint
+- insert service(with batch mode)/support for semi-autonomous mode (registry hooks)
+- patch/create/update
 - parameters with golang/js codec
-* Move codecs from the Marshaller, create different DB Schema if codecs are present
-* ^ the same if columns are excluded from the response
-* Add possibility to modify columns without specifying all of them
+- more than one view in out output nice to have for now
+- improve documentation/examples
