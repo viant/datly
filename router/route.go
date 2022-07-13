@@ -30,12 +30,13 @@ const (
 type (
 	Routes []*Route
 	Route  struct {
-		Visitor *codec.Visitor
-		URI     string
-		Method  string
-		Service ServiceType
-		View    *view.View
-		Cors    *Cors
+		Visitor     *codec.Visitor
+		URI         string
+		Method      string
+		Service     ServiceType
+		View        *view.View
+		Cors        *Cors
+		EnableAudit bool
 		Output
 		Index
 

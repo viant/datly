@@ -47,6 +47,7 @@ type (
 
 	CodecFn func(context context.Context, rawValue interface{}, options ...interface{}) (interface{}, error)
 	Codec   struct {
+		shared.Reference
 		Name      string  `json:",omitempty"`
 		Source    string  `json:",omitempty"`
 		SourceURL string  `json:",omitempty"`
@@ -56,6 +57,20 @@ type (
 )
 
 func (v *Codec) Init(resource *Resource, view *View, paramType reflect.Type) error {
+	if v.Ref != "" {
+		visitor, ok := resource.VisitorByName(v.Ref)
+		if !ok {
+			return fmt.Errorf("not found visitor with name %v", v.Ref)
+		}
+
+		asCodec, ok := visitor.(codec.Codec)
+		if !ok {
+			return fmt.Errorf("expected visitor to be type of %T but was %T", asCodec, visitor)
+		}
+
+		v.inherit(asCodec)
+	}
+
 	v.ensureSchema(paramType)
 	if v.SourceURL != "" && v.Source == "" {
 		data, err := resource.LoadText(context.Background(), v.SourceURL)
@@ -111,6 +126,12 @@ func (v *Codec) extractCodecFn(resource *Resource, paramType reflect.Type, view 
 
 func (v *Codec) Transform(ctx context.Context, raw string, options ...interface{}) (interface{}, error) {
 	return v._codecFn(ctx, raw, options...)
+}
+
+func (v *Codec) inherit(asCodec codec.Codec) {
+	v.Name = asCodec.Name()
+	v.Schema = NewSchema(asCodec.ResultType())
+	v._codecFn = asCodec.Valuer().Value
 }
 
 //Init initializes Parameter

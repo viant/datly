@@ -32,7 +32,7 @@
 }
 ---------- connections: -----------
 	mem://localhost/dev/Datly/dependencies/connections.yamlConnectors:
-    - DSN: /tmp/datly/generator/db.db
+    - DSN: ${Username}:${Password}@tcp(localhost:3306)/dev?parseTime=true
       Driver: sqlite3
       Name: dev
       Secret:
@@ -41,13 +41,14 @@
 ModTime: "2014-11-12T11:45:26Z"
 
 -------------- view --- -----------
-	mem://localhost/dev/Datly/routes/dev/foos.yamlColumnsDiscovery: false
+	mem://localhost/dev/Datly/routes/dev/events.yamlColumnsDiscovery: false
 Resource:
     ModTime: "0001-01-01T00:00:00Z"
     Views:
-        - Connector:
+        - CaseFormat: lc
+          Connector:
             Ref: dev
-          Name: foos
+          Name: events
           Selector:
             Constraints:
                 Criteria: true
@@ -58,6 +59,7 @@ Resource:
                 OrderBy: false
                 Projection: true
             Limit: 40
+          Table: events
 Routes:
     - Cardinality: Many
       CaseFormat: lc
@@ -71,12 +73,13 @@ Routes:
             - '*'
         ExposeHeaders:
             - '*'
-      EnableAudit: false
       Method: GET
+      Namespace:
+        ev: events
       Style: Basic
-      URI: /v1/api/dev/foos
+      URI: /v1/api/dev/events
       View:
-        Ref: foos
+        Ref: events
 With:
     - connections
 

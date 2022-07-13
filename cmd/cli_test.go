@@ -75,6 +75,14 @@ func TestRun(t *testing.T) {
 			dataURL:     "/v1/api/dev/events",
 			dataMethod:  http.MethodGet,
 		},
+		{
+			description: "column codec",
+			URI:         "case003_columns_codec",
+			args:        []string{"-N=events", "-D=sqlite3", "-X=testdata/case003_columns_codec/events.sql"},
+			viewURL:     "/v1/api/meta/view/dev/events",
+			dataURL:     "/v1/api/dev/events",
+			dataMethod:  http.MethodGet,
+		},
 	}
 
 	loader := afs.New()
@@ -132,7 +140,12 @@ func checkGeneratedView(t *testing.T, loader afs.Service, testLocation string, t
 }
 
 func checkGeneratedOpenAPI(t *testing.T, loader afs.Service, testLocation string, testCase *testcase, server *standalone.Server) {
-	expectedOpenAPI, err := readExpectedOpenAPI(loader, testLocation)
+	actualLocation := path.Join(testLocation, "openapi3.yaml")
+	if ok, err := loader.Exists(context.TODO(), actualLocation); !ok || err == nil {
+		return
+	}
+
+	expectedOpenAPI, err := readExpectedOpenAPI(loader, actualLocation)
 	if !assert.Nil(t, err, testCase.description) {
 		return
 	}
@@ -167,7 +180,7 @@ func readExpectedView(loader afs.Service, location string) ([]byte, error) {
 }
 
 func readExpectedOpenAPI(loader afs.Service, testLocation string) ([]byte, error) {
-	asBytes, err := loader.DownloadWithURL(context.TODO(), path.Join(testLocation, "openapi3.yaml"))
+	asBytes, err := loader.DownloadWithURL(context.TODO(), testLocation)
 	if err != nil {
 		return nil, err
 	}

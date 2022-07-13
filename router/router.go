@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/base64"
 	goJson "encoding/json"
-	"errors"
 	"fmt"
 	"github.com/go-playground/validator"
 	"github.com/viant/afs/option/content"
@@ -22,13 +21,12 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 )
 
 //TODO: Add to meta response size
 type viewHandler func(response http.ResponseWriter, request *http.Request)
-
-var stringErrorType = reflect.TypeOf(errors.New(""))
 
 const (
 	AllowOriginHeader      = "Access-Control-Allow-Origin"
@@ -178,6 +176,10 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 	return func(response http.ResponseWriter, request *http.Request) {
 		if route.Cors != nil {
 			enableCors(response, route.Cors, false)
+		}
+
+		if route.EnableAudit {
+			r.logAudit(request)
 		}
 
 		if !r.runBeforeFetch(response, request, route) {
@@ -587,4 +589,13 @@ func (r *Router) compressIfNeeded(marshalled []byte, route *Route) (*BytesReader
 	}
 
 	return AsBytesReader(buffer, EncodingGzip, payloadSize), nil
+}
+
+func (r *Router) logAudit(request *http.Request) {
+	asBytes, _ := goJson.Marshal(Audit{
+		URL:     request.RequestURI,
+		Headers: request.Header,
+	})
+
+	fmt.Printf("[LOGGER]: Time %s, %v\n", time.Now(), string(asBytes))
 }
