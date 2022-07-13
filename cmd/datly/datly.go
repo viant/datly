@@ -36,6 +36,6 @@ func main() {
 
 	server := cmd.New(os.Args[1:], &ConsoleWriter{})
 	if err := server.ListenAndServe(); err != nil {
-		panic(err.Error())
+		log.Fatal(err.Error())
 	}
 }
