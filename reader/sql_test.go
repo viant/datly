@@ -197,7 +197,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:     "dataset001_events/",
 			description: `select statement with parameters`,
-			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS  WHERE ID = ?) AS t`,
+			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS WHERE ID = ?) AS t`,
 			view: &view.View{
 				Columns: []*view.Column{
 					{
@@ -240,7 +240,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:      "dataset001_events/",
 			description:  `select statement with $AND_COLUMN_IN`,
-			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ?  AND ( ev.user_id IN (?, ?, ?, ?))) AS t`,
+			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ?  AND ( ev.user_id IN (?, ?, ?, ?)) ) AS t`,
 			placeholders: []interface{}{10, 4, 5, 9, 2},
 			relation:     &view.Relation{ColumnAlias: "ev", Of: &view.ReferenceView{Column: "ID"}},
 			view: &view.View{
@@ -287,7 +287,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:      "dataset001_events/",
 			description:  `select statement without $COLUMN_IN`,
-			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ?) AS t  WHERE  t.user_id IN (?, ?, ?, ?)`,
+			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ?  AND ( ev.user_id IN (?, ?, ?, ?))) AS t`,
 			placeholders: []interface{}{10, 4, 5, 9, 2},
 			relation:     &view.Relation{ColumnAlias: "ev", Of: &view.ReferenceView{Column: "ID"}},
 			view: &view.View{
@@ -380,7 +380,7 @@ func TestBuilder_Build(t *testing.T) {
 
 	//for index, useCase := range useCases[len(useCases)-1:] {
 	for index, useCase := range useCases {
-		fmt.Println("Running testcase nr: " + strconv.Itoa(index))
+		fmt.Println("Running testcase nr: " + strconv.Itoa(index) + " | " + useCase.description)
 		resourcePath := path.Join(testLocation, "testdata", "datasets", useCase.dataset, "populate")
 		if initDb(t, path.Join(testLocation, "testdata", "db_config.yaml"), resourcePath, "db") {
 			return

@@ -13,7 +13,6 @@ import (
 	"github.com/viant/velty/parser"
 	"reflect"
 	"strings"
-	"time"
 )
 
 func detectColumns(ctx context.Context, resource *Resource, SQL string, v *View, usePlaceholders bool) ([]*Column, error) {
@@ -43,7 +42,7 @@ func detectColumns(ctx context.Context, resource *Resource, SQL string, v *View,
 				value = false
 			default:
 				if parameter.Schema.Type() == converter.TimeType {
-					value = time.Now()
+					value = Now()
 				} else {
 					value = reflect.New(parameter.Schema.Type()).Elem().Interface()
 				}

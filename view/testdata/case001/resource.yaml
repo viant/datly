@@ -13,4 +13,4 @@ Views:
 Connectors:
   - Name: mydb
     Driver: sqlite3
-    DSN: "./testdata/db/mydb.db"
+    DSN: "/tmp/view/mydb.db"

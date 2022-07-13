@@ -36,7 +36,8 @@ Logger:
   Name: ""
 MatchStrategy: read_matched
 Name: events
-Schema: {}
+Schema:
+  Cardinality: One
 Selector:
   Constraints:
     Criteria: true
@@ -49,8 +50,10 @@ Selector:
   Limit: 40
 Table: events
 Template:
-  PresenceSchema: {}
-  Schema: {}
+  PresenceSchema:
+    Cardinality: One
+  Schema:
+    Cardinality: One
   Source: events
 With:
   - Cardinality: Many
@@ -88,7 +91,8 @@ With:
       MatchStrategy: read_matched
       Name: event_types#
       Ref: event_types
-      Schema: {}
+      Schema:
+        Cardinality: One
       Selector:
         Constraints:
           Criteria: false
@@ -100,6 +104,8 @@ With:
         Limit: 40
       Table: event_types
       Template:
-        PresenceSchema: {}
-        Schema: {}
+        PresenceSchema:
+          Cardinality: One
+        Schema:
+          Cardinality: One
         Source: event_types

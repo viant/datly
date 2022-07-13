@@ -28,7 +28,8 @@ Logger:
   Name: ""
 MatchStrategy: read_matched
 Name: foos
-Schema: {}
+Schema:
+  Cardinality: One
 Selector:
   Constraints:
     Criteria: true
@@ -41,6 +42,8 @@ Selector:
   Limit: 40
 Table: foos
 Template:
-  PresenceSchema: {}
-  Schema: {}
+  PresenceSchema:
+    Cardinality: One
+  Schema:
+    Cardinality: One
   Source: foos

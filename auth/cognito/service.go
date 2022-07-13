@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"github.com/viant/afs"
+	"github.com/viant/datly/codec"
 	"github.com/viant/scy/auth/cognito"
 )
 
@@ -12,6 +13,15 @@ type Service struct {
 	*cognito.Service
 	fs  afs.Service
 	efs *embed.FS
+}
+
+func (s *Service) Valuer() codec.Valuer {
+	return codec.NewValuer(s.Value)
+}
+
+func (s *Service) Name() string {
+	//TODO implement me
+	panic("implement me")
 }
 
 func New(config *Config, fs afs.Service, efs *embed.FS) (*Service, error) {

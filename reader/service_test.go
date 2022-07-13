@@ -17,7 +17,6 @@ import (
 	"github.com/viant/dsunit"
 	"github.com/viant/gmetric/counter/base"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
-	"github.com/viant/toolbox"
 	"github.com/viant/toolbox/format"
 	"os"
 	"path"
@@ -160,7 +159,8 @@ func TestRead(t *testing.T) {
 		Subject string
 	}
 
-	testLocation := toolbox.CallerDirectory(3)
+	//testLocation := toolbox.CallerDirectory(3)
+	testLocation := "./"
 
 	var useCases = []usecase{
 		{

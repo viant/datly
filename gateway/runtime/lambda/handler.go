@@ -90,8 +90,7 @@ func InitAuthService(config *gateway.Config) (*cognito.Service, error) {
 	var err error
 	authServiceInit.Do(func() {
 		if authService, err = cognito.New(config.Cognito, fs, &embedFs); err == nil {
-			authCodec := codec.Codec(authService)
-			registry.Codecs.Register(codec.NewVisitory(registry.CodecKeyJwtClaim, authCodec))
+			registry.Codecs.Register(codec.NewVisitor(registry.CodecKeyJwtClaim, codec.NewValuer(authService.Value)))
 		}
 
 	})

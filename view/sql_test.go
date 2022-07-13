@@ -17,15 +17,15 @@ func TestDetectColumnsSQL(t *testing.T) {
 				From:  "SELECT * FROM FOOS",
 				Alias: "t",
 			},
-			sql: `SELECT t.* FROM (SELECT * FROM FOOS) t WHERE 1=0`,
+			sql: `SELECT * FROM FOOS  WHERE 1=0 `,
 		},
 		{
 			description: `Criteria`,
 			view: &View{
-				From:  "SELECT * FROM FOOS $CRITERIA",
+				From:  "SELECT * FROM FOOS $WHERE_CRITERIA",
 				Alias: "t",
 			},
-			sql: `SELECT t.* FROM (SELECT * FROM FOOS  WHERE 1 = 0) t WHERE 1=0`,
+			sql: `SELECT * FROM FOOS  WHERE 1=0 `,
 		},
 		{
 			description: `Criteria with where`,
@@ -33,7 +33,7 @@ func TestDetectColumnsSQL(t *testing.T) {
 				From:  "SELECT * FROM FOOS  WHERE id = 10 $CRITERIA",
 				Alias: "t",
 			},
-			sql: `SELECT t.* FROM (SELECT * FROM FOOS  WHERE id = 10  AND 1 = 0) t WHERE 1=0`,
+			sql: `SELECT * FROM FOOS  WHERE id = 10   AND 1=0 `,
 		},
 	}
 

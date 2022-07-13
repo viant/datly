@@ -88,3 +88,15 @@ func NewVisitors(visitors ...LifecycleVisitor) Visitors {
 func (v *Visitor) Inherit(visitor LifecycleVisitor) {
 	v._visitor = visitor.Valuer()
 }
+
+type valuer struct {
+	fn func(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error)
+}
+
+func (v *valuer) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+	return v.fn(ctx, raw, options...)
+}
+
+func NewValuer(aFunc func(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error)) Valuer {
+	return &valuer{fn: aFunc}
+}

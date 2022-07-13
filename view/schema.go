@@ -39,6 +39,10 @@ func (c *Schema) Type() reflect.Type {
 }
 
 func (c *Schema) setType(rType reflect.Type) {
+	if c.Cardinality == "" {
+		c.Cardinality = One
+	}
+
 	if c.Cardinality == Many {
 		rType = reflect.SliceOf(rType)
 	}

@@ -140,7 +140,8 @@ type event struct {
 
 //TODO: add testcases against sql injection
 func TestRouter(t *testing.T) {
-	testLocation := toolbox.CallerDirectory(3)
+	//testLocation := toolbox.CallerDirectory(3)
+	testLocation := "./"
 	_ = toolbox.CreateDirIfNotExist(path.Join(testLocation, "testdata/db"))
 
 	type FooParam struct {

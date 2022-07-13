@@ -10,10 +10,17 @@ import (
 	"github.com/viant/toolbox"
 	"path"
 	"testing"
+	"time"
 )
 
 func TestNewResourceFromURL(t *testing.T) {
-	testLocation := toolbox.CallerDirectory(3)
+	Now = func() time.Time {
+		aTime, _ := time.Parse(time.RFC3339Nano, "2022-07-13T19:18:02.063177478+02:00")
+		return aTime
+	}
+	_ = toolbox.CreateDirIfNotExist("/tmp/view")
+	//testLocation := toolbox.CallerDirectory(3)
+	testLocation := ""
 
 	testCases := []struct {
 		description string
@@ -21,68 +28,13 @@ func TestNewResourceFromURL(t *testing.T) {
 		expect      string
 	}{
 		{
-			url: "case001",
-			expect: `{
-	"Connectors": [
-		{
-			"DSN": "./testdata/db/mydb.db",
-			"Driver": "sqlite3",
-			"DbName": "mydb"
-		}
-	],
-	"Views": [
-		{
-			"Alias": "t",
-			"BatchReadSize": null,
-			"CaseFormat": "lu",
-			"Caser": 5,
-			"Columns": [
-				{
-					"DataType": "Int",
-					"Filterable": false,
-					"DbName": "id"
-				},
-				{
-					"DataType": "Float",
-					"Filterable": false,
-					"DbName": "quantity"
-				},
-				{
-					"DataType": "Int",
-					"Filterable": false,
-					"DbName": "event_type_id"
-				}
-			],
-			"Connector": {
-				"DSN": "./testdata/db/mydb.db",
-				"Driver": "sqlite3",
-				"DbName": "mydb",
-				"Ref": "mydb"
-			},
-			"MatchStrategy": "read_matched",
-			"DbName": "events",
-			"Schema": {
-				"DbName": "events",
-				"OmitEmpty": false
-			},
-			"Selector": {
-				"Constraints": {
-				"Columns": null,
-				"Criteria": null,
-				"Limit": null,
-				"Offset": null,
-				"OrderBy": null
-				}
-			},
-			"Table": "events"
-		}
-	]
-}`,
+			url:    "case001",
+			expect: `{"SourceURL":"testdata/case001/resource.yaml","Connectors":[{"Name":"mydb","Driver":"sqlite3","DSN":"/tmp/view/mydb.db"}],"Views":[{"Connector":{"Name":"mydb","Driver":"sqlite3","DSN":"/tmp/view/mydb.db"},"Name":"events","Alias":"t","Table":"events","Columns":[{"Name":"id","DataType":"Int"},{"Name":"quantity","DataType":"Float"},{"Name":"event_type_id","DataType":"Int"}],"CaseFormat":"lu","Selector":{"Constraints":{"Criteria":false,"OrderBy":false,"Limit":false,"Offset":false,"Projection":false}},"Template":{"Source":"events","Schema":{"Cardinality":"One"},"PresenceSchema":{"Cardinality":"One"}},"Schema":{"Cardinality":"One"},"MatchStrategy":"read_matched","Batch":{"Parent":10000},"Logger":{"Name":""},"Caser":5}],"ModTime":"2022-07-13T19:18:05+02:00"}`,
 		},
 	}
 
 	for _, testCase := range testCases {
-		if !dsunit.InitFromURL(t, path.Join(testLocation, "testdata/config.yaml")) {
+		if !dsunit.InitFromURL(t, path.Join(testLocation, "testdata", "config.yaml")) {
 			return
 		}
 
