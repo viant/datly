@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/codec"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/cache"
+	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
@@ -89,6 +90,20 @@ func (r *Resource) Init(ctx context.Context) error {
 	if r.initialised {
 		return nil
 	}
+
+	transforms := marshal.TransformIndex{}
+	for _, route := range r.Routes {
+		if err := route.normalizePaths(); err != nil {
+			return err
+		}
+
+		if route.View.Ref == "" {
+			continue
+		}
+
+		transforms[route.View.Ref] = route.Transforms
+	}
+
 	r.initialised = true
 
 	var columnCacheExists bool
@@ -109,7 +124,7 @@ func (r *Resource) Init(ctx context.Context) error {
 		columnsCache = r.ColumnsCache.Items
 	}
 
-	if err := r.Resource.Init(ctx, r.Resource.GetTypes(), r._visitors, columnsCache); err != nil {
+	if err := r.Resource.Init(ctx, r.Resource.GetTypes(), r._visitors, columnsCache, transforms); err != nil {
 		return err
 	}
 

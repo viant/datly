@@ -34,7 +34,7 @@ func TestJson_Marshal(t *testing.T) {
 		{
 			description: "nils",
 			data:        nilsPtr,
-			expect:      `{"Int":0,"Int8":0,"Uint8":0,"Int16":0,"Uint16":0,"Int32":0,"Uint32":0,"Int64":0,"Uint64":0,"Byte":0,"String":"","Float32":0,"Float64":0,"Bool":false}`,
+			expect:      `{"Int":null,"Int8":null,"Uint8":null,"Int16":null,"Uint16":null,"Int32":null,"Uint32":null,"Int64":null,"Uint64":null,"Byte":null,"String":"","Float32":null,"Float64":null,"Bool":null}`,
 		},
 		{
 			description: "slice without relations",
@@ -89,7 +89,17 @@ func TestJson_Marshal(t *testing.T) {
 		{
 			description: "default tag",
 			data:        defaultTag,
-			expect:      `[{"Int":1,"Int8":2,"Int16":3,"Int32":4,"Int64":5,"Uint":6,"Uint8":7,"Uint16":8,"Uint32":9,"Uint64":10,"IntPtr":1,"Int8Ptr":2,"Int16Ptr":3,"Int32Ptr":4,"Int64Ptr":5,"UintPtr":6,"Uint8Ptr":7,"Uint16Ptr":8,"Uint32Ptr":9,"Uint64Ptr":10,"String":"empty","StringPtr":empty,"Bool":false,"BoolPtr":false,"Float32":10.5,"Float32Ptr":10.5,"Float64":20.5,"Float64Ptr":20.5,"Time":"2012-07-12","TimePtr":"2022-02-08"}]`,
+			expect:      `[{"Int":1,"Int8":2,"Int16":3,"Int32":4,"Int64":5,"Uint":6,"Uint8":7,"Uint16":8,"Uint32":9,"Uint64":10,"IntPtr":null,"Int8Ptr":null,"Int16Ptr":null,"Int32Ptr":null,"Int64Ptr":null,"UintPtr":null,"Uint8Ptr":null,"Uint16Ptr":null,"Uint32Ptr":null,"Uint64Ptr":null,"String":"empty","StringPtr":empty,"Bool":false,"BoolPtr":false,"Float32":10.5,"Float32Ptr":null,"Float64":20.5,"Float64Ptr":null,"Time":"2012-07-12","TimePtr":"2022-02-08"}]`,
+		},
+		{
+			description: "primitive slice",
+			data:        primitiveSlice,
+			expect:      `["abc","def","ghi"]`,
+		},
+		{
+			description: "primitive nested slice",
+			data:        primitiveNestedSlice,
+			expect:      `[{"Name":"N - 1","Price":125.5,"Ints":[1,2,3]},{"Name":"N - 1","Price":250.5,"Ints":[4,5,6]}]`,
 		},
 	}
 
@@ -113,6 +123,31 @@ func TestJson_Marshal(t *testing.T) {
 			toolbox.Dump(string(result))
 		}
 	}
+}
+
+func primitiveNestedSlice() interface{} {
+	type Foo struct {
+		Name  string
+		Price float64
+		Ints  []int
+	}
+
+	return []Foo{
+		{
+			Name:  "N - 1",
+			Price: 125.5,
+			Ints:  []int{1, 2, 3},
+		},
+		{
+			Name:  "N - 1",
+			Price: 250.5,
+			Ints:  []int{4, 5, 6},
+		},
+	}
+}
+
+func primitiveSlice() interface{} {
+	return []string{"abc", "def", "ghi"}
 }
 
 func defaultTag() interface{} {
@@ -423,24 +458,22 @@ func eventPtr() interface{} {
 	}
 }
 
-//Benchmarks
-type Event struct {
-	ID    int
-	Name  string
-	Price float64
-	Types []EventType
-}
+func BenchmarkMarshal(b *testing.B) {
+	type EventType struct {
+		TypeID int
+		Type   string
+	}
 
-type EventType struct {
-	TypeID int
-	Type   string
-}
+	type Event struct {
+		ID    int
+		Name  string
+		Price float64
+		Types []EventType
+	}
 
-var benchEvents []*Event
-var benchMarshaller *json.Marshaller
+	var benchEvents []*Event
+	var benchMarshaller *json.Marshaller
 
-func init() {
-	//return
 	benchEvents = []*Event{
 		{
 			ID:    1,
@@ -491,28 +524,28 @@ func init() {
 	}
 
 	benchMarshaller, _ = json.New(reflect.TypeOf(&Event{}), marshal.Default{})
-}
 
-func BenchmarkMarshal(b *testing.B) {
-	var bytes []byte
-	var err error
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		bytes, err = benchMarshaller.Marshal(benchEvents, nil)
-	}
+	b.Run("SDK json", func(b *testing.B) {
+		var bytes []byte
+		var err error
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			bytes, err = goJson.Marshal(benchEvents)
+		}
 
-	assert.Nil(b, err)
-	assert.Equal(b, `[{"ID":1,"Name":"Event - 1","Price":123,"Types":[{"TypeID":1,"Type":"Type - 1"},{"TypeID":2,"Type":"Type - 2"}]},{"ID":2,"Name":"Event - 2","Price":226,"Types":[{"TypeID":2,"Type":"Type - 2"},{"TypeID":3,"Type":"Type - 3"},{"TypeID":4,"Type":"Type - 4"},{"TypeID":5,"Type":"Type - 5"},{"TypeID":6,"Type":"Type - 6"},{"TypeID":7,"Type":"Type - 7"}]}]`, string(bytes))
-}
+		assert.Nil(b, err)
+		assert.Equal(b, `[{"ID":1,"Name":"Event - 1","Price":123,"Types":[{"TypeID":1,"Type":"Type - 1"},{"TypeID":2,"Type":"Type - 2"}]},{"ID":2,"Name":"Event - 2","Price":226,"Types":[{"TypeID":2,"Type":"Type - 2"},{"TypeID":3,"Type":"Type - 3"},{"TypeID":4,"Type":"Type - 4"},{"TypeID":5,"Type":"Type - 5"},{"TypeID":6,"Type":"Type - 6"},{"TypeID":7,"Type":"Type - 7"}]}]`, string(bytes))
+	})
 
-func BenchmarkJson_Marshal(b *testing.B) {
-	var bytes []byte
-	var err error
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		bytes, err = goJson.Marshal(benchEvents)
-	}
+	b.Run("Custom json", func(b *testing.B) {
+		var bytes []byte
+		var err error
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			bytes, err = benchMarshaller.Marshal(benchEvents, nil)
+		}
 
-	assert.Nil(b, err)
-	assert.Equal(b, `[{"ID":1,"Name":"Event - 1","Price":123,"Types":[{"TypeID":1,"Type":"Type - 1"},{"TypeID":2,"Type":"Type - 2"}]},{"ID":2,"Name":"Event - 2","Price":226,"Types":[{"TypeID":2,"Type":"Type - 2"},{"TypeID":3,"Type":"Type - 3"},{"TypeID":4,"Type":"Type - 4"},{"TypeID":5,"Type":"Type - 5"},{"TypeID":6,"Type":"Type - 6"},{"TypeID":7,"Type":"Type - 7"}]}]`, string(bytes))
+		assert.Nil(b, err)
+		assert.Equal(b, `[{"ID":1,"Name":"Event - 1","Price":123,"Types":[{"TypeID":1,"Type":"Type - 1"},{"TypeID":2,"Type":"Type - 2"}]},{"ID":2,"Name":"Event - 2","Price":226,"Types":[{"TypeID":2,"Type":"Type - 2"},{"TypeID":3,"Type":"Type - 3"},{"TypeID":4,"Type":"Type - 4"},{"TypeID":5,"Type":"Type - 5"},{"TypeID":6,"Type":"Type - 6"},{"TypeID":7,"Type":"Type - 7"}]}]`, string(bytes))
+	})
 }

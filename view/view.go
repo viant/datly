@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/datly/codec"
 	"github.com/viant/datly/logger"
+	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/gmetric/provider"
@@ -132,9 +134,17 @@ func (v *View) DataType() reflect.Type {
 //Init initializes View using view provided in Resource.
 //i.e. If View, Connector etc. should inherit from others - it has te bo included in Resource.
 //It is important to call Init for every View because it also initializes due to the optimization reasons.
-func (v *View) Init(ctx context.Context, resource *Resource) error {
+func (v *View) Init(ctx context.Context, resource *Resource, options ...interface{}) error {
 	if v.initialized {
 		return nil
+	}
+
+	var transforms marshal.Transforms
+	for _, anOption := range options {
+		switch actual := anOption.(type) {
+		case marshal.Transforms:
+			transforms = actual
+		}
 	}
 
 	v.initialized = true
@@ -143,11 +153,11 @@ func (v *View) Init(ctx context.Context, resource *Resource) error {
 		v.Name: true,
 	}
 
-	if err := v.initViews(ctx, resource, v.With, nameTaken); err != nil {
+	if err := v.initViews(ctx, resource, v.With, nameTaken, transforms); err != nil {
 		return err
 	}
 
-	if err := v.initView(ctx, resource); err != nil {
+	if err := v.initView(ctx, resource, transforms); err != nil {
 		return err
 	}
 
@@ -167,7 +177,7 @@ func (v *View) loadFromWithURL(ctx context.Context, resource *Resource) error {
 	return err
 }
 
-func (v *View) initViews(ctx context.Context, resource *Resource, relations []*Relation, notUnique map[string]bool) error {
+func (v *View) initViews(ctx context.Context, resource *Resource, relations []*Relation, notUnique map[string]bool, transforms marshal.Transforms) error {
 	for _, rel := range relations {
 		refView := &rel.Of.View
 		v.generateNameIfNeeded(refView, rel)
@@ -176,8 +186,18 @@ func (v *View) initViews(ctx context.Context, resource *Resource, relations []*R
 			return fmt.Errorf("not unique view name: %v", rel.Of.View.Name)
 		}
 		notUnique[rel.Of.View.Name] = true
+		relTransforms := marshal.Transforms{}
+		for _, transform := range transforms {
+			pathPrefix := rel.Holder + "."
+			if strings.HasPrefix(transform.Path, pathPrefix) {
+				relTransform := *transform
 
-		if err := refView.inheritFromViewIfNeeded(ctx, resource); err != nil {
+				relTransform.Path = relTransform.Path[len(pathPrefix):]
+				relTransforms = append(relTransforms, &relTransform)
+			}
+		}
+
+		if err := refView.inheritFromViewIfNeeded(ctx, resource, relTransforms); err != nil {
 			return err
 		}
 
@@ -185,11 +205,11 @@ func (v *View) initViews(ctx context.Context, resource *Resource, relations []*R
 			return err
 		}
 
-		if err := refView.initViews(ctx, resource, refView.With, notUnique); err != nil {
+		if err := refView.initViews(ctx, resource, refView.With, notUnique, relTransforms); err != nil {
 			return err
 		}
 
-		if err := refView.initView(ctx, resource); err != nil {
+		if err := refView.initView(ctx, resource, relTransforms); err != nil {
 			return err
 		}
 
@@ -203,7 +223,7 @@ func (v *View) generateNameIfNeeded(refView *View, rel *Relation) {
 	}
 }
 
-func (v *View) initView(ctx context.Context, resource *Resource) error {
+func (v *View) initView(ctx context.Context, resource *Resource, transforms marshal.Transforms) error {
 	if v.ColumnsConfig == nil {
 		v.ColumnsConfig = map[string]*ColumnConfig{}
 	}
@@ -213,7 +233,7 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err = v.inheritFromViewIfNeeded(ctx, resource); err != nil {
+	if err = v.inheritFromViewIfNeeded(ctx, resource, transforms); err != nil {
 		return err
 	}
 
@@ -273,6 +293,10 @@ func (v *View) initView(ctx context.Context, resource *Resource) error {
 	}
 
 	if err = v.ensureCaseFormat(); err != nil {
+		return err
+	}
+
+	if err = v.indexTransforms(resource, transforms); err != nil {
 		return err
 	}
 
@@ -850,14 +874,14 @@ func (v *View) initSchemaIfNeeded() {
 	}
 }
 
-func (v *View) inheritFromViewIfNeeded(ctx context.Context, resource *Resource) error {
+func (v *View) inheritFromViewIfNeeded(ctx context.Context, resource *Resource, transforms marshal.Transforms) error {
 	if v.Ref != "" {
 		view, err := resource._views.Lookup(v.Ref)
 		if err != nil {
 			return err
 		}
 
-		if err = view.initView(ctx, resource); err != nil {
+		if err = view.initView(ctx, resource, transforms); err != nil {
 			return err
 		}
 
@@ -940,4 +964,37 @@ func (v *View) UnwrapDatabaseType(ctx context.Context, value interface{}) (inter
 	}
 
 	return value, nil
+}
+
+func (v *View) indexTransforms(resource *Resource, transforms marshal.Transforms) error {
+	for _, transform := range transforms {
+		if strings.Contains(transform.Path, ".") {
+			continue
+		}
+
+		columnName := format.CaseUpperCamel.Format(transform.Path, v.Caser)
+		config, ok := v.ColumnsConfig[columnName]
+		if !ok {
+			config = &ColumnConfig{}
+			v.ColumnsConfig[columnName] = config
+		}
+
+		visitor, ok := resource.VisitorByName(transform.Codec)
+		if !ok {
+			return fmt.Errorf("not found codec %v", transform.Codec)
+		}
+
+		actualCodec, ok := visitor.(codec.Codec)
+		if !ok {
+			return fmt.Errorf("expected %v codec to be type of %T but was %T", transform.Codec, actualCodec, visitor)
+		}
+
+		config.Codec = &Codec{
+			Name:     transform.Codec,
+			Schema:   NewSchema(actualCodec.ResultType()),
+			_codecFn: actualCodec.Valuer().Value,
+		}
+	}
+
+	return nil
 }

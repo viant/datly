@@ -3,6 +3,8 @@ package registry
 import (
 	"github.com/viant/datly/auth/gcp"
 	"github.com/viant/datly/codec"
+	"github.com/viant/scy/auth/jwt"
+	"reflect"
 )
 
 const (
@@ -11,6 +13,6 @@ const (
 )
 
 var Codecs = codec.NewVisitors(
-	codec.New(CodecKeyJwtClaim, &gcp.JwtClaim{}),
-	codec.New(CodecKeyAsStrings, &AsStrings{}),
+	codec.NewCodec(CodecKeyJwtClaim, &gcp.JwtClaim{}, reflect.TypeOf(&jwt.Claims{})),
+	codec.NewCodec(CodecKeyAsStrings, &AsStrings{}, reflect.TypeOf([]string{})),
 )

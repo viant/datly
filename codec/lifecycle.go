@@ -1,15 +1,21 @@
 package codec
 
 import (
+	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
 	"net/http"
 )
 
 type (
+	Valuer interface {
+		Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error)
+	}
+
 	//LifecycleVisitor visitor can implement BeforeFetcher and/or AfterFetcher
 	LifecycleVisitor interface {
-		Codec
+		Valuer() Valuer
+		Name() string
 	}
 
 	//BeforeFetcher represents Lifecycle hook which is called before view was read from the Database.
@@ -31,25 +37,33 @@ type (
 
 	Visitor struct {
 		shared.Reference
-		Name     string
-		_visitor LifecycleVisitor
+		name     string
+		_visitor Valuer
 	}
 )
 
-func (v *Visitor) Visitor() LifecycleVisitor {
+func (v *Visitor) Valuer() Valuer {
 	return v._visitor
 }
 
-func New(name string, visitor LifecycleVisitor) *Visitor {
+func (v *Visitor) Name() string {
+	return v.name
+}
+
+func (v *Visitor) Visitor() interface{} {
+	return v._visitor
+}
+
+func NewVisitor(name string, visitor Valuer) LifecycleVisitor {
 	return &Visitor{
-		Name:     name,
+		name:     name,
 		_visitor: visitor,
 	}
 }
 
-type Visitors map[string]*Visitor
+type Visitors map[string]LifecycleVisitor
 
-func (v Visitors) Lookup(name string) (*Visitor, error) {
+func (v Visitors) Lookup(name string) (LifecycleVisitor, error) {
 	visitor, ok := v[name]
 	if !ok {
 		return nil, fmt.Errorf("not found visitor with name %v", name)
@@ -58,11 +72,11 @@ func (v Visitors) Lookup(name string) (*Visitor, error) {
 	return visitor, nil
 }
 
-func (v Visitors) Register(visitor *Visitor) {
-	v[visitor.Name] = visitor
+func (v Visitors) Register(visitor LifecycleVisitor) {
+	v[visitor.Name()] = visitor
 }
 
-func NewVisitors(visitors ...*Visitor) Visitors {
+func NewVisitors(visitors ...LifecycleVisitor) Visitors {
 	result := Visitors{}
 	for i := range visitors {
 		result.Register(visitors[i])
@@ -71,6 +85,6 @@ func NewVisitors(visitors ...*Visitor) Visitors {
 	return result
 }
 
-func (v *Visitor) Inherit(visitor *Visitor) {
-	v._visitor = visitor._visitor
+func (v *Visitor) Inherit(visitor LifecycleVisitor) {
+	v._visitor = visitor.Valuer()
 }

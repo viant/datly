@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
 )
 
@@ -53,9 +54,14 @@ func (v ViewSlice) Index() Views {
 }
 
 //Init initializes views.
-func (v ViewSlice) Init(ctx context.Context, resource *Resource) error {
+func (v ViewSlice) Init(ctx context.Context, resource *Resource, transforms marshal.TransformIndex) error {
 	for i := range v {
-		if err := v[i].Init(ctx, resource); err != nil {
+		var options []interface{}
+		transform, ok := transforms[v[i].Name]
+		if ok {
+			options = append(options, transform)
+		}
+		if err := v[i].Init(ctx, resource, options...); err != nil {
 			return err
 		}
 	}

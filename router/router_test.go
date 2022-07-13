@@ -59,7 +59,17 @@ type (
 	eventAfterFetcher  struct{}
 	eventBeforeFetcher struct{}
 	gcpMockDecoder     struct{}
+	asStrings          struct{}
 )
+
+func (a *asStrings) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+	rawString, ok := raw.(string)
+	if !ok {
+		return nil, fmt.Errorf("expected to got string but got %T", raw)
+	}
+
+	return strings.Split(rawString, " "), nil
+}
 
 func (e *eventBeforeFetcher) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
 	return nil, nil
@@ -200,7 +210,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "004_visitors",
 			uri:         "/api/events",
 			visitors: codec.NewVisitors(
-				codec.New("event_visitor", &eventAfterFetcher{}),
+				codec.NewVisitor("event_visitor", &eventAfterFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -213,7 +223,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "004_visitors",
 			uri:         "/api/events",
 			visitors: codec.NewVisitors(
-				codec.New("event_visitor", &eventBeforeFetcher{}),
+				codec.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -229,7 +239,7 @@ func TestRouter(t *testing.T) {
 				"event": reflect.TypeOf(&event{}),
 			},
 			visitors: codec.NewVisitors(
-				codec.New("event_visitor", &eventBeforeFetcher{}),
+				codec.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			expected: `[]`,
 			method:   http.MethodGet,
@@ -239,7 +249,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "005_templates",
 			uri:         "/api/events",
 			visitors: codec.NewVisitors(
-				codec.New("event_visitor", &eventBeforeFetcher{}),
+				codec.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -252,7 +262,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "005_templates",
 			uri:         "/api/events?user_id=1",
 			visitors: codec.NewVisitors(
-				codec.New("event_visitor", &eventBeforeFetcher{}),
+				codec.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -265,7 +275,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "005_templates",
 			uri:         "/api/events?quantity=10",
 			visitors: codec.NewVisitors(
-				codec.New("event_visitor", &eventBeforeFetcher{}),
+				codec.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -328,7 +338,7 @@ func TestRouter(t *testing.T) {
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MSwiRW1haWwiOiJhYmNAZXhhbXBsZS5jb20ifQ.dm3jSSuqy9wf4BsjU1dElRQQEySC5nn6fCUTmTKqt2")},
 			},
 			visitors: codec.NewVisitors(
-				codec.New(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
+				codec.NewVisitor(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
 			),
 			types: map[string]reflect.Type{
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
@@ -345,7 +355,7 @@ func TestRouter(t *testing.T) {
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MiwiRW1haWwiOiJleGFtcGxlQGdtYWlsLmNvbSJ9.XsZ115KqQK8uQE9for6NaphYS1VHdJc_famKWHo1Dcw")},
 			},
 			visitors: codec.NewVisitors(
-				codec.New(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
+				codec.NewVisitor(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
 			),
 			types: map[string]reflect.Type{
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
@@ -362,7 +372,7 @@ func TestRouter(t *testing.T) {
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJFbWFpbCI6IkFubkBleGFtcGxlLmNvbSIsIklkIjo0fQ.9A0LWtsh_tskG-hLBFVNj7PNRQE8qWc5ZioqLWPS1gQ")},
 			},
 			visitors: codec.NewVisitors(
-				codec.New(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
+				codec.NewVisitor(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
 			),
 			types: map[string]reflect.Type{
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
@@ -552,12 +562,16 @@ func TestRouter(t *testing.T) {
 			method:      http.MethodGet,
 			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 		},
-		//{
-		//	description: "transforms",
-		//	resourceURI: "025_transforms",
-		//	uri:         "/api/employees",
-		//	method:      http.MethodGet,
-		//},
+		{
+			description: "transforms",
+			resourceURI: "025_transforms",
+			uri:         "/api/employees",
+			method:      http.MethodGet,
+			visitors: map[string]codec.LifecycleVisitor{
+				"AsStrings": codec.NewCodec("AsStrings", &asStrings{}, reflect.TypeOf([]string{})),
+			},
+			expected: `[{"Id":1,"Email":"abc@example.com","Department":{"Id":1,"Name":["dep","-","1"]}},{"Id":2,"Email":"example@gmail.com","Department":{"Id":2,"Name":["dep","-","2"]}},{"Id":3,"Email":"tom@example.com","Department":{"Id":1,"Name":["dep","-","1"]}},{"Id":4,"Email":"Ann@example.com","Department":{"Id":2,"Name":["dep","-","2"]}}]`,
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {
@@ -636,6 +650,8 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 	if !assertly.AssertValues(t, actualOpenApi, generated, c.description) {
 		toolbox.Dump(actualOpenApi)
 		actBytes, _ := yaml.Marshal(actualOpenApi)
+		toolbox.Dump(string(actBytes))
+		actBytes, _ = yaml.Marshal(generated)
 		toolbox.Dump(string(actBytes))
 	}
 

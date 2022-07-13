@@ -471,8 +471,8 @@ func TestRead(t *testing.T) {
 			dataURI:     "case023_columns_codec/",
 			dest:        new(interface{}),
 			view:        "events",
-			visitors: map[string]*codec.Visitor{
-				"Strings": codec.New("Strings", &StringsCodec{}),
+			visitors: codec.Visitors{
+				"Strings": codec.NewVisitor("Strings", &StringsCodec{}),
 			},
 			expect: `[{"Name":["John","David","Anna"]}]`,
 		},

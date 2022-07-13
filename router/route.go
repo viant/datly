@@ -56,7 +56,7 @@ type (
 		Transforms       marshal.Transforms
 		Exclude          []string
 		NormalizeExclude *bool
-		_caser           format.Case
+		_caser           *format.Case
 		_excluded        map[string]bool
 		_marshaller      *json.Marshaller
 		_responseSetter  *responseSetter
@@ -165,7 +165,7 @@ func (r *Route) initCardinality() error {
 func (r *Route) initMarshaller() error {
 	marshaller, err := json.New(r.responseType(), marshal.Default{
 		OmitEmpty:  r.OmitEmpty,
-		CaseFormat: r._caser,
+		CaseFormat: *r._caser,
 		Transforms: r.Transforms.Index(),
 		Exclude:    marshal.Exclude(r.Exclude).Index(),
 	})
@@ -333,6 +333,13 @@ func (r *Route) normalizePaths() error {
 		return nil
 	}
 
+	if err := r.initCaser(); err != nil {
+		return err
+	}
+
+	aBool := false
+	r.NormalizeExclude = &aBool
+
 	for i, excluded := range r.Exclude {
 		lastDot := strings.LastIndex(excluded, ".")
 		if lastDot == -1 {
@@ -367,15 +374,21 @@ func (r *Route) indexExcluded() {
 }
 
 func (r *Route) initCaser() error {
+	if r._caser != nil {
+		return nil
+	}
+
 	if r.CaseFormat == "" {
 		r.CaseFormat = view.UpperCamel
 	}
 
 	var err error
-	r._caser, err = r.CaseFormat.Caser()
+	caser, err := r.CaseFormat.Caser()
 	if err != nil {
 		return err
 	}
+
+	r._caser = &caser
 
 	return nil
 }

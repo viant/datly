@@ -99,9 +99,11 @@ func (v *Codec) extractCodecFn(resource *Resource, paramType reflect.Type, view 
 		return nil, err
 	}
 
-	switch actual := vVisitor.Visitor().(type) {
+	switch actual := vVisitor.(type) {
+	case codec.LifecycleVisitor:
+		return actual.Valuer().Value, nil
 	case codec.Codec:
-		return actual.Value, nil
+		return actual.Valuer().Value, nil
 	default:
 		return nil, fmt.Errorf("expected %T to implement Codec", actual)
 	}
@@ -349,4 +351,59 @@ func (p *Parameter) initCodec(resource *Resource, view *View, paramType reflect.
 		return err
 	}
 	return nil
+}
+
+//ParametersIndex represents Parameter map indexed by Parameter.Name
+type ParametersIndex map[string]*Parameter
+
+//ParametersSlice represents slice of parameters
+type ParametersSlice []*Parameter
+
+//Index indexes parameters by Parameter.Name
+func (p ParametersSlice) Index() ParametersIndex {
+	result := ParametersIndex(make(map[string]*Parameter))
+	for parameterIndex := range p {
+		result.Register(p[parameterIndex])
+	}
+
+	return result
+}
+
+//Filter filters ParametersSlice with given Kind and creates Template
+func (p ParametersSlice) Filter(kind Kind) ParametersIndex {
+	result := make(map[string]*Parameter)
+
+	for parameterIndex := range p {
+		if p[parameterIndex].In.Kind != kind {
+			continue
+		}
+		result[p[parameterIndex].In.Name] = p[parameterIndex]
+
+	}
+
+	return result
+}
+
+func (p ParametersIndex) merge(with ParametersIndex) {
+	for s := range with {
+		p[s] = with[s]
+	}
+}
+
+//Lookup returns Parameter with given name
+func (p ParametersIndex) Lookup(paramName string) (*Parameter, error) {
+
+	if param, ok := p[paramName]; ok {
+		return param, nil
+	}
+
+	return nil, fmt.Errorf("not found parameter %v", paramName)
+}
+
+//Register registers parameter
+func (p ParametersIndex) Register(parameter *Parameter) {
+	keys := shared.KeysOf(parameter.Name, false)
+	for _, key := range keys {
+		p[key] = parameter
+	}
 }

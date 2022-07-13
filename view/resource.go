@@ -9,6 +9,7 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/codec"
 	"github.com/viant/datly/logger"
+	"github.com/viant/datly/router/marshal"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"reflect"
@@ -216,7 +217,7 @@ func (r *Resource) GetConnectors() Connectors {
 
 //Init initializes Resource
 func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
-	types, visitors, cache := r.readOptions(options)
+	types, visitors, cache, transforms := r.readOptions(options)
 	r._typesIndex = map[reflect.Type]string{}
 	r._types = types.copy()
 	r._visitors = visitors
@@ -245,17 +246,18 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 		return err
 	}
 
-	if err := ViewSlice(r.Views).Init(ctx, r); err != nil {
+	if err := ViewSlice(r.Views).Init(ctx, r, transforms); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (r *Resource) readOptions(options []interface{}) (Types, codec.Visitors, map[string]Columns) {
-	var types Types = Types{}
+func (r *Resource) readOptions(options []interface{}) (Types, codec.Visitors, map[string]Columns, marshal.TransformIndex) {
+	var types = Types{}
 	var visitors = codec.Visitors{}
 	var cache map[string]Columns
+	var transformsIndex marshal.TransformIndex
 	if len(options) > 0 {
 		for _, option := range options {
 			if option == nil {
@@ -268,10 +270,12 @@ func (r *Resource) readOptions(options []interface{}) (Types, codec.Visitors, ma
 				cache = actual
 			case Types:
 				types = actual
+			case marshal.TransformIndex:
+				transformsIndex = actual
 			}
 		}
 	}
-	return types, visitors, cache
+	return types, visitors, cache, transformsIndex
 }
 
 //View returns View with given name
@@ -438,4 +442,9 @@ func (r *Resource) GetTypes() Types {
 func (r *Resource) TypeName(p reflect.Type) (string, bool) {
 	name, ok := r._typesIndex[p]
 	return name, ok
+}
+
+func (r *Resource) VisitorByName(name string) (codec.LifecycleVisitor, bool) {
+	visitor, ok := r._visitors[name]
+	return visitor, ok
 }

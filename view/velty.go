@@ -384,15 +384,3 @@ func (v *VeltyCodec) init() error {
 
 	return nil
 }
-
-type VeltyNamer struct {
-}
-
-func (v *VeltyNamer) Names(rField reflect.StructField) []string {
-	veltyTag := velty.Parse(rField.Tag.Get("velty"))
-	if len(veltyTag.Names) == 0 {
-		return []string{rField.Name}
-	}
-
-	return veltyTag.Names
-}

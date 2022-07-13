@@ -6,6 +6,7 @@ type Transform struct {
 }
 
 type Transforms []*Transform
+type TransformIndex map[string]Transforms
 
 func (t Transforms) Index() map[string]*Transform {
 	var result = map[string]*Transform{}

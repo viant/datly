@@ -253,7 +253,7 @@ func (g *generator) addToSchema(schema *openapi3.Schema, route *Route, rType ref
 
 			fieldName := aField.Name
 			if isOutputSchema {
-				fieldName = format.CaseUpperCamel.Format(aField.Name, route._caser)
+				fieldName = format.CaseUpperCamel.Format(aField.Name, *route._caser)
 			}
 
 			schema.Properties[fieldName], err = g.generateSchema(route, aField.Type, defaultTag.Format, isOutputSchema, "", defaultTag, fieldPath)

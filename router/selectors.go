@@ -30,7 +30,7 @@ func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.R
 		return nil, err
 	}
 
-	return CreateSelectors(ctx, route._caser, requestMetadata, requestParams, views...)
+	return CreateSelectors(ctx, *route._caser, requestMetadata, requestParams, views...)
 }
 
 func NewRequestMetadata(route *Route) *RequestMetadata {
