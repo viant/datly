@@ -32,7 +32,7 @@
 }
 ---------- connections: -----------
 	mem://localhost/dev/Datly/dependencies/connections.yamlConnectors:
-    - DSN: ${Username}:${Password}@tcp(localhost:3306)/dev?parseTime=true
+    - DSN: /tmp/datly/generator/db.db
       Driver: sqlite3
       Name: dev
       Secret:
@@ -48,6 +48,7 @@ Resource:
         - CaseFormat: lc
           Connector:
             Ref: dev
+          FromURL: events_from.sql
           Name: events
           Selector:
             Constraints:
@@ -60,6 +61,7 @@ Resource:
                 Projection: true
             Limit: 40
           Table: events
+          UseBindingPositions: true
 Routes:
     - Cardinality: Many
       CaseFormat: lc
@@ -73,6 +75,7 @@ Routes:
             - '*'
         ExposeHeaders:
             - '*'
+      EnableAudit: false
       Method: GET
       Namespace:
         ev: events

@@ -131,7 +131,12 @@ func matchDataSet(cursor *parsly.Cursor, columns view.ColumnIndex, column *view.
 				return dataSetCursor.NewError(comaMatcher)
 			}
 
-			if err := matchFieldValue(valueCursor, columns, column.ColumnType(), column.Format, buffer, placeholders, methods); err != nil {
+			columnType := column.ColumnType()
+			if columnType.Kind() == reflect.Ptr {
+				columnType = columnType.Elem()
+			}
+
+			if err := matchFieldValue(valueCursor, columns, columnType, column.Format, buffer, placeholders, methods); err != nil {
 				return err
 			}
 

@@ -78,7 +78,7 @@ func TestRun(t *testing.T) {
 		{
 			description: "column codec",
 			URI:         "case003_columns_codec",
-			args:        []string{"-N=events", "-D=sqlite3", "-X=testdata/case003_columns_codec/events.sql"},
+			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly/generator/db.db", "-X=testdata/case003_columns_codec/events.sql"},
 			viewURL:     "/v1/api/meta/view/dev/events",
 			dataURL:     "/v1/api/dev/events",
 			dataMethod:  http.MethodGet,
