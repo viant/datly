@@ -147,7 +147,7 @@ func (c *Connector) setDriverOptions(secret *scy.Secret) {
 	switch c.Driver { //TODO remove globel exposure toward actual database/sql driver
 	case "bigquery":
 		gcpService := gcp.New(client.NewGCloud())
-		client, err := gcpService.AuthClient(context.Background(), append(gcp.Scopes, "https://www.googleapis.com/auth/bigquery", "https://www.googleapis.com/auth/bigquery.insertdata")...)
+		client, err := gcpService.AuthClient(context.Background(), append(gcp.Scopes, "https://www.googleapis.com/auth/bigquery")...)
 		if err == nil && client != nil {
 			bigquery.SetOptions(option.WithHTTPClient(client))
 		}
