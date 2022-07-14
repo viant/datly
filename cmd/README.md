@@ -144,7 +144,7 @@ JOIN (SELECT ID, NAME, DEPT_ID,
             'x1,x2'
              WHEN COLUMN_X = 2 THEN
             'x3,x4'
-       END) AS SLICE /* {"Codec":{"Ref":"AsStrings"}}  */  
+       END) AS SLICE /* {"Codec":{"Ref":"AsStrings"}, "DataType": "string"} */  
     FROM EMP t) employee ON dept.ID = employee.DEPT_ID
 JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
 WHERE ID = $Id

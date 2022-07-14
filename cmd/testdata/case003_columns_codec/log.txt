@@ -46,6 +46,11 @@ Resource:
     ModTime: "0001-01-01T00:00:00Z"
     Views:
         - CaseFormat: lc
+          ColumnsConfig:
+            slice:
+                Codec:
+                    Ref: AsStrings
+                DataType: string
           Connector:
             Ref: dev
           FromURL: events_from.sql
@@ -62,6 +67,20 @@ Resource:
             Limit: 40
           Table: events
           UseBindingPositions: true
+          With:
+            - Cardinality: Many
+              Column: event_type_id
+              Holder: EventType
+              IncludeColumn: true
+              Name: events_event_type
+              Of:
+                Column: id
+                Name: event_type#
+                Ref: event_type
+        - Name: event_type
+          Selector:
+            Limit: 40
+          Table: event_types
 Routes:
     - Cardinality: Many
       CaseFormat: lc
@@ -79,6 +98,7 @@ Routes:
       Method: GET
       Namespace:
         ev: events
+        ty: event_type#
       Style: Basic
       URI: /v1/api/dev/events
       View:

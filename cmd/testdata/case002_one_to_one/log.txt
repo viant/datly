@@ -61,7 +61,7 @@ Resource:
           With:
             - Cardinality: Many
               Column: event_type_id
-              Holder: Event_types
+              Holder: EventTypes
               Name: eventsevent_types
               Of:
                 Column: id
@@ -84,6 +84,7 @@ Routes:
             - '*'
         ExposeHeaders:
             - '*'
+      EnableAudit: false
       Method: GET
       Namespace:
         ty: event_types#

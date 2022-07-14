@@ -633,6 +633,10 @@ func (v *View) inherit(view *View) error {
 		v.Cache = &shallowCopy
 	}
 
+	if v.ColumnsConfig == nil {
+		v.ColumnsConfig = view.ColumnsConfig
+	}
+
 	return nil
 }
 

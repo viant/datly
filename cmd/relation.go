@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
@@ -13,10 +14,12 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/metadata"
+	"github.com/viant/sqlx/metadata/ast/parser"
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/sqlx/option"
 	rdata "github.com/viant/toolbox/data"
+	"github.com/viant/toolbox/format"
 	"reflect"
 	"strings"
 )
@@ -55,6 +58,12 @@ func buildXRelations(options *Options, route *router.Resource, viewRoute *router
 		if aView == nil {
 			return fmt.Errorf("failed to lookup view: %v", join.Owner.Name)
 		}
+
+		newCase, err := format.NewCase(view.DetectCase(join.Table.Alias))
+		if err != nil {
+			return err
+		}
+
 		aView.With = append(aView.With, &view.Relation{
 			Name: aView.Name + "_" + join.Table.Alias,
 			Of: &view.ReferenceView{
@@ -65,7 +74,7 @@ func buildXRelations(options *Options, route *router.Resource, viewRoute *router
 			Cardinality: cardinality,
 			Column:      join.OwnerKey,
 			ColumnAlias: join.KeyAlias,
-			Holder:      strings.Title(join.Table.Alias),
+			Holder:      newCase.Format(join.Table.Alias, format.CaseUpperCamel),
 
 			IncludeColumn: true,
 		})
@@ -81,6 +90,10 @@ func updateView(options *Options, table *Table, aView *view.View) error {
 
 	updateTableColumnTypes(options, table)
 	updateParameterTypes(table)
+
+	if err := updateColumnsConfig(table, aView); err != nil {
+		return err
+	}
 
 	if viewMeta := table.ViewMeta; viewMeta != nil {
 		var SQL string
@@ -146,6 +159,34 @@ func updateView(options *Options, table *Table, aView *view.View) error {
 	return nil
 }
 
+func updateColumnsConfig(table *Table, aView *view.View) error {
+	query, err := parser.ParseQuery(table.SQL)
+	if err != nil {
+		return err
+	}
+
+	aView.ColumnsConfig = map[string]*view.ColumnConfig{}
+	for _, item := range query.List {
+
+		if item.Comments == "" {
+			continue
+		}
+
+		configJSON := strings.TrimPrefix(item.Comments, "/*")
+		configJSON = strings.TrimSuffix(configJSON, "*/")
+		configJSON = strings.TrimSpace(configJSON)
+
+		aConfig := &view.ColumnConfig{}
+		if err := json.Unmarshal([]byte(configJSON), aConfig); err != nil {
+			fmt.Printf(err.Error())
+			continue
+		}
+
+		aView.ColumnsConfig[item.Alias] = aConfig
+	}
+	return nil
+}
+
 func updateTableColumnTypes(options *Options, table *Table) {
 	//TODO read all column per alias from main and join table
 	table.ColumnTypes = map[string]string{}
@@ -181,7 +222,6 @@ func updateTableColumnTypes(options *Options, table *Table) {
 }
 
 func createAndEvalauteTemplate(meta *ast.ViewMeta) (string, error) {
-
 	schemaFields := make([]reflect.StructField, len(meta.Parameters))
 	presenceFields := make([]reflect.StructField, len(meta.Parameters))
 
@@ -284,6 +324,12 @@ func buildRelations(options *Options, meta *metadata.Service, db *sql.DB, route 
 				},
 			}
 			route.Resource.AddViews(relView)
+
+			caseFormat, err := format.NewCase(view.DetectCase(relName))
+			if err != nil {
+				return err
+			}
+
 			aView.With = append(aView.With, &view.Relation{
 				Name: aView.Name + relName,
 				Of: &view.ReferenceView{
@@ -292,7 +338,7 @@ func buildRelations(options *Options, meta *metadata.Service, db *sql.DB, route 
 				},
 				Cardinality: view.Many,
 				Column:      parentColumn,
-				Holder:      strings.Title(relName),
+				Holder:      caseFormat.Format(relName, format.CaseUpperCamel),
 			})
 
 			viewRoute.Index.Namespace[namespace(relTable)] = relName + "#"

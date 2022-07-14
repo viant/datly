@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
+	"github.com/viant/afs/mem"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/router/openapi3"
@@ -43,8 +44,6 @@ type testcase struct {
 	dataMethod  string
 }
 
-//TODO: afs caches generated routes, it makes every test case depends on previous.
-//TODO: clean afs cache after every run, currently it is needed to run one by one.
 func TestRun(t *testing.T) {
 	TimeNow = func() time.Time {
 		parse, _ := time.Parse("2006-01-02 15:04:05.000000000 -0700 MST", "2014-11-12 11:45:26.000000000 +0000 UTC")
@@ -87,7 +86,8 @@ func TestRun(t *testing.T) {
 
 	loader := afs.New()
 	//for i, testCase := range testCases[len(testCases)-1:] {
-	for i, testCase := range testCases[:1] {
+	for i, testCase := range testCases {
+		mem.ResetSingleton()
 		gateway.ResetSingleton()
 
 		fmt.Printf("Running testcase: %v\n", i)

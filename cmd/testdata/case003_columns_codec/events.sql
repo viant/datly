@@ -1,13 +1,14 @@
-SELECT events.*
---        event_type.*
+SELECT events.*,
+       event_type.*
 FROM (
          SELECT id,
-                name,
+                event_type_id,
                 (CASE
-                     WHEN COLUMN_X = 1 THEN
+                     WHEN id = 1 THEN
                          'x1,x2'
-                     WHEN COLUMN_X = 2 THEN
+                     ELSE
                          'x3,x4'
-                    END) AS slice /* {"Codec":{"Ref":"AsStrings"}}  */
+                    END) AS slice /* {"Codec":{"Ref":"AsStrings"}, "DataType": "string"}  */
          FROM events
      ) events
+         JOIN event_types event_type ON events.event_type_id = event_type.id

@@ -86,12 +86,20 @@ func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, co
 		return fmt.Errorf("column name was empty")
 	}
 
-	if c.rType == nil {
+	nonPtrType := c.rType
+	for nonPtrType != nil && nonPtrType.Kind() == reflect.Ptr {
+		nonPtrType = nonPtrType.Elem()
+	}
+
+	if nonPtrType == nil || nonPtrType.Kind() == reflect.Interface {
 		rType, err := ParseType(c.DataType)
-		if err != nil {
+		if err != nil && c.rType == nil {
 			return err
 		}
-		c.rType = rType
+
+		if rType != nil {
+			c.rType = rType
+		}
 	}
 
 	if err := c.buildSQLExpression(allowNulls); err != nil {

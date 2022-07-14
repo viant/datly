@@ -1,29 +1,36 @@
 Alias: t
 Batch:
   Parent: 10000
-CaseFormat: lu
-Caser: 5
+CaseFormat: lc
+Caser: 3
 Columns:
   - DataType: INTEGER
     Filterable: true
     Name: id
     Nullable: true
-  - DataType: DATETIME
-    Filterable: true
-    Name: timestamp
-    Nullable: true
   - DataType: INTEGER
     Filterable: true
     Name: event_type_id
     Nullable: true
-  - DataType: DECIMAL(7, 2)
+  - Codec:
+      Name: AsStrings
+      Ref: AsStrings
+      Schema:
+        Cardinality: One
+    DataType: string
     Filterable: true
-    Name: quantity
+    Name: slice
     Nullable: true
-  - DataType: INTEGER
-    Filterable: true
-    Name: user_id
-    Nullable: true
+ColumnsConfig:
+  slice:
+    Codec:
+      Name: AsStrings
+      Ref: AsStrings
+      Schema:
+        Cardinality: One
+    DataType: string
+    Expression: null
+    Name: ""
 Connector:
   DSN: /tmp/datly/generator/db.db
   Driver: sqlite3
@@ -32,6 +39,8 @@ Connector:
     Data: null
     Key: blowfish://default
     URL: mem://localhost/resource/mysql.json
+From: "SELECT id,\n                event_type_id,\n                (CASE\n                     WHEN id = 1 THEN\n                         'x1,x2'\n                     ELSE\n                         'x3,x4'\n                    END) AS slice /* {\"Codec\":{\"Ref\":\"AsStrings\"}, \"DataType\": \"string\"}  */\n         FROM events\n    "
+FromURL: events_from.sql
 Logger:
   Name: ""
 MatchStrategy: read_matched
@@ -54,12 +63,24 @@ Template:
     Cardinality: One
   Schema:
     Cardinality: One
-  Source: events
+  Source: |-
+    (SELECT id,
+                    event_type_id,
+                    (CASE
+                         WHEN id = 1 THEN
+                             'x1,x2'
+                         ELSE
+                             'x3,x4'
+                        END) AS slice /* {"Codec":{"Ref":"AsStrings"}, "DataType": "string"}  */
+             FROM events
+        )
+UseBindingPositions: true
 With:
   - Cardinality: Many
     Column: event_type_id
-    Holder: Event_types
-    Name: eventsevent_types
+    Holder: EventType
+    IncludeColumn: true
+    Name: events_event_type
     Of:
       Alias: t
       Batch:
@@ -89,8 +110,8 @@ With:
       Logger:
         Name: ""
       MatchStrategy: read_matched
-      Name: event_types#
-      Ref: event_types
+      Name: event_type#
+      Ref: event_type
       Schema:
         Cardinality: One
       Selector:
