@@ -9,6 +9,9 @@
 
 ```bash
  ./datly  -C=dev  -N=MyViewName -T=MyTableName
+ 
+open http://127.0.0.1:8080/v1/api/dev/MyViewName
+
 ```
 
 #### Generate rule with endpoint for a table and SQL
