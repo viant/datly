@@ -29,8 +29,6 @@ ColumnsConfig:
       Schema:
         Cardinality: One
     DataType: string
-    Expression: null
-    Name: ""
 Connector:
   DSN: /tmp/datly/generator/db.db
   Driver: sqlite3

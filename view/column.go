@@ -174,6 +174,10 @@ func (c *Column) inherit(config *ColumnConfig) {
 	if config.DataType != nil {
 		c.DataType = *config.DataType
 	}
+
+	if config.Format != nil {
+		c.Format = *config.Format
+	}
 }
 
 //Columns wrap slice of Column
@@ -285,8 +289,9 @@ func (c Columns) updateTypes(columns []*Column, caser format.Case) {
 }
 
 type ColumnConfig struct {
-	Name       string
-	Expression *string
-	Codec      *Codec
-	DataType   *string
+	Name       string  `json:",omitempty"`
+	Expression *string `json:",omitempty"`
+	Codec      *Codec  `json:",omitempty"`
+	DataType   *string `json:",omitempty"`
+	Format     *string `json:",omitempty"`
 }

@@ -235,7 +235,7 @@ func (f *fieldMarshaller) updateFieldMarshaller(actualType reflect.Type, config 
 		if rType.Kind() == reflect.Slice && rType.Elem().Kind() == reflect.Uint8 {
 			updateBytesMarshaller(f, wasPtr, defaultTag)
 		} else if rType == timeType {
-			updateTimeMarshaller(f, wasPtr, defaultTag)
+			updateTimeMarshaller(f, wasPtr, defaultTag, config)
 		} else {
 			marshallers, err := j.structMarshallers(rType, config, f.path, f.outputPath, defaultTag)
 			if err != nil {
@@ -284,10 +284,14 @@ func (f *fieldMarshaller) updateInterfaceMarshaller(config marshal.Default, j *M
 	}
 }
 
-func updateTimeMarshaller(f *fieldMarshaller, wasPtr bool, tag *DefaultTag) {
+func updateTimeMarshaller(f *fieldMarshaller, wasPtr bool, tag *DefaultTag, config marshal.Default) {
 	timeFormat := time.RFC3339
 	if tag.Format != "" {
 		timeFormat = tag.Format
+	}
+
+	if config.DateLayout != "" {
+		timeFormat = config.DateLayout
 	}
 
 	if wasPtr {

@@ -9,6 +9,7 @@ type Default struct {
 	CaseFormat format.Case
 	Transforms map[string]*Transform
 	Exclude    map[string]bool
+	DateLayout string
 }
 
 type Exclude []string

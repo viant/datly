@@ -57,6 +57,7 @@ type (
 		Transforms       marshal.Transforms
 		Exclude          []string
 		NormalizeExclude *bool
+		DateFormat       string `json:",omitempty"`
 		_caser           *format.Case
 		_excluded        map[string]bool
 		_marshaller      *json.Marshaller
@@ -169,6 +170,7 @@ func (r *Route) initMarshaller() error {
 		CaseFormat: *r._caser,
 		Transforms: r.Transforms.Index(),
 		Exclude:    marshal.Exclude(r.Exclude).Index(),
+		DateLayout: r.DateFormat,
 	})
 
 	if err != nil {

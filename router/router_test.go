@@ -573,6 +573,14 @@ func TestRouter(t *testing.T) {
 			},
 			expected: `[{"Id":1,"Email":"abc@example.com","Department":{"Id":1,"Name":["dep","-","1"]}},{"Id":2,"Email":"example@gmail.com","Department":{"Id":2,"Name":["dep","-","2"]}},{"Id":3,"Email":"tom@example.com","Department":{"Id":1,"Name":["dep","-","1"]}},{"Id":4,"Email":"Ann@example.com","Department":{"Id":2,"Name":["dep","-","2"]}}]`,
 		},
+		{
+			description: "transforms",
+			resourceURI: "026_date_format",
+			uri:         "/api/events",
+			method:      http.MethodGet,
+			visitors:    map[string]codec.LifecycleVisitor{},
+			expected:    `[{"Id":1,"Timestamp":"11-03-2019","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"15-03-2019","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"10-04-2019","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {
