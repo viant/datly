@@ -64,6 +64,7 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 	if err != nil {
 		return err
 	}
+
 	t._view = view
 	t._parametersIndex = ParametersSlice(t.Parameters).Index()
 	t._fieldIndex = map[string]int{}

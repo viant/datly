@@ -37,6 +37,7 @@ type (
 		Positions        []int `json:",omitempty"`
 		valueAccessor    *Accessor
 		presenceAccessor *Accessor
+		DateFormat       string `json:",omitempty"`
 	}
 
 	//Location tells how to get parameter value.
