@@ -30,6 +30,7 @@ func (m *ViewMeta) addParameter(param *Parameter, indexPosition bool) {
 	actualIndex := m.actualParametersLen - 1
 
 	if index, ok := m.index[param.Id]; ok {
+		m.Parameters[index].Required = m.Parameters[index].Required || param.Required
 		if !indexPosition {
 			return
 		}

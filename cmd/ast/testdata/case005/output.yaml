@@ -3,12 +3,14 @@ parameters:
     name: id
     kind: query
     type: int
+    required: false
     positions:
       - 0
   - id: quantity
     name: quantity
     kind: query
     type: string
+    required: false
     positions:
       - 1
       - 2
@@ -26,3 +28,4 @@ source: |
   AND quantity = $quantity
   AND quantity = $Unsafe.quantity
   #end
+hasveltysyntax: true

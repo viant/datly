@@ -39,7 +39,6 @@ outer:
 				viewMeta.HasVeltySyntax = true
 				break outer
 			}
-		//Do nothing
 		default:
 			viewMeta.HasVeltySyntax = true
 			break outer
@@ -54,7 +53,7 @@ outer:
 	}
 
 	variables := map[string]bool{}
-	implyDefaultParams(variables, block.Statements(), viewMeta)
+	implyDefaultParams(variables, block.Statements(), viewMeta, true)
 
 	if viewMeta.HasVeltySyntax {
 		viewMeta.Source = actualSource
@@ -67,7 +66,7 @@ outer:
 	return viewMeta, nil
 }
 
-func implyDefaultParams(variables map[string]bool, statements []ast.Statement, meta *ViewMeta) {
+func implyDefaultParams(variables map[string]bool, statements []ast.Statement, meta *ViewMeta, required bool) {
 	for _, statement := range statements {
 		switch actual := statement.(type) {
 		case *expr.Select:
@@ -91,6 +90,7 @@ func implyDefaultParams(variables map[string]bool, statements []ast.Statement, m
 				Kind:     "query",
 				Type:     "string",
 				fullName: actual.FullName,
+				Required: required,
 			}, true)
 
 		case *stmt.Statement:
@@ -105,7 +105,7 @@ func implyDefaultParams(variables map[string]bool, statements []ast.Statement, m
 
 		switch actual := statement.(type) {
 		case ast.StatementContainer:
-			implyDefaultParams(variables, actual.Statements(), meta)
+			implyDefaultParams(variables, actual.Statements(), meta, false)
 		}
 	}
 }

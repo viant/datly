@@ -85,8 +85,8 @@ func TestRun(t *testing.T) {
 	}
 
 	loader := afs.New()
-	//for i, testCase := range testCases[len(testCases)-1:] {
-	for i, testCase := range testCases {
+	for i, testCase := range testCases[len(testCases)-1:] {
+		//for i, testCase := range testCases {
 		mem.ResetSingleton()
 		gateway.ResetSingleton()
 
@@ -98,7 +98,11 @@ func TestRun(t *testing.T) {
 			continue
 		}
 
-		server := New(testCase.args, logger)
+		server, err := New(testCase.args, logger)
+		if !assert.Nil(t, err, testCase.description) {
+			continue
+		}
+		
 		checkGeneratedOpenAPI(t, loader, testLocation, testCase, server)
 		checkGeneratedView(t, loader, testLocation, testCase, server)
 		checkReadData(t, server, testCase, loader, testLocation)

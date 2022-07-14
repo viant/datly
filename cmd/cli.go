@@ -14,35 +14,34 @@ import (
 	"github.com/viant/datly/router/openapi3"
 	"gopkg.in/yaml.v3"
 	"io"
-	"log"
 	"os"
 )
 
-func New(args []string, logger io.Writer) *standalone.Server {
+func New(args []string, logger io.Writer) (*standalone.Server, error) {
 	os.Setenv("AWS_SDK_LOAD_CONFIG", "true")
 	options := &Options{}
 	_, err := flags.ParseArgs(options, args)
 	if isHelOption(args) {
-		return nil
+		return nil, nil
 	}
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	options.Init()
 	ctx := context.Background()
 	config, err := loadConfig(ctx, options)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	err = initConfig(config, options)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	reportContent(logger, "------------ config ------------\n\t "+options.ConfigURL, options.ConfigURL)
 	var authService *cognito.Service
 	if config.Cognito != nil {
 		if authService, err = lambda.InitAuthService(config.Config); err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
 		fmt.Printf("with auth Service: %T\n", authService)
 	}
@@ -56,7 +55,7 @@ func New(args []string, logger io.Writer) *standalone.Server {
 	}
 	if options.WriteLocation != "" {
 		dumpConfiguration(options)
-		return nil
+		return nil, nil
 	}
 
 	var srv *standalone.Server
@@ -64,6 +63,10 @@ func New(args []string, logger io.Writer) *standalone.Server {
 		srv, err = standalone.New(config)
 	} else {
 		srv, err = standalone.NewWithAuth(config, authService)
+	}
+
+	if err != nil {
+		return nil, err
 	}
 
 	if options.OpenApiURL != "" {
@@ -74,11 +77,11 @@ func New(args []string, logger io.Writer) *standalone.Server {
 	}
 
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	_, _ = logger.Write([]byte(fmt.Sprintf("starting endpoint: %v\n", config.Endpoint.Port)))
-	return srv
+	return srv, nil
 }
 
 func dumpConfiguration(options *Options) {

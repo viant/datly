@@ -102,9 +102,13 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		buildExcludeColumn(xTable, aView, viewRoute)
 	}
 	if len(options.Relations) > 0 && conn != nil {
-		db, _ := conn.Db()
+		db, err := conn.Db()
+		if err != nil {
+			return err
+		}
+
 		meta := metadata.New()
-		err := buildRelations(options, meta, db, route, aView, viewRoute)
+		err = buildRelations(options, meta, db, route, aView, viewRoute)
 		if err != nil {
 			return err
 		}

@@ -3,6 +3,7 @@ parameters:
     name: Id
     kind: query
     type: string
+    required: true
     positions:
       - 0
 from: |-
