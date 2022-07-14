@@ -148,7 +148,6 @@ func buildExcludeColumn(xTable *Table, aView *view.View, viewRoute *router.Route
 func detectCaseFormat(xTable *Table) view.CaseFormat {
 	var result = "lc"
 	if len(xTable.Inner) > 0 {
-		result = view.DetectCase(xTable.Inner[0].Name)
 		for _, candidate := range xTable.Inner {
 			if len(candidate.Name) > 3 {
 				result = view.DetectCase(xTable.Inner[0].Name)

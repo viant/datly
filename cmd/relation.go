@@ -162,7 +162,7 @@ func updateView(options *Options, table *Table, aView *view.View) error {
 func updateColumnsConfig(table *Table, aView *view.View) error {
 	query, err := parser.ParseQuery(table.SQL)
 	if err != nil {
-		return err
+		return nil
 	}
 
 	aView.ColumnsConfig = map[string]*view.ColumnConfig{}
@@ -190,7 +190,10 @@ func updateColumnsConfig(table *Table, aView *view.View) error {
 func updateTableColumnTypes(options *Options, table *Table) {
 	//TODO read all column per alias from main and join table
 	table.ColumnTypes = map[string]string{}
-	db, _ := options.Connector.New().Db()
+	db, err := options.Connector.New().Db()
+	if err != nil {
+		fmt.Printf(err.Error())
+	}
 	SQL := "SELECT * FROM " + table.Name + " WHERE 1 = 0"
 	if strings.Contains(strings.ToUpper(table.InnerSQL), "JOIN") {
 		SQL = table.InnerSQL
@@ -218,7 +221,6 @@ func updateTableColumnTypes(options *Options, table *Table) {
 			}
 		}
 	}
-	fmt.Printf("ColumnTypes: %v\n", table.ColumnTypes)
 }
 
 func createAndEvalauteTemplate(meta *ast.ViewMeta) (string, error) {
