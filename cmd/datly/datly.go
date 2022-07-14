@@ -35,7 +35,9 @@ func main() {
 	}()
 
 	server := cmd.New(os.Args[1:], &ConsoleWriter{})
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatal(err.Error())
+	if server != nil {
+		if err := server.ListenAndServe(); err != nil {
+			log.Fatal(err.Error())
+		}
 	}
 }
