@@ -42,22 +42,15 @@ func TestEnrichWithDiscover(t *testing.T) {
 			input:       `( (     (SELECT * FROM (SELECT * FROM EVENTS WHERE ID = 10))))`,
 			output:      `(SELECT * FROM (SELECT * FROM EVENTS WHERE ID = 10) $WHERE_CRITERIA)`,
 		},
-		//		{
-		//			description: `inner select, with where #1`,
-		//			input:       `SELECT * FROM (SELECT * FROM EVENTS WHERE ID = 10) WHERE 1=1`,
-		//			contains:    true,
-		//		},
-		//		{
-		//			description: `inner select, with where #2`,
-		//			input: `SELECT * FROM (
-		//SELECT * FROM EVENTS
-		//) WHERE (id = 1 OR id = 2) $CRITERIA`,
-		//			contains: true,
-		//		},
+		{
+			description: `inner select, without where`,
+			input:       `SELECT * FROM (SELECT * FROM EVENTS WHERE ID = 10) WHERE 1 = 1 GROUP BY EVENT_NAME `,
+			output:      `(SELECT * FROM (SELECT * FROM EVENTS WHERE ID = 10) WHERE 1 = 1 $AND_CRITERIA GROUP BY EVENT_NAME)`,
+		},
 	}
 
-	for _, testcase := range testcases[len(testcases)-1:] {
-		//for _, testcase := range testcases {
+	//for _, testcase := range testcases[len(testcases)-1:] {
+	for _, testcase := range testcases {
 		discover := EnrichWithDiscover(testcase.input, true)
 		assert.Equal(t, testcase.output, discover, testcase.description)
 	}

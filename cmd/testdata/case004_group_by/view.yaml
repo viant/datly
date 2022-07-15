@@ -1,0 +1,133 @@
+Alias: t
+Batch:
+  Parent: 10000
+CaseFormat: lc
+Caser: 3
+Columns:
+  - Filterable: true
+    Name: totalTypes
+    Nullable: true
+  - DataType: INTEGER
+    Filterable: true
+    Name: id
+    Nullable: true
+  - DataType: INTEGER
+    Filterable: true
+    Name: eventTypeId
+    Nullable: true
+Connector:
+  DSN: /tmp/datly/generator/db.db
+  Driver: sqlite3
+  Name: dev
+  Secret:
+    Data: null
+    Key: blowfish://default
+    URL: mem://localhost/resource/mysql.json
+From: "SELECT\n                COUNT(*) as totalTypes,\n                id,\n                event_type_id as eventTypeId\n         FROM events\n         WHERE 1 = 1\n         AND quantity > ?\n         GROUP BY event_type_id\n         ORDER BY 1\n        "
+FromURL: events_from.sql
+Logger:
+  Name: ""
+MatchStrategy: read_matched
+Name: events
+Schema:
+  Cardinality: One
+Selector:
+  Constraints:
+    Criteria: true
+    Filterable:
+      - '*'
+    Limit: true
+    Offset: true
+    OrderBy: false
+    Projection: true
+  Limit: 40
+Table: events
+Template:
+  Parameters:
+    - In:
+        Kind: query
+        Name: quantity
+      Name: quantity
+      Positions:
+        - 0
+      PresenceName: quantity
+      Required: true
+      Schema:
+        Cardinality: One
+        DataType: string
+  PresenceSchema:
+    Cardinality: One
+  Schema:
+    Cardinality: One
+  Source: |-
+    (SELECT
+                    COUNT(*) as totalTypes,
+                    id,
+                    event_type_id as eventTypeId
+             FROM events
+             WHERE 1 = 1
+             AND quantity > ?
+             GROUP BY event_type_id
+             ORDER BY 1
+            )
+UseBindingPositions: true
+With:
+  - Cardinality: Many
+    Column: event_type_id
+    Holder: EventTypes
+    IncludeColumn: true
+    Name: events_eventTypes
+    Of:
+      Alias: t
+      Batch:
+        Parent: 10000
+      CaseFormat: lu
+      Caser: 5
+      Column: id
+      Columns:
+        - DataType: INTEGER
+          Name: id
+          Nullable: true
+        - DataType: VARCHAR(255)
+          Name: name
+          Nullable: true
+        - DataType: INTEGER
+          Name: account_id
+          Nullable: true
+      Connector:
+        DSN: /tmp/datly/generator/db.db
+        Driver: sqlite3
+        Name: dev
+        Secret:
+          Data: null
+          Key: blowfish://default
+          URL: mem://localhost/resource/mysql.json
+      Field: id
+      From: "SELECT * FROM event_types\n   "
+      FromURL: "SELECT * FROM event_types\n   "
+      Logger:
+        Name: ""
+      MatchStrategy: read_matched
+      Name: eventTypes#
+      Ref: eventTypes
+      Schema:
+        Cardinality: One
+      Selector:
+        Constraints:
+          Criteria: false
+          Filterable: null
+          Limit: false
+          Offset: false
+          OrderBy: false
+          Projection: false
+        Limit: 40
+      Table: event_types
+      Template:
+        PresenceSchema:
+          Cardinality: One
+        Schema:
+          Cardinality: One
+        Source: |-
+          (SELECT * FROM event_types
+             )
+      UseBindingPositions: true

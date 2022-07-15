@@ -3,8 +3,17 @@ package metadata
 import (
 	"bytes"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/parsly"
 	"strings"
 )
+
+var where = []byte("where")
+var afterWhere = [][]byte{
+	[]byte("group"),
+	[]byte("order"),
+	[]byte("limit"),
+	[]byte("having"),
+}
 
 func EnrichWithDiscover(template string, withParentheses bool) string {
 	buffer := bytes.Buffer{}
@@ -22,7 +31,6 @@ func EnrichWithDiscover(template string, withParentheses bool) string {
 		buffer.WriteByte('(')
 	}
 
-	buffer.Write(tempAsBytes)
 	appendAutoDiscover(tempAsBytes, &buffer)
 
 	if withParentheses {
@@ -34,15 +42,66 @@ func EnrichWithDiscover(template string, withParentheses bool) string {
 
 func appendAutoDiscover(tempAsBytes []byte, buffer *bytes.Buffer) {
 	if containsAnyCriteria(tempAsBytes) {
+		buffer.Write(tempAsBytes)
 		return
 	}
 
-	if ContainsWhereClause(tempAsBytes) {
+	cursor := parsly.NewCursor("", tempAsBytes, 0)
+	candidates := []*parsly.Token{parenthesesMatcher}
+
+	matched := cursor.MatchAfterOptional(whitespaceMatcher, candidates...)
+	candidates = []*parsly.Token{parenthesesMatcher, WhitespaceTerminator}
+
+	var prevPos int
+	var hasCriteria bool
+	var breakOuter bool
+	var wroteCriteria bool
+
+outer:
+	for !breakOuter {
+		matched = cursor.MatchAfterOptional(whitespaceMatcher, candidates...)
+		switch matched.Code {
+		case parenthesesToken:
+			matched = cursor.MatchAfterOptional(whitespaceMatcher, parenthesesMatcher)
+			continue outer
+		case whitespaceTerminateToken:
+			text := []byte(matched.Text(cursor))
+			if bytes.EqualFold(text, where) {
+				hasCriteria = true
+				continue
+			}
+
+			for _, clause := range afterWhere {
+				if bytes.EqualFold(clause, text) {
+					buffer.WriteByte(' ')
+					if hasCriteria {
+						buffer.WriteString(keywords.AndCriteria)
+					} else {
+						buffer.WriteString(keywords.WhereCriteria)
+					}
+					breakOuter = true
+					wroteCriteria = true
+					break
+				}
+			}
+
+		case parsly.EOF, parsly.Invalid:
+			breakOuter = true
+		}
+
+		buffer.Write(tempAsBytes[prevPos:cursor.Pos])
+		prevPos = cursor.Pos
+	}
+
+	buffer.Write(tempAsBytes[cursor.Pos:])
+
+	if !wroteCriteria {
 		buffer.WriteByte(' ')
-		buffer.WriteString(keywords.AndCriteria)
-	} else {
-		buffer.WriteByte(' ')
-		buffer.WriteString(keywords.WhereCriteria)
+		if !hasCriteria {
+			buffer.WriteString(keywords.WhereCriteria)
+		} else {
+			buffer.WriteString(keywords.AndCriteria)
+		}
 	}
 }
 

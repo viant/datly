@@ -38,7 +38,7 @@ func TestDetectColumnsSQL(t *testing.T) {
 	}
 
 	for _, testcase := range testcases {
-		sql, _ := detectColumnsSQL(testcase.view.Source(), testcase.view)
+		sql, _ := DetectColumnsSQL(testcase.view.Source(), testcase.view)
 		assert.Equal(t, testcase.sql, sql, testcase.description)
 	}
 }

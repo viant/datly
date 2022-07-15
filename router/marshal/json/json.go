@@ -2,6 +2,7 @@ package json
 
 import (
 	"bytes"
+	goJson "encoding/json"
 	"fmt"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
@@ -831,7 +832,15 @@ func (j *Marshaller) stringifyNonPrimitive(rType reflect.Type) (marshallObjFn, e
 	case reflect.Slice:
 		return j.storeOrLoadSliceMarshaller(rType)
 	default:
-		return nil, fmt.Errorf("unsupported type %v", rType)
+		return func(ptr unsafe.Pointer, fields []*fieldMarshaller, sb *bytes.Buffer, filters *Filters, path string) error {
+			asIface := xunsafe.AsInterface(ptr)
+			ifaceMarshal, err := goJson.Marshal(asIface)
+			if err != nil {
+				return err
+			}
+			sb.Write(ifaceMarshal)
+			return nil
+		}, nil
 	}
 }
 

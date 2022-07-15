@@ -82,11 +82,19 @@ func TestRun(t *testing.T) {
 			dataURL:     "/v1/api/dev/events",
 			dataMethod:  http.MethodGet,
 		},
+		{
+			description: "group by",
+			URI:         "case004_group_by",
+			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly/generator/db.db", "-X=testdata/case004_group_by/events.sql"},
+			viewURL:     "/v1/api/meta/view/dev/events",
+			dataURL:     "/v1/api/dev/events?quantity=10",
+			dataMethod:  http.MethodGet,
+		},
 	}
 
 	loader := afs.New()
-	for i, testCase := range testCases[len(testCases)-1:] {
-		//for i, testCase := range testCases {
+	//for i, testCase := range testCases[len(testCases)-1:] {
+	for i, testCase := range testCases {
 		mem.ResetSingleton()
 		gateway.ResetSingleton()
 
@@ -102,7 +110,7 @@ func TestRun(t *testing.T) {
 		if !assert.Nil(t, err, testCase.description) {
 			continue
 		}
-		
+
 		checkGeneratedOpenAPI(t, loader, testLocation, testCase, server)
 		checkGeneratedView(t, loader, testLocation, testCase, server)
 		checkReadData(t, server, testCase, loader, testLocation)

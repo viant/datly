@@ -5,8 +5,6 @@ import (
 	"github.com/viant/parsly"
 )
 
-var where = []byte("where")
-
 func ContainsWhereClause(source []byte) bool {
 	cursor := parsly.NewCursor("", source, 0)
 	candidates := []*parsly.Token{parenthesesMatcher}

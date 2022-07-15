@@ -109,7 +109,7 @@ func columnsMetadata(ctx context.Context, db *sql.DB, v *View, columns []io.Colu
 	return result, nil
 }
 
-func detectColumnsSQL(source string, v *View) (string, error) {
+func DetectColumnsSQL(source string, v *View) (string, error) {
 	SQL := "SELECT " + v.Alias + ".* FROM " + source + " " + v.Alias + " WHERE 1=0"
 	if source != v.Name && source != v.Table {
 		discover := metadata.EnrichWithDiscover(source, false)

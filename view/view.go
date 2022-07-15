@@ -417,7 +417,7 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 		return nil
 	}
 
-	SQL, err := detectColumnsSQL(v.Source(), v)
+	SQL, err := DetectColumnsSQL(v.Source(), v)
 	if err != nil {
 		return err
 	}
@@ -426,11 +426,11 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 	columns, err := detectColumns(ctx, resource, SQL, v, v.UseParamBindingPositions())
 
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to run query: %v due to %w", SQL, err)
 	}
 
 	if v.From != "" && v.Table != "" {
-		tableSQL, errr := detectColumnsSQL(v.Table, v)
+		tableSQL, errr := DetectColumnsSQL(v.Table, v)
 		if errr != nil {
 			return errr
 		}

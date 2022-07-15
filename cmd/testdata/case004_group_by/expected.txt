@@ -1,0 +1,1 @@
+[{"totalTypes":1,"id":1,"eventTypeId":2,"eventTypes":[{"id":2,"name":"type 6","accountId":37}]},{"totalTypes":1,"id":10,"eventTypeId":11,"eventTypes":[{"id":11,"name":"type 2","accountId":33}]}]
