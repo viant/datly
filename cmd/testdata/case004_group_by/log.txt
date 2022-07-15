@@ -71,7 +71,7 @@ Resource:
                     - 0
                   Required: true
                   Schema:
-                    DataType: string
+                    DataType: float64
           UseBindingPositions: true
           With:
             - Cardinality: Many

@@ -37,7 +37,7 @@ Connector:
     Data: null
     Key: blowfish://default
     URL: mem://localhost/resource/mysql.json
-From: "SELECT id,\n                event_type_id,\n                (CASE\n                     WHEN id = 1 THEN\n                         'x1,x2'\n                     ELSE\n                         'x3,x4'\n                    END) AS slice /* {\"Codec\":{\"Ref\":\"AsStrings\"}, \"DataType\": \"string\"}  */\n         FROM events\n    "
+From: "SELECT id,\n                event_type_id,\n                (CASE\n                     WHEN id = 1 THEN\n                         'x1,x2'\n                     ELSE\n                         'x3,x4'\n                    END) AS slice /* {\"Codec\":{\"Ref\":\"AsStrings\"}, \"DataType\": \"string\"}  */\n         FROM events\n     "
 FromURL: events_from.sql
 Logger:
   Name: ""
@@ -71,7 +71,7 @@ Template:
                              'x3,x4'
                         END) AS slice /* {"Codec":{"Ref":"AsStrings"}, "DataType": "string"}  */
              FROM events
-        )
+         )
 UseBindingPositions: true
 With:
   - Cardinality: Many
