@@ -18,6 +18,7 @@ type (
 		ColumnTypes map[string]string
 		InnerAlias  string
 		InnerSQL    string
+		Deps        map[string]string
 		Columns     Columns
 		Name        string
 		SQL         string
@@ -112,7 +113,6 @@ func ParseSQLx(SQL string) (*Table, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	table.Alias = aQuery.From.Alias
 	table.Columns = selectItemToColumn(aQuery)
 	if star := table.Columns.StarExpr(table.Alias); star != nil {
@@ -130,16 +130,28 @@ func ParseSQLx(SQL string) (*Table, error) {
 }
 
 func buildTable(x node.Node) (*Table, error) {
-	var err error
+	//var err error
 	table := &Table{}
 	switch actual := x.(type) {
 	case *expr.Raw:
-		table.SQL = actual.Raw[1 : len(actual.Raw)-2]
-		innerSQL, condBlocks := ast.ExtractCondBlock(table.SQL)
-		innerQuery, _ := parser.ParseQuery(innerSQL)
+		table.SQL = strings.Trim(actual.Raw, "()")
+		innerSQL, paramsExprs := ast.ExtractCondBlock(table.SQL)
+
+		innerQuery, err := parser.ParseQuery(innerSQL)
+
 		if innerQuery != nil && innerQuery.From.X != nil {
-			table.Name = parser.Stringify(innerQuery.From.X)
+			table.Name = strings.Trim(parser.Stringify(innerQuery.From.X), "`")
 			table.Inner = selectItemToColumn(innerQuery)
+
+			if len(innerQuery.Joins) > 0 {
+				table.Deps = map[string]string{}
+				for _, join := range innerQuery.Joins {
+					table.Deps[join.Alias] = strings.Trim(parser.Stringify(join.With), "`")
+				}
+			}
+			if innerQuery.Qualify != nil {
+				extractCriteriaPairs(innerQuery.Qualify.X, &paramsExprs)
+			}
 			table.InnerSQL = innerSQL
 			table.InnerAlias = innerQuery.From.Alias
 		}
@@ -147,12 +159,52 @@ func buildTable(x node.Node) (*Table, error) {
 		if err != nil {
 			return nil, err
 		}
-		table.ViewMeta.Expressions = condBlocks
+		table.ViewMeta.Expressions = paramsExprs
 
 	case *expr.Selector, *expr.Ident:
 		table.Name = parser.Stringify(actual)
+
 	}
 	return table, nil
+}
+
+func extractCriteriaPairs(node node.Node, list *[]string) {
+	if node == nil {
+		return
+	}
+	switch actual := node.(type) {
+	case *expr.Binary:
+		op := strings.ToUpper(actual.Op)
+		switch op {
+		case "AND", "OR":
+			extractCriteriaPairs(actual.X, list)
+			extractCriteriaPairs(actual.Y, list)
+		default:
+			if bin, ok := actual.Y.(*expr.Binary); ok {
+				extractCriteriaPairs(bin.Y, list)
+				switch operand := actual.X.(type) {
+				case *expr.Selector, *expr.Ident, *expr.Placeholder:
+					appendParamExpr(operand, actual.Op, bin.X, list)
+					*list = append(*list, parser.Stringify(operand)+" = "+parser.Stringify(bin.X))
+				}
+				return
+			}
+			appendParamExpr(actual.X, actual.Op, actual.Y, list)
+		}
+	case *expr.Unary:
+
+	}
+}
+
+func appendParamExpr(x node.Node, op string, y node.Node, list *[]string) {
+	if p, ok := y.(*expr.Parenthesis); ok && strings.EqualFold(op, "IN") {
+		*list = append(*list, parser.Stringify(x)+" = "+strings.Trim(p.Raw, "()"))
+		return
+	}
+	switch operand := y.(type) {
+	case *expr.Placeholder:
+		*list = append(*list, parser.Stringify(x)+" = "+operand.Name)
+	}
 }
 
 func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns) error {

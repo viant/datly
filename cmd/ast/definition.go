@@ -43,6 +43,5 @@ func (m *ViewMeta) addParameter(param *Parameter, indexPosition bool) {
 	if indexPosition {
 		param.Positions = append(param.Positions, actualIndex)
 	}
-
 	m.Parameters = append(m.Parameters, param)
 }

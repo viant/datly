@@ -9,7 +9,7 @@ import (
 )
 
 type parameter struct {
-	param, column string
+	param, column, selector string
 }
 
 type parameters []*parameter
@@ -50,6 +50,7 @@ func updateParameterTypes(table *Table) {
 		return
 	}
 	table.ViewMeta.ParameterTypes = map[string]string{}
+
 	for _, enExpr := range table.ViewMeta.Expressions {
 		if strings.HasPrefix(strings.ToLower(enExpr), "and ") {
 			enExpr = enExpr[4:]
@@ -59,13 +60,23 @@ func updateParameterTypes(table *Table) {
 		}
 		cursor := parsly.NewCursor("", []byte(enExpr), 0)
 		qualify := &expr.Qualify{}
+
 		if err := parser.ParseQualify(cursor, qualify); err == nil {
 			var pairs parameters
 			discoverParameterColumn(qualify.X, &pairs)
 			if len(pairs) > 0 {
 				for _, p := range pairs {
-					columnType, ok := table.ColumnTypes[p.column]
-					if ok {
+					if p.param == "" {
+						continue
+					}
+					var columnType string
+					if p.selector != "" {
+						columnType = table.ColumnTypes[strings.ToLower(p.selector)]
+					}
+					if columnType == "" {
+						columnType = table.ColumnTypes[strings.ToLower(p.column)]
+					}
+					if columnType != "" && p.param != "" {
 						table.ViewMeta.ParameterTypes[p.param[1:]] = columnType
 					}
 				}
@@ -97,6 +108,7 @@ func discoverOperand(n node.Node, list *parameters) {
 		pair.param = x.Name
 	case *expr.Selector:
 		pair := list.nextColumn()
+		pair.selector = parser.Stringify(x)
 		pair.column = parser.Stringify(x.X)
 	case *expr.Ident:
 		pair := list.nextColumn()

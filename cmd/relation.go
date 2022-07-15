@@ -12,7 +12,6 @@ import (
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
-	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/metadata"
 	"github.com/viant/sqlx/metadata/ast/parser"
 	"github.com/viant/sqlx/metadata/info"
@@ -87,7 +86,7 @@ func updateView(options *Options, table *Table, aView *view.View) error {
 	if table == nil {
 		return nil
 	}
-
+	fmt.Printf("Discovering  %v metadata ...\n", aView.Name)
 	updateTableColumnTypes(options, table)
 	updateParameterTypes(table)
 
@@ -110,17 +109,21 @@ func updateView(options *Options, table *Table, aView *view.View) error {
 
 		aView.UseBindingPositions = boolPtr(!viewMeta.HasVeltySyntax)
 
-		SQLURL := options.SQLURL(table.Alias + "_from")
+		fromURL := options.SQLURL(table.Alias + "_from")
 		fs := afs.New()
-		if err := fs.Upload(context.Background(), SQLURL, file.DefaultFileOsMode, strings.NewReader(SQL)); err != nil {
+		if err := fs.Upload(context.Background(), fromURL, file.DefaultFileOsMode, strings.NewReader(SQL)); err != nil {
 			return err
 		}
-		_, URI := url.Split(SQLURL, file.Scheme)
+		_, URI := url.Split(fromURL, file.Scheme)
 		aView.FromURL = URI
 
 		if len(viewMeta.Parameters) > 0 || viewMeta.Source != "" {
 			templateParameters := make([]*view.Parameter, len(viewMeta.Parameters))
 			for i, parameter := range viewMeta.Parameters {
+				positions := parameter.Positions
+				if aView.UseBindingPositions != nil && !*aView.UseBindingPositions {
+					positions = nil
+				}
 				if table != nil {
 					if paramType, ok := table.ViewMeta.ParameterTypes[parameter.Name]; ok {
 						parameter.Type = paramType
@@ -132,7 +135,7 @@ func updateView(options *Options, table *Table, aView *view.View) error {
 						Kind: view.Kind(parameter.Kind),
 						Name: parameter.Name,
 					},
-					Positions: parameter.Positions,
+					Positions: positions,
 					Required:  boolPtr(parameter.Required),
 					Schema:    &view.Schema{DataType: parameter.Type},
 				}
@@ -187,48 +190,15 @@ func updateColumnsConfig(table *Table, aView *view.View) error {
 	return nil
 }
 
-func updateTableColumnTypes(options *Options, table *Table) {
-	//TODO read all column per alias from main and join table
-	table.ColumnTypes = map[string]string{}
-	db, err := options.Connector.New().Db()
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
-	SQL := "SELECT * FROM " + table.Name + " WHERE 1 = 0"
-	if strings.Contains(strings.ToUpper(table.InnerSQL), "JOIN") {
-		SQL = table.InnerSQL
-		if strings.Contains(strings.ToUpper(table.InnerSQL), "WHERE") {
-			SQL += " AND  1 = 0"
-		}
-	}
-
-	query, err := db.QueryContext(context.Background(), SQL)
-	if err == nil {
-		if types, err := query.ColumnTypes(); err == nil {
-			ioColumns := io.TypesToColumns(types)
-			for _, column := range ioColumns {
-				columnType := column.ScanType().String()
-				if strings.HasPrefix(columnType, "*") {
-					columnType = columnType[1:]
-				}
-				if columnType == "sql.RawBytes" {
-					columnType = "string"
-				}
-				if strings.Contains(columnType, "int") {
-					columnType = "int"
-				}
-				table.ColumnTypes[column.Name()] = columnType
-			}
-		}
-	}
-}
-
 func createAndEvalauteTemplate(meta *ast.ViewMeta) (string, error) {
 	schemaFields := make([]reflect.StructField, len(meta.Parameters))
 	presenceFields := make([]reflect.StructField, len(meta.Parameters))
 
 	expandMap := rdata.Map{}
 	for i, parameter := range meta.Parameters {
+		if paramType, ok := meta.ParameterTypes[parameter.Name]; ok {
+			parameter.Type = paramType
+		}
 		var pkgPath string
 		if parameter.Name[0] < 'A' || parameter.Name[0] > 'Z' {
 			pkgPath = "github.com/viant/datly/cmd"
