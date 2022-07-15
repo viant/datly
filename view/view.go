@@ -885,7 +885,7 @@ func (v *View) inheritFromViewIfNeeded(ctx context.Context, resource *Resource, 
 			return err
 		}
 
-		if err = view.initView(ctx, resource, transforms); err != nil {
+		if err = view.Init(ctx, resource, transforms); err != nil {
 			return err
 		}
 
