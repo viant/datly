@@ -28,6 +28,9 @@ func lookupView(resource *view.Resource, name string) *view.View {
 		if candidate.Name == name {
 			return candidate
 		}
+		if candidate.Table == name {
+			return candidate
+		}
 	}
 	return nil
 }
@@ -53,8 +56,8 @@ func buildXRelations(options *Options, route *router.Resource, viewRoute *router
 		if join.ToOne {
 			cardinality = view.One
 		}
-		aView := lookupView(route.Resource, join.Owner.Ref)
-		if aView == nil {
+		ownerView := lookupView(route.Resource, join.Owner.Ref)
+		if ownerView == nil {
 			return fmt.Errorf("failed to lookup view: %v", join.Owner.Name)
 		}
 
@@ -64,7 +67,7 @@ func buildXRelations(options *Options, route *router.Resource, viewRoute *router
 		}
 
 		withView := &view.Relation{
-			Name: aView.Name + "_" + join.Table.Alias,
+			Name: ownerView.Name + "_" + join.Table.Alias,
 			Of: &view.ReferenceView{
 				View:   view.View{Reference: shared.Reference{Ref: join.Table.Alias}, Name: join.Table.Alias + "#"},
 				Column: join.Key,
@@ -80,9 +83,16 @@ func buildXRelations(options *Options, route *router.Resource, viewRoute *router
 		if join.Connector != "" {
 			relView.Connector = &view.Connector{Reference: shared.Reference{Ref: join.Connector}}
 		}
-		aView.With = append(aView.With, withView)
+		ownerView.With = append(ownerView.With, withView)
 
 		viewRoute.Index.Namespace[namespace(join.Table.Alias)] = join.Table.Alias + "#"
+
+		if len(join.Table.Joins) > 0 {
+			if err := buildXRelations(options, route, viewRoute, join.Table); err != nil {
+				return err
+			}
+		}
+
 	}
 	return nil
 }
@@ -103,7 +113,7 @@ func updateView(options *Options, table *Table, aView *view.View) error {
 		var SQL string
 		var err error
 		if viewMeta.From == "" {
-			SQL, err = createAndEvalauteTemplate(viewMeta)
+			SQL, err = createAndEvaluateTemplate(viewMeta)
 		} else {
 			SQL = viewMeta.From
 		}
@@ -195,7 +205,7 @@ func updateColumnsConfig(table *Table, aView *view.View) error {
 	return nil
 }
 
-func createAndEvalauteTemplate(meta *ast.ViewMeta) (string, error) {
+func createAndEvaluateTemplate(meta *ast.ViewMeta) (string, error) {
 	schemaFields := make([]reflect.StructField, len(meta.Parameters))
 	presenceFields := make([]reflect.StructField, len(meta.Parameters))
 
