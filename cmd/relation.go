@@ -63,7 +63,7 @@ func buildXRelations(options *Options, route *router.Resource, viewRoute *router
 			return err
 		}
 
-		aView.With = append(aView.With, &view.Relation{
+		withView := &view.Relation{
 			Name: aView.Name + "_" + join.Table.Alias,
 			Of: &view.ReferenceView{
 				View:   view.View{Reference: shared.Reference{Ref: join.Table.Alias}, Name: join.Table.Alias + "#"},
@@ -76,7 +76,12 @@ func buildXRelations(options *Options, route *router.Resource, viewRoute *router
 			Holder:      newCase.Format(join.Table.Alias, format.CaseUpperCamel),
 
 			IncludeColumn: true,
-		})
+		}
+		if join.Connector != "" {
+			relView.Connector = &view.Connector{Reference: shared.Reference{Ref: join.Connector}}
+		}
+		aView.With = append(aView.With, withView)
+
 		viewRoute.Index.Namespace[namespace(join.Table.Alias)] = join.Table.Alias + "#"
 	}
 	return nil
@@ -254,8 +259,17 @@ func createAndEvalauteTemplate(meta *ast.ViewMeta) (string, error) {
 	return expandMap.ExpandAsText(SQL), nil
 }
 
-func buildRelations(options *Options, meta *metadata.Service, db *sql.DB, route *router.Resource, aView *view.View, viewRoute *router.Route) error {
+func buildRelations(options *Options, meta *metadata.Service, connectors map[string]*view.Connector, route *router.Resource, aView *view.View, viewRoute *router.Route) error {
 	pk := []sink.Key{}
+	conn, ok := connectors[options.DbName]
+	if !ok {
+		return nil
+	}
+	db, err := conn.Db()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
 	if err := meta.Info(context.Background(), db, info.KindPrimaryKeys, &pk, option.NewArgs("", options.Connector.DbName, options.Table)); err == nil && len(pk) > 0 {
 		for _, rel := range options.Relations {
 			if !strings.Contains(rel, ":") {

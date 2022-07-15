@@ -25,10 +25,11 @@ type (
 	}
 
 	Connector struct {
-		DbName string `short:"C" long:"dbname" description:"db/connector name" `
-		Driver string `short:"D" long:"driver" description:"driver" `
-		DSN    string `short:"A" long:"dsn" description:"DSN" `
-		Secret string `short:"E" long:"secret" description:"database secret" `
+		Connects []string `short:"C" long:"conn" description:"name|driver|dsn" `
+		DbName   string   `short:"V" long:"dbname" description:"db/connector name" `
+		Driver   string   `short:"D" long:"driver" description:"driver" `
+		DSN      string   `short:"A" long:"dsn" description:"DSN" `
+		Secret   string   `short:"E" long:"secret" description:"database secret" `
 	}
 
 	Generate struct {
@@ -74,7 +75,35 @@ func (c *Options) ResponseField() string {
 	return "Data"
 }
 
+//MatchConnector returns matcher or default connector
+func (c *Connector) MatchConnector(name string) *view.Connector {
+	if name == "" {
+		return c.New()
+	}
+	registry := c.Registry()
+	if result, ok := registry[name]; ok {
+		return result
+	}
+	return c.New()
+}
+
 func (c *Connector) Init() {
+
+	if len(c.Connects) > 0 {
+		parts := strings.Split(c.Connects[0], "|")
+		switch len(parts) {
+		case 1:
+			c.DbName = parts[0]
+		case 2:
+			c.DbName = parts[0]
+			c.Driver = parts[1]
+		case 3:
+			c.DbName = parts[0]
+			c.Driver = parts[1]
+			c.DSN = parts[2]
+		}
+	}
+
 	if c.Driver == "" {
 		c.Driver = "mysql"
 	}
@@ -93,6 +122,27 @@ func (c *Connector) Init() {
 		fs := afs.New()
 		fs.Upload(context.Background(), c.Secret, file.DefaultFileOsMode, strings.NewReader(mysqlDev))
 	}
+}
+
+func (c *Connector) Registry() map[string]*view.Connector {
+	var result = map[string]*view.Connector{}
+	defaultConn := c.New()
+	result[defaultConn.Name] = defaultConn
+	if len(c.Connects) > 1 {
+		for i := 1; i < len(c.Connects); i++ {
+			parts := strings.Split(c.Connects[i], "|")
+			if len(parts) < 3 {
+				continue
+			}
+			conn := &view.Connector{
+				Name:   parts[0],
+				Driver: parts[1],
+				DSN:    parts[2],
+			}
+			result[conn.Name] = conn
+		}
+	}
+	return result
 }
 
 func (c *Connector) New() *view.Connector {

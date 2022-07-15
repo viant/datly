@@ -11,10 +11,12 @@ import (
 func updateTableColumnTypes(options *Options, table *Table) {
 	//TODO read all column per alias from main and join table
 	table.ColumnTypes = map[string]string{}
-	db, err := options.Connector.New().Db()
+	connector := options.MatchConnector(table.Connector)
+	db, err := connector.Db()
 	if err != nil {
 		fmt.Printf(err.Error())
 	}
+
 	updatedColumns(table, "", table.Name, db)
 	if len(table.Deps) > 0 {
 		for k, v := range table.Deps {

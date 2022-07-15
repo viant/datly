@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
@@ -53,22 +52,27 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	if err := updateView(options, xTable, aView); err != nil {
 		return err
 	}
-	var conn *view.Connector
-	var ok bool
-	connector := options.Connector
-
-	if connector.DbName != "" {
-		if conn, ok = connectors[connector.DbName]; !ok {
-			if conn = connector.New(); conn.Name == connector.DbName {
-				route.Resource.AddConnectors(conn)
-			} else {
-				return fmt.Errorf("undefined connector: %v", connector.DbName)
-			}
-		} else {
-			route.Resource.AddConnectors(conn)
+	connectorRegistry := options.Connector.Registry()
+	if len(connectorRegistry) > 0 {
+		for k := range connectorRegistry {
+			route.Resource.AddConnectors(connectorRegistry[k])
+			connectors[k] = connectorRegistry[k]
 		}
-		aView.Connector = &view.Connector{Reference: shared.Reference{Ref: connector.DbName}}
 	}
+
+	//if connector.DbName != "" {
+	//	if conn, ok = connectors[connector.DbName]; !ok {
+	//		if conn = connector.New(); conn.Name == connector.DbName {
+	//			route.Resource.AddConnectors(conn)
+	//		} else {
+	//			return fmt.Errorf("undefined connector: %v", connector.DbName)
+	//		}
+	//	} else {
+	//		route.Resource.AddConnectors(conn)
+	//	}
+	//
+	//	aView.Connector = &view.Connector{Reference: shared.Reference{Ref: connector.DbName}}
+	//}
 
 	viewRoute := &router.Route{
 		Method: "GET",
@@ -101,14 +105,9 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		}
 		buildExcludeColumn(xTable, aView, viewRoute)
 	}
-	if len(options.Relations) > 0 && conn != nil {
-		db, err := conn.Db()
-		if err != nil {
-			return err
-		}
-
+	if len(options.Relations) > 0 {
 		meta := metadata.New()
-		err = buildRelations(options, meta, db, route, aView, viewRoute)
+		err := buildRelations(options, meta, connectors, route, aView, viewRoute)
 		if err != nil {
 			return err
 		}
@@ -126,7 +125,6 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 }
 
 func buildExcludeColumn(xTable *Table, aView *view.View, viewRoute *router.Route) {
-
 	joins := xTable.Joins.Index()
 	viewCaser, _ := aView.CaseFormat.Caser()
 	outputCaser, _ := format.NewCase(string(viewRoute.CaseFormat))
@@ -178,8 +176,8 @@ func buildMainView(options *Options, generate *Generate, route *router.Resource)
 				Projection: true,
 			},
 		},
+		Connector: &view.Connector{Reference: shared.Reference{Ref: options.DbName}},
 	}
-
 	route.Resource.AddViews(aView)
 	return aView
 }

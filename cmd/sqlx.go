@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/cmd/ast"
 	"github.com/viant/sqlx/metadata/ast/expr"
@@ -24,10 +25,13 @@ type (
 		SQL         string
 		Joins       Joins
 		Alias       string
-
+		TableMeta
 		ViewMeta *ast.ViewMeta
 	}
 
+	TableMeta struct {
+		Connector string
+	}
 	Column struct {
 		Ns     string
 		Name   string
@@ -38,12 +42,13 @@ type (
 	Columns []*Column
 
 	Join struct {
-		Key      string
-		KeyAlias string
-		OwnerKey string
-		OwnerNs  string
-		Owner    *Table
-		Field    string
+		Key       string
+		KeyAlias  string
+		OwnerKey  string
+		OwnerNs   string
+		Owner     *Table
+		Connector string
+		Field     string
 
 		ToOne bool
 		Table *Table
@@ -212,6 +217,12 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	if err != nil {
 		return err
 	}
+	if join.Comments != "" {
+		comments := join.Comments
+		comments = strings.ReplaceAll(comments, "/*", "")
+		comments = strings.ReplaceAll(comments, "*/", "")
+		_ = json.Unmarshal([]byte(comments), &relTable.TableMeta)
+	}
 
 	relTable.Alias = join.Alias
 	relTable.Ref = relTable.Name
@@ -230,6 +241,7 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	}
 	byAlias := relTable.Inner.ByAlias()
 	relJoin.KeyAlias = relTable.InnerAlias
+	relJoin.Connector = relTable.Connector
 	if len(byAlias) > 0 {
 		column, ok := byAlias[relJoin.Key]
 		if !ok {
