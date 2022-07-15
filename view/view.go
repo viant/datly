@@ -422,7 +422,7 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	v.Logger.ColumnsDetection(SQL, v.Source())
+	v.Logger.ColumnsDetection(SQL, "From statement")
 	columns, err := detectColumns(ctx, resource, SQL, v, v.UseParamBindingPositions())
 
 	if err != nil {
@@ -434,7 +434,7 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 		if errr != nil {
 			return errr
 		}
-		v.Logger.ColumnsDetection(tableSQL, v.Table)
+		v.Logger.ColumnsDetection(tableSQL, "Table")
 		tableColumns, err := detectColumns(ctx, resource, tableSQL, v, false)
 		if err != nil {
 			return err

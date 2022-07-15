@@ -17,7 +17,9 @@ func TestDetectColumnsSQL(t *testing.T) {
 				From:  "SELECT * FROM FOOS",
 				Alias: "t",
 			},
-			sql: `SELECT * FROM FOOS  WHERE 1=0 `,
+			sql: `SELECT * FROM FOOS 
+
+ WHERE 1=0 `,
 		},
 		{
 			description: `Criteria`,
@@ -25,7 +27,9 @@ func TestDetectColumnsSQL(t *testing.T) {
 				From:  "SELECT * FROM FOOS $WHERE_CRITERIA",
 				Alias: "t",
 			},
-			sql: `SELECT * FROM FOOS  WHERE 1=0 `,
+			sql: `SELECT * FROM FOOS 
+
+ WHERE 1=0 `,
 		},
 		{
 			description: `Criteria with where`,
@@ -33,12 +37,33 @@ func TestDetectColumnsSQL(t *testing.T) {
 				From:  "SELECT * FROM FOOS  WHERE id = 10 $CRITERIA",
 				Alias: "t",
 			},
-			sql: `SELECT * FROM FOOS  WHERE id = 10   AND 1=0 `,
+			sql: `SELECT * FROM FOOS  WHERE id = 10  
+
+ AND 1=0 `,
+		},
+		{
+			description: `Criteria with where`,
+			view: &View{
+				From: `SELECT * FROM FOOS  WHERE id = 10
+--- this is comment
+GROUP BY 1
+`,
+				Alias: "t",
+			},
+			sql: `SELECT * FROM FOOS  WHERE id = 10
+--- this is comment 
+
+ AND 1=0 
+GROUP BY 1`,
 		},
 	}
 
 	for _, testcase := range testcases {
-		sql, _ := DetectColumnsSQL(testcase.view.Source(), testcase.view)
+		sql, err := DetectColumnsSQL(testcase.view.Source(), testcase.view)
+		if !assert.Nil(t, err, testcase.description) {
+			continue
+		}
+
 		assert.Equal(t, testcase.sql, sql, testcase.description)
 	}
 }
