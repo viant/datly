@@ -16,8 +16,15 @@ Resource:
       Template:
         Parameters:
           - Ref: JWT
-          - Ref: CRITERIA_ALC
-        Source: "SELECT * FROM employees e WHERE $Unsafe.CRITERIA_ALC.Criteria"
+          - Ref: CRITERIA_ACL
+        Source: '
+        SELECT * FROM employees e WHERE 1=1 AND
+         #if($Unsafe.CRITERIA_ACL.Criteria == "")
+         1 = 0
+         #else
+         $Unsafe.CRITERIA_ACL.Criteria
+         #end
+        '
       Selector:
         Constraints:
           Projection: true
@@ -64,7 +71,7 @@ Resource:
         Kind: header
         Name: Authorization
 
-    - Name: CRITERIA_ALC
+    - Name: CRITERIA_ACL
       Required: true
       In:
         Kind: data_view

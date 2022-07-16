@@ -81,6 +81,7 @@ With:
         DSN: /tmp/datly/generator/db.db
         Driver: sqlite3
         Name: dev
+        Ref: dev
         Secret:
           Data: null
           Key: blowfish://default

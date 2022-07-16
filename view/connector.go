@@ -30,6 +30,7 @@ func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 	if c.initialized {
 		return nil
 	}
+
 	c.initialized = true
 
 	if c.Ref != "" {

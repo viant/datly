@@ -4,12 +4,12 @@ import (
 	"github.com/viant/parsly"
 )
 
-type terminatorAny struct {
+type wordTerminator struct {
 	terminatedBy []byte
 	inclusive    bool
 }
 
-func (t *terminatorAny) Match(cursor *parsly.Cursor) (matched int) {
+func (t *wordTerminator) Match(cursor *parsly.Cursor) (matched int) {
 	hasMatch := false
 outer:
 	for _, c := range cursor.Input[cursor.Pos:] {
@@ -24,14 +24,12 @@ outer:
 		}
 
 	}
-	if !hasMatch {
-		return 0
-	}
+
 	return matched
 }
 
-func newTerminatorAny(inclusive bool, terminatedBy []byte) *terminatorAny {
-	return &terminatorAny{
+func newTerminatorAny(inclusive bool, terminatedBy []byte) *wordTerminator {
+	return &wordTerminator{
 		terminatedBy: terminatedBy,
 		inclusive:    inclusive,
 	}

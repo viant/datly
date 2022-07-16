@@ -4,7 +4,8 @@ Batch:
 CaseFormat: lc
 Caser: 3
 Columns:
-  - Filterable: true
+  - DataType: int
+    Filterable: true
     Name: totalTypes
     Nullable: true
   - DataType: INTEGER
@@ -15,6 +16,13 @@ Columns:
     Filterable: true
     Name: eventTypeId
     Nullable: true
+  - DataType: VARCHAR(255)
+    Filterable: true
+    Name: eventName
+    Nullable: true
+ColumnsConfig:
+  totalTypes:
+    DataType: int
 Connector:
   DSN: /tmp/datly/generator/db.db
   Driver: sqlite3
@@ -23,7 +31,7 @@ Connector:
     Data: null
     Key: blowfish://default
     URL: mem://localhost/resource/mysql.json
-From: "SELECT\n                COUNT(*) as totalTypes,\n                id,\n                event_type_id as eventTypeId\n         FROM events\n         WHERE 1 = 1\n         AND quantity > ?\n         GROUP BY event_type_id\n         ORDER BY 1\n         "
+From: "SELECT COUNT(*)      as totalTypes /*{\"DataType\": \"int\"}*/,\n                e.id,\n                e.event_type_id as eventTypeId,\n                et.name as eventName\n         FROM events e\n                  JOIN event_types et ON e.event_type_id = et.id\n         WHERE 1 = 1\n           AND e.quantity > ?\n         GROUP BY e.event_type_id\n         ORDER BY 1\n     "
 FromURL: events.sql
 Logger:
   Name: ""
@@ -60,16 +68,17 @@ Template:
   Schema:
     Cardinality: One
   Source: |-
-    (SELECT
-                    COUNT(*) as totalTypes,
-                    id,
-                    event_type_id as eventTypeId
-             FROM events
+    (SELECT COUNT(*)      as totalTypes /*{"DataType": "int"}*/,
+                    e.id,
+                    e.event_type_id as eventTypeId,
+                    et.name as eventName
+             FROM events e
+                      JOIN event_types et ON e.event_type_id = et.id
              WHERE 1 = 1
-             AND quantity > ?
-             GROUP BY event_type_id
+               AND e.quantity > ?
+             GROUP BY e.event_type_id
              ORDER BY 1
-             )
+         )
 UseBindingPositions: true
 With:
   - Cardinality: Many
@@ -103,7 +112,9 @@ With:
           Key: blowfish://default
           URL: mem://localhost/resource/mysql.json
       Field: id
-      From: "SELECT * FROM event_types\n    "
+      From: |
+        SELECT *
+            FROM event_types
       FromURL: eventTypes.sql
       Logger:
         Name: ""
@@ -128,6 +139,7 @@ With:
         Schema:
           Cardinality: One
         Source: |-
-          (SELECT * FROM event_types
-              )
+          (SELECT *
+              FROM event_types
+          )
       UseBindingPositions: true

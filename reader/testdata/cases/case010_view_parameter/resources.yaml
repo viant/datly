@@ -4,7 +4,14 @@ Views:
     Name: users
     Table: users
     Template:
-      Source: 'SELECT * FROM USERS WHERE ${Unsafe.DATLY_ACL}'
+      Source: '
+      SELECT * FROM USERS WHERE 1=1 AND  
+      #if($Unsafe.DATLY_ACL != "")
+        $Unsafe.DATLY_ACL
+      #else
+        0 = 1
+      #end
+      '
       Schema:
         Name: user_params
       Parameters:

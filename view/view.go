@@ -276,15 +276,7 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 		return fmt.Errorf("view name was empty")
 	}
 
-	if v.Connector, err = resource.FindConnector(v); err != nil {
-		return err
-	}
-
-	if err = v.Connector.Init(ctx, resource._connectors); err != nil {
-		return err
-	}
-
-	if err = v.Connector.Validate(); err != nil {
+	if err = v.ensureConnector(ctx, resource); err != nil {
 		return err
 	}
 
@@ -335,6 +327,26 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 		return err
 	}
 
+	return nil
+}
+
+func (v *View) ensureConnector(ctx context.Context, resource *Resource) error {
+	if v.Connector != nil && v.Connector.initialized {
+		return nil
+	}
+
+	var err error
+	if v.Connector, err = resource.FindConnector(v); err != nil {
+		return err
+	}
+
+	if err = v.Connector.Init(ctx, resource._connectors); err != nil {
+		return err
+	}
+
+	if err = v.Connector.Validate(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -417,30 +429,11 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 		return nil
 	}
 
-	SQL, err := DetectColumnsSQL(v.Source(), v)
-	if err != nil {
-		return err
-	}
-
-	v.Logger.ColumnsDetection(SQL, "From statement")
-	columns, err := detectColumns(ctx, resource, SQL, v, v.UseParamBindingPositions())
+	columns, SQL, err := DetectColumns(ctx, resource, v)
+	v.Logger.ColumnsDetection(SQL, v.Source())
 
 	if err != nil {
 		return fmt.Errorf("failed to run query: %v due to %w", SQL, err)
-	}
-
-	if v.From != "" && v.Table != "" {
-		tableSQL, errr := DetectColumnsSQL(v.Table, v)
-		if errr != nil {
-			return errr
-		}
-		v.Logger.ColumnsDetection(tableSQL, "Table")
-		tableColumns, err := detectColumns(ctx, resource, tableSQL, v, false)
-		if err != nil {
-			return err
-		}
-
-		Columns(columns).updateTypes(tableColumns, v.Caser)
 	}
 
 	v.Columns = columns
@@ -569,7 +562,7 @@ func (v *View) inherit(view *View) error {
 	v.Alias = notEmptyOf(v.Alias, view.Alias)
 	v.Table = notEmptyOf(v.Table, view.Table)
 	v.From = notEmptyOf(v.From, view.From)
-	v.FromURL = notEmptyOf(v.From, view.FromURL)
+	v.FromURL = notEmptyOf(v.FromURL, view.FromURL)
 
 	if stringsSliceEqual(v.Exclude, view.Exclude) {
 		if len(v.Columns) == 0 {

@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader/metadata"
 	"github.com/viant/datly/view/keywords"
@@ -15,11 +16,78 @@ import (
 	"strings"
 )
 
-func detectColumns(ctx context.Context, resource *Resource, SQL string, v *View, usePlaceholders bool) ([]*Column, error) {
+func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column, string, error) {
+	actualSQL, evaluated, err := evaluateTemplateIfNeeded(ctx, resource, v)
+	if err != nil {
+		return nil, "", err
+	}
+
+	columns, SQL, err := detectColumns(ctx, resource, actualSQL, v, v.UseParamBindingPositions())
+	if err != nil {
+		if err != nil && !evaluated {
+			fmt.Println(fmt.Errorf("failed to detect columns using velocity engine and SQL:  %v  due to the %w\n", SQL, err).Error())
+
+			columns, SQL, err = detectColumns(ctx, resource, v.Source(), v, v.UseParamBindingPositions())
+			if err != nil {
+				return nil, "", fmt.Errorf("failed also to detect columns using %v due to the %w\n", SQL, err)
+			}
+		}
+
+		return columns, SQL, err
+	}
+
+	if v.From != "" && v.Table != "" {
+		tableColumns, tableSQL, errr := detectColumns(ctx, resource, v.Table, v, false)
+		if errr != nil {
+			return nil, tableSQL, errr
+		}
+
+		v.Logger.ColumnsDetection(tableSQL, v.Table)
+		if err != nil {
+			return nil, tableSQL, err
+		}
+
+		Columns(columns).updateTypes(tableColumns, v.Caser)
+	}
+
+	return columns, SQL, nil
+}
+
+func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *View) (SQL string, evaluated bool, err error) {
+	if aView.Template == nil {
+		return aView.Source(), false, nil
+	}
+
+	if err := aView.Template.Init(ctx, resource, aView); err != nil {
+		return "", false, err
+	}
+
+	params := newValue(aView.Template.Schema.Type())
+	presence := newValue(aView.Template.PresenceSchema.Type())
+
+	source, err := aView.Template.EvaluateSource(params, presence, aView)
+	if err != nil {
+		return "", false, err
+	}
+
+	source, err = expandWithZeroValues(source, aView.Template)
+	if err != nil {
+		return "", false, err
+	}
+
+	return source, false, err
+}
+
+func detectColumns(ctx context.Context, resource *Resource, SQL string, v *View, usePlaceholders bool) ([]*Column, string, error) {
+	SQL, err := detectColumnsSQL(SQL, v)
+	if err != nil {
+		return nil, "", err
+	}
+
 	db, err := v.Connector.Db()
 
 	var args []interface{}
-	if usePlaceholders && v.Template != nil && v.Template.Schema == nil {
+	if usePlaceholders && v.Template != nil {
 		totalLength := 0
 		for _, parameter := range v.Template.Parameters {
 			totalLength += len(parameter.Positions)
@@ -27,7 +95,7 @@ func detectColumns(ctx context.Context, resource *Resource, SQL string, v *View,
 		args = make([]interface{}, totalLength)
 		for _, parameter := range v.Template.Parameters {
 			if err = parameter.Init(ctx, v, resource, nil); err != nil {
-				return nil, err
+				return nil, SQL, err
 			}
 			var value interface{}
 			switch parameter.Schema.Type().Kind() {
@@ -55,25 +123,27 @@ func detectColumns(ctx context.Context, resource *Resource, SQL string, v *View,
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, SQL, err
 	}
 
 	query, err := db.QueryContext(ctx, SQL, args...)
 	if err != nil {
-		return nil, err
+		return nil, SQL, err
 	}
 
 	types, err := query.ColumnTypes()
 	if err != nil {
-		return nil, err
+		return nil, SQL, err
 	}
 
 	ioColumns := io.TypesToColumns(types)
 	columnsMetadata, err := columnsMetadata(ctx, db, v, ioColumns)
 	if err != nil {
-		return nil, err
+		return nil, SQL, err
 	}
-	return convertIoColumnsToColumns(v.exclude(ioColumns), columnsMetadata), nil
+
+	columns := convertIoColumnsToColumns(v.exclude(ioColumns), columnsMetadata)
+	return columns, SQL, nil
 }
 
 func columnsMetadata(ctx context.Context, db *sql.DB, v *View, columns []io.Column) (map[string]bool, error) {
@@ -109,8 +179,20 @@ func columnsMetadata(ctx context.Context, db *sql.DB, v *View, columns []io.Colu
 	return result, nil
 }
 
-func DetectColumnsSQL(source string, v *View) (string, error) {
-	SQL := "SELECT " + v.Alias + ".* FROM " + source + " " + v.Alias + " WHERE 1=0"
+func detectColumnsSQL(source string, v *View) (string, error) {
+	sb := strings.Builder{}
+	sb.WriteString("SELECT ")
+	if v.Alias != "" {
+		sb.WriteString(v.Alias)
+		sb.WriteString(".")
+	}
+	sb.WriteString("* FROM ")
+	sb.WriteString(source)
+	sb.WriteString(" ")
+	sb.WriteString(v.Alias)
+	sb.WriteString(" WHERE 1=0")
+
+	SQL := sb.String()
 	if source != v.Name && source != v.Table {
 		discover := metadata.EnrichWithDiscover(source, false)
 		replacement := rdata.Map{}
@@ -135,4 +217,29 @@ func DetectColumnsSQL(source string, v *View) (string, error) {
 	SQL = replacement.ExpandAsText(SQL)
 
 	return SQL, nil
+}
+
+func expandWithZeroValues(SQL string, template *Template) (string, error) {
+	expandMap := rdata.Map{}
+	for _, parameter := range template.Parameters {
+		var value interface{}
+		paramType := parameter.Schema.Type()
+		switch paramType.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			value = 0
+		case reflect.Float32, reflect.Float64:
+			value = 0.0
+		case reflect.String:
+			value = "''"
+		case reflect.Bool:
+			value = false
+		default:
+			value = reflect.New(paramType).Elem().Interface()
+		}
+
+		expandMap.SetValue(parameter.Name, value)
+	}
+
+	return expandMap.ExpandAsText(SQL), nil
 }

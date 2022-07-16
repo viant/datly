@@ -49,7 +49,8 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	}
 
 	aView := buildMainView(options, generate, route)
-	if err := updateView(options, xTable, aView); err != nil {
+	_, err := addViewConn(options, connectors, route, aView)
+	if err != nil {
 		return err
 	}
 	connectorRegistry := options.Connector.Registry()
@@ -60,19 +61,9 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		}
 	}
 
-	//if connector.DbName != "" {
-	//	if conn, ok = connectors[connector.DbName]; !ok {
-	//		if conn = connector.New(); conn.Name == connector.DbName {
-	//			route.Resource.AddConnectors(conn)
-	//		} else {
-	//			return fmt.Errorf("undefined connector: %v", connector.DbName)
-	//		}
-	//	} else {
-	//		route.Resource.AddConnectors(conn)
-	//	}
-	//
-	//	aView.Connector = &view.Connector{Reference: shared.Reference{Ref: connector.DbName}}
-	//}
+	if err := updateView(options, xTable, aView); err != nil {
+		return err
+	}
 
 	viewRoute := &router.Route{
 		Method: "GET",
@@ -99,7 +90,7 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	if xTable != nil {
 		aView.CaseFormat = detectCaseFormat(xTable)
 		if len(xTable.Joins) > 0 {
-			if err := buildXRelations(options, route, viewRoute, xTable); err != nil {
+			if err := buildXRelations(options, connectors, route, viewRoute, xTable); err != nil {
 				return err
 			}
 		}
@@ -122,6 +113,30 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	_ = fsAddYAML(fs, depURL, dependency)
 	route.Resource.Connectors = nil
 	return fsAddYAML(fs, options.RouterURL(), route)
+}
+
+func addViewConn(options *Options, connectors map[string]*view.Connector, route *router.Resource, aView *view.View) (*view.Connector, error) {
+	connector := options.Connector
+	if connector.DbName == "" {
+		return nil, nil
+	}
+
+	//if !ok {
+	conn := connector.New()
+	//	if conn.Name != connector.DbName {
+	//		return nil, fmt.Errorf("undefined connector: %v", connector.DbName)
+	//	}
+	//}
+
+	shallowCopy := *conn
+	shallowCopy.Ref = connector.DbName
+
+	_, ok := connectors[connector.DbName]
+	if !ok {
+		route.Resource.AddConnectors(conn)
+	}
+	aView.Connector = &shallowCopy
+	return conn, nil
 }
 
 func buildExcludeColumn(xTable *Table, aView *view.View, viewRoute *router.Route) {

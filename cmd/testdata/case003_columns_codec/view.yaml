@@ -38,7 +38,7 @@ Connector:
     Key: blowfish://default
     URL: mem://localhost/resource/mysql.json
 From: "SELECT id,\n                event_type_id,\n                (CASE\n                     WHEN id = 1 THEN\n                         'x1,x2'\n                     ELSE\n                         'x3,x4'\n                    END) AS slice /* {\"Codec\":{\"Ref\":\"AsStrings\"}, \"DataType\": \"string\"}  */\n         FROM events\n     "
-FromURL: events_from.sql
+FromURL: events.sql
 Logger:
   Name: ""
 MatchStrategy: read_matched

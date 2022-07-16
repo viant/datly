@@ -17,9 +17,7 @@ import (
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/sqlx/option"
-	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/toolbox/format"
-	"reflect"
 	"strings"
 )
 
@@ -35,7 +33,7 @@ func lookupView(resource *view.Resource, name string) *view.View {
 	return nil
 }
 
-func buildXRelations(options *Options, route *router.Resource, viewRoute *router.Route, xTable *Table) error {
+func buildXRelations(options *Options, connectors map[string]*view.Connector, route *router.Resource, viewRoute *router.Route, xTable *Table) error {
 	if len(xTable.Joins) == 0 {
 		return nil
 	}
@@ -46,6 +44,10 @@ func buildXRelations(options *Options, route *router.Resource, viewRoute *router
 			Selector: &view.Config{
 				Limit: 40,
 			},
+		}
+
+		if _, err := addViewConn(options, connectors, route, relView); err != nil {
+			return err
 		}
 		if err := updateView(options, join.Table, relView); err != nil {
 			return err
@@ -88,7 +90,7 @@ func buildXRelations(options *Options, route *router.Resource, viewRoute *router
 		viewRoute.Index.Namespace[namespace(join.Table.Alias)] = join.Table.Alias + "#"
 
 		if len(join.Table.Joins) > 0 {
-			if err := buildXRelations(options, route, viewRoute, join.Table); err != nil {
+			if err := buildXRelations(options, connectors, route, viewRoute, join.Table); err != nil {
 				return err
 			}
 		}
@@ -109,72 +111,91 @@ func updateView(options *Options, table *Table, aView *view.View) error {
 		return err
 	}
 
-	if viewMeta := table.ViewMeta; viewMeta != nil {
-		var SQL string
-		var err error
-		if viewMeta.From == "" {
-			SQL, err = createAndEvaluateTemplate(viewMeta)
-		} else {
-			SQL = viewMeta.From
-		}
+	if table.ViewMeta == nil {
+		return nil
+	}
 
-		if err != nil {
-			return err
-		}
-
-		aView.UseBindingPositions = boolPtr(!viewMeta.HasVeltySyntax)
-
-		fromURL := options.SQLURL(table.Alias + "_from")
-		fs := afs.New()
-		if err := fs.Upload(context.Background(), fromURL, file.DefaultFileOsMode, strings.NewReader(SQL)); err != nil {
-			return err
-		}
-		_, URI := url.Split(fromURL, file.Scheme)
-		aView.FromURL = URI
-
-		if len(viewMeta.Parameters) > 0 || viewMeta.Source != "" {
-			templateParameters := make([]*view.Parameter, len(viewMeta.Parameters))
-			for i, parameter := range viewMeta.Parameters {
-				positions := parameter.Positions
-				if aView.UseBindingPositions != nil && !*aView.UseBindingPositions {
-					positions = nil
-				}
-				if table != nil {
-					if paramType, ok := table.ViewMeta.ParameterTypes[parameter.Name]; ok {
-						parameter.Type = paramType
-					}
-				}
-				templateParameters[i] = &view.Parameter{
-					Name: parameter.Id,
-					In: &view.Location{
-						Kind: view.Kind(parameter.Kind),
-						Name: parameter.Name,
-					},
-					Positions: positions,
-					Required:  boolPtr(parameter.Required),
-					Schema:    &view.Schema{DataType: parameter.Type},
-				}
-			}
-
-			aView.Template = &view.Template{
-				Source:     "",
-				Parameters: templateParameters,
-			}
-		}
-
-		if viewMeta.Source != "" {
-			source := viewMeta.Source
-			sourceURL := options.SQLURL(table.Alias + "_source")
-			if err := fs.Upload(context.Background(), sourceURL, file.DefaultFileOsMode, strings.NewReader(source)); err != nil {
-				return err
-			}
-
-			_, URI = url.Split(sourceURL, file.Scheme)
-			aView.Template.SourceURL = URI
-		}
+	if err := buildSQLSource(options, aView, table); err != nil {
+		return err
 	}
 
 	return nil
+}
+
+func buildSQLSource(options *Options, aView *view.View, table *Table) error {
+	templateParams := make([]*view.Parameter, len(table.ViewMeta.Parameters))
+	for i, param := range table.ViewMeta.Parameters {
+		templateParams[i] = convertMetaParameter(param)
+	}
+
+	template := &view.Template{
+		Parameters: templateParams,
+	}
+
+	aView.Template = template
+	aView.UseBindingPositions = boolPtr(!table.ViewMeta.HasVeltySyntax)
+
+	if err := updateTemplateSource(options, template, table); err != nil {
+		return err
+	}
+
+	if err := updateViewSource(options, aView, table); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func convertMetaParameter(param *ast.Parameter) *view.Parameter {
+	return &view.Parameter{
+		Name:      param.Id,
+		Schema:    &view.Schema{DataType: param.Type},
+		Positions: param.Positions,
+		In: &view.Location{
+			Kind: view.Kind(param.Kind),
+			Name: param.Name,
+		},
+		Required: boolPtr(param.Required),
+	}
+}
+
+func updateViewSource(options *Options, aView *view.View, table *Table) error {
+	if table.ViewMeta.From == "" {
+		return nil
+	}
+
+	URI, err := uploadSQL(options, table.Alias, table.ViewMeta.From)
+	if err != nil {
+		return err
+	}
+
+	aView.FromURL = URI
+	return nil
+}
+
+func updateTemplateSource(options *Options, template *view.Template, table *Table) error {
+	if table.ViewMeta.Source == "" {
+		return nil
+	}
+
+	URI, err := uploadSQL(options, table.Alias, table.ViewMeta.Source)
+	if err != nil {
+		return err
+	}
+
+	template.SourceURL = URI
+	return nil
+}
+
+func uploadSQL(options *Options, fileName string, SQL string) (string, error) {
+	sourceURL := options.SQLURL(fileName)
+	fs := afs.New()
+	if err := fs.Upload(context.Background(), sourceURL, file.DefaultFileOsMode, strings.NewReader(SQL)); err != nil {
+		return "", err
+	}
+
+	_, URI := url.Split(sourceURL, file.Scheme)
+	return URI, nil
 }
 
 func updateColumnsConfig(table *Table, aView *view.View) error {
@@ -203,70 +224,6 @@ func updateColumnsConfig(table *Table, aView *view.View) error {
 		aView.ColumnsConfig[item.Alias] = aConfig
 	}
 	return nil
-}
-
-func createAndEvaluateTemplate(meta *ast.ViewMeta) (string, error) {
-	schemaFields := make([]reflect.StructField, len(meta.Parameters))
-	presenceFields := make([]reflect.StructField, len(meta.Parameters))
-
-	expandMap := rdata.Map{}
-	for i, parameter := range meta.Parameters {
-		if paramType, ok := meta.ParameterTypes[parameter.Name]; ok {
-			parameter.Type = paramType
-		}
-		var pkgPath string
-		if parameter.Name[0] < 'A' || parameter.Name[0] > 'Z' {
-			pkgPath = "github.com/viant/datly/cmd"
-		}
-
-		presenceFields[i] = reflect.StructField{
-			Name:    parameter.Id,
-			PkgPath: pkgPath,
-			Type:    reflect.TypeOf(true),
-		}
-
-		paramType, err := view.ParseType(parameter.Type)
-		if err != nil {
-			return "", err
-		}
-
-		schemaFields[i] = reflect.StructField{
-			Name:    parameter.Id,
-			PkgPath: pkgPath,
-			Type:    paramType,
-		}
-
-		var value interface{}
-		switch paramType.Kind() {
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			value = 0
-		case reflect.Float32, reflect.Float64:
-			value = 0.0
-		case reflect.String:
-			value = "''"
-		case reflect.Bool:
-			value = false
-		default:
-			value = reflect.New(paramType).Elem().Interface()
-		}
-
-		expandMap.SetValue(parameter.Id, value)
-	}
-
-	schemaType := reflect.StructOf(schemaFields)
-	presenceType := reflect.StructOf(presenceFields)
-	evaluator, err := view.NewEvaluator(schemaType, presenceType, meta.Source)
-	if err != nil {
-		return "", err
-	}
-
-	SQL, err := evaluator.Evaluate(schemaType, reflect.New(schemaType).Elem().Interface(), reflect.New(presenceType).Elem().Interface(), &view.Param{})
-	if err != nil {
-		return "", err
-	}
-
-	return expandMap.ExpandAsText(SQL), nil
 }
 
 func buildRelations(options *Options, meta *metadata.Service, connectors map[string]*view.Connector, route *router.Resource, aView *view.View, viewRoute *router.Route) error {

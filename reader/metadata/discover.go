@@ -52,13 +52,14 @@ func appendAutoDiscover(tempAsBytes []byte, buffer *bytes.Buffer) {
 	matched := cursor.MatchAfterOptional(whitespaceMatcher, candidates...)
 	candidates = []*parsly.Token{parenthesesMatcher, WhitespaceTerminator}
 
-	var prevPos int
 	var hasCriteria bool
-	var breakOuter bool
-	var wroteCriteria bool
+	var criteriaKeyword string
+	var hasPagination bool
+	var prevPos int
 
 outer:
-	for !breakOuter {
+	for criteriaKeyword == "" {
+		prevPos = cursor.Pos
 		matched = cursor.MatchAfterOptional(whitespaceMatcher, candidates...)
 		switch matched.Code {
 		case parenthesesToken:
@@ -71,37 +72,38 @@ outer:
 				continue
 			}
 
+			if bytes.Equal(text, []byte(keywords.Pagination)) {
+				hasPagination = true
+			}
+
 			for _, clause := range afterWhere {
 				if bytes.EqualFold(clause, text) {
-					buffer.WriteByte(' ')
 					if hasCriteria {
-						buffer.WriteString(keywords.AndCriteria)
+						criteriaKeyword = keywords.AndCriteria
 					} else {
-						buffer.WriteString(keywords.WhereCriteria)
+						criteriaKeyword = keywords.WhereCriteria
 					}
-					breakOuter = true
-					wroteCriteria = true
 					break
 				}
 			}
 
-		case parsly.EOF, parsly.Invalid:
-			breakOuter = true
+		case parsly.EOF:
+			prevPos = cursor.Pos
+			if !hasCriteria {
+				criteriaKeyword = keywords.WhereCriteria
+			} else {
+				criteriaKeyword = keywords.AndCriteria
+			}
 		}
-
-		buffer.Write(tempAsBytes[prevPos:cursor.Pos])
-		prevPos = cursor.Pos
 	}
 
-	buffer.Write(tempAsBytes[cursor.Pos:])
-
-	if !wroteCriteria {
+	buffer.Write(tempAsBytes[:prevPos])
+	buffer.WriteByte(' ')
+	buffer.Write([]byte(criteriaKeyword))
+	buffer.Write(tempAsBytes[prevPos:])
+	if !hasPagination {
 		buffer.WriteByte(' ')
-		if !hasCriteria {
-			buffer.WriteString(keywords.WhereCriteria)
-		} else {
-			buffer.WriteString(keywords.AndCriteria)
-		}
+		buffer.WriteString(keywords.Pagination)
 	}
 }
 

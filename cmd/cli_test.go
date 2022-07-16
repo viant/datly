@@ -90,6 +90,14 @@ func TestRun(t *testing.T) {
 			dataURL:     "/v1/api/dev/events?quantity=10",
 			dataMethod:  http.MethodGet,
 		},
+		{
+			description: "inner join",
+			URI:         "case005_inner_join",
+			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly/generator/db.db", "-X=testdata/case005_inner_join/events.sql"},
+			viewURL:     "/v1/api/meta/view/dev/events",
+			dataURL:     "/v1/api/dev/events?quantity=10",
+			dataMethod:  http.MethodGet,
+		},
 	}
 
 	loader := afs.New()
@@ -114,7 +122,7 @@ func TestRun(t *testing.T) {
 		checkGeneratedOpenAPI(t, loader, testLocation, testCase, server)
 		checkGeneratedView(t, loader, testLocation, testCase, server)
 		checkReadData(t, server, testCase, loader, testLocation)
-		generateLogs(loader, testLocation, logger, testCase)
+		//generateLogs(loader, testLocation, logger, testCase)
 	}
 }
 
