@@ -34,13 +34,14 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	}
 
 	var xTable *Table
+	var dataViewParams map[string]*TableParam
 	if options.SQLXLocation != "" && url.Scheme(options.SQLLocation, "e") == "e" {
 		sourceURL := normalizeURL(options.SQLXLocation)
 		SQL, err := fs.DownloadWithURL(context.Background(), sourceURL)
 		if err != nil {
 			return err
 		}
-		if xTable, err = ParseSQLx(string(SQL)); err != nil {
+		if xTable, dataViewParams, err = ParseSQLx(string(SQL)); err != nil {
 			log.Println(err)
 		}
 		if xTable != nil {
@@ -96,6 +97,9 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		}
 		buildExcludeColumn(xTable, aView, viewRoute)
 	}
+
+	buildDataViewParams(options, connectors, dataViewParams, route)
+
 	if len(options.Relations) > 0 {
 		meta := metadata.New()
 		err := buildRelations(options, meta, connectors, route, aView, viewRoute)
@@ -113,6 +117,73 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	_ = fsAddYAML(fs, depURL, dependency)
 	route.Resource.Connectors = nil
 	return fsAddYAML(fs, options.RouterURL(), route)
+}
+
+func buildDataViewParams(options *Options, connectors map[string]*view.Connector, params map[string]*TableParam, route *router.Resource) {
+	if len(params) == 0 {
+		return
+	}
+
+	for k, v := range params {
+		table := v.Table
+		if len(table.Inner) == 0 {
+			continue
+		}
+		var fields = make([]*view.Field, 0)
+		for _, column := range table.Inner {
+			name := column.Alias
+			if name == "" {
+				name = column.Name
+			}
+			if name == "" {
+				continue
+			}
+
+			fields = append(fields, &view.Field{
+				Name:   name,
+				Embed:  false,
+				Schema: &view.Schema{DataType: "string"},
+			})
+		}
+
+		route.Resource.Types = append(route.Resource.Types, &view.Definition{
+			Name:   strings.Title(k),
+			Fields: fields,
+		})
+
+		relView := &view.View{
+			Name:  k,
+			Table: v.Table.Name,
+			Selector: &view.Config{
+				Limit: 1,
+			},
+		}
+		if _, err := addViewConn(options, connectors, route, relView); err != nil {
+			continue
+		}
+		if err := updateView(options, table, relView); err != nil {
+			continue
+		}
+
+		route.Resource.AddViews(relView)
+		route.Resource.AddParameters(v.Param)
+
+		for _, aView := range route.Resource.Views {
+			if aView.Template == nil || len(aView.Template.Parameters) == 0 {
+				continue
+			}
+			for i, viewParam := range aView.Template.Parameters {
+				if viewParam.Name != k {
+					continue
+				}
+				aView.Template.Parameters[i].Ref = k
+				aView.Template.Parameters[i].In = v.Param.In
+				aView.Template.Parameters[i].Schema = v.Param.Schema
+			}
+
+		}
+	}
+
 }
 
 func addViewConn(options *Options, connectors map[string]*view.Connector, route *router.Resource, aView *view.View) (*view.Connector, error) {

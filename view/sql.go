@@ -26,7 +26,6 @@ func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column,
 	if err != nil {
 		if err != nil && !evaluated {
 			fmt.Println(fmt.Errorf("failed to detect columns using velocity engine and SQL:  %v  due to the %w\n", SQL, err).Error())
-
 			columns, SQL, err = detectColumns(ctx, resource, v.Source(), v, v.UseParamBindingPositions())
 			if err != nil {
 				return nil, "", fmt.Errorf("failed also to detect columns using %v due to the %w\n", SQL, err)

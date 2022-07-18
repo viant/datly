@@ -16,7 +16,6 @@ func updateTableColumnTypes(options *Options, table *Table) {
 	if err != nil {
 		fmt.Printf(err.Error())
 	}
-
 	updatedColumns(table, "", table.Name, db)
 	if len(table.Deps) > 0 {
 		for k, v := range table.Deps {

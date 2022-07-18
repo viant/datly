@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/cmd/ast"
+	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/metadata/ast/expr"
 	"github.com/viant/sqlx/metadata/ast/node"
 	"github.com/viant/sqlx/metadata/ast/parser"
@@ -31,12 +32,18 @@ type (
 
 	TableMeta struct {
 		Connector string
+		parameter *view.Parameter
 	}
 	Column struct {
 		Ns     string
 		Name   string
 		Alias  string
 		Except []string
+	}
+
+	TableParam struct {
+		Table *Table
+		Param *view.Parameter
 	}
 
 	Columns []*Column
@@ -108,30 +115,32 @@ func (j *Joins) Index() map[string]*Join {
 	return result
 }
 
-func ParseSQLx(SQL string) (*Table, error) {
+func ParseSQLx(SQL string) (*Table, map[string]*TableParam, error) {
 	aQuery, err := parser.ParseQuery(SQL)
 	if aQuery == nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var tables = map[string]*Table{}
 	table, err := buildTable(aQuery.From.X)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	table.Alias = aQuery.From.Alias
 	table.Columns = selectItemToColumn(aQuery)
 	if star := table.Columns.StarExpr(table.Alias); star != nil {
 		table.StarExpr = true
 	}
+	var dataParameters = map[string]*TableParam{}
 	tables[table.Alias] = table
+
 	if len(aQuery.Joins) > 0 {
 		for _, join := range aQuery.Joins {
-			if err := processJoin(join, tables, table.Columns); err != nil {
-				return nil, err
+			if err := processJoin(join, tables, table.Columns, dataParameters); err != nil {
+				return nil, nil, err
 			}
 		}
 	}
-	return table, nil
+	return table, dataParameters, nil
 }
 
 func buildTable(x node.Node) (*Table, error) {
@@ -212,7 +221,7 @@ func appendParamExpr(x node.Node, op string, y node.Node, list *[]string) {
 	}
 }
 
-func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns) error {
+func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns, dataParameters map[string]*TableParam) error {
 	relTable, err := buildTable(join.With)
 	if err != nil {
 		return err
@@ -222,6 +231,21 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 		comments = strings.ReplaceAll(comments, "/*", "")
 		comments = strings.ReplaceAll(comments, "*/", "")
 		_ = json.Unmarshal([]byte(comments), &relTable.TableMeta)
+	}
+	onCriteria := strings.TrimSpace(parser.Stringify(join.On))
+	isParamView := onCriteria == "1 = 1"
+	if isParamView {
+		paramName := join.Alias
+		if relTable.parameter == nil {
+			relTable.parameter = &view.Parameter{}
+		}
+		relTable.parameter.In = &view.Location{Name: paramName, Kind: view.DataViewKind}
+		relTable.parameter.Schema = &view.Schema{Name: strings.Title(paramName)}
+
+		relTable.Alias = paramName
+		relTable.parameter.Name = paramName
+		dataParameters[paramName] = &TableParam{Table: relTable, Param: relTable.parameter}
+		return nil
 	}
 
 	relTable.Alias = join.Alias
