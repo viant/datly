@@ -6,10 +6,15 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/parameter"
+	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty"
+	"github.com/viant/velty/ast"
+	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/est"
+	"github.com/viant/velty/parser"
 	"github.com/viant/xunsafe"
 	"reflect"
+	"strings"
 )
 
 var boolType = reflect.TypeOf(true)
@@ -188,7 +193,7 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 	return nil
 }
 
-func NewEvaluator(paramSchema, presenceSchema reflect.Type, template string, options ...interface{}) (*Evaluator, error) {
+func NewEvaluator(paramSchema, presenceSchema reflect.Type, template string) (*Evaluator, error) {
 	evaluator := &Evaluator{}
 	var err error
 
@@ -372,4 +377,128 @@ func fieldByTemplateName(structType reflect.Type, name string) (*xunsafe.Field, 
 
 func (t *Template) IsActualTemplate() bool {
 	return t.isTemplate
+}
+
+func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CommonParams, batchData *BatchData) (string, error) {
+	return t.expand(placeholders, SQL, selector, params, batchData)
+}
+
+func (t *Template) expand(placeholders *[]interface{}, SQL string, selector *Selector, params CommonParams, batchData *BatchData) (string, error) {
+	block, err := parser.Parse([]byte(SQL))
+	if err != nil {
+		return "", err
+	}
+
+	replacement := rdata.Map{}
+
+	for _, statement := range block.Stmt {
+		key, val, err := t.prepareExpanded(statement, params, selector, batchData, placeholders)
+		if err != nil {
+			return "", err
+		}
+
+		if key == "" {
+			continue
+		}
+
+		replacement.SetValue(key, val)
+	}
+
+	return replacement.ExpandAsText(SQL), err
+}
+
+func (t *Template) prepareExpanded(statement ast.Statement, params CommonParams, selector *Selector, batchData *BatchData, placeholders *[]interface{}) (string, string, error) {
+	switch actual := statement.(type) {
+	case *expr.Select:
+		key := extractSelectorName(actual.FullName)
+		mapKey, mapValue, err := t.replacementEntry(key, params, selector, batchData, placeholders)
+		if err != nil {
+			return "", "", err
+		}
+
+		return mapKey, mapValue, nil
+	}
+
+	return "", "", nil
+}
+
+func (t *Template) replacementEntry(key string, params CommonParams, selector *Selector, batchData *BatchData, placeholders *[]interface{}) (string, string, error) {
+	switch key {
+	case keywords.Pagination[1:]:
+		return key, params.Pagination, nil
+	case keywords.Criteria[1:]:
+		criteriaExpanded, err := t.expand(placeholders, params.WhereClause, selector, params, batchData)
+		if err != nil {
+			return "", "", err
+		}
+
+		return key, criteriaExpanded, nil
+	case keywords.ColumnsIn[1:]:
+		*placeholders = append(*placeholders, batchData.ValuesBatch...)
+		return key, params.ColumnsIn, nil
+	case keywords.SelectorCriteria[1:]:
+		*placeholders = append(*placeholders, selector.Placeholders...)
+		return key, selector.Criteria, nil
+	default:
+		if strings.HasPrefix(key, keywords.WherePrefix) {
+			_, aValue, err := t.replacementEntry(key[len(keywords.WherePrefix):], params, selector, batchData, placeholders)
+			if err != nil {
+				return "", "", err
+			}
+
+			return t.valueWithPrefix(key, aValue, " WHERE ", false)
+		}
+
+		if strings.HasPrefix(key, keywords.AndPrefix) {
+			_, aValue, err := t.replacementEntry(key[len(keywords.AndPrefix):], params, selector, batchData, placeholders)
+			if err != nil {
+				return "", "", err
+			}
+
+			return t.valueWithPrefix(key, aValue, " AND ", true)
+		}
+
+		if strings.HasPrefix(key, keywords.OrPrefix) {
+			_, aValue, err := t.replacementEntry(key[len(keywords.OrPrefix):], params, selector, batchData, placeholders)
+			if err != nil {
+				return "", "", err
+			}
+
+			return t.valueWithPrefix(key, aValue, " OR ", true)
+		}
+
+		accessor, err := t.AccessorByName(key)
+		if err != nil {
+			return "", "", err
+		}
+
+		value, err := accessor.Value(selector.Parameters.Values)
+		if err != nil {
+			return "", "", err
+		}
+
+		*placeholders = append(*placeholders, value)
+		return key, "?", nil
+	}
+}
+
+func (t *Template) valueWithPrefix(key string, aValue, prefix string, wrapWithParentheses bool) (string, string, error) {
+	if aValue == "" {
+		return key, "", nil
+	}
+
+	if wrapWithParentheses {
+		return key, prefix + "(" + aValue + ")", nil
+	}
+
+	return key, prefix + aValue, nil
+}
+
+func extractSelectorName(name string) string {
+	i := 1 // all names starts with the '$'
+
+	for ; i < len(name) && name[i] == '{'; i++ {
+	} // skip the select block i.e. ${foo.DbName}
+
+	return name[i : len(name)-i+1]
 }

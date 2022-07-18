@@ -135,8 +135,8 @@ func (s *Service) afterReadAll(collectorFetchEmitted bool, collector *view.Colle
 	collector.Fetched()
 }
 
-func (s *Service) batchData(collector *view.Collector) *BatchData {
-	batchData := &BatchData{}
+func (s *Service) batchData(collector *view.Collector) *view.BatchData {
+	batchData := &view.BatchData{}
 
 	batchData.Values, batchData.ColumnName = collector.ParentPlaceholders()
 	batchData.ParentReadSize = len(batchData.Values)
@@ -144,7 +144,7 @@ func (s *Service) batchData(collector *view.Collector) *BatchData {
 	return batchData
 }
 
-func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.Selector, batchData *BatchData, db *sql.DB, collector *view.Collector, session *Session) error {
+func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.Selector, batchData *view.BatchData, db *sql.DB, collector *view.Collector, session *Session) error {
 	batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
 	visitor := collector.Visitor(ctx)
 
@@ -190,7 +190,7 @@ func (s *Service) query(ctx context.Context, view *view.View, db *sql.DB, SQL st
 		if err != nil {
 			return err
 		}
-		
+
 		readData++
 		if fetcher, ok := row.(OnFetcher); ok {
 			if err = fetcher.OnFetch(ctx); err != nil {

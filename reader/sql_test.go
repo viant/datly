@@ -26,7 +26,7 @@ func TestBuilder_Build(t *testing.T) {
 	}
 
 	useCases := []struct {
-		batchData    *BatchData
+		batchData    *view.BatchData
 		view         *view.View
 		relation     *view.Relation
 		selector     *view.Selector
@@ -57,7 +57,7 @@ func TestBuilder_Build(t *testing.T) {
 					PresenceSchema: view.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
-			batchData: &BatchData{},
+			batchData: &view.BatchData{},
 			selector: &view.Selector{Parameters: view.ParamState{
 				Values: Params{},
 				Has:    PresenceMap{},
@@ -88,7 +88,7 @@ func TestBuilder_Build(t *testing.T) {
 					PresenceSchema: view.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
-			batchData: &BatchData{},
+			batchData: &view.BatchData{},
 			selector: &view.Selector{
 				Parameters: view.ParamState{
 					Values: Params{},
@@ -123,7 +123,7 @@ func TestBuilder_Build(t *testing.T) {
 					PresenceSchema: view.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
-			batchData: &BatchData{},
+			batchData: &view.BatchData{},
 			selector: &view.Selector{
 				Parameters: view.ParamState{
 					Values: Params{},
@@ -155,7 +155,7 @@ func TestBuilder_Build(t *testing.T) {
 					PresenceSchema: view.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
-			batchData: &BatchData{},
+			batchData: &view.BatchData{},
 			selector: &view.Selector{
 				Parameters: view.ParamState{
 					Values: Params{},
@@ -186,7 +186,7 @@ func TestBuilder_Build(t *testing.T) {
 					PresenceSchema: view.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
-			batchData: &BatchData{},
+			batchData: &view.BatchData{},
 			selector: &view.Selector{
 				Parameters: view.ParamState{
 					Values: Params{},
@@ -229,7 +229,7 @@ func TestBuilder_Build(t *testing.T) {
 				},
 			},
 			placeholders: []interface{}{10},
-			batchData:    &BatchData{},
+			batchData:    &view.BatchData{},
 			selector: &view.Selector{
 				Parameters: view.ParamState{
 					Values: Params{EventId: 10},
@@ -273,7 +273,7 @@ func TestBuilder_Build(t *testing.T) {
 					},
 				},
 			},
-			batchData: &BatchData{
+			batchData: &view.BatchData{
 				ColumnName:  "user_id",
 				ValuesBatch: []interface{}{4, 5, 9, 2},
 			},
@@ -320,7 +320,7 @@ func TestBuilder_Build(t *testing.T) {
 					},
 				},
 			},
-			batchData: &BatchData{
+			batchData: &view.BatchData{
 				ColumnName:  "user_id",
 				ValuesBatch: []interface{}{4, 5, 9, 2},
 			},

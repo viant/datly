@@ -9,8 +9,6 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
 	rdata "github.com/viant/toolbox/data"
-	"github.com/viant/velty/ast/expr"
-	"github.com/viant/velty/parser"
 	"reflect"
 	"strings"
 )
@@ -78,7 +76,7 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 }
 
 func detectColumns(ctx context.Context, SQL string, v *View) ([]*Column, string, error) {
-	SQL, err := detectColumnsSQL(SQL, v)
+	SQL, args, err := detectColumnsSQL(SQL, v)
 	if err != nil {
 		return nil, "", err
 	}
@@ -89,7 +87,7 @@ func detectColumns(ctx context.Context, SQL string, v *View) ([]*Column, string,
 		return nil, SQL, err
 	}
 
-	query, err := db.QueryContext(ctx, SQL)
+	query, err := db.QueryContext(ctx, SQL, args...)
 	if err != nil {
 		return nil, SQL, err
 	}
@@ -142,7 +140,7 @@ func columnsMetadata(ctx context.Context, db *sql.DB, v *View, columns []io.Colu
 	return result, nil
 }
 
-func detectColumnsSQL(source string, v *View) (string, error) {
+func detectColumnsSQL(source string, v *View) (string, []interface{}, error) {
 	sb := strings.Builder{}
 	sb.WriteString("SELECT ")
 	if v.Alias != "" {
@@ -164,22 +162,14 @@ func detectColumnsSQL(source string, v *View) (string, error) {
 		SQL = replacement.ExpandAsText(discover)
 	}
 
-	parse, err := parser.Parse([]byte(SQL))
+	var placeholders []interface{}
+	var err error
+	SQL, err = v.Template.Expand(&placeholders, SQL, &Selector{}, CommonParams{}, &BatchData{})
 	if err != nil {
-		return "", err
+		return SQL, nil, err
 	}
 
-	replacement := rdata.Map{}
-	for _, statement := range parse.Stmt {
-		switch actual := statement.(type) {
-		case *expr.Select:
-			replacement.Put(actual.ID, "")
-		}
-	}
-
-	SQL = replacement.ExpandAsText(SQL)
-
-	return SQL, nil
+	return SQL, placeholders, nil
 }
 
 func expandWithZeroValues(SQL string, template *Template) (string, error) {

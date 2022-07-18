@@ -5,10 +5,6 @@ import (
 	"github.com/viant/datly/reader/metadata"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
-	rdata "github.com/viant/toolbox/data"
-	"github.com/viant/velty/ast"
-	"github.com/viant/velty/ast/expr"
-	"github.com/viant/velty/parser"
 	"strconv"
 	"strings"
 )
@@ -33,14 +29,7 @@ type (
 	Builder struct{}
 
 	//BatchData groups view needed to use various view.MatchStrategy
-	BatchData struct {
-		ColumnName     string
-		Parent         int
-		ParentReadSize int
 
-		Values      []interface{}
-		ValuesBatch []interface{}
-	}
 )
 
 //NewBuilder creates Builder instance
@@ -49,7 +38,7 @@ func NewBuilder() *Builder {
 }
 
 //Build builds SQL Select statement
-func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *BatchData, relation *view.Relation, parentOfAclView *view.View) (string, []interface{}, error) {
+func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, parentOfAclView *view.View) (string, []interface{}, error) {
 	template, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parentOfAclView)
 	if err != nil {
 		return "", nil, err
@@ -115,7 +104,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *Ba
 		return "", nil, err
 	}
 
-	SQL, err := b.expand(sb.String(), aView, selector, commonParams, batchData, &placeholders)
+	SQL, err := aView.Template.Expand(&placeholders, sb.String(), selector, commonParams, batchData)
 	if err != nil {
 		return "", nil, err
 	}
@@ -218,117 +207,6 @@ func (b *Builder) appendOffset(sb *strings.Builder, selector *view.Selector) {
 	sb.WriteString(strconv.Itoa(selector.Offset))
 }
 
-func (b *Builder) expand(sql string, aView *view.View, selector *view.Selector, params view.CommonParams, batchData *BatchData, placeholders *[]interface{}) (string, error) {
-	block, err := parser.Parse([]byte(sql))
-	if err != nil {
-		return "", err
-	}
-
-	replacement := rdata.Map{}
-
-	for _, statement := range block.Stmt {
-		key, val, err := b.prepareExpanded(statement, params, aView, selector, batchData, placeholders)
-		if err != nil {
-			return "", err
-		}
-
-		if key == "" {
-			continue
-		}
-
-		replacement.SetValue(key, val)
-	}
-
-	return replacement.ExpandAsText(sql), err
-}
-
-func (b *Builder) prepareExpanded(statement ast.Statement, params view.CommonParams, aView *view.View, selector *view.Selector, batchData *BatchData, placeholders *[]interface{}) (string, string, error) {
-	switch actual := statement.(type) {
-	case *expr.Select:
-		key := extractSelectorName(actual.FullName)
-		mapKey, mapValue, err := b.replacementEntry(key, params, aView, selector, batchData, placeholders)
-		if err != nil {
-			return "", "", err
-		}
-
-		return mapKey, mapValue, nil
-	}
-
-	return "", "", nil
-}
-
-func (b *Builder) replacementEntry(key string, params view.CommonParams, aView *view.View, selector *view.Selector, batchData *BatchData, placeholders *[]interface{}) (string, string, error) {
-	switch key {
-	case keywords.Pagination[1:]:
-		return key, params.Pagination, nil
-	case keywords.Criteria[1:]:
-		criteriaExpanded, err := b.expand(params.WhereClause, aView, selector, params, batchData, placeholders)
-		if err != nil {
-			return "", "", err
-		}
-
-		return key, criteriaExpanded, nil
-	case keywords.ColumnsIn[1:]:
-		*placeholders = append(*placeholders, batchData.ValuesBatch...)
-		return key, params.ColumnsIn, nil
-	case keywords.SelectorCriteria[1:]:
-		*placeholders = append(*placeholders, selector.Placeholders...)
-		return key, selector.Criteria, nil
-	default:
-		if strings.HasPrefix(key, keywords.WherePrefix) {
-			_, aValue, err := b.replacementEntry(key[len(keywords.WherePrefix):], params, aView, selector, batchData, placeholders)
-			if err != nil {
-				return "", "", err
-			}
-
-			return b.valueWithPrefix(key, aValue, " WHERE ", false)
-		}
-
-		if strings.HasPrefix(key, keywords.AndPrefix) {
-			_, aValue, err := b.replacementEntry(key[len(keywords.AndPrefix):], params, aView, selector, batchData, placeholders)
-			if err != nil {
-				return "", "", err
-			}
-
-			return b.valueWithPrefix(key, aValue, " AND ", true)
-		}
-
-		if strings.HasPrefix(key, keywords.OrPrefix) {
-			_, aValue, err := b.replacementEntry(key[len(keywords.OrPrefix):], params, aView, selector, batchData, placeholders)
-			if err != nil {
-				return "", "", err
-			}
-
-			return b.valueWithPrefix(key, aValue, " OR ", true)
-		}
-
-		accessor, err := aView.Template.AccessorByName(key)
-		if err != nil {
-			return "", "", err
-		}
-
-		value, err := accessor.Value(selector.Parameters.Values)
-		if err != nil {
-			return "", "", err
-		}
-
-		*placeholders = append(*placeholders, value)
-		return key, "?", nil
-	}
-}
-
-func (b *Builder) valueWithPrefix(key string, aValue, prefix string, wrapWithParentheses bool) (string, string, error) {
-	if aValue == "" {
-		return key, "", nil
-	}
-
-	if wrapWithParentheses {
-		return key, prefix + "(" + aValue + ")", nil
-	}
-
-	return key, prefix + aValue, nil
-}
-
 func (b *Builder) updateCriteria(params *view.CommonParams, columnsInMeta *reservedMeta) error {
 	sb := strings.Builder{}
 	hasColumnsIn := columnsInMeta.has()
@@ -353,7 +231,7 @@ func (b *Builder) appendCriteria(sb *strings.Builder, criteria string, addAnd bo
 	}
 }
 
-func (b *Builder) updateColumnsIn(params *view.CommonParams, view *view.View, relation *view.Relation, batchData *BatchData, columnsInMeta *reservedMeta, hasCriteria bool) {
+func (b *Builder) updateColumnsIn(params *view.CommonParams, view *view.View, relation *view.Relation, batchData *view.BatchData, columnsInMeta *reservedMeta, hasCriteria bool) {
 	columnsIn := columnsInMeta.has()
 
 	if batchData == nil || batchData.ColumnName == "" {
@@ -465,13 +343,4 @@ func (b *Builder) getInitialPlaceholders(aView *view.View, selector *view.Select
 	}
 
 	return placeholders, nil
-}
-
-func extractSelectorName(name string) string {
-	i := 1 // all names starts with the '$'
-
-	for ; i < len(name) && name[i] == '{'; i++ {
-	} // skip the select block i.e. ${foo.DbName}
-
-	return name[i : len(name)-i+1]
 }
