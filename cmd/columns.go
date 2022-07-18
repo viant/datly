@@ -9,6 +9,9 @@ import (
 )
 
 func updateTableColumnTypes(options *Options, table *Table) {
+	if len(table.ColumnTypes) > 0 {
+		return
+	}
 	//TODO read all column per alias from main and join table
 	table.ColumnTypes = map[string]string{}
 	connector := options.MatchConnector(table.Connector)

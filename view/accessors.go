@@ -116,6 +116,9 @@ func (a *Accessor) upstream(ptr unsafe.Pointer, indexes ...int) (unsafe.Pointer,
 }
 
 func (a *Accessor) Value(values interface{}, indexes ...int) (interface{}, error) {
+	if values == nil {
+
+	}
 	ptr := xunsafe.AsPointer(values)
 	pointer, index := a.upstream(ptr, indexes...)
 	xField := a.xFields[len(a.xFields)-1]

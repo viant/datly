@@ -126,10 +126,12 @@ func buildDataViewParams(options *Options, connectors map[string]*view.Connector
 
 	for k, v := range params {
 		table := v.Table
+
 		if len(table.Inner) == 0 {
 			continue
 		}
 		var fields = make([]*view.Field, 0)
+		updateTableColumnTypes(options, table)
 		for _, column := range table.Inner {
 			name := column.Alias
 			if name == "" {
