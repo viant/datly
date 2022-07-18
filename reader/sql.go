@@ -104,7 +104,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 		return "", nil, err
 	}
 
-	SQL, err := aView.Template.Expand(&placeholders, sb.String(), selector, commonParams, batchData)
+	SQL, err := aView.Expand(&placeholders, sb.String(), selector, commonParams, batchData)
 	if err != nil {
 		return "", nil, err
 	}

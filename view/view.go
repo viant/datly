@@ -986,3 +986,23 @@ func (v *View) indexTransforms(resource *Resource, transforms marshal.Transforms
 
 	return nil
 }
+
+func (v *View) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CommonParams, batchData *BatchData) (string, error) {
+	v.ensureParameters(selector)
+
+	return v.Template.Expand(placeholders, SQL, selector, params, batchData)
+}
+
+func (v *View) ensureParameters(selector *Selector) {
+	if v.Template == nil {
+		return
+	}
+
+	if selector.Parameters.Values == nil {
+		selector.Parameters.Values = newValue(v.Template.Schema.Type())
+	}
+
+	if selector.Parameters.Has == nil {
+		selector.Parameters.Has = newValue(v.Template.PresenceSchema.Type())
+	}
+}

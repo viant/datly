@@ -164,7 +164,7 @@ func detectColumnsSQL(source string, v *View) (string, []interface{}, error) {
 
 	var placeholders []interface{}
 	var err error
-	SQL, err = v.Template.Expand(&placeholders, SQL, &Selector{}, CommonParams{}, &BatchData{})
+	SQL, err = v.Expand(&placeholders, SQL, &Selector{}, CommonParams{}, &BatchData{})
 	if err != nil {
 		return SQL, nil, err
 	}
