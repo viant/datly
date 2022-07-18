@@ -44,6 +44,10 @@ func TestParse(t *testing.T) {
 			description: "foreach and set",
 			path:        "case006",
 		},
+		{
+			description: "detect params only int statements",
+			path:        "case007",
+		},
 	}
 
 	loader := afs.New()
@@ -97,6 +101,5 @@ func TestExtractCondBlock(t *testing.T) {
 		actual, exprs := ast.ExtractCondBlock(testCase.SQL)
 		assert.EqualValues(t, testCase.expect, actual, testCase.description)
 		assert.EqualValues(t, testCase.exprs, exprs, testCase.description)
-
 	}
 }

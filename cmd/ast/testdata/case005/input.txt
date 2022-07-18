@@ -12,7 +12,7 @@ WHERE 1=1
 #if($Has.ID)
 AND ID = $ID
 #end
-#if($Has.quantiy)
+#if($Has.quantity)
 AND quantity = $quantity
 AND quantity = $Unsafe.quantity
 #end

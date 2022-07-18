@@ -18,7 +18,7 @@ AND ID = $ID
     $column.Id
 #end
 
-#if($Has.quantiy)
+#if($Has.quantity)
 AND quantity = $quantity
 AND quantity = $Unsafe.quantity
 #end

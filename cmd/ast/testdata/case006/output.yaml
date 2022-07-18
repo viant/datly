@@ -3,15 +3,10 @@ parameters:
     name: id
     kind: query
     type: int
-    positions:
-      - 0
   - id: quantity
     name: quantity
     kind: query
     type: string
-    positions:
-      - 1
-      - 2
 source: |
   SELECT *, (
       SELECT abc
@@ -28,8 +23,10 @@ source: |
       $column.Id
   #end
   
-  #if($Has.quantiy)
+  #if($Has.quantity)
   AND quantity = $quantity
   AND quantity = $Unsafe.quantity
   #end
 hasveltysyntax: true
+expressions: []
+parametertypes: {}

@@ -1,18 +1,19 @@
-/*TEMPLATE
-PARAMETER ID[query:id:int]
-PARAMETER quantity[path:quantity:string:true]
-*/
-
-
 SELECT *, (
     SELECT abc
     FROM T2
     WHERE 1=2
 ) as abc FROM T1
 WHERE 1=1
+#set($valueSet = 123)
 #if($Has.ID)
-AND ID = $ID
+AND ID = 10
 #end
+
+#foreach($column in $Columns)
+    $column.Id
+#end
+
 #if($Has.quantity)
 AND quantity = $quantity
+AND quantity = $Unsafe.quantity
 #end

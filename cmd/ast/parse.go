@@ -63,35 +63,34 @@ outer:
 		}
 		viewMeta.From = actualSource
 	}
+
+	if viewMeta.HasVeltySyntax {
+		for _, parameter := range viewMeta.Parameters {
+			parameter.Positions = []int{}
+		}
+	}
+
 	return viewMeta, nil
 }
 
 func implyDefaultParams(variables map[string]bool, statements []ast.Statement, meta *ViewMeta, required bool) {
 	for _, statement := range statements {
 		switch actual := statement.(type) {
+		case stmt.ForEach:
+			variables[actual.Item.ID] = true
+		case stmt.Statement:
+			x, ok := actual.X.(*expr.Select)
+			if ok {
+				variables[x.ID] = true
+			}
+
+			y, ok := actual.Y.(*expr.Select)
+			if ok && !variables[y.ID] {
+				indexParameter(variables, y, meta, required)
+			}
+
 		case *expr.Select:
-			paramName := paramId(actual)
-
-			paramName = removePrefixIfNeeded(paramName)
-			paramName = withoutPath(paramName)
-
-			if isVariable := variables[paramName]; isVariable {
-				continue
-			}
-
-			switch paramName {
-			case keywords.Criteria[1:], keywords.SelectorCriteria[1:], keywords.Pagination[1:], keywords.ColumnsIn[1:]:
-				continue
-			}
-
-			meta.addParameter(&Parameter{
-				Id:       paramName,
-				Name:     paramName,
-				Kind:     "query",
-				Type:     "string",
-				fullName: actual.FullName,
-				Required: required,
-			}, true)
+			indexParameter(variables, actual, meta, required)
 
 		case *stmt.Statement:
 			x, ok := actual.X.(*expr.Select)
@@ -101,6 +100,18 @@ func implyDefaultParams(variables map[string]bool, statements []ast.Statement, m
 			variables[x.ID] = true
 		case *stmt.ForEach:
 			variables[actual.Item.ID] = true
+
+		case *stmt.If:
+			switch condition := actual.Condition.(type) {
+			case *expr.Unary:
+				implyDefaultParams(variables, []ast.Statement{condition.X}, meta, false)
+			case *expr.Binary:
+				implyDefaultParams(variables, []ast.Statement{condition.X, condition.Y}, meta, false)
+			case *expr.Parentheses:
+				implyDefaultParams(variables, []ast.Statement{condition.P}, meta, false)
+			default:
+				implyDefaultParams(variables, []ast.Statement{actual.Condition}, meta, false)
+			}
 		}
 
 		switch actual := statement.(type) {
@@ -108,6 +119,30 @@ func implyDefaultParams(variables map[string]bool, statements []ast.Statement, m
 			implyDefaultParams(variables, actual.Statements(), meta, false)
 		}
 	}
+}
+
+func indexParameter(variables map[string]bool, actual *expr.Select, meta *ViewMeta, required bool) {
+	paramName := paramId(actual)
+	prefix, paramName := removePrefixIfNeeded(paramName)
+	paramName = withoutPath(paramName)
+
+	if isVariable := variables[paramName]; isVariable {
+		return
+	}
+
+	switch paramName {
+	case keywords.Criteria[1:], keywords.SelectorCriteria[1:], keywords.Pagination[1:], keywords.ColumnsIn[1:]:
+		return
+	}
+
+	meta.addParameter(&Parameter{
+		Id:       paramName,
+		Name:     paramName,
+		Kind:     "query",
+		Type:     "string",
+		fullName: actual.FullName,
+		Required: required && prefix != keywords.ParamsMetadataKey,
+	}, true)
 }
 
 func paramId(actual *expr.Select) string {
@@ -126,18 +161,18 @@ func withoutPath(name string) string {
 	return name
 }
 
-func removePrefixIfNeeded(name string) string {
+func removePrefixIfNeeded(name string) (prefix string, actual string) {
 	prefixes := []string{
 		keywords.AndPrefix, keywords.WherePrefix, keywords.OrPrefix,
 		keywords.ParamsKey + ".", keywords.ParamsMetadataKey + ".",
 	}
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(name, prefix) {
-			return name[len(prefix):]
+			return prefix[:len(prefix)-1], name[len(prefix):]
 		}
 	}
 
-	return name
+	return "", name
 }
 
 func addTemplateIfNeeded(cursor *parsly.Cursor, meta *ViewMeta) error {
