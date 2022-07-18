@@ -114,7 +114,7 @@ func TestRun(t *testing.T) {
 			continue
 		}
 
-		server, err := New(testCase.args, logger)
+		server, err := New("", testCase.args, logger)
 		if !assert.Nil(t, err, testCase.description) {
 			continue
 		}

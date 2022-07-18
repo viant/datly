@@ -19,6 +19,8 @@ import (
 	"os"
 )
 
+var Version = "development"
+
 type ConsoleWriter struct {
 }
 
@@ -34,7 +36,7 @@ func main() {
 		}
 	}()
 
-	server, err := cmd.New(os.Args[1:], &ConsoleWriter{})
+	server, err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {
 		log.Fatal(err)
 	}

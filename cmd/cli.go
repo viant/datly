@@ -17,11 +17,16 @@ import (
 	"os"
 )
 
-func New(args []string, logger io.Writer) (*standalone.Server, error) {
+func New(version string, args []string, logger io.Writer) (*standalone.Server, error) {
 	os.Setenv("AWS_SDK_LOAD_CONFIG", "true")
 	options := &Options{}
 	_, err := flags.ParseArgs(options, args)
-	if isHelOption(args) {
+
+	if options.Version {
+		fmt.Printf("Datly: version: %v\n", version)
+		return nil, nil
+	}
+	if isOption("-h", args) {
 		return nil, nil
 	}
 	if err != nil {
@@ -101,7 +106,7 @@ func reportContent(logger io.Writer, message string, URL string) {
 	_, _ = logger.Write([]byte(fmt.Sprintf("%s\n", data)))
 }
 
-func isHelOption(args []string) bool {
+func isOption(key string, args []string) bool {
 	for _, arg := range args {
 		if arg == "-h" {
 			return true

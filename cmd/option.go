@@ -22,6 +22,7 @@ type (
 		Connector
 		Content
 		OpenApiURL string `short:"o" long:"openapi"`
+		Version    bool   `short:"v" long:"version"  description:"build version" `
 	}
 
 	Connector struct {
