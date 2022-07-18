@@ -23,8 +23,6 @@ Connector:
     Data: null
     Key: blowfish://default
     URL: mem://localhost/resource/mysql.json
-From: "SELECT\n                COUNT(*) as totalTypes,\n                id,\n                event_type_id as eventTypeId\n         FROM events\n         WHERE 1 = 1\n         AND quantity > ?\n         GROUP BY event_type_id\n         ORDER BY 1\n         "
-FromURL: events.sql
 Logger:
   Name: ""
 MatchStrategy: read_matched
@@ -48,8 +46,6 @@ Template:
         Kind: query
         Name: quantity
       Name: quantity
-      Positions:
-        - 0
       PresenceName: quantity
       Required: true
       Schema:
@@ -60,17 +56,17 @@ Template:
   Schema:
     Cardinality: One
   Source: |-
-    (SELECT
+    ( SELECT
                     COUNT(*) as totalTypes,
                     id,
                     event_type_id as eventTypeId
              FROM events
              WHERE 1 = 1
-             AND quantity > ?
+             AND quantity > $quantity
              GROUP BY event_type_id
              ORDER BY 1
-             )
-UseBindingPositions: true
+              )
+  SourceURL: events.sql
 With:
   - Cardinality: Many
     Column: event_type_id
@@ -103,8 +99,6 @@ With:
           Key: blowfish://default
           URL: mem://localhost/resource/mysql.json
       Field: id
-      From: "SELECT * FROM event_types\n    "
-      FromURL: eventTypes.sql
       Logger:
         Name: ""
       MatchStrategy: read_matched
@@ -128,6 +122,6 @@ With:
         Schema:
           Cardinality: One
         Source: |-
-          (SELECT * FROM event_types
-              )
-      UseBindingPositions: true
+          ( SELECT * FROM event_types
+               )
+        SourceURL: eventTypes.sql

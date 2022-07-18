@@ -130,7 +130,6 @@ func buildSQLSource(options *Options, aView *view.View, table *Table) error {
 	}
 
 	aView.Template = template
-	aView.UseBindingPositions = boolPtr(!table.ViewMeta.HasVeltySyntax)
 
 	if err := updateTemplateSource(options, template, table); err != nil {
 		return err
@@ -145,9 +144,8 @@ func buildSQLSource(options *Options, aView *view.View, table *Table) error {
 
 func convertMetaParameter(param *ast.Parameter) *view.Parameter {
 	return &view.Parameter{
-		Name:      param.Id,
-		Schema:    &view.Schema{DataType: param.Type},
-		Positions: param.Positions,
+		Name:   param.Id,
+		Schema: &view.Schema{DataType: param.Type},
 		In: &view.Location{
 			Kind: view.Kind(param.Kind),
 			Name: param.Name,

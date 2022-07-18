@@ -37,8 +37,6 @@ Connector:
     Data: null
     Key: blowfish://default
     URL: mem://localhost/resource/mysql.json
-From: "SELECT id,\n                event_type_id,\n                (CASE\n                     WHEN id = 1 THEN\n                         'x1,x2'\n                     ELSE\n                         'x3,x4'\n                    END) AS slice /* {\"Codec\":{\"Ref\":\"AsStrings\"}, \"DataType\": \"string\"}  */\n         FROM events\n     "
-FromURL: events.sql
 Logger:
   Name: ""
 MatchStrategy: read_matched
@@ -62,7 +60,7 @@ Template:
   Schema:
     Cardinality: One
   Source: |-
-    (SELECT id,
+    ( SELECT id,
                     event_type_id,
                     (CASE
                          WHEN id = 1 THEN
@@ -71,8 +69,8 @@ Template:
                              'x3,x4'
                         END) AS slice /* {"Codec":{"Ref":"AsStrings"}, "DataType": "string"}  */
              FROM events
-         )
-UseBindingPositions: true
+          )
+  SourceURL: events.sql
 With:
   - Cardinality: Many
     Column: event_type_id

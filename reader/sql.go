@@ -61,7 +61,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *Ba
 
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
-	if err = b.appendColumns(&sb, aView, selector, relation); err != nil {
+	if err = b.appendColumns(&sb, aView, selector); err != nil {
 		return "", nil, err
 	}
 
@@ -85,7 +85,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *Ba
 		return "", nil, err
 	}
 
-	if err = b.updateCriteria(&commonParams, columnsInMeta, selector); err != nil {
+	if err = b.updateCriteria(&commonParams, columnsInMeta); err != nil {
 		return "", nil, err
 	}
 
@@ -123,16 +123,16 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *Ba
 	return SQL, placeholders, err
 }
 
-func (b *Builder) appendColumns(sb *strings.Builder, aView *view.View, selector *view.Selector, relation *view.Relation) error {
+func (b *Builder) appendColumns(sb *strings.Builder, aView *view.View, selector *view.Selector) error {
 	if len(selector.Columns) == 0 {
 		b.appendViewColumns(sb, aView)
 		return nil
 	}
 
-	return b.appendSelectorColumns(sb, aView, selector, relation)
+	return b.appendSelectorColumns(sb, aView, selector)
 }
 
-func (b *Builder) appendSelectorColumns(sb *strings.Builder, view *view.View, selector *view.Selector, relation *view.Relation) error {
+func (b *Builder) appendSelectorColumns(sb *strings.Builder, view *view.View, selector *view.Selector) error {
 	for i, column := range selector.Columns {
 		viewColumn, ok := view.ColumnByName(column)
 		if !ok {
@@ -329,7 +329,7 @@ func (b *Builder) valueWithPrefix(key string, aValue, prefix string, wrapWithPar
 	return key, prefix + aValue, nil
 }
 
-func (b *Builder) updateCriteria(params *view.CommonParams, columnsInMeta *reservedMeta, selector *view.Selector) error {
+func (b *Builder) updateCriteria(params *view.CommonParams, columnsInMeta *reservedMeta) error {
 	sb := strings.Builder{}
 	hasColumnsIn := columnsInMeta.has()
 
@@ -450,10 +450,6 @@ func (b *Builder) checkSelectorAndAppendRelColumn(sb *strings.Builder, aView *vi
 }
 
 func (b *Builder) getInitialPlaceholders(aView *view.View, selector *view.Selector) ([]interface{}, error) {
-	if !aView.UseParamBindingPositions() {
-		return make([]interface{}, 0), nil
-	}
-
 	totalLen := 0
 	for _, parameter := range aView.Template.Parameters {
 		totalLen += len(parameter.Positions)
@@ -461,14 +457,11 @@ func (b *Builder) getInitialPlaceholders(aView *view.View, selector *view.Select
 
 	placeholders := make([]interface{}, totalLen)
 	for _, parameter := range aView.Template.Parameters {
-		value, err := parameter.Value(selector.Parameters.Values)
+		_, err := parameter.Value(selector.Parameters.Values)
 		if err != nil {
 			return nil, err
 		}
 
-		for _, position := range parameter.Positions {
-			placeholders[position] = value
-		}
 	}
 
 	return placeholders, nil

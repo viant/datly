@@ -1,5 +1,4 @@
-parameters: []
-from: |-
+source: |-
   SELECT *, (
       SELECT abc
       FROM T2

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader/metadata"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/io"
@@ -22,11 +21,12 @@ func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column,
 		return nil, "", err
 	}
 
-	columns, SQL, err := detectColumns(ctx, resource, actualSQL, v, v.UseParamBindingPositions())
+	columns, SQL, err := detectColumns(ctx, actualSQL, v)
 	if err != nil {
 		if err != nil && !evaluated {
 			fmt.Println(fmt.Errorf("failed to detect columns using velocity engine and SQL:  %v  due to the %w\n", SQL, err).Error())
-			columns, SQL, err = detectColumns(ctx, resource, v.Source(), v, v.UseParamBindingPositions())
+
+			columns, SQL, err = detectColumns(ctx, v.Source(), v)
 			if err != nil {
 				return nil, "", fmt.Errorf("failed also to detect columns using %v due to the %w\n", SQL, err)
 			}
@@ -36,7 +36,7 @@ func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column,
 	}
 
 	if v.From != "" && v.Table != "" {
-		tableColumns, tableSQL, errr := detectColumns(ctx, resource, v.Table, v, false)
+		tableColumns, tableSQL, errr := detectColumns(ctx, v.Table, v)
 		if errr != nil {
 			return nil, tableSQL, errr
 		}
@@ -77,7 +77,7 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 	return source, false, err
 }
 
-func detectColumns(ctx context.Context, resource *Resource, SQL string, v *View, usePlaceholders bool) ([]*Column, string, error) {
+func detectColumns(ctx context.Context, SQL string, v *View) ([]*Column, string, error) {
 	SQL, err := detectColumnsSQL(SQL, v)
 	if err != nil {
 		return nil, "", err
@@ -85,47 +85,11 @@ func detectColumns(ctx context.Context, resource *Resource, SQL string, v *View,
 
 	db, err := v.Connector.Db()
 
-	var args []interface{}
-	if usePlaceholders && v.Template != nil {
-		totalLength := 0
-		for _, parameter := range v.Template.Parameters {
-			totalLength += len(parameter.Positions)
-		}
-		args = make([]interface{}, totalLength)
-		for _, parameter := range v.Template.Parameters {
-			if err = parameter.Init(ctx, v, resource, nil); err != nil {
-				return nil, SQL, err
-			}
-			var value interface{}
-			switch parameter.Schema.Type().Kind() {
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-				reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-				value = 0
-			case reflect.Float32, reflect.Float64:
-				value = 0.0
-			case reflect.String:
-				value = ""
-			case reflect.Bool:
-				value = false
-			default:
-				if parameter.Schema.Type() == converter.TimeType {
-					value = Now()
-				} else {
-					value = reflect.New(parameter.Schema.Type()).Elem().Interface()
-				}
-			}
-
-			for _, position := range parameter.Positions {
-				args[position] = value
-			}
-		}
-	}
-
 	if err != nil {
 		return nil, SQL, err
 	}
 
-	query, err := db.QueryContext(ctx, SQL, args...)
+	query, err := db.QueryContext(ctx, SQL)
 	if err != nil {
 		return nil, SQL, err
 	}

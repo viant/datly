@@ -56,10 +56,9 @@ type (
 		_columns  ColumnIndex
 		_excluded map[string]bool
 
-		DiscoverCriteria    *bool  `json:",omitempty"`
-		AllowNulls          *bool  `json:",omitempty"`
-		UseBindingPositions *bool  `json:",omitempty"`
-		Cache               *Cache `json:",omitempty"`
+		DiscoverCriteria *bool  `json:",omitempty"`
+		AllowNulls       *bool  `json:",omitempty"`
+		Cache            *Cache `json:",omitempty"`
 
 		ColumnsConfig map[string]*ColumnConfig `json:",omitempty"`
 
@@ -443,10 +442,6 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 	return nil
 }
 
-func (v *View) UseParamBindingPositions() bool {
-	return v.UseBindingPositions != nil && *v.UseBindingPositions
-}
-
 func convertIoColumnsToColumns(ioColumns []io.Column, nullable map[string]bool) []*Column {
 	columns := make([]*Column, 0)
 	for i := 0; i < len(ioColumns); i++ {
@@ -615,10 +610,6 @@ func (v *View) inherit(view *View) error {
 
 	if v.AllowNulls == nil {
 		v.AllowNulls = view.AllowNulls
-	}
-
-	if v.UseBindingPositions == nil {
-		v.UseBindingPositions = view.UseBindingPositions
 	}
 
 	if v.Cache == nil && view.Cache != nil {

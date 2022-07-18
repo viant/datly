@@ -215,7 +215,7 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 func (r *Router) writeResponseWithErrorHandler(response http.ResponseWriter, request *http.Request, ctx context.Context, route *Route, selectors *view.Selectors, cacheEntry *cache.Entry) {
 	httpCode, err := r.readAndWriteResponse(response, request, ctx, route, selectors, cacheEntry)
 	if err != nil {
-		err = r.normalizeErr(err)
+		httpCode, err = r.normalizeErr(err, httpCode)
 		message, _ := goJson.Marshal(err)
 		response.Write(message)
 		response.WriteHeader(httpCode)
@@ -415,8 +415,7 @@ func (r *Router) buildJsonFilters(route *Route, selectors *view.Selectors) (*jso
 }
 
 func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, statusCode int) {
-	err = r.normalizeErr(err)
-
+	statusCode, err = r.normalizeErr(err, statusCode)
 	if route._responseSetter == nil {
 		errAsBytes, marshalErr := goJson.Marshal(err)
 		if marshalErr != nil {
@@ -479,7 +478,7 @@ func (r *Router) createCacheEntry(ctx context.Context, route *Route, selectors *
 	return route.Cache.Get(ctx, marshalled, route.View.Name)
 }
 
-func (r *Router) normalizeErr(err error) error {
+func (r *Router) normalizeErr(err error, statusCode int) (int, error) {
 	switch actual := err.(type) {
 	case *Errors:
 		for _, anError := range actual.Errors {
@@ -490,10 +489,15 @@ func (r *Router) normalizeErr(err error) error {
 				anError.Message = actual.Error()
 			}
 		}
-		return err
+
+		if actual.status != 0 {
+			statusCode = actual.status
+		}
+
+		return statusCode, err
 	}
 
-	return &Error{
+	return statusCode, &Error{
 		Message: err.Error(),
 	}
 }

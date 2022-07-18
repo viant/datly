@@ -27,6 +27,3 @@ source: |
   AND quantity = $quantity
   AND quantity = $Unsafe.quantity
   #end
-hasveltysyntax: true
-expressions: []
-parametertypes: {}

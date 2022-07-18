@@ -8,6 +8,14 @@ import (
 	"sync"
 )
 
+const (
+	priorityDefault = iota
+	priority400
+	priority404
+	priority403
+	priority401
+)
+
 type (
 	Error struct {
 		View    string      `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
@@ -20,6 +28,7 @@ type (
 	Errors struct {
 		Errors []*Error
 		mutex  sync.Mutex
+		status int
 	}
 
 	ParamErrors []*ParamError
@@ -54,6 +63,32 @@ func (e *Errors) AddError(view, param string, err error) {
 func (e *Errors) Error() string {
 	asBytes, _ := goJson.Marshal(e)
 	return string(asBytes)
+}
+
+func (e *Errors) setStatus(code int) {
+	e.mutex.Lock()
+	if statusCodePriority(code) > statusCodePriority(e.status) {
+		e.status = code
+	}
+
+	e.mutex.Unlock()
+}
+
+func statusCodePriority(status int) int {
+	switch status {
+	case 401:
+		return priority401
+	case 403:
+		return priority403
+	case 404:
+		return priority404
+	case 400:
+		return priority400
+	case 0:
+		return -1
+	default:
+		return priorityDefault
+	}
 }
 
 func NewParamErrors(validationErrors validator.ValidationErrors) ParamErrors {

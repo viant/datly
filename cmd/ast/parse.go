@@ -28,23 +28,6 @@ func Parse(SQL string) (*ViewMeta, error) {
 		return nil, err
 	}
 
-outer:
-	for _, statement := range block.Statements() {
-		switch actual := statement.(type) {
-		case *stmt.Append:
-		//Do nothing
-		case *expr.Select:
-			id := paramId(actual)
-			if strings.HasPrefix(id, keywords.ParamsKey) {
-				viewMeta.HasVeltySyntax = true
-				break outer
-			}
-		default:
-			viewMeta.HasVeltySyntax = true
-			break outer
-		}
-	}
-
 	cursor.MatchOne(whitespaceMatcher)
 	actualSource := string(cursor.Input[cursor.Pos:])
 
@@ -55,21 +38,7 @@ outer:
 	variables := map[string]bool{}
 	implyDefaultParams(variables, block.Statements(), viewMeta, true)
 
-	if viewMeta.HasVeltySyntax {
-		viewMeta.Source = actualSource
-	} else {
-		for _, parameter := range viewMeta.Parameters {
-			actualSource = strings.ReplaceAll(actualSource, parameter.fullName, "?")
-		}
-		viewMeta.From = actualSource
-	}
-
-	if viewMeta.HasVeltySyntax {
-		for _, parameter := range viewMeta.Parameters {
-			parameter.Positions = []int{}
-		}
-	}
-
+	viewMeta.Source = actualSource
 	return viewMeta, nil
 }
 
@@ -142,7 +111,7 @@ func indexParameter(variables map[string]bool, actual *expr.Select, meta *ViewMe
 		Type:     "string",
 		fullName: actual.FullName,
 		Required: required && prefix != keywords.ParamsMetadataKey,
-	}, true)
+	})
 }
 
 func paramId(actual *expr.Select) string {
@@ -213,7 +182,7 @@ func addTemplateIfNeeded(cursor *parsly.Cursor, meta *ViewMeta) error {
 		default:
 			return cursor.NewError(paramMatcher)
 		}
-		meta.addParameter(parameter, false)
+		meta.addParameter(parameter)
 	}
 }
 

@@ -38,6 +38,7 @@ type (
 		valueAccessor    *Accessor
 		presenceAccessor *Accessor
 		DateFormat       string `json:",omitempty"`
+		ErrorStatusCode  int    `json:",omitempty"`
 	}
 
 	//Location tells how to get parameter value.

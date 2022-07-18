@@ -31,8 +31,6 @@ Connector:
     Data: null
     Key: blowfish://default
     URL: mem://localhost/resource/mysql.json
-From: "SELECT COUNT(*)      as totalTypes /*{\"DataType\": \"int\"}*/,\n                e.id,\n                e.event_type_id as eventTypeId,\n                et.name as eventName\n         FROM events e\n                  JOIN event_types et ON e.event_type_id = et.id\n         WHERE 1 = 1\n           AND e.quantity > ?\n         GROUP BY e.event_type_id\n         ORDER BY 1\n     "
-FromURL: events.sql
 Logger:
   Name: ""
 MatchStrategy: read_matched
@@ -56,8 +54,6 @@ Template:
         Kind: query
         Name: quantity
       Name: quantity
-      Positions:
-        - 0
       PresenceName: quantity
       Required: true
       Schema:
@@ -68,18 +64,18 @@ Template:
   Schema:
     Cardinality: One
   Source: |-
-    (SELECT COUNT(*)      as totalTypes /*{"DataType": "int"}*/,
+    ( SELECT COUNT(*)      as totalTypes /*{"DataType": "int"}*/,
                     e.id,
                     e.event_type_id as eventTypeId,
                     et.name as eventName
              FROM events e
                       JOIN event_types et ON e.event_type_id = et.id
              WHERE 1 = 1
-               AND e.quantity > ?
+               AND e.quantity > $quantity
              GROUP BY e.event_type_id
              ORDER BY 1
-         )
-UseBindingPositions: true
+          )
+  SourceURL: events.sql
 With:
   - Cardinality: Many
     Column: event_type_id
@@ -112,10 +108,6 @@ With:
           Key: blowfish://default
           URL: mem://localhost/resource/mysql.json
       Field: id
-      From: |
-        SELECT *
-            FROM event_types
-      FromURL: eventTypes.sql
       Logger:
         Name: ""
       MatchStrategy: read_matched
@@ -139,7 +131,7 @@ With:
         Schema:
           Cardinality: One
         Source: |-
-          (SELECT *
+          ( SELECT *
               FROM event_types
-          )
-      UseBindingPositions: true
+           )
+        SourceURL: eventTypes.sql
