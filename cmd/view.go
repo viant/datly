@@ -142,6 +142,9 @@ func buildDataViewParams(options *Options, connectors map[string]*view.Connector
 				continue
 			}
 			dataType := column.DataType
+			if dataType == "" {
+				dataType = "string"
+			}
 			fields = append(fields, &view.Field{
 				Name:   name,
 				Embed:  false,
