@@ -2,11 +2,8 @@ package lambda
 
 import (
 	"context"
-	"embed"
 	"fmt"
-	"github.com/viant/afs"
-	"github.com/viant/datly/auth/cognito"
-	"github.com/viant/datly/codec"
+	"github.com/viant/datly/auth/jwt"
 	"github.com/viant/datly/gateway/runtime/standalone/handler"
 	"net/http"
 	"strings"
@@ -48,7 +45,8 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 		configInit = sync.Once{}
 		return err
 	}
-	if _, err = InitAuthService(config); err != nil {
+	var authenticator jwt.Authenticator
+	if _, err = jwt.Init(config, nil); err != nil {
 		return err
 	}
 	service, err := gateway.SingletonWithConfig(config, registry.Codecs, registry.Types, nil)
@@ -56,8 +54,8 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 		return err
 	}
 	httpHandler := service.Handle
-	if authService != nil {
-		httpHandler = authService.Auth(service.Handle)
+	if authenticator != nil {
+		httpHandler = authenticator.Auth(service.Handle)
 	}
 	if err != nil {
 		return err
@@ -74,30 +72,4 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 		httpHandler(writer, httpRequest)
 	}
 	return nil
-}
-
-var authService *cognito.Service
-var authServiceInit sync.Once
-
-//go:embed resource/*
-var embedFs embed.FS
-
-func InitAuthService(config *gateway.Config) (*cognito.Service, error) {
-	if config.Cognito == nil {
-		return nil, nil
-	}
-	fs := afs.New()
-	var err error
-	authServiceInit.Do(func() {
-		if authService, err = cognito.New(config.Cognito, fs, &embedFs); err == nil {
-			registry.Codecs.Register(codec.NewVisitor(registry.CodecKeyJwtClaim, codec.NewValuer(authService.Value)))
-		}
-
-	})
-	if err != nil {
-		authServiceInit = sync.Once{}
-		authService = nil
-		return nil, err
-	}
-	return authService, nil
 }

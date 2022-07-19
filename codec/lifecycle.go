@@ -76,7 +76,7 @@ func (v Visitors) Register(visitor LifecycleVisitor) {
 	v[visitor.Name()] = visitor
 }
 
-func NewVisitors(visitors ...LifecycleVisitor) Visitors {
+func New(visitors ...LifecycleVisitor) Visitors {
 	result := Visitors{}
 	for i := range visitors {
 		result.Register(visitors[i])

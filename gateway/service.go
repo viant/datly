@@ -178,7 +178,6 @@ func (r *Service) handleRouterResourceChange(ctx context.Context, hasChanged *bo
 				return
 			}
 			resourcesSnapshot[res.SourceURL] = res
-
 		case resource.Deleted:
 			delete(resourcesSnapshot, URL)
 		}

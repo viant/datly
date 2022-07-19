@@ -7,8 +7,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/modifier"
-	"github.com/viant/datly/auth/cognito"
-	"github.com/viant/datly/gateway/runtime/lambda"
+	"github.com/viant/datly/auth/jwt"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/openapi3"
@@ -43,14 +42,11 @@ func New(version string, args []string, logger io.Writer) (*standalone.Server, e
 		return nil, err
 	}
 	reportContent(logger, "------------ config ------------\n\t "+options.ConfigURL, options.ConfigURL)
-	var authService *cognito.Service
-	if config.Cognito != nil {
-		if authService, err = lambda.InitAuthService(config.Config); err != nil {
-			return nil, err
-		}
-		fmt.Printf("with auth Service: %T\n", authService)
-	}
 
+	authenticator, err := jwt.Init(config.Config, nil)
+	if authenticator != nil {
+		fmt.Printf("with auth Service: %T\n", authenticator)
+	}
 	if URL := options.DepURL("connections"); URL != "" {
 		reportContent(logger, "---------- connections: -----------\n\t"+URL, URL)
 	}
@@ -64,23 +60,20 @@ func New(version string, args []string, logger io.Writer) (*standalone.Server, e
 	}
 
 	var srv *standalone.Server
-	if authService == nil {
+	if authenticator == nil {
 		srv, err = standalone.New(config)
 	} else {
-		srv, err = standalone.NewWithAuth(config, authService)
+		srv, err = standalone.NewWithAuth(config, authenticator)
 	}
-
 	if err != nil {
 		return nil, err
 	}
-
 	if options.OpenApiURL != "" {
 		//TODO: add opeanpi3.Info to Config
 		openapiSpec, _ := router.GenerateOpenAPI3Spec(openapi3.Info{}, srv.Routes()...)
 		openApiMarshal, _ := yaml.Marshal(openapiSpec)
 		_ = os.WriteFile(options.OpenApiURL, openApiMarshal, file.DefaultFileOsMode)
 	}
-
 	if err != nil {
 		return nil, err
 	}

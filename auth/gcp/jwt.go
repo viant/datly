@@ -16,7 +16,6 @@ func (j *JwtClaim) Value(ctx context.Context, raw interface{}, options ...interf
 	if !ok {
 		return nil, fmt.Errorf("expected to get string but got %T", raw)
 	}
-
 	if last := strings.LastIndexByte(rawString, ' '); last != -1 {
 		rawString = rawString[last+1:]
 	}

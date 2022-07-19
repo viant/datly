@@ -8,11 +8,13 @@ import (
 )
 
 const (
-	CodecKeyJwtClaim  = "JwtClaim"
-	CodecKeyAsStrings = "AsStrings"
+	CodecCognitoKeyJwtClaim = "CognitoJwtClaim"
+	CodecKeyJwtClaim        = "JwtClaim"
+	CodecKeyAsStrings       = "AsStrings"
 )
 
-var Codecs = codec.NewVisitors(
+var Codecs = codec.New(
 	codec.NewCodec(CodecKeyJwtClaim, &gcp.JwtClaim{}, reflect.TypeOf(&jwt.Claims{})),
+	codec.NewCodec(CodecCognitoKeyJwtClaim, &gcp.JwtClaim{}, reflect.TypeOf(&jwt.Claims{})),
 	codec.NewCodec(CodecKeyAsStrings, &AsStrings{}, reflect.TypeOf([]string{})),
 )

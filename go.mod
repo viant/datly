@@ -3,7 +3,6 @@ module github.com/viant/datly
 go 1.16
 
 require (
-	cloud.google.com/go/secretmanager v1.4.0 // indirect
 	github.com/aws/aws-lambda-go v1.31.0
 	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/go-playground/validator v9.31.0+incompatible
@@ -27,7 +26,7 @@ require (
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/parsly v0.0.0-20220701205749-237fda4a6158
-	github.com/viant/scy v0.0.0-20220525181307-5c0db5da0082
+	github.com/viant/scy v0.1.2-0.20220719145706-2ad46bc6351e
 	github.com/viant/sqlx v0.0.0-20220715140407-372fa6657c81
 	github.com/viant/toolbox v0.34.6-0.20220630003140-fb2bf82657c1
 	github.com/viant/velty v0.1.1-0.20220615222300-d36908b3bf21

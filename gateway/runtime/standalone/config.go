@@ -30,7 +30,6 @@ func (c *Config) Init() {
 	if c.Cognito != nil {
 		c.Cognito.Init()
 	}
-
 }
 
 //Validate validates config

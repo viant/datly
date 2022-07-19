@@ -17,6 +17,7 @@ type (
 		RouteURL      string `short:"r" long:"mode" description:"route URL"  `
 		DependencyURL string `short:"d" long:"deps" description:"dependencies URL" `
 		ConfigURL     string `short:"c" long:"config" description:"configuration URL" `
+		JWTVerifier   string `short:"j" long:"jwt" description:"PublicKeyPath|EncKey" `
 		WriteLocation string `short:"w" long:"write" description:"dump all config files to specified location" `
 		Generate
 		Connector

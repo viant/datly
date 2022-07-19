@@ -2,11 +2,8 @@ package apigw
 
 import (
 	"context"
-	"embed"
 	"fmt"
-	"github.com/viant/afs"
-	"github.com/viant/datly/auth/cognito"
-	"github.com/viant/datly/codec"
+	"github.com/viant/datly/auth/jwt"
 	"github.com/viant/datly/gateway/runtime/standalone/handler"
 	"github.com/viant/datly/router/openapi3"
 	"net/http"
@@ -48,7 +45,8 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 		configInit = sync.Once{}
 		return err
 	}
-	if _, err = InitAuthService(config); err != nil {
+	var authService jwt.Authenticator
+	if authService, err = jwt.Init(config, nil); err != nil {
 		return err
 	}
 	service, err := gateway.SingletonWithConfig(config, registry.Codecs, registry.Types, nil)
@@ -62,7 +60,6 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 	if err != nil {
 		return err
 	}
-
 	if strings.Contains(httpRequest.RequestURI, config.Meta.ViewURI) {
 		viewHandler := handler.NewView(config.Meta.ViewURI, &config.Meta, service.View)
 		viewHandler.ServeHTTP(writer, httpRequest)
@@ -73,44 +70,16 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 		viewHandler.ServeHTTP(writer, httpRequest)
 		return nil
 	}
-
 	if strings.Contains(httpRequest.RequestURI, config.Meta.OpenApiURI) {
 		//TODO: add openapi3.Info to Config
 		openApiHandler := handler.NewOpenApi(config.APIPrefix, config.Meta.OpenApiURI, openapi3.Info{}, service.Routes)
 		openApiHandler.ServeHTTP(writer, httpRequest)
 		return nil
 	}
-
 	if strings.HasSuffix(httpRequest.RequestURI, ".ico") {
 		writer.WriteHeader(http.StatusNotFound)
 	} else {
 		httpHandler(writer, httpRequest)
 	}
 	return nil
-}
-
-var authService *cognito.Service
-var authServiceInit sync.Once
-
-//go:embed resource/*
-var embedFs embed.FS
-
-func InitAuthService(config *gateway.Config) (*cognito.Service, error) {
-	if config.Cognito == nil {
-		return nil, nil
-	}
-	fs := afs.New()
-	var err error
-	authServiceInit.Do(func() {
-		if authService, err = cognito.New(config.Cognito, fs, &embedFs); err == nil {
-			registry.Codecs.Register(codec.NewVisitor(registry.CodecKeyJwtClaim, codec.NewValuer(authService.Value)))
-		}
-
-	})
-	if err != nil {
-		authServiceInit = sync.Once{}
-		authService = nil
-		return nil, err
-	}
-	return authService, nil
 }

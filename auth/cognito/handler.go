@@ -118,19 +118,6 @@ func (s *Service) authorizeRequest(w http.ResponseWriter, r *http.Request) bool 
 	return false
 }
 
-func (s *Service) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
-	rawString, ok := raw.(string)
-	if !ok {
-		return nil, fmt.Errorf("expected to got string but got %T", raw)
-	}
-
-	if index := strings.Index(rawString, " "); index != -1 {
-		rawString = rawString[index+1:]
-	}
-	claims, err := s.VerifyIdentity(ctx, rawString)
-	return claims, err
-}
-
 func (s *Service) authenticateCredentials(w http.ResponseWriter, r *http.Request, username string, password string) bool {
 	token, err := s.Service.InitiateBasicAuth(username, password)
 	if err == nil && s.Config.AuthCookie != "" {

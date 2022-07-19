@@ -8,6 +8,9 @@ import (
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/gateway/runtime/standalone/endpoint"
 	"github.com/viant/datly/view"
+	"github.com/viant/scy"
+	"github.com/viant/scy/auth/jwt/verifier"
+	"strings"
 )
 
 func loadConfig(ctx context.Context, options *Options) (cfg *standalone.Config, err error) {
@@ -49,8 +52,18 @@ func initConfig(cfg *standalone.Config, options *Options) error {
 	} else if cfg.RouteURL != "" {
 		cfg.RouteURL = normalizeURL(cfg.RouteURL)
 		cfg.DependencyURL = normalizeURL(cfg.DependencyURL)
-
 	}
+
+	if options.JWTVerifier != "" {
+		pair := strings.Split(options.JWTVerifier, "|")
+		switch len(pair) {
+		case 1:
+			cfg.JWTValidator = &verifier.Config{RSA: &scy.Resource{URL: pair[0]}}
+		case 2:
+			cfg.JWTValidator = &verifier.Config{RSA: &scy.Resource{URL: pair[0], Key: pair[1]}}
+		}
+	}
+
 	err = buildDefaultConfig(cfg, options)
 	if err != nil {
 		return err

@@ -210,7 +210,7 @@ func TestRouter(t *testing.T) {
 			description: "visitors | AfterFetcher",
 			resourceURI: "004_visitors",
 			uri:         "/api/events",
-			visitors: codec.NewVisitors(
+			visitors: codec.New(
 				codec.NewVisitor("event_visitor", &eventAfterFetcher{}),
 			),
 			types: map[string]reflect.Type{
@@ -223,7 +223,7 @@ func TestRouter(t *testing.T) {
 			description: "visitors | BeforeFetcher",
 			resourceURI: "004_visitors",
 			uri:         "/api/events",
-			visitors: codec.NewVisitors(
+			visitors: codec.New(
 				codec.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
@@ -239,7 +239,7 @@ func TestRouter(t *testing.T) {
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
 			},
-			visitors: codec.NewVisitors(
+			visitors: codec.New(
 				codec.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			expected: `[]`,
@@ -249,7 +249,7 @@ func TestRouter(t *testing.T) {
 			description: "templates | none value set",
 			resourceURI: "005_templates",
 			uri:         "/api/events",
-			visitors: codec.NewVisitors(
+			visitors: codec.New(
 				codec.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
@@ -262,7 +262,7 @@ func TestRouter(t *testing.T) {
 			description: "templates | user_id",
 			resourceURI: "005_templates",
 			uri:         "/api/events?user_id=1",
-			visitors: codec.NewVisitors(
+			visitors: codec.New(
 				codec.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
@@ -275,7 +275,7 @@ func TestRouter(t *testing.T) {
 			description: "templates | quantity",
 			resourceURI: "005_templates",
 			uri:         "/api/events?quantity=10",
-			visitors: codec.NewVisitors(
+			visitors: codec.New(
 				codec.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
@@ -338,7 +338,7 @@ func TestRouter(t *testing.T) {
 				//ID: 1, Email: abc@example.com
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MSwiRW1haWwiOiJhYmNAZXhhbXBsZS5jb20ifQ.dm3jSSuqy9wf4BsjU1dElRQQEySC5nn6fCUTmTKqt2")},
 			},
-			visitors: codec.NewVisitors(
+			visitors: codec.New(
 				codec.NewVisitor(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
 			),
 			types: map[string]reflect.Type{
@@ -355,7 +355,7 @@ func TestRouter(t *testing.T) {
 				//ID: 1
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MiwiRW1haWwiOiJleGFtcGxlQGdtYWlsLmNvbSJ9.XsZ115KqQK8uQE9for6NaphYS1VHdJc_famKWHo1Dcw")},
 			},
-			visitors: codec.NewVisitors(
+			visitors: codec.New(
 				codec.NewVisitor(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
 			),
 			types: map[string]reflect.Type{
@@ -372,7 +372,7 @@ func TestRouter(t *testing.T) {
 				//ID: 4
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJFbWFpbCI6IkFubkBleGFtcGxlLmNvbSIsIklkIjo0fQ.9A0LWtsh_tskG-hLBFVNj7PNRQE8qWc5ZioqLWPS1gQ")},
 			},
-			visitors: codec.NewVisitors(
+			visitors: codec.New(
 				codec.NewVisitor(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
 			),
 			types: map[string]reflect.Type{

@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/auth/cognito"
 	"github.com/viant/datly/auth/secret"
 	"github.com/viant/datly/gateway/runtime/meta"
+	"github.com/viant/scy/auth/jwt/verifier"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"strings"
@@ -20,6 +21,7 @@ type Config struct {
 	UseCacheFS      bool
 	SyncFrequencyMs int
 	Secrets         []*secret.Resource
+	JWTValidator    *verifier.Config
 	Cognito         *cognito.Config
 	Meta            meta.Config
 	AutoDiscovery   *bool
