@@ -162,15 +162,18 @@ func (c *Connector) New() *view.Connector {
 	return result
 }
 
-func (o *Options) RouterURI() string {
-	return "dev/" + o.Generate.Name
+func (o *Options) RouterURI(name string) string {
+	if name == "" {
+		name = o.Generate.Name
+	}
+	return "dev/" + name
 }
 
 func (o *Options) RouterURL() string {
 	if o.Generate.Name == "" {
 		return ""
 	}
-	return url.Join(o.RouteURL, o.RouterURI()+".yaml")
+	return url.Join(o.RouteURL, o.RouterURI("")+".yaml")
 }
 
 func (o *Options) DepURL(uri string) string {

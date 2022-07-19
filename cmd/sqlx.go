@@ -50,6 +50,10 @@ type (
 		Param *view.Parameter
 	}
 
+	GlobalSetting struct {
+		URI string
+	}
+
 	Columns []*Column
 
 	Join struct {

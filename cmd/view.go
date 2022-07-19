@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
@@ -36,13 +37,25 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 
 	var xTable *Table
 	var dataViewParams map[string]*TableParam
+
+	settings := &GlobalSetting{}
+
 	if options.SQLXLocation != "" && url.Scheme(options.SQLLocation, "e") == "e" {
 		sourceURL := normalizeURL(options.SQLXLocation)
-		SQL, err := fs.DownloadWithURL(context.Background(), sourceURL)
+		SQLData, err := fs.DownloadWithURL(context.Background(), sourceURL)
 		if err != nil {
 			return err
 		}
-		if xTable, dataViewParams, err = ParseSQLx(string(SQL)); err != nil {
+
+		SQL := strings.TrimSpace(string(SQLData))
+		if strings.HasPrefix(SQL, "/*") {
+			index := strings.Index(SQL, "*/")
+			globalComments := SQL[3:index]
+			SQL = SQL[index+3:]
+			json.Unmarshal([]byte(globalComments), settings)
+		}
+
+		if xTable, dataViewParams, err = ParseSQLx(SQL); err != nil {
 			log.Println(err)
 		}
 		if xTable != nil {
@@ -77,7 +90,7 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 			AllowOrigins:     stringsPtr("*"),
 			ExposeHeaders:    stringsPtr("*"),
 		},
-		URI:    config.APIPrefix + options.RouterURI(),
+		URI:    config.APIPrefix + options.RouterURI(settings.URI),
 		View:   &view.View{Reference: shared.Reference{Ref: aView.Name}},
 		Index:  router.Index{Namespace: map[string]string{}},
 		Output: router.Output{Style: router.Style(options.Output), Cardinality: view.Many, ResponseField: options.ResponseField()},
