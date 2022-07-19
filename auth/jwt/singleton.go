@@ -42,5 +42,8 @@ func Init(config *gateway.Config, embedFs *embed.FS) (Authenticator, error) {
 		cognitoService = nil
 		return nil, err
 	}
+	if cognitoService == nil {
+		return nil, nil
+	}
 	return cognitoService, nil
 }

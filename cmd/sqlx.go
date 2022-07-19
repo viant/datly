@@ -35,12 +35,14 @@ type (
 		Cache             *view.Cache
 		dataViewParameter *view.Parameter
 		Parameter         *view.Parameter
+		Auth              string
 	}
 	Column struct {
-		Ns     string
-		Name   string
-		Alias  string
-		Except []string
+		Ns       string
+		Name     string
+		Alias    string
+		Except   []string
+		DataType string
 	}
 
 	TableParam struct {
@@ -157,6 +159,7 @@ func buildTable(x node.Node) (*Table, error) {
 
 		if innerQuery != nil && innerQuery.From.X != nil {
 			table.Name = strings.Trim(parser.Stringify(innerQuery.From.X), "`")
+
 			table.Inner = selectItemToColumn(innerQuery)
 
 			if len(innerQuery.Joins) > 0 {
@@ -234,8 +237,7 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 		comments = strings.ReplaceAll(comments, "*/", "")
 		_ = json.Unmarshal([]byte(comments), &relTable.TableMeta)
 	}
-	onCriteria := strings.TrimSpace(parser.Stringify(join.On))
-	isParamView := onCriteria == "1 = 1"
+	isParamView := isParamPredicate(parser.Stringify(join.On.X))
 	if isParamView {
 		paramName := join.Alias
 		if relTable.dataViewParameter == nil {
@@ -247,6 +249,18 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 		relTable.Alias = paramName
 		relTable.dataViewParameter.Name = paramName
 		dataParameters[paramName] = &TableParam{Table: relTable, Param: relTable.dataViewParameter}
+
+		if relTable.Auth != "" {
+			required := true
+			relTable.Parameter = &view.Parameter{
+				Name:            relTable.Auth,
+				In:              &view.Location{Name: "Authorization", Kind: view.HeaderKind},
+				ErrorStatusCode: 401,
+				Required:        &required,
+				Codec:           &view.Codec{Name: "JwtClaim"},
+				Schema:          &view.Schema{Name: "JwtTokenInfo"},
+			}
+		}
 		return nil
 	}
 
@@ -292,6 +306,15 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	relJoin.Owner = owner
 	owner.Joins = append(owner.Joins, relJoin)
 	return nil
+}
+
+func isParamPredicate(criteria string) bool {
+	onCriteria := strings.TrimSpace(criteria)
+	if index := strings.Index(criteria, "/*"); index != -1 {
+		criteria = criteria[:index]
+	}
+	isParamView := onCriteria == "1 = 1"
+	return isParamView
 }
 
 func updateRelationKey(relTable *Table, y *expr.Selector, relJoin *Join, x *expr.Selector) error {
@@ -348,6 +371,9 @@ func selectItemToColumn(query *query.Select) Columns {
 			case *expr.Selector:
 				result = append(result, &Column{Name: parser.Stringify(star.X), Ns: star.Name, Except: actual.Except})
 			}
+		case *expr.Literal:
+			result = append(result, &Column{Name: "", Alias: item.Alias, DataType: actual.Kind})
+
 		}
 	}
 	return result

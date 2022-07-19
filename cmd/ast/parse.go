@@ -238,6 +238,7 @@ outer:
 		case parsly.EOF:
 			break outer
 		case condBlockToken:
+
 			block := match.Text(cursor)[3:]
 			cur := parsly.NewCursor("", []byte(block), 0)
 			match = cur.MatchAfterOptional(whitespaceMatcher, exprGroupMatcher)
@@ -247,6 +248,7 @@ outer:
 					expressions = append(expressions, strings.TrimSpace(matched[:index]))
 				}
 			}
+
 		default:
 			builder.WriteByte(cursor.Input[cursor.Pos])
 			cursor.Pos++

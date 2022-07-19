@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 type RequestParams struct {
@@ -65,7 +66,11 @@ func (p *RequestParams) pathVariable(name string, defaultValue string) string {
 }
 
 func (p *RequestParams) header(name string) string {
-	return p.request.Header.Get(name)
+	result := p.request.Header.Get(name)
+	if result == "" {
+		result = p.request.Header.Get(strings.ToLower(name))
+	}
+	return result
 }
 
 func (p *RequestParams) cookie(name string) string {

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
@@ -67,7 +68,8 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	}
 
 	viewRoute := &router.Route{
-		Method: "GET",
+		Method:      "GET",
+		EnableAudit: true,
 		Cors: &router.Cors{
 			AllowCredentials: boolPtr(true),
 			AllowHeaders:     stringsPtr("*"),
@@ -97,6 +99,7 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		}
 		buildExcludeColumn(xTable, aView, viewRoute)
 	}
+
 	buildDataViewParams(options, connectors, dataViewParams, route)
 	if len(options.Relations) > 0 {
 		meta := metadata.New()
@@ -124,8 +127,8 @@ func buildDataViewParams(options *Options, connectors map[string]*view.Connector
 
 	for k, v := range params {
 		table := v.Table
-
 		if len(table.Inner) == 0 {
+			fmt.Printf("Skpining data view params: %v - no column detected", v.Table)
 			continue
 		}
 		var fields = make([]*view.Field, 0)
@@ -138,11 +141,11 @@ func buildDataViewParams(options *Options, connectors map[string]*view.Connector
 			if name == "" {
 				continue
 			}
-
+			dataType := column.DataType
 			fields = append(fields, &view.Field{
 				Name:   name,
 				Embed:  false,
-				Schema: &view.Schema{DataType: "string"},
+				Schema: &view.Schema{DataType: dataType},
 			})
 		}
 
@@ -167,25 +170,25 @@ func buildDataViewParams(options *Options, connectors map[string]*view.Connector
 		route.Resource.AddViews(relView)
 		route.Resource.AddParameters(v.Param)
 		if v.Table.Parameter != nil {
-			if relView.Template == nil {
-				relView.Template = &view.Template{}
-			}
-			relView.Template.Parameters = append(relView.Template.Parameters, v.Table.Parameter)
+			mergeParameter(route, v.Table.Parameter)
 		}
-		for _, aView := range route.Resource.Views {
-			if aView.Template == nil || len(aView.Template.Parameters) == 0 {
+		mergeParameter(route, v.Param)
+	}
+}
+
+func mergeParameter(route *router.Resource, param *view.Parameter) {
+	for _, aView := range route.Resource.Views {
+		if aView.Template == nil || len(aView.Template.Parameters) == 0 {
+			continue
+		}
+		for i, viewParam := range aView.Template.Parameters {
+			if viewParam.Name != param.Name {
 				continue
 			}
-			for i, viewParam := range aView.Template.Parameters {
-				if viewParam.Name != k {
-					continue
-				}
-				aView.Template.Parameters[i].Ref = k
-				aView.Template.Parameters[i].In = v.Param.In
-
-				aView.Template.Parameters[i].Schema = v.Param.Schema
-
-			}
+			aView.Template.Parameters[i].In = param.In
+			aView.Template.Parameters[i].Schema = param.Schema
+			aView.Template.Parameters[i].Codec = param.Codec
+			aView.Template.Parameters[i].ErrorStatusCode = param.ErrorStatusCode
 		}
 	}
 }
@@ -230,9 +233,11 @@ func buildExcludeColumn(xTable *Table, aView *view.View, viewRoute *router.Route
 			continue
 		}
 		join := joins[column.Ns]
-		for _, except := range column.Except {
-			holder := strings.Title(join.Table.Alias)
-			viewRoute.Exclude = append(viewRoute.Exclude, holder+"."+viewCaser.Format(except, outputCaser))
+		if join != nil && join.Table != nil {
+			for _, except := range column.Except {
+				holder := strings.Title(join.Table.Alias)
+				viewRoute.Exclude = append(viewRoute.Exclude, holder+"."+viewCaser.Format(except, outputCaser))
+			}
 		}
 	}
 }

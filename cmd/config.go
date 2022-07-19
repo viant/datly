@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/gateway/runtime/standalone/endpoint"
@@ -61,6 +62,12 @@ func initConfig(cfg *standalone.Config, options *Options) error {
 			cfg.JWTValidator = &verifier.Config{RSA: &scy.Resource{URL: pair[0]}}
 		case 2:
 			cfg.JWTValidator = &verifier.Config{RSA: &scy.Resource{URL: pair[0], Key: pair[1]}}
+		}
+		if cfg.JWTValidator != nil && cfg.JWTValidator.RSA != nil {
+			URL := cfg.JWTValidator.RSA.URL
+			if url.Scheme(URL, "e") == "e" && URL[0] != '/' {
+				cfg.JWTValidator.RSA.URL = normalizeURL(URL)
+			}
 		}
 	}
 
