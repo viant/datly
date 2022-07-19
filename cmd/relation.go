@@ -111,9 +111,11 @@ func updateView(options *Options, table *Table, aView *view.View) error {
 	if err := updateColumnsConfig(table, aView); err != nil {
 		return err
 	}
+
 	if table.ViewMeta == nil {
 		return nil
 	}
+
 	if err := buildSQLSource(options, aView, table); err != nil {
 		return err
 	}

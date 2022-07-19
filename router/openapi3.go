@@ -457,12 +457,13 @@ func (g *generator) convertParam(route *Route, param *view.Parameter, descriptio
 
 	cachedParam, ok := g._parametersIndex[param.Name]
 	if ok {
-		if param != nil {
+		if cachedParam != nil {
 			original := *cachedParam
 			g.commonParameters[param.Name] = &original
 			*cachedParam = openapi3.Parameter{Ref: "#/components/parameters/" + param.Name}
 			g._parametersIndex[param.Name] = nil
 		}
+		
 		return &openapi3.Parameter{Ref: "#/components/parameters/" + param.Name}, true, nil
 	}
 

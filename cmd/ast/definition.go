@@ -17,15 +17,31 @@ type (
 		Required bool   `json:",omitempty" yaml:",omitempty"`
 		Type     string `json:",omitempty" yaml:",omitempty"`
 		fullName string
+		Assumed  bool
+		Typer    Typer `json:",omitempty" yaml:",omitempty"`
 	}
 )
 
 func (m *ViewMeta) addParameter(param *Parameter) {
 	if index, ok := m.index[param.Id]; ok {
-		m.Parameters[index].Required = m.Parameters[index].Required || param.Required
+		parameter := m.Parameters[index]
+		parameter.Required = parameter.Required || param.Required
+		if parameter.Assumed {
+			parameter.Type = param.Type
+		}
+
 		return
 	}
 
 	m.index[param.Id] = len(m.Parameters)
 	m.Parameters = append(m.Parameters, param)
+}
+
+func (m *ViewMeta) ParamByName(name string) (*Parameter, bool) {
+	index, ok := m.index[name]
+	if !ok {
+		return nil, false
+	}
+
+	return m.Parameters[index], true
 }

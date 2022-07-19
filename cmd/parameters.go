@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/viant/datly/cmd/ast"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlx/metadata/ast/expr"
 	"github.com/viant/sqlx/metadata/ast/node"
@@ -46,41 +47,27 @@ func (p *parameters) nextParam() *parameter {
 }
 
 func updateParameterTypes(table *Table) {
-	if table.ViewMeta == nil || len(table.ViewMeta.Expressions) == 0 {
+	if table.ViewMeta == nil {
 		return
 	}
-	table.ViewMeta.ParameterTypes = map[string]string{}
 
-	for _, enExpr := range table.ViewMeta.Expressions {
-		if strings.HasPrefix(strings.ToLower(enExpr), "and ") {
-			enExpr = enExpr[4:]
+	for _, param := range table.ViewMeta.Parameters {
+		if !param.Assumed {
+			continue
 		}
-		if strings.HasPrefix(strings.ToLower(enExpr), "or ") {
-			enExpr = enExpr[3:]
-		}
-		cursor := parsly.NewCursor("", []byte(enExpr), 0)
-		qualify := &expr.Qualify{}
 
-		if err := parser.ParseQualify(cursor, qualify); err == nil {
-			var pairs parameters
-			discoverParameterColumn(qualify.X, &pairs)
-			if len(pairs) > 0 {
-				for _, p := range pairs {
-					if p.param == "" {
-						continue
-					}
-					var columnType string
-					if p.selector != "" {
-						columnType = table.ColumnTypes[strings.ToLower(p.selector)]
-					}
-					if columnType == "" {
-						columnType = table.ColumnTypes[strings.ToLower(p.column)]
-					}
-					if columnType != "" && p.param != "" {
-						table.ViewMeta.ParameterTypes[p.param[1:]] = columnType
-					}
+		switch actual := param.Typer.(type) {
+		case *ast.ColumnType:
+			param.Type = table.ColumnTypes[actual.ColumnName]
+			if param.Type == "" {
+				dotIndex := strings.Index(actual.ColumnName, ".")
+				if dotIndex != -1 {
+					param.Type = table.ColumnTypes[actual.ColumnName[dotIndex+1:]]
 				}
 			}
+
+		case *ast.LiteralType:
+			param.Type = actual.RType.String()
 		}
 	}
 }

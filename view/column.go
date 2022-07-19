@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io"
+	"github.com/viant/sqlx/io/read/cache/ast"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
 	"reflect"
@@ -62,7 +63,7 @@ func ParseType(dataType string) (reflect.Type, error) {
 		return t, nil
 	}
 
-	return nil, fmt.Errorf("unsupported type: %v", dataType)
+	return ast.Parse(dataType)
 }
 
 //ColumnName returns Column Name

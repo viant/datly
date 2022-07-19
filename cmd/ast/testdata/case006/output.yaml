@@ -1,12 +1,18 @@
 parameters:
-  - id: ID
+  - assumed: false
+    id: ID
+    kind: query
     name: id
-    kind: query
     type: int
-  - id: quantity
-    name: quantity
+    typer:
+      columnname: ID
+  - assumed: true
+    id: quantity
     kind: query
+    name: quantity
     type: string
+    typer:
+      columnname: quantity
 source: |
   SELECT *, (
       SELECT abc

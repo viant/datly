@@ -78,6 +78,7 @@ Resource:
         Name: roles_acl
       Schema:
         Name: criteria_acl
+      ErrorStatusCode: 401
 
     - Name: Dummy
       In:

@@ -8,6 +8,7 @@ import (
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/ast/stmt"
 	"github.com/viant/velty/parser"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -36,13 +37,37 @@ func Parse(SQL string) (*ViewMeta, error) {
 	}
 
 	variables := map[string]bool{}
-	implyDefaultParams(variables, block.Statements(), viewMeta, true)
+	implyDefaultParams(variables, block.Statements(), viewMeta, true, nil)
+
+	SQL = removeVeltySyntax(string(from))
+	correctUntyped(SQL, variables, viewMeta)
 
 	viewMeta.Source = actualSource
 	return viewMeta, nil
 }
 
-func implyDefaultParams(variables map[string]bool, statements []ast.Statement, meta *ViewMeta, required bool) {
+func removeVeltySyntax(SQL string) string {
+	cursor := parsly.NewCursor("", []byte(SQL), 0)
+	sb := strings.Builder{}
+
+outer:
+	for cursor.Pos < cursor.InputSize {
+		matched := cursor.MatchAny(whitespaceMatcher, ifMatcher, assignMatcher, elseIfMatcher, elseMatcher, forEachMatcher, endMatcher, anyMatcher)
+		switch matched.Code {
+		case endToken, elseToken:
+			continue outer
+		case elseIfToken, assignToken, forEachToken, ifToken:
+			cursor.MatchOne(exprGroupMatcher)
+			continue outer
+		}
+
+		sb.WriteString(matched.Text(cursor))
+	}
+
+	return sb.String()
+}
+
+func implyDefaultParams(variables map[string]bool, statements []ast.Statement, meta *ViewMeta, required bool, rType reflect.Type) {
 	for _, statement := range statements {
 		switch actual := statement.(type) {
 		case stmt.ForEach:
@@ -55,11 +80,11 @@ func implyDefaultParams(variables map[string]bool, statements []ast.Statement, m
 
 			y, ok := actual.Y.(*expr.Select)
 			if ok && !variables[y.ID] {
-				indexParameter(variables, y, meta, required)
+				indexParameter(variables, y, meta, required, rType)
 			}
 
 		case *expr.Select:
-			indexParameter(variables, actual, meta, required)
+			indexParameter(variables, actual, meta, required, rType)
 
 		case *stmt.Statement:
 			x, ok := actual.X.(*expr.Select)
@@ -69,53 +94,75 @@ func implyDefaultParams(variables map[string]bool, statements []ast.Statement, m
 			variables[x.ID] = true
 		case *stmt.ForEach:
 			variables[actual.Item.ID] = true
-
-		case *stmt.If:
-			switch condition := actual.Condition.(type) {
-			case *expr.Unary:
-				implyDefaultParams(variables, []ast.Statement{condition.X}, meta, false)
-			case *expr.Binary:
-				implyDefaultParams(variables, []ast.Statement{condition.X, condition.Y}, meta, false)
-			case *expr.Parentheses:
-				implyDefaultParams(variables, []ast.Statement{condition.P}, meta, false)
-			default:
-				implyDefaultParams(variables, []ast.Statement{actual.Condition}, meta, false)
+		case *expr.Unary:
+			implyDefaultParams(variables, []ast.Statement{actual}, meta, false, actual.Type())
+		case *expr.Binary:
+			xType := actual.X.Type()
+			if xType == nil {
+				xType = actual.Y.Type()
 			}
+
+			implyDefaultParams(variables, []ast.Statement{actual.X, actual.Y}, meta, false, xType)
+		case *expr.Parentheses:
+			implyDefaultParams(variables, []ast.Statement{actual.P}, meta, false, actual.Type())
+		case *stmt.If:
+			implyDefaultParams(variables, []ast.Statement{actual.Condition}, meta, false, actual.Type())
 		}
 
 		switch actual := statement.(type) {
 		case ast.StatementContainer:
-			implyDefaultParams(variables, actual.Statements(), meta, false)
+			implyDefaultParams(variables, actual.Statements(), meta, false, nil)
 		}
 	}
 }
 
-func indexParameter(variables map[string]bool, actual *expr.Select, meta *ViewMeta, required bool) {
-	paramName := paramId(actual)
-	prefix, paramName := removePrefixIfNeeded(paramName)
-	paramName = withoutPath(paramName)
+func indexParameter(variables map[string]bool, actual *expr.Select, meta *ViewMeta, required bool, rType reflect.Type) {
+	prefix, paramName := getParamName(actual.FullName)
 
-	if isVariable := variables[paramName]; isVariable {
+	if !isParameter(variables, paramName) {
 		return
 	}
 
-	switch paramName {
-	case keywords.Criteria[1:], keywords.SelectorCriteria[1:], keywords.Pagination[1:], keywords.ColumnsIn[1:]:
-		return
+	pType := "string"
+	assumed := true
+	if rType != nil && prefix != keywords.ParamsMetadataKey {
+		pType = rType.String()
+		assumed = false
 	}
 
 	meta.addParameter(&Parameter{
+		Assumed:  assumed,
 		Id:       paramName,
 		Name:     paramName,
 		Kind:     "query",
-		Type:     "string",
+		Type:     pType,
 		fullName: actual.FullName,
 		Required: required && prefix != keywords.ParamsMetadataKey,
 	})
 }
 
-func paramId(actual *expr.Select) string {
-	paramName := actual.FullName[1:]
+func getParamName(identifier string) (string, string) {
+	paramName := paramId(identifier)
+	prefix, paramName := removePrefixIfNeeded(paramName)
+	paramName = withoutPath(paramName)
+	return prefix, paramName
+}
+
+func isParameter(variables map[string]bool, paramName string) bool {
+	if isVariable := variables[paramName]; isVariable {
+		return false
+	}
+
+	switch paramName {
+	case keywords.Criteria[1:], keywords.SelectorCriteria[1:], keywords.Pagination[1:], keywords.ColumnsIn[1:]:
+		return false
+	}
+
+	return true
+}
+
+func paramId(identifier string) string {
+	paramName := identifier[1:]
 	if paramName[0] == '{' {
 		paramName = paramName[1 : len(paramName)-1]
 	}

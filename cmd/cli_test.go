@@ -98,6 +98,14 @@ func TestRun(t *testing.T) {
 			dataURL:     "/v1/api/dev/events?quantity=10",
 			dataMethod:  http.MethodGet,
 		},
+		{
+			description: "inner join",
+			URI:         "case006_velty",
+			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly/generator/db.db", "-X=testdata/case006_velty/events.sql"},
+			viewURL:     "/v1/api/meta/view/dev/events",
+			dataURL:     "/v1/api/dev/events?quantity=10",
+			dataMethod:  http.MethodGet,
+		},
 	}
 
 	loader := afs.New()

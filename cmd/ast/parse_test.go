@@ -71,14 +71,22 @@ func TestParse(t *testing.T) {
 			continue
 		}
 
-		expected := &ast.ViewMeta{}
-		_ = yaml.Unmarshal(outputData, expected)
-		if !assertly.AssertValues(t, expected, viewMeta, testcase.description) {
-			actualBytes, _ := yaml.Marshal(viewMeta)
-			fmt.Println(string(actualBytes))
-			fmt.Println(string(outputData))
+		actualMeta, _ := yaml.Marshal(viewMeta)
+		expected := normalize(outputData)
+		actual := normalize(actualMeta)
+		if !assertly.AssertValues(t, string(expected), string(actual), testcase.description) {
+			fmt.Println(string(expected))
+			fmt.Println(string(actual))
 		}
 	}
+}
+
+func normalize(b []byte) []byte {
+	aMap := map[string]interface{}{}
+
+	_ = yaml.Unmarshal(b, aMap)
+	result, _ := yaml.Marshal(aMap)
+	return result
 }
 
 func TestExtractCondBlock(t *testing.T) {

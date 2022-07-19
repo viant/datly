@@ -208,6 +208,10 @@ func (p *Parameter) inherit(param *Parameter) {
 	if p.view == nil {
 		p.view = param.view
 	}
+
+	if p.ErrorStatusCode == 0 {
+		p.ErrorStatusCode = param.ErrorStatusCode
+	}
 }
 
 //Validate checks if parameter is valid

@@ -4,6 +4,9 @@ parameters:
     kind: query
     required: true
     type: string
+    assumed: true
+    typer:
+      columnname: id
 source: |-
   SELECT *, (
       SELECT abc

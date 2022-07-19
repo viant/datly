@@ -1,13 +1,19 @@
 parameters:
-  - id: ID
-    name: id
+  - assumed: false
+    id: ID
     kind: query
+    name: id
     type: int
-  - id: quantity
-    name: quantity
+    typer:
+      columnname: ID
+  - assumed: false
+    id: quantity
     kind: path
+    name: quantity
     required: true
     type: string
+    typer:
+      columnname: quantity
 source: |-
   SELECT *, (
       SELECT abc
@@ -21,6 +27,3 @@ source: |-
   #if($Has.quantity)
   AND quantity = $quantity
   #end
-hasveltysyntax: true
-expressions: []
-parametertypes: {}

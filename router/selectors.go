@@ -508,7 +508,7 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 	switch paramLen {
 	case 0:
 		if param.Required != nil && *param.Required {
-			return nil, fmt.Errorf("parameter %v value is required but no view was found", param.Name)
+			return nil, fmt.Errorf("parameter %v value is required but no data was found", param.Name)
 		}
 
 		return nil, err

@@ -54,5 +54,4 @@ func updatedColumns(table *Table, prefix, tableName string, db *sql.DB) {
 			}
 		}
 	}
-
 }

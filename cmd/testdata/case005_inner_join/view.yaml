@@ -29,7 +29,10 @@ Connector:
   Name: dev
   Secret:
     Data: null
+    Fallback: null
     Key: blowfish://default
+    MaxRetry: 3
+    TimeoutMs: 5000
     URL: mem://localhost/resource/mysql.json
 Logger:
   Name: ""
@@ -58,7 +61,7 @@ Template:
       Required: true
       Schema:
         Cardinality: One
-        DataType: string
+        DataType: float64
   PresenceSchema:
     Cardinality: One
   Schema:
@@ -105,7 +108,10 @@ With:
         Name: dev
         Secret:
           Data: null
+          Fallback: null
           Key: blowfish://default
+          MaxRetry: 3
+          TimeoutMs: 5000
           URL: mem://localhost/resource/mysql.json
       Field: id
       Logger:

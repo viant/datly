@@ -30,7 +30,10 @@ Connector:
   Name: dev
   Secret:
     Data: null
+    Fallback: null
     Key: blowfish://default
+    MaxRetry: 3
+    TimeoutMs: 5000
     URL: mem://localhost/resource/mysql.json
 Logger:
   Name: ""
@@ -84,6 +87,7 @@ With:
         Ref: dev
         Secret:
           Data: null
+          Fallback: null
           Key: blowfish://default
           URL: mem://localhost/resource/mysql.json
       Field: id
