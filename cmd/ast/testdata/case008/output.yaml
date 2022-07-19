@@ -5,14 +5,12 @@ parameters:
     kind: query
     name: ID
     required: false
-  - assumed: true
-    datatype: string
+  - assumed: false
+    datatype: time.Time
     id: quantity
     kind: query
     name: quantity
     required: false
-    typer:
-      columnname: quantity
 source: |
   SELECT *, (
       SELECT abc
@@ -30,6 +28,6 @@ source: |
   #end
   
   #if($Has.quantity)
-  AND quantity = $quantity
+  AND quantity = $quantity /* {"DataType": "time.Time"} */
   AND quantity = $Unsafe.quantity
   #end

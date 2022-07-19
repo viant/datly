@@ -14,8 +14,8 @@ type (
 		Id       string `json:",omitempty" yaml:",omitempty"`
 		Name     string `json:",omitempty" yaml:",omitempty"`
 		Kind     string `json:",omitempty" yaml:",omitempty"`
-		Required bool   `json:",omitempty" yaml:",omitempty"`
-		Type     string `json:",omitempty" yaml:",omitempty"`
+		Required *bool  `json:",omitempty" yaml:",omitempty"`
+		DataType string `json:",omitempty" yaml:",omitempty"`
 		fullName string
 		Assumed  bool
 		Typer    Typer `json:",omitempty" yaml:",omitempty"`
@@ -25,9 +25,9 @@ type (
 func (m *ViewMeta) addParameter(param *Parameter) {
 	if index, ok := m.index[param.Id]; ok {
 		parameter := m.Parameters[index]
-		parameter.Required = parameter.Required || param.Required
+		parameter.Required = boolPtr((parameter.Required != nil && *parameter.Required) || (param.Required != nil && *param.Required))
 		if parameter.Assumed {
-			parameter.Type = param.Type
+			parameter.DataType = param.DataType
 		}
 
 		return
@@ -35,6 +35,10 @@ func (m *ViewMeta) addParameter(param *Parameter) {
 
 	m.index[param.Id] = len(m.Parameters)
 	m.Parameters = append(m.Parameters, param)
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }
 
 func (m *ViewMeta) ParamByName(name string) (*Parameter, bool) {

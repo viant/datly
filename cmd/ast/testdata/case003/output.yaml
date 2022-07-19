@@ -3,7 +3,7 @@ parameters:
     name: Id
     kind: query
     required: true
-    type: string
+    datatype: string
     assumed: true
     typer:
       columnname: id

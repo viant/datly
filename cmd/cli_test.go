@@ -99,7 +99,7 @@ func TestRun(t *testing.T) {
 			dataMethod:  http.MethodGet,
 		},
 		{
-			description: "inner join",
+			description: "velty syntax",
 			URI:         "case006_velty",
 			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly/generator/db.db", "-X=testdata/case006_velty/events.sql"},
 			viewURL:     "/v1/api/meta/view/dev/events",

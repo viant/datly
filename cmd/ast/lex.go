@@ -12,6 +12,7 @@ const (
 	colonToken
 	condBlockToken
 	squareBracketsToken
+	commentBlockToken
 
 	templateHeaderToken
 	templateEndToken
@@ -37,6 +38,7 @@ var whitespaceMatcher = parsly.NewToken(whitespaceToken, "Whitespace", matcher.N
 var wordMatcher = parsly.NewToken(wordToken, "Word", matchers.NewWordMatcher(false))
 var fullWordMatcher = parsly.NewToken(wordToken, "Word", matchers.NewWordMatcher(true))
 var colonMatcher = parsly.NewToken(colonToken, "Colon", matcher.NewByte(':'))
+var commentBlockMatcher = parsly.NewToken(commentBlockToken, "Comment", matcher.NewSeqBlock("/*", "*/"))
 
 var squareBracketsMatcher = parsly.NewToken(squareBracketsToken, "Square brackets", matcher.NewBlock('[', ']', '\\'))
 

@@ -147,12 +147,12 @@ func buildSQLSource(options *Options, aView *view.View, table *Table) error {
 func convertMetaParameter(param *ast.Parameter) *view.Parameter {
 	return &view.Parameter{
 		Name:   param.Id,
-		Schema: &view.Schema{DataType: param.Type},
+		Schema: &view.Schema{DataType: param.DataType},
 		In: &view.Location{
 			Kind: view.Kind(param.Kind),
 			Name: param.Name,
 		},
-		Required: boolPtr(param.Required),
+		Required: param.Required,
 	}
 }
 

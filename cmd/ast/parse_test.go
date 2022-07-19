@@ -48,6 +48,10 @@ func TestParse(t *testing.T) {
 			description: "detect params only int statements",
 			path:        "case007",
 		},
+		{
+			description: "param type hint",
+			path:        "case008",
+		},
 	}
 
 	loader := afs.New()

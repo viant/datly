@@ -2,6 +2,7 @@ package ast
 
 import (
 	"bytes"
+	"encoding/json"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlx/io/read/cache/ast"
 	"reflect"
@@ -24,7 +25,7 @@ type (
 
 func correctUntyped(SQL string, variables map[string]bool, meta *ViewMeta) {
 	var typer Typer
-	var untyped []string
+	var untyped []*Parameter
 
 	cursor := parsly.NewCursor("", []byte(SQL), 0)
 outer:
@@ -57,7 +58,19 @@ outer:
 			if text[0] == '$' {
 				_, paramName := getParamName(text)
 				if isParameter(variables, paramName) {
-					untyped = append(untyped, paramName)
+					aParam, _ := meta.ParamByName(paramName)
+
+					matched = cursor.MatchAfterOptional(whitespaceMatcher, commentBlockMatcher)
+					if matched.Code == commentBlockToken {
+						parameter := &Parameter{}
+						commentContent := bytes.TrimSpace(bytes.Trim(matched.Bytes(cursor), "/**/"))
+						_ = json.Unmarshal(commentContent, parameter)
+						inherit(aParam, parameter)
+					}
+
+					if aParam.Assumed {
+						untyped = append(untyped, aParam)
+					}
 				}
 			} else {
 				typer = &ColumnType{ColumnName: text}
@@ -65,14 +78,34 @@ outer:
 		}
 
 		if typer != nil {
-			for _, paramName := range untyped {
-				param, ok := meta.ParamByName(paramName)
-				if !ok {
-					continue
-				}
-
+			for _, param := range untyped {
 				param.Typer = typer
 			}
+
+			untyped = nil
 		}
+	}
+}
+
+func inherit(generated *Parameter, inlined *Parameter) {
+	if inlined.DataType != "" {
+		generated.DataType = inlined.DataType
+		generated.Assumed = false
+	}
+
+	if inlined.Required != nil {
+		generated.Required = inlined.Required
+	}
+
+	if inlined.Name != "" {
+		generated.Name = inlined.Name
+	}
+
+	if inlined.Kind != "" {
+		generated.Kind = inlined.Kind
+	}
+
+	if inlined.Id != "" {
+		generated.Id = inlined.Id
 	}
 }

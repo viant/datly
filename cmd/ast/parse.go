@@ -135,9 +135,9 @@ func indexParameter(variables map[string]bool, actual *expr.Select, meta *ViewMe
 		Id:       paramName,
 		Name:     paramName,
 		Kind:     "query",
-		Type:     pType,
+		DataType: pType,
 		fullName: actual.FullName,
-		Required: required && prefix != keywords.ParamsMetadataKey,
+		Required: boolPtr(required && prefix != keywords.ParamsMetadataKey),
 	})
 }
 
@@ -262,13 +262,13 @@ func addParamLocation(cursor *parsly.Cursor, parameter *Parameter) error {
 		case 1:
 			parameter.Name = value
 		case 2:
-			parameter.Type = value
+			parameter.DataType = value
 		case 3:
 			asBool, err := strconv.ParseBool(value)
 			if err != nil {
 				return err
 			}
-			parameter.Required = asBool
+			parameter.Required = boolPtr(asBool)
 		}
 		i++
 	}

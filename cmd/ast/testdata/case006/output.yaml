@@ -1,16 +1,16 @@
 parameters:
   - assumed: false
+    datatype: int
     id: ID
     kind: query
     name: id
-    type: int
-    typer:
-      columnname: ID
+    required: false
   - assumed: true
+    datatype: string
     id: quantity
     kind: query
     name: quantity
-    type: string
+    required: false
     typer:
       columnname: quantity
 source: |

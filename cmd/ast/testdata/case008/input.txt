@@ -1,0 +1,19 @@
+SELECT *, (
+    SELECT abc
+    FROM T2
+    WHERE 1=2
+) as abc FROM T1
+WHERE 1=1
+#set($valueSet = 123)
+#if($Has.ID)
+AND ID = 10
+#end
+
+#foreach($column in $Columns)
+    $column.Id
+#end
+
+#if($Has.quantity)
+AND quantity = $quantity /* {"DataType": "time.Time"} */
+AND quantity = $Unsafe.quantity
+#end
