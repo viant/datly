@@ -58,12 +58,16 @@ func updateParameterTypes(table *Table) {
 
 		switch actual := param.Typer.(type) {
 		case *ast.ColumnType:
-			param.Type = table.ColumnTypes[actual.ColumnName]
-			if param.Type == "" {
+			aType := table.ColumnTypes[actual.ColumnName]
+			if aType == "" {
 				dotIndex := strings.Index(actual.ColumnName, ".")
 				if dotIndex != -1 {
-					param.Type = table.ColumnTypes[actual.ColumnName[dotIndex+1:]]
+					aType = table.ColumnTypes[actual.ColumnName[dotIndex+1:]]
 				}
+			}
+
+			if aType != "" {
+				param.Type = aType
 			}
 
 		case *ast.LiteralType:
