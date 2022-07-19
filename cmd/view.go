@@ -97,9 +97,7 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		}
 		buildExcludeColumn(xTable, aView, viewRoute)
 	}
-
 	buildDataViewParams(options, connectors, dataViewParams, route)
-
 	if len(options.Relations) > 0 {
 		meta := metadata.New()
 		err := buildRelations(options, meta, connectors, route, aView, viewRoute)
@@ -152,7 +150,6 @@ func buildDataViewParams(options *Options, connectors map[string]*view.Connector
 			Name:   strings.Title(k),
 			Fields: fields,
 		})
-
 		relView := &view.View{
 			Name:  k,
 			Table: v.Table.Name,
@@ -169,7 +166,12 @@ func buildDataViewParams(options *Options, connectors map[string]*view.Connector
 
 		route.Resource.AddViews(relView)
 		route.Resource.AddParameters(v.Param)
-
+		if v.Table.Parameter != nil {
+			if relView.Template == nil {
+				relView.Template = &view.Template{}
+			}
+			relView.Template.Parameters = append(relView.Template.Parameters, v.Table.Parameter)
+		}
 		for _, aView := range route.Resource.Views {
 			if aView.Template == nil || len(aView.Template.Parameters) == 0 {
 				continue
@@ -180,12 +182,12 @@ func buildDataViewParams(options *Options, connectors map[string]*view.Connector
 				}
 				aView.Template.Parameters[i].Ref = k
 				aView.Template.Parameters[i].In = v.Param.In
-				aView.Template.Parameters[i].Schema = v.Param.Schema
-			}
 
+				aView.Template.Parameters[i].Schema = v.Param.Schema
+
+			}
 		}
 	}
-
 }
 
 func addViewConn(options *Options, connectors map[string]*view.Connector, route *router.Resource, aView *view.View) (*view.Connector, error) {

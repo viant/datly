@@ -85,6 +85,7 @@ func buildXRelations(options *Options, connectors map[string]*view.Connector, ro
 		if join.Connector != "" {
 			relView.Connector = &view.Connector{Reference: shared.Reference{Ref: join.Connector}}
 		}
+		relView.Cache = join.Cache
 		ownerView.With = append(ownerView.With, withView)
 
 		viewRoute.Index.Namespace[namespace(join.Table.Alias)] = join.Table.Alias + "#"

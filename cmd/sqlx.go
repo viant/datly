@@ -31,8 +31,10 @@ type (
 	}
 
 	TableMeta struct {
-		Connector string
-		parameter *view.Parameter
+		Connector         string
+		Cache             *view.Cache
+		dataViewParameter *view.Parameter
+		Parameter         *view.Parameter
 	}
 	Column struct {
 		Ns     string
@@ -49,13 +51,13 @@ type (
 	Columns []*Column
 
 	Join struct {
-		Key       string
-		KeyAlias  string
-		OwnerKey  string
-		OwnerNs   string
-		Owner     *Table
-		Connector string
-		Field     string
+		Key      string
+		KeyAlias string
+		OwnerKey string
+		OwnerNs  string
+		Owner    *Table
+		TableMeta
+		Field string
 
 		ToOne bool
 		Table *Table
@@ -236,15 +238,15 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	isParamView := onCriteria == "1 = 1"
 	if isParamView {
 		paramName := join.Alias
-		if relTable.parameter == nil {
-			relTable.parameter = &view.Parameter{}
+		if relTable.dataViewParameter == nil {
+			relTable.dataViewParameter = &view.Parameter{}
 		}
-		relTable.parameter.In = &view.Location{Name: paramName, Kind: view.DataViewKind}
-		relTable.parameter.Schema = &view.Schema{Name: strings.Title(paramName)}
+		relTable.dataViewParameter.In = &view.Location{Name: paramName, Kind: view.DataViewKind}
+		relTable.dataViewParameter.Schema = &view.Schema{Name: strings.Title(paramName)}
 
 		relTable.Alias = paramName
-		relTable.parameter.Name = paramName
-		dataParameters[paramName] = &TableParam{Table: relTable, Param: relTable.parameter}
+		relTable.dataViewParameter.Name = paramName
+		dataParameters[paramName] = &TableParam{Table: relTable, Param: relTable.dataViewParameter}
 		return nil
 	}
 
@@ -266,6 +268,8 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	byAlias := relTable.Inner.ByAlias()
 	relJoin.KeyAlias = relTable.InnerAlias
 	relJoin.Connector = relTable.Connector
+	relJoin.Cache = relTable.Cache
+
 	if len(byAlias) > 0 {
 		column, ok := byAlias[relJoin.Key]
 		if !ok {
