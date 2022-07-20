@@ -120,7 +120,7 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	}
 
 	updateURIParams(route, routeSetting)
-
+	updateParamReferences(route)
 	route.Routes = append(route.Routes, viewRoute)
 
 	route.With = []string{"connections"}
@@ -214,10 +214,32 @@ func buildDataViewParams(options *Options, connectors map[string]*view.Connector
 	}
 }
 
+func updateParamReferences(route *router.Resource) {
+	var resourceParams = map[string]*view.Parameter{}
+	if len(route.Resource.Parameters) > 0 {
+		for i, param := range route.Resource.Parameters {
+			resourceParams[param.Name] = route.Resource.Parameters[i]
+		}
+	}
+	for _, aView := range route.Resource.Views {
+		if aView.Template == nil || len(aView.Template.Parameters) == 0 {
+			continue
+		}
+		for i, viewParam := range aView.Template.Parameters {
+			if _, ok := resourceParams[viewParam.Name]; !ok {
+				route.Resource.Parameters = append(route.Resource.Parameters, aView.Template.Parameters[i])
+			}
+			aView.Template.Parameters[i] = &view.Parameter{Reference: shared.Reference{Ref: viewParam.Name}}
+		}
+	}
+
+}
+
 func updateURIParams(route *router.Resource, setting *RouteSetting) {
 	if setting == nil || len(setting.URIParams) == 0 {
 		return
 	}
+
 	for _, aView := range route.Resource.Views {
 		if aView.Template == nil || len(aView.Template.Parameters) == 0 {
 			continue
