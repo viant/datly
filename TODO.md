@@ -4,3 +4,8 @@
 - parameters with golang/js codec
 - more than one view in out output nice to have for now
 - improve documentation/examples
+
+- Router handler optimization
+- Parameter path detection
+- Fix parameter detection issues
+- Standarize fields/offset etc. according to output format.
