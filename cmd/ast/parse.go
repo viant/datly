@@ -301,6 +301,26 @@ outer:
 			cursor.Pos++
 		}
 	}
-
 	return builder.String(), expressions
+}
+
+//ParseURIParams extract URI params from URI
+func ParseURIParams(URI string) []string {
+	var params []string
+	cursor := parsly.NewCursor("", []byte(URI), 0)
+outer:
+	for i := 0; i < len(cursor.Input); i++ {
+
+		match := cursor.MatchOne(scopeBlockMatcher)
+		switch match.Code {
+		case parsly.EOF:
+			break outer
+		case scopeBlock:
+			block := match.Text(cursor)
+			params = append(params, block[1:len(block)-1])
+		default:
+			cursor.Pos++
+		}
+	}
+	return params
 }

@@ -107,7 +107,6 @@ func updateView(options *Options, table *Table, aView *view.View) error {
 	fmt.Printf("Discovering  %v metadata ...\n", aView.Name)
 	updateTableColumnTypes(options, table)
 	updateParameterTypes(table)
-
 	if err := updateColumnsConfig(table, aView); err != nil {
 		return err
 	}

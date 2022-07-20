@@ -50,8 +50,9 @@ type (
 		Param *view.Parameter
 	}
 
-	GlobalSetting struct {
-		URI string
+	RouteSetting struct {
+		URI       string
+		URIParams map[string]bool
 	}
 
 	Columns []*Column

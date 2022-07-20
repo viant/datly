@@ -7,11 +7,13 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/cmd/ast"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/metadata"
+	"github.com/viant/toolbox"
 	"github.com/viant/toolbox/format"
 	"log"
 	"strings"
@@ -37,9 +39,7 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 
 	var xTable *Table
 	var dataViewParams map[string]*TableParam
-
-	settings := &GlobalSetting{}
-
+	routeSetting := &RouteSetting{}
 	if options.SQLXLocation != "" && url.Scheme(options.SQLLocation, "e") == "e" {
 		sourceURL := normalizeURL(options.SQLXLocation)
 		SQLData, err := fs.DownloadWithURL(context.Background(), sourceURL)
@@ -48,12 +48,9 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		}
 
 		SQL := strings.TrimSpace(string(SQLData))
-		if strings.HasPrefix(SQL, "/*") {
-			index := strings.Index(SQL, "*/")
-			globalComments := SQL[3:index]
-			SQL = SQL[index+3:]
-			json.Unmarshal([]byte(globalComments), settings)
-		}
+		SQL = extractSetting(strings.TrimSpace(string(SQLData)), routeSetting)
+
+		toolbox.Dump(routeSetting)
 
 		if xTable, dataViewParams, err = ParseSQLx(SQL); err != nil {
 			log.Println(err)
@@ -90,7 +87,7 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 			AllowOrigins:     stringsPtr("*"),
 			ExposeHeaders:    stringsPtr("*"),
 		},
-		URI:    config.APIPrefix + options.RouterURI(settings.URI),
+		URI:    config.APIPrefix + options.RouterURI(routeSetting.URI),
 		View:   &view.View{Reference: shared.Reference{Ref: aView.Name}},
 		Index:  router.Index{Namespace: map[string]string{}},
 		Output: router.Output{Style: router.Style(options.Output), Cardinality: view.Many, ResponseField: options.ResponseField()},
@@ -122,6 +119,8 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		}
 	}
 
+	updateURIParams(route, routeSetting)
+
 	route.Routes = append(route.Routes, viewRoute)
 
 	route.With = []string{"connections"}
@@ -131,6 +130,29 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	_ = fsAddYAML(fs, depURL, dependency)
 	route.Resource.Connectors = nil
 	return fsAddYAML(fs, options.RouterURL(), route)
+}
+
+func extractSetting(SQL string, settings *RouteSetting) string {
+	if strings.HasPrefix(SQL, "/*") {
+		index := strings.Index(SQL, "*/")
+		routeSetting := SQL[3:index]
+		SQL = SQL[index+3:]
+		err := json.Unmarshal([]byte(routeSetting), settings)
+		if err != nil {
+			log.Printf("invalid route setting: %s, %w", routeSetting, err)
+		}
+		if settings.URI != "" {
+			if params := ast.ParseURIParams(settings.URI); len(params) > 0 {
+				settings.URIParams = map[string]bool{}
+				for _, param := range params {
+					settings.URIParams[param] = true
+				}
+
+			}
+		}
+
+	}
+	return SQL
 }
 
 func buildDataViewParams(options *Options, connectors map[string]*view.Connector, params map[string]*TableParam, route *router.Resource) {
@@ -192,6 +214,22 @@ func buildDataViewParams(options *Options, connectors map[string]*view.Connector
 	}
 }
 
+func updateURIParams(route *router.Resource, setting *RouteSetting) {
+	if setting == nil || len(setting.URIParams) == 0 {
+		return
+	}
+	for _, aView := range route.Resource.Views {
+		if aView.Template == nil || len(aView.Template.Parameters) == 0 {
+			continue
+		}
+		for _, viewParam := range aView.Template.Parameters {
+			if _, ok := setting.URIParams[viewParam.Name]; ok {
+				viewParam.In.Kind = view.PathKind
+			}
+		}
+	}
+}
+
 func mergeParameter(route *router.Resource, param *view.Parameter) {
 	for _, aView := range route.Resource.Views {
 		if aView.Template == nil || len(aView.Template.Parameters) == 0 {
@@ -214,22 +252,15 @@ func addViewConn(options *Options, connectors map[string]*view.Connector, route 
 	if connector.DbName == "" {
 		return nil, nil
 	}
-
-	//if !ok {
 	conn := connector.New()
-	//	if conn.Name != connector.DbName {
-	//		return nil, fmt.Errorf("undefined connector: %v", connector.DbName)
-	//	}
-	//}
-
-	shallowCopy := *conn
-	shallowCopy.Ref = connector.DbName
+	viewConnector := &view.Connector{}
+	viewConnector.Ref = connector.DbName
 
 	_, ok := connectors[connector.DbName]
 	if !ok {
 		route.Resource.AddConnectors(conn)
 	}
-	aView.Connector = &shallowCopy
+	aView.Connector = viewConnector
 	return conn, nil
 }
 

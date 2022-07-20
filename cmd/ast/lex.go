@@ -27,6 +27,7 @@ const (
 	forEachToken
 	ifToken
 
+	scopeBlock
 	numberToken
 	boolToken
 	stringToken
@@ -46,6 +47,7 @@ var paramMatcher = parsly.NewToken(paramToken, "Parameter", matcher.NewFragments
 var identityMatcher = parsly.NewToken(identityToken, "Identity", matchers.NewIdentity())
 var condBlockMatcher = parsly.NewToken(condBlockToken, "#if .... #end", matcher.NewSeqBlock("#if", "#end"))
 var exprGroupMatcher = parsly.NewToken(exprGroupToken, "( .... )", matcher.NewBlock('(', ')', '\\'))
+var scopeBlockMatcher = parsly.NewToken(scopeBlock, "{ .... }", matcher.NewBlock('{', '}', '\\'))
 
 var anyMatcher = parsly.NewToken(anyToken, "Any", matchers.NewAny())
 var endMatcher = parsly.NewToken(endToken, "End", matcher.NewFragment("#end"))
