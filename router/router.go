@@ -485,9 +485,9 @@ func (r *Router) normalizeErr(err error, statusCode int) (int, error) {
 			switch actual := anError.Err.(type) {
 			case validator.ValidationErrors:
 				anError.Object = NewParamErrors(actual)
-			default:
-				anError.Message = actual.Error()
 			}
+
+			anError.Message = anError.Error()
 		}
 
 		if actual.status != 0 {

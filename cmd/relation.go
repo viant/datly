@@ -49,7 +49,7 @@ func buildXRelations(options *Options, connectors map[string]*view.Connector, ro
 		if _, err := addViewConn(options, connectors, route, relView); err != nil {
 			return err
 		}
-		if err := updateView(options, join.Table, relView); err != nil {
+		if err := updateView(options, join.Table, relView, false); err != nil {
 			return err
 		}
 
@@ -100,7 +100,7 @@ func buildXRelations(options *Options, connectors map[string]*view.Connector, ro
 	return nil
 }
 
-func updateView(options *Options, table *Table, aView *view.View) error {
+func updateView(options *Options, table *Table, aView *view.View, isMainView bool) error {
 	if table == nil {
 		return nil
 	}
@@ -115,13 +115,13 @@ func updateView(options *Options, table *Table, aView *view.View) error {
 		return nil
 	}
 
-	if err := buildSQLSource(options, aView, table); err != nil {
+	if err := buildSQLSource(options, aView, table, isMainView); err != nil {
 		return err
 	}
 	return nil
 }
 
-func buildSQLSource(options *Options, aView *view.View, table *Table) error {
+func buildSQLSource(options *Options, aView *view.View, table *Table, mainView bool) error {
 	templateParams := make([]*view.Parameter, len(table.ViewMeta.Parameters))
 	for i, param := range table.ViewMeta.Parameters {
 		templateParams[i] = convertMetaParameter(param)
@@ -133,11 +133,11 @@ func buildSQLSource(options *Options, aView *view.View, table *Table) error {
 
 	aView.Template = template
 
-	if err := updateTemplateSource(options, template, table); err != nil {
+	if err := updateTemplateSource(options, template, table, mainView); err != nil {
 		return err
 	}
 
-	if err := updateViewSource(options, aView, table); err != nil {
+	if err := updateViewSource(options, aView, table, mainView); err != nil {
 		return err
 	}
 
@@ -156,11 +156,11 @@ func convertMetaParameter(param *ast.Parameter) *view.Parameter {
 	}
 }
 
-func updateViewSource(options *Options, aView *view.View, table *Table) error {
+func updateViewSource(options *Options, aView *view.View, table *Table, mainView bool) error {
 	if table.ViewMeta.From == "" {
 		return nil
 	}
-	URI, err := uploadSQL(options, table.Alias, table.ViewMeta.From)
+	URI, err := uploadSQL(options, table.Alias, table.ViewMeta.From, mainView)
 	if err != nil {
 		return err
 	}
@@ -169,12 +169,12 @@ func updateViewSource(options *Options, aView *view.View, table *Table) error {
 	return nil
 }
 
-func updateTemplateSource(options *Options, template *view.Template, table *Table) error {
+func updateTemplateSource(options *Options, template *view.Template, table *Table, mainView bool) error {
 	if table.ViewMeta.Source == "" {
 		return nil
 	}
 
-	URI, err := uploadSQL(options, table.Alias, table.ViewMeta.Source)
+	URI, err := uploadSQL(options, table.Alias, table.ViewMeta.Source, mainView)
 	if err != nil {
 		return err
 	}
@@ -183,15 +183,32 @@ func updateTemplateSource(options *Options, template *view.Template, table *Tabl
 	return nil
 }
 
-func uploadSQL(options *Options, fileName string, SQL string) (string, error) {
-	sourceURL := options.SQLURL(fileName)
+func uploadSQL(options *Options, fileName string, SQL string, mainView bool) (string, error) {
+	sourceURL := options.SQLURL(fileName, !mainView)
 	fs := afs.New()
 	if err := fs.Upload(context.Background(), sourceURL, file.DefaultFileOsMode, strings.NewReader(SQL)); err != nil {
 		return "", err
 	}
 
-	_, URI := url.Split(sourceURL, file.Scheme)
-	return URI, nil
+	if mainView {
+		_, sourceURL = url.Split(sourceURL, file.Scheme)
+	} else {
+		skipped := 0
+		anIndex := strings.LastIndexFunc(sourceURL, func(r rune) bool {
+			if r == '/' {
+				skipped++
+			}
+
+			if skipped == 2 {
+				return true
+			}
+			return false
+		})
+
+		sourceURL = sourceURL[anIndex+1:]
+	}
+
+	return sourceURL, nil
 }
 
 func updateColumnsConfig(table *Table, aView *view.View) error {

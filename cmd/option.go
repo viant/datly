@@ -183,8 +183,20 @@ func (o *Options) DepURL(uri string) string {
 	return url.Join(o.DependencyURL, uri+".yaml")
 }
 
-func (o *Options) SQLURL(name string) string {
-	return url.Join(o.RouteURL, "dev/"+name+".sql")
+func (o *Options) SQLURL(name string, addSubFolder bool) string {
+	pathSegments := []string{"dev"}
+	if addSubFolder {
+		location := o.SQLXLocation[strings.LastIndex(o.SQLXLocation, "/")+1:]
+		extensionIndex := strings.LastIndex(location, ".")
+		if extensionIndex != -1 {
+			location = location[:extensionIndex]
+		}
+		pathSegments = append(pathSegments, location)
+	}
+
+	pathSegments = append(pathSegments, name+".sql")
+
+	return url.Join(o.RouteURL, pathSegments...)
 }
 
 func (g *Generate) Namespace() string {

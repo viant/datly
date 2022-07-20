@@ -140,4 +140,4 @@ With:
           ( SELECT *
               FROM event_types
            )
-        SourceURL: eventTypes.sql
+        SourceURL: events/eventTypes.sql

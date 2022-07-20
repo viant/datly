@@ -73,7 +73,7 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		}
 	}
 
-	if err := updateView(options, xTable, aView); err != nil {
+	if err := updateView(options, xTable, aView, true); err != nil {
 		return err
 	}
 
@@ -201,7 +201,8 @@ func buildDataViewParams(options *Options, connectors map[string]*view.Connector
 		if _, err := addViewConn(options, connectors, route, relView); err != nil {
 			continue
 		}
-		if err := updateView(options, table, relView); err != nil {
+
+		if err := updateView(options, table, relView, false); err != nil {
 			continue
 		}
 
