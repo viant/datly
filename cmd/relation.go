@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
-	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/ast"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
@@ -184,30 +183,24 @@ func updateTemplateSource(options *Options, template *view.Template, table *Tabl
 }
 
 func uploadSQL(options *Options, fileName string, SQL string, mainView bool) (string, error) {
-	sourceURL := options.SQLURL(fileName, !mainView)
+	sourceURL := options.SQLURL(fileName, true)
 	fs := afs.New()
 	if err := fs.Upload(context.Background(), sourceURL, file.DefaultFileOsMode, strings.NewReader(SQL)); err != nil {
 		return "", err
 	}
 
-	if mainView {
-		_, sourceURL = url.Split(sourceURL, file.Scheme)
-	} else {
-		skipped := 0
-		anIndex := strings.LastIndexFunc(sourceURL, func(r rune) bool {
-			if r == '/' {
-				skipped++
-			}
+	skipped := 0
+	anIndex := strings.LastIndexFunc(sourceURL, func(r rune) bool {
+		if r == '/' {
+			skipped++
+		}
 
-			if skipped == 2 {
-				return true
-			}
-			return false
-		})
-
-		sourceURL = sourceURL[anIndex+1:]
-	}
-
+		if skipped == 2 {
+			return true
+		}
+		return false
+	})
+	sourceURL = sourceURL[anIndex+1:]
 	return sourceURL, nil
 }
 

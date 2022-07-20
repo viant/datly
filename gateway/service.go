@@ -112,9 +112,11 @@ func (r *Service) match(URI string) (*router.Router, error) {
 	parts := strings.Split(URI, "/")
 	for i := len(parts); i > 0; i-- {
 		key := strings.Join(parts[:i], "/")
-		result, ok := routes[key]
-		if ok {
-			return result, nil
+		for template, candidate := range routes {
+			matches := MatchURI(template, key)
+			if matches {
+				return candidate, nil
+			}
 		}
 	}
 	return nil, fmt.Errorf("failed to match APIURI: %v", r.Config.APIPrefix+URI)
@@ -140,11 +142,13 @@ func (r *Service) reloadRouterResourcesIfNeeded(ctx context.Context) error {
 	routers := map[string]*router.Router{}
 	for k := range resourcesSnapshot {
 		item := resourcesSnapshot[k]
-		key := strings.Trim(item.APIURI, "/")
-		if _, ok := routers[key]; ok {
-			return fmt.Errorf("duplicate resource APIURI: %v,-> %v", key, item.SourceURL)
+		for _, route := range item.Routes {
+			key := r.normalize(route)
+			if _, ok := routers[key]; ok {
+				return fmt.Errorf("duplicate resource APIURI: %v,-> %v", key, item.SourceURL)
+			}
+			routers[key] = router.New(item)
 		}
-		routers[key] = router.New(item)
 		updatedResource = append(updatedResource, item)
 	}
 	r.mux.Lock()
@@ -152,6 +156,14 @@ func (r *Service) reloadRouterResourcesIfNeeded(ctx context.Context) error {
 	r.routerResources = updatedResource
 	r.routers = routers
 	return nil
+}
+
+func (r *Service) normalize(route *router.Route) string {
+	key := route.URI
+	if strings.HasPrefix(key, r.Config.APIPrefix) {
+		key = strings.ReplaceAll(key, r.Config.APIPrefix, "")
+	}
+	return key
 }
 
 func (r *Service) handleRouterResourceChange(ctx context.Context, hasChanged *bool, resourcesSnapshot map[string]*router.Resource, fs afs.Service) func(URL string, operation resource.Operation) {
@@ -325,4 +337,69 @@ func initSecrets(ctx context.Context, config *Config) error {
 		}
 	}
 	return nil
+}
+
+//MatchURI parses URIs to extract {<param>} defined in templateURI from requestURI, it returns extracted parameters and flag if requestURI matched templateURI
+func MatchURI(templateURI, requestURI string) bool {
+	var expectingValue, expectingName bool
+	var name, value string
+	maxLength := len(templateURI) + len(requestURI)
+	var requestURIIndex, templateURIIndex int
+
+	questionMarkPosition := strings.Index(requestURI, "?")
+	if questionMarkPosition != -1 {
+		requestURI = string(requestURI[:questionMarkPosition])
+	}
+
+	for k := 0; k < maxLength; k++ {
+		var requestChar, routingChar string
+
+		if requestURIIndex < len(requestURI) {
+			requestChar = requestURI[requestURIIndex : requestURIIndex+1]
+		}
+
+		if templateURIIndex < len(templateURI) {
+			routingChar = templateURI[templateURIIndex : templateURIIndex+1]
+		}
+		if (!expectingValue && !expectingName) && requestChar == routingChar && routingChar != "" {
+			requestURIIndex++
+			templateURIIndex++
+			continue
+		}
+
+		if routingChar == "}" {
+			expectingName = false
+			templateURIIndex++
+		}
+
+		if expectingValue && requestChar == "/" {
+			expectingValue = false
+		}
+
+		if expectingName && templateURIIndex < len(templateURI) {
+			name += routingChar
+			templateURIIndex++
+		}
+
+		if routingChar == "{" {
+			expectingValue = true
+			expectingName = true
+			templateURIIndex++
+
+		}
+
+		if expectingValue && requestURIIndex < len(requestURI) {
+			value += requestChar
+			requestURIIndex++
+		}
+
+		if !expectingValue && !expectingName && len(name) > 0 {
+			name = ""
+			value = ""
+		}
+
+	}
+
+	matched := requestURIIndex == len(requestURI) && templateURIIndex == len(templateURI)
+	return matched
 }

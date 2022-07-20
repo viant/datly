@@ -52,6 +52,15 @@ type (
 var mysqlDev string
 
 func (o *Options) Init() {
+
+	if o.SQLXLocation != "" {
+		_, name := url.Split(o.SQLXLocation, file.Scheme)
+		if index := strings.Index(name, "."); index != -1 {
+			name = name[:index]
+		}
+		o.Name = name
+	}
+
 	if o.ConfigURL != "" {
 		o.ConfigURL = normalizeURL(o.ConfigURL)
 	}
