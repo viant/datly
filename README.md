@@ -1,4 +1,4 @@
-# Datly - codeless rule based data layer service
+# Datly - Managed and Autonomous ORM for golang 
 
 [![GoReportCard](https://goreportcard.com/badge/github.com/viant/datly)](https://goreportcard.com/report/github.com/viant/datly)
 [![GoDoc](https://godoc.org/github.com/viant/datly?status.svg)](https://godoc.org/github.com/viant/datly)
