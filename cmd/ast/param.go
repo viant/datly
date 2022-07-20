@@ -3,6 +3,7 @@ package ast
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlx/io/read/cache/ast"
 	"reflect"
@@ -58,7 +59,11 @@ outer:
 			if text[0] == '$' {
 				_, paramName := getParamName(text)
 				if isParameter(variables, paramName) {
-					aParam, _ := meta.ParamByName(paramName)
+					aParam, ok := meta.ParamByName(paramName)
+					if !ok {
+						fmt.Printf("ParamName: %v, params: %v\n", paramName, meta.Parameters)
+						continue
+					}
 
 					matched = cursor.MatchAfterOptional(whitespaceMatcher, commentBlockMatcher)
 					if matched.Code == commentBlockToken {
