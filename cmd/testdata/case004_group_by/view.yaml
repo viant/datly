@@ -30,6 +30,7 @@ Logger:
   Name: ""
 MatchStrategy: read_matched
 Name: events
+Ref: events
 Schema:
   Cardinality: One
 Selector:
@@ -41,7 +42,8 @@ Selector:
     Offset: true
     OrderBy: false
     Projection: true
-  Limit: 40
+  Limit: 25
+Standalone: true
 Table: events
 Template:
   Parameters:
@@ -50,6 +52,7 @@ Template:
         Name: quantity
       Name: quantity
       PresenceName: quantity
+      Ref: quantity
       Required: true
       Schema:
         Cardinality: One
@@ -69,7 +72,7 @@ Template:
              GROUP BY event_type_id
              ORDER BY 1
               )
-  SourceURL: events.sql
+  SourceURL: events/events.sql
 With:
   - Cardinality: Many
     Column: event_type_id
@@ -130,4 +133,4 @@ With:
         Source: |-
           ( SELECT * FROM event_types
                )
-        SourceURL: eventTypes.sql
+        SourceURL: events/eventTypes.sql

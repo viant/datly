@@ -49,7 +49,7 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 
 		SQL := strings.TrimSpace(string(SQLData))
 		SQL = extractSetting(strings.TrimSpace(string(SQLData)), routeSetting)
-		if xTable, dataViewParams, err = ParseSQLx(SQL); err != nil {
+		if xTable, dataViewParams, err = ParseSQLx(SQL, routeSetting.URIParams); err != nil {
 			log.Println(err)
 		}
 		if xTable != nil {
@@ -136,7 +136,7 @@ func extractSetting(SQL string, settings *RouteSetting) string {
 		SQL = SQL[index+3:]
 		err := json.Unmarshal([]byte(routeSetting), settings)
 		if err != nil {
-			log.Printf("invalid route setting: %s, %w", routeSetting, err)
+			log.Printf("invalid route setting: %s, %v", routeSetting, err)
 		}
 		if settings.URI != "" {
 			if params := ast.ParseURIParams(settings.URI); len(params) > 0 {

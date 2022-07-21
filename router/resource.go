@@ -109,7 +109,6 @@ func (r *Resource) Init(ctx context.Context) error {
 
 	var columnCacheExists bool
 	if r.ColumnsDiscovery {
-
 		parent, name := url.Split(r.SourceURL, file.Scheme)
 		metaURL := url.Join(parent, ".meta", name)
 		r.ColumnsCache = discover.New(metaURL, r.cfs)

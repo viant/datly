@@ -24,7 +24,7 @@ func TestParseSQLx(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		table, _, err := ParseSQLx(testCase.SQL)
+		table, _, err := ParseSQLx(testCase.SQL, map[string]bool{})
 		if !assert.Nil(t, err, testCase.description) {
 			continue
 		}

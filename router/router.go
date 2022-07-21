@@ -48,6 +48,7 @@ type (
 		viewRouter *toolbox.ServiceRouter
 		index      map[string][]int
 		routes     Routes
+		Matcher    *Matcher
 	}
 
 	BytesReadCloser struct {
@@ -94,6 +95,7 @@ func (r *Router) Init(routes Routes) {
 
 	r.indexRoutes()
 	r.initServiceRouter()
+	r.initMatcher()
 }
 
 func (r *Router) initServiceRouter() {
@@ -613,4 +615,8 @@ func (r *Router) logMetrics(URI string, metrics []*reader.Metric) {
 	}{URI: URI, Metrics: metrics})
 
 	fmt.Printf("%v\n", string(asBytes))
+}
+
+func (r *Router) initMatcher() {
+	r.Matcher = NewMatcher(r.routes)
 }

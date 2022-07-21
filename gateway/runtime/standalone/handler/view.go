@@ -9,22 +9,28 @@ import (
 	"strings"
 )
 
-type metaView struct {
-	URIPrefix string
-	meta      *meta2.Config
-	lookup    func(location string) (*view.View, error)
-}
+type (
+	metaView struct {
+		URIPrefix string
+		meta      *meta2.Config
+		lookup    ViewLookupFn
+	}
+
+	ViewLookupFn func(method, location string) (*view.View, error)
+)
 
 func (v *metaView) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	if !meta2.IsAuthorized(request, v.meta.AllowedSubnet) {
 		writer.WriteHeader(http.StatusForbidden)
 		return
 	}
+
 	URI := request.RequestURI
 	if index := strings.Index(URI, v.URIPrefix); index != -1 {
 		URI = URI[index+len(v.URIPrefix):]
 	}
-	view, err := v.lookup(URI)
+
+	view, err := v.lookup(request.Method, URI)
 	if err != nil {
 		http.Error(writer, err.Error(), http.StatusInternalServerError)
 		return
@@ -51,7 +57,7 @@ func (v *metaView) ServeHTTP(writer http.ResponseWriter, request *http.Request) 
 }
 
 //NewView creates view handler
-func NewView(URI string, meta *meta2.Config, lookup func(location string) (*view.View, error)) http.Handler {
+func NewView(URI string, meta *meta2.Config, lookup ViewLookupFn) http.Handler {
 	handler := &metaView{lookup: lookup, meta: meta, URIPrefix: URI}
 	return handler
 }

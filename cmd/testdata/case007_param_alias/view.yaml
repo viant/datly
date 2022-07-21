@@ -8,13 +8,21 @@ Columns:
     Filterable: true
     Name: id
     Nullable: true
-  - DataType: text
+  - DataType: DATETIME
     Filterable: true
-    Name: name
+    Name: timestamp
     Nullable: true
-  - DataType: numeric
+  - DataType: INTEGER
     Filterable: true
-    Name: price
+    Name: event_type_id
+    Nullable: true
+  - DataType: DECIMAL(7, 2)
+    Filterable: true
+    Name: quantity
+    Nullable: true
+  - DataType: INTEGER
+    Filterable: true
+    Name: user_id
     Nullable: true
 Connector:
   DSN: /tmp/datly/generator/db.db
@@ -30,8 +38,8 @@ Connector:
 Logger:
   Name: ""
 MatchStrategy: read_matched
-Name: foos
-Ref: foos
+Name: events
+Ref: events
 Schema:
   Cardinality: One
 Selector:
@@ -45,10 +53,28 @@ Selector:
     Projection: true
   Limit: 25
 Standalone: true
-Table: foos
+Table: events
 Template:
+  Parameters:
+    - In:
+        Kind: path
+        Name: eventID
+      Name: eventID
+      PresenceName: eventID
+      Ref: eventID
+      Required: true
+      Schema:
+        Cardinality: One
+        DataType: int
   PresenceSchema:
     Cardinality: One
   Schema:
     Cardinality: One
-  Source: foos
+  Source: |-
+    ( SELECT *
+             FROM events e
+             WHERE 1 = 1
+               AND e.id = $eventID
+             ORDER BY 1
+          )
+  SourceURL: events/events.sql

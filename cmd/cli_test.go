@@ -106,6 +106,14 @@ func TestRun(t *testing.T) {
 			dataURL:     "/v1/api/dev/events?quantity=10",
 			dataMethod:  http.MethodGet,
 		},
+		{
+			description: "param column alias",
+			URI:         "case007_param_alias",
+			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly/generator/db.db", "-X=testdata/case007_param_alias/events.sql"},
+			viewURL:     "/v1/api/meta/view/dev/events/1",
+			dataURL:     "/v1/api/dev/events/1",
+			dataMethod:  http.MethodGet,
+		},
 	}
 
 	loader := afs.New()

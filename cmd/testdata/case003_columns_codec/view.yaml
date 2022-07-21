@@ -44,6 +44,7 @@ Logger:
   Name: ""
 MatchStrategy: read_matched
 Name: events
+Ref: events
 Schema:
   Cardinality: One
 Selector:
@@ -55,7 +56,8 @@ Selector:
     Offset: true
     OrderBy: false
     Projection: true
-  Limit: 40
+  Limit: 25
+Standalone: true
 Table: events
 Template:
   PresenceSchema:
@@ -73,7 +75,7 @@ Template:
                         END) AS slice /* {"Codec":{"Ref":"AsStrings"}, "DataType": "string"}  */
              FROM events
           )
-  SourceURL: events.sql
+  SourceURL: events/events.sql
 With:
   - Cardinality: Many
     Column: event_type_id

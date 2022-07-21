@@ -223,17 +223,16 @@ func (v *View) generateNameIfNeeded(refView *View, rel *Relation) {
 }
 
 func (v *View) initView(ctx context.Context, resource *Resource, transforms marshal.Transforms) error {
-	if v.ColumnsConfig == nil {
-		v.ColumnsConfig = map[string]*ColumnConfig{}
-	}
-
 	var err error
-	if err := v.loadFromWithURL(ctx, resource); err != nil {
+	if err = v.loadFromWithURL(ctx, resource); err != nil {
 		return err
 	}
 
 	if err = v.inheritFromViewIfNeeded(ctx, resource, transforms); err != nil {
 		return err
+	}
+	if v.ColumnsConfig == nil {
+		v.ColumnsConfig = map[string]*ColumnConfig{}
 	}
 
 	v.ensureIndexExcluded()

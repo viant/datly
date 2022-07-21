@@ -19,6 +19,7 @@ func TestParse(t *testing.T) {
 	testcases := []struct {
 		description string
 		path        string
+		uriParams   map[string]bool
 	}{
 		{
 			description: "basic",
@@ -52,6 +53,13 @@ func TestParse(t *testing.T) {
 			description: "param type hint",
 			path:        "case008",
 		},
+		{
+			description: "uri params",
+			path:        "case009",
+			uriParams: map[string]bool{
+				"tID": true,
+			},
+		},
 	}
 
 	loader := afs.New()
@@ -64,7 +72,7 @@ func TestParse(t *testing.T) {
 			continue
 		}
 
-		viewMeta, err := ast.Parse(string(inputData))
+		viewMeta, err := ast.Parse(string(inputData), testcase.uriParams)
 		if !assert.Nil(t, err, testcase.description) {
 			continue
 		}

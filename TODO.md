@@ -6,6 +6,8 @@
 - improve documentation/examples
 
 - Router handler optimization
-- Parameter path detection
-- Fix parameter detection issues
 - Standarize fields/offset etc. according to output format.
+- Measure load performance
+- Measure first request
+- Smart caching
+- Aerospike caching

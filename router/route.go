@@ -88,6 +88,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if r.View.Name == "" {
 		r.View.Name = r.View.Ref
 	}
+
 	if err := r.View.Init(ctx, resource.Resource); err != nil {
 		return err
 	}

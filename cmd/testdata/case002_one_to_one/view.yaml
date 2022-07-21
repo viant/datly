@@ -39,6 +39,7 @@ Logger:
   Name: ""
 MatchStrategy: read_matched
 Name: events
+Ref: events
 Schema:
   Cardinality: One
 Selector:
@@ -50,7 +51,8 @@ Selector:
     Offset: true
     OrderBy: false
     Projection: true
-  Limit: 40
+  Limit: 25
+Standalone: true
 Table: events
 Template:
   PresenceSchema:
@@ -85,11 +87,6 @@ With:
         Driver: sqlite3
         Name: dev
         Ref: dev
-        Secret:
-          Data: null
-          Fallback: null
-          Key: blowfish://default
-          URL: mem://localhost/resource/mysql.json
       Field: id
       Logger:
         Name: ""

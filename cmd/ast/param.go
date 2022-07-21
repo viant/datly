@@ -31,7 +31,7 @@ func correctUntyped(SQL string, variables map[string]bool, meta *ViewMeta) {
 	cursor := parsly.NewCursor("", []byte(SQL), 0)
 outer:
 	for cursor.Pos < cursor.InputSize {
-		matched := cursor.MatchAfterOptional(whitespaceMatcher, doubleQuoteStringMatcher, singleQuoteStringMatcher, boolTokenMatcher, boolMatcher, numberMatcher, fullWordMatcher)
+		matched := cursor.MatchAfterOptional(whitespaceMatcher, commentBlockMatcher, doubleQuoteStringMatcher, singleQuoteStringMatcher, boolTokenMatcher, boolMatcher, numberMatcher, fullWordMatcher, anyMatcher)
 		switch matched.Code {
 		case numberToken:
 			typer = &LiteralType{RType: ast.Float64Type}
@@ -39,7 +39,7 @@ outer:
 			typer = &LiteralType{RType: ast.BoolType}
 		case stringToken:
 			typer = &LiteralType{RType: ast.StringType}
-		case parsly.EOF:
+		case parsly.EOF, anyToken:
 			//Do nothing
 		default:
 			text := matched.Text(cursor)

@@ -2,6 +2,7 @@ package ast
 
 import (
 	"bytes"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/parsly"
 	"github.com/viant/velty/ast"
@@ -13,7 +14,11 @@ import (
 	"strings"
 )
 
-func Parse(SQL string) (*ViewMeta, error) {
+func Parse(SQL string, uriParams map[string]bool) (*ViewMeta, error) {
+	if uriParams == nil {
+		uriParams = map[string]bool{}
+	}
+
 	block, err := parser.Parse([]byte(SQL))
 	if err != nil {
 		return nil, err
@@ -37,7 +42,7 @@ func Parse(SQL string) (*ViewMeta, error) {
 	}
 
 	variables := map[string]bool{}
-	implyDefaultParams(variables, block.Statements(), viewMeta, true, nil)
+	implyDefaultParams(variables, block.Statements(), viewMeta, true, nil, uriParams)
 
 	SQL = removeVeltySyntax(string(from))
 	correctUntyped(SQL, variables, viewMeta)
@@ -67,7 +72,7 @@ outer:
 	return sb.String()
 }
 
-func implyDefaultParams(variables map[string]bool, statements []ast.Statement, meta *ViewMeta, required bool, rType reflect.Type) {
+func implyDefaultParams(variables map[string]bool, statements []ast.Statement, meta *ViewMeta, required bool, rType reflect.Type, uriParams map[string]bool) {
 	for _, statement := range statements {
 		switch actual := statement.(type) {
 		case stmt.ForEach:
@@ -80,11 +85,11 @@ func implyDefaultParams(variables map[string]bool, statements []ast.Statement, m
 
 			y, ok := actual.Y.(*expr.Select)
 			if ok && !variables[y.ID] {
-				indexParameter(variables, y, meta, required, rType)
+				indexParameter(variables, y, meta, required, rType, uriParams)
 			}
 
 		case *expr.Select:
-			indexParameter(variables, actual, meta, required, rType)
+			indexParameter(variables, actual, meta, required, rType, uriParams)
 
 		case *stmt.Statement:
 			x, ok := actual.X.(*expr.Select)
@@ -95,28 +100,28 @@ func implyDefaultParams(variables map[string]bool, statements []ast.Statement, m
 		case *stmt.ForEach:
 			variables[actual.Item.ID] = true
 		case *expr.Unary:
-			implyDefaultParams(variables, []ast.Statement{actual}, meta, false, actual.Type())
+			implyDefaultParams(variables, []ast.Statement{actual}, meta, false, actual.Type(), uriParams)
 		case *expr.Binary:
 			xType := actual.X.Type()
 			if xType == nil {
 				xType = actual.Y.Type()
 			}
 
-			implyDefaultParams(variables, []ast.Statement{actual.X, actual.Y}, meta, false, xType)
+			implyDefaultParams(variables, []ast.Statement{actual.X, actual.Y}, meta, false, xType, uriParams)
 		case *expr.Parentheses:
-			implyDefaultParams(variables, []ast.Statement{actual.P}, meta, false, actual.Type())
+			implyDefaultParams(variables, []ast.Statement{actual.P}, meta, false, actual.Type(), uriParams)
 		case *stmt.If:
-			implyDefaultParams(variables, []ast.Statement{actual.Condition}, meta, false, actual.Type())
+			implyDefaultParams(variables, []ast.Statement{actual.Condition}, meta, false, actual.Type(), uriParams)
 		}
 
 		switch actual := statement.(type) {
 		case ast.StatementContainer:
-			implyDefaultParams(variables, actual.Statements(), meta, false, nil)
+			implyDefaultParams(variables, actual.Statements(), meta, false, nil, uriParams)
 		}
 	}
 }
 
-func indexParameter(variables map[string]bool, actual *expr.Select, meta *ViewMeta, required bool, rType reflect.Type) {
+func indexParameter(variables map[string]bool, actual *expr.Select, meta *ViewMeta, required bool, rType reflect.Type, uriParams map[string]bool) {
 	prefix, paramName := getParamName(actual.FullName)
 
 	if !isParameter(variables, paramName) {
@@ -130,11 +135,16 @@ func indexParameter(variables map[string]bool, actual *expr.Select, meta *ViewMe
 		assumed = false
 	}
 
+	kind := "query"
+	if uriParams[paramName] {
+		kind = string(view.PathKind)
+	}
+
 	meta.addParameter(&Parameter{
 		Assumed:  assumed,
 		Id:       paramName,
 		Name:     paramName,
-		Kind:     "query",
+		Kind:     kind,
 		DataType: pType,
 		fullName: actual.FullName,
 		Required: boolPtr(required && prefix != keywords.ParamsMetadataKey),

@@ -37,19 +37,24 @@ type Service struct {
 	dataResourceTracker  *resource.Tracker
 	dataResources        map[string]*view.Resource
 	metrics              *gmetric.Service
+	routesReloaded       bool
 }
 
-func (r *Service) View(location string) (*view.View, error) {
-	URI := strings.ReplaceAll(location, ".", "/")
-	aRouter, err := r.match(URI)
-	if err != nil {
-		return nil, err
+func (r *Service) View(method, location string) (*view.View, error) {
+	URI := r.Config.APIPrefix + strings.ReplaceAll(location, ".", "/")
+
+	var err error
+	var route *router.Route
+
+	routers := r.routers
+
+	for _, candidate := range routers {
+		if route, err = candidate.Matcher.Match(method, URI); err == nil {
+			return route.View, nil
+		}
 	}
-	name := URI
-	if index := strings.LastIndex(name, "/"); index != -1 {
-		name = name[index+1:]
-	}
-	return aRouter.View(name)
+
+	return nil, err
 }
 
 func (r *Service) Handle(writer http.ResponseWriter, request *http.Request) {
@@ -88,7 +93,8 @@ func (r *Service) handle(writer http.ResponseWriter, request *http.Request) erro
 	if idx := strings.Index(URI, "?"); idx != -1 {
 		routePath = URI[:idx]
 	}
-	aRouter, err := r.match(routePath)
+
+	aRouter, err := r.match(request.Method, routePath)
 	if err == nil {
 		err = aRouter.Handle(writer, request)
 		if err != nil {
@@ -105,34 +111,50 @@ func (r *Service) reloadFs() afs.Service {
 	return r.fs
 }
 
-func (r *Service) match(URI string) (*router.Router, error) {
+func (r *Service) match(method, URI string) (*router.Router, error) {
 	r.mux.RLock()
-	routes := r.routers
+	routers := r.routers
 	r.mux.RUnlock()
 
-	parts := strings.Split(URI, "/")
-	for i := len(parts); i > 0; i-- {
-		key := strings.Join(parts[:i], "/")
-		for template, candidate := range routes {
-			matches := MatchURI(template, key)
-			if matches {
-				return candidate, nil
-			}
+	var err error
+	for _, aRouter := range routers {
+		if _, err = aRouter.Matcher.Match(method, URI); err != nil {
+			return aRouter, nil
 		}
 	}
 
 	var available = []string{}
-	for template := range routes {
+	for template := range routers {
 		available = append(available, r.Config.APIPrefix+template)
 	}
-	return nil, fmt.Errorf("failed to match APIURI: %v, avail: %v", r.Config.APIPrefix+URI, available)
+	return nil, fmt.Errorf("%w, avail: %v", err, available)
 }
 
 func (r *Service) reloadResourceIfNeeded(ctx context.Context) error {
+	if !r.routesReloaded {
+		return r.reloadResource(ctx)
+	}
+
+	go func() {
+		err := r.reloadResource(ctx)
+		if err != nil {
+			fmt.Println(fmt.Errorf("couldn't reload resource in background due to %w", err).Error())
+		}
+	}()
+
+	return nil
+}
+
+func (r *Service) reloadResource(ctx context.Context) error {
 	if err := r.reloadDataResourceIfNeeded(ctx); err != nil {
 		log.Printf("failed to reload view reousrces: %v", err)
 	}
-	return r.reloadRouterResourcesIfNeeded(ctx)
+	if err := r.reloadRouterResourcesIfNeeded(ctx); err != nil {
+		return err
+	}
+
+	r.routesReloaded = true
+	return nil
 }
 
 func (r *Service) reloadRouterResourcesIfNeeded(ctx context.Context) error {
@@ -297,9 +319,11 @@ func (r *Service) apiURI(URL string) string {
 
 func (r *Service) Routes(route string) []*router.Route {
 	routes := make([]*router.Route, 0)
+
 	for _, viewRouter := range r.routers {
 		routes = append(routes, viewRouter.Routes(route)...)
 	}
+
 	return routes
 }
 
@@ -328,6 +352,7 @@ func New(ctx context.Context, config *Config, visitors codec.Visitors, types vie
 	if err = initSecrets(ctx, config); err != nil {
 		return nil, err
 	}
+
 	err = srv.reloadResourceIfNeeded(ctx)
 	return srv, err
 }
@@ -343,67 +368,4 @@ func initSecrets(ctx context.Context, config *Config) error {
 		}
 	}
 	return nil
-}
-
-//MatchURI parses URIs to extract {<param>} defined in templateURI from requestURI, it returns extracted parameters and flag if requestURI matched templateURI
-func MatchURI(templateURI, requestURI string) bool {
-	var expectingValue, expectingName bool
-	var name, value string
-	maxLength := len(templateURI) + len(requestURI)
-	var requestURIIndex, templateURIIndex int
-
-	questionMarkPosition := strings.Index(requestURI, "?")
-	if questionMarkPosition != -1 {
-		requestURI = string(requestURI[:questionMarkPosition])
-	}
-
-	for k := 0; k < maxLength; k++ {
-		var requestChar, routingChar string
-		if requestURIIndex < len(requestURI) {
-			requestChar = requestURI[requestURIIndex : requestURIIndex+1]
-		}
-		if templateURIIndex < len(templateURI) {
-			routingChar = templateURI[templateURIIndex : templateURIIndex+1]
-		}
-		if (!expectingValue && !expectingName) && requestChar == routingChar && routingChar != "" {
-			requestURIIndex++
-			templateURIIndex++
-			continue
-		}
-
-		if routingChar == "}" {
-			expectingName = false
-			templateURIIndex++
-		}
-
-		if expectingValue && requestChar == "/" {
-			expectingValue = false
-		}
-
-		if expectingName && templateURIIndex < len(templateURI) {
-			name += routingChar
-			templateURIIndex++
-		}
-
-		if routingChar == "{" {
-			expectingValue = true
-			expectingName = true
-			templateURIIndex++
-
-		}
-
-		if expectingValue && requestURIIndex < len(requestURI) {
-			value += requestChar
-			requestURIIndex++
-		}
-
-		if !expectingValue && !expectingName && len(name) > 0 {
-			name = ""
-			value = ""
-		}
-
-	}
-
-	matched := requestURIIndex == len(requestURI) && templateURIIndex == len(templateURI)
-	return matched
 }

@@ -124,13 +124,13 @@ func (j *Joins) Index() map[string]*Join {
 	return result
 }
 
-func ParseSQLx(SQL string) (*Table, map[string]*TableParam, error) {
+func ParseSQLx(SQL string, uriParams map[string]bool) (*Table, map[string]*TableParam, error) {
 	aQuery, err := parser.ParseQuery(SQL)
 	if aQuery == nil {
 		return nil, nil, err
 	}
 	var tables = map[string]*Table{}
-	table, err := buildTable(aQuery.From.X)
+	table, err := buildTable(aQuery.From.X, uriParams)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -144,7 +144,7 @@ func ParseSQLx(SQL string) (*Table, map[string]*TableParam, error) {
 
 	if len(aQuery.Joins) > 0 {
 		for _, join := range aQuery.Joins {
-			if err := processJoin(join, tables, table.Columns, dataParameters); err != nil {
+			if err := processJoin(join, tables, table.Columns, dataParameters, uriParams); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -152,7 +152,7 @@ func ParseSQLx(SQL string) (*Table, map[string]*TableParam, error) {
 	return table, dataParameters, nil
 }
 
-func buildTable(x node.Node) (*Table, error) {
+func buildTable(x node.Node, uriParams map[string]bool) (*Table, error) {
 	//var err error
 	table := &Table{}
 	switch actual := x.(type) {
@@ -179,7 +179,7 @@ func buildTable(x node.Node) (*Table, error) {
 			table.InnerSQL = innerSQL
 			table.InnerAlias = innerQuery.From.Alias
 		}
-		table.ViewMeta, err = ast.Parse(table.SQL)
+		table.ViewMeta, err = ast.Parse(table.SQL, uriParams)
 		if err != nil {
 			return nil, err
 		}
@@ -231,8 +231,8 @@ func appendParamExpr(x node.Node, op string, y node.Node, list *[]string) {
 	}
 }
 
-func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns, dataParameters map[string]*TableParam) error {
-	relTable, err := buildTable(join.With)
+func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns, dataParameters map[string]*TableParam, params map[string]bool) error {
+	relTable, err := buildTable(join.With, params)
 	if err != nil {
 		return err
 	}
@@ -364,22 +364,25 @@ func extractSelector(n node.Node, left bool) *expr.Selector {
 func selectItemToColumn(query *query.Select) Columns {
 	var result []*Column
 	for _, item := range query.List {
-		switch actual := item.Expr.(type) {
-		case *expr.Ident:
-			result = append(result, &Column{Name: actual.Name, Alias: item.Alias})
-		case *expr.Selector:
-			result = append(result, &Column{Name: parser.Stringify(actual.X), Ns: actual.Name, Alias: item.Alias})
-		case *expr.Star:
-			switch star := actual.X.(type) {
-			case *expr.Ident:
-				result = append(result, &Column{Name: star.Name, Except: actual.Except})
-			case *expr.Selector:
-				result = append(result, &Column{Name: parser.Stringify(star.X), Ns: star.Name, Except: actual.Except})
-			}
-		case *expr.Literal:
-			result = append(result, &Column{Name: "", Alias: item.Alias, DataType: actual.Kind})
-
-		}
+		appendItem(item, &result)
 	}
 	return result
+}
+
+func appendItem(item *query.Item, result *[]*Column) {
+	switch actual := item.Expr.(type) {
+	case *expr.Ident:
+		*result = append(*result, &Column{Name: actual.Name, Alias: item.Alias})
+	case *expr.Selector:
+		*result = append(*result, &Column{Name: parser.Stringify(actual.X), Ns: actual.Name, Alias: item.Alias})
+	case *expr.Star:
+		switch star := actual.X.(type) {
+		case *expr.Ident:
+			*result = append(*result, &Column{Name: star.Name, Except: actual.Except})
+		case *expr.Selector:
+			*result = append(*result, &Column{Name: parser.Stringify(star.X), Ns: star.Name, Except: actual.Except})
+		}
+	case *expr.Literal:
+		*result = append(*result, &Column{Name: "", Alias: item.Alias, DataType: actual.Kind})
+	}
 }

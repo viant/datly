@@ -1,0 +1,17 @@
+parameters:
+  - assumed: true
+    datatype: string
+    id: tID
+    kind: path
+    name: tID
+    required: true
+    typer:
+      columnname: T1.ID
+source: |-
+  SELECT *, (
+      SELECT abc
+      FROM T2
+      WHERE 1=2
+  ) as abc FROM T1
+  WHERE 1=1
+  AND T1.ID = $tID

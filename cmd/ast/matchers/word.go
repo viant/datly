@@ -2,7 +2,6 @@ package matchers
 
 import (
 	"github.com/viant/parsly"
-	"github.com/viant/parsly/matcher"
 )
 
 type word struct {
@@ -13,7 +12,8 @@ func (w *word) Match(cursor *parsly.Cursor) (matched int) {
 	var current byte
 	for i := cursor.Pos; i < cursor.InputSize; i++ {
 		current = cursor.Input[i]
-		if (current >= 'a' && current <= 'z' || current >= 'A' && current <= 'Z') || (w.matchAny && !matcher.IsWhiteSpace(current)) {
+
+		if (current >= 'a' && current <= 'z' || current >= 'A' && current <= 'Z') || (w.matchAny && isAllowedSpecialChar(current)) {
 			matched++
 			continue
 		}
@@ -26,4 +26,8 @@ func (w *word) Match(cursor *parsly.Cursor) (matched int) {
 
 func NewWordMatcher(matchAny bool) parsly.Matcher {
 	return &word{matchAny: matchAny}
+}
+
+func isAllowedSpecialChar(char byte) bool {
+	return char == '$' || char == '.' || char == '_' || (char >= '0' && char <= '9')
 }
