@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"time"
 	"unsafe"
 )
 
@@ -604,14 +603,14 @@ func (r *Router) logAudit(request *http.Request) {
 		Headers: request.Header,
 	})
 
-	fmt.Printf("[LOGGER]: Time %s, %v\n", time.Now(), string(asBytes))
+	fmt.Printf("%v\n", string(asBytes))
 }
 
 func (r *Router) logMetrics(URI string, metrics []*reader.Metric) {
 	asBytes, _ := goJson.Marshal(struct {
-		URI    string
-		Metric []*reader.Metric
-	}{URI: URI, Metric: metrics})
+		URI     string
+		Metrics []*reader.Metric
+	}{URI: URI, Metrics: metrics})
 
-	fmt.Printf("[LOGGER]: Time %s, %v\n", time.Now(), string(asBytes))
+	fmt.Printf("%v\n", string(asBytes))
 }

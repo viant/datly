@@ -17,9 +17,10 @@ type (
 	}
 
 	Metric struct {
-		View    string
-		Elapsed string
-		Rows    int
+		View      string
+		Elapsed   string
+		ElapsedMs int
+		Rows      int
 	}
 )
 

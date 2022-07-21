@@ -516,6 +516,13 @@ func (r *Collector) Fetched() {
 	}
 }
 
+func (r *Collector) Len() int {
+	if r.dest != nil {
+		return (*reflect.SliceHeader)(xunsafe.AsPointer(r.dest)).Len
+	}
+	return 0
+}
+
 func (r *Collector) Slice() (unsafe.Pointer, *xunsafe.Slice) {
 	return xunsafe.AsPointer(r.dest), r.slice
 }
