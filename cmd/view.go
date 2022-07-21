@@ -13,7 +13,6 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/metadata"
-	"github.com/viant/toolbox"
 	"github.com/viant/toolbox/format"
 	"log"
 	"strings"
@@ -50,9 +49,6 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 
 		SQL := strings.TrimSpace(string(SQLData))
 		SQL = extractSetting(strings.TrimSpace(string(SQLData)), routeSetting)
-
-		toolbox.Dump(routeSetting)
-
 		if xTable, dataViewParams, err = ParseSQLx(SQL); err != nil {
 			log.Println(err)
 		}
