@@ -43,6 +43,7 @@ type (
 		Info             openapi3.Info
 		_visitors        codec.Visitors
 		ColumnsDiscovery bool
+		cfs              afs.Service
 	}
 
 	Logger struct {
@@ -111,7 +112,7 @@ func (r *Resource) Init(ctx context.Context) error {
 
 		parent, name := url.Split(r.SourceURL, file.Scheme)
 		metaURL := url.Join(parent, ".meta", name)
-		r.ColumnsCache = discover.New(metaURL)
+		r.ColumnsCache = discover.New(metaURL, r.cfs)
 		if columnCacheExists = r.ColumnsCache.Exists(ctx); columnCacheExists {
 			if err := r.ColumnsCache.Load(ctx); err != nil {
 				return err
@@ -197,11 +198,12 @@ func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, visitor
 		return nil, err
 	}
 
-	resource := &Resource{SourceURL: URL}
+	resource := &Resource{SourceURL: URL, cfs: fs}
 	err = toolbox.DefaultConverter.AssignConverted(resource, aMap)
 	if err != nil {
 		return nil, err
 	}
+	resource.cfs = fs
 	if resource.Resource == nil {
 		return nil, fmt.Errorf("resource was empty: %v", URL)
 	}

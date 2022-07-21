@@ -18,7 +18,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.5
 	github.com/viant/afs v1.16.1-0.20220708154004-5cc767a16d95
-	github.com/viant/afsc v1.8.1-0.20220707193227-b701c18cb4ed
+	github.com/viant/afsc v1.8.1-0.20220721172758-a0713d05bfdd
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.0.0-20220525183022-c2f9e012181a
 	github.com/viant/cloudless v1.1.1-0.20220302185825-1e29705ac362

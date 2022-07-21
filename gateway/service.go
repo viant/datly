@@ -311,6 +311,8 @@ func New(ctx context.Context, config *Config, visitors codec.Visitors, types vie
 		return nil, err
 	}
 	URL, _ := furl.Split(config.RouteURL, file.Scheme)
+	cfs := cache.Singleton(URL)
+
 	srv := &Service{
 		visitors:             visitors,
 		metrics:              metrics,
@@ -318,7 +320,7 @@ func New(ctx context.Context, config *Config, visitors codec.Visitors, types vie
 		Config:               config,
 		mux:                  sync.RWMutex{},
 		fs:                   afs.New(),
-		cfs:                  cache.Singleton(URL),
+		cfs:                  cfs,
 		dataResources:        map[string]*view.Resource{},
 		routeResourceTracker: resource.New(config.RouteURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
 		dataResourceTracker:  resource.New(config.DependencyURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
