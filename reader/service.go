@@ -22,10 +22,6 @@ type Service struct {
 //Read select view from database based on View and assign it to dest. ParentDest has to be pointer.
 func (s *Service) Read(ctx context.Context, session *Session) error {
 	var err error
-	start := time.Now()
-	onFinish := session.View.Counter.Begin(start)
-	defer s.afterRead(session, &start, err, onFinish)
-
 	if err = session.Init(); err != nil {
 		return err
 	}
@@ -52,9 +48,12 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 	return nil
 }
 
-func (s *Service) afterRead(session *Session, start *time.Time, err error, onFinish counter.OnDone) {
+func (s *Service) afterRead(session *Session, collector *view.Collector, start *time.Time, err error, onFinish counter.OnDone) {
 	end := time.Now()
-	session.View.Logger.ReadTime(session.View.Name, start, &end, err)
+	viewName := collector.View().Name
+	session.View.Logger.ReadTime(viewName, start, &end, err)
+	//TODO add to metrics record read
+	session.Metrics = append(session.Metrics, &Metric{View: viewName, Elapsed: end.Sub(*start).String()})
 	if err != nil {
 		session.View.Counter.IncrementValue(Error)
 	} else {
@@ -64,6 +63,10 @@ func (s *Service) afterRead(session *Session, start *time.Time, err error, onFin
 }
 
 func (s *Service) readAll(ctx context.Context, session *Session, collector *view.Collector, wg *sync.WaitGroup, errorCollector *shared.Errors) {
+	start := time.Now()
+	onFinish := session.View.Counter.Begin(start)
+	defer s.afterRead(session, collector, &start, errorCollector.Error(), onFinish)
+
 	var collectorFetchEmitted bool
 	defer s.afterReadAll(collectorFetchEmitted, collector)
 

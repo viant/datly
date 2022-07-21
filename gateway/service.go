@@ -41,7 +41,7 @@ type Service struct {
 
 func (r *Service) View(location string) (*view.View, error) {
 	URI := strings.ReplaceAll(location, ".", "/")
-	router, err := r.match(URI)
+	aRouter, err := r.match(URI)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func (r *Service) View(location string) (*view.View, error) {
 	if index := strings.LastIndex(name, "/"); index != -1 {
 		name = name[index+1:]
 	}
-	return router.View(name)
+	return aRouter.View(name)
 }
 
 func (r *Service) Handle(writer http.ResponseWriter, request *http.Request) {
@@ -88,9 +88,9 @@ func (r *Service) handle(writer http.ResponseWriter, request *http.Request) erro
 	if idx := strings.Index(URI, "?"); idx != -1 {
 		routePath = URI[:idx]
 	}
-	router, err := r.match(routePath)
+	aRouter, err := r.match(routePath)
 	if err == nil {
-		err = router.Handle(writer, request)
+		err = aRouter.Handle(writer, request)
 		if err != nil {
 			err = fmt.Errorf("failed to route: %v, %v, %v %w", request.Method, request.RequestURI, request.URL.String(), err)
 		}
@@ -109,6 +109,7 @@ func (r *Service) match(URI string) (*router.Router, error) {
 	r.mux.RLock()
 	routes := r.routers
 	r.mux.RUnlock()
+
 	parts := strings.Split(URI, "/")
 	for i := len(parts); i > 0; i-- {
 		key := strings.Join(parts[:i], "/")
@@ -119,7 +120,12 @@ func (r *Service) match(URI string) (*router.Router, error) {
 			}
 		}
 	}
-	return nil, fmt.Errorf("failed to match APIURI: %v", r.Config.APIPrefix+URI)
+
+	var available = []string{}
+	for template := range routes {
+		available = append(available, r.Config.APIPrefix+template)
+	}
+	return nil, fmt.Errorf("failed to match APIURI: %v, avail: %v", r.Config.APIPrefix+URI, available)
 }
 
 func (r *Service) reloadResourceIfNeeded(ctx context.Context) error {
@@ -291,11 +297,9 @@ func (r *Service) apiURI(URL string) string {
 
 func (r *Service) Routes(route string) []*router.Route {
 	routes := make([]*router.Route, 0)
-
 	for _, viewRouter := range r.routers {
 		routes = append(routes, viewRouter.Routes(route)...)
 	}
-
 	return routes
 }
 
@@ -353,11 +357,9 @@ func MatchURI(templateURI, requestURI string) bool {
 
 	for k := 0; k < maxLength; k++ {
 		var requestChar, routingChar string
-
 		if requestURIIndex < len(requestURI) {
 			requestChar = requestURI[requestURIIndex : requestURIIndex+1]
 		}
-
 		if templateURIIndex < len(templateURI) {
 			routingChar = templateURI[templateURIIndex : templateURIIndex+1]
 		}

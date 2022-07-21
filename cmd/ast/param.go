@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlx/io/read/cache/ast"
+	"github.com/viant/toolbox"
 	"reflect"
 	"strings"
 )
@@ -62,6 +63,7 @@ outer:
 					aParam, ok := meta.ParamByName(paramName)
 					if !ok {
 						fmt.Printf("ParamName: %v, params: %v\n", paramName, meta.Parameters)
+						toolbox.Dump(meta.Parameters)
 						continue
 					}
 

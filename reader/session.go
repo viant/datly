@@ -7,12 +7,21 @@ import (
 )
 
 //Session groups view required to Read view
-type Session struct {
-	Dest      interface{} //slice
-	View      *view.View
-	Selectors *view.Selectors
-	Parent    *view.View
-}
+type (
+	Session struct {
+		Dest      interface{} //slice
+		View      *view.View
+		Selectors *view.Selectors
+		Parent    *view.View
+		Metrics   []*Metric
+	}
+
+	Metric struct {
+		View    string
+		Elapsed string
+		Rows    int
+	}
+)
 
 //Init initializes session
 func (s *Session) Init() error {

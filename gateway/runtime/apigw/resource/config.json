@@ -4,6 +4,7 @@
   "DependencyURL": "s3://${configBucket}/${appName}/dependencies/",
   "UseCacheFS": true,
   "SyncFrequencyMs": 2000,
+  "ColumnsDiscovery": true,
   "Secrets": [{
     "Kind": "gcp",
     "URL": "aws://secretmanager/us-west-1/secret/dev/gcp/viant-e2e"

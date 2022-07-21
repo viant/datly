@@ -26,7 +26,8 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		return nil
 	}
 	route := &router.Resource{
-		Resource: &view.Resource{},
+		ColumnsDiscovery: true,
+		Resource:         &view.Resource{},
 	}
 	if options.SQLLocation != "" && url.Scheme(options.SQLLocation, "e") == "e" {
 		parent, _ := url.Split(options.RouterURL(), file.Scheme)
@@ -332,7 +333,7 @@ func buildMainView(options *Options, generate *Generate, route *router.Resource)
 		Table:   generate.Table,
 		FromURL: options.SQLLocation,
 		Selector: &view.Config{
-			Limit: 40,
+			Limit: 25,
 			Constraints: &view.Constraints{
 				Filterable: []string{"*"},
 				Criteria:   true,
