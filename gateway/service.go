@@ -85,10 +85,7 @@ func (r *Service) handle(writer http.ResponseWriter, request *http.Request) erro
 		URL := "https://" + host + "/" + URI
 		request.URL, err = url.Parse(URL)
 	}
-	if index := strings.Index(URI, r.Config.APIPrefix); index != -1 {
-		URI = URI[index+len(r.Config.APIPrefix):]
-		request.RequestURI = r.Config.APIPrefix + URI
-	}
+
 	routePath := URI
 	if idx := strings.Index(URI, "?"); idx != -1 {
 		routePath = URI[:idx]
@@ -118,7 +115,7 @@ func (r *Service) match(method, URI string) (*router.Router, error) {
 
 	var err error
 	for _, aRouter := range routers {
-		if _, err = aRouter.Matcher.Match(method, URI); err != nil {
+		if _, err = aRouter.Matcher.Match(method, URI); err == nil {
 			return aRouter, nil
 		}
 	}
@@ -175,7 +172,7 @@ func (r *Service) reloadRouterResourcesIfNeeded(ctx context.Context) error {
 			if _, ok := routers[key]; ok {
 				return fmt.Errorf("duplicate resource APIURI: %v,-> %v", key, item.SourceURL)
 			}
-			routers[key] = router.New(item)
+			routers[key] = router.New(item, router.ApiPrefix(r.Config.APIPrefix))
 		}
 		updatedResource = append(updatedResource, item)
 	}

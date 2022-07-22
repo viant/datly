@@ -14,10 +14,10 @@ import (
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
-	"github.com/viant/toolbox"
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -44,16 +44,17 @@ var debugEnabled = os.Getenv("DATLY_DEBUG") != ""
 
 type (
 	Router struct {
-		resource   *Resource
-		viewRouter *toolbox.ServiceRouter
-		index      map[string][]int
-		routes     Routes
-		Matcher    *Matcher
+		resource *Resource
+		index    map[string][]int
+		routes   Routes
+		Matcher  *Matcher
 	}
 
 	BytesReadCloser struct {
 		bytes *bytes.Buffer
 	}
+
+	ApiPrefix string
 )
 
 func (b *BytesReadCloser) Read(p []byte) (int, error) {
@@ -69,61 +70,58 @@ func (r *Router) View(name string) (*view.View, error) {
 }
 
 func (r *Router) Handle(response http.ResponseWriter, request *http.Request) error {
-	if err := r.viewRouter.Route(response, request); err != nil {
+	route, err := r.Matcher.Match(request.Method, request.URL.Path)
+	if err != nil {
 		return err
 	}
 
-	return nil
+	return r.handleRoute(response, request, route)
 }
 
-func New(resource *Resource) *Router {
+func (r *Router) handleRoute(response http.ResponseWriter, request *http.Request, route *Route) error {
+	if request.Method == http.MethodOptions {
+		corsHandler(route.Cors)(response)
+		return nil
+	}
+
+	switch route.Service {
+	case ReaderServiceType:
+		r.viewHandler(route)(response, request)
+		return nil
+	}
+
+	return fmt.Errorf("unsupported service operation %v", request.Method)
+}
+
+func New(resource *Resource, options ...interface{}) *Router {
+	var apiPrefix string
+	for _, option := range options {
+		switch actual := option.(type) {
+		case ApiPrefix:
+			apiPrefix = string(actual)
+		}
+	}
+
 	router := &Router{
 		resource: resource,
 		index:    map[string][]int{},
 		routes:   resource.Routes,
 	}
 
-	router.Init(resource.Routes)
+	router.Init(resource.Routes, apiPrefix)
 
 	return router
 }
 
-func (r *Router) Init(routes Routes) {
+func (r *Router) Init(routes Routes, apiPrefix string) {
 	for _, route := range routes {
+		r.normalizeRouteURI(apiPrefix, route)
+
 		route._resource = r.resource.Resource
 	}
 
 	r.indexRoutes()
-	r.initServiceRouter()
 	r.initMatcher()
-}
-
-func (r *Router) initServiceRouter() {
-	routings := make([]toolbox.ServiceRouting, 0)
-
-	for i, route := range r.routes {
-		routings = append(routings, toolbox.ServiceRouting{
-			URI:        route.URI,
-			Handler:    r.viewHandler(r.routes[i]),
-			HTTPMethod: route.Method,
-			Parameters: []string{"@httpResponseWriter", "@httpRequest"},
-		})
-
-		if route.Cors != nil {
-			routings = append(routings, corsRouting(route))
-		}
-	}
-
-	r.viewRouter = toolbox.NewServiceRouter(routings...)
-}
-
-func corsRouting(route *Route) toolbox.ServiceRouting {
-	return toolbox.ServiceRouting{
-		URI:        route.URI,
-		Handler:    corsHandler(route.Cors),
-		HTTPMethod: http.MethodOptions,
-		Parameters: []string{"@httpResponseWriter"},
-	}
 }
 
 func corsHandler(cors *Cors) func(writer http.ResponseWriter) {
@@ -167,7 +165,12 @@ func (r *Router) Serve(serverPath string) error {
 }
 
 func (r *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	err := r.viewRouter.Route(writer, request)
+	route, err := r.Matcher.Match(request.Method, request.URL.Path)
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+	}
+
+	err = r.handleRoute(writer, request, route)
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
 	}
@@ -619,4 +622,25 @@ func (r *Router) logMetrics(URI string, metrics []*reader.Metric) {
 
 func (r *Router) initMatcher() {
 	r.Matcher = NewMatcher(r.routes)
+}
+
+func (r *Router) normalizeRouteURI(prefix string, route *Route) {
+	if prefix == "" {
+		return
+	}
+
+	if strings.HasPrefix(route.URI, prefix) {
+		return
+	}
+
+	if prefix[len(prefix)-1] == '/' {
+		prefix = prefix[:len(prefix)-1]
+	}
+
+	URI := route.URI
+	if URI != "" && URI[len(URI)-1] == '/' {
+		URI = URI[:len(URI)-1]
+	}
+
+	route.URI = path.Join(prefix, URI)
 }

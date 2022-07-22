@@ -2,6 +2,7 @@ package router
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 )
 
@@ -128,10 +129,15 @@ func (m *Matcher) getMethodMatcher(method string) (*Node, bool) {
 func (m *Matcher) init() {
 	m.methodIndex = map[string]int{}
 	for i, route := range m.Routes {
-		node := m.getOrCreateMatcher(route.Method)
-
 		uri := asRelative(route.URI)
+
+		node := m.getOrCreateMatcher(route.Method)
 		node.Add(i, uri)
+
+		if route.Cors != nil {
+			corsMatcher := m.getOrCreateMatcher(http.MethodOptions)
+			corsMatcher.Add(i, uri)
+		}
 	}
 }
 

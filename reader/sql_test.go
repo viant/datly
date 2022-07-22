@@ -100,7 +100,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:     "dataset001_events/",
 			description: `select statement with $PAGINATION`,
-			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS  LIMIT 10 OFFSET 5) AS t`,
+			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS  LIMIT 10 OFFSET 5 ) AS t`,
 			view: &view.View{
 				Columns: []*view.Column{
 					{
@@ -135,7 +135,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:     "dataset001_events/",
 			description: `select statement with View Criteria`,
-			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ) AS t`,
+			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS  ) AS t`,
 			view: &view.View{
 				Columns: []*view.Column{
 					{
@@ -197,7 +197,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:     "dataset001_events/",
 			description: `select statement with parameters`,
-			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS WHERE ID = ?) AS t`,
+			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS WHERE ID = ?  ) AS t`,
 			view: &view.View{
 				Columns: []*view.Column{
 					{
@@ -334,7 +334,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:     "dataset001_events/",
 			description: `select statement | selectors`,
-			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS) AS t  WHERE price > 10   ORDER BY Price LIMIT 100 OFFSET 10`,
+			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS   ORDER BY Price LIMIT 100 OFFSET 10) AS t WHERE price > 10`,
 			view: &view.View{
 				Columns: []*view.Column{
 					{

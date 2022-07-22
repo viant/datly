@@ -44,7 +44,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 		return "", nil, err
 	}
 
-	if aView.Template.IsActualTemplate() && relation != nil && aView.ShouldTryDiscover() {
+	if aView.Template.IsActualTemplate() && aView.ShouldTryDiscover() {
 		template = metadata.EnrichWithDiscover(template, true)
 	}
 
