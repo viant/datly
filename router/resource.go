@@ -116,6 +116,7 @@ func (r *Resource) Init(ctx context.Context) error {
 			if err := r.ColumnsCache.Load(ctx); err != nil {
 				return err
 			}
+			r.ColumnsCache.SourceURL = metaURL
 		}
 	}
 

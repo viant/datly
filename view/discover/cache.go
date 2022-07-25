@@ -43,12 +43,14 @@ func (c *Cache) Exists(ctx context.Context) bool {
 }
 
 func (c *Cache) Store(ctx context.Context) error {
+	sourceURL := c.SourceURL
+	c.SourceURL = "" //avoid writing absolute location
 	asBytes, err := yaml.Marshal(c)
 	if err != nil {
 		return err
 	}
 
-	return c.fs.Upload(ctx, c.SourceURL, file.DefaultFileOsMode, bytes.NewReader(asBytes))
+	return c.fs.Upload(ctx, sourceURL, file.DefaultFileOsMode, bytes.NewReader(asBytes))
 }
 
 func (c *Cache) Lookup(viewName string) view.Columns {
