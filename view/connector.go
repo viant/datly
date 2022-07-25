@@ -10,6 +10,7 @@ import (
 	"github.com/viant/scy/auth/gcp"
 	"github.com/viant/scy/auth/gcp/client"
 	"google.golang.org/api/option"
+	"time"
 )
 
 //Connector represents database/sql named connection config
@@ -19,9 +20,22 @@ type Connector struct {
 	Name   string        `json:",omitempty"`
 	Driver string        `json:",omitempty"`
 	DSN    string        `json:",omitempty"`
+
 	//TODO add secure password storage
-	db          *sql.DB
-	initialized bool
+	db                *sql.DB
+	initialized       bool
+	MaxIdleConns      int
+	ConnMaxIdleTimeMs int
+	MaxOpenConns      int
+	ConnMaxLifetimeMs int
+}
+
+func (c *Connector) ConnMaxIdleTime() time.Duration {
+	return time.Duration(c.ConnMaxIdleTimeMs) * time.Millisecond
+}
+
+func (c *Connector) ConnMaxLifetime() time.Duration {
+	return time.Duration(c.ConnMaxLifetimeMs) * time.Millisecond
 }
 
 //Init initializes connector. It is possible to inherit from other Connector using Ref _field.
@@ -65,7 +79,6 @@ func (c *Connector) Db() (*sql.DB, error) {
 	if c.db != nil {
 		return c.db, nil
 	}
-
 	var err error
 	dsn := c.DSN
 	var secret *scy.Secret
@@ -80,6 +93,11 @@ func (c *Connector) Db() (*sql.DB, error) {
 		c.setDriverOptions(secret)
 	}
 	c.db, err = sql.Open(c.Driver, dsn)
+
+	c.db.SetMaxIdleConns(c.MaxIdleConns)
+	c.db.SetConnMaxIdleTime(c.ConnMaxIdleTime())
+	c.db.SetMaxOpenConns(c.MaxOpenConns)
+	c.db.SetConnMaxLifetime(c.ConnMaxLifetime())
 	return c.db, err
 }
 
