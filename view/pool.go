@@ -84,10 +84,22 @@ func (d *db) connect(ctx context.Context, driver string, dsn string, c *DBConfig
 		return nil, err
 	}
 
-	aDb.SetMaxIdleConns(c.MaxIdleConns)
-	aDb.SetConnMaxIdleTime(c.ConnMaxIdleTime())
-	aDb.SetMaxOpenConns(c.MaxOpenConns)
-	aDb.SetConnMaxLifetime(c.ConnMaxLifetime())
+	if c.MaxIdleConns != 0 {
+		aDb.SetMaxIdleConns(c.MaxIdleConns)
+	}
+
+	if c.ConnMaxIdleTimeMs != 0 {
+		aDb.SetConnMaxIdleTime(c.ConnMaxIdleTime())
+	}
+
+	if c.MaxOpenConns != 0 {
+		aDb.SetMaxOpenConns(c.MaxOpenConns)
+	}
+
+	if c.ConnMaxLifetimeMs != 0 {
+		aDb.SetConnMaxLifetime(c.ConnMaxLifetime())
+	}
+
 	return aDb, err
 }
 
