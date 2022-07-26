@@ -18,7 +18,7 @@ import (
 	"strings"
 )
 
-func (s *serverBuilder) buildViewWithRouter(config *standalone.Config) error {
+func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standalone.Config) error {
 	fs := afs.New()
 	generate := &s.options.Generate
 	if generate.Name == "" {
@@ -73,7 +73,7 @@ func (s *serverBuilder) buildViewWithRouter(config *standalone.Config) error {
 		}
 	}
 
-	if err := s.updateView(xTable, aView); err != nil {
+	if err := s.updateView(ctx, xTable, aView); err != nil {
 		return err
 	}
 
@@ -103,17 +103,17 @@ func (s *serverBuilder) buildViewWithRouter(config *standalone.Config) error {
 	if xTable != nil {
 		aView.CaseFormat = detectCaseFormat(xTable)
 		if len(xTable.Joins) > 0 {
-			if err := s.buildXRelations(viewRoute, xTable); err != nil {
+			if err := s.buildXRelations(ctx, viewRoute, xTable); err != nil {
 				return err
 			}
 		}
 		buildExcludeColumn(xTable, aView, viewRoute)
 	}
 
-	s.buildDataViewParams(dataViewParams)
+	s.buildDataViewParams(ctx, dataViewParams)
 	if len(s.options.Relations) > 0 {
 		meta := metadata.New()
-		err := s.buildRelations(meta, aView, viewRoute)
+		err := s.buildRelations(ctx, meta, aView, viewRoute)
 		if err != nil {
 			return err
 		}
@@ -155,7 +155,7 @@ func extractSetting(SQL string, settings *RouteSetting) string {
 	return SQL
 }
 
-func (s *serverBuilder) buildDataViewParams(params map[string]*TableParam) {
+func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*TableParam) {
 	if len(params) == 0 {
 		return
 	}
@@ -168,7 +168,7 @@ func (s *serverBuilder) buildDataViewParams(params map[string]*TableParam) {
 		}
 
 		var fields = make([]*view.Field, 0)
-		s.updateTableColumnTypes(table)
+		s.updateTableColumnTypes(ctx, table)
 		for _, column := range table.Inner {
 			name := column.Alias
 			if name == "" {
@@ -204,7 +204,7 @@ func (s *serverBuilder) buildDataViewParams(params map[string]*TableParam) {
 			continue
 		}
 
-		if err := s.updateView(table, relView); err != nil {
+		if err := s.updateView(ctx, table, relView); err != nil {
 			continue
 		}
 

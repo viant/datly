@@ -32,7 +32,7 @@ func lookupView(resource *view.Resource, name string) *view.View {
 	return nil
 }
 
-func (s *serverBuilder) buildXRelations(viewRoute *router.Route, xTable *Table) error {
+func (s *serverBuilder) buildXRelations(ctx context.Context, viewRoute *router.Route, xTable *Table) error {
 	if len(xTable.Joins) == 0 {
 		return nil
 	}
@@ -49,7 +49,7 @@ func (s *serverBuilder) buildXRelations(viewRoute *router.Route, xTable *Table) 
 			return err
 		}
 
-		if err := s.updateView(join.Table, relView); err != nil {
+		if err := s.updateView(ctx, join.Table, relView); err != nil {
 			return err
 		}
 
@@ -92,7 +92,7 @@ func (s *serverBuilder) buildXRelations(viewRoute *router.Route, xTable *Table) 
 		viewRoute.Index.Namespace[namespace(join.Table.Alias)] = join.Table.Alias + "#"
 
 		if len(join.Table.Joins) > 0 {
-			if err := s.buildXRelations(viewRoute, join.Table); err != nil {
+			if err := s.buildXRelations(ctx, viewRoute, join.Table); err != nil {
 				return err
 			}
 		}
@@ -105,13 +105,13 @@ func connectorRef(name string) *view.Connector {
 	return &view.Connector{Reference: shared.Reference{Ref: name}}
 }
 
-func (s *serverBuilder) updateView(table *Table, aView *view.View) error {
+func (s *serverBuilder) updateView(ctx context.Context, table *Table, aView *view.View) error {
 	if table == nil {
 		return nil
 	}
 
 	s.logger.Write([]byte(fmt.Sprintf("Discovering  %v metadata ...\n", aView.Name)))
-	s.updateTableColumnTypes(table)
+	s.updateTableColumnTypes(ctx, table)
 	s.updateParameterTypes(table)
 	if err := s.updateViewMeta(table, aView); err != nil {
 		return err
@@ -270,14 +270,14 @@ func (s *serverBuilder) updateColumnsConfig(table *Table, aView *view.View) erro
 	return nil
 }
 
-func (s *serverBuilder) buildRelations(meta *metadata.Service, aView *view.View, viewRoute *router.Route) error {
+func (s *serverBuilder) buildRelations(ctx context.Context, meta *metadata.Service, aView *view.View, viewRoute *router.Route) error {
 	pk := []sink.Key{}
 	conn, ok := s.connectors[s.options.DbName]
 	if !ok {
 		return nil
 	}
 
-	db, err := conn.Db()
+	db, err := conn.DB(ctx)
 	if err != nil {
 		return err
 	}

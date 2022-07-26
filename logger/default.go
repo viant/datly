@@ -8,6 +8,10 @@ import (
 type defaultLogger struct {
 }
 
+func (d *defaultLogger) Log() Log {
+	return d.log
+}
+
 func (d *defaultLogger) OverallReadTime() ReadTime {
 	return d.logOverallReadTime
 }
@@ -40,4 +44,8 @@ func (d *defaultLogger) ReadingData() ReadingData {
 
 func (d *defaultLogger) logOverallReadTime(viewName string, start *time.Time, end *time.Time, err error) {
 	fmt.Printf("[LOGGER] Overall reading view from main View %v took: %v, err: %v\n", viewName, end.Sub(*start), err)
+}
+
+func (d *defaultLogger) log(message string) {
+	fmt.Printf("[LOGGER] %v\n", message)
 }

@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"fmt"
 	"github.com/viant/datly/shared"
 	"os"
 	"time"
@@ -18,6 +19,7 @@ type (
 		readingData       ReadingData
 		objectReconciling ObjectReconciling
 		columnsDetection  ColumnsDetection
+		log               Log
 	}
 )
 
@@ -76,6 +78,15 @@ func (l *Adapter) Inherit(adapter *Adapter) {
 	l.readingData = adapter.readingData
 	l.objectReconciling = adapter.objectReconciling
 	l.columnsDetection = adapter.columnsDetection
+	l.log = adapter.log
+}
+
+func (l *Adapter) LogDatabaseErr(err error) {
+	if l.log == nil {
+		return
+	}
+
+	l.log(fmt.Sprintf("error occured while fetching data from db: %v", err))
 }
 
 func NewLogger(name string, logger Logger) *Adapter {
@@ -92,6 +103,7 @@ func NewLogger(name string, logger Logger) *Adapter {
 		readingData:       logger.ReadingData(),
 		objectReconciling: logger.ObjectReconciling(),
 		columnsDetection:  logger.ColumnsDetection(),
+		log:               logger.Log(),
 	}
 }
 

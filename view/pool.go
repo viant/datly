@@ -1,6 +1,7 @@
 package view
 
 import (
+	"context"
 	"database/sql"
 	as "github.com/aerospike/aerospike-client-go"
 	"strconv"
@@ -55,9 +56,9 @@ func newClientPool() *aerospikePool {
 	return &aerospikePool{index: map[string]*aerospikeClient{}}
 }
 
-func (d *db) connectWithLock(driver string, dsn string, config *DBConfig) (*sql.DB, error) {
+func (d *db) connectWithLock(ctx context.Context, driver string, dsn string, config *DBConfig) (*sql.DB, error) {
 	d.mutex.Lock()
-	aDb, err := d.connect(driver, dsn, config)
+	aDb, err := d.connect(ctx, driver, dsn, config)
 
 	if err == nil && d.actual != aDb {
 
@@ -68,11 +69,11 @@ func (d *db) connectWithLock(driver string, dsn string, config *DBConfig) (*sql.
 	return aDb, err
 }
 
-func (d *db) connect(driver string, dsn string, c *DBConfig) (*sql.DB, error) {
+func (d *db) connect(ctx context.Context, driver string, dsn string, c *DBConfig) (*sql.DB, error) {
 	if d.actual != nil {
-		if err := d.actual.Ping(); err != nil {
+		if err := d.actual.PingContext(ctx); err != nil {
 			d.actual = nil
-			return d.connect(driver, dsn, c)
+			return d.connect(ctx, driver, dsn, c)
 		}
 
 		return d.actual, nil
@@ -90,7 +91,7 @@ func (d *db) connect(driver string, dsn string, c *DBConfig) (*sql.DB, error) {
 	return aDb, err
 }
 
-func (p *dbPool) DB(driver, dsn string, config *DBConfig) (*sql.DB, error) {
+func (p *dbPool) DB(ctx context.Context, driver, dsn string, config *DBConfig) (*sql.DB, error) {
 	builder := &strings.Builder{}
 	builder.WriteString(strconv.Itoa(config.ConnMaxLifetimeMs))
 	builder.WriteByte('#')
@@ -107,7 +108,7 @@ func (p *dbPool) DB(driver, dsn string, config *DBConfig) (*sql.DB, error) {
 	actualKey := builder.String()
 	dbConn := p.getItem(actualKey)
 
-	return dbConn.connectWithLock(driver, dsn, config)
+	return dbConn.connectWithLock(ctx, driver, dsn, config)
 }
 
 func (p *dbPool) getItem(key string) *db {
@@ -132,4 +133,25 @@ func ResetAerospikePool() {
 
 func newPool() *dbPool {
 	return &dbPool{index: map[string]*db{}}
+}
+
+func (a *aerospikePool) Client(host string, port int) (*as.Client, error) {
+	aKey := host + ":" + strconv.Itoa(port)
+	aClient := a.clientWithLock(aKey)
+
+	return aClient.connect(host, port)
+
+}
+
+func (a *aerospikePool) clientWithLock(key string) *aerospikeClient {
+	a.mutex.Lock()
+
+	client, ok := a.index[key]
+	if !ok {
+		client = &aerospikeClient{}
+		a.index[key] = client
+	}
+
+	a.mutex.Unlock()
+	return client
 }

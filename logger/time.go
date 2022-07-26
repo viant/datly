@@ -10,6 +10,10 @@ type TimeLogger struct {
 	defaultLogger defaultLogger
 }
 
+func (t *TimeLogger) Log() Log {
+	return t.defaultLogger.Log()
+}
+
 func (t *TimeLogger) OverallReadTime() ReadTime {
 	return func(viewName string, start *time.Time, end *time.Time, err error) {
 		if end.Sub(*start) < t.global {

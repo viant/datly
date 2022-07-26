@@ -29,10 +29,10 @@ type (
 	}
 
 	DBConfig struct {
-		MaxIdleConns      int
-		ConnMaxIdleTimeMs int
-		MaxOpenConns      int
-		ConnMaxLifetimeMs int
+		MaxIdleConns      int `json:",omitempty" yaml:",omitempty"`
+		ConnMaxIdleTimeMs int `json:",omitempty" yaml:",omitempty"`
+		MaxOpenConns      int `json:",omitempty" yaml:",omitempty"`
+		ConnMaxLifetimeMs int `json:",omitempty" yaml:",omitempty"`
 	}
 )
 
@@ -73,11 +73,13 @@ func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 	return nil
 }
 
-//Db creates connection to the DB.
+//DB creates connection to the DB.
 //It is important to not close the DB since the connection is shared.
-func (c *Connector) Db() (*sql.DB, error) {
+func (c *Connector) DB(ctx context.Context) (*sql.DB, error) {
 	if c.db != nil {
-		return c.db, nil
+		if err := c.db.PingContext(ctx); err == nil {
+			return c.db, nil
+		}
 	}
 
 	var err error
@@ -95,7 +97,7 @@ func (c *Connector) Db() (*sql.DB, error) {
 		c.setDriverOptions(secret)
 	}
 
-	c.db, err = aDbPool.DB(c.Driver, dsn, &c.DBConfig)
+	c.db, err = aDbPool.DB(ctx, c.Driver, dsn, &c.DBConfig)
 	return c.db, err
 }
 

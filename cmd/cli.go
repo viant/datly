@@ -80,7 +80,7 @@ func (s *serverBuilder) loadAndInitConfig(ctx context.Context) error {
 		return err
 	}
 
-	err = s.initConfig(aConfig)
+	err = s.initConfig(ctx, aConfig)
 	if err != nil {
 		return err
 	}

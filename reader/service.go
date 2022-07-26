@@ -3,6 +3,7 @@ package reader
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric/counter"
@@ -93,7 +94,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 		return
 	}
 
-	db, err := aView.Db()
+	db, err := aView.Db(ctx)
 	if err != nil {
 		errorCollector.Append(err)
 		return
@@ -189,7 +190,8 @@ func (s *Service) query(ctx context.Context, view *view.View, db *sql.DB, SQL st
 
 	reader, err := read.New(ctx, db, SQL, collector.NewItem(), options...)
 	if err != nil {
-		return err
+		view.Logger.LogDatabaseErr(err)
+		return fmt.Errorf("database error occured while fetching data for view %v", view.Name)
 	}
 
 	defer reader.Stmt().Close()
@@ -211,7 +213,8 @@ func (s *Service) query(ctx context.Context, view *view.View, db *sql.DB, SQL st
 	end := time.Now()
 	view.Logger.ReadingData(end.Sub(begin), SQL, readData, args, err)
 	if err != nil {
-		return err
+		view.Logger.LogDatabaseErr(err)
+		return fmt.Errorf("database error occured while fetching data for view %v", view.Name)
 	}
 
 	return nil

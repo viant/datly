@@ -21,7 +21,7 @@ func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column,
 
 	columns, SQL, err := detectColumns(ctx, actualSQL, v)
 	if err != nil {
-		if err != nil && !evaluated {
+		if !evaluated {
 			fmt.Println(fmt.Errorf("failed to detect columns using velocity engine and SQL:  %v  due to the %w\n", SQL, err).Error())
 
 			columns, SQL, err = detectColumns(ctx, v.Source(), v)
@@ -81,13 +81,13 @@ func detectColumns(ctx context.Context, SQL string, v *View) ([]*Column, string,
 		return nil, "", err
 	}
 
-	db, err := v.Connector.Db()
+	aDb, err := v.Connector.DB(ctx)
 
 	if err != nil {
 		return nil, SQL, err
 	}
 
-	query, err := db.QueryContext(ctx, SQL, args...)
+	query, err := aDb.QueryContext(ctx, SQL, args...)
 	if err != nil {
 		return nil, SQL, err
 	}
@@ -98,7 +98,7 @@ func detectColumns(ctx context.Context, SQL string, v *View) ([]*Column, string,
 	}
 
 	ioColumns := io.TypesToColumns(types)
-	columnsMetadata, err := columnsMetadata(ctx, db, v, ioColumns)
+	columnsMetadata, err := columnsMetadata(ctx, aDb, v, ioColumns)
 	if err != nil {
 		return nil, SQL, err
 	}
