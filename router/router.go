@@ -219,10 +219,7 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 func (r *Router) writeResponseWithErrorHandler(response http.ResponseWriter, request *http.Request, ctx context.Context, route *Route, selectors *view.Selectors, cacheEntry *cache.Entry) {
 	httpCode, err := r.readAndWriteResponse(response, request, ctx, route, selectors, cacheEntry)
 	if err != nil {
-		httpCode, err = r.normalizeErr(err, httpCode)
-		message, _ := goJson.Marshal(err)
-		response.Write(message)
-		response.WriteHeader(httpCode)
+		r.writeErr(response, route, err, httpCode)
 	}
 }
 

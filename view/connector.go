@@ -38,7 +38,7 @@ func (c *Connector) ConnMaxLifetime() time.Duration {
 	return time.Duration(c.ConnMaxLifetimeMs) * time.Millisecond
 }
 
-//Init initializes connector. It is possible to inherit from other Connector using Ref _field.
+//Init initializes connector.
 //If Ref is specified, then Connector with the name has to be registered in Connectors
 func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 	if c.initialized {
@@ -59,15 +59,15 @@ func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 		return err
 	}
 
-	db, err := c.Db()
-	if err != nil {
-		return err
-	}
-
-	err = db.PingContext(ctx)
-	if err != nil {
-		return err
-	}
+	//db, err := c.Db()
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//err = db.PingContext(ctx)
+	//if err != nil {
+	//	return err
+	//}
 
 	c.initialized = true
 	return nil

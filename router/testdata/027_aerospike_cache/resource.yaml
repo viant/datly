@@ -1,0 +1,27 @@
+Routes:
+  - URI: "/api/events"
+    Method: GET
+    DateFormat: 02-01-2006
+    View:
+      Ref: events_ref
+      Name: events
+
+Resource:
+  Views:
+    - Name: events_ref
+      Connector:
+        Ref: db
+      Table: events
+      Cache:
+        Type: aerospike
+        Location: 'https://127.0.0.1:3000/test'
+        SetName: aerospike
+        TimeToLiveMs: 10000
+      Selector:
+        Constraints:
+          Projection: true
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"
