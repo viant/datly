@@ -18,6 +18,7 @@ const (
 	OrderBy  QueryParam = "_orderby"
 	Limit    QueryParam = "_limit"
 	Criteria QueryParam = "_criteria"
+	Page     QueryParam = "_page"
 )
 
 func (q QueryParam) ParamType() reflect.Type {

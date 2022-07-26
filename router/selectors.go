@@ -62,6 +62,11 @@ func (b *selectorsBuilder) build(ctx context.Context, viewsDetails []*ViewDetail
 				errors.AddError(details.View.Name, param.Name, err)
 				return
 			}
+
+			if err := validateSelector(selector, details.View); err != nil {
+				errors.AddError(details.View.Name, "", err)
+				return
+			}
 		}(ctx, details, selector)
 	}
 
@@ -71,6 +76,14 @@ func (b *selectorsBuilder) build(ctx context.Context, viewsDetails []*ViewDetail
 	}
 
 	return nil, errors
+}
+
+func validateSelector(selector *view.Selector, aView *view.View) error {
+	if selector.Offset != 0 && selector.Limit == 0 && aView.Selector.Limit == 0 {
+		return fmt.Errorf("can't use offset if limit was not specified")
+	}
+
+	return nil
 }
 
 func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, views ...*ViewDetails) (*view.Selectors, error) {
@@ -111,6 +124,12 @@ func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.
 			}
 		}
 
+		if i == 0 || details.View.Selector.LimitParam == nil {
+			if err := b.populateLimit(ctx, selector, details, ns); err != nil {
+				return string(Limit), err
+			}
+		}
+
 		if i == 0 || details.View.Selector.OffsetParam == nil {
 			if err := b.populateOffset(ctx, selector, details, ns); err != nil {
 				return string(Offset), err
@@ -120,12 +139,6 @@ func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.
 		if i == 0 || details.View.Selector.OrderByParam == nil {
 			if err := b.populateOrderBy(ctx, selector, details, ns); err != nil {
 				return string(OrderBy), err
-			}
-		}
-
-		if i == 0 || details.View.Selector.LimitParam == nil {
-			if err := b.populateLimit(ctx, selector, details, ns); err != nil {
-				return string(Limit), err
 			}
 		}
 

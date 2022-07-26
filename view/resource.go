@@ -20,8 +20,12 @@ import (
 //Resource represents grouped view needed to build the View
 //can be loaded from i.e. yaml file
 type Resource struct {
-	Metrics     *Metrics
-	SourceURL   string `json:",omitempty"`
+	Metrics   *Metrics
+	SourceURL string `json:",omitempty"`
+
+	CacheProviders []*Cache
+	_cacheIndex    map[string]int
+
 	Connectors  []*Connector
 	_connectors Connectors
 
@@ -92,6 +96,7 @@ func (r *Resource) MergeFrom(resource *Resource, types Types) {
 	r.mergeParameters(resource)
 	r.mergeTypes(resource, types)
 	r.mergeConnectors(resource)
+	r.mergeProviders(resource)
 }
 
 func (r *Resource) mergeViews(resource *Resource) {
@@ -142,6 +147,7 @@ func (r *Resource) mergeTypes(resource *Resource, types Types) {
 		if _, ok := types[candidate.Name]; ok {
 			continue
 		}
+
 		if _, ok := views[candidate.Name]; !ok {
 			typeDef := *resource.Types[i]
 			r.Types = append(r.Types, &typeDef)
@@ -157,6 +163,7 @@ func (r *Resource) viewByName() map[string]*View {
 	for i, view := range r.Views {
 		index[view.Name] = r.Views[i]
 	}
+
 	return index
 }
 
@@ -218,6 +225,8 @@ func (r *Resource) GetConnectors() Connectors {
 //Init initializes Resource
 func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	types, visitors, cache, transforms := r.readOptions(options)
+	r.indexProviders()
+
 	r._typesIndex = map[reflect.Type]string{}
 	r._types = types.copy()
 	r._visitors = visitors
@@ -447,4 +456,35 @@ func (r *Resource) TypeName(p reflect.Type) (string, bool) {
 func (r *Resource) VisitorByName(name string) (codec.LifecycleVisitor, bool) {
 	visitor, ok := r._visitors[name]
 	return visitor, ok
+}
+
+func (r *Resource) CacheProvider(ref string) (*Cache, bool) {
+	index, ok := r._cacheIndex[ref]
+	if !ok {
+		return nil, false
+	}
+
+	return r.CacheProviders[index], ok
+}
+
+func (r *Resource) indexProviders() {
+	r._cacheIndex = map[string]int{}
+	for i, provider := range r.CacheProviders {
+		if provider.Name == "" {
+			continue
+		}
+
+		r._cacheIndex[provider.Name] = i
+	}
+}
+
+func (r *Resource) mergeProviders(resource *Resource) {
+	for _, provider := range resource.CacheProviders {
+		if _, ok := r.CacheProvider(provider.Name); ok {
+			continue
+		}
+
+		r._cacheIndex[provider.Name] = len(r.CacheProviders)
+		r.CacheProviders = append(r.CacheProviders, provider)
+	}
 }

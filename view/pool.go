@@ -2,6 +2,7 @@ package view
 
 import (
 	"database/sql"
+	as "github.com/aerospike/aerospike-client-go"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,9 +18,42 @@ type (
 		mutex  sync.Mutex
 		actual *sql.DB
 	}
+
+	aerospikePool struct {
+		index map[string]*aerospikeClient
+		mutex sync.Mutex
+	}
+
+	aerospikeClient struct {
+		actual *as.Client
+		mutex  sync.Mutex
+	}
 )
 
-var aPool = newPool()
+func (c *aerospikeClient) connect(host string, port int) (*as.Client, error) {
+	c.mutex.Lock()
+	client, err := c.connectIfNeeded(host, port)
+	c.mutex.Unlock()
+	return client, err
+}
+
+func (c *aerospikeClient) connectIfNeeded(host string, port int) (*as.Client, error) {
+	client := c.actual
+	if client != nil && client.IsConnected() {
+		return client, nil
+	}
+
+	var err error
+	c.actual, err = as.NewClient(host, port)
+	return c.actual, err
+}
+
+var aDbPool = newPool()
+var aClientPool = newClientPool()
+
+func newClientPool() *aerospikePool {
+	return &aerospikePool{index: map[string]*aerospikeClient{}}
+}
 
 func (d *db) connectWithLock(driver string, dsn string, config *DBConfig) (*sql.DB, error) {
 	d.mutex.Lock()
@@ -89,7 +123,11 @@ func (p *dbPool) getItem(key string) *db {
 }
 
 func ResetDBPool() {
-	aPool = newPool()
+	aDbPool = newPool()
+}
+
+func ResetAerospikePool() {
+	aClientPool = newClientPool()
 }
 
 func newPool() *dbPool {

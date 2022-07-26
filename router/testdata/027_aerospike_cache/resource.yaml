@@ -7,15 +7,19 @@ Routes:
       Name: events
 
 Resource:
+  CacheProviders:
+    - Name: aerospike
+      Location: ${view.Name}
+      Provider: 'aerospike://127.0.0.1:3000/test'
+      TimeToLiveMs: 10000
+
   Views:
     - Name: events_ref
       Connector:
         Ref: db
       Table: events
       Cache:
-        Provider: 'aerospike://127.0.0.1:3000/test'
-        Location: aerospike
-        TimeToLiveMs: 10000
+        Ref: aerospike
       Selector:
         Constraints:
           Projection: true

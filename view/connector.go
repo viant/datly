@@ -95,7 +95,7 @@ func (c *Connector) Db() (*sql.DB, error) {
 		c.setDriverOptions(secret)
 	}
 
-	c.db, err = aPool.DB(c.Driver, dsn, &c.DBConfig)
+	c.db, err = aDbPool.DB(c.Driver, dsn, &c.DBConfig)
 	return c.db, err
 }
 

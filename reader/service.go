@@ -179,7 +179,12 @@ func (s *Service) query(ctx context.Context, view *view.View, db *sql.DB, SQL st
 
 	var options = []option.Option{io.Resolve(collector.Resolve)}
 	if view.Cache != nil {
-		options = append(options, view.Cache.Service())
+		service, err := view.Cache.Service()
+		if err != nil {
+			return err
+		}
+
+		options = append(options, service)
 	}
 
 	reader, err := read.New(ctx, db, SQL, collector.NewItem(), options...)
