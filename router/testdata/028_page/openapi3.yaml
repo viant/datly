@@ -6,34 +6,18 @@ paths:
     /api/events:
         get:
             parameters:
-                - name: ev_criteria
-                  in: query
-                  description: allows to filter view events data that matches given criteria
-                  schema:
-                    type: string
-                - name: ev_limit
-                  in: query
-                  description: allows to limit events view data returned from db
-                  schema:
-                    type: integer
-                    format: int64
-                - name: ev_offset
+                - name: _offset
                   in: query
                   description: allows to skip first n  view events records, it has to be used alongside the limit
                   schema:
                     type: integer
                     format: int64
-                - name: ev_page
+                - name: _page
                   in: query
                   description: allows to skip first page * limit values, starting from 0 page. Has precedence over offset
                   schema:
                     type: string
-                - name: ev_orderby
-                  in: query
-                  description: allows to sort view events results
-                  schema:
-                    type: string
-                - name: ev_fields
+                - name: _fields
                   in: query
                   description: allows to control view events fields present in response
                   style: form

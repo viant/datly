@@ -590,6 +590,14 @@ func TestRouter(t *testing.T) {
 			expected:      `[{"Id":1,"Timestamp":"11-03-2019","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"15-03-2019","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"10-04-2019","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			extraRequests: 1,
 		},
+		{
+			description: "page",
+			resourceURI: "028_page",
+			uri:         "/api/events?_page=2",
+			method:      http.MethodGet,
+			visitors:    map[string]codec.LifecycleVisitor{},
+			expected:    `[{"Id":102,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {

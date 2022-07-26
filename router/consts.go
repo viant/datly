@@ -42,6 +42,8 @@ func (q QueryParam) Description(viewName string) string {
 		return fmt.Sprintf("allows to control view %v fields present in response", viewName)
 	case OrderBy:
 		return fmt.Sprintf("allows to sort view %v results", viewName)
+	case Page:
+		return fmt.Sprintf("allows to skip first page * limit values, starting from 0 page. Has precedence over offset")
 	}
 
 	return ""

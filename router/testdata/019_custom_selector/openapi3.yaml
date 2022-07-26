@@ -27,6 +27,11 @@ paths:
                     type: integer
                     description: Parameter Offset schema
                     format: int64
+                - name: _page
+                  in: query
+                  description: allows to skip first page * limit values, starting from 0 page. Has precedence over offset
+                  schema:
+                    type: string
                 - name: OrderBy
                   in: query
                   description: allows to sort view events results

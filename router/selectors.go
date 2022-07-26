@@ -285,6 +285,11 @@ func (b *selectorsBuilder) populateOffset(ctx context.Context, selector *view.Se
 func (b *selectorsBuilder) offsetValue(ctx context.Context, details *ViewDetails, ns string, selector *view.Selector) (int, error) {
 	param := details.View.Selector.OffsetParam
 	if param == nil {
+		pageValue := b.params.queryParam(ns+string(Page), "")
+		if pageValue != "" {
+			return b.pageOffset(pageValue, selector, details.View)
+		}
+
 		return parseInt(b.params.queryParam(ns+string(Offset), ""))
 	}
 
@@ -576,6 +581,20 @@ func (b *selectorsBuilder) buildFields(aView *view.View, selector *view.Selector
 	}
 
 	return nil
+}
+
+func (b *selectorsBuilder) pageOffset(pageValue string, selector *view.Selector, aView *view.View) (int, error) {
+	page, err := strconv.Atoi(pageValue)
+	if err != nil {
+		return 0, err
+	}
+
+	limit := aView.Selector.Limit
+	if selector.Limit != 0 {
+		limit = selector.Limit
+	}
+
+	return page * limit, nil
 }
 
 func canUseColumn(aView *view.View, columnName string) error {

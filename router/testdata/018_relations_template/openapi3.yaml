@@ -23,6 +23,11 @@ paths:
                   schema:
                     type: integer
                     format: int64
+                - name: ev_page
+                  in: query
+                  description: allows to skip first page * limit values, starting from 0 page. Has precedence over offset
+                  schema:
+                    type: string
                 - name: ev_orderby
                   in: query
                   description: allows to sort view events results

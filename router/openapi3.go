@@ -391,6 +391,10 @@ func (g *generator) viewParameters(aView *view.View, route *Route, mainView bool
 		return nil, err
 	}
 
+	if err := g.appendBuiltInParam(&parameters, route, aView, nil, Page, mainView); err != nil {
+		return nil, err
+	}
+
 	if err := g.appendBuiltInParam(&parameters, route, aView, aView.Selector.OrderByParam, OrderBy, mainView); err != nil {
 		return nil, err
 	}
@@ -416,7 +420,7 @@ func (g *generator) appendBuiltInParam(params *[]*openapi3.Parameter, route *Rou
 		if !aView.CanUseSelectorOrderBy() {
 			return nil
 		}
-	case Offset:
+	case Offset, Page:
 		if !aView.CanUseSelectorOffset() {
 			return nil
 		}
@@ -463,7 +467,7 @@ func (g *generator) convertParam(route *Route, param *view.Parameter, descriptio
 			*cachedParam = openapi3.Parameter{Ref: "#/components/parameters/" + param.Name}
 			g._parametersIndex[param.Name] = nil
 		}
-		
+
 		return &openapi3.Parameter{Ref: "#/components/parameters/" + param.Name}, true, nil
 	}
 
@@ -504,6 +508,7 @@ func (g *generator) appendDefaultParam(params *[]*openapi3.Parameter, route *Rou
 		aFalse := false
 		explode = &aFalse
 	}
+
 	for _, prefix := range prefixes {
 		schema, err := g.getOrGenerateSchema(route, paramType, false, "", "")
 		if err != nil {
