@@ -114,6 +114,22 @@ func TestRun(t *testing.T) {
 			dataURL:     "/v1/api/dev/events/1",
 			dataMethod:  http.MethodGet,
 		},
+		{
+			description: "cache hint",
+			URI:         "case008_cache_hint",
+			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly/generator/db.db", "-X=testdata/case008_cache_hint/events.sql"},
+			viewURL:     "/v1/api/meta/view/dev/events/1",
+			dataURL:     "/v1/api/dev/events/1",
+			dataMethod:  http.MethodGet,
+		},
+		{
+			description: "selector hint",
+			URI:         "case009_selector_hint",
+			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly/generator/db.db", "-X=testdata/case009_selector_hint/events.sql"},
+			viewURL:     "/v1/api/meta/view/dev/events/1",
+			dataURL:     "/v1/api/dev/events/1",
+			dataMethod:  http.MethodGet,
+		},
 	}
 
 	loader := afs.New()

@@ -32,7 +32,7 @@ func lookupView(resource *view.Resource, name string) *view.View {
 	return nil
 }
 
-func buildXRelations(options *Options, connectors map[string]*view.Connector, route *router.Resource, viewRoute *router.Route, xTable *Table) error {
+func (s *serverBuilder) buildXRelations(viewRoute *router.Route, xTable *Table) error {
 	if len(xTable.Joins) == 0 {
 		return nil
 	}
@@ -45,19 +45,21 @@ func buildXRelations(options *Options, connectors map[string]*view.Connector, ro
 			},
 		}
 
-		if _, err := addViewConn(options, connectors, route, relView); err != nil {
-			return err
-		}
-		if err := updateView(options, join.Table, relView, false); err != nil {
+		if _, err := s.addViewConn(s.options.Connector.DbName, relView); err != nil {
 			return err
 		}
 
-		route.Resource.AddViews(relView)
+		if err := s.updateView(join.Table, relView); err != nil {
+			return err
+		}
+
+		s.route.Resource.AddViews(relView)
 		var cardinality = view.Many
 		if join.ToOne {
 			cardinality = view.One
 		}
-		ownerView := lookupView(route.Resource, join.Owner.Ref)
+
+		ownerView := lookupView(s.route.Resource, join.Owner.Ref)
 		if ownerView == nil {
 			return fmt.Errorf("failed to lookup view: %v", join.Owner.Name)
 		}
@@ -82,7 +84,7 @@ func buildXRelations(options *Options, connectors map[string]*view.Connector, ro
 			IncludeColumn: true,
 		}
 		if join.Connector != "" {
-			relView.Connector = &view.Connector{Reference: shared.Reference{Ref: join.Connector}}
+			relView.Connector = connectorRef(join.Connector)
 		}
 		relView.Cache = join.Cache
 		ownerView.With = append(ownerView.With, withView)
@@ -90,7 +92,7 @@ func buildXRelations(options *Options, connectors map[string]*view.Connector, ro
 		viewRoute.Index.Namespace[namespace(join.Table.Alias)] = join.Table.Alias + "#"
 
 		if len(join.Table.Joins) > 0 {
-			if err := buildXRelations(options, connectors, route, viewRoute, join.Table); err != nil {
+			if err := s.buildXRelations(viewRoute, join.Table); err != nil {
 				return err
 			}
 		}
@@ -99,14 +101,23 @@ func buildXRelations(options *Options, connectors map[string]*view.Connector, ro
 	return nil
 }
 
-func updateView(options *Options, table *Table, aView *view.View, isMainView bool) error {
+func connectorRef(name string) *view.Connector {
+	return &view.Connector{Reference: shared.Reference{Ref: name}}
+}
+
+func (s *serverBuilder) updateView(table *Table, aView *view.View) error {
 	if table == nil {
 		return nil
 	}
-	fmt.Printf("Discovering  %v metadata ...\n", aView.Name)
-	updateTableColumnTypes(options, table)
-	updateParameterTypes(table)
-	if err := updateColumnsConfig(table, aView); err != nil {
+
+	s.logger.Write([]byte(fmt.Sprintf("Discovering  %v metadata ...\n", aView.Name)))
+	s.updateTableColumnTypes(table)
+	s.updateParameterTypes(table)
+	if err := s.updateViewMeta(table, aView); err != nil {
+		return err
+	}
+
+	if err := s.updateColumnsConfig(table, aView); err != nil {
 		return err
 	}
 
@@ -114,13 +125,40 @@ func updateView(options *Options, table *Table, aView *view.View, isMainView boo
 		return nil
 	}
 
-	if err := buildSQLSource(options, aView, table, isMainView); err != nil {
+	if err := s.buildSQLSource(aView, table); err != nil {
 		return err
 	}
 	return nil
 }
 
-func buildSQLSource(options *Options, aView *view.View, table *Table, mainView bool) error {
+func (s *serverBuilder) updateViewMeta(table *Table, aView *view.View) error {
+	viewHint := strings.TrimSpace(strings.Trim(table.ViewHint, "/**/"))
+	if viewHint == "" {
+		return nil
+	}
+
+	tableMeta := &TableMeta{
+		Selector: aView.Selector,
+	}
+
+	if err := json.Unmarshal([]byte(viewHint), tableMeta); err != nil {
+		return err
+	}
+
+	if tableMeta.Cache != nil {
+		aView.Cache = tableMeta.Cache
+	}
+
+	if tableMeta.Connector != "" {
+		if _, err := s.addViewConn(tableMeta.Connector, aView); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *serverBuilder) buildSQLSource(aView *view.View, table *Table) error {
 	templateParams := make([]*view.Parameter, len(table.ViewMeta.Parameters))
 	for i, param := range table.ViewMeta.Parameters {
 		templateParams[i] = convertMetaParameter(param)
@@ -132,11 +170,11 @@ func buildSQLSource(options *Options, aView *view.View, table *Table, mainView b
 
 	aView.Template = template
 
-	if err := updateTemplateSource(options, template, table, mainView); err != nil {
+	if err := s.updateTemplateSource(template, table); err != nil {
 		return err
 	}
 
-	if err := updateViewSource(options, aView, table, mainView); err != nil {
+	if err := s.updateViewSource(aView, table); err != nil {
 		return err
 	}
 
@@ -155,11 +193,11 @@ func convertMetaParameter(param *ast.Parameter) *view.Parameter {
 	}
 }
 
-func updateViewSource(options *Options, aView *view.View, table *Table, mainView bool) error {
+func (s *serverBuilder) updateViewSource(aView *view.View, table *Table) error {
 	if table.ViewMeta.From == "" {
 		return nil
 	}
-	URI, err := uploadSQL(options, table.Alias, table.ViewMeta.From, mainView)
+	URI, err := s.uploadSQL(table.Alias, table.ViewMeta.From)
 	if err != nil {
 		return err
 	}
@@ -168,12 +206,12 @@ func updateViewSource(options *Options, aView *view.View, table *Table, mainView
 	return nil
 }
 
-func updateTemplateSource(options *Options, template *view.Template, table *Table, mainView bool) error {
+func (s *serverBuilder) updateTemplateSource(template *view.Template, table *Table) error {
 	if table.ViewMeta.Source == "" {
 		return nil
 	}
 
-	URI, err := uploadSQL(options, table.Alias, table.ViewMeta.Source, mainView)
+	URI, err := s.uploadSQL(table.Alias, table.ViewMeta.Source)
 	if err != nil {
 		return err
 	}
@@ -182,8 +220,8 @@ func updateTemplateSource(options *Options, template *view.Template, table *Tabl
 	return nil
 }
 
-func uploadSQL(options *Options, fileName string, SQL string, mainView bool) (string, error) {
-	sourceURL := options.SQLURL(fileName, true)
+func (s *serverBuilder) uploadSQL(fileName string, SQL string) (string, error) {
+	sourceURL := s.options.SQLURL(fileName, true)
 	fs := afs.New()
 	if err := fs.Upload(context.Background(), sourceURL, file.DefaultFileOsMode, strings.NewReader(SQL)); err != nil {
 		return "", err
@@ -204,7 +242,7 @@ func uploadSQL(options *Options, fileName string, SQL string, mainView bool) (st
 	return sourceURL, nil
 }
 
-func updateColumnsConfig(table *Table, aView *view.View) error {
+func (s *serverBuilder) updateColumnsConfig(table *Table, aView *view.View) error {
 	query, err := parser.ParseQuery(table.SQL)
 	if err != nil {
 		return nil
@@ -232,19 +270,20 @@ func updateColumnsConfig(table *Table, aView *view.View) error {
 	return nil
 }
 
-func buildRelations(options *Options, meta *metadata.Service, connectors map[string]*view.Connector, route *router.Resource, aView *view.View, viewRoute *router.Route) error {
+func (s *serverBuilder) buildRelations(meta *metadata.Service, aView *view.View, viewRoute *router.Route) error {
 	pk := []sink.Key{}
-	conn, ok := connectors[options.DbName]
+	conn, ok := s.connectors[s.options.DbName]
 	if !ok {
 		return nil
 	}
+
 	db, err := conn.Db()
 	if err != nil {
 		return err
 	}
 	defer db.Close()
-	if err := meta.Info(context.Background(), db, info.KindPrimaryKeys, &pk, option.NewArgs("", options.Connector.DbName, options.Table)); err == nil && len(pk) > 0 {
-		for _, rel := range options.Relations {
+	if err := meta.Info(context.Background(), db, info.KindPrimaryKeys, &pk, option.NewArgs("", s.options.Connector.DbName, s.options.Table)); err == nil && len(pk) > 0 {
+		for _, rel := range s.options.Relations {
 			if !strings.Contains(rel, ":") {
 				return fmt.Errorf("invalid relation: %v, expected name:table", rel)
 			}
@@ -260,7 +299,7 @@ func buildRelations(options *Options, meta *metadata.Service, connectors map[str
 				relationCardinality = view.Many
 			}
 
-			fk, err := readForeignKeys(options, meta, db, relTable, relationCardinality)
+			fk, err := readForeignKeys(s.options, meta, db, relTable, relationCardinality)
 			if err != nil {
 				fmt.Printf("skiping relation: %v due to %v", rel, err)
 				continue
@@ -282,7 +321,7 @@ func buildRelations(options *Options, meta *metadata.Service, connectors map[str
 					Limit: 40,
 				},
 			}
-			route.Resource.AddViews(relView)
+			s.route.Resource.AddViews(relView)
 
 			caseFormat, err := format.NewCase(view.DetectCase(relName))
 			if err != nil {

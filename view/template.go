@@ -225,9 +225,9 @@ func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, paren
 
 	viewParam := &Param{}
 	if parent != nil {
-		viewParam = asParam(parent)
+		viewParam = asViewParam(parent)
 	} else {
-		viewParam = asParam(t._view)
+		viewParam = asViewParam(t._view)
 	}
 
 	SQL, err := t.sqlEvaluator.Evaluate(t.Schema.Type(), externalParams, presenceMap, viewParam)
@@ -264,7 +264,7 @@ func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMa
 	return newState.Buffer.String(), nil
 }
 
-func asParam(parent *View) *Param {
+func asViewParam(parent *View) *Param {
 	viewParam := &Param{
 		Name:  parent.Name,
 		Alias: parent.Alias,

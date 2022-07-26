@@ -18,20 +18,22 @@ import (
 	"strings"
 )
 
-func buildViewWithRouter(options *Options, config *standalone.Config, connectors map[string]*view.Connector) error {
+func (s *serverBuilder) buildViewWithRouter(config *standalone.Config) error {
 	fs := afs.New()
-	generate := &options.Generate
+	generate := &s.options.Generate
 	if generate.Name == "" {
 		return nil
 	}
-	route := &router.Resource{
+
+	s.route = &router.Resource{
 		ColumnsDiscovery: true,
 		Resource:         &view.Resource{},
 	}
-	if options.SQLLocation != "" && url.Scheme(options.SQLLocation, "e") == "e" {
-		parent, _ := url.Split(options.RouterURL(), file.Scheme)
-		destURL := url.Join(parent, options.SQLLocation)
-		sourceURL := normalizeURL(options.SQLLocation)
+
+	if s.options.SQLLocation != "" && url.Scheme(s.options.SQLLocation, "e") == "e" {
+		parent, _ := url.Split(s.options.RouterURL(), file.Scheme)
+		destURL := url.Join(parent, s.options.SQLLocation)
+		sourceURL := normalizeURL(s.options.SQLLocation)
 		if err := fs.Copy(context.Background(), sourceURL, destURL); err != nil {
 			return err
 		}
@@ -40,8 +42,8 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 	var xTable *Table
 	var dataViewParams map[string]*TableParam
 	routeSetting := &RouteSetting{}
-	if options.SQLXLocation != "" && url.Scheme(options.SQLLocation, "e") == "e" {
-		sourceURL := normalizeURL(options.SQLXLocation)
+	if s.options.SQLXLocation != "" && url.Scheme(s.options.SQLLocation, "e") == "e" {
+		sourceURL := normalizeURL(s.options.SQLXLocation)
 		SQLData, err := fs.DownloadWithURL(context.Background(), sourceURL)
 		if err != nil {
 			return err
@@ -57,20 +59,21 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 		}
 	}
 
-	aView := buildMainView(options, generate, route)
-	_, err := addViewConn(options, connectors, route, aView)
+	aView := s.buildMainView(s.options, generate)
+	_, err := s.addViewConn(s.options.Connector.DbName, aView)
 	if err != nil {
 		return err
 	}
-	connectorRegistry := options.Connector.Registry()
+
+	connectorRegistry := s.options.Connector.Registry()
 	if len(connectorRegistry) > 0 {
 		for k := range connectorRegistry {
-			route.Resource.AddConnectors(connectorRegistry[k])
-			connectors[k] = connectorRegistry[k]
+			s.route.Resource.AddConnectors(connectorRegistry[k])
+			s.connectors[k] = connectorRegistry[k]
 		}
 	}
 
-	if err := updateView(options, xTable, aView, true); err != nil {
+	if err := s.updateView(xTable, aView); err != nil {
 		return err
 	}
 
@@ -84,49 +87,49 @@ func buildViewWithRouter(options *Options, config *standalone.Config, connectors
 			AllowOrigins:     stringsPtr("*"),
 			ExposeHeaders:    stringsPtr("*"),
 		},
-		URI:    config.APIPrefix + options.RouterURI(routeSetting.URI),
+		URI:    config.APIPrefix + s.options.RouterURI(routeSetting.URI),
 		View:   &view.View{Reference: shared.Reference{Ref: aView.Name}},
 		Index:  router.Index{Namespace: map[string]string{}},
-		Output: router.Output{Style: router.Style(options.Output), Cardinality: view.Many, ResponseField: options.ResponseField()},
+		Output: router.Output{Style: router.Style(s.options.Output), Cardinality: view.Many, ResponseField: s.options.ResponseField()},
 	}
-	if options.RedirectSizeKb > 0 && options.RedirectURL != "" {
-		route.Redirect = &router.Redirect{TimeToLiveMs: 10000, MinSizeKb: options.RedirectSizeKb, StorageURL: options.RedirectURL}
+	if s.options.RedirectSizeKb > 0 && s.options.RedirectURL != "" {
+		s.route.Redirect = &router.Redirect{TimeToLiveMs: 10000, MinSizeKb: s.options.RedirectSizeKb, StorageURL: s.options.RedirectURL}
 	}
 
-	if options.Table != "" {
-		viewRoute.Index.Namespace[options.Namespace()] = options.Generate.Name
+	if s.options.Table != "" {
+		viewRoute.Index.Namespace[s.options.Namespace()] = s.options.Generate.Name
 	}
 	viewRoute.CaseFormat = "lc"
 	if xTable != nil {
 		aView.CaseFormat = detectCaseFormat(xTable)
 		if len(xTable.Joins) > 0 {
-			if err := buildXRelations(options, connectors, route, viewRoute, xTable); err != nil {
+			if err := s.buildXRelations(viewRoute, xTable); err != nil {
 				return err
 			}
 		}
 		buildExcludeColumn(xTable, aView, viewRoute)
 	}
 
-	buildDataViewParams(options, connectors, dataViewParams, route)
-	if len(options.Relations) > 0 {
+	s.buildDataViewParams(dataViewParams)
+	if len(s.options.Relations) > 0 {
 		meta := metadata.New()
-		err := buildRelations(options, meta, connectors, route, aView, viewRoute)
+		err := s.buildRelations(meta, aView, viewRoute)
 		if err != nil {
 			return err
 		}
 	}
 
-	updateURIParams(route, routeSetting)
-	updateParamReferences(route)
-	route.Routes = append(route.Routes, viewRoute)
+	updateURIParams(s.route, routeSetting)
+	updateParamReferences(s.route)
+	s.route.Routes = append(s.route.Routes, viewRoute)
 
-	route.With = []string{"connections"}
+	s.route.With = []string{"connections"}
 	dependency := &view.Resource{ModTime: TimeNow()}
-	dependency.Connectors = route.Resource.Connectors
-	depURL := options.DepURL("connections")
+	dependency.Connectors = s.route.Resource.Connectors
+	depURL := s.options.DepURL("connections")
 	_ = fsAddYAML(fs, depURL, dependency)
-	route.Resource.Connectors = nil
-	return fsAddYAML(fs, options.RouterURL(), route)
+	s.route.Resource.Connectors = nil
+	return fsAddYAML(fs, s.options.RouterURL(), s.route)
 }
 
 func extractSetting(SQL string, settings *RouteSetting) string {
@@ -152,7 +155,7 @@ func extractSetting(SQL string, settings *RouteSetting) string {
 	return SQL
 }
 
-func buildDataViewParams(options *Options, connectors map[string]*view.Connector, params map[string]*TableParam, route *router.Resource) {
+func (s *serverBuilder) buildDataViewParams(params map[string]*TableParam) {
 	if len(params) == 0 {
 		return
 	}
@@ -163,8 +166,9 @@ func buildDataViewParams(options *Options, connectors map[string]*view.Connector
 			fmt.Printf("Skpining data view params: %v - no column detected", v.Table)
 			continue
 		}
+
 		var fields = make([]*view.Field, 0)
-		updateTableColumnTypes(options, table)
+		s.updateTableColumnTypes(table)
 		for _, column := range table.Inner {
 			name := column.Alias
 			if name == "" {
@@ -184,7 +188,7 @@ func buildDataViewParams(options *Options, connectors map[string]*view.Connector
 			})
 		}
 
-		route.Resource.Types = append(route.Resource.Types, &view.Definition{
+		s.route.Resource.Types = append(s.route.Resource.Types, &view.Definition{
 			Name:   strings.Title(k),
 			Fields: fields,
 		})
@@ -195,20 +199,21 @@ func buildDataViewParams(options *Options, connectors map[string]*view.Connector
 				Limit: 1,
 			},
 		}
-		if _, err := addViewConn(options, connectors, route, relView); err != nil {
+
+		if _, err := s.addViewConn(s.options.Connector.DbName, relView); err != nil {
 			continue
 		}
 
-		if err := updateView(options, table, relView, false); err != nil {
+		if err := s.updateView(table, relView); err != nil {
 			continue
 		}
 
-		route.Resource.AddViews(relView)
-		route.Resource.AddParameters(v.Param)
+		s.route.Resource.AddViews(relView)
+		s.route.Resource.AddParameters(v.Param)
 		if v.Table.Parameter != nil {
-			mergeParameter(route, v.Table.Parameter)
+			mergeParameter(s.route, v.Table.Parameter)
 		}
-		mergeParameter(route, v.Param)
+		mergeParameter(s.route, v.Param)
 	}
 }
 
@@ -267,19 +272,22 @@ func mergeParameter(route *router.Resource, param *view.Parameter) {
 	}
 }
 
-func addViewConn(options *Options, connectors map[string]*view.Connector, route *router.Resource, aView *view.View) (*view.Connector, error) {
-	connector := options.Connector
-	if connector.DbName == "" {
+func (s *serverBuilder) addViewConn(connectorName string, aView *view.View) (*view.Connector, error) {
+	if connectorName == "" {
 		return nil, nil
 	}
+
+	connector := s.options.Connector
 	conn := connector.New()
 	viewConnector := &view.Connector{}
 	viewConnector.Ref = connector.DbName
 
-	_, ok := connectors[connector.DbName]
+	_, ok := s.connectors[connector.DbName]
+
 	if !ok {
-		route.Resource.AddConnectors(conn)
+		s.route.Resource.AddConnectors(conn)
 	}
+
 	aView.Connector = viewConnector
 	return conn, nil
 }
@@ -323,7 +331,7 @@ func detectCaseFormat(xTable *Table) view.CaseFormat {
 
 }
 
-func buildMainView(options *Options, generate *Generate, route *router.Resource) *view.View {
+func (s *serverBuilder) buildMainView(options *Options, generate *Generate) *view.View {
 	aView := &view.View{
 		Name:    generate.Name,
 		Table:   generate.Table,
@@ -340,7 +348,8 @@ func buildMainView(options *Options, generate *Generate, route *router.Resource)
 		},
 		Connector: &view.Connector{Reference: shared.Reference{Ref: options.DbName}},
 	}
-	route.Resource.AddViews(aView)
+
+	s.route.Resource.AddViews(aView)
 	return aView
 }
 

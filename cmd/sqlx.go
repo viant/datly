@@ -28,6 +28,7 @@ type (
 		Alias       string
 		TableMeta
 		ViewMeta *ast.ViewMeta
+		ViewHint string
 	}
 
 	TableMeta struct {
@@ -36,6 +37,7 @@ type (
 		dataViewParameter *view.Parameter
 		Parameter         *view.Parameter
 		Auth              string
+		Selector          *view.Config
 	}
 	Column struct {
 		Ns       string
@@ -129,13 +131,17 @@ func ParseSQLx(SQL string, uriParams map[string]bool) (*Table, map[string]*Table
 	if aQuery == nil {
 		return nil, nil, err
 	}
+
 	var tables = map[string]*Table{}
 	table, err := buildTable(aQuery.From.X, uriParams)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	table.Alias = aQuery.From.Alias
 	table.Columns = selectItemToColumn(aQuery)
+	table.ViewHint = aQuery.From.Comments
+
 	if star := table.Columns.StarExpr(table.Alias); star != nil {
 		table.StarExpr = true
 	}

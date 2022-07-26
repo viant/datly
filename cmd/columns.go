@@ -8,13 +8,13 @@ import (
 	"strings"
 )
 
-func updateTableColumnTypes(options *Options, table *Table) {
+func (s *serverBuilder) updateTableColumnTypes(table *Table) {
 	if len(table.ColumnTypes) > 0 {
 		return
 	}
 	//TODO read all column per alias from main and join table
 	table.ColumnTypes = map[string]string{}
-	connector := options.MatchConnector(table.Connector)
+	connector := s.options.MatchConnector(table.Connector)
 	db, err := connector.Db()
 	if err != nil {
 		fmt.Printf(err.Error())

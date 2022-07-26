@@ -2,6 +2,7 @@ package view
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	as "github.com/aerospike/aerospike-client-go"
 	"github.com/viant/afs/option"
@@ -9,6 +10,7 @@ import (
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/sqlx/io/read/cache/aerospike"
 	"github.com/viant/sqlx/io/read/cache/afs"
+	rdata "github.com/viant/toolbox/data"
 	"strconv"
 	"strings"
 	"time"
@@ -16,9 +18,8 @@ import (
 
 type (
 	Cache struct {
-		Type         string
 		Location     string
-		SetName      string
+		Provider     string
 		TimeToLiveMs int
 		PartSize     int
 		cache        cache.Cache
@@ -35,11 +36,12 @@ const (
 	aerospikeType = "aerospike"
 )
 
-func (c *Cache) init(ctx context.Context, viewName string) error {
+func (c *Cache) init(ctx context.Context, aView *View) error {
 	if c.initialized {
 		return nil
 	}
 	c.initialized = true
+	viewName := aView.Name
 
 	if c.Location == "" {
 		return fmt.Errorf("view %v cache Location can't be empty", viewName)
@@ -49,7 +51,7 @@ func (c *Cache) init(ctx context.Context, viewName string) error {
 		return fmt.Errorf("view %v cache TimeToLiveMs can't be empty", viewName)
 	}
 
-	aCache, err := c.cacheService(viewName)
+	aCache, err := c.cacheService(aView)
 	if err != nil {
 		return fmt.Errorf("view %v error: %w", viewName, err)
 	}
@@ -58,21 +60,22 @@ func (c *Cache) init(ctx context.Context, viewName string) error {
 	return nil
 }
 
-func (c *Cache) cacheService(viewName string) (cache.Cache, error) {
-	switch c.Type {
+func (c *Cache) cacheService(aView *View) (cache.Cache, error) {
+	scheme := url.Scheme(c.Provider, "")
+	switch scheme {
 	case aerospikeType:
-		return c.aerospikeCache()
+		return c.aerospikeCache(aView)
 	default:
-		return afs.NewCache(c.Location, time.Duration(c.TimeToLiveMs)*time.Millisecond, viewName, option.NewStream(c.PartSize, 0))
+		return afs.NewCache(c.Location, time.Duration(c.TimeToLiveMs)*time.Millisecond, aView.Name, option.NewStream(c.PartSize, 0))
 	}
 }
 
-func (c *Cache) aerospikeCache() (cache.Cache, error) {
-	if c.SetName == "" {
+func (c *Cache) aerospikeCache(aView *View) (cache.Cache, error) {
+	if c.Location == "" {
 		return nil, fmt.Errorf("aerospike cache SetName cannot be empty")
 	}
 
-	host, port, namespace, err := c.split(c.Location)
+	host, port, namespace, err := c.split(c.Provider)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +85,23 @@ func (c *Cache) aerospikeCache() (cache.Cache, error) {
 		return nil, err
 	}
 
-	return aerospike.New(namespace, c.SetName, client, uint32(time.Duration(c.TimeToLiveMs)*time.Second/time.Millisecond))
+	viewParam := asViewParam(aView)
+	asBytes, err := json.Marshal(viewParam)
+	if err != nil {
+		return nil, err
+	}
+
+	locationMap := &rdata.Map{}
+
+	viewMap := map[string]interface{}{}
+	if err = json.Unmarshal(asBytes, &viewMap); err != nil {
+		return nil, err
+	}
+
+	locationMap.Put("view", viewMap)
+
+	expanded := locationMap.ExpandAsText(c.Location)
+	return aerospike.New(namespace, expanded, client, uint32(time.Duration(c.TimeToLiveMs)*time.Second/time.Millisecond))
 }
 
 func (c *Cache) Service() cache.Cache {

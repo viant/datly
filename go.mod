@@ -3,7 +3,7 @@ module github.com/viant/datly
 go 1.16
 
 require (
-	github.com/aerospike/aerospike-client-go v4.5.2+incompatible // indirect
+	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
 	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/go-playground/validator v9.31.0+incompatible
@@ -26,9 +26,9 @@ require (
 	github.com/viant/dsc v0.16.0 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
-	github.com/viant/parsly v0.0.0-20220701205749-237fda4a6158
+	github.com/viant/parsly v0.0.0-20220726191103-6f54d86a6bf9
 	github.com/viant/scy v0.1.2-0.20220719145706-2ad46bc6351e
-	github.com/viant/sqlx v0.0.0-20220725230306-7a8d6e266cf9
+	github.com/viant/sqlx v0.0.0-20220726191655-d0e11c6598fe
 	github.com/viant/toolbox v0.34.6-0.20220630003140-fb2bf82657c1
 	github.com/viant/velty v0.1.1-0.20220615222300-d36908b3bf21
 	github.com/viant/xunsafe v0.8.1-0.20220609224231-1d3e1fcf7bb6

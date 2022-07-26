@@ -14,8 +14,8 @@ import (
 	"strings"
 )
 
-func loadConfig(ctx context.Context, options *Options) (cfg *standalone.Config, err error) {
-	if options.ConfigURL == "" {
+func (s *serverBuilder) loadConfig(ctx context.Context) (cfg *standalone.Config, err error) {
+	if s.options.ConfigURL == "" {
 		cfg = &standalone.Config{
 			Config: &gateway.Config{
 				APIPrefix: "/v1/api/",
@@ -27,36 +27,42 @@ func loadConfig(ctx context.Context, options *Options) (cfg *standalone.Config, 
 		cfg.AutoDiscovery = &disable
 		return cfg, nil
 	}
-	options.ConfigURL = normalizeURL(options.ConfigURL)
-	cfg, err = standalone.NewConfigFromURL(ctx, options.ConfigURL)
+
+	s.options.ConfigURL = normalizeURL(s.options.ConfigURL)
+	cfg, err = standalone.NewConfigFromURL(ctx, s.options.ConfigURL)
+
 	return cfg, err
 }
 
-func initConfig(cfg *standalone.Config, options *Options) error {
-	if options.Port != 0 {
-		cfg.Endpoint.Port = options.Port
+func (s *serverBuilder) initConfig(cfg *standalone.Config) error {
+	if s.options.Port != 0 {
+		cfg.Endpoint.Port = s.options.Port
 	}
-	if URL := options.RouteURL; URL != "" {
+
+	if URL := s.options.RouteURL; URL != "" {
 		cfg.RouteURL = normalizeURL(URL)
 	}
 
-	if URL := options.DependencyURL; URL != "" {
+	if URL := s.options.DependencyURL; URL != "" {
 		cfg.DependencyURL = normalizeURL(URL)
 	}
+
 	cfg.Init()
-	connectors, err := loadConnectors(cfg, options)
+
+	_, err := loadConnectors(cfg, s.options)
 	if err != nil {
 		return err
 	}
-	if options.RouteURL != "" {
-		cfg.RouteURL = options.RouteURL
+
+	if s.options.RouteURL != "" {
+		cfg.RouteURL = s.options.RouteURL
 	} else if cfg.RouteURL != "" {
 		cfg.RouteURL = normalizeURL(cfg.RouteURL)
 		cfg.DependencyURL = normalizeURL(cfg.DependencyURL)
 	}
 
-	if options.JWTVerifier != "" {
-		pair := strings.Split(options.JWTVerifier, "|")
+	if s.options.JWTVerifier != "" {
+		pair := strings.Split(s.options.JWTVerifier, "|")
 		switch len(pair) {
 		case 1:
 			cfg.JWTValidator = &verifier.Config{RSA: &scy.Resource{URL: pair[0]}}
@@ -71,14 +77,15 @@ func initConfig(cfg *standalone.Config, options *Options) error {
 		}
 	}
 
-	err = buildDefaultConfig(cfg, options)
+	err = buildDefaultConfig(cfg, s.options)
 	if err != nil {
 		return err
 	}
-	if cfg.DependencyURL != "" && options.DependencyURL == "" {
-		options.DependencyURL = cfg.DependencyURL
+	if cfg.DependencyURL != "" && s.options.DependencyURL == "" {
+		s.options.DependencyURL = cfg.DependencyURL
 	}
-	return buildViewWithRouter(options, cfg, connectors)
+
+	return s.buildViewWithRouter(cfg)
 }
 
 func buildDefaultConfig(cfg *standalone.Config, options *Options) error {

@@ -46,7 +46,7 @@ func (p *parameters) nextParam() *parameter {
 	return ret
 }
 
-func updateParameterTypes(table *Table) {
+func (s *serverBuilder) updateParameterTypes(table *Table) {
 	if table.ViewMeta == nil {
 		return
 	}

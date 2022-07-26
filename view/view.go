@@ -315,7 +315,7 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 	}
 
 	if v.Cache != nil {
-		if err = v.Cache.init(ctx, v.Name); err != nil {
+		if err = v.Cache.init(ctx, v); err != nil {
 			return err
 		}
 	}

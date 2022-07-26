@@ -13,9 +13,8 @@ Resource:
         Ref: db
       Table: events
       Cache:
-        Type: aerospike
-        Location: 'https://127.0.0.1:3000/test'
-        SetName: aerospike
+        Provider: 'aerospike://127.0.0.1:3000/test'
+        Location: aerospike
         TimeToLiveMs: 10000
       Selector:
         Constraints:

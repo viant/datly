@@ -1,0 +1,74 @@
+Alias: t
+Batch:
+  Parent: 10000
+CaseFormat: lc
+Caser: 3
+Columns:
+  - DataType: INTEGER
+    Name: id
+    Nullable: true
+  - DataType: DATETIME
+    Name: timestamp
+    Nullable: true
+  - DataType: INTEGER
+    Name: event_type_id
+    Nullable: true
+  - DataType: DECIMAL(7, 2)
+    Name: quantity
+    Nullable: true
+  - DataType: INTEGER
+    Name: user_id
+    Nullable: true
+Connector:
+  DSN: /tmp/datly/generator/db.db
+  Driver: sqlite3
+  Name: dev
+  Secret:
+    Data: null
+    Fallback: null
+    Key: blowfish://default
+    MaxRetry: 3
+    TimeoutMs: 5000
+    URL: mem://localhost/resource/mysql.json
+Logger:
+  Name: ""
+MatchStrategy: read_matched
+Name: events
+Ref: events
+Schema:
+  Cardinality: One
+Selector:
+  Constraints:
+    Criteria: true
+    Filterable: null
+    Limit: true
+    Offset: true
+    OrderBy: false
+    Projection: false
+  Limit: 25
+Standalone: true
+Table: events
+Template:
+  Parameters:
+    - In:
+        Kind: path
+        Name: eventID
+      Name: eventID
+      PresenceName: eventID
+      Ref: eventID
+      Required: true
+      Schema:
+        Cardinality: One
+        DataType: int
+  PresenceSchema:
+    Cardinality: One
+  Schema:
+    Cardinality: One
+  Source: |-
+    ( SELECT *
+             FROM events e
+             WHERE 1 = 1
+               AND e.id = $eventID
+             ORDER BY 1
+          )
+  SourceURL: events/events.sql
