@@ -40,6 +40,7 @@ func (c *Cache) init(ctx context.Context, aView *View) error {
 	if c.initialized {
 		return nil
 	}
+
 	c.initialized = true
 	viewName := aView.Name
 

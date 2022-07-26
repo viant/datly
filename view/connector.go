@@ -14,33 +14,43 @@ import (
 )
 
 //Connector represents database/sql named connection config
-type Connector struct {
-	shared.Reference
-	Secret *scy.Resource `json:",omitempty"`
-	Name   string        `json:",omitempty"`
-	Driver string        `json:",omitempty"`
-	DSN    string        `json:",omitempty"`
+type (
+	Connector struct {
+		shared.Reference
+		Secret *scy.Resource `json:",omitempty"`
+		Name   string        `json:",omitempty"`
+		Driver string        `json:",omitempty"`
+		DSN    string        `json:",omitempty"`
 
-	//TODO add secure password storage
-	db                *sql.DB
-	initialized       bool
-	MaxIdleConns      int
-	ConnMaxIdleTimeMs int
-	MaxOpenConns      int
-	ConnMaxLifetimeMs int
-}
+		//TODO add secure password storage
+		db          *sql.DB
+		initialized bool
+		DBConfig
+	}
 
-func (c *Connector) ConnMaxIdleTime() time.Duration {
+	DBConfig struct {
+		MaxIdleConns      int
+		ConnMaxIdleTimeMs int
+		MaxOpenConns      int
+		ConnMaxLifetimeMs int
+	}
+)
+
+func (c *DBConfig) ConnMaxIdleTime() time.Duration {
 	return time.Duration(c.ConnMaxIdleTimeMs) * time.Millisecond
 }
 
-func (c *Connector) ConnMaxLifetime() time.Duration {
+func (c *DBConfig) ConnMaxLifetime() time.Duration {
 	return time.Duration(c.ConnMaxLifetimeMs) * time.Millisecond
 }
 
 //Init initializes connector.
 //If Ref is specified, then Connector with the name has to be registered in Connectors
 func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
+	if c.initialized {
+		return nil
+	}
+
 	if c.initialized {
 		return nil
 	}
@@ -59,16 +69,6 @@ func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 		return err
 	}
 
-	//db, err := c.Db()
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//err = db.PingContext(ctx)
-	//if err != nil {
-	//	return err
-	//}
-
 	c.initialized = true
 	return nil
 }
@@ -79,6 +79,7 @@ func (c *Connector) Db() (*sql.DB, error) {
 	if c.db != nil {
 		return c.db, nil
 	}
+
 	var err error
 	dsn := c.DSN
 	var secret *scy.Secret
@@ -89,15 +90,12 @@ func (c *Connector) Db() (*sql.DB, error) {
 		}
 		dsn = secret.Expand(dsn)
 	}
+
 	if secret != nil {
 		c.setDriverOptions(secret)
 	}
-	c.db, err = sql.Open(c.Driver, dsn)
 
-	c.db.SetMaxIdleConns(c.MaxIdleConns)
-	c.db.SetConnMaxIdleTime(c.ConnMaxIdleTime())
-	c.db.SetMaxOpenConns(c.MaxOpenConns)
-	c.db.SetConnMaxLifetime(c.ConnMaxLifetime())
+	c.db, err = aPool.DB(c.Driver, dsn, &c.DBConfig)
 	return c.db, err
 }
 
@@ -145,6 +143,7 @@ func (c *Connector) Reset() {
 	if c.db == nil {
 		return
 	}
+
 	_ = c.db.Close()
 	c.db = nil
 }

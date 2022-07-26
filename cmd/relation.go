@@ -281,6 +281,7 @@ func (s *serverBuilder) buildRelations(meta *metadata.Service, aView *view.View,
 	if err != nil {
 		return err
 	}
+
 	defer db.Close()
 	if err := meta.Info(context.Background(), db, info.KindPrimaryKeys, &pk, option.NewArgs("", s.options.Connector.DbName, s.options.Table)); err == nil && len(pk) > 0 {
 		for _, rel := range s.options.Relations {
