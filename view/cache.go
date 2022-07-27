@@ -92,12 +92,13 @@ func (c *Cache) cacheService(aView *View) (cache.Cache, error) {
 	case aerospikeType:
 		return c.aerospikeCache(aView)
 	default:
-
+		if aView.Name == "" {
+			return nil, nil
+		}
 		expandedLoc, err := c.expandLocation(aView)
 		if err != nil {
 			return nil, err
 		}
-
 		return afs.NewCache(expandedLoc, time.Duration(c.TimeToLiveMs)*time.Millisecond, aView.Name, option.NewStream(c.PartSize, 0))
 	}
 }
