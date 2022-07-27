@@ -171,6 +171,24 @@ JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee
 
 #### Setting data caching
 
+
+```sql
+/* {"URI":"dept/", 
+   "Cache":{
+         "Name": "fs"
+         "Location": "/tmp/cache/${view.Name}",
+         "TimeToLiveMs": 360000
+         }
+   } */
+SELECT
+dept.* EXCEPT ORG_ID
+employee.* EXCEPT DEPT_ID
+FROM (SELECT * FROM DEPARMENT t) dept                /* {"Cache":{"Ref":"fs"}} */
+JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee  /* {"Cache":{"Ref":"fs"}} */
+ ON dept.ID = employee.DEPT_ID
+```
+
+
 ```sql
 /* {"URI":"dept/", 
    "Cache":{
