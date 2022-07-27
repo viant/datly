@@ -64,7 +64,7 @@ func newClientPool() *aerospikePool {
 func (d *db) initWithLock(ctx context.Context, driver string, dsn string, config *DBConfig) error {
 	d.mutex.Lock()
 	err := d.initDatabase(ctx, driver, dsn, config)
-	//d.keepConnectionAlive(driver, dsn, config)
+	d.keepConnectionAlive(driver, dsn, config)
 	d.mutex.Unlock()
 
 	return err
@@ -128,7 +128,7 @@ func (d *db) keepConnectionAlive(driver string, dsn string, config *DBConfig) {
 
 	go func(driver, dsn string, config *DBConfig) {
 		for {
-			time.Sleep(time.Second * time.Duration(10))
+			time.Sleep(time.Second * time.Duration(15))
 
 			select {
 			case <-cancel.Done():
