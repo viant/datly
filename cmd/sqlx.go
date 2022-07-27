@@ -55,6 +55,7 @@ type (
 	RouteSetting struct {
 		URI       string
 		URIParams map[string]bool
+		Cache     *view.Cache
 	}
 
 	Columns []*Column

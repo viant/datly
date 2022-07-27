@@ -124,6 +124,14 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	s.route.Routes = append(s.route.Routes, viewRoute)
 
 	s.route.With = []string{"connections"}
+	if routeSetting.Cache != nil {
+		s.route.With = append(s.route.With, "cache")
+		cacheDependency := &view.Resource{ModTime: TimeNow()}
+		cacheURL := s.options.DepURL("cache")
+		cacheDependency.CacheProviders = append(cacheDependency.CacheProviders, routeSetting.Cache)
+		_ = fsAddYAML(fs, cacheURL, cacheDependency)
+	}
+
 	dependency := &view.Resource{ModTime: TimeNow()}
 	dependency.Connectors = s.route.Resource.Connectors
 	depURL := s.options.DepURL("connections")
