@@ -468,6 +468,8 @@ func (r *Resource) CacheProvider(ref string) (*Cache, bool) {
 }
 
 func (r *Resource) indexProviders() {
+	r.ensureCacheIndex()
+
 	r._cacheIndex = map[string]int{}
 	for i, provider := range r.CacheProviders {
 		if provider.Name == "" {
@@ -479,9 +481,7 @@ func (r *Resource) indexProviders() {
 }
 
 func (r *Resource) mergeProviders(resource *Resource) {
-	if r._cacheIndex == nil {
-		r._cacheIndex = map[string]int{}
-	}
+	r.ensureCacheIndex()
 
 	if resource._cacheIndex == nil {
 		resource._cacheIndex = map[string]int{}
@@ -494,5 +494,11 @@ func (r *Resource) mergeProviders(resource *Resource) {
 
 		r._cacheIndex[provider.Name] = len(r.CacheProviders)
 		r.CacheProviders = append(r.CacheProviders, provider)
+	}
+}
+
+func (r *Resource) ensureCacheIndex() {
+	if r._cacheIndex == nil {
+		r._cacheIndex = map[string]int{}
 	}
 }
