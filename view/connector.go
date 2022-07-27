@@ -10,6 +10,7 @@ import (
 	"github.com/viant/scy/auth/gcp"
 	"github.com/viant/scy/auth/gcp/client"
 	"google.golang.org/api/option"
+	"sync"
 	"time"
 )
 
@@ -23,9 +24,10 @@ type (
 		DSN    string        `json:",omitempty"`
 
 		//TODO add secure password storage
-		db          *sql.DB
+		db          func() (*sql.DB, error)
 		initialized bool
 		DBConfig
+		mux sync.Mutex
 	}
 
 	DBConfig struct {
@@ -77,9 +79,7 @@ func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 //It is important to not close the DB since the connection is shared.
 func (c *Connector) DB(ctx context.Context) (*sql.DB, error) {
 	if c.db != nil {
-		if err := c.db.PingContext(ctx); err == nil {
-			return c.db, nil
-		}
+		return c.db()
 	}
 
 	var err error
@@ -97,8 +97,12 @@ func (c *Connector) DB(ctx context.Context) (*sql.DB, error) {
 		c.setDriverOptions(secret)
 	}
 
-	c.db, err = aDbPool.DB(ctx, c.Driver, dsn, &c.DBConfig)
-	return c.db, err
+	c.mux.Lock()
+	c.db = aDbPool.DB(ctx, c.Driver, dsn, &c.DBConfig)
+	aDB, err := c.db()
+	c.mux.Unlock()
+
+	return aDB, err
 }
 
 //Validate check if connector was configured properly.
@@ -138,26 +142,6 @@ func (c *Connector) inherit(connector *Connector) {
 	if c.Name == "" {
 		c.Name = connector.Name
 	}
-}
-
-//Reset reset connector
-func (c *Connector) Reset() {
-	if c.db == nil {
-		return
-	}
-
-	_ = c.db.Close()
-	c.db = nil
-}
-
-//Close closes connector
-func (c *Connector) Close() error {
-	if c.db == nil {
-		return nil
-	}
-	err := c.db.Close()
-	c.db = nil
-	return err
 }
 
 func (c *Connector) setDriverOptions(secret *scy.Secret) {

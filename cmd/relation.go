@@ -282,7 +282,6 @@ func (s *serverBuilder) buildRelations(ctx context.Context, meta *metadata.Servi
 		return err
 	}
 
-	defer db.Close()
 	if err := meta.Info(context.Background(), db, info.KindPrimaryKeys, &pk, option.NewArgs("", s.options.Connector.DbName, s.options.Table)); err == nil && len(pk) > 0 {
 		for _, rel := range s.options.Relations {
 			if !strings.Contains(rel, ":") {

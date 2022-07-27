@@ -55,7 +55,8 @@ func (s *Service) afterRead(session *Session, collector *view.Collector, start *
 	session.View.Logger.ReadTime(viewName, start, &end, err)
 	//TODO add to metrics record read
 	elapsed := end.Sub(*start)
-	session.Metrics = append(session.Metrics, &Metric{View: viewName, ElapsedMs: int(elapsed.Milliseconds()), Elapsed: elapsed.String(), Rows: collector.Len()})
+
+	session.AddMetric(&Metric{View: viewName, ElapsedMs: int(elapsed.Milliseconds()), Elapsed: elapsed.String(), Rows: collector.Len()})
 	if err != nil {
 		session.View.Counter.IncrementValue(Error)
 	} else {

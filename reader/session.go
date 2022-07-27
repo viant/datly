@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"github.com/viant/datly/view"
 	"reflect"
+	"sync"
 )
 
 //Session groups view required to Read view
 type (
 	Session struct {
+		mux       sync.Mutex
 		Dest      interface{} //slice
 		View      *view.View
 		Selectors *view.Selectors
@@ -47,6 +49,12 @@ func (s *Session) AddCriteria(aView *view.View, criteria string, placeholders ..
 	sel := s.Selectors.Lookup(aView)
 	sel.Criteria = criteria
 	sel.Placeholders = placeholders
+}
+
+func (s *Session) AddMetric(m *Metric) {
+	s.mux.Lock()
+	s.Metrics = append(s.Metrics, m)
+	s.mux.Unlock()
 }
 
 //NewSession creates a session

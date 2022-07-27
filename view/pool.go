@@ -3,10 +3,12 @@ package view
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	as "github.com/aerospike/aerospike-client-go"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type (
@@ -16,8 +18,11 @@ type (
 	}
 
 	db struct {
-		mutex  sync.Mutex
-		actual *sql.DB
+		mutex       sync.Mutex
+		actual      *sql.DB
+		ctx         context.Context
+		cancelFunc  context.CancelFunc
+		initialized bool
 	}
 
 	aerospikePool struct {
@@ -56,34 +61,43 @@ func newClientPool() *aerospikePool {
 	return &aerospikePool{index: map[string]*aerospikeClient{}}
 }
 
-func (d *db) connectWithLock(ctx context.Context, driver string, dsn string, config *DBConfig) (*sql.DB, error) {
+func (d *db) initWithLock(ctx context.Context, driver string, dsn string, config *DBConfig) error {
 	d.mutex.Lock()
-	aDb, err := d.connect(ctx, driver, dsn, config)
-
-	if err == nil && d.actual != aDb {
-
-		d.actual = aDb
-	}
-
+	err := d.initDatabase(ctx, driver, dsn, config)
+	//d.keepConnectionAlive(driver, dsn, config)
 	d.mutex.Unlock()
-	return aDb, err
+
+	return err
 }
 
-func (d *db) connect(ctx context.Context, driver string, dsn string, c *DBConfig) (*sql.DB, error) {
+func (d *db) initDatabase(ctx context.Context, driver string, dsn string, config *DBConfig) error {
+	if d.initialized {
+		return nil
+	}
+
+	d.initialized = true
+	var err error
+	d.actual, err = sql.Open(driver, dsn)
 	if d.actual != nil {
-		if err := d.actual.PingContext(ctx); err != nil {
-			d.actual = nil
-			return d.connect(ctx, driver, dsn, c)
-		}
-
-		return d.actual, nil
+		d.configureDB(config, d.actual)
 	}
 
-	aDb, err := sql.Open(driver, dsn)
-	if err != nil {
-		return nil, err
+	return err
+}
+
+func (d *db) connect() (*sql.DB, error) {
+	d.mutex.Lock()
+	aDb := d.actual
+	d.mutex.Unlock()
+
+	if aDb == nil {
+		return nil, fmt.Errorf("no connection with database is available")
 	}
 
+	return aDb, nil
+}
+
+func (d *db) configureDB(c *DBConfig, aDb *sql.DB) {
 	if c.MaxIdleConns != 0 {
 		aDb.SetMaxIdleConns(c.MaxIdleConns)
 	}
@@ -99,11 +113,62 @@ func (d *db) connect(ctx context.Context, driver string, dsn string, c *DBConfig
 	if c.ConnMaxLifetimeMs != 0 {
 		aDb.SetConnMaxLifetime(c.ConnMaxLifetime())
 	}
-
-	return aDb, err
 }
 
-func (p *dbPool) DB(ctx context.Context, driver, dsn string, config *DBConfig) (*sql.DB, error) {
+func (d *db) keepConnectionAlive(driver string, dsn string, config *DBConfig) {
+	if d.cancelFunc != nil {
+		return
+	}
+
+	newCtx := context.Background()
+	cancel, cancelFunc := context.WithCancel(newCtx)
+
+	d.ctx = cancel
+	d.cancelFunc = cancelFunc
+
+	go func(driver, dsn string, config *DBConfig) {
+		for {
+			time.Sleep(time.Second * time.Duration(10))
+
+			select {
+			case <-cancel.Done():
+				return
+			default:
+				d.mutex.Lock()
+				aDb := d.actual
+				d.mutex.Unlock()
+
+				var err error
+				if aDb != nil {
+					err = aDb.PingContext(d.ctx)
+				}
+
+				if err != nil || aDb == nil {
+					newDb, err := sql.Open(driver, dsn)
+					d.mutex.Lock()
+					d.actual = newDb
+					if newDb != nil {
+						d.configureDB(config, newDb)
+					}
+					d.mutex.Unlock()
+
+					err = newDb.PingContext(d.ctxWithTimeout(time.Duration(5) * time.Second))
+					if err != nil {
+						fmt.Printf("[INFO] couldn't connect to one of %v database \n", driver)
+					}
+				}
+			}
+		}
+	}(driver, dsn, config)
+}
+
+func (d *db) ctxWithTimeout(duration time.Duration) context.Context {
+	background := context.Background()
+	ctxWithTimeout, _ := context.WithTimeout(background, duration)
+	return ctxWithTimeout
+}
+
+func (p *dbPool) DB(ctx context.Context, driver, dsn string, config *DBConfig) func() (*sql.DB, error) {
 	builder := &strings.Builder{}
 	builder.WriteString(strconv.Itoa(config.ConnMaxLifetimeMs))
 	builder.WriteByte('#')
@@ -118,16 +183,21 @@ func (p *dbPool) DB(ctx context.Context, driver, dsn string, config *DBConfig) (
 	builder.WriteString(dsn)
 
 	actualKey := builder.String()
-	dbConn := p.getItem(actualKey)
+	dbConn := p.getItem(ctx, actualKey, driver, dsn, config)
 
-	return dbConn.connectWithLock(ctx, driver, dsn, config)
+	return dbConn.connect
 }
 
-func (p *dbPool) getItem(key string) *db {
+func (p *dbPool) getItem(ctx context.Context, key string, driver string, dsn string, config *DBConfig) *db {
 	p.mutex.Lock()
 	item, ok := p.index[key]
 	if !ok {
 		item = &db{}
+		err := item.initWithLock(ctx, driver, dsn, config)
+		if err != nil {
+			fmt.Printf("error occured while initializing db %v\n", err.Error())
+		}
+
 		p.index[key] = item
 	}
 
@@ -136,6 +206,10 @@ func (p *dbPool) getItem(key string) *db {
 }
 
 func ResetDBPool() {
+	for _, dbItem := range aDbPool.index {
+		dbItem.cancelFunc()
+	}
+
 	aDbPool = newPool()
 }
 
