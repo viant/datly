@@ -117,10 +117,16 @@ func TestRun(t *testing.T) {
 		{
 			description: "cache hint",
 			URI:         "case008_cache_hint",
-			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly/generator/db.db", "-X=testdata/case008_cache_hint/events.sql"},
-			viewURL:     "/v1/api/meta/view/dev/events/1",
-			dataURL:     "/v1/api/dev/events/1",
-			dataMethod:  http.MethodGet,
+			args: []string{
+				"-N=events",
+				"-D=sqlite3",
+				"-A=/tmp/datly/generator/db.db",
+				"-X=testdata/case008_cache_hint/events.sql",
+				"-d=testdata/case008_cache_hint",
+			},
+			viewURL:    "/v1/api/meta/view/dev/events/1",
+			dataURL:    "/v1/api/dev/events/1",
+			dataMethod: http.MethodGet,
 		},
 		{
 			description: "selector hint",

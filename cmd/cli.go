@@ -38,6 +38,7 @@ func (s *serverBuilder) build() (*standalone.Server, error) {
 	if authenticator != nil {
 		fmt.Printf("with auth Service: %T\n", authenticator)
 	}
+
 	if URL := s.options.DepURL("connections"); URL != "" {
 		reportContent(s.logger, "---------- connections: -----------\n\t"+URL, URL)
 	}

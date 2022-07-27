@@ -92,7 +92,13 @@ func (c *Cache) cacheService(aView *View) (cache.Cache, error) {
 	case aerospikeType:
 		return c.aerospikeCache(aView)
 	default:
-		return afs.NewCache(c.Location, time.Duration(c.TimeToLiveMs)*time.Millisecond, aView.Name, option.NewStream(c.PartSize, 0))
+
+		expandedLoc, err := c.expandLocation(aView)
+		if err != nil {
+			return nil, err
+		}
+
+		return afs.NewCache(expandedLoc, time.Duration(c.TimeToLiveMs)*time.Millisecond, aView.Name, option.NewStream(c.PartSize, 0))
 	}
 }
 
@@ -111,25 +117,32 @@ func (c *Cache) aerospikeCache(aView *View) (cache.Cache, error) {
 		return nil, err
 	}
 
+	expanded, err := c.expandLocation(aView)
+	if err != nil {
+		return nil, err
+	}
+
+	c.aerospikeClient = client
+	return aerospike.New(namespace, expanded, client, uint32(time.Duration(c.TimeToLiveMs)*time.Second/time.Millisecond))
+}
+
+func (c *Cache) expandLocation(aView *View) (string, error) {
 	viewParam := asViewParam(aView)
 	asBytes, err := json.Marshal(viewParam)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	locationMap := &rdata.Map{}
 
 	viewMap := map[string]interface{}{}
 	if err = json.Unmarshal(asBytes, &viewMap); err != nil {
-		return nil, err
+		return "", err
 	}
 
 	locationMap.Put("view", viewMap)
-
 	expanded := locationMap.ExpandAsText(c.Location)
-
-	c.aerospikeClient = client
-	return aerospike.New(namespace, expanded, client, uint32(time.Duration(c.TimeToLiveMs)*time.Second/time.Millisecond))
+	return expanded, nil
 }
 
 func (c *Cache) Service() (cache.Cache, error) {
