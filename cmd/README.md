@@ -172,11 +172,14 @@ JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee
 #### Setting data caching
 
 ```sql
-/* {"URI":"dept/", "Cache":{"Name": "aerospike",
-"Provider": "aerospike://127.0.0.1:3000/test",
-"Location": "${view.Name}",
-"TimeToLiveMs": 36000
-}} */
+/* {"URI":"dept/", 
+   "Cache":{
+         "Name": "aerospike",
+         "Provider": "aerospike://127.0.0.1:3000/test",
+         "Location": "${view.Name}",
+         "TimeToLiveMs": 360000
+         }
+   } */
 SELECT
 dept.* EXCEPT ORG_ID
 employee.* EXCEPT DEPT_ID
