@@ -301,6 +301,10 @@ func (b *Builder) checkViewAndAppendRelColumn(sb *strings.Builder, aView *view.V
 		return nil
 	}
 
+	if aView.Template.IsActualTemplate() {
+		return nil
+	}
+
 	sb.WriteString(separatorFragment)
 	sb.WriteString(aView.Alias)
 	sb.WriteString(".")
