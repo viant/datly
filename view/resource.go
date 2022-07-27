@@ -479,6 +479,14 @@ func (r *Resource) indexProviders() {
 }
 
 func (r *Resource) mergeProviders(resource *Resource) {
+	if r._cacheIndex == nil {
+		r._cacheIndex = map[string]int{}
+	}
+
+	if resource._cacheIndex == nil {
+		resource._cacheIndex = map[string]int{}
+	}
+
 	for _, provider := range resource.CacheProviders {
 		if _, ok := r.CacheProvider(provider.Name); ok {
 			continue

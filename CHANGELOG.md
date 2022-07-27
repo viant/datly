@@ -1,3 +1,8 @@
+## Jul 27 2022 v0.2.7
+  * Aerospike cache
+  * Improved DB sharing
+  * Page query param
+
 ## Jul 1 2022 v0.2.1
   * OpenAPI endpoint
   * Route response caching
