@@ -171,7 +171,6 @@ JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee
 
 #### Setting data caching
 
-
 ```sql
 /* {"URI":"dept/", 
    "Cache":{
@@ -207,8 +206,16 @@ JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee  /* {"Cache":{"Ref":"aerospi
 ```
 
 
+### Setting selector
 
-
+```sql
+SELECT
+dept.* EXCEPT ORG_ID
+employee.* EXCEPT DEPT_ID
+FROM (SELECT * FROM DEPARMENT t) dept                /* {"Selector":{"Limit": 40, "Constraints"{"Criteria": false}}} */
+JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee  /* {"Selector":{"Limit": 80, "Constraints"{"Criteria": false, "Limit": false, "Offset": false}}} */
+ ON dept.ID = employee.DEPT_ID
+```
 
 
 #### Persisting routes/config to the local folder
