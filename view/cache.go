@@ -124,7 +124,7 @@ func (c *Cache) aerospikeCache(aView *View) (cache.Cache, error) {
 	}
 
 	c.aerospikeClient = client
-	return aerospike.New(namespace, expanded, client, uint32(time.Duration(c.TimeToLiveMs)*time.Second/time.Millisecond))
+	return aerospike.New(namespace, expanded, client, uint32(c.TimeToLiveMs/1000))
 }
 
 func (c *Cache) expandLocation(aView *View) (string, error) {
