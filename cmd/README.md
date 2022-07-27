@@ -133,7 +133,6 @@ JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
 WHERE ID = $Id
 ```
 
-
 ###### View SQL column type codec 
 
 ```sql
@@ -155,6 +154,40 @@ WHERE ID = $Id
 
 ###### Supported conversion Codecs
     - AsStrings: converts coma separated value into []string
+
+
+##### Setting matching URI
+
+```sql
+/* {"URI":"dept/"} */
+SELECT
+dept.* EXCEPT ORG_ID
+employee.* EXCEPT DEPT_ID
+FROM (SELECT * FROM DEPARMENT t) dept               
+JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee 
+ ON dept.ID = employee.DEPT_ID
+```
+
+
+#### Setting data caching
+
+```sql
+/* {"URI":"dept/", "Cache":{"Name": "aerospike",
+"Provider": "aerospike://127.0.0.1:3000/test",
+"Location": "${view.Name}",
+"TimeToLiveMs": 36000
+}} */
+SELECT
+dept.* EXCEPT ORG_ID
+employee.* EXCEPT DEPT_ID
+FROM (SELECT * FROM DEPARMENT t) dept                /* {"Cache":{"Ref":"aerospike"}} */
+JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee  /* {"Cache":{"Ref":"aerospike"}} */
+ ON dept.ID = employee.DEPT_ID
+```
+
+
+
+
 
 
 #### Persisting routes/config to the local folder
