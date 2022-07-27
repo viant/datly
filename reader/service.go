@@ -195,7 +195,13 @@ func (s *Service) query(ctx context.Context, view *view.View, db *sql.DB, SQL st
 		return fmt.Errorf("database error occured while fetching data for view %v", view.Name)
 	}
 
-	defer reader.Stmt().Close()
+	defer func() {
+		stmt := reader.Stmt()
+		if stmt == nil {
+			return
+		}
+		stmt.Close()
+	}()
 	readData := 0
 	err = reader.QueryAll(ctx, func(row interface{}) error {
 		row, err = view.UnwrapDatabaseType(ctx, row)
