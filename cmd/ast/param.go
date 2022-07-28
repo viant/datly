@@ -78,7 +78,7 @@ outer:
 					}
 				}
 			} else {
-				typer = &ColumnType{ColumnName: text}
+				typer = &ColumnType{ColumnName: strings.ToLower(text)}
 			}
 		}
 

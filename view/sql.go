@@ -155,11 +155,7 @@ func detectColumnsSQL(source string, v *View) (string, []interface{}, error) {
 
 	SQL := sb.String()
 	if source != v.Name && source != v.Table {
-		discover := metadata.EnrichWithDiscover(source, false)
-		replacement := rdata.Map{}
-		replacement.Put(keywords.AndCriteria[1:], "\n\n AND 1=0 ")
-		replacement.Put(keywords.WhereCriteria[1:], "\n\n WHERE 1=0 ")
-		SQL = replacement.ExpandAsText(discover)
+		SQL = ExpandWithFalseCondition(source)
 	}
 
 	var placeholders []interface{}
@@ -170,6 +166,15 @@ func detectColumnsSQL(source string, v *View) (string, []interface{}, error) {
 	}
 
 	return SQL, placeholders, nil
+}
+
+func ExpandWithFalseCondition(source string) string {
+	discover := metadata.EnrichWithDiscover(source, false)
+	replacement := rdata.Map{}
+	replacement.Put(keywords.AndCriteria[1:], "\n\n AND 1=0 ")
+	replacement.Put(keywords.WhereCriteria[1:], "\n\n WHERE 1=0 ")
+	SQL := replacement.ExpandAsText(discover)
+	return SQL
 }
 
 func expandWithZeroValues(SQL string, template *Template) (string, error) {

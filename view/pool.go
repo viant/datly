@@ -170,6 +170,11 @@ func (d *db) ctxWithTimeout(duration time.Duration) context.Context {
 
 func (p *dbPool) DB(ctx context.Context, driver, dsn string, config *DBConfig) func() (*sql.DB, error) {
 	builder := &strings.Builder{}
+
+	if config == nil {
+		config = &DBConfig{}
+	}
+
 	builder.WriteString(strconv.Itoa(config.ConnMaxLifetimeMs))
 	builder.WriteByte('#')
 	builder.WriteString(strconv.Itoa(config.MaxIdleConns))

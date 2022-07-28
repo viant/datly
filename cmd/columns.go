@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/sqlx/io"
+	rdata "github.com/viant/toolbox/data"
+	"github.com/viant/velty/ast/expr"
+	"github.com/viant/velty/parser"
 	"strings"
 )
 
@@ -30,9 +33,29 @@ func (s *serverBuilder) updateTableColumnTypes(ctx context.Context, table *Table
 }
 
 func (s *serverBuilder) updatedColumns(table *Table, prefix, tableName string, db *sql.DB) {
-	SQL := "SELECT * FROM " + tableName + " WHERE 1 = 0"
+	parse, err := parser.Parse([]byte(tableName))
+	var args []interface{}
+	expandMap := &rdata.Map{}
+
+	if err == nil {
+		if anIndex := strings.Index(tableName, "SELECT"); anIndex != -1 {
+
+			for _, statement := range parse.Stmt {
+				switch actual := statement.(type) {
+				case *expr.Select:
+					expandMap.SetValue(actual.FullName[1:], "?")
+					args = append(args, 0)
+				}
+			}
+
+			tableName = expandMap.ExpandAsText(tableName)
+		}
+	}
+
+	SQL := "SELECT * FROM " + tableName + " t WHERE 1 = 0"
+
 	fmt.Printf("checking %v ...\n", tableName)
-	query, err := db.QueryContext(context.Background(), SQL)
+	query, err := db.QueryContext(context.Background(), SQL, args...)
 	if err != nil {
 		s.logger.Write([]byte(fmt.Sprintf("error occured while updating table %v columns: %v", tableName, err)))
 		return
@@ -55,6 +78,7 @@ func (s *serverBuilder) updatedColumns(table *Table, prefix, tableName string, d
 			if key != "" {
 				key += "."
 			}
+
 			key += column.Name()
 			table.ColumnTypes[strings.ToLower(key)] = columnType
 		}

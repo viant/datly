@@ -6,7 +6,7 @@ parameters:
     name: tID
     required: true
     typer:
-      columnname: T1.ID
+      columnname: t1.id
 source: |-
   SELECT *, (
       SELECT abc

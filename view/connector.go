@@ -26,7 +26,7 @@ type (
 		//TODO add secure password storage
 		db          func() (*sql.DB, error)
 		initialized bool
-		DBConfig
+		*DBConfig
 		mux sync.Mutex
 	}
 
@@ -35,6 +35,7 @@ type (
 		ConnMaxIdleTimeMs int `json:",omitempty" yaml:",omitempty"`
 		MaxOpenConns      int `json:",omitempty" yaml:",omitempty"`
 		ConnMaxLifetimeMs int `json:",omitempty" yaml:",omitempty"`
+		TimeoutTime       int `json:",omitempty" yaml:",omitempty"`
 	}
 )
 
@@ -65,6 +66,10 @@ func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 			return err
 		}
 		c.inherit(connector)
+	}
+
+	if c.DBConfig == nil {
+		c.DBConfig = &DBConfig{}
 	}
 
 	if err := c.Validate(); err != nil {
@@ -98,7 +103,7 @@ func (c *Connector) DB(ctx context.Context) (*sql.DB, error) {
 	}
 
 	c.mux.Lock()
-	c.db = aDbPool.DB(ctx, c.Driver, dsn, &c.DBConfig)
+	c.db = aDbPool.DB(ctx, c.Driver, dsn, c.DBConfig)
 	aDB, err := c.db()
 	c.mux.Unlock()
 
@@ -141,6 +146,10 @@ func (c *Connector) inherit(connector *Connector) {
 
 	if c.Name == "" {
 		c.Name = connector.Name
+	}
+
+	if c.DBConfig == nil {
+		c.DBConfig = connector.DBConfig
 	}
 }
 
