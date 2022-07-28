@@ -1,33 +1,22 @@
 Alias: t
 Batch:
   Parent: 10000
-Cache:
-  Location: ${view.Name}
-  Name: aerospike
-  PartSize: 0
-  Provider: aerospike://127.0.0.1:3000/test
-  TimeToLiveMs: 3.6e+06
 CaseFormat: lc
 Caser: 3
 Columns:
   - DataType: INTEGER
-    Filterable: true
     Name: id
     Nullable: true
   - DataType: DATETIME
-    Filterable: true
     Name: timestamp
     Nullable: true
   - DataType: INTEGER
-    Filterable: true
     Name: event_type_id
     Nullable: true
   - DataType: DECIMAL(7, 2)
-    Filterable: true
     Name: quantity
     Nullable: true
   - DataType: INTEGER
-    Filterable: true
     Name: user_id
     Nullable: true
 Connector:
@@ -51,12 +40,11 @@ Schema:
 Selector:
   Constraints:
     Criteria: true
-    Filterable:
-      - '*'
+    Filterable: null
     Limit: true
     Offset: true
     OrderBy: false
-    Projection: true
+    Projection: false
   Limit: 25
 Standalone: true
 Table: events

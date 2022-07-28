@@ -92,6 +92,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if err := r.View.Init(ctx, resource.Resource); err != nil {
 		return err
 	}
+
 	if err := r.initVisitor(resource); err != nil {
 		return err
 	}

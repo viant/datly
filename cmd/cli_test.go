@@ -122,10 +122,8 @@ func TestRun(t *testing.T) {
 				"-D=sqlite3",
 				"-A=/tmp/datly/generator/db.db",
 				"-X=testdata/case008_cache_hint/events.sql",
-				"-d=testdata/case008_cache_hint",
 			},
 			viewURL:    "/v1/api/meta/view/dev/events/1",
-			dataURL:    "/v1/api/dev/events/1",
 			dataMethod: http.MethodGet,
 		},
 		{
@@ -136,6 +134,19 @@ func TestRun(t *testing.T) {
 			dataURL:     "/v1/api/dev/events/1",
 			dataMethod:  http.MethodGet,
 		},
+		//{
+		//	description: "type definition",
+		//	URI:         "case010_acl_param",
+		//	args: []string{
+		//		"-N=events",
+		//		"-D=sqlite3",
+		//		"-A=/tmp/datly/generator/db.db",
+		//		"-X=testdata/case010_acl_param/events.sql",
+		//		"-w=testdata/case010_acl_param",
+		//	},
+		//	viewURL:    "/v1/api/meta/view/dev/events/1",
+		//	dataMethod: http.MethodGet,
+		//},
 	}
 
 	loader := afs.New()
@@ -169,6 +180,10 @@ func generateLogs(loader afs.Service, testLocation string, logger *memoryWriter,
 }
 
 func checkReadData(t *testing.T, server *standalone.Server, testCase *testcase, loader afs.Service, testLocation string) {
+	if testCase.dataURL == "" {
+		return
+	}
+
 	actualData, err := readResponse(server.Handler, testCase.dataURL, testCase.dataMethod, nil)
 	if !assert.Nil(t, err, testCase.description) {
 		return

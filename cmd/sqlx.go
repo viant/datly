@@ -39,6 +39,7 @@ type (
 		Auth              string
 		Selector          *view.Config
 	}
+
 	Column struct {
 		Ns       string
 		Name     string
@@ -243,6 +244,7 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	if err != nil {
 		return err
 	}
+
 	if join.Comments != "" {
 		comments := join.Comments
 		comments = strings.ReplaceAll(comments, "/*", "")

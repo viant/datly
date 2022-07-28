@@ -593,7 +593,7 @@ func TestRouter(t *testing.T) {
 		{
 			description: "page",
 			resourceURI: "028_page",
-			uri:         "/api/events?_page=2",
+			uri:         "/api/events?_page=3",
 			method:      http.MethodGet,
 			visitors:    map[string]codec.LifecycleVisitor{},
 			expected:    `[{"Id":102,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,

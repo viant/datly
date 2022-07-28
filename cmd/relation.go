@@ -36,6 +36,7 @@ func (s *serverBuilder) buildXRelations(ctx context.Context, viewRoute *router.R
 	if len(xTable.Joins) == 0 {
 		return nil
 	}
+
 	for _, join := range xTable.Joins {
 		relView := &view.View{
 			Name:  join.Table.Alias,
@@ -64,7 +65,17 @@ func (s *serverBuilder) buildXRelations(ctx context.Context, viewRoute *router.R
 			return fmt.Errorf("failed to lookup view: %v", join.Owner.Name)
 		}
 
-		newCase, err := format.NewCase(view.DetectCase(join.Table.Alias))
+		columnNames := make([]string, 0)
+		for _, column := range xTable.Inner {
+			columnName := column.Alias
+			if columnName == "" {
+				columnName = column.Name
+			}
+
+			columnNames = append(columnNames, columnName)
+		}
+
+		newCase, err := format.NewCase(view.DetectCase(columnNames...))
 		if err != nil {
 			return err
 		}
@@ -321,8 +332,8 @@ func (s *serverBuilder) buildRelations(ctx context.Context, meta *metadata.Servi
 					Limit: 40,
 				},
 			}
-			s.route.Resource.AddViews(relView)
 
+			s.route.Resource.AddViews(relView)
 			caseFormat, err := format.NewCase(view.DetectCase(relName))
 			if err != nil {
 				return err

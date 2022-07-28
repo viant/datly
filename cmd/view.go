@@ -182,10 +182,16 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 			if name == "" {
 				name = column.Name
 			}
+
 			if name == "" {
 				continue
 			}
+
 			dataType := column.DataType
+			if dataType == "" {
+				dataType = table.ColumnTypes[strings.ToLower(name)]
+			}
+
 			if dataType == "" {
 				dataType = "string"
 			}
@@ -200,6 +206,7 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 			Name:   strings.Title(k),
 			Fields: fields,
 		})
+
 		relView := &view.View{
 			Name:  k,
 			Table: v.Table.Name,
@@ -326,16 +333,21 @@ func buildExcludeColumn(xTable *Table, aView *view.View, viewRoute *router.Route
 }
 
 func detectCaseFormat(xTable *Table) view.CaseFormat {
-	var result = "lc"
-	if len(xTable.Inner) > 0 {
-		for _, candidate := range xTable.Inner {
-			if len(candidate.Name) > 3 {
-				result = view.DetectCase(xTable.Inner[0].Name)
-				break
-			}
+	columnNames := make([]string, 0)
+	for _, column := range xTable.Inner {
+		columnName := column.Alias
+		if columnName == "" {
+			columnName = column.Name
 		}
+
+		if columnName == "*" {
+			continue
+		}
+
+		columnNames = append(columnNames, columnName)
 	}
-	return view.CaseFormat(result)
+
+	return view.CaseFormat(view.DetectCase(columnNames...))
 
 }
 

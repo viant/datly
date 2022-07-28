@@ -1,4 +1,0 @@
-CacheProviders:
-  - Provider: 'aerospike://127.0.0.1:3000/test'
-    Location: "${view.Name}"
-    TimeToLiveMs: 10240
