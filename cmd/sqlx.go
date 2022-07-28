@@ -391,7 +391,6 @@ func appendItem(item *query.Item, result *[]*Column) {
 		}
 		item.DataType = column.DataType
 	}
-	fmt.Printf("CCC: %v %+v\n", comments, item)
 	switch actual := item.Expr.(type) {
 	case *expr.Ident:
 		*result = append(*result, &Column{Name: actual.Name, Alias: item.Alias, DataType: item.DataType})
