@@ -244,12 +244,11 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	if err != nil {
 		return err
 	}
-
-	if join.Comments != "" {
-		comments := join.Comments
-		comments = strings.ReplaceAll(comments, "/*", "")
-		comments = strings.ReplaceAll(comments, "*/", "")
-		_ = json.Unmarshal([]byte(comments), &relTable.TableMeta)
+	if hint := join.Comments; hint != "" {
+		err = hintToStruct(hint, &relTable.TableMeta)
+		if err != nil {
+			fmt.Printf("invalid hint: %s, %w\n", hint, err)
+		}
 	}
 	isParamView := isParamPredicate(parser.Stringify(join.On.X))
 	if isParamView {
@@ -322,6 +321,12 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	return nil
 }
 
+func hintToStruct(encoded string, aStructPtr interface{}) error {
+	encoded = strings.ReplaceAll(encoded, "/*", "")
+	encoded = strings.ReplaceAll(encoded, "*/", "")
+	return json.Unmarshal([]byte(encoded), aStructPtr)
+}
+
 func isParamPredicate(criteria string) bool {
 	onCriteria := strings.TrimSpace(criteria)
 	if index := strings.Index(criteria, "/*"); index != -1 {
@@ -379,11 +384,19 @@ func selectItemToColumn(query *query.Select) Columns {
 }
 
 func appendItem(item *query.Item, result *[]*Column) {
+	comments := item.Comments
+	if hint := comments; hint != "" {
+		column := &view.Column{}
+		if err := hintToStruct(hint, &column); err != nil {
+		}
+		item.DataType = column.DataType
+	}
+	fmt.Printf("CCC: %v %+v\n", comments, item)
 	switch actual := item.Expr.(type) {
 	case *expr.Ident:
-		*result = append(*result, &Column{Name: actual.Name, Alias: item.Alias})
+		*result = append(*result, &Column{Name: actual.Name, Alias: item.Alias, DataType: item.DataType})
 	case *expr.Selector:
-		*result = append(*result, &Column{Name: parser.Stringify(actual.X), Ns: actual.Name, Alias: item.Alias})
+		*result = append(*result, &Column{Name: parser.Stringify(actual.X), Ns: actual.Name, DataType: item.DataType, Alias: item.Alias})
 	case *expr.Star:
 		switch star := actual.X.(type) {
 		case *expr.Ident:
