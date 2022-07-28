@@ -1,8 +1,8 @@
 Alias: t
 Batch:
   Parent: 10000
-CaseFormat: lc
-Caser: 3
+CaseFormat: lu
+Caser: 5
 Columns:
   - DataType: INTEGER
     Filterable: true

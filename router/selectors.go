@@ -594,7 +594,11 @@ func (b *selectorsBuilder) pageOffset(pageValue string, selector *view.Selector,
 		limit = selector.Limit
 	}
 
-	return page * limit, nil
+	if page <= 0 {
+		return 0, fmt.Errorf("page can't be lower than 1")
+	}
+
+	return (page - 1) * limit, nil
 }
 
 func canUseColumn(aView *view.View, columnName string) error {

@@ -39,6 +39,7 @@ type (
 		Auth              string
 		Selector          *view.Config
 	}
+
 	Column struct {
 		Ns       string
 		Name     string
@@ -177,8 +178,7 @@ func buildTable(x node.Node, uriParams map[string]bool) (*Table, error) {
 			if len(innerQuery.Joins) > 0 {
 				table.Deps = map[string]string{}
 				for _, join := range innerQuery.Joins {
-					joinTable := strings.Trim(parser.Stringify(join.With), "`")
-					table.Deps[join.Alias] = joinTable
+					table.Deps[join.Alias] = strings.Trim(parser.Stringify(join.With), "`")
 				}
 			}
 			if innerQuery.Qualify != nil {
@@ -244,11 +244,12 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	if err != nil {
 		return err
 	}
-	if hint := join.Comments; hint != "" {
-		err = hintToStruct(hint, &relTable.TableMeta)
-		if err != nil {
-			fmt.Printf("invalid hint: %s, %w\n", hint, err)
-		}
+
+	if join.Comments != "" {
+		comments := join.Comments
+		comments = strings.ReplaceAll(comments, "/*", "")
+		comments = strings.ReplaceAll(comments, "*/", "")
+		_ = json.Unmarshal([]byte(comments), &relTable.TableMeta)
 	}
 	isParamView := isParamPredicate(parser.Stringify(join.On.X))
 	if isParamView {
@@ -321,12 +322,6 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	return nil
 }
 
-func hintToStruct(encoded string, aStructPtr interface{}) error {
-	encoded = strings.ReplaceAll(encoded, "/*", "")
-	encoded = strings.ReplaceAll(encoded, "*/", "")
-	return json.Unmarshal([]byte(encoded), aStructPtr)
-}
-
 func isParamPredicate(criteria string) bool {
 	onCriteria := strings.TrimSpace(criteria)
 	if index := strings.Index(criteria, "/*"); index != -1 {
@@ -384,18 +379,11 @@ func selectItemToColumn(query *query.Select) Columns {
 }
 
 func appendItem(item *query.Item, result *[]*Column) {
-	comments := item.Comments
-	if hint := comments; hint != "" {
-		column := &view.Column{}
-		if err := hintToStruct(hint, &column); err != nil {
-		}
-		item.DataType = column.DataType
-	}
 	switch actual := item.Expr.(type) {
 	case *expr.Ident:
-		*result = append(*result, &Column{Name: actual.Name, Alias: item.Alias, DataType: item.DataType})
+		*result = append(*result, &Column{Name: actual.Name, Alias: item.Alias})
 	case *expr.Selector:
-		*result = append(*result, &Column{Name: parser.Stringify(actual.X), Ns: actual.Name, DataType: item.DataType, Alias: item.Alias})
+		*result = append(*result, &Column{Name: parser.Stringify(actual.X), Ns: actual.Name, Alias: item.Alias})
 	case *expr.Star:
 		switch star := actual.X.(type) {
 		case *expr.Ident:

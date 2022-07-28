@@ -41,6 +41,7 @@ type (
 		SQLXLocation string   `short:"X" long:"sqlx" description:"SQLX (extension for relation) location" `
 		Relations    []string `short:"R" long:"relation" description:"relation in form of viewName:tableName" `
 	}
+
 	Content struct {
 		Output         string `short:"O" long:"output" description:"output style" choice:"c" choice:"b" `
 		RedirectSizeKb int    `short:"M" long:"redirect" description:"redirectMinSize" `
