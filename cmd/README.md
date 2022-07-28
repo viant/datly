@@ -183,7 +183,7 @@ SELECT
 dept.* EXCEPT ORG_ID
 employee.* EXCEPT DEPT_ID
 FROM (SELECT * FROM DEPARMENT t) dept                /* {"Cache":{"Ref":"fs"}} */
-JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee  /* {"Cache":{"Ref":"fs"}} */
+JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee  /* {"Cache":{"Ref":"fsgit p"}} */
  ON dept.ID = employee.DEPT_ID
 ```
 
