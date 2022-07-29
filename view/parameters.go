@@ -434,3 +434,8 @@ func (p ParametersIndex) Register(parameter *Parameter) {
 		p[key] = parameter
 	}
 }
+
+//NewQueryLocation creates a query location
+func NewQueryLocation(name string) *Location {
+	return &Location{Name: name, Kind: QueryKind}
+}

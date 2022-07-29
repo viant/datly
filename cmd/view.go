@@ -211,7 +211,11 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 			Name:  k,
 			Table: v.Table.Name,
 			Selector: &view.Config{
-				Limit: 1,
+				Limit: 25,
+				Constraints: &view.Constraints{
+					Limit:  true,
+					Offset: true,
+				},
 			},
 		}
 

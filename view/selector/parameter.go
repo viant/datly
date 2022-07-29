@@ -1,11 +1,9 @@
-package router
+package selector
 
 import (
 	"fmt"
 	"reflect"
 )
-
-type QueryParam string
 
 var (
 	stringType = reflect.TypeOf("")
@@ -13,16 +11,16 @@ var (
 )
 
 const (
-	Fields   QueryParam = "_fields"
-	Offset   QueryParam = "_offset"
-	OrderBy  QueryParam = "_orderby"
-	Limit    QueryParam = "_limit"
-	Criteria QueryParam = "_criteria"
-	Page     QueryParam = "_page"
+	Fields   = "_fields"
+	Offset   = "_offset"
+	OrderBy  = "_orderby"
+	Limit    = "_limit"
+	Criteria = "_criteria"
+	Page     = "_page"
 )
 
-func (q QueryParam) ParamType() reflect.Type {
-	switch q {
+func ParamType(name string) reflect.Type {
+	switch name {
 	case Limit, Offset, Page:
 		return intType
 	default:
@@ -30,8 +28,8 @@ func (q QueryParam) ParamType() reflect.Type {
 	}
 }
 
-func (q QueryParam) Description(viewName string) string {
-	switch q {
+func Description(paramName, viewName string) string {
+	switch paramName {
 	case Limit:
 		return fmt.Sprintf("allows to limit %v view data returned from db", viewName)
 	case Offset:
@@ -45,6 +43,5 @@ func (q QueryParam) Description(viewName string) string {
 	case Page:
 		return fmt.Sprintf("allows to skip first page * limit values, starting from 0 page. Has precedence over offset")
 	}
-
 	return ""
 }
