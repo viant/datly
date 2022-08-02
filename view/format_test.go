@@ -2,6 +2,7 @@ package view
 
 import (
 	"github.com/stretchr/testify/assert"
+	"strings"
 	"testing"
 )
 
@@ -24,11 +25,23 @@ func TestDetectCase(t *testing.T) {
 			},
 			expect: "lc",
 		},
+		{
+			names: []string{
+				"EVENT",
+			},
+			expect: "uu",
+		},
+		{
+			names: []string{
+				"event",
+			},
+			expect: "lu",
+		},
 	}
 
 	for _, testCase := range testCases {
 		actual := DetectCase(testCase.names...)
-		assert.EqualValues(t, testCase.expect, actual)
+		assert.EqualValues(t, testCase.expect, actual, testCase.expect+" "+strings.Join(testCase.names, ","))
 	}
 
 }

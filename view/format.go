@@ -51,37 +51,53 @@ func DetectCase(data ...string) string {
 	}
 
 	result := ""
-
+	upperCases := 0
+	loweCases := 0
 	hasUnderscore := false
 
 outer:
 	for _, datum := range data {
 		for _, aByte := range datum {
+
 			if aByte >= 'A' && aByte <= 'Z' {
-				result += "u"
+				if result == "" {
+					result += "u"
+				}
+				upperCases++
 			}
 
 			if aByte >= 'a' && aByte <= 'z' {
-				result += "l"
+				if result == "" {
+					result += "l"
+				}
+				loweCases++
 			}
 
-			if len(result) > 0 {
+			if aByte == '_' {
+				hasUnderscore = true
+			}
+
+			if result != "" && (loweCases > 0 && upperCases > 0) || hasUnderscore {
 				break outer
 			}
-		}
-	}
-
-	for _, datum := range data {
-		hasUnderscore = hasUnderscore || strings.Contains(datum, "_")
-		if hasUnderscore {
-			break
 		}
 	}
 
 	if hasUnderscore {
 		result += "u"
 	} else {
-		result += "c"
+		suffix := "c"
+		switch strings.ToLower(result) {
+		case "u":
+			if loweCases == 0 {
+				suffix = "u"
+			}
+		case "l":
+			if upperCases == 0 {
+				suffix = "u"
+			}
+		}
+		result += suffix
 	}
 
 	return result

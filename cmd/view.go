@@ -337,7 +337,7 @@ func buildExcludeColumn(xTable *Table, aView *view.View, viewRoute *router.Route
 }
 
 func detectCaseFormat(xTable *Table) view.CaseFormat {
-	columnNames := make([]string, 0)
+	names := make([]string, 0)
 	for _, column := range xTable.Inner {
 		columnName := column.Alias
 		if columnName == "" {
@@ -348,10 +348,19 @@ func detectCaseFormat(xTable *Table) view.CaseFormat {
 			continue
 		}
 
-		columnNames = append(columnNames, columnName)
+		names = append(names, columnName)
 	}
 
-	return view.CaseFormat(view.DetectCase(columnNames...))
+	if len(names) == 0 && len(xTable.ColumnTypes) > 0 {
+		for columnName := range xTable.ColumnTypes {
+			names = append(names, columnName)
+		}
+	}
+	if len(names) == 0 {
+		names = append(names, xTable.Name)
+	}
+
+	return view.CaseFormat(view.DetectCase(names...))
 
 }
 
