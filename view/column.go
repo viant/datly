@@ -28,12 +28,13 @@ type Column struct {
 
 	Codec *Codec `json:",omitempty"`
 
-	rType         reflect.Type
-	tag           *io.Tag
-	sqlExpression string
-	field         *reflect.StructField
-	initialized   bool
-	_fieldName    string
+	rType          reflect.Type
+	tag            *io.Tag
+	sqlExpression  string
+	field          *reflect.StructField
+	initialized    bool
+	_fieldName     string
+	DatabaseColumn string
 }
 
 //SqlExpression builds column sql expression if any expression specified in format: Expression AS Name
@@ -77,11 +78,14 @@ func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, co
 		return nil
 	}
 
+	c.initialized = true
 	if config != nil {
 		c.inherit(config)
 	}
 
-	c.initialized = true
+	if c.DatabaseColumn == "" {
+		c.DatabaseColumn = c.Name
+	}
 
 	if c.Name == "" {
 		return fmt.Errorf("column name was empty")
@@ -120,7 +124,7 @@ func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, co
 
 func (c *Column) buildSQLExpression(allowNulls bool) error {
 	defaultValue := c.defaultValue(c.rType)
-	c.sqlExpression = c.Name
+	c.sqlExpression = c.DatabaseColumn
 	if c.Expression != "" {
 		c.sqlExpression = c.Expression
 	}

@@ -1,146 +1,153 @@
 Alias: t
 Batch:
-  Parent: 10000
+    Parent: 10000
 CaseFormat: lc
 Caser: 3
 Columns:
-  - DataType: int
-    Filterable: true
-    Name: totalTypes
-    Nullable: true
-  - DataType: INTEGER
-    Filterable: true
-    Name: id
-    Nullable: true
-  - DataType: INTEGER
-    Filterable: true
-    Name: eventTypeId
-    Nullable: true
-  - DataType: VARCHAR(255)
-    Filterable: true
-    Name: eventName
-    Nullable: true
+    - DataType: int
+      DatabaseColumn: totalTypes
+      Filterable: true
+      Name: totalTypes
+      Nullable: true
+    - DataType: INTEGER
+      DatabaseColumn: id
+      Filterable: true
+      Name: id
+      Nullable: true
+    - DataType: INTEGER
+      DatabaseColumn: eventTypeId
+      Filterable: true
+      Name: eventTypeId
+      Nullable: true
+    - DataType: VARCHAR(255)
+      DatabaseColumn: eventName
+      Filterable: true
+      Name: eventName
+      Nullable: true
 ColumnsConfig:
-  totalTypes:
-    DataType: int
+    totalTypes:
+        DataType: int
 Connector:
-  DSN: /tmp/datly/generator/db.db
-  Driver: sqlite3
-  Name: dev
-  Secret:
-    Data: null
-    Fallback: null
-    Key: blowfish://default
-    MaxRetry: 3
-    TimeoutMs: 5000
-    URL: mem://localhost/resource/mysql.json
+    DSN: /tmp/datly/generator/db.db
+    Driver: sqlite3
+    Name: dev
+    Secret:
+        Data: null
+        Fallback: null
+        Key: blowfish://default
+        MaxRetry: 3
+        TimeoutMs: 5000
+        URL: mem://localhost/resource/mysql.json
 Logger:
-  Name: ""
+    Name: ""
 MatchStrategy: read_matched
 Name: events
 Ref: events
 Schema:
-  Cardinality: One
+    Cardinality: One
 Selector:
-  Constraints:
-    Criteria: true
-    Filterable:
-      - '*'
-    Limit: true
-    Offset: true
-    OrderBy: false
-    Projection: true
-  Limit: 25
+    Constraints:
+        Criteria: true
+        Filterable:
+            - '*'
+        Limit: true
+        Offset: true
+        OrderBy: false
+        Projection: true
+    Limit: 25
 Standalone: true
 Table: events
 Template:
-  Parameters:
-    - In:
-        Kind: query
-        Name: quantity
-      Name: quantity
-      PresenceName: quantity
-      Ref: quantity
-      Required: true
-      Schema:
+    Parameters:
+        - In:
+            Kind: query
+            Name: quantity
+          Name: quantity
+          PresenceName: quantity
+          Ref: quantity
+          Required: true
+          Schema:
+            Cardinality: One
+            DataType: float64
+    PresenceSchema:
         Cardinality: One
-        DataType: float64
-  PresenceSchema:
-    Cardinality: One
-  Schema:
-    Cardinality: One
-  Source: |-
-    ( SELECT COUNT(*)      as totalTypes /*{"DataType": "int"}*/,
-                    e.id,
-                    e.event_type_id as eventTypeId,
-                    et.name as eventName
-             FROM events e
-                      JOIN event_types et ON e.event_type_id = et.id
-             WHERE 1 = 1
-               AND e.quantity > $quantity
-             GROUP BY e.event_type_id
-             ORDER BY 1
-          )
-  SourceURL: events/events.sql
+    Schema:
+        Cardinality: One
+    Source: |-
+        ( SELECT COUNT(*)      as totalTypes /*{"DataType": "int"}*/,
+                        e.id,
+                        e.event_type_id as eventTypeId,
+                        et.name as eventName
+                 FROM events e
+                          JOIN event_types et ON e.event_type_id = et.id
+                 WHERE 1 = 1
+                   AND e.quantity > $quantity
+                 GROUP BY e.event_type_id
+                 ORDER BY 1
+              )
+    SourceURL: events/events.sql
 With:
-  - Cardinality: Many
-    Column: event_type_id
-    Holder: EventTypes
-    IncludeColumn: true
-    Name: events_eventTypes
-    Of:
-      Alias: t
-      Batch:
-        Parent: 10000
-      CaseFormat: lu
-      Caser: 5
-      Column: id
-      Columns:
-        - DataType: INTEGER
-          Name: id
-          Nullable: true
-        - DataType: VARCHAR(255)
-          Name: name
-          Nullable: true
-        - DataType: INTEGER
-          Name: account_id
-          Nullable: true
-      Connector:
-        DSN: /tmp/datly/generator/db.db
-        Driver: sqlite3
-        Name: dev
-        Secret:
-          Data: null
-          Fallback: null
-          Key: blowfish://default
-          MaxRetry: 3
-          TimeoutMs: 5000
-          URL: mem://localhost/resource/mysql.json
-      Field: id
-      Logger:
-        Name: ""
-      MatchStrategy: read_matched
-      Name: eventTypes#
-      Ref: eventTypes
-      Schema:
-        Cardinality: One
-      Selector:
-        Constraints:
-          Criteria: false
-          Filterable: null
-          Limit: false
-          Offset: false
-          OrderBy: false
-          Projection: false
-        Limit: 40
-      Table: event_types
-      Template:
-        PresenceSchema:
-          Cardinality: One
+    - Cardinality: Many
+      Column: event_type_id
+      Holder: EventTypes
+      IncludeColumn: true
+      Name: events_eventTypes
+      Of:
+        Alias: t
+        Batch:
+            Parent: 10000
+        CaseFormat: lu
+        Caser: 5
+        Column: id
+        Columns:
+            - DataType: INTEGER
+              DatabaseColumn: id
+              Name: id
+              Nullable: true
+            - DataType: VARCHAR(255)
+              DatabaseColumn: name
+              Name: name
+              Nullable: true
+            - DataType: INTEGER
+              DatabaseColumn: account_id
+              Name: account_id
+              Nullable: true
+        Connector:
+            DSN: /tmp/datly/generator/db.db
+            Driver: sqlite3
+            Name: dev
+            Secret:
+                Data: null
+                Fallback: null
+                Key: blowfish://default
+                MaxRetry: 3
+                TimeoutMs: 5000
+                URL: mem://localhost/resource/mysql.json
+        Field: id
+        Logger:
+            Name: ""
+        MatchStrategy: read_matched
+        Name: eventTypes#
+        Ref: eventTypes
         Schema:
-          Cardinality: One
-        Source: |-
-          ( SELECT *
-              FROM event_types
-           )
-        SourceURL: events/eventTypes.sql
+            Cardinality: One
+        Selector:
+            Constraints:
+                Criteria: false
+                Filterable: null
+                Limit: false
+                Offset: false
+                OrderBy: false
+                Projection: false
+            Limit: 40
+        Table: event_types
+        Template:
+            PresenceSchema:
+                Cardinality: One
+            Schema:
+                Cardinality: One
+            Source: |-
+                ( SELECT *
+                    FROM event_types
+                 )
+            SourceURL: events/eventTypes.sql

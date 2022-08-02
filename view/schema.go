@@ -97,12 +97,13 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 	fieldsLen := len(columns)
 	structFields := make([]reflect.StructField, 0)
 	for i := 0; i < fieldsLen; i++ {
-		if _, ok := excluded[columns[i].Name]; ok {
+		columnName := columns[i].Name
+		if _, ok := excluded[columnName]; ok {
 			continue
 		}
 
 		defaultTag := createDefaultTagIfNeeded(columns[i])
-		sqlxTag := `sqlx:"name=` + columns[i].Name + `"`
+		sqlxTag := `sqlx:"name=` + columnName + `"`
 
 		var aTag string
 		if defaultTag == "" {
@@ -111,7 +112,7 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 			aTag = sqlxTag + " " + defaultTag
 		}
 
-		structFieldName := viewCaseFormat.Format(columns[i].Name, format.CaseUpperCamel)
+		structFieldName := viewCaseFormat.Format(columnName, format.CaseUpperCamel)
 		rType := columns[i].rType
 		if columns[i].Nullable && rType.Kind() != reflect.Ptr {
 			rType = reflect.PtrTo(rType)

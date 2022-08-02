@@ -75,7 +75,7 @@ func (s *serverBuilder) buildXRelations(ctx context.Context, viewRoute *router.R
 			columnNames = append(columnNames, columnName)
 		}
 
-		newCase, err := format.NewCase(view.DetectCase(columnNames...))
+		newCase, err := detectCaseFormat(xTable).Caser()
 		if err != nil {
 			return err
 		}

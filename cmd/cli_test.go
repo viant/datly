@@ -134,19 +134,18 @@ func TestRun(t *testing.T) {
 			dataURL:     "/v1/api/dev/events/1",
 			dataMethod:  http.MethodGet,
 		},
-		//{
-		//	description: "type definition",
-		//	URI:         "case010_acl_param",
-		//	args: []string{
-		//		"-N=events",
-		//		"-D=sqlite3",
-		//		"-A=/tmp/datly/generator/db.db",
-		//		"-X=testdata/case010_acl_param/events.sql",
-		//		"-w=testdata/case010_acl_param",
-		//	},
-		//	viewURL:    "/v1/api/meta/view/dev/events/1",
-		//	dataMethod: http.MethodGet,
-		//},
+		{
+			description: "type definition",
+			URI:         "case010_acl_param",
+			args: []string{
+				"-N=eventTypes",
+				"-D=sqlite3",
+				"-A=/tmp/datly/generator/db.db",
+				"-X=testdata/case010_acl_param/event_types.sql",
+			},
+			viewURL:    "/v1/api/meta/view/dev/event_types",
+			dataMethod: http.MethodGet,
+		},
 	}
 
 	loader := afs.New()

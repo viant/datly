@@ -449,10 +449,11 @@ func convertIoColumnsToColumns(ioColumns []io.Column, nullable map[string]bool) 
 		dataTypeName := ioColumns[i].DatabaseTypeName()
 		isNullable, _ := ioColumns[i].Nullable()
 		columns = append(columns, &Column{
-			Name:     ioColumns[i].Name(),
-			DataType: dataTypeName,
-			rType:    scanType,
-			Nullable: nullable[ioColumns[i].Name()] || isNullable,
+			DatabaseColumn: ioColumns[i].Name(),
+			Name:           strings.Trim(ioColumns[i].Name(), "'"),
+			DataType:       dataTypeName,
+			rType:          scanType,
+			Nullable:       nullable[ioColumns[i].Name()] || isNullable,
 		})
 	}
 	return columns

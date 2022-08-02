@@ -1,1 +1,0 @@
-[{"id":1,"timestamp":"2019-03-11T02:20:33Z","event_type_id":2,"quantity":33.23432374000549,"user_id":1}]

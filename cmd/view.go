@@ -99,6 +99,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	if s.options.Table != "" {
 		viewRoute.Index.Namespace[s.options.Namespace()] = s.options.Generate.Name
 	}
+
 	viewRoute.CaseFormat = "lc"
 	if xTable != nil {
 		aView.CaseFormat = detectCaseFormat(xTable)
