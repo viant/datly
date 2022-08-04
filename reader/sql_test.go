@@ -399,11 +399,11 @@ func TestBuilder_Build(t *testing.T) {
 		builder := NewBuilder()
 
 		useCase.selector.Init()
-		sql, placeholders, err := builder.Build(useCase.view, useCase.selector, useCase.batchData, useCase.relation, nil)
+		matcher, err := builder.Build(useCase.view, useCase.selector, useCase.batchData, useCase.relation, nil, nil)
 
 		assert.Nil(t, err, useCase.description)
-		assertly.AssertValues(t, useCase.placeholders, placeholders, useCase.description)
-		assert.Equal(t, useCase.output, strings.TrimSpace(sql), useCase.description)
+		assertly.AssertValues(t, useCase.placeholders, matcher.RawArgs, useCase.description)
+		assert.Equal(t, useCase.output, strings.TrimSpace(matcher.RawSQL), useCase.description)
 	}
 }
 

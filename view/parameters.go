@@ -34,7 +34,6 @@ type (
 		initialized bool
 		view        *View
 
-		Positions        []int `json:",omitempty"`
 		valueAccessor    *Accessor
 		presenceAccessor *Accessor
 		DateFormat       string `json:",omitempty"`

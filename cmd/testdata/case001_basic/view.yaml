@@ -1,57 +1,57 @@
 Alias: t
 Batch:
-    Parent: 10000
-CaseFormat: lc
-Caser: 3
+  Parent: 10000
+CaseFormat: lu
+Caser: 5
 Columns:
-    - DataType: INTEGER
-      DatabaseColumn: id
-      Filterable: true
-      Name: id
-      Nullable: true
-    - DataType: text
-      DatabaseColumn: name
-      Filterable: true
-      Name: name
-      Nullable: true
-    - DataType: numeric
-      DatabaseColumn: price
-      Filterable: true
-      Name: price
-      Nullable: true
+  - DataType: INTEGER
+    DatabaseColumn: id
+    Filterable: true
+    Name: id
+    Nullable: true
+  - DataType: text
+    DatabaseColumn: name
+    Filterable: true
+    Name: name
+    Nullable: true
+  - DataType: numeric
+    DatabaseColumn: price
+    Filterable: true
+    Name: price
+    Nullable: true
 Connector:
-    DSN: /tmp/datly/generator/db.db
-    Driver: sqlite3
-    Name: dev
-    Secret:
-        Data: null
-        Fallback: null
-        Key: blowfish://default
-        MaxRetry: 3
-        TimeoutMs: 5000
-        URL: mem://localhost/resource/mysql.json
+  DSN: /tmp/datly/generator/db.db
+  Driver: sqlite3
+  Name: dev
+  Secret:
+    Data: null
+    Fallback: null
+    Key: blowfish://default
+    MaxRetry: 3
+    TimeoutMs: 5000
+    URL: mem://localhost/resource/mysql.json
 Logger:
-    Name: ""
+  Name: ""
 MatchStrategy: read_matched
 Name: foos
 Ref: foos
 Schema:
-    Cardinality: One
+  Cardinality: One
 Selector:
-    Constraints:
-        Criteria: true
-        Filterable:
-            - '*'
-        Limit: true
-        Offset: true
-        OrderBy: false
-        Projection: true
-    Limit: 25
+  Constraints:
+    Criteria: true
+    Filterable:
+      - '*'
+    Limit: true
+    Offset: true
+    OrderBy: false
+    Projection: true
+  Limit: 25
 Standalone: true
 Table: foos
 Template:
-    PresenceSchema:
-        Cardinality: One
-    Schema:
-        Cardinality: One
-    Source: foos
+  PresenceSchema:
+    Cardinality: One
+  Schema:
+    Cardinality: One
+  Source: foos

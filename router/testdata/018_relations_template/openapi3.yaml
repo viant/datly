@@ -1,113 +1,114 @@
 openapi: 3.1.0
 info:
-    title: ""
-    version: ""
+  title: ""
+  version: ""
 paths:
-    /api/events:
-        get:
-            parameters:
-                - name: ev_criteria
-                  in: query
-                  description: allows to filter view events data that matches given criteria
-                  schema:
-                    type: string
-                - name: ev_limit
-                  in: query
-                  description: allows to limit events view data returned from db
-                  schema:
+  /api/events:
+    get:
+      parameters:
+        - name: ev_criteria
+          in: query
+          description: allows to filter view events data that matches given criteria
+          schema:
+            type: string
+        - name: ev_limit
+          in: query
+          description: allows to limit events view data returned from db
+          schema:
+            type: integer
+            format: int64
+        - name: ev_offset
+          in: query
+          description: allows to skip first n  view events records, it has to be used alongside the limit
+          schema:
+            type: integer
+            format: int64
+        - name: ev_page
+          in: query
+          description: allows to skip first page * limit values, starting from 1 page. Has precedence over offset
+          schema:
+            type: integer
+            format: int64
+        - name: ev_orderby
+          in: query
+          description: allows to sort view events results
+          schema:
+            type: string
+        - name: ev_fields
+          in: query
+          description: allows to control view events fields present in response
+          style: form
+          explode: false
+          schema:
+            type: string
+        - name: Id
+          in: query
+          description: Parameter Id, Located in query with name eventTypeId
+          required: true
+          schema:
+            type: integer
+            description: Parameter Id schema
+            format: int64
+        - name: typ_fields
+          in: query
+          description: allows to control view event_types fields present in response
+          style: form
+          explode: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  EventType:
+                    type: object
+                    properties:
+                      Code:
+                        type: string
+                      Id:
+                        type: integer
+                        format: int64
+                      Type:
+                        type: string
+                  Id:
                     type: integer
                     format: int64
-                - name: ev_offset
-                  in: query
-                  description: allows to skip first n  view events records, it has to be used alongside the limit
-                  schema:
+                  Quantity:
+                    type: number
+                    format: double
+                  Timestamp:
+                    type: string
+                    format: 2006-01-02T15:04:05Z07:00
+                  UserId:
                     type: integer
                     format: int64
-                - name: ev_page
-                  in: query
-                  description: allows to skip first page * limit values, starting from 0 page. Has precedence over offset
-                  schema:
+                description: Success object schema
+        Default:
+          description: Error response. The view and param may be empty, but one of the message or object should be specified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Message:
                     type: string
-                - name: ev_orderby
-                  in: query
-                  description: allows to sort view events results
-                  schema:
+                    nullable: true
+                  Object:
+                    anyOf:
+                      - type: string
+                      - type: object
+                      - type: array
+                      - type: number
+                      - type: boolean
+                    nullable: true
+                  Param:
                     type: string
-                - name: ev_fields
-                  in: query
-                  description: allows to control view events fields present in response
-                  style: form
-                  explode: false
-                  schema:
+                    nullable: true
+                  View:
                     type: string
-                - name: Id
-                  in: query
-                  description: Parameter Id, Located in query with name eventTypeId
-                  required: true
-                  schema:
-                    type: integer
-                    description: Parameter Id schema
-                    format: int64
-                - name: typ_fields
-                  in: query
-                  description: allows to control view event_types fields present in response
-                  style: form
-                  explode: false
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: Success response
-                    content:
-                        application/json:
-                            schema:
-                                type: object
-                                properties:
-                                    EventType:
-                                        type: object
-                                        properties:
-                                            Code:
-                                                type: string
-                                            Id:
-                                                type: integer
-                                                format: int64
-                                            Type:
-                                                type: string
-                                    Id:
-                                        type: integer
-                                        format: int64
-                                    Quantity:
-                                        type: number
-                                        format: double
-                                    Timestamp:
-                                        type: string
-                                        format: 2006-01-02T15:04:05Z07:00
-                                    UserId:
-                                        type: integer
-                                        format: int64
-                                description: Success object schema
-                Default:
-                    description: Error response. The view and param may be empty, but one of the message or object should be specified
-                    content:
-                        application/json:
-                            schema:
-                                type: object
-                                properties:
-                                    Message:
-                                        type: string
-                                        nullable: true
-                                    Object:
-                                        anyOf:
-                                            - type: string
-                                            - type: object
-                                            - type: array
-                                            - type: number
-                                            - type: boolean
-                                        nullable: true
-                                    Param:
-                                        type: string
-                                        nullable: true
-                                    View:
-                                        type: string
-                                        nullable: true
-                                description: Error object schema
+                    nullable: true
+                description: Error object schema

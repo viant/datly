@@ -33,6 +33,7 @@ type (
 		initialized     bool
 		aerospikeClient *as.Client
 		mux             sync.Mutex
+		Warmup          interface{}
 	}
 
 	CacheType string

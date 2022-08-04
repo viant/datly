@@ -1,75 +1,76 @@
 openapi: 3.1.0
 info:
-    title: ""
-    version: ""
+  title: ""
+  version: ""
 paths:
-    /api/events:
-        get:
-            parameters:
-                - name: _offset
-                  in: query
-                  description: allows to skip first n  view events records, it has to be used alongside the limit
-                  schema:
+  /api/events:
+    get:
+      parameters:
+        - name: _offset
+          in: query
+          description: allows to skip first n  view events records, it has to be used alongside the limit
+          schema:
+            type: integer
+            format: int64
+        - name: _page
+          in: query
+          description: allows to skip first page * limit values, starting from 1 page. Has precedence over offset
+          schema:
+            type: integer
+            format: int64
+        - name: _fields
+          in: query
+          description: allows to control view events fields present in response
+          style: form
+          explode: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  EventTypeId:
                     type: integer
                     format: int64
-                - name: _page
-                  in: query
-                  description: allows to skip first page * limit values, starting from 0 page. Has precedence over offset
-                  schema:
+                  Id:
+                    type: integer
+                    format: int64
+                  Quantity:
+                    type: number
+                    format: double
+                  Timestamp:
                     type: string
-                - name: _fields
-                  in: query
-                  description: allows to control view events fields present in response
-                  style: form
-                  explode: false
-                  schema:
+                    format: 2006-01-02T15:04:05Z07:00
+                  UserId:
+                    type: integer
+                    format: int64
+                description: Success object schema
+        Default:
+          description: Error response. The view and param may be empty, but one of the message or object should be specified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Message:
                     type: string
-            responses:
-                "200":
-                    description: Success response
-                    content:
-                        application/json:
-                            schema:
-                                type: object
-                                properties:
-                                    EventTypeId:
-                                        type: integer
-                                        format: int64
-                                    Id:
-                                        type: integer
-                                        format: int64
-                                    Quantity:
-                                        type: number
-                                        format: double
-                                    Timestamp:
-                                        type: string
-                                        format: 2006-01-02T15:04:05Z07:00
-                                    UserId:
-                                        type: integer
-                                        format: int64
-                                description: Success object schema
-                Default:
-                    description: Error response. The view and param may be empty, but one of the message or object should be specified
-                    content:
-                        application/json:
-                            schema:
-                                type: object
-                                properties:
-                                    Message:
-                                        type: string
-                                        nullable: true
-                                    Object:
-                                        anyOf:
-                                            - type: string
-                                            - type: object
-                                            - type: array
-                                            - type: number
-                                            - type: boolean
-                                        nullable: true
-                                    Param:
-                                        type: string
-                                        nullable: true
-                                    View:
-                                        type: string
-                                        nullable: true
-                                description: Error object schema
+                    nullable: true
+                  Object:
+                    anyOf:
+                      - type: string
+                      - type: object
+                      - type: array
+                      - type: number
+                      - type: boolean
+                    nullable: true
+                  Param:
+                    type: string
+                    nullable: true
+                  View:
+                    type: string
+                    nullable: true
+                description: Error object schema

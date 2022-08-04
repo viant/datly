@@ -696,14 +696,6 @@ func (v *View) registerHolders() error {
 	return nil
 }
 
-//LimitWithSelector returns Selector.Limit if it is allowed by the View to use Selector.Columns (see Constraints.Limit)
-func (v *View) LimitWithSelector(selector *Selector) int {
-	if v.CanUseSelectorLimit() && selector != nil && selector.Limit > 0 {
-		return selector.Limit
-	}
-	return v.Selector.Limit
-}
-
 //CanUseSelectorCriteria indicates if Selector.Criteria can be used
 func (v *View) CanUseSelectorCriteria() bool {
 	return v.Selector.Constraints.Criteria

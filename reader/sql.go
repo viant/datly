@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/reader/metadata"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/sqlx/io/read/cache"
 	"strconv"
 	"strings"
 )
@@ -27,9 +28,12 @@ type (
 
 	//Builder represent SQL Builder
 	Builder struct{}
+	Exclude struct {
+		ColumnsIn  bool
+		Pagination bool
+	}
 
 	//BatchData groups view needed to use various view.MatchStrategy
-
 )
 
 //NewBuilder creates Builder instance
@@ -38,10 +42,14 @@ func NewBuilder() *Builder {
 }
 
 //Build builds SQL Select statement
-func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, parentOfAclView *view.View) (string, []interface{}, error) {
+func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parentOfAclView *view.View) (*cache.SmartMatcher, error) {
+	if exclude == nil {
+		exclude = &Exclude{}
+	}
+
 	template, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parentOfAclView)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	if aView.Template.IsActualTemplate() && aView.ShouldTryDiscover() {
@@ -51,11 +59,11 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 	sb := strings.Builder{}
 	sb.WriteString(selectFragment)
 	if err = b.appendColumns(&sb, aView, selector); err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	if err = b.appendRelationColumn(&sb, aView, selector, relation); err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	sb.WriteString(fromFragment)
@@ -68,14 +76,14 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 	criteriaMeta := hasKeyword(template, keywords.Criteria)
 	hasCriteria := criteriaMeta.has()
 
-	b.updateColumnsIn(&commonParams, aView, relation, batchData, columnsInMeta, hasCriteria)
+	b.updateColumnsIn(&commonParams, aView, relation, batchData, columnsInMeta, hasCriteria, exclude)
 
-	if err = b.updatePagination(&commonParams, aView, selector); err != nil {
-		return "", nil, err
+	if err = b.updatePagination(&commonParams, aView, selector, exclude); err != nil {
+		return nil, err
 	}
 
 	if err = b.updateCriteria(&commonParams, columnsInMeta); err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	if !hasCriteria {
@@ -93,23 +101,35 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 	}
 
 	hasPagination := strings.Contains(template, keywords.Pagination)
-	if !hasPagination {
+	if !hasPagination && commonParams.Pagination != "" {
 		sb.WriteString(" ")
 		sb.WriteString(keywords.Pagination)
 		sb.WriteString(" ")
 	}
 
-	placeholders, err := b.getInitialPlaceholders(aView, selector)
-	if err != nil {
-		return "", nil, err
-	}
+	var placeholders []interface{}
 
 	SQL, err := aView.Expand(&placeholders, sb.String(), selector, commonParams, batchData)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
-	return SQL, placeholders, err
+	matcher := &cache.SmartMatcher{
+		RawSQL:  SQL,
+		RawArgs: placeholders,
+	}
+
+	if exclude.ColumnsIn && relation != nil {
+		matcher.IndexBy = relation.Of.Column
+		matcher.In = batchData.ValuesBatch
+	}
+
+	if exclude.Pagination {
+		matcher.Offset = selector.Offset
+		matcher.Limit = actualLimit(aView, selector)
+	}
+
+	return matcher, err
 }
 
 func (b *Builder) appendColumns(sb *strings.Builder, aView *view.View, selector *view.Selector) error {
@@ -173,7 +193,11 @@ func (b *Builder) appendViewAlias(sb *strings.Builder, view *view.View) {
 	sb.WriteString(view.Alias)
 }
 
-func (b *Builder) updatePagination(params *view.CommonParams, view *view.View, selector *view.Selector) error {
+func (b *Builder) updatePagination(params *view.CommonParams, view *view.View, selector *view.Selector, exclude *Exclude) error {
+	if exclude.Pagination {
+		return nil
+	}
+
 	sb := strings.Builder{}
 	if err := b.appendOrderBy(&sb, view, selector); err != nil {
 		return err
@@ -184,18 +208,14 @@ func (b *Builder) updatePagination(params *view.CommonParams, view *view.View, s
 	return nil
 }
 
-func (b *Builder) appendLimit(sb *strings.Builder, view *view.View, selector *view.Selector) {
-	if selector.Limit != 0 && (selector.Limit < view.Selector.Limit || view.Selector.Limit == 0) {
-		sb.WriteString(limitFragment)
-		sb.WriteString(strconv.Itoa(selector.Limit))
+func (b *Builder) appendLimit(sb *strings.Builder, aView *view.View, selector *view.Selector) {
+	limit := actualLimit(aView, selector)
+	if limit == 0 {
 		return
 	}
 
-	if view.Selector.Limit != 0 {
-		sb.WriteString(limitFragment)
-		sb.WriteString(strconv.Itoa(view.Selector.Limit))
-		return
-	}
+	sb.WriteString(limitFragment)
+	sb.WriteString(strconv.Itoa(limit))
 }
 
 func (b *Builder) appendOffset(sb *strings.Builder, selector *view.Selector) {
@@ -231,7 +251,11 @@ func (b *Builder) appendCriteria(sb *strings.Builder, criteria string, addAnd bo
 	}
 }
 
-func (b *Builder) updateColumnsIn(params *view.CommonParams, view *view.View, relation *view.Relation, batchData *view.BatchData, columnsInMeta *reservedMeta, hasCriteria bool) {
+func (b *Builder) updateColumnsIn(params *view.CommonParams, view *view.View, relation *view.Relation, batchData *view.BatchData, columnsInMeta *reservedMeta, hasCriteria bool, exclude *Exclude) {
+	if exclude.ColumnsIn {
+		return
+	}
+
 	columnsIn := columnsInMeta.has()
 
 	if batchData == nil || batchData.ColumnName == "" {
@@ -315,7 +339,7 @@ func (b *Builder) checkViewAndAppendRelColumn(sb *strings.Builder, aView *view.V
 }
 
 func (b *Builder) checkSelectorAndAppendRelColumn(sb *strings.Builder, aView *view.View, selector *view.Selector, relation *view.Relation) error {
-	if relation == nil || selector.Has(relation.Of.Column) {
+	if relation == nil || selector.Has(relation.Of.Column) || aView.Template.IsActualTemplate() {
 		return nil
 	}
 
@@ -331,20 +355,10 @@ func (b *Builder) checkSelectorAndAppendRelColumn(sb *strings.Builder, aView *vi
 	return nil
 }
 
-func (b *Builder) getInitialPlaceholders(aView *view.View, selector *view.Selector) ([]interface{}, error) {
-	totalLen := 0
-	for _, parameter := range aView.Template.Parameters {
-		totalLen += len(parameter.Positions)
+func actualLimit(aView *view.View, selector *view.Selector) int {
+	if selector.Limit != 0 {
+		return selector.Limit
 	}
 
-	placeholders := make([]interface{}, totalLen)
-	for _, parameter := range aView.Template.Parameters {
-		_, err := parameter.Value(selector.Parameters.Values)
-		if err != nil {
-			return nil, err
-		}
-
-	}
-
-	return placeholders, nil
+	return aView.Selector.Limit
 }

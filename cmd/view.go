@@ -362,7 +362,6 @@ func detectCaseFormat(xTable *Table) view.CaseFormat {
 	}
 
 	return view.CaseFormat(view.DetectCase(names...))
-
 }
 
 func (s *serverBuilder) buildMainView(options *Options, generate *Generate) *view.View {

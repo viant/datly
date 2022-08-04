@@ -247,7 +247,7 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	if hint := join.Comments; hint != "" {
 		err = hintToStruct(hint, &relTable.TableMeta)
 		if err != nil {
-			fmt.Printf("invalid hint: %s, %w\n", hint, err)
+			fmt.Printf(fmt.Errorf("invalid hint: %s, %w\n", hint, err).Error())
 		}
 	}
 	isParamView := isParamPredicate(parser.Stringify(join.On.X))

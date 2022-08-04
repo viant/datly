@@ -9,6 +9,7 @@ import (
 	"github.com/viant/gmetric/counter"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/read"
+	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/sqlx/option"
 	"sync"
 	"time"
@@ -155,12 +156,12 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 	visitor := collector.Visitor(ctx)
 
 	for {
-		SQL, args, err := s.sqlBuilder.Build(view, selector, batchData, collector.Relation(), session.Parent)
+		fullMatch, smartMatch, err := s.getMatchers(view, selector, batchData, collector, session)
 		if err != nil {
 			return err
 		}
 
-		err = s.query(ctx, view, db, SQL, collector, args, visitor)
+		err = s.query(ctx, view, db, collector, visitor, fullMatch, smartMatch)
 		if err != nil {
 			return err
 		}
@@ -176,12 +177,45 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 	return nil
 }
 
-func (s *Service) query(ctx context.Context, view *view.View, db *sql.DB, SQL string, collector *view.Collector, args []interface{}, visitor view.Visitor) error {
+func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchData *view.BatchData, collector *view.Collector, session *Session) (fullMatch *cache.SmartMatcher, smartMatch *cache.SmartMatcher, err error) {
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+
+	var fullMatchErr, smartMatchErr error
+	go func() {
+		defer wg.Done()
+
+		fullMatch, fullMatchErr = s.sqlBuilder.Build(aView, selector, batchData, collector.Relation(), nil, session.Parent)
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		if aView.Cache != nil && aView.Cache.Warmup != nil {
+			smartMatch, smartMatchErr = s.sqlBuilder.Build(aView, selector, batchData, collector.Relation(), &Exclude{Pagination: true, ColumnsIn: true}, session.Parent)
+		}
+	}()
+
+	wg.Wait()
+	return fullMatch, smartMatch, notNilErr(fullMatchErr, smartMatchErr)
+}
+
+func notNilErr(errs ...error) error {
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, collector *view.Collector, visitor view.Visitor, fullMatcher, smartMatcher *cache.SmartMatcher) error {
 	begin := time.Now()
 
 	var options = []option.Option{io.Resolve(collector.Resolve)}
-	if view.Cache != nil {
-		service, err := view.Cache.Service()
+	if aView.Cache != nil {
+		service, err := aView.Cache.Service()
 		if err != nil {
 			return err
 		}
@@ -189,10 +223,10 @@ func (s *Service) query(ctx context.Context, view *view.View, db *sql.DB, SQL st
 		options = append(options, service)
 	}
 
-	reader, err := read.New(ctx, db, SQL, collector.NewItem(), options...)
+	reader, err := read.New(ctx, db, fullMatcher.RawSQL, collector.NewItem(), options...)
 	if err != nil {
-		view.Logger.LogDatabaseErr(err)
-		return fmt.Errorf("database error occured while fetching data for view %v", view.Name)
+		aView.Logger.LogDatabaseErr(err)
+		return fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
 	}
 
 	defer func() {
@@ -204,7 +238,7 @@ func (s *Service) query(ctx context.Context, view *view.View, db *sql.DB, SQL st
 	}()
 	readData := 0
 	err = reader.QueryAll(ctx, func(row interface{}) error {
-		row, err = view.UnwrapDatabaseType(ctx, row)
+		row, err = aView.UnwrapDatabaseType(ctx, row)
 		if err != nil {
 			return err
 		}
@@ -216,12 +250,12 @@ func (s *Service) query(ctx context.Context, view *view.View, db *sql.DB, SQL st
 			}
 		}
 		return visitor(row)
-	}, args...)
+	}, smartMatcher, fullMatcher.RawArgs...)
 	end := time.Now()
-	view.Logger.ReadingData(end.Sub(begin), SQL, readData, args, err)
+	aView.Logger.ReadingData(end.Sub(begin), fullMatcher.RawSQL, readData, fullMatcher.RawArgs, err)
 	if err != nil {
-		view.Logger.LogDatabaseErr(err)
-		return fmt.Errorf("database error occured while fetching data for view %v", view.Name)
+		aView.Logger.LogDatabaseErr(err)
+		return fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
 	}
 
 	return nil
