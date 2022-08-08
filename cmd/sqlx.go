@@ -31,15 +31,10 @@ type (
 		ViewHint string
 	}
 
-	CacheWarmupCases struct {
-		Name   string
-		Values []interface{}
-	}
-
 	TableMeta struct {
 		Connector         string
 		Cache             *view.Cache
-		Warmup            *CacheWarmupCases
+		Warmup            map[string][]interface{}
 		dataViewParameter *view.Parameter
 		Parameter         *view.Parameter
 		Auth              string
