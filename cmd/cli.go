@@ -12,9 +12,11 @@ import (
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/warmup"
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
+	"sync"
 )
 
 type serverBuilder struct {
@@ -56,6 +58,24 @@ func (s *serverBuilder) build() (*standalone.Server, error) {
 		srv, err = standalone.New(s.config)
 	} else {
 		srv, err = standalone.NewWithAuth(s.config, authenticator)
+	}
+
+	if len(s.options.WarmupURIs) > 0 {
+		group := sync.WaitGroup{}
+		for _, URI := range s.options.WarmupURIs {
+			group.Add(1)
+			go func(URI string) {
+				defer group.Done()
+				views, e := srv.Service.PreCachables("GET", URI)
+				if e != nil {
+					err = e
+				}
+				if e = warmup.PopulateCache(views); e != nil {
+					err = e
+				}
+			}(URI)
+		}
+		group.Wait()
 	}
 
 	if err != nil {

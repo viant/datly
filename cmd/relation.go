@@ -97,9 +97,10 @@ func (s *serverBuilder) buildXRelations(ctx context.Context, viewRoute *router.R
 		if join.Connector != "" {
 			relView.Connector = connectorRef(join.Connector)
 		}
-		relView.Cache = join.Cache
+		if join.Cache != nil {
+			s.addCacheWithWarmup(relView, join)
+		}
 		ownerView.With = append(ownerView.With, withView)
-
 		viewRoute.Index.Namespace[namespace(join.Table.Alias)] = join.Table.Alias + "#"
 
 		if len(join.Table.Joins) > 0 {
@@ -110,6 +111,21 @@ func (s *serverBuilder) buildXRelations(ctx context.Context, viewRoute *router.R
 
 	}
 	return nil
+}
+
+func (s *serverBuilder) addCacheWithWarmup(relView *view.View, join *Join) {
+	relView.Cache = join.Cache
+	if warmup := join.Warmup; warmup != nil {
+		relView.Cache.Warmup = &view.Warmup{IndexColumn: join.OwnerKey}
+		relView.Cache.Warmup.Cases = append(relView.Cache.Warmup.Cases, &view.CacheParameters{
+			Set: []*view.ParamValue{
+				{
+					Name:   warmup.Name,
+					Values: warmup.Values,
+				},
+			},
+		})
+	}
 }
 
 func connectorRef(name string) *view.Connector {
@@ -157,6 +173,7 @@ func (s *serverBuilder) updateViewMeta(table *Table, aView *view.View) error {
 	}
 	if tableMeta.Cache != nil {
 		aView.Cache = tableMeta.Cache
+
 	}
 	if tableMeta.Connector != "" {
 		if _, err := s.addViewConn(tableMeta.Connector, aView); err != nil {

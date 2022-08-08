@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-//Service represents gateway service
+// Service represents gateway service
 type Service struct {
 	Config               *Config
 	visitors             codec.Visitors
@@ -221,6 +221,33 @@ func (r *Service) handleRouterResourceChange(ctx context.Context, hasChanged *bo
 	}
 }
 
+func (r *Service) PreCachables(method, matchingURI string) ([]*view.View, error) {
+	aRouter, err := r.match(method, matchingURI)
+	if err != nil {
+		return nil, err
+	}
+	route, err := aRouter.Matcher.Match(method, matchingURI)
+	if err != nil {
+		return nil, err
+	}
+	var result = make([]*view.View, 0)
+	aView := route.View
+	appendCacheWarmupViews(aView, &result)
+	return result, nil
+}
+
+func appendCacheWarmupViews(aView *view.View, result *[]*view.View) {
+	if aCache := aView.Cache; aCache != nil && aCache.Warmup != nil {
+		*result = append(*result, aView)
+	}
+	if len(aView.With) == 0 {
+		return
+	}
+	for i := range aView.With {
+		appendCacheWarmupViews(&aView.With[i].Of.View, result)
+	}
+}
+
 func (r *Service) reloadDataResourceIfNeeded(ctx context.Context) error {
 	fs := r.reloadFs()
 	var resourcesSnapshot = map[string]*view.Resource{}
@@ -326,7 +353,7 @@ func (r *Service) Routes(route string) []*router.Route {
 	return routes
 }
 
-//New creates a gateway service
+// New creates a gateway service
 func New(ctx context.Context, config *Config, visitors codec.Visitors, types view.Types, metrics *gmetric.Service) (*Service, error) {
 	config.Init()
 	err := config.Validate()

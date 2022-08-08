@@ -14,7 +14,7 @@ import (
 type (
 	Options struct {
 		Port          int    `short:"p" long:"port" description:"port"  `
-		RouteURL      string `short:"r" long:"mode" description:"route URL"  `
+		RouteURL      string `short:"r" long:"route URL" description:"route URL"  `
 		DependencyURL string `short:"d" long:"deps" description:"dependencies URL" `
 		ConfigURL     string `short:"c" long:"config" description:"configuration URL" `
 		JWTVerifier   string `short:"j" long:"jwt" description:"PublicKeyPath|EncKey" `
@@ -22,8 +22,13 @@ type (
 		Generate
 		Connector
 		Content
+		CacheWarmup
 		OpenApiURL string `short:"o" long:"openapi"`
 		Version    bool   `short:"v" long:"version"  description:"build version" `
+	}
+
+	CacheWarmup struct {
+		WarmupURIs []string `short:"u" long:"wuri" description:"uri to warmup cache" `
 	}
 
 	Connector struct {
@@ -87,7 +92,7 @@ func (c *Options) ResponseField() string {
 	return "Data"
 }
 
-//MatchConnector returns matcher or default connector
+// MatchConnector returns matcher or default connector
 func (c *Connector) MatchConnector(name string) *view.Connector {
 	if name == "" {
 		return c.New()
