@@ -34,7 +34,7 @@ type (
 	TableMeta struct {
 		Connector         string
 		Cache             *view.Cache
-		Warmup            map[string][]interface{}
+		Warmup            map[string]interface{}
 		dataViewParameter *view.Parameter
 		Parameter         *view.Parameter
 		Auth              string
@@ -297,6 +297,7 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	relJoin.KeyAlias = relTable.InnerAlias
 	relJoin.Connector = relTable.Connector
 	relJoin.Cache = relTable.Cache
+	relJoin.Warmup = relTable.Warmup
 
 	if len(byAlias) > 0 {
 		column, ok := byAlias[relJoin.Key]

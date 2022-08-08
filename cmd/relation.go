@@ -116,11 +116,16 @@ func (s *serverBuilder) buildXRelations(ctx context.Context, viewRoute *router.R
 func (s *serverBuilder) addCacheWithWarmup(relView *view.View, join *Join) {
 	relView.Cache = join.Cache
 	if warmup := join.Warmup; len(warmup) > 0 {
-		relView.Cache.Warmup = &view.Warmup{IndexColumn: join.OwnerKey}
+		relView.Cache.Warmup = &view.Warmup{IndexColumn: join.Key}
 
 		multiSet := &view.CacheParameters{}
 		for k, v := range warmup {
-			multiSet.Set = append(multiSet.Set, &view.ParamValue{Name: k, Values: v})
+			switch actual := v.(type) {
+			case []interface{}:
+				multiSet.Set = append(multiSet.Set, &view.ParamValue{Name: k, Values: actual})
+			default:
+				multiSet.Set = append(multiSet.Set, &view.ParamValue{Name: k, Values: []interface{}{actual}})
+			}
 		}
 		relView.Cache.Warmup.Cases = append(relView.Cache.Warmup.Cases, multiSet)
 	}
