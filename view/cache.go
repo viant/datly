@@ -38,12 +38,12 @@ type (
 	}
 
 	Warmup struct {
-		DataSets []*DataSet
+		IndexColumn string
+		Cases       []*CacheParameters
 	}
 
-	DataSet struct {
-		IndexColumn string
-		ParamValues []*ParamValue
+	CacheParameters struct {
+		Set []*ParamValue
 	}
 
 	ParamValue struct {
@@ -288,11 +288,11 @@ func (c *Cache) recreateCacheIfNeeded() error {
 
 func (c *Cache) GenerateCacheInput(ctx context.Context) ([]*CacheInput, error) {
 	var cacheInputPermutations []*CacheInput
-	chanSize := len(c.Warmup.DataSets)
+	chanSize := len(c.Warmup.Cases)
 	selectorChan := make(chan CacheInputFn, chanSize)
 
-	for i := range c.Warmup.DataSets {
-		go c.generateDatasetSelectorsChan(ctx, selectorChan, c.Warmup.DataSets[i])
+	for i := range c.Warmup.Cases {
+		go c.generateDatasetSelectorsChan(ctx, selectorChan, c.Warmup.Cases[i])
 	}
 
 	counter := 0
@@ -312,18 +312,18 @@ func (c *Cache) GenerateCacheInput(ctx context.Context) ([]*CacheInput, error) {
 	return cacheInputPermutations, nil
 }
 
-func (c *Cache) generateDatasetSelectorsChan(ctx context.Context, selectorChan chan CacheInputFn, dataSet *DataSet) {
+func (c *Cache) generateDatasetSelectorsChan(ctx context.Context, selectorChan chan CacheInputFn, dataSet *CacheParameters) {
 	selectors, err := c.generateDatasetSelectorsErr(ctx, dataSet)
 	selectorChan <- func() ([]*CacheInput, error) {
 		return selectors, err
 	}
 }
 
-func (c *Cache) generateDatasetSelectorsErr(ctx context.Context, set *DataSet) ([]*CacheInput, error) {
+func (c *Cache) generateDatasetSelectorsErr(ctx context.Context, set *CacheParameters) ([]*CacheInput, error) {
 	var availableValues [][]interface{}
 
-	for i := range set.ParamValues {
-		paramValues, err := c.getParamValues(ctx, set.ParamValues[i])
+	for i := range set.Set {
+		paramValues, err := c.getParamValues(ctx, set.Set[i])
 		if err != nil {
 			return nil, err
 		}
@@ -367,18 +367,18 @@ func (c *Cache) initWarmup() error {
 		return nil
 	}
 
-	for _, dataset := range c.Warmup.DataSets {
+	for _, dataset := range c.Warmup.Cases {
 
-		if dataset.IndexColumn == "" {
+		if c.Warmup.IndexColumn == "" {
 			return fmt.Errorf("view %v warmup Column can't be empty", c.owner.Name)
 		}
 
-		_, ok := c.owner.ColumnByName(dataset.IndexColumn)
+		_, ok := c.owner.ColumnByName(c.Warmup.IndexColumn)
 		if !ok {
-			return fmt.Errorf("not found warmup column %v at view %v", dataset.IndexColumn, c.owner.Name)
+			return fmt.Errorf("not found warmup column %v at view %v", c.Warmup, c.owner.Name)
 		}
 
-		for _, paramValue := range dataset.ParamValues {
+		for _, paramValue := range dataset.Set {
 			param, err := c.owner.Template._parametersIndex.Lookup(paramValue.Name)
 			if err != nil {
 				return err
@@ -391,10 +391,10 @@ func (c *Cache) initWarmup() error {
 	return nil
 }
 
-func (c *Cache) appendSelectors(set *DataSet, paramValues [][]interface{}, selectors *[]*CacheInput) error {
+func (c *Cache) appendSelectors(set *CacheParameters, paramValues [][]interface{}, selectors *[]*CacheInput) error {
 	for i, value := range paramValues {
 		if len(value) == 0 {
-			return fmt.Errorf("parameter %v is required but there was no data", set.ParamValues[i].Name)
+			return fmt.Errorf("parameter %v is required but there was no data", set.Set[i].Name)
 		}
 	}
 
@@ -411,12 +411,12 @@ outer:
 				continue
 			}
 
-			if err := set.ParamValues[i]._param.Set(selector, actualValue); err != nil {
+			if err := set.Set[i]._param.Set(selector, actualValue); err != nil {
 				return err
 			}
 		}
 
-		*selectors = append(*selectors, &CacheInput{Selector: selector, Column: set.IndexColumn})
+		*selectors = append(*selectors, &CacheInput{Selector: selector, Column: c.Warmup.IndexColumn})
 
 		for i := len(indexes) - 1; i >= 0; i-- {
 			if indexes[i] < len(paramValues[i])-1 {
