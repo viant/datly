@@ -5,53 +5,180 @@ import (
 	"fmt"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/view"
+	"github.com/viant/sqlx/io/read/cache"
 	"sync"
 )
 
-type warmupper struct {
-	selectors []*view.CacheInput
-	aView     *view.View
-	builder   *reader.Builder
-}
-
-func (w *warmupper) warmup(ctx context.Context) {
-	wg := &sync.WaitGroup{}
-	wg.Add(len(w.selectors))
-	for i := range w.selectors {
-		//go func(data *view.CacheInput) {
-		func(data *view.CacheInput) {
-			defer wg.Done()
-			build, err := w.builder.Build(w.aView, data.Selector, &view.BatchData{}, nil, &reader.Exclude{
-				ColumnsIn:  true,
-				Pagination: true,
-			}, nil)
-			panicOnError(err)
-
-			service, err := w.aView.Cache.Service()
-			panicOnError(err)
-
-			db, err := w.aView.Db()
-			panicOnError(err)
-
-			err = service.IndexBy(ctx, db, data.Column, build.SQL, build.Args)
-			panicOnError(err)
-		}(w.selectors[i])
-
-		fmt.Println(i)
+type (
+	matchersCollector struct {
+		size     int
+		matchers []*cache.Matcher
+		mux      sync.Mutex
+		builder  *reader.Builder
+		view     *view.View
 	}
 
-	wg.Wait()
+	warmupEntry struct {
+		matcher *cache.Matcher
+		view    *view.View
+		column  string
+	}
+
+	warmupEntryFn func() (*warmupEntry, error)
+	notifierFn    func() (int, error)
+)
+
+func (c *matchersCollector) populate(ctx context.Context, collector chan warmupEntryFn, notifier chan notifierFn) {
+	go func() {
+		size, err := c.populateCollectorWithErr(ctx, collector)
+
+		notifier <- func() (int, error) {
+			return size, err
+		}
+	}()
 }
 
-func newWarmupper(aView *view.View, selectors []*view.CacheInput) *warmupper {
-	return &warmupper{
-		aView:     aView,
-		selectors: selectors,
-		builder:   reader.NewBuilder(),
+func (c *matchersCollector) populateCollectorWithErr(ctx context.Context, collector chan warmupEntryFn) (int, error) {
+	cacheData, err := c.view.Cache.GenerateCacheInput(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	for i := range cacheData {
+		go c.populateChan(c.view, collector, cacheData[i])
+	}
+
+	return len(cacheData), err
+}
+
+func (c *matchersCollector) populateChan(aView *view.View, aChan chan warmupEntryFn, cacheInput *view.CacheInput) {
+	build, err := c.builder.Build(c.view, cacheInput.Selector, &view.BatchData{}, nil, &reader.Exclude{
+		ColumnsIn:  true,
+		Pagination: true,
+	}, nil)
+
+	aChan <- func() (*warmupEntry, error) {
+		if err != nil {
+			return nil, err
+		}
+
+		return &warmupEntry{
+			matcher: build,
+			view:    aView,
+			column:  cacheInput.Column,
+		}, err
 	}
 }
 
-func PopulateCache(views []*view.View) error {
+func populateCollector(ctx context.Context, aView *view.View, builder *reader.Builder, collector chan warmupEntryFn, notifier chan notifierFn) {
+	(&matchersCollector{
+		size:     0,
+		matchers: nil,
+		view:     aView,
+		builder:  builder,
+		mux:      sync.Mutex{},
+	}).populate(ctx, collector, notifier)
+}
+
+func warmup(ctx context.Context, entries []*warmupEntry, notifier chan error) {
+	for i := range entries {
+		go readWithChan(ctx, entries[i], notifier)
+	}
+}
+
+func readWithChan(ctx context.Context, entry *warmupEntry, notifier chan error) {
+	notifier <- readWithErr(ctx, entry)
+}
+
+func readWithErr(ctx context.Context, entry *warmupEntry) error {
+	db, err := entry.view.Db()
+	if err != nil {
+		return err
+	}
+
+	service, err := entry.view.Cache.Service()
+	if err != nil {
+		return err
+	}
+
+	matcher := entry.matcher
+	return service.IndexBy(ctx, db, entry.column, matcher.SQL, matcher.Args)
+}
+
+func PopulateCache(views []*view.View) (int, error) {
+	viewsWithCache := FilterCacheViews(views)
+
+	if len(viewsWithCache) == 0 {
+		return 0, nil
+	}
+
+	collector := make(chan warmupEntryFn)
+	notifier := make(chan notifierFn)
+	ctx := context.Background()
+
+	builder := reader.NewBuilder()
+	for i := range viewsWithCache {
+		populateCollector(ctx, viewsWithCache[i], builder, collector, notifier)
+	}
+
+	counter := 0
+	collectorSize := 0
+	for counter < len(viewsWithCache) {
+		select {
+		case fn := <-notifier:
+			chunkSize, err := fn()
+			collectorSize += chunkSize
+
+			if err != nil {
+				fmt.Printf("encounter err while creating selectors: %v\n", err.Error())
+			}
+
+			counter++
+		}
+	}
+
+	if collectorSize == 0 {
+		return 0, nil
+	}
+
+	var errors []error
+	var warmupEntries []*warmupEntry
+	var collectorsCounter int
+	for fn := range collector {
+		entry, err := fn()
+		if err != nil {
+			errors = append(errors, err)
+		} else {
+			warmupEntries = append(warmupEntries, entry)
+		}
+
+		collectorsCounter++
+		if collectorSize <= collectorsCounter {
+			break
+		}
+	}
+
+	close(collector)
+	if err := combineErrors(errors); err != nil {
+		return 0, err
+	}
+
+	notifierErr := make(chan error)
+	warmup(ctx, warmupEntries, notifierErr)
+	for i := 0; i < len(warmupEntries); i++ {
+		select {
+		case actual := <-notifierErr:
+			if actual != nil {
+				errors = append(errors, actual)
+			}
+		}
+	}
+
+	close(notifier)
+	return collectorsCounter, combineErrors(errors)
+}
+
+func FilterCacheViews(views []*view.View) []*view.View {
 	viewsWithCache := make([]*view.View, 0)
 
 	for i, aView := range views {
@@ -60,22 +187,18 @@ func PopulateCache(views []*view.View) error {
 		}
 	}
 
-	for i, aView := range viewsWithCache {
-		cache := aView.Cache
-		ctx := context.Background()
-		selectors, err := cache.GenerateCacheInput(ctx)
-		if err != nil {
-			return err
-		}
-
-		newWarmupper(viewsWithCache[i], selectors).warmup(ctx)
-	}
-
-	return nil
+	return viewsWithCache
 }
 
-func panicOnError(err error) {
-	if err != nil {
-		panic(err)
+func combineErrors(errors []error) error {
+	if len(errors) == 0 {
+		return nil
 	}
+
+	outputErr := fmt.Errorf("errors while populating cache: ")
+	for _, err := range errors {
+		outputErr = fmt.Errorf("%w; %v", outputErr, err.Error())
+	}
+
+	return outputErr
 }
