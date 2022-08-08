@@ -82,7 +82,7 @@ func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 
 //DB creates connection to the DB.
 //It is important to not close the DB since the connection is shared.
-func (c *Connector) DB(ctx context.Context) (*sql.DB, error) {
+func (c *Connector) DB() (*sql.DB, error) {
 	if c.db != nil {
 		return c.db()
 	}
@@ -103,7 +103,7 @@ func (c *Connector) DB(ctx context.Context) (*sql.DB, error) {
 	}
 
 	c.mux.Lock()
-	c.db = aDbPool.DB(ctx, c.Driver, dsn, c.DBConfig)
+	c.db = aDbPool.DB(c.Driver, dsn, c.DBConfig)
 	aDB, err := c.db()
 	c.mux.Unlock()
 

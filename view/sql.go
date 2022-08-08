@@ -81,7 +81,7 @@ func detectColumns(ctx context.Context, SQL string, v *View) ([]*Column, string,
 		return nil, "", err
 	}
 
-	aDb, err := v.Connector.DB(ctx)
+	aDb, err := v.Connector.DB()
 
 	if err != nil {
 		return nil, SQL, err

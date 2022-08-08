@@ -61,16 +61,16 @@ func newClientPool() *aerospikePool {
 	return &aerospikePool{index: map[string]*aerospikeClient{}}
 }
 
-func (d *db) initWithLock(ctx context.Context, driver string, dsn string, config *DBConfig) error {
+func (d *db) initWithLock(driver string, dsn string, config *DBConfig) error {
 	d.mutex.Lock()
-	err := d.initDatabase(ctx, driver, dsn, config)
+	err := d.initDatabase(driver, dsn, config)
 	d.keepConnectionAlive(driver, dsn, config)
 	d.mutex.Unlock()
 
 	return err
 }
 
-func (d *db) initDatabase(ctx context.Context, driver string, dsn string, config *DBConfig) error {
+func (d *db) initDatabase(driver string, dsn string, config *DBConfig) error {
 	if d.initialized {
 		return nil
 	}
@@ -168,7 +168,7 @@ func (d *db) ctxWithTimeout(duration time.Duration) context.Context {
 	return ctxWithTimeout
 }
 
-func (p *dbPool) DB(ctx context.Context, driver, dsn string, config *DBConfig) func() (*sql.DB, error) {
+func (p *dbPool) DB(driver, dsn string, config *DBConfig) func() (*sql.DB, error) {
 	builder := &strings.Builder{}
 
 	if config == nil {
@@ -188,17 +188,17 @@ func (p *dbPool) DB(ctx context.Context, driver, dsn string, config *DBConfig) f
 	builder.WriteString(dsn)
 
 	actualKey := builder.String()
-	dbConn := p.getItem(ctx, actualKey, driver, dsn, config)
+	dbConn := p.getItem(actualKey, driver, dsn, config)
 
 	return dbConn.connect
 }
 
-func (p *dbPool) getItem(ctx context.Context, key string, driver string, dsn string, config *DBConfig) *db {
+func (p *dbPool) getItem(key string, driver string, dsn string, config *DBConfig) *db {
 	p.mutex.Lock()
 	item, ok := p.index[key]
 	if !ok {
 		item = &db{}
-		err := item.initWithLock(ctx, driver, dsn, config)
+		err := item.initWithLock(driver, dsn, config)
 		if err != nil {
 			fmt.Printf("error occured while initializing db %v\n", err.Error())
 		}

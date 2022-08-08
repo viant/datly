@@ -96,7 +96,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 		return
 	}
 
-	db, err := aView.Db(ctx)
+	db, err := aView.Db()
 	if err != nil {
 		errorCollector.Append(err)
 		return
@@ -177,7 +177,7 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 	return nil
 }
 
-func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchData *view.BatchData, collector *view.Collector, session *Session) (fullMatch *cache.SmartMatcher, smartMatch *cache.SmartMatcher, err error) {
+func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchData *view.BatchData, collector *view.Collector, session *Session) (fullMatch *cache.Matcher, columnInMatcher *cache.Matcher, err error) {
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
@@ -192,12 +192,12 @@ func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchDa
 		defer wg.Done()
 
 		if aView.Cache != nil && aView.Cache.Warmup != nil {
-			smartMatch, smartMatchErr = s.sqlBuilder.Build(aView, selector, batchData, collector.Relation(), &Exclude{Pagination: true, ColumnsIn: true}, session.Parent)
+			columnInMatcher, smartMatchErr = s.sqlBuilder.Build(aView, selector, batchData, collector.Relation(), &Exclude{Pagination: true, ColumnsIn: true}, session.Parent)
 		}
 	}()
 
 	wg.Wait()
-	return fullMatch, smartMatch, notNilErr(fullMatchErr, smartMatchErr)
+	return fullMatch, columnInMatcher, notNilErr(fullMatchErr, smartMatchErr)
 }
 
 func notNilErr(errs ...error) error {
@@ -210,7 +210,7 @@ func notNilErr(errs ...error) error {
 	return nil
 }
 
-func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, collector *view.Collector, visitor view.Visitor, fullMatcher, smartMatcher *cache.SmartMatcher) error {
+func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, collector *view.Collector, visitor view.Visitor, fullMatcher, columnInMatcher *cache.Matcher) error {
 	begin := time.Now()
 
 	var options = []option.Option{io.Resolve(collector.Resolve)}
@@ -223,7 +223,7 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 		options = append(options, service)
 	}
 
-	reader, err := read.New(ctx, db, fullMatcher.RawSQL, collector.NewItem(), options...)
+	reader, err := read.New(ctx, db, fullMatcher.SQL, collector.NewItem(), options...)
 	if err != nil {
 		aView.Logger.LogDatabaseErr(err)
 		return fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
@@ -250,9 +250,9 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 			}
 		}
 		return visitor(row)
-	}, smartMatcher, fullMatcher.RawArgs...)
+	}, columnInMatcher, fullMatcher.Args...)
 	end := time.Now()
-	aView.Logger.ReadingData(end.Sub(begin), fullMatcher.RawSQL, readData, fullMatcher.RawArgs, err)
+	aView.Logger.ReadingData(end.Sub(begin), fullMatcher.SQL, readData, fullMatcher.Args, err)
 	if err != nil {
 		aView.Logger.LogDatabaseErr(err)
 		return fmt.Errorf("database error occured while fetching data for view %v", aView.Name)

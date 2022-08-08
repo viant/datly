@@ -29,7 +29,7 @@ Resource:
                   Values: [ 0, 100 ]
                 - Name: USER_ID
                   Values: [ 1,2,3,4,5 ]
-              Column: event_type_id
+              IndexColumn: event_type_id
 
       Selector:
         Constraints:

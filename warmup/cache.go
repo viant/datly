@@ -30,10 +30,10 @@ func (w *warmupper) warmup(ctx context.Context) {
 			service, err := w.aView.Cache.Service()
 			panicOnError(err)
 
-			db, err := w.aView.Db(ctx)
+			db, err := w.aView.Db()
 			panicOnError(err)
 
-			err = service.IndexBy(ctx, db, data.Column, build.RawSQL, build.RawArgs)
+			err = service.IndexBy(ctx, db, data.Column, build.SQL, build.Args)
 			panicOnError(err)
 		}(w.selectors[i])
 

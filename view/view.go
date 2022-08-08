@@ -530,8 +530,8 @@ func (v *View) ensureSchema(types Types) error {
 }
 
 //Db returns database connection that View was assigned to.
-func (v *View) Db(ctx context.Context) (*sql.DB, error) {
-	return v.Connector.DB(ctx)
+func (v *View) Db() (*sql.DB, error) {
+	return v.Connector.DB()
 }
 
 func (v *View) exclude(columns []io.Column) []io.Column {

@@ -286,7 +286,7 @@ func (s *serverBuilder) buildRelations(ctx context.Context, meta *metadata.Servi
 		return nil
 	}
 
-	db, err := conn.DB(ctx)
+	db, err := conn.DB()
 	if err != nil {
 		return err
 	}

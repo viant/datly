@@ -13,7 +13,6 @@ import (
 
 func TestPopulateCache(t *testing.T) {
 	return
-
 	testCases := []struct {
 		description string
 		URL         string

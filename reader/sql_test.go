@@ -402,8 +402,8 @@ func TestBuilder_Build(t *testing.T) {
 		matcher, err := builder.Build(useCase.view, useCase.selector, useCase.batchData, useCase.relation, nil, nil)
 
 		assert.Nil(t, err, useCase.description)
-		assertly.AssertValues(t, useCase.placeholders, matcher.RawArgs, useCase.description)
-		assert.Equal(t, useCase.output, strings.TrimSpace(matcher.RawSQL), useCase.description)
+		assertly.AssertValues(t, useCase.placeholders, matcher.Args, useCase.description)
+		assert.Equal(t, useCase.output, strings.TrimSpace(matcher.SQL), useCase.description)
 	}
 }
 
