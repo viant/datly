@@ -8,6 +8,6 @@ go.sum
 datly
 other
 mydb
-tmp
+tmp/
 *.gz
 .DS_Store
