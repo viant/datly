@@ -15,13 +15,13 @@ import (
 	"time"
 )
 
-//Service represents reader service
+// Service represents reader service
 type Service struct {
 	sqlBuilder *Builder
 	Resource   *view.Resource
 }
 
-//Read select view from database based on View and assign it to dest. ParentDest has to be pointer.
+// Read select view from database based on View and assign it to dest. ParentDest has to be pointer.
 func (s *Service) Read(ctx context.Context, session *Session) error {
 	var err error
 	if err = session.Init(); err != nil {
@@ -219,10 +219,11 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 		if err != nil {
 			return err
 		}
-
 		options = append(options, service)
 	}
-
+	if columnInMatcher != nil {
+		options = append(options, &columnInMatcher)
+	}
 	reader, err := read.New(ctx, db, fullMatcher.SQL, collector.NewItem(), options...)
 	if err != nil {
 		aView.Logger.LogDatabaseErr(err)
@@ -250,7 +251,7 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 			}
 		}
 		return visitor(row)
-	}, columnInMatcher, fullMatcher.Args...)
+	}, fullMatcher.Args...)
 	end := time.Now()
 	aView.Logger.ReadingData(end.Sub(begin), fullMatcher.SQL, readData, fullMatcher.Args, err)
 	if err != nil {
@@ -261,7 +262,7 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 	return nil
 }
 
-//New creates Service instance
+// New creates Service instance
 func New() *Service {
 	return &Service{
 		sqlBuilder: NewBuilder(),
