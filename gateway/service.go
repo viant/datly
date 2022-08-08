@@ -282,13 +282,15 @@ func (r *Service) loadRouterResource(ctx context.Context, URL string, fs afs.Ser
 		}
 	}
 
-	resource, err := router.NewResourceFromURL(ctx, fs, URL, r.visitors, types, r.dataResources, metrics, r.Config.Discovery())
+	resource, err := router.NewResourceFromURL(ctx, fs, URL, r.Config.Discovery(), r.visitors, types, r.dataResources, metrics)
 	if err != nil {
 		return nil, err
 	}
+
 	if err = r.initResource(ctx, resource, URL); err != nil {
 		return nil, err
 	}
+
 	return resource, nil
 }
 

@@ -1,0 +1,64 @@
+Routes:
+  - URI: "/api/events"
+    Method: GET
+    View:
+      Ref: events
+    Index:
+      ViewPrefix:
+        ev: events
+
+
+Resource:
+  CacheProviders:
+    - Name: aerospike
+      Location: ${view.Name}
+      Provider: 'aerospike://127.0.0.1:3000/test'
+      TimeToLiveMs: 10000
+
+  Views:
+    - Name: events
+      Connector:
+        Ref: db
+      Table: events
+      Cache:
+        Ref: aerospike
+        Warmup:
+          DataSets:
+            - ParamValues:
+                - Name: QUANTITY
+                  Values: [ 0, 100 ]
+                - Name: USER_ID
+                  Values: [ 1,2,3,4,5 ]
+              Column: event_type_id
+
+      Selector:
+        Constraints:
+          Projection: true
+      Template:
+        Source: '        
+          SELECT * FROM EVENTS WHERE 0=0 
+          #if($Has.QUANTITY)
+          AND quantity > $QUANTITY
+          #end
+          #if($Has.USER_ID)
+          AND user_id = $Unsafe.USER_ID
+          #end
+        '
+        Parameters:
+          - Name: QUANTITY
+            In:
+              Kind: query
+              Name: quantity
+            Schema:
+              DataType: float
+          - Name: USER_ID
+            In:
+              Kind: query
+              Name: user_id
+            Schema:
+              DataType: int
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"

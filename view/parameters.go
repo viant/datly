@@ -38,6 +38,7 @@ type (
 		presenceAccessor *Accessor
 		DateFormat       string `json:",omitempty"`
 		ErrorStatusCode  int    `json:",omitempty"`
+		_owner           *View
 	}
 
 	//Location tells how to get parameter value.
@@ -141,6 +142,7 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 		return nil
 	}
 	p.initialized = true
+	p._owner = view
 
 	if p.Ref != "" {
 		param, err := resource._parameters.Lookup(p.Ref)
@@ -338,8 +340,17 @@ func (p *Parameter) Value(values interface{}) (interface{}, error) {
 	return p.valueAccessor.Value(values)
 }
 
-func (p *Parameter) ConvertAndSet(ctx context.Context, paramPtr unsafe.Pointer, value string, selector *Selector) error {
-	return p.valueAccessor.setValue(ctx, paramPtr, value, p.Codec, selector)
+func (p *Parameter) ConvertAndSet(ctx context.Context, selector *Selector, value string) error {
+	p.ensureSelectorParamValue(selector)
+
+	paramPtr, presencePtr := asValuesPtr(selector)
+
+	if err := p.valueAccessor.setValue(ctx, paramPtr, value, p.Codec, selector); err != nil {
+		return err
+	}
+
+	p.UpdatePresence(presencePtr)
+	return nil
 }
 
 func elem(rType reflect.Type) reflect.Type {
@@ -350,9 +361,20 @@ func elem(rType reflect.Type) reflect.Type {
 	return rType
 }
 
-func (p *Parameter) Set(ptr unsafe.Pointer, value interface{}) error {
+func (p *Parameter) Set(selector *Selector, value interface{}) error {
+	p.ensureSelectorParamValue(selector)
+
+	ptr, presencePtr := asValuesPtr(selector)
 	p.valueAccessor.set(ptr, value)
+	p.UpdatePresence(presencePtr)
+
 	return nil
+}
+
+func asValuesPtr(selector *Selector) (paramPtr unsafe.Pointer, presencePtr unsafe.Pointer) {
+	paramPtr = xunsafe.AsPointer(selector.Parameters.Values)
+	presencePtr = xunsafe.AsPointer(selector.Parameters.Has)
+	return paramPtr, presencePtr
 }
 
 func (p *Parameter) SetPresenceField(structType reflect.Type) error {
@@ -377,6 +399,10 @@ func (p *Parameter) initCodec(resource *Resource, view *View, paramType reflect.
 		return err
 	}
 	return nil
+}
+
+func (p *Parameter) ensureSelectorParamValue(selector *Selector) {
+	selector.Parameters.Init(p._owner)
 }
 
 //ParametersIndex represents Parameter map indexed by Parameter.Name

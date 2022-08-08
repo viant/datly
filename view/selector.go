@@ -98,7 +98,6 @@ func (s *ParamState) Init(view *View) {
 		s.Values = newValue(view.Template.Schema.Type())
 		s.Has = newValue(view.Template.PresenceSchema.Type())
 	}
-
 }
 
 func newValue(p reflect.Type) interface{} {

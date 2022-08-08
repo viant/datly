@@ -14,6 +14,7 @@ import (
 	"github.com/viant/assertly"
 	"github.com/viant/datly/codec"
 	"github.com/viant/datly/gateway/registry"
+	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
@@ -30,7 +31,6 @@ import (
 	"time"
 
 	"github.com/viant/datly/router"
-	"github.com/viant/dsunit"
 	"github.com/viant/toolbox"
 	"net/http"
 	"path"
@@ -640,7 +640,7 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 
 	resourceURI := path.Join(testDataLocation, c.resourceURI)
 	fs := afs.New()
-	if !initDb(t, testDataLocation, c.resourceURI) {
+	if !tests.InitDB(t, path.Join(testDataLocation, "db_config.yaml"), path.Join(testDataLocation, c.resourceURI, "populate"), "db") {
 		return nil, false
 	}
 
@@ -690,7 +690,7 @@ func (c *testcase) readOpenAPI(resource *router.Resource) (*openapi3.OpenAPI, er
 }
 
 func (c *testcase) readResource(t *testing.T, fs afs.Service, resourceUrl string, dependencies map[string]*view.Resource) (*router.Resource, bool) {
-	resource, err := router.NewResourceFromURL(context.TODO(), fs, resourceUrl, c.visitors, c.types, dependencies, nil, false)
+	resource, err := router.NewResourceFromURL(context.TODO(), fs, resourceUrl, false, c.visitors, c.types, dependencies, nil)
 	if !assert.Nil(t, err, c.description) {
 		return nil, false
 	}
@@ -747,21 +747,6 @@ func (c *testcase) cleanup() {
 	for key := range c.envVariables {
 		os.Unsetenv(key)
 	}
-}
-
-func initDb(t *testing.T, datasetPath string, resourceURI string) bool {
-	configPath := path.Join(datasetPath, "db_config.yaml")
-	if !dsunit.InitFromURL(t, configPath) {
-		return false
-	}
-	datasetURI := path.Join(datasetPath, resourceURI, "populate")
-	initDataset := dsunit.NewDatasetResource("db", datasetURI, "", "")
-	request := dsunit.NewPrepareRequest(initDataset)
-	if !dsunit.Prepare(t, request) {
-		return false
-	}
-
-	return true
 }
 
 func encodeToken(token string) string {

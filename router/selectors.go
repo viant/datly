@@ -14,7 +14,6 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
-	"unsafe"
 )
 
 type (
@@ -442,8 +441,6 @@ func (b *selectorsBuilder) addEnvVariableParam(ctx context.Context, selector *vi
 }
 
 func (b *selectorsBuilder) addRequestBodyParam(selector *view.Selector, param *view.Parameter) error {
-	paramsPtr, presencePtr := asValuesPtr(selector)
-
 	if param.Required != nil && *param.Required && b.params.requestBody == nil {
 		return fmt.Errorf("parameter %v is required", param.Name)
 	}
@@ -452,11 +449,10 @@ func (b *selectorsBuilder) addRequestBodyParam(selector *view.Selector, param *v
 		return nil
 	}
 
-	if err := param.Set(paramsPtr, b.params.requestBody); err != nil {
+	if err := param.Set(selector, b.params.requestBody); err != nil {
 		return err
 	}
 
-	param.UpdatePresence(presencePtr)
 	return nil
 }
 
@@ -477,8 +473,6 @@ func (b *selectorsBuilder) addPathParam(ctx context.Context, selector *view.Sele
 }
 
 func (b *selectorsBuilder) addViewParam(ctx context.Context, selector *view.Selector, viewDetails *ViewDetails, param *view.Parameter) error {
-	paramsPtr, presencePtr := asValuesPtr(selector)
-
 	paramValue, err := b.viewParamValue(ctx, viewDetails, param)
 	if err != nil {
 		return err
@@ -488,11 +482,10 @@ func (b *selectorsBuilder) addViewParam(ctx context.Context, selector *view.Sele
 		return nil
 	}
 
-	if err = param.Set(paramsPtr, paramValue); err != nil {
+	if err = param.Set(selector, paramValue); err != nil {
 		return err
 	}
 
-	param.UpdatePresence(presencePtr)
 	return nil
 }
 
@@ -539,8 +532,6 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 }
 
 func convertAndSet(ctx context.Context, selector *view.Selector, parameter *view.Parameter, rawValue string) error {
-	paramPtr, presencePtr := asValuesPtr(selector)
-
 	if parameter.IsRequired() && rawValue == "" {
 		return fmt.Errorf("parameter %v is required", parameter.Name)
 	}
@@ -549,21 +540,13 @@ func convertAndSet(ctx context.Context, selector *view.Selector, parameter *view
 		return nil
 	}
 
-	if err := parameter.ConvertAndSet(ctx, paramPtr, rawValue, selector); err != nil {
+	if err := parameter.ConvertAndSet(ctx, selector, rawValue); err != nil {
 		return err
 	}
 
-	parameter.UpdatePresence(presencePtr)
 	return nil
 }
 
-func asValuesPtr(selector *view.Selector) (paramPtr unsafe.Pointer, presencePtr unsafe.Pointer) {
-	paramPtr = xunsafe.AsPointer(selector.Parameters.Values)
-	presencePtr = xunsafe.AsPointer(selector.Parameters.Has)
-	return paramPtr, presencePtr
-}
-
-//TODO: Distinct fields
 func (b *selectorsBuilder) buildFields(aView *view.View, selector *view.Selector, fieldsQuery string, separator int32) error {
 	fieldIt := NewParamIt(fieldsQuery, separator)
 	for fieldIt.Has() {

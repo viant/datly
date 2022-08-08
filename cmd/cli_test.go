@@ -11,8 +11,8 @@ import (
 	"github.com/viant/afs/mem"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone"
+	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/router/openapi3"
-	"github.com/viant/dsunit"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
@@ -158,7 +158,7 @@ func TestRun(t *testing.T) {
 		logger := &memoryWriter{}
 		testLocation := path.Join(currentLocation, "testdata", testCase.URI)
 		datasetPath := path.Join(testLocation, "populate")
-		if !initDb(t, configLocation, datasetPath) {
+		if !tests.InitDB(t, configLocation, datasetPath, "db") {
 			continue
 		}
 
@@ -272,20 +272,6 @@ func asOpenApi(bytes []byte) (*openapi3.OpenAPI, error) {
 	}
 
 	return openapi, nil
-}
-
-func initDb(t *testing.T, configPath, datasetPath string) bool {
-	if !dsunit.InitFromURL(t, configPath) {
-		return false
-	}
-
-	initDataset := dsunit.NewDatasetResource("db", datasetPath, "", "")
-	request := dsunit.NewPrepareRequest(initDataset)
-	if !dsunit.Prepare(t, request) {
-		return false
-	}
-
-	return true
 }
 
 func readResponse(handler http.Handler, url string, method string, body io.Reader) ([]byte, error) {

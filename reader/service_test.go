@@ -4,21 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
 	"github.com/viant/datly/codec"
+	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
-	"github.com/viant/dsunit"
 	"github.com/viant/gmetric/counter/base"
-	_ "github.com/viant/sqlx/metadata/product/sqlite"
 	"github.com/viant/toolbox/format"
-	"os"
 	"path"
 	"reflect"
 	"strconv"
@@ -481,17 +477,17 @@ func TestRead(t *testing.T) {
 	//for index, testCase := range useCases[len(useCases)-1:] {
 	for index, testCase := range useCases {
 		fmt.Println("Running testcase nr: " + strconv.Itoa(index))
-		resourcePath := path.Join(testLocation, "testdata", "cases", testCase.dataURI, "populate")
+		resourcePath := path.Join(testLocation, "testdata", "cases", testCase.dataURI)
 		if testCase.dataset != "" {
-			resourcePath = path.Join(testLocation, "testdata", "datasets", testCase.dataset, "populate")
+			resourcePath = path.Join(testLocation, "testdata", "datasets", testCase.dataset)
 		}
 
-		if initDb(t, path.Join(testLocation, "testdata", "db_config.yaml"), resourcePath, "db") {
-			return
+		if !tests.InitDB(t, path.Join(testLocation, "testdata", "db_config.yaml"), path.Join(resourcePath, "populate_db"), "db") {
+			continue
 		}
 
-		if initDb(t, path.Join(testLocation, "testdata", "other_config.yaml"), resourcePath, "other") {
-			return
+		if !tests.InitDB(t, path.Join(testLocation, "testdata", "other_config.yaml"), path.Join(resourcePath, "populate_other"), "other") {
+			continue
 		}
 
 		types := view.Types{}
@@ -1159,40 +1155,4 @@ func eventTypeViewWithoutEventTypeIdColumn() usecase {
 		dataset:     "dataset001_events/",
 		resource:    resource,
 	}
-}
-
-func initDb(t *testing.T, configPath, datasetPath, dataStore string) bool {
-	datasetPath = datasetPath + "_" + dataStore
-	resourceExist, err := exists(datasetPath)
-	if err != nil {
-		return true
-	}
-
-	if !resourceExist {
-		return false
-	}
-
-	if !dsunit.InitFromURL(t, configPath) {
-		return true
-	}
-
-	initDataset := dsunit.NewDatasetResource(dataStore, datasetPath, "", "")
-	request := dsunit.NewPrepareRequest(initDataset)
-	if !dsunit.Prepare(t, request) {
-		return true
-	}
-
-	return false
-}
-
-func exists(name string) (bool, error) {
-	_, err := os.Stat(name)
-	if err == nil {
-		return true, nil
-	}
-
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
-	}
-	return false, err
 }

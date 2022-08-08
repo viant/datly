@@ -18,6 +18,7 @@ import (
 	"github.com/viant/datly/view/discover"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -182,7 +183,9 @@ func (r *Resource) addLogger(aView *view.View, timeLogger *logger.Adapter) {
 	}
 }
 
-func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, visitors codec.Visitors, types view.Types, resources map[string]*view.Resource, metrics *view.Metrics, useColumnCache bool) (*Resource, error) {
+func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, useColumnCache bool, options ...interface{}) (*Resource, error) {
+	visitors, types, resources, metrics := readOptions(options)
+
 	resourceData, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, err
@@ -224,6 +227,38 @@ func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, visitor
 		return nil, err
 	}
 	return resource, err
+}
+
+func readOptions(options []interface{}) (codec.Visitors, view.Types, map[string]*view.Resource, *view.Metrics) {
+	var visitors codec.Visitors
+	var types view.Types
+	var resources map[string]*view.Resource
+	var metrics *view.Metrics
+	for _, anOption := range options {
+		switch actual := anOption.(type) {
+		case codec.Visitors:
+			visitors = actual
+		case view.Types:
+			types = actual
+		case map[string]*view.Resource:
+			resources = actual
+		case *view.Metrics:
+			metrics = actual
+		}
+	}
+
+	if resources == nil {
+		resources = map[string]*view.Resource{}
+	}
+
+	if types == nil {
+		types = map[string]reflect.Type{}
+	}
+
+	if visitors == nil {
+		visitors = map[string]codec.LifecycleVisitor{}
+	}
+	return visitors, types, resources, metrics
 }
 
 func mergeResources(resource *Resource, resources map[string]*view.Resource, types view.Types) error {

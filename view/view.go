@@ -998,3 +998,7 @@ func (v *View) ensureParameters(selector *Selector) {
 		selector.Parameters.Has = newValue(v.Template.PresenceSchema.Type())
 	}
 }
+
+func (v *View) ParamByName(name string) (*Parameter, error) {
+	return v.Template._parametersIndex.Lookup(name)
+}
