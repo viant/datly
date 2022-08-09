@@ -309,16 +309,16 @@ func (r *Service) loadRouterResource(ctx context.Context, URL string, fs afs.Ser
 		}
 	}
 
-	resource, err := router.NewResourceFromURL(ctx, fs, URL, r.Config.Discovery(), r.visitors, types, r.dataResources, metrics)
+	aResource, err := router.NewResourceFromURL(ctx, fs, URL, r.Config.Discovery(), r.visitors, types, r.dataResources, metrics)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = r.initResource(ctx, resource, URL); err != nil {
+	if err = r.initResource(ctx, aResource, URL); err != nil {
 		return nil, err
 	}
 
-	return resource, nil
+	return aResource, nil
 }
 
 func (r *Service) initResource(ctx context.Context, resource *router.Resource, URL string) error {

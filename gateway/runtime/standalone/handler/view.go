@@ -30,13 +30,13 @@ func (v *metaView) ServeHTTP(writer http.ResponseWriter, request *http.Request) 
 		URI = URI[index+len(v.URIPrefix):]
 	}
 
-	view, err := v.lookup(request.Method, URI)
+	aView, err := v.lookup(request.Method, URI)
 	if err != nil {
 		http.Error(writer, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	JSON, err := json.Marshal(view)
+	JSON, err := json.Marshal(aView)
 	if err != nil {
 		http.Error(writer, err.Error(), http.StatusInternalServerError)
 		return
@@ -56,7 +56,7 @@ func (v *metaView) ServeHTTP(writer http.ResponseWriter, request *http.Request) 
 	writer.Write(YAML)
 }
 
-//NewView creates view handler
+// NewView creates view handler
 func NewView(URI string, meta *meta2.Config, lookup ViewLookupFn) http.Handler {
 	handler := &metaView{lookup: lookup, meta: meta, URIPrefix: URI}
 	return handler

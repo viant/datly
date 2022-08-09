@@ -76,6 +76,11 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 		openApiHandler.ServeHTTP(writer, httpRequest)
 		return nil
 	}
+	if strings.Contains(httpRequest.RequestURI, config.Meta.CacheWarmURI) {
+		warmupHandler := handler.NewCacheWarmup(config.APIPrefix, &config.Meta, service.PreCachables)
+		warmupHandler.ServeHTTP(writer, httpRequest)
+		return nil
+	}
 	if strings.HasSuffix(httpRequest.RequestURI, ".ico") {
 		writer.WriteHeader(http.StatusNotFound)
 	} else {

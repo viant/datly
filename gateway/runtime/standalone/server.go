@@ -21,7 +21,7 @@ type Server struct {
 	Service *gateway.Service
 }
 
-//shutdownOnInterrupt server on interupts
+// shutdownOnInterrupt server on interupts
 func (r *Server) shutdownOnInterrupt() {
 	closed := make(chan struct{})
 	go func() {
@@ -63,6 +63,7 @@ func NewWithAuth(config *Config, auth AuthHandler) (*Server, error) {
 
 	mux.Handle(config.Meta.ViewURI, auth.Auth(handler.NewView(config.Meta.ViewURI, &config.Meta, service.View).ServeHTTP))
 	mux.Handle(config.Meta.OpenApiURI, auth.Auth(handler.NewOpenApi(config.APIPrefix, config.Meta.OpenApiURI, config.Info, service.Routes).ServeHTTP))
+	mux.Handle(config.Meta.CacheWarmURI, auth.Auth(handler.NewCacheWarmup(config.APIPrefix, &config.Meta, service.PreCachables).ServeHTTP))
 
 	//actual datly handler
 	mux.HandleFunc(config.Config.APIPrefix, auth.Auth(service.Handle))

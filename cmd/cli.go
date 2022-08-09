@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/jessevdk/go-flags"
 	"github.com/viant/afs"
@@ -9,15 +10,13 @@ import (
 	"github.com/viant/afs/modifier"
 	"github.com/viant/datly/auth/jwt"
 	"github.com/viant/datly/gateway/runtime/standalone"
+	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/warmup"
 	"gopkg.in/yaml.v3"
 	"io"
-	"net/http"
 	"os"
-	"sync"
 )
 
 type serverBuilder struct {
@@ -62,21 +61,10 @@ func (s *serverBuilder) build() (*standalone.Server, error) {
 	}
 
 	if len(s.options.WarmupURIs) > 0 {
-		group := sync.WaitGroup{}
-		for _, URI := range s.options.WarmupURIs {
-			group.Add(1)
-			go func(URI string) {
-				defer group.Done()
-				views, e := srv.Service.PreCachables(http.MethodGet, URI)
-				if e != nil {
-					err = e
-				}
-				if _, e = warmup.PopulateCache(views); e != nil {
-					err = e
-				}
-			}(URI)
-		}
-		group.Wait()
+		fmt.Printf("starting cache warmup for: %v\n", s.options.WarmupURIs)
+		response := warmup.PreCache(srv.Service.PreCachables, s.options.WarmupURIs...)
+		data, _ := json.Marshal(response)
+		fmt.Printf("%s\n", data)
 	}
 
 	if err != nil {

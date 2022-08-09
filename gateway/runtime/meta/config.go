@@ -11,9 +11,11 @@ const (
 	ViewURI = "/v1/api/meta/view/"
 	//OpenApiURI represents default config openapi URIPrefix
 	OpenApiURI = "/v1/api/meta/openapi/"
+	//CacheWarmupURI URIPrefix default value
+	CacheWarmupURI = "/v1/api/cache/warmup/"
 )
 
-//Config represents meta config
+// Config represents meta config
 type Config struct {
 	Version       string
 	MetricURI     string
@@ -21,10 +23,11 @@ type Config struct {
 	StatusURI     string
 	ViewURI       string
 	OpenApiURI    string
+	CacheWarmURI  string
 	AllowedSubnet []string
 }
 
-//Init initialises config
+// Init initialises config
 func (m *Config) Init() {
 	if m.MetricURI == "" {
 		m.MetricURI = MetricURI
@@ -44,5 +47,8 @@ func (m *Config) Init() {
 
 	if m.OpenApiURI == "" {
 		m.OpenApiURI = OpenApiURI
+	}
+	if m.CacheWarmURI == "" {
+		m.CacheWarmURI = CacheWarmupURI
 	}
 }

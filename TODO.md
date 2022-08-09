@@ -1,4 +1,4 @@
-- smart caching
+- smart caching (add detail response about each view case time,records, etc...)
 - $Limit/$Offset context based generator enhancement
 - managed ORM mode: selector with velty parameter setter, simplify/remove lifcycle, codec,
 - reduce complexity/execution branches/duplication on selector parameters
