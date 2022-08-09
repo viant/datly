@@ -30,7 +30,7 @@ type (
 
 func (c *matchersCollector) populate(ctx context.Context, collector chan warmupEntryFn, notifier chan notifierFn) {
 	go func() {
-		size, err := c.populateCollectorWithErr(ctx, collector)
+		size, err := c.populateCacheCases(ctx, collector)
 
 		notifier <- func() (int, error) {
 			return size, err
@@ -38,17 +38,17 @@ func (c *matchersCollector) populate(ctx context.Context, collector chan warmupE
 	}()
 }
 
-func (c *matchersCollector) populateCollectorWithErr(ctx context.Context, collector chan warmupEntryFn) (int, error) {
-	cacheData, err := c.view.Cache.GenerateCacheInput(ctx)
+func (c *matchersCollector) populateCacheCases(ctx context.Context, collector chan warmupEntryFn) (int, error) {
+	cacheCases, err := c.view.Cache.GenerateCacheInput(ctx)
 	if err != nil {
 		return 0, err
 	}
 
-	for i := range cacheData {
-		go c.populateChan(c.view, collector, cacheData[i])
+	for i := range cacheCases {
+		go c.populateChan(c.view, collector, cacheCases[i])
 	}
 
-	return len(cacheData), err
+	return len(cacheCases), err
 }
 
 func (c *matchersCollector) populateChan(aView *view.View, aChan chan warmupEntryFn, cacheInput *view.CacheInput) {
