@@ -16,9 +16,9 @@ type PreCached struct {
 }
 
 type Response struct {
-	Error     string
-	Status    string
-	PreCached []*PreCached
+	Error     string       `json:"error,omitempty"`
+	Status    string       `json:"status"`
+	PreCached []*PreCached `json:"preCached"`
 }
 
 func PreCache(lookup PreCachables, warmupURIs ...string) *Response {
