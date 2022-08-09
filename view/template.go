@@ -71,7 +71,6 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 	}
 
 	t._view = view
-	t._parametersIndex = ParametersSlice(t.Parameters).Index()
 	t._fieldIndex = map[string]int{}
 
 	if t.Source != "" {
@@ -99,6 +98,8 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 	if err := t.updateParametersFields(); err != nil {
 		return err
 	}
+
+	t._parametersIndex = ParametersSlice(t.Parameters).Index()
 
 	return nil
 }

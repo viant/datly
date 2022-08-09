@@ -23,13 +23,13 @@ Resource:
       Cache:
         Ref: aerospike
         Warmup:
-          DataSets:
-            - ParamValues:
+          IndexColumn: event_type_id
+          Cases:
+            - Set:
                 - Name: QUANTITY
                   Values: [ 0, 100 ]
                 - Name: USER_ID
                   Values: [ 1,2,3,4,5 ]
-              IndexColumn: event_type_id
 
       Selector:
         Constraints:

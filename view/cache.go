@@ -290,6 +290,9 @@ func (c *Cache) GenerateCacheInput(ctx context.Context) ([]*CacheInput, error) {
 	var cacheInputPermutations []*CacheInput
 	chanSize := len(c.Warmup.Cases)
 	selectorChan := make(chan CacheInputFn, chanSize)
+	if chanSize == 0 {
+		return []*CacheInput{}, nil
+	}
 
 	for i := range c.Warmup.Cases {
 		go c.generateDatasetSelectorsChan(ctx, selectorChan, c.Warmup.Cases[i])
@@ -337,18 +340,13 @@ func (c *Cache) generateDatasetSelectorsErr(ctx context.Context, set *CacheParam
 	}
 
 	return result, nil
-
 }
 
 func (c *Cache) getParamValues(ctx context.Context, paramValue *ParamValue) ([]interface{}, error) {
 	result := make([]interface{}, len(paramValue.Values), len(paramValue.Values)+1)
 	for i, value := range paramValue.Values {
-		marshal, err := json.Marshal(value)
-		if err != nil {
-			return nil, err
-		}
-
-		converted, _, err := converter.Convert(string(marshal), paramValue._param.Schema.Type(), paramValue._param.DateFormat)
+		marshal := fmt.Sprintf("%v", value)
+		converted, _, err := converter.Convert(marshal, paramValue._param.Schema.Type(), paramValue._param.DateFormat)
 		if err != nil {
 			return nil, err
 		}

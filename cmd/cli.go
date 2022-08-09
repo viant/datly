@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/warmup"
 	"gopkg.in/yaml.v3"
 	"io"
+	"net/http"
 	"os"
 	"sync"
 )
@@ -66,11 +67,11 @@ func (s *serverBuilder) build() (*standalone.Server, error) {
 			group.Add(1)
 			go func(URI string) {
 				defer group.Done()
-				views, e := srv.Service.PreCachables("GET", URI)
+				views, e := srv.Service.PreCachables(http.MethodGet, URI)
 				if e != nil {
 					err = e
 				}
-				if e = warmup.PopulateCache(views); e != nil {
+				if _, e = warmup.PopulateCache(views); e != nil {
 					err = e
 				}
 			}(URI)
