@@ -1,9 +1,10 @@
-- smart caching (add detail response about each view case time,records, etc...)
+- smart caching (cache compression if size over x, )
 - $Limit/$Offset context based generator enhancement
-- managed ORM mode: selector with velty parameter setter, simplify/remove lifcycle, codec,
 - reduce complexity/execution branches/duplication on selector parameters
+- - managed ORM mode: selector with velty parameter setter, simplify/remove lifcycle, codec,
 - performance profiling/tuning
 - strinigfy golang type in meta/view endpoint
+- cache metric add detail response about each view case time,records, etc...
 - insert service(with batch mode)/support for semi-autonomous mode (registry hooks)
 - patch/create/update
 - velty macros
