@@ -9,10 +9,11 @@ type CriteriaSanitizer struct {
 	Columns      ColumnIndex
 	Placeholders []interface{}
 	ParamsGroup  [][]interface{}
+	Mock         bool
 }
 
 func (p *CriteriaSanitizer) AsBinding(value interface{}) string {
-	p.Placeholders = append(p.Placeholders, value)
+	p.Placeholders = append(p.Placeholders, p.copy(value))
 	return "?"
 }
 
@@ -28,6 +29,13 @@ func (p *CriteriaSanitizer) AsColumn(columnName string) (string, error) {
 func (p *CriteriaSanitizer) Add(at int, value interface{}) string {
 	p.growIfNeeded(at)
 
+	valueCopy := p.copy(value)
+
+	p.ParamsGroup[at] = append(p.ParamsGroup[at], valueCopy)
+	return "?"
+}
+
+func (p *CriteriaSanitizer) copy(value interface{}) interface{} {
 	valueType := reflect.TypeOf(value)
 	valueCopy := reflect.New(valueType).Elem().Interface()
 	valuePtr := xunsafe.AsPointer(value)
@@ -36,8 +44,7 @@ func (p *CriteriaSanitizer) Add(at int, value interface{}) string {
 		xunsafe.Copy(xunsafe.AsPointer(valueCopy), valuePtr, int(valueType.Size()))
 	}
 
-	p.ParamsGroup[at] = append(p.ParamsGroup[at], valueCopy)
-	return "?"
+	return valueCopy
 }
 
 func (p *CriteriaSanitizer) growIfNeeded(at int) {

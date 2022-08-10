@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
+	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/view"
 	"github.com/viant/dsunit"
 	"github.com/viant/toolbox"
 	"path"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -66,7 +66,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:     "dataset001_events/",
 			description: `select statement with offset and limit`,
-			output:      `SELECT  t.ID,  t.Price FROM events AS t    LIMIT 10 OFFSET 5`,
+			output:      `SELECT  t.ID,  t.Price FROM events AS t     LIMIT 10 OFFSET 5`,
 			view: &view.View{
 				Columns: []*view.Column{
 					{
@@ -334,7 +334,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:     "dataset001_events/",
 			description: `select statement | selectors`,
-			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS   ORDER BY Price LIMIT 100 OFFSET 10) AS t WHERE price > 10`,
+			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS   ORDER BY Price LIMIT 100 OFFSET 10) AS t  WHERE price > 10`,
 			view: &view.View{
 				Columns: []*view.Column{
 					{
@@ -380,7 +380,7 @@ func TestBuilder_Build(t *testing.T) {
 
 	//for index, useCase := range useCases[len(useCases)-1:] {
 	for index, useCase := range useCases {
-		fmt.Println("Running testcase nr: " + strconv.Itoa(index) + " | " + useCase.description)
+		tests.LogHeader(fmt.Sprintf("Running testcase nr: %v | %v \n", index, useCase.description))
 		resourcePath := path.Join(testLocation, "testdata", "datasets", useCase.dataset, "populate")
 		if initDb(t, path.Join(testLocation, "testdata", "db_config.yaml"), resourcePath, "db") {
 			return

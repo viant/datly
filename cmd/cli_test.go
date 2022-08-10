@@ -153,8 +153,8 @@ func TestRun(t *testing.T) {
 	for i, testCase := range testCases[1:] {
 		mem.ResetSingleton()
 		gateway.ResetSingleton()
+		tests.LogHeader(fmt.Sprintf("Running testcase: %v\n", i))
 
-		fmt.Printf("Running testcase: %v\n", i)
 		logger := &memoryWriter{}
 		testLocation := path.Join(currentLocation, "testdata", testCase.URI)
 		datasetPath := path.Join(testLocation, "populate")

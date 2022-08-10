@@ -28,16 +28,15 @@ type (
 		Description string    `json:",omitempty"`
 		Style       string    `json:",omitempty"`
 		Schema      *Schema   `json:",omitempty"`
+		Codec       *Codec    `json:",omitempty"`
 
-		Codec *Codec `json:",omitempty"`
-
-		initialized bool
-		view        *View
+		DateFormat      string `json:",omitempty"`
+		ErrorStatusCode int    `json:",omitempty"`
 
 		valueAccessor    *Accessor
 		presenceAccessor *Accessor
-		DateFormat       string `json:",omitempty"`
-		ErrorStatusCode  int    `json:",omitempty"`
+		initialized      bool
+		view             *View
 		_owner           *View
 	}
 
@@ -161,16 +160,16 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 	}
 
 	if p.In.Kind == DataViewKind {
-		view, err := resource.View(p.In.Name)
+		aView, err := resource.View(p.In.Name)
 		if err != nil {
 			return fmt.Errorf("failed to lookup parameter %v view %w", p.Name, err)
 		}
 
-		if err = view.Init(ctx, resource); err != nil {
+		if err = aView.Init(ctx, resource); err != nil {
 			return err
 		}
 
-		p.view = view
+		p.view = aView
 	}
 
 	if err := p.initSchema(resource._types, structType); err != nil {
@@ -267,23 +266,16 @@ func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
 		return fmt.Errorf("parameter %v either schema DataType or DbName has to be specified", p.Name)
 	}
 
-	if p.Schema.Name != "" {
-		lookup, err := types.Lookup(p.Schema.Name)
+	schemaType := notEmptyOf(p.Schema.Name, p.Schema.DataType)
+	if schemaType != "" {
+		lookup, err := GetOrParseType(types, schemaType)
 		if err != nil {
 			return err
 		}
 
 		p.Schema.setType(lookup)
 		return nil
-	}
 
-	if p.Schema.DataType != "" {
-		rType, err := ParseType(p.Schema.DataType)
-		if err != nil {
-			return err
-		}
-		p.Schema.setType(rType)
-		return nil
 	}
 
 	return p.Schema.Init(nil, nil, 0, types)
@@ -463,4 +455,18 @@ func (p ParametersIndex) Register(parameter *Parameter) {
 //NewQueryLocation creates a query location
 func NewQueryLocation(name string) *Location {
 	return &Location{Name: name, Kind: QueryKind}
+}
+
+func GetOrParseType(types Types, dataType string) (reflect.Type, error) {
+	lookup, lookupErr := types.Lookup(dataType)
+	if lookupErr == nil {
+		return lookup, nil
+	}
+
+	parseType, parseErr := ParseType(dataType)
+	if parseErr == nil {
+		return parseType, nil
+	}
+
+	return nil, fmt.Errorf("couldn't determine struct type: %v, due to the: %w, %v", dataType, lookupErr, parseErr)
 }

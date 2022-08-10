@@ -32,8 +32,18 @@ func (d *Definition) Init(ctx context.Context, types Types) error {
 		return err
 	}
 
-	d.Schema = &Schema{}
-	d.Schema.setType(buildTypeFromFields(d.Fields))
+	if d.Schema != nil {
+		parseType, err := GetOrParseType(map[string]reflect.Type{}, d.Schema.DataType)
+		if err != nil {
+			return err
+		}
+
+		d.Schema.setType(parseType)
+	} else {
+		d.Schema = &Schema{}
+		d.Schema.setType(buildTypeFromFields(d.Fields))
+	}
+
 	return nil
 }
 

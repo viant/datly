@@ -68,12 +68,9 @@ func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat f
 	}
 
 	if c.DataType != "" {
-		rType, err := ParseType(c.DataType)
+		rType, err := GetOrParseType(types, c.DataType)
 		if err != nil {
-			rType, err = types.Lookup(c.DataType)
-			if err != nil {
-				return err
-			}
+			return err
 		}
 
 		c.setType(rType)

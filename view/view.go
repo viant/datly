@@ -989,10 +989,10 @@ func (v *View) indexTransforms(resource *Resource, transforms marshal.Transforms
 	return nil
 }
 
-func (v *View) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CommonParams, batchData *BatchData) (string, error) {
+func (v *View) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CommonParams, batchData *BatchData, sanitized *CriteriaSanitizer) (string, error) {
 	v.ensureParameters(selector)
 
-	return v.Template.Expand(placeholders, SQL, selector, params, batchData)
+	return v.Template.Expand(placeholders, SQL, selector, params, batchData, sanitized)
 }
 
 func (v *View) ensureParameters(selector *Selector) {

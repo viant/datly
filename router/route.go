@@ -282,7 +282,7 @@ func (r *Route) initRequestBodyFromParams() error {
 
 	rType := params[0].Schema.Type()
 	for i := 1; i < len(params); i++ {
-		if params[i].Schema.Type() != rType {
+		if params[i].Schema.Type() != rType && !params[i].Schema.Type().ConvertibleTo(rType) {
 			return fmt.Errorf("parameters request body type missmatch: wanted %v got %v", rType.String(), params[i].Schema.Type().String())
 		}
 	}

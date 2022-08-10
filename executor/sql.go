@@ -37,6 +37,10 @@ func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) ([]*Sq
 	statements := parser.ParseWithReader(strings.NewReader(SQL))
 
 	result := make([]*SqlData, len(statements))
+	if len(statements) == 0 {
+		result = append(result, &SqlData{SQL: SQL, Args: params.At(0)})
+	}
+
 	for i := range statements {
 		result[i] = &SqlData{
 			SQL:  statements[i],

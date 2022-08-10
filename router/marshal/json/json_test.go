@@ -4,6 +4,7 @@ import (
 	goJson "encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/toolbox"
@@ -105,7 +106,7 @@ func TestJson_Marshal(t *testing.T) {
 
 	//for i, testcase := range testcases[len(testcases)-1:] {
 	for i, testcase := range testcases {
-		fmt.Printf("Running testcase nr: %v\n", i)
+		tests.LogHeader(fmt.Sprintf("Running testcase nr: %v\n", i))
 		data := testcase.data()
 		marshaller, err := json.New(reflect.TypeOf(data), testcase.defaultConfig)
 		if !assert.Nil(t, err, testcase.description) {

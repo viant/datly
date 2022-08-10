@@ -26,7 +26,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -616,6 +615,26 @@ func TestRouter(t *testing.T) {
 ]}`,
 			afterInsertExpected: `[{"Id":1,"Timestamp":"2022-08-09T23:10:17+02:00","EventTypeId":0,"Quantity":125.5,"UserId":0},{"Id":2,"Timestamp":"2022-01-09T23:10:17+02:00","EventTypeId":0,"Quantity":250.5,"UserId":0},{"Id":3,"Timestamp":"2020-01-09T23:10:17+02:00","EventTypeId":0,"Quantity":300,"UserId":0}]`,
 		},
+		{
+			description:         "executor with param slice",
+			resourceURI:         "030_param_slice",
+			uri:                 "/api/events",
+			method:              http.MethodPost,
+			visitors:            map[string]codec.LifecycleVisitor{},
+			afterInsertUri:      "/api/events?_criteria=Quantity=40",
+			afterInsertMethod:   http.MethodGet,
+			requestBody:         `{"ID": [1,10,103], "Quantity": 40}`,
+			afterInsertExpected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":40,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":40,"UserId":2},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":40,"UserId":3}]`,
+		},
+		{
+			description: "executor with param slice",
+			resourceURI: "030_param_slice",
+			uri:         "/api/events",
+			method:      http.MethodPost,
+			visitors:    map[string]codec.LifecycleVisitor{},
+			requestBody: `{"ID": [1,10,103], "Quantity": 0}`,
+			expected:    `{"Message":"invalid template due to: invalid status"}`,
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {
@@ -623,8 +642,9 @@ func TestRouter(t *testing.T) {
 		if i != 0 {
 			testcases[i-1].cleanup()
 		}
+		tests.LogHeader(fmt.Sprintf("Running testcase  %v, %v\n", i, tCase.description))
 
-		fmt.Println("Running testcase " + strconv.Itoa(i) + ", " + tCase.description)
+		fmt.Println()
 		testUri := path.Join(testLocation, "testdata")
 		routingHandler, ok := tCase.init(t, testUri)
 		if !ok {

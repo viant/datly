@@ -476,7 +476,8 @@ func TestRead(t *testing.T) {
 
 	//for index, testCase := range useCases[len(useCases)-1:] {
 	for index, testCase := range useCases {
-		fmt.Println("Running testcase nr: " + strconv.Itoa(index))
+		tests.LogHeader(fmt.Sprintf("Running testcase nr: %v\n", index))
+
 		resourcePath := path.Join(testLocation, "testdata", "cases", testCase.dataURI)
 		if testCase.dataset != "" {
 			resourcePath = path.Join(testLocation, "testdata", "datasets", testCase.dataset)

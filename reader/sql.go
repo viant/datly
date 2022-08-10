@@ -47,7 +47,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 		exclude = &Exclude{}
 	}
 
-	template, _, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parentOfAclView)
+	template, sanitized, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parentOfAclView)
 	if err != nil {
 		return nil, err
 	}
@@ -93,10 +93,12 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 			sb.WriteString(" ")
 			sb.WriteString(keywords.AndSelectorCriteria)
 		} else {
+			sb.WriteString(" ")
 			sb.WriteString(keywords.WhereSelectorCriteria)
 			sb.WriteString(" ")
 		}
 	} else {
+		sb.WriteString(" ")
 		sb.WriteString(keywords.WhereSelectorCriteria)
 	}
 
@@ -109,7 +111,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 
 	var placeholders []interface{}
 
-	SQL, err := aView.Expand(&placeholders, sb.String(), selector, commonParams, batchData)
+	SQL, err := aView.Expand(&placeholders, sb.String(), selector, commonParams, batchData, sanitized)
 	if err != nil {
 		return nil, err
 	}

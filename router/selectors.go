@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
+	"unsafe"
 )
 
 type (
@@ -492,8 +493,19 @@ func (b *selectorsBuilder) addViewParam(ctx context.Context, selector *view.Sele
 
 func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *ViewDetails, param *view.Parameter) (interface{}, error) {
 	aView := param.View()
-	destSlice := reflect.New(aView.Schema.SliceType()).Interface()
-	session := reader.NewSession(destSlice, aView)
+
+	sliceType := aView.Schema.SliceType()
+	slice := aView.Schema.Slice()
+	var returnMulti bool
+	if param.Schema.Type().Kind() == reflect.Slice {
+		sliceType = param.Schema.Type()
+		slice = param.Schema.Slice()
+		returnMulti = true
+	}
+
+	sliceValue := reflect.New(sliceType)
+	destSlicePtr := sliceValue.Interface()
+	session := reader.NewSession(destSlicePtr, aView)
 	session.Parent = viewDetails.View
 	newIndex := Index{}
 	if err := newIndex.Init(aView, ""); err != nil {
@@ -515,21 +527,14 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 	if err = reader.New().Read(ctx, session); err != nil {
 		return nil, err
 	}
-	ptr := xunsafe.AsPointer(destSlice)
-	paramLen := aView.Schema.Slice().Len(ptr)
-	switch paramLen {
-	case 0:
-		if param.Required != nil && *param.Required {
-			return nil, fmt.Errorf("parameter %v value is required but no data was found", param.Name)
-		}
 
-		return nil, err
-	case 1:
-		holder := aView.Schema.Slice().ValuePointerAt(ptr, 0)
-		return holder, nil
-	default:
-		return nil, fmt.Errorf("parameter %v return more than one value", param.Name)
+	ptr := xunsafe.AsPointer(destSlicePtr)
+	paramLen := slice.Len(ptr)
+	if paramLen == 0 && param.IsRequired() {
+		return nil, fmt.Errorf("parameter %v value is required but no data was found", param.Name)
 	}
+
+	return b.paramViewValue(param, sliceValue, returnMulti, paramLen, slice, ptr)
 }
 
 func convertAndSet(ctx context.Context, selector *view.Selector, parameter *view.Parameter, rawValue string) error {
@@ -583,6 +588,19 @@ func (b *selectorsBuilder) pageOffset(pageValue string, selector *view.Selector,
 	}
 
 	return (page - 1) * limit, nil
+}
+
+func (b *selectorsBuilder) paramViewValue(param *view.Parameter, value reflect.Value, multi bool, paramLen int, aSlice *xunsafe.Slice, ptr unsafe.Pointer) (interface{}, error) {
+	if multi {
+		return value.Elem().Interface(), nil
+	}
+
+	switch paramLen {
+	case 1:
+		return aSlice.ValuePointerAt(ptr, 0), nil
+	default:
+		return nil, fmt.Errorf("parameter %v return more than one value", param.Name)
+	}
 }
 
 func canUseColumn(aView *view.View, columnName string) error {

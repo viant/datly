@@ -3,6 +3,7 @@ package criteria_test
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/router/criteria"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox/format"
@@ -278,7 +279,7 @@ func TestParse(t *testing.T) {
 
 	//for i, testCase := range testCases[len(testCases)-1:] {
 	for i, testCase := range testCases {
-		fmt.Printf("Running testcase %v\n", i)
+		tests.LogHeader(fmt.Sprintf("Running testcase %v\n", i))
 
 		for _, column := range testCase.columns {
 			if !assert.Nil(t, column.Init(view.EmptyResource(), format.CaseLowerUnderscore, true, nil), testCase.input) {

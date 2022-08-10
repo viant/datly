@@ -8,10 +8,7 @@ import (
 	"github.com/viant/datly/view/parameter"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty"
-	"github.com/viant/velty/ast"
-	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/est"
-	"github.com/viant/velty/parser"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -225,7 +222,7 @@ func NewEvaluator(paramSchema, presenceSchema reflect.Type, template string) (*E
 
 func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parent *View) (string, *CriteriaSanitizer, error) {
 	if t.wasEmpty {
-		return t.Source, nil, nil
+		return t.Source, &CriteriaSanitizer{}, nil
 	}
 
 	viewParam := &Param{}
@@ -389,20 +386,30 @@ func (t *Template) IsActualTemplate() bool {
 	return t.isTemplate
 }
 
-func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CommonParams, batchData *BatchData) (string, error) {
-	return t.expand(placeholders, SQL, selector, params, batchData)
-}
-
-func (t *Template) expand(placeholders *[]interface{}, SQL string, selector *Selector, params CommonParams, batchData *BatchData) (string, error) {
-	block, err := parser.Parse([]byte(SQL))
+func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CommonParams, batchData *BatchData, sanitized *CriteriaSanitizer) (string, error) {
+	values, err := parameter.Parse(SQL)
 	if err != nil {
 		return "", err
 	}
 
-	replacement := rdata.Map{}
+	replacement := &rdata.Map{}
 
-	for _, statement := range block.Stmt {
-		key, val, err := t.prepareExpanded(statement, params, selector, batchData, placeholders)
+	counter := 0
+	for _, value := range values {
+		if value.Key == "?" {
+			var placeholder interface{}
+			if sanitized.Mock {
+				placeholder = 0
+			} else {
+				placeholder = sanitized.Placeholders[counter]
+			}
+
+			*placeholders = append(*placeholders, placeholder)
+			counter++
+			continue
+		}
+
+		key, val, err := t.prepareExpanded(value, params, selector, batchData, placeholders)
 		if err != nil {
 			return "", err
 		}
@@ -417,19 +424,14 @@ func (t *Template) expand(placeholders *[]interface{}, SQL string, selector *Sel
 	return replacement.ExpandAsText(SQL), err
 }
 
-func (t *Template) prepareExpanded(statement ast.Statement, params CommonParams, selector *Selector, batchData *BatchData, placeholders *[]interface{}) (string, string, error) {
-	switch actual := statement.(type) {
-	case *expr.Select:
-		key := extractSelectorName(actual.FullName)
-		mapKey, mapValue, err := t.replacementEntry(key, params, selector, batchData, placeholders)
-		if err != nil {
-			return "", "", err
-		}
-
-		return mapKey, mapValue, nil
+func (t *Template) prepareExpanded(value *parameter.Value, params CommonParams, selector *Selector, batchData *BatchData, placeholders *[]interface{}) (string, string, error) {
+	key, val, err := t.replacementEntry(value.Key, params, selector, batchData, placeholders)
+	if err != nil {
+		return "", "", err
 	}
 
-	return "", "", nil
+	return key, val, err
+
 }
 
 func (t *Template) replacementEntry(key string, params CommonParams, selector *Selector, batchData *BatchData, placeholders *[]interface{}) (string, string, error) {
@@ -437,7 +439,7 @@ func (t *Template) replacementEntry(key string, params CommonParams, selector *S
 	case keywords.Pagination[1:]:
 		return key, params.Pagination, nil
 	case keywords.Criteria[1:]:
-		criteriaExpanded, err := t.expand(placeholders, params.WhereClause, selector, params, batchData)
+		criteriaExpanded, err := t.Expand(placeholders, params.WhereClause, selector, params, batchData, &CriteriaSanitizer{})
 		if err != nil {
 			return "", "", err
 		}
@@ -502,13 +504,4 @@ func (t *Template) valueWithPrefix(key string, aValue, prefix string, wrapWithPa
 	}
 
 	return key, prefix + aValue, nil
-}
-
-func extractSelectorName(name string) string {
-	i := 1 // all names starts with the '$'
-
-	for ; i < len(name) && name[i] == '{'; i++ {
-	} // skip the select block i.e. ${foo.DbName}
-
-	return name[i : len(name)-i+1]
 }

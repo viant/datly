@@ -18,9 +18,10 @@ type (
 		SQL       string
 		Evaluated bool
 		Expander  ExpanderFn
+		Args      []interface{}
 	}
 
-	ExpanderFn func(placeholders *[]interface{}, SQL string, selector *Selector, params CommonParams, batchData *BatchData) (string, error)
+	ExpanderFn func(placeholders *[]interface{}, SQL string, selector *Selector, params CommonParams, batchData *BatchData, sanitized *CriteriaSanitizer) (string, error)
 )
 
 func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column, string, error) {
@@ -89,7 +90,7 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 	params := newValue(aView.Template.Schema.Type())
 	presence := newValue(aView.Template.PresenceSchema.Type())
 
-	source, _, err := aView.Template.EvaluateSource(params, presence, aView)
+	source, sanitized, err := aView.Template.EvaluateSource(params, presence, aView)
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +101,7 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 	}
 
 	result.SQL = source
+	result.Args = sanitized.Placeholders
 	return result, nil
 }
 
@@ -192,13 +194,23 @@ func detectColumnsSQL(evaluation *TemplateEvaluation, v *View) (string, []interf
 	var err error
 
 	if evaluation.Expander != nil {
-		SQL, err = v.Expand(&placeholders, SQL, &Selector{}, CommonParams{}, &BatchData{})
+		SQL, err = v.Expand(&placeholders, SQL, &Selector{}, CommonParams{}, &BatchData{}, NewMockSanitizer())
 		if err != nil {
 			return SQL, nil, err
 		}
 	}
 
+	if len(placeholders) == 0 {
+		placeholders = evaluation.Args
+	}
+
 	return SQL, placeholders, nil
+}
+
+func NewMockSanitizer() *CriteriaSanitizer {
+	return &CriteriaSanitizer{
+		Mock: true,
+	}
 }
 
 func ExpandWithFalseCondition(source string) string {
