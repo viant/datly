@@ -6,21 +6,21 @@ Routes:
     View:
       Ref: events_ref
       Name: events
-      ForceSource: Table
+      Mode: Write
       Template:
         Parameters:
           - Name: Data
             In:
               Kind: body
             Schema:
-              Name: EventTypeRB
+              DataType: 'struct {Items []struct{Id int; Quantity float64; Timestamp time.Time }}'
         Source: '
           #set($index = 0)
           #foreach($item in $Unsafe.Data.Items)
           INSERT INTO 
           events(id, quantity, timestamp) 
           VALUES 
-          ($Bindings.Add($index, $item.Id), $Bindings.Add($index, $item.Quantity), $Bindings.Add($index, $item.Timestamp));
+          ($criteria.Add($index, $item.Id), $criteria.Add($index, $item.Quantity), $criteria.Add($index, $item.Timestamp));
           #set($index = $index+1)
           #end
         '
@@ -37,24 +37,6 @@ Resource:
       Connector:
         Ref: db
       Table: events
-
-  Types:
-    - Name: EventTypeRB
-      Fields:
-        - Name: Items
-          Cardinality: Many
-          Fields:
-            - Name: Id
-              Schema:
-                DataType: int
-            - Name: Quantity
-              Schema:
-                DataType: float64
-            - Name: Timestamp
-              Schema:
-                DataType: date
-
-
 
   Connectors:
     - Name: db

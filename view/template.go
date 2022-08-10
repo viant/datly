@@ -55,47 +55,7 @@ type (
 		Alias string
 		Table string
 	}
-
-	BindingParams struct {
-		paramsGroup [][]interface{}
-	}
 )
-
-func (p *BindingParams) Add(at int, value interface{}) string {
-	p.growIfNeeded(at)
-
-	valueType := reflect.TypeOf(value)
-	valueCopy := reflect.New(valueType).Elem().Interface()
-	valuePtr := xunsafe.AsPointer(value)
-
-	if valuePtr != nil {
-		xunsafe.Copy(xunsafe.AsPointer(valueCopy), valuePtr, int(valueType.Size()))
-	}
-
-	p.paramsGroup[at] = append(p.paramsGroup[at], valueCopy)
-	return "?"
-}
-
-func (p *BindingParams) growIfNeeded(at int) {
-	if len(p.paramsGroup) > at {
-		return
-	}
-
-	newParams := make([][]interface{}, at+1)
-	for i, group := range p.paramsGroup {
-		newParams[i] = append(newParams[i], group...)
-	}
-
-	p.paramsGroup = newParams
-}
-
-func (p *BindingParams) At(i int) []interface{} {
-	if len(p.paramsGroup) < i {
-		return []interface{}{}
-	}
-
-	return p.paramsGroup[i]
-}
 
 func (t *Template) Init(ctx context.Context, resource *Resource, view *View) error {
 	if t.initialized {
@@ -251,7 +211,7 @@ func NewEvaluator(paramSchema, presenceSchema reflect.Type, template string) (*E
 		return nil, err
 	}
 
-	if err = evaluator.planner.DefineVariable(keywords.BindingsKey, reflect.TypeOf(&BindingParams{})); err != nil {
+	if err = evaluator.planner.DefineVariable(Criteria, reflect.TypeOf(&CriteriaSanitizer{})); err != nil {
 		return nil, err
 	}
 
@@ -263,7 +223,7 @@ func NewEvaluator(paramSchema, presenceSchema reflect.Type, template string) (*E
 	return evaluator, nil
 }
 
-func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parent *View) (string, *BindingParams, error) {
+func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parent *View) (string, *CriteriaSanitizer, error) {
 	if t.wasEmpty {
 		return t.Source, nil, nil
 	}
@@ -275,12 +235,12 @@ func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, paren
 		viewParam = asViewParam(t._view)
 	}
 
-	params := &BindingParams{}
+	params := &CriteriaSanitizer{}
 	SQL, err := t.sqlEvaluator.Evaluate(t.Schema.Type(), externalParams, presenceMap, viewParam, params)
 	return SQL, params, err
 }
 
-func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMap interface{}, viewParam *Param, params *BindingParams) (string, error) {
+func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMap interface{}, viewParam *Param, params *CriteriaSanitizer) (string, error) {
 	externalType := reflect.TypeOf(externalParams)
 	if schemaType != externalType {
 		return "", fmt.Errorf("inompactible types, wanted %v got %T", schemaType.String(), externalParams)
@@ -303,7 +263,7 @@ func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMa
 		return "", err
 	}
 
-	if err := newState.SetValue(keywords.BindingsKey, params); err != nil {
+	if err := newState.SetValue(Criteria, params); err != nil {
 		return "", err
 	}
 

@@ -4,7 +4,6 @@ const (
 	ParamsMetadataKey = "Has"
 	ParamsKey         = "Unsafe"
 	ViewKey           = "View"
-	BindingsKey       = "Bindings"
 
 	Pagination    = "$PAGINATION"
 	Criteria      = "$CRITERIA"

@@ -25,25 +25,6 @@ const (
 	Criteria = "criteria"
 )
 
-type CriteriaSanitizer struct {
-	Columns      ColumnIndex
-	Placeholders []interface{}
-}
-
-func (c *CriteriaSanitizer) AsBinding(value interface{}) string {
-	c.Placeholders = append(c.Placeholders, value)
-	return "?"
-}
-
-func (c *CriteriaSanitizer) AsColumn(columnName string) (string, error) {
-	lookup, err := c.Columns.Lookup(columnName)
-	if err != nil {
-		return "", err
-	}
-
-	return lookup.Name, nil
-}
-
 type Sanitizer struct {
 	sanitize   func(id, criteria string, value interface{}, placeholders *[]interface{}, columns ColumnIndex) (string, error)
 	keyword    string

@@ -21,15 +21,18 @@ import (
 )
 
 const (
-	TableSourceType = "Table"
+	WriteMode = "Write"
+	ReadMode  = "Read"
 )
 
 type (
-	SourceType string
+	Mode string
 
 	//View represents a view View
 	View struct {
 		shared.Reference
+		Mode Mode
+
 		Connector  *Connector `json:",omitempty"`
 		Standalone bool       `json:",omitempty"`
 		Name       string     `json:",omitempty"`
@@ -37,8 +40,6 @@ type (
 		Table      string     `json:",omitempty"`
 		From       string     `json:",omitempty"`
 		FromURL    string     `json:",omitempty"`
-
-		ForceSource SourceType
 
 		Exclude              []string   `json:",omitempty"`
 		Columns              []*Column  `json:",omitempty"`
@@ -566,7 +567,7 @@ func (v *View) inherit(view *View) error {
 	v.Table = notEmptyOf(v.Table, view.Table)
 	v.From = notEmptyOf(v.From, view.From)
 	v.FromURL = notEmptyOf(v.FromURL, view.FromURL)
-	v.ForceSource = SourceType(notEmptyOf(string(v.ForceSource), string(view.ForceSource)))
+	v.Mode = Mode(notEmptyOf(string(v.Mode), string(view.Mode)))
 
 	if stringsSliceEqual(v.Exclude, view.Exclude) {
 		if len(v.Columns) == 0 {

@@ -71,7 +71,7 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 		Expander: aView.Expand,
 	}
 
-	if aView.ForceSource == TableSourceType {
+	if aView.Mode == WriteMode {
 		result.SQL = aView.Table
 		result.Expander = nil
 		return result, nil
