@@ -88,6 +88,9 @@ func (r *Router) handleRoute(response http.ResponseWriter, request *http.Request
 	case ReaderServiceType:
 		r.viewHandler(route)(response, request)
 		return nil
+	case ExecutorServiceType:
+		r.executorHandler(route)(response, request)
+		return nil
 	}
 
 	return fmt.Errorf("unsupported service operation %v", request.Method)

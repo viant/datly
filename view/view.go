@@ -20,7 +20,13 @@ import (
 	"time"
 )
 
+const (
+	TableSourceType = "Table"
+)
+
 type (
+	SourceType string
+
 	//View represents a view View
 	View struct {
 		shared.Reference
@@ -31,6 +37,8 @@ type (
 		Table      string     `json:",omitempty"`
 		From       string     `json:",omitempty"`
 		FromURL    string     `json:",omitempty"`
+
+		ForceSource SourceType
 
 		Exclude              []string   `json:",omitempty"`
 		Columns              []*Column  `json:",omitempty"`
@@ -558,6 +566,7 @@ func (v *View) inherit(view *View) error {
 	v.Table = notEmptyOf(v.Table, view.Table)
 	v.From = notEmptyOf(v.From, view.From)
 	v.FromURL = notEmptyOf(v.FromURL, view.FromURL)
+	v.ForceSource = SourceType(notEmptyOf(string(v.ForceSource), string(view.ForceSource)))
 
 	if stringsSliceEqual(v.Exclude, view.Exclude) {
 		if len(v.Columns) == 0 {

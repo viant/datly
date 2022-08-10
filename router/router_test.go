@@ -51,8 +51,11 @@ type testcase struct {
 	extraRequests    int
 	envVariables     map[string]string
 
-	corsHeaders     map[string]string
-	dependenciesUrl map[string]string
+	corsHeaders         map[string]string
+	dependenciesUrl     map[string]string
+	afterInsertUri      string
+	afterInsertMethod   string
+	afterInsertExpected string
 }
 
 type (
@@ -598,6 +601,21 @@ func TestRouter(t *testing.T) {
 			visitors:    map[string]codec.LifecycleVisitor{},
 			expected:    `[{"Id":102,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 		},
+		{
+			description:       "executor",
+			resourceURI:       "029_executor",
+			uri:               "/api/events",
+			method:            http.MethodPost,
+			visitors:          map[string]codec.LifecycleVisitor{},
+			afterInsertUri:    "/api/events",
+			afterInsertMethod: http.MethodGet,
+			requestBody: `{"Items": [
+			{"Id": 1, "Quantity": 125.5, "Timestamp": "2022-08-09T23:10:17.720975+02:00"},
+			{"Id": 2, "Quantity": 250.5, "Timestamp": "2022-01-09T23:10:17.720975+02:00"},
+			{"Id": 3, "Quantity": 300, "Timestamp": "2020-01-09T23:10:17.720975+02:00"}
+]}`,
+			afterInsertExpected: `[{"Id":1,"Timestamp":"2022-08-09T23:10:17+02:00","EventTypeId":0,"Quantity":125.5,"UserId":0},{"Id":2,"Timestamp":"2022-01-09T23:10:17+02:00","EventTypeId":0,"Quantity":250.5,"UserId":0},{"Id":3,"Timestamp":"2020-01-09T23:10:17+02:00","EventTypeId":0,"Quantity":300,"UserId":0}]`,
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {
@@ -626,7 +644,13 @@ func TestRouter(t *testing.T) {
 		}
 
 		for j := 0; j < tCase.extraRequests+1; j++ {
-			if !tCase.sendHttpRequest(t, routingHandler) {
+			if !tCase.sendHttpRequest(t, routingHandler, tCase.shouldDecompress, true) {
+				return
+			}
+		}
+
+		if tCase.afterInsertUri != "" {
+			if !tCase.sendHttpRequest(t, routingHandler, false, false) {
 				return
 			}
 		}
@@ -662,17 +686,26 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 
 	aRouter := router.New(resource)
 
-	generated, err := c.readOpenAPI(resource)
-	if !assert.Nil(t, err, c.description) {
+	if !c.checkGeneratedOpenAPI(t, resource, resourceURI, fs) {
 		return nil, false
 	}
 
+	return aRouter, true
+}
+
+func (c *testcase) checkGeneratedOpenAPI(t *testing.T, resource *router.Resource, resourceURI string, fs afs.Service) bool {
 	openAPIURI := path.Join(resourceURI, "openapi3.yaml")
 	actualOpenApi, err := loadOpenApi(context.TODO(), openAPIURI, fs)
-
-	if !assert.Nil(t, err, c.description) {
-		return nil, false
+	if err != nil {
+		fmt.Printf("Skiping openapi3 check for testcase: %v\n", c.description)
+		return true
 	}
+
+	generated, err := c.readOpenAPI(resource)
+	if !assert.Nil(t, err, c.description) {
+		return false
+	}
+
 	if !assertly.AssertValues(t, actualOpenApi, generated, c.description) {
 		toolbox.Dump(actualOpenApi)
 		actBytes, _ := yaml.Marshal(actualOpenApi)
@@ -680,8 +713,7 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 		actBytes, _ = yaml.Marshal(generated)
 		toolbox.Dump(string(actBytes))
 	}
-
-	return aRouter, true
+	return true
 }
 
 func (c *testcase) readOpenAPI(resource *router.Resource) (*openapi3.OpenAPI, error) {
@@ -705,13 +737,18 @@ func (c *testcase) readViewResource(t *testing.T, resourceUrl string, types view
 	return resource, true
 }
 
-func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router) bool {
+func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router, shouldDecompress bool, useMainRoute bool) bool {
+	method, uri, expected := c.method, c.uri, c.expected
+	if !useMainRoute {
+		method, uri, expected = c.afterInsertMethod, c.afterInsertUri, c.afterInsertExpected
+	}
+
 	var body io.Reader
-	if c.method != http.MethodGet {
+	if method != http.MethodGet {
 		body = bytes.NewReader([]byte(c.requestBody))
 	}
 
-	httpRequest := httptest.NewRequest(c.method, c.uri, body)
+	httpRequest := httptest.NewRequest(method, uri, body)
 	for header, values := range c.headers {
 		httpRequest.Header.Add(header, values[0])
 	}
@@ -727,7 +764,7 @@ func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router) bool {
 		return false
 	}
 
-	if c.shouldDecompress {
+	if shouldDecompress {
 		assert.Equal(t, router.EncodingGzip, responseWriter.Header().Get(content.Encoding), c.description)
 		reader, err := gzip.NewReader(bytes.NewReader(response))
 		assert.Nil(t, err, c.description)
@@ -736,7 +773,7 @@ func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router) bool {
 		response = decompressed
 	}
 
-	if !assert.Equal(t, c.expected, string(response), c.description) {
+	if !assert.Equal(t, expected, string(response), c.description) {
 		fmt.Println(string(response))
 	}
 

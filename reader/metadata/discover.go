@@ -20,7 +20,7 @@ func EnrichWithDiscover(template string, withParentheses bool) string {
 	tempAsBytes := []byte(strings.TrimSpace(template))
 
 	for {
-		if tempAsBytes[0] != '(' || tempAsBytes[len(tempAsBytes)-1] != ')' {
+		if len(tempAsBytes) == 0 || tempAsBytes[0] != '(' || tempAsBytes[len(tempAsBytes)-1] != ')' {
 			break
 		}
 

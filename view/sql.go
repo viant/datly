@@ -13,28 +13,29 @@ import (
 	"strings"
 )
 
+type (
+	TemplateEvaluation struct {
+		SQL       string
+		Evaluated bool
+		Expander  ExpanderFn
+	}
+
+	ExpanderFn func(placeholders *[]interface{}, SQL string, selector *Selector, params CommonParams, batchData *BatchData) (string, error)
+)
+
 func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column, string, error) {
-	actualSQL, evaluated, err := evaluateTemplateIfNeeded(ctx, resource, v)
+	evaluation, err := evaluateTemplateIfNeeded(ctx, resource, v)
 	if err != nil {
 		return nil, "", err
 	}
 
-	columns, SQL, err := detectColumns(ctx, actualSQL, v)
+	columns, SQL, err := detectColumns(ctx, evaluation, v)
 	if err != nil {
-		if !evaluated {
-			fmt.Println(fmt.Errorf("failed to detect columns using velocity engine and SQL:  %v  due to the %w\n", SQL, err).Error())
-
-			columns, SQL, err = detectColumns(ctx, v.Source(), v)
-			if err != nil {
-				return nil, "", fmt.Errorf("failed also to detect columns using %v due to the %w\n", SQL, err)
-			}
-		}
-
-		return columns, SQL, err
+		return expandWithoutTemplateEvaluation(ctx, evaluation, SQL, err, columns, v)
 	}
 
 	if v.From != "" && v.Table != "" {
-		tableColumns, tableSQL, errr := detectColumns(ctx, v.Table, v)
+		tableColumns, tableSQL, errr := detectColumns(ctx, &TemplateEvaluation{SQL: v.Table}, v)
 		if errr != nil {
 			return nil, tableSQL, errr
 		}
@@ -50,33 +51,60 @@ func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column,
 	return columns, SQL, nil
 }
 
-func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *View) (SQL string, evaluated bool, err error) {
+func expandWithoutTemplateEvaluation(ctx context.Context, evaluation *TemplateEvaluation, SQL string, err error, columns []*Column, v *View) ([]*Column, string, error) {
+	if evaluation.Evaluated {
+		return columns, SQL, err
+	}
+
+	fmt.Println(fmt.Errorf("failed to detect columns using velocity engine and SQL:  %v  due to the %w\n", SQL, err).Error())
+
+	columns, SQL, err = detectColumns(ctx, &TemplateEvaluation{SQL: v.Source(), Expander: v.Expand}, v)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed also to detect columns using %v due to the %w\n", SQL, err)
+	}
+
+	return columns, SQL, nil
+}
+
+func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *View) (evaluation *TemplateEvaluation, err error) {
+	result := &TemplateEvaluation{
+		Expander: aView.Expand,
+	}
+
+	if aView.ForceSource == TableSourceType {
+		result.SQL = aView.Table
+		result.Expander = nil
+		return result, nil
+	}
+
 	if aView.Template == nil {
-		return aView.Source(), false, nil
+		result.SQL = aView.Source()
+		return result, nil
 	}
 
 	if err := aView.Template.Init(ctx, resource, aView); err != nil {
-		return "", false, err
+		return nil, err
 	}
 
 	params := newValue(aView.Template.Schema.Type())
 	presence := newValue(aView.Template.PresenceSchema.Type())
 
-	source, err := aView.Template.EvaluateSource(params, presence, aView)
+	source, _, err := aView.Template.EvaluateSource(params, presence, aView)
 	if err != nil {
-		return "", false, err
+		return nil, err
 	}
 
 	source, err = expandWithZeroValues(source, aView.Template)
 	if err != nil {
-		return "", false, err
+		return nil, err
 	}
 
-	return source, false, err
+	result.SQL = source
+	return result, nil
 }
 
-func detectColumns(ctx context.Context, SQL string, v *View) ([]*Column, string, error) {
-	SQL, args, err := detectColumnsSQL(SQL, v)
+func detectColumns(ctx context.Context, evaluation *TemplateEvaluation, v *View) ([]*Column, string, error) {
+	SQL, args, err := detectColumnsSQL(evaluation, v)
 	if err != nil {
 		return nil, "", err
 	}
@@ -140,7 +168,9 @@ func columnsMetadata(ctx context.Context, db *sql.DB, v *View, columns []io.Colu
 	return result, nil
 }
 
-func detectColumnsSQL(source string, v *View) (string, []interface{}, error) {
+func detectColumnsSQL(evaluation *TemplateEvaluation, v *View) (string, []interface{}, error) {
+	source := evaluation.SQL
+
 	sb := strings.Builder{}
 	sb.WriteString("SELECT ")
 	if v.Alias != "" {
@@ -160,9 +190,12 @@ func detectColumnsSQL(source string, v *View) (string, []interface{}, error) {
 
 	var placeholders []interface{}
 	var err error
-	SQL, err = v.Expand(&placeholders, SQL, &Selector{}, CommonParams{}, &BatchData{})
-	if err != nil {
-		return SQL, nil, err
+
+	if evaluation.Expander != nil {
+		SQL, err = v.Expand(&placeholders, SQL, &Selector{}, CommonParams{}, &BatchData{})
+		if err != nil {
+			return SQL, nil, err
+		}
 	}
 
 	return SQL, placeholders, nil

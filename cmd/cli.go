@@ -76,6 +76,7 @@ func (s *serverBuilder) build() (*standalone.Server, error) {
 		openApiMarshal, _ := yaml.Marshal(openapiSpec)
 		_ = os.WriteFile(s.options.OpenApiURL, openApiMarshal, file.DefaultFileOsMode)
 	}
+
 	if err != nil {
 		return nil, err
 	}

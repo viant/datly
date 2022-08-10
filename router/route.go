@@ -24,7 +24,8 @@ const (
 	BasicStyle         Style = "Basic"
 	ComprehensiveStyle Style = "Comprehensive"
 
-	ReaderServiceType ServiceType = "Reader"
+	ReaderServiceType   ServiceType = "Reader"
+	ExecutorServiceType ServiceType = "Executor"
 )
 
 type (
@@ -250,6 +251,8 @@ func (r *Route) initServiceType() error {
 	case "", ReaderServiceType:
 		r.Service = ReaderServiceType
 		return nil
+	case ExecutorServiceType:
+		return nil
 	}
 
 	switch r.Method {
@@ -257,7 +260,7 @@ func (r *Route) initServiceType() error {
 		r.Service = ReaderServiceType
 		return nil
 	default:
-		return fmt.Errorf("http method %v unsupported", r.Method)
+		return fmt.Errorf("http method %v unsupported, no default service specified for given method", r.Method)
 	}
 }
 

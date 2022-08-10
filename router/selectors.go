@@ -101,6 +101,7 @@ func NewRequestMetadata(route *Route) *RequestMetadata {
 		Index:    route.Index,
 		MainView: route.View,
 	}
+
 	return requestMetadata
 }
 
