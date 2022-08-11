@@ -38,12 +38,7 @@ func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) ([]*SQ
 
 	result := make([]*SQLStatment, len(statements))
 	if len(statements) == 0 {
-		args := params.At(0)
-		if len(params.Placeholders) > 0 {
-			args = params.Placeholders
-		}
-
-		result = append(result, &SQLStatment{SQL: SQL, Args: args})
+		result = append(result, &SQLStatment{SQL: SQL, Args: params.At(0)})
 	}
 
 	for i := range statements {
@@ -55,8 +50,7 @@ func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) ([]*SQ
 
 	for _, data := range result {
 		var placeholders []interface{}
-		sanitizer := &view.CriteriaSanitizer{Placeholders: data.Args}
-		expand, err := aView.Expand(&placeholders, data.SQL, &view.Selector{}, view.CommonParams{}, &view.BatchData{}, sanitizer)
+		expand, err := aView.Expand(&placeholders, data.SQL, &view.Selector{}, view.CommonParams{}, &view.BatchData{}, params)
 		if err != nil {
 			return nil, err
 		}

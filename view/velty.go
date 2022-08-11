@@ -226,15 +226,14 @@ func (v *VeltyCodec) evaluateCriteria(selector *Selector, dest interface{}, wasN
 		return "", err
 	}
 
-	selector.Placeholders = append(selector.Placeholders, criteriaSanitizer.Placeholders...)
+	selector.Placeholders = append(selector.Placeholders, criteriaSanitizer.At(0)...)
 
 	return state.Buffer.String(), nil
 }
 
 func NewCriteria(columns ColumnIndex) *CriteriaSanitizer {
 	return &CriteriaSanitizer{
-		Columns:      columns,
-		Placeholders: []interface{}{},
+		Columns: columns,
 	}
 }
 

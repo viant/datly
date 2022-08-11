@@ -6,14 +6,13 @@ import (
 )
 
 type CriteriaSanitizer struct {
-	Columns      ColumnIndex
-	Placeholders []interface{}
-	ParamsGroup  [][]interface{}
-	Mock         bool
+	Columns     ColumnIndex
+	ParamsGroup [][]interface{}
+	Mock        bool
 }
 
 func (p *CriteriaSanitizer) AsBinding(value interface{}) string {
-	p.Placeholders = append(p.Placeholders, p.copy(value))
+	p.Add(0, value)
 	return "?"
 }
 

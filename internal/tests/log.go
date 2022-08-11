@@ -8,9 +8,9 @@ import (
 var loggingHeaderEnabled = os.Getenv("ENABLE_LOGGING") == "true"
 
 func LogHeader(header string) {
-	if !loggingHeaderEnabled {
-		return
-	}
+	//if !loggingHeaderEnabled {
+	//	return
+	//}
 
 	fmt.Println(header)
 }

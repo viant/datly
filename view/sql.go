@@ -101,7 +101,7 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 	}
 
 	result.SQL = source
-	result.Args = sanitized.Placeholders
+	result.Args = sanitized.At(0)
 	return result, nil
 }
 

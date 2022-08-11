@@ -405,7 +405,7 @@ func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Sel
 			if sanitized.Mock {
 				placeholder = 0
 			} else {
-				placeholder = sanitized.Placeholders[counter]
+				placeholder = sanitized.At(0)[counter]
 			}
 
 			*placeholders = append(*placeholders, placeholder)
