@@ -22,6 +22,8 @@ func buildViewMetaInExecSQLMode(SQL string, view *ViewMeta) error {
 		if err != nil {
 			return err
 		}
+	} else {
+		//TODO if more then 1 DML statement here
 	}
 	view.Source = nonSQLStmt + SQL
 	return nil
