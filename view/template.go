@@ -398,22 +398,18 @@ func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Sel
 
 	replacement := &rdata.Map{}
 
-	counter := 0
 	for _, value := range values {
 		if value.Key == "?" {
-			var placeholder interface{}
-			if sanitized.Mock {
-				placeholder = 0
-			} else {
-				placeholder = sanitized.At(0)[counter]
+			placeholder, err := sanitized.Next()
+			if err != nil {
+				return "", err
 			}
 
 			*placeholders = append(*placeholders, placeholder)
-			counter++
 			continue
 		}
 
-		key, val, err := t.prepareExpanded(value, params, selector, batchData, placeholders)
+		key, val, err := t.prepareExpanded(value, params, selector, batchData, placeholders, sanitized)
 		if err != nil {
 			return "", err
 		}
@@ -428,8 +424,8 @@ func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Sel
 	return replacement.ExpandAsText(SQL), err
 }
 
-func (t *Template) prepareExpanded(value *parameter.Value, params CommonParams, selector *Selector, batchData *BatchData, placeholders *[]interface{}) (string, string, error) {
-	key, val, err := t.replacementEntry(value.Key, params, selector, batchData, placeholders)
+func (t *Template) prepareExpanded(value *parameter.Value, params CommonParams, selector *Selector, batchData *BatchData, placeholders *[]interface{}, sanitized *CriteriaSanitizer) (string, string, error) {
+	key, val, err := t.replacementEntry(value.Key, params, selector, batchData, placeholders, sanitized)
 	if err != nil {
 		return "", "", err
 	}
@@ -438,12 +434,12 @@ func (t *Template) prepareExpanded(value *parameter.Value, params CommonParams, 
 
 }
 
-func (t *Template) replacementEntry(key string, params CommonParams, selector *Selector, batchData *BatchData, placeholders *[]interface{}) (string, string, error) {
+func (t *Template) replacementEntry(key string, params CommonParams, selector *Selector, batchData *BatchData, placeholders *[]interface{}, sanitized *CriteriaSanitizer) (string, string, error) {
 	switch key {
 	case keywords.Pagination[1:]:
 		return key, params.Pagination, nil
 	case keywords.Criteria[1:]:
-		criteriaExpanded, err := t.Expand(placeholders, params.WhereClause, selector, params, batchData, &CriteriaSanitizer{})
+		criteriaExpanded, err := t.Expand(placeholders, params.WhereClause, selector, params, batchData, sanitized)
 		if err != nil {
 			return "", "", err
 		}
@@ -457,7 +453,7 @@ func (t *Template) replacementEntry(key string, params CommonParams, selector *S
 		return key, selector.Criteria, nil
 	default:
 		if strings.HasPrefix(key, keywords.WherePrefix) {
-			_, aValue, err := t.replacementEntry(key[len(keywords.WherePrefix):], params, selector, batchData, placeholders)
+			_, aValue, err := t.replacementEntry(key[len(keywords.WherePrefix):], params, selector, batchData, placeholders, sanitized)
 			if err != nil {
 				return "", "", err
 			}
@@ -466,7 +462,7 @@ func (t *Template) replacementEntry(key string, params CommonParams, selector *S
 		}
 
 		if strings.HasPrefix(key, keywords.AndPrefix) {
-			_, aValue, err := t.replacementEntry(key[len(keywords.AndPrefix):], params, selector, batchData, placeholders)
+			_, aValue, err := t.replacementEntry(key[len(keywords.AndPrefix):], params, selector, batchData, placeholders, sanitized)
 			if err != nil {
 				return "", "", err
 			}
@@ -475,7 +471,7 @@ func (t *Template) replacementEntry(key string, params CommonParams, selector *S
 		}
 
 		if strings.HasPrefix(key, keywords.OrPrefix) {
-			_, aValue, err := t.replacementEntry(key[len(keywords.OrPrefix):], params, selector, batchData, placeholders)
+			_, aValue, err := t.replacementEntry(key[len(keywords.OrPrefix):], params, selector, batchData, placeholders, sanitized)
 			if err != nil {
 				return "", "", err
 			}
@@ -488,13 +484,32 @@ func (t *Template) replacementEntry(key string, params CommonParams, selector *S
 			return "", "", err
 		}
 
-		value, err := accessor.Value(selector.Parameters.Values)
+		values, err := accessor.Values(selector.Parameters.Values)
 		if err != nil {
 			return "", "", err
 		}
 
-		*placeholders = append(*placeholders, value)
-		return key, "?", nil
+		*placeholders = append(*placeholders, values...)
+		switch len(values) {
+		case 0:
+			return "", "", nil
+		case 1:
+			return key, "?", nil
+		case 2:
+			return key, "?, ?", nil
+		case 3:
+			return key, "?, ?, ?", nil
+		case 4:
+			return key, "?, ?, ?, ?", nil
+		default:
+			sb := strings.Builder{}
+			sb.WriteByte('?')
+			for i := 1; i < len(values); i++ {
+				sb.WriteString(", ?")
+			}
+			return key, sb.String(), nil
+		}
+
 	}
 }
 

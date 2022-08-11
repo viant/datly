@@ -178,9 +178,12 @@ func Convert(raw string, toType reflect.Type, format string) (value interface{},
 		return result, isNil, nil
 	}
 
-	validationErr := aValidator.Struct(result)
-	if validationErr != nil {
-		return nil, false, validationErr
+	if toType.Kind() == reflect.Struct {
+		err = aValidator.Struct(result)
+	}
+
+	if err != nil {
+		return nil, false, err
 	}
 
 	return result, isNil, nil

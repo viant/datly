@@ -115,8 +115,9 @@ func (a *Accessor) upstream(ptr unsafe.Pointer, indexes ...int) (unsafe.Pointer,
 
 func (a *Accessor) Value(values interface{}, indexes ...int) (interface{}, error) {
 	if values == nil {
-
+		return nil, nil
 	}
+
 	ptr := xunsafe.AsPointer(values)
 	pointer, index := a.upstream(ptr, indexes...)
 	xField := a.xFields[len(a.xFields)-1]
@@ -127,6 +128,35 @@ func (a *Accessor) Value(values interface{}, indexes ...int) (interface{}, error
 	}
 
 	return v, nil
+}
+
+func (a *Accessor) Values(values interface{}, indexes ...int) ([]interface{}, error) {
+	if values == nil {
+		return nil, nil
+	}
+
+	ptr := xunsafe.AsPointer(values)
+	pointer, index := a.upstream(ptr, indexes...)
+	xField := a.xFields[len(a.xFields)-1]
+
+	if xField.Type.Kind() != reflect.Slice {
+		v := xField.Value(pointer)
+
+		if (len(a.xSlices)) != 0 && a.xSlices[len(a.xSlices)-1] != nil && len(indexes) > index {
+			v = a.xSlices[len(a.xSlices)-1].ValueAt(xField.Pointer(pointer), indexes[index])
+		}
+
+		return []interface{}{v}, nil
+	}
+
+	slice := a.xSlices[len(a.xSlices)-1]
+	sliceLen := slice.Len(pointer)
+	placeholders := make([]interface{}, sliceLen)
+	for i := 0; i < sliceLen; i++ {
+		placeholders[i] = slice.ValueAt(ptr, i)
+	}
+
+	return placeholders, nil
 }
 
 func (a *Accessor) setBool(ptr unsafe.Pointer, value bool) {
