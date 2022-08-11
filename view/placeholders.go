@@ -61,7 +61,7 @@ func (p *CriteriaSanitizer) growIfNeeded(at int) {
 }
 
 func (p *CriteriaSanitizer) At(i int) []interface{} {
-	if len(p.ParamsGroup) < i {
+	if len(p.ParamsGroup) <= i {
 		return []interface{}{}
 	}
 
