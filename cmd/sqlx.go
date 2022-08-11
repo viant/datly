@@ -125,7 +125,6 @@ func (j *Joins) Index() map[string]*Join {
 }
 
 func ParseSQLx(SQL string, routeOpt *option.Route) (*Table, map[string]*TableParam, error) {
-
 	aQuery, err := parser.ParseQuery(SQL)
 	if aQuery == nil {
 		return nil, nil, err

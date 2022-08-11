@@ -8,8 +8,8 @@ type (
 		From           string            `json:",omitempty" yaml:",omitempty"`
 		Expressions    []string          `json:",omitempty" yaml:",omitempty"`
 		ParameterTypes map[string]string `json:",omitempty" yaml:",omitempty"`
-		Updates        []string
-		Inserts        []string
+		Updates        []string          `json:",omitempty" yaml:",omitempty"`
+		Inserts        []string          `json:",omitempty" yaml:",omitempty"`
 		index          map[string]int
 	}
 
