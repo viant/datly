@@ -36,9 +36,7 @@ func normalizeSQLExec(stmtType byte, SQLStmt string, view *ViewMeta) (string, er
 	}
 
 	rawSQL, expressions := ExtractCondBlock(SQLStmt)
-	if len(expressions) > 0 {
-		//TODO if any variable is used in expr set opt flag, otherwise required
-	}
+	//would it be better to leve in the raw SQL true case form if statement
 
 	switch stmtType {
 	case 'i':
@@ -147,9 +145,8 @@ func normalizeAndExtractUpdateSet(stmt *update.Statement, view *ViewMeta, rawSQL
 }
 
 func sanitizeUnsafeExpr(paramName string) string {
-	return paramName
-	//paramName = sanitizeUnsafeParameter(paramName)
-	//return fmt.Sprintf("$criteria.Add($sIndex,%v)", paramName)
+	paramName = sanitizeUnsafeParameter(paramName)
+	return fmt.Sprintf("$criteria.Add($sIndex,%v)", paramName)
 }
 
 func sanitizeUnsafeParameter(paramName string) string {
@@ -186,7 +183,7 @@ func getStatementBoundary(lcSQL string) []int {
 
 func getStatementIndex(lcSQL string) int {
 	var candidates []int
-	for _, keyword := range []string{"insert ", "update ", "call "} {
+	for _, keyword := range []string{"insert ", "update ", "delete", "call "} {
 		if index := strings.Index(lcSQL, keyword); index != -1 {
 			candidates = append(candidates, index)
 		}

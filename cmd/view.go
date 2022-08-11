@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/metadata"
+	"github.com/viant/toolbox"
 	"github.com/viant/toolbox/format"
 	"log"
 	"net/http"
@@ -171,8 +172,12 @@ func (s *serverBuilder) updateViewInSQLExecMode(aView *view.View, viewMeta *ast.
 		Source:     viewMeta.Source,
 		Parameters: []*view.Parameter{},
 	}
+
+	toolbox.Dump(viewMeta)
 	if len(viewMeta.Updates) > 0 {
 		aView.Table = viewMeta.Updates[0]
+	} else if len(viewMeta.Inserts) > 0 {
+		aView.Table = viewMeta.Inserts[0]
 	}
 
 	for _, p := range viewMeta.Parameters {
@@ -196,12 +201,24 @@ func (s *serverBuilder) updateViewInSQLExecMode(aView *view.View, viewMeta *ast.
 }
 
 func (s *serverBuilder) updateMetaColumnTypes(ctx context.Context, viewMeta *ast.ViewMeta) {
+
+	toolbox.Dump(viewMeta)
 	if len(viewMeta.ParameterTypes) == 0 {
 		viewMeta.ParameterTypes = map[string]string{}
 	}
 	if len(viewMeta.Updates) > 0 {
 
 		for _, name := range viewMeta.Updates {
+			table := &Table{Name: name, ColumnTypes: map[string]string{}}
+			s.updateTableColumnTypes(ctx, table)
+			for k, v := range table.ColumnTypes {
+				viewMeta.ParameterTypes[k] = v
+			}
+		}
+	}
+	if len(viewMeta.Inserts) > 0 {
+
+		for _, name := range viewMeta.Inserts {
 			table := &Table{Name: name, ColumnTypes: map[string]string{}}
 			s.updateTableColumnTypes(ctx, table)
 			for k, v := range table.ColumnTypes {

@@ -2,6 +2,7 @@ package ast
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
@@ -21,10 +22,14 @@ func Parse(SQL string, route *option.Route) (*ViewMeta, error) {
 		index: map[string]int{},
 	}
 
+	fmt.Printf("IS EXEC: %v\n", IsSQLExecMode(SQL))
 	if IsSQLExecMode(SQL) {
 		viewMeta.Mode = view.SQLExecMode
 		var err error
 		err = buildViewMetaInExecSQLMode(SQL, viewMeta)
+		if err != nil {
+			fmt.Printf("error while build ExecSQL: %v", err)
+		}
 		return viewMeta, err
 	}
 	uriParams := route.URIParams
@@ -77,7 +82,7 @@ func isUpdate(lcSQL string) bool {
 }
 
 func isInsert(lcSQL string) bool {
-	return strings.Contains(lcSQL, "insert ") && strings.Contains(lcSQL, "into ") && strings.Contains(lcSQL, "values ")
+	return strings.Contains(lcSQL, "insert ") && strings.Contains(lcSQL, "into ") && strings.Contains(lcSQL, "values")
 }
 
 func removeVeltySyntax(SQL string) string {
