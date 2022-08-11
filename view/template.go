@@ -351,10 +351,14 @@ func (t *Template) updateParametersFields() error {
 
 func (t *Template) initAccessors() {
 	if t.accessors == nil {
-		t.accessors = &Accessors{index: map[string]int{}}
+		t.accessors = NewAccessors()
 	}
 
-	t.accessors.init(t.Schema.Type())
+	t.accessors.Init(t.Schema.Type())
+}
+
+func NewAccessors() *Accessors {
+	return &Accessors{index: map[string]int{}}
 }
 
 func (t *Template) AccessorByName(name string) (*Accessor, error) {

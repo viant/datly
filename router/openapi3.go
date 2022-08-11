@@ -564,18 +564,18 @@ func (g *generator) indexParameters(parameters []*openapi3.Parameter) openapi3.P
 }
 
 func (g *generator) requestBody(route *Route, method string) (*openapi3.RequestBody, error) {
-	if method != http.MethodPost || route._requestBodyParam == nil {
+	if method != http.MethodPost || route._requestBodyType == nil {
 		return nil, nil
 	}
 
-	typeName := g.typeName(route, route._requestBodyParam.Schema.Type(), "RequestBody")
-	requestBodySchema, err := g.getOrGenerateSchema(route, route._requestBodyParam.Schema.Type(), false, typeName, "Request body schema")
+	typeName := g.typeName(route, route._requestBodyType, "RequestBody")
+	requestBodySchema, err := g.getOrGenerateSchema(route, route._requestBodyType, false, typeName, "Request body schema")
 	if err != nil {
 		return nil, err
 	}
 
 	return &openapi3.RequestBody{
-		Required: route._requestBodyParam.IsRequired(),
+		Required: route._requestBodyParamRequired,
 		Content: map[string]*openapi3.MediaType{
 			applicationJson: {
 				Schema: requestBodySchema,

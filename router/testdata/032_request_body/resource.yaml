@@ -1,0 +1,64 @@
+Routes:
+  - URI: "/api/events"
+    Method: POST
+    View:
+      Ref: events_ref
+      Name: events
+
+Resource:
+  Views:
+    - Name: events_ref
+      Connector:
+        Ref: db
+      Table: events
+      Template:
+        Parameters:
+          - Name: Body
+            In:
+              Kind: body
+            Schema:
+              DataType: 'struct{ID int; Wrapper struct{Quantity float64; Timestamp time.Time}}'
+
+          - Name: ID
+            In:
+              Kind: body
+              Name: ID
+            Schema:
+              DataType: int
+
+          - Name: Quantity
+            In:
+              Kind: body
+              Name: Wrapper.Quantity
+            Schema:
+              DataType: float64
+
+          - Name: Timestamp
+            In:
+              Kind: body
+              Name: Wrapper.Timestamp
+            Schema:
+              DataType: time.Time
+
+        Source: '
+          SELECT * FROM EVENTS WHERE 1=1
+          #if($Has.ID)
+            AND id = $ID
+          #end
+          #if($Has.Timestamp)
+            AND timestamp < $Timestamp
+          #end
+          #if($Has.Quantity)
+            AND quantity < $Quantity
+          #end
+        
+        '
+      Selector:
+        Constraints:
+          Criteria: true
+          Filterable: [ '*' ]
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"

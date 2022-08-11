@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"unsafe"
 )
@@ -425,7 +427,7 @@ func (b *selectorsBuilder) handleParam(ctx context.Context, selector *view.Selec
 		}
 
 	case view.RequestBodyKind:
-		if err := b.addRequestBodyParam(selector, parameter); err != nil {
+		if err := b.addRequestBodyParam(ctx, selector, parameter); err != nil {
 			return err
 		}
 
@@ -442,7 +444,7 @@ func (b *selectorsBuilder) addEnvVariableParam(ctx context.Context, selector *vi
 	return convertAndSet(ctx, selector, parameter, os.Getenv(parameter.In.Name))
 }
 
-func (b *selectorsBuilder) addRequestBodyParam(selector *view.Selector, param *view.Parameter) error {
+func (b *selectorsBuilder) addRequestBodyParam(ctx context.Context, selector *view.Selector, param *view.Parameter) error {
 	if param.Required != nil && *param.Required && b.params.requestBody == nil {
 		return fmt.Errorf("parameter %v is required", param.Name)
 	}
@@ -451,11 +453,16 @@ func (b *selectorsBuilder) addRequestBodyParam(selector *view.Selector, param *v
 		return nil
 	}
 
-	if err := param.Set(selector, b.params.requestBody); err != nil {
-		return err
+	if param.In.Name == "" {
+		return param.Set(selector, b.params.requestBody)
 	}
 
-	return nil
+	bodyValue, ok := b.extractBody(param.In.Name)
+	if !ok {
+		return nil
+	}
+
+	return param.ConvertAndSet(ctx, selector, bodyValue)
 }
 
 func (b *selectorsBuilder) addCookieParam(ctx context.Context, selector *view.Selector, parameter *view.Parameter) error {
@@ -601,6 +608,37 @@ func (b *selectorsBuilder) paramViewValue(param *view.Parameter, value reflect.V
 	default:
 		return nil, fmt.Errorf("parameter %v return more than one value", param.Name)
 	}
+}
+
+func (b *selectorsBuilder) extractBody(path string) (string, bool) {
+	segments := strings.Split(path, ".")
+
+	var rawValue interface{} = b.params.bodyMap
+	for _, segment := range segments {
+		actualMap, ok := rawValue.(map[string]interface{})
+		if !ok {
+			return "", false
+		}
+
+		segmentValue, ok := actualMap[segment]
+		if !ok {
+			return "", false
+		}
+
+		rawValue = segmentValue
+	}
+
+	rawString, ok := rawValue.(string)
+	if ok {
+		return rawString, true
+	}
+
+	marshal, err := json.Marshal(rawValue)
+	if err != nil {
+		return "", false
+	}
+
+	return string(marshal), true
 }
 
 func canUseColumn(aView *view.View, columnName string) error {

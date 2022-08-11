@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/parameter"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"net/http"
@@ -45,8 +46,10 @@ type (
 		Cache            *cache.Cache
 		Compression      *Compression
 
-		_resource         *view.Resource
-		_requestBodyParam *view.Parameter
+		_resource                 *view.Resource
+		_requestBodyType          reflect.Type
+		accessors                 *view.Accessors
+		_requestBodyParamRequired bool
 	}
 
 	Output struct {
@@ -280,14 +283,40 @@ func (r *Route) initRequestBodyFromParams() error {
 		return nil
 	}
 
-	rType := params[0].Schema.Type()
-	for i := 1; i < len(params); i++ {
-		if params[i].Schema.Type() != rType && !params[i].Schema.Type().ConvertibleTo(rType) {
-			return fmt.Errorf("parameters request body type missmatch: wanted %v got %v", rType.String(), params[i].Schema.Type().String())
+	accessors := view.NewAccessors()
+	r.accessors = accessors
+	bodyParam, _ := r.fullBodyParam(params)
+	err := r.initRequestBodyType(bodyParam, params)
+	if err != nil {
+		return err
+	}
+
+	for _, param := range params {
+		r._requestBodyParamRequired = r._requestBodyParamRequired || param.IsRequired()
+	}
+
+	return nil
+}
+
+func (r *Route) initRequestBodyType(bodyParam *view.Parameter, params []*view.Parameter) error {
+	if bodyParam != nil {
+		r._requestBodyType = bodyParam.Schema.Type()
+		r.accessors.Init(r._requestBodyType)
+
+		return r.bodyParamMatches(r._requestBodyType, params)
+	}
+
+	typeBuilder := parameter.NewBuilder("")
+	for _, param := range params {
+		name := param.In.Name
+		schemaType := param.Schema.Type()
+		if err := typeBuilder.AddType(name, schemaType); err != nil {
+			return err
 		}
 	}
 
-	r._requestBodyParam = params[0]
+	r._requestBodyType = typeBuilder.Build()
+	r.accessors.Init(r._requestBodyType)
 	return nil
 }
 
@@ -397,6 +426,31 @@ func (r *Route) initCaser() error {
 	}
 
 	r._caser = &caser
+
+	return nil
+}
+
+func (r *Route) fullBodyParam(params []*view.Parameter) (*view.Parameter, bool) {
+	for _, param := range params {
+		if param.In.Name == "" {
+			return param, true
+		}
+	}
+
+	return nil, false
+}
+
+func (r *Route) bodyParamMatches(rType reflect.Type, params []*view.Parameter) error {
+	for _, param := range params {
+		name := param.In.Name
+		if name == "" {
+			continue
+		}
+
+		if _, err := r.accessors.AccessorByName(name); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

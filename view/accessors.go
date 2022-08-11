@@ -2,8 +2,8 @@ package view
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/viant/datly/converter"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strconv"
@@ -29,7 +29,7 @@ func (a *Accessor) set(ptr unsafe.Pointer, value interface{}) {
 	a.xFields[len(a.xFields)-1].SetValue(ptr, value)
 }
 
-func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue string, valueVisitor *Codec, selector *Selector) error {
+func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue string, valueVisitor *Codec, selector *Selector, format string) error {
 	ptr, _ = a.upstream(ptr)
 	xField := a.xFields[len(a.xFields)-1]
 
@@ -73,17 +73,15 @@ func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue st
 		xField.SetFloat64(ptr, asFloat)
 		return nil
 
-	case reflect.Struct:
-		dest := reflect.New(xField.Type)
-		if err := json.Unmarshal([]byte(rawValue), dest.Interface()); err != nil {
+	default:
+		converted, _, err := converter.Convert(rawValue, xField.Type, format)
+		if err != nil {
 			return err
 		}
 
-		xField.SetValue(ptr, dest.Elem().Interface())
+		xField.SetValue(ptr, converted)
 		return nil
 	}
-
-	return fmt.Errorf("unsupported parameter type %v", xField.Type.String())
 }
 
 func (a *Accessor) upstream(ptr unsafe.Pointer, indexes ...int) (unsafe.Pointer, int) {
@@ -175,7 +173,7 @@ func (a *Accessors) indexAccessor(name string, fields []*xunsafe.Field) {
 	a.accessors = append(a.accessors, fieldAccessor)
 }
 
-func (a *Accessors) init(rType reflect.Type) {
+func (a *Accessors) Init(rType reflect.Type) {
 	if a.namer == nil {
 		a.namer = &VeltyNamer{}
 	}

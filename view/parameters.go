@@ -337,7 +337,7 @@ func (p *Parameter) ConvertAndSet(ctx context.Context, selector *Selector, value
 
 	paramPtr, presencePtr := asValuesPtr(selector)
 
-	if err := p.valueAccessor.setValue(ctx, paramPtr, value, p.Codec, selector); err != nil {
+	if err := p.valueAccessor.setValue(ctx, paramPtr, value, p.Codec, selector, p.DateFormat); err != nil {
 		return err
 	}
 

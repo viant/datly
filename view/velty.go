@@ -337,7 +337,7 @@ func escapeSafeKeywords(template string) string {
 
 func (v *VeltyCodec) init() error {
 	v.accessors = &Accessors{index: map[string]int{}}
-	v.accessors.init(v.codecType)
+	v.accessors.Init(v.codecType)
 
 	planner := velty.New()
 

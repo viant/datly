@@ -538,7 +538,7 @@ func TestRouter(t *testing.T) {
 			uri:         "/api/events",
 			method:      http.MethodPost,
 			requestBody: `{"Id":0,"Quantity":0}`,
-			expected:    `{"Errors":[{"Param":"EventFilter","Message":"Key: 'Id' Error:Field validation for 'Id' failed on the 'required' tag","Object":[{"Value":0,"Field":"Id","Tag":"required"}]}]}`,
+			expected:    `{"Errors":[{"Param":"RequestBody","Message":"Key: 'Id' Error:Field validation for 'Id' failed on the 'required' tag","Object":[{"Value":0,"Field":"Id","Tag":"required"}]}]}`,
 		},
 		{
 			description: "exclude | remove columns",
@@ -634,6 +634,37 @@ func TestRouter(t *testing.T) {
 			visitors:    map[string]codec.LifecycleVisitor{},
 			requestBody: `{"ID": [1,10,103], "Quantity": 0}`,
 			expected:    `{"Message":"invalid template due to: invalid status"}`,
+		},
+		{
+			description:         "multiple execution statements",
+			resourceURI:         "031_multiple_execs",
+			uri:                 "/api/events",
+			method:              http.MethodPost,
+			visitors:            map[string]codec.LifecycleVisitor{},
+			afterInsertUri:      "/api/events?_criteria=Quantity=40",
+			afterInsertMethod:   http.MethodGet,
+			requestBody:         `{"ID": [1,10,103], "Quantity": 40}`,
+			afterInsertExpected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":40,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":40,"UserId":2},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":40,"UserId":3}]`,
+		},
+		{
+			description:         "multiple execution statements",
+			resourceURI:         "031_multiple_execs",
+			uri:                 "/api/events",
+			method:              http.MethodPost,
+			visitors:            map[string]codec.LifecycleVisitor{},
+			afterInsertUri:      "/api/events?_criteria=Quantity=40",
+			afterInsertMethod:   http.MethodGet,
+			requestBody:         `{"ID": [1,10,103], "Quantity": 40}`,
+			afterInsertExpected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":40,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":40,"UserId":2},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":40,"UserId":3}]`,
+		},
+		{
+			description: "extract values from Request Body",
+			resourceURI: "032_request_body",
+			uri:         "/api/events",
+			method:      http.MethodPost,
+			visitors:    map[string]codec.LifecycleVisitor{},
+			requestBody: `{"ID": 1, "Wrapper": {"Quantity": 40, "Timestamp": "2019-03-12T02:20:33Z"}}`,
+			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}]`,
 		},
 	}
 
@@ -746,6 +777,7 @@ func (c *testcase) readResource(t *testing.T, fs afs.Service, resourceUrl string
 	if !assert.Nil(t, err, c.description) {
 		return nil, false
 	}
+
 	return resource, true
 }
 

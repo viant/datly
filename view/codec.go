@@ -78,7 +78,7 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 		namer: &SqlxNamer{},
 		index: map[string]int{},
 	}
-	accessors.init(c.actualType)
+	accessors.Init(c.actualType)
 
 	c.accessors = make([]*Accessor, len(columns))
 	for i, column := range columns {

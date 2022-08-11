@@ -1,6 +1,7 @@
 package router
 
 import (
+	"encoding/json"
 	"github.com/viant/datly/converter"
 	"github.com/viant/toolbox"
 	"io"
@@ -17,6 +18,7 @@ type RequestParams struct {
 	pathIndex  map[string]string
 
 	requestBody interface{}
+	bodyMap     map[string]interface{}
 	request     *http.Request
 }
 
@@ -83,25 +85,30 @@ func (p *RequestParams) cookie(name string) string {
 }
 
 func (p *RequestParams) initRequestBody(request *http.Request, route *Route) (string, error) {
-	if route._requestBodyParam == nil {
+	if route._requestBodyType == nil {
 		return "", nil
 	}
 
-	defer request.Body.Close()
 	body, err := io.ReadAll(request.Body)
 	if err != nil {
-		return route._requestBodyParam.Name, err
+		return "RequestBody", err
 	}
 
+	_ = request.Body.Close()
 	if len(body) == 0 {
 		return "", nil
 	}
 
-	convert, _, err := converter.Convert(string(body), route._requestBodyParam.Schema.Type(), "")
+	convert, _, err := converter.Convert(string(body), route._requestBodyType, "")
 	if err != nil {
-		return route._requestBodyParam.Name, err
+		return "RequestBody", err
 	}
 
 	p.requestBody = convert
+	_ = json.Unmarshal(body, &p.bodyMap)
+	if p.bodyMap == nil {
+		p.bodyMap = map[string]interface{}{}
+	}
+
 	return "", nil
 }
