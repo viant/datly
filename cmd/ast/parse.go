@@ -17,12 +17,9 @@ import (
 )
 
 func Parse(SQL string, route *option.Route) (*ViewMeta, error) {
-
 	viewMeta := &ViewMeta{
 		index: map[string]int{},
 	}
-
-	fmt.Printf("IS EXEC: %v\n", IsSQLExecMode(SQL))
 	if IsSQLExecMode(SQL) {
 		viewMeta.Mode = view.SQLExecMode
 		var err error

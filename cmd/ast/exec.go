@@ -54,7 +54,7 @@ func normalizeSQLExec(stmtType byte, SQLStmt string, view *ViewMeta) (string, er
 		}
 		view.Updates = append(view.Updates, parser.Stringify(stmt.Target.X))
 		SQLStmt = normalizeAndExtractUpdateSet(stmt, view, rawSQL, SQLStmt)
-		SQLStmt = normalizeAndExtractUpdateWhere(stmt, view, rawSQL, SQLStmt)
+		SQLStmt = normalizeAndExtractUpdateWhere(stmt, view, SQLStmt)
 		SQLStmt = normalizeOptionParameters(expressions, view, SQLStmt)
 	}
 	return SQLStmt + nonSQLStmt, nil
@@ -93,7 +93,7 @@ func normalizeOptionParameters(expressions []string, view *ViewMeta, SQLExec str
 	return SQLExec
 }
 
-func normalizeAndExtractUpdateWhere(stmt *update.Statement, view *ViewMeta, rawSQL, SQLExec string) string {
+func normalizeAndExtractUpdateWhere(stmt *update.Statement, view *ViewMeta, SQLExec string) string {
 	var criteria []*Criterion
 	ExtractCriteriaPlaceholders(stmt.Qualify.X, &criteria)
 	for _, criterion := range criteria {

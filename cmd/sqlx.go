@@ -15,18 +15,19 @@ import (
 
 type (
 	Table struct {
-		Ref         string
-		StarExpr    bool
-		Inner       Columns
-		ColumnTypes map[string]string
-		InnerAlias  string
-		InnerSQL    string
-		Deps        map[string]string
-		Columns     Columns
-		Name        string
-		SQL         string
-		Joins       Joins
-		Alias       string
+		Ref           string
+		StarExpr      bool
+		Inner         Columns
+		ColumnTypes   map[string]string
+		InnerAlias    string
+		InnerSQL      string
+		Deps          map[string]string
+		Columns       Columns
+		Name          string
+		SQL           string
+		Joins         Joins
+		Alias         string
+		ParamDataType string
 		TableMeta
 		ViewMeta *ast.ViewMeta
 		ViewHint string
@@ -163,38 +164,46 @@ func buildTable(x node.Node, routeOpt *option.Route) (*Table, error) {
 	switch actual := x.(type) {
 	case *expr.Raw:
 		table.SQL = strings.Trim(actual.Raw, "()")
-		innerSQL, paramsExprs := ast.ExtractCondBlock(table.SQL)
-
-		innerQuery, err := parser.ParseQuery(innerSQL)
-
-		if innerQuery != nil && innerQuery.From.X != nil {
-			table.Name = strings.Trim(parser.Stringify(innerQuery.From.X), "`")
-
-			table.Inner = selectItemToColumn(innerQuery)
-
-			if len(innerQuery.Joins) > 0 {
-				table.Deps = map[string]string{}
-				for _, join := range innerQuery.Joins {
-					table.Deps[join.Alias] = strings.Trim(parser.Stringify(join.With), "`")
-				}
-			}
-			if innerQuery.Qualify != nil {
-				extractCriteriaPairs(innerQuery.Qualify.X, &paramsExprs)
-			}
-			table.InnerSQL = innerSQL
-			table.InnerAlias = innerQuery.From.Alias
+		if err := updateTableSettings(table, routeOpt); err != nil {
+			return table, err
 		}
-		table.ViewMeta, err = ast.Parse(table.SQL, routeOpt)
-		if err != nil {
-			return nil, err
-		}
-		table.ViewMeta.Expressions = paramsExprs
 
 	case *expr.Selector, *expr.Ident:
 		table.Name = parser.Stringify(actual)
 
 	}
 	return table, nil
+}
+
+func updateTableSettings(table *Table, routeOpt *option.Route) error {
+	innerSQL, paramsExprs := ast.ExtractCondBlock(table.SQL)
+	innerQuery, err := parser.ParseQuery(innerSQL)
+	fmt.Printf("innerSQL %v %v\n", table.SQL, err)
+
+	if innerQuery != nil && innerQuery.From.X != nil {
+		table.Name = strings.Trim(parser.Stringify(innerQuery.From.X), "`")
+
+		table.Inner = selectItemToColumn(innerQuery)
+
+		if len(innerQuery.Joins) > 0 {
+			table.Deps = map[string]string{}
+			for _, join := range innerQuery.Joins {
+				table.Deps[join.Alias] = strings.Trim(parser.Stringify(join.With), "`")
+			}
+		}
+		if innerQuery.Qualify != nil {
+			extractCriteriaPairs(innerQuery.Qualify.X, &paramsExprs)
+		}
+		table.InnerSQL = innerSQL
+		table.InnerAlias = innerQuery.From.Alias
+	}
+
+	table.ViewMeta, err = ast.Parse(table.SQL, routeOpt)
+	if err != nil {
+		return err
+	}
+	table.ViewMeta.Expressions = paramsExprs
+	return nil
 }
 
 func extractCriteriaPairs(node node.Node, list *[]string) {
@@ -249,6 +258,7 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	}
 	isParamView := isParamPredicate(parser.Stringify(join.On.X))
 	if isParamView {
+
 		paramName := join.Alias
 		if relTable.dataViewParameter == nil {
 			relTable.dataViewParameter = &view.Parameter{}
@@ -259,18 +269,7 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 		relTable.Alias = paramName
 		relTable.dataViewParameter.Name = paramName
 		dataParameters[paramName] = &TableParam{Table: relTable, Param: relTable.dataViewParameter}
-
-		if relTable.Auth != "" {
-			required := true
-			relTable.Parameter = &view.Parameter{
-				Name:            relTable.Auth,
-				In:              &view.Location{Name: "Authorization", Kind: view.HeaderKind},
-				ErrorStatusCode: 401,
-				Required:        &required,
-				Codec:           &view.Codec{Name: "JwtClaim"},
-				Schema:          &view.Schema{Name: "JwtTokenInfo"},
-			}
-		}
+		updateAuthToken(relTable)
 		return nil
 	}
 
@@ -317,6 +316,22 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	relJoin.Owner = owner
 	owner.Joins = append(owner.Joins, relJoin)
 	return nil
+}
+
+func updateAuthToken(aTable *Table) {
+	if aTable.Auth == "" {
+		return
+	}
+	required := true
+	aTable.Parameter = &view.Parameter{
+		Name:            aTable.Auth,
+		In:              &view.Location{Name: "Authorization", Kind: view.HeaderKind},
+		ErrorStatusCode: 401,
+		Required:        &required,
+		Codec:           &view.Codec{Name: "JwtClaim"},
+		Schema:          &view.Schema{Name: "JwtTokenInfo"},
+	}
+
 }
 
 func hintToStruct(encoded string, aStructPtr interface{}) error {

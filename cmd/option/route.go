@@ -7,4 +7,5 @@ type Route struct {
 	URIParams map[string]bool
 	Cache     *view.Cache
 	Method    string
+	Declare   map[string]string
 }
