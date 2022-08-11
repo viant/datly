@@ -666,6 +666,15 @@ func TestRouter(t *testing.T) {
 			requestBody: `{"ID": 1, "Wrapper": {"Quantity": 40, "Timestamp": "2019-03-12T02:20:33Z"}}`,
 			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}]`,
 		},
+		{
+			description: "executor with param slice",
+			resourceURI: "033_custom_err_message",
+			uri:         "/api/events",
+			method:      http.MethodPost,
+			visitors:    map[string]codec.LifecycleVisitor{},
+			requestBody: `{"ID": [1,10,103], "Quantity": 0}`,
+			expected:    `{"Errors":[{"View":"events","Param":"Data","Message":"[{\"Id\":1,\"Status\":false},{\"Id\":10,\"Status\":false},{\"Id\":103,\"Status\":false}]","Object":[{"Id":1,"Status":false},{"Id":10,"Status":false},{"Id":103,"Status":false}]}]}`,
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {

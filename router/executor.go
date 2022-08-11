@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/viant/datly/executor"
 	"net/http"
 )
@@ -10,11 +9,9 @@ import (
 func (r *Router) executorHandler(route *Route) viewHandler {
 	return func(response http.ResponseWriter, request *http.Request) {
 		err := r.executorHandlerWithError(route, request)
+
 		if err != nil {
-			statusCode, err := r.normalizeErr(err, 401)
-			marshal, _ := json.Marshal(err)
-			response.Write(marshal)
-			response.WriteHeader(statusCode)
+			r.writeErr(response, route, err, 400)
 			return
 		}
 

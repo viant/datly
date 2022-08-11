@@ -32,7 +32,20 @@ type (
 		requestMetadata *RequestMetadata
 		params          *RequestParams
 	}
+
+	JSONError struct {
+		Object interface{}
+	}
 )
+
+func (e *JSONError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(e.Object)
+}
+
+func (e *JSONError) Error() string {
+	marshal, _ := json.Marshal(e.Object)
+	return string(marshal)
+}
 
 func (b *selectorsBuilder) build(ctx context.Context, viewsDetails []*ViewDetails) (*view.Selectors, error) {
 	selectors := view.Selectors{}
@@ -537,6 +550,10 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 
 	ptr := xunsafe.AsPointer(destSlicePtr)
 	paramLen := slice.Len(ptr)
+	if param.ExpectReturned != nil && *param.ExpectReturned != paramLen {
+		return nil, &JSONError{Object: destSlicePtr}
+	}
+
 	if paramLen == 0 && param.IsRequired() {
 		return nil, fmt.Errorf("parameter %v value is required but no data was found", param.Name)
 	}
