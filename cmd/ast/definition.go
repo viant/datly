@@ -2,23 +2,29 @@ package ast
 
 type (
 	ViewMeta struct {
+		Mode           string            `json:",omitempty" yaml:",omitempty"`
 		Parameters     []*Parameter      `json:",omitempty" yaml:",omitempty"`
 		Source         string            `json:",omitempty" yaml:",omitempty"`
 		From           string            `json:",omitempty" yaml:",omitempty"`
 		Expressions    []string          `json:",omitempty" yaml:",omitempty"`
 		ParameterTypes map[string]string `json:",omitempty" yaml:",omitempty"`
+		Updates        []string
+		Inserts        []string
 		index          map[string]int
 	}
 
 	Parameter struct {
-		Id       string `json:",omitempty" yaml:",omitempty"`
-		Name     string `json:",omitempty" yaml:",omitempty"`
-		Kind     string `json:",omitempty" yaml:",omitempty"`
-		Required *bool  `json:",omitempty" yaml:",omitempty"`
-		DataType string `json:",omitempty" yaml:",omitempty"`
-		fullName string
-		Assumed  bool
-		Typer    Typer `json:",omitempty" yaml:",omitempty"`
+		Id            string `json:",omitempty" yaml:",omitempty"`
+		Name          string `json:",omitempty" yaml:",omitempty"`
+		Kind          string `json:",omitempty" yaml:",omitempty"`
+		Required      *bool  `json:",omitempty" yaml:",omitempty"`
+		DataType      string `json:",omitempty" yaml:",omitempty"`
+		DerivedColumn string `json:",omitempty" yaml:",omitempty"`
+		Repeated      bool   `json:",omitempty" yaml:",omitempty"`
+		fullName      string
+		Assumed       bool
+		Typer         Typer  `json:",omitempty" yaml:",omitempty"`
+		SQL           string `json:",omitempty" yaml:",omitempty"`
 	}
 )
 

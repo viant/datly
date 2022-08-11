@@ -7,6 +7,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/assertly"
 	"github.com/viant/datly/cmd/ast"
+	"github.com/viant/datly/cmd/option"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"path"
@@ -72,7 +73,7 @@ func TestParse(t *testing.T) {
 			continue
 		}
 
-		viewMeta, err := ast.Parse(string(inputData), testcase.uriParams)
+		viewMeta, err := ast.Parse(string(inputData), &option.Route{URIParams: testcase.uriParams})
 		if !assert.Nil(t, err, testcase.description) {
 			continue
 		}

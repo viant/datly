@@ -13,6 +13,7 @@ const (
 	condBlockToken
 	squareBracketsToken
 	commentBlockToken
+	selectorToken
 
 	templateHeaderToken
 	templateEndToken
@@ -47,6 +48,8 @@ var templateEndMatcher = parsly.NewToken(templateEndToken, "Template end", match
 var paramMatcher = parsly.NewToken(paramToken, "Parameter", matcher.NewFragmentsFold([]byte("PARAMETER")))
 
 var identityMatcher = parsly.NewToken(identityToken, "Identity", matchers.NewIdentity())
+var selectorMatcher = parsly.NewToken(selectorToken, "$...", matchers.NewSelector())
+
 var condBlockMatcher = parsly.NewToken(condBlockToken, "#if .... #end", matcher.NewSeqBlock("#if", "#end"))
 var exprGroupMatcher = parsly.NewToken(exprGroupToken, "( .... )", matcher.NewBlock('(', ')', '\\'))
 var scopeBlockMatcher = parsly.NewToken(scopeBlock, "{ .... }", matcher.NewBlock('{', '}', '\\'))

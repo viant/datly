@@ -139,7 +139,6 @@ func (s *serverBuilder) updateView(ctx context.Context, table *Table, aView *vie
 	if table == nil {
 		return nil
 	}
-
 	s.logger.Write([]byte(fmt.Sprintf("Discovering  %v metadata ...\n", aView.Name)))
 	s.updateTableColumnTypes(ctx, table)
 	s.updateParameterTypes(table)

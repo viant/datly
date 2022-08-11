@@ -2,12 +2,12 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/ast"
+	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
@@ -15,6 +15,7 @@ import (
 	"github.com/viant/sqlx/metadata"
 	"github.com/viant/toolbox/format"
 	"log"
+	"net/http"
 	"strings"
 )
 
@@ -41,25 +42,37 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 
 	var xTable *Table
 	var dataViewParams map[string]*TableParam
-	routeSetting := &RouteSetting{}
+	routeOption := &option.Route{}
+	var sqlExecModeView *ast.ViewMeta
 	if s.options.SQLXLocation != "" && url.Scheme(s.options.SQLLocation, "e") == "e" {
 		sourceURL := normalizeURL(s.options.SQLXLocation)
 		SQLData, err := fs.DownloadWithURL(context.Background(), sourceURL)
 		if err != nil {
 			return err
 		}
-
-		SQL := strings.TrimSpace(string(SQLData))
-		SQL = extractSetting(strings.TrimSpace(string(SQLData)), routeSetting)
-		if xTable, dataViewParams, err = ParseSQLx(SQL, routeSetting.URIParams); err != nil {
-			log.Println(err)
+		SQL, err := extractSetting(string(SQLData), routeOption)
+		if err != nil {
+			return fmt.Errorf("invalid settings: %v", err)
 		}
-		if xTable != nil {
-			updateGenerateOption(generate, xTable)
+
+		if ast.IsSQLExecMode(SQL) {
+			if sqlExecModeView, err = ast.Parse(SQL, routeOption); err != nil {
+				return err
+			}
+			s.updateMetaColumnTypes(ctx, sqlExecModeView)
+		} else {
+			if xTable, dataViewParams, err = ParseSQLx(SQL, routeOption); err != nil {
+				log.Println(err)
+			}
+			if xTable != nil {
+				updateGenerateOption(generate, xTable)
+			}
 		}
 	}
-
 	aView := s.buildMainView(s.options, generate)
+	if sqlExecModeView != nil {
+		s.updateViewInSQLExecMode(aView, sqlExecModeView, routeOption)
+	}
 	_, err := s.addViewConn(s.options.Connector.DbName, aView)
 	if err != nil {
 		return err
@@ -87,10 +100,21 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 			AllowOrigins:     stringsPtr("*"),
 			ExposeHeaders:    stringsPtr("*"),
 		},
-		URI:    config.APIPrefix + s.options.RouterURI(routeSetting.URI),
+		URI:    config.APIPrefix + s.options.RouterURI(routeOption.URI),
 		View:   &view.View{Reference: shared.Reference{Ref: aView.Name}},
 		Index:  router.Index{Namespace: map[string]string{}},
 		Output: router.Output{Style: router.Style(s.options.Output), Cardinality: view.Many, ResponseField: s.options.ResponseField()},
+	}
+
+	if routeOption.Method != "" {
+		viewRoute.Method = routeOption.Method
+	}
+
+	if sqlExecModeView != nil {
+		if routeOption.Method == "" {
+			viewRoute.Method = http.MethodPost
+		}
+		viewRoute.Service = router.ExecutorServiceType
 	}
 	if s.options.RedirectSizeKb > 0 && s.options.RedirectURL != "" {
 		s.route.Redirect = &router.Redirect{TimeToLiveMs: 10000, MinSizeKb: s.options.RedirectSizeKb, StorageURL: s.options.RedirectURL}
@@ -120,16 +144,16 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 		}
 	}
 
-	updateURIParams(s.route, routeSetting)
+	updateURIParams(s.route, routeOption)
 	updateParamReferences(s.route)
 	s.route.Routes = append(s.route.Routes, viewRoute)
 
 	s.route.With = []string{"connections"}
-	if routeSetting.Cache != nil {
+	if routeOption.Cache != nil {
 		s.route.With = append(s.route.With, "cache")
 		cacheDependency := &view.Resource{ModTime: TimeNow()}
 		cacheURL := s.options.DepURL("cache")
-		cacheDependency.CacheProviders = append(cacheDependency.CacheProviders, routeSetting.Cache)
+		cacheDependency.CacheProviders = append(cacheDependency.CacheProviders, routeOption.Cache)
 		_ = fsAddYAML(fs, cacheURL, cacheDependency)
 	}
 
@@ -141,27 +165,71 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	return fsAddYAML(fs, s.options.RouterURL(), s.route)
 }
 
-func extractSetting(SQL string, settings *RouteSetting) string {
-	if strings.HasPrefix(SQL, "/*") {
-		index := strings.Index(SQL, "*/")
-		routeSetting := SQL[3:index]
-		SQL = SQL[index+3:]
-		err := json.Unmarshal([]byte(routeSetting), settings)
-		if err != nil {
-			log.Printf("invalid route setting: %s, %v", routeSetting, err)
-		}
-		if settings.URI != "" {
-			if params := ast.ParseURIParams(settings.URI); len(params) > 0 {
-				settings.URIParams = map[string]bool{}
-				for _, param := range params {
-					settings.URIParams[param] = true
-				}
+func (s *serverBuilder) updateViewInSQLExecMode(aView *view.View, viewMeta *ast.ViewMeta, route *option.Route) {
+	aView.Mode = view.Mode(viewMeta.Mode)
+	aView.Template = &view.Template{
+		Source:     viewMeta.Source,
+		Parameters: []*view.Parameter{},
+	}
+	if len(viewMeta.Updates) > 0 {
+		aView.Table = viewMeta.Updates[0]
+	}
 
+	for _, p := range viewMeta.Parameters {
+		dataType, ok := viewMeta.ParameterTypes[strings.ToLower(p.DerivedColumn)]
+		if !ok {
+			dataType = viewMeta.ParameterTypes[strings.ToLower(p.Name)]
+		}
+		if dataType == "" {
+			dataType = "string"
+		}
+		if p.Repeated {
+			dataType = "[]" + dataType
+		}
+		kind := view.RequestBodyKind
+		if route.Method == http.MethodGet {
+			kind = view.QueryKind
+		}
+		param := &view.Parameter{Name: p.Name, In: &view.Location{Name: p.Name, Kind: kind}, Schema: &view.Schema{DataType: dataType}}
+		aView.Template.Parameters = append(aView.Template.Parameters, param)
+	}
+}
+
+func (s *serverBuilder) updateMetaColumnTypes(ctx context.Context, viewMeta *ast.ViewMeta) {
+	if len(viewMeta.ParameterTypes) == 0 {
+		viewMeta.ParameterTypes = map[string]string{}
+	}
+	if len(viewMeta.Updates) > 0 {
+
+		for _, name := range viewMeta.Updates {
+			table := &Table{Name: name, ColumnTypes: map[string]string{}}
+			s.updateTableColumnTypes(ctx, table)
+			for k, v := range table.ColumnTypes {
+				viewMeta.ParameterTypes[k] = v
 			}
 		}
-
 	}
-	return SQL
+}
+
+func extractSetting(SQL string, route *option.Route) (string, error) {
+	hint := ast.ExtractHint(SQL)
+	if hint == "" {
+		return SQL, nil
+	}
+	SQL = strings.Replace(SQL, hint, "", 1)
+	_, err := ast.UnmarshalHint(hint, route)
+	if err != nil {
+		return SQL, err
+	}
+	if route.URI != "" {
+		if params := ast.ParseURIParams(route.URI); len(params) > 0 {
+			route.URIParams = map[string]bool{}
+			for _, param := range params {
+				route.URIParams[param] = true
+			}
+		}
+	}
+	return SQL, nil
 }
 
 func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*TableParam) {
@@ -258,7 +326,7 @@ func updateParamReferences(route *router.Resource) {
 
 }
 
-func updateURIParams(route *router.Resource, setting *RouteSetting) {
+func updateURIParams(route *router.Resource, setting *option.Route) {
 	if setting == nil || len(setting.URIParams) == 0 {
 		return
 	}
@@ -357,6 +425,7 @@ func detectCaseFormat(xTable *Table) view.CaseFormat {
 			names = append(names, columnName)
 		}
 	}
+
 	if len(names) == 0 {
 		names = append(names, xTable.Name)
 	}

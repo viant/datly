@@ -2,6 +2,7 @@ package ast
 
 import (
 	"bytes"
+	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/parsly"
@@ -14,18 +15,25 @@ import (
 	"strings"
 )
 
-func Parse(SQL string, uriParams map[string]bool) (*ViewMeta, error) {
-	if uriParams == nil {
-		uriParams = map[string]bool{}
-	}
-
-	block, err := parser.Parse([]byte(SQL))
-	if err != nil {
-		return nil, err
-	}
+func Parse(SQL string, route *option.Route) (*ViewMeta, error) {
 
 	viewMeta := &ViewMeta{
 		index: map[string]int{},
+	}
+
+	if IsSQLExecMode(SQL) {
+		viewMeta.Mode = view.SQLExecMode
+		var err error
+		err = buildViewMetaInExecSQLMode(SQL, viewMeta)
+		return viewMeta, err
+	}
+	uriParams := route.URIParams
+	if uriParams == nil {
+		uriParams = map[string]bool{}
+	}
+	block, err := parser.Parse([]byte(SQL))
+	if err != nil {
+		return nil, err
 	}
 
 	from := []byte(SQL)
@@ -49,6 +57,27 @@ func Parse(SQL string, uriParams map[string]bool) (*ViewMeta, error) {
 
 	viewMeta.Source = actualSource
 	return viewMeta, nil
+}
+
+func IsSQLExecMode(SQL string) bool {
+	lcSQL := strings.ToLower(SQL)
+	return strings.Contains(lcSQL, "call") ||
+		(strings.Contains(lcSQL, "begin") && strings.Contains(lcSQL, "end")) ||
+		isUpdate(lcSQL) ||
+		isDelete(lcSQL) ||
+		isInsert(lcSQL)
+}
+
+func isDelete(lcSQL string) bool {
+	return strings.Contains(lcSQL, "delete ") && strings.Contains(lcSQL, "from ")
+}
+
+func isUpdate(lcSQL string) bool {
+	return strings.Contains(lcSQL, "update ") && strings.Contains(lcSQL, "set ")
+}
+
+func isInsert(lcSQL string) bool {
+	return strings.Contains(lcSQL, "insert ") && strings.Contains(lcSQL, "into ") && strings.Contains(lcSQL, "values ")
 }
 
 func removeVeltySyntax(SQL string) string {
@@ -314,7 +343,7 @@ outer:
 	return builder.String(), expressions
 }
 
-//ParseURIParams extract URI params from URI
+// ParseURIParams extract URI params from URI
 func ParseURIParams(URI string) []string {
 	var params []string
 	cursor := parsly.NewCursor("", []byte(URI), 0)

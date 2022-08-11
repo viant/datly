@@ -9,7 +9,7 @@ import (
 type (
 	SqlBuilder struct{}
 
-	SqlData struct {
+	SQLStatment struct {
 		SQL  string
 		Args []interface{}
 	}
@@ -19,7 +19,7 @@ func NewBuilder() *SqlBuilder {
 	return &SqlBuilder{}
 }
 
-func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) ([]*SqlData, error) {
+func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) ([]*SQLStatment, error) {
 	SQL, params, err := aView.Template.EvaluateSource(paramState.Values, paramState.Has, nil)
 	if err != nil {
 		return nil, err
@@ -36,18 +36,18 @@ func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) ([]*Sq
 
 	statements := parser.ParseWithReader(strings.NewReader(SQL))
 
-	result := make([]*SqlData, len(statements))
+	result := make([]*SQLStatment, len(statements))
 	if len(statements) == 0 {
 		args := params.At(0)
 		if len(params.Placeholders) > 0 {
 			args = params.Placeholders
 		}
 
-		result = append(result, &SqlData{SQL: SQL, Args: args})
+		result = append(result, &SQLStatment{SQL: SQL, Args: args})
 	}
 
 	for i := range statements {
-		result[i] = &SqlData{
+		result[i] = &SQLStatment{
 			SQL:  statements[i],
 			Args: params.At(i),
 		}

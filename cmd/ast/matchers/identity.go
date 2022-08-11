@@ -5,7 +5,7 @@ import "github.com/viant/parsly"
 type identity struct {
 }
 
-//Match matches a string
+// Match matches a string
 func (n *identity) Match(cursor *parsly.Cursor) (matched int) {
 	input := cursor.Input
 	pos := cursor.Pos
@@ -45,7 +45,7 @@ func IsLetter(b byte) bool {
 	return true
 }
 
-//NewIdentity creates a string matcher
+// NewIdentity creates a string matcher
 func NewIdentity() *identity {
 	return &identity{}
 }

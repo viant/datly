@@ -6,7 +6,7 @@ Routes:
     View:
       Ref: events_ref
       Name: events
-      Mode: Write
+      Mode: SQLExec
       Template:
         Parameters:
           - Name: Data

@@ -21,14 +21,14 @@ require (
 	github.com/viant/afs v1.16.1-0.20220708154004-5cc767a16d95
 	github.com/viant/afsc v1.8.1-0.20220721172758-a0713d05bfdd
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
-	github.com/viant/bigquery v0.0.0-20220525183022-c2f9e012181a
+	github.com/viant/bigquery v0.0.0-20220811173904-48aef4447055
 	github.com/viant/cloudless v1.1.1-0.20220302185825-1e29705ac362
 	github.com/viant/dsc v0.16.0 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/parsly v0.0.0-20220726191103-6f54d86a6bf9
 	github.com/viant/scy v0.1.2-0.20220719145706-2ad46bc6351e
-	github.com/viant/sqlx v0.0.0-20220809232359-de7c2e3bceb6
+	github.com/viant/sqlx v0.0.0-20220811174716-1b6dd6d967a2
 	github.com/viant/toolbox v0.34.6-0.20220630003140-fb2bf82657c1
 	github.com/viant/velty v0.1.1-0.20220810215332-b4095f02bc23
 	github.com/viant/xunsafe v0.8.1-0.20220609224231-1d3e1fcf7bb6
@@ -37,3 +37,5 @@ require (
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+replace github.com/viant/sqlx v0.0.0-20220811162450-fda00ea81681 => /Users/awitas/go/src/github.com/viant/sqlx

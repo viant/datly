@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	WriteMode = "Write"
-	ReadMode  = "Read"
+	SQLExecMode  = "SQLExec"
+	SQLQueryMode = "SQLQuery"
 )
 
 type (
@@ -134,14 +134,14 @@ func (c *Constraints) SqlMethodsIndexed() map[string]*Method {
 	return c._sqlMethods
 }
 
-//DataType returns struct type.
+// DataType returns struct type.
 func (v *View) DataType() reflect.Type {
 	return v.Schema.Type()
 }
 
-//Init initializes View using view provided in Resource.
-//i.e. If View, Connector etc. should inherit from others - it has te bo included in Resource.
-//It is important to call Init for every View because it also initializes due to the optimization reasons.
+// Init initializes View using view provided in Resource.
+// i.e. If View, Connector etc. should inherit from others - it has te bo included in Resource.
+// It is important to call Init for every View because it also initializes due to the optimization reasons.
 func (v *View) Init(ctx context.Context, resource *Resource, options ...interface{}) error {
 	if v.initialized {
 		return nil
@@ -497,7 +497,7 @@ func remapScanType(scanType reflect.Type, name string) reflect.Type {
 	return scanType
 }
 
-//ColumnByName returns Column by Column.Name
+// ColumnByName returns Column by Column.Name
 func (v *View) ColumnByName(name string) (*Column, bool) {
 	if column, ok := v._columns[name]; ok {
 		return column, true
@@ -506,7 +506,7 @@ func (v *View) ColumnByName(name string) (*Column, bool) {
 	return nil, false
 }
 
-//Source returns database view source. It prioritizes From, Table then View.Name
+// Source returns database view source. It prioritizes From, Table then View.Name
 func (v *View) Source() string {
 	if v.From != "" {
 		if v.From[0] == '(' {
@@ -538,7 +538,7 @@ func (v *View) ensureSchema(types Types) error {
 	return v.Schema.Init(v.Columns, v.With, v.Caser, types)
 }
 
-//Db returns database connection that View was assigned to.
+// Db returns database connection that View was assigned to.
 func (v *View) Db() (*sql.DB, error) {
 	return v.Connector.DB()
 }
@@ -681,7 +681,7 @@ func (v *View) ensureCollector() {
 	}
 }
 
-//Collector creates new Collector for View.DataType
+// Collector creates new Collector for View.DataType
 func (v *View) Collector(dest interface{}, supportParallel bool) *Collector {
 	return v.newCollector(dest, supportParallel)
 }
@@ -706,32 +706,32 @@ func (v *View) registerHolders() error {
 	return nil
 }
 
-//CanUseSelectorCriteria indicates if Selector.Criteria can be used
+// CanUseSelectorCriteria indicates if Selector.Criteria can be used
 func (v *View) CanUseSelectorCriteria() bool {
 	return v.Selector.Constraints.Criteria
 }
 
-//CanUseSelectorLimit indicates if Selector.Limit can be used
+// CanUseSelectorLimit indicates if Selector.Limit can be used
 func (v *View) CanUseSelectorLimit() bool {
 	return v.Selector.Constraints.Limit
 }
 
-//CanUseSelectorOrderBy indicates if Selector.OrderBy can be used
+// CanUseSelectorOrderBy indicates if Selector.OrderBy can be used
 func (v *View) CanUseSelectorOrderBy() bool {
 	return v.Selector.Constraints.OrderBy
 }
 
-//CanUseSelectorOffset indicates if Selector.Offset can be used
+// CanUseSelectorOffset indicates if Selector.Offset can be used
 func (v *View) CanUseSelectorOffset() bool {
 	return v.Selector.Constraints.Offset
 }
 
-//CanUseSelectorProjection indicates if Selector.Fields can be used
+// CanUseSelectorProjection indicates if Selector.Fields can be used
 func (v *View) CanUseSelectorProjection() bool {
 	return v.Selector.Constraints.Projection
 }
 
-//IndexedColumns returns Columns
+// IndexedColumns returns Columns
 func (v *View) IndexedColumns() ColumnIndex {
 	return v._columns
 }

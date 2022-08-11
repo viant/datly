@@ -3,6 +3,7 @@ package executor
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/viant/datly/shared"
 	"sync"
 )
@@ -49,15 +50,16 @@ func (e *Executor) Exec(ctx context.Context, session *Session) error {
 	return tx.Commit()
 }
 
-func (e *Executor) execData(ctx context.Context, wg *sync.WaitGroup, tx *sql.Tx, data *SqlData, errors *shared.Errors) {
+func (e *Executor) execData(ctx context.Context, wg *sync.WaitGroup, tx *sql.Tx, data *SQLStatment, errors *shared.Errors) {
 	defer wg.Done()
-	err := e.execDataWithErr(ctx, tx, data)
+	err := e.executeStatement(ctx, tx, data)
 	if err != nil {
 		errors.Append(err)
 	}
 }
 
-func (e *Executor) execDataWithErr(ctx context.Context, tx *sql.Tx, data *SqlData) error {
-	_, err := tx.ExecContext(ctx, data.SQL, data.Args...)
+func (e *Executor) executeStatement(ctx context.Context, tx *sql.Tx, stmt *SQLStatment) error {
+	fmt.Printf("executing: %v %v\n", stmt.SQL, stmt.Args)
+	_, err := tx.ExecContext(ctx, stmt.SQL, stmt.Args...)
 	return err
 }

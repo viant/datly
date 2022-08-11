@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/cmd/ast"
+	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/metadata/ast/expr"
 	"github.com/viant/sqlx/metadata/ast/node"
@@ -52,12 +53,6 @@ type (
 	TableParam struct {
 		Table *Table
 		Param *view.Parameter
-	}
-
-	RouteSetting struct {
-		URI       string
-		URIParams map[string]bool
-		Cache     *view.Cache
 	}
 
 	Columns []*Column
@@ -129,14 +124,15 @@ func (j *Joins) Index() map[string]*Join {
 	return result
 }
 
-func ParseSQLx(SQL string, uriParams map[string]bool) (*Table, map[string]*TableParam, error) {
+func ParseSQLx(SQL string, routeOpt *option.Route) (*Table, map[string]*TableParam, error) {
+
 	aQuery, err := parser.ParseQuery(SQL)
 	if aQuery == nil {
 		return nil, nil, err
 	}
 
 	var tables = map[string]*Table{}
-	table, err := buildTable(aQuery.From.X, uriParams)
+	table, err := buildTable(aQuery.From.X, routeOpt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -153,7 +149,7 @@ func ParseSQLx(SQL string, uriParams map[string]bool) (*Table, map[string]*Table
 
 	if len(aQuery.Joins) > 0 {
 		for _, join := range aQuery.Joins {
-			if err := processJoin(join, tables, table.Columns, dataParameters, uriParams); err != nil {
+			if err := processJoin(join, tables, table.Columns, dataParameters, routeOpt); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -161,7 +157,7 @@ func ParseSQLx(SQL string, uriParams map[string]bool) (*Table, map[string]*Table
 	return table, dataParameters, nil
 }
 
-func buildTable(x node.Node, uriParams map[string]bool) (*Table, error) {
+func buildTable(x node.Node, routeOpt *option.Route) (*Table, error) {
 	//var err error
 	table := &Table{}
 	switch actual := x.(type) {
@@ -188,7 +184,7 @@ func buildTable(x node.Node, uriParams map[string]bool) (*Table, error) {
 			table.InnerSQL = innerSQL
 			table.InnerAlias = innerQuery.From.Alias
 		}
-		table.ViewMeta, err = ast.Parse(table.SQL, uriParams)
+		table.ViewMeta, err = ast.Parse(table.SQL, routeOpt)
 		if err != nil {
 			return nil, err
 		}
@@ -240,8 +236,8 @@ func appendParamExpr(x node.Node, op string, y node.Node, list *[]string) {
 	}
 }
 
-func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns, dataParameters map[string]*TableParam, params map[string]bool) error {
-	relTable, err := buildTable(join.With, params)
+func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns, dataParameters map[string]*TableParam, routeOpt *option.Route) error {
+	relTable, err := buildTable(join.With, routeOpt)
 	if err != nil {
 		return err
 	}

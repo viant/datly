@@ -5,10 +5,11 @@
 ./datly -h
 ```
 
+
 #### Generate rule with endpoint for a table
 
 ```bash
- ./datly  -C=dev  -N=MyViewName -T=MyTableName
+ ./datly -C='mydb|mysql|root:pass@tcp(127.0.0.1:3306)/mydb?parseTime=true'  -N=MyViewName -T=MyTableName
  
 open http://127.0.0.1:8080/v1/api/dev/MyViewName
 
