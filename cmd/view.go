@@ -442,6 +442,9 @@ func updateParamPrecedence(dest *view.Parameter, source *view.Parameter) {
 		dest.Schema.Cardinality = source.Schema.Cardinality
 	}
 
+	if dest.Schema.Name == "" {
+		dest.Schema.Name = source.Schema.Name
+	}
 	dest.Schema.DataType = source.Schema.DataType
 
 	if dest.Codec == nil {
