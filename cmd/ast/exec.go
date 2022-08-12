@@ -13,34 +13,60 @@ import (
 func buildViewMetaInExecSQLMode(SQL string, view *ViewMeta, variables map[string]bool) error {
 	lcSQL := strings.ToLower(SQL)
 	boundary := getStatementBoundary(lcSQL)
-	var err error
-	nonSQLStmt := "#set($sIndex = 0)\n"
-	if len(boundary) == 1 {
-		index := boundary[0]
-		nonSQLStmt += strings.TrimSpace(SQL[:index]) + "\n"
-		SQL, err = normalizeSQLExec(lcSQL[index], SQL[index:], view, variables)
+
+	SQLExec := "#set($sIndex = 0)\n"
+	i := 0
+	isLast := i+1 == len(boundary)
+	if len(boundary) > 0 {
+		offset := boundary[0]
+		limit := len(SQL)
+		if len(boundary) > 1 {
+			limit = boundary[1] - 1
+		}
+		SQLExec += strings.TrimSpace(SQL[:offset]) + "\n"
+		normalizedSQL, err := normalizeSQLExec(SQL[offset], SQL[offset:limit], view, variables)
 		if err != nil {
 			return err
 		}
-	} else {
-		//TODO if more then 1 DML statement here
+		SQLExec += normalizedSQL
+		if !isLast {
+			SQLExec += "\n#set($sIndex = $sIndex+1)\n"
+		}
+
+		for i := 1; i < len(boundary); i++ {
+			isLast = i+1 == len(boundary)
+			offset = boundary[i]
+			limit = len(SQL)
+			if i+1 < len(boundary) {
+				limit = boundary[i+1] - 1
+			}
+			normalizedSQL, err := normalizeSQLExec(SQL[offset], SQL[offset:limit], view, variables)
+			if err != nil {
+				return err
+			}
+			SQLExec += normalizedSQL
+			if !isLast {
+				SQLExec += "\n#set($sIndex = $sIndex+1)\n"
+			}
+		}
 	}
-	view.Source = nonSQLStmt + SQL
+	view.Source = SQLExec
 	return nil
 }
 
 func normalizeSQLExec(stmtType byte, SQLStmt string, view *ViewMeta, variables map[string]bool) (string, error) {
 	var nonSQLStmt = ""
+
+	hasSemiColon := false
 	//TODO replace this with SQL block splitter instead
 	if index := strings.LastIndex(SQLStmt, ";"); index != -1 {
 		nonSQLStmt = SQLStmt[index:]
 		SQLStmt = SQLStmt[:index]
+		hasSemiColon = true
 	}
-
 	rawSQL, expressions := ExtractCondBlock(SQLStmt)
-	//would it be better to leve in the raw SQL true case form if statement
 
-	switch stmtType {
+	switch stmtType | ' ' {
 	case 'i':
 		stmt, err := parser.ParseInsert(rawSQL)
 		if err != nil {
@@ -58,6 +84,9 @@ func normalizeSQLExec(stmtType byte, SQLStmt string, view *ViewMeta, variables m
 		SQLStmt = normalizeAndExtractUpdateSet(stmt, view, rawSQL, SQLStmt, variables)
 		SQLStmt = normalizeAndExtractUpdateWhere(stmt, view, SQLStmt, variables)
 		SQLStmt = normalizeOptionParameters(expressions, view, SQLStmt, variables)
+	}
+	if !hasSemiColon {
+		SQLStmt += ";"
 	}
 	return SQLStmt + nonSQLStmt, nil
 }
@@ -155,7 +184,7 @@ func normalizeAndExtractUpdateSet(stmt *update.Statement, view *ViewMeta, rawSQL
 		enrichedExpr := parser.Stringify(item)
 		SQLStmt = strings.Replace(SQLStmt, originalExpr, enrichedExpr, 1)
 	}
-	return SQLStmt + "\n#set($sIndex = $sIndex+1)"
+	return SQLStmt
 }
 
 func sanitizeUnsafeExpr(paramName string) string {
@@ -188,8 +217,9 @@ func getStatementBoundary(lcSQL string) []int {
 		if index == -1 {
 			break
 		}
+
 		boundary = append(boundary, offset+index)
-		offset += index
+		offset += index + 1
 		tempSQL = tempSQL[index+1:]
 	}
 	return boundary

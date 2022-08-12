@@ -372,7 +372,11 @@ outer:
 			if match.Code == exprGroupToken {
 				matched := string(cur.Input[cur.Pos:])
 				if index := strings.Index(matched, "#"); index != -1 {
-					expressions = append(expressions, strings.TrimSpace(matched[:index]))
+					expression := strings.TrimSpace(matched[:index])
+					expressions = append(expressions, expression)
+					if strings.Contains(expression, "=") {
+						builder.WriteString(expression)
+					}
 				}
 			}
 
