@@ -181,6 +181,9 @@ func (s *serverBuilder) buildDataParameters(dataParameters map[string]*TablePara
 	}
 
 	for _, hintedParam := range parameters {
+		if strings.HasPrefix(hintedParam.Parameter, "Unsafe.") {
+			hintedParam.Parameter = strings.Replace(hintedParam.Parameter, "Unsafe.", "", 1)
+		}
 		paramName := hintedParam.Parameter
 		aTable := &Table{}
 		SQL, err := ast.UnmarshalHint(hintedParam.Hint, aTable)

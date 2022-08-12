@@ -1,4 +1,5 @@
 - smart caching (cache compression if size over x, )
+  - velty #query
 - $Limit/$Offset context based generator enhancement
 - reduce complexity/execution branches/duplication on selector parameters
 - - managed ORM mode: selector with velty parameter setter, simplify/remove lifcycle, codec,
