@@ -27,7 +27,7 @@ require (
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/parsly v0.0.0-20220726191103-6f54d86a6bf9
-	github.com/viant/scy v0.2.1-0.20220812181237-88ab3e66566b
+	github.com/viant/scy v0.2.1-0.20220812182657-3c558bdbece7
 	github.com/viant/sqlx v0.0.0-20220811174716-1b6dd6d967a2
 	github.com/viant/toolbox v0.34.6-0.20220630003140-fb2bf82657c1
 	github.com/viant/velty v0.1.1-0.20220810215332-b4095f02bc23
