@@ -2,6 +2,7 @@ package ast
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/viant/parsly"
 	"strings"
 )
@@ -60,6 +61,7 @@ func ExtractHint(text string) string {
 
 func UnmarshalHint(hint string, dest interface{}) (string, error) {
 	hint = hint[3 : len(hint)-3]
+
 	index := strings.LastIndex(hint, "}")
 	result := ""
 	if index != -1 {
@@ -68,6 +70,10 @@ func UnmarshalHint(hint string, dest interface{}) (string, error) {
 	} else {
 		return hint, nil
 	}
+
 	err := json.Unmarshal([]byte(hint), dest)
+	if err != nil {
+		return "", fmt.Errorf("invalid %s, %w", hint, err)
+	}
 	return strings.TrimSpace(result), err
 }
