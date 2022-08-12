@@ -1,5 +1,7 @@
 package ast
 
+import "github.com/viant/datly/view"
+
 type (
 	ViewMeta struct {
 		Mode           string            `json:",omitempty" yaml:",omitempty"`
@@ -14,23 +16,34 @@ type (
 	}
 
 	Parameter struct {
-		Id            string `json:",omitempty" yaml:",omitempty"`
-		Name          string `json:",omitempty" yaml:",omitempty"`
-		Kind          string `json:",omitempty" yaml:",omitempty"`
-		Required      *bool  `json:",omitempty" yaml:",omitempty"`
-		DataType      string `json:",omitempty" yaml:",omitempty"`
-		DerivedColumn string `json:",omitempty" yaml:",omitempty"`
-		Repeated      bool   `json:",omitempty" yaml:",omitempty"`
-		fullName      string
-		Assumed       bool
-		Typer         Typer  `json:",omitempty" yaml:",omitempty"`
-		SQL           string `json:",omitempty" yaml:",omitempty"`
+		Id             string `json:",omitempty" yaml:",omitempty"`
+		Name           string `json:",omitempty" yaml:",omitempty"`
+		Kind           string `json:",omitempty" yaml:",omitempty"`
+		Required       *bool  `json:",omitempty" yaml:",omitempty"`
+		DataType       string `json:",omitempty" yaml:",omitempty"`
+		Repeated       bool   `json:",omitempty" yaml:",omitempty"`
+		ExpectReturned *int   `json:",omitempty" yaml:",omitempty"`
+		fullName       string
+		Assumed        bool             `json:",omitempty" yaml:",omitempty"`
+		Typer          Typer            `json:",omitempty" yaml:",omitempty"`
+		SQL            string           `json:",omitempty" yaml:",omitempty"`
+		Cardinality    view.Cardinality `json:",omitempty" yaml:",omitempty"`
+		Multi          bool             `json:",omitempty" yaml:",omitempty"`
 	}
 )
 
 func (m *ViewMeta) addParameter(param *Parameter) {
+	if param.Multi {
+		param.Cardinality = view.Many
+	}
+
 	if index, ok := m.index[param.Id]; ok {
 		parameter := m.Parameters[index]
+		parameter.Multi = param.Multi || parameter.Multi
+		if parameter.Multi {
+			parameter.Cardinality = view.Many
+		}
+
 		parameter.Required = boolPtr((parameter.Required != nil && *parameter.Required) || (param.Required != nil && *param.Required))
 		if parameter.Assumed {
 			parameter.DataType = param.DataType

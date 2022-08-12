@@ -23,14 +23,14 @@ type (
 		Name         string `json:",omitempty"`
 		PresenceName string `json:",omitempty"`
 
-		In             *Location `json:",omitempty"`
-		Required       *bool     `json:",omitempty"`
-		Description    string    `json:",omitempty"`
-		DataType       string    `json:",omitempty"`
-		Style          string    `json:",omitempty"`
-		ExpectReturned *int      `json:",omitempty"`
-		Schema         *Schema   `json:",omitempty"`
-		Codec          *Codec    `json:",omitempty"`
+		In                *Location `json:",omitempty"`
+		Required          *bool     `json:",omitempty"`
+		Description       string    `json:",omitempty"`
+		DataType          string    `json:",omitempty"`
+		Style             string    `json:",omitempty"`
+		MaxAllowedRecords *int      `json:",omitempty"`
+		Schema            *Schema   `json:",omitempty"`
+		Codec             *Codec    `json:",omitempty"`
 
 		DateFormat      string `json:",omitempty"`
 		ErrorStatusCode int    `json:",omitempty"`
@@ -157,6 +157,7 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 
 		p.inherit(param)
 	}
+
 	if p.PresenceName == "" {
 		p.PresenceName = p.Name
 	}
@@ -273,7 +274,7 @@ func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
 	}
 
 	schemaType := notEmptyOf(p.Schema.Name, p.Schema.DataType)
-	if p.ExpectReturned != nil && *p.ExpectReturned > 1 {
+	if p.MaxAllowedRecords != nil && *p.MaxAllowedRecords > 1 {
 		p.Schema.Cardinality = Many
 	}
 

@@ -211,8 +211,11 @@ func (s *serverBuilder) buildSQLSource(aView *view.View, table *Table) error {
 
 func convertMetaParameter(param *ast.Parameter) *view.Parameter {
 	return &view.Parameter{
-		Name:   param.Id,
-		Schema: &view.Schema{DataType: param.DataType},
+		Name: param.Id,
+		Schema: &view.Schema{
+			DataType:    param.DataType,
+			Cardinality: param.Cardinality,
+		},
 		In: &view.Location{
 			Kind: view.Kind(param.Kind),
 			Name: param.Name,

@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func buildViewMetaInExecSQLMode(SQL string, view *ViewMeta) error {
+func buildViewMetaInExecSQLMode(SQL string, view *ViewMeta, variables map[string]bool) error {
 	lcSQL := strings.ToLower(SQL)
 	boundary := getStatementBoundary(lcSQL)
 	var err error
@@ -18,16 +18,18 @@ func buildViewMetaInExecSQLMode(SQL string, view *ViewMeta) error {
 	if len(boundary) == 1 {
 		index := boundary[0]
 		nonSQLStmt += strings.TrimSpace(SQL[:index]) + "\n"
-		SQL, err = normalizeSQLExec(lcSQL[index], SQL[index:], view)
+		SQL, err = normalizeSQLExec(lcSQL[index], SQL[index:], view, variables)
 		if err != nil {
 			return err
 		}
+	} else {
+		//TODO if more then 1 DML statement here
 	}
 	view.Source = nonSQLStmt + SQL
 	return nil
 }
 
-func normalizeSQLExec(stmtType byte, SQLStmt string, view *ViewMeta) (string, error) {
+func normalizeSQLExec(stmtType byte, SQLStmt string, view *ViewMeta, variables map[string]bool) (string, error) {
 	var nonSQLStmt = ""
 	//TODO replace this with SQL block splitter instead
 	if index := strings.LastIndex(SQLStmt, ";"); index != -1 {
@@ -53,9 +55,9 @@ func normalizeSQLExec(stmtType byte, SQLStmt string, view *ViewMeta) (string, er
 			return "", err
 		}
 		view.Updates = append(view.Updates, parser.Stringify(stmt.Target.X))
-		SQLStmt = normalizeAndExtractUpdateSet(stmt, view, rawSQL, SQLStmt)
-		SQLStmt = normalizeAndExtractUpdateWhere(stmt, view, rawSQL, SQLStmt)
-		SQLStmt = normalizeOptionParameters(expressions, view, SQLStmt)
+		SQLStmt = normalizeAndExtractUpdateSet(stmt, view, rawSQL, SQLStmt, variables)
+		SQLStmt = normalizeAndExtractUpdateWhere(stmt, view, SQLStmt, variables)
+		SQLStmt = normalizeOptionParameters(expressions, view, SQLStmt, variables)
 	}
 	return SQLStmt + nonSQLStmt, nil
 }
@@ -65,13 +67,13 @@ func normalizeAndExtractInsertValues(stmt *insert.Statement, view *ViewMeta, SQL
 		selector := ExtractSelector(value.Raw)
 		column := stmt.Columns[i]
 		paramName := selector[1:]
-		view.addParameter(&Parameter{Id: paramName, Name: paramName, DerivedColumn: column})
+		view.addParameter(&Parameter{Id: paramName, Name: paramName, Typer: &ColumnType{ColumnName: column}})
 		SQL = strings.Replace(SQL, selector, sanitizeUnsafeExpr(selector), 1)
 	}
 	return SQL
 }
 
-func normalizeOptionParameters(expressions []string, view *ViewMeta, SQLExec string) string {
+func normalizeOptionParameters(expressions []string, view *ViewMeta, SQLExec string, variables map[string]bool) string {
 	for _, anExpr := range expressions {
 		anExpr = strings.TrimSpace(anExpr)
 		if strings.HasPrefix(anExpr, ",") {
@@ -87,13 +89,13 @@ func normalizeOptionParameters(expressions []string, view *ViewMeta, SQLExec str
 			continue
 		}
 		paramName := selector[1:]
-		view.addParameter(&Parameter{Id: paramName, Name: paramName, DerivedColumn: column})
+		view.addParameter(&Parameter{Id: paramName, Name: paramName, Typer: &ColumnType{ColumnName: column}})
 		SQLExec = strings.Replace(SQLExec, anExpr, column+" = "+sanitizeUnsafeExpr(selector), 1)
 	}
 	return SQLExec
 }
 
-func normalizeAndExtractUpdateWhere(stmt *update.Statement, view *ViewMeta, rawSQL, SQLExec string) string {
+func normalizeAndExtractUpdateWhere(stmt *update.Statement, view *ViewMeta, SQLExec string, variables map[string]bool) string {
 	var criteria []*Criterion
 	ExtractCriteriaPlaceholders(stmt.Qualify.X, &criteria)
 	for _, criterion := range criteria {
@@ -101,10 +103,18 @@ func normalizeAndExtractUpdateWhere(stmt *update.Statement, view *ViewMeta, rawS
 		if !strings.HasPrefix(y, "$") {
 			continue
 		}
+
+		_, paramName := getHolderName(y)
+		if variables[paramName] {
+			continue
+		}
+
 		switch strings.ToLower(criterion.Op) {
 		case "in":
 			paramName := y[1:]
-			view.addParameter(&Parameter{Id: paramName, Name: paramName, Repeated: true, DerivedColumn: criterion.X})
+			view.addParameter(&Parameter{Id: paramName, Name: paramName, Repeated: true, Typer: &ColumnType{
+				ColumnName: criterion.X,
+			}})
 			SQLExec = strings.Replace(SQLExec, y, fmt.Sprintf(`
 #set($coma = "")
 #foreach($Key in %v)
@@ -115,14 +125,16 @@ func normalizeAndExtractUpdateWhere(stmt *update.Statement, view *ViewMeta, rawS
 		case "=":
 			paramName := y[1:]
 			required := true
-			view.addParameter(&Parameter{Id: paramName, Name: paramName, Required: &required, DerivedColumn: criterion.X})
+			view.addParameter(&Parameter{Id: paramName, Name: paramName, Required: &required, Typer: &ColumnType{
+				ColumnName: criterion.X,
+			}})
 		}
 		SQLExec = strings.Replace(SQLExec, y, sanitizeUnsafeExpr(y), 1)
 	}
 	return SQLExec
 }
 
-func normalizeAndExtractUpdateSet(stmt *update.Statement, view *ViewMeta, rawSQL string, SQLStmt string) string {
+func normalizeAndExtractUpdateSet(stmt *update.Statement, view *ViewMeta, rawSQL string, SQLStmt string, variables map[string]bool) string {
 	for _, item := range stmt.Set {
 		placeholder, ok := item.Expr.(*expr.Placeholder)
 		if !ok {
@@ -133,7 +145,9 @@ func normalizeAndExtractUpdateSet(stmt *update.Statement, view *ViewMeta, rawSQL
 			continue
 		}
 		column := getColumnName(item)
-		view.addParameter(&Parameter{Id: paramName[1:], Name: paramName[1:], DerivedColumn: column})
+		view.addParameter(&Parameter{Id: paramName[1:], Name: paramName[1:], Typer: &ColumnType{
+			ColumnName: column,
+		}})
 		originalExpr := strings.TrimSpace(rawSQL[item.Begin:item.End])
 		item.Expr = &expr.Raw{
 			Raw: sanitizeUnsafeExpr(paramName),

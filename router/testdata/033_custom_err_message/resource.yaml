@@ -15,7 +15,7 @@ Routes:
             Schema:
               DataType: Body
           - Name: Data
-            ExpectReturned: 0
+            MaxAllowedRecords: 0
             In:
               Kind: data_view
               Name: status_view

@@ -13,7 +13,6 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/metadata"
-	"github.com/viant/toolbox"
 	"github.com/viant/toolbox/format"
 	"log"
 	"net/http"
@@ -42,9 +41,10 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	}
 
 	var xTable *Table
-	var dataViewParams map[string]*TableParam
+	var dataViewParams = make(map[string]*TableParam)
 	routeOption := &option.Route{}
 	var sqlExecModeView *ast.ViewMeta
+	var parameterHints []*ast.ParameterHint
 	if s.options.SQLXLocation != "" && url.Scheme(s.options.SQLLocation, "e") == "e" {
 		sourceURL := normalizeURL(s.options.SQLXLocation)
 		SQLData, err := fs.DownloadWithURL(context.Background(), sourceURL)
@@ -56,11 +56,17 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 			return fmt.Errorf("invalid settings: %v", err)
 		}
 
+		parameterHints = ast.ExtractParameterHints(SQL)
+
+		if len(parameterHints) > 0 {
+			SQL = ast.RemoveParameterHints(SQL, parameterHints)
+		}
+
 		if ast.IsSQLExecMode(SQL) {
 			if sqlExecModeView, err = ast.Parse(SQL, routeOption); err != nil {
 				return err
 			}
-			s.updateMetaColumnTypes(ctx, sqlExecModeView)
+			s.updateMetaColumnTypes(ctx, sqlExecModeView, routeOption)
 		} else {
 			if xTable, dataViewParams, err = ParseSQLx(SQL, routeOption); err != nil {
 				log.Println(err)
@@ -70,10 +76,13 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 			}
 		}
 	}
+	s.buildDataParameters(dataViewParams, parameterHints, routeOption)
+
 	aView := s.buildMainView(s.options, generate)
 	if sqlExecModeView != nil {
 		s.updateViewInSQLExecMode(aView, sqlExecModeView, routeOption)
 	}
+
 	_, err := s.addViewConn(s.options.Connector.DbName, aView)
 	if err != nil {
 		return err
@@ -136,7 +145,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 		buildExcludeColumn(xTable, aView, viewRoute)
 	}
 
-	s.buildDataViewParams(ctx, dataViewParams)
+	s.buildDataViewParams(ctx, dataViewParams, routeOption)
 	if len(s.options.Relations) > 0 {
 		meta := metadata.New()
 		err := s.buildRelations(ctx, meta, aView, viewRoute)
@@ -166,6 +175,39 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	return fsAddYAML(fs, s.options.RouterURL(), s.route)
 }
 
+func (s *serverBuilder) buildDataParameters(dataParameters map[string]*TableParam, parameters []*ast.ParameterHint, routeOption *option.Route) error {
+	if len(parameters) == 0 {
+		return nil
+	}
+
+	for _, hintedParam := range parameters {
+		paramName := hintedParam.Parameter
+		aTable := &Table{}
+		SQL, err := ast.UnmarshalHint(hintedParam.Hint, aTable)
+		if err != nil {
+			return err
+		}
+
+		if SQL == "" {
+			continue
+		}
+		aTable.SQL = SQL
+		if err := updateTableSettings(aTable, routeOption); err != nil {
+			return err
+		}
+		aTable.Alias = paramName
+		if aTable.dataViewParameter == nil {
+			aTable.dataViewParameter = &view.Parameter{}
+		}
+		aTable.dataViewParameter.In = &view.Location{Name: paramName, Kind: view.DataViewKind}
+		aTable.dataViewParameter.Schema = &view.Schema{Name: strings.Title(paramName)}
+		aTable.dataViewParameter.Name = paramName
+		dataParameters[paramName] = &TableParam{Table: aTable, Param: aTable.dataViewParameter}
+		updateAuthToken(aTable)
+	}
+	return nil
+}
+
 func (s *serverBuilder) updateViewInSQLExecMode(aView *view.View, viewMeta *ast.ViewMeta, route *option.Route) {
 	aView.Mode = view.Mode(viewMeta.Mode)
 	aView.Template = &view.Template{
@@ -173,7 +215,6 @@ func (s *serverBuilder) updateViewInSQLExecMode(aView *view.View, viewMeta *ast.
 		Parameters: []*view.Parameter{},
 	}
 
-	toolbox.Dump(viewMeta)
 	if len(viewMeta.Updates) > 0 {
 		aView.Table = viewMeta.Updates[0]
 	} else if len(viewMeta.Inserts) > 0 {
@@ -181,28 +222,43 @@ func (s *serverBuilder) updateViewInSQLExecMode(aView *view.View, viewMeta *ast.
 	}
 
 	for _, p := range viewMeta.Parameters {
-		dataType, ok := viewMeta.ParameterTypes[strings.ToLower(p.DerivedColumn)]
-		if !ok {
+		var dataType string
+		if p.Typer != nil {
+			switch actual := p.Typer.(type) {
+			case *ast.ColumnType:
+				dataType = viewMeta.ParameterTypes[strings.ToLower(actual.ColumnName)]
+			case *ast.LiteralType:
+				dataType = actual.RType.String()
+			}
+		}
+
+		if dataType == "" {
 			dataType = viewMeta.ParameterTypes[strings.ToLower(p.Name)]
 		}
+
 		if dataType == "" {
 			dataType = "string"
 		}
+
 		if p.Repeated {
 			dataType = "[]" + dataType
 		}
-		kind := view.RequestBodyKind
-		if route.Method == http.MethodGet {
-			kind = view.QueryKind
+
+		p.DataType = dataType
+
+		metaParameter := convertMetaParameter(p)
+		if route.Method != http.MethodGet {
+			metaParameter.In.Kind = view.RequestBodyKind
+		} else {
+			metaParameter.In.Kind = view.QueryKind
 		}
-		param := &view.Parameter{Name: p.Name, In: &view.Location{Name: p.Name, Kind: kind}, Schema: &view.Schema{DataType: dataType}}
-		aView.Template.Parameters = append(aView.Template.Parameters, param)
+
+		aView.Template.Parameters = append(aView.Template.Parameters, metaParameter)
 	}
 }
 
-func (s *serverBuilder) updateMetaColumnTypes(ctx context.Context, viewMeta *ast.ViewMeta) {
+func (s *serverBuilder) updateMetaColumnTypes(ctx context.Context, viewMeta *ast.ViewMeta, routeOption *option.Route) {
 
-	toolbox.Dump(viewMeta)
 	if len(viewMeta.ParameterTypes) == 0 {
 		viewMeta.ParameterTypes = map[string]string{}
 	}
@@ -224,6 +280,11 @@ func (s *serverBuilder) updateMetaColumnTypes(ctx context.Context, viewMeta *ast
 			for k, v := range table.ColumnTypes {
 				viewMeta.ParameterTypes[k] = v
 			}
+		}
+	}
+	if len(routeOption.Declare) > 0 {
+		for k, v := range viewMeta.ParameterTypes {
+			viewMeta.ParameterTypes[k] = v
 		}
 	}
 }
@@ -249,13 +310,23 @@ func extractSetting(SQL string, route *option.Route) (string, error) {
 	return SQL, nil
 }
 
-func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*TableParam) {
+func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*TableParam, routeOption *option.Route) {
 	if len(params) == 0 {
 		return
 	}
 
 	for k, v := range params {
 		table := v.Table
+
+		if len(routeOption.Declare) > 0 {
+			if len(table.ColumnTypes) == 0 {
+				table.ColumnTypes = map[string]string{}
+			}
+			for k, v := range routeOption.Declare {
+				table.ColumnTypes[k] = v
+			}
+		}
+
 		if len(table.Inner) == 0 {
 			fmt.Printf("Skpining data view params: %v - no column detected", v.Table)
 			continue
@@ -288,14 +359,16 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 			})
 		}
 
+		schemaName := strings.Title(k)
 		s.route.Resource.Types = append(s.route.Resource.Types, &view.Definition{
-			Name:   strings.Title(k),
+			Name:   schemaName,
 			Fields: fields,
 		})
 
 		relView := &view.View{
-			Name:  k,
-			Table: v.Table.Name,
+			Name:   k,
+			Table:  v.Table.Name,
+			Schema: &view.Schema{Name: schemaName},
 			Selector: &view.Config{
 				Limit: 25,
 				Constraints: &view.Constraints{
@@ -309,6 +382,8 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 			continue
 		}
 
+		s.mergeParamTypes(table)
+
 		if err := s.updateView(ctx, table, relView); err != nil {
 			continue
 		}
@@ -319,6 +394,17 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 			mergeParameter(s.route, v.Table.Parameter)
 		}
 		mergeParameter(s.route, v.Param)
+	}
+}
+
+func (s *serverBuilder) mergeParamTypes(table *Table) {
+	if len(table.ColumnTypes) > 0 {
+		for k, v := range table.ColumnTypes {
+			if len(table.ViewMeta.ParameterTypes) == 0 {
+				table.ViewMeta.ParameterTypes = map[string]string{}
+			}
+			table.ViewMeta.ParameterTypes[k] = v
+		}
 	}
 }
 
@@ -334,13 +420,41 @@ func updateParamReferences(route *router.Resource) {
 			continue
 		}
 		for i, viewParam := range aView.Template.Parameters {
-			if _, ok := resourceParams[viewParam.Name]; !ok {
+			if resourceParam, ok := resourceParams[viewParam.Name]; ok {
+				updateParamPrecedence(resourceParam, viewParam)
+			} else {
 				route.Resource.Parameters = append(route.Resource.Parameters, aView.Template.Parameters[i])
 			}
 			aView.Template.Parameters[i] = &view.Parameter{Reference: shared.Reference{Ref: viewParam.Name}}
 		}
 	}
 
+}
+
+func updateParamPrecedence(dest *view.Parameter, source *view.Parameter) {
+	dest.Required = boolPtr(dest.IsRequired() || source.IsRequired())
+
+	if source.DateFormat != "" && dest.DateFormat == "" {
+		dest.DateFormat = source.DateFormat
+	}
+
+	if dest.Schema.Cardinality != view.Many {
+		dest.Schema.Cardinality = source.Schema.Cardinality
+	}
+
+	dest.Schema.DataType = source.Schema.DataType
+
+	if dest.Codec == nil {
+		dest.Codec = source.Codec
+	}
+
+	if source.In != nil {
+		dest.In = source.In
+	}
+
+	if dest.ErrorStatusCode == 0 && source.ErrorStatusCode != 0 {
+		dest.ErrorStatusCode = source.ErrorStatusCode
+	}
 }
 
 func updateURIParams(route *router.Resource, setting *option.Route) {
@@ -369,10 +483,8 @@ func mergeParameter(route *router.Resource, param *view.Parameter) {
 			if viewParam.Name != param.Name {
 				continue
 			}
-			aView.Template.Parameters[i].In = param.In
-			aView.Template.Parameters[i].Schema = param.Schema
-			aView.Template.Parameters[i].Codec = param.Codec
-			aView.Template.Parameters[i].ErrorStatusCode = param.ErrorStatusCode
+
+			updateParamPrecedence(aView.Template.Parameters[i], param)
 		}
 	}
 }

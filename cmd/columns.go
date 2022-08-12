@@ -12,9 +12,6 @@ import (
 )
 
 func (s *serverBuilder) updateTableColumnTypes(ctx context.Context, table *Table) {
-	if len(table.ColumnTypes) > 0 {
-		return
-	}
 	//TODO read all column per alias from main and join table
 	table.ColumnTypes = map[string]string{}
 	connector := s.options.MatchConnector(table.Connector)

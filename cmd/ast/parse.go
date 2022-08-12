@@ -16,25 +16,39 @@ import (
 	"strings"
 )
 
-func Parse(SQL string, route *option.Route) (*ViewMeta, error) {
+type paramTypeDetector struct {
+	uriParams  map[string]bool
+	paramTypes map[string]string
+	variables  map[string]bool
+	viewMeta   *ViewMeta
+}
 
+func newParamTypeDetector(uriParams map[string]bool, paramTypes map[string]string, variables map[string]bool, meta *ViewMeta) *paramTypeDetector {
+	return &paramTypeDetector{
+		uriParams:  uriParams,
+		paramTypes: paramTypes,
+		variables:  variables,
+		viewMeta:   meta,
+	}
+}
+
+func Parse(SQL string, route *option.Route) (*ViewMeta, error) {
 	viewMeta := &ViewMeta{
 		index: map[string]int{},
 	}
 
-	if IsSQLExecMode(SQL) {
-		viewMeta.Mode = view.SQLExecMode
-		var err error
-		err = buildViewMetaInExecSQLMode(SQL, viewMeta)
-		if err != nil {
-			fmt.Printf("error while build ExecSQL: %v", err)
+	uriParams := map[string]bool{}
+	paramTypes := map[string]string{}
+	if route != nil {
+		if route.URIParams != nil {
+			uriParams = route.URIParams
 		}
-		return viewMeta, err
+
+		if route.Declare != nil {
+			paramTypes = route.Declare
+		}
 	}
-	uriParams := route.URIParams
-	if uriParams == nil {
-		uriParams = map[string]bool{}
-	}
+
 	block, err := parser.Parse([]byte(SQL))
 	if err != nil {
 		return nil, err
@@ -54,12 +68,23 @@ func Parse(SQL string, route *option.Route) (*ViewMeta, error) {
 	}
 
 	variables := map[string]bool{}
-	implyDefaultParams(variables, block.Statements(), viewMeta, true, nil, uriParams)
+	newParamTypeDetector(uriParams, paramTypes, variables, viewMeta).
+		implyDefaultParams(block.Statements(), true, nil, false)
 
-	SQL = removeVeltySyntax(string(from))
-	correctUntyped(SQL, variables, viewMeta)
+	sqlNoVelty := removeVeltySyntax(string(from))
+	correctUntyped(sqlNoVelty, variables, viewMeta)
 
 	viewMeta.Source = actualSource
+
+	if IsSQLExecMode(SQL) {
+		viewMeta.Mode = view.SQLExecMode
+		var err error
+		err = buildViewMetaInExecSQLMode(SQL, viewMeta, variables)
+		if err != nil {
+			fmt.Printf("error while build ExecSQL: %v", err)
+		}
+	}
+
 	return viewMeta, nil
 }
 
@@ -105,86 +130,98 @@ outer:
 	return sb.String()
 }
 
-func implyDefaultParams(variables map[string]bool, statements []ast.Statement, meta *ViewMeta, required bool, rType reflect.Type, uriParams map[string]bool) {
+func (p *paramTypeDetector) implyDefaultParams(statements []ast.Statement, required bool, rType reflect.Type, multi bool) {
 	for _, statement := range statements {
 		switch actual := statement.(type) {
 		case stmt.ForEach:
-			variables[actual.Item.ID] = true
+			p.variables[actual.Item.ID] = true
 		case stmt.Statement:
 			x, ok := actual.X.(*expr.Select)
 			if ok {
-				variables[x.ID] = true
+				p.variables[x.ID] = true
 			}
 
 			y, ok := actual.Y.(*expr.Select)
-			if ok && !variables[y.ID] {
-				indexParameter(variables, y, meta, required, rType, uriParams)
+			if ok && !p.variables[y.ID] {
+				p.indexParameter(y, required, rType, multi)
 			}
 
 		case *expr.Select:
-			indexParameter(variables, actual, meta, required, rType, uriParams)
+			p.indexParameter(actual, required, rType, multi)
 
 		case *stmt.Statement:
 			x, ok := actual.X.(*expr.Select)
 			if !ok {
 				continue
 			}
-			variables[x.ID] = true
+			p.variables[x.ID] = true
 		case *stmt.ForEach:
-			variables[actual.Item.ID] = true
+			p.variables[actual.Item.ID] = true
+			set, ok := actual.Set.(*expr.Select)
+			if ok && !p.variables[set.ID] {
+				p.implyDefaultParams([]ast.Statement{set}, false, rType, true)
+			}
+
 		case *expr.Unary:
-			implyDefaultParams(variables, []ast.Statement{actual}, meta, false, actual.Type(), uriParams)
+			p.implyDefaultParams([]ast.Statement{actual}, false, actual.Type(), false)
 		case *expr.Binary:
 			xType := actual.X.Type()
 			if xType == nil {
 				xType = actual.Y.Type()
 			}
 
-			implyDefaultParams(variables, []ast.Statement{actual.X, actual.Y}, meta, false, xType, uriParams)
+			p.implyDefaultParams([]ast.Statement{actual.X, actual.Y}, false, xType, false)
 		case *expr.Parentheses:
-			implyDefaultParams(variables, []ast.Statement{actual.P}, meta, false, actual.Type(), uriParams)
+			p.implyDefaultParams([]ast.Statement{actual.P}, false, actual.Type(), false)
 		case *stmt.If:
-			implyDefaultParams(variables, []ast.Statement{actual.Condition}, meta, false, actual.Type(), uriParams)
+			p.implyDefaultParams([]ast.Statement{actual.Condition}, false, actual.Type(), false)
 		}
 
 		switch actual := statement.(type) {
 		case ast.StatementContainer:
-			implyDefaultParams(variables, actual.Statements(), meta, false, nil, uriParams)
+			p.implyDefaultParams(actual.Statements(), false, nil, false)
 		}
 	}
 }
 
-func indexParameter(variables map[string]bool, actual *expr.Select, meta *ViewMeta, required bool, rType reflect.Type, uriParams map[string]bool) {
-	prefix, paramName := getParamName(actual.FullName)
+func (p *paramTypeDetector) indexParameter(actual *expr.Select, required bool, rType reflect.Type, multi bool) {
+	prefix, paramName := getHolderName(actual.FullName)
 
-	if !isParameter(variables, paramName) {
+	if !isParameter(p.variables, paramName) {
 		return
 	}
 
 	pType := "string"
 	assumed := true
+
+	if declared, ok := p.paramTypes[paramName]; ok {
+		pType = declared
+		assumed = false
+	}
+
 	if rType != nil && prefix != keywords.ParamsMetadataKey {
 		pType = rType.String()
 		assumed = false
 	}
 
 	kind := "query"
-	if uriParams[paramName] {
+	if p.uriParams[paramName] {
 		kind = string(view.PathKind)
 	}
 
-	meta.addParameter(&Parameter{
+	p.viewMeta.addParameter(&Parameter{
 		Assumed:  assumed,
 		Id:       paramName,
 		Name:     paramName,
 		Kind:     kind,
 		DataType: pType,
 		fullName: actual.FullName,
+		Multi:    multi,
 		Required: boolPtr(required && prefix != keywords.ParamsMetadataKey),
 	})
 }
 
-func getParamName(identifier string) (string, string) {
+func getHolderName(identifier string) (string, string) {
 	paramName := paramId(identifier)
 	prefix, paramName := removePrefixIfNeeded(paramName)
 	paramName = withoutPath(paramName)

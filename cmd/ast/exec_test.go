@@ -29,7 +29,7 @@ WHERE ID IN ($Ids);
 
 	for _, testCase := range testCases {
 		var aView = &ViewMeta{index: map[string]int{}}
-		err := buildViewMetaInExecSQLMode(testCase.SQL, aView)
+		err := buildViewMetaInExecSQLMode(testCase.SQL, aView, map[string]bool{})
 		if !assert.Nil(t, err, testCase.description) {
 			continue
 		}

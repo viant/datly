@@ -57,7 +57,7 @@ outer:
 			}
 
 			if text[0] == '$' {
-				_, paramName := getParamName(text)
+				_, paramName := getHolderName(text)
 				if isParameter(variables, paramName) {
 					aParam, ok := meta.ParamByName(paramName)
 					if !ok {

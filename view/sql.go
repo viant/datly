@@ -227,6 +227,10 @@ func expandWithZeroValues(SQL string, template *Template) (string, error) {
 	for _, parameter := range template.Parameters {
 		var value interface{}
 		paramType := parameter.Schema.Type()
+		for paramType.Kind() == reflect.Ptr || paramType.Kind() == reflect.Slice {
+			paramType = paramType.Elem()
+		}
+
 		switch paramType.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
