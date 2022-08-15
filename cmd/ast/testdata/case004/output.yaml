@@ -1,26 +1,24 @@
 parameters:
-  - assumed: false
-    datatype: int
-    id: ID
-    kind: query
-    name: id
-    required: false
-  - assumed: false
-    datatype: string
-    id: quantity
-    kind: path
-    name: quantity
-    required: true
+    - datatype: int
+      id: ID
+      kind: query
+      name: id
+      required: false
+    - datatype: string
+      id: quantity
+      kind: path
+      name: quantity
+      required: true
 source: |-
-  SELECT *, (
-      SELECT abc
-      FROM T2
-      WHERE 1=2
-  ) as abc FROM T1
-  WHERE 1=1
-  #if($Has.ID)
-  AND ID = $ID
-  #end
-  #if($Has.quantity)
-  AND quantity = $quantity
-  #end
+    SELECT *, (
+        SELECT abc
+        FROM T2
+        WHERE 1=2
+    ) as abc FROM T1
+    WHERE 1=1
+    #if($Has.ID)
+    AND ID = $ID
+    #end
+    #if($Has.quantity)
+    AND quantity = $quantity
+    #end

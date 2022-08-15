@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/parameter"
@@ -209,6 +210,10 @@ func NewEvaluator(paramSchema, presenceSchema reflect.Type, template string) (*E
 	}
 
 	if err = evaluator.planner.DefineVariable(Criteria, reflect.TypeOf(&CriteriaSanitizer{})); err != nil {
+		return nil, err
+	}
+
+	if err = evaluator.planner.DefineVariable(Logger, reflect.TypeOf(logger.Printer{})); err != nil {
 		return nil, err
 	}
 

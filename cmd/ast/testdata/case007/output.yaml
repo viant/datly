@@ -1,35 +1,43 @@
 parameters:
-  - assumed: true
-    datatype: string
-    id: ID
-    kind: query
-    name: ID
-    required: false
-  - assumed: true
-    datatype: string
-    id: quantity
-    kind: query
-    name: quantity
-    required: false
-    typer:
-      columnname: quantity
+    - assumed: true
+      datatype: string
+      id: ID
+      kind: query
+      name: ID
+      required: false
+    - assumed: true
+      cardinality: Many
+      datatype: string
+      id: Columns
+      kind: query
+      multi: true
+      name: Columns
+      required: false
+    - assumed: true
+      datatype: string
+      id: quantity
+      kind: query
+      name: quantity
+      required: false
+      typer:
+        columnname: quantity
 source: |
-  SELECT *, (
-      SELECT abc
-      FROM T2
-      WHERE 1=2
-  ) as abc FROM T1
-  WHERE 1=1
-  #set($valueSet = 123)
-  #if($Has.ID)
-  AND ID = 10
-  #end
-  
-  #foreach($column in $Columns)
-      $column.Id
-  #end
-  
-  #if($Has.quantity)
-  AND quantity = $quantity
-  AND quantity = $Unsafe.quantity
-  #end
+    SELECT *, (
+        SELECT abc
+        FROM T2
+        WHERE 1=2
+    ) as abc FROM T1
+    WHERE 1=1
+    #set($valueSet = 123)
+    #if($Has.ID)
+    AND ID = 10
+    #end
+
+    #foreach($column in $Columns)
+        $column.Id
+    #end
+
+    #if($Has.quantity)
+    AND quantity = $quantity
+    AND quantity = $Unsafe.quantity
+    #end

@@ -23,6 +23,7 @@ const (
 	SafeFloat  = "Safe_Float"
 
 	Criteria = "criteria"
+	Logger   = "logger"
 )
 
 type Sanitizer struct {
