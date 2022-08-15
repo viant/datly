@@ -10,14 +10,17 @@ import (
 
 type CriteriaSanitizer struct {
 	Columns            ColumnIndex
-	ParamsGroup        [][]interface{}
+	ParamsGroup        []interface{}
 	Mock               bool
-	GroupCounter       int
 	PlaceholderCounter int
 	sliceIndex         map[reflect.Type]*xunsafe.Slice
 }
 
 func (p *CriteriaSanitizer) AsBinding(value interface{}) string {
+	return p.Add(0, value)
+}
+
+func (p *CriteriaSanitizer) AppendBinding(value interface{}) string {
 	return p.Add(0, value)
 }
 
@@ -30,7 +33,7 @@ func (p *CriteriaSanitizer) AsColumn(columnName string) (string, error) {
 	return lookup.Name, nil
 }
 
-func (p *CriteriaSanitizer) Add(at int, value interface{}) string {
+func (p *CriteriaSanitizer) Add(_ int, value interface{}) string {
 	if value == nil {
 		return ""
 	}
@@ -40,8 +43,7 @@ func (p *CriteriaSanitizer) Add(at int, value interface{}) string {
 		return ""
 	}
 
-	p.growIfNeeded(at)
-	p.ParamsGroup[at] = append(p.ParamsGroup[at], valueCopy...)
+	p.ParamsGroup = append(p.ParamsGroup, valueCopy...)
 	return expanded
 }
 
@@ -85,25 +87,8 @@ func (p *CriteriaSanitizer) copyAndExpandSlice(valueType reflect.Type, valuePtr 
 	}
 }
 
-func (p *CriteriaSanitizer) growIfNeeded(at int) {
-	if len(p.ParamsGroup) > at {
-		return
-	}
-
-	newParams := make([][]interface{}, at+1)
-	for i, group := range p.ParamsGroup {
-		newParams[i] = append(newParams[i], group...)
-	}
-
-	p.ParamsGroup = newParams
-}
-
-func (p *CriteriaSanitizer) At(i int) []interface{} {
-	if len(p.ParamsGroup) <= i {
-		return []interface{}{}
-	}
-
-	return p.ParamsGroup[i]
+func (p *CriteriaSanitizer) At(_ int) []interface{} {
+	return p.ParamsGroup
 }
 
 func (p *CriteriaSanitizer) Next() (interface{}, error) {
@@ -112,18 +97,13 @@ func (p *CriteriaSanitizer) Next() (interface{}, error) {
 	}
 
 	for {
-		if p.GroupCounter >= len(p.ParamsGroup) {
-			return nil, fmt.Errorf("not found next binding variable")
-		}
-
-		if p.PlaceholderCounter < len(p.ParamsGroup[p.GroupCounter]) {
+		if p.PlaceholderCounter < len(p.ParamsGroup) {
 			index := p.PlaceholderCounter
 			p.PlaceholderCounter++
-			return p.ParamsGroup[p.GroupCounter][index], nil
+			return p.ParamsGroup[index], nil
 		}
 
-		p.GroupCounter++
-		p.PlaceholderCounter = 0
+		return nil, fmt.Errorf("expected to got binding parameter, but noone was found")
 	}
 }
 

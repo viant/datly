@@ -6,6 +6,7 @@ import (
 	"github.com/viant/velty/est/op"
 	"github.com/viant/xunsafe"
 	"reflect"
+	"strings"
 )
 
 var stringType = reflect.TypeOf("")
@@ -17,7 +18,7 @@ func (p Printer) Discover(aFunc interface{}) (func(operands []*op.Operand, state
 	switch actual := aFunc.(type) {
 	case func(_ Printer, args ...interface{}) string:
 		return func(operands []*op.Operand, state *est.State) (interface{}, error) {
-			return actual(p, p.asInterfaces(operands, state)), nil
+			return actual(p, p.asInterfaces(operands[1:], state)), nil
 		}, stringType, true
 
 	case func(_ Printer, message string, args ...interface{}) string:
@@ -26,8 +27,8 @@ func (p Printer) Discover(aFunc interface{}) (func(operands []*op.Operand, state
 				return nil, fmt.Errorf("expected to get 1 or more arguments but got %v", len(operands))
 			}
 
-			format := *(*string)(operands[0].Exec(state))
-			args := p.asInterfaces(operands[1:], state)
+			format := *(*string)(operands[1].Exec(state))
+			args := p.asInterfaces(operands[2:], state)
 
 			return actual(p, format, args...), nil
 		}, stringType, true
@@ -55,6 +56,6 @@ func (p Printer) Println(args ...interface{}) string {
 }
 
 func (p Printer) Printf(format string, args ...interface{}) string {
-	fmt.Printf(format, args...)
+	fmt.Printf(strings.ReplaceAll(format, "\\n", "\n"), args...)
 	return ""
 }

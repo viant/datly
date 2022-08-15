@@ -654,8 +654,8 @@ func TestRouter(t *testing.T) {
 			visitors:            map[string]codec.LifecycleVisitor{},
 			afterInsertUri:      "/api/events?_criteria=Quantity=40",
 			afterInsertMethod:   http.MethodGet,
-			requestBody:         `{"ID": [1,10,103], "Quantity": 40}`,
 			afterInsertExpected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":40,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":40,"UserId":2},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":40,"UserId":3}]`,
+			requestBody:         `{"ID": [1,10,103], "Quantity": 40}`,
 		},
 		{
 			description: "extract values from Request Body",
@@ -683,6 +683,17 @@ func TestRouter(t *testing.T) {
 			visitors:    map[string]codec.LifecycleVisitor{},
 			requestBody: `[1,10,103]`,
 			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
+		},
+		{
+			description:         "executor with param slice",
+			resourceURI:         "035_logger",
+			uri:                 "/api/events",
+			method:              http.MethodPost,
+			visitors:            map[string]codec.LifecycleVisitor{},
+			requestBody:         `{"ID": [1,10,103], "Quantity": 0}`,
+			afterInsertUri:      "/api/events",
+			afterInsertMethod:   http.MethodGet,
+			afterInsertExpected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":0,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":0,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":102,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":0,"UserId":3}]`,
 		},
 	}
 
