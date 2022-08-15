@@ -14,9 +14,7 @@ func buildViewMetaInExecSQLMode(SQL string, view *ViewMeta, variables map[string
 	lcSQL := strings.ToLower(SQL)
 	boundary := getStatementBoundary(lcSQL)
 
-	SQLExec := "#set($sIndex = 0)\n"
-	i := 0
-	isLast := i+1 == len(boundary)
+	SQLExec := ""
 	if len(boundary) > 0 {
 		offset := boundary[0]
 		limit := len(SQL)
@@ -28,13 +26,10 @@ func buildViewMetaInExecSQLMode(SQL string, view *ViewMeta, variables map[string
 		if err != nil {
 			return err
 		}
+
 		SQLExec += normalizedSQL
-		if !isLast {
-			SQLExec += "\n#set($sIndex = $sIndex+1)\n"
-		}
 
 		for i := 1; i < len(boundary); i++ {
-			isLast = i+1 == len(boundary)
 			offset = boundary[i]
 			limit = len(SQL)
 			if i+1 < len(boundary) {
@@ -45,9 +40,6 @@ func buildViewMetaInExecSQLMode(SQL string, view *ViewMeta, variables map[string
 				return err
 			}
 			SQLExec += normalizedSQL
-			if !isLast {
-				SQLExec += "\n#set($sIndex = $sIndex+1)\n"
-			}
 		}
 	}
 	view.Source = SQLExec
@@ -144,13 +136,7 @@ func normalizeAndExtractUpdateWhere(stmt *update.Statement, view *ViewMeta, SQLE
 			view.addParameter(&Parameter{Id: paramName, Name: paramName, Repeated: true, Typer: &ColumnType{
 				ColumnName: criterion.X,
 			}})
-			SQLExec = strings.Replace(SQLExec, y, fmt.Sprintf(`
-#set($coma = "")
-#foreach($Key in %v)
-	$coma $criteria.Add($sIndex, $Key)
-	#set($coma = ",")
-#end
-`, sanitizeUnsafeParameter(y)), 1)
+
 		case "=":
 			paramName := y[1:]
 			required := true
@@ -189,7 +175,7 @@ func normalizeAndExtractUpdateSet(stmt *update.Statement, view *ViewMeta, rawSQL
 
 func sanitizeUnsafeExpr(paramName string) string {
 	paramName = sanitizeUnsafeParameter(paramName)
-	return fmt.Sprintf("$criteria.Add($sIndex,%v)", paramName)
+	return fmt.Sprintf("$criteria.AppendBinding(%v)", paramName)
 }
 
 func sanitizeUnsafeParameter(paramName string) string {

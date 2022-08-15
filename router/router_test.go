@@ -627,7 +627,7 @@ func TestRouter(t *testing.T) {
 			afterInsertExpected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":40,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":40,"UserId":2},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":40,"UserId":3}]`,
 		},
 		{
-			description: "executor with param slice",
+			description: "executor with param slice | error",
 			resourceURI: "030_param_slice",
 			uri:         "/api/events",
 			method:      http.MethodPost,
@@ -636,7 +636,7 @@ func TestRouter(t *testing.T) {
 			expected:    `{"Message":"invalid template due to: invalid status"}`,
 		},
 		{
-			description:         "multiple execution statements",
+			description:         "multiple execution statements | multiple execs",
 			resourceURI:         "031_multiple_execs",
 			uri:                 "/api/events",
 			method:              http.MethodPost,
@@ -645,17 +645,6 @@ func TestRouter(t *testing.T) {
 			afterInsertMethod:   http.MethodGet,
 			requestBody:         `{"ID": [1,10,103], "Quantity": 40}`,
 			afterInsertExpected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":40,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":40,"UserId":2},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":40,"UserId":3}]`,
-		},
-		{
-			description:         "multiple execution statements",
-			resourceURI:         "031_multiple_execs",
-			uri:                 "/api/events",
-			method:              http.MethodPost,
-			visitors:            map[string]codec.LifecycleVisitor{},
-			afterInsertUri:      "/api/events?_criteria=Quantity=40",
-			afterInsertMethod:   http.MethodGet,
-			afterInsertExpected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":40,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":40,"UserId":2},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":40,"UserId":3}]`,
-			requestBody:         `{"ID": [1,10,103], "Quantity": 40}`,
 		},
 		{
 			description: "extract values from Request Body",
@@ -673,7 +662,7 @@ func TestRouter(t *testing.T) {
 			method:      http.MethodPost,
 			visitors:    map[string]codec.LifecycleVisitor{},
 			requestBody: `{"ID": [1,10,103], "Quantity": 0}`,
-			expected:    `{"Errors":[{"View":"events","Param":"Data","Message":"[{\"Id\":1,\"Status\":false},{\"Id\":10,\"Status\":false},{\"Id\":103,\"Status\":false}]","Object":[{"Id":1,"Status":false},{"Id":10,"Status":false},{"Id":103,"Status":false}]}]}`,
+			expected:    `{"Errors":[{"View":"events","Param":"Data","Object":[{"Id":1,"Status":false},{"Id":10,"Status":false},{"Id":103,"Status":false}]}]}`,
 		},
 		{
 			description: "executor with param slice",

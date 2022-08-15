@@ -44,6 +44,8 @@ func (m *ViewMeta) addParameter(param *Parameter) {
 			parameter.Cardinality = view.Many
 		}
 
+		parameter.Repeated = parameter.Repeated || param.Repeated
+
 		parameter.Required = boolPtr((parameter.Required != nil && *parameter.Required) || (param.Required != nil && *param.Required))
 		if parameter.Assumed {
 			parameter.DataType = param.DataType

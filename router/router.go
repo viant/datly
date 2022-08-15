@@ -489,14 +489,17 @@ func (r *Router) normalizeErr(err error, statusCode int) (int, error) {
 	switch actual := err.(type) {
 	case *Errors:
 		for _, anError := range actual.Errors {
-			switch actual := anError.Err.(type) {
+			switch childErr := anError.Err.(type) {
 			case validator.ValidationErrors:
-				anError.Object = NewParamErrors(actual)
+				anError.Object = NewParamErrors(childErr)
+				anError.Message = childErr.Error()
+			case *Errors:
+				_, anError.Object = r.normalizeErr(anError.Err, statusCode)
 			case *JSONError:
-				anError.Object = actual
+				anError.Object = childErr
+			default:
+				anError.Message = anError.Error()
 			}
-
-			anError.Message = anError.Error()
 		}
 
 		if actual.status != 0 {
