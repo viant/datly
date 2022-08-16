@@ -40,7 +40,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 		}
 	}
 
-	//route, err := s.BuildRoute(ctx)
+	//_, _ = s.BuildRoute(ctx)
 	//if err != nil {
 	//	return err
 	//}
@@ -159,7 +159,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 		buildExcludeColumn(xTable, aView, viewRoute)
 	}
 
-	s.buildDataViewParams(ctx, dataViewParams, routeOption)
+	s.buildDataViewParams(ctx, dataViewParams, routeOption, parameterHints)
 	if len(s.options.Relations) > 0 {
 		meta := metadata.New()
 		err := s.buildRelations(ctx, meta, aView, viewRoute)
@@ -339,7 +339,7 @@ func extractURIParams(URI string) map[string]bool {
 	return result
 }
 
-func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*option.TableParam, routeOption *option.Route) {
+func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*option.TableParam, routeOption *option.Route, hints []*option.ParameterHint) {
 	if len(params) == 0 {
 		return
 	}

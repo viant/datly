@@ -134,25 +134,11 @@ func (p *paramTypeDetector) implyDefaultParams(statements []ast.Statement, requi
 		case stmt.ForEach:
 			p.variables[actual.Item.ID] = true
 		case stmt.Statement:
-			x, ok := actual.X.(*expr.Select)
-			if ok {
-				p.variables[x.ID] = true
-			}
-
-			y, ok := actual.Y.(*expr.Select)
-			if ok && !p.variables[y.ID] {
-				p.indexParameter(y, required, rType, multi)
-			}
-
+			p.indexStmt(&actual, required, rType, multi)
 		case *expr.Select:
 			p.indexParameter(actual, required, rType, multi)
-
 		case *stmt.Statement:
-			x, ok := actual.X.(*expr.Select)
-			if !ok {
-				continue
-			}
-			p.variables[x.ID] = true
+			p.indexStmt(actual, required, rType, multi)
 		case *stmt.ForEach:
 			p.variables[actual.Item.ID] = true
 			set, ok := actual.Set.(*expr.Select)
@@ -179,6 +165,18 @@ func (p *paramTypeDetector) implyDefaultParams(statements []ast.Statement, requi
 		case ast.StatementContainer:
 			p.implyDefaultParams(actual.Statements(), false, nil, false)
 		}
+	}
+}
+
+func (p *paramTypeDetector) indexStmt(actual *stmt.Statement, required bool, rType reflect.Type, multi bool) {
+	x, ok := actual.X.(*expr.Select)
+	if ok {
+		p.variables[x.ID] = true
+	}
+
+	y, ok := actual.Y.(*expr.Select)
+	if ok && !p.variables[y.ID] {
+		p.indexParameter(y, required, rType, multi)
 	}
 }
 
