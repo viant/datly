@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/datly/cmd/option"
 	"github.com/viant/sqlx/io"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty/ast/expr"
@@ -11,7 +12,7 @@ import (
 	"strings"
 )
 
-func (s *serverBuilder) updateTableColumnTypes(ctx context.Context, table *Table) {
+func (s *serverBuilder) updateTableColumnTypes(ctx context.Context, table *option.Table) {
 	//TODO read all column per alias from main and join table
 	table.ColumnTypes = map[string]string{}
 	connector := s.options.MatchConnector(table.Connector)
@@ -29,7 +30,7 @@ func (s *serverBuilder) updateTableColumnTypes(ctx context.Context, table *Table
 	}
 }
 
-func (s *serverBuilder) updatedColumns(table *Table, prefix, tableName string, db *sql.DB) {
+func (s *serverBuilder) updatedColumns(table *option.Table, prefix, tableName string, db *sql.DB) {
 	parse, err := parser.Parse([]byte(tableName))
 	var args []interface{}
 	expandMap := &rdata.Map{}

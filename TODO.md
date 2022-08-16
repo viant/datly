@@ -1,15 +1,23 @@
-- smart caching (cache compression if size over x, )
-  - velty #query
 - $Limit/$Offset context based generator enhancement
 - reduce complexity/execution branches/duplication on selector parameters
-- - managed ORM mode: selector with velty parameter setter, simplify/remove lifcycle, codec,
+- pagination - It1: only when data is read from the cache, flag enable by default
+- Simplify/remove lifecycle,  simplify codec
+
+- ($parentView.Limit / $parentView.Offset)
+- e2e / generator refactoring, remove unused/duplicated options
+- AuditLog -> logger with velty template
+- Parameter Criteria IN, EXISTS, etc 
+- XML/CSV output
 - performance profiling/tuning
 - strinigfy golang type in meta/view endpoint
 - cache metric add detail response about each view case time,records, etc...
 - insert service(with batch mode)/support for semi-autonomous mode (registry hooks)
 - patch/create/update
-- velty macros
 - parameters with golang/js codec
 - more than one view in out output nice to have for now
 - improve documentation/examples
 
+- velty #query
+- velty macros
+- Management API 
+- add GUI

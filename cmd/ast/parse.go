@@ -20,23 +20,10 @@ type paramTypeDetector struct {
 	uriParams  map[string]bool
 	paramTypes map[string]string
 	variables  map[string]bool
-	viewMeta   *ViewMeta
+	viewMeta   *option.ViewMeta
 }
 
-func newParamTypeDetector(uriParams map[string]bool, paramTypes map[string]string, variables map[string]bool, meta *ViewMeta) *paramTypeDetector {
-	return &paramTypeDetector{
-		uriParams:  uriParams,
-		paramTypes: paramTypes,
-		variables:  variables,
-		viewMeta:   meta,
-	}
-}
-
-func Parse(SQL string, route *option.Route) (*ViewMeta, error) {
-	viewMeta := &ViewMeta{
-		index: map[string]int{},
-	}
-
+func newParamTypeDetector(route *option.Route, meta *option.ViewMeta) *paramTypeDetector {
 	uriParams := map[string]bool{}
 	paramTypes := map[string]string{}
 	if route != nil {
@@ -48,6 +35,17 @@ func Parse(SQL string, route *option.Route) (*ViewMeta, error) {
 			paramTypes = route.Declare
 		}
 	}
+
+	return &paramTypeDetector{
+		uriParams:  uriParams,
+		paramTypes: paramTypes,
+		variables:  map[string]bool{},
+		viewMeta:   meta,
+	}
+}
+
+func Parse(SQL string, route *option.Route) (*option.ViewMeta, error) {
+	viewMeta := option.NewViewMeta()
 
 	block, err := parser.Parse([]byte(SQL))
 	if err != nil {
@@ -67,19 +65,19 @@ func Parse(SQL string, route *option.Route) (*ViewMeta, error) {
 		cursor.Input[i] = ' '
 	}
 
-	variables := map[string]bool{}
-	newParamTypeDetector(uriParams, paramTypes, variables, viewMeta).
-		implyDefaultParams(block.Statements(), true, nil, false)
+	detector := newParamTypeDetector(route, viewMeta)
+	detector.implyDefaultParams(block.Statements(), true, nil, false)
+	viewMeta.SetVariables(detector.variables)
 
 	sqlNoVelty := removeVeltySyntax(string(from))
-	correctUntyped(sqlNoVelty, variables, viewMeta)
+	correctUntyped(sqlNoVelty, detector.variables, viewMeta)
 
 	viewMeta.Source = actualSource
 
 	if IsSQLExecMode(SQL) {
 		viewMeta.Mode = view.SQLExecMode
 		var err error
-		err = buildViewMetaInExecSQLMode(SQL, viewMeta, variables)
+		err = buildViewMetaInExecSQLMode(SQL, viewMeta, detector.variables)
 		if err != nil {
 			fmt.Printf("error while build ExecSQL: %v", err)
 		}
@@ -209,15 +207,15 @@ func (p *paramTypeDetector) indexParameter(actual *expr.Select, required bool, r
 		kind = string(view.PathKind)
 	}
 
-	p.viewMeta.addParameter(&Parameter{
+	p.viewMeta.AddParameter(&option.Parameter{
 		Assumed:  assumed,
 		Id:       paramName,
 		Name:     paramName,
 		Kind:     kind,
 		DataType: pType,
-		fullName: actual.FullName,
+		FullName: actual.FullName,
 		Multi:    multi,
-		Required: boolPtr(required && prefix != keywords.ParamsMetadataKey),
+		Required: option.BoolPtr(required && prefix != keywords.ParamsMetadataKey),
 	})
 }
 
@@ -271,7 +269,7 @@ func removePrefixIfNeeded(name string) (prefix string, actual string) {
 	return "", name
 }
 
-func addTemplateIfNeeded(cursor *parsly.Cursor, meta *ViewMeta) error {
+func addTemplateIfNeeded(cursor *parsly.Cursor, meta *option.ViewMeta) error {
 	matched := cursor.MatchAfterOptional(whitespaceMatcher, templateHeaderMatcher)
 	switch matched.Code {
 	case parsly.Invalid, parsly.EOF:
@@ -279,11 +277,11 @@ func addTemplateIfNeeded(cursor *parsly.Cursor, meta *ViewMeta) error {
 	}
 
 	for {
-		var parameter *Parameter
+		var parameter *option.Parameter
 		matched = cursor.MatchAfterOptional(whitespaceMatcher, paramMatcher, templateEndMatcher)
 		switch matched.Code {
 		case paramToken:
-			parameter = &Parameter{}
+			parameter = &option.Parameter{}
 		case templateEndToken:
 			return nil
 		default:
@@ -309,11 +307,11 @@ func addTemplateIfNeeded(cursor *parsly.Cursor, meta *ViewMeta) error {
 		default:
 			return cursor.NewError(paramMatcher)
 		}
-		meta.addParameter(parameter)
+		meta.AddParameter(parameter)
 	}
 }
 
-func addParamLocation(cursor *parsly.Cursor, parameter *Parameter) error {
+func addParamLocation(cursor *parsly.Cursor, parameter *option.Parameter) error {
 	i := 0
 	var matched *parsly.TokenMatch
 	for {
@@ -348,7 +346,7 @@ func addParamLocation(cursor *parsly.Cursor, parameter *Parameter) error {
 			if err != nil {
 				return err
 			}
-			parameter.Required = boolPtr(asBool)
+			parameter.Required = option.BoolPtr(asBool)
 		}
 		i++
 	}

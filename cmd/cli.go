@@ -25,6 +25,7 @@ type serverBuilder struct {
 	config     *standalone.Config
 	logger     io.Writer
 	route      *router.Resource
+	fs         afs.Service
 }
 
 func (s *serverBuilder) build() (*standalone.Server, error) {
@@ -105,6 +106,7 @@ func newBuilder(options *Options, logger io.Writer) *serverBuilder {
 		options:    options,
 		connectors: map[string]*view.Connector{},
 		logger:     logger,
+		fs:         afs.New(),
 	}
 }
 

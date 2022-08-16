@@ -20,7 +20,6 @@ Columns:
     Name: price
     Nullable: true
 Connector:
-  DSN: /tmp/datly/generator/db.db
   Driver: sqlite3
   Name: dev
   Secret:

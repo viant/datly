@@ -64,6 +64,7 @@ func (c *aerospikeClient) tryConnect(host string, port int, channel chan func() 
 	}
 
 	var err error
+
 	c.actual, err = as.NewClient(host, port)
 	channel <- func() (*as.Client, error) {
 		return c.actual, err

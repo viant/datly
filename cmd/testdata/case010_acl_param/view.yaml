@@ -1,74 +1,74 @@
 Alias: t
 Batch:
-    Parent: 10000
-CaseFormat: lc
-Caser: 3
+  Parent: 10000
+CaseFormat: lu
+Caser: 5
 Columns:
-    - DataType: INTEGER
-      DatabaseColumn: id
-      Filterable: true
-      Name: id
-      Nullable: true
-    - DataType: VARCHAR(255)
-      DatabaseColumn: name
-      Filterable: true
-      Name: name
-      Nullable: true
-    - DataType: INTEGER
-      DatabaseColumn: account_id
-      Filterable: true
-      Name: account_id
-      Nullable: true
+  - DataType: INTEGER
+    DatabaseColumn: id
+    Filterable: true
+    Name: id
+    Nullable: true
+  - DataType: VARCHAR(255)
+    DatabaseColumn: name
+    Filterable: true
+    Name: name
+    Nullable: true
+  - DataType: INTEGER
+    DatabaseColumn: account_id
+    Filterable: true
+    Name: account_id
+    Nullable: true
 Connector:
-    DSN: /tmp/datly/generator/db.db
-    Driver: sqlite3
-    Name: dev
-    Secret:
-        Data: null
-        Fallback: null
-        Key: blowfish://default
-        MaxRetry: 3
-        TimeoutMs: 5000
-        URL: mem://localhost/resource/mysql.json
+  Driver: sqlite3
+  Name: dev
+  Secret:
+    Data: null
+    Fallback: null
+    Key: blowfish://default
+    MaxRetry: 3
+    TimeoutMs: 5000
+    URL: mem://localhost/resource/mysql.json
 Logger:
-    Name: ""
+  Name: ""
 MatchStrategy: read_matched
 Name: event_types
 Ref: event_types
 Schema:
-    Cardinality: One
+  Cardinality: One
 Selector:
-    Constraints:
-        Criteria: true
-        Filterable:
-            - '*'
-        Limit: true
-        Offset: true
-        OrderBy: false
-        Projection: true
-    Limit: 25
+  Constraints:
+    Criteria: true
+    Filterable:
+      - '*'
+    Limit: true
+    Offset: true
+    OrderBy: false
+    Projection: true
+  Limit: 25
 Standalone: true
 Table: event_types
 Template:
-    Parameters:
-        - In:
-            Kind: data_view
-            Name: events
-          Name: events
-          PresenceName: events
-          Ref: events
-          Schema:
-            Cardinality: One
-            Name: Events
-    PresenceSchema:
+  Parameters:
+    - In:
+        Kind: data_view
+        Name: events
+      Name: events
+      PresenceName: events
+      Ref: events
+      Required: true
+      Schema:
         Cardinality: One
-    Schema:
-        Cardinality: One
-    Source: |-
-        ( SELECT et.*
-                 FROM event_types et
-                          JOIN events e ON et.id = e.event_type_id
-                 WHERE 1 = 1
-                   AND et.id = $events.event_type_id
-              )
-    SourceURL: event_types/eventTypes.sql
+        Name: Events
+  PresenceSchema:
+    Cardinality: One
+  Schema:
+    Cardinality: One
+  Source: |-
+    ( SELECT et.*
+             FROM event_types et
+                      JOIN events e ON et.id = e.event_type_id
+             WHERE 1 = 1
+               AND et.id = $events.event_type_id
+          )
+  SourceURL: event_types/eventTypes.sql

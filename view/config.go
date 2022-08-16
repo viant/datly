@@ -15,6 +15,7 @@ var stringType = reflect.TypeOf("")
 type (
 	Config struct {
 		//TODO: Should order by be a slice?
+		Namespace     string             `json:",omitempty"`
 		OrderBy       string             `json:",omitempty"`
 		Limit         int                `json:",omitempty"`
 		Constraints   *Constraints       `json:",omitempty"`
@@ -41,6 +42,7 @@ func (c *Config) ParameterName(ns, paramName string) string {
 	if c.Parameters == nil {
 		return ns + paramName
 	}
+
 	var result = ""
 	if ns != "" && strings.HasPrefix(paramName, ns) {
 		paramName = paramName[len(ns):]

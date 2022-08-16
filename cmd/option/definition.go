@@ -1,6 +1,9 @@
-package ast
+package option
 
-import "github.com/viant/datly/view"
+import (
+	"github.com/viant/datly/view"
+	"reflect"
+)
 
 type (
 	ViewMeta struct {
@@ -13,26 +16,45 @@ type (
 		Updates        []string          `json:",omitempty" yaml:",omitempty"`
 		Inserts        []string          `json:",omitempty" yaml:",omitempty"`
 		index          map[string]int
+		variables      map[string]bool
 	}
 
 	Parameter struct {
-		Id             string `json:",omitempty" yaml:",omitempty"`
-		Name           string `json:",omitempty" yaml:",omitempty"`
-		Kind           string `json:",omitempty" yaml:",omitempty"`
-		Required       *bool  `json:",omitempty" yaml:",omitempty"`
-		DataType       string `json:",omitempty" yaml:",omitempty"`
-		Repeated       bool   `json:",omitempty" yaml:",omitempty"`
-		ExpectReturned *int   `json:",omitempty" yaml:",omitempty"`
-		fullName       string
+		Id             string           `json:",omitempty" yaml:",omitempty"`
+		Name           string           `json:",omitempty" yaml:",omitempty"`
+		Kind           string           `json:",omitempty" yaml:",omitempty"`
+		Required       *bool            `json:",omitempty" yaml:",omitempty"`
+		DataType       string           `json:",omitempty" yaml:",omitempty"`
+		Repeated       bool             `json:",omitempty" yaml:",omitempty"`
+		ExpectReturned *int             `json:",omitempty" yaml:",omitempty"`
+		FullName       string           `json:"-" yaml:"-"`
 		Assumed        bool             `json:",omitempty" yaml:",omitempty"`
 		Typer          Typer            `json:",omitempty" yaml:",omitempty"`
 		SQL            string           `json:",omitempty" yaml:",omitempty"`
 		Cardinality    view.Cardinality `json:",omitempty" yaml:",omitempty"`
 		Multi          bool             `json:",omitempty" yaml:",omitempty"`
 	}
+
+	Typer interface{}
+
+	LiteralType struct {
+		RType reflect.Type
+	}
+
+	ColumnType struct {
+		ColumnName string
+	}
 )
 
-func (m *ViewMeta) addParameter(param *Parameter) {
+func NewViewMeta() *ViewMeta {
+	return &ViewMeta{index: map[string]int{}}
+}
+
+func (m *ViewMeta) AddParameter(param *Parameter) {
+	if m.variables != nil && m.variables[param.Name] {
+		return
+	}
+
 	if param.Multi {
 		param.Cardinality = view.Many
 	}
@@ -46,7 +68,7 @@ func (m *ViewMeta) addParameter(param *Parameter) {
 
 		parameter.Repeated = parameter.Repeated || param.Repeated
 
-		parameter.Required = boolPtr((parameter.Required != nil && *parameter.Required) || (param.Required != nil && *param.Required))
+		parameter.Required = BoolPtr((parameter.Required != nil && *parameter.Required) || (param.Required != nil && *param.Required))
 		if parameter.Assumed {
 			parameter.DataType = param.DataType
 		}
@@ -58,7 +80,7 @@ func (m *ViewMeta) addParameter(param *Parameter) {
 	m.Parameters = append(m.Parameters, param)
 }
 
-func boolPtr(b bool) *bool {
+func BoolPtr(b bool) *bool {
 	return &b
 }
 
@@ -69,4 +91,8 @@ func (m *ViewMeta) ParamByName(name string) (*Parameter, bool) {
 	}
 
 	return m.Parameters[index], true
+}
+
+func (m *ViewMeta) SetVariables(variables map[string]bool) {
+	m.variables = variables
 }

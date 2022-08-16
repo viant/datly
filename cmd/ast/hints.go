@@ -3,26 +3,12 @@ package ast
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/viant/datly/cmd/option"
 	"github.com/viant/parsly"
 	"strings"
 )
 
-type ParameterHint struct {
-	Parameter string
-	Hint      string
-}
-
-type ParameterHints []*ParameterHint
-
-func (p *ParameterHints) Index() map[string]*ParameterHint {
-	var result = make(map[string]*ParameterHint)
-	for i, item := range *p {
-		result[item.Parameter] = (*p)[i]
-	}
-	return result
-}
-
-func RemoveParameterHints(text string, hints ParameterHints) string {
+func RemoveParameterHints(text string, hints option.ParameterHints) string {
 	var pairs = []string{}
 	for _, v := range hints {
 		pairs = append(pairs, v.Hint, "")
@@ -31,8 +17,8 @@ func RemoveParameterHints(text string, hints ParameterHints) string {
 	return replacer.Replace(text)
 }
 
-func ExtractParameterHints(text string) ParameterHints {
-	var hints = make([]*ParameterHint, 0)
+func ExtractParameterHints(text string) option.ParameterHints {
+	var hints = make([]*option.ParameterHint, 0)
 outer:
 	for i := 0; i < len(text); i++ {
 		switch text[i] {
@@ -43,10 +29,11 @@ outer:
 			}
 			candidate := text[i+len(selExpr):]
 			if hint := ExtractHint(candidate); hint != "" {
-				hints = append(hints, &ParameterHint{Parameter: selExpr[1:], Hint: hint})
+				hints = append(hints, &option.ParameterHint{Parameter: selExpr[1:], Hint: hint})
 			}
 		}
 	}
+
 	return hints
 }
 
@@ -60,7 +47,7 @@ func ExtractHint(text string) string {
 }
 
 func UnmarshalHint(hint string, dest interface{}) (string, error) {
-	hint = hint[3 : len(hint)-3]
+	hint = hint[3 : len(hint)-2]
 
 	index := strings.LastIndex(hint, "}")
 	result := ""

@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/viant/datly/cmd/ast"
+	"github.com/viant/datly/cmd/option"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlx/metadata/ast/expr"
 	"github.com/viant/sqlx/metadata/ast/node"
@@ -46,7 +46,7 @@ func (p *parameters) nextParam() *parameter {
 	return ret
 }
 
-func (s *serverBuilder) updateParameterTypes(table *Table) {
+func (s *serverBuilder) updateParameterTypes(table *option.Table) {
 	if table.ViewMeta == nil {
 		return
 	}
@@ -61,7 +61,7 @@ func (s *serverBuilder) updateParameterTypes(table *Table) {
 		}
 
 		switch actual := param.Typer.(type) {
-		case *ast.ColumnType:
+		case *option.ColumnType:
 			aType := table.ColumnTypes[actual.ColumnName]
 			if aType == "" {
 				dotIndex := strings.Index(actual.ColumnName, ".")
@@ -74,7 +74,7 @@ func (s *serverBuilder) updateParameterTypes(table *Table) {
 				param.DataType = aType
 			}
 
-		case *ast.LiteralType:
+		case *option.LiteralType:
 			param.DataType = actual.RType.String()
 		}
 	}

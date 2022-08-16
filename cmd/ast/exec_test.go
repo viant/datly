@@ -2,6 +2,7 @@ package ast
 
 import (
 	"github.com/stretchr/testify/assert"
+	"github.com/viant/datly/cmd/option"
 	"github.com/viant/toolbox"
 	"testing"
 )
@@ -28,7 +29,7 @@ WHERE ID IN ($Ids);
 	}
 
 	for _, testCase := range testCases {
-		var aView = &ViewMeta{index: map[string]int{}}
+		var aView = option.NewViewMeta()
 		err := buildViewMetaInExecSQLMode(testCase.SQL, aView, map[string]bool{})
 		if !assert.Nil(t, err, testCase.description) {
 			continue

@@ -29,12 +29,12 @@ type (
 		Provider     string
 		TimeToLiveMs int
 		PartSize     int
-		cache        cache.Cache
+		Warmup       *Warmup `json:",omitempty" yaml:",omitempty"`
 
+		cache           cache.Cache
 		initialized     bool
 		aerospikeClient func() (*as.Client, error)
 		mux             sync.Mutex
-		Warmup          *Warmup
 		last            *as.Client
 	}
 

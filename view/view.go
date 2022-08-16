@@ -31,7 +31,7 @@ type (
 	//View represents a view View
 	View struct {
 		shared.Reference
-		Mode Mode
+		Mode Mode `json:",omitempty"`
 
 		Connector  *Connector `json:",omitempty"`
 		Standalone bool       `json:",omitempty"`

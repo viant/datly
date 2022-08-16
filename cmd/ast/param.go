@@ -4,29 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/viant/datly/cmd/option"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlx/io/read/cache/ast"
-	"reflect"
 	"strings"
 )
 
 var resetWords = []string{"AND", "OR", "WITH", "HAVING", "LIMIT", "OFFSET", "WHERE", "SELECT", "UNION", "ALL", "AS", "BETWEEN", "IN"}
 
-type (
-	Typer interface{}
-
-	LiteralType struct {
-		RType reflect.Type
-	}
-
-	ColumnType struct {
-		ColumnName string
-	}
-)
-
-func correctUntyped(SQL string, variables map[string]bool, meta *ViewMeta) {
-	var typer Typer
-	var untyped []*Parameter
+func correctUntyped(SQL string, variables map[string]bool, meta *option.ViewMeta) {
+	var typer option.Typer
+	var untyped []*option.Parameter
 
 	cursor := parsly.NewCursor("", []byte(SQL), 0)
 outer:
@@ -34,11 +22,11 @@ outer:
 		matched := cursor.MatchAfterOptional(whitespaceMatcher, commentBlockMatcher, doubleQuoteStringMatcher, singleQuoteStringMatcher, boolTokenMatcher, boolMatcher, numberMatcher, fullWordMatcher, anyMatcher)
 		switch matched.Code {
 		case numberToken:
-			typer = &LiteralType{RType: ast.Float64Type}
+			typer = &option.LiteralType{RType: ast.Float64Type}
 		case boolToken:
-			typer = &LiteralType{RType: ast.BoolType}
+			typer = &option.LiteralType{RType: ast.BoolType}
 		case stringToken:
-			typer = &LiteralType{RType: ast.StringType}
+			typer = &option.LiteralType{RType: ast.StringType}
 		case parsly.EOF, anyToken:
 			//Do nothing
 		default:
@@ -67,7 +55,7 @@ outer:
 
 					matched = cursor.MatchAfterOptional(whitespaceMatcher, commentBlockMatcher)
 					if matched.Code == commentBlockToken {
-						parameter := &Parameter{}
+						parameter := &option.Parameter{}
 						commentContent := bytes.TrimSpace(bytes.Trim(matched.Bytes(cursor), "/**/"))
 						_ = json.Unmarshal(commentContent, parameter)
 						inherit(aParam, parameter)
@@ -78,7 +66,7 @@ outer:
 					}
 				}
 			} else {
-				typer = &ColumnType{ColumnName: strings.ToLower(text)}
+				typer = &option.ColumnType{ColumnName: strings.ToLower(text)}
 			}
 		}
 
@@ -92,7 +80,7 @@ outer:
 	}
 }
 
-func inherit(generated *Parameter, inlined *Parameter) {
+func inherit(generated *option.Parameter, inlined *option.Parameter) {
 	if inlined.DataType != "" {
 		generated.DataType = inlined.DataType
 		generated.Assumed = false

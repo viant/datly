@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
-	"github.com/viant/datly/cmd/ast"
+	option2 "github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -32,7 +32,7 @@ func lookupView(resource *view.Resource, name string) *view.View {
 	return nil
 }
 
-func (s *serverBuilder) buildXRelations(ctx context.Context, viewRoute *router.Route, xTable *Table) error {
+func (s *serverBuilder) buildXRelations(ctx context.Context, viewRoute *router.Route, xTable *option2.Table) error {
 	if len(xTable.Joins) == 0 {
 		return nil
 	}
@@ -113,7 +113,7 @@ func (s *serverBuilder) buildXRelations(ctx context.Context, viewRoute *router.R
 	return nil
 }
 
-func (s *serverBuilder) addCacheWithWarmup(relView *view.View, join *Join) {
+func (s *serverBuilder) addCacheWithWarmup(relView *view.View, join *option2.Join) {
 	relView.Cache = join.Cache
 	if warmup := join.Warmup; len(warmup) > 0 {
 		relView.Cache.Warmup = &view.Warmup{IndexColumn: join.Key}
@@ -135,10 +135,11 @@ func connectorRef(name string) *view.Connector {
 	return &view.Connector{Reference: shared.Reference{Ref: name}}
 }
 
-func (s *serverBuilder) updateView(ctx context.Context, table *Table, aView *view.View) error {
+func (s *serverBuilder) updateView(ctx context.Context, table *option2.Table, aView *view.View) error {
 	if table == nil {
 		return nil
 	}
+
 	s.logger.Write([]byte(fmt.Sprintf("Discovering  %v metadata ...\n", aView.Name)))
 	s.updateTableColumnTypes(ctx, table)
 	s.updateParameterTypes(table)
@@ -160,13 +161,13 @@ func (s *serverBuilder) updateView(ctx context.Context, table *Table, aView *vie
 	return nil
 }
 
-func (s *serverBuilder) updateViewMeta(table *Table, aView *view.View) error {
+func (s *serverBuilder) updateViewMeta(table *option2.Table, aView *view.View) error {
 	viewHint := strings.TrimSpace(strings.Trim(table.ViewHint, "/**/"))
 	if viewHint == "" {
 		return nil
 	}
 
-	tableMeta := &TableMeta{}
+	tableMeta := &option2.TableMeta{}
 	if err := json.Unmarshal([]byte(viewHint), tableMeta); err != nil {
 		return err
 	}
@@ -192,7 +193,7 @@ func (s *serverBuilder) updateViewMeta(table *Table, aView *view.View) error {
 	return nil
 }
 
-func (s *serverBuilder) buildSQLSource(aView *view.View, table *Table) error {
+func (s *serverBuilder) buildSQLSource(aView *view.View, table *option2.Table) error {
 	templateParams := make([]*view.Parameter, len(table.ViewMeta.Parameters))
 	for i, param := range table.ViewMeta.Parameters {
 		templateParams[i] = convertMetaParameter(param)
@@ -215,7 +216,7 @@ func (s *serverBuilder) buildSQLSource(aView *view.View, table *Table) error {
 	return nil
 }
 
-func convertMetaParameter(param *ast.Parameter) *view.Parameter {
+func convertMetaParameter(param *option2.Parameter) *view.Parameter {
 	return &view.Parameter{
 		Name: param.Id,
 		Schema: &view.Schema{
@@ -230,7 +231,7 @@ func convertMetaParameter(param *ast.Parameter) *view.Parameter {
 	}
 }
 
-func (s *serverBuilder) updateViewSource(aView *view.View, table *Table) error {
+func (s *serverBuilder) updateViewSource(aView *view.View, table *option2.Table) error {
 	if table.ViewMeta.From == "" {
 		return nil
 	}
@@ -243,7 +244,7 @@ func (s *serverBuilder) updateViewSource(aView *view.View, table *Table) error {
 	return nil
 }
 
-func (s *serverBuilder) updateTemplateSource(template *view.Template, table *Table) error {
+func (s *serverBuilder) updateTemplateSource(template *view.Template, table *option2.Table) error {
 	if table.ViewMeta.Source == "" {
 		return nil
 	}
@@ -279,7 +280,7 @@ func (s *serverBuilder) uploadSQL(fileName string, SQL string) (string, error) {
 	return sourceURL, nil
 }
 
-func (s *serverBuilder) updateColumnsConfig(table *Table, aView *view.View) error {
+func (s *serverBuilder) updateColumnsConfig(table *option2.Table, aView *view.View) error {
 	query, err := parser.ParseQuery(table.SQL)
 	if err != nil {
 		return nil

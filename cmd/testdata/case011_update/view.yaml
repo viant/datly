@@ -9,25 +9,15 @@ Columns:
     Filterable: true
     Name: id
     Nullable: true
-  - DataType: DATETIME
-    DatabaseColumn: timestamp
+  - DataType: VARCHAR(255)
+    DatabaseColumn: name
     Filterable: true
-    Name: timestamp
+    Name: name
     Nullable: true
   - DataType: INTEGER
-    DatabaseColumn: event_type_id
+    DatabaseColumn: account_id
     Filterable: true
-    Name: event_type_id
-    Nullable: true
-  - DataType: DECIMAL(7, 2)
-    DatabaseColumn: quantity
-    Filterable: true
-    Name: quantity
-    Nullable: true
-  - DataType: INTEGER
-    DatabaseColumn: user_id
-    Filterable: true
-    Name: user_id
+    Name: account_id
     Nullable: true
 Connector:
   Driver: sqlite3
@@ -42,8 +32,9 @@ Connector:
 Logger:
   Name: ""
 MatchStrategy: read_matched
-Name: events
-Ref: events
+Mode: SQLExec
+Name: update
+Ref: update
 Schema:
   Cardinality: One
 Selector:
@@ -57,28 +48,21 @@ Selector:
     Projection: true
   Limit: 25
 Standalone: true
-Table: events
+Table: event_types
 Template:
   Parameters:
     - In:
-        Kind: path
-        Name: eventID
-      Name: eventID
-      PresenceName: eventID
-      Ref: eventID
-      Required: true
+        Kind: data_view
+        Name: Records
+      Name: Records
+      PresenceName: Records
+      Ref: Records
+      Required: false
       Schema:
-        Cardinality: One
-        DataType: int
+        Cardinality: Many
+        Name: Records
   PresenceSchema:
     Cardinality: One
   Schema:
     Cardinality: One
-  Source: |-
-    ( SELECT *
-             FROM events e
-             WHERE 1 = 1
-               AND e.id = $eventID
-             ORDER BY 1
-          )
-  SourceURL: events/events.sql
+  Source: "( #foreach($rec in $Unsafe.Records )\nUPDATE event_types\nSET name =  $criteria.AppendBinding($rec.NEW_NAME) \nWHERE ID = $criteria.AppendBinding($rec.ID);\n\n#end )"

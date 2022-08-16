@@ -13,126 +13,13 @@ import (
 	"strings"
 )
 
-type (
-	Table struct {
-		Ref           string
-		StarExpr      bool
-		Inner         Columns
-		ColumnTypes   map[string]string
-		InnerAlias    string
-		InnerSQL      string
-		Deps          map[string]string
-		Columns       Columns
-		Name          string
-		SQL           string
-		Joins         Joins
-		Alias         string
-		ParamDataType string
-		TableMeta
-		ViewMeta *ast.ViewMeta
-		ViewHint string
-	}
-
-	TableMeta struct {
-		Connector         string
-		Cache             *view.Cache
-		Warmup            map[string]interface{}
-		dataViewParameter *view.Parameter
-		Parameter         *view.Parameter
-		Auth              string
-		Selector          *view.Config
-		AllowNulls        *bool
-	}
-
-	Column struct {
-		Ns       string
-		Name     string
-		Alias    string
-		Except   []string
-		DataType string
-	}
-
-	TableParam struct {
-		Table *Table
-		Param *view.Parameter
-	}
-
-	Columns []*Column
-
-	Join struct {
-		Key      string
-		KeyAlias string
-		OwnerKey string
-		OwnerNs  string
-		Owner    *Table
-		TableMeta
-		Field string
-
-		ToOne bool
-		Table *Table
-	}
-
-	Joins []*Join
-)
-
-func (c Columns) StarExpr(ns string) *Column {
-	for _, item := range c {
-		if item.Name == "*" && item.Ns == ns {
-			return item
-		}
-	}
-	return nil
-}
-
-func (c Columns) ByNs(ns string) map[string]*Column {
-	var result = make(map[string]*Column)
-	for i, item := range c {
-		if item.Name == "*" || item.Ns != ns {
-			continue
-		}
-		alias := item.Alias
-		if alias == "" {
-			alias = item.Name
-		}
-		result[alias] = c[i]
-	}
-	return result
-}
-
-func (c Columns) ByAlias() map[string]*Column {
-	var result = make(map[string]*Column)
-	if c == nil {
-		return result
-	}
-	for i, item := range c {
-		if item.Name == "*" {
-			continue
-		}
-		alias := item.Alias
-		if alias == "" {
-			alias = item.Name
-		}
-		result[alias] = c[i]
-	}
-	return result
-}
-
-func (j *Joins) Index() map[string]*Join {
-	var result = make(map[string]*Join)
-	for _, join := range *j {
-		result[join.Table.Alias] = join
-	}
-
-	return result
-}
-
-func ParseSQLx(SQL string, routeOpt *option.Route) (*Table, map[string]*TableParam, error) {
+func ParseSQLx(SQL string, routeOpt *option.Route) (*option.Table, map[string]*option.TableParam, error) {
 	aQuery, err := parser.ParseQuery(SQL)
 	if aQuery == nil {
 		return nil, nil, err
 	}
 
-	var tables = map[string]*Table{}
+	var tables = map[string]*option.Table{}
 	table, err := buildTable(aQuery.From.X, routeOpt)
 	if err != nil {
 		return nil, nil, err
@@ -145,7 +32,7 @@ func ParseSQLx(SQL string, routeOpt *option.Route) (*Table, map[string]*TablePar
 	if star := table.Columns.StarExpr(table.Alias); star != nil {
 		table.StarExpr = true
 	}
-	var dataParameters = map[string]*TableParam{}
+	var dataParameters = map[string]*option.TableParam{}
 	tables[table.Alias] = table
 
 	if len(aQuery.Joins) > 0 {
@@ -158,13 +45,13 @@ func ParseSQLx(SQL string, routeOpt *option.Route) (*Table, map[string]*TablePar
 	return table, dataParameters, nil
 }
 
-func buildTable(x node.Node, routeOpt *option.Route) (*Table, error) {
+func buildTable(x node.Node, routeOpt *option.Route) (*option.Table, error) {
 	//var err error
-	table := &Table{}
+	table := &option.Table{}
 	switch actual := x.(type) {
 	case *expr.Raw:
 		table.SQL = strings.Trim(actual.Raw, "()")
-		if err := updateTableSettings(table, routeOpt); err != nil {
+		if err := UpdateTableSettings(table, routeOpt); err != nil {
 			return table, err
 		}
 
@@ -175,7 +62,7 @@ func buildTable(x node.Node, routeOpt *option.Route) (*Table, error) {
 	return table, nil
 }
 
-func updateTableSettings(table *Table, routeOpt *option.Route) error {
+func UpdateTableSettings(table *option.Table, routeOpt *option.Route) error {
 	innerSQL, paramsExprs := ast.ExtractCondBlock(table.SQL)
 	innerQuery, err := parser.ParseQuery(innerSQL)
 	fmt.Printf("innerSQL %v %v\n", table.SQL, err)
@@ -245,7 +132,7 @@ func appendParamExpr(x node.Node, op string, y node.Node, list *[]string) {
 	}
 }
 
-func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns, dataParameters map[string]*TableParam, routeOpt *option.Route) error {
+func processJoin(join *query.Join, tables map[string]*option.Table, outerColumn option.Columns, dataParameters map[string]*option.TableParam, routeOpt *option.Route) error {
 	relTable, err := buildTable(join.With, routeOpt)
 	if err != nil {
 		return err
@@ -260,16 +147,16 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	if isParamView {
 
 		paramName := join.Alias
-		if relTable.dataViewParameter == nil {
-			relTable.dataViewParameter = &view.Parameter{}
+		if relTable.DataViewParameter == nil {
+			relTable.DataViewParameter = &view.Parameter{}
 		}
-		relTable.dataViewParameter.In = &view.Location{Name: paramName, Kind: view.DataViewKind}
-		relTable.dataViewParameter.Schema = &view.Schema{Name: strings.Title(paramName)}
+		relTable.DataViewParameter.In = &view.Location{Name: paramName, Kind: view.DataViewKind}
+		relTable.DataViewParameter.Schema = &view.Schema{Name: strings.Title(paramName)}
 
 		relTable.Alias = paramName
-		relTable.dataViewParameter.Name = paramName
-		dataParameters[paramName] = &TableParam{Table: relTable, Param: relTable.dataViewParameter}
-		updateAuthToken(relTable)
+		relTable.DataViewParameter.Name = paramName
+		dataParameters[paramName] = &option.TableParam{Table: relTable, Param: relTable.DataViewParameter}
+		UpdateAuthToken(relTable)
 		return nil
 	}
 
@@ -279,7 +166,7 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	if star := outerColumn.StarExpr(relTable.Alias); star != nil {
 		relTable.StarExpr = true
 	}
-	relJoin := &Join{
+	relJoin := &option.Join{
 		Table: relTable,
 	}
 	on := join.On.X
@@ -318,7 +205,7 @@ func processJoin(join *query.Join, tables map[string]*Table, outerColumn Columns
 	return nil
 }
 
-func updateAuthToken(aTable *Table) {
+func UpdateAuthToken(aTable *option.Table) {
 	if aTable.Auth == "" {
 		return
 	}
@@ -349,7 +236,7 @@ func isParamPredicate(criteria string) bool {
 	return isParamView
 }
 
-func updateRelationKey(relTable *Table, y *expr.Selector, relJoin *Join, x *expr.Selector) error {
+func updateRelationKey(relTable *option.Table, y *expr.Selector, relJoin *option.Join, x *expr.Selector) error {
 	if relTable.Alias == y.Name {
 		relJoin.Key = parser.Stringify(y.X)
 		relJoin.OwnerKey = parser.Stringify(x.X)
@@ -388,15 +275,15 @@ func extractSelector(n node.Node, left bool) *expr.Selector {
 	return nil
 }
 
-func selectItemToColumn(query *query.Select) Columns {
-	var result []*Column
+func selectItemToColumn(query *query.Select) option.Columns {
+	var result []*option.Column
 	for _, item := range query.List {
 		appendItem(item, &result)
 	}
 	return result
 }
 
-func appendItem(item *query.Item, result *[]*Column) {
+func appendItem(item *query.Item, result *[]*option.Column) {
 	comments := item.Comments
 	if hint := comments; hint != "" {
 		column := &view.Column{}
@@ -406,17 +293,17 @@ func appendItem(item *query.Item, result *[]*Column) {
 	}
 	switch actual := item.Expr.(type) {
 	case *expr.Ident:
-		*result = append(*result, &Column{Name: actual.Name, Alias: item.Alias, DataType: item.DataType})
+		*result = append(*result, &option.Column{Name: actual.Name, Alias: item.Alias, DataType: item.DataType})
 	case *expr.Selector:
-		*result = append(*result, &Column{Name: parser.Stringify(actual.X), Ns: actual.Name, DataType: item.DataType, Alias: item.Alias})
+		*result = append(*result, &option.Column{Name: parser.Stringify(actual.X), Ns: actual.Name, DataType: item.DataType, Alias: item.Alias})
 	case *expr.Star:
 		switch star := actual.X.(type) {
 		case *expr.Ident:
-			*result = append(*result, &Column{Name: star.Name, Except: actual.Except})
+			*result = append(*result, &option.Column{Name: star.Name, Except: actual.Except})
 		case *expr.Selector:
-			*result = append(*result, &Column{Name: parser.Stringify(star.X), Ns: star.Name, Except: actual.Except})
+			*result = append(*result, &option.Column{Name: parser.Stringify(star.X), Ns: star.Name, Except: actual.Except})
 		}
 	case *expr.Literal:
-		*result = append(*result, &Column{Name: "", Alias: item.Alias, DataType: actual.Kind})
+		*result = append(*result, &option.Column{Name: "", Alias: item.Alias, DataType: actual.Kind})
 	}
 }

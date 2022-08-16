@@ -42,9 +42,9 @@ type (
 	Generate struct {
 		Name         string   `short:"N" long:"name" description:"view DbName/route URI" `
 		Table        string   `short:"T" long:"table" description:"table" `
-		SQLLocation  string   `short:"S" long:"sql" description:"SQL location" `
+		SQLLocation  string   `short:"S" long:"sql" description:"SQL location" ` //TODO: remove
 		SQLXLocation string   `short:"X" long:"sqlx" description:"SQLX (extension for relation) location" `
-		Relations    []string `short:"R" long:"relation" description:"relation in form of viewName:tableName" `
+		Relations    []string `short:"R" long:"relation" description:"relation in form of viewName:tableName" ` //TODO: remove
 	}
 
 	Content struct {

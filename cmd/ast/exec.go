@@ -2,6 +2,8 @@ package ast
 
 import (
 	"fmt"
+	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/metadata/ast/expr"
 	"github.com/viant/sqlx/metadata/ast/insert"
 	"github.com/viant/sqlx/metadata/ast/parser"
@@ -10,7 +12,7 @@ import (
 	"strings"
 )
 
-func buildViewMetaInExecSQLMode(SQL string, view *ViewMeta, variables map[string]bool) error {
+func buildViewMetaInExecSQLMode(SQL string, view *option.ViewMeta, variables map[string]bool) error {
 	lcSQL := strings.ToLower(SQL)
 	boundary := getStatementBoundary(lcSQL)
 
@@ -46,7 +48,7 @@ func buildViewMetaInExecSQLMode(SQL string, view *ViewMeta, variables map[string
 	return nil
 }
 
-func normalizeSQLExec(stmtType byte, SQLStmt string, view *ViewMeta, variables map[string]bool) (string, error) {
+func normalizeSQLExec(stmtType byte, SQLStmt string, view *option.ViewMeta, variables map[string]bool) (string, error) {
 	var nonSQLStmt = ""
 
 	hasSemiColon := false
@@ -83,7 +85,7 @@ func normalizeSQLExec(stmtType byte, SQLStmt string, view *ViewMeta, variables m
 	return SQLStmt + nonSQLStmt, nil
 }
 
-func normalizeAndExtractInsertValues(stmt *insert.Statement, view *ViewMeta, SQL string) string {
+func normalizeAndExtractInsertValues(stmt *insert.Statement, view *option.ViewMeta, SQL string) string {
 	for i, value := range stmt.Values {
 		selector := ExtractSelector(value.Raw)
 		if selector == "" {
@@ -91,13 +93,13 @@ func normalizeAndExtractInsertValues(stmt *insert.Statement, view *ViewMeta, SQL
 		}
 		column := stmt.Columns[i]
 		paramName := selector[1:]
-		view.addParameter(&Parameter{Id: paramName, Name: paramName, Typer: &ColumnType{ColumnName: column}})
+		view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Typer: &option.ColumnType{ColumnName: column}})
 		SQL = strings.Replace(SQL, selector, sanitizeUnsafeExpr(selector), 1)
 	}
 	return SQL
 }
 
-func normalizeOptionParameters(expressions []string, view *ViewMeta, SQLExec string, variables map[string]bool) string {
+func normalizeOptionParameters(expressions []string, view *option.ViewMeta, SQLExec string, variables map[string]bool) string {
 	for _, anExpr := range expressions {
 		anExpr = strings.TrimSpace(anExpr)
 		if strings.HasPrefix(anExpr, ",") {
@@ -113,13 +115,13 @@ func normalizeOptionParameters(expressions []string, view *ViewMeta, SQLExec str
 			continue
 		}
 		paramName := selector[1:]
-		view.addParameter(&Parameter{Id: paramName, Name: paramName, Typer: &ColumnType{ColumnName: column}})
+		view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Typer: &option.ColumnType{ColumnName: column}})
 		SQLExec = strings.Replace(SQLExec, anExpr, column+" = "+sanitizeUnsafeExpr(selector), 1)
 	}
 	return SQLExec
 }
 
-func normalizeAndExtractUpdateWhere(stmt *update.Statement, view *ViewMeta, SQLExec string, variables map[string]bool) string {
+func normalizeAndExtractUpdateWhere(stmt *update.Statement, view *option.ViewMeta, SQLExec string, variables map[string]bool) string {
 	var criteria []*Criterion
 	ExtractCriteriaPlaceholders(stmt.Qualify.X, &criteria)
 	for _, criterion := range criteria {
@@ -128,52 +130,69 @@ func normalizeAndExtractUpdateWhere(stmt *update.Statement, view *ViewMeta, SQLE
 			continue
 		}
 
-		_, paramName := getHolderName(y)
-		if variables[paramName] {
-			continue
-		}
+		prefix, paramName := getHolderName(y)
+		SQLExec = strings.Replace(SQLExec, y, sanitizePlaceholder(prefix, paramName, y, variables), 1)
 
 		switch strings.ToLower(criterion.Op) {
 		case "in":
-			paramName := y[1:]
-			view.addParameter(&Parameter{Id: paramName, Name: paramName, Repeated: true, Typer: &ColumnType{
+			view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Repeated: true, Typer: &option.ColumnType{
 				ColumnName: criterion.X,
 			}})
 
 		case "=":
-			paramName := y[1:]
 			required := true
-			view.addParameter(&Parameter{Id: paramName, Name: paramName, Required: &required, Typer: &ColumnType{
+			view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Required: &required, Typer: &option.ColumnType{
 				ColumnName: criterion.X,
 			}})
 		}
-		SQLExec = strings.Replace(SQLExec, y, sanitizeUnsafeExpr(y), 1)
 	}
 	return SQLExec
 }
 
-func normalizeAndExtractUpdateSet(stmt *update.Statement, view *ViewMeta, rawSQL string, SQLStmt string, variables map[string]bool) string {
+func normalizeAndExtractUpdateSet(stmt *update.Statement, view *option.ViewMeta, rawSQL string, SQLStmt string, variables map[string]bool) string {
 	for _, item := range stmt.Set {
 		placeholder, ok := item.Expr.(*expr.Placeholder)
 		if !ok {
 			continue
 		}
-		paramName := parser.Stringify(placeholder)
-		if strings.Contains(paramName, ".") {
-			continue
-		}
+
+		actualParam := parser.Stringify(placeholder)
+		prefix, paramName := getHolderName(actualParam)
+
+		item.Expr = &expr.Raw{Raw: sanitizePlaceholder(prefix, paramName, actualParam, variables)}
+
+		originalExpr := strings.TrimSpace(rawSQL[item.Begin:item.End])
+		enrichedExpr := parser.Stringify(item)
+
+		SQLStmt = strings.Replace(SQLStmt, originalExpr, enrichedExpr, 1)
 		column := getColumnName(item)
-		view.addParameter(&Parameter{Id: paramName[1:], Name: paramName[1:], Typer: &ColumnType{
+		view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Typer: &option.ColumnType{
 			ColumnName: column,
 		}})
-		originalExpr := strings.TrimSpace(rawSQL[item.Begin:item.End])
-		item.Expr = &expr.Raw{
-			Raw: sanitizeUnsafeExpr(paramName),
-		}
-		enrichedExpr := parser.Stringify(item)
-		SQLStmt = strings.Replace(SQLStmt, originalExpr, enrichedExpr, 1)
 	}
+
 	return SQLStmt
+}
+
+func sanitizePlaceholder(prefix, paramName, raw string, variables map[string]bool) string {
+
+	if variables[paramName] {
+		return sanitizeInternalVariable(prefix, raw)
+	}
+
+	if prefix == keywords.ParamsKey {
+		return sanitizeUnsafeParameter(raw)
+	}
+
+	return sanitizeInternalVariable("", raw)
+}
+
+func sanitizeInternalVariable(prefix, paramName string) string {
+	if prefix == keywords.ParamsKey {
+		return strings.Replace(paramName, fmt.Sprintf("$%v", keywords.ParamsKey), "$", 1)
+	}
+
+	return fmt.Sprintf("$criteria.AppendBinding(%v)", paramName)
 }
 
 func sanitizeUnsafeExpr(paramName string) string {

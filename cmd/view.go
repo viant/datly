@@ -40,22 +40,37 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 		}
 	}
 
-	var xTable *Table
-	var dataViewParams = make(map[string]*TableParam)
+	//route, err := s.BuildRoute(ctx)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//if err = route.Err(); err != nil {
+	//	fmt.Println(err.Error())
+	//}
+
+	// ReadMode
+	var xTable *option.Table
+
+	// ReadMode
+	var dataViewParams = make(map[string]*option.TableParam)
 	routeOption := &option.Route{}
-	var sqlExecModeView *ast.ViewMeta
-	var parameterHints []*ast.ParameterHint
+	// ExecMode
+	var sqlExecModeView *option.ViewMeta
+	var parameterHints []*option.ParameterHint
 	if s.options.SQLXLocation != "" && url.Scheme(s.options.SQLLocation, "e") == "e" {
 		sourceURL := normalizeURL(s.options.SQLXLocation)
 		SQLData, err := fs.DownloadWithURL(context.Background(), sourceURL)
 		if err != nil {
 			return err
 		}
-		SQL, err := extractSetting(string(SQLData), routeOption)
+
+		SQL, uriParams, err := extractSetting(string(SQLData), routeOption)
 		if err != nil {
-			return fmt.Errorf("invalid settings: %v", err)
+			return fmt.Errorf("invalid settings: %w", err)
 		}
 
+		routeOption.URIParams = uriParams
 		parameterHints = ast.ExtractParameterHints(SQL)
 
 		if len(parameterHints) > 0 {
@@ -83,8 +98,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 		s.updateViewInSQLExecMode(aView, sqlExecModeView, routeOption)
 	}
 
-	_, err := s.addViewConn(s.options.Connector.DbName, aView)
-	if err != nil {
+	if _, err := s.addViewConn(s.options.Connector.DbName, aView); err != nil {
 		return err
 	}
 
@@ -175,7 +189,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	return fsAddYAML(fs, s.options.RouterURL(), s.route)
 }
 
-func (s *serverBuilder) buildDataParameters(dataParameters map[string]*TableParam, parameters []*ast.ParameterHint, routeOption *option.Route) error {
+func (s *serverBuilder) buildDataParameters(dataParameters map[string]*option.TableParam, parameters []*option.ParameterHint, routeOption *option.Route) error {
 	if len(parameters) == 0 {
 		return nil
 	}
@@ -185,7 +199,7 @@ func (s *serverBuilder) buildDataParameters(dataParameters map[string]*TablePara
 			hintedParam.Parameter = strings.Replace(hintedParam.Parameter, "Unsafe.", "", 1)
 		}
 		paramName := hintedParam.Parameter
-		aTable := &Table{}
+		aTable := &option.Table{}
 		SQL, err := ast.UnmarshalHint(hintedParam.Hint, aTable)
 		if err != nil {
 			return err
@@ -195,23 +209,23 @@ func (s *serverBuilder) buildDataParameters(dataParameters map[string]*TablePara
 			continue
 		}
 		aTable.SQL = SQL
-		if err := updateTableSettings(aTable, routeOption); err != nil {
+		if err := UpdateTableSettings(aTable, routeOption); err != nil {
 			return err
 		}
 		aTable.Alias = paramName
-		if aTable.dataViewParameter == nil {
-			aTable.dataViewParameter = &view.Parameter{}
+		if aTable.DataViewParameter == nil {
+			aTable.DataViewParameter = &view.Parameter{}
 		}
-		aTable.dataViewParameter.In = &view.Location{Name: paramName, Kind: view.DataViewKind}
-		aTable.dataViewParameter.Schema = &view.Schema{Name: strings.Title(paramName)}
-		aTable.dataViewParameter.Name = paramName
-		dataParameters[paramName] = &TableParam{Table: aTable, Param: aTable.dataViewParameter}
-		updateAuthToken(aTable)
+		aTable.DataViewParameter.In = &view.Location{Name: paramName, Kind: view.DataViewKind}
+		aTable.DataViewParameter.Schema = &view.Schema{Name: strings.Title(paramName)}
+		aTable.DataViewParameter.Name = paramName
+		dataParameters[paramName] = &option.TableParam{Table: aTable, Param: aTable.DataViewParameter}
+		UpdateAuthToken(aTable)
 	}
 	return nil
 }
 
-func (s *serverBuilder) updateViewInSQLExecMode(aView *view.View, viewMeta *ast.ViewMeta, route *option.Route) {
+func (s *serverBuilder) updateViewInSQLExecMode(aView *view.View, viewMeta *option.ViewMeta, route *option.Route) {
 	aView.Mode = view.Mode(viewMeta.Mode)
 	aView.Template = &view.Template{
 		Source:     viewMeta.Source,
@@ -228,9 +242,9 @@ func (s *serverBuilder) updateViewInSQLExecMode(aView *view.View, viewMeta *ast.
 		var dataType string
 		if p.Typer != nil {
 			switch actual := p.Typer.(type) {
-			case *ast.ColumnType:
+			case *option.ColumnType:
 				dataType = viewMeta.ParameterTypes[strings.ToLower(actual.ColumnName)]
-			case *ast.LiteralType:
+			case *option.LiteralType:
 				dataType = actual.RType.String()
 			}
 		}
@@ -260,7 +274,7 @@ func (s *serverBuilder) updateViewInSQLExecMode(aView *view.View, viewMeta *ast.
 	}
 }
 
-func (s *serverBuilder) updateMetaColumnTypes(ctx context.Context, viewMeta *ast.ViewMeta, routeOption *option.Route) {
+func (s *serverBuilder) updateMetaColumnTypes(ctx context.Context, viewMeta *option.ViewMeta, routeOption *option.Route) {
 
 	if len(viewMeta.ParameterTypes) == 0 {
 		viewMeta.ParameterTypes = map[string]string{}
@@ -268,7 +282,7 @@ func (s *serverBuilder) updateMetaColumnTypes(ctx context.Context, viewMeta *ast
 	if len(viewMeta.Updates) > 0 {
 
 		for _, name := range viewMeta.Updates {
-			table := &Table{Name: name, ColumnTypes: map[string]string{}}
+			table := &option.Table{Name: name, ColumnTypes: map[string]string{}}
 			s.updateTableColumnTypes(ctx, table)
 			for k, v := range table.ColumnTypes {
 				viewMeta.ParameterTypes[k] = v
@@ -278,7 +292,7 @@ func (s *serverBuilder) updateMetaColumnTypes(ctx context.Context, viewMeta *ast
 	if len(viewMeta.Inserts) > 0 {
 
 		for _, name := range viewMeta.Inserts {
-			table := &Table{Name: name, ColumnTypes: map[string]string{}}
+			table := &option.Table{Name: name, ColumnTypes: map[string]string{}}
 			s.updateTableColumnTypes(ctx, table)
 			for k, v := range table.ColumnTypes {
 				viewMeta.ParameterTypes[k] = v
@@ -292,28 +306,40 @@ func (s *serverBuilder) updateMetaColumnTypes(ctx context.Context, viewMeta *ast
 	}
 }
 
-func extractSetting(SQL string, route *option.Route) (string, error) {
+func extractSetting(SQL string, route *option.Route) (string, map[string]bool, error) {
 	hint := ast.ExtractHint(SQL)
 	if hint == "" {
-		return SQL, nil
+		return SQL, map[string]bool{}, nil
 	}
+
 	SQL = strings.Replace(SQL, hint, "", 1)
+
 	_, err := ast.UnmarshalHint(hint, route)
 	if err != nil {
-		return SQL, err
+		return SQL, map[string]bool{}, err
 	}
-	if route.URI != "" {
-		if params := ast.ParseURIParams(route.URI); len(params) > 0 {
-			route.URIParams = map[string]bool{}
-			for _, param := range params {
-				route.URIParams[param] = true
-			}
-		}
-	}
-	return SQL, nil
+
+	uriParams := extractURIParams(route.URI)
+
+	return SQL, uriParams, nil
 }
 
-func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*TableParam, routeOption *option.Route) {
+func extractURIParams(URI string) map[string]bool {
+	result := map[string]bool{}
+
+	if URI == "" {
+		return result
+	}
+
+	uriParams := ast.ParseURIParams(URI)
+	for _, param := range uriParams {
+		result[param] = true
+	}
+
+	return result
+}
+
+func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*option.TableParam, routeOption *option.Route) {
 	if len(params) == 0 {
 		return
 	}
@@ -400,7 +426,7 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 	}
 }
 
-func (s *serverBuilder) mergeParamTypes(table *Table) {
+func (s *serverBuilder) mergeParamTypes(table *option.Table) {
 	if len(table.ColumnTypes) > 0 {
 		for k, v := range table.ColumnTypes {
 			if len(table.ViewMeta.ParameterTypes) == 0 {
@@ -515,7 +541,7 @@ func (s *serverBuilder) addViewConn(connectorName string, aView *view.View) (*vi
 	return conn, nil
 }
 
-func buildExcludeColumn(xTable *Table, aView *view.View, viewRoute *router.Route) {
+func buildExcludeColumn(xTable *option.Table, aView *view.View, viewRoute *router.Route) {
 	joins := xTable.Joins.Index()
 	viewCaser, _ := aView.CaseFormat.Caser()
 	outputCaser, _ := format.NewCase(string(viewRoute.CaseFormat))
@@ -540,7 +566,7 @@ func buildExcludeColumn(xTable *Table, aView *view.View, viewRoute *router.Route
 	}
 }
 
-func detectCaseFormat(xTable *Table) view.CaseFormat {
+func detectCaseFormat(xTable *option.Table) view.CaseFormat {
 	names := make([]string, 0)
 	for _, column := range xTable.Inner {
 		columnName := column.Alias
@@ -590,7 +616,7 @@ func (s *serverBuilder) buildMainView(options *Options, generate *Generate) *vie
 	return aView
 }
 
-func updateGenerateOption(generate *Generate, table *Table) {
+func updateGenerateOption(generate *Generate, table *option.Table) {
 	if table == nil {
 		return
 	}

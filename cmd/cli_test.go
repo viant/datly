@@ -45,8 +45,6 @@ type testcase struct {
 }
 
 func TestRun(t *testing.T) {
-	return
-
 	TimeNow = func() time.Time {
 		parse, _ := time.Parse("2006-01-02 15:04:05.000000000 -0700 MST", "2014-11-12 11:45:26.000000000 +0000 UTC")
 		return parse
@@ -148,6 +146,18 @@ func TestRun(t *testing.T) {
 			viewURL:    "/v1/api/meta/view/dev/event_types",
 			dataMethod: http.MethodGet,
 		},
+		{
+			description: "update",
+			URI:         "case011_update",
+			args: []string{
+				"-N=eventTypes",
+				"-D=sqlite3",
+				"-A=/tmp/datly/generator/db.db",
+				"-X=testdata/case011_update/update.sql",
+			},
+			viewURL:    "/v1/api/meta/view/dev/status",
+			dataMethod: http.MethodGet,
+		},
 	}
 
 	loader := afs.New()
@@ -169,7 +179,7 @@ func TestRun(t *testing.T) {
 			continue
 		}
 
-		checkGeneratedOpenAPI(t, loader, testLocation, testCase, server)
+		checkGeneratedOpenAPI(t, testCase, loader, testLocation, testCase, server)
 		checkGeneratedView(t, loader, testLocation, testCase, server)
 		checkReadData(t, server, testCase, loader, testLocation)
 		//generateLogs(loader, testLocation, logger, testCase)
@@ -213,7 +223,11 @@ func checkGeneratedView(t *testing.T, loader afs.Service, testLocation string, t
 	return
 }
 
-func checkGeneratedOpenAPI(t *testing.T, loader afs.Service, testLocation string, testCase *testcase, server *standalone.Server) {
+func checkGeneratedOpenAPI(t *testing.T, c *testcase, loader afs.Service, testLocation string, testCase *testcase, server *standalone.Server) {
+	if c.openApiURL == "" {
+		return
+	}
+
 	actualLocation := path.Join(testLocation, "openapi3.yaml")
 	if ok, err := loader.Exists(context.TODO(), actualLocation); !ok || err == nil {
 		return
