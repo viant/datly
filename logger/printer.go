@@ -61,7 +61,7 @@ func (p *Printer) Printf(format string, args ...interface{}) string {
 	return ""
 }
 
-func (p *Printer) Add(format string, args ...interface{}) string {
+func (p *Printer) Log(format string, args ...interface{}) string {
 	p.buffer = append(p.buffer, p.Sprintf(format, args...))
 	return ""
 }
