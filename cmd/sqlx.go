@@ -41,6 +41,7 @@ type (
 		Parameter         *view.Parameter
 		Auth              string
 		Selector          *view.Config
+		AllowNulls        *bool
 	}
 
 	Column struct {

@@ -29,7 +29,7 @@ func TestNewResourceFromURL(t *testing.T) {
 	}{
 		{
 			url:    "case001",
-			expect: `{"SourceURL":"testdata/case001/resource.yaml","Connectors":[{"Name":"mydb","Driver":"sqlite3","DSN":"/tmp/view/mydb.db"}],"Views":[{"Connector":{"Name":"mydb","Driver":"sqlite3","DSN":"/tmp/view/mydb.db"},"Name":"events","Alias":"t","Table":"events","Columns":[{"Name":"id","DataType":"Int"},{"Name":"quantity","DataType":"Float"},{"Name":"event_type_id","DataType":"Int"}],"CaseFormat":"lu","Selector":{"Constraints":{"Criteria":false,"OrderBy":false,"Limit":false,"Offset":false,"Projection":false}},"Template":{"Source":"events","Schema":{"Cardinality":"One"},"PresenceSchema":{"Cardinality":"One"}},"Schema":{"Cardinality":"One"},"MatchStrategy":"read_matched","Batch":{"Parent":10000},"Logger":{"Name":""},"Caser":5}],"ModTime":"2022-07-13T19:18:05+02:00"}`,
+			expect: `{"SourceURL":"testdata/case001/resource.yaml","Connectors":[{"Name":"mydb","Driver":"sqlite3"}],"Views":[{"Connector":{"Name":"mydb","Driver":"sqlite3"},"Name":"events","Alias":"t","Table":"events","Columns":[{"Name":"id","DataType":"Int"},{"Name":"quantity","DataType":"Float"},{"Name":"event_type_id","DataType":"Int"}],"CaseFormat":"lu","Selector":{"Constraints":{"Criteria":false,"OrderBy":false,"Limit":false,"Offset":false,"Projection":false}},"Template":{"Source":"events","Schema":{"Cardinality":"One"},"PresenceSchema":{"Cardinality":"One"}},"Schema":{"Cardinality":"One"},"MatchStrategy":"read_matched","Batch":{"Parent":10000},"Logger":{"Name":""},"Caser":5}],"ModTime":"2022-07-13T19:18:05+02:00"}`,
 		},
 	}
 

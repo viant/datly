@@ -170,13 +170,19 @@ func (s *serverBuilder) updateViewMeta(table *Table, aView *view.View) error {
 	if err := json.Unmarshal([]byte(viewHint), tableMeta); err != nil {
 		return err
 	}
+
 	if tableMeta.Selector != nil {
 		aView.Selector = tableMeta.Selector
 	}
+
 	if tableMeta.Cache != nil {
 		aView.Cache = tableMeta.Cache
-
 	}
+
+	if tableMeta.AllowNulls != nil {
+		aView.AllowNulls = tableMeta.AllowNulls
+	}
+
 	if tableMeta.Connector != "" {
 		if _, err := s.addViewConn(tableMeta.Connector, aView); err != nil {
 			return err

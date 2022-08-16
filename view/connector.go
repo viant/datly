@@ -23,6 +23,7 @@ type (
 		Driver string        `json:",omitempty"`
 		DSN    string        `json:",omitempty"`
 
+		_dsn string
 		//TODO add secure password storage
 		db          func() (*sql.DB, error)
 		initialized bool
@@ -53,6 +54,9 @@ func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 	if c.initialized {
 		return nil
 	}
+
+	c._dsn = c.DSN
+	c.DSN = ""
 
 	if c.initialized {
 		return nil
@@ -88,7 +92,7 @@ func (c *Connector) DB() (*sql.DB, error) {
 	}
 
 	var err error
-	dsn := c.DSN
+	dsn := c._dsn
 	var secret *scy.Secret
 	if c.Secret != nil {
 		secrets := scy.New()
@@ -113,6 +117,10 @@ func (c *Connector) DB() (*sql.DB, error) {
 //Validate check if connector was configured properly.
 //Name, Driver and DSN are required.
 func (c *Connector) Validate() error {
+	if c.initialized {
+		return nil
+	}
+
 	if c.Name == "" {
 		return fmt.Errorf("connector name was empty")
 	}
@@ -121,23 +129,21 @@ func (c *Connector) Validate() error {
 		return fmt.Errorf("connector driver was empty")
 	}
 
-	if c.DSN == "" {
+	if notEmptyOf(c._dsn, c.DSN) == "" {
 		return fmt.Errorf("connector dsn was empty")
 	}
 	return nil
 }
 
 func (c *Connector) inherit(connector *Connector) {
-	if c.DSN == "" {
-		c.DSN = connector.DSN
-	}
+	c._dsn = notEmptyOf(c._dsn, c.DSN, connector._dsn, connector.DSN)
 
 	if c.Driver == "" {
 		c.Driver = connector.Driver
 	}
 
-	if c.DSN == "" {
-		c.DSN = connector.DSN
+	if c._dsn == "" {
+		c._dsn = connector._dsn
 	}
 
 	if c.db == nil {
