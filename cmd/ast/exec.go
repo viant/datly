@@ -86,6 +86,9 @@ func normalizeSQLExec(stmtType byte, SQLStmt string, view *ViewMeta, variables m
 func normalizeAndExtractInsertValues(stmt *insert.Statement, view *ViewMeta, SQL string) string {
 	for i, value := range stmt.Values {
 		selector := ExtractSelector(value.Raw)
+		if selector == "" {
+			continue
+		}
 		column := stmt.Columns[i]
 		paramName := selector[1:]
 		view.addParameter(&Parameter{Id: paramName, Name: paramName, Typer: &ColumnType{ColumnName: column}})
