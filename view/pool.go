@@ -25,7 +25,6 @@ type (
 		initialized bool
 	}
 
-	//TODO: connection should be handled in background
 	aerospikeClientRegistry struct {
 		index map[string]*aerospikeClient
 		mutex sync.Mutex
@@ -39,11 +38,15 @@ type (
 	}
 )
 
-func (c *aerospikeClient) connect(host string, port int) (*as.Client, error) {
+func (c *aerospikeClient) connect() (*as.Client, error) {
 	c.mutex.Lock()
-	client, err := c.connectIfNeeded(host, port)
+	aClient := c.actual
 	c.mutex.Unlock()
-	return client, err
+
+	if aClient == nil {
+		return nil, fmt.Errorf("no connection to one of aerospike cache was available")
+	}
+	return aClient, nil
 }
 
 func (c *aerospikeClient) connectIfNeeded(host string, port int) (*as.Client, error) {
@@ -86,6 +89,51 @@ func (c *aerospikeClient) clientWithTimeout(duration time.Duration, host string,
 	cancelFunc()
 
 	return client, err
+}
+
+func (c *aerospikeClient) init(host string, port int) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	if c.initialized {
+		return nil
+	}
+
+	c.initialized = true
+	var err error
+	c.actual, err = as.NewClient(host, port)
+	c.keepConnAlive(host, port)
+
+	return err
+}
+
+func (c *aerospikeClient) keepConnAlive(host string, port int) {
+	if c.cancelFunc != nil {
+		return
+	}
+
+	ctx := context.Background()
+	withCancel, cancelFunc := context.WithCancel(ctx)
+	c.cancelFunc = cancelFunc
+
+	go func(ctx context.Context, host string, port int) {
+		for {
+			time.Sleep(time.Second * time.Duration(15))
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				aClient, err := c.clientWithTimeout(time.Duration(5)*time.Second, host, port)
+				c.mutex.Lock()
+				c.actual = aClient
+				c.mutex.Unlock()
+
+				if err != nil {
+					fmt.Printf("couldn't connect to aerospike client due to the %v\n", err.Error())
+				}
+
+			}
+		}
+	}(withCancel, host, port)
 }
 
 var aDbPool = newPool()
@@ -259,7 +307,9 @@ func ResetDBPool() {
 
 func ResetAerospikePool() {
 	for _, aClient := range aClientPool.index {
-		aClient.cancelFunc()
+		if aClient.cancelFunc != nil {
+			aClient.cancelFunc()
+		}
 	}
 	aClientPool = newClientPool()
 }
@@ -268,19 +318,22 @@ func newPool() *dbRegistry {
 	return &dbRegistry{index: map[string]*db{}}
 }
 
-func (a *aerospikeClientRegistry) Client(host string, port int) (*as.Client, error) {
+func (a *aerospikeClientRegistry) Client(host string, port int) func() (*as.Client, error) {
 	aKey := host + ":" + strconv.Itoa(port)
-	aClient := a.clientWithLock(aKey)
+	aClient := a.clientWithLock(aKey, host, port)
 
-	return aClient.connect(host, port)
+	return aClient.connect
 }
 
-func (a *aerospikeClientRegistry) clientWithLock(key string) *aerospikeClient {
+func (a *aerospikeClientRegistry) clientWithLock(key string, host string, port int) *aerospikeClient {
 	a.mutex.Lock()
 
 	client, ok := a.index[key]
 	if !ok {
 		client = &aerospikeClient{}
+		if err := client.init(host, port); err != nil {
+			fmt.Printf("error occurred while connecting to aerospike client %v\n", err.Error())
+		}
 		a.index[key] = client
 	}
 

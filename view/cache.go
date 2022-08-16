@@ -32,9 +32,10 @@ type (
 		cache        cache.Cache
 
 		initialized     bool
-		aerospikeClient *as.Client
+		aerospikeClient func() (*as.Client, error)
 		mux             sync.Mutex
 		Warmup          *Warmup
+		last            *as.Client
 	}
 
 	Warmup struct {
@@ -147,7 +148,10 @@ func (c *Cache) aerospikeCache(aView *View) (cache.Cache, error) {
 		return nil, err
 	}
 
-	client, err := aClientPool.Client(host, port)
+	clientProvider := aClientPool.Client(host, port)
+	c.aerospikeClient = clientProvider
+
+	client, err := clientProvider()
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +161,7 @@ func (c *Cache) aerospikeCache(aView *View) (cache.Cache, error) {
 		return nil, err
 	}
 
-	c.aerospikeClient = client
+	c.last = client
 	return aerospike.New(namespace, expanded, client, uint32(c.TimeToLiveMs/1000))
 }
 
@@ -270,12 +274,13 @@ func (c *Cache) inherit(source *Cache) error {
 }
 
 func (c *Cache) recreateCacheIfNeeded() error {
-	if c.aerospikeClient.IsConnected() {
-		return nil
-	}
-
 	c.mux.Lock()
 	defer c.mux.Unlock()
+
+	client, err := c.aerospikeClient()
+	if err != nil || c.last == client {
+		return err
+	}
 
 	aerospikeCache, err := c.aerospikeCache(c.owner)
 	if err != nil {
