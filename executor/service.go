@@ -16,7 +16,7 @@ func New() *Executor {
 }
 
 func (e *Executor) Exec(ctx context.Context, session *Session) error {
-	data, err := e.sqlBuilder.Build(session.View, session.Lookup(session.View))
+	data, printer, err := e.sqlBuilder.Build(session.View, session.Lookup(session.View))
 	if err != nil {
 		return err
 	}
@@ -36,7 +36,7 @@ func (e *Executor) Exec(ctx context.Context, session *Session) error {
 	wg := &sync.WaitGroup{}
 	wg.Add(len(data))
 	for i := range data {
-		go e.execData(ctx, wg, tx, data[i], errors)
+		e.execData(ctx, wg, tx, data[i], errors)
 	}
 
 	wg.Wait()
@@ -45,6 +45,8 @@ func (e *Executor) Exec(ctx context.Context, session *Session) error {
 		_ = tx.Rollback()
 		return err
 	}
+
+	printer.Flush()
 
 	return tx.Commit()
 }

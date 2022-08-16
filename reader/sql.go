@@ -47,7 +47,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 		exclude = &Exclude{}
 	}
 
-	template, sanitized, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parentOfAclView)
+	template, sanitized, _, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parentOfAclView)
 	if err != nil {
 		return nil, err
 	}

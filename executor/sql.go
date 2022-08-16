@@ -2,6 +2,7 @@ package executor
 
 import (
 	"github.com/viant/datly/executor/parser"
+	"github.com/viant/datly/logger"
 	"github.com/viant/datly/view"
 	"strings"
 )
@@ -19,10 +20,10 @@ func NewBuilder() *SqlBuilder {
 	return &SqlBuilder{}
 }
 
-func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) ([]*SQLStatment, error) {
-	SQL, params, err := aView.Template.EvaluateSource(paramState.Values, paramState.Has, nil)
+func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) ([]*SQLStatment, *logger.Printer, error) {
+	SQL, params, printer, err := aView.Template.EvaluateSource(paramState.Values, paramState.Has, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for {
@@ -52,12 +53,12 @@ func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) ([]*SQ
 		var placeholders []interface{}
 		expand, err := aView.Expand(&placeholders, data.SQL, &view.Selector{}, view.CommonParams{}, &view.BatchData{}, params)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		data.SQL = expand
 		data.Args = placeholders
 	}
 
-	return result, nil
+	return result, printer, nil
 }

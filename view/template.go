@@ -213,7 +213,7 @@ func NewEvaluator(paramSchema, presenceSchema reflect.Type, template string) (*E
 		return nil, err
 	}
 
-	if err = evaluator.planner.DefineVariable(Logger, reflect.TypeOf(logger.Printer{})); err != nil {
+	if err = evaluator.planner.DefineVariable(Logger, reflect.TypeOf(&logger.Printer{})); err != nil {
 		return nil, err
 	}
 
@@ -225,9 +225,10 @@ func NewEvaluator(paramSchema, presenceSchema reflect.Type, template string) (*E
 	return evaluator, nil
 }
 
-func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parent *View) (string, *CriteriaSanitizer, error) {
+func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parent *View) (string, *CriteriaSanitizer, *logger.Printer, error) {
+	printer := &logger.Printer{}
 	if t.wasEmpty {
-		return t.Source, &CriteriaSanitizer{}, nil
+		return t.Source, &CriteriaSanitizer{}, printer, nil
 	}
 
 	viewParam := &Param{}
@@ -238,11 +239,11 @@ func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, paren
 	}
 
 	params := &CriteriaSanitizer{}
-	SQL, err := t.sqlEvaluator.Evaluate(t.Schema.Type(), externalParams, presenceMap, viewParam, params)
-	return SQL, params, err
+	SQL, err := t.sqlEvaluator.Evaluate(t.Schema.Type(), externalParams, presenceMap, viewParam, params, printer)
+	return SQL, params, printer, err
 }
 
-func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMap interface{}, viewParam *Param, params *CriteriaSanitizer) (string, error) {
+func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMap interface{}, viewParam *Param, params *CriteriaSanitizer, logger *logger.Printer) (string, error) {
 	externalType := reflect.TypeOf(externalParams)
 	if schemaType != externalType {
 		return "", fmt.Errorf("inompactible types, wanted %v got %T", schemaType.String(), externalParams)
@@ -266,6 +267,10 @@ func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMa
 	}
 
 	if err := newState.SetValue(Criteria, params); err != nil {
+		return "", err
+	}
+
+	if err := newState.SetValue(Logger, logger); err != nil {
 		return "", err
 	}
 

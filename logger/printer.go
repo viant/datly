@@ -12,16 +12,17 @@ import (
 var stringType = reflect.TypeOf("")
 
 type Printer struct {
+	buffer []string
 }
 
-func (p Printer) Discover(aFunc interface{}) (func(operands []*op.Operand, state *est.State) (interface{}, error), reflect.Type, bool) {
+func (p *Printer) Discover(aFunc interface{}) (func(operands []*op.Operand, state *est.State) (interface{}, error), reflect.Type, bool) {
 	switch actual := aFunc.(type) {
-	case func(_ Printer, args ...interface{}) string:
+	case func(_ *Printer, args ...interface{}) string:
 		return func(operands []*op.Operand, state *est.State) (interface{}, error) {
 			return actual(p, p.asInterfaces(operands[1:], state)), nil
 		}, stringType, true
 
-	case func(_ Printer, message string, args ...interface{}) string:
+	case func(_ *Printer, message string, args ...interface{}) string:
 		return func(operands []*op.Operand, state *est.State) (interface{}, error) {
 			if len(operands) < 1 {
 				return nil, fmt.Errorf("expected to get 1 or more arguments but got %v", len(operands))
@@ -38,7 +39,7 @@ func (p Printer) Discover(aFunc interface{}) (func(operands []*op.Operand, state
 	return nil, nil, false
 }
 
-func (p Printer) asInterfaces(operands []*op.Operand, state *est.State) []interface{} {
+func (p *Printer) asInterfaces(operands []*op.Operand, state *est.State) []interface{} {
 	args := make([]interface{}, len(operands))
 
 	for i, operand := range operands {
@@ -50,12 +51,27 @@ func (p Printer) asInterfaces(operands []*op.Operand, state *est.State) []interf
 	return args
 }
 
-func (p Printer) Println(args ...interface{}) string {
+func (p *Printer) Println(args ...interface{}) string {
 	fmt.Println(args...)
 	return ""
 }
 
-func (p Printer) Printf(format string, args ...interface{}) string {
-	fmt.Printf(strings.ReplaceAll(format, "\\n", "\n"), args...)
+func (p *Printer) Printf(format string, args ...interface{}) string {
+	fmt.Printf(p.Sprintf(format, args...))
 	return ""
+}
+
+func (p *Printer) Add(format string, args ...interface{}) string {
+	p.buffer = append(p.buffer, p.Sprintf(format, args...))
+	return ""
+}
+
+func (p *Printer) Sprintf(format string, args ...interface{}) string {
+	return fmt.Sprintf(strings.ReplaceAll(format, "\\n", "\n"), args...)
+}
+
+func (p *Printer) Flush() {
+	for _, s := range p.buffer {
+		fmt.Print(s)
+	}
 }

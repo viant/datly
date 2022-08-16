@@ -90,7 +90,7 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 	params := newValue(aView.Template.Schema.Type())
 	presence := newValue(aView.Template.PresenceSchema.Type())
 
-	source, sanitized, err := aView.Template.EvaluateSource(params, presence, aView)
+	source, sanitized, _, err := aView.Template.EvaluateSource(params, presence, aView)
 	if err != nil {
 		return nil, err
 	}
