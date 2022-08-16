@@ -92,7 +92,7 @@ func (c *Connector) DB() (*sql.DB, error) {
 	}
 
 	var err error
-	dsn := c._dsn
+	dsn := c.getDSN()
 	var secret *scy.Secret
 	if c.Secret != nil {
 		secrets := scy.New()
@@ -142,10 +142,6 @@ func (c *Connector) inherit(connector *Connector) {
 		c.Driver = connector.Driver
 	}
 
-	if c._dsn == "" {
-		c._dsn = connector._dsn
-	}
-
 	if c.db == nil {
 		c.db = connector.db
 	}
@@ -171,4 +167,8 @@ func (c *Connector) setDriverOptions(secret *scy.Secret) {
 			bigquery.SetOptions(option.WithHTTPClient(client))
 		}
 	}
+}
+
+func (c *Connector) getDSN() string {
+	return notEmptyOf(c._dsn, c.DSN)
 }
