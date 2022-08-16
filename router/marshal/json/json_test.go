@@ -35,7 +35,7 @@ func TestJson_Marshal(t *testing.T) {
 		{
 			description: "nils",
 			data:        nilsPtr,
-			expect:      `{"Int":null,"Int8":null,"Uint8":null,"Int16":null,"Uint16":null,"Int32":null,"Uint32":null,"Int64":null,"Uint64":null,"Byte":null,"String":"","Float32":null,"Float64":null,"Bool":null}`,
+			expect:      `{"Int":null,"Int8":null,"Uint8":null,"Int16":null,"Uint16":null,"Int32":null,"Uint32":null,"Int64":null,"Uint64":null,"Byte":null,"String":null,"Float32":null,"Float64":null,"Bool":null}`,
 		},
 		{
 			description: "slice without relations",

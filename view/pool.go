@@ -12,7 +12,7 @@ import (
 )
 
 type (
-	dbPool struct {
+	dbRegistry struct {
 		index map[string]*db
 		mutex sync.Mutex
 	}
@@ -25,14 +25,17 @@ type (
 		initialized bool
 	}
 
-	aerospikePool struct {
+	//TODO: connection should be handled in background
+	aerospikeClientRegistry struct {
 		index map[string]*aerospikeClient
 		mutex sync.Mutex
 	}
 
 	aerospikeClient struct {
-		actual *as.Client
-		mutex  sync.Mutex
+		actual      *as.Client
+		mutex       sync.Mutex
+		cancelFunc  func()
+		initialized bool
 	}
 )
 
@@ -44,21 +47,52 @@ func (c *aerospikeClient) connect(host string, port int) (*as.Client, error) {
 }
 
 func (c *aerospikeClient) connectIfNeeded(host string, port int) (*as.Client, error) {
+	return c.clientWithTimeout(time.Duration(1)*time.Second, host, port)
+}
+
+func (c *aerospikeClient) tryConnect(host string, port int, channel chan func() (*as.Client, error)) {
+	defer close(channel)
+
 	client := c.actual
 	if client != nil && client.IsConnected() {
-		return client, nil
+		channel <- func() (*as.Client, error) {
+			return client, nil
+		}
 	}
 
 	var err error
 	c.actual, err = as.NewClient(host, port)
-	return c.actual, err
+	channel <- func() (*as.Client, error) {
+		return c.actual, err
+	}
+}
+
+func (c *aerospikeClient) clientWithTimeout(duration time.Duration, host string, port int) (*as.Client, error) {
+	ctx := context.Background()
+	clientChannel := make(chan func() (*as.Client, error))
+	withTimeout, cancelFunc := context.WithTimeout(ctx, duration)
+
+	go c.tryConnect(host, port, clientChannel)
+
+	var client *as.Client
+	var err error
+	select {
+	case actual := <-clientChannel:
+		client, err = actual()
+	case <-withTimeout.Done():
+		client, err = nil, fmt.Errorf("timeout error,couldn't connect to aerospike cache")
+	}
+
+	cancelFunc()
+
+	return client, err
 }
 
 var aDbPool = newPool()
 var aClientPool = newClientPool()
 
-func newClientPool() *aerospikePool {
-	return &aerospikePool{index: map[string]*aerospikeClient{}}
+func newClientPool() *aerospikeClientRegistry {
+	return &aerospikeClientRegistry{index: map[string]*aerospikeClient{}}
 }
 
 func (d *db) initWithLock(driver string, dsn string, config *DBConfig) error {
@@ -152,23 +186,26 @@ func (d *db) keepConnectionAlive(driver string, dsn string, config *DBConfig) {
 					}
 					d.mutex.Unlock()
 
-					err = newDb.PingContext(d.ctxWithTimeout(time.Duration(5) * time.Second))
+					ctx, timeout := d.ctxWithTimeout(time.Duration(5) * time.Second)
+					err = newDb.PingContext(ctx)
 					if err != nil {
 						fmt.Printf("[INFO] couldn't connect to one of %v database \n", driver)
 					}
+
+					timeout()
 				}
 			}
 		}
 	}(driver, dsn, config)
 }
 
-func (d *db) ctxWithTimeout(duration time.Duration) context.Context {
+func (d *db) ctxWithTimeout(duration time.Duration) (context.Context, context.CancelFunc) {
 	background := context.Background()
-	ctxWithTimeout, _ := context.WithTimeout(background, duration)
-	return ctxWithTimeout
+	ctxWithTimeout, cancelFn := context.WithTimeout(background, duration)
+	return ctxWithTimeout, cancelFn
 }
 
-func (p *dbPool) DB(driver, dsn string, config *DBConfig) func() (*sql.DB, error) {
+func (p *dbRegistry) DB(driver, dsn string, config *DBConfig) func() (*sql.DB, error) {
 	builder := &strings.Builder{}
 
 	if config == nil {
@@ -193,7 +230,7 @@ func (p *dbPool) DB(driver, dsn string, config *DBConfig) func() (*sql.DB, error
 	return dbConn.connect
 }
 
-func (p *dbPool) getItem(key string, driver string, dsn string, config *DBConfig) *db {
+func (p *dbRegistry) getItem(key string, driver string, dsn string, config *DBConfig) *db {
 	p.mutex.Lock()
 	item, ok := p.index[key]
 	if !ok {
@@ -212,29 +249,33 @@ func (p *dbPool) getItem(key string, driver string, dsn string, config *DBConfig
 
 func ResetDBPool() {
 	for _, dbItem := range aDbPool.index {
-		dbItem.cancelFunc()
+		if dbItem.cancelFunc != nil {
+			dbItem.cancelFunc()
+		}
 	}
 
 	aDbPool = newPool()
 }
 
 func ResetAerospikePool() {
+	for _, aClient := range aClientPool.index {
+		aClient.cancelFunc()
+	}
 	aClientPool = newClientPool()
 }
 
-func newPool() *dbPool {
-	return &dbPool{index: map[string]*db{}}
+func newPool() *dbRegistry {
+	return &dbRegistry{index: map[string]*db{}}
 }
 
-func (a *aerospikePool) Client(host string, port int) (*as.Client, error) {
+func (a *aerospikeClientRegistry) Client(host string, port int) (*as.Client, error) {
 	aKey := host + ":" + strconv.Itoa(port)
 	aClient := a.clientWithLock(aKey)
 
 	return aClient.connect(host, port)
-
 }
 
-func (a *aerospikePool) clientWithLock(key string) *aerospikeClient {
+func (a *aerospikeClientRegistry) clientWithLock(key string) *aerospikeClient {
 	a.mutex.Lock()
 
 	client, ok := a.index[key]

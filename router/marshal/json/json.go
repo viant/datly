@@ -406,7 +406,7 @@ func updateStringMarshaller(stringifier *fieldMarshaller, wasPtr bool, tag *Defa
 					return nil
 				}
 
-				sb.WriteString(`""`)
+				sb.WriteString(null)
 				return nil
 			}
 

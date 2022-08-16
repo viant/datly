@@ -216,10 +216,9 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 	var options = []option.Option{io.Resolve(collector.Resolve)}
 	if aView.Cache != nil {
 		service, err := aView.Cache.Service()
-		if err != nil {
-			return err
+		if err == nil {
+			options = append(options, service)
 		}
-		options = append(options, service)
 	}
 	if columnInMatcher != nil {
 		options = append(options, &columnInMatcher)
