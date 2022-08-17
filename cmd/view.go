@@ -95,7 +95,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 
 	aView := s.buildMainView(s.options, generate)
 	if sqlExecModeView != nil {
-		s.updateViewInSQLExecMode(aView, sqlExecModeView, routeOption)
+		s.updateViewInSQLExecMode(aView, sqlExecModeView, dataViewParams, routeOption)
 	}
 
 	if _, err := s.addViewConn(s.options.Connector.DbName, aView); err != nil {
@@ -216,6 +216,7 @@ func (s *serverBuilder) buildDataParameters(dataParameters map[string]*option.Ta
 		if aTable.DataViewParameter == nil {
 			aTable.DataViewParameter = &view.Parameter{}
 		}
+
 		aTable.DataViewParameter.In = &view.Location{Name: paramName, Kind: view.DataViewKind}
 		aTable.DataViewParameter.Schema = &view.Schema{Name: strings.Title(paramName)}
 		aTable.DataViewParameter.Name = paramName
@@ -225,7 +226,7 @@ func (s *serverBuilder) buildDataParameters(dataParameters map[string]*option.Ta
 	return nil
 }
 
-func (s *serverBuilder) updateViewInSQLExecMode(aView *view.View, viewMeta *option.ViewMeta, route *option.Route) {
+func (s *serverBuilder) updateViewInSQLExecMode(aView *view.View, viewMeta *option.ViewMeta, params map[string]*option.TableParam, route *option.Route) {
 	aView.Mode = view.Mode(viewMeta.Mode)
 	aView.Template = &view.Template{
 		Source:     viewMeta.Source,
@@ -264,7 +265,9 @@ func (s *serverBuilder) updateViewInSQLExecMode(aView *view.View, viewMeta *opti
 		p.DataType = dataType
 
 		metaParameter := convertMetaParameter(p)
-		if route.Method != http.MethodGet {
+		if _, ok := params[p.Name]; ok {
+			metaParameter.In.Kind = view.DataViewKind
+		} else if route.Method != http.MethodGet {
 			metaParameter.In.Kind = view.RequestBodyKind
 		} else {
 			metaParameter.In.Kind = view.QueryKind

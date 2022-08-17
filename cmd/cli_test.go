@@ -158,11 +158,23 @@ func TestRun(t *testing.T) {
 			viewURL:    "/v1/api/meta/view/dev/status",
 			dataMethod: http.MethodGet,
 		},
+		{
+			description: "set view param",
+			URI:         "case012_set_view_param",
+			args: []string{
+				"-N=eventTypes",
+				"-D=sqlite3",
+				"-A=/tmp/datly/generator/db.db",
+				"-X=testdata/case012_set_view_param/update.sql",
+			},
+			viewURL:    "/v1/api/meta/view/dev/status",
+			dataMethod: http.MethodGet,
+		},
 	}
 
 	loader := afs.New()
 	//for i, testCase := range testCases[len(testCases)-1:] {
-	for i, testCase := range testCases {
+	for i, testCase := range testCases[:len(testCases)-1] {
 		mem.ResetSingleton()
 		gateway.ResetSingleton()
 		tests.LogHeader(fmt.Sprintf("Running testcase: %v\n", i))
