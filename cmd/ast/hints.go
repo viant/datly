@@ -47,7 +47,8 @@ func ExtractHint(text string) string {
 }
 
 func UnmarshalHint(hint string, dest interface{}) (string, error) {
-	hint = hint[3 : len(hint)-2]
+	hint = hint[2 : len(hint)-2]
+	hint = strings.TrimSpace(hint)
 
 	//TODO: replace with parsly
 	index := strings.LastIndex(hint, "}")

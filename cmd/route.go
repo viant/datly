@@ -59,7 +59,7 @@ func (s *serverBuilder) updateRouteSQLMeta(ctx context.Context, route *option.Ro
 }
 
 func (s *serverBuilder) updateRouteInExecMode(ctx context.Context, route *option.Route, SQL string) error {
-	sqlExecModeView, err := ast.Parse(SQL, route)
+	sqlExecModeView, err := ast.Parse(SQL, route, route.ParameterHints)
 	if err != nil {
 		return err
 	}
@@ -73,7 +73,7 @@ func (s *serverBuilder) updateRouteInReadMode(route *option.Route, SQL string) e
 	rData := &option.ReadData{}
 	var err error
 
-	rData.Table, rData.DataViewParams, err = ParseSQLx(SQL, route)
+	rData.Table, rData.DataViewParams, err = ParseSQLx(SQL, route, route.ParameterHints)
 	if err != nil {
 		return err
 	}

@@ -13,14 +13,14 @@ import (
 	"strings"
 )
 
-func ParseSQLx(SQL string, routeOpt *option.Route) (*option.Table, map[string]*option.TableParam, error) {
+func ParseSQLx(SQL string, routeOpt *option.Route, parameterHints option.ParameterHints) (*option.Table, map[string]*option.TableParam, error) {
 	aQuery, err := parser.ParseQuery(SQL)
 	if aQuery == nil {
 		return nil, nil, err
 	}
 
 	var tables = map[string]*option.Table{}
-	table, err := buildTable(aQuery.From.X, routeOpt)
+	table, err := buildTable(aQuery.From.X, routeOpt, parameterHints)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -37,7 +37,7 @@ func ParseSQLx(SQL string, routeOpt *option.Route) (*option.Table, map[string]*o
 
 	if len(aQuery.Joins) > 0 {
 		for _, join := range aQuery.Joins {
-			if err := processJoin(join, tables, table.Columns, dataParameters, routeOpt); err != nil {
+			if err := processJoin(join, tables, table.Columns, dataParameters, routeOpt, parameterHints); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -45,13 +45,13 @@ func ParseSQLx(SQL string, routeOpt *option.Route) (*option.Table, map[string]*o
 	return table, dataParameters, nil
 }
 
-func buildTable(x node.Node, routeOpt *option.Route) (*option.Table, error) {
+func buildTable(x node.Node, routeOpt *option.Route, parameterHints option.ParameterHints) (*option.Table, error) {
 	//var err error
 	table := &option.Table{}
 	switch actual := x.(type) {
 	case *expr.Raw:
 		table.SQL = strings.Trim(actual.Raw, "()")
-		if err := UpdateTableSettings(table, routeOpt); err != nil {
+		if err := UpdateTableSettings(table, routeOpt, parameterHints); err != nil {
 			return table, err
 		}
 
@@ -62,7 +62,7 @@ func buildTable(x node.Node, routeOpt *option.Route) (*option.Table, error) {
 	return table, nil
 }
 
-func UpdateTableSettings(table *option.Table, routeOpt *option.Route) error {
+func UpdateTableSettings(table *option.Table, routeOpt *option.Route, parameterHints option.ParameterHints) error {
 	innerSQL, paramsExprs := ast.ExtractCondBlock(table.SQL)
 	innerQuery, err := parser.ParseQuery(innerSQL)
 	fmt.Printf("innerSQL %v %v\n", table.SQL, err)
@@ -85,7 +85,7 @@ func UpdateTableSettings(table *option.Table, routeOpt *option.Route) error {
 		table.InnerAlias = innerQuery.From.Alias
 	}
 
-	table.ViewMeta, err = ast.Parse(table.SQL, routeOpt)
+	table.ViewMeta, err = ast.Parse(table.SQL, routeOpt, parameterHints)
 	if err != nil {
 		return err
 	}
@@ -132,8 +132,8 @@ func appendParamExpr(x node.Node, op string, y node.Node, list *[]string) {
 	}
 }
 
-func processJoin(join *query.Join, tables map[string]*option.Table, outerColumn option.Columns, dataParameters map[string]*option.TableParam, routeOpt *option.Route) error {
-	relTable, err := buildTable(join.With, routeOpt)
+func processJoin(join *query.Join, tables map[string]*option.Table, outerColumn option.Columns, dataParameters map[string]*option.TableParam, routeOpt *option.Route, parameterHints option.ParameterHints) error {
+	relTable, err := buildTable(join.With, routeOpt, parameterHints)
 	if err != nil {
 		return err
 	}

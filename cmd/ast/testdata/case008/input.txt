@@ -14,6 +14,6 @@ AND ID = 10
 #end
 
 #if($Has.quantity)
-AND quantity = $quantity /* {"DataType": "time.Time"} */
+AND quantity = $quantity
 AND quantity = $Unsafe.quantity
 #end

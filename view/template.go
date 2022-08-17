@@ -129,7 +129,7 @@ func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resourc
 			return err
 		}
 
-		if err := builder.AddType(param.Name, param.Schema.Type()); err != nil {
+		if err := builder.AddType(param.Name, param.ActualParamType()); err != nil {
 			return err
 		}
 	}

@@ -159,6 +159,18 @@ func TestRun(t *testing.T) {
 			dataMethod: http.MethodGet,
 		},
 		{
+			description: "AsInts codec",
+			URI:         "case013_ints_codec",
+			args: []string{
+				"-N=eventTypes",
+				"-D=sqlite3",
+				"-A=/tmp/datly/generator/db.db",
+				"-X=testdata/case013_ints_codec/update.sql",
+			},
+			viewURL:    "/v1/api/meta/view/dev/status",
+			dataMethod: http.MethodGet,
+		},
+		{
 			description: "set view param",
 			URI:         "case012_set_view_param",
 			args: []string{
@@ -174,7 +186,7 @@ func TestRun(t *testing.T) {
 
 	loader := afs.New()
 	//for i, testCase := range testCases[len(testCases)-1:] {
-	for i, testCase := range testCases[:len(testCases)-1] {
+	for i, testCase := range testCases[11:12] {
 		mem.ResetSingleton()
 		gateway.ResetSingleton()
 		tests.LogHeader(fmt.Sprintf("Running testcase: %v\n", i))

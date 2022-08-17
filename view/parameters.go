@@ -82,6 +82,7 @@ func (v *Codec) Init(resource *Resource, view *View, paramType reflect.Type) err
 		}
 		v.Source = data
 	}
+
 	if err := v.Schema.Init(nil, nil, format.CaseUpperCamel, resource._types); err != nil {
 		return err
 	}
@@ -134,6 +135,7 @@ func (v *Codec) Transform(ctx context.Context, raw string, options ...interface{
 func (v *Codec) inherit(asCodec codec.Codec) {
 	v.Name = asCodec.Name()
 	v.Schema = NewSchema(asCodec.ResultType())
+	v.Schema.DataType = asCodec.ResultType().String()
 	v._codecFn = asCodec.Valuer().Value
 }
 
@@ -401,7 +403,16 @@ func (p *Parameter) initCodec(resource *Resource, view *View, paramType reflect.
 	if err := p.Codec.Init(resource, view, paramType); err != nil {
 		return err
 	}
+
 	return nil
+}
+
+func (p *Parameter) ActualParamType() reflect.Type {
+	if p.Codec != nil && p.Codec.Schema != nil {
+		return p.Codec.Schema.Type()
+	}
+
+	return p.Schema.Type()
 }
 
 func (p *Parameter) ensureSelectorParamValue(selector *Selector) {

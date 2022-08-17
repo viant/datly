@@ -2,7 +2,6 @@ package ast
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/parsly"
@@ -12,7 +11,7 @@ import (
 
 var resetWords = []string{"AND", "OR", "WITH", "HAVING", "LIMIT", "OFFSET", "WHERE", "SELECT", "UNION", "ALL", "AS", "BETWEEN", "IN"}
 
-func correctUntyped(SQL string, variables map[string]bool, meta *option.ViewMeta) {
+func (d *paramTypeDetector) correctUntyped(SQL string, variables map[string]bool, meta *option.ViewMeta) {
 	var typer option.Typer
 	var untyped []*option.Parameter
 
@@ -53,11 +52,10 @@ outer:
 						continue
 					}
 
-					matched = cursor.MatchAfterOptional(whitespaceMatcher, commentBlockMatcher)
-					if matched.Code == commentBlockToken {
+					hint, ok := d.hints[paramName]
+					if ok {
 						parameter := &option.Parameter{}
-						commentContent := bytes.TrimSpace(bytes.Trim(matched.Bytes(cursor), "/**/"))
-						_ = json.Unmarshal(commentContent, parameter)
+						_, _ = UnmarshalHint(hint.Hint, parameter)
 						inherit(aParam, parameter)
 					}
 
@@ -100,5 +98,9 @@ func inherit(generated *option.Parameter, inlined *option.Parameter) {
 
 	if inlined.Id != "" {
 		generated.Id = inlined.Id
+	}
+
+	if inlined.Codec != "" {
+		generated.Codec = inlined.Codec
 	}
 }

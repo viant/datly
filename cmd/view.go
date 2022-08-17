@@ -78,12 +78,12 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 		}
 
 		if ast.IsSQLExecMode(SQL) {
-			if sqlExecModeView, err = ast.Parse(SQL, routeOption); err != nil {
+			if sqlExecModeView, err = ast.Parse(SQL, routeOption, parameterHints); err != nil {
 				return err
 			}
 			s.updateMetaColumnTypes(ctx, sqlExecModeView, routeOption)
 		} else {
-			if xTable, dataViewParams, err = ParseSQLx(SQL, routeOption); err != nil {
+			if xTable, dataViewParams, err = ParseSQLx(SQL, routeOption, parameterHints); err != nil {
 				log.Println(err)
 			}
 			if xTable != nil {
@@ -209,7 +209,7 @@ func (s *serverBuilder) buildDataParameters(dataParameters map[string]*option.Ta
 			continue
 		}
 		aTable.SQL = SQL
-		if err := UpdateTableSettings(aTable, routeOption); err != nil {
+		if err := UpdateTableSettings(aTable, routeOption, parameters); err != nil {
 			return err
 		}
 		aTable.Alias = paramName
@@ -489,6 +489,10 @@ func updateParamPrecedence(dest *view.Parameter, source *view.Parameter) {
 
 	if dest.ErrorStatusCode == 0 && source.ErrorStatusCode != 0 {
 		dest.ErrorStatusCode = source.ErrorStatusCode
+	}
+
+	if dest.Codec == nil {
+		dest.Codec = source.Codec
 	}
 }
 

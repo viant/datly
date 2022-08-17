@@ -21,6 +21,7 @@ func TestParse(t *testing.T) {
 		description string
 		path        string
 		uriParams   map[string]bool
+		hints       option.ParameterHints
 	}{
 		{
 			description: "basic",
@@ -53,6 +54,9 @@ func TestParse(t *testing.T) {
 		{
 			description: "param type hint",
 			path:        "case008",
+			hints: option.ParameterHints{
+				{Parameter: "quantity", Hint: `/* {"DataType": "time.Time"} */`},
+			},
 		},
 		{
 			description: "uri params",
@@ -73,7 +77,7 @@ func TestParse(t *testing.T) {
 			continue
 		}
 
-		viewMeta, err := ast.Parse(string(inputData), &option.Route{URIParams: testcase.uriParams})
+		viewMeta, err := ast.Parse(string(inputData), &option.Route{URIParams: testcase.uriParams}, testcase.hints)
 		if !assert.Nil(t, err, testcase.description) {
 			continue
 		}

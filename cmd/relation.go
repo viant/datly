@@ -217,8 +217,14 @@ func (s *serverBuilder) buildSQLSource(aView *view.View, table *option2.Table) e
 }
 
 func convertMetaParameter(param *option2.Parameter) *view.Parameter {
+	var aCodec *view.Codec
+	if param.Codec != "" {
+		aCodec = &view.Codec{Reference: shared.Reference{Ref: param.Codec}}
+	}
+
 	return &view.Parameter{
-		Name: param.Id,
+		Name:  param.Id,
+		Codec: aCodec,
 		Schema: &view.Schema{
 			DataType:    param.DataType,
 			Cardinality: param.Cardinality,

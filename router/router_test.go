@@ -691,9 +691,8 @@ func TestRouter(t *testing.T) {
 		if i != 0 {
 			testcases[i-1].cleanup()
 		}
-		tests.LogHeader(fmt.Sprintf("Running testcase  %v, %v\n", i, tCase.description))
 
-		fmt.Println()
+		tests.LogHeader(fmt.Sprintf("Running testcase  %v, %v\n", i, tCase.description))
 		testUri := path.Join(testLocation, "testdata")
 		routingHandler, ok := tCase.init(t, testUri)
 		if !ok {

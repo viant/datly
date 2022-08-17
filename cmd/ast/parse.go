@@ -21,9 +21,10 @@ type paramTypeDetector struct {
 	paramTypes map[string]string
 	variables  map[string]bool
 	viewMeta   *option.ViewMeta
+	hints      map[string]*option.ParameterHint
 }
 
-func newParamTypeDetector(route *option.Route, meta *option.ViewMeta) *paramTypeDetector {
+func newParamTypeDetector(route *option.Route, meta *option.ViewMeta, hints option.ParameterHints) *paramTypeDetector {
 	uriParams := map[string]bool{}
 	paramTypes := map[string]string{}
 	if route != nil {
@@ -41,10 +42,11 @@ func newParamTypeDetector(route *option.Route, meta *option.ViewMeta) *paramType
 		paramTypes: paramTypes,
 		variables:  map[string]bool{},
 		viewMeta:   meta,
+		hints:      hints.Index(),
 	}
 }
 
-func Parse(SQL string, route *option.Route) (*option.ViewMeta, error) {
+func Parse(SQL string, route *option.Route, hints option.ParameterHints) (*option.ViewMeta, error) {
 	viewMeta := option.NewViewMeta()
 
 	block, err := parser.Parse([]byte(SQL))
@@ -65,12 +67,12 @@ func Parse(SQL string, route *option.Route) (*option.ViewMeta, error) {
 		cursor.Input[i] = ' '
 	}
 
-	detector := newParamTypeDetector(route, viewMeta)
+	detector := newParamTypeDetector(route, viewMeta, hints)
 	detector.implyDefaultParams(block.Statements(), true, nil, false)
 	viewMeta.SetVariables(detector.variables)
 
 	sqlNoVelty := removeVeltySyntax(string(from))
-	correctUntyped(sqlNoVelty, detector.variables, viewMeta)
+	detector.correctUntyped(sqlNoVelty, detector.variables, viewMeta)
 
 	viewMeta.Source = actualSource
 

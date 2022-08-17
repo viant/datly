@@ -40,6 +40,7 @@ type (
 		DataType       string           `json:",omitempty" yaml:",omitempty"`
 		Repeated       bool             `json:",omitempty" yaml:",omitempty"`
 		ExpectReturned *int             `json:",omitempty" yaml:",omitempty"`
+		Codec          string           `json:",omitempty" yaml:",omitempty"`
 		FullName       string           `json:"-" yaml:"-"`
 		Assumed        bool             `json:",omitempty" yaml:",omitempty"`
 		Typer          Typer            `json:",omitempty" yaml:",omitempty"`
