@@ -93,6 +93,7 @@ func (a *Accessor) upstream(ptr unsafe.Pointer, indexes ...int) (unsafe.Pointer,
 	for i := 0; i < len(a.xFields)-1; i++ {
 		field := a.xFields[i]
 		p := field.Pointer(ptr)
+
 		if field.Kind() == reflect.Ptr && field.ValuePointer(ptr) == nil {
 			newValue := reflect.New(field.Type.Elem()).Interface()
 			field.SetValue(ptr, newValue)
@@ -119,12 +120,13 @@ func (a *Accessor) Value(values interface{}, indexes ...int) (interface{}, error
 	}
 
 	ptr := xunsafe.AsPointer(values)
-	pointer, index := a.upstream(ptr, indexes...)
+	var index int
+	ptr, index = a.upstream(ptr, indexes...)
 	xField := a.xFields[len(a.xFields)-1]
-	v := xField.Value(pointer)
+	v := xField.Value(ptr)
 
 	if a.xSlices[len(a.xSlices)-1] != nil && len(indexes) > index {
-		v = a.xSlices[len(a.xSlices)-1].ValueAt(xField.Pointer(pointer), indexes[index])
+		v = a.xSlices[len(a.xSlices)-1].ValueAt(xField.Pointer(ptr), indexes[index])
 	}
 
 	return v, nil
@@ -136,22 +138,25 @@ func (a *Accessor) Values(values interface{}, indexes ...int) ([]interface{}, er
 	}
 
 	ptr := xunsafe.AsPointer(values)
-	pointer, index := a.upstream(ptr, indexes...)
+	var index int
+	ptr, index = a.upstream(ptr, indexes...)
 	xField := a.xFields[len(a.xFields)-1]
 
 	if xField.Type.Kind() != reflect.Slice {
-		v := xField.Value(pointer)
+		v := xField.Value(ptr)
 
 		if (len(a.xSlices)) != 0 && a.xSlices[len(a.xSlices)-1] != nil && len(indexes) > index {
-			v = a.xSlices[len(a.xSlices)-1].ValueAt(xField.Pointer(pointer), indexes[index])
+			v = a.xSlices[len(a.xSlices)-1].ValueAt(xField.Pointer(ptr), indexes[index])
 		}
 
 		return []interface{}{v}, nil
 	}
 
+	ptr = xField.Pointer(ptr)
 	slice := a.xSlices[len(a.xSlices)-1]
-	sliceLen := slice.Len(pointer)
+	sliceLen := slice.Len(ptr)
 	placeholders := make([]interface{}, sliceLen)
+
 	for i := 0; i < sliceLen; i++ {
 		placeholders[i] = slice.ValueAt(ptr, i)
 	}

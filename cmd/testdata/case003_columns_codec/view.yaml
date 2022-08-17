@@ -19,6 +19,7 @@ Columns:
       Ref: AsStrings
       Schema:
         Cardinality: One
+        DataType: '[]string'
     DataType: string
     DatabaseColumn: slice
     Filterable: true
@@ -31,6 +32,7 @@ ColumnsConfig:
       Ref: AsStrings
       Schema:
         Cardinality: One
+        DataType: '[]string'
     DataType: string
 Connector:
   Driver: sqlite3
