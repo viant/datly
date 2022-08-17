@@ -20,6 +20,7 @@ func (r Types) Lookup(name string) (reflect.Type, error) {
 	if !ok {
 		return nil, fmt.Errorf("not found type %v", name)
 	}
+
 	return rType, nil
 }
 

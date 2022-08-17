@@ -9,6 +9,8 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/modifier"
 	"github.com/viant/datly/auth/jwt"
+	"github.com/viant/datly/cmd/ast"
+	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/router"
@@ -17,6 +19,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
+	"strings"
 )
 
 type serverBuilder struct {
@@ -99,6 +102,34 @@ func (s *serverBuilder) loadAndInitConfig(ctx context.Context) error {
 
 	s.config = aConfig
 	return nil
+}
+
+func (s *serverBuilder) buildSchemaFromParamType(schemaName, paramType string) (*view.Definition, bool) {
+	return &view.Definition{
+		Name: schemaName,
+		Schema: &view.Schema{
+			Name:     schemaName,
+			DataType: paramType,
+		},
+	}, true
+}
+
+func (s *serverBuilder) buildParamViewTemplate(paramName string, hintsIndex map[string]*option.ParameterHint) *view.Template {
+	hint, ok := hintsIndex[paramName]
+	if !ok {
+		return nil
+	}
+
+	_, SQL := ast.SplitHint(hint.Hint)
+	SQL = strings.TrimSpace(SQL)
+
+	if !ast.IsDataViewKind(hint.Hint) {
+		return nil
+	}
+
+	return &view.Template{
+		Source: SQL,
+	}
 }
 
 func newBuilder(options *Options, logger io.Writer) *serverBuilder {

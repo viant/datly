@@ -57,7 +57,7 @@ Template:
       Name: Records
       PresenceName: Records
       Ref: Records
-      Required: false
+      Required: true
       Schema:
         Cardinality: Many
         Name: Records

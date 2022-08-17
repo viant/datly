@@ -71,8 +71,8 @@ func Parse(SQL string, route *option.Route, hints option.ParameterHints) (*optio
 	detector.implyDefaultParams(block.Statements(), true, nil, false)
 	viewMeta.SetVariables(detector.variables)
 
-	sqlNoVelty := removeVeltySyntax(string(from))
-	detector.correctUntyped(sqlNoVelty, detector.variables, viewMeta)
+	//sqlNoVelty := removeVeltySyntax(string(from))
+	detector.correctUntyped(string(from), detector.variables, viewMeta)
 
 	viewMeta.Source = actualSource
 
@@ -397,7 +397,7 @@ outer:
 		switch match.Code {
 		case parsly.EOF:
 			break outer
-		case scopeBlock:
+		case scopeBlockToken:
 			block := match.Text(cursor)
 			params = append(params, block[1:len(block)-1])
 		default:

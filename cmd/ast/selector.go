@@ -8,10 +8,12 @@ func ExtractSelector(text string) string {
 		match := cursor.MatchAfterOptional(whitespaceMatcher, selectorMatcher)
 		result := match.Text(cursor)
 		if match.Code == selectorToken {
-			match = cursor.MatchOne(exprGroupMatcher)
-			if match.Code == exprGroupToken {
+			match = cursor.MatchAny(exprGroupMatcher, scopeBlockMatcher)
+			switch match.Code {
+			case exprGroupToken, scopeBlockToken:
 				result += match.Text(cursor)
 			}
+
 			return result
 		}
 	}

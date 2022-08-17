@@ -27,9 +27,11 @@ outer:
 			if selExpr == "" {
 				continue outer
 			}
+
+			_, paramName := getHolderName(selExpr)
 			candidate := text[i+len(selExpr):]
 			if hint := ExtractHint(candidate); hint != "" {
-				hints = append(hints, &option.ParameterHint{Parameter: selExpr[1:], Hint: hint})
+				hints = append(hints, &option.ParameterHint{Parameter: paramName, Hint: hint})
 			}
 		}
 	}
@@ -50,19 +52,25 @@ func UnmarshalHint(hint string, dest interface{}) (string, error) {
 	hint = hint[2 : len(hint)-2]
 	hint = strings.TrimSpace(hint)
 
-	//TODO: replace with parsly
-	index := strings.LastIndex(hint, "}")
-	result := ""
-	if index != -1 {
-		result = hint[index+1:]
-		hint = hint[:index+1]
-	} else {
-		return hint, nil
+	hint, SQL := SplitHint(hint)
+	if hint == "" {
+		return SQL, nil
 	}
 
 	err := json.Unmarshal([]byte(hint), dest)
 	if err != nil {
 		return "", fmt.Errorf("invalid %s, %w", hint, err)
 	}
-	return strings.TrimSpace(result), err
+	return strings.TrimSpace(SQL), err
+}
+
+func SplitHint(hint string) (marshal string, SQL string) {
+	//TODO: replace with parsly
+
+	index := strings.LastIndex(hint, "}")
+	if index != -1 {
+		return hint[:index+1], hint[index+1:]
+	}
+
+	return "", hint
 }

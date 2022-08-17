@@ -4,28 +4,48 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/keywords"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlx/io/read/cache/ast"
+	"strconv"
 	"strings"
 )
 
 var resetWords = []string{"AND", "OR", "WITH", "HAVING", "LIMIT", "OFFSET", "WHERE", "SELECT", "UNION", "ALL", "AS", "BETWEEN", "IN"}
 
-func (d *paramTypeDetector) correctUntyped(SQL string, variables map[string]bool, meta *option.ViewMeta) {
+func (d *paramTypeDetector) correctUntyped(SQL string, variables map[string]bool, meta *option.ViewMeta) []*option.Parameter {
 	var typer option.Typer
 	var untyped []*option.Parameter
+	previouslyMatched := -1
 
 	cursor := parsly.NewCursor("", []byte(SQL), 0)
-outer:
+
 	for cursor.Pos < cursor.InputSize {
-		matched := cursor.MatchAfterOptional(whitespaceMatcher, commentBlockMatcher, doubleQuoteStringMatcher, singleQuoteStringMatcher, boolTokenMatcher, boolMatcher, numberMatcher, fullWordMatcher, anyMatcher)
+		matched := cursor.MatchAfterOptional(whitespaceMatcher, forEachMatcher, ifMatcher, assignMatcher, elseIfMatcher, elseMatcher, endMatcher,
+			commentBlockMatcher, doubleQuoteStringMatcher, singleQuoteStringMatcher, boolTokenMatcher, boolMatcher, numberMatcher, parenthesesBlockMatcher, fullWordMatcher, anyMatcher)
 		switch matched.Code {
 		case numberToken:
-			typer = &option.LiteralType{RType: ast.Float64Type}
+			text := matched.Text(cursor)
+
+			_, err := strconv.Atoi(text)
+			if err == nil {
+				typer = option.NewLiteralType(ast.IntType)
+			} else {
+				typer = option.NewLiteralType(ast.Float64Type)
+			}
+
 		case boolToken:
-			typer = &option.LiteralType{RType: ast.BoolType}
+			typer = option.NewLiteralType(ast.BoolType)
 		case stringToken:
-			typer = &option.LiteralType{RType: ast.StringType}
+			typer = option.NewLiteralType(ast.StringType)
+		case parenthesesBlockToken:
+			sqlFragment := matched.Text(cursor)
+			untypedInBlock := d.correctUntyped(sqlFragment[1:len(sqlFragment)-1], variables, meta)
+			if !isVeltyMatchToken(previouslyMatched) {
+				untyped = append(untyped, untypedInBlock...)
+			}
+
 		case parsly.EOF, anyToken:
 			//Do nothing
 		default:
@@ -34,17 +54,21 @@ outer:
 				if strings.EqualFold(text, word) {
 					typer = nil
 					untyped = nil
-					continue outer
+					goto quitSwitch
 				}
 			}
 
 			firstLetter := bytes.ToUpper([]byte{text[0]})[0]
 			if (firstLetter < 'A' || firstLetter > 'Z') && firstLetter != '$' {
-				continue outer
+				goto quitSwitch
 			}
 
 			if text[0] == '$' {
-				_, paramName := getHolderName(text)
+				prefix, paramName := getHolderName(text)
+				if prefix == keywords.ParamsMetadataKey {
+					continue
+				}
+
 				if isParameter(variables, paramName) {
 					aParam, ok := meta.ParamByName(paramName)
 					if !ok {
@@ -56,6 +80,11 @@ outer:
 					if ok {
 						parameter := &option.Parameter{}
 						_, _ = UnmarshalHint(hint.Hint, parameter)
+
+						if IsDataViewKind(hint.Hint) {
+							parameter.Kind = string(view.DataViewKind)
+						}
+
 						inherit(aParam, parameter)
 					}
 
@@ -75,7 +104,32 @@ outer:
 
 			untyped = nil
 		}
+
+	quitSwitch:
+		if matched.Token.Code != anyToken {
+			previouslyMatched = matched.Token.Code
+		}
 	}
+
+	return untyped
+}
+
+func isVeltyMatchToken(matched int) bool {
+	switch matched {
+	case endToken, elseToken, assignToken, forEachToken, ifToken:
+		return true
+	}
+
+	return false
+}
+
+func IsDataViewKind(hint string) bool {
+	_, sqlPart := SplitHint(hint)
+	if strings.HasSuffix(sqlPart, "*/") {
+		sqlPart = sqlPart[:len(sqlPart)-len("*/")]
+	}
+
+	return strings.TrimSpace(sqlPart) != ""
 }
 
 func inherit(generated *option.Parameter, inlined *option.Parameter) {

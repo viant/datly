@@ -186,7 +186,7 @@ func TestRun(t *testing.T) {
 
 	loader := afs.New()
 	//for i, testCase := range testCases[len(testCases)-1:] {
-	for i, testCase := range testCases[:12] {
+	for i, testCase := range testCases {
 		mem.ResetSingleton()
 		gateway.ResetSingleton()
 		tests.LogHeader(fmt.Sprintf("Running testcase: %v\n", i))

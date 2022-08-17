@@ -81,7 +81,10 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 			if sqlExecModeView, err = ast.Parse(SQL, routeOption, parameterHints); err != nil {
 				return err
 			}
+
 			s.updateMetaColumnTypes(ctx, sqlExecModeView, routeOption)
+			dataViewParams = extractDataViewParams(sqlExecModeView.Parameters)
+
 		} else {
 			if xTable, dataViewParams, err = ParseSQLx(SQL, routeOption, parameterHints); err != nil {
 				log.Println(err)
@@ -342,60 +345,24 @@ func extractURIParams(URI string) map[string]bool {
 	return result
 }
 
-func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*option.TableParam, routeOption *option.Route, hints []*option.ParameterHint) {
+func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*option.TableParam, routeOption *option.Route, hints option.ParameterHints) {
 	if len(params) == 0 {
 		return
 	}
 
+	hintsIndex := hints.Index()
+
 	for k, v := range params {
-		table := v.Table
-
-		if len(routeOption.Declare) > 0 {
-			if len(table.ColumnTypes) == 0 {
-				table.ColumnTypes = map[string]string{}
-			}
-			for k, v := range routeOption.Declare {
-				table.ColumnTypes[k] = v
-			}
-		}
-
-		if len(table.Inner) == 0 {
-			fmt.Printf("Skpining data view params: %v - no column detected", v.Table)
+		schemaName := strings.Title(k)
+		typeDef, ok := s.BuildSchema(ctx, schemaName, k, v, routeOption)
+		if !ok {
+			fmt.Printf("skipping data view params: %v - no column detected, nor type declaration", v.Table)
 			continue
 		}
 
-		var fields = make([]*view.Field, 0)
-		s.updateTableColumnTypes(ctx, table)
-		for _, column := range table.Inner {
-			name := column.Alias
-			if name == "" {
-				name = column.Name
-			}
-
-			if name == "" {
-				continue
-			}
-
-			dataType := column.DataType
-			if dataType == "" {
-				dataType = table.ColumnTypes[strings.ToLower(name)]
-			}
-
-			if dataType == "" {
-				dataType = "string"
-			}
-			fields = append(fields, &view.Field{
-				Name:   name,
-				Embed:  false,
-				Schema: &view.Schema{DataType: dataType},
-			})
+		if typeDef != nil {
+			s.route.Resource.Types = append(s.route.Resource.Types, typeDef)
 		}
-
-		schemaName := strings.Title(k)
-		s.route.Resource.Types = append(s.route.Resource.Types, &view.Definition{
-			Name:   schemaName,
-			Fields: fields,
-		})
 
 		relView := &view.View{
 			Name:   k,
@@ -408,15 +375,16 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 					Offset: true,
 				},
 			},
+			Template: s.buildParamViewTemplate(k, hintsIndex),
 		}
 
 		if _, err := s.addViewConn(s.options.Connector.DbName, relView); err != nil {
 			continue
 		}
 
-		s.mergeParamTypes(table)
+		s.mergeParamTypes(v.Table)
 
-		if err := s.updateView(ctx, table, relView); err != nil {
+		if err := s.updateView(ctx, v.Table, relView); err != nil {
 			continue
 		}
 

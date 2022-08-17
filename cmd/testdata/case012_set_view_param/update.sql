@@ -1,8 +1,9 @@
-/* {"URI":"status", "Method":"GET" , "Declare":{"Ids":"[]int"} } */
+/* {"URI":"status", "Method":"GET" , "Declare":{"Ids":"[]int", "Event": "struct {Authorized bool} "} } */
 
-#set($event = $Unsafe.Event /*
+#set
+($event = $Unsafe.Event /*
     {"Auth": "Jwt", "Kind": "data_view"}
-    SELECT CASE(
+    SELECT (CASE
     WHEN total_events > 0 THEN true
     ELSE false
     END

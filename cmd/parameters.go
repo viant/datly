@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlx/metadata/ast/expr"
 	"github.com/viant/sqlx/metadata/ast/node"
@@ -111,4 +112,19 @@ func discoverOperand(n node.Node, list *parameters) {
 	default:
 		discoverParameterColumn(x, list)
 	}
+}
+
+func extractDataViewParams(params []*option.Parameter) map[string]*option.TableParam {
+	result := map[string]*option.TableParam{}
+	for _, param := range params {
+		if param.Kind != string(view.DataViewKind) {
+			continue
+		}
+
+		result[param.Name] = &option.TableParam{
+			Param: convertMetaParameter(param),
+		}
+	}
+
+	return result
 }
