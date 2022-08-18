@@ -111,6 +111,8 @@ func (p *CriteriaSanitizer) ensureSliceIndex() {
 	if p.sliceIndex != nil {
 		return
 	}
+
+	p.sliceIndex = map[reflect.Type]*xunsafe.Slice{}
 }
 
 func (p *CriteriaSanitizer) xunsafeSlice(valueType reflect.Type) *xunsafe.Slice {

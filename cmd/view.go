@@ -57,7 +57,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	routeOption := &option.Route{}
 	// ExecMode
 	var sqlExecModeView *option.ViewMeta
-	var parameterHints []*option.ParameterHint
+	var parameterHints option.ParameterHints
 	if s.options.SQLXLocation != "" && url.Scheme(s.options.SQLLocation, "e") == "e" {
 		sourceURL := normalizeURL(s.options.SQLXLocation)
 		SQLData, err := fs.DownloadWithURL(context.Background(), sourceURL)
@@ -78,7 +78,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 		}
 
 		if ast.IsSQLExecMode(SQL) {
-			if sqlExecModeView, err = ast.Parse(SQL, routeOption, parameterHints); err != nil {
+			if sqlExecModeView, err = ast.Parse(SQL, routeOption, parameterHints.Index()); err != nil {
 				return err
 			}
 
@@ -86,15 +86,16 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 			dataViewParams = extractDataViewParams(sqlExecModeView.Parameters)
 
 		} else {
-			if xTable, dataViewParams, err = ParseSQLx(SQL, routeOption, parameterHints); err != nil {
+			if xTable, dataViewParams, err = ParseSQLx(SQL, routeOption, parameterHints.Index()); err != nil {
 				log.Println(err)
 			}
+
 			if xTable != nil {
 				updateGenerateOption(generate, xTable)
 			}
 		}
 	}
-	s.buildDataParameters(dataViewParams, parameterHints, routeOption)
+	s.buildDataParameters(dataViewParams, parameterHints.Index(), routeOption)
 
 	aView := s.buildMainView(s.options, generate)
 	if sqlExecModeView != nil {
@@ -192,7 +193,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	return fsAddYAML(fs, s.options.RouterURL(), s.route)
 }
 
-func (s *serverBuilder) buildDataParameters(dataParameters map[string]*option.TableParam, parameters []*option.ParameterHint, routeOption *option.Route) error {
+func (s *serverBuilder) buildDataParameters(dataParameters map[string]*option.TableParam, parameters map[string]*option.ParameterHint, routeOption *option.Route) error {
 	if len(parameters) == 0 {
 		return nil
 	}
@@ -364,18 +365,10 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 			s.route.Resource.Types = append(s.route.Resource.Types, typeDef)
 		}
 
-		relView := &view.View{
-			Name:   k,
-			Table:  v.Table.Name,
-			Schema: &view.Schema{Name: schemaName},
-			Selector: &view.Config{
-				Limit: 25,
-				Constraints: &view.Constraints{
-					Limit:  true,
-					Offset: true,
-				},
-			},
-			Template: s.buildParamViewTemplate(k, hintsIndex),
+		relView, err := s.buildParamView(ctx, routeOption, k, schemaName, v, hintsIndex)
+		if err != nil {
+			fmt.Printf("can't create data view param: %v\n", err.Error())
+			continue
 		}
 
 		if _, err := s.addViewConn(s.options.Connector.DbName, relView); err != nil {
@@ -394,6 +387,21 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 			mergeParameter(s.route, v.Table.Parameter)
 		}
 		mergeParameter(s.route, v.Param)
+	}
+}
+
+func (s *serverBuilder) buildParamViewWithoutTemplate(k string, v *option.TableParam, schemaName string) *view.View {
+	return &view.View{
+		Name:   k,
+		Table:  v.Table.Name,
+		Schema: &view.Schema{Name: schemaName},
+		Selector: &view.Config{
+			Limit: 25,
+			Constraints: &view.Constraints{
+				Limit:  true,
+				Offset: true,
+			},
+		},
 	}
 }
 

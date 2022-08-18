@@ -1,24 +1,12 @@
 parameters:
-    - datatype: int
-      id: ID
-      kind: query
-      name: id
-      required: false
-    - datatype: string
-      id: quantity
-      kind: path
-      name: quantity
-      required: true
-source: |-
-    SELECT *, (
-        SELECT abc
-        FROM T2
-        WHERE 1=2
-    ) as abc FROM T1
-    WHERE 1=1
-    #if($Has.ID)
-    AND ID = $ID
-    #end
-    #if($Has.quantity)
-    AND quantity = $quantity
-    #end
+  - datatype: int
+    id: ID
+    kind: query
+    name: id
+    required: false
+  - datatype: string
+    id: quantity
+    kind: path
+    name: quantity
+    required: true
+source: "SELECT *, (\n    SELECT abc\n    FROM T2\n    WHERE 1=2\n) as abc FROM T1\nWHERE 1=1\n#if($Has.ID)\nAND ID =  $criteria.AppendBinding($Unsafe.ID) \n#end\n#if($Has.quantity)\nAND quantity =  $criteria.AppendBinding($Unsafe.quantity) \n#end"

@@ -1,7 +1,6 @@
 package ast
 
 import (
-	"fmt"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/metadata/ast/expr"
@@ -44,7 +43,7 @@ func buildViewMetaInExecSQLMode(SQL string, view *option.ViewMeta, variables map
 			SQLExec += normalizedSQL
 		}
 	}
-	view.Source = SQLExec
+
 	return nil
 }
 
@@ -94,7 +93,6 @@ func normalizeAndExtractInsertValues(stmt *insert.Statement, view *option.ViewMe
 		column := stmt.Columns[i]
 		paramName := selector[1:]
 		view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Typer: &option.ColumnType{ColumnName: column}})
-		SQL = strings.Replace(SQL, selector, sanitizeUnsafeExpr(selector), 1)
 	}
 	return SQL
 }
@@ -116,7 +114,6 @@ func normalizeOptionParameters(expressions []string, view *option.ViewMeta, SQLE
 		}
 		paramName := selector[1:]
 		view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Typer: &option.ColumnType{ColumnName: column}})
-		SQLExec = strings.Replace(SQLExec, anExpr, column+" = "+sanitizeUnsafeExpr(selector), 1)
 	}
 	return SQLExec
 }
@@ -130,8 +127,7 @@ func normalizeAndExtractUpdateWhere(stmt *update.Statement, view *option.ViewMet
 			continue
 		}
 
-		prefix, paramName := getHolderName(y)
-		SQLExec = strings.Replace(SQLExec, y, sanitizePlaceholder(prefix, paramName, y, variables), 1)
+		_, paramName := getHolderName(y)
 
 		switch strings.ToLower(criterion.Op) {
 		case "in":
@@ -158,13 +154,10 @@ func normalizeAndExtractUpdateSet(stmt *update.Statement, view *option.ViewMeta,
 
 		actualParam := parser.Stringify(placeholder)
 		prefix, paramName := getHolderName(actualParam)
+		if prefix == keywords.ParamsMetadataKey {
+			continue
+		}
 
-		item.Expr = &expr.Raw{Raw: sanitizePlaceholder(prefix, paramName, actualParam, variables)}
-
-		originalExpr := strings.TrimSpace(rawSQL[item.Begin:item.End])
-		enrichedExpr := parser.Stringify(item)
-
-		SQLStmt = strings.Replace(SQLStmt, originalExpr, enrichedExpr, 1)
 		column := getColumnName(item)
 		view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Typer: &option.ColumnType{
 			ColumnName: column,
@@ -172,37 +165,6 @@ func normalizeAndExtractUpdateSet(stmt *update.Statement, view *option.ViewMeta,
 	}
 
 	return SQLStmt
-}
-
-func sanitizePlaceholder(prefix, paramName, raw string, variables map[string]bool) string {
-
-	if variables[paramName] {
-		return sanitizeInternalVariable(prefix, raw)
-	}
-
-	if prefix == keywords.ParamsKey {
-		return sanitizeUnsafeParameter(raw)
-	}
-
-	return sanitizeInternalVariable("", raw)
-}
-
-func sanitizeInternalVariable(prefix, paramName string) string {
-	if prefix == keywords.ParamsKey {
-		return strings.Replace(paramName, fmt.Sprintf("$%v", keywords.ParamsKey), "$", 1)
-	}
-
-	return fmt.Sprintf("$criteria.AppendBinding(%v)", paramName)
-}
-
-func sanitizeUnsafeExpr(paramName string) string {
-	paramName = sanitizeUnsafeParameter(paramName)
-	return fmt.Sprintf("$criteria.AppendBinding(%v)", paramName)
-}
-
-func sanitizeUnsafeParameter(paramName string) string {
-	paramName = strings.Replace(paramName, "$", "$Unsafe.", 1)
-	return paramName
 }
 
 func getColumnName(item *update.Item) string {

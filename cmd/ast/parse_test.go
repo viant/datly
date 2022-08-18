@@ -77,7 +77,7 @@ func TestParse(t *testing.T) {
 			continue
 		}
 
-		viewMeta, err := ast.Parse(string(inputData), &option.Route{URIParams: testcase.uriParams}, testcase.hints)
+		viewMeta, err := ast.Parse(string(inputData), &option.Route{URIParams: testcase.uriParams}, testcase.hints.Index())
 		if !assert.Nil(t, err, testcase.description) {
 			continue
 		}

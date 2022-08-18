@@ -77,8 +77,7 @@ Template:
                          ELSE
                              'x3,x4'
                         END) AS slice /* {"Codec":{"Ref":"AsStrings"}, "DataType": "string"}  */
-             FROM events
-          )
+             FROM events )
   SourceURL: events/events.sql
 With:
   - Cardinality: Many

@@ -189,10 +189,10 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 }
 
 func (p *Parameter) inherit(param *Parameter) {
-	p.Name = notEmptyOf(p.Name, param.Name)
-	p.Description = notEmptyOf(p.Description, param.Description)
-	p.Style = notEmptyOf(p.Style, param.Style)
-	p.PresenceName = notEmptyOf(p.PresenceName, param.PresenceName)
+	p.Name = NotEmptyOf(p.Name, param.Name)
+	p.Description = NotEmptyOf(p.Description, param.Description)
+	p.Style = NotEmptyOf(p.Style, param.Style)
+	p.PresenceName = NotEmptyOf(p.PresenceName, param.PresenceName)
 
 	if p.In == nil {
 		p.In = param.In
@@ -275,7 +275,7 @@ func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
 		return fmt.Errorf("parameter %v either schema DataType or DbName has to be specified", p.Name)
 	}
 
-	schemaType := notEmptyOf(p.Schema.Name, p.Schema.DataType)
+	schemaType := NotEmptyOf(p.Schema.Name, p.Schema.DataType)
 	if p.MaxAllowedRecords != nil && *p.MaxAllowedRecords > 1 {
 		p.Schema.Cardinality = Many
 	}

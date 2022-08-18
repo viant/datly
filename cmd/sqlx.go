@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-func ParseSQLx(SQL string, routeOpt *option.Route, parameterHints option.ParameterHints) (*option.Table, map[string]*option.TableParam, error) {
+func ParseSQLx(SQL string, routeOpt *option.Route, parameterHints map[string]*option.ParameterHint) (*option.Table, map[string]*option.TableParam, error) {
 	aQuery, err := parser.ParseQuery(SQL)
 	if aQuery == nil {
 		return nil, nil, err
@@ -45,12 +45,24 @@ func ParseSQLx(SQL string, routeOpt *option.Route, parameterHints option.Paramet
 	return table, dataParameters, nil
 }
 
-func buildTable(x node.Node, routeOpt *option.Route, parameterHints option.ParameterHints) (*option.Table, error) {
+func buildTable(x node.Node, routeOpt *option.Route, parameterHints map[string]*option.ParameterHint) (*option.Table, error) {
 	//var err error
 	table := &option.Table{}
 	switch actual := x.(type) {
 	case *expr.Raw:
-		table.SQL = strings.Trim(actual.Raw, "()")
+		SQL := strings.TrimSpace(actual.Raw)
+		trimmedParentheses := true
+		for len(SQL) >= 2 && trimmedParentheses {
+			if SQL[0] == '(' && SQL[len(SQL)-1] == ')' {
+				SQL = SQL[1 : len(SQL)-1]
+			} else {
+				trimmedParentheses = false
+			}
+
+			SQL = strings.TrimSpace(SQL)
+		}
+
+		table.SQL = SQL
 		if err := UpdateTableSettings(table, routeOpt, parameterHints); err != nil {
 			return table, err
 		}
@@ -62,7 +74,7 @@ func buildTable(x node.Node, routeOpt *option.Route, parameterHints option.Param
 	return table, nil
 }
 
-func UpdateTableSettings(table *option.Table, routeOpt *option.Route, parameterHints option.ParameterHints) error {
+func UpdateTableSettings(table *option.Table, routeOpt *option.Route, parameterHints map[string]*option.ParameterHint) error {
 	innerSQL, paramsExprs := ast.ExtractCondBlock(table.SQL)
 	innerQuery, err := parser.ParseQuery(innerSQL)
 	fmt.Printf("innerSQL %v %v\n", table.SQL, err)
@@ -89,6 +101,7 @@ func UpdateTableSettings(table *option.Table, routeOpt *option.Route, parameterH
 	if err != nil {
 		return err
 	}
+
 	table.ViewMeta.Expressions = paramsExprs
 	return nil
 }
@@ -132,7 +145,7 @@ func appendParamExpr(x node.Node, op string, y node.Node, list *[]string) {
 	}
 }
 
-func processJoin(join *query.Join, tables map[string]*option.Table, outerColumn option.Columns, dataParameters map[string]*option.TableParam, routeOpt *option.Route, parameterHints option.ParameterHints) error {
+func processJoin(join *query.Join, tables map[string]*option.Table, outerColumn option.Columns, dataParameters map[string]*option.TableParam, routeOpt *option.Route, parameterHints map[string]*option.ParameterHint) error {
 	relTable, err := buildTable(join.With, routeOpt, parameterHints)
 	if err != nil {
 		return err

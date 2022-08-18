@@ -80,11 +80,5 @@ Template:
     Cardinality: One
   Schema:
     Cardinality: One
-  Source: |-
-    ( SELECT *
-             FROM events e
-             WHERE 1 = 1
-               AND e.id = $eventID
-             ORDER BY 1
-          )
+  Source: "( SELECT *\n         FROM events e\n         WHERE 1 = 1\n           AND e.id =  $criteria.AppendBinding($Unsafe.eventID) \n         ORDER BY 1 )"
   SourceURL: events/events.sql

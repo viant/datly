@@ -26,7 +26,6 @@ const (
 	endToken
 	elseToken
 	assignToken
-	elseIfToken
 	forEachToken
 	ifToken
 

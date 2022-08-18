@@ -72,18 +72,7 @@ Template:
     Cardinality: One
   Schema:
     Cardinality: One
-  Source: |-
-    ( SELECT COUNT(*)      as totalTypes /*{"DataType": "int"}*/,
-                    e.id,
-                    e.event_type_id as eventTypeId,
-                    et.name as eventName
-             FROM events e
-                      JOIN event_types et ON e.event_type_id = et.id
-             WHERE 1 = 1
-               AND e.quantity > $quantity
-             GROUP BY e.event_type_id
-             ORDER BY 1
-          )
+  Source: "( SELECT COUNT(*)      as totalTypes /*{\"DataType\": \"int\"}*/,\n                e.id,\n                e.event_type_id as eventTypeId,\n                et.name as eventName\n         FROM events e\n                  JOIN event_types et ON e.event_type_id = et.id\n         WHERE 1 = 1\n           AND e.quantity >  $criteria.AppendBinding($Unsafe.quantity) \n         GROUP BY e.event_type_id\n         ORDER BY 1 )"
   SourceURL: events/events.sql
 With:
   - Cardinality: Many
@@ -146,6 +135,5 @@ With:
           Cardinality: One
         Source: |-
           ( SELECT *
-              FROM event_types
-           )
+              FROM event_types )
         SourceURL: events/eventTypes.sql

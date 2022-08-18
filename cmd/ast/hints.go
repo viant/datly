@@ -49,8 +49,6 @@ func ExtractHint(text string) string {
 }
 
 func UnmarshalHint(hint string, dest interface{}) (string, error) {
-	hint = hint[2 : len(hint)-2]
-	hint = strings.TrimSpace(hint)
 
 	hint, SQL := SplitHint(hint)
 	if hint == "" {
@@ -65,8 +63,17 @@ func UnmarshalHint(hint string, dest interface{}) (string, error) {
 }
 
 func SplitHint(hint string) (marshal string, SQL string) {
-	//TODO: replace with parsly
+	if strings.HasPrefix(hint, "/*") {
+		hint = hint[2:]
+	}
 
+	if strings.HasSuffix(hint, "*/") {
+		hint = hint[:len(hint)-2]
+	}
+
+	hint = strings.TrimSpace(hint)
+
+	//TODO: replace with parsly
 	index := strings.LastIndex(hint, "}")
 	if index != -1 {
 		return hint[:index+1], hint[index+1:]

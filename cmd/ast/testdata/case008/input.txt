@@ -9,7 +9,7 @@ WHERE 1=1
 AND ID = 10
 #end
 
-#foreach($column in $Columns)
+#foreach($column in $Unsafe.Columns)
     $column.Id
 #end
 

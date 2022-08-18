@@ -7,11 +7,4 @@ parameters:
     required: true
     typer:
       columnname: t1.id
-source: |-
-  SELECT *, (
-      SELECT abc
-      FROM T2
-      WHERE 1=2
-  ) as abc FROM T1
-  WHERE 1=1
-  AND T1.ID = $tID
+source: "SELECT *, (\n    SELECT abc\n    FROM T2\n    WHERE 1=2\n) as abc FROM T1\nWHERE 1=1\nAND T1.ID =  $criteria.AppendBinding($Unsafe.tID) "

@@ -253,9 +253,9 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 
 	v.ensureCounter(resource)
 
-	v.Alias = notEmptyOf(v.Alias, "t")
+	v.Alias = NotEmptyOf(v.Alias, "t")
 	if v.From == "" {
-		v.Table = notEmptyOf(v.Table, v.Name)
+		v.Table = NotEmptyOf(v.Table, v.Name)
 	} else {
 		if strings.Contains(v.From, keywords.WhereCriteria) {
 			flag := false
@@ -563,11 +563,11 @@ func (v *View) inherit(view *View) error {
 		v.Connector = view.Connector
 	}
 
-	v.Alias = notEmptyOf(v.Alias, view.Alias)
-	v.Table = notEmptyOf(v.Table, view.Table)
-	v.From = notEmptyOf(v.From, view.From)
-	v.FromURL = notEmptyOf(v.FromURL, view.FromURL)
-	v.Mode = Mode(notEmptyOf(string(v.Mode), string(view.Mode)))
+	v.Alias = NotEmptyOf(v.Alias, view.Alias)
+	v.Table = NotEmptyOf(v.Table, view.Table)
+	v.From = NotEmptyOf(v.From, view.From)
+	v.FromURL = NotEmptyOf(v.FromURL, view.FromURL)
+	v.Mode = Mode(NotEmptyOf(string(v.Mode), string(view.Mode)))
 
 	if stringsSliceEqual(v.Exclude, view.Exclude) {
 		if len(v.Columns) == 0 {
@@ -686,7 +686,7 @@ func (v *View) Collector(dest interface{}, supportParallel bool) *Collector {
 	return v.newCollector(dest, supportParallel)
 }
 
-func notEmptyOf(values ...string) string {
+func NotEmptyOf(values ...string) string {
 	for _, value := range values {
 		if value != "" {
 			return value

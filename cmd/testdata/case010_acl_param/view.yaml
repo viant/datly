@@ -69,6 +69,5 @@ Template:
              FROM event_types et
                       JOIN events e ON et.id = e.event_type_id
              WHERE 1 = 1
-               AND et.id = $events.event_type_id
-          )
+               AND et.id =  $criteria.AppendBinding($Unsafe.events.event_type_id)  )
   SourceURL: event_types/eventTypes.sql

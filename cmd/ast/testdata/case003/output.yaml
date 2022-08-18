@@ -1,16 +1,10 @@
 parameters:
-  - id: Id
-    name: Id
-    kind: query
-    required: true
+  - assumed: true
     datatype: string
-    assumed: true
+    id: Id
+    kind: query
+    name: Id
+    required: true
     typer:
       columnname: id
-source: |-
-  SELECT *, (
-      SELECT abc
-      FROM T2
-      WHERE 1=2
-  ) as abc FROM T1
-  WHERE id = $Id
+source: "SELECT *, (\n    SELECT abc\n    FROM T2\n    WHERE 1=2\n) as abc FROM T1\nWHERE id =  $criteria.AppendBinding($Unsafe.Id) "

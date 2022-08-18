@@ -14,7 +14,7 @@ import (
 
 var resetWords = []string{"AND", "OR", "WITH", "HAVING", "LIMIT", "OFFSET", "WHERE", "SELECT", "UNION", "ALL", "AS", "BETWEEN", "IN"}
 
-func (d *paramTypeDetector) correctUntyped(SQL string, variables map[string]bool, meta *option.ViewMeta) []*option.Parameter {
+func (d *paramTypeDetector) correctUntyped(SQL string, variables map[string]bool, meta *option.ViewMeta, route *option.Route) []*option.Parameter {
 	var typer option.Typer
 	var untyped []*option.Parameter
 	previouslyMatched := -1
@@ -41,7 +41,7 @@ func (d *paramTypeDetector) correctUntyped(SQL string, variables map[string]bool
 			typer = option.NewLiteralType(ast.StringType)
 		case parenthesesBlockToken:
 			sqlFragment := matched.Text(cursor)
-			untypedInBlock := d.correctUntyped(sqlFragment[1:len(sqlFragment)-1], variables, meta)
+			untypedInBlock := d.correctUntyped(sqlFragment[1:len(sqlFragment)-1], variables, meta, route)
 			if !isVeltyMatchToken(previouslyMatched) {
 				untyped = append(untyped, untypedInBlock...)
 			}
@@ -86,6 +86,13 @@ func (d *paramTypeDetector) correctUntyped(SQL string, variables map[string]bool
 						}
 
 						inherit(aParam, parameter)
+					}
+
+					if route.Declare != nil {
+						if typeDeclaration, ok := route.Declare[paramName]; ok {
+							aParam.DataType = typeDeclaration
+							aParam.Assumed = false
+						}
 					}
 
 					if aParam.Assumed {

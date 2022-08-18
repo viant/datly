@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/sanitizer"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/parsly"
@@ -24,7 +25,7 @@ type paramTypeDetector struct {
 	hints      map[string]*option.ParameterHint
 }
 
-func newParamTypeDetector(route *option.Route, meta *option.ViewMeta, hints option.ParameterHints) *paramTypeDetector {
+func newParamTypeDetector(route *option.Route, meta *option.ViewMeta, hints map[string]*option.ParameterHint) *paramTypeDetector {
 	uriParams := map[string]bool{}
 	paramTypes := map[string]string{}
 	if route != nil {
@@ -42,11 +43,11 @@ func newParamTypeDetector(route *option.Route, meta *option.ViewMeta, hints opti
 		paramTypes: paramTypes,
 		variables:  map[string]bool{},
 		viewMeta:   meta,
-		hints:      hints.Index(),
+		hints:      hints,
 	}
 }
 
-func Parse(SQL string, route *option.Route, hints option.ParameterHints) (*option.ViewMeta, error) {
+func Parse(SQL string, route *option.Route, hints map[string]*option.ParameterHint) (*option.ViewMeta, error) {
 	viewMeta := option.NewViewMeta()
 
 	block, err := parser.Parse([]byte(SQL))
@@ -71,10 +72,7 @@ func Parse(SQL string, route *option.Route, hints option.ParameterHints) (*optio
 	detector.implyDefaultParams(block.Statements(), true, nil, false)
 	viewMeta.SetVariables(detector.variables)
 
-	//sqlNoVelty := removeVeltySyntax(string(from))
-	detector.correctUntyped(string(from), detector.variables, viewMeta)
-
-	viewMeta.Source = actualSource
+	detector.correctUntyped(string(from), detector.variables, viewMeta, route)
 
 	if IsSQLExecMode(SQL) {
 		viewMeta.Mode = view.SQLExecMode
@@ -85,6 +83,7 @@ func Parse(SQL string, route *option.Route, hints option.ParameterHints) (*optio
 		}
 	}
 
+	viewMeta.Source = sanitizer.Sanitize(actualSource)
 	return viewMeta, nil
 }
 
@@ -109,90 +108,69 @@ func isInsert(lcSQL string) bool {
 	return strings.Contains(lcSQL, "insert ") && strings.Contains(lcSQL, "into ") && strings.Contains(lcSQL, "values")
 }
 
-func removeVeltySyntax(SQL string) string {
-	cursor := parsly.NewCursor("", []byte(SQL), 0)
-	sb := strings.Builder{}
-
-outer:
-	for cursor.Pos < cursor.InputSize {
-		matched := cursor.MatchAny(whitespaceMatcher, ifMatcher, assignMatcher, elseIfMatcher, elseMatcher, forEachMatcher, endMatcher, anyMatcher)
-		switch matched.Code {
-		case endToken, elseToken:
-			continue outer
-		case elseIfToken, assignToken, forEachToken, ifToken:
-			cursor.MatchOne(exprGroupMatcher)
-			continue outer
-		}
-
-		sb.WriteString(matched.Text(cursor))
-	}
-
-	return sb.String()
-}
-
-func (p *paramTypeDetector) implyDefaultParams(statements []ast.Statement, required bool, rType reflect.Type, multi bool) {
+func (d *paramTypeDetector) implyDefaultParams(statements []ast.Statement, required bool, rType reflect.Type, multi bool) {
 	for _, statement := range statements {
 		switch actual := statement.(type) {
 		case stmt.ForEach:
-			p.variables[actual.Item.ID] = true
+			d.variables[actual.Item.ID] = true
 		case stmt.Statement:
-			p.indexStmt(&actual, required, rType, multi)
+			d.indexStmt(&actual, required, rType, multi)
 		case *expr.Select:
-			p.indexParameter(actual, required, rType, multi)
+			d.indexParameter(actual, required, rType, multi)
 		case *stmt.Statement:
-			p.indexStmt(actual, required, rType, multi)
+			d.indexStmt(actual, required, rType, multi)
 		case *stmt.ForEach:
-			p.variables[actual.Item.ID] = true
+			d.variables[actual.Item.ID] = true
 			set, ok := actual.Set.(*expr.Select)
-			if ok && !p.variables[set.ID] {
-				p.implyDefaultParams([]ast.Statement{set}, false, rType, true)
+			if ok && !d.variables[set.ID] {
+				d.implyDefaultParams([]ast.Statement{set}, false, rType, true)
 			}
 
 		case *expr.Unary:
-			p.implyDefaultParams([]ast.Statement{actual}, false, actual.Type(), false)
+			d.implyDefaultParams([]ast.Statement{actual}, false, actual.Type(), false)
 		case *expr.Binary:
 			xType := actual.X.Type()
 			if xType == nil {
 				xType = actual.Y.Type()
 			}
 
-			p.implyDefaultParams([]ast.Statement{actual.X, actual.Y}, false, xType, false)
+			d.implyDefaultParams([]ast.Statement{actual.X, actual.Y}, false, xType, false)
 		case *expr.Parentheses:
-			p.implyDefaultParams([]ast.Statement{actual.P}, false, actual.Type(), false)
+			d.implyDefaultParams([]ast.Statement{actual.P}, false, actual.Type(), false)
 		case *stmt.If:
-			p.implyDefaultParams([]ast.Statement{actual.Condition}, false, actual.Type(), false)
+			d.implyDefaultParams([]ast.Statement{actual.Condition}, false, actual.Type(), false)
 		}
 
 		switch actual := statement.(type) {
 		case ast.StatementContainer:
-			p.implyDefaultParams(actual.Statements(), false, nil, false)
+			d.implyDefaultParams(actual.Statements(), false, nil, false)
 		}
 	}
 }
 
-func (p *paramTypeDetector) indexStmt(actual *stmt.Statement, required bool, rType reflect.Type, multi bool) {
+func (d *paramTypeDetector) indexStmt(actual *stmt.Statement, required bool, rType reflect.Type, multi bool) {
 	x, ok := actual.X.(*expr.Select)
 	if ok {
-		p.variables[x.ID] = true
+		d.variables[x.ID] = true
 	}
 
 	y, ok := actual.Y.(*expr.Select)
-	if ok && !p.variables[y.ID] {
-		p.indexParameter(y, required, rType, multi)
+	if ok && !d.variables[y.ID] {
+		d.indexParameter(y, required, rType, multi)
 	}
 }
 
-func (p *paramTypeDetector) indexParameter(actual *expr.Select, required bool, rType reflect.Type, multi bool) {
+func (d *paramTypeDetector) indexParameter(actual *expr.Select, required bool, rType reflect.Type, multi bool) {
 	prefix, paramName := getHolderName(actual.FullName)
 
-	if !isParameter(p.variables, paramName) {
+	if !isParameter(d.variables, paramName) {
 		return
 	}
 
 	pType := "string"
 	assumed := true
 
-	if declared, ok := p.paramTypes[paramName]; ok {
+	if declared, ok := d.paramTypes[paramName]; ok {
 		pType = declared
 		assumed = false
 	}
@@ -203,11 +181,11 @@ func (p *paramTypeDetector) indexParameter(actual *expr.Select, required bool, r
 	}
 
 	kind := "query"
-	if p.uriParams[paramName] {
+	if d.uriParams[paramName] {
 		kind = string(view.PathKind)
 	}
 
-	p.viewMeta.AddParameter(&option.Parameter{
+	d.viewMeta.AddParameter(&option.Parameter{
 		Assumed:  assumed,
 		Id:       paramName,
 		Name:     paramName,
