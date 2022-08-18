@@ -1,0 +1,25 @@
+init:
+  i: 0
+pipeline:
+
+  loop:
+    generate:
+      init:
+        rule: '${data.gen[$i]}'
+
+      action: exec:run
+      description: build datly rule with SQL extension
+      target: '$target'
+      checkError: true
+      commands:
+        - cd ${appPath}/e2e/local
+        - /tmp/datly -N=${rule.Name} -X=${rule.URL}  -C='ci_ads|mysql|root:dev@tcp(127.0.0.1:3306)/dev${qMark}parseTime=true' -j='${appPath}/e2e/cloud/jwt/public.enc|blowfish://default'  -w=autogen
+
+    increment:
+      action: nop
+      init:
+        _: $i++
+    goto:
+      when: $i < $Len(${data.gen})
+      action: goto
+      task: loop

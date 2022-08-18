@@ -1,0 +1,36 @@
+init:
+  yesterday: $FormatTime('yesterdayInUTC', 'yyyy-MM-dd HH:mm:ss')
+  today: $FormatTime('nowInUTC', 'yyyy-MM-dd HH:mm:ss')
+
+  target:
+    URL: ssh://localhost/
+    credentials: localhost
+  appPath: $WorkingDirectory(../..)
+  mysqlCredentials: mysql-e2e
+  dbIP:
+    mysql: 127.0.0.1
+
+pipeline:
+  init:
+    description: initialise test (docker,database,build app)
+    system:
+      action: run
+      request: '@system'
+      tasks: '*'
+
+    datastore:
+      action: run
+      request: '@datastore/datastore.yaml'
+      tasks: '*'
+
+    build:
+      action: run
+      request: '@build'
+      tasks: 'deploy'
+
+
+
+  test:
+    action: run
+    description: run regression test
+    request: '@regression/regression'

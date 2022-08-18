@@ -1,0 +1,15 @@
+pipeline:
+  stop:
+    action: process:stop
+    target: $target
+    input: datly
+  start:
+    action: process:start
+    sleepTimeMs: 3000
+    target: $target
+    directory: /tmp/
+    checkError: true
+    immuneToHangups: true
+    env:
+      TEST: 1
+    command: ./datly -c=$appPath/e2e/local/autogen/Datly/config.json
