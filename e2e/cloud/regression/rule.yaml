@@ -13,7 +13,7 @@ pipeline:
       checkError: true
       commands:
         - cd ${appPath}/e2e/cloud
-        - /tmp/datly -N=${rule.Name} -X=${rule.URL}  -C='ci_ads|mysql|root:dev@tcp(127.0.0.1:3306)/dev${qMark}parseTime=true'   -C='bqdev|bigquery|bigquery://${gcpProjectID}/bqdev' -j='${appPath}/e2e/cloud/jwt/public.enc|blowfish://default'  -w=autogen
+        - /tmp/datly -N=${rule.Name} -X=${rule.URL}  -C='dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev${qMark}parseTime=true'   -C='bqdev|bigquery|bigquery://${gcpProjectID}/bqdev' -j='${appPath}/e2e/cloud/jwt/public.enc|blowfish://default'  -w=autogen
 
     increment:
       action: nop
