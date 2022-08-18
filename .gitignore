@@ -2,7 +2,6 @@
 secrets.json
 *.db
 local_test.go
-local/
 vendor
 go.sum
 datly

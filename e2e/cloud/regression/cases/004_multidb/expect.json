@@ -1,0 +1,23 @@
+[
+  {
+    "@indexBy@": "id"
+  },
+  {
+    "id": 3,
+    "name": "V2 Product 1",
+    "created": "2022-08-18T00:00:00Z",
+    "userCreated": 2
+  },
+  {
+    "id": 4,
+    "name": "V2 Product 2",
+    "created": "2022-08-18T00:00:00Z",
+    "userCreated": 2
+  },
+  {
+    "id": 5,
+    "name": "V2 Product 3",
+    "created": "2022-08-18T00:00:00Z",
+    "userCreated": 2
+  }
+]

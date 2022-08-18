@@ -1,0 +1,96 @@
+[
+  {},
+  {
+    "product_id": 1,
+    "location_id": 1,
+    "timestamp": "$yesterday",
+    "quantity": 250,
+    "price": 4,
+    "charge": 0,
+    "payment": 1000
+  },
+  {
+    "product_id": 1,
+    "location_id": 1,
+    "timestamp": "$today",
+    "quantity": 250,
+    "price": 4,
+    "charge": 0,
+    "payment": 1000
+  },
+  {
+    "product_id": 2,
+    "location_id": 1,
+    "timestamp": "$yesterday",
+    "quantity": 250,
+    "price": 4,
+    "charge": 0,
+    "payment": 1000
+  },
+  {
+    "product_id": 2,
+    "location_id": 1,
+    "timestamp": "$today",
+    "quantity": 250,
+    "price": 4,
+    "charge": 0,
+    "payment": 1000
+  },
+  {
+    "product_id": 3,
+    "location_id": 1,
+    "timestamp": "$yesterday",
+    "quantity": 250,
+    "price": 4,
+    "charge": 0,
+    "payment": 1000
+  },
+  {
+    "product_id": 3,
+    "location_id": 1,
+    "timestamp": "$today",
+    "quantity": 250,
+    "price": 4,
+    "charge": 0,
+    "payment": 1000
+  },
+  {
+    "product_id": 4,
+    "location_id": 1,
+    "timestamp": "$yesterday",
+    "quantity": 250,
+    "price": 4,
+    "charge": 0,
+    "payment": 1000
+  },
+  {
+    "product_id": 4,
+    "location_id": 1,
+    "timestamp": "$today",
+    "quantity": 250,
+    "price": 4,
+    "charge": 0,
+    "payment": 1000
+  },
+  {
+    "product_id": 5,
+    "location_id": 1,
+    "timestamp": "$yesterday",
+    "quantity": 250,
+    "price": 4,
+    "charge": 0,
+    "payment": 1000
+  },
+  {
+    "product_id": 5,
+    "location_id": 1,
+    "timestamp": "$today",
+    "quantity": 250,
+    "price": 4,
+    "charge": 0,
+    "payment": 1000
+  }
+
+
+
+]
