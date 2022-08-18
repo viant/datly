@@ -23,10 +23,10 @@ pipeline:
       request: '@datastore/datastore.yaml'
       tasks: '*'
 
-    build:
-      action: run
-      request: '@build'
-      tasks: 'deploy'
+  build:
+    action: run
+    request: '@build'
+    tasks: 'deploy'
 
 
 
