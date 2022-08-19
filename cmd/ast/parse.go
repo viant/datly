@@ -86,7 +86,7 @@ func Parse(SQL string, route *option.Route, hints option.ParameterHints) (*optio
 		}
 	}
 
-	viewMeta.Source = sanitizer.Sanitize(SQL[actualSourceStart:])
+	viewMeta.Source = sanitizer.Sanitize(SQL[actualSourceStart:], hints)
 	return viewMeta, nil
 }
 

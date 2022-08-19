@@ -91,8 +91,7 @@ func normalizeAndExtractInsertValues(stmt *insert.Statement, view *option.ViewMe
 			continue
 		}
 		column := stmt.Columns[i]
-		paramName := selector[1:]
-		view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Typer: &option.ColumnType{ColumnName: column}})
+		view.AddParameter(&option.Parameter{Id: selector, Name: selector, Typer: &option.ColumnType{ColumnName: column}})
 	}
 	return SQL
 }

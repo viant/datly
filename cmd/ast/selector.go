@@ -13,7 +13,7 @@ func ExtractSelector(text string) string {
 			case exprGroupToken, scopeBlockToken:
 				result += match.Text(cursor)
 			}
-
+			_, result = getHolderName(result)
 			return result
 		}
 	}

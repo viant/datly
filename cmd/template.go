@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/viant/datly/cmd/ast"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/sanitizer"
 	"github.com/viant/datly/view"
 	"strings"
 )
@@ -35,6 +36,8 @@ func (s *serverBuilder) enrichParamViewWithTemplate(ctx context.Context, routeOp
 	if aTable.SQL == "" {
 		aTable.SQL = SQL
 	}
+
+	aTable.SQL = sanitizer.Sanitize(SQL, hints)
 
 	if err = UpdateTableSettings(aTable, routeOption, hints); err != nil {
 		return nil, err

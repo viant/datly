@@ -1,17 +1,16 @@
 /* {"URI":"auth/product/{productID}", "Method":"PUT" , "Declare":{"Ids":"[]int", "Authorized":"bool"}} */
 
 
-
 #foreach($rec in $Unsafe.Records /*
-  {"Auth":"Jwt"}   SELECT ID, STATUS, (IS_PRODUCT_AUTHORIZED($Jwt.UserID, ID)) AS IS_AUTH FROM PRODUCT WHERE ID IN ($Ids)
+  {"Auth":"Jwt"}   SELECT ID, STATUS, IS_PRODUCT_AUTHORIZED($Jwt.UserID, ID) AS IS_AUTH FROM PRODUCT WHERE ID IN ($Ids)
  */)
 
 #if($rec.IS_AUTH == 0)
-    $errors.Raise("Unauthorized access to product: $rec.ID")
+    $logger.Fatal("Unauthorized access to product: %v", $rec.ID)
 #end
 
 #if($rec.STATUS == 0)
-    $errors.Raise("Changing archived product ID: $rec.ID is not allowed: $rec.ID")
+    $logger.Fatal("Changing archived product ID: %v is not allowed: %v", $rec.ID, $rec.ID)
 #end
 
 UPDATE PRODUCT

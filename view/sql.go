@@ -57,6 +57,7 @@ func expandWithoutTemplateEvaluation(ctx context.Context, evaluation *TemplateEv
 		return columns, SQL, err
 	}
 
+	fmt.Println(v.Template.Schema.Type().String())
 	fmt.Println(fmt.Errorf("failed to detect columns using velocity engine and SQL:  %v  due to the %w\n", SQL, err).Error())
 
 	columns, SQL, err = detectColumns(ctx, &TemplateEvaluation{SQL: v.Source(), Expander: v.Expand}, v)
@@ -89,6 +90,23 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 
 	params := newValue(aView.Template.Schema.Type())
 	presence := newValue(aView.Template.PresenceSchema.Type())
+
+	selector := &Selector{
+		Parameters: ParamState{
+			Values: params,
+			Has:    presence,
+		},
+	}
+	for _, parameter := range aView.Template.Parameters {
+		if parameter.ActualParamType().Kind() != reflect.Slice {
+			continue
+		}
+
+		aSlice := reflect.MakeSlice(parameter.ActualParamType(), 1, 1)
+		if err = parameter.Set(selector, aSlice.Interface()); err != nil {
+			return nil, err
+		}
+	}
 
 	source, sanitized, _, err := aView.Template.EvaluateSource(params, presence, aView)
 	if err != nil {

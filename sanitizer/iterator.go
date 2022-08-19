@@ -16,6 +16,7 @@ const (
 	IfContext
 	ForEachContext
 	AppendContext
+	FuncContext
 )
 
 type (
@@ -82,10 +83,30 @@ func NewParamContext(name string, context Context) *ParamContext {
 }
 
 func (i *ParamMetaIterator) buildContexts(context Context, statements ...ast.Statement) {
+
+outer:
 	for _, statement := range statements {
 		switch actual := statement.(type) {
 		case *expr.Select:
 			i.contexts = append(i.contexts, NewParamContext(view.NotEmptyOf(actual.FullName, actual.ID), context))
+
+			for actual.X != nil {
+				xSelect, ok := actual.X.(*expr.Select)
+				if ok {
+					actual = xSelect
+					continue
+				}
+
+				asFunc, ok := actual.X.(*expr.Call)
+				if ok {
+					for _, arg := range asFunc.Args {
+						i.buildContexts(FuncContext, arg)
+					}
+				}
+
+				continue outer
+			}
+
 		case *expr.Parentheses:
 			i.buildContexts(context, actual.P)
 		case *expr.Unary:
@@ -119,18 +140,40 @@ func (i *ParamMetaIterator) Has() bool {
 		return false
 	}
 
+	i.cursor.MatchOne(whitespaceMatcher)
 	for i.cursor.Pos < i.cursor.InputSize {
+		beforeMatch := i.cursor.Pos
 		param, pos := i.paramMatcher.TryMatchParam(i.cursor)
 		if pos == -1 {
 			i.cursor.Pos++
 			continue
 		}
 
-		i.buildMetaParam(pos, param)
+		if method, ok := i.tryBuildParam(param, pos); !ok {
+			i.cursor.Pos = beforeMatch + len(method) + 1
+			continue
+		}
+
 		return true
 	}
 
 	return false
+}
+
+func (i *ParamMetaIterator) tryBuildParam(param string, pos int) (string, bool) {
+	index := i.counter
+	i.counter++
+
+	_, name := GetHolderName(param)
+	occurrenceIndex := i.occurrences[name]
+	i.occurrences[name] = occurrenceIndex + 1
+
+	if builtInMethods[name] {
+		return name, false
+	}
+
+	i.buildMetaParam(index, occurrenceIndex, pos, param)
+	return "", true
 }
 
 func (i *ParamMetaIterator) Next() *ParamMeta {
@@ -152,15 +195,14 @@ func (i *ParamMetaIterator) init() {
 	i.initMetaTypes(i.SQL)
 }
 
-func (i *ParamMetaIterator) buildMetaParam(pos int, name string) {
+func (i *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, raw string) {
 	context := UnspecifiedContext
 	if len(i.contexts) > 0 {
-		context = i.contexts[i.counter].Context
+		context = i.contexts[index].Context
 	}
 
-	prefix, holder := GetHolderName(name)
-	occurrenceIndex := i.occurrences[holder]
-	i.occurrences[holder] = occurrenceIndex + 1
+	prefix, holder := GetHolderName(raw)
+
 	var paramMetaType *ParamMetaType
 	if metaType, ok := i.paramMetaTypes[holder]; ok {
 		paramMetaType = metaType
@@ -169,16 +211,14 @@ func (i *ParamMetaIterator) buildMetaParam(pos int, name string) {
 	i.paramMeta = &ParamMeta{
 		Context:         context,
 		Start:           pos,
-		End:             pos + len(name),
-		FullName:        name,
+		End:             pos + len(raw),
+		FullName:        raw,
 		Prefix:          prefix,
 		Holder:          holder,
 		IsVariable:      i.variables[holder],
-		OccurrenceIndex: occurrenceIndex,
+		OccurrenceIndex: occurrence,
 		MetaType:        paramMetaType,
 	}
-
-	i.counter++
 }
 
 func (i *ParamMetaIterator) addVariable(selector *expr.Select) {
