@@ -1,0 +1,50 @@
+init:
+  parentPath: $parent.path
+  expect: $LoadData('${parentPath}/expect.json')
+pipeline:
+
+
+  signJWT:
+    action: secret:signJWT
+    privateKey:
+      URL: ${appPath}/e2e/cloud/jwt/private.enc
+      Key: blowfish://default
+    claims:
+      userID: 2
+      email: dev@viantint.com
+
+  printToken:
+    action: print
+    message: Bearer ${signJWT.TokenString}
+
+
+  test:
+    testNoAuthenticated:
+      action: http/runner:send
+      requests:
+        - Method: GET
+          description: user is no authenticated
+          URL: http://127.0.0.1:8080/v1/api/dev/auth/vendors/2
+          Expect:
+            Code: 400
+
+    testAuthenticatedAndAuthorized:
+      action: http/runner:send
+      requests:
+      - Method: GET
+        description: user is authenticated and authorized for vendor 2
+        URL: http://127.0.0.1:8080/v1/api/dev/auth/vendors/2
+        Header:
+          Authorization: Bearer ${signJWT.TokenString}
+        Expect:
+          Code: 200
+          JSONBody: $expect
+
+    testAuthenticatedAndNoAuthorized:
+      action: http/runner:send
+      requests:
+      - Method: GET
+        description: user is authenticated but not authorized for vendor 1 (no data returned)
+        URL: http://127.0.0.1:8080/v1/api/dev/auth/vendors/1
+        Expect:
+          Code: 400
