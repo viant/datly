@@ -41,7 +41,7 @@ type testcase struct {
 	openApiURL  string
 	viewURL     string
 	dataURL     string
-	dataMethod  string
+	httpMethod  string
 }
 
 func TestRun(t *testing.T) {
@@ -63,7 +63,7 @@ func TestRun(t *testing.T) {
 			args:        []string{"-N=foos", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db"},
 			viewURL:     "/v1/api/meta/view/dev/foos",
 			dataURL:     "/v1/api/dev/foos",
-			dataMethod:  http.MethodGet,
+			httpMethod:  http.MethodGet,
 		},
 		{
 			description: "relation one to one",
@@ -72,7 +72,7 @@ func TestRun(t *testing.T) {
 			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db", "-R=event_types:event_types:One"},
 			viewURL:     "/v1/api/meta/view/dev/events",
 			dataURL:     "/v1/api/dev/events",
-			dataMethod:  http.MethodGet,
+			httpMethod:  http.MethodGet,
 		},
 		{
 			description: "column codec",
@@ -80,7 +80,7 @@ func TestRun(t *testing.T) {
 			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db", "-X=testdata/case003_columns_codec/events.sql"},
 			viewURL:     "/v1/api/meta/view/dev/events",
 			dataURL:     "/v1/api/dev/events",
-			dataMethod:  http.MethodGet,
+			httpMethod:  http.MethodGet,
 		},
 		{
 			description: "group by",
@@ -88,7 +88,7 @@ func TestRun(t *testing.T) {
 			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db", "-X=testdata/case004_group_by/events.sql"},
 			viewURL:     "/v1/api/meta/view/dev/events",
 			dataURL:     "/v1/api/dev/events?quantity=10",
-			dataMethod:  http.MethodGet,
+			httpMethod:  http.MethodGet,
 		},
 		{
 			description: "inner join",
@@ -96,7 +96,7 @@ func TestRun(t *testing.T) {
 			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db", "-X=testdata/case005_inner_join/events.sql"},
 			viewURL:     "/v1/api/meta/view/dev/events",
 			dataURL:     "/v1/api/dev/events?quantity=10",
-			dataMethod:  http.MethodGet,
+			httpMethod:  http.MethodGet,
 		},
 		{
 			description: "velty syntax",
@@ -104,7 +104,7 @@ func TestRun(t *testing.T) {
 			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db", "-X=testdata/case006_velty/events.sql"},
 			viewURL:     "/v1/api/meta/view/dev/events",
 			dataURL:     "/v1/api/dev/events?quantity=10",
-			dataMethod:  http.MethodGet,
+			httpMethod:  http.MethodGet,
 		},
 		{
 			description: "param column alias",
@@ -112,7 +112,7 @@ func TestRun(t *testing.T) {
 			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db", "-X=testdata/case007_param_alias/events.sql"},
 			viewURL:     "/v1/api/meta/view/dev/events/1",
 			dataURL:     "/v1/api/dev/events/1",
-			dataMethod:  http.MethodGet,
+			httpMethod:  http.MethodGet,
 		},
 		{
 			description: "cache hint",
@@ -124,7 +124,7 @@ func TestRun(t *testing.T) {
 				"-X=testdata/case008_cache_hint/events.sql",
 			},
 			viewURL:    "/v1/api/meta/view/dev/events/1",
-			dataMethod: http.MethodGet,
+			httpMethod: http.MethodGet,
 		},
 		{
 			description: "selector hint",
@@ -132,7 +132,7 @@ func TestRun(t *testing.T) {
 			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db", "-X=testdata/case009_selector_hint/events.sql"},
 			viewURL:     "/v1/api/meta/view/dev/events/1",
 			dataURL:     "/v1/api/dev/events/1",
-			dataMethod:  http.MethodGet,
+			httpMethod:  http.MethodGet,
 		},
 		{
 			description: "type definition",
@@ -144,7 +144,7 @@ func TestRun(t *testing.T) {
 				"-X=testdata/case010_acl_param/event_types.sql",
 			},
 			viewURL:    "/v1/api/meta/view/dev/event_types",
-			dataMethod: http.MethodGet,
+			httpMethod: http.MethodGet,
 		},
 		{
 			description: "update",
@@ -156,7 +156,7 @@ func TestRun(t *testing.T) {
 				"-X=testdata/case011_update/update.sql",
 			},
 			viewURL:    "/v1/api/meta/view/dev/status",
-			dataMethod: http.MethodGet,
+			httpMethod: http.MethodGet,
 		},
 		{
 			description: "set view param",
@@ -168,7 +168,7 @@ func TestRun(t *testing.T) {
 				"-X=testdata/case012_set_view_param/update.sql",
 			},
 			viewURL:    "/v1/api/meta/view/dev/status",
-			dataMethod: http.MethodGet,
+			httpMethod: http.MethodGet,
 		},
 		{
 			description: "AsInts codec",
@@ -180,13 +180,25 @@ func TestRun(t *testing.T) {
 				"-X=testdata/case013_ints_codec/update.sql",
 			},
 			viewURL:    "/v1/api/meta/view/dev/status",
-			dataMethod: http.MethodGet,
+			httpMethod: http.MethodGet,
+		},
+		{
+			description: "Insert type detection",
+			URI:         "case014_insert",
+			args: []string{
+				"-N=eventTypes",
+				"-D=sqlite3",
+				"-A=/tmp/datly_tests/generator/db.db",
+				"-X=testdata/case014_insert/insert.sql",
+			},
+			viewURL:    "/v1/api/meta/view/dev/status",
+			httpMethod: http.MethodPost,
 		},
 	}
 
 	loader := afs.New()
 	//for i, testCase := range testCases[len(testCases)-1:] {
-	for i, testCase := range testCases {
+	for i, testCase := range testCases[:len(testCases)-1] {
 		mem.ResetSingleton()
 		gateway.ResetSingleton()
 		tests.LogHeader(fmt.Sprintf("Running testcase: %v\n", i))
@@ -219,7 +231,7 @@ func checkReadData(t *testing.T, server *standalone.Server, testCase *testcase, 
 		return
 	}
 
-	actualData, err := readResponse(server.Handler, testCase.dataURL, testCase.dataMethod, nil)
+	actualData, err := readResponse(server.Handler, testCase.dataURL, testCase.httpMethod, nil)
 	if !assert.Nil(t, err, testCase.description) {
 		return
 	}
@@ -238,7 +250,12 @@ func checkGeneratedView(t *testing.T, loader afs.Service, testLocation string, t
 		return
 	}
 
-	actualView, err := readResponse(server.Handler, testCase.viewURL, http.MethodGet, nil)
+	httpMethod := http.MethodGet
+	if testCase.httpMethod != "" {
+		httpMethod = testCase.httpMethod
+	}
+
+	actualView, err := readResponse(server.Handler, testCase.viewURL, httpMethod, nil)
 	if !assert.Nil(t, err, testCase.description) {
 		return
 	}
