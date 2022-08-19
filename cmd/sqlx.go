@@ -52,12 +52,21 @@ func buildTableFromQuery(aQuery *query.Select, routeOpt *option.Route, hints opt
 	if err != nil {
 		return nil, err
 	}
-
-	for _, item := range aQuery.List {
-		if item.Comments == "" || item.Alias == "" {
-			continue
-		}
-	}
+	//
+	//for _, item := range aQuery.List {
+	//	if item.Comments == "" || item.Alias == "" {
+	//		continue
+	//	}
+	//
+	//	aType := &DataTyped{}
+	//	hint, _ := sanitizer.SplitHint(item.Comments)
+	//
+	//	if err := json.Unmarshal([]byte(hint), aType); err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	table.ColumnTypes[item.Alias] = aType.DataType
+	//}
 
 	return table, nil
 }
@@ -323,6 +332,8 @@ func appendItem(item *query.Item, result *[]*option.Column) {
 		item.DataType = column.DataType
 	}
 	switch actual := item.Expr.(type) {
+	case *expr.Call:
+		*result = append(*result, &option.Column{Name: parser.Stringify(actual), Alias: item.Alias, DataType: item.DataType})
 	case *expr.Ident:
 		*result = append(*result, &option.Column{Name: actual.Name, Alias: item.Alias, DataType: item.DataType})
 	case *expr.Selector:
