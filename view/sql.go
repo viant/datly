@@ -57,7 +57,6 @@ func expandWithoutTemplateEvaluation(ctx context.Context, evaluation *TemplateEv
 		return columns, SQL, err
 	}
 
-	fmt.Println(v.Template.Schema.Type().String())
 	fmt.Println(fmt.Errorf("failed to detect columns using velocity engine and SQL:  %v  due to the %w\n", SQL, err).Error())
 
 	columns, SQL, err = detectColumns(ctx, &TemplateEvaluation{SQL: v.Source(), Expander: v.Expand}, v)

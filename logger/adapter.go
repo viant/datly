@@ -61,7 +61,7 @@ func (l *Adapter) ReadingData(duration time.Duration, SQL string, read int, para
 	if l.readingData == nil {
 		return
 	}
-	fmt.Printf("%v %v\n", SQL, params)
+
 	l.readingData(duration, SQL, read, params, err)
 }
 

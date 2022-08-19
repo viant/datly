@@ -49,13 +49,13 @@ func (p *CriteriaSanitizer) Add(_ int, value interface{}) string {
 
 func (p *CriteriaSanitizer) expandCopy(value interface{}) ([]interface{}, string) {
 	valueType := reflect.TypeOf(value)
-	valueCopy := reflect.New(valueType).Elem().Interface()
 	valuePtr := xunsafe.AsPointer(value)
 
 	if valueType.Kind() == reflect.Slice {
 		return p.copyAndExpandSlice(valueType, valuePtr)
 	}
 
+	valueCopy := reflect.New(valueType).Elem().Interface()
 	if valuePtr != nil {
 		xunsafe.Copy(xunsafe.AsPointer(valueCopy), valuePtr, int(valueType.Size()))
 	}
@@ -63,9 +63,9 @@ func (p *CriteriaSanitizer) expandCopy(value interface{}) ([]interface{}, string
 	return []interface{}{valueCopy}, "?"
 }
 
-func (p *CriteriaSanitizer) copyAndExpandSlice(valueType reflect.Type, valuePtr unsafe.Pointer) ([]interface{}, string) {
+func (p *CriteriaSanitizer) copyAndExpandSlice(sliceType reflect.Type, valuePtr unsafe.Pointer) ([]interface{}, string) {
 	p.ensureSliceIndex()
-	xslice := p.xunsafeSlice(valueType)
+	xslice := p.xunsafeSlice(sliceType.Elem())
 	sliceLen := xslice.Len(valuePtr)
 	switch sliceLen {
 	case 0:
