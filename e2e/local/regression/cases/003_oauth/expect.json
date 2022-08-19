@@ -2,6 +2,7 @@
   {
     "id": 2,
     "name": "Vendor 2",
+    "firstName": "Developer",
     "products": [
       {
         "@indexBy@": "id"
