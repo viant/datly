@@ -65,11 +65,12 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 			return err
 		}
 
-		SQL, uriParams, err := extractSetting(string(SQLData), routeOption)
+		SQLWithHints, uriParams, err := extractSetting(string(SQLData), routeOption)
 		if err != nil {
 			return fmt.Errorf("invalid settings: %w", err)
 		}
 
+		SQL := SQLWithHints
 		routeOption.URIParams = uriParams
 		parameterHints = ast.ExtractParameterHints(SQL)
 
@@ -78,7 +79,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 		}
 
 		if ast.IsSQLExecMode(SQL) {
-			if sqlExecModeView, err = ast.Parse(SQL, routeOption, parameterHints.Index()); err != nil {
+			if sqlExecModeView, err = ast.Parse(SQLWithHints, routeOption, parameterHints); err != nil {
 				return err
 			}
 
@@ -86,7 +87,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 			dataViewParams = extractDataViewParams(sqlExecModeView.Parameters)
 
 		} else {
-			if xTable, dataViewParams, err = ParseSQLx(SQL, routeOption, parameterHints.Index()); err != nil {
+			if xTable, dataViewParams, err = ParseSQLx(SQL, routeOption, parameterHints); err != nil {
 				log.Println(err)
 			}
 
@@ -95,7 +96,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 			}
 		}
 	}
-	s.buildDataParameters(dataViewParams, parameterHints.Index(), routeOption)
+	s.buildDataParameters(dataViewParams, parameterHints, routeOption)
 
 	aView := s.buildMainView(s.options, generate)
 	if sqlExecModeView != nil {
@@ -193,7 +194,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	return fsAddYAML(fs, s.options.RouterURL(), s.route)
 }
 
-func (s *serverBuilder) buildDataParameters(dataParameters map[string]*option.TableParam, parameters map[string]*option.ParameterHint, routeOption *option.Route) error {
+func (s *serverBuilder) buildDataParameters(dataParameters map[string]*option.TableParam, parameters option.ParameterHints, routeOption *option.Route) error {
 	if len(parameters) == 0 {
 		return nil
 	}
@@ -351,8 +352,6 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 		return
 	}
 
-	hintsIndex := hints.Index()
-
 	for k, v := range params {
 		schemaName := strings.Title(k)
 		typeDef, ok := s.BuildSchema(ctx, schemaName, k, v, routeOption)
@@ -365,7 +364,7 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 			s.route.Resource.Types = append(s.route.Resource.Types, typeDef)
 		}
 
-		relView, err := s.buildParamView(ctx, routeOption, k, schemaName, v, hintsIndex)
+		relView, err := s.buildParamView(ctx, routeOption, k, schemaName, v, hints)
 		if err != nil {
 			fmt.Printf("can't create data view param: %v\n", err.Error())
 			continue

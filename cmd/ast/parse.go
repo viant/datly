@@ -22,10 +22,9 @@ type paramTypeDetector struct {
 	paramTypes map[string]string
 	variables  map[string]bool
 	viewMeta   *option.ViewMeta
-	hints      map[string]*option.ParameterHint
 }
 
-func newParamTypeDetector(route *option.Route, meta *option.ViewMeta, hints map[string]*option.ParameterHint) *paramTypeDetector {
+func newParamTypeDetector(route *option.Route, meta *option.ViewMeta) *paramTypeDetector {
 	uriParams := map[string]bool{}
 	paramTypes := map[string]string{}
 	if route != nil {
@@ -43,12 +42,13 @@ func newParamTypeDetector(route *option.Route, meta *option.ViewMeta, hints map[
 		paramTypes: paramTypes,
 		variables:  map[string]bool{},
 		viewMeta:   meta,
-		hints:      hints,
 	}
 }
 
-func Parse(SQL string, route *option.Route, hints map[string]*option.ParameterHint) (*option.ViewMeta, error) {
+func Parse(SQL string, route *option.Route, hints option.ParameterHints) (*option.ViewMeta, error) {
 	viewMeta := option.NewViewMeta()
+	iterator := sanitizer.NewIterator(SQL, hints)
+	SQL = iterator.SQL
 
 	block, err := parser.Parse([]byte(SQL))
 	if err != nil {
@@ -62,17 +62,20 @@ func Parse(SQL string, route *option.Route, hints map[string]*option.ParameterHi
 	}
 
 	cursor.MatchOne(whitespaceMatcher)
-	actualSource := string(cursor.Input[cursor.Pos:])
 
 	for i := 0; i < cursor.Pos; i++ {
 		cursor.Input[i] = ' '
 	}
 
-	detector := newParamTypeDetector(route, viewMeta, hints)
+	actualSourceStart := cursor.Pos
+
+	detector := newParamTypeDetector(route, viewMeta)
 	detector.implyDefaultParams(block.Statements(), true, nil, false)
 	viewMeta.SetVariables(detector.variables)
 
-	detector.correctUntyped(string(from), detector.variables, viewMeta, route)
+	if err = detector.correctUntyped(iterator, viewMeta, route); err != nil {
+		return nil, err
+	}
 
 	if IsSQLExecMode(SQL) {
 		viewMeta.Mode = view.SQLExecMode
@@ -83,7 +86,7 @@ func Parse(SQL string, route *option.Route, hints map[string]*option.ParameterHi
 		}
 	}
 
-	viewMeta.Source = sanitizer.Sanitize(actualSource)
+	viewMeta.Source = sanitizer.Sanitize(SQL[actualSourceStart:])
 	return viewMeta, nil
 }
 

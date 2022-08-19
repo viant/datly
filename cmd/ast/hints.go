@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/sanitizer"
 	"github.com/viant/parsly"
 	"strings"
 )
@@ -18,22 +19,27 @@ func RemoveParameterHints(text string, hints option.ParameterHints) string {
 }
 
 func ExtractParameterHints(text string) option.ParameterHints {
+	cursor := parsly.NewCursor("", []byte(text), 0)
 	var hints = make([]*option.ParameterHint, 0)
-outer:
-	for i := 0; i < len(text); i++ {
-		switch text[i] {
-		case '$':
-			selExpr := ExtractSelector(text[i:])
-			if selExpr == "" {
-				continue outer
-			}
+	matcher := sanitizer.NewParamMatcher()
 
-			_, paramName := getHolderName(selExpr)
-			candidate := text[i+len(selExpr):]
-			if hint := ExtractHint(candidate); hint != "" {
-				hints = append(hints, &option.ParameterHint{Parameter: paramName, Hint: hint})
-			}
+	for cursor.Pos < cursor.InputSize {
+		paramName, pos := matcher.TryMatchParam(cursor)
+		if pos == -1 {
+			cursor.Pos++
+			continue
 		}
+
+		matched := cursor.MatchAfterOptional(whitespaceMatcher, commentBlockMatcher)
+		if matched.Code != commentBlockToken {
+			continue
+		}
+
+		_, holder := getHolderName(paramName)
+		hints = append(hints, &option.ParameterHint{
+			Parameter: holder,
+			Hint:      matched.Text(cursor),
+		})
 	}
 
 	return hints

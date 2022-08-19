@@ -1,6 +1,7 @@
 package sanitizer
 
 import (
+	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
 	"github.com/viant/velty/ast"
@@ -24,11 +25,14 @@ type (
 		SQL    string
 		cursor *parsly.Cursor
 
-		paramMeta   *ParamMeta
-		contexts    []*ParamContext
-		counter     int
-		variables   map[string]bool
-		occurrences map[string]int
+		paramMeta      *ParamMeta
+		contexts       []*ParamContext
+		counter        int
+		variables      map[string]bool
+		occurrences    map[string]int
+		paramMetaTypes map[string]*ParamMetaType
+		hints          map[string]*option.ParameterHint
+		paramMatcher   *ParamMatcher
 	}
 
 	ParamContext struct {
@@ -45,14 +49,24 @@ type (
 		Context         Context
 		IsVariable      bool
 		OccurrenceIndex int
+		MetaType        *ParamMetaType
+	}
+
+	ParamMetaType struct {
+		Typer []option.Typer
+		SQL   []string
+		Hint  []string
 	}
 )
 
-func NewIterator(SQL string) *ParamMetaIterator {
+func NewIterator(SQL string, hints option.ParameterHints) *ParamMetaIterator {
 	result := &ParamMetaIterator{
-		SQL:         SQL,
-		variables:   map[string]bool{},
-		occurrences: map[string]int{},
+		SQL:            SQL,
+		variables:      map[string]bool{},
+		occurrences:    map[string]int{},
+		paramMetaTypes: map[string]*ParamMetaType{},
+		paramMatcher:   NewParamMatcher(),
+		hints:          hints.Index(),
 	}
 
 	result.init()
@@ -105,32 +119,14 @@ func (i *ParamMetaIterator) Has() bool {
 		return false
 	}
 
-	var matched *parsly.TokenMatch
 	for i.cursor.Pos < i.cursor.InputSize {
-		matched = i.cursor.MatchAfterOptional(whitespaceMatcher, anyMatcher)
-		if matched.Code == parsly.EOF {
-			return false
-		}
-
-		b := matched.Byte(i.cursor)
-		if b != '$' {
+		param, pos := i.paramMatcher.TryMatchParam(i.cursor)
+		if pos == -1 {
+			i.cursor.Pos++
 			continue
 		}
 
-		matchedPos := i.cursor.Pos
-		matched = i.cursor.MatchAny(scopeBlockMatcher, wordMatcher)
-
-		paramName := string(b)
-		switch matched.Code {
-		case scopeBlockToken, wordToken:
-			paramName += matched.Text(i.cursor)
-		}
-
-		if paramName == "$" {
-			continue
-		}
-
-		i.buildMetaParam(matchedPos, paramName)
+		i.buildMetaParam(pos, param)
 		return true
 	}
 
@@ -145,12 +141,15 @@ func (i *ParamMetaIterator) Next() *ParamMeta {
 }
 
 func (i *ParamMetaIterator) init() {
+	i.extractHints()
+
 	block, err := parser.Parse([]byte(i.SQL))
 	if err == nil {
 		i.buildContexts(AppendContext, block.Statements()...)
 	}
 
 	i.cursor = parsly.NewCursor("", []byte(i.SQL), 0)
+	i.initMetaTypes(i.SQL)
 }
 
 func (i *ParamMetaIterator) buildMetaParam(pos int, name string) {
@@ -162,6 +161,10 @@ func (i *ParamMetaIterator) buildMetaParam(pos int, name string) {
 	prefix, holder := getHolderName(name)
 	occurrenceIndex := i.occurrences[holder]
 	i.occurrences[holder] = occurrenceIndex + 1
+	var paramMetaType *ParamMetaType
+	if metaType, ok := i.paramMetaTypes[holder]; ok {
+		paramMetaType = metaType
+	}
 
 	i.paramMeta = &ParamMeta{
 		Context:         context,
@@ -172,6 +175,7 @@ func (i *ParamMetaIterator) buildMetaParam(pos int, name string) {
 		Holder:          holder,
 		IsVariable:      i.variables[holder],
 		OccurrenceIndex: occurrenceIndex,
+		MetaType:        paramMetaType,
 	}
 
 	i.counter++
@@ -184,4 +188,13 @@ func (i *ParamMetaIterator) addVariable(selector *expr.Select) {
 	}
 
 	i.variables[holderName] = true
+}
+
+func (i *ParamMetaIterator) extractHints() {
+	hints := ExtractParameterHints(i.SQL)
+	for index, hint := range hints {
+		i.hints[hint.Parameter] = hints[index]
+	}
+
+	i.SQL = RemoveParameterHints(i.SQL, hints)
 }

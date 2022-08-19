@@ -34,7 +34,7 @@ func ExtractCriteriaPlaceholders(node node.Node, list *[]*Criterion) {
 			appendParamExpr(actual.X, actual.Op, actual.Y, list)
 		}
 	case *expr.Unary:
-
+		// Do nothing
 	}
 }
 

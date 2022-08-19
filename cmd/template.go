@@ -8,7 +8,8 @@ import (
 	"strings"
 )
 
-func (s *serverBuilder) buildParamView(ctx context.Context, routeOption *option.Route, paramName string, schemaName string, tableParam *option.TableParam, hintsIndex map[string]*option.ParameterHint) (*view.View, error) {
+func (s *serverBuilder) buildParamView(ctx context.Context, routeOption *option.Route, paramName string, schemaName string, tableParam *option.TableParam, hints option.ParameterHints) (*view.View, error) {
+	hintsIndex := hints.Index()
 	hint, ok := hintsIndex[paramName]
 	paramView := s.buildParamViewWithoutTemplate(paramName, tableParam, schemaName)
 	if !ok {
@@ -22,11 +23,11 @@ func (s *serverBuilder) buildParamView(ctx context.Context, routeOption *option.
 		return paramView, nil
 	}
 
-	return s.enrichParamViewWithTemplate(ctx, routeOption, SQL, hintsIndex, paramView)
+	return s.enrichParamViewWithTemplate(ctx, routeOption, SQL, paramView, hints)
 }
 
-func (s *serverBuilder) enrichParamViewWithTemplate(ctx context.Context, routeOption *option.Route, SQL string, hintsIndex map[string]*option.ParameterHint, paramView *view.View) (*view.View, error) {
-	aTable, _, err := ParseSQLx(SQL, routeOption, hintsIndex)
+func (s *serverBuilder) enrichParamViewWithTemplate(ctx context.Context, routeOption *option.Route, SQL string, paramView *view.View, hints option.ParameterHints) (*view.View, error) {
+	aTable, _, err := ParseSQLx(SQL, routeOption, hints)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +36,7 @@ func (s *serverBuilder) enrichParamViewWithTemplate(ctx context.Context, routeOp
 		aTable.SQL = SQL
 	}
 
-	if err = UpdateTableSettings(aTable, routeOption, hintsIndex); err != nil {
+	if err = UpdateTableSettings(aTable, routeOption, hints); err != nil {
 		return nil, err
 	}
 

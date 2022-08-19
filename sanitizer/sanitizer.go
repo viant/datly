@@ -22,7 +22,7 @@ var builtInMethods = map[string]bool{
 }
 
 func Sanitize(SQL string) string {
-	iterator := NewIterator(SQL)
+	iterator := NewIterator(SQL, nil)
 	offset := 0
 
 	modifiable := []byte(SQL)

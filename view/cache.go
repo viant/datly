@@ -153,7 +153,7 @@ func (c *Cache) aerospikeCache(aView *View) (cache.Cache, error) {
 
 	client, err := clientProvider()
 	if err != nil {
-		return nil, err
+		return nil, nil
 	}
 
 	expanded, err := c.expandLocation(aView)
@@ -189,6 +189,10 @@ func (c *Cache) Service() (cache.Cache, error) {
 		if err := c.recreateCacheIfNeeded(); err != nil {
 			return nil, err
 		}
+	}
+
+	if c.cache == nil {
+		return nil, fmt.Errorf("%v cache service is not available", c.Name)
 	}
 
 	return c.cache, nil

@@ -5,6 +5,13 @@ type ParameterHint struct {
 	Hint      string
 }
 
+func NewParameterHint(name, hint string) *ParameterHint {
+	return &ParameterHint{
+		Parameter: name,
+		Hint:      hint,
+	}
+}
+
 type ParameterHints []*ParameterHint
 
 func (p *ParameterHints) Index() map[string]*ParameterHint {
