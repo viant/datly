@@ -1,13 +1,12 @@
 /* {"URI":"auth/product/{productID}", "Method":"PUT" , "Declare":{"Ids":"[]int", "Authorized":"bool"}} */
 
 
-#set ($auth = $Unsafe.Auth /*  {"Auth":"Jwt"}  SELECT Authorized  FROM (SELECT  TRUE AS Authorized) t t WHERE Authorized AND $Jwt.UserID > 0  */ )
 
 #foreach($rec in $Unsafe.Records /*
-    SELECT ID, STATUS, IS_PRODUCT_AUTHORIZED($Jwt.UserID, ID) AS IS_PRODUCT_AUTHORIZED FROM PRODUCT WHERE ID IN ($Ids)
+  {"Auth":"Jwt"}   SELECT ID, STATUS, IS_PRODUCT_AUTHORIZED($Jwt.UserID, ID) AS IS_AUTH FROM PRODUCT WHERE ID IN ($Ids)
  */)
 
-#if($rec.IS_PRODUCT_AUTHORIZED == 0)
+#if($rec.IS_AUTH == 0)
     $errors.Raise("Unauthorized access to product: $rec.ID")
 #end
 

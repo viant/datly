@@ -18,10 +18,10 @@ pipeline:
           descriptor: '[username]:[password]@tcp(${dbIP.mysql}:3306)/[dbname]?parseTime=true'
           credentials: $mysqlCredentials
       scripts:
-        - URL: ${appPath}/e2e/cloud/datastore/mysql/schema.ddl
+        - URL: ${appPath}/e2e/local/datastore/mysql/schema.ddl
 
     prepare:
       action: 'dsunit:prepare'
       datastore: dev
       expand: true
-      URL: ${appPath}/e2e/cloud/datastore/mysql/populate
+      URL: ${appPath}/e2e/local/datastore/mysql/populate
