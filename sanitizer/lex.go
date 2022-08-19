@@ -23,6 +23,7 @@ const (
 	numberToken
 	boolToken
 	stringToken
+	scopeBlockToken
 )
 
 var whitespaceMatcher = parsly.NewToken(whitespaceToken, "Whitespace", matcher.NewWhiteSpace())
@@ -48,3 +49,4 @@ var boolTokenMatcher = parsly.NewToken(boolToken, "Boolean", matcher.NewFragment
 
 var singleQuoteStringMatcher = parsly.NewToken(stringToken, "String", matcher.NewBlock('\'', '\'', '\\'))
 var doubleQuoteStringMatcher = parsly.NewToken(stringToken, "String", matcher.NewBlock('"', '"', '\\'))
+var scopeBlockMatcher = parsly.NewToken(scopeBlockToken, "{ .... }", matcher.NewBlock('{', '}', '\\'))

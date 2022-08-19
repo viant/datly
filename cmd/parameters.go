@@ -114,17 +114,23 @@ func discoverOperand(n node.Node, list *parameters) {
 	}
 }
 
-func extractDataViewParams(params []*option.Parameter) map[string]*option.TableParam {
+func extractDataViewParams(params []*option.Parameter, routeOption *option.Route, hints option.ParameterHints) (map[string]*option.TableParam, error) {
 	result := map[string]*option.TableParam{}
 	for _, param := range params {
 		if param.Kind != string(view.DataViewKind) {
 			continue
 		}
 
+		xTable, _, err := ParseSQLx(param.SQL, routeOption, hints)
+		if err != nil {
+			return nil, err
+		}
+
 		result[param.Name] = &option.TableParam{
 			Param: convertMetaParameter(param),
+			Table: xTable,
 		}
 	}
 
-	return result
+	return result, nil
 }

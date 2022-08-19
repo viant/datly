@@ -4,15 +4,13 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/afs"
-	"github.com/viant/afs/file"
-	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/ast"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/sanitizer"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
-	"github.com/viant/sqlx/metadata"
 	"github.com/viant/toolbox/format"
 	"log"
 	"net/http"
@@ -29,15 +27,6 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	s.route = &router.Resource{
 		ColumnsDiscovery: true,
 		Resource:         &view.Resource{},
-	}
-
-	if s.options.SQLLocation != "" && url.Scheme(s.options.SQLLocation, "e") == "e" {
-		parent, _ := url.Split(s.options.RouterURL(), file.Scheme)
-		destURL := url.Join(parent, s.options.SQLLocation)
-		sourceURL := normalizeURL(s.options.SQLLocation)
-		if err := fs.Copy(context.Background(), sourceURL, destURL); err != nil {
-			return err
-		}
 	}
 
 	//_, _ = s.BuildRoute(ctx)
@@ -58,7 +47,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	// ExecMode
 	var sqlExecModeView *option.ViewMeta
 	var parameterHints option.ParameterHints
-	if s.options.SQLXLocation != "" && url.Scheme(s.options.SQLLocation, "e") == "e" {
+	if s.options.SQLXLocation != "" {
 		sourceURL := normalizeURL(s.options.SQLXLocation)
 		SQLData, err := fs.DownloadWithURL(context.Background(), sourceURL)
 		if err != nil {
@@ -84,7 +73,10 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 			}
 
 			s.updateMetaColumnTypes(ctx, sqlExecModeView, routeOption)
-			dataViewParams = extractDataViewParams(sqlExecModeView.Parameters)
+			dataViewParams, err = extractDataViewParams(sqlExecModeView.Parameters, routeOption, parameterHints)
+			if err != nil {
+				return err
+			}
 
 		} else {
 			if xTable, dataViewParams, err = ParseSQLx(SQL, routeOption, parameterHints); err != nil {
@@ -165,14 +157,6 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	}
 
 	s.buildDataViewParams(ctx, dataViewParams, routeOption, parameterHints)
-	if len(s.options.Relations) > 0 {
-		meta := metadata.New()
-		err := s.buildRelations(ctx, meta, aView, viewRoute)
-		if err != nil {
-			return err
-		}
-	}
-
 	updateURIParams(s.route, routeOption)
 	updateParamReferences(s.route)
 	s.route.Routes = append(s.route.Routes, viewRoute)
@@ -200,10 +184,7 @@ func (s *serverBuilder) buildDataParameters(dataParameters map[string]*option.Ta
 	}
 
 	for _, hintedParam := range parameters {
-		if strings.HasPrefix(hintedParam.Parameter, "Unsafe.") {
-			hintedParam.Parameter = strings.Replace(hintedParam.Parameter, "Unsafe.", "", 1)
-		}
-		paramName := hintedParam.Parameter
+		_, paramName := sanitizer.GetHolderName(hintedParam.Parameter)
 		aTable := &option.Table{}
 		SQL, err := ast.UnmarshalHint(hintedParam.Hint, aTable)
 		if err != nil {
@@ -217,6 +198,7 @@ func (s *serverBuilder) buildDataParameters(dataParameters map[string]*option.Ta
 		if err := UpdateTableSettings(aTable, routeOption, parameters); err != nil {
 			return err
 		}
+
 		aTable.Alias = paramName
 		if aTable.DataViewParameter == nil {
 			aTable.DataViewParameter = &view.Parameter{}
@@ -578,9 +560,8 @@ func detectCaseFormat(xTable *option.Table) view.CaseFormat {
 
 func (s *serverBuilder) buildMainView(options *Options, generate *Generate) *view.View {
 	aView := &view.View{
-		Name:    generate.Name,
-		Table:   generate.Table,
-		FromURL: options.SQLLocation,
+		Name:  generate.Name,
+		Table: generate.Table,
 		Selector: &view.Config{
 			Limit: 25,
 			Constraints: &view.Constraints{

@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func getHolderName(identifier string) (string, string) {
+func GetHolderName(identifier string) (string, string) {
 	paramName := paramId(identifier)
 	prefix, paramName := removePrefixIfNeeded(paramName)
 	paramName = withoutPath(paramName)

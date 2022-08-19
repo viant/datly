@@ -57,24 +57,6 @@ func TestRun(t *testing.T) {
 
 	testCases := []*testcase{
 		{
-			description: "basic",
-			URI:         "case001_basic",
-			openApiURL:  "/v1/api/meta/openapi/",
-			args:        []string{"-N=foos", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db"},
-			viewURL:     "/v1/api/meta/view/dev/foos",
-			dataURL:     "/v1/api/dev/foos",
-			httpMethod:  http.MethodGet,
-		},
-		{
-			description: "relation one to one",
-			URI:         "case002_one_to_one",
-			openApiURL:  "/v1/api/meta/openapi/",
-			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db", "-R=event_types:event_types:One"},
-			viewURL:     "/v1/api/meta/view/dev/events",
-			dataURL:     "/v1/api/dev/events",
-			httpMethod:  http.MethodGet,
-		},
-		{
 			description: "column codec",
 			URI:         "case003_columns_codec",
 			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db", "-X=testdata/case003_columns_codec/events.sql"},

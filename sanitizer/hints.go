@@ -16,11 +16,11 @@ func SplitHint(hint string) (marshal string, SQL string) {
 	}
 
 	hint = strings.TrimSpace(hint)
-
-	//TODO: replace with parsly
-	index := strings.LastIndex(hint, "}")
-	if index != -1 {
-		return strings.TrimSpace(hint[:index+1]), strings.TrimSpace(hint[index+1:])
+	hintCursor := parsly.NewCursor("", []byte(hint), 0)
+	matched := hintCursor.MatchOne(scopeBlockMatcher)
+	if matched.Code == scopeBlockToken {
+		jsonHint := matched.Text(hintCursor)
+		return jsonHint, strings.TrimSpace(string(hintCursor.Input[hintCursor.Pos:]))
 	}
 
 	return "", hint
@@ -43,7 +43,7 @@ func ExtractParameterHints(text string) option.ParameterHints {
 			continue
 		}
 
-		_, holder := getHolderName(paramName)
+		_, holder := GetHolderName(paramName)
 		hints = append(hints, &option.ParameterHint{
 			Parameter: holder,
 			Hint:      matched.Text(cursor),

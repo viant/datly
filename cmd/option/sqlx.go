@@ -66,6 +66,16 @@ type (
 	Joins []*Join
 )
 
+func NewTable() *Table {
+	return &Table{
+		ColumnTypes: map[string]string{},
+		Deps:        map[string]string{},
+		TableMeta: TableMeta{
+			Warmup: map[string]interface{}{},
+		},
+	}
+}
+
 func (c Columns) StarExpr(ns string) *Column {
 	for _, item := range c {
 		if item.Name == "*" && item.Ns == ns {

@@ -3,7 +3,7 @@
 
 
 #foreach($rec in $Unsafe.Records /*
-  {"Auth":"Jwt"}   SELECT ID, STATUS, IS_PRODUCT_AUTHORIZED($Jwt.UserID, ID) AS IS_AUTH FROM PRODUCT WHERE ID IN ($Ids)
+  {"Auth":"Jwt"}   SELECT ID, STATUS, (IS_PRODUCT_AUTHORIZED($Jwt.UserID, ID)) AS IS_AUTH FROM PRODUCT WHERE ID IN ($Ids)
  */)
 
 #if($rec.IS_AUTH == 0)

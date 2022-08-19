@@ -75,3 +75,7 @@ func (p *Printer) Flush() {
 		fmt.Print(s)
 	}
 }
+
+func (p *Printer) Fatal(format string, args ...interface{}) (string, error) {
+	return "", fmt.Errorf(p.Sprintf(format, args...))
+}

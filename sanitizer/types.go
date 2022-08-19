@@ -47,7 +47,7 @@ func (i *ParamMetaIterator) initMetaTypes(SQL string) []string {
 			}
 
 			if i.canBeParam(text) {
-				prefix, paramName := getHolderName(text)
+				prefix, paramName := GetHolderName(text)
 				if prefix == keywords.ParamsMetadataKey {
 					continue
 				}

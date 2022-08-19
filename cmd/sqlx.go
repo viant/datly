@@ -20,7 +20,8 @@ func ParseSQLx(SQL string, routeOpt *option.Route, hints option.ParameterHints) 
 	}
 
 	var tables = map[string]*option.Table{}
-	table, err := buildTable(aQuery.From.X, routeOpt, hints)
+
+	table, err := buildTableFromQuery(aQuery, routeOpt, hints)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -32,6 +33,7 @@ func ParseSQLx(SQL string, routeOpt *option.Route, hints option.ParameterHints) 
 	if star := table.Columns.StarExpr(table.Alias); star != nil {
 		table.StarExpr = true
 	}
+
 	var dataParameters = map[string]*option.TableParam{}
 	tables[table.Alias] = table
 
@@ -45,9 +47,25 @@ func ParseSQLx(SQL string, routeOpt *option.Route, hints option.ParameterHints) 
 	return table, dataParameters, nil
 }
 
+func buildTableFromQuery(aQuery *query.Select, routeOpt *option.Route, hints option.ParameterHints) (*option.Table, error) {
+	table, err := buildTable(aQuery.From.X, routeOpt, hints)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, item := range aQuery.List {
+		if item.Comments == "" || item.Alias == "" {
+			continue
+		}
+	}
+
+	return table, nil
+}
+
 func buildTable(x node.Node, routeOpt *option.Route, hints option.ParameterHints) (*option.Table, error) {
 	//var err error
-	table := &option.Table{}
+	table := option.NewTable()
+
 	switch actual := x.(type) {
 	case *expr.Raw:
 		SQL := strings.TrimSpace(actual.Raw)

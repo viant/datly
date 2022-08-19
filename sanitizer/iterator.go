@@ -158,7 +158,7 @@ func (i *ParamMetaIterator) buildMetaParam(pos int, name string) {
 		context = i.contexts[i.counter].Context
 	}
 
-	prefix, holder := getHolderName(name)
+	prefix, holder := GetHolderName(name)
 	occurrenceIndex := i.occurrences[holder]
 	i.occurrences[holder] = occurrenceIndex + 1
 	var paramMetaType *ParamMetaType
@@ -182,7 +182,7 @@ func (i *ParamMetaIterator) buildMetaParam(pos int, name string) {
 }
 
 func (i *ParamMetaIterator) addVariable(selector *expr.Select) {
-	_, holderName := getHolderName(view.NotEmptyOf(selector.FullName, selector.ID))
+	_, holderName := GetHolderName(view.NotEmptyOf(selector.FullName, selector.ID))
 	if builtInMethods[holderName] {
 		return
 	}
