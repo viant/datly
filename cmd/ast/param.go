@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/sanitizer"
 	"github.com/viant/datly/view"
+	"net/http"
 	"strings"
 )
 
@@ -24,6 +25,11 @@ func (d *paramTypeDetector) correctUntyped(iterator *sanitizer.ParamMetaIterator
 		if ok {
 			aParam.DataType = paramType
 			aParam.Assumed = false
+		}
+		if aParam.Kind == string(view.QueryKind) {
+			if route.Method != "" && route.Method != http.MethodGet {
+				aParam.Kind = string(view.RequestBodyKind)
+			}
 		}
 	}
 

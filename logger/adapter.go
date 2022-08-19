@@ -57,12 +57,12 @@ func (l *Adapter) ObjectReconciling(dst, item, parent interface{}, index int) {
 	l.objectReconciling(dst, item, parent, index)
 }
 
-func (l *Adapter) ReadingData(duration time.Duration, sql string, read int, params []interface{}, err error) {
+func (l *Adapter) ReadingData(duration time.Duration, SQL string, read int, params []interface{}, err error) {
 	if l.readingData == nil {
 		return
 	}
-
-	l.readingData(duration, sql, read, params, err)
+	fmt.Printf("%v %v\n", SQL, params)
+	l.readingData(duration, SQL, read, params, err)
 }
 
 func (l *Adapter) ReadTime(viewName string, start, end *time.Time, err error) {
