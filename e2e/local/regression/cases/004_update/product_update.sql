@@ -1,4 +1,4 @@
-/* {"URI":"auth/products/", "Method":"PUT" , "Declare":{"Ids":"[]int", "Authorized":"bool", "IS_AUTH": "bool"}} */
+/* {"URI":"auth/products/", "Method":"POST" , "Declare":{"Ids":"[]int", "Authorized":"bool", "IS_AUTH": "bool"}} */
 
 
 #foreach($rec in $Unsafe.Records /*

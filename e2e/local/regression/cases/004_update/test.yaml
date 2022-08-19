@@ -22,7 +22,7 @@ pipeline:
     testNoAuthenticated:
       action: http/runner:send
       requests:
-        - Method: PUT
+        - Method: POST
           description: user is no authenticated
           URL: http://127.0.0.1:8080/v1/api/dev/auth/products/
           Header:
@@ -30,6 +30,7 @@ pipeline:
           JSONBody:
             Ids:
               - 1
+              - 2
             Status: 2
           Expect:
             Code: 200

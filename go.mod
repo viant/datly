@@ -28,7 +28,7 @@ require (
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/parsly v0.0.0-20220726191103-6f54d86a6bf9
 	github.com/viant/scy v0.3.2-0.20220818025028-4d06184f4d73
-	github.com/viant/sqlx v0.0.0-20220811174716-1b6dd6d967a2
+	github.com/viant/sqlx v0.0.0-20220819215818-6e8b96901a6c
 	github.com/viant/toolbox v0.34.6-0.20220630003140-fb2bf82657c1
 	github.com/viant/velty v0.1.1-0.20220819125800-dde10a681f06
 	github.com/viant/xunsafe v0.8.1-0.20220609224231-1d3e1fcf7bb6
