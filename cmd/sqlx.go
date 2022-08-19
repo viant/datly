@@ -27,7 +27,7 @@ func ParseSQLx(SQL string, routeOpt *option.Route, hints option.ParameterHints) 
 	}
 
 	table.Alias = aQuery.From.Alias
-	table.Columns = selectItemToColumn(aQuery)
+	table.Columns = selectItemToColumn(aQuery, routeOpt)
 	table.ViewHint = aQuery.From.Comments
 
 	if star := table.Columns.StarExpr(table.Alias); star != nil {
@@ -73,7 +73,7 @@ func buildTableFromQuery(aQuery *query.Select, routeOpt *option.Route, hints opt
 
 func buildTable(x node.Node, routeOpt *option.Route, hints option.ParameterHints) (*option.Table, error) {
 	//var err error
-	table := option.NewTable()
+	table := option.NewTable("")
 
 	switch actual := x.(type) {
 	case *expr.Raw:
@@ -109,7 +109,7 @@ func UpdateTableSettings(table *option.Table, routeOpt *option.Route, hints opti
 	if innerQuery != nil && innerQuery.From.X != nil {
 		table.Name = strings.Trim(parser.Stringify(innerQuery.From.X), "`")
 
-		table.Inner = selectItemToColumn(innerQuery)
+		table.Inner = selectItemToColumn(innerQuery, routeOpt)
 
 		if len(innerQuery.Joins) > 0 {
 			table.Deps = map[string]string{}
@@ -195,6 +195,7 @@ func processJoin(join *query.Join, tables map[string]*option.Table, outerColumn 
 
 		relTable.Alias = paramName
 		relTable.DataViewParameter.Name = paramName
+
 		dataParameters[paramName] = &option.TableParam{Table: relTable, Param: relTable.DataViewParameter}
 		UpdateAuthToken(relTable)
 		return nil
@@ -315,15 +316,15 @@ func extractSelector(n node.Node, left bool) *expr.Selector {
 	return nil
 }
 
-func selectItemToColumn(query *query.Select) option.Columns {
+func selectItemToColumn(query *query.Select, route *option.Route) option.Columns {
 	var result []*option.Column
 	for _, item := range query.List {
-		appendItem(item, &result)
+		appendItem(item, &result, route)
 	}
 	return result
 }
 
-func appendItem(item *query.Item, result *[]*option.Column) {
+func appendItem(item *query.Item, result *[]*option.Column, route *option.Route) {
 	comments := item.Comments
 	if hint := comments; hint != "" {
 		column := &view.Column{}
@@ -331,6 +332,11 @@ func appendItem(item *query.Item, result *[]*option.Column) {
 		}
 		item.DataType = column.DataType
 	}
+
+	if actualDataType, ok := route.Declare[item.Alias]; ok {
+		item.DataType = actualDataType
+	}
+
 	switch actual := item.Expr.(type) {
 	case *expr.Call:
 		*result = append(*result, &option.Column{Name: parser.Stringify(actual), Alias: item.Alias, DataType: item.DataType})
@@ -347,5 +353,9 @@ func appendItem(item *query.Item, result *[]*option.Column) {
 		}
 	case *expr.Literal:
 		*result = append(*result, &option.Column{Name: "", Alias: item.Alias, DataType: actual.Kind})
+	case *expr.Parenthesis:
+		*result = append(*result, &option.Column{Name: parser.Stringify(actual), Alias: item.Alias, DataType: item.DataType})
+	default:
+		fmt.Printf("can't convert %T to column\n", actual)
 	}
 }

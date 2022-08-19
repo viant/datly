@@ -175,6 +175,10 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 		}
 
 		p.view = aView
+
+		if p.Schema == nil {
+			p.Schema = aView.Schema
+		}
 	}
 
 	if err := p.initSchema(resource._types, structType); err != nil {

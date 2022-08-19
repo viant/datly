@@ -66,8 +66,9 @@ type (
 	Joins []*Join
 )
 
-func NewTable() *Table {
+func NewTable(name string) *Table {
 	return &Table{
+		Name:        name,
 		ColumnTypes: map[string]string{},
 		Deps:        map[string]string{},
 		TableMeta: TableMeta{

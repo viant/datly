@@ -185,7 +185,7 @@ func (s *serverBuilder) buildDataParameters(dataParameters map[string]*option.Ta
 
 	for _, hintedParam := range parameters {
 		_, paramName := sanitizer.GetHolderName(hintedParam.Parameter)
-		aTable := &option.Table{}
+		aTable := option.NewTable("")
 		SQL, err := ast.UnmarshalHint(hintedParam.Hint, aTable)
 		if err != nil {
 			return err
@@ -272,7 +272,7 @@ func (s *serverBuilder) updateMetaColumnTypes(ctx context.Context, viewMeta *opt
 	if len(viewMeta.Updates) > 0 {
 
 		for _, name := range viewMeta.Updates {
-			table := &option.Table{Name: name, ColumnTypes: map[string]string{}}
+			table := option.NewTable(name)
 			s.updateTableColumnTypes(ctx, table)
 			for k, v := range table.ColumnTypes {
 				viewMeta.ParameterTypes[k] = v
@@ -282,7 +282,7 @@ func (s *serverBuilder) updateMetaColumnTypes(ctx context.Context, viewMeta *opt
 	if len(viewMeta.Inserts) > 0 {
 
 		for _, name := range viewMeta.Inserts {
-			table := &option.Table{Name: name, ColumnTypes: map[string]string{}}
+			table := option.NewTable(name)
 			s.updateTableColumnTypes(ctx, table)
 			for k, v := range table.ColumnTypes {
 				viewMeta.ParameterTypes[k] = v
@@ -336,12 +336,7 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 
 	for k, v := range params {
 		schemaName := strings.Title(k)
-		typeDef, ok := s.BuildSchema(ctx, schemaName, k, v, routeOption)
-		if !ok {
-			fmt.Printf("skipping data view params: %v - no column detected, nor type declaration", v.Table)
-			continue
-		}
-
+		typeDef, _ := s.BuildSchema(ctx, schemaName, k, v, routeOption)
 		if typeDef != nil {
 			s.route.Resource.Types = append(s.route.Resource.Types, typeDef)
 		}
@@ -388,6 +383,10 @@ func (s *serverBuilder) buildParamViewWithoutTemplate(k string, v *option.TableP
 
 func (s *serverBuilder) mergeParamTypes(table *option.Table) {
 	if len(table.ColumnTypes) > 0 {
+		if table.ViewMeta.ParameterTypes == nil {
+			table.ViewMeta.ParameterTypes = map[string]string{}
+		}
+
 		for k, v := range table.ColumnTypes {
 			if len(table.ViewMeta.ParameterTypes) == 0 {
 				table.ViewMeta.ParameterTypes = map[string]string{}
