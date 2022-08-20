@@ -10,7 +10,7 @@ pipeline:
       URL: ${appPath}/e2e/cloud/jwt/private.enc
       Key: blowfish://default
     claims:
-      userID: 2
+      userID: 1
       email: dev@viantint.com
 
   printToken:
@@ -30,7 +30,6 @@ pipeline:
           JSONBody:
             Ids:
               - 1
-              - 2
             Status: 2
           Expect:
             Code: 200

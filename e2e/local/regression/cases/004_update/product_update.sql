@@ -13,13 +13,15 @@
     $logger.Fatal("Changing archived product ID: %v is not allowed: %v", $rec.ID, $rec.ID)
 #end
 
+
 UPDATE PRODUCT
 SET STATUS = $Status
 WHERE ID = $rec.ID;
 
+
 $logger.Log("change PRODUCT ID: %v status from: %v to %v\n", $rec.ID, $rec.STATUS, $Unsafe.Status)
 
-INSERT INTO PRODUCT_JN(PRODUCT_ID, USER_ID, OLD_VALUE, NEW_VALUE) VALUES($rec.ID, $rec.STATUS, $Status);
+INSERT INTO PRODUCT_JN(PRODUCT_ID, USER_ID, OLD_VALUE, NEW_VALUE) VALUES($rec.ID, $Jwt.UserID, $rec.STATUS, $Status);
 
 #end
 
