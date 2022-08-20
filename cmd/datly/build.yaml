@@ -1,6 +1,6 @@
 init:
   target:
-    URL: ssh://127.0.0.1
+    URL: ssh://localhost
     Credentials: localhost
   appPath: $WorkingDirectory(./../..)
   Ver: $Cat(${appPath}/Version)
@@ -16,6 +16,7 @@ pipeline:
     checkError: true
     commands:
       - cd ${appPath}/cmd/datly
+      - go mod vendor
       - export GOOS=linux
       - go build -ldflags="-X 'main.Version=${Ver}'"
       - tar cvzf datly_linux_${Ver}.tar.gz datly

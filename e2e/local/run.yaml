@@ -8,7 +8,7 @@ init:
   appPath: $WorkingDirectory(../..)
   mysqlCredentials: mysql-e2e
   dbIP:
-    mysql: 127.0.0.1
+    mysql: localhost
 
 pipeline:
   init:
