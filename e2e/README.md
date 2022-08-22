@@ -38,7 +38,7 @@ endly -t=test -i=uri_param
 ```
 
 
-### Securing JWT claims
+### Generating custom Authorization header with JWT claims
 Some test use manually  OAuth security Authorization Bearer  token, you can sign JWT claims with the following command
 
 ```bash
