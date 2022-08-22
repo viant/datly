@@ -14,26 +14,38 @@ Copy endly to /usr/local/bin
 - mysql
 3. Install [secrets manager](https://github.com/viant/scy/releases)
 
+4. Checkout this repo
+```bahs
+git clone https://github.com/viant/datly.git
+
+```
+
 ### Running local test
 
 1. Running (init,build,test)
 
 ```bash
-cd local
+git clone https://github.com/viant/datly.git
+cd datly
+cd e2e/local
 endly
 ```
 
 2. To build datly binary and run test use the following
 
 ```bash
-cd local
+git clone https://github.com/viant/datly.git
+cd datly
+cd e2e/local
 endly -t=build,test
 ```
 
 2. To run specific test case only
 
 ```bash
-cd local
+git clone https://github.com/viant/datly.git
+cd datly
+cd e2e/local
 endly -t=test -i=uri_param
 ```
 
@@ -52,10 +64,14 @@ scy -m=singJWT -s=claims.json -r='<datly_root>/e2e/local/jwt/public.enc|blowfish
 Generate google secrets with for service account that has full access to a test project i.e mycompny.json
 Store it locally on ~/.secret/mycompany-e2e.json
 
+Note that name of the file should be also GCP test project.
+
 1. Running (init,build,test)
 
 ```bash
-cd local
+git clone https://github.com/viant/datly.git
+cd datly
+cd e2e/cloud
 endly authWith=mycompany-e2e 
 ```
 
