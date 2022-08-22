@@ -1,13 +1,13 @@
 init:
   yesterday: $FormatTime('yesterdayInUTC', 'yyyy-MM-dd HH:mm:ss')
   today: $FormatTime('nowInUTC', 'yyyy-MM-dd HH:mm:ss')
-
+  '!authWith': $params.authWith
   target:
     URL: ssh://localhost/
     credentials: localhost
   appPath: $WorkingDirectory(../..)
   mysqlCredentials: mysql-e2e
-  bqCredentials: viant-e2e
+  bqCredentials: $authWith
   gcpProjectID: $bqCredentials
   dbIP:
     mysql: 127.0.0.1

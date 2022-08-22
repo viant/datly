@@ -14,7 +14,7 @@ Copy endly to /usr/local/bin
 - mysql
 3. Install [secrets manager](https://github.com/viant/scy/releases)
 
-### Running test
+### Running local test
 
 1. Running (init,build,test)
 
@@ -44,5 +44,18 @@ Some test use manually  OAuth security Authorization Bearer  token, you can sign
 ```bash
 echo '{"user_id":123,"email":"dev@test.me"}' > claims.json
 scy -m=singJWT -s=claims.json -r='<datly_root>/e2e/local/jwt/public.enc|blowfish://default'
+```
+
+
+### Running cloud test
+
+Generate google secrets with for service account that has full access to a test project i.e mycompny.json
+Store it locally on ~/.secret/mycompany-e2e.json
+
+1. Running (init,build,test)
+
+```bash
+cd local
+endly authWith=mycompany-e2e 
 ```
 
