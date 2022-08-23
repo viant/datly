@@ -18,10 +18,6 @@ import (
 )
 
 func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standalone.Config) error {
-	if s.options.SQLXLocation == "" {
-		return fmt.Errorf("sqlx location cn't be empty")
-	}
-
 	fs := afs.New()
 	generate := &s.options.Generate
 	if generate.Name == "" {
@@ -42,42 +38,45 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	// ExecMode
 	var sqlExecModeView *option.ViewMeta
 	var parameterHints option.ParameterHints
-	sourceURL := normalizeURL(s.options.SQLXLocation)
-	SQLData, err := fs.DownloadWithURL(context.Background(), sourceURL)
-	if err != nil {
-		return err
-	}
+	if s.options.SQLXLocation != "" {
 
-	SQL, uriParams, err := extractSetting(string(SQLData), routeOption)
-	if err != nil {
-		return fmt.Errorf("invalid settings: %w", err)
-	}
-
-	routeOption.URIParams = uriParams
-	parameterHints = ast.ExtractParameterHints(SQL)
-
-	if len(parameterHints) > 0 {
-		SQL = ast.RemoveParameterHints(SQL, parameterHints)
-	}
-
-	if ast.IsSQLExecMode(SQL) {
-		if sqlExecModeView, err = ast.Parse(SQL, routeOption, parameterHints); err != nil {
-			return err
-		}
-
-		s.updateMetaColumnTypes(ctx, sqlExecModeView, routeOption)
-		dataViewParams, err = extractDataViewParams(sqlExecModeView.Parameters, routeOption, parameterHints)
+		sourceURL := normalizeURL(s.options.SQLXLocation)
+		SQLData, err := fs.DownloadWithURL(context.Background(), sourceURL)
 		if err != nil {
 			return err
 		}
 
-	} else {
-		if xTable, dataViewParams, err = ParseSQLx(SQL, routeOption, parameterHints); err != nil {
-			log.Println(err)
+		SQL, uriParams, err := extractSetting(string(SQLData), routeOption)
+		if err != nil {
+			return fmt.Errorf("invalid settings: %w", err)
 		}
 
-		if xTable != nil {
-			updateGenerateOption(generate, xTable)
+		routeOption.URIParams = uriParams
+		parameterHints = ast.ExtractParameterHints(SQL)
+
+		if len(parameterHints) > 0 {
+			SQL = ast.RemoveParameterHints(SQL, parameterHints)
+		}
+
+		if ast.IsSQLExecMode(SQL) {
+			if sqlExecModeView, err = ast.Parse(SQL, routeOption, parameterHints); err != nil {
+				return err
+			}
+
+			s.updateMetaColumnTypes(ctx, sqlExecModeView, routeOption)
+			dataViewParams, err = extractDataViewParams(sqlExecModeView.Parameters, routeOption, parameterHints)
+			if err != nil {
+				return err
+			}
+
+		} else {
+			if xTable, dataViewParams, err = ParseSQLx(SQL, routeOption, parameterHints); err != nil {
+				log.Println(err)
+			}
+
+			if xTable != nil {
+				updateGenerateOption(generate, xTable)
+			}
 		}
 	}
 

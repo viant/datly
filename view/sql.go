@@ -240,7 +240,7 @@ func expandWithZeroValues(SQL string, template *Template) (string, error) {
 		case reflect.Float32, reflect.Float64:
 			value = 0.0
 		case reflect.String:
-			value = "''"
+			value = ""
 		case reflect.Bool:
 			value = false
 		default:
