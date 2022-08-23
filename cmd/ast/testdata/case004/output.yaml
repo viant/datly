@@ -1,12 +1,16 @@
 parameters:
-  - datatype: int
-    id: ID
-    kind: query
-    name: id
-    required: false
-  - datatype: string
-    id: quantity
-    kind: path
-    name: quantity
-    required: true
+    - datatype: int
+      id: ID
+      kind: query
+      name: id
+      required: false
+      typer:
+        columnname: id
+    - datatype: string
+      id: quantity
+      kind: path
+      name: quantity
+      required: true
+      typer:
+        columnname: quantity
 source: "SELECT *, (\n    SELECT abc\n    FROM T2\n    WHERE 1=2\n) as abc FROM T1\nWHERE 1=1\n#if($Has.ID)\nAND ID =  $criteria.AppendBinding($Unsafe.ID) \n#end\n#if($Has.quantity)\nAND quantity =  $criteria.AppendBinding($Unsafe.quantity) \n#end"

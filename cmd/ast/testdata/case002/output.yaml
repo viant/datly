@@ -1,6 +1,6 @@
 source: |-
-  SELECT *, (
-      SELECT abc
-      FROM T2
-      WHERE 1=2
-  ) as abc FROM T1
+    SELECT *, (
+        SELECT abc
+        FROM T2
+        WHERE 1=2
+    ) as abc FROM T1

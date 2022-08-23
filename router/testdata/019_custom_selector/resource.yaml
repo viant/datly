@@ -12,7 +12,7 @@ Resource:
         Ref: db
       Table: events
       Template:
-        Source: 'SELECT ${Unsafe.Alias}.* FROM ${Unsafe.Table} AS $Unsafe.Alias'
+        Source: 'SELECT * FROM events'
         Parameters:
           - Ref: Alias
           - Ref: Table

@@ -51,7 +51,7 @@ func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) ([]*SQ
 
 	for _, data := range result {
 		var placeholders []interface{}
-		expand, err := aView.Expand(&placeholders, data.SQL, &view.Selector{}, view.CommonParams{}, &view.BatchData{}, params)
+		expand, err := aView.Expand(&placeholders, data.SQL, &view.Selector{}, view.CriteriaParam{}, &view.BatchData{}, params)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -2,6 +2,7 @@ package cache
 
 import (
 	"io"
+	"net/http"
 	"time"
 )
 
@@ -22,10 +23,15 @@ type (
 		ExpireAt        time.Time
 		Size            int
 		CompressionType string
+		ExtraHeaders    http.Header
 
 		url string
 	}
 )
+
+func (e *Entry) Headers() http.Header {
+	return e.meta.ExtraHeaders
+}
 
 func (e *Entry) Size() int {
 	return e.meta.Size

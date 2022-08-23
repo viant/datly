@@ -42,12 +42,12 @@ func NewBuilder() *Builder {
 }
 
 //Build builds SQL Select statement
-func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parentOfAclView *view.View) (*cache.Matcher, error) {
+func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *view.MetaParam) (*cache.Matcher, error) {
 	if exclude == nil {
 		exclude = &Exclude{}
 	}
 
-	template, sanitized, _, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parentOfAclView)
+	template, sanitized, _, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parent)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 	b.appendViewAlias(&sb, aView)
 
 	columnsInMeta := hasKeyword(template, keywords.ColumnsIn)
-	commonParams := view.CommonParams{}
+	commonParams := view.CriteriaParam{}
 
 	criteriaMeta := hasKeyword(template, keywords.Criteria)
 	hasCriteria := criteriaMeta.has()
@@ -195,7 +195,7 @@ func (b *Builder) appendViewAlias(sb *strings.Builder, view *view.View) {
 	sb.WriteString(view.Alias)
 }
 
-func (b *Builder) updatePagination(params *view.CommonParams, view *view.View, selector *view.Selector, exclude *Exclude) error {
+func (b *Builder) updatePagination(params *view.CriteriaParam, view *view.View, selector *view.Selector, exclude *Exclude) error {
 	if exclude.Pagination {
 		return nil
 	}
@@ -229,7 +229,7 @@ func (b *Builder) appendOffset(sb *strings.Builder, selector *view.Selector) {
 	sb.WriteString(strconv.Itoa(selector.Offset))
 }
 
-func (b *Builder) updateCriteria(params *view.CommonParams, columnsInMeta *reservedMeta) error {
+func (b *Builder) updateCriteria(params *view.CriteriaParam, columnsInMeta *reservedMeta) error {
 	sb := strings.Builder{}
 	hasColumnsIn := columnsInMeta.has()
 
@@ -253,7 +253,7 @@ func (b *Builder) appendCriteria(sb *strings.Builder, criteria string, addAnd bo
 	}
 }
 
-func (b *Builder) updateColumnsIn(params *view.CommonParams, view *view.View, relation *view.Relation, batchData *view.BatchData, columnsInMeta *reservedMeta, hasCriteria bool, exclude *Exclude) {
+func (b *Builder) updateColumnsIn(params *view.CriteriaParam, view *view.View, relation *view.Relation, batchData *view.BatchData, columnsInMeta *reservedMeta, hasCriteria bool, exclude *Exclude) {
 	if exclude.ColumnsIn {
 		return
 	}

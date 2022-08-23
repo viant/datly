@@ -166,7 +166,7 @@ func (c *Cache) aerospikeCache(aView *View) (cache.Cache, error) {
 }
 
 func (c *Cache) expandLocation(aView *View) (string, error) {
-	viewParam := asViewParam(aView)
+	viewParam := AsViewParam(aView, nil)
 	asBytes, err := json.Marshal(viewParam)
 	if err != nil {
 		return "", err

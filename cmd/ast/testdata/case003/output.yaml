@@ -1,10 +1,10 @@
 parameters:
-  - assumed: true
-    datatype: string
-    id: Id
-    kind: query
-    name: Id
-    required: true
-    typer:
-      columnname: id
+    - assumed: true
+      datatype: string
+      id: Id
+      kind: query
+      name: Id
+      required: true
+      typer:
+        columnname: id
 source: "SELECT *, (\n    SELECT abc\n    FROM T2\n    WHERE 1=2\n) as abc FROM T1\nWHERE id =  $criteria.AppendBinding($Unsafe.Id) "

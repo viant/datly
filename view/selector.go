@@ -1,6 +1,7 @@
 package view
 
 import (
+	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -13,16 +14,19 @@ type (
 	Selector struct {
 		DatabaseFormat format.Case
 		OutputFormat   format.Case
-		Columns        []string   `json:",omitempty"`
-		Fields         []string   `json:",omitempty"`
-		OrderBy        string     `json:",omitempty"`
-		Offset         int        `json:",omitempty"`
-		Limit          int        `json:",omitempty"`
-		Parameters     ParamState `json:",omitempty"`
-		_columnNames   map[string]bool
+		Columns        []string      `json:",omitempty"`
+		Fields         []string      `json:",omitempty"`
+		OrderBy        string        `json:",omitempty"`
+		Offset         int           `json:",omitempty"`
+		Limit          int           `json:",omitempty"`
+		Parameters     ParamState    `json:",omitempty"`
 		Criteria       string        `json:",omitempty"`
 		Placeholders   []interface{} `json:",omitempty"`
 		initialized    bool
+		Page           int
+
+		_columnNames map[string]bool
+		result       *cache.Matcher
 	}
 
 	ParamState struct {

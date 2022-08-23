@@ -85,7 +85,7 @@ func (c *Cache) close(ctx context.Context, entry *Entry) error {
 	return c.afs.Move(ctx, entry.meta.url, actualURL)
 }
 
-func (c *Cache) Put(ctx context.Context, entry *Entry, response []byte, compressionType string) error {
+func (c *Cache) Put(ctx context.Context, entry *Entry, response []byte, compressionType string, headers http.Header) error {
 	if entry.reader != nil {
 		return entry.Close()
 	}
@@ -93,6 +93,7 @@ func (c *Cache) Put(ctx context.Context, entry *Entry, response []byte, compress
 	entry.meta.ExpireAt = Now().Add(c._ttl)
 	entry.meta.CompressionType = compressionType
 	entry.meta.Size = len(response)
+	entry.meta.ExtraHeaders = headers
 
 	metaBytes, err := json.Marshal(entry.meta)
 	if err != nil {

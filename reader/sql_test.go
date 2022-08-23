@@ -100,7 +100,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:     "dataset001_events/",
 			description: `select statement with $PAGINATION`,
-			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS  LIMIT 10 OFFSET 5 ) AS t`,
+			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS  LIMIT 10 OFFSET 5  ) AS t`,
 			view: &view.View{
 				Columns: []*view.Column{
 					{
@@ -135,7 +135,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:     "dataset001_events/",
 			description: `select statement with View Criteria`,
-			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS  ) AS t`,
+			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS   ) AS t`,
 			view: &view.View{
 				Columns: []*view.Column{
 					{
@@ -197,7 +197,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:     "dataset001_events/",
 			description: `select statement with parameters`,
-			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS WHERE ID = ?  ) AS t`,
+			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS WHERE ID = ?   ) AS t`,
 			view: &view.View{
 				Columns: []*view.Column{
 					{
@@ -240,7 +240,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:      "dataset001_events/",
 			description:  `select statement with $AND_COLUMN_IN`,
-			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ?  AND ( ev.user_id IN (?, ?, ?, ?))  ) AS t`,
+			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ?  AND ( ev.user_id IN (?, ?, ?, ?))   ) AS t`,
 			placeholders: []interface{}{10, 4, 5, 9, 2},
 			relation:     &view.Relation{ColumnAlias: "ev", Of: &view.ReferenceView{Column: "ID"}},
 			view: &view.View{
@@ -287,7 +287,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:      "dataset001_events/",
 			description:  `select statement without $COLUMN_IN`,
-			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ?  AND ( ev.user_id IN (?, ?, ?, ?)) ) AS t`,
+			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ?  AND ( ev.user_id IN (?, ?, ?, ?))  ) AS t`,
 			placeholders: []interface{}{10, 4, 5, 9, 2},
 			relation:     &view.Relation{ColumnAlias: "ev", Of: &view.ReferenceView{Column: "ID"}},
 			view: &view.View{
@@ -334,7 +334,7 @@ func TestBuilder_Build(t *testing.T) {
 		{
 			dataset:     "dataset001_events/",
 			description: `select statement | selectors`,
-			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS   ORDER BY Price LIMIT 100 OFFSET 10) AS t  WHERE price > 10`,
+			output:      `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS    ORDER BY Price LIMIT 100 OFFSET 10) AS t  WHERE price > 10`,
 			view: &view.View{
 				Columns: []*view.Column{
 					{

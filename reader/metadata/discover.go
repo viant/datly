@@ -100,6 +100,7 @@ outer:
 	buffer.Write(tempAsBytes[:prevPos])
 	buffer.WriteByte(' ')
 	buffer.Write([]byte(criteriaKeyword))
+	buffer.WriteByte(' ')
 	buffer.Write(tempAsBytes[prevPos:])
 	if !hasPagination {
 		buffer.WriteByte(' ')

@@ -11,8 +11,10 @@ import (
 	"github.com/viant/sqlx/io/read"
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/sqlx/option"
+	"reflect"
 	"sync"
 	"time"
+	"unsafe"
 )
 
 // Service represents reader service
@@ -30,9 +32,15 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 
 	wg := sync.WaitGroup{}
 
-	collector := session.View.Collector(session.Dest, session.View.MatchStrategy.SupportsParallel())
+	collector := session.View.Collector(session.Dest, session.HandleViewMeta, session.View.MatchStrategy.SupportsParallel())
 	errors := shared.NewErrors(0)
-	s.readAll(ctx, session, collector, &wg, errors)
+
+	var parentMetaParam *view.MetaParam
+	if session.Parent != nil {
+		parentMetaParam = view.AsViewParam(session.Parent, session.Selectors.Lookup(session.Parent))
+	}
+
+	s.readAll(ctx, session, collector, &wg, errors, parentMetaParam)
 	wg.Wait()
 	err = errors.Error()
 	if err != nil {
@@ -66,7 +74,7 @@ func (s *Service) afterRead(session *Session, collector *view.Collector, start *
 	onFinish(end)
 }
 
-func (s *Service) readAll(ctx context.Context, session *Session, collector *view.Collector, wg *sync.WaitGroup, errorCollector *shared.Errors) {
+func (s *Service) readAll(ctx context.Context, session *Session, collector *view.Collector, wg *sync.WaitGroup, errorCollector *shared.Errors, parentMeta *view.MetaParam) {
 	start := time.Now()
 	onFinish := session.View.Counter.Begin(start)
 	defer s.afterRead(session, collector, &start, errorCollector.Error(), onFinish)
@@ -83,10 +91,12 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 	if !collector.SupportsParallel() {
 		relationGroup.Add(len(collectorChildren))
 	}
+
 	for i := range collectorChildren {
 		go func(i int) {
 			defer s.afterRelationCompleted(wg, collector, &relationGroup)
-			s.readAll(ctx, session, collectorChildren[i], wg, errorCollector)
+			parentMeta := view.AsViewParam(aView, selector)
+			s.readAll(ctx, session, collectorChildren[i], wg, errorCollector, parentMeta)
 		}(i)
 	}
 
@@ -104,10 +114,11 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 
 	session.View.Counter.IncrementValue(Pending)
 	defer session.View.Counter.DecrementValue(Pending)
-	err = s.exhaustRead(ctx, aView, selector, batchData, db, collector, session)
+	err = s.exhaustRead(ctx, aView, selector, batchData, db, collector, session, parentMeta)
 	if err != nil {
 		errorCollector.Append(err)
 	}
+
 	if collector.SupportsParallel() {
 		return
 	}
@@ -151,30 +162,114 @@ func (s *Service) batchData(collector *view.Collector) *view.BatchData {
 	return batchData
 }
 
-func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.Selector, batchData *view.BatchData, db *sql.DB, collector *view.Collector, session *Session) error {
-	batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
-	visitor := collector.Visitor(ctx)
+func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.Selector, batchData *view.BatchData, db *sql.DB, collector *view.Collector, session *Session, parentViewMetaParam *view.MetaParam) error {
+	batchDataCopy := s.copyBatchData(batchData)
+	batchDataCopy.ValuesBatch = batchDataCopy.Values
 
-	for {
-		fullMatch, smartMatch, err := s.getMatchers(view, selector, batchData, collector, session)
-		if err != nil {
-			return err
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+
+	var queryErr error
+	go func() {
+		defer wg.Done()
+		batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
+		visitor := collector.Visitor(ctx)
+
+		for {
+			fullMatch, smartMatch, err := s.getMatchers(view, selector, batchData, collector, session)
+			if err != nil {
+				queryErr = err
+				return
+			}
+
+			err = s.query(ctx, view, db, collector, visitor, fullMatch, smartMatch)
+			if err != nil {
+				queryErr = err
+				return
+			}
+
+			if batchData.Parent == batchData.ParentReadSize {
+				break
+			}
+
+			var nextParents int
+			batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
+			batchData.Parent += nextParents
+		}
+	}()
+
+	var updateSelectorSQLErr error
+	go func() {
+		defer wg.Done()
+		if view.Template.Meta == nil {
+			return
 		}
 
-		err = s.query(ctx, view, db, collector, visitor, fullMatch, smartMatch)
-		if err != nil {
-			return err
-		}
+		s.readPage(ctx, view, selector, batchDataCopy, collector, parentViewMetaParam)
+	}()
 
-		if batchData.Parent == batchData.ParentReadSize {
-			break
-		}
-
-		var nextParents int
-		batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
-		batchData.Parent += nextParents
+	wg.Wait()
+	if queryErr != nil {
+		return queryErr
 	}
+
+	if updateSelectorSQLErr != nil {
+		return updateSelectorSQLErr
+	}
+
 	return nil
+}
+
+func (s *Service) readPage(ctx context.Context, aView *view.View, selector *view.Selector, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *view.MetaParam) error {
+	selectorCopy := *selector
+	selector.Fields = []string{}
+	selector.Columns = []string{}
+
+	selector = &selectorCopy
+	matcher, err := s.sqlBuilder.Build(aView, selector, batchDataCopy, collector.Relation(), &Exclude{Pagination: true}, parentViewMetaParam)
+	if err != nil {
+		return err
+	}
+
+	viewParam := view.AsViewParam(aView, selector)
+	viewParam.NonWindowSQL = matcher.SQL
+	viewParam.Args = matcher.Args
+
+	SQL, args, err := aView.Template.Meta.Evaluate(selector.Parameters.Values, selector.Parameters.Has, viewParam)
+	if err != nil {
+		return err
+	}
+
+	db, err := aView.Db()
+	if err != nil {
+		return err
+	}
+
+	slice := reflect.MakeSlice(aView.Template.Meta.Schema.SliceType(), 0, 0)
+	slicePtr := unsafe.Pointer(slice.Pointer())
+	appender := aView.Template.Meta.Schema.Slice().Appender(slicePtr)
+	reader, err := read.New(ctx, db, SQL, func() interface{} {
+		return appender.Add()
+	})
+
+	if err != nil {
+		return err
+	}
+
+	err = reader.QueryAll(ctx, func(row interface{}) error {
+		return collector.AddMeta(row)
+	}, args...)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) copyBatchData(batchData *view.BatchData) *view.BatchData {
+	batchDataCopy := *batchData
+	return &batchDataCopy
 }
 
 func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchData *view.BatchData, collector *view.Collector, session *Session) (fullMatch *cache.Matcher, columnInMatcher *cache.Matcher, err error) {
@@ -185,14 +280,17 @@ func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchDa
 	go func() {
 		defer wg.Done()
 
-		fullMatch, fullMatchErr = s.sqlBuilder.Build(aView, selector, batchData, collector.Relation(), nil, session.Parent)
+		data, _ := session.ParentData()
+		fullMatch, fullMatchErr = s.sqlBuilder.Build(aView, selector, batchData, collector.Relation(), nil, data.AsParam())
 	}()
 
 	go func() {
 		defer wg.Done()
 
 		if aView.Cache != nil && aView.Cache.Warmup != nil {
-			columnInMatcher, smartMatchErr = s.sqlBuilder.Build(aView, selector, batchData, collector.Relation(), &Exclude{Pagination: true, ColumnsIn: true}, session.Parent)
+
+			data, _ := session.ParentData()
+			columnInMatcher, smartMatchErr = s.sqlBuilder.Build(aView, selector, batchData, collector.Relation(), &Exclude{Pagination: true, ColumnsIn: true}, data.AsParam())
 		}
 	}()
 
@@ -220,9 +318,11 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 			options = append(options, service)
 		}
 	}
+
 	if columnInMatcher != nil {
 		options = append(options, &columnInMatcher)
 	}
+
 	reader, err := read.New(ctx, db, fullMatcher.SQL, collector.NewItem(), options...)
 	if err != nil {
 		aView.Logger.LogDatabaseErr(err)

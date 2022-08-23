@@ -36,11 +36,12 @@ type Collector struct {
 	supportParallel bool
 	wgDelta         int
 
-	indexCounter   int
-	manyCounter    int
-	codecSlice     *xunsafe.Slice
-	codecSliceDest interface{}
-	codecAppender  *xunsafe.Appender
+	indexCounter    int
+	manyCounter     int
+	codecSlice      *xunsafe.Slice
+	codecSliceDest  interface{}
+	codecAppender   *xunsafe.Appender
+	viewMetaHandler viewMetaHandlerFn
 }
 
 func (r *Collector) Lock() *sync.Mutex {
@@ -103,7 +104,7 @@ func (r *Collector) parentValuesPositions(columnName string) map[interface{}][]i
 }
 
 //NewCollector creates a collector
-func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, supportParallel bool) *Collector {
+func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHandler viewMetaHandlerFn, supportParallel bool) *Collector {
 	ensuredDest := ensureDest(dest, view)
 	wg := sync.WaitGroup{}
 	wgDelta := 0
@@ -124,6 +125,7 @@ func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, supportPar
 		supportParallel: supportParallel,
 		wg:              &wg,
 		wgDelta:         wgDelta,
+		viewMetaHandler: viewMetaHandler,
 	}
 }
 
@@ -369,6 +371,7 @@ func (r *Collector) Relations(selector *Selector) []*Collector {
 
 		result[counter] = &Collector{
 			parent:          r,
+			viewMetaHandler: r.ViewMetaHandler(r.view.With[i]),
 			dest:            dest,
 			appender:        slice.Appender(xunsafe.AsPointer(dest)),
 			valuePosition:   make(map[string]map[interface{}][]int),
@@ -386,6 +389,20 @@ func (r *Collector) Relations(selector *Selector) []*Collector {
 
 	r.relations = result[:counter]
 	return result[:counter]
+}
+
+func (r *Collector) ViewMetaHandler(rel *Relation) func(viewMeta interface{}) error {
+	if rel.Of.View.Template.Meta == nil {
+		return func(viewMeta interface{}) error {
+			return nil
+		}
+	}
+
+	metaField := xunsafe.FieldByName(rel.Of.View.Template.Meta.Schema.Type(), rel.Of.Column)
+	return func(viewMeta interface{}) error {
+		_ = normalizeKey(metaField.Value(xunsafe.AsPointer(viewMeta)))
+		return nil
+	}
 }
 
 //View returns View assigned to the Collector
@@ -529,4 +546,8 @@ func (r *Collector) Slice() (unsafe.Pointer, *xunsafe.Slice) {
 
 func (r *Collector) Relation() *Relation {
 	return r.relation
+}
+
+func (r *Collector) AddMeta(row interface{}) error {
+	return r.viewMetaHandler(row)
 }

@@ -59,7 +59,7 @@ func TestRun(t *testing.T) {
 		{
 			description: "column codec",
 			URI:         "case003_columns_codec",
-			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db", "-X=testdata/case003_columns_codec/events.sql"},
+			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/db.db", "-X=testdata/case003_columns_codec/events.sql"},
 			viewURL:     "/v1/api/meta/view/dev/events",
 			dataURL:     "/v1/api/dev/events",
 			httpMethod:  http.MethodGet,
@@ -67,7 +67,7 @@ func TestRun(t *testing.T) {
 		{
 			description: "group by",
 			URI:         "case004_group_by",
-			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db", "-X=testdata/case004_group_by/events.sql"},
+			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/db.db", "-X=testdata/case004_group_by/events.sql"},
 			viewURL:     "/v1/api/meta/view/dev/events",
 			dataURL:     "/v1/api/dev/events?quantity=10",
 			httpMethod:  http.MethodGet,
@@ -75,7 +75,7 @@ func TestRun(t *testing.T) {
 		{
 			description: "inner join",
 			URI:         "case005_inner_join",
-			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db", "-X=testdata/case005_inner_join/events.sql"},
+			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/db.db", "-X=testdata/case005_inner_join/events.sql"},
 			viewURL:     "/v1/api/meta/view/dev/events",
 			dataURL:     "/v1/api/dev/events?quantity=10",
 			httpMethod:  http.MethodGet,
@@ -83,7 +83,7 @@ func TestRun(t *testing.T) {
 		{
 			description: "velty syntax",
 			URI:         "case006_velty",
-			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db", "-X=testdata/case006_velty/events.sql"},
+			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/db.db", "-X=testdata/case006_velty/events.sql"},
 			viewURL:     "/v1/api/meta/view/dev/events",
 			dataURL:     "/v1/api/dev/events?quantity=10",
 			httpMethod:  http.MethodGet,
@@ -91,7 +91,7 @@ func TestRun(t *testing.T) {
 		{
 			description: "param column alias",
 			URI:         "case007_param_alias",
-			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db", "-X=testdata/case007_param_alias/events.sql"},
+			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/db.db", "-X=testdata/case007_param_alias/events.sql"},
 			viewURL:     "/v1/api/meta/view/dev/events/1",
 			dataURL:     "/v1/api/dev/events/1",
 			httpMethod:  http.MethodGet,
@@ -102,7 +102,7 @@ func TestRun(t *testing.T) {
 			args: []string{
 				"-N=events",
 				"-D=sqlite3",
-				"-A=/tmp/datly_tests/generator/db.db",
+				"-A=/tmp/datly_tests/db.db",
 				"-X=testdata/case008_cache_hint/events.sql",
 			},
 			viewURL:    "/v1/api/meta/view/dev/events/1",
@@ -111,7 +111,7 @@ func TestRun(t *testing.T) {
 		{
 			description: "selector hint",
 			URI:         "case009_selector_hint",
-			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/generator/db.db", "-X=testdata/case009_selector_hint/events.sql"},
+			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/db.db", "-X=testdata/case009_selector_hint/events.sql"},
 			viewURL:     "/v1/api/meta/view/dev/events/1",
 			dataURL:     "/v1/api/dev/events/1",
 			httpMethod:  http.MethodGet,
@@ -122,7 +122,7 @@ func TestRun(t *testing.T) {
 			args: []string{
 				"-N=eventTypes",
 				"-D=sqlite3",
-				"-A=/tmp/datly_tests/generator/db.db",
+				"-A=/tmp/datly_tests/db.db",
 				"-X=testdata/case010_acl_param/event_types.sql",
 			},
 			viewURL:    "/v1/api/meta/view/dev/event_types",
@@ -134,7 +134,7 @@ func TestRun(t *testing.T) {
 			args: []string{
 				"-N=eventTypes",
 				"-D=sqlite3",
-				"-A=/tmp/datly_tests/generator/db.db",
+				"-A=/tmp/datly_tests/db.db",
 				"-X=testdata/case011_update/update.sql",
 			},
 			viewURL:    "/v1/api/meta/view/dev/status",
@@ -146,7 +146,7 @@ func TestRun(t *testing.T) {
 			args: []string{
 				"-N=eventTypes",
 				"-D=sqlite3",
-				"-A=/tmp/datly_tests/generator/db.db",
+				"-A=/tmp/datly_tests/db.db",
 				"-X=testdata/case012_set_view_param/update.sql",
 			},
 			viewURL:    "/v1/api/meta/view/dev/status",
@@ -158,7 +158,7 @@ func TestRun(t *testing.T) {
 			args: []string{
 				"-N=eventTypes",
 				"-D=sqlite3",
-				"-A=/tmp/datly_tests/generator/db.db",
+				"-A=/tmp/datly_tests/db.db",
 				"-X=testdata/case013_ints_codec/update.sql",
 			},
 			viewURL:    "/v1/api/meta/view/dev/status",
@@ -170,7 +170,7 @@ func TestRun(t *testing.T) {
 			args: []string{
 				"-N=eventTypes",
 				"-D=sqlite3",
-				"-A=/tmp/datly_tests/generator/db.db",
+				"-A=/tmp/datly_tests/db.db",
 				"-X=testdata/case014_insert/insert.sql",
 			},
 			viewURL:    "/v1/api/meta/view/dev/status",

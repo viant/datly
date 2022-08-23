@@ -1,10 +1,10 @@
 parameters:
-  - assumed: true
-    datatype: string
-    id: tID
-    kind: path
-    name: tID
-    required: true
-    typer:
-      columnname: t1.id
+    - assumed: true
+      datatype: string
+      id: tID
+      kind: path
+      name: tID
+      required: true
+      typer:
+        columnname: t1.id
 source: "SELECT *, (\n    SELECT abc\n    FROM T2\n    WHERE 1=2\n) as abc FROM T1\nWHERE 1=1\nAND T1.ID =  $criteria.AppendBinding($Unsafe.tID) "

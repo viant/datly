@@ -227,7 +227,7 @@ func (r *Router) writeResponseWithErrorHandler(response http.ResponseWriter, req
 }
 
 func (r *Router) readAndWriteResponse(response http.ResponseWriter, request *http.Request, ctx context.Context, route *Route, selectors *view.Selectors, entry *cache.Entry) (statusCode int, err error) {
-	rValue, err := r.readValue(route, selectors)
+	rValue, viewMeta, err := r.readValue(route, selectors)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -236,7 +236,7 @@ func (r *Router) readAndWriteResponse(response http.ResponseWriter, request *htt
 		return -1, nil
 	}
 
-	resultMarshalled, statusCode, err := r.marshalResult(route, request, selectors, rValue)
+	resultMarshalled, statusCode, err := r.marshalResult(route, request, selectors, rValue, viewMeta)
 	if err != nil {
 		return statusCode, err
 	}
@@ -244,6 +244,16 @@ func (r *Router) readAndWriteResponse(response http.ResponseWriter, request *htt
 	payloadReader, err := r.compressIfNeeded(resultMarshalled, route)
 	if err != nil {
 		return http.StatusInternalServerError, err
+	}
+
+	templateMeta := route.View.Template.Meta
+	if templateMeta != nil && templateMeta.Kind == view.HeaderTemplateMetaKind && viewMeta != nil {
+		data, err := goJson.Marshal(viewMeta)
+		if err != nil {
+			return http.StatusInternalServerError, err
+		}
+
+		payloadReader.AddHeader(templateMeta.Name, string(data))
 	}
 
 	if entry != nil {
@@ -254,23 +264,24 @@ func (r *Router) readAndWriteResponse(response http.ResponseWriter, request *htt
 	return -1, nil
 }
 
-func (r *Router) readValue(route *Route, selectors *view.Selectors) (reflect.Value, error) {
+func (r *Router) readValue(route *Route, selectors *view.Selectors) (reflect.Value, interface{}, error) {
 	destValue := reflect.New(route.View.Schema.SliceType())
 	dest := destValue.Interface()
 
 	session := reader.NewSession(dest, route.View)
 	session.Selectors = selectors
 	if err := reader.New().Read(context.TODO(), session); err != nil {
-		return destValue, err
+		return destValue, nil, err
 	}
+
 	if route.EnableAudit {
 		r.logMetrics(route.URI, session.Metrics)
-
 	}
-	return destValue, nil
+
+	return destValue, session.ViewMeta, nil
 }
 
-func (r *Router) updateCache(ctx context.Context, route *Route, cacheEntry *cache.Entry, response *BytesReader) {
+func (r *Router) updateCache(ctx context.Context, route *Route, cacheEntry *cache.Entry, response *RequestDataReader) {
 	if !debugEnabled {
 		go r.putCache(ctx, route, cacheEntry, response)
 		return
@@ -292,8 +303,8 @@ func (r *Router) cacheEntry(ctx context.Context, route *Route, selectors *view.S
 	return cacheEntry, nil
 }
 
-func (r *Router) putCache(ctx context.Context, route *Route, cacheEntry *cache.Entry, payloadReader *BytesReader) {
-	_ = route.Cache.Put(ctx, cacheEntry, payloadReader.buffer.Bytes(), payloadReader.CompressionType())
+func (r *Router) putCache(ctx context.Context, route *Route, cacheEntry *cache.Entry, payloadReader *RequestDataReader) {
+	_ = route.Cache.Put(ctx, cacheEntry, payloadReader.buffer.Bytes(), payloadReader.CompressionType(), payloadReader.Headers())
 }
 
 func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Request, route *Route) (shouldContinue bool) {
@@ -329,12 +340,12 @@ func (r *Router) runAfterFetch(response http.ResponseWriter, request *http.Reque
 	return true
 }
 
-func (r *Router) marshalResult(route *Route, request *http.Request, selectors *view.Selectors, destValue reflect.Value) (result []byte, statusCode int, err error) {
+func (r *Router) marshalResult(route *Route, request *http.Request, selectors *view.Selectors, destValue reflect.Value, viewMeta interface{}) (result []byte, statusCode int, err error) {
 	filters, err := r.buildJsonFilters(route, selectors)
 	if err != nil {
 		return nil, http.StatusBadRequest, err
 	}
-	payload, httpStatus, err := r.result(route, request, destValue, filters)
+	payload, httpStatus, err := r.result(route, request, destValue, filters, viewMeta)
 	if err != nil {
 		return nil, httpStatus, err
 	}
@@ -346,21 +357,9 @@ func (r *Router) inAWS() bool {
 	return scheme == "s3"
 }
 
-func (r *Router) writePayload(response http.ResponseWriter, payload []byte, httpStatus int, encoding string) {
-	response.Header().Add(content.Type, ContentTypeJSON)
-	response.Header().Add(content.Type, CharsetUTF8)
-	response.Header().Add(ContentLength, strconv.Itoa(len(payload)))
-	if encoding != "" {
-		response.Header().Set(content.Encoding, encoding)
-	}
-	response.WriteHeader(httpStatus)
-
-	response.Write(payload)
-}
-
-func (r *Router) result(route *Route, request *http.Request, destValue reflect.Value, filters *json.Filters) ([]byte, int, error) {
+func (r *Router) result(route *Route, request *http.Request, destValue reflect.Value, filters *json.Filters, meta interface{}) ([]byte, int, error) {
 	if route.Cardinality == view.Many {
-		result := r.wrapWithResponseIfNeeded(destValue.Elem().Interface(), route)
+		result := r.wrapWithResponseIfNeeded(destValue.Elem().Interface(), route, meta)
 		asBytes, err := route._marshaller.Marshal(result, filters)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
@@ -375,7 +374,7 @@ func (r *Router) result(route *Route, request *http.Request, destValue reflect.V
 	case 0:
 		return nil, http.StatusNotFound, nil
 	case 1:
-		result := r.wrapWithResponseIfNeeded(route.View.Schema.Slice().ValueAt(slicePtr, 0), route)
+		result := r.wrapWithResponseIfNeeded(route.View.Schema.Slice().ValueAt(slicePtr, 0), route, meta)
 		asBytes, err := route._marshaller.Marshal(result, filters)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
@@ -457,13 +456,18 @@ func (r *Router) setResponseStatus(route *Route, response reflect.Value, respons
 	route._responseSetter.statusField.SetValue(unsafe.Pointer(response.Pointer()), responseStatus)
 }
 
-func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route) interface{} {
+func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route, viewMeta interface{}) interface{} {
 	if route._responseSetter == nil {
 		return response
 	}
 
 	newResponse := reflect.New(route._responseSetter.rType)
-	route._responseSetter.bodyField.SetValue(unsafe.Pointer(newResponse.Pointer()), response)
+	responseBodyPtr := unsafe.Pointer(newResponse.Pointer())
+	route._responseSetter.bodyField.SetValue(responseBodyPtr, response)
+	if route._responseSetter.pageField != nil && viewMeta != nil {
+		route._responseSetter.pageField.SetValue(responseBodyPtr, viewMeta)
+	}
+
 	r.setResponseStatus(route, newResponse, ResponseStatus{Status: "ok"})
 	return newResponse.Elem().Interface()
 }
@@ -560,6 +564,10 @@ func (r *Router) writeResponse(ctx context.Context, route *Route, response http.
 	response.Header().Add(content.Type, ContentTypeJSON)
 	response.Header().Add(content.Type, CharsetUTF8)
 	response.Header().Add(ContentLength, strconv.Itoa(payloadReader.Size()))
+	for key, value := range payloadReader.Headers() {
+		response.Header().Add(key, value[0])
+	}
+
 	compressionType := payloadReader.CompressionType()
 	if compressionType != "" {
 		response.Header().Set(content.Encoding, compressionType)
@@ -588,7 +596,7 @@ func (r *Router) redirectIfNeeded(ctx context.Context, route *Route, response ht
 	return true, nil
 }
 
-func (r *Router) compressIfNeeded(marshalled []byte, route *Route) (*BytesReader, error) {
+func (r *Router) compressIfNeeded(marshalled []byte, route *Route) (*RequestDataReader, error) {
 	compression := route.Compression
 	if compression == nil || (compression.MinSizeKb > 0 && len(marshalled) <= compression.MinSizeKb*1024) {
 		return NewBytesReader(marshalled, ""), nil

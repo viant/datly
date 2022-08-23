@@ -11,15 +11,17 @@ import (
 )
 
 var builtInMethods = map[string]bool{
-	view.Logger:           true,
-	view.Criteria:         true,
-	functions.SlicesFunc:  true,
-	functions.MathFunc:    true,
-	functions.TimeFunc:    true,
-	functions.StringsFunc: true,
-	functions.ErrorsFunc:  true,
-	functions.StrconvFunc: true,
-	functions.TypesFunc:   true,
+	view.Logger:            true,
+	view.Criteria:          true,
+	keywords.ParentViewKey: true,
+	keywords.ViewKey:       true,
+	functions.SlicesFunc:   true,
+	functions.MathFunc:     true,
+	functions.TimeFunc:     true,
+	functions.StringsFunc:  true,
+	functions.ErrorsFunc:   true,
+	functions.StrconvFunc:  true,
+	functions.TypesFunc:    true,
 }
 
 func Sanitize(SQL string, hints option.ParameterHints) string {

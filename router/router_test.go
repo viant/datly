@@ -50,11 +50,13 @@ type testcase struct {
 	extraRequests    int
 	envVariables     map[string]string
 
-	corsHeaders         map[string]string
-	dependenciesUrl     map[string]string
-	afterInsertUri      string
-	afterInsertMethod   string
-	afterInsertExpected string
+	corsHeaders                map[string]string
+	dependenciesUrl            map[string]string
+	afterInsertUri             string
+	afterInsertMethod          string
+	afterInsertExpected        string
+	expectedHeaders            http.Header
+	afterInsertExpectedHeaders http.Header
 }
 
 type (
@@ -506,8 +508,8 @@ func TestRouter(t *testing.T) {
 			method:      http.MethodGet,
 			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			envVariables: map[string]string{
-				"alias": "t",
-				"table": "events",
+				"alias": "t.",
+				"table": "events.",
 			},
 		},
 		{
@@ -516,8 +518,8 @@ func TestRouter(t *testing.T) {
 			uri:         "/api/events?limit=2&skip=1&names=Id,Quantity&sort=Quantity",
 			method:      http.MethodGet,
 			envVariables: map[string]string{
-				"alias": "t",
-				"table": "events",
+				"alias": "t.",
+				"table": "events.",
 			},
 			expected: `[{"Id":10,"Quantity":21.957962334156036},{"Id":1,"Quantity":33.23432374000549}]`,
 		},
@@ -684,6 +686,25 @@ func TestRouter(t *testing.T) {
 			afterInsertMethod:   http.MethodGet,
 			afterInsertExpected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":0,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":0,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":102,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":0,"UserId":3}]`,
 		},
+		{
+			description: "pagination over main view | basic, header",
+			resourceURI: "036_pagination_basic",
+			uri:         "/api/events?_page=2",
+			method:      http.MethodGet,
+			visitors:    map[string]codec.LifecycleVisitor{},
+			expected:    `[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
+			expectedHeaders: map[string][]string{
+				"Events-Meta": {`{"TotalRecords":6,"CurrentPage":2,"PageSize":2}`},
+			},
+		},
+		{
+			description: "pagination over main view | comprehensive, record",
+			resourceURI: "037_pagination_comprehensive",
+			uri:         "/api/events?_page=2",
+			method:      http.MethodGet,
+			visitors:    map[string]codec.LifecycleVisitor{},
+			expected:    `{"Status":"ok","ResponseBody":[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}],"EventsMeta":{"TotalRecords":6,"CurrentPage":2,"PageSize":2}}`,
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {
@@ -712,13 +733,13 @@ func TestRouter(t *testing.T) {
 		}
 
 		for j := 0; j < tCase.extraRequests+1; j++ {
-			if !tCase.sendHttpRequest(t, routingHandler, tCase.shouldDecompress, true) {
+			if !tCase.sendHttpRequest(t, routingHandler, tCase.shouldDecompress, true, tCase.expectedHeaders) {
 				return
 			}
 		}
 
 		if tCase.afterInsertUri != "" {
-			if !tCase.sendHttpRequest(t, routingHandler, false, false) {
+			if !tCase.sendHttpRequest(t, routingHandler, false, false, tCase.afterInsertExpectedHeaders) {
 				return
 			}
 		}
@@ -806,7 +827,7 @@ func (c *testcase) readViewResource(t *testing.T, resourceUrl string, types view
 	return resource, true
 }
 
-func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router, shouldDecompress bool, useMainRoute bool) bool {
+func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router, shouldDecompress bool, useMainRoute bool, expectedHeaders http.Header) bool {
 	method, uri, expected := c.method, c.uri, c.expected
 	if !useMainRoute {
 		method, uri, expected = c.afterInsertMethod, c.afterInsertUri, c.afterInsertExpected
@@ -844,6 +865,10 @@ func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router, shouldD
 
 	if !assert.Equal(t, expected, string(response), c.description) {
 		fmt.Println(string(response))
+	}
+
+	for key, value := range expectedHeaders {
+		assert.Equal(t, value[0], responseWriter.Header()[key][0], c.description)
 	}
 
 	return true

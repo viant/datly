@@ -3,7 +3,6 @@ package view
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"github.com/viant/datly/reader/metadata"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/io"
@@ -21,7 +20,7 @@ type (
 		Args      []interface{}
 	}
 
-	ExpanderFn func(placeholders *[]interface{}, SQL string, selector *Selector, params CommonParams, batchData *BatchData, sanitized *CriteriaSanitizer) (string, error)
+	ExpanderFn func(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *CriteriaSanitizer) (string, error)
 )
 
 func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column, string, error) {
@@ -32,7 +31,7 @@ func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column,
 
 	columns, SQL, err := detectColumns(ctx, evaluation, v)
 	if err != nil {
-		return expandWithoutTemplateEvaluation(ctx, evaluation, SQL, err, columns, v)
+		return nil, "", err
 	}
 
 	if v.From != "" && v.Table != "" {
@@ -47,21 +46,6 @@ func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column,
 		}
 
 		Columns(columns).updateTypes(tableColumns, v.Caser)
-	}
-
-	return columns, SQL, nil
-}
-
-func expandWithoutTemplateEvaluation(ctx context.Context, evaluation *TemplateEvaluation, SQL string, err error, columns []*Column, v *View) ([]*Column, string, error) {
-	if evaluation.Evaluated {
-		return columns, SQL, err
-	}
-
-	fmt.Println(fmt.Errorf("failed to detect columns using velocity engine and SQL:  %v  due to the %w\n", SQL, err).Error())
-
-	columns, SQL, err = detectColumns(ctx, &TemplateEvaluation{SQL: v.Source(), Expander: v.Expand}, v)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed also to detect columns using %v due to the %w\n", SQL, err)
 	}
 
 	return columns, SQL, nil
@@ -96,6 +80,7 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 			Has:    presence,
 		},
 	}
+
 	for _, parameter := range aView.Template.Parameters {
 		if parameter.ActualParamType().Kind() != reflect.Slice {
 			continue
@@ -107,7 +92,7 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 		}
 	}
 
-	source, sanitized, _, err := aView.Template.EvaluateSource(params, presence, aView)
+	source, sanitized, _, err := aView.Template.EvaluateSource(params, presence, AsViewParam(aView, nil))
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +196,7 @@ func detectColumnsSQL(evaluation *TemplateEvaluation, v *View) (string, []interf
 	var err error
 
 	if evaluation.Expander != nil {
-		SQL, err = v.Expand(&placeholders, SQL, &Selector{}, CommonParams{}, &BatchData{}, NewMockSanitizer())
+		SQL, err = v.Expand(&placeholders, SQL, &Selector{}, CriteriaParam{}, &BatchData{}, NewMockSanitizer())
 		if err != nil {
 			return SQL, nil, err
 		}

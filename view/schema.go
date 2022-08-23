@@ -99,17 +99,6 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 			continue
 		}
 
-		defaultTag := createDefaultTagIfNeeded(columns[i])
-		sqlxTag := `sqlx:"name=` + columnName + `"`
-
-		var aTag string
-		if defaultTag == "" {
-			aTag = sqlxTag
-		} else {
-			aTag = sqlxTag + " " + defaultTag
-		}
-
-		structFieldName := viewCaseFormat.Format(columnName, format.CaseUpperCamel)
 		rType := columns[i].rType
 		if columns[i].Nullable && rType.Kind() != reflect.Ptr {
 			rType = reflect.PtrTo(rType)
@@ -119,12 +108,8 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 			rType = columns[i].Codec.Schema.Type()
 		}
 
-		structFields = append(structFields, reflect.StructField{
-			Name:  structFieldName,
-			Type:  rType,
-			Index: []int{i},
-			Tag:   reflect.StructTag(aTag),
-		})
+		aField := c.newField(columns[i], columnName, viewCaseFormat, rType)
+		structFields = append(structFields, aField)
 	}
 
 	holders := make(map[string]bool)
@@ -144,18 +129,46 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 		}
 
 		holders[rel.Holder] = true
-
 		structFields = append(structFields, reflect.StructField{
 			Name: rel.Holder,
 			Type: rType,
 		})
+
+		if meta := rel.Of.View.Template.Meta; meta != nil {
+			structFields = append(structFields, c.newField(nil, meta.Name, rel.Of.View.Caser, meta.Schema.Type()))
+		}
 	}
 
 	structType := reflect.StructOf(structFields)
 	c.setType(structType)
 }
 
+func (c *Schema) newField(column *Column, columnName string, viewCaseFormat format.Case, rType reflect.Type) reflect.StructField {
+	defaultTag := createDefaultTagIfNeeded(column)
+	sqlxTag := `sqlx:"name=` + columnName + `"`
+
+	var aTag string
+	if defaultTag == "" {
+		aTag = sqlxTag
+	} else {
+		aTag = sqlxTag + " " + defaultTag
+	}
+
+	structFieldName := viewCaseFormat.Format(columnName, format.CaseUpperCamel)
+
+	aField := reflect.StructField{
+		Name: structFieldName,
+		Type: rType,
+		Tag:  reflect.StructTag(aTag),
+	}
+	return aField
+}
+
 func createDefaultTagIfNeeded(column *Column) string {
+	if column == nil {
+		return ""
+	}
+
 	attributes := make([]string, 0)
 	if column.Format != "" {
 		attributes = append(attributes, json.FormatAttribute+"="+column.Format)

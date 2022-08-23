@@ -71,6 +71,7 @@ type (
 	responseSetter struct {
 		statusField *xunsafe.Field
 		bodyField   *xunsafe.Field
+		pageField   *xunsafe.Field
 		rType       reflect.Type
 	}
 
@@ -214,16 +215,29 @@ func (r *Route) initStyle() error {
 			Anonymous: true,
 		}
 
+		responseFieldPgkPath := r.PgkPath(r.ResponseField)
+
 		responseFields[1] = reflect.StructField{
 			Name:    r.ResponseField,
-			PkgPath: pkgPath,
+			PkgPath: responseFieldPgkPath,
 			Type:    r.cardinalityType(),
+		}
+
+		var metaFieldName string
+		if r.View.MetaTemplateEnabled() && r.View.Template.Meta.Kind == view.RecordTemplateMetaKind {
+			responseFields = append(responseFields, reflect.StructField{
+				Name:    r.View.Template.Meta.Name,
+				Type:    r.View.Template.Meta.Schema.Type(),
+				PkgPath: r.PgkPath(r.View.Template.Meta.Name),
+			})
+			metaFieldName = r.View.Template.Meta.Name
 		}
 
 		responseType := reflect.StructOf(responseFields)
 		r._responseSetter = &responseSetter{
-			statusField: xunsafe.FieldByName(responseType, "ResponseStatus"),
-			bodyField:   xunsafe.FieldByName(responseType, r.ResponseField),
+			statusField: FieldByName(responseType, "ResponseStatus"),
+			bodyField:   FieldByName(responseType, r.ResponseField),
+			pageField:   FieldByName(responseType, metaFieldName),
 			rType:       responseType,
 		}
 
@@ -231,6 +245,22 @@ func (r *Route) initStyle() error {
 	}
 
 	return fmt.Errorf("unsupported style %v", r.Style)
+}
+
+func FieldByName(responseType reflect.Type, name string) *xunsafe.Field {
+	if name == "" {
+		return nil
+	}
+
+	return xunsafe.FieldByName(responseType, name)
+}
+
+func (r *Route) PgkPath(fieldName string) string {
+	var responseFieldPgkPath string
+	if fieldName[0] < 'A' || fieldName[0] > 'Z' {
+		responseFieldPgkPath = pkgPath
+	}
+	return responseFieldPgkPath
 }
 
 func (r *Route) cardinalityType() reflect.Type {

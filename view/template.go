@@ -19,11 +19,12 @@ var boolType = reflect.TypeOf(true)
 
 type (
 	Template struct {
-		Source         string       `json:",omitempty" yaml:"source,omitempty"`
-		SourceURL      string       `json:",omitempty" yaml:"sourceURL,omitempty"`
-		Schema         *Schema      `json:",omitempty" yaml:"schema,omitempty"`
-		PresenceSchema *Schema      `json:",omitempty" yaml:"presenceSchema,omitempty"`
-		Parameters     []*Parameter `json:",omitempty" yaml:"parameters,omitempty"`
+		Source         string        `json:",omitempty" yaml:"source,omitempty"`
+		SourceURL      string        `json:",omitempty" yaml:"sourceURL,omitempty"`
+		Schema         *Schema       `json:",omitempty" yaml:"schema,omitempty"`
+		PresenceSchema *Schema       `json:",omitempty" yaml:"presenceSchema,omitempty"`
+		Parameters     []*Parameter  `json:",omitempty" yaml:"parameters,omitempty"`
+		Meta           *TemplateMeta `json:",omitempty" yaml:",omitempty"`
 
 		sqlEvaluator     *Evaluator
 		accessors        *Accessors
@@ -42,16 +43,21 @@ type (
 		stateProvider func() *est.State
 	}
 
-	CommonParams struct {
+	CriteriaParam struct {
 		ColumnsIn   string `velty:"COLUMN_IN"`
 		WhereClause string `velty:"CRITERIA"`
 		Pagination  string `velty:"PAGINATION"`
 	}
 
-	Param struct {
-		Name  string
-		Alias string
-		Table string
+	MetaParam struct {
+		Name         string
+		Alias        string
+		Table        string
+		Limit        int
+		Offset       int
+		Page         int
+		Args         []interface{}
+		NonWindowSQL string
 	}
 )
 
@@ -70,36 +76,40 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 
 	t._view = view
 	t._fieldIndex = map[string]int{}
-
-	if t.Source != "" {
-		t.Source = "( " + t.Source + " )"
-	} else {
-		t.Source = view.Source()
-	}
+	t.updateSource(view)
 
 	t.isTemplate = t.Source != view.Name && t.Source != view.Table
 
-	if err := t.initTypes(ctx, resource); err != nil {
+	if err = t.initTypes(ctx, resource); err != nil {
 		return err
 	}
 
-	if err := t.initPresenceType(resource); err != nil {
+	if err = t.initPresenceType(resource); err != nil {
 		return err
 	}
 
-	if err := t.initSqlEvaluator(); err != nil {
+	if err = t.initSqlEvaluator(); err != nil {
 		return err
 	}
 
 	t.initAccessors()
 
-	if err := t.updateParametersFields(); err != nil {
+	if err = t.updateParametersFields(); err != nil {
 		return err
 	}
 
 	t._parametersIndex = ParametersSlice(t.Parameters).Index()
 
-	return nil
+	return t.initMetaIfNeeded(ctx, resource)
+}
+
+func (t *Template) updateSource(view *View) {
+	if t.Source != "" {
+		t.Source = "( " + t.Source + " )"
+		return
+	}
+
+	t.Source = view.Source()
 }
 
 func (t *Template) loadSourceFromURL(ctx context.Context, resource *Resource) error {
@@ -205,7 +215,7 @@ func NewEvaluator(paramSchema, presenceSchema reflect.Type, template string) (*E
 		return nil, err
 	}
 
-	if err = evaluator.planner.DefineVariable(keywords.ViewKey, reflect.TypeOf(&Param{})); err != nil {
+	if err = evaluator.planner.DefineVariable(keywords.ViewKey, reflect.TypeOf(&MetaParam{})); err != nil {
 		return nil, err
 	}
 
@@ -217,6 +227,10 @@ func NewEvaluator(paramSchema, presenceSchema reflect.Type, template string) (*E
 		return nil, err
 	}
 
+	if err = evaluator.planner.DefineVariable(keywords.ParentViewKey, reflect.TypeOf(&MetaParam{})); err != nil {
+		return nil, err
+	}
+
 	evaluator.executor, evaluator.stateProvider, err = evaluator.planner.Compile([]byte(template))
 	if err != nil {
 		return nil, err
@@ -225,25 +239,27 @@ func NewEvaluator(paramSchema, presenceSchema reflect.Type, template string) (*E
 	return evaluator, nil
 }
 
-func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parent *View) (string, *CriteriaSanitizer, *logger.Printer, error) {
-	printer := &logger.Printer{}
+func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parentParam *MetaParam) (string, *CriteriaSanitizer, *logger.Printer, error) {
 	if t.wasEmpty {
-		return t.Source, &CriteriaSanitizer{}, printer, nil
+		return t.Source, &CriteriaSanitizer{}, &logger.Printer{}, nil
 	}
 
-	viewParam := &Param{}
-	if parent != nil {
-		viewParam = asViewParam(parent)
-	} else {
-		viewParam = asViewParam(t._view)
-	}
-
-	params := &CriteriaSanitizer{}
-	SQL, err := t.sqlEvaluator.Evaluate(t.Schema.Type(), externalParams, presenceMap, viewParam, params, printer)
-	return SQL, params, printer, err
+	return Evaluate(t.sqlEvaluator, t.Schema.Type(), externalParams, presenceMap, AsViewParam(t._view, nil), parentParam)
 }
 
-func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMap interface{}, viewParam *Param, params *CriteriaSanitizer, logger *logger.Printer) (string, error) {
+func Evaluate(evaluator *Evaluator, schemaType reflect.Type, externalParams, presenceMap interface{}, viewParam, parentParam *MetaParam) (string, *CriteriaSanitizer, *logger.Printer, error) {
+	printer := &logger.Printer{}
+	params := &CriteriaSanitizer{}
+
+	SQL, err := evaluator.Evaluate(schemaType, externalParams, presenceMap, viewParam, parentParam, params, printer)
+	if err != nil {
+		return "", nil, printer, err
+	}
+
+	return SQL, params, printer, nil
+}
+
+func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMap interface{}, viewParam *MetaParam, parentParam *MetaParam, params *CriteriaSanitizer, logger *logger.Printer) (string, error) {
 	externalType := reflect.TypeOf(externalParams)
 	if schemaType != externalType {
 		return "", fmt.Errorf("inompactible types, wanted %v got %T", schemaType.String(), externalParams)
@@ -266,6 +282,12 @@ func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMa
 		return "", err
 	}
 
+	if parentParam != nil {
+		if err := newState.SetValue(keywords.ParentViewKey, parentParam); err != nil {
+			return "", err
+		}
+	}
+
 	if err := newState.SetValue(Criteria, params); err != nil {
 		return "", err
 	}
@@ -281,14 +303,53 @@ func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMa
 	return newState.Buffer.String(), nil
 }
 
-func asViewParam(parent *View) *Param {
-	viewParam := &Param{
-		Name:  parent.Name,
-		Alias: parent.Alias,
-		Table: parent.Table,
+func AsViewParam(aView *View, aSelector *Selector, options ...interface{}) *MetaParam {
+	if aView == nil {
+		return nil
+	}
+
+	var sanitizer *CriteriaSanitizer
+	for _, option := range options {
+		switch actual := option.(type) {
+		case *CriteriaSanitizer:
+			sanitizer = actual
+		}
+	}
+
+	limit := aView.Selector.Limit
+	offset := 0
+	page := 0
+	var args []interface{}
+	var SQLExec string
+
+	if aSelector != nil {
+		limit = NotZeroOf(aSelector.Limit, limit)
+		offset = NotZeroOf(aSelector.Offset, offset)
+		page = NotZeroOf(aSelector.Page, 0)
+	}
+
+	if sanitizer != nil {
+		args = sanitizer.ParamsGroup
+		SQLExec = sanitizer.TemplateSQL
+	}
+
+	viewParam := &MetaParam{
+		Name:         aView.Name,
+		Alias:        aView.Alias,
+		Table:        aView.Table,
+		Limit:        limit,
+		Page:         page,
+		Offset:       offset,
+		Args:         args,
+		NonWindowSQL: SQLExec,
 	}
 
 	return viewParam
+}
+
+func (m *MetaParam) Expand(sanitizer *CriteriaSanitizer) string {
+	sanitizer.addAll(m.Args...)
+	return m.NonWindowSQL
 }
 
 func (t *Template) inheritAndInitParam(ctx context.Context, resource *Resource, param *Parameter) error {
@@ -400,7 +461,7 @@ func (t *Template) IsActualTemplate() bool {
 	return t.isTemplate
 }
 
-func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CommonParams, batchData *BatchData, sanitized *CriteriaSanitizer) (string, error) {
+func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *CriteriaSanitizer) (string, error) {
 	values, err := parameter.Parse(SQL)
 	if err != nil {
 		return "", err
@@ -434,17 +495,16 @@ func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Sel
 	return replacement.ExpandAsText(SQL), err
 }
 
-func (t *Template) prepareExpanded(value *parameter.Value, params CommonParams, selector *Selector, batchData *BatchData, placeholders *[]interface{}, sanitized *CriteriaSanitizer) (string, string, error) {
+func (t *Template) prepareExpanded(value *parameter.Value, params CriteriaParam, selector *Selector, batchData *BatchData, placeholders *[]interface{}, sanitized *CriteriaSanitizer) (string, string, error) {
 	key, val, err := t.replacementEntry(value.Key, params, selector, batchData, placeholders, sanitized)
 	if err != nil {
 		return "", "", err
 	}
 
 	return key, val, err
-
 }
 
-func (t *Template) replacementEntry(key string, params CommonParams, selector *Selector, batchData *BatchData, placeholders *[]interface{}, sanitized *CriteriaSanitizer) (string, string, error) {
+func (t *Template) replacementEntry(key string, params CriteriaParam, selector *Selector, batchData *BatchData, placeholders *[]interface{}, sanitized *CriteriaSanitizer) (string, string, error) {
 	switch key {
 	case keywords.Pagination[1:]:
 		return key, params.Pagination, nil
@@ -533,4 +593,12 @@ func (t *Template) valueWithPrefix(key string, aValue, prefix string, wrapWithPa
 	}
 
 	return key, prefix + aValue, nil
+}
+
+func (t *Template) initMetaIfNeeded(ctx context.Context, r *Resource) error {
+	if t.Meta == nil {
+		return nil
+	}
+
+	return t.Meta.Init(ctx, t, r)
 }

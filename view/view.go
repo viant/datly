@@ -72,10 +72,13 @@ type (
 		ColumnsConfig map[string]*ColumnConfig `json:",omitempty"`
 
 		initialized  bool
-		newCollector func(dest interface{}, supportParallel bool) *Collector
+		newCollector newCollectorFn
 
 		codec *columnsCodec
 	}
+
+	newCollectorFn    func(dest interface{}, viewMetaHandler viewMetaHandlerFn, supportParallel bool) *Collector
+	viewMetaHandlerFn func(viewMeta interface{}) error
 
 	//Constraints configure what can be selected by Selector
 	//For each _field, default value is `false`
@@ -676,14 +679,14 @@ func (v *View) ensureCaseFormat() error {
 }
 
 func (v *View) ensureCollector() {
-	v.newCollector = func(dest interface{}, supportParallel bool) *Collector {
-		return NewCollector(v.Schema.slice, v, dest, supportParallel)
+	v.newCollector = func(dest interface{}, viewMetaHandler viewMetaHandlerFn, supportParallel bool) *Collector {
+		return NewCollector(v.Schema.slice, v, dest, viewMetaHandler, supportParallel)
 	}
 }
 
 // Collector creates new Collector for View.DataType
-func (v *View) Collector(dest interface{}, supportParallel bool) *Collector {
-	return v.newCollector(dest, supportParallel)
+func (v *View) Collector(dest interface{}, handleMeta viewMetaHandlerFn, supportParallel bool) *Collector {
+	return v.newCollector(dest, handleMeta, supportParallel)
 }
 
 func NotEmptyOf(values ...string) string {
@@ -694,6 +697,16 @@ func NotEmptyOf(values ...string) string {
 	}
 
 	return ""
+}
+
+func NotZeroOf(values ...int) int {
+	for _, value := range values {
+		if value != 0 {
+			return value
+		}
+	}
+
+	return 0
 }
 
 func (v *View) registerHolders() error {
@@ -989,7 +1002,7 @@ func (v *View) indexTransforms(resource *Resource, transforms marshal.Transforms
 	return nil
 }
 
-func (v *View) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CommonParams, batchData *BatchData, sanitized *CriteriaSanitizer) (string, error) {
+func (v *View) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *CriteriaSanitizer) (string, error) {
 	v.ensureParameters(selector)
 
 	return v.Template.Expand(placeholders, SQL, selector, params, batchData, sanitized)
@@ -1011,4 +1024,8 @@ func (v *View) ensureParameters(selector *Selector) {
 
 func (v *View) ParamByName(name string) (*Parameter, error) {
 	return v.Template._parametersIndex.Lookup(name)
+}
+
+func (v *View) MetaTemplateEnabled() bool {
+	return v.Template.Meta != nil
 }

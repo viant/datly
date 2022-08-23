@@ -16,6 +16,12 @@ type (
 		Selectors *view.Selectors
 		Parent    *view.View
 		Metrics   []*Metric
+		ViewMeta  interface{}
+	}
+
+	ParentData struct {
+		View     *view.View
+		Selector *view.Selector
 	}
 
 	Metric struct {
@@ -58,10 +64,43 @@ func (s *Session) AddMetric(m *Metric) {
 }
 
 //NewSession creates a session
-func NewSession(dest interface{}, aView *view.View) *Session {
+func NewSession(dest interface{}, aView *view.View, options ...interface{}) *Session {
+	var parent *view.View
+	for _, option := range options {
+		switch actual := option.(type) {
+		case *view.View:
+			parent = actual
+		}
+	}
+
 	return &Session{
 		Dest:      dest,
 		View:      aView,
 		Selectors: &view.Selectors{Index: make(map[string]*view.Selector)},
+		Parent:    parent,
 	}
+}
+
+func (s *Session) HandleViewMeta(meta interface{}) error {
+	s.ViewMeta = meta
+	return nil
+}
+
+func (s *Session) ParentData() (*ParentData, bool) {
+	if s.Parent == nil {
+		return nil, false
+	}
+
+	return &ParentData{
+		View:     s.Parent,
+		Selector: s.Selectors.Lookup(s.Parent),
+	}, true
+}
+
+func (d *ParentData) AsParam() *view.MetaParam {
+	if d == nil {
+		return nil
+	}
+
+	return view.AsViewParam(d.View, d.Selector)
 }

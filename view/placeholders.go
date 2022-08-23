@@ -14,6 +14,7 @@ type CriteriaSanitizer struct {
 	Mock               bool
 	PlaceholderCounter int
 	sliceIndex         map[reflect.Type]*xunsafe.Slice
+	TemplateSQL        string
 }
 
 func (p *CriteriaSanitizer) AsBinding(value interface{}) string {
@@ -123,4 +124,12 @@ func (p *CriteriaSanitizer) xunsafeSlice(valueType reflect.Type) *xunsafe.Slice 
 	}
 
 	return slice
+}
+
+func (p *CriteriaSanitizer) Insert() (string, []interface{}) {
+	return p.TemplateSQL, p.ParamsGroup
+}
+
+func (p *CriteriaSanitizer) addAll(args ...interface{}) {
+	p.ParamsGroup = append(p.ParamsGroup, args...)
 }

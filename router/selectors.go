@@ -525,8 +525,7 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 
 	sliceValue := reflect.New(sliceType)
 	destSlicePtr := sliceValue.Interface()
-	session := reader.NewSession(destSlicePtr, aView)
-	session.Parent = viewDetails.View
+
 	newIndex := Index{}
 	if err := newIndex.Init(aView, ""); err != nil {
 		return nil, err
@@ -543,6 +542,7 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 		return nil, err
 	}
 
+	session := reader.NewSession(destSlicePtr, aView, viewDetails.View)
 	session.Selectors = selectors
 	if err = reader.New().Read(ctx, session); err != nil {
 		return nil, err
@@ -603,6 +603,8 @@ func (b *selectorsBuilder) pageOffset(pageValue string, selector *view.Selector,
 	}
 
 	limit := aView.Selector.Limit
+	selector.Page = page
+
 	if selector.Limit != 0 {
 		limit = selector.Limit
 	}

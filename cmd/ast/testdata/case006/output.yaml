@@ -1,23 +1,27 @@
 parameters:
-  - datatype: int
-    id: ID
-    kind: query
-    name: id
-    required: false
-  - assumed: true
-    cardinality: Many
-    datatype: string
-    id: Columns
-    kind: query
-    multi: true
-    name: Columns
-    required: false
-  - assumed: true
-    datatype: string
-    id: quantity
-    kind: query
-    name: quantity
-    required: false
-    typer:
-      columnname: quantity
+    - datatype: int
+      id: ID
+      kind: query
+      name: id
+      required: false
+      typer:
+        columnname: id
+    - assumed: true
+      cardinality: Many
+      datatype: string
+      id: Columns
+      kind: query
+      multi: true
+      name: Columns
+      required: false
+      typer:
+        columnname: in
+    - assumed: true
+      datatype: string
+      id: quantity
+      kind: query
+      name: quantity
+      required: false
+      typer:
+        columnname: quantity
 source: "SELECT *, (\n    SELECT abc\n    FROM T2\n    WHERE 1=2\n) as abc FROM T1\nWHERE 1=1\n#set($valueSet = 123)\n#if($Has.ID)\nAND ID =  $criteria.AppendBinding($Unsafe.ID) \n#end\n\n#foreach($column in $Unsafe.Columns)\n     $criteria.AppendBinding($column.Id) \n#end\n\n#if($Has.quantity)\nAND quantity =  $criteria.AppendBinding($Unsafe.quantity) \nAND quantity = $Unsafe.quantity\n#end\n"
