@@ -254,8 +254,8 @@ func (c ColumnIndex) Lookup(name string) (*Column, error) {
 		keys[counter] = k
 		counter++
 	}
-	err := fmt.Errorf("undefined column name %v, avails: %+v", name, strings.Join(keys, ","))
-	return nil, err
+
+	return nil, fmt.Errorf("undefined column name %v, avails: %+v", name, strings.Join(keys, ","))
 }
 
 func (c ColumnIndex) RegisterWithName(name string, column *Column) {

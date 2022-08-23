@@ -108,7 +108,17 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 			rType = columns[i].Codec.Schema.Type()
 		}
 
-		aField := c.newField(columns[i], columnName, viewCaseFormat, rType)
+		defaultTag := createDefaultTagIfNeeded(columns[i])
+		sqlxTag := `sqlx:"name=` + columnName + `"`
+
+		var aTag string
+		if defaultTag == "" {
+			aTag = sqlxTag
+		} else {
+			aTag = sqlxTag + " " + defaultTag
+		}
+
+		aField := c.newField(aTag, columnName, viewCaseFormat, rType)
 		structFields = append(structFields, aField)
 	}
 
@@ -135,7 +145,7 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 		})
 
 		if meta := rel.Of.View.Template.Meta; meta != nil {
-			structFields = append(structFields, c.newField(nil, meta.Name, rel.Of.View.Caser, meta.Schema.Type()))
+			structFields = append(structFields, c.newField(`json:",omitempty" yaml:",omitempty"`, meta.Name, rel.Of.View.Caser, meta.Schema.Type()))
 		}
 	}
 
@@ -143,19 +153,8 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 	c.setType(structType)
 }
 
-func (c *Schema) newField(column *Column, columnName string, viewCaseFormat format.Case, rType reflect.Type) reflect.StructField {
-	defaultTag := createDefaultTagIfNeeded(column)
-	sqlxTag := `sqlx:"name=` + columnName + `"`
-
-	var aTag string
-	if defaultTag == "" {
-		aTag = sqlxTag
-	} else {
-		aTag = sqlxTag + " " + defaultTag
-	}
-
+func (c *Schema) newField(aTag string, columnName string, viewCaseFormat format.Case, rType reflect.Type) reflect.StructField {
 	structFieldName := viewCaseFormat.Format(columnName, format.CaseUpperCamel)
-
 	aField := reflect.StructField{
 		Name: structFieldName,
 		Type: rType,

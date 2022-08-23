@@ -78,17 +78,10 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 		return nil
 	}
 
-	SQL, args, err := m.prepareSQL(owner)
+	columns, err := m.getColumns(ctx, resource, owner)
 	if err != nil {
 		return err
 	}
-
-	columns, _, err := detectColumns(ctx, &TemplateEvaluation{
-		SQL:       SQL,
-		Evaluated: true,
-		Expander:  owner.Expand,
-		Args:      args,
-	}, owner._view)
 
 	if err != nil {
 		return fmt.Errorf("couldn't resolve template meta SQL due to the: %w", err)
@@ -106,6 +99,41 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 
 	m.Schema.initByColumns(columns, nil, newCase)
 	return nil
+}
+
+func (m *TemplateMeta) getColumns(ctx context.Context, resource *Resource, owner *Template) ([]*Column, error) {
+	if resource._columnsCache != nil {
+		columns, ok := resource._columnsCache[m.metaColumnsCacheKey()]
+		if ok {
+			return columns, nil
+		}
+	}
+
+	SQL, args, err := m.prepareSQL(owner)
+	if err != nil {
+		return nil, err
+	}
+
+	columns, _, err := detectColumns(ctx, &TemplateEvaluation{
+		SQL:       SQL,
+		Evaluated: true,
+		Expander:  owner.Expand,
+		Args:      args,
+	}, owner._view)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resource._columnsCache != nil {
+		resource._columnsCache[m.metaColumnsCacheKey()] = columns
+	}
+
+	return columns, nil
+}
+
+func (m *TemplateMeta) metaColumnsCacheKey() string {
+	return "template_meta:" + m.Name
 }
 
 func (m *TemplateMeta) prepareSQL(owner *Template) (string, []interface{}, error) {

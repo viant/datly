@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"github.com/viant/sqlx/io"
+	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"sync"
@@ -100,6 +101,7 @@ func (r *Collector) parentValuesPositions(columnName string) map[interface{}][]i
 		r.indexParentPositions(columnName)
 		result = r.parent.valuePosition[columnName]
 	}
+
 	return result
 }
 
@@ -326,13 +328,17 @@ func (r *Collector) indexParentPositions(name string) {
 		return
 	}
 
-	values := r.parent.values[name]
+	r.parent.indexPositions(name)
+}
+
+func (r *Collector) indexPositions(name string) {
+	values := r.values[name]
 	if values == nil {
 		return
 	}
 
-	xType := r.parent.types[name]
-	r.parent.valuePosition[name] = map[interface{}][]int{}
+	xType := r.types[name]
+	r.valuePosition[name] = map[interface{}][]int{}
 	for position, v := range *values {
 		if v == nil {
 			continue
@@ -340,12 +346,12 @@ func (r *Collector) indexParentPositions(name string) {
 
 		val := xType.Deref(v)
 		val = normalizeKey(val)
-		_, ok := r.parent.valuePosition[name][val]
+		_, ok := r.valuePosition[name][val]
 		if !ok {
-			r.parent.valuePosition[name][val] = make([]int, 0)
+			r.valuePosition[name][val] = make([]int, 0)
 		}
 
-		r.parent.valuePosition[name][val] = append(r.parent.valuePosition[name][val], position)
+		r.valuePosition[name][val] = append(r.valuePosition[name][val], position)
 	}
 }
 
@@ -392,15 +398,39 @@ func (r *Collector) Relations(selector *Selector) []*Collector {
 }
 
 func (r *Collector) ViewMetaHandler(rel *Relation) func(viewMeta interface{}) error {
-	if rel.Of.View.Template.Meta == nil {
+	templateMeta := rel.Of.View.Template.Meta
+	if templateMeta == nil {
 		return func(viewMeta interface{}) error {
 			return nil
 		}
 	}
 
-	metaField := xunsafe.FieldByName(rel.Of.View.Template.Meta.Schema.Type(), rel.Of.Column)
+	metaChildKeyField := xunsafe.FieldByName(templateMeta.Schema.Type(), rel.Of.View.Caser.Format(rel.Of.Column, format.CaseUpperCamel))
+	metaParentHolderField := xunsafe.FieldByName(r.view.Schema.Type(), rel.Of.View.Caser.Format(templateMeta.Name, format.CaseUpperCamel))
+	xType := xunsafe.NewType(metaParentHolderField.Type)
+	shouldDeref := xType.Kind() == reflect.Ptr
+	var valuesPosition map[interface{}][]int
 	return func(viewMeta interface{}) error {
-		_ = normalizeKey(metaField.Value(xunsafe.AsPointer(viewMeta)))
+		if valuesPosition == nil {
+			valuesPosition = r.valuePosition[rel.Column]
+		}
+
+		value := normalizeKey(metaChildKeyField.Value(xunsafe.AsPointer(viewMeta)))
+		positions, ok := valuesPosition[value]
+		if !ok {
+			return nil
+		}
+
+		slicePtr := xunsafe.AsPointer(r.dest)
+		for _, position := range positions {
+			ownerPtr := r.slice.PointerAt(slicePtr, uintptr(position))
+			if shouldDeref {
+				metaParentHolderField.SetValue(ownerPtr, xType.Deref(viewMeta))
+			} else {
+				metaParentHolderField.SetValue(ownerPtr, viewMeta)
+			}
+		}
+
 		return nil
 	}
 }
