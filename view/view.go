@@ -302,7 +302,7 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 		return err
 	}
 
-	if err = Columns(v.Columns).Init(resource, v.ColumnsConfig, v.Caser, v.AllowNulls != nil && !*v.AllowNulls); err != nil {
+	if err = Columns(v.Columns).Init(resource, v.ColumnsConfig, v.Caser, v.AreNullValuesAllowed()); err != nil {
 		return err
 	}
 
@@ -1028,4 +1028,8 @@ func (v *View) ParamByName(name string) (*Parameter, error) {
 
 func (v *View) MetaTemplateEnabled() bool {
 	return v.Template.Meta != nil
+}
+
+func (v *View) AreNullValuesAllowed() bool {
+	return v.AllowNulls != nil && !*v.AllowNulls
 }

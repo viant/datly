@@ -130,7 +130,7 @@ func (s *serverBuilder) buildViewMetaTemplate(k string, v *option.TableParam, ro
 		if starExpr.Comments != "" {
 			fmt.Printf("Using %v with %s\n", k, starExpr.Comments)
 			if _, err := ast.UnmarshalHint(starExpr.Comments, tmplMeta); err != nil {
-				fmt.Printf("invalid TempalteMeta: %w", err)
+				fmt.Printf("invalid TempalteMeta: %v", err.Error())
 			}
 		}
 	}

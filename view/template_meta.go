@@ -68,8 +68,9 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 		m.Schema = &Schema{}
 	}
 
+	schemaDataType := NotEmptyOf(m.Schema.DataType, m.Schema.Name)
 	if m.Schema.DataType != "" {
-		dataType, err := GetOrParseType(resource._types, m.Schema.DataType)
+		dataType, err := GetOrParseType(resource._types, schemaDataType)
 		if err != nil {
 			return err
 		}
@@ -81,6 +82,12 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 	columns, err := m.getColumns(ctx, resource, owner)
 	if err != nil {
 		return err
+	}
+
+	for _, column := range columns {
+		if err = column.Init(resource, owner._view.Caser, owner._view.AreNullValuesAllowed(), nil); err != nil {
+			return err
+		}
 	}
 
 	if err != nil {
@@ -98,7 +105,6 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 	}
 
 	m.Schema.initByColumns(columns, nil, newCase)
-	fmt.Printf("schema: %s\n", m.Schema.Type().String())
 	return nil
 }
 

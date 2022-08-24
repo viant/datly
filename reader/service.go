@@ -198,14 +198,14 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 		}
 	}()
 
-	var updateSelectorSQLErr error
+	var pageErr error
 	go func() {
 		defer wg.Done()
 		if view.Template.Meta == nil {
 			return
 		}
 
-		s.readPage(ctx, view, selector, batchDataCopy, collector, parentViewMetaParam)
+		pageErr = s.readPage(ctx, view, selector, batchDataCopy, collector, parentViewMetaParam)
 	}()
 
 	wg.Wait()
@@ -213,8 +213,8 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 		return queryErr
 	}
 
-	if updateSelectorSQLErr != nil {
-		return updateSelectorSQLErr
+	if pageErr != nil {
+		return pageErr
 	}
 
 	return nil
@@ -245,11 +245,12 @@ func (s *Service) readPage(ctx context.Context, aView *view.View, selector *view
 		return err
 	}
 
-	slice := reflect.MakeSlice(aView.Template.Meta.Schema.SliceType(), 0, 0)
+	slice := reflect.New(aView.Template.Meta.Schema.SliceType())
 	slicePtr := unsafe.Pointer(slice.Pointer())
 	appender := aView.Template.Meta.Schema.Slice().Appender(slicePtr)
 	reader, err := read.New(ctx, db, SQL, func() interface{} {
-		return appender.Add()
+		add := appender.Add()
+		return add
 	})
 
 	if err != nil {

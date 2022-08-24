@@ -85,7 +85,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	}
 
 	if err := s.buildDataParametersFromHintedParamters(dataViewParams, parameterHints, routeOption); err != nil {
-		log.Printf("failed to build data params: %w", err)
+		log.Printf("failed to build data params: %v", err.Error())
 	}
 
 	aView := s.buildMainView(s.options, generate)
