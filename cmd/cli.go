@@ -116,7 +116,7 @@ func (s *serverBuilder) buildSchemaFromParamType(schemaName, paramType string) (
 	}, true
 }
 
-func (s *serverBuilder) buildViewMetaTemplate(k string, v *option.TableParam) {
+func (s *serverBuilder) buildViewMetaTemplate(k string, v *option.TableParam, routeOption *option.Route) {
 	viewAlias := getMetaTemplateHolder(v.Table.Name)
 	SQL := normalizeMetaTemplateSQL(v.Table.SQL, viewAlias)
 	holderView := lookupView(s.route.Resource, s.getViewName(viewAlias))
@@ -141,6 +141,14 @@ func (s *serverBuilder) buildViewMetaTemplate(k string, v *option.TableParam) {
 	if tmplMeta.Name == "" {
 		tmplMeta.Name = k
 	}
+
+	schemaName := strings.Title(k)
+	typeDef, _ := s.BuildSchema(context.Background(), schemaName, k, v, routeOption)
+	if typeDef != nil {
+		s.route.Resource.Types = append(s.route.Resource.Types, typeDef)
+	}
+
+	tmplMeta.Schema = &view.Schema{Name: schemaName}
 	holderView.Template.Meta = tmplMeta
 }
 

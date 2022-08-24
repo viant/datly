@@ -337,7 +337,8 @@ func appendItem(item *query.Item, result *[]*option.Column, route *option.Route)
 
 	switch actual := item.Expr.(type) {
 	case *expr.Call:
-		*result = append(*result, &option.Column{Name: parser.Stringify(actual), Alias: item.Alias, DataType: item.DataType})
+		call := parser.Stringify(actual)
+		*result = append(*result, &option.Column{Name: call, Alias: item.Alias, DataType: item.DataType})
 	case *expr.Ident:
 		*result = append(*result, &option.Column{Name: actual.Name, Alias: item.Alias, DataType: item.DataType})
 	case *expr.Selector:

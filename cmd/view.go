@@ -336,7 +336,7 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 	for k, v := range params {
 
 		if isMetaTemplate(v.Table.Name) {
-			s.buildViewMetaTemplate(k, v)
+			s.buildViewMetaTemplate(k, v, routeOption)
 			continue
 		}
 		schemaName := strings.Title(k)

@@ -11,7 +11,7 @@ func (s *serverBuilder) BuildSchema(ctx context.Context, schemaName, paramName s
 	table := tableParam.Table
 	s.mergeTypes(routeOption, table)
 
-	if len(table.Inner) > 0 {
+	if len(table.Inner) > 0 && isMetaTemplate(table.Name) {
 		return s.buildSchemaFromTable(ctx, schemaName, table)
 	}
 
