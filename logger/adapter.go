@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/shared"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -82,7 +83,7 @@ func (l *Adapter) Inherit(adapter *Adapter) {
 }
 
 func (l *Adapter) LogDatabaseErr(SQL string, err error) {
-	fmt.Printf(fmt.Sprintf("error occured while fetching data from db: %v, SQL: %v\n", err, SQL))
+	fmt.Printf(fmt.Sprintf("error occured while executing SQL: %v, SQL: %v\n", err, strings.ReplaceAll(SQL, "\n", "\\n")))
 }
 
 func NewLogger(name string, logger Logger) *Adapter {
