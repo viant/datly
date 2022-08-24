@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/viant/datly/reader/metadata"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/io"
@@ -121,6 +122,7 @@ func detectColumns(ctx context.Context, evaluation *TemplateEvaluation, v *View)
 
 	query, err := aDb.QueryContext(ctx, SQL, args...)
 	if err != nil {
+		fmt.Printf("failed to detect columns dute to the: %v, SQL: %v\n", err.Error(), SQL)
 		return nil, SQL, err
 	}
 

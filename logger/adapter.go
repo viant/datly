@@ -81,8 +81,8 @@ func (l *Adapter) Inherit(adapter *Adapter) {
 	l.log = adapter.log
 }
 
-func (l *Adapter) LogDatabaseErr(err error) {
-	fmt.Printf(fmt.Sprintf("error occured while fetching data from db: %v\n", err))
+func (l *Adapter) LogDatabaseErr(SQL string, err error) {
+	fmt.Printf(fmt.Sprintf("error occured while fetching data from db: %v, SQL: %v\n", err, SQL))
 }
 
 func NewLogger(name string, logger Logger) *Adapter {

@@ -325,7 +325,7 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 
 	reader, err := read.New(ctx, db, fullMatcher.SQL, collector.NewItem(), options...)
 	if err != nil {
-		aView.Logger.LogDatabaseErr(err)
+		aView.Logger.LogDatabaseErr(fullMatcher.SQL, err)
 		return fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
 	}
 
@@ -354,7 +354,7 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 	end := time.Now()
 	aView.Logger.ReadingData(end.Sub(begin), fullMatcher.SQL, readData, fullMatcher.Args, err)
 	if err != nil {
-		aView.Logger.LogDatabaseErr(err)
+		aView.Logger.LogDatabaseErr(fullMatcher.SQL, err)
 		return fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
 	}
 
