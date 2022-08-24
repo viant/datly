@@ -37,7 +37,6 @@ func (s *serverBuilder) updatedColumns(table *option.Table, prefix, tableName st
 
 	if err == nil {
 		if anIndex := strings.Index(tableName, "SELECT"); anIndex != -1 {
-
 			for _, statement := range parse.Stmt {
 				switch actual := statement.(type) {
 				case *expr.Select:
@@ -52,7 +51,6 @@ func (s *serverBuilder) updatedColumns(table *option.Table, prefix, tableName st
 
 	SQL := "SELECT * FROM " + tableName + " t WHERE 1 = 0"
 
-	fmt.Printf("checking %v ...\n", tableName)
 	query, err := db.QueryContext(context.Background(), SQL, args...)
 	if err != nil {
 		s.logger.Write([]byte(fmt.Sprintf("error occured while updating table %v columns: %v", tableName, err)))

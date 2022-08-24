@@ -76,11 +76,17 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 
 			if xTable != nil {
 				updateGenerateOption(generate, xTable)
+				s.Columns = xTable.Columns
+				if xTable.Alias != "" {
+					s.mainAlias = xTable.Alias
+				}
 			}
 		}
 	}
 
-	s.buildDataParameters(dataViewParams, parameterHints, routeOption)
+	if err := s.buildDataParametersFromHintedParamters(dataViewParams, parameterHints, routeOption); err != nil {
+		log.Printf("failed to build data params: %w", err)
+	}
 
 	aView := s.buildMainView(s.options, generate)
 	if sqlExecModeView != nil {
@@ -170,12 +176,13 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	return fsAddYAML(fs, s.options.RouterURL(), s.route)
 }
 
-func (s *serverBuilder) buildDataParameters(dataParameters map[string]*option.TableParam, parameters option.ParameterHints, routeOption *option.Route) error {
+func (s *serverBuilder) buildDataParametersFromHintedParamters(dataParameters map[string]*option.TableParam, parameters option.ParameterHints, routeOption *option.Route) error {
 	if len(parameters) == 0 {
 		return nil
 	}
 
 	for _, hintedParam := range parameters {
+
 		_, paramName := sanitizer.GetHolderName(hintedParam.Parameter)
 		aTable := option.NewTable("")
 		SQL, err := ast.UnmarshalHint(hintedParam.Hint, aTable)
@@ -327,6 +334,11 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 	}
 
 	for k, v := range params {
+
+		if isMetaTemplate(v.Table.Name) {
+			s.buildViewMetaTemplate(k, v)
+			continue
+		}
 		schemaName := strings.Title(k)
 		typeDef, _ := s.BuildSchema(ctx, schemaName, k, v, routeOption)
 		if typeDef != nil {
@@ -335,7 +347,7 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 
 		relView, err := s.buildParamView(ctx, routeOption, k, schemaName, v, hints)
 		if err != nil {
-			fmt.Printf("can't create data view param: %v\n", err.Error())
+			fmt.Printf("unable to create data view param: %v\n", err.Error())
 			continue
 		}
 
@@ -356,6 +368,18 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 		}
 		mergeParameter(s.route, v.Param)
 	}
+}
+
+func isMetaTemplate(candidate string) bool {
+	return strings.Contains(candidate, "$View.") && strings.Contains(candidate, ".SQL")
+}
+
+func getMetaTemplateHolder(name string) string {
+	var viewNs = "$View."
+	index := strings.Index(name, viewNs)
+	name = name[index+len(viewNs):]
+	index = strings.Index(name, ".SQL")
+	return name[:index]
 }
 
 func (s *serverBuilder) buildParamViewWithoutTemplate(k string, v *option.TableParam, schemaName string) *view.View {

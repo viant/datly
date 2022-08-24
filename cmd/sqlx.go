@@ -52,6 +52,21 @@ func buildTableFromQuery(aQuery *query.Select, routeOpt *option.Route, hints opt
 	if err != nil {
 		return nil, err
 	}
+	//
+	//for _, item := range aQuery.List {
+	//	if item.Comments == "" || item.Alias == "" {
+	//		continue
+	//	}
+	//
+	//	aType := &DataTyped{}
+	//	hint, _ := sanitizer.SplitHint(item.Comments)
+	//
+	//	if err := json.Unmarshal([]byte(hint), aType); err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	table.ColumnTypes[item.Alias] = aType.DataType
+	//}
 
 	return table, nil
 }
@@ -93,9 +108,7 @@ func UpdateTableSettings(table *option.Table, routeOpt *option.Route, hints opti
 
 	if innerQuery != nil && innerQuery.From.X != nil {
 		table.Name = strings.Trim(parser.Stringify(innerQuery.From.X), "`")
-
 		table.Inner = selectItemToColumn(innerQuery, routeOpt)
-
 		if len(innerQuery.Joins) > 0 {
 			table.Deps = map[string]string{}
 			for _, join := range innerQuery.Joins {
@@ -322,36 +335,28 @@ func appendItem(item *query.Item, result *[]*option.Column, route *option.Route)
 		item.DataType = actualDataType
 	}
 
-	col, err := toColumn(item)
-	if err != nil {
-		fmt.Printf("%v\n", err.Error())
-		return
-	}
-
-	col.Comments = item.Comments
-	*result = append(*result, col)
-}
-
-func toColumn(item *query.Item) (*option.Column, error) {
 	switch actual := item.Expr.(type) {
 	case *expr.Call:
-		return &option.Column{Name: parser.Stringify(actual), Alias: item.Alias, DataType: item.DataType}, nil
+		*result = append(*result, &option.Column{Name: parser.Stringify(actual), Alias: item.Alias, DataType: item.DataType})
 	case *expr.Ident:
-		return &option.Column{Name: actual.Name, Alias: item.Alias, DataType: item.DataType}, nil
+		*result = append(*result, &option.Column{Name: actual.Name, Alias: item.Alias, DataType: item.DataType})
 	case *expr.Selector:
-		return &option.Column{Name: parser.Stringify(actual.X), Ns: actual.Name, DataType: item.DataType, Alias: item.Alias}, nil
+		*result = append(*result, &option.Column{Name: parser.Stringify(actual.X), Ns: actual.Name, DataType: item.DataType, Alias: item.Alias})
 	case *expr.Star:
 		switch star := actual.X.(type) {
 		case *expr.Ident:
-			return &option.Column{Name: star.Name, Except: actual.Except}, nil
+			*result = append(*result, &option.Column{Name: star.Name, Except: actual.Except, Comments: actual.Comments})
 		case *expr.Selector:
-			return &option.Column{Name: parser.Stringify(star.X), Ns: star.Name, Except: actual.Except}, nil
+			*result = append(*result, &option.Column{Name: parser.Stringify(star.X), Ns: star.Name, Except: actual.Except, Comments: actual.Comments})
 		}
 	case *expr.Literal:
-		return &option.Column{Name: "", Alias: item.Alias, DataType: actual.Kind}, nil
+		*result = append(*result, &option.Column{Name: "", Alias: item.Alias, DataType: actual.Kind})
+	case *expr.Binary:
+		*result = append(*result, &option.Column{Name: parser.Stringify(actual), Alias: item.Alias})
 	case *expr.Parenthesis:
-		return &option.Column{Name: parser.Stringify(actual), Alias: item.Alias, DataType: item.DataType}, nil
+		*result = append(*result, &option.Column{Name: parser.Stringify(actual), Alias: item.Alias, DataType: item.DataType})
+	default:
+		fmt.Printf("unsupported convertion %T to column\n", actual)
 	}
 
-	return nil, fmt.Errorf("can't convert %T to column\n", item.Expr)
 }

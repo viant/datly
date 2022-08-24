@@ -20,7 +20,7 @@ func (i *ParamMetaIterator) initMetaTypes(SQL string) []string {
 	cursor := parsly.NewCursor("", []byte(SQL), 0)
 
 	for cursor.Pos < cursor.InputSize {
-		matched := cursor.MatchAfterOptional(whitespaceMatcher, forEachMatcher, ifMatcher, assignMatcher, elseIfMatcher, elseMatcher, endMatcher, commentBlockMatcher, doubleQuoteStringMatcher, singleQuoteStringMatcher, boolTokenMatcher, boolMatcher, numberMatcher, parenthesesBlockMatcher, fullWordMatcher, anyMatcher)
+		matched := cursor.MatchAfterOptional(whitespaceMatcher, forEachMatcher, ifMatcher, assignMatcher, elseIfMatcher, elseMatcher, endMatcher, commentBlockMatcher, doubleQuoteStringMatcher, singleQuoteStringMatcher, boolTokenMatcher, boolMatcher, numberMatcher, parenthesesBlockMatcher, selectorMatcher, fullWordMatcher, anyMatcher)
 		switch matched.Code {
 		case numberToken:
 			text := matched.Text(cursor)

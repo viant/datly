@@ -17,6 +17,18 @@ func (n *selector) Match(cursor *parsly.Cursor) (matched int) {
 	}
 	matched++
 	pos++
+
+	if input[pos] == '{' {
+		matched++
+		pos++
+		for i := pos; i < size; i++ {
+			matched++
+			pos++
+			if input[pos] == '}' {
+				return matched
+			}
+		}
+	}
 	for i := pos; i < size; i++ {
 		switch input[i] {
 		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '_', '.', ':':

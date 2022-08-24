@@ -9,23 +9,29 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/modifier"
 	"github.com/viant/datly/auth/jwt"
+	"github.com/viant/datly/cmd/ast"
+	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
+	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
+	"strings"
 )
 
 type serverBuilder struct {
 	options    *Options
+	Columns    option.Columns
 	connectors map[string]*view.Connector
 	config     *standalone.Config
 	logger     io.Writer
 	route      *router.Resource
 	fs         afs.Service
+	mainAlias  string
 }
 
 func (s *serverBuilder) build() (*standalone.Server, error) {
@@ -109,6 +115,43 @@ func (s *serverBuilder) buildSchemaFromParamType(schemaName, paramType string) (
 			DataType: paramType,
 		},
 	}, true
+}
+
+func (s *serverBuilder) buildViewMetaTemplate(k string, v *option.TableParam) {
+	holderViewName := getMetaTemplateHolder(v.Table.Name)
+	SQL := normalizeMetaTemplateSQL(v.Table.SQL, holderViewName)
+	if s.mainAlias == holderViewName { //main view alias is derived fro fielname or -N parameter
+		//rather the alias in SQLX thus needs that mapping
+		holderViewName = s.options.Name
+	}
+	holderView := lookupView(s.route.Resource, holderViewName)
+	if holderView == nil {
+		fmt.Printf("faield to lookup view %v for metaTempalte: %v", holderView, k)
+		return
+	}
+
+	toolbox.Dump(v)
+	tmplMeta := &view.TemplateMeta{}
+	if len(s.Columns) > 0 {
+		starExpr := s.Columns.StarExpr(k)
+		if starExpr.Comments != "" {
+			if _, err := ast.UnmarshalHint(starExpr.Comments, tmplMeta); err != nil {
+				fmt.Printf("invalid TempalteMeta: %w", err)
+			}
+		}
+	}
+	tmplMeta.Source = SQL
+	if tmplMeta.Kind == "" {
+		tmplMeta.Kind = view.RecordTemplateMetaKind
+	}
+	if tmplMeta.Name == "" {
+		tmplMeta.Name = k
+	}
+	holderView.Template.Meta = tmplMeta
+}
+
+func normalizeMetaTemplateSQL(SQL string, holderViewName string) string {
+	return strings.Replace(SQL, "$View."+holderViewName+".SQL", "$View.NonWindowSQL", 1)
 }
 
 func newBuilder(options *Options, logger io.Writer) *serverBuilder {
