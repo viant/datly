@@ -4,7 +4,8 @@ Batch:
 CaseFormat: lc
 Caser: 3
 Columns:
-  - DatabaseColumn: totalTypes
+  - DataType: int
+    DatabaseColumn: totalTypes
     Filterable: true
     Name: totalTypes
     Nullable: true
@@ -23,6 +24,9 @@ Columns:
     Filterable: true
     Name: eventName
     Nullable: true
+ColumnsConfig:
+  totalTypes:
+    DataType: int
 Connector:
   Driver: sqlite3
   Name: dev

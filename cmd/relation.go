@@ -10,7 +10,6 @@ import (
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
-	"github.com/viant/sqlx/metadata/ast/parser"
 	"github.com/viant/toolbox/format"
 	"strings"
 )
@@ -282,14 +281,9 @@ func (s *serverBuilder) uploadSQL(fileName string, SQL string) (string, error) {
 }
 
 func (s *serverBuilder) updateColumnsConfig(table *option2.Table, aView *view.View) error {
-	query, err := parser.ParseQuery(table.SQL)
-	if err != nil {
-		return nil
-	}
 
 	aView.ColumnsConfig = map[string]*view.ColumnConfig{}
-	for _, item := range query.List {
-
+	for _, item := range table.Inner {
 		if item.Comments == "" {
 			continue
 		}
@@ -304,7 +298,7 @@ func (s *serverBuilder) updateColumnsConfig(table *option2.Table, aView *view.Vi
 			continue
 		}
 
-		aView.ColumnsConfig[item.Alias] = aConfig
+		aView.ColumnsConfig[view.NotEmptyOf(item.Alias, item.Name)] = aConfig
 	}
 	return nil
 }

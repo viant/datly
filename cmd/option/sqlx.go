@@ -41,6 +41,7 @@ type (
 		Alias    string
 		Except   []string
 		DataType string
+		Comments string
 	}
 
 	TableParam struct {
