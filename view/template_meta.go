@@ -98,6 +98,7 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 	}
 
 	m.Schema.initByColumns(columns, nil, newCase)
+	fmt.Printf("schema: %s\n", m.Schema.Type().String())
 	return nil
 }
 

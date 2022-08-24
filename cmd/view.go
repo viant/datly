@@ -78,7 +78,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 				updateGenerateOption(generate, xTable)
 				s.Columns = xTable.Columns
 				if xTable.Alias != "" {
-					s.mainAlias = xTable.Alias
+					s.mainStarExpNamesapce = xTable.Alias
 				}
 			}
 		}

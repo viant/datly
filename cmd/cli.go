@@ -16,7 +16,6 @@ import (
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
-	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
@@ -24,14 +23,14 @@ import (
 )
 
 type serverBuilder struct {
-	options    *Options
-	Columns    option.Columns
-	connectors map[string]*view.Connector
-	config     *standalone.Config
-	logger     io.Writer
-	route      *router.Resource
-	fs         afs.Service
-	mainAlias  string
+	options              *Options
+	Columns              option.Columns
+	connectors           map[string]*view.Connector
+	config               *standalone.Config
+	logger               io.Writer
+	route                *router.Resource
+	fs                   afs.Service
+	mainStarExpNamesapce string
 }
 
 func (s *serverBuilder) build() (*standalone.Server, error) {
@@ -118,23 +117,18 @@ func (s *serverBuilder) buildSchemaFromParamType(schemaName, paramType string) (
 }
 
 func (s *serverBuilder) buildViewMetaTemplate(k string, v *option.TableParam) {
-	holderViewName := getMetaTemplateHolder(v.Table.Name)
-	SQL := normalizeMetaTemplateSQL(v.Table.SQL, holderViewName)
-	if s.mainAlias == holderViewName { //main view alias is derived fro fielname or -N parameter
-		//rather the alias in SQLX thus needs that mapping
-		holderViewName = s.options.Name
-	}
-	holderView := lookupView(s.route.Resource, holderViewName)
+	viewAlias := getMetaTemplateHolder(v.Table.Name)
+	SQL := normalizeMetaTemplateSQL(v.Table.SQL, viewAlias)
+	holderView := lookupView(s.route.Resource, s.getViewName(viewAlias))
 	if holderView == nil {
 		fmt.Printf("faield to lookup view %v for metaTempalte: %v", holderView, k)
 		return
 	}
-
-	toolbox.Dump(v)
 	tmplMeta := &view.TemplateMeta{}
 	if len(s.Columns) > 0 {
 		starExpr := s.Columns.StarExpr(k)
 		if starExpr.Comments != "" {
+			fmt.Printf("Using %v with %s\n", k, starExpr.Comments)
 			if _, err := ast.UnmarshalHint(starExpr.Comments, tmplMeta); err != nil {
 				fmt.Printf("invalid TempalteMeta: %w", err)
 			}
@@ -148,6 +142,14 @@ func (s *serverBuilder) buildViewMetaTemplate(k string, v *option.TableParam) {
 		tmplMeta.Name = k
 	}
 	holderView.Template.Meta = tmplMeta
+}
+
+func (s *serverBuilder) getViewName(startExprNs string) string {
+	if s.mainStarExpNamesapce == startExprNs { //main view alias is derived fro fielname or -N parameter
+		//rather the alias in SQLX thus needs that mapping
+		startExprNs = s.options.Name
+	}
+	return startExprNs
 }
 
 func normalizeMetaTemplateSQL(SQL string, holderViewName string) string {
