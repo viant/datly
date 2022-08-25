@@ -128,7 +128,6 @@ func (s *serverBuilder) buildViewMetaTemplate(k string, v *option.TableParam, ro
 	if len(s.Columns) > 0 {
 		starExpr := s.Columns.StarExpr(k)
 		if starExpr.Comments != "" {
-			fmt.Printf("Using %v with %s\n", k, starExpr.Comments)
 			if _, err := ast.UnmarshalHint(starExpr.Comments, tmplMeta); err != nil {
 				fmt.Printf("invalid TempalteMeta: %v", err.Error())
 			}
@@ -141,14 +140,6 @@ func (s *serverBuilder) buildViewMetaTemplate(k string, v *option.TableParam, ro
 	if tmplMeta.Name == "" {
 		tmplMeta.Name = k
 	}
-
-	schemaName := strings.Title(k)
-	typeDef, _ := s.BuildSchema(context.Background(), schemaName, k, v, routeOption)
-	if typeDef != nil {
-		s.route.Resource.Types = append(s.route.Resource.Types, typeDef)
-	}
-
-	tmplMeta.Schema = &view.Schema{Name: schemaName}
 	holderView.Template.Meta = tmplMeta
 }
 

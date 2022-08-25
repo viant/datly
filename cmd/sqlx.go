@@ -352,6 +352,17 @@ func getColumn(item *query.Item) (*option.Column, error) {
 	switch actual := item.Expr.(type) {
 	case *expr.Call:
 		call := parser.Stringify(actual)
+		lcCall := strings.ToLower(call)
+		if item.DataType == "" {
+			item.DataType = "string"
+		}
+		if isCast := strings.HasPrefix(lcCall, "cast"); isCast {
+			if index := strings.Index(lcCall, " as "); index != -1 {
+				targetType := strings.Trim(call[index+4:], " )")
+				item.DataType = castTypeToGoType(targetType)
+			}
+		}
+
 		return &option.Column{Name: call, Alias: item.Alias, DataType: item.DataType}, nil
 	case *expr.Ident:
 		return &option.Column{Name: actual.Name, Alias: item.Alias, DataType: item.DataType}, nil
@@ -367,9 +378,21 @@ func getColumn(item *query.Item) (*option.Column, error) {
 	case *expr.Literal:
 		return &option.Column{Name: "", Alias: item.Alias, DataType: actual.Kind}, nil
 	case *expr.Binary:
-		return &option.Column{Name: parser.Stringify(actual), Alias: item.Alias}, nil
+		enExpr := parser.Stringify(actual)
+		if item.DataType == "" || (strings.Contains(enExpr, "+") || strings.Contains(enExpr, "-") || strings.Contains(enExpr, "/") || strings.Contains(enExpr, "*")) {
+			item.DataType = "float64"
+		}
+		return &option.Column{Name: enExpr, Alias: item.Alias, DataType: item.DataType}, nil
 	case *expr.Parenthesis:
 		return &option.Column{Name: parser.Stringify(actual), Alias: item.Alias, DataType: item.DataType}, nil
 	}
 	return nil, fmt.Errorf("invalid type: %T", item.Expr)
+}
+
+func castTypeToGoType(targetType string) string {
+	switch strings.ToLower(targetType) {
+	case "signed":
+		return "int"
+	}
+	return "string"
 }
