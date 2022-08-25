@@ -10,6 +10,7 @@ import (
 	"github.com/viant/sqlx/metadata/ast/node"
 	"github.com/viant/sqlx/metadata/ast/parser"
 	"github.com/viant/sqlx/metadata/ast/query"
+	"github.com/viant/toolbox"
 	"strings"
 )
 
@@ -19,6 +20,7 @@ func ParseSQLx(SQL string, routeOpt *option.Route, hints option.ParameterHints) 
 		return nil, nil, err
 	}
 
+	toolbox.Dump(aQuery)
 	var tables = map[string]*option.Table{}
 
 	table, err := buildTableFromQuery(aQuery, routeOpt, hints)

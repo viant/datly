@@ -613,8 +613,8 @@ func BuildTree(schemaType reflect.Type, slice *xunsafe.Slice, nodes interface{},
 		return nodes
 	}
 
-	idField := xunsafe.FieldByName(schemaType, caser.Format(reference.ChildColumn, format.CaseUpperCamel))
-	parentField := xunsafe.FieldByName(schemaType, caser.Format(reference.ParentColumn, format.CaseUpperCamel))
+	idField := xunsafe.FieldByName(schemaType, caser.Format(reference.Child, format.CaseUpperCamel))
+	parentField := xunsafe.FieldByName(schemaType, caser.Format(reference.Parent, format.CaseUpperCamel))
 	holderField := xunsafe.FieldByName(schemaType, reference.Holder)
 	holderSlice := xunsafe.NewSlice(holderField.Type)
 

@@ -79,9 +79,9 @@ type (
 	}
 
 	SelfReference struct {
-		Holder       string
-		ParentColumn string
-		ChildColumn  string
+		Holder string
+		Parent string
+		Child  string
 	}
 
 	newCollectorFn    func(dest interface{}, viewMetaHandler viewMetaHandlerFn, supportParallel bool) *Collector
@@ -1058,19 +1058,19 @@ func (v *View) validateSelfRef() error {
 		return fmt.Errorf("view %v SelfReference Holder can't be empty", v.Name)
 	}
 
-	if v.SelfReference.ChildColumn == "" {
-		return fmt.Errorf("view %v SelfReference ChildColumn can't be empty", v.Name)
+	if v.SelfReference.Child == "" {
+		return fmt.Errorf("view %v SelfReference Child can't be empty", v.Name)
 	}
 
-	if _, err := v._columns.Lookup(v.SelfReference.ChildColumn); err != nil {
+	if _, err := v._columns.Lookup(v.SelfReference.Child); err != nil {
 		return err
 	}
 
-	if v.SelfReference.ParentColumn == "" {
-		return fmt.Errorf("view %v SelfReference ParentColumn can't be empty", v.Name)
+	if v.SelfReference.Parent == "" {
+		return fmt.Errorf("view %v SelfReference Parent can't be empty", v.Name)
 	}
 
-	if _, err := v._columns.Lookup(v.SelfReference.ParentColumn); err != nil {
+	if _, err := v._columns.Lookup(v.SelfReference.Parent); err != nil {
 		return err
 	}
 

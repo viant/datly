@@ -26,6 +26,7 @@ type (
 
 	TableMeta struct {
 		Connector         string
+		Self              *view.SelfReference
 		Cache             *view.Cache
 		Warmup            map[string]interface{}
 		DataViewParameter *view.Parameter `json:"-"`
