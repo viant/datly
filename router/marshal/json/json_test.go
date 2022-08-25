@@ -106,6 +106,7 @@ func TestJson_Marshal(t *testing.T) {
 
 	//for i, testcase := range testcases[len(testcases)-1:] {
 	for i, testcase := range testcases {
+		json.ResetCache()
 		tests.LogHeader(fmt.Sprintf("Running testcase nr: %v\n", i))
 		data := testcase.data()
 		marshaller, err := json.New(reflect.TypeOf(data), testcase.defaultConfig)

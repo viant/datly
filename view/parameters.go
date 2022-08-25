@@ -83,7 +83,7 @@ func (v *Codec) Init(resource *Resource, view *View, paramType reflect.Type) err
 		v.Source = data
 	}
 
-	if err := v.Schema.Init(nil, nil, format.CaseUpperCamel, resource._types); err != nil {
+	if err := v.Schema.Init(nil, nil, format.CaseUpperCamel, resource._types, nil); err != nil {
 		return err
 	}
 
@@ -295,7 +295,7 @@ func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
 
 	}
 
-	return p.Schema.Init(nil, nil, 0, types)
+	return p.Schema.Init(nil, nil, 0, types, nil)
 }
 
 func (p *Parameter) initSchemaFromType(structType reflect.Type) error {

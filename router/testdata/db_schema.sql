@@ -78,3 +78,10 @@ CREATE TABLE event_types
     type text,
     code text
 );
+
+DROP TABLE IF EXISTS nodes;
+create TABLE nodes (
+    id INTEGER NOT NULL PRIMARY KEY,
+    parent INTEGER,
+    label text
+);

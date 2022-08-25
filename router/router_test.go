@@ -713,6 +713,14 @@ func TestRouter(t *testing.T) {
 			visitors:    map[string]codec.LifecycleVisitor{},
 			expected:    `{"Status":"ok","ResponseBody":[{"Id":1,"Type":"type - 1","Code":"code - 1","Events":[]},{"Id":2,"Type":"type - 2","Code":"code - 2","Events":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}],"EventsMeta":{"EventTypeId":2,"TotalCount":1}},{"Id":11,"Type":"type - 11","Code":"code - 11","Events":[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}],"EventsMeta":{"EventTypeId":11,"TotalCount":1}},{"Id":111,"Type":"type - 111","Code":"code - 111","Events":[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":102,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}],"EventsMeta":{"EventTypeId":111,"TotalCount":4}}]}`,
 		},
+		{
+			description: "tree",
+			resourceURI: "039_tree",
+			uri:         "/api/nodes",
+			method:      http.MethodGet,
+			visitors:    map[string]codec.LifecycleVisitor{},
+			expected:    `[{"Id":0,"Label":"/parent-1","Children":[{"Id":2,"Label":"/parent-1/children-1","Children":[{"Id":3,"Label":"/parent-1/children-1/children-1","Children":[{"Id":6,"Label":"/parent-1/children-1/children-1/children-1","Children":[{"Id":4,"Label":"/parent-1/children-1/children-1/children-1/children-1","Children":[{"Id":5,"Label":"/parent-1/children-1/children-1/children-1/children-1/children-1","Children":[]}]}]}]}]}]},{"Id":1,"Label":"/parent-2","Children":[]}]`,
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {

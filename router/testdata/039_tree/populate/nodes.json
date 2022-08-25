@@ -1,0 +1,38 @@
+[
+  {},
+  {
+    "parent": 0,
+    "id": 2,
+    "label": "/parent-1/children-1"
+  },
+  {
+    "parent": -1,
+    "id": 0,
+    "label": "/parent-1"
+  },
+  {
+    "parent": -1,
+    "id": 1,
+    "label": "/parent-2"
+  },
+  {
+    "parent": 2,
+    "id": 3,
+    "label": "/parent-1/children-1/children-1"
+  },
+  {
+    "parent": 6,
+    "id": 4,
+    "label": "/parent-1/children-1/children-1/children-1/children-1"
+  },
+  {
+    "parent": 4,
+    "id": 5,
+    "label": "/parent-1/children-1/children-1/children-1/children-1/children-1"
+  },
+  {
+    "parent": 3,
+    "id": 6,
+    "label": "/parent-1/children-1/children-1/children-1"
+  }
+]

@@ -6,6 +6,10 @@ import (
 )
 
 func init() {
+	ResetCache()
+}
+
+func ResetCache() {
 	bufferPool = &BufferPool{}
 	bufferPool.pool = &sync.Pool{
 		New: func() interface{} {
@@ -15,4 +19,6 @@ func init() {
 	}
 
 	bufferPool.Put(bufferPool.Get())
+
+	typesPool = &TypesPool{xtypesMap: sync.Map{}}
 }

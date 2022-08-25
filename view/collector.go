@@ -557,6 +557,8 @@ func (r *Collector) WaitIfNeeded() {
 }
 
 func (r *Collector) Fetched() {
+	r.createTreeIfNeeded()
+
 	if r.wgDelta > 0 {
 		r.wg.Done()
 		r.wgDelta--
@@ -581,3 +583,141 @@ func (r *Collector) Relation() *Relation {
 func (r *Collector) AddMeta(row interface{}) error {
 	return r.viewMetaHandler(row)
 }
+
+func (r *Collector) createTreeIfNeeded() {
+	if r.view.SelfReference == nil {
+		return
+	}
+
+	aTree := BuildTree(r.view.Schema.Type(), r.view.Schema.Slice(), r.dest, r.view.SelfReference, r.view.Caser)
+	if aTree != nil {
+		reflect.ValueOf(r.dest).Elem().Set(reflect.ValueOf(aTree).Elem())
+	}
+}
+
+type NodeIndex map[interface{}]map[interface{}]bool
+
+func (i NodeIndex) Get(id interface{}) map[interface{}]bool {
+	index, ok := i[id]
+	if !ok {
+		index = map[interface{}]bool{}
+		i[id] = index
+	}
+
+	return index
+}
+
+func BuildTree(schemaType reflect.Type, slice *xunsafe.Slice, nodes interface{}, reference *SelfReference, caser format.Case) interface{} {
+	nodesPtr := xunsafe.AsPointer(nodes)
+	if nodesPtr == nil {
+		return nodes
+	}
+
+	idField := xunsafe.FieldByName(schemaType, caser.Format(reference.ChildColumn, format.CaseUpperCamel))
+	parentField := xunsafe.FieldByName(schemaType, caser.Format(reference.ParentColumn, format.CaseUpperCamel))
+	holderField := xunsafe.FieldByName(schemaType, reference.Holder)
+	holderSlice := xunsafe.NewSlice(holderField.Type)
+
+	index := map[interface{}]int{}
+	nodesLen := slice.Len(nodesPtr)
+	for i := 0; i < nodesLen; i++ {
+		index[keyAt(idField, slice, nodesPtr, i)] = i // first I am indexing nodes by "ID"
+	}
+
+	indexes := NodeIndex{}
+	for i := 0; i < nodesLen; i++ {
+		node := slice.ValueAt(nodesPtr, i)
+		nodeParentIndex, ok := index[keyAt(parentField, slice, nodesPtr, i)]
+
+		for ok { //then I am appending item to the parent, and parent to his parent and so on...,
+			parentIndex := index[keyAt(parentField, slice, nodesPtr, nodeParentIndex)]
+			parent := slice.ValuePointerAt(nodesPtr, nodeParentIndex)
+			nodeIndex := indexes.Get(keyAt(idField, slice, nodesPtr, parentIndex))
+			nodeId := key(idField, node)
+
+			if !nodeIndex[nodeId] { // only if item was not already added to the parent. If item was already added, it means that this node and his parents were already updated.
+				currentNode := slice.ValuePointerAt(nodesPtr, index[key(idField, node)])
+				parentPtr := xunsafe.AsPointer(parent)
+
+				asIfaceSlice, isIfaceSlice := holderField.Value(parentPtr).([]interface{})
+				if isIfaceSlice {
+					asIfaceSlice = append(asIfaceSlice, currentNode)
+					holderField.SetValue(parentPtr, asIfaceSlice)
+				} else {
+					holder := holderField.ValuePointer(parentPtr)
+					holderSlice.Appender(holder).Append(currentNode)
+				}
+
+				nodeIndex[nodeId] = true
+				node = parent
+				nodeParentIndex, ok = index[key(parentField, parent)]
+				continue
+			}
+			break
+		}
+	}
+
+	result := reflect.New(slice.Type)
+	resultAppender := slice.Appender(unsafe.Pointer(result.Pointer()))
+	for i := 0; i < nodesLen; i++ { // then I am collecting all Nodes without parents
+		ownerParentFieldValue := keyAt(parentField, slice, nodesPtr, i)
+		if ownerParentFieldValue == nil || xunsafe.AsPointer(ownerParentFieldValue) == nil {
+			resultAppender.Append(slice.ValuePointerAt(nodesPtr, i))
+			continue
+		}
+
+		_, ok := index[ownerParentFieldValue]
+		if !ok {
+			resultAppender.Append(slice.ValuePointerAt(nodesPtr, i))
+		}
+	}
+
+	return result.Interface()
+}
+
+func key(field *xunsafe.Field, node interface{}) interface{} {
+	return normalizeKey(field.Value(xunsafe.AsPointer(node)))
+}
+
+func keyAt(field *xunsafe.Field, slice *xunsafe.Slice, nodesPtr unsafe.Pointer, i int) interface{} {
+	return normalizeKey(field.Value(slice.PointerAt(nodesPtr, uintptr(i))))
+}
+
+//
+//func BuildTree(nodes []*Node) []*Node {
+//	if len(nodes) == 0 {
+//		return []*Node{}
+//	}
+//
+//	var parents []*Node
+//	index := map[int]int{}
+//
+//	for i, node := range nodes {
+//		index[node.ID] = i
+//	}
+//
+//	indexes := NodeIndex{}
+//
+//	for i, node := range nodes {
+//		nodeParentIndex, ok := index[node.ParentID]
+//		if !ok {
+//			parents = append(parents, nodes[i])
+//			continue
+//		}
+//
+//		for ok {
+//			parent := nodes[nodeParentIndex]
+//			nodeIndex := indexes.Get(parent.ID)
+//			if !nodeIndex[node.ID] {
+//				nodeCopy := nodes[index[node.ID]]
+//				parent.Children = append(parent.Children, nodeCopy)
+//			}
+//
+//			nodeIndex[node.ID] = true
+//			node = parent
+//			nodeParentIndex, ok = index[parent.ParentID]
+//		}
+//	}
+//
+//	return parents
+//}

@@ -104,7 +104,7 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 		return err
 	}
 
-	m.Schema.initByColumns(columns, nil, newCase)
+	m.Schema.initByColumns(columns, nil, nil, newCase)
 	return nil
 }
 

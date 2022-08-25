@@ -70,11 +70,18 @@ type (
 		Cache            *Cache `json:",omitempty"`
 
 		ColumnsConfig map[string]*ColumnConfig `json:",omitempty"`
+		SelfReference *SelfReference           `json:",omitempty"`
 
 		initialized  bool
 		newCollector newCollectorFn
 
 		codec *columnsCodec
+	}
+
+	SelfReference struct {
+		Holder       string
+		ParentColumn string
+		ChildColumn  string
 	}
 
 	newCollectorFn    func(dest interface{}, viewMetaHandler viewMetaHandlerFn, supportParallel bool) *Collector
@@ -110,7 +117,7 @@ func (m *Method) init(resource *Resource) error {
 
 	for _, arg := range m.Args {
 		//TODO: Check format
-		if err := arg.Init(nil, nil, format.CaseUpperCamel, resource.GetTypes()); err != nil {
+		if err := arg.Init(nil, nil, format.CaseUpperCamel, resource.GetTypes(), nil); err != nil {
 			return err
 		}
 	}
@@ -307,6 +314,10 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 	}
 
 	v._columns = Columns(v.Columns).Index(v.Caser)
+
+	if err = v.validateSelfRef(); err != nil {
+		return err
+	}
 
 	if err = v.ensureSchema(resource._types); err != nil {
 		return err
@@ -538,7 +549,7 @@ func (v *View) ensureSchema(types Types) error {
 		}
 	}
 
-	return v.Schema.Init(v.Columns, v.With, v.Caser, types)
+	return v.Schema.Init(v.Columns, v.With, v.Caser, types, v.SelfReference)
 }
 
 // Db returns database connection that View was assigned to.
@@ -632,6 +643,10 @@ func (v *View) inherit(view *View) error {
 
 	if v.ColumnsConfig == nil {
 		v.ColumnsConfig = view.ColumnsConfig
+	}
+
+	if v.SelfReference == nil {
+		v.SelfReference = view.SelfReference
 	}
 
 	return nil
@@ -1032,4 +1047,32 @@ func (v *View) MetaTemplateEnabled() bool {
 
 func (v *View) AreNullValuesAllowed() bool {
 	return v.AllowNulls != nil && !*v.AllowNulls
+}
+
+func (v *View) validateSelfRef() error {
+	if v.SelfReference == nil {
+		return nil
+	}
+
+	if v.SelfReference.Holder == "" {
+		return fmt.Errorf("view %v SelfReference Holder can't be empty", v.Name)
+	}
+
+	if v.SelfReference.ChildColumn == "" {
+		return fmt.Errorf("view %v SelfReference ChildColumn can't be empty", v.Name)
+	}
+
+	if _, err := v._columns.Lookup(v.SelfReference.ChildColumn); err != nil {
+		return err
+	}
+
+	if v.SelfReference.ParentColumn == "" {
+		return fmt.Errorf("view %v SelfReference ParentColumn can't be empty", v.Name)
+	}
+
+	if _, err := v._columns.Lookup(v.SelfReference.ParentColumn); err != nil {
+		return err
+	}
+
+	return nil
 }

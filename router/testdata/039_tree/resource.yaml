@@ -1,0 +1,23 @@
+Routes:
+  - URI: "/api/nodes"
+    Method: GET
+    Exclude:
+      - parent
+    View:
+      Ref: nodes
+
+Resource:
+  Views:
+    - Name: nodes
+      Connector:
+        Ref: db
+      Table: nodes
+      SelfReference:
+        Holder: Children
+        ParentColumn: parent
+        ChildColumn: id
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"

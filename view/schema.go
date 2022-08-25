@@ -2,6 +2,7 @@ package view
 
 import (
 	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/sqlx/io/read/cache/ast"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -57,7 +58,7 @@ func (c *Schema) updateSliceType() {
 }
 
 //Init build struct type
-func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case, types Types) error {
+func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case, types Types, selfRef *SelfReference) error {
 	if c.Cardinality != Many {
 		c.Cardinality = One
 	}
@@ -77,13 +78,13 @@ func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat f
 		return nil
 	}
 
-	c.initByColumns(columns, relations, viewCaseFormat)
+	c.initByColumns(columns, relations, selfRef, viewCaseFormat)
 	c.autoGen = true
 
 	return nil
 }
 
-func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCaseFormat format.Case) {
+func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef *SelfReference, viewCaseFormat format.Case) {
 	excluded := make(map[string]bool)
 	for _, rel := range relations {
 		if !rel.IncludeColumn && rel.Cardinality == One {
@@ -147,6 +148,10 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, viewCas
 		if meta := rel.Of.View.Template.Meta; meta != nil {
 			structFields = append(structFields, c.newField(`json:",omitempty" yaml:",omitempty"`, meta.Name, rel.Of.View.Caser, meta.Schema.Type()))
 		}
+	}
+
+	if selfRef != nil {
+		structFields = append(structFields, c.newField("", selfRef.Holder, format.CaseUpperCamel, reflect.SliceOf(ast.InterfaceType)))
 	}
 
 	structType := reflect.StructOf(structFields)
