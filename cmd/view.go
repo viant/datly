@@ -108,7 +108,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	if err := s.updateView(ctx, xTable, aView); err != nil {
 		return err
 	}
-
+	output := s.buildRouterOutput(xTable)
 	viewRoute := &router.Route{
 		Method:      "GET",
 		EnableAudit: true,
@@ -122,7 +122,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 		URI:    config.APIPrefix + s.options.RouterURI(routeOption.URI),
 		View:   &view.View{Reference: shared.Reference{Ref: aView.Name}},
 		Index:  router.Index{Namespace: map[string]string{}},
-		Output: router.Output{Style: router.Style(s.options.Output), Cardinality: view.Many, ResponseField: s.options.ResponseField()},
+		Output: output,
 	}
 
 	if routeOption.Method != "" {
@@ -174,6 +174,31 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	_ = fsAddYAML(fs, depURL, dependency)
 	s.route.Resource.Connectors = nil
 	return fsAddYAML(fs, s.options.RouterURL(), s.route)
+}
+
+func (s *serverBuilder) buildRouterOutput(xTable *option.Table) router.Output {
+	output := router.Output{}
+	if len(s.Columns) == 0 {
+		return output
+	}
+	if startExpr := s.Columns.StarExpr(xTable.Alias); startExpr != nil {
+		if comments := startExpr.Comments; comments != "" {
+			if _, err := ast.UnmarshalHint(comments, output); err != nil {
+				fmt.Printf("err: %v\n", err)
+			}
+		}
+	}
+
+	if output.Style == "" {
+		output.Style = router.Style(s.options.Output)
+	}
+	if output.Cardinality == "" {
+		output.Cardinality = view.Many
+	}
+	if output.ResponseField == "" {
+		output.ResponseField = s.options.ResponseField()
+	}
+	return output
 }
 
 func (s *serverBuilder) buildDataParametersFromHintedParamters(dataParameters map[string]*option.TableParam, parameters option.ParameterHints, routeOption *option.Route) error {
