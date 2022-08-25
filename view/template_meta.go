@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/toolbox/format"
+	"strings"
 )
 
 const (
@@ -31,6 +32,8 @@ func (m *TemplateMeta) Init(ctx context.Context, owner *Template, resource *Reso
 	if m.initialized == true {
 		return nil
 	}
+
+	m.Kind = TemplateMetaKind(strings.ToLower(string(m.Kind)))
 
 	if m.Name == "" {
 		return fmt.Errorf("template meta name can't be empty")
