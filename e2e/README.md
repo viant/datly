@@ -10,8 +10,8 @@ The first use local docker mysql, the latter uses mysql and BigQuery
 Copy endly to /usr/local/bin
 
 2. Set endly [credentials](https://github.com/viant/endly/tree/master/doc/secrets) 
-- local SSH
-- mysql
+- local SSH  
+- mysql   (endly -c=mysql-e2e root/dev)
 3. Install [secrets manager](https://github.com/viant/scy/releases)
 
 4. Checkout this repo
