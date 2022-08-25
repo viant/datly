@@ -1,5 +1,5 @@
 /* {"URI":"meta/vendors/"} */
-SELECT vendor.* ,
+SELECT vendor.* /* {"Style":"Comprehensive"}  */,
        products.* EXCEPT VENDOR_ID,
        Meta.*
 FROM (SELECT t.* FROM VENDOR t WHERE 1=1  ) vendor

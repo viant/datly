@@ -181,9 +181,11 @@ func (s *serverBuilder) buildRouterOutput(xTable *option.Table) router.Output {
 	if len(s.Columns) == 0 {
 		return output
 	}
-	if startExpr := s.Columns.StarExpr(xTable.Alias); startExpr != nil {
+
+	startExpr := s.Columns.StarExpr(xTable.Alias)
+	if startExpr != nil {
 		if comments := startExpr.Comments; comments != "" {
-			if _, err := ast.UnmarshalHint(comments, output); err != nil {
+			if _, err := ast.UnmarshalHint(comments, &output); err != nil {
 				fmt.Printf("err: %v\n", err)
 			}
 		}
