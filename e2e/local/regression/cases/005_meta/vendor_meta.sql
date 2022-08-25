@@ -1,4 +1,4 @@
-/* {"URI":"git /vendors/"} */
+/* {"URI":"meta/vendors/"} */
 SELECT vendor.* /* {"Style":"Comprehensive", "ResponseField":"Data"}  */,
        products.* EXCEPT VENDOR_ID,
        Meta.* /* {"Kind": "record"} */
