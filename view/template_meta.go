@@ -69,7 +69,7 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 	}
 
 	schemaDataType := NotEmptyOf(m.Schema.DataType, m.Schema.Name)
-	if m.Schema.DataType != "" {
+	if schemaDataType != "" {
 		dataType, err := GetOrParseType(resource._types, schemaDataType)
 		if err != nil {
 			return err
