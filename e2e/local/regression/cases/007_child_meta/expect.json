@@ -5,30 +5,21 @@
       "id": 1,
       "name": "Vendor 1",
       "accountId": 100,
-      "created": "2022-08-26T00:00:00Z",
       "userCreated": 1,
-      "updated": null,
-      "userUpdated": null,
       "products": [
         {
           "id": 1,
           "name": "V1 Product 1",
           "vendorId": 1,
           "status": 2,
-          "created": "2022-08-26T00:00:00Z",
-          "userCreated": 1,
-          "updated": null,
-          "userUpdated": null
+          "userCreated": 1
         },
         {
           "id": 2,
           "name": "V1 Product 2",
           "vendorId": 1,
           "status": 1,
-          "created": "2022-08-26T00:00:00Z",
-          "userCreated": 1,
-          "updated": null,
-          "userUpdated": null
+          "userCreated": 1
         }
       ],
       "productsMeta": {
@@ -40,40 +31,28 @@
       "id": 2,
       "name": "Vendor 2",
       "accountId": 101,
-      "created": "2022-08-26T00:00:00Z",
       "userCreated": 2,
-      "updated": null,
-      "userUpdated": null,
       "products": [
         {
           "id": 3,
           "name": "V2 Product 1",
           "vendorId": 2,
           "status": 1,
-          "created": "2022-08-26T00:00:00Z",
-          "userCreated": 2,
-          "updated": null,
-          "userUpdated": null
+          "userCreated": 2
         },
         {
           "id": 4,
           "name": "V2 Product 2",
           "vendorId": 2,
           "status": 1,
-          "created": "2022-08-26T00:00:00Z",
-          "userCreated": 2,
-          "updated": null,
-          "userUpdated": null
+          "userCreated": 2
         },
         {
           "id": 5,
           "name": "V2 Product 3",
           "vendorId": 2,
           "status": 1,
-          "created": "2022-08-26T00:00:00Z",
-          "userCreated": 2,
-          "updated": null,
-          "userUpdated": null
+          "userCreated": 2
         }
       ],
       "productsMeta": {
@@ -85,11 +64,7 @@
       "id": 3,
       "name": "Vendor 3",
       "accountId": 100,
-      "created": "2022-08-26T00:00:00Z",
-      "userCreated": 1,
-      "updated": null,
-      "userUpdated": null,
-      "products": []
+      "userCreated": 1
     }
   ],
   "meta": {
