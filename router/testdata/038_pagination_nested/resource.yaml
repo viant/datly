@@ -14,7 +14,7 @@ Resource:
       Template:
         Source: SELECT * FROM EVENT_TYPES
         Meta:
-          Name: event_types_meta
+          Name: EventTypesMeta
           In: record
           Source: SELECT COUNT(*) AS total_count FROM ($View.Expand($criteria)) T
       Selector:
@@ -32,7 +32,7 @@ Resource:
             Template:
               Source: SELECT * FROM EVENTS
               Meta:
-                Name: events_meta
+                Name: EventsMeta
                 In: record
                 Source: SELECT event_type_id, COUNT(*) AS total_count FROM ($View.Expand($criteria)) T GROUP BY event_type_id
 

@@ -146,7 +146,7 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 		})
 
 		if meta := rel.Of.View.Template.Meta; meta != nil {
-			structFields = append(structFields, c.newField(`json:",omitempty" yaml:",omitempty"`, meta.Name, rel.Of.View.Caser, meta.Schema.Type()))
+			structFields = append(structFields, c.newField(`json:",omitempty" yaml:",omitempty"`, meta.Name, format.CaseUpperCamel, meta.Schema.Type()))
 		}
 	}
 
@@ -158,8 +158,14 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 	c.setType(structType)
 }
 
-func (c *Schema) newField(aTag string, columnName string, viewCaseFormat format.Case, rType reflect.Type) reflect.StructField {
-	structFieldName := viewCaseFormat.Format(columnName, format.CaseUpperCamel)
+func (c *Schema) newField(aTag string, columnName string, sourceCaseFormat format.Case, rType reflect.Type) reflect.StructField {
+	var structFieldName string
+	if sourceCaseFormat == format.CaseUpperCamel {
+		structFieldName = columnName
+	} else {
+		structFieldName = sourceCaseFormat.Format(columnName, format.CaseUpperCamel)
+	}
+
 	aField := reflect.StructField{
 		Name: structFieldName,
 		Type: rType,

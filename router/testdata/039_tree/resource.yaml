@@ -14,8 +14,8 @@ Resource:
       Table: nodes
       SelfReference:
         Holder: Children
-        ParentColumn: parent
-        ChildColumn: id
+        Parent: parent
+        Child: id
 
   Connectors:
     - Name: db

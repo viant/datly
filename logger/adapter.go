@@ -51,11 +51,7 @@ func (l *Adapter) ColumnsDetection(sql, source string) {
 }
 
 func (l *Adapter) ObjectReconciling(dst, item, parent interface{}, index int) {
-	if l.objectReconciling == nil {
-		return
-	}
-
-	l.objectReconciling(dst, item, parent, index)
+	return
 }
 
 func (l *Adapter) ReadingData(duration time.Duration, SQL string, read int, params []interface{}, err error) {

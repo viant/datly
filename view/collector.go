@@ -406,7 +406,7 @@ func (r *Collector) ViewMetaHandler(rel *Relation) func(viewMeta interface{}) er
 	}
 
 	metaChildKeyField := xunsafe.FieldByName(templateMeta.Schema.Type(), rel.Of.View.Caser.Format(rel.Of.Column, format.CaseUpperCamel))
-	metaParentHolderField := xunsafe.FieldByName(r.view.Schema.Type(), rel.Of.View.Caser.Format(templateMeta.Name, format.CaseUpperCamel))
+	metaParentHolderField := xunsafe.FieldByName(r.view.Schema.Type(), templateMeta.Name)
 	xType := xunsafe.NewType(metaParentHolderField.Type)
 	shouldDeref := xType.Kind() == reflect.Ptr
 	var valuesPosition map[interface{}][]int

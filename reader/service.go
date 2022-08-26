@@ -236,6 +236,10 @@ func (s *Service) readPage(ctx context.Context, aView *view.View, selector *view
 	viewParam.Args = matcher.Args
 
 	SQL, args, err := aView.Template.Meta.Evaluate(selector.Parameters.Values, selector.Parameters.Has, viewParam)
+	if len(args) == 0 {
+		args = matcher.Args
+	}
+
 	if err != nil {
 		return err
 	}

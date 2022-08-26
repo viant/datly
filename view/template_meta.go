@@ -35,6 +35,11 @@ func (m *TemplateMeta) Init(ctx context.Context, owner *Template, resource *Reso
 
 	m.Kind = TemplateMetaKind(strings.ToLower(string(m.Kind)))
 
+	cFormat, err := format.NewCase(DetectCase(m.Name))
+	if err == nil && cFormat != format.CaseUpperCamel {
+		m.Name = cFormat.Format(m.Name, format.CaseUpperCamel)
+	}
+
 	if m.Name == "" {
 		return fmt.Errorf("template meta name can't be empty")
 	}
