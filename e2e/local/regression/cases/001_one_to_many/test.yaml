@@ -1,6 +1,6 @@
 init:
   parentPath: $parent.path
-  expect: $LoadData('${parentPath}/expect.json')
+  expect: $LoadJSON('${parentPath}/expect.json')
 pipeline:
 
   test:
