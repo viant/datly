@@ -1,15 +1,10 @@
-
 pipeline:
 
   test:
     action: http/runner:send
     requests:
       - Method: GET
-        URL: http://127.0.0.1:8080/v1/api/dev/meta/vendors
+        URL: http://127.0.0.1:8080/v1/api/dev/meta/vendors-nested
         Expect:
           Code: 200
-          JSONBody:
-            status: ok
-            meta:
-              pageCnt: 1
-              cnt: 3
+          JSONBody: $expect

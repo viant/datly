@@ -1,4 +1,4 @@
-/* {"URI":"meta/vendors/"} */
+/* {"URI":"meta/vendors-nested/"} */
 SELECT vendor.* /* {"Style":"Comprehensive", "ResponseField":"Data"}  */,
        products.* EXCEPT VENDOR_ID,
        Meta.* /* {"Kind": "record"} */,
