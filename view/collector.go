@@ -405,7 +405,7 @@ func (r *Collector) ViewMetaHandler(rel *Relation) func(viewMeta interface{}) er
 		}
 	}
 
-	metaChildKeyField := xunsafe.FieldByName(templateMeta.Schema.Type(), rel.Of.View.Caser.Format(rel.Of.Column, format.CaseUpperCamel))
+	metaChildKeyField := xunsafe.FieldByName(templateMeta.Schema.Type(), rel.Of.View.Caser.Format(rel.Of.Field, format.CaseUpperCamel))
 	metaParentHolderField := xunsafe.FieldByName(r.view.Schema.Type(), templateMeta.Name)
 	xType := xunsafe.NewType(metaParentHolderField.Type)
 	shouldDeref := xType.Kind() == reflect.Ptr
@@ -415,7 +415,12 @@ func (r *Collector) ViewMetaHandler(rel *Relation) func(viewMeta interface{}) er
 			valuesPosition = r.valuePosition[rel.Column]
 		}
 
-		value := normalizeKey(metaChildKeyField.Value(xunsafe.AsPointer(viewMeta)))
+		viewMetaPtr := xunsafe.AsPointer(viewMeta)
+		if viewMetaPtr == nil {
+			return nil
+		}
+
+		value := normalizeKey(metaChildKeyField.Value(viewMetaPtr))
 		positions, ok := valuesPosition[value]
 		if !ok {
 			return nil
