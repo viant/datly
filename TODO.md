@@ -35,3 +35,7 @@
 - velty macros
 - Management API 
 - add GUI
+
+- add template meta to caching
+- limit / offset window option with SQLX
+- Markers for pagination data, 100, 1000, 10000 etc.
