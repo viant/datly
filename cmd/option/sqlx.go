@@ -129,3 +129,13 @@ func (j *Joins) Index() map[string]*Join {
 
 	return result
 }
+
+func (c Columns) Index() map[string]*Column {
+	result := map[string]*Column{}
+
+	for i := range c {
+		result[c[i].Name] = c[i]
+	}
+
+	return result
+}

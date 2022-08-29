@@ -116,7 +116,7 @@ func (s *serverBuilder) buildSchemaFromParamType(schemaName, paramType string) (
 	}, true
 }
 
-func (s *serverBuilder) buildViewMetaTemplate(k string, v *option.TableParam, routeOption *option.Route) {
+func (s *serverBuilder) buildViewMetaTemplate(k string, v *option.TableParam) {
 	viewAlias := getMetaTemplateHolder(v.Table.Name)
 	SQL := normalizeMetaTemplateSQL(v.Table.SQL, viewAlias)
 	holderView := lookupView(s.route.Resource, s.getViewName(viewAlias))
@@ -149,6 +149,14 @@ func (s *serverBuilder) getViewName(startExprNs string) string {
 		startExprNs = s.options.Name
 	}
 	return startExprNs
+}
+
+func (s *serverBuilder) removeFromOutputIfNeeded(route *router.Route, table *option.Table) {
+	if table == nil {
+		return
+	}
+
+	//buildExcludeColumn()
 }
 
 func normalizeMetaTemplateSQL(SQL string, holderViewName string) string {

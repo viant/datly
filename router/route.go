@@ -118,6 +118,8 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
+	r.addPrefixFieldIfNeeded()
+
 	if err := r.initMarshaller(); err != nil {
 		return err
 	}
@@ -483,4 +485,14 @@ func (r *Route) bodyParamMatches(rType reflect.Type, params []*view.Parameter) e
 	}
 
 	return nil
+}
+
+func (r *Route) addPrefixFieldIfNeeded() {
+	if r.ResponseField == "" {
+		return
+	}
+
+	for i, actual := range r.Exclude {
+		r.Exclude[i] = r.ResponseField + "." + actual
+	}
 }

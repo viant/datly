@@ -1,24 +1,9 @@
-- ${[view|parentView].[Name|Limit|Offset|SQL|NonWindowSQL]}
-
-- 
-  - type ViewInfo  stuct {
-      Name string
-      Limit int
-      Offset int
-      SQL string
-      NonWindowSQL string
-  }
-
-
-
-
 - context based generator enhancement
 - reduce complexity/execution branches/duplication on selector parameters
 - pagination - It1: only when data is read from the cache, flag enable by default
 - Simplify/remove lifecycle,  simplify codec
 
-- ($parentView.Limit / $parentView.Offset)
-- e2e / generator refactoring, remove unused/duplicated options
+- e2e / generator refactoring
 - AuditLog -> logger with velty template
 - Parameter Criteria IN, EXISTS, etc 
 - XML/CSV output

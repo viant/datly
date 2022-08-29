@@ -151,10 +151,14 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 				return err
 			}
 		}
-		buildExcludeColumn(xTable, aView, viewRoute)
 	}
 
-	s.buildDataViewParams(ctx, dataViewParams, routeOption, parameterHints)
+	s.buildDataViewParams(ctx, dataViewParams, routeOption, parameterHints, viewRoute)
+	if xTable != nil {
+		caser, _ := aView.CaseFormat.Caser()
+		s.buildExcludeColumn(xTable, caser, viewRoute)
+	}
+
 	updateURIParams(s.route, routeOption)
 	updateParamReferences(s.route)
 	s.route.Routes = append(s.route.Routes, viewRoute)
@@ -355,7 +359,7 @@ func extractURIParams(URI string) map[string]bool {
 	return result
 }
 
-func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*option.TableParam, routeOption *option.Route, hints option.ParameterHints) {
+func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*option.TableParam, routeOption *option.Route, hints option.ParameterHints, route *router.Route) {
 	if len(params) == 0 {
 		return
 	}
@@ -363,7 +367,7 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 	for k, v := range params {
 
 		if isMetaTemplate(v.Table.Name) {
-			s.buildViewMetaTemplate(k, v, routeOption)
+			s.buildViewMetaTemplate(k, v)
 			continue
 		}
 		schemaName := strings.Title(k)
@@ -547,10 +551,10 @@ func (s *serverBuilder) addViewConn(connectorName string, aView *view.View) (*vi
 	return conn, nil
 }
 
-func buildExcludeColumn(xTable *option.Table, aView *view.View, viewRoute *router.Route) {
+func (s *serverBuilder) buildExcludeColumn(xTable *option.Table, viewCaser format.Case, viewRoute *router.Route) {
 	joins := xTable.Joins.Index()
-	viewCaser, _ := aView.CaseFormat.Caser()
 	outputCaser, _ := format.NewCase(string(viewRoute.CaseFormat))
+	//columnsIndex := xTable.Columns.Index()
 
 	for _, column := range xTable.Columns {
 		if len(column.Except) == 0 {
@@ -562,11 +566,28 @@ func buildExcludeColumn(xTable *option.Table, aView *view.View, viewRoute *route
 			}
 			continue
 		}
+
 		join := joins[column.Ns]
 		if join != nil && join.Table != nil {
 			for _, except := range column.Except {
 				holder := strings.Title(join.Table.Alias)
 				viewRoute.Exclude = append(viewRoute.Exclude, holder+"."+viewCaser.Format(except, outputCaser))
+			}
+		}
+
+		for _, aView := range s.route.Resource.Views {
+			templateMeta := aView.Template.Meta
+			if templateMeta == nil || column.Ns != templateMeta.Name {
+				continue
+			}
+
+			if _, ok := joins[aView.Name]; !ok {
+				continue
+			}
+
+			for _, except := range column.Except {
+				actual, _ := format.NewCase(view.DetectCase(except))
+				viewRoute.Exclude = append(viewRoute.Exclude, column.Ns+"."+actual.Format(except, outputCaser))
 			}
 		}
 	}

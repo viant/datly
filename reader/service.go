@@ -282,20 +282,23 @@ func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchDa
 	wg.Add(2)
 
 	var fullMatchErr, smartMatchErr error
+	relation := collector.Relation()
+
 	go func() {
 		defer wg.Done()
 
 		data, _ := session.ParentData()
-		fullMatch, fullMatchErr = s.sqlBuilder.Build(aView, selector, batchData, collector.Relation(), nil, data.AsParam())
+		fullMatch, fullMatchErr = s.sqlBuilder.Build(aView, selector, batchData, relation, &Exclude{
+			Pagination: relation != nil,
+		}, data.AsParam())
 	}()
 
 	go func() {
 		defer wg.Done()
 
-		if aView.Cache != nil && aView.Cache.Warmup != nil {
-
+		if (aView.Cache != nil && aView.Cache.Warmup != nil) || relation != nil {
 			data, _ := session.ParentData()
-			columnInMatcher, smartMatchErr = s.sqlBuilder.Build(aView, selector, batchData, collector.Relation(), &Exclude{Pagination: true, ColumnsIn: true}, data.AsParam())
+			columnInMatcher, smartMatchErr = s.sqlBuilder.Build(aView, selector, batchData, relation, &Exclude{Pagination: true, ColumnsIn: true}, data.AsParam())
 		}
 	}()
 
