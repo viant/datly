@@ -118,7 +118,12 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 
 func (m *TemplateMeta) getColumns(ctx context.Context, resource *Resource, owner *Template) ([]*Column, error) {
 	if resource._columnsCache != nil {
-		columns, ok := resource._columnsCache[m.metaColumnsCacheKey()]
+		columns, ok := resource._columnsCache[m.newMetaColumnsCacheKey()]
+		if ok {
+			return columns, nil
+		}
+
+		columns, ok = resource._columnsCache[m.oldMetaColumnsCacheKey()]
 		if ok {
 			return columns, nil
 		}
@@ -141,14 +146,19 @@ func (m *TemplateMeta) getColumns(ctx context.Context, resource *Resource, owner
 	}
 
 	if resource._columnsCache != nil {
-		resource._columnsCache[m.metaColumnsCacheKey()] = columns
+		resource._columnsCache[m.newMetaColumnsCacheKey()] = columns
 	}
 
 	return columns, nil
 }
 
-func (m *TemplateMeta) metaColumnsCacheKey() string {
+func (m *TemplateMeta) newMetaColumnsCacheKey() string {
 	return "view: " + m._owner._view.Name + "template_meta:" + m.Name
+}
+
+//Deprecated: oldMetaColumnsCacheKey is deprecated.
+func (m *TemplateMeta) oldMetaColumnsCacheKey() string {
+	return "template_meta:" + m.Name
 }
 
 func (m *TemplateMeta) prepareSQL(owner *Template) (string, []interface{}, error) {
