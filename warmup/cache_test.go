@@ -23,8 +23,14 @@ func TestPopulateCache(t *testing.T) {
 			URL:              "case001",
 			expectedInserted: 18,
 		},
+		//{
+		//	description:      "template meta",
+		//	URL:              "case002",
+		//	expectedInserted: 36,
+		//},
 	}
 
+	//for _, testCase := range testCases[len(testCases)-1:] {
 	for _, testCase := range testCases {
 		dataPath := path.Join("testdata", testCase.URL, "populate")
 		configPath := path.Join("testdata", "db_config.yaml")
@@ -82,7 +88,7 @@ func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCas
 			return err
 		}
 
-		build.IndexBy = cacheInput.Column
+		build.By = cacheInput.Column
 		entry, err := service.Get(ctx, build.SQL, build.Args, build)
 		if err != nil {
 			return err

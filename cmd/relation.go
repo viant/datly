@@ -157,16 +157,9 @@ func (s *serverBuilder) updateView(ctx context.Context, table *option.Table, aVi
 }
 
 func (s *serverBuilder) updateViewMeta(table *option.Table, aView *view.View) error {
-
 	fmt.Printf("TABLE HINT: %v %v\n", table.Name, table.ViewHint)
-
-	viewHint := strings.TrimSpace(strings.Trim(table.ViewHint, "/**/"))
-	if viewHint == "" {
-		return nil
-	}
-
-	tableMeta := &option.TableMeta{}
-	if err := json.Unmarshal([]byte(viewHint), tableMeta); err != nil {
+	tableMeta, err := s.tableMeta(table)
+	if err != nil {
 		return err
 	}
 
@@ -193,6 +186,18 @@ func (s *serverBuilder) updateViewMeta(table *option.Table, aView *view.View) er
 	}
 
 	return nil
+}
+
+func (s *serverBuilder) tableMeta(table *option.Table) (*option.TableMeta, error) {
+	viewHint := strings.TrimSpace(strings.Trim(table.ViewHint, "/**/"))
+	if viewHint == "" {
+		return &table.TableMeta, nil
+	}
+
+	if err := json.Unmarshal([]byte(viewHint), &table.TableMeta); err != nil {
+		return nil, err
+	}
+	return &table.TableMeta, nil
 }
 
 func (s *serverBuilder) buildSQLSource(aView *view.View, table *option.Table) error {

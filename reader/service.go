@@ -205,7 +205,7 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 			return
 		}
 
-		pageErr = s.readPage(ctx, view, selector, batchDataCopy, collector, parentViewMetaParam)
+		pageErr = s.readMeta(ctx, view, selector, batchDataCopy, collector, parentViewMetaParam)
 	}()
 
 	wg.Wait()
@@ -220,7 +220,7 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 	return nil
 }
 
-func (s *Service) readPage(ctx context.Context, aView *view.View, selector *view.Selector, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *view.MetaParam) error {
+func (s *Service) readMeta(ctx context.Context, aView *view.View, selector *view.Selector, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *view.MetaParam) error {
 	selectorCopy := *selector
 	selector.Fields = []string{}
 	selector.Columns = []string{}
@@ -249,17 +249,31 @@ func (s *Service) readPage(ctx context.Context, aView *view.View, selector *view
 		return err
 	}
 
+	options, err := s.metaOptions(SQL, args, matcher, aView)
+	if err != nil {
+		return err
+	}
+
 	slice := reflect.New(aView.Template.Meta.Schema.SliceType())
 	slicePtr := unsafe.Pointer(slice.Pointer())
 	appender := aView.Template.Meta.Schema.Slice().Appender(slicePtr)
 	reader, err := read.New(ctx, db, SQL, func() interface{} {
 		add := appender.Add()
 		return add
-	})
+	}, options...)
 
 	if err != nil {
 		return err
 	}
+
+	defer func() {
+		stmt := reader.Stmt()
+		if stmt == nil {
+			return
+		}
+
+		_ = stmt.Close()
+	}()
 
 	err = reader.QueryAll(ctx, func(row interface{}) error {
 		return collector.AddMeta(row)
@@ -277,7 +291,7 @@ func (s *Service) copyBatchData(batchData *view.BatchData) *view.BatchData {
 	return &batchDataCopy
 }
 
-func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchData *view.BatchData, collector *view.Collector, session *Session) (fullMatch *cache.Matcher, columnInMatcher *cache.Matcher, err error) {
+func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchData *view.BatchData, collector *view.Collector, session *Session) (fullMatch *cache.Index, columnInMatcher *cache.Index, err error) {
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
@@ -289,7 +303,7 @@ func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchDa
 
 		data, _ := session.ParentData()
 		fullMatch, fullMatchErr = s.sqlBuilder.Build(aView, selector, batchData, relation, &Exclude{
-			Pagination: relation != nil,
+			Pagination: relation != nil && len(batchData.ValuesBatch) > 1,
 		}, data.AsParam())
 	}()
 
@@ -316,7 +330,7 @@ func notNilErr(errs ...error) error {
 	return nil
 }
 
-func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, collector *view.Collector, visitor view.Visitor, fullMatcher, columnInMatcher *cache.Matcher) error {
+func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, collector *view.Collector, visitor view.Visitor, fullMatcher, columnInMatcher *cache.Index) error {
 	begin := time.Now()
 
 	var options = []option.Option{io.Resolve(collector.Resolve)}
@@ -328,6 +342,7 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 	}
 
 	if columnInMatcher != nil {
+		columnInMatcher.OnSkip = collector.OnSkip
 		options = append(options, &columnInMatcher)
 	}
 
@@ -342,8 +357,10 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 		if stmt == nil {
 			return
 		}
-		stmt.Close()
+
+		_ = stmt.Close()
 	}()
+
 	readData := 0
 	err = reader.QueryAll(ctx, func(row interface{}) error {
 		row, err = aView.UnwrapDatabaseType(ctx, row)
@@ -367,6 +384,24 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 	}
 
 	return nil
+}
+
+func (s *Service) metaOptions(SQL string, args []interface{}, matcher *cache.Index, aView *view.View) ([]option.Option, error) {
+	if aView.Cache == nil {
+		return []option.Option{}, nil
+	}
+
+	matcherDeref := *matcher
+	matcherCopy := &matcherDeref
+	matcherCopy.SQL = SQL
+	matcherCopy.Args = args
+
+	service, err := aView.Cache.Service()
+	if err != nil {
+		return nil, err
+	}
+
+	return []option.Option{service, matcherCopy}, nil
 }
 
 // New creates Service instance

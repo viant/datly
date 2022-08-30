@@ -1,0 +1,27 @@
+[
+  {},
+  {
+    "ID": 1,
+    "NAME": "district - 1 / city - 1",
+    "ZIP_CODE": "12-345",
+    "DISTRICT_ID": 1
+  },
+  {
+    "ID": 2,
+    "NAME": "district - 2 / city - 1",
+    "DISTRICT_ID": 2,
+    "ZIP_CODE": "23-456"
+  },
+  {
+    "ID": 3,
+    "NAME": "district - 1 / city - 2",
+    "DISTRICT_ID": 1,
+    "ZIP_CODE": "34-567"
+  },
+  {
+    "ID": 4,
+    "NAME": "district - 1 / city - 3",
+    "DISTRICT_ID": 1,
+    "ZIP_CODE": "45_678"
+  }
+]

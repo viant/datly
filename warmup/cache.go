@@ -12,14 +12,14 @@ import (
 type (
 	matchersCollector struct {
 		size     int
-		matchers []*cache.Matcher
+		matchers []*cache.Index
 		mux      sync.Mutex
 		builder  *reader.Builder
 		view     *view.View
 	}
 
 	warmupEntry struct {
-		matcher *cache.Matcher
+		matcher *cache.Index
 		view    *view.View
 		column  string
 	}
@@ -102,7 +102,11 @@ func readWithErr(ctx context.Context, entry *warmupEntry) error {
 	}
 
 	matcher := entry.matcher
-	return service.IndexBy(ctx, db, entry.column, matcher.SQL, matcher.Args)
+	if err = service.IndexBy(ctx, db, entry.column, matcher.SQL, matcher.Args); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func PopulateCache(views []*view.View) (int, error) {

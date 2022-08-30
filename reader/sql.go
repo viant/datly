@@ -42,7 +42,7 @@ func NewBuilder() *Builder {
 }
 
 //Build builds SQL Select statement
-func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *view.MetaParam) (*cache.Matcher, error) {
+func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *view.MetaParam) (*cache.Index, error) {
 	if exclude == nil {
 		exclude = &Exclude{}
 	}
@@ -116,13 +116,13 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 		return nil, err
 	}
 
-	matcher := &cache.Matcher{
+	matcher := &cache.Index{
 		SQL:  SQL,
 		Args: placeholders,
 	}
 
 	if exclude.ColumnsIn && relation != nil {
-		matcher.IndexBy = relation.Of.Column
+		matcher.By = relation.Of.Column
 		matcher.In = batchData.ValuesBatch
 	}
 

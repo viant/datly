@@ -1,6 +1,5 @@
 - context based generator enhancement
 - reduce complexity/execution branches/duplication on selector parameters
-- pagination - It1: only when data is read from the cache, flag enable by default
 - Simplify/remove lifecycle,  simplify codec
 
 - e2e / generator refactoring

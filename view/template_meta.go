@@ -148,7 +148,7 @@ func (m *TemplateMeta) getColumns(ctx context.Context, resource *Resource, owner
 }
 
 func (m *TemplateMeta) metaColumnsCacheKey() string {
-	return "template_meta:" + m.Name
+	return "view: " + m._owner._view.Name + "template_meta:" + m.Name
 }
 
 func (m *TemplateMeta) prepareSQL(owner *Template) (string, []interface{}, error) {

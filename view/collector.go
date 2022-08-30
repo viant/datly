@@ -600,6 +600,15 @@ func (r *Collector) createTreeIfNeeded() {
 	}
 }
 
+func (r *Collector) OnSkip(_ []interface{}) error {
+	sliceLen := r.slice.Len(xunsafe.AsPointer(r.dest))
+	if sliceLen == 0 {
+		return nil
+	}
+
+	return r.appender.Trunc(sliceLen - 1)
+}
+
 type NodeIndex map[interface{}]map[interface{}]bool
 
 func (i NodeIndex) Get(id interface{}) map[interface{}]bool {

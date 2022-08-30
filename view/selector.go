@@ -22,11 +22,11 @@ type (
 		Parameters     ParamState    `json:",omitempty"`
 		Criteria       string        `json:",omitempty"`
 		Placeholders   []interface{} `json:",omitempty"`
-		initialized    bool
 		Page           int
 
+		initialized  bool
 		_columnNames map[string]bool
-		result       *cache.Matcher
+		result       *cache.Index
 	}
 
 	ParamState struct {

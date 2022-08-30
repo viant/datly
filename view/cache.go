@@ -57,6 +57,7 @@ type (
 	CacheInput struct {
 		Selector *Selector
 		Column   string
+		GroupBy  string
 	}
 
 	CacheInputFn func() ([]*CacheInput, error)
