@@ -616,9 +616,14 @@ func (r *Router) compressIfNeeded(marshalled []byte, route *Route) (*RequestData
 }
 
 func (r *Router) logAudit(request *http.Request) {
+	headers := request.Header.Clone()
+	if len(headers.Get("Authorization")) > 0 {
+		headers.Set("Authorization", "***")
+	}
+
 	asBytes, _ := goJson.Marshal(Audit{
 		URL:     request.RequestURI,
-		Headers: request.Header,
+		Headers: headers,
 	})
 
 	fmt.Printf("%v\n", string(asBytes))

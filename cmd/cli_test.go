@@ -165,6 +165,17 @@ func TestRun(t *testing.T) {
 			httpMethod: http.MethodGet,
 		},
 		//{
+		//	description: "Template Meta Warmup Column",
+		//	args: []string{
+		//		"-N=events",
+		//		"-D=sqlite3",
+		//		"-A=/tmp/datly_tests/db.db",
+		//		"-X=testdata/case013_cache_warmup/events.sql",
+		//	},
+		//	viewURL:    "/v1/api/meta/view/dev/events",
+		//	httpMethod: http.MethodGet,
+		//},
+		//{
 		//	description: "Insert type detection",
 		//	URI:         "case014_insert",
 		//	args: []string{

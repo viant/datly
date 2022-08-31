@@ -50,7 +50,7 @@ func (c *matchersCollector) populateCacheCases(ctx context.Context, collector ch
 
 	cacheSize := len(cacheCases)
 	for _, cacheCase := range cacheCases {
-		if cacheCase.MetaColumn != "" {
+		if cacheCase.IndexMeta && c.view.Template.Meta != nil {
 			cacheSize++
 		}
 	}
@@ -61,7 +61,7 @@ func (c *matchersCollector) populateCacheCases(ctx context.Context, collector ch
 func (c *matchersCollector) populateChan(aView *view.View, aChan chan warmupEntryFn, cacheInput *view.CacheInput) {
 	c.createIndexWarmupEntry(aView, aChan, cacheInput)
 
-	if cacheInput.MetaColumn == "" {
+	if !cacheInput.IndexMeta || aView.Template.Meta == nil {
 		return
 	}
 
@@ -69,7 +69,21 @@ func (c *matchersCollector) populateChan(aView *view.View, aChan chan warmupEntr
 }
 
 func (c *matchersCollector) createMetaWarmupEntry(aView *view.View, aChan chan warmupEntryFn, input *view.CacheInput) {
-	//aView.Template.Meta.Evaluate()
+	cacheIndex, err := c.builder.CacheMetaSQL(aView, input.Selector, nil, nil, nil)
+	if err != nil {
+		aChan <- func() (*warmupEntry, error) {
+			return nil, err
+		}
+		return
+	}
+
+	aChan <- func() (*warmupEntry, error) {
+		return &warmupEntry{
+			matcher: cacheIndex,
+			view:    aView,
+			column:  input.MetaColumn,
+		}, nil
+	}
 }
 
 func (c *matchersCollector) createIndexWarmupEntry(aView *view.View, aChan chan warmupEntryFn, cacheInput *view.CacheInput) {

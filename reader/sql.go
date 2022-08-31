@@ -399,5 +399,9 @@ func (b *Builder) metaSQL(aView *view.View, selector *view.Selector, batchData *
 		matcher.Args = args
 	}
 
+	if relation != nil {
+		matcher.By = relation.Column
+	}
+
 	return matcher, nil
 }

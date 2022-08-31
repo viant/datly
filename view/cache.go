@@ -37,7 +37,7 @@ type (
 
 	Warmup struct {
 		IndexColumn string
-		MetaColumn  string
+		IndexMeta   bool
 		Cases       []*CacheParameters
 	}
 
@@ -56,6 +56,7 @@ type (
 		Selector   *Selector
 		Column     string
 		MetaColumn string
+		IndexMeta  bool
 	}
 
 	CacheInputFn func() ([]*CacheInput, error)
@@ -405,7 +406,8 @@ outer:
 		*selectors = append(*selectors, &CacheInput{
 			Selector:   selector,
 			Column:     c.Warmup.IndexColumn,
-			MetaColumn: c.Warmup.MetaColumn,
+			MetaColumn: c.Warmup.IndexColumn,
+			IndexMeta:  c.Warmup.IndexMeta || c.Warmup.IndexColumn != "",
 		})
 
 		for i := len(indexes) - 1; i >= 0; i-- {

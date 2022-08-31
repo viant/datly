@@ -17,17 +17,19 @@ func TestPopulateCache(t *testing.T) {
 		description      string
 		URL              string
 		expectedInserted int
+		metaIndexed      []interface{}
 	}{
 		{
 			description:      "basic",
 			URL:              "case001",
 			expectedInserted: 18,
 		},
-		//{
-		//	description:      "template meta",
-		//	URL:              "case002",
-		//	expectedInserted: 36,
-		//},
+		{
+			description:      "template meta",
+			URL:              "case002",
+			expectedInserted: 36,
+			metaIndexed:      []interface{}{2, 11, 111},
+		},
 	}
 
 	//for _, testCase := range testCases[len(testCases)-1:] {
@@ -58,7 +60,7 @@ func TestPopulateCache(t *testing.T) {
 		for _, aView := range views {
 			cache := aView.Cache
 			ctx := context.TODO()
-			checkIfCached(t, cache, ctx, testCase, aView)
+			assert.Nil(t, checkIfCached(t, cache, ctx, testCase, aView), testCase.description)
 		}
 	}
 }
@@ -67,6 +69,7 @@ func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCas
 	description      string
 	URL              string
 	expectedInserted int
+	metaIndexed      []interface{}
 }, aView *view.View) error {
 	input, err := cache.GenerateCacheInput(ctx)
 	if !assert.Nil(t, err, testCase.description) {
@@ -78,8 +81,10 @@ func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCas
 		return err
 	}
 
+	builder := reader.NewBuilder()
+
 	for _, cacheInput := range input {
-		build, err := reader.NewBuilder().Build(aView, cacheInput.Selector, &view.BatchData{}, nil, &reader.Exclude{
+		build, err := builder.Build(aView, cacheInput.Selector, &view.BatchData{}, nil, &reader.Exclude{
 			ColumnsIn:  true,
 			Pagination: true,
 		}, nil)
@@ -94,8 +99,29 @@ func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCas
 			return err
 		}
 
-		assert.True(t, entry.Has(), testCase.description)
-		assert.Nil(t, service.Close(ctx, entry), testCase.description)
+		if assert.True(t, entry.Has(), testCase.description) {
+			assert.Nil(t, service.Close(ctx, entry), testCase.description)
+		}
+
+		if cacheInput.IndexMeta && aView.Template.Meta != nil {
+			metaIndex, err := builder.CacheMetaSQL(aView, cacheInput.Selector, &view.BatchData{
+				ValuesBatch: testCase.metaIndexed,
+				Values:      testCase.metaIndexed,
+			}, nil, nil)
+			if !assert.Nil(t, err, testCase.description) {
+				continue
+			}
+
+			metaIndex.By = cacheInput.MetaColumn
+			metaEntry, err := service.Get(ctx, metaIndex.SQL, metaIndex.Args, metaIndex)
+			if !assert.Nil(t, err, testCase.description) {
+				continue
+			}
+
+			if assert.True(t, metaEntry.Has(), testCase.description) {
+				assert.Nil(t, service.Close(ctx, metaEntry), testCase.description)
+			}
+		}
 	}
 
 	return nil
