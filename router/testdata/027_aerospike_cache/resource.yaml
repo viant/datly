@@ -11,7 +11,7 @@ Resource:
     - Name: aerospike
       Location: ${view.Name}
       Provider: 'aerospike://127.0.0.1:3000/test'
-      TimeToLiveMs: 10000
+      TimeToLiveMs: 100000
 
   Views:
     - Name: events_ref

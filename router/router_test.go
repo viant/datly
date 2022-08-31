@@ -144,6 +144,10 @@ type event struct {
 
 //TODO: add testcases against sql injection
 func TestRouter(t *testing.T) {
+	view.AerospikeConnectionTimeoutInS = 1000
+	view.PingTimeInS = 1000
+	defer view.ResetConnectionConfig()
+
 	//testLocation := toolbox.CallerDirectory(3)
 	testLocation := "./"
 	_ = toolbox.CreateDirIfNotExist(path.Join(testLocation, "testdata/db"))

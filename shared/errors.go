@@ -30,6 +30,9 @@ func (r *Errors) Append(err error) {
 
 //Error returns first encounter error if any
 func (r *Errors) Error() error {
+	r.locker.Lock()
+	defer r.locker.Unlock()
+
 	for i := range r.errors {
 		if r.errors[i] != nil {
 			return r.errors[i]

@@ -11,6 +11,8 @@ Resource:
       Connector:
         Ref: db
       Table: event_types
+      Cache:
+        Ref: aerospike
       Template:
         Source: SELECT * FROM EVENT_TYPES
         Meta:
@@ -29,6 +31,8 @@ Resource:
             Ref: events#ref
             Name: events
             Column: event_type_id
+            Cache:
+              Ref: aerospike
             Template:
               Source: SELECT * FROM EVENTS
               Meta:
@@ -49,3 +53,8 @@ Resource:
       Driver: sqlite3
       DSN: "./testdata/db/db.db"
 
+  CacheProviders:
+    - Name: aerospike
+      Location: ${view.Name}
+      Provider: 'aerospike://127.0.0.1:3000/test'
+      TimeToLiveMs: 36000000

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	as "github.com/aerospike/aerospike-client-go"
 	"github.com/viant/afs/option"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/converter"
@@ -31,15 +30,14 @@ type (
 		PartSize     int
 		Warmup       *Warmup `json:",omitempty" yaml:",omitempty"`
 
-		cache           cache.Cache
-		initialized     bool
-		aerospikeClient func() (*as.Client, error)
-		mux             sync.Mutex
-		last            *as.Client
+		newCache    func() (cache.Cache, error)
+		initialized bool
+		mux         sync.Mutex
 	}
 
 	Warmup struct {
 		IndexColumn string
+		MetaColumn  string
 		Cases       []*CacheParameters
 	}
 
@@ -55,9 +53,9 @@ type (
 	}
 
 	CacheInput struct {
-		Selector *Selector
-		Column   string
-		GroupBy  string
+		Selector   *Selector
+		Column     string
+		MetaColumn string
 	}
 
 	CacheInputFn func() ([]*CacheInput, error)
@@ -105,7 +103,7 @@ func (c *Cache) init(ctx context.Context, resource *Resource, aView *View) error
 }
 
 func (c *Cache) ensureCacheClient(aView *View, viewName string) error {
-	if c.aerospikeClient != nil {
+	if c.newCache != nil {
 		return nil
 	}
 
@@ -113,16 +111,16 @@ func (c *Cache) ensureCacheClient(aView *View, viewName string) error {
 		return nil
 	}
 
-	aCache, err := c.cacheService(aView)
+	var err error
+	c.newCache, err = c.cacheService(viewName, aView)
 	if err != nil {
-		return fmt.Errorf("view %v error: %w", viewName, err)
+		return err
 	}
 
-	c.cache = aCache
 	return nil
 }
 
-func (c *Cache) cacheService(aView *View) (cache.Cache, error) {
+func (c *Cache) cacheService(name string, aView *View) (func() (cache.Cache, error), error) {
 	scheme := url.Scheme(c.Provider, "")
 	switch scheme {
 	case aerospikeType:
@@ -135,11 +133,19 @@ func (c *Cache) cacheService(aView *View) (cache.Cache, error) {
 		if err != nil {
 			return nil, err
 		}
-		return afs.NewCache(expandedLoc, time.Duration(c.TimeToLiveMs)*time.Millisecond, aView.Name, option.NewStream(c.PartSize, 0))
+
+		afsCache, err := afs.NewCache(expandedLoc, time.Duration(c.TimeToLiveMs)*time.Millisecond, aView.Name, option.NewStream(c.PartSize, 0))
+		if err != nil {
+			return nil, err
+		}
+
+		return func() (cache.Cache, error) {
+			return afsCache, nil
+		}, nil
 	}
 }
 
-func (c *Cache) aerospikeCache(aView *View) (cache.Cache, error) {
+func (c *Cache) aerospikeCache(aView *View) (func() (cache.Cache, error), error) {
 	if c.Location == "" {
 		return nil, fmt.Errorf("aerospike cache SetName cannot be empty")
 	}
@@ -150,20 +156,20 @@ func (c *Cache) aerospikeCache(aView *View) (cache.Cache, error) {
 	}
 
 	clientProvider := aClientPool.Client(host, port)
-	c.aerospikeClient = clientProvider
-
-	client, err := clientProvider()
-	if err != nil {
-		return nil, nil
-	}
 
 	expanded, err := c.expandLocation(aView)
 	if err != nil {
 		return nil, err
 	}
 
-	c.last = client
-	return aerospike.New(namespace, expanded, client, uint32(c.TimeToLiveMs/1000))
+	return func() (cache.Cache, error) {
+		client, err := clientProvider()
+		if err != nil {
+			return nil, err
+		}
+
+		return aerospike.New(namespace, expanded, client, uint32(c.TimeToLiveMs/1000))
+	}, nil
 }
 
 func (c *Cache) expandLocation(aView *View) (string, error) {
@@ -186,17 +192,7 @@ func (c *Cache) expandLocation(aView *View) (string, error) {
 }
 
 func (c *Cache) Service() (cache.Cache, error) {
-	if c.aerospikeClient != nil {
-		if err := c.recreateCacheIfNeeded(); err != nil {
-			return nil, err
-		}
-	}
-
-	if c.cache == nil {
-		return nil, fmt.Errorf("%v cache service is not available", c.Name)
-	}
-
-	return c.cache, nil
+	return c.newCache()
 }
 
 func (c *Cache) split(location string) (host string, port int, namespace string, err error) {
@@ -276,24 +272,6 @@ func (c *Cache) inherit(source *Cache) error {
 	}
 
 	return nil
-}
-
-func (c *Cache) recreateCacheIfNeeded() error {
-	c.mux.Lock()
-	defer c.mux.Unlock()
-
-	client, err := c.aerospikeClient()
-	if err != nil || c.last == client {
-		return err
-	}
-
-	aerospikeCache, err := c.aerospikeCache(c.owner)
-	if err != nil {
-		return err
-	}
-
-	c.cache = aerospikeCache
-	return err
 }
 
 func (c *Cache) GenerateCacheInput(ctx context.Context) ([]*CacheInput, error) {
@@ -424,7 +402,11 @@ outer:
 			}
 		}
 
-		*selectors = append(*selectors, &CacheInput{Selector: selector, Column: c.Warmup.IndexColumn})
+		*selectors = append(*selectors, &CacheInput{
+			Selector:   selector,
+			Column:     c.Warmup.IndexColumn,
+			MetaColumn: c.Warmup.MetaColumn,
+		})
 
 		for i := len(indexes) - 1; i >= 0; i-- {
 			if indexes[i] < len(paramValues[i])-1 {

@@ -48,10 +48,31 @@ func (c *matchersCollector) populateCacheCases(ctx context.Context, collector ch
 		go c.populateChan(c.view, collector, cacheCases[i])
 	}
 
-	return len(cacheCases), err
+	cacheSize := len(cacheCases)
+	for _, cacheCase := range cacheCases {
+		if cacheCase.MetaColumn != "" {
+			cacheSize++
+		}
+	}
+
+	return cacheSize, err
 }
 
 func (c *matchersCollector) populateChan(aView *view.View, aChan chan warmupEntryFn, cacheInput *view.CacheInput) {
+	c.createIndexWarmupEntry(aView, aChan, cacheInput)
+
+	if cacheInput.MetaColumn == "" {
+		return
+	}
+
+	c.createMetaWarmupEntry(aView, aChan, cacheInput)
+}
+
+func (c *matchersCollector) createMetaWarmupEntry(aView *view.View, aChan chan warmupEntryFn, input *view.CacheInput) {
+	//aView.Template.Meta.Evaluate()
+}
+
+func (c *matchersCollector) createIndexWarmupEntry(aView *view.View, aChan chan warmupEntryFn, cacheInput *view.CacheInput) {
 	build, err := c.builder.Build(c.view, cacheInput.Selector, &view.BatchData{}, nil, &reader.Exclude{
 		ColumnsIn:  true,
 		Pagination: true,

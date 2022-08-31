@@ -23,7 +23,7 @@ func (s *serverBuilder) loadConfig(ctx context.Context) (cfg *standalone.Config,
 			Endpoint: endpoint.Config{},
 		}
 		cfg.Init()
-		disable := false
+		disable := false //TODO: enabled by default?
 		cfg.AutoDiscovery = &disable
 		return cfg, nil
 	}

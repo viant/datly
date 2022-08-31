@@ -364,3 +364,40 @@ func actualLimit(aView *view.View, selector *view.Selector) int {
 
 	return aView.Selector.Limit
 }
+
+func (b *Builder) ExactMetaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, parent *view.MetaParam) (*cache.Index, error) {
+	return b.metaSQL(aView, selector, batchData, relation, &Exclude{
+		Pagination: true,
+	}, parent)
+}
+
+func (b *Builder) CacheMetaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, parent *view.MetaParam) (*cache.Index, error) {
+	return b.metaSQL(aView, selector, batchData, relation, &Exclude{Pagination: true, ColumnsIn: true}, parent)
+}
+
+func (b *Builder) metaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *view.MetaParam) (*cache.Index, error) {
+	matcher, err := b.Build(aView, selector, batchData, relation, exclude, parent)
+	if err != nil {
+		return nil, err
+	}
+
+	viewParam := view.AsViewParam(aView, selector)
+	viewParam.NonWindowSQL = matcher.SQL
+	viewParam.Args = matcher.Args
+
+	SQL, args, err := aView.Template.Meta.Evaluate(selector.Parameters.Values, selector.Parameters.Has, viewParam)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(args) == 0 {
+		args = matcher.Args
+	}
+
+	matcher.SQL = SQL
+	if len(args) > 0 {
+		matcher.Args = args
+	}
+
+	return matcher, nil
+}

@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+var (
+	AerospikeConnectionTimeoutInS = 5
+	PingTimeInS                   = 15
+)
+
 type (
 	dbRegistry struct {
 		index map[string]*db
@@ -38,6 +43,11 @@ type (
 	}
 )
 
+func ResetConnectionConfig() {
+	AerospikeConnectionTimeoutInS = 5
+	PingTimeInS = 15
+}
+
 func (c *aerospikeClient) connect() (*as.Client, error) {
 	c.mutex.Lock()
 	aClient := c.actual
@@ -50,7 +60,7 @@ func (c *aerospikeClient) connect() (*as.Client, error) {
 }
 
 func (c *aerospikeClient) connectIfNeeded(host string, port int) (*as.Client, error) {
-	return c.clientWithTimeout(time.Duration(1)*time.Second, host, port)
+	return c.clientWithTimeout(time.Duration(AerospikeConnectionTimeoutInS)*time.Second, host, port)
 }
 
 func (c *aerospikeClient) tryConnect(host string, port int, channel chan func() (*as.Client, error)) {
@@ -118,12 +128,12 @@ func (c *aerospikeClient) keepConnAlive(host string, port int) {
 
 	go func(ctx context.Context, host string, port int) {
 		for {
-			time.Sleep(time.Second * time.Duration(15))
+			time.Sleep(time.Second * time.Duration(PingTimeInS))
 			select {
 			case <-ctx.Done():
 				return
 			default:
-				aClient, err := c.clientWithTimeout(time.Duration(5)*time.Second, host, port)
+				aClient, err := c.clientWithTimeout(time.Duration(AerospikeConnectionTimeoutInS)*time.Second, host, port)
 				c.mutex.Lock()
 				c.actual = aClient
 				c.mutex.Unlock()
@@ -211,7 +221,7 @@ func (d *db) keepConnectionAlive(driver string, dsn string, config *DBConfig) {
 
 	go func(driver, dsn string, config *DBConfig) {
 		for {
-			time.Sleep(time.Second * time.Duration(15))
+			time.Sleep(time.Second * time.Duration(PingTimeInS))
 
 			select {
 			case <-cancel.Done():

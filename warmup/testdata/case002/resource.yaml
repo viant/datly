@@ -39,7 +39,7 @@ Resource:
         Meta:
           Name: EventsMeta
           Source: '
-            SELECT COUNT(*) AS TOTAL_RECORDS, $View.Limit, id FROM ($View.Expand($criteria)) GROUP BY   
+            SELECT COUNT(*) AS TOTAL_RECORDS, $View.Limit as RECORDS_LIMIT, event_type_id FROM ($View.Expand($criteria)) GROUP BY event_type_id
           '
         Source: '        
           SELECT * FROM EVENTS WHERE 0=0 

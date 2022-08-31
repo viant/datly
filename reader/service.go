@@ -101,6 +101,10 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 	}
 
 	collector.WaitIfNeeded()
+	if err := errorCollector.Error(); err != nil {
+		return
+	}
+
 	batchData := s.batchData(collector)
 	if batchData.ColumnName != "" && len(batchData.Values) == 0 {
 		return
@@ -164,57 +168,47 @@ func (s *Service) batchData(collector *view.Collector) *view.BatchData {
 
 func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.Selector, batchData *view.BatchData, db *sql.DB, collector *view.Collector, session *Session, parentViewMetaParam *view.MetaParam) error {
 	batchDataCopy := s.copyBatchData(batchData)
-	batchDataCopy.ValuesBatch = batchDataCopy.Values
-
 	wg := &sync.WaitGroup{}
-	wg.Add(2)
 
-	var queryErr error
-	go func() {
-		defer wg.Done()
-		batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
-		visitor := collector.Visitor(ctx)
-
-		for {
-			fullMatch, smartMatch, err := s.getMatchers(view, selector, batchData, collector, session)
-			if err != nil {
-				queryErr = err
-				return
-			}
-
-			err = s.query(ctx, view, db, collector, visitor, fullMatch, smartMatch)
-			if err != nil {
-				queryErr = err
-				return
-			}
-
-			if batchData.Parent == batchData.ParentReadSize {
-				break
-			}
-
-			var nextParents int
-			batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
-			batchData.Parent += nextParents
-		}
-	}()
-
-	var pageErr error
-	go func() {
-		defer wg.Done()
-		if view.Template.Meta == nil {
-			return
-		}
-
-		pageErr = s.readMeta(ctx, view, selector, batchDataCopy, collector, parentViewMetaParam)
-	}()
-
-	wg.Wait()
-	if queryErr != nil {
-		return queryErr
+	var metaErr error
+	if view.Template.Meta != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			metaErr = s.readMeta(ctx, view, selector, batchDataCopy, collector, parentViewMetaParam)
+		}()
 	}
 
-	if pageErr != nil {
-		return pageErr
+	if err := s.readObjects(ctx, session, batchData, view, collector, selector, db); err != nil {
+		return err
+	}
+
+	wg.Wait()
+	return metaErr
+}
+
+func (s *Service) readObjects(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Selector, db *sql.DB) error {
+	batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
+	visitor := collector.Visitor(ctx)
+
+	for {
+		fullMatch, smartMatch, err := s.getMatchers(view, selector, batchData, collector, session)
+		if err != nil {
+			return err
+		}
+
+		err = s.query(ctx, view, db, collector, visitor, fullMatch, smartMatch)
+		if err != nil {
+			return err
+		}
+
+		if batchData.Parent == batchData.ParentReadSize {
+			break
+		}
+
+		var nextParents int
+		batchData.ValuesBatch, nextParents = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
+		batchData.Parent += nextParents
 	}
 
 	return nil
@@ -224,24 +218,44 @@ func (s *Service) readMeta(ctx context.Context, aView *view.View, selector *view
 	selectorCopy := *selector
 	selector.Fields = []string{}
 	selector.Columns = []string{}
-
 	selector = &selectorCopy
-	matcher, err := s.sqlBuilder.Build(aView, selector, batchDataCopy, collector.Relation(), &Exclude{Pagination: true}, parentViewMetaParam)
+
+	var indexed *cache.Index
+	var metaOptions []option.Option
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	var cacheErr error
+	go func() {
+		defer wg.Done()
+		if aView.Cache == nil {
+			return
+		}
+
+		cacheMatcher, err := s.sqlBuilder.CacheMetaSQL(aView, selector, batchDataCopy, collector.Relation(), parentViewMetaParam)
+		if err != nil {
+			cacheErr = err
+			return
+		}
+
+		cacheService, err := aView.Cache.Service()
+		if err != nil {
+			cacheErr = err
+			return
+		}
+
+		metaOptions = []option.Option{cacheService, cacheMatcher}
+	}()
+
+	var err error
+	indexed, err = s.sqlBuilder.ExactMetaSQL(aView, selector, batchDataCopy, collector.Relation(), parentViewMetaParam)
 	if err != nil {
 		return err
 	}
 
-	viewParam := view.AsViewParam(aView, selector)
-	viewParam.NonWindowSQL = matcher.SQL
-	viewParam.Args = matcher.Args
-
-	SQL, args, err := aView.Template.Meta.Evaluate(selector.Parameters.Values, selector.Parameters.Has, viewParam)
-	if len(args) == 0 {
-		args = matcher.Args
-	}
-
-	if err != nil {
-		return err
+	wg.Wait()
+	if cacheErr != nil {
+		return cacheErr
 	}
 
 	db, err := aView.Db()
@@ -249,18 +263,13 @@ func (s *Service) readMeta(ctx context.Context, aView *view.View, selector *view
 		return err
 	}
 
-	options, err := s.metaOptions(SQL, args, matcher, aView)
-	if err != nil {
-		return err
-	}
-
 	slice := reflect.New(aView.Template.Meta.Schema.SliceType())
 	slicePtr := unsafe.Pointer(slice.Pointer())
 	appender := aView.Template.Meta.Schema.Slice().Appender(slicePtr)
-	reader, err := read.New(ctx, db, SQL, func() interface{} {
+	reader, err := read.New(ctx, db, indexed.SQL, func() interface{} {
 		add := appender.Add()
 		return add
-	}, options...)
+	}, metaOptions...)
 
 	if err != nil {
 		return err
@@ -277,7 +286,7 @@ func (s *Service) readMeta(ctx context.Context, aView *view.View, selector *view
 
 	err = reader.QueryAll(ctx, func(row interface{}) error {
 		return collector.AddMeta(row)
-	}, args...)
+	}, indexed.Args...)
 
 	if err != nil {
 		return err
@@ -288,46 +297,40 @@ func (s *Service) readMeta(ctx context.Context, aView *view.View, selector *view
 
 func (s *Service) copyBatchData(batchData *view.BatchData) *view.BatchData {
 	batchDataCopy := *batchData
+	newValues := make([]interface{}, len(batchData.Values))
+	copy(newValues, batchDataCopy.Values)
+	batchDataCopy.ValuesBatch = newValues
+
 	return &batchDataCopy
 }
 
 func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchData *view.BatchData, collector *view.Collector, session *Session) (fullMatch *cache.Index, columnInMatcher *cache.Index, err error) {
 	wg := &sync.WaitGroup{}
-	wg.Add(2)
+	wg.Add(1)
 
-	var fullMatchErr, smartMatchErr error
 	relation := collector.Relation()
 
-	go func() {
-		defer wg.Done()
-
-		data, _ := session.ParentData()
-		fullMatch, fullMatchErr = s.sqlBuilder.Build(aView, selector, batchData, relation, &Exclude{
-			Pagination: relation != nil && len(batchData.ValuesBatch) > 1,
-		}, data.AsParam())
-	}()
-
+	var cacheErr error
 	go func() {
 		defer wg.Done()
 
 		if (aView.Cache != nil && aView.Cache.Warmup != nil) || relation != nil {
 			data, _ := session.ParentData()
-			columnInMatcher, smartMatchErr = s.sqlBuilder.Build(aView, selector, batchData, relation, &Exclude{Pagination: true, ColumnsIn: true}, data.AsParam())
+			columnInMatcher, cacheErr = s.sqlBuilder.Build(aView, selector, batchData, relation, &Exclude{Pagination: true, ColumnsIn: true}, data.AsParam())
 		}
 	}()
 
-	wg.Wait()
-	return fullMatch, columnInMatcher, notNilErr(fullMatchErr, smartMatchErr)
-}
+	data, _ := session.ParentData()
+	fullMatch, err = s.sqlBuilder.Build(aView, selector, batchData, relation, &Exclude{
+		Pagination: relation != nil && len(batchData.ValuesBatch) > 1,
+	}, data.AsParam())
 
-func notNilErr(errs ...error) error {
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return nil
+	wg.Wait()
+	return fullMatch, columnInMatcher, cacheErr
 }
 
 func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, collector *view.Collector, visitor view.Visitor, fullMatcher, columnInMatcher *cache.Index) error {
@@ -336,6 +339,10 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 	var options = []option.Option{io.Resolve(collector.Resolve)}
 	if aView.Cache != nil {
 		service, err := aView.Cache.Service()
+		if err != nil {
+			fmt.Printf("err: %v\n", err.Error())
+		}
+
 		if err == nil {
 			options = append(options, service)
 		}
@@ -384,24 +391,6 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 	}
 
 	return nil
-}
-
-func (s *Service) metaOptions(SQL string, args []interface{}, matcher *cache.Index, aView *view.View) ([]option.Option, error) {
-	if aView.Cache == nil {
-		return []option.Option{}, nil
-	}
-
-	matcherDeref := *matcher
-	matcherCopy := &matcherDeref
-	matcherCopy.SQL = SQL
-	matcherCopy.Args = args
-
-	service, err := aView.Cache.Service()
-	if err != nil {
-		return nil, err
-	}
-
-	return []option.Option{service, matcherCopy}, nil
 }
 
 // New creates Service instance
