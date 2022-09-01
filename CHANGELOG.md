@@ -1,3 +1,9 @@
+## Jul 27 2022 v0.2.11
+  * Meta Template
+  * Meta Template Caching
+  * Executor service
+  * APIKey support
+
 ## Jul 27 2022 v0.2.7
   * Aerospike cache
   * Improved DB sharing

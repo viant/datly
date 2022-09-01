@@ -157,7 +157,6 @@ func asRelative(route string) string {
 	if route[0] == '/' {
 		route = route[1:]
 	}
-
 	if paramsStartIndex := strings.IndexByte(route, '?'); paramsStartIndex != -1 {
 		route = route[:paramsStartIndex]
 	}

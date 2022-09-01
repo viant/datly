@@ -1,11 +1,15 @@
-- context based generator enhancement
+- context based generator enhancement AsInts (enhancement)
+- API Keys
 - reduce complexity/execution branches/duplication on selector parameters
-- Simplify/remove lifecycle,  simplify codec
+- Parameter Criteria IN, EXISTS, etc
+  
+    250x5
+
+- WIDTH=250 aND HIEGHT=50
+
+- XML/CSV output
 
 - e2e / generator refactoring
-- AuditLog -> logger with velty template
-- Parameter Criteria IN, EXISTS, etc 
-- XML/CSV output
 - performance profiling/tuning
 - strinigfy golang type in meta/view endpoint
 - cache metric add detail response about each view case time,records, etc...

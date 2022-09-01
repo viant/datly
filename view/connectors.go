@@ -7,7 +7,7 @@ import (
 )
 
 //Connectors represents Connector registry
-//Key was produced based on Connector.Name
+//Value was produced based on Connector.Name
 type Connectors map[string]*Connector
 
 //Register registers connector

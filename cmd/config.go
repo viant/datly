@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/gateway/runtime/standalone/endpoint"
+	"github.com/viant/datly/router"
 	"github.com/viant/datly/view"
 	"github.com/viant/scy"
 	"github.com/viant/scy/auth/jwt/verifier"
@@ -19,6 +20,13 @@ func (s *serverBuilder) loadConfig(ctx context.Context) (cfg *standalone.Config,
 		cfg = &standalone.Config{
 			Config: &gateway.Config{
 				APIPrefix: "/v1/api/",
+				APIKeys: router.APIKeys{
+					{
+						URI:    "/v1/api/dev/secured/",
+						Header: "App-Secret-Id",
+						Value:  "changeme",
+					},
+				},
 			},
 			Endpoint: endpoint.Config{},
 		}

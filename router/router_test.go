@@ -544,7 +544,7 @@ func TestRouter(t *testing.T) {
 			uri:         "/api/events",
 			method:      http.MethodPost,
 			requestBody: `{"Id":0,"Quantity":0}`,
-			expected:    `{"Errors":[{"Param":"RequestBody","Message":"Key: 'Id' Error:Field validation for 'Id' failed on the 'required' tag","Object":[{"Value":0,"Field":"Id","Tag":"required"}]}]}`,
+			expected:    `{"Errors":[{"Param":"RequestBody","Message":"Value: 'Id' Error:Field validation for 'Id' failed on the 'required' tag","Object":[{"Value":0,"Field":"Id","Tag":"required"}]}]}`,
 		},
 		{
 			description: "exclude | remove columns",

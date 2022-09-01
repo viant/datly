@@ -34,6 +34,7 @@ type (
 	Route  struct {
 		Visitor     *codec.Visitor
 		URI         string
+		APIKey      *APIKey
 		Method      string
 		Service     ServiceType
 		View        *view.View

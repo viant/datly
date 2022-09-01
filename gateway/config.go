@@ -8,9 +8,11 @@ import (
 	"github.com/viant/datly/auth/cognito"
 	"github.com/viant/datly/auth/secret"
 	"github.com/viant/datly/gateway/runtime/meta"
+	"github.com/viant/datly/router"
 	"github.com/viant/scy/auth/jwt/verifier"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
+	"sort"
 	"strings"
 )
 
@@ -24,6 +26,7 @@ type Config struct {
 	JWTValidator    *verifier.Config
 	Cognito         *cognito.Config
 	Meta            meta.Config
+	APIKeys         router.APIKeys
 	AutoDiscovery   *bool
 }
 
@@ -69,5 +72,6 @@ func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {
 		return nil, err
 	}
 	cfg.Init()
+	sort.Sort(cfg.APIKeys)
 	return cfg, cfg.Validate()
 }

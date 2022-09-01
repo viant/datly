@@ -75,6 +75,13 @@ func (r *Router) Handle(response http.ResponseWriter, request *http.Request) err
 		return err
 	}
 
+	if apiKey := route.APIKey; apiKey != nil {
+		key := request.Header.Get(apiKey.Header)
+		if key != apiKey.Value {
+			response.WriteHeader(http.StatusUnauthorized)
+			return nil
+		}
+	}
 	return r.handleRoute(response, request, route)
 }
 

@@ -92,6 +92,7 @@ func (r *Service) handle(writer http.ResponseWriter, request *http.Request) erro
 	}
 
 	aRouter, err := r.match(request.Method, routePath)
+
 	if err == nil {
 		err = aRouter.Handle(writer, request)
 		if err != nil {
@@ -168,6 +169,9 @@ func (r *Service) reloadRouterResourcesIfNeeded(ctx context.Context) error {
 	for k := range resourcesSnapshot {
 		item := resourcesSnapshot[k]
 		for _, route := range item.Routes {
+			if route.APIKey == nil {
+				route.APIKey = r.Config.APIKeys.Match(route.URI)
+			}
 			key := r.normalize(route)
 			if _, ok := routers[key]; ok {
 				return fmt.Errorf("duplicate resource APIURI: %v,-> %v", key, item.SourceURL)
@@ -230,6 +234,7 @@ func (r *Service) PreCachables(method, matchingURI string) ([]*view.View, error)
 	if err != nil {
 		return nil, err
 	}
+
 	var result = make([]*view.View, 0)
 	aView := route.View
 	appendCacheWarmupViews(aView, &result)

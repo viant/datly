@@ -6,24 +6,19 @@
       "name": "Vendor 1",
       "accountId": 100,
       "userCreated": 1,
-      "updated": null,
-      "userUpdated": null,
       "products": [
         {
           "id": 1,
           "name": "V1 Product 1",
           "status": 2,
-          "userCreated": 1,
-          "updated": null,
-          "userUpdated": null
+          "userCreated": 1
+
         },
         {
           "id": 2,
           "name": "V1 Product 2",
           "status": 1,
-          "userCreated": 1,
-          "updated": null,
-          "userUpdated": null
+          "userCreated": 1
         }
       ],
       "productsMeta": {
@@ -36,32 +31,24 @@
       "name": "Vendor 2",
       "accountId": 101,
       "userCreated": 2,
-      "updated": null,
-      "userUpdated": null,
       "products": [
         {
           "id": 3,
           "name": "V2 Product 1",
           "status": 1,
-          "userCreated": 2,
-          "updated": null,
-          "userUpdated": null
+          "userCreated": 2
         },
         {
           "id": 4,
           "name": "V2 Product 2",
           "status": 1,
-          "userCreated": 2,
-          "updated": null,
-          "userUpdated": null
+          "userCreated": 2
         },
         {
           "id": 5,
           "name": "V2 Product 3",
           "status": 1,
-          "userCreated": 2,
-          "updated": null,
-          "userUpdated": null
+          "userCreated": 2
         }
       ],
       "productsMeta": {
@@ -74,8 +61,6 @@
       "name": "Vendor 3",
       "accountId": 100,
       "userCreated": 1,
-      "updated": null,
-      "userUpdated": null,
       "products": []
     }
   ],
