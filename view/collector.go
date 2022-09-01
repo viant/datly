@@ -2,6 +2,7 @@ package view
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -356,7 +357,7 @@ func (r *Collector) indexPositions(name string) {
 }
 
 //Relations creates and register new Collector for each Relation present in the Selector.Columns if View allows use Selector.Columns
-func (r *Collector) Relations(selector *Selector) []*Collector {
+func (r *Collector) Relations(selector *Selector) ([]*Collector, error) {
 	result := make([]*Collector, len(r.view.With))
 
 	counter := 0
@@ -375,9 +376,14 @@ func (r *Collector) Relations(selector *Selector) []*Collector {
 		}
 		wg.Add(delta)
 
+		handler, err := r.ViewMetaHandler(r.view.With[i])
+		if err != nil {
+			return nil, err
+		}
+
 		result[counter] = &Collector{
 			parent:          r,
-			viewMetaHandler: r.ViewMetaHandler(r.view.With[i]),
+			viewMetaHandler: handler,
 			dest:            dest,
 			appender:        slice.Appender(xunsafe.AsPointer(dest)),
 			valuePosition:   make(map[string]map[interface{}][]int),
@@ -394,19 +400,28 @@ func (r *Collector) Relations(selector *Selector) []*Collector {
 	}
 
 	r.relations = result[:counter]
-	return result[:counter]
+	return result[:counter], nil
 }
 
-func (r *Collector) ViewMetaHandler(rel *Relation) func(viewMeta interface{}) error {
+func (r *Collector) ViewMetaHandler(rel *Relation) (func(viewMeta interface{}) error, error) {
 	templateMeta := rel.Of.View.Template.Meta
 	if templateMeta == nil {
 		return func(viewMeta interface{}) error {
 			return nil
-		}
+		}, nil
 	}
 
-	metaChildKeyField := xunsafe.FieldByName(templateMeta.Schema.Type(), rel.Of.View.Caser.Format(rel.Of.Field, format.CaseUpperCamel))
+	childMetaFieldName := rel.Of.View.Caser.Format(rel.Of.Field, format.CaseUpperCamel)
+	metaChildKeyField := xunsafe.FieldByName(templateMeta.Schema.Type(), childMetaFieldName)
+	if metaChildKeyField == nil {
+		return nil, fmt.Errorf("not found field %v at %v", childMetaFieldName, templateMeta.Schema.Type().String())
+	}
+
 	metaParentHolderField := xunsafe.FieldByName(r.view.Schema.Type(), templateMeta.Name)
+	if metaParentHolderField == nil {
+		return nil, fmt.Errorf("not found holder field %v at %v", templateMeta.Name, templateMeta.Schema.Type().String())
+	}
+
 	xType := xunsafe.NewType(metaParentHolderField.Type)
 	shouldDeref := xType.Kind() == reflect.Ptr
 	var valuesPosition map[interface{}][]int
@@ -437,7 +452,7 @@ func (r *Collector) ViewMetaHandler(rel *Relation) func(viewMeta interface{}) er
 		}
 
 		return nil
-	}
+	}, nil
 }
 
 //View returns View assigned to the Collector

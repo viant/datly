@@ -84,9 +84,13 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 
 	aView := collector.View()
 	selector := session.Selectors.Lookup(aView)
-	collectorChildren := collector.Relations(selector)
-	wg.Add(len(collectorChildren))
+	collectorChildren, err := collector.Relations(selector)
+	if err != nil {
+		errorCollector.Append(err)
+		return
+	}
 
+	wg.Add(len(collectorChildren))
 	relationGroup := sync.WaitGroup{}
 	if !collector.SupportsParallel() {
 		relationGroup.Add(len(collectorChildren))
