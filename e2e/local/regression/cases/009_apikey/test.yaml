@@ -7,12 +7,12 @@ pipeline:
     action: http/runner:send
     requests:
       - Method: GET
-        URL: http://127.0.0.1:8080/v1/api/dev/dummy/vendors/2
+        URL: http://127.0.0.1:8080/v1/api/dev/secured/vendors/2
         Expect:
-          Code: 400
+          Code: 401
 
       - Method: GET
-        URL: http://127.0.0.1:8080/v1/api/dev/dummy/vendors/2
+        URL: http://127.0.0.1:8080/v1/api/dev/secured/vendors/2
         Header:
           App-Secret-Id: 'changeme'
         Expect:
