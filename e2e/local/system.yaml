@@ -21,11 +21,9 @@ pipeline:
 
       aerospike:
         action: docker:run
-        image: 'aerospike/aerospike-server:3.16.0.6'
+        image: 'aerospike/aerospike-server'
         name: aero
         ports:
           3000: 3000
           3001: 3001
           3002: 3002
-          3003: 3003
-          8081: 8081
