@@ -1,4 +1,4 @@
-## Jul 27 2022 v0.2.12
+## Jul 27 2022 v0.2.14
  * Improved rule generator
 
 ## Jul 27 2022 v0.2.11
