@@ -1,3 +1,6 @@
+## Jul 27 2022 v0.2.12
+ * Improved rule generator
+
 ## Jul 27 2022 v0.2.11
   * Meta Template
   * Meta Template Caching
