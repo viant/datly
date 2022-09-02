@@ -1,11 +1,8 @@
-- context based generator enhancement
-- API Keys
 - reduce complexity/execution branches/duplication on selector parameters
+- API Keys on meta/warmup
 - Parameter Criteria IN, EXISTS, etc
-  
-    250x5
 
-- WIDTH=250 aND HIEGHT=50
+- context based generator enhancement
 
 - XML/CSV output
 
