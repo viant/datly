@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-var resetWords = []string{"AND", "OR", "WITH", "HAVING", "LIMIT", "OFFSET", "WHERE", "SELECT", "UNION", "ALL", "AS", "BETWEEN", "IN"}
+var resetWords = []string{"AND", "OR", "WITH", "HAVING", "LIMIT", "OFFSET", "WHERE", "SELECT", "UNION", "ALL", "AS", "BETWEEN"}
 
 func (i *ParamMetaIterator) initMetaTypes(SQL string) []string {
 	var typer option.Typer
@@ -40,11 +40,11 @@ func (i *ParamMetaIterator) initMetaTypes(SQL string) []string {
 			//Do nothing
 		default:
 			text := matched.Text(cursor)
-			shouldReset := i.isResetKeyword(text)
-			if shouldReset {
-				typer = nil
-				untyped = []string{}
-			}
+			//shouldReset := i.isResetKeyword(text)
+			//if shouldReset {
+			//	typer = nil
+			//	untyped = []string{}
+			//}
 
 			if i.canBeParam(text) {
 				prefix, paramName := GetHolderName(text)
@@ -56,7 +56,7 @@ func (i *ParamMetaIterator) initMetaTypes(SQL string) []string {
 					untyped = append(untyped, paramName)
 				}
 			} else {
-				typer = &option.ColumnType{ColumnName: strings.ToLower(text)}
+				typer = newColumnTyper(text, typer)
 			}
 		}
 
@@ -76,6 +76,22 @@ func (i *ParamMetaIterator) initMetaTypes(SQL string) []string {
 	}
 
 	return untyped
+}
+
+func newColumnTyper(text string, previous option.Typer) option.Typer {
+	if strings.EqualFold(text, OrKeyword) || strings.EqualFold(text, AndKeyword) {
+		return nil
+	}
+
+	if strings.EqualFold(text, InKeyword) {
+		return previous
+	}
+
+	if isSQLKeyword(text) {
+		return nil
+	}
+
+	return &option.ColumnType{ColumnName: strings.ToLower(text)}
 }
 
 func (i *ParamMetaIterator) isResetKeyword(text string) bool {

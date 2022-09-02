@@ -8,6 +8,7 @@ import (
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/ast/stmt"
 	"github.com/viant/velty/parser"
+	"strings"
 )
 
 const (
@@ -18,6 +19,14 @@ const (
 	AppendContext
 	FuncContext
 )
+
+const (
+	InKeyword  = "in"
+	OrKeyword  = "or"
+	AndKeyword = "and"
+)
+
+var sqlKeywords = []string{InKeyword, OrKeyword, AndKeyword, "where", "from", "limit", "offset", "having", "select", "update", "delete", "case", "when", "then", "coalesce"}
 
 type (
 	Context int
@@ -51,6 +60,7 @@ type (
 		IsVariable      bool
 		OccurrenceIndex int
 		MetaType        *ParamMetaType
+		SQLKeyword      string
 	}
 
 	ParamMetaType struct {
@@ -140,16 +150,25 @@ func (i *ParamMetaIterator) Has() bool {
 		return false
 	}
 
-	i.cursor.MatchOne(whitespaceMatcher)
+	var SQLKeyword string
+
 	for i.cursor.Pos < i.cursor.InputSize {
+		i.cursor.MatchOne(whitespaceMatcher)
+
 		beforeMatch := i.cursor.Pos
 		param, pos := i.paramMatcher.TryMatchParam(i.cursor)
 		if pos == -1 {
-			i.cursor.Pos++
+			matchedKeyword, ok := i.matchKeyword()
+			if ok {
+				SQLKeyword = matchedKeyword
+			} else {
+				i.cursor.Pos++
+			}
+
 			continue
 		}
 
-		if method, ok := i.tryBuildParam(param, pos); !ok {
+		if method, ok := i.tryBuildParam(SQLKeyword, param, pos); !ok {
 			i.cursor.Pos = beforeMatch + len(method) + 1
 			continue
 		}
@@ -160,7 +179,7 @@ func (i *ParamMetaIterator) Has() bool {
 	return false
 }
 
-func (i *ParamMetaIterator) tryBuildParam(param string, pos int) (string, bool) {
+func (i *ParamMetaIterator) tryBuildParam(SQLKeyword string, param string, pos int) (string, bool) {
 	index := i.counter
 	i.counter++
 
@@ -172,7 +191,7 @@ func (i *ParamMetaIterator) tryBuildParam(param string, pos int) (string, bool) 
 		return name, false
 	}
 
-	i.buildMetaParam(index, occurrenceIndex, pos, param)
+	i.buildMetaParam(index, occurrenceIndex, pos, param, SQLKeyword)
 	return "", true
 }
 
@@ -195,7 +214,7 @@ func (i *ParamMetaIterator) init() {
 	i.initMetaTypes(i.SQL)
 }
 
-func (i *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, raw string) {
+func (i *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, raw, SQLKeyword string) {
 	context := UnspecifiedContext
 	if len(i.contexts) > 0 {
 		context = i.contexts[index].Context
@@ -218,6 +237,7 @@ func (i *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, raw strin
 		IsVariable:      i.variables[holder],
 		OccurrenceIndex: occurrence,
 		MetaType:        paramMetaType,
+		SQLKeyword:      SQLKeyword,
 	}
 }
 
@@ -237,4 +257,26 @@ func (i *ParamMetaIterator) extractHints() {
 	}
 
 	i.SQL = RemoveParameterHints(i.SQL, hints)
+}
+
+func (i *ParamMetaIterator) matchKeyword() (string, bool) {
+	i.cursor.MatchOne(whitespaceMatcher)
+
+	match := i.cursor.MatchOne(fullWordMatcher)
+	matchedText := match.Text(i.cursor)
+	if isSQLKeyword(matchedText) {
+		return matchedText, true
+	}
+
+	return "", false
+}
+
+func isSQLKeyword(value string) bool {
+	for _, candidate := range sqlKeywords {
+		if strings.EqualFold(candidate, value) {
+			return true
+		}
+	}
+
+	return false
 }

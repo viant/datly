@@ -7,6 +7,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	option "github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -224,16 +225,13 @@ func (s *serverBuilder) buildSQLSource(aView *view.View, table *option.Table) er
 }
 
 func convertMetaParameter(param *option.Parameter) *view.Parameter {
-	var aCodec *view.Codec
-	if param.Codec != "" {
-		aCodec = &view.Codec{Reference: shared.Reference{Ref: param.Codec}}
-	}
+	aCodec, dataType := paramCodec(param)
 
 	return &view.Parameter{
 		Name:  param.Id,
 		Codec: aCodec,
 		Schema: &view.Schema{
-			DataType:    param.DataType,
+			DataType:    dataType,
 			Cardinality: param.Cardinality,
 		},
 		In: &view.Location{
@@ -242,6 +240,40 @@ func convertMetaParameter(param *option.Parameter) *view.Parameter {
 		},
 		Required: param.Required,
 	}
+}
+
+func paramCodec(param *option.Parameter) (*view.Codec, string) {
+	dataTypeLower := strings.ToLower(param.DataType)
+	if registry.CodecKeyAsInts == param.Codec || canInterfereAsIntsCodec(param, dataTypeLower) {
+		return &view.Codec{Reference: shared.Reference{Ref: registry.CodecKeyAsInts}}, "string"
+	}
+
+	if registry.CodecKeyAsStrings == param.Codec || canInterfereAsStringsCodec(param, dataTypeLower) {
+		return &view.Codec{Reference: shared.Reference{Ref: registry.CodecKeyAsStrings}}, "string"
+
+	}
+
+	return nil, param.DataType
+}
+
+func canInterfereAsStringsCodec(param *option.Parameter, dataTypeLower string) bool {
+	if !param.Repeated || param.Codec != "" {
+		return false
+	}
+
+	return strings.HasPrefix(dataTypeLower, "string")
+}
+
+func canInterfereAsIntsCodec(param *option.Parameter, dataTypeLower string) bool {
+	if !param.Repeated || param.Codec != "" {
+		return false
+	}
+
+	if strings.HasPrefix(param.DataType, "interface") {
+		return false
+	}
+
+	return strings.HasPrefix(dataTypeLower, "int")
 }
 
 func (s *serverBuilder) updateViewSource(aView *view.View, table *option.Table) error {

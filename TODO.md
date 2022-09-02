@@ -1,4 +1,4 @@
-- context based generator enhancement AsInts (enhancement)
+- context based generator enhancement
 - API Keys
 - reduce complexity/execution branches/duplication on selector parameters
 - Parameter Criteria IN, EXISTS, etc

@@ -64,6 +64,10 @@ func (d *paramTypeDetector) updateParamIfNeeded(param *option.Parameter, meta *s
 		param.Typer = meta.MetaType.Typer[0]
 	}
 
+	if strings.EqualFold(meta.SQLKeyword, sanitizer.InKeyword) {
+		param.Repeated = true
+	}
+
 	return nil
 }
 

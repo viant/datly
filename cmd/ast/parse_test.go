@@ -68,8 +68,9 @@ func TestParse(t *testing.T) {
 	}
 
 	loader := afs.New()
-	//for _, testcase := range testcases[len(testcases)-1:] {
-	for _, testcase := range testcases {
+	//for _i, testcase := range testcases[len(testcases)-1:] {
+	for i, testcase := range testcases {
+		fmt.Printf("Running testcase %v | %v\n", i, testcase.description)
 		fullURL := path.Join(testLocation, "testdata", testcase.path)
 		inputFile := path.Join(fullURL, "input.txt")
 		inputData, err := loader.DownloadWithURL(context.TODO(), inputFile)
