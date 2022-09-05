@@ -294,7 +294,12 @@ func (s *serverBuilder) updateTemplateSource(template *view.Template, table *opt
 		return nil
 	}
 
-	URI, err := s.uploadSQL(table.Alias, table.ViewMeta.Source)
+	fileName := table.Alias
+	//if fileName == "" {
+	//	fileName = table.Name
+	//}
+
+	URI, err := s.uploadSQL(fileName, table.ViewMeta.Source)
 	if err != nil {
 		return err
 	}

@@ -53,9 +53,9 @@ func ParseType(dataType string) (reflect.Type, error) {
 		return reflect.TypeOf(0), nil
 	case "float", "float64", "numeric", "decimal":
 		return reflect.TypeOf(0.0), nil
-	case "bool", "boolean":
+	case "bool", "boolean", "bit":
 		return reflect.TypeOf(false), nil
-	case "string", "varchar", "char", "text":
+	case "string", "varchar", "char", "text", "longtext", "longblob", "mediumblob", "mediumtext", "blob", "tinytext":
 		return reflect.TypeOf(""), nil
 	case "date", "time", "timestamp", "datetime":
 		return reflect.TypeOf(time.Time{}), nil

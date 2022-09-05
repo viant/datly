@@ -244,7 +244,6 @@ func (s *Service) readMeta(ctx context.Context, aView *view.View, selector *view
 
 		cacheService, err := aView.Cache.Service()
 		if err != nil {
-			cacheErr = err
 			return
 		}
 
