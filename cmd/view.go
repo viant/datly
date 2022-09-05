@@ -388,10 +388,6 @@ func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[stri
 
 		s.mergeParamTypes(v.Table)
 
-		if err := s.updateView(ctx, v.Table, relView); err != nil {
-			continue
-		}
-
 		s.route.Resource.AddViews(relView)
 		s.route.Resource.AddParameters(v.Param)
 		if v.Table.Parameter != nil {
