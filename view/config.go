@@ -3,9 +3,17 @@ package view
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/view/selector"
 	"reflect"
 	"strings"
+)
+
+const (
+	FieldsQuery   = "_fields"
+	OffsetQuery   = "_offset"
+	LimitQuery    = "_limit"
+	CriteriaQuery = "_criteria"
+	OrderByQuery  = "_orderby"
+	PageQuery     = "_page"
 )
 
 var intType = reflect.TypeOf(0)
@@ -26,6 +34,13 @@ type (
 		FieldsParam   *Parameter         `json:",omitempty"`
 		OrderByParam  *Parameter         `json:",omitempty"`
 		CriteriaParam *Parameter         `json:",omitempty"`
+
+		limitDefault    *bool
+		offsetDefault   *bool
+		pageDefault     *bool
+		fieldsDefault   *bool
+		criteriaDefault *bool
+		orderByDefault  *bool
 	}
 
 	SelectorParameter struct {
@@ -48,17 +63,17 @@ func (c *Config) ParameterName(ns, paramName string) string {
 		paramName = paramName[len(ns):]
 	}
 	switch strings.ToLower(paramName) {
-	case selector.Fields:
+	case FieldsQuery:
 		result = c.Parameters.Fields
-	case selector.Offset:
+	case OffsetQuery:
 		result = c.Parameters.Offset
-	case selector.OrderBy:
+	case OrderByQuery:
 		result = c.Parameters.OrderBy
-	case selector.Limit:
+	case LimitQuery:
 		result = c.Parameters.Limit
-	case selector.Criteria:
+	case CriteriaQuery:
 		result = c.Parameters.Criteria
-	case selector.Page:
+	case PageQuery:
 		result = c.Parameters.Page
 	}
 	if result == "" {
@@ -72,32 +87,64 @@ func (c *Config) Init(ctx context.Context, resource *Resource, parent *View) err
 		return err
 	}
 
-	if params := c.Parameters; params != nil {
-
-		if name := params.Limit; name != "" {
-			c.LimitParam = &Parameter{Name: name, In: NewQueryLocation(name), Schema: NewSchema(selector.ParamType(selector.Limit)), Description: selector.Description(selector.Limit, parent.Name)}
-		}
-		if name := params.Offset; name != "" {
-			c.OffsetParam = &Parameter{Name: name, In: NewQueryLocation(name), Schema: NewSchema(selector.ParamType(selector.Offset)), Description: selector.Description(selector.Offset, parent.Name)}
-		}
-		if name := params.Page; name != "" {
-			c.PageParam = &Parameter{Name: name, In: NewQueryLocation(name), Schema: NewSchema(selector.ParamType(selector.Page)), Description: selector.Description(selector.Page, parent.Name)}
-		}
-		if name := params.Fields; name != "" {
-			c.FieldsParam = &Parameter{Name: name, In: NewQueryLocation(name), Schema: NewSchema(selector.ParamType(selector.Fields)), Description: selector.Description(selector.Fields, parent.Name)}
-		}
-		if name := params.Criteria; name != "" {
-			c.CriteriaParam = &Parameter{Name: name, In: NewQueryLocation(name), Schema: NewSchema(selector.ParamType(selector.Criteria)), Description: selector.Description(selector.Criteria, parent.Name)}
-		}
-		if name := params.OrderBy; name != "" {
-			c.OrderByParam = &Parameter{Name: name, In: NewQueryLocation(name), Schema: NewSchema(selector.ParamType(selector.OrderBy)), Description: selector.Description(selector.OrderBy, parent.Name)}
-		}
+	parameters := c.Parameters
+	if parameters == nil {
+		parameters = &SelectorParameter{}
 	}
+
+	if name := parameters.Limit; (name != "" || c.Constraints.Limit) && derefBool(c.limitDefault, c.LimitParam == nil) {
+		c.limitDefault = boolPtr(name == "")
+		c.LimitParam = c.newSelectorParam(name, LimitQuery, parent)
+	}
+
+	if name := parameters.Offset; (name != "" || c.Constraints.Offset) && derefBool(c.offsetDefault, c.OffsetParam == nil) {
+		c.offsetDefault = boolPtr(name == "")
+		c.OffsetParam = c.newSelectorParam(name, OffsetQuery, parent)
+	}
+
+	if name := parameters.Page; (name != "" || c.Constraints.IsPageEnabled()) && derefBool(c.pageDefault, c.PageParam == nil) {
+		c.pageDefault = boolPtr(name == "")
+		c.PageParam = c.newSelectorParam(name, PageQuery, parent)
+	}
+
+	if name := parameters.Fields; (name != "" || c.Constraints.Projection) && derefBool(c.fieldsDefault, c.FieldsParam == nil) {
+		c.fieldsDefault = boolPtr(name == "")
+		c.FieldsParam = c.newSelectorParam(name, FieldsQuery, parent)
+	}
+
+	if name := parameters.Criteria; (name != "" || c.Constraints.Criteria) && derefBool(c.criteriaDefault, c.CriteriaParam == nil) {
+		c.criteriaDefault = boolPtr(name == "")
+		c.CriteriaParam = c.newSelectorParam(name, CriteriaQuery, parent)
+	}
+
+	if name := parameters.OrderBy; (name != "" || c.Constraints.OrderBy) && derefBool(c.orderByDefault, c.OrderByParam == nil) {
+		c.orderByDefault = boolPtr(name == "")
+		c.OrderByParam = c.newSelectorParam(name, OrderByQuery, parent)
+	}
+
 	if err := c.initCustomParams(ctx, resource, parent); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (c *Config) newSelectorParam(name, paramKind string, parent *View) *Parameter {
+	return &Parameter{
+		Name:        NotEmptyOf(name, paramKind),
+		In:          NewQueryLocation(NotEmptyOf(name, c.Namespace+paramKind)),
+		Schema:      NewSchema(ParamType(paramKind)),
+		Description: Description(paramKind, parent.Name),
+	}
+}
+
+func (c *Config) Clone() *Config {
+	if c == nil {
+		return nil
+	}
+
+	result := *c
+	return &result
 }
 
 func (c *Config) ensureConstraints(resource *Resource) error {
@@ -129,6 +176,10 @@ func (c *Config) initCustomParams(ctx context.Context, resource *Resource, paren
 		return err
 	}
 
+	if err := c.initParamIfNeeded(ctx, c.PageParam, resource, intType, parent); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -146,4 +197,51 @@ func (c *Config) initParamIfNeeded(ctx context.Context, param *Parameter, resour
 	}
 
 	return nil
+}
+
+func (c *Config) CloneWithNs(ctx context.Context, resource *Resource, owner *View, ns string) (*Config, error) {
+	shallowCopy := *c
+	shallowCopy.Namespace = ns
+	copyRef := &shallowCopy
+	return copyRef, copyRef.Init(ctx, resource, owner)
+}
+
+func ParamType(name string) reflect.Type {
+	switch name {
+	case LimitQuery, OffsetQuery, PageQuery:
+		return intType
+	default:
+		return stringType
+	}
+}
+
+func Description(paramName, viewName string) string {
+	switch paramName {
+	case LimitQuery:
+		return fmt.Sprintf("allows to limit %v view data returned from db", viewName)
+	case OffsetQuery:
+		return fmt.Sprintf("allows to skip first n  view %v records, it has to be used alongside the limit", viewName)
+	case CriteriaQuery:
+		return fmt.Sprintf("allows to filter view %v data that matches given criteria", viewName)
+	case FieldsQuery:
+		return fmt.Sprintf("allows to control view %v fields present in response", viewName)
+	case OrderByQuery:
+		return fmt.Sprintf("allows to sort view %v results", viewName)
+	case PageQuery:
+		return fmt.Sprintf("allows to skip first page * limit values, starting from 1 page. Has precedence over offset")
+	}
+
+	return ""
+}
+
+func boolPtr(value bool) *bool {
+	return &value
+}
+
+func derefBool(value *bool, onNil bool) bool {
+	if value == nil {
+		return onNil
+	}
+
+	return *value
 }

@@ -1,22 +1,19 @@
----
 openapi: 3.1.0
-components: {}
 info:
-  title: ''
-  version: ''
+  title: ""
+  version: ""
 paths:
-  "/api/events":
+  /api/events:
     get:
       parameters:
         - name: _fields
           in: query
           description: allows to control view events fields present in response
-          style: form
-          explode: false
           schema:
             type: string
+            description: Parameter _fields schema
       responses:
-        '200':
+        "200":
           description: Success response
           content:
             application/json:
@@ -40,8 +37,7 @@ paths:
                     format: int64
                 description: Success object schema
         Default:
-          description: Error response. The view and param may be empty, but one of
-            the message or object should be specified
+          description: Error response. The view and param may be empty, but one of the message or object should be specified
           content:
             application/json:
               schema:

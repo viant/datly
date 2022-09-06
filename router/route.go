@@ -95,7 +95,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		r.View.Name = r.View.Ref
 	}
 
-	if err := r.View.Init(ctx, resource.Resource); err != nil {
+	if err := r.initView(ctx, resource); err != nil {
 		return err
 	}
 
@@ -142,6 +142,47 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	r.indexExcluded()
 
 	return nil
+}
+
+func (r *Route) initView(ctx context.Context, resource *Resource) error {
+	if err := r.View.Init(ctx, resource.Resource); err != nil {
+		return err
+	}
+
+	return updateViewConfig(ctx, resource.Resource, reverse(r.Namespace), r.View)
+}
+
+func updateViewConfig(ctx context.Context, resource *view.Resource, nameToNs map[string]string, aView *view.View) error {
+	var err error
+
+	viewNs, ok := nameToNs[aView.Name]
+	if ok {
+		aViewCopy := *aView
+		aViewCopy.Selector, err = aViewCopy.Selector.CloneWithNs(ctx, resource, &aViewCopy, viewNs)
+		if err != nil {
+			return err
+		}
+
+		*aView = aViewCopy
+	}
+
+	for _, relation := range aView.With {
+		if err = updateViewConfig(ctx, resource, nameToNs, &relation.Of.View); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func reverse(namespace map[string]string) map[string]string {
+	result := map[string]string{}
+
+	for key, value := range namespace {
+		result[value] = key
+	}
+
+	return result
 }
 
 func (r *Route) initVisitor(resource *Resource) error {

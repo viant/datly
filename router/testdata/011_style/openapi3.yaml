@@ -9,10 +9,9 @@ paths:
                 - name: _fields
                   in: query
                   description: allows to control view events fields present in response
-                  style: form
-                  explode: false
                   schema:
-                    type: string
+                      type: string
+                      description: Parameter _fields schema
             responses:
                 "200":
                     description: Success response
@@ -28,6 +27,26 @@ paths:
                                             - type: array
                                             - type: number
                                             - type: boolean
+                                    Result:
+                                        type: array
+                                        items:
+                                            type: object
+                                            properties:
+                                                EventTypeId:
+                                                    type: integer
+                                                    format: int64
+                                                Id:
+                                                    type: integer
+                                                    format: int64
+                                                Quantity:
+                                                    type: number
+                                                    format: double
+                                                Timestamp:
+                                                    type: string
+                                                    format: 2006-01-02T15:04:05Z07:00
+                                                UserId:
+                                                    type: integer
+                                                    format: int64
                                     Status:
                                         type: string
                                 description: Success object schema

@@ -98,6 +98,7 @@ type (
 		Filterable  []string
 		SQLMethods  []*Method `json:",omitempty"`
 		_sqlMethods map[string]*Method
+		Page        *bool
 	}
 
 	Batch struct {
@@ -140,6 +141,10 @@ func (c *Constraints) init(resource *Resource) error {
 	return nil
 }
 
+func (c *Constraints) IsPageEnabled() bool {
+	return (c.Limit || c.Offset) || (c.Page != nil && !*c.Page)
+}
+
 func (c *Constraints) SqlMethodsIndexed() map[string]*Method {
 	return c._sqlMethods
 }
@@ -156,6 +161,7 @@ func (v *View) Init(ctx context.Context, resource *Resource, options ...interfac
 	if v.initialized {
 		return nil
 	}
+	v.initialized = true
 
 	var transforms marshal.Transforms
 	for _, anOption := range options {
@@ -164,8 +170,6 @@ func (v *View) Init(ctx context.Context, resource *Resource, options ...interfac
 			transforms = actual
 		}
 	}
-
-	v.initialized = true
 
 	nameTaken := map[string]bool{
 		v.Name: true,
@@ -621,7 +625,7 @@ func (v *View) inherit(view *View) error {
 	}
 
 	if v.Selector == nil && view.Selector != nil {
-		v.Selector = view.Selector
+		v.Selector = view.Selector.Clone()
 	}
 
 	if v.Logger == nil {

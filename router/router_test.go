@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/afs"
 	"github.com/viant/afs/option/content"
-	"github.com/viant/assertly"
 	"github.com/viant/datly/codec"
 	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/internal/tests"
@@ -183,21 +182,21 @@ func TestRouter(t *testing.T) {
 		{
 			description: "selectors | fields, offset, limit",
 			resourceURI: "002_selectors",
-			uri:         fmt.Sprintf("/api/events?ev%v=Id,Quantity&ev%v=1&%v=2", router.Fields, router.Offset, router.Limit),
+			uri:         fmt.Sprintf("/api/events?ev%v=Id,Quantity&ev%v=1&ev%v=2", view.FieldsQuery, view.OffsetQuery, view.LimitQuery),
 			expected:    `[{"Id":10,"Quantity":21.957962334156036},{"Id":100,"Quantity":5.084940046072006}]`,
 			method:      http.MethodGet,
 		},
 		{
 			description: "selectors | orderBy, offset, limit",
 			resourceURI: "002_selectors",
-			uri:         fmt.Sprintf("/api/events?ev%v=Quantity&ev%v=1&ev%v=3", router.OrderBy, router.Offset, router.Limit),
+			uri:         fmt.Sprintf("/api/events?ev%v=Quantity&ev%v=1&ev%v=3", view.OrderByQuery, view.OffsetQuery, view.LimitQuery),
 			expected:    `[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}]`,
 			method:      http.MethodGet,
 		},
 		{
 			description: "selectors | orderBy, criteria",
 			resourceURI: "002_selectors",
-			uri:         fmt.Sprintf("/api/events?%v=Id&ev%v=(ID%%20in%%20(1,100))", router.OrderBy, router.Criteria),
+			uri:         fmt.Sprintf("/api/events?%v=Id&ev%v=(ID%%20in%%20(1,100))", view.OrderByQuery, view.CriteriaQuery),
 			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			method:      http.MethodGet,
 		},
@@ -405,7 +404,7 @@ func TestRouter(t *testing.T) {
 		{
 			description: "relations | with specified fields",
 			resourceURI: "010_relations",
-			uri:         fmt.Sprintf("/api/events?ev%v=Id,Quantity,EventType&typ%v=Id,Code&ev%v=1&%v=2", router.Fields, router.Fields, router.Offset, router.Limit),
+			uri:         fmt.Sprintf("/api/events?ev%v=Id,Quantity,EventType&typ%v=Id,Code&ev%v=1&ev%v=2", view.FieldsQuery, view.FieldsQuery, view.OffsetQuery, view.LimitQuery),
 			method:      http.MethodGet,
 			expected:    `[{"Id":10,"Quantity":21.957962334156036,"EventType":{"Id":11,"Code":"code - 11"}},{"Id":100,"Quantity":5.084940046072006,"EventType":{"Id":111,"Code":"code - 111"}}]`,
 		},
@@ -413,14 +412,14 @@ func TestRouter(t *testing.T) {
 			description: "relations | with specified fields, without relation Id",
 			resourceURI: "010_relations",
 			expected:    `[{"Id":10,"Quantity":21.957962334156036,"EventType":{"Code":"code - 11"}},{"Id":100,"Quantity":5.084940046072006,"EventType":{"Code":"code - 111"}}]`,
-			uri:         fmt.Sprintf("/api/events?ev%v=Id,Quantity,EventType&typ%v=Code&ev%v=1&%v=2", router.Fields, router.Fields, router.Offset, router.Limit),
+			uri:         fmt.Sprintf("/api/events?ev%v=Id,Quantity,EventType&typ%v=Code&ev%v=1&ev%v=2", view.FieldsQuery, view.FieldsQuery, view.OffsetQuery, view.LimitQuery),
 			method:      http.MethodGet,
 		},
 		{
 			description: "relations | with specified fields, without relation",
 			resourceURI: "010_relations",
 			expected:    `[{"Id":10,"Quantity":21.957962334156036},{"Id":100,"Quantity":5.084940046072006}]`,
-			uri:         fmt.Sprintf("/api/events?ev%v=Id,Quantity&ev%v=1&%v=2", router.Fields, router.Offset, router.Limit),
+			uri:         fmt.Sprintf("/api/events?ev%v=Id,Quantity&ev%v=1&ev%v=2", view.FieldsQuery, view.OffsetQuery, view.LimitQuery),
 			method:      http.MethodGet,
 		},
 		{
@@ -464,23 +463,23 @@ func TestRouter(t *testing.T) {
 		{
 			description:   "cache | fields, offset, limit",
 			resourceURI:   "014_cache",
-			uri:           fmt.Sprintf("/api/events?ev%v=Id,Quantity&ev%v=1&%v=2", router.Fields, router.Offset, router.Limit),
+			uri:           fmt.Sprintf("/api/events?ev%v=Id,Quantity&ev%v=1&ev%v=2", view.FieldsQuery, view.OffsetQuery, view.LimitQuery),
 			expected:      `[{"Id":10,"Quantity":21.957962334156036},{"Id":100,"Quantity":5.084940046072006}]`,
 			method:        http.MethodGet,
 			extraRequests: 1,
 		},
 		{
-			description: "relations | with specified fields, without relation Id",
+			description: "relations many | with specified fields, without relation Id",
 			resourceURI: "015_relations_many",
 			expected:    `[{"Id":1,"Events":[]},{"Id":2,"Events":[{"UserId":1},{"UserId":10}]},{"Id":11,"Events":[{"UserId":2}]},{"Id":111,"Events":[{"UserId":3}]}]`,
-			uri:         "/api/event-types?_fields=Events,Id&ev_fields=UserId",
+			uri:         "/api/event-types?typ_fields=Events,Id&ev_fields=UserId",
 			method:      http.MethodGet,
 		},
 		{
 			description: "case format | with specified fields",
 			resourceURI: "016_case_format",
 			expected:    `[{"id":1,"events":[]},{"id":2,"events":[{"userId":1},{"userId":10}]},{"id":11,"events":[{"userId":2}]},{"id":111,"events":[{"userId":3}]}]`,
-			uri:         "/api/event-types?_fields=events,id&ev_fields=userId",
+			uri:         "/api/event-types?typ_fields=events,id&ev_fields=userId",
 			method:      http.MethodGet,
 		},
 		{
@@ -488,7 +487,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "016_case_format",
 			expected:    `[{"id":1,"events":[]},{"id":2,"events":[{"id":123,"timestamp":"2019-04-10T05:15:33Z","quantity":5,"userId":10}]},{"id":11,"events":[{"id":10,"timestamp":"2019-03-15T12:07:33Z","quantity":21.957962334156036,"userId":2}]},{"id":111,"events":[{"id":100,"timestamp":"2019-04-10T05:15:33Z","quantity":5.084940046072006,"userId":3}]}]`,
 			//(userId in (10,2,3))
-			uri:    "/api/event-types?_fields=events,id&ev_criteria=%28userId%20in%20%2810%2C2%2C3%29%29",
+			uri:    "/api/event-types?typ_fields=events,id&ev_criteria=%28userId%20in%20%2810%2C2%2C3%29%29",
 			method: http.MethodGet,
 		},
 		{
@@ -804,7 +803,7 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 
 func (c *testcase) checkGeneratedOpenAPI(t *testing.T, resource *router.Resource, resourceURI string, fs afs.Service) bool {
 	openAPIURI := path.Join(resourceURI, "openapi3.yaml")
-	actualOpenApi, err := loadOpenApi(context.TODO(), openAPIURI, fs)
+	expectedOpenapi, err := loadOpenApi(context.TODO(), openAPIURI, fs)
 	if err != nil {
 		fmt.Printf("Skiping openapi3 check for testcase: %v\n", c.description)
 		return true
@@ -815,14 +814,43 @@ func (c *testcase) checkGeneratedOpenAPI(t *testing.T, resource *router.Resource
 		return false
 	}
 
-	if !assertly.AssertValues(t, actualOpenApi, generated, c.description) {
-		toolbox.Dump(actualOpenApi)
-		actBytes, _ := yaml.Marshal(actualOpenApi)
-		toolbox.Dump(string(actBytes))
-		actBytes, _ = yaml.Marshal(generated)
+	aMap, err := asMap(generated)
+	if !assert.Nil(t, err, c.description) {
+		return false
+	}
+
+	if !assert.EqualValues(t, expectedOpenapi, aMap, c.description) {
+		toolbox.Dump(expectedOpenapi)
+		expectedBytes, _ := asOpenapiBytes(expectedOpenapi)
+		toolbox.Dump(string(expectedBytes))
+		actBytes, _ := yaml.Marshal(generated)
 		toolbox.Dump(string(actBytes))
 	}
 	return true
+}
+
+func asOpenapiBytes(openapi map[string]interface{}) ([]byte, error) {
+	marshal, err := yaml.Marshal(openapi)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &openapi3.OpenAPI{}
+	if err = yaml.Unmarshal(marshal, result); err != nil {
+		return nil, err
+	}
+
+	return yaml.Marshal(result)
+}
+
+func asMap(generated *openapi3.OpenAPI) (map[string]interface{}, error) {
+	marshal, err := yaml.Marshal(generated)
+	if err != nil {
+		return nil, err
+	}
+
+	aMap := map[string]interface{}{}
+	return aMap, yaml.Unmarshal(marshal, &aMap)
 }
 
 func (c *testcase) readOpenAPI(resource *router.Resource) (*openapi3.OpenAPI, error) {
@@ -904,23 +932,16 @@ func encodeToken(token string) string {
 	return base64.StdEncoding.EncodeToString([]byte(token))
 }
 
-func loadOpenApi(ctx context.Context, URL string, fs afs.Service) (*openapi3.OpenAPI, error) {
+func loadOpenApi(ctx context.Context, URL string, fs afs.Service) (map[string]interface{}, error) {
 	data, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, err
 	}
-	transient := map[string]interface{}{}
-	if err := yaml.Unmarshal(data, &transient); err != nil {
+
+	result := map[string]interface{}{}
+	if err := yaml.Unmarshal(data, &result); err != nil {
 		return nil, err
 	}
-	aMap := map[string]interface{}{}
-	if err := yaml.Unmarshal(data, &aMap); err != nil {
-		return nil, err
-	}
-	openApi := &openapi3.OpenAPI{}
-	err = toolbox.DefaultConverter.AssignConverted(openApi, aMap)
-	if err != nil {
-		return nil, err
-	}
-	return openApi, err
+
+	return result, nil
 }

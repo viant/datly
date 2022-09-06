@@ -43,8 +43,54 @@ Selector:
     Limit: true
     Offset: true
     OrderBy: false
+    Page: null
     Projection: true
+  CriteriaParam:
+    Description: allows to filter view events data that matches given criteria
+    In:
+      Kind: query
+      Name: _criteria
+    Name: _criteria
+    PresenceName: _criteria
+    Schema:
+      Cardinality: One
+  FieldsParam:
+    Description: allows to control view events fields present in response
+    In:
+      Kind: query
+      Name: _fields
+    Name: _fields
+    PresenceName: _fields
+    Schema:
+      Cardinality: One
   Limit: 25
+  LimitParam:
+    Description: allows to limit events view data returned from db
+    In:
+      Kind: query
+      Name: _limit
+    Name: _limit
+    PresenceName: _limit
+    Schema:
+      Cardinality: One
+  OffsetParam:
+    Description: allows to skip first n  view events records, it has to be used alongside the limit
+    In:
+      Kind: query
+      Name: _offset
+    Name: _offset
+    PresenceName: _offset
+    Schema:
+      Cardinality: One
+  PageParam:
+    Description: allows to skip first page * limit values, starting from 1 page. Has precedence over offset
+    In:
+      Kind: query
+      Name: _page
+    Name: _page
+    PresenceName: _page
+    Schema:
+      Cardinality: One
 Standalone: true
 Table: events
 Template:
@@ -116,8 +162,10 @@ With:
           Limit: false
           Offset: false
           OrderBy: false
+          Page: null
           Projection: false
         Limit: 40
+        Namespace: ev
       Table: event_types
       Template:
         PresenceSchema:

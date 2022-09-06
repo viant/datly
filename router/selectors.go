@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"unsafe"
@@ -133,43 +132,83 @@ func CreateSelectors(ctx context.Context, dateFormat string, inputFormat format.
 }
 
 func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.Selector, details *ViewDetails) (string, error) {
-	for i, ns := range details.Prefixes {
-		if i == 0 || details.View.Selector.FieldsParam == nil {
-			if err := b.populateFields(ctx, selector, details, ns); err != nil {
-				return string(Fields), err
-			}
+	if details.View.Selector.FieldsParam != nil {
+		if err := b.populateFields(ctx, selector, details); err != nil {
+			return view.FieldsQuery, err
 		}
+	} else {
+		if b.isParamPresent(details, view.FieldsQuery) {
+			return view.FieldsQuery, fmt.Errorf("can't use fields on view %v", details.View.Name)
+		}
+	}
 
-		if i == 0 || details.View.Selector.LimitParam == nil {
-			if err := b.populateLimit(ctx, selector, details, ns); err != nil {
-				return string(Limit), err
-			}
+	if details.View.Selector.LimitParam != nil {
+		if err := b.populateLimit(ctx, selector, details); err != nil {
+			return view.LimitQuery, err
 		}
+	} else {
+		if b.isParamPresent(details, view.LimitQuery) {
+			return view.LimitQuery, fmt.Errorf("can't use limit on view %v", details.View.Name)
+		}
+	}
 
-		if i == 0 || details.View.Selector.OffsetParam == nil {
-			if err := b.populateOffset(ctx, selector, details, ns); err != nil {
-				return string(Offset), err
-			}
+	if details.View.Selector.OffsetParam != nil {
+		if err := b.populateOffset(ctx, selector, details); err != nil {
+			return view.OffsetQuery, err
 		}
+	} else {
+		if b.isParamPresent(details, view.LimitQuery) {
+			return view.OffsetQuery, fmt.Errorf("can't use offset on view %v", details.View.Name)
+		}
+	}
 
-		if i == 0 || details.View.Selector.OrderByParam == nil {
-			if err := b.populateOrderBy(ctx, selector, details, ns); err != nil {
-				return string(OrderBy), err
-			}
+	if details.View.Selector.OrderByParam != nil {
+		if err := b.populateOrderBy(ctx, selector, details); err != nil {
+			return view.OrderByQuery, err
 		}
+	} else {
+		if b.isParamPresent(details, view.LimitQuery) {
+			return view.OrderByQuery, fmt.Errorf("can't use order by on view %v", details.View.Name)
+		}
+	}
 
-		if i == 0 || details.View.Selector.CriteriaParam == nil {
-			if err := b.populateCriteria(ctx, selector, details, ns); err != nil {
-				return string(Criteria), err
-			}
+	if details.View.Selector.CriteriaParam != nil {
+		if err := b.populateCriteria(ctx, selector, details); err != nil {
+			return view.CriteriaQuery, err
 		}
+	} else {
+		if b.isParamPresent(details, view.CriteriaQuery) {
+			return view.CriteriaQuery, fmt.Errorf("can't use criteria on view %v", details.View.Name)
+		}
+	}
+
+	if details.View.Selector.PageParam != nil {
+		if err := b.populatePage(ctx, selector, details); err != nil {
+			return view.PageQuery, err
+		}
+	} else {
+		if b.isParamPresent(details, view.PageQuery) {
+			return view.PageQuery, fmt.Errorf("can't use page on view %v", details.View.Name)
+		}
+	}
+
+	if selector.Limit == 0 && selector.Offset != 0 {
+		return "", fmt.Errorf("can't use offset without limit")
 	}
 
 	return "", nil
 }
 
-func (b *selectorsBuilder) populateCriteria(ctx context.Context, selector *view.Selector, details *ViewDetails, ns string) error {
-	criteriaExpression, err := b.criteriaValue(ctx, details, ns, selector)
+func (b *selectorsBuilder) isParamPresent(details *ViewDetails, defaultParamName string) bool {
+	if len(details.Prefixes) == 0 {
+		return false
+	}
+
+	return b.params.queryParam(details.Prefixes[0]+defaultParamName, "") != ""
+}
+
+func (b *selectorsBuilder) populateCriteria(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+	criteriaExpression, err := b.criteriaValue(ctx, details, selector)
 	if err != nil || criteriaExpression == "" {
 		return err
 	}
@@ -188,12 +227,8 @@ func (b *selectorsBuilder) populateCriteria(ctx context.Context, selector *view.
 	return nil
 }
 
-func (b *selectorsBuilder) criteriaValue(ctx context.Context, details *ViewDetails, ns string, selector *view.Selector) (string, error) {
+func (b *selectorsBuilder) criteriaValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, error) {
 	param := details.View.Selector.CriteriaParam
-	if param == nil {
-		return b.params.queryParam(ns+string(Criteria), ""), nil
-	}
-
 	paramValue, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil || paramValue == nil {
 		return "", err
@@ -206,8 +241,8 @@ func (b *selectorsBuilder) criteriaValue(ctx context.Context, details *ViewDetai
 	return "", typeMismatchError(param, paramValue)
 }
 
-func (b *selectorsBuilder) populateLimit(ctx context.Context, selector *view.Selector, details *ViewDetails, ns string) error {
-	limit, err := b.limitValue(ctx, details, ns, selector)
+func (b *selectorsBuilder) populateLimit(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+	limit, err := b.limitValue(ctx, details, selector)
 	if err != nil || limit == 0 {
 		return err
 	}
@@ -223,12 +258,8 @@ func (b *selectorsBuilder) populateLimit(ctx context.Context, selector *view.Sel
 	return nil
 }
 
-func (b *selectorsBuilder) limitValue(ctx context.Context, details *ViewDetails, ns string, selector *view.Selector) (int, error) {
+func (b *selectorsBuilder) limitValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (int, error) {
 	param := details.View.Selector.LimitParam
-	if param == nil {
-		return parseInt(b.params.queryParam(ns+string(Limit), ""))
-	}
-
 	paramValue, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil {
 		return 0, err
@@ -237,15 +268,8 @@ func (b *selectorsBuilder) limitValue(ctx context.Context, details *ViewDetails,
 	return asInt(paramValue, param)
 }
 
-func parseInt(queryParam string) (int, error) {
-	if queryParam == "" {
-		return 0, nil
-	}
-	return strconv.Atoi(queryParam)
-}
-
-func (b *selectorsBuilder) populateOrderBy(ctx context.Context, selector *view.Selector, details *ViewDetails, ns string) error {
-	orderBy, err := b.orderByValue(ctx, details, ns, selector)
+func (b *selectorsBuilder) populateOrderBy(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+	orderBy, err := b.orderByValue(ctx, details, selector)
 	if err != nil {
 		return err
 	}
@@ -267,12 +291,8 @@ func (b *selectorsBuilder) populateOrderBy(ctx context.Context, selector *view.S
 	return nil
 }
 
-func (b *selectorsBuilder) orderByValue(ctx context.Context, details *ViewDetails, ns string, selector *view.Selector) (string, error) {
+func (b *selectorsBuilder) orderByValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, error) {
 	param := details.View.Selector.OrderByParam
-	if param == nil {
-		return b.params.queryParam(ns+string(OrderBy), ""), nil
-	}
-
 	value, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil {
 		return "", err
@@ -284,8 +304,8 @@ func (b *selectorsBuilder) orderByValue(ctx context.Context, details *ViewDetail
 	return "", typeMismatchError(param, value)
 }
 
-func (b *selectorsBuilder) populateOffset(ctx context.Context, selector *view.Selector, details *ViewDetails, ns string) error {
-	offset, err := b.offsetValue(ctx, details, ns, selector)
+func (b *selectorsBuilder) populateOffset(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+	offset, err := b.offsetValue(ctx, details, selector)
 	if err != nil || offset == 0 {
 		return err
 	}
@@ -298,17 +318,8 @@ func (b *selectorsBuilder) populateOffset(ctx context.Context, selector *view.Se
 	return nil
 }
 
-func (b *selectorsBuilder) offsetValue(ctx context.Context, details *ViewDetails, ns string, selector *view.Selector) (int, error) {
+func (b *selectorsBuilder) offsetValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (int, error) {
 	param := details.View.Selector.OffsetParam
-	if param == nil {
-		pageValue := b.params.queryParam(ns+string(Page), "")
-		if pageValue != "" {
-			return b.pageOffset(pageValue, selector, details.View)
-		}
-
-		return parseInt(b.params.queryParam(ns+string(Offset), ""))
-	}
-
 	value, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil {
 		return 0, err
@@ -325,8 +336,8 @@ func asInt(value interface{}, param *view.Parameter) (int, error) {
 	return 0, typeMismatchError(param, value)
 }
 
-func (b *selectorsBuilder) populateFields(ctx context.Context, selector *view.Selector, details *ViewDetails, ns string) error {
-	fieldValue, separator, err := b.fieldRawValue(ctx, details, ns, selector)
+func (b *selectorsBuilder) populateFields(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+	fieldValue, separator, err := b.fieldRawValue(ctx, details, selector)
 	if err != nil {
 		return err
 	}
@@ -346,12 +357,8 @@ func (b *selectorsBuilder) populateFields(ctx context.Context, selector *view.Se
 	return nil
 }
 
-func (b *selectorsBuilder) fieldRawValue(ctx context.Context, details *ViewDetails, ns string, selector *view.Selector) (string, int32, error) {
+func (b *selectorsBuilder) fieldRawValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, int32, error) {
 	param := details.View.Selector.FieldsParam
-	if param == nil {
-		return b.params.queryParam(ns+string(Fields), ""), ValuesSeparator, nil
-	}
-
 	paramValue, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil {
 		return "", ValuesSeparator, err
@@ -596,26 +603,6 @@ func (b *selectorsBuilder) buildFields(aView *view.View, selector *view.Selector
 	return nil
 }
 
-func (b *selectorsBuilder) pageOffset(pageValue string, selector *view.Selector, aView *view.View) (int, error) {
-	page, err := strconv.Atoi(pageValue)
-	if err != nil {
-		return 0, err
-	}
-
-	limit := aView.Selector.Limit
-	selector.Page = page
-
-	if selector.Limit != 0 {
-		limit = selector.Limit
-	}
-
-	if page <= 0 {
-		return 0, fmt.Errorf("page can't be lower than 1")
-	}
-
-	return (page - 1) * limit, nil
-}
-
 func (b *selectorsBuilder) paramViewValue(param *view.Parameter, value reflect.Value, multi bool, paramLen int, aSlice *xunsafe.Slice, ptr unsafe.Pointer) (interface{}, error) {
 	if multi {
 		return value.Elem().Interface(), nil
@@ -658,6 +645,29 @@ func (b *selectorsBuilder) extractBody(path string) (string, bool) {
 	}
 
 	return string(marshal), true
+}
+
+func (b *selectorsBuilder) populatePage(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+	pageParam := details.View.Selector.PageParam
+	value, err := b.extractParamValue(ctx, pageParam, details, selector)
+	if err != nil {
+		return err
+	}
+
+	page, err := asInt(value, pageParam)
+	if err != nil || page == 0 {
+		return err
+	}
+
+	actualLimit := selector.Limit
+	if actualLimit == 0 {
+		actualLimit = details.View.Selector.Limit
+	}
+
+	selector.Offset = actualLimit * (page - 1)
+	selector.Limit = actualLimit
+	selector.Page = page
+	return nil
 }
 
 func canUseColumn(aView *view.View, columnName string) error {

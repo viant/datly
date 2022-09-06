@@ -59,10 +59,6 @@ func (i *Index) indexViews(view *view.View, path string, mainView *view.View) {
 		Path: path,
 	}
 
-	if mainView == view {
-		viewDetails.Prefixes = []string{""}
-	}
-
 	i._viewDetails = append(i._viewDetails, viewDetails)
 
 	for relationIndex := range view.With {
@@ -95,9 +91,11 @@ func (i *Index) indexViewsByPrefix(mainView *view.View) error {
 		i._viewsByPrefix[prefix] = index
 		viewDetails := i._viewDetails[index]
 		viewDetails.Prefixes = []string{prefix}
-		if viewDetails.View == mainView {
-			viewDetails.Prefixes = append(viewDetails.Prefixes, "")
-		}
+	}
+
+	mainViewDetails, ok := i.viewByName(mainView.Name)
+	if ok && len(mainViewDetails.Prefixes) == 0 {
+		mainViewDetails.Prefixes = append(mainViewDetails.Prefixes, "")
 	}
 
 	return nil
