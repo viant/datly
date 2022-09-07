@@ -142,7 +142,9 @@ func (s *serverBuilder) updateView(ctx context.Context, table *option.Table, aVi
 	if err := s.updateViewMeta(table, aView); err != nil {
 		return err
 	}
-
+	if table.Connector != "" {
+		aView.Connector = &view.Connector{Reference: shared.Reference{Ref: table.Connector}}
+	}
 	if err := s.updateColumnsConfig(table, aView); err != nil {
 		return err
 	}
