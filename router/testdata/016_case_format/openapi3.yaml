@@ -1,4 +1,9 @@
 openapi: 3.1.0
+components:
+    schemas:
+        _fields:
+            type: string
+            description: Parameter _fields schema
 info:
     title: ""
     version: ""
@@ -9,22 +14,19 @@ paths:
                 - name: typ_fields
                   in: query
                   description: allows to control view event_types fields present in response
-                  style: form
-                  explode: false
                   schema:
-                    type: string
+                      $ref: '#/components/schema/_fields'
                 - name: ev_criteria
                   in: query
                   description: allows to filter view events data that matches given criteria
                   schema:
-                    type: string
+                      type: string
+                      description: Parameter _criteria schema
                 - name: ev_fields
                   in: query
                   description: allows to control view events fields present in response
-                  style: form
-                  explode: false
                   schema:
-                    type: string
+                      $ref: '#/components/schema/_fields'
             responses:
                 "200":
                     description: Success response

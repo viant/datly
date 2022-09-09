@@ -8,7 +8,6 @@ import (
 	"github.com/viant/toolbox/format"
 	"net/http"
 	"reflect"
-	"strings"
 	"time"
 )
 
@@ -341,7 +340,7 @@ func (g *generator) generateOperation(route *Route, method string) (*openapi3.Op
 		return nil, err
 	}
 
-	parameters, err := g.getAllViewsParameters(route, route.View, true)
+	parameters, err := g.getAllViewsParameters(route, route.View)
 	if err != nil {
 		return nil, err
 	}
@@ -365,7 +364,7 @@ func (g *generator) generateOperation(route *Route, method string) (*openapi3.Op
 	return operation, nil
 }
 
-func (g *generator) viewParameters(aView *view.View, route *Route, mainView bool) ([]*openapi3.Parameter, error) {
+func (g *generator) viewParameters(aView *view.View, route *Route) ([]*openapi3.Parameter, error) {
 	parameters := make([]*openapi3.Parameter, 0)
 	for _, param := range aView.Template.Parameters {
 		converted, ok, err := g.convertParam(route, param, "")
@@ -379,77 +378,45 @@ func (g *generator) viewParameters(aView *view.View, route *Route, mainView bool
 		parameters = append(parameters, converted)
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView, aView.Selector.CriteriaParam, Criteria, mainView); err != nil {
+	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.CriteriaParam); err != nil {
 		return nil, err
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView, aView.Selector.LimitParam, Limit, mainView); err != nil {
+	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.LimitParam); err != nil {
 		return nil, err
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView, aView.Selector.OffsetParam, Offset, mainView); err != nil {
+	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.OffsetParam); err != nil {
 		return nil, err
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView, nil, Page, mainView); err != nil {
+	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.PageParam); err != nil {
 		return nil, err
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView, aView.Selector.OrderByParam, OrderBy, mainView); err != nil {
+	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.OrderByParam); err != nil {
 		return nil, err
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView, aView.Selector.FieldsParam, Fields, mainView); err != nil {
+	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.FieldsParam); err != nil {
 		return nil, err
 	}
 
 	return parameters, nil
 }
 
-func (g *generator) appendBuiltInParam(params *[]*openapi3.Parameter, route *Route, aView *view.View, param *view.Parameter, paramName QueryParam, mainView bool) error {
-	switch paramName {
-	case Criteria:
-		if !aView.CanUseSelectorCriteria() {
-			return nil
-		}
-	case Limit:
-		if !aView.CanUseSelectorLimit() {
-			return nil
-		}
-	case OrderBy:
-		if !aView.CanUseSelectorOrderBy() {
-			return nil
-		}
-	case Offset, Page:
-		if !aView.CanUseSelectorOffset() {
-			return nil
-		}
-	case Fields:
-		if !aView.CanUseSelectorProjection() {
-			return nil
-		}
+func (g *generator) appendBuiltInParam(params *[]*openapi3.Parameter, route *Route, param *view.Parameter) error {
+	if param == nil {
+		return nil
 	}
 
-	if param == nil {
-		if err := g.appendDefaultParam(params, route, aView, paramName, mainView); err != nil {
-			return err
-		}
-	} else {
-		if strings.HasPrefix(param.Name, "_") {
-			if ns := route.Index.ViewNamespace(aView); ns != "" {
-				tempParam := *param
-				tempParam.Name = ns + tempParam.Name
-				param = &tempParam
-			}
-		}
-		converted, ok, err := g.convertParam(route, param, paramName.Description(aView.Name))
-		if err != nil {
-			return err
-		}
+	converted, ok, err := g.convertParam(route, param, param.Description)
+	if err != nil {
+		return err
+	}
 
-		if ok {
-			*params = append(*params, converted)
-		}
+	if ok {
+		*params = append(*params, converted)
 	}
 	return nil
 }
@@ -459,7 +426,7 @@ func (g *generator) convertParam(route *Route, param *view.Parameter, descriptio
 		return nil, false, nil
 	}
 
-	cachedParam, ok := g._parametersIndex[param.Name]
+	cachedParam, ok := g._parametersIndex[view.NotEmptyOf(param.In.Name, param.Name)]
 	if ok {
 		if cachedParam != nil {
 			original := *cachedParam
@@ -485,48 +452,16 @@ func (g *generator) convertParam(route *Route, param *view.Parameter, descriptio
 	}
 
 	convertedParam := &openapi3.Parameter{
-		Name:        param.Name,
+		Name:        view.NotEmptyOf(param.In.Name, param.Name),
 		In:          string(param.In.Kind),
 		Description: description,
 		Style:       param.Style,
-		Required:    param.Required == nil || *param.Required,
+		Required:    param.Required != nil && *param.Required,
 		Schema:      schema,
 	}
 
 	g._parametersIndex[param.Name] = convertedParam
 	return convertedParam, true, nil
-}
-
-func (g *generator) appendDefaultParam(params *[]*openapi3.Parameter, route *Route, aView *view.View, paramName QueryParam, mainView bool) error {
-	paramType := paramName.ParamType()
-	prefixes := g.getViewPrefixes(mainView, route, aView)
-
-	var style string
-	var explode *bool
-	if paramName == Fields {
-		style = "form"
-		aFalse := false
-		explode = &aFalse
-	}
-
-	for _, prefix := range prefixes {
-		schema, err := g.getOrGenerateSchema(route, paramType, false, "", "")
-		if err != nil {
-			return err
-		}
-		*params = append(*params, &openapi3.Parameter{
-			Name:        prefix + string(paramName),
-			In:          string(view.QueryKind),
-			Description: paramName.Description(aView.Name),
-			Style:       style,
-			Schema:      schema,
-			Explode:     explode,
-			Example:     nil,
-			Examples:    nil,
-			Content:     nil,
-		})
-	}
-	return nil
 }
 
 func (g *generator) getViewPrefixes(mainView bool, route *Route, aView *view.View) []string {
@@ -538,14 +473,14 @@ func (g *generator) getViewPrefixes(mainView bool, route *Route, aView *view.Vie
 	return prefixes
 }
 
-func (g *generator) getAllViewsParameters(route *Route, aView *view.View, mainView bool) ([]*openapi3.Parameter, error) {
-	params, err := g.viewParameters(aView, route, mainView)
+func (g *generator) getAllViewsParameters(route *Route, aView *view.View) ([]*openapi3.Parameter, error) {
+	params, err := g.viewParameters(aView, route)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, relation := range aView.With {
-		relationParams, err := g.getAllViewsParameters(route, &relation.Of.View, false)
+		relationParams, err := g.getAllViewsParameters(route, &relation.Of.View)
 		if err != nil {
 			return nil, err
 		}

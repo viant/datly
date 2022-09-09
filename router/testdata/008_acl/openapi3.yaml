@@ -6,36 +6,35 @@ paths:
     /api/employees:
         get:
             parameters:
-                - name: JWT
+                - name: Authorization
                   in: header
                   description: Parameter JWT, Located in header with name Authorization
                   required: true
                   schema:
-                    type: object
-                    properties:
-                        Audience:
-                            type: string
-                        Email:
-                            type: string
-                        ExpiresIn:
-                            type: integer
-                            format: int64
-                        IssuedTo:
-                            type: string
-                        Scope:
-                            type: string
-                        UserId:
-                            type: string
-                        VerifiedEmail:
-                            type: boolean
-                    description: Parameter JWT schema
+                      type: object
+                      properties:
+                          Audience:
+                              type: string
+                          Email:
+                              type: string
+                          ExpiresIn:
+                              type: integer
+                              format: int64
+                          IssuedTo:
+                              type: string
+                          Scope:
+                              type: string
+                          UserId:
+                              type: string
+                          VerifiedEmail:
+                              type: boolean
+                      description: Parameter JWT schema
                 - name: _fields
                   in: query
                   description: allows to control view employees fields present in response
-                  style: form
-                  explode: false
                   schema:
-                    type: string
+                      type: string
+                      description: Parameter _fields schema
             responses:
                 "200":
                     description: Success response

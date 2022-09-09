@@ -11,18 +11,17 @@ paths:
           description: allows to filter view events data that matches given criteria
           schema:
             type: string
-        - name: Limit
+            description: Parameter _criteria schema
+        - name: limit
           in: query
-          description: allows to limit events view data returned from db
-          required: true
+          description: Parameter Limit, Located in query with name limit
           schema:
             type: integer
             description: Parameter Limit schema
             format: int64
-        - name: Offset
+        - name: skip
           in: query
-          description: allows to skip first n  view events records, it has to be used alongside the limit
-          required: true
+          description: Parameter Offset, Located in query with name skip
           schema:
             type: integer
             description: Parameter Offset schema
@@ -32,18 +31,17 @@ paths:
           description: allows to skip first page * limit values, starting from 1 page. Has precedence over offset
           schema:
             type: integer
+            description: Parameter _page schema
             format: int64
-        - name: OrderBy
+        - name: sort
           in: query
-          description: allows to sort view events results
-          required: true
+          description: Parameter OrderBy, Located in query with name sort
           schema:
             type: string
             description: Parameter OrderBy schema
-        - name: Fields
+        - name: names
           in: query
-          description: allows to control view events fields present in response
-          required: true
+          description: Parameter Fields, Located in query with name names
           schema:
             type: string
             description: Parameter Fields schema

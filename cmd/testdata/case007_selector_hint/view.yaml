@@ -48,7 +48,9 @@ Selector:
     Limit: false
     Offset: false
     OrderBy: false
+    Page: null
     Projection: false
+  Namespace: ev
 Standalone: true
 Table: events
 Template:

@@ -6,21 +6,19 @@ paths:
     /api/events/{eventId}:
         get:
             parameters:
-                - name: EventId
+                - name: eventId
                   in: path
                   description: Parameter EventId, Located in path with name eventId
-                  required: true
                   schema:
-                    type: integer
-                    description: Parameter EventId schema
-                    format: int64
+                      type: integer
+                      description: Parameter EventId schema
+                      format: int64
                 - name: _fields
                   in: query
                   description: allows to control view events fields present in response
-                  style: form
-                  explode: false
                   schema:
-                    type: string
+                      type: string
+                      description: Parameter _fields schema
             responses:
                 "200":
                     description: Success response

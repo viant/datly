@@ -38,7 +38,7 @@ func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) ([]*SQ
 	statements := parser.ParseWithReader(strings.NewReader(SQL))
 
 	result := make([]*SQLStatment, len(statements))
-	if len(statements) == 0 {
+	if len(statements) == 0 && strings.TrimSpace(SQL) != "" {
 		result = append(result, &SQLStatment{SQL: SQL, Args: params.At(0)})
 	}
 

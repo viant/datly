@@ -1,4 +1,3 @@
-- reduce complexity/execution branches/duplication on selector parameters
 - API Keys on meta/warmup
 - Parameter Criteria IN, EXISTS, etc
 

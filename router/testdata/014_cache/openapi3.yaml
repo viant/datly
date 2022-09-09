@@ -11,36 +11,40 @@ paths:
           description: allows to filter view events data that matches given criteria
           schema:
             type: string
+            description: Parameter _criteria schema
         - name: ev_limit
           in: query
           description: allows to limit events view data returned from db
           schema:
             type: integer
+            description: Parameter _limit schema
             format: int64
         - name: ev_offset
           in: query
           description: allows to skip first n  view events records, it has to be used alongside the limit
           schema:
             type: integer
+            description: Parameter _offset schema
             format: int64
         - name: ev_page
           in: query
           description: allows to skip first page * limit values, starting from 1 page. Has precedence over offset
           schema:
             type: integer
+            description: Parameter _page schema
             format: int64
         - name: ev_orderby
           in: query
           description: allows to sort view events results
           schema:
             type: string
+            description: Parameter _orderby schema
         - name: ev_fields
           in: query
           description: allows to control view events fields present in response
-          style: form
-          explode: false
           schema:
             type: string
+            description: Parameter _fields schema
       responses:
         "200":
           description: Success response

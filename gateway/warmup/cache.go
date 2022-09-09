@@ -13,6 +13,7 @@ type PreCached struct {
 	View      string
 	Elapsed   string
 	TimeTaken time.Duration
+	Rows      int
 }
 
 type Response struct {
@@ -36,13 +37,14 @@ func PreCache(lookup PreCachables, warmupURIs ...string) *Response {
 			if e != nil {
 				err = e
 			}
-			if _, e = warmup.PopulateCache(views); e != nil {
+			var added int
+			if added, e = warmup.PopulateCache(views); e != nil {
 				err = e
 			}
 			elapsed := time.Now().Sub(startTime)
 			for _, v := range views {
 				mux.Lock()
-				response.PreCached = append(response.PreCached, &PreCached{View: v.Name, Elapsed: elapsed.String(), TimeTaken: elapsed})
+				response.PreCached = append(response.PreCached, &PreCached{View: v.Name, Elapsed: elapsed.String(), TimeTaken: elapsed, Rows: added})
 				mux.Unlock()
 			}
 		}(URI)
