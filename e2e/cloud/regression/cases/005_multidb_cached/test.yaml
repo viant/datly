@@ -1,0 +1,22 @@
+init:
+  parentPath: $parent.path
+  expect: $LoadData('${parentPath}/expect.json')
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/cached/products/
+        Expect:
+          Code: 200
+          JSONBody: $expect
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/cache/warmup/dev/cached/products
+        Expect:
+          Code: 200
+          JSONBody:
+            preCached:
+              - View: 'performance#'
+                Rows: 5

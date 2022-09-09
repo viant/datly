@@ -12,4 +12,5 @@ pipeline:
     immuneToHangups: true
     env:
       TEST: 1
+      GOOGLE_APPLICATION_CREDENTIALS: ~/.secret/${gcpProjectID}.json
     command: ./datly -c=$appPath/e2e/cloud/autogen/Datly/config.json
