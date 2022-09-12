@@ -1,0 +1,65 @@
+init:
+  appArchive: ${appPath}/gateway/runtime/lambda/app/datly.zip
+  privilegePolicy: policy/datly.json
+pipeline:
+
+
+  set_sdk:
+    action: sdk.set
+    target: $target
+    sdk: go:1.17
+
+  build:
+    package:
+      action: exec:run
+      comments: vendor build for deployment speedup
+      target: $target
+      checkError: true
+      commands:
+        - cd ${appPath}/gateway/runtime/lambda/app/
+        - export GOOS=linux
+        - go mod tidy
+        - go build datly.go
+        - zip -j ${appArchive} datly
+
+  deploy:
+    deploy:
+      action: aws/lambda:deploy
+      credentials: $awsCredentials
+      #       vpcMatcher:
+      #         vpc:
+      #           name: mysql-e2e
+
+      functionname: ${appName}
+      runtime:  go1.x
+      timeout: 540
+      http:
+        AuthType: NONE
+
+      environment:
+        variables:
+          CONFIG_URL:  s3://${configBucket}/${appName}/config.json
+          LOGGING: true
+      handler: datly
+      code:
+        zipfile: $LoadBinary(${appArchive})
+      rolename: DatlyRole
+      define:
+        - policyname: lambda-datly-execution-role
+          policydocument: $Cat('${privilegePolicy}')
+      attach:
+        - policyarn: arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - policyarn: arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+
+  clean:
+    action: exec:run
+    comments: vendor build for deployment speedup
+    target: $target
+    checkError: true
+    commands:
+      - cd ${appPath}/gateway/runtime/lambda/app/
+      - rm datly
+      - rm ${appArchive}
+
+post:
+  awsEndpointURL: ${deploy.URL}
