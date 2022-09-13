@@ -38,13 +38,6 @@ Columns:
 Connector:
   Driver: sqlite3
   Name: dev
-  Secret:
-    Data: null
-    Fallback: null
-    Key: blowfish://default
-    MaxRetry: 3
-    TimeoutMs: 5000
-    URL: mem://localhost/resource/mysql.json
 Logger:
   Name: ""
 MatchStrategy: read_matched

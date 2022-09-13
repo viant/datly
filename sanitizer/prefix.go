@@ -27,7 +27,7 @@ func paramId(identifier string) string {
 func removePrefixIfNeeded(name string) (prefix string, actual string) {
 	prefixes := []string{
 		keywords.AndPrefix, keywords.WherePrefix, keywords.OrPrefix,
-		keywords.ParamsKey + ".", keywords.ParamsMetadataKey + ".",
+		keywords.ParamsKey + ".", keywords.ParamsMetadataKey + ".", Const + ".",
 	}
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(name, prefix) {

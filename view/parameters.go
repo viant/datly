@@ -23,14 +23,15 @@ type (
 		Name         string `json:",omitempty"`
 		PresenceName string `json:",omitempty"`
 
-		In                *Location `json:",omitempty"`
-		Required          *bool     `json:",omitempty"`
-		Description       string    `json:",omitempty"`
-		DataType          string    `json:",omitempty"`
-		Style             string    `json:",omitempty"`
-		MaxAllowedRecords *int      `json:",omitempty"`
-		Schema            *Schema   `json:",omitempty"`
-		Codec             *Codec    `json:",omitempty"`
+		In                *Location   `json:",omitempty"`
+		Required          *bool       `json:",omitempty"`
+		Description       string      `json:",omitempty"`
+		DataType          string      `json:",omitempty"`
+		Style             string      `json:",omitempty"`
+		MaxAllowedRecords *int        `json:",omitempty"`
+		Schema            *Schema     `json:",omitempty"`
+		Codec             *Codec      `json:",omitempty"`
+		Val               interface{} `json:",omitempty"`
 
 		DateFormat      string `json:",omitempty"`
 		ErrorStatusCode int    `json:",omitempty"`
@@ -40,6 +41,7 @@ type (
 		initialized      bool
 		view             *View
 		_owner           *View
+		_literalValue    interface{}
 	}
 
 	//Location tells how to get parameter value.
@@ -164,6 +166,10 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 		p.PresenceName = p.Name
 	}
 
+	if p.In.Kind == LiteralKind && p.Val == nil {
+		return fmt.Errorf("param %v value was not set", p.Name)
+	}
+
 	if p.In.Kind == DataViewKind {
 		aView, err := resource.View(p.In.Name)
 		if err != nil {
@@ -197,6 +203,9 @@ func (p *Parameter) inherit(param *Parameter) {
 	p.Description = NotEmptyOf(p.Description, param.Description)
 	p.Style = NotEmptyOf(p.Style, param.Style)
 	p.PresenceName = NotEmptyOf(p.PresenceName, param.PresenceName)
+	if p.Val == nil {
+		p.Val = param.Val
+	}
 
 	if p.In == nil {
 		p.In = param.In
@@ -265,6 +274,11 @@ func (p *Parameter) IsRequired() bool {
 func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
 	if structType != nil {
 		return p.initSchemaFromType(structType)
+	}
+
+	if p.In.Kind == LiteralKind {
+		p.Schema = NewSchema(reflect.TypeOf(p.Val))
+		return nil
 	}
 
 	if p.Schema == nil {
@@ -378,10 +392,14 @@ func (p *Parameter) Set(selector *Selector, value interface{}) error {
 	p.ensureSelectorParamValue(selector)
 
 	ptr, presencePtr := asValuesPtr(selector)
-	p.valueAccessor.set(ptr, value)
-	p.UpdatePresence(presencePtr)
+	p.setValue(ptr, value, presencePtr)
 
 	return nil
+}
+
+func (p *Parameter) setValue(ptr unsafe.Pointer, value interface{}, presencePtr unsafe.Pointer) {
+	p.valueAccessor.set(ptr, value)
+	p.UpdatePresence(presencePtr)
 }
 
 func asValuesPtr(selector *Selector) (paramPtr unsafe.Pointer, presencePtr unsafe.Pointer) {
@@ -425,6 +443,16 @@ func (p *Parameter) ActualParamType() reflect.Type {
 
 func (p *Parameter) ensureSelectorParamValue(selector *Selector) {
 	selector.Parameters.Init(p._owner)
+}
+
+func (p *Parameter) UpdateValue(params interface{}, presenceMap interface{}) {
+	if p.Val == nil {
+		return
+	}
+
+	paramsPtr := xunsafe.AsPointer(params)
+	presenceMapPtr := xunsafe.AsPointer(presenceMap)
+	p.setValue(paramsPtr, p.Val, presenceMapPtr)
 }
 
 //ParametersIndex represents Parameter map indexed by Parameter.Name

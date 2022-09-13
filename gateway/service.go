@@ -177,10 +177,6 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (resourc
 			return nil, false, err
 		}
 
-		if err = newResource.FlushEnv(); err != nil {
-			return nil, false, err
-		}
-
 		result[r.updateResourceKey(resourceURL)] = newResource
 	}
 

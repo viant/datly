@@ -1,4 +1,4 @@
-package option
+package sanitizer
 
 type ParameterHint struct {
 	Parameter string

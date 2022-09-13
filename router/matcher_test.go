@@ -81,10 +81,17 @@ func TestMatcher(t *testing.T) {
 			method:      http.MethodGet,
 			expectError: true,
 		},
+		{
+			description: "empty path",
+			routes:      []*Route{{URI: "/events/seg1/{segID}/seg3", Method: http.MethodGet}, {URI: "/events/seg1/seg2/seg4", Method: http.MethodGet}},
+			route:       "",
+			method:      http.MethodGet,
+			expectError: true,
+		},
 	}
 
-	//for _, testCase := range testCases[len(testCases)-1:] {
-	for _, testCase := range testCases {
+	for _, testCase := range testCases[len(testCases)-1:] {
+		//for _, testCase := range testCases {
 		matcher := NewRouteMatcher(testCase.routes)
 		match, err := matcher.MatchOneRoute(testCase.method, testCase.route)
 		if testCase.expectError {

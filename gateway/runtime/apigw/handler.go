@@ -43,7 +43,9 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 	}
 
 	var authService gateway.Authorizer
-	if authService, err = jwt.Init(config, nil); err != nil {
+	if jwtAuth, err := jwt.Init(config, nil); err == nil {
+		authService = jwtAuth
+	} else {
 		return err
 	}
 

@@ -9,7 +9,6 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/modifier"
 	"github.com/viant/datly/auth/jwt"
-	"github.com/viant/datly/cmd/ast"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/gateway/warmup"
@@ -130,7 +129,7 @@ func (s *serverBuilder) buildViewMetaTemplate(k string, v *option.TableParam) {
 	if len(s.Columns) > 0 {
 		starExpr := s.Columns.StarExpr(k)
 		if starExpr.Comments != "" {
-			if _, err := ast.UnmarshalHint(starExpr.Comments, tmplMeta); err != nil {
+			if _, err := sanitizer.UnmarshalHint(starExpr.Comments, tmplMeta); err != nil {
 				fmt.Printf("invalid TempalteMeta: %v", err.Error())
 			}
 		}
@@ -161,7 +160,7 @@ func (s *serverBuilder) removeFromOutputIfNeeded(route *router.Route, table *opt
 	//buildExcludeColumn()
 }
 
-func (s *serverBuilder) buildExpandMap(hints option.ParameterHints) (rdata.Map, error) {
+func (s *serverBuilder) buildExpandMap(hints sanitizer.ParameterHints) (rdata.Map, error) {
 	result := rdata.Map{}
 	for _, aHint := range hints {
 		actual, _ := sanitizer.SplitHint(aHint.Hint)
@@ -178,6 +177,22 @@ func (s *serverBuilder) buildExpandMap(hints option.ParameterHints) (rdata.Map, 
 	}
 
 	return result, nil
+}
+
+func (s *serverBuilder) buildConstParameters(route *option.Route) []*view.Parameter {
+	params := make([]*view.Parameter, 0, len(route.Const))
+	for paramName := range route.Const {
+		params = append(params, &view.Parameter{
+			Name: paramName,
+			In: &view.Location{
+				Kind: view.LiteralKind,
+				Name: paramName,
+			},
+			Val: route.Const[paramName],
+		})
+	}
+
+	return params
 }
 
 func normalizeMetaTemplateSQL(SQL string, holderViewName string) string {

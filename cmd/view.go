@@ -37,7 +37,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	routeOption := &option.Route{}
 	// ExecMode
 	var sqlExecModeView *option.ViewMeta
-	var parameterHints option.ParameterHints
+	var parameterHints sanitizer.ParameterHints
 	if s.options.SQLXLocation != "" {
 
 		sourceURL := normalizeURL(s.options.SQLXLocation)
@@ -52,10 +52,10 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 		}
 
 		routeOption.URIParams = uriParams
-		parameterHints = ast.ExtractParameterHints(SQL)
+		parameterHints = sanitizer.ExtractParameterHints(SQL)
 
 		if len(parameterHints) > 0 {
-			SQL = ast.RemoveParameterHints(SQL, parameterHints)
+			SQL = sanitizer.RemoveParameterHints(SQL, parameterHints)
 		}
 
 		expandMap, err := s.buildExpandMap(parameterHints)
@@ -181,6 +181,13 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 		_ = fsAddYAML(fs, cacheURL, cacheDependency)
 	}
 
+	if len(routeOption.Const) > 0 {
+		s.route.With = append(s.route.With, "variables")
+		variablesDep := &view.Resource{ModTime: TimeNow(), Parameters: s.buildConstParameters(routeOption)}
+		variablesURL := s.options.DepURL("variables")
+		_ = fsAddYAML(fs, variablesURL, variablesDep)
+	}
+
 	dependency := &view.Resource{ModTime: TimeNow()}
 	dependency.Connectors = s.route.Resource.Connectors
 	depURL := s.options.DepURL("connections")
@@ -198,7 +205,7 @@ func (s *serverBuilder) buildRouterOutput(xTable *option.Table) router.Output {
 	startExpr := s.Columns.StarExpr(xTable.Alias)
 	if startExpr != nil {
 		if comments := startExpr.Comments; comments != "" {
-			if _, err := ast.UnmarshalHint(comments, &output); err != nil {
+			if _, err := sanitizer.UnmarshalHint(comments, &output); err != nil {
 				fmt.Printf("err: %v\n", err)
 			}
 		}
@@ -216,7 +223,7 @@ func (s *serverBuilder) buildRouterOutput(xTable *option.Table) router.Output {
 	return output
 }
 
-func (s *serverBuilder) buildDataParametersFromHintedParamters(dataParameters map[string]*option.TableParam, parameters option.ParameterHints, routeOption *option.Route) error {
+func (s *serverBuilder) buildDataParametersFromHintedParamters(dataParameters map[string]*option.TableParam, parameters sanitizer.ParameterHints, routeOption *option.Route) error {
 	if len(parameters) == 0 {
 		return nil
 	}
@@ -225,7 +232,7 @@ func (s *serverBuilder) buildDataParametersFromHintedParamters(dataParameters ma
 
 		_, paramName := sanitizer.GetHolderName(hintedParam.Parameter)
 		aTable := option.NewTable("")
-		SQL, err := ast.UnmarshalHint(hintedParam.Hint, aTable)
+		SQL, err := sanitizer.UnmarshalHint(hintedParam.Hint, aTable)
 		if err != nil {
 			return err
 		}
@@ -269,9 +276,9 @@ func (s *serverBuilder) updateViewInSQLExecMode(aView *view.View, viewMeta *opti
 		var dataType string
 		if p.Typer != nil {
 			switch actual := p.Typer.(type) {
-			case *option.ColumnType:
+			case *sanitizer.ColumnType:
 				dataType = viewMeta.ParameterTypes[strings.ToLower(actual.ColumnName)]
-			case *option.LiteralType:
+			case *sanitizer.LiteralType:
 				dataType = actual.RType.String()
 			}
 		}
@@ -336,14 +343,14 @@ func (s *serverBuilder) updateMetaColumnTypes(ctx context.Context, viewMeta *opt
 }
 
 func extractSetting(SQL string, route *option.Route) (string, map[string]bool, error) {
-	hint := ast.ExtractHint(SQL)
+	hint := sanitizer.ExtractHint(SQL)
 	if hint == "" {
 		return SQL, map[string]bool{}, nil
 	}
 
 	SQL = strings.Replace(SQL, hint, "", 1)
 
-	_, err := ast.UnmarshalHint(hint, route)
+	_, err := sanitizer.UnmarshalHint(hint, route)
 	if err != nil {
 		return SQL, map[string]bool{}, err
 	}
@@ -368,7 +375,7 @@ func extractURIParams(URI string) map[string]bool {
 	return result
 }
 
-func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*option.TableParam, routeOption *option.Route, hints option.ParameterHints, route *router.Route) {
+func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*option.TableParam, routeOption *option.Route, hints sanitizer.ParameterHints, route *router.Route) {
 	if len(params) == 0 {
 		return
 	}
@@ -463,7 +470,9 @@ func updateParamReferences(route *router.Resource) {
 			if resourceParam, ok := resourceParams[viewParam.Name]; ok {
 				updateParamPrecedence(resourceParam, viewParam)
 			} else {
-				route.Resource.Parameters = append(route.Resource.Parameters, aView.Template.Parameters[i])
+				if viewParam.In.Kind != view.LiteralKind {
+					route.Resource.Parameters = append(route.Resource.Parameters, aView.Template.Parameters[i])
+				}
 			}
 			aView.Template.Parameters[i] = &view.Parameter{Reference: shared.Reference{Ref: viewParam.Name}}
 		}

@@ -1,9 +1,9 @@
 package option
 
 import (
+	"github.com/viant/datly/sanitizer"
 	"github.com/viant/datly/view"
 	"github.com/viant/velty/functions"
-	"reflect"
 )
 
 var builtInMethods = map[string]bool{
@@ -43,30 +43,12 @@ type (
 		Codec          string           `json:",omitempty" yaml:",omitempty"`
 		FullName       string           `json:"-" yaml:"-"`
 		Assumed        bool             `json:",omitempty" yaml:",omitempty"`
-		Typer          Typer            `json:",omitempty" yaml:",omitempty"`
+		Typer          sanitizer.Typer  `json:",omitempty" yaml:",omitempty"`
 		SQL            string           `json:",omitempty" yaml:",omitempty"`
 		Cardinality    view.Cardinality `json:",omitempty" yaml:",omitempty"`
 		Multi          bool             `json:",omitempty" yaml:",omitempty"`
 	}
-
-	Typer interface{}
-
-	LiteralType struct {
-		RType    reflect.Type
-		DataType string
-	}
-
-	ColumnType struct {
-		ColumnName string
-	}
 )
-
-func NewLiteralType(rType reflect.Type) *LiteralType {
-	return &LiteralType{
-		RType:    rType,
-		DataType: rType.String(),
-	}
-}
 
 func NewViewMeta() *ViewMeta {
 	return &ViewMeta{index: map[string]int{}}

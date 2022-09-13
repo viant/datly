@@ -5,23 +5,25 @@ import (
 	"fmt"
 	"github.com/viant/datly/cmd/ast"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/sanitizer"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/metadata/ast/expr"
 	"github.com/viant/sqlx/metadata/ast/node"
 	"github.com/viant/sqlx/metadata/ast/parser"
 	"github.com/viant/sqlx/metadata/ast/query"
+	rdata "github.com/viant/toolbox/data"
 	"strings"
 )
 
-func ParseSQLx(SQL string, routeOpt *option.Route, hints option.ParameterHints) (*option.Table, map[string]*option.TableParam, error) {
+func ParseSQLx(SQL string, routeOpt *option.Route, hints sanitizer.ParameterHints) (*option.Table, map[string]*option.TableParam, error) {
 	aQuery, err := parser.ParseQuery(SQL)
-	if aQuery == nil {
+	if err != nil {
 		return nil, nil, err
 	}
 
 	var tables = map[string]*option.Table{}
 
-	table, err := buildTableFromQuery(aQuery, routeOpt, hints)
+	table, err := buildTable(aQuery.From.X, routeOpt, hints)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -47,64 +49,56 @@ func ParseSQLx(SQL string, routeOpt *option.Route, hints option.ParameterHints) 
 	return table, dataParameters, nil
 }
 
-func buildTableFromQuery(aQuery *query.Select, routeOpt *option.Route, hints option.ParameterHints) (*option.Table, error) {
-	table, err := buildTable(aQuery.From.X, routeOpt, hints)
-	if err != nil {
-		return nil, err
-	}
-	//
-	//for _, item := range aQuery.List {
-	//	if item.Comments == "" || item.Alias == "" {
-	//		continue
-	//	}
-	//
-	//	aType := &DataTyped{}
-	//	hint, _ := sanitizer.SplitHint(item.Comments)
-	//
-	//	if err := json.Unmarshal([]byte(hint), aType); err != nil {
-	//		return nil, err
-	//	}
-	//
-	//	table.ColumnTypes[item.Alias] = aType.DataType
-	//}
-
-	return table, nil
-}
-
-func buildTable(x node.Node, routeOpt *option.Route, hints option.ParameterHints) (*option.Table, error) {
+func buildTable(x node.Node, routeOpt *option.Route, hints sanitizer.ParameterHints) (*option.Table, error) {
 	//var err error
 	table := option.NewTable("")
 
 	switch actual := x.(type) {
 	case *expr.Raw:
-		SQL := strings.TrimSpace(actual.Raw)
-		trimmedParentheses := true
-		for len(SQL) >= 2 && trimmedParentheses {
-			if SQL[0] == '(' && SQL[len(SQL)-1] == ')' {
-				SQL = SQL[1 : len(SQL)-1]
-			} else {
-				trimmedParentheses = false
-			}
-
-			SQL = strings.TrimSpace(SQL)
-		}
-
+		_, SQL := extractTableSQL(actual)
 		table.SQL = SQL
 		if err := UpdateTableSettings(table, routeOpt, hints); err != nil {
 			return table, err
 		}
 
 	case *expr.Selector, *expr.Ident:
-		table.Name = parser.Stringify(actual)
-
+		name, _ := extractTableName(actual)
+		table.Name = name
 	}
+
 	return table, nil
 }
 
-func UpdateTableSettings(table *option.Table, routeOpt *option.Route, hints option.ParameterHints) error {
-	innerSQL, paramsExprs := ast.ExtractCondBlock(table.SQL)
+func extractTableName(node node.Node) (name string, SQL string) {
+	switch actual := node.(type) {
+	case *expr.Selector, *expr.Ident:
+		return parser.Stringify(actual), ""
+	}
+
+	return "", ""
+}
+
+func extractTableSQL(actual *expr.Raw) (name string, SQL string) {
+	SQL = strings.TrimSpace(actual.Raw)
+	trimmedParentheses := true
+	for len(SQL) >= 2 && trimmedParentheses {
+		if SQL[0] == '(' && SQL[len(SQL)-1] == ')' {
+			SQL = SQL[1 : len(SQL)-1]
+		} else {
+			trimmedParentheses = false
+		}
+
+		SQL = strings.TrimSpace(SQL)
+	}
+
+	return "", SQL
+}
+
+func UpdateTableSettings(table *option.Table, routeOpt *option.Route, hints sanitizer.ParameterHints) error {
+	tableSQL := expandConsts(table.SQL, routeOpt)
+	innerSQL, paramsExprs := ast.ExtractCondBlock(tableSQL)
 	innerQuery, err := parser.ParseQuery(innerSQL)
-	fmt.Printf("innerSQL %v %v\n", table.SQL, err)
+	fmt.Printf("innerSQL %v %v\n", tableSQL, err)
 
 	if innerQuery != nil && innerQuery.From.X != nil {
 		table.Name = strings.Trim(parser.Stringify(innerQuery.From.X), "`")
@@ -129,6 +123,17 @@ func UpdateTableSettings(table *option.Table, routeOpt *option.Route, hints opti
 
 	table.ViewMeta.Expressions = paramsExprs
 	return nil
+}
+
+func expandConsts(SQL string, opt *option.Route) string {
+	replacementMap := rdata.Map{}
+	consts := opt.Const
+	if consts == nil {
+		return SQL
+	}
+
+	replacementMap.SetValue(sanitizer.Const, consts)
+	return replacementMap.ExpandAsText(SQL)
 }
 
 func extractCriteriaPairs(node node.Node, list *[]string) {
@@ -170,7 +175,7 @@ func appendParamExpr(x node.Node, op string, y node.Node, list *[]string) {
 	}
 }
 
-func processJoin(join *query.Join, tables map[string]*option.Table, outerColumn option.Columns, dataParameters map[string]*option.TableParam, routeOpt *option.Route, hints option.ParameterHints) error {
+func processJoin(join *query.Join, tables map[string]*option.Table, outerColumn option.Columns, dataParameters map[string]*option.TableParam, routeOpt *option.Route, hints sanitizer.ParameterHints) error {
 	relTable, err := buildTable(join.With, routeOpt, hints)
 	if err != nil {
 		return err

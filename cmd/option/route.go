@@ -1,6 +1,7 @@
 package option
 
 import (
+	"github.com/viant/datly/sanitizer"
 	"github.com/viant/datly/view"
 )
 
@@ -11,9 +12,10 @@ type (
 		Cache          *view.Cache
 		Method         string
 		Declare        map[string]string
-		ParameterHints ParameterHints `json:"-"`
-		ExecData       *ExecData      `json:"-"`
-		ReadData       *ReadData      `json:"-"`
+		ParameterHints sanitizer.ParameterHints `json:"-"`
+		ExecData       *ExecData                `json:"-"`
+		ReadData       *ReadData                `json:"-"`
+		Const          map[string]interface{}
 		err            error
 	}
 

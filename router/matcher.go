@@ -257,6 +257,10 @@ func (m *Matcher) flatten(match []*Node) []Matchable {
 }
 
 func AsRelative(route string) string {
+	if len(route) == 0 {
+		return route
+	}
+
 	if route[0] == '/' {
 		route = route[1:]
 	}

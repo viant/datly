@@ -43,12 +43,14 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 		return err
 	}
 
-	var authenticator gateway.Authorizer
-	if authenticator, err = jwt.Init(config, nil); err != nil {
+	var authorizer gateway.Authorizer
+	if jwtAuthorizer, err := jwt.Init(config, nil); err == nil {
+		authorizer = jwtAuthorizer
+	} else {
 		return err
 	}
 
-	service, err := gateway.SingletonWithConfig(config, nil, authenticator, registry.Codecs, registry.Types, nil)
+	service, err := gateway.SingletonWithConfig(config, nil, authorizer, registry.Codecs, registry.Types, nil)
 	if err != nil {
 		return err
 	}

@@ -1,8 +1,7 @@
-package ast
+package sanitizer
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/viant/datly/cmd/option"
 	"github.com/viant/toolbox"
 	"testing"
 )
@@ -35,7 +34,7 @@ func TestExtractParameterHints(t *testing.T) {
 	var testCases = []struct {
 		description string
 		text        string
-		expect      option.ParameterHints
+		expect      ParameterHints
 	}{
 		{
 			description: "expr with hints",
@@ -52,7 +51,7 @@ $xx /* this is 2nd hint */
 /* this is non matching hint */
 
 `,
-			expect: option.ParameterHints{
+			expect: ParameterHints{
 				{
 					Parameter: "zyx",
 					Hint:      "/* this is 1st hint */",

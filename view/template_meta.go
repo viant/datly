@@ -186,7 +186,7 @@ func (m *TemplateMeta) Evaluate(selectorValues interface{}, selectorPresence int
 }
 
 func (m *TemplateMeta) initTemplateEvaluator(_ context.Context, owner *Template, _ *Resource) error {
-	evaluator, err := NewEvaluator(owner.Schema.Type(), owner.PresenceSchema.Type(), m.Source)
+	evaluator, err := NewEvaluator(owner.Parameters, owner.Schema.Type(), owner.PresenceSchema.Type(), m.Source)
 	if err != nil {
 		return err
 	}

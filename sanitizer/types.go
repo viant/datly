@@ -2,7 +2,6 @@ package sanitizer
 
 import (
 	"bytes"
-	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlx/io/read/cache/ast"
@@ -13,7 +12,7 @@ import (
 var resetWords = []string{"AND", "OR", "WITH", "HAVING", "LIMIT", "OFFSET", "WHERE", "SELECT", "UNION", "ALL", "AS", "BETWEEN"}
 
 func (i *ParamMetaIterator) initMetaTypes(SQL string) []string {
-	var typer option.Typer
+	var typer Typer
 	var untyped []string
 	previouslyMatched := -1
 
@@ -26,9 +25,9 @@ func (i *ParamMetaIterator) initMetaTypes(SQL string) []string {
 			text := matched.Text(cursor)
 			typer = i.asNumberTyper(text)
 		case boolToken:
-			typer = option.NewLiteralType(ast.BoolType)
+			typer = NewLiteralType(ast.BoolType)
 		case stringToken:
-			typer = option.NewLiteralType(ast.StringType)
+			typer = NewLiteralType(ast.StringType)
 		case parenthesesBlockToken:
 			sqlFragment := matched.Text(cursor)
 			untypedInBlock := i.initMetaTypes(sqlFragment[1 : len(sqlFragment)-1])
@@ -78,7 +77,7 @@ func (i *ParamMetaIterator) initMetaTypes(SQL string) []string {
 	return untyped
 }
 
-func newColumnTyper(text string, previous option.Typer) option.Typer {
+func newColumnTyper(text string, previous Typer) Typer {
 	if strings.EqualFold(text, OrKeyword) || strings.EqualFold(text, AndKeyword) {
 		return nil
 	}
@@ -91,7 +90,7 @@ func newColumnTyper(text string, previous option.Typer) option.Typer {
 		return nil
 	}
 
-	return &option.ColumnType{ColumnName: strings.ToLower(text)}
+	return &ColumnType{ColumnName: strings.ToLower(text)}
 }
 
 func (i *ParamMetaIterator) isResetKeyword(text string) bool {
@@ -104,13 +103,13 @@ func (i *ParamMetaIterator) isResetKeyword(text string) bool {
 	return false
 }
 
-func (i *ParamMetaIterator) asNumberTyper(text string) option.Typer {
+func (i *ParamMetaIterator) asNumberTyper(text string) Typer {
 	_, err := strconv.Atoi(text)
 	if err == nil {
-		return option.NewLiteralType(ast.IntType)
+		return NewLiteralType(ast.IntType)
 	}
 
-	return option.NewLiteralType(ast.Float64Type)
+	return NewLiteralType(ast.Float64Type)
 }
 
 func isVeltyMatchToken(matched int) bool {

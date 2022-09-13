@@ -16,7 +16,7 @@ var cognitoService *cognito.Service
 var jwtVerifier *verifier.Service
 var authServiceInit sync.Once
 
-func Init(config *gateway.Config, embedFs *embed.FS) (*cognito.Service, error) {
+func Init(config *gateway.Config, embedFs *embed.FS) (gateway.Authorizer, error) {
 	fs := afs.New()
 	var err error
 	authServiceInit.Do(func() {
@@ -37,13 +37,16 @@ func Init(config *gateway.Config, embedFs *embed.FS) (*cognito.Service, error) {
 			}
 		}
 	})
+
 	if err != nil {
 		authServiceInit = sync.Once{}
 		cognitoService = nil
 		return nil, err
 	}
+
 	if cognitoService == nil {
 		return nil, nil
 	}
+
 	return cognitoService, nil
 }

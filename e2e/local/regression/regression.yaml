@@ -20,7 +20,7 @@ pipeline:
     data:
       '[]gen': '@gen'
 
-    range: 10..011
+    range: 1..011
     template:
       checkSkip:
         action: nop

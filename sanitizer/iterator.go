@@ -1,7 +1,6 @@
 package sanitizer
 
 import (
-	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
 	"github.com/viant/velty/ast"
@@ -41,7 +40,7 @@ type (
 		variables      map[string]bool
 		occurrences    map[string]int
 		paramMetaTypes map[string]*ParamMetaType
-		hints          map[string]*option.ParameterHint
+		hints          map[string]*ParameterHint
 		paramMatcher   *ParamMatcher
 	}
 
@@ -64,13 +63,13 @@ type (
 	}
 
 	ParamMetaType struct {
-		Typer []option.Typer
+		Typer []Typer
 		SQL   []string
 		Hint  []string
 	}
 )
 
-func NewIterator(SQL string, hints option.ParameterHints) *ParamMetaIterator {
+func NewIterator(SQL string, hints ParameterHints) *ParamMetaIterator {
 	result := &ParamMetaIterator{
 		SQL:            SQL,
 		variables:      map[string]bool{},

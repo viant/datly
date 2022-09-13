@@ -17,12 +17,13 @@ const (
 	CookieKind      Kind = "cookie"
 	RequestBodyKind Kind = "body"
 	EnvironmentKind Kind = "env"
+	LiteralKind     Kind = "literal"
 )
 
 //Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case DataViewKind, PathKind, QueryKind, HeaderKind, CookieKind, RequestBodyKind, EnvironmentKind:
+	case DataViewKind, PathKind, QueryKind, HeaderKind, CookieKind, RequestBodyKind, EnvironmentKind, LiteralKind:
 		return nil
 	}
 
@@ -41,7 +42,7 @@ func (p ParamName) Validate(kind Kind) error {
 	}
 
 	switch kind {
-	case DataViewKind, PathKind, QueryKind, HeaderKind, CookieKind, RequestBodyKind:
+	case DataViewKind, PathKind, QueryKind, HeaderKind, CookieKind, RequestBodyKind, LiteralKind:
 		return nil
 	case EnvironmentKind:
 		if os.Getenv(string(p)) == "" {

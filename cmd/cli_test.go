@@ -191,7 +191,7 @@ func TestRun(t *testing.T) {
 
 	loader := afs.New()
 	//for i, testCase := range testCases[len(testCases)-1:] {
-	for i, testCase := range testCases[10:11] {
+	for i, testCase := range testCases {
 		mem.ResetSingleton()
 		gateway.ResetSingleton()
 		tests.LogHeader(fmt.Sprintf("Running testcase: %v\n", i))
@@ -253,7 +253,9 @@ func checkGeneratedView(t *testing.T, loader afs.Service, testLocation string, t
 		return
 	}
 
-	assert.Equal(t, string(expectedView), string(actualView), testCase.description)
+	if !assert.Equal(t, string(expectedView), string(actualView), testCase.description) {
+		return
+	}
 	return
 }
 

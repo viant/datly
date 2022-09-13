@@ -26,6 +26,7 @@ func (d *paramTypeDetector) correctUntyped(iterator *sanitizer.ParamMetaIterator
 			aParam.DataType = paramType
 			aParam.Assumed = false
 		}
+
 		if aParam.Kind == string(view.QueryKind) {
 			if route.Method != "" && route.Method != http.MethodGet {
 				aParam.Kind = string(view.RequestBodyKind)
@@ -37,13 +38,17 @@ func (d *paramTypeDetector) correctUntyped(iterator *sanitizer.ParamMetaIterator
 }
 
 func (d *paramTypeDetector) updateParamIfNeeded(param *option.Parameter, meta *sanitizer.ParamMeta) error {
+	if meta.Prefix == sanitizer.Const {
+		param.Kind = string(view.LiteralKind)
+	}
+
 	if meta.MetaType == nil {
 		return nil
 	}
 
 	for _, aHint := range meta.MetaType.Hint {
 		newParam := &option.Parameter{}
-		_, err := UnmarshalHint(aHint, newParam)
+		_, err := sanitizer.UnmarshalHint(aHint, newParam)
 		if err != nil {
 			return err
 		}
@@ -72,7 +77,7 @@ func (d *paramTypeDetector) updateParamIfNeeded(param *option.Parameter, meta *s
 }
 
 func IsDataViewKind(hint string) bool {
-	_, sqlPart := SplitHint(hint)
+	_, sqlPart := sanitizer.SplitHint(hint)
 	if strings.HasSuffix(sqlPart, "*/") {
 		sqlPart = sqlPart[:len(sqlPart)-len("*/")]
 	}

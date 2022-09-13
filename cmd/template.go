@@ -4,11 +4,12 @@ import (
 	"context"
 	"github.com/viant/datly/cmd/ast"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/sanitizer"
 	"github.com/viant/datly/view"
 	"strings"
 )
 
-func (s *serverBuilder) buildParamView(ctx context.Context, routeOption *option.Route, paramName string, schemaName string, tableParam *option.TableParam, hints option.ParameterHints) (*view.View, error) {
+func (s *serverBuilder) buildParamView(ctx context.Context, routeOption *option.Route, paramName string, schemaName string, tableParam *option.TableParam, hints sanitizer.ParameterHints) (*view.View, error) {
 	hintsIndex := hints.Index()
 	hint, ok := hintsIndex[paramName]
 	paramView := s.buildParamViewWithoutTemplate(paramName, tableParam, schemaName)
@@ -16,7 +17,7 @@ func (s *serverBuilder) buildParamView(ctx context.Context, routeOption *option.
 		return paramView, s.updateView(ctx, tableParam.Table, paramView)
 	}
 
-	_, SQL := ast.SplitHint(hint.Hint)
+	_, SQL := sanitizer.SplitHint(hint.Hint)
 	SQL = strings.TrimSpace(SQL)
 
 	if !ast.IsDataViewKind(hint.Hint) {
@@ -26,7 +27,7 @@ func (s *serverBuilder) buildParamView(ctx context.Context, routeOption *option.
 	return s.enrichParamViewWithTemplate(ctx, routeOption, SQL, paramView, hints, tableParam.Table.Alias)
 }
 
-func (s *serverBuilder) enrichParamViewWithTemplate(ctx context.Context, routeOption *option.Route, SQL string, paramView *view.View, hints option.ParameterHints, alias string) (*view.View, error) {
+func (s *serverBuilder) enrichParamViewWithTemplate(ctx context.Context, routeOption *option.Route, SQL string, paramView *view.View, hints sanitizer.ParameterHints, alias string) (*view.View, error) {
 	aTable, _, err := ParseSQLx(SQL, routeOption, hints)
 	if err != nil {
 		return nil, err

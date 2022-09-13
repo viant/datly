@@ -47,7 +47,7 @@ func newParamTypeDetector(route *option.Route, meta *option.ViewMeta) *paramType
 	}
 }
 
-func Parse(SQL string, route *option.Route, hints option.ParameterHints) (*option.ViewMeta, error) {
+func Parse(SQL string, route *option.Route, hints sanitizer.ParameterHints) (*option.ViewMeta, error) {
 	viewMeta := option.NewViewMeta()
 	iterator := sanitizer.NewIterator(SQL, hints)
 	SQL = iterator.SQL
@@ -185,7 +185,7 @@ func (d *paramTypeDetector) indexStmt(actual *stmt.Statement, required bool, rTy
 }
 
 func (d *paramTypeDetector) indexParameter(actual *expr.Select, required bool, rType reflect.Type, multi bool) {
-	prefix, paramName := getHolderName(actual.FullName)
+	prefix, paramName := sanitizer.GetHolderName(actual.FullName)
 
 	if !isParameter(d.variables, paramName) {
 		return
@@ -219,13 +219,6 @@ func (d *paramTypeDetector) indexParameter(actual *expr.Select, required bool, r
 		Multi:    multi,
 		Required: option.BoolPtr(required && prefix != keywords.ParamsMetadataKey),
 	})
-}
-
-func getHolderName(identifier string) (string, string) {
-	paramName := paramId(identifier)
-	prefix, paramName := removePrefixIfNeeded(paramName)
-	paramName = withoutPath(paramName)
-	return prefix, paramName
 }
 
 func isParameter(variables map[string]bool, paramName string) bool {

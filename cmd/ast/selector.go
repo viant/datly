@@ -1,6 +1,9 @@
 package ast
 
-import "github.com/viant/parsly"
+import (
+	"github.com/viant/datly/sanitizer"
+	"github.com/viant/parsly"
+)
 
 func ExtractSelector(text string) string {
 	cursor := parsly.NewCursor("", []byte(text), 0)
@@ -13,7 +16,7 @@ func ExtractSelector(text string) string {
 			case exprGroupToken, scopeBlockToken:
 				result += match.Text(cursor)
 			}
-			_, result = getHolderName(result)
+			_, result = sanitizer.GetHolderName(result)
 			return result
 		}
 	}

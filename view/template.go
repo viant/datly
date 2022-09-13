@@ -38,9 +38,12 @@ type (
 	}
 
 	Evaluator struct {
-		planner       *velty.Planner
-		executor      *est.Execution
-		stateProvider func() *est.State
+		planner        *velty.Planner
+		executor       *est.Execution
+		stateProvider  func() *est.State
+		constParams    []*Parameter
+		paramSchema    reflect.Type
+		presenceSchema reflect.Type
 	}
 
 	CriteriaParam struct {
@@ -168,7 +171,7 @@ func (t *Template) addField(name string, rType reflect.Type) error {
 
 func TemplateField(name string, rType reflect.Type) (reflect.StructField, error) {
 	if len(name) == 0 {
-		return reflect.StructField{}, fmt.Errorf("template _field name can't be empty")
+		return reflect.StructField{}, fmt.Errorf("template field name can't be empty")
 	}
 
 	pkgPath := ""
@@ -202,10 +205,14 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 	return nil
 }
 
-func NewEvaluator(paramSchema, presenceSchema reflect.Type, template string) (*Evaluator, error) {
-	evaluator := &Evaluator{}
-	var err error
+func NewEvaluator(parameters []*Parameter, paramSchema, presenceSchema reflect.Type, template string) (*Evaluator, error) {
+	evaluator := &Evaluator{
+		constParams:    filterConstParameters(parameters),
+		paramSchema:    paramSchema,
+		presenceSchema: presenceSchema,
+	}
 
+	var err error
 	evaluator.planner = velty.New(velty.BufferSize(len(template)))
 	if err = evaluator.planner.DefineVariable(keywords.ParamsKey, paramSchema); err != nil {
 		return nil, err
@@ -239,6 +246,19 @@ func NewEvaluator(paramSchema, presenceSchema reflect.Type, template string) (*E
 	return evaluator, nil
 }
 
+func filterConstParameters(parameters []*Parameter) []*Parameter {
+	params := make([]*Parameter, 0)
+	for i := range parameters {
+		if parameters[i].In.Kind != LiteralKind {
+			continue
+		}
+
+		params = append(params, parameters[i])
+	}
+
+	return params
+}
+
 func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parentParam *MetaParam) (string, *CriteriaSanitizer, *logger.Printer, error) {
 	if t.wasEmpty {
 		return t.Source, &CriteriaSanitizer{}, &logger.Printer{}, nil
@@ -264,6 +284,8 @@ func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMa
 	if schemaType != externalType {
 		return "", fmt.Errorf("inompactible types, wanted %v got %T", schemaType.String(), externalParams)
 	}
+
+	externalParams, presenceMap = e.updateConsts(externalParams, presenceMap)
 
 	newState := e.stateProvider()
 	if externalParams != nil {
@@ -301,6 +323,23 @@ func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMa
 	}
 
 	return newState.Buffer.String(), nil
+}
+
+func (e *Evaluator) updateConsts(params interface{}, presenceMap interface{}) (interface{}, interface{}) {
+	if len(e.constParams) == 0 {
+		return params, presenceMap
+	}
+
+	if params == nil {
+		params = reflect.New(e.paramSchema).Elem().Interface()
+		presenceMap = reflect.New(e.presenceSchema).Elem().Interface()
+	}
+
+	for _, param := range e.constParams {
+		param.UpdateValue(params, presenceMap)
+	}
+
+	return params, presenceMap
 }
 
 func AsViewParam(aView *View, aSelector *Selector, options ...interface{}) *MetaParam {
@@ -361,7 +400,7 @@ func (t *Template) initSqlEvaluator() error {
 		return nil
 	}
 
-	evaluator, err := NewEvaluator(t.Schema.Type(), t.PresenceSchema.Type(), t.Source)
+	evaluator, err := NewEvaluator(t.Parameters, t.Schema.Type(), t.PresenceSchema.Type(), t.Source)
 	if err != nil {
 		return err
 	}

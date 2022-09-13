@@ -9,7 +9,6 @@ import (
 	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
-	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"net/http"
 	"net/url"
@@ -541,10 +540,6 @@ func asRouterSlice(routers map[string]*router.Router) []*router.Router {
 func newMatcher(routers []*router.Router) (*router.Matcher, []*router.Route, map[string]int) {
 	routesSize := 0
 	for _, r := range routers {
-		if r == nil {
-			toolbox.Dump(routers)
-		}
-
 		routesSize += len(r.Routes(""))
 	}
 

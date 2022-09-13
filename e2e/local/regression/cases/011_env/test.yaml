@@ -7,12 +7,6 @@ pipeline:
     action: print
     message: hello action 1
 
-  initEnv:
-    action: exec:run
-    target: $target
-    commands:
-      - export $TableName=VENDOR
-
   test:
     action: http/runner:send
     requests:
