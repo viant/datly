@@ -133,7 +133,7 @@ func (c *Connector) Init() {
 	if c.DbName == "" {
 		c.DbName = "dev"
 	}
-	if c.Secret == "" {
+	if c.Secret == "" && (strings.Contains(c.DSN, "localhost")) {
 		c.Secret = "mem://localhost/resource/mysql.json"
 		fs := afs.New()
 		fs.Upload(context.Background(), c.Secret, file.DefaultFileOsMode, strings.NewReader(mysqlDev))
@@ -167,11 +167,16 @@ func (c *Connector) New() *view.Connector {
 		Driver: c.Driver,
 		DSN:    c.DSN,
 	}
-	result.Secret = &scy.Resource{
-		Name: "",
-		URL:  c.Secret,
-		Key:  "blowfish://default",
-		Data: nil,
+
+	if c.Secret != "" {
+		result.Secret = &scy.Resource{
+			Name: "",
+			URL:  c.Secret,
+			Data: nil,
+		}
+		if result.Secret.Key == "" && c.Driver == "mysql" {
+			result.Secret.Key = "blowfish://default"
+		}
 	}
 	return result
 }

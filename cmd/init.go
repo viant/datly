@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"github.com/viant/afsc/gs"
-	"github.com/viant/bigquery"
 	"github.com/viant/scy/auth/gcp"
 	"github.com/viant/scy/auth/gcp/client"
 	"golang.org/x/oauth2"
@@ -12,7 +11,6 @@ import (
 
 func init() {
 	srv := gcp.New(client.NewGCloud())
-	bigquery.SetOptions(option.WithTokenSource(&tokenSource{Service: srv}))
 	gs.SetOptions(option.WithTokenSource(&tokenSource{Service: srv}))
 }
 

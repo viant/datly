@@ -30,6 +30,18 @@ pipeline:
       #         vpc:
       #           name: mysql-e2e
 
+      CORS:
+        allowCredentials: true
+        allowHeaders:
+          - '*'
+        allowMethods:
+          - '*'
+        allowOrigins:
+          - '*'
+        exposeHeaders:
+          - 'WWW-Authenticate'
+        maxAge: 0
+
       functionname: ${appName}
       runtime:  go1.x
       timeout: 540

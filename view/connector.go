@@ -4,12 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/viant/bigquery"
 	"github.com/viant/datly/shared"
 	"github.com/viant/scy"
-	"github.com/viant/scy/auth/gcp"
-	"github.com/viant/scy/auth/gcp/client"
-	"google.golang.org/api/option"
 	"sync"
 	"time"
 )
@@ -102,10 +98,6 @@ func (c *Connector) DB() (*sql.DB, error) {
 		dsn = secret.Expand(dsn)
 	}
 
-	if secret != nil {
-		c.setDriverOptions(secret)
-	}
-
 	c.mux.Lock()
 	c.db = aDbPool.DB(c.Driver, dsn, c.DBConfig)
 	aDB, err := c.db()
@@ -158,14 +150,6 @@ func (c *Connector) inherit(connector *Connector) {
 func (c *Connector) setDriverOptions(secret *scy.Secret) {
 	if secret == nil || c.initialized {
 		return
-	}
-	switch c.Driver { //TODO remove globel exposure toward actual database/sql driver
-	case "bigquery":
-		gcpService := gcp.New(client.NewGCloud())
-		client, err := gcpService.AuthClient(context.Background(), append(gcp.Scopes, "https://www.googleapis.com/auth/bigquery")...)
-		if err == nil && client != nil {
-			bigquery.SetOptions(option.WithHTTPClient(client))
-		}
 	}
 }
 
