@@ -3,7 +3,7 @@ init:
   yesterday: $FormatTime('yesterdayInUTC', 'yyyy-MM-dd HH:mm:ss')
   today: $FormatTime('nowInUTC', 'yyyy-MM-dd HH:mm:ss')
   '!authWith': $params.authWith
-  '!configBucket': $params.configBucket
+  '!configBucket': $authWith
   target:
     URL: ssh://localhost/
     credentials: localhost
