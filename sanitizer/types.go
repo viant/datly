@@ -122,7 +122,7 @@ func isVeltyMatchToken(matched int) bool {
 }
 
 func (i *ParamMetaIterator) isParameter(paramName string) bool {
-	if isVariable := i.variables[paramName]; isVariable {
+	if isVariable := i.assignedVars[paramName]; isVariable {
 		return false
 	}
 

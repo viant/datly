@@ -49,7 +49,7 @@ func newParamTypeDetector(route *option.Route, meta *option.ViewMeta) *paramType
 
 func Parse(SQL string, route *option.Route, hints sanitizer.ParameterHints) (*option.ViewMeta, error) {
 	viewMeta := option.NewViewMeta()
-	iterator := sanitizer.NewIterator(SQL, hints)
+	iterator := sanitizer.NewIterator(SQL, hints, route.Const)
 	SQL = iterator.SQL
 
 	block, err := parser.Parse([]byte(SQL))
@@ -94,7 +94,7 @@ func Parse(SQL string, route *option.Route, hints sanitizer.ParameterHints) (*op
 		SQL = envMap.ExpandAsText(SQL)
 	}
 
-	viewMeta.Source = sanitizer.Sanitize(SQL, hints)
+	viewMeta.Source = sanitizer.Sanitize(SQL, hints, route.Const)
 	return viewMeta, nil
 }
 

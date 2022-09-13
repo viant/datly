@@ -9,6 +9,7 @@ type (
 	Route struct {
 		URI            string
 		URIParams      map[string]bool
+		ConstFileURL   string
 		Cache          *view.Cache
 		Method         string
 		Declare        map[string]string

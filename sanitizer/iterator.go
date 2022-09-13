@@ -37,11 +37,12 @@ type (
 		paramMeta      *ParamMeta
 		contexts       []*ParamContext
 		counter        int
-		variables      map[string]bool
+		assignedVars   map[string]bool
 		occurrences    map[string]int
 		paramMetaTypes map[string]*ParamMetaType
 		hints          map[string]*ParameterHint
 		paramMatcher   *ParamMatcher
+		consts         map[string]interface{}
 	}
 
 	ParamContext struct {
@@ -69,14 +70,19 @@ type (
 	}
 )
 
-func NewIterator(SQL string, hints ParameterHints) *ParamMetaIterator {
+func NewIterator(SQL string, hints ParameterHints, consts map[string]interface{}) *ParamMetaIterator {
+	if consts == nil {
+		consts = map[string]interface{}{}
+	}
+
 	result := &ParamMetaIterator{
 		SQL:            SQL,
-		variables:      map[string]bool{},
+		assignedVars:   map[string]bool{},
 		occurrences:    map[string]int{},
 		paramMetaTypes: map[string]*ParamMetaType{},
 		paramMatcher:   NewParamMatcher(),
 		hints:          hints.Index(),
+		consts:         consts,
 	}
 
 	result.init()
@@ -233,7 +239,7 @@ func (i *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, raw, SQLK
 		FullName:        raw,
 		Prefix:          prefix,
 		Holder:          holder,
-		IsVariable:      i.variables[holder],
+		IsVariable:      i.assignedVars[holder],
 		OccurrenceIndex: occurrence,
 		MetaType:        paramMetaType,
 		SQLKeyword:      SQLKeyword,
@@ -246,7 +252,7 @@ func (i *ParamMetaIterator) addVariable(selector *expr.Select) {
 		return
 	}
 
-	i.variables[holderName] = true
+	i.assignedVars[holderName] = true
 }
 
 func (i *ParamMetaIterator) extractHints() {

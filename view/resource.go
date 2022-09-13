@@ -423,9 +423,16 @@ func (r *Resource) AddViews(views ...*View) {
 func (r *Resource) AddConnectors(connectors ...*Connector) {
 	if r.Connectors == nil {
 		r.Connectors = make([]*Connector, 0)
+		r._connectors = map[string]*Connector{}
 	}
 
-	r.Connectors = append(r.Connectors, connectors...)
+	for i, connector := range connectors {
+		if _, ok := r._connectors[connector.Name]; ok {
+			continue
+		}
+
+		r.Connectors = append(r.Connectors, connectors[i])
+	}
 }
 
 //AddParameters register parameters in the resource

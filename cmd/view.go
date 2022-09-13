@@ -34,7 +34,11 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 
 	// ReadMode
 	var dataViewParams = make(map[string]*option.TableParam)
-	routeOption := &option.Route{}
+	routeOption := &option.Route{
+		URIParams: map[string]bool{},
+		Declare:   map[string]string{},
+		Const:     map[string]interface{}{},
+	}
 	// ExecMode
 	var sqlExecModeView *option.ViewMeta
 	var parameterHints sanitizer.ParameterHints
@@ -182,9 +186,14 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	}
 
 	if len(routeOption.Const) > 0 {
-		s.route.With = append(s.route.With, "variables")
+		fileName := "variables"
+		if routeOption.ConstFileURL != "" {
+			fileName = routeOption.ConstFileURL
+		}
+
+		s.route.With = append(s.route.With, fileName)
 		variablesDep := &view.Resource{ModTime: TimeNow(), Parameters: s.buildConstParameters(routeOption)}
-		variablesURL := s.options.DepURL("variables")
+		variablesURL := s.options.DepURL(fileName)
 		_ = fsAddYAML(fs, variablesURL, variablesDep)
 	}
 

@@ -17,7 +17,7 @@ func (d *paramTypeDetector) correctUntyped(iterator *sanitizer.ParamMetaIterator
 			continue
 		}
 
-		if err := d.updateParamIfNeeded(aParam, paramMeta); err != nil {
+		if err := d.updateParamIfNeeded(route.Const, aParam, paramMeta); err != nil {
 			return err
 		}
 
@@ -37,8 +37,8 @@ func (d *paramTypeDetector) correctUntyped(iterator *sanitizer.ParamMetaIterator
 	return nil
 }
 
-func (d *paramTypeDetector) updateParamIfNeeded(param *option.Parameter, meta *sanitizer.ParamMeta) error {
-	if meta.Prefix == sanitizer.Const {
+func (d *paramTypeDetector) updateParamIfNeeded(consts map[string]interface{}, param *option.Parameter, meta *sanitizer.ParamMeta) error {
+	if _, ok := consts[param.Name]; ok {
 		param.Kind = string(view.LiteralKind)
 	}
 

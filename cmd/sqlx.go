@@ -127,12 +127,10 @@ func UpdateTableSettings(table *option.Table, routeOpt *option.Route, hints sani
 
 func expandConsts(SQL string, opt *option.Route) string {
 	replacementMap := rdata.Map{}
-	consts := opt.Const
-	if consts == nil {
-		return SQL
+	for key := range opt.Const {
+		replacementMap.SetValue(key, opt.Const[key])
 	}
 
-	replacementMap.SetValue(sanitizer.Const, consts)
 	return replacementMap.ExpandAsText(SQL)
 }
 

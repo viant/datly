@@ -23,12 +23,8 @@ var builtInMethods = map[string]bool{
 	functions.TypesFunc:    true,
 }
 
-const (
-	Const = "const"
-)
-
-func Sanitize(SQL string, hints ParameterHints) string {
-	iterator := NewIterator(SQL, hints)
+func Sanitize(SQL string, hints ParameterHints, consts map[string]interface{}) string {
+	iterator := NewIterator(SQL, hints, consts)
 	offset := 0
 
 	modifiable := []byte(SQL)
@@ -38,7 +34,7 @@ func Sanitize(SQL string, hints ParameterHints) string {
 			continue
 		}
 
-		sanitized := sanitizeParameter(paramMeta.Context, paramMeta.Prefix, paramMeta.Holder, paramMeta.FullName, iterator.variables)
+		sanitized := sanitizeParameter(paramMeta.Context, paramMeta.Prefix, paramMeta.Holder, paramMeta.FullName, iterator.assignedVars, iterator.consts)
 		if sanitized == paramMeta.FullName {
 			continue
 		}
@@ -50,13 +46,13 @@ func Sanitize(SQL string, hints ParameterHints) string {
 	return string(modifiable)
 }
 
-func sanitizeParameter(context Context, prefix, paramName, raw string, variables map[string]bool) string {
+func sanitizeParameter(context Context, prefix, paramName, raw string, variables map[string]bool, consts map[string]interface{}) string {
 	if prefix == keywords.ParamsMetadataKey {
 		return raw
 	}
 
-	if prefix == Const {
-		return strings.Replace(raw, prefix, keywords.ParamsKey, 1)
+	if _, ok := consts[paramName]; ok {
+		return strings.Replace(raw, "$", fmt.Sprintf("$%v.", keywords.ParamsKey), 1)
 	}
 
 	if (context == FuncContext || context == ForEachContext || context == IfContext) && variables[paramName] {
