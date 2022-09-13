@@ -3,11 +3,13 @@ package view
 import (
 	"context"
 	"database/sql"
+	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader/metadata"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
 	rdata "github.com/viant/toolbox/data"
+	"os"
 	"reflect"
 	"strings"
 )
@@ -79,6 +81,24 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 			Values: params,
 			Has:    presence,
 		},
+	}
+
+	for _, parameter := range aView.Template.Parameters {
+		if parameter.In.Kind != EnvironmentKind {
+			continue
+		}
+
+		paramValue := os.Getenv(parameter.In.Name)
+		convert, wasNil, err := converter.Convert(paramValue, parameter.Schema.Type(), parameter.DataType)
+		if err != nil {
+			return nil, err
+		}
+
+		if !wasNil {
+			if err = parameter.Set(selector, convert); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	for _, parameter := range aView.Template.Parameters {

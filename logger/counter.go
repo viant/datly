@@ -21,6 +21,10 @@ type CounterAdapter struct {
 	counter Counter
 }
 
+func (c *CounterAdapter) Counter() Counter {
+	return c.counter
+}
+
 func (c *CounterAdapter) Begin(started time.Time) counter.OnDone {
 	if c.counter == nil {
 		return nopOnDone

@@ -7,9 +7,15 @@ import (
 )
 
 type (
+	Matchable interface {
+		HttpURI() string
+		HttpMethod() string
+		CorsEnabled() bool
+	}
+
 	Matcher struct {
 		Nodes       []*Node
-		Routes      []*Route
+		Matchables  []Matchable
 		methodIndex map[string]int
 	}
 
@@ -58,22 +64,34 @@ func NewNode() *Node {
 	return &Node{index: map[string]int{}}
 }
 
-func (n *Node) Match(method, route string) (*Node, bool) {
+func (n *Node) Match(method, route string, exact bool, dest *[]*Node) {
 	if route == "" {
-		return n, true
+		*dest = append(*dest, n)
+		return
 	}
 
 	segment, path := extractSegment(route)
 
+	node, ok := n.nextMatcher(segment)
+	if ok {
+		node.Match(method, path, exact, dest)
+		return
+	}
+
+	if n.WildcardMatcher == nil && len(n.ExactChildren) == 0 && !exact {
+		*dest = append(*dest, n)
+	}
+}
+
+func (n *Node) nextMatcher(segment string) (*Node, bool) {
 	index, ok := n.index[segment]
 	if !ok && n.WildcardMatcher != nil {
-		return n.WildcardMatcher.Match(method, path)
+		return n.WildcardMatcher, true
 	}
 
 	if ok {
-		return n.ExactChildren[index].Match(method, path)
+		return n.ExactChildren[index], true
 	}
-
 	return nil, false
 }
 
@@ -97,24 +115,80 @@ func extractSegment(uri string) (string, string) {
 	return uri, ""
 }
 
-func (m *Matcher) Match(method, route string) (*Route, error) {
-	relative := asRelative(route)
-
-	methodMatcher, ok := m.getMethodMatcher(method)
-	if !ok {
-		return nil, fmt.Errorf("couldn't match URI %v", route)
+func (m *Matcher) MatchAllRoutes(method, route string) ([]*Route, error) {
+	matched, err := m.match(method, route, true)
+	if err != nil {
+		return nil, err
 	}
 
-	matched, ok := methodMatcher.Match(method, relative)
-	if !ok || len(matched.Matched) == 0 {
-		return nil, fmt.Errorf("couldn't match URI %v", route)
+	routesSize := 0
+
+	for _, node := range matched {
+		routesSize += len(node.Matched)
 	}
 
-	if len(matched.Matched) > 1 {
+	routes := make([]*Route, 0, routesSize)
+
+	for _, matchedNode := range matched {
+		for _, matchedIndex := range matchedNode.Matched {
+			aRoute, ok := m.Matchables[matchedIndex].(*Route)
+			if !ok {
+				continue
+			}
+
+			routes = append(routes, aRoute)
+
+		}
+	}
+
+	return routes, nil
+}
+
+func (m *Matcher) MatchOneRoute(method, route string) (*Route, error) {
+	matched, err := m.match(method, route, true)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(matched) == 0 || (len(matched) == 1 && len(matched[0].Matched) == 0) {
+		return nil, m.unmatchedRouteErr(route)
+	}
+
+	if len(matched) > 1 || len(matched[0].Matched) > 1 {
 		return nil, fmt.Errorf("matched more than one route for %v", route)
 	}
 
-	return m.Routes[matched.Matched[0]], nil
+	return asRoute(m.firstMatched(matched[0]))
+}
+
+func asRoute(matchable Matchable) (*Route, error) {
+	aRoute, ok := matchable.(*Route)
+	if !ok {
+		return nil, fmt.Errorf("unexpected Matcher type, wanted: %T, got %T", aRoute, matchable)
+	}
+
+	return aRoute, nil
+}
+
+func (m *Matcher) match(method string, route string, exact bool) ([]*Node, error) {
+	relative := AsRelative(route)
+
+	methodMatcher, ok := m.getMethodMatcher(method)
+	if !ok {
+		return nil, m.unmatchedRouteErr(route)
+	}
+
+	var matched []*Node
+	methodMatcher.Match(method, relative, exact, &matched)
+	if len(matched) == 0 {
+		return nil, fmt.Errorf("couldn't match URI %v", route)
+	}
+
+	return matched, nil
+}
+
+func (m *Matcher) unmatchedRouteErr(route string) error {
+	return fmt.Errorf("couldn't match URI %v", route)
 }
 
 func (m *Matcher) getMethodMatcher(method string) (*Node, bool) {
@@ -128,13 +202,13 @@ func (m *Matcher) getMethodMatcher(method string) (*Node, bool) {
 
 func (m *Matcher) init() {
 	m.methodIndex = map[string]int{}
-	for i, route := range m.Routes {
-		uri := asRelative(route.URI)
+	for i, route := range m.Matchables {
+		uri := AsRelative(route.HttpURI())
 
-		node := m.getOrCreateMatcher(route.Method)
+		node := m.getOrCreateMatcher(route.HttpMethod())
 		node.Add(i, uri)
 
-		if route.Cors != nil {
+		if route.CorsEnabled() {
 			corsMatcher := m.getOrCreateMatcher(http.MethodOptions)
 			corsMatcher.Add(i, uri)
 		}
@@ -153,7 +227,36 @@ func (m *Matcher) getOrCreateMatcher(method string) *Node {
 	return node
 }
 
-func asRelative(route string) string {
+func (m *Matcher) MatchPrefix(method string, uriPath string) ([]Matchable, error) {
+	allMatch, err := m.match(method, uriPath, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return m.flatten(allMatch), nil
+}
+
+func (m *Matcher) firstMatched(match *Node) Matchable {
+	return m.Matchables[match.Matched[0]]
+}
+
+func (m *Matcher) flatten(match []*Node) []Matchable {
+	totalMatched := 0
+	for _, node := range match {
+		totalMatched += len(node.Matched)
+	}
+
+	matchables := make([]Matchable, 0, totalMatched)
+	for _, node := range match {
+		for _, i := range node.Matched {
+			matchables = append(matchables, m.Matchables[i])
+		}
+	}
+
+	return matchables
+}
+
+func AsRelative(route string) string {
 	if route[0] == '/' {
 		route = route[1:]
 	}
@@ -164,11 +267,29 @@ func asRelative(route string) string {
 	return route
 }
 
-func NewMatcher(routes []*Route) *Matcher {
+func NewRouteMatcher(routes []*Route) *Matcher {
 	m := &Matcher{
-		Routes: routes,
+		Matchables: asMatchables(routes),
 	}
 
 	m.init()
 	return m
+}
+
+func NewMatcher(matchables []Matchable) *Matcher {
+	m := &Matcher{
+		Matchables: matchables,
+	}
+
+	m.init()
+	return m
+}
+
+func asMatchables(routes []*Route) []Matchable {
+	matchables := make([]Matchable, len(routes))
+	for i := range routes {
+		matchables[i] = routes[i]
+	}
+
+	return matchables
 }

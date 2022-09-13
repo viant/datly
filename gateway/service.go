@@ -13,358 +13,58 @@ import (
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
-	"log"
 	"net/http"
-	"net/url"
-	"os"
-	"path"
 	"strings"
 	"sync"
 	"time"
 )
 
-// Service represents gateway service
 type Service struct {
 	Config               *Config
 	visitors             codec.Visitors
 	types                view.Types
 	mux                  sync.RWMutex
-	routerResources      []*router.Resource
-	routers              map[string]*router.Router
+	routersIndex         map[string]*router.Router
 	fs                   afs.Service
 	cfs                  afs.Service //cache file system
 	routeResourceTracker *resource.Tracker
 	dataResourceTracker  *resource.Tracker
-	dataResources        map[string]*view.Resource
+	dataResourcesIndex   map[string]*view.Resource
 	metrics              *gmetric.Service
-	routesReloaded       bool
+	mainRouter           *Router
+	cancelFn             context.CancelFunc
 }
 
-func (r *Service) View(method, location string) (*view.View, error) {
-	URI := r.Config.APIPrefix + strings.ReplaceAll(location, ".", "/")
-
-	var err error
-	var route *router.Route
-
-	routers := r.routers
-
-	for _, candidate := range routers {
-		if route, err = candidate.Matcher.Match(method, URI); err == nil {
-			return route.View, nil
-		}
+func (r *Service) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	aRouter, ok := r.Router()
+	if !ok {
+		writer.WriteHeader(http.StatusNotFound)
 	}
 
-	return nil, err
+	aRouter.Handle(writer, request)
 }
 
-func (r *Service) Handle(writer http.ResponseWriter, request *http.Request) {
-	err := r.handle(writer, request)
-	if err != nil {
-		http.Error(writer, err.Error(), http.StatusInternalServerError)
-	}
+func (r *Service) Router() (*Router, bool) {
+	mainRouter := r.mainRouter
+	return mainRouter, mainRouter != nil
 }
 
-func (r *Service) handle(writer http.ResponseWriter, request *http.Request) error {
-	err := r.reloadResourceIfNeeded(context.Background())
-	if err != nil {
-		return err
+func (r *Service) Close() error {
+	if r.cancelFn != nil {
+		r.cancelFn()
 	}
-	URI := request.RequestURI
-	if strings.Contains(URI, "://") {
-		_, URI = furl.Base(URI, "https")
-	}
-
-	if request.URL == nil {
-		host := os.Getenv("FUNCTION_NAME")
-		if host == "" {
-			host = request.Host
-		}
-		if host == "" {
-			host = "localhost"
-		}
-		URL := "https://" + host + "/" + URI
-		request.URL, err = url.Parse(URL)
-	}
-
-	routePath := URI
-	if idx := strings.Index(URI, "?"); idx != -1 {
-		routePath = URI[:idx]
-	}
-
-	aRouter, err := r.match(request.Method, routePath)
-
-	if err == nil {
-		err = aRouter.Handle(writer, request)
-		if err != nil {
-			err = fmt.Errorf("failed to route: %v, %v, %v %w", request.Method, request.RequestURI, request.URL.String(), err)
-		}
-	}
-	return err
-}
-
-func (r *Service) reloadFs() afs.Service {
-	if r.Config.UseCacheFS {
-		return r.cfs
-	}
-	return r.fs
-}
-
-func (r *Service) match(method, URI string) (*router.Router, error) {
-	r.mux.RLock()
-	routers := r.routers
-	r.mux.RUnlock()
-
-	var err error
-	for _, aRouter := range routers {
-		if _, err = aRouter.Matcher.Match(method, URI); err == nil {
-			return aRouter, nil
-		}
-	}
-
-	var available = []string{}
-	for template := range routers {
-		available = append(available, r.Config.APIPrefix+template)
-	}
-	return nil, fmt.Errorf("%w, avail: %v", err, available)
-}
-
-func (r *Service) reloadResourceIfNeeded(ctx context.Context) error {
-	if !r.routesReloaded {
-		return r.reloadResource(ctx)
-	}
-
-	go func() {
-		err := r.reloadResource(ctx)
-		if err != nil {
-			fmt.Println(fmt.Errorf("couldn't reload resource in background due to %w", err).Error())
-		}
-	}()
 
 	return nil
 }
 
-func (r *Service) reloadResource(ctx context.Context) error {
-	if err := r.reloadDataResourceIfNeeded(ctx); err != nil {
-		log.Printf("failed to reload view reousrces: %v", err)
-	}
-	if err := r.reloadRouterResourcesIfNeeded(ctx); err != nil {
-		return err
-	}
-
-	r.routesReloaded = true
-	return nil
-}
-
-func (r *Service) reloadRouterResourcesIfNeeded(ctx context.Context) error {
-	fs := r.reloadFs()
-	var resourcesSnapshot = map[string]*router.Resource{}
-	hasChanged := false
-
-	err := r.routeResourceTracker.Notify(ctx, fs, r.handleRouterResourceChange(ctx, &hasChanged, resourcesSnapshot, fs))
-	if err != nil || !hasChanged {
-		return err
-	}
-	var updatedResource []*router.Resource
-	routers := map[string]*router.Router{}
-	for k := range resourcesSnapshot {
-		item := resourcesSnapshot[k]
-		for _, route := range item.Routes {
-			if route.APIKey == nil {
-				route.APIKey = r.Config.APIKeys.Match(route.URI)
-			}
-			key := r.normalize(route)
-			if _, ok := routers[key]; ok {
-				return fmt.Errorf("duplicate resource APIURI: %v,-> %v", key, item.SourceURL)
-			}
-			routers[key] = router.New(item, router.ApiPrefix(r.Config.APIPrefix))
-		}
-		updatedResource = append(updatedResource, item)
-	}
-	r.mux.Lock()
-	defer r.mux.Unlock()
-	r.routerResources = updatedResource
-	r.routers = routers
-	return nil
-}
-
-func (r *Service) normalize(route *router.Route) string {
-	key := route.URI
-	if strings.HasPrefix(key, r.Config.APIPrefix) {
-		key = strings.ReplaceAll(key, r.Config.APIPrefix, "")
-	}
-	return key
-}
-
-func (r *Service) handleRouterResourceChange(ctx context.Context, hasChanged *bool, resourcesSnapshot map[string]*router.Resource, fs afs.Service) func(URL string, operation resource.Operation) {
-	return func(URL string, operation resource.Operation) {
-		if strings.Contains(URL, ".meta/") {
-			return
-		}
-		*hasChanged = true
-		if len(resourcesSnapshot) == 0 {
-			r.mux.RLock()
-			for i, item := range r.routerResources {
-				resourcesSnapshot[item.SourceURL] = r.routerResources[i]
-			}
-			r.mux.RUnlock()
-		}
-		switch operation {
-		case resource.Added, resource.Modified:
-			if !strings.HasSuffix(URL, "yaml") {
-				return
-			}
-			res, err := r.loadRouterResource(ctx, URL, fs)
-			if err != nil {
-				log.Printf("failed to load %v, %v\n", URL, err)
-				return
-			}
-			resourcesSnapshot[res.SourceURL] = res
-		case resource.Deleted:
-			delete(resourcesSnapshot, URL)
-		}
-	}
-}
-
-func (r *Service) PreCachables(method, matchingURI string) ([]*view.View, error) {
-	aRouter, err := r.match(method, matchingURI)
-	if err != nil {
-		return nil, err
-	}
-	route, err := aRouter.Matcher.Match(method, matchingURI)
-	if err != nil {
-		return nil, err
-	}
-
-	var result = make([]*view.View, 0)
-	aView := route.View
-	appendCacheWarmupViews(aView, &result)
-	return result, nil
-}
-
-func appendCacheWarmupViews(aView *view.View, result *[]*view.View) {
-	if aCache := aView.Cache; aCache != nil && aCache.Warmup != nil {
-		*result = append(*result, aView)
-	}
-	if len(aView.With) == 0 {
-		return
-	}
-	for i := range aView.With {
-		appendCacheWarmupViews(&aView.With[i].Of.View, result)
-	}
-}
-
-func (r *Service) reloadDataResourceIfNeeded(ctx context.Context) error {
-	fs := r.reloadFs()
-	var resourcesSnapshot = map[string]*view.Resource{}
-	hasChanged := false
-	err := r.dataResourceTracker.Notify(ctx, fs, r.handleDataResourceChange(ctx, &hasChanged, resourcesSnapshot, fs))
-	if err != nil || !hasChanged {
-		return err
-	}
-	r.mux.Lock()
-	defer r.mux.Unlock()
-	r.dataResources = resourcesSnapshot
-	return nil
-}
-
-func (r *Service) handleDataResourceChange(ctx context.Context, hasChanged *bool, resourcesSnapshot map[string]*view.Resource, fs afs.Service) func(URL string, operation resource.Operation) {
-	return func(URL string, operation resource.Operation) {
-		if strings.Contains(URL, ".meta/") {
-			return
-		}
-		_, key := furl.Split(URL, file.Scheme)
-		if index := strings.Index(key, "."); index != -1 {
-			key = key[:index]
-		}
-		*hasChanged = true
-		if len(resourcesSnapshot) == 0 {
-			r.mux.RLock()
-			for i, item := range r.dataResources {
-				resourcesSnapshot[item.SourceURL] = r.dataResources[i]
-			}
-			r.mux.RUnlock()
-		}
-		switch operation {
-		case resource.Added, resource.Modified:
-			res, err := view.LoadResourceFromURL(ctx, URL, fs)
-			if err != nil {
-				log.Printf("failed to load %v, %v\n", URL, err)
-				return
-			}
-			resourcesSnapshot[key] = res
-		case resource.Deleted:
-			delete(resourcesSnapshot, URL)
-		}
-	}
-}
-
-func (r *Service) loadRouterResource(ctx context.Context, URL string, fs afs.Service) (*router.Resource, error) {
-	types := view.Types{}
-	for k, v := range r.types {
-		types[k] = v
-	}
-
-	var metrics *view.Metrics
-	if r.metrics != nil {
-		appURI := r.apiURI(URL)
-		URIPart, _ := path.Split(appURI)
-		metrics = &view.Metrics{
-			Service: r.metrics,
-			URIPart: URIPart,
-		}
-	}
-
-	aResource, err := router.NewResourceFromURL(ctx, fs, URL, r.Config.Discovery(), r.visitors, types, r.dataResources, metrics)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = r.initResource(ctx, aResource, URL); err != nil {
-		return nil, err
-	}
-
-	return aResource, nil
-}
-
-func (r *Service) initResource(ctx context.Context, resource *router.Resource, URL string) error {
-	resource.SourceURL = URL
-	if resource.APIURI == "" {
-		appURI := r.apiURI(URL)
-		resource.APIURI = appURI
-	}
-	return resource.Init(ctx)
-}
-
-func (r *Service) apiURI(URL string) string {
-	path := furl.Path(r.Config.RouteURL)
-	URI := URL
-	index := strings.Index(URL, path)
-	if index != -1 {
-		URI = strings.Trim(URL[index+len(path):], "/")
-	}
-	if index := strings.Index(URI, "."); index != -1 {
-		URI = URI[:index]
-	}
-	return URI
-}
-
-func (r *Service) Routes(route string) []*router.Route {
-	routes := make([]*router.Route, 0)
-
-	for _, viewRouter := range r.routers {
-		routes = append(routes, viewRouter.Routes(route)...)
-	}
-
-	return routes
-}
-
-// New creates a gateway service
-func New(ctx context.Context, config *Config, visitors codec.Visitors, types view.Types, metrics *gmetric.Service) (*Service, error) {
+//New creates gateway Service. It is important to call Service.Close before Service got Garbage collected.
+func New(ctx context.Context, config *Config, statusHandler http.Handler, authorizer Authorizer, visitors codec.Visitors, types view.Types, metrics *gmetric.Service) (*Service, error) {
 	config.Init()
 	err := config.Validate()
 	if err != nil {
 		return nil, err
 	}
+
 	URL, _ := furl.Split(config.RouteURL, file.Scheme)
 	cfs := cache.Singleton(URL)
 
@@ -376,16 +76,216 @@ func New(ctx context.Context, config *Config, visitors codec.Visitors, types vie
 		mux:                  sync.RWMutex{},
 		fs:                   afs.New(),
 		cfs:                  cfs,
-		dataResources:        map[string]*view.Resource{},
+		dataResourcesIndex:   map[string]*view.Resource{},
 		routeResourceTracker: resource.New(config.RouteURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
 		dataResourceTracker:  resource.New(config.DependencyURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
+		routersIndex:         map[string]*router.Router{},
+		mainRouter:           NewRouter(map[string]*router.Router{}, config, metrics, statusHandler, authorizer),
 	}
+
 	if err = initSecrets(ctx, config); err != nil {
 		return nil, err
 	}
 
-	err = srv.reloadResourceIfNeeded(ctx)
+	err = srv.createRouterIfNeeded(ctx, metrics, statusHandler, authorizer)
+	srv.detectChanges(metrics, statusHandler, authorizer)
+
 	return srv, err
+}
+
+func (r *Service) createRouterIfNeeded(ctx context.Context, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer) error {
+	fs := r.reloadFs()
+	resources, changed, err := r.getDataResources(ctx, fs)
+	if err != nil {
+		return err
+	}
+
+	routers, changed, err := r.getRouters(ctx, fs, resources, changed)
+	if err != nil || !changed {
+		return err
+	}
+
+	mainRouter := NewRouter(routers, r.Config, metrics, statusHandler, authorizer)
+	r.mux.Lock()
+	r.mainRouter = mainRouter
+	r.routersIndex = routers
+	r.dataResourcesIndex = resources
+	r.mux.Unlock()
+
+	return nil
+}
+
+func (r *Service) getRouters(ctx context.Context, fs afs.Service, resources map[string]*view.Resource, viewResourcesChanged bool) (routers map[string]*router.Router, changed bool, err error) {
+	updatedRouters, removedRouters, err := r.detectRoutersChanges(ctx, fs)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if !viewResourcesChanged && len(updatedRouters) == 0 && len(removedRouters) == 0 {
+		return r.routersIndex, false, nil
+	}
+
+	updatedMap, removedMap := asMap(updatedRouters), asMap(removedRouters)
+
+	routers = map[string]*router.Router{}
+	for routerURL := range r.routersIndex {
+		if (updatedMap[routerURL] || removedMap[routerURL]) && !changed {
+			continue
+		}
+
+		routers[routerURL] = r.routersIndex[routerURL]
+	}
+
+	for _, resourceURL := range updatedRouters {
+		routerResource, err := router.NewResourceFromURL(ctx, fs, resourceURL, r.Config.Discovery(), r.visitors, r.types, r.metrics, resources)
+		if err != nil {
+			return nil, false, err
+		}
+
+		r.updateRouterAPIKeys(routerResource.Routes)
+		routerResource.SourceURL = resourceURL
+		routers[resourceURL] = router.New(routerResource, router.ApiPrefix(r.Config.APIPrefix))
+	}
+
+	return routers, true, nil
+}
+
+func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (resources map[string]*view.Resource, changed bool, err error) {
+	updatedResources, removedResources, err := r.detectResourceChanges(ctx, fs)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if len(updatedResources) == 0 && len(removedResources) == 0 {
+		return r.dataResourcesIndex, false, nil
+	}
+
+	updatedMap, removedMap := asMap(updatedResources), asMap(removedResources)
+
+	result := map[string]*view.Resource{}
+	for resourceURL, dataResource := range r.dataResourcesIndex {
+		if updatedMap[dataResource.SourceURL] || removedMap[dataResource.SourceURL] {
+			continue
+		}
+
+		result[resourceURL] = r.dataResourcesIndex[resourceURL]
+	}
+
+	for _, resourceURL := range updatedResources {
+		newResource, err := view.LoadResourceFromURL(ctx, resourceURL, fs)
+		if err != nil {
+			return nil, false, err
+		}
+
+		if err = newResource.FlushEnv(); err != nil {
+			return nil, false, err
+		}
+
+		result[r.updateResourceKey(resourceURL)] = newResource
+	}
+
+	return result, true, err
+}
+
+func asMap(URLs []string) map[string]bool {
+	result := map[string]bool{}
+	for i := range URLs {
+		result[URLs[i]] = true
+	}
+
+	return result
+}
+
+func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) ([]string, []string, error) {
+	var updatedResources []string
+	var removedResources []string
+
+	err := r.dataResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
+		if strings.Contains(URL, ".meta/") {
+			return
+		}
+
+		switch operation {
+		case resource.Added, resource.Modified:
+			updatedResources = append(updatedResources, URL)
+		case resource.Deleted:
+			removedResources = append(removedResources, URL)
+		}
+	})
+
+	return updatedResources, removedResources, err
+}
+
+func (r *Service) detectRoutersChanges(ctx context.Context, fs afs.Service) ([]string, []string, error) {
+	var updated []string
+	var removed []string
+	err := r.routeResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
+		if strings.Contains(URL, ".meta/") || !strings.HasSuffix(URL, ".yaml") {
+			return
+		}
+
+		switch operation {
+		case resource.Added, resource.Modified:
+			updated = append(updated, URL)
+		case resource.Deleted:
+			removed = append(removed, URL)
+		}
+	})
+
+	return updated, removed, err
+}
+
+func (r *Service) detectChanges(metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer) {
+	ctx := context.Background()
+	cancel, cancelFunc := context.WithCancel(ctx)
+	r.cancelFn = cancelFunc
+	go func() {
+	outer:
+		for {
+			time.Sleep(time.Minute * 1)
+			select {
+			case <-cancel.Done():
+				break outer
+			default:
+				if err := r.createRouterIfNeeded(context.TODO(), metrics, statusHandler, authorizer); err != nil {
+					fmt.Printf("error occured while recreating routers: %v \n", err.Error())
+				}
+			}
+		}
+	}()
+}
+
+func (r *Service) reloadFs() afs.Service {
+	if r.Config.UseCacheFS {
+		return r.cfs
+	}
+	return r.fs
+}
+
+func (r *Service) PreCachables(method string, uri string) ([]*view.View, error) {
+	aRouter, ok := r.Router()
+	if !ok {
+		return []*view.View{}, nil
+	}
+
+	return aRouter.PreCacheables(method, uri)
+}
+
+func (r *Service) updateResourceKey(URL string) string {
+	_, key := furl.Split(URL, file.Scheme)
+	if index := strings.Index(key, "."); index != -1 {
+		key = key[:index]
+	}
+
+	return key
+}
+
+func (r *Service) updateRouterAPIKeys(routes router.Routes) {
+	for _, route := range routes {
+		if route.APIKey == nil {
+			route.APIKey = r.Config.APIKeys.Match(route.URI)
+		}
+	}
 }
 
 func initSecrets(ctx context.Context, config *Config) error {

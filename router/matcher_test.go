@@ -74,12 +74,19 @@ func TestMatcher(t *testing.T) {
 			matchedRoute: "/events/seg1/seg2/seg4",
 			method:       http.MethodGet,
 		},
+		{
+			description: "includes route",
+			routes:      []*Route{{URI: "/events/seg1/{segID}/seg3", Method: http.MethodGet}, {URI: "/events/seg1/seg2/seg4", Method: http.MethodGet}},
+			route:       "/events/seg1/seg2/seg4/abc/def/ghi/jkl?abc=true",
+			method:      http.MethodGet,
+			expectError: true,
+		},
 	}
 
 	//for _, testCase := range testCases[len(testCases)-1:] {
 	for _, testCase := range testCases {
-		matcher := NewMatcher(testCase.routes)
-		match, err := matcher.Match(testCase.method, testCase.route)
+		matcher := NewRouteMatcher(testCase.routes)
+		match, err := matcher.MatchOneRoute(testCase.method, testCase.route)
 		if testCase.expectError {
 			assert.NotNil(t, err, testCase.description)
 			continue

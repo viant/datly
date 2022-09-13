@@ -2,6 +2,7 @@ package view
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
@@ -12,6 +13,7 @@ import (
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -43,7 +45,8 @@ type Resource struct {
 	_loggers logger.AdapterIndex
 
 	_visitors     codec.Visitors
-	ModTime       time.Time `json:",omitempty"`
+	ModTime       time.Time              `json:",omitempty"`
+	Env           map[string]interface{} `json:",omitempty"`
 	_columnsCache map[string]Columns
 }
 
@@ -308,6 +311,7 @@ func LoadResourceFromURL(ctx context.Context, URL string, fs afs.Service) (*Reso
 	if err != nil {
 		return nil, err
 	}
+
 	transient := map[string]interface{}{}
 	object, err := fs.Object(ctx, URL)
 	if err != nil {
@@ -501,4 +505,33 @@ func (r *Resource) ensureCacheIndex() {
 	if r._cacheIndex == nil {
 		r._cacheIndex = map[string]int{}
 	}
+}
+
+func (r *Resource) FlushEnv() error {
+	for key, value := range r.Env {
+		asString, err := AsString(value)
+		if err != nil {
+			return err
+		}
+
+		if err := os.Setenv(key, asString); err != nil {
+			return err
+		}
+	}
+
+	r.Env = nil
+	return nil
+}
+
+func AsString(value interface{}) (string, error) {
+	asString, ok := value.(string)
+	if ok {
+		return asString, nil
+	}
+
+	bytes, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return string(bytes), nil
 }

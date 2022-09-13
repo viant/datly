@@ -38,45 +38,60 @@ func (r *Server) shutdownOnInterrupt() {
 }
 
 func (r *Server) Routes() []*router.Route {
-	return r.Service.Routes("")
-}
-
-func NewWithAuth(config *Config, auth AuthHandler) (*Server, error) {
-	if auth == nil {
-		auth = &noAuth{}
+	aRouter, ok := r.Service.Router()
+	if !ok {
+		return []*router.Route{}
 	}
 
+	return aRouter.MatchAll("")
+}
+
+func NewWithAuth(config *Config, auth gateway.Authorizer) (*Server, error) {
 	config.Init()
-	mux := http.NewServeMux()
+	//mux := http.NewServeMux()
 	metric := gmetric.New()
 	if config.Config == nil {
 		return nil, fmt.Errorf("gateway config was empty")
 	}
-	service, err := gateway.SingletonWithConfig(config.Config, registry.Codecs, registry.Types, metric)
+
+	service, err := gateway.SingletonWithConfig(
+		config.Config,
+		handler.NewStatus(config.Version, &config.Meta),
+		auth,
+		registry.Codecs,
+		registry.Types,
+		metric,
+	)
+
 	if err != nil {
+		if service != nil {
+			_ = service.Close()
+		}
+
 		return nil, err
 	}
 
-	mux.Handle(config.Meta.MetricURI, auth.Auth(gmetric.NewHandler(config.Meta.MetricURI, metric).ServeHTTP))
-	mux.Handle(config.Meta.ConfigURI, auth.Auth(handler.NewConfig(config.Config, &config.Endpoint, &config.Meta).ServeHTTP))
-	mux.Handle(config.Meta.StatusURI, auth.Auth(handler.NewStatus(config.Version, &config.Meta).ServeHTTP))
-
-	mux.Handle(config.Meta.ViewURI, auth.Auth(handler.NewView(config.Meta.ViewURI, &config.Meta, service.View).ServeHTTP))
-	mux.Handle(config.Meta.OpenApiURI, auth.Auth(handler.NewOpenApi(config.APIPrefix, config.Meta.OpenApiURI, config.Info, service.Routes).ServeHTTP))
-	mux.Handle(config.Meta.CacheWarmURI, auth.Auth(handler.NewCacheWarmup(config.APIPrefix, &config.Meta, service.PreCachables).ServeHTTP))
-
-	//actual datly handler
-	mux.HandleFunc(config.Config.APIPrefix, auth.Auth(service.Handle))
+	//mux.Handle(config.Meta.MetricURI, auth.Auth(gmetric.NewHandler(config.Meta.MetricURI, metric).ServeHTTP))
+	//mux.Handle(config.Meta.ConfigURI, auth.Auth(handler.NewConfig(config.Config, &config.Endpoint, &config.Meta).ServeHTTP))
+	//mux.Handle(config.Meta.StatusURI, auth.Auth(handler.NewStatus(config.Version, &config.Meta).ServeHTTP))
+	//
+	//mux.Handle(config.Meta.ViewURI, auth.Auth(handler.NewView(config.Meta.ViewURI, &config.Meta, service.View).ServeHTTP))
+	//mux.Handle(config.Meta.OpenApiURI, auth.Auth(handler.NewOpenApi(config.APIPrefix, config.Meta.OpenApiURI, config.Info, service.Routes).ServeHTTP))
+	//mux.Handle(config.Meta.CacheWarmURI, auth.Auth(handler.NewCacheWarmup(config.APIPrefix, &config.Meta, service.PreCachables).ServeHTTP))
+	//
+	////actual datly handler
+	//mux.HandleFunc(config.Config.APIPrefix, auth.Auth(service.Handle))
 	server := &Server{
 		Service: service,
 		Server: http.Server{
 			Addr:           ":" + strconv.Itoa(config.Endpoint.Port),
-			Handler:        mux,
+			Handler:        service,
 			ReadTimeout:    time.Millisecond * time.Duration(config.Endpoint.ReadTimeoutMs),
 			WriteTimeout:   time.Millisecond * time.Duration(config.Endpoint.WriteTimeoutMs),
 			MaxHeaderBytes: config.Endpoint.MaxHeaderBytes,
 		},
 	}
+
 	server.shutdownOnInterrupt()
 	return server, nil
 }

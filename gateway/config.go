@@ -45,6 +45,7 @@ func (c *Config) Init() {
 	if c.SyncFrequencyMs == 0 {
 		c.SyncFrequencyMs = 5000
 	}
+
 	c.Meta.Init()
 }
 

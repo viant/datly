@@ -15,7 +15,9 @@ import (
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/openapi3"
+	"github.com/viant/datly/sanitizer"
 	"github.com/viant/datly/view"
+	rdata "github.com/viant/toolbox/data"
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
@@ -157,6 +159,25 @@ func (s *serverBuilder) removeFromOutputIfNeeded(route *router.Route, table *opt
 	}
 
 	//buildExcludeColumn()
+}
+
+func (s *serverBuilder) buildExpandMap(hints option.ParameterHints) (rdata.Map, error) {
+	result := rdata.Map{}
+	for _, aHint := range hints {
+		actual, _ := sanitizer.SplitHint(aHint.Hint)
+		aParam := &option.Parameter{}
+		if err := json.Unmarshal([]byte(actual), aParam); err != nil {
+			return nil, err
+		}
+
+		if aParam.Kind != string(view.EnvironmentKind) {
+			continue
+		}
+
+		result.SetValue(aHint.Parameter, os.Getenv(aHint.Parameter))
+	}
+
+	return result, nil
 }
 
 func normalizeMetaTemplateSQL(SQL string, holderViewName string) string {

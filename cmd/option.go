@@ -230,5 +230,6 @@ func namespace(name string) string {
 	if len(parts) > 2 {
 		return parts[len(parts)-2][0:1] + parts[len(parts)-1][0:1]
 	}
+
 	return parts[len(parts)-1][0:2]
 }

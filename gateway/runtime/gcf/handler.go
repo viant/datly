@@ -28,10 +28,12 @@ func handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if configURL == "" {
 		return fmt.Errorf("config was emrty")
 	}
-	service, err := gateway.Singleton(configURL, registry.Codecs, registry.Types, nil)
+
+	service, err := gateway.Singleton(configURL, nil, nil, registry.Codecs, registry.Types, nil)
 	if err != nil {
 		return err
 	}
-	service.Handle(w, r)
+
+	service.ServeHTTP(w, r)
 	return nil
 }

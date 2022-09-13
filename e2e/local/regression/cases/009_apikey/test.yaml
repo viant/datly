@@ -9,7 +9,7 @@ pipeline:
       - Method: GET
         URL: http://127.0.0.1:8080/v1/api/dev/secured/vendors/2
         Expect:
-          Code: 401
+          Code: 403
 
       - Method: GET
         URL: http://127.0.0.1:8080/v1/api/dev/secured/vendors/2

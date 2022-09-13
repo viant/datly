@@ -58,6 +58,15 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 			SQL = ast.RemoveParameterHints(SQL, parameterHints)
 		}
 
+		expandMap, err := s.buildExpandMap(parameterHints)
+		if err != nil {
+			return err
+		}
+
+		if len(expandMap) > 0 {
+			SQL = expandMap.ExpandAsText(SQL)
+		}
+
 		if ast.IsSQLExecMode(SQL) {
 			if sqlExecModeView, err = ast.Parse(SQL, routeOption, parameterHints); err != nil {
 				return err

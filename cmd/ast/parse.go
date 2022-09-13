@@ -8,10 +8,12 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/parsly"
+	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty/ast"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/ast/stmt"
 	"github.com/viant/velty/parser"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -86,8 +88,27 @@ func Parse(SQL string, route *option.Route, hints option.ParameterHints) (*optio
 		}
 	}
 
-	viewMeta.Source = sanitizer.Sanitize(SQL[actualSourceStart:], hints)
+	envMap := buildExpandMap(viewMeta)
+	SQL = SQL[actualSourceStart:]
+	if len(envMap) != 0 {
+		SQL = envMap.ExpandAsText(SQL)
+	}
+
+	viewMeta.Source = sanitizer.Sanitize(SQL, hints)
 	return viewMeta, nil
+}
+
+func buildExpandMap(viewMeta *option.ViewMeta) rdata.Map {
+	result := rdata.Map{}
+	for _, parameter := range viewMeta.Parameters {
+		if parameter.Kind != string(view.EnvironmentKind) {
+			continue
+		}
+
+		result.SetValue(parameter.Name, os.Getenv(parameter.Name))
+	}
+
+	return result
 }
 
 func IsSQLExecMode(SQL string) bool {

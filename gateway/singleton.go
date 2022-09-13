@@ -5,13 +5,14 @@ import (
 	"github.com/viant/datly/codec"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
+	"net/http"
 	"sync"
 )
 
 var service *Service
 var once sync.Once
 
-func Singleton(configURL string, visitors codec.Visitors, types view.Types, metric *gmetric.Service) (*Service, error) {
+func Singleton(configURL string, statusHandler http.Handler, authorizer Authorizer, visitors codec.Visitors, types view.Types, metric *gmetric.Service) (*Service, error) {
 	var err error
 	once.Do(func() {
 		ctx := context.Background()
@@ -19,33 +20,33 @@ func Singleton(configURL string, visitors codec.Visitors, types view.Types, metr
 		if config, err = NewConfigFromURL(ctx, configURL); err != nil {
 			return
 		}
-		service, err = New(ctx, config, visitors, types, metric)
+		service, err = New(ctx, config, statusHandler, authorizer, visitors, types, metric)
 	})
 	if err != nil {
 		once = sync.Once{}
 	}
+
 	return service, err
 }
 
-var onceWithConfig sync.Once
-
-func SingletonWithConfig(config *Config, visitors codec.Visitors, types view.Types, metric *gmetric.Service) (*Service, error) {
+func SingletonWithConfig(config *Config, statusHandler http.Handler, authorizer Authorizer, visitors codec.Visitors, types view.Types, metric *gmetric.Service) (*Service, error) {
 	var err error
 
-	onceWithConfig.Do(func() {
+	once.Do(func() {
 		ctx := context.Background()
-		service, err = New(ctx, config, visitors, types, metric)
+		service, err = New(ctx, config, statusHandler, authorizer, visitors, types, metric)
 	})
 
 	if err != nil {
-		onceWithConfig = sync.Once{}
+		once = sync.Once{}
 	}
 
 	return service, err
 }
 
 func ResetSingleton() {
-	service = nil
 	once = sync.Once{}
-	onceWithConfig = sync.Once{}
+	if service != nil {
+		_ = service.Close()
+	}
 }

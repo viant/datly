@@ -1,0 +1,23 @@
+init:
+  parentPath: $parent.path
+  expect: $LoadJSON('${parentPath}/expect.json')
+
+pipeline:
+  printHello:
+    action: print
+    message: hello action 1
+
+  initEnv:
+    action: exec:run
+    target: $target
+    commands:
+      - export $TableName=VENDOR
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/vendors-env?vendorIDs=1,2
+        Expect:
+          Code: 200
+          JSONBody: $expect

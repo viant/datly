@@ -70,7 +70,7 @@ func (r *Router) View(name string) (*view.View, error) {
 }
 
 func (r *Router) Handle(response http.ResponseWriter, request *http.Request) error {
-	route, err := r.Matcher.Match(request.Method, request.URL.Path)
+	route, err := r.Matcher.MatchOneRoute(request.Method, request.URL.Path)
 	if err != nil {
 		return err
 	}
@@ -82,10 +82,10 @@ func (r *Router) Handle(response http.ResponseWriter, request *http.Request) err
 			return nil
 		}
 	}
-	return r.handleRoute(response, request, route)
+	return r.HandleRoute(response, request, route)
 }
 
-func (r *Router) handleRoute(response http.ResponseWriter, request *http.Request, route *Route) error {
+func (r *Router) HandleRoute(response http.ResponseWriter, request *http.Request, route *Route) error {
 	if request.Method == http.MethodOptions {
 		corsHandler(route.Cors)(response)
 		return nil
@@ -175,12 +175,12 @@ func (r *Router) Serve(serverPath string) error {
 }
 
 func (r *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	route, err := r.Matcher.Match(request.Method, request.URL.Path)
+	route, err := r.Matcher.MatchOneRoute(request.Method, request.URL.Path)
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
 	}
 
-	err = r.handleRoute(writer, request, route)
+	err = r.HandleRoute(writer, request, route)
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
 	}
@@ -646,7 +646,7 @@ func (r *Router) logMetrics(URI string, metrics []*reader.Metric) {
 }
 
 func (r *Router) initMatcher() {
-	r.Matcher = NewMatcher(r.routes)
+	r.Matcher = NewRouteMatcher(r.routes)
 }
 
 func (r *Router) normalizeRouteURI(prefix string, route *Route) {

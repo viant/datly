@@ -18,20 +18,27 @@ const (
 	AuthTypeBearer      = "bearer"
 )
 
+func (s *Service) Authorize(writer http.ResponseWriter, request *http.Request) bool {
+	if s.authorizeRequest(writer, request) {
+		return true
+	}
+
+	if s.Config.SignInURL != "" {
+		if err := s.handleSignIn(writer, request); err == nil {
+			return false
+		}
+	}
+
+	writer.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
+	http.Error(writer, "Unauthorized", http.StatusUnauthorized)
+	return false
+}
+
 func (s *Service) Auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.authorizeRequest(w, r) {
+		if s.Authorize(w, r) {
 			next(w, r)
-			return
 		}
-		if s.Config.SignInURL != "" {
-			if err := s.handleSignIn(w, r); err == nil {
-				return
-			}
-		}
-
-		w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	}
 }
 

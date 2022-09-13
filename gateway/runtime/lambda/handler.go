@@ -3,13 +3,10 @@ package lambda
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/auth/jwt"
-	"github.com/viant/datly/gateway/runtime/standalone/handler"
-	"net/http"
-	"strings"
-
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/viant/datly/auth/jwt"
 	"github.com/viant/datly/gateway"
+	"net/http"
 
 	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/gateway/runtime/lambda/adapter"
@@ -45,31 +42,17 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 		configInit = sync.Once{}
 		return err
 	}
-	var authenticator jwt.Authenticator
-	if _, err = jwt.Init(config, nil); err != nil {
+
+	var authenticator gateway.Authorizer
+	if authenticator, err = jwt.Init(config, nil); err != nil {
 		return err
-	}
-	service, err := gateway.SingletonWithConfig(config, registry.Codecs, registry.Types, nil)
-	if err != nil {
-		return err
-	}
-	httpHandler := service.Handle
-	if authenticator != nil {
-		httpHandler = authenticator.Auth(service.Handle)
-	}
-	if err != nil {
-		return err
-	}
-	if strings.Contains(httpRequest.RequestURI, config.Meta.ViewURI) {
-		viewHandler := handler.NewView(config.Meta.ViewURI, &config.Meta, service.View)
-		viewHandler.ServeHTTP(writer, httpRequest)
-		return nil
 	}
 
-	if strings.HasSuffix(httpRequest.RequestURI, ".ico") {
-		writer.WriteHeader(http.StatusNotFound)
-	} else {
-		httpHandler(writer, httpRequest)
+	service, err := gateway.SingletonWithConfig(config, nil, authenticator, registry.Codecs, registry.Types, nil)
+	if err != nil {
+		return err
 	}
+
+	service.ServeHTTP(writer, httpRequest)
 	return nil
 }

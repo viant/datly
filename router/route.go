@@ -82,6 +82,18 @@ type (
 	}
 )
 
+func (r *Route) HttpURI() string {
+	return r.URI
+}
+
+func (r *Route) HttpMethod() string {
+	return r.Method
+}
+
+func (r *Route) CorsEnabled() bool {
+	return r.Cors != nil
+}
+
 func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if r.Style == BasicStyle {
 		r.ResponseField = ""

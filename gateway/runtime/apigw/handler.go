@@ -3,14 +3,10 @@ package apigw
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/auth/jwt"
-	"github.com/viant/datly/gateway/runtime/standalone/handler"
-	"github.com/viant/datly/router/openapi3"
-	"net/http"
-	"strings"
-
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/viant/datly/auth/jwt"
 	"github.com/viant/datly/gateway"
+	"net/http"
 
 	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/gateway/runtime/apigw/adapter"
@@ -45,46 +41,17 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 		configInit = sync.Once{}
 		return err
 	}
-	var authService jwt.Authenticator
+
+	var authService gateway.Authorizer
 	if authService, err = jwt.Init(config, nil); err != nil {
 		return err
 	}
-	service, err := gateway.SingletonWithConfig(config, registry.Codecs, registry.Types, nil)
+
+	service, err := gateway.SingletonWithConfig(config, nil, authService, registry.Codecs, registry.Types, nil)
 	if err != nil {
 		return err
 	}
-	httpHandler := service.Handle
-	if authService != nil {
-		httpHandler = authService.Auth(service.Handle)
-	}
-	if err != nil {
-		return err
-	}
-	if strings.Contains(httpRequest.RequestURI, config.Meta.ViewURI) {
-		viewHandler := handler.NewView(config.Meta.ViewURI, &config.Meta, service.View)
-		viewHandler.ServeHTTP(writer, httpRequest)
-		return nil
-	}
-	if strings.Contains(httpRequest.RequestURI, config.Meta.ConfigURI) {
-		viewHandler := handler.NewConfig(config, nil, &config.Meta)
-		viewHandler.ServeHTTP(writer, httpRequest)
-		return nil
-	}
-	if strings.Contains(httpRequest.RequestURI, config.Meta.OpenApiURI) {
-		//TODO: add openapi3.Info to Config
-		openApiHandler := handler.NewOpenApi(config.APIPrefix, config.Meta.OpenApiURI, openapi3.Info{}, service.Routes)
-		openApiHandler.ServeHTTP(writer, httpRequest)
-		return nil
-	}
-	if strings.Contains(httpRequest.RequestURI, config.Meta.CacheWarmURI) {
-		warmupHandler := handler.NewCacheWarmup(config.APIPrefix, &config.Meta, service.PreCachables)
-		warmupHandler.ServeHTTP(writer, httpRequest)
-		return nil
-	}
-	if strings.HasSuffix(httpRequest.RequestURI, ".ico") {
-		writer.WriteHeader(http.StatusNotFound)
-	} else {
-		httpHandler(writer, httpRequest)
-	}
+
+	service.ServeHTTP(writer, httpRequest)
 	return nil
 }
