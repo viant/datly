@@ -85,6 +85,8 @@ func (p *Prefix) CorsEnabled() bool {
 	return false
 }
 
+//NewRouter creates new router
+//TODO: http handlers can be chosen by matcher. We can create wrapper for router.Matchable that will handle the request using Route/Routes etc.
 func NewRouter(routersIndex map[string]*router.Router, config *Config, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer) *Router {
 	routers := asRouterSlice(routersIndex)
 	matcher, routes, index := newMatcher(routers)
