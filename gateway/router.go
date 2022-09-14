@@ -13,11 +13,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"strings"
 )
 
-const wildcard = `{DATLY_WILDCARD}`
+//const wildcard = `{DATLY_WILDCARD}`
 
 type (
 	Router struct {
@@ -33,6 +32,7 @@ type (
 		authorizer      Authorizer
 		availableRoutes []Route
 		apiKeyMatcher   *router.Matcher
+		metaConfig      *meta.Config
 	}
 
 	AvailableRoutesError struct {
@@ -46,7 +46,6 @@ type (
 	}
 
 	Prefix struct {
-		Actual  string
 		Indexed string
 	}
 
@@ -91,6 +90,16 @@ func NewRouter(routersIndex map[string]*router.Router, config *Config, metrics *
 	routers := asRouterSlice(routersIndex)
 	matcher, routes, index := newMatcher(routers)
 
+	var metaConfig meta.Config
+	if config != nil {
+		metaConfig = config.Meta
+		metaConfig.MetricURI = router.AsRelative(metaConfig.MetricURI)
+		metaConfig.ViewURI = router.AsRelative(metaConfig.ViewURI)
+		metaConfig.OpenApiURI = router.AsRelative(metaConfig.OpenApiURI)
+		metaConfig.StatusURI = router.AsRelative(metaConfig.StatusURI)
+		metaConfig.CacheWarmURI = router.AsRelative(metaConfig.CacheWarmURI)
+	}
+
 	return &Router{
 		routersIndex:  index,
 		routers:       routers,
@@ -100,17 +109,18 @@ func NewRouter(routersIndex map[string]*router.Router, config *Config, metrics *
 		metrics:       metrics,
 		statusHandler: statusHandler,
 		prefixesMatcher: newPrefixMatcher([]string{
-			config.Meta.ViewURI,
-			config.Meta.MetricURI,
-			config.Meta.StatusURI,
-			config.Meta.CacheWarmURI,
-			config.Meta.OpenApiURI,
-			config.Meta.ConfigURI,
+			metaConfig.ViewURI,
+			metaConfig.MetricURI,
+			metaConfig.StatusURI,
+			metaConfig.CacheWarmURI,
+			metaConfig.OpenApiURI,
+			metaConfig.ConfigURI,
 			config.APIPrefix,
 		}),
 		authorizer:      authorizer,
 		availableRoutes: asAvailableRoutes(routes),
 		apiKeyMatcher:   newApiKeyMatcher(config.APIKeys),
+		metaConfig:      &metaConfig,
 	}
 }
 
@@ -119,15 +129,11 @@ func newApiKeyMatcher(keys router.APIKeys) *router.Matcher {
 		return nil
 	}
 
-	matchables := make([]router.Matchable, 0, len(keys)*2)
+	matchables := make([]router.Matchable, 0, len(keys))
 	for i := range keys {
 		matchables = append(matchables,
 			&ApiKeyWrapper{
 				Indexed: keys[i].URI,
-				apiKey:  keys[i],
-			},
-			&ApiKeyWrapper{
-				Indexed: path.Join(wildcard, router.AsRelative(keys[i].URI)),
 				apiKey:  keys[i],
 			},
 		)
@@ -150,27 +156,23 @@ func asAvailableRoutes(routes []*router.Route) []Route {
 }
 
 func newPrefixMatcher(prefixes []string) *router.Matcher {
-	matchables := make([]router.Matchable, 0, len(prefixes)*2)
+	matchables := make([]router.Matchable, 0, len(prefixes))
 	for _, prefix := range prefixes {
 		if prefix == "" {
 			continue
 		}
 
-		matchables = append(matchables, newPrefix(prefix, true), newPrefix(prefix, false))
+		matchables = append(matchables, newPrefix(prefix))
 	}
 
 	return router.NewMatcher(matchables)
 }
 
-func newPrefix(prefix string, exact bool) router.Matchable {
+func newPrefix(prefix string) router.Matchable {
 	indexed := prefix
-	if !exact {
-		indexed = path.Join(wildcard, router.AsRelative(prefix))
-	}
 
 	return &Prefix{
-		Actual:  prefix,
-		Indexed: indexed,
+		Indexed: router.AsRelative(indexed),
 	}
 }
 
@@ -193,20 +195,20 @@ func (r *Router) handle(writer http.ResponseWriter, request *http.Request) (int,
 	urlPath := request.URL.Path
 	actualPrefix, viewPath := r.asAPIPrefix(urlPath)
 
-	if (actualPrefix != r.config.APIPrefix && !meta.IsAuthorized(request, r.config.Meta.AllowedSubnet)) || !r.apiKeyMatches(urlPath, request) {
+	if (actualPrefix != r.config.APIPrefix && !meta.IsAuthorized(request, r.config.Meta.AllowedSubnet)) || !r.apiKeyMatches(urlPath, request) || !r.apiKeyMatches(viewPath, request) {
 		return http.StatusForbidden, nil
 	}
 
 	switch actualPrefix {
-	case r.config.Meta.MetricURI:
+	case r.metaConfig.MetricURI:
 		r.handleMetrics(writer, request)
 		return http.StatusOK, nil
-	case r.config.Meta.ConfigURI:
+	case r.metaConfig.ConfigURI:
 		r.handleConfig(writer)
 		return http.StatusOK, nil
-	case r.config.Meta.OpenApiURI:
-		return r.matchByMultiRoutes(writer, request, urlPath)
-	case r.config.Meta.StatusURI:
+	case r.metaConfig.OpenApiURI:
+		return r.matchByMultiRoutes(writer, request, viewPath)
+	case r.metaConfig.StatusURI:
 		if r.statusHandler == nil {
 			return http.StatusNotFound, nil
 		}
@@ -224,15 +226,19 @@ func (r *Router) matchByRoute(writer http.ResponseWriter, request *http.Request,
 		return http.StatusNotFound, r.availableRoutesErr(err)
 	}
 
+	if !r.apiKeyMatches(aRoute.URI, request) {
+		return http.StatusForbidden, nil
+	}
+
 	return r.handleRouteWithPrefix(writer, request, actualPrefix, aRouter, aRoute)
 }
 
 func (r *Router) handleRouteWithPrefix(writer http.ResponseWriter, request *http.Request, actualPrefix string, aRouter *router.Router, aRoute *router.Route) (int, error) {
 	switch actualPrefix {
-	case r.config.Meta.ViewURI:
+	case r.metaConfig.ViewURI:
 		r.handleView(writer, aRoute)
 		return http.StatusOK, nil
-	case r.config.Meta.CacheWarmURI:
+	case r.metaConfig.CacheWarmURI:
 		r.handleCacheWarmup(writer, request, aRoute)
 		return http.StatusOK, nil
 	default:
@@ -289,6 +295,7 @@ func (r *Router) Match(method, URL string) (*router.Route, *router.Router, error
 }
 
 func (r *Router) asAPIPrefix(URIPath string) (prefix string, path string) {
+	URIPath = router.AsRelative(URIPath)
 	matched, err := r.prefixesMatcher.MatchPrefix("", URIPath)
 	if err != nil {
 		return r.config.APIPrefix, URIPath
@@ -303,7 +310,7 @@ func (r *Router) asAPIPrefix(URIPath string) (prefix string, path string) {
 			continue
 		}
 
-		candidateSegmentsCount := strings.Count(asPrefix.Actual, "/")
+		candidateSegmentsCount := strings.Count(asPrefix.Indexed, "/")
 		if matchedPrefix == nil || numOfSegments < candidateSegmentsCount {
 			matchedPrefix = asPrefix
 			numOfSegments = candidateSegmentsCount
@@ -314,16 +321,11 @@ func (r *Router) asAPIPrefix(URIPath string) (prefix string, path string) {
 		return r.config.APIPrefix, URIPath
 	}
 
-	if matchedPrefix.Actual != matchedPrefix.Indexed {
+	if matchedPrefix.Indexed != matchedPrefix.Indexed {
 		URIPath = URIPath[strings.Index(URIPath, "/")+1:]
 	}
 
-	if matchedPrefix.Actual == r.config.APIPrefix {
-		return matchedPrefix.Actual, URIPath
-	} else {
-		return matchedPrefix.Actual, strings.Replace(URIPath, matchedPrefix.Actual, r.config.APIPrefix, 1)
-	}
-
+	return matchedPrefix.Indexed, strings.Replace(URIPath, matchedPrefix.Indexed, router.AsRelative(r.config.APIPrefix), 1)
 }
 
 func (r *Router) handleView(writer http.ResponseWriter, route *router.Route) {
@@ -365,6 +367,10 @@ func (r *Router) matchByMultiRoutes(writer http.ResponseWriter, request *http.Re
 		allowed = append(allowed, allMatched[i])
 	}
 
+	if len(allowed) == 0 && len(allMatched) != 0 {
+		return http.StatusForbidden, nil
+	}
+
 	r.handleOpenAPI(writer, allMatched)
 	return http.StatusOK, nil
 }
@@ -400,7 +406,7 @@ func (r *Router) MatchAllWithMethod(method, path string) []*router.Route {
 }
 
 func (r *Router) matchAll(method, path string) []*router.Route {
-	if path == r.config.Meta.OpenApiURI {
+	if path == r.metaConfig.OpenApiURI {
 		return r.routes
 	}
 
@@ -422,7 +428,7 @@ func (r *Router) handleErrIfNeeded(writer http.ResponseWriter, errStatusCode int
 }
 
 func (r *Router) handleMetrics(writer http.ResponseWriter, req *http.Request) {
-	gmetric.NewHandler(r.config.Meta.MetricURI, r.metrics).ServeHTTP(writer, req)
+	gmetric.NewHandler(r.metaConfig.MetricURI, r.metrics).ServeHTTP(writer, req)
 }
 
 func (r *Router) handleConfig(writer http.ResponseWriter) {

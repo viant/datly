@@ -14,12 +14,16 @@ import (
 
 type Request events.APIGatewayProxyRequest
 
+//Request converts to http.Request
+//apigw doesn't include the function name in the URI segments
 func (r *Request) Request() *http.Request {
+	path := r.Path
 	req := http.Request{
 		Method:     r.HTTPMethod,
 		Header:     http.Header{},
-		RequestURI: r.Path,
+		RequestURI: path,
 	}
+
 	if len(r.Headers) > 0 {
 		for k, v := range r.Headers {
 			req.Header.Set(k, v)
@@ -37,8 +41,8 @@ func (r *Request) Request() *http.Request {
 			req.Header.Set("Content-Length", strconv.Itoa(len(r.Body)))
 		}
 	}
-	req.RequestURI = r.Path
-	apiURI := r.Path
+	req.RequestURI = path
+	apiURI := path
 	if len(r.MultiValueQueryStringParameters) > 0 {
 		values := url.Values(r.MultiValueQueryStringParameters)
 		apiURI += "?" + values.Encode()

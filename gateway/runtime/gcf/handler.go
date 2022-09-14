@@ -23,6 +23,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+//GCF doesn't include the function name in the URL segments
 func handleRequest(w http.ResponseWriter, r *http.Request) error {
 	configURL := os.Getenv("CONFIG_URL")
 	if configURL == "" {

@@ -208,6 +208,9 @@ func (m *Matcher) init() {
 		node := m.getOrCreateMatcher(route.HttpMethod())
 		node.Add(i, uri)
 
+		allUriNodes := m.getOrCreateMatcher("")
+		allUriNodes.Add(i, uri)
+
 		if route.CorsEnabled() {
 			corsMatcher := m.getOrCreateMatcher(http.MethodOptions)
 			corsMatcher.Add(i, uri)

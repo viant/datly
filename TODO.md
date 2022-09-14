@@ -1,9 +1,16 @@
 - API Keys on meta/warmup
-- Parameter Criteria IN, EXISTS, etc
+- Velty enhance selector with slice expression
+- Data mutation enhancement
+    - Generator for SQLx
+    - Function lookup
+
+- e2e for patch / update / insert / delete with single and batch data
+- XML/CSV output
+- XML/CSV input
 
 - context based generator enhancement
 
-- XML/CSV output
+- Parameter Criteria IN, EXISTS, etc
 
 - e2e / generator refactoring
 - performance profiling/tuning
@@ -17,9 +24,5 @@
 
 - velty #query
 - velty macros
-- Management API 
+- Management API
 - add GUI
-
-- add template meta to caching
-- limit / offset window option with SQLX
-- Markers for pagination data, 100, 1000, 10000 etc.

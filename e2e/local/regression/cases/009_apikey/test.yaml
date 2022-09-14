@@ -17,3 +17,36 @@ pipeline:
           App-Secret-Id: 'changeme'
         Expect:
           Code: 200
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/meta/view/dev/secured/vendors/2
+        Expect:
+          Code: 403
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/meta/view/dev/secured/vendors/2
+        Header:
+          App-Secret-Id: 'changeme'
+        Expect:
+          Code: 200
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/meta/openapi/dev/secured/vendors/2
+        Expect:
+          Code: 403
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/meta/openapi/dev/secured/vendors/2
+        Header:
+          App-Secret-Id: 'changeme'
+        Expect:
+          Code: 200
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/cache/warmup/dev/secured/vendors/2
+        Expect:
+          Code: 403
+
+
+
+
