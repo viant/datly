@@ -472,6 +472,7 @@ func TestRead(t *testing.T) {
 			},
 			expect: `[{"Name":["John","David","Anna"]}]`,
 		},
+		nestedStruct(),
 	}
 
 	//for index, testCase := range useCases[len(useCases)-1:] {
@@ -519,6 +520,51 @@ func TestRead(t *testing.T) {
 		}
 
 		testView(t, testCase, dataView, err, service)
+	}
+}
+
+func nestedStruct() usecase {
+	type ev struct {
+		ID          int
+		EventTypeID int
+		Quantity    float64
+		ExtraField  string `sqlx:"FIELD" json:",omitempty"`
+		Recent      struct {
+			ID          int
+			Quantity    float64
+			EventTypeID int `sqlx:"EVENT_TYPE_ID"`
+		} `sqlx:"ns=RECENT_"`
+	}
+
+	resource := view.EmptyResource()
+	resource.AddViews(&view.View{
+		Name:                 "events",
+		Schema:               view.NewSchema(reflect.TypeOf(ev{})),
+		InheritSchemaColumns: true,
+		Connector: &view.Connector{
+			Name:   "db",
+			Driver: "sqlite3",
+			DSN:    "./testdata/db/db.db",
+		},
+		Template: &view.Template{
+			Source: `
+SELECT 
+id, id as RECENT_ID,
+event_type_id as RECENT_event_type_id, event_type_id,
+quantity as RECENT_quantity,quantity
+FROM events`,
+		},
+	})
+
+	return usecase{
+		description: "nested struct without relation",
+		expect:      `[{"ID":1,"EventTypeID":2,"Quantity":33.23432374000549,"Recent":{"ID":1,"Quantity":33.23432374000549,"EventTypeID":2}},{"ID":10,"EventTypeID":11,"Quantity":21.957962334156036,"Recent":{"ID":10,"Quantity":21.957962334156036,"EventTypeID":11}},{"ID":100,"EventTypeID":111,"Quantity":5.084940046072006,"Recent":{"ID":100,"Quantity":5.084940046072006,"EventTypeID":111}}]`,
+		dest:        new([]ev),
+		view:        "events",
+		resource:    resource,
+		dataset:     "dataset001_events/",
+		provider:    nil,
+		visitors:    nil,
 	}
 }
 

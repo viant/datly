@@ -251,7 +251,6 @@ func (r *Route) initMarshaller() error {
 	marshaller, err := json.New(r.responseType(), marshal.Default{
 		OmitEmpty:  r.OmitEmpty,
 		CaseFormat: *r._caser,
-		Transforms: r.Transforms.Index(),
 		Exclude:    marshal.Exclude(r.Exclude).Index(),
 		DateLayout: r.DateFormat,
 	})

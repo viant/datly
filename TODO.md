@@ -1,3 +1,4 @@
+- Handle error with fields that not exists in select
 - Velty enhance selector with slice expression
 - Data mutation enhancement
     - Generator for SQLx

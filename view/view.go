@@ -573,6 +573,7 @@ func (v *View) exclude(columns []io.Column) []io.Column {
 		}
 		filtered = append(filtered, columns[i])
 	}
+
 	return filtered
 }
 
@@ -801,7 +802,7 @@ func (v *View) indexSqlxColumnsByFieldName() error {
 		if tag.Column != "" {
 			column, err := v._columns.Lookup(tag.Column)
 			if err != nil {
-				return fmt.Errorf("invalid view: %v %w", v.Name, err)
+				continue
 			}
 			v._columns.RegisterWithName(field.Name, column)
 		}
@@ -817,7 +818,7 @@ func (v *View) deriveColumnsFromSchema(relation *Relation) error {
 
 	newColumns := make([]*Column, 0)
 
-	if err := v.updateColumn(shared.Elem(v.Schema.Type()), &newColumns, relation); err != nil {
+	if err := v.updateColumn("", shared.Elem(v.Schema.Type()), &newColumns, relation); err != nil {
 		return err
 	}
 
@@ -827,7 +828,7 @@ func (v *View) deriveColumnsFromSchema(relation *Relation) error {
 	return nil
 }
 
-func (v *View) updateColumn(rType reflect.Type, columns *[]*Column, relation *Relation) error {
+func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, relation *Relation) error {
 	index := Columns(*columns).Index(v.Caser)
 
 	for i := 0; i < rType.NumField(); i++ {
@@ -838,17 +839,32 @@ func (v *View) updateColumn(rType reflect.Type, columns *[]*Column, relation *Re
 		}
 
 		if field.Anonymous {
-			if err := v.updateColumn(field.Type, columns, relation); err != nil {
+			if err := v.updateColumn("", field.Type, columns, relation); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if _, ok := index[field.Name]; ok {
+		sqlxTag := io.ParseTag(field.Tag.Get(option.TagSqlx))
+		elemType := elem(field.Type)
+		if !v.IsHolder(field.Name) && sqlxTag.Ns != "" && elemType.Kind() == reflect.Struct {
+			if err := v.updateColumn(sqlxTag.Ns, elemType, columns, relation); err != nil {
+				return err
+			}
 			continue
 		}
 
-		column, err := v._columns.Lookup(field.Name)
+		fieldName := sqlxTag.Column
+		if fieldName == "" {
+			fieldName = field.Name
+		}
+
+		fieldName = ns + fieldName
+		if _, ok := index[fieldName]; ok {
+			continue
+		}
+
+		column, err := v._columns.Lookup(fieldName)
 		if err == nil {
 			*columns = append(*columns, column)
 		}

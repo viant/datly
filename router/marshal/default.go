@@ -7,7 +7,6 @@ import (
 type Default struct {
 	OmitEmpty  bool
 	CaseFormat format.Case
-	Transforms map[string]*Transform
 	Exclude    map[string]bool
 	DateLayout string
 }
