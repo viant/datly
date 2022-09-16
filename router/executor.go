@@ -22,7 +22,7 @@ func (r *Router) executorHandler(route *Route) viewHandler {
 func (r *Router) executorHandlerWithError(route *Route, request *http.Request) error {
 	ctx := context.Background()
 
-	selectors, err := CreateSelectorsFromRoute(ctx, route, request, route.Index._viewDetails...)
+	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, nil, route.Index._viewDetails...)
 	if err != nil {
 		return err
 	}

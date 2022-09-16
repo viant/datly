@@ -9,6 +9,8 @@ import (
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/parameter"
+	"github.com/viant/sqlx/io"
+	"github.com/viant/sqlx/io/load/reader/csv"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"net/http"
@@ -27,6 +29,11 @@ const (
 
 	ReaderServiceType   ServiceType = "Reader"
 	ExecutorServiceType ServiceType = "Executor"
+
+	CSVQueryFormat = "csv"
+	CSVFormat      = "text/csv"
+	JSONFormat     = "application/json"
+	FormatQuery    = "_format"
 )
 
 type (
@@ -62,11 +69,20 @@ type (
 		Transforms       marshal.Transforms
 		Exclude          []string
 		NormalizeExclude *bool
-		DateFormat       string `json:",omitempty"`
+		DateFormat       string     `json:",omitempty"`
+		CSV              *CSVConfig `json:",omitempty"`
 		_caser           *format.Case
 		_excluded        map[string]bool
 		_marshaller      *json.Marshaller
 		_responseSetter  *responseSetter
+	}
+
+	CSVConfig struct {
+		Separator string
+		NullValue string
+		//Stringifier io.ObjectStringifier
+		config            *csv.Config
+		objectStringifier *io.ObjectStringifier
 	}
 
 	responseSetter struct {
@@ -152,6 +168,10 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	r.initCors(resource)
 	r.initCompression(resource)
 	r.indexExcluded()
+
+	if err := r.initCSVIfNeeded(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -549,4 +569,30 @@ func (r *Route) addPrefixFieldIfNeeded() {
 	for i, actual := range r.Exclude {
 		r.Exclude[i] = r.ResponseField + "." + actual
 	}
+}
+
+func (r *Route) initCSVIfNeeded() error {
+	if r.CSV == nil {
+		return nil
+	}
+
+	if len(r.CSV.Separator) != 1 {
+		return fmt.Errorf("separator has to be a single char, but was %v", r.CSV.Separator)
+	}
+
+	if r.CSV.NullValue == "" {
+		r.CSV.NullValue = "null"
+	}
+
+	r.CSV.config = &csv.Config{
+		FieldSeparator:  r.CSV.Separator,
+		ObjectSeparator: "\n",
+		EncloseBy:       `"`,
+		EscapeBy:        "\\",
+		NullValue:       r.CSV.NullValue,
+	}
+
+	r.CSV.objectStringifier = io.TypeStringifier(r.View.Schema.Type(), "null", true, io.Parallel(true))
+
+	return nil
 }

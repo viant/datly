@@ -28,7 +28,7 @@ require (
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/parsly v0.0.0-20220824212058-ab859cc3d9d6
 	github.com/viant/scy v0.3.2-0.20220825213848-acc5c59cde78
-	github.com/viant/sqlx v0.0.0-20220901173738-a062352abc57
+	github.com/viant/sqlx v0.0.0-20220916170633-33e56a46f6f7
 	github.com/viant/toolbox v0.34.6-0.20220630003140-fb2bf82657c1
 	github.com/viant/velty v0.1.1-0.20220823164959-71cfbb2b10fd
 	github.com/viant/xunsafe v0.8.1-0.20220829223316-aae47a6fbb1f
@@ -37,3 +37,5 @@ require (
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+replace github.com/viant/sqlx => /Users/klarysz/Documents/open_source/sqlx

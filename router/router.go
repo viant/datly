@@ -14,6 +14,8 @@ import (
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
+	io2 "github.com/viant/sqlx/io"
+	"github.com/viant/sqlx/io/load/reader/csv"
 	"io"
 	"net/http"
 	"os"
@@ -55,6 +57,15 @@ type (
 	}
 
 	ApiPrefix string
+
+	ReaderServiceSession struct {
+		RequestParams *RequestParams
+		ContentType   string
+		Route         *Route
+		Request       *http.Request
+		Response      http.ResponseWriter
+		Selectors     *view.Selectors
+	}
 )
 
 func (b *BytesReadCloser) Read(p []byte) (int, error) {
@@ -201,59 +212,104 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 		}
 
 		ctx := context.Background()
-		selectors, err := CreateSelectorsFromRoute(ctx, route, request, route.Index._viewDetails...)
+		session, httpErrStatus, err := r.buildSession(ctx, response, request, route)
+		if httpErrStatus >= http.StatusBadRequest {
+			r.writeErr(response, route, err, httpErrStatus)
+			return
+		}
+
 		if err != nil {
 			status := http.StatusBadRequest
 			if route.ParamStatusError != nil && (*route.ParamStatusError%100 >= 4) {
 				status = *route.ParamStatusError
 			}
 
-			r.writeErr(response, route, err, status)
+			r.writeErr(session.Response, session.Route, err, status)
 			return
 		}
 
-		cacheEntry, err := r.cacheEntry(ctx, route, selectors)
+		cacheEntry, err := r.cacheEntry(ctx, session)
 		if err != nil {
-			r.writeErr(response, route, err, http.StatusInternalServerError)
+			r.writeErr(session.Response, session.Route, err, http.StatusInternalServerError)
 		}
 
 		if cacheEntry != nil && cacheEntry.Has() {
-			r.writeResponse(ctx, route, response, request, cacheEntry)
+			r.writeResponse(ctx, session, cacheEntry)
 			return
 		}
 
-		r.writeResponseWithErrorHandler(response, request, ctx, route, selectors, cacheEntry)
+		r.writeResponseWithErrorHandler(ctx, session, cacheEntry)
 	}
 }
 
-func (r *Router) writeResponseWithErrorHandler(response http.ResponseWriter, request *http.Request, ctx context.Context, route *Route, selectors *view.Selectors, cacheEntry *cache.Entry) {
-	httpCode, err := r.readAndWriteResponse(response, request, ctx, route, selectors, cacheEntry)
+func (r *Router) buildSession(ctx context.Context, response http.ResponseWriter, request *http.Request, route *Route) (*ReaderServiceSession, int, error) {
+	requestParams, err := NewRequestParameters(request, route)
 	if err != nil {
-		r.writeErr(response, route, err, httpCode)
+		return nil, http.StatusBadRequest, err
+	}
+
+	requestedFormat, err := r.outputFormat(route, requestParams)
+	if err != nil {
+		return nil, http.StatusBadRequest, err
+	}
+
+	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, requestParams, route.Index._viewDetails...)
+	if err != nil {
+		return nil, http.StatusBadRequest, err
+	}
+
+	return &ReaderServiceSession{
+		RequestParams: requestParams,
+		ContentType:   requestedFormat,
+		Route:         route,
+		Request:       request,
+		Response:      response,
+		Selectors:     selectors,
+	}, http.StatusOK, nil
+}
+
+func (r *Router) outputFormat(route *Route, requestParams *RequestParams) (string, error) {
+	requestedFormat := strings.ToLower(requestParams.queryParam(FormatQuery, ""))
+	switch requestedFormat {
+	case CSVQueryFormat:
+		if route.CSV == nil {
+			return "", fmt.Errorf("CSV output format unsupported")
+		}
+
+		return CSVFormat, nil
+	}
+
+	return JSONFormat, nil
+}
+
+func (r *Router) writeResponseWithErrorHandler(ctx context.Context, session *ReaderServiceSession, cacheEntry *cache.Entry) {
+	httpCode, err := r.readAndWriteResponse(ctx, session, cacheEntry)
+	if err != nil {
+		r.writeErr(session.Response, session.Route, err, httpCode)
 	}
 }
 
-func (r *Router) readAndWriteResponse(response http.ResponseWriter, request *http.Request, ctx context.Context, route *Route, selectors *view.Selectors, entry *cache.Entry) (statusCode int, err error) {
-	rValue, viewMeta, err := r.readValue(route, selectors)
+func (r *Router) readAndWriteResponse(ctx context.Context, session *ReaderServiceSession, entry *cache.Entry) (statusCode int, err error) {
+	rValue, viewMeta, err := r.readValue(session)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
 
-	if !r.runAfterFetch(response, request, route, rValue.Interface()) {
+	if !r.runAfterFetch(session, rValue.Interface()) {
 		return -1, nil
 	}
 
-	resultMarshalled, statusCode, err := r.marshalResult(route, request, selectors, rValue, viewMeta)
+	resultMarshalled, statusCode, err := r.marshalResult(session, rValue, viewMeta)
 	if err != nil {
 		return statusCode, err
 	}
 
-	payloadReader, err := r.compressIfNeeded(resultMarshalled, route)
+	payloadReader, err := r.compressIfNeeded(resultMarshalled, session.Route)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
 
-	templateMeta := route.View.Template.Meta
+	templateMeta := session.Route.View.Template.Meta
 	if templateMeta != nil && templateMeta.Kind == view.HeaderTemplateMetaKind && viewMeta != nil {
 		data, err := goJson.Marshal(viewMeta)
 		if err != nil {
@@ -264,25 +320,25 @@ func (r *Router) readAndWriteResponse(response http.ResponseWriter, request *htt
 	}
 
 	if entry != nil {
-		r.updateCache(ctx, route, entry, payloadReader)
+		r.updateCache(ctx, session.Route, entry, payloadReader)
 	}
 
-	r.writeResponse(ctx, route, response, request, payloadReader)
+	r.writeResponse(ctx, session, payloadReader)
 	return -1, nil
 }
 
-func (r *Router) readValue(route *Route, selectors *view.Selectors) (reflect.Value, interface{}, error) {
-	destValue := reflect.New(route.View.Schema.SliceType())
+func (r *Router) readValue(readerSession *ReaderServiceSession) (reflect.Value, interface{}, error) {
+	destValue := reflect.New(readerSession.Route.View.Schema.SliceType())
 	dest := destValue.Interface()
 
-	session := reader.NewSession(dest, route.View)
-	session.Selectors = selectors
+	session := reader.NewSession(dest, readerSession.Route.View)
+	session.Selectors = readerSession.Selectors
 	if err := reader.New().Read(context.TODO(), session); err != nil {
 		return destValue, nil, err
 	}
 
-	if route.EnableAudit {
-		r.logMetrics(route.URI, session.Metrics)
+	if readerSession.Route.EnableAudit {
+		r.logMetrics(readerSession.Route.URI, session.Metrics)
 	}
 
 	return destValue, session.ViewMeta, nil
@@ -297,12 +353,12 @@ func (r *Router) updateCache(ctx context.Context, route *Route, cacheEntry *cach
 	r.putCache(ctx, route, cacheEntry, response)
 }
 
-func (r *Router) cacheEntry(ctx context.Context, route *Route, selectors *view.Selectors) (*cache.Entry, error) {
-	if route.Cache == nil {
+func (r *Router) cacheEntry(ctx context.Context, session *ReaderServiceSession) (*cache.Entry, error) {
+	if session.Route.Cache == nil {
 		return nil, nil
 	}
 
-	cacheEntry, err := r.createCacheEntry(ctx, route, selectors)
+	cacheEntry, err := r.createCacheEntry(ctx, session)
 	if err != nil {
 		return nil, err
 	}
@@ -330,16 +386,15 @@ func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Requ
 	return true
 }
 
-func (r *Router) runAfterFetch(response http.ResponseWriter, request *http.Request, route *Route, dest interface{}) (shouldContinue bool) {
-	if actual, ok := route.Visitor.Visitor().(codec.AfterFetcher); ok {
-		responseClosed, err := actual.AfterFetch(dest, response, request)
+func (r *Router) runAfterFetch(session *ReaderServiceSession, dest interface{}) (shouldContinue bool) {
+	if actual, ok := session.Route.Visitor.Visitor().(codec.AfterFetcher); ok {
+		responseClosed, err := actual.AfterFetch(dest, session.Response, session.Request)
 		if responseClosed {
 			return false
 		}
 
 		if err != nil {
-			response.WriteHeader(http.StatusBadRequest)
-			response.Write([]byte(err.Error()))
+			r.writeErr(session.Response, session.Route, err, http.StatusBadRequest)
 			return false
 		}
 	}
@@ -347,12 +402,23 @@ func (r *Router) runAfterFetch(response http.ResponseWriter, request *http.Reque
 	return true
 }
 
-func (r *Router) marshalResult(route *Route, request *http.Request, selectors *view.Selectors, destValue reflect.Value, viewMeta interface{}) (result []byte, statusCode int, err error) {
-	filters, err := r.buildJsonFilters(route, selectors)
+func (r *Router) marshalResult(session *ReaderServiceSession, destValue reflect.Value, viewMeta interface{}) (result []byte, statusCode int, err error) {
+	filters, err := r.buildJsonFilters(session.Route, session.Selectors)
 	if err != nil {
 		return nil, http.StatusBadRequest, err
 	}
-	payload, httpStatus, err := r.result(route, request, destValue, filters, viewMeta)
+
+	formatType := session.RequestParams.queryParam(FormatQuery, "")
+	switch strings.ToLower(formatType) {
+	case CSVQueryFormat:
+		return r.marshalAsCSV(session, destValue, filters)
+	}
+
+	return r.marshalAsJSON(session, destValue, json.NewFilters(filters...), viewMeta)
+}
+
+func (r *Router) marshalAsJSON(session *ReaderServiceSession, destValue reflect.Value, filters *json.Filters, viewMeta interface{}) ([]byte, int, error) {
+	payload, httpStatus, err := r.result(session, destValue, filters, viewMeta)
 	if err != nil {
 		return nil, httpStatus, err
 	}
@@ -364,10 +430,10 @@ func (r *Router) inAWS() bool {
 	return scheme == "s3"
 }
 
-func (r *Router) result(route *Route, request *http.Request, destValue reflect.Value, filters *json.Filters, meta interface{}) ([]byte, int, error) {
-	if route.Cardinality == view.Many {
-		result := r.wrapWithResponseIfNeeded(destValue.Elem().Interface(), route, meta)
-		asBytes, err := route._marshaller.Marshal(result, filters)
+func (r *Router) result(session *ReaderServiceSession, destValue reflect.Value, filters *json.Filters, meta interface{}) ([]byte, int, error) {
+	if session.Route.Cardinality == view.Many {
+		result := r.wrapWithResponseIfNeeded(destValue.Elem().Interface(), session.Route, meta)
+		asBytes, err := session.Route._marshaller.Marshal(result, filters)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
@@ -376,13 +442,14 @@ func (r *Router) result(route *Route, request *http.Request, destValue reflect.V
 	}
 
 	slicePtr := unsafe.Pointer(destValue.Pointer())
-	sliceSize := route.View.Schema.Slice().Len(slicePtr)
+	sliceSize := session.Route.View.Schema.Slice().Len(slicePtr)
+
 	switch sliceSize {
 	case 0:
 		return nil, http.StatusNotFound, nil
 	case 1:
-		result := r.wrapWithResponseIfNeeded(route.View.Schema.Slice().ValueAt(slicePtr, 0), route, meta)
-		asBytes, err := route._marshaller.Marshal(result, filters)
+		result := r.wrapWithResponseIfNeeded(session.Route.View.Schema.Slice().ValueAt(slicePtr, 0), session.Route, meta)
+		asBytes, err := session.Route._marshaller.Marshal(result, filters)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
@@ -390,11 +457,11 @@ func (r *Router) result(route *Route, request *http.Request, destValue reflect.V
 		return asBytes, http.StatusOK, nil
 
 	default:
-		return nil, http.StatusInternalServerError, fmt.Errorf("for route %v expected query to return zero or one result but returned %v", request.RequestURI, sliceSize)
+		return nil, http.StatusInternalServerError, fmt.Errorf("for route %v expected query to return zero or one result but returned %v", session.Request.RequestURI, sliceSize)
 	}
 }
 
-func (r *Router) buildJsonFilters(route *Route, selectors *view.Selectors) (*json.Filters, error) {
+func (r *Router) buildJsonFilters(route *Route, selectors *view.Selectors) ([]*json.FilterEntry, error) {
 	entries := make([]*json.FilterEntry, 0)
 
 	selectors.Lock()
@@ -424,7 +491,7 @@ func (r *Router) buildJsonFilters(route *Route, selectors *view.Selectors) (*jso
 
 	}
 
-	return json.NewFilters(entries...), nil
+	return entries, nil
 }
 
 func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, statusCode int) {
@@ -479,21 +546,21 @@ func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route, vi
 	return newResponse.Elem().Interface()
 }
 
-func (r *Router) createCacheEntry(ctx context.Context, route *Route, selectors *view.Selectors) (*cache.Entry, error) {
-	selectors.RWMutex.RLock()
-	defer selectors.RWMutex.RUnlock()
+func (r *Router) createCacheEntry(ctx context.Context, session *ReaderServiceSession) (*cache.Entry, error) {
+	session.Selectors.RWMutex.RLock()
+	defer session.Selectors.RWMutex.RUnlock()
 
-	selectorSlice := make([]*view.Selector, len(selectors.Index))
-	for viewName := range selectors.Index {
-		index, _ := route.viewIndex(viewName)
-		selectorSlice[index] = selectors.Index[viewName]
+	selectorSlice := make([]*view.Selector, len(session.Selectors.Index))
+	for viewName := range session.Selectors.Index {
+		index, _ := session.Route.viewIndex(viewName)
+		selectorSlice[index] = session.Selectors.Index[viewName]
 	}
 	marshalled, err := goJson.Marshal(selectorSlice)
 	if err != nil {
 		return nil, err
 	}
 
-	return route.Cache.Get(ctx, marshalled, route.View.Name)
+	return session.Route.Cache.Get(ctx, marshalled, session.Route.View.Name)
 }
 
 func (r *Router) normalizeErr(err error, statusCode int) (int, error) {
@@ -555,36 +622,36 @@ func (r *Router) Routes(route string) []*Route {
 	return routes
 }
 
-func (r *Router) writeResponse(ctx context.Context, route *Route, response http.ResponseWriter, request *http.Request, payloadReader PayloadReader) {
+func (r *Router) writeResponse(ctx context.Context, session *ReaderServiceSession, payloadReader PayloadReader) {
 	defer payloadReader.Close()
 
-	redirected, err := r.redirectIfNeeded(ctx, route, response, request, payloadReader)
+	redirected, err := r.redirectIfNeeded(ctx, session, payloadReader)
 	if redirected {
 		return
 	}
 
 	if err != nil {
-		r.writeErr(response, route, err, http.StatusInternalServerError)
+		r.writeErr(session.Response, session.Route, err, http.StatusInternalServerError)
 		return
 	}
 
-	response.Header().Add(content.Type, ContentTypeJSON)
-	response.Header().Add(content.Type, CharsetUTF8)
-	response.Header().Add(ContentLength, strconv.Itoa(payloadReader.Size()))
+	session.Response.Header().Add(content.Type, session.ContentType)
+	session.Response.Header().Add(content.Type, CharsetUTF8)
+	session.Response.Header().Add(ContentLength, strconv.Itoa(payloadReader.Size()))
 	for key, value := range payloadReader.Headers() {
-		response.Header().Add(key, value[0])
+		session.Response.Header().Add(key, value[0])
 	}
 
 	compressionType := payloadReader.CompressionType()
 	if compressionType != "" {
-		response.Header().Set(content.Encoding, compressionType)
+		session.Response.Header().Set(content.Encoding, compressionType)
 	}
 
-	response.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(response, payloadReader)
+	session.Response.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(session.Response, payloadReader)
 }
 
-func (r *Router) redirectIfNeeded(ctx context.Context, route *Route, response http.ResponseWriter, request *http.Request, payloadReader PayloadReader) (redirected bool, err error) {
+func (r *Router) redirectIfNeeded(ctx context.Context, session *ReaderServiceSession, payloadReader PayloadReader) (redirected bool, err error) {
 	redirect := r.resource.Redirect
 	if redirect == nil {
 		return false, nil
@@ -594,12 +661,12 @@ func (r *Router) redirectIfNeeded(ctx context.Context, route *Route, response ht
 		return false, nil
 	}
 
-	preSign, err := redirect.Apply(ctx, route.View.Name, payloadReader)
+	preSign, err := redirect.Apply(ctx, session.Route.View.Name, payloadReader)
 	if err != nil {
 		return false, err
 	}
 
-	http.Redirect(response, request, preSign.URL, http.StatusMovedPermanently)
+	http.Redirect(session.Response, session.Request, preSign.URL, http.StatusMovedPermanently)
 	return true, nil
 }
 
@@ -668,4 +735,49 @@ func (r *Router) normalizeRouteURI(prefix string, route *Route) {
 	}
 
 	route.URI = path.Join(prefix, URI)
+}
+
+func (r *Router) marshalAsCSV(session *ReaderServiceSession, sliceValue reflect.Value, filters []*json.FilterEntry) ([]byte, int, error) {
+	if session.Route.View.Schema.Slice().Len(unsafe.Pointer(sliceValue.Pointer())) == 0 {
+		return nil, http.StatusOK, nil
+	}
+
+	fieldsLen := 0
+	for _, filter := range filters {
+		fieldsLen += len(filter.Fields)
+	}
+
+	fields := make([]string, 0, fieldsLen)
+	offset := 0
+	for _, filter := range filters {
+		updateFieldPathsIfNeeded(filter)
+		offset = copy(fields[offset:], filter.Fields)
+	}
+
+	stringifierConfig := &io2.StringifierConfig{
+		Fields:     fields,
+		CaseFormat: *session.Route.Output._caser,
+	}
+
+	newReader, _, err := csv.NewReader(sliceValue.Elem().Interface(), session.Route.CSV.config, session.Route.CSV.objectStringifier, stringifierConfig)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	all, err := io.ReadAll(newReader)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	return all, http.StatusOK, nil
+}
+
+func updateFieldPathsIfNeeded(filter *json.FilterEntry) {
+	if filter.Path == "" {
+		return
+	}
+
+	for i, field := range filter.Fields {
+		filter.Fields[i] = filter.Path + "." + field
+	}
 }

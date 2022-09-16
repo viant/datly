@@ -724,6 +724,19 @@ func TestRouter(t *testing.T) {
 			visitors:    map[string]codec.LifecycleVisitor{},
 			expected:    `[{"Id":0,"Label":"/parent-1","Children":[{"Id":2,"Label":"/parent-1/children-1","Children":[{"Id":3,"Label":"/parent-1/children-1/children-1","Children":[{"Id":6,"Label":"/parent-1/children-1/children-1/children-1","Children":[{"Id":4,"Label":"/parent-1/children-1/children-1/children-1/children-1","Children":[{"Id":5,"Label":"/parent-1/children-1/children-1/children-1/children-1/children-1","Children":[]}]}]}]}]}]},{"Id":1,"Label":"/parent-2","Children":[]}]`,
 		},
+		{
+			description: "csv output format",
+			resourceURI: "040_csv_output",
+			uri:         "/api/events?_format=CSV",
+			expected: `"Id","Timestamp","EventTypeId","Quantity","UserId"
+1,"2019-03-11T02:20:33Z",2,33.2343237400054931640625000000000000000000000000000000000000000000,1
+10,"2019-03-15T12:07:33Z",11,21.9579623341560363769531250000000000000000000000000000000000000000,2
+100,"2019-04-10T05:15:33Z",111,5.0849400460720062255859375000000000000000000000000000000000000000,3`,
+			method: http.MethodGet,
+			expectedHeaders: map[string][]string{
+				"Content-Type": {"text/csv"},
+			},
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {

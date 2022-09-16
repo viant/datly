@@ -1,4 +1,3 @@
-- API Keys on meta/warmup
 - Velty enhance selector with slice expression
 - Data mutation enhancement
     - Generator for SQLx

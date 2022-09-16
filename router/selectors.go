@@ -100,14 +100,19 @@ func validateSelector(selector *view.Selector, aView *view.View) error {
 	return nil
 }
 
-func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, views ...*ViewDetails) (*view.Selectors, error) {
+func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, requestParams *RequestParams, views ...*ViewDetails) (*view.Selectors, *RequestParams, error) {
 	requestMetadata := NewRequestMetadata(route)
-	requestParams, err := NewRequestParameters(request, route)
-	if err != nil {
-		return nil, err
+
+	if requestParams == nil {
+		var err error
+		requestParams, err = NewRequestParameters(request, route)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
-	return CreateSelectors(ctx, route.DateFormat, *route._caser, requestMetadata, requestParams, views...)
+	selectors, err := CreateSelectors(ctx, route.DateFormat, *route._caser, requestMetadata, requestParams, views...)
+	return selectors, requestParams, err
 }
 
 func NewRequestMetadata(route *Route) *RequestMetadata {
