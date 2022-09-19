@@ -1,4 +1,4 @@
-- Handle error with fields that not exists in select
+- Add possibility for sqlx ns in order to avoid unneccessary one-one relations.
 - Velty enhance selector with slice expression
 - Data mutation enhancement
     - Generator for SQLx
