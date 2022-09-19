@@ -12,6 +12,7 @@ const (
 	CodecKeyJwtClaim        = "JwtClaim"
 	CodecKeyAsStrings       = "AsStrings"
 	CodecKeyAsInts          = "AsInts"
+	CodecKeyCSV             = "CSV"
 )
 
 var Codecs = codec.New(
@@ -19,4 +20,5 @@ var Codecs = codec.New(
 	codec.NewCodec(CodecCognitoKeyJwtClaim, &gcp.JwtClaim{}, reflect.TypeOf(&jwt.Claims{})),
 	codec.NewCodec(CodecKeyAsInts, &AsInts{}, reflect.TypeOf([]int{})),
 	codec.NewCodec(CodecKeyAsStrings, &AsStrings{}, reflect.TypeOf([]string{})),
+	CsvFactory(""),
 )

@@ -17,6 +17,10 @@ const (
 )
 
 type (
+	CodecFactory interface {
+		New(codec *Codec) (codec.Valuer, error)
+	}
+
 	//Parameter describes parameters used by the Criteria to filter the view.
 	Parameter struct {
 		shared.Reference
@@ -62,18 +66,8 @@ type (
 )
 
 func (v *Codec) Init(resource *Resource, view *View, paramType reflect.Type) error {
-	if v.Ref != "" {
-		visitor, ok := resource.VisitorByName(v.Ref)
-		if !ok {
-			return fmt.Errorf("not found visitor with name %v", v.Ref)
-		}
-
-		asCodec, ok := visitor.(codec.Codec)
-		if !ok {
-			return fmt.Errorf("expected visitor to be type of %T but was %T", asCodec, visitor)
-		}
-
-		v.inherit(asCodec)
+	if err := v.inheritCodecIfNeeded(resource); err != nil {
+		return err
 	}
 
 	v.ensureSchema(paramType)
@@ -89,12 +83,54 @@ func (v *Codec) Init(resource *Resource, view *View, paramType reflect.Type) err
 		return err
 	}
 
+	return v.initFnIfNeeded(resource, view)
+}
+
+func (v *Codec) initFnIfNeeded(resource *Resource, view *View) error {
+	if v._codecFn != nil {
+		return nil
+	}
+
 	fn, err := v.extractCodecFn(resource, v.Schema.Type(), view)
 	if err != nil {
 		return err
 	}
 
 	v._codecFn = fn
+	return nil
+}
+
+func (v *Codec) inheritCodecIfNeeded(resource *Resource) error {
+	if v.Ref == "" {
+		return nil
+	}
+
+	if err := v.initSchemaIfNeeded(resource); err != nil {
+		return err
+	}
+
+	visitor, ok := resource.VisitorByName(v.Ref)
+	if !ok {
+		return fmt.Errorf("not found visitor with name %v", v.Ref)
+	}
+
+	factory, ok := visitor.(CodecFactory)
+	if ok {
+		aCodec, err := factory.New(v)
+		if err != nil {
+			return err
+		}
+
+		v._codecFn = aCodec.Value
+		return nil
+	}
+
+	asCodec, ok := visitor.(codec.Codec)
+	if !ok {
+		return fmt.Errorf("expected visitor to be type of %T but was %T", asCodec, visitor)
+	}
+
+	v.inherit(asCodec)
 	return nil
 }
 
@@ -141,6 +177,14 @@ func (v *Codec) inherit(asCodec codec.Codec) {
 	v._codecFn = asCodec.Valuer().Value
 }
 
+func (v *Codec) initSchemaIfNeeded(resource *Resource) error {
+	if v.Schema == nil || v.Schema.Type() != nil {
+		return nil
+	}
+
+	return v.Schema.parseType(resource._types)
+}
+
 //Init initializes Parameter
 func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, structType reflect.Type) error {
 	if p.initialized == true {
@@ -149,24 +193,19 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 	p.initialized = true
 	p._owner = view
 
-	if p.Ref != "" {
-		param, err := resource._parameters.Lookup(p.Ref)
-		if err != nil {
-			return err
-		}
-
-		if err = param.Init(ctx, view, resource, structType); err != nil {
-			return err
-		}
-
-		p.inherit(param)
+	if err := p.inheritParamIfNeeded(ctx, view, resource, structType); err != nil {
+		return err
 	}
 
 	if p.PresenceName == "" {
 		p.PresenceName = p.Name
 	}
 
-	if p.In.Kind == LiteralKind && p.Const == nil {
+	if p.In == nil {
+		return fmt.Errorf("parameter %v In can't be empty", p.Name)
+	}
+
+	if p.In.Kind == LiteralKind && p.Val == nil {
 		return fmt.Errorf("param %v value was not set", p.Name)
 	}
 
@@ -196,6 +235,24 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 	}
 
 	return p.Validate()
+}
+
+func (p *Parameter) inheritParamIfNeeded(ctx context.Context, view *View, resource *Resource, structType reflect.Type) error {
+	if p.Ref == "" {
+		return nil
+	}
+
+	param, err := resource._parameters.Lookup(p.Ref)
+	if err != nil {
+		return err
+	}
+
+	if err = param.Init(ctx, view, resource, structType); err != nil {
+		return err
+	}
+
+	p.inherit(param)
+	return nil
 }
 
 func (p *Parameter) inherit(param *Parameter) {

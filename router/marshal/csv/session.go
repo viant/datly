@@ -69,7 +69,8 @@ func (s *Session) getOrCreatePathIndex(field *Field, refs map[string][]string, a
 		index: &Index{
 			positionInSlice: map[interface{}]int{},
 			data:            nil,
-			pathIndex:       map[string]ObjectIndex{},
+			objectIndex:     ObjectIndex{},
+			appenders:       map[interface{}]*xunsafe.Appender{},
 		},
 		xField: xField,
 		xSlice: slice,

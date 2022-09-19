@@ -1,20 +1,21 @@
 package csv
 
+import "github.com/viant/xunsafe"
+
 type (
 	Index struct {
 		positionInSlice map[interface{}]int
 		data            []interface{}
-		pathIndex       ChildPathIndex
+		objectIndex     ObjectIndex
+		appenders       map[interface{}]*xunsafe.Appender
 	}
 
-	ChildPathIndex map[string]ObjectIndex
-	ObjectIndex    map[interface{}]PresenceIndex
-	PresenceIndex  map[interface{}]bool
+	ObjectIndex   map[interface{}]PresenceIndex
+	PresenceIndex map[interface{}]bool
 )
 
-func (i *Index) Has(path string, owner, value interface{}) bool {
-	index := i.pathIndex.Index(path)
-	presenceIndex := index.Index(owner)
+func (i *Index) Has(owner, value interface{}) bool {
+	presenceIndex := i.objectIndex.Index(owner)
 	ok := presenceIndex[value]
 	if ok {
 		return true
@@ -22,17 +23,6 @@ func (i *Index) Has(path string, owner, value interface{}) bool {
 
 	presenceIndex[value] = true
 	return false
-}
-
-func (p ChildPathIndex) Index(key string) ObjectIndex {
-	index, ok := p[key]
-	if ok {
-		return index
-	}
-
-	index = ObjectIndex{}
-	p[key] = index
-	return index
 }
 
 func (i ObjectIndex) Index(value interface{}) PresenceIndex {

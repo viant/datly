@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/codec"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
+	csv2 "github.com/viant/datly/router/marshal/csv"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/parameter"
@@ -34,6 +35,8 @@ const (
 	CSVFormat      = "text/csv"
 	JSONFormat     = "application/json"
 	FormatQuery    = "_format"
+
+	HeaderContentType = "Content-Type"
 )
 
 type (
@@ -54,10 +57,12 @@ type (
 		Cache            *cache.Cache
 		Compression      *Compression
 
-		_resource                 *view.Resource
-		_requestBodyType          reflect.Type
-		accessors                 *view.Accessors
+		_resource *view.Resource
+		accessors *view.Accessors
+
 		_requestBodyParamRequired bool
+		_requestBodyType          reflect.Type
+		_requestBodySlice         *xunsafe.Slice
 	}
 
 	Output struct {
@@ -83,6 +88,8 @@ type (
 		//Stringifier io.ObjectStringifier
 		config            *csv.Config
 		objectStringifier *io.ObjectStringifier
+		marshaller        *csv2.Marshaller
+		unwrapperSlice    *xunsafe.Slice
 	}
 
 	responseSetter struct {
@@ -400,6 +407,8 @@ func (r *Route) initRequestBodyFromParams() error {
 		r._requestBodyParamRequired = r._requestBodyParamRequired || param.IsRequired()
 	}
 
+	r._requestBodySlice = xunsafe.NewSlice(reflect.SliceOf(r._requestBodyType))
+
 	return nil
 }
 
@@ -426,13 +435,13 @@ func (r *Route) initRequestBodyType(bodyParam *view.Parameter, params []*view.Pa
 }
 
 func (r *Route) findRequestBodyParams(aView *view.View, params *[]*view.Parameter) {
-	for i, parameter := range aView.Template.Parameters {
-		if parameter.In.Kind == view.RequestBodyKind {
+	for i, param := range aView.Template.Parameters {
+		if param.In.Kind == view.RequestBodyKind {
 			*params = append(*params, aView.Template.Parameters[i])
 		}
 
-		if parameter.View() != nil {
-			r.findRequestBodyParams(parameter.View(), params)
+		if param.View() != nil {
+			r.findRequestBodyParams(param.View(), params)
 		}
 	}
 
@@ -593,5 +602,49 @@ func (r *Route) initCSVIfNeeded() error {
 
 	r.CSV.objectStringifier = io.TypeStringifier(r.View.Schema.Type(), "null", true, io.Parallel(true))
 
-	return nil
+	if r._requestBodyType == nil {
+		return nil
+	}
+	r.CSV.unwrapperSlice = r._requestBodySlice
+
+	var err error
+	r.CSV.marshaller, err = csv2.NewMarshaller(r._requestBodyType, nil)
+	return err
+}
+
+func (c *CSVConfig) presenceMap() PresenceMapFn {
+	return func(bytes []byte) (map[string]interface{}, error) {
+		result := map[string]interface{}{}
+		fieldNames, err := c.marshaller.ReadHeaders(bytes)
+		if err != nil {
+			return result, err
+		}
+
+		for _, name := range fieldNames {
+			result[name] = true
+		}
+
+		return result, err
+	}
+}
+
+func (c *CSVConfig) Unmarshal(bytes []byte, i interface{}) error {
+	return c.marshaller.Unmarshal(bytes, i)
+}
+
+func (c *CSVConfig) unwrapIfNeeded(value interface{}) (interface{}, error) {
+	if c.unwrapperSlice == nil || value == nil {
+		return value, nil
+	}
+
+	ptr := xunsafe.AsPointer(value)
+	sliceLen := c.unwrapperSlice.Len(ptr)
+	switch sliceLen {
+	case 0:
+		return nil, nil
+	case 1:
+		return c.unwrapperSlice.ValuePointerAt(ptr, 0), nil
+	default:
+		return nil, fmt.Errorf("unexpected number of data, expected 0 or 1 but got %v", sliceLen)
+	}
 }

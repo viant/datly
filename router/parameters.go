@@ -7,20 +7,35 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 )
 
-type RequestParams struct {
-	cookiesIndex map[string]*http.Cookie
-	cookies      []*http.Cookie
+type (
+	RequestParams struct {
+		OutputFormat string
+		InputFormat  string
 
-	queryIndex url.Values
-	pathIndex  map[string]string
+		cookiesIndex map[string]*http.Cookie
+		cookies      []*http.Cookie
 
-	requestBody interface{}
-	bodyMap     map[string]interface{}
-	request     *http.Request
-}
+		queryIndex url.Values
+		pathIndex  map[string]string
+
+		requestBody interface{}
+		presenceMap map[string]interface{}
+		request     *http.Request
+	}
+
+	PresenceMapFn func([]byte) (map[string]interface{}, error)
+	Unwrapper     func(interface{}) (interface{}, error)
+	Marshaller    struct {
+		unmarshal converter.Unmarshaller
+		presence  PresenceMapFn
+		unwrapper Unwrapper
+		rType     reflect.Type
+	}
+)
 
 func NewRequestParameters(request *http.Request, route *Route) (*RequestParams, error) {
 	parameters := &RequestParams{
@@ -40,6 +55,8 @@ func NewRequestParameters(request *http.Request, route *Route) (*RequestParams, 
 func (p *RequestParams) init(request *http.Request, route *Route) (string, error) {
 	p.pathIndex, _ = toolbox.ExtractURIParameters(route.URI, request.RequestURI)
 	p.queryIndex = request.URL.Query()
+	p.OutputFormat = p.outputFormat()
+	p.InputFormat = p.header(HeaderContentType)
 
 	p.cookiesIndex = map[string]*http.Cookie{}
 	for i := range p.cookies {
@@ -99,16 +116,68 @@ func (p *RequestParams) initRequestBody(request *http.Request, route *Route) (st
 		return "", nil
 	}
 
-	convert, _, err := converter.Convert(string(body), route._requestBodyType, "")
+	return "RequestBody", p.parseRequestBody(body, route)
+}
+
+func (p *RequestParams) parseRequestBody(body []byte, route *Route) error {
+	unmarshaller, err := p.unmarshaller(route)
 	if err != nil {
-		return "RequestBody", err
+		return err
+	}
+
+	convert, _, err := converter.Convert(string(body), unmarshaller.rType, "", unmarshaller.unmarshal)
+	if err != nil {
+		return err
+	}
+
+	p.presenceMap, err = unmarshaller.presence(body)
+
+	if unmarshaller.unwrapper != nil {
+		convert, err = unmarshaller.unwrapper(convert)
+		if err != nil {
+			return err
+		}
 	}
 
 	p.requestBody = convert
-	_ = json.Unmarshal(body, &p.bodyMap)
-	if p.bodyMap == nil {
-		p.bodyMap = map[string]interface{}{}
+	return nil
+}
+
+func (p *RequestParams) outputFormat() string {
+	requestedFormat := strings.ToLower(p.queryParam(FormatQuery, ""))
+	switch requestedFormat {
+	case CSVQueryFormat:
+		return CSVFormat
 	}
 
-	return "", nil
+	return JSONFormat
+}
+
+func (p *RequestParams) unmarshaller(route *Route) (*Marshaller, error) {
+	switch p.InputFormat {
+	case CSVFormat:
+		if route.CSV == nil {
+			return nil, UnsupportedFormatErr(CSVFormat)
+		}
+
+		return &Marshaller{
+			unmarshal: route.CSV.Unmarshal,
+			presence:  route.CSV.presenceMap(),
+			unwrapper: route.CSV.unwrapIfNeeded,
+			rType:     route._requestBodySlice.Type,
+		}, nil
+	}
+
+	return &Marshaller{
+		unmarshal: json.Unmarshal,
+		presence:  p.jsonPresenceMap(),
+		rType:     route._requestBodyType,
+	}, nil
+}
+
+func (p *RequestParams) jsonPresenceMap() PresenceMapFn {
+	return func(b []byte) (map[string]interface{}, error) {
+		bodyMap := map[string]interface{}{}
+		return bodyMap, json.Unmarshal(b, &bodyMap)
+	}
 }

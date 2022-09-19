@@ -60,7 +60,6 @@ type (
 
 	ReaderServiceSession struct {
 		RequestParams *RequestParams
-		ContentType   string
 		Route         *Route
 		Request       *http.Request
 		Response      http.ResponseWriter
@@ -248,9 +247,8 @@ func (r *Router) buildSession(ctx context.Context, response http.ResponseWriter,
 		return nil, http.StatusBadRequest, err
 	}
 
-	requestedFormat, err := r.outputFormat(route, requestParams)
-	if err != nil {
-		return nil, http.StatusBadRequest, err
+	if route.CSV == nil && requestParams.OutputFormat == CSVFormat {
+		return nil, http.StatusBadRequest, UnsupportedFormatErr(CSVFormat)
 	}
 
 	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, requestParams, route.Index._viewDetails...)
@@ -260,7 +258,6 @@ func (r *Router) buildSession(ctx context.Context, response http.ResponseWriter,
 
 	return &ReaderServiceSession{
 		RequestParams: requestParams,
-		ContentType:   requestedFormat,
 		Route:         route,
 		Request:       request,
 		Response:      response,
@@ -268,18 +265,8 @@ func (r *Router) buildSession(ctx context.Context, response http.ResponseWriter,
 	}, http.StatusOK, nil
 }
 
-func (r *Router) outputFormat(route *Route, requestParams *RequestParams) (string, error) {
-	requestedFormat := strings.ToLower(requestParams.queryParam(FormatQuery, ""))
-	switch requestedFormat {
-	case CSVQueryFormat:
-		if route.CSV == nil {
-			return "", fmt.Errorf("CSV output format unsupported")
-		}
-
-		return CSVFormat, nil
-	}
-
-	return JSONFormat, nil
+func UnsupportedFormatErr(format string) error {
+	return fmt.Errorf("unsupported output format %v", format)
 }
 
 func (r *Router) writeResponseWithErrorHandler(ctx context.Context, session *ReaderServiceSession, cacheEntry *cache.Entry) {
@@ -635,7 +622,7 @@ func (r *Router) writeResponse(ctx context.Context, session *ReaderServiceSessio
 		return
 	}
 
-	session.Response.Header().Add(content.Type, session.ContentType)
+	session.Response.Header().Add(content.Type, session.RequestParams.OutputFormat)
 	session.Response.Header().Add(content.Type, CharsetUTF8)
 	session.Response.Header().Add(ContentLength, strconv.Itoa(payloadReader.Size()))
 	for key, value := range payloadReader.Headers() {

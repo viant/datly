@@ -30,6 +30,7 @@ type (
 		dateFormat      string
 		requestMetadata *RequestMetadata
 		params          *RequestParams
+		accessor        *view.Accessors
 	}
 
 	JSONError struct {
@@ -111,7 +112,7 @@ func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.R
 		}
 	}
 
-	selectors, err := CreateSelectors(ctx, route.DateFormat, *route._caser, requestMetadata, requestParams, views...)
+	selectors, err := CreateSelectors(ctx, route.accessors, route.DateFormat, *route._caser, requestMetadata, requestParams, views...)
 	return selectors, requestParams, err
 }
 
@@ -125,12 +126,13 @@ func NewRequestMetadata(route *Route) *RequestMetadata {
 	return requestMetadata
 }
 
-func CreateSelectors(ctx context.Context, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, views ...*ViewDetails) (*view.Selectors, error) {
+func CreateSelectors(ctx context.Context, accessor *view.Accessors, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, views ...*ViewDetails) (*view.Selectors, error) {
 	sb := &selectorsBuilder{
 		caser:           inputFormat,
 		dateFormat:      dateFormat,
 		requestMetadata: requestMetadata,
 		params:          requestParams,
+		accessor:        accessor,
 	}
 
 	return sb.build(ctx, views)
@@ -478,16 +480,12 @@ func (b *selectorsBuilder) addRequestBodyParam(ctx context.Context, selector *vi
 		return nil
 	}
 
-	if param.In.Name == "" {
-		return param.Set(selector, b.params.requestBody)
-	}
-
 	bodyValue, ok := b.extractBody(param.In.Name)
-	if !ok {
+	if !ok || bodyValue == nil {
 		return nil
 	}
 
-	return param.ConvertAndSet(ctx, selector, bodyValue)
+	return param.Set(selector, bodyValue)
 }
 
 func (b *selectorsBuilder) addCookieParam(ctx context.Context, selector *view.Selector, parameter *view.Parameter) error {
@@ -549,7 +547,7 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 		MainView: nil,
 	}
 
-	selectors, err := CreateSelectors(ctx, b.dateFormat, b.caser, newRequestMetadata, b.params, &ViewDetails{View: aView})
+	selectors, err := CreateSelectors(ctx, b.accessor, b.dateFormat, b.caser, newRequestMetadata, b.params, &ViewDetails{View: aView})
 	if err != nil {
 		return nil, err
 	}
@@ -621,35 +619,52 @@ func (b *selectorsBuilder) paramViewValue(param *view.Parameter, value reflect.V
 	}
 }
 
-func (b *selectorsBuilder) extractBody(path string) (string, bool) {
+func (b *selectorsBuilder) extractBody(path string) (interface{}, bool) {
+	if path == "" {
+		return b.params.requestBody, true
+	}
+
+	has := b.hasBodyPart(path)
+	if !has {
+		return nil, false
+	}
+
+	accessor, err := b.accessor.AccessorByName(path)
+	if err != nil {
+		return nil, false
+	}
+
+	value, err := accessor.Value(b.params.requestBody)
+	if err != nil {
+		return nil, false
+	}
+
+	return value, true
+}
+
+func (b *selectorsBuilder) hasBodyPart(path string) bool {
+	if _, ok := b.params.presenceMap[path]; ok {
+		return true
+	}
+
 	segments := strings.Split(path, ".")
 
-	var rawValue interface{} = b.params.bodyMap
+	var rawValue interface{} = b.params.presenceMap
 	for _, segment := range segments {
 		actualMap, ok := rawValue.(map[string]interface{})
 		if !ok {
-			return "", false
+			return false
 		}
 
 		segmentValue, ok := actualMap[segment]
 		if !ok {
-			return "", false
+			return false
 		}
 
 		rawValue = segmentValue
 	}
 
-	rawString, ok := rawValue.(string)
-	if ok {
-		return rawString, true
-	}
-
-	marshal, err := json.Marshal(rawValue)
-	if err != nil {
-		return "", false
-	}
-
-	return string(marshal), true
+	return true
 }
 
 func (b *selectorsBuilder) populatePage(ctx context.Context, selector *view.Selector, details *ViewDetails) error {

@@ -9,7 +9,9 @@ import (
 
 var TimeType = reflect.TypeOf(time.Time{})
 
-func Convert(raw string, toType reflect.Type, format string) (value interface{}, wasNil bool, err error) {
+type Unmarshaller func([]byte, interface{}) error
+
+func Convert(raw string, toType reflect.Type, format string, options ...interface{}) (value interface{}, wasNil bool, err error) {
 	switch toType.Kind() {
 	case reflect.Bool:
 		parseBool, err := strconv.ParseBool(raw)
@@ -162,7 +164,7 @@ func Convert(raw string, toType reflect.Type, format string) (value interface{},
 	dest := reflect.New(toType)
 
 	if raw != "" {
-		err = json.Unmarshal([]byte(raw), dest.Interface())
+		err = unmarshaller(options)([]byte(raw), dest.Interface())
 		if err != nil {
 			return nil, false, err
 		}
@@ -187,4 +189,15 @@ func Convert(raw string, toType reflect.Type, format string) (value interface{},
 	}
 
 	return result, isNil, nil
+}
+
+func unmarshaller(options []interface{}) Unmarshaller {
+	for _, option := range options {
+		switch actual := option.(type) {
+		case Unmarshaller:
+			return actual
+		}
+	}
+
+	return json.Unmarshal
 }

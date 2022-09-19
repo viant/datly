@@ -737,6 +737,24 @@ func TestRouter(t *testing.T) {
 				"Content-Type": {"text/csv"},
 			},
 		},
+		{
+			description: "csv input",
+			resourceURI: "041_csv_input",
+			uri:         "/api/events",
+			requestBody: `ID,Quantity
+1,6`,
+			expected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
+			method:   http.MethodPost,
+			expectedHeaders: map[string][]string{
+				"Content-Type": {"application/json"},
+			},
+			headers: map[string][]string{
+				"Content-Type": {router.CSVFormat},
+			},
+			visitors: map[string]codec.LifecycleVisitor{
+				registry.CodecKeyCSV: registry.CsvFactory(""),
+			},
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {

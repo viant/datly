@@ -29,11 +29,14 @@ type (
 		xField     *xunsafe.Field
 		depth      int
 		unique     bool
+		name       string
 	}
 
 	Config struct {
-		UniqueFields []string
-		References   []*Reference // parent -> children. Foo.ID -> Boo.FooId
+		UniqueFields    []string
+		References      []*Reference // parent -> children. Foo.ID -> Boo.FooId
+		FieldSeparator  string
+		ObjectSeparator string
 	}
 
 	Reference struct {
@@ -140,6 +143,7 @@ func (m *Marshaller) newField(path string, field reflect.StructField, depth int,
 		xField:     xunsafe.NewField(field),
 		depth:      depth,
 		parentType: parentType,
+		name:       field.Name,
 	}
 }
 
@@ -162,14 +166,9 @@ func (m *Marshaller) initConfig(config *Config) {
 }
 
 func (m *Marshaller) session(headers []string, dest interface{}) (*Session, []*Field, error) {
-	fields := make([]*Field, 0, len(headers))
-	for _, header := range headers {
-		index, ok := m.fieldsPositions[header]
-		if !ok {
-			return nil, nil, fmt.Errorf("not found field %v", header)
-		}
-
-		fields = append(fields, m.fields[index])
+	fields, err := m.fieldsByName(headers)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	s := &Session{
@@ -178,4 +177,37 @@ func (m *Marshaller) session(headers []string, dest interface{}) (*Session, []*F
 	}
 
 	return s, fields, s.init(fields, m.references, m.pathAccessors)
+}
+
+func (m *Marshaller) fieldsByName(names []string) ([]*Field, error) {
+	fields := make([]*Field, 0, len(names))
+	for _, header := range names {
+		index, ok := m.fieldsPositions[header]
+		if !ok {
+			return nil, fmt.Errorf("not found field %v", header)
+		}
+
+		fields = append(fields, m.fields[index])
+	}
+	return fields, nil
+}
+
+func (m *Marshaller) ReadHeaders(b []byte) ([]string, error) {
+	reader := csv.NewReader(bytes.NewReader(b))
+	headers, err := reader.Read()
+	if err != nil {
+		return nil, m.asReadError(err)
+	}
+
+	fields, err := m.fieldsByName(headers)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]string, 0, len(fields))
+	for _, field := range fields {
+		result = append(result, m.combine(field.path, field.name))
+	}
+
+	return result, nil
 }

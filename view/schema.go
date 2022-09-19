@@ -230,3 +230,13 @@ func (c *Schema) copy() *Schema {
 	newSchema.setType(c.compType)
 	return c
 }
+
+func (c *Schema) parseType(types Types) error {
+	parseType, err := GetOrParseType(types, NotEmptyOf(c.DataType, c.Name))
+	if err != nil {
+		return err
+	}
+
+	c.setType(parseType)
+	return nil
+}

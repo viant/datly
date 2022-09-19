@@ -35,6 +35,10 @@ type (
 		AfterFetch(data interface{}, response http.ResponseWriter, request *http.Request) (responseClosed bool, err error)
 	}
 
+	Factory interface {
+		New()
+	}
+
 	Visitor struct {
 		shared.Reference
 		name     string

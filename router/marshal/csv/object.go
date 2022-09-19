@@ -49,11 +49,11 @@ func (o *Object) AddHolder(field *Field, holder *string) {
 }
 
 func (o *Object) Build() error {
-	_, err := o.build(nil)
+	_, err := o.build()
 	return err
 }
 
-func (o *Object) build(parent interface{}) (interface{}, error) {
+func (o *Object) build() (interface{}, error) {
 	indexed, ok := o.CheckIndexed()
 	if ok {
 		return indexed, nil
@@ -99,16 +99,16 @@ func (o *Object) CheckIndexed() (interface{}, bool) {
 
 func (o *Object) buildChildren(parent unsafe.Pointer, children []*Object) error {
 	for _, child := range children {
-		childValue, err := child.build(parent)
+		childValue, err := child.build()
 		if err != nil {
 			return err
 		}
 
-		if o.Has(child.path, parent, childValue) {
+		if child.Has(parent, childValue) {
 			continue
 		}
 
-		o.merge(child, parent, childValue)
+		child.merge(parent, childValue)
 		if err = child.buildChildren(xunsafe.AsPointer(childValue), child.children); err != nil {
 			return err
 		}
@@ -117,15 +117,25 @@ func (o *Object) buildChildren(parent unsafe.Pointer, children []*Object) error 
 	return nil
 }
 
-func (o *Object) Has(path string, parent interface{}, value interface{}) bool {
-	return o.index.Has(path, parent, value)
+func (o *Object) Has(parent interface{}, value interface{}) bool {
+	return o.index.Has(parent, value)
 }
 
-func (o *Object) merge(child *Object, parent unsafe.Pointer, value interface{}) {
-	if child.xSlice != nil {
-		child.xSlice.Appender(child.xField.ValuePointer(parent)).Append(value)
+func (o *Object) merge(parent unsafe.Pointer, value interface{}) {
+	if o.xSlice != nil {
+		o.objectAppender(parent).Append(value)
 		return
 	}
 
-	child.xField.SetValue(parent, value)
+	o.xField.SetValue(parent, value)
+}
+
+func (o *Object) objectAppender(parent unsafe.Pointer) *xunsafe.Appender {
+	appender, ok := o.index.appenders[parent]
+	if !ok {
+		appender = o.xSlice.Appender(o.xField.ValuePointer(parent))
+		o.index.appenders[parent] = appender
+	}
+
+	return appender
 }
