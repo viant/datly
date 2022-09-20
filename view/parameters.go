@@ -205,7 +205,7 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 		return fmt.Errorf("parameter %v In can't be empty", p.Name)
 	}
 
-	if p.In.Kind == LiteralKind && p.Val == nil {
+	if p.In.Kind == LiteralKind && p.Const == nil {
 		return fmt.Errorf("param %v value was not set", p.Name)
 	}
 
