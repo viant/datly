@@ -4,12 +4,8 @@ SELECT vendor.* /* {"Style":"Comprehensive", "ResponseField":"Data"}  */,
        Meta.* /* {"Kind": "record"} */,
        products_meta.* EXCEPT VENDOR_ID /* {"Kind": "record"} */
 FROM (SELECT t.* FROM VENDOR t WHERE 1=1  ) vendor
-    JOIN (SELECT * FROM PRODUCT t) products /* {"Cache": {
-         "Name": "aerospike",
-         "Provider": "aerospike://127.0.0.1:3000/test",
-         "Location": "${view.Name}",
-         "TimeToLiveMs": 3600000
-         }} */  ON products.VENDOR_ID = vendor.ID
+    JOIN (SELECT * FROM PRODUCT t) products /* { "AllowNulls": true } */
+    ON products.VENDOR_ID = vendor.ID
     JOIN (SELECT   CAST(1 + (COUNT(1) / $View.Limit) AS SIGNED)  AS PAGE_CNT, COUNT(1) AS CNT
     FROM ($View.vendor.SQL)  t ) AS Meta ON 1=1
     JOIN (
