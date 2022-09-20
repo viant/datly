@@ -16,7 +16,6 @@ import (
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
-	"strings"
 )
 
 type Style string
@@ -492,22 +491,11 @@ func (r *Route) normalizePaths() error {
 	r.NormalizeExclude = &aBool
 
 	for i, excluded := range r.Exclude {
-		lastDot := strings.LastIndex(excluded, ".")
-		if lastDot == -1 {
-			r.Exclude[i] = r._caser.Format(excluded, format.CaseUpperCamel)
-		} else {
-			r.Exclude[i] = excluded[:lastDot+1] + r._caser.Format(excluded[lastDot+1:], format.CaseUpperCamel)
-		}
+		r.Exclude[i] = NormalizePath(excluded)
 	}
 
 	for i, transform := range r.Transforms {
-		path := transform.Path
-		lastDot := strings.LastIndex(path, ".")
-		if lastDot == -1 {
-			r.Transforms[i].Path = r._caser.Format(path, format.CaseUpperCamel)
-		} else {
-			r.Transforms[i].Path = path[:lastDot+1] + r._caser.Format(path[lastDot+1:], format.CaseUpperCamel)
-		}
+		r.Transforms[i].Path = NormalizePath(transform.Path)
 	}
 
 	return nil

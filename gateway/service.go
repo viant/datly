@@ -307,8 +307,14 @@ func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (ma
 func (r *Service) detectRoutersChanges(ctx context.Context, fs afs.Service) (map[string]bool, map[string]bool, error) {
 	var updated []string
 	var deleted []string
+	var metaUpdated []string
 	err := r.routeResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
-		if strings.Contains(URL, ".meta/") || !strings.HasSuffix(URL, ".yaml") {
+		if strings.Contains(URL, ".meta/") {
+			metaUpdated = append(metaUpdated, URL[strings.LastIndexByte(URL, '/')+1:])
+			return
+		}
+
+		if !strings.HasSuffix(URL, ".yaml") {
 			return
 		}
 
@@ -327,7 +333,30 @@ func (r *Service) detectRoutersChanges(ctx context.Context, fs afs.Service) (map
 	r.session.OnRouterUpdated(updated...)
 	r.session.OnRouterDeleted(deleted...)
 
+	routerMetaUpdated := r.handleMetaUpdated(metaUpdated)
+	r.session.OnRouterUpdated(routerMetaUpdated...)
+
 	return r.session.UpdatedRouters, r.session.DeletedRouters, err
+}
+
+func (r *Service) handleMetaUpdated(metaUpdated []string) []string {
+	if len(metaUpdated) == 0 {
+		return nil
+	}
+
+	routeURLs := make([]string, 0, len(r.routersIndex))
+	for URL := range r.routersIndex {
+		routeURLs = append(routeURLs, URL)
+	}
+
+	var actualUpdated []string
+	for _, viewSeg := range metaUpdated {
+		if URL, ok := r.shouldUpdateRouter(viewSeg, routeURLs); ok {
+			actualUpdated = append(actualUpdated, URL)
+		}
+	}
+
+	return actualUpdated
 }
 
 func (r *Service) detectChanges(metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer) {
@@ -413,6 +442,22 @@ func (r *Service) loadRouterResource(URL string, resources map[string]*view.Reso
 	}
 
 	return routerResource, err
+}
+
+func (r *Service) shouldUpdateRouter(viewSeg string, routeURLs []string) (string, bool) {
+	for _, routeURL := range routeURLs {
+		if !strings.Contains(routeURL, r.Config.RouteURL) && strings.HasSuffix(routeURL, viewSeg) {
+			continue
+		}
+
+		if r.session.DeletedRouters[routeURL] || r.session.UpdatedRouters[routeURL] {
+			continue
+		}
+
+		return routeURL, true
+	}
+
+	return "", false
 }
 
 func initSecrets(ctx context.Context, config *Config) error {
