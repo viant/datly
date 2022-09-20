@@ -14,26 +14,49 @@ import (
 	"gopkg.in/yaml.v3"
 	"sort"
 	"strings"
+	"time"
 )
 
-type Config struct {
-	APIPrefix       string //like /v1/api/
-	RouteURL        string
-	DependencyURL   string
-	UseCacheFS      bool
-	SyncFrequencyMs int
-	Secrets         []*secret.Resource
-	JWTValidator    *verifier.Config
-	Cognito         *cognito.Config
-	Meta            meta.Config
-	APIKeys         router.APIKeys
-	AutoDiscovery   *bool
+type (
+	Config struct {
+		APIPrefix       string //like /v1/api/
+		RouteURL        string
+		DependencyURL   string
+		UseCacheFS      bool
+		SyncFrequencyMs int
+		Secrets         []*secret.Resource
+		JWTValidator    *verifier.Config
+		Cognito         *cognito.Config
+		Meta            meta.Config
+		APIKeys         router.APIKeys
+		AutoDiscovery   *bool
+		ChangeDetection *ChangeDetection
+	}
+
+	ChangeDetection struct {
+		NumOfRetries     int
+		RetryIntervalInS int
+		_retry           time.Duration
+	}
+)
+
+func (d *ChangeDetection) Init() {
+	if d.NumOfRetries == 0 {
+		d.NumOfRetries = 15
+	}
+
+	if d.RetryIntervalInS == 0 {
+		d.RetryIntervalInS = 60
+	}
+
+	d._retry = time.Second * time.Duration(d.RetryIntervalInS)
 }
 
 func (c *Config) Validate() error {
 	if c.RouteURL == "" {
 		return fmt.Errorf("RouteURL was empty")
 	}
+
 	return nil
 }
 
@@ -46,7 +69,12 @@ func (c *Config) Init() {
 		c.SyncFrequencyMs = 5000
 	}
 
+	if c.ChangeDetection == nil {
+		c.ChangeDetection = &ChangeDetection{}
+	}
+
 	c.Meta.Init()
+	c.ChangeDetection.Init()
 }
 
 func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {

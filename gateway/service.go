@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/cache"
@@ -19,21 +20,24 @@ import (
 	"time"
 )
 
-type Service struct {
-	Config               *Config
-	visitors             codec.Visitors
-	types                view.Types
-	mux                  sync.RWMutex
-	routersIndex         map[string]*router.Router
-	fs                   afs.Service
-	cfs                  afs.Service //cache file system
-	routeResourceTracker *resource.Tracker
-	dataResourceTracker  *resource.Tracker
-	dataResourcesIndex   map[string]*view.Resource
-	metrics              *gmetric.Service
-	mainRouter           *Router
-	cancelFn             context.CancelFunc
-}
+type (
+	Service struct {
+		Config               *Config
+		visitors             codec.Visitors
+		types                view.Types
+		mux                  sync.RWMutex
+		routersIndex         map[string]*router.Router
+		fs                   afs.Service
+		cfs                  afs.Service //cache file system
+		routeResourceTracker *resource.Tracker
+		dataResourceTracker  *resource.Tracker
+		dataResourcesIndex   map[string]*view.Resource
+		metrics              *gmetric.Service
+		mainRouter           *Router
+		cancelFn             context.CancelFunc
+		session              *Session
+	}
+)
 
 func (r *Service) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	aRouter, ok := r.Router()
@@ -81,6 +85,7 @@ func New(ctx context.Context, config *Config, statusHandler http.Handler, author
 		dataResourceTracker:  resource.New(config.DependencyURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
 		routersIndex:         map[string]*router.Router{},
 		mainRouter:           NewRouter(map[string]*router.Router{}, config, metrics, statusHandler, authorizer),
+		session:              NewSession(config.ChangeDetection),
 	}
 
 	if err = initSecrets(ctx, config); err != nil {
@@ -94,6 +99,18 @@ func New(ctx context.Context, config *Config, statusHandler http.Handler, author
 }
 
 func (r *Service) createRouterIfNeeded(ctx context.Context, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer) error {
+	defer func() {
+		if r.session == nil {
+			return
+		}
+
+		r.session.UpdateFailureCounter()
+	}()
+
+	if r.session == nil {
+		r.session = NewSession(r.Config.ChangeDetection)
+	}
+
 	fs := r.reloadFs()
 	resources, changed, err := r.getDataResources(ctx, fs)
 	if err != nil {
@@ -110,22 +127,21 @@ func (r *Service) createRouterIfNeeded(ctx context.Context, metrics *gmetric.Ser
 	r.mainRouter = mainRouter
 	r.routersIndex = routers
 	r.dataResourcesIndex = resources
+	r.session = nil
 	r.mux.Unlock()
 
 	return nil
 }
 
 func (r *Service) getRouters(ctx context.Context, fs afs.Service, resources map[string]*view.Resource, viewResourcesChanged bool) (routers map[string]*router.Router, changed bool, err error) {
-	updatedRouters, removedRouters, err := r.detectRoutersChanges(ctx, fs)
+	updatedMap, removedMap, err := r.detectRoutersChanges(ctx, fs)
 	if err != nil {
 		return nil, false, err
 	}
 
-	if !viewResourcesChanged && len(updatedRouters) == 0 && len(removedRouters) == 0 {
+	if !viewResourcesChanged && len(updatedMap) == 0 && len(removedMap) == 0 {
 		return r.routersIndex, false, nil
 	}
-
-	updatedMap, removedMap := asMap(updatedRouters), asMap(removedRouters)
 
 	routers = map[string]*router.Router{}
 	for routerURL := range r.routersIndex {
@@ -136,31 +152,40 @@ func (r *Service) getRouters(ctx context.Context, fs afs.Service, resources map[
 		routers[routerURL] = r.routersIndex[routerURL]
 	}
 
-	for _, resourceURL := range updatedRouters {
-		routerResource, err := router.NewResourceFromURL(ctx, fs, resourceURL, r.Config.Discovery(), r.visitors, r.types, r.metrics, resources)
+	routersChan := make(chan func() (*router.Resource, string, error))
+	channelSize := r.populateRoutersChan(ctx, routersChan, updatedMap, fs, resources)
+	counter := 0
+	var errors []error
+	for fn := range routersChan {
+		routerResource, URL, err := fn()
 		if err != nil {
-			return nil, false, err
+			errors = append(errors, err)
+		} else {
+			routers[URL] = router.New(routerResource, router.ApiPrefix(r.Config.APIPrefix))
 		}
 
-		r.updateRouterAPIKeys(routerResource.Routes)
-		routerResource.SourceURL = resourceURL
-		routers[resourceURL] = router.New(routerResource, router.ApiPrefix(r.Config.APIPrefix))
+		counter++
+		if counter >= channelSize {
+			close(routersChan)
+		}
+	}
+
+	if err := r.combineErrors("routers", errors); err != nil {
+		return nil, false, err
 	}
 
 	return routers, true, nil
 }
 
 func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (resources map[string]*view.Resource, changed bool, err error) {
-	updatedResources, removedResources, err := r.detectResourceChanges(ctx, fs)
+	updatedMap, removedMap, err := r.detectResourceChanges(ctx, fs)
 	if err != nil {
 		return nil, false, err
 	}
 
-	if len(updatedResources) == 0 && len(removedResources) == 0 {
-		return r.dataResourcesIndex, false, nil
+	if len(updatedMap) == 0 && len(removedMap) == 0 {
+		return copyResourcesMap(r.dataResourcesIndex), false, nil
 	}
-
-	updatedMap, removedMap := asMap(updatedResources), asMap(removedResources)
 
 	result := map[string]*view.Resource{}
 	for resourceURL, dataResource := range r.dataResourcesIndex {
@@ -171,28 +196,89 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (resourc
 		result[resourceURL] = r.dataResourcesIndex[resourceURL]
 	}
 
-	for _, resourceURL := range updatedResources {
-		newResource, err := view.LoadResourceFromURL(ctx, resourceURL, fs)
+	resourceChan := make(chan func() (*view.Resource, string, error))
+	channelSize := r.populateResourceChan(ctx, resourceChan, fs, updatedMap)
+	counter := 0
+	var errors []error
+	for fn := range resourceChan {
+		dependency, URL, err := fn()
 		if err != nil {
-			return nil, false, err
+			errors = append(errors, err)
+		} else {
+			result[URL] = dependency
 		}
 
-		result[r.updateResourceKey(resourceURL)] = newResource
+		counter++
+		if counter >= channelSize {
+			close(resourceChan)
+		}
 	}
 
-	return result, true, err
+	if err := r.combineErrors("dependencies", errors); err != nil {
+		return nil, false, err
+	}
+
+	return result, true, nil
 }
 
-func asMap(URLs []string) map[string]bool {
-	result := map[string]bool{}
-	for i := range URLs {
-		result[URLs[i]] = true
+func (r *Service) combineErrors(resourceType string, errors []error) error {
+	if len(errors) == 0 {
+		return nil
+	}
+
+	actualErr := fmt.Errorf("failed to load %v due to the: %w", resourceType, errors[0])
+	for i := 1; i < len(errors); i++ {
+		actualErr = fmt.Errorf("%w, %v", actualErr, errors[i].Error())
+	}
+
+	return actualErr
+}
+
+func copyResourcesMap(index map[string]*view.Resource) map[string]*view.Resource {
+	result := map[string]*view.Resource{}
+
+	for key := range index {
+		result[key] = index[key]
 	}
 
 	return result
 }
 
-func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) ([]string, []string, error) {
+func deepCopyResources(index map[string]*view.Resource) (map[string]*view.Resource, error) {
+	marshal, err := json.Marshal(index)
+	if err != nil {
+		return nil, err
+	}
+
+	result := map[string]*view.Resource{}
+	return result, json.Unmarshal(marshal, &result)
+}
+
+func (r *Service) populateResourceChan(ctx context.Context, resourceChan chan func() (*view.Resource, string, error), fs afs.Service, updatedResources map[string]bool) int {
+	for resourceURL := range updatedResources {
+		go func(URL string) {
+			newResource, err := r.loadDependencyResource(URL, ctx, fs)
+			resourceChan <- func() (*view.Resource, string, error) {
+				return newResource, r.updateResourceKey(URL), err
+			}
+		}(resourceURL)
+	}
+
+	return len(updatedResources)
+}
+
+func (r *Service) loadDependencyResource(URL string, ctx context.Context, fs afs.Service) (*view.Resource, error) {
+	dependency, ok := r.session.Dependencies[URL]
+	if ok {
+		return dependency, nil
+	}
+
+	var err error
+	dependency, err = view.LoadResourceFromURL(ctx, URL, fs)
+	return dependency, err
+}
+
+func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (map[string]bool, map[string]bool, error) {
 	var updatedResources []string
 	var removedResources []string
 
@@ -209,12 +295,18 @@ func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) ([]
 		}
 	})
 
-	return updatedResources, removedResources, err
+	if err != nil {
+		return nil, nil, err
+	}
+
+	r.session.OnDependencyUpdated(updatedResources...)
+	r.session.OnFileChange(removedResources...)
+	return r.session.UpdatedDependencies, r.session.DeletedDependencies, err
 }
 
-func (r *Service) detectRoutersChanges(ctx context.Context, fs afs.Service) ([]string, []string, error) {
+func (r *Service) detectRoutersChanges(ctx context.Context, fs afs.Service) (map[string]bool, map[string]bool, error) {
 	var updated []string
-	var removed []string
+	var deleted []string
 	err := r.routeResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
 		if strings.Contains(URL, ".meta/") || !strings.HasSuffix(URL, ".yaml") {
 			return
@@ -224,11 +316,18 @@ func (r *Service) detectRoutersChanges(ctx context.Context, fs afs.Service) ([]s
 		case resource.Added, resource.Modified:
 			updated = append(updated, URL)
 		case resource.Deleted:
-			removed = append(removed, URL)
+			deleted = append(deleted, URL)
 		}
 	})
 
-	return updated, removed, err
+	if err != nil {
+		return nil, nil, err
+	}
+
+	r.session.OnRouterUpdated(updated...)
+	r.session.OnRouterDeleted(deleted...)
+
+	return r.session.UpdatedRouters, r.session.DeletedRouters, err
 }
 
 func (r *Service) detectChanges(metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer) {
@@ -238,7 +337,7 @@ func (r *Service) detectChanges(metrics *gmetric.Service, statusHandler http.Han
 	go func() {
 	outer:
 		for {
-			time.Sleep(time.Minute * 1)
+			time.Sleep(r.Config.ChangeDetection._retry)
 			select {
 			case <-cancel.Done():
 				break outer
@@ -282,6 +381,38 @@ func (r *Service) updateRouterAPIKeys(routes router.Routes) {
 			route.APIKey = r.Config.APIKeys.Match(route.URI)
 		}
 	}
+}
+
+func (r *Service) populateRoutersChan(ctx context.Context, routersChan chan func() (*router.Resource, string, error), updatedMap map[string]bool, fs afs.Service, resources map[string]*view.Resource) int {
+	for resourceURL := range updatedMap {
+		go func(URL string) {
+			routerResource, err := r.loadRouterResource(URL, resources, ctx, fs)
+			routersChan <- func() (*router.Resource, string, error) {
+				return routerResource, URL, err
+			}
+		}(resourceURL)
+	}
+
+	return len(updatedMap)
+}
+
+func (r *Service) loadRouterResource(URL string, resources map[string]*view.Resource, ctx context.Context, fs afs.Service) (*router.Resource, error) {
+	routerResource, ok := r.session.Routers[URL]
+	if ok {
+		return routerResource, nil
+	}
+
+	copyResources, err := deepCopyResources(resources)
+	if err != nil {
+		return nil, err
+	}
+
+	routerResource, err = router.NewResourceFromURL(ctx, fs, URL, r.Config.Discovery(), r.visitors, r.types, r.metrics, copyResources)
+	if err == nil {
+		r.session.AddRouter(URL, routerResource)
+	}
+
+	return routerResource, err
 }
 
 func initSecrets(ctx context.Context, config *Config) error {
