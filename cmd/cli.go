@@ -188,7 +188,7 @@ func (s *serverBuilder) buildConstParameters(route *option.Route) []*view.Parame
 				Kind: view.LiteralKind,
 				Name: paramName,
 			},
-			Val: route.Const[paramName],
+			Const: route.Const[paramName],
 		})
 	}
 

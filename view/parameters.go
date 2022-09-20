@@ -31,7 +31,7 @@ type (
 		MaxAllowedRecords *int        `json:",omitempty"`
 		Schema            *Schema     `json:",omitempty"`
 		Codec             *Codec      `json:",omitempty"`
-		Val               interface{} `json:",omitempty"`
+		Const             interface{} `json:",omitempty"`
 
 		DateFormat      string `json:",omitempty"`
 		ErrorStatusCode int    `json:",omitempty"`
@@ -166,7 +166,7 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 		p.PresenceName = p.Name
 	}
 
-	if p.In.Kind == LiteralKind && p.Val == nil {
+	if p.In.Kind == LiteralKind && p.Const == nil {
 		return fmt.Errorf("param %v value was not set", p.Name)
 	}
 
@@ -203,8 +203,8 @@ func (p *Parameter) inherit(param *Parameter) {
 	p.Description = NotEmptyOf(p.Description, param.Description)
 	p.Style = NotEmptyOf(p.Style, param.Style)
 	p.PresenceName = NotEmptyOf(p.PresenceName, param.PresenceName)
-	if p.Val == nil {
-		p.Val = param.Val
+	if p.Const == nil {
+		p.Const = param.Const
 	}
 
 	if p.In == nil {
@@ -277,7 +277,7 @@ func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
 	}
 
 	if p.In.Kind == LiteralKind {
-		p.Schema = NewSchema(reflect.TypeOf(p.Val))
+		p.Schema = NewSchema(reflect.TypeOf(p.Const))
 		return nil
 	}
 
@@ -446,13 +446,13 @@ func (p *Parameter) ensureSelectorParamValue(selector *Selector) {
 }
 
 func (p *Parameter) UpdateValue(params interface{}, presenceMap interface{}) {
-	if p.Val == nil {
+	if p.Const == nil {
 		return
 	}
 
 	paramsPtr := xunsafe.AsPointer(params)
 	presenceMapPtr := xunsafe.AsPointer(presenceMap)
-	p.setValue(paramsPtr, p.Val, presenceMapPtr)
+	p.setValue(paramsPtr, p.Const, presenceMapPtr)
 }
 
 //ParametersIndex represents Parameter map indexed by Parameter.Name
