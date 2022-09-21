@@ -18,6 +18,11 @@ import (
 var boolType = reflect.TypeOf(true)
 
 type (
+	Expander interface {
+		ColIn(column string, args ...interface{}) (string, error)
+		In(args ...interface{}) (string, error)
+	}
+
 	Template struct {
 		Source         string        `json:",omitempty" yaml:"source,omitempty"`
 		SourceURL      string        `json:",omitempty" yaml:"sourceURL,omitempty"`
@@ -53,6 +58,8 @@ type (
 	}
 
 	MetaParam struct {
+		expander     Expander
+		sanitizer    *CriteriaSanitizer
 		Name         string
 		Alias        string
 		Table        string
@@ -63,6 +70,24 @@ type (
 		NonWindowSQL string
 	}
 )
+
+func (m *MetaParam) ColIn(column string, args ...interface{}) (string, error) {
+	if m.expander != nil {
+		return m.expander.ColIn(column, args...)
+	}
+
+	return column + " IN " + m.addBindings(args), nil
+}
+
+func (m *MetaParam) addBindings(args []interface{}) string {
+	_, bindings := AsBindings("", args)
+	m.sanitizer.addAll(args...)
+	return bindings
+}
+
+func (m *MetaParam) In(args ...interface{}) (string, error) {
+	return m.ColIn("", args...)
+}
 
 func (t *Template) Init(ctx context.Context, resource *Resource, view *View) error {
 	if t.initialized {
@@ -259,19 +284,26 @@ func filterConstParameters(parameters []*Parameter) []*Parameter {
 	return params
 }
 
-func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parentParam *MetaParam) (string, *CriteriaSanitizer, *logger.Printer, error) {
+func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parentParam *MetaParam, options ...interface{}) (string, *CriteriaSanitizer, *logger.Printer, error) {
 	if t.wasEmpty {
 		return t.Source, &CriteriaSanitizer{}, &logger.Printer{}, nil
 	}
 
-	return Evaluate(t.sqlEvaluator, t.Schema.Type(), externalParams, presenceMap, AsViewParam(t._view, nil), parentParam)
+	var expander Expander
+	for _, option := range options {
+		switch actual := option.(type) {
+		case Expander:
+			expander = actual
+		}
+	}
+
+	return Evaluate(t.sqlEvaluator, t.Schema.Type(), externalParams, presenceMap, AsViewParam(t._view, nil, expander), parentParam)
 }
 
 func Evaluate(evaluator *Evaluator, schemaType reflect.Type, externalParams, presenceMap interface{}, viewParam, parentParam *MetaParam) (string, *CriteriaSanitizer, *logger.Printer, error) {
 	printer := &logger.Printer{}
-	params := &CriteriaSanitizer{}
 
-	SQL, err := evaluator.Evaluate(schemaType, externalParams, presenceMap, viewParam, parentParam, params, printer)
+	SQL, params, err := evaluator.Evaluate(schemaType, externalParams, presenceMap, viewParam, parentParam, printer)
 	if err != nil {
 		return "", nil, printer, err
 	}
@@ -279,10 +311,10 @@ func Evaluate(evaluator *Evaluator, schemaType reflect.Type, externalParams, pre
 	return SQL, params, printer, nil
 }
 
-func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMap interface{}, viewParam *MetaParam, parentParam *MetaParam, params *CriteriaSanitizer, logger *logger.Printer) (string, error) {
+func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMap interface{}, viewParam *MetaParam, parentParam *MetaParam, logger *logger.Printer) (string, *CriteriaSanitizer, error) {
 	externalType := reflect.TypeOf(externalParams)
 	if schemaType != externalType {
-		return "", fmt.Errorf("inompactible types, wanted %v got %T", schemaType.String(), externalParams)
+		return "", nil, fmt.Errorf("inompactible types, wanted %v got %T", schemaType.String(), externalParams)
 	}
 
 	externalParams, presenceMap = e.updateConsts(externalParams, presenceMap)
@@ -290,39 +322,39 @@ func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMa
 	newState := e.stateProvider()
 	if externalParams != nil {
 		if err := newState.SetValue(keywords.ParamsKey, externalParams); err != nil {
-			return "", err
+			return "", nil, err
 		}
 	}
 
 	if presenceMap != nil {
 		if err := newState.SetValue(keywords.ParamsMetadataKey, presenceMap); err != nil {
-			return "", err
+			return "", nil, err
 		}
 	}
 
 	if err := newState.SetValue(keywords.ViewKey, viewParam); err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	if parentParam != nil {
 		if err := newState.SetValue(keywords.ParentViewKey, parentParam); err != nil {
-			return "", err
+			return "", nil, err
 		}
 	}
 
-	if err := newState.SetValue(Criteria, params); err != nil {
-		return "", err
+	if err := newState.SetValue(Criteria, viewParam.sanitizer); err != nil {
+		return "", nil, err
 	}
 
 	if err := newState.SetValue(Logger, logger); err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	if err := e.executor.Exec(newState); err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	return newState.Buffer.String(), nil
+	return newState.Buffer.String(), viewParam.sanitizer, nil
 }
 
 func (e *Evaluator) updateConsts(params interface{}, presenceMap interface{}) (interface{}, interface{}) {
@@ -348,10 +380,14 @@ func AsViewParam(aView *View, aSelector *Selector, options ...interface{}) *Meta
 	}
 
 	var sanitizer *CriteriaSanitizer
+	var expander Expander
+
 	for _, option := range options {
 		switch actual := option.(type) {
 		case *CriteriaSanitizer:
 			sanitizer = actual
+		case Expander:
+			expander = actual
 		}
 	}
 
@@ -373,6 +409,7 @@ func AsViewParam(aView *View, aSelector *Selector, options ...interface{}) *Meta
 	}
 
 	viewParam := &MetaParam{
+		expander:     expander,
 		Name:         aView.Name,
 		Alias:        aView.Alias,
 		Table:        aView.Table,
@@ -381,13 +418,15 @@ func AsViewParam(aView *View, aSelector *Selector, options ...interface{}) *Meta
 		Offset:       offset,
 		Args:         args,
 		NonWindowSQL: SQLExec,
+		sanitizer:    &CriteriaSanitizer{},
 	}
 
 	return viewParam
 }
 
-func (m *MetaParam) Expand(sanitizer *CriteriaSanitizer) string {
-	sanitizer.addAll(m.Args...)
+//For the backward compatibility
+func (m *MetaParam) Expand(_ *CriteriaSanitizer) string {
+	m.sanitizer.addAll(m.Args...)
 	return m.NonWindowSQL
 }
 
@@ -599,26 +638,30 @@ func (t *Template) replacementEntry(key string, params CriteriaParam, selector *
 		}
 
 		*placeholders = append(*placeholders, values...)
-		switch len(values) {
-		case 0:
-			return "", "", nil
-		case 1:
-			return key, "?", nil
-		case 2:
-			return key, "?, ?", nil
-		case 3:
-			return key, "?, ?, ?", nil
-		case 4:
-			return key, "?, ?, ?, ?", nil
-		default:
-			sb := strings.Builder{}
-			sb.WriteByte('?')
-			for i := 1; i < len(values); i++ {
-				sb.WriteString(", ?")
-			}
-			return key, sb.String(), nil
-		}
+		actualKey, bindings := AsBindings(key, values)
+		return actualKey, bindings, nil
+	}
+}
 
+func AsBindings(key string, values []interface{}) (column string, bindings string) {
+	switch len(values) {
+	case 0:
+		return "", ""
+	case 1:
+		return key, "?"
+	case 2:
+		return key, "?, ?"
+	case 3:
+		return key, "?, ?, ?"
+	case 4:
+		return key, "?, ?, ?, ?"
+	default:
+		sb := strings.Builder{}
+		sb.WriteByte('?')
+		for i := 1; i < len(values); i++ {
+			sb.WriteString(", ?")
+		}
+		return key, sb.String()
 	}
 }
 

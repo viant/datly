@@ -23,7 +23,7 @@ require (
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.2.1-0.20220914154037-307a294f2482
 	github.com/viant/cloudless v1.1.1-0.20220302185825-1e29705ac362
-	github.com/viant/dsc v0.16.0 // indirect
+	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/parsly v0.0.0-20220913214053-cb272791c00f

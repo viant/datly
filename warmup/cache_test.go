@@ -93,7 +93,7 @@ func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCas
 		build, err := builder.Build(aView, cacheInput.Selector, &view.BatchData{}, nil, &reader.Exclude{
 			ColumnsIn:  true,
 			Pagination: true,
-		}, nil)
+		}, nil, nil)
 
 		if err != nil {
 			return err

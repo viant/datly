@@ -319,14 +319,14 @@ func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchDa
 
 		if (aView.Cache != nil && aView.Cache.Warmup != nil) || relation != nil {
 			data, _ := session.ParentData()
-			columnInMatcher, cacheErr = s.sqlBuilder.Build(aView, selector, batchData, relation, &Exclude{Pagination: true, ColumnsIn: true}, data.AsParam())
+			columnInMatcher, cacheErr = s.sqlBuilder.Build(aView, selector, batchData, relation, &Exclude{Pagination: true, ColumnsIn: true}, data.AsParam(), nil)
 		}
 	}()
 
 	data, _ := session.ParentData()
 	fullMatch, err = s.sqlBuilder.Build(aView, selector, batchData, relation, &Exclude{
 		Pagination: relation != nil && len(batchData.ValuesBatch) > 1,
-	}, data.AsParam())
+	}, data.AsParam(), nil)
 
 	if err != nil {
 		return nil, nil, err

@@ -88,11 +88,7 @@ func (c *matchersCollector) createMetaWarmupEntry(aView *view.View, aChan chan w
 }
 
 func (c *matchersCollector) createIndexWarmupEntry(aView *view.View, aChan chan warmupEntryFn, cacheInput *view.CacheInput) {
-	build, err := c.builder.Build(c.view, cacheInput.Selector, &view.BatchData{}, nil, &reader.Exclude{
-		ColumnsIn:  true,
-		Pagination: true,
-	}, nil)
-
+	build, err := c.builder.CacheSQL(c.view, cacheInput.Selector)
 	aChan <- func() (*warmupEntry, error) {
 		if err != nil {
 			return nil, err

@@ -25,6 +25,8 @@ const (
 )
 
 type (
+	expanderMock struct {
+	}
 
 	//Builder represent SQL Builder
 	Builder struct{}
@@ -36,13 +38,21 @@ type (
 	//BatchData groups view needed to use various view.MatchStrategy
 )
 
+func (e *expanderMock) ColIn(column string, args ...interface{}) (string, error) {
+	return "", nil
+}
+
+func (e *expanderMock) In(args ...interface{}) (string, error) {
+	return "", nil
+}
+
 //NewBuilder creates Builder instance
 func NewBuilder() *Builder {
 	return &Builder{}
 }
 
 //Build builds SQL Select statement
-func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *view.MetaParam) (*cache.Index, error) {
+func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *view.MetaParam, expander view.Expander) (*cache.Index, error) {
 	if exclude == nil {
 		exclude = &Exclude{}
 	}
@@ -368,15 +378,22 @@ func actualLimit(aView *view.View, selector *view.Selector) int {
 func (b *Builder) ExactMetaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, parent *view.MetaParam) (*cache.Index, error) {
 	return b.metaSQL(aView, selector, batchData, relation, &Exclude{
 		Pagination: true,
-	}, parent)
+	}, parent, nil)
 }
 
 func (b *Builder) CacheMetaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, parent *view.MetaParam) (*cache.Index, error) {
-	return b.metaSQL(aView, selector, batchData, relation, &Exclude{Pagination: true, ColumnsIn: true}, parent)
+	return b.metaSQL(aView, selector, batchData, relation, &Exclude{Pagination: true, ColumnsIn: true}, parent, &expanderMock{})
 }
 
-func (b *Builder) metaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *view.MetaParam) (*cache.Index, error) {
-	matcher, err := b.Build(aView, selector, batchData, relation, exclude, parent)
+func (b *Builder) CacheSQL(aView *view.View, selector *view.Selector) (*cache.Index, error) {
+	return b.Build(aView, selector, nil, nil, &Exclude{
+		ColumnsIn:  true,
+		Pagination: true,
+	}, nil, &expanderMock{})
+}
+
+func (b *Builder) metaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *view.MetaParam, expander view.Expander) (*cache.Index, error) {
+	matcher, err := b.Build(aView, selector, batchData, relation, exclude, parent, expander)
 	if err != nil {
 		return nil, err
 	}
