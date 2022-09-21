@@ -38,6 +38,7 @@ type (
 	Warmup struct {
 		IndexColumn string
 		IndexMeta   bool
+		Connector   *Connector `json:",omitempty"`
 		Cases       []*CacheParameters
 	}
 
@@ -96,7 +97,7 @@ func (c *Cache) init(ctx context.Context, resource *Resource, aView *View) error
 		return err
 	}
 
-	if err := c.initWarmup(); err != nil {
+	if err := c.initWarmup(ctx, resource); err != nil {
 		return err
 	}
 
@@ -349,7 +350,7 @@ func (c *Cache) getParamValues(ctx context.Context, paramValue *ParamValue) ([]i
 	return result, nil
 }
 
-func (c *Cache) initWarmup() error {
+func (c *Cache) initWarmup(ctx context.Context, resource *Resource) error {
 	if c.owner == nil || c.Warmup == nil {
 		return nil
 	}
@@ -372,6 +373,12 @@ func (c *Cache) initWarmup() error {
 			}
 
 			paramValue._param = param
+		}
+	}
+
+	if c.Warmup.Connector != nil {
+		if err := c.Warmup.Connector.Init(ctx, resource.GetConnectors()); err != nil {
+			return err
 		}
 	}
 

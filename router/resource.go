@@ -184,6 +184,19 @@ func (r *Resource) addLogger(aView *view.View, timeLogger *logger.Adapter) {
 }
 
 func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, useColumnCache bool, options ...interface{}) (*Resource, error) {
+	resource, err := LoadResource(ctx, fs, URL, useColumnCache, options...)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := resource.Init(ctx); err != nil {
+		return nil, err
+	}
+
+	return resource, err
+}
+
+func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCache bool, options ...interface{}) (*Resource, error) {
 	visitors, types, resources, metrics := readOptions(options)
 
 	resourceData, err := fs.DownloadWithURL(ctx, URL)
@@ -222,11 +235,7 @@ func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, useColu
 
 	object, _ := fs.Object(ctx, URL)
 	resource.Resource.ModTime = object.ModTime()
-
-	if err := resource.Init(ctx); err != nil {
-		return nil, err
-	}
-	return resource, err
+	return resource, nil
 }
 
 func readOptions(options []interface{}) (codec.Visitors, view.Types, map[string]*view.Resource, *view.Metrics) {

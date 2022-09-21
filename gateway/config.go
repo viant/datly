@@ -19,18 +19,19 @@ import (
 
 type (
 	Config struct {
-		APIPrefix       string //like /v1/api/
-		RouteURL        string
-		DependencyURL   string
-		UseCacheFS      bool
-		SyncFrequencyMs int
-		Secrets         []*secret.Resource
-		JWTValidator    *verifier.Config
-		Cognito         *cognito.Config
-		Meta            meta.Config
-		APIKeys         router.APIKeys
-		AutoDiscovery   *bool
-		ChangeDetection *ChangeDetection
+		APIPrefix            string //like /v1/api/
+		RouteURL             string
+		DependencyURL        string
+		UseCacheFS           bool
+		SyncFrequencyMs      int
+		Secrets              []*secret.Resource
+		JWTValidator         *verifier.Config
+		Cognito              *cognito.Config
+		Meta                 meta.Config
+		APIKeys              router.APIKeys
+		AutoDiscovery        *bool
+		ChangeDetection      *ChangeDetection
+		CacheConnectorPrefix string
 	}
 
 	ChangeDetection struct {

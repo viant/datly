@@ -30,6 +30,12 @@ func TestPopulateCache(t *testing.T) {
 			expectedInserted: 36,
 			metaIndexed:      []interface{}{2, 11, 111},
 		},
+		{
+			description:      "cache connector",
+			URL:              "case003",
+			expectedInserted: 36,
+			metaIndexed:      []interface{}{2, 11, 111},
+		},
 	}
 
 	//for _, testCase := range testCases[len(testCases)-1:] {

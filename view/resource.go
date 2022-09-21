@@ -511,3 +511,16 @@ func (r *Resource) ensureCacheIndex() {
 		r._cacheIndex = map[string]int{}
 	}
 }
+
+func (r *Resource) ExistsConnector(name string) bool {
+	lookup, err := r._connectors.Lookup(name)
+	return lookup != nil && err == nil
+}
+
+func (r *Resource) Connector(name string) (*Connector, error) {
+	if r._connectors == nil {
+		r._connectors = ConnectorSlice(r.Connectors).Index()
+	}
+
+	return r._connectors.Lookup(name)
+}

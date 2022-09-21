@@ -2,6 +2,7 @@ package warmup
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/view"
@@ -126,7 +127,7 @@ func readWithChan(ctx context.Context, entry *warmupEntry, notifier chan error) 
 }
 
 func readWithErr(ctx context.Context, entry *warmupEntry) error {
-	db, err := entry.view.Db()
+	db, err := DB(entry)
 	if err != nil {
 		return err
 	}
@@ -142,6 +143,14 @@ func readWithErr(ctx context.Context, entry *warmupEntry) error {
 	}
 
 	return nil
+}
+
+func DB(entry *warmupEntry) (*sql.DB, error) {
+	if entry.view.Cache.Warmup.Connector != nil {
+		return entry.view.Cache.Warmup.Connector.DB()
+	}
+
+	return entry.view.Db()
 }
 
 func PopulateCache(views []*view.View) (int, error) {

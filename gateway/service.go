@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/auth/secret"
 	"github.com/viant/datly/codec"
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
 	"net/http"
@@ -438,12 +439,16 @@ func (r *Service) loadRouterResource(URL string, resources map[string]*view.Reso
 		return nil, err
 	}
 
-	routerResource, err = router.NewResourceFromURL(ctx, fs, URL, r.Config.Discovery(), r.visitors, r.types, r.metrics, copyResources)
+	routerResource, err = router.LoadResource(ctx, fs, URL, r.Config.Discovery(), r.visitors, r.types, r.metrics, copyResources)
 	if err == nil {
 		r.session.AddRouter(URL, routerResource)
 	}
 
-	return routerResource, err
+	if err = r.updateCacheConnectorRefIfNeeded(routerResource); err != nil {
+		return nil, err
+	}
+
+	return routerResource, routerResource.Init(ctx)
 }
 
 func (r *Service) shouldUpdateRouter(viewSeg string, routeURLs []string) (string, bool) {
@@ -460,6 +465,75 @@ func (r *Service) shouldUpdateRouter(viewSeg string, routeURLs []string) (string
 	}
 
 	return "", false
+}
+
+func (r *Service) updateCacheConnectorRefIfNeeded(routerResource *router.Resource) error {
+	if r.Config.CacheConnectorPrefix == "" {
+		return nil
+	}
+
+	for _, aView := range routerResource.Resource.Views {
+		if err := r.updateCacheConnectorRef(routerResource, aView); err != nil {
+			return err
+		}
+	}
+
+	for _, route := range routerResource.Routes {
+		if err := r.updateCacheConnectorRef(routerResource, route.View); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *Service) updateCacheConnectorRef(routerResource *router.Resource, aView *view.View) error {
+	viewWarmup, ok := r.viewWarmup(aView)
+	if ok {
+		if viewWarmup.Connector != nil && viewWarmup.Connector.Ref != "" {
+			cacheConnectorName := r.Config.CacheConnectorPrefix + viewWarmup.Connector.Ref
+			if routerResource.Resource.ExistsConnector(cacheConnectorName) {
+				viewWarmup.Connector.Ref = cacheConnectorName
+			}
+		} else if viewWarmup.Connector == nil {
+			viewConnector, ok := r.viewConnector(routerResource, aView)
+			if ok {
+				refName := r.Config.CacheConnectorPrefix + viewConnector.Name
+				if ok && routerResource.Resource.ExistsConnector(refName) {
+					viewWarmup.Connector = &view.Connector{Reference: shared.Reference{Ref: refName}}
+				}
+			}
+		}
+	}
+
+	for _, relation := range aView.With {
+		if err := r.updateCacheConnectorRef(routerResource, &relation.Of.View); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *Service) viewWarmup(aView *view.View) (*view.Warmup, bool) {
+	if aView.Cache == nil {
+		return nil, false
+	}
+
+	return aView.Cache.Warmup, aView.Cache.Warmup != nil
+}
+
+func (r *Service) viewConnector(routerResource *router.Resource, aView *view.View) (*view.Connector, bool) {
+	if aView.Connector.Name != "" {
+		return aView.Connector, true
+	}
+
+	if aView.Connector.Ref != "" {
+		connector, err := routerResource.Resource.Connector(aView.Connector.Ref)
+		return connector, err == nil
+	}
+
+	return nil, false
 }
 
 func initSecrets(ctx context.Context, config *Config) error {
