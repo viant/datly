@@ -44,13 +44,13 @@ func (r *Request) Request() *http.Request {
 	}
 	req.Host = host
 	URI := r.RawPath
-	if URI != "" && URI[0] == '/' {
-		URI = URI[1:]
+	if URI != "" && URI[0] != '/' {
+		URI = "/" + URI
 	}
 
 	if r.RawQueryString != "" {
 		URI += "?" + r.RawQueryString
 	}
-	req.URL, _ = url.Parse("https://" + host + "/" + URI)
+	req.URL, _ = url.Parse("https://" + host + URI)
 	return &req
 }
