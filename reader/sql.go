@@ -38,6 +38,14 @@ type (
 	//BatchData groups view needed to use various view.MatchStrategy
 )
 
+func (e *expanderMock) ParentJoinOn(column string) (string, error) {
+	return e.ColIn("", column)
+}
+
+func (e *expanderMock) AndParentJoinOn(column string) (string, error) {
+	return e.ColIn("AND", column)
+}
+
 func (e *expanderMock) ColIn(prefix, column string) (string, error) {
 	return "", nil
 }

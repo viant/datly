@@ -21,6 +21,8 @@ type (
 	Expander interface {
 		ColIn(prefix, column string) (string, error)
 		In(prefix string) (string, error)
+		ParentJoinOn(column string) (string, error)
+		AndParentJoinOn(column string) (string, error)
 	}
 
 	Template struct {
@@ -71,6 +73,14 @@ type (
 		ParentValues []interface{}
 	}
 )
+
+func (m *MetaParam) ParentJoinOn(column string) (string, error) {
+	return m.ColIn("", column)
+}
+
+func (m *MetaParam) AndParentJoinOn(column string) (string, error) {
+	return m.ColIn("AND", column)
+}
 
 func (m *MetaParam) ColIn(prefix, column string) (string, error) {
 	if m.expander != nil {
