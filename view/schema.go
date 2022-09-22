@@ -146,7 +146,12 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 		})
 
 		if meta := rel.Of.View.Template.Meta; meta != nil {
-			structFields = append(structFields, c.newField(`json:",omitempty" yaml:",omitempty"`, meta.Name, format.CaseUpperCamel, meta.Schema.Type()))
+			metaType := meta.Schema.Type()
+			if metaType.Kind() != reflect.Ptr {
+				metaType = reflect.PtrTo(metaType)
+			}
+
+			structFields = append(structFields, c.newField(`json:",omitempty" yaml:",omitempty"`, meta.Name, format.CaseUpperCamel, metaType))
 		}
 	}
 
@@ -154,7 +159,7 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 		structFields = append(structFields, c.newField("", selfRef.Holder, format.CaseUpperCamel, reflect.SliceOf(ast.InterfaceType)))
 	}
 
-	structType := reflect.StructOf(structFields)
+	structType := reflect.PtrTo(reflect.StructOf(structFields))
 	c.setType(structType)
 }
 

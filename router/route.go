@@ -588,7 +588,12 @@ func (r *Route) initCSVIfNeeded() error {
 		NullValue:       r.CSV.NullValue,
 	}
 
-	r.CSV.objectStringifier = io.TypeStringifier(r.View.Schema.Type(), "null", true, io.Parallel(true))
+	schemaType := r.View.Schema.Type()
+	if schemaType.Kind() == reflect.Ptr {
+		schemaType = schemaType.Elem()
+	}
+
+	r.CSV.objectStringifier = io.TypeStringifier(schemaType, "null", true, io.Parallel(true))
 
 	if r._requestBodyType == nil {
 		return nil

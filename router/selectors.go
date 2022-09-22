@@ -164,7 +164,7 @@ func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.
 			return view.OffsetQuery, err
 		}
 	} else {
-		if b.isParamPresent(details, view.LimitQuery) {
+		if b.isParamPresent(details, view.OffsetQuery) {
 			return view.OffsetQuery, fmt.Errorf("can't use offset on view %v", details.View.Name)
 		}
 	}
@@ -174,7 +174,7 @@ func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.
 			return view.OrderByQuery, err
 		}
 	} else {
-		if b.isParamPresent(details, view.LimitQuery) {
+		if b.isParamPresent(details, view.OrderByQuery) {
 			return view.OrderByQuery, fmt.Errorf("can't use order by on view %v", details.View.Name)
 		}
 	}

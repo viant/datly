@@ -422,8 +422,6 @@ func (r *Collector) ViewMetaHandler(rel *Relation) (func(viewMeta interface{}) e
 		return nil, fmt.Errorf("not found holder field %v at %v", templateMeta.Name, templateMeta.Schema.Type().String())
 	}
 
-	xType := xunsafe.NewType(metaParentHolderField.Type)
-	shouldDeref := xType.Kind() == reflect.Ptr
 	var valuesPosition map[interface{}][]int
 	return func(viewMeta interface{}) error {
 		if valuesPosition == nil {
@@ -443,12 +441,8 @@ func (r *Collector) ViewMetaHandler(rel *Relation) (func(viewMeta interface{}) e
 
 		slicePtr := xunsafe.AsPointer(r.dest)
 		for _, position := range positions {
-			ownerPtr := r.slice.PointerAt(slicePtr, uintptr(position))
-			if shouldDeref {
-				metaParentHolderField.SetValue(ownerPtr, xType.Deref(viewMeta))
-			} else {
-				metaParentHolderField.SetValue(ownerPtr, viewMeta)
-			}
+			ownerPtr := xunsafe.AsPointer(r.slice.ValuePointerAt(slicePtr, position))
+			metaParentHolderField.SetValue(ownerPtr, viewMeta)
 		}
 
 		return nil
@@ -709,44 +703,5 @@ func key(field *xunsafe.Field, node interface{}) interface{} {
 }
 
 func keyAt(field *xunsafe.Field, slice *xunsafe.Slice, nodesPtr unsafe.Pointer, i int) interface{} {
-	return normalizeKey(field.Value(slice.PointerAt(nodesPtr, uintptr(i))))
+	return normalizeKey(field.Value(xunsafe.AsPointer(slice.ValuePointerAt(nodesPtr, i))))
 }
-
-//
-//func BuildTree(nodes []*Node) []*Node {
-//	if len(nodes) == 0 {
-//		return []*Node{}
-//	}
-//
-//	var parents []*Node
-//	index := map[int]int{}
-//
-//	for i, node := range nodes {
-//		index[node.ID] = i
-//	}
-//
-//	indexes := NodeIndex{}
-//
-//	for i, node := range nodes {
-//		nodeParentIndex, ok := index[node.ParentID]
-//		if !ok {
-//			parents = append(parents, nodes[i])
-//			continue
-//		}
-//
-//		for ok {
-//			parent := nodes[nodeParentIndex]
-//			nodeIndex := indexes.Get(parent.ID)
-//			if !nodeIndex[node.ID] {
-//				nodeCopy := nodes[index[node.ID]]
-//				parent.Children = append(parent.Children, nodeCopy)
-//			}
-//
-//			nodeIndex[node.ID] = true
-//			node = parent
-//			nodeParentIndex, ok = index[parent.ParentID]
-//		}
-//	}
-//
-//	return parents
-//}
