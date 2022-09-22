@@ -38,7 +38,7 @@ type (
 	//BatchData groups view needed to use various view.MatchStrategy
 )
 
-func (e *expanderMock) ColIn(column string, args ...interface{}) (string, error) {
+func (e *expanderMock) ColIn(column string) (string, error) {
 	return "", nil
 }
 
@@ -57,7 +57,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 		exclude = &Exclude{}
 	}
 
-	template, sanitized, _, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parent)
+	template, sanitized, _, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parent, batchData, expander)
 	if err != nil {
 		return nil, err
 	}
@@ -398,7 +398,7 @@ func (b *Builder) metaSQL(aView *view.View, selector *view.Selector, batchData *
 		return nil, err
 	}
 
-	viewParam := view.AsViewParam(aView, selector)
+	viewParam := view.AsViewParam(aView, selector, batchData)
 	viewParam.NonWindowSQL = matcher.SQL
 	viewParam.Args = matcher.Args
 

@@ -102,5 +102,5 @@ func (d *ParentData) AsParam() *view.MetaParam {
 		return nil
 	}
 
-	return view.AsViewParam(d.View, d.Selector)
+	return view.AsViewParam(d.View, d.Selector, nil)
 }

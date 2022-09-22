@@ -19,7 +19,7 @@ var boolType = reflect.TypeOf(true)
 
 type (
 	Expander interface {
-		ColIn(column string, args ...interface{}) (string, error)
+		ColIn(column string) (string, error)
 		In(args ...interface{}) (string, error)
 	}
 
@@ -68,15 +68,16 @@ type (
 		Page         int
 		Args         []interface{}
 		NonWindowSQL string
+		ParentValues []interface{}
 	}
 )
 
-func (m *MetaParam) ColIn(column string, args ...interface{}) (string, error) {
+func (m *MetaParam) ColIn(column string) (string, error) {
 	if m.expander != nil {
-		return m.expander.ColIn(column, args...)
+		return m.expander.ColIn(column)
 	}
 
-	return column + " IN " + m.addBindings(args), nil
+	return column + " IN " + m.addBindings(m.ParentValues), nil
 }
 
 func (m *MetaParam) addBindings(args []interface{}) string {
@@ -85,8 +86,8 @@ func (m *MetaParam) addBindings(args []interface{}) string {
 	return bindings
 }
 
-func (m *MetaParam) In(args ...interface{}) (string, error) {
-	return m.ColIn("", args...)
+func (m *MetaParam) In() (string, error) {
+	return m.ColIn("")
 }
 
 func (t *Template) Init(ctx context.Context, resource *Resource, view *View) error {
@@ -284,7 +285,7 @@ func filterConstParameters(parameters []*Parameter) []*Parameter {
 	return params
 }
 
-func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parentParam *MetaParam, options ...interface{}) (string, *CriteriaSanitizer, *logger.Printer, error) {
+func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parentParam *MetaParam, batchData *BatchData, options ...interface{}) (string, *CriteriaSanitizer, *logger.Printer, error) {
 	if t.wasEmpty {
 		return t.Source, &CriteriaSanitizer{}, &logger.Printer{}, nil
 	}
@@ -297,7 +298,7 @@ func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, paren
 		}
 	}
 
-	return Evaluate(t.sqlEvaluator, t.Schema.Type(), externalParams, presenceMap, AsViewParam(t._view, nil, expander), parentParam)
+	return Evaluate(t.sqlEvaluator, t.Schema.Type(), externalParams, presenceMap, AsViewParam(t._view, nil, batchData, expander), parentParam)
 }
 
 func Evaluate(evaluator *Evaluator, schemaType reflect.Type, externalParams, presenceMap interface{}, viewParam, parentParam *MetaParam) (string, *CriteriaSanitizer, *logger.Printer, error) {
@@ -374,13 +375,14 @@ func (e *Evaluator) updateConsts(params interface{}, presenceMap interface{}) (i
 	return params, presenceMap
 }
 
-func AsViewParam(aView *View, aSelector *Selector, options ...interface{}) *MetaParam {
+func AsViewParam(aView *View, aSelector *Selector, batchData *BatchData, options ...interface{}) *MetaParam {
 	if aView == nil {
 		return nil
 	}
 
 	var sanitizer *CriteriaSanitizer
 	var expander Expander
+	var colInArgs []interface{}
 
 	for _, option := range options {
 		switch actual := option.(type) {
@@ -389,6 +391,10 @@ func AsViewParam(aView *View, aSelector *Selector, options ...interface{}) *Meta
 		case Expander:
 			expander = actual
 		}
+	}
+
+	if batchData != nil {
+		colInArgs = batchData.Values
 	}
 
 	limit := aView.Selector.Limit
@@ -419,6 +425,7 @@ func AsViewParam(aView *View, aSelector *Selector, options ...interface{}) *Meta
 		Args:         args,
 		NonWindowSQL: SQLExec,
 		sanitizer:    &CriteriaSanitizer{},
+		ParentValues: colInArgs,
 	}
 
 	return viewParam

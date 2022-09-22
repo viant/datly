@@ -35,12 +35,7 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 	collector := session.View.Collector(session.Dest, session.HandleViewMeta, session.View.MatchStrategy.SupportsParallel())
 	errors := shared.NewErrors(0)
 
-	var parentMetaParam *view.MetaParam
-	if session.Parent != nil {
-		parentMetaParam = view.AsViewParam(session.Parent, session.Selectors.Lookup(session.Parent))
-	}
-
-	s.readAll(ctx, session, collector, &wg, errors, parentMetaParam)
+	s.readAll(ctx, session, collector, &wg, errors, session.Parent)
 	wg.Wait()
 	err = errors.Error()
 	if err != nil {
@@ -74,7 +69,11 @@ func (s *Service) afterRead(session *Session, collector *view.Collector, start *
 	onFinish(end)
 }
 
-func (s *Service) readAll(ctx context.Context, session *Session, collector *view.Collector, wg *sync.WaitGroup, errorCollector *shared.Errors, parentMeta *view.MetaParam) {
+func (s *Service) readAll(ctx context.Context, session *Session, collector *view.Collector, wg *sync.WaitGroup, errorCollector *shared.Errors, parent *view.View) {
+	if errorCollector.Error() != nil {
+		return
+	}
+
 	start := time.Now()
 	onFinish := session.View.Counter.Begin(start)
 	defer s.afterRead(session, collector, &start, errorCollector.Error(), onFinish)
@@ -97,11 +96,10 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 	}
 
 	for i := range collectorChildren {
-		go func(i int) {
+		go func(i int, parent *view.View) {
 			defer s.afterRelationCompleted(wg, collector, &relationGroup)
-			parentMeta := view.AsViewParam(aView, selector)
-			s.readAll(ctx, session, collectorChildren[i], wg, errorCollector, parentMeta)
-		}(i)
+			s.readAll(ctx, session, collectorChildren[i], wg, errorCollector, aView)
+		}(i, aView)
 	}
 
 	collector.WaitIfNeeded()
@@ -122,6 +120,8 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 
 	session.View.Counter.IncrementValue(Pending)
 	defer session.View.Counter.DecrementValue(Pending)
+
+	parentMeta := view.AsViewParam(aView, selector, batchData)
 	err = s.exhaustRead(ctx, aView, selector, batchData, db, collector, session, parentMeta)
 	if err != nil {
 		errorCollector.Append(err)

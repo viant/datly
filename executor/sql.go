@@ -21,7 +21,7 @@ func NewBuilder() *SqlBuilder {
 }
 
 func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) ([]*SQLStatment, *logger.Printer, error) {
-	SQL, params, printer, err := aView.Template.EvaluateSource(paramState.Values, paramState.Has, nil)
+	SQL, params, printer, err := aView.Template.EvaluateSource(paramState.Values, paramState.Has, nil, nil)
 	if err != nil {
 		return nil, nil, err
 	}

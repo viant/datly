@@ -164,7 +164,7 @@ func (m *TemplateMeta) oldMetaColumnsCacheKey() string {
 func (m *TemplateMeta) prepareSQL(owner *Template) (string, []interface{}, error) {
 	selectorValues := newValue(owner.Schema.Type())
 	selectorPresence := newValue(owner.PresenceSchema.Type())
-	viewParam := AsViewParam(owner._view, nil)
+	viewParam := AsViewParam(owner._view, nil, nil)
 
 	templateSQL, sanitizer, _, err := Evaluate(owner.sqlEvaluator, owner.Schema.Type(), selectorValues, selectorPresence, viewParam, nil)
 	if err != nil {

@@ -112,7 +112,7 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 		}
 	}
 
-	source, sanitized, _, err := aView.Template.EvaluateSource(params, presence, AsViewParam(aView, nil))
+	source, sanitized, _, err := aView.Template.EvaluateSource(params, presence, nil, &BatchData{})
 	if err != nil {
 		return nil, err
 	}
