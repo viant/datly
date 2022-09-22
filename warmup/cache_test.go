@@ -36,10 +36,15 @@ func TestPopulateCache(t *testing.T) {
 			expectedInserted: 36,
 			metaIndexed:      []interface{}{2, 11, 111},
 		},
+		{
+			description:      "cache connector",
+			URL:              "case004",
+			expectedInserted: 2,
+		},
 	}
 
-	//for _, testCase := range testCases[len(testCases)-1:] {
-	for _, testCase := range testCases {
+	for _, testCase := range testCases[len(testCases)-1:] {
+		//for _, testCase := range testCases {
 		dataPath := path.Join("testdata", testCase.URL, "populate")
 		configPath := path.Join("testdata", "db_config.yaml")
 

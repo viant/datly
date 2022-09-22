@@ -322,9 +322,11 @@ func Evaluate(evaluator *Evaluator, schemaType reflect.Type, externalParams, pre
 }
 
 func (e *Evaluator) Evaluate(schemaType reflect.Type, externalParams, presenceMap interface{}, viewParam *MetaParam, parentParam *MetaParam, logger *logger.Printer) (string, *CriteriaSanitizer, error) {
-	externalType := reflect.TypeOf(externalParams)
-	if schemaType != externalType {
-		return "", nil, fmt.Errorf("inompactible types, wanted %v got %T", schemaType.String(), externalParams)
+	if externalParams != nil {
+		externalType := reflect.TypeOf(externalParams)
+		if schemaType != externalType {
+			return "", nil, fmt.Errorf("inompactible types, wanted %v got %T", schemaType.String(), externalParams)
+		}
 	}
 
 	externalParams, presenceMap = e.updateConsts(externalParams, presenceMap)

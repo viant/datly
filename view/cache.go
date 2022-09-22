@@ -281,7 +281,10 @@ func (c *Cache) GenerateCacheInput(ctx context.Context) ([]*CacheInput, error) {
 	chanSize := len(c.Warmup.Cases)
 	selectorChan := make(chan CacheInputFn, chanSize)
 	if chanSize == 0 {
-		return []*CacheInput{}, nil
+		close(selectorChan)
+		return []*CacheInput{
+			c.NewInput(NewSelector()),
+		}, nil
 	}
 
 	for i := range c.Warmup.Cases {
@@ -410,12 +413,7 @@ outer:
 			}
 		}
 
-		*selectors = append(*selectors, &CacheInput{
-			Selector:   selector,
-			Column:     c.Warmup.IndexColumn,
-			MetaColumn: c.Warmup.IndexColumn,
-			IndexMeta:  c.Warmup.IndexMeta || c.Warmup.IndexColumn != "",
-		})
+		*selectors = append(*selectors, c.NewInput(selector))
 
 		for i := len(indexes) - 1; i >= 0; i-- {
 			if indexes[i] < len(paramValues[i])-1 {
@@ -432,4 +430,13 @@ outer:
 	}
 
 	return nil
+}
+
+func (c *Cache) NewInput(selector *Selector) *CacheInput {
+	return &CacheInput{
+		Selector:   selector,
+		Column:     c.Warmup.IndexColumn,
+		MetaColumn: c.Warmup.IndexColumn,
+		IndexMeta:  c.Warmup.IndexMeta || c.Warmup.IndexColumn != "",
+	}
 }

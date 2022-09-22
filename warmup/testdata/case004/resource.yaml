@@ -1,0 +1,68 @@
+Routes:
+  - URI: "/api/events"
+    Method: GET
+    View:
+      Ref: events
+    Index:
+      ViewPrefix:
+        ev: events
+
+
+Resource:
+  CacheProviders:
+    - Name: aerospike
+      Location: ${view.Name}
+      Provider: 'aerospike://127.0.0.1:3000/test'
+      TimeToLiveMs: 3600000
+
+  Views:
+    - Name: events
+      Connector:
+        Ref: db
+      Table: events
+      Cache:
+        Ref: aerospike
+        Warmup:
+          IndexColumn: event_type_id
+          MetaColumn: event_type_id
+          Connector:
+            Ref: cache_db
+      Selector:
+        Constraints:
+          Projection: true
+      Template:
+        Meta:
+          Name: EventsMeta
+          Source: '
+            SELECT COUNT(*) AS TOTAL_RECORDS, $View.Limit as RECORDS_LIMIT, event_type_id FROM ($View.Expand($criteria)) GROUP BY event_type_id
+          '
+        Source: '        
+          SELECT * FROM EVENTS WHERE 0=0 
+          #if($Has.QUANTITY)
+          AND quantity > $QUANTITY
+          #end
+          #if($Has.USER_ID)
+          AND user_id = $Unsafe.USER_ID
+          #end
+        '
+        Parameters:
+          - Name: QUANTITY
+            In:
+              Kind: query
+              Name: quantity
+            Schema:
+              DataType: float
+          - Name: USER_ID
+            In:
+              Kind: query
+              Name: user_id
+            Schema:
+              DataType: int
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"
+    - Name: cache_db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"
