@@ -38,11 +38,11 @@ type (
 	//BatchData groups view needed to use various view.MatchStrategy
 )
 
-func (e *expanderMock) ColIn(column string) (string, error) {
+func (e *expanderMock) ColIn(prefix, column string) (string, error) {
 	return "", nil
 }
 
-func (e *expanderMock) In(args ...interface{}) (string, error) {
+func (e *expanderMock) In(prefix string) (string, error) {
 	return "", nil
 }
 

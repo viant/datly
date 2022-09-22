@@ -285,3 +285,8 @@ func isSQLKeyword(value string) bool {
 
 	return false
 }
+
+func CanBeParam(name string) bool {
+	canBe, ok := builtInMethods[name]
+	return !(canBe && ok)
+}

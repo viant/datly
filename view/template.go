@@ -19,8 +19,8 @@ var boolType = reflect.TypeOf(true)
 
 type (
 	Expander interface {
-		ColIn(column string) (string, error)
-		In(args ...interface{}) (string, error)
+		ColIn(prefix, column string) (string, error)
+		In(prefix string) (string, error)
 	}
 
 	Template struct {
@@ -72,12 +72,21 @@ type (
 	}
 )
 
-func (m *MetaParam) ColIn(column string) (string, error) {
+func (m *MetaParam) ColIn(prefix, column string) (string, error) {
 	if m.expander != nil {
-		return m.expander.ColIn(column)
+		return m.expander.ColIn(prefix, column)
 	}
 
-	return column + " IN " + m.addBindings(m.ParentValues), nil
+	bindings := m.addBindings(m.ParentValues)
+	if bindings == "" {
+		return prefix + " 1 = 0 ", nil
+	}
+
+	if prefix != "" && !strings.HasSuffix(prefix, " ") {
+		prefix = prefix + " "
+	}
+
+	return prefix + column + " IN (" + bindings + " )", nil
 }
 
 func (m *MetaParam) addBindings(args []interface{}) string {
@@ -86,8 +95,8 @@ func (m *MetaParam) addBindings(args []interface{}) string {
 	return bindings
 }
 
-func (m *MetaParam) In() (string, error) {
-	return m.ColIn("")
+func (m *MetaParam) In(prefix string) (string, error) {
+	return m.ColIn(prefix, "")
 }
 
 func (t *Template) Init(ctx context.Context, resource *Resource, view *View) error {

@@ -3,20 +3,7 @@ package option
 import (
 	"github.com/viant/datly/sanitizer"
 	"github.com/viant/datly/view"
-	"github.com/viant/velty/functions"
 )
-
-var builtInMethods = map[string]bool{
-	view.Logger:           true,
-	view.Criteria:         true,
-	functions.SlicesFunc:  true,
-	functions.MathFunc:    true,
-	functions.TimeFunc:    true,
-	functions.StringsFunc: true,
-	functions.ErrorsFunc:  true,
-	functions.StrconvFunc: true,
-	functions.TypesFunc:   true,
-}
 
 type (
 	ViewMeta struct {
@@ -55,7 +42,7 @@ func NewViewMeta() *ViewMeta {
 }
 
 func (m *ViewMeta) AddParameter(param *Parameter) {
-	if m.variables != nil && m.variables[param.Name] || builtInMethods[param.Name] {
+	if m.variables != nil && m.variables[param.Name] || !sanitizer.CanBeParam(param.Name) {
 		return
 	}
 
