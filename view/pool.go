@@ -134,6 +134,9 @@ func (c *aerospikeClient) keepConnAlive(host string, port int) {
 				return
 			default:
 				aClient, err := c.clientWithTimeout(time.Duration(AerospikeConnectionTimeoutInS)*time.Second, host, port)
+				if aClient != nil {
+					aClient.DefaultWritePolicy.SendKey = true
+				}
 				c.mutex.Lock()
 				c.actual = aClient
 				c.mutex.Unlock()
