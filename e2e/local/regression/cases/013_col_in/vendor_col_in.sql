@@ -13,9 +13,9 @@ FROM (SELECT * FROM VENDOR t ) vendor
     JOIN (
         SELECT ID,NAME, VENDOR_ID FROM  (
 
-        SELECT ID, NAME, VENDOR_ID  FROM PRODUCT t WHERE 1=1 $View.ColIn("AND","VENDOR_ID")
+        SELECT ID, NAME, VENDOR_ID  FROM PRODUCT t WHERE 1=1 $View.ParentJoinOn("AND","VENDOR_ID")
         UNION ALL
-        SELECT ID, NAME, VENDOR_ID FROM PRODUCT t WHERE 1=1 $View.ColIn("AND","VENDOR_ID")
+        SELECT ID, NAME, VENDOR_ID FROM PRODUCT t WHERE 1=1 $View.ParentJoinOn("AND","VENDOR_ID")
     ) t WHERE 1 = 1
    #if($Unsafe.Period=="today")
     AND 1 = 1

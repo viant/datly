@@ -16,6 +16,7 @@ require (
 	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/lib/pq v1.10.6
 	github.com/mattn/go-sqlite3 v2.0.2+incompatible
+	github.com/onsi/gomega v1.20.2 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.0
 	github.com/viant/afs v1.16.1-0.20220708154004-5cc767a16d95
@@ -28,7 +29,7 @@ require (
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/parsly v0.0.0-20220913214053-cb272791c00f
 	github.com/viant/scy v0.3.2-0.20220825213848-acc5c59cde78
-	github.com/viant/sqlx v0.0.0-20220922191529-087888e35700
+	github.com/viant/sqlx v0.0.0-20220923155635-db090152530d
 	github.com/viant/toolbox v0.34.6-0.20220630003140-fb2bf82657c1
 	github.com/viant/velty v0.1.1-0.20220823164959-71cfbb2b10fd
 	github.com/viant/xunsafe v0.8.1-0.20220921220858-82f5aba1919f

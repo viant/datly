@@ -38,12 +38,12 @@ type (
 	//BatchData groups view needed to use various view.MatchStrategy
 )
 
-func (e *expanderMock) ParentJoinOn(column string) (string, error) {
-	return e.ColIn("", column)
+func (e *expanderMock) ParentJoinOn(column string, prepend ...string) (string, error) {
+	return "", nil
 }
 
 func (e *expanderMock) AndParentJoinOn(column string) (string, error) {
-	return e.ColIn("AND", column)
+	return e.ColIn("", column)
 }
 
 func (e *expanderMock) ColIn(prefix, column string) (string, error) {
@@ -425,7 +425,7 @@ func (b *Builder) metaSQL(aView *view.View, selector *view.Selector, batchData *
 	}
 
 	if relation != nil {
-		matcher.By = relation.Column
+		matcher.By = relation.Of.Column
 	}
 
 	return matcher, nil

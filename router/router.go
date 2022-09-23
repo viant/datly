@@ -768,3 +768,21 @@ func updateFieldPathsIfNeeded(filter *json.FilterEntry) {
 		filter.Fields[i] = filter.Path + "." + field
 	}
 }
+
+func ExtractCacheableViews(route *Route) []*view.View {
+	var views []*view.View
+	appendCacheWarmupViews(route.View, &views)
+	return views
+}
+
+func appendCacheWarmupViews(aView *view.View, result *[]*view.View) {
+	if aCache := aView.Cache; aCache != nil && aCache.Warmup != nil {
+		*result = append(*result, aView)
+	}
+	if len(aView.With) == 0 {
+		return
+	}
+	for i := range aView.With {
+		appendCacheWarmupViews(&aView.With[i].Of.View, result)
+	}
+}

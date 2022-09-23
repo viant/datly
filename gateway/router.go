@@ -463,15 +463,6 @@ func (r *Router) handleCacheWarmupWithErr(writer http.ResponseWriter, request *h
 	return http.StatusOK, nil
 }
 
-func (r *Router) extractCacheableViews(route *router.Route) warmup.PreCachables {
-	var views []*view.View
-	appendCacheWarmupViews(route.View, &views)
-
-	return func(_, _ string) ([]*view.View, error) {
-		return views, nil
-	}
-}
-
 func (r *Router) ensureRequestURL(request *http.Request) error {
 	if request.URL != nil {
 		return nil
@@ -521,15 +512,9 @@ func (r *Router) availableRoutesErr(err error) error {
 	}
 }
 
-func appendCacheWarmupViews(aView *view.View, result *[]*view.View) {
-	if aCache := aView.Cache; aCache != nil && aCache.Warmup != nil {
-		*result = append(*result, aView)
-	}
-	if len(aView.With) == 0 {
-		return
-	}
-	for i := range aView.With {
-		appendCacheWarmupViews(&aView.With[i].Of.View, result)
+func (r *Router) extractCacheableViews(route *router.Route) warmup.PreCachables {
+	return func(_, _ string) ([]*view.View, error) {
+		return router.ExtractCacheableViews(route), nil
 	}
 }
 

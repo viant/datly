@@ -13,6 +13,7 @@ import (
 	"github.com/viant/afs/option/content"
 	"github.com/viant/datly/codec"
 	"github.com/viant/datly/gateway/registry"
+	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
@@ -36,18 +37,20 @@ import (
 )
 
 type testcase struct {
-	description      string
-	resourceURI      string
-	uri              string
-	method           string
-	expected         string
-	visitors         codec.Visitors
-	types            view.Types
-	headers          http.Header
-	requestBody      string
-	shouldDecompress bool
-	extraRequests    int
-	envVariables     map[string]string
+	preWarmup           bool
+	closeAfterPreWarmup map[string]bool
+	description         string
+	resourceURI         string
+	uri                 string
+	method              string
+	expected            string
+	visitors            codec.Visitors
+	types               view.Types
+	headers             http.Header
+	requestBody         string
+	shouldDecompress    bool
+	extraRequests       int
+	envVariables        map[string]string
 
 	corsHeaders                map[string]string
 	dependenciesUrl            map[string]string
@@ -755,6 +758,17 @@ func TestRouter(t *testing.T) {
 				registry.CodecKeyCSV: registry.CsvFactory(""),
 			},
 		},
+		{
+			description: "meta prewarmup",
+			resourceURI: "042_meta_prewarmup",
+			uri:         "/api/event-types",
+			method:      http.MethodGet,
+			preWarmup:   true,
+			closeAfterPreWarmup: map[string]bool{
+				"events": true,
+			},
+			expected: `{"Status":"ok","ResponseBody":[{"Id":1,"Type":"type - 1","Code":"code - 1","Events":[]},{"Id":2,"Type":"type - 2","Code":"code - 2","Events":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}],"EventsMeta":{"EventTypeId":2,"TotalCount":1}},{"Id":11,"Type":"type - 11","Code":"code - 11","Events":[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}],"EventsMeta":{"EventTypeId":11,"TotalCount":1}},{"Id":111,"Type":"type - 111","Code":"code - 111","Events":[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":102,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}],"EventsMeta":{"EventTypeId":111,"TotalCount":4}}]}`,
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {
@@ -829,7 +843,45 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 		return nil, false
 	}
 
+	if c.preWarmup {
+		for _, route := range aRouter.Routes("") {
+			views := router.ExtractCacheableViews(route)
+
+			warmup.PreCache(func(method, matchingURI string) ([]*view.View, error) {
+				return views, nil
+			}, "")
+
+			if len(c.closeAfterPreWarmup) != 0 {
+				if !c.cleanAfterPrewarmup(t, testDataLocation, views) {
+					return nil, false
+				}
+			}
+		}
+	}
+
 	return aRouter, true
+}
+
+func (c *testcase) cleanAfterPrewarmup(t *testing.T, location string, views []*view.View) bool {
+	_ = toolbox.CreateDirIfNotExist(path.Join(location, "db", "mock.db"))
+
+	for _, aView := range views {
+		if !c.closeAfterPreWarmup[aView.Name] {
+			continue
+		}
+
+		aView.Connector = &view.Connector{
+			Name:   "mock",
+			DSN:    path.Join(location, "db", "mock.db"),
+			Driver: "sqlite3",
+		}
+
+		if !assert.Nil(t, aView.Connector.Init(context.TODO(), map[string]*view.Connector{}), c.description) {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (c *testcase) checkGeneratedOpenAPI(t *testing.T, resource *router.Resource, resourceURI string, fs afs.Service) bool {
@@ -857,6 +909,7 @@ func (c *testcase) checkGeneratedOpenAPI(t *testing.T, resource *router.Resource
 		actBytes, _ := yaml.Marshal(generated)
 		toolbox.Dump(string(actBytes))
 	}
+
 	return true
 }
 

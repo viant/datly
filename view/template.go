@@ -21,7 +21,7 @@ type (
 	Expander interface {
 		ColIn(prefix, column string) (string, error)
 		In(prefix string) (string, error)
-		ParentJoinOn(column string) (string, error)
+		ParentJoinOn(column string, prepend ...string) (string, error)
 		AndParentJoinOn(column string) (string, error)
 	}
 
@@ -74,8 +74,12 @@ type (
 	}
 )
 
-func (m *MetaParam) ParentJoinOn(column string) (string, error) {
-	return m.ColIn("", column)
+func (m *MetaParam) ParentJoinOn(column string, prepend ...string) (string, error) {
+	if len(prepend) > 0 {
+		return m.ColIn(column, prepend[0])
+	}
+
+	return m.ColIn("AND", column)
 }
 
 func (m *MetaParam) AndParentJoinOn(column string) (string, error) {
