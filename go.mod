@@ -38,5 +38,3 @@ require (
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
-
-replace github.com/viant/sqlx => /Users/klarysz/Documents/open_source/sqlx
