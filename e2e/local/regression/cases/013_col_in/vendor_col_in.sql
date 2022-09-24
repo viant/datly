@@ -17,9 +17,7 @@ FROM (SELECT * FROM VENDOR t ) vendor
         UNION ALL
         SELECT ID, NAME, VENDOR_ID FROM PRODUCT t WHERE 1=1 $View.ParentJoinOn("AND","VENDOR_ID")
     ) t WHERE 1 = 1
-   #if($Unsafe.Period=="today")
-    AND 1 = 1
-   #end
 
-    ) products /* { "Cache":{"Ref":"aerospike"}, "Warmup":{"Period":["today"]}} */ ON products.VENDOR_ID = vendor.ID
+
+    ) products /* { "Cache":{"Ref":"aerospike"}, "Warmup":{"":[""]}} */ ON products.VENDOR_ID = vendor.ID
 

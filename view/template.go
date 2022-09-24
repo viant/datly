@@ -78,7 +78,6 @@ func (m *MetaParam) ParentJoinOn(column string, prepend ...string) (string, erro
 	if len(prepend) > 0 {
 		return m.ColIn(column, prepend[0])
 	}
-
 	return m.ColIn("AND", column)
 }
 
