@@ -6,11 +6,9 @@ import (
 	"github.com/viant/datly/codec"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
-	csv2 "github.com/viant/datly/router/marshal/csv"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/parameter"
-	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/load/reader/csv"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -85,10 +83,10 @@ type (
 		Separator string
 		NullValue string
 		//Stringifier io.ObjectStringifier
-		config            *csv.Config
-		objectStringifier *io.ObjectStringifier
-		marshaller        *csv2.Marshaller
-		unwrapperSlice    *xunsafe.Slice
+		config                *csv.Config
+		requestBodyMarshaller *csv.Marshaller
+		outputMarshaller      *csv.Marshaller
+		unwrapperSlice        *xunsafe.Slice
 	}
 
 	responseSetter struct {
@@ -593,22 +591,25 @@ func (r *Route) initCSVIfNeeded() error {
 		schemaType = schemaType.Elem()
 	}
 
-	r.CSV.objectStringifier = io.TypeStringifier(schemaType, "null", true, io.Parallel(true))
+	var err error
+	r.CSV.outputMarshaller, err = csv.NewMarshaller(schemaType, r.CSV.config)
+	if err != nil {
+		return err
+	}
 
 	if r._requestBodyType == nil {
 		return nil
 	}
-	r.CSV.unwrapperSlice = r._requestBodySlice
 
-	var err error
-	r.CSV.marshaller, err = csv2.NewMarshaller(r._requestBodyType, nil)
+	r.CSV.unwrapperSlice = r._requestBodySlice
+	r.CSV.requestBodyMarshaller, err = csv.NewMarshaller(r._requestBodyType, nil)
 	return err
 }
 
 func (c *CSVConfig) presenceMap() PresenceMapFn {
 	return func(bytes []byte) (map[string]interface{}, error) {
 		result := map[string]interface{}{}
-		fieldNames, err := c.marshaller.ReadHeaders(bytes)
+		fieldNames, err := c.requestBodyMarshaller.ReadHeaders(bytes)
 		if err != nil {
 			return result, err
 		}
@@ -622,7 +623,7 @@ func (c *CSVConfig) presenceMap() PresenceMapFn {
 }
 
 func (c *CSVConfig) Unmarshal(bytes []byte, i interface{}) error {
-	return c.marshaller.Unmarshal(bytes, i)
+	return c.requestBodyMarshaller.Unmarshal(bytes, i)
 }
 
 func (c *CSVConfig) unwrapIfNeeded(value interface{}) (interface{}, error) {

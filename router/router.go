@@ -14,8 +14,6 @@ import (
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
-	io2 "github.com/viant/sqlx/io"
-	"github.com/viant/sqlx/io/load/reader/csv"
 	"io"
 	"net/http"
 	"os"
@@ -741,22 +739,13 @@ func (r *Router) marshalAsCSV(session *ReaderServiceSession, sliceValue reflect.
 		offset = copy(fields[offset:], filter.Fields)
 	}
 
-	stringifierConfig := &io2.StringifierConfig{
-		Fields:     fields,
-		CaseFormat: *session.Route.Output._caser,
-	}
+	data, err := session.Route.CSV.outputMarshaller.Marshal(sliceValue.Elem().Interface())
 
-	newReader, _, err := csv.NewReader(sliceValue.Elem().Interface(), session.Route.CSV.config, session.Route.CSV.objectStringifier, stringifierConfig)
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
 	}
 
-	all, err := io.ReadAll(newReader)
-	if err != nil {
-		return nil, http.StatusInternalServerError, err
-	}
-
-	return all, http.StatusOK, nil
+	return data, http.StatusOK, nil
 }
 
 func updateFieldPathsIfNeeded(filter *json.FilterEntry) {

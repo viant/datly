@@ -769,6 +769,21 @@ func TestRouter(t *testing.T) {
 			},
 			expected: `{"Status":"ok","ResponseBody":[{"Id":1,"Type":"type - 1","Code":"code - 1","Events":[]},{"Id":2,"Type":"type - 2","Code":"code - 2","Events":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}],"EventsMeta":{"EventTypeId":2,"TotalCount":1}},{"Id":11,"Type":"type - 11","Code":"code - 11","Events":[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}],"EventsMeta":{"EventTypeId":11,"TotalCount":1}},{"Id":111,"Type":"type - 111","Code":"code - 111","Events":[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":102,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}],"EventsMeta":{"EventTypeId":111,"TotalCount":4}}]}`,
 		},
+		{
+			description: "csv output format",
+			resourceURI: "043_nested_csv_output",
+			uri:         "/api/event-types?_format=CSV",
+			expected: `"Id","Type","Code","Events.Id","Events.Timestamp","Events.Quantity","Events.UserId"
+1,"type - 1","code - 1",null,null,null,null
+2,"type - 2","code - 2",1,"2019-03-11T02:20:33Z",33.2343237400054931640625000000000000000000000000000000000000000000,1
+2,"type - 2","code - 2",123,"2019-04-10T05:15:33Z",5.0000000000000000000000000000000000000000000000000000000000000000,10
+11,"type - 11","code - 11",10,"2019-03-15T12:07:33Z",21.9579623341560363769531250000000000000000000000000000000000000000,2
+111,"type - 111","code - 111",100,"2019-04-10T05:15:33Z",5.0849400460720062255859375000000000000000000000000000000000000000,3`,
+			method: http.MethodGet,
+			expectedHeaders: map[string][]string{
+				"Content-Type": {"text/csv"},
+			},
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {
