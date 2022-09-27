@@ -5,11 +5,9 @@
     - Function lookup
 
 - e2e for patch / update / insert / delete with single and batch data
-- XML/CSV output
-- XML/CSV input
+- XML input / output
 
 - context based generator enhancement
-
 - Parameter Criteria IN, EXISTS, etc
 
 - e2e / generator refactoring

@@ -310,9 +310,15 @@ func (r *Service) detectRoutersChanges(ctx context.Context, fs afs.Service) (map
 	var updated []string
 	var deleted []string
 	var metaUpdated []string
+	var updatedSQLs []string
 	err := r.routeResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
 		if strings.Contains(URL, ".meta/") {
 			metaUpdated = append(metaUpdated, URL[strings.LastIndexByte(URL, '/')+1:])
+			return
+		}
+
+		if strings.HasSuffix(URL, ".sql") {
+			updatedSQLs = append(updatedSQLs, URL)
 			return
 		}
 
@@ -330,6 +336,12 @@ func (r *Service) detectRoutersChanges(ctx context.Context, fs afs.Service) (map
 
 	if err != nil {
 		return nil, nil, err
+	}
+
+	for routerURL, aRouter := range r.routersIndex {
+		if r.routerSQLChanged(aRouter, updatedSQLs) {
+			updated = append(updated, routerURL)
+		}
 	}
 
 	r.session.OnRouterUpdated(updated...)
@@ -534,6 +546,43 @@ func (r *Service) viewConnector(routerResource *router.Resource, aView *view.Vie
 	}
 
 	return nil, false
+}
+
+func (r *Service) routerSQLChanged(aRouter *router.Router, sqls []string) bool {
+	if len(sqls) == 0 {
+		return false
+	}
+
+	routes := aRouter.Routes("")
+	for _, route := range routes {
+		if r.viewSQLChanged(route.View, sqls) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (r *Service) viewSQLChanged(aView *view.View, sqlFiles []string) bool {
+	if len(sqlFiles) == 0 {
+		return false
+	}
+
+	if aView.Template.SourceURL != "" {
+		for _, sqlFile := range sqlFiles {
+			if strings.HasSuffix(sqlFile, aView.Template.SourceURL) {
+				return true
+			}
+		}
+	}
+
+	for _, relation := range aView.With {
+		if r.viewSQLChanged(&relation.Of.View, sqlFiles) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func initSecrets(ctx context.Context, config *Config) error {
