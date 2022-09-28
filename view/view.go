@@ -817,8 +817,9 @@ func (v *View) deriveColumnsFromSchema(relation *Relation) error {
 	}
 
 	newColumns := make([]*Column, 0)
+	columnsIndex := Columns(newColumns).Index(v.Caser)
 
-	if err := v.updateColumn("", shared.Elem(v.Schema.Type()), &newColumns, relation); err != nil {
+	if err := v.updateColumn("", shared.Elem(v.Schema.Type()), &newColumns, relation, columnsIndex); err != nil {
 		return err
 	}
 
@@ -828,9 +829,7 @@ func (v *View) deriveColumnsFromSchema(relation *Relation) error {
 	return nil
 }
 
-func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, relation *Relation) error {
-	index := Columns(*columns).Index(v.Caser)
-
+func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, relation *Relation, columnsIndex ColumnIndex) error {
 	for i := 0; i < rType.NumField(); i++ {
 		field := rType.Field(i)
 		isExported := field.PkgPath == ""
@@ -839,7 +838,7 @@ func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, r
 		}
 
 		if field.Anonymous {
-			if err := v.updateColumn("", field.Type, columns, relation); err != nil {
+			if err := v.updateColumn("", field.Type, columns, relation, columnsIndex); err != nil {
 				return err
 			}
 			continue
@@ -848,7 +847,7 @@ func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, r
 		sqlxTag := io.ParseTag(field.Tag.Get(option.TagSqlx))
 		elemType := elem(field.Type)
 		if !v.IsHolder(field.Name) && sqlxTag.Ns != "" && elemType.Kind() == reflect.Struct {
-			if err := v.updateColumn(sqlxTag.Ns, elemType, columns, relation); err != nil {
+			if err := v.updateColumn(sqlxTag.Ns, elemType, columns, relation, columnsIndex); err != nil {
 				return err
 			}
 			continue
@@ -860,25 +859,19 @@ func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, r
 		}
 
 		fieldName = ns + fieldName
-		if _, ok := index[fieldName]; ok {
+		if _, ok := columnsIndex[fieldName]; ok {
 			continue
 		}
 
-		column, err := v._columns.Lookup(fieldName)
-		if err == nil {
+		column, ok := v.findSchemaColumn(fieldName)
+		if ok {
 			*columns = append(*columns, column)
-		}
-
-		tag := io.ParseTag(field.Tag.Get(option.TagSqlx))
-		column, err = v._columns.Lookup(tag.Column)
-		if err == nil {
-			*columns = append(*columns, column)
-			index.Register(v.Caser, column)
+			columnsIndex.Register(v.Caser, column)
 		}
 	}
 
 	for _, rel := range v.With {
-		if _, ok := index[rel.Of.Column]; ok {
+		if _, ok := columnsIndex[rel.Of.Column]; ok {
 			continue
 		}
 
@@ -891,7 +884,7 @@ func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, r
 	}
 
 	if relation != nil {
-		_, err := index.Lookup(relation.Of.Column)
+		_, err := columnsIndex.Lookup(relation.Of.Column)
 		if err != nil {
 			col, err := v._columns.Lookup(relation.Of.Column)
 			if err != nil {
@@ -1095,4 +1088,10 @@ func (v *View) validateSelfRef() error {
 	}
 
 	return nil
+}
+
+func (v *View) findSchemaColumn(fieldName string) (*Column, bool) {
+
+	lookup, err := v._columns.Lookup(fieldName)
+	return lookup, err == nil
 }

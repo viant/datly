@@ -885,6 +885,8 @@ func (c *testcase) cleanAfterPrewarmup(t *testing.T, location string, views []*v
 			continue
 		}
 
+		fmt.Printf("[INFO] Replacing view %v connector with mock one to check Aerospike cache connection\n", aView.Name)
+
 		aView.Connector = &view.Connector{
 			Name:   "mock",
 			DSN:    path.Join(location, "db", "mock.db"),
