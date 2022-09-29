@@ -1,6 +1,7 @@
 package option
 
 import (
+	"github.com/viant/datly/router"
 	"github.com/viant/datly/sanitizer"
 	"github.com/viant/datly/view"
 )
@@ -12,6 +13,9 @@ type (
 		ConstFileURL   string
 		Cache          *view.Cache
 		Method         string
+		CaseFormat     string
+		DateFormat     string
+		CSV            *router.CSVConfig
 		Declare        map[string]string
 		ParameterHints sanitizer.ParameterHints `json:"-"`
 		ExecData       *ExecData                `json:"-"`

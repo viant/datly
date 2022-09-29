@@ -121,7 +121,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	if err := s.updateView(ctx, xTable, aView); err != nil {
 		return err
 	}
-	output := s.buildRouterOutput(xTable)
+	output := s.buildRouterOutput(xTable, routeOption)
 	viewRoute := &router.Route{
 		Method:      "GET",
 		EnableAudit: true,
@@ -205,8 +205,12 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	return fsAddYAML(fs, s.options.RouterURL(), s.route)
 }
 
-func (s *serverBuilder) buildRouterOutput(xTable *option.Table) router.Output {
+func (s *serverBuilder) buildRouterOutput(xTable *option.Table, routeOption *option.Route) router.Output {
 	output := router.Output{}
+	if routeOption.DateFormat != "" {
+		output.DateFormat = routeOption.DateFormat
+	}
+	output.CSV = routeOption.CSV
 	if len(s.Columns) == 0 {
 		return output
 	}
