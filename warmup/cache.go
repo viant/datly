@@ -135,7 +135,7 @@ func readWithErr(ctx context.Context, entry *warmupEntry) error {
 
 	matcher := entry.matcher
 	if err = service.IndexBy(ctx, db, entry.column, matcher.SQL, matcher.Args); err != nil {
-		return err
+		return fmt.Errorf("failed to index: %w, %v", err, matcher.SQL)
 	}
 
 	return nil
