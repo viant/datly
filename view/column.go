@@ -18,23 +18,23 @@ type foo struct {
 
 //Column represents view View column
 type Column struct {
-	Name       string `json:",omitempty"`
-	DataType   string `json:",omitempty"`
-	Expression string `json:",omitempty"`
-	Filterable bool   `json:",omitempty"`
-	Nullable   bool   `json:",omitempty"`
-	Default    string `json:",omitempty"`
-	Format     string `json:",omitempty"`
+	Name           string `json:",omitempty"`
+	DataType       string `json:",omitempty"`
+	Expression     string `json:",omitempty"`
+	Filterable     bool   `json:",omitempty"`
+	Nullable       bool   `json:",omitempty"`
+	Default        string `json:",omitempty"`
+	Format         string `json:",omitempty"`
+	Codec          *Codec `json:",omitempty"`
+	DatabaseColumn string `json:",omitempty"`
+	IndexedBy      string `json:",omitempty"`
 
-	Codec *Codec `json:",omitempty"`
-
-	rType          reflect.Type
-	tag            *io.Tag
-	sqlExpression  string
-	field          *reflect.StructField
-	initialized    bool
-	_fieldName     string
-	DatabaseColumn string
+	rType         reflect.Type
+	tag           *io.Tag
+	sqlExpression string
+	field         *reflect.StructField
+	initialized   bool
+	_fieldName    string
 }
 
 //SqlExpression builds column sql expression if any expression specified in format: Expression AS Name
@@ -190,6 +190,15 @@ type Columns []*Column
 
 //ColumnIndex represents *Column registry.
 type ColumnIndex map[string]*Column
+
+func (c ColumnIndex) ColumnName(key string) (string, error) {
+	lookup, err := c.Lookup(key)
+	if err != nil {
+		return "", err
+	}
+
+	return lookup.Name, nil
+}
 
 //Index indexes columns by Column.Name
 func (c Columns) Index(caser format.Case) ColumnIndex {

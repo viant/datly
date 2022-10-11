@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/transform/expand"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/gmetric/provider"
 	"github.com/viant/sqlx/io"
@@ -71,6 +72,7 @@ type (
 
 		ColumnsConfig map[string]*ColumnConfig `json:",omitempty"`
 		SelfReference *SelfReference           `json:",omitempty"`
+		Namespaces    []*Namespace             `json:",omitempty"`
 
 		initialized  bool
 		newCollector newCollectorFn
@@ -109,7 +111,29 @@ type (
 		Name string    `json:",omitempty"`
 		Args []*Schema `json:",omitempty"`
 	}
+
+	Namespace struct {
+		Parent string
+		Prefix string
+		Holder string
+	}
 )
+
+func (v *View) ViewName() string {
+	return v.Name
+}
+
+func (v *View) TableAlias() string {
+	return v.Alias
+}
+
+func (v *View) TableName() string {
+	return v.Table
+}
+
+func (v *View) ResultLimit() int {
+	return v.Selector.Limit
+}
 
 func (m *Method) init(resource *Resource) error {
 	if m.Name == "" {
@@ -1030,7 +1054,7 @@ func (v *View) indexTransforms(resource *Resource, transforms marshal.Transforms
 	return nil
 }
 
-func (v *View) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *CriteriaSanitizer) (string, error) {
+func (v *View) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *expand.CriteriaSanitizer) (string, error) {
 	v.ensureParameters(selector)
 
 	return v.Template.Expand(placeholders, SQL, selector, params, batchData, sanitized)

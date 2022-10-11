@@ -35,6 +35,18 @@ type (
 	}
 )
 
+func (s *Selector) CurrentLimit() int {
+	return s.Limit
+}
+
+func (s *Selector) CurrentOffset() int {
+	return s.Offset
+}
+
+func (s *Selector) CurrentPage() int {
+	return s.Page
+}
+
 //Init initializes Selector
 func (s *Selector) Init() {
 	if s.initialized {

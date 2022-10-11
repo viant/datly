@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"github.com/viant/datly/cmd/option"
-	"github.com/viant/datly/sanitizer"
+	"github.com/viant/datly/transform/sanitize"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlx/metadata/ast/expr"
@@ -63,7 +63,7 @@ func (s *serverBuilder) updateParameterTypes(table *option.Table) {
 		}
 
 		switch actual := param.Typer.(type) {
-		case *sanitizer.ColumnType:
+		case *sanitize.ColumnType:
 			aType := table.ColumnTypes[actual.ColumnName]
 			if aType == "" {
 				dotIndex := strings.Index(actual.ColumnName, ".")
@@ -76,7 +76,7 @@ func (s *serverBuilder) updateParameterTypes(table *option.Table) {
 				param.DataType = aType
 			}
 
-		case *sanitizer.LiteralType:
+		case *sanitize.LiteralType:
 			param.DataType = actual.RType.String()
 		}
 	}
@@ -115,7 +115,7 @@ func discoverOperand(n node.Node, list *parameters) {
 	}
 }
 
-func extractDataViewParams(params []*option.Parameter, routeOption *option.Route, hints sanitizer.ParameterHints) (map[string]*option.TableParam, error) {
+func extractDataViewParams(params []*option.Parameter, routeOption *option.Route, hints sanitize.ParameterHints) (map[string]*option.TableParam, error) {
 	result := map[string]*option.TableParam{}
 	for _, param := range params {
 		if param.Kind != string(view.DataViewKind) {

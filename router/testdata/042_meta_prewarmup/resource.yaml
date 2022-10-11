@@ -50,7 +50,7 @@ Resource:
               Source: '
               SELECT * FROM EVENTS WHERE 1 = 1 $View.ColIn("AND", "EVENT_TYPE_ID")
                 #if($Has.Quantity)
-                quantity < $Unsafe.Quantity
+                AND quantity < $Unsafe.Quantity
                 #end
               '
               Parameters:

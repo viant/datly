@@ -1,4 +1,4 @@
-package sanitizer
+package sanitize
 
 import (
 	"encoding/json"
@@ -17,7 +17,6 @@ func ExtractHint(text string) string {
 }
 
 func UnmarshalHint(hint string, dest interface{}) (string, error) {
-
 	hint, SQL := SplitHint(hint)
 	if hint == "" {
 		return SQL, nil

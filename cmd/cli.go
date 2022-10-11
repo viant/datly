@@ -14,7 +14,7 @@ import (
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/openapi3"
-	"github.com/viant/datly/sanitizer"
+	"github.com/viant/datly/transform/sanitize"
 	"github.com/viant/datly/view"
 	rdata "github.com/viant/toolbox/data"
 	"gopkg.in/yaml.v3"
@@ -129,7 +129,7 @@ func (s *serverBuilder) buildViewMetaTemplate(k string, v *option.TableParam) {
 	if len(s.Columns) > 0 {
 		starExpr := s.Columns.StarExpr(k)
 		if starExpr.Comments != "" {
-			if _, err := sanitizer.UnmarshalHint(starExpr.Comments, tmplMeta); err != nil {
+			if _, err := sanitize.UnmarshalHint(starExpr.Comments, tmplMeta); err != nil {
 				fmt.Printf("invalid TempalteMeta: %v", err.Error())
 			}
 		}
@@ -160,10 +160,10 @@ func (s *serverBuilder) removeFromOutputIfNeeded(route *router.Route, table *opt
 	//buildExcludeColumn()
 }
 
-func (s *serverBuilder) buildExpandMap(hints sanitizer.ParameterHints) (rdata.Map, error) {
+func (s *serverBuilder) buildExpandMap(hints sanitize.ParameterHints) (rdata.Map, error) {
 	result := rdata.Map{}
 	for _, aHint := range hints {
-		actual, _ := sanitizer.SplitHint(aHint.Hint)
+		actual, _ := sanitize.SplitHint(aHint.Hint)
 		aParam := &option.Parameter{}
 		if err := json.Unmarshal([]byte(actual), aParam); err != nil {
 			return nil, err

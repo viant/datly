@@ -3,6 +3,7 @@ package reader
 import (
 	"fmt"
 	"github.com/viant/datly/reader/metadata"
+	"github.com/viant/datly/transform/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/io/read/cache"
@@ -60,7 +61,7 @@ func NewBuilder() *Builder {
 }
 
 //Build builds SQL Select statement
-func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *view.MetaParam, expander view.Expander) (*cache.Index, error) {
+func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *expand.MetaParam, expander expand.Expander) (*cache.Index, error) {
 	if exclude == nil {
 		exclude = &Exclude{}
 	}
@@ -383,24 +384,28 @@ func actualLimit(aView *view.View, selector *view.Selector) int {
 	return aView.Selector.Limit
 }
 
-func (b *Builder) ExactMetaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, parent *view.MetaParam) (*cache.Index, error) {
+func (b *Builder) ExactMetaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, parent *expand.MetaParam) (*cache.Index, error) {
 	return b.metaSQL(aView, selector, batchData, relation, &Exclude{
 		Pagination: true,
 	}, parent, nil)
 }
 
-func (b *Builder) CacheMetaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, parent *view.MetaParam) (*cache.Index, error) {
+func (b *Builder) CacheMetaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, parent *expand.MetaParam) (*cache.Index, error) {
 	return b.metaSQL(aView, selector, batchData, relation, &Exclude{Pagination: true, ColumnsIn: true}, parent, &expanderMock{})
 }
 
 func (b *Builder) CacheSQL(aView *view.View, selector *view.Selector) (*cache.Index, error) {
-	return b.Build(aView, selector, nil, nil, &Exclude{
-		ColumnsIn:  true,
-		Pagination: true,
-	}, nil, &expanderMock{})
+	return b.CacheSQLWithOptions(aView, selector, nil, nil, nil)
 }
 
-func (b *Builder) metaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *view.MetaParam, expander view.Expander) (*cache.Index, error) {
+func (b *Builder) CacheSQLWithOptions(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, parent *expand.MetaParam) (*cache.Index, error) {
+	return b.Build(aView, selector, batchData, relation, &Exclude{
+		ColumnsIn:  true,
+		Pagination: true,
+	}, parent, &expanderMock{})
+}
+
+func (b *Builder) metaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *expand.MetaParam, expander expand.Expander) (*cache.Index, error) {
 	matcher, err := b.Build(aView, selector, batchData, relation, exclude, parent, expander)
 	if err != nil {
 		return nil, err

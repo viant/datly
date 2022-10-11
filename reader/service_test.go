@@ -473,7 +473,6 @@ func TestRead(t *testing.T) {
 			expect: `[{"Name":["John","David","Anna"]}]`,
 		},
 		nestedStruct(),
-		//multiNamepsace(),
 	}
 
 	//for index, testCase := range useCases[len(useCases)-1:] {
@@ -521,72 +520,6 @@ func TestRead(t *testing.T) {
 		}
 
 		testView(t, testCase, dataView, err, service)
-	}
-}
-
-func multiNamepsace() usecase {
-	type EventType3 struct {
-		Id   int
-		Meta struct {
-			Count int `sqlx:"name=COUNT"`
-		} `sqlx:"ns=META_"`
-		Events []*struct {
-			Id        int
-			Quantity  float64
-			Timestamp time.Time
-			TypeId    int `sqlx:"name=event_type_id"`
-		}
-		Recent struct {
-			ID   int    `sqlx:"name=ID"`
-			Name string `sqlx:"name=NAME"`
-		} `sqlx:"ns=RECENT_"`
-		Name string
-	}
-
-	resource := view.EmptyResource()
-	connector := &view.Connector{
-		Name:   "db",
-		DSN:    "./testdata/db/db.db",
-		Driver: "sqlite3",
-	}
-
-	resource.AddViews(&view.View{
-		Connector:            connector,
-		Name:                 "event-type_events",
-		Table:                "event_types",
-		InheritSchemaColumns: true,
-		Schema:               view.NewSchema(reflect.TypeOf(&EventType3{})),
-		Template: &view.Template{
-			Source: `
-	SELECT 1 as ID, 10 as META_COUNT, -1 AS RECENT_ID, 'RECENT_NAME' as RECENT_NAME, 'EV_TYPE' as NAME
-`,
-		},
-		With: []*view.Relation{
-			{
-				Name: "event-type_rel",
-				Of: &view.ReferenceView{
-					View: view.View{
-						Connector:            connector,
-						Name:                 "events",
-						Table:                "events",
-						InheritSchemaColumns: true,
-					},
-					Column: "event_type_id",
-				},
-				Cardinality: view.Many,
-				Column:      "Id",
-				Holder:      "Events",
-			},
-		},
-	})
-
-	return usecase{
-		description: "event type -> events, many to one, programmatically, with EventTypeId column",
-		expect:      `[]`,
-		dest:        new([]*EventType3),
-		view:        "event-type_events",
-		dataset:     "dataset001_events/",
-		resource:    resource,
 	}
 }
 

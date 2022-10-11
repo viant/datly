@@ -1,0 +1,43 @@
+Routes:
+  - URI: "/api/events"
+    Method: GET
+    View:
+      Ref: events
+    Index:
+      ViewPrefix:
+        ev: events
+
+
+Resource:
+  CacheProviders:
+    - Name: aerospike
+      Location: ${view.Name}
+      Provider: 'aerospike://127.0.0.1:3000/test'
+      TimeToLiveMs: 3600000
+
+  Views:
+    - Name: events
+      Connector:
+        Ref: db
+      Table: events
+      Cache:
+        Ref: aerospike
+        Warmup:
+          IndexColumn: event_type_id
+          MetaColumn: event_type_id
+          Connector:
+            Ref: cache_db
+      Selector:
+        Constraints:
+          Projection: true
+      Template:
+        Source: |
+          SELECT 1 as id, 'Foo' as name, 10 as event_type_id WHERE 1 = 1 $View.ParentJoinOn("event_type_id")
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"
+    - Name: cache_db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"

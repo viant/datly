@@ -8,3 +8,11 @@ type BatchData struct {
 	Values      []interface{}
 	ValuesBatch []interface{}
 }
+
+func (b *BatchData) ColIn() []interface{} {
+	return b.Values
+}
+
+func (b *BatchData) ColInBatch() []interface{} {
+	return b.ValuesBatch
+}

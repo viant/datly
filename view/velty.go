@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/converter"
+	"github.com/viant/datly/transform/expand"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/velty"
 	"github.com/viant/velty/ast/expr"
@@ -21,9 +22,6 @@ const (
 	SafeString = "Safe_String"
 	SafeBool   = "Safe_Bool"
 	SafeFloat  = "Safe_Float"
-
-	Criteria = "criteria"
-	Logger   = "logger"
 )
 
 type Sanitizer struct {
@@ -219,7 +217,7 @@ func (v *VeltyCodec) evaluateCriteria(selector *Selector, dest interface{}, wasN
 	}
 
 	criteriaSanitizer := NewCriteria(v.columns)
-	if err := state.SetValue(Criteria, criteriaSanitizer); err != nil {
+	if err := state.SetValue(expand.Criteria, criteriaSanitizer); err != nil {
 		return "", err
 	}
 
@@ -232,8 +230,8 @@ func (v *VeltyCodec) evaluateCriteria(selector *Selector, dest interface{}, wasN
 	return state.Buffer.String(), nil
 }
 
-func NewCriteria(columns ColumnIndex) *CriteriaSanitizer {
-	return &CriteriaSanitizer{
+func NewCriteria(columns ColumnIndex) *expand.CriteriaSanitizer {
+	return &expand.CriteriaSanitizer{
 		Columns: columns,
 	}
 }
@@ -350,7 +348,7 @@ func (v *VeltyCodec) init() error {
 		return err
 	}
 
-	if err = planner.DefineVariable(Criteria, &CriteriaSanitizer{}); err != nil {
+	if err = planner.DefineVariable(expand.Criteria, &expand.CriteriaSanitizer{}); err != nil {
 		return err
 	}
 

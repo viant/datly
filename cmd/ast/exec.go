@@ -2,7 +2,7 @@ package ast
 
 import (
 	"github.com/viant/datly/cmd/option"
-	"github.com/viant/datly/sanitizer"
+	"github.com/viant/datly/transform/sanitize"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/metadata/ast/expr"
 	"github.com/viant/sqlx/metadata/ast/insert"
@@ -92,7 +92,7 @@ func normalizeAndExtractInsertValues(stmt *insert.Statement, view *option.ViewMe
 			continue
 		}
 		column := stmt.Columns[i]
-		view.AddParameter(&option.Parameter{Id: selector, Name: selector, Typer: &sanitizer.ColumnType{ColumnName: column}})
+		view.AddParameter(&option.Parameter{Id: selector, Name: selector, Typer: &sanitize.ColumnType{ColumnName: column}})
 	}
 	return SQL
 }
@@ -113,7 +113,7 @@ func normalizeOptionParameters(expressions []string, view *option.ViewMeta, SQLE
 			continue
 		}
 		paramName := selector[1:]
-		view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Typer: &sanitizer.ColumnType{ColumnName: column}})
+		view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Typer: &sanitize.ColumnType{ColumnName: column}})
 	}
 	return SQLExec
 }
@@ -127,17 +127,17 @@ func normalizeAndExtractUpdateWhere(stmt *update.Statement, view *option.ViewMet
 			continue
 		}
 
-		_, paramName := sanitizer.GetHolderName(y)
+		_, paramName := sanitize.GetHolderName(y)
 
 		switch strings.ToLower(criterion.Op) {
 		case "in":
-			view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Repeated: true, Typer: &sanitizer.ColumnType{
+			view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Repeated: true, Typer: &sanitize.ColumnType{
 				ColumnName: criterion.X,
 			}})
 
 		case "=":
 			required := true
-			view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Required: &required, Typer: &sanitizer.ColumnType{
+			view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Required: &required, Typer: &sanitize.ColumnType{
 				ColumnName: criterion.X,
 			}})
 		}
@@ -153,13 +153,13 @@ func normalizeAndExtractUpdateSet(stmt *update.Statement, view *option.ViewMeta,
 		}
 
 		actualParam := parser.Stringify(placeholder)
-		prefix, paramName := sanitizer.GetHolderName(actualParam)
+		prefix, paramName := sanitize.GetHolderName(actualParam)
 		if prefix == keywords.ParamsMetadataKey {
 			continue
 		}
 
 		column := getColumnName(item)
-		view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Typer: &sanitizer.ColumnType{
+		view.AddParameter(&option.Parameter{Id: paramName, Name: paramName, Typer: &sanitize.ColumnType{
 			ColumnName: column,
 		}})
 	}

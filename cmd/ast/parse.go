@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/viant/datly/cmd/option"
-	"github.com/viant/datly/sanitizer"
+	"github.com/viant/datly/transform/sanitize"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/parsly"
@@ -47,9 +47,9 @@ func newParamTypeDetector(route *option.Route, meta *option.ViewMeta) *paramType
 	}
 }
 
-func Parse(SQL string, route *option.Route, hints sanitizer.ParameterHints) (*option.ViewMeta, error) {
+func Parse(SQL string, route *option.Route, hints sanitize.ParameterHints) (*option.ViewMeta, error) {
 	viewMeta := option.NewViewMeta()
-	iterator := sanitizer.NewIterator(SQL, hints, route.Const)
+	iterator := sanitize.NewIterator(SQL, hints, route.Const)
 	SQL = iterator.SQL
 
 	block, err := parser.Parse([]byte(SQL))
@@ -94,7 +94,7 @@ func Parse(SQL string, route *option.Route, hints sanitizer.ParameterHints) (*op
 		SQL = envMap.ExpandAsText(SQL)
 	}
 
-	viewMeta.Source = sanitizer.Sanitize(SQL, hints, route.Const)
+	viewMeta.Source = sanitize.Sanitize(SQL, hints, route.Const)
 	return viewMeta, nil
 }
 
@@ -185,7 +185,7 @@ func (d *paramTypeDetector) indexStmt(actual *stmt.Statement, required bool, rTy
 }
 
 func (d *paramTypeDetector) indexParameter(actual *expr.Select, required bool, rType reflect.Type, multi bool) {
-	prefix, paramName := sanitizer.GetHolderName(actual.FullName)
+	prefix, paramName := sanitize.GetHolderName(actual.FullName)
 
 	if !isParameter(d.variables, paramName) {
 		return

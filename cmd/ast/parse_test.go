@@ -8,7 +8,7 @@ import (
 	"github.com/viant/assertly"
 	"github.com/viant/datly/cmd/ast"
 	"github.com/viant/datly/cmd/option"
-	"github.com/viant/datly/sanitizer"
+	"github.com/viant/datly/transform/sanitize"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
 	"path"
@@ -22,7 +22,7 @@ func TestParse(t *testing.T) {
 		description string
 		path        string
 		uriParams   map[string]bool
-		hints       sanitizer.ParameterHints
+		hints       sanitize.ParameterHints
 	}{
 		{
 			description: "basic",
@@ -55,7 +55,7 @@ func TestParse(t *testing.T) {
 		{
 			description: "param type hint",
 			path:        "case008",
-			hints: sanitizer.ParameterHints{
+			hints: sanitize.ParameterHints{
 				{Parameter: "quantity", Hint: `/* {"DataType": "time.Time"} */`},
 			},
 		},

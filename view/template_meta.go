@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/transform/expand"
 	"github.com/viant/toolbox/format"
 	"strings"
 )
@@ -21,7 +22,7 @@ type (
 		Kind        TemplateMetaKind
 		Cardinality Cardinality
 
-		sqlEvaluator *Evaluator
+		sqlEvaluator *expand.Evaluator
 		Schema       *Schema
 		_owner       *Template
 		initialized  bool
@@ -176,7 +177,7 @@ func (m *TemplateMeta) prepareSQL(owner *Template) (string, []interface{}, error
 	return m.Evaluate(selectorValues, selectorPresence, viewParam)
 }
 
-func (m *TemplateMeta) Evaluate(selectorValues interface{}, selectorPresence interface{}, viewParam *MetaParam) (string, []interface{}, error) {
+func (m *TemplateMeta) Evaluate(selectorValues interface{}, selectorPresence interface{}, viewParam *expand.MetaParam) (string, []interface{}, error) {
 	SQL, sanitizer, _, err := Evaluate(m.sqlEvaluator, m._owner.Schema.Type(), selectorValues, selectorPresence, viewParam, nil)
 	if err != nil {
 		return "", nil, err

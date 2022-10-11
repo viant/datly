@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/cmd/ast"
 	"github.com/viant/datly/cmd/option"
-	"github.com/viant/datly/sanitizer"
+	"github.com/viant/datly/transform/sanitize"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/metadata/ast/expr"
 	"github.com/viant/sqlx/metadata/ast/node"
@@ -15,7 +15,7 @@ import (
 	"strings"
 )
 
-func ParseSQLx(SQL string, routeOpt *option.Route, hints sanitizer.ParameterHints) (*option.Table, map[string]*option.TableParam, error) {
+func ParseSQLx(SQL string, routeOpt *option.Route, hints sanitize.ParameterHints) (*option.Table, map[string]*option.TableParam, error) {
 	aQuery, err := parser.ParseQuery(SQL)
 	if err != nil {
 		return nil, nil, err
@@ -49,13 +49,16 @@ func ParseSQLx(SQL string, routeOpt *option.Route, hints sanitizer.ParameterHint
 	return table, dataParameters, nil
 }
 
-func buildTable(x node.Node, routeOpt *option.Route, hints sanitizer.ParameterHints) (*option.Table, error) {
+func buildTable(x node.Node, routeOpt *option.Route, hints sanitize.ParameterHints) (*option.Table, error) {
 	//var err error
 	table := option.NewTable("")
 
 	switch actual := x.(type) {
 	case *expr.Raw:
 		_, SQL := extractTableSQL(actual)
+		if strings.Contains(SQL, "$View.ParentJoinOn") {
+			fmt.Printf("aaaa")
+		}
 		table.SQL = SQL
 		if err := UpdateTableSettings(table, routeOpt, hints); err != nil {
 			return table, err
@@ -94,7 +97,7 @@ func extractTableSQL(actual *expr.Raw) (name string, SQL string) {
 	return "", SQL
 }
 
-func UpdateTableSettings(table *option.Table, routeOpt *option.Route, hints sanitizer.ParameterHints) error {
+func UpdateTableSettings(table *option.Table, routeOpt *option.Route, hints sanitize.ParameterHints) error {
 	tableSQL := expandConsts(table.SQL, routeOpt)
 	innerSQL, paramsExprs := ast.ExtractCondBlock(tableSQL)
 	innerQuery, err := parser.ParseQuery(innerSQL)
@@ -173,7 +176,7 @@ func appendParamExpr(x node.Node, op string, y node.Node, list *[]string) {
 	}
 }
 
-func processJoin(join *query.Join, tables map[string]*option.Table, outerColumn option.Columns, dataParameters map[string]*option.TableParam, routeOpt *option.Route, hints sanitizer.ParameterHints) error {
+func processJoin(join *query.Join, tables map[string]*option.Table, outerColumn option.Columns, dataParameters map[string]*option.TableParam, routeOpt *option.Route, hints sanitize.ParameterHints) error {
 	relTable, err := buildTable(join.With, routeOpt, hints)
 	if err != nil {
 		return err

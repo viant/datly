@@ -1,0 +1,22 @@
+Views:
+  - Connector:
+      Ref: db
+    Name: events
+    Table: events
+    Template:
+      Source: |
+        SELECT 
+          ev.id, 
+          ev.quantity, 
+          ev.timestamp,
+          et.id as typeId,
+          et.name as typeName
+        FROM events ev
+        JOIN event_types et ON ev.event_type_id = et.id
+    Namespaces:
+      - Holder: EventType
+        Prefix: type
+Connectors:
+  - Name: db
+    Driver: sqlite3
+    DSN: "./testdata/db/db.db"

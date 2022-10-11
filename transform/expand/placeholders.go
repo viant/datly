@@ -1,4 +1,4 @@
-package view
+package expand
 
 import (
 	"fmt"
@@ -8,14 +8,20 @@ import (
 	"unsafe"
 )
 
-type CriteriaSanitizer struct {
-	Columns            ColumnIndex
-	ParamsGroup        []interface{}
-	Mock               bool
-	PlaceholderCounter int
-	sliceIndex         map[reflect.Type]*xunsafe.Slice
-	TemplateSQL        string
-}
+type (
+	ColumnsSource interface {
+		ColumnName(key string) (string, error)
+	}
+
+	CriteriaSanitizer struct {
+		Columns            ColumnsSource
+		ParamsGroup        []interface{}
+		Mock               bool
+		PlaceholderCounter int
+		sliceIndex         map[reflect.Type]*xunsafe.Slice
+		TemplateSQL        string
+	}
+)
 
 func (p *CriteriaSanitizer) AsBinding(value interface{}) string {
 	return p.Add(0, value)
@@ -26,12 +32,7 @@ func (p *CriteriaSanitizer) AppendBinding(value interface{}) string {
 }
 
 func (p *CriteriaSanitizer) AsColumn(columnName string) (string, error) {
-	lookup, err := p.Columns.Lookup(columnName)
-	if err != nil {
-		return "", err
-	}
-
-	return lookup.Name, nil
+	return p.Columns.ColumnName(columnName)
 }
 
 func (p *CriteriaSanitizer) Add(_ int, value interface{}) string {

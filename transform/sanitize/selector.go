@@ -1,4 +1,4 @@
-package sanitizer
+package sanitize
 
 import (
 	"github.com/viant/datly/view"

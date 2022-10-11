@@ -2,6 +2,7 @@ package reader
 
 import (
 	"fmt"
+	"github.com/viant/datly/transform/expand"
 	"github.com/viant/datly/view"
 	"reflect"
 	"sync"
@@ -97,7 +98,7 @@ func (s *Session) ParentData() (*ParentData, bool) {
 	}, true
 }
 
-func (d *ParentData) AsParam() *view.MetaParam {
+func (d *ParentData) AsParam() *expand.MetaParam {
 	if d == nil {
 		return nil
 	}

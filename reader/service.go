@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/transform/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric/counter"
 	"github.com/viant/sqlx/io"
@@ -170,7 +171,7 @@ func (s *Service) batchData(collector *view.Collector) *view.BatchData {
 	return batchData
 }
 
-func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.Selector, batchData *view.BatchData, db *sql.DB, collector *view.Collector, session *Session, parentViewMetaParam *view.MetaParam) error {
+func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.Selector, batchData *view.BatchData, db *sql.DB, collector *view.Collector, session *Session, parentViewMetaParam *expand.MetaParam) error {
 	batchDataCopy := s.copyBatchData(batchData)
 	wg := &sync.WaitGroup{}
 
@@ -218,7 +219,7 @@ func (s *Service) readObjects(ctx context.Context, session *Session, batchData *
 	return nil
 }
 
-func (s *Service) readMeta(ctx context.Context, aView *view.View, selector *view.Selector, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *view.MetaParam) error {
+func (s *Service) readMeta(ctx context.Context, aView *view.View, selector *view.Selector, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *expand.MetaParam) error {
 	selectorCopy := *selector
 	selector.Fields = []string{}
 	selector.Columns = []string{}
@@ -319,7 +320,7 @@ func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchDa
 
 		if (aView.Cache != nil && aView.Cache.Warmup != nil) || relation != nil {
 			data, _ := session.ParentData()
-			columnInMatcher, cacheErr = s.sqlBuilder.Build(aView, selector, batchData, relation, &Exclude{Pagination: true, ColumnsIn: true}, data.AsParam(), &expanderMock{})
+			columnInMatcher, cacheErr = s.sqlBuilder.CacheSQLWithOptions(aView, selector, batchData, relation, data.AsParam())
 		}
 	}()
 

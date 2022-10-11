@@ -1,7 +1,7 @@
 package ast
 
 import (
-	"github.com/viant/datly/sanitizer"
+	"github.com/viant/datly/transform/sanitize"
 	"github.com/viant/parsly"
 )
 
@@ -16,7 +16,7 @@ func ExtractSelector(text string) string {
 			case exprGroupToken, scopeBlockToken:
 				result += match.Text(cursor)
 			}
-			_, result = sanitizer.GetHolderName(result)
+			_, result = sanitize.GetHolderName(result)
 			return result
 		}
 	}

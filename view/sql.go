@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader/metadata"
+	"github.com/viant/datly/transform/expand"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
@@ -22,7 +23,7 @@ type (
 		Args      []interface{}
 	}
 
-	ExpanderFn func(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *CriteriaSanitizer) (string, error)
+	ExpanderFn func(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *expand.CriteriaSanitizer) (string, error)
 )
 
 func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column, string, error) {
@@ -230,8 +231,8 @@ func detectColumnsSQL(evaluation *TemplateEvaluation, v *View) (string, []interf
 	return SQL, placeholders, nil
 }
 
-func NewMockSanitizer() *CriteriaSanitizer {
-	return &CriteriaSanitizer{
+func NewMockSanitizer() *expand.CriteriaSanitizer {
+	return &expand.CriteriaSanitizer{
 		Mock: true,
 	}
 }

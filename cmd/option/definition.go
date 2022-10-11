@@ -1,7 +1,7 @@
 package option
 
 import (
-	"github.com/viant/datly/sanitizer"
+	"github.com/viant/datly/transform/sanitize"
 	"github.com/viant/datly/view"
 )
 
@@ -30,7 +30,7 @@ type (
 		Codec          string           `json:",omitempty" yaml:",omitempty"`
 		FullName       string           `json:"-" yaml:"-"`
 		Assumed        bool             `json:",omitempty" yaml:",omitempty"`
-		Typer          sanitizer.Typer  `json:",omitempty" yaml:",omitempty"`
+		Typer          sanitize.Typer   `json:",omitempty" yaml:",omitempty"`
 		SQL            string           `json:",omitempty" yaml:",omitempty"`
 		Cardinality    view.Cardinality `json:",omitempty" yaml:",omitempty"`
 		Multi          bool             `json:",omitempty" yaml:",omitempty"`
@@ -42,7 +42,7 @@ func NewViewMeta() *ViewMeta {
 }
 
 func (m *ViewMeta) AddParameter(param *Parameter) {
-	if m.variables != nil && m.variables[param.Name] || !sanitizer.CanBeParam(param.Name) {
+	if m.variables != nil && m.variables[param.Name] || !sanitize.CanBeParam(param.Name) {
 		return
 	}
 

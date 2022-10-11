@@ -41,10 +41,15 @@ func TestPopulateCache(t *testing.T) {
 			URL:              "case004",
 			expectedInserted: 2,
 		},
+		{
+			description:      "parent join on",
+			URL:              "case005",
+			expectedInserted: 1,
+		},
 	}
 
-	for _, testCase := range testCases[len(testCases)-1:] {
-		//for _, testCase := range testCases {
+	//for _, testCase := range testCases[len(testCases)-1:] {
+	for _, testCase := range testCases {
 		dataPath := path.Join("testdata", testCase.URL, "populate")
 		configPath := path.Join("testdata", "db_config.yaml")
 
@@ -95,11 +100,7 @@ func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCas
 	builder := reader.NewBuilder()
 
 	for _, cacheInput := range input {
-		build, err := builder.Build(aView, cacheInput.Selector, &view.BatchData{}, nil, &reader.Exclude{
-			ColumnsIn:  true,
-			Pagination: true,
-		}, nil, nil)
-
+		build, err := builder.CacheSQL(aView, cacheInput.Selector)
 		if err != nil {
 			return err
 		}

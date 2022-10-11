@@ -3,13 +3,13 @@ package ast
 import (
 	"fmt"
 	"github.com/viant/datly/cmd/option"
-	"github.com/viant/datly/sanitizer"
+	"github.com/viant/datly/transform/sanitize"
 	"github.com/viant/datly/view"
 	"net/http"
 	"strings"
 )
 
-func (d *paramTypeDetector) correctUntyped(iterator *sanitizer.ParamMetaIterator, meta *option.ViewMeta, route *option.Route) error {
+func (d *paramTypeDetector) correctUntyped(iterator *sanitize.ParamMetaIterator, meta *option.ViewMeta, route *option.Route) error {
 	for iterator.Has() {
 		paramMeta := iterator.Next()
 		aParam, ok := meta.ParamByName(paramMeta.Holder)
@@ -37,7 +37,7 @@ func (d *paramTypeDetector) correctUntyped(iterator *sanitizer.ParamMetaIterator
 	return nil
 }
 
-func (d *paramTypeDetector) updateParamIfNeeded(consts map[string]interface{}, param *option.Parameter, meta *sanitizer.ParamMeta) error {
+func (d *paramTypeDetector) updateParamIfNeeded(consts map[string]interface{}, param *option.Parameter, meta *sanitize.ParamMeta) error {
 	if _, ok := consts[param.Name]; ok {
 		param.Kind = string(view.LiteralKind)
 	}
@@ -48,7 +48,7 @@ func (d *paramTypeDetector) updateParamIfNeeded(consts map[string]interface{}, p
 
 	for _, aHint := range meta.MetaType.Hint {
 		newParam := &option.Parameter{}
-		_, err := sanitizer.UnmarshalHint(aHint, newParam)
+		_, err := sanitize.UnmarshalHint(aHint, newParam)
 		if err != nil {
 			return err
 		}
@@ -69,7 +69,7 @@ func (d *paramTypeDetector) updateParamIfNeeded(consts map[string]interface{}, p
 		param.Typer = meta.MetaType.Typer[0]
 	}
 
-	if strings.EqualFold(meta.SQLKeyword, sanitizer.InKeyword) {
+	if strings.EqualFold(meta.SQLKeyword, sanitize.InKeyword) {
 		param.Repeated = true
 	}
 
@@ -77,7 +77,7 @@ func (d *paramTypeDetector) updateParamIfNeeded(consts map[string]interface{}, p
 }
 
 func IsDataViewKind(hint string) bool {
-	_, sqlPart := sanitizer.SplitHint(hint)
+	_, sqlPart := sanitize.SplitHint(hint)
 	if strings.HasSuffix(sqlPart, "*/") {
 		sqlPart = sqlPart[:len(sqlPart)-len("*/")]
 	}

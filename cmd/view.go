@@ -8,8 +8,8 @@ import (
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/router"
-	"github.com/viant/datly/sanitizer"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/transform/sanitize"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox/format"
 	"log"
@@ -41,7 +41,7 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 	}
 	// ExecMode
 	var sqlExecModeView *option.ViewMeta
-	var parameterHints sanitizer.ParameterHints
+	var parameterHints sanitize.ParameterHints
 	if s.options.SQLXLocation != "" {
 
 		sourceURL := normalizeURL(s.options.SQLXLocation)
@@ -56,10 +56,10 @@ func (s *serverBuilder) buildViewWithRouter(ctx context.Context, config *standal
 		}
 
 		routeOption.URIParams = uriParams
-		parameterHints = sanitizer.ExtractParameterHints(SQL)
+		parameterHints = sanitize.ExtractParameterHints(SQL)
 
 		if len(parameterHints) > 0 {
-			SQL = sanitizer.RemoveParameterHints(SQL, parameterHints)
+			SQL = sanitize.RemoveParameterHints(SQL, parameterHints)
 		}
 
 		expandMap, err := s.buildExpandMap(parameterHints)
@@ -218,7 +218,7 @@ func (s *serverBuilder) buildRouterOutput(xTable *option.Table, routeOption *opt
 	startExpr := s.Columns.StarExpr(xTable.Alias)
 	if startExpr != nil {
 		if comments := startExpr.Comments; comments != "" {
-			if _, err := sanitizer.UnmarshalHint(comments, &output); err != nil {
+			if _, err := sanitize.UnmarshalHint(comments, &output); err != nil {
 				fmt.Printf("err: %v\n", err)
 			}
 		}
@@ -236,16 +236,16 @@ func (s *serverBuilder) buildRouterOutput(xTable *option.Table, routeOption *opt
 	return output
 }
 
-func (s *serverBuilder) buildDataParametersFromHintedParamters(dataParameters map[string]*option.TableParam, parameters sanitizer.ParameterHints, routeOption *option.Route) error {
+func (s *serverBuilder) buildDataParametersFromHintedParamters(dataParameters map[string]*option.TableParam, parameters sanitize.ParameterHints, routeOption *option.Route) error {
 	if len(parameters) == 0 {
 		return nil
 	}
 
 	for _, hintedParam := range parameters {
 
-		_, paramName := sanitizer.GetHolderName(hintedParam.Parameter)
+		_, paramName := sanitize.GetHolderName(hintedParam.Parameter)
 		aTable := option.NewTable("")
-		SQL, err := sanitizer.UnmarshalHint(hintedParam.Hint, aTable)
+		SQL, err := sanitize.UnmarshalHint(hintedParam.Hint, aTable)
 		if err != nil {
 			return err
 		}
@@ -289,9 +289,9 @@ func (s *serverBuilder) updateViewInSQLExecMode(aView *view.View, viewMeta *opti
 		var dataType string
 		if p.Typer != nil {
 			switch actual := p.Typer.(type) {
-			case *sanitizer.ColumnType:
+			case *sanitize.ColumnType:
 				dataType = viewMeta.ParameterTypes[strings.ToLower(actual.ColumnName)]
-			case *sanitizer.LiteralType:
+			case *sanitize.LiteralType:
 				dataType = actual.RType.String()
 			}
 		}
@@ -356,14 +356,14 @@ func (s *serverBuilder) updateMetaColumnTypes(ctx context.Context, viewMeta *opt
 }
 
 func extractSetting(SQL string, route *option.Route) (string, map[string]bool, error) {
-	hint := sanitizer.ExtractHint(SQL)
+	hint := sanitize.ExtractHint(SQL)
 	if hint == "" {
 		return SQL, map[string]bool{}, nil
 	}
 
 	SQL = strings.Replace(SQL, hint, "", 1)
 
-	_, err := sanitizer.UnmarshalHint(hint, route)
+	_, err := sanitize.UnmarshalHint(hint, route)
 	if err != nil {
 		return SQL, map[string]bool{}, err
 	}
@@ -388,7 +388,7 @@ func extractURIParams(URI string) map[string]bool {
 	return result
 }
 
-func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*option.TableParam, routeOption *option.Route, hints sanitizer.ParameterHints, route *router.Route) {
+func (s *serverBuilder) buildDataViewParams(ctx context.Context, params map[string]*option.TableParam, routeOption *option.Route, hints sanitize.ParameterHints, route *router.Route) {
 	if len(params) == 0 {
 		return
 	}

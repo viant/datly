@@ -1,17 +1,17 @@
-package sanitizer
+package sanitize
 
 import (
 	"bytes"
 	"fmt"
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/transform/expand"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/velty/functions"
 	"strings"
 )
 
 var builtInMethods = map[string]bool{
-	view.Logger:            true,
-	view.Criteria:          true,
+	expand.Logger:          true,
+	expand.Criteria:        true,
 	keywords.ParentViewKey: true,
 	keywords.ViewKey:       true,
 	functions.SlicesFunc:   true,
