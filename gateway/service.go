@@ -459,7 +459,9 @@ func (r *Service) loadRouterResource(URL string, resources map[string]*view.Reso
 	if err = r.updateCacheConnectorRefIfNeeded(routerResource); err != nil {
 		return nil, err
 	}
-
+	if r.Config.DisableCors {
+		routerResource.Cors = nil
+	}
 	return routerResource, routerResource.Init(ctx)
 }
 

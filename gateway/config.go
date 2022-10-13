@@ -31,6 +31,7 @@ type (
 		APIKeys              router.APIKeys
 		AutoDiscovery        *bool
 		ChangeDetection      *ChangeDetection
+		DisableCors          bool
 		CacheConnectorPrefix string
 	}
 
