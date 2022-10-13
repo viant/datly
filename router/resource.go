@@ -136,6 +136,7 @@ func (r *Resource) Init(ctx context.Context) error {
 		}
 
 		if err := route.Init(ctx, r); err != nil {
+
 			return err
 		}
 	}
