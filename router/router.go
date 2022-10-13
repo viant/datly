@@ -95,7 +95,7 @@ func (r *Router) Handle(response http.ResponseWriter, request *http.Request) err
 
 func (r *Router) HandleRoute(response http.ResponseWriter, request *http.Request, route *Route) error {
 	if request.Method == http.MethodOptions {
-		corsHandler(route.Cors)(response)
+		corsHandler(request, route.Cors)(response)
 		return nil
 	}
 
@@ -142,33 +142,39 @@ func (r *Router) Init(routes Routes, apiPrefix string) {
 	r.initMatcher()
 }
 
-func corsHandler(cors *Cors) func(writer http.ResponseWriter) {
+func corsHandler(request *http.Request, cors *Cors) func(writer http.ResponseWriter) {
 	return func(writer http.ResponseWriter) {
-		enableCors(writer, cors, true)
+		enableCors(writer, request, cors, true)
 	}
 }
 
-func enableCors(writer http.ResponseWriter, cors *Cors, allHeaders bool) {
+func enableCors(writer http.ResponseWriter, request *http.Request, cors *Cors, allHeaders bool) {
+
 	if cors == nil {
 		return
 	}
 
-	if cors.AllowOrigins != nil {
-		writer.Header().Set(AllowOriginHeader, strings.Join(*cors.AllowOrigins, Separator))
+	origins := request.Header["Origin"]
+	origin := ""
+	if len(origins) > 0 {
+		origin = origins[0]
+	}
+	if origin == "" {
+		writer.Header().Set(AllowOriginHeader, "*")
+	} else {
+		writer.Header().Set(AllowOriginHeader, origin)
 	}
 
 	if cors.AllowMethods != nil && allHeaders {
-		writer.Header().Set(AllowMethodsHeader, strings.Join(*cors.AllowMethods, Separator))
+		writer.Header().Set(AllowMethodsHeader, request.Method)
 	}
 
 	if cors.AllowHeaders != nil && allHeaders {
 		writer.Header().Set(AllowHeadersHeader, strings.Join(*cors.AllowHeaders, Separator))
 	}
-
 	if cors.AllowCredentials != nil && allHeaders {
 		writer.Header().Set(AllowCredentialsHeader, strconv.FormatBool(*cors.AllowCredentials))
 	}
-
 	if cors.MaxAge != nil && allHeaders {
 		writer.Header().Set(MaxAgeHeader, strconv.Itoa(int(*cors.MaxAge)))
 	}
@@ -197,9 +203,8 @@ func (r *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 func (r *Router) viewHandler(route *Route) viewHandler {
 	return func(response http.ResponseWriter, request *http.Request) {
 		if route.Cors != nil {
-			enableCors(response, route.Cors, false)
+			enableCors(response, request, route.Cors, false)
 		}
-
 		if route.EnableAudit {
 			r.logAudit(request)
 		}
