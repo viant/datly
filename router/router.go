@@ -10,10 +10,12 @@ import (
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/codec"
+	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
+	"github.com/viant/scy/auth/jwt"
 	"io"
 	"net/http"
 	"os"
@@ -681,7 +683,15 @@ func (r *Router) compressIfNeeded(marshalled []byte, route *Route) (*RequestData
 
 func (r *Router) logAudit(request *http.Request) {
 	headers := request.Header.Clone()
-	if len(headers.Get("Authorization")) > 0 {
+	if authorization := headers.Get("Authorization"); authorization != "" {
+		if jwtCodec, _ := registry.Codecs.Lookup(registry.CodecKeyJwtClaim); jwtCodec != nil {
+			if claim, _ := jwtCodec.Valuer().Value(context.TODO(), authorization); claim != nil {
+				if jwtClaim, ok := claim.(*jwt.Claims); ok && jwtClaim != nil {
+					headers.Set("UserID", strconv.Itoa(jwtClaim.UserID))
+					headers.Set("UserEmail", jwtClaim.Email)
+				}
+			}
+		}
 		headers.Set("Authorization", "***")
 	}
 
