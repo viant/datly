@@ -70,8 +70,12 @@ func (b *selectorsBuilder) build(ctx context.Context, viewsDetails []*ViewDetail
 
 			selector.Parameters.Init(details.View)
 			if param, err := b.buildSelectorParameters(ctx, selector, details, details.View.Template.Parameters); err != nil {
+				asErrors, ok := err.(*Errors)
+
 				if param.ErrorStatusCode != 0 {
 					errors.setStatus(param.ErrorStatusCode)
+				} else if ok && asErrors.status != http.StatusBadRequest {
+					errors.setStatus(asErrors.status)
 				}
 
 				errors.AddError(details.View.Name, param.Name, err)

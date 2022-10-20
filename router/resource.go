@@ -31,7 +31,6 @@ type (
 		SourceURL    string
 		With         []string //list of resource to inherit from
 		Routes       Routes
-		Resource     *view.Resource
 		Compression  *Compression
 		Redirect     *Redirect
 		Cache        *cache.Cache
@@ -47,6 +46,7 @@ type (
 		EnableDebug      *bool
 		_visitors        codec.Visitors
 		cfs              afs.Service
+		Resource         *view.Resource
 	}
 
 	Logger struct {

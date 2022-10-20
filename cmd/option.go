@@ -40,15 +40,12 @@ type (
 	}
 
 	Generate struct {
-		Name         string `short:"N" long:"name" description:"view DbName/route URI" `
-		Table        string `short:"T" long:"table" description:"table" `
-		SQLXLocation string `short:"X" long:"sqlx" description:"SQLX (extension for relation) location" `
+		Name     string `short:"N" long:"name" description:"view DbName/route URI" `
+		Location string `short:"X" long:"sqlx" description:"SQLX (extension for relation) location" `
 	}
 
 	Content struct {
-		Output         string `short:"O" long:"output" description:"output style" choice:"c" choice:"b" `
-		RedirectSizeKb int    `short:"M" long:"redirect" description:"redirectMinSize" `
-		RedirectURL    string `short:"L" long:"redirectURL" description:"redirectURL" `
+		Output string `short:"O" long:"output" description:"output style" choice:"c" choice:"b" `
 	}
 )
 
@@ -56,9 +53,8 @@ type (
 var mysqlDev string
 
 func (o *Options) Init() {
-
-	if o.SQLXLocation != "" {
-		_, name := url.Split(o.SQLXLocation, file.Scheme)
+	if o.Location != "" {
+		_, name := url.Split(o.Location, file.Scheme)
 		if index := strings.Index(name, "."); index != -1 {
 			name = name[:index]
 		}
@@ -81,13 +77,6 @@ func (o *Options) Init() {
 	default:
 		o.Output = "Basic"
 	}
-}
-
-func (c *Options) ResponseField() string {
-	if c.Output == "Basic" {
-		return ""
-	}
-	return "Data"
 }
 
 // MatchConnector returns matcher or default connector
@@ -143,21 +132,42 @@ func (c *Connector) Registry() map[string]*view.Connector {
 	var result = map[string]*view.Connector{}
 	defaultConn := c.New()
 	result[defaultConn.Name] = defaultConn
-	if len(c.Connects) > 1 {
-		for i := 1; i < len(c.Connects); i++ {
-			parts := strings.Split(c.Connects[i], "|")
-			if len(parts) < 3 {
-				continue
-			}
-			conn := &view.Connector{
-				Name:   parts[0],
-				Driver: parts[1],
-				DSN:    parts[2],
-			}
-			result[conn.Name] = conn
-		}
+	connectors := c.Connectors()
+	for i := range connectors {
+		result[connectors[i].Name] = connectors[i]
 	}
+
 	return result
+}
+
+func (c *Connector) Connectors() []*view.Connector {
+	result := []*view.Connector{
+		{
+			Name:   c.DbName,
+			Driver: c.Driver,
+			DSN:    c.DSN,
+		},
+	}
+
+	for i := 0; i < len(c.Connects); i++ {
+		parts := strings.Split(c.Connects[i], "|")
+		if len(parts) < 3 {
+			continue
+		}
+		conn := &view.Connector{
+			Name:   parts[0],
+			Driver: parts[1],
+			DSN:    parts[2],
+		}
+		result = append(result, conn)
+	}
+
+	return result
+}
+
+func (c *Connector) Lookup(connectorName string) (*view.Connector, bool) {
+	conn, ok := c.Registry()[connectorName]
+	return conn, ok
 }
 
 func (c *Connector) New() *view.Connector {
@@ -204,7 +214,7 @@ func (o *Options) DepURL(uri string) string {
 func (o *Options) SQLURL(name string, addSubFolder bool) string {
 	pathSegments := []string{"dev"}
 	if addSubFolder {
-		location := o.SQLXLocation[strings.LastIndex(o.SQLXLocation, "/")+1:]
+		location := o.Location[strings.LastIndex(o.Location, "/")+1:]
 		extensionIndex := strings.LastIndex(location, ".")
 		if extensionIndex != -1 {
 			location = location[:extensionIndex]
@@ -215,13 +225,6 @@ func (o *Options) SQLURL(name string, addSubFolder bool) string {
 	pathSegments = append(pathSegments, name+".sql")
 
 	return url.Join(o.RouteURL, pathSegments...)
-}
-
-func (g *Generate) Namespace() string {
-	if g.Table == "" {
-		return ""
-	}
-	return namespace(g.Table)
 }
 
 func namespace(name string) string {

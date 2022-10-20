@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/converter"
-	"github.com/viant/datly/transform/expand"
+	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/velty"
 	"github.com/viant/velty/ast/expr"

@@ -8,7 +8,7 @@ import (
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/transform/expand"
+	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/gmetric/provider"
 	"github.com/viant/sqlx/io"
@@ -573,7 +573,7 @@ func (v *View) ensureSchema(types Types) error {
 		}
 
 		if componentType != nil {
-			v.Schema.setType(componentType)
+			v.Schema.SetType(componentType)
 		}
 	}
 
@@ -1066,11 +1066,11 @@ func (v *View) ensureParameters(selector *Selector) {
 	}
 
 	if selector.Parameters.Values == nil {
-		selector.Parameters.Values = newValue(v.Template.Schema.Type())
+		selector.Parameters.Values = expand.NewValue(v.Template.Schema.Type())
 	}
 
 	if selector.Parameters.Has == nil {
-		selector.Parameters.Has = newValue(v.Template.PresenceSchema.Type())
+		selector.Parameters.Has = expand.NewValue(v.Template.PresenceSchema.Type())
 	}
 }
 

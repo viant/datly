@@ -6,79 +6,81 @@ Caser: 5
 Columns:
   - DataType: INTEGER
     DatabaseColumn: id
-    Filterable: true
     Name: id
     Nullable: true
   - DataType: DATETIME
     DatabaseColumn: timestamp
-    Filterable: true
     Name: timestamp
     Nullable: true
   - DataType: INTEGER
     DatabaseColumn: event_type_id
-    Filterable: true
     Name: event_type_id
     Nullable: true
   - DataType: DECIMAL(7, 2)
     DatabaseColumn: quantity
-    Filterable: true
     Name: quantity
     Nullable: true
   - DataType: INTEGER
     DatabaseColumn: user_id
-    Filterable: true
     Name: user_id
     Nullable: true
 Connector:
   Driver: sqlite3
   Name: dev
-  Secret:
-    Data: null
-    Fallback: null
-    Key: blowfish://default
-    MaxRetry: 3
-    TimeoutMs: 5000
-    URL: mem://localhost/resource/mysql.json
 Logger:
   Name: ""
 MatchStrategy: read_matched
-Name: update
-Ref: update
+Mode: SQLExec
+Name: insert
+Ref: insert
 Schema:
   Cardinality: One
 Selector:
   Constraints:
-    Criteria: true
-    Filterable:
-      - '*'
-    Limit: true
-    Offset: true
+    Criteria: false
+    Filterable: null
+    Limit: false
+    Offset: false
     OrderBy: false
-    Projection: true
-  Limit: 25
+    Page: null
+    Projection: false
 Standalone: true
 Table: events
 Template:
   Parameters:
-    - Codec:
-        Name: AsInts
-        Ref: AsInts
-        Schema:
-          Cardinality: One
-          DataType: '[]int'
-      In:
-        Kind: query
-        Name: Ids
-      Name: Ids
-      PresenceName: Ids
-      Ref: Ids
+    - In:
+        Kind: body
+        Name: eventId
+      Name: eventId
+      PresenceName: eventId
+      Ref: eventId
       Required: true
       Schema:
         Cardinality: One
-        DataType: string
+        DataType: int
+    - In:
+        Kind: body
+        Name: quantity
+      Name: quantity
+      PresenceName: quantity
+      Ref: quantity
+      Required: true
+      Schema:
+        Cardinality: One
+        DataType: float64
+    - In:
+        Kind: body
+        Name: timestamp
+      Name: timestamp
+      PresenceName: timestamp
+      Ref: timestamp
+      Required: true
+      Schema:
+        Cardinality: One
+        DataType: time.Time
   PresenceSchema:
     Cardinality: One
   Schema:
     Cardinality: One
-  Source: ( SELECT * FROM events WHERE ID IN ( $criteria.AppendBinding($Unsafe.Ids)  ) )
-  SourceURL: update/events.sql
+  Source: "( \n\nINSERT INTO events (id, quantity, 'timestamp') VALUES ( $criteria.AppendBinding($Unsafe.eventId) ,  $criteria.AppendBinding($Unsafe.quantity) ,  $criteria.AppendBinding($Unsafe.timestamp) ); )"
+  SourceURL: insert/insert.sql

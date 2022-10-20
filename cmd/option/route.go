@@ -2,14 +2,13 @@ package option
 
 import (
 	"github.com/viant/datly/router"
-	"github.com/viant/datly/transform/sanitize"
+	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
 )
 
 type (
 	Route struct {
 		URI            string
-		URIParams      map[string]bool
 		ConstFileURL   string
 		Cache          *view.Cache
 		Method         string

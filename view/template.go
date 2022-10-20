@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/transform/expand"
+	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/parameter"
 	rdata "github.com/viant/toolbox/data"
@@ -113,23 +113,42 @@ func (t *Template) initTypes(ctx context.Context, resource *Resource) error {
 }
 
 func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resource) error {
-	t.Schema = &Schema{}
-
-	builder := parameter.NewBuilder("")
-
 	for _, param := range t.Parameters {
 		if err := t.inheritAndInitParam(ctx, resource, param); err != nil {
 			return err
 		}
+	}
 
+	rType, err := BuildType(t.Parameters)
+	if err != nil {
+		return err
+	}
+
+	t.Schema = &Schema{}
+	t.Schema.SetType(rType)
+	return nil
+}
+
+func BuildType(parameters []*Parameter) (reflect.Type, error) {
+	builder := parameter.NewBuilder("")
+	for _, param := range parameters {
 		if err := builder.AddType(param.Name, param.ActualParamType()); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	t.Schema.setType(builder.Build())
+	return builder.Build(), nil
+}
 
-	return nil
+func BuildPresenceType(parameters []*Parameter) (reflect.Type, error) {
+	builder := parameter.NewBuilder("")
+	for _, param := range parameters {
+		if err := builder.AddType(param.PresenceName, boolType); err != nil {
+			return nil, err
+		}
+	}
+
+	return builder.Build(), nil
 }
 
 func (t *Template) addField(name string, rType reflect.Type) error {
@@ -169,7 +188,7 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 		if err != nil {
 			return err
 		}
-		t.Schema.setType(rType)
+		t.Schema.SetType(rType)
 	}
 
 	for _, param := range t.Parameters {
@@ -186,10 +205,10 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 }
 
 func NewEvaluator(parameters []*Parameter, paramSchema, presenceSchema reflect.Type, template string) (*expand.Evaluator, error) {
-	return expand.NewEvaluator(filterConstParameters(parameters), paramSchema, presenceSchema, template)
+	return expand.NewEvaluator(FilterConstParameters(parameters), paramSchema, presenceSchema, template)
 }
 
-func filterConstParameters(parameters []*Parameter) []expand.ConstUpdater {
+func FilterConstParameters(parameters []*Parameter) []expand.ConstUpdater {
 	params := make([]expand.ConstUpdater, 0)
 	for i := range parameters {
 		if parameters[i].In.Kind != LiteralKind {
@@ -215,13 +234,13 @@ func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, paren
 		}
 	}
 
-	return Evaluate(t.sqlEvaluator, t.Schema.Type(), externalParams, presenceMap, AsViewParam(t._view, nil, batchData, expander), parentParam)
+	return Evaluate(t.sqlEvaluator, externalParams, presenceMap, AsViewParam(t._view, nil, batchData, expander), parentParam)
 }
 
-func Evaluate(evaluator *expand.Evaluator, schemaType reflect.Type, externalParams, presenceMap interface{}, viewParam, parentParam *expand.MetaParam) (string, *expand.CriteriaSanitizer, *logger.Printer, error) {
+func Evaluate(evaluator *expand.Evaluator, externalParams, presenceMap interface{}, viewParam, parentParam *expand.MetaParam) (string, *expand.CriteriaSanitizer, *logger.Printer, error) {
 	printer := &logger.Printer{}
 
-	SQL, params, err := evaluator.Evaluate(schemaType, externalParams, presenceMap, viewParam, parentParam, printer)
+	SQL, params, err := evaluator.Evaluate(externalParams, presenceMap, viewParam, parentParam, printer)
 	if err != nil {
 		return "", nil, printer, err
 	}
@@ -280,21 +299,18 @@ func (t *Template) initPresenceType(resource *Resource) error {
 		return err
 	}
 
-	t.PresenceSchema.setType(rType)
+	t.PresenceSchema.SetType(rType)
 	return nil
 }
 
 func (t *Template) initPresenceSchemaFromParams() error {
-	builder := parameter.NewBuilder("")
-
-	for _, param := range t.Parameters {
-		if err := builder.AddType(param.PresenceName, boolType); err != nil {
-			return err
-		}
+	rType, err := BuildPresenceType(t.Parameters)
+	if err != nil {
+		return err
 	}
 
 	t.PresenceSchema = &Schema{}
-	t.PresenceSchema.setType(builder.Build())
+	t.PresenceSchema.SetType(rType)
 
 	return nil
 }

@@ -33,6 +33,7 @@ Connector:
 Logger:
   Name: ""
 MatchStrategy: read_matched
+Mode: SQLQuery
 Name: events
 Ref: events
 Schema:
@@ -176,6 +177,7 @@ With:
       Logger:
         Name: ""
       MatchStrategy: read_matched
+      Mode: SQLQuery
       Name: eventTypes#
       Ref: eventTypes
       Schema:
@@ -184,13 +186,40 @@ With:
         Constraints:
           Criteria: false
           Filterable: null
-          Limit: false
-          Offset: false
+          Limit: true
+          Offset: true
           OrderBy: false
-          Page: null
+          Page: true
           Projection: false
         Limit: 40
-        Namespace: ev
+        LimitParam:
+          Description: allows to limit eventTypes# view data returned from db
+          In:
+            Kind: query
+            Name: ty_limit
+          Name: _limit
+          PresenceName: _limit
+          Schema:
+            Cardinality: One
+        Namespace: ty
+        OffsetParam:
+          Description: allows to skip first n  view eventTypes# records, it has to be used alongside the limit
+          In:
+            Kind: query
+            Name: ty_offset
+          Name: _offset
+          PresenceName: _offset
+          Schema:
+            Cardinality: One
+        PageParam:
+          Description: allows to skip first page * limit values, starting from 1 page. Has precedence over offset
+          In:
+            Kind: query
+            Name: ty_page
+          Name: _page
+          PresenceName: _page
+          Schema:
+            Cardinality: One
       Table: event_types
       Template:
         PresenceSchema:

@@ -21,5 +21,5 @@ FROM (
          JOIN (
     SELECT *
     FROM event_types
-) eventTypes ON events.event_type_id = eventTypes.id
+) eventTypes ON events.eventTypeId = eventTypes.id
 

@@ -26,9 +26,6 @@ const (
 )
 
 type (
-	expanderMock struct {
-	}
-
 	//Builder represent SQL Builder
 	Builder struct{}
 	Exclude struct {
@@ -38,22 +35,6 @@ type (
 
 	//BatchData groups view needed to use various view.MatchStrategy
 )
-
-func (e *expanderMock) ParentJoinOn(column string, prepend ...string) (string, error) {
-	return "", nil
-}
-
-func (e *expanderMock) AndParentJoinOn(column string) (string, error) {
-	return e.ColIn("", column)
-}
-
-func (e *expanderMock) ColIn(prefix, column string) (string, error) {
-	return "", nil
-}
-
-func (e *expanderMock) In(prefix string) (string, error) {
-	return "", nil
-}
 
 //NewBuilder creates Builder instance
 func NewBuilder() *Builder {
@@ -391,7 +372,7 @@ func (b *Builder) ExactMetaSQL(aView *view.View, selector *view.Selector, batchD
 }
 
 func (b *Builder) CacheMetaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, parent *expand.MetaParam) (*cache.ParmetrizedQuery, error) {
-	return b.metaSQL(aView, selector, batchData, relation, &Exclude{Pagination: true, ColumnsIn: true}, parent, &expanderMock{})
+	return b.metaSQL(aView, selector, batchData, relation, &Exclude{Pagination: true, ColumnsIn: true}, parent, &expand.MockExpander{})
 }
 
 func (b *Builder) CacheSQL(aView *view.View, selector *view.Selector) (*cache.ParmetrizedQuery, error) {
@@ -402,7 +383,7 @@ func (b *Builder) CacheSQLWithOptions(aView *view.View, selector *view.Selector,
 	return b.Build(aView, selector, batchData, relation, &Exclude{
 		ColumnsIn:  true,
 		Pagination: true,
-	}, parent, &expanderMock{})
+	}, parent, &expand.MockExpander{})
 }
 
 func (b *Builder) metaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *expand.MetaParam, expander expand.Expander) (*cache.ParmetrizedQuery, error) {

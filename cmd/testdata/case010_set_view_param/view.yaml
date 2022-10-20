@@ -6,17 +6,14 @@ Caser: 5
 Columns:
   - DataType: INTEGER
     DatabaseColumn: id
-    Filterable: true
     Name: id
     Nullable: true
   - DataType: VARCHAR(255)
     DatabaseColumn: name
-    Filterable: true
     Name: name
     Nullable: true
   - DataType: INTEGER
     DatabaseColumn: account_id
-    Filterable: true
     Name: account_id
     Nullable: true
 Connector:
@@ -32,60 +29,13 @@ Schema:
   Cardinality: One
 Selector:
   Constraints:
-    Criteria: true
-    Filterable:
-      - '*'
-    Limit: true
-    Offset: true
+    Criteria: false
+    Filterable: null
+    Limit: false
+    Offset: false
     OrderBy: false
     Page: null
-    Projection: true
-  CriteriaParam:
-    Description: allows to filter view update data that matches given criteria
-    In:
-      Kind: query
-      Name: _criteria
-    Name: _criteria
-    PresenceName: _criteria
-    Schema:
-      Cardinality: One
-  FieldsParam:
-    Description: allows to control view update fields present in response
-    In:
-      Kind: query
-      Name: _fields
-    Name: _fields
-    PresenceName: _fields
-    Schema:
-      Cardinality: One
-  Limit: 25
-  LimitParam:
-    Description: allows to limit update view data returned from db
-    In:
-      Kind: query
-      Name: _limit
-    Name: _limit
-    PresenceName: _limit
-    Schema:
-      Cardinality: One
-  OffsetParam:
-    Description: allows to skip first n  view update records, it has to be used alongside the limit
-    In:
-      Kind: query
-      Name: _offset
-    Name: _offset
-    PresenceName: _offset
-    Schema:
-      Cardinality: One
-  PageParam:
-    Description: allows to skip first page * limit values, starting from 1 page. Has precedence over offset
-    In:
-      Kind: query
-      Name: _page
-    Name: _page
-    PresenceName: _page
-    Schema:
-      Cardinality: One
+    Projection: false
 Standalone: true
 Table: event_types
 Template:
@@ -99,7 +49,7 @@ Template:
       Required: true
       Schema:
         Cardinality: One
-        Name: Event
+        DataType: Event
     - In:
         Kind: data_view
         Name: Records
@@ -109,9 +59,10 @@ Template:
       Required: true
       Schema:
         Cardinality: Many
-        Name: Records
+        DataType: Records
   PresenceSchema:
     Cardinality: One
   Schema:
     Cardinality: One
-  Source: "( #set\n($event = $Unsafe.Event )\n\n#foreach($rec in $Unsafe.Records )\n\nUPDATE event_types\nSET name =  $criteria.AppendBinding($rec.NEW_NAME) \nWHERE ID =  $criteria.AppendBinding($rec.ID) ;\n\n#end )"
+  Source: "( \n\n#set($event = $Unsafe.Event )\n\n#foreach($rec in $Unsafe.Records )\n\nUPDATE event_types\nSET name =  $criteria.AppendBinding($rec.NEW_NAME) \nWHERE ID =  $criteria.AppendBinding($rec.ID) ;\n\n#end )"
+  SourceURL: update/update.sql

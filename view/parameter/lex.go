@@ -1,7 +1,7 @@
 package parameter
 
 import (
-	"github.com/viant/datly/cmd/ast/matchers"
+	"github.com/viant/datly/cmd/matchers"
 	"github.com/viant/parsly"
 	"github.com/viant/parsly/matcher"
 )

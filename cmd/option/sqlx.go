@@ -2,25 +2,32 @@ package option
 
 import (
 	"github.com/viant/datly/view"
+	"strings"
 )
 
 type (
+	Alias     string
+	TableName string
+
+	/* SELECT events.* FROM (
+		SELECT * from events e2
+	) events
+	JOIN (
+		SELECT * from event_types typ
+	) event_types ON events.event_type_id = event_types.id
+	*/
 	Table struct {
-		Ref           string
-		StarExpr      bool
-		Inner         Columns
-		ColumnTypes   map[string]string
-		InnerAlias    string
-		InnerSQL      string
-		Deps          map[string]string
-		Columns       Columns
-		Name          string
-		SQL           string
-		Joins         Joins
-		Alias         string
-		ParamDataType string
+		Ref             string
+		Inner           Columns
+		InnerAlias      string //e2
+		OuterAlias      string //events
+		NamespaceSource string
+		Deps            map[Alias]TableName
+		Columns         Columns
+		Name            string
+		SQL             string
+		Relations       Relations
 		TableMeta
-		ViewMeta *ViewMeta
 		ViewHint string
 	}
 
@@ -30,7 +37,6 @@ type (
 		Cache             *view.Cache
 		Warmup            map[string]interface{}
 		DataViewParameter *view.Parameter `json:"-"`
-		Parameter         *view.Parameter
 		Auth              string
 		Selector          *view.Config
 		AllowNulls        *bool
@@ -52,28 +58,28 @@ type (
 
 	Columns []*Column
 
-	Join struct {
-		Key      string
-		KeyAlias string
-		OwnerKey string
-		OwnerNs  string
-		Owner    *Table
+	Relation struct {
+		Owner *Table
 		TableMeta
-		Field string
 
 		ToOne bool
 		Table *Table
 	}
 
-	Joins []*Join
+	Relations []*Relation
 )
+
+func (t *Table) HasStarExpr(alias string) bool {
+	return t.Inner.StarExpr(alias) != nil
+}
 
 func NewTable(name string) *Table {
 	return &Table{
-		Name:        name,
-		ColumnTypes: map[string]string{},
-		Deps:        map[string]string{},
-		TableMeta:   TableMeta{},
+		Name: name,
+		Deps: map[Alias]TableName{},
+		TableMeta: TableMeta{
+			Warmup: map[string]interface{}{},
+		},
 	}
 }
 
@@ -114,15 +120,15 @@ func (c Columns) ByAlias() map[string]*Column {
 		if alias == "" {
 			alias = item.Name
 		}
-		result[alias] = c[i]
+		result[strings.ToLower(alias)] = c[i]
 	}
 	return result
 }
 
-func (j *Joins) Index() map[string]*Join {
-	var result = make(map[string]*Join)
+func (j *Relations) Index() map[string]*Relation {
+	var result = make(map[string]*Relation)
 	for _, join := range *j {
-		result[join.Table.Alias] = join
+		result[join.Table.OuterAlias] = join
 	}
 
 	return result

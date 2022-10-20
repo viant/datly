@@ -23,7 +23,7 @@ pipeline:
       action: http/runner:send
       requests:
         - Method: POST
-          description: user is no authenticated
+          description: user is authenticated
           URL: http://127.0.0.1:8080/v1/api/dev/auth/products/
           Header:
             Authorization: Bearer ${signJWT.TokenString}
@@ -33,3 +33,14 @@ pipeline:
             Status: 2
           Expect:
             Code: 200
+
+
+        - Method: POST
+          description: user is no authenticated
+          URL: http://127.0.0.1:8080/v1/api/dev/auth/products/
+          JSONBody:
+            Ids:
+              - 1
+            Status: 2
+          Expect:
+            Code: 401

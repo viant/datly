@@ -2,7 +2,7 @@ package reader
 
 import (
 	"fmt"
-	"github.com/viant/datly/transform/expand"
+	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/read/cache"
 	"reflect"

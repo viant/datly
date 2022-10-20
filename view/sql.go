@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader/metadata"
-	"github.com/viant/datly/transform/expand"
+	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
@@ -74,8 +74,8 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 		return nil, err
 	}
 
-	params := newValue(aView.Template.Schema.Type())
-	presence := newValue(aView.Template.PresenceSchema.Type())
+	params := expand.NewValue(aView.Template.Schema.Type())
+	presence := expand.NewValue(aView.Template.PresenceSchema.Type())
 
 	selector := &Selector{
 		Parameters: ParamState{

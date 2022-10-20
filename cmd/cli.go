@@ -14,33 +14,14 @@ import (
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/openapi3"
-	"github.com/viant/datly/transform/sanitize"
 	"github.com/viant/datly/view"
-	rdata "github.com/viant/toolbox/data"
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
 	"strings"
 )
 
-type serverBuilder struct {
-	options              *Options
-	Columns              option.Columns
-	connectors           map[string]*view.Connector
-	config               *standalone.Config
-	logger               io.Writer
-	route                *router.Resource
-	fs                   afs.Service
-	mainStarExpNamesapce string
-}
-
-func (s *serverBuilder) build() (*standalone.Server, error) {
-	ctx := context.Background()
-	err := s.loadAndInitConfig(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func (s *Builder) build() (*standalone.Server, error) {
 	reportContent(s.logger, "------------ config ------------\n\t "+s.options.ConfigURL, s.options.ConfigURL)
 
 	authenticator, err := jwt.Init(s.config.Config, nil)
@@ -92,22 +73,7 @@ func (s *serverBuilder) build() (*standalone.Server, error) {
 	return srv, nil
 }
 
-func (s *serverBuilder) loadAndInitConfig(ctx context.Context) error {
-	aConfig, err := s.loadConfig(ctx)
-	if err != nil {
-		return err
-	}
-
-	err = s.initConfig(ctx, aConfig)
-	if err != nil {
-		return err
-	}
-
-	s.config = aConfig
-	return nil
-}
-
-func (s *serverBuilder) buildSchemaFromParamType(schemaName, paramType string) (*view.Definition, bool) {
+func (s *Builder) buildSchemaFromParamType(schemaName, paramType string) (*view.Definition, bool) {
 	return &view.Definition{
 		Name: schemaName,
 		Schema: &view.Schema{
@@ -117,96 +83,30 @@ func (s *serverBuilder) buildSchemaFromParamType(schemaName, paramType string) (
 	}, true
 }
 
-func (s *serverBuilder) buildViewMetaTemplate(k string, v *option.TableParam) {
-	viewAlias := getMetaTemplateHolder(v.Table.Name)
-	SQL := normalizeMetaTemplateSQL(v.Table.SQL, viewAlias)
-	holderView := lookupView(s.route.Resource, s.getViewName(viewAlias))
-	if holderView == nil {
-		fmt.Printf("faield to lookup view %v for metaTempalte: %v", holderView, k)
-		return
-	}
-	tmplMeta := &view.TemplateMeta{}
-	if len(s.Columns) > 0 {
-		starExpr := s.Columns.StarExpr(k)
-		if starExpr.Comments != "" {
-			if _, err := sanitize.UnmarshalHint(starExpr.Comments, tmplMeta); err != nil {
-				fmt.Printf("invalid TempalteMeta: %v", err.Error())
-			}
-		}
-	}
-	tmplMeta.Source = SQL
-	if tmplMeta.Kind == "" {
-		tmplMeta.Kind = view.MetaTypeRecord
-	}
-	if tmplMeta.Name == "" {
-		tmplMeta.Name = k
-	}
-	holderView.Template.Meta = tmplMeta
-}
-
-func (s *serverBuilder) getViewName(startExprNs string) string {
-	if s.mainStarExpNamesapce == startExprNs { //main view alias is derived fro fielname or -N parameter
-		//rather the alias in SQLX thus needs that mapping
-		startExprNs = s.options.Name
-	}
-	return startExprNs
-}
-
-func (s *serverBuilder) removeFromOutputIfNeeded(route *router.Route, table *option.Table) {
-	if table == nil {
-		return
-	}
-
-	//buildExcludeColumn()
-}
-
-func (s *serverBuilder) buildExpandMap(hints sanitize.ParameterHints) (rdata.Map, error) {
-	result := rdata.Map{}
-	for _, aHint := range hints {
-		actual, _ := sanitize.SplitHint(aHint.Hint)
-		aParam := &option.Parameter{}
-		if err := json.Unmarshal([]byte(actual), aParam); err != nil {
-			return nil, err
-		}
-
-		if aParam.Kind != string(view.EnvironmentKind) {
-			continue
-		}
-
-		result.SetValue(aHint.Parameter, os.Getenv(aHint.Parameter))
-	}
-
-	return result, nil
-}
-
-func (s *serverBuilder) buildConstParameters(route *option.Route) []*view.Parameter {
-	params := make([]*view.Parameter, 0, len(route.Const))
-	for paramName := range route.Const {
-		params = append(params, &view.Parameter{
-			Name: paramName,
-			In: &view.Location{
-				Kind: view.LiteralKind,
-				Name: paramName,
-			},
-			Required: boolPtr(true),
-			Const:    route.Const[paramName],
-		})
-	}
-
-	return params
-}
-
 func normalizeMetaTemplateSQL(SQL string, holderViewName string) string {
 	return strings.Replace(SQL, "$View."+holderViewName+".SQL", "$View.NonWindowSQL", 1)
 }
 
-func newBuilder(options *Options, logger io.Writer) *serverBuilder {
-	return &serverBuilder{
+func NewBuilder(options *Options, logger io.Writer) (*Builder, error) {
+	builder := &Builder{
 		options:    options,
-		connectors: map[string]*view.Connector{},
+		tablesMeta: NewTableMetaRegistry(),
 		logger:     logger,
 		fs:         afs.New(),
+		routeBuilder: &routeBuilder{
+			views: map[string]*view.View{},
+			routerResource: &router.Resource{
+				Resource: view.EmptyResource(),
+			},
+			paramsIndex: NewParametersIndex(),
+			option: &option.Route{
+				Declare: map[string]string{},
+				Const:   map[string]interface{}{},
+			},
+		},
 	}
+
+	return builder, builder.Build(context.TODO())
 }
 
 func New(version string, args []string, logger io.Writer) (*standalone.Server, error) {
@@ -228,7 +128,12 @@ func New(version string, args []string, logger io.Writer) (*standalone.Server, e
 	}
 
 	options.Init()
-	return newBuilder(options, logger).build()
+	builder, err := NewBuilder(options, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	return builder.build()
 }
 
 func dumpConfiguration(options *Options) {

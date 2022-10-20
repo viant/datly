@@ -1,12 +1,12 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/viant/datly/cmd/ast"
 	"github.com/viant/datly/cmd/option"
-	"github.com/viant/datly/transform/sanitize"
 	"github.com/viant/datly/view"
+	"github.com/viant/parsly"
 	"github.com/viant/sqlx/metadata/ast/expr"
 	"github.com/viant/sqlx/metadata/ast/node"
 	"github.com/viant/sqlx/metadata/ast/parser"
@@ -15,52 +15,69 @@ import (
 	"strings"
 )
 
-func ParseSQLx(SQL string, routeOpt *option.Route, hints sanitize.ParameterHints) (*option.Table, map[string]*option.TableParam, error) {
-	aQuery, err := parser.ParseQuery(SQL)
-	if err != nil {
-		return nil, nil, err
+type (
+	key struct {
+		Column string
+		Field  string
+		Alias  string
 	}
 
-	var tables = map[string]*option.Table{}
-
-	table, err := buildTable(aQuery.From.X, routeOpt, hints)
-	if err != nil {
-		return nil, nil, err
+	relationKey struct {
+		owner *key
+		child *key
 	}
+)
 
-	table.Alias = aQuery.From.Alias
-	table.Columns = selectItemToColumn(aQuery, routeOpt)
-	table.ViewHint = aQuery.From.Comments
-
-	if star := table.Columns.StarExpr(table.Alias); star != nil {
-		table.StarExpr = true
+func newViewConfig(viewName string, fileName string, parent *query.Join, aTable *option.Table, templateMeta *option.Table, mode view.Mode) *viewConfig {
+	result := &viewConfig{
+		viewName:       viewName,
+		queryJoin:      parent,
+		table:          aTable,
+		fileName:       fileName,
+		viewParams:     map[string]*viewParamConfig{},
+		metasBuffer:    map[string]*option.Table{},
+		templateMeta:   templateMeta,
+		viewType:       mode,
+		relationsIndex: map[string]int{},
 	}
-
-	var dataParameters = map[string]*option.TableParam{}
-	tables[table.Alias] = table
-
-	if len(aQuery.Joins) > 0 {
-		for _, join := range aQuery.Joins {
-			if err := processJoin(join, tables, table.Columns, dataParameters, routeOpt, hints); err != nil {
-				return nil, nil, err
-			}
-		}
-	}
-	return table, dataParameters, nil
+	return result
 }
 
-func buildTable(x node.Node, routeOpt *option.Route, hints sanitize.ParameterHints) (*option.Table, error) {
-	//var err error
+func buildTableFromQueryWithWarning(aQuery *query.Select, x node.Node, routeOpt *option.Route, comment string) *option.Table {
+	aTable := buildTableWithWarning(x, routeOpt, comment)
+	aTable.Columns = selectItemToColumn(aQuery, routeOpt)
+	return aTable
+}
+
+func selectItemToColumn(query *query.Select, route *option.Route) option.Columns {
+	var result []*option.Column
+	for _, item := range query.List {
+		appendItem(item, &result, route)
+	}
+	return result
+}
+
+func buildTableWithWarning(x node.Node, routeOpt *option.Route, comment string) *option.Table {
+	aTable, err := buildTable(x, routeOpt)
+	if err != nil {
+		fmt.Printf("[WARN] couldn't build full table representation %v\n", aTable.Name)
+	}
+
+	if err = tryUnmarshalHint(comment, &aTable.TableMeta); err != nil {
+		fmt.Printf("[WARN] couldn't parse table hint to option.Table: %v\n", comment)
+	}
+
+	return aTable
+}
+
+func buildTable(x node.Node, routeOpt *option.Route) (*option.Table, error) {
 	table := option.NewTable("")
 
 	switch actual := x.(type) {
 	case *expr.Raw:
 		_, SQL := extractTableSQL(actual)
-		if strings.Contains(SQL, "$View.ParentJoinOn") {
-			fmt.Printf("aaaa")
-		}
 		table.SQL = SQL
-		if err := UpdateTableSettings(table, routeOpt, hints); err != nil {
+		if err := UpdateTableSettings(table, routeOpt); err != nil {
 			return table, err
 		}
 
@@ -97,9 +114,9 @@ func extractTableSQL(actual *expr.Raw) (name string, SQL string) {
 	return "", SQL
 }
 
-func UpdateTableSettings(table *option.Table, routeOpt *option.Route, hints sanitize.ParameterHints) error {
+func UpdateTableSettings(table *option.Table, routeOpt *option.Route) error {
 	tableSQL := expandConsts(table.SQL, routeOpt)
-	innerSQL, paramsExprs := ast.ExtractCondBlock(tableSQL)
+	innerSQL, _ := ExtractCondBlock(tableSQL)
 	innerQuery, err := parser.ParseQuery(innerSQL)
 	fmt.Printf("innerSQL %v %v\n", tableSQL, err)
 
@@ -107,24 +124,18 @@ func UpdateTableSettings(table *option.Table, routeOpt *option.Route, hints sani
 		table.Name = strings.Trim(parser.Stringify(innerQuery.From.X), "`")
 		table.Inner = selectItemToColumn(innerQuery, routeOpt)
 		if len(innerQuery.Joins) > 0 {
-			table.Deps = map[string]string{}
 			for _, join := range innerQuery.Joins {
-				table.Deps[join.Alias] = strings.Trim(parser.Stringify(join.With), "`")
+				table.Deps[option.Alias(join.Alias)] = option.TableName(strings.Trim(parser.Stringify(join.With), "`"))
 			}
 		}
-		if innerQuery.Qualify != nil {
-			extractCriteriaPairs(innerQuery.Qualify.X, &paramsExprs)
-		}
-		table.InnerSQL = innerSQL
+
 		table.InnerAlias = innerQuery.From.Alias
 	}
 
-	table.ViewMeta, err = ast.Parse(table.SQL, routeOpt, hints)
 	if err != nil {
 		return err
 	}
 
-	table.ViewMeta.Expressions = paramsExprs
 	return nil
 }
 
@@ -135,135 +146,6 @@ func expandConsts(SQL string, opt *option.Route) string {
 	}
 
 	return replacementMap.ExpandAsText(SQL)
-}
-
-func extractCriteriaPairs(node node.Node, list *[]string) {
-	if node == nil {
-		return
-	}
-	switch actual := node.(type) {
-	case *expr.Binary:
-		op := strings.ToUpper(actual.Op)
-		switch op {
-		case "AND", "OR":
-			extractCriteriaPairs(actual.X, list)
-			extractCriteriaPairs(actual.Y, list)
-		default:
-			if bin, ok := actual.Y.(*expr.Binary); ok {
-				extractCriteriaPairs(bin.Y, list)
-				switch operand := actual.X.(type) {
-				case *expr.Selector, *expr.Ident, *expr.Placeholder:
-					appendParamExpr(operand, actual.Op, bin.X, list)
-					*list = append(*list, parser.Stringify(operand)+" = "+parser.Stringify(bin.X))
-				}
-				return
-			}
-			appendParamExpr(actual.X, actual.Op, actual.Y, list)
-		}
-	case *expr.Unary:
-
-	}
-}
-
-func appendParamExpr(x node.Node, op string, y node.Node, list *[]string) {
-	if p, ok := y.(*expr.Parenthesis); ok && strings.EqualFold(op, "IN") {
-		*list = append(*list, parser.Stringify(x)+" = "+strings.Trim(p.Raw, "()"))
-		return
-	}
-	switch operand := y.(type) {
-	case *expr.Placeholder:
-		*list = append(*list, parser.Stringify(x)+" = "+operand.Name)
-	}
-}
-
-func processJoin(join *query.Join, tables map[string]*option.Table, outerColumn option.Columns, dataParameters map[string]*option.TableParam, routeOpt *option.Route, hints sanitize.ParameterHints) error {
-	relTable, err := buildTable(join.With, routeOpt, hints)
-	if err != nil {
-		return err
-	}
-	if hint := join.Comments; hint != "" {
-		err = hintToStruct(hint, &relTable.TableMeta)
-		if err != nil {
-			fmt.Printf(fmt.Errorf("invalid hint: %s, %w\n", hint, err).Error())
-		}
-	}
-	isParamView := isParamPredicate(parser.Stringify(join.On.X))
-	if isParamView {
-
-		paramName := join.Alias
-		if relTable.DataViewParameter == nil {
-			relTable.DataViewParameter = &view.Parameter{}
-		}
-		relTable.DataViewParameter.In = &view.Location{Name: paramName, Kind: view.DataViewKind}
-		relTable.DataViewParameter.Schema = &view.Schema{Name: strings.Title(paramName)}
-
-		relTable.Alias = paramName
-		relTable.DataViewParameter.Name = paramName
-
-		dataParameters[paramName] = &option.TableParam{Table: relTable, Param: relTable.DataViewParameter}
-		UpdateAuthToken(relTable)
-		return nil
-	}
-
-	relTable.Alias = join.Alias
-	relTable.Ref = relTable.Name
-	tables[relTable.Alias] = relTable
-	if star := outerColumn.StarExpr(relTable.Alias); star != nil {
-		relTable.StarExpr = true
-	}
-	relJoin := &option.Join{
-		Table: relTable,
-	}
-	on := join.On.X
-	x := extractSelector(on, true)
-	y := extractSelector(on, false)
-	if err := updateRelationKey(relTable, y, relJoin, x); err != nil {
-		return err
-	}
-	byAlias := relTable.Inner.ByAlias()
-	relJoin.KeyAlias = relTable.InnerAlias
-	relJoin.Connector = relTable.Connector
-	relJoin.Cache = relTable.Cache
-	relJoin.Warmup = relTable.Warmup
-
-	if len(byAlias) > 0 {
-		column, ok := byAlias[relJoin.Key]
-		if !ok {
-			return fmt.Errorf("key %s is not listed on %v", relJoin.Key, relTable.Name)
-		}
-		if column.Name != relJoin.Key {
-			relJoin.Field = relJoin.Key
-			relJoin.Key = column.Name
-			if column.Ns != "" {
-				relJoin.KeyAlias = column.Ns
-			}
-		}
-	}
-
-	relJoin.ToOne = hasOneCardinalityPredicate(join.On.X)
-	owner, ok := tables[relJoin.OwnerNs]
-	if !ok {
-		return fmt.Errorf("unable to locate owner view: %s", relJoin.OwnerNs)
-	}
-	relJoin.Owner = owner
-	owner.Joins = append(owner.Joins, relJoin)
-	return nil
-}
-
-func UpdateAuthToken(aTable *option.Table) {
-	if aTable.Auth == "" {
-		return
-	}
-	required := true
-	aTable.Parameter = &view.Parameter{
-		Name:            aTable.Auth,
-		In:              &view.Location{Name: "Authorization", Kind: view.HeaderKind},
-		ErrorStatusCode: 401,
-		Required:        &required,
-		Codec:           &view.Codec{Name: "JwtClaim"},
-		Schema:          &view.Schema{Name: "JwtTokenInfo"},
-	}
-
 }
 
 func hintToStruct(encoded string, aStructPtr interface{}) error {
@@ -281,19 +163,74 @@ func isParamPredicate(criteria string) bool {
 	return isParamView
 }
 
-func updateRelationKey(relTable *option.Table, y *expr.Selector, relJoin *option.Join, x *expr.Selector) error {
-	if relTable.Alias == y.Name {
-		relJoin.Key = parser.Stringify(y.X)
-		relJoin.OwnerKey = parser.Stringify(x.X)
-		relJoin.OwnerNs = x.Name
-	} else if relTable.Alias == x.Name {
-		relJoin.Key = parser.Stringify(x.X)
-		relJoin.OwnerKey = parser.Stringify(y.X)
-		relJoin.OwnerNs = y.Name
-	} else {
-		return fmt.Errorf("unknow view alias: %v %v", relTable.Alias, relTable.Name)
+func relationKeyOf(parentTable *option.Table, relTable *option.Table, join *query.Join) (*relationKey, error) {
+	x := extractSelector(join.On.X, true)
+	y := extractSelector(join.On.X, false)
+
+	actualTableName := view.NotEmptyOf(parentTable.OuterAlias, parentTable.Name)
+	if actualTableName != y.Name && actualTableName != x.Name {
+		return nil, fmt.Errorf("unknow view alias: %v %v", actualTableName, parentTable.Name)
 	}
-	return nil
+
+	if actualTableName == y.Name {
+		y, x = x, y
+	}
+
+	ownerKey, err := newKey(x, parentTable)
+	if err != nil {
+		return nil, err
+	}
+
+	childKey, err := newKey(y, relTable)
+	if err != nil {
+		return nil, err
+	}
+
+	return &relationKey{
+		owner: ownerKey,
+		child: childKey,
+	}, nil
+}
+
+func newKey(s *expr.Selector, table *option.Table) (*key, error) {
+	alias := table.InnerAlias
+	tableName := table.Name
+	byAlias := table.Inner.ByAlias()
+
+	colName := parser.Stringify(s.X)
+	field := colName
+
+	if len(byAlias) > 0 {
+		actualColumn, ok := fieldName(byAlias, colName)
+		if !ok && !table.HasStarExpr(alias) {
+			return nil, fmt.Errorf("key %s is not listed on %v", colName, tableName)
+		}
+
+		if ok {
+			colName = view.NotEmptyOf(actualColumn, colName)
+		}
+	}
+
+	return &key{
+		Column: colName,
+		Field:  field,
+		Alias:  alias,
+	}, nil
+}
+
+func fieldName(byAlias map[string]*option.Column, alias string) (string, bool) {
+	aliasLc := strings.ToLower(alias)
+	column, ok := byAlias[aliasLc]
+	if !ok {
+		//return "", "", fmt.Errorf("key %s is not listed on %v", alias, relTable.Name)
+		return "", false
+	}
+
+	if column.Name != aliasLc {
+		return column.Name, true
+	}
+
+	return alias, true
 }
 
 func hasOneCardinalityPredicate(n node.Node) bool {
@@ -318,14 +255,6 @@ func extractSelector(n node.Node, left bool) *expr.Selector {
 		return actual
 	}
 	return nil
-}
-
-func selectItemToColumn(query *query.Select, route *option.Route) option.Columns {
-	var result []*option.Column
-	for _, item := range query.List {
-		appendItem(item, &result, route)
-	}
-	return result
 }
 
 func appendItem(item *query.Item, result *[]*option.Column, route *option.Route) {
@@ -401,4 +330,59 @@ func castTypeToGoType(targetType string) string {
 		return "int"
 	}
 	return "string"
+}
+
+func IsSQLExecMode(SQL string) bool {
+	lcSQL := strings.ToLower(SQL)
+	return strings.Contains(lcSQL, "call") ||
+		(strings.Contains(lcSQL, "begin") && strings.Contains(lcSQL, "end")) ||
+		isUpdate(lcSQL) ||
+		isDelete(lcSQL) ||
+		isInsert(lcSQL)
+}
+
+func isDelete(lcSQL string) bool {
+	return strings.Contains(lcSQL, "delete ") && strings.Contains(lcSQL, "from ")
+}
+
+func isUpdate(lcSQL string) bool {
+	return strings.Contains(lcSQL, "update ") && strings.Contains(lcSQL, "set ")
+}
+
+func isInsert(lcSQL string) bool {
+	return strings.Contains(lcSQL, "insert ") && strings.Contains(lcSQL, "into ") && strings.Contains(lcSQL, "values")
+}
+
+func ExtractCondBlock(SQL string) (string, []string) {
+	builder := new(bytes.Buffer)
+	var expressions []string
+	cursor := parsly.NewCursor("", []byte(SQL), 0)
+outer:
+	for i := 0; i < len(cursor.Input); i++ {
+		match := cursor.MatchOne(condBlockMatcher)
+		switch match.Code {
+		case parsly.EOF:
+			break outer
+		case condBlockToken:
+
+			block := match.Text(cursor)[3:]
+			cur := parsly.NewCursor("", []byte(block), 0)
+			match = cur.MatchAfterOptional(whitespaceMatcher, exprGroupMatcher)
+			if match.Code == exprGroupToken {
+				matched := string(cur.Input[cur.Pos:])
+				if index := strings.Index(matched, "#"); index != -1 {
+					expression := strings.TrimSpace(matched[:index])
+					expressions = append(expressions, expression)
+					if strings.Contains(expression, "=") {
+						builder.WriteString(expression)
+					}
+				}
+			}
+
+		default:
+			builder.WriteByte(cursor.Input[cursor.Pos])
+			cursor.Pos++
+		}
+	}
+	return builder.String(), expressions
 }

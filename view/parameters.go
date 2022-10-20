@@ -137,7 +137,7 @@ func (v *Codec) inheritCodecIfNeeded(resource *Resource) error {
 func (v *Codec) ensureSchema(paramType reflect.Type) {
 	if v.Schema == nil {
 		v.Schema = &Schema{}
-		v.Schema.setType(paramType)
+		v.Schema.SetType(paramType)
 	}
 }
 
@@ -329,6 +329,10 @@ func (p *Parameter) IsRequired() bool {
 }
 
 func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
+	if p.Schema.Type() != nil {
+		return nil
+	}
+
 	if structType != nil {
 		return p.initSchemaFromType(structType)
 	}
@@ -365,7 +369,7 @@ func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
 			return err
 		}
 
-		p.Schema.setType(lookup)
+		p.Schema.SetType(lookup)
 		return nil
 
 	}
@@ -384,7 +388,7 @@ func (p *Parameter) initSchemaFromType(structType reflect.Type) error {
 		return err
 	}
 
-	p.Schema.setType(field.Type)
+	p.Schema.SetType(field.Type)
 	return nil
 }
 

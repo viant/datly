@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	errUtils "github.com/viant/datly/err-utils"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/read/cache"
@@ -207,7 +208,7 @@ func PopulateCache(views []*view.View) (int, error) {
 	}
 
 	close(collector)
-	if err := combineErrors(errors); err != nil {
+	if err := errUtils.CombineErrors("errors while populating cache: ", errors); err != nil {
 		return 0, err
 	}
 
@@ -229,7 +230,7 @@ func PopulateCache(views []*view.View) (int, error) {
 	}
 
 	close(notifier)
-	return indexed, combineErrors(errors)
+	return collectorsCounter, errUtils.CombineErrors("errors while populating cache: ", errors)
 }
 
 func FilterCacheViews(views []*view.View) []*view.View {
@@ -242,17 +243,4 @@ func FilterCacheViews(views []*view.View) []*view.View {
 	}
 
 	return viewsWithCache
-}
-
-func combineErrors(errors []error) error {
-	if len(errors) == 0 {
-		return nil
-	}
-
-	outputErr := fmt.Errorf("errors while populating cache: ")
-	for _, err := range errors {
-		outputErr = fmt.Errorf("%w; %v", outputErr, err.Error())
-	}
-
-	return outputErr
 }

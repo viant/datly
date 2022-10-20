@@ -30,6 +30,7 @@ Connector:
 Logger:
   Name: ""
 MatchStrategy: read_matched
+Mode: SQLQuery
 Name: events
 Ref: events
 Schema:
@@ -43,7 +44,6 @@ Selector:
     OrderBy: false
     Page: null
     Projection: false
-  Namespace: ev
 Standalone: true
 Table: events
 Template:

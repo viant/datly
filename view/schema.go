@@ -22,15 +22,17 @@ type Schema struct {
 	autoGen     bool
 	DataType    string `json:",omitempty" yaml:"dataType,omitempty"`
 	Cardinality Cardinality
+	initialized bool
 }
 
 func NewSchema(compType reflect.Type) *Schema {
 	result := &Schema{
-		Name:    "",
-		autoGen: false,
+		Name:        "",
+		autoGen:     false,
+		initialized: true,
 	}
 
-	result.setType(compType)
+	result.SetType(compType)
 	return result
 }
 
@@ -39,7 +41,7 @@ func (c *Schema) Type() reflect.Type {
 	return c.compType
 }
 
-func (c *Schema) setType(rType reflect.Type) {
+func (c *Schema) SetType(rType reflect.Type) {
 	if c.Cardinality == "" {
 		c.Cardinality = One
 	}
@@ -59,6 +61,11 @@ func (c *Schema) updateSliceType() {
 
 //Init build struct type
 func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case, types Types, selfRef *SelfReference) error {
+	if c.initialized {
+		return nil
+	}
+
+	c.initialized = true
 	if c.Cardinality != Many {
 		c.Cardinality = One
 	}
@@ -74,7 +81,7 @@ func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat f
 			return err
 		}
 
-		c.setType(rType)
+		c.SetType(rType)
 		return nil
 	}
 
@@ -110,7 +117,7 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 		}
 
 		defaultTag := createDefaultTagIfNeeded(columns[i])
-		sqlxTag := `sqlx:"name=` + columnName + `"`
+		sqlxTag := `sqlx:"name=` + columnName + `" velty:"name=` + columnName + `"`
 
 		var aTag string
 		if defaultTag == "" {
@@ -132,7 +139,7 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 		rType := rel.Of.DataType()
 		if rType.Kind() == reflect.Struct {
 			rType = reflect.PtrTo(rType)
-			rel.Of.Schema.setType(rType)
+			rel.Of.Schema.SetType(rType)
 		}
 
 		if rel.Cardinality == Many {
@@ -160,7 +167,7 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 	}
 
 	structType := reflect.PtrTo(reflect.StructOf(structFields))
-	c.setType(structType)
+	c.SetType(structType)
 }
 
 func (c *Schema) newField(aTag string, columnName string, sourceCaseFormat format.Case, rType reflect.Type) reflect.StructField {
@@ -171,10 +178,16 @@ func (c *Schema) newField(aTag string, columnName string, sourceCaseFormat forma
 		structFieldName = sourceCaseFormat.Format(columnName, format.CaseUpperCamel)
 	}
 
+	var fieldPkgPath string
+	if structFieldName[0] < 'A' || structFieldName[0] > 'Z' {
+		fieldPkgPath = pkgPath
+	}
+
 	aField := reflect.StructField{
-		Name: structFieldName,
-		Type: rType,
-		Tag:  reflect.StructTag(aTag),
+		Name:    structFieldName,
+		Type:    rType,
+		Tag:     reflect.StructTag(aTag),
+		PkgPath: fieldPkgPath,
 	}
 	return aField
 }
@@ -216,7 +229,7 @@ func (c *Schema) SliceType() reflect.Type {
 }
 
 func (c *Schema) inheritType(rType reflect.Type) {
-	c.setType(rType)
+	c.SetType(rType)
 	c.autoGen = false
 }
 
@@ -232,7 +245,7 @@ func (c *Schema) copy() *Schema {
 		DataType: c.DataType,
 	}
 
-	newSchema.setType(c.compType)
+	newSchema.SetType(c.compType)
 	return c
 }
 
@@ -242,6 +255,6 @@ func (c *Schema) parseType(types Types) error {
 		return err
 	}
 
-	c.setType(parseType)
+	c.SetType(parseType)
 	return nil
 }

@@ -3,7 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/transform/expand"
+	"github.com/viant/datly/template/expand"
 	"github.com/viant/toolbox/format"
 	"strings"
 )
@@ -84,7 +84,7 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 			return err
 		}
 
-		m.Schema.setType(dataType)
+		m.Schema.SetType(dataType)
 		return nil
 	}
 
@@ -163,11 +163,11 @@ func (m *TemplateMeta) oldMetaColumnsCacheKey() string {
 }
 
 func (m *TemplateMeta) prepareSQL(owner *Template) (string, []interface{}, error) {
-	selectorValues := newValue(owner.Schema.Type())
-	selectorPresence := newValue(owner.PresenceSchema.Type())
+	selectorValues := expand.NewValue(owner.Schema.Type())
+	selectorPresence := expand.NewValue(owner.PresenceSchema.Type())
 	viewParam := AsViewParam(owner._view, nil, nil)
 
-	templateSQL, sanitizer, _, err := Evaluate(owner.sqlEvaluator, owner.Schema.Type(), selectorValues, selectorPresence, viewParam, nil)
+	templateSQL, sanitizer, _, err := Evaluate(owner.sqlEvaluator, selectorValues, selectorPresence, viewParam, nil)
 	if err != nil {
 		return "", nil, err
 	}
@@ -178,7 +178,7 @@ func (m *TemplateMeta) prepareSQL(owner *Template) (string, []interface{}, error
 }
 
 func (m *TemplateMeta) Evaluate(selectorValues interface{}, selectorPresence interface{}, viewParam *expand.MetaParam) (string, []interface{}, error) {
-	SQL, sanitizer, _, err := Evaluate(m.sqlEvaluator, m._owner.Schema.Type(), selectorValues, selectorPresence, viewParam, nil)
+	SQL, sanitizer, _, err := Evaluate(m.sqlEvaluator, selectorValues, selectorPresence, viewParam, nil)
 	if err != nil {
 		return "", nil, err
 	}

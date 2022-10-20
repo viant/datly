@@ -38,10 +38,10 @@ func (d *Definition) Init(ctx context.Context, types Types) error {
 			return err
 		}
 
-		d.Schema.setType(parseType)
+		d.Schema.SetType(parseType)
 	} else {
 		d.Schema = &Schema{}
-		d.Schema.setType(buildTypeFromFields(d.Fields))
+		d.Schema.SetType(buildTypeFromFields(d.Fields))
 	}
 
 	return nil
@@ -97,7 +97,7 @@ func (f *Field) initSchemaType(types Types) error {
 			return err
 		}
 
-		f.Schema.setType(rType)
+		f.Schema.SetType(rType)
 		return nil
 	}
 
@@ -106,7 +106,7 @@ func (f *Field) initSchemaType(types Types) error {
 		if err != nil {
 			return err
 		}
-		f.Schema.setType(rType)
+		f.Schema.SetType(rType)
 	}
 
 	return fmt.Errorf("_field %v schema can't be empty", f.Name)
@@ -114,7 +114,7 @@ func (f *Field) initSchemaType(types Types) error {
 
 func (f *Field) buildSchemaFromFields() error {
 	f.Schema = &Schema{}
-	f.Schema.setType(buildTypeFromFields(f.Fields))
+	f.Schema.SetType(buildTypeFromFields(f.Fields))
 
 	return nil
 }

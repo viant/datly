@@ -1,7 +1,7 @@
 package option
 
 import (
-	"github.com/viant/datly/transform/sanitize"
+	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
 )
 
@@ -20,6 +20,7 @@ type (
 	}
 
 	Parameter struct {
+		Auth           string
 		Id             string           `json:",omitempty" yaml:",omitempty"`
 		Name           string           `json:",omitempty" yaml:",omitempty"`
 		Kind           string           `json:",omitempty" yaml:",omitempty"`

@@ -41,6 +41,7 @@ Connector:
 Logger:
   Name: ""
 MatchStrategy: read_matched
+Mode: SQLQuery
 Name: events
 Ref: events
 Schema:
@@ -59,7 +60,7 @@ Selector:
     Description: allows to filter view events data that matches given criteria
     In:
       Kind: query
-      Name: ev_criteria
+      Name: _criteria
     Name: _criteria
     PresenceName: _criteria
     Schema:
@@ -68,7 +69,7 @@ Selector:
     Description: allows to control view events fields present in response
     In:
       Kind: query
-      Name: ev_fields
+      Name: _fields
     Name: _fields
     PresenceName: _fields
     Schema:
@@ -78,17 +79,16 @@ Selector:
     Description: allows to limit events view data returned from db
     In:
       Kind: query
-      Name: ev_limit
+      Name: _limit
     Name: _limit
     PresenceName: _limit
     Schema:
       Cardinality: One
-  Namespace: ev
   OffsetParam:
     Description: allows to skip first n  view events records, it has to be used alongside the limit
     In:
       Kind: query
-      Name: ev_offset
+      Name: _offset
     Name: _offset
     PresenceName: _offset
     Schema:
@@ -97,7 +97,7 @@ Selector:
     Description: allows to skip first page * limit values, starting from 1 page. Has precedence over offset
     In:
       Kind: query
-      Name: ev_page
+      Name: _page
     Name: _page
     PresenceName: _page
     Schema:

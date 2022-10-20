@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/transform/expand"
+	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric/counter"
 	"github.com/viant/sqlx/io"

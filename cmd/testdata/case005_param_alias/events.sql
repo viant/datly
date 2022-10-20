@@ -1,4 +1,4 @@
-/* {"URI": "events/{eventID}" }*/
+/* {"URI": "events/{eventID}" } */
 SELECT events.*
 FROM (
          SELECT *

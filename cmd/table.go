@@ -1,0 +1,402 @@
+package cmd
+
+import (
+	"bytes"
+	"fmt"
+	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/router"
+	"github.com/viant/datly/template/columns"
+	"github.com/viant/datly/template/sanitize"
+	"github.com/viant/datly/view"
+	"github.com/viant/parsly"
+	"github.com/viant/sqlx/metadata/ast/expr"
+	"github.com/viant/sqlx/metadata/ast/node"
+	"github.com/viant/sqlx/metadata/ast/parser"
+	"github.com/viant/sqlx/metadata/ast/query"
+	"net/http"
+	"sort"
+	"strings"
+)
+
+type ConfigProvider struct {
+	tables map[string]*option.Table
+	//tableParams  map[string]*viewConfig
+	//metaTables   map[string]*option.Table
+	aView        *viewConfig
+	relations    []*option.Relation
+	mainViewName string
+	serviceType  router.ServiceType
+}
+
+func (c *ConfigProvider) ViewConfig() *viewConfig {
+	return c.aView
+}
+
+func (c *ConfigProvider) DefaultHTTPMethod() string {
+	switch c.serviceType {
+	case router.ExecutorServiceType:
+		return http.MethodPost
+	}
+
+	return http.MethodGet
+}
+
+func (c *ConfigProvider) ServiceType() router.ServiceType {
+	return c.serviceType
+}
+
+func NewConfigProviderReader(mainViewName string, SQL string, routeOpt *option.Route, hints map[string]*sanitize.ParameterHint, serviceType router.ServiceType) (*ConfigProvider, error) {
+	result := &ConfigProvider{
+		tables:       map[string]*option.Table{},
+		mainViewName: mainViewName,
+		serviceType:  serviceType,
+	}
+
+	return result, result.Init(SQL, routeOpt, hints)
+}
+
+func (c *ConfigProvider) OutputConfig() (string, error) {
+	startExpr := c.aView.table.Columns.StarExpr(c.aView.table.OuterAlias)
+	if startExpr == nil {
+		return "", nil
+	}
+
+	return startExpr.Comments, nil
+}
+
+func (c *ConfigProvider) Init(SQL string, opt *option.Route, hints map[string]*sanitize.ParameterHint) error {
+	config, err := c.buildViewConfig(c.serviceType, c.mainViewName, SQL, opt, nil)
+	if err != nil {
+		return err
+	}
+
+	if err = c.extractViewParamsFromHints(config, hints, opt); err != nil {
+		return err
+	}
+
+	c.aView = config
+	return nil
+}
+
+func (c *ConfigProvider) registerTable(table *option.Table) {
+	c.registerTableWithKey(table.OuterAlias, table)
+}
+
+func (c *ConfigProvider) registerTableWithKey(key string, table *option.Table) {
+	c.tables[key] = table
+}
+
+func isMetaTable(candidate string) bool {
+	return strings.Contains(candidate, "$View.") && strings.Contains(candidate, ".SQL")
+}
+
+func tryUnmrashalHintWithWarn(hint string, any interface{}) {
+	err := tryUnmarshalHint(hint, any)
+	if err != nil {
+		fmt.Printf("[WARN] couldn't unmarshal %v into %T due to the %v\n", hint, any, err.Error())
+	}
+}
+
+func tryUnmarshalHint(hint string, any interface{}) error {
+	if hint == "" {
+		return nil
+	}
+
+	return hintToStruct(hint, any)
+}
+
+func getMetaTemplateHolder(name string) string {
+	var viewNs = "$View."
+	index := strings.Index(name, viewNs)
+	name = name[index+len(viewNs):]
+	index = strings.Index(name, ".SQL")
+	return name[:index]
+}
+
+func (c *ConfigProvider) buildViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.Route, parent *query.Join) (*viewConfig, error) {
+	config, err := c.prepareViewConfig(serviceType, viewName, SQL, opt, parent)
+
+	return config, err
+}
+
+func (c *ConfigProvider) prepareViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.Route, parent *query.Join) (*viewConfig, error) {
+	if serviceType == router.ReaderServiceType {
+		return c.buildReaderViewConfig(viewName, SQL, opt, parent)
+	}
+
+	return c.buildExecViewConfig(viewName, SQL)
+}
+
+func (c *ConfigProvider) buildExecViewConfig(viewName string, templateSQL string) (*viewConfig, error) {
+	table := &option.Table{
+		SQL: templateSQL,
+	}
+	aConfig := newViewConfig(viewName, viewName, nil, table, nil, view.SQLExecMode)
+
+	lcSQL := strings.ToLower(templateSQL)
+	boundary := getStatementBoundary(lcSQL)
+
+	var resultErr error
+	for i := 1; i < len(boundary); i++ {
+		offset := boundary[i-1]
+		limit := len(templateSQL)
+		if i+1 < len(boundary) {
+			limit = boundary[i+1] - 1
+		}
+
+		if err := updateExecViewConfig(templateSQL[offset], templateSQL[offset:limit], aConfig); err != nil {
+			resultErr = err
+		}
+	}
+
+	return aConfig, resultErr
+}
+
+func (c *ConfigProvider) buildReaderViewConfig(viewName string, SQL string, opt *option.Route, parent *query.Join) (*viewConfig, error) {
+	aQuery, err := parser.ParseQuery(SQL)
+	if err != nil {
+		fmt.Printf("[WARN] couldn't parse properly SQL for %v\n", viewName)
+	}
+
+	joins, ok := sqlxJoins(aQuery)
+	if !ok {
+		aTable := buildTableFromQueryWithWarning(aQuery, expr.NewRaw(SQL), opt, aQuery.From.Comments)
+		result := newViewConfig(viewName, viewName, parent, aTable, nil, view.SQLQueryMode)
+		return result, nil
+	}
+
+	aTable := buildTableFromQueryWithWarning(aQuery, aQuery.From.X, opt, aQuery.From.Comments)
+	aTable.OuterAlias = view.NotEmptyOf(aQuery.From.Alias, aTable.OuterAlias)
+	aTable.NamespaceSource = aTable.OuterAlias
+
+	if columns.CanBeTableName(aTable.Name) {
+		aTable.NamespaceSource = aTable.Name //for the relations, it will be adjusted later
+	}
+
+	result := newViewConfig(viewName, view.NotEmptyOf(aQuery.From.Alias, viewName), parent, aTable, nil, view.SQLQueryMode)
+
+	for _, join := range joins {
+		innerTable := buildTableWithWarning(join.With, opt, join.Comments)
+		relViewConfig, err := c.buildViewConfigWithTable(join, innerTable, opt)
+		if err != nil {
+			return nil, err
+		}
+
+		if err = tryUnmarshalHint(join.Comments, &relViewConfig.table.TableMeta); err != nil {
+			return nil, err
+		}
+
+		relViewConfig.table.OuterAlias = join.Alias
+		if isMetaTable(relViewConfig.table.Name) {
+			holder := getMetaTemplateHolder(relViewConfig.table.Name)
+			result.AddMetaTemplate(holder, relViewConfig.table)
+		} else if isParamPredicate(parser.Stringify(join.On.X)) || relViewConfig.table.TableMeta.DataViewParameter != nil {
+			paramOption := &option.Parameter{}
+			relViewConfig.fileName = join.Alias
+
+			tryUnmrashalHintWithWarn(join.Comments, paramOption)
+			result.viewParams[join.Alias] = &viewParamConfig{
+				viewConfig:  relViewConfig,
+				paramConfig: []*option.Parameter{paramOption},
+			}
+		} else {
+			relViewConfig.aKey, err = relationKeyOf(aTable, innerTable, join)
+			if err != nil {
+				return nil, err
+			}
+
+			result.AddRelation(relViewConfig)
+		}
+	}
+
+	for _, item := range aQuery.List {
+		asStarExpr, ok := item.Expr.(*expr.Star)
+		if !ok {
+			continue
+		}
+
+		holder := c.getAlias(asStarExpr)
+		if holder == "" {
+			continue
+		}
+
+		if config, ok := result.ViewConfig(holder); ok {
+			tryUnmrashalHintWithWarn(asStarExpr.Comments, &config.outputConfig)
+		}
+	}
+
+	return result, nil
+}
+
+func (c *ConfigProvider) getAlias(asStarExpr *expr.Star) string {
+	stringify := parser.Stringify(asStarExpr.X)
+	if index := strings.Index(stringify, "."); index != -1 {
+		return stringify[:index]
+	}
+
+	return ""
+}
+
+func (c *ConfigProvider) buildViewConfigWithTable(join *query.Join, innerTable *option.Table, opt *option.Route) (*viewConfig, error) {
+	if strings.TrimSpace(innerTable.SQL) == "" {
+		return newViewConfig(join.Alias, join.Alias, join, innerTable, nil, view.SQLQueryMode), nil
+	}
+
+	config, err := c.buildViewConfig(c.serviceType, join.Alias, innerTable.SQL, opt, join)
+	if config != nil {
+		config.table = innerTable
+	}
+
+	return config, err
+}
+
+func sqlxJoins(aQuery *query.Select) ([]*query.Join, bool) {
+	if isSQLXRelation(aQuery.From.X) {
+		return aQuery.Joins, true
+	}
+
+	var result []*query.Join
+	for i, join := range aQuery.Joins {
+		if isSQLXRelation(join) {
+			result = append(result, aQuery.Joins[i])
+		}
+	}
+
+	return result, len(result) != 0
+}
+
+func isSQLXRelation(rel node.Node) bool {
+	if rel == nil {
+		return false
+	}
+
+	candidate := parser.Stringify(rel)
+	return columns.ContainsSelect(candidate) || !columns.CanBeTableName(candidate)
+}
+
+func (c *ConfigProvider) extractViewParamsFromHints(config *viewConfig, hints map[string]*sanitize.ParameterHint, opt *option.Route) error {
+	for _, hint := range hints {
+		aHint, sql := sanitize.SplitHint(hint.Hint)
+		if strings.TrimSpace(sql) == "" {
+			continue
+		}
+
+		param := &option.Parameter{}
+		tryUnmrashalHintWithWarn(aHint, param)
+
+		aViewConfig, err := c.buildViewConfig(router.ReaderServiceType, hint.Parameter, sql, opt, nil)
+		if err != nil {
+			return err
+		}
+
+		config.viewParams[hint.Parameter] = &viewParamConfig{
+			viewConfig:  aViewConfig,
+			paramConfig: []*option.Parameter{param},
+		}
+	}
+
+	return nil
+}
+
+func updateExecViewConfig(stmtType byte, SQLStmt string, view *viewConfig) error {
+	rawSQL := RemoveCondBlocks(SQLStmt)
+
+	switch stmtType | ' ' {
+	case 'i':
+		stmt, err := parser.ParseInsert(rawSQL)
+		if err != nil {
+			return err
+		}
+		inheritFromTarget(stmt.Target.X, view)
+
+	case 'u':
+		stmt, err := parser.ParseUpdate(rawSQL)
+		if err != nil {
+			return err
+		}
+
+		inheritFromTarget(stmt.Target.X, view)
+	}
+
+	return nil
+}
+
+func inheritFromTarget(target node.Node, view *viewConfig) {
+	tableName := parser.Stringify(target)
+	view.ensureTableName(tableName)
+	view.ensureOuterAlias(tableName)
+	view.ensureInnerAlias(tableName)
+	view.ensureFileName(tableName)
+}
+
+func getStatementBoundary(lcSQL string) []int {
+	var boundary []int
+	var offset = 0
+	tempSQL := lcSQL
+	for {
+		index := getStatementIndex(tempSQL)
+		if index == -1 {
+			break
+		}
+
+		boundary = append(boundary, offset+index)
+		offset += index + 1
+		tempSQL = tempSQL[index+1:]
+	}
+
+	if len(boundary) == 0 {
+		boundary = append(boundary, 0)
+	}
+
+	if len(boundary) == 1 {
+		boundary = append(boundary, len(lcSQL))
+	}
+
+	return boundary
+}
+
+func getStatementIndex(lcSQL string) int {
+	var candidates []int
+	for _, keyword := range []string{"insert ", "update ", "delete", "call "} {
+		if index := strings.Index(lcSQL, keyword); index != -1 {
+			candidates = append(candidates, index)
+		}
+	}
+	if len(candidates) == 0 {
+		return -1
+	}
+	sort.Ints(candidates)
+	return candidates[0]
+}
+
+func RemoveCondBlocks(SQL string) string {
+	builder := new(bytes.Buffer)
+	cursor := parsly.NewCursor("", []byte(SQL), 0)
+outer:
+	for i := 0; i < len(cursor.Input); i++ {
+		match := cursor.MatchOne(condBlockMatcher)
+		switch match.Code {
+		case parsly.EOF:
+			break outer
+		case condBlockToken:
+
+			block := match.Text(cursor)[3:]
+			cur := parsly.NewCursor("", []byte(block), 0)
+			match = cur.MatchAfterOptional(whitespaceMatcher, exprGroupMatcher)
+			if match.Code == exprGroupToken {
+				matched := string(cur.Input[cur.Pos:])
+				if index := strings.Index(matched, "#"); index != -1 {
+					expression := strings.TrimSpace(matched[:index])
+					if strings.Contains(expression, "=") {
+						builder.WriteString(expression)
+					}
+				}
+			}
+
+		default:
+			builder.WriteByte(cursor.Input[cursor.Pos])
+			cursor.Pos++
+		}
+	}
+	return builder.String()
+}

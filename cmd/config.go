@@ -15,7 +15,7 @@ import (
 	"strings"
 )
 
-func (s *serverBuilder) loadConfig(ctx context.Context) (cfg *standalone.Config, err error) {
+func (s *Builder) loadConfig(ctx context.Context) (cfg *standalone.Config, err error) {
 	if s.options.ConfigURL == "" {
 		revealMetrics := true
 		cfg = &standalone.Config{
@@ -44,7 +44,7 @@ func (s *serverBuilder) loadConfig(ctx context.Context) (cfg *standalone.Config,
 	return cfg, err
 }
 
-func (s *serverBuilder) initConfig(ctx context.Context, cfg *standalone.Config) error {
+func (s *Builder) initConfig(ctx context.Context, cfg *standalone.Config) error {
 	if s.options.Port != 0 {
 		cfg.Endpoint.Port = s.options.Port
 	}
@@ -95,7 +95,7 @@ func (s *serverBuilder) initConfig(ctx context.Context, cfg *standalone.Config) 
 		s.options.DependencyURL = cfg.DependencyURL
 	}
 
-	return s.buildViewWithRouter(ctx, cfg)
+	return nil
 }
 
 func buildDefaultConfig(cfg *standalone.Config, options *Options) error {

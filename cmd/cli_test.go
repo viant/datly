@@ -164,34 +164,23 @@ func TestRun(t *testing.T) {
 			viewURL:    "/v1/api/meta/view/dev/status",
 			httpMethod: http.MethodGet,
 		},
-		//{
-		//	description: "Template Meta Warmup Column",
-		//	args: []string{
-		//		"-N=events",
-		//		"-D=sqlite3",
-		//		"-A=/tmp/datly_tests/db.db",
-		//		"-X=testdata/case013_cache_warmup/events.sql",
-		//	},
-		//	viewURL:    "/v1/api/meta/view/dev/events",
-		//	httpMethod: http.MethodGet,
-		//},
-		//{
-		//	description: "Insert type detection",
-		//	URI:         "case014_insert",
-		//	args: []string{
-		//		"-N=eventTypes",
-		//		"-D=sqlite3",
-		//		"-A=/tmp/datly_tests/db.db",
-		//		"-X=testdata/case014_insert/insert.sql",
-		//	},
-		//	viewURL:    "/v1/api/meta/view/dev/status",
-		//	httpMethod: http.MethodPost,
-		//},
+		{
+			description: "Insert type detection",
+			URI:         "case012_insert",
+			args: []string{
+				"-N=eventTypes",
+				"-D=sqlite3",
+				"-A=/tmp/datly_tests/db.db",
+				"-X=testdata/case012_insert/insert.sql",
+			},
+			viewURL:    "/v1/api/meta/view/dev/status",
+			httpMethod: http.MethodPost,
+		},
 	}
 
 	loader := afs.New()
 	//for i, testCase := range testCases[len(testCases)-1:] {
-	for i, testCase := range testCases {
+	for i, testCase := range testCases[:1] {
 		mem.ResetSingleton()
 		gateway.ResetSingleton()
 		tests.LogHeader(fmt.Sprintf("Running testcase: %v\n", i))
@@ -256,6 +245,7 @@ func checkGeneratedView(t *testing.T, loader afs.Service, testLocation string, t
 	if !assert.Equal(t, string(expectedView), string(actualView), testCase.description) {
 		return
 	}
+
 	return
 }
 
