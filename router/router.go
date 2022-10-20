@@ -208,7 +208,7 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 			enableCors(response, request, route.Cors, false)
 		}
 		if route.EnableAudit {
-			r.logAudit(request)
+			r.logAudit(request, response)
 		}
 
 		if !r.runBeforeFetch(response, request, route) {
@@ -681,18 +681,10 @@ func (r *Router) compressIfNeeded(marshalled []byte, route *Route) (*RequestData
 	return AsBytesReader(buffer, EncodingGzip, payloadSize), nil
 }
 
-func (r *Router) logAudit(request *http.Request) {
+func (r *Router) logAudit(request *http.Request, response http.ResponseWriter) {
 	headers := request.Header.Clone()
 	if authorization := headers.Get("Authorization"); authorization != "" {
-		if jwtCodec, _ := registry.Codecs.Lookup(registry.CodecKeyJwtClaim); jwtCodec != nil {
-			if claim, _ := jwtCodec.Valuer().Value(context.TODO(), authorization); claim != nil {
-				if jwtClaim, ok := claim.(*jwt.Claims); ok && jwtClaim != nil {
-					headers.Set("UserID", strconv.Itoa(jwtClaim.UserID))
-					headers.Set("UserEmail", jwtClaim.Email)
-				}
-			}
-		}
-		headers.Set("Authorization", "***")
+		r.obfuscateAuthorization(authorization, headers, response)
 	}
 
 	asBytes, _ := goJson.Marshal(Audit{
@@ -701,6 +693,22 @@ func (r *Router) logAudit(request *http.Request) {
 	})
 
 	fmt.Printf("%v\n", string(asBytes))
+}
+
+func (r *Router) obfuscateAuthorization(authorization string, headers http.Header, response http.ResponseWriter) {
+	if jwtCodec, _ := registry.Codecs.Lookup(registry.CodecKeyJwtClaim); jwtCodec != nil {
+		if claim, _ := jwtCodec.Valuer().Value(context.TODO(), authorization); claim != nil {
+			if jwtClaim, ok := claim.(*jwt.Claims); ok && jwtClaim != nil {
+				headers.Set("UserID", strconv.Itoa(jwtClaim.UserID))
+				headers.Set("UserEmail", jwtClaim.Email)
+				//if response.Header().Get("DATLY_DEBUG") != "" {
+				//	response.Header().Set("UserID", strconv.Itoa(jwtClaim.UserID))
+				//	response.Header().Set("UserEmail", jwtClaim.Email)
+				//}
+			}
+		}
+	}
+	headers.Set("Authorization", "***")
 }
 
 func (r *Router) logMetrics(URI string, metrics []*reader.Metric) {
