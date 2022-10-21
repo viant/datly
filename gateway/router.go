@@ -98,6 +98,7 @@ func NewRouter(routersIndex map[string]*router.Router, config *Config, metrics *
 		metaConfig.OpenApiURI = router.AsRelative(metaConfig.OpenApiURI)
 		metaConfig.StatusURI = router.AsRelative(metaConfig.StatusURI)
 		metaConfig.CacheWarmURI = router.AsRelative(metaConfig.CacheWarmURI)
+		metaConfig.ConfigURI = router.AsRelative(metaConfig.ConfigURI)
 	}
 
 	return &Router{
