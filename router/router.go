@@ -82,11 +82,11 @@ func (r *Route) IsMetricsEnabled(req *http.Request) bool {
 }
 
 func (r *Route) IsMetricInfo(req *http.Request) bool {
-	return r.IsRevealMetricEnabled() && strings.ToLower(req.Header.Get(DatlyRequestMetricsHeader)) == DatlyInfoHeaderValue
+	return r.IsRevealMetric() && strings.ToLower(req.Header.Get(DatlyRequestMetricsHeader)) == DatlyInfoHeaderValue
 }
 
 func (r *Route) IsMetricDebug(req *http.Request) bool {
-	return r.IsRevealMetricEnabled() && strings.ToLower(req.Header.Get(DatlyRequestMetricsHeader)) == DatlyDebugHeaderValue
+	return r.IsRevealMetric() && strings.ToLower(req.Header.Get(DatlyRequestMetricsHeader)) == DatlyDebugHeaderValue
 }
 
 func (s *ReaderSession) IsMetricDebug() bool {
@@ -366,7 +366,7 @@ func (r *Router) readValue(readerSession *ReaderSession) (reflect.Value, interfa
 	dest := destValue.Interface()
 
 	session := reader.NewSession(dest, readerSession.Route.View)
-	session.CacheDisabled = readerSession.Route.IsRevealMetricEnabled() && readerSession.Request.Header.Get(DatlyRequestDisableCacheHeader) != ""
+	session.CacheDisabled = readerSession.Route.IsRevealMetric() && readerSession.Request.Header.Get(DatlyRequestDisableCacheHeader) != ""
 	session.IncludeSQL = readerSession.IsMetricDebug()
 
 	session.Selectors = readerSession.Selectors

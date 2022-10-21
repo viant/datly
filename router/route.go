@@ -64,18 +64,18 @@ type (
 	}
 
 	Output struct {
-		Cardinality         view.Cardinality `json:",omitempty"`
-		CaseFormat          view.CaseFormat  `json:",omitempty"`
-		OmitEmpty           bool             `json:",omitempty"`
-		Style               Style            `json:",omitempty"`
-		ResponseField       string           `json:",omitempty"`
-		Transforms          marshal.Transforms
-		Exclude             []string
-		NormalizeExclude    *bool
-		DateFormat          string     `json:",omitempty"`
-		CSV                 *CSVConfig `json:",omitempty"`
-		RevealMetricEnabled *bool
-		DebugKind           view.MetaKind
+		Cardinality      view.Cardinality `json:",omitempty"`
+		CaseFormat       view.CaseFormat  `json:",omitempty"`
+		OmitEmpty        bool             `json:",omitempty"`
+		Style            Style            `json:",omitempty"`
+		ResponseField    string           `json:",omitempty"`
+		Transforms       marshal.Transforms
+		Exclude          []string
+		NormalizeExclude *bool
+		DateFormat       string     `json:",omitempty"`
+		CSV              *CSVConfig `json:",omitempty"`
+		RevealMetric     *bool
+		DebugKind        view.MetaKind
 
 		_caser          *format.Case
 		_excluded       map[string]bool
@@ -108,11 +108,11 @@ type (
 	}
 )
 
-func (r *Route) IsRevealMetricEnabled() bool {
-	if r.RevealMetricEnabled == nil {
+func (r *Route) IsRevealMetric() bool {
+	if r.RevealMetric == nil {
 		return false
 	}
-	return *r.RevealMetricEnabled
+	return *r.RevealMetric
 }
 func (r *Route) HttpURI() string {
 	return r.URI
@@ -324,7 +324,7 @@ func (r *Route) initStyle() error {
 			metaFieldName = r.View.Template.Meta.Name
 		}
 
-		if r.IsRevealMetricEnabled() && r.DebugKind == view.MetaTypeRecord {
+		if r.IsRevealMetric() && r.DebugKind == view.MetaTypeRecord {
 			responseFields = append(responseFields, reflect.StructField{
 				Name: "DatlyDebug",
 				Tag:  `json:"_datly_debug_,omitempty"`,

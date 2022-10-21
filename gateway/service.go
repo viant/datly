@@ -462,8 +462,8 @@ func (r *Service) loadRouterResource(URL string, resources map[string]*view.Reso
 	if r.Config.DisableCors {
 		routerResource.Cors = nil
 	}
-	if r.Config.RevealMetricEnabled != nil {
-		routerResource.RevealMetricEnabled = r.Config.RevealMetricEnabled
+	if r.Config.RevealMetric != nil {
+		routerResource.RevealMetric = r.Config.RevealMetric
 	}
 	return routerResource, routerResource.Init(ctx)
 }

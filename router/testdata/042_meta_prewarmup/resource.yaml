@@ -1,8 +1,8 @@
-RevealMetricEnabled: true
+RevealMetric: true
 Routes:
   - URI: "/api/event-types"
     Method: GET
-    RevealMetricEnabled: true
+    RevealMetric: true
     Style: Comprehensive
     DebugKind: record
     View:
