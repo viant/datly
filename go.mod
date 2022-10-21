@@ -3,6 +3,7 @@ module github.com/viant/datly
 go 1.16
 
 require (
+	cloud.google.com/go/storage v1.26.0 // indirect
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
 	github.com/go-playground/universal-translator v0.18.0 // indirect
