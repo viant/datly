@@ -77,12 +77,24 @@ func (s *ReaderSession) IsMetricsEnabled() bool {
 	return s.IsMetricInfo() || s.IsMetricDebug()
 }
 
+func (r *Route) IsMetricsEnabled(req *http.Request) bool {
+	return r.IsMetricInfo(req) || r.IsMetricDebug(req)
+}
+
+func (r *Route) IsMetricInfo(req *http.Request) bool {
+	return r.DebugEnabled && strings.ToLower(req.Header.Get(DatlyRequestMetricsHeader)) == DatlyInfoHeaderValue
+}
+
+func (r *Route) IsMetricDebug(req *http.Request) bool {
+	return r.DebugEnabled && strings.ToLower(req.Header.Get(DatlyRequestMetricsHeader)) == DatlyDebugHeaderValue
+}
+
 func (s *ReaderSession) IsMetricDebug() bool {
-	return s.Route.DebugEnabled && strings.ToLower(s.Request.Header.Get(DatlyRequestMetricsHeader)) == DatlyDebugHeaderValue
+	return s.Route.IsMetricsEnabled(s.Request)
 }
 
 func (s *ReaderSession) IsMetricInfo() bool {
-	return s.Route.DebugEnabled && strings.ToLower(s.Request.Header.Get(DatlyRequestMetricsHeader)) == DatlyInfoHeaderValue
+	return s.Route.IsMetricInfo(s.Request)
 }
 
 func (b *BytesReadCloser) Read(p []byte) (int, error) {
@@ -226,7 +238,7 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 			enableCors(response, request, route.Cors, false)
 		}
 		if route.EnableAudit {
-			r.logAudit(request, response)
+			r.logAudit(request, response, route)
 		}
 
 		if !r.runBeforeFetch(response, request, route) {
@@ -725,10 +737,10 @@ func (r *Router) compressIfNeeded(marshalled []byte, route *Route) (*RequestData
 	return AsBytesReader(buffer, EncodingGzip, payloadSize), nil
 }
 
-func (r *Router) logAudit(request *http.Request, response http.ResponseWriter) {
+func (r *Router) logAudit(request *http.Request, response http.ResponseWriter, route *Route) {
 	headers := request.Header.Clone()
 	if authorization := headers.Get("Authorization"); authorization != "" {
-		r.obfuscateAuthorization(authorization, headers, response)
+		r.obfuscateAuthorization(request, response, authorization, headers, route)
 	}
 
 	asBytes, _ := goJson.Marshal(Audit{
@@ -739,16 +751,17 @@ func (r *Router) logAudit(request *http.Request, response http.ResponseWriter) {
 	fmt.Printf("%v\n", string(asBytes))
 }
 
-func (r *Router) obfuscateAuthorization(authorization string, headers http.Header, response http.ResponseWriter) {
+func (r *Router) obfuscateAuthorization(request *http.Request, response http.ResponseWriter, authorization string, headers http.Header, route *Route) {
 	if jwtCodec, _ := registry.Codecs.Lookup(registry.CodecKeyJwtClaim); jwtCodec != nil {
 		if claim, _ := jwtCodec.Valuer().Value(context.TODO(), authorization); claim != nil {
 			if jwtClaim, ok := claim.(*jwt.Claims); ok && jwtClaim != nil {
 				headers.Set("UserID", strconv.Itoa(jwtClaim.UserID))
 				headers.Set("UserEmail", jwtClaim.Email)
-				//if response.Header().Get("DATLY_DEBUG") != "" {
-				//	response.Header().Set("UserID", strconv.Itoa(jwtClaim.UserID))
-				//	response.Header().Set("UserEmail", jwtClaim.Email)
-				//}
+
+				if route.IsMetricDebug(request) {
+					response.Header().Set("UserID", strconv.Itoa(jwtClaim.UserID))
+					response.Header().Set("UserEmail", jwtClaim.Email)
+				}
 			}
 		}
 	}
