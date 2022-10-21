@@ -1,7 +1,10 @@
+DebugEnabled: true
 Routes:
   - URI: "/api/event-types"
     Method: GET
+    DebugEnabled: true
     Style: Comprehensive
+    DebugKind: record
     View:
       Ref: event_types
 

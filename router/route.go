@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/codec"
+	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/json"
@@ -73,10 +74,13 @@ type (
 		NormalizeExclude *bool
 		DateFormat       string     `json:",omitempty"`
 		CSV              *CSVConfig `json:",omitempty"`
-		_caser           *format.Case
-		_excluded        map[string]bool
-		_marshaller      *json.Marshaller
-		_responseSetter  *responseSetter
+		DebugEnabled     bool
+		DebugKind        view.MetaKind
+
+		_caser          *format.Case
+		_excluded       map[string]bool
+		_marshaller     *json.Marshaller
+		_responseSetter *responseSetter
 	}
 
 	CSVConfig struct {
@@ -93,6 +97,8 @@ type (
 		statusField *xunsafe.Field
 		bodyField   *xunsafe.Field
 		pageField   *xunsafe.Field
+		infoField   *xunsafe.Field
+		debug       *xunsafe.Field
 		rType       reflect.Type
 	}
 
@@ -303,7 +309,7 @@ func (r *Route) initStyle() error {
 		}
 
 		var metaFieldName string
-		if r.View.MetaTemplateEnabled() && r.View.Template.Meta.Kind == view.RecordTemplateMetaKind {
+		if r.View.MetaTemplateEnabled() && r.View.Template.Meta.Kind == view.MetaTypeRecord {
 			responseFields = append(responseFields, reflect.StructField{
 				Name:    r.View.Template.Meta.Name,
 				Type:    r.View.Template.Meta.Schema.Type(),
@@ -312,11 +318,20 @@ func (r *Route) initStyle() error {
 			metaFieldName = r.View.Template.Meta.Name
 		}
 
+		if r.DebugEnabled && r.DebugKind == view.MetaTypeRecord {
+			responseFields = append(responseFields, reflect.StructField{
+				Name: "DatlyDebug",
+				Tag:  `json:"_datly_debug_,omitempty"`,
+				Type: reflect.TypeOf([]*reader.Info{}),
+			})
+		}
+
 		responseType := reflect.StructOf(responseFields)
 		r._responseSetter = &responseSetter{
 			statusField: FieldByName(responseType, "ResponseStatus"),
 			bodyField:   FieldByName(responseType, r.ResponseField),
 			pageField:   FieldByName(responseType, metaFieldName),
+			infoField:   FieldByName(responseType, "DatlyDebug"),
 			rType:       responseType,
 		}
 

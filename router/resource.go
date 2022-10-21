@@ -39,11 +39,12 @@ type (
 		Cors         *Cors
 
 		ColumnsCache     *discover.Cache
+		DebugEnabled     bool
 		ParamStatusError *int
 
 		Info             openapi3.Info
-		_visitors        codec.Visitors
 		ColumnsDiscovery bool
+		_visitors        codec.Visitors
 		cfs              afs.Service
 	}
 
@@ -119,6 +120,10 @@ func (r *Resource) Init(ctx context.Context) error {
 			}
 			r.ColumnsCache.SourceURL = metaURL
 		}
+	}
+
+	for _, route := range r.Routes {
+		route.DebugEnabled = route.DebugEnabled && r.DebugEnabled
 	}
 
 	columnsCache := map[string]view.Columns{}

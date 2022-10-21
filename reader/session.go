@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/transform/expand"
 	"github.com/viant/datly/view"
+	"github.com/viant/sqlx/io/read/cache"
 	"reflect"
 	"sync"
 )
@@ -11,13 +12,16 @@ import (
 //Session groups view required to Read view
 type (
 	Session struct {
-		mux       sync.Mutex
-		Dest      interface{} //slice
-		View      *view.View
-		Selectors *view.Selectors
-		Parent    *view.View
-		Metrics   []*Metric
-		ViewMeta  interface{}
+		mux           sync.Mutex
+		CacheDisabled bool
+		Dest          interface{} //slice
+		View          *view.View
+		Selectors     *view.Selectors
+		Parent        *view.View
+		Metrics       []*Metric
+		ViewMeta      interface{}
+		Stats         []*Info
+		IncludeSQL    bool
 	}
 
 	ParentData struct {
@@ -30,6 +34,19 @@ type (
 		Elapsed   string
 		ElapsedMs int
 		Rows      int
+	}
+
+	Info struct {
+		Template     []*Stats `json:",omitempty"`
+		TemplateMeta []*Stats `json:",omitempty"`
+		View         string
+	}
+
+	Stats struct {
+		SQL        string        `json:",omitempty"`
+		Args       []interface{} `json:",omitempty"`
+		CacheStats *cache.Stats  `json:",omitempty"`
+		Error      string        `json:",omitempty"`
 	}
 )
 
@@ -98,10 +115,20 @@ func (s *Session) ParentData() (*ParentData, bool) {
 	}, true
 }
 
+func (s *Session) AddInfo(info *Info) {
+	s.mux.Lock()
+	s.Stats = append(s.Stats, info)
+	s.mux.Unlock()
+}
+
 func (d *ParentData) AsParam() *expand.MetaParam {
 	if d == nil {
 		return nil
 	}
 
 	return view.AsViewParam(d.View, d.Selector, nil)
+}
+
+func (s *Session) IsCacheEnabled(aView *view.View) bool {
+	return !s.CacheDisabled && aView.Cache != nil
 }

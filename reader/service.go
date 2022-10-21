@@ -175,36 +175,48 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 	batchDataCopy := s.copyBatchData(batchData)
 	wg := &sync.WaitGroup{}
 
+	info := &Info{
+		View: view.Name,
+	}
+
 	var metaErr error
 	if view.Template.Meta != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			metaErr = s.readMeta(ctx, view, selector, batchDataCopy, collector, parentViewMetaParam)
+			info.TemplateMeta, metaErr = s.readMeta(ctx, session, view, selector, batchDataCopy, collector, parentViewMetaParam)
 		}()
 	}
 
-	if err := s.readObjects(ctx, session, batchData, view, collector, selector, db); err != nil {
+	var err error
+	if info.Template, err = s.readObjects(ctx, session, batchData, view, collector, selector, db, info); err != nil {
 		return err
 	}
 
 	wg.Wait()
+
+	session.AddInfo(info)
 	return metaErr
 }
 
-func (s *Service) readObjects(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Selector, db *sql.DB) error {
+func (s *Service) readObjects(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Selector, db *sql.DB, info *Info) ([]*Stats, error) {
 	batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
 	visitor := collector.Visitor(ctx)
+	var stats []*Stats
 
 	for {
 		fullMatch, smartMatch, err := s.getMatchers(view, selector, batchData, collector, session)
 		if err != nil {
-			return err
+			return stats, err
 		}
 
-		err = s.query(ctx, view, db, collector, visitor, fullMatch, smartMatch)
+		currStats, err := s.query(ctx, session, view, db, collector, visitor, fullMatch, smartMatch)
 		if err != nil {
-			return err
+			return stats, err
+		}
+
+		if currStats != nil {
+			stats = append(stats, currStats)
 		}
 
 		if batchData.Parent == batchData.ParentReadSize {
@@ -216,16 +228,17 @@ func (s *Service) readObjects(ctx context.Context, session *Session, batchData *
 		batchData.Parent += nextParents
 	}
 
-	return nil
+	return stats, nil
 }
 
-func (s *Service) readMeta(ctx context.Context, aView *view.View, selector *view.Selector, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *expand.MetaParam) error {
+func (s *Service) readMeta(ctx context.Context, session *Session, aView *view.View, selector *view.Selector, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *expand.MetaParam) ([]*Stats, error) {
 	selectorCopy := *selector
 	selector.Fields = []string{}
 	selector.Columns = []string{}
 	selector = &selectorCopy
 
 	var indexed *cache.Index
+	var cacheStats *cache.Stats
 	var metaOptions []option.Option
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -233,7 +246,7 @@ func (s *Service) readMeta(ctx context.Context, aView *view.View, selector *view
 	var cacheErr error
 	go func() {
 		defer wg.Done()
-		if aView.Cache == nil {
+		if !session.IsCacheEnabled(aView) {
 			return
 		}
 
@@ -248,23 +261,24 @@ func (s *Service) readMeta(ctx context.Context, aView *view.View, selector *view
 			return
 		}
 
-		metaOptions = []option.Option{cacheService, cacheMatcher}
+		cacheStats = &cache.Stats{}
+		metaOptions = []option.Option{cacheService, cacheMatcher, cacheStats}
 	}()
 
 	var err error
 	indexed, err = s.sqlBuilder.ExactMetaSQL(aView, selector, batchDataCopy, collector.Relation(), parentViewMetaParam)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	wg.Wait()
 	if cacheErr != nil {
-		return cacheErr
+		return nil, cacheErr
 	}
 
 	db, err := aView.Db()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	slice := reflect.New(aView.Template.Meta.Schema.SliceType())
@@ -276,7 +290,7 @@ func (s *Service) readMeta(ctx context.Context, aView *view.View, selector *view
 	}, metaOptions...)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	defer func() {
@@ -293,10 +307,12 @@ func (s *Service) readMeta(ctx context.Context, aView *view.View, selector *view
 	}, indexed.Args...)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return []*Stats{
+		s.NewStats(session, indexed, cacheStats),
+	}, nil
 }
 
 func (s *Service) copyBatchData(batchData *view.BatchData) *view.BatchData {
@@ -337,18 +353,20 @@ func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchDa
 	return fullMatch, columnInMatcher, cacheErr
 }
 
-func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, collector *view.Collector, visitor view.Visitor, fullMatcher, columnInMatcher *cache.Index) error {
+func (s *Service) query(ctx context.Context, session *Session, aView *view.View, db *sql.DB, collector *view.Collector, visitor view.Visitor, fullMatcher, columnInMatcher *cache.Index) (*Stats, error) {
 	begin := time.Now()
 
+	var cacheStats *cache.Stats
 	var options = []option.Option{io.Resolve(collector.Resolve)}
-	if aView.Cache != nil {
+	if session.IsCacheEnabled(aView) {
 		service, err := aView.Cache.Service()
 		if err != nil {
 			fmt.Printf("err: %v\n", err.Error())
 		}
 
 		if err == nil {
-			options = append(options, service)
+			cacheStats = &cache.Stats{}
+			options = append(options, service, cacheStats)
 		}
 	}
 
@@ -357,10 +375,13 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 		options = append(options, &columnInMatcher)
 	}
 
+	stats := s.NewStats(session, fullMatcher, cacheStats)
+
 	reader, err := read.New(ctx, db, fullMatcher.SQL, collector.NewItem(), options...)
 	if err != nil {
 		aView.Logger.LogDatabaseErr(fullMatcher.SQL, err)
-		return fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
+		stats.Error = err.Error()
+		return nil, fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
 	}
 
 	defer func() {
@@ -391,10 +412,25 @@ func (s *Service) query(ctx context.Context, aView *view.View, db *sql.DB, colle
 	aView.Logger.ReadingData(end.Sub(begin), fullMatcher.SQL, readData, fullMatcher.Args, err)
 	if err != nil {
 		aView.Logger.LogDatabaseErr(fullMatcher.SQL, err)
-		return fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
+		return nil, fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
 	}
 
-	return nil
+	return stats, nil
+}
+
+func (s *Service) NewStats(session *Session, index *cache.Index, cacheStats *cache.Stats) *Stats {
+	var SQL string
+	var args []interface{}
+	if session.IncludeSQL {
+		SQL = index.SQL
+		args = index.Args
+	}
+
+	return &Stats{
+		SQL:        SQL,
+		Args:       args,
+		CacheStats: cacheStats,
+	}
 }
 
 // New creates Service instance

@@ -136,7 +136,7 @@ func (s *serverBuilder) buildViewMetaTemplate(k string, v *option.TableParam) {
 	}
 	tmplMeta.Source = SQL
 	if tmplMeta.Kind == "" {
-		tmplMeta.Kind = view.RecordTemplateMetaKind
+		tmplMeta.Kind = view.MetaTypeRecord
 	}
 	if tmplMeta.Name == "" {
 		tmplMeta.Name = k

@@ -9,17 +9,17 @@ import (
 )
 
 const (
-	RecordTemplateMetaKind TemplateMetaKind = "record"
-	HeaderTemplateMetaKind TemplateMetaKind = "header"
+	MetaTypeRecord MetaKind = "record"
+	MetaTypeHeader MetaKind = "header"
 )
 
 type (
-	TemplateMetaKind string
-	TemplateMeta     struct {
+	MetaKind     string
+	TemplateMeta struct {
 		SourceURL   string
 		Source      string
 		Name        string
-		Kind        TemplateMetaKind
+		Kind        MetaKind
 		Cardinality Cardinality
 
 		sqlEvaluator *expand.Evaluator
@@ -34,7 +34,7 @@ func (m *TemplateMeta) Init(ctx context.Context, owner *Template, resource *Reso
 		return nil
 	}
 
-	m.Kind = TemplateMetaKind(strings.ToLower(string(m.Kind)))
+	m.Kind = MetaKind(strings.ToLower(string(m.Kind)))
 
 	cFormat, err := format.NewCase(DetectCase(m.Name))
 	if err == nil && cFormat != format.CaseUpperCamel {
