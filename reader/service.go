@@ -379,6 +379,10 @@ func (s *Service) query(ctx context.Context, session *Session, aView *view.View,
 
 	reader, err := read.New(ctx, db, fullMatcher.SQL, collector.NewItem(), options...)
 	if err != nil {
+		if session.IncludeSQL {
+			return nil, err
+		}
+
 		aView.Logger.LogDatabaseErr(fullMatcher.SQL, err)
 		stats.Error = err.Error()
 		return nil, fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
