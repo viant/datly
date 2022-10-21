@@ -82,11 +82,25 @@ func (r *Route) IsMetricsEnabled(req *http.Request) bool {
 }
 
 func (r *Route) IsMetricInfo(req *http.Request) bool {
-	return r.IsRevealMetric() && strings.ToLower(req.Header.Get(DatlyRequestMetricsHeader)) == DatlyInfoHeaderValue
+	if !r.IsRevealMetric() {
+		return false
+	}
+	value := req.Header.Get(DatlyRequestMetricsHeader)
+	if value == "" {
+		value = req.Header.Get(strings.ToLower(DatlyRequestMetricsHeader))
+	}
+	return strings.ToLower(value) == DatlyInfoHeaderValue
 }
 
 func (r *Route) IsMetricDebug(req *http.Request) bool {
-	return r.IsRevealMetric() && strings.ToLower(req.Header.Get(DatlyRequestMetricsHeader)) == DatlyDebugHeaderValue
+	if !r.IsRevealMetric() {
+		return false
+	}
+	value := req.Header.Get(DatlyRequestMetricsHeader)
+	if value == "" {
+		value = req.Header.Get(strings.ToLower(DatlyRequestMetricsHeader))
+	}
+	return strings.ToLower(value) == DatlyDebugHeaderValue
 }
 
 func (s *ReaderSession) IsMetricDebug() bool {
