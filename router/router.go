@@ -380,7 +380,7 @@ func (r *Router) readValue(readerSession *ReaderSession) (reflect.Value, interfa
 	dest := destValue.Interface()
 
 	session := reader.NewSession(dest, readerSession.Route.View)
-	session.CacheDisabled = readerSession.Route.IsRevealMetric() && readerSession.Request.Header.Get(DatlyRequestDisableCacheHeader) != ""
+	session.CacheDisabled = readerSession.Request.Header.Get(DatlyRequestDisableCacheHeader) != "" || readerSession.Request.Header.Get(strings.ToLower(DatlyRequestDisableCacheHeader)) != ""
 	session.IncludeSQL = readerSession.IsMetricDebug()
 
 	session.Selectors = readerSession.Selectors
