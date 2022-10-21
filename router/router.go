@@ -104,7 +104,7 @@ func (r *Route) IsMetricDebug(req *http.Request) bool {
 }
 
 func (s *ReaderSession) IsMetricDebug() bool {
-	return s.Route.IsMetricsEnabled(s.Request)
+	return s.Route.IsMetricDebug(s.Request)
 }
 
 func (s *ReaderSession) IsMetricInfo() bool {

@@ -17,6 +17,7 @@ import (
 
 func (s *serverBuilder) loadConfig(ctx context.Context) (cfg *standalone.Config, err error) {
 	if s.options.ConfigURL == "" {
+		revealMetrics := true
 		cfg = &standalone.Config{
 			Config: &gateway.Config{
 				APIPrefix: "/v1/api/",
@@ -27,6 +28,7 @@ func (s *serverBuilder) loadConfig(ctx context.Context) (cfg *standalone.Config,
 						Value:  "changeme",
 					},
 				},
+				RevealMetric: &revealMetrics,
 			},
 			Endpoint: endpoint.Config{},
 		}
