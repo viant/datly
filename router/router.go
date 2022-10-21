@@ -755,12 +755,11 @@ func (r *Router) obfuscateAuthorization(request *http.Request, response http.Res
 	if jwtCodec, _ := registry.Codecs.Lookup(registry.CodecKeyJwtClaim); jwtCodec != nil {
 		if claim, _ := jwtCodec.Valuer().Value(context.TODO(), authorization); claim != nil {
 			if jwtClaim, ok := claim.(*jwt.Claims); ok && jwtClaim != nil {
-				headers.Set("UserID", strconv.Itoa(jwtClaim.UserID))
-				headers.Set("UserEmail", jwtClaim.Email)
-
-				if route.IsMetricDebug(request) {
-					response.Header().Set("UserID", strconv.Itoa(jwtClaim.UserID))
-					response.Header().Set("UserEmail", jwtClaim.Email)
+				headers.Set("User-ID", strconv.Itoa(jwtClaim.UserID))
+				headers.Set("User-Email", jwtClaim.Email)
+				if route.IsMetricsEnabled(request) {
+					response.Header().Set("User-ID", strconv.Itoa(jwtClaim.UserID))
+					response.Header().Set("User-Email", jwtClaim.Email)
 				}
 			}
 		}
