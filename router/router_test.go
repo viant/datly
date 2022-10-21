@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/internal/tests"
+	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
@@ -148,7 +149,22 @@ type event struct {
 func TestRouter(t *testing.T) {
 	view.AerospikeConnectionTimeoutInS = 1000
 	view.PingTimeInS = 1000
-	defer view.ResetConnectionConfig()
+	reader.Dif = func(t1, t2 time.Time) time.Duration {
+		return time.Duration(5) * time.Millisecond
+	}
+
+	reader.Now = func() time.Time {
+		parse, _ := time.Parse("2006-01-02 15:04:05.000000000 -0700 MST", "2014-11-12 11:45:26.000000000 +0000 UTC")
+		return parse
+	}
+
+	defer func() {
+		view.ResetConnectionConfig()
+		reader.Dif = func(t1, t2 time.Time) time.Duration {
+			return t1.Sub(t2)
+		}
+		reader.Now = time.Now
+	}()
 
 	//testLocation := toolbox.CallerDirectory(3)
 	testLocation := "./"
@@ -759,7 +775,7 @@ func TestRouter(t *testing.T) {
 			},
 		},
 		{
-			description: "meta prewarmup",
+			description: "meta prewarmup | DebugKind record",
 			resourceURI: "042_meta_prewarmup",
 			uri:         "/api/event-types",
 			method:      http.MethodGet,
@@ -770,7 +786,7 @@ func TestRouter(t *testing.T) {
 			expected: `{"Status":"ok","ResponseBody":[{"Id":1,"Type":"type - 1","Code":"code - 1","Events":[]},{"Id":2,"Type":"type - 2","Code":"code - 2","Events":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}],"EventsMeta":{"EventTypeId":2,"TotalCount":1}},{"Id":11,"Type":"type - 11","Code":"code - 11","Events":[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}],"EventsMeta":{"EventTypeId":11,"TotalCount":1}},{"Id":111,"Type":"type - 111","Code":"code - 111","Events":[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":102,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}],"EventsMeta":{"EventTypeId":111,"TotalCount":4}}]}`,
 		},
 		{
-			description: "meta prewarmup with cache disabled",
+			description: "meta prewarmup with cache disabled | DebugKind record",
 			resourceURI: "042_meta_prewarmup",
 			uri:         "/api/event-types",
 			method:      http.MethodGet,
@@ -784,7 +800,7 @@ func TestRouter(t *testing.T) {
 			expected: `{"Status":"ok","ResponseBody":[{"Id":1,"Type":"type - 1","Code":"code - 1","Events":[]},{"Id":2,"Type":"type - 2","Code":"code - 2","Events":[]},{"Id":11,"Type":"type - 11","Code":"code - 11","Events":[]},{"Id":111,"Type":"type - 111","Code":"code - 111","Events":[]}]}`,
 		},
 		{
-			description: "meta prewarmup with debug enabled",
+			description: "meta prewarmup with debug enabled | DebugKind record",
 			resourceURI: "042_meta_prewarmup",
 			uri:         "/api/event-types",
 			method:      http.MethodGet,
@@ -795,7 +811,7 @@ func TestRouter(t *testing.T) {
 			closeAfterPreWarmup: map[string]bool{
 				"events": true,
 			},
-			expected: `{"Status":"ok","ResponseBody":[{"Id":1,"Type":"type - 1","Code":"code - 1","Events":[]},{"Id":2,"Type":"type - 2","Code":"code - 2","Events":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}],"EventsMeta":{"EventTypeId":2,"TotalCount":1}},{"Id":11,"Type":"type - 11","Code":"code - 11","Events":[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}],"EventsMeta":{"EventTypeId":11,"TotalCount":1}},{"Id":111,"Type":"type - 111","Code":"code - 111","Events":[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":102,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}],"EventsMeta":{"EventTypeId":111,"TotalCount":4}}],"_datly_debug_":[{"Template":[{"SQL":"SELECT  COALESCE(id,0) AS id,  COALESCE(type,\"\") AS type,  COALESCE(code,\"\") AS code FROM (SELECT * FROM EVENT_TYPES   ) AS t ","CacheStats":{"Type":"lazy","RecordsCounter":1}}],"TemplateMeta":[{"SQL":"SELECT COUNT(*) AS total_count FROM (SELECT  COALESCE(id,0) AS id,  COALESCE(type,\"\") AS type,  COALESCE(code,\"\") AS code FROM (SELECT * FROM EVENT_TYPES   ) AS t ) T","CacheStats":{"Type":"lazy","RecordsCounter":1}}],"View":"event_types"},{"Template":[{"SQL":"SELECT  COALESCE(id,0) AS id,  t.timestamp,  COALESCE(event_type_id,0) AS event_type_id,  COALESCE(quantity,0) AS quantity,  COALESCE(user_id,0) AS user_id FROM (SELECT * FROM EVENTS WHERE 1 = 1 AND EVENT_TYPE_ID IN (?, ?, ?, ? )  AND ( event_type_id IN (?, ?, ?, ?))  ) AS t ","Args":[1,2,11,111,1,2,11,111],"CacheStats":{"Type":"warmup","RecordsCounter":4}}],"TemplateMeta":[{"SQL":"SELECT event_type_id, COUNT(*) AS total_count FROM (SELECT  COALESCE(id,0) AS id,  t.timestamp,  COALESCE(event_type_id,0) AS event_type_id,  COALESCE(quantity,0) AS quantity,  COALESCE(user_id,0) AS user_id FROM (SELECT * FROM EVENTS WHERE 1 = 1 AND EVENT_TYPE_ID IN (?, ?, ?, ? )  AND ( event_type_id IN (?, ?, ?, ?))  ) AS t ) T GROUP BY event_type_id","Args":[1,2,11,111,1,2,11,111],"CacheStats":{"Type":"warmup","RecordsCounter":4}}],"View":"events"}]}`,
+			expected: `{"Status":"ok","ResponseBody":[{"Id":1,"Type":"type - 1","Code":"code - 1","Events":[]},{"Id":2,"Type":"type - 2","Code":"code - 2","Events":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}],"EventsMeta":{"EventTypeId":2,"TotalCount":1}},{"Id":11,"Type":"type - 11","Code":"code - 11","Events":[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}],"EventsMeta":{"EventTypeId":11,"TotalCount":1}},{"Id":111,"Type":"type - 111","Code":"code - 111","Events":[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":102,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}],"EventsMeta":{"EventTypeId":111,"TotalCount":4}}],"_datly_debug_":[{"View":"event_types","Template":[{"SQL":"SELECT  COALESCE(id,0) AS id,  COALESCE(type,\"\") AS type,  COALESCE(code,\"\") AS code FROM (SELECT * FROM EVENT_TYPES   ) AS t ","CacheStats":{"Type":"lazy","RecordsCounter":1}}],"TemplateMeta":[{"SQL":"SELECT COUNT(*) AS total_count FROM (SELECT  COALESCE(id,0) AS id,  COALESCE(type,\"\") AS type,  COALESCE(code,\"\") AS code FROM (SELECT * FROM EVENT_TYPES   ) AS t ) T","CacheStats":{"Type":"lazy","RecordsCounter":1}}],"Elapsed":"5ms"},{"View":"events","Template":[{"SQL":"SELECT  COALESCE(id,0) AS id,  t.timestamp,  COALESCE(event_type_id,0) AS event_type_id,  COALESCE(quantity,0) AS quantity,  COALESCE(user_id,0) AS user_id FROM (SELECT * FROM EVENTS WHERE 1 = 1 AND EVENT_TYPE_ID IN (?, ?, ?, ? )  AND ( event_type_id IN (?, ?, ?, ?))  ) AS t ","Args":[1,2,11,111,1,2,11,111],"CacheStats":{"Type":"warmup","RecordsCounter":4}}],"TemplateMeta":[{"SQL":"SELECT event_type_id, COUNT(*) AS total_count FROM (SELECT  COALESCE(id,0) AS id,  t.timestamp,  COALESCE(event_type_id,0) AS event_type_id,  COALESCE(quantity,0) AS quantity,  COALESCE(user_id,0) AS user_id FROM (SELECT * FROM EVENTS WHERE 1 = 1 AND EVENT_TYPE_ID IN (?, ?, ?, ? )  AND ( event_type_id IN (?, ?, ?, ?))  ) AS t ) T GROUP BY event_type_id","Args":[1,2,11,111,1,2,11,111],"CacheStats":{"Type":"warmup","RecordsCounter":4}}],"Elapsed":"5ms"}]}`,
 		},
 		{
 			description: "csv output format",
@@ -811,6 +827,24 @@ func TestRouter(t *testing.T) {
 			expectedHeaders: map[string][]string{
 				"Content-Type": {"text/csv"},
 			},
+		},
+		{
+			description: "meta prewarmup with debug enabled | DebugKind header",
+			resourceURI: "044_debug_headers",
+			uri:         "/api/event-types",
+			method:      http.MethodGet,
+			preWarmup:   true,
+			headers: map[string][]string{
+				router.DatlyRequestMetricsHeader: {router.DatlyDebugHeaderValue},
+			},
+			closeAfterPreWarmup: map[string]bool{
+				"events": true,
+			},
+			expectedHeaders: map[string][]string{
+				"Datly-Metrics-Event_types": {`{"View":"event_types","Template":[{"SQL":"SELECT  COALESCE(id,0) AS id,  COALESCE(type,\"\") AS type,  COALESCE(code,\"\") AS code FROM (SELECT * FROM EVENT_TYPES   ) AS t ","CacheStats":{"Type":"lazy","RecordsCounter":1}}],"TemplateMeta":[{"SQL":"SELECT COUNT(*) AS total_count FROM (SELECT  COALESCE(id,0) AS id,  COALESCE(type,\"\") AS type,  COALESCE(code,\"\") AS code FROM (SELECT * FROM EVENT_TYPES   ) AS t ) T","CacheStats":{"Type":"lazy","RecordsCounter":1}}],"Elapsed":"5ms"}`},
+				"Datly-Metrics-Events":      {`{"View":"events","Template":[{"SQL":"SELECT  COALESCE(id,0) AS id,  t.timestamp,  COALESCE(event_type_id,0) AS event_type_id,  COALESCE(quantity,0) AS quantity,  COALESCE(user_id,0) AS user_id FROM (SELECT * FROM EVENTS WHERE 1 = 1 AND EVENT_TYPE_ID IN (?, ?, ?, ? )  AND ( event_type_id IN (?, ?, ?, ?))  ) AS t ","Args":[1,2,11,111,1,2,11,111],"CacheStats":{"Type":"warmup","RecordsCounter":4}}],"TemplateMeta":[{"SQL":"SELECT event_type_id, COUNT(*) AS total_count FROM (SELECT  COALESCE(id,0) AS id,  t.timestamp,  COALESCE(event_type_id,0) AS event_type_id,  COALESCE(quantity,0) AS quantity,  COALESCE(user_id,0) AS user_id FROM (SELECT * FROM EVENTS WHERE 1 = 1 AND EVENT_TYPE_ID IN (?, ?, ?, ? )  AND ( event_type_id IN (?, ?, ?, ?))  ) AS t ) T GROUP BY event_type_id","Args":[1,2,11,111,1,2,11,111],"CacheStats":{"Type":"warmup","RecordsCounter":4}}],"Elapsed":"5ms"}`},
+			},
+			expected: `[{"Id":1,"Type":"type - 1","Code":"code - 1","Events":[]},{"Id":2,"Type":"type - 2","Code":"code - 2","Events":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}],"EventsMeta":{"EventTypeId":2,"TotalCount":1}},{"Id":11,"Type":"type - 11","Code":"code - 11","Events":[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}],"EventsMeta":{"EventTypeId":11,"TotalCount":1}},{"Id":111,"Type":"type - 111","Code":"code - 111","Events":[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":102,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}],"EventsMeta":{"EventTypeId":111,"TotalCount":4}}]`,
 		},
 	}
 

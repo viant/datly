@@ -51,16 +51,15 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 	if dest, ok := session.Dest.(*interface{}); ok {
 		*dest = collector.Dest()
 	}
+
 	return nil
 }
 
-func (s *Service) afterRead(session *Session, collector *view.Collector, start *time.Time, err error, onFinish counter.OnDone) {
-	end := time.Now()
+func (s *Service) afterRead(session *Session, collector *view.Collector, start *time.Time, err error, onFinish counter.OnDone) time.Duration {
+	end := Now()
 	viewName := collector.View().Name
 	session.View.Logger.ReadTime(viewName, start, &end, err)
-	//TODO add to metrics record read
-	elapsed := end.Sub(*start)
-
+	elapsed := Dif(end, *start)
 	session.AddMetric(&Metric{View: viewName, ElapsedMs: int(elapsed.Milliseconds()), Elapsed: elapsed.String(), Rows: collector.Len()})
 	if err != nil {
 		session.View.Counter.IncrementValue(Error)
@@ -68,16 +67,14 @@ func (s *Service) afterRead(session *Session, collector *view.Collector, start *
 		session.View.Counter.IncrementValue(Success)
 	}
 	onFinish(end)
+
+	return elapsed
 }
 
 func (s *Service) readAll(ctx context.Context, session *Session, collector *view.Collector, wg *sync.WaitGroup, errorCollector *shared.Errors, parent *view.View) {
 	if errorCollector.Error() != nil {
 		return
 	}
-
-	start := time.Now()
-	onFinish := session.View.Counter.Begin(start)
-	defer s.afterRead(session, collector, &start, errorCollector.Error(), onFinish)
 
 	var collectorFetchEmitted bool
 	defer s.afterReadAll(collectorFetchEmitted, collector)
@@ -113,17 +110,11 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 		return
 	}
 
-	db, err := aView.Db()
-	if err != nil {
-		errorCollector.Append(err)
-		return
-	}
-
 	session.View.Counter.IncrementValue(Pending)
 	defer session.View.Counter.DecrementValue(Pending)
 
 	parentMeta := view.AsViewParam(aView, selector, batchData)
-	err = s.exhaustRead(ctx, aView, selector, batchData, db, collector, session, parentMeta)
+	err = s.exhaustRead(ctx, aView, selector, batchData, collector, session, parentMeta)
 	if err != nil {
 		errorCollector.Append(err)
 	}
@@ -171,52 +162,34 @@ func (s *Service) batchData(collector *view.Collector) *view.BatchData {
 	return batchData
 }
 
-func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.Selector, batchData *view.BatchData, db *sql.DB, collector *view.Collector, session *Session, parentViewMetaParam *expand.MetaParam) error {
-	batchDataCopy := s.copyBatchData(batchData)
-	wg := &sync.WaitGroup{}
-
+func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.Selector, batchData *view.BatchData, collector *view.Collector, session *Session, parentViewMetaParam *expand.MetaParam) error {
 	info := &Info{
 		View: view.Name,
 	}
 
-	var metaErr error
-	if view.Template.Meta != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			info.TemplateMeta, metaErr = s.readMeta(ctx, session, view, selector, batchDataCopy, collector, parentViewMetaParam)
-		}()
-	}
+	start := Now()
 
-	var err error
-	if info.Template, err = s.readObjects(ctx, session, batchData, view, collector, selector, db, info); err != nil {
+	onFinish := session.View.Counter.Begin(start)
+
+	err := s.readObjectsWithMeta(ctx, session, batchData, view, collector, selector, info, parentViewMetaParam)
+	info.Elapsed = s.afterRead(session, collector, &start, err, onFinish).String()
+
+	if err != nil {
 		return err
 	}
 
-	wg.Wait()
-
 	session.AddInfo(info)
-	return metaErr
+	return nil
 }
 
-func (s *Service) readObjects(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Selector, db *sql.DB, info *Info) ([]*Stats, error) {
+func (s *Service) readObjectsWithMeta(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Selector, info *Info, parentParam *expand.MetaParam) error {
 	batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
 	visitor := collector.Visitor(ctx)
-	var stats []*Stats
 
 	for {
-		fullMatch, smartMatch, err := s.getMatchers(view, selector, batchData, collector, session)
+		err := s.queryObjectsWithMeta(ctx, session, view, collector, visitor, info, batchData, selector, parentParam)
 		if err != nil {
-			return stats, err
-		}
-
-		currStats, err := s.query(ctx, session, view, db, collector, visitor, fullMatch, smartMatch)
-		if err != nil {
-			return stats, err
-		}
-
-		if currStats != nil {
-			stats = append(stats, currStats)
+			return err
 		}
 
 		if batchData.Parent == batchData.ParentReadSize {
@@ -228,14 +201,14 @@ func (s *Service) readObjects(ctx context.Context, session *Session, batchData *
 		batchData.Parent += nextParents
 	}
 
-	return stats, nil
+	return nil
 }
 
-func (s *Service) readMeta(ctx context.Context, session *Session, aView *view.View, selector *view.Selector, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *expand.MetaParam) ([]*Stats, error) {
-	selectorCopy := *selector
-	selector.Fields = []string{}
-	selector.Columns = []string{}
-	selector = &selectorCopy
+func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.View, originalSelector *view.Selector, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *expand.MetaParam) (*Stats, error) {
+	selectorDeref := *originalSelector
+	selectorDeref.Fields = []string{}
+	selectorDeref.Columns = []string{}
+	selector := &selectorDeref
 
 	var indexed *cache.Index
 	var cacheStats *cache.Stats
@@ -310,18 +283,7 @@ func (s *Service) readMeta(ctx context.Context, session *Session, aView *view.Vi
 		return nil, err
 	}
 
-	return []*Stats{
-		s.NewStats(session, indexed, cacheStats),
-	}, nil
-}
-
-func (s *Service) copyBatchData(batchData *view.BatchData) *view.BatchData {
-	batchDataCopy := *batchData
-	newValues := make([]interface{}, len(batchData.Values))
-	copy(newValues, batchDataCopy.Values)
-	batchDataCopy.ValuesBatch = newValues
-
-	return &batchDataCopy
+	return s.NewStats(session, indexed, cacheStats), nil
 }
 
 func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchData *view.BatchData, collector *view.Collector, session *Session) (fullMatch *cache.Index, columnInMatcher *cache.Index, err error) {
@@ -353,7 +315,45 @@ func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchDa
 	return fullMatch, columnInMatcher, cacheErr
 }
 
-func (s *Service) query(ctx context.Context, session *Session, aView *view.View, db *sql.DB, collector *view.Collector, visitor view.Visitor, fullMatcher, columnInMatcher *cache.Index) (*Stats, error) {
+func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.Visitor, info *Info, batchData *view.BatchData, selector *view.Selector, parentParam *expand.MetaParam) error {
+	wg := &sync.WaitGroup{}
+	db, err := aView.Db()
+	if err != nil {
+		return err
+	}
+
+	var metaErr error
+	if aView.Template.Meta != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var templateMeta *Stats
+			templateMeta, metaErr = s.queryMeta(ctx, session, aView, selector, batchData, collector, parentParam)
+			if templateMeta != nil {
+				info.TemplateMeta = append(info.TemplateMeta, templateMeta)
+			}
+		}()
+	}
+
+	objectStats, err := s.queryObjects(ctx, session, aView, selector, batchData, db, collector, visitor)
+	if err != nil {
+		return err
+	}
+
+	if objectStats != nil {
+		info.Template = append(info.Template, objectStats)
+	}
+
+	wg.Wait()
+	return metaErr
+}
+
+func (s *Service) queryObjects(ctx context.Context, session *Session, aView *view.View, selector *view.Selector, batchData *view.BatchData, db *sql.DB, collector *view.Collector, visitor view.Visitor) (*Stats, error) {
+	fullMatcher, columnInMatcher, err := s.getMatchers(aView, selector, batchData, collector, session)
+	if err != nil {
+		return nil, err
+	}
+
 	begin := time.Now()
 
 	var cacheStats *cache.Stats

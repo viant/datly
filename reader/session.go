@@ -37,9 +37,10 @@ type (
 	}
 
 	Info struct {
+		View         string
 		Template     []*Stats `json:",omitempty"`
 		TemplateMeta []*Stats `json:",omitempty"`
-		View         string
+		Elapsed      string   `json:",omitempty"`
 	}
 
 	Stats struct {
