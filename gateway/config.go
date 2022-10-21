@@ -32,6 +32,7 @@ type (
 		AutoDiscovery        *bool
 		ChangeDetection      *ChangeDetection
 		DisableCors          bool
+		RevealMetricEnabled  *bool
 		CacheConnectorPrefix string
 	}
 

@@ -38,9 +38,9 @@ type (
 		Logger       *Logger //connect, dataview, time, SQL with params if exceeded time
 		Cors         *Cors
 
-		ColumnsCache     *discover.Cache
-		DebugEnabled     bool
-		ParamStatusError *int
+		ColumnsCache        *discover.Cache
+		RevealMetricEnabled *bool
+		ParamStatusError    *int
 
 		Info             openapi3.Info
 		ColumnsDiscovery bool
@@ -123,7 +123,9 @@ func (r *Resource) Init(ctx context.Context) error {
 	}
 
 	for _, route := range r.Routes {
-		route.DebugEnabled = route.DebugEnabled && r.DebugEnabled
+		if route.RevealMetricEnabled == nil {
+			route.RevealMetricEnabled = r.RevealMetricEnabled
+		}
 	}
 
 	columnsCache := map[string]view.Columns{}
