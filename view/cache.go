@@ -358,24 +358,18 @@ func (c *Cache) initWarmup(ctx context.Context, resource *Resource) error {
 		return nil
 	}
 
+	c.addNonRequiredWarmupIfNeeded()
+
 	for _, dataset := range c.Warmup.Cases {
-
-		if c.Warmup.IndexColumn == "" {
-			return fmt.Errorf("view %v warmup Column can't be empty", c.owner.Name)
-		}
-
 		_, ok := c.owner.ColumnByName(c.Warmup.IndexColumn)
 		if !ok {
 			return fmt.Errorf("not found warmup column %v at view %v", c.Warmup, c.owner.Name)
 		}
 
 		for _, paramValue := range dataset.Set {
-			param, err := c.owner.Template._parametersIndex.Lookup(paramValue.Name)
-			if err != nil {
+			if err := c.ensureParam(paramValue); err != nil {
 				return err
 			}
-
-			paramValue._param = param
 		}
 	}
 
@@ -386,6 +380,39 @@ func (c *Cache) initWarmup(ctx context.Context, resource *Resource) error {
 	}
 
 	return nil
+}
+
+func (c *Cache) ensureParam(paramValue *ParamValue) error {
+	if paramValue._param != nil {
+		return nil
+	}
+
+	param, err := c.owner.Template._parametersIndex.Lookup(paramValue.Name)
+	if err != nil {
+		return err
+	}
+
+	paramValue._param = param
+	return nil
+}
+
+func (c *Cache) addNonRequiredWarmupIfNeeded() {
+	if len(c.Warmup.Cases) != 0 {
+		return
+	}
+
+	var values []*ParamValue
+	for i, parameter := range c.owner.Template.Parameters {
+		if parameter.IsRequired() {
+			return
+		}
+
+		values = append(values, &ParamValue{Name: parameter.Name, _param: c.owner.Template.Parameters[i]})
+	}
+
+	c.Warmup.Cases = append(c.Warmup.Cases, &CacheParameters{
+		Set: values,
+	})
 }
 
 func (c *Cache) appendSelectors(set *CacheParameters, paramValues [][]interface{}, selectors *[]*CacheInput) error {
