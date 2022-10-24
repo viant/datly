@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/read/cache"
 	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -50,6 +51,10 @@ type (
 		Error      string        `json:",omitempty"`
 	}
 )
+
+func (s *Info) Name() string {
+	return strings.Title(strings.ReplaceAll(s.View, "#", ""))
+}
 
 //Init initializes session
 func (s *Session) Init() error {

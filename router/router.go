@@ -356,15 +356,12 @@ func (r *Router) readAndWriteResponse(ctx context.Context, session *ReaderSessio
 		payloadReader.AddHeader(templateMeta.Name, string(data))
 	}
 
-	if session.Route.Style == BasicStyle {
-		for _, stat := range readerStats {
-			marshal, err := goJson.Marshal(stat)
-			if err != nil {
-				continue
-			}
-
-			payloadReader.AddHeader(DatlyResponseHeaderMetrics+"-"+stat.View, string(marshal))
+	for _, stat := range readerStats {
+		marshal, err := goJson.Marshal(stat)
+		if err != nil {
+			continue
 		}
+		payloadReader.AddHeader(DatlyResponseHeaderMetrics+"-"+stat.Name(), string(marshal))
 	}
 
 	if entry != nil {
