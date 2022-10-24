@@ -73,9 +73,7 @@ func NewTable(name string) *Table {
 		Name:        name,
 		ColumnTypes: map[string]string{},
 		Deps:        map[string]string{},
-		TableMeta: TableMeta{
-			Warmup: map[string]interface{}{},
-		},
+		TableMeta:   TableMeta{},
 	}
 }
 

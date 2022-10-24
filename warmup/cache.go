@@ -112,33 +112,37 @@ func populateCollector(ctx context.Context, aView *view.View, builder *reader.Bu
 	}).populate(ctx, collector, notifier)
 }
 
-func warmup(ctx context.Context, entries []*warmupEntry, notifier chan error) {
+func warmup(ctx context.Context, entries []*warmupEntry, notifier chan func() (int, error)) {
 	for i := range entries {
 		go readWithChan(ctx, entries[i], notifier)
 	}
 }
 
-func readWithChan(ctx context.Context, entry *warmupEntry, notifier chan error) {
-	notifier <- readWithErr(ctx, entry)
+func readWithChan(ctx context.Context, entry *warmupEntry, notifier chan func() (int, error)) {
+	indexed, err := readWithErr(ctx, entry)
+	notifier <- func() (int, error) {
+		return indexed, err
+	}
 }
 
-func readWithErr(ctx context.Context, entry *warmupEntry) error {
+func readWithErr(ctx context.Context, entry *warmupEntry) (int, error) {
 	db, err := DB(entry)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	service, err := entry.view.Cache.Service()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	matcher := entry.matcher
-	if err = service.IndexBy(ctx, db, entry.column, matcher.SQL, matcher.Args); err != nil {
-		return fmt.Errorf("failed to index: %w, %v", err, matcher.SQL)
+	indexed, err := service.IndexBy(ctx, db, entry.column, matcher.SQL, matcher.Args)
+	if err != nil {
+		return indexed, fmt.Errorf("failed to index: %w, %v", err, matcher.SQL)
 	}
 
-	return nil
+	return indexed, nil
 }
 
 func DB(entry *warmupEntry) (*sql.DB, error) {
@@ -207,19 +211,25 @@ func PopulateCache(views []*view.View) (int, error) {
 		return 0, err
 	}
 
-	notifierErr := make(chan error)
+	notifierErr := make(chan func() (int, error))
 	warmup(ctx, warmupEntries, notifierErr)
+	indexed := 0
+
 	for i := 0; i < len(warmupEntries); i++ {
 		select {
 		case actual := <-notifierErr:
 			if actual != nil {
-				errors = append(errors, actual)
+				currIndexed, err := actual()
+				indexed += currIndexed
+				if err != nil {
+					errors = append(errors, err)
+				}
 			}
 		}
 	}
 
 	close(notifier)
-	return collectorsCounter, combineErrors(errors)
+	return indexed, combineErrors(errors)
 }
 
 func FilterCacheViews(views []*view.View) []*view.View {

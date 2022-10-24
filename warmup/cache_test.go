@@ -22,29 +22,29 @@ func TestPopulateCache(t *testing.T) {
 		{
 			description:      "basic",
 			URL:              "case001",
-			expectedInserted: 18,
+			expectedInserted: 30,
 		},
 		{
 			description:      "template meta",
 			URL:              "case002",
-			expectedInserted: 36,
+			expectedInserted: 64,
 			metaIndexed:      []interface{}{2, 11, 111},
 		},
 		{
 			description:      "cache connector",
 			URL:              "case003",
-			expectedInserted: 36,
+			expectedInserted: 64,
 			metaIndexed:      []interface{}{2, 11, 111},
 		},
 		{
 			description:      "cache connector",
 			URL:              "case004",
-			expectedInserted: 2,
+			expectedInserted: 8,
 		},
 		{
 			description:      "parent join on",
 			URL:              "case005",
-			expectedInserted: 1,
+			expectedInserted: 2,
 		},
 	}
 

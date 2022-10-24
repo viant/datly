@@ -111,7 +111,8 @@ func (s *serverBuilder) buildXRelations(ctx context.Context, viewRoute *router.R
 func (s *serverBuilder) addCacheWithWarmup(relView *view.View, join *option.Join) {
 	relView.Cache = join.Cache
 	relView.SelfReference = join.Self
-	if warmup := join.Warmup; len(warmup) > 0 {
+	if warmup := join.Warmup; warmup != nil { //non nil zero length table indicates,
+		// that the cache will be indexed using zero values for non-required parameters
 		relView.Cache.Warmup = &view.Warmup{IndexColumn: join.Key}
 
 		multiSet := &view.CacheParameters{}
