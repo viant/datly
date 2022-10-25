@@ -360,11 +360,12 @@ func (c *Cache) initWarmup(ctx context.Context, resource *Resource) error {
 
 	c.addNonRequiredWarmupIfNeeded()
 
+	_, ok := c.owner.ColumnByName(c.Warmup.IndexColumn)
+	if !ok && c.Warmup.IndexColumn != "" {
+		return fmt.Errorf("not found warmup column %v at view %v", c.Warmup, c.owner.Name)
+	}
+
 	for _, dataset := range c.Warmup.Cases {
-		_, ok := c.owner.ColumnByName(c.Warmup.IndexColumn)
-		if !ok {
-			return fmt.Errorf("not found warmup column %v at view %v", c.Warmup, c.owner.Name)
-		}
 
 		for _, paramValue := range dataset.Set {
 			if err := c.ensureParam(paramValue); err != nil {
@@ -410,6 +411,10 @@ func (c *Cache) addNonRequiredWarmupIfNeeded() {
 		values = append(values, &ParamValue{Name: parameter.Name, _param: c.owner.Template.Parameters[i]})
 	}
 
+	if len(values) == 0 {
+		return
+	}
+
 	c.Warmup.Cases = append(c.Warmup.Cases, &CacheParameters{
 		Set: values,
 	})
@@ -423,6 +428,9 @@ func (c *Cache) appendSelectors(set *CacheParameters, paramValues [][]interface{
 	}
 
 	indexes := make([]int, len(paramValues))
+	if len(indexes) == 0 {
+		return nil
+	}
 
 outer:
 	for {
