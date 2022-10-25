@@ -575,8 +575,8 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 		return
 	}
 
-	w.Write(asBytes)
 	w.WriteHeader(statusCode)
+	w.Write(asBytes)
 }
 
 func (r *Router) setResponseStatus(route *Route, response reflect.Value, responseStatus ResponseStatus, stats []*reader.Info) {
