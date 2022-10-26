@@ -430,7 +430,7 @@ func (b *Builder) metaSQL(aView *view.View, selector *view.Selector, batchData *
 	}
 
 	if relation != nil {
-		matcher.By = relation.Of.Column
+		matcher.By = relation.Of.Field
 	}
 
 	return matcher, nil

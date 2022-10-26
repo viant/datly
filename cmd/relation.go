@@ -113,7 +113,7 @@ func (s *serverBuilder) addCacheWithWarmup(relView *view.View, join *option.Join
 	relView.SelfReference = join.Self
 	if warmup := join.Warmup; warmup != nil { //non nil zero length table indicates,
 		// that the cache will be indexed using zero values for non-required parameters
-		relView.Cache.Warmup = &view.Warmup{IndexColumn: join.Key}
+		relView.Cache.Warmup = &view.Warmup{IndexColumn: view.NotEmptyOf(join.Field, join.Key)}
 
 		multiSet := &view.CacheParameters{}
 		for k, v := range warmup {

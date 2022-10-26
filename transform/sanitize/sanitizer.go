@@ -34,7 +34,13 @@ func Sanitize(SQL string, hints ParameterHints, consts map[string]interface{}) s
 			continue
 		}
 
-		sanitized := sanitizeParameter(paramMeta.Context, paramMeta.Prefix, paramMeta.Holder, paramMeta.FullName, iterator.assignedVars, iterator.consts)
+		paramName, hadBrackets := unwrapBrackets(paramMeta.FullName)
+		sanitized := sanitizeParameter(paramMeta.Context, paramMeta.Prefix, paramMeta.Holder, paramName, iterator.assignedVars, iterator.consts)
+
+		if hadBrackets {
+			sanitized = strings.Replace(sanitized, "$", "${", 1) + "}"
+		}
+
 		if sanitized == paramMeta.FullName {
 			continue
 		}
@@ -44,6 +50,14 @@ func Sanitize(SQL string, hints ParameterHints, consts map[string]interface{}) s
 	}
 
 	return string(modifiable)
+}
+
+func unwrapBrackets(name string) (string, bool) {
+	if !strings.HasPrefix(name, "${") || !strings.HasSuffix(name, "}") {
+		return name, false
+	}
+
+	return "$" + name[2:len(name)-1], true
 }
 
 func sanitizeParameter(context Context, prefix, paramName, raw string, variables map[string]bool, consts map[string]interface{}) string {
