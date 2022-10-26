@@ -141,7 +141,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 	}
 
 	if exclude.ColumnsIn && relation != nil {
-		matcher.By = relation.Of.Column
+		matcher.By = view.NotEmptyOf(relation.Of.Field, relation.Of.Column)
 		matcher.In = batchData.ValuesBatch
 	}
 
