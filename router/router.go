@@ -394,7 +394,7 @@ func (r *Router) readValue(readerSession *ReaderSession) (reflect.Value, interfa
 	}
 
 	if readerSession.Route.EnableAudit {
-		r.logMetrics(readerSession.Route.URI, session.Metrics)
+		r.logMetrics(readerSession.Route.URI, session.Metrics, session.Stats)
 	}
 
 	readerStats := session.Stats
@@ -788,11 +788,12 @@ func (r *Router) obfuscateAuthorization(request *http.Request, response http.Res
 	headers.Set("Authorization", "***")
 }
 
-func (r *Router) logMetrics(URI string, metrics []*reader.Metric) {
+func (r *Router) logMetrics(URI string, metrics []*reader.Metric, stats []*reader.Info) {
 	asBytes, _ := goJson.Marshal(struct {
 		URI     string
 		Metrics []*reader.Metric
-	}{URI: URI, Metrics: metrics})
+		Stats   []*reader.Info
+	}{URI: URI, Metrics: metrics, Stats: stats})
 
 	fmt.Printf("%v\n", string(asBytes))
 }

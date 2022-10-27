@@ -190,6 +190,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
+	r.initDebugStyleIfNeeded()
 	return nil
 }
 
@@ -626,6 +627,16 @@ func (r *Route) initCSVIfNeeded() error {
 	r.CSV.unwrapperSlice = r._requestBodySlice
 	r.CSV.requestBodyMarshaller, err = csv.NewMarshaller(r._requestBodyType, nil)
 	return err
+}
+
+func (r *Route) initDebugStyleIfNeeded() {
+	if r.RevealMetric == nil || !*r.RevealMetric {
+		return
+	}
+
+	if r.DebugKind != view.MetaTypeRecord {
+		r.DebugKind = view.MetaTypeHeader
+	}
 }
 
 func (c *CSVConfig) presenceMap() PresenceMapFn {
