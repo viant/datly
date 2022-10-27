@@ -48,6 +48,7 @@ type (
 		View        *view.View
 		Cors        *Cors
 		EnableAudit bool
+		EnableDebug *bool
 		Output
 		Index
 
@@ -61,7 +62,6 @@ type (
 		_requestBodyParamRequired bool
 		_requestBodyType          reflect.Type
 		_requestBodySlice         *xunsafe.Slice
-		EnableDebug               *bool
 	}
 
 	Output struct {
