@@ -74,7 +74,7 @@ type (
 )
 
 func (s *ReaderSession) IsMetricsEnabled() bool {
-	return s.IsMetricInfo() || s.IsMetricDebug()
+	return s.Route.DebugKind == view.MetaTypeHeader || (s.IsMetricInfo() || s.IsMetricDebug())
 }
 
 func (r *Route) IsMetricsEnabled(req *http.Request) bool {
@@ -109,6 +109,14 @@ func (s *ReaderSession) IsMetricDebug() bool {
 
 func (s *ReaderSession) IsMetricInfo() bool {
 	return s.Route.IsMetricInfo(s.Request)
+}
+
+func (s *ReaderSession) IsCacheDisabled() bool {
+	if s.Route.EnableDebug == nil {
+		return false
+	}
+
+	return (*s.Route.EnableDebug) && (s.Request.Header.Get(DatlyRequestDisableCacheHeader) != "" || s.Request.Header.Get(strings.ToLower(DatlyRequestDisableCacheHeader)) != "")
 }
 
 func (b *BytesReadCloser) Read(p []byte) (int, error) {
@@ -377,7 +385,7 @@ func (r *Router) readValue(readerSession *ReaderSession) (reflect.Value, interfa
 	dest := destValue.Interface()
 
 	session := reader.NewSession(dest, readerSession.Route.View)
-	session.CacheDisabled = readerSession.Request.Header.Get(DatlyRequestDisableCacheHeader) != "" || readerSession.Request.Header.Get(strings.ToLower(DatlyRequestDisableCacheHeader)) != ""
+	session.CacheDisabled = readerSession.IsCacheDisabled()
 	session.IncludeSQL = readerSession.IsMetricDebug()
 
 	session.Selectors = readerSession.Selectors
@@ -548,7 +556,7 @@ func (r *Router) buildJsonFilters(route *Route, selectors *view.Selectors) ([]*j
 }
 
 func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, statusCode int) {
-	statusCode, err = r.normalizeErr(err, statusCode)
+	statusCode, err = normalizeErr(err, statusCode)
 	if route._responseSetter == nil {
 		errAsBytes, marshalErr := goJson.Marshal(err)
 		if marshalErr != nil {
@@ -622,7 +630,7 @@ func (r *Router) createCacheEntry(ctx context.Context, session *ReaderSession) (
 	return session.Route.Cache.Get(ctx, marshalled, session.Route.View.Name)
 }
 
-func (r *Router) normalizeErr(err error, statusCode int) (int, error) {
+func normalizeErr(err error, statusCode int) (int, error) {
 	switch actual := err.(type) {
 	case *Errors:
 		for _, anError := range actual.Errors {
@@ -631,7 +639,9 @@ func (r *Router) normalizeErr(err error, statusCode int) (int, error) {
 				anError.Object = NewParamErrors(childErr)
 				anError.Message = childErr.Error()
 			case *Errors:
-				_, anError.Object = r.normalizeErr(anError.Err, statusCode)
+				var errCode int
+				errCode, anError.Object = normalizeErr(anError.Err, statusCode)
+				actual.setStatus(errCode)
 			case *JSONError:
 				anError.Object = childErr
 			default:

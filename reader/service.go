@@ -379,13 +379,7 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 
 	reader, err := read.New(ctx, db, fullMatcher.SQL, collector.NewItem(), options...)
 	if err != nil {
-		if session.IncludeSQL {
-			return nil, err
-		}
-
-		aView.Logger.LogDatabaseErr(fullMatcher.SQL, err)
-		stats.Error = err.Error()
-		return nil, fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
+		return s.HandleSQLError(err, session, aView, fullMatcher, stats)
 	}
 
 	defer func() {
@@ -415,11 +409,20 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 	end := time.Now()
 	aView.Logger.ReadingData(end.Sub(begin), fullMatcher.SQL, readData, fullMatcher.Args, err)
 	if err != nil {
-		aView.Logger.LogDatabaseErr(fullMatcher.SQL, err)
-		return nil, fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
+		return s.HandleSQLError(err, session, aView, fullMatcher, stats)
 	}
 
 	return stats, nil
+}
+
+func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, matcher *cache.Index, stats *Stats) (*Stats, error) {
+	if session.IncludeSQL {
+		return nil, err
+	}
+
+	aView.Logger.LogDatabaseErr(matcher.SQL, err)
+	stats.Error = err.Error()
+	return nil, fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
 }
 
 func (s *Service) NewStats(session *Session, index *cache.Index, cacheStats *cache.Stats) *Stats {

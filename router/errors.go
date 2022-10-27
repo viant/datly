@@ -66,6 +66,10 @@ func (e *Errors) Error() string {
 }
 
 func (e *Errors) setStatus(code int) {
+	if code == 0 {
+		return
+	}
+
 	e.mutex.Lock()
 	if statusCodePriority(code) > statusCodePriority(e.status) {
 		e.status = code

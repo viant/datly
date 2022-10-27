@@ -113,6 +113,9 @@ func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.R
 	}
 
 	selectors, err := CreateSelectors(ctx, route.accessors, route.DateFormat, *route._caser, requestMetadata, requestParams, views...)
+	if err != nil {
+		_, err = normalizeErr(err, 400)
+	}
 	return selectors, requestParams, err
 }
 

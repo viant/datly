@@ -61,6 +61,7 @@ type (
 		_requestBodyParamRequired bool
 		_requestBodyType          reflect.Type
 		_requestBodySlice         *xunsafe.Slice
+		EnableDebug               *bool
 	}
 
 	Output struct {

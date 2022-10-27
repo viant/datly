@@ -44,6 +44,7 @@ type (
 
 		Info             openapi3.Info
 		ColumnsDiscovery bool
+		EnableDebug      *bool
 		_visitors        codec.Visitors
 		cfs              afs.Service
 	}
@@ -125,6 +126,10 @@ func (r *Resource) Init(ctx context.Context) error {
 	for _, route := range r.Routes {
 		if route.RevealMetric == nil {
 			route.RevealMetric = r.RevealMetric
+		}
+
+		if route.EnableDebug == nil {
+			route.EnableDebug = r.EnableDebug
 		}
 	}
 
