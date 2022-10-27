@@ -65,6 +65,7 @@ func (r *Service) Close() error {
 
 //New creates gateway Service. It is important to call Service.Close before Service got Garbage collected.
 func New(ctx context.Context, config *Config, statusHandler http.Handler, authorizer Authorizer, visitors codec.Visitors, types view.Types, metrics *gmetric.Service) (*Service, error) {
+	start := time.Now()
 	config.Init()
 	err := config.Validate()
 	if err != nil {
@@ -96,7 +97,7 @@ func New(ctx context.Context, config *Config, statusHandler http.Handler, author
 
 	err = srv.createRouterIfNeeded(ctx, metrics, statusHandler, authorizer)
 	srv.detectChanges(metrics, statusHandler, authorizer)
-
+	fmt.Printf("initialised datly: %s\n", time.Now().Sub(start))
 	return srv, err
 }
 
@@ -452,10 +453,10 @@ func (r *Service) loadRouterResource(URL string, resources map[string]*view.Reso
 	}
 
 	routerResource, err = router.LoadResource(ctx, fs, URL, r.Config.Discovery(), r.visitors, r.types, r.metrics, copyResources)
-	if err == nil {
-		r.session.AddRouter(URL, routerResource)
+	if err != nil {
+		return nil, err
 	}
-
+	r.session.AddRouter(URL, routerResource)
 	if err = r.updateCacheConnectorRefIfNeeded(routerResource); err != nil {
 		return nil, err
 	}
