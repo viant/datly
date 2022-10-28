@@ -97,7 +97,7 @@ func (c *aerospikeClient) loginNewClientError(err error) bool {
 	}
 
 	switch aerospikeError.ResultCode() {
-	case types.NO_AVAILABLE_CONNECTIONS_TO_NODE, types.INVALID_NODE_ERROR:
+	case types.NO_AVAILABLE_CONNECTIONS_TO_NODE, types.INVALID_NODE_ERROR, types.TIMEOUT:
 		fmt.Printf("[WARN] no available connection to one of the aerospike clients: %v\n", err.Error())
 		return true
 	default:

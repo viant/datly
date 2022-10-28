@@ -283,7 +283,7 @@ func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.V
 		return nil, err
 	}
 
-	return s.NewStats(session, indexed, cacheStats), nil
+	return s.NewStats(session, indexed, cacheStats, cacheErr), nil
 }
 
 func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchData *view.BatchData, collector *view.Collector, session *Session) (fullMatch *cache.Index, columnInMatcher *cache.Index, err error) {
@@ -365,7 +365,6 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 		}
 
 		if err == nil {
-			cacheStats = &cache.Stats{}
 			options = append(options, service, cacheStats)
 		}
 	}
@@ -375,7 +374,7 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 		options = append(options, &columnInMatcher)
 	}
 
-	stats := s.NewStats(session, fullMatcher, cacheStats)
+	stats := s.NewStats(session, fullMatcher, cacheStats, err)
 
 	reader, err := read.New(ctx, db, fullMatcher.SQL, collector.NewItem(), options...)
 	if err != nil {
@@ -425,7 +424,7 @@ func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, 
 	return nil, fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
 }
 
-func (s *Service) NewStats(session *Session, index *cache.Index, cacheStats *cache.Stats) *Stats {
+func (s *Service) NewStats(session *Session, index *cache.Index, cacheStats *cache.Stats, cacheError error) *Stats {
 	var SQL string
 	var args []interface{}
 	if session.IncludeSQL {
@@ -433,10 +432,16 @@ func (s *Service) NewStats(session *Session, index *cache.Index, cacheStats *cac
 		args = index.Args
 	}
 
+	var cacheErrorMessage string
+	if cacheError != nil {
+		cacheErrorMessage = cacheError.Error()
+	}
+
 	return &Stats{
 		SQL:        SQL,
 		Args:       args,
 		CacheStats: cacheStats,
+		CacheError: cacheErrorMessage,
 	}
 }
 

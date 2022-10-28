@@ -49,6 +49,7 @@ type (
 		Args       []interface{} `json:",omitempty"`
 		CacheStats *cache.Stats  `json:",omitempty"`
 		Error      string        `json:",omitempty"`
+		CacheError string        `json:",omitempty"`
 	}
 )
 
