@@ -51,7 +51,7 @@ func (c *matchersCollector) populateCacheCases(ctx context.Context, collector ch
 
 	cacheSize := len(cacheCases)
 	for _, cacheCase := range cacheCases {
-		if cacheCase.IndexMeta && c.view.Template.Meta != nil {
+		if cacheCase.IndexMeta {
 			cacheSize++
 		}
 	}
@@ -62,7 +62,7 @@ func (c *matchersCollector) populateCacheCases(ctx context.Context, collector ch
 func (c *matchersCollector) populateChan(aView *view.View, aChan chan warmupEntryFn, cacheInput *view.CacheInput) {
 	c.createIndexWarmupEntry(aView, aChan, cacheInput)
 
-	if !cacheInput.IndexMeta || aView.Template.Meta == nil {
+	if !cacheInput.IndexMeta {
 		return
 	}
 

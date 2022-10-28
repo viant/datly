@@ -37,7 +37,7 @@ type (
 
 	Warmup struct {
 		IndexColumn string
-		IndexMeta   bool
+		IndexMeta   bool       `json:",omitempty"`
 		Connector   *Connector `json:",omitempty"`
 		Cases       []*CacheParameters
 	}
@@ -472,6 +472,6 @@ func (c *Cache) NewInput(selector *Selector) *CacheInput {
 		Selector:   selector,
 		Column:     c.Warmup.IndexColumn,
 		MetaColumn: c.Warmup.IndexColumn,
-		IndexMeta:  c.Warmup.IndexMeta || c.Warmup.IndexColumn != "",
+		IndexMeta:  (c.Warmup.IndexMeta || c.Warmup.IndexColumn != "") && c.owner.Template.Meta != nil,
 	}
 }
