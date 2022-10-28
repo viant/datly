@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	as "github.com/aerospike/aerospike-client-go"
+	"github.com/aerospike/aerospike-client-go/types"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,7 +38,7 @@ type (
 
 	aerospikeClient struct {
 		actual      *as.Client
-		mutex       sync.Mutex
+		mutex       sync.RWMutex
 		cancelFunc  func()
 		initialized bool
 	}
@@ -53,53 +54,11 @@ func (c *aerospikeClient) connect() (*as.Client, error) {
 	aClient := c.actual
 	c.mutex.Unlock()
 
-	if aClient == nil {
+	if aClient == nil || !aClient.IsConnected() {
 		return nil, fmt.Errorf("no connection to one of aerospike cache was available")
 	}
+
 	return aClient, nil
-}
-
-func (c *aerospikeClient) connectIfNeeded(host string, port int) (*as.Client, error) {
-	return c.clientWithTimeout(time.Duration(AerospikeConnectionTimeoutInS)*time.Second, host, port)
-}
-
-func (c *aerospikeClient) tryConnect(host string, port int, channel chan func() (*as.Client, error)) {
-	defer close(channel)
-
-	client := c.actual
-	if client != nil && client.IsConnected() {
-		channel <- func() (*as.Client, error) {
-			return client, nil
-		}
-	}
-
-	var err error
-
-	c.actual, err = as.NewClient(host, port)
-	channel <- func() (*as.Client, error) {
-		return c.actual, err
-	}
-}
-
-func (c *aerospikeClient) clientWithTimeout(duration time.Duration, host string, port int) (*as.Client, error) {
-	ctx := context.Background()
-	clientChannel := make(chan func() (*as.Client, error))
-	withTimeout, cancelFunc := context.WithTimeout(ctx, duration)
-
-	go c.tryConnect(host, port, clientChannel)
-
-	var client *as.Client
-	var err error
-	select {
-	case actual := <-clientChannel:
-		client, err = actual()
-	case <-withTimeout.Done():
-		client, err = nil, fmt.Errorf("timeout error,couldn't connect to aerospike cache")
-	}
-
-	cancelFunc()
-
-	return client, err
 }
 
 func (c *aerospikeClient) init(host string, port int) error {
@@ -111,43 +70,69 @@ func (c *aerospikeClient) init(host string, port int) error {
 
 	c.initialized = true
 	var err error
-	c.actual, err = as.NewClient(host, port)
-	c.keepConnAlive(host, port)
+	c.actual, err = c.newClient(host, port)
+	go c.keepProbingIfNeeded(host, port)
 
 	return err
 }
 
-func (c *aerospikeClient) keepConnAlive(host string, port int) {
-	if c.cancelFunc != nil {
-		return
+func (c *aerospikeClient) newClient(host string, port int) (*as.Client, error) {
+	client, err := as.NewClient(host, port)
+	if client != nil {
+		client.DefaultPolicy.TotalTimeout = 100 * time.Millisecond
+		client.DefaultPolicy.MaxRetries = 2
 	}
 
-	ctx := context.Background()
-	withCancel, cancelFunc := context.WithCancel(ctx)
-	c.cancelFunc = cancelFunc
+	return client, err
+}
 
-	go func(ctx context.Context, host string, port int) {
-		for {
-			time.Sleep(time.Second * time.Duration(PingTimeInS))
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				aClient, err := c.clientWithTimeout(time.Duration(AerospikeConnectionTimeoutInS)*time.Second, host, port)
-				if aClient != nil {
-					aClient.DefaultWritePolicy.SendKey = true
-				}
-				c.mutex.Lock()
-				c.actual = aClient
-				c.mutex.Unlock()
+func (c *aerospikeClient) loginNewClientError(err error) bool {
+	if err == nil {
+		return false
+	}
 
-				if err != nil {
-					fmt.Printf("couldn't connect to aerospike client due to the %v\n", err.Error())
-				}
+	aerospikeError, ok := c.asAerospikeErr(err)
+	if !ok {
+		return false
+	}
 
-			}
+	switch aerospikeError.ResultCode() {
+	case types.NO_AVAILABLE_CONNECTIONS_TO_NODE, types.INVALID_NODE_ERROR:
+		fmt.Printf("[WARN] no available connection to one of the aerospike clients: %v\n", err.Error())
+		return true
+	default:
+		fmt.Printf("[WARN] Error occured while connecting to aerospike %v\n", err.Error())
+		return false
+	}
+}
+
+func (c *aerospikeClient) asAerospikeErr(err error) (types.AerospikeError, bool) {
+	aerospikeError, ok := err.(types.AerospikeError)
+	if ok {
+		return aerospikeError, true
+	}
+
+	aerospikePtrErr, ok := err.(*types.AerospikeError)
+	if ok && aerospikePtrErr != nil {
+		return *aerospikePtrErr, true
+	}
+
+	return types.AerospikeError{}, false
+}
+
+func (c *aerospikeClient) keepProbingIfNeeded(host string, port int) {
+	for c.actual == nil {
+		time.Sleep(time.Duration(PingTimeInS) * time.Second)
+
+		newClient, err := c.newClient(host, port)
+		if newClient != nil {
+			c.actual = newClient
 		}
-	}(withCancel, host, port)
+
+		if err != nil {
+			c.loginNewClientError(err)
+		}
+	}
 }
 
 var aDbPool = newPool()
