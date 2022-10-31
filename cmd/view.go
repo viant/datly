@@ -13,7 +13,7 @@ import (
 )
 
 func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, selector *view.Config, indexNamespace bool, parameters ...*view.Parameter) (*view.View, error) {
-	table := viewConfig.table
+	table := viewConfig.unexpandedTable
 	connector, err := s.ConnectorRef(view.NotEmptyOf(table.Connector, s.options.Connector.DbName))
 	if err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 		Template:      template,
 		Connector:     connector,
 		AllowNulls:    table.AllowNulls,
-		SelfReference: viewConfig.table.TableMeta.Self,
+		SelfReference: viewConfig.unexpandedTable.TableMeta.Self,
 		Cache:         cache,
 		Mode:          viewConfig.viewType,
 	}
@@ -236,7 +236,7 @@ func detectCaseFormat(xTable *option.Table) view.CaseFormat {
 
 func (s *Builder) buildColumnsConfig(ctx context.Context, config *viewConfig) (map[string]*view.ColumnConfig, error) {
 	result := map[string]*view.ColumnConfig{}
-	for _, column := range config.table.Inner {
+	for _, column := range config.unexpandedTable.Inner {
 		if column.Comments == "" {
 			continue
 		}
@@ -252,7 +252,7 @@ func (s *Builder) buildColumnsConfig(ctx context.Context, config *viewConfig) (m
 }
 
 func (s *Builder) buildCache(viewConfig *viewConfig) (*view.Cache, error) {
-	meta := viewConfig.table.TableMeta
+	meta := viewConfig.unexpandedTable.TableMeta
 	if meta.Cache == nil {
 		return nil, nil
 	}

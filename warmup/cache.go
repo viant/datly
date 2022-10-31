@@ -230,7 +230,7 @@ func PopulateCache(views []*view.View) (int, error) {
 	}
 
 	close(notifier)
-	return collectorsCounter, errUtils.CombineErrors("errors while populating cache: ", errors)
+	return indexed, errUtils.CombineErrors("errors while populating cache: ", errors)
 }
 
 func FilterCacheViews(views []*view.View) []*view.View {

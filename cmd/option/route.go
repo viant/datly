@@ -17,19 +17,8 @@ type (
 		CSV            *router.CSVConfig
 		Declare        map[string]string
 		ParameterHints sanitize.ParameterHints `json:"-"`
-		ExecData       *ExecData               `json:"-"`
-		ReadData       *ReadData               `json:"-"`
 		Const          map[string]interface{}
 		err            error
-	}
-
-	ExecData struct {
-		Meta *ViewMeta
-	}
-
-	ReadData struct {
-		Table          *Table
-		DataViewParams map[string]*TableParam
 	}
 )
 

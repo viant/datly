@@ -14,10 +14,8 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/metadata/ast/query"
 	"github.com/viant/toolbox"
-	rdata "github.com/viant/toolbox/data"
 	"gopkg.in/yaml.v3"
 	"io"
-	"os"
 	"strings"
 )
 
@@ -32,7 +30,7 @@ type (
 	}
 
 	routeBuilder struct {
-		configProvider *ConfigProvider
+		configProvider *ViewConfigurer
 		paramsIndex    *ParametersIndex
 		routerResource *router.Resource
 		route          *router.Route
@@ -42,10 +40,10 @@ type (
 	}
 
 	viewConfig struct {
-		viewName     string
-		queryJoin    *query.Join
-		table        *option.Table
-		outputConfig option.Output
+		viewName        string
+		queryJoin       *query.Join
+		unexpandedTable *option.Table
+		outputConfig    option.Output
 
 		relations      []*viewConfig
 		relationsIndex map[string]int
@@ -55,6 +53,7 @@ type (
 		aKey           *relationKey
 		fileName       string
 		viewType       view.Mode
+		expandedTable  *option.Table
 	}
 
 	viewParamConfig struct {
@@ -71,27 +70,27 @@ func (b *routeBuilder) AddViews(aView *view.View) {
 }
 
 func (c *viewConfig) ensureTableName(tableName string) {
-	if c.table.Name != "" {
+	if c.unexpandedTable.Name != "" {
 		return
 	}
 
-	c.table.Name = tableName
+	c.unexpandedTable.Name = tableName
 }
 
 func (c *viewConfig) ensureOuterAlias(alias string) {
-	if c.table.OuterAlias != "" {
+	if c.unexpandedTable.OuterAlias != "" {
 		return
 	}
 
-	c.table.OuterAlias = alias
+	c.unexpandedTable.OuterAlias = alias
 }
 
 func (c *viewConfig) ensureInnerAlias(name string) {
-	if c.table.InnerAlias != "" {
+	if c.unexpandedTable.InnerAlias != "" {
 		return
 	}
 
-	c.table.InnerAlias = name
+	c.unexpandedTable.InnerAlias = name
 }
 
 func (c *viewConfig) ensureFileName(name string) {
@@ -103,7 +102,7 @@ func (c *viewConfig) ensureFileName(name string) {
 }
 
 func (c *viewConfig) AddMetaTemplate(holder string, config *option.Table) {
-	if c.table.OuterAlias == holder {
+	if c.unexpandedTable.OuterAlias == holder {
 		c.templateMeta = config
 		return
 	}
@@ -117,7 +116,7 @@ func (c *viewConfig) AddMetaTemplate(holder string, config *option.Table) {
 }
 
 func (c *viewConfig) AddRelation(viewConfig *viewConfig) {
-	holderName := viewConfig.table.OuterAlias
+	holderName := viewConfig.unexpandedTable.OuterAlias
 
 	c.relationsIndex[holderName] = len(c.relations)
 	c.relations = append(c.relations, viewConfig)
@@ -129,12 +128,12 @@ func (c *viewConfig) AddRelation(viewConfig *viewConfig) {
 }
 
 func (c *viewConfig) ViewConfig(holder string) (*viewConfig, bool) {
-	if holder == c.table.OuterAlias {
+	if holder == c.unexpandedTable.OuterAlias {
 		return c, true
 	}
 
 	for _, relation := range c.relations {
-		if relation.table.OuterAlias == holder {
+		if relation.unexpandedTable.OuterAlias == holder {
 			return relation, true
 		}
 	}
@@ -303,14 +302,14 @@ func (s *Builder) initConfigProvider() error {
 	return nil
 }
 
-func (s *Builder) buildConfigProvider(SQL string) (*ConfigProvider, error) {
+func (s *Builder) buildConfigProvider(SQL string) (*ViewConfigurer, error) {
 	serviceType := router.ReaderServiceType
 
 	if IsSQLExecMode(SQL) {
 		serviceType = router.ExecutorServiceType
 	}
 
-	return NewConfigProviderReader(s.options.Generate.Name, SQL, s.routeBuilder.option, s.routeBuilder.paramsIndex.hints, serviceType)
+	return NewConfigProviderReader(s.options.Generate.Name, SQL, s.routeBuilder.option, s.routeBuilder.paramsIndex.hints, serviceType, s.routeBuilder.paramsIndex.consts)
 }
 
 func (s *Builder) loadSQL(ctx context.Context) error {
@@ -335,44 +334,12 @@ func (s *Builder) loadSQL(ctx context.Context) error {
 
 	tryUnmrashalHintWithWarn(hint, s.routeBuilder.option)
 
-	expandMap, err := s.buildExpandMap(hints, s.routeBuilder.option.Const)
-	if err != nil {
-		return err
-	}
-
-	if len(expandMap) > 0 {
-		SQL = expandMap.ExpandAsText(SQL)
-	}
-
 	s.routeBuilder.sqlStmt = SQL
 	s.routeBuilder.paramsIndex.AddHints(hints.Index())
 	return nil
 }
 
-func (s *Builder) buildExpandMap(hints sanitize.ParameterHints, consts map[string]interface{}) (rdata.Map, error) {
-	result := rdata.Map{}
-	for _, aHint := range hints {
-		actual, _ := sanitize.SplitHint(aHint.Hint)
-		aParam := &option.Parameter{}
-		if err := tryUnmarshalHint(actual, aParam); err != nil {
-			return nil, err
-		}
-
-		if aParam.Kind != string(view.EnvironmentKind) {
-			continue
-		}
-
-		result.SetValue(aHint.Parameter, os.Getenv(aHint.Parameter))
-	}
-
-	for constName := range consts {
-		result.SetValue(constName, consts[constName])
-	}
-
-	return result, nil
-}
-
-func (s *Builder) buildExecModeConfigProvider(SQL string) (ConfigProvider, error) {
+func (s *Builder) buildExecModeConfigProvider(SQL string) (ViewConfigurer, error) {
 	panic("handle later!")
 }
 
@@ -580,7 +547,7 @@ func (s *Builder) indexExcludedColumns(config *viewConfig) error {
 }
 
 func (s *Builder) appendExcluded(excluded *[]string, config *viewConfig, path string) {
-	for _, column := range config.table.Columns {
+	for _, column := range config.unexpandedTable.Columns {
 		for _, except := range column.Except {
 			excludedFieldPath := except
 			if path != "" {

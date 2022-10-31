@@ -30,15 +30,16 @@ type (
 
 func newViewConfig(viewName string, fileName string, parent *query.Join, aTable *option.Table, templateMeta *option.Table, mode view.Mode) *viewConfig {
 	result := &viewConfig{
-		viewName:       viewName,
-		queryJoin:      parent,
-		table:          aTable,
-		fileName:       fileName,
-		viewParams:     map[string]*viewParamConfig{},
-		metasBuffer:    map[string]*option.Table{},
-		templateMeta:   templateMeta,
-		viewType:       mode,
-		relationsIndex: map[string]int{},
+		viewName:        viewName,
+		queryJoin:       parent,
+		unexpandedTable: aTable,
+		expandedTable:   aTable,
+		fileName:        fileName,
+		viewParams:      map[string]*viewParamConfig{},
+		metasBuffer:     map[string]*option.Table{},
+		templateMeta:    templateMeta,
+		viewType:        mode,
+		relationsIndex:  map[string]int{},
 	}
 	return result
 }

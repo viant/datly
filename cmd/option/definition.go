@@ -38,53 +38,6 @@ type (
 	}
 )
 
-func NewViewMeta() *ViewMeta {
-	return &ViewMeta{index: map[string]int{}}
-}
-
-func (m *ViewMeta) AddParameter(param *Parameter) {
-	if m.variables != nil && m.variables[param.Name] || !sanitize.CanBeParam(param.Name) {
-		return
-	}
-
-	if param.Multi {
-		param.Cardinality = view.Many
-	}
-
-	if index, ok := m.index[param.Id]; ok {
-		parameter := m.Parameters[index]
-		parameter.Multi = param.Multi || parameter.Multi
-		if parameter.Multi {
-			parameter.Cardinality = view.Many
-		}
-
-		parameter.Repeated = parameter.Repeated || param.Repeated
-
-		parameter.Required = BoolPtr((parameter.Required != nil && *parameter.Required) || (param.Required != nil && *param.Required))
-		if parameter.Assumed {
-			parameter.DataType = param.DataType
-		}
-
-		return
-	}
-
-	m.index[param.Id] = len(m.Parameters)
-	m.Parameters = append(m.Parameters, param)
-}
-
 func BoolPtr(b bool) *bool {
 	return &b
-}
-
-func (m *ViewMeta) ParamByName(name string) (*Parameter, bool) {
-	index, ok := m.index[name]
-	if !ok {
-		return nil, false
-	}
-
-	return m.Parameters[index], true
-}
-
-func (m *ViewMeta) SetVariables(variables map[string]bool) {
-	m.variables = variables
 }

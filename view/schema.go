@@ -38,6 +38,9 @@ func NewSchema(compType reflect.Type) *Schema {
 
 //Type returns struct type
 func (c *Schema) Type() reflect.Type {
+	if c == nil {
+		panic(c)
+	}
 	return c.compType
 }
 

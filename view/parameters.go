@@ -329,6 +329,14 @@ func (p *Parameter) IsRequired() bool {
 }
 
 func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
+	if p.Schema == nil {
+		if p.In.Kind == LiteralKind {
+			p.Schema = NewSchema(reflect.TypeOf(p.Const))
+		} else {
+			return fmt.Errorf("parameter %v schema can't be empty", p.Name)
+		}
+	}
+
 	if p.Schema.Type() != nil {
 		return nil
 	}

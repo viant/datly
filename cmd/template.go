@@ -11,13 +11,11 @@ import (
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
-	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty/ast"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/ast/stmt"
 	"github.com/viant/velty/parser"
 	"net/http"
-	"os"
 	"reflect"
 	"strings"
 )
@@ -58,7 +56,6 @@ func (s *Builder) buildTemplate(ctx context.Context, aViewConfig *viewConfig, ex
 }
 
 func (s *Builder) Parse(ctx context.Context, aViewConfig *viewConfig, params []*view.Parameter) (*Template, error) {
-	table := aViewConfig.table
 
 	for paramName, paramViewConfig := range aViewConfig.viewParams {
 		var externalParams []*view.Parameter
@@ -95,10 +92,10 @@ func (s *Builder) Parse(ctx context.Context, aViewConfig *viewConfig, params []*
 			return nil, err
 		}
 
-		typeDef := s.buildSchemaFromTable(paramName, childViewConfig.table, s.columnTypes(childViewConfig.table))
+		typeDef := s.buildSchemaFromTable(paramName, childViewConfig.unexpandedTable, s.columnTypes(childViewConfig.unexpandedTable))
 		s.addTypeDef(typeDef)
 
-		aParam := childViewConfig.table.TableMeta.DataViewParameter
+		aParam := childViewConfig.unexpandedTable.TableMeta.DataViewParameter
 
 		if aParam == nil {
 			aParam = &view.Parameter{
@@ -113,19 +110,15 @@ func (s *Builder) Parse(ctx context.Context, aViewConfig *viewConfig, params []*
 
 		aParam.Schema = s.NewSchema(typeDef.Name, "")
 		aView.Schema = s.NewSchema(typeDef.Name, "")
-		updateAsAuthParamIfNeeded(childViewConfig.table.Auth, aParam)
+		updateAsAuthParamIfNeeded(childViewConfig.unexpandedTable.Auth, aParam)
 		params = append(params, aParam)
 	}
 
+	table := aViewConfig.expandedTable
+
 	SQL := table.SQL
-	viewMeta := option.NewViewMeta()
 	iterator := sanitize.NewIterator(SQL, s.routeBuilder.paramsIndex.hints, s.routeBuilder.option.Const)
 	SQL = iterator.SQL
-
-	envMap := buildExpandMap(viewMeta)
-	if len(envMap) != 0 {
-		SQL = envMap.ExpandAsText(SQL)
-	}
 
 	defaultParamType := view.QueryKind
 	if s.routeBuilder.option.Method == http.MethodPost {
@@ -143,19 +136,6 @@ func (s *Builder) NewSchema(dataType string, cardinality string) *view.Schema {
 	return schema
 }
 
-func buildExpandMap(viewMeta *option.ViewMeta) rdata.Map {
-	result := rdata.Map{}
-	for _, parameter := range viewMeta.Parameters {
-		if parameter.Kind != string(view.EnvironmentKind) {
-			continue
-		}
-
-		result.SetValue(parameter.Name, os.Getenv(parameter.Name))
-	}
-
-	return result
-}
-
 func (s *Builder) convertParams(template *Template) ([]*view.Parameter, error) {
 	parameters := template.Parameters
 	result := make([]*view.Parameter, 0, len(parameters))
@@ -164,7 +144,7 @@ func (s *Builder) convertParams(template *Template) ([]*view.Parameter, error) {
 	added := map[string]bool{}
 	for _, parameter := range parameters {
 		existingParam := s.paramByName(parameter.Name)
-		newParam := convertMetaParameter(parameter)
+		newParam := convertMetaParameter(parameter, s.routeBuilder.option.Const)
 		updateParamPrecedence(existingParam, newParam)
 		result = append(result, &view.Parameter{Reference: shared.Reference{Ref: existingParam.Name}})
 		added[existingParam.Name] = true
@@ -181,12 +161,17 @@ func (s *Builder) convertParams(template *Template) ([]*view.Parameter, error) {
 	return result, nil
 }
 
-func convertMetaParameter(param *option.Parameter) *view.Parameter {
+func convertMetaParameter(param *option.Parameter, values map[string]interface{}) *view.Parameter {
 	aCodec, dataType := paramCodec(param)
+	var constValue interface{}
+	if aValue, ok := values[param.Name]; ok {
+		constValue = aValue
+	}
 
 	return &view.Parameter{
 		Name:         param.Id,
 		Codec:        aCodec,
+		Const:        constValue,
 		PresenceName: param.Name,
 		Schema: &view.Schema{
 			DataType:    dataType,
@@ -297,7 +282,7 @@ func (s *Builder) buildTemplateMeta(aConfig *viewConfig) (*view.TemplateMeta, er
 	tmplMeta := &view.TemplateMeta{
 		Source: SQL,
 		Name:   table.OuterAlias,
-		Kind:   view.TemplateMetaKind(view.NotEmptyOf(aConfig.outputConfig.Kind, string(view.RecordTemplateMetaKind))),
+		Kind:   view.MetaKind(view.NotEmptyOf(aConfig.outputConfig.Kind, string(view.MetaTypeRecord))),
 	}
 
 	return tmplMeta, tryUnmarshalHint(table.ViewHint, tmplMeta)
@@ -492,8 +477,9 @@ func (t *Template) unmarshalParamsHints() error {
 }
 
 func (t *Template) updateParamIfNeeded(param *option.Parameter, meta *sanitize.ParamMeta) error {
-	if _, ok := t.paramsMeta.consts[param.Name]; ok {
+	if value, ok := t.paramsMeta.consts[param.Name]; ok {
 		param.Kind = string(view.LiteralKind)
+		param.DataType = reflect.TypeOf(value).String()
 	}
 
 	if meta.MetaType == nil {
