@@ -147,7 +147,6 @@ type event struct {
 
 //TODO: add testcases against sql injection
 func TestRouter(t *testing.T) {
-	view.AerospikeConnectionTimeoutInS = 1000
 	view.PingTimeInS = 1000
 	reader.Dif = func(t1, t2 time.Time) time.Duration {
 		return time.Duration(5) * time.Millisecond
@@ -849,7 +848,7 @@ func TestRouter(t *testing.T) {
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {
-	for i, tCase := range testcases {
+	for i, tCase := range testcases[63:64] {
 		if i != 0 {
 			testcases[i-1].cleanup()
 		}

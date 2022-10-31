@@ -30,10 +30,15 @@ type ViewConfigurer struct {
 	serviceType  router.ServiceType
 	hints        map[string]*sanitize.ParameterHint
 	consts       map[string]interface{}
+	viewParams   []*viewParamConfig
 }
 
 func (c *ViewConfigurer) ViewConfig() *viewConfig {
 	return c.aView
+}
+
+func (c *ViewConfigurer) ViewParams() []*viewParamConfig {
+	return c.viewParams
 }
 
 func (c *ViewConfigurer) DefaultHTTPMethod() string {
@@ -71,16 +76,18 @@ func (c *ViewConfigurer) OutputConfig() (string, error) {
 }
 
 func (c *ViewConfigurer) Init(SQL string, opt *option.Route, hints map[string]*sanitize.ParameterHint) error {
-	config, err := c.buildViewConfig(c.serviceType, c.mainViewName, SQL, opt, nil)
+	config, viewParams, err := c.buildViewConfig(c.serviceType, c.mainViewName, SQL, opt, nil)
 	if err != nil {
 		return err
 	}
 
-	if err = c.extractViewParamsFromHints(config, hints, opt); err != nil {
+	hintedViewParams, err := c.extractViewParamsFromHints(hints, opt)
+	if err != nil {
 		return err
 	}
 
 	c.aView = config
+	c.viewParams = append(viewParams, hintedViewParams...)
 	return nil
 }
 
@@ -119,18 +126,19 @@ func getMetaTemplateHolder(name string) string {
 	return name[:index]
 }
 
-func (c *ViewConfigurer) buildViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.Route, parent *query.Join) (*viewConfig, error) {
-	config, err := c.prepareViewConfig(serviceType, viewName, SQL, opt, parent)
+func (c *ViewConfigurer) buildViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.Route, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
+	config, viewParams, err := c.prepareViewConfig(serviceType, viewName, SQL, opt, parent)
 
-	return config, err
+	return config, viewParams, err
 }
 
-func (c *ViewConfigurer) prepareViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.Route, parent *query.Join) (*viewConfig, error) {
+func (c *ViewConfigurer) prepareViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.Route, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
 	if serviceType == router.ReaderServiceType {
 		return c.buildReaderViewConfig(viewName, SQL, opt, parent)
 	}
 
-	return c.buildExecViewConfig(viewName, SQL)
+	config, err := c.buildExecViewConfig(viewName, SQL)
+	return config, nil, err
 }
 
 func (c *ViewConfigurer) buildExecViewConfig(viewName string, templateSQL string) (*viewConfig, error) {
@@ -158,24 +166,24 @@ func (c *ViewConfigurer) buildExecViewConfig(viewName string, templateSQL string
 	return aConfig, resultErr
 }
 
-func (c *ViewConfigurer) buildReaderViewConfig(viewName string, SQL string, opt *option.Route, parent *query.Join) (*viewConfig, error) {
-	result, err := c.prepareUnexpanded(viewName, SQL, opt, parent)
+func (c *ViewConfigurer) buildReaderViewConfig(viewName string, SQL string, opt *option.Route, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
+	result, dataViewParams, err := c.prepareUnexpanded(viewName, SQL, opt, parent)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	expandMap, err := buildExpandMap(c.hints, c.consts)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	expandedTable, err := buildExpandedTable(viewName, result.unexpandedTable, expandMap, opt)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	result.expandedTable = expandedTable
-	return result, err
+	return result, dataViewParams, err
 }
 
 func buildExpandedTable(viewName string, table *option.Table, expandMap rdata.Map, opt *option.Route) (*option.Table, error) {
@@ -213,7 +221,7 @@ func buildExpandMap(hints map[string]*sanitize.ParameterHint, consts map[string]
 	return result, nil
 }
 
-func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *option.Route, parent *query.Join) (*viewConfig, error) {
+func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *option.Route, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
 	aQuery, err := parser.ParseQuery(SQL)
 	if err != nil {
 		fmt.Printf("[WARN] couldn't parse properly SQL for %v\n", viewName)
@@ -231,7 +239,7 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 		}
 
 		aTable.NamespaceSource = namespaceSource
-		return result, nil
+		return result, nil, nil
 	}
 
 	aTable := buildTableFromQueryWithWarning(aQuery, aQuery.From.X, opt, aQuery.From.Comments)
@@ -244,15 +252,17 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 
 	result := newViewConfig(viewName, view.NotEmptyOf(aQuery.From.Alias, viewName), parent, aTable, nil, view.SQLQueryMode)
 
+	var dataViewParams []*viewParamConfig
 	for _, join := range joins {
 		innerTable := buildTableWithWarning(join.With, opt, join.Comments)
-		relViewConfig, err := c.buildViewConfigWithTable(join, innerTable, opt)
+		relViewConfig, childViewParams, err := c.buildViewConfigWithTable(join, innerTable, opt)
+		dataViewParams = append(dataViewParams, childViewParams...)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		if err = tryUnmarshalHint(join.Comments, &relViewConfig.unexpandedTable.TableMeta); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		relViewConfig.unexpandedTable.OuterAlias = join.Alias
@@ -264,14 +274,15 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 			relViewConfig.fileName = join.Alias
 
 			tryUnmrashalHintWithWarn(join.Comments, paramOption)
-			result.viewParams[join.Alias] = &viewParamConfig{
-				viewConfig:  relViewConfig,
-				paramConfig: []*option.Parameter{paramOption},
-			}
+			dataViewParams = append(dataViewParams, &viewParamConfig{
+				viewConfig: relViewConfig,
+				params:     []*option.Parameter{paramOption},
+			})
+
 		} else {
 			relViewConfig.aKey, err = relationKeyOf(aTable, innerTable, join)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
 			result.AddRelation(relViewConfig)
@@ -294,7 +305,7 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 		}
 	}
 
-	return result, nil
+	return result, dataViewParams, nil
 }
 
 func (c *ViewConfigurer) getAlias(asStarExpr *expr.Star) string {
@@ -306,17 +317,17 @@ func (c *ViewConfigurer) getAlias(asStarExpr *expr.Star) string {
 	return ""
 }
 
-func (c *ViewConfigurer) buildViewConfigWithTable(join *query.Join, innerTable *option.Table, opt *option.Route) (*viewConfig, error) {
+func (c *ViewConfigurer) buildViewConfigWithTable(join *query.Join, innerTable *option.Table, opt *option.Route) (*viewConfig, []*viewParamConfig, error) {
 	if strings.TrimSpace(innerTable.SQL) == "" {
-		return newViewConfig(join.Alias, join.Alias, join, innerTable, nil, view.SQLQueryMode), nil
+		return newViewConfig(join.Alias, join.Alias, join, innerTable, nil, view.SQLQueryMode), nil, nil
 	}
 
-	config, err := c.buildViewConfig(c.serviceType, join.Alias, innerTable.SQL, opt, join)
+	config, viewParams, err := c.buildViewConfig(c.serviceType, join.Alias, innerTable.SQL, opt, join)
 	if config != nil {
 		config.unexpandedTable = innerTable
 	}
 
-	return config, err
+	return config, viewParams, err
 }
 
 func sqlxJoins(aQuery *query.Select, opt *option.Route) ([]*query.Join, bool) {
@@ -328,7 +339,7 @@ func sqlxJoins(aQuery *query.Select, opt *option.Route) ([]*query.Join, bool) {
 
 	var result []*query.Join
 	for i, join := range aQuery.Joins {
-		if isSQLXRelation(join) {
+		if isSQLXRelation(join.With) {
 			result = append(result, aQuery.Joins[i])
 		}
 	}
@@ -345,7 +356,8 @@ func isSQLXRelation(rel node.Node) bool {
 	return columns.ContainsSelect(candidate) || !columns.CanBeTableName(candidate)
 }
 
-func (c *ViewConfigurer) extractViewParamsFromHints(config *viewConfig, hints map[string]*sanitize.ParameterHint, opt *option.Route) error {
+func (c *ViewConfigurer) extractViewParamsFromHints(hints map[string]*sanitize.ParameterHint, opt *option.Route) ([]*viewParamConfig, error) {
+	var viewParams []*viewParamConfig
 	for _, hint := range hints {
 		aHint, sql := sanitize.SplitHint(hint.Hint)
 		if strings.TrimSpace(sql) == "" {
@@ -355,18 +367,24 @@ func (c *ViewConfigurer) extractViewParamsFromHints(config *viewConfig, hints ma
 		param := &option.Parameter{}
 		tryUnmrashalHintWithWarn(aHint, param)
 
-		aViewConfig, err := c.buildViewConfig(router.ReaderServiceType, hint.Parameter, sql, opt, nil)
+		aViewConfig, childViewParams, err := c.buildViewConfig(router.ReaderServiceType, hint.Parameter, sql, opt, nil)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		config.viewParams[hint.Parameter] = &viewParamConfig{
-			viewConfig:  aViewConfig,
-			paramConfig: []*option.Parameter{param},
-		}
+		viewParams = append(viewParams, newViewParamConfig(aViewConfig, param))
+
+		viewParams = append(viewParams, childViewParams...)
 	}
 
-	return nil
+	return viewParams, nil
+}
+
+func newViewParamConfig(aViewConfig *viewConfig, param ...*option.Parameter) *viewParamConfig {
+	return &viewParamConfig{
+		viewConfig: aViewConfig,
+		params:     param,
+	}
 }
 
 func updateExecViewConfig(stmtType byte, SQLStmt string, view *viewConfig) error {

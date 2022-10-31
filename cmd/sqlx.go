@@ -35,7 +35,6 @@ func newViewConfig(viewName string, fileName string, parent *query.Join, aTable 
 		unexpandedTable: aTable,
 		expandedTable:   aTable,
 		fileName:        fileName,
-		viewParams:      map[string]*viewParamConfig{},
 		metasBuffer:     map[string]*option.Table{},
 		templateMeta:    templateMeta,
 		viewType:        mode,
@@ -194,12 +193,19 @@ func relationKeyOf(parentTable *option.Table, relTable *option.Table, join *quer
 }
 
 func newKey(s *expr.Selector, table *option.Table) (*key, error) {
-	alias := table.InnerAlias
+	alias := ""
 	tableName := table.Name
 	byAlias := table.Inner.ByAlias()
 
 	colName := parser.Stringify(s.X)
 	field := colName
+
+	for _, column := range table.Inner {
+		if column.Alias == colName {
+			alias = column.Ns
+			break
+		}
+	}
 
 	if len(byAlias) > 0 {
 		actualColumn, ok := fieldName(byAlias, colName)

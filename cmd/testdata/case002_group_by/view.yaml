@@ -109,6 +109,7 @@ Template:
 With:
   - Cardinality: Many
     Column: event_type_id
+    Field: eventTypeId
     Holder: EventTypes
     IncludeColumn: true
     Name: events_eventTypes

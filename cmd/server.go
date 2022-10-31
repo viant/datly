@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/metadata/ast/query"
 	"github.com/viant/toolbox"
+	"github.com/viant/toolbox/format"
 	"gopkg.in/yaml.v3"
 	"io"
 	"strings"
@@ -48,7 +49,6 @@ type (
 		relations      []*viewConfig
 		relationsIndex map[string]int
 		metasBuffer    map[string]*option.Table
-		viewParams     map[string]*viewParamConfig
 		templateMeta   *option.Table
 		aKey           *relationKey
 		fileName       string
@@ -57,8 +57,11 @@ type (
 	}
 
 	viewParamConfig struct {
-		viewConfig  *viewConfig
-		paramConfig []*option.Parameter
+		viewName string
+		viewFile string
+
+		viewConfig *viewConfig
+		params     []*option.Parameter
 	}
 )
 
@@ -170,7 +173,12 @@ func (s *Builder) Build(ctx context.Context) error {
 		return err
 	}
 
+	if err := s.buildViewParams(); err != nil {
+		return err
+	}
+
 	config := s.routeBuilder.configProvider.ViewConfig()
+
 	if err := s.buildMainView(ctx, config); err != nil {
 		return err
 	}
@@ -414,14 +422,18 @@ func (s *Builder) uploadVariablesDep() error {
 func (s *Builder) buildConstParameters(route *option.Route) []*view.Parameter {
 	params := make([]*view.Parameter, 0, len(route.Const))
 	for paramName := range route.Const {
-		params = append(params, &view.Parameter{
+		aParam := s.paramByName(paramName)
+		constParam := view.Parameter{
 			Name: paramName,
 			In: &view.Location{
 				Kind: view.LiteralKind,
 				Name: paramName,
 			},
 			Const: route.Const[paramName],
-		})
+		}
+
+		*aParam = constParam
+		params = append(params, aParam)
 	}
 
 	return params
@@ -505,7 +517,7 @@ func (s *Builder) buildCacheWarmup(warmup map[string]interface{}, on *relationKe
 	}
 
 	result := &view.Warmup{
-		IndexColumn: view.NotEmptyOf(on.child.Alias, on.child.Column),
+		IndexColumn: view.NotEmptyOf(on.child.Alias, on.child.Field, on.child.Column),
 	}
 
 	multiSet := &view.CacheParameters{}
@@ -522,7 +534,7 @@ func (s *Builder) buildCacheWarmup(warmup map[string]interface{}, on *relationKe
 	return result
 }
 
-func (s *Builder) addParameters(params []*view.Parameter) {
+func (s *Builder) addParameters(params ...*view.Parameter) {
 	for i := range params {
 		s.routeBuilder.routerResource.Resource.Parameters = append(s.routeBuilder.routerResource.Resource.Parameters, params[i])
 		s.routeBuilder.paramsIndex.AddParameter(params[i])
@@ -539,17 +551,18 @@ func (s *Builder) inheritRouteFromMainConfig(config option.Output) {
 }
 
 func (s *Builder) indexExcludedColumns(config *viewConfig) error {
-	var excluded []string
-	s.appendExcluded(&excluded, config, "")
-	s.routeBuilder.route.Exclude = excluded
-
-	return nil
+	return s.appendExcluded(&s.routeBuilder.route.Exclude, config, "")
 }
 
-func (s *Builder) appendExcluded(excluded *[]string, config *viewConfig, path string) {
+func (s *Builder) appendExcluded(excluded *[]string, config *viewConfig, path string) error {
 	for _, column := range config.unexpandedTable.Columns {
 		for _, except := range column.Except {
-			excludedFieldPath := except
+			colFormat, err := format.NewCase(view.DetectCase(except))
+			if err != nil {
+				return err
+			}
+
+			excludedFieldPath := colFormat.Format(except, format.CaseUpperCamel)
 			if path != "" {
 				excludedFieldPath = path + "." + excludedFieldPath
 			}
@@ -563,6 +576,80 @@ func (s *Builder) appendExcluded(excluded *[]string, config *viewConfig, path st
 		if path != "" {
 			childPath = path + "." + childPath
 		}
-		s.appendExcluded(excluded, relation, childPath)
+		if err := s.appendExcluded(excluded, relation, childPath); err != nil {
+			return err
+		}
 	}
+
+	return nil
+}
+
+func (s *Builder) buildViewParams() error {
+	paramViews := s.routeBuilder.configProvider.ViewParams()
+
+	for _, paramViewConfig := range paramViews {
+		externalParams := s.prepareExternalParameters(paramViewConfig)
+
+		childViewConfig := paramViewConfig.viewConfig
+
+		aView, err := s.buildAndAddView(context.TODO(), paramViewConfig.viewConfig, &view.Config{
+			Constraints: &view.Constraints{
+				Criteria:   false,
+				Limit:      true,
+				Offset:     true,
+				OrderBy:    false,
+				Projection: false,
+			},
+			Limit: 25,
+		}, false, externalParams...)
+
+		if err != nil {
+			return err
+		}
+
+		paramName := aView.Name
+		typeDef := s.buildSchemaFromTable(paramName, childViewConfig.unexpandedTable, s.columnTypes(childViewConfig.unexpandedTable))
+		s.addTypeDef(typeDef)
+
+		aParam := childViewConfig.unexpandedTable.TableMeta.DataViewParameter
+
+		if aParam == nil {
+			aParam = &view.Parameter{
+				Name: paramName,
+				In: &view.Location{
+					Kind: view.DataViewKind,
+					Name: paramName,
+				},
+				Required: boolPtr(true),
+			}
+		}
+
+		aParam.Schema = s.NewSchema(typeDef.Name, "")
+		aView.Schema = s.NewSchema(typeDef.Name, "")
+		updateAsAuthParamIfNeeded(childViewConfig.unexpandedTable.Auth, aParam)
+		s.addParameters(aParam)
+	}
+
+	return nil
+}
+
+func (s *Builder) prepareExternalParameters(paramViewConfig *viewParamConfig) []*view.Parameter {
+	var externalParams []*view.Parameter
+
+	for _, parameter := range paramViewConfig.params {
+		if parameter.Auth != "" {
+			externalParams = append(externalParams, &view.Parameter{
+				Name:            parameter.Auth,
+				In:              &view.Location{Name: "Authorization", Kind: view.HeaderKind},
+				ErrorStatusCode: 401,
+				Required:        boolPtr(true),
+				Codec:           &view.Codec{Name: "JwtClaim"},
+				Schema:          &view.Schema{DataType: "JwtTokenInfo"},
+			})
+
+			continue
+		}
+	}
+
+	return externalParams
 }

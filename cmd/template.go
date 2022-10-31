@@ -56,64 +56,6 @@ func (s *Builder) buildTemplate(ctx context.Context, aViewConfig *viewConfig, ex
 }
 
 func (s *Builder) Parse(ctx context.Context, aViewConfig *viewConfig, params []*view.Parameter) (*Template, error) {
-
-	for paramName, paramViewConfig := range aViewConfig.viewParams {
-		var externalParams []*view.Parameter
-
-		for _, parameter := range paramViewConfig.paramConfig {
-			if parameter.Auth != "" {
-				externalParams = append(externalParams, &view.Parameter{
-					Name:            parameter.Auth,
-					In:              &view.Location{Name: "Authorization", Kind: view.HeaderKind},
-					ErrorStatusCode: 401,
-					Required:        boolPtr(true),
-					Codec:           &view.Codec{Name: "JwtClaim"},
-					Schema:          &view.Schema{DataType: "JwtTokenInfo"},
-				})
-
-				continue
-			}
-		}
-
-		childViewConfig := paramViewConfig.viewConfig
-
-		aView, err := s.buildAndAddView(ctx, paramViewConfig.viewConfig, &view.Config{
-			Constraints: &view.Constraints{
-				Criteria:   false,
-				Limit:      true,
-				Offset:     true,
-				OrderBy:    false,
-				Projection: false,
-			},
-			Limit: 25,
-		}, false, externalParams...)
-
-		if err != nil {
-			return nil, err
-		}
-
-		typeDef := s.buildSchemaFromTable(paramName, childViewConfig.unexpandedTable, s.columnTypes(childViewConfig.unexpandedTable))
-		s.addTypeDef(typeDef)
-
-		aParam := childViewConfig.unexpandedTable.TableMeta.DataViewParameter
-
-		if aParam == nil {
-			aParam = &view.Parameter{
-				Name: paramName,
-				In: &view.Location{
-					Kind: view.DataViewKind,
-					Name: aView.Name,
-				},
-				Required: boolPtr(true),
-			}
-		}
-
-		aParam.Schema = s.NewSchema(typeDef.Name, "")
-		aView.Schema = s.NewSchema(typeDef.Name, "")
-		updateAsAuthParamIfNeeded(childViewConfig.unexpandedTable.Auth, aParam)
-		params = append(params, aParam)
-	}
-
 	table := aViewConfig.expandedTable
 
 	SQL := table.SQL
@@ -139,7 +81,7 @@ func (s *Builder) NewSchema(dataType string, cardinality string) *view.Schema {
 func (s *Builder) convertParams(template *Template) ([]*view.Parameter, error) {
 	parameters := template.Parameters
 	result := make([]*view.Parameter, 0, len(parameters))
-	s.addParameters(template.viewParams)
+	s.addParameters(template.viewParams...)
 
 	added := map[string]bool{}
 	for _, parameter := range parameters {

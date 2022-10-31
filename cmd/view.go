@@ -162,11 +162,6 @@ func (s *Builder) buildRelations(ctx context.Context, config *viewConfig, indexN
 		relationName := relation.queryJoin.Alias
 		relView, err := s.buildAndAddView(ctx, relation, &view.Config{
 			Limit: 40,
-			Constraints: &view.Constraints{
-				Limit:  true,
-				Offset: true,
-				Page:   boolPtr(true),
-			},
 		}, indexNamespace)
 
 		if err != nil {
@@ -179,14 +174,8 @@ func (s *Builder) buildRelations(ctx context.Context, config *viewConfig, indexN
 		}
 
 		var cardinality view.Cardinality
-		//var column string
-		//var ofColumn string
-		//var field string
 		if hasOneCardinalityPredicate(relation.queryJoin.On.X) {
 			cardinality = view.One
-			//column = relation.aKey.OwnerKey
-			//ofColumn = relation.aKey.Key
-
 		} else {
 			cardinality = view.Many
 		}
@@ -201,7 +190,8 @@ func (s *Builder) buildRelations(ctx context.Context, config *viewConfig, indexN
 				Field:  relation.aKey.child.Field,
 				Column: relation.aKey.child.Column,
 			},
-			Column:        relation.aKey.owner.Column,
+			Column:        relation.aKey.owner.Field,
+			Field:         relation.aKey.owner.Field,
 			ColumnAlias:   relation.aKey.child.Alias,
 			Holder:        holderFormat.Format(relationName, format.CaseUpperCamel),
 			IncludeColumn: true,

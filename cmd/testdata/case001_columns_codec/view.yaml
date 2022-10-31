@@ -123,6 +123,7 @@ Template:
 With:
   - Cardinality: Many
     Column: event_type_id
+    Field: event_type_id
     Holder: EventType
     IncludeColumn: true
     Name: events_event_type

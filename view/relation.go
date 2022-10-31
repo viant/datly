@@ -23,6 +23,7 @@ type (
 
 		Cardinality   Cardinality `json:",omitempty"` //One, or Many
 		Column        string      `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
+		Field         string      `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
 		ColumnAlias   string      `json:",omitempty"` //Represents column alias, can be specified if $shared.Criteria / $shared.ColumnInPosition is inside the "from" statement
 		Holder        string      `json:",omitempty"` //Represents column created due to the merging. In our example it would be Employee#Account
 		IncludeColumn bool        `json:",omitempty"` //tells if Column _field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId _field
@@ -79,6 +80,10 @@ func (r *ReferenceView) Validate() error {
 
 //Init initializes Relation
 func (r *Relation) Init(ctx context.Context, resource *Resource, parent *View) error {
+	if r.Field == "" {
+		r.Field = r.Column
+	}
+
 	field := shared.MatchField(parent.DataType(), r.Holder, r.Of.View.Caser)
 
 	if err := r.inheritType(field.Type); err != nil {
@@ -116,7 +121,7 @@ func (r *Relation) initHolder(v *View) error {
 		return fmt.Errorf("failed to lookup holderField %v", r.Holder)
 	}
 
-	columnName := r.Of.Caser.Format(r.Column, format.CaseUpperCamel)
+	columnName := r.Of.Caser.Format(r.Field, format.CaseUpperCamel)
 	r.columnField = shared.MatchField(v.DataType(), columnName, v.Caser)
 
 	r.hasColumnField = r.columnField != nil

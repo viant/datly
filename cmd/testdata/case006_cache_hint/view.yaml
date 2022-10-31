@@ -4,7 +4,6 @@ Batch:
 Cache:
   Location: ${view.Name}
   Name: aerospike
-  PartSize: 0
   Provider: aerospike://127.0.0.1:3000/test
   TimeToLiveMs: 3.6e+06
 CaseFormat: lu

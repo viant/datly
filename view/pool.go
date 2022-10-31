@@ -13,8 +13,7 @@ import (
 )
 
 var (
-	AerospikeConnectionTimeoutInS = 5
-	PingTimeInS                   = 15
+	PingTimeInS = 15
 )
 
 type (
@@ -45,7 +44,6 @@ type (
 )
 
 func ResetConnectionConfig() {
-	AerospikeConnectionTimeoutInS = 5
 	PingTimeInS = 15
 }
 
