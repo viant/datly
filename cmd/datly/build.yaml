@@ -23,3 +23,6 @@ pipeline:
       - export GOOS=darwin
       - go build -ldflags="-X 'main.Version=${Ver}'"
       - tar cvzf datly_darwin_${Ver}.tar.gz datly
+      - export GOOS=windows
+      - go build -ldflags="-X 'main.Version=${Ver}'"
+      - tar cvzf datly_windows_${Ver}.tar.gz datly
