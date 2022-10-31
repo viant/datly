@@ -27,12 +27,22 @@ type (
 		Location     string
 		Provider     string
 		TimeToLiveMs int
-		PartSize     int
-		Warmup       *Warmup `json:",omitempty" yaml:",omitempty"`
+		PartSize     int `json:",omitempty"`
+		AerospikeConfig
+		Warmup *Warmup `json:",omitempty" yaml:",omitempty"`
 
 		newCache    func() (cache.Cache, error)
 		initialized bool
 		mux         sync.Mutex
+	}
+
+	AerospikeConfig struct {
+		SleepBetweenRetriesInMs int `json:",omitempty"`
+		MaxRetries              int `json:",omitempty"`
+		TotalTimeoutInMs        int `json:",omitempty"`
+		SocketTimeoutInMs       int `json:",omitempty"`
+		FailedRequestLimit      int `json:",omitempty"`
+		ResetFailuresInMs       int `json:",omitempty"`
 	}
 
 	Warmup struct {
@@ -164,13 +174,27 @@ func (c *Cache) aerospikeCache(aView *View) (func() (cache.Cache, error), error)
 		return nil, err
 	}
 
+	timeoutConfig := &aerospike.TimeoutConfig{
+		MaxRetries:            c.AerospikeConfig.MaxRetries,
+		TotalTimeoutMs:        c.AerospikeConfig.TotalTimeoutInMs,
+		SleepBetweenRetriesMs: c.SleepBetweenRetriesInMs,
+	}
+
+	var resetTimout *time.Duration
+	if c.AerospikeConfig.ResetFailuresInMs != 0 {
+		resetDuration := time.Duration(c.AerospikeConfig.ResetFailuresInMs)
+		resetTimout = &resetDuration
+	}
+
+	failureHandler := aerospike.NewFailureHandler(int64(c.AerospikeConfig.FailedRequestLimit), resetTimout)
+
 	return func() (cache.Cache, error) {
 		client, err := clientProvider()
 		if err != nil {
 			return nil, err
 		}
 
-		return aerospike.New(namespace, expanded, client, uint32(c.TimeToLiveMs/1000))
+		return aerospike.New(namespace, expanded, client, uint32(c.TimeToLiveMs/1000), timeoutConfig, failureHandler)
 	}, nil
 }
 

@@ -26,7 +26,7 @@ type (
 
 		initialized  bool
 		_columnNames map[string]bool
-		result       *cache.Index
+		result       *cache.ParmetrizedQuery
 	}
 
 	ParamState struct {

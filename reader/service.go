@@ -210,7 +210,7 @@ func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.V
 	selectorDeref.Columns = []string{}
 	selector := &selectorDeref
 
-	var indexed *cache.Index
+	var indexed *cache.ParmetrizedQuery
 	var cacheStats *cache.Stats
 	var metaOptions []option.Option
 	wg := &sync.WaitGroup{}
@@ -286,7 +286,7 @@ func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.V
 	return s.NewStats(session, indexed, cacheStats, cacheErr), nil
 }
 
-func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchData *view.BatchData, collector *view.Collector, session *Session) (fullMatch *cache.Index, columnInMatcher *cache.Index, err error) {
+func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchData *view.BatchData, collector *view.Collector, session *Session) (fullMatch *cache.ParmetrizedQuery, columnInMatcher *cache.ParmetrizedQuery, err error) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
@@ -365,6 +365,7 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 		}
 
 		if err == nil {
+			cacheStats = &cache.Stats{}
 			options = append(options, service, cacheStats)
 		}
 	}
@@ -414,7 +415,7 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 	return stats, nil
 }
 
-func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, matcher *cache.Index, stats *Stats) (*Stats, error) {
+func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, matcher *cache.ParmetrizedQuery, stats *Stats) (*Stats, error) {
 	if session.IncludeSQL {
 		return nil, err
 	}
@@ -424,7 +425,7 @@ func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, 
 	return nil, fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
 }
 
-func (s *Service) NewStats(session *Session, index *cache.Index, cacheStats *cache.Stats, cacheError error) *Stats {
+func (s *Service) NewStats(session *Session, index *cache.ParmetrizedQuery, cacheStats *cache.Stats, cacheError error) *Stats {
 	var SQL string
 	var args []interface{}
 	if session.IncludeSQL {

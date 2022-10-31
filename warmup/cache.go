@@ -13,14 +13,14 @@ import (
 type (
 	matchersCollector struct {
 		size     int
-		matchers []*cache.Index
+		matchers []*cache.ParmetrizedQuery
 		mux      sync.Mutex
 		builder  *reader.Builder
 		view     *view.View
 	}
 
 	warmupEntry struct {
-		matcher *cache.Index
+		matcher *cache.ParmetrizedQuery
 		view    *view.View
 		column  string
 	}

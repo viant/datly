@@ -78,15 +78,10 @@ func (c *aerospikeClient) init(host string, port int) error {
 
 func (c *aerospikeClient) newClient(host string, port int) (*as.Client, error) {
 	client, err := as.NewClient(host, port)
-	if client != nil {
-		client.DefaultPolicy.TotalTimeout = 100 * time.Millisecond
-		client.DefaultPolicy.MaxRetries = 2
-	}
-
 	return client, err
 }
 
-func (c *aerospikeClient) loginNewClientError(err error) bool {
+func (c *aerospikeClient) logNewClientError(err error) bool {
 	if err == nil {
 		return false
 	}
@@ -130,7 +125,7 @@ func (c *aerospikeClient) keepProbingIfNeeded(host string, port int) {
 		}
 
 		if err != nil {
-			c.loginNewClientError(err)
+			c.logNewClientError(err)
 		}
 	}
 }
