@@ -54,7 +54,7 @@ func (c *aerospikeClient) connect() (*as.Client, error) {
 	aClient := c.actual
 	c.mutex.Unlock()
 
-	if aClient == nil || !aClient.IsConnected() {
+	if aClient == nil {
 		return nil, fmt.Errorf("no connection to one of aerospike cache was available")
 	}
 
