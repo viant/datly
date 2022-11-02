@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"time"
 )
 
 type (
@@ -63,4 +64,36 @@ func AsBytesReader(buffer *bytes.Buffer, compression string, size int) *RequestD
 		size:        size,
 		headers:     map[string][]string{},
 	}
+}
+
+type ResponseWithMetrics struct {
+	startTime time.Time
+	http.ResponseWriter
+}
+
+func (r *ResponseWithMetrics) Write(data []byte) (int, error) {
+	r.writeMetricHeader()
+
+	return r.ResponseWriter.Write(data)
+}
+
+func (r *ResponseWithMetrics) WriteHeader(statusCode int) {
+	r.writeMetricHeader()
+
+	r.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (r *ResponseWithMetrics) writeMetricHeader() {
+	r.Header().Set(DatlyServiceTimeHeader, Until(r.startTime).String())
+}
+
+func NewMetricResponseWithTime(writer http.ResponseWriter, start time.Time) *ResponseWithMetrics {
+	return &ResponseWithMetrics{
+		startTime:      start,
+		ResponseWriter: writer,
+	}
+}
+
+func NewMetricResponse(writer http.ResponseWriter) *ResponseWithMetrics {
+	return NewMetricResponseWithTime(writer, Now())
 }

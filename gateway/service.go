@@ -47,6 +47,7 @@ func (r *Service) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusNotFound)
 	}
 
+	writer = r.WrapResponseIfNeeded(writer)
 	aRouter.Handle(writer, request)
 }
 
@@ -460,12 +461,15 @@ func (r *Service) loadRouterResource(URL string, resources map[string]*view.Reso
 	if err = r.updateCacheConnectorRefIfNeeded(routerResource); err != nil {
 		return nil, err
 	}
+
 	if r.Config.DisableCors {
 		routerResource.Cors = nil
 	}
+
 	if r.Config.RevealMetric != nil {
 		routerResource.RevealMetric = r.Config.RevealMetric
 	}
+
 	return routerResource, routerResource.Init(ctx)
 }
 
@@ -602,4 +606,24 @@ func initSecrets(ctx context.Context, config *Config) error {
 		}
 	}
 	return nil
+}
+
+func (r *Service) WrapResponseIfNeeded(response http.ResponseWriter) http.ResponseWriter {
+	if !r.ShouldRevealMetrics() {
+		return response
+	}
+
+	return router.NewMetricResponse(response)
+}
+
+func (r *Service) ShouldRevealMetrics() bool {
+	return r.Config.RevealMetric != nil && *r.Config.RevealMetric
+}
+
+func (r *Service) LogInitTimeIfNeeded(start time.Time, writer http.ResponseWriter) {
+	if !r.ShouldRevealMetrics() {
+		return
+	}
+
+	writer.Header().Set(router.DatlyServiceInitHeader, time.Until(start).String())
 }

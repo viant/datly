@@ -43,6 +43,9 @@ const (
 	DatlyDebugHeaderValue          = "debug"
 	DatlyRequestDisableCacheHeader = "Datly-Disable-Cache"
 	DatlyResponseHeaderMetrics     = "Datly-Metrics"
+
+	DatlyServiceTimeHeader = "Datly-Service-Time"
+	DatlyServiceInitHeader = "Datly-Service-Init"
 )
 
 var errorFilters = json.NewFilters(&json.FilterEntry{

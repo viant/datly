@@ -6,13 +6,13 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/viant/datly/auth/jwt"
 	"github.com/viant/datly/gateway"
-	"net/http"
-
 	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/gateway/runtime/lambda/adapter"
 	"github.com/viant/datly/router/proxy"
+	"net/http"
 	"os"
 	"sync"
+	"time"
 )
 
 var config *gateway.Config
@@ -28,11 +28,13 @@ func HandleRequest(ctx context.Context, request *adapter.Request) (*events.Lambd
 }
 
 func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) error {
+	now := time.Now()
 
 	configURL := os.Getenv("CONFIG_URL")
 	if configURL == "" {
 		return fmt.Errorf("config was emty")
 	}
+
 	var err error
 	configInit.Do(func() {
 		config, err = gateway.NewConfigFromURL(context.Background(), configURL)
@@ -55,6 +57,7 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 		return err
 	}
 
+	service.LogInitTimeIfNeeded(now, writer)
 	service.ServeHTTP(writer, httpRequest)
 	return nil
 }
