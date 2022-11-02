@@ -257,7 +257,12 @@ func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.V
 	slice := reflect.New(aView.Template.Meta.Schema.SliceType())
 	slicePtr := unsafe.Pointer(slice.Pointer())
 	appender := aView.Template.Meta.Schema.Slice().Appender(slicePtr)
-	reader, err := read.New(ctx, db, indexed.SQL, func() interface{} {
+
+	SQL := indexed.SQL
+	args := indexed.Args
+	now := Now()
+
+	reader, err := read.New(ctx, db, SQL, func() interface{} {
 		add := appender.Add()
 		return add
 	}, metaOptions...)
@@ -277,11 +282,14 @@ func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.V
 
 	err = reader.QueryAll(ctx, func(row interface{}) error {
 		return collector.AddMeta(row)
-	}, indexed.Args...)
+	}, args...)
 
 	if err != nil {
 		return nil, err
 	}
+
+	finished := Now()
+	aView.Logger.Log("reading view %v meta took %v, SQL: %v , Args: %v\n", aView.Name, finished.Sub(now).String(), SQL, args)
 
 	return s.NewStats(session, indexed, cacheStats, cacheErr), nil
 }

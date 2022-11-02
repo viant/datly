@@ -70,6 +70,14 @@ func (l *Adapter) ReadTime(viewName string, start, end *time.Time, err error) {
 	l.readTime(viewName, start, end, err)
 }
 
+func (l *Adapter) Log(message string, args ...interface{}) {
+	if l.log == nil {
+		return
+	}
+
+	l.log(message, args...)
+}
+
 func (l *Adapter) Inherit(adapter *Adapter) {
 	l.readTime = adapter.readTime
 	l.readingData = adapter.readingData

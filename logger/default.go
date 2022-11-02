@@ -46,6 +46,6 @@ func (d *defaultLogger) logOverallReadTime(viewName string, start *time.Time, en
 	fmt.Printf("[LOGGER] Overall reading view from main View %v took: %v, err: %v\n", viewName, end.Sub(*start), err)
 }
 
-func (d *defaultLogger) log(message string) {
-	fmt.Printf("[LOGGER] %v\n", message)
+func (d *defaultLogger) log(message string, args ...interface{}) {
+	fmt.Printf("[LOGGER] "+message+"\n", args...)
 }
