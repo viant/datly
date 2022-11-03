@@ -319,6 +319,9 @@ func (t *Template) detectParameters(statements []ast.Statement, required bool, r
 			t.detectParameters([]ast.Statement{actual.P}, false, actual.Type(), false)
 		case *stmt.If:
 			t.detectParameters([]ast.Statement{actual.Condition}, false, actual.Type(), false)
+			if actual.Else != nil {
+				t.detectParameters([]ast.Statement{actual.Else}, false, actual.Else.Type(), false)
+			}
 		}
 
 		switch actual := statement.(type) {
@@ -374,6 +377,7 @@ func (t *Template) indexParameter(actual *expr.Select, required bool, rType refl
 		FullName: actual.FullName,
 		Multi:    multi,
 		Required: BoolPtr(required && prefix != keywords.ParamsMetadataKey),
+		Has:      prefix == keywords.ParamsMetadataKey,
 	})
 }
 
@@ -395,7 +399,7 @@ func (t *Template) AddParameter(param *Parameter) {
 
 		parameter.Repeated = parameter.Repeated || param.Repeated
 
-		parameter.Required = BoolPtr((parameter.Required != nil && *parameter.Required) || (param.Required != nil && *param.Required))
+		parameter.Required = BoolPtr(((parameter.Required != nil && *parameter.Required) || (param.Required != nil && *param.Required)) && !(param.Has || parameter.Has))
 		if parameter.Assumed {
 			parameter.DataType = param.DataType
 		}

@@ -22,4 +22,5 @@ type Parameter struct {
 	Cardinality    view.Cardinality `json:",omitempty" yaml:",omitempty"`
 	Multi          bool             `json:",omitempty" yaml:",omitempty"`
 	Const          interface{}      `json:",omitempty" yaml:",omitempty"`
+	Has            bool             `json:",omitempty" yaml:",omitempty"`
 }

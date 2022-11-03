@@ -59,10 +59,15 @@ func TestRun(t *testing.T) {
 		{
 			description: "column codec",
 			URI:         "case001_columns_codec",
-			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/db.db", "-X=testdata/case001_columns_codec/events.sql"},
-			viewURL:     "/v1/api/meta/view/dev/events",
-			dataURL:     "/v1/api/dev/events",
-			httpMethod:  http.MethodGet,
+			args: []string{
+				"-N=events",
+				"-D=sqlite3",
+				"-A=/tmp/datly_tests/db.db",
+				"-X=testdata/case001_columns_codec/events.sql",
+			},
+			viewURL:    "/v1/api/meta/view/dev/events",
+			dataURL:    "/v1/api/dev/events",
+			httpMethod: http.MethodGet,
 		},
 		{
 			description: "group by",
@@ -175,6 +180,17 @@ func TestRun(t *testing.T) {
 			},
 			viewURL:    "/v1/api/meta/view/dev/status",
 			httpMethod: http.MethodPost,
+		},
+		{
+			description: "column codec",
+			URI:         "case014_ifs",
+			args: []string{
+				"-D=sqlite3",
+				"-A=/tmp/datly_tests/db.db",
+				"-X=testdata/case014_ifs/events.sql",
+			},
+			viewURL:    "/v1/api/meta/view/dev/events",
+			httpMethod: http.MethodGet,
 		},
 	}
 
