@@ -48,13 +48,13 @@ func newViewConfig(viewName string, fileName string, parent *query.Join, aTable 
 	return result
 }
 
-func buildTableFromQueryWithWarning(aQuery *query.Select, x node.Node, routeOpt *option.Route, comment string) *Table {
+func buildTableFromQueryWithWarning(aQuery *query.Select, x node.Node, routeOpt *option.RouteConfig, comment string) *Table {
 	aTable := buildTableWithWarning(x, routeOpt, comment)
 	aTable.Columns = selectItemToColumn(aQuery, routeOpt)
 	return aTable
 }
 
-func selectItemToColumn(query *query.Select, route *option.Route) Columns {
+func selectItemToColumn(query *query.Select, route *option.RouteConfig) Columns {
 	var result []*Column
 	for _, item := range query.List {
 		appendItem(item, &result, route)
@@ -62,20 +62,20 @@ func selectItemToColumn(query *query.Select, route *option.Route) Columns {
 	return result
 }
 
-func buildTableWithWarning(x node.Node, routeOpt *option.Route, comment string) *Table {
+func buildTableWithWarning(x node.Node, routeOpt *option.RouteConfig, comment string) *Table {
 	aTable, err := buildTable(x, routeOpt)
 	if err != nil {
 		fmt.Printf("[WARN] couldn't build full table representation %v\n", aTable.Name)
 	}
 
-	if err = tryUnmarshalHint(comment, &aTable.ViewHint); err != nil {
+	if err = tryUnmarshalHint(comment, &aTable.ViewConfig); err != nil {
 		fmt.Printf("[WARN] couldn't parse table hint to option.Table: %v\n", comment)
 	}
 
 	return aTable
 }
 
-func buildTable(x node.Node, routeOpt *option.Route) (*Table, error) {
+func buildTable(x node.Node, routeOpt *option.RouteConfig) (*Table, error) {
 	table := NewTable("")
 
 	switch actual := x.(type) {
@@ -119,7 +119,7 @@ func extractTableSQL(actual *expr.Raw) (name string, SQL string) {
 	return "", SQL
 }
 
-func UpdateTableSettings(table *Table, routeOpt *option.Route) error {
+func UpdateTableSettings(table *Table, routeOpt *option.RouteConfig) error {
 	tableSQL := expandConsts(table.SQL, routeOpt)
 	innerSQL, _ := ExtractCondBlock(tableSQL)
 	innerQuery, err := parser.ParseQuery(innerSQL)
@@ -144,7 +144,7 @@ func UpdateTableSettings(table *Table, routeOpt *option.Route) error {
 	return nil
 }
 
-func expandConsts(SQL string, opt *option.Route) string {
+func expandConsts(SQL string, opt *option.RouteConfig) string {
 	replacementMap := rdata.Map{}
 	for key := range opt.Const {
 		replacementMap.SetValue(key, opt.Const[key])
@@ -273,7 +273,7 @@ func extractSelector(n node.Node, left bool) *expr.Selector {
 	return nil
 }
 
-func appendItem(item *query.Item, result *[]*Column, route *option.Route) {
+func appendItem(item *query.Item, result *[]*Column, route *option.RouteConfig) {
 	comments := item.Comments
 	if hint := comments; hint != "" {
 		column := &view.Column{}

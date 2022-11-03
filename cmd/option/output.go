@@ -1,6 +1,6 @@
 package option
 
-type Output struct {
+type OutputConfig struct {
 	Style         string `json:"Style"`
 	ResponseField string `json:"ResponseField"`
 	Kind          string `json:"Kind"`

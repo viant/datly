@@ -21,7 +21,7 @@ type (
 		Name            string
 		SQL             string
 		Relations       Relations
-		option.ViewHint
+		option.ViewConfig
 		ViewHintJSON string
 	}
 
@@ -43,7 +43,7 @@ type (
 	Relations []*Relation
 	Relation  struct {
 		Owner *Table
-		option.ViewHint
+		option.ViewConfig
 		Table *Table
 	}
 )

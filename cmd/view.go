@@ -44,8 +44,8 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 
 	if viewConfig.viewType == view.SQLExecMode {
 		selector = nil
-	} else if table.ViewHint.Selector != nil {
-		selector = table.ViewHint.Selector
+	} else if table.ViewConfig.Selector != nil {
+		selector = table.ViewConfig.Selector
 	}
 
 	tableName := view.NotEmptyOf(table.Name, table.HolderName)
@@ -69,7 +69,7 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 		Template:      template,
 		Connector:     connector,
 		AllowNulls:    table.AllowNulls,
-		SelfReference: viewConfig.unexpandedTable.ViewHint.Self,
+		SelfReference: viewConfig.unexpandedTable.ViewConfig.Self,
 		Cache:         cache,
 		Mode:          viewConfig.viewType,
 	}
@@ -219,7 +219,7 @@ func (s *Builder) buildColumnsConfig(ctx context.Context, config *viewConfig) (m
 }
 
 func (s *Builder) buildCache(viewConfig *viewConfig) (*view.Cache, error) {
-	meta := viewConfig.unexpandedTable.ViewHint
+	meta := viewConfig.unexpandedTable.ViewConfig
 	if meta.Cache == nil {
 		return nil, nil
 	}

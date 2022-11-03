@@ -52,7 +52,7 @@ func (c *ViewConfigurer) ServiceType() router.ServiceType {
 	return c.serviceType
 }
 
-func NewConfigProviderReader(mainViewName string, SQL string, routeOpt *option.Route, hints map[string]*sanitize.ParameterHint, serviceType router.ServiceType, consts map[string]interface{}) (*ViewConfigurer, error) {
+func NewConfigProviderReader(mainViewName string, SQL string, routeOpt *option.RouteConfig, hints map[string]*sanitize.ParameterHint, serviceType router.ServiceType, consts map[string]interface{}) (*ViewConfigurer, error) {
 	result := &ViewConfigurer{
 		tables:       map[string]*Table{},
 		mainViewName: mainViewName,
@@ -73,7 +73,7 @@ func (c *ViewConfigurer) OutputConfig() (string, error) {
 	return startExpr.Comments, nil
 }
 
-func (c *ViewConfigurer) Init(SQL string, opt *option.Route, hints map[string]*sanitize.ParameterHint) error {
+func (c *ViewConfigurer) Init(SQL string, opt *option.RouteConfig, hints map[string]*sanitize.ParameterHint) error {
 	config, viewParams, err := c.buildViewConfig(c.serviceType, c.mainViewName, SQL, opt, nil)
 	if err != nil {
 		return err
@@ -124,13 +124,13 @@ func getMetaTemplateHolder(name string) string {
 	return name[:index]
 }
 
-func (c *ViewConfigurer) buildViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.Route, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
+func (c *ViewConfigurer) buildViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
 	config, viewParams, err := c.prepareViewConfig(serviceType, viewName, SQL, opt, parent)
 
 	return config, viewParams, err
 }
 
-func (c *ViewConfigurer) prepareViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.Route, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
+func (c *ViewConfigurer) prepareViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
 	if serviceType == router.ReaderServiceType {
 		return c.buildReaderViewConfig(viewName, SQL, opt, parent)
 	}
@@ -164,7 +164,7 @@ func (c *ViewConfigurer) buildExecViewConfig(viewName string, templateSQL string
 	return aConfig, resultErr
 }
 
-func (c *ViewConfigurer) buildReaderViewConfig(viewName string, SQL string, opt *option.Route, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
+func (c *ViewConfigurer) buildReaderViewConfig(viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
 	result, dataViewParams, err := c.prepareUnexpanded(viewName, SQL, opt, parent)
 	if err != nil {
 		return nil, nil, err
@@ -184,7 +184,7 @@ func (c *ViewConfigurer) buildReaderViewConfig(viewName string, SQL string, opt 
 	return result, dataViewParams, err
 }
 
-func buildExpandedTable(viewName string, table *Table, expandMap rdata.Map, opt *option.Route) (*Table, error) {
+func buildExpandedTable(viewName string, table *Table, expandMap rdata.Map, opt *option.RouteConfig) (*Table, error) {
 	if len(expandMap) == 0 {
 		return table, nil
 	}
@@ -219,7 +219,7 @@ func buildExpandMap(hints map[string]*sanitize.ParameterHint, consts map[string]
 	return result, nil
 }
 
-func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *option.Route, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
+func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
 	aQuery, err := parser.ParseQuery(SQL)
 	if err != nil {
 		fmt.Printf("[WARN] couldn't parse properly SQL for %v\n", viewName)
@@ -259,7 +259,7 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 			return nil, nil, err
 		}
 
-		if err = tryUnmarshalHint(join.Comments, &relViewConfig.unexpandedTable.ViewHint); err != nil {
+		if err = tryUnmarshalHint(join.Comments, &relViewConfig.unexpandedTable.ViewConfig); err != nil {
 			return nil, nil, err
 		}
 
@@ -267,7 +267,7 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 		if isMetaTable(relViewConfig.unexpandedTable.Name) {
 			holder := getMetaTemplateHolder(relViewConfig.unexpandedTable.Name)
 			result.AddMetaTemplate(join.Alias, holder, relViewConfig.unexpandedTable)
-		} else if isParamPredicate(parser.Stringify(join.On.X)) || relViewConfig.unexpandedTable.ViewHint.DataViewParameter != nil {
+		} else if isParamPredicate(parser.Stringify(join.On.X)) || relViewConfig.unexpandedTable.ViewConfig.DataViewParameter != nil {
 			paramOption := &Parameter{}
 			relViewConfig.fileName = join.Alias
 
@@ -319,7 +319,7 @@ func (c *ViewConfigurer) getAlias(asStarExpr *expr.Star) string {
 	return ""
 }
 
-func (c *ViewConfigurer) buildViewConfigWithTable(join *query.Join, innerTable *Table, opt *option.Route) (*viewConfig, []*viewParamConfig, error) {
+func (c *ViewConfigurer) buildViewConfigWithTable(join *query.Join, innerTable *Table, opt *option.RouteConfig) (*viewConfig, []*viewParamConfig, error) {
 	if strings.TrimSpace(innerTable.SQL) == "" {
 		return newViewConfig(join.Alias, join.Alias, join, innerTable, nil, view.SQLQueryMode), nil, nil
 	}
@@ -332,7 +332,7 @@ func (c *ViewConfigurer) buildViewConfigWithTable(join *query.Join, innerTable *
 	return config, viewParams, err
 }
 
-func sqlxJoins(aQuery *query.Select, opt *option.Route) ([]*query.Join, bool) {
+func sqlxJoins(aQuery *query.Select, opt *option.RouteConfig) ([]*query.Join, bool) {
 	if isSQLXRelation(aQuery.From.X) {
 		items := selectItemToColumn(aQuery, opt)
 
@@ -358,7 +358,7 @@ func isSQLXRelation(rel node.Node) bool {
 	return columns.ContainsSelect(candidate) || !columns.CanBeTableName(candidate)
 }
 
-func (c *ViewConfigurer) extractViewParamsFromHints(hints map[string]*sanitize.ParameterHint, opt *option.Route) ([]*viewParamConfig, error) {
+func (c *ViewConfigurer) extractViewParamsFromHints(hints map[string]*sanitize.ParameterHint, opt *option.RouteConfig) ([]*viewParamConfig, error) {
 	var viewParams []*viewParamConfig
 	for _, hint := range hints {
 		aHint, sql := sanitize.SplitHint(hint.Hint)

@@ -99,7 +99,7 @@ func NewBuilder(options *Options, logger io.Writer) (*Builder, error) {
 				Resource: view.EmptyResource(),
 			},
 			paramsIndex: NewParametersIndex(),
-			option: &option.Route{
+			option: &option.RouteConfig{
 				Declare: map[string]string{},
 				Const:   map[string]interface{}{},
 			},

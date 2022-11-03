@@ -36,7 +36,7 @@ type (
 		paramsIndex    *ParametersIndex
 		routerResource *router.Resource
 		route          *router.Route
-		option         *option.Route
+		option         *option.RouteConfig
 		sqlStmt        string
 		views          map[string]*view.View
 	}
@@ -45,7 +45,7 @@ type (
 		viewName        string
 		queryJoin       *query.Join
 		unexpandedTable *Table
-		outputConfig    option.Output
+		outputConfig    option.OutputConfig
 
 		relations      []*viewConfig
 		relationsIndex map[string]int
@@ -59,7 +59,7 @@ type (
 
 	templateMetaConfig struct {
 		table  *Table
-		output *option.Output
+		output *option.OutputConfig
 		name   string
 		except []string
 	}
@@ -569,7 +569,7 @@ func (s *Builder) addTypeDef(schema *view.Definition) {
 	s.routeBuilder.routerResource.Resource.Types = append(s.routeBuilder.routerResource.Resource.Types, schema)
 }
 
-func (s *Builder) inheritRouteFromMainConfig(config option.Output) {
+func (s *Builder) inheritRouteFromMainConfig(config option.OutputConfig) {
 	s.routeBuilder.route.ResponseField = view.NotEmptyOf(config.ResponseField, s.routeBuilder.route.ResponseField)
 	s.routeBuilder.route.Style = router.Style(view.NotEmptyOf(config.Style, string(s.routeBuilder.route.Style)))
 }
@@ -694,7 +694,7 @@ func (s *Builder) buildViewParams() error {
 		typeDef := s.buildSchemaFromTable(paramName, childViewConfig.unexpandedTable, s.columnTypes(childViewConfig.unexpandedTable))
 		s.addTypeDef(typeDef)
 
-		aParam := childViewConfig.unexpandedTable.ViewHint.DataViewParameter
+		aParam := childViewConfig.unexpandedTable.ViewConfig.DataViewParameter
 
 		if aParam == nil {
 			aParam = &view.Parameter{

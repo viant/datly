@@ -6,7 +6,7 @@ import (
 	"github.com/viant/datly/view"
 )
 
-type Route struct {
+type RouteConfig struct {
 	URI            string
 	ConstFileURL   string
 	Cache          *view.Cache

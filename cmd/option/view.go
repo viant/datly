@@ -2,7 +2,7 @@ package option
 
 import "github.com/viant/datly/view"
 
-type ViewHint struct {
+type ViewConfig struct {
 	Connector         string
 	Self              *view.SelfReference
 	Cache             *view.Cache
