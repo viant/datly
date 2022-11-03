@@ -20,12 +20,11 @@ type (
 		Columns []*ColumnMeta
 	}
 
-	ColumnMeta struct {
+	ColumnIndex map[string]*ColumnMeta
+	ColumnMeta  struct {
 		Name string
 		Type reflect.Type
 	}
-
-	Columns map[string]*ColumnMeta
 )
 
 func NewTableMetaRegistry() *TableMetaRegistry {
@@ -129,13 +128,13 @@ func normalizeType(rType reflect.Type) reflect.Type {
 	return rType
 }
 
-func (m *TableMeta) IndexColumns(alias string) Columns {
+func (m *TableMeta) IndexColumns(alias string) ColumnIndex {
 	prefix := ""
 	if alias != "" {
 		prefix = alias + "."
 	}
 
-	result := Columns{}
+	result := ColumnIndex{}
 	for i, column := range m.Columns {
 		result[strings.ToLower(prefix+column.Name)] = m.Columns[i]
 	}
@@ -143,7 +142,7 @@ func (m *TableMeta) IndexColumns(alias string) Columns {
 	return result
 }
 
-func (c Columns) Merge(with Columns) Columns {
+func (c ColumnIndex) Merge(with ColumnIndex) ColumnIndex {
 	for columnName := range with {
 		c[columnName] = with[columnName]
 	}

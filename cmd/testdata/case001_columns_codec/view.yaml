@@ -163,40 +163,13 @@ With:
         Constraints:
           Criteria: false
           Filterable: null
-          Limit: true
-          Offset: true
+          Limit: false
+          Offset: false
           OrderBy: false
-          Page: true
+          Page: null
           Projection: false
         Limit: 40
-        LimitParam:
-          Description: allows to limit event_type# view data returned from db
-          In:
-            Kind: query
-            Name: ty_limit
-          Name: _limit
-          PresenceName: _limit
-          Schema:
-            Cardinality: One
         Namespace: ty
-        OffsetParam:
-          Description: allows to skip first n  view event_type# records, it has to be used alongside the limit
-          In:
-            Kind: query
-            Name: ty_offset
-          Name: _offset
-          PresenceName: _offset
-          Schema:
-            Cardinality: One
-        PageParam:
-          Description: allows to skip first page * limit values, starting from 1 page. Has precedence over offset
-          In:
-            Kind: query
-            Name: ty_page
-          Name: _page
-          PresenceName: _page
-          Schema:
-            Cardinality: One
       Table: event_types
       Template:
         PresenceSchema:

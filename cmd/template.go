@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
-	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/sanitize"
@@ -103,7 +102,7 @@ func (s *Builder) convertParams(template *Template) ([]*view.Parameter, error) {
 	return result, nil
 }
 
-func convertMetaParameter(param *option.Parameter, values map[string]interface{}) *view.Parameter {
+func convertMetaParameter(param *Parameter, values map[string]interface{}) *view.Parameter {
 	aCodec, dataType := paramCodec(param)
 	constValue := param.Const
 	if aValue, ok := values[param.Name]; ok {
@@ -127,7 +126,7 @@ func convertMetaParameter(param *option.Parameter, values map[string]interface{}
 	}
 }
 
-func paramCodec(param *option.Parameter) (*view.Codec, string) {
+func paramCodec(param *Parameter) (*view.Codec, string) {
 	dataTypeLower := strings.ToLower(param.DataType)
 	if registry.CodecKeyAsInts == param.Codec || canInferAsIntsCodec(param, dataTypeLower) {
 		return &view.Codec{Reference: shared.Reference{Ref: registry.CodecKeyAsInts}}, "string"
@@ -141,7 +140,7 @@ func paramCodec(param *option.Parameter) (*view.Codec, string) {
 	return nil, param.DataType
 }
 
-func canInferAsStringsCodec(param *option.Parameter, dataTypeLower string) bool {
+func canInferAsStringsCodec(param *Parameter, dataTypeLower string) bool {
 	if !param.Repeated || param.Codec != "" || !param.Assumed {
 		return false
 	}
@@ -149,7 +148,7 @@ func canInferAsStringsCodec(param *option.Parameter, dataTypeLower string) bool 
 	return strings.HasPrefix(dataTypeLower, "[]string")
 }
 
-func canInferAsIntsCodec(param *option.Parameter, dataTypeLower string) bool {
+func canInferAsIntsCodec(param *Parameter, dataTypeLower string) bool {
 	if !param.Repeated || param.Codec != "" || !param.Assumed {
 		return false
 	}
@@ -217,7 +216,7 @@ func updateDestSchema(dest *view.Parameter, source *view.Parameter) {
 }
 
 func (s *Builder) buildTemplateMeta(aConfig *viewConfig) (*view.TemplateMeta, error) {
-	var table *option.Table
+	var table *Table
 	if aConfig.templateMeta != nil {
 		table = aConfig.templateMeta.table
 	}
@@ -234,22 +233,22 @@ func (s *Builder) buildTemplateMeta(aConfig *viewConfig) (*view.TemplateMeta, er
 		Kind:   view.MetaKind(view.NotEmptyOf(aConfig.outputConfig.Kind, string(view.MetaTypeRecord))),
 	}
 
-	return tmplMeta, tryUnmarshalHint(table.ViewHint, tmplMeta)
+	return tmplMeta, tryUnmarshalHint(table.ViewHintJSON, tmplMeta)
 }
 
 type Template struct {
 	SQL        string
-	Parameters []*option.Parameter
+	Parameters []*Parameter
 
 	defaultParamKind view.Kind
 	variables        map[string]bool
 	paramsMeta       *ParametersIndex
 	index            map[string]int
-	columnTypes      Columns
+	columnTypes      ColumnIndex
 	viewParams       []*view.Parameter
 }
 
-func NewTemplate(paramsMeta *ParametersIndex, SQL string, defaultParamKind view.Kind, viewParams []*view.Parameter, columnTypes Columns) (*Template, error) {
+func NewTemplate(paramsMeta *ParametersIndex, SQL string, defaultParamKind view.Kind, viewParams []*view.Parameter, columnTypes ColumnIndex) (*Template, error) {
 	t := &Template{
 		SQL:              SQL,
 		paramsMeta:       paramsMeta,
@@ -366,7 +365,7 @@ func (t *Template) indexParameter(actual *expr.Select, required bool, rType refl
 		kind = string(paramKind)
 	}
 
-	t.AddParameter(&option.Parameter{
+	t.AddParameter(&Parameter{
 		Assumed:  assumed,
 		Id:       paramName,
 		Name:     paramName,
@@ -374,11 +373,11 @@ func (t *Template) indexParameter(actual *expr.Select, required bool, rType refl
 		DataType: pType,
 		FullName: actual.FullName,
 		Multi:    multi,
-		Required: option.BoolPtr(required && prefix != keywords.ParamsMetadataKey),
+		Required: BoolPtr(required && prefix != keywords.ParamsMetadataKey),
 	})
 }
 
-func (t *Template) AddParameter(param *option.Parameter) {
+func (t *Template) AddParameter(param *Parameter) {
 	if t.variables != nil && t.variables[param.Name] || !sanitize.CanBeParam(param.Name) {
 		return
 	}
@@ -425,7 +424,7 @@ func (t *Template) unmarshalParamsHints() error {
 	return nil
 }
 
-func (t *Template) updateParamIfNeeded(param *option.Parameter, meta *sanitize.ParamMeta) error {
+func (t *Template) updateParamIfNeeded(param *Parameter, meta *sanitize.ParamMeta) error {
 	if value, ok := t.paramsMeta.consts[param.Name]; ok {
 		param.Kind = string(view.LiteralKind)
 		param.DataType = reflect.TypeOf(value).String()
@@ -466,7 +465,7 @@ func (t *Template) updateParamIfNeeded(param *option.Parameter, meta *sanitize.P
 	return nil
 }
 
-func (t *Template) ParamByName(holder string) (*option.Parameter, bool) {
+func (t *Template) ParamByName(holder string) (*Parameter, bool) {
 	index, ok := t.index[holder]
 	if !ok {
 		return nil, false
@@ -515,10 +514,6 @@ func (t *Template) inheritParamTypesFromTypers() error {
 	return nil
 }
 
-func BoolPtr(b bool) *bool {
-	return &b
-}
-
 func isParameter(variables map[string]bool, paramName string) bool {
 	if isVariable := variables[paramName]; isVariable {
 		return false
@@ -549,7 +544,7 @@ func (s *Builder) uploadSQL(fileName string, SQL string) (string, error) {
 	return sourceURL, nil
 }
 
-func (s *Builder) buildSchemaFromTable(schemaName string, table *option.Table, columnTypes map[string]*ColumnMeta) *view.Definition {
+func (s *Builder) buildSchemaFromTable(schemaName string, table *Table, columnTypes map[string]*ColumnMeta) *view.Definition {
 	var fields = make([]*view.Field, 0)
 	for _, column := range table.Inner {
 		structFieldName := column.Alias
@@ -585,4 +580,8 @@ func (s *Builder) buildSchemaFromTable(schemaName string, table *option.Table, c
 		Fields: fields,
 		Schema: nil,
 	}
+}
+
+func BoolPtr(b bool) *bool {
+	return &b
 }

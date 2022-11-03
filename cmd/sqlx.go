@@ -28,7 +28,7 @@ type (
 	}
 )
 
-func newViewConfig(viewName string, fileName string, parent *query.Join, aTable *option.Table, templateMeta *option.Table, mode view.Mode) *viewConfig {
+func newViewConfig(viewName string, fileName string, parent *query.Join, aTable *Table, templateMeta *Table, mode view.Mode) *viewConfig {
 	var metaConfig *templateMetaConfig
 	if templateMeta != nil {
 		metaConfig = &templateMetaConfig{table: templateMeta}
@@ -40,7 +40,7 @@ func newViewConfig(viewName string, fileName string, parent *query.Join, aTable 
 		unexpandedTable: aTable,
 		expandedTable:   aTable,
 		fileName:        fileName,
-		metasBuffer:     map[string]*option.Table{},
+		metasBuffer:     map[string]*Table{},
 		templateMeta:    metaConfig,
 		viewType:        mode,
 		relationsIndex:  map[string]int{},
@@ -48,35 +48,35 @@ func newViewConfig(viewName string, fileName string, parent *query.Join, aTable 
 	return result
 }
 
-func buildTableFromQueryWithWarning(aQuery *query.Select, x node.Node, routeOpt *option.Route, comment string) *option.Table {
+func buildTableFromQueryWithWarning(aQuery *query.Select, x node.Node, routeOpt *option.Route, comment string) *Table {
 	aTable := buildTableWithWarning(x, routeOpt, comment)
 	aTable.Columns = selectItemToColumn(aQuery, routeOpt)
 	return aTable
 }
 
-func selectItemToColumn(query *query.Select, route *option.Route) option.Columns {
-	var result []*option.Column
+func selectItemToColumn(query *query.Select, route *option.Route) Columns {
+	var result []*Column
 	for _, item := range query.List {
 		appendItem(item, &result, route)
 	}
 	return result
 }
 
-func buildTableWithWarning(x node.Node, routeOpt *option.Route, comment string) *option.Table {
+func buildTableWithWarning(x node.Node, routeOpt *option.Route, comment string) *Table {
 	aTable, err := buildTable(x, routeOpt)
 	if err != nil {
 		fmt.Printf("[WARN] couldn't build full table representation %v\n", aTable.Name)
 	}
 
-	if err = tryUnmarshalHint(comment, &aTable.TableMeta); err != nil {
+	if err = tryUnmarshalHint(comment, &aTable.ViewHint); err != nil {
 		fmt.Printf("[WARN] couldn't parse table hint to option.Table: %v\n", comment)
 	}
 
 	return aTable
 }
 
-func buildTable(x node.Node, routeOpt *option.Route) (*option.Table, error) {
-	table := option.NewTable("")
+func buildTable(x node.Node, routeOpt *option.Route) (*Table, error) {
+	table := NewTable("")
 
 	switch actual := x.(type) {
 	case *expr.Raw:
@@ -119,7 +119,7 @@ func extractTableSQL(actual *expr.Raw) (name string, SQL string) {
 	return "", SQL
 }
 
-func UpdateTableSettings(table *option.Table, routeOpt *option.Route) error {
+func UpdateTableSettings(table *Table, routeOpt *option.Route) error {
 	tableSQL := expandConsts(table.SQL, routeOpt)
 	innerSQL, _ := ExtractCondBlock(tableSQL)
 	innerQuery, err := parser.ParseQuery(innerSQL)
@@ -130,7 +130,7 @@ func UpdateTableSettings(table *option.Table, routeOpt *option.Route) error {
 		table.Inner = selectItemToColumn(innerQuery, routeOpt)
 		if len(innerQuery.Joins) > 0 {
 			for _, join := range innerQuery.Joins {
-				table.Deps[option.Alias(join.Alias)] = option.TableName(strings.Trim(parser.Stringify(join.With), "`"))
+				table.Deps[Alias(join.Alias)] = TableName(strings.Trim(parser.Stringify(join.With), "`"))
 			}
 		}
 
@@ -168,7 +168,7 @@ func isParamPredicate(criteria string) bool {
 	return isParamView
 }
 
-func relationKeyOf(parentTable *option.Table, relTable *option.Table, join *query.Join) (*relationKey, error) {
+func relationKeyOf(parentTable *Table, relTable *Table, join *query.Join) (*relationKey, error) {
 	x := extractSelector(join.On.X, true)
 	y := extractSelector(join.On.X, false)
 
@@ -197,7 +197,7 @@ func relationKeyOf(parentTable *option.Table, relTable *option.Table, join *quer
 	}, nil
 }
 
-func newKey(s *expr.Selector, table *option.Table) (*key, error) {
+func newKey(s *expr.Selector, table *Table) (*key, error) {
 	alias := ""
 	tableName := table.Name
 	byAlias := table.Inner.ByAlias()
@@ -210,6 +210,10 @@ func newKey(s *expr.Selector, table *option.Table) (*key, error) {
 			alias = column.Ns
 			break
 		}
+	}
+
+	if alias == "" {
+		alias = table.InnerAlias
 	}
 
 	if len(byAlias) > 0 {
@@ -230,7 +234,7 @@ func newKey(s *expr.Selector, table *option.Table) (*key, error) {
 	}, nil
 }
 
-func fieldName(byAlias map[string]*option.Column, alias string) (string, bool) {
+func fieldName(byAlias map[string]*Column, alias string) (string, bool) {
 	aliasLc := strings.ToLower(alias)
 	column, ok := byAlias[aliasLc]
 	if !ok {
@@ -269,7 +273,7 @@ func extractSelector(n node.Node, left bool) *expr.Selector {
 	return nil
 }
 
-func appendItem(item *query.Item, result *[]*option.Column, route *option.Route) {
+func appendItem(item *query.Item, result *[]*Column, route *option.Route) {
 	comments := item.Comments
 	if hint := comments; hint != "" {
 		column := &view.Column{}
@@ -295,7 +299,7 @@ func appendItem(item *query.Item, result *[]*option.Column, route *option.Route)
 	*result = append(*result, column)
 }
 
-func getColumn(item *query.Item) (*option.Column, error) {
+func getColumn(item *query.Item) (*Column, error) {
 	switch actual := item.Expr.(type) {
 	case *expr.Call:
 		call := parser.Stringify(actual)
@@ -310,28 +314,28 @@ func getColumn(item *query.Item) (*option.Column, error) {
 			}
 		}
 
-		return &option.Column{Name: call, Alias: item.Alias, DataType: item.DataType}, nil
+		return &Column{Name: call, Alias: item.Alias, DataType: item.DataType}, nil
 	case *expr.Ident:
-		return &option.Column{Name: actual.Name, Alias: item.Alias, DataType: item.DataType}, nil
+		return &Column{Name: actual.Name, Alias: item.Alias, DataType: item.DataType}, nil
 	case *expr.Selector:
-		return &option.Column{Name: parser.Stringify(actual.X), Ns: actual.Name, DataType: item.DataType, Alias: item.Alias}, nil
+		return &Column{Name: parser.Stringify(actual.X), Ns: actual.Name, DataType: item.DataType, Alias: item.Alias}, nil
 	case *expr.Star:
 		switch star := actual.X.(type) {
 		case *expr.Ident:
-			return &option.Column{Name: star.Name, Except: actual.Except}, nil
+			return &Column{Name: star.Name, Except: actual.Except}, nil
 		case *expr.Selector:
-			return &option.Column{Name: parser.Stringify(star.X), Ns: star.Name, Except: actual.Except, Comments: actual.Comments}, nil
+			return &Column{Name: parser.Stringify(star.X), Ns: star.Name, Except: actual.Except, Comments: actual.Comments}, nil
 		}
 	case *expr.Literal:
-		return &option.Column{Name: "", Alias: item.Alias, DataType: actual.Kind}, nil
+		return &Column{Name: "", Alias: item.Alias, DataType: actual.Kind}, nil
 	case *expr.Binary:
 		enExpr := parser.Stringify(actual)
 		if item.DataType == "" || (strings.Contains(enExpr, "+") || strings.Contains(enExpr, "-") || strings.Contains(enExpr, "/") || strings.Contains(enExpr, "*")) {
 			item.DataType = "float64"
 		}
-		return &option.Column{Name: enExpr, Alias: item.Alias, DataType: item.DataType}, nil
+		return &Column{Name: enExpr, Alias: item.Alias, DataType: item.DataType}, nil
 	case *expr.Parenthesis:
-		return &option.Column{Name: parser.Stringify(actual), Alias: item.Alias, DataType: item.DataType}, nil
+		return &Column{Name: parser.Stringify(actual), Alias: item.Alias, DataType: item.DataType}, nil
 	}
 	return nil, fmt.Errorf("invalid type: %T", item.Expr)
 }

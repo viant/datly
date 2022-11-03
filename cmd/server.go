@@ -44,21 +44,21 @@ type (
 	viewConfig struct {
 		viewName        string
 		queryJoin       *query.Join
-		unexpandedTable *option.Table
+		unexpandedTable *Table
 		outputConfig    option.Output
 
 		relations      []*viewConfig
 		relationsIndex map[string]int
-		metasBuffer    map[string]*option.Table
+		metasBuffer    map[string]*Table
 		templateMeta   *templateMetaConfig
 		aKey           *relationKey
 		fileName       string
 		viewType       view.Mode
-		expandedTable  *option.Table
+		expandedTable  *Table
 	}
 
 	templateMetaConfig struct {
-		table  *option.Table
+		table  *Table
 		output *option.Output
 		name   string
 		except []string
@@ -69,7 +69,7 @@ type (
 		viewFile string
 
 		viewConfig *viewConfig
-		params     []*option.Parameter
+		params     []*Parameter
 	}
 )
 
@@ -112,7 +112,7 @@ func (c *viewConfig) ensureFileName(name string) {
 	c.fileName = name
 }
 
-func (c *viewConfig) AddMetaTemplate(metaName string, holder string, config *option.Table) {
+func (c *viewConfig) AddMetaTemplate(metaName string, holder string, config *Table) {
 	if c.unexpandedTable.HolderName == holder {
 		c.templateMeta = &templateMetaConfig{
 			name:  metaName,
@@ -316,10 +316,11 @@ func (s *Builder) buildRouterOutput() error {
 		s.routeBuilder.route.Output.Cardinality = view.Many
 	}
 
+	s.routeBuilder.route.Output.CaseFormat = view.CaseFormat(view.NotEmptyOf(s.routeBuilder.option.CaseFormat, "lc"))
 	return nil
 }
 
-func (s *Builder) unmarshalRouterOutput(startExpr *option.Column, output *router.Output) error {
+func (s *Builder) unmarshalRouterOutput(startExpr *Column, output *router.Output) error {
 	if startExpr == nil || startExpr.Comments == "" {
 		return nil
 	}
@@ -507,7 +508,7 @@ func (s *Builder) paramByName(name string) *view.Parameter {
 	return param
 }
 
-func (s *Builder) columnTypes(table *option.Table) Columns {
+func (s *Builder) columnTypes(table *Table) ColumnIndex {
 	meta := s.tablesMeta.TableMeta(view.NotEmptyOf(table.HolderName, table.Name))
 	columns := meta.IndexColumns(table.InnerAlias).Merge(meta.IndexColumns(""))
 
@@ -524,8 +525,10 @@ func (s *Builder) buildCacheWarmup(warmup map[string]interface{}, on *relationKe
 		return nil
 	}
 
+	warmup = copyWarmup(warmup)
+
 	result := &view.Warmup{
-		IndexColumn: view.NotEmptyOf(on.child.Alias, on.child.Field, on.child.Column),
+		IndexColumn: view.NotEmptyOf(on.child.Field, on.child.Column),
 	}
 
 	multiSet := &view.CacheParameters{}
@@ -540,6 +543,19 @@ func (s *Builder) buildCacheWarmup(warmup map[string]interface{}, on *relationKe
 
 	result.Cases = append(result.Cases, multiSet)
 	return result
+}
+
+func copyWarmup(warmup map[string]interface{}) map[string]interface{} {
+	result := map[string]interface{}{}
+	for aKey := range warmup {
+		if aKey == "" {
+			continue
+		}
+
+		result[aKey] = warmup[aKey]
+	}
+	return result
+
 }
 
 func (s *Builder) addParameters(params ...*view.Parameter) {
@@ -613,7 +629,7 @@ func (s *Builder) appendMetaExcluded(excluded *[]string, config *viewConfig, pat
 	return nil
 }
 
-func (s *Builder) excludeTableColumns(excluded *[]string, table *option.Table, path string) error {
+func (s *Builder) excludeTableColumns(excluded *[]string, table *Table, path string) error {
 	for _, column := range table.Columns {
 		for _, except := range column.Except {
 			actualFieldName, err := s.normalizeFieldName(except)
@@ -678,7 +694,7 @@ func (s *Builder) buildViewParams() error {
 		typeDef := s.buildSchemaFromTable(paramName, childViewConfig.unexpandedTable, s.columnTypes(childViewConfig.unexpandedTable))
 		s.addTypeDef(typeDef)
 
-		aParam := childViewConfig.unexpandedTable.TableMeta.DataViewParameter
+		aParam := childViewConfig.unexpandedTable.ViewHint.DataViewParameter
 
 		if aParam == nil {
 			aParam = &view.Parameter{

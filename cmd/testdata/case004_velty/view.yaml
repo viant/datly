@@ -147,7 +147,7 @@ Template:
   SourceURL: events/events.sql
 With:
   - Cardinality: Many
-    Column: event_type_id
+    Column: eventTypeId
     Field: eventTypeId
     Holder: EventTypes
     IncludeColumn: true
@@ -188,40 +188,13 @@ With:
         Constraints:
           Criteria: false
           Filterable: null
-          Limit: true
-          Offset: true
+          Limit: false
+          Offset: false
           OrderBy: false
-          Page: true
+          Page: null
           Projection: false
         Limit: 40
-        LimitParam:
-          Description: allows to limit eventTypes# view data returned from db
-          In:
-            Kind: query
-            Name: ev_limit
-          Name: _limit
-          PresenceName: _limit
-          Schema:
-            Cardinality: One
         Namespace: ev
-        OffsetParam:
-          Description: allows to skip first n  view eventTypes# records, it has to be used alongside the limit
-          In:
-            Kind: query
-            Name: ev_offset
-          Name: _offset
-          PresenceName: _offset
-          Schema:
-            Cardinality: One
-        PageParam:
-          Description: allows to skip first page * limit values, starting from 1 page. Has precedence over offset
-          In:
-            Kind: query
-            Name: ev_page
-          Name: _page
-          PresenceName: _page
-          Schema:
-            Cardinality: One
       Table: event_types
       Template:
         PresenceSchema:

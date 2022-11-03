@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/columns"
 	"github.com/viant/datly/view"
@@ -45,8 +44,8 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 
 	if viewConfig.viewType == view.SQLExecMode {
 		selector = nil
-	} else if table.TableMeta.Selector != nil {
-		selector = table.TableMeta.Selector
+	} else if table.ViewHint.Selector != nil {
+		selector = table.ViewHint.Selector
 	}
 
 	tableName := view.NotEmptyOf(table.Name, table.HolderName)
@@ -70,7 +69,7 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 		Template:      template,
 		Connector:     connector,
 		AllowNulls:    table.AllowNulls,
-		SelfReference: viewConfig.unexpandedTable.TableMeta.Self,
+		SelfReference: viewConfig.unexpandedTable.ViewHint.Self,
 		Cache:         cache,
 		Mode:          viewConfig.viewType,
 	}
@@ -79,7 +78,7 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 	return result, nil
 }
 
-func (s *Builder) readColumnTypes(ctx context.Context, db *sql.DB, table *option.Table) (string, error) {
+func (s *Builder) readColumnTypes(ctx context.Context, db *sql.DB, table *Table) (string, error) {
 	if err := s.indexColumns(ctx, db, table.Name); err != nil {
 		return table.Name, err
 	}
@@ -202,28 +201,6 @@ func (s *Builder) buildRelations(ctx context.Context, config *viewConfig, indexN
 	return result, nil
 }
 
-func detectCaseFormat(xTable *option.Table) view.CaseFormat {
-	names := make([]string, 0)
-	for _, column := range xTable.Inner {
-		columnName := column.Alias
-		if columnName == "" {
-			columnName = column.Name
-		}
-
-		if columnName == "*" {
-			continue
-		}
-
-		names = append(names, columnName)
-	}
-
-	if len(names) == 0 {
-		names = append(names, xTable.Name)
-	}
-
-	return view.CaseFormat(view.DetectCase(names...))
-}
-
 func (s *Builder) buildColumnsConfig(ctx context.Context, config *viewConfig) (map[string]*view.ColumnConfig, error) {
 	result := map[string]*view.ColumnConfig{}
 	for _, column := range config.unexpandedTable.Inner {
@@ -242,7 +219,7 @@ func (s *Builder) buildColumnsConfig(ctx context.Context, config *viewConfig) (m
 }
 
 func (s *Builder) buildCache(viewConfig *viewConfig) (*view.Cache, error) {
-	meta := viewConfig.unexpandedTable.TableMeta
+	meta := viewConfig.unexpandedTable.ViewHint
 	if meta.Cache == nil {
 		return nil, nil
 	}
