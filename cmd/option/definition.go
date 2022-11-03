@@ -35,6 +35,7 @@ type (
 		SQL            string           `json:",omitempty" yaml:",omitempty"`
 		Cardinality    view.Cardinality `json:",omitempty" yaml:",omitempty"`
 		Multi          bool             `json:",omitempty" yaml:",omitempty"`
+		Const          interface{}      `json:",omitempty" yaml:",omitempty"`
 	}
 )
 

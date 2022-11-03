@@ -67,7 +67,7 @@ func NewConfigProviderReader(mainViewName string, SQL string, routeOpt *option.R
 }
 
 func (c *ViewConfigurer) OutputConfig() (string, error) {
-	startExpr := c.aView.unexpandedTable.Columns.StarExpr(c.aView.unexpandedTable.OuterAlias)
+	startExpr := c.aView.unexpandedTable.Columns.StarExpr(c.aView.unexpandedTable.HolderName)
 	if startExpr == nil {
 		return "", nil
 	}
@@ -92,7 +92,7 @@ func (c *ViewConfigurer) Init(SQL string, opt *option.Route, hints map[string]*s
 }
 
 func (c *ViewConfigurer) registerTable(table *option.Table) {
-	c.registerTableWithKey(table.OuterAlias, table)
+	c.registerTableWithKey(table.HolderName, table)
 }
 
 func (c *ViewConfigurer) registerTableWithKey(key string, table *option.Table) {
@@ -243,8 +243,8 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 	}
 
 	aTable := buildTableFromQueryWithWarning(aQuery, aQuery.From.X, opt, aQuery.From.Comments)
-	aTable.OuterAlias = view.NotEmptyOf(aQuery.From.Alias, aTable.OuterAlias)
-	aTable.NamespaceSource = aTable.OuterAlias
+	aTable.HolderName = view.NotEmptyOf(aQuery.From.Alias, aTable.HolderName)
+	aTable.NamespaceSource = aTable.HolderName
 
 	if columns.CanBeTableName(aTable.Name) {
 		aTable.NamespaceSource = aTable.Name //for the relations, it will be adjusted later
@@ -265,10 +265,10 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 			return nil, nil, err
 		}
 
-		relViewConfig.unexpandedTable.OuterAlias = join.Alias
+		relViewConfig.unexpandedTable.HolderName = join.Alias
 		if isMetaTable(relViewConfig.unexpandedTable.Name) {
 			holder := getMetaTemplateHolder(relViewConfig.unexpandedTable.Name)
-			result.AddMetaTemplate(holder, relViewConfig.unexpandedTable)
+			result.AddMetaTemplate(join.Alias, holder, relViewConfig.unexpandedTable)
 		} else if isParamPredicate(parser.Stringify(join.On.X)) || relViewConfig.unexpandedTable.TableMeta.DataViewParameter != nil {
 			paramOption := &option.Parameter{}
 			relViewConfig.fileName = join.Alias
@@ -302,6 +302,10 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 
 		if config, ok := result.ViewConfig(holder); ok {
 			tryUnmrashalHintWithWarn(asStarExpr.Comments, &config.outputConfig)
+		}
+
+		if metaConfig, ok := result.metaConfigByName(holder); ok {
+			metaConfig.except = asStarExpr.Except
 		}
 	}
 

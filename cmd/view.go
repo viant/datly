@@ -49,9 +49,9 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 		selector = table.TableMeta.Selector
 	}
 
-	tableName := view.NotEmptyOf(table.Name, table.OuterAlias)
+	tableName := view.NotEmptyOf(table.Name, table.HolderName)
 
-	actualNamespaceSource := view.NotEmptyOf(table.NamespaceSource, table.OuterAlias)
+	actualNamespaceSource := view.NotEmptyOf(table.NamespaceSource, table.HolderName)
 	if selector != nil && selector.Namespace == "" && indexNamespace && actualNamespaceSource != "" {
 		selector.Namespace = namespace(actualNamespaceSource)
 	}

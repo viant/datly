@@ -29,6 +29,11 @@ type (
 )
 
 func newViewConfig(viewName string, fileName string, parent *query.Join, aTable *option.Table, templateMeta *option.Table, mode view.Mode) *viewConfig {
+	var metaConfig *templateMetaConfig
+	if templateMeta != nil {
+		metaConfig = &templateMetaConfig{table: templateMeta}
+	}
+
 	result := &viewConfig{
 		viewName:        viewName,
 		queryJoin:       parent,
@@ -36,7 +41,7 @@ func newViewConfig(viewName string, fileName string, parent *query.Join, aTable 
 		expandedTable:   aTable,
 		fileName:        fileName,
 		metasBuffer:     map[string]*option.Table{},
-		templateMeta:    templateMeta,
+		templateMeta:    metaConfig,
 		viewType:        mode,
 		relationsIndex:  map[string]int{},
 	}
@@ -167,7 +172,7 @@ func relationKeyOf(parentTable *option.Table, relTable *option.Table, join *quer
 	x := extractSelector(join.On.X, true)
 	y := extractSelector(join.On.X, false)
 
-	actualTableName := view.NotEmptyOf(parentTable.OuterAlias, parentTable.Name)
+	actualTableName := view.NotEmptyOf(parentTable.HolderName, parentTable.Name)
 	if actualTableName != y.Name && actualTableName != x.Name {
 		return nil, fmt.Errorf("unknow view alias: %v %v", actualTableName, parentTable.Name)
 	}

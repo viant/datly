@@ -17,10 +17,12 @@ type (
 	) event_types ON events.event_type_id = event_types.id
 	*/
 	Table struct {
+		outputConfig Output
+
 		Ref             string
 		Inner           Columns
 		InnerAlias      string //e2
-		OuterAlias      string //events
+		HolderName      string //events
 		NamespaceSource string
 		Deps            map[Alias]TableName
 		Columns         Columns
@@ -128,7 +130,7 @@ func (c Columns) ByAlias() map[string]*Column {
 func (j *Relations) Index() map[string]*Relation {
 	var result = make(map[string]*Relation)
 	for _, join := range *j {
-		result[join.Table.OuterAlias] = join
+		result[join.Table.HolderName] = join
 	}
 
 	return result

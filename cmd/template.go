@@ -56,7 +56,7 @@ func (s *Builder) buildTemplate(ctx context.Context, aViewConfig *viewConfig, ex
 }
 
 func (s *Builder) Parse(ctx context.Context, aViewConfig *viewConfig, params []*view.Parameter) (*Template, error) {
-	table := aViewConfig.expandedTable
+	table := aViewConfig.unexpandedTable
 
 	SQL := table.SQL
 	iterator := sanitize.NewIterator(SQL, s.routeBuilder.paramsIndex.hints, s.routeBuilder.option.Const)
@@ -67,7 +67,7 @@ func (s *Builder) Parse(ctx context.Context, aViewConfig *viewConfig, params []*
 		defaultParamType = view.RequestBodyKind
 	}
 
-	return NewTemplate(s.routeBuilder.paramsIndex, SQL, defaultParamType, params, s.columnTypes(table))
+	return NewTemplate(s.routeBuilder.paramsIndex, SQL, defaultParamType, params, s.columnTypes(aViewConfig.expandedTable))
 }
 
 func (s *Builder) NewSchema(dataType string, cardinality string) *view.Schema {
@@ -105,7 +105,7 @@ func (s *Builder) convertParams(template *Template) ([]*view.Parameter, error) {
 
 func convertMetaParameter(param *option.Parameter, values map[string]interface{}) *view.Parameter {
 	aCodec, dataType := paramCodec(param)
-	var constValue interface{}
+	constValue := param.Const
 	if aValue, ok := values[param.Name]; ok {
 		constValue = aValue
 	}
@@ -191,6 +191,10 @@ func updateParamPrecedence(dest *view.Parameter, source *view.Parameter) {
 	if dest.In.Kind == view.DataViewKind {
 		dest.Codec = nil
 	}
+
+	if source.Const != nil {
+		dest.Const = source.Const
+	}
 }
 
 func updateDestSchema(dest *view.Parameter, source *view.Parameter) {
@@ -213,7 +217,10 @@ func updateDestSchema(dest *view.Parameter, source *view.Parameter) {
 }
 
 func (s *Builder) buildTemplateMeta(aConfig *viewConfig) (*view.TemplateMeta, error) {
-	table := aConfig.templateMeta
+	var table *option.Table
+	if aConfig.templateMeta != nil {
+		table = aConfig.templateMeta.table
+	}
 
 	if table == nil {
 		return nil, nil
@@ -223,7 +230,7 @@ func (s *Builder) buildTemplateMeta(aConfig *viewConfig) (*view.TemplateMeta, er
 	SQL := normalizeMetaTemplateSQL(table.SQL, viewAlias)
 	tmplMeta := &view.TemplateMeta{
 		Source: SQL,
-		Name:   table.OuterAlias,
+		Name:   table.HolderName,
 		Kind:   view.MetaKind(view.NotEmptyOf(aConfig.outputConfig.Kind, string(view.MetaTypeRecord))),
 	}
 
@@ -422,6 +429,7 @@ func (t *Template) updateParamIfNeeded(param *option.Parameter, meta *sanitize.P
 	if value, ok := t.paramsMeta.consts[param.Name]; ok {
 		param.Kind = string(view.LiteralKind)
 		param.DataType = reflect.TypeOf(value).String()
+		param.Const = value
 	}
 
 	if meta.MetaType == nil {

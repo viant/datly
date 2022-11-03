@@ -25,7 +25,7 @@ type (
 
 func (i *Index) Init(aView *view.View, path string) error {
 	i.ensureIndexes()
-	i.indexViews(aView, path, aView)
+	i.indexViews(aView, path)
 
 	if err := i.indexViewsByPrefix(aView); err != nil {
 		return err
@@ -52,11 +52,17 @@ func (i *Index) ensureIndexes() {
 	}
 }
 
-func (i *Index) indexViews(view *view.View, path string, mainView *view.View) {
+func (i *Index) indexViews(view *view.View, path string) {
 	i._viewsByName[view.Name] = len(i._viewDetails)
+	var prefixes []string
+	if view.Selector.Namespace != "" {
+		prefixes = append(prefixes, view.Selector.Namespace)
+	}
+
 	viewDetails := &ViewDetails{
-		View: view,
-		Path: path,
+		View:     view,
+		Path:     path,
+		Prefixes: prefixes,
 	}
 
 	i._viewDetails = append(i._viewDetails, viewDetails)
@@ -69,7 +75,7 @@ func (i *Index) indexViews(view *view.View, path string, mainView *view.View) {
 			aPath += "." + view.With[relationIndex].Holder
 		}
 
-		i.indexViews(&view.With[relationIndex].Of.View, aPath, mainView)
+		i.indexViews(&view.With[relationIndex].Of.View, aPath)
 	}
 
 	for namespace, viewName := range i.Namespace {
@@ -91,11 +97,6 @@ func (i *Index) indexViewsByPrefix(mainView *view.View) error {
 		i._viewsByPrefix[prefix] = index
 		viewDetails := i._viewDetails[index]
 		viewDetails.Prefixes = []string{prefix}
-	}
-
-	mainViewDetails, ok := i.viewByName(mainView.Name)
-	if ok && len(mainViewDetails.Prefixes) == 0 {
-		mainViewDetails.Prefixes = append(mainViewDetails.Prefixes, "")
 	}
 
 	return nil

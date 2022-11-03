@@ -22,12 +22,13 @@ import (
 
 type (
 	Builder struct {
-		tablesMeta   *TableMetaRegistry
-		routeBuilder *routeBuilder
-		options      *Options
-		config       *standalone.Config
-		logger       io.Writer
-		fs           afs.Service
+		tablesMeta      *TableMetaRegistry
+		routeBuilder    *routeBuilder
+		options         *Options
+		config          *standalone.Config
+		logger          io.Writer
+		fs              afs.Service
+		constParameters []*view.Parameter
 	}
 
 	routeBuilder struct {
@@ -49,11 +50,18 @@ type (
 		relations      []*viewConfig
 		relationsIndex map[string]int
 		metasBuffer    map[string]*option.Table
-		templateMeta   *option.Table
+		templateMeta   *templateMetaConfig
 		aKey           *relationKey
 		fileName       string
 		viewType       view.Mode
 		expandedTable  *option.Table
+	}
+
+	templateMetaConfig struct {
+		table  *option.Table
+		output *option.Output
+		name   string
+		except []string
 	}
 
 	viewParamConfig struct {
@@ -81,11 +89,11 @@ func (c *viewConfig) ensureTableName(tableName string) {
 }
 
 func (c *viewConfig) ensureOuterAlias(alias string) {
-	if c.unexpandedTable.OuterAlias != "" {
+	if c.unexpandedTable.HolderName != "" {
 		return
 	}
 
-	c.unexpandedTable.OuterAlias = alias
+	c.unexpandedTable.HolderName = alias
 }
 
 func (c *viewConfig) ensureInnerAlias(name string) {
@@ -104,14 +112,21 @@ func (c *viewConfig) ensureFileName(name string) {
 	c.fileName = name
 }
 
-func (c *viewConfig) AddMetaTemplate(holder string, config *option.Table) {
-	if c.unexpandedTable.OuterAlias == holder {
-		c.templateMeta = config
+func (c *viewConfig) AddMetaTemplate(metaName string, holder string, config *option.Table) {
+	if c.unexpandedTable.HolderName == holder {
+		c.templateMeta = &templateMetaConfig{
+			name:  metaName,
+			table: config,
+		}
 		return
 	}
 
 	if index, ok := c.relationsIndex[holder]; ok {
-		c.relations[index].templateMeta = config
+		c.relations[index].templateMeta = &templateMetaConfig{
+			table: config,
+			name:  metaName,
+		}
+
 		return
 	}
 
@@ -119,25 +134,39 @@ func (c *viewConfig) AddMetaTemplate(holder string, config *option.Table) {
 }
 
 func (c *viewConfig) AddRelation(viewConfig *viewConfig) {
-	holderName := viewConfig.unexpandedTable.OuterAlias
+	holderName := viewConfig.unexpandedTable.HolderName
 
 	c.relationsIndex[holderName] = len(c.relations)
 	c.relations = append(c.relations, viewConfig)
 
 	if metaConfig, ok := c.metasBuffer[holderName]; ok {
-		viewConfig.templateMeta = metaConfig
+		viewConfig.templateMeta.table = metaConfig
 		delete(c.metasBuffer, holderName)
 	}
 }
 
 func (c *viewConfig) ViewConfig(holder string) (*viewConfig, bool) {
-	if holder == c.unexpandedTable.OuterAlias {
+	if holder == c.unexpandedTable.HolderName {
 		return c, true
 	}
 
 	for _, relation := range c.relations {
-		if relation.unexpandedTable.OuterAlias == holder {
+		if relation.unexpandedTable.HolderName == holder {
 			return relation, true
+		}
+	}
+
+	return nil, false
+}
+
+func (c *viewConfig) metaConfigByName(holder string) (*templateMetaConfig, bool) {
+	if c.templateMeta != nil && c.templateMeta.name == holder {
+		return c.templateMeta, true
+	}
+
+	for _, relation := range c.relations {
+		if relation.templateMeta != nil && relation.templateMeta.name == holder {
+			return relation.templateMeta, true
 		}
 	}
 
@@ -184,6 +213,10 @@ func (s *Builder) Build(ctx context.Context) error {
 	}
 
 	if err := s.indexExcludedColumns(config); err != nil {
+		return err
+	}
+
+	if err := s.moveConstParameters(); err != nil {
 		return err
 	}
 
@@ -347,10 +380,6 @@ func (s *Builder) loadSQL(ctx context.Context) error {
 	return nil
 }
 
-func (s *Builder) buildExecModeConfigProvider(SQL string) (ViewConfigurer, error) {
-	panic("handle later!")
-}
-
 func (s *Builder) initRouterResource() error {
 	var redirect *router.Redirect
 
@@ -403,8 +432,7 @@ func (s *Builder) uploadCacheDep() error {
 }
 
 func (s *Builder) uploadVariablesDep() error {
-	variables := s.routeBuilder.option.Const
-	if len(variables) == 0 {
+	if len(s.constParameters) == 0 {
 		return nil
 	}
 
@@ -414,29 +442,9 @@ func (s *Builder) uploadVariablesDep() error {
 	}
 
 	s.routeBuilder.routerResource.With = append(s.routeBuilder.routerResource.With, fileName)
-	variablesDep := &view.Resource{ModTime: TimeNow(), Parameters: s.buildConstParameters(s.routeBuilder.option)}
+	variablesDep := &view.Resource{ModTime: TimeNow(), Parameters: s.constParameters}
 	variablesURL := s.options.DepURL(fileName)
 	return fsAddYAML(s.fs, variablesURL, variablesDep)
-}
-
-func (s *Builder) buildConstParameters(route *option.Route) []*view.Parameter {
-	params := make([]*view.Parameter, 0, len(route.Const))
-	for paramName := range route.Const {
-		aParam := s.paramByName(paramName)
-		constParam := view.Parameter{
-			Name: paramName,
-			In: &view.Location{
-				Kind: view.LiteralKind,
-				Name: paramName,
-			},
-			Const: route.Const[paramName],
-		}
-
-		*aParam = constParam
-		params = append(params, aParam)
-	}
-
-	return params
 }
 
 func fsAddJSON(fs afs.Service, URL string, any interface{}) error {
@@ -500,7 +508,7 @@ func (s *Builder) paramByName(name string) *view.Parameter {
 }
 
 func (s *Builder) columnTypes(table *option.Table) Columns {
-	meta := s.tablesMeta.TableMeta(view.NotEmptyOf(table.OuterAlias, table.Name))
+	meta := s.tablesMeta.TableMeta(view.NotEmptyOf(table.HolderName, table.Name))
 	columns := meta.IndexColumns(table.InnerAlias).Merge(meta.IndexColumns(""))
 
 	for alias, tableName := range table.Deps {
@@ -551,37 +559,96 @@ func (s *Builder) inheritRouteFromMainConfig(config option.Output) {
 }
 
 func (s *Builder) indexExcludedColumns(config *viewConfig) error {
-	return s.appendExcluded(&s.routeBuilder.route.Exclude, config, "")
+	err := s.appendExcluded(&s.routeBuilder.route.Exclude, config, "")
+	if err != nil {
+		return err
+	}
+
+	if err := s.appendMetaExcluded(&s.routeBuilder.route.Exclude, config, ""); err != nil {
+		return err
+	}
+
+	return err
 }
 
 func (s *Builder) appendExcluded(excluded *[]string, config *viewConfig, path string) error {
-	for _, column := range config.unexpandedTable.Columns {
-		for _, except := range column.Except {
-			colFormat, err := format.NewCase(view.DetectCase(except))
-			if err != nil {
-				return err
-			}
-
-			excludedFieldPath := colFormat.Format(except, format.CaseUpperCamel)
-			if path != "" {
-				excludedFieldPath = path + "." + excludedFieldPath
-			}
-
-			*excluded = append(*excluded, excludedFieldPath)
-		}
+	if err := s.excludeTableColumns(excluded, config.expandedTable, path); err != nil {
+		return err
 	}
 
 	for _, relation := range config.relations {
-		childPath := relation.aKey.owner.Field
-		if path != "" {
-			childPath = path + "." + childPath
+		holderName, err := s.normalizeFieldName(relation.unexpandedTable.HolderName)
+		if err != nil {
+			return err
 		}
-		if err := s.appendExcluded(excluded, relation, childPath); err != nil {
+
+		if err := s.appendExcluded(excluded, relation, combineSegments(path, holderName)); err != nil {
+			return err
+		}
+
+		if err := s.appendMetaExcluded(excluded, relation, path); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (s *Builder) appendMetaExcluded(excluded *[]string, config *viewConfig, path string) error {
+	if config.templateMeta != nil {
+		for _, field := range config.templateMeta.except {
+			actualFieldName, err := s.normalizeFieldName(field)
+			if err != nil {
+				return err
+			}
+
+			actualName, err := s.normalizeFieldName(config.templateMeta.name)
+			if err != nil {
+				return err
+			}
+
+			*excluded = append(*excluded, combineSegments(path, actualName, actualFieldName))
+		}
+	}
+	return nil
+}
+
+func (s *Builder) excludeTableColumns(excluded *[]string, table *option.Table, path string) error {
+	for _, column := range table.Columns {
+		for _, except := range column.Except {
+			actualFieldName, err := s.normalizeFieldName(except)
+			if err != nil {
+				return err
+			}
+
+			excludedFieldPath := combineSegments(path, actualFieldName)
+			*excluded = append(*excluded, excludedFieldPath)
+		}
+	}
+	return nil
+}
+
+func (s *Builder) normalizeFieldName(except string) (string, error) {
+	colFormat, err := format.NewCase(view.DetectCase(except))
+	if err != nil {
+		return "", err
+	}
+
+	actualFieldName := colFormat.Format(except, format.CaseUpperCamel)
+	return actualFieldName, nil
+}
+
+func combineSegments(segments ...string) string {
+	result := ""
+	for _, segment := range segments {
+		if result == "" {
+			result = segment
+		} else {
+			result = result + "." + segment
+		}
+	}
+
+	return result
 }
 
 func (s *Builder) buildViewParams() error {
@@ -652,4 +719,24 @@ func (s *Builder) prepareExternalParameters(paramViewConfig *viewParamConfig) []
 	}
 
 	return externalParams
+}
+
+func (s *Builder) moveConstParameters() error {
+	newParams := make([]*view.Parameter, 0)
+	constParams := make([]*view.Parameter, 0)
+	for i := range s.routeBuilder.routerResource.Resource.Parameters {
+		parameter := s.routeBuilder.routerResource.Resource.Parameters[i]
+
+		if parameter.In.Kind == view.LiteralKind {
+			constParams = append(constParams, parameter)
+			continue
+		}
+
+		newParams = append(newParams, parameter)
+	}
+
+	s.routeBuilder.routerResource.Resource.Parameters = newParams
+	s.constParameters = constParams
+
+	return nil
 }
