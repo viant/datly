@@ -3,7 +3,7 @@ package reader
 import (
 	"fmt"
 	"github.com/viant/datly/reader/metadata"
-	"github.com/viant/datly/transform/expand"
+	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/io/read/cache"
