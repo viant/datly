@@ -84,7 +84,7 @@ func (r *ResponseWithMetrics) WriteHeader(statusCode int) {
 }
 
 func (r *ResponseWithMetrics) writeMetricHeader() {
-	r.Header().Set(DatlyServiceTimeHeader, Until(r.startTime).String())
+	r.Header().Set(DatlyServiceTimeHeader, time.Since(r.startTime).String())
 }
 
 func NewMetricResponseWithTime(writer http.ResponseWriter, start time.Time) *ResponseWithMetrics {

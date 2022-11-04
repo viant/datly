@@ -625,5 +625,5 @@ func (r *Service) LogInitTimeIfNeeded(start time.Time, writer http.ResponseWrite
 		return
 	}
 
-	writer.Header().Set(router.DatlyServiceInitHeader, time.Until(start).String())
+	writer.Header().Set(router.DatlyServiceInitHeader, time.Since(start).String())
 }
