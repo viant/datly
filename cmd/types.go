@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	errUtils "github.com/viant/datly/err-utils"
+	errUtils "github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/metadata/sink"
