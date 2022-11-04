@@ -1,3 +1,6 @@
+## Nov 3 2022 v0.3.0.0
+* Refactored rule generator
+
 ## Jul 27 2022 v0.2.14
  * Improved rule generator
 
