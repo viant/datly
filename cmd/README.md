@@ -12,27 +12,36 @@
 
 The general structure for datly SQL
 ```sql
-[JSON_RouteConfig](option/route.go)
-SELECT mainViewAlias.*  [JSON_OutputConfig](option/output.go) EXCEPT ID,
-secondViewAlias.* [JSON_OutputConfig](option/output.go)
+[RouteConfig]
+SELECT mainViewAlias.*  [EXCEPT COLUMN][OutputConfig]
+[, secondViewAlias.*       [OutputConfig]  ]
+[, NviewAlias.*            [OutputConfig]  ]
 FROM (
     SELECT
-    ID  [JSON_ColumnConfig](option/column.go),
+    ID  [ColumnConfig],
     ...,
      other_column   
     FROM table1
-    ) mainViewAlias [JSON_ViewConfig](option/view.go),
-    JOIN (
+    ) mainViewAlias [ViewConfig],
+
+[
+ JOIN (
     SELECT OTHER_ID,
         ...,
         other_column
     FROM table2
-    ) secondViewAlias  [JSON_ViewRelationConfig](option/view.go), ON mainViewAlias.ID = secondViewAlias.OTHER_ID
+    ) secondViewAlias  [ViewConfig] ON mainViewAlias.ID = secondViewAlias.OTHER_ID
+    
+]    
 ```
 
+Where
+- **RouteConfig** is JSON representation of [Route](option/route.go) settings i.e {"URI":"app1/view1/{Id}"}
+- **OutputConfig** is JSON representation of [Output](option/output.go) settings i.e {"Style":"Comprehensive"}
+- **ColumnConfig** is JSON representation of [Column](option/column.go) settings i.e {"DataTyp":"bool"}
+- **ViewConfig**  is JSON representation of [View](option/view.go) settings i.e {"Cache":{"Ref":"aerospike"}}
 
-all JSON options require /* {JSON_HERE} */
-
+See e2e [testcase](../e2e/local/regression/cases) for more examples
 
 ###### One to many
 
