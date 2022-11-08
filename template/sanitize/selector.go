@@ -28,5 +28,5 @@ func (p *ParamMatcher) TryMatchParam(cursor *parsly.Cursor) (string, int) {
 		return "", -1
 	}
 
-	return view.NotEmptyOf(selector.FullName, selector.ID), matchedPos
+	return view.FirstNotEmpty(selector.FullName, selector.ID), matchedPos
 }

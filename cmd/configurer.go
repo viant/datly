@@ -241,14 +241,14 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 	}
 
 	aTable := buildTableFromQueryWithWarning(aQuery, aQuery.From.X, opt, aQuery.From.Comments)
-	aTable.HolderName = view.NotEmptyOf(aQuery.From.Alias, aTable.HolderName)
+	aTable.HolderName = view.FirstNotEmpty(aQuery.From.Alias, aTable.HolderName)
 	aTable.NamespaceSource = aTable.HolderName
 
 	if columns.CanBeTableName(aTable.Name) {
 		aTable.NamespaceSource = aTable.Name //for the relations, it will be adjusted later
 	}
 
-	result := newViewConfig(viewName, view.NotEmptyOf(aQuery.From.Alias, viewName), parent, aTable, nil, view.SQLQueryMode)
+	result := newViewConfig(viewName, view.FirstNotEmpty(aQuery.From.Alias, viewName), parent, aTable, nil, view.SQLQueryMode)
 
 	var dataViewParams []*viewParamConfig
 	for _, join := range joins {

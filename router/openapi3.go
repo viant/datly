@@ -426,7 +426,7 @@ func (g *generator) convertParam(route *Route, param *view.Parameter, descriptio
 		return nil, false, nil
 	}
 
-	cachedParam, ok := g._parametersIndex[view.NotEmptyOf(param.In.Name, param.Name)]
+	cachedParam, ok := g._parametersIndex[view.FirstNotEmpty(param.In.Name, param.Name)]
 	if ok {
 		if cachedParam != nil {
 			original := *cachedParam
@@ -452,7 +452,7 @@ func (g *generator) convertParam(route *Route, param *view.Parameter, descriptio
 	}
 
 	convertedParam := &openapi3.Parameter{
-		Name:        view.NotEmptyOf(param.In.Name, param.Name),
+		Name:        view.FirstNotEmpty(param.In.Name, param.Name),
 		In:          string(param.In.Kind),
 		Description: description,
 		Style:       param.Style,

@@ -121,14 +121,14 @@ func (c *Connector) Validate() error {
 		return fmt.Errorf("connector driver was empty")
 	}
 
-	if NotEmptyOf(c._dsn, c.DSN) == "" {
+	if FirstNotEmpty(c._dsn, c.DSN) == "" {
 		return fmt.Errorf("connector dsn was empty")
 	}
 	return nil
 }
 
 func (c *Connector) inherit(connector *Connector) {
-	c._dsn = NotEmptyOf(c._dsn, c.DSN, connector._dsn, connector.DSN)
+	c._dsn = FirstNotEmpty(c._dsn, c.DSN, connector._dsn, connector.DSN)
 
 	if c.Driver == "" {
 		c.Driver = connector.Driver
@@ -154,5 +154,5 @@ func (c *Connector) setDriverOptions(secret *scy.Secret) {
 }
 
 func (c *Connector) getDSN() string {
-	return NotEmptyOf(c._dsn, c.DSN)
+	return FirstNotEmpty(c._dsn, c.DSN)
 }

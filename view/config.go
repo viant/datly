@@ -131,8 +131,8 @@ func (c *Config) Init(ctx context.Context, resource *Resource, parent *View) err
 
 func (c *Config) newSelectorParam(name, paramKind string, parent *View) *Parameter {
 	return &Parameter{
-		Name:        NotEmptyOf(name, paramKind),
-		In:          NewQueryLocation(NotEmptyOf(name, c.Namespace+paramKind)),
+		Name:        FirstNotEmpty(name, paramKind),
+		In:          NewQueryLocation(FirstNotEmpty(name, c.Namespace+paramKind)),
 		Schema:      NewSchema(ParamType(paramKind)),
 		Description: Description(paramKind, parent.Name),
 	}

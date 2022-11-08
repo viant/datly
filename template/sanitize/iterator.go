@@ -103,7 +103,7 @@ outer:
 	for _, statement := range statements {
 		switch actual := statement.(type) {
 		case *expr.Select:
-			it.contexts = append(it.contexts, NewParamContext(view.NotEmptyOf(actual.FullName, actual.ID), context))
+			it.contexts = append(it.contexts, NewParamContext(view.FirstNotEmpty(actual.FullName, actual.ID), context))
 
 			for actual.X != nil {
 				xSelect, ok := actual.X.(*expr.Select)
@@ -247,7 +247,7 @@ func (it *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, raw, SQL
 }
 
 func (it *ParamMetaIterator) addVariable(selector *expr.Select) {
-	_, holderName := GetHolderName(view.NotEmptyOf(selector.FullName, selector.ID))
+	_, holderName := GetHolderName(view.FirstNotEmpty(selector.FullName, selector.ID))
 	if builtInMethods[holderName] {
 		return
 	}

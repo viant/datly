@@ -316,7 +316,7 @@ func (s *Builder) buildRouterOutput() error {
 		s.routeBuilder.route.Output.Cardinality = view.Many
 	}
 
-	s.routeBuilder.route.Output.CaseFormat = view.CaseFormat(view.NotEmptyOf(s.routeBuilder.option.CaseFormat, "lc"))
+	s.routeBuilder.route.Output.CaseFormat = view.CaseFormat(view.FirstNotEmpty(s.routeBuilder.option.CaseFormat, "lc"))
 	return nil
 }
 
@@ -509,7 +509,7 @@ func (s *Builder) paramByName(name string) *view.Parameter {
 }
 
 func (s *Builder) columnTypes(table *Table) ColumnIndex {
-	meta := s.tablesMeta.TableMeta(view.NotEmptyOf(table.HolderName, table.Name))
+	meta := s.tablesMeta.TableMeta(view.FirstNotEmpty(table.HolderName, table.Name))
 	columns := meta.IndexColumns(table.InnerAlias).Merge(meta.IndexColumns(""))
 
 	for alias, tableName := range table.Deps {
@@ -528,7 +528,7 @@ func (s *Builder) buildCacheWarmup(warmup map[string]interface{}, on *relationKe
 	warmup = copyWarmup(warmup)
 
 	result := &view.Warmup{
-		IndexColumn: view.NotEmptyOf(on.child.Field, on.child.Column),
+		IndexColumn: view.FirstNotEmpty(on.child.Field, on.child.Column),
 	}
 
 	multiSet := &view.CacheParameters{}
@@ -570,8 +570,8 @@ func (s *Builder) addTypeDef(schema *view.Definition) {
 }
 
 func (s *Builder) inheritRouteFromMainConfig(config option.OutputConfig) {
-	s.routeBuilder.route.ResponseField = view.NotEmptyOf(config.ResponseField, s.routeBuilder.route.ResponseField)
-	s.routeBuilder.route.Style = router.Style(view.NotEmptyOf(config.Style, string(s.routeBuilder.route.Style)))
+	s.routeBuilder.route.ResponseField = view.FirstNotEmpty(config.ResponseField, s.routeBuilder.route.ResponseField)
+	s.routeBuilder.route.Style = router.Style(view.FirstNotEmpty(config.Style, string(s.routeBuilder.route.Style)))
 }
 
 func (s *Builder) indexExcludedColumns(config *viewConfig) error {

@@ -172,7 +172,7 @@ func relationKeyOf(parentTable *Table, relTable *Table, join *query.Join) (*rela
 	x := extractSelector(join.On.X, true)
 	y := extractSelector(join.On.X, false)
 
-	actualTableName := view.NotEmptyOf(parentTable.HolderName, parentTable.Name)
+	actualTableName := view.FirstNotEmpty(parentTable.HolderName, parentTable.Name)
 	if actualTableName != y.Name && actualTableName != x.Name {
 		return nil, fmt.Errorf("unknow view alias: %v %v", actualTableName, parentTable.Name)
 	}
@@ -223,7 +223,7 @@ func newKey(s *expr.Selector, table *Table) (*key, error) {
 		}
 
 		if ok {
-			colName = view.NotEmptyOf(actualColumn, colName)
+			colName = view.FirstNotEmpty(actualColumn, colName)
 		}
 	}
 

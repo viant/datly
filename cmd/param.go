@@ -23,4 +23,5 @@ type Parameter struct {
 	Multi          bool             `json:",omitempty" yaml:",omitempty"`
 	Const          interface{}      `json:",omitempty" yaml:",omitempty"`
 	Has            bool             `json:",omitempty" yaml:",omitempty"`
+	Target         string           `json:",omitempty" yaml:",omitempty"`
 }

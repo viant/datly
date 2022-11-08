@@ -256,10 +256,10 @@ func (p *Parameter) inheritParamIfNeeded(ctx context.Context, view *View, resour
 }
 
 func (p *Parameter) inherit(param *Parameter) {
-	p.Name = NotEmptyOf(p.Name, param.Name)
-	p.Description = NotEmptyOf(p.Description, param.Description)
-	p.Style = NotEmptyOf(p.Style, param.Style)
-	p.PresenceName = NotEmptyOf(p.PresenceName, param.PresenceName)
+	p.Name = FirstNotEmpty(p.Name, param.Name)
+	p.Description = FirstNotEmpty(p.Description, param.Description)
+	p.Style = FirstNotEmpty(p.Style, param.Style)
+	p.PresenceName = FirstNotEmpty(p.PresenceName, param.PresenceName)
 	if p.Const == nil {
 		p.Const = param.Const
 	}
@@ -366,7 +366,7 @@ func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
 		return fmt.Errorf("parameter %v either schema DataType or Name has to be specified", p.Name)
 	}
 
-	schemaType := NotEmptyOf(p.Schema.Name, p.Schema.DataType)
+	schemaType := FirstNotEmpty(p.Schema.Name, p.Schema.DataType)
 	if p.MaxAllowedRecords != nil && *p.MaxAllowedRecords > 1 {
 		p.Schema.Cardinality = Many
 	}

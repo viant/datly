@@ -253,7 +253,7 @@ func (c *Schema) copy() *Schema {
 }
 
 func (c *Schema) parseType(types Types) error {
-	parseType, err := GetOrParseType(types, NotEmptyOf(c.DataType, c.Name))
+	parseType, err := GetOrParseType(types, FirstNotEmpty(c.DataType, c.Name))
 	if err != nil {
 		return err
 	}

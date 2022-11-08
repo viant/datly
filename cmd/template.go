@@ -120,7 +120,7 @@ func convertMetaParameter(param *Parameter, values map[string]interface{}) *view
 		},
 		In: &view.Location{
 			Kind: view.Kind(param.Kind),
-			Name: param.Name,
+			Name: view.FirstNotEmpty(param.Target, param.Name),
 		},
 		Required: param.Required,
 	}
@@ -230,7 +230,7 @@ func (s *Builder) buildTemplateMeta(aConfig *viewConfig) (*view.TemplateMeta, er
 	tmplMeta := &view.TemplateMeta{
 		Source: SQL,
 		Name:   table.HolderName,
-		Kind:   view.MetaKind(view.NotEmptyOf(aConfig.outputConfig.Kind, string(view.MetaTypeRecord))),
+		Kind:   view.MetaKind(view.FirstNotEmpty(aConfig.outputConfig.Kind, string(view.MetaTypeRecord))),
 	}
 
 	return tmplMeta, tryUnmarshalHint(table.ViewHintJSON, tmplMeta)

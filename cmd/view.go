@@ -13,7 +13,7 @@ import (
 
 func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, selector *view.Config, indexNamespace bool, parameters ...*view.Parameter) (*view.View, error) {
 	table := viewConfig.unexpandedTable
-	connector, err := s.ConnectorRef(view.NotEmptyOf(table.Connector, s.options.Connector.DbName))
+	connector, err := s.ConnectorRef(view.FirstNotEmpty(table.Connector, s.options.Connector.DbName))
 	if err != nil {
 		return nil, err
 	}
@@ -48,9 +48,9 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 		selector = table.ViewConfig.Selector
 	}
 
-	tableName := view.NotEmptyOf(table.Name, table.HolderName)
+	tableName := view.FirstNotEmpty(table.Name, table.HolderName)
 
-	actualNamespaceSource := view.NotEmptyOf(table.NamespaceSource, table.HolderName)
+	actualNamespaceSource := view.FirstNotEmpty(table.NamespaceSource, table.HolderName)
 	if selector != nil && selector.Namespace == "" && indexNamespace && actualNamespaceSource != "" {
 		selector.Namespace = namespace(actualNamespaceSource)
 	}
@@ -97,7 +97,7 @@ func (s *Builder) readColumnTypes(ctx context.Context, db *sql.DB, table *Table)
 }
 
 func (s *Builder) DB(connector *view.Connector) (*sql.DB, error) {
-	connectorName := view.NotEmptyOf(connector.Name, connector.Ref)
+	connectorName := view.FirstNotEmpty(connector.Name, connector.Ref)
 	connector, ok := s.options.Lookup(connectorName)
 	if !ok {
 		return nil, fmt.Errorf("not found connector %v", connectorName)
@@ -213,7 +213,7 @@ func (s *Builder) buildColumnsConfig(ctx context.Context, config *viewConfig) (m
 			return nil, err
 		}
 
-		result[view.NotEmptyOf(column.Alias, column.Name)] = columnConfig
+		result[view.FirstNotEmpty(column.Alias, column.Name)] = columnConfig
 	}
 	return result, nil
 }
