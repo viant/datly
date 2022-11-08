@@ -6,32 +6,33 @@
 ```
 
 
-#### Generate rule with endpoint for a table
 
-```bash
- ./datly -C='mydb|mysql|root:pass@tcp(127.0.0.1:3306)/mydb?parseTime=true'  -N=MyViewName -T=MyTableName
- 
-open http://127.0.0.1:8080/v1/api/dev/MyViewName
-
-```
-
-#### Generate rule with endpoint for a table and SQL
-
-```bash
- ./datly  -C=dev  -N=MyViewName -T=MyTableName -S=view.sql
-```
-
-```bash
- ./datly  -C=dev  -N=MyViewName -T=MyTableName
-```
-
-#### Generate rule with endpoint for a table and relations
-
-```bash
- ./datly  -C=dev  -N=MyViewName -T=MyTableName  -R=MyRelName:RelTable 
-```
 
 ##### SQLx (extension) based rule generation
+
+The general structure for datly SQL
+```sql
+[JSON_RouteConfig](option/route.go)
+SELECT mainViewAlias.*  [JSON_OutputConfig](option/output.go) EXCEPT ID,
+secondViewAlias.* [JSON_OutputConfig](option/output.go)
+FROM (
+    SELECT
+    ID  [JSON_ColumnConfig](option/column.go),
+    ...,
+     other_column   
+    FROM table1
+    ) mainViewAlias [JSON_ViewConfig](option/view.go),
+    JOIN (
+    SELECT OTHER_ID,
+        ...,
+        other_column
+    FROM table2
+    ) secondViewAlias  [JSON_ViewRelationConfig](option/view.go), ON mainViewAlias.ID = secondViewAlias.OTHER_ID
+```
+
+
+all JSON options require /* {JSON_HERE} */
+
 
 ###### One to many
 
