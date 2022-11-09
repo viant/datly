@@ -1,0 +1,25 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: PUT
+        URL: http://127.0.0.1:8080/v1/api/dev/teams?TeamIDs=100
+        Expect:
+          Code: 400
+          Body:
+            Message: "not found team with ID 100"
+
+      - Method: PUT
+        URL: http://127.0.0.1:8080/v1/api/dev/teams?TeamIDs=1
+        Expect:
+          Code: 400
+          Body:
+            Message: "can't deactivate team Team - 1 with 2 members"
+
+      - Method: PUT
+        URL: http://127.0.0.1:8080/v1/api/dev/teams?TeamIDs=3
+        Expect:
+          Code: 200

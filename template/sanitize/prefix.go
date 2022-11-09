@@ -43,5 +43,9 @@ func withoutPath(name string) string {
 		return name[:index]
 	}
 
+	if index := strings.Index(name, "["); index != -1 {
+		return name[:index]
+	}
+
 	return name
 }

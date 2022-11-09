@@ -101,6 +101,10 @@ func (it *ParamMetaIterator) buildContexts(context Context, statements ...ast.St
 
 outer:
 	for _, statement := range statements {
+		if statement == nil {
+			continue
+		}
+
 		switch actual := statement.(type) {
 		case *expr.Select:
 			it.contexts = append(it.contexts, NewParamContext(view.FirstNotEmpty(actual.FullName, actual.ID), context))
@@ -117,6 +121,11 @@ outer:
 					for _, arg := range asFunc.Args {
 						it.buildContexts(FuncContext, arg)
 					}
+				}
+
+				asSlice, ok := actual.X.(*expr.SliceIndex)
+				if ok {
+					it.buildContexts(context, asSlice.X, asSlice.Y)
 				}
 
 				continue outer
@@ -157,27 +166,34 @@ func (it *ParamMetaIterator) Has() bool {
 
 	var SQLKeyword string
 
+	beforeMatchedWhitespace := it.cursor.Pos
 	for it.cursor.Pos < it.cursor.InputSize {
 		it.cursor.MatchOne(whitespaceMatcher)
+		afterMatchedWhitespace := it.cursor.Pos
 
-		beforeMatch := it.cursor.Pos
 		param, pos := it.paramMatcher.TryMatchParam(it.cursor)
 		if pos == -1 {
-			matchedKeyword, ok := it.matchKeyword()
-			if ok {
-				SQLKeyword = matchedKeyword
-			} else {
+			if beforeMatchedWhitespace == afterMatchedWhitespace {
 				it.cursor.Pos++
+			} else {
+				matchedKeyword, ok := it.matchKeyword()
+				if ok {
+					SQLKeyword = matchedKeyword
+				} else {
+					it.cursor.Pos++
+				}
 			}
 
 			continue
 		}
 
 		if method, ok := it.tryBuildParam(SQLKeyword, param, pos); !ok {
-			it.cursor.Pos = beforeMatch + len(method) + 1
+			it.cursor.Pos = afterMatchedWhitespace + len(method) + 1
 			continue
 		}
 
+		_, holderName := GetHolderName(param)
+		it.cursor.Pos = afterMatchedWhitespace + len(holderName) + 1
 		return true
 	}
 

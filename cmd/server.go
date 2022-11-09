@@ -706,8 +706,11 @@ func (s *Builder) buildViewParams() error {
 				Required: boolPtr(true),
 			}
 		}
-
 		aParam.Schema = s.NewSchema(typeDef.Name, "")
+		if err = s.updateParamByHint(aParam); err != nil {
+			return err
+		}
+
 		aView.Schema = s.NewSchema(typeDef.Name, "")
 		updateAsAuthParamIfNeeded(childViewConfig.unexpandedTable.Auth, aParam)
 		s.addParameters(aParam)
@@ -755,4 +758,47 @@ func (s *Builder) moveConstParameters() error {
 	s.constParameters = constParams
 
 	return nil
+}
+
+func (s *Builder) updateParamByHint(param *view.Parameter) error {
+	hint, ok := s.routeBuilder.paramsIndex.hints[param.Name]
+	if !ok {
+		return nil
+	}
+
+	JSONHint, _ := sanitize.SplitHint(hint.Hint)
+	JSONHint = strings.TrimSpace(JSONHint)
+	if JSONHint == "" {
+		return nil
+	}
+
+	paramConfig := &option.ParameterConfig{}
+	if err := tryUnmarshalHint(JSONHint, paramConfig); err != nil {
+		return err
+	}
+
+	s.updateViewParam(param, paramConfig)
+	return nil
+}
+
+func (s *Builder) updateViewParam(param *view.Parameter, config *option.ParameterConfig) {
+	if config.Const != nil {
+		param.Const = config.Const
+	}
+
+	param.Name = view.FirstNotEmpty(config.Name, param.Name)
+	param.In.Name = view.FirstNotEmpty(config.Target, param.In.Name)
+	if config.Required != nil {
+		param.Required = config.Required
+	}
+
+	param.In.Kind = view.Kind(view.FirstNotEmpty(config.Kind, string(param.In.Kind)))
+	param.Schema.DataType = view.FirstNotEmpty(config.DataType, param.Schema.DataType)
+	if config.Codec != "" {
+		param.Codec = &view.Codec{Reference: shared.Reference{Ref: config.Codec}}
+	}
+
+	if config.ExpectReturned != nil {
+		param.MaxAllowedRecords = config.ExpectReturned
+	}
 }

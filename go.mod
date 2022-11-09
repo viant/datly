@@ -32,8 +32,8 @@ require (
 	github.com/viant/scy v0.3.2-0.20220825213848-acc5c59cde78
 	github.com/viant/sqlx v0.0.0-20221031222757-ca81f9a9131b
 	github.com/viant/toolbox v0.34.6-0.20220630003140-fb2bf82657c1
-	github.com/viant/velty v0.1.1-0.20220823164959-71cfbb2b10fd
-	github.com/viant/xunsafe v0.8.1-0.20220921220858-82f5aba1919f
+	github.com/viant/velty v0.1.1-0.20221108005606-04bdc14dccc4
+	github.com/viant/xunsafe v0.8.1-0.20221104195713-fd8483040428
 	golang.org/x/oauth2 v0.0.0-20220822191816-0ebed06d0094
 	google.golang.org/api v0.94.0
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect

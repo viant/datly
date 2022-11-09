@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
+	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/sanitize"
@@ -85,8 +86,16 @@ func (s *Builder) convertParams(template *Template) ([]*view.Parameter, error) {
 	added := map[string]bool{}
 	for _, parameter := range parameters {
 		existingParam := s.paramByName(parameter.Name)
-		newParam := convertMetaParameter(parameter, s.routeBuilder.option.Const)
+		newParam, err := convertMetaParameter(parameter, s.routeBuilder.option.Const, s.routeBuilder.paramsIndex.hints)
+		if err != nil {
+			return nil, err
+		}
+
 		updateParamPrecedence(existingParam, newParam)
+		if err = s.updateParamByHint(existingParam); err != nil {
+			return nil, err
+		}
+
 		result = append(result, &view.Parameter{Reference: shared.Reference{Ref: existingParam.Name}})
 		added[existingParam.Name] = true
 	}
@@ -102,7 +111,16 @@ func (s *Builder) convertParams(template *Template) ([]*view.Parameter, error) {
 	return result, nil
 }
 
-func convertMetaParameter(param *Parameter, values map[string]interface{}) *view.Parameter {
+func convertMetaParameter(param *Parameter, values map[string]interface{}, hints map[string]*sanitize.ParameterHint) (*view.Parameter, error) {
+	hint, ok := hints[param.Name]
+	if ok {
+		jsonHint, _ := sanitize.SplitHint(hint.Hint)
+		jsonHint = strings.TrimSpace(jsonHint)
+		if err := tryUnmarshalHint(jsonHint, param); err != nil {
+			return nil, err
+		}
+	}
+
 	aCodec, dataType := paramCodec(param)
 	constValue := param.Const
 	if aValue, ok := values[param.Name]; ok {
@@ -123,7 +141,7 @@ func convertMetaParameter(param *Parameter, values map[string]interface{}) *view
 			Name: view.FirstNotEmpty(param.Target, param.Name),
 		},
 		Required: param.Required,
-	}
+	}, nil
 }
 
 func paramCodec(param *Parameter) (*view.Codec, string) {
@@ -307,7 +325,7 @@ func (t *Template) detectParameters(statements []ast.Statement, required bool, r
 			}
 
 		case *expr.Unary:
-			t.detectParameters([]ast.Statement{actual}, false, actual.Type(), false)
+			t.detectParameters([]ast.Statement{actual.X}, false, actual.Type(), false)
 		case *expr.Binary:
 			xType := actual.X.Type()
 			if xType == nil {
@@ -350,6 +368,11 @@ func (t *Template) indexParameter(actual *expr.Select, required bool, rType refl
 		return
 	}
 
+	selector, ok := getContextSelector(prefix, actual.X)
+	if ok {
+		multi = multi || selector.ID == "IndexBy"
+	}
+
 	pType := "string"
 	assumed := true
 
@@ -369,16 +392,32 @@ func (t *Template) indexParameter(actual *expr.Select, required bool, rType refl
 	}
 
 	t.AddParameter(&Parameter{
-		Assumed:  assumed,
-		Id:       paramName,
-		Name:     paramName,
-		Kind:     kind,
-		DataType: pType,
+		Assumed: assumed,
+		ParameterConfig: option.ParameterConfig{
+			Id:       paramName,
+			Name:     paramName,
+			Kind:     kind,
+			DataType: pType,
+			Required: BoolPtr(required && prefix != keywords.ParamsMetadataKey),
+		},
 		FullName: actual.FullName,
 		Multi:    multi,
-		Required: BoolPtr(required && prefix != keywords.ParamsMetadataKey),
 		Has:      prefix == keywords.ParamsMetadataKey,
 	})
+}
+
+func getContextSelector(prefix string, x ast.Expression) (*expr.Select, bool) {
+	selector, ok := asSelector(x)
+	if prefix == "" || !ok {
+		return selector, ok
+	}
+
+	return asSelector(selector.X)
+}
+
+func asSelector(x ast.Expression) (*expr.Select, bool) {
+	selector, ok := x.(*expr.Select)
+	return selector, ok
 }
 
 func (t *Template) AddParameter(param *Parameter) {

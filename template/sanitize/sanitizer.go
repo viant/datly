@@ -73,7 +73,7 @@ func sanitizeParameter(context Context, prefix, paramName, raw string, variables
 		return strings.Replace(raw, "$", fmt.Sprintf("$%v.", keywords.ParamsKey), 1)
 	}
 
-	if (context == FuncContext || context == ForEachContext || context == IfContext) && variables[paramName] {
+	if (context == FuncContext || context == ForEachContext || context == IfContext || context == SetContext) && variables[paramName] {
 		return strings.Replace(raw, fmt.Sprintf("$%v.", keywords.ParamsKey), "$", 1)
 	}
 

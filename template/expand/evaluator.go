@@ -37,7 +37,7 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	}
 
 	var err error
-	evaluator.planner = velty.New(velty.BufferSize(len(template)))
+	evaluator.planner = velty.New(velty.BufferSize(len(template)), velty.PanicOnError(true))
 	if err = evaluator.planner.DefineVariable(keywords.ParamsKey, paramSchema); err != nil {
 		return nil, err
 	}
