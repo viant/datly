@@ -1,0 +1,11 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: DELETE
+        URL: http://127.0.0.1:8080/v1/api/dev/team/1
+        Expect:
+          Code: 200
