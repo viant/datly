@@ -64,5 +64,5 @@ Template:
     Cardinality: One
   Schema:
     Cardinality: One
-  Source: "( \n\n#set($event = $Unsafe.Event )\n\n#foreach($rec in $Unsafe.Records )\n\nUPDATE event_types\nSET name =  $criteria.AppendBinding($rec.NEW_NAME) \nWHERE ID =  $criteria.AppendBinding($rec.ID) ;\n\n#end )"
+  Source: "( \n\n#set($event = $Unsafe.Event )\n\n#foreach($rec in $Unsafe.Records )\n\nUPDATE event_types\nSET name =  $criteria.AppendBinding($rec.NEW_NAME)\nWHERE ID =  $criteria.AppendBinding($rec.ID);\n\n#end )"
   SourceURL: update/update.sql

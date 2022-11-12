@@ -4,22 +4,23 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/router/marshal"
-	"github.com/viant/datly/shared"
 )
 
 //Views represents views registry indexed by view name.
 type Views map[string]*View
 
 //Register registers view in registry using View name.
-func (v *Views) Register(view *View) {
+func (v *Views) Register(view *View) error {
 	if len(*v) == 0 {
 		*v = make(map[string]*View)
 	}
-	keys := shared.KeysOf(view.Name, false)
 
-	for _, key := range keys {
-		(*v)[key] = view
+	if _, ok := (*v)[view.Name]; ok {
+		return fmt.Errorf("view with %v name already exists in given resource", view.Name)
 	}
+
+	(*v)[view.Name] = view
+	return nil
 }
 
 func (v *Views) merge(views *Views) {
@@ -45,12 +46,14 @@ func (v Views) Lookup(viewName string) (*View, error) {
 type ViewSlice []*View
 
 //Index indexes ViewSlice by View.Name
-func (v ViewSlice) Index() Views {
+func (v ViewSlice) Index() (Views, error) {
 	result := Views(make(map[string]*View))
 	for i := range v {
-		result.Register(v[i])
+		if err := result.Register(v[i]); err != nil {
+			return nil, err
+		}
 	}
-	return result
+	return result, nil
 }
 
 //Init initializes views.

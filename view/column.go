@@ -49,7 +49,7 @@ func ParseType(dataType string) (reflect.Type, error) {
 	}
 
 	switch strings.ToLower(dataType) {
-	case "int", "integer", "bigint", "smallint", "tinyint":
+	case "int", "integer", "bigint", "smallint", "tinyint", "int64", "int32", "int16", "int8", "uint", "uint8", "uint16", "uint32", "uint64":
 		return reflect.TypeOf(0), nil
 	case "float", "float64", "numeric", "decimal":
 		return reflect.TypeOf(0.0), nil
@@ -59,6 +59,8 @@ func ParseType(dataType string) (reflect.Type, error) {
 		return reflect.TypeOf(""), nil
 	case "date", "time", "timestamp", "datetime":
 		return reflect.TypeOf(time.Time{}), nil
+	case "sql.RawBytes":
+		return reflect.TypeOf(""), nil
 	case "interface":
 		t := reflect.ValueOf(interface{}(foo{})).FieldByName("Interface").Type()
 		return t, nil

@@ -368,7 +368,7 @@ func (r *Service) handleMetaUpdated(metaUpdated []string) []string {
 	var actualUpdated []string
 	for _, viewSeg := range metaUpdated {
 		if URL, ok := r.shouldUpdateRouter(viewSeg, routeURLs); ok {
-			fmt.Printf("[INFO] Detected meta file removed but not resource changes. In order to optimize startup, please provide the %v cache file \n", path.Join(".meta", viewSeg))
+			fmt.Printf("[INFO] Detected meta file missing. In order to optimize startup, please provide the %v cache file \n", path.Join(".meta", viewSeg))
 			actualUpdated = append(actualUpdated, URL)
 		}
 	}

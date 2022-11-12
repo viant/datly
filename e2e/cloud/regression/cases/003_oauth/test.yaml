@@ -26,7 +26,7 @@ pipeline:
           description: user is no authenticated
           URL: http://127.0.0.1:8080/v1/api/dev/auth/vendors/2
           Expect:
-            Code: 400
+            Code: 401
 
     testAuthenticatedAndAuthorized:
       action: http/runner:send
@@ -47,4 +47,4 @@ pipeline:
         description: user is authenticated but not authorized for vendor 1 (no data returned)
         URL: http://127.0.0.1:8080/v1/api/dev/auth/vendors/1
         Expect:
-          Code: 400
+          Code: 401

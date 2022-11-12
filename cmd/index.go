@@ -83,21 +83,6 @@ func (m *TableMeta) AddSinkColumns(columns []sink.Column) error {
 func (m *TableMeta) addColumn(column *ColumnMeta) {
 	column.Type = normalizeType(column.Type)
 
-	//	columnType := column.ScanType().String()
-	//	if strings.HasPrefix(columnType, "*") {
-	//		columnType = columnType[1:]
-	//	}
-	//	if columnType == "sql.RawBytes" {
-	//		columnType = "string"
-	//	}
-	//	if strings.Contains(columnType, "int") {
-	//		columnType = "int"
-	//	}
-	//	key := prefix
-	//	if key != "" {
-	//		key += "."
-	//	}
-
 	index, ok := m.index[column.Name]
 	if !ok {
 		m.index[column.Name] = len(m.Columns)

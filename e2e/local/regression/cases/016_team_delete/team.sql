@@ -1,5 +1,5 @@
-/* {"URI":"team/${teamID}",
+/* {"URI":"team/{teamID}",
     "Method": "DELETE"
  } */
 
-DELETE TEAM WHERE ID = ${teamID}
+DELETE FROM TEAM WHERE ID = ${teamID}

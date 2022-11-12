@@ -11,7 +11,7 @@ JOIN ( SELECT
     AVG(payment) * 1.25 AS price
     FROM `viant-e2e.bqdev.product_performance` t
     WHERE 1=1
-    #if($Unsafe.period="today")
+    #if($Unsafe.period == "today")
         AND 1 = 1
     #end
     GROUP BY 1, 2) performance /*  {"Connector":"bqdev"} */ ON performance.product_id = product.ID

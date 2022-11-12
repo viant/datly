@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
+	"strings"
 )
 
 type ParametersIndex struct {
@@ -11,10 +13,12 @@ type ParametersIndex struct {
 	consts         map[string]interface{}
 	types          map[string]string
 	hints          map[string]*sanitize.ParameterHint
+	utilsIndex     map[string]bool
 }
 
 func NewParametersIndex() *ParametersIndex {
 	return &ParametersIndex{
+		utilsIndex:     map[string]bool{},
 		parameterKinds: map[string]view.Kind{},
 		parameters:     map[string]*view.Parameter{},
 		types:          map[string]string{},
@@ -53,7 +57,16 @@ func (p *ParametersIndex) AddConsts(consts map[string]interface{}) {
 
 func (p *ParametersIndex) AddHints(hints map[string]*sanitize.ParameterHint) {
 	for paramName := range hints {
-		p.hints[paramName] = hints[paramName]
+		hint := hints[paramName]
+		p.hints[paramName] = hint
+		actualHint, _ := sanitize.SplitHint(hint.Hint)
+		actualHint = strings.TrimSpace(actualHint)
+
+		paramMeta := &option.ParamMeta{}
+		tryUnmrashalHintWithWarn(actualHint, &paramMeta)
+		if paramMeta.Util {
+			p.utilsIndex[paramName] = true
+		}
 	}
 }
 

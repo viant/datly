@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 )
 
 const pkgPath = "github.com/viant/datly/view"
@@ -130,7 +131,7 @@ func buildTypeFromFields(fields []*Field) reflect.Type {
 		}
 
 		aTagValue := jsonTagValue(jsonName, field)
-		if field.Column != "" {
+		if field.Column != "" && !strings.Contains(field.Tag, "sqlx") {
 			aTagValue += fmt.Sprintf(`sqlx:"name=%v" `, field.Column)
 		}
 

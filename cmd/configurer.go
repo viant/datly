@@ -102,6 +102,11 @@ func isMetaTable(candidate string) bool {
 }
 
 func tryUnmrashalHintWithWarn(hint string, any interface{}) {
+	hint = strings.TrimSpace(hint)
+	if hint == "" {
+		return
+	}
+
 	err := tryUnmarshalHint(hint, any)
 	if err != nil {
 		fmt.Printf("[WARN] couldn't unmarshal %v into %T due to the %v\n", hint, any, err.Error())
@@ -398,7 +403,7 @@ func updateExecViewConfig(stmtType byte, SQLStmt string, view *viewConfig) error
 		if err != nil {
 			return err
 		}
-		inheritFromTarget(stmt.Target.X, view)
+		inheritFromTarget(stmt.Target.X, view, stmt.Target.Comments)
 
 	case 'u':
 		stmt, err := parser.ParseUpdate(rawSQL)
@@ -406,18 +411,32 @@ func updateExecViewConfig(stmtType byte, SQLStmt string, view *viewConfig) error
 			return err
 		}
 
-		inheritFromTarget(stmt.Target.X, view)
+		inheritFromTarget(stmt.Target.X, view, stmt.Target.Comments)
+
+	case 'd':
+		stmt, err := parser.ParseDelete(rawSQL)
+		if err != nil {
+			return err
+		}
+
+		inheritFromTarget(stmt.Target.X, view, stmt.Target.Comments)
 	}
 
 	return nil
 }
 
-func inheritFromTarget(target node.Node, view *viewConfig) {
+func inheritFromTarget(target node.Node, view *viewConfig, tableNameComment string) {
 	tableName := parser.Stringify(target)
 	view.ensureTableName(tableName)
 	view.ensureOuterAlias(tableName)
 	view.ensureInnerAlias(tableName)
 	view.ensureFileName(tableName)
+	view.parseComment(tableNameComment)
+}
+
+func (c *viewConfig) parseComment(comment string) {
+	hint, _ := sanitize.SplitHint(comment)
+	tryUnmrashalHintWithWarn(hint, &c.expandedTable.ViewConfig)
 }
 
 func getStatementBoundary(lcSQL string) []int {

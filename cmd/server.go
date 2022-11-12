@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/datly/cmd/option"
@@ -17,6 +18,7 @@ import (
 	"github.com/viant/toolbox/format"
 	"gopkg.in/yaml.v3"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -29,6 +31,8 @@ type (
 		logger          io.Writer
 		fs              afs.Service
 		constParameters []*view.Parameter
+		fileNames       map[string]int
+		viewNames       map[string]int
 	}
 
 	routeBuilder struct {
@@ -202,17 +206,7 @@ func (s *Builder) Build(ctx context.Context) error {
 		return err
 	}
 
-	if err := s.buildViewParams(); err != nil {
-		return err
-	}
-
-	config := s.routeBuilder.configProvider.ViewConfig()
-
-	if err := s.buildMainView(ctx, config); err != nil {
-		return err
-	}
-
-	if err := s.indexExcludedColumns(config); err != nil {
+	if err := s.buildViews(ctx); err != nil {
 		return err
 	}
 
@@ -225,6 +219,51 @@ func (s *Builder) Build(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (s *Builder) buildViews(ctx context.Context) error {
+	params, err := s.buildViewParams()
+	if err != nil {
+		return err
+	}
+
+	config := s.routeBuilder.configProvider.ViewConfig()
+
+	aView, err := s.buildOrPrepareRule(ctx, config)
+	if err != nil {
+		return err
+	}
+
+outer:
+	for _, paramName := range params {
+		for _, viewParameter := range aView.Template.Parameters {
+			if view.FirstNotEmpty(viewParameter.Ref, viewParameter.Name) == paramName {
+				continue outer
+			}
+		}
+
+		aView.Template.Parameters = append(aView.Template.Parameters, &view.Parameter{Reference: shared.Reference{Ref: paramName}})
+	}
+
+	s.setMainView(aView)
+	if err = s.indexExcludedColumns(config); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Builder) buildOrPrepareRule(ctx context.Context, config *viewConfig) (*view.View, error) {
+	if s.options.PrepareRule == "" {
+		return s.buildMainView(ctx, config)
+	}
+
+	switch s.options.PrepareRule {
+	case PreparePost:
+		return s.preparePostRule(ctx, config)
+	default:
+		return nil, fmt.Errorf("unsupported %v prepare rule type", s.options.PrepareRule)
+	}
 }
 
 func (s *Builder) loadAndInitConfig(ctx context.Context) error {
@@ -469,10 +508,10 @@ func fsAddYAML(fs afs.Service, URL string, any interface{}) error {
 	return fs.Upload(context.Background(), URL, file.DefaultFileOsMode, bytes.NewReader(data))
 }
 
-func (s *Builder) buildMainView(ctx context.Context, config *viewConfig) error {
+func (s *Builder) buildMainView(ctx context.Context, config *viewConfig) (*view.View, error) {
 	s.inheritRouteFromMainConfig(config.outputConfig)
 
-	aView, err := s.buildAndAddView(ctx, config, &view.Config{
+	aView, err := s.buildAndAddViewWithLog(ctx, config, &view.Config{
 		Limit: 25,
 		Constraints: &view.Constraints{
 			Filterable: []string{"*"},
@@ -482,12 +521,12 @@ func (s *Builder) buildMainView(ctx context.Context, config *viewConfig) error {
 			Projection: true,
 		},
 	}, true)
-	if err != nil {
-		return err
-	}
 
+	return aView, err
+}
+
+func (s *Builder) setMainView(aView *view.View) {
 	s.routeBuilder.route.View = &view.View{Reference: shared.Reference{Ref: aView.Name}}
-	return nil
 }
 
 func updateAsAuthParamIfNeeded(auth string, param *view.Parameter) {
@@ -558,11 +597,17 @@ func copyWarmup(warmup map[string]interface{}) map[string]interface{} {
 
 }
 
-func (s *Builder) addParameters(params ...*view.Parameter) {
-	for i := range params {
+func (s *Builder) addParameters(params ...*view.Parameter) error {
+	for i, aParam := range params {
+		if err := s.updateParamByHint(aParam); err != nil {
+			return err
+		}
+
 		s.routeBuilder.routerResource.Resource.Parameters = append(s.routeBuilder.routerResource.Resource.Parameters, params[i])
 		s.routeBuilder.paramsIndex.AddParameter(params[i])
 	}
+
+	return nil
 }
 
 func (s *Builder) addTypeDef(schema *view.Definition) {
@@ -667,15 +712,16 @@ func combineSegments(segments ...string) string {
 	return result
 }
 
-func (s *Builder) buildViewParams() error {
+func (s *Builder) buildViewParams() ([]string, error) {
 	paramViews := s.routeBuilder.configProvider.ViewParams()
+	var utilParams []string
 
 	for _, paramViewConfig := range paramViews {
 		externalParams := s.prepareExternalParameters(paramViewConfig)
 
 		childViewConfig := paramViewConfig.viewConfig
 
-		aView, err := s.buildAndAddView(context.TODO(), paramViewConfig.viewConfig, &view.Config{
+		aView, err := s.buildAndAddViewWithLog(context.TODO(), paramViewConfig.viewConfig, &view.Config{
 			Constraints: &view.Constraints{
 				Criteria:   false,
 				Limit:      true,
@@ -687,7 +733,7 @@ func (s *Builder) buildViewParams() error {
 		}, false, externalParams...)
 
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		paramName := aView.Name
@@ -707,16 +753,19 @@ func (s *Builder) buildViewParams() error {
 			}
 		}
 		aParam.Schema = s.NewSchema(typeDef.Name, "")
-		if err = s.updateParamByHint(aParam); err != nil {
-			return err
-		}
 
 		aView.Schema = s.NewSchema(typeDef.Name, "")
 		updateAsAuthParamIfNeeded(childViewConfig.unexpandedTable.Auth, aParam)
-		s.addParameters(aParam)
+		if err = s.addParameters(aParam); err != nil {
+			return nil, err
+		}
+
+		if s.isUtilParam(aParam) {
+			utilParams = append(utilParams, aParam.Name)
+		}
 	}
 
-	return nil
+	return utilParams, nil
 }
 
 func (s *Builder) prepareExternalParameters(paramViewConfig *viewParamConfig) []*view.Parameter {
@@ -801,4 +850,24 @@ func (s *Builder) updateViewParam(param *view.Parameter, config *option.Paramete
 	if config.ExpectReturned != nil {
 		param.MaxAllowedRecords = config.ExpectReturned
 	}
+}
+
+func (s *Builder) isUtilParam(param *view.Parameter) bool {
+	return s.routeBuilder.paramsIndex.utilsIndex[param.Name]
+}
+
+func (s *Builder) unique(name string, names map[string]int, caseSensitive bool) string {
+	aKey := name
+	if !caseSensitive {
+		aKey = strings.ToLower(aKey)
+	}
+
+	counter := names[aKey]
+	names[aKey] = counter + 1
+
+	if counter == 0 {
+		return name
+	}
+
+	return name + "_" + strconv.Itoa(counter)
 }

@@ -73,8 +73,14 @@ func sanitizeParameter(context Context, prefix, paramName, raw string, variables
 		return strings.Replace(raw, "$", fmt.Sprintf("$%v.", keywords.ParamsKey), 1)
 	}
 
-	if (context == FuncContext || context == ForEachContext || context == IfContext || context == SetContext) && variables[paramName] {
-		return strings.Replace(raw, fmt.Sprintf("$%v.", keywords.ParamsKey), "$", 1)
+	if context == FuncContext || context == ForEachContext || context == IfContext || context == SetContext {
+		if variables[paramName] {
+			return strings.Replace(raw, fmt.Sprintf("$%v.", keywords.ParamsKey), "$", 1)
+		}
+
+		if prefix == "" {
+			return strings.Replace(raw, "$", fmt.Sprintf("$%v.", keywords.ParamsKey), 1)
+		}
 	}
 
 	isVariable := variables[paramName]
@@ -94,5 +100,5 @@ func sanitizeParameter(context Context, prefix, paramName, raw string, variables
 }
 
 func sanitizeAsPlaceholder(paramName string) string {
-	return fmt.Sprintf(" $criteria.AppendBinding(%v) ", paramName)
+	return fmt.Sprintf(" $criteria.AppendBinding(%v)", paramName)
 }

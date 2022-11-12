@@ -8,11 +8,25 @@ import (
 	"github.com/viant/datly/template/columns"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/config"
+	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/toolbox/format"
 )
 
-func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, selector *view.Config, indexNamespace bool, parameters ...*view.Parameter) (*view.View, error) {
+func (s *Builder) buildAndAddViewWithLog(ctx context.Context, viewConfig *viewConfig, selector *view.Config, indexNamespace bool, parameters ...*view.Parameter) (*view.View, error) {
+	fmt.Printf("[INFO] building view %v\n", viewConfig.viewName)
+	aView, err := s.buildAndAddView(ctx, viewConfig, selector, indexNamespace, parameters)
+	if err != nil {
+		fmt.Printf("[ERROR] couldn't build view %v due to the %v\n", viewConfig.viewName, err.Error())
+	} else {
+		fmt.Printf("[INFO] built view %v\n", viewConfig.viewName)
+	}
+
+	return aView, err
+}
+
+func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, selector *view.Config, indexNamespace bool, parameters []*view.Parameter) (*view.View, error) {
 	table := viewConfig.unexpandedTable
+	viewName := s.unique(viewConfig.viewName, s.viewNames, true)
 	connector, err := s.ConnectorRef(view.FirstNotEmpty(table.Connector, s.options.Connector.DbName))
 	if err != nil {
 		return nil, err
@@ -61,7 +75,7 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 	}
 
 	result := &view.View{
-		Name:          viewConfig.viewName,
+		Name:          viewName,
 		Table:         tableName,
 		With:          relations,
 		ColumnsConfig: columnsConfig,
@@ -79,7 +93,7 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 }
 
 func (s *Builder) readColumnTypes(ctx context.Context, db *sql.DB, table *Table) (string, error) {
-	if err := s.indexColumns(ctx, db, table.Name); err != nil {
+	if err := s.indexColumnsWithLog(ctx, db, table.Name); err != nil {
 		return table.Name, err
 	}
 
@@ -88,7 +102,7 @@ func (s *Builder) readColumnTypes(ctx context.Context, db *sql.DB, table *Table)
 			continue
 		}
 
-		if err := s.indexColumns(ctx, db, string(v)); err != nil {
+		if err := s.indexColumnsWithLog(ctx, db, string(v)); err != nil {
 			return string(v), err
 		}
 	}
@@ -117,8 +131,8 @@ func (s *Builder) ConnectorRef(name string) (*view.Connector, error) {
 	}, nil
 }
 
-func (s *Builder) indexColumns(ctx context.Context, db *sql.DB, tableName string) error {
-	if columns.ContainsSelect(tableName) {
+func (s *Builder) indexColumnsWithLog(ctx context.Context, db *sql.DB, tableName string) error {
+	if columns.ContainsSelect(tableName) || tableName == "" {
 		return nil
 	}
 
@@ -126,25 +140,45 @@ func (s *Builder) indexColumns(ctx context.Context, db *sql.DB, tableName string
 		return nil
 	}
 
-	tableMeta := s.tablesMeta.TableMeta(tableName)
+	fmt.Printf("[INFO] reading %v table column types\n", tableName)
+	err := s.indexColumns(ctx, db, tableName)
+	if err != nil {
+		fmt.Printf("[WARN] couldn't read table %v column types\n", tableName)
+	} else {
+		fmt.Printf("[INFO] finished reading table %v column types\n", tableName)
+	}
 
+	return err
+}
+
+func (s *Builder) indexColumns(ctx context.Context, db *sql.DB, tableName string) error {
+	tableMeta := s.tablesMeta.TableMeta(tableName)
 	ioColumns, err := columns.DetectColumns(context.Background(), db, tableName)
 	if err != nil {
 		return err
 	}
 	tableMeta.AddIoColumns(ioColumns)
 
-	session, err := config.Session(ctx, db)
-	if err != nil {
-		return err
-	}
-
-	sinkColumns, err := config.Columns(ctx, session, db, tableName)
+	sinkColumns, err := s.readSinkColumns(ctx, db, tableName)
 	if err != nil {
 		return err
 	}
 
 	return tableMeta.AddSinkColumns(sinkColumns)
+}
+
+func (s *Builder) readSinkColumns(ctx context.Context, db *sql.DB, tableName string) ([]sink.Column, error) {
+	session, err := config.Session(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	sinkColumns, err := config.Columns(ctx, session, db, tableName)
+	if err != nil {
+		return nil, err
+	}
+
+	return sinkColumns, nil
 }
 
 func stringsPtr(args ...string) *[]string {
@@ -159,7 +193,7 @@ func (s *Builder) buildRelations(ctx context.Context, config *viewConfig, indexN
 	result := make([]*view.Relation, 0, len(config.relations))
 	for _, relation := range config.relations {
 		relationName := relation.queryJoin.Alias
-		relView, err := s.buildAndAddView(ctx, relation, &view.Config{
+		relView, err := s.buildAndAddViewWithLog(ctx, relation, &view.Config{
 			Limit: 40,
 		}, indexNamespace)
 

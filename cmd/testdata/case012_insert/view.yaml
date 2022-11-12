@@ -82,5 +82,5 @@ Template:
     Cardinality: One
   Schema:
     Cardinality: One
-  Source: "( \n\nINSERT INTO events (id, quantity, 'timestamp') VALUES ( $criteria.AppendBinding($Unsafe.eventId) ,  $criteria.AppendBinding($Unsafe.quantity) ,  $criteria.AppendBinding($Unsafe.timestamp) ); )"
+  Source: "( \n\nINSERT INTO events (id, quantity, 'timestamp') VALUES ( $criteria.AppendBinding($Unsafe.eventId),  $criteria.AppendBinding($Unsafe.quantity),  $criteria.AppendBinding($Unsafe.timestamp)); )"
   SourceURL: insert/insert.sql

@@ -9,3 +9,9 @@ CREATE OR REPLACE TABLE bqdev.product_performance (
     payment  FLOAT64
 ) PARTITION BY DATE(timestamp) CLUSTER BY product_id;
 
+CREATE OR REPLACE TABLE bqdev.products (
+    product_id INT64,
+    location_id INT,
+    price    FLOAT64,
+    payment  FLOAT64
+);

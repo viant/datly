@@ -531,13 +531,15 @@ type ParametersIndex map[string]*Parameter
 type ParametersSlice []*Parameter
 
 //Index indexes parameters by Parameter.Name
-func (p ParametersSlice) Index() ParametersIndex {
+func (p ParametersSlice) Index() (ParametersIndex, error) {
 	result := ParametersIndex(make(map[string]*Parameter))
 	for parameterIndex := range p {
-		result.Register(p[parameterIndex])
+		if err := result.Register(p[parameterIndex]); err != nil {
+			return nil, err
+		}
 	}
 
-	return result
+	return result, nil
 }
 
 //Filter filters ParametersSlice with given Kind and creates Template
@@ -572,11 +574,13 @@ func (p ParametersIndex) Lookup(paramName string) (*Parameter, error) {
 }
 
 //Register registers parameter
-func (p ParametersIndex) Register(parameter *Parameter) {
-	keys := shared.KeysOf(parameter.Name, false)
-	for _, key := range keys {
-		p[key] = parameter
+func (p ParametersIndex) Register(parameter *Parameter) error {
+	if _, ok := p[parameter.Name]; ok {
+		return fmt.Errorf("parameter %v already exists", parameter.Name)
 	}
+
+	p[parameter.Name] = parameter
+	return nil
 }
 
 //NewQueryLocation creates a query location

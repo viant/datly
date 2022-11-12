@@ -143,7 +143,23 @@ Template:
     Cardinality: One
   Schema:
     Cardinality: One
-  Source: "( SELECT COUNT(*)        as totalTypes /*{\"DataType\": \"int\"}*/,\n                e.id,\n                e.event_type_id as eventTypeId,\n                et.name         as eventName\n         FROM events e\n                  JOIN event_types et ON e.event_type_id = et.id\n         WHERE 1 = 1\n           AND e.quantity >  $criteria.AppendBinding($Unsafe.quantity) \n           #if($Has.etId && ($Unsafe.etId != 0))\n            AND et.name =  $criteria.AppendBinding($Unsafe.eventName) \n           #end\n         #if($Unsafe.filter == 1)\n           AND e.id = 10\n         #end\n         GROUP BY e.event_type_id\n         ORDER BY 1 )"
+  Source: |-
+    ( SELECT COUNT(*)        as totalTypes /*{"DataType": "int"}*/,
+                    e.id,
+                    e.event_type_id as eventTypeId,
+                    et.name         as eventName
+             FROM events e
+                      JOIN event_types et ON e.event_type_id = et.id
+             WHERE 1 = 1
+               AND e.quantity >  $criteria.AppendBinding($Unsafe.quantity)
+               #if($Has.etId && ($Unsafe.etId != 0))
+                AND et.name =  $criteria.AppendBinding($Unsafe.eventName)
+               #end
+             #if($Unsafe.filter == 1)
+               AND e.id = 10
+             #end
+             GROUP BY e.event_type_id
+             ORDER BY 1 )
   SourceURL: events/events.sql
 With:
   - Cardinality: Many

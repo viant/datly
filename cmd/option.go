@@ -11,6 +11,12 @@ import (
 	"strings"
 )
 
+const (
+	PreparePost   = "post"
+	PreparePut    = "put"
+	PrepareDelete = "put"
+)
+
 type (
 	Options struct {
 		Port          int    `short:"p" long:"port" description:"port"  `
@@ -21,10 +27,10 @@ type (
 		WriteLocation string `short:"w" long:"write" description:"dump all config files to specified location" `
 		Generate
 		Connector
-		Content
 		CacheWarmup
-		OpenApiURL string `short:"o" long:"openapi"`
-		Version    bool   `short:"v" long:"version"  description:"build version" `
+		OpenApiURL  string `short:"o" long:"openapi"`
+		Version     bool   `short:"v" long:"version"  description:"build version"`
+		PrepareRule string `short:"G" long:"generate" description:"prepare rule for patch|post|put"`
 	}
 
 	CacheWarmup struct {
@@ -42,10 +48,6 @@ type (
 	Generate struct {
 		Name     string `short:"N" long:"name" description:"view DbName/route URI" `
 		Location string `short:"X" long:"sqlx" description:"SQLX (extension for relation) location" `
-	}
-
-	Content struct {
-		Output string `short:"O" long:"output" description:"output style" choice:"c" choice:"b" `
 	}
 )
 
@@ -70,13 +72,9 @@ func (o *Options) Init() {
 	if o.DependencyURL != "" {
 		o.DependencyURL = normalizeURL(o.DependencyURL)
 	}
+
+	o.PrepareRule = strings.ToLower(o.PrepareRule)
 	o.Connector.Init()
-	switch o.Output {
-	case "c":
-		o.Output = "Comprehensive"
-	default:
-		o.Output = "Basic"
-	}
 }
 
 // MatchConnector returns matcher or default connector

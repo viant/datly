@@ -3,6 +3,7 @@ package option
 import "github.com/viant/datly/view"
 
 type ParameterConfig struct {
+	ParamMeta
 	Auth           string
 	Id             string           `json:",omitempty" yaml:",omitempty"`
 	Name           string           `json:",omitempty" yaml:",omitempty"`
@@ -14,4 +15,8 @@ type ParameterConfig struct {
 	Target         string           `json:",omitempty" yaml:",omitempty"`
 	Const          interface{}      `json:",omitempty" yaml:",omitempty"`
 	Cardinality    view.Cardinality `json:",omitempty" yaml:",omitempty"`
+}
+
+type ParamMeta struct {
+	Util bool `json:",omitempty" yaml:",omitempty"`
 }

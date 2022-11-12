@@ -192,11 +192,23 @@ func TestRun(t *testing.T) {
 			viewURL:    "/v1/api/meta/view/dev/events",
 			httpMethod: http.MethodGet,
 		},
+		{
+			description: "insert exec",
+			URI:         "case015_insert_exec",
+			args: []string{
+				"-D=sqlite3",
+				"-A=/tmp/datly_tests/db.db",
+				"-X=testdata/case015_insert_exec/events.sql",
+				"-G=post",
+			},
+			viewURL:    "/v1/api/meta/view/dev/events",
+			httpMethod: http.MethodGet,
+		},
 	}
 
 	loader := afs.New()
-	//for i, testCase := range testCases[len(testCases)-1:] {
-	for i, testCase := range testCases {
+	//for i, testCase := range testCases[:len(testCases)-1] {
+	for i, testCase := range testCases[:len(testCases)-1] {
 		mem.ResetSingleton()
 		gateway.ResetSingleton()
 		tests.LogHeader(fmt.Sprintf("Running testcase: %v\n", i))

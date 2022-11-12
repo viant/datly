@@ -81,7 +81,10 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 		return err
 	}
 
-	t._parametersIndex = ParametersSlice(t.Parameters).Index()
+	t._parametersIndex, err = ParametersSlice(t.Parameters).Index()
+	if err != nil {
+		return err
+	}
 
 	return t.initMetaIfNeeded(ctx, resource)
 }

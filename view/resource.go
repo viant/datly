@@ -247,16 +247,25 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 		r._typesIndex[definition.Type()] = definition.Name
 	}
 
-	r._views = ViewSlice(r.Views).Index()
-	r._connectors = ConnectorSlice(r.Connectors).Index()
-	r._parameters = ParametersSlice(r.Parameters).Index()
-	r._loggers = r.Loggers.Index()
-
-	if err := ConnectorSlice(r.Connectors).Init(ctx, r._connectors); err != nil {
+	var err error
+	r._views, err = ViewSlice(r.Views).Index()
+	if err != nil {
 		return err
 	}
 
-	if err := ViewSlice(r.Views).Init(ctx, r, transforms); err != nil {
+	r._connectors = ConnectorSlice(r.Connectors).Index()
+	r._parameters, err = ParametersSlice(r.Parameters).Index()
+	if err != nil {
+		return err
+	}
+
+	r._loggers = r.Loggers.Index()
+
+	if err = ConnectorSlice(r.Connectors).Init(ctx, r._connectors); err != nil {
+		return err
+	}
+
+	if err = ViewSlice(r.Views).Init(ctx, r, transforms); err != nil {
 		return err
 	}
 

@@ -104,7 +104,16 @@ Template:
     Cardinality: One
   Schema:
     Cardinality: One
-  Source: "( SELECT\n                COUNT(*) as totalTypes,\n                id,\n                event_type_id as eventTypeId\n         FROM events\n         WHERE 1 = 1\n         AND quantity >  $criteria.AppendBinding($Unsafe.quantity) \n         GROUP BY event_type_id\n         ORDER BY 1 )"
+  Source: |-
+    ( SELECT
+                    COUNT(*) as totalTypes,
+                    id,
+                    event_type_id as eventTypeId
+             FROM events
+             WHERE 1 = 1
+             AND quantity >  $criteria.AppendBinding($Unsafe.quantity)
+             GROUP BY event_type_id
+             ORDER BY 1 )
   SourceURL: events/events.sql
 With:
   - Cardinality: Many

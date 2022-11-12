@@ -81,7 +81,9 @@ func (s *Builder) NewSchema(dataType string, cardinality string) *view.Schema {
 func (s *Builder) convertParams(template *Template) ([]*view.Parameter, error) {
 	parameters := template.Parameters
 	result := make([]*view.Parameter, 0, len(parameters))
-	s.addParameters(template.viewParams...)
+	if err := s.addParameters(template.viewParams...); err != nil {
+		return nil, err
+	}
 
 	added := map[string]bool{}
 	for _, parameter := range parameters {
@@ -92,9 +94,6 @@ func (s *Builder) convertParams(template *Template) ([]*view.Parameter, error) {
 		}
 
 		updateParamPrecedence(existingParam, newParam)
-		if err = s.updateParamByHint(existingParam); err != nil {
-			return nil, err
-		}
 
 		result = append(result, &view.Parameter{Reference: shared.Reference{Ref: existingParam.Name}})
 		added[existingParam.Name] = true
@@ -188,10 +187,6 @@ func updateParamPrecedence(dest *view.Parameter, source *view.Parameter) {
 		dest.DateFormat = source.DateFormat
 	}
 
-	if dest.Codec == nil {
-		dest.Codec = source.Codec
-	}
-
 	if dest.In == nil {
 		dest.In = source.In
 	} else if source.In != nil {
@@ -215,6 +210,14 @@ func updateParamPrecedence(dest *view.Parameter, source *view.Parameter) {
 }
 
 func updateDestSchema(dest *view.Parameter, source *view.Parameter) {
+	if dest.Codec != nil {
+		return
+	}
+
+	if dest.Codec == nil {
+		dest.Codec = source.Codec
+	}
+
 	if source.Schema == nil {
 		return
 	}
@@ -566,7 +569,7 @@ func isParameter(variables map[string]bool, paramName string) bool {
 }
 
 func (s *Builder) uploadSQL(fileName string, SQL string) (string, error) {
-	sourceURL := s.options.SQLURL(fileName, true)
+	sourceURL := s.options.SQLURL(s.unique(fileName, s.fileNames, false), true)
 	fs := afs.New()
 	if err := fs.Upload(context.Background(), sourceURL, file.DefaultFileOsMode, strings.NewReader(SQL)); err != nil {
 		return "", err
@@ -601,7 +604,7 @@ func (s *Builder) buildSchemaFromTable(schemaName string, table *Table, columnTy
 
 		dataType := column.DataType
 		if dataType == "" {
-			meta, ok := columnTypes[strings.ToLower(structFieldName)]
+			meta, ok := columnTypes[strings.ToLower(column.Name)]
 			if ok {
 				dataType = meta.Type.String()
 			}

@@ -242,14 +242,14 @@ func (c *Schema) XType() *xunsafe.Type {
 }
 
 func (c *Schema) copy() *Schema {
-	newSchema := &Schema{
-		Name:     c.Name,
-		autoGen:  c.autoGen,
-		DataType: c.DataType,
-	}
+	//newSchema := &Schema{
+	//	Name:     c.Name,
+	//	autoGen:  c.autoGen,
+	//	DataType: c.DataType,
+	//}
 
-	newSchema.SetType(c.compType)
-	return c
+	schema := *c
+	return &schema
 }
 
 func (c *Schema) parseType(types Types) error {

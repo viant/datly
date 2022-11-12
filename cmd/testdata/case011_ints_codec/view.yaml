@@ -121,5 +121,5 @@ Template:
     Cardinality: One
   Schema:
     Cardinality: One
-  Source: ( SELECT * FROM events WHERE ID IN ( $criteria.AppendBinding($Unsafe.Ids)  ) )
+  Source: ( SELECT * FROM events WHERE ID IN ( $criteria.AppendBinding($Unsafe.Ids) ) )
   SourceURL: update/events.sql

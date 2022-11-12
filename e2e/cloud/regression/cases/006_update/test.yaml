@@ -1,0 +1,41 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: PUT
+        URL: http://127.0.0.1:8080/v1/api/dev/products
+        Expect:
+          Code: 400
+          JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
+
+      - Method: PUT
+        URL: http://127.0.0.1:8080/v1/api/dev/products?Ids=100
+        Expect:
+          Code: 400
+          JSONBody: $LoadJSON('${parentPath}/expect_t1.json')
+
+      - Method: PUT
+        URL: http://127.0.0.1:8080/v1/api/dev/products?payment=100
+        Expect:
+          Code: 400
+          JSONBody: $LoadJSON('${parentPath}/expect_t2.json')
+
+      - Method: PUT
+        URL: http://127.0.0.1:8080/v1/api/dev/products?payment=100&Ids=100
+        Expect:
+          Code: 400
+          JSONBody:  $LoadJSON('${parentPath}/expect_t3.json')
+
+      - Method: PUT
+        URL: http://127.0.0.1:8080/v1/api/dev/products?payment=100&Ids=1,100
+        Expect:
+          Code: 400
+          JSONBody:  $LoadJSON('${parentPath}/expect_t4.json')
+
+      - Method: PUT
+        URL: http://127.0.0.1:8080/v1/api/dev/products?payment=100&Ids=1
+        Expect:
+          Code: 200
