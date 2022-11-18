@@ -36,15 +36,9 @@ func (s *Builder) buildTemplate(ctx context.Context, aViewConfig *viewConfig, ex
 		return nil, err
 	}
 
-	SQL := sanitize.Sanitize(template.SQL, s.routeBuilder.paramsIndex.hints, s.routeBuilder.paramsIndex.consts)
-	var URI string
-	if SQL != "" && aViewConfig.fileName != "" {
-		URI, err = s.uploadSQL(aViewConfig.fileName, SQL)
-		if err != nil {
-			return nil, err
-		}
-
-		SQL = ""
+	SQL, URI, err := s.uploadTemplateSQL(template.SQL, aViewConfig)
+	if err != nil {
+		return nil, err
 	}
 
 	return &view.Template{
@@ -53,6 +47,19 @@ func (s *Builder) buildTemplate(ctx context.Context, aViewConfig *viewConfig, ex
 		Meta:       metaTemplate,
 		Source:     SQL,
 	}, nil
+}
+
+func (s *Builder) uploadTemplateSQL(template string, aViewConfig *viewConfig) (SQL string, URI string, err error) {
+	SQL = sanitize.Sanitize(template, s.routeBuilder.paramsIndex.hints, s.routeBuilder.paramsIndex.consts)
+	if SQL != "" && aViewConfig.fileName != "" {
+		URI, err = s.uploadSQL(folderDev, aViewConfig.fileName, SQL, true)
+		if err != nil {
+			return "", "", err
+		}
+
+		SQL = ""
+	}
+	return SQL, URI, nil
 }
 
 func (s *Builder) Parse(ctx context.Context, aViewConfig *viewConfig, params []*view.Parameter) (*Template, error) {
@@ -126,6 +133,11 @@ func convertMetaParameter(param *Parameter, values map[string]interface{}, hints
 		constValue = aValue
 	}
 
+	targetName := ""
+	if param.Kind != "body" {
+		targetName = view.FirstNotEmpty(param.Target, param.Name)
+	}
+
 	return &view.Parameter{
 		Name:         param.Id,
 		Codec:        aCodec,
@@ -137,7 +149,7 @@ func convertMetaParameter(param *Parameter, values map[string]interface{}, hints
 		},
 		In: &view.Location{
 			Kind: view.Kind(param.Kind),
-			Name: view.FirstNotEmpty(param.Target, param.Name),
+			Name: targetName,
 		},
 		Required: param.Required,
 	}, nil
@@ -568,10 +580,18 @@ func isParameter(variables map[string]bool, paramName string) bool {
 	return sanitize.CanBeParam(paramName)
 }
 
-func (s *Builder) uploadSQL(fileName string, SQL string) (string, error) {
-	sourceURL := s.options.SQLURL(s.unique(fileName, s.fileNames, false), true)
+func (s *Builder) uploadSQL(namespace, fileName string, fileContent string, inRoutes bool) (string, error) {
+	return s.uploadFile(namespace, fileName, fileContent, inRoutes, ".sql")
+}
+
+func (s *Builder) uploadGo(namespace, fileName string, fileContent string, inRoutes bool) (string, error) {
+	return s.uploadFile(namespace, fileName, fileContent, inRoutes, ".go")
+}
+
+func (s *Builder) uploadFile(namespace string, fileName string, fileContent string, inRoutes bool, extension string) (string, error) {
+	sourceURL := s.options.URL(namespace, s.unique(fileName, s.fileNames, false), inRoutes, extension)
 	fs := afs.New()
-	if err := fs.Upload(context.Background(), sourceURL, file.DefaultFileOsMode, strings.NewReader(SQL)); err != nil {
+	if err := fs.Upload(context.Background(), sourceURL, file.DefaultFileOsMode, strings.NewReader(fileContent)); err != nil {
 		return "", err
 	}
 
@@ -624,7 +644,6 @@ func (s *Builder) buildSchemaFromTable(schemaName string, table *Table, columnTy
 	return &view.Definition{
 		Name:   schemaName,
 		Fields: fields,
-		Schema: nil,
 	}
 }
 

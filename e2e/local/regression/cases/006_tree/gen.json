@@ -1,4 +1,5 @@
 {
   "Name": "$tagId",
-  "URL": "$path/user.sql"
+  "URL": "$path/user.sql",
+  "Args": ""
 }

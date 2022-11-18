@@ -48,6 +48,21 @@ func newViewConfig(viewName string, fileName string, parent *query.Join, aTable 
 	return result
 }
 
+func buildTableFromSQL(SQL string, routeOpt *option.RouteConfig) (*Table, error) {
+	aQuery, err := parser.ParseQuery(SQL)
+	if err != nil {
+		return nil, err
+	}
+
+	table, err := buildTable(aQuery.From.X, routeOpt)
+	if err != nil {
+		return nil, err
+	}
+
+	table.Columns = selectItemToColumn(aQuery, routeOpt)
+	return table, err
+}
+
 func buildTableFromQueryWithWarning(aQuery *query.Select, x node.Node, routeOpt *option.RouteConfig, comment string) *Table {
 	aTable := buildTableWithWarning(x, routeOpt, comment)
 	aTable.Columns = selectItemToColumn(aQuery, routeOpt)

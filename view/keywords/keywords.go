@@ -5,6 +5,7 @@ const (
 	ParamsKey         = "Unsafe"
 	ViewKey           = "View"
 	ParentViewKey     = "ParentView"
+	SequencerKey      = "sequencer"
 
 	Pagination    = "$PAGINATION"
 	Criteria      = "$CRITERIA"

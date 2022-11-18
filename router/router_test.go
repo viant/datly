@@ -656,7 +656,7 @@ func TestRouter(t *testing.T) {
 			method:      http.MethodPost,
 			visitors:    map[string]codec.LifecycleVisitor{},
 			requestBody: `{"ID": [1,10,103], "Quantity": 0}`,
-			expected:    `{"Message":"invalid template due to: invalid status"}`,
+			expected:    `{"Message":"invalid status"}`,
 		},
 		{
 			description:         "multiple execution statements | multiple execs",

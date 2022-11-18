@@ -12,4 +12,4 @@ pipeline:
     immuneToHangups: true
     env:
       TEST: 1
-    command: ./datly -c=$appPath/e2e/local/autogen/Datly/config.json
+    command: ./datly -c=$appPath/e2e/local/autogen/Datly/config.json > /tmp/datly.out

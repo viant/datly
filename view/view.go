@@ -1054,7 +1054,7 @@ func (v *View) indexTransforms(resource *Resource, transforms marshal.Transforms
 	return nil
 }
 
-func (v *View) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *expand.CriteriaSanitizer) (string, error) {
+func (v *View) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *expand.SQLCriteria) (string, error) {
 	v.ensureParameters(selector)
 
 	return v.Template.Expand(placeholders, SQL, selector, params, batchData, sanitized)

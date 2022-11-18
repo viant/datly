@@ -1,6 +1,9 @@
 package expand
 
-import "strings"
+import (
+	"database/sql"
+	"strings"
+)
 
 type (
 	Expander interface {
@@ -15,6 +18,7 @@ type (
 		TableAlias() string
 		TableName() string
 		ResultLimit() int
+		Db() (*sql.DB, error)
 	}
 
 	MetaExtras interface {
@@ -30,7 +34,7 @@ type (
 
 	MetaParam struct {
 		expander     Expander
-		sanitizer    *CriteriaSanitizer
+		sanitizer    *SQLCriteria
 		Name         string
 		Alias        string
 		Table        string
@@ -100,7 +104,7 @@ func (m *MetaParam) In(prefix string) (string, error) {
 }
 
 //For the backward compatibility
-func (m *MetaParam) Expand(_ *CriteriaSanitizer) string {
+func (m *MetaParam) Expand(_ *SQLCriteria) string {
 	m.sanitizer.addAll(m.Args...)
 	return m.NonWindowSQL
 }
@@ -132,13 +136,13 @@ func NewMetaParam(metaSource MetaSource, aSelector MetaExtras, batchData MetaBat
 		return nil
 	}
 
-	var sanitizer *CriteriaSanitizer
+	var sanitizer *SQLCriteria
 	var expander Expander
 	var colInArgs []interface{}
 
 	for _, option := range options {
 		switch actual := option.(type) {
-		case *CriteriaSanitizer:
+		case *SQLCriteria:
 			sanitizer = actual
 		case Expander:
 			expander = actual
@@ -176,7 +180,9 @@ func NewMetaParam(metaSource MetaSource, aSelector MetaExtras, batchData MetaBat
 		Offset:       offset,
 		Args:         args,
 		NonWindowSQL: SQLExec,
-		sanitizer:    &CriteriaSanitizer{},
+		sanitizer: &SQLCriteria{
+			MetaSource: metaSource,
+		},
 		ParentValues: colInArgs,
 	}
 
@@ -195,6 +201,6 @@ func NotZeroOf(values ...int) int {
 
 func MockMetaParam() *MetaParam {
 	return &MetaParam{
-		sanitizer: &CriteriaSanitizer{},
+		sanitizer: &SQLCriteria{},
 	}
 }

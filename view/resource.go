@@ -234,7 +234,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	r._columnsCache = cache
 
 	for _, definition := range r.Types {
-		if err := definition.Init(ctx, types); err != nil {
+		if err := definition.Init(ctx, r._types); err != nil {
 			return err
 		}
 

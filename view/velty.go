@@ -230,8 +230,8 @@ func (v *VeltyCodec) evaluateCriteria(selector *Selector, dest interface{}, wasN
 	return state.Buffer.String(), nil
 }
 
-func NewCriteria(columns ColumnIndex) *expand.CriteriaSanitizer {
-	return &expand.CriteriaSanitizer{
+func NewCriteria(columns ColumnIndex) *expand.SQLCriteria {
+	return &expand.SQLCriteria{
 		Columns: columns,
 	}
 }
@@ -348,7 +348,7 @@ func (v *VeltyCodec) init() error {
 		return err
 	}
 
-	if err = planner.DefineVariable(expand.Criteria, &expand.CriteriaSanitizer{}); err != nil {
+	if err = planner.DefineVariable(expand.Criteria, &expand.SQLCriteria{}); err != nil {
 		return err
 	}
 

@@ -1,0 +1,32 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: POST
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/events-many
+        JSONBody:
+          - Name: ''
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
+
+      - Method: POST
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/events-many
+        JSONBody:
+          - Name: ''
+          - Name: ''
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_t1.json')
+
+      - Method: POST
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/events-many
+        JSONBody:
+          - Name: 'Custom - 1'
+          - Name: 'Custom - 2'
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_t2.json')

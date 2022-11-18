@@ -50,7 +50,7 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
-	if err = evaluator.planner.DefineVariable(Criteria, reflect.TypeOf(&CriteriaSanitizer{})); err != nil {
+	if err = evaluator.planner.DefineVariable(Criteria, reflect.TypeOf(&SQLCriteria{})); err != nil {
 		return nil, err
 	}
 
@@ -62,6 +62,10 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
+	if err = evaluator.planner.DefineVariable(keywords.SequencerKey, reflect.TypeOf(&SQLCriteria{})); err != nil {
+		return nil, err
+	}
+
 	evaluator.executor, evaluator.stateProvider, err = evaluator.planner.Compile([]byte(template))
 	if err != nil {
 		return nil, err
@@ -70,7 +74,7 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	return evaluator, nil
 }
 
-func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam *MetaParam, parentParam *MetaParam, logger *logger.Printer) (string, *CriteriaSanitizer, error) {
+func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam *MetaParam, parentParam *MetaParam, logger *logger.Printer) (string, *SQLCriteria, error) {
 	if externalParams != nil {
 		externalType := reflect.TypeOf(externalParams)
 		if e.paramSchema != externalType {
@@ -104,6 +108,10 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 	}
 
 	if err := newState.SetValue(Criteria, viewParam.sanitizer); err != nil {
+		return "", nil, err
+	}
+
+	if err := newState.SetValue(keywords.SequencerKey, viewParam.sanitizer); err != nil {
 		return "", nil, err
 	}
 

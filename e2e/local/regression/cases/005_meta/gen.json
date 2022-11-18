@@ -1,4 +1,5 @@
 {
   "Name": "$tagId",
-  "URL": "$path/vendor_meta.sql"
+  "URL": "$path/vendor_meta.sql",
+  "Args": ""
 }

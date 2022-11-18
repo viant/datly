@@ -36,8 +36,19 @@ func (s *Builder) build() (*standalone.Server, error) {
 	if URL := s.options.RouterURL(); URL != "" {
 		reportContent(s.logger, "-------------- view --- -----------\n\t"+URL, URL)
 	}
+
+	dumped := false
+	if s.options.PrepareRule != "" {
+		dumpConfiguration("", folderSQL, s.options)
+		dumped = true
+	}
+
 	if s.options.WriteLocation != "" {
-		dumpConfiguration(s.options)
+		dumpConfiguration(s.options.WriteLocation, folderDev, s.options)
+		return nil, nil
+	}
+
+	if dumped {
 		return nil, nil
 	}
 
@@ -138,12 +149,16 @@ func New(version string, args []string, logger io.Writer) (*standalone.Server, e
 	return builder.build()
 }
 
-func dumpConfiguration(options *Options) {
+func dumpConfiguration(location, folder string, options *Options) {
+	dumpFolder(options, location, folder)
+}
+
+func dumpFolder(options *Options, location, folder string) {
 	fs := afs.New()
 	destURL := normalizeURL(options.WriteLocation)
 	os.MkdirAll(destURL, file.DefaultDirOsMode)
-	srcURL := "mem://localhost/dev"
-	fs.Copy(context.Background(), "mem://localhost/dev", destURL, modifier.Replace(map[string]string{
+	srcURL := fmt.Sprintf("mem://localhost/%v", folder)
+	fs.Copy(context.Background(), srcURL, destURL, modifier.Replace(map[string]string{
 		srcURL: destURL,
 	}))
 }

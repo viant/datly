@@ -1,4 +1,5 @@
 {
   "Name": "$tagId",
-  "URL": "$path/vendors_codec.sql"
+  "URL": "$path/vendors_codec.sql",
+  "Args": ""
 }

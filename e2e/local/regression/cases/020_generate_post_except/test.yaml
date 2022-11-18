@@ -1,0 +1,22 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: POST
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/events-except
+        JsonBody:
+          Quantity: 20
+          Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
+
+      - Method: POST
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/events-except
+        JSONBody:
+          Quantity: 25
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_t1.json')

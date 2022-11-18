@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io"
-	"github.com/viant/sqlx/io/read/cache/ast"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
 	"time"
@@ -66,7 +66,7 @@ func ParseType(dataType string) (reflect.Type, error) {
 		return t, nil
 	}
 
-	return ast.Parse(dataType)
+	return xreflect.Parse(dataType)
 }
 
 //ColumnName returns Column Name

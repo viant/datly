@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/codec"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/load/reader/csv"
-	"github.com/viant/toolbox"
 	"reflect"
 	"unsafe"
 )
@@ -60,9 +59,7 @@ func (c *CSV) Value(ctx context.Context, raw interface{}, options ...interface{}
 	if err := c.marshaller.Unmarshal([]byte(rawString), dest.Interface()); err != nil {
 		return nil, err
 	}
-
-	toolbox.Dump(dest.Interface())
-
+	
 	if cardinality == view.Many {
 		return dest.Elem().Interface(), nil
 	}

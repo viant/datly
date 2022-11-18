@@ -88,10 +88,15 @@ func TestMatcher(t *testing.T) {
 			method:      http.MethodGet,
 			expectError: true,
 		},
+		{
+			description: "v1/api/meta/view/",
+			routes:      []*Route{{URI: "v1/api/meta/view/"}},
+			route:       `v1/api/meta/view/`,
+		},
 	}
 
-	for _, testCase := range testCases[len(testCases)-1:] {
-		//for _, testCase := range testCases {
+	//for _, testCase := range testCases[len(testCases)-1:] {
+	for _, testCase := range testCases {
 		matcher := NewRouteMatcher(testCase.routes)
 		match, err := matcher.MatchOneRoute(testCase.method, testCase.route)
 		if testCase.expectError {

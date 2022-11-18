@@ -41,12 +41,6 @@ func (it *ParamMetaIterator) initMetaTypes(SQL string) []string {
 			//Do nothing
 		default:
 			text := matched.Text(cursor)
-			//shouldReset := i.isResetKeyword(text)
-			//if shouldReset {
-			//	typer = nil
-			//	untyped = []string{}
-			//}
-
 			if it.canBeParam(text) {
 				prefix, paramName := GetHolderName(text)
 				if prefix == keywords.ParamsMetadataKey {

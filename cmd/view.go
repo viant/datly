@@ -89,6 +89,7 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 	}
 
 	s.routeBuilder.AddViews(result)
+
 	return result, nil
 }
 

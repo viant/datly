@@ -14,7 +14,10 @@ import (
 const (
 	PreparePost   = "post"
 	PreparePut    = "put"
-	PrepareDelete = "put"
+	PrepareDelete = "delete"
+
+	folderDev = "dev"
+	folderSQL = "dsql"
 )
 
 type (
@@ -28,9 +31,9 @@ type (
 		Generate
 		Connector
 		CacheWarmup
-		OpenApiURL  string `short:"o" long:"openapi"`
-		Version     bool   `short:"v" long:"version"  description:"build version"`
-		PrepareRule string `short:"G" long:"generate" description:"prepare rule for patch|post|put"`
+		Prepare
+		OpenApiURL string `short:"o" long:"openapi"`
+		Version    bool   `short:"v" long:"version"  description:"build version"`
 	}
 
 	CacheWarmup struct {
@@ -48,6 +51,10 @@ type (
 	Generate struct {
 		Name     string `short:"N" long:"name" description:"view DbName/route URI" `
 		Location string `short:"X" long:"sqlx" description:"SQLX (extension for relation) location" `
+	}
+
+	Prepare struct {
+		PrepareRule string `short:"G" long:"generate" description:"prepare rule for patch|post|put|delete"`
 	}
 )
 
@@ -209,19 +216,20 @@ func (o *Options) DepURL(uri string) string {
 	return url.Join(o.DependencyURL, uri+".yaml")
 }
 
-func (o *Options) SQLURL(name string, addSubFolder bool) string {
-	pathSegments := []string{"dev"}
-	if addSubFolder {
-		location := o.Location[strings.LastIndex(o.Location, "/")+1:]
-		extensionIndex := strings.LastIndex(location, ".")
-		if extensionIndex != -1 {
-			location = location[:extensionIndex]
-		}
-		pathSegments = append(pathSegments, location)
+func (o *Options) URL(folder, name string, inRoutes bool, extension string) string {
+	if !inRoutes {
+		return url.Join(folder, name+extension)
 	}
 
-	pathSegments = append(pathSegments, name+".sql")
+	pathSegments := []string{folder}
+	location := o.Location[strings.LastIndex(o.Location, "/")+1:]
+	extensionIndex := strings.LastIndex(location, ".")
+	if extensionIndex != -1 {
+		location = location[:extensionIndex]
+	}
+	pathSegments = append(pathSegments, location)
 
+	pathSegments = append(pathSegments, name+extension)
 	return url.Join(o.RouteURL, pathSegments...)
 }
 

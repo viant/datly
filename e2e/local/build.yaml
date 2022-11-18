@@ -15,7 +15,8 @@ pipeline:
       target: $target
       checkError: true
       commands:
+        - export GO111MODULE=on
         - cd ${appPath}/cmd/datly
-        - go mod vendor
+        - go mod download
         - go build
         - mv datly /tmp/datly

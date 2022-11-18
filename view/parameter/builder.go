@@ -22,12 +22,19 @@ func NewBuilder(name string) *Builder {
 	}
 }
 
-func (b *Builder) AddType(path string, rType reflect.Type) error {
+func (b *Builder) AddType(path string, rType reflect.Type, options ...interface{}) error {
+	var aTag reflect.StructTag
+	for _, option := range options {
+		switch actual := option.(type) {
+		case reflect.StructTag:
+			aTag = actual
+		}
+	}
 	pathSegments := strings.Split(path, ".")
-	return b.add(pathSegments, rType)
+	return b.add(pathSegments, rType, aTag)
 }
 
-func (b *Builder) add(segments []string, rType reflect.Type) error {
+func (b *Builder) add(segments []string, rType reflect.Type, tag reflect.StructTag) error {
 	if len(segments) == 1 {
 		if segments[0] == "" {
 			return fmt.Errorf("segment can't be empty")
@@ -35,11 +42,11 @@ func (b *Builder) add(segments []string, rType reflect.Type) error {
 
 		pgkPath := b.pkgPath(segments[0])
 
-		b.field = append(b.field, reflect.StructField{Name: segments[0], PkgPath: pgkPath, Type: rType})
+		b.field = append(b.field, reflect.StructField{Name: segments[0], PkgPath: pgkPath, Type: rType, Tag: tag})
 		return nil
 	}
 
-	return b.getOrCreate(segments[0]).add(segments[1:], rType)
+	return b.getOrCreate(segments[0]).add(segments[1:], rType, tag)
 }
 
 func (b *Builder) pkgPath(fieldName string) string {

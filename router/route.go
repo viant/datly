@@ -77,6 +77,7 @@ type (
 		CSV              *CSVConfig `json:",omitempty"`
 		RevealMetric     *bool
 		DebugKind        view.MetaKind
+		ReturnBody       bool `json:",omitempty"`
 
 		_caser          *format.Case
 		_excluded       map[string]bool
@@ -97,7 +98,7 @@ type (
 	responseSetter struct {
 		statusField *xunsafe.Field
 		bodyField   *xunsafe.Field
-		pageField   *xunsafe.Field
+		metaField   *xunsafe.Field
 		infoField   *xunsafe.Field
 		debug       *xunsafe.Field
 		rType       reflect.Type
@@ -148,6 +149,10 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
+	if err := r.initRequestBody(); err != nil {
+		return err
+	}
+
 	if err := r.initStyle(); err != nil {
 		return err
 	}
@@ -171,10 +176,6 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	}
 
 	if err := r.initServiceType(); err != nil {
-		return err
-	}
-
-	if err := r.initRequestBody(); err != nil {
 		return err
 	}
 
@@ -291,62 +292,67 @@ func (r *Route) initCors(resource *Resource) {
 }
 
 func (r *Route) initStyle() error {
-	if r.Style == "" || r.Style == BasicStyle {
+	if (r.Style == "" || r.Style == BasicStyle) && r.ResponseField == "" {
 		r.Style = BasicStyle
 		return nil
 	}
 
-	if r.Style == ComprehensiveStyle {
-		if r.ResponseField == "" {
-			r.ResponseField = "ResponseBody"
-		}
-
-		responseFields := make([]reflect.StructField, 2)
-		responseFields[0] = reflect.StructField{
-			Name:      "ResponseStatus",
-			Type:      reflect.TypeOf(ResponseStatus{}),
-			Anonymous: true,
-		}
-
-		responseFieldPgkPath := r.PgkPath(r.ResponseField)
-
-		responseFields[1] = reflect.StructField{
-			Name:    r.ResponseField,
-			PkgPath: responseFieldPgkPath,
-			Type:    r.cardinalityType(),
-		}
-
-		var metaFieldName string
-		if r.View.MetaTemplateEnabled() && r.View.Template.Meta.Kind == view.MetaTypeRecord {
-			responseFields = append(responseFields, reflect.StructField{
-				Name:    r.View.Template.Meta.Name,
-				Type:    r.View.Template.Meta.Schema.Type(),
-				PkgPath: r.PgkPath(r.View.Template.Meta.Name),
-			})
-			metaFieldName = r.View.Template.Meta.Name
-		}
-
-		if r.IsRevealMetric() && r.DebugKind == view.MetaTypeRecord {
-			responseFields = append(responseFields, reflect.StructField{
-				Name: "DatlyDebug",
-				Tag:  `json:"_datly_debug_,omitempty"`,
-				Type: reflect.TypeOf([]*reader.Info{}),
-			})
-		}
-
-		responseType := reflect.StructOf(responseFields)
-		r._responseSetter = &responseSetter{
-			statusField: FieldByName(responseType, "ResponseStatus"),
-			bodyField:   FieldByName(responseType, r.ResponseField),
-			pageField:   FieldByName(responseType, metaFieldName),
-			infoField:   FieldByName(responseType, "DatlyDebug"),
-			rType:       responseType,
-		}
-
-		return nil
+	if r.ResponseField == "" {
+		r.ResponseField = "ResponseBody"
 	}
 
-	return fmt.Errorf("unsupported style %v", r.Style)
+	responseFields := make([]reflect.StructField, 2)
+	responseFields[0] = reflect.StructField{
+		Name:      "ResponseStatus",
+		Type:      reflect.TypeOf(ResponseStatus{}),
+		Anonymous: true,
+	}
+
+	responseFieldPgkPath := r.PgkPath(r.ResponseField)
+
+	fieldType := r.responseFieldType()
+	isComprehensive := r.isAlreadyComprehensive()
+	jsonTag := ""
+	if isComprehensive {
+		jsonTag = `json:"` + format.CaseUpperCamel.Format(r.ResponseField, *r._caser) + `"`
+	}
+
+	responseFields[1] = reflect.StructField{
+		Name:      r.ResponseField,
+		PkgPath:   responseFieldPgkPath,
+		Type:      fieldType,
+		Tag:       reflect.StructTag(jsonTag),
+		Anonymous: isComprehensive,
+	}
+
+	var metaFieldName string
+	if r.View.MetaTemplateEnabled() && r.View.Template.Meta.Kind == view.MetaTypeRecord {
+		responseFields = append(responseFields, reflect.StructField{
+			Name:    r.View.Template.Meta.Name,
+			Type:    r.View.Template.Meta.Schema.Type(),
+			PkgPath: r.PgkPath(r.View.Template.Meta.Name),
+		})
+		metaFieldName = r.View.Template.Meta.Name
+	}
+
+	if r.IsRevealMetric() && r.DebugKind == view.MetaTypeRecord {
+		responseFields = append(responseFields, reflect.StructField{
+			Name: "DatlyDebug",
+			Tag:  `json:"_datly_debug_,omitempty"`,
+			Type: reflect.TypeOf([]*reader.Info{}),
+		})
+	}
+
+	responseType := reflect.StructOf(responseFields)
+	r._responseSetter = &responseSetter{
+		statusField: FieldByName(responseType, "ResponseStatus"),
+		bodyField:   FieldByName(responseType, r.ResponseField),
+		metaField:   FieldByName(responseType, metaFieldName),
+		infoField:   FieldByName(responseType, "DatlyDebug"),
+		rType:       responseType,
+	}
+
+	return nil
 }
 
 func FieldByName(responseType reflect.Type, name string) *xunsafe.Field {
@@ -365,7 +371,11 @@ func (r *Route) PgkPath(fieldName string) string {
 	return responseFieldPgkPath
 }
 
-func (r *Route) cardinalityType() reflect.Type {
+func (r *Route) responseFieldType() reflect.Type {
+	if r.ReturnBody {
+		return r._requestBodyType
+	}
+
 	if r.Cardinality == view.Many {
 		return r.View.Schema.SliceType()
 	}
@@ -376,6 +386,10 @@ func (r *Route) cardinalityType() reflect.Type {
 func (r *Route) responseType() reflect.Type {
 	if r._responseSetter != nil {
 		return r._responseSetter.rType
+	}
+
+	if r.ReturnBody {
+		return r._requestBodyType
 	}
 
 	return r.View.Schema.Type()
@@ -637,6 +651,15 @@ func (r *Route) initDebugStyleIfNeeded() {
 	if r.DebugKind != view.MetaTypeRecord {
 		r.DebugKind = view.MetaTypeHeader
 	}
+}
+
+func (r *Route) isAlreadyComprehensive() bool {
+	rType := r.responseType()
+	for rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
+
+	return rType.Kind() == reflect.Struct && rType.NumField() == 1 && rType.Field(0).Name == r.ResponseField
 }
 
 func (c *CSVConfig) presenceMap() PresenceMapFn {

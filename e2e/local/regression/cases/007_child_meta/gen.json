@@ -1,4 +1,5 @@
 {
   "Name": "$tagId",
-  "URL": "$path/child_meta.sql"
+  "URL": "$path/child_meta.sql",
+  "Args": ""
 }

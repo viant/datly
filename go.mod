@@ -3,7 +3,7 @@ module github.com/viant/datly
 go 1.16
 
 require (
-	cloud.google.com/go/storage v1.26.0 // indirect
+	cloud.google.com/go/storage v1.28.0 // indirect
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
 	github.com/go-playground/universal-translator v0.18.0 // indirect
@@ -19,7 +19,7 @@ require (
 	github.com/mattn/go-sqlite3 v2.0.2+incompatible
 	github.com/onsi/gomega v1.20.2 // indirect
 	github.com/pkg/errors v0.9.1
-	github.com/stretchr/testify v1.8.0
+	github.com/stretchr/testify v1.8.1
 	github.com/viant/afs v1.16.1-0.20220708154004-5cc767a16d95
 	github.com/viant/afsc v1.8.1-0.20220721172758-a0713d05bfdd
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
@@ -30,12 +30,13 @@ require (
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/parsly v0.0.0-20220913214053-cb272791c00f
 	github.com/viant/scy v0.3.2-0.20220825213848-acc5c59cde78
-	github.com/viant/sqlx v0.2.2-0.20221116163609-4e2361bfe957
-	github.com/viant/toolbox v0.34.6-0.20220630003140-fb2bf82657c1
-	github.com/viant/velty v0.1.1-0.20221108005606-04bdc14dccc4
+	github.com/viant/sqlx v0.2.3
+	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
+	github.com/viant/velty v0.1.1-0.20221115010237-73ecce4f1da2
+	github.com/viant/xreflect v0.0.0-20221118213917-a128e7cc7a8f
 	github.com/viant/xunsafe v0.8.1-0.20221104195713-fd8483040428
-	golang.org/x/oauth2 v0.0.0-20220822191816-0ebed06d0094
-	google.golang.org/api v0.94.0
+	golang.org/x/oauth2 v0.2.0
+	google.golang.org/api v0.102.0
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )

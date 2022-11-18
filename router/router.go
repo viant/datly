@@ -608,8 +608,8 @@ func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route, vi
 	newResponse := reflect.New(route._responseSetter.rType)
 	responseBodyPtr := unsafe.Pointer(newResponse.Pointer())
 	route._responseSetter.bodyField.SetValue(responseBodyPtr, response)
-	if route._responseSetter.pageField != nil && viewMeta != nil {
-		route._responseSetter.pageField.SetValue(responseBodyPtr, viewMeta)
+	if route._responseSetter.metaField != nil && viewMeta != nil {
+		route._responseSetter.metaField.SetValue(responseBodyPtr, viewMeta)
 	}
 
 	r.setResponseStatus(route, newResponse, ResponseStatus{Status: "ok"}, stats)

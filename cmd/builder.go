@@ -16,6 +16,7 @@ import (
 	"github.com/viant/sqlx/metadata/ast/query"
 	"github.com/viant/toolbox"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
 	"io"
 	"strconv"
@@ -229,7 +230,7 @@ func (s *Builder) buildViews(ctx context.Context) error {
 
 	config := s.routeBuilder.configProvider.ViewConfig()
 
-	aView, err := s.buildOrPrepareRule(ctx, config)
+	aView, err := s.buildMainView(ctx, config)
 	if err != nil {
 		return err
 	}
@@ -250,20 +251,8 @@ outer:
 		return err
 	}
 
+	s.inheritRouteServiceType(aView)
 	return nil
-}
-
-func (s *Builder) buildOrPrepareRule(ctx context.Context, config *viewConfig) (*view.View, error) {
-	if s.options.PrepareRule == "" {
-		return s.buildMainView(ctx, config)
-	}
-
-	switch s.options.PrepareRule {
-	case PreparePost:
-		return s.preparePostRule(ctx, config)
-	default:
-		return nil, fmt.Errorf("unsupported %v prepare rule type", s.options.PrepareRule)
-	}
 }
 
 func (s *Builder) loadAndInitConfig(ctx context.Context) error {
@@ -290,7 +279,7 @@ func (s *Builder) readRouteSettings() error {
 		s.routeBuilder.paramsIndex.AddConsts(s.routeBuilder.option.Const)
 	}
 
-	return nil
+	return s.loadGoTypes()
 }
 
 func extractURIParams(URI string) map[string]bool {
@@ -316,7 +305,6 @@ func (s *Builder) initRoute() error {
 
 	s.routeBuilder.route = &router.Route{
 		Method:      method,
-		Service:     s.routeBuilder.configProvider.ServiceType(),
 		EnableAudit: true,
 		Cors: &router.Cors{
 			AllowCredentials: boolPtr(true),
@@ -329,6 +317,7 @@ func (s *Builder) initRoute() error {
 		Index: router.Index{Namespace: map[string]string{}},
 		Output: router.Output{
 			CaseFormat: "lc",
+			ReturnBody: s.routeBuilder.option.ReturnBody,
 		},
 	}
 
@@ -356,6 +345,11 @@ func (s *Builder) buildRouterOutput() error {
 	}
 
 	s.routeBuilder.route.Output.CaseFormat = view.CaseFormat(view.FirstNotEmpty(s.routeBuilder.option.CaseFormat, "lc"))
+	if s.routeBuilder.option.ResponseField != "" {
+		s.routeBuilder.route.Style = router.ComprehensiveStyle
+		s.routeBuilder.route.ResponseField = s.routeBuilder.option.ResponseField
+	}
+
 	return nil
 }
 
@@ -404,12 +398,12 @@ func (s *Builder) loadSQL(ctx context.Context) error {
 		return err
 	}
 
-	SQL := string(SQLbytes)
-	hint := sanitize.ExtractHint(SQL)
-	if hint != "" {
-		SQL = strings.Replace(SQL, hint, "", 1)
+	SQL, err := s.prepareRuleIfNeeded(SQLbytes)
+	if err != nil {
+		return err
 	}
 
+	hint, SQL := s.extractRouteSettings([]byte(SQL))
 	hints := sanitize.ExtractParameterHints(SQL)
 	SQL = sanitize.RemoveParameterHints(SQL, hints)
 
@@ -870,4 +864,52 @@ func (s *Builder) unique(name string, names map[string]int, caseSensitive bool) 
 	}
 
 	return name + "_" + strconv.Itoa(counter)
+}
+
+func (s *Builder) inheritRouteServiceType(aView *view.View) {
+	switch aView.Mode {
+	case "", view.SQLQueryMode:
+		s.routeBuilder.route.Service = router.ReaderServiceType
+	case view.SQLExecMode:
+		s.routeBuilder.route.Service = router.ExecutorServiceType
+	}
+}
+
+func (s *Builder) prepareRuleIfNeeded(SQL []byte) (string, error) {
+	if s.options.PrepareRule == "" {
+		return string(SQL), nil
+	}
+
+	switch strings.ToLower(s.options.PrepareRule) {
+	case PreparePost:
+		return s.preparePostRule(context.Background(), SQL)
+	default:
+		return "", fmt.Errorf("unsupported prepare rule type")
+	}
+}
+
+func (s *Builder) loadGoTypes() error {
+	typeSrc := s.routeBuilder.option.TypeSrc
+	if typeSrc == nil {
+		return nil
+	}
+
+	dirTypes, err := xreflect.ParseTypes(typeSrc.URL)
+	if err != nil {
+		return err
+	}
+
+	for _, typeName := range typeSrc.Types {
+		rType, err := dirTypes.Type(typeName)
+		if err != nil {
+			return err
+		}
+
+		s.addTypeDef(&view.Definition{
+			Name:     typeName,
+			DataType: rType.String(),
+		})
+	}
+
+	return nil
 }

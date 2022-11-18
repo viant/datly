@@ -102,8 +102,14 @@ func TestJson_Marshal(t *testing.T) {
 			data:        primitiveNestedSlice,
 			expect:      `[{"Name":"N - 1","Price":125.5,"Ints":[1,2,3]},{"Name":"N - 1","Price":250.5,"Ints":[4,5,6]}]`,
 		},
+		{
+			description: "anonymous nested struct",
+			data:        anonymousNestedStruct,
+			expect:      `{"ResponseStatus":{"Message":"","Status":"","Error":""},"Foo":[{"ID":1,"Name":"abc","Quantity":0},{"ID":2,"Name":"def","Quantity":250}]}`,
+		},
 	}
 
+	//for i, testcase := range testcases[:len(testcases)-1] {
 	//for i, testcase := range testcases[len(testcases)-1:] {
 	for i, testcase := range testcases {
 		json.ResetCache()
@@ -124,6 +130,47 @@ func TestJson_Marshal(t *testing.T) {
 		if !assert.Equal(t, testcase.expect, string(result), testcase.description) {
 			toolbox.Dump(string(result))
 		}
+	}
+}
+
+func anonymousNestedStruct() interface{} {
+	type Foo struct {
+		ID       int
+		Name     string
+		Quantity int
+	}
+
+	type FooWrapper struct {
+		Foo []*Foo
+	}
+
+	type ResponseStatus struct {
+		Message string
+		Status  string
+		Error   string
+	}
+
+	type Response struct {
+		ResponseStatus ResponseStatus
+		FooWrapper
+	}
+
+	return Response{
+		ResponseStatus: ResponseStatus{},
+		FooWrapper: FooWrapper{
+			Foo: []*Foo{
+				{
+					ID:       1,
+					Name:     "abc",
+					Quantity: 0,
+				},
+				{
+					ID:       2,
+					Name:     "def",
+					Quantity: 250,
+				},
+			},
+		},
 	}
 }
 

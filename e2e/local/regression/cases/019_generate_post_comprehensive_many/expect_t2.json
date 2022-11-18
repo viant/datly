@@ -1,0 +1,15 @@
+{
+  "status": "ok",
+  "data": [
+    {
+      "id": "@exists@",
+      "name": "Custom - 1",
+      "quantity": 0
+    },
+    {
+      "id": "@exists@",
+      "name": "Custom - 2",
+      "quantity": 0
+    }
+  ]
+}

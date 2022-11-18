@@ -10,3 +10,5 @@ mydb
 tmp/
 *.gz
 .DS_Store
+autogen
+dsql

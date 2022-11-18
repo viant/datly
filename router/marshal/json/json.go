@@ -126,6 +126,10 @@ func (j *Marshaller) newFieldMarshaller(marshallers *[]*fieldMarshaller, field r
 			return err
 		}
 
+		for _, marshaller := range anonymousMarshallers {
+			marshaller.xField.Offset += field.Offset
+		}
+
 		*marshallers = append(*marshallers, anonymousMarshallers...)
 		return nil
 	}
@@ -187,7 +191,7 @@ func (f *fieldMarshaller) init(field reflect.StructField, config marshal.Default
 		rType = rType.Elem()
 	}
 
-	f.isComparable = rType.Kind() != reflect.Slice
+	f.isComparable = rType.Comparable()
 	if wasPtr || rType.Kind() == reflect.Slice {
 		f.nilValue = reflect.New(field.Type).Elem().Interface()
 	}
@@ -747,7 +751,6 @@ func (j *Marshaller) asObject(parentType reflect.Type, ptr unsafe.Pointer, field
 		if err := stringifier.marshall(rType, ptr, sb, filters); err != nil {
 			return err
 		}
-
 	}
 
 	sb.WriteByte('}')

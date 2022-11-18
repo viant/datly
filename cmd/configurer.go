@@ -48,10 +48,6 @@ func (c *ViewConfigurer) DefaultHTTPMethod() string {
 	return http.MethodGet
 }
 
-func (c *ViewConfigurer) ServiceType() router.ServiceType {
-	return c.serviceType
-}
-
 func NewConfigProviderReader(mainViewName string, SQL string, routeOpt *option.RouteConfig, hints map[string]*sanitize.ParameterHint, serviceType router.ServiceType, consts map[string]interface{}) (*ViewConfigurer, error) {
 	result := &ViewConfigurer{
 		tables:       map[string]*Table{},
