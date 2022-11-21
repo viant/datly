@@ -572,7 +572,7 @@ func (p ParametersIndex) Lookup(paramName string) (*Parameter, error) {
 //Register registers parameter
 func (p ParametersIndex) Register(parameter *Parameter) error {
 	if _, ok := p[parameter.Name]; ok {
-		return fmt.Errorf("parameter %v already exists", parameter.Name)
+		fmt.Printf("[WARN] parameter with %v name already exists in given resource", parameter.Name)
 	}
 
 	p[parameter.Name] = parameter

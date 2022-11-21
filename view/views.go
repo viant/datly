@@ -16,7 +16,7 @@ func (v *Views) Register(view *View) error {
 	}
 
 	if _, ok := (*v)[view.Name]; ok {
-		return fmt.Errorf("view with %v name already exists in given resource", view.Name)
+		fmt.Printf("[WARN] view with %v name already exists in given resource", view.Name)
 	}
 
 	(*v)[view.Name] = view

@@ -1,4 +1,4 @@
-/* {"URI": "basic/events-explicit", "Method": "POST", "ReturnBody": true } */
+/* {"URI": "basic/events-one-many", "Method": "POST", "ReturnBody": true } */
 
 SELECT EVENTS.*
 FROM (SELECT ID, QUANTITY FROM EVENTS) EVENTS

@@ -19,12 +19,13 @@ import (
 )
 
 type (
-	postRequestBodyData struct {
+	insertData struct {
 		typeDef      *view.Definition
 		meta         *typeMeta
 		actualFields []*view.Field
 		bodyHolder   string
 		paramName    string
+		relations    []*insertData
 	}
 
 	typeMeta struct {
@@ -40,6 +41,12 @@ type (
 		columnName    string
 		fieldName     string
 		columnCase    format.Case
+	}
+
+	insertRelation struct {
+		fk         string
+		insertData *insertData
+		relations  []*insertRelation
 	}
 )
 
@@ -88,7 +95,7 @@ func (s *Builder) extractRouteSettings(sourceSQL []byte) (string, string) {
 
 func (s *Builder) detectTypeAndBuildPostSQL(ctx context.Context, aViewConfig *viewConfig, db *sql.DB, routeOption *option.RouteConfig) (string, error) {
 	tableName := aViewConfig.expandedTable.Name
-	parameterType, err := s.detectInputType(ctx, db, tableName, aViewConfig)
+	parameterType, err := s.detectInputType(ctx, db, tableName, aViewConfig, "")
 	if err != nil {
 		return "", err
 	}
@@ -109,7 +116,7 @@ func (s *Builder) uploadGoType(name string, rType reflect.Type) error {
 	return nil
 }
 
-func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName string, config *viewConfig) (*postRequestBodyData, error) {
+func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName string, config *viewConfig, fkName string) (*insertData, error) {
 	columns, err := s.readSinkColumns(ctx, db, tableName)
 	if err != nil {
 		return nil, err
@@ -158,7 +165,7 @@ func (s *Builder) readPrimaryKeys(ctx context.Context, db *sql.DB, tableName str
 	return s.filterKeys(keys, tableName), nil
 }
 
-func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys []sink.Key, primaryKeys []sink.Key, config *viewConfig) (*postRequestBodyData, error) {
+func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys []sink.Key, primaryKeys []sink.Key, config *viewConfig) (*insertData, error) {
 	fkIndex := s.indexKeys(foreignKeys)
 	pkIndex := s.indexKeys(primaryKeys)
 
@@ -261,8 +268,12 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		}
 		definition.Cardinality = ""
 	}
+	//
+	//for _, relation := range config.relations {
+	//	s.detectInputType(context.TODO())
+	//}
 
-	return &postRequestBodyData{
+	return &insertData{
 		typeDef:      definition,
 		meta:         aFields,
 		actualFields: actualFields,
@@ -362,32 +373,21 @@ func (s *Builder) indexKeys(primaryKeys []sink.Key) map[string]sink.Key {
 	return pkIndex
 }
 
-func (s *Builder) buildInsertSQL(tableName string, typeDef *postRequestBodyData, config *viewConfig, routeOption *option.RouteConfig) (string, error) {
+func (s *Builder) buildInsertSQL(tableName string, typeDef *insertData, config *viewConfig, routeOption *option.RouteConfig) (string, error) {
 	sb := &strings.Builder{}
+	typeName := typeDef.typeDef.Name
+
 	paramType, err := s.buildRequestBodyPostParam(config, typeDef)
 	if err != nil {
 		return "", err
 	}
 
-	typeName := typeDef.typeDef.Name
 	if err = s.uploadGoType(typeName, paramType); err != nil {
 		return "", err
 	}
 
-	routeOption.Declare = map[string]string{}
-	routeOption.TypeSrc = &option.TypeSrc{
-		URL:   folderSQL,
-		Types: []string{typeName},
-	}
-
-	routeOption.Declare[view.FirstNotEmpty(typeDef.bodyHolder, typeDef.paramName)] = typeName
-	marshal, err := json.Marshal(routeOption)
-	if err != nil {
+	if err = s.appendPostRouteOption(routeOption, typeName, typeDef, sb); err != nil {
 		return "", err
-	}
-
-	if routeJSON := string(marshal); routeJSON != "{}" {
-		sb.WriteString(fmt.Sprintf("/* %v */\n\n", routeJSON))
 	}
 
 	holderName := typeDef.paramName
@@ -417,7 +417,26 @@ func (s *Builder) buildInsertSQL(tableName string, typeDef *postRequestBodyData,
 	return sb.String(), nil
 }
 
-func (s *Builder) appendInsertStmt(sb *strings.Builder, tableName string, typeDef *postRequestBodyData, name string) {
+func (s *Builder) appendPostRouteOption(routeOption *option.RouteConfig, typeName string, typeDef *insertData, sb *strings.Builder) error {
+	routeOption.Declare = map[string]string{}
+	routeOption.TypeSrc = &option.TypeSrc{
+		URL:   folderSQL,
+		Types: []string{typeName},
+	}
+
+	routeOption.Declare[view.FirstNotEmpty(typeDef.bodyHolder, typeDef.paramName)] = typeName
+	marshal, err := json.Marshal(routeOption)
+	if err != nil {
+		return err
+	}
+
+	if routeJSON := string(marshal); routeJSON != "{}" {
+		sb.WriteString(fmt.Sprintf("/* %v */\n\n", routeJSON))
+	}
+	return nil
+}
+
+func (s *Builder) appendInsertStmt(sb *strings.Builder, tableName string, typeDef *insertData, name string) {
 	sb.WriteString("INSERT INTO ")
 	sb.WriteString(tableName)
 	sb.WriteString(" ( ")
@@ -442,7 +461,7 @@ func (s *Builder) appendInsertStmt(sb *strings.Builder, tableName string, typeDe
 	sb.WriteString("); ")
 }
 
-func (s *Builder) appendAllocation(sb *strings.Builder, tableName string, def *postRequestBodyData, holderName string) {
+func (s *Builder) appendAllocation(sb *strings.Builder, tableName string, def *insertData, holderName string) {
 	for _, meta := range def.meta.metas {
 		if !meta.autoincrement {
 			continue
@@ -461,7 +480,7 @@ func (s *Builder) recordName(recordName string, config *viewConfig) (string, boo
 	return "rec" + strings.Title(recordName), true
 }
 
-func (s *Builder) buildRequestBodyPostParam(config *viewConfig, def *postRequestBodyData) (reflect.Type, error) {
+func (s *Builder) buildRequestBodyPostParam(config *viewConfig, def *insertData) (reflect.Type, error) {
 	if err := def.typeDef.Init(context.Background(), map[string]reflect.Type{}); err != nil {
 		return nil, err
 	}
