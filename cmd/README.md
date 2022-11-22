@@ -8,9 +8,9 @@
 
 
 
-##### SQLx (extension) based rule generation
+##### DSQL (datly SQL)
 
-The general structure for datly SQL
+The general structure for DSQL
 ```sql
 [RouteConfig]
 SELECT mainViewAlias.*  [EXCEPT COLUMN][OutputConfig]
