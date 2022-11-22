@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
+	"github.com/viant/scy/auth/jwt/signer"
 	"net/http"
 	"path"
 	"strings"
@@ -38,6 +39,7 @@ type (
 		mainRouter           *Router
 		cancelFn             context.CancelFunc
 		session              *Session
+		JWTSigner            *signer.Service
 	}
 )
 
@@ -90,6 +92,13 @@ func New(ctx context.Context, config *Config, statusHandler http.Handler, author
 		routersIndex:         map[string]*router.Router{},
 		mainRouter:           NewRouter(map[string]*router.Router{}, config, metrics, statusHandler, authorizer),
 		session:              NewSession(config.ChangeDetection),
+	}
+
+	if config.JwtSigner != nil {
+		srv.JWTSigner = signer.New(config.JwtSigner)
+		if err = srv.JWTSigner.Init(context.Background()); err != nil {
+			return nil, err
+		}
 	}
 
 	if err = initSecrets(ctx, config); err != nil {

@@ -20,16 +20,16 @@ var config *gateway.Config
 var configInit sync.Once
 
 func HandleRequest(ctx context.Context, request *adapter.Request) (*events.APIGatewayProxyResponse, error) {
-	httpRequest := request.Request()
+
 	writer := proxy.NewWriter()
-	if err := HandleHttpRequest(writer, httpRequest); err != nil {
+	if err := HandleHttpRequest(writer, request); err != nil {
 		return nil, err
 	}
 
 	return adapter.NewResponse(writer), nil
 }
 
-func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) error {
+func HandleHttpRequest(writer http.ResponseWriter, apiRequest *adapter.Request) error {
 	now := time.Now()
 
 	configURL := os.Getenv("CONFIG_URL")
@@ -57,7 +57,7 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 	if err != nil {
 		return err
 	}
-
+	httpRequest := apiRequest.Request(service.JWTSigner)
 	service.LogInitTimeIfNeeded(now, writer)
 	service.ServeHTTP(writer, httpRequest)
 	return nil

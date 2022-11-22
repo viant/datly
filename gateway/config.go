@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/auth/secret"
 	"github.com/viant/datly/gateway/runtime/meta"
 	"github.com/viant/datly/router"
+	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
@@ -26,6 +27,7 @@ type (
 		SyncFrequencyMs      int
 		Secrets              []*secret.Resource
 		JWTValidator         *verifier.Config
+		JwtSigner            *signer.Config
 		Cognito              *cognito.Config
 		Meta                 meta.Config
 		APIKeys              router.APIKeys

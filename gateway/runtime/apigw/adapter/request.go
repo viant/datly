@@ -5,18 +5,21 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/viant/scy/auth/jwt/signer"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Request events.APIGatewayProxyRequest
 
 //Request converts to http.Request
 //apigw doesn't include the function name in the URI segments
-func (r *Request) Request() *http.Request {
+func (r *Request) Request(jwtSigner *signer.Service) *http.Request {
 	path := r.Path
 	req := http.Request{
 		Method:     r.HTTPMethod,
@@ -41,6 +44,18 @@ func (r *Request) Request() *http.Request {
 			req.Header.Set("Content-Length", strconv.Itoa(len(r.Body)))
 		}
 	}
+
+	if ctx := r.RequestContext; len(ctx.Authorizer) > 0 {
+		authorizer := ctx.Authorizer
+		if req.Header.Get("Authorization") == "" && jwtSigner != nil {
+			token, err := jwtSigner.Create(time.Hour, authorizer)
+			if err != nil {
+				log.Printf("faied to create jwtClaim: %v", err)
+			}
+			req.Header.Set("Authorization", token)
+		}
+	}
+
 	req.RequestURI = path
 	apiURI := path
 	if len(r.MultiValueQueryStringParameters) > 0 {
