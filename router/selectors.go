@@ -665,13 +665,26 @@ func (b *selectorsBuilder) hasBodyPart(path string) bool {
 
 		segmentValue, ok := actualMap[segment]
 		if !ok {
-			return false
+			segmentValue, ok = checkCaseInsensitive(actualMap, segment)
+			if !ok {
+				return false
+			}
 		}
 
 		rawValue = segmentValue
 	}
 
 	return true
+}
+
+func checkCaseInsensitive(actualMap map[string]interface{}, segment string) (interface{}, bool) {
+	for key, value := range actualMap {
+		if strings.EqualFold(key, segment) {
+			return value, true
+		}
+	}
+
+	return nil, false
 }
 
 func (b *selectorsBuilder) populatePage(ctx context.Context, selector *view.Selector, details *ViewDetails) error {

@@ -26,27 +26,37 @@ type (
 		bodyHolder   string
 		paramName    string
 		relations    []*insertData
+		fkIndex      map[string]sink.Key
+		pkIndex      map[string]sink.Key
+		table        string
+		config       *viewConfig
 	}
 
 	typeMeta struct {
-		index map[string]int
-		metas []*fieldMeta
+		fieldIndex  map[string]int
+		columnIndex map[string]int
+		metas       []*fieldMeta
 	}
 
 	fieldMeta struct {
 		primaryKey    bool
 		autoincrement bool
-		foreignKey    bool
 		generator     string
 		columnName    string
 		fieldName     string
 		columnCase    format.Case
+		fkKey         *sink.Key
 	}
 
-	insertRelation struct {
-		fk         string
-		insertData *insertData
-		relations  []*insertRelation
+	insertStmtBuilder struct {
+		indent    string
+		sb        *strings.Builder
+		typeDef   *insertData
+		paramName string
+		isMulti   bool
+
+		parent    *insertStmtBuilder
+		wroteHint *bool
 	}
 )
 
@@ -100,7 +110,7 @@ func (s *Builder) detectTypeAndBuildPostSQL(ctx context.Context, aViewConfig *vi
 		return "", err
 	}
 
-	return s.buildInsertSQL(tableName, parameterType, aViewConfig, routeOption)
+	return s.buildInsertSQL(parameterType, aViewConfig, routeOption)
 }
 
 func (s *Builder) uploadGoType(name string, rType reflect.Type) error {
@@ -116,7 +126,7 @@ func (s *Builder) uploadGoType(name string, rType reflect.Type) error {
 	return nil
 }
 
-func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName string, config *viewConfig, fkName string) (*insertData, error) {
+func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName string, config *viewConfig, parentTable string) (*insertData, error) {
 	columns, err := s.readSinkColumns(ctx, db, tableName)
 	if err != nil {
 		return nil, err
@@ -132,7 +142,7 @@ func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName str
 		return nil, err
 	}
 
-	return s.buildPostInputParameterType(columns, foreignKeys, primaryKeys, config)
+	return s.buildPostInputParameterType(columns, foreignKeys, primaryKeys, config, db, tableName, parentTable)
 }
 
 func (s *Builder) readForeignKeys(ctx context.Context, db *sql.DB, tableName string) ([]sink.Key, error) {
@@ -165,7 +175,7 @@ func (s *Builder) readPrimaryKeys(ctx context.Context, db *sql.DB, tableName str
 	return s.filterKeys(keys, tableName), nil
 }
 
-func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys []sink.Key, primaryKeys []sink.Key, config *viewConfig) (*insertData, error) {
+func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys []sink.Key, primaryKeys []sink.Key, config *viewConfig, db *sql.DB, table, parentTable string) (*insertData, error) {
 	fkIndex := s.indexKeys(foreignKeys)
 	pkIndex := s.indexKeys(primaryKeys)
 
@@ -179,7 +189,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		outputCase = &newCase
 	}
 
-	aFields := &typeMeta{index: map[string]int{}}
+	typesMeta := &typeMeta{fieldIndex: map[string]int{}, columnIndex: map[string]int{}}
 	name := config.expandedTable.HolderName
 	detectCase, err := format.NewCase(view.DetectCase(name))
 	if err != nil {
@@ -213,6 +223,10 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 			return nil, err
 		}
 
+		if s.shouldFilterColumnByMeta(parentTable, fkIndex, meta) {
+			continue
+		}
+
 		aType, err := view.GetOrParseType(map[string]reflect.Type{}, column.Type)
 		if err != nil {
 			return nil, err
@@ -236,7 +250,15 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 			fromName = meta.columnCase.Format(fromName, *outputCase)
 		}
 
-		aTag := fmt.Sprintf(`sqlx:"name=%v"%v`, column.Name, jsonTag)
+		sqlxTagContent := ""
+		if meta.fkKey != nil {
+			//TODO: introduce fk sqlx tag
+			sqlxTagContent = `-`
+		} else {
+			sqlxTagContent = "name=" + column.Name
+		}
+
+		aTag := fmt.Sprintf(`sqlx:"%v"%v`, sqlxTagContent, jsonTag)
 
 		definition.Fields = append(definition.Fields, &view.Field{
 			Name:   meta.fieldName,
@@ -248,7 +270,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 			FromName: fromName,
 		})
 
-		aFields.addMeta(meta)
+		typesMeta.addMeta(meta)
 	}
 
 	holderName := ""
@@ -268,18 +290,60 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		}
 		definition.Cardinality = ""
 	}
-	//
-	//for _, relation := range config.relations {
-	//	s.detectInputType(context.TODO())
-	//}
+
+	insertRelations, err := s.buildInsertRelations(config, db)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, relation := range insertRelations {
+		definition.Fields = append(definition.Fields, &view.Field{
+			Name:        relation.paramName,
+			Fields:      relation.typeDef.Fields,
+			Tag:         fmt.Sprintf(`typeName:"%v" sqlx:"-"`, relation.paramName),
+			Cardinality: relation.config.outputConfig.Cardinality,
+			Ptr:         true,
+		})
+	}
 
 	return &insertData{
 		typeDef:      definition,
-		meta:         aFields,
+		meta:         typesMeta,
 		actualFields: actualFields,
 		paramName:    paramName,
 		bodyHolder:   holderName,
+		relations:    insertRelations,
+		fkIndex:      fkIndex,
+		pkIndex:      pkIndex,
+		table:        table,
+		config:       config,
 	}, nil
+}
+
+func (s *Builder) shouldFilterColumnByMeta(parentTable string, fkIndex map[string]sink.Key, fieldMeta *fieldMeta) bool {
+	if fieldMeta.fkKey == nil {
+		return false
+	}
+
+	if parentColumn, ok := fkIndex[strings.ToLower(fieldMeta.columnName)]; ok {
+		return parentColumn.ReferenceTable != parentTable
+	}
+
+	return true
+}
+
+func (s *Builder) buildInsertRelations(config *viewConfig, db *sql.DB) ([]*insertData, error) {
+	var relations []*insertData
+	for _, relation := range config.relations {
+		relationConfig, err := s.detectInputType(context.TODO(), db, relation.expandedTable.Name, relation, config.expandedTable.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		relations = append(relations, relationConfig)
+	}
+
+	return relations, nil
 }
 
 func (s *Builder) shouldSkipColumn(exceptIndex map[string]bool, includeIndex map[string]bool, column sink.Column) bool {
@@ -332,8 +396,8 @@ func (s *Builder) buildFieldMeta(column sink.Column, pkIndex map[string]sink.Key
 		fieldName:  columnCase.Format(column.Name, format.CaseUpperCamel),
 	}
 
-	if _, ok := fkIndex[column.Name]; ok {
-		meta.foreignKey = true
+	if fkKey, ok := fkIndex[strings.ToLower(column.Name)]; ok {
+		meta.fkKey = &fkKey
 	}
 
 	if _, ok := pkIndex[column.Name]; ok {
@@ -361,19 +425,28 @@ func (s *Builder) containsAutoincrement(text string) bool {
 }
 
 func (f *typeMeta) addMeta(meta *fieldMeta) {
-	f.index[meta.fieldName] = len(f.metas)
+	f.fieldIndex[strings.ToLower(meta.fieldName)] = len(f.metas)
+	f.columnIndex[strings.ToLower(meta.columnName)] = len(f.metas)
 	f.metas = append(f.metas, meta)
+}
+
+func (f *typeMeta) metaByColName(column string) (*fieldMeta, bool) {
+	i, ok := f.columnIndex[strings.ToLower(column)]
+	if !ok {
+		return nil, false
+	}
+	return f.metas[i], true
 }
 
 func (s *Builder) indexKeys(primaryKeys []sink.Key) map[string]sink.Key {
 	pkIndex := map[string]sink.Key{}
 	for index, primaryKey := range primaryKeys {
-		pkIndex[primaryKey.Name] = primaryKeys[index]
+		pkIndex[strings.ToLower(primaryKey.Column)] = primaryKeys[index]
 	}
 	return pkIndex
 }
 
-func (s *Builder) buildInsertSQL(tableName string, typeDef *insertData, config *viewConfig, routeOption *option.RouteConfig) (string, error) {
+func (s *Builder) buildInsertSQL(typeDef *insertData, config *viewConfig, routeOption *option.RouteConfig) (string, error) {
 	sb := &strings.Builder{}
 	typeName := typeDef.typeDef.Name
 
@@ -390,38 +463,27 @@ func (s *Builder) buildInsertSQL(tableName string, typeDef *insertData, config *
 		return "", err
 	}
 
-	holderName := typeDef.paramName
-	if typeDef.bodyHolder != "" {
-		sb.WriteString(fmt.Sprintf("#set($%v = $Unsafe.%v.%v)", holderName, typeDef.bodyHolder, typeDef.bodyHolder))
-		sb.WriteString("\n")
-	}
+	builder := newInsertStmtBuilder(sb, typeDef)
+	builder.appendAllocation(typeDef, "", typeDef.paramName)
 
-	s.appendAllocation(sb, tableName, typeDef, holderName)
-
-	recordName, multi := s.recordName(holderName, config)
-	if multi {
-		sb.WriteString("#foreach($")
-		sb.WriteString(recordName)
-		sb.WriteString(" in $")
-		sb.WriteString(holderName)
-		sb.WriteString(")")
-		sb.WriteString("\n")
-	}
-
-	s.appendInsertStmt(sb, tableName, typeDef, recordName)
-
-	if multi {
-		sb.WriteString("\n#end")
-	}
-
-	return sb.String(), nil
+	return builder.build("", true)
 }
 
 func (s *Builder) appendPostRouteOption(routeOption *option.RouteConfig, typeName string, typeDef *insertData, sb *strings.Builder) error {
+	requiredTypes := []string{"*" + typeDef.paramName}
+	routeOption.RequestBody = &option.BodyConfig{
+		ReturnAsResponse: true,
+		Type:             typeDef.bodyHolder,
+	}
+
+	if typeDef.bodyHolder != "" {
+		requiredTypes = append(requiredTypes, "*"+typeDef.bodyHolder)
+	}
+
 	routeOption.Declare = map[string]string{}
-	routeOption.TypeSrc = &option.TypeSrc{
+	routeOption.TypeSrc = &option.TypeSrcConfig{
 		URL:   folderSQL,
-		Types: []string{typeName},
+		Types: requiredTypes,
 	}
 
 	routeOption.Declare[view.FirstNotEmpty(typeDef.bodyHolder, typeDef.paramName)] = typeName
@@ -436,39 +498,24 @@ func (s *Builder) appendPostRouteOption(routeOption *option.RouteConfig, typeNam
 	return nil
 }
 
-func (s *Builder) appendInsertStmt(sb *strings.Builder, tableName string, typeDef *insertData, name string) {
-	sb.WriteString("INSERT INTO ")
-	sb.WriteString(tableName)
-	sb.WriteString(" ( ")
-	for i, field := range typeDef.actualFields {
-		if i != 0 {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(field.Column)
-	}
-
-	sb.WriteString(" ) VALUES ( ")
-	for i, field := range typeDef.actualFields {
-		if i != 0 {
-			sb.WriteString(", ")
-		}
-		sb.WriteByte('$')
-		sb.WriteString(name)
-		sb.WriteByte('.')
-		sb.WriteString(field.Name)
-	}
-
-	sb.WriteString("); ")
-}
-
-func (s *Builder) appendAllocation(sb *strings.Builder, tableName string, def *insertData, holderName string) {
+func (isb *insertStmtBuilder) appendAllocation(def *insertData, path, holderName string) {
 	for _, meta := range def.meta.metas {
 		if !meta.autoincrement {
 			continue
 		}
 
-		sb.WriteString(fmt.Sprintf(`$sequencer.Allocate("%v", $%v, "%v")`, tableName, holderName, meta.fieldName))
-		sb.WriteString("\n")
+		isb.writeString(fmt.Sprintf(`$sequencer.Allocate("%v", $%v, "%v")`, def.table, holderName, path+meta.fieldName))
+		isb.writeString("\n")
+	}
+
+	for _, relation := range def.relations {
+		actualPath := path
+		if actualPath == "" {
+			actualPath = relation.paramName + "/"
+		} else {
+			actualPath += relation.paramName + "/"
+		}
+		isb.appendAllocation(relation, actualPath, holderName)
 	}
 }
 
@@ -486,4 +533,156 @@ func (s *Builder) buildRequestBodyPostParam(config *viewConfig, def *insertData)
 	}
 
 	return def.typeDef.Schema.Type(), nil
+}
+
+func newInsertStmtBuilder(sb *strings.Builder, def *insertData) *insertStmtBuilder {
+	return &insertStmtBuilder{
+		sb:        sb,
+		typeDef:   def,
+		paramName: def.paramName,
+		wroteHint: boolPtr(false),
+		isMulti:   def.config.outputConfig.IsMany(),
+	}
+}
+
+func (isb *insertStmtBuilder) build(parentRecord string, withUnsafe bool) (string, error) {
+	name := isb.paramName
+	indirectParent := parentRecord
+
+	if isb.isMulti {
+		isb.writeString("\n#foreach($")
+		recName := "rec" + name
+		isb.writeString(recName)
+		isb.writeString(" in ")
+		isb.writeString("$")
+		isb.writeString(isb.accessParam(parentRecord, name, withUnsafe))
+		if err := isb.tryWriteParamHint(); err != nil {
+			return "", err
+		}
+
+		isb.writeString(")")
+		name = recName
+		indirectParent = ""
+	}
+
+	if isb.parent != nil {
+		for _, meta := range isb.typeDef.meta.metas {
+			if meta.fkKey == nil {
+				continue
+			}
+
+			if meta.fkKey.ReferenceTable != isb.parent.typeDef.table {
+				continue
+			}
+
+			refMeta, ok := isb.parent.typeDef.meta.metaByColName(meta.fkKey.ReferenceColumn)
+			if !ok {
+				continue
+			}
+
+			isb.writeString(fmt.Sprintf("\n#set($%v.%v = $%v)", isb.accessParam(indirectParent, name, withUnsafe && !isb.isMulti), meta.fieldName, isb.accessParam(parentRecord, refMeta.fieldName, withUnsafe)))
+		}
+	}
+
+	isb.writeString("\nINSERT INTO ")
+	isb.writeString(isb.typeDef.table)
+	isb.writeString(" (\n")
+
+	for i, field := range isb.typeDef.actualFields {
+		if i != 0 {
+			isb.writeString(",\n")
+		}
+		isb.writeString(field.Column)
+	}
+
+	isb.writeString("\n) VALUES (\n")
+	for i, field := range isb.typeDef.actualFields {
+		if i != 0 {
+			isb.writeString(",\n")
+		}
+		isb.writeString("$")
+		isb.writeString(isb.accessParam(indirectParent, name, false))
+		isb.writeString(".")
+		isb.writeString(field.Name)
+		if err := isb.tryWriteParamHint(); err != nil {
+			return "", err
+		}
+	}
+	isb.writeString("\n);\n")
+
+	for _, rel := range isb.typeDef.relations {
+		_, err := isb.newRelation(rel).build(name, !isb.isMulti && withUnsafe)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if isb.isMulti {
+		isb.writeString("\n#end")
+	}
+	return isb.sb.String(), nil
+}
+
+func (isb *insertStmtBuilder) writeString(value string) {
+	if isb.indent != "" {
+		value = strings.ReplaceAll(value, "\n", "\n"+isb.indent)
+	}
+
+	isb.sb.WriteString(value)
+}
+
+func (isb *insertStmtBuilder) paramHint(typeDef *insertData) (string, error) {
+	target := typeDef.bodyHolder
+
+	paramConfig, err := json.Marshal(&option.ParameterConfig{
+		Target:      &target,
+		DataType:    typeDef.paramName,
+		Cardinality: typeDef.typeDef.Cardinality,
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf(" /* %v */ ", string(paramConfig)), nil
+}
+
+func (isb *insertStmtBuilder) newRelation(rel *insertData) *insertStmtBuilder {
+	builder := newInsertStmtBuilder(isb.sb, rel)
+	builder.indent = isb.indent
+	if builder.isMulti {
+		builder.indent += "	"
+	}
+	builder.parent = isb
+	builder.wroteHint = isb.wroteHint
+	return builder
+}
+
+func (isb *insertStmtBuilder) tryWriteParamHint() error {
+	if *isb.wroteHint {
+		return nil
+	}
+	*isb.wroteHint = true
+	paramHint, err := isb.paramHint(isb.typeDef)
+	if err != nil {
+		return err
+	}
+
+	isb.writeString(paramHint)
+	return nil
+}
+
+func (isb *insertStmtBuilder) accessParam(parentRecord, record string, withUnsafe bool) string {
+	result := parentRecord
+	if result == "" {
+		result = record
+	} else {
+		result += "." + record
+	}
+
+	if withUnsafe {
+		result = "Unsafe." + result
+	}
+
+	return result
 }

@@ -1,0 +1,6 @@
+/* {"URI": "basic/events-one-many", "Method": "POST", "ReturnBody": true } */
+
+SELECT EVENTS.*,
+       EVENTS_PERFORMANCE.* /* { "Cardinality": "Many" } */
+FROM (SELECT ID, QUANTITY FROM EVENTS) EVENTS
+JOIN (SELECT * FROM EVENTS_PERFORMANCE) EVENTS_PERFORMANCE ON EVENTS.ID = EVENTS_PERFORMANCE.EVENT_ID

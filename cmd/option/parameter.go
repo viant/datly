@@ -4,7 +4,7 @@ import "github.com/viant/datly/view"
 
 type ParameterConfig struct {
 	ParamMeta
-	Auth           string
+	Auth           string           `json:",omitempty" yaml:",omitempty"`
 	Id             string           `json:",omitempty" yaml:",omitempty"`
 	Name           string           `json:",omitempty" yaml:",omitempty"`
 	Kind           string           `json:",omitempty" yaml:",omitempty"`
@@ -12,7 +12,7 @@ type ParameterConfig struct {
 	DataType       string           `json:",omitempty" yaml:",omitempty"`
 	ExpectReturned *int             `json:",omitempty" yaml:",omitempty"`
 	Codec          string           `json:",omitempty" yaml:",omitempty"`
-	Target         string           `json:",omitempty" yaml:",omitempty"`
+	Target         *string          `json:",omitempty" yaml:",omitempty"`
 	Const          interface{}      `json:",omitempty" yaml:",omitempty"`
 	Cardinality    view.Cardinality `json:",omitempty" yaml:",omitempty"`
 }

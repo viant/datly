@@ -17,12 +17,17 @@ type (
 		Declare       map[string]string      `json:",omitempty"`
 		Const         map[string]interface{} `json:",omitempty"`
 		ResponseField string                 `json:",omitempty"`
-		ReturnBody    bool                   `json:",omitempty"`
-		TypeSrc       *TypeSrc               `json:",omitempty"`
+		RequestBody   *BodyConfig            `json:",omitempty"`
+		TypeSrc       *TypeSrcConfig         `json:",omitempty"`
 	}
 
-	TypeSrc struct {
+	TypeSrcConfig struct {
 		URL   string
 		Types []string
+	}
+
+	BodyConfig struct {
+		ReturnAsResponse bool   `json:",omitempty"`
+		Type             string `json:",omitempty"`
 	}
 )

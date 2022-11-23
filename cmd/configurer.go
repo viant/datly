@@ -265,6 +265,7 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 		}
 
 		relViewConfig.unexpandedTable.HolderName = join.Alias
+		relViewConfig.expandedTable.HolderName = join.Alias
 		if isMetaTable(relViewConfig.unexpandedTable.Name) {
 			holder := getMetaTemplateHolder(relViewConfig.unexpandedTable.Name)
 			result.AddMetaTemplate(join.Alias, holder, relViewConfig.unexpandedTable)

@@ -44,6 +44,10 @@ func (d *Definition) Init(ctx context.Context, types Types) error {
 			return err
 		}
 
+		if d.Ptr && parseType.Kind() != reflect.Ptr {
+			parseType = reflect.PtrTo(parseType)
+		}
+
 		d.Schema.SetType(parseType)
 	} else {
 		d.Schema = &Schema{}
@@ -164,6 +168,10 @@ func buildTypeFromFields(fields []*Field) reflect.Type {
 		}
 
 		fieldType := field.Schema.Type()
+		if field.Ptr {
+			fieldType = reflect.PtrTo(fieldType)
+		}
+
 		if field.Cardinality == Many {
 			fieldType = reflect.SliceOf(fieldType)
 		}

@@ -317,7 +317,6 @@ func (s *Builder) initRoute() error {
 		Index: router.Index{Namespace: map[string]string{}},
 		Output: router.Output{
 			CaseFormat: "lc",
-			ReturnBody: s.routeBuilder.option.ReturnBody,
 		},
 	}
 
@@ -350,6 +349,29 @@ func (s *Builder) buildRouterOutput() error {
 		s.routeBuilder.route.ResponseField = s.routeBuilder.option.ResponseField
 	}
 
+	if err = s.initRouteRequestBodySchemaIfNeeded(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Builder) initRouteRequestBodySchemaIfNeeded() error {
+	body := s.routeBuilder.option.RequestBody
+	if body == nil {
+		return nil
+	}
+
+	s.routeBuilder.route.ReturnBody = body.ReturnAsResponse
+	if body.Type == "" {
+		return nil
+	}
+	bodyType, ok := s.routeBuilder.paramsIndex.types[body.Type]
+	if !ok {
+		return fmt.Errorf("not found type %v", body.Type)
+	}
+
+	s.routeBuilder.route.RequestBodySchema = &view.Schema{DataType: bodyType}
 	return nil
 }
 
@@ -830,7 +852,10 @@ func (s *Builder) updateViewParam(param *view.Parameter, config *option.Paramete
 	}
 
 	param.Name = view.FirstNotEmpty(config.Name, param.Name)
-	param.In.Name = view.FirstNotEmpty(config.Target, param.In.Name)
+	if config.Target != nil {
+		param.In.Name = *config.Target
+	}
+
 	if config.Required != nil {
 		param.Required = config.Required
 	}
@@ -900,15 +925,23 @@ func (s *Builder) loadGoTypes() error {
 	}
 
 	for _, typeName := range typeSrc.Types {
-		rType, err := dirTypes.Type(typeName)
+		actualName, asPtr := typeName, false
+		if strings.HasPrefix(typeName, "*") {
+			actualName = actualName[1:]
+			asPtr = true
+		}
+
+		rType, err := dirTypes.Type(actualName)
 		if err != nil {
 			return err
 		}
 
 		s.addTypeDef(&view.Definition{
-			Name:     typeName,
+			Name:     actualName,
 			DataType: rType.String(),
+			Ptr:      asPtr,
 		})
+
 	}
 
 	return nil

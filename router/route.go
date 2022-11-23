@@ -65,19 +65,20 @@ type (
 	}
 
 	Output struct {
-		Cardinality      view.Cardinality `json:",omitempty"`
-		CaseFormat       view.CaseFormat  `json:",omitempty"`
-		OmitEmpty        bool             `json:",omitempty"`
-		Style            Style            `json:",omitempty"`
-		ResponseField    string           `json:",omitempty"`
-		Transforms       marshal.Transforms
-		Exclude          []string
-		NormalizeExclude *bool
-		DateFormat       string     `json:",omitempty"`
-		CSV              *CSVConfig `json:",omitempty"`
-		RevealMetric     *bool
-		DebugKind        view.MetaKind
-		ReturnBody       bool `json:",omitempty"`
+		Cardinality       view.Cardinality `json:",omitempty"`
+		CaseFormat        view.CaseFormat  `json:",omitempty"`
+		OmitEmpty         bool             `json:",omitempty"`
+		Style             Style            `json:",omitempty"`
+		ResponseField     string           `json:",omitempty"`
+		Transforms        marshal.Transforms
+		Exclude           []string
+		NormalizeExclude  *bool
+		DateFormat        string     `json:",omitempty"`
+		CSV               *CSVConfig `json:",omitempty"`
+		RevealMetric      *bool
+		DebugKind         view.MetaKind
+		ReturnBody        bool `json:",omitempty"`
+		RequestBodySchema *view.Schema
 
 		_caser          *format.Case
 		_excluded       map[string]bool
@@ -149,6 +150,10 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
+	if err := r.initCaser(); err != nil {
+		return err
+	}
+
 	if err := r.initRequestBody(); err != nil {
 		return err
 	}
@@ -158,10 +163,6 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	}
 
 	if err := r.Index.Init(r.View, r.ResponseField); err != nil {
-		return err
-	}
-
-	if err := r.initCaser(); err != nil {
 		return err
 	}
 
@@ -317,6 +318,10 @@ func (r *Route) initStyle() error {
 		jsonTag = `json:"` + format.CaseUpperCamel.Format(r.ResponseField, *r._caser) + `"`
 	}
 
+	if fieldType.Kind() == reflect.Ptr {
+		fieldType = fieldType.Elem()
+	}
+
 	responseFields[1] = reflect.StructField{
 		Name:      r.ResponseField,
 		PkgPath:   responseFieldPgkPath,
@@ -432,10 +437,13 @@ func (r *Route) initRequestBodyFromParams() error {
 	accessors := view.NewAccessors()
 	r.accessors = accessors
 	bodyParam, _ := r.fullBodyParam(params)
-	err := r.initRequestBodyType(bodyParam, params)
+	rType, err := r.initRequestBodyType(bodyParam, params)
 	if err != nil {
 		return err
 	}
+
+	r._requestBodyType = rType
+	r.accessors.Init(r._requestBodyType)
 
 	for _, param := range params {
 		r._requestBodyParamRequired = r._requestBodyParamRequired || param.IsRequired()
@@ -446,12 +454,19 @@ func (r *Route) initRequestBodyFromParams() error {
 	return nil
 }
 
-func (r *Route) initRequestBodyType(bodyParam *view.Parameter, params []*view.Parameter) error {
+func (r *Route) initRequestBodyType(bodyParam *view.Parameter, params []*view.Parameter) (reflect.Type, error) {
 	if bodyParam != nil {
-		r._requestBodyType = bodyParam.Schema.Type()
-		r.accessors.Init(r._requestBodyType)
+		bodyType := bodyParam.Schema.Type()
+		r.accessors.Init(bodyType)
+		return bodyType, r.bodyParamMatches(bodyType, params)
+	}
 
-		return r.bodyParamMatches(r._requestBodyType, params)
+	if r.RequestBodySchema != nil {
+		if err := r.RequestBodySchema.Init(nil, nil, *r.Output._caser, r._resource.GetTypes(), nil); err != nil {
+			return nil, err
+		}
+
+		return r.RequestBodySchema.Type(), nil
 	}
 
 	typeBuilder := parameter.NewBuilder("")
@@ -459,13 +474,11 @@ func (r *Route) initRequestBodyType(bodyParam *view.Parameter, params []*view.Pa
 		name := param.In.Name
 		schemaType := param.Schema.Type()
 		if err := typeBuilder.AddType(name, schemaType); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	r._requestBodyType = typeBuilder.Build()
-	r.accessors.Init(r._requestBodyType)
-	return nil
+	return typeBuilder.Build(), nil
 }
 
 func (r *Route) findRequestBodyParams(aView *view.View, params *[]*view.Parameter) {

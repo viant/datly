@@ -41,11 +41,14 @@ type (
 		fieldName  string
 		omitEmpty  bool
 
-		path         string
-		isComparable bool
-		nilValue     interface{}
-		zeroValue    interface{}
-		outputPath   string
+		path             string
+		isComparable     bool
+		nilValue         interface{}
+		zeroValue        interface{}
+		outputPath       string
+		derefCount       int
+		indirectAccessor *xunsafe.Field
+		derefStart       int
 	}
 
 	marshallObjFn   func(parentType reflect.Type, ptr unsafe.Pointer, fields []*fieldMarshaller, sb *bytes.Buffer, filters *Filters, path string) error
@@ -121,13 +124,31 @@ func (j *Marshaller) structMarshallers(rType reflect.Type, config marshal.Defaul
 
 func (j *Marshaller) newFieldMarshaller(marshallers *[]*fieldMarshaller, field reflect.StructField, config marshal.Default, path, outputPath string, defaultTag *DefaultTag) error {
 	if field.Anonymous {
-		anonymousMarshallers, err := j.structMarshallers(field.Type, config, path, outputPath, defaultTag)
+		rType, ptrSize := field.Type, 0
+		for rType.Kind() == reflect.Ptr {
+			rType = rType.Elem()
+			ptrSize++
+		}
+
+		actualParentType := elem(rType)
+		ptrStart := 0
+		if actualParentType.NumField() == 1 {
+			ptrStart = ptrSize
+		}
+
+		anonymousMarshallers, err := j.structMarshallers(rType, config, path, outputPath, defaultTag)
 		if err != nil {
 			return err
 		}
 
 		for _, marshaller := range anonymousMarshallers {
-			marshaller.xField.Offset += field.Offset
+			if ptrSize == 0 {
+				marshaller.xField.Offset += field.Offset
+			} else {
+				marshaller.indirectAccessor = xunsafe.NewField(field)
+				marshaller.derefCount = ptrSize
+				marshaller.derefStart = ptrStart
+			}
 		}
 
 		*marshallers = append(*marshallers, anonymousMarshallers...)
@@ -728,8 +749,16 @@ func (j *Marshaller) asObject(parentType reflect.Type, ptr unsafe.Pointer, field
 			continue
 		}
 
-		value := stringifier.xField.Value(ptr)
-		isZeroVal := isZeroValue(ptr, stringifier, value)
+		objPtr := ptr
+		if stringifier.indirectAccessor != nil {
+			objPtr = stringifier.indirectAccessor.Pointer(objPtr)
+			for i := stringifier.derefStart; i < stringifier.derefCount; i++ {
+				objPtr = xunsafe.DerefPointer(objPtr)
+			}
+		}
+
+		value := stringifier.xField.Value(objPtr)
+		isZeroVal := isZeroValue(objPtr, stringifier, value)
 		if stringifier.omitEmpty && isZeroVal {
 			continue
 		}
@@ -748,7 +777,7 @@ func (j *Marshaller) asObject(parentType reflect.Type, ptr unsafe.Pointer, field
 			rType = reflect.TypeOf(value)
 		}
 
-		if err := stringifier.marshall(rType, ptr, sb, filters); err != nil {
+		if err := stringifier.marshall(rType, objPtr, sb, filters); err != nil {
 			return err
 		}
 	}
@@ -957,4 +986,15 @@ func (j *Marshaller) AsOutputPath(fieldPath string) (string, error) {
 	}
 
 	return j.marshallers[index].outputPath, nil
+}
+
+func elem(rType reflect.Type) reflect.Type {
+	for {
+		switch rType.Kind() {
+		case reflect.Ptr, reflect.Slice:
+			rType = rType.Elem()
+		default:
+			return rType
+		}
+	}
 }

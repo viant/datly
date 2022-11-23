@@ -33,7 +33,7 @@ require (
 	github.com/viant/sqlx v0.2.3
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20221115010237-73ecce4f1da2
-	github.com/viant/xreflect v0.0.0-20221118213917-a128e7cc7a8f
+	github.com/viant/xreflect v0.0.0-20221122174440-1eb105c35613
 	github.com/viant/xunsafe v0.8.1-0.20221104195713-fd8483040428
 	golang.org/x/oauth2 v0.2.0
 	google.golang.org/api v0.102.0

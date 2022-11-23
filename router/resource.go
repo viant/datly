@@ -124,6 +124,8 @@ func (r *Resource) Init(ctx context.Context) error {
 	}
 
 	for _, route := range r.Routes {
+		route._resource = r.Resource
+
 		if route.RevealMetric == nil {
 			route.RevealMetric = r.RevealMetric
 		}

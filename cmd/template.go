@@ -133,7 +133,10 @@ func convertMetaParameter(param *Parameter, values map[string]interface{}, hints
 		constValue = aValue
 	}
 
-	targetName := view.FirstNotEmpty(param.Target, param.Name)
+	targetName := param.Name
+	if param.Target != nil {
+		targetName = *param.Target
+	}
 
 	return &view.Parameter{
 		Name:         param.Id,

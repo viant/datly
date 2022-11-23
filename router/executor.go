@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"github.com/viant/datly/executor"
+	"github.com/viant/toolbox"
 	"net/http"
 )
 
@@ -46,6 +47,8 @@ func (r *Router) executorHandlerWithError(route *Route, request *http.Request) (
 	if err != nil || !route.ReturnBody {
 		return nil, err
 	}
+
+	toolbox.Dump(parameters.requestBody)
 
 	responseBody := r.wrapWithResponseIfNeeded(parameters.requestBody, route, nil, nil)
 	return route._marshaller.Marshal(responseBody, nil)

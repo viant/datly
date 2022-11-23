@@ -107,6 +107,16 @@ func TestJson_Marshal(t *testing.T) {
 			data:        anonymousNestedStruct,
 			expect:      `{"ResponseStatus":{"Message":"","Status":"","Error":""},"Foo":[{"ID":1,"Name":"abc","Quantity":0},{"ID":2,"Name":"def","Quantity":250}]}`,
 		},
+		{
+			description: "anonymous nested struct with ptrs",
+			data:        anonymousNestedStructWithPointers,
+			expect:      `{"FooWrapperName":"","Foo":[{"ID":1,"Name":"abc","Quantity":0},{"ID":2,"Name":"def","Quantity":250}]}`,
+		},
+		{
+			description: "anonymous nested complex struct with ptrs",
+			data:        complexAnonymousNestedStructWithPointers,
+			expect:      `{"Status":0,"Message":"","FooWrapperName":"","Foo":[{"ID":1,"Name":"abc","Quantity":0},{"ID":2,"Name":"def","Quantity":250}],"Timestamp":"0001-01-01T00:00:00Z"}`,
+		},
 	}
 
 	//for i, testcase := range testcases[:len(testcases)-1] {
@@ -130,6 +140,77 @@ func TestJson_Marshal(t *testing.T) {
 		if !assert.Equal(t, testcase.expect, string(result), testcase.description) {
 			toolbox.Dump(string(result))
 		}
+	}
+}
+
+func complexAnonymousNestedStructWithPointers() interface{} {
+	type Foo struct {
+		ID       int
+		Name     string
+		Quantity int
+	}
+
+	type FooWrapper struct {
+		FooWrapperName string
+		Foo            []*Foo
+	}
+
+	type Response struct {
+		Status  int
+		Message string
+		*FooWrapper
+		Timestamp time.Time
+	}
+
+	return Response{
+		FooWrapper: &FooWrapper{
+			Foo: []*Foo{
+				{
+					ID:       1,
+					Name:     "abc",
+					Quantity: 0,
+				},
+				{
+					ID:       2,
+					Name:     "def",
+					Quantity: 250,
+				},
+			},
+		},
+	}
+}
+
+func anonymousNestedStructWithPointers() interface{} {
+	type Foo struct {
+		ID       int
+		Name     string
+		Quantity int
+	}
+
+	type FooWrapper struct {
+		FooWrapperName string
+		Foo            []*Foo
+	}
+
+	type Response struct {
+		*FooWrapper
+	}
+
+	return &Response{
+		FooWrapper: &FooWrapper{
+			Foo: []*Foo{
+				{
+					ID:       1,
+					Name:     "abc",
+					Quantity: 0,
+				},
+				{
+					ID:       2,
+					Name:     "def",
+					Quantity: 250,
+				},
+			},
+		},
 	}
 }
 

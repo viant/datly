@@ -13,9 +13,10 @@ import (
 
 type (
 	Accessors struct {
-		index     map[string]int
-		namer     Namer
-		accessors []*Accessor
+		index       map[string]int
+		namer       Namer
+		accessors   []*Accessor
+		initialized bool
 	}
 
 	Accessor struct {
@@ -209,6 +210,11 @@ func (a *Accessors) indexAccessor(name string, fields []*xunsafe.Field) {
 }
 
 func (a *Accessors) Init(rType reflect.Type) {
+	if a.initialized {
+		return
+	}
+
+	a.initialized = true
 	if a.namer == nil {
 		a.namer = &VeltyNamer{}
 	}
