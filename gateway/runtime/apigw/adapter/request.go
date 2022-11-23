@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/viant/scy/auth/jwt/signer"
+	"github.com/viant/toolbox"
 	"io"
 	"log"
 	"net/http"
@@ -48,6 +49,15 @@ func (r *Request) Request(jwtSigner *signer.Service) *http.Request {
 	if ctx := r.RequestContext; len(ctx.Authorizer) > 0 {
 		authorizer := ctx.Authorizer
 		if req.Header.Get("Authorization") == "" && jwtSigner != nil {
+
+			if val, ok := authorizer["userId"]; ok {
+				authorizer["user_id"] = toolbox.AsInt(val)
+				authorizer["userId"] = toolbox.AsInt(val)
+			}
+			if val, ok := authorizer["accountId"]; ok {
+				authorizer["account_id"] = toolbox.AsInt(val)
+				authorizer["accountId"] = toolbox.AsInt(val)
+			}
 			token, err := jwtSigner.Create(time.Hour, authorizer)
 			if err != nil {
 				log.Printf("faied to create jwtClaim: %v", err)
