@@ -49,7 +49,6 @@ func (r *Request) Request(jwtSigner *signer.Service) *http.Request {
 	if ctx := r.RequestContext; len(ctx.Authorizer) > 0 {
 		authorizer := ctx.Authorizer
 		if req.Header.Get("Authorization") == "" && jwtSigner != nil {
-
 			if val, ok := authorizer["userId"]; ok {
 				authorizer["user_id"] = toolbox.AsInt(val)
 				authorizer["userId"] = toolbox.AsInt(val)
