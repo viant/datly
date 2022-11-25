@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
-	"github.com/viant/datly/codec"
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/reader"
@@ -78,7 +77,7 @@ type usecase struct {
 	resource    *view.Resource
 	dataset     string
 	provider    *base.Provider
-	visitors    codec.Visitors
+	visitors    view.Visitors
 }
 
 type StringsCodec struct {
@@ -467,8 +466,8 @@ func TestRead(t *testing.T) {
 			dataURI:     "case023_columns_codec/",
 			dest:        new(interface{}),
 			view:        "events",
-			visitors: codec.Visitors{
-				"Strings": codec.NewVisitor("Strings", &StringsCodec{}),
+			visitors: view.Visitors{
+				"Strings": view.NewVisitor("Strings", &StringsCodec{}),
 			},
 			expect: `[{"Name":["John","David","Anna"]}]`,
 		},
