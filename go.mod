@@ -31,7 +31,7 @@ require (
 	github.com/viant/parsly v0.0.0-20220913214053-cb272791c00f
 	github.com/viant/scy v0.3.2-0.20221123210038-042281941f17
 	github.com/viant/sqlx v0.2.4-0.20221123191800-9604165e9c37
-	github.com/viant/structql v0.0.0-20221123202557-5c31e19d513e
+	github.com/viant/structql v0.0.0-20221125021249-35b7a7d2d345
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20221115010237-73ecce4f1da2
 	github.com/viant/xreflect v0.0.0-20221122174440-1eb105c35613
