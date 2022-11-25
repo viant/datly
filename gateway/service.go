@@ -10,7 +10,6 @@ import (
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/auth/secret"
-	"github.com/viant/datly/codec"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -26,7 +25,7 @@ import (
 type (
 	Service struct {
 		Config               *Config
-		visitors             codec.Visitors
+		visitors             view.Visitors
 		types                view.Types
 		mux                  sync.RWMutex
 		routersIndex         map[string]*router.Router
@@ -67,7 +66,7 @@ func (r *Service) Close() error {
 }
 
 //New creates gateway Service. It is important to call Service.Close before Service got Garbage collected.
-func New(ctx context.Context, config *Config, statusHandler http.Handler, authorizer Authorizer, visitors codec.Visitors, types view.Types, metrics *gmetric.Service) (*Service, error) {
+func New(ctx context.Context, config *Config, statusHandler http.Handler, authorizer Authorizer, visitors view.Visitors, types view.Types, metrics *gmetric.Service) (*Service, error) {
 	start := time.Now()
 	config.Init()
 	err := config.Validate()

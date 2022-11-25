@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/viant/datly/codec"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
@@ -1039,7 +1038,7 @@ func (v *View) indexTransforms(resource *Resource, transforms marshal.Transforms
 			return fmt.Errorf("not found codec %v", transform.Codec)
 		}
 
-		actualCodec, ok := visitor.(codec.Codec)
+		actualCodec, ok := visitor.(CodecDef)
 		if !ok {
 			return fmt.Errorf("expected %v codec to be type of %T but was %T", transform.Codec, actualCodec, visitor)
 		}

@@ -3,7 +3,6 @@ package view
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/codec"
 	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -13,14 +12,12 @@ import (
 )
 
 const (
+	//deprecated
 	VeltyCriteriaCodec = "VeltyCriteria"
+	CodecVeltyCriteria = "VeltyCriteria"
 )
 
 type (
-	CodecFactory interface {
-		New(codec *Codec) (codec.Valuer, error)
-	}
-
 	//Parameter describes parameters used by the Criteria to filter the view.
 	Parameter struct {
 		shared.Reference
@@ -61,12 +58,13 @@ type (
 		Source    string  `json:",omitempty"`
 		SourceURL string  `json:",omitempty"`
 		Schema    *Schema `json:",omitempty"`
-		_codecFn  CodecFn //shall rename to codec ?
+		Query     string  `json:",omitempty"`
+		_codecFn  CodecFn
 	}
 )
 
 func (v *Codec) Init(resource *Resource, view *View, paramType reflect.Type) error {
-	if err := v.inheritCodecIfNeeded(resource); err != nil {
+	if err := v.inheritCodecIfNeeded(resource, paramType); err != nil {
 		return err
 	}
 
@@ -100,7 +98,7 @@ func (v *Codec) initFnIfNeeded(resource *Resource, view *View) error {
 	return nil
 }
 
-func (v *Codec) inheritCodecIfNeeded(resource *Resource) error {
+func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type) error {
 	if v.Ref == "" {
 		return nil
 	}
@@ -116,16 +114,20 @@ func (v *Codec) inheritCodecIfNeeded(resource *Resource) error {
 
 	factory, ok := visitor.(CodecFactory)
 	if ok {
-		aCodec, err := factory.New(v)
+		aCodec, err := factory.New(v, paramType)
 		if err != nil {
 			return err
 		}
 
 		v._codecFn = aCodec.Value
+		if typeProvider, ok := aCodec.(TypeProvider); ok {
+			v.Schema = NewSchema(typeProvider.ResultType())
+		}
+
 		return nil
 	}
 
-	asCodec, ok := visitor.(codec.Codec)
+	asCodec, ok := visitor.(CodecDef)
 	if !ok {
 		return fmt.Errorf("expected visitor to be type of %T but was %T", asCodec, visitor)
 	}
@@ -142,8 +144,8 @@ func (v *Codec) ensureSchema(paramType reflect.Type) {
 }
 
 func (v *Codec) extractCodecFn(resource *Resource, paramType reflect.Type, view *View) (CodecFn, error) {
-	switch v.Name {
-	case VeltyCriteriaCodec:
+	switch strings.ToLower(v.Name) {
+	case strings.ToLower(CodecVeltyCriteria):
 		veltyCodec, err := NewVeltyCodec(v.Source, paramType, view)
 		if err != nil {
 			return nil, err
@@ -157,9 +159,9 @@ func (v *Codec) extractCodecFn(resource *Resource, paramType reflect.Type, view 
 	}
 
 	switch actual := vVisitor.(type) {
-	case codec.LifecycleVisitor:
+	case LifecycleVisitor:
 		return actual.Valuer().Value, nil
-	case codec.Codec:
+	case CodecDef:
 		return actual.Valuer().Value, nil
 	default:
 		return nil, fmt.Errorf("expected %T to implement Codec", actual)
@@ -170,7 +172,7 @@ func (v *Codec) Transform(ctx context.Context, raw string, options ...interface{
 	return v._codecFn(ctx, raw, options...)
 }
 
-func (v *Codec) inherit(asCodec codec.Codec) {
+func (v *Codec) inherit(asCodec CodecDef) {
 	v.Name = asCodec.Name()
 	v.Schema = NewSchema(asCodec.ResultType())
 	v.Schema.DataType = asCodec.ResultType().String()
@@ -432,17 +434,31 @@ func (p *Parameter) Value(values interface{}) (interface{}, error) {
 	return p.valueAccessor.Value(values)
 }
 
-func (p *Parameter) ConvertAndSet(ctx context.Context, selector *Selector, value string) error {
+func (p *Parameter) ConvertAndSetCtx(ctx context.Context, selector *Selector, value interface{}) error {
+	return p.convertAndSet(ctx, selector, value, false)
+}
+
+func (p *Parameter) convertAndSet(ctx context.Context, selector *Selector, value interface{}, converted bool) error {
 	p.ensureSelectorParamValue(selector)
 
 	paramPtr, presencePtr := asValuesPtr(selector)
 
-	if err := p.valueAccessor.setValue(ctx, paramPtr, value, p.Codec, selector, p.DateFormat); err != nil {
+	err := p.setValue(ctx, value, paramPtr, converted, selector)
+	if err != nil {
 		return err
 	}
 
 	p.UpdatePresence(presencePtr)
 	return nil
+}
+
+func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr unsafe.Pointer, converted bool, options ...interface{}) error {
+	aCodec := p.Codec
+	if converted {
+		aCodec = nil
+	}
+
+	return p.valueAccessor.setValue(ctx, paramPtr, value, aCodec, p.DateFormat, options...)
 }
 
 func elem(rType reflect.Type) reflect.Type {
@@ -454,17 +470,7 @@ func elem(rType reflect.Type) reflect.Type {
 }
 
 func (p *Parameter) Set(selector *Selector, value interface{}) error {
-	p.ensureSelectorParamValue(selector)
-
-	ptr, presencePtr := asValuesPtr(selector)
-	p.setValue(ptr, value, presencePtr)
-
-	return nil
-}
-
-func (p *Parameter) setValue(ptr unsafe.Pointer, value interface{}, presencePtr unsafe.Pointer) {
-	p.valueAccessor.set(ptr, value)
-	p.UpdatePresence(presencePtr)
+	return p.convertAndSet(context.Background(), selector, value, true)
 }
 
 func asValuesPtr(selector *Selector) (paramPtr unsafe.Pointer, presencePtr unsafe.Pointer) {
@@ -510,14 +516,20 @@ func (p *Parameter) ensureSelectorParamValue(selector *Selector) {
 	selector.Parameters.Init(p._owner)
 }
 
-func (p *Parameter) UpdateValue(params interface{}, presenceMap interface{}) {
+func (p *Parameter) UpdateValue(params interface{}, presenceMap interface{}) error {
 	if p.Const == nil {
-		return
+		return nil
 	}
 
 	paramsPtr := xunsafe.AsPointer(params)
 	presenceMapPtr := xunsafe.AsPointer(presenceMap)
-	p.setValue(paramsPtr, p.Const, presenceMapPtr)
+
+	if err := p.setValue(context.Background(), p.Const, paramsPtr, true); err != nil {
+		return err
+	}
+
+	p.UpdatePresence(presenceMapPtr)
+	return nil
 }
 
 //ParametersIndex represents Parameter map indexed by Parameter.Name

@@ -26,6 +26,7 @@ var builtInMethods = map[string]bool{
 	keywords.Pagination[1:]:       true,
 	keywords.ColumnsIn[1:]:        true,
 	keywords.SequencerKey:         true,
+	expand.HttpService:            true,
 }
 
 func Sanitize(SQL string, hints map[string]*ParameterHint, consts map[string]interface{}) string {

@@ -7,7 +7,6 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/storage"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/codec"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/toolbox"
@@ -42,7 +41,7 @@ type Resource struct {
 	Loggers  logger.Adapters `json:",omitempty"`
 	_loggers logger.AdapterIndex
 
-	_visitors codec.Visitors
+	_visitors Visitors
 	ModTime   time.Time `json:",omitempty"`
 
 	_columnsCache map[string]Columns
@@ -272,9 +271,9 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	return nil
 }
 
-func (r *Resource) readOptions(options []interface{}) (Types, codec.Visitors, map[string]Columns, marshal.TransformIndex) {
+func (r *Resource) readOptions(options []interface{}) (Types, Visitors, map[string]Columns, marshal.TransformIndex) {
 	var types = Types{}
-	var visitors = codec.Visitors{}
+	var visitors = Visitors{}
 	var cache map[string]Columns
 	var transformsIndex marshal.TransformIndex
 	if len(options) > 0 {
@@ -283,7 +282,7 @@ func (r *Resource) readOptions(options []interface{}) (Types, codec.Visitors, ma
 				continue
 			}
 			switch actual := option.(type) {
-			case codec.Visitors:
+			case Visitors:
 				visitors = actual
 			case map[string]Columns:
 				cache = actual
@@ -303,7 +302,7 @@ func (r *Resource) View(name string) (*View, error) {
 }
 
 //NewResourceFromURL loads and initializes Resource from file .yaml
-func NewResourceFromURL(ctx context.Context, url string, types Types, visitors codec.Visitors) (*Resource, error) {
+func NewResourceFromURL(ctx context.Context, url string, types Types, visitors Visitors) (*Resource, error) {
 	resource, err := LoadResourceFromURL(ctx, url, afs.New())
 	if err != nil {
 		return nil, err
@@ -471,7 +470,7 @@ func (r *Resource) TypeName(p reflect.Type) (string, bool) {
 	return name, ok
 }
 
-func (r *Resource) VisitorByName(name string) (codec.LifecycleVisitor, bool) {
+func (r *Resource) VisitorByName(name string) (LifecycleVisitor, bool) {
 	visitor, ok := r._visitors[name]
 	return visitor, ok
 }

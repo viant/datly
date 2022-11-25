@@ -1,15 +1,29 @@
-package codec
+package view
 
 import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
 	"net/http"
+	"reflect"
 )
 
 type (
+	CodecFactory interface {
+		New(codec *Codec, paramType reflect.Type) (Valuer, error)
+	}
+
+	TypeProvider interface {
+		ResultType() reflect.Type
+	}
+
 	Valuer interface {
 		Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error)
+	}
+
+	CodecDef interface {
+		LifecycleVisitor
+		TypeProvider
 	}
 
 	//LifecycleVisitor visitor can implement BeforeFetcher and/or AfterFetcher
@@ -33,10 +47,6 @@ type (
 		//or just an error if it is needed to stop the routers flow.
 		//view is type of *[]T or *[]*T
 		AfterFetch(data interface{}, response http.ResponseWriter, request *http.Request) (responseClosed bool, err error)
-	}
-
-	Factory interface {
-		New()
 	}
 
 	Visitor struct {
@@ -80,7 +90,7 @@ func (v Visitors) Register(visitor LifecycleVisitor) {
 	v[visitor.Name()] = visitor
 }
 
-func New(visitors ...LifecycleVisitor) Visitors {
+func NewCodecs(visitors ...LifecycleVisitor) Visitors {
 	result := Visitors{}
 	for i := range visitors {
 		result.Register(visitors[i])
@@ -103,4 +113,32 @@ func (v *valuer) Value(ctx context.Context, raw interface{}, options ...interfac
 
 func NewValuer(aFunc func(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error)) Valuer {
 	return &valuer{fn: aFunc}
+}
+
+type (
+	codec struct {
+		name       string
+		visitor    Valuer
+		resultType reflect.Type
+	}
+)
+
+func (c *codec) Name() string {
+	return c.name
+}
+
+func (c *codec) Valuer() Valuer {
+	return c.visitor
+}
+
+func (c *codec) ResultType() reflect.Type {
+	return c.resultType
+}
+
+func NewCodec(name string, valuer Valuer, resultType reflect.Type) CodecDef {
+	return &codec{
+		name:       name,
+		visitor:    valuer,
+		resultType: resultType,
+	}
 }

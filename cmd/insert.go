@@ -68,7 +68,9 @@ func (s *Builder) preparePostRule(ctx context.Context, sourceSQL []byte) (string
 		return "", err
 	}
 
-	configurer, err := NewConfigProviderReader("", SQL, s.routeBuilder.option, map[string]*sanitize.ParameterHint{}, router.ReaderServiceType, map[string]interface{}{})
+	paramIndex := NewParametersIndex(routeOption, map[string]*sanitize.ParameterHint{})
+
+	configurer, err := NewConfigProviderReader("", SQL, s.routeBuilder.option, router.ReaderServiceType, paramIndex)
 	if err != nil {
 		return "", err
 	}

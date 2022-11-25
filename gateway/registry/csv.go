@@ -3,7 +3,6 @@ package registry
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/codec"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/load/reader/csv"
 	"reflect"
@@ -19,7 +18,7 @@ type (
 	}
 )
 
-func (c CsvFactory) Valuer() codec.Valuer {
+func (c CsvFactory) Valuer() view.Valuer {
 	return c
 }
 
@@ -28,14 +27,14 @@ func (c CsvFactory) Name() string {
 }
 
 func (c CsvFactory) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
-	return nil, fmt.Errorf("unexpected use Value on CsvFactory")
+	return nil, unexpectedUseError(c)
 }
 
-func (c *CSV) Valuer() codec.Valuer {
+func (c *CSV) Valuer() view.Valuer {
 	return c
 }
 
-func (c CsvFactory) New(codec *view.Codec) (codec.Valuer, error) {
+func (c CsvFactory) New(codec *view.Codec, _ reflect.Type) (view.Valuer, error) {
 	aCsv := &CSV{
 		codec: codec,
 	}
@@ -59,7 +58,7 @@ func (c *CSV) Value(ctx context.Context, raw interface{}, options ...interface{}
 	if err := c.marshaller.Unmarshal([]byte(rawString), dest.Interface()); err != nil {
 		return nil, err
 	}
-	
+
 	if cardinality == view.Many {
 		return dest.Elem().Interface(), nil
 	}

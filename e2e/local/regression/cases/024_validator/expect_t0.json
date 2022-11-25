@@ -1,0 +1,18 @@
+{
+  "id": "@exists@",
+  "quantity": 0,
+  "eventsPerformance": [
+    {
+      "id": "@exists@",
+      "price": 125,
+      "eventId": "@exists@",
+      "timestamp": "0001-01-01T00:00:00Z"
+    },
+    {
+      "id": "@exists@",
+      "price": 250,
+      "eventId": "@exists@",
+      "timestamp": "0001-01-01T00:00:00Z"
+    }
+  ]
+}

@@ -323,7 +323,7 @@ func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchDa
 	return fullMatch, columnInMatcher, cacheErr
 }
 
-func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.Visitor, info *Info, batchData *view.BatchData, selector *view.Selector, parentParam *expand.MetaParam) error {
+func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.VisitorFn, info *Info, batchData *view.BatchData, selector *view.Selector, parentParam *expand.MetaParam) error {
 	wg := &sync.WaitGroup{}
 	db, err := aView.Db()
 	if err != nil {
@@ -356,7 +356,7 @@ func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aV
 	return metaErr
 }
 
-func (s *Service) queryObjects(ctx context.Context, session *Session, aView *view.View, selector *view.Selector, batchData *view.BatchData, db *sql.DB, collector *view.Collector, visitor view.Visitor) (*Stats, error) {
+func (s *Service) queryObjects(ctx context.Context, session *Session, aView *view.View, selector *view.Selector, batchData *view.BatchData, db *sql.DB, collector *view.Collector, visitor view.VisitorFn) (*Stats, error) {
 	fullMatcher, columnInMatcher, err := s.getMatchers(aView, selector, batchData, collector, session)
 	if err != nil {
 		return nil, err

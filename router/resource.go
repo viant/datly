@@ -9,7 +9,6 @@ import (
 	"github.com/viant/afs/option"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/codec"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
@@ -44,7 +43,7 @@ type (
 		Info             openapi3.Info
 		ColumnsDiscovery bool
 		EnableDebug      *bool
-		_visitors        codec.Visitors
+		_visitors        view.Visitors
 		cfs              afs.Service
 		Resource         *view.Resource
 	}
@@ -252,14 +251,14 @@ func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCach
 	return resource, nil
 }
 
-func readOptions(options []interface{}) (codec.Visitors, view.Types, map[string]*view.Resource, *view.Metrics) {
-	var visitors codec.Visitors
+func readOptions(options []interface{}) (view.Visitors, view.Types, map[string]*view.Resource, *view.Metrics) {
+	var visitors view.Visitors
 	var types view.Types
 	var resources map[string]*view.Resource
 	var metrics *view.Metrics
 	for _, anOption := range options {
 		switch actual := anOption.(type) {
-		case codec.Visitors:
+		case view.Visitors:
 			visitors = actual
 		case view.Types:
 			types = actual
@@ -279,7 +278,7 @@ func readOptions(options []interface{}) (codec.Visitors, view.Types, map[string]
 	}
 
 	if visitors == nil {
-		visitors = map[string]codec.LifecycleVisitor{}
+		visitors = map[string]view.LifecycleVisitor{}
 	}
 	return visitors, types, resources, metrics
 }

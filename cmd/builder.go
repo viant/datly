@@ -406,7 +406,7 @@ func (s *Builder) buildConfigProvider(SQL string) (*ViewConfigurer, error) {
 		serviceType = router.ExecutorServiceType
 	}
 
-	return NewConfigProviderReader(s.options.Generate.Name, SQL, s.routeBuilder.option, s.routeBuilder.paramsIndex.hints, serviceType, s.routeBuilder.paramsIndex.consts)
+	return NewConfigProviderReader(s.options.Generate.Name, SQL, s.routeBuilder.option, serviceType, s.routeBuilder.paramsIndex)
 }
 
 func (s *Builder) loadSQL(ctx context.Context) error {

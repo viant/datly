@@ -14,17 +14,30 @@ type ParametersIndex struct {
 	types          map[string]string
 	hints          map[string]*sanitize.ParameterHint
 	utilsIndex     map[string]bool
+	paramsMeta     map[string]*Parameter
 }
 
-func NewParametersIndex() *ParametersIndex {
-	return &ParametersIndex{
+func NewParametersIndex(routeConfig *option.RouteConfig, hints map[string]*sanitize.ParameterHint) *ParametersIndex {
+	index := &ParametersIndex{
 		utilsIndex:     map[string]bool{},
 		parameterKinds: map[string]view.Kind{},
 		parameters:     map[string]*view.Parameter{},
 		types:          map[string]string{},
 		consts:         map[string]interface{}{},
 		hints:          map[string]*sanitize.ParameterHint{},
+		paramsMeta:     map[string]*Parameter{},
 	}
+
+	if routeConfig != nil {
+		index.AddConsts(routeConfig.Const)
+		index.AddUriParams(extractURIParams(routeConfig.URI))
+	}
+
+	if hints != nil {
+		index.AddHints(hints)
+	}
+
+	return index
 }
 
 func (p *ParametersIndex) AddUriParams(params map[string]bool) {
@@ -86,4 +99,44 @@ func (p *ParametersIndex) Param(name string) (*view.Parameter, bool) {
 
 func (p *ParametersIndex) AddParameter(parameter *view.Parameter) {
 	p.parameters[parameter.Name] = parameter
+}
+
+func (p *ParametersIndex) ParamsMetaWithHint(paramName string, hint *sanitize.ParameterHint) (*Parameter, error) {
+	parameter := p.getOrCreateParam(paramName)
+	if hint == nil {
+		return parameter, nil
+	}
+
+	jsonHint, SQL := sanitize.SplitHint(hint.Hint)
+
+	if err := tryUnmarshalHint(jsonHint, parameter); err != nil {
+		return nil, err
+	}
+
+	parameter.SQLCodec = isSQLLikeCodec(parameter.Codec)
+	parameter.SQL = SQL
+
+	return parameter, nil
+}
+
+func (p *ParametersIndex) getOrCreateParam(paramName string) *Parameter {
+	parameter, ok := p.paramsMeta[paramName]
+	if !ok {
+		parameter = &Parameter{}
+		p.paramsMeta[paramName] = parameter
+	}
+	return parameter
+}
+
+func (p *ParametersIndex) ParamsMetaWithComment(paramName, hint string) (*Parameter, error) {
+	parameter := p.getOrCreateParam(paramName)
+	if hint == "" {
+		return parameter, nil
+	}
+
+	if err := tryUnmarshalHint(hint, parameter); err != nil {
+		return nil, err
+	}
+
+	return parameter, nil
 }

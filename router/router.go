@@ -9,7 +9,6 @@ import (
 	"github.com/go-playground/validator"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/codec"
 	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
@@ -435,7 +434,7 @@ func (r *Router) putCache(ctx context.Context, route *Route, cacheEntry *cache.E
 }
 
 func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Request, route *Route) (shouldContinue bool) {
-	if actual, ok := route.Visitor.Visitor().(codec.BeforeFetcher); ok {
+	if actual, ok := route.Visitor.Visitor().(view.BeforeFetcher); ok {
 		closed, err := actual.BeforeFetch(response, request)
 		if closed {
 			return false
@@ -451,7 +450,7 @@ func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Requ
 }
 
 func (r *Router) runAfterFetch(session *ReaderSession, dest interface{}) (shouldContinue bool) {
-	if actual, ok := session.Route.Visitor.Visitor().(codec.AfterFetcher); ok {
+	if actual, ok := session.Route.Visitor.Visitor().(view.AfterFetcher); ok {
 		responseClosed, err := actual.AfterFetch(dest, session.Response, session.Request)
 		if responseClosed {
 			return false
@@ -535,12 +534,12 @@ func (r *Router) buildJsonFilters(route *Route, selectors *view.Selectors) ([]*j
 			continue
 		}
 
-		var path string
+		var aPath string
 		viewByName, ok := route.Index.viewByName(viewName)
 		if !ok {
-			path = ""
+			aPath = ""
 		} else {
-			path = viewByName.Path
+			aPath = viewByName.Path
 		}
 
 		fields := make([]string, len(selector.Fields))
@@ -549,7 +548,7 @@ func (r *Router) buildJsonFilters(route *Route, selectors *view.Selectors) ([]*j
 		}
 
 		entries = append(entries, &json.FilterEntry{
-			Path:   path,
+			Path:   aPath,
 			Fields: fields,
 		})
 

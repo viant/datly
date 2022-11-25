@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/afs"
 	"github.com/viant/afs/option/content"
-	"github.com/viant/datly/codec"
 	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/internal/tests"
@@ -45,7 +44,7 @@ type testcase struct {
 	uri                 string
 	method              string
 	expected            string
-	visitors            codec.Visitors
+	visitors            view.Visitors
 	types               view.Types
 	headers             http.Header
 	requestBody         string
@@ -235,8 +234,8 @@ func TestRouter(t *testing.T) {
 			description: "visitors | AfterFetcher",
 			resourceURI: "004_visitors",
 			uri:         "/api/events",
-			visitors: codec.New(
-				codec.NewVisitor("event_visitor", &eventAfterFetcher{}),
+			visitors: view.NewCodecs(
+				view.NewVisitor("event_visitor", &eventAfterFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -248,8 +247,8 @@ func TestRouter(t *testing.T) {
 			description: "visitors | BeforeFetcher",
 			resourceURI: "004_visitors",
 			uri:         "/api/events",
-			visitors: codec.New(
-				codec.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+			visitors: view.NewCodecs(
+				view.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -264,8 +263,8 @@ func TestRouter(t *testing.T) {
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
 			},
-			visitors: codec.New(
-				codec.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+			visitors: view.NewCodecs(
+				view.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			expected: `[]`,
 			method:   http.MethodGet,
@@ -274,8 +273,8 @@ func TestRouter(t *testing.T) {
 			description: "templates | none value set",
 			resourceURI: "005_templates",
 			uri:         "/api/events",
-			visitors: codec.New(
-				codec.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+			visitors: view.NewCodecs(
+				view.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -287,8 +286,8 @@ func TestRouter(t *testing.T) {
 			description: "templates | user_id",
 			resourceURI: "005_templates",
 			uri:         "/api/events?user_id=1",
-			visitors: codec.New(
-				codec.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+			visitors: view.NewCodecs(
+				view.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -300,8 +299,8 @@ func TestRouter(t *testing.T) {
 			description: "templates | quantity",
 			resourceURI: "005_templates",
 			uri:         "/api/events?quantity=10",
-			visitors: codec.New(
-				codec.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+			visitors: view.NewCodecs(
+				view.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -363,8 +362,8 @@ func TestRouter(t *testing.T) {
 				//ID: 1, Email: abc@example.com
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MSwiRW1haWwiOiJhYmNAZXhhbXBsZS5jb20ifQ.dm3jSSuqy9wf4BsjU1dElRQQEySC5nn6fCUTmTKqt2")},
 			},
-			visitors: codec.New(
-				codec.NewVisitor(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
+			visitors: view.NewCodecs(
+				view.NewVisitor(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
 			),
 			types: map[string]reflect.Type{
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
@@ -380,8 +379,8 @@ func TestRouter(t *testing.T) {
 				//ID: 1
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MiwiRW1haWwiOiJleGFtcGxlQGdtYWlsLmNvbSJ9.XsZ115KqQK8uQE9for6NaphYS1VHdJc_famKWHo1Dcw")},
 			},
-			visitors: codec.New(
-				codec.NewVisitor(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
+			visitors: view.NewCodecs(
+				view.NewVisitor(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
 			),
 			types: map[string]reflect.Type{
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
@@ -397,8 +396,8 @@ func TestRouter(t *testing.T) {
 				//ID: 4
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJFbWFpbCI6IkFubkBleGFtcGxlLmNvbSIsIklkIjo0fQ.9A0LWtsh_tskG-hLBFVNj7PNRQE8qWc5ZioqLWPS1gQ")},
 			},
-			visitors: codec.New(
-				codec.NewVisitor(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
+			visitors: view.NewCodecs(
+				view.NewVisitor(registry.CodecKeyJwtClaim, &gcpMockDecoder{}),
 			),
 			types: map[string]reflect.Type{
 				registry.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
@@ -593,8 +592,8 @@ func TestRouter(t *testing.T) {
 			resourceURI: "025_transforms",
 			uri:         "/api/employees",
 			method:      http.MethodGet,
-			visitors: map[string]codec.LifecycleVisitor{
-				"AsStrings": codec.NewCodec("AsStrings", &asStrings{}, reflect.TypeOf([]string{})),
+			visitors: map[string]view.LifecycleVisitor{
+				"AsStrings": view.NewCodec("AsStrings", &asStrings{}, reflect.TypeOf([]string{})),
 			},
 			expected: `[{"Id":1,"Email":"abc@example.com","Department":{"Id":1,"Name":["dep","-","1"]}},{"Id":2,"Email":"example@gmail.com","Department":{"Id":2,"Name":["dep","-","2"]}},{"Id":3,"Email":"tom@example.com","Department":{"Id":1,"Name":["dep","-","1"]}},{"Id":4,"Email":"Ann@example.com","Department":{"Id":2,"Name":["dep","-","2"]}}]`,
 		},
@@ -603,7 +602,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "026_date_format",
 			uri:         "/api/events",
 			method:      http.MethodGet,
-			visitors:    map[string]codec.LifecycleVisitor{},
+			visitors:    map[string]view.LifecycleVisitor{},
 			expected:    `[{"Id":1,"Timestamp":"11-03-2019","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"15-03-2019","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"10-04-2019","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 		},
 		{
@@ -611,7 +610,7 @@ func TestRouter(t *testing.T) {
 			resourceURI:   "027_aerospike_cache",
 			uri:           "/api/events",
 			method:        http.MethodGet,
-			visitors:      map[string]codec.LifecycleVisitor{},
+			visitors:      map[string]view.LifecycleVisitor{},
 			expected:      `[{"Id":1,"Timestamp":"11-03-2019","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"15-03-2019","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"10-04-2019","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			extraRequests: 1,
 		},
@@ -620,7 +619,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "028_page",
 			uri:         "/api/events?_page=3",
 			method:      http.MethodGet,
-			visitors:    map[string]codec.LifecycleVisitor{},
+			visitors:    map[string]view.LifecycleVisitor{},
 			expected:    `[{"Id":102,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 		},
 		{
@@ -628,7 +627,7 @@ func TestRouter(t *testing.T) {
 			resourceURI:       "029_executor",
 			uri:               "/api/events",
 			method:            http.MethodPost,
-			visitors:          map[string]codec.LifecycleVisitor{},
+			visitors:          map[string]view.LifecycleVisitor{},
 			afterInsertUri:    "/api/events",
 			afterInsertMethod: http.MethodGet,
 			requestBody: `{"Items": [
@@ -643,7 +642,7 @@ func TestRouter(t *testing.T) {
 			resourceURI:         "030_param_slice",
 			uri:                 "/api/events",
 			method:              http.MethodPost,
-			visitors:            map[string]codec.LifecycleVisitor{},
+			visitors:            map[string]view.LifecycleVisitor{},
 			afterInsertUri:      "/api/events?_criteria=Quantity=40",
 			afterInsertMethod:   http.MethodGet,
 			requestBody:         `{"ID": [1,10,103], "Quantity": 40}`,
@@ -654,7 +653,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "030_param_slice",
 			uri:         "/api/events",
 			method:      http.MethodPost,
-			visitors:    map[string]codec.LifecycleVisitor{},
+			visitors:    map[string]view.LifecycleVisitor{},
 			requestBody: `{"ID": [1,10,103], "Quantity": 0}`,
 			expected:    `{"Message":"invalid status"}`,
 		},
@@ -663,7 +662,7 @@ func TestRouter(t *testing.T) {
 			resourceURI:         "031_multiple_execs",
 			uri:                 "/api/events",
 			method:              http.MethodPost,
-			visitors:            map[string]codec.LifecycleVisitor{},
+			visitors:            map[string]view.LifecycleVisitor{},
 			afterInsertUri:      "/api/events?_criteria=Quantity=40",
 			afterInsertMethod:   http.MethodGet,
 			requestBody:         `{"ID": [1,10,103], "Quantity": 40}`,
@@ -674,7 +673,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "032_request_body",
 			uri:         "/api/events",
 			method:      http.MethodPost,
-			visitors:    map[string]codec.LifecycleVisitor{},
+			visitors:    map[string]view.LifecycleVisitor{},
 			requestBody: `{"ID": 1, "Wrapper": {"Quantity": 40, "Timestamp": "2019-03-12T02:20:33Z"}}`,
 			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}]`,
 		},
@@ -683,7 +682,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "033_custom_err_message",
 			uri:         "/api/events",
 			method:      http.MethodPost,
-			visitors:    map[string]codec.LifecycleVisitor{},
+			visitors:    map[string]view.LifecycleVisitor{},
 			requestBody: `{"ID": [1,10,103], "Quantity": 0}`,
 			expected:    `{"Errors":[{"View":"events","Param":"Data","Object":[{"Id":1,"Status":false},{"Id":10,"Status":false},{"Id":103,"Status":false}]}]}`,
 		},
@@ -692,7 +691,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "034_slice_expansion",
 			uri:         "/api/events",
 			method:      http.MethodPost,
-			visitors:    map[string]codec.LifecycleVisitor{},
+			visitors:    map[string]view.LifecycleVisitor{},
 			requestBody: `[1,10,103]`,
 			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 		},
@@ -701,7 +700,7 @@ func TestRouter(t *testing.T) {
 			resourceURI:         "035_logger",
 			uri:                 "/api/events",
 			method:              http.MethodPost,
-			visitors:            map[string]codec.LifecycleVisitor{},
+			visitors:            map[string]view.LifecycleVisitor{},
 			requestBody:         `{"ID": [1,10,103], "Quantity": 0}`,
 			afterInsertUri:      "/api/events",
 			afterInsertMethod:   http.MethodGet,
@@ -712,7 +711,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "036_pagination_basic",
 			uri:         "/api/events?_page=2",
 			method:      http.MethodGet,
-			visitors:    map[string]codec.LifecycleVisitor{},
+			visitors:    map[string]view.LifecycleVisitor{},
 			expected:    `[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			expectedHeaders: map[string][]string{
 				"Events-Meta": {`{"TotalRecords":6,"CurrentPage":2,"PageSize":2}`},
@@ -723,7 +722,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "037_pagination_comprehensive",
 			uri:         "/api/events?_page=2",
 			method:      http.MethodGet,
-			visitors:    map[string]codec.LifecycleVisitor{},
+			visitors:    map[string]view.LifecycleVisitor{},
 			expected:    `{"Status":"ok","ResponseBody":[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}],"EventsMeta":{"TotalRecords":6,"CurrentPage":2,"PageSize":2}}`,
 		},
 		{
@@ -731,7 +730,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "038_pagination_nested",
 			uri:         "/api/event-types",
 			method:      http.MethodGet,
-			visitors:    map[string]codec.LifecycleVisitor{},
+			visitors:    map[string]view.LifecycleVisitor{},
 			expected:    `{"Status":"ok","ResponseBody":[{"Id":1,"Type":"type - 1","Code":"code - 1","Events":[]},{"Id":2,"Type":"type - 2","Code":"code - 2","Events":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}],"EventsMeta":{"EventTypeId":2,"TotalCount":1}},{"Id":11,"Type":"type - 11","Code":"code - 11","Events":[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}],"EventsMeta":{"EventTypeId":11,"TotalCount":1}},{"Id":111,"Type":"type - 111","Code":"code - 111","Events":[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":102,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}],"EventsMeta":{"EventTypeId":111,"TotalCount":4}}]}`,
 		},
 		{
@@ -739,7 +738,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "039_tree",
 			uri:         "/api/nodes",
 			method:      http.MethodGet,
-			visitors:    map[string]codec.LifecycleVisitor{},
+			visitors:    map[string]view.LifecycleVisitor{},
 			expected:    `[{"Id":0,"Label":"/parent-1","Children":[{"Id":2,"Label":"/parent-1/children-1","Children":[{"Id":3,"Label":"/parent-1/children-1/children-1","Children":[{"Id":6,"Label":"/parent-1/children-1/children-1/children-1","Children":[{"Id":4,"Label":"/parent-1/children-1/children-1/children-1/children-1","Children":[{"Id":5,"Label":"/parent-1/children-1/children-1/children-1/children-1/children-1","Children":[]}]}]}]}]}]},{"Id":1,"Label":"/parent-2","Children":[]}]`,
 		},
 		{
@@ -769,7 +768,7 @@ func TestRouter(t *testing.T) {
 			headers: map[string][]string{
 				"Content-Type": {router.CSVFormat},
 			},
-			visitors: map[string]codec.LifecycleVisitor{
+			visitors: map[string]view.LifecycleVisitor{
 				registry.CodecKeyCSV: registry.CsvFactory(""),
 			},
 		},
@@ -1032,7 +1031,7 @@ func (c *testcase) readResource(t *testing.T, fs afs.Service, resourceUrl string
 	return resource, true
 }
 
-func (c *testcase) readViewResource(t *testing.T, resourceUrl string, types view.Types, visitors codec.Visitors) (*view.Resource, bool) {
+func (c *testcase) readViewResource(t *testing.T, resourceUrl string, types view.Types, visitors view.Visitors) (*view.Resource, bool) {
 	resource, err := view.NewResourceFromURL(context.TODO(), resourceUrl, types, visitors)
 	if !assert.Nil(t, err, c.description) {
 		return nil, false

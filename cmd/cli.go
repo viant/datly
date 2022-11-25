@@ -109,7 +109,7 @@ func NewBuilder(options *Options, logger io.Writer) (*Builder, error) {
 			routerResource: &router.Resource{
 				Resource: view.EmptyResource(),
 			},
-			paramsIndex: NewParametersIndex(),
+			paramsIndex: NewParametersIndex(nil, nil),
 			option: &option.RouteConfig{
 				Declare: map[string]string{},
 				Const:   map[string]interface{}{},

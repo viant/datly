@@ -394,7 +394,7 @@ func (b *selectorsBuilder) extractParamValue(ctx context.Context, param *view.Pa
 		return b.convertAndTransform(ctx, b.params.pathVariable(param.In.Name, ""), param, selector)
 	case view.QueryKind:
 		return b.convertAndTransform(ctx, b.params.queryParam(param.In.Name, ""), param, selector)
-	case view.RequestBodyKind:
+	case view.KindRequestBody:
 		return b.params.requestBody, nil
 	case view.EnvironmentKind:
 		return b.convertAndTransform(ctx, os.Getenv(param.In.Name), param, selector)
@@ -492,7 +492,7 @@ func (b *selectorsBuilder) addRequestBodyParam(ctx context.Context, selector *vi
 		return nil
 	}
 
-	return param.Set(selector, bodyValue)
+	return param.ConvertAndSetCtx(ctx, selector, bodyValue)
 }
 
 func (b *selectorsBuilder) addCookieParam(ctx context.Context, selector *view.Selector, parameter *view.Parameter) error {
@@ -587,7 +587,7 @@ func convertAndSet(ctx context.Context, selector *view.Selector, parameter *view
 		return nil
 	}
 
-	if err := parameter.ConvertAndSet(ctx, selector, rawValue); err != nil {
+	if err := parameter.ConvertAndSetCtx(ctx, selector, rawValue); err != nil {
 		return err
 	}
 

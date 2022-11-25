@@ -5,9 +5,9 @@ import (
 	"embed"
 	"github.com/viant/afs"
 	"github.com/viant/datly/auth/cognito"
-	"github.com/viant/datly/codec"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/registry"
+	"github.com/viant/datly/view"
 	"github.com/viant/scy/auth/jwt/verifier"
 	"sync"
 )
@@ -26,14 +26,14 @@ func Init(config *gateway.Config, embedFs *embed.FS) (gateway.Authorizer, error)
 			}
 			if cognitoService, err = cognito.New(config.Cognito, fs, embedFs); err == nil {
 				provider := New(cognitoService.VerifyIdentity)
-				registry.Codecs.Register(codec.NewVisitor(registry.CodecKeyJwtClaim, provider))
-				registry.Codecs.Register(codec.NewVisitor(registry.CodecCognitoKeyJwtClaim, provider))
+				registry.Codecs.Register(view.NewVisitor(registry.CodecKeyJwtClaim, provider))
+				registry.Codecs.Register(view.NewVisitor(registry.CodecCognitoKeyJwtClaim, provider))
 			}
 		}
 		if config.JWTValidator != nil {
 			jwtVerifier = verifier.New(config.JWTValidator)
 			if err = jwtVerifier.Init(context.Background()); err == nil {
-				registry.Codecs.Register(codec.NewVisitor(registry.CodecKeyJwtClaim, New(jwtVerifier.VerifyClaims)))
+				registry.Codecs.Register(view.NewVisitor(registry.CodecKeyJwtClaim, New(jwtVerifier.VerifyClaims)))
 			}
 		}
 	})

@@ -11,8 +11,8 @@ import (
 	"unsafe"
 )
 
-//Visitor represents visitor function
-type Visitor func(value interface{}) error
+//VisitorFn represents visitor function
+type VisitorFn func(value interface{}) error
 
 //Collector collects and build result from view fetched from Database
 //If View or any of the View.With MatchStrategy support Parallel fetching, it is important to call MergeData
@@ -139,15 +139,15 @@ func ensureDest(dest interface{}, view *View) interface{} {
 	return dest
 }
 
-//Visitor creates visitor function
-func (r *Collector) Visitor(ctx context.Context) Visitor {
+//VisitorFn creates visitor function
+func (r *Collector) Visitor(ctx context.Context) VisitorFn {
 	relation := r.relation
 	visitorRelations := RelationsSlice(r.view.With).PopulateWithVisitor()
 	for _, rel := range visitorRelations {
 		r.valuePosition[rel.Column] = map[interface{}][]int{}
 	}
 
-	visitors := make([]Visitor, 1)
+	visitors := make([]VisitorFn, 1)
 	visitors[0] = r.valueIndexer(ctx, visitorRelations)
 
 	if relation != nil && (r.parent == nil || !r.parent.SupportsParallel()) {

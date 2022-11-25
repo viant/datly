@@ -2,12 +2,13 @@ package view
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/converter"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strconv"
-	"strings"
+	"time"
 	"unsafe"
 )
 
@@ -30,12 +31,12 @@ func (a *Accessor) set(ptr unsafe.Pointer, value interface{}) {
 	a.xFields[len(a.xFields)-1].SetValue(ptr, value)
 }
 
-func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue string, valueVisitor *Codec, selector *Selector, format string) error {
+func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue interface{}, valueVisitor *Codec, format string, options ...interface{}) error {
 	ptr, _ = a.upstream(ptr)
 	xField := a.xFields[len(a.xFields)-1]
 
 	if valueVisitor != nil {
-		transformed, err := valueVisitor._codecFn(ctx, rawValue, selector)
+		transformed, err := valueVisitor._codecFn(ctx, rawValue, options...)
 		if err != nil {
 			return err
 		}
@@ -50,39 +51,157 @@ func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue st
 	//TODO: Add remaining types
 	switch xField.Type.Kind() {
 	case reflect.String:
-		xField.SetValue(ptr, rawValue)
-		return nil
+		switch actual := rawValue.(type) {
+		case *time.Time:
+			xField.SetString(ptr, actual.Format(time.RFC3339))
+			return nil
+		case time.Time:
+			xField.SetString(ptr, actual.Format(time.RFC3339))
+			return nil
+		case string:
+			xField.SetString(ptr, actual)
+			return nil
+		case int:
+			xField.SetString(ptr, strconv.Itoa(actual))
+			return nil
+		case float64:
+			xField.SetString(ptr, strconv.FormatFloat(actual, 'f', -1, 64))
+			return nil
+		case bool:
+			xField.SetString(ptr, strconv.FormatBool(actual))
+			return nil
+		case int64:
+			xField.SetString(ptr, strconv.Itoa(int(actual)))
+			return nil
+		}
 
 	case reflect.Int:
-		asInt, err := strconv.Atoi(rawValue)
-		if err != nil {
-			return err
+		switch actual := rawValue.(type) {
+		case string:
+			atoi, err := strconv.Atoi(actual)
+			if err != nil {
+				return err
+			}
+			xField.SetInt(ptr, atoi)
+			return nil
+		case int:
+			xField.SetInt(ptr, actual)
+			return nil
+		case int8:
+			xField.SetInt(ptr, int(actual))
+			return nil
+		case int16:
+			xField.SetInt(ptr, int(actual))
+			return nil
+		case int32:
+			xField.SetInt(ptr, int(actual))
+			return nil
+		case int64:
+			xField.SetInt(ptr, int(actual))
+			return nil
+		case uint:
+			xField.SetInt(ptr, int(actual))
+			return nil
+		case uint8:
+			xField.SetInt(ptr, int(actual))
+			return nil
+		case uint16:
+			xField.SetInt(ptr, int(actual))
+			return nil
+		case uint32:
+			xField.SetInt(ptr, int(actual))
+			return nil
+		case uint64:
+			xField.SetInt(ptr, int(actual))
+			return nil
+		case float64:
+			xField.SetInt(ptr, int(actual))
+			return nil
+		case float32:
+			xField.SetInt(ptr, int(actual))
+			return nil
 		}
-		xField.SetInt(ptr, asInt)
-		return nil
 
 	case reflect.Bool:
-		xField.SetBool(ptr, strings.EqualFold(rawValue, "true"))
-		return nil
+		switch actual := rawValue.(type) {
+		case bool:
+			xField.SetBool(ptr, actual)
+			return nil
+		case string:
+			parseBool, err := strconv.ParseBool(actual)
+			if err != nil {
+				return err
+			}
+			xField.SetBool(ptr, parseBool)
+			return nil
+		}
 
 	case reflect.Float64:
-		asFloat, err := strconv.ParseFloat(rawValue, 64)
-		if err != nil {
-			return err
+		switch actual := rawValue.(type) {
+		case float64:
+			xField.SetFloat64(ptr, actual)
+			return nil
+		case float32:
+			xField.SetFloat64(ptr, float64(actual))
+			return nil
+		case string:
+			float, err := strconv.ParseFloat(actual, 64)
+			if err != nil {
+				return err
+			}
+
+			xField.SetFloat64(ptr, float)
+			return nil
+		case int:
+			xField.SetFloat64(ptr, float64(actual))
+			return nil
+		case int8:
+			xField.SetFloat64(ptr, float64(actual))
+			return nil
+		case int16:
+			xField.SetFloat64(ptr, float64(actual))
+			return nil
+		case int32:
+			xField.SetFloat64(ptr, float64(actual))
+			return nil
+		case int64:
+			xField.SetFloat64(ptr, float64(actual))
+			return nil
+		case uint:
+			xField.SetFloat64(ptr, float64(actual))
+			return nil
+		case uint8:
+			xField.SetFloat64(ptr, float64(actual))
+			return nil
+		case uint16:
+			xField.SetFloat64(ptr, float64(actual))
+			return nil
+		case uint32:
+			xField.SetFloat64(ptr, float64(actual))
+			return nil
+		case uint64:
+			xField.SetFloat64(ptr, float64(actual))
+			return nil
 		}
+	}
 
-		xField.SetFloat64(ptr, asFloat)
-		return nil
-
-	default:
-		converted, _, err := converter.Convert(rawValue, xField.Type, format)
-		if err != nil {
-			return err
-		}
-
-		xField.SetValue(ptr, converted)
+	if reflect.TypeOf(rawValue) == xField.Type {
+		xField.SetValue(ptr, rawValue)
 		return nil
 	}
+
+	marshal, err := json.Marshal(rawValue)
+	if err != nil {
+		return err
+	}
+
+	converted, _, err := converter.Convert(string(marshal), xField.Type, format)
+	if err != nil {
+		return err
+	}
+
+	xField.SetValue(ptr, converted)
+	return nil
 }
 
 func (a *Accessor) upstream(ptr unsafe.Pointer, indexes ...int) (unsafe.Pointer, int) {

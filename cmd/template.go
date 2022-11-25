@@ -69,9 +69,9 @@ func (s *Builder) Parse(ctx context.Context, aViewConfig *viewConfig, params []*
 	iterator := sanitize.NewIterator(SQL, s.routeBuilder.paramsIndex.hints, s.routeBuilder.option.Const)
 	SQL = iterator.SQL
 
-	defaultParamType := view.QueryKind
+	defaultParamType := view.KindQuery
 	if s.routeBuilder.option.Method == http.MethodPost {
-		defaultParamType = view.RequestBodyKind
+		defaultParamType = view.KindRequestBody
 	}
 
 	return NewTemplate(s.routeBuilder.paramsIndex, SQL, defaultParamType, params, s.columnTypes(aViewConfig.expandedTable))
@@ -163,10 +163,17 @@ func paramCodec(param *Parameter) (*view.Codec, string) {
 
 	if registry.CodecKeyAsStrings == param.Codec || canInferAsStringsCodec(param, dataTypeLower) {
 		return &view.Codec{Reference: shared.Reference{Ref: registry.CodecKeyAsStrings}}, "string"
-
 	}
 
-	return nil, param.DataType
+	var codec *view.Codec
+	if param.Codec != "" {
+		codec = &view.Codec{
+			Reference: shared.Reference{Ref: param.Codec},
+			Query:     param.SQL,
+		}
+	}
+
+	return codec, param.DataType
 }
 
 func canInferAsStringsCodec(param *Parameter, dataTypeLower string) bool {
@@ -508,8 +515,15 @@ func (t *Template) updateParamIfNeeded(param *Parameter, meta *sanitize.ParamMet
 	}
 
 	if len(meta.MetaType.SQL) == 1 {
-		param.Kind = string(view.DataViewKind)
-		param.SQL = meta.MetaType.SQL[0]
+		existingMeta, err := t.paramsMeta.ParamsMetaWithComment(param.Name, "")
+		if err != nil {
+			return err
+		}
+
+		param.SQL = existingMeta.SQL
+		if !existingMeta.SQLCodec {
+			param.Kind = string(view.KindDataView)
+		}
 	}
 
 	if len(meta.MetaType.Typer) > 0 {

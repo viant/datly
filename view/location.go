@@ -10,14 +10,31 @@ import (
 type Kind string
 
 const (
-	DataViewKind    Kind = "data_view"
-	HeaderKind      Kind = "header"
-	QueryKind       Kind = "query"
-	PathKind        Kind = "path"
-	CookieKind      Kind = "cookie"
+	//deprecated
+	DataViewKind Kind = "data_view"
+	KindDataView Kind = "data_view"
+	//deprecated
+	HeaderKind Kind = "header"
+	KindHeader Kind = "header"
+	//deprecated
+	QueryKind Kind = "query"
+	KindQuery Kind = "query"
+	//deprecated
+	PathKind Kind = "path"
+	KindPath Kind = "path"
+	//deprecated
+	CookieKind Kind = "cookie"
+	KindCookie Kind = "cookie"
+	//deprecated
 	RequestBodyKind Kind = "body"
+	KindRequestBody Kind = "body"
+	//deprecated
 	EnvironmentKind Kind = "env"
-	LiteralKind     Kind = "literal"
+	KindEnvironment Kind = "env"
+	//deprecated
+	LiteralKind  Kind = "literal"
+	KindLiteral  Kind = "literal"
+	KindStructQL Kind = "structql"
 )
 
 //Validate checks if Kind is valid.

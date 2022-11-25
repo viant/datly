@@ -3,7 +3,6 @@ package router
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/codec"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
@@ -40,7 +39,7 @@ const (
 type (
 	Routes []*Route
 	Route  struct {
-		Visitor     *codec.Visitor
+		Visitor     *view.Visitor
 		URI         string
 		APIKey      *APIKey
 		Method      string
@@ -239,7 +238,7 @@ func reverse(namespace map[string]string) map[string]string {
 
 func (r *Route) initVisitor(resource *Resource) error {
 	if r.Visitor == nil {
-		r.Visitor = &codec.Visitor{}
+		r.Visitor = &view.Visitor{}
 		return nil
 	}
 

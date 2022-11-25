@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	Criteria = "criteria"
-	Logger   = "logger"
+	Criteria    = "criteria"
+	Logger      = "logger"
+	HttpService = "http"
 )
 
 type (
@@ -25,7 +26,7 @@ type (
 	}
 
 	ConstUpdater interface {
-		UpdateValue(params interface{}, presenceMap interface{})
+		UpdateValue(params interface{}, presenceMap interface{}) error
 	}
 )
 
@@ -63,6 +64,10 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	}
 
 	if err = evaluator.planner.DefineVariable(keywords.SequencerKey, reflect.TypeOf(&SQLCriteria{})); err != nil {
+		return nil, err
+	}
+
+	if err = evaluator.planner.DefineVariable(HttpService, reflect.TypeOf(&Http{})); err != nil {
 		return nil, err
 	}
 
@@ -116,6 +121,10 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 	}
 
 	if err := newState.SetValue(Logger, logger); err != nil {
+		return "", nil, err
+	}
+
+	if err := newState.SetValue(HttpService, &Http{}); err != nil {
 		return "", nil, err
 	}
 

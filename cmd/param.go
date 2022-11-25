@@ -13,5 +13,6 @@ type Parameter struct {
 	SQL      string         `json:",omitempty" yaml:",omitempty"`
 	Multi    bool           `json:",omitempty" yaml:",omitempty"`
 	Has      bool           `json:",omitempty" yaml:",omitempty"`
+	SQLCodec bool           `json:",omitempty" yaml:",omitempty"`
 	option.ParameterConfig
 }
