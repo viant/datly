@@ -4,7 +4,7 @@
    "Declare":{"Events":"Events"},
    "RequestBody":{"ReturnAsResponse":true},
    "TypeSrc":{
-        "URL":"e2e/local/regression/cases/024_validator",
+        "URL":"regression/cases/024_validator",
         "Types":["*Events"]
         }
    } */
@@ -16,7 +16,7 @@ $sequencer.Allocate("EVENTS_PERFORMANCE", $Events, "EventsPerformance/Id")
     SELECT Price, Timestamp FROM `EventsPerformance`
 */)
 
-#set($validationResult = $http.Do("POST", "http://localhost:8081/dev/validate/event-perf", $eTypes))
+#set($validationResult = $http.Do("POST", "http://localhost:8871/dev/validate/event-perf", $eTypes))
 #if($validationResult.Invalid)
 $logger.Fatal("%v", $validationResult.Message)
 #end
