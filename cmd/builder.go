@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/router"
@@ -19,6 +20,9 @@ import (
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
 	"io"
+	"os"
+	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -918,6 +922,7 @@ func (s *Builder) loadGoTypes() error {
 	if typeSrc == nil {
 		return nil
 	}
+	s.normalizeURL(typeSrc)
 
 	dirTypes, err := xreflect.ParseTypes(typeSrc.URL)
 	if err != nil {
@@ -945,4 +950,17 @@ func (s *Builder) loadGoTypes() error {
 	}
 
 	return nil
+}
+
+func (s *Builder) normalizeURL(typeSrc *option.TypeSrcConfig) {
+	goPATH := os.Getenv("GOPATH")
+	if goPATH == "" {
+		goPATH = path.Join(os.Getenv("HOME"), "go")
+	}
+	typeSrc.URL = strings.ReplaceAll(typeSrc.URL, "${GOPATH}", goPATH)
+	if url.Scheme(typeSrc.URL, "") == "" && !strings.HasPrefix(typeSrc.URL, "/") {
+		if dir, err := os.Getwd(); err == nil {
+			typeSrc.URL = filepath.Join(dir, typeSrc.URL)
+		}
+	}
 }
