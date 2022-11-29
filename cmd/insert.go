@@ -475,7 +475,7 @@ func (s *Builder) appendPostRouteOption(routeOption *option.RouteConfig, typeNam
 	requiredTypes := []string{"*" + typeDef.paramName}
 	routeOption.RequestBody = &option.BodyConfig{
 		ReturnAsResponse: true,
-		Type:             typeDef.bodyHolder,
+		DataType:         typeDef.bodyHolder,
 	}
 
 	if typeDef.bodyHolder != "" {

@@ -1,18 +1,18 @@
-/* {
-   "URI":"basic/events-validator",
+/*
+{
+   "URI":"basic/events-velty-validator",
    "Method":"POST",
-   "Declare":{"Events":"Events"},
-   "RequestBody":{"ReturnAsResponse":true},
-   "TypeSrc":{
-        "URL":"regression/cases/024_validator",
-        "Types":["*Events"]
-        }
-   } */
+   "Declare":{"Events":"*regression/cases/025_structql_velocity.Events"},
+   "RequestBody":{
+        "ReturnAsResponse":true,
+        "DataType": "Events"
+   }
+} */
 
 $sequencer.Allocate("EVENTS", $Events, "Id")
 $sequencer.Allocate("EVENTS_PERFORMANCE", $Events, "EventsPerformance/Id")
 
-#set($eTypes = $Unsafe.EventTypes /* { "Codec": "structql", "DataType": "Events", "Target": "" }
+#set($eTypes = $Events.Query("SELECT Price, Timestamp FROM `/EventsPerformance`") }
     SELECT Price, Timestamp FROM `EventsPerformance`
 */)
 

@@ -283,7 +283,7 @@ func (s *Builder) readRouteSettings() error {
 		s.routeBuilder.paramsIndex.AddConsts(s.routeBuilder.option.Const)
 	}
 
-	return s.loadGoTypes()
+	return s.loadGoTypes(s.routeBuilder.option.TypeSrc)
 }
 
 func extractURIParams(URI string) map[string]bool {
@@ -367,12 +367,12 @@ func (s *Builder) initRouteRequestBodySchemaIfNeeded() error {
 	}
 
 	s.routeBuilder.route.ReturnBody = body.ReturnAsResponse
-	if body.Type == "" {
+	if body.DataType == "" {
 		return nil
 	}
-	bodyType, ok := s.routeBuilder.paramsIndex.types[body.Type]
+	bodyType, ok := s.routeBuilder.paramsIndex.types[body.DataType]
 	if !ok {
-		return fmt.Errorf("not found type %v", body.Type)
+		return fmt.Errorf("not found type %v", body.DataType)
 	}
 
 	s.routeBuilder.route.RequestBodySchema = &view.Schema{DataType: bodyType}
@@ -434,6 +434,15 @@ func (s *Builder) loadSQL(ctx context.Context) error {
 	SQL = sanitize.RemoveParameterHints(SQL, hints)
 
 	tryUnmrashalHintWithWarn(hint, s.routeBuilder.option)
+
+	for paramName, paramType := range s.routeBuilder.option.Declare {
+		actualName, err := s.Type(paramType)
+		if err != nil {
+			return err
+		}
+
+		s.routeBuilder.option.Declare[paramName] = actualName
+	}
 
 	s.routeBuilder.sqlStmt = SQL
 	s.routeBuilder.paramsIndex.AddHints(hints.Index())
@@ -850,7 +859,7 @@ func (s *Builder) updateParamByHint(param *view.Parameter) error {
 	return nil
 }
 
-func (s *Builder) updateViewParam(param *view.Parameter, config *option.ParameterConfig) {
+func (s *Builder) updateViewParam(param *view.Parameter, config *option.ParameterConfig) error {
 	if config.Const != nil {
 		param.Const = config.Const
 	}
@@ -865,7 +874,12 @@ func (s *Builder) updateViewParam(param *view.Parameter, config *option.Paramete
 	}
 
 	param.In.Kind = view.Kind(view.FirstNotEmpty(config.Kind, string(param.In.Kind)))
-	param.Schema.DataType = view.FirstNotEmpty(config.DataType, param.Schema.DataType)
+	paramType, err := s.Type(view.FirstNotEmpty(config.DataType, param.Schema.DataType))
+	if err != nil {
+		return err
+	}
+
+	param.Schema.DataType = paramType
 	if config.Codec != "" {
 		param.Codec = &view.Codec{Reference: shared.Reference{Ref: config.Codec}}
 	}
@@ -873,6 +887,8 @@ func (s *Builder) updateViewParam(param *view.Parameter, config *option.Paramete
 	if config.ExpectReturned != nil {
 		param.MaxAllowedRecords = config.ExpectReturned
 	}
+
+	return nil
 }
 
 func (s *Builder) isUtilParam(param *view.Parameter) bool {
@@ -917,8 +933,7 @@ func (s *Builder) prepareRuleIfNeeded(SQL []byte) (string, error) {
 	}
 }
 
-func (s *Builder) loadGoTypes() error {
-	typeSrc := s.routeBuilder.option.TypeSrc
+func (s *Builder) loadGoTypes(typeSrc *option.TypeSrcConfig) error {
 	if typeSrc == nil {
 		return nil
 	}
@@ -950,6 +965,29 @@ func (s *Builder) loadGoTypes() error {
 	}
 
 	return nil
+}
+
+func (s *Builder) Type(typeName string) (string, error) {
+	index := strings.LastIndex(typeName, ".")
+	if index == -1 {
+		return typeName, nil
+	}
+
+	actualName, asPtr := typeName, false
+	if strings.HasPrefix(typeName, "*") {
+		actualName = actualName[1:]
+		asPtr = true
+	}
+
+	sourcePath, actualName := actualName[:index-1], actualName[index:]
+	if asPtr {
+		actualName = "*" + actualName
+	}
+
+	return typeName, s.loadGoTypes(&option.TypeSrcConfig{
+		URL:   sourcePath,
+		Types: []string{actualName},
+	})
 }
 
 func (s *Builder) normalizeURL(typeSrc *option.TypeSrcConfig) {

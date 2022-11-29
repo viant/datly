@@ -28,6 +28,6 @@ type (
 
 	BodyConfig struct {
 		ReturnAsResponse bool   `json:",omitempty"`
-		Type             string `json:",omitempty"`
+		DataType         string `json:",omitempty"`
 	}
 )

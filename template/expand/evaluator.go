@@ -13,6 +13,7 @@ const (
 	Criteria    = "criteria"
 	Logger      = "logger"
 	HttpService = "http"
+	QueryData   = "QueryData"
 )
 
 type (
@@ -68,6 +69,10 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	}
 
 	if err = evaluator.planner.DefineVariable(HttpService, reflect.TypeOf(&Http{})); err != nil {
+		return nil, err
+	}
+
+	if err = evaluator.planner.RegisterFunctionKind(queryFunctionName, queryFnHandler); err != nil {
 		return nil, err
 	}
 
