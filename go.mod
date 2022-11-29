@@ -33,7 +33,7 @@ require (
 	github.com/viant/sqlx v0.2.4-0.20221123191800-9604165e9c37
 	github.com/viant/structql v0.0.0-20221125021249-35b7a7d2d345
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
-	github.com/viant/velty v0.1.1-0.20221115010237-73ecce4f1da2
+	github.com/viant/velty v0.1.1-0.20221129020548-c16aab056ef0
 	github.com/viant/xreflect v0.0.0-20221122174440-1eb105c35613
 	github.com/viant/xunsafe v0.8.1-0.20221104195713-fd8483040428
 	golang.org/x/oauth2 v0.2.0
@@ -47,7 +47,7 @@ require (
 	cloud.google.com/go/compute v1.12.1 // indirect
 	cloud.google.com/go/compute/metadata v0.2.1 // indirect
 	cloud.google.com/go/iam v0.5.0 // indirect
-	cloud.google.com/go/secretmanager v1.4.0 // indirect
+	cloud.google.com/go/secretmanager v1.6.0 // indirect
 	github.com/aws/aws-sdk-go v1.44.12 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.0-20210816181553-5444fa50b93d // indirect

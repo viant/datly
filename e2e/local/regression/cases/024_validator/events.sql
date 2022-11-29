@@ -1,12 +1,8 @@
 /* {
    "URI":"basic/events-validator",
    "Method":"POST",
-   "Declare":{"Events":"Events"},
-   "RequestBody":{"ReturnAsResponse":true},
-   "TypeSrc":{
-        "URL":"regression/cases/024_validator",
-        "Types":["*Events"]
-        }
+   "Declare":{"Events":"*regression/cases/024_validator.Events"},
+   "RequestBody":{"ReturnAsResponse":true}
    } */
 
 $sequencer.Allocate("EVENTS", $Events, "Id")
