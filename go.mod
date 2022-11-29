@@ -34,13 +34,15 @@ require (
 	github.com/viant/structql v0.0.0-20221125021249-35b7a7d2d345
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20221129020548-c16aab056ef0
-	github.com/viant/xreflect v0.0.0-20221122174440-1eb105c35613
+	github.com/viant/xreflect v0.0.0-20221129195610-6c6068eb8186
 	github.com/viant/xunsafe v0.8.1-0.20221124153229-5feda0d224f1
 	golang.org/x/oauth2 v0.2.0
 	google.golang.org/api v0.102.0
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+require github.com/francoispqt/gojay v1.2.13
 
 require (
 	cloud.google.com/go v0.104.0 // indirect
@@ -51,7 +53,6 @@ require (
 	github.com/aws/aws-sdk-go v1.44.12 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.0-20210816181553-5444fa50b93d // indirect
-	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
 	github.com/go-playground/locales v0.14.0 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect

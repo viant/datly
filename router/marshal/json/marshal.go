@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 
 const null = `null`
 const defaultCaser = format.CaseUpperCamel
+const IndexKey = "jsonIndex"
 
 type (
 	Marshaller struct {
@@ -34,6 +36,7 @@ type (
 
 	fieldMarshaller struct {
 		xField   *xunsafe.Field
+		xType    *xunsafe.Type
 		marshall marshallFieldFn
 		fields   []*fieldMarshaller
 
@@ -43,12 +46,12 @@ type (
 
 		path             string
 		isComparable     bool
-		nilValue         interface{}
 		zeroValue        interface{}
 		outputPath       string
 		derefCount       int
 		indirectAccessor *xunsafe.Field
 		derefStart       int
+		indexUpdater     *presenceUpdater
 	}
 
 	marshallObjFn   func(parentType reflect.Type, ptr unsafe.Pointer, fields []*fieldMarshaller, sb *bytes.Buffer, filters *Filters, path string) error
@@ -105,9 +108,22 @@ func (j *Marshaller) structMarshallers(rType reflect.Type, config marshal.Defaul
 	}
 
 	marshallers := make([]*fieldMarshaller, 0)
+	var iUpdater *presenceUpdater
+
 	numField := elem.NumField()
 	for i := 0; i < numField; i++ {
 		field := elem.Field(i)
+		indexTag := field.Tag.Get(IndexKey)
+		if indexTag != "" {
+			var err error
+			iUpdater, err = j.presenceUpdater(field)
+			if err != nil {
+				return nil, err
+			}
+
+			continue
+		}
+
 		dTag, err := NewDefaultTag(field)
 		if err != nil {
 			return nil, err
@@ -116,10 +132,55 @@ func (j *Marshaller) structMarshallers(rType reflect.Type, config marshal.Defaul
 		if err = j.newFieldMarshaller(&marshallers, field, config, path, outputPath, dTag); err != nil {
 			return nil, err
 		}
+	}
 
+	if iUpdater != nil {
+		for _, marshaller := range marshallers {
+			marshaller.indexUpdater = iUpdater
+		}
 	}
 
 	return marshallers, nil
+}
+
+func (j *Marshaller) presenceUpdater(field reflect.StructField) (*presenceUpdater, error) {
+	presenceFields, err := getFields(field.Type)
+	if err != nil {
+		return nil, err
+	}
+
+	presenceFieldsIndex := map[string]*xunsafe.Field{}
+	for i, presenceField := range presenceFields {
+		presenceFieldsIndex[presenceField.Name] = presenceFields[i]
+	}
+
+	iUpdater := &presenceUpdater{
+		xField: xunsafe.NewField(field),
+		fields: presenceFieldsIndex,
+	}
+	return iUpdater, nil
+}
+
+func getFields(rType reflect.Type) ([]*xunsafe.Field, error) {
+	for rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
+
+	if rType.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("index has to be type of struct")
+	}
+
+	numField := rType.NumField()
+	result := make([]*xunsafe.Field, 0, numField)
+	for i := 0; i < numField; i++ {
+		aField := rType.Field(i)
+		if aField.Type != xreflect.BoolType {
+			continue
+		}
+
+		result = append(result, xunsafe.NewField(aField))
+	}
+	return result, nil
 }
 
 func (j *Marshaller) newFieldMarshaller(marshallers *[]*fieldMarshaller, field reflect.StructField, config marshal.Default, path, outputPath string, defaultTag *DefaultTag) error {
@@ -181,6 +242,7 @@ func (j *Marshaller) newFieldMarshaller(marshallers *[]*fieldMarshaller, field r
 		omitEmpty:  tag.OmitEmpty || config.OmitEmpty,
 		path:       path,
 		outputPath: outputPath,
+		xType:      xunsafe.NewType(reflect.PtrTo(xField.Type)),
 	}
 
 	if err := marshaller.init(field, config, j); err != nil {
@@ -213,10 +275,6 @@ func (f *fieldMarshaller) init(field reflect.StructField, config marshal.Default
 	}
 
 	f.isComparable = rType.Comparable()
-	if wasPtr || rType.Kind() == reflect.Slice {
-		f.nilValue = reflect.New(field.Type).Elem().Interface()
-	}
-
 	f.zeroValue = reflect.New(field.Type).Elem().Interface()
 
 	err = f.updateFieldMarshaller(field.Type, config, j, rType, wasPtr, defaultTag)
@@ -423,15 +481,15 @@ func appendFloat(sb *bytes.Buffer, f float64, wasNull bool, tag *DefaultTag) err
 
 func updateStringMarshaller(stringifier *fieldMarshaller, wasPtr bool, tag *DefaultTag) {
 	if wasPtr {
+		defaultValue := null
+		if tag._value != nil {
+			defaultValue = tag._value.(string)
+		}
+
 		stringifier.marshall = func(parentType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
 			stringPtr := stringifier.xField.StringPtr(ptr)
 			if stringPtr == nil {
-				if tag._value != nil {
-					sb.WriteString(tag._value.(string))
-					return nil
-				}
-
-				sb.WriteString(null)
+				sb.WriteString(defaultValue)
 				return nil
 			}
 
@@ -734,7 +792,7 @@ func appendInt(value int, wasNull bool, aTag *DefaultTag, sb *bytes.Buffer) erro
 	return nil
 }
 
-func (j *Marshaller) asObject(parentType reflect.Type, ptr unsafe.Pointer, fields []*fieldMarshaller, sb *bytes.Buffer, filters *Filters, path string) error {
+func (j *Marshaller) asObject(_ reflect.Type, ptr unsafe.Pointer, fields []*fieldMarshaller, sb *bytes.Buffer, filters *Filters, path string) error {
 	if ptr == nil {
 		sb.WriteString(null)
 		return nil
@@ -986,6 +1044,15 @@ func (j *Marshaller) AsOutputPath(fieldPath string) (string, error) {
 	}
 
 	return j.marshallers[index].outputPath, nil
+}
+
+func (j *Marshaller) marshalerByName(name string) (*fieldMarshaller, bool) {
+	index, ok := j._marshallersInput[name]
+	if !ok {
+		return nil, false
+	}
+
+	return j.marshallers[index], true
 }
 
 func elem(rType reflect.Type) reflect.Type {

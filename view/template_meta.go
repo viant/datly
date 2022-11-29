@@ -186,8 +186,8 @@ func (m *TemplateMeta) Evaluate(selectorValues interface{}, selectorPresence int
 	return SQL, sanitizer.ParamsGroup, nil
 }
 
-func (m *TemplateMeta) initTemplateEvaluator(_ context.Context, owner *Template, _ *Resource) error {
-	evaluator, err := NewEvaluator(owner.Parameters, owner.Schema.Type(), owner.PresenceSchema.Type(), m.Source)
+func (m *TemplateMeta) initTemplateEvaluator(_ context.Context, owner *Template, resource *Resource) error {
+	evaluator, err := NewEvaluator(owner.Parameters, owner.Schema.Type(), owner.PresenceSchema.Type(), m.Source, resource.GetTypes())
 	if err != nil {
 		return err
 	}

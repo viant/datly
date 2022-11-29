@@ -15,7 +15,7 @@ import (
 func main() {
 	port := os.Getenv("VALIDATOR_PORT")
 	if port == "" {
-		port = "8081"
+		port = "8871"
 	}
 
 	h := &server{
@@ -51,11 +51,27 @@ type (
 
 	handler struct {
 	}
+
+	PerformanceBody struct {
+		EventsPerformance []*PerformanceData
+	}
+
+	PerformanceData struct {
+		Id    int
+		Price int
+	}
 )
 
 func (h *handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	if strings.HasSuffix(request.RequestURI, "/dev/validate/event-perf") {
 		status, payload := h.validateEventPerfs(request)
+		writer.WriteHeader(status)
+		writer.Write(payload)
+		return
+	}
+
+	if strings.HasSuffix(request.RequestURI, "/transform/events-perf") {
+		status, payload := h.transformIntoPerfData(request)
 		writer.WriteHeader(status)
 		writer.Write(payload)
 		return
@@ -84,6 +100,25 @@ func (h *handler) validateEventPerfs(request *http.Request) (int, []byte) {
 	}
 
 	return http.StatusOK, nil
+}
+
+func (h *handler) transformIntoPerfData(request *http.Request) (int, []byte) {
+	content, err := ioutil.ReadAll(request.Body)
+	if err != nil {
+		return 500, nil
+	}
+
+	result := &PerformanceBody{}
+	if err := json.Unmarshal(content, &result); err != nil {
+		return 500, nil
+	}
+
+	marshal, err := json.Marshal(result.EventsPerformance)
+	if err != nil {
+		return 500, nil
+	}
+
+	return 200, marshal
 }
 
 func (h *server) Shutdown(background context.Context) error {

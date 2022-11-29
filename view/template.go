@@ -71,7 +71,7 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 		return err
 	}
 
-	if err = t.initSqlEvaluator(); err != nil {
+	if err = t.initSqlEvaluator(resource); err != nil {
 		return err
 	}
 
@@ -207,8 +207,16 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 	return nil
 }
 
-func NewEvaluator(parameters []*Parameter, paramSchema, presenceSchema reflect.Type, template string) (*expand.Evaluator, error) {
-	return expand.NewEvaluator(FilterConstParameters(parameters), paramSchema, presenceSchema, template)
+func NewEvaluator(parameters []*Parameter, paramSchema, presenceSchema reflect.Type, template string, types Types) (*expand.Evaluator, error) {
+	expandTypes := make([]*expand.Type, 0, len(types))
+	for typeName := range types {
+		expandTypes = append(expandTypes, &expand.Type{
+			Name:  typeName,
+			RType: types[typeName],
+		})
+	}
+
+	return expand.NewEvaluator(FilterConstParameters(parameters), paramSchema, presenceSchema, template, expandTypes...)
 }
 
 func FilterConstParameters(parameters []*Parameter) []expand.ConstUpdater {
@@ -274,12 +282,12 @@ func (t *Template) inheritAndInitParam(ctx context.Context, resource *Resource, 
 	return param.Init(ctx, t._view, resource, nil)
 }
 
-func (t *Template) initSqlEvaluator() error {
+func (t *Template) initSqlEvaluator(resource *Resource) error {
 	if t.wasEmpty {
 		return nil
 	}
 
-	evaluator, err := NewEvaluator(t.Parameters, t.Schema.Type(), t.PresenceSchema.Type(), t.Source)
+	evaluator, err := NewEvaluator(t.Parameters, t.Schema.Type(), t.PresenceSchema.Type(), t.Source, resource.GetTypes())
 	if err != nil {
 		return err
 	}

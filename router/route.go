@@ -61,6 +61,7 @@ type (
 		_requestBodyParamRequired bool
 		_requestBodyType          reflect.Type
 		_requestBodySlice         *xunsafe.Slice
+		_inputMarshaller          *json.Marshaller
 	}
 
 	Output struct {
@@ -79,10 +80,10 @@ type (
 		ReturnBody        bool `json:",omitempty"`
 		RequestBodySchema *view.Schema
 
-		_caser          *format.Case
-		_excluded       map[string]bool
-		_marshaller     *json.Marshaller
-		_responseSetter *responseSetter
+		_caser            *format.Case
+		_excluded         map[string]bool
+		_outputMarshaller *json.Marshaller
+		_responseSetter   *responseSetter
 	}
 
 	CSVConfig struct {
@@ -267,19 +268,23 @@ func (r *Route) initCardinality() error {
 }
 
 func (r *Route) initMarshaller() error {
-	marshaller, err := json.New(r.responseType(), marshal.Default{
-		OmitEmpty:  r.OmitEmpty,
-		CaseFormat: *r._caser,
-		Exclude:    marshal.Exclude(r.Exclude).Index(),
-		DateLayout: r.DateFormat,
-	})
+	marshaller, err := json.New(r.responseType(), r.jsonConfig())
 
 	if err != nil {
 		return err
 	}
 
-	r._marshaller = marshaller
+	r._outputMarshaller = marshaller
 	return nil
+}
+
+func (r *Route) jsonConfig() marshal.Default {
+	return marshal.Default{
+		OmitEmpty:  r.OmitEmpty,
+		CaseFormat: *r._caser,
+		Exclude:    marshal.Exclude(r.Exclude).Index(),
+		DateLayout: r.DateFormat,
+	}
 }
 
 func (r *Route) initCors(resource *Resource) {
@@ -442,8 +447,12 @@ func (r *Route) initRequestBodyFromParams() error {
 	}
 
 	r._requestBodyType = rType
-	r.accessors.Init(r._requestBodyType)
+	r._inputMarshaller, err = json.New(rType, r.jsonConfig())
+	if err != nil {
+		return err
+	}
 
+	r.accessors.Init(r._requestBodyType)
 	for _, param := range params {
 		r._requestBodyParamRequired = r._requestBodyParamRequired || param.IsRequired()
 	}
@@ -482,7 +491,7 @@ func (r *Route) initRequestBodyType(bodyParam *view.Parameter, params []*view.Pa
 
 func (r *Route) findRequestBodyParams(aView *view.View, params *[]*view.Parameter) {
 	for i, param := range aView.Template.Parameters {
-		if param.In.Kind == view.RequestBodyKind {
+		if param.In.Kind == view.KindRequestBody {
 			*params = append(*params, aView.Template.Parameters[i])
 		}
 

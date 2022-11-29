@@ -26,12 +26,17 @@ type (
 		presenceSchema reflect.Type
 	}
 
+	Type struct {
+		Name  string
+		RType reflect.Type
+	}
+
 	ConstUpdater interface {
 		UpdateValue(params interface{}, presenceMap interface{}) error
 	}
 )
 
-func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Type, template string) (*Evaluator, error) {
+func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Type, template string, types ...*Type) (*Evaluator, error) {
 	evaluator := &Evaluator{
 		constParams:    consts,
 		paramSchema:    paramSchema,
@@ -73,6 +78,10 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	}
 
 	if err = evaluator.planner.RegisterFunctionKind(queryFunctionName, queryFnHandler); err != nil {
+		return nil, err
+	}
+
+	if err = evaluator.planner.RegisterFunctionKind(transformFunctionName, newTransform(types)); err != nil {
 		return nil, err
 	}
 
@@ -155,18 +164,4 @@ func (e *Evaluator) updateConsts(params interface{}, presenceMap interface{}) (i
 	}
 
 	return params, presenceMap
-}
-
-func ExpandWithDefaults(constParameters []ConstUpdater, paramSchema, presenceSchema reflect.Type, template string) (string, []interface{}, error) {
-	evaluator, err := NewEvaluator(constParameters, paramSchema, presenceSchema, template)
-	if err != nil {
-		return "", nil, err
-	}
-
-	evaluate, sanitizer, err := evaluator.Evaluate(NewValue(paramSchema), NewValue(presenceSchema), MockMetaParam(), MockMetaParam(), &logger.Printer{})
-	if err != nil {
-		return "", nil, err
-	}
-
-	return evaluate, sanitizer.ParamsGroup, nil
 }

@@ -154,6 +154,7 @@ func (c *Connector) Connectors() []*view.Connector {
 		},
 	}
 
+outer:
 	for i := 0; i < len(c.Connects); i++ {
 		parts := strings.Split(c.Connects[i], "|")
 		if len(parts) < 3 {
@@ -164,6 +165,13 @@ func (c *Connector) Connectors() []*view.Connector {
 			Driver: parts[1],
 			DSN:    parts[2],
 		}
+
+		for _, connector := range result {
+			if connector.Name == conn.Name {
+				continue outer
+			}
+		}
+
 		result = append(result, conn)
 	}
 

@@ -1,7 +1,6 @@
 package expand
 
 import (
-	"fmt"
 	"github.com/viant/structql"
 	"github.com/viant/velty/ast/expr"
 	"reflect"
@@ -16,13 +15,13 @@ type (
 var queryFnHandler = &queryFunction{}
 
 func (q *queryFunction) ResultType(receiver reflect.Type, call *expr.Call) (reflect.Type, error) {
-	if len(call.Args) != 1 {
-		return nil, fmt.Errorf("unexpected number of function %v arguments, expected 1 got %v", queryFunctionName, len(call.Args))
+	if err := checkArgsSize(call, 1); err != nil {
+		return nil, err
 	}
 
 	asLiteral, ok := call.Args[0].(*expr.Literal)
 	if !ok {
-		return nil, fmt.Errorf("unsupported arg[1] type, expected %T, got %T", asLiteral, call.Args[0])
+		return nil, unexpectedArgType(0, asLiteral, call)
 	}
 
 	query, err := structql.NewQuery(asLiteral.Value, receiver, nil)

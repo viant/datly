@@ -16,7 +16,6 @@ import (
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
-	"time"
 )
 
 type (
@@ -117,8 +116,6 @@ func (s *Builder) detectTypeAndBuildPostSQL(ctx context.Context, aViewConfig *vi
 	return s.buildInsertSQL(parameterType, aViewConfig, routeOption)
 }
 
-var timeType = reflect.TypeOf(time.Time{})
-
 func (s *Builder) uploadGoType(name string, rType reflect.Type) error {
 	for rType.Kind() == reflect.Ptr {
 		rType = rType.Elem()
@@ -135,9 +132,17 @@ func (s *Builder) uploadGoType(name string, rType reflect.Type) error {
 		if fieldType.Kind() == reflect.Ptr {
 			fieldType = fieldType.Elem()
 		}
-		if fieldType.Kind() == reflect.Struct && fieldType != timeType {
-			fieldValue := reflect.New(fieldType)
-			sampleValue.Elem().Field(i).Elem().Set(fieldValue)
+		if fieldType.Kind() == reflect.Struct && fieldType != xreflect.TimeType {
+			newFieldValue := reflect.New(fieldType)
+			fieldValue := sampleValue.Elem().Field(i)
+			elemField := fieldValue.Elem()
+			if fieldValue.IsZero() {
+				initializedValue := reflect.New(fieldValue.Type())
+				elemField = initializedValue.Elem()
+				fieldValue.Set(elemField)
+			}
+
+			elemField.Set(newFieldValue)
 		}
 	}
 	sample := sampleValue.Elem().Interface()

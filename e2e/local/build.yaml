@@ -20,6 +20,6 @@ pipeline:
         - go mod download
         - go build
         - mv datly /tmp/datly
-        - cd ${appPath}/e2e/local/regression/cases/024_validator/src
+        - cd ${appPath}/e2e/local/validator/src
         - go build main/validator.go
         - mv validator /tmp/validator_24
