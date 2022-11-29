@@ -12,9 +12,7 @@
 $sequencer.Allocate("EVENTS", $Events, "Id")
 $sequencer.Allocate("EVENTS_PERFORMANCE", $Events, "EventsPerformance/Id")
 
-#set($eTypes = $Events.Query("SELECT Price, Timestamp FROM `/EventsPerformance`") }
-    SELECT Price, Timestamp FROM `EventsPerformance`
-*/)
+#set($eTypes = $Events.Query("SELECT Price, Timestamp FROM `/EventsPerformance`"))
 
 #set($validationResult = $http.Do("POST", "http://localhost:8871/dev/validate/event-perf", $eTypes))
 #if($validationResult.Invalid)
