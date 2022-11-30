@@ -44,6 +44,7 @@ type (
 		generator     string
 		columnName    string
 		fieldName     string
+		required      bool
 		columnCase    format.Case
 		fkKey         *sink.Key
 	}
@@ -219,21 +220,21 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		if s.shouldSkipColumn(exceptIndex, includeIndex, column) {
 			continue
 		}
-
 		meta, err := s.buildFieldMeta(column, pkIndex, fkIndex)
 		if err != nil {
 			return nil, err
 		}
 
-		if s.shouldFilterColumnByMeta(parentTable, fkIndex, meta) {
-			continue
-		}
-
+		//if s.shouldFilterColumnByMeta(parentTable, fkIndex, meta) {
+		//	continue
+		//}
 		aType, err := view.GetOrParseType(map[string]reflect.Type{}, column.Type)
 		if err != nil {
 			return nil, err
 		}
-
+		if !meta.required {
+			aType = reflect.PtrTo(aType)
+		}
 		tagContent := "name=" + column.Name
 		if meta.primaryKey {
 			tagContent += ",primaryKey=true"
@@ -244,7 +245,6 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		} else if meta.generator != "" {
 			tagContent += ",generator=" + meta.generator
 		}
-
 		var jsonTag string
 		fromName := meta.columnName
 		if outputCase != nil {
@@ -253,12 +253,12 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		}
 
 		sqlxTagContent := ""
-		if meta.fkKey != nil {
-			//TODO: introduce fk sqlx tag
-			sqlxTagContent = `-`
-		} else {
-			sqlxTagContent = "name=" + column.Name
-		}
+		//if meta.fkKey != nil {
+		//	//TODO: introduce fk sqlx tag
+		//	sqlxTagContent = `-`
+		//} else {
+		sqlxTagContent = "name=" + column.Name
+		//		}
 
 		aTag := fmt.Sprintf(`sqlx:"%v"%v`, sqlxTagContent, jsonTag)
 
@@ -392,10 +392,12 @@ func (s *Builder) buildFieldMeta(column sink.Column, pkIndex map[string]sink.Key
 		return nil, err
 	}
 
+	isRequired := strings.ToLower(column.Nullable) != "yes"
 	meta := &fieldMeta{
 		columnCase: columnCase,
 		columnName: column.Name,
 		fieldName:  columnCase.Format(column.Name, format.CaseUpperCamel),
+		required:   isRequired,
 	}
 
 	if fkKey, ok := fkIndex[strings.ToLower(column.Name)]; ok {

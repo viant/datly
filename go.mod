@@ -30,12 +30,12 @@ require (
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/parsly v0.0.0-20220913214053-cb272791c00f
 	github.com/viant/scy v0.3.2-0.20221123210038-042281941f17
-	github.com/viant/sqlx v0.2.4-0.20221123191800-9604165e9c37
+	github.com/viant/sqlx v0.2.4-0.20221130032646-83e77badfb48
 	github.com/viant/structql v0.0.0-20221125021249-35b7a7d2d345
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20221129020548-c16aab056ef0
 	github.com/viant/xreflect v0.0.0-20221122174440-1eb105c35613
-	github.com/viant/xunsafe v0.8.1-0.20221104195713-fd8483040428
+	github.com/viant/xunsafe v0.8.1-0.20221124153229-5feda0d224f1
 	golang.org/x/oauth2 v0.2.0
 	google.golang.org/api v0.102.0
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect

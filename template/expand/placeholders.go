@@ -61,20 +61,47 @@ func (p *SQLCriteria) Add(_ int, value interface{}) string {
 	if value == nil {
 		return ""
 	}
-
 	valueCopy, expanded := p.expandCopy(value)
 	if valueCopy == nil {
 		return ""
 	}
-
 	p.ParamsGroup = append(p.ParamsGroup, valueCopy...)
 	return expanded
 }
 
 func (p *SQLCriteria) expandCopy(value interface{}) ([]interface{}, string) {
+	switch actual := value.(type) {
+	case *string:
+		return []interface{}{actual}, "?"
+	case *int:
+		return []interface{}{actual}, "?"
+	case *int64:
+		return []interface{}{actual}, "?"
+	case *uint64:
+		return []interface{}{actual}, "?"
+	case *float32:
+		return []interface{}{actual}, "?"
+	case *float64:
+		return []interface{}{actual}, "?"
+	case *uint:
+		return []interface{}{actual}, "?"
+	case *bool:
+		return []interface{}{actual}, "?"
+	case *int8:
+		return []interface{}{actual}, "?"
+	case *uint8:
+		return []interface{}{actual}, "?"
+	case *int32:
+		return []interface{}{actual}, "?"
+	case *uint32:
+		return []interface{}{actual}, "?"
+	case *int16:
+		return []interface{}{actual}, "?"
+	case *uint16:
+		return []interface{}{actual}, "?"
+	}
 	valueType := reflect.TypeOf(value)
 	valuePtr := xunsafe.AsPointer(value)
-
 	if valueType.Kind() == reflect.Slice {
 		return p.copyAndExpandSlice(valueType, valuePtr)
 	}
