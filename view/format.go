@@ -99,6 +99,8 @@ outer:
 		}
 		result += suffix
 	}
-
+	if result == "c" {
+		result = "uc"
+	}
 	return result
 }

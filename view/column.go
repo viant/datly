@@ -49,9 +49,9 @@ func ParseType(dataType string) (reflect.Type, error) {
 	}
 
 	switch strings.ToLower(dataType) {
-	case "int", "integer", "bigint", "smallint", "tinyint", "int64", "int32", "int16", "int8", "uint", "uint8", "uint16", "uint32", "uint64":
+	case "int", "integer", "bigint", "smallint", "tinyint", "int64", "int32", "int16", "int8", "uint", "uint8", "uint16", "uint32", "uint64", "binary":
 		return reflect.TypeOf(0), nil
-	case "float", "float64", "numeric", "decimal":
+	case "float", "float64", "numeric", "decimal", "double":
 		return reflect.TypeOf(0.0), nil
 	case "bool", "boolean", "bit":
 		return reflect.TypeOf(false), nil

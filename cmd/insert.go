@@ -16,6 +16,7 @@ import (
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
+	"time"
 )
 
 type (
@@ -116,6 +117,8 @@ func (s *Builder) detectTypeAndBuildPostSQL(ctx context.Context, aViewConfig *vi
 	return s.buildInsertSQL(parameterType, aViewConfig, routeOption)
 }
 
+var timeType = reflect.TypeOf(time.Time{})
+
 func (s *Builder) uploadGoType(name string, rType reflect.Type) error {
 	for rType.Kind() == reflect.Ptr {
 		rType = rType.Elem()
@@ -124,6 +127,22 @@ func (s *Builder) uploadGoType(name string, rType reflect.Type) error {
 	fileContent := xreflect.GenerateStruct(name, rType)
 	if _, err := s.uploadGo(folderSQL, name, fileContent, false); err != nil {
 		return err
+	}
+
+	sampleValue := reflect.New(rType)
+	for i := 0; i < rType.NumField(); i++ {
+		fieldType := rType.Field(i).Type
+		if fieldType.Kind() == reflect.Ptr {
+			fieldType = fieldType.Elem()
+		}
+		if fieldType.Kind() == reflect.Struct && fieldType != timeType {
+			fieldValue := reflect.New(fieldType)
+			sampleValue.Elem().Field(i).Elem().Set(fieldValue)
+		}
+	}
+	sample := sampleValue.Elem().Interface()
+	if data, err := json.Marshal(sample); err == nil {
+		s.uploadFile(folderSQL, name+"Post", string(data), false, ".json")
 	}
 
 	return nil
@@ -250,6 +269,10 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		if outputCase != nil {
 			jsonTag = fmt.Sprintf(` json:"%v"`, meta.columnCase.Format(meta.columnName, *outputCase))
 			fromName = meta.columnCase.Format(fromName, *outputCase)
+		} else {
+			if !meta.required {
+				jsonTag = ` json:",omitempty"`
+			}
 		}
 
 		sqlxTagContent := ""
