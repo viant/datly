@@ -8,9 +8,9 @@
         "Types":["PerformanceData", "Events"]
    },
    "RequestBody":{
-        "ReturnAsResponse":true,
         "DataType": "Events"
-   }
+   },
+    "ResponseBody": { "StateValue": "Events" }
 } */
 
 $sequencer.Allocate("EVENTS", $Events, "Id")

@@ -18,7 +18,9 @@ func New() *Executor {
 }
 
 func (e *Executor) Exec(ctx context.Context, session *Session) error {
-	data, printer, err := e.sqlBuilder.Build(session.View, session.Lookup(session.View))
+	state, data, printer, err := e.sqlBuilder.Build(session.View, session.Lookup(session.View))
+	session.State = state
+
 	if err != nil {
 		return err
 	}

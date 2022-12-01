@@ -43,10 +43,23 @@ func (r *Router) executorHandlerWithError(route *Route, request *http.Request) (
 	anExecutor := executor.New()
 
 	err = anExecutor.Exec(ctx, session)
-	if err != nil || !route.ReturnBody {
+	if err != nil || route.ResponseBody == nil {
 		return nil, err
 	}
 
-	responseBody := r.wrapWithResponseIfNeeded(parameters.requestBody, route, nil, nil)
+	body, err := route.execResponseBody(parameters, session)
+	if err != nil {
+		return nil, err
+	}
+
+	responseBody := r.wrapWithResponseIfNeeded(body, route, nil, nil)
 	return route._outputMarshaller.Marshal(responseBody, nil)
+}
+
+func (r *Route) execResponseBody(parameters *RequestParams, session *executor.Session) (interface{}, error) {
+	if r.ResponseBody != nil {
+		return r.ResponseBody.getValue(session)
+	}
+
+	return parameters.requestBody, nil
 }

@@ -2,6 +2,7 @@ package executor
 
 import (
 	"github.com/viant/datly/view"
+	"github.com/viant/velty/est"
 	"sync"
 )
 
@@ -9,6 +10,7 @@ type Session struct {
 	Parameters *Parameters
 	View       *view.View
 	mux        sync.Mutex
+	State      *est.State
 }
 
 func NewSession(selectors *view.Selectors, aView *view.View) (*Session, error) {

@@ -1,4 +1,8 @@
-/* {"URI": "basic/events-one-many", "Method": "POST", "ReturnBody": true } */
+/* {"URI": "basic/events-one-many", "Method": "POST",
+   "ResponseBody": {
+        "StateValue": "Events"
+        }
+   } */
 
 SELECT EVENTS.*,
        EVENTS_PERFORMANCE.* /* { "Cardinality": "Many" } */

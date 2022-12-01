@@ -79,6 +79,7 @@ type (
 		DebugKind         view.MetaKind
 		ReturnBody        bool `json:",omitempty"`
 		RequestBodySchema *view.Schema
+		ResponseBody      *BodySelector
 
 		_caser            *format.Case
 		_excluded         map[string]bool
@@ -155,6 +156,10 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	}
 
 	if err := r.initRequestBody(); err != nil {
+		return err
+	}
+
+	if err := r.initResponseBodyIfNeeded(); err != nil {
 		return err
 	}
 
@@ -316,22 +321,15 @@ func (r *Route) initStyle() error {
 	responseFieldPgkPath := r.PgkPath(r.ResponseField)
 
 	fieldType := r.responseFieldType()
-	isComprehensive := r.isAlreadyComprehensive()
-	jsonTag := ""
-	if isComprehensive {
-		jsonTag = `json:"` + format.CaseUpperCamel.Format(r.ResponseField, *r._caser) + `"`
-	}
 
 	if fieldType.Kind() == reflect.Ptr {
 		fieldType = fieldType.Elem()
 	}
 
 	responseFields[1] = reflect.StructField{
-		Name:      r.ResponseField,
-		PkgPath:   responseFieldPgkPath,
-		Type:      fieldType,
-		Tag:       reflect.StructTag(jsonTag),
-		Anonymous: isComprehensive,
+		Name:    r.ResponseField,
+		PkgPath: responseFieldPgkPath,
+		Type:    fieldType,
 	}
 
 	var metaFieldName string
@@ -381,10 +379,6 @@ func (r *Route) PgkPath(fieldName string) string {
 }
 
 func (r *Route) responseFieldType() reflect.Type {
-	if r.ReturnBody {
-		return r._requestBodyType
-	}
-
 	if r.Cardinality == view.Many {
 		return r.View.Schema.SliceType()
 	}
@@ -397,8 +391,8 @@ func (r *Route) responseType() reflect.Type {
 		return r._responseSetter.rType
 	}
 
-	if r.ReturnBody {
-		return r._requestBodyType
+	if r.ResponseBody != nil {
+		return r.ResponseBody._bodyType
 	}
 
 	return r.View.Schema.Type()
@@ -674,13 +668,12 @@ func (r *Route) initDebugStyleIfNeeded() {
 	}
 }
 
-func (r *Route) isAlreadyComprehensive() bool {
-	rType := r.responseType()
-	for rType.Kind() == reflect.Ptr {
-		rType = rType.Elem()
+func (r *Route) initResponseBodyIfNeeded() error {
+	if r.ResponseBody == nil {
+		return nil
 	}
 
-	return rType.Kind() == reflect.Struct && rType.NumField() == 1 && rType.Field(0).Name == r.ResponseField
+	return r.ResponseBody.Init(r.View)
 }
 
 func (c *CSVConfig) presenceMap() PresenceMapFn {

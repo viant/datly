@@ -357,6 +357,12 @@ func (s *Builder) buildRouterOutput() error {
 		return err
 	}
 
+	if rBody := s.routeBuilder.option.ResponseBody; rBody != nil {
+		s.routeBuilder.route.ResponseBody = &router.BodySelector{
+			StateValue: rBody.StateValue,
+		}
+	}
+
 	return nil
 }
 
@@ -366,7 +372,6 @@ func (s *Builder) initRouteRequestBodySchemaIfNeeded() error {
 		return nil
 	}
 
-	s.routeBuilder.route.ReturnBody = body.ReturnAsResponse
 	if body.DataType == "" {
 		return nil
 	}

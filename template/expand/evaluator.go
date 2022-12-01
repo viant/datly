@@ -13,7 +13,6 @@ const (
 	Criteria    = "criteria"
 	Logger      = "logger"
 	HttpService = "http"
-	QueryData   = "QueryData"
 )
 
 type (
@@ -93,11 +92,11 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	return evaluator, nil
 }
 
-func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam *MetaParam, parentParam *MetaParam, logger *logger.Printer) (string, *SQLCriteria, error) {
+func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam *MetaParam, parentParam *MetaParam, logger *logger.Printer) (*est.State, *SQLCriteria, error) {
 	if externalParams != nil {
 		externalType := reflect.TypeOf(externalParams)
 		if e.paramSchema != externalType {
-			return "", nil, fmt.Errorf("inompactible types, wanted %v got %T", e.paramSchema.String(), externalParams)
+			return nil, nil, fmt.Errorf("inompactible types, wanted %v got %T", e.paramSchema.String(), externalParams)
 		}
 	}
 
@@ -106,47 +105,47 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 	newState := e.stateProvider()
 	if externalParams != nil {
 		if err := newState.SetValue(keywords.ParamsKey, externalParams); err != nil {
-			return "", nil, err
+			return nil, nil, err
 		}
 	}
 
 	if presenceMap != nil {
 		if err := newState.SetValue(keywords.ParamsMetadataKey, presenceMap); err != nil {
-			return "", nil, err
+			return nil, nil, err
 		}
 	}
 
 	if err := newState.SetValue(keywords.ViewKey, viewParam); err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 
 	if parentParam != nil {
 		if err := newState.SetValue(keywords.ParentViewKey, parentParam); err != nil {
-			return "", nil, err
+			return nil, nil, err
 		}
 	}
 
 	if err := newState.SetValue(Criteria, viewParam.sanitizer); err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 
 	if err := newState.SetValue(keywords.SequencerKey, viewParam.sanitizer); err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 
 	if err := newState.SetValue(Logger, logger); err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 
 	if err := newState.SetValue(HttpService, &Http{}); err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 
 	if err := e.executor.Exec(newState); err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 
-	return newState.Buffer.String(), viewParam.sanitizer, nil
+	return newState, viewParam.sanitizer, nil
 }
 
 func (e *Evaluator) updateConsts(params interface{}, presenceMap interface{}) (interface{}, interface{}) {
@@ -160,8 +159,12 @@ func (e *Evaluator) updateConsts(params interface{}, presenceMap interface{}) (i
 	}
 
 	for _, param := range e.constParams {
-		param.UpdateValue(params, presenceMap)
+		_ = param.UpdateValue(params, presenceMap)
 	}
 
 	return params, presenceMap
+}
+
+func (e *Evaluator) Type() reflect.Type {
+	return e.planner.Type.Type
 }

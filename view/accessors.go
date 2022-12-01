@@ -8,6 +8,7 @@ import (
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 	"unsafe"
 )
@@ -29,6 +30,10 @@ type (
 func (a *Accessor) set(ptr unsafe.Pointer, value interface{}) {
 	ptr, _ = a.upstream(ptr)
 	a.xFields[len(a.xFields)-1].SetValue(ptr, value)
+}
+
+func (a *Accessor) Type() reflect.Type {
+	return a.xFields[len(a.xFields)-1].Type
 }
 
 func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue interface{}, valueVisitor *Codec, format string, options ...interface{}) error {
@@ -289,13 +294,14 @@ func (a *Accessor) setBool(ptr unsafe.Pointer, value bool) {
 	a.xFields[len(a.xFields)-1].SetBool(ptr, value)
 }
 
-func (a *Accessors) indexAccessors(prefix string, parentType reflect.Type, fields []*xunsafe.Field) {
+func (a *Accessors) indexAccessors(prefix string, parentType reflect.Type, fields []*xunsafe.Field, path string) {
 	parentType = elem(parentType)
 	if parentType.Kind() != reflect.Struct {
 		return
 	}
 
-	for i := 0; i < parentType.NumField(); i++ {
+	numField := parentType.NumField()
+	for i := 0; i < numField; i++ {
 		field := parentType.Field(i)
 		names := a.namer.Names(field)
 
@@ -305,8 +311,12 @@ func (a *Accessors) indexAccessors(prefix string, parentType reflect.Type, field
 
 		for _, name := range names {
 			accessorName := prefix + name
+			if path != "" && !strings.HasPrefix(path, accessorName) {
+				continue
+			}
+
 			a.indexAccessor(accessorName, accessorFields)
-			a.indexAccessors(accessorName+".", field.Type, accessorFields)
+			a.indexAccessors(accessorName+".", field.Type, accessorFields, path)
 		}
 	}
 }
@@ -329,16 +339,31 @@ func (a *Accessors) indexAccessor(name string, fields []*xunsafe.Field) {
 }
 
 func (a *Accessors) Init(rType reflect.Type) {
-	if a.initialized {
+	if a.init() {
 		return
+	}
+
+	a.indexAccessors("", rType, []*xunsafe.Field{}, "")
+}
+
+func (a *Accessors) InitPath(rType reflect.Type, path string) {
+	if a.init() {
+		return
+	}
+
+	a.indexAccessors("", rType, []*xunsafe.Field{}, path)
+}
+
+func (a *Accessors) init() bool {
+	if a.initialized {
+		return true
 	}
 
 	a.initialized = true
 	if a.namer == nil {
 		a.namer = &VeltyNamer{}
 	}
-
-	a.indexAccessors("", rType, []*xunsafe.Field{})
+	return false
 }
 
 func (a *Accessors) AccessorByName(name string) (*Accessor, error) {

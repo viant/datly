@@ -4,9 +4,9 @@
    "Method":"POST",
    "Declare":{"Events":"*regression/cases/025_structql_velocity.Events"},
    "RequestBody":{
-        "ReturnAsResponse":true,
         "DataType": "Events"
-   }
+   },
+    "ResponseBody": {"StateValue": "Events"}
 } */
 
 $sequencer.Allocate("EVENTS", $Events, "Id")

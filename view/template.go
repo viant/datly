@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/view/parameter"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty"
+	"github.com/viant/velty/est"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -237,6 +238,15 @@ func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, paren
 		return t.Source, &expand.SQLCriteria{}, &logger.Printer{}, nil
 	}
 
+	state, criteria, printer, err := t.EvaluateState(externalParams, presenceMap, parentParam, batchData, options...)
+	if err != nil {
+		return "", criteria, printer, err
+	}
+
+	return state.Buffer.String(), criteria, printer, err
+}
+
+func (t *Template) EvaluateState(externalParams interface{}, presenceMap interface{}, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (*est.State, *expand.SQLCriteria, *logger.Printer, error) {
 	var expander expand.Expander
 	for _, option := range options {
 		switch actual := option.(type) {
@@ -248,15 +258,15 @@ func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, paren
 	return Evaluate(t.sqlEvaluator, externalParams, presenceMap, AsViewParam(t._view, nil, batchData, expander), parentParam)
 }
 
-func Evaluate(evaluator *expand.Evaluator, externalParams, presenceMap interface{}, viewParam, parentParam *expand.MetaParam) (string, *expand.SQLCriteria, *logger.Printer, error) {
+func Evaluate(evaluator *expand.Evaluator, externalParams, presenceMap interface{}, viewParam, parentParam *expand.MetaParam) (*est.State, *expand.SQLCriteria, *logger.Printer, error) {
 	printer := &logger.Printer{}
 
-	SQL, params, err := evaluator.Evaluate(externalParams, presenceMap, viewParam, parentParam, printer)
+	state, params, err := evaluator.Evaluate(externalParams, presenceMap, viewParam, parentParam, printer)
 	if err != nil {
-		return "", nil, printer, err
+		return nil, nil, printer, err
 	}
 
-	return SQL, params, printer, nil
+	return state, params, printer, nil
 }
 
 func AsViewParam(aView *View, aSelector *Selector, batchData *BatchData, options ...interface{}) *expand.MetaParam {
@@ -506,4 +516,8 @@ func (t *Template) initMetaIfNeeded(ctx context.Context, r *Resource) error {
 	}
 
 	return t.Meta.Init(ctx, t, r)
+}
+
+func (t *Template) StateType() reflect.Type {
+	return t.sqlEvaluator.Type()
 }

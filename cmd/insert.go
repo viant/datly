@@ -535,9 +535,9 @@ func (s *Builder) buildInsertSQL(typeDef *insertData, config *viewConfig, routeO
 
 func (s *Builder) appendPostRouteOption(routeOption *option.RouteConfig, typeName string, typeDef *insertData, sb *strings.Builder) error {
 	requiredTypes := []string{"*" + typeDef.paramName}
+
 	routeOption.RequestBody = &option.BodyConfig{
-		ReturnAsResponse: true,
-		DataType:         typeDef.bodyHolder,
+		DataType: typeDef.bodyHolder,
 	}
 
 	if typeDef.bodyHolder != "" {
