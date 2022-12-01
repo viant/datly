@@ -5,14 +5,12 @@
     {
       "id": "@exists@",
       "price": 125,
-      "eventId": "@exists@",
-      "timestamp": "0001-01-01T00:00:00Z"
+      "eventId": "@exists@"
     },
     {
       "id": "@exists@",
       "price": 250,
-      "eventId": "@exists@",
-      "timestamp": "0001-01-01T00:00:00Z"
+      "eventId": "@exists@"
     }
   ]
 }

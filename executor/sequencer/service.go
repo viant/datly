@@ -37,6 +37,7 @@ func (s *Service) Next(table string, any interface{}, selector string) error {
 	}
 	seq := &Sequence{Value: nextSeq.MinValue(int64(emptyRecordCount)), IncrementBy: nextSeq.IncrementBy}
 	err = aWalker.Allocate(any, seq)
+
 	return err
 }
 

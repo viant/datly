@@ -3,13 +3,11 @@
   "data": [
     {
       "id": "@exists@",
-      "name": "Custom - 1",
-      "quantity": 0
+      "name": "Custom - 1"
     },
     {
       "id": "@exists@",
-      "name": "Custom - 2",
-      "quantity": 0
+      "name": "Custom - 2"
     }
   ]
 }

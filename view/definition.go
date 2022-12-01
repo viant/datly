@@ -13,7 +13,7 @@ type (
 	Definition struct {
 		Name        string   `json:",omitempty"`
 		Fields      []*Field `json:",omitempty"`
-		fields      map[string]bool
+		_fields     map[string]bool
 		Schema      *Schema     `json:",omitempty"`
 		DataType    string      `json:",omitempty"`
 		Cardinality Cardinality `json:",omitempty"`
@@ -34,14 +34,14 @@ type (
 )
 
 func (d *Definition) AddField(field *Field) {
-	if len(d.fields) == 0 {
-		d.fields = map[string]bool{}
+	if len(d._fields) == 0 {
+		d._fields = map[string]bool{}
 	}
-	if _, ok := d.fields[field.Name]; ok {
+	if _, ok := d._fields[field.Name]; ok {
 		return
 	}
 	d.Fields = append(d.Fields, field)
-	d.fields[field.Name] = true
+	d._fields[field.Name] = true
 }
 
 func (d *Definition) Init(ctx context.Context, types Types) error {

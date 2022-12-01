@@ -1,7 +1,7 @@
 /* {
    "URI":"basic/events-validator",
    "Method":"POST",
-   "Declare":{"Events":"*regression/cases/024_validator.Events"},
+   "Declare":{"Events":"*regression/cases/024_validator_codec.Events"},
    "RequestBody":{"ReturnAsResponse":true}
    } */
 
