@@ -359,7 +359,7 @@ func (s *Builder) buildRouterOutput() error {
 
 	if rBody := s.routeBuilder.option.ResponseBody; rBody != nil {
 		s.routeBuilder.route.ResponseBody = &router.BodySelector{
-			StateValue: rBody.StateValue,
+			StateValue: rBody.From,
 		}
 	}
 

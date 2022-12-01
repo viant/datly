@@ -2,7 +2,7 @@
    "URI":"basic/events-validator",
    "Method":"POST",
    "Declare":{"Events":"*regression/cases/024_validator_codec.Events"},
-   "ResponseBody": {"StateValue": "Events" }
+   "ResponseBody": {"From": "Events" }
    } */
 
 $sequencer.Allocate("EVENTS", $Events, "Id")

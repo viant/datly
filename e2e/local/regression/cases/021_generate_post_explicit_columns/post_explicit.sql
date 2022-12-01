@@ -1,6 +1,6 @@
 /* {"URI": "basic/events-explicit", "Method": "POST",
    "ResponseBody": {
-        "StateValue": "Events"
+        "From": "Events"
         }
    } */
 

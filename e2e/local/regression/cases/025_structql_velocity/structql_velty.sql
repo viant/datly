@@ -6,7 +6,7 @@
    "RequestBody":{
         "DataType": "Events"
    },
-    "ResponseBody": {"StateValue": "Events"}
+    "ResponseBody": {"From": "Events"}
 } */
 
 $sequencer.Allocate("EVENTS", $Events, "Id")

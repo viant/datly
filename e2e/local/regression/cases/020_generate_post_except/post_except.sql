@@ -1,6 +1,6 @@
 /* {"URI": "basic/events-except", "Method": "POST",
    "ResponseBody": {
-        "StateValue": "Events"
+        "From": "Events"
         }
  } */
 

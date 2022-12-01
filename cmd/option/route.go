@@ -19,7 +19,7 @@ type (
 		ResponseField string                 `json:",omitempty"`
 		RequestBody   *BodyConfig            `json:",omitempty"`
 		TypeSrc       *TypeSrcConfig         `json:",omitempty"`
-		ResponseBody  *ResponseBodyConfig
+		ResponseBody  *ResponseBodyConfig    `json:",omitempty"`
 	}
 
 	TypeSrcConfig struct {
@@ -32,6 +32,6 @@ type (
 	}
 
 	ResponseBodyConfig struct {
-		StateValue string
+		From string
 	}
 )

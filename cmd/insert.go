@@ -523,7 +523,7 @@ func (s *Builder) buildInsertSQL(typeDef *insertData, config *viewConfig, routeO
 		return "", err
 	}
 
-	if err = s.appendPostRouteOption(routeOption, typeName, typeDef, sb); err != nil {
+	if err = s.appendPostRouteOption(typeDef.paramName, routeOption, typeName, typeDef, sb); err != nil {
 		return "", err
 	}
 
@@ -533,11 +533,15 @@ func (s *Builder) buildInsertSQL(typeDef *insertData, config *viewConfig, routeO
 	return builder.build("", true)
 }
 
-func (s *Builder) appendPostRouteOption(routeOption *option.RouteConfig, typeName string, typeDef *insertData, sb *strings.Builder) error {
+func (s *Builder) appendPostRouteOption(paramName string, routeOption *option.RouteConfig, typeName string, typeDef *insertData, sb *strings.Builder) error {
 	requiredTypes := []string{"*" + typeDef.paramName}
 
 	routeOption.RequestBody = &option.BodyConfig{
 		DataType: typeDef.bodyHolder,
+	}
+
+	routeOption.ResponseBody = &option.ResponseBodyConfig{
+		From: paramName,
 	}
 
 	if typeDef.bodyHolder != "" {

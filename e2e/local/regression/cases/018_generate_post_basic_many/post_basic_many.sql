@@ -1,5 +1,5 @@
 /* {"URI": "basic/events-many", "Method": "POST", "ResponseBody": {
-        "StateValue": "Events"
+        "From": "Events"
    }
 } */
 
