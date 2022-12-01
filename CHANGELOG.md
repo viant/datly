@@ -1,3 +1,9 @@
+## Dec 1 2022 v0.4.0.0
+* Added insert dsql generator
+* Added transformer service
+* Added structql integration
+* Minor fixes
+
 ## Nov 3 2022 v0.3.0.0
 * Refactored rule generator
 

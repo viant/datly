@@ -2,6 +2,16 @@ init:
   i: 0
 pipeline:
 
+  cleanup:
+    action: exec:run
+    description: build datly rule with SQL extension
+    target: '$target'
+    checkError: true
+    commands:
+      - mkdir -p ${appPath}/e2e/local/autogen
+      - rm -rf ${appPath}/e2e/local/autogen
+
+
   loop:
     generate:
       init:
