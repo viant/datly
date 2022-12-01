@@ -117,40 +117,72 @@ func (s *Builder) detectTypeAndBuildPostSQL(ctx context.Context, aViewConfig *vi
 }
 
 func (s *Builder) uploadGoType(name string, rType reflect.Type) error {
-	for rType.Kind() == reflect.Ptr {
-		rType = rType.Elem()
-	}
 
 	fileContent := xreflect.GenerateStruct(name, rType)
 	if _, err := s.uploadGo(folderSQL, name, fileContent, false); err != nil {
 		return err
 	}
 
+	sampleValue := getStruct(rType)
+	sample := sampleValue.Interface()
+	if data, err := json.Marshal(sample); err == nil {
+		s.uploadFile(folderSQL, name+"Post", string(data), false, ".json")
+	}
+
+	return nil
+}
+
+func getStruct(rType reflect.Type) reflect.Value {
+	for rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
 	sampleValue := reflect.New(rType)
 	for i := 0; i < rType.NumField(); i++ {
 		fieldType := rType.Field(i).Type
-		if fieldType.Kind() == reflect.Ptr {
+		isPtr := false
+		if isPtr = fieldType.Kind() == reflect.Ptr; isPtr {
 			fieldType = fieldType.Elem()
+		}
+		fieldValue := sampleValue.Elem().Field(i)
+
+		if fieldType.Kind() == reflect.String {
+			str := " "
+			if isPtr {
+				fieldValue.Set(reflect.ValueOf(&str))
+			} else {
+				fieldValue.Set(reflect.ValueOf(str))
+			}
+		}
+		if fieldType.Kind() == reflect.Slice {
+			aSlice := reflect.MakeSlice(fieldType, 1, 1)
+
+			itemType := fieldType.Elem()
+			isItemPtr := itemType.Kind() == reflect.Ptr
+			if isItemPtr {
+				itemType = itemType.Elem()
+			}
+			if itemType.Kind() == reflect.Struct {
+				itemValue := getStruct(itemType)
+				if isItemPtr {
+					aSlice.Index(0).Set(itemValue)
+				} else {
+					aSlice.Index(0).Set(itemValue.Elem())
+				}
+			}
+			fieldValue.Set(aSlice)
 		}
 		if fieldType.Kind() == reflect.Struct && fieldType != xreflect.TimeType {
 			newFieldValue := reflect.New(fieldType)
-			fieldValue := sampleValue.Elem().Field(i)
 			elemField := fieldValue.Elem()
 			if fieldValue.IsZero() {
 				initializedValue := reflect.New(fieldValue.Type())
 				elemField = initializedValue.Elem()
 				fieldValue.Set(elemField)
 			}
-
 			elemField.Set(newFieldValue)
 		}
 	}
-	sample := sampleValue.Elem().Interface()
-	if data, err := json.Marshal(sample); err == nil {
-		s.uploadFile(folderSQL, name+"Post", string(data), false, ".json")
-	}
-
-	return nil
+	return sampleValue
 }
 
 func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName string, config *viewConfig, parentTable string) (*insertData, error) {
