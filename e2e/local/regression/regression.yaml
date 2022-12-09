@@ -2,6 +2,10 @@ init:
 
 pipeline:
 
+  database:
+    action: run
+    request: '@db'
+
   rule:
     description: generate datly rule with SQLx (SQL extension)
     action: run
@@ -20,7 +24,7 @@ pipeline:
     data:
       '[]gen': '@gen'
 
-    range: 1..026
+    range: 1..027
     template:
       checkSkip:
         action: nop

@@ -12,25 +12,34 @@ pipeline:
           ID: 1
         Expect:
           Code: 200
-          JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
-
-      - Method: GET
-        URL: http://127.0.0.1:8090/v1/api/dev/basic/foos/1
-        Expect:
-          Code: 200
-          JSONBody: $LoadJSON('${parentPath}/expect_t1.json')
+  #        JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
 
       - Method: PUT
         URL: http://127.0.0.1:8080/v1/api/dev/basic/foos
         JsonBody:
           Name: 'changed - 123.5'
-          ID: 1
+          ID: 2
         Expect:
           Code: 200
-          JSONBody: $LoadJSON('${parentPath}/expect_t2.json')
 
-      - Method: GET
-        URL: http://127.0.0.1:8090/v1/api/dev/basic/foos/1
-        Expect:
-          Code: 200
-          JSONBody: $LoadJSON('${parentPath}/expect_t3.json')
+
+  checkDb:
+    action: 'dsunit:expect'
+    datastore: dev
+    expand: true
+    checkPolicy: 1
+    URL: ${parentPath}/expect
+
+#
+#      - Method: GET
+#        URL: http://127.0.0.1:8090/v1/api/dev/basic/foos/1
+#        Expect:
+#          Code: 200
+#          JSONBody: $LoadJSON('${parentPath}/expect_t1.json')
+#
+
+#      - Method: GET
+#        URL: http://127.0.0.1:8090/v1/api/dev/basic/foos/1
+#        Expect:
+#          Code: 200
+#          JSONBody: $LoadJSON('${parentPath}/expect_t3.json')

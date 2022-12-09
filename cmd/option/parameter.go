@@ -5,6 +5,7 @@ import "github.com/viant/datly/view"
 type ParameterConfig struct {
 	ParamMeta
 	Auth           string           `json:",omitempty" yaml:",omitempty"`
+	Connector      string           `json:",omitempty" yaml:",omitempty"`
 	Id             string           `json:",omitempty" yaml:",omitempty"`
 	Name           string           `json:",omitempty" yaml:",omitempty"`
 	Kind           string           `json:",omitempty" yaml:",omitempty"`

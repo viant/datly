@@ -815,8 +815,9 @@ func (s *Builder) prepareExternalParameters(paramViewConfig *viewParamConfig) []
 				Codec:           &view.Codec{Name: "JwtClaim"},
 				Schema:          &view.Schema{DataType: "JwtTokenInfo"},
 			})
-
-			continue
+		}
+		if parameter.Connector != "" {
+			paramViewConfig.viewConfig.unexpandedTable.Connector = parameter.Connector
 		}
 	}
 
@@ -1009,5 +1010,3 @@ func (s *Builder) normalizeURL(typeSrc *option.TypeSrcConfig) {
 		}
 	}
 }
-
-
