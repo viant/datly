@@ -15,3 +15,7 @@ pipeline:
         Expect:
           Code: 200
           JSONBody: $expect
+
+  info:
+    action: print
+    message: $AsJSON($test)

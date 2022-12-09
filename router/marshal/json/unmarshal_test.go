@@ -1,6 +1,8 @@
 package json
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
 	"github.com/viant/datly/router/marshal"
@@ -10,11 +12,12 @@ import (
 
 func TestMarshaller_Unmarshal(t *testing.T) {
 	testCases := []struct {
-		description string
-		data        string
-		into        func() interface{}
-		expect      string
-		expectError bool
+		description  string
+		data         string
+		into         func() interface{}
+		expect       string
+		expectError  bool
+		stringsEqual bool
 	}{
 		{
 			description: "basic struct",
@@ -64,7 +67,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 				type Foo struct {
 					ID   int
 					Name string
-					Has  *FooHas `jsonIndex:"true"`
+					Has  *FooHas `presenceIndex:"true"`
 				}
 
 				return &[]*Foo{}
@@ -74,6 +77,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 		{
 			description: "setting has",
 			data:        `[{"ID": 1, "Has": {"ID": true, "Name": "true"}}, {"Name": "Boo"}]`,
+			expect:      `[{"ID":1,"Name":"","Has":{"ID":true,"Name":false}},{"ID":0,"Name":"Boo","Has":{"ID":false,"Name":true}}]`,
 			into: func() interface{} {
 				type FooHas struct {
 					ID   bool
@@ -83,17 +87,145 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 				type Foo struct {
 					ID   int
 					Name string
-					Has  *FooHas `jsonIndex:"true"`
+					Has  *FooHas `presenceIndex:"true"`
 				}
 
 				return &[]*Foo{}
 			},
-			expectError: true,
+		},
+		{
+			description: "setting has",
+			data:        `[{"ID": 1, "Has": {"ID": true, "Name": "true"}}, {"Name": "Boo"}]`,
+			expect:      `[{"ID":1,"Name":"","Has":{"ID":true,"Name":false}},{"ID":0,"Name":"Boo","Has":{"ID":false,"Name":true}}]`,
+			into: func() interface{} {
+				type FooHas struct {
+					ID   bool
+					Name bool
+				}
+
+				type Foo struct {
+					ID   int
+					Name string
+					Has  *FooHas `presenceIndex:"true"`
+				}
+
+				return &[]*Foo{}
+			},
+		},
+		{
+			description: "multi nesting",
+			data: `[
+	{
+		"Size": 1,
+		"Foos":[
+			{"WrapperID": 1, "WrapperName": "wrapper - 1", "Foos": [{"ID": 10, "Name": "foo - 10"}]},
+			{"WrapperID": 2, "WrapperName": "wrapper - 2", "Foos": [{"ID": 20, "Name": "foo - 20"}]}
+		]
+	}
+]`,
+			expect: `[{"Foos":[{"WrapperID":1,"WrapperName":"wrapper - 1","Foos":[{"ID":10,"Name":"foo - 10","Has":{"ID":true,"Name":true}}],"Has":{"WrapperID":true,"WrapperName":true}},{"WrapperID":2,"WrapperName":"wrapper - 2","Foos":[{"ID":20,"Name":"foo - 20","Has":{"ID":true,"Name":true}}],"Has":{"WrapperID":true,"WrapperName":true}}],"Size":1}]`,
+			into: func() interface{} {
+				type FooHas struct {
+					ID   bool
+					Name bool
+				}
+
+				type Foo struct {
+					ID   int
+					Name string
+					Has  *FooHas `presenceIndex:"true"`
+				}
+
+				type WrapperHas struct {
+					WrapperID   bool
+					WrapperName bool
+				}
+
+				type FooWrapper struct {
+					WrapperID   int
+					WrapperName string
+					Foos        []*Foo
+					Has         *WrapperHas `presenceIndex:"true"`
+				}
+
+				type Data struct {
+					Foos []*FooWrapper
+					Size int
+				}
+
+				return &[]*Data{}
+			},
+		},
+		{
+			description: "multi nesting",
+			data: `[
+	{
+		"Size": 1,
+		"Foos":[
+			{"WrapperName": "wrapper - 1", "Foos": [{"ID": 10}]},
+			{"WrapperID": 2, "Foos": [{"Name": "foo - 20"}]}
+		]
+	}
+]`,
+			expect: `[{"Foos":[{"WrapperID":0,"WrapperName":"wrapper - 1","Foos":[{"ID":10,"Name":"","Has":{"ID":true,"Name":false}}],"Has":{"WrapperID":false,"WrapperName":true}},{"WrapperID":2,"WrapperName":"","Foos":[{"ID":0,"Name":"foo - 20","Has":{"ID":false,"Name":true}}],"Has":{"WrapperID":true,"WrapperName":false}}],"Size":1}]`,
+			into: func() interface{} {
+				type FooHas struct {
+					ID   bool
+					Name bool
+				}
+
+				type Foo struct {
+					ID   int
+					Name string
+					Has  *FooHas `presenceIndex:"true"`
+				}
+
+				type WrapperHas struct {
+					WrapperID   bool
+					WrapperName bool
+				}
+
+				type FooWrapper struct {
+					WrapperID   int
+					WrapperName string
+					Foos        []*Foo
+					Has         *WrapperHas `presenceIndex:"true"`
+				}
+
+				type Data struct {
+					Foos []*FooWrapper
+					Size int
+				}
+
+				return &[]*Data{}
+			},
+		},
+		{
+			description: "primitive slice",
+			data:        `[1,2,3,4,5]`,
+			expect:      `[1,2,3,4,5]`,
+			into: func() interface{} {
+				return new([]int)
+			},
+		},
+		{
+			description:  "nulls",
+			data:         `{"ID":null,"Name":null}`,
+			stringsEqual: true,
+			into: func() interface{} {
+				type Foo struct {
+					ID   *int
+					Name *string
+				}
+
+				return &Foo{}
+			},
 		},
 	}
 
-	//for _, testCase := range testCases[len(testCases)-1:] {
-	for _, testCase := range testCases {
+	//for i, testCase := range testCases[len(testCases)-1:] {
+	for i, testCase := range testCases {
+		fmt.Printf("Running testcase nr#%v\n", i)
 		dest := testCase.into()
 		marshaller, err := New(reflect.TypeOf(dest), marshal.Default{})
 		if !assert.Nil(t, err, testCase.description) {
@@ -111,6 +243,11 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 			expect = testCase.data
 		}
 
-		assertly.AssertValues(t, expect, dest, testCase.description)
+		if !testCase.stringsEqual {
+			assertly.AssertValues(t, expect, dest, testCase.description)
+		} else {
+			bytes, _ := json.Marshal(dest)
+			assert.Equal(t, expect, string(bytes), testCase.description)
+		}
 	}
 }

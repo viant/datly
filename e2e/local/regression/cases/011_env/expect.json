@@ -4,23 +4,20 @@
     "name": "Vendor 1",
     "accountId": 100,
     "userCreated": 1,
-    "userUpdated": 0,
     "products": [
       {
         "id": 1,
         "name": "V1 Product 1",
         "vendorId": 1,
         "status": 2,
-        "userCreated": 1,
-        "userUpdated": 0
+        "userCreated": 1
       },
       {
         "id": 2,
         "name": "V1 Product 2",
         "vendorId": 1,
         "status": 1,
-        "userCreated": 1,
-        "userUpdated": 0
+        "userCreated": 1
       }
     ]
   },
@@ -29,31 +26,27 @@
     "name": "Vendor 2",
     "accountId": 101,
     "userCreated": 2,
-    "userUpdated": 0,
     "products": [
       {
         "id": 3,
         "name": "V2 Product 1",
         "vendorId": 2,
         "status": 1,
-        "userCreated": 2,
-        "userUpdated": 0
+        "userCreated": 2
       },
       {
         "id": 4,
         "name": "V2 Product 2",
         "vendorId": 2,
         "status": 1,
-        "userCreated": 2,
-        "userUpdated": 0
+        "userCreated": 2
       },
       {
         "id": 5,
         "name": "V2 Product 3",
         "vendorId": 2,
         "status": 1,
-        "userCreated": 2,
-        "userUpdated": 0
+        "userCreated": 2
       }
     ]
   }

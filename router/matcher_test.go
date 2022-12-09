@@ -93,6 +93,11 @@ func TestMatcher(t *testing.T) {
 			routes:      []*Route{{URI: "v1/api/meta/view/"}},
 			route:       `v1/api/meta/view/`,
 		},
+		{
+			description: "/v1/api/meta/view",
+			routes:      []*Route{{URI: "//v1/api/meta/view"}},
+			route:       `//v1/api/meta/view`,
+		},
 	}
 
 	//for _, testCase := range testCases[len(testCases)-1:] {

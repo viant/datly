@@ -7,8 +7,6 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/columns"
 	"github.com/viant/datly/view"
-	"github.com/viant/sqlx/io/config"
-	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/toolbox/format"
 )
 
@@ -166,20 +164,6 @@ func (s *Builder) indexColumns(ctx context.Context, db *sql.DB, tableName string
 	}
 
 	return tableMeta.AddSinkColumns(sinkColumns)
-}
-
-func (s *Builder) readSinkColumns(ctx context.Context, db *sql.DB, tableName string) ([]sink.Column, error) {
-	session, err := config.Session(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-
-	sinkColumns, err := config.Columns(ctx, session, db, tableName)
-	if err != nil {
-		return nil, err
-	}
-
-	return sinkColumns, nil
 }
 
 func stringsPtr(args ...string) *[]string {

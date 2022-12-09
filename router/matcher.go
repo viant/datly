@@ -23,7 +23,8 @@ type (
 		Matched         []int
 		ExactChildren   []*Node
 		WildcardMatcher *Node
-		index           map[string]int
+		urlIndex        map[string]int
+		positionIndex   map[int]bool
 	}
 
 	NodeMatch struct {
@@ -34,7 +35,10 @@ type (
 
 func (n *Node) Add(routeIndex int, uri string) {
 	if uri == "" {
-		n.Matched = append(n.Matched, routeIndex)
+		if !n.positionIndex[routeIndex] {
+			n.Matched = append(n.Matched, routeIndex)
+			n.positionIndex[routeIndex] = true
+		}
 		return
 	}
 
@@ -50,18 +54,21 @@ func (n *Node) Add(routeIndex int, uri string) {
 }
 
 func (n *Node) getChildOrCreate(segment string) *Node {
-	if childIndex, ok := n.index[segment]; ok {
+	if childIndex, ok := n.urlIndex[segment]; ok {
 		return n.ExactChildren[childIndex]
 	}
 
-	n.index[segment] = len(n.ExactChildren)
+	n.urlIndex[segment] = len(n.ExactChildren)
 	child := NewNode()
 	n.ExactChildren = append(n.ExactChildren, child)
 	return child
 }
 
 func NewNode() *Node {
-	return &Node{index: map[string]int{}}
+	return &Node{
+		urlIndex:      map[string]int{},
+		positionIndex: map[int]bool{},
+	}
 }
 
 func (n *Node) Match(method, route string, exact bool, dest *[]*Node) {
@@ -84,7 +91,7 @@ func (n *Node) Match(method, route string, exact bool, dest *[]*Node) {
 }
 
 func (n *Node) nextMatcher(segment string) (*Node, bool) {
-	index, ok := n.index[segment]
+	index, ok := n.urlIndex[segment]
 	if !ok && n.WildcardMatcher != nil {
 		return n.WildcardMatcher, true
 	}
@@ -101,13 +108,16 @@ func (n *Node) getWildcardMatcher() *Node {
 	}
 
 	n.WildcardMatcher = &Node{
-		index: map[string]int{},
+		urlIndex:      map[string]int{},
+		positionIndex: map[int]bool{},
 	}
 
 	return n.WildcardMatcher
 }
 
 func extractSegment(uri string) (string, string) {
+	uri = AsRelative(uri)
+
 	if segIndex := strings.IndexByte(uri, '/'); segIndex != -1 {
 		return uri[:segIndex], uri[segIndex+1:]
 	}
@@ -264,9 +274,16 @@ func AsRelative(route string) string {
 		return route
 	}
 
-	if route[0] == '/' {
-		route = route[1:]
+	var i int
+	for ; i < len(route) && route[i] == '/'; i++ {
 	}
+
+	if i >= len(route)-1 {
+		return ""
+	}
+
+	route = route[i:]
+
 	if paramsStartIndex := strings.IndexByte(route, '?'); paramsStartIndex != -1 {
 		route = route[:paramsStartIndex]
 	}

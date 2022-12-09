@@ -169,6 +169,10 @@ func (it *ParamMetaIterator) updateParamMetaType(paramName string) (wasParam boo
 }
 
 func (it *ParamMetaIterator) canBeParam(text string) bool {
+	if len(text) == 0 {
+		return false
+	}
+
 	firstLetter := bytes.ToUpper([]byte{text[0]})[0]
 	if (firstLetter < 'A' || firstLetter > 'Z') && firstLetter != '$' {
 		return false

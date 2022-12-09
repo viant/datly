@@ -24,7 +24,6 @@ func (s *BodySelector) Init(aView *view.View) error {
 	}
 
 	stateType := aView.Template.StateType()
-
 	accessors := view.NewAccessors()
 
 	actualName := s.stateValue(aView)

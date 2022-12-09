@@ -7,7 +7,7 @@ pipeline:
 
     start:
       action: process:start
-      sleepTimeMs: 3000
+      sleepTimeMs: 6000
       target: $target
       directory: /tmp/
       checkError: true

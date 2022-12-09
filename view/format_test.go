@@ -37,6 +37,12 @@ func TestDetectCase(t *testing.T) {
 			},
 			expect: "lu",
 		},
+		{
+			names: []string{
+				"ID",
+			},
+			expect: "uu",
+		},
 	}
 
 	for _, testCase := range testCases {

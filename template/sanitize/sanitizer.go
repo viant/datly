@@ -88,7 +88,7 @@ func sanitizeParameter(context Context, prefix, paramName, raw string, variables
 	isVariable := variables[paramName]
 	if isVariable {
 		if prefix == keywords.ParamsKey {
-			return strings.Replace(raw, "$"+string(keywords.ParamsKey), "$", 1)
+			return strings.Replace(raw, "$"+string(keywords.ParamsKey)+".", "$", 1)
 		} else {
 			return sanitizeAsPlaceholder(raw)
 		}

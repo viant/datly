@@ -15,6 +15,8 @@ import (
 	"strings"
 )
 
+var whiteSpaces = []byte{' ', '\n', '\t', '\r', '\v', '\f', 0x85, 0xA0}
+
 type (
 	key struct {
 		Column string
@@ -29,6 +31,7 @@ type (
 )
 
 func newViewConfig(viewName string, fileName string, parent *query.Join, aTable *Table, templateMeta *Table, mode view.Mode) *viewConfig {
+
 	var metaConfig *templateMetaConfig
 	if templateMeta != nil {
 		metaConfig = &templateMetaConfig{table: templateMeta}
@@ -373,15 +376,31 @@ func IsSQLExecMode(SQL string) bool {
 }
 
 func isDelete(lcSQL string) bool {
-	return strings.Contains(lcSQL, "delete ") && strings.Contains(lcSQL, "from ")
+	return containsAll(lcSQL, "delete", "from")
 }
 
 func isUpdate(lcSQL string) bool {
-	return strings.Contains(lcSQL, "update ") && strings.Contains(lcSQL, "set ")
+	return containsAll(lcSQL, "update", "set")
+}
+
+func containsAll(lcSQL string, keywords ...string) bool {
+	lcSQL = strings.ToLower(lcSQL)
+outer:
+	for _, keyword := range keywords {
+		for _, space := range whiteSpaces {
+			if strings.Contains(lcSQL, keyword+string(space)) {
+				continue outer
+			}
+		}
+
+		return false
+	}
+
+	return true
 }
 
 func isInsert(lcSQL string) bool {
-	return strings.Contains(lcSQL, "insert ") && strings.Contains(lcSQL, "into ") && strings.Contains(lcSQL, "values")
+	return containsAll(lcSQL, "insert", "into", "values")
 }
 
 func ExtractCondBlock(SQL string) (string, []string) {

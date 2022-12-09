@@ -162,15 +162,10 @@ func (f *Field) buildSchemaFromFields() error {
 func buildTypeFromFields(fields []*Field) reflect.Type {
 	rFields := make([]reflect.StructField, len(fields))
 	for i, field := range fields {
-		tag := reflect.StructTag(field.Tag)
 
-		jsonName := field.Name
-		if field.FromName != "" {
-			jsonName = field.FromName
-		}
-
-		aTagValue := jsonTagValue(jsonName, field, tag)
-		if field.Column != "" && !strings.Contains(string(tag), "sqlx") {
+		jsonName := field.FromName
+		aTagValue := jsonTagValue(jsonName, field, field.Tag)
+		if field.Column != "" && !strings.Contains(string(aTagValue), "sqlx") {
 			aTagValue += fmt.Sprintf(`sqlx:"name=%v" `, field.Column)
 		}
 
@@ -192,7 +187,7 @@ func buildTypeFromFields(fields []*Field) reflect.Type {
 			Name:      field.Name,
 			PkgPath:   fieldPath,
 			Type:      fieldType,
-			Tag:       tag,
+			Tag:       reflect.StructTag(aTagValue),
 			Anonymous: field.Embed,
 		}
 	}
@@ -201,9 +196,9 @@ func buildTypeFromFields(fields []*Field) reflect.Type {
 	return of
 }
 
-func jsonTagValue(jsonName string, field *Field, tag reflect.StructTag) string {
-	if strings.Contains(string(tag), "json") {
-		return string(tag)
+func jsonTagValue(jsonName string, field *Field, tag string) string {
+	if strings.Contains(tag, "json") || jsonName == "" {
+		return tag
 	}
 
 	if field.Embed {

@@ -169,7 +169,7 @@ func (p *RequestParams) unmarshaller(route *Route) (*Marshaller, error) {
 	}
 
 	return &Marshaller{
-		unmarshal: json.Unmarshal,
+		unmarshal: route._inputMarshaller.Unmarshal,
 		presence:  p.jsonPresenceMap(),
 		rType:     route._requestBodyType,
 	}, nil

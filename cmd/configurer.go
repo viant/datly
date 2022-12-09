@@ -162,7 +162,11 @@ func (c *ViewConfigurer) buildExecViewConfig(viewName string, templateSQL string
 		}
 	}
 
-	return aConfig, resultErr
+	if resultErr != nil {
+		fmt.Printf("[WARN] couldn't create update table ast representation: %v\n", resultErr.Error())
+	}
+
+	return aConfig, nil
 }
 
 func (c *ViewConfigurer) buildReaderViewConfig(viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
@@ -413,18 +417,23 @@ func updateExecViewConfig(stmtType byte, SQLStmt string, view *viewConfig) error
 	switch stmtType | ' ' {
 	case 'i':
 		stmt, err := parser.ParseInsert(rawSQL)
+		if stmt != nil {
+			inheritFromTarget(stmt.Target.X, view, stmt.Target.Comments)
+		}
+
 		if err != nil {
 			return err
 		}
-		inheritFromTarget(stmt.Target.X, view, stmt.Target.Comments)
-
 	case 'u':
 		stmt, err := parser.ParseUpdate(rawSQL)
+		if stmt != nil {
+			inheritFromTarget(stmt.Target.X, view, stmt.Target.Comments)
+
+		}
+
 		if err != nil {
 			return err
 		}
-
-		inheritFromTarget(stmt.Target.X, view, stmt.Target.Comments)
 
 	case 'd':
 		stmt, err := parser.ParseDelete(rawSQL)

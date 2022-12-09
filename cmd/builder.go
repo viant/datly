@@ -933,6 +933,8 @@ func (s *Builder) prepareRuleIfNeeded(SQL []byte) (string, error) {
 	switch strings.ToLower(s.options.PrepareRule) {
 	case PreparePost:
 		return s.preparePostRule(context.Background(), SQL)
+	case PreparePut:
+		return s.preparePutRule(context.Background(), SQL)
 	default:
 		return "", fmt.Errorf("unsupported prepare rule type")
 	}
@@ -1007,3 +1009,5 @@ func (s *Builder) normalizeURL(typeSrc *option.TypeSrcConfig) {
 		}
 	}
 }
+
+

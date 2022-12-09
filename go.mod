@@ -35,7 +35,7 @@ require (
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20221201184133-b0f3ead9be6c
 	github.com/viant/xreflect v0.0.0-20221129195610-6c6068eb8186
-	github.com/viant/xunsafe v0.8.1-0.20221201184033-61078df343a7
+	github.com/viant/xunsafe v0.8.1-0.20221207213917-872876bac6f1
 	golang.org/x/oauth2 v0.2.0
 	google.golang.org/api v0.102.0
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect

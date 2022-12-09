@@ -10,20 +10,21 @@ import (
 )
 
 type (
-	structDecoder struct {
+	decoder struct {
 		marshaller *Marshaller
 		dest       interface{}
 		ptr        unsafe.Pointer
 		path       string
+		xType      *xunsafe.Type
 	}
 
 	sliceDecoder struct {
-		marshaller *Marshaller
-		dest       interface{}
-		ptr        unsafe.Pointer
-		xSlice     *xunsafe.Slice
-		appender   *xunsafe.Appender
-		isStruct   bool
+		rType    reflect.Type
+		ptr      unsafe.Pointer
+		appender *xunsafe.Appender
+		fn       unmarshallFieldFn
+		xType    *xunsafe.Type
+		isPtr    bool
 	}
 
 	presenceUpdater struct {
@@ -32,17 +33,35 @@ type (
 	}
 )
 
-func (d *structDecoder) UnmarshalJSONObject(decoder *gojay.Decoder, fieldName string) error {
+func newSliceDecoder(rType reflect.Type, ptr unsafe.Pointer, xslice *xunsafe.Slice, unmarshaller unmarshallFieldFn, xType *xunsafe.Type) *sliceDecoder {
+	return &sliceDecoder{
+		rType:    rType,
+		ptr:      ptr,
+		appender: xslice.Appender(ptr),
+		fn:       unmarshaller,
+		xType:    xType,
+		isPtr:    xType.Kind() == reflect.Ptr,
+	}
+}
+
+func (s *sliceDecoder) UnmarshalJSONArray(d *gojay.Decoder) error {
+	add := s.appender.Add()
+	return s.fn(s.rType, xunsafe.AsPointer(add), d, nil)
+}
+
+type Fieldx struct {
+	hasField   *xunsafe.Field
+	valueField *xunsafe.Field
+	decoder    func(decoder *gojay.Decoder) (interface{}, error)
+}
+
+func (d *decoder) UnmarshalJSONObject(decoder *gojay.Decoder, fieldName string) error {
 	marshaller, ok := d.marshaller.marshalerByName(fieldName)
 	if !ok {
-		return fmt.Errorf("not found field %v", fieldName)
+		return nil
 	}
 
-	ptr := marshaller.xField.Pointer(d.ptr)
-	iface := marshaller.xType.Interface(xunsafe.RefPointer(ptr))
-
-	err := decoder.AddInterface(&iface)
-	if err != nil {
+	if err := marshaller.unmarshal(marshaller.xField.Type, marshaller.xField.Pointer(d.ptr), decoder, nil); err != nil {
 		return err
 	}
 
@@ -50,7 +69,7 @@ func (d *structDecoder) UnmarshalJSONObject(decoder *gojay.Decoder, fieldName st
 	return nil
 }
 
-func (d *structDecoder) updatePresenceIfNeeded(marshaller *fieldMarshaller) {
+func (d *decoder) updatePresenceIfNeeded(marshaller *fieldMarshaller) {
 	updater := marshaller.indexUpdater
 	if updater == nil {
 		return
@@ -63,76 +82,55 @@ func (d *structDecoder) updatePresenceIfNeeded(marshaller *fieldMarshaller) {
 
 	ptr := updater.xField.ValuePointer(d.ptr)
 	if ptr == nil {
-		rValue := reflect.New(updater.xField.Type)
-		ptr = xunsafe.ValuePointer(&rValue)
-		fieldPtr := updater.xField.Pointer(d.ptr)
-		*(*unsafe.Pointer)(fieldPtr) = ptr
+		var rValue reflect.Value
+		if updater.xField.Type.Kind() == reflect.Ptr {
+			rValue = reflect.New(updater.xField.Type.Elem())
+		} else {
+			rValue = reflect.New(updater.xField.Type)
+		}
+
+		iface := rValue.Elem().Interface()
+		ptr = xunsafe.AsPointer(iface)
+		updater.xField.SetValue(d.ptr, iface)
 	}
 
 	xField.SetBool(ptr, true)
 }
 
-func (d *structDecoder) NKeys() int {
+func (d *decoder) NKeys() int {
 	return len(d.marshaller.marshallers)
 }
 
 func (j *Marshaller) Unmarshal(data []byte, dest interface{}) error {
+	err := j.unmarshal(data, dest)
+	return err
+}
+
+func (j *Marshaller) unmarshal(data []byte, dest interface{}) error {
 	rValue := reflect.ValueOf(dest)
 	if rValue.Kind() != reflect.Ptr {
 		return fmt.Errorf("unsupported dest type, expected Ptr, got %T", dest)
 	}
 
-	decoder := gojay.NewDecoder(bytes.NewReader(data))
+	d := gojay.NewDecoder(bytes.NewReader(data))
 
 	elemType := rValue.Elem().Type()
 	switch elemType.Kind() {
 	case reflect.Struct:
-		return decoder.Object(j.newStructDecoder("", dest))
+		return j.unmarshalElem(elemType, xunsafe.AsPointer(dest), d, nil)
 	case reflect.Slice:
-		return decoder.Array(j.newArrayDecoder(dest, elemType))
+		return j.unmarshalArr(elemType, xunsafe.AsPointer(dest), d, nil)
 	}
 
-	return decoder.Decode(dest)
+	return d.Decode(dest)
 }
 
-func (j *Marshaller) newStructDecoder(path string, dest interface{}) gojay.UnmarshalerJSONObject {
-	return &structDecoder{
+func (j *Marshaller) newStructDecoder(path string, dest interface{}, xType *xunsafe.Type) gojay.UnmarshalerJSONObject {
+	return &decoder{
 		marshaller: j,
+		xType:      xType,
 		dest:       dest,
 		ptr:        xunsafe.AsPointer(dest),
 		path:       path,
 	}
-}
-
-func (j *Marshaller) newArrayDecoder(dest interface{}, elemType reflect.Type) gojay.UnmarshalerJSONArray {
-	pointer := xunsafe.AsPointer(dest)
-	slice := xunsafe.NewSlice(elemType)
-	var isStruct bool
-outer:
-	for {
-		switch elemType.Kind() {
-		case reflect.Ptr, reflect.Slice, reflect.Map:
-			elemType = elemType.Elem()
-		default:
-			isStruct = elemType.Kind() == reflect.Struct
-			break outer
-		}
-	}
-	return &sliceDecoder{
-		marshaller: j,
-		dest:       dest,
-		ptr:        pointer,
-		xSlice:     slice,
-		appender:   slice.Appender(pointer),
-		isStruct:   isStruct,
-	}
-}
-
-func (s *sliceDecoder) UnmarshalJSONArray(decoder *gojay.Decoder) error {
-	iface := s.appender.Add()
-	if s.isStruct {
-		return decoder.Object(s.marshaller.newStructDecoder("", iface))
-	}
-
-	return decoder.AddInterface(&iface)
 }

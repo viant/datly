@@ -90,7 +90,7 @@ func TestJson_Marshal(t *testing.T) {
 		{
 			description: "default tag",
 			data:        defaultTag,
-			expect:      `[{"Int":1,"Int8":2,"Int16":3,"Int32":4,"Int64":5,"Uint":6,"Uint8":7,"Uint16":8,"Uint32":9,"Uint64":10,"IntPtr":null,"Int8Ptr":null,"Int16Ptr":null,"Int32Ptr":null,"Int64Ptr":null,"UintPtr":null,"Uint8Ptr":null,"Uint16Ptr":null,"Uint32Ptr":null,"Uint64Ptr":null,"String":"empty","StringPtr":empty,"Bool":false,"BoolPtr":false,"Float32":10.5,"Float32Ptr":null,"Float64":20.5,"Float64Ptr":null,"Time":"2012-07-12","TimePtr":"2022-02-08"}]`,
+			expect:      `[{"Int":1,"Int8":2,"Int16":3,"Int32":4,"Int64":5,"Uint":6,"Uint8":7,"Uint16":8,"Uint32":9,"Uint64":10,"IntPtr":1,"Int8Ptr":2,"Int16Ptr":3,"Int32Ptr":4,"Int64Ptr":5,"UintPtr":6,"Uint8Ptr":7,"Uint16Ptr":8,"Uint32Ptr":9,"Uint64Ptr":10,"String":"empty","StringPtr":"empty","Bool":false,"BoolPtr":false,"Float32":10.5,"Float32Ptr":10.5,"Float64":20.5,"Float64Ptr":20.5,"Time":"2012-07-12","TimePtr":2022-02-08}]`,
 		},
 		{
 			description: "primitive slice",
@@ -117,15 +117,29 @@ func TestJson_Marshal(t *testing.T) {
 			data:        complexAnonymousNestedStructWithPointers,
 			expect:      `{"Status":0,"Message":"","FooWrapperName":"","Foo":[{"ID":1,"Name":"abc","Quantity":0},{"ID":2,"Name":"def","Quantity":250}],"Timestamp":"0001-01-01T00:00:00Z"}`,
 		},
+		{
+			description: "ID field",
+			data:        idStruct,
+			expect:      `[{"id":10,"name":"foo","price":125.5}]`,
+			defaultConfig: marshal.Default{
+				CaseFormat: format.CaseLowerCamel,
+			},
+		},
 	}
 
 	//for i, testcase := range testcases[:len(testcases)-1] {
 	//for i, testcase := range testcases[len(testcases)-1:] {
 	for i, testcase := range testcases {
 		json.ResetCache()
-		tests.LogHeader(fmt.Sprintf("Running testcase nr: %v\n", i))
+		tests.LogHeader(fmt.Sprintf("Running testcase nr: %v out of %v \n ", i, len(testcases)-1))
 		data := testcase.data()
-		marshaller, err := json.New(reflect.TypeOf(data), testcase.defaultConfig)
+
+		dataType := reflect.TypeOf(data)
+		if dataType.Kind() == reflect.Slice {
+			dataType = dataType.Elem()
+		}
+
+		marshaller, err := json.New(dataType, testcase.defaultConfig)
 		if !assert.Nil(t, err, testcase.description) {
 			t.Fail()
 			return
@@ -140,6 +154,22 @@ func TestJson_Marshal(t *testing.T) {
 		if !assert.Equal(t, testcase.expect, string(result), testcase.description) {
 			toolbox.Dump(string(result))
 		}
+	}
+}
+
+func idStruct() interface{} {
+	type Foo struct {
+		ID    int
+		Name  string
+		Price float64
+	}
+
+	return []*Foo{
+		{
+			ID:    10,
+			Name:  "foo",
+			Price: 125.5,
+		},
 	}
 }
 
