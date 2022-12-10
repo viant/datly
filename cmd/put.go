@@ -46,32 +46,88 @@ func (s *Builder) buildUpdateSQL(routeConfig *option.RouteConfig, aViewConfig *v
 	return newUpdateStmtBuilder(sb, metadata).build("", true)
 }
 
-func (b *updateStmtBuilder) build(parentRecord string, withUnsafe bool) (string, error) {
-	b.sb.WriteString("\nUPDATE ")
-	b.sb.WriteString(b.typeDef.table)
-	b.sb.WriteString("\nSET")
-	if err := b.stmtBuilder.appendColumnNameValues(b.accessParam(parentRecord, b.paramName, false), func(field *view.Field) bool {
-		fieldMeta, ok := b.typeDef.meta.metaByColName(field.Column)
-		if !ok {
-			return ok
+func (usb *updateStmtBuilder) build(parentRecord string, withUnsafe bool) (string, error) {
+	name := usb.paramName
+	indirectParent := parentRecord
+	if usb.isMulti {
+		var err error
+		indirectParent, name, err = usb.appendForEach(parentRecord, name, withUnsafe)
+		if err != nil {
+			return "", err
 		}
 
-		return fieldMeta.primaryKey
-	}); err != nil {
+		withUnsafe = false
+	}
+
+	if usb.parent != nil {
+		usb.appendSetFk(parentRecord, withUnsafe, indirectParent, name, usb.parent.stmtBuilder)
+	}
+
+	usb.writeString("\nUPDATE ")
+	usb.writeString(usb.typeDef.table)
+	usb.writeString("\nSET")
+	if err := usb.stmtBuilder.appendColumnNameValues(usb.accessParam(indirectParent, name, false), true, nil); err != nil {
 		return "", err
 	}
 
-	pkFields := b.typeDef.primaryKeyFields()
-	if len(pkFields) == 0 {
-		return "", fmt.Errorf("not found primary keys for table %v", b.typeDef.table)
+	qualifiedFields := usb.qualifiedFields()
+	if len(qualifiedFields) == 0 {
+		return "", fmt.Errorf("not found pk/fk keys for table %v", usb.typeDef.table)
 	}
 
 	conKeyword := "\nWHERE "
-	for _, field := range pkFields {
-		b.writeString(conKeyword)
-		b.writeString(fmt.Sprintf("%v = $%v.%v", field.Column, b.accessParam(parentRecord, b.paramName, false), field.Name))
+	for _, field := range qualifiedFields {
+		usb.writeString(conKeyword)
+		usb.writeString(fmt.Sprintf("%v = $%v.%v", field.Column, usb.accessParam(indirectParent, name, false), field.Name))
 		conKeyword = " AND "
 	}
 
-	return b.sb.String(), nil
+	usb.writeString(";")
+
+	for _, rel := range usb.typeDef.relations {
+		_, err := usb.newRelation(rel).build(name, !usb.isMulti && withUnsafe)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if usb.isMulti {
+		usb.writeString("\n#end")
+	}
+
+	return usb.sb.String(), nil
+}
+
+func (usb *updateStmtBuilder) newRelation(rel *inputMetadata) *updateStmtBuilder {
+	relation := usb.stmtBuilder.newRelation(rel)
+	return &updateStmtBuilder{
+		parent:      usb,
+		stmtBuilder: relation,
+	}
+}
+
+func (usb *updateStmtBuilder) qualifiedFields() []*view.Field {
+	var fields []*view.Field
+	for i, field := range usb.typeDef.actualFields {
+		meta, ok := usb.typeDef.meta.metaByColName(field.Column)
+		if !ok {
+			continue
+		}
+
+		if !meta.primaryKey && !usb.isParentFk(meta) {
+			continue
+		}
+
+		fields = append(fields, usb.typeDef.actualFields[i])
+	}
+
+	return fields
+}
+
+func (usb *updateStmtBuilder) isParentFk(meta *fieldMeta) bool {
+	if usb.parent == nil || meta.fkKey == nil {
+		return false
+	}
+
+	return usb.parent.typeDef.table == meta.fkKey.ReferenceTable
 }

@@ -6,23 +6,15 @@ pipeline:
     action: http/runner:send
     requests:
       - Method: PUT
-        URL: http://127.0.0.1:8080/v1/api/dev/basic/foos
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/foos-many
         JsonBody:
-          Name: 'changed - 1'
-          ID: 1
+          - Name: 'changed - 180'
+            ID: 1
+          - Name: 'changed - 250'
+            ID: 2
         Expect:
           Code: 200
           JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
-
-      - Method: PUT
-        URL: http://127.0.0.1:8080/v1/api/dev/basic/foos
-        JsonBody:
-          Name: 'changed - 123.5'
-          ID: 2
-        Expect:
-          Code: 200
-          JSONBody: $LoadJSON('${parentPath}/expect_t1.json')
-
 
   checkDb:
     action: 'dsunit:expect'
@@ -30,3 +22,4 @@ pipeline:
     expand: true
     checkPolicy: 1
     URL: ${parentPath}/expect
+

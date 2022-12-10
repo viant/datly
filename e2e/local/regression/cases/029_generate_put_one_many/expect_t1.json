@@ -1,0 +1,19 @@
+{
+  "id": 2,
+  "name": "changed foo - 500",
+  "foosPerformance": [
+    {"@indexBy@":  "id"},
+    {
+      "id": 1,
+      "perfName": "tried to change",
+      "perfQuantity": -1000,
+      "fooId": 2
+    },
+    {
+      "id": 3,
+      "perfName": "changed perf - 3",
+      "perfQuantity": 2997,
+      "fooId": 2
+    }
+  ]
+}

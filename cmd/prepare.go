@@ -60,51 +60,40 @@ func newStmtBuilder(sb *strings.Builder, def *inputMetadata, paramKind string) *
 	return b
 }
 
-func (sb *stmtBuilder) appendComa(i int, coma bool) {
-	if coma {
-		sb.writeString(" $Unsafe.coma ")
-	} else if i != 0 {
-		sb.writeString(" , ")
-	}
-}
-
-func (sb *stmtBuilder) appendColumnValues(accessor string) error {
-	return sb.appendColumns(accessor, true, func(accessor string, field *view.Field) string {
+func (sb *stmtBuilder) appendColumnValues(accessor string, withHas bool) error {
+	return sb.appendColumns(accessor, true, withHas, func(accessor string, field *view.Field) string {
 		return fmt.Sprintf("$%v.%v", accessor, field.Name)
 	}, nil)
 }
 
-func (sb *stmtBuilder) appendColumnNameValues(accessor string, fieldSkipper func(field *view.Field) bool) error {
-	return sb.appendColumns(accessor, true, func(accessor string, field *view.Field) string {
+func (sb *stmtBuilder) appendColumnNameValues(accessor string, withHas bool, fieldSkipper func(field *view.Field) bool) error {
+	return sb.appendColumns(accessor, true, withHas, func(accessor string, field *view.Field) string {
 		return fmt.Sprintf("%v = $%v.%v", field.Column, accessor, field.Name)
 	}, fieldSkipper)
 }
 
-func (sb *stmtBuilder) appendColumnNames(accessor string) error {
-	return sb.appendColumns(accessor, false, func(accessor string, field *view.Field) string {
+func (sb *stmtBuilder) appendColumnNames(accessor string, withHas bool) error {
+	return sb.appendColumns(accessor, false, withHas, func(accessor string, field *view.Field) string {
 		return field.Column
 	}, nil)
 }
 
-func (sb *stmtBuilder) appendColumns(accessor string, withHint bool, content func(accessor string, field *view.Field) string, skipper func(field *view.Field) bool) error {
-	isDynamicComa := sb.findFirstNonPtrField(skipper)
-
-	if isDynamicComa {
-		sb.writeString("\n#set($coma = \"\")")
-	}
-
+func (sb *stmtBuilder) appendColumns(accessor string, withHint, withHas bool, content func(accessor string, field *view.Field) string, skipper func(field *view.Field) bool) error {
 	var i = 0
 	for _, field := range sb.typeDef.actualFields {
 		if skipper != nil && skipper(field) {
 			continue
 		}
 
-		if field.Ptr {
+		if field.Ptr && withHas {
 			sb.writeString(fmt.Sprintf("\n#if($%v.Has.%v == true)", accessor, field.Name))
 		}
-		sb.appendComa(i, isDynamicComa)
-		i++
 
+		if i != 0 {
+			sb.writeString(" , ")
+		}
+
+		i++
 		sb.writeString("\n")
 		sb.writeString(content(accessor, field))
 
@@ -114,11 +103,7 @@ func (sb *stmtBuilder) appendColumns(accessor string, withHint bool, content fun
 			}
 		}
 
-		if isDynamicComa {
-			sb.writeString("\n#set($coma = \",\")")
-		}
-
-		if field.Ptr {
+		if field.Ptr && withHas {
 			sb.writeString("\n#end")
 		}
 	}
@@ -180,16 +165,31 @@ func (sb *stmtBuilder) writeString(value string) {
 	sb.sb.WriteString(value)
 }
 
-func (sb *stmtBuilder) findFirstNonPtrField(skipper func(field *view.Field) bool) bool {
-	for _, field := range sb.typeDef.actualFields {
-		if skipper != nil && skipper(field) {
-			continue
-		}
-
-		return field.Ptr
+func (sb *stmtBuilder) appendForEach(parentRecord, name string, withUnsafe bool) (parentName string, recordName string, err error) {
+	sb.writeString("\n#foreach($")
+	recName := "rec" + name
+	sb.writeString(recName)
+	sb.writeString(" in ")
+	sb.writeString("$")
+	sb.writeString(sb.accessParam(parentRecord, name, withUnsafe))
+	if err := sb.tryWriteParamHint(); err != nil {
+		return "", "", err
 	}
 
-	return false
+	sb.writeString(")")
+
+	return "", recName, err
+}
+
+func (sb *stmtBuilder) newRelation(rel *inputMetadata) *stmtBuilder {
+	builder := newStmtBuilder(sb.sb, rel, "")
+	builder.indent = sb.indent
+	if builder.isMulti {
+		builder.indent += "	"
+	}
+
+	builder.wroteHint = sb.wroteHint
+	return builder
 }
 
 func (s *Builder) buildInputMetadata(ctx context.Context, sourceSQL []byte) (*option.RouteConfig, *viewConfig, *inputMetadata, error) {
@@ -230,6 +230,10 @@ func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName str
 	columns, err := s.readSinkColumns(ctx, db, tableName)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(columns) == 0 {
+		return nil, fmt.Errorf("not found table %v columns", tableName)
 	}
 
 	foreignKeys, err := s.readForeignKeys(ctx, db, tableName)
@@ -283,16 +287,6 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	fkIndex := s.indexKeys(foreignKeys)
 	pkIndex := s.indexKeys(primaryKeys)
 
-	var outputCase *format.Case
-	if outputFormat := s.routeBuilder.option.CaseFormat; outputFormat != "" {
-		newCase, err := format.NewCase(outputFormat)
-		if err != nil {
-			return nil, err
-		}
-
-		outputCase = &newCase
-	}
-
 	typesMeta := &typeMeta{fieldIndex: map[string]int{}, columnIndex: map[string]int{}}
 	name := config.expandedTable.HolderName
 	detectCase, err := format.NewCase(view.DetectCase(name))
@@ -341,13 +335,8 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 			tagContent += ",generator=" + meta.generator
 		}
 		var jsonTag string
-		fromName := meta.columnName
-		if outputCase != nil {
-			fromName = meta.columnCase.Format(fromName, *outputCase)
-		} else {
-			if !meta.required {
-				jsonTag = ` json:",omitempty"`
-			}
+		if !meta.required {
+			jsonTag = ` json:",omitempty"`
 		}
 
 		sqlxTagContent := "name=" + column.Name

@@ -1,0 +1,20 @@
+[
+  {
+    "ID": 1,
+    "PERF_NAME": "changed perf - 1",
+    "PERF_QUANTITY": 999,
+    "FOO_ID": 1
+  },
+  {
+    "ID": 2,
+    "PERF_NAME": "changed perf - 2",
+    "PERF_QUANTITY": 1998,
+    "FOO_ID": 1
+  },
+  {
+    "ID": 3,
+    "PERF_NAME": "changed perf - 3",
+    "PERF_QUANTITY": 2997,
+    "FOO_ID": 2
+  }
+]

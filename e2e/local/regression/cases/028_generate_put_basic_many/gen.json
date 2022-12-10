@@ -1,0 +1,5 @@
+{
+  "Name": "$tagId",
+  "URL": "$path/put_basic_many.sql",
+  "Args": "-G=put"
+}

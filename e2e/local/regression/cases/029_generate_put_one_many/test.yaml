@@ -1,0 +1,49 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: PUT
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/foos-one-many
+        JsonBody:
+            Name: 'changed foo - 250'
+            ID: 1
+            FoosPerformance:
+              - ID: 1
+                PerfName: "changed perf - 1"
+                PerfQuantity: 999
+                FooID: 1
+              - ID: 2
+                PerfName: "changed perf - 2"
+                PerfQuantity: 1998
+                FooID: 1
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
+
+      - Method: PUT
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/foos-one-many
+        JsonBody:
+          Name: 'changed foo - 500'
+          ID: 2
+          FoosPerformance:
+            - ID: 1
+              PerfName: "tried to change"
+              PerfQuantity: -1000
+              FooID: 1
+            - ID: 3
+              PerfName: "changed perf - 3"
+              PerfQuantity: 2997
+              FooID: 2
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_t1.json')
+
+  checkDb:
+    action: 'dsunit:expect'
+    datastore: dev
+    expand: true
+    checkPolicy: 1
+    URL: ${parentPath}/expect

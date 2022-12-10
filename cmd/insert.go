@@ -51,20 +51,6 @@ type (
 	}
 )
 
-func (m *inputMetadata) primaryKeyFields() []*view.Field {
-	var pkFields []*view.Field
-	for i, field := range m.actualFields {
-		meta, ok := m.meta.metaByColName(field.Column)
-		if !ok || !meta.primaryKey {
-			continue
-		}
-
-		pkFields = append(pkFields, m.actualFields[i])
-	}
-
-	return pkFields
-}
-
 func (s *Builder) preparePostRule(ctx context.Context, sourceSQL []byte) (string, error) {
 	routeOption, config, paramType, err := s.buildInputMetadata(ctx, sourceSQL)
 	if err != nil {
@@ -270,70 +256,30 @@ func (isb *insertStmtBuilder) build(parentRecord string, withUnsafe bool) (strin
 	indirectParent := parentRecord
 
 	if isb.isMulti {
-		isb.writeString("\n#foreach($")
-		recName := "rec" + name
-		isb.writeString(recName)
-		isb.writeString(" in ")
-		isb.writeString("$")
-		isb.writeString(isb.accessParam(parentRecord, name, withUnsafe))
-		if err := isb.tryWriteParamHint(); err != nil {
+		var err error
+		indirectParent, name, err = isb.appendForEach(parentRecord, name, withUnsafe)
+		if err != nil {
 			return "", err
 		}
 
-		isb.writeString(")")
-		name = recName
-		indirectParent = ""
+		withUnsafe = false
 	}
 
 	if isb.parent != nil {
-		for _, meta := range isb.typeDef.meta.metas {
-			if meta.fkKey == nil {
-				continue
-			}
-
-			if meta.fkKey.ReferenceTable != isb.parent.typeDef.table {
-				continue
-			}
-
-			refMeta, ok := isb.parent.typeDef.meta.metaByColName(meta.fkKey.ReferenceColumn)
-			if !ok {
-				continue
-			}
-
-			isb.writeString(fmt.Sprintf("\n#set($%v.%v = $%v)", isb.accessParam(indirectParent, name, withUnsafe && !isb.isMulti), meta.fieldName, isb.accessParam(parentRecord, refMeta.fieldName, withUnsafe)))
-		}
+		isb.appendSetFk(parentRecord, withUnsafe, indirectParent, name, isb.parent.stmtBuilder)
 	}
 
 	isb.writeString("\nINSERT INTO ")
 	isb.writeString(isb.typeDef.table)
 	isb.writeString(" (\n")
-	if err := isb.stmtBuilder.appendColumnNames(isb.accessParam(indirectParent, name, false)); err != nil {
+	if err := isb.stmtBuilder.appendColumnNames(isb.accessParam(indirectParent, name, false), false); err != nil {
 		return "", err
 	}
-
-	//for i, field := range isb.typeDef.actualFields {
-	//	if i != 0 {
-	//		isb.writeString(",\n")
-	//	}
-	//	isb.writeString(field.Column)
-	//}
 
 	isb.writeString("\n) VALUES (")
-	if err := isb.appendColumnValues(isb.accessParam(indirectParent, name, false)); err != nil {
+	if err := isb.appendColumnValues(isb.accessParam(indirectParent, name, false), false); err != nil {
 		return "", err
 	}
-	//for i, field := range isb.typeDef.actualFields {
-	//	if i != 0 {
-	//		isb.writeString(",\n")
-	//	}
-	//	isb.writeString("$")
-	//	isb.writeString(isb.accessParam(indirectParent, name, false))
-	//	isb.writeString(".")
-	//	isb.writeString(field.Name)
-	//	if err := isb.tryWriteParamHint(); err != nil {
-	//		return "", err
-	//	}
-	//}
 	isb.writeString("\n);\n")
 
 	for _, rel := range isb.typeDef.relations {
@@ -349,13 +295,31 @@ func (isb *insertStmtBuilder) build(parentRecord string, withUnsafe bool) (strin
 	return isb.sb.String(), nil
 }
 
-func (isb *insertStmtBuilder) newRelation(rel *inputMetadata) *insertStmtBuilder {
-	builder := newInsertStmtBuilder(isb.sb, rel)
-	builder.indent = isb.indent
-	if builder.isMulti {
-		builder.indent += "	"
+func (sb *stmtBuilder) appendSetFk(parentRecord string, withUnsafe bool, indirectParent string, name string, parent *stmtBuilder) {
+	if parent != nil {
+		for _, meta := range sb.typeDef.meta.metas {
+			if meta.fkKey == nil {
+				continue
+			}
+
+			if meta.fkKey.ReferenceTable != parent.typeDef.table {
+				continue
+			}
+
+			refMeta, ok := parent.typeDef.meta.metaByColName(meta.fkKey.ReferenceColumn)
+			if !ok {
+				continue
+			}
+
+			sb.writeString(fmt.Sprintf("\n#set($%v.%v = $%v)", sb.accessParam(indirectParent, name, withUnsafe && !sb.isMulti), meta.fieldName, sb.accessParam(parentRecord, refMeta.fieldName, withUnsafe)))
+		}
 	}
-	builder.parent = isb
-	builder.wroteHint = isb.wroteHint
-	return builder
+}
+
+func (isb *insertStmtBuilder) newRelation(rel *inputMetadata) *insertStmtBuilder {
+	builder := isb.stmtBuilder.newRelation(rel)
+	return &insertStmtBuilder{
+		stmtBuilder: builder,
+		parent:      isb,
+	}
 }
