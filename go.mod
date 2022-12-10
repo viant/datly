@@ -29,7 +29,7 @@ require (
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/parsly v0.0.0-20220913214053-cb272791c00f
-	github.com/viant/scy v0.3.2-0.20221123210038-042281941f17
+	github.com/viant/scy v0.4.1
 	github.com/viant/sqlx v0.2.4-0.20221130032646-83e77badfb48
 	github.com/viant/structql v0.0.0-20221125021249-35b7a7d2d345
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888

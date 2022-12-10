@@ -7,6 +7,7 @@ pipeline:
       images:
         - mysql
         - aerospike-server
+        - dynamodb-local
 
   start:
     services:
@@ -27,3 +28,10 @@ pipeline:
           3000: 3000
           3001: 3001
           3002: 3002
+
+      dynamodb:
+        action: docker:run
+        image: 'amazon/dynamodb-local'
+        name: dynamodb
+        ports:
+          8000: 8000

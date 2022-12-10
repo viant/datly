@@ -1,6 +1,28 @@
 init:
 
 pipeline:
+
+  dynamodb:
+    create:
+      action: dsunit:init
+      datastore: dyndb
+      config:
+        driverName: dyndb
+        parameters:
+          region: us-west-1
+          key: dummy
+          secret: dummy
+          endpoint: localhost:8000
+      scripts:
+        - URL: ${appPath}/e2e/local/datastore/dyndb/schema.ddl
+
+    prepare:
+      action: 'dsunit:prepare'
+      datastore: dyndb
+      expand: true
+      URL: ${appPath}/e2e/local/datastore/dyndb/populate
+
+
   mysql:
     create:
       action: dsunit:init
