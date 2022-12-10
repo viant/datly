@@ -176,7 +176,6 @@ func (s *Builder) prepareStringBuilder(typeDef *inputMetadata, config *viewConfi
 }
 
 func (s *Builder) appendPostRouteOption(paramName string, routeOption *option.RouteConfig, typeName string, typeDef *inputMetadata, sb *strings.Builder) error {
-	requiredTypes := []string{"*" + typeDef.paramName}
 
 	routeOption.RequestBody = &option.BodyConfig{
 		DataType: typeDef.bodyHolder,
@@ -186,15 +185,7 @@ func (s *Builder) appendPostRouteOption(paramName string, routeOption *option.Ro
 		From: paramName,
 	}
 
-	if typeDef.bodyHolder != "" {
-		requiredTypes = append(requiredTypes, "*"+typeDef.bodyHolder)
-	}
-
 	routeOption.Declare = map[string]string{}
-	routeOption.TypeSrc = &option.TypeSrcConfig{
-		URL:   folderSQL,
-		Types: requiredTypes,
-	}
 
 	routeOption.Declare[view.FirstNotEmpty(typeDef.bodyHolder, typeDef.paramName)] = typeName
 	marshal, err := json.Marshal(routeOption)
@@ -205,6 +196,20 @@ func (s *Builder) appendPostRouteOption(paramName string, routeOption *option.Ro
 	if routeJSON := string(marshal); routeJSON != "{}" {
 		sb.WriteString(fmt.Sprintf("/* %v */\n\n", routeJSON))
 	}
+
+	requiredTypes := []string{typeDef.paramName}
+	if typeDef.bodyHolder != "" {
+		requiredTypes = append(requiredTypes, typeDef.bodyHolder)
+	}
+
+	if len(requiredTypes) > 0 {
+		sb.WriteString("import (")
+		for _, requiredType := range requiredTypes {
+			sb.WriteString(fmt.Sprintf("\n	\"%v.%v\"", folderSQL, requiredType))
+		}
+		sb.WriteString("\n)\n\n")
+	}
+
 	return nil
 }
 
