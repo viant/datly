@@ -1,3 +1,7 @@
+## Dec 12 2022 v0.4.1.0
+* Added update dsql generator
+* Minor fixes
+
 ## Dec 1 2022 v0.4.0.0
 * Added insert dsql generator
 * Added transformer service
