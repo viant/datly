@@ -7,10 +7,10 @@ import (
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
-	"github.com/viant/sqlx/metadata/ast/expr"
-	"github.com/viant/sqlx/metadata/ast/node"
-	"github.com/viant/sqlx/metadata/ast/parser"
-	"github.com/viant/sqlx/metadata/ast/query"
+	"github.com/viant/sqlparser"
+	"github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/node"
+	"github.com/viant/sqlparser/query"
 	rdata "github.com/viant/toolbox/data"
 	"strings"
 )
@@ -52,7 +52,7 @@ func newViewConfig(viewName string, fileName string, parent *query.Join, aTable 
 }
 
 func buildTableFromSQL(SQL string, routeOpt *option.RouteConfig) (*Table, error) {
-	aQuery, err := parser.ParseQuery(SQL)
+	aQuery, err := sqlparser.ParseQuery(SQL)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func buildTable(x node.Node, routeOpt *option.RouteConfig) (*Table, error) {
 func extractTableName(node node.Node) (name string, SQL string) {
 	switch actual := node.(type) {
 	case *expr.Selector, *expr.Ident:
-		return parser.Stringify(actual), ""
+		return sqlparser.Stringify(actual), ""
 	}
 
 	return "", ""
@@ -140,15 +140,15 @@ func extractTableSQL(actual *expr.Raw) (name string, SQL string) {
 func UpdateTableSettings(table *Table, routeOpt *option.RouteConfig) error {
 	tableSQL := expandConsts(table.SQL, routeOpt)
 	innerSQL, _ := ExtractCondBlock(tableSQL)
-	innerQuery, err := parser.ParseQuery(innerSQL)
+	innerQuery, err := sqlparser.ParseQuery(innerSQL)
 	fmt.Printf("innerSQL %v %v\n", tableSQL, err)
 
 	if innerQuery != nil && innerQuery.From.X != nil {
-		table.Name = strings.Trim(parser.Stringify(innerQuery.From.X), "`")
+		table.Name = strings.Trim(sqlparser.Stringify(innerQuery.From.X), "`")
 		table.Inner = selectItemToColumn(innerQuery, routeOpt)
 		if len(innerQuery.Joins) > 0 {
 			for _, join := range innerQuery.Joins {
-				table.Deps[Alias(join.Alias)] = TableName(strings.Trim(parser.Stringify(join.With), "`"))
+				table.Deps[Alias(join.Alias)] = TableName(strings.Trim(sqlparser.Stringify(join.With), "`"))
 			}
 		}
 
@@ -220,7 +220,7 @@ func newKey(s *expr.Selector, table *Table) (*key, error) {
 	tableName := table.Name
 	byAlias := table.Inner.ByAlias()
 
-	colName := parser.Stringify(s.X)
+	colName := sqlparser.Stringify(s.X)
 	field := colName
 
 	for _, column := range table.Inner {
@@ -268,7 +268,7 @@ func fieldName(byAlias map[string]*Column, alias string) (string, bool) {
 }
 
 func hasOneCardinalityPredicate(n node.Node) bool {
-	predicate := parser.Stringify(n)
+	predicate := sqlparser.Stringify(n)
 	return strings.Contains(predicate, " 1 = 1")
 }
 
@@ -320,7 +320,7 @@ func appendItem(item *query.Item, result *[]*Column, route *option.RouteConfig) 
 func getColumn(item *query.Item) (*Column, error) {
 	switch actual := item.Expr.(type) {
 	case *expr.Call:
-		call := parser.Stringify(actual)
+		call := sqlparser.Stringify(actual)
 		lcCall := strings.ToLower(call)
 		if item.DataType == "" {
 			item.DataType = "string"
@@ -336,24 +336,24 @@ func getColumn(item *query.Item) (*Column, error) {
 	case *expr.Ident:
 		return &Column{Name: actual.Name, Alias: item.Alias, DataType: item.DataType}, nil
 	case *expr.Selector:
-		return &Column{Name: parser.Stringify(actual.X), Ns: actual.Name, DataType: item.DataType, Alias: item.Alias}, nil
+		return &Column{Name: sqlparser.Stringify(actual.X), Ns: actual.Name, DataType: item.DataType, Alias: item.Alias}, nil
 	case *expr.Star:
 		switch star := actual.X.(type) {
 		case *expr.Ident:
 			return &Column{Name: star.Name, Except: actual.Except}, nil
 		case *expr.Selector:
-			return &Column{Name: parser.Stringify(star.X), Ns: star.Name, Except: actual.Except, Comments: actual.Comments}, nil
+			return &Column{Name: sqlparser.Stringify(star.X), Ns: star.Name, Except: actual.Except, Comments: actual.Comments}, nil
 		}
 	case *expr.Literal:
 		return &Column{Name: "", Alias: item.Alias, DataType: actual.Kind}, nil
 	case *expr.Binary:
-		enExpr := parser.Stringify(actual)
+		enExpr := sqlparser.Stringify(actual)
 		if item.DataType == "" || (strings.Contains(enExpr, "+") || strings.Contains(enExpr, "-") || strings.Contains(enExpr, "/") || strings.Contains(enExpr, "*")) {
 			item.DataType = "float64"
 		}
 		return &Column{Name: enExpr, Alias: item.Alias, DataType: item.DataType}, nil
 	case *expr.Parenthesis:
-		return &Column{Name: parser.Stringify(actual), Alias: item.Alias, DataType: item.DataType}, nil
+		return &Column{Name: sqlparser.Stringify(actual), Alias: item.Alias, DataType: item.DataType}, nil
 	}
 	return nil, fmt.Errorf("invalid type: %T", item.Expr)
 }

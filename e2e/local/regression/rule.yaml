@@ -25,7 +25,7 @@ pipeline:
         commands:
           - pwd
           - cd ${appPath}/e2e/local
-          - /tmp/datly -N=${rule.Name} -X=${rule.URL}  -C='mydb|mysql|root:dev@tcp(127.0.0.1:3306)/dev${qMark}parseTime=true' -j='${appPath}/e2e/local/jwt/public.enc|blowfish://default'  -w=autogen ${rule.Args}
+          - /tmp/datly -N=${rule.Name} -X=${rule.URL}  -C='mydb|mysql|root:dev@tcp(127.0.0.1:3306)/dev${qMark}parseTime=true' -C='dyndb|dynamodb|dynamodb://localhost:8000/us-west-1${qMark}key=dummy&secret=dummy'  -j='${appPath}/e2e/local/jwt/public.enc|blowfish://default'  -w=autogen ${rule.Args}
           - if [ -d "${appPath}/e2e/local/dsql" ]; then
             rm -r "${appPath}/e2e/local/autogen/dsql_$i";
             mv  "${appPath}/e2e/local/dsql" "${appPath}/e2e/local/autogen/dsql_$i";

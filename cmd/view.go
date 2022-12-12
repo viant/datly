@@ -7,6 +7,8 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/columns"
 	"github.com/viant/datly/view"
+	"github.com/viant/sqlparser"
+	"github.com/viant/sqlparser/expr"
 	"github.com/viant/toolbox/format"
 )
 
@@ -38,7 +40,6 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 	if tableName, err := s.readColumnTypes(ctx, db, table); err != nil {
 		fmt.Printf("[WARN] %v", fmt.Errorf("couldn't read table %v column types %w ", tableName, err).Error())
 	}
-
 	template, err := s.buildTemplate(ctx, viewConfig, parameters)
 	if err != nil {
 		return nil, err
@@ -92,7 +93,7 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 }
 
 func (s *Builder) readColumnTypes(ctx context.Context, db *sql.DB, table *Table) (string, error) {
-	if err := s.indexColumnsWithLog(ctx, db, table.Name); err != nil {
+	if err := s.indexColumnsWithLog(ctx, db, table); err != nil {
 		return table.Name, err
 	}
 
@@ -101,7 +102,7 @@ func (s *Builder) readColumnTypes(ctx context.Context, db *sql.DB, table *Table)
 			continue
 		}
 
-		if err := s.indexColumnsWithLog(ctx, db, string(v)); err != nil {
+		if err := s.indexColumnsWithLog(ctx, db, &Table{Name: string(v)}); err != nil {
 			return string(v), err
 		}
 	}
@@ -130,7 +131,9 @@ func (s *Builder) ConnectorRef(name string) (*view.Connector, error) {
 	}, nil
 }
 
-func (s *Builder) indexColumnsWithLog(ctx context.Context, db *sql.DB, tableName string) error {
+func (s *Builder) indexColumnsWithLog(ctx context.Context, db *sql.DB, table *Table) error {
+	tableName := table.Name
+
 	if columns.ContainsSelect(tableName) || tableName == "" {
 		return nil
 	}
@@ -140,7 +143,7 @@ func (s *Builder) indexColumnsWithLog(ctx context.Context, db *sql.DB, tableName
 	}
 
 	fmt.Printf("[INFO] reading %v table column types\n", tableName)
-	err := s.indexColumns(ctx, db, tableName)
+	err := s.indexColumns(ctx, db, table)
 	if err != nil {
 		fmt.Printf("[WARN] couldn't read table %v column types\n", tableName)
 	} else {
@@ -150,20 +153,49 @@ func (s *Builder) indexColumnsWithLog(ctx context.Context, db *sql.DB, tableName
 	return err
 }
 
-func (s *Builder) indexColumns(ctx context.Context, db *sql.DB, tableName string) error {
+func (s *Builder) indexColumns(ctx context.Context, db *sql.DB, table *Table) error {
+	tableName := table.Name
 	tableMeta := s.tablesMeta.TableMeta(tableName)
+	if table.SQL != "" {
+		s.discoverySQLColumns(db, table, tableMeta)
+	}
 	ioColumns, err := columns.DetectColumns(context.Background(), db, tableName)
 	if err != nil {
 		return err
 	}
 	tableMeta.AddIoColumns(ioColumns)
-
 	sinkColumns, err := s.readSinkColumns(ctx, db, tableName)
 	if err != nil {
 		return err
 	}
-
 	return tableMeta.AddSinkColumns(sinkColumns)
+}
+
+func (s *Builder) discoverySQLColumns(db *sql.DB, table *Table, tableMeta *TableMeta) {
+	SQL, err := normalizeSQL(table)
+	if err != nil {
+		return
+	}
+	ioColumns, err := columns.DetectColumns(context.Background(), db, SQL)
+	if len(ioColumns) > 0 {
+		tableMeta.AddIoColumns(ioColumns)
+		if len(ioColumns) == len(table.Columns) {
+			for i, column := range ioColumns {
+				table.Columns[i].DataType = column.ScanType().String()
+			}
+		}
+	}
+}
+
+func normalizeSQL(table *Table) (string, error) {
+	aQuery, err := sqlparser.ParseQuery(table.SQL)
+	if err != nil {
+		return "", err
+	}
+	aQuery.Limit = &expr.Literal{Value: "0", Kind: "int"}
+	aQuery.Qualify = nil
+	SQL := sqlparser.Stringify(aQuery)
+	return SQL, nil
 }
 
 func stringsPtr(args ...string) *[]string {

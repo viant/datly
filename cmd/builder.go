@@ -14,7 +14,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
-	"github.com/viant/sqlx/metadata/ast/query"
+	"github.com/viant/sqlparser/query"
 	"github.com/viant/toolbox"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xreflect"

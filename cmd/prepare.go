@@ -259,7 +259,6 @@ func (s *Builder) readSinkColumns(ctx context.Context, db *sql.DB, tableName str
 	if err != nil {
 		return nil, err
 	}
-
 	return sinkColumns, nil
 }
 
