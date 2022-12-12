@@ -18,7 +18,7 @@
   {"Auth":"Jwt", "Connector":"dyndb"}   SELECT USER_ID AS UserID,
                           ARRAY_EXISTS(ROLE, 'READ_ONLY') AS IsReadOnly,
                           ARRAY_EXISTS(FEATURE1, 'FEATURE1') AS Feature
-                    FROM USER_ACL WHERE USER_ID = $Jwt.UserID
+                    FROM USER_ACL WHERE USER_ID = $Unsafe.Jwt.UserID
  */)
 
 
