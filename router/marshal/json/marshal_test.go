@@ -125,6 +125,15 @@ func TestJson_Marshal(t *testing.T) {
 				CaseFormat: format.CaseLowerCamel,
 			},
 		},
+		//TODO: Handle that case
+		//{
+		//	description: "marshal non ptr",
+		//	data:        nonPtr,
+		//	expect:      `[{"id":10,"name":"foo","price":125.5}]`,
+		//	defaultConfig: marshal.Default{
+		//		CaseFormat: format.CaseLowerCamel,
+		//	},
+		//},
 	}
 
 	//for i, testcase := range testcases[:len(testcases)-1] {
@@ -154,6 +163,35 @@ func TestJson_Marshal(t *testing.T) {
 		if !assert.Equal(t, testcase.expect, string(result), testcase.description) {
 			toolbox.Dump(string(result))
 		}
+	}
+}
+
+func nonPtr() interface{} {
+	type Response struct {
+		Message interface{}
+		Status  string
+	}
+
+	type Event struct {
+		ID    int
+		Name  string
+		Price float64
+	}
+
+	type Data struct {
+		Response
+		Events []*Event
+	}
+
+	return Data{
+		Response: Response{},
+		Events: []*Event{
+			{
+				ID:    1,
+				Name:  "ABC",
+				Price: 125.5,
+			},
+		},
 	}
 }
 

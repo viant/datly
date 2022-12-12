@@ -116,7 +116,7 @@ func (sb *stmtBuilder) paramHint(typeDef *inputMetadata) (string, error) {
 
 	paramConfig, err := json.Marshal(&option.ParameterConfig{
 		Target:      &target,
-		DataType:    typeDef.paramName,
+		DataType:    "*" + typeDef.paramName,
 		Cardinality: typeDef.typeDef.Cardinality,
 		Kind:        sb.paramKind,
 	})

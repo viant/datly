@@ -51,7 +51,7 @@ func (d *Definition) Init(ctx context.Context, types Types) error {
 
 	d.createSchemaIfNeeded()
 	if d.Schema != nil {
-		parseType, err := GetOrParseType(map[string]reflect.Type{}, d.Schema.DataType)
+		parseType, err := GetOrParseType(types, d.Schema.DataType)
 		if err != nil {
 			return err
 		}

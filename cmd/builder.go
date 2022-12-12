@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
+	"github.com/viant/parsly"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/toolbox"
 	"github.com/viant/toolbox/format"
@@ -283,7 +284,11 @@ func (s *Builder) readRouteSettings() error {
 		s.routeBuilder.paramsIndex.AddConsts(s.routeBuilder.option.Const)
 	}
 
-	return s.loadGoTypes(s.routeBuilder.option.TypeSrc)
+	if err := s.loadGoTypes(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func extractURIParams(URI string) map[string]bool {
@@ -941,7 +946,7 @@ func (s *Builder) prepareRuleIfNeeded(SQL []byte) (string, error) {
 	}
 }
 
-func (s *Builder) loadGoTypes(typeSrc *option.TypeSrcConfig) error {
+func (s *Builder) loadGoType(typeSrc *option.TypeSrcConfig) error {
 	if typeSrc == nil {
 		return nil
 	}
@@ -992,7 +997,7 @@ func (s *Builder) Type(typeName string) (string, error) {
 		actualName = "*" + actualName
 	}
 
-	return typeName, s.loadGoTypes(&option.TypeSrcConfig{
+	return typeName, s.loadGoType(&option.TypeSrcConfig{
 		URL:   sourcePath,
 		Types: []string{actualName},
 	})
@@ -1009,4 +1014,70 @@ func (s *Builder) normalizeURL(typeSrc *option.TypeSrcConfig) {
 			typeSrc.URL = filepath.Join(dir, typeSrc.URL)
 		}
 	}
+}
+
+func (s *Builder) loadGoTypes() error {
+	if err := s.loadGoType(s.routeBuilder.option.TypeSrc); err != nil {
+		return err
+	}
+
+	cursor := parsly.NewCursor("", []byte(s.routeBuilder.sqlStmt), 0)
+	defer func() {
+		s.routeBuilder.sqlStmt = s.routeBuilder.sqlStmt[cursor.Pos:]
+	}()
+
+	matched := cursor.MatchAfterOptional(whitespaceMatcher, importKeywordMatcher)
+	if matched.Code != importKeywordToken {
+		return nil
+	}
+
+	matched = cursor.MatchAfterOptional(whitespaceMatcher, exprGroupMatcher, quotedMatcher)
+	switch matched.Code {
+	case quotedToken:
+		text := matched.Text(cursor)
+		typeSrc, err := s.parseTypeSrc(text[1 : len(text)-1])
+		if err != nil {
+			return err
+		}
+
+		return s.loadGoType(typeSrc)
+	case exprGroupToken:
+		exprContent := matched.Text(cursor)
+		exprGroupCursor := parsly.NewCursor("", []byte(exprContent[1:len(exprContent)-1]), 0)
+
+		for {
+
+			matched = exprGroupCursor.MatchAfterOptional(whitespaceMatcher, quotedMatcher)
+			switch matched.Code {
+			case quotedToken:
+				text := matched.Text(exprGroupCursor)
+				typeSrc, err := s.parseTypeSrc(text[1 : len(text)-1])
+				if err != nil {
+					return err
+				}
+
+				if err = s.loadGoType(typeSrc); err != nil {
+					return err
+				}
+			case parsly.EOF:
+				return nil
+			default:
+				return cursor.NewError(quotedMatcher)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *Builder) parseTypeSrc(imported string) (*option.TypeSrcConfig, error) {
+	importSegments := strings.Split(imported, ".")
+	if len(importSegments) != 2 {
+		return nil, fmt.Errorf(`unsupported import format, supported: "[path].[type]"`)
+	}
+
+	return &option.TypeSrcConfig{
+		URL:   importSegments[0],
+		Types: []string{importSegments[1]},
+	}, nil
 }

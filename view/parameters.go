@@ -602,7 +602,7 @@ func GetOrParseType(types Types, dataType string) (reflect.Type, error) {
 		return lookup, nil
 	}
 
-	parseType, parseErr := ParseType(dataType)
+	parseType, parseErr := ParseType(dataType, types)
 	if parseErr == nil {
 		return parseType, nil
 	}
