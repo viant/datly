@@ -10,10 +10,10 @@ import (
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
-	"github.com/viant/sqlx/metadata/ast/expr"
-	"github.com/viant/sqlx/metadata/ast/node"
-	"github.com/viant/sqlx/metadata/ast/parser"
-	"github.com/viant/sqlx/metadata/ast/query"
+	"github.com/viant/sqlparser"
+	"github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/node"
+	"github.com/viant/sqlparser/query"
 	rdata "github.com/viant/toolbox/data"
 	"net/http"
 	"os"
@@ -194,7 +194,7 @@ func buildExpandedTable(viewName string, table *Table, expandMap rdata.Map, opt 
 		return table, nil
 	}
 
-	aQuery, err := parser.ParseQuery(expandMap.ExpandAsText(table.SQL))
+	aQuery, err := sqlparser.ParseQuery(expandMap.ExpandAsText(table.SQL))
 	if err != nil {
 		fmt.Printf("[WARN] couldn't parse epanded SQL for %v\n", viewName)
 	}
@@ -227,7 +227,7 @@ func buildExpandMap(paramsIndex *ParametersIndex) (rdata.Map, error) {
 }
 
 func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
-	aQuery, err := parser.ParseQuery(SQL)
+	aQuery, err := sqlparser.ParseQuery(SQL)
 	if err != nil {
 		fmt.Printf("[WARN] couldn't parse properly SQL for %v\n", viewName)
 	}
@@ -275,7 +275,7 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 		if isMetaTable(relViewConfig.unexpandedTable.Name) {
 			holder := getMetaTemplateHolder(relViewConfig.unexpandedTable.Name)
 			result.AddMetaTemplate(join.Alias, holder, relViewConfig.unexpandedTable)
-		} else if isParamPredicate(parser.Stringify(join.On.X)) || relViewConfig.unexpandedTable.ViewConfig.DataViewParameter != nil {
+		} else if isParamPredicate(sqlparser.Stringify(join.On.X)) || relViewConfig.unexpandedTable.ViewConfig.DataViewParameter != nil {
 			relViewConfig.fileName = join.Alias
 			paramOption, err := c.paramIndex.ParamsMetaWithComment(relViewConfig.viewName, join.Comments)
 			if err != nil {
@@ -321,7 +321,7 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 }
 
 func (c *ViewConfigurer) getAlias(asStarExpr *expr.Star) string {
-	stringify := parser.Stringify(asStarExpr.X)
+	stringify := sqlparser.Stringify(asStarExpr.X)
 	if index := strings.Index(stringify, "."); index != -1 {
 		return stringify[:index]
 	}
@@ -364,7 +364,7 @@ func isSQLXRelation(rel node.Node) bool {
 		return false
 	}
 
-	candidate := parser.Stringify(rel)
+	candidate := sqlparser.Stringify(rel)
 	return columns.ContainsSelect(candidate) || !columns.CanBeTableName(candidate)
 }
 
@@ -416,7 +416,7 @@ func updateExecViewConfig(stmtType byte, SQLStmt string, view *viewConfig) error
 
 	switch stmtType | ' ' {
 	case 'i':
-		stmt, err := parser.ParseInsert(rawSQL)
+		stmt, err := sqlparser.ParseInsert(rawSQL)
 		if stmt != nil {
 			inheritFromTarget(stmt.Target.X, view, stmt.Target.Comments)
 		}
@@ -425,7 +425,7 @@ func updateExecViewConfig(stmtType byte, SQLStmt string, view *viewConfig) error
 			return err
 		}
 	case 'u':
-		stmt, err := parser.ParseUpdate(rawSQL)
+		stmt, err := sqlparser.ParseUpdate(rawSQL)
 		if stmt != nil {
 			inheritFromTarget(stmt.Target.X, view, stmt.Target.Comments)
 
@@ -436,7 +436,7 @@ func updateExecViewConfig(stmtType byte, SQLStmt string, view *viewConfig) error
 		}
 
 	case 'd':
-		stmt, err := parser.ParseDelete(rawSQL)
+		stmt, err := sqlparser.ParseDelete(rawSQL)
 		if err != nil {
 			return err
 		}
@@ -448,7 +448,7 @@ func updateExecViewConfig(stmtType byte, SQLStmt string, view *viewConfig) error
 }
 
 func inheritFromTarget(target node.Node, view *viewConfig, tableNameComment string) {
-	tableName := parser.Stringify(target)
+	tableName := sqlparser.Stringify(target)
 	view.ensureTableName(tableName)
 	view.ensureOuterAlias(tableName)
 	view.ensureInnerAlias(tableName)

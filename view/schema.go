@@ -165,7 +165,6 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 	if selfRef != nil {
 		structFields = append(structFields, c.newField("", selfRef.Holder, format.CaseUpperCamel, reflect.SliceOf(ast.InterfaceType)))
 	}
-
 	structType := reflect.PtrTo(reflect.StructOf(structFields))
 	c.SetType(structType)
 }

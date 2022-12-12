@@ -11,6 +11,7 @@ import (
 	_ "github.com/viant/afsc/s3"
 	_ "github.com/viant/bigquery"
 	"github.com/viant/datly/cmd"
+	_ "github.com/viant/dyndb"
 	_ "github.com/viant/scy/kms/blowfish"
 	_ "github.com/viant/sqlx/metadata/product/bigquery"
 	_ "github.com/viant/sqlx/metadata/product/mysql"

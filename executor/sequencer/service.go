@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"github.com/viant/sqlx/io/insert"
-	"github.com/viant/sqlx/option"
+	"github.com/viant/sqlx/metadata/info/dialect"
 	"strings"
 )
 
@@ -31,7 +31,7 @@ func (s *Service) Next(table string, any interface{}, selector string) error {
 	if err != nil {
 		return err
 	}
-	nextSeq, err := inserter.NextSequence(s.ctx, record, emptyRecordCount, option.PresetIDWithTransientTransaction)
+	nextSeq, err := inserter.NextSequence(s.ctx, record, emptyRecordCount, dialect.PresetIDWithTransientTransaction)
 	if err != nil {
 		return err
 	}
