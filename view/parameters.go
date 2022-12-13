@@ -54,16 +54,22 @@ type (
 	CodecFn func(context context.Context, rawValue interface{}, options ...interface{}) (interface{}, error)
 	Codec   struct {
 		shared.Reference
-		Name      string  `json:",omitempty"`
-		Source    string  `json:",omitempty"`
-		SourceURL string  `json:",omitempty"`
-		Schema    *Schema `json:",omitempty"`
-		Query     string  `json:",omitempty"`
-		_codecFn  CodecFn
+		Name         string  `json:",omitempty"`
+		Source       string  `json:",omitempty"`
+		SourceURL    string  `json:",omitempty"`
+		Schema       *Schema `json:",omitempty"`
+		Query        string  `json:",omitempty"`
+		_initialized bool
+		_codecFn     CodecFn
 	}
 )
 
 func (v *Codec) Init(resource *Resource, view *View, paramType reflect.Type) error {
+	if v._initialized {
+		return nil
+	}
+	v._initialized = true
+
 	if err := v.inheritCodecIfNeeded(resource, paramType); err != nil {
 		return err
 	}

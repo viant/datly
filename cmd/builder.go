@@ -18,6 +18,8 @@ import (
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/toolbox"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/velty/ast/expr"
+	"github.com/viant/velty/parser"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
 	"io"
@@ -194,6 +196,10 @@ func (s *Builder) Build(ctx context.Context) error {
 
 	if strings.TrimSpace(s.routeBuilder.sqlStmt) == "" {
 		return nil
+	}
+
+	if err := s.readArtificialParamHints(); err != nil {
+		return err
 	}
 
 	if err := s.readRouteSettings(); err != nil {
@@ -377,12 +383,9 @@ func (s *Builder) initRouteRequestBodySchemaIfNeeded() error {
 		return nil
 	}
 
-	if body.DataType == "" {
+	bodyType := body.DataType
+	if bodyType == "" {
 		return nil
-	}
-	bodyType, ok := s.routeBuilder.paramsIndex.types[body.DataType]
-	if !ok {
-		return fmt.Errorf("not found type %v", body.DataType)
 	}
 
 	s.routeBuilder.route.RequestBodySchema = &view.Schema{DataType: bodyType}
@@ -638,6 +641,10 @@ func copyWarmup(warmup map[string]interface{}) map[string]interface{} {
 
 func (s *Builder) addParameters(params ...*view.Parameter) error {
 	for i, aParam := range params {
+		if _, ok := s.routeBuilder.paramsIndex.parameters[aParam.Name]; ok {
+			continue
+		}
+
 		if err := s.updateParamByHint(aParam); err != nil {
 			return err
 		}
@@ -756,7 +763,10 @@ func (s *Builder) buildViewParams() ([]string, error) {
 	var utilParams []string
 
 	for _, paramViewConfig := range paramViews {
-		externalParams := s.prepareExternalParameters(paramViewConfig)
+		externalParams, err := s.prepareExternalParameters(paramViewConfig)
+		if err != nil {
+			return nil, err
+		}
 
 		childViewConfig := paramViewConfig.viewConfig
 
@@ -807,26 +817,32 @@ func (s *Builder) buildViewParams() ([]string, error) {
 	return utilParams, nil
 }
 
-func (s *Builder) prepareExternalParameters(paramViewConfig *viewParamConfig) []*view.Parameter {
+func (s *Builder) prepareExternalParameters(paramViewConfig *viewParamConfig) ([]*view.Parameter, error) {
 	var externalParams []*view.Parameter
 
 	for _, parameter := range paramViewConfig.params {
 		if parameter.Auth != "" {
-			externalParams = append(externalParams, &view.Parameter{
+			authParam := &view.Parameter{
 				Name:            parameter.Auth,
 				In:              &view.Location{Name: "Authorization", Kind: view.HeaderKind},
 				ErrorStatusCode: 401,
 				Required:        boolPtr(true),
 				Codec:           &view.Codec{Name: "JwtClaim"},
 				Schema:          &view.Schema{DataType: "JwtTokenInfo"},
-			})
+			}
+
+			if err := s.addParameters(authParam); err != nil {
+				return nil, err
+			}
+
+			externalParams = append(externalParams, authParam)
 		}
 		if parameter.Connector != "" {
 			paramViewConfig.viewConfig.unexpandedTable.Connector = parameter.Connector
 		}
 	}
 
-	return externalParams
+	return externalParams, nil
 }
 
 func (s *Builder) moveConstParameters() error {
@@ -866,8 +882,7 @@ func (s *Builder) updateParamByHint(param *view.Parameter) error {
 		return err
 	}
 
-	s.updateViewParam(param, paramConfig)
-	return nil
+	return s.updateViewParam(param, paramConfig)
 }
 
 func (s *Builder) updateViewParam(param *view.Parameter, config *option.ParameterConfig) error {
@@ -897,6 +912,10 @@ func (s *Builder) updateViewParam(param *view.Parameter, config *option.Paramete
 
 	if config.ExpectReturned != nil {
 		param.MaxAllowedRecords = config.ExpectReturned
+	}
+
+	if config.CodecType != "" && param.Codec != nil {
+		param.Codec.Schema = &view.Schema{DataType: config.CodecType}
 	}
 
 	return nil
@@ -974,7 +993,6 @@ func (s *Builder) loadGoType(typeSrc *option.TypeSrcConfig) error {
 			DataType: rType.String(),
 			Ptr:      asPtr,
 		})
-
 	}
 
 	return nil
@@ -1080,4 +1098,108 @@ func (s *Builder) parseTypeSrc(imported string) (*option.TypeSrcConfig, error) {
 		URL:   importSegments[0],
 		Types: []string{importSegments[1]},
 	}, nil
+}
+
+func (s *Builder) readArtificialParamHints() error {
+	cursor := parsly.NewCursor("", []byte(s.routeBuilder.sqlStmt), 0)
+	for {
+		matched := cursor.MatchOne(setTerminatedMatcher)
+		switch matched.Code {
+		case setTerminatedToken:
+			setStart := cursor.Pos
+			cursor.MatchOne(setMatcher) //to move cursor
+			matched = cursor.MatchAfterOptional(whitespaceMatcher, exprGroupMatcher)
+			if matched.Code != exprGroupToken {
+				continue
+			}
+
+			selEnd := cursor.Pos
+
+			content := matched.Text(cursor)
+			content = content[1 : len(content)-1]
+			contentCursor := parsly.NewCursor("", []byte(content), 0)
+
+			matched = contentCursor.MatchAfterOptional(whitespaceMatcher, artificialMatcher)
+			if matched.Code != artificialToken {
+				continue
+			}
+
+			matched = contentCursor.MatchOne(whitespaceMatcher)
+			selector, err := parser.MatchSelector(contentCursor)
+			if err != nil {
+				continue
+			}
+
+			s.buildParamHint(selector, contentCursor)
+			s.routeBuilder.sqlStmt = strings.Replace(s.routeBuilder.sqlStmt, string(cursor.Input[setStart:selEnd]), "", 1)
+
+		default:
+			return nil
+		}
+	}
+}
+
+func (s *Builder) buildParamHint(selector *expr.Select, cursor *parsly.Cursor) {
+	_, holderName := sanitize.GetHolderName(view.FirstNotEmpty(selector.FullName, selector.ID))
+	paramHint, _ := s.parseParamHint(cursor)
+	if paramHint == "" {
+		return
+	}
+
+	s.routeBuilder.paramsIndex.hints[holderName] = &sanitize.ParameterHint{
+		Parameter: holderName,
+		Hint:      paramHint,
+	}
+}
+
+func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
+	matched := cursor.MatchAfterOptional(whitespaceMatcher, commentMatcher)
+	if matched.Code == commentToken {
+		return matched.Text(cursor), nil
+	}
+
+	config := &option.ParameterConfig{}
+	possibilities := []*parsly.Token{typeMatcher, exprGroupMatcher}
+	anyMatched := false
+	for len(possibilities) > 0 {
+		matched = cursor.MatchAfterOptional(whitespaceMatcher, possibilities...)
+		switch matched.Code {
+		case typeToken:
+			typeContent := matched.Text(cursor)
+			typeContent = strings.TrimSpace(typeContent[1 : len(typeContent)-1])
+			config.DataType = typeContent
+			if strings.HasPrefix(typeContent, "[]") {
+				config.Cardinality = view.Many
+			}
+
+			possibilities = []*parsly.Token{exprGroupMatcher}
+
+		case exprGroupToken:
+			inContent := matched.Text(cursor)
+			inContent = strings.TrimSpace(inContent[1 : len(inContent)-1])
+
+			segments := strings.Split(inContent, "/")
+			config.Kind = segments[0]
+
+			target := ""
+			if len(segments) > 1 {
+				target = strings.Join(segments[1:], ".")
+			}
+
+			config.Target = &target
+			possibilities = []*parsly.Token{}
+		default:
+			if !anyMatched {
+				return "", nil
+			}
+			possibilities = []*parsly.Token{}
+		}
+		anyMatched = true
+	}
+	marshal, err := json.Marshal(config)
+	if err != nil {
+		return "", err
+	}
+
+	return string(marshal), nil
 }

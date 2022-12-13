@@ -388,15 +388,15 @@ func (b *selectorsBuilder) fieldRawValue(ctx context.Context, details *ViewDetai
 
 func (b *selectorsBuilder) extractParamValue(ctx context.Context, param *view.Parameter, details *ViewDetails, selector *view.Selector) (interface{}, error) {
 	switch param.In.Kind {
-	case view.DataViewKind:
+	case view.KindDataView:
 		return b.viewParamValue(ctx, details, param)
-	case view.PathKind:
+	case view.KindPath:
 		return b.convertAndTransform(ctx, b.params.pathVariable(param.In.Name, ""), param, selector)
-	case view.QueryKind:
+	case view.KindQuery:
 		return b.convertAndTransform(ctx, b.params.queryParam(param.In.Name, ""), param, selector)
 	case view.KindRequestBody:
 		return b.params.requestBody, nil
-	case view.EnvironmentKind:
+	case view.KindEnvironment:
 		return b.convertAndTransform(ctx, os.Getenv(param.In.Name), param, selector)
 	case view.HeaderKind:
 		return b.convertAndTransform(ctx, b.params.header(param.In.Name), param, selector)

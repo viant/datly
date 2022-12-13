@@ -337,7 +337,30 @@ func (t *Template) detectParameters(statements []ast.Statement, required bool, r
 			t.indexStmt(&actual, required, rType, multi)
 		case *expr.Select:
 			t.indexParameter(actual, required, rType, multi)
+
+			callExpr := actual.X
+			for callExpr != nil {
+				switch callType := callExpr.(type) {
+				case *expr.Select:
+					callExpr = callType.X
+				case *expr.Call:
+					for _, arg := range callType.Args {
+						t.detectParameters([]ast.Statement{arg}, required, arg.Type(), false)
+					}
+					callExpr = callType.X
+				case *expr.SliceIndex:
+					t.detectParameters([]ast.Statement{callType.X}, required, callType.Type(), false)
+					callExpr = callType.Y
+				default:
+					callExpr = nil
+				}
+			}
 		case *stmt.Statement:
+			selector, ok := asSelector(actual.X)
+			if ok {
+				t.variables[view.FirstNotEmpty(selector.FullName, selector.ID)] = true
+			}
+
 			t.indexStmt(actual, required, rType, multi)
 		case *stmt.ForEach:
 			t.variables[actual.Item.ID] = true

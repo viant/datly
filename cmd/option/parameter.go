@@ -15,6 +15,7 @@ type ParameterConfig struct {
 	Codec          string           `json:",omitempty" yaml:",omitempty"`
 	Target         *string          `json:",omitempty" yaml:",omitempty"`
 	Const          interface{}      `json:",omitempty" yaml:",omitempty"`
+	CodecType      string           `json:",omitempty" yaml:",omitempty"`
 	Cardinality    view.Cardinality `json:",omitempty" yaml:",omitempty"`
 }
 
