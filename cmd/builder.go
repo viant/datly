@@ -827,8 +827,8 @@ func (s *Builder) prepareExternalParameters(paramViewConfig *viewParamConfig) ([
 				In:              &view.Location{Name: "Authorization", Kind: view.HeaderKind},
 				ErrorStatusCode: 401,
 				Required:        boolPtr(true),
-				Codec:           &view.Codec{Name: "JwtClaim"},
-				Schema:          &view.Schema{DataType: "JwtTokenInfo"},
+				Output:          &view.Codec{Name: "JwtClaim", Schema: &view.Schema{DataType: "JwtClaims"}},
+				Schema:          &view.Schema{DataType: "string"},
 			}
 
 			if err := s.addParameters(authParam); err != nil {
@@ -907,15 +907,15 @@ func (s *Builder) updateViewParam(param *view.Parameter, config *option.Paramete
 
 	param.Schema.DataType = paramType
 	if config.Codec != "" {
-		param.Codec = &view.Codec{Reference: shared.Reference{Ref: config.Codec}}
+		param.Output = &view.Codec{Reference: shared.Reference{Ref: config.Codec}}
 	}
 
 	if config.ExpectReturned != nil {
 		param.MaxAllowedRecords = config.ExpectReturned
 	}
 
-	if config.CodecType != "" && param.Codec != nil {
-		param.Codec.Schema = &view.Schema{DataType: config.CodecType}
+	if config.CodecType != "" && param.Output != nil {
+		param.Output.Schema = &view.Schema{DataType: config.CodecType}
 	}
 
 	return nil

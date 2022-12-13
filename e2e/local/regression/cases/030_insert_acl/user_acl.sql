@@ -11,10 +11,9 @@
 
 import(
     "regression/cases/030_insert_acl.Events"
-    "regression/cases/030_insert_acl.JwtClaims"
 )
 
-#set($_ = $Jwt /* { "CodecType": "*JwtClaims" } */)
+#set($_ = $Jwt)
 #set($_ = $Events<*Events>(body/))
 
 #set($acl = $Unsafe.UserAcl /*
@@ -29,7 +28,7 @@ $sequencer.Allocate("EVENTS", $Events, "Id")
 $sequencer.Allocate("EVENTS_PERFORMANCE", $Events, "EventsPerformance/Id")
 
 #if($acl.IsReadOnly)
-$logger.Fatal("permission denied for %v", $Jwt.Name)
+$logger.Fatal("permission denied for %v", $Jwt.Username)
 #end
 
 

@@ -413,12 +413,12 @@ func (b *selectorsBuilder) convertAndTransform(ctx context.Context, raw string, 
 		dateFormat = param.DateFormat
 	}
 
-	if param.Codec == nil {
-		convert, _, err := converter.Convert(raw, param.Schema.Type(), dateFormat)
+	if param.Output == nil {
+		convert, _, err := converter.Convert(raw, param.ActualParamType(), dateFormat)
 		return convert, err
 	}
 
-	return param.Codec.Transform(ctx, raw, selector)
+	return param.Output.Transform(ctx, raw, selector)
 }
 
 func (b *selectorsBuilder) buildSelectorParameters(ctx context.Context, selector *view.Selector, parent *ViewDetails, parameters []*view.Parameter) (*view.Parameter, error) {
@@ -534,7 +534,7 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 	sliceType := aView.Schema.SliceType()
 	slice := aView.Schema.Slice()
 	var returnMulti bool
-	if param.Schema.Type().Kind() == reflect.Slice {
+	if param.ActualParamType().Kind() == reflect.Slice {
 		sliceType = param.Schema.Type()
 		slice = param.Schema.Slice()
 		returnMulti = true

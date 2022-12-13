@@ -742,16 +742,6 @@ func FirstNotEmpty(values ...string) string {
 	return ""
 }
 
-func NotZeroOf(values ...int) int {
-	for _, value := range values {
-		if value != 0 {
-			return value
-		}
-	}
-
-	return 0
-}
-
 func (v *View) registerHolders() error {
 	for i := range v.With {
 		if err := v._columns.RegisterHolder(v.With[i]); err != nil {

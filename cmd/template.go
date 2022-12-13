@@ -140,7 +140,7 @@ func convertMetaParameter(param *Parameter, values map[string]interface{}, hints
 
 	return &view.Parameter{
 		Name:         param.Id,
-		Codec:        aCodec,
+		Output:       aCodec,
 		Const:        constValue,
 		PresenceName: param.Name,
 		Schema: &view.Schema{
@@ -220,7 +220,7 @@ func updateParamPrecedence(dest *view.Parameter, source *view.Parameter) {
 
 	updateDestSchema(dest, source)
 	if dest.In.Kind == view.DataViewKind {
-		dest.Codec = nil
+		dest.Output = nil
 	}
 
 	if source.Const != nil {
@@ -229,12 +229,12 @@ func updateParamPrecedence(dest *view.Parameter, source *view.Parameter) {
 }
 
 func updateDestSchema(dest *view.Parameter, source *view.Parameter) {
-	if dest.Codec != nil {
+	if dest.Output != nil {
 		return
 	}
 
-	if dest.Codec == nil {
-		dest.Codec = source.Codec
+	if dest.Output == nil {
+		dest.Output = source.Output
 	}
 
 	if source.Schema == nil {

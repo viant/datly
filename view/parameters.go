@@ -24,15 +24,17 @@ type (
 		Name         string `json:",omitempty"`
 		PresenceName string `json:",omitempty"`
 
-		In                *Location   `json:",omitempty"`
-		Required          *bool       `json:",omitempty"`
-		Description       string      `json:",omitempty"`
-		DataType          string      `json:",omitempty"`
-		Style             string      `json:",omitempty"`
-		MaxAllowedRecords *int        `json:",omitempty"`
-		Schema            *Schema     `json:",omitempty"`
-		Codec             *Codec      `json:",omitempty"`
-		Const             interface{} `json:",omitempty"`
+		In                *Location `json:",omitempty"`
+		Required          *bool     `json:",omitempty"`
+		Description       string    `json:",omitempty"`
+		DataType          string    `json:",omitempty"`
+		Style             string    `json:",omitempty"`
+		MaxAllowedRecords *int      `json:",omitempty"`
+		Schema            *Schema   `json:",omitempty"`
+		//deprecated -> use Codec only to set Output
+		Codec  *Codec      `json:",omitempty"`
+		Output *Codec      `json:",omitempty"`
+		Const  interface{} `json:",omitempty"`
 
 		DateFormat      string `json:",omitempty"`
 		ErrorStatusCode int    `json:",omitempty"`
@@ -198,6 +200,11 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 	if p.initialized == true {
 		return nil
 	}
+	if p.Codec != nil {
+		p.Output = p.Codec
+		p.Codec = nil
+	}
+
 	p.initialized = true
 	p._owner = view
 
@@ -284,8 +291,8 @@ func (p *Parameter) inherit(param *Parameter) {
 		p.Schema = param.Schema.copy()
 	}
 
-	if p.Codec == nil {
-		p.Codec = param.Codec
+	if p.Output == nil {
+		p.Output = param.Output
 	}
 
 	if p.view == nil {
@@ -459,7 +466,7 @@ func (p *Parameter) convertAndSet(ctx context.Context, selector *Selector, value
 }
 
 func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr unsafe.Pointer, converted bool, options ...interface{}) error {
-	aCodec := p.Codec
+	aCodec := p.Output
 	if converted {
 		aCodec = nil
 	}
@@ -499,11 +506,11 @@ func (p *Parameter) SetPresenceField(structType reflect.Type) error {
 }
 
 func (p *Parameter) initCodec(resource *Resource, view *View, paramType reflect.Type) error {
-	if p.Codec == nil {
+	if p.Output == nil {
 		return nil
 	}
 
-	if err := p.Codec.Init(resource, view, paramType); err != nil {
+	if err := p.Output.Init(resource, view, paramType); err != nil {
 		return err
 	}
 
@@ -511,8 +518,8 @@ func (p *Parameter) initCodec(resource *Resource, view *View, paramType reflect.
 }
 
 func (p *Parameter) ActualParamType() reflect.Type {
-	if p.Codec != nil && p.Codec.Schema != nil {
-		return p.Codec.Schema.Type()
+	if p.Output != nil && p.Output.Schema != nil {
+		return p.Output.Schema.Type()
 	}
 
 	return p.Schema.Type()

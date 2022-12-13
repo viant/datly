@@ -84,16 +84,6 @@ func (s *Builder) build() (*standalone.Server, error) {
 	return srv, nil
 }
 
-func (s *Builder) buildSchemaFromParamType(schemaName, paramType string) (*view.Definition, bool) {
-	return &view.Definition{
-		Name: schemaName,
-		Schema: &view.Schema{
-			Name:     schemaName,
-			DataType: paramType,
-		},
-	}, true
-}
-
 func normalizeMetaTemplateSQL(SQL string, holderViewName string) string {
 	return strings.Replace(SQL, "$View."+holderViewName+".SQL", "$View.NonWindowSQL", 1)
 }

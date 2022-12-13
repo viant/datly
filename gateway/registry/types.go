@@ -7,8 +7,10 @@ import (
 
 const (
 	TypeJwtTokenInfo = "JwtTokenInfo"
+	TypeJwtClaims    = "JwtClaims"
 )
 
 var Types = map[string]reflect.Type{
 	TypeJwtTokenInfo: reflect.TypeOf(&jwt.Claims{}),
+	TypeJwtClaims:    reflect.TypeOf(jwt.Claims{}),
 }
