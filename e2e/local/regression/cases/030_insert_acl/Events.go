@@ -16,3 +16,8 @@ type EventsPerformance struct {
 	EventId   int       `sqlx:"-"`
 	Timestamp time.Time `sqlx:"name=TIMESTAMP"`
 }
+
+type JwtClaims struct {
+	Name   string
+	UserID int
+}
