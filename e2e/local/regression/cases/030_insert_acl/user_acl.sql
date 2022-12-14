@@ -16,19 +16,19 @@ import(
 #set($_ = $Jwt)
 #set($_ = $Events<*Events>(body/))
 
-#set($acl = $Unsafe.UserAcl /*
+#set($Acl = $Unsafe.UserAcl /*
   { "Auth":"Jwt", "Connector":"dyndb" }
                           SELECT USER_ID AS UserID,
-                          ARRAY_EXISTS(ROLE, 'READ_ONLY') AS IsReadOnly,
-                          ARRAY_EXISTS(FEATURE1, 'FEATURE1') AS Feature
+                          ARRAY_EXISTS(ROLE, 'READ_ONLY') AS IsReadOnly /* {"DataType":"bool"} */,
+                          ARRAY_EXISTS(FEATURE1, 'FEATURE1') AS Feature /* {"DataType":"bool"} */
                           FROM USER_ACL WHERE USER_ID = $Jwt.UserID
  */)
 
 $sequencer.Allocate("EVENTS", $Events, "Id")
 $sequencer.Allocate("EVENTS_PERFORMANCE", $Events, "EventsPerformance/Id")
 
-#if($acl.IsReadOnly)
-$logger.Fatal("permission denied for %v", $Jwt.Username)
+#if($Acl.IsReadOnly)
+$logger.Fatal("permission denied for %v", $Jwt.Email)
 #end
 
 
@@ -39,19 +39,3 @@ INSERT INTO EVENTS (
     $Events.Id /* {"DataType":"Events","Target":"","Cardinality":"One"} */ ,
     $Events.Quantity
 );
-
-#foreach($recEventsPerformance in $Unsafe.Events.EventsPerformance)
-	#set($recEventsPerformance.EventId = $Unsafe.Events.Id)
-	INSERT INTO EVENTS_PERFORMANCE (
-        ID,
-        PRICE,
-        EVENT_ID,
-        TIMESTAMP
-	) VALUES (
-        $recEventsPerformance.Id,
-        $recEventsPerformance.Price,
-        $recEventsPerformance.EventId,
-        $recEventsPerformance.Timestamp
-	);
-	
-#end
