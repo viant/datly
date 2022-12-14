@@ -107,3 +107,4 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
+require github.com/r3labs/diff v1.1.0 // indirect

@@ -181,6 +181,7 @@ func (s *Builder) discoverySQLColumns(db *sql.DB, table *Table, tableMeta *Table
 		tableMeta.AddIoColumns(ioColumns)
 		if len(ioColumns) == len(table.Columns) {
 			for i, column := range ioColumns {
+				fmt.Printf("detected %v %v %v\n", column.Name(), column.DatabaseTypeName(), column.ScanType().String())
 				table.Columns[i].DataType = column.ScanType().String()
 			}
 		}

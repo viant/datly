@@ -19,8 +19,8 @@ import(
 #set($Acl = $Unsafe.UserAcl /*
   { "Auth":"Jwt", "Connector":"dyndb" }
                           SELECT USER_ID AS UserID,
-                          ARRAY_EXISTS(ROLE, 'READ_ONLY') AS IsReadOnly /* {"DataType":"bool"} */,
-                          ARRAY_EXISTS(FEATURE1, 'FEATURE1') AS Feature /* {"DataType":"bool"} */
+                          ARRAY_EXISTS(ROLE, 'READ_ONLY') AS IsReadOnly,
+                          ARRAY_EXISTS(FEATURE1, 'FEATURE1') AS Feature
                           FROM USER_ACL WHERE USER_ID = $Jwt.UserID
  */)
 
