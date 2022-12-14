@@ -177,15 +177,7 @@ func (s *Builder) discoverySQLColumns(db *sql.DB, table *Table, tableMeta *Table
 		return
 	}
 	ioColumns, err := columns.DetectColumns(context.Background(), db, SQL)
-	if len(ioColumns) > 0 {
-		tableMeta.AddIoColumns(ioColumns)
-		if len(ioColumns) == len(table.Columns) {
-			for i, column := range ioColumns {
-				fmt.Printf("detected %v %v %v\n", column.Name(), column.DatabaseTypeName(), column.ScanType().String())
-				table.Columns[i].DataType = column.ScanType().String()
-			}
-		}
-	}
+	tableMeta.AddIoColumns(ioColumns)
 }
 
 func normalizeSQL(table *Table) (string, error) {

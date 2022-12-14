@@ -660,8 +660,8 @@ func (s *Builder) buildSchemaFromTable(schemaName string, table *Table, columnTy
 		}
 
 		dataType := column.DataType
-		if dataType == "" {
-			meta, ok := columnTypes[strings.ToLower(column.Name)]
+		if dataType == "" || dataType == "string" {
+			meta, ok := columnTypes[strings.ToLower(structFieldName)]
 			if ok {
 				dataType = meta.Type.String()
 			}

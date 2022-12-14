@@ -56,8 +56,6 @@ func (m *TableMeta) AddIoColumns(columns []io.Column) {
 			Name: column.Name(),
 			Type: column.ScanType(),
 		})
-
-		m.Columns = append(m.Columns)
 	}
 }
 
