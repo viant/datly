@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"github.com/viant/datly/cmd/matchers"
 	"github.com/viant/parsly"
 	"github.com/viant/parsly/matcher"
 )
@@ -17,6 +18,8 @@ const (
 	artificialToken
 	commentToken
 	typeToken
+	dotToken
+	selectToken
 )
 
 var whitespaceMatcher = parsly.NewToken(whitespaceToken, "Whitespace", matcher.NewWhiteSpace())
@@ -29,6 +32,8 @@ var setMatcher = parsly.NewToken(setToken, "#set", matcher.NewFragments([]byte("
 var artificialMatcher = parsly.NewToken(artificialToken, "$_", matcher.NewSpacedSet([]string{"$_ = $"}))
 var commentMatcher = parsly.NewToken(commentToken, "/**/", matcher.NewSeqBlock("/*", "*/"))
 var typeMatcher = parsly.NewToken(typeToken, "<T>", matcher.NewSeqBlock("<", ">"))
+var dotMatcher = parsly.NewToken(dotToken, "call", matcher.NewByte('.'))
+var selectMatcher = parsly.NewToken(selectToken, "Function call", matchers.NewIdentity())
 
 type stringTerminatorMatcher struct {
 	value []byte

@@ -1167,9 +1167,16 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 		case typeToken:
 			typeContent := matched.Text(cursor)
 			typeContent = strings.TrimSpace(typeContent[1 : len(typeContent)-1])
-			config.DataType = typeContent
-			if strings.HasPrefix(typeContent, "[]") {
+
+			types := strings.Split(typeContent, ",")
+			dataType := types[0]
+			config.DataType = dataType
+			if strings.HasPrefix(dataType, "[]") {
 				config.Cardinality = view.Many
+			}
+
+			if len(types) > 1 {
+				config.CodecType = types[1]
 			}
 
 			possibilities = []*parsly.Token{exprGroupMatcher}
@@ -1187,6 +1194,10 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 			}
 
 			config.Target = &target
+
+			if err := s.readParamConfigs(config, cursor); err != nil {
+				return "", err
+			}
 			possibilities = []*parsly.Token{}
 		default:
 			if !anyMatched {
@@ -1202,4 +1213,36 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 	}
 
 	return string(marshal), nil
+}
+
+func (s *Builder) readParamConfigs(config *option.ParameterConfig, cursor *parsly.Cursor) error {
+	matched := cursor.MatchOne(dotMatcher)
+	if matched.Code != dotToken {
+		return nil
+	}
+
+	for cursor.Pos < cursor.InputSize {
+		matched = cursor.MatchOne(selectMatcher)
+		if matched.Code != selectToken {
+			return cursor.NewError(selectMatcher)
+		}
+
+		text := matched.Text(cursor)
+		matched = cursor.MatchOne(exprGroupMatcher)
+		if matched.Code != exprGroupToken {
+			return cursor.NewError(exprGroupMatcher)
+		}
+
+		content := matched.Text(cursor)
+		content = content[1 : len(content)-1]
+
+		switch text {
+		case "WithCodec":
+			config.Codec = strings.Trim(content, "'")
+		}
+
+		cursor.MatchOne(whitespaceMatcher)
+	}
+
+	return nil
 }
