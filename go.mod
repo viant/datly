@@ -44,7 +44,7 @@ require (
 
 require (
 	github.com/francoispqt/gojay v1.2.13
-	github.com/viant/dyndb v0.1.3
+	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
 )
 
 require (
