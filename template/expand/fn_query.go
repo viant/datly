@@ -23,7 +23,7 @@ func (q *queryFirstFunction) ResultType(receiver reflect.Type, call *expr.Call) 
 		return nil, err
 	}
 
-	return resultType.Elem(), nil
+	return resultType.Elem().Elem(), nil
 }
 
 func (q *queryFirstFunction) Kind() []reflect.Kind {
@@ -37,12 +37,13 @@ func (q *queryFirstFunction) Handler() interface{} {
 			return nil, err
 		}
 
-		rValue := reflect.ValueOf(result).Elem()
+		rValue := reflect.ValueOf(result)
 		if rValue.Len() == 0 {
 			return NewValue(rValue.Type().Elem()), nil
 		}
 
 		result = rValue.Index(0).Interface()
+
 		return result, nil
 	}
 }
@@ -64,7 +65,7 @@ func (q *queryFunction) ResultType(receiver reflect.Type, call *expr.Call) (refl
 		return nil, err
 	}
 
-	return reflect.PtrTo(query.Type()), nil
+	return query.Type(), nil
 }
 
 func (q *queryFunction) Kind() []reflect.Kind {
@@ -83,7 +84,7 @@ func (q *queryFunction) handleQuery(data interface{}, query string) (interface{}
 	}
 
 	if xunsafe.AsPointer(data) == nil {
-		return NewValue(reflect.PtrTo(parsedQuery.Type())), nil
+		return NewValue(parsedQuery.Type()), nil
 	}
 
 	result, err := parsedQuery.Select(data)
@@ -91,7 +92,7 @@ func (q *queryFunction) handleQuery(data interface{}, query string) (interface{}
 		return nil, err
 	}
 
-	return reflect.ValueOf(result).Interface(), nil
+	return reflect.ValueOf(result).Elem().Interface(), nil
 }
 
 var queryFirstFnHandler = &queryFirstFunction{}

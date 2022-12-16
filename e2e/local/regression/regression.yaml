@@ -24,7 +24,7 @@ pipeline:
     data:
       '[]gen': '@gen'
 
-    range: 31..031
+    range: 1..031
     template:
       checkSkip:
         action: nop
