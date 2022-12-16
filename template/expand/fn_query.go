@@ -1,9 +1,9 @@
 package expand
 
 import (
+	"fmt"
 	"github.com/viant/structql"
 	"github.com/viant/velty/ast/expr"
-	"github.com/viant/xunsafe"
 	"reflect"
 )
 
@@ -32,6 +32,7 @@ func (q *queryFirstFunction) Kind() []reflect.Kind {
 
 func (q *queryFirstFunction) Handler() interface{} {
 	return func(data interface{}, query string) (interface{}, error) {
+		fmt.Printf("%T, %v\n", data, data)
 		result, err := queryFnHandler.handleQuery(data, query)
 		if err != nil {
 			return nil, err
@@ -81,10 +82,6 @@ func (q *queryFunction) handleQuery(data interface{}, query string) (interface{}
 	parsedQuery, err := structql.NewQuery(query, reflect.TypeOf(data), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if xunsafe.AsPointer(data) == nil {
-		return NewValue(parsedQuery.Type()), nil
 	}
 
 	result, err := parsedQuery.Select(data)

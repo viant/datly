@@ -68,18 +68,33 @@ func (b *patchStmtBuilder) build(parentRecord string, withUnsafe bool) (string, 
 	}
 
 	b.insert.appendAllocation(b.typeDef, "", b.typeDef.paramName)
-	accessor, _ := b.appendForEachIfNeeded(parentRecord, b.paramName, withUnsafe)
-	contentBuilder := b.withIndent()
-
-	withUnsafe = accessor.withUnsafe
-
-	indexes, err := contentBuilder.generateIndexes(contentBuilder.typeDef, accessor)
+	indexes, err := b.generateIndexes(b.typeDef)
 	if err != nil {
 		return "", nil
 	}
 
-	b.writeString("\n#if(")
+	accessor, multi := b.appendForEachIfNeeded(parentRecord, b.paramName, withUnsafe)
+	contentBuilder := b
+	if multi {
+		contentBuilder = b.withIndent()
+	}
 
+	withUnsafe = accessor.withUnsafe
+	if err = contentBuilder.appendPatchContent(indexes, accessor); err != nil {
+		return "", err
+	}
+
+	if multi {
+		b.writeString("\n#end")
+	}
+
+	return b.sb.String(), nil
+}
+
+func (b *patchStmtBuilder) appendPatchContent(indexes []*patchChecker, accessor *paramAccessor) error {
+	contentBuilder := b.withIndent()
+
+	b.writeString("\n#if(")
 	for i, index := range indexes {
 		if i != 0 {
 			contentBuilder.writeString(" && ")
@@ -88,21 +103,20 @@ func (b *patchStmtBuilder) build(parentRecord string, withUnsafe bool) (string, 
 	}
 
 	contentBuilder.writeString(")")
-	if err = contentBuilder.update.appendUpdate(accessor); err != nil {
-		return "", err
+	if err := contentBuilder.update.appendUpdate(accessor); err != nil {
+		return err
 	}
 
 	b.writeString("\n#else")
-	if err = contentBuilder.insert.appendInsert(accessor); err != nil {
-		return "", err
+	if err := contentBuilder.insert.appendInsert(accessor); err != nil {
+		return err
 	}
 
 	b.writeString("\n#end")
-
-	return b.sb.String(), nil
+	return nil
 }
 
-func (b *patchStmtBuilder) generateIndexes(def *inputMetadata, accessor *paramAccessor) ([]*patchChecker, error) {
+func (b *patchStmtBuilder) generateIndexes(def *inputMetadata) ([]*patchChecker, error) {
 	var checkers []*patchChecker
 	for _, field := range def.actualFields {
 		aMeta, ok := def.meta.metaByColName(field.Column)
@@ -127,8 +141,8 @@ func (b *patchStmtBuilder) generateIndexes(def *inputMetadata, accessor *paramAc
 
 func (b *patchStmtBuilder) withIndent() *patchStmtBuilder {
 	aCopy := *b
-	aCopy.update = aCopy.update.withIndent()
-	aCopy.insert = aCopy.insert.withIndent()
+	aCopy.update = b.update.withIndent()
+	aCopy.insert = b.insert.withIndent()
 	aCopy.stmtBuilder = aCopy.stmtBuilder.withIndent()
 	return &aCopy
 }

@@ -23,3 +23,10 @@ pipeline:
         Expect:
           Code: 200
           JSONBody: $LoadJSON('${parentPath}/expect_t1.json')
+
+#  checkDb:
+#    action: 'dsunit:expect'
+#    datastore: dev
+#    expand: true
+#    checkPolicy: 1
+#    URL: ${parentPath}/expect

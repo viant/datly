@@ -1,0 +1,12 @@
+[
+  {
+    "id": 5,
+    "name": "changed - foo 5",
+    "quantity": 5000
+  },
+  {
+    "id": "@exists@",
+    "name": "created - foo 5",
+    "quantity": 10000
+  }
+]
