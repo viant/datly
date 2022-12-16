@@ -84,6 +84,18 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
+	if err = evaluator.planner.RegisterFunctionKind(lengthFunctionName, newStringLength()); err != nil {
+		return nil, err
+	}
+
+	if err = evaluator.planner.RegisterFunctionKind(lengthFunctionName, newArrayLength()); err != nil {
+		return nil, err
+	}
+
+	if err = evaluator.planner.RegisterFunctionKind(queryFirstFunctionName, queryFirstFnHandler); err != nil {
+		return nil, err
+	}
+
 	evaluator.executor, evaluator.stateProvider, err = evaluator.planner.Compile([]byte(template))
 	if err != nil {
 		return nil, err

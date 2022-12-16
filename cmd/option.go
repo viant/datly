@@ -14,6 +14,7 @@ import (
 const (
 	PreparePost   = "post"
 	PreparePut    = "put"
+	PreparePatch  = "patch"
 	PrepareDelete = "delete"
 
 	folderDev = "dev"

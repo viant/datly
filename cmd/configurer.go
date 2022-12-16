@@ -146,8 +146,7 @@ func (c *ViewConfigurer) buildExecViewConfig(viewName string, templateSQL string
 	}
 	aConfig := newViewConfig(viewName, viewName, nil, table, nil, view.SQLExecMode)
 
-	lcSQL := strings.ToLower(templateSQL)
-	boundary := getStatementBoundary(lcSQL)
+	boundary := GetStmtBoundaries(templateSQL)
 
 	var resultErr error
 	for i := 1; i < len(boundary); i++ {
@@ -227,14 +226,22 @@ func buildExpandMap(paramsIndex *ParametersIndex) (rdata.Map, error) {
 }
 
 func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
-	aQuery, err := sqlparser.ParseQuery(SQL)
+	boundary := GetStmtBoundaries(SQL)
+	if len(boundary) == 0 {
+		return nil, nil, fmt.Errorf("not found select in %v", SQL)
+	}
+
+	parsableSQL := SQL[boundary[0]:]
+
+	aQuery, err := sqlparser.ParseQuery(parsableSQL)
 	if err != nil {
 		fmt.Printf("[WARN] couldn't parse properly SQL for %v\n", viewName)
 	}
 
 	joins, ok := sqlxJoins(aQuery, opt)
 	if !ok {
-		aTable := buildTableFromQueryWithWarning(aQuery, expr.NewRaw(SQL), opt, aQuery.From.Comments)
+		aTable := buildTableFromQueryWithWarning(aQuery, expr.NewRaw(parsableSQL), opt, aQuery.From.Comments)
+		aTable.SQL = SQL
 		result := newViewConfig(viewName, viewName, parent, aTable, nil, view.SQLQueryMode)
 		var namespaceSource string
 		if columns.CanBeTableName(aTable.Name) {
@@ -461,12 +468,16 @@ func (c *viewConfig) parseComment(comment string) {
 	tryUnmrashalHintWithWarn(hint, &c.expandedTable.ViewConfig)
 }
 
-func getStatementBoundary(lcSQL string) []int {
+func getExecStatementBoundary(lcSQL string) []int {
+	return getStmtBoundary(lcSQL, []string{"insert ", "update ", "delete", "call "})
+}
+
+func getStmtBoundary(lcSQL string, statements []string) []int {
 	var boundary []int
 	var offset = 0
-	tempSQL := lcSQL
+	tempSQL := strings.ToLower(lcSQL)
 	for {
-		index := getStatementIndex(tempSQL)
+		index := getStatementIndex(tempSQL, statements)
 		if index == -1 {
 			break
 		}
@@ -487,9 +498,9 @@ func getStatementBoundary(lcSQL string) []int {
 	return boundary
 }
 
-func getStatementIndex(lcSQL string) int {
+func getStatementIndex(lcSQL string, statements []string) int {
 	var candidates []int
-	for _, keyword := range []string{"insert ", "update ", "delete", "call "} {
+	for _, keyword := range statements {
 		if index := strings.Index(lcSQL, keyword); index != -1 {
 			candidates = append(candidates, index)
 		}

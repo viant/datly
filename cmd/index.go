@@ -16,8 +16,9 @@ type (
 	}
 
 	TableMeta struct {
-		index   map[string]int
-		Columns []*ColumnMeta
+		TableName string
+		index     map[string]int
+		Columns   []*ColumnMeta
 	}
 
 	ColumnIndex map[string]*ColumnMeta
@@ -39,14 +40,16 @@ func (t *TableMetaRegistry) Indexed(tableName string) bool {
 }
 
 func (t *TableMetaRegistry) TableMeta(tableName string) *TableMeta {
-	if meta, ok := t.metas[tableName]; ok {
+	tableKey := strings.ToLower(tableName)
+	if meta, ok := t.metas[tableKey]; ok {
 		return meta
 	}
 
 	meta := &TableMeta{
-		index: map[string]int{},
+		TableName: tableName,
+		index:     map[string]int{},
 	}
-	t.metas[tableName] = meta
+	t.metas[tableKey] = meta
 	return meta
 }
 

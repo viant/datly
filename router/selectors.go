@@ -445,7 +445,7 @@ func (b *selectorsBuilder) handleParam(ctx context.Context, selector *view.Selec
 			return err
 		}
 
-	case view.HeaderKind:
+	case view.KindHeader:
 		if err := b.addHeaderParam(ctx, selector, parameter); err != nil {
 			return err
 		}
@@ -641,6 +641,7 @@ func (b *selectorsBuilder) extractBody(path string) (interface{}, bool) {
 		return nil, false
 	}
 
+	fmt.Printf("%T, %v\n", b.params.requestBody, b.params.requestBody)
 	value, err := accessor.Value(b.params.requestBody)
 	if err != nil {
 		return nil, false

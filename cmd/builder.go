@@ -39,8 +39,9 @@ type (
 		logger          io.Writer
 		fs              afs.Service
 		constParameters []*view.Parameter
-		fileNames       map[string]int
-		viewNames       map[string]int
+		fileNames       *uniqueIndex
+		viewNames       *uniqueIndex
+		types           *uniqueIndex
 	}
 
 	routeBuilder struct {
@@ -83,7 +84,50 @@ type (
 		viewConfig *viewConfig
 		params     []*Parameter
 	}
+
+	uniqueIndex struct {
+		taken         map[string]int
+		caseSensitive bool
+	}
 )
+
+func newUniqueIndex(caseSensitive bool) *uniqueIndex {
+	return &uniqueIndex{
+		taken:         map[string]int{},
+		caseSensitive: caseSensitive,
+	}
+}
+
+func (u *uniqueIndex) unique(value string) string {
+	aKey := value
+	if !u.caseSensitive {
+		aKey = strings.ToLower(aKey)
+	}
+
+	counter, ok := u.taken[aKey]
+	if !ok {
+		u.taken[aKey] = 1
+		return value
+	}
+
+	u.taken[aKey] = counter + 1
+	return value + strconv.Itoa(counter)
+}
+
+func (u *uniqueIndex) reserve(value string) error {
+	aKey := value
+	if !u.caseSensitive {
+		aKey = strings.ToLower(aKey)
+	}
+
+	_, ok := u.taken[aKey]
+	if !ok {
+		u.taken[aKey] = 1
+		return nil
+	}
+
+	return fmt.Errorf("%v is already defined")
+}
 
 func (b *routeBuilder) AddViews(aView *view.View) {
 	b.routerResource.Resource.AddViews(aView)
@@ -786,7 +830,11 @@ func (s *Builder) buildViewParams() ([]string, error) {
 		}
 
 		paramName := aView.Name
-		typeDef := s.buildSchemaFromTable(paramName, childViewConfig.unexpandedTable, s.columnTypes(childViewConfig.unexpandedTable))
+		typeDef, err := s.buildSchemaFromTable(paramName, childViewConfig.unexpandedTable, s.columnTypes(childViewConfig.unexpandedTable))
+		if err != nil {
+			return nil, err
+		}
+
 		s.addTypeDef(typeDef)
 
 		aParam := childViewConfig.unexpandedTable.ViewConfig.DataViewParameter
@@ -925,22 +973,6 @@ func (s *Builder) isUtilParam(param *view.Parameter) bool {
 	return s.routeBuilder.paramsIndex.utilsIndex[param.Name]
 }
 
-func (s *Builder) unique(name string, names map[string]int, caseSensitive bool) string {
-	aKey := name
-	if !caseSensitive {
-		aKey = strings.ToLower(aKey)
-	}
-
-	counter := names[aKey]
-	names[aKey] = counter + 1
-
-	if counter == 0 {
-		return name
-	}
-
-	return name + "_" + strconv.Itoa(counter)
-}
-
 func (s *Builder) inheritRouteServiceType(aView *view.View) {
 	switch aView.Mode {
 	case "", view.SQLQueryMode:
@@ -958,6 +990,8 @@ func (s *Builder) prepareRuleIfNeeded(SQL []byte) (string, error) {
 	switch strings.ToLower(s.options.PrepareRule) {
 	case PreparePost:
 		return s.preparePostRule(context.Background(), SQL)
+	case PreparePatch:
+		return s.preparePatchRule(context.Background(), SQL)
 	case PreparePut:
 		return s.preparePutRule(context.Background(), SQL)
 	default:
@@ -985,6 +1019,10 @@ func (s *Builder) loadGoType(typeSrc *option.TypeSrcConfig) error {
 
 		rType, err := dirTypes.Type(actualName)
 		if err != nil {
+			return err
+		}
+
+		if err = s.types.reserve(actualName); err != nil {
 			return err
 		}
 

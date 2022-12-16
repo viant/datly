@@ -1,0 +1,25 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: PATCH
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/foos
+        JsonBody:
+          ID: 4
+          Quantity: 2500
+          Name: 'changed - foo 4'
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
+
+      - Method: PATCH
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/foos
+        JsonBody:
+          Quantity: 1234
+          Name: 'created'
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_t0.json')

@@ -26,7 +26,7 @@ func (s *Builder) buildAndAddViewWithLog(ctx context.Context, viewConfig *viewCo
 
 func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, selector *view.Config, indexNamespace bool, parameters []*view.Parameter) (*view.View, error) {
 	table := viewConfig.unexpandedTable
-	viewName := s.unique(viewConfig.viewName, s.viewNames, true)
+	viewName := s.viewNames.unique(viewConfig.viewName)
 	connector, err := s.ConnectorRef(view.FirstNotEmpty(table.Connector, s.options.Connector.DbName))
 	if err != nil {
 		return nil, err

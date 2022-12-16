@@ -20,6 +20,8 @@ import (
 	"strings"
 )
 
+const defaultIndent = "  "
+
 type (
 	stmtBuilder struct {
 		indent  string
@@ -28,10 +30,21 @@ type (
 
 		paramName string
 		isMulti   bool
-		wroteHint *bool
 		paramKind string
+		paramSQLs map[string]string
+		withSQL   bool
 	}
 
+	paramAccessor struct {
+		unsafeRecord string
+		record       string
+		parent       string
+		unsafeParent string
+		withUnsafe   bool
+		name         interface{}
+	}
+
+	withSQL    bool
 	viewFields []*view.Field
 )
 
@@ -47,61 +60,72 @@ func (f viewFields) Swap(i, j int) {
 	f[i], f[j] = f[j], f[i]
 }
 
-func newStmtBuilder(sb *strings.Builder, def *inputMetadata, paramKind string) *stmtBuilder {
+func newStmtBuilder(sb *strings.Builder, def *inputMetadata, options ...interface{}) *stmtBuilder {
+	var paramKind string
+	var hintSQL bool
+
+	for _, anOption := range options {
+		switch actual := anOption.(type) {
+		case view.Kind:
+			paramKind = string(actual)
+		case withSQL:
+			hintSQL = bool(actual)
+		}
+	}
 	b := &stmtBuilder{
 		sb:        sb,
 		typeDef:   def,
 		paramName: def.paramName,
-		wroteHint: boolPtr(false),
 		isMulti:   def.config.outputConfig.IsMany(),
 		paramKind: paramKind,
+		paramSQLs: map[string]string{},
+		withSQL:   hintSQL,
 	}
 
 	return b
 }
 
-func (sb *stmtBuilder) appendColumnValues(accessor string, withHas bool) error {
-	return sb.appendColumns(accessor, true, withHas, func(accessor string, field *view.Field) string {
+func (sb *stmtBuilder) appendColumnValues(accessor *paramAccessor, withHas bool) error {
+	return sb.appendColumns(accessor, withHas, func(accessor string, field *view.Field) string {
 		return fmt.Sprintf("$%v.%v", accessor, field.Name)
 	}, nil)
 }
 
-func (sb *stmtBuilder) appendColumnNameValues(accessor string, withHas bool, fieldSkipper func(field *view.Field) bool) error {
-	return sb.appendColumns(accessor, true, withHas, func(accessor string, field *view.Field) string {
+func (sb *stmtBuilder) appendColumnNameValues(accessor *paramAccessor, withHas bool, fieldSkipper func(field *view.Field) bool) error {
+	return sb.appendColumns(accessor, withHas, func(accessor string, field *view.Field) string {
 		return fmt.Sprintf("%v = $%v.%v", field.Column, accessor, field.Name)
 	}, fieldSkipper)
 }
 
-func (sb *stmtBuilder) appendColumnNames(accessor string, withHas bool) error {
-	return sb.appendColumns(accessor, false, withHas, func(accessor string, field *view.Field) string {
+func (sb *stmtBuilder) appendColumnNames(accessor *paramAccessor, withHas bool) error {
+	return sb.appendColumns(accessor, withHas, func(accessor string, field *view.Field) string {
 		return field.Column
 	}, nil)
 }
 
-func (sb *stmtBuilder) appendColumns(accessor string, withHint, withHas bool, content func(accessor string, field *view.Field) string, skipper func(field *view.Field) bool) error {
+func (sb *stmtBuilder) appendColumns(accessor *paramAccessor, withHas bool, content func(accessor string, field *view.Field) string, skipper func(field *view.Field) bool) error {
 	var i = 0
-	for _, field := range sb.typeDef.actualFields {
+	for index, field := range sb.typeDef.actualFields {
 		if skipper != nil && skipper(field) {
 			continue
 		}
 
 		if field.Ptr && withHas {
-			sb.writeString(fmt.Sprintf("\n#if($%v.Has.%v == true)", accessor, field.Name))
+			sb.writeString(fmt.Sprintf("\n#if($%v.Has.%v == true)", accessor.unsafeRecord, field.Name))
 		}
 
-		if i != 0 {
-			sb.writeString(" , ")
+		if i == 0 {
+			sb.writeString("\n")
+		} else {
+			if len(sb.typeDef.actualFields)-1 > index && sb.typeDef.actualFields[index+1].Ptr && withHas {
+				sb.writeString("\n, ")
+			} else {
+				sb.writeString(", \n")
+			}
 		}
 
 		i++
-		sb.writeString("\n")
-		sb.writeString(content(accessor, field))
-
-		if withHint {
-			if err := sb.tryWriteParamHint(); err != nil {
-				return err
-			}
-		}
+		sb.writeString(content(accessor.record, field))
 
 		if field.Ptr && withHas {
 			sb.writeString("\n#end")
@@ -111,13 +135,13 @@ func (sb *stmtBuilder) appendColumns(accessor string, withHint, withHas bool, co
 	return nil
 }
 
-func (sb *stmtBuilder) paramHint(typeDef *inputMetadata) (string, error) {
-	target := typeDef.bodyHolder
+func (sb *stmtBuilder) paramHint(metadata *inputMetadata) (string, error) {
+	target := metadata.bodyHolder
 
 	paramConfig, err := json.Marshal(&option.ParameterConfig{
 		Target:      &target,
-		DataType:    "*" + typeDef.paramName,
-		Cardinality: typeDef.typeDef.Cardinality,
+		DataType:    "*" + metadata.paramName,
+		Cardinality: metadata.typeDef.Cardinality,
 		Kind:        sb.paramKind,
 	})
 
@@ -143,20 +167,6 @@ func (sb *stmtBuilder) accessParam(parentRecord, record string, withUnsafe bool)
 	return result
 }
 
-func (sb *stmtBuilder) tryWriteParamHint() error {
-	if *sb.wroteHint {
-		return nil
-	}
-	*sb.wroteHint = true
-	paramHint, err := sb.paramHint(sb.typeDef)
-	if err != nil {
-		return err
-	}
-
-	sb.writeString(paramHint)
-	return nil
-}
-
 func (sb *stmtBuilder) writeString(value string) {
 	if sb.indent != "" {
 		value = strings.ReplaceAll(value, "\n", "\n"+sb.indent)
@@ -165,30 +175,43 @@ func (sb *stmtBuilder) writeString(value string) {
 	sb.sb.WriteString(value)
 }
 
-func (sb *stmtBuilder) appendForEach(parentRecord, name string, withUnsafe bool) (parentName string, recordName string, err error) {
+func (sb *stmtBuilder) appendForEachIfNeeded(parentRecord, name string, withUnsafe bool) (*paramAccessor, bool) {
+	if !sb.isMulti {
+		return &paramAccessor{
+			record:       sb.accessParam(parentRecord, name, false),
+			withUnsafe:   withUnsafe,
+			parent:       parentRecord,
+			unsafeRecord: sb.accessParam(parentRecord, name, withUnsafe),
+			unsafeParent: sb.accessParam("", parentRecord, withUnsafe),
+			name:         name,
+		}, false
+	}
+
 	sb.writeString("\n#foreach($")
 	recName := "rec" + name
 	sb.writeString(recName)
 	sb.writeString(" in ")
 	sb.writeString("$")
 	sb.writeString(sb.accessParam(parentRecord, name, withUnsafe))
-	if err := sb.tryWriteParamHint(); err != nil {
-		return "", "", err
-	}
-
 	sb.writeString(")")
 
-	return "", recName, err
+	return &paramAccessor{
+		unsafeRecord: recName,
+		parent:       parentRecord,
+		unsafeParent: sb.accessParam("", parentRecord, withUnsafe),
+		record:       recName,
+		withUnsafe:   false,
+		name:         name,
+	}, true
 }
 
 func (sb *stmtBuilder) newRelation(rel *inputMetadata) *stmtBuilder {
-	builder := newStmtBuilder(sb.sb, rel, "")
+	builder := newStmtBuilder(sb.sb, rel)
 	builder.indent = sb.indent
 	if builder.isMulti {
-		builder.indent += "	"
+		builder.indent += defaultIndent
 	}
 
-	builder.wroteHint = sb.wroteHint
 	return builder
 }
 
@@ -219,14 +242,14 @@ func (s *Builder) buildInputMetadata(ctx context.Context, sourceSQL []byte) (*op
 		return nil, nil, nil, err
 	}
 
-	paramType, err := s.detectInputType(ctx, db, aConfig.expandedTable.Name, aConfig, "")
+	paramType, err := s.detectInputType(ctx, db, aConfig.expandedTable.Name, aConfig, "", "/")
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	return routeOption, aConfig, paramType, nil
 }
 
-func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName string, config *viewConfig, parentTable string) (*inputMetadata, error) {
+func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName string, config *viewConfig, parentTable string, path string) (*inputMetadata, error) {
 	columns, err := s.readSinkColumns(ctx, db, tableName)
 	if err != nil {
 		return nil, err
@@ -246,7 +269,7 @@ func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName str
 		return nil, err
 	}
 
-	return s.buildPostInputParameterType(columns, foreignKeys, primaryKeys, config, db, tableName, parentTable)
+	return s.buildPostInputParameterType(columns, foreignKeys, primaryKeys, config, db, tableName, parentTable, path)
 }
 
 func (s *Builder) readSinkColumns(ctx context.Context, db *sql.DB, tableName string) ([]sink.Column, error) {
@@ -282,7 +305,7 @@ func (s *Builder) readPrimaryKeys(ctx context.Context, db *sql.DB, tableName str
 	return s.filterKeys(keys, tableName), nil
 }
 
-func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys []sink.Key, primaryKeys []sink.Key, config *viewConfig, db *sql.DB, table, parentTable string) (*inputMetadata, error) {
+func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys, primaryKeys []sink.Key, config *viewConfig, db *sql.DB, table, parentTable, path string) (*inputMetadata, error) {
 	fkIndex := s.indexKeys(foreignKeys)
 	pkIndex := s.indexKeys(primaryKeys)
 
@@ -360,7 +383,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	actualFields := make([]*view.Field, len(definition.Fields))
 	copy(actualFields, definition.Fields)
 
-	insertRelations, err := s.buildInsertRelations(config, db)
+	insertRelations, err := s.buildInsertRelations(config, db, path)
 	if err != nil {
 		return nil, err
 	}
@@ -405,6 +428,16 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 
 	sort.Sort(viewFields(actualFields))
 
+	SQL, err := s.buildInputMetadataSQL(actualFields, typesMeta, table, path, paramName)
+	if err != nil {
+		return nil, err
+	}
+
+	var query string
+	if path != "/" {
+		query = fmt.Sprintf("SELECT * FROM %v", path)
+	}
+
 	return &inputMetadata{
 		typeDef:      definition,
 		meta:         typesMeta,
@@ -416,6 +449,9 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		pkIndex:      pkIndex,
 		table:        table,
 		config:       config,
+		sql:          SQL,
+		sqlName:      paramName + "DBRecords",
+		query:        query,
 	}, nil
 }
 
@@ -441,10 +477,10 @@ func (s *Builder) filterKeys(keys []sink.Key, tableName string) []sink.Key {
 	return tableKeys
 }
 
-func (s *Builder) buildInsertRelations(config *viewConfig, db *sql.DB) ([]*inputMetadata, error) {
+func (s *Builder) buildInsertRelations(config *viewConfig, db *sql.DB, path string) ([]*inputMetadata, error) {
 	var relations []*inputMetadata
 	for _, relation := range config.relations {
-		relationConfig, err := s.detectInputType(context.TODO(), db, relation.expandedTable.Name, relation, config.expandedTable.Name)
+		relationConfig, err := s.detectInputType(context.TODO(), db, relation.expandedTable.Name, relation, config.expandedTable.Name, path)
 		if err != nil {
 			return nil, err
 		}
@@ -555,4 +591,124 @@ func (s *Builder) indexKeys(primaryKeys []sink.Key) map[string]sink.Key {
 		pkIndex[strings.ToLower(primaryKey.Column)] = primaryKeys[index]
 	}
 	return pkIndex
+}
+
+func (sb *stmtBuilder) appendHintsWithRelations() error {
+	if err := sb.appendHints(sb.typeDef); err != nil {
+		return err
+	}
+
+	return sb.appendRelations(sb.typeDef.relations...)
+}
+
+func (sb *stmtBuilder) appendHints(typeDef *inputMetadata) error {
+	hint, err := sb.paramHint(typeDef)
+	if err != nil {
+		return err
+	}
+
+	sb.writeString(fmt.Sprintf("\n#set($_ = $%v %v)", typeDef.paramName, hint))
+	if sb.withSQL {
+		sb.writeString(fmt.Sprintf("\n#set($_ = $%v ", typeDef.sqlName))
+		sqlHint, err := sb.paramSQLHint(typeDef)
+		if err != nil {
+			return err
+		}
+		sb.writeString(sb.stringWithIndent(sqlHint))
+		sb.writeString("\n)")
+	}
+
+	return nil
+}
+
+func (sb *stmtBuilder) appendRelations(relations ...*inputMetadata) error {
+	for _, relation := range relations {
+		if err := sb.appendHints(relation); err != nil {
+			return err
+		}
+
+		if err := sb.appendRelations(relation.relations...); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (sb *stmtBuilder) stringWithIndent(value string) string {
+	return strings.ReplaceAll(value, "\n", "\n"+defaultIndent)
+}
+
+func (sb *stmtBuilder) withIndent() *stmtBuilder {
+	aCopy := *sb
+	aCopy.indent += defaultIndent
+	return &aCopy
+}
+
+func (sb *stmtBuilder) paramSQLHint(def *inputMetadata) (string, error) {
+	paramOption := &option.ParameterConfig{
+		Required: boolPtr(false),
+	}
+
+	marshal, err := json.Marshal(paramOption)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("/* %v %v */", string(marshal), def.sql), nil
+}
+
+func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, table string, path string, paramName string) (string, error) {
+	vConfig := &option.ViewConfig{
+		Selector: &view.Config{},
+	}
+
+	marshal, err := json.Marshal(vConfig)
+	if err != nil {
+		return "", err
+	}
+
+	sb := &strings.Builder{}
+	sqlSb := &strings.Builder{}
+	sqlSb.WriteString("SELECT * FROM ")
+	sqlSb.WriteString(table)
+	sqlSb.WriteString(fmt.Sprintf("/* %v */", string(marshal)))
+
+	setSb := &strings.Builder{}
+
+	var i int
+	for _, field := range fields {
+		aFieldMeta, ok := meta.metaByColName(field.Column)
+		if !ok || !aFieldMeta.primaryKey {
+			continue
+		}
+
+		if i == 0 {
+			sqlSb.WriteString("\nWHERE ")
+		} else {
+			sqlSb.WriteString("\nAND ")
+		}
+		i++
+
+		recName := s.appendSelectField(aFieldMeta, setSb, paramName)
+		sqlSb.WriteString(fmt.Sprintf(" #if($%v.Length() > 0 ) ", recName))
+		sqlSb.WriteString(aFieldMeta.columnName)
+		sqlSb.WriteString(" IN ( $")
+		sqlSb.WriteString(recName)
+		sqlSb.WriteString(" ) ")
+		sqlSb.WriteString("#else 1 = 0 #end")
+	}
+
+	sb.WriteString(setSb.String())
+	sb.WriteString("\n")
+	sb.WriteString(sqlSb.String())
+	return sb.String(), nil
+}
+
+func (s *Builder) appendSelectField(aFieldMeta *fieldMeta, sb *strings.Builder, paramName string) string {
+	recName := paramName + aFieldMeta.fieldName
+	sb.WriteString(fmt.Sprintf(
+		"\n#set($%v = $%v.QueryFirst(\"SELECT ARRAY_AGG(%v) AS Values FROM  `/`\"))",
+		recName, paramName, aFieldMeta.fieldName,
+	))
+	return recName + "." + "Values"
 }

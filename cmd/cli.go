@@ -105,8 +105,9 @@ func NewBuilder(options *Options, logger io.Writer) (*Builder, error) {
 				Const:   map[string]interface{}{},
 			},
 		},
-		fileNames: map[string]int{},
-		viewNames: map[string]int{},
+		fileNames: newUniqueIndex(false),
+		viewNames: newUniqueIndex(true),
+		types:     newUniqueIndex(true),
 	}
 
 	return builder, builder.Build(context.TODO())

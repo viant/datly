@@ -21,3 +21,7 @@ pipeline:
         Expect:
           Code: 200
           JSONBody: $LoadJSON('${parentPath}/expect_t1.json')
+
+  info:
+    action: print
+    message: $AsJSON(${test})

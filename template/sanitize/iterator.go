@@ -65,8 +65,8 @@ type (
 
 	ParamMetaType struct {
 		Typer []Typer
-		SQL   []string
-		Hint  []string
+		SQL   string
+		Hint  string
 	}
 )
 

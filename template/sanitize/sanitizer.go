@@ -36,7 +36,7 @@ func Sanitize(SQL string, hints map[string]*ParameterHint, consts map[string]int
 	modifiable := []byte(SQL)
 	for iterator.Has() {
 		paramMeta := iterator.Next()
-		if paramMeta.IsVariable && paramMeta.OccurrenceIndex == 0 {
+		if paramMeta.IsVariable && (paramMeta.OccurrenceIndex == 0 && paramMeta.Context == SetContext) {
 			continue
 		}
 
@@ -77,12 +77,17 @@ func sanitizeParameter(context Context, prefix, paramName, raw string, variables
 
 	if context == FuncContext || context == ForEachContext || context == IfContext || context == SetContext {
 		if variables[paramName] {
-			return strings.Replace(raw, fmt.Sprintf("$%v.", keywords.ParamsKey), "$", 1)
+			if prefix == keywords.ParamsKey {
+				return strings.Replace(raw, fmt.Sprintf("$%v.", keywords.ParamsKey), "$", 1)
+			} else {
+				return raw
+			}
 		}
 
 		if prefix == "" {
 			return strings.Replace(raw, "$", fmt.Sprintf("$%v.", keywords.ParamsKey), 1)
 		}
+		return raw
 	}
 
 	isVariable := variables[paramName]

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/datly/cmd/option"
@@ -11,6 +10,7 @@ import (
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/toolbox/format"
 	"github.com/viant/velty/ast"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/ast/stmt"
@@ -173,7 +173,11 @@ func paramCodec(param *Parameter) (*view.Codec, string) {
 		}
 	}
 
-	return codec, param.DataType
+	dataType := param.DataType
+	if param.Repeated && param.Assumed {
+		dataType = "[]" + dataType
+	}
+	return codec, dataType
 }
 
 func canInferAsStringsCodec(param *Parameter, dataTypeLower string) bool {
@@ -189,11 +193,11 @@ func canInferAsIntsCodec(param *Parameter, dataTypeLower string) bool {
 		return false
 	}
 
-	if strings.HasPrefix(param.DataType, "interface") {
+	if strings.HasPrefix(param.DataType, "interface") || strings.HasPrefix(param.DataType, "[]interface") {
 		return false
 	}
 
-	return strings.HasPrefix(dataTypeLower, "[]int")
+	return strings.HasPrefix(dataTypeLower, "int")
 }
 
 func updateParamPrecedence(dest *view.Parameter, source *view.Parameter) {
@@ -523,21 +527,15 @@ func (t *Template) updateParamIfNeeded(param *Parameter, meta *sanitize.ParamMet
 		return nil
 	}
 
-	for _, aHint := range meta.MetaType.Hint {
-		oldType := param.DataType
-		_, err := sanitize.UnmarshalHint(aHint, param)
-		if err != nil {
-			return err
-		}
-
-		param.Assumed = !param.Assumed && oldType == param.DataType
+	oldType := param.DataType
+	_, err := sanitize.UnmarshalHint(meta.MetaType.Hint, param)
+	if err != nil {
+		return err
 	}
 
-	if len(meta.MetaType.SQL) > 1 {
-		return fmt.Errorf("found multiple SQL statements for one parameter %v, SQL: %v", param.Name, meta.MetaType.SQL)
-	}
+	param.Assumed = param.Assumed && oldType == param.DataType
 
-	if len(meta.MetaType.SQL) == 1 {
+	if len(meta.MetaType.SQL) != 0 {
 		existingMeta, err := t.paramsMeta.ParamsMetaWithComment(param.Name, "")
 		if err != nil {
 			return err
@@ -599,10 +597,6 @@ func (t *Template) inheritParamTypesFromTypers() error {
 			dataType = "string"
 		}
 
-		if p.Repeated {
-			dataType = "[]" + dataType
-		}
-
 		p.DataType = dataType
 	}
 
@@ -622,11 +616,16 @@ func (s *Builder) uploadSQL(namespace, fileName string, fileContent string, inRo
 }
 
 func (s *Builder) uploadGo(namespace, fileName string, fileContent string, inRoutes bool) (string, error) {
+	detectCase, err := format.NewCase(view.DetectCase(fileName))
+	if err == nil {
+		fileName = detectCase.Format(fileName, format.CaseLowerUnderscore)
+	}
+
 	return s.uploadFile(namespace, fileName, fileContent, inRoutes, ".go")
 }
 
 func (s *Builder) uploadFile(namespace string, fileName string, fileContent string, inRoutes bool, extension string) (string, error) {
-	sourceURL := s.options.URL(namespace, s.unique(fileName, s.fileNames, false), inRoutes, extension)
+	sourceURL := s.options.URL(namespace, s.fileNames.unique(fileName), inRoutes, extension)
 	fs := afs.New()
 	if err := fs.Upload(context.Background(), sourceURL, file.DefaultFileOsMode, strings.NewReader(fileContent)); err != nil {
 		return "", err
@@ -647,7 +646,7 @@ func (s *Builder) uploadFile(namespace string, fileName string, fileContent stri
 	return sourceURL, nil
 }
 
-func (s *Builder) buildSchemaFromTable(schemaName string, table *Table, columnTypes map[string]*ColumnMeta) *view.Definition {
+func (s *Builder) buildSchemaFromTable(schemaName string, table *Table, columnTypes map[string]*ColumnMeta) (*view.Definition, error) {
 	var fields = make([]*view.Field, 0)
 	for _, column := range table.Inner {
 		structFieldName := column.Alias
@@ -659,29 +658,86 @@ func (s *Builder) buildSchemaFromTable(schemaName string, table *Table, columnTy
 			continue
 		}
 
-		dataType := column.DataType
-		if dataType == "" || dataType == "string" {
-			meta, ok := columnTypes[strings.ToLower(structFieldName)]
-			if ok {
-				dataType = meta.Type.String()
+		switch structFieldName {
+		case "*":
+			var tableChecker func(name string) bool
+			if column.Ns != "" {
+				tableChecker = func(name string) bool {
+					return name == column.Ns
+				}
 			}
-		}
 
-		if dataType == "" {
-			dataType = "string"
-		}
+			meta := s.tablesMeta.TableMeta(table.Name)
+			tableFields, err := s.buildTableFields(meta, tableChecker)
+			if err != nil {
+				return nil, err
+			}
 
-		fields = append(fields, &view.Field{
-			Name:   structFieldName,
-			Embed:  false,
-			Schema: &view.Schema{DataType: dataType},
-		})
+			fields = append(fields, tableFields...)
+
+			for _, relation := range table.Relations {
+				relMeta := s.tablesMeta.TableMeta(relation.Table.Name)
+				relFields, err := s.buildTableFields(relMeta, tableChecker)
+				if err != nil {
+					return nil, err
+				}
+
+				fields = append(fields, relFields...)
+
+			}
+
+		default:
+			aField := s.newViewField(column, columnTypes, structFieldName)
+			fields = append(fields, aField)
+		}
 	}
 
 	return &view.Definition{
-		Name:   schemaName,
+		Name:   s.types.unique(schemaName),
 		Fields: fields,
+	}, nil
+}
+
+func (s *Builder) buildTableFields(meta *TableMeta, tableChecker func(tableName string) bool) ([]*view.Field, error) {
+	if tableChecker != nil && !tableChecker(meta.TableName) {
+		return []*view.Field{}, nil
 	}
+
+	tableFields := make([]*view.Field, 0, len(meta.Columns))
+	for _, columnMeta := range meta.Columns {
+		columnName := columnMeta.Name
+		detectCase, err := format.NewCase(view.DetectCase(columnName))
+		if err != nil {
+			return tableFields, err
+		}
+
+		tableFields = append(tableFields, &view.Field{
+			Name:   detectCase.Format(columnName, format.CaseUpperCamel),
+			Schema: &view.Schema{DataType: columnMeta.Type.String()},
+		})
+	}
+
+	return tableFields, nil
+}
+
+func (s *Builder) newViewField(column *Column, columnTypes map[string]*ColumnMeta, structFieldName string) *view.Field {
+	dataType := column.DataType
+	if dataType == "" || dataType == "string" {
+		meta, ok := columnTypes[strings.ToLower(structFieldName)]
+		if ok {
+			dataType = meta.Type.String()
+		}
+	}
+
+	if dataType == "" {
+		dataType = "string"
+	}
+
+	aField := &view.Field{
+		Name:   structFieldName,
+		Schema: &view.Schema{DataType: dataType},
+	}
+	return aField
 }
 
 func BoolPtr(b bool) *bool {

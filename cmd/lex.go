@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"github.com/viant/datly/cmd/matchers"
 	"github.com/viant/parsly"
 	"github.com/viant/parsly/matcher"
@@ -20,6 +19,12 @@ const (
 	typeToken
 	dotToken
 	selectToken
+
+	execStmtToken
+	readStmtToken
+	exprToken
+	exprEndToken
+	anyToken
 )
 
 var whitespaceMatcher = parsly.NewToken(whitespaceToken, "Whitespace", matcher.NewWhiteSpace())
@@ -27,7 +32,7 @@ var condBlockMatcher = parsly.NewToken(condBlockToken, "#if .... #end", matcher.
 var exprGroupMatcher = parsly.NewToken(exprGroupToken, "( .... )", matcher.NewBlock('(', ')', '\\'))
 var importKeywordMatcher = parsly.NewToken(importKeywordToken, "import", matcher.NewFragmentsFold([]byte("import")))
 var quotedMatcher = parsly.NewToken(quotedToken, "quoted block", matcher.NewQuote('"', '\\'))
-var setTerminatedMatcher = parsly.NewToken(setTerminatedToken, "#set", newStringTerminator("#set"))
+var setTerminatedMatcher = parsly.NewToken(setTerminatedToken, "#set", matchers.NewStringTerminator("#set"))
 var setMatcher = parsly.NewToken(setToken, "#set", matcher.NewFragments([]byte("#set")))
 var artificialMatcher = parsly.NewToken(artificialToken, "$_", matcher.NewSpacedSet([]string{"$_ = $"}))
 var commentMatcher = parsly.NewToken(commentToken, "/**/", matcher.NewSeqBlock("/*", "*/"))
@@ -35,26 +40,8 @@ var typeMatcher = parsly.NewToken(typeToken, "<T>", matcher.NewSeqBlock("<", ">"
 var dotMatcher = parsly.NewToken(dotToken, "call", matcher.NewByte('.'))
 var selectMatcher = parsly.NewToken(selectToken, "Function call", matchers.NewIdentity())
 
-type stringTerminatorMatcher struct {
-	value []byte
-}
-
-func (t *stringTerminatorMatcher) Match(cursor *parsly.Cursor) (matched int) {
-	if len(t.value) >= cursor.InputSize-cursor.Pos {
-		return 0
-	}
-
-	for i := cursor.Pos; i < cursor.InputSize-len(t.value); i++ {
-		if bytes.Equal(cursor.Input[i:i+len(t.value)], t.value) {
-			return matched
-		}
-
-		matched++
-	}
-
-	return 0
-}
-
-func newStringTerminator(by string) *stringTerminatorMatcher {
-	return &stringTerminatorMatcher{value: []byte(by)}
-}
+var execStmtMatcher = parsly.NewToken(execStmtToken, "Exec statement", matcher.NewFragmentsFold([]byte("insert"), []byte("update"), []byte("select"), []byte("delete"), []byte("call")))
+var readStmtMatcher = parsly.NewToken(execStmtToken, "Select statement", matcher.NewFragmentsFold([]byte("select")))
+var exprMatcher = parsly.NewToken(exprToken, "Expression", matcher.NewFragments([]byte("#set"), []byte("#foreach"), []byte("#if")))
+var anyMatcher = parsly.NewToken(anyToken, "Any", matchers.NewAny())
+var exprEndMatcher = parsly.NewToken(exprEndToken, "#end", matcher.NewFragmentsFold([]byte("#end")))

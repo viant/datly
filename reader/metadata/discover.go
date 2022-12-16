@@ -50,7 +50,7 @@ func appendAutoDiscover(tempAsBytes []byte, buffer *bytes.Buffer) {
 	candidates := []*parsly.Token{parenthesesMatcher}
 
 	matched := cursor.MatchAfterOptional(whitespaceMatcher, candidates...)
-	candidates = []*parsly.Token{parenthesesMatcher, WhitespaceTerminator}
+	candidates = []*parsly.Token{parenthesesMatcher, semicolonMatcher, whitespaceTerminator}
 
 	var hasCriteria bool
 	var criteriaKeyword string
@@ -85,6 +85,12 @@ outer:
 					}
 					break
 				}
+			}
+		case semicolonToken:
+			if hasCriteria {
+				criteriaKeyword = keywords.AndCriteria
+			} else {
+				criteriaKeyword = keywords.WhereCriteria
 			}
 
 		case parsly.EOF:

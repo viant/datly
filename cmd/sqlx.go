@@ -31,7 +31,6 @@ type (
 )
 
 func newViewConfig(viewName string, fileName string, parent *query.Join, aTable *Table, templateMeta *Table, mode view.Mode) *viewConfig {
-
 	var metaConfig *templateMetaConfig
 	if templateMeta != nil {
 		metaConfig = &templateMetaConfig{table: templateMeta}

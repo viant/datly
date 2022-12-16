@@ -10,7 +10,7 @@ func ContainsWhereClause(source []byte) bool {
 	candidates := []*parsly.Token{parenthesesMatcher}
 
 	matched := cursor.MatchAfterOptional(whitespaceMatcher, candidates...)
-	candidates = []*parsly.Token{parenthesesMatcher, WhitespaceTerminator}
+	candidates = []*parsly.Token{parenthesesMatcher, whitespaceTerminator}
 outer:
 	for {
 		matched = cursor.MatchAfterOptional(whitespaceMatcher, candidates...)

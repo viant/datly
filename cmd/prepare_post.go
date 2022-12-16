@@ -26,6 +26,9 @@ type (
 		pkIndex      map[string]sink.Key
 		table        string
 		config       *viewConfig
+		sql          string
+		query        string
+		sqlName      string
 	}
 
 	typeMeta struct {
@@ -62,7 +65,7 @@ func (s *Builder) preparePostRule(ctx context.Context, sourceSQL []byte) (string
 		return "", err
 	}
 
-	if _, err = s.uploadSQL(folderSQL, s.unique(config.fileName, s.fileNames, false), template, false); err != nil {
+	if _, err = s.uploadSQL(folderSQL, s.fileNames.unique(config.fileName), template, false); err != nil {
 		return "", nil
 	}
 
@@ -151,6 +154,10 @@ func (s *Builder) buildInsertSQL(typeDef *inputMetadata, config *viewConfig, rou
 	}
 
 	builder := newInsertStmtBuilder(sb, typeDef)
+	if err := builder.appendHintsWithRelations(); err != nil {
+		return "", err
+	}
+
 	builder.appendAllocation(typeDef, "", typeDef.paramName)
 
 	return builder.build("", true)
@@ -219,8 +226,8 @@ func (isb *insertStmtBuilder) appendAllocation(def *inputMetadata, path, holderN
 			continue
 		}
 
-		isb.writeString(fmt.Sprintf(`$sequencer.Allocate("%v", $%v, "%v")`, def.table, holderName, path+meta.fieldName))
 		isb.writeString("\n")
+		isb.writeString(fmt.Sprintf(`$sequencer.Allocate("%v", $%v, "%v")`, def.table, holderName, path+meta.fieldName))
 	}
 
 	for _, relation := range def.relations {
@@ -252,55 +259,57 @@ func (s *Builder) buildRequestBodyPostParam(config *viewConfig, def *inputMetada
 
 func newInsertStmtBuilder(sb *strings.Builder, def *inputMetadata) *insertStmtBuilder {
 	return &insertStmtBuilder{
-		stmtBuilder: newStmtBuilder(sb, def, ""),
+		stmtBuilder: newStmtBuilder(sb, def),
 	}
 }
 
 func (isb *insertStmtBuilder) build(parentRecord string, withUnsafe bool) (string, error) {
-	name := isb.paramName
-	indirectParent := parentRecord
-
-	if isb.isMulti {
-		var err error
-		indirectParent, name, err = isb.appendForEach(parentRecord, name, withUnsafe)
-		if err != nil {
-			return "", err
-		}
-
-		withUnsafe = false
+	accessor, ok := isb.appendForEachIfNeeded(parentRecord, isb.paramName, withUnsafe)
+	contentBuilder := isb
+	if ok {
+		contentBuilder = contentBuilder.withIndent()
 	}
 
-	if isb.parent != nil {
-		isb.appendSetFk(parentRecord, withUnsafe, indirectParent, name, isb.parent.stmtBuilder)
+	withUnsafe = accessor.withUnsafe
+
+	if contentBuilder.parent != nil {
+		contentBuilder.appendSetFk(accessor, contentBuilder.parent.stmtBuilder)
 	}
 
-	isb.writeString("\nINSERT INTO ")
-	isb.writeString(isb.typeDef.table)
-	isb.writeString(" (\n")
-	if err := isb.stmtBuilder.appendColumnNames(isb.accessParam(indirectParent, name, false), false); err != nil {
+	if err := contentBuilder.appendInsert(accessor); err != nil {
 		return "", err
 	}
-
-	isb.writeString("\n) VALUES (")
-	if err := isb.appendColumnValues(isb.accessParam(indirectParent, name, false), false); err != nil {
-		return "", err
-	}
-	isb.writeString("\n);\n")
 
 	for _, rel := range isb.typeDef.relations {
-		_, err := isb.newRelation(rel).build(name, !isb.isMulti && withUnsafe)
+		_, err := contentBuilder.newRelation(rel).build(accessor.record, !contentBuilder.isMulti && withUnsafe)
 		if err != nil {
 			return "", err
 		}
 	}
 
-	if isb.isMulti {
+	if ok {
 		isb.writeString("\n#end")
 	}
 	return isb.sb.String(), nil
 }
 
-func (sb *stmtBuilder) appendSetFk(parentRecord string, withUnsafe bool, indirectParent string, name string, parent *stmtBuilder) {
+func (isb *insertStmtBuilder) appendInsert(accessor *paramAccessor) error {
+	isb.writeString("\nINSERT INTO ")
+	isb.writeString(isb.typeDef.table)
+	isb.writeString("( ")
+	if err := isb.stmtBuilder.appendColumnNames(accessor, false); err != nil {
+		return err
+	}
+
+	isb.writeString("\n) VALUES (")
+	if err := isb.appendColumnValues(accessor, false); err != nil {
+		return err
+	}
+	isb.writeString("\n);\n")
+	return nil
+}
+
+func (sb *stmtBuilder) appendSetFk(accessor *paramAccessor, parent *stmtBuilder) {
 	if parent != nil {
 		for _, meta := range sb.typeDef.meta.metas {
 			if meta.fkKey == nil {
@@ -316,7 +325,7 @@ func (sb *stmtBuilder) appendSetFk(parentRecord string, withUnsafe bool, indirec
 				continue
 			}
 
-			sb.writeString(fmt.Sprintf("\n#set($%v.%v = $%v)", sb.accessParam(indirectParent, name, withUnsafe && !sb.isMulti), meta.fieldName, sb.accessParam(parentRecord, refMeta.fieldName, withUnsafe)))
+			sb.writeString(fmt.Sprintf("\n#set($%v.%v = $%v.%v)", accessor.unsafeRecord, meta.fieldName, accessor.unsafeParent, refMeta.fieldName))
 		}
 	}
 }
@@ -327,4 +336,10 @@ func (isb *insertStmtBuilder) newRelation(rel *inputMetadata) *insertStmtBuilder
 		stmtBuilder: builder,
 		parent:      isb,
 	}
+}
+
+func (isb *insertStmtBuilder) withIndent() *insertStmtBuilder {
+	aCopy := *isb
+	aCopy.stmtBuilder = aCopy.stmtBuilder.withIndent()
+	return &aCopy
 }

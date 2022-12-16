@@ -157,13 +157,9 @@ func (it *ParamMetaIterator) updateParamMetaType(paramName string) (wasParam boo
 
 	metaType := it.getOrCreateParamMetaType(paramName)
 	jsonHint, SQL := SplitHint(hint)
-	if jsonHint != "" {
-		metaType.Hint = append(metaType.Hint, jsonHint)
-	}
 
-	if SQL != "" {
-		metaType.SQL = append(metaType.SQL, SQL)
-	}
+	metaType.Hint = jsonHint
+	metaType.SQL = SQL
 
 	return true
 }

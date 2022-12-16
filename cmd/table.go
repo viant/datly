@@ -61,7 +61,7 @@ func NewTable(name string) *Table {
 
 func (c Columns) StarExpr(ns string) *Column {
 	for _, item := range c {
-		if item.Name == "*" && item.Ns == ns {
+		if item.Name == "*" && (item.Ns == ns || ns == "") {
 			return item
 		}
 	}

@@ -9,7 +9,11 @@ func NewValue(p reflect.Type) interface{} {
 	if p.Kind() == reflect.Ptr {
 		return reflect.New(p.Elem()).Interface()
 	}
+
 	result := reflect.New(p)
+	if p.Kind() == reflect.Slice {
+		return result.Elem().Interface()
+	}
 
 	ptr := xunsafe.ValuePointer(&result)
 	//initialise pointers
