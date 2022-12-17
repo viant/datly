@@ -27,7 +27,6 @@ type (
 		table        string
 		config       *viewConfig
 		sql          string
-		query        string
 		sqlName      string
 	}
 

@@ -24,5 +24,10 @@
     "ID": 5,
     "NAME": "FOO - 5 ",
     "QUANTITY": 1250
+  },
+  {
+    "ID": 6,
+    "NAME": "FOO - 6 ",
+    "QUANTITY": 1500
   }
 ]

@@ -1,0 +1,33 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: PATCH
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/foos-many-many
+        JsonBody:
+          - ID: 5
+            Quantity: 5000
+            Name: 'changed - foo 5'
+            FoosPerformance:
+              - ID: 5
+                PerfName: "updated foos perf - 5"
+                PerfQuantity: -1000
+                FooID: 5
+          - Quantity: 9898
+            Name: 'created - foo 6'
+
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
+
+
+
+#  checkDb:
+#    action: 'dsunit:expect'
+#    datastore: dev
+#    expand: true
+#    checkPolicy: 1
+#    URL: ${parentPath}/expect

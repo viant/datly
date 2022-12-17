@@ -1,0 +1,5 @@
+{
+  "Name": "$tagId",
+  "URL": "$path/patch_basic_many_many.sql",
+  "Args": "-G=patch"
+}

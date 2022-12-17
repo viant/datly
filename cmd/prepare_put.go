@@ -59,11 +59,7 @@ func (usb *updateStmtBuilder) build(parentRecord string, withUnsafe bool) (strin
 		contentBuilder = usb.withIndent()
 	}
 
-	if contentBuilder.parent != nil {
-		contentBuilder.appendSetFk(accessor, contentBuilder.parent.stmtBuilder)
-	}
-
-	if err := contentBuilder.appendUpdate(accessor); err != nil {
+	if err := contentBuilder.appendUpdate(accessor, contentBuilder.parent); err != nil {
 		return "", err
 	}
 
@@ -81,7 +77,11 @@ func (usb *updateStmtBuilder) build(parentRecord string, withUnsafe bool) (strin
 	return usb.sb.String(), nil
 }
 
-func (usb *updateStmtBuilder) appendUpdate(accessor *paramAccessor) error {
+func (usb *updateStmtBuilder) appendUpdate(accessor *paramAccessor, parent *updateStmtBuilder) error {
+	if parent != nil {
+		usb.appendSetFk(accessor, parent.stmtBuilder)
+	}
+
 	usb.writeString("\nUPDATE ")
 	usb.writeString(usb.typeDef.table)
 	usb.writeString("\nSET")

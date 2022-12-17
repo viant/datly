@@ -31,7 +31,7 @@ require (
 	github.com/viant/parsly v0.0.0-20220913214053-cb272791c00f
 	github.com/viant/scy v0.4.1
 	github.com/viant/sqlx v0.3.0
-	github.com/viant/structql v0.1.0
+	github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20221216173126-224111120b53
 	github.com/viant/xreflect v0.0.0-20221129195610-6c6068eb8186
@@ -105,8 +105,4 @@ require (
 	google.golang.org/grpc v1.50.1 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-)
-
-replace (
-	github.com/viant/structql => /Users/klarysz/Documents/open_source/structql
 )

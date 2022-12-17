@@ -242,14 +242,14 @@ func (s *Builder) buildInputMetadata(ctx context.Context, sourceSQL []byte) (*op
 		return nil, nil, nil, err
 	}
 
-	paramType, err := s.detectInputType(ctx, db, aConfig.expandedTable.Name, aConfig, "", "/")
+	paramType, err := s.detectInputType(ctx, db, aConfig.expandedTable.Name, aConfig, "", "/", "")
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	return routeOption, aConfig, paramType, nil
 }
 
-func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName string, config *viewConfig, parentTable string, path string) (*inputMetadata, error) {
+func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName string, config *viewConfig, parentTable, path, actualHolder string) (*inputMetadata, error) {
 	columns, err := s.readSinkColumns(ctx, db, tableName)
 	if err != nil {
 		return nil, err
@@ -269,7 +269,7 @@ func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName str
 		return nil, err
 	}
 
-	return s.buildPostInputParameterType(columns, foreignKeys, primaryKeys, config, db, tableName, parentTable, path)
+	return s.buildPostInputParameterType(columns, foreignKeys, primaryKeys, config, db, tableName, parentTable, path, actualHolder)
 }
 
 func (s *Builder) readSinkColumns(ctx context.Context, db *sql.DB, tableName string) ([]sink.Column, error) {
@@ -305,7 +305,7 @@ func (s *Builder) readPrimaryKeys(ctx context.Context, db *sql.DB, tableName str
 	return s.filterKeys(keys, tableName), nil
 }
 
-func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys, primaryKeys []sink.Key, config *viewConfig, db *sql.DB, table, parentTable, path string) (*inputMetadata, error) {
+func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys, primaryKeys []sink.Key, config *viewConfig, db *sql.DB, table, parentTable, path, actualHolder string) (*inputMetadata, error) {
 	fkIndex := s.indexKeys(foreignKeys)
 	pkIndex := s.indexKeys(primaryKeys)
 
@@ -327,6 +327,10 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	definition := &view.Definition{
 		Name:        name,
 		Cardinality: cardinality,
+	}
+
+	if actualHolder == "" {
+		actualHolder = name
 	}
 
 	exceptIndex := s.buildExceptIndex(config)
@@ -383,7 +387,12 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	actualFields := make([]*view.Field, len(definition.Fields))
 	copy(actualFields, definition.Fields)
 
-	insertRelations, err := s.buildInsertRelations(config, db, path)
+	actualPath := path
+	if parentTable != "" {
+		actualPath += paramName + "/"
+	}
+
+	insertRelations, err := s.buildInsertRelations(config, db, actualPath, actualHolder)
 	if err != nil {
 		return nil, err
 	}
@@ -428,14 +437,9 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 
 	sort.Sort(viewFields(actualFields))
 
-	SQL, err := s.buildInputMetadataSQL(actualFields, typesMeta, table, path, paramName)
+	SQL, err := s.buildInputMetadataSQL(actualFields, typesMeta, table, paramName, actualPath, actualHolder)
 	if err != nil {
 		return nil, err
-	}
-
-	var query string
-	if path != "/" {
-		query = fmt.Sprintf("SELECT * FROM %v", path)
 	}
 
 	return &inputMetadata{
@@ -451,7 +455,6 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		config:       config,
 		sql:          SQL,
 		sqlName:      paramName + "DBRecords",
-		query:        query,
 	}, nil
 }
 
@@ -477,10 +480,10 @@ func (s *Builder) filterKeys(keys []sink.Key, tableName string) []sink.Key {
 	return tableKeys
 }
 
-func (s *Builder) buildInsertRelations(config *viewConfig, db *sql.DB, path string) ([]*inputMetadata, error) {
+func (s *Builder) buildInsertRelations(config *viewConfig, db *sql.DB, path string, holder string) ([]*inputMetadata, error) {
 	var relations []*inputMetadata
 	for _, relation := range config.relations {
-		relationConfig, err := s.detectInputType(context.TODO(), db, relation.expandedTable.Name, relation, config.expandedTable.Name, path)
+		relationConfig, err := s.detectInputType(context.TODO(), db, relation.expandedTable.Name, relation, config.expandedTable.Name, path, holder)
 		if err != nil {
 			return nil, err
 		}
@@ -594,11 +597,22 @@ func (s *Builder) indexKeys(primaryKeys []sink.Key) map[string]sink.Key {
 }
 
 func (sb *stmtBuilder) appendHintsWithRelations() error {
-	if err := sb.appendHints(sb.typeDef); err != nil {
-		return err
-	}
+	return sb.iterateOverHints(sb.typeDef, func(metadata *inputMetadata) error {
+		return sb.appendHints(metadata)
+	})
+}
 
-	return sb.appendRelations(sb.typeDef.relations...)
+func (sb *stmtBuilder) appendSQLWithRelations() error {
+	return sb.iterateOverHints(sb.typeDef, func(metadata *inputMetadata) error {
+		sqlHint, err := sb.paramSQLHint(metadata)
+		if err != nil {
+			return err
+		}
+		sb.writeString(fmt.Sprintf("\n#set($_ = $%v ", metadata.sqlName))
+		sb.writeString(sb.stringWithIndent(sqlHint))
+		sb.writeString("\n)")
+		return nil
+	})
 }
 
 func (sb *stmtBuilder) appendHints(typeDef *inputMetadata) error {
@@ -608,26 +622,16 @@ func (sb *stmtBuilder) appendHints(typeDef *inputMetadata) error {
 	}
 
 	sb.writeString(fmt.Sprintf("\n#set($_ = $%v %v)", typeDef.paramName, hint))
-	if sb.withSQL {
-		sb.writeString(fmt.Sprintf("\n#set($_ = $%v ", typeDef.sqlName))
-		sqlHint, err := sb.paramSQLHint(typeDef)
-		if err != nil {
-			return err
-		}
-		sb.writeString(sb.stringWithIndent(sqlHint))
-		sb.writeString("\n)")
-	}
-
 	return nil
 }
 
-func (sb *stmtBuilder) appendRelations(relations ...*inputMetadata) error {
-	for _, relation := range relations {
-		if err := sb.appendHints(relation); err != nil {
-			return err
-		}
+func (sb *stmtBuilder) iterateOverHints(metadata *inputMetadata, iterator func(*inputMetadata) error) error {
+	if err := iterator(metadata); err != nil {
+		return err
+	}
 
-		if err := sb.appendRelations(relation.relations...); err != nil {
+	for _, relation := range metadata.relations {
+		if err := iterator(relation); err != nil {
 			return err
 		}
 	}
@@ -657,7 +661,7 @@ func (sb *stmtBuilder) paramSQLHint(def *inputMetadata) (string, error) {
 	return fmt.Sprintf("/* %v %v */", string(marshal), def.sql), nil
 }
 
-func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, table string, path string, paramName string) (string, error) {
+func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, table string, paramName string, path string, holder string) (string, error) {
 	vConfig := &option.ViewConfig{
 		Selector: &view.Config{},
 	}
@@ -689,7 +693,7 @@ func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, ta
 		}
 		i++
 
-		recName := s.appendSelectField(aFieldMeta, setSb, paramName)
+		recName := s.appendSelectField(aFieldMeta, setSb, holder, path)
 		sqlSb.WriteString(fmt.Sprintf(" #if($%v.Length() > 0 ) ", recName))
 		sqlSb.WriteString(aFieldMeta.columnName)
 		sqlSb.WriteString(" IN ( $")
@@ -704,11 +708,11 @@ func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, ta
 	return sb.String(), nil
 }
 
-func (s *Builder) appendSelectField(aFieldMeta *fieldMeta, sb *strings.Builder, paramName string) string {
+func (s *Builder) appendSelectField(aFieldMeta *fieldMeta, sb *strings.Builder, paramName string, path string) string {
 	recName := paramName + aFieldMeta.fieldName
 	sb.WriteString(fmt.Sprintf(
-		"\n#set($%v = $%v.QueryFirst(\"SELECT ARRAY_AGG(%v) AS Values FROM  `/`\"))",
-		recName, paramName, aFieldMeta.fieldName,
+		"\n#set($%v = $%v.QueryFirst(\"SELECT ARRAY_AGG(%v) AS Values FROM  `%v`\"))",
+		recName, paramName, aFieldMeta.fieldName, path,
 	))
 	return recName + "." + "Values"
 }
