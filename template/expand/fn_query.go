@@ -1,7 +1,6 @@
 package expand
 
 import (
-	"fmt"
 	"github.com/viant/structql"
 	"github.com/viant/velty/ast/expr"
 	"reflect"
@@ -32,7 +31,6 @@ func (q *queryFirstFunction) Kind() []reflect.Kind {
 
 func (q *queryFirstFunction) Handler() interface{} {
 	return func(data interface{}, query string) (interface{}, error) {
-		fmt.Printf("%T, %v\n", data, data)
 		result, err := queryFnHandler.handleQuery(data, query)
 		if err != nil {
 			return nil, err
