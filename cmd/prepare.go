@@ -61,7 +61,7 @@ func (f viewFields) Swap(i, j int) {
 }
 
 func newStmtBuilder(sb *strings.Builder, def *inputMetadata, options ...interface{}) *stmtBuilder {
-	var paramKind string
+	paramKind := string(view.KindRequestBody)
 	var hintSQL bool
 
 	for _, anOption := range options {
@@ -136,20 +136,20 @@ func (sb *stmtBuilder) appendColumns(accessor *paramAccessor, withHas bool, cont
 }
 
 func (sb *stmtBuilder) paramHint(metadata *inputMetadata) (string, error) {
-	target := metadata.bodyHolder
-
-	paramConfig, err := json.Marshal(&option.ParameterConfig{
-		Target:      &target,
-		DataType:    "*" + metadata.paramName,
-		Cardinality: metadata.typeDef.Cardinality,
-		Kind:        sb.paramKind,
-	})
-
-	if err != nil {
-		return "", err
+	hintBuilder := &strings.Builder{}
+	hintBuilder.WriteString("<")
+	if metadata.config.outputConfig.IsMany() {
+		hintBuilder.WriteString("[]")
 	}
+	hintBuilder.WriteString("*")
+	hintBuilder.WriteString(metadata.paramName)
+	hintBuilder.WriteString(">(")
+	hintBuilder.WriteString(sb.paramKind)
+	hintBuilder.WriteString("/")
+	hintBuilder.WriteString(metadata.bodyHolder)
+	hintBuilder.WriteString(")")
 
-	return fmt.Sprintf(" /* %v */ ", string(paramConfig)), nil
+	return hintBuilder.String(), nil
 }
 
 func (sb *stmtBuilder) accessParam(parentRecord, record string, withUnsafe bool) string {
@@ -206,7 +206,7 @@ func (sb *stmtBuilder) appendForEachIfNeeded(parentRecord, name string, withUnsa
 }
 
 func (sb *stmtBuilder) newRelation(rel *inputMetadata) *stmtBuilder {
-	builder := newStmtBuilder(sb.sb, rel)
+	builder := newStmtBuilder(sb.sb, rel, view.KindRequestBody)
 	builder.indent = sb.indent
 	if builder.isMulti {
 		builder.indent += defaultIndent
@@ -621,7 +621,7 @@ func (sb *stmtBuilder) appendHints(typeDef *inputMetadata) error {
 		return err
 	}
 
-	sb.writeString(fmt.Sprintf("\n#set($_ = $%v %v)", typeDef.paramName, hint))
+	sb.writeString(fmt.Sprintf("\n#set($_ = $%v%v)", typeDef.paramName, hint))
 	return nil
 }
 

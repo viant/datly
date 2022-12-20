@@ -1208,11 +1208,14 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 
 			types := strings.Split(typeContent, ",")
 			dataType := types[0]
-			config.DataType = dataType
 			if strings.HasPrefix(dataType, "[]") {
 				config.Cardinality = view.Many
+				dataType = dataType[2:]
+			} else {
+				config.Cardinality = view.One
 			}
 
+			config.DataType = dataType
 			if len(types) > 1 {
 				config.CodecType = types[1]
 			}

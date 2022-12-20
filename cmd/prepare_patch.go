@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/cmd/option"
-	"github.com/viant/datly/view"
 	"strings"
 )
 
@@ -23,7 +22,7 @@ type (
 )
 
 func newPatchStmtBuilder(sb *strings.Builder, metadata *inputMetadata) *patchStmtBuilder {
-	builder := newStmtBuilder(sb, metadata, withSQL(true), view.KindRequestBody)
+	builder := newStmtBuilder(sb, metadata, withSQL(true))
 	return &patchStmtBuilder{
 		stmtBuilder: builder,
 		insert: &insertStmtBuilder{

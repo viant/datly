@@ -153,7 +153,7 @@ func (s *Builder) buildInsertSQL(typeDef *inputMetadata, config *viewConfig, rou
 	}
 
 	builder := newInsertStmtBuilder(sb, typeDef)
-	if err := builder.appendHintsWithRelations(); err != nil {
+	if err := builder.appendHints(typeDef); err != nil {
 		return "", err
 	}
 

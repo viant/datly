@@ -15,7 +15,7 @@ type updateStmtBuilder struct {
 
 func newUpdateStmtBuilder(sb *strings.Builder, def *inputMetadata) *updateStmtBuilder {
 	return &updateStmtBuilder{
-		stmtBuilder: newStmtBuilder(sb, def, view.KindRequestBody),
+		stmtBuilder: newStmtBuilder(sb, def),
 	}
 }
 
