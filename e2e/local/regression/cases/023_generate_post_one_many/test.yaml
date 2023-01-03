@@ -8,15 +8,22 @@ pipeline:
       - Method: POST
         URL: http://127.0.0.1:8080/v1/api/dev/basic/events-one-many
         JsonBody:
-          Quantity: 20
+          Quantity: -7890
           EventsPerformance:
-            - Price: 125
-            - Price: 250
-            - Price: 375
+            - Price: -8901
+            - Price: -9012
+            - Price: -10123
         Expect:
           Code: 200
           JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
 
-  info:
-    action: print
-    message: $AsJSON($test)
+  checkDB:
+    action: 'dsunit:query'
+    dataStore: dev
+    SQL: |
+      SELECT 
+      (CASE  WHEN (SELECT COUNT(*) FROM EVENTS WHERE QUANTITY = -7890) = 0 THEN FALSE ELSE TRUE END) AS EVENTS_ADDED,
+      (CASE  WHEN (SELECT COUNT(*) FROM EVENTS_PERFORMANCE WHERE PRICE IN (-8901, -9012, -10123)) = 0 THEN FALSE ELSE TRUE END) AS EVENTS_PERFORMANCE_ADDED ;
+    expect:
+      - EVENTS_ADDED: true
+        EVENTS_PERFORMANCE_ADDED: true

@@ -8,7 +8,7 @@ pipeline:
       - Method: POST
         URL: http://127.0.0.1:8080/v1/api/dev/basic/events-explicit
         JsonBody:
-          Quantity: 20
+          Quantity: -3456
           Expect:
           Code: 200
           JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
@@ -16,7 +16,15 @@ pipeline:
       - Method: POST
         URL: http://127.0.0.1:8080/v1/api/dev/basic/events-explicit
         JSONBody:
-          Quantity: 25
+          Quantity: -4567
         Expect:
           Code: 200
           JSONBody: $LoadJSON('${parentPath}/expect_t1.json')
+
+  checkDB:
+    action: 'dsunit:query'
+    dataStore: dev
+    SQL: |
+      SELECT (CASE  WHEN COUNT(*) = 0 THEN FALSE ELSE TRUE END) AS ADDED_NEW_ROWS FROM ( SELECT * FROM EVENTS WHERE QUANTITY IN (-3456,-4567)) T;
+    expect:
+      - ADDED_NEW_ROWS: true

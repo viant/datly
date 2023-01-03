@@ -1,0 +1,27 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: POST
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/foos-inserter
+        JsonBody:
+          - Quantity: 5000
+            Name: '034_ changed - foo 6'
+          - Quantity: 10000
+            Name: '034_ created - foo 5'
+
+        Expect:
+          Code: 200
+
+
+
+  checkDB:
+    action: 'dsunit:query'
+    dataStore: dev
+    SQL: |
+      SELECT (CASE  WHEN COUNT(*) = 0 THEN FALSE ELSE TRUE END) AS ADDED_NEW_ROWS FROM ( SELECT * FROM FOOS WHERE NAME LIKE '034_%') T;
+    expect:
+      - ADDED_NEW_ROWS: true

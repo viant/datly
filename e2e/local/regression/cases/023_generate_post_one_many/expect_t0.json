@@ -1,20 +1,20 @@
 {
   "id": "@exists@",
-  "quantity": 20,
+  "quantity": -7890,
   "eventsPerformance": [
     {
       "id": "@exists@",
-      "price": 125,
+      "price": -8901,
       "eventId": "@exists@"
     },
     {
       "id": "@exists@",
-      "price": 250,
+      "price": -9012,
       "eventId": "@exists@"
     },
     {
       "id": "@exists@",
-      "price": 375,
+      "price": -10123,
       "eventId": "@exists@"
     }
   ]

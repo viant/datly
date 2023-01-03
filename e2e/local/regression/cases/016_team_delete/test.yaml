@@ -9,3 +9,10 @@ pipeline:
         URL: http://127.0.0.1:8080/v1/api/dev/team/1000000
         Expect:
           Code: 200
+
+  checkDb:
+    action: 'dsunit:query'
+    datastore: dev
+    SQL: 'SELECT COUNT(*) AS NUM_RECORDS FROM (SELECT 1 FROM TEAM WHERE ID = 1000000) T'
+    expect:
+      - NUM_RECORDS: 0

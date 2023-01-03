@@ -3,6 +3,7 @@ package executor
 import (
 	"github.com/viant/datly/executor/parser"
 	"github.com/viant/datly/logger"
+	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/velty/est"
 	"strings"
@@ -21,10 +22,10 @@ func NewBuilder() *SqlBuilder {
 	return &SqlBuilder{}
 }
 
-func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) (*est.State, []*SQLStatment, *logger.Printer, error) {
+func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) (*est.State, []*SQLStatment, *logger.Printer, *expand.SQLCriteria, error) {
 	state, params, printer, err := aView.Template.EvaluateState(paramState.Values, paramState.Has, nil, nil)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	SQL := state.Buffer.String()
@@ -56,12 +57,12 @@ func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) (*est.
 		var placeholders []interface{}
 		expand, err := aView.Expand(&placeholders, data.SQL, &view.Selector{}, view.CriteriaParam{}, &view.BatchData{}, params)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 
 		data.SQL = expand
 		data.Args = placeholders
 	}
 
-	return state, result, printer, nil
+	return state, result, printer, params, nil
 }

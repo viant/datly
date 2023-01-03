@@ -15,6 +15,7 @@ import (
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
 	rdata "github.com/viant/toolbox/data"
+	expr2 "github.com/viant/velty/ast/expr"
 	"net/http"
 	"os"
 	"sort"
@@ -29,6 +30,7 @@ type ViewConfigurer struct {
 	serviceType  router.ServiceType
 	viewParams   []*viewParamConfig
 	paramIndex   *ParametersIndex
+	prepare      *Prepare
 }
 
 func (c *ViewConfigurer) ViewConfig() *viewConfig {
@@ -48,12 +50,13 @@ func (c *ViewConfigurer) DefaultHTTPMethod() string {
 	return http.MethodGet
 }
 
-func NewConfigProviderReader(mainViewName string, SQL string, routeOpt *option.RouteConfig, serviceType router.ServiceType, index *ParametersIndex) (*ViewConfigurer, error) {
+func NewConfigProviderReader(mainViewName string, SQL string, routeOpt *option.RouteConfig, serviceType router.ServiceType, index *ParametersIndex, prepare *Prepare) (*ViewConfigurer, error) {
 	result := &ViewConfigurer{
 		tables:       map[string]*Table{},
 		mainViewName: mainViewName,
 		serviceType:  serviceType,
 		paramIndex:   index,
+		prepare:      prepare,
 	}
 
 	return result, result.Init(SQL, routeOpt)
@@ -146,19 +149,33 @@ func (c *ViewConfigurer) buildExecViewConfig(viewName string, templateSQL string
 	}
 	aConfig := newViewConfig(viewName, viewName, nil, table, nil, view.SQLExecMode)
 
-	boundary := GetStmtBoundaries(templateSQL)
+	statements := GetStatements(templateSQL)
 
 	var resultErr error
-	for i := 1; i < len(boundary); i++ {
-		offset := boundary[i-1]
-		limit := len(templateSQL)
-		if i+1 < len(boundary) {
-			limit = boundary[i+1] - 1
+	for _, statement := range statements {
+		if statement.Selector != nil {
+			call, ok := statement.Selector.X.(*expr2.Call)
+			if !ok {
+				return nil, fmt.Errorf("expected tu got func call on %v but got %T", statement.Selector.ID, statement.Selector.X)
+			}
+
+			if len(call.Args) < 2 {
+				return nil, fmt.Errorf("expected to got 2 args for %v but got %v", statement.Selector.ID, len(call.Args))
+			}
+
+			asString, ok := call.Args[1].(*expr2.Literal)
+			if !ok {
+				return nil, fmt.Errorf("expected tu got %T on Args[1] but got %T", asString, call.Args[1])
+			}
+
+			inheritFromTableName(aConfig, asString.Value)
+
+		} else {
+			if err := updateExecViewConfig(templateSQL[statement.Start], templateSQL[statement.Start:statement.End], aConfig); err != nil {
+				resultErr = err
+			}
 		}
 
-		if err := updateExecViewConfig(templateSQL[offset], templateSQL[offset:limit], aConfig); err != nil {
-			resultErr = err
-		}
 	}
 
 	if resultErr != nil {
@@ -179,7 +196,7 @@ func (c *ViewConfigurer) buildReaderViewConfig(viewName string, SQL string, opt 
 		return nil, nil, err
 	}
 
-	expandedTable, err := buildExpandedTable(viewName, result.unexpandedTable, expandMap, opt)
+	expandedTable, err := c.buildExpandedTable(viewName, result.unexpandedTable, expandMap, opt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -188,7 +205,7 @@ func (c *ViewConfigurer) buildReaderViewConfig(viewName string, SQL string, opt 
 	return result, dataViewParams, err
 }
 
-func buildExpandedTable(viewName string, table *Table, expandMap rdata.Map, opt *option.RouteConfig) (*Table, error) {
+func (c *ViewConfigurer) buildExpandedTable(viewName string, table *Table, expandMap rdata.Map, opt *option.RouteConfig) (*Table, error) {
 	if len(expandMap) == 0 {
 		return table, nil
 	}
@@ -197,7 +214,7 @@ func buildExpandedTable(viewName string, table *Table, expandMap rdata.Map, opt 
 	if err != nil {
 		fmt.Printf("[WARN] couldn't parse epanded SQL for %v\n", viewName)
 	}
-	return buildTableFromQueryWithWarning(aQuery, &expr.Raw{Raw: table.SQL}, opt, aQuery.From.Comments), nil
+	return c.buildTableFromQueryWithWarning(aQuery, &expr.Raw{Raw: table.SQL}, opt, aQuery.From.Comments), nil
 }
 
 func buildExpandMap(paramsIndex *ParametersIndex) (rdata.Map, error) {
@@ -226,12 +243,12 @@ func buildExpandMap(paramsIndex *ParametersIndex) (rdata.Map, error) {
 }
 
 func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
-	boundary := GetStmtBoundaries(SQL)
+	boundary := GetStatements(SQL)
 	if len(boundary) == 0 {
 		return nil, nil, fmt.Errorf("not found select in %v", SQL)
 	}
 
-	parsableSQL := SQL[boundary[0]:]
+	parsableSQL := SQL[boundary[0].Start:]
 
 	aQuery, err := sqlparser.ParseQuery(parsableSQL)
 	if err != nil {
@@ -240,7 +257,7 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 
 	joins, ok := sqlxJoins(aQuery, opt)
 	if !ok {
-		aTable := buildTableFromQueryWithWarning(aQuery, expr.NewRaw(parsableSQL), opt, aQuery.From.Comments)
+		aTable := c.buildTableFromQueryWithWarning(aQuery, expr.NewRaw(parsableSQL), opt, aQuery.From.Comments)
 		aTable.SQL = SQL
 		result := newViewConfig(viewName, viewName, parent, aTable, nil, view.SQLQueryMode)
 		var namespaceSource string
@@ -254,7 +271,7 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 		return result, nil, nil
 	}
 
-	aTable := buildTableFromQueryWithWarning(aQuery, aQuery.From.X, opt, aQuery.From.Comments)
+	aTable := c.buildTableFromQueryWithWarning(aQuery, aQuery.From.X, opt, aQuery.From.Comments)
 	aTable.HolderName = view.FirstNotEmpty(aQuery.From.Alias, aTable.HolderName)
 	aTable.NamespaceSource = aTable.HolderName
 
@@ -266,7 +283,7 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 
 	var dataViewParams []*viewParamConfig
 	for _, join := range joins {
-		innerTable := buildTableWithWarning(join.With, opt, join.Comments)
+		innerTable := c.buildTableWithWarning(join.With, opt, join.Comments)
 		relViewConfig, childViewParams, err := c.buildViewConfigWithTable(join, innerTable, opt)
 		dataViewParams = append(dataViewParams, childViewParams...)
 		if err != nil {
@@ -456,11 +473,15 @@ func updateExecViewConfig(stmtType byte, SQLStmt string, view *viewConfig) error
 
 func inheritFromTarget(target node.Node, view *viewConfig, tableNameComment string) {
 	tableName := sqlparser.Stringify(target)
+	inheritFromTableName(view, tableName)
+	view.parseComment(tableNameComment)
+}
+
+func inheritFromTableName(view *viewConfig, tableName string) {
 	view.ensureTableName(tableName)
 	view.ensureOuterAlias(tableName)
 	view.ensureInnerAlias(tableName)
 	view.ensureFileName(tableName)
-	view.parseComment(tableNameComment)
 }
 
 func (c *viewConfig) parseComment(comment string) {

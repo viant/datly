@@ -23,3 +23,10 @@ pipeline:
         URL: http://127.0.0.1:8080/v1/api/dev/teams?TeamIDs=3
         Expect:
           Code: 200
+
+  checkDb:
+    action: 'dsunit:expect'
+    dataStore: dev
+    expand: true
+    checkPolicy: 1
+    URL: ${parentPath}/expect

@@ -1,0 +1,23 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: PUT
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/foos-updater
+        JsonBody:
+          - ID: 7
+            Quantity: 123456
+            Name: '035_ changed - foo 7'
+        Expect:
+          Code: 200
+
+  checkDB:
+    action: 'dsunit:query'
+    dataStore: dev
+    SQL: |
+      SELECT (CASE  WHEN COUNT(*) = 0 THEN FALSE ELSE TRUE END) AS ADDED_NEW_ROWS FROM ( SELECT * FROM FOOS WHERE NAME LIKE '035_%') T;
+    expect:
+      - ADDED_NEW_ROWS: true

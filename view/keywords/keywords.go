@@ -3,9 +3,10 @@ package keywords
 const (
 	ParamsMetadataKey = "Has"
 	ParamsKey         = "Unsafe"
-	ViewKey           = "View"
-	ParentViewKey     = "ParentView"
-	SequencerKey      = "sequencer"
+	KeyView           = "View"
+	KeySQL            = "sql"
+	KeyParentView     = "ParentView"
+	KeySequencer      = "sequencer"
 
 	Pagination    = "$PAGINATION"
 	Criteria      = "$CRITERIA"

@@ -40,8 +40,8 @@ var typeMatcher = parsly.NewToken(typeToken, "<T>", matcher.NewSeqBlock("<", ">"
 var dotMatcher = parsly.NewToken(dotToken, "call", matcher.NewByte('.'))
 var selectMatcher = parsly.NewToken(selectToken, "Function call", matchers.NewIdentity())
 
-var execStmtMatcher = parsly.NewToken(execStmtToken, "Exec statement", matcher.NewFragmentsFold([]byte("insert"), []byte("update"), []byte("select"), []byte("delete"), []byte("call")))
-var readStmtMatcher = parsly.NewToken(execStmtToken, "Select statement", matcher.NewFragmentsFold([]byte("select")))
+var execStmtMatcher = parsly.NewToken(execStmtToken, "Exec statement", matcher.NewFragmentsFold([]byte("insert"), []byte("update"), []byte("delete"), []byte("call"), []byte("begin")))
+var readStmtMatcher = parsly.NewToken(readStmtToken, "Select statement", matcher.NewFragmentsFold([]byte("select")))
 var exprMatcher = parsly.NewToken(exprToken, "Expression", matcher.NewFragments([]byte("#set"), []byte("#foreach"), []byte("#if")))
 var anyMatcher = parsly.NewToken(anyToken, "Any", matchers.NewAny())
 var exprEndMatcher = parsly.NewToken(exprEndToken, "#end", matcher.NewFragmentsFold([]byte("#end")))

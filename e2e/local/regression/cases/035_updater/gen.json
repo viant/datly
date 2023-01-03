@@ -1,0 +1,5 @@
+{
+  "Name": "$tagId",
+  "URL": "$path/updater.sql",
+  "Args": "-G=put --execKind=service"
+}

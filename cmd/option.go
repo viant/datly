@@ -56,6 +56,7 @@ type (
 
 	Prepare struct {
 		PrepareRule string `short:"G" long:"generate" description:"prepare rule for patch|post|put|delete"`
+		ExecKind    string `long:"execKind"`
 	}
 )
 

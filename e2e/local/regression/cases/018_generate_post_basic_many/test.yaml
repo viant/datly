@@ -8,7 +8,7 @@ pipeline:
       - Method: POST
         URL: http://127.0.0.1:8080/v1/api/dev/basic/events-many
         JSONBody:
-          - Name: ''
+          - Name: '018_ '
         Expect:
           Code: 200
           JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
@@ -16,8 +16,8 @@ pipeline:
       - Method: POST
         URL: http://127.0.0.1:8080/v1/api/dev/basic/events-many
         JSONBody:
-          - Name: ''
-          - Name: ''
+          - Name: '018_ '
+          - Name: '018_ '
         Expect:
           Code: 200
           JSONBody: $LoadJSON('${parentPath}/expect_t1.json')
@@ -25,8 +25,16 @@ pipeline:
       - Method: POST
         URL: http://127.0.0.1:8080/v1/api/dev/basic/events-many
         JSONBody:
-          - Name: 'Custom - 1'
-          - Name: 'Custom - 2'
+          - Name: '018_ Custom - 1'
+          - Name: '018_ Custom - 2'
         Expect:
           Code: 200
           JSONBody: $LoadJSON('${parentPath}/expect_t2.json')
+
+  checkDB:
+    action: 'dsunit:query'
+    dataStore: dev
+    SQL: |
+      SELECT (CASE  WHEN COUNT(*) = 0 THEN FALSE ELSE TRUE END) AS ADDED_NEW_ROWS FROM ( SELECT * FROM EVENTS WHERE NAME LIKE '018_%') T;
+    expect:
+      - ADDED_NEW_ROWS: true

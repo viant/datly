@@ -225,7 +225,7 @@ func (s *Builder) buildInputMetadata(ctx context.Context, sourceSQL []byte) (*op
 
 	paramIndex := NewParametersIndex(routeOption, map[string]*sanitize.ParameterHint{})
 
-	configurer, err := NewConfigProviderReader("", SQL, s.routeBuilder.option, router.ReaderServiceType, paramIndex)
+	configurer, err := NewConfigProviderReader("", SQL, s.routeBuilder.option, router.ReaderServiceType, paramIndex, &s.options.Prepare)
 	if err != nil {
 		return nil, nil, nil, err
 	}

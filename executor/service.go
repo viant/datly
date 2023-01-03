@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/template/expand"
+	"github.com/viant/sqlx/io/insert"
+	"github.com/viant/sqlx/io/update"
 	"strings"
 	"sync"
 )
@@ -18,14 +21,14 @@ func New() *Executor {
 }
 
 func (e *Executor) Exec(ctx context.Context, session *Session) error {
-	state, data, printer, err := e.sqlBuilder.Build(session.View, session.Lookup(session.View))
+	state, data, printer, sqlCriteria, err := e.sqlBuilder.Build(session.View, session.Lookup(session.View))
 	session.State = state
 
 	if err != nil {
 		return err
 	}
 
-	if err = e.exec(ctx, session, data); err != nil {
+	if err = e.exec(ctx, session, data, sqlCriteria); err != nil {
 		return err
 	}
 
@@ -33,7 +36,7 @@ func (e *Executor) Exec(ctx context.Context, session *Session) error {
 	return err
 }
 
-func (e *Executor) exec(ctx context.Context, session *Session, data []*SQLStatment) error {
+func (e *Executor) exec(ctx context.Context, session *Session, data []*SQLStatment, criteria *expand.SQLCriteria) error {
 	if len(data) == 0 {
 		return nil
 	}
@@ -52,7 +55,7 @@ func (e *Executor) exec(ctx context.Context, session *Session, data []*SQLStatme
 	wg := &sync.WaitGroup{}
 	wg.Add(len(data))
 	for i := range data {
-		e.execData(ctx, wg, tx, data[i], errors, session)
+		e.execData(ctx, wg, tx, data[i], errors, session, criteria, db)
 	}
 
 	wg.Wait()
@@ -65,16 +68,49 @@ func (e *Executor) exec(ctx context.Context, session *Session, data []*SQLStatme
 	return tx.Commit()
 }
 
-func (e *Executor) execData(ctx context.Context, wg *sync.WaitGroup, tx *sql.Tx, data *SQLStatment, errors *shared.Errors, session *Session) {
+func (e *Executor) execData(ctx context.Context, wg *sync.WaitGroup, tx *sql.Tx, data *SQLStatment, errors *shared.Errors, session *Session, criteria *expand.SQLCriteria, db *sql.DB) {
 	defer wg.Done()
 	if strings.TrimSpace(data.SQL) == "" {
 		return
 	}
 
-	err := e.executeStatement(ctx, tx, data, session)
+	err := e.tryExec(ctx, criteria, tx, data, session, db)
 	if err != nil {
 		errors.Append(err)
 	}
+}
+
+func (e *Executor) tryExec(ctx context.Context, criteria *expand.SQLCriteria, tx *sql.Tx, data *SQLStatment, session *Session, db *sql.DB) error {
+	if executable, ok := criteria.IsServiceExec(data.SQL); ok {
+		if executable.Executed {
+			return nil
+		}
+
+		executable.Executed = true
+		switch executable.ExecType {
+		case expand.ExecTypeInsert:
+			service, err := insert.New(ctx, db, executable.Table)
+			if err != nil {
+				return err
+			}
+
+			_, _, err = service.Exec(ctx, executable.Data, tx)
+			return err
+		case expand.ExecTypeUpdate:
+			service, err := update.New(ctx, db, executable.Table)
+			if err != nil {
+				return err
+			}
+
+			_, err = service.Exec(ctx, executable.Data, tx)
+			return err
+		default:
+			return fmt.Errorf("unsupported exec type: %v\n", executable.ExecType)
+		}
+	}
+
+	err := e.executeStatement(ctx, tx, data, session)
+	return err
 }
 
 func (e *Executor) executeStatement(ctx context.Context, tx *sql.Tx, stmt *SQLStatment, session *Session) error {

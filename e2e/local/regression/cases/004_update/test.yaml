@@ -44,3 +44,10 @@ pipeline:
             Status: 2
           Expect:
             Code: 401
+
+  checkDb:
+    action: 'dsunit:expect'
+    datastore: dev
+    expand: true
+    checkPolicy: 1
+    URL: ${parentPath}/expect

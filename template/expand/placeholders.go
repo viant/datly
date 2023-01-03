@@ -24,11 +24,15 @@ type (
 		sliceIndex         map[reflect.Type]*xunsafe.Slice
 		TemplateSQL        string
 		MetaSource         MetaSource
+		executables        []*Executable
+
+		markerIndex int
+		markers     []string
 	}
 )
 
-func (p *SQLCriteria) Allocate(tableName string, dest interface{}, selector string) (string, error) {
-	db, err := p.MetaSource.Db()
+func (c *SQLCriteria) Allocate(tableName string, dest interface{}, selector string) (string, error) {
+	db, err := c.MetaSource.Db()
 	if err != nil {
 		fmt.Printf("error occured while connecting to DB %v\n", err.Error())
 
@@ -39,37 +43,37 @@ func (p *SQLCriteria) Allocate(tableName string, dest interface{}, selector stri
 	return "", service.Next(tableName, dest, selector)
 }
 
-func (p *SQLCriteria) AsBinding(value interface{}) string {
-	return p.Add(0, value)
+func (c *SQLCriteria) AsBinding(value interface{}) string {
+	return c.Add(0, value)
 }
 
-func (p *SQLCriteria) AppendBinding(value interface{}) string {
-	return p.Add(0, value)
+func (c *SQLCriteria) AppendBinding(value interface{}) string {
+	return c.Add(0, value)
 }
 
-func (p *SQLCriteria) UUID() string {
+func (c *SQLCriteria) UUID() string {
 	newUUID := uuid.New()
-	p.ParamsGroup = append(p.ParamsGroup, newUUID.String())
+	c.ParamsGroup = append(c.ParamsGroup, newUUID.String())
 	return "?"
 }
 
-func (p *SQLCriteria) AsColumn(columnName string) (string, error) {
-	return p.Columns.ColumnName(columnName)
+func (c *SQLCriteria) AsColumn(columnName string) (string, error) {
+	return c.Columns.ColumnName(columnName)
 }
 
-func (p *SQLCriteria) Add(_ int, value interface{}) string {
+func (c *SQLCriteria) Add(_ int, value interface{}) string {
 	if value == nil {
 		return ""
 	}
-	valueCopy, expanded := p.expandCopy(value)
+	valueCopy, expanded := c.expandCopy(value)
 	if valueCopy == nil {
 		return ""
 	}
-	p.ParamsGroup = append(p.ParamsGroup, valueCopy...)
+	c.ParamsGroup = append(c.ParamsGroup, valueCopy...)
 	return expanded
 }
 
-func (p *SQLCriteria) expandCopy(value interface{}) ([]interface{}, string) {
+func (c *SQLCriteria) expandCopy(value interface{}) ([]interface{}, string) {
 	switch actual := value.(type) {
 	case *string:
 		return []interface{}{actual}, "?"
@@ -103,7 +107,7 @@ func (p *SQLCriteria) expandCopy(value interface{}) ([]interface{}, string) {
 	valueType := reflect.TypeOf(value)
 	valuePtr := xunsafe.AsPointer(value)
 	if valueType.Kind() == reflect.Slice {
-		return p.copyAndExpandSlice(valueType, valuePtr)
+		return c.copyAndExpandSlice(valueType, valuePtr)
 	}
 
 	valueCopy := reflect.New(valueType).Elem().Interface()
@@ -114,9 +118,9 @@ func (p *SQLCriteria) expandCopy(value interface{}) ([]interface{}, string) {
 	return []interface{}{valueCopy}, "?"
 }
 
-func (p *SQLCriteria) copyAndExpandSlice(sliceType reflect.Type, valuePtr unsafe.Pointer) ([]interface{}, string) {
-	p.ensureSliceIndex()
-	xslice := p.xunsafeSlice(sliceType.Elem())
+func (c *SQLCriteria) copyAndExpandSlice(sliceType reflect.Type, valuePtr unsafe.Pointer) ([]interface{}, string) {
+	c.ensureSliceIndex()
+	xslice := c.xunsafeSlice(sliceType.Elem())
 	sliceLen := xslice.Len(valuePtr)
 	switch sliceLen {
 	case 0:
@@ -138,46 +142,56 @@ func (p *SQLCriteria) copyAndExpandSlice(sliceType reflect.Type, valuePtr unsafe
 	}
 }
 
-func (p *SQLCriteria) At(_ int) []interface{} {
-	return p.ParamsGroup
+func (c *SQLCriteria) At(_ int) []interface{} {
+	return c.ParamsGroup
 }
 
-func (p *SQLCriteria) Next() (interface{}, error) {
-	if p.Mock {
+func (c *SQLCriteria) Next() (interface{}, error) {
+	if c.Mock {
 		return 0, nil
 	}
 
-	if p.PlaceholderCounter < len(p.ParamsGroup) {
-		index := p.PlaceholderCounter
-		p.PlaceholderCounter++
-		return p.ParamsGroup[index], nil
+	if c.PlaceholderCounter < len(c.ParamsGroup) {
+		index := c.PlaceholderCounter
+		c.PlaceholderCounter++
+		return c.ParamsGroup[index], nil
 	}
 
 	return nil, fmt.Errorf("expected to got binding parameter, but noone was found")
 }
 
-func (p *SQLCriteria) ensureSliceIndex() {
-	if p.sliceIndex != nil {
+func (c *SQLCriteria) ensureSliceIndex() {
+	if c.sliceIndex != nil {
 		return
 	}
 
-	p.sliceIndex = map[reflect.Type]*xunsafe.Slice{}
+	c.sliceIndex = map[reflect.Type]*xunsafe.Slice{}
 }
 
-func (p *SQLCriteria) xunsafeSlice(valueType reflect.Type) *xunsafe.Slice {
-	slice, ok := p.sliceIndex[valueType]
+func (c *SQLCriteria) xunsafeSlice(valueType reflect.Type) *xunsafe.Slice {
+	slice, ok := c.sliceIndex[valueType]
 	if !ok {
 		slice = xunsafe.NewSlice(reflect.SliceOf(valueType))
-		p.sliceIndex[valueType] = slice
+		c.sliceIndex[valueType] = slice
 	}
 
 	return slice
 }
 
-func (p *SQLCriteria) Insert() (string, []interface{}) {
-	return p.TemplateSQL, p.ParamsGroup
+func (c *SQLCriteria) addAll(args ...interface{}) {
+	c.ParamsGroup = append(c.ParamsGroup, args...)
 }
 
-func (p *SQLCriteria) addAll(args ...interface{}) {
-	p.ParamsGroup = append(p.ParamsGroup, args...)
+func (c *SQLCriteria) IsServiceExec(SQL string) (*Executable, bool) {
+	if len(c.executables) <= c.markerIndex {
+		return nil, false
+	}
+
+	if strings.TrimSpace(SQL) == c.markers[c.markerIndex] {
+		executable := c.executables[c.markerIndex]
+		c.markerIndex++
+		return executable, true
+	}
+
+	return nil, false
 }

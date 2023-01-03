@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xreflect"
@@ -175,18 +176,13 @@ func (s *Builder) prepareStringBuilder(typeDef *inputMetadata, config *viewConfi
 		return nil, err
 	}
 
-	if err = s.appendPostRouteOption(typeDef.paramName, routeOption, typeName, typeDef, sb); err != nil {
+	if err = s.appendRouteOption(typeDef.paramName, routeOption, typeName, typeDef, sb); err != nil {
 		return nil, err
 	}
 	return sb, nil
 }
 
-func (s *Builder) appendPostRouteOption(paramName string, routeOption *option.RouteConfig, typeName string, typeDef *inputMetadata, sb *strings.Builder) error {
-
-	routeOption.RequestBody = &option.BodyConfig{
-		DataType: typeDef.bodyHolder,
-	}
-
+func (s *Builder) appendRouteOption(paramName string, routeOption *option.RouteConfig, typeName string, typeDef *inputMetadata, sb *strings.Builder) error {
 	routeOption.ResponseBody = &option.ResponseBodyConfig{
 		From: paramName,
 	}
@@ -293,6 +289,11 @@ func (isb *insertStmtBuilder) build(parentRecord string, withUnsafe bool) (strin
 }
 
 func (isb *insertStmtBuilder) appendInsert(accessor *paramAccessor) error {
+	if strings.ToLower(isb.typeDef.config.expandedTable.ExecKind) == option.ExecKindService {
+		isb.writeString(fmt.Sprintf("\n$%v.Insert($%v, \"%v\");", keywords.KeySQL, accessor.record, isb.typeDef.table))
+		return nil
+	}
+
 	isb.writeString("\nINSERT INTO ")
 	isb.writeString(isb.typeDef.table)
 	isb.writeString("( ")

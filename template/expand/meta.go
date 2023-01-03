@@ -2,7 +2,17 @@ package expand
 
 import (
 	"database/sql"
+	"fmt"
+	"github.com/google/uuid"
+	"github.com/viant/toolbox"
+	"github.com/viant/xunsafe"
+	"reflect"
 	"strings"
+)
+
+const (
+	ExecTypeInsert ExecType = iota
+	ExecTypeUpdate
 )
 
 type (
@@ -46,6 +56,14 @@ type (
 		ParentValues []interface{}
 	}
 
+	Executable struct {
+		Table    string
+		ExecType ExecType
+		Data     interface{}
+		Executed bool
+	}
+
+	ExecType     int
 	MockExpander struct{}
 )
 
@@ -103,7 +121,8 @@ func (m *MetaParam) In(prefix string) (string, error) {
 	return m.ColIn(prefix, "")
 }
 
-//For the backward compatibility
+//Expand appends SQL and adds binding arguments
+//Deprecated: For the backward compatibility
 func (m *MetaParam) Expand(_ *SQLCriteria) string {
 	m.sanitizer.addAll(m.Args...)
 	return m.NonWindowSQL
@@ -202,5 +221,53 @@ func NotZeroOf(values ...int) int {
 func MockMetaParam() *MetaParam {
 	return &MetaParam{
 		sanitizer: &SQLCriteria{},
+	}
+}
+
+func (c *SQLCriteria) Insert(data interface{}, tableName string) (string, error) {
+	return c.appendExecutable(data, tableName, ExecTypeInsert), nil
+}
+
+func (c *SQLCriteria) Update(data interface{}, tableName string) (string, error) {
+	return c.appendExecutable(data, tableName, ExecTypeUpdate), nil
+}
+
+func (c *SQLCriteria) appendExecutable(data interface{}, tableName string, execType ExecType) string {
+	value := copyValue(data)
+
+	toolbox.Dump(data)
+	fmt.Printf("%T, %v\n", data, data)
+
+	toolbox.Dump(value)
+	fmt.Printf("%T, %v\n", value, value)
+
+	c.executables = append(c.executables, &Executable{
+		Table:    tableName,
+		ExecType: execType,
+		Data:     value,
+	})
+
+	marker := uuid.New().String()
+	c.markers = append(c.markers, marker)
+	return marker
+}
+
+func copyValue(data interface{}) interface{} {
+	result := reflect.ValueOf(data)
+	toolbox.Dump(result)
+	switch result.Kind() {
+	case reflect.Slice:
+		sliceResult := reflect.MakeSlice(result.Type(), result.Len(), result.Len())
+		reflect.Copy(sliceResult, result)
+		return result.Elem().Interface()
+	default:
+		dest := NewValue(result.Type())
+		actualType := result.Type()
+		if actualType.Kind() == reflect.Ptr {
+			actualType = actualType.Elem()
+		}
+
+		xunsafe.Copy(xunsafe.AsPointer(dest), xunsafe.AsPointer(data), int(actualType.Size()))
+		return dest
 	}
 }

@@ -50,23 +50,8 @@ func newViewConfig(viewName string, fileName string, parent *query.Join, aTable 
 	return result
 }
 
-func buildTableFromSQL(SQL string, routeOpt *option.RouteConfig) (*Table, error) {
-	aQuery, err := sqlparser.ParseQuery(SQL)
-	if err != nil {
-		return nil, err
-	}
-
-	table, err := buildTable(aQuery.From.X, routeOpt)
-	if err != nil {
-		return nil, err
-	}
-
-	table.Columns = selectItemToColumn(aQuery, routeOpt)
-	return table, err
-}
-
-func buildTableFromQueryWithWarning(aQuery *query.Select, x node.Node, routeOpt *option.RouteConfig, comment string) *Table {
-	aTable := buildTableWithWarning(x, routeOpt, comment)
+func (c *ViewConfigurer) buildTableFromQueryWithWarning(aQuery *query.Select, x node.Node, routeOpt *option.RouteConfig, comment string) *Table {
+	aTable := c.buildTableWithWarning(x, routeOpt, comment)
 	aTable.Columns = selectItemToColumn(aQuery, routeOpt)
 	return aTable
 }
@@ -79,8 +64,8 @@ func selectItemToColumn(query *query.Select, route *option.RouteConfig) Columns 
 	return result
 }
 
-func buildTableWithWarning(x node.Node, routeOpt *option.RouteConfig, comment string) *Table {
-	aTable, err := buildTable(x, routeOpt)
+func (c *ViewConfigurer) buildTableWithWarning(x node.Node, routeOpt *option.RouteConfig, comment string) *Table {
+	aTable, err := c.buildTable(x, routeOpt)
 	if err != nil {
 		fmt.Printf("[WARN] couldn't build full table representation %v\n", aTable.Name)
 	}
@@ -92,7 +77,7 @@ func buildTableWithWarning(x node.Node, routeOpt *option.RouteConfig, comment st
 	return aTable
 }
 
-func buildTable(x node.Node, routeOpt *option.RouteConfig) (*Table, error) {
+func (c *ViewConfigurer) buildTable(x node.Node, routeOpt *option.RouteConfig) (*Table, error) {
 	table := NewTable("")
 
 	switch actual := x.(type) {
@@ -106,6 +91,10 @@ func buildTable(x node.Node, routeOpt *option.RouteConfig) (*Table, error) {
 	case *expr.Selector, *expr.Ident:
 		name, _ := extractTableName(actual)
 		table.Name = name
+	}
+
+	if c.prepare != nil && table.ViewConfig.ExecKind == "" {
+		table.ViewConfig.ExecKind = c.prepare.ExecKind
 	}
 
 	return table, nil
@@ -366,40 +355,14 @@ func castTypeToGoType(targetType string) string {
 }
 
 func IsSQLExecMode(SQL string) bool {
-	lcSQL := strings.ToLower(SQL)
-	return strings.Contains(lcSQL, "call") ||
-		(strings.Contains(lcSQL, "begin") && strings.Contains(lcSQL, "end")) ||
-		isUpdate(lcSQL) ||
-		isDelete(lcSQL) ||
-		isInsert(lcSQL)
-}
-
-func isDelete(lcSQL string) bool {
-	return containsAll(lcSQL, "delete", "from")
-}
-
-func isUpdate(lcSQL string) bool {
-	return containsAll(lcSQL, "update", "set")
-}
-
-func containsAll(lcSQL string, keywords ...string) bool {
-	lcSQL = strings.ToLower(lcSQL)
-outer:
-	for _, keyword := range keywords {
-		for _, space := range whiteSpaces {
-			if strings.Contains(lcSQL, keyword+string(space)) {
-				continue outer
-			}
+	statements := GetStatements(SQL)
+	for _, statement := range statements {
+		if statement.IsExec {
+			return true
 		}
-
-		return false
 	}
 
-	return true
-}
-
-func isInsert(lcSQL string) bool {
-	return containsAll(lcSQL, "insert", "into", "values")
+	return false
 }
 
 func ExtractCondBlock(SQL string) (string, []string) {

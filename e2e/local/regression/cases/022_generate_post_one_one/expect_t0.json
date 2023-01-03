@@ -1,9 +1,9 @@
 {
   "id": "@exists@",
-  "quantity": 20,
+  "quantity": -5678,
   "eventsPerformance": {
     "id": "@exists@",
-    "price": 125,
+    "price": -6789,
     "eventId": "@exists@"
   }
 }

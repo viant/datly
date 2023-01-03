@@ -12,8 +12,9 @@ import (
 var builtInMethods = map[string]bool{
 	expand.Logger:                 true,
 	expand.Criteria:               true,
-	keywords.ParentViewKey:        true,
-	keywords.ViewKey:              true,
+	keywords.KeyParentView:        true,
+	keywords.KeyView:              true,
+	keywords.KeySQL:               true,
 	functions.SlicesFunc:          true,
 	functions.MathFunc:            true,
 	functions.TimeFunc:            true,
@@ -25,7 +26,7 @@ var builtInMethods = map[string]bool{
 	keywords.SelectorCriteria[1:]: true,
 	keywords.Pagination[1:]:       true,
 	keywords.ColumnsIn[1:]:        true,
-	keywords.SequencerKey:         true,
+	keywords.KeySequencer:         true,
 	expand.HttpService:            true,
 }
 

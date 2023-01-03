@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/keywords"
 	"strings"
 )
 
@@ -20,6 +21,7 @@ func newUpdateStmtBuilder(sb *strings.Builder, def *inputMetadata) *updateStmtBu
 }
 
 func (s *Builder) preparePutRule(ctx context.Context, SQL []byte) (string, error) {
+
 	routeConfig, config, metadata, err := s.buildInputMetadata(ctx, SQL)
 	if err != nil {
 		return "", err
@@ -78,6 +80,11 @@ func (usb *updateStmtBuilder) build(parentRecord string, withUnsafe bool) (strin
 }
 
 func (usb *updateStmtBuilder) appendUpdate(accessor *paramAccessor, parent *updateStmtBuilder) error {
+	if strings.ToLower(usb.typeDef.config.expandedTable.ExecKind) == option.ExecKindService {
+		usb.writeString(fmt.Sprintf("\n$%v.Update($%v, \"%v\");", keywords.KeySQL, accessor.record, usb.typeDef.table))
+		return nil
+	}
+
 	if parent != nil {
 		usb.appendSetFk(accessor, parent.stmtBuilder)
 	}

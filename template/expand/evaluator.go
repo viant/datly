@@ -52,11 +52,14 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
-	if err = evaluator.planner.DefineVariable(keywords.ViewKey, reflect.TypeOf(&MetaParam{})); err != nil {
+	if err = evaluator.planner.DefineVariable(keywords.KeyView, reflect.TypeOf(&MetaParam{})); err != nil {
 		return nil, err
 	}
 
-	if err = evaluator.planner.DefineVariable(Criteria, reflect.TypeOf(&SQLCriteria{})); err != nil {
+	if err = evaluator.planner.DefineVariable(
+		Criteria, reflect.TypeOf(&SQLCriteria{}),
+		keywords.KeySequencer, keywords.KeySQL,
+	); err != nil {
 		return nil, err
 	}
 
@@ -64,11 +67,7 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
-	if err = evaluator.planner.DefineVariable(keywords.ParentViewKey, reflect.TypeOf(&MetaParam{})); err != nil {
-		return nil, err
-	}
-
-	if err = evaluator.planner.DefineVariable(keywords.SequencerKey, reflect.TypeOf(&SQLCriteria{})); err != nil {
+	if err = evaluator.planner.DefineVariable(keywords.KeyParentView, reflect.TypeOf(&MetaParam{})); err != nil {
 		return nil, err
 	}
 
@@ -127,21 +126,17 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 		}
 	}
 
-	if err := newState.SetValue(keywords.ViewKey, viewParam); err != nil {
+	if err := newState.SetValue(keywords.KeyView, viewParam); err != nil {
 		return nil, nil, err
 	}
 
 	if parentParam != nil {
-		if err := newState.SetValue(keywords.ParentViewKey, parentParam); err != nil {
+		if err := newState.SetValue(keywords.KeyParentView, parentParam); err != nil {
 			return nil, nil, err
 		}
 	}
 
 	if err := newState.SetValue(Criteria, viewParam.sanitizer); err != nil {
-		return nil, nil, err
-	}
-
-	if err := newState.SetValue(keywords.SequencerKey, viewParam.sanitizer); err != nil {
 		return nil, nil, err
 	}
 

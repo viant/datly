@@ -9,7 +9,7 @@ pipeline:
         URL: http://127.0.0.1:8080/v1/api/dev/comprehensive/events-many
         JSONBody:
             data:
-            - name: ''
+            - name: '019_ '
         Expect:
           Code: 200
           JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
@@ -18,8 +18,8 @@ pipeline:
         URL: http://127.0.0.1:8080/v1/api/dev/comprehensive/events-many
         JSONBody:
             data:
-            - name: ''
-            - name: ''
+            - name: '019_ '
+            - name: '019_ '
         Expect:
           Code: 200
           JSONBody: $LoadJSON('${parentPath}/expect_t1.json')
@@ -28,8 +28,16 @@ pipeline:
         URL: http://127.0.0.1:8080/v1/api/dev/comprehensive/events-many
         JSONBody:
             data:
-            - name: 'Custom - 1'
-            - name: 'Custom - 2'
+            - name: '019_ Custom - 1'
+            - name: '019_ Custom - 2'
         Expect:
           Code: 200
           JSONBody: $LoadJSON('${parentPath}/expect_t2.json')
+
+  checkDB:
+    action: 'dsunit:query'
+    dataStore: dev
+    SQL: |
+      SELECT (CASE  WHEN COUNT(*) = 0 THEN FALSE ELSE TRUE END) AS ADDED_NEW_ROWS FROM ( SELECT * FROM EVENTS WHERE NAME LIKE '019_%') T;
+    expect:
+      - ADDED_NEW_ROWS: true
