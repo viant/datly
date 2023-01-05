@@ -55,12 +55,12 @@ func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) (*est.
 
 	for _, data := range result {
 		var placeholders []interface{}
-		expand, err := aView.Expand(&placeholders, data.SQL, &view.Selector{}, view.CriteriaParam{}, &view.BatchData{}, params)
+		expanded, err := aView.Expand(&placeholders, data.SQL, &view.Selector{}, view.CriteriaParam{}, &view.BatchData{}, params)
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}
 
-		data.SQL = expand
+		data.SQL = expanded
 		data.Args = placeholders
 	}
 

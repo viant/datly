@@ -1,6 +1,14 @@
 [
   {
-    "name": "changed - foo 6",
-    "quantity": 5000
+    "@indexBy@": "id"
+  },
+  {
+    "id": 7,
+    "name": "035_ changed - foo 7",
+    "quantity": 123456
+  },
+  {
+    "id": 8,
+    "name": "035_ changed - foo 8"
   }
 ]

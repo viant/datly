@@ -62,9 +62,6 @@ type (
 		Counter logger.Counter  `json:"-"`
 		Caser   format.Case     `json:",omitempty"`
 
-		_columns  ColumnIndex
-		_excluded map[string]bool
-
 		DiscoverCriteria *bool  `json:",omitempty"`
 		AllowNulls       *bool  `json:",omitempty"`
 		Cache            *Cache `json:",omitempty"`
@@ -72,11 +69,13 @@ type (
 		ColumnsConfig map[string]*ColumnConfig `json:",omitempty"`
 		SelfReference *SelfReference           `json:",omitempty"`
 		Namespaces    []*Namespace             `json:",omitempty"`
+		TableBatches  map[string]bool          `json:",omitempty"`
 
-		initialized  bool
-		newCollector newCollectorFn
-
-		codec *columnsCodec
+		_initialized  bool
+		_newCollector newCollectorFn
+		_codec        *columnsCodec
+		_columns      ColumnIndex
+		_excluded     map[string]bool
 	}
 
 	SelfReference struct {
@@ -181,10 +180,10 @@ func (v *View) DataType() reflect.Type {
 // i.e. If View, Connector etc. should inherit from others - it has te bo included in Resource.
 // It is important to call Init for every View because it also initializes due to the optimization reasons.
 func (v *View) Init(ctx context.Context, resource *Resource, options ...interface{}) error {
-	if v.initialized {
+	if v._initialized {
 		return nil
 	}
-	v.initialized = true
+	v._initialized = true
 
 	var transforms marshal.Transforms
 	for _, anOption := range options {
@@ -370,16 +369,20 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 		}
 	}
 
-	v.codec, err = newColumnsCodec(v.Schema.Type(), v.Columns)
+	v._codec, err = newColumnsCodec(v.Schema.Type(), v.Columns)
 	if err != nil {
 		return err
+	}
+
+	if v.TableBatches == nil {
+		v.TableBatches = map[string]bool{}
 	}
 
 	return nil
 }
 
 func (v *View) ensureConnector(ctx context.Context, resource *Resource) error {
-	if v.Connector != nil && v.Connector.initialized {
+	if v.Connector != nil && v.Connector._initialized {
 		return nil
 	}
 
@@ -634,8 +637,8 @@ func (v *View) inherit(view *View) error {
 		v.Caser = view.Caser
 	}
 
-	if v.newCollector == nil && len(v.With) == 0 {
-		v.newCollector = view.newCollector
+	if v._newCollector == nil && len(v.With) == 0 {
+		v._newCollector = view._newCollector
 	}
 
 	if v.Template == nil && view.Template != nil {
@@ -675,6 +678,10 @@ func (v *View) inherit(view *View) error {
 
 	if v.SelfReference == nil {
 		v.SelfReference = view.SelfReference
+	}
+
+	if v.TableBatches == nil {
+		v.TableBatches = view.TableBatches
 	}
 
 	return nil
@@ -722,14 +729,14 @@ func (v *View) ensureCaseFormat() error {
 }
 
 func (v *View) ensureCollector() {
-	v.newCollector = func(dest interface{}, viewMetaHandler viewMetaHandlerFn, supportParallel bool) *Collector {
+	v._newCollector = func(dest interface{}, viewMetaHandler viewMetaHandlerFn, supportParallel bool) *Collector {
 		return NewCollector(v.Schema.slice, v, dest, viewMetaHandler, supportParallel)
 	}
 }
 
 // Collector creates new Collector for View.DataType
 func (v *View) Collector(dest interface{}, handleMeta viewMetaHandlerFn, supportParallel bool) *Collector {
-	return v.newCollector(dest, handleMeta, supportParallel)
+	return v._newCollector(dest, handleMeta, supportParallel)
 }
 
 func FirstNotEmpty(values ...string) string {
@@ -991,20 +998,20 @@ func (v *View) ShouldTryDiscover() bool {
 }
 
 func (v *View) DatabaseType() reflect.Type {
-	if v.codec != nil {
-		return v.codec.actualType
+	if v._codec != nil {
+		return v._codec.actualType
 	}
 
 	return v.Schema.Type()
 }
 
 func (v *View) UnwrapDatabaseType(ctx context.Context, value interface{}) (interface{}, error) {
-	if v.codec != nil {
-		if err := v.codec.updateValue(ctx, value); err != nil {
+	if v._codec != nil {
+		if err := v._codec.updateValue(ctx, value); err != nil {
 			return nil, err
 		}
 
-		return v.codec.unwrapper.Value(xunsafe.AsPointer(value)), nil
+		return v._codec.unwrapper.Value(xunsafe.AsPointer(value)), nil
 	}
 
 	return value, nil

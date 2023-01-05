@@ -85,6 +85,7 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 		SelfReference: viewConfig.unexpandedTable.ViewConfig.Self,
 		Cache:         cache,
 		Mode:          viewConfig.viewType,
+		TableBatches:  viewConfig.batchEnabled,
 	}
 
 	s.routeBuilder.AddViews(result)

@@ -8,16 +8,21 @@ import (
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/sqlx/io/insert"
 	"github.com/viant/sqlx/io/update"
+	"github.com/viant/toolbox"
 	"strings"
 	"sync"
 )
 
-type Executor struct {
-	sqlBuilder *SqlBuilder
-}
+type (
+	Executor struct {
+		sqlBuilder *SqlBuilder
+	}
+)
 
-func New() *Executor {
-	return &Executor{sqlBuilder: NewBuilder()}
+func New(options ...interface{}) *Executor {
+	return &Executor{
+		sqlBuilder: NewBuilder(),
+	}
 }
 
 func (e *Executor) Exec(ctx context.Context, session *Session) error {
@@ -82,21 +87,36 @@ func (e *Executor) execData(ctx context.Context, wg *sync.WaitGroup, tx *sql.Tx,
 
 func (e *Executor) tryExec(ctx context.Context, criteria *expand.SQLCriteria, tx *sql.Tx, data *SQLStatment, session *Session, db *sql.DB) error {
 	if executable, ok := criteria.IsServiceExec(data.SQL); ok {
-		if executable.Executed {
-			return nil
-		}
-
-		executable.Executed = true
 		switch executable.ExecType {
 		case expand.ExecTypeInsert:
+			dialect, err := session.View.Connector.Dialect(ctx)
+			if err != nil {
+				return err
+			}
+
 			service, err := insert.New(ctx, db, executable.Table)
 			if err != nil {
 				return err
 			}
 
-			_, _, err = service.Exec(ctx, executable.Data, tx)
+			canBeBatched := session.View.TableBatches[executable.Table] && dialect.Insert.MultiValues()
+			if !canBeBatched {
+				_, _, err = service.Exec(ctx, executable.Data, tx)
+				return err
+			}
+
+			collection := session.Collection(executable)
+			collection.Append(executable.Data)
+			if !executable.IsLast {
+				return nil
+			}
+
+			_, _, err = service.Exec(ctx, collection.Unwrap(), tx)
 			return err
+
 		case expand.ExecTypeUpdate:
+			fmt.Printf("%T, %+v\n", executable.Data, executable.Data)
+			toolbox.Dump(executable.Data)
 			service, err := update.New(ctx, db, executable.Table)
 			if err != nil {
 				return err

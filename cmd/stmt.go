@@ -9,11 +9,12 @@ import (
 )
 
 type Statement struct {
-	Start    int
-	End      int
-	Kind     string
-	IsExec   bool
-	Selector *expr.Select
+	Start          int
+	End            int
+	Kind           string
+	IsExec         bool
+	Selector       *expr.Select
+	SelectorMethod string
 }
 
 func GetStatements(SQL string) []*Statement {
@@ -47,18 +48,19 @@ func GetStatements(SQL string) []*Statement {
 				boundaries = append(boundaries, stmt)
 			}
 		case anyToken:
-			selector, ok := getStmtSelector(matched, cursor)
+			selector, method, ok := getStmtSelector(matched, cursor)
 			if ok {
 				if stmt != nil {
 					stmt.End = beforeMatch
 				}
 
 				stmt = &Statement{
-					Start:    beforeMatch,
-					End:      -1,
-					IsExec:   true,
-					Kind:     option.ExecKindService,
-					Selector: selector,
+					Start:          beforeMatch,
+					End:            -1,
+					IsExec:         true,
+					Kind:           option.ExecKindService,
+					Selector:       selector,
+					SelectorMethod: method,
 				}
 
 				boundaries = append(boundaries, stmt)
@@ -79,23 +81,23 @@ func GetStatements(SQL string) []*Statement {
 	return boundaries
 }
 
-func getStmtSelector(matched *parsly.TokenMatch, cursor *parsly.Cursor) (*expr.Select, bool) {
+func getStmtSelector(matched *parsly.TokenMatch, cursor *parsly.Cursor) (*expr.Select, string, bool) {
 	text := matched.Text(cursor)
 	if text != "$" {
-		return nil, false
+		return nil, "", false
 	}
 
 	selector, err := parser.MatchSelector(cursor)
 	if err != nil || selector.ID != keywords.KeySQL || selector.X == nil {
-		return nil, false
+		return nil, "", false
 	}
 
 	aSelector, ok := selector.X.(*expr.Select)
 	if !ok || (aSelector.ID != "Insert" && aSelector.ID != "Update") {
-		return nil, false
+		return nil, "", false
 	}
 
-	return aSelector, ok
+	return aSelector, selector.ID, ok
 }
 
 func nextWhitespace(cursor *parsly.Cursor) bool {

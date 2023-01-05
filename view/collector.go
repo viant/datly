@@ -190,7 +190,7 @@ func (r *Collector) valueIndexer(ctx context.Context, visitorRelations []*Relati
 		}
 
 		r.indexCounter++
-		if r.view.codec != nil {
+		if r.view._codec != nil {
 			r.appender.Append(value)
 		}
 
@@ -306,7 +306,7 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 
 //NewItem creates and return item provider
 func (r *Collector) NewItem() func() interface{} {
-	if r.view.codec == nil {
+	if r.view._codec == nil {
 		return func() interface{} {
 			return r.appender.Add()
 		}

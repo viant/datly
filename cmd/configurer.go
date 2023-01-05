@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/gateway/registry"
@@ -18,7 +19,6 @@ import (
 	expr2 "github.com/viant/velty/ast/expr"
 	"net/http"
 	"os"
-	"sort"
 	"strings"
 )
 
@@ -31,6 +31,7 @@ type ViewConfigurer struct {
 	viewParams   []*viewParamConfig
 	paramIndex   *ParametersIndex
 	prepare      *Prepare
+	connectors   *Connector
 }
 
 func (c *ViewConfigurer) ViewConfig() *viewConfig {
@@ -50,13 +51,14 @@ func (c *ViewConfigurer) DefaultHTTPMethod() string {
 	return http.MethodGet
 }
 
-func NewConfigProviderReader(mainViewName string, SQL string, routeOpt *option.RouteConfig, serviceType router.ServiceType, index *ParametersIndex, prepare *Prepare) (*ViewConfigurer, error) {
+func NewConfigProviderReader(mainViewName string, SQL string, routeOpt *option.RouteConfig, serviceType router.ServiceType, index *ParametersIndex, prepare *Prepare, connectors *Connector) (*ViewConfigurer, error) {
 	result := &ViewConfigurer{
 		tables:       map[string]*Table{},
 		mainViewName: mainViewName,
 		serviceType:  serviceType,
 		paramIndex:   index,
 		prepare:      prepare,
+		connectors:   connectors,
 	}
 
 	return result, result.Init(SQL, routeOpt)
@@ -150,39 +152,71 @@ func (c *ViewConfigurer) buildExecViewConfig(viewName string, templateSQL string
 	aConfig := newViewConfig(viewName, viewName, nil, table, nil, view.SQLExecMode)
 
 	statements := GetStatements(templateSQL)
+	batchInsertEnabled := map[string]bool{}
+	batchInsertDisabled := map[string]bool{}
 
-	var resultErr error
+	var resultErr []error
 	for _, statement := range statements {
-		if statement.Selector != nil {
-			call, ok := statement.Selector.X.(*expr2.Call)
-			if !ok {
-				return nil, fmt.Errorf("expected tu got func call on %v but got %T", statement.Selector.ID, statement.Selector.X)
-			}
-
-			if len(call.Args) < 2 {
-				return nil, fmt.Errorf("expected to got 2 args for %v but got %v", statement.Selector.ID, len(call.Args))
-			}
-
-			asString, ok := call.Args[1].(*expr2.Literal)
-			if !ok {
-				return nil, fmt.Errorf("expected tu got %T on Args[1] but got %T", asString, call.Args[1])
-			}
-
-			inheritFromTableName(aConfig, asString.Value)
-
-		} else {
-			if err := updateExecViewConfig(templateSQL[statement.Start], templateSQL[statement.Start:statement.End], aConfig); err != nil {
-				resultErr = err
-			}
+		tableName, err := c.updateConfigWithExecStmt(statement, aConfig, batchInsertEnabled, templateSQL)
+		if err != nil {
+			resultErr = append(resultErr, err)
 		}
 
+		if statement.Selector != nil && tableName != "" {
+			batchInsertEnabled[tableName] = true
+		} else {
+			tables, err := c.findDependantTables(tableName)
+			if err != nil {
+				resultErr = append(resultErr, err)
+			}
+
+			for _, disabled := range tables {
+				batchInsertDisabled[disabled] = true
+			}
+		}
 	}
 
-	if resultErr != nil {
-		fmt.Printf("[WARN] couldn't create update table ast representation: %v\n", resultErr.Error())
+	for tableName := range batchInsertEnabled {
+		if batchInsertDisabled[tableName] {
+			delete(batchInsertEnabled, tableName)
+		}
 	}
 
+	for _, err := range resultErr {
+		if resultErr != nil {
+			fmt.Printf("[WARN] couldn't create update table ast representation: %v\n", err.Error())
+		}
+	}
+
+	aConfig.batchEnabled = batchInsertEnabled
 	return aConfig, nil
+}
+
+func (c *ViewConfigurer) updateConfigWithExecStmt(statement *Statement, aConfig *viewConfig, batchInsertEnabled map[string]bool, templateSQL string) (string, error) {
+	if statement.Selector != nil {
+		call, ok := statement.Selector.X.(*expr2.Call)
+		if !ok {
+			return "", fmt.Errorf("expected tu got func call on %v but got %T", statement.Selector.ID, statement.Selector.X)
+		}
+
+		if len(call.Args) < 2 {
+			return "", fmt.Errorf("expected to got 2 args for %v but got %v", statement.Selector.ID, len(call.Args))
+		}
+
+		asStringLiteral, ok := call.Args[1].(*expr2.Literal)
+		if !ok {
+			return "", fmt.Errorf("expected tu got %T on Args[1] but got %T", asStringLiteral, call.Args[1])
+		}
+
+		inheritFromTableName(aConfig, asStringLiteral.Value)
+		if statement.SelectorMethod == "Insert" {
+			batchInsertEnabled[asStringLiteral.Value] = true
+		}
+
+		return asStringLiteral.Value, nil
+	} else {
+		return updateExecViewConfig(templateSQL[statement.Start], templateSQL[statement.Start:statement.End], aConfig)
+	}
 }
 
 func (c *ViewConfigurer) buildReaderViewConfig(viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
@@ -419,6 +453,29 @@ func (c *ViewConfigurer) extractViewParamsFromHints(opt *option.RouteConfig) ([]
 	return viewParams, nil
 }
 
+func (c *ViewConfigurer) findDependantTables(tableName string) ([]string, error) {
+	if len(c.connectors.Connectors()) == 0 {
+		return nil, fmt.Errorf("not found any connector")
+	}
+
+	db, err := c.connectors.Connectors()[0].DB()
+	if err != nil {
+		return nil, err
+	}
+
+	keys, err := readForeignKeys(context.TODO(), db, tableName)
+	if err != nil {
+		return nil, err
+	}
+
+	var tables []string
+	for _, aKey := range keys {
+		tables = append(tables, aKey.ReferenceTable)
+	}
+
+	return tables, nil
+}
+
 func isSQLLikeCodec(codec string) bool {
 	switch strings.ToLower(codec) {
 	case registry.CodecStructql:
@@ -435,40 +492,42 @@ func newViewParamConfig(aViewConfig *viewConfig, param ...*Parameter) *viewParam
 	}
 }
 
-func updateExecViewConfig(stmtType byte, SQLStmt string, view *viewConfig) error {
+func updateExecViewConfig(stmtType byte, SQLStmt string, view *viewConfig) (string, error) {
 	rawSQL := RemoveCondBlocks(SQLStmt)
 
 	switch stmtType | ' ' {
 	case 'i':
 		stmt, err := sqlparser.ParseInsert(rawSQL)
+
+		tableName := ""
 		if stmt != nil {
+			tableName = sqlparser.Stringify(stmt.Target.X)
 			inheritFromTarget(stmt.Target.X, view, stmt.Target.Comments)
 		}
 
-		if err != nil {
-			return err
-		}
+		return tableName, err
+
 	case 'u':
 		stmt, err := sqlparser.ParseUpdate(rawSQL)
+		tableName := ""
 		if stmt != nil {
 			inheritFromTarget(stmt.Target.X, view, stmt.Target.Comments)
-
+			tableName = sqlparser.Stringify(stmt.Target.X)
 		}
 
-		if err != nil {
-			return err
-		}
-
+		return tableName, err
 	case 'd':
 		stmt, err := sqlparser.ParseDelete(rawSQL)
-		if err != nil {
-			return err
+		tableName := ""
+		if stmt != nil {
+			tableName = sqlparser.Stringify(stmt.Target.X)
+			inheritFromTarget(stmt.Target.X, view, stmt.Target.Comments)
 		}
 
-		inheritFromTarget(stmt.Target.X, view, stmt.Target.Comments)
+		return tableName, err
 	}
 
-	return nil
+	return "", nil
 }
 
 func inheritFromTarget(target node.Node, view *viewConfig, tableNameComment string) {
@@ -487,50 +546,6 @@ func inheritFromTableName(view *viewConfig, tableName string) {
 func (c *viewConfig) parseComment(comment string) {
 	hint, _ := sanitize.SplitHint(comment)
 	tryUnmrashalHintWithWarn(hint, &c.expandedTable.ViewConfig)
-}
-
-func getExecStatementBoundary(lcSQL string) []int {
-	return getStmtBoundary(lcSQL, []string{"insert ", "update ", "delete", "call "})
-}
-
-func getStmtBoundary(lcSQL string, statements []string) []int {
-	var boundary []int
-	var offset = 0
-	tempSQL := strings.ToLower(lcSQL)
-	for {
-		index := getStatementIndex(tempSQL, statements)
-		if index == -1 {
-			break
-		}
-
-		boundary = append(boundary, offset+index)
-		offset += index + 1
-		tempSQL = tempSQL[index+1:]
-	}
-
-	if len(boundary) == 0 {
-		boundary = append(boundary, 0)
-	}
-
-	if len(boundary) == 1 {
-		boundary = append(boundary, len(lcSQL))
-	}
-
-	return boundary
-}
-
-func getStatementIndex(lcSQL string, statements []string) int {
-	var candidates []int
-	for _, keyword := range statements {
-		if index := strings.Index(lcSQL, keyword); index != -1 {
-			candidates = append(candidates, index)
-		}
-	}
-	if len(candidates) == 0 {
-		return -1
-	}
-	sort.Ints(candidates)
-	return candidates[0]
 }
 
 func RemoveCondBlocks(SQL string) string {

@@ -1,1 +1,0 @@
-[{"id":1,"eventTypeId":2,"slice":["x1","x2"],"eventType":[{"id":2,"name":"type 6","accountId":37}]},{"id":10,"eventTypeId":11,"slice":["x3","x4"],"eventType":[{"id":11,"name":"type 2","accountId":33}]},{"id":100,"eventTypeId":111,"slice":["x3","x4"],"eventType":[{"id":111,"name":"type 3","accountId":36}]}]

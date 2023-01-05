@@ -842,7 +842,7 @@ func (r *Router) marshalAsCSV(session *ReaderSession, sliceValue reflect.Value, 
 		offset = copy(fields[offset:], filter.Fields)
 	}
 
-	data, err := session.Route.CSV.outputMarshaller.Marshal(sliceValue.Elem().Interface())
+	data, err := session.Route.CSV._outputMarshaller.Marshal(sliceValue.Elem().Interface())
 
 	if err != nil {
 		return nil, http.StatusInternalServerError, err

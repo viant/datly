@@ -221,6 +221,25 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 				return &Foo{}
 			},
 		},
+		{
+			description:  "empty presence index",
+			data:         `{}`,
+			expect:       `{"Has":{"ID":false,"Name":false}}`,
+			stringsEqual: true,
+			into: func() interface{} {
+				type FooHasIndex struct {
+					ID   bool
+					Name bool
+				}
+				type Foo struct {
+					ID   *int         `json:",omitempty"`
+					Name *string      `json:",omitempty"`
+					Has  *FooHasIndex `presenceIndex:"true"`
+				}
+
+				return &Foo{}
+			},
+		},
 	}
 
 	//for i, testCase := range testCases[len(testCases)-1:] {

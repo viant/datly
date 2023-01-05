@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/parameter"
 	"github.com/viant/sqlx/io/load/reader/csv"
+	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"net/http"
@@ -55,8 +56,9 @@ type (
 		Cache            *cache.Cache
 		Compression      *Compression
 
-		_resource *view.Resource
-		accessors *view.Accessors
+		_resource          *view.Resource
+		_accessors         *view.Accessors
+		_presenceProviders map[reflect.Type]*option.PresenceProvider
 
 		_requestBodyParamRequired bool
 		_requestBodyType          reflect.Type
@@ -88,13 +90,12 @@ type (
 	}
 
 	CSVConfig struct {
-		Separator string
-		NullValue string
-		//Stringifier io.ObjectStringifier
-		config                *csv.Config
-		requestBodyMarshaller *csv.Marshaller
-		outputMarshaller      *csv.Marshaller
-		unwrapperSlice        *xunsafe.Slice
+		Separator              string
+		NullValue              string
+		_config                *csv.Config
+		_requestBodyMarshaller *csv.Marshaller
+		_outputMarshaller      *csv.Marshaller
+		_unwrapperSlice        *xunsafe.Slice
 	}
 
 	responseSetter struct {
@@ -433,7 +434,7 @@ func (r *Route) initRequestBodyFromParams() error {
 	}
 
 	accessors := view.NewAccessors()
-	r.accessors = accessors
+	r._accessors = accessors
 	bodyParam, _ := r.fullBodyParam(params)
 	rType, err := r.initRequestBodyType(bodyParam, params)
 	if err != nil {
@@ -446,7 +447,7 @@ func (r *Route) initRequestBodyFromParams() error {
 		return err
 	}
 
-	r.accessors.Init(r._requestBodyType)
+	r._accessors.Init(r._requestBodyType)
 	for _, param := range params {
 		r._requestBodyParamRequired = r._requestBodyParamRequired || param.IsRequired()
 	}
@@ -459,7 +460,7 @@ func (r *Route) initRequestBodyFromParams() error {
 func (r *Route) initRequestBodyType(bodyParam *view.Parameter, params []*view.Parameter) (reflect.Type, error) {
 	if bodyParam != nil {
 		bodyType := bodyParam.Schema.Type()
-		r.accessors.Init(bodyType)
+		r._accessors.Init(bodyType)
 		return bodyType, r.bodyParamMatches(bodyType, params)
 	}
 
@@ -599,7 +600,7 @@ func (r *Route) bodyParamMatches(rType reflect.Type, params []*view.Parameter) e
 			continue
 		}
 
-		if _, err := r.accessors.AccessorByName(name); err != nil {
+		if _, err := r._accessors.AccessorByName(name); err != nil {
 			return err
 		}
 	}
@@ -630,7 +631,7 @@ func (r *Route) initCSVIfNeeded() error {
 		r.CSV.NullValue = "null"
 	}
 
-	r.CSV.config = &csv.Config{
+	r.CSV._config = &csv.Config{
 		FieldSeparator:  r.CSV.Separator,
 		ObjectSeparator: "\n",
 		EncloseBy:       `"`,
@@ -644,7 +645,7 @@ func (r *Route) initCSVIfNeeded() error {
 	}
 
 	var err error
-	r.CSV.outputMarshaller, err = csv.NewMarshaller(schemaType, r.CSV.config)
+	r.CSV._outputMarshaller, err = csv.NewMarshaller(schemaType, r.CSV._config)
 	if err != nil {
 		return err
 	}
@@ -653,8 +654,8 @@ func (r *Route) initCSVIfNeeded() error {
 		return nil
 	}
 
-	r.CSV.unwrapperSlice = r._requestBodySlice
-	r.CSV.requestBodyMarshaller, err = csv.NewMarshaller(r._requestBodyType, nil)
+	r.CSV._unwrapperSlice = r._requestBodySlice
+	r.CSV._requestBodyMarshaller, err = csv.NewMarshaller(r._requestBodyType, nil)
 	return err
 }
 
@@ -679,7 +680,7 @@ func (r *Route) initResponseBodyIfNeeded() error {
 func (c *CSVConfig) presenceMap() PresenceMapFn {
 	return func(bytes []byte) (map[string]interface{}, error) {
 		result := map[string]interface{}{}
-		fieldNames, err := c.requestBodyMarshaller.ReadHeaders(bytes)
+		fieldNames, err := c._requestBodyMarshaller.ReadHeaders(bytes)
 		if err != nil {
 			return result, err
 		}
@@ -693,21 +694,21 @@ func (c *CSVConfig) presenceMap() PresenceMapFn {
 }
 
 func (c *CSVConfig) Unmarshal(bytes []byte, i interface{}) error {
-	return c.requestBodyMarshaller.Unmarshal(bytes, i)
+	return c._requestBodyMarshaller.Unmarshal(bytes, i)
 }
 
 func (c *CSVConfig) unwrapIfNeeded(value interface{}) (interface{}, error) {
-	if c.unwrapperSlice == nil || value == nil {
+	if c._unwrapperSlice == nil || value == nil {
 		return value, nil
 	}
 
 	ptr := xunsafe.AsPointer(value)
-	sliceLen := c.unwrapperSlice.Len(ptr)
+	sliceLen := c._unwrapperSlice.Len(ptr)
 	switch sliceLen {
 	case 0:
 		return nil, nil
 	case 1:
-		return c.unwrapperSlice.ValuePointerAt(ptr, 0), nil
+		return c._unwrapperSlice.ValuePointerAt(ptr, 0), nil
 	default:
 		return nil, fmt.Errorf("unexpected number of data, expected 0 or 1 but got %v", sliceLen)
 	}

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/scy"
+	"github.com/viant/sqlx/io/config"
+	"github.com/viant/sqlx/metadata/info"
 	"sync"
 	"time"
 )
@@ -19,12 +21,12 @@ type (
 		Driver string        `json:",omitempty"`
 		DSN    string        `json:",omitempty"`
 
-		_dsn string
-		//TODO add secure password storage
-		db          func() (*sql.DB, error)
-		initialized bool
 		*DBConfig
-		mux sync.Mutex
+		_dialect     *info.Dialect
+		_dsn         string
+		_db          func() (*sql.DB, error)
+		_initialized bool
+		_mux         sync.Mutex
 	}
 
 	DBConfig struct {
@@ -47,18 +49,18 @@ func (c *DBConfig) ConnMaxLifetime() time.Duration {
 //Init initializes connector.
 //If Ref is specified, then Connector with the name has to be registered in Connectors
 func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
-	if c.initialized {
+	if c._initialized {
 		return nil
 	}
 
 	c._dsn = c.DSN
 	c.DSN = ""
 
-	if c.initialized {
+	if c._initialized {
 		return nil
 	}
 
-	c.initialized = true
+	c._initialized = true
 
 	if c.Ref != "" {
 		connector, err := connectors.Lookup(c.Ref)
@@ -76,15 +78,15 @@ func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 		return err
 	}
 
-	c.initialized = true
+	c._initialized = true
 	return nil
 }
 
 //DB creates connection to the DB.
 //It is important to not close the DB since the connection is shared.
 func (c *Connector) DB() (*sql.DB, error) {
-	if c.db != nil {
-		return c.db()
+	if c._db != nil {
+		return c._db()
 	}
 
 	var err error
@@ -98,10 +100,10 @@ func (c *Connector) DB() (*sql.DB, error) {
 		dsn = secret.Expand(dsn)
 	}
 
-	c.mux.Lock()
-	c.db = aDbPool.DB(c.Driver, dsn, c.DBConfig)
-	aDB, err := c.db()
-	c.mux.Unlock()
+	c._mux.Lock()
+	c._db = aDbPool.DB(c.Driver, dsn, c.DBConfig)
+	aDB, err := c._db()
+	c._mux.Unlock()
 
 	return aDB, err
 }
@@ -109,7 +111,7 @@ func (c *Connector) DB() (*sql.DB, error) {
 //Validate check if connector was configured properly.
 //Name, Driver and DSN are required.
 func (c *Connector) Validate() error {
-	if c.initialized {
+	if c._initialized {
 		return nil
 	}
 
@@ -134,8 +136,8 @@ func (c *Connector) inherit(connector *Connector) {
 		c.Driver = connector.Driver
 	}
 
-	if c.db == nil {
-		c.db = connector.db
+	if c._db == nil {
+		c._db = connector._db
 	}
 
 	if c.Name == "" {
@@ -148,11 +150,30 @@ func (c *Connector) inherit(connector *Connector) {
 }
 
 func (c *Connector) setDriverOptions(secret *scy.Secret) {
-	if secret == nil || c.initialized {
+	if secret == nil || c._initialized {
 		return
 	}
 }
 
 func (c *Connector) getDSN() string {
 	return FirstNotEmpty(c._dsn, c.DSN)
+}
+
+func (c *Connector) Dialect(ctx context.Context) (*info.Dialect, error) {
+	if c._dialect != nil {
+		return c._dialect, nil
+	}
+
+	aDB, err := c.DB()
+	if err != nil {
+		return nil, err
+	}
+
+	dialect, err := config.Dialect(ctx, aDB)
+	if err != nil {
+		return nil, err
+	}
+
+	c._dialect = dialect
+	return dialect, nil
 }

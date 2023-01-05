@@ -225,7 +225,7 @@ func (s *Builder) buildInputMetadata(ctx context.Context, sourceSQL []byte) (*op
 
 	paramIndex := NewParametersIndex(routeOption, map[string]*sanitize.ParameterHint{})
 
-	configurer, err := NewConfigProviderReader("", SQL, s.routeBuilder.option, router.ReaderServiceType, paramIndex, &s.options.Prepare)
+	configurer, err := NewConfigProviderReader("", SQL, s.routeBuilder.option, router.ReaderServiceType, paramIndex, &s.options.Prepare, &s.options.Connector)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -259,7 +259,7 @@ func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName str
 		return nil, fmt.Errorf("not found table %v columns", tableName)
 	}
 
-	foreignKeys, err := s.readForeignKeys(ctx, db, tableName)
+	foreignKeys, err := readForeignKeys(ctx, db, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -285,14 +285,14 @@ func (s *Builder) readSinkColumns(ctx context.Context, db *sql.DB, tableName str
 	return sinkColumns, nil
 }
 
-func (s *Builder) readForeignKeys(ctx context.Context, db *sql.DB, tableName string) ([]sink.Key, error) {
+func readForeignKeys(ctx context.Context, db *sql.DB, tableName string) ([]sink.Key, error) {
 	meta := metadata.New()
 	var keys []sink.Key
 	if err := meta.Info(ctx, db, info.KindForeignKeys, &keys); err != nil {
 		return nil, err
 	}
 
-	return s.filterKeys(keys, tableName), nil
+	return filterKeys(keys, tableName), nil
 }
 
 func (s *Builder) readPrimaryKeys(ctx context.Context, db *sql.DB, tableName string) ([]sink.Key, error) {
@@ -302,7 +302,7 @@ func (s *Builder) readPrimaryKeys(ctx context.Context, db *sql.DB, tableName str
 		return nil, err
 	}
 
-	return s.filterKeys(keys, tableName), nil
+	return filterKeys(keys, tableName), nil
 }
 
 func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys, primaryKeys []sink.Key, config *viewConfig, db *sql.DB, table, parentTable, path, actualHolder string) (*inputMetadata, error) {
@@ -366,6 +366,10 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		}
 
 		sqlxTagContent := "name=" + column.Name
+		if meta.primaryKey {
+			sqlxTagContent += ",primaryKey"
+		}
+
 		aTag := fmt.Sprintf(`sqlx:"%v"%v`, sqlxTagContent, jsonTag)
 
 		definition.Fields = append(definition.Fields, &view.Field{
@@ -410,7 +414,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	hasFieldName := "Has"
 	hasField := &view.Field{
 		Name: hasFieldName,
-		Tag:  fmt.Sprintf(`%v:"true" typeName:"%v" json:"-" sqlx:"-"`, json2.IndexKey, definition.Name+"Has"),
+		Tag:  fmt.Sprintf(`%v:"true" typeName:"%v" json:"-" sqlx:"presence=true"`, json2.IndexKey, definition.Name+"Has"),
 		Ptr:  true,
 	}
 
@@ -470,7 +474,7 @@ func (s *Builder) shouldFilterColumnByMeta(parentTable string, fkIndex map[strin
 	return true
 }
 
-func (s *Builder) filterKeys(keys []sink.Key, tableName string) []sink.Key {
+func filterKeys(keys []sink.Key, tableName string) []sink.Key {
 	var tableKeys []sink.Key
 	for i, aKey := range keys {
 		if aKey.Table == tableName {

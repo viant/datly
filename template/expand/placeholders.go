@@ -21,13 +21,14 @@ type (
 		ParamsGroup        []interface{}
 		Mock               bool
 		PlaceholderCounter int
-		sliceIndex         map[reflect.Type]*xunsafe.Slice
 		TemplateSQL        string
 		MetaSource         MetaSource
-		executables        []*Executable
 
-		markerIndex int
-		markers     []string
+		sliceIndex           map[reflect.Type]*xunsafe.Slice
+		executables          []*Executable
+		lastTableExecutables map[string]*Executable
+		markerIndex          int
+		markers              []string
 	}
 )
 

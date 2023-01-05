@@ -30,7 +30,7 @@ require (
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/parsly v0.0.0-20220913214053-cb272791c00f
 	github.com/viant/scy v0.4.1
-	github.com/viant/sqlx v0.3.0
+	github.com/viant/sqlx v0.4.1
 	github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20230102225600-f6b354a14c55

@@ -45,153 +45,32 @@ type testcase struct {
 }
 
 func TestRun(t *testing.T) {
-	return
 	TimeNow = func() time.Time {
 		parse, _ := time.Parse("2006-01-02 15:04:05.000000000 -0700 MST", "2014-11-12 11:45:26.000000000 +0000 UTC")
 		return parse
 	}
 
-	_ = toolbox.CreateDirIfNotExist(path.Join("/", "tmp", "datly", "generator"))
+	defer func() {
+		TimeNow = func() time.Time {
+			return time.Now()
+		}
+	}()
+
+	_ = toolbox.CreateDirIfNotExist(path.Join("/", "tmp", "datly_tests"))
 
 	currentLocation := toolbox.CallerDirectory(3)
 	configLocation := path.Join(currentLocation, "testdata", "config.yaml")
 
 	testCases := []*testcase{
 		{
-			description: "column codec",
-			URI:         "case001_columns_codec",
+			description: "enable last child batch when ExecKind = Service specified",
 			args: []string{
-				"-N=events",
-				"-D=sqlite3",
-				"-A=/tmp/datly_tests/db.db",
-				"-X=testdata/case001_columns_codec/events.sql",
+				"-C=dev|sqlite3|/tmp/datly_tests/db.db",
+				"-X=testdata/cases/case001_batch_enabled_no_ref/events.sql",
 			},
 			viewURL:    "/v1/api/meta/view/dev/events",
-			dataURL:    "/v1/api/dev/events",
-			httpMethod: http.MethodGet,
-		},
-		{
-			description: "group by",
-			URI:         "case002_group_by",
-			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/db.db", "-X=testdata/case002_group_by/events.sql"},
-			viewURL:     "/v1/api/meta/view/dev/events",
-			dataURL:     "/v1/api/dev/events?quantity=10",
-			httpMethod:  http.MethodGet,
-		},
-		{
-			description: "inner join",
-			URI:         "case003_inner_join",
-			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/db.db", "-X=testdata/case003_inner_join/events.sql"},
-			viewURL:     "/v1/api/meta/view/dev/events",
-			dataURL:     "/v1/api/dev/events?quantity=10",
-			httpMethod:  http.MethodGet,
-		},
-		{
-			description: "velty syntax",
-			URI:         "case004_velty",
-			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/db.db", "-X=testdata/case004_velty/events.sql"},
-			viewURL:     "/v1/api/meta/view/dev/events",
-			dataURL:     "/v1/api/dev/events?quantity=10",
-			httpMethod:  http.MethodGet,
-		},
-		{
-			description: "param column alias",
-			URI:         "case005_param_alias",
-			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/db.db", "-X=testdata/case005_param_alias/events.sql"},
-			viewURL:     "/v1/api/meta/view/dev/events/1",
-			dataURL:     "/v1/api/dev/events/1",
-			httpMethod:  http.MethodGet,
-		},
-		{
-			description: "cache hint",
-			URI:         "case006_cache_hint",
-			args: []string{
-				"-N=events",
-				"-D=sqlite3",
-				"-A=/tmp/datly_tests/db.db",
-				"-X=testdata/case006_cache_hint/events.sql",
-			},
-			viewURL:    "/v1/api/meta/view/dev/events/1",
-			httpMethod: http.MethodGet,
-		},
-		{
-			description: "selector hint",
-			URI:         "case007_selector_hint",
-			args:        []string{"-N=events", "-D=sqlite3", "-A=/tmp/datly_tests/db.db", "-X=testdata/case007_selector_hint/events.sql"},
-			viewURL:     "/v1/api/meta/view/dev/events/1",
-			dataURL:     "/v1/api/dev/events/1",
-			httpMethod:  http.MethodGet,
-		},
-		{
-			description: "type definition",
-			URI:         "case008_acl_param",
-			args: []string{
-				"-N=eventTypes",
-				"-D=sqlite3",
-				"-A=/tmp/datly_tests/db.db",
-				"-X=testdata/case008_acl_param/event_types.sql",
-			},
-			viewURL:    "/v1/api/meta/view/dev/event_types",
-			httpMethod: http.MethodGet,
-		},
-		{
-			description: "update",
-			URI:         "case009_update",
-			args: []string{
-				"-N=eventTypes",
-				"-D=sqlite3",
-				"-A=/tmp/datly_tests/db.db",
-				"-X=testdata/case009_update/update.sql",
-			},
-			viewURL:    "/v1/api/meta/view/dev/status",
-			httpMethod: http.MethodGet,
-		},
-		{
-			description: "set view param",
-			URI:         "case010_set_view_param",
-			args: []string{
-				"-N=eventTypes",
-				"-D=sqlite3",
-				"-A=/tmp/datly_tests/db.db",
-				"-X=testdata/case010_set_view_param/update.sql",
-			},
-			viewURL:    "/v1/api/meta/view/dev/status",
-			httpMethod: http.MethodGet,
-		},
-		{
-			description: "AsInts codec",
-			URI:         "case011_ints_codec",
-			args: []string{
-				"-N=eventTypes",
-				"-D=sqlite3",
-				"-A=/tmp/datly_tests/db.db",
-				"-X=testdata/case011_ints_codec/update.sql",
-			},
-			viewURL:    "/v1/api/meta/view/dev/status",
-			httpMethod: http.MethodGet,
-		},
-		{
-			description: "Insert type detection",
-			URI:         "case012_insert",
-			args: []string{
-				"-N=eventTypes",
-				"-D=sqlite3",
-				"-A=/tmp/datly_tests/db.db",
-				"-X=testdata/case012_insert/insert.sql",
-			},
-			viewURL:    "/v1/api/meta/view/dev/status",
-			httpMethod: http.MethodPost,
-		},
-		{
-			description: "column codec",
-			URI:         "case014_ifs",
-			args: []string{
-				"-D=sqlite3",
-				"-A=/tmp/datly_tests/db.db",
-				"-X=testdata/case014_ifs/events.sql",
-			},
-			viewURL:    "/v1/api/meta/view/dev/events",
-			httpMethod: http.MethodGet,
+			URI:        "cases/case001_batch_enabled_no_ref",
+			httpMethod: "POST",
 		},
 	}
 

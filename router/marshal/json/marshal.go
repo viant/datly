@@ -40,6 +40,7 @@ type (
 
 		_marshallersOutput map[string]int
 		_marshallersInput  map[string]int
+		indexUpdater       *presenceUpdater
 	}
 
 	fieldMarshaller struct {
@@ -140,8 +141,7 @@ func (j *Marshaller) structMarshallers(rType reflect.Type, config marshal.Defaul
 	numField := elem.NumField()
 	for i := 0; i < numField; i++ {
 		field := elem.Field(i)
-		indexTag := field.Tag.Get(IndexKey)
-		if indexTag != "" {
+		if IsPresenceField(field) {
 			var err error
 			iUpdater, err = j.presenceUpdater(field)
 			if err != nil {
@@ -162,12 +162,18 @@ func (j *Marshaller) structMarshallers(rType reflect.Type, config marshal.Defaul
 	}
 
 	if iUpdater != nil {
+		j.indexUpdater = iUpdater
 		for _, marshaller := range marshallers {
 			marshaller.indexUpdater = iUpdater
 		}
 	}
 
 	return marshallers, nil
+}
+
+func IsPresenceField(field reflect.StructField) bool {
+	indexTag := field.Tag.Get(IndexKey)
+	return indexTag != ""
 }
 
 func (j *Marshaller) presenceUpdater(field reflect.StructField) (*presenceUpdater, error) {

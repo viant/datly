@@ -11,6 +11,8 @@ pipeline:
           - ID: 7
             Quantity: 123456
             Name: '035_ changed - foo 7'
+          - ID: 8
+            Name: '035_ changed - foo 8'
         Expect:
           Code: 200
 
@@ -18,6 +20,9 @@ pipeline:
     action: 'dsunit:query'
     dataStore: dev
     SQL: |
-      SELECT (CASE  WHEN COUNT(*) = 0 THEN FALSE ELSE TRUE END) AS ADDED_NEW_ROWS FROM ( SELECT * FROM FOOS WHERE NAME LIKE '035_%') T;
+      SELECT 
+      (CASE  WHEN (SELECT COUNT(*) FROM FOOS WHERE ID = 7 AND QUANTITY = 123456 AND NAME ='035_ changed - foo 7' ) = 0 THEN FALSE ELSE TRUE END) AS UPDATED_ALL,
+      (CASE WHEN (SELECT COUNT(*) FROM FOOS WHERE ID = 8 AND NAME = '035_ changed - foo 8' AND QUANTITY = 2500) THEN TRUE ELSE FALSE END) AS UPDATED_WITH_HAS;
     expect:
-      - ADDED_NEW_ROWS: true
+      - UPDATED_ALL: true
+        UPDATED_WITH_HAS: true

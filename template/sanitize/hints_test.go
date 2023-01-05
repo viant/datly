@@ -2,7 +2,6 @@ package sanitize
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/viant/toolbox"
 	"testing"
 )
 
@@ -66,7 +65,7 @@ $xx /* this is 2nd hint */
 
 	for _, testCase := range testCases {
 		actual := ExtractParameterHints(testCase.text)
-		toolbox.Dump(actual)
+		//toolbox.Dump(actual)
 		assert.EqualValues(t, testCase.expect, actual, testCase.description)
 	}
 

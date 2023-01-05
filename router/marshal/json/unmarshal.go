@@ -81,19 +81,6 @@ func (d *decoder) updatePresenceIfNeeded(marshaller *fieldMarshaller) {
 	}
 
 	ptr := updater.xField.ValuePointer(d.ptr)
-	if ptr == nil {
-		var rValue reflect.Value
-		if updater.xField.Type.Kind() == reflect.Ptr {
-			rValue = reflect.New(updater.xField.Type.Elem())
-		} else {
-			rValue = reflect.New(updater.xField.Type)
-		}
-
-		iface := rValue.Elem().Interface()
-		ptr = xunsafe.AsPointer(iface)
-		updater.xField.SetValue(d.ptr, iface)
-	}
-
 	xField.SetBool(ptr, true)
 }
 
@@ -126,11 +113,28 @@ func (j *Marshaller) unmarshal(data []byte, dest interface{}) error {
 }
 
 func (j *Marshaller) newStructDecoder(path string, dest interface{}, xType *xunsafe.Type) gojay.UnmarshalerJSONObject {
+	destPtr := xunsafe.AsPointer(dest)
+
+	if j.indexUpdater != nil {
+		indexPtr := j.indexUpdater.xField.ValuePointer(destPtr)
+		if indexPtr == nil {
+			var rValue reflect.Value
+			if j.indexUpdater.xField.Type.Kind() == reflect.Ptr {
+				rValue = reflect.New(j.indexUpdater.xField.Type.Elem())
+			} else {
+				rValue = reflect.New(j.indexUpdater.xField.Type)
+			}
+
+			iface := rValue.Elem().Interface()
+			j.indexUpdater.xField.SetValue(destPtr, iface)
+		}
+	}
+
 	return &decoder{
 		marshaller: j,
 		xType:      xType,
 		dest:       dest,
-		ptr:        xunsafe.AsPointer(dest),
+		ptr:        destPtr,
 		path:       path,
 	}
 }

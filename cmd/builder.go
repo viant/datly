@@ -68,6 +68,7 @@ type (
 		fileName       string
 		viewType       view.Mode
 		expandedTable  *Table
+		batchEnabled   map[string]bool
 	}
 
 	templateMetaConfig struct {
@@ -126,7 +127,7 @@ func (u *uniqueIndex) reserve(value string) error {
 		return nil
 	}
 
-	return fmt.Errorf("%v is already defined")
+	return fmt.Errorf("%v is already defined", value)
 }
 
 func (b *routeBuilder) AddViews(aView *view.View) {
@@ -467,7 +468,7 @@ func (s *Builder) buildConfigProvider(SQL string) (*ViewConfigurer, error) {
 		serviceType = router.ExecutorServiceType
 	}
 
-	return NewConfigProviderReader(s.options.Generate.Name, SQL, s.routeBuilder.option, serviceType, s.routeBuilder.paramsIndex, nil)
+	return NewConfigProviderReader(s.options.Generate.Name, SQL, s.routeBuilder.option, serviceType, s.routeBuilder.paramsIndex, nil, &s.options.Connector)
 }
 
 func (s *Builder) loadSQL(ctx context.Context) error {

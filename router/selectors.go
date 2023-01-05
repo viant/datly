@@ -116,7 +116,7 @@ func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.R
 		}
 	}
 
-	selectors, err := CreateSelectors(ctx, route.accessors, route.DateFormat, *route._caser, requestMetadata, requestParams, views...)
+	selectors, err := CreateSelectors(ctx, route._accessors, route.DateFormat, *route._caser, requestMetadata, requestParams, views...)
 	if err != nil {
 		_, err = normalizeErr(err, 400)
 	}
@@ -641,7 +641,6 @@ func (b *selectorsBuilder) extractBody(path string) (interface{}, bool) {
 		return nil, false
 	}
 
-	fmt.Printf("%T, %v\n", b.params.requestBody, b.params.requestBody)
 	value, err := accessor.Value(b.params.requestBody)
 	if err != nil {
 		return nil, false

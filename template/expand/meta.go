@@ -2,7 +2,6 @@ package expand
 
 import (
 	"database/sql"
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/viant/toolbox"
 	"github.com/viant/xunsafe"
@@ -43,24 +42,25 @@ type (
 	}
 
 	MetaParam struct {
-		expander     Expander
-		sanitizer    *SQLCriteria
-		Name         string
-		Alias        string
-		Table        string
-		Limit        int
-		Offset       int
-		Page         int
-		Args         []interface{}
-		NonWindowSQL string
-		ParentValues []interface{}
+		expander            Expander
+		sanitizer           *SQLCriteria
+		Name                string
+		Alias               string
+		Table               string
+		Limit               int
+		Offset              int
+		Page                int
+		Args                []interface{}
+		NonWindowSQL        string
+		ParentValues        []interface{}
+		lastTablExecutables map[string]*Executable
 	}
 
 	Executable struct {
 		Table    string
 		ExecType ExecType
 		Data     interface{}
-		Executed bool
+		IsLast   bool
 	}
 
 	ExecType     int
@@ -235,20 +235,29 @@ func (c *SQLCriteria) Update(data interface{}, tableName string) (string, error)
 func (c *SQLCriteria) appendExecutable(data interface{}, tableName string, execType ExecType) string {
 	value := copyValue(data)
 
-	toolbox.Dump(data)
-	fmt.Printf("%T, %v\n", data, data)
+	if c.lastTableExecutables == nil {
+		c.lastTableExecutables = map[string]*Executable{}
+	}
 
-	toolbox.Dump(value)
-	fmt.Printf("%T, %v\n", value, value)
-
-	c.executables = append(c.executables, &Executable{
+	newExecutable := &Executable{
 		Table:    tableName,
 		ExecType: execType,
 		Data:     value,
-	})
+		IsLast:   true,
+	}
 
+	c.executables = append(c.executables, newExecutable)
 	marker := uuid.New().String()
 	c.markers = append(c.markers, marker)
+
+	if execType == ExecTypeInsert {
+		if lastExecutable, ok := c.lastTableExecutables[tableName]; ok {
+			lastExecutable.IsLast = false
+		}
+
+		c.lastTableExecutables[tableName] = newExecutable
+	}
+
 	return marker
 }
 

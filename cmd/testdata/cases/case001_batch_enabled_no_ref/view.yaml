@@ -23,8 +23,8 @@ Logger:
   Name: ""
 MatchStrategy: read_matched
 Mode: SQLExec
-Name: update
-Ref: update
+Name: events
+Ref: events
 Schema:
   Cardinality: One
 Selector:
@@ -41,28 +41,17 @@ Table: event_types
 Template:
   Parameters:
     - In:
-        Kind: data_view
-        Name: Event
-      Name: Event
-      PresenceName: Event
-      Ref: Event
+        Kind: body
+      Name: EventTypes
+      PresenceName: EventTypes
+      Ref: EventTypes
       Required: true
       Schema:
         Cardinality: One
-        DataType: Event
-    - In:
-        Kind: data_view
-        Name: Records
-      Name: Records
-      PresenceName: Records
-      Ref: Records
-      Required: true
-      Schema:
-        Cardinality: Many
-        DataType: Records
+        DataType: '*EventTypes'
   PresenceSchema:
     Cardinality: One
   Schema:
     Cardinality: One
-  Source: "( \n\n#set($event = $Unsafe.Event )\n\n#foreach($rec in $Unsafe.Records )\n\nUPDATE event_types\nSET name =  $criteria.AppendBinding($rec.NEW_NAME)\nWHERE ID =  $criteria.AppendBinding($rec.ID);\n\n#end )"
-  SourceURL: update/update.sql
+  Source: "( \n\n\n\nINSERT INTO event_types(\naccount_id,\nname,\nid\n) VALUES (\n $criteria.AppendBinding($Unsafe.EventTypes.AccountId),\n $criteria.AppendBinding($Unsafe.EventTypes.Name),\n $criteria.AppendBinding($Unsafe.EventTypes.Id)\n);\n\n  #foreach($recEvents in $Unsafe.EventTypes.Events)\n    #set($recEvents.EventTypeId = $Unsafe.EventTypes.Id)\n    $sql.Insert($recEvents, \"events\");\n  #end )"
+  SourceURL: events/events.sql
