@@ -4,13 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
+	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/insert"
+	"github.com/viant/sqlx/io/insert/batcher"
 	"github.com/viant/sqlx/io/update"
-	"github.com/viant/toolbox"
+	"reflect"
 	"strings"
-	"sync"
 )
 
 type (
@@ -19,7 +19,7 @@ type (
 	}
 )
 
-func New(options ...interface{}) *Executor {
+func New() *Executor {
 	return &Executor{
 		sqlBuilder: NewBuilder(),
 	}
@@ -46,62 +46,79 @@ func (e *Executor) exec(ctx context.Context, session *Session, data []*SQLStatme
 		return nil
 	}
 
+	canBeBatchedGlobally := e.canBeBatchedGlobally(criteria, data) && e.dialectSupportsBatching(ctx, session.View)
 	db, err := session.View.Db()
 	if err != nil {
 		return err
 	}
 
-	tx, err := db.Begin()
-	if err != nil {
-		return err
-	}
+	aTx := newLazyTx(db, canBeBatchedGlobally)
 
-	errors := shared.NewErrors(0)
-	wg := &sync.WaitGroup{}
-	wg.Add(len(data))
 	for i := range data {
-		e.execData(ctx, wg, tx, data[i], errors, session, criteria, db)
+		if err = e.execData(ctx, aTx, data[i], session, criteria, db, canBeBatchedGlobally); err != nil {
+			_ = aTx.RollbackIfNeeded()
+			return err
+		}
 	}
 
-	wg.Wait()
-
-	if err = errors.Error(); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	return tx.Commit()
+	return aTx.CommitIfNeeded()
 }
 
-func (e *Executor) execData(ctx context.Context, wg *sync.WaitGroup, tx *sql.Tx, data *SQLStatment, errors *shared.Errors, session *Session, criteria *expand.SQLCriteria, db *sql.DB) {
-	defer wg.Done()
+func (e *Executor) canBeBatchedGlobally(criteria *expand.SQLCriteria, data []*SQLStatment) bool {
+	executables := criteria.FilterExecutables(extractStatements(data), true)
+	if len(executables) != len(data) {
+		return false
+	}
+
+	tableNamesIndex := map[string]bool{}
+	for _, executable := range executables {
+		if executable.ExecType == expand.ExecTypeUpdate {
+			return false
+		}
+
+		tableNamesIndex[executable.Table] = true
+	}
+
+	return len(tableNamesIndex) == 1
+}
+
+func extractStatements(data []*SQLStatment) []string {
+	result := make([]string, 0, len(data))
+	for _, datum := range data {
+		result = append(result, datum.SQL)
+	}
+
+	return result
+}
+
+func (e *Executor) execData(ctx context.Context, aTx *lazyTx, data *SQLStatment, session *Session, criteria *expand.SQLCriteria, db *sql.DB, canBeBatchedGlobally bool) error {
 	if strings.TrimSpace(data.SQL) == "" {
-		return
+		return nil
 	}
 
-	err := e.tryExec(ctx, criteria, tx, data, session, db)
-	if err != nil {
-		errors.Append(err)
-	}
-}
-
-func (e *Executor) tryExec(ctx context.Context, criteria *expand.SQLCriteria, tx *sql.Tx, data *SQLStatment, session *Session, db *sql.DB) error {
 	if executable, ok := criteria.IsServiceExec(data.SQL); ok {
 		switch executable.ExecType {
 		case expand.ExecTypeInsert:
+
 			dialect, err := session.View.Connector.Dialect(ctx)
 			if err != nil {
 				return err
 			}
+
+			canBeBatched := session.View.TableBatches[executable.Table] && e.dialectSupportsBatching(ctx, session.View)
 
 			service, err := insert.New(ctx, db, executable.Table)
 			if err != nil {
 				return err
 			}
 
-			canBeBatched := session.View.TableBatches[executable.Table] && dialect.Insert.MultiValues()
 			if !canBeBatched {
-				_, _, err = service.Exec(ctx, executable.Data, tx)
+				tx, err := aTx.Tx()
+				if err != nil {
+					return err
+				}
+
+				_, _, err = service.Exec(ctx, executable.Data, tx, dialect)
 				return err
 			}
 
@@ -111,26 +128,70 @@ func (e *Executor) tryExec(ctx context.Context, criteria *expand.SQLCriteria, tx
 				return nil
 			}
 
-			_, _, err = service.Exec(ctx, collection.Unwrap(), tx)
+			if canBeBatchedGlobally {
+				aBatcher, err := batcherRegistry.GetBatcher(executable.Table, reflect.TypeOf(executable.Data), db, &batcher.Config{
+					MaxElements:   100,
+					MaxDurationMs: 10,
+					BatchSize:     100,
+				})
+
+				if err != nil {
+					return err
+				}
+
+				//TODO: remove reflection
+				rSlice := reflect.ValueOf(collection.Unwrap()).Elem()
+				sliceLen := rSlice.Len()
+				var state *batcher.State
+				for i := 0; i < sliceLen; i++ {
+					state, err = aBatcher.Collect(rSlice.Index(i).Interface())
+					if err != nil {
+						return err
+					}
+				}
+
+				if state != nil {
+					return state.Wait()
+				}
+			}
+
+			options, err := aTx.PrepareTxOptions()
+			if err != nil {
+				return err
+			}
+
+			_, _, err = service.Exec(ctx, collection.Unwrap(), append(options, dialect)...)
 			return err
 
 		case expand.ExecTypeUpdate:
-			fmt.Printf("%T, %+v\n", executable.Data, executable.Data)
-			toolbox.Dump(executable.Data)
 			service, err := update.New(ctx, db, executable.Table)
 			if err != nil {
 				return err
 			}
 
-			_, err = service.Exec(ctx, executable.Data, tx)
+			options, err := aTx.PrepareTxOptions()
+			if err != nil {
+				return err
+			}
+
+			_, err = service.Exec(ctx, executable.Data, options...)
 			return err
 		default:
 			return fmt.Errorf("unsupported exec type: %v\n", executable.ExecType)
 		}
 	}
 
-	err := e.executeStatement(ctx, tx, data, session)
-	return err
+	tx, err := aTx.Tx()
+	if err != nil {
+		return err
+	}
+
+	return e.executeStatement(ctx, tx, data, session)
+}
+
+func (e *Executor) dialectSupportsBatching(ctx context.Context, aView *view.View) bool {
+	dialect, err := aView.Connector.Dialect(ctx)
+	return err == nil && dialect.Insert.MultiValues()
 }
 
 func (e *Executor) executeStatement(ctx context.Context, tx *sql.Tx, stmt *SQLStatment, session *Session) error {

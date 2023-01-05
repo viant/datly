@@ -3,7 +3,6 @@ package expand
 import (
 	"database/sql"
 	"github.com/google/uuid"
-	"github.com/viant/toolbox"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -263,7 +262,6 @@ func (c *SQLCriteria) appendExecutable(data interface{}, tableName string, execT
 
 func copyValue(data interface{}) interface{} {
 	result := reflect.ValueOf(data)
-	toolbox.Dump(result)
 	switch result.Kind() {
 	case reflect.Slice:
 		sliceResult := reflect.MakeSlice(result.Type(), result.Len(), result.Len())

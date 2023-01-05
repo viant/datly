@@ -196,3 +196,21 @@ func (c *SQLCriteria) IsServiceExec(SQL string) (*Executable, bool) {
 
 	return nil, false
 }
+
+func (c *SQLCriteria) FilterExecutables(statements []string, stopOnNonExec bool) []*Executable {
+	result := make([]*Executable, 0)
+
+	for i := 0; i < len(statements); i++ {
+		if len(c.executables) <= i {
+			break
+		}
+
+		if strings.TrimSpace(statements[i]) != c.markers[i] && stopOnNonExec {
+			return result
+		}
+
+		result = append(result, c.executables[i])
+	}
+
+	return result
+}
