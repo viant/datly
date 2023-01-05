@@ -187,9 +187,6 @@ func (s *Builder) appendRouteOption(paramName string, routeOption *option.RouteC
 		From: paramName,
 	}
 
-	routeOption.Declare = map[string]string{}
-
-	routeOption.Declare[view.FirstNotEmpty(typeDef.bodyHolder, typeDef.paramName)] = typeName
 	marshal, err := json.Marshal(routeOption)
 	if err != nil {
 		return err

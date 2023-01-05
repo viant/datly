@@ -42,7 +42,7 @@ type (
 
 	MetaParam struct {
 		expander            Expander
-		sanitizer           *SQLCriteria
+		sanitizer           *DataUnit
 		Name                string
 		Alias               string
 		Table               string
@@ -122,7 +122,7 @@ func (m *MetaParam) In(prefix string) (string, error) {
 
 //Expand appends SQL and adds binding arguments
 //Deprecated: For the backward compatibility
-func (m *MetaParam) Expand(_ *SQLCriteria) string {
+func (m *MetaParam) Expand(_ *DataUnit) string {
 	m.sanitizer.addAll(m.Args...)
 	return m.NonWindowSQL
 }
@@ -154,13 +154,13 @@ func NewMetaParam(metaSource MetaSource, aSelector MetaExtras, batchData MetaBat
 		return nil
 	}
 
-	var sanitizer *SQLCriteria
+	var sanitizer *DataUnit
 	var expander Expander
 	var colInArgs []interface{}
 
 	for _, option := range options {
 		switch actual := option.(type) {
-		case *SQLCriteria:
+		case *DataUnit:
 			sanitizer = actual
 		case Expander:
 			expander = actual
@@ -198,7 +198,7 @@ func NewMetaParam(metaSource MetaSource, aSelector MetaExtras, batchData MetaBat
 		Offset:       offset,
 		Args:         args,
 		NonWindowSQL: SQLExec,
-		sanitizer: &SQLCriteria{
+		sanitizer: &DataUnit{
 			MetaSource: metaSource,
 		},
 		ParentValues: colInArgs,
@@ -219,19 +219,19 @@ func NotZeroOf(values ...int) int {
 
 func MockMetaParam() *MetaParam {
 	return &MetaParam{
-		sanitizer: &SQLCriteria{},
+		sanitizer: &DataUnit{},
 	}
 }
 
-func (c *SQLCriteria) Insert(data interface{}, tableName string) (string, error) {
+func (c *DataUnit) Insert(data interface{}, tableName string) (string, error) {
 	return c.appendExecutable(data, tableName, ExecTypeInsert), nil
 }
 
-func (c *SQLCriteria) Update(data interface{}, tableName string) (string, error) {
+func (c *DataUnit) Update(data interface{}, tableName string) (string, error) {
 	return c.appendExecutable(data, tableName, ExecTypeUpdate), nil
 }
 
-func (c *SQLCriteria) appendExecutable(data interface{}, tableName string, execType ExecType) string {
+func (c *DataUnit) appendExecutable(data interface{}, tableName string, execType ExecType) string {
 	value := copyValue(data)
 
 	if c.lastTableExecutables == nil {

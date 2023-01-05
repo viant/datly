@@ -233,9 +233,9 @@ func FilterConstParameters(parameters []*Parameter) []expand.ConstUpdater {
 	return params
 }
 
-func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (string, *expand.SQLCriteria, *logger.Printer, error) {
+func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (string, *expand.DataUnit, *logger.Printer, error) {
 	if t.wasEmpty {
-		return t.Source, &expand.SQLCriteria{}, &logger.Printer{}, nil
+		return t.Source, &expand.DataUnit{}, &logger.Printer{}, nil
 	}
 
 	state, criteria, printer, err := t.EvaluateState(externalParams, presenceMap, parentParam, batchData, options...)
@@ -246,7 +246,7 @@ func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, paren
 	return state.Buffer.String(), criteria, printer, err
 }
 
-func (t *Template) EvaluateState(externalParams interface{}, presenceMap interface{}, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (*est.State, *expand.SQLCriteria, *logger.Printer, error) {
+func (t *Template) EvaluateState(externalParams interface{}, presenceMap interface{}, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (*est.State, *expand.DataUnit, *logger.Printer, error) {
 	var expander expand.Expander
 	for _, option := range options {
 		switch actual := option.(type) {
@@ -258,7 +258,7 @@ func (t *Template) EvaluateState(externalParams interface{}, presenceMap interfa
 	return Evaluate(t.sqlEvaluator, externalParams, presenceMap, AsViewParam(t._view, nil, batchData, expander), parentParam)
 }
 
-func Evaluate(evaluator *expand.Evaluator, externalParams, presenceMap interface{}, viewParam, parentParam *expand.MetaParam) (*est.State, *expand.SQLCriteria, *logger.Printer, error) {
+func Evaluate(evaluator *expand.Evaluator, externalParams, presenceMap interface{}, viewParam, parentParam *expand.MetaParam) (*est.State, *expand.DataUnit, *logger.Printer, error) {
 	printer := &logger.Printer{}
 
 	state, params, err := evaluator.Evaluate(externalParams, presenceMap, viewParam, parentParam, printer)
@@ -394,7 +394,7 @@ func (t *Template) IsActualTemplate() bool {
 	return t.isTemplate
 }
 
-func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *expand.SQLCriteria) (string, error) {
+func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error) {
 	values, err := parameter.Parse(SQL)
 	if err != nil {
 		return "", err
@@ -428,7 +428,7 @@ func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Sel
 	return replacement.ExpandAsText(SQL), err
 }
 
-func (t *Template) prepareExpanded(value *parameter.Value, params CriteriaParam, selector *Selector, batchData *BatchData, placeholders *[]interface{}, sanitized *expand.SQLCriteria) (string, string, error) {
+func (t *Template) prepareExpanded(value *parameter.Value, params CriteriaParam, selector *Selector, batchData *BatchData, placeholders *[]interface{}, sanitized *expand.DataUnit) (string, string, error) {
 	key, val, err := t.replacementEntry(value.Key, params, selector, batchData, placeholders, sanitized)
 	if err != nil {
 		return "", "", err
@@ -437,7 +437,7 @@ func (t *Template) prepareExpanded(value *parameter.Value, params CriteriaParam,
 	return key, val, err
 }
 
-func (t *Template) replacementEntry(key string, params CriteriaParam, selector *Selector, batchData *BatchData, placeholders *[]interface{}, sanitized *expand.SQLCriteria) (string, string, error) {
+func (t *Template) replacementEntry(key string, params CriteriaParam, selector *Selector, batchData *BatchData, placeholders *[]interface{}, sanitized *expand.DataUnit) (string, string, error) {
 	switch key {
 	case keywords.Pagination[1:]:
 		return key, params.Pagination, nil

@@ -22,7 +22,7 @@ func NewBuilder() *SqlBuilder {
 	return &SqlBuilder{}
 }
 
-func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) (*est.State, []*SQLStatment, *logger.Printer, *expand.SQLCriteria, error) {
+func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) (*est.State, []*SQLStatment, *logger.Printer, *expand.DataUnit, error) {
 	state, params, printer, err := aView.Template.EvaluateState(paramState.Values, paramState.Has, nil, nil)
 	if err != nil {
 		return nil, nil, nil, nil, err

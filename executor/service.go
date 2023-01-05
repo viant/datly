@@ -25,6 +25,8 @@ func New() *Executor {
 	}
 }
 
+//TODO: remove reflection
+//TODO: customize global batch collector
 func (e *Executor) Exec(ctx context.Context, session *Session) error {
 	state, data, printer, sqlCriteria, err := e.sqlBuilder.Build(session.View, session.Lookup(session.View))
 	session.State = state
@@ -41,7 +43,7 @@ func (e *Executor) Exec(ctx context.Context, session *Session) error {
 	return err
 }
 
-func (e *Executor) exec(ctx context.Context, session *Session, data []*SQLStatment, criteria *expand.SQLCriteria) error {
+func (e *Executor) exec(ctx context.Context, session *Session, data []*SQLStatment, criteria *expand.DataUnit) error {
 	if len(data) == 0 {
 		return nil
 	}
@@ -64,7 +66,7 @@ func (e *Executor) exec(ctx context.Context, session *Session, data []*SQLStatme
 	return aTx.CommitIfNeeded()
 }
 
-func (e *Executor) canBeBatchedGlobally(criteria *expand.SQLCriteria, data []*SQLStatment) bool {
+func (e *Executor) canBeBatchedGlobally(criteria *expand.DataUnit, data []*SQLStatment) bool {
 	executables := criteria.FilterExecutables(extractStatements(data), true)
 	if len(executables) != len(data) {
 		return false
@@ -91,7 +93,7 @@ func extractStatements(data []*SQLStatment) []string {
 	return result
 }
 
-func (e *Executor) execData(ctx context.Context, aTx *lazyTx, data *SQLStatment, session *Session, criteria *expand.SQLCriteria, db *sql.DB, canBeBatchedGlobally bool) error {
+func (e *Executor) execData(ctx context.Context, aTx *lazyTx, data *SQLStatment, session *Session, criteria *expand.DataUnit, db *sql.DB, canBeBatchedGlobally bool) error {
 	if strings.TrimSpace(data.SQL) == "" {
 		return nil
 	}
@@ -99,7 +101,6 @@ func (e *Executor) execData(ctx context.Context, aTx *lazyTx, data *SQLStatment,
 	if executable, ok := criteria.IsServiceExec(data.SQL); ok {
 		switch executable.ExecType {
 		case expand.ExecTypeInsert:
-
 			dialect, err := session.View.Connector.Dialect(ctx)
 			if err != nil {
 				return err

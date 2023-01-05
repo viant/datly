@@ -23,7 +23,7 @@ type (
 		Args      []interface{}
 	}
 
-	ExpanderFn func(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *expand.SQLCriteria) (string, error)
+	ExpanderFn func(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error)
 )
 
 func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column, string, error) {
@@ -231,8 +231,8 @@ func detectColumnsSQL(evaluation *TemplateEvaluation, v *View) (string, []interf
 	return SQL, placeholders, nil
 }
 
-func NewMockSanitizer() *expand.SQLCriteria {
-	return &expand.SQLCriteria{
+func NewMockSanitizer() *expand.DataUnit {
+	return &expand.DataUnit{
 		Mock: true,
 	}
 }

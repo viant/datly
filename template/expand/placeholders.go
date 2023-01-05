@@ -16,7 +16,7 @@ type (
 		ColumnName(key string) (string, error)
 	}
 
-	SQLCriteria struct {
+	DataUnit struct {
 		Columns            ColumnsSource
 		ParamsGroup        []interface{}
 		Mock               bool
@@ -32,7 +32,7 @@ type (
 	}
 )
 
-func (c *SQLCriteria) Allocate(tableName string, dest interface{}, selector string) (string, error) {
+func (c *DataUnit) Allocate(tableName string, dest interface{}, selector string) (string, error) {
 	db, err := c.MetaSource.Db()
 	if err != nil {
 		fmt.Printf("error occured while connecting to DB %v\n", err.Error())
@@ -44,25 +44,25 @@ func (c *SQLCriteria) Allocate(tableName string, dest interface{}, selector stri
 	return "", service.Next(tableName, dest, selector)
 }
 
-func (c *SQLCriteria) AsBinding(value interface{}) string {
+func (c *DataUnit) AsBinding(value interface{}) string {
 	return c.Add(0, value)
 }
 
-func (c *SQLCriteria) AppendBinding(value interface{}) string {
+func (c *DataUnit) AppendBinding(value interface{}) string {
 	return c.Add(0, value)
 }
 
-func (c *SQLCriteria) UUID() string {
+func (c *DataUnit) UUID() string {
 	newUUID := uuid.New()
 	c.ParamsGroup = append(c.ParamsGroup, newUUID.String())
 	return "?"
 }
 
-func (c *SQLCriteria) AsColumn(columnName string) (string, error) {
+func (c *DataUnit) AsColumn(columnName string) (string, error) {
 	return c.Columns.ColumnName(columnName)
 }
 
-func (c *SQLCriteria) Add(_ int, value interface{}) string {
+func (c *DataUnit) Add(_ int, value interface{}) string {
 	if value == nil {
 		return ""
 	}
@@ -74,7 +74,7 @@ func (c *SQLCriteria) Add(_ int, value interface{}) string {
 	return expanded
 }
 
-func (c *SQLCriteria) expandCopy(value interface{}) ([]interface{}, string) {
+func (c *DataUnit) expandCopy(value interface{}) ([]interface{}, string) {
 	switch actual := value.(type) {
 	case *string:
 		return []interface{}{actual}, "?"
@@ -119,7 +119,7 @@ func (c *SQLCriteria) expandCopy(value interface{}) ([]interface{}, string) {
 	return []interface{}{valueCopy}, "?"
 }
 
-func (c *SQLCriteria) copyAndExpandSlice(sliceType reflect.Type, valuePtr unsafe.Pointer) ([]interface{}, string) {
+func (c *DataUnit) copyAndExpandSlice(sliceType reflect.Type, valuePtr unsafe.Pointer) ([]interface{}, string) {
 	c.ensureSliceIndex()
 	xslice := c.xunsafeSlice(sliceType.Elem())
 	sliceLen := xslice.Len(valuePtr)
@@ -143,11 +143,11 @@ func (c *SQLCriteria) copyAndExpandSlice(sliceType reflect.Type, valuePtr unsafe
 	}
 }
 
-func (c *SQLCriteria) At(_ int) []interface{} {
+func (c *DataUnit) At(_ int) []interface{} {
 	return c.ParamsGroup
 }
 
-func (c *SQLCriteria) Next() (interface{}, error) {
+func (c *DataUnit) Next() (interface{}, error) {
 	if c.Mock {
 		return 0, nil
 	}
@@ -161,7 +161,7 @@ func (c *SQLCriteria) Next() (interface{}, error) {
 	return nil, fmt.Errorf("expected to got binding parameter, but noone was found")
 }
 
-func (c *SQLCriteria) ensureSliceIndex() {
+func (c *DataUnit) ensureSliceIndex() {
 	if c.sliceIndex != nil {
 		return
 	}
@@ -169,7 +169,7 @@ func (c *SQLCriteria) ensureSliceIndex() {
 	c.sliceIndex = map[reflect.Type]*xunsafe.Slice{}
 }
 
-func (c *SQLCriteria) xunsafeSlice(valueType reflect.Type) *xunsafe.Slice {
+func (c *DataUnit) xunsafeSlice(valueType reflect.Type) *xunsafe.Slice {
 	slice, ok := c.sliceIndex[valueType]
 	if !ok {
 		slice = xunsafe.NewSlice(reflect.SliceOf(valueType))
@@ -179,11 +179,11 @@ func (c *SQLCriteria) xunsafeSlice(valueType reflect.Type) *xunsafe.Slice {
 	return slice
 }
 
-func (c *SQLCriteria) addAll(args ...interface{}) {
+func (c *DataUnit) addAll(args ...interface{}) {
 	c.ParamsGroup = append(c.ParamsGroup, args...)
 }
 
-func (c *SQLCriteria) IsServiceExec(SQL string) (*Executable, bool) {
+func (c *DataUnit) IsServiceExec(SQL string) (*Executable, bool) {
 	if len(c.executables) <= c.markerIndex {
 		return nil, false
 	}
@@ -197,7 +197,7 @@ func (c *SQLCriteria) IsServiceExec(SQL string) (*Executable, bool) {
 	return nil, false
 }
 
-func (c *SQLCriteria) FilterExecutables(statements []string, stopOnNonExec bool) []*Executable {
+func (c *DataUnit) FilterExecutables(statements []string, stopOnNonExec bool) []*Executable {
 	result := make([]*Executable, 0)
 
 	for i := 0; i < len(statements); i++ {
