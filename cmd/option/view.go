@@ -20,6 +20,7 @@ type (
 	}
 
 	ViewPregenConfig struct {
-		ExecKind string
+		ExecKind     string `json:",omitempty"`
+		FetchRecords bool   `json:",omitempty"`
 	}
 )

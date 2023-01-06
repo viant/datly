@@ -1067,8 +1067,12 @@ func (s *Builder) normalizeURL(typeSrc *option.TypeSrcConfig) {
 	}
 	typeSrc.URL = strings.ReplaceAll(typeSrc.URL, "${GOPATH}", goPATH)
 	if url.Scheme(typeSrc.URL, "") == "" && !strings.HasPrefix(typeSrc.URL, "/") {
-		if dir, err := os.Getwd(); err == nil {
-			typeSrc.URL = filepath.Join(dir, typeSrc.URL)
+		if s.options.RelativePath != "" {
+			typeSrc.URL = path.Join(s.options.RelativePath, typeSrc.URL)
+		} else {
+			if dir, err := os.Getwd(); err == nil {
+				typeSrc.URL = filepath.Join(dir, typeSrc.URL)
+			}
 		}
 	}
 }

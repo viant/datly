@@ -28,14 +28,14 @@ require (
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
-	github.com/viant/parsly v0.0.0-20220913214053-cb272791c00f
+	github.com/viant/parsly v0.1.0
 	github.com/viant/scy v0.4.1
 	github.com/viant/sqlx v0.4.1
 	github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
-	github.com/viant/velty v0.1.1-0.20230102225600-f6b354a14c55
+	github.com/viant/velty v0.1.1-0.20230106025837-a471fbfe6a12
 	github.com/viant/xreflect v0.0.0-20221129195610-6c6068eb8186
-	github.com/viant/xunsafe v0.8.1-0.20221217035120-48c214a9bcfc
+	github.com/viant/xunsafe v0.8.1
 	golang.org/x/oauth2 v0.3.0
 	google.golang.org/api v0.102.0
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
@@ -46,6 +46,8 @@ require (
 	github.com/francoispqt/gojay v1.2.13
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
 )
+
+require github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac
 
 require (
 	cloud.google.com/go v0.104.0 // indirect

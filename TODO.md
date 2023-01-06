@@ -24,3 +24,6 @@
 - velty macros
 - Management API
 - add GUI
+
+- Example with differ
+- Differ for update

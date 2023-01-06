@@ -7,8 +7,8 @@ import (
 )
 
 const (
-	queryFunctionName      = "Query"
-	queryFirstFunctionName = "QueryFirst"
+	fnQuery      = "Query"
+	fnQueryFirst = "QueryFirst"
 )
 
 type (
@@ -22,7 +22,7 @@ func (q *queryFirstFunction) ResultType(receiver reflect.Type, call *expr.Call) 
 		return nil, err
 	}
 
-	return resultType.Elem().Elem(), nil
+	return resultType.Elem(), nil
 }
 
 func (q *queryFirstFunction) Kind() []reflect.Kind {
@@ -87,7 +87,8 @@ func (q *queryFunction) handleQuery(data interface{}, query string) (interface{}
 		return nil, err
 	}
 
-	return reflect.ValueOf(result).Elem().Interface(), nil
+	result = reflect.ValueOf(result).Elem().Interface()
+	return result, nil
 }
 
 var queryFirstFnHandler = &queryFirstFunction{}

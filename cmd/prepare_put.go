@@ -21,7 +21,6 @@ func newUpdateStmtBuilder(sb *strings.Builder, def *inputMetadata) *updateStmtBu
 }
 
 func (s *Builder) preparePutRule(ctx context.Context, SQL []byte) (string, error) {
-
 	routeConfig, config, metadata, err := s.buildInputMetadata(ctx, SQL)
 	if err != nil {
 		return "", err
@@ -47,6 +46,27 @@ func (s *Builder) buildUpdateSQL(routeConfig *option.RouteConfig, aViewConfig *v
 
 	builder := newUpdateStmtBuilder(sb, metadata)
 	if err = builder.appendHintsWithRelations(); err != nil {
+		return "", err
+	}
+
+	if err = builder.iterateOverHints(metadata, func(currMetadata *inputMetadata) error {
+		if !currMetadata.config.expandedTable.ViewConfig.FetchRecords {
+			return nil
+		}
+
+		return builder.appendSQLHint(currMetadata)
+	}); err != nil {
+		return "", err
+	}
+
+	if err = builder.iterateOverHints(metadata, func(currMetadata *inputMetadata) error {
+		if !currMetadata.config.expandedTable.ViewConfig.FetchRecords {
+			return nil
+		}
+
+		builder.generateIndexIfNeeded(currMetadata)
+		return nil
+	}); err != nil {
 		return "", err
 	}
 

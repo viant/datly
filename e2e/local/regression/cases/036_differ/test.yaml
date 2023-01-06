@@ -1,0 +1,24 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: PUT
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/foos-differ
+        JsonBody:
+        - ID: 9
+          Name: "036_ CHANGED FOO 9"
+        Expect:
+         Code: 200
+
+  checkDB:
+    action: 'dsunit:query'
+    dataStore: dev
+    SQL: |
+          SELECT COUNT(*) AS DIFF_UPDATED FROM (
+          SELECT 1 FROM DIFF_JN WHERE DIFF = '[{"Path":"Name","Change":"update","From":"FOO - 9","To":"036_ CHANGED FOO 9"},{"Path":"Quantity","Change":"update","From":3000}]'
+           ) T;
+    expect:
+      - DIFF_UPDATED: 1

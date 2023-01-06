@@ -4,15 +4,16 @@ import (
 	"fmt"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/godiff"
 	"github.com/viant/velty"
 	"github.com/viant/velty/est"
 	"reflect"
 )
 
 const (
-	Criteria    = "criteria"
-	Logger      = "logger"
-	HttpService = "http"
+	Criteria       = "criteria"
+	Logger         = "logger"
+	FnsHttpService = "http"
 )
 
 type (
@@ -71,27 +72,35 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
-	if err = evaluator.planner.DefineVariable(HttpService, reflect.TypeOf(&Http{})); err != nil {
+	if err = evaluator.planner.DefineVariable(FnsHttpService, reflect.TypeOf(&Http{})); err != nil {
 		return nil, err
 	}
 
-	if err = evaluator.planner.RegisterFunctionKind(queryFunctionName, queryFnHandler); err != nil {
+	if err = evaluator.planner.RegisterFunctionKind(fnQuery, queryFnHandler); err != nil {
 		return nil, err
 	}
 
-	if err = evaluator.planner.RegisterFunctionKind(transformFunctionName, newTransform(types)); err != nil {
+	if err = evaluator.planner.RegisterFunctionKind(fnTransform, newTransform(types)); err != nil {
 		return nil, err
 	}
 
-	if err = evaluator.planner.RegisterFunctionKind(lengthFunctionName, newStringLength()); err != nil {
+	if err = evaluator.planner.RegisterFunctionKind(fnLength, newStringLength()); err != nil {
 		return nil, err
 	}
 
-	if err = evaluator.planner.RegisterFunctionKind(lengthFunctionName, newArrayLength()); err != nil {
+	if err = evaluator.planner.RegisterFunctionKind(fnLength, newArrayLength()); err != nil {
 		return nil, err
 	}
 
-	if err = evaluator.planner.RegisterFunctionKind(queryFirstFunctionName, queryFirstFnHandler); err != nil {
+	if err = evaluator.planner.RegisterFunctionKind(fnQueryFirst, queryFirstFnHandler); err != nil {
+		return nil, err
+	}
+
+	if err = evaluator.planner.RegisterFuncNs(FnsDiffer, Differ{}); err != nil {
+		return nil, err
+	}
+
+	if err = evaluator.planner.RegisterTypeFunc(reflect.TypeOf(&godiff.ChangeLog{}), funcChanged); err != nil {
 		return nil, err
 	}
 
@@ -144,7 +153,7 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 		return nil, nil, err
 	}
 
-	if err := newState.SetValue(HttpService, &Http{}); err != nil {
+	if err := newState.SetValue(FnsHttpService, &Http{}); err != nil {
 		return nil, nil, err
 	}
 

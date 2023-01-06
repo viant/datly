@@ -2,6 +2,7 @@ package sanitize
 
 import (
 	"github.com/viant/datly/view/keywords"
+	"sort"
 	"strings"
 )
 
@@ -39,12 +40,19 @@ func removePrefixIfNeeded(name string) (prefix string, actual string) {
 }
 
 func withoutPath(name string) string {
+	var calls []int
+
 	if index := strings.Index(name, "."); index != -1 {
-		return name[:index]
+		calls = append(calls, index)
 	}
 
 	if index := strings.Index(name, "["); index != -1 {
-		return name[:index]
+		calls = append(calls, index)
+	}
+
+	if len(calls) != 0 {
+		sort.Ints(calls)
+		return name[:calls[0]]
 	}
 
 	return name

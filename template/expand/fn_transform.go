@@ -11,7 +11,7 @@ import (
 	"reflect"
 )
 
-const transformFunctionName = "TransformWithURL"
+const fnTransform = "TransformWithURL"
 
 type (
 	transform struct {

@@ -33,8 +33,9 @@ type (
 		Connector
 		CacheWarmup
 		Prepare
-		OpenApiURL string `short:"o" long:"openapi"`
-		Version    bool   `short:"v" long:"version"  description:"build version"`
+		OpenApiURL   string `short:"o" long:"openapi"`
+		Version      bool   `short:"v" long:"version"  description:"build version"`
+		RelativePath string `long:"relative" description:"allow to control relative path where path is used"`
 	}
 
 	CacheWarmup struct {

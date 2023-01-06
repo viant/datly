@@ -14,7 +14,7 @@ type (
 		update *updateStmtBuilder
 	}
 
-	patchChecker struct {
+	indexChecker struct {
 		indexName string
 		field     string
 		paramName string
@@ -80,7 +80,7 @@ func (b *patchStmtBuilder) buildWithMeta(parentRecord string, withUnsafe bool) (
 	return b.build(parentRecord, withUnsafe, indexes)
 }
 
-func (b *patchStmtBuilder) build(parentRecord string, withUnsafe bool, indexes []*patchChecker) (string, error) {
+func (b *patchStmtBuilder) build(parentRecord string, withUnsafe bool, indexes []*indexChecker) (string, error) {
 	accessor, multi := b.appendForEachIfNeeded(parentRecord, b.paramName, withUnsafe)
 	contentBuilder := b
 	if multi {
@@ -105,7 +105,7 @@ func (b *patchStmtBuilder) build(parentRecord string, withUnsafe bool, indexes [
 	return b.sb.String(), nil
 }
 
-func (b *patchStmtBuilder) appendPatchContent(indexes []*patchChecker, accessor *paramAccessor) error {
+func (b *patchStmtBuilder) appendPatchContent(indexes []*indexChecker, accessor *paramAccessor) error {
 	contentBuilder := b.withIndent()
 
 	b.writeString("\n#if(")
@@ -136,34 +136,6 @@ func (b *patchStmtBuilder) appendPatchContent(indexes []*patchChecker, accessor 
 
 	b.writeString("\n#end")
 	return nil
-}
-
-func (b *patchStmtBuilder) generateIndexes() ([]*patchChecker, error) {
-	var checkers []*patchChecker
-	err := b.iterateOverHints(b.typeDef, func(def *inputMetadata) error {
-		for _, field := range def.actualFields {
-			aMeta, ok := def.meta.metaByColName(field.Column)
-			if !ok || !aMeta.primaryKey {
-				continue
-			}
-
-			indexName := fmt.Sprintf("%vIndex", def.sqlName)
-			aFieldName := aMeta.fieldName
-
-			b.sb.WriteString("\n")
-			b.writeString(fmt.Sprintf("#set($%v = $%v.IndexBy(\"%v\"))", indexName, def.sqlName, aFieldName))
-
-			checkers = append(checkers, &patchChecker{
-				indexName: indexName,
-				field:     aFieldName,
-				paramName: def.paramName,
-			})
-		}
-
-		return nil
-	})
-
-	return checkers, err
 }
 
 func (b *patchStmtBuilder) withIndent() *patchStmtBuilder {

@@ -215,6 +215,47 @@ func (sb *stmtBuilder) newRelation(rel *inputMetadata) *stmtBuilder {
 	return builder
 }
 
+func (b *stmtBuilder) generateIndexes() ([]*indexChecker, error) {
+	var checkers []*indexChecker
+	err := b.iterateOverHints(b.typeDef, func(def *inputMetadata) error {
+		index, ok := b.generateIndexIfNeeded(def)
+		if ok {
+			checkers = append(checkers, index)
+		}
+
+		return nil
+	})
+
+	return checkers, err
+}
+
+func (b *stmtBuilder) generateIndexIfNeeded(def *inputMetadata) (*indexChecker, bool) {
+	for _, field := range def.actualFields {
+		aMeta, ok := def.meta.metaByColName(field.Column)
+		if !ok || !aMeta.primaryKey {
+			continue
+		}
+
+		indexName, aFieldName := b.appendIndex(def, aMeta)
+
+		return &indexChecker{
+			indexName: indexName,
+			field:     aFieldName,
+			paramName: def.paramName,
+		}, true
+	}
+	return nil, false
+}
+
+func (b *stmtBuilder) appendIndex(def *inputMetadata, aMeta *fieldMeta) (string, string) {
+	indexName := fmt.Sprintf("%vIndex", def.sqlName)
+	aFieldName := aMeta.fieldName
+
+	b.sb.WriteString("\n")
+	b.writeString(fmt.Sprintf("#set($%v = $%v.IndexBy(\"%v\"))", indexName, def.sqlName, aFieldName))
+	return indexName, aFieldName
+}
+
 func (s *Builder) buildInputMetadata(ctx context.Context, sourceSQL []byte) (*option.RouteConfig, *viewConfig, *inputMetadata, error) {
 	hint, SQL := s.extractRouteSettings(sourceSQL)
 
@@ -608,15 +649,19 @@ func (sb *stmtBuilder) appendHintsWithRelations() error {
 
 func (sb *stmtBuilder) appendSQLWithRelations() error {
 	return sb.iterateOverHints(sb.typeDef, func(metadata *inputMetadata) error {
-		sqlHint, err := sb.paramSQLHint(metadata)
-		if err != nil {
-			return err
-		}
-		sb.writeString(fmt.Sprintf("\n#set($_ = $%v ", metadata.sqlName))
-		sb.writeString(sb.stringWithIndent(sqlHint))
-		sb.writeString("\n)")
-		return nil
+		return sb.appendSQLHint(metadata)
 	})
+}
+
+func (sb *stmtBuilder) appendSQLHint(metadata *inputMetadata) error {
+	sqlHint, err := sb.paramSQLHint(metadata)
+	if err != nil {
+		return err
+	}
+	sb.writeString(fmt.Sprintf("\n#set($_ = $%v ", metadata.sqlName))
+	sb.writeString(sb.stringWithIndent(sqlHint))
+	sb.writeString("\n)")
+	return nil
 }
 
 func (sb *stmtBuilder) appendHints(typeDef *inputMetadata) error {
@@ -719,4 +764,28 @@ func (s *Builder) appendSelectField(aFieldMeta *fieldMeta, sb *strings.Builder, 
 		recName, paramName, aFieldMeta.fieldName, path,
 	))
 	return recName + "." + "Values"
+}
+
+func (b *patchStmtBuilder) generateIndexes() ([]*indexChecker, error) {
+	var checkers []*indexChecker
+	err := b.iterateOverHints(b.typeDef, func(def *inputMetadata) error {
+		for _, field := range def.actualFields {
+			aMeta, ok := def.meta.metaByColName(field.Column)
+			if !ok || !aMeta.primaryKey {
+				continue
+			}
+
+			indexName, aFieldName := b.appendIndex(def, aMeta)
+
+			checkers = append(checkers, &indexChecker{
+				indexName: indexName,
+				field:     aFieldName,
+				paramName: def.paramName,
+			})
+		}
+
+		return nil
+	})
+
+	return checkers, err
 }

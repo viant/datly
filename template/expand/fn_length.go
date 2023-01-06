@@ -4,7 +4,7 @@ import (
 	"reflect"
 )
 
-const lengthFunctionName = "Length"
+const fnLength = "Length"
 
 type (
 	stringLength struct{}
