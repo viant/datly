@@ -3,8 +3,8 @@ package jwt
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/view"
 	"github.com/viant/scy/auth/jwt"
+	"github.com/viant/xdatly"
 	"strings"
 )
 
@@ -26,6 +26,6 @@ func (s *Provider) Value(ctx context.Context, raw interface{}, options ...interf
 }
 
 //New creates a jwt claim validator
-func New(jwtValidator func(ctx context.Context, rawString string) (*jwt.Claims, error)) view.Valuer {
+func New(jwtValidator func(ctx context.Context, rawString string) (*jwt.Claims, error)) xdatly.Valuer {
 	return &Provider{jwtValidator: jwtValidator}
 }

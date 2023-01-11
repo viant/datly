@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/gateway"
-	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/gateway/runtime/standalone/handler"
 	"github.com/viant/datly/router"
 	"github.com/viant/gmetric"
+	"github.com/viant/xdatly"
 	"log"
 	"net/http"
 	"os"
@@ -58,8 +58,8 @@ func NewWithAuth(config *Config, auth gateway.Authorizer) (*Server, error) {
 		config.Config,
 		handler.NewStatus(config.Version, &config.Meta),
 		auth,
-		registry.Codecs,
-		registry.Types,
+		xdatly.Config.Codecs,
+		xdatly.Config.Types,
 		metric,
 	)
 
@@ -71,16 +71,6 @@ func NewWithAuth(config *Config, auth gateway.Authorizer) (*Server, error) {
 		return nil, err
 	}
 
-	//mux.Handle(config.Meta.MetricURI, auth.Auth(gmetric.NewHandler(config.Meta.MetricURI, metric).ServeHTTP))
-	//mux.Handle(config.Meta.ConfigURI, auth.Auth(handler.NewConfig(config.Config, &config.Endpoint, &config.Meta).ServeHTTP))
-	//mux.Handle(config.Meta.StatusURI, auth.Auth(handler.NewStatus(config.Version, &config.Meta).ServeHTTP))
-	//
-	//mux.Handle(config.Meta.ViewURI, auth.Auth(handler.NewView(config.Meta.ViewURI, &config.Meta, service.View).ServeHTTP))
-	//mux.Handle(config.Meta.OpenApiURI, auth.Auth(handler.NewOpenApi(config.APIPrefix, config.Meta.OpenApiURI, config.Info, service.Routes).ServeHTTP))
-	//mux.Handle(config.Meta.CacheWarmURI, auth.Auth(handler.NewCacheWarmup(config.APIPrefix, &config.Meta, service.PreCachables).ServeHTTP))
-	//
-	////actual datly handler
-	//mux.HandleFunc(config.Config.APIPrefix, auth.Auth(service.Handle))
 	server := &Server{
 		Service: service,
 		Server: http.Server{

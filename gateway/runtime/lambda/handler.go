@@ -6,9 +6,9 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/viant/datly/auth/jwt"
 	"github.com/viant/datly/gateway"
-	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/gateway/runtime/lambda/adapter"
 	"github.com/viant/datly/router/proxy"
+	"github.com/viant/xdatly"
 	"net/http"
 	"os"
 	"sync"
@@ -52,7 +52,7 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 		return err
 	}
 
-	service, err := gateway.SingletonWithConfig(config, nil, authorizer, registry.Codecs, registry.Types, nil)
+	service, err := gateway.SingletonWithConfig(config, nil, authorizer, xdatly.Config.Codecs, xdatly.Config.Types, nil)
 	if err != nil {
 		return err
 	}

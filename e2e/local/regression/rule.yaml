@@ -39,3 +39,10 @@ pipeline:
       when: $i < $Len(${data.gen})
       action: goto
       task: loop
+
+    copyPlugin:
+      action: exec:run
+      target: '$target'
+      checkError: true
+      commands:
+        - cp /tmp/plugins.so ${appPath}/e2e/local/autogen/Datly/dependencies

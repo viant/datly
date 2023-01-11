@@ -5,7 +5,6 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/datly/cmd/option"
-	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
@@ -15,6 +14,7 @@ import (
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/ast/stmt"
 	"github.com/viant/velty/parser"
+	"github.com/viant/xdatly"
 	"net/http"
 	"reflect"
 	"strings"
@@ -157,19 +157,21 @@ func convertMetaParameter(param *Parameter, values map[string]interface{}, hints
 
 func paramCodec(param *Parameter) (*view.Codec, string) {
 	dataTypeLower := strings.ToLower(param.DataType)
-	if registry.CodecKeyAsInts == param.Codec || canInferAsIntsCodec(param, dataTypeLower) {
-		return &view.Codec{Reference: shared.Reference{Ref: registry.CodecKeyAsInts}}, "string"
+	if xdatly.CodecKeyAsInts == param.Codec || canInferAsIntsCodec(param, dataTypeLower) {
+		return &view.Codec{Reference: shared.Reference{Ref: xdatly.CodecKeyAsInts}}, "string"
 	}
 
-	if registry.CodecKeyAsStrings == param.Codec || canInferAsStringsCodec(param, dataTypeLower) {
-		return &view.Codec{Reference: shared.Reference{Ref: registry.CodecKeyAsStrings}}, "string"
+	if xdatly.CodecKeyAsStrings == param.Codec || canInferAsStringsCodec(param, dataTypeLower) {
+		return &view.Codec{Reference: shared.Reference{Ref: xdatly.CodecKeyAsStrings}}, "string"
 	}
 
 	var codec *view.Codec
 	if param.Codec != "" {
 		codec = &view.Codec{
 			Reference: shared.Reference{Ref: param.Codec},
-			Query:     param.SQL,
+			CodecConfig: xdatly.CodecConfig{
+				Query: param.SQL,
+			},
 		}
 	}
 

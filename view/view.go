@@ -13,6 +13,7 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xdatly"
 	"github.com/viant/xunsafe"
 
 	"reflect"
@@ -1035,14 +1036,18 @@ func (v *View) indexTransforms(resource *Resource, transforms marshal.Transforms
 			return fmt.Errorf("not found codec %v", transform.Codec)
 		}
 
-		actualCodec, ok := visitor.(CodecDef)
+		actualCodec, ok := visitor.(xdatly.CodecDef)
 		if !ok {
 			return fmt.Errorf("expected %v codec to be type of %T but was %T", transform.Codec, actualCodec, visitor)
 		}
 
+		resultType, err := actualCodec.ResultType(nil)
+		if err != nil {
+			return err
+		}
 		config.Codec = &Codec{
 			Name:     transform.Codec,
-			Schema:   NewSchema(actualCodec.ResultType()),
+			Schema:   NewSchema(resultType),
 			_codecFn: actualCodec.Valuer().Value,
 		}
 	}

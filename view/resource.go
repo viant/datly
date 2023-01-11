@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/toolbox"
+	"github.com/viant/xdatly"
 	"gopkg.in/yaml.v3"
 	"reflect"
 	"strings"
@@ -41,7 +42,7 @@ type Resource struct {
 	Loggers  logger.Adapters `json:",omitempty"`
 	_loggers logger.AdapterIndex
 
-	_visitors Visitors
+	_visitors xdatly.CodecsRegistry
 	ModTime   time.Time `json:",omitempty"`
 
 	_columnsCache map[string]Columns
@@ -271,9 +272,9 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	return nil
 }
 
-func (r *Resource) readOptions(options []interface{}) (Types, Visitors, map[string]Columns, marshal.TransformIndex) {
+func (r *Resource) readOptions(options []interface{}) (Types, xdatly.CodecsRegistry, map[string]Columns, marshal.TransformIndex) {
 	var types = Types{}
-	var visitors = Visitors{}
+	var visitors = xdatly.CodecsRegistry{}
 	var cache map[string]Columns
 	var transformsIndex marshal.TransformIndex
 	if len(options) > 0 {
@@ -282,7 +283,7 @@ func (r *Resource) readOptions(options []interface{}) (Types, Visitors, map[stri
 				continue
 			}
 			switch actual := option.(type) {
-			case Visitors:
+			case xdatly.CodecsRegistry:
 				visitors = actual
 			case map[string]Columns:
 				cache = actual
@@ -302,7 +303,7 @@ func (r *Resource) View(name string) (*View, error) {
 }
 
 //NewResourceFromURL loads and initializes Resource from file .yaml
-func NewResourceFromURL(ctx context.Context, url string, types Types, visitors Visitors) (*Resource, error) {
+func NewResourceFromURL(ctx context.Context, url string, types Types, visitors xdatly.CodecsRegistry) (*Resource, error) {
 	resource, err := LoadResourceFromURL(ctx, url, afs.New())
 	if err != nil {
 		return nil, err
@@ -470,7 +471,7 @@ func (r *Resource) TypeName(p reflect.Type) (string, bool) {
 	return name, ok
 }
 
-func (r *Resource) VisitorByName(name string) (LifecycleVisitor, bool) {
+func (r *Resource) VisitorByName(name string) (xdatly.BasicCodec, bool) {
 	visitor, ok := r._visitors[name]
 	return visitor, ok
 }

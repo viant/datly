@@ -9,12 +9,12 @@ import (
 	"github.com/go-playground/validator"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/gateway/registry"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
 	"github.com/viant/scy/auth/jwt"
+	"github.com/viant/xdatly"
 	"io"
 	"net/http"
 	"os"
@@ -73,7 +73,23 @@ type (
 		Response      http.ResponseWriter
 		Selectors     *view.Selectors
 	}
+
+	ClosableResponse struct {
+		http.ResponseWriter
+		closed bool
+	}
 )
+
+func NewClosableResponse(response http.ResponseWriter) *ClosableResponse {
+	return &ClosableResponse{
+		ResponseWriter: response,
+	}
+}
+
+func (c *ClosableResponse) WriteHeader(statusCode int) {
+	c.closed = true
+	c.ResponseWriter.WriteHeader(statusCode)
+}
 
 func (s *ReaderSession) IsMetricsEnabled() bool {
 	return s.Route.DebugKind == view.MetaTypeHeader || (s.IsMetricInfo() || s.IsMetricDebug())
@@ -434,9 +450,10 @@ func (r *Router) putCache(ctx context.Context, route *Route, cacheEntry *cache.E
 }
 
 func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Request, route *Route) (shouldContinue bool) {
-	if actual, ok := route.Visitor.Visitor().(view.BeforeFetcher); ok {
-		closed, err := actual.BeforeFetch(response, request)
-		if closed {
+	if actual, ok := route.Visitor.Visitor().(xdatly.BeforeFetcher); ok {
+		respWrapper := NewClosableResponse(response)
+		err := actual.BeforeFetch(respWrapper, request)
+		if respWrapper.closed {
 			return false
 		}
 
@@ -450,9 +467,11 @@ func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Requ
 }
 
 func (r *Router) runAfterFetch(session *ReaderSession, dest interface{}) (shouldContinue bool) {
-	if actual, ok := session.Route.Visitor.Visitor().(view.AfterFetcher); ok {
-		responseClosed, err := actual.AfterFetch(dest, session.Response, session.Request)
-		if responseClosed {
+	if actual, ok := session.Route.Visitor.Visitor().(xdatly.AfterFetcher); ok {
+		respWrapper := NewClosableResponse(session.Response)
+		err := actual.AfterFetch(dest, session.Response, session.Request)
+
+		if respWrapper.closed {
 			return false
 		}
 
@@ -775,7 +794,7 @@ func (r *Router) logAudit(request *http.Request, response http.ResponseWriter, r
 }
 
 func (r *Router) obfuscateAuthorization(request *http.Request, response http.ResponseWriter, authorization string, headers http.Header, route *Route) {
-	if jwtCodec, _ := registry.Codecs.Lookup(registry.CodecKeyJwtClaim); jwtCodec != nil {
+	if jwtCodec, _ := xdatly.Config.LookupCodec(xdatly.CodecKeyJwtClaim); jwtCodec != nil {
 		if claim, _ := jwtCodec.Valuer().Value(context.TODO(), authorization); claim != nil {
 			if jwtClaim, ok := claim.(*jwt.Claims); ok && jwtClaim != nil {
 				headers.Set("User-ID", strconv.Itoa(jwtClaim.UserID))

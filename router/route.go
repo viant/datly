@@ -12,6 +12,7 @@ import (
 	"github.com/viant/sqlx/io/load/reader/csv"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xdatly"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
@@ -40,7 +41,7 @@ const (
 type (
 	Routes []*Route
 	Route  struct {
-		Visitor     *view.Visitor
+		Visitor     *xdatly.Visitor
 		URI         string
 		APIKey      *APIKey
 		Method      string
@@ -245,11 +246,11 @@ func reverse(namespace map[string]string) map[string]string {
 
 func (r *Route) initVisitor(resource *Resource) error {
 	if r.Visitor == nil {
-		r.Visitor = &view.Visitor{}
+		r.Visitor = &xdatly.Visitor{}
 		return nil
 	}
 
-	if r.Visitor.Reference.Ref != "" {
+	if r.Visitor.Ref != "" {
 		refVisitor, err := resource._visitors.Lookup(r.Visitor.Ref)
 		if err != nil {
 			return err

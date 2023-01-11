@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/gmetric/counter/base"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xdatly"
 	"path"
 	"reflect"
 	"strconv"
@@ -77,7 +78,7 @@ type usecase struct {
 	resource    *view.Resource
 	dataset     string
 	provider    *base.Provider
-	visitors    view.Visitors
+	visitors    xdatly.Visitors
 }
 
 type StringsCodec struct {
@@ -466,8 +467,8 @@ func TestRead(t *testing.T) {
 			dataURI:     "case023_columns_codec/",
 			dest:        new(interface{}),
 			view:        "events",
-			visitors: view.Visitors{
-				"Strings": view.NewVisitor("Strings", &StringsCodec{}),
+			visitors: xdatly.Visitors{
+				"Strings": xdatly.NewVisitor("Strings", &StringsCodec{}),
 			},
 			expect: `[{"Name":["John","David","Anna"]}]`,
 		},
