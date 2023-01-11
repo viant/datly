@@ -12,3 +12,4 @@ tmp/
 .DS_Store
 autogen
 dsql
+*.iml
