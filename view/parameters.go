@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xdatly"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -56,11 +57,9 @@ type (
 	CodecFn func(context context.Context, rawValue interface{}, options ...interface{}) (interface{}, error)
 	Codec   struct {
 		shared.Reference
-		Name         string  `json:",omitempty"`
-		Source       string  `json:",omitempty"`
-		SourceURL    string  `json:",omitempty"`
+		Name string `json:",omitempty"`
+		xdatly.CodecConfig
 		Schema       *Schema `json:",omitempty"`
-		Query        string  `json:",omitempty"`
 		_initialized bool
 		_codecFn     CodecFn
 	}
@@ -120,28 +119,32 @@ func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type)
 		return fmt.Errorf("not found visitor with name %v", v.Ref)
 	}
 
-	factory, ok := visitor.(CodecFactory)
+	factory, ok := visitor.(xdatly.CodecFactory)
 	if ok {
-		aCodec, err := factory.New(v, paramType)
+		aCodec, err := factory.New(&v.CodecConfig, paramType)
 		if err != nil {
 			return err
 		}
 
 		v._codecFn = aCodec.Value
-		if typeProvider, ok := aCodec.(TypeProvider); ok {
-			v.Schema = NewSchema(typeProvider.ResultType())
+		if typeProvider, ok := aCodec.(xdatly.Typer); ok {
+			rType, err := typeProvider.ResultType(paramType)
+			if err != nil {
+				return err
+			}
+
+			v.Schema = NewSchema(rType)
 		}
 
 		return nil
 	}
 
-	asCodec, ok := visitor.(CodecDef)
+	asCodec, ok := visitor.(xdatly.CodecDef)
 	if !ok {
 		return fmt.Errorf("expected visitor to be type of %T but was %T", asCodec, visitor)
 	}
 
-	v.inherit(asCodec)
-	return nil
+	return v.inherit(asCodec, paramType)
 }
 
 func (v *Codec) ensureSchema(paramType reflect.Type) {
@@ -167,9 +170,9 @@ func (v *Codec) extractCodecFn(resource *Resource, paramType reflect.Type, view 
 	}
 
 	switch actual := vVisitor.(type) {
-	case LifecycleVisitor:
+	case xdatly.BasicCodec:
 		return actual.Valuer().Value, nil
-	case CodecDef:
+	case xdatly.CodecDef:
 		return actual.Valuer().Value, nil
 	default:
 		return nil, fmt.Errorf("expected %T to implement Codec", actual)
@@ -180,11 +183,17 @@ func (v *Codec) Transform(ctx context.Context, raw string, options ...interface{
 	return v._codecFn(ctx, raw, options...)
 }
 
-func (v *Codec) inherit(asCodec CodecDef) {
+func (v *Codec) inherit(asCodec xdatly.CodecDef, paramType reflect.Type) error {
 	v.Name = asCodec.Name()
-	v.Schema = NewSchema(asCodec.ResultType())
-	v.Schema.DataType = asCodec.ResultType().String()
+	resultType, err := asCodec.ResultType(paramType)
+	if err != nil {
+		return err
+	}
+
+	v.Schema = NewSchema(resultType)
+	v.Schema.DataType = resultType.String()
 	v._codecFn = asCodec.Valuer().Value
+	return nil
 }
 
 func (v *Codec) initSchemaIfNeeded(resource *Resource) error {

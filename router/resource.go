@@ -16,6 +16,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
 	"github.com/viant/toolbox"
+	"github.com/viant/xdatly"
 	"gopkg.in/yaml.v3"
 	"reflect"
 	"strings"
@@ -43,7 +44,7 @@ type (
 		Info             openapi3.Info
 		ColumnsDiscovery bool
 		EnableDebug      *bool
-		_visitors        view.Visitors
+		_visitors        xdatly.CodecsRegistry
 		cfs              afs.Service
 		Resource         *view.Resource
 	}
@@ -251,14 +252,14 @@ func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCach
 	return resource, nil
 }
 
-func readOptions(options []interface{}) (view.Visitors, view.Types, map[string]*view.Resource, *view.Metrics) {
-	var visitors view.Visitors
+func readOptions(options []interface{}) (xdatly.CodecsRegistry, view.Types, map[string]*view.Resource, *view.Metrics) {
+	var visitors xdatly.CodecsRegistry
 	var types view.Types
 	var resources map[string]*view.Resource
 	var metrics *view.Metrics
 	for _, anOption := range options {
 		switch actual := anOption.(type) {
-		case view.Visitors:
+		case xdatly.CodecsRegistry:
 			visitors = actual
 		case view.Types:
 			types = actual
@@ -278,7 +279,7 @@ func readOptions(options []interface{}) (view.Visitors, view.Types, map[string]*
 	}
 
 	if visitors == nil {
-		visitors = map[string]view.LifecycleVisitor{}
+		visitors = map[string]xdatly.BasicCodec{}
 	}
 	return visitors, types, resources, metrics
 }

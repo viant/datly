@@ -15,8 +15,10 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
 	"github.com/viant/scy/auth/jwt/signer"
+	"github.com/viant/xdatly"
 	"net/http"
 	"path"
+	"plugin"
 	"strings"
 	"sync"
 	"time"
@@ -25,7 +27,7 @@ import (
 type (
 	Service struct {
 		Config               *Config
-		visitors             view.Visitors
+		visitors             xdatly.CodecsRegistry
 		types                view.Types
 		mux                  sync.RWMutex
 		routersIndex         map[string]*router.Router
@@ -66,7 +68,7 @@ func (r *Service) Close() error {
 }
 
 //New creates gateway Service. It is important to call Service.Close before Service got Garbage collected.
-func New(ctx context.Context, config *Config, statusHandler http.Handler, authorizer Authorizer, visitors view.Visitors, types view.Types, metrics *gmetric.Service) (*Service, error) {
+func New(ctx context.Context, config *Config, statusHandler http.Handler, authorizer Authorizer, visitors xdatly.CodecsRegistry, types view.Types, metrics *gmetric.Service) (*Service, error) {
 	start := time.Now()
 	config.Init()
 	err := config.Validate()
@@ -190,18 +192,31 @@ func (r *Service) getRouters(ctx context.Context, fs afs.Service, resources map[
 }
 
 func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (resources map[string]*view.Resource, changed bool, err error) {
-	updatedMap, removedMap, err := r.detectResourceChanges(ctx, fs)
+	changes, err := r.detectResourceChanges(ctx, fs)
 	if err != nil {
 		return nil, false, err
 	}
 
-	if len(updatedMap) == 0 && len(removedMap) == 0 {
+	if !changes.Changed() {
 		return copyResourcesMap(r.dataResourcesIndex), false, nil
 	}
 
+	if err = r.handlePluginsChanges(changes); err != nil {
+		return nil, false, err
+	}
+
+	resources, err = r.reloadResources(ctx, fs, changes)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return resources, true, nil
+}
+
+func (r *Service) reloadResources(ctx context.Context, fs afs.Service, changes *ResourcesChange) (map[string]*view.Resource, error) {
 	result := map[string]*view.Resource{}
 	for resourceURL, dataResource := range r.dataResourcesIndex {
-		if updatedMap[dataResource.SourceURL] || removedMap[dataResource.SourceURL] {
+		if changes.resourcesIndex.Changed(dataResource.SourceURL) {
 			continue
 		}
 
@@ -209,7 +224,7 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (resourc
 	}
 
 	resourceChan := make(chan func() (*view.Resource, string, error))
-	channelSize := r.populateResourceChan(ctx, resourceChan, fs, updatedMap)
+	channelSize := r.populateResourceChan(ctx, resourceChan, fs, changes.resourcesIndex.updatedIndex)
 	counter := 0
 	var errors []error
 	for fn := range resourceChan {
@@ -227,10 +242,10 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (resourc
 	}
 
 	if err := r.combineErrors("dependencies", errors); err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
-	return result, true, nil
+	return result, nil
 }
 
 func (r *Service) combineErrors(resourceType string, errors []error) error {
@@ -290,30 +305,23 @@ func (r *Service) loadDependencyResource(URL string, ctx context.Context, fs afs
 	return dependency, err
 }
 
-func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (map[string]bool, map[string]bool, error) {
-	var updatedResources []string
-	var removedResources []string
-
+func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*ResourcesChange, error) {
+	changes := NewResourcesChange()
 	err := r.dataResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
 		if strings.Contains(URL, ".meta/") {
 			return
 		}
 
-		switch operation {
-		case resource.Added, resource.Modified:
-			updatedResources = append(updatedResources, URL)
-		case resource.Deleted:
-			removedResources = append(removedResources, URL)
-		}
+		changes.OnChange(operation, URL)
 	})
 
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	r.session.OnDependencyUpdated(updatedResources...)
-	r.session.OnFileChange(removedResources...)
-	return r.session.UpdatedDependencies, r.session.DeletedDependencies, err
+	r.session.OnDependencyUpdated(changes.resourcesIndex.updated...)
+	r.session.OnFileChange(changes.resourcesIndex.deleted...)
+	return changes, err
 }
 
 func (r *Service) detectRoutersChanges(ctx context.Context, fs afs.Service) (map[string]bool, map[string]bool, error) {
@@ -634,4 +642,59 @@ func (r *Service) LogInitTimeIfNeeded(start time.Time, writer http.ResponseWrite
 	}
 
 	writer.Header().Set(router.DatlyServiceInitHeader, time.Since(start).String())
+}
+
+func (r *Service) handlePluginsChanges(changes *ResourcesChange) error {
+	updateSize := len(changes.pluginsIndex.updated)
+	switch updateSize {
+	case 0:
+		return nil
+	case 1:
+		return r.loadPlugin(changes.pluginsIndex.updated[0])
+	default:
+		errorsChan := make(chan error, updateSize)
+		for _, pluginURL := range changes.pluginsIndex.updated {
+			go func(collector chan error, URL string) {
+				errorsChan <- r.loadPlugin(URL)
+			}(errorsChan, pluginURL)
+		}
+
+		counter := 0
+		for err := range errorsChan {
+			counter++
+			if err != nil {
+				return err
+			}
+
+			if counter == updateSize {
+				return nil
+			}
+		}
+	}
+
+	return nil
+}
+
+func (r *Service) loadPlugin(URL string) error {
+	if index := strings.Index(URL, r.Config.DependencyURL); index != -1 {
+		URL = URL[index:]
+	}
+
+	plugins, err := plugin.Open(URL)
+	if err != nil {
+		return err
+	}
+
+	configPlugin, err := plugins.Lookup(xdatly.PluginSymbol)
+	if err != nil {
+		return err
+	}
+
+	registry, ok := configPlugin.(**xdatly.Registry)
+	if !ok {
+		return fmt.Errorf("unexpected symbol type, wanted %T got %T", &xdatly.Registry{}, configPlugin)
+	}
+
+	xdatly.Config.Override(*registry)
+	return nil
 }
