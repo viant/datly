@@ -13,3 +13,4 @@ tmp/
 autogen
 dsql
 *.so
+*.iml

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/viant/xdatly"
+	"github.com/viant/datly/xdatly"
 	"reflect"
 )
 

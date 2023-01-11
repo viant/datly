@@ -9,11 +9,11 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/datly/xdatly"
 	"github.com/viant/gmetric/provider"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
-	"github.com/viant/xdatly"
 	"github.com/viant/xunsafe"
 
 	"reflect"

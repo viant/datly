@@ -6,7 +6,7 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/viant/datly/auth/jwt"
 	"github.com/viant/datly/gateway"
-	"github.com/viant/xdatly"
+	"github.com/viant/datly/xdatly"
 	"net/http"
 	"time"
 

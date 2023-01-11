@@ -6,8 +6,8 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/datly/auth/cognito"
 	"github.com/viant/datly/gateway"
+	"github.com/viant/datly/xdatly"
 	"github.com/viant/scy/auth/jwt/verifier"
-	"github.com/viant/xdatly"
 	"sync"
 )
 

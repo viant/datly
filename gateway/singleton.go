@@ -3,8 +3,8 @@ package gateway
 import (
 	"context"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/xdatly"
 	"github.com/viant/gmetric"
-	"github.com/viant/xdatly"
 	"net/http"
 	"sync"
 )
