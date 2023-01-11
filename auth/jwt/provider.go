@@ -3,8 +3,8 @@ package jwt
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/xdatly"
 	"github.com/viant/scy/auth/jwt"
-	"github.com/viant/xdatly"
 	"strings"
 )
 

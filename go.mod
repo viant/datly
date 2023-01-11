@@ -49,7 +49,7 @@ require (
 
 require github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac
 
-require github.com/viant/xdatly v0.0.0-20230111002411-e9e16170311c
+require github.com/viant/datly/xdatly v0.0.0
 
 require (
 	cloud.google.com/go v0.104.0 // indirect

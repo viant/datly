@@ -8,7 +8,7 @@ import (
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/lambda/adapter"
 	"github.com/viant/datly/router/proxy"
-	"github.com/viant/xdatly"
+	"github.com/viant/datly/xdatly"
 	"net/http"
 	"os"
 	"sync"
