@@ -1,4 +1,4 @@
-package xdatly
+package plugins
 
 import (
 	"context"

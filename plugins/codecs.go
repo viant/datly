@@ -1,4 +1,4 @@
-package xdatly
+package plugins
 
 import (
 	"fmt"
@@ -10,12 +10,6 @@ type (
 		name       string
 		visitor    Valuer
 		resultType reflect.Type
-	}
-
-	CodecConfig struct {
-		Query     string `json:",omitempty"`
-		SourceURL string `json:",omitempty"`
-		Source    string `json:",omitempty"`
 	}
 
 	CodecsRegistry map[string]BasicCodec
@@ -41,7 +35,7 @@ func NewCodec(name string, valuer Valuer, resultType reflect.Type) CodecDef {
 	}
 }
 
-func unexpectedUseError(on interface{}) error {
+func UnexpectedUseError(on interface{}) error {
 	return fmt.Errorf("unexpected use Value on %T", on)
 }
 

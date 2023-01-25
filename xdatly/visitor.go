@@ -1,23 +1,25 @@
 package xdatly
 
+import "github.com/viant/datly/plugins"
+
 type Visitor struct {
 	Ref      string
 	name     string
-	_visitor Valuer
+	_visitor plugins.Valuer
 }
 
-func NewVisitor(name string, visitor Valuer) BasicCodec {
+func NewVisitor(name string, visitor plugins.Valuer) plugins.BasicCodec {
 	return &Visitor{
 		name:     name,
 		_visitor: visitor,
 	}
 }
 
-func (v *Visitor) Inherit(visitor BasicCodec) {
+func (v *Visitor) Inherit(visitor plugins.BasicCodec) {
 	v._visitor = visitor.Valuer()
 }
 
-func (v *Visitor) Valuer() Valuer {
+func (v *Visitor) Valuer() plugins.Valuer {
 	return v._visitor
 }
 

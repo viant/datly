@@ -9,6 +9,7 @@ import (
 	"github.com/go-playground/validator"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal/json"
@@ -450,7 +451,7 @@ func (r *Router) putCache(ctx context.Context, route *Route, cacheEntry *cache.E
 }
 
 func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Request, route *Route) (shouldContinue bool) {
-	if actual, ok := route.Visitor.Visitor().(xdatly.BeforeFetcher); ok {
+	if actual, ok := route.Visitor.Visitor().(plugins.BeforeFetcher); ok {
 		respWrapper := NewClosableResponse(response)
 		err := actual.BeforeFetch(respWrapper, request)
 		if respWrapper.closed {
@@ -467,7 +468,7 @@ func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Requ
 }
 
 func (r *Router) runAfterFetch(session *ReaderSession, dest interface{}) (shouldContinue bool) {
-	if actual, ok := session.Route.Visitor.Visitor().(xdatly.AfterFetcher); ok {
+	if actual, ok := session.Route.Visitor.Visitor().(plugins.AfterFetcher); ok {
 		respWrapper := NewClosableResponse(session.Response)
 		err := actual.AfterFetch(dest, session.Response, session.Request)
 

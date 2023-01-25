@@ -27,6 +27,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/viant/afs v1.16.1-0.20220601210902-dc23d64dda15 // indirect
 	github.com/viant/assertly v0.9.1-0.20220308232634-4242424ccaf5 // indirect
+	github.com/viant/datly/plugins v0.0.0-20230111021818-8e2b2f4673d9 // indirect
 	github.com/viant/igo v0.1.0 // indirect
 	github.com/viant/parsly v0.0.0-20220913214053-cb272791c00f // indirect
 	github.com/viant/sqlparser v0.3.0 // indirect
@@ -44,4 +45,8 @@ require (
 	google.golang.org/grpc v1.47.0 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
+)
+
+replace (
+	github.com/viant/datly/plugins => ../plugins
 )

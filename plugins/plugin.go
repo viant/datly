@@ -1,3 +1,3 @@
-package xdatly
+package plugins
 
 const PluginSymbol = "Config"

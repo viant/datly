@@ -2,8 +2,8 @@ package gateway
 
 import (
 	"context"
+	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/xdatly"
 	"github.com/viant/gmetric"
 	"net/http"
 	"sync"
@@ -12,7 +12,7 @@ import (
 var service *Service
 var once sync.Once
 
-func Singleton(configURL string, statusHandler http.Handler, authorizer Authorizer, visitors xdatly.CodecsRegistry, types view.Types, metric *gmetric.Service) (*Service, error) {
+func Singleton(configURL string, statusHandler http.Handler, authorizer Authorizer, visitors plugins.CodecsRegistry, types view.Types, metric *gmetric.Service) (*Service, error) {
 	var err error
 	once.Do(func() {
 		ctx := context.Background()
@@ -29,7 +29,7 @@ func Singleton(configURL string, statusHandler http.Handler, authorizer Authoriz
 	return service, err
 }
 
-func SingletonWithConfig(config *Config, statusHandler http.Handler, authorizer Authorizer, visitors xdatly.CodecsRegistry, types view.Types, metric *gmetric.Service) (*Service, error) {
+func SingletonWithConfig(config *Config, statusHandler http.Handler, authorizer Authorizer, visitors plugins.CodecsRegistry, types view.Types, metric *gmetric.Service) (*Service, error) {
 	var err error
 
 	once.Do(func() {

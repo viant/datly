@@ -10,6 +10,7 @@ import (
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/auth/secret"
+	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -19,17 +20,24 @@ import (
 	"net/http"
 	"path"
 	"plugin"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
+const (
+	pluginsFolder = ".plugins"
+	metaFolder    = ".meta"
+)
+
+var unindexedFolders = []string{pluginsFolder, metaFolder}
+
 type (
 	Service struct {
 		Config               *Config
-		visitors             xdatly.CodecsRegistry
+		visitors             plugins.CodecsRegistry
 		types                view.Types
-		mux                  sync.RWMutex
 		routersIndex         map[string]*router.Router
 		fs                   afs.Service
 		cfs                  afs.Service //cache file system
@@ -41,6 +49,8 @@ type (
 		cancelFn             context.CancelFunc
 		session              *Session
 		JWTSigner            *signer.Service
+		pluginsInUse         map[string]bool
+		mux                  sync.RWMutex
 	}
 )
 
@@ -68,7 +78,7 @@ func (r *Service) Close() error {
 }
 
 //New creates gateway Service. It is important to call Service.Close before Service got Garbage collected.
-func New(ctx context.Context, config *Config, statusHandler http.Handler, authorizer Authorizer, visitors xdatly.CodecsRegistry, types view.Types, metrics *gmetric.Service) (*Service, error) {
+func New(ctx context.Context, config *Config, statusHandler http.Handler, authorizer Authorizer, visitors plugins.CodecsRegistry, types view.Types, metrics *gmetric.Service) (*Service, error) {
 	start := time.Now()
 	config.Init()
 	err := config.Validate()
@@ -93,6 +103,7 @@ func New(ctx context.Context, config *Config, statusHandler http.Handler, author
 		routersIndex:         map[string]*router.Router{},
 		mainRouter:           NewRouter(map[string]*router.Router{}, config, metrics, statusHandler, authorizer),
 		session:              NewSession(config.ChangeDetection),
+		pluginsInUse:         map[string]bool{},
 	}
 
 	if config.JwtSigner != nil {
@@ -201,7 +212,7 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (resourc
 		return copyResourcesMap(r.dataResourcesIndex), false, nil
 	}
 
-	if err = r.handlePluginsChanges(changes); err != nil {
+	if err = r.handlePluginsChanges(ctx, changes); err != nil {
 		return nil, false, err
 	}
 
@@ -308,8 +319,10 @@ func (r *Service) loadDependencyResource(URL string, ctx context.Context, fs afs
 func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*ResourcesChange, error) {
 	changes := NewResourcesChange()
 	err := r.dataResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
-		if strings.Contains(URL, ".meta/") {
-			return
+		for _, folderName := range unindexedFolders {
+			if strings.Contains(URL, folderName) {
+				return
+			}
 		}
 
 		changes.OnChange(operation, URL)
@@ -644,19 +657,19 @@ func (r *Service) LogInitTimeIfNeeded(start time.Time, writer http.ResponseWrite
 	writer.Header().Set(router.DatlyServiceInitHeader, time.Since(start).String())
 }
 
-func (r *Service) handlePluginsChanges(changes *ResourcesChange) error {
+func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesChange) error {
 	updateSize := len(changes.pluginsIndex.updated)
 	switch updateSize {
 	case 0:
 		return nil
 	case 1:
-		return r.loadPlugin(changes.pluginsIndex.updated[0])
+		return r.loadPlugin(ctx, changes.pluginsIndex.updated[0])
 	default:
 		errorsChan := make(chan error, updateSize)
 		for _, pluginURL := range changes.pluginsIndex.updated {
-			go func(collector chan error, URL string) {
-				errorsChan <- r.loadPlugin(URL)
-			}(errorsChan, pluginURL)
+			go func(ctx context.Context, collector chan error, URL string) {
+				errorsChan <- r.loadPlugin(ctx, URL)
+			}(ctx, errorsChan, pluginURL)
 		}
 
 		counter := 0
@@ -675,26 +688,41 @@ func (r *Service) handlePluginsChanges(changes *ResourcesChange) error {
 	return nil
 }
 
-func (r *Service) loadPlugin(URL string) error {
+func (r *Service) loadPlugin(ctx context.Context, URL string) error {
 	if index := strings.Index(URL, r.Config.DependencyURL); index != -1 {
 		URL = URL[index:]
 	}
 
-	plugins, err := plugin.Open(URL)
+	URL, err := r.copyIfNeeded(ctx, URL)
 	if err != nil {
 		return err
 	}
 
-	configPlugin, err := plugins.Lookup(xdatly.PluginSymbol)
+	pluginProvider, err := plugin.Open(URL)
 	if err != nil {
 		return err
 	}
 
-	registry, ok := configPlugin.(**xdatly.Registry)
+	configPlugin, err := pluginProvider.Lookup(plugins.PluginSymbol)
+	if err != nil {
+		return err
+	}
+
+	registry, ok := configPlugin.(**plugins.Registry)
 	if !ok {
-		return fmt.Errorf("unexpected symbol type, wanted %T got %T", &xdatly.Registry{}, configPlugin)
+		return fmt.Errorf("unexpected symbol type, wanted %T got %T", &plugins.Registry{}, configPlugin)
 	}
 
 	xdatly.Config.Override(*registry)
 	return nil
+}
+
+func (r *Service) copyIfNeeded(ctx context.Context, URL string) (string, error) {
+	oldURL := URL
+	URL = strings.Replace(URL, r.Config.DependencyURL, path.Join(r.Config.DependencyURL, pluginsFolder), 1)
+	suffix := strconv.Itoa(int(time.Now().UnixNano()))
+	ext := path.Ext(URL)
+	URL = strings.Replace(URL, ext, suffix+ext, 1)
+
+	return URL, r.fs.Copy(ctx, oldURL, URL)
 }

@@ -1,12 +1,12 @@
 package main
 
 import (
-	"github.com/viant/datly/xdatly"
+	"github.com/viant/datly/plugins"
 	"reflect"
 )
 
-var Config = &xdatly.Registry{
+var Config = &plugins.Registry{
 	Types: map[string]reflect.Type{
-		"FooPlugin": reflect.TypeOf(&FooPlugin{}),
+		"FooPlugin": reflect.TypeOf(FooPlugin{}),
 	},
 }

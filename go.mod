@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/storage v1.28.0 // indirect
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
+	github.com/francoispqt/gojay v1.2.13
 	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/go-playground/validator v9.31.0+incompatible
 	github.com/go-sql-driver/mysql v1.6.0
@@ -25,9 +26,12 @@ require (
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.2.1-0.20221005024313-4286a9622882
 	github.com/viant/cloudless v1.1.1-0.20220302185825-1e29705ac362
+	github.com/viant/datly/xdatly v0.0.0-20230111021818-8e2b2f4673d9
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
+	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
+	github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac
 	github.com/viant/parsly v0.1.0
 	github.com/viant/scy v0.4.1
 	github.com/viant/sqlx v0.4.1
@@ -41,15 +45,6 @@ require (
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
-
-require (
-	github.com/francoispqt/gojay v1.2.13
-	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
-)
-
-require github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac
-
-require github.com/viant/datly/xdatly v0.0.0
 
 require (
 	cloud.google.com/go v0.104.0 // indirect
@@ -109,4 +104,11 @@ require (
 	google.golang.org/grpc v1.50.1 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
+)
+
+require github.com/viant/datly/plugins v0.0.0-20230111021818-8e2b2f4673d9
+
+replace (
+	github.com/viant/datly/plugins => ./plugins
+	github.com/viant/datly/xdatly => ./xdatly
 )

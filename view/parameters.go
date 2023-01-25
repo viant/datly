@@ -3,8 +3,8 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/xdatly"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -58,7 +58,7 @@ type (
 	Codec   struct {
 		shared.Reference
 		Name string `json:",omitempty"`
-		xdatly.CodecConfig
+		plugins.CodecConfig
 		Schema       *Schema `json:",omitempty"`
 		_initialized bool
 		_codecFn     CodecFn
@@ -119,7 +119,7 @@ func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type)
 		return fmt.Errorf("not found visitor with name %v", v.Ref)
 	}
 
-	factory, ok := visitor.(xdatly.CodecFactory)
+	factory, ok := visitor.(plugins.CodecFactory)
 	if ok {
 		aCodec, err := factory.New(&v.CodecConfig, paramType)
 		if err != nil {
@@ -127,7 +127,7 @@ func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type)
 		}
 
 		v._codecFn = aCodec.Value
-		if typeProvider, ok := aCodec.(xdatly.Typer); ok {
+		if typeProvider, ok := aCodec.(plugins.Typer); ok {
 			rType, err := typeProvider.ResultType(paramType)
 			if err != nil {
 				return err
@@ -139,7 +139,7 @@ func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type)
 		return nil
 	}
 
-	asCodec, ok := visitor.(xdatly.CodecDef)
+	asCodec, ok := visitor.(plugins.CodecDef)
 	if !ok {
 		return fmt.Errorf("expected visitor to be type of %T but was %T", asCodec, visitor)
 	}
@@ -170,9 +170,9 @@ func (v *Codec) extractCodecFn(resource *Resource, paramType reflect.Type, view 
 	}
 
 	switch actual := vVisitor.(type) {
-	case xdatly.BasicCodec:
+	case plugins.BasicCodec:
 		return actual.Valuer().Value, nil
-	case xdatly.CodecDef:
+	case plugins.CodecDef:
 		return actual.Valuer().Value, nil
 	default:
 		return nil, fmt.Errorf("expected %T to implement Codec", actual)
@@ -183,7 +183,7 @@ func (v *Codec) Transform(ctx context.Context, raw string, options ...interface{
 	return v._codecFn(ctx, raw, options...)
 }
 
-func (v *Codec) inherit(asCodec xdatly.CodecDef, paramType reflect.Type) error {
+func (v *Codec) inherit(asCodec plugins.CodecDef, paramType reflect.Type) error {
 	v.Name = asCodec.Name()
 	resultType, err := asCodec.ResultType(paramType)
 	if err != nil {

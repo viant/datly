@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/datly/logger"
+	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view/keywords"
-	"github.com/viant/datly/xdatly"
 	"github.com/viant/gmetric/provider"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
@@ -1036,7 +1036,7 @@ func (v *View) indexTransforms(resource *Resource, transforms marshal.Transforms
 			return fmt.Errorf("not found codec %v", transform.Codec)
 		}
 
-		actualCodec, ok := visitor.(xdatly.CodecDef)
+		actualCodec, ok := visitor.(plugins.CodecDef)
 		if !ok {
 			return fmt.Errorf("expected %v codec to be type of %T but was %T", transform.Codec, actualCodec, visitor)
 		}

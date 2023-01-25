@@ -1,0 +1,17 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: POST
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/foos-plugin
+        JsonBody:
+        - ID: 9
+          Name: ""
+          Quantity: -1
+        Expect:
+         Code: 400
+         JSONBody:
+           Message: quantity can't be negative

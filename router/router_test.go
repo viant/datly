@@ -44,7 +44,7 @@ type testcase struct {
 	uri                 string
 	method              string
 	expected            string
-	visitors            xdatly.CodecsRegistry
+	visitors            plugins.CodecsRegistry
 	types               view.Types
 	headers             http.Header
 	requestBody         string
@@ -1044,7 +1044,7 @@ func (c *testcase) readResource(t *testing.T, fs afs.Service, resourceUrl string
 	return resource, true
 }
 
-func (c *testcase) readViewResource(t *testing.T, resourceUrl string, types view.Types, visitors xdatly.CodecsRegistry) (*view.Resource, bool) {
+func (c *testcase) readViewResource(t *testing.T, resourceUrl string, types view.Types, visitors plugins.CodecsRegistry) (*view.Resource, bool) {
 	resource, err := view.NewResourceFromURL(context.TODO(), resourceUrl, types, visitors)
 	if !assert.Nil(t, err, c.description) {
 		return nil, false
