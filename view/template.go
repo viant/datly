@@ -11,6 +11,7 @@ import (
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty"
 	"github.com/viant/velty/est"
+	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -208,16 +209,8 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 	return nil
 }
 
-func NewEvaluator(parameters []*Parameter, paramSchema, presenceSchema reflect.Type, template string, types Types) (*expand.Evaluator, error) {
-	expandTypes := make([]*expand.Type, 0, len(types))
-	for typeName := range types {
-		expandTypes = append(expandTypes, &expand.Type{
-			Name:  typeName,
-			RType: types[typeName],
-		})
-	}
-
-	return expand.NewEvaluator(FilterConstParameters(parameters), paramSchema, presenceSchema, template, expandTypes...)
+func NewEvaluator(parameters []*Parameter, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.TypeLookupFn) (*expand.Evaluator, error) {
+	return expand.NewEvaluator(FilterConstParameters(parameters), paramSchema, presenceSchema, template, typeLookup)
 }
 
 func FilterConstParameters(parameters []*Parameter) []expand.ConstUpdater {
@@ -297,7 +290,7 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 		return nil
 	}
 
-	evaluator, err := NewEvaluator(t.Parameters, t.Schema.Type(), t.PresenceSchema.Type(), t.Source, resource.GetTypes())
+	evaluator, err := NewEvaluator(t.Parameters, t.Schema.Type(), t.PresenceSchema.Type(), t.Source, resource.LookupType)
 	if err != nil {
 		return err
 	}

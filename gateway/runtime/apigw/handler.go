@@ -53,7 +53,7 @@ func HandleHttpRequest(writer http.ResponseWriter, apiRequest *adapter.Request) 
 		return err
 	}
 
-	service, err := gateway.SingletonWithConfig(config, nil, authService, xdatly.Config.Codecs, xdatly.Config.Types, nil)
+	service, err := gateway.SingletonWithConfig(config, nil, authService, xdatly.Config, nil)
 	if err != nil {
 		return err
 	}

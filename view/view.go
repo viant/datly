@@ -15,7 +15,6 @@ import (
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
-
 	"reflect"
 	"strings"
 	"time"
@@ -141,7 +140,7 @@ func (m *Method) init(resource *Resource) error {
 
 	for _, arg := range m.Args {
 		//TODO: Check format
-		if err := arg.Init(nil, nil, format.CaseUpperCamel, resource.GetTypes(), nil); err != nil {
+		if err := arg.Init(nil, nil, format.CaseUpperCamel, resource, nil); err != nil {
 			return err
 		}
 	}
@@ -346,7 +345,7 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 		return err
 	}
 
-	if err = v.ensureSchema(resource._types); err != nil {
+	if err = v.ensureSchema(resource); err != nil {
 		return err
 	}
 
@@ -567,10 +566,10 @@ func (v *View) Source() string {
 	return v.Name
 }
 
-func (v *View) ensureSchema(types Types) error {
+func (v *View) ensureSchema(resource *Resource) error {
 	v.initSchemaIfNeeded()
 	if v.Schema.Name != "" {
-		componentType, err := types.Lookup(v.Schema.Name)
+		componentType, err := resource.LookupType("", "", v.Schema.Name)
 		if err != nil {
 			return err
 		}
@@ -580,7 +579,7 @@ func (v *View) ensureSchema(types Types) error {
 		}
 	}
 
-	return v.Schema.Init(v.Columns, v.With, v.Caser, types, v.SelfReference)
+	return v.Schema.Init(v.Columns, v.With, v.Caser, resource, v.SelfReference)
 }
 
 // Db returns database connection that View was assigned to.

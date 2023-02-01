@@ -14,20 +14,17 @@ import (
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/xdatly"
 	"github.com/viant/gmetric"
 	"github.com/viant/scy/auth/jwt/signer"
 	"net/http"
 	"path"
-	"plugin"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 const (
-	pluginsFolder = ".plugins"
+	pluginsFolder = ".plugins_snapshot"
 	metaFolder    = ".meta"
 )
 
@@ -36,8 +33,6 @@ var unindexedFolders = []string{pluginsFolder, metaFolder}
 type (
 	Service struct {
 		Config               *Config
-		visitors             plugins.CodecsRegistry
-		types                view.Types
 		routersIndex         map[string]*router.Router
 		fs                   afs.Service
 		cfs                  afs.Service //cache file system
@@ -51,6 +46,7 @@ type (
 		JWTSigner            *signer.Service
 		pluginsInUse         map[string]bool
 		mux                  sync.RWMutex
+		pluginsConfig        *plugins.Registry
 	}
 )
 
@@ -78,7 +74,7 @@ func (r *Service) Close() error {
 }
 
 //New creates gateway Service. It is important to call Service.Close before Service got Garbage collected.
-func New(ctx context.Context, config *Config, statusHandler http.Handler, authorizer Authorizer, visitors plugins.CodecsRegistry, types view.Types, metrics *gmetric.Service) (*Service, error) {
+func New(ctx context.Context, config *Config, statusHandler http.Handler, authorizer Authorizer, registry *plugins.Registry, metrics *gmetric.Service) (*Service, error) {
 	start := time.Now()
 	config.Init()
 	err := config.Validate()
@@ -90,9 +86,8 @@ func New(ctx context.Context, config *Config, statusHandler http.Handler, author
 	cfs := cache.Singleton(URL)
 
 	srv := &Service{
-		visitors:             visitors,
 		metrics:              metrics,
-		types:                types,
+		pluginsConfig:        registry,
 		Config:               config,
 		mux:                  sync.RWMutex{},
 		fs:                   afs.New(),
@@ -212,7 +207,21 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (resourc
 		return copyResourcesMap(r.dataResourcesIndex), false, nil
 	}
 
-	if err = r.handlePluginsChanges(ctx, changes); err != nil {
+	pluginsChanges, err := r.handlePluginsChanges(ctx, changes)
+	if pluginsChanges != nil {
+	outer:
+		for URL, viewResource := range r.dataResourcesIndex {
+			for _, definition := range viewResource.Types {
+				_, ok := pluginsChanges.PackageRegistry(definition.Package)[definition.Name]
+				if ok {
+					changes.OnChange(resource.Modified, URL)
+					continue outer
+				}
+			}
+		}
+	}
+
+	if err != nil {
 		return nil, false, err
 	}
 
@@ -482,7 +491,7 @@ func (r *Service) loadRouterResource(URL string, resources map[string]*view.Reso
 		return nil, err
 	}
 
-	routerResource, err = router.LoadResource(ctx, fs, URL, r.Config.Discovery(), r.visitors, r.types, r.metrics, copyResources)
+	routerResource, err = router.LoadResource(ctx, fs, URL, r.Config.Discovery(), r.pluginsConfig, r.metrics, copyResources)
 	if err != nil {
 		return nil, err
 	}
@@ -655,74 +664,4 @@ func (r *Service) LogInitTimeIfNeeded(start time.Time, writer http.ResponseWrite
 	}
 
 	writer.Header().Set(router.DatlyServiceInitHeader, time.Since(start).String())
-}
-
-func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesChange) error {
-	updateSize := len(changes.pluginsIndex.updated)
-	switch updateSize {
-	case 0:
-		return nil
-	case 1:
-		return r.loadPlugin(ctx, changes.pluginsIndex.updated[0])
-	default:
-		errorsChan := make(chan error, updateSize)
-		for _, pluginURL := range changes.pluginsIndex.updated {
-			go func(ctx context.Context, collector chan error, URL string) {
-				errorsChan <- r.loadPlugin(ctx, URL)
-			}(ctx, errorsChan, pluginURL)
-		}
-
-		counter := 0
-		for err := range errorsChan {
-			counter++
-			if err != nil {
-				return err
-			}
-
-			if counter == updateSize {
-				return nil
-			}
-		}
-	}
-
-	return nil
-}
-
-func (r *Service) loadPlugin(ctx context.Context, URL string) error {
-	if index := strings.Index(URL, r.Config.DependencyURL); index != -1 {
-		URL = URL[index:]
-	}
-
-	URL, err := r.copyIfNeeded(ctx, URL)
-	if err != nil {
-		return err
-	}
-
-	pluginProvider, err := plugin.Open(URL)
-	if err != nil {
-		return err
-	}
-
-	configPlugin, err := pluginProvider.Lookup(plugins.PluginSymbol)
-	if err != nil {
-		return err
-	}
-
-	registry, ok := configPlugin.(**plugins.Registry)
-	if !ok {
-		return fmt.Errorf("unexpected symbol type, wanted %T got %T", &plugins.Registry{}, configPlugin)
-	}
-
-	xdatly.Config.Override(*registry)
-	return nil
-}
-
-func (r *Service) copyIfNeeded(ctx context.Context, URL string) (string, error) {
-	oldURL := URL
-	URL = strings.Replace(URL, r.Config.DependencyURL, path.Join(r.Config.DependencyURL, pluginsFolder), 1)
-	suffix := strconv.Itoa(int(time.Now().UnixNano()))
-	ext := path.Ext(URL)
-	URL = strings.Replace(URL, ext, suffix+ext, 1)
-
-	return URL, r.fs.Copy(ctx, oldURL, URL)
 }

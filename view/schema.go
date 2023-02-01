@@ -60,7 +60,7 @@ func (c *Schema) updateSliceType() {
 }
 
 //Init build struct type
-func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case, types Types, selfRef *SelfReference) error {
+func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case, resource *Resource, selfRef *SelfReference) error {
 	if c.initialized {
 		return nil
 	}
@@ -76,7 +76,7 @@ func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat f
 	}
 
 	if c.DataType != "" {
-		rType, err := GetOrParseType(types, c.DataType)
+		rType, err := GetOrParseType(resource.LookupType, c.DataType)
 		if err != nil {
 			return err
 		}
@@ -249,7 +249,7 @@ func (c *Schema) copy() *Schema {
 }
 
 func (c *Schema) parseType(types Types) error {
-	parseType, err := GetOrParseType(types, FirstNotEmpty(c.DataType, c.Name))
+	parseType, err := GetOrParseType(types.LookupType, FirstNotEmpty(c.DataType, c.Name))
 	if err != nil {
 		return err
 	}

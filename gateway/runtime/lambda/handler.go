@@ -52,7 +52,7 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 		return err
 	}
 
-	service, err := gateway.SingletonWithConfig(config, nil, authorizer, xdatly.Config.Codecs, xdatly.Config.Types, nil)
+	service, err := gateway.SingletonWithConfig(config, nil, authorizer, xdatly.Config, nil)
 	if err != nil {
 		return err
 	}

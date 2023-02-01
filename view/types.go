@@ -6,7 +6,7 @@ import (
 )
 
 //Types represents reflect.Type registry
-//map key should match Schema.Name
+//map key should match Schema.Name / Schema.DataType
 type Types map[string]reflect.Type
 
 //Register registers Type
@@ -32,4 +32,9 @@ func (r Types) copy() Types {
 	}
 
 	return rCopy
+}
+
+func (r Types) LookupType(path string, identifier string, name string) (reflect.Type, error) {
+	lookup, err := r.Lookup(name)
+	return lookup, err
 }

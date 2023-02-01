@@ -20,17 +20,6 @@ pipeline:
         - go build main/validator.go
         - mv validator /tmp/validator_24
 
-    buildPlugins:
-      action: exec:run
-      comments: vendor build for deployment speedup
-      target: $target
-      checkError: true
-      commands:
-        - export GO111MODULE=on
-        - cd ${appPath}/e2e/local/plugins/src/main
-        - go build -buildmode=plugin -o plugins.so
-        - mv plugins.so /tmp/plugins.so
-
     package:
       action: exec:run
       comments: vendor build for deployment speedup
@@ -40,7 +29,7 @@ pipeline:
         - export GO111MODULE=on
         - cd ${appPath}/cmd/datly
         - go mod download
-        - go build
+        - go build -ldflags "-X main.BuildTimeInS=`date +%s`"
         - mv datly /tmp/datly
         - cp /tmp/datly /tmp/datly_utils
         - cd ${appPath}/e2e/local/validator/src

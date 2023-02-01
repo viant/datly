@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/toolbox"
+	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
 	"reflect"
 	"strings"
@@ -35,9 +36,10 @@ type Resource struct {
 	Parameters  []*Parameter `json:",omitempty"`
 	_parameters ParametersIndex
 
-	Types       []*Definition
-	_types      Types
-	_typesIndex map[reflect.Type]string
+	Types         []*TypeDefinition
+	_types        Types
+	_packageTypes map[string]Types
+	_typesIndex   map[reflect.Type]string
 
 	Loggers  logger.Adapters `json:",omitempty"`
 	_loggers logger.AdapterIndex
@@ -46,6 +48,7 @@ type Resource struct {
 	ModTime   time.Time `json:",omitempty"`
 
 	_columnsCache map[string]Columns
+	_typeLookup   xreflect.TypeLookupFn
 }
 
 func (r *Resource) LoadText(ctx context.Context, URL string) (string, error) {
@@ -190,8 +193,8 @@ func (r *Resource) paramByName() map[string]*Parameter {
 	return index
 }
 
-func (r *Resource) typeByName() map[string]*Definition {
-	index := map[string]*Definition{}
+func (r *Resource) typeByName() map[string]*TypeDefinition {
+	index := map[string]*TypeDefinition{}
 	if len(r.Parameters) == 0 {
 		return index
 	}
@@ -232,19 +235,21 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	r._types = types.copy()
 	r._visitors = visitors
 	r._columnsCache = cache
+	r._packageTypes = map[string]Types{}
+	if r._typeLookup == nil {
+		r._typeLookup = func(_, _, typeName string) (reflect.Type, error) {
+			return r._types.Lookup(typeName)
+		}
+	}
 
 	for _, definition := range r.Types {
-		if err := definition.Init(ctx, r._types); err != nil {
+		if err := definition.Init(ctx, r._typeLookup); err != nil {
 			return err
 		}
 
-		_, err := r._types.Lookup(definition.Name)
-		if err == nil {
-			return fmt.Errorf("%v type is already registered", definition.Name)
+		if err := r.registerType(definition.Package, definition.Name, definition.Type()); err != nil {
+			return err
 		}
-
-		r._types.Register(definition.Name, definition.Type())
-		r._typesIndex[definition.Type()] = definition.Name
 	}
 
 	var err error
@@ -272,28 +277,49 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	return nil
 }
 
+func (r *Resource) registerType(packageName, typeName string, rType reflect.Type) error {
+	typesIndex := r._types
+	typeIndexName := typeName
+
+	if packageName != "" {
+		index, ok := r._packageTypes[packageName]
+		if !ok {
+			index = map[string]reflect.Type{}
+			r._packageTypes[packageName] = index
+		}
+
+		typesIndex = index
+		typeIndexName = packageName + "." + typeName
+	}
+
+	typesIndex.Register(typeName, rType)
+	r._typesIndex[rType] = typeIndexName
+
+	return nil
+}
+
 func (r *Resource) readOptions(options []interface{}) (Types, plugins.CodecsRegistry, map[string]Columns, marshal.TransformIndex) {
 	var types = Types{}
 	var visitors = plugins.CodecsRegistry{}
 	var cache map[string]Columns
 	var transformsIndex marshal.TransformIndex
-	if len(options) > 0 {
-		for _, option := range options {
-			if option == nil {
-				continue
-			}
-			switch actual := option.(type) {
-			case plugins.CodecsRegistry:
-				visitors = actual
-			case map[string]Columns:
-				cache = actual
-			case Types:
-				types = actual
-			case marshal.TransformIndex:
-				transformsIndex = actual
-			}
+
+	for _, option := range options {
+		if option == nil {
+			continue
+		}
+		switch actual := option.(type) {
+		case plugins.CodecsRegistry:
+			visitors = actual
+		case map[string]Columns:
+			cache = actual
+		case Types:
+			types = actual
+		case marshal.TransformIndex:
+			transformsIndex = actual
 		}
 	}
+
 	return types, visitors, cache, transformsIndex
 }
 
@@ -532,4 +558,58 @@ func (r *Resource) Connector(name string) (*Connector, error) {
 	}
 
 	return r._connectors.Lookup(name)
+}
+
+func (r *Resource) SetTypeLookup(lookup xreflect.TypeLookupFn) {
+	r._typeLookup = lookup
+}
+
+func (r *Resource) LookupType(_, packageName, typeName string) (reflect.Type, error) {
+	if packageName == "builtin" {
+		return r._types.Lookup(typeName)
+	}
+
+	if packageName != "" {
+		registry, ok := r._packageTypes[packageName]
+		if !ok {
+			return nil, fmt.Errorf("didn't found package %v", packageName)
+		}
+
+		rType, ok := registry[typeName]
+		if ok {
+			return rType, nil
+		}
+
+		return nil, r.typeNotFound(packageName, typeName)
+	}
+
+	rType, _ := r._types.Lookup(typeName)
+	for _, registry := range r._packageTypes {
+		packageType := registry[typeName]
+		if packageType == nil {
+			continue
+		}
+
+		if rType != nil && packageType != nil && rType != packageType {
+			return nil, fmt.Errorf("ambigious type %v, please specify package or use 'builtin' package to access builtin types", typeName)
+		}
+
+		if rType == nil {
+			rType = packageType
+		}
+	}
+
+	if rType != nil {
+		return rType, nil
+	}
+
+	return nil, r.typeNotFound(packageName, typeName)
+}
+
+func (r *Resource) typeNotFound(packageName string, typeName string) error {
+	if packageName == "" {
+		return fmt.Errorf("not found type %v", typeName)
+	}
+
+	return fmt.Errorf("not found type %v under %v package", typeName, packageName)
 }

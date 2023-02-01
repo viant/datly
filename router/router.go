@@ -282,7 +282,7 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 			r.logAudit(request, response, route)
 		}
 
-		if !r.runBeforeFetch(response, request, route) {
+		if !r.runBeforeFetchIfNeeded(response, request, route) {
 			return
 		}
 
@@ -359,7 +359,7 @@ func (r *Router) readAndWriteResponse(ctx context.Context, session *ReaderSessio
 		return http.StatusInternalServerError, err
 	}
 
-	if !r.runAfterFetch(session, rValue.Interface()) {
+	if !r.runAfterFetchIfNeeded(session, rValue.Interface()) {
 		return -1, nil
 	}
 
@@ -450,38 +450,64 @@ func (r *Router) putCache(ctx context.Context, route *Route, cacheEntry *cache.E
 	_ = route.Cache.Put(ctx, cacheEntry, payloadReader.buffer.Bytes(), payloadReader.CompressionType(), payloadReader.Headers())
 }
 
-func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Request, route *Route) (shouldContinue bool) {
+func (r *Router) runBeforeFetchIfNeeded(response http.ResponseWriter, request *http.Request, route *Route) (shouldContinue bool) {
 	if actual, ok := route.Visitor.Visitor().(plugins.BeforeFetcher); ok {
-		respWrapper := NewClosableResponse(response)
-		err := actual.BeforeFetch(respWrapper, request)
-		if respWrapper.closed {
-			return false
-		}
-
-		if err != nil {
-			response.WriteHeader(http.StatusBadRequest)
-			response.Write([]byte(err.Error()))
-			return false
-		}
+		return r.runBeforeFetch(response, request, actual.BeforeFetch)
 	}
+
+	if actual, ok := route.Visitor.Visitor().(plugins.ClosableBeforeFetcher); ok {
+		return r.runBeforeFetch(response, request, func(response http.ResponseWriter, request *http.Request) error {
+			_, err := actual.BeforeFetch(response, request)
+			return err
+		})
+	}
+
 	return true
 }
 
-func (r *Router) runAfterFetch(session *ReaderSession, dest interface{}) (shouldContinue bool) {
-	if actual, ok := session.Route.Visitor.Visitor().(plugins.AfterFetcher); ok {
-		respWrapper := NewClosableResponse(session.Response)
-		err := actual.AfterFetch(dest, session.Response, session.Request)
-
-		if respWrapper.closed {
-			return false
-		}
-
-		if err != nil {
-			r.writeErr(session.Response, session.Route, err, http.StatusBadRequest)
-			return false
-		}
+func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Request, fn func(response http.ResponseWriter, request *http.Request) error) bool {
+	respWrapper := NewClosableResponse(response)
+	err := fn(respWrapper, request)
+	if respWrapper.closed {
+		return false
 	}
 
+	if err != nil {
+		response.WriteHeader(http.StatusBadRequest)
+		response.Write([]byte(err.Error()))
+		return false
+	}
+
+	return true
+}
+
+func (r *Router) runAfterFetchIfNeeded(session *ReaderSession, dest interface{}) (shouldContinue bool) {
+	if actual, ok := session.Route.Visitor.Visitor().(plugins.AfterFetcher); ok {
+		return r.runAfterFetch(session, dest, actual.AfterFetch)
+	}
+
+	if actual, ok := session.Route.Visitor.Visitor().(plugins.ClosableAfterFetcher); ok {
+		return r.runAfterFetch(session, dest, func(dest interface{}, response http.ResponseWriter, req *http.Request) error {
+			_, err := actual.AfterFetch(dest, response, req)
+			return err
+		})
+	}
+
+	return true
+}
+
+func (r *Router) runAfterFetch(session *ReaderSession, dest interface{}, fn func(dest interface{}, response http.ResponseWriter, req *http.Request) error) bool {
+	respWrapper := NewClosableResponse(session.Response)
+	err := fn(dest, session.Response, session.Request)
+
+	if respWrapper.closed {
+		return false
+	}
+
+	if err != nil {
+		r.writeErr(session.Response, session.Route, err, http.StatusBadRequest)
+		return false
+	}
 	return true
 }
 

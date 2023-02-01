@@ -27,6 +27,7 @@ type (
 		_db          func() (*sql.DB, error)
 		_initialized bool
 		_mux         sync.Mutex
+		_sharedMux   *sync.Mutex
 	}
 
 	DBConfig struct {
@@ -60,6 +61,7 @@ func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 		return nil
 	}
 
+	c._sharedMux = &sync.Mutex{}
 	c._initialized = true
 
 	if c.Ref != "" {
@@ -100,12 +102,30 @@ func (c *Connector) DB() (*sql.DB, error) {
 		dsn = secret.Expand(dsn)
 	}
 
-	c._mux.Lock()
+	c.lock()
 	c._db = aDbPool.DB(c.Driver, dsn, c.DBConfig)
 	aDB, err := c._db()
-	c._mux.Unlock()
+	c.unlock()
 
 	return aDB, err
+}
+
+func (c *Connector) unlock() {
+	if c._sharedMux != nil {
+		c._sharedMux.Unlock()
+		return
+	}
+
+	c._mux.Unlock()
+}
+
+func (c *Connector) lock() {
+	if c._sharedMux != nil {
+		c._sharedMux.Lock()
+		return
+	}
+
+	c._mux.Lock()
 }
 
 //Validate check if connector was configured properly.
@@ -146,6 +166,10 @@ func (c *Connector) inherit(connector *Connector) {
 
 	if c.DBConfig == nil {
 		c.DBConfig = connector.DBConfig
+	}
+
+	if c._sharedMux == nil {
+
 	}
 }
 

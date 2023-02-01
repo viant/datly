@@ -15,7 +15,6 @@ import (
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/toolbox/format"
-	"reflect"
 	"sort"
 	"strings"
 )
@@ -365,7 +364,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	if config.outputConfig.IsMany() {
 		cardinality = view.Many
 	}
-	definition := &view.Definition{
+	definition := &view.TypeDefinition{
 		Name:        name,
 		Cardinality: cardinality,
 	}
@@ -386,7 +385,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 			return nil, err
 		}
 
-		aType, err := view.GetOrParseType(map[string]reflect.Type{}, column.Type)
+		aType, err := view.GetOrParseType(view.Types{}.LookupType, column.Type)
 		if err != nil {
 			return nil, err
 		}

@@ -33,9 +33,10 @@ type (
 		Connector
 		CacheWarmup
 		Prepare
-		OpenApiURL   string `short:"o" long:"openapi"`
-		Version      bool   `short:"v" long:"version"  description:"build version"`
-		RelativePath string `long:"relative" description:"allow to control relative path where path is used"`
+		OpenApiURL   string   `short:"o" long:"openapi"`
+		Version      bool     `short:"v" long:"version"  description:"build version"`
+		RelativePath string   `long:"relative" description:"allow to control relative path where path is used"`
+		PluginArgs   []string `long:"pluginArgs" description:"args need to be passed to generate a plugin"`
 	}
 
 	CacheWarmup struct {

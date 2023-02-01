@@ -17,6 +17,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
 	"github.com/viant/toolbox"
+	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
 	"reflect"
 	"strings"
@@ -211,7 +212,7 @@ func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, useColu
 }
 
 func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCache bool, options ...interface{}) (*Resource, error) {
-	visitors, types, resources, metrics := readOptions(options)
+	visitors, types, resources, metrics, typeLookup := readOptions(options)
 
 	resourceData, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
@@ -233,6 +234,7 @@ func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCach
 	if err != nil {
 		return nil, err
 	}
+
 	resource.cfs = fs
 	if resource.Resource == nil {
 		return nil, fmt.Errorf("resource was empty: %v", URL)
@@ -245,28 +247,41 @@ func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCach
 	resource.Resource.Metrics = metrics
 	resource.Resource.SourceURL = URL
 	resource.Resource.SetTypes(types)
+	resource.Resource.SetTypeLookup(typeLookup)
 	resource.ColumnsDiscovery = useColumnCache
-
 	object, _ := fs.Object(ctx, URL)
 	resource.Resource.ModTime = object.ModTime()
 	return resource, nil
 }
 
-func readOptions(options []interface{}) (plugins.CodecsRegistry, view.Types, map[string]*view.Resource, *view.Metrics) {
+func readOptions(options []interface{}) (plugins.CodecsRegistry, view.Types, map[string]*view.Resource, *view.Metrics, xreflect.TypeLookupFn) {
 	var visitors plugins.CodecsRegistry
 	var types view.Types
 	var resources map[string]*view.Resource
 	var metrics *view.Metrics
+	var typeLookup xreflect.TypeLookupFn
 	for _, anOption := range options {
 		switch actual := anOption.(type) {
 		case plugins.CodecsRegistry:
 			visitors = actual
 		case view.Types:
 			types = actual
+			typeLookup = func(packagePath, packageIdentifier, typeName string) (reflect.Type, error) {
+				if packageIdentifier != "" {
+					return nil, fmt.Errorf("unsupported use package on %T", actual)
+				}
+
+				return types.Lookup(typeName)
+			}
+
 		case map[string]*view.Resource:
 			resources = actual
 		case *view.Metrics:
 			metrics = actual
+		case *plugins.Registry:
+			types = actual.Types
+			typeLookup = actual.LookupType
+			visitors = actual.Codecs
 		}
 	}
 
@@ -281,7 +296,8 @@ func readOptions(options []interface{}) (plugins.CodecsRegistry, view.Types, map
 	if visitors == nil {
 		visitors = map[string]plugins.BasicCodec{}
 	}
-	return visitors, types, resources, metrics
+
+	return visitors, types, resources, metrics, typeLookup
 }
 
 func mergeResources(resource *Resource, resources map[string]*view.Resource, types view.Types) error {

@@ -1,6 +1,14 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
+
+var PackageName = "foos"
+var Types = []reflect.Type{
+	reflect.TypeOf(FooPlugin{}),
+}
 
 type FooPlugin struct {
 	Id       int           `sqlx:"name=ID,primaryKey"`

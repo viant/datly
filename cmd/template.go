@@ -649,7 +649,7 @@ func (s *Builder) uploadFile(namespace string, fileName string, fileContent stri
 	return sourceURL, nil
 }
 
-func (s *Builder) buildSchemaFromTable(schemaName string, table *Table, columnTypes map[string]*ColumnMeta) (*view.Definition, error) {
+func (s *Builder) buildSchemaFromTable(schemaName string, table *Table, columnTypes map[string]*ColumnMeta) (*view.TypeDefinition, error) {
 	var fields = make([]*view.Field, 0)
 	for _, column := range table.Inner {
 		structFieldName := column.Alias
@@ -695,7 +695,7 @@ func (s *Builder) buildSchemaFromTable(schemaName string, table *Table, columnTy
 		}
 	}
 
-	return &view.Definition{
+	return &view.TypeDefinition{
 		Name:   s.types.unique(schemaName),
 		Fields: fields,
 	}, nil

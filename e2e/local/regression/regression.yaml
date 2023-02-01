@@ -1,5 +1,9 @@
 init:
 pipeline:
+  set_sdk:
+    action: sdk.set
+    target: $target
+    sdk: go:1.17
 
   database:
     action: run
@@ -16,19 +20,20 @@ pipeline:
     request: '@app'
 
   test:
-    tag: $pathMatch
-    description: '@info'
+    run_tests:
+      tag: $pathMatch
+      description: '@info'
 
-    subPath: 'cases/${index}_*'
-    data:
-      '[]gen': '@gen'
+      subPath: 'cases/${index}_*'
+      data:
+        '[]gen': '@gen'
 
-    range: 1..037
-    template:
-      checkSkip:
-        action: nop
-        comments: use case init
-        skip: $HasResource(${path}/skip.txt)
-      test:
-        action: run
-        request: '@test'
+      range: 1..037
+      template:
+        checkSkip:
+          action: nop
+          comments: use case init
+          skip: $HasResource(${path}/skip.txt)
+        test:
+          action: run
+          request: '@test'

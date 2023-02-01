@@ -3,6 +3,8 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/shared"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
 )
@@ -10,14 +12,16 @@ import (
 const pkgPath = "github.com/viant/datly/view"
 
 type (
-	Definition struct {
-		Name        string   `json:",omitempty"`
-		Fields      []*Field `json:",omitempty"`
-		_fields     map[string]bool
-		Schema      *Schema     `json:",omitempty"`
-		DataType    string      `json:",omitempty"`
-		Cardinality Cardinality `json:",omitempty"`
-		Ptr         bool        `json:",omitempty"`
+	TypeDefinition struct {
+		shared.Reference `json:",omitempty"`
+		Name             string   `json:",omitempty"`
+		Fields           []*Field `json:",omitempty"`
+		_fields          map[string]bool
+		Schema           *Schema     `json:",omitempty"`
+		DataType         string      `json:",omitempty"`
+		Cardinality      Cardinality `json:",omitempty"`
+		Package          string      `json:",omitempty"`
+		Ptr              bool        `json:",omitempty"`
 	}
 
 	Field struct {
@@ -33,7 +37,7 @@ type (
 	}
 )
 
-func (d *Definition) AddField(field *Field) {
+func (d *TypeDefinition) AddField(field *Field) {
 	if len(d._fields) == 0 {
 		d._fields = map[string]bool{}
 	}
@@ -44,14 +48,24 @@ func (d *Definition) AddField(field *Field) {
 	d._fields[field.Name] = true
 }
 
-func (d *Definition) Init(ctx context.Context, types Types) error {
-	if err := d.initFields(ctx, types); err != nil {
+func (d *TypeDefinition) Init(ctx context.Context, typeLookup xreflect.TypeLookupFn) error {
+	if err := d.initFields(ctx, typeLookup); err != nil {
 		return err
 	}
 
 	d.createSchemaIfNeeded()
+	if d.Ref != "" && typeLookup != nil {
+		lookup, err := typeLookup("", d.Package, d.Ref)
+		if err != nil {
+			return err
+		}
+
+		d.Schema = NewSchema(lookup)
+		return nil
+	}
+
 	if d.Schema != nil {
-		parseType, err := GetOrParseType(types, d.Schema.DataType)
+		parseType, err := GetOrParseType(typeLookup, d.Schema.DataType)
 		if err != nil {
 			return err
 		}
@@ -75,9 +89,9 @@ func (d *Definition) Init(ctx context.Context, types Types) error {
 	return nil
 }
 
-func (d *Definition) initFields(ctx context.Context, types Types) error {
+func (d *TypeDefinition) initFields(ctx context.Context, typeLookup xreflect.TypeLookupFn) error {
 	for _, field := range d.Fields {
-		if err := field.Init(ctx, types, d); err != nil {
+		if err := field.Init(ctx, typeLookup, d); err != nil {
 			return err
 		}
 	}
@@ -85,11 +99,11 @@ func (d *Definition) initFields(ctx context.Context, types Types) error {
 	return nil
 }
 
-func (d *Definition) Type() reflect.Type {
+func (d *TypeDefinition) Type() reflect.Type {
 	return d.Schema.Type()
 }
 
-func (d *Definition) createSchemaIfNeeded() {
+func (d *TypeDefinition) createSchemaIfNeeded() {
 	if d.DataType == "" {
 		return
 	}
@@ -97,31 +111,31 @@ func (d *Definition) createSchemaIfNeeded() {
 	d.Schema = &Schema{DataType: d.DataType, Cardinality: d.Cardinality}
 }
 
-func (f *Field) Init(ctx context.Context, types Types, d *Definition) error {
-	if err := f.initChildren(ctx, types, d); err != nil {
+func (f *Field) Init(ctx context.Context, typeLookup xreflect.TypeLookupFn, d *TypeDefinition) error {
+	if err := f.initChildren(ctx, typeLookup, d); err != nil {
 		return err
 	}
 
-	if err := f.initType(types); err != nil {
+	if err := f.initType(typeLookup); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (f *Field) initType(types Types) error {
+func (f *Field) initType(typeLookup xreflect.TypeLookupFn) error {
 	if f.Schema == nil && len(f.Fields) == 0 {
 		return fmt.Errorf("_field definition has to have schema or defined other fields")
 	}
 
 	if f.Schema != nil {
-		return f.initSchemaType(types)
+		return f.initSchemaType(typeLookup)
 	}
 
 	return f.buildSchemaFromFields()
 }
 
-func (f *Field) initChildren(ctx context.Context, types Types, d *Definition) error {
+func (f *Field) initChildren(ctx context.Context, types xreflect.TypeLookupFn, d *TypeDefinition) error {
 	for _, field := range f.Fields {
 		if err := field.Init(ctx, types, d); err != nil {
 			return err
@@ -130,7 +144,7 @@ func (f *Field) initChildren(ctx context.Context, types Types, d *Definition) er
 	return nil
 }
 
-func (f *Field) initSchemaType(types Types) error {
+func (f *Field) initSchemaType(types xreflect.TypeLookupFn) error {
 	if f.Schema.DataType != "" {
 		rType, err := GetOrParseType(types, f.Schema.DataType)
 		if err != nil {
@@ -142,7 +156,7 @@ func (f *Field) initSchemaType(types Types) error {
 	}
 
 	if f.Schema.Name != "" {
-		rType, err := types.Lookup(f.Schema.Name)
+		rType, err := types("", "", f.Schema.Name)
 		if err != nil {
 			return err
 		}

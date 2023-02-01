@@ -15,8 +15,8 @@ const fnTransform = "TransformWithURL"
 
 type (
 	transform struct {
-		index typesIndex
-		types map[string]reflect.Type
+		types      map[string]reflect.Type
+		typeLookup xreflect.TypeLookupFn
 	}
 
 	typesIndex map[string]reflect.Type
@@ -27,13 +27,8 @@ func (i typesIndex) Lookup(path string, identifier string, name string) (reflect
 	return rType, ok
 }
 
-func newTransform(types []*Type) *transform {
-	anIndex := typesIndex{}
-	for i := range types {
-		anIndex[types[i].Name] = types[i].RType
-	}
-
-	return &transform{index: anIndex, types: map[string]reflect.Type{}}
+func newTransform(typeLookup xreflect.TypeLookupFn) *transform {
+	return &transform{typeLookup: typeLookup, types: map[string]reflect.Type{}}
 }
 
 func (t *transform) ResultType(_ reflect.Type, call *expr.Call) (reflect.Type, error) {
@@ -54,7 +49,7 @@ func (t *transform) parseType(dataType string) (reflect.Type, error) {
 		return rType, nil
 	}
 
-	parsed, err := xreflect.ParseWithLookup(dataType, true, t.index.Lookup)
+	parsed, err := xreflect.ParseWithLookup(dataType, true, t.typeLookup)
 	if err != nil {
 		return nil, err
 	}

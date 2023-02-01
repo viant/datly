@@ -466,7 +466,7 @@ func (r *Route) initRequestBodyType(bodyParam *view.Parameter, params []*view.Pa
 	}
 
 	if r.RequestBodySchema != nil {
-		if err := r.RequestBodySchema.Init(nil, nil, *r.Output._caser, r._resource.GetTypes(), nil); err != nil {
+		if err := r.RequestBodySchema.Init(nil, nil, *r.Output._caser, r._resource, nil); err != nil {
 			return nil, err
 		}
 

@@ -1,3 +1,11 @@
 package plugins
 
-const PluginSymbol = "Config"
+import "time"
+
+const PluginConfig = "Config"
+const PackageName = "PackageName"
+const TypesName = "Types"
+
+type Metadata struct {
+	CreationTime time.Time `json:",omitempty"`
+}

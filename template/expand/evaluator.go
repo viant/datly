@@ -7,6 +7,7 @@ import (
 	"github.com/viant/godiff"
 	"github.com/viant/velty"
 	"github.com/viant/velty/est"
+	"github.com/viant/xreflect"
 	"reflect"
 )
 
@@ -26,17 +27,12 @@ type (
 		presenceSchema reflect.Type
 	}
 
-	Type struct {
-		Name  string
-		RType reflect.Type
-	}
-
 	ConstUpdater interface {
 		UpdateValue(params interface{}, presenceMap interface{}) error
 	}
 )
 
-func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Type, template string, types ...*Type) (*Evaluator, error) {
+func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.TypeLookupFn) (*Evaluator, error) {
 	evaluator := &Evaluator{
 		constParams:    consts,
 		paramSchema:    paramSchema,
@@ -80,7 +76,7 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
-	if err = evaluator.planner.RegisterFunctionKind(fnTransform, newTransform(types)); err != nil {
+	if err = evaluator.planner.RegisterFunctionKind(fnTransform, newTransform(typeLookup)); err != nil {
 		return nil, err
 	}
 

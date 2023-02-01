@@ -32,7 +32,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("config was emrty")
 	}
 
-	service, err := gateway.Singleton(configURL, nil, nil, xdatly.Config.Codecs, xdatly.Config.Types, nil)
+	service, err := gateway.Singleton(configURL, nil, nil, xdatly.Config, nil)
 	if err != nil {
 		return err
 	}

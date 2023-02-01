@@ -3,7 +3,6 @@ package gateway
 import (
 	"context"
 	"github.com/viant/datly/plugins"
-	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
 	"net/http"
 	"sync"
@@ -12,7 +11,7 @@ import (
 var service *Service
 var once sync.Once
 
-func Singleton(configURL string, statusHandler http.Handler, authorizer Authorizer, visitors plugins.CodecsRegistry, types view.Types, metric *gmetric.Service) (*Service, error) {
+func Singleton(configURL string, statusHandler http.Handler, authorizer Authorizer, registry *plugins.Registry, metric *gmetric.Service) (*Service, error) {
 	var err error
 	once.Do(func() {
 		ctx := context.Background()
@@ -20,7 +19,7 @@ func Singleton(configURL string, statusHandler http.Handler, authorizer Authoriz
 		if config, err = NewConfigFromURL(ctx, configURL); err != nil {
 			return
 		}
-		service, err = New(ctx, config, statusHandler, authorizer, visitors, types, metric)
+		service, err = New(ctx, config, statusHandler, authorizer, registry, metric)
 	})
 	if err != nil {
 		once = sync.Once{}
@@ -29,12 +28,12 @@ func Singleton(configURL string, statusHandler http.Handler, authorizer Authoriz
 	return service, err
 }
 
-func SingletonWithConfig(config *Config, statusHandler http.Handler, authorizer Authorizer, visitors plugins.CodecsRegistry, types view.Types, metric *gmetric.Service) (*Service, error) {
+func SingletonWithConfig(config *Config, statusHandler http.Handler, authorizer Authorizer, registry *plugins.Registry, metric *gmetric.Service) (*Service, error) {
 	var err error
 
 	once.Do(func() {
 		ctx := context.Background()
-		service, err = New(ctx, config, statusHandler, authorizer, visitors, types, metric)
+		service, err = New(ctx, config, statusHandler, authorizer, registry, metric)
 	})
 
 	if err != nil {

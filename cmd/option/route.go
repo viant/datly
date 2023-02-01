@@ -20,6 +20,7 @@ type (
 		RequestBody   *BodyConfig            `json:",omitempty"`
 		TypeSrc       *TypeSrcConfig         `json:",omitempty"`
 		ResponseBody  *ResponseBodyConfig    `json:",omitempty"`
+		Package       string                 `json:",omitempty"`
 	}
 
 	TypeSrcConfig struct {

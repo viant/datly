@@ -42,7 +42,7 @@ func (c *Column) SqlExpression() string {
 	return c.sqlExpression
 }
 
-func ParseType(dataType string, types Types) (reflect.Type, error) {
+func ParseType(dataType string, typeLookup xreflect.TypeLookupFn) (reflect.Type, error) {
 	precisionIndex := strings.Index(dataType, "(")
 	if precisionIndex != -1 {
 		dataType = dataType[:precisionIndex]
@@ -66,10 +66,7 @@ func ParseType(dataType string, types Types) (reflect.Type, error) {
 		return t, nil
 	}
 
-	return xreflect.ParseWithLookup(dataType, true, func(packagePath, packageIdentifier, typeName string) (reflect.Type, bool) {
-		lookup, err := types.Lookup(typeName)
-		return lookup, err == nil
-	})
+	return xreflect.ParseWithLookup(dataType, true, typeLookup)
 }
 
 //ColumnName returns Column Name
@@ -102,7 +99,7 @@ func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, co
 	}
 
 	if nonPtrType == nil || nonPtrType.Kind() == reflect.Interface {
-		rType, err := ParseType(c.DataType, resource._types)
+		rType, err := ParseType(c.DataType, resource._types.LookupType)
 		if err != nil && c.rType == nil {
 			return err
 		}

@@ -58,8 +58,7 @@ func NewWithAuth(config *Config, auth gateway.Authorizer) (*Server, error) {
 		config.Config,
 		handler.NewStatus(config.Version, &config.Meta),
 		auth,
-		xdatly.Config.Codecs,
-		xdatly.Config.Types,
+		xdatly.Config,
 		metric,
 	)
 

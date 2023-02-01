@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -84,7 +85,7 @@ func (v *Codec) Init(resource *Resource, view *View, paramType reflect.Type) err
 		v.Source = data
 	}
 
-	if err := v.Schema.Init(nil, nil, format.CaseUpperCamel, resource._types, nil); err != nil {
+	if err := v.Schema.Init(nil, nil, format.CaseUpperCamel, resource, nil); err != nil {
 		return err
 	}
 
@@ -250,7 +251,7 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 		}
 	}
 
-	if err := p.initSchema(resource._types, structType); err != nil {
+	if err := p.initSchema(resource, structType); err != nil {
 		return err
 	}
 
@@ -352,7 +353,7 @@ func (p *Parameter) IsRequired() bool {
 	return p.Required != nil && *p.Required == true
 }
 
-func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
+func (p *Parameter) initSchema(resource *Resource, structType reflect.Type) error {
 	if p.Schema == nil {
 		if p.In.Kind == LiteralKind {
 			p.Schema = NewSchema(reflect.TypeOf(p.Const))
@@ -392,7 +393,7 @@ func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
 	}
 
 	if schemaType != "" {
-		lookup, err := GetOrParseType(types, schemaType)
+		lookup, err := GetOrParseType(resource.LookupType, schemaType)
 		if err != nil {
 			return err
 		}
@@ -402,7 +403,7 @@ func (p *Parameter) initSchema(types Types, structType reflect.Type) error {
 
 	}
 
-	return p.Schema.Init(nil, nil, 0, types, nil)
+	return p.Schema.Init(nil, nil, 0, resource, nil)
 }
 
 func (p *Parameter) initSchemaFromType(structType reflect.Type) error {
@@ -618,13 +619,13 @@ func NewQueryLocation(name string) *Location {
 	return &Location{Name: name, Kind: QueryKind}
 }
 
-func GetOrParseType(types Types, dataType string) (reflect.Type, error) {
-	lookup, lookupErr := types.Lookup(dataType)
+func GetOrParseType(typeLookup xreflect.TypeLookupFn, dataType string) (reflect.Type, error) {
+	lookup, lookupErr := typeLookup("", "", dataType)
 	if lookupErr == nil {
 		return lookup, nil
 	}
 
-	parseType, parseErr := ParseType(dataType, types)
+	parseType, parseErr := ParseType(dataType, typeLookup)
 	if parseErr == nil {
 		return parseType, nil
 	}

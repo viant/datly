@@ -11,6 +11,7 @@ import (
 	_ "github.com/viant/afsc/s3"
 	_ "github.com/viant/bigquery"
 	"github.com/viant/datly/cmd"
+	"github.com/viant/datly/cmd/build"
 	_ "github.com/viant/dyndb"
 	_ "github.com/viant/scy/kms/blowfish"
 	_ "github.com/viant/sqlx/metadata/product/bigquery"
@@ -19,9 +20,25 @@ import (
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
 	"log"
 	"os"
+	"strconv"
+	"time"
 )
 
-var Version = "development"
+var (
+	Version      = "development"
+	BuildTimeInS string
+)
+
+func init() {
+	if BuildTimeInS != "" {
+		seconds, err := strconv.Atoi(BuildTimeInS)
+		if err != nil {
+			panic(err)
+		}
+
+		build.BuildTime = time.Unix(int64(seconds), 0)
+	}
+}
 
 type ConsoleWriter struct {
 }
@@ -32,6 +49,8 @@ func (c *ConsoleWriter) Write(data []byte) (n int, err error) {
 }
 
 func main() {
+	fmt.Printf("[INFO] Build time: %v\n", build.BuildTime.String())
+
 	go func() {
 		if err := agent.Listen(agent.Options{}); err != nil {
 			log.Fatal(err)

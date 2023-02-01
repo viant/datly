@@ -38,7 +38,7 @@ require (
 	github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20230106025837-a471fbfe6a12
-	github.com/viant/xreflect v0.0.0-20221129195610-6c6068eb8186
+	github.com/viant/xreflect v0.0.0-20230201013652-e4d510b41f8d
 	github.com/viant/xunsafe v0.8.1
 	golang.org/x/oauth2 v0.3.0
 	google.golang.org/api v0.102.0
@@ -106,7 +106,12 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-require github.com/viant/datly/plugins v0.0.0-20230111021818-8e2b2f4673d9
+require (
+	github.com/viant/datly/plugins v0.0.0-20230111021818-8e2b2f4673d9
+	golang.org/x/tools v0.1.12
+)
+
+require golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
 
 replace (
 	github.com/viant/datly/plugins => ./plugins
