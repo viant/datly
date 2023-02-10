@@ -8,8 +8,8 @@ import (
 	_ "github.com/viant/afsc/gs"
 	_ "github.com/viant/afsc/s3"
 	_ "github.com/viant/bigquery"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway"
-	"github.com/viant/datly/xdatly"
 	_ "github.com/viant/scy/kms/blowfish"
 	"net/http"
 	"os"
@@ -32,7 +32,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("config was emrty")
 	}
 
-	service, err := gateway.Singleton(configURL, nil, nil, xdatly.Config, nil)
+	service, err := gateway.Singleton(configURL, nil, nil, config.Config, nil)
 	if err != nil {
 		return err
 	}

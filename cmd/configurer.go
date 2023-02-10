@@ -5,11 +5,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/template/columns"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/xdatly"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
@@ -478,7 +478,7 @@ func (c *ViewConfigurer) findDependantTables(tableName string) ([]string, error)
 
 func isSQLLikeCodec(codec string) bool {
 	switch strings.ToLower(codec) {
-	case xdatly.CodecStructql:
+	case config.CodecStructql:
 		return true
 	}
 

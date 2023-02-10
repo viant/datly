@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/viant/datly/auth/jwt"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/lambda/adapter"
 	"github.com/viant/datly/router/proxy"
-	"github.com/viant/datly/xdatly"
 	"net/http"
 	"os"
 	"sync"
 	"time"
 )
 
-var config *gateway.Config
+var gwayConfig *gateway.Config
 var configInit sync.Once
 
 func HandleRequest(ctx context.Context, request *adapter.Request) (*events.LambdaFunctionURLResponse, error) {
@@ -37,7 +37,7 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 
 	var err error
 	configInit.Do(func() {
-		config, err = gateway.NewConfigFromURL(context.Background(), configURL)
+		gwayConfig, err = gateway.NewConfigFromURL(context.Background(), configURL)
 	})
 
 	if err != nil {
@@ -46,13 +46,13 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 	}
 
 	var authorizer gateway.Authorizer
-	if jwtAuthorizer, err := jwt.Init(config, nil); err == nil {
+	if jwtAuthorizer, err := jwt.Init(gwayConfig, nil); err == nil {
 		authorizer = jwtAuthorizer
 	} else {
 		return err
 	}
 
-	service, err := gateway.SingletonWithConfig(config, nil, authorizer, xdatly.Config, nil)
+	service, err := gateway.SingletonWithConfig(gwayConfig, nil, authorizer, config.Config, nil)
 	if err != nil {
 		return err
 	}

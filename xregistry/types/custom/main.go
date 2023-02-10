@@ -1,5 +1,3 @@
-package custom
+package main
 
-func helloWorld() {
-
-}
+import _ "github.com/viant/datly/xregistry/types/custom/imports"

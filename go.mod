@@ -26,7 +26,7 @@ require (
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.2.1-0.20221005024313-4286a9622882
 	github.com/viant/cloudless v1.1.1-0.20220302185825-1e29705ac362
-	github.com/viant/datly/xdatly v0.0.0-20230111021818-8e2b2f4673d9
+	github.com/viant/datly/plugins v0.0.0-20230111021818-8e2b2f4673d9
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
@@ -38,12 +38,14 @@ require (
 	github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20230106025837-a471fbfe6a12
-	github.com/viant/xreflect v0.0.0-20230201013652-e4d510b41f8d
+	github.com/viant/xreflect v0.0.0-20230204032006-f985101a93d5
 	github.com/viant/xunsafe v0.8.1
+	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4
 	golang.org/x/oauth2 v0.3.0
 	google.golang.org/api v0.102.0
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1
+
 )
 
 require (
@@ -88,6 +90,8 @@ require (
 	github.com/lestrrat-go/option v1.0.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/viant/datly/xregistry/types/core v0.0.0-20230203194142-0e99a7c2d722
+	github.com/viant/datly/xregistry/types/custom v0.0.0-20230203194142-0e99a7c2d722
 	github.com/viant/igo v0.1.0 // indirect
 	github.com/viant/sqlparser v0.3.1-0.20221212220151-be94fb808202
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
@@ -106,14 +110,9 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-require (
-	github.com/viant/datly/plugins v0.0.0-20230111021818-8e2b2f4673d9
-	golang.org/x/tools v0.1.12
-)
-
-require golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
-
 replace (
 	github.com/viant/datly/plugins => ./plugins
-	github.com/viant/datly/xdatly => ./xdatly
+	github.com/viant/datly/xregistry/types/core => ./xregistry/types/core
+	github.com/viant/datly/xregistry/types/custom => ./xregistry/types/custom
+	github.com/viant/xreflect => /Users/klarysz/Documents/github_viant/xreflect
 )

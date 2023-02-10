@@ -6,19 +6,19 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/golang-jwt/jwt/v4"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/afs"
 	"github.com/viant/afs/option/content"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/xdatly"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
+	"golang.org/x/oauth2/jwt"
 	"google.golang.org/api/oauth2/v2"
 	"gopkg.in/yaml.v3"
 	"io"
@@ -236,7 +236,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "004_visitors",
 			uri:         "/api/events",
 			visitors: plugins.NewCodecs(
-				xdatly.NewVisitor("event_visitor", &eventAfterFetcher{}),
+				config.NewVisitor("event_visitor", &eventAfterFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -249,7 +249,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "004_visitors",
 			uri:         "/api/events",
 			visitors: plugins.NewCodecs(
-				xdatly.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+				config.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -265,7 +265,7 @@ func TestRouter(t *testing.T) {
 				"event": reflect.TypeOf(&event{}),
 			},
 			visitors: plugins.NewCodecs(
-				xdatly.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+				config.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			expected: `[]`,
 			method:   http.MethodGet,
@@ -275,7 +275,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "005_templates",
 			uri:         "/api/events",
 			visitors: plugins.NewCodecs(
-				xdatly.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+				config.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -288,7 +288,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "005_templates",
 			uri:         "/api/events?user_id=1",
 			visitors: plugins.NewCodecs(
-				xdatly.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+				config.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -301,7 +301,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "005_templates",
 			uri:         "/api/events?quantity=10",
 			visitors: plugins.NewCodecs(
-				xdatly.NewVisitor("event_visitor", &eventBeforeFetcher{}),
+				config.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
 			types: map[string]reflect.Type{
 				"event": reflect.TypeOf(&event{}),
@@ -364,10 +364,10 @@ func TestRouter(t *testing.T) {
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MSwiRW1haWwiOiJhYmNAZXhhbXBsZS5jb20ifQ.dm3jSSuqy9wf4BsjU1dElRQQEySC5nn6fCUTmTKqt2")},
 			},
 			visitors: plugins.NewCodecs(
-				xdatly.NewVisitor(xdatly.CodecKeyJwtClaim, &gcpMockDecoder{}),
+				config.NewVisitor(config.CodecKeyJwtClaim, &gcpMockDecoder{}),
 			),
 			types: map[string]reflect.Type{
-				xdatly.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
+				config.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
 			},
 		},
 		{
@@ -381,10 +381,10 @@ func TestRouter(t *testing.T) {
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJJZCI6MiwiRW1haWwiOiJleGFtcGxlQGdtYWlsLmNvbSJ9.XsZ115KqQK8uQE9for6NaphYS1VHdJc_famKWHo1Dcw")},
 			},
 			visitors: plugins.NewCodecs(
-				xdatly.NewVisitor(xdatly.CodecKeyJwtClaim, &gcpMockDecoder{}),
+				config.NewVisitor(config.CodecKeyJwtClaim, &gcpMockDecoder{}),
 			),
 			types: map[string]reflect.Type{
-				xdatly.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
+				config.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
 			},
 		},
 		{
@@ -398,10 +398,10 @@ func TestRouter(t *testing.T) {
 				"Authorization": {"Bearer " + encodeToken("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJFbWFpbCI6IkFubkBleGFtcGxlLmNvbSIsIklkIjo0fQ.9A0LWtsh_tskG-hLBFVNj7PNRQE8qWc5ZioqLWPS1gQ")},
 			},
 			visitors: plugins.NewCodecs(
-				xdatly.NewVisitor(xdatly.CodecKeyJwtClaim, &gcpMockDecoder{}),
+				config.NewVisitor(config.CodecKeyJwtClaim, &gcpMockDecoder{}),
 			),
 			types: map[string]reflect.Type{
-				xdatly.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
+				config.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
 			},
 		},
 		{
@@ -770,7 +770,7 @@ func TestRouter(t *testing.T) {
 				"Content-Type": {router.CSVFormat},
 			},
 			visitors: map[string]plugins.BasicCodec{
-				xdatly.CodecKeyCSV: xdatly.CsvFactory(""),
+				config.CodecKeyCSV: config.CsvFactory(""),
 			},
 		},
 		{

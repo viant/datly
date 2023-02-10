@@ -1,0 +1,9 @@
+{
+  "Method": "POST",
+  "Args": "",
+  "GoFile": "foos_performance.go",
+  "Path": "002_plugins_replace",
+  "URL": "foosPerformance.sql",
+  "PregenURL": "pre_plugins_replace.sql",
+  "PluginGoFile": "foos_performance_changed.go"
+}

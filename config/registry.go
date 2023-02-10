@@ -1,4 +1,4 @@
-package xdatly
+package config
 
 import (
 	"github.com/viant/datly/plugins"
@@ -29,4 +29,5 @@ var Config = &plugins.Registry{
 		CsvFactory(""),
 		StructQLFactory(""),
 	),
+	Packages: map[string]map[string]reflect.Type{},
 }

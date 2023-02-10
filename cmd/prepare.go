@@ -1,11 +1,16 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/viant/afs/file"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/option"
+	dConfig "github.com/viant/datly/config"
+	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/router"
 	json2 "github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/template/sanitize"
@@ -15,6 +20,10 @@ import (
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xreflect"
+	goFormat "go/format"
+	"path"
+	"reflect"
 	"sort"
 	"strings"
 )
@@ -345,12 +354,12 @@ func (s *Builder) readPrimaryKeys(ctx context.Context, db *sql.DB, tableName str
 	return filterKeys(keys, tableName), nil
 }
 
-func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys, primaryKeys []sink.Key, config *viewConfig, db *sql.DB, table, parentTable, path, actualHolder string) (*inputMetadata, error) {
+func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys, primaryKeys []sink.Key, aConfig *viewConfig, db *sql.DB, table, parentTable, structPath, actualHolder string) (*inputMetadata, error) {
 	fkIndex := s.indexKeys(foreignKeys)
 	pkIndex := s.indexKeys(primaryKeys)
 
 	typesMeta := &typeMeta{fieldIndex: map[string]int{}, columnIndex: map[string]int{}}
-	name := config.expandedTable.HolderName
+	name := aConfig.expandedTable.HolderName
 	detectCase, err := format.NewCase(view.DetectCase(name))
 	if err != nil {
 		return nil, err
@@ -361,7 +370,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	}
 
 	cardinality := view.One
-	if config.outputConfig.IsMany() {
+	if aConfig.outputConfig.IsMany() {
 		cardinality = view.Many
 	}
 	definition := &view.TypeDefinition{
@@ -373,8 +382,8 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		actualHolder = name
 	}
 
-	exceptIndex := s.buildExceptIndex(config)
-	includeIndex := s.buildIncludeIndex(config)
+	exceptIndex := s.buildExceptIndex(aConfig)
+	includeIndex := s.buildIncludeIndex(aConfig)
 
 	for _, column := range columns {
 		if s.shouldSkipColumn(exceptIndex, includeIndex, column) {
@@ -385,7 +394,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 			return nil, err
 		}
 
-		aType, err := view.GetOrParseType(view.Types{}.LookupType, column.Type)
+		aType, err := view.GetOrParseType(dConfig.Config.LookupType, column.Type)
 		if err != nil {
 			return nil, err
 		}
@@ -431,12 +440,12 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	actualFields := make([]*view.Field, len(definition.Fields))
 	copy(actualFields, definition.Fields)
 
-	actualPath := path
+	actualPath := structPath
 	if parentTable != "" {
 		actualPath += paramName + "/"
 	}
 
-	insertRelations, err := s.buildInsertRelations(config, db, actualPath, actualHolder)
+	insertRelations, err := s.buildInsertRelations(aConfig, db, actualPath, actualHolder)
 	if err != nil {
 		return nil, err
 	}
@@ -464,12 +473,12 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 
 	definition.Fields = append(definition.Fields, hasField)
 
-	if !config.outputConfig.IsBasic() {
-		holderName = config.outputConfig.Field()
+	if !aConfig.outputConfig.IsBasic() {
+		holderName = aConfig.outputConfig.Field()
 		definition.Name = holderName
 		definition.Fields = []*view.Field{
 			{
-				Name:        config.outputConfig.ResponseField,
+				Name:        aConfig.outputConfig.ResponseField,
 				Fields:      definition.Fields,
 				Cardinality: definition.Cardinality,
 				Tag:         fmt.Sprintf(`typeName:"%v"`, paramName),
@@ -496,7 +505,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		fkIndex:      fkIndex,
 		pkIndex:      pkIndex,
 		table:        table,
-		config:       config,
+		config:       aConfig,
 		sql:          SQL,
 		sqlName:      paramName + "DBRecords",
 	}, nil
@@ -787,4 +796,253 @@ func (b *patchStmtBuilder) generateIndexes() ([]*indexChecker, error) {
 	})
 
 	return checkers, err
+}
+
+func (s *Builder) prepareStringBuilder(typeDef *inputMetadata, config *viewConfig, routeOption *option.RouteConfig) (*strings.Builder, error) {
+	sb := &strings.Builder{}
+	typeName := typeDef.typeDef.Name
+
+	paramType, err := s.buildRequestBodyPostParam(config, typeDef)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = s.uploadGoType(typeName, paramType, routeOption, config); err != nil {
+		return nil, err
+	}
+
+	if err = s.appendMetadata(typeDef.paramName, routeOption, typeName, typeDef, sb); err != nil {
+		return nil, err
+	}
+	return sb, nil
+}
+
+func (s *Builder) appendMetadata(paramName string, routeOption *option.RouteConfig, typeName string, typeDef *inputMetadata, sb *strings.Builder) error {
+	routeOption.ResponseBody = &option.ResponseBodyConfig{
+		From: paramName,
+	}
+
+	marshal, err := json.Marshal(routeOption)
+	if err != nil {
+		return err
+	}
+
+	if routeJSON := string(marshal); routeJSON != "{}" {
+		sb.WriteString(fmt.Sprintf("/* %v */\n", routeJSON))
+	}
+
+	requiredTypes := []string{typeDef.paramName}
+	if typeDef.bodyHolder != "" {
+		requiredTypes = append(requiredTypes, typeDef.bodyHolder)
+	}
+
+	if len(requiredTypes) > 0 {
+		sb.WriteString("\nimport (")
+		for _, requiredType := range requiredTypes {
+			URL := s.goURL("")
+			if s.options.RelativePath != "" && strings.HasPrefix(URL, s.options.RelativePath) {
+				URL = strings.Replace(URL, s.options.RelativePath, "", 1)
+				if len(URL) > 0 && URL[0] == '/' {
+					URL = URL[1:]
+				}
+			}
+
+			sb.WriteString(fmt.Sprintf("\n	\"%v.%v\"", URL, requiredType))
+		}
+		sb.WriteString("\n)\n\n")
+	}
+
+	return nil
+}
+
+func (s *Builder) extractRouteSettings(sourceSQL []byte) (string, string) {
+	hint := sanitize.ExtractHint(string(sourceSQL))
+	SQL := strings.Replace(string(sourceSQL), hint, "", 1)
+	return hint, SQL
+}
+
+func (s *Builder) uploadGoType(name string, rType reflect.Type, routeOption *option.RouteConfig, config *viewConfig) error {
+	modulePath, isXDatly := s.IsPluginBundle(s.options.Location)
+	outputURL := s.goURL(name)
+
+	content, err := s.generateGoFileContent(name, rType, routeOption, config, modulePath, outputURL)
+	if err != nil {
+		return err
+	}
+
+	if _, err = s.upload(s.goURL(name), string(content)); err != nil {
+		return err
+	}
+
+	if isXDatly {
+		if err = s.registerXDatlyGoFile(modulePath, outputURL); err != nil {
+			return err
+		}
+	}
+
+	sampleValue := getStruct(rType)
+	sample := sampleValue.Interface()
+	if data, err := json.Marshal(sample); err == nil {
+		_, _ = s.uploadRuleFile(folderSQL, name+"Post", string(data), ".json", true)
+	}
+
+	return nil
+}
+
+func (s *Builder) registerXDatlyGoFile(modulePath string, outputURL string) error {
+	var imports []string
+	types, err := xreflect.ParseTypes(path.Join(modulePath, "imports"))
+	if err == nil {
+		imports = types.Imports("*" + importsFile)
+	}
+
+	location := s.relativeOf(modulePath, outputURL)
+	imports = append(imports, location)
+	result := &bytes.Buffer{}
+	result.WriteString(`// Code generated by DATLY. Append sideefect imports here.
+
+		package generated
+		
+		import (`)
+
+	imported := map[string]bool{}
+	for _, packageName := range imports {
+		if imported[packageName] {
+			continue
+		}
+
+		result.WriteString(fmt.Sprintf(`
+		_ "%v"
+`, packageName))
+
+		imported[packageName] = true
+	}
+
+	result.WriteString("\n)")
+
+	source, err := goFormat.Source(result.Bytes())
+	if err != nil {
+		return err
+	}
+
+	registryURL := path.Join(modulePath, "imports", importsFile)
+	return s.fs.Upload(context.Background(), registryURL, file.DefaultFileOsMode, bytes.NewReader(source))
+}
+
+func (s *Builder) relativeOf(modulePath string, outputURL string) string {
+	var segments []string
+	outputURL = path.Dir(outputURL)
+	for len(outputURL) > 1 && outputURL != modulePath {
+		fmt.Printf("ModulePath: %v | OutputPath: %v\n", modulePath, outputURL)
+
+		name := path.Base(outputURL)
+		segments = append([]string{name}, segments...)
+		outputURL = path.Dir(outputURL)
+	}
+
+	URL := url.Join("github.com/viant/datly/xregistry/types/custom", segments...)
+	fmt.Printf("Generated URL: %v\n", URL)
+	return URL
+}
+
+func (s *Builder) generateGoFileContent(name string, rType reflect.Type, routeOption *option.RouteConfig, config *viewConfig, xDatlyModURL string, outputURL string) ([]byte, error) {
+	packageName := routeOption.Package
+	if packageName == "" {
+		base := path.Base(config.fileName)
+		ext := path.Ext(base)
+		packageName = strings.Replace(base, ext, "", 1)
+	}
+
+	sbBefore := &bytes.Buffer{}
+	sbBefore.WriteString(fmt.Sprintf("var PackageName = \"%v\"\n", packageName))
+
+	var imports xreflect.Imports
+	if xDatlyModURL == "" {
+		sbBefore.WriteString(fmt.Sprintf(`
+var %v = map[string]reflect.Type{
+		"%v": reflect.TypeOf(%v{}),
+}
+`, plugins.TypesName, name, name))
+
+		imports = append(imports, "reflect")
+		packageName = "main"
+	} else {
+		imports = append(imports,
+			"github.com/viant/datly/xregistry/types/core",
+			"github.com/viant/datly/xregistry/types/custom/generated",
+			"reflect",
+		)
+
+		sbBefore.WriteString(fmt.Sprintf(`
+func init() {
+	core.RegisterType(PackageName, "%v", reflect.TypeOf(%v{}), generated.GeneratedTime)
+}
+`, name, name))
+	}
+
+	sb := &bytes.Buffer{}
+	generatedStruct := xreflect.GenerateStruct(name, rType, imports, xreflect.AppendBeforeType(sbBefore.String()), xreflect.PackageName(packageName))
+	sb.WriteString(generatedStruct)
+	sb.WriteString("\n")
+
+	source, err := goFormat.Source(sb.Bytes())
+	if err != nil {
+		return nil, err
+	}
+
+	return source, nil
+}
+
+func getStruct(rType reflect.Type) reflect.Value {
+	for rType.Kind() == reflect.Ptr {
+		rType = rType.Elem()
+	}
+	sampleValue := reflect.New(rType)
+	for i := 0; i < rType.NumField(); i++ {
+		fieldType := rType.Field(i).Type
+		isPtr := false
+		if isPtr = fieldType.Kind() == reflect.Ptr; isPtr {
+			fieldType = fieldType.Elem()
+		}
+		fieldValue := sampleValue.Elem().Field(i)
+
+		if fieldType.Kind() == reflect.String {
+			str := " "
+			if isPtr {
+				fieldValue.Set(reflect.ValueOf(&str))
+			} else {
+				fieldValue.Set(reflect.ValueOf(str))
+			}
+		}
+		if fieldType.Kind() == reflect.Slice {
+			aSlice := reflect.MakeSlice(fieldType, 1, 1)
+
+			itemType := fieldType.Elem()
+			isItemPtr := itemType.Kind() == reflect.Ptr
+			if isItemPtr {
+				itemType = itemType.Elem()
+			}
+			if itemType.Kind() == reflect.Struct {
+				itemValue := getStruct(itemType)
+				if isItemPtr {
+					aSlice.Index(0).Set(itemValue)
+				} else {
+					aSlice.Index(0).Set(itemValue.Elem())
+				}
+			}
+			fieldValue.Set(aSlice)
+		}
+		if fieldType.Kind() == reflect.Struct && fieldType != xreflect.TimeType {
+			newFieldValue := reflect.New(fieldType)
+			elemField := fieldValue
+
+			if fieldValue.IsZero() {
+				initializedValue := reflect.New(fieldValue.Type())
+				elemField = initializedValue.Elem()
+				fieldValue.Set(elemField)
+			}
+			elemField.Set(newFieldValue)
+		}
+	}
+	return sampleValue
 }

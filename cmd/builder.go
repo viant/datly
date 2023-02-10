@@ -23,44 +23,14 @@ import (
 	"github.com/viant/velty/parser"
 	"github.com/viant/xreflect"
 	"go/ast"
-	"golang.org/x/tools/go/packages"
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
-
-var stdLibraries = map[string]bool{}
-
-func init() {
-	service := afs.New()
-	content, err := service.DownloadWithURL(context.Background(), "/tmp/sdk_libraries.json")
-	if err == nil {
-		if err = json.Unmarshal(content, &stdLibraries); err != nil {
-			stdLibraries = map[string]bool{}
-		} else {
-			return
-		}
-	}
-
-	pkgs, err := packages.Load(nil, "std")
-	if err != nil {
-		panic(err)
-	}
-
-	for _, p := range pkgs {
-		stdLibraries[p.PkgPath] = true
-	}
-
-	marshal, _ := json.Marshal(stdLibraries)
-	_ = service.Upload(context.Background(), "/tmp/sdk_libraries.json", file.DefaultFileOsMode, bytes.NewReader(marshal))
-}
 
 type (
 	Builder struct {
@@ -75,6 +45,7 @@ type (
 		viewNames       *uniqueIndex
 		types           *uniqueIndex
 		plugins         []*pluginGenDeta
+		bundles         map[string]string
 	}
 
 	routeBuilder struct {
@@ -128,7 +99,8 @@ type (
 		URL       string
 		filesMeta *xreflect.DirTypes
 		Types     []string
-		FileURL   string
+		fileURL   string
+		mainFile  string
 	}
 )
 
@@ -1089,6 +1061,18 @@ func (s *Builder) loadGoType(typeSrc *option.TypeSrcConfig) error {
 			dataType = actualName
 			ref = actualName
 			aPluginMeta.Types = append(aPluginMeta.Types, actualName)
+			occurrences := dirTypes.TypesOccurrences(actualName)
+			if aPluginMeta.fileURL != "" {
+				aPluginMeta.fileURL = aPluginMeta.URL
+			} else {
+				if len(occurrences) == 1 {
+					aPluginMeta.fileURL = occurrences[0]
+				}
+			}
+		}
+
+		if aPluginMeta.fileURL == "" {
+			aPluginMeta.fileURL = aPluginMeta.URL
 		}
 
 		if err != nil {
@@ -1381,199 +1365,4 @@ func (s *Builder) readParamConfigs(config *option.ParameterConfig, cursor *parsl
 	}
 
 	return nil
-}
-
-func (s *Builder) shouldGenPlugin(name string, types *xreflect.DirTypes) bool {
-	methods := types.Methods(name)
-	return len(methods) != 0
-}
-
-func (s *Builder) uploadPlugins() error {
-	hasMod := map[string]string{}
-	for _, pluginUrl := range s.plugins {
-		if err := s.detectMod(pluginUrl, hasMod); err != nil {
-			return err
-		}
-	}
-
-	generated := map[string]bool{}
-	for _, aPlugin := range s.plugins {
-		modPath, ok := s.getModPath(aPlugin, hasMod)
-		pluginPath := aPlugin.FileURL
-
-		if ok {
-			if generated[modPath] {
-				continue
-			}
-
-			pluginPath = modPath
-			generated[modPath] = true
-		}
-
-		if err := s.genPlugin(pluginPath); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (s *Builder) canBuildStandalonePlugin(aPlugin *pluginGenDeta) bool {
-	var URL string
-	for _, typeName := range aPlugin.Types {
-		occurrences := aPlugin.filesMeta.TypesOccurrences(typeName)
-		if len(occurrences) != 1 {
-			return false
-		}
-
-		if URL == "" {
-			URL = occurrences[0]
-		} else if URL != occurrences[0] {
-			return false
-		}
-	}
-
-	_, err := aPlugin.filesMeta.ValueInFile(URL, plugins.TypesName)
-	if err == nil {
-		aPlugin.FileURL = URL
-	}
-
-	return err == nil
-}
-
-func (s *Builder) detectMod(pluginMeta *pluginGenDeta, modules map[string]string) error {
-	if s.canBuildStandalonePlugin(pluginMeta) {
-		return nil
-	}
-
-	location := path.Dir(s.options.Location)
-	dir := pluginMeta.URL
-
-	for {
-		list, err := s.fs.List(context.Background(), dir)
-		if err != nil {
-			return err
-		}
-
-		var modURL string
-		for _, object := range list {
-			if path.Base(object.URL()) == "go.mod" {
-				modURL = object.URL()
-			}
-		}
-
-		if modURL != "" {
-			modules[dir] = modURL
-			return nil
-		}
-
-		if location == dir || location == "" {
-			return nil
-		}
-
-		dir = path.Dir(dir)
-	}
-}
-
-func (s *Builder) importsOnlyStd(pluginMeta *pluginGenDeta) bool {
-	imports := pluginMeta.filesMeta.Imports(pluginMeta.URL)
-	for _, pkg := range imports {
-		if stdLibraries[pkg] {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (s *Builder) getModPath(plugin *pluginGenDeta, mod map[string]string) (string, bool) {
-	dir := path.Dir(plugin.URL)
-	for len(dir) > 1 {
-		if modPath, ok := mod[dir]; ok {
-			return modPath, true
-		}
-
-		dir = path.Dir(dir)
-	}
-
-	return "", false
-}
-
-func (s *Builder) genPlugin(aPath string) error {
-	suffix := strconv.Itoa(int(TimeNow().Unix()))
-	name := path.Base(aPath)
-
-	pluginPath := path.Join(os.TempDir(), "plugins", suffix, name)
-	if err := s.fs.Copy(context.Background(), aPath, pluginPath); err != nil {
-		return err
-	}
-
-	pluginName := name
-	if ext := path.Ext(name); ext != "" {
-		pluginName = pluginName[:len(pluginName)-len(ext)] + ".so"
-	}
-
-	pluginDst := path.Join(path.Dir(pluginPath), pluginName)
-	args, err := s.pluginArgs(pluginDst, pluginPath)
-	if err != nil {
-		return err
-	}
-
-	command := exec.Command("go", args...)
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("couldn't generate plugin due to the: %w\n | console output: %s", err, output)
-	}
-
-	if err = s.fs.Copy(context.Background(), pluginDst, s.options.DependencyURL); err != nil {
-		return err
-	}
-
-	return s.genPluginMetadata(pluginDst)
-}
-
-func (s *Builder) pluginArgs(pluginDst string, pluginPath string) ([]string, error) {
-	args := []string{
-		"build",
-		"-buildmode=plugin",
-	}
-
-	for _, pluginArg := range s.options.PluginArgs {
-		argsReg := regexp.MustCompile(`([-a-zA-Z]+)|(".*?[^\\]")|("")`)
-		pluginArgs := argsReg.FindAllString(pluginArg, -1)
-
-		for i, arg := range pluginArgs {
-			if !strings.HasPrefix(arg, `"`) || !strings.HasSuffix(arg, `"`) {
-				continue
-			}
-
-			var err error
-			pluginArgs[i], err = strconv.Unquote(arg)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		args = append(args, pluginArgs...)
-	}
-
-	args = append(args,
-		"-o",
-		pluginDst,
-		pluginPath)
-
-	return args, nil
-}
-
-func (s *Builder) genPluginMetadata(pluginPath string) error {
-	pluginMeta := &plugins.Metadata{
-		CreationTime: time.Now(),
-	}
-
-	marshal, err := json.Marshal(pluginMeta)
-	if err != nil {
-		return err
-	}
-
-	return s.fs.Upload(context.Background(), url.Join(s.options.DependencyURL, path.Base(pluginPath)+".meta"), file.DefaultFileOsMode, bytes.NewReader(marshal))
 }

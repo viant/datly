@@ -31,7 +31,7 @@ func (s *Builder) preparePutRule(ctx context.Context, SQL []byte) (string, error
 		return "", err
 	}
 
-	if _, err = s.uploadSQL(folderSQL, s.fileNames.unique(config.fileName), template, false); err != nil {
+	if _, err = s.upload(s.preGenSQLURL(s.fileNames.unique(config.fileName)), template); err != nil {
 		return "", nil
 	}
 

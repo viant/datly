@@ -101,6 +101,8 @@ func New(ctx context.Context, config *Config, statusHandler http.Handler, author
 		pluginsInUse:         map[string]bool{},
 	}
 
+	_ = srv.fs.Delete(context.Background(), srv.pluginDst())
+
 	if config.JwtSigner != nil {
 		srv.JWTSigner = signer.New(config.JwtSigner)
 		if err = srv.JWTSigner.Init(context.Background()); err != nil {

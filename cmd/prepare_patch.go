@@ -45,7 +45,7 @@ func (s *Builder) preparePatchRule(ctx context.Context, sourceSQL []byte) (strin
 		return "", err
 	}
 
-	if _, err = s.uploadSQL(folderSQL, s.fileNames.unique(config.fileName), SQL, false); err != nil {
+	if _, err = s.upload(s.preGenSQLURL(s.fileNames.unique(config.fileName)), SQL); err != nil {
 		return "", err
 	}
 

@@ -1,0 +1,37 @@
+init:
+  mysqlSecrets:  ${secrets.$mysqlCredentials}
+pipeline:
+  stop:
+    services:
+      action: docker:stop
+      images:
+        - mysql
+        - aerospike-server
+        - dynamodb-local
+
+  start:
+    services:
+      mysql_dev:
+        action: docker:run
+        image: mysql:5.6
+        name: mysql_dev
+        ports:
+          3306: 3306
+        env:
+          MYSQL_ROOT_PASSWORD: ${mysqlSecrets.Password}
+
+      aerospike:
+        action: docker:run
+        image: 'aerospike/aerospike-server'
+        name: aero
+        ports:
+          3000: 3000
+          3001: 3001
+          3002: 3002
+
+      dynamodb:
+        action: docker:run
+        image: 'amazon/dynamodb-local'
+        name: dynamodb
+        ports:
+          8000: 8000

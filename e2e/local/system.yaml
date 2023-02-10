@@ -6,7 +6,7 @@ pipeline:
       action: docker:stop
       images:
         - mysql
-        - aerospike-server
+        - aerospike
         - dynamodb-local
 
   start:
@@ -22,7 +22,7 @@ pipeline:
 
       aerospike:
         action: docker:run
-        image: 'aerospike/aerospike-server'
+        image: 'aerospike:ce-6.2.0.2'
         name: aero
         ports:
           3000: 3000

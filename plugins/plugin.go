@@ -8,4 +8,5 @@ const TypesName = "Types"
 
 type Metadata struct {
 	CreationTime time.Time `json:",omitempty"`
+	URL          string
 }

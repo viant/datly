@@ -3,10 +3,10 @@ package standalone
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone/handler"
 	"github.com/viant/datly/router"
-	"github.com/viant/datly/xdatly"
 	"github.com/viant/gmetric"
 	"log"
 	"net/http"
@@ -46,19 +46,19 @@ func (r *Server) Routes() []*router.Route {
 	return aRouter.MatchAll("")
 }
 
-func NewWithAuth(config *Config, auth gateway.Authorizer) (*Server, error) {
-	config.Init()
+func NewWithAuth(gwayConfig *Config, auth gateway.Authorizer) (*Server, error) {
+	gwayConfig.Init()
 	//mux := http.NewServeMux()
 	metric := gmetric.New()
-	if config.Config == nil {
+	if gwayConfig.Config == nil {
 		return nil, fmt.Errorf("gateway config was empty")
 	}
 
 	service, err := gateway.SingletonWithConfig(
-		config.Config,
-		handler.NewStatus(config.Version, &config.Meta),
+		gwayConfig.Config,
+		handler.NewStatus(gwayConfig.Version, &gwayConfig.Meta),
 		auth,
-		xdatly.Config,
+		config.Config,
 		metric,
 	)
 
@@ -73,11 +73,11 @@ func NewWithAuth(config *Config, auth gateway.Authorizer) (*Server, error) {
 	server := &Server{
 		Service: service,
 		Server: http.Server{
-			Addr:           ":" + strconv.Itoa(config.Endpoint.Port),
+			Addr:           ":" + strconv.Itoa(gwayConfig.Endpoint.Port),
 			Handler:        service,
-			ReadTimeout:    time.Millisecond * time.Duration(config.Endpoint.ReadTimeoutMs),
-			WriteTimeout:   time.Millisecond * time.Duration(config.Endpoint.WriteTimeoutMs),
-			MaxHeaderBytes: config.Endpoint.MaxHeaderBytes,
+			ReadTimeout:    time.Millisecond * time.Duration(gwayConfig.Endpoint.ReadTimeoutMs),
+			WriteTimeout:   time.Millisecond * time.Duration(gwayConfig.Endpoint.WriteTimeoutMs),
+			MaxHeaderBytes: gwayConfig.Endpoint.MaxHeaderBytes,
 		},
 	}
 

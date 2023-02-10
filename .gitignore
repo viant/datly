@@ -3,7 +3,6 @@ secrets.json
 *.db
 local_test.go
 vendor
-go.sum
 datly
 other
 mydb
@@ -15,3 +14,4 @@ dsql
 *.iml
 *.so
 logs
+.datly

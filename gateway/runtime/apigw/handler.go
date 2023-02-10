@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/viant/datly/auth/jwt"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway"
-	"github.com/viant/datly/xdatly"
 	"net/http"
 	"time"
 
@@ -16,7 +16,7 @@ import (
 	"sync"
 )
 
-var config *gateway.Config
+var gwayConfig *gateway.Config
 var configInit sync.Once
 
 func HandleRequest(ctx context.Context, request *adapter.Request) (*events.APIGatewayProxyResponse, error) {
@@ -38,7 +38,7 @@ func HandleHttpRequest(writer http.ResponseWriter, apiRequest *adapter.Request) 
 	}
 	var err error
 	configInit.Do(func() {
-		config, err = gateway.NewConfigFromURL(context.Background(), configURL)
+		gwayConfig, err = gateway.NewConfigFromURL(context.Background(), configURL)
 	})
 
 	if err != nil {
@@ -47,13 +47,13 @@ func HandleHttpRequest(writer http.ResponseWriter, apiRequest *adapter.Request) 
 	}
 
 	var authService gateway.Authorizer
-	if jwtAuth, err := jwt.Init(config, nil); err == nil {
+	if jwtAuth, err := jwt.Init(gwayConfig, nil); err == nil {
 		authService = jwtAuth
 	} else {
 		return err
 	}
 
-	service, err := gateway.SingletonWithConfig(config, nil, authService, xdatly.Config, nil)
+	service, err := gateway.SingletonWithConfig(gwayConfig, nil, authService, config.Config, nil)
 	if err != nil {
 		return err
 	}

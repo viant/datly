@@ -108,6 +108,7 @@ func NewBuilder(options *Options, logger io.Writer) (*Builder, error) {
 		fileNames: newUniqueIndex(false),
 		viewNames: newUniqueIndex(true),
 		types:     newUniqueIndex(true),
+		bundles:   map[string]string{},
 	}
 
 	return builder, builder.Build(context.TODO())

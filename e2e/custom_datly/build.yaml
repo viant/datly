@@ -1,0 +1,35 @@
+init:
+  AppVersion: $Cat(${appPath}/Version)
+  appPath: $WorkingDirectory(./../..)
+
+pipeline:
+  deploy:
+    set_sdk:
+      action: sdk.set
+      target: $target
+      sdk: go:1.17
+
+
+    copyDatly:
+      action: exec:run
+      comments: copy datly project
+      target: $target
+      checkError: true
+      commands:
+        - export GLOBIGNORE='.datly*'
+        - echo $appPath
+        - pwd
+        - rm -rf .datly
+        - rsync -av --progress ../../ .datly/ --exclude .datly
+
+    package:
+      action: exec:run
+      comments: vendor build for deployment speedup
+      target: $target
+      checkError: true
+      commands:
+        - export GO111MODULE=on
+        - cd ${appPath}/cmd/datly
+        - go mod download
+        - go build -ldflags "-X main.BuildTimeInS=`date +%s`" -trimpath
+        - mv datly /tmp/datly

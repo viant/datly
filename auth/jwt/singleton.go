@@ -5,8 +5,8 @@ import (
 	"embed"
 	"github.com/viant/afs"
 	"github.com/viant/datly/auth/cognito"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway"
-	"github.com/viant/datly/xdatly"
 	"github.com/viant/scy/auth/jwt/verifier"
 	"sync"
 )
@@ -15,24 +15,24 @@ var cognitoService *cognito.Service
 var jwtVerifier *verifier.Service
 var authServiceInit sync.Once
 
-func Init(config *gateway.Config, embedFs *embed.FS) (gateway.Authorizer, error) {
+func Init(gwayConfig *gateway.Config, embedFs *embed.FS) (gateway.Authorizer, error) {
 	fs := afs.New()
 	var err error
 	authServiceInit.Do(func() {
-		if config.Cognito != nil {
+		if gwayConfig.Cognito != nil {
 			if embedFs == nil { //default FS
 				embedFs = &cognito.EmbedFs
 			}
-			if cognitoService, err = cognito.New(config.Cognito, fs, embedFs); err == nil {
+			if cognitoService, err = cognito.New(gwayConfig.Cognito, fs, embedFs); err == nil {
 				provider := New(cognitoService.VerifyIdentity)
-				xdatly.Config.RegisterCodec(xdatly.NewVisitor(xdatly.CodecKeyJwtClaim, provider))
-				xdatly.Config.RegisterCodec(xdatly.NewVisitor(xdatly.CodecCognitoKeyJwtClaim, provider))
+				config.Config.RegisterCodec(config.NewVisitor(config.CodecKeyJwtClaim, provider))
+				config.Config.RegisterCodec(config.NewVisitor(config.CodecCognitoKeyJwtClaim, provider))
 			}
 		}
-		if config.JWTValidator != nil {
-			jwtVerifier = verifier.New(config.JWTValidator)
+		if gwayConfig.JWTValidator != nil {
+			jwtVerifier = verifier.New(gwayConfig.JWTValidator)
 			if err = jwtVerifier.Init(context.Background()); err == nil {
-				xdatly.Config.RegisterCodec(xdatly.NewVisitor(xdatly.CodecKeyJwtClaim, New(jwtVerifier.VerifyClaims)))
+				config.Config.RegisterCodec(config.NewVisitor(config.CodecKeyJwtClaim, New(jwtVerifier.VerifyClaims)))
 			}
 		}
 	})

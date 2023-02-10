@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/plugins"
@@ -13,7 +14,6 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
-	"github.com/viant/datly/xdatly"
 	"github.com/viant/gmetric/counter/base"
 	"github.com/viant/toolbox/format"
 	"path"
@@ -469,7 +469,7 @@ func TestRead(t *testing.T) {
 			dest:        new(interface{}),
 			view:        "events",
 			visitors: plugins.CodecsRegistry{
-				"Strings": xdatly.NewVisitor("Strings", &StringsCodec{}),
+				"Strings": config.NewVisitor("Strings", &StringsCodec{}),
 			},
 			expect: `[{"Name":["John","David","Anna"]}]`,
 		},

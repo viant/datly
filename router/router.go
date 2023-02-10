@@ -9,12 +9,12 @@ import (
 	"github.com/go-playground/validator"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/xdatly"
 	"github.com/viant/scy/auth/jwt"
 	"io"
 	"net/http"
@@ -821,7 +821,7 @@ func (r *Router) logAudit(request *http.Request, response http.ResponseWriter, r
 }
 
 func (r *Router) obfuscateAuthorization(request *http.Request, response http.ResponseWriter, authorization string, headers http.Header, route *Route) {
-	if jwtCodec, _ := xdatly.Config.LookupCodec(xdatly.CodecKeyJwtClaim); jwtCodec != nil {
+	if jwtCodec, _ := config.Config.LookupCodec(config.CodecKeyJwtClaim); jwtCodec != nil {
 		if claim, _ := jwtCodec.Valuer().Value(context.TODO(), authorization); claim != nil {
 			if jwtClaim, ok := claim.(*jwt.Claims); ok && jwtClaim != nil {
 				headers.Set("User-ID", strconv.Itoa(jwtClaim.UserID))

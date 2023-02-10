@@ -2,21 +2,22 @@ package cmd
 
 import (
 	"context"
-	"github.com/viant/afs"
 	"github.com/viant/afs/file"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
-	"github.com/viant/datly/xdatly"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/velty/ast"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/ast/stmt"
 	"github.com/viant/velty/parser"
 	"net/http"
+	"path"
 	"reflect"
 	"strings"
 )
@@ -53,7 +54,7 @@ func (s *Builder) buildTemplate(ctx context.Context, aViewConfig *viewConfig, ex
 func (s *Builder) uploadTemplateSQL(template string, aViewConfig *viewConfig) (SQL string, URI string, err error) {
 	SQL = sanitize.Sanitize(template, s.routeBuilder.paramsIndex.hints, s.routeBuilder.paramsIndex.consts)
 	if SQL != "" && aViewConfig.fileName != "" {
-		URI, err = s.uploadSQL(folderDev, aViewConfig.fileName, SQL, true)
+		URI, err = s.uploadSQL(folderDev, aViewConfig.fileName, SQL)
 		if err != nil {
 			return "", "", err
 		}
@@ -158,12 +159,12 @@ func convertMetaParameter(param *Parameter, values map[string]interface{}, hints
 
 func paramCodec(param *Parameter) (*view.Codec, string) {
 	dataTypeLower := strings.ToLower(param.DataType)
-	if xdatly.CodecKeyAsInts == param.Codec || canInferAsIntsCodec(param, dataTypeLower) {
-		return &view.Codec{Reference: shared.Reference{Ref: xdatly.CodecKeyAsInts}}, "string"
+	if config.CodecKeyAsInts == param.Codec || canInferAsIntsCodec(param, dataTypeLower) {
+		return &view.Codec{Reference: shared.Reference{Ref: config.CodecKeyAsInts}}, "string"
 	}
 
-	if xdatly.CodecKeyAsStrings == param.Codec || canInferAsStringsCodec(param, dataTypeLower) {
-		return &view.Codec{Reference: shared.Reference{Ref: xdatly.CodecKeyAsStrings}}, "string"
+	if config.CodecKeyAsStrings == param.Codec || canInferAsStringsCodec(param, dataTypeLower) {
+		return &view.Codec{Reference: shared.Reference{Ref: config.CodecKeyAsStrings}}, "string"
 	}
 
 	var codec *view.Codec
@@ -614,28 +615,64 @@ func isParameter(variables map[string]bool, paramName string) bool {
 	return sanitize.CanBeParam(paramName)
 }
 
-func (s *Builder) uploadSQL(namespace, fileName string, fileContent string, inRoutes bool) (string, error) {
-	return s.uploadFile(namespace, fileName, fileContent, inRoutes, ".sql")
+func (s *Builder) uploadSQL(namespace, fileName string, fileContent string) (string, error) {
+	return s.uploadRuleFile(namespace, fileName, fileContent, ".sql", true)
 }
 
-func (s *Builder) uploadGo(namespace, fileName string, fileContent string, inRoutes bool) (string, error) {
+func (s *Builder) uploadRuleFile(namespace string, fileName string, fileContent string, extension string, ensureUniques bool) (string, error) {
+	if ensureUniques {
+		fileName = s.fileNames.unique(fileName)
+	}
+
+	sourceURL := s.url(namespace, fileName, extension)
+	return s.upload(sourceURL, fileContent)
+}
+
+func (s *Builder) goURL(fileName string) string {
 	detectCase, err := format.NewCase(view.DetectCase(fileName))
 	if err == nil {
 		fileName = detectCase.Format(fileName, format.CaseLowerUnderscore)
 	}
 
-	return s.uploadFile(namespace, fileName, fileContent, inRoutes, ".go")
+	return s.preGenURL(fileName, ".go")
 }
 
-func (s *Builder) uploadFile(namespace string, fileName string, fileContent string, inRoutes bool, extension string) (string, error) {
-	sourceURL := s.options.URL(namespace, s.fileNames.unique(fileName), inRoutes, extension)
-	fs := afs.New()
-	if err := fs.Upload(context.Background(), sourceURL, file.DefaultFileOsMode, strings.NewReader(fileContent)); err != nil {
+func (s *Builder) preGenSQLURL(fileName string) string {
+	return s.preGenURL(fileName, ".sql")
+}
+
+func (s *Builder) preGenURL(fileName string, ext string) string {
+	return s.url(folderSQL, fileName, ext)
+}
+
+func (s *Builder) genURL(fileName, ext string) string {
+	return s.url(folderDev, fileName, ext)
+}
+
+func (s *Builder) url(namespace, fileName string, ext string) string {
+	segments := []string{
+		namespace,
+	}
+
+	if fileName != "" {
+		segments = append(segments, fileName+ext)
+	}
+
+	if namespace == folderSQL {
+		return url.Join(path.Dir(s.options.Location), segments...)
+	}
+
+	sourceURL := s.options.URL(namespace, s.fileNames.unique(fileName), true, ext)
+	return sourceURL
+}
+
+func (s *Builder) upload(destURL string, fileContent string) (string, error) {
+	if err := s.fs.Upload(context.Background(), destURL, file.DefaultFileOsMode, strings.NewReader(fileContent)); err != nil {
 		return "", err
 	}
 
 	skipped := 0
-	anIndex := strings.LastIndexFunc(sourceURL, func(r rune) bool {
+	anIndex := strings.LastIndexFunc(destURL, func(r rune) bool {
 		if r == '/' {
 			skipped++
 		}
@@ -645,8 +682,8 @@ func (s *Builder) uploadFile(namespace string, fileName string, fileContent stri
 		}
 		return false
 	})
-	sourceURL = sourceURL[anIndex+1:]
-	return sourceURL, nil
+	destURL = destURL[anIndex+1:]
+	return destURL, nil
 }
 
 func (s *Builder) buildSchemaFromTable(schemaName string, table *Table, columnTypes map[string]*ColumnMeta) (*view.TypeDefinition, error) {

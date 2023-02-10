@@ -1,4 +1,4 @@
-package xdatly
+package config
 
 import "github.com/viant/datly/plugins"
 

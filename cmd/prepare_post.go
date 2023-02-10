@@ -1,19 +1,13 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/cmd/option"
-	"github.com/viant/datly/plugins"
-	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/toolbox/format"
-	"github.com/viant/xreflect"
-	goFormat "go/format"
 	"reflect"
 	"strings"
 )
@@ -68,107 +62,11 @@ func (s *Builder) preparePostRule(ctx context.Context, sourceSQL []byte) (string
 		return "", err
 	}
 
-	if _, err = s.uploadSQL(folderSQL, s.fileNames.unique(config.fileName), template, false); err != nil {
+	if _, err = s.upload(s.preGenSQLURL(s.fileNames.unique(config.fileName)), template); err != nil {
 		return "", nil
 	}
 
 	return template, nil
-}
-
-func (s *Builder) extractRouteSettings(sourceSQL []byte) (string, string) {
-	hint := sanitize.ExtractHint(string(sourceSQL))
-	SQL := strings.Replace(string(sourceSQL), hint, "", 1)
-	return hint, SQL
-}
-
-func (s *Builder) uploadGoType(name string, rType reflect.Type, packageName string) error {
-	sb := &bytes.Buffer{}
-
-	sbBefore := &bytes.Buffer{}
-	if packageName != "" {
-		sbBefore.WriteString(fmt.Sprintf("var PackageName = \"%v\"\n", packageName))
-	}
-
-	sbBefore.WriteString(fmt.Sprintf(`
-var %v = map[string]reflect.Type{
-		"%v": reflect.TypeOf(%v{}),
-}
-`, plugins.TypesName, name, name))
-
-	generatedStruct := xreflect.GenerateStruct(name, rType, xreflect.Imports{"reflect"}, xreflect.AppendBeforeType(sbBefore.String()))
-	sb.WriteString(generatedStruct)
-	sb.WriteString("\n")
-
-	source, err := goFormat.Source(sb.Bytes())
-	if err != nil {
-		return err
-	}
-
-	if _, err := s.uploadGo(folderSQL, name, string(source), false); err != nil {
-		return err
-	}
-
-	sampleValue := getStruct(rType)
-	sample := sampleValue.Interface()
-	if data, err := json.Marshal(sample); err == nil {
-		s.uploadFile(folderSQL, name+"Post", string(data), false, ".json")
-	}
-
-	return nil
-}
-
-func getStruct(rType reflect.Type) reflect.Value {
-	for rType.Kind() == reflect.Ptr {
-		rType = rType.Elem()
-	}
-	sampleValue := reflect.New(rType)
-	for i := 0; i < rType.NumField(); i++ {
-		fieldType := rType.Field(i).Type
-		isPtr := false
-		if isPtr = fieldType.Kind() == reflect.Ptr; isPtr {
-			fieldType = fieldType.Elem()
-		}
-		fieldValue := sampleValue.Elem().Field(i)
-
-		if fieldType.Kind() == reflect.String {
-			str := " "
-			if isPtr {
-				fieldValue.Set(reflect.ValueOf(&str))
-			} else {
-				fieldValue.Set(reflect.ValueOf(str))
-			}
-		}
-		if fieldType.Kind() == reflect.Slice {
-			aSlice := reflect.MakeSlice(fieldType, 1, 1)
-
-			itemType := fieldType.Elem()
-			isItemPtr := itemType.Kind() == reflect.Ptr
-			if isItemPtr {
-				itemType = itemType.Elem()
-			}
-			if itemType.Kind() == reflect.Struct {
-				itemValue := getStruct(itemType)
-				if isItemPtr {
-					aSlice.Index(0).Set(itemValue)
-				} else {
-					aSlice.Index(0).Set(itemValue.Elem())
-				}
-			}
-			fieldValue.Set(aSlice)
-		}
-		if fieldType.Kind() == reflect.Struct && fieldType != xreflect.TimeType {
-			newFieldValue := reflect.New(fieldType)
-			elemField := fieldValue
-
-			if fieldValue.IsZero() {
-				initializedValue := reflect.New(fieldValue.Type())
-				elemField = initializedValue.Elem()
-				fieldValue.Set(elemField)
-			}
-			elemField.Set(newFieldValue)
-		}
-	}
-	return sampleValue
 }
 
 func (s *Builder) buildInsertSQL(typeDef *inputMetadata, config *viewConfig, routeOption *option.RouteConfig) (string, error) {
@@ -185,55 +83,6 @@ func (s *Builder) buildInsertSQL(typeDef *inputMetadata, config *viewConfig, rou
 	builder.appendAllocation(typeDef, "", typeDef.paramName)
 
 	return builder.build("", true)
-}
-
-func (s *Builder) prepareStringBuilder(typeDef *inputMetadata, config *viewConfig, routeOption *option.RouteConfig) (*strings.Builder, error) {
-	sb := &strings.Builder{}
-	typeName := typeDef.typeDef.Name
-
-	paramType, err := s.buildRequestBodyPostParam(config, typeDef)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = s.uploadGoType(typeName, paramType, routeOption.Package); err != nil {
-		return nil, err
-	}
-
-	if err = s.appendMetadata(typeDef.paramName, routeOption, typeName, typeDef, sb); err != nil {
-		return nil, err
-	}
-	return sb, nil
-}
-
-func (s *Builder) appendMetadata(paramName string, routeOption *option.RouteConfig, typeName string, typeDef *inputMetadata, sb *strings.Builder) error {
-	routeOption.ResponseBody = &option.ResponseBodyConfig{
-		From: paramName,
-	}
-
-	marshal, err := json.Marshal(routeOption)
-	if err != nil {
-		return err
-	}
-
-	if routeJSON := string(marshal); routeJSON != "{}" {
-		sb.WriteString(fmt.Sprintf("/* %v */\n", routeJSON))
-	}
-
-	requiredTypes := []string{typeDef.paramName}
-	if typeDef.bodyHolder != "" {
-		requiredTypes = append(requiredTypes, typeDef.bodyHolder)
-	}
-
-	if len(requiredTypes) > 0 {
-		sb.WriteString("\nimport (")
-		for _, requiredType := range requiredTypes {
-			sb.WriteString(fmt.Sprintf("\n	\"%v.%v\"", folderSQL, requiredType))
-		}
-		sb.WriteString("\n)\n\n")
-	}
-
-	return nil
 }
 
 func (isb *insertStmtBuilder) appendAllocation(def *inputMetadata, path, holderName string) {

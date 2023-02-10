@@ -1,0 +1,61 @@
+init:
+  aPath: ${parent.path}
+  anID: ${parent.tagID}
+  aTag: ${parent.tag}
+  aPathMatch: ${parent.pathMatch}
+  anIndex: ${parent.index}
+  appPath: $WorkingDirectory()
+  rule: $LoadJSON(${state.aPath}/gen.json)
+
+pipeline:
+  set_sdk:
+    action: sdk.set
+    target: $target
+    sdk: go:1.17
+
+  loop:
+    generate:
+      init:
+        ruleURL: '${appPath}/.datly/xregistry/types/custom/rules/${rule.Path}/${rule.URL}'
+        pregenURL: '${appPath}/.datly/xregistry/types/custom/rules/${rule.Path}/${rule.PregenURL}'
+        goFile: '$aPath/${rule.GoFile}'
+        outputGoFile: '${appPath}/.datly/xregistry/types/custom/rules/${rule.Path}/dsql/${rule.GoFile}'
+        relative: '${appPath}/.datly/xregistry/types/custom'
+        pluginGoFile: '$aPath/${rule.PluginGoFile}'
+        dbDSN: 'dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev${qMark}parseTime=true'
+
+      genRulesTemplate:
+        when: ${state.mode}=gen
+        genRule:
+          action: exec:run
+          description: build datly rule with SQL extension
+          target: '$target'
+          checkError: true
+          commands:
+            - export GO111MODULE=on
+            - mkdir -p ${appPath}/.datly/xregistry/types/custom/rules/${rule.Path}/dsql
+            - cp $aPath/${rule.PregenURL} ${pregenURL}
+            - /tmp/datly --relative='${relative}' -X='${pregenURL}' -G='${rule.Method}' -C='${dbDSN}'
+            - cp $goFile $outputGoFile
+            - rm ${pregenURL}
+            - cp $aPath/${rule.URL} ${appPath}/.datly/xregistry/types/custom/rules/${rule.Path}/${rule.URL}
+            - /tmp/datly --relative='${relative}' -X='${ruleURL}' -C='${dbDSN}' --pluginArgs='-trimpath' -w=${appPath}/autogen
+
+      generatePlugins:
+        when: ${state.mode}=copy_plugins
+        checkSkipEmptyPath:
+          when: ${rule.PluginGoFile}!=''
+          genRule:
+            action: exec:run
+            description: build datly rule with SQL extension
+            target: '$target'
+            checkError: true
+            commands:
+              - export GO111MODULE=on
+              - cp ${pluginGoFile} ${outputGoFile}
+              - /tmp/datly --relative='${relative}' -X='${ruleURL}' -C='${dbDSN}' --pluginArgs='-trimpath' -w=${appPath}/autogen
+
+      runTestsTemplate:
+        when: ${state.mode}=state_test
+        action: run
+        request: '@${state.aPath}/test.yaml'

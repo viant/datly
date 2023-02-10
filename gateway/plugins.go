@@ -6,8 +6,9 @@ import (
 	"fmt"
 	furl "github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/build"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/plugins"
-	"github.com/viant/datly/xdatly"
+	"github.com/viant/datly/xregistry/types/core"
 	"os"
 	"path"
 	"plugin"
@@ -45,6 +46,13 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 		return nil, nil
 	}
 
+	registry := plugins.NewRegistry()
+	_, cancelFn := core.Types(func(packageName, typeName string, rType reflect.Type, _ time.Time) {
+		registry.AddType(packageName, typeName, rType)
+	})
+
+	defer cancelFn()
+
 	aChan := make(chan func() (*pluginData, error), updateSize)
 	for i := 0; i < updateSize; i++ {
 		go r.loadPlugin(ctx, changes.pluginsIndex.updated[i], aChan)
@@ -53,9 +61,18 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	var pluginsData pluginDataSlice
 	var i = 0
 	for fn := range aChan {
+		i++
+		if i == updateSize {
+			close(aChan)
+		}
+
 		data, err := fn()
 		if err != nil {
 			fmt.Printf("[WARN] error occured while reading plugin %v\n", err.Error())
+			continue
+		}
+
+		if data == nil {
 			continue
 		}
 
@@ -64,16 +81,9 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 		}
 
 		pluginsData = append(pluginsData, data)
-
-		i++
-		if i == updateSize {
-			close(aChan)
-		}
 	}
 
 	sort.Sort(pluginsData)
-
-	registry := plugins.NewRegistry()
 
 	for _, pluginChanges := range pluginsData {
 		for _, change := range pluginChanges.changes {
@@ -92,7 +102,7 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 		}
 	}
 
-	xdatly.Config.Override(registry)
+	config.Config.Override(registry)
 
 	return registry, nil
 }
@@ -114,12 +124,16 @@ func (r *Service) copyIfNeeded(ctx context.Context, URL string) (string, error) 
 		dir := path.Join(os.TempDir(), "plugins", suffix)
 		URL = furl.Join(dir, path.Base(URL))
 	} else {
-		URL = strings.Replace(URL, r.Config.DependencyURL, path.Join(r.Config.DependencyURL, pluginsFolder), 1)
+		URL = strings.Replace(URL, r.Config.DependencyURL, r.pluginDst(), 1)
 		ext := path.Ext(URL)
 		URL = strings.Replace(URL, ext, suffix+ext, 1)
 	}
 
 	return URL, r.fs.Copy(ctx, oldURL, URL)
+}
+
+func (r *Service) pluginDst() string {
+	return path.Join(r.Config.DependencyURL, pluginsFolder)
 }
 
 func (r *Service) handlePluginTypes(provider *plugin.Plugin, data *pluginData) {
@@ -142,12 +156,15 @@ func (r *Service) handlePluginTypes(provider *plugin.Plugin, data *pluginData) {
 }
 
 func (r *Service) loadPluginMetadata(ctx context.Context, URL string) (*plugins.Metadata, error) {
-	content, err := r.fs.DownloadWithURL(ctx, URL+".meta")
+	metadataURL := URL + ".meta"
+	content, err := r.fs.DownloadWithURL(ctx, metadataURL)
 	if err != nil {
 		return nil, err
 	}
 
-	pluginsMetadata := &plugins.Metadata{}
+	pluginsMetadata := &plugins.Metadata{
+		URL: metadataURL,
+	}
 	return pluginsMetadata, json.Unmarshal(content, pluginsMetadata)
 }
 
@@ -169,6 +186,8 @@ func (r *Service) loadPluginWithErr(ctx context.Context, URL string) (*pluginDat
 	}
 
 	if build.BuildTime.After(metadata.CreationTime) {
+		go r.fs.Delete(context.Background(), metadata.URL)
+		go r.fs.Delete(context.Background(), URL)
 		return nil, nil
 	}
 

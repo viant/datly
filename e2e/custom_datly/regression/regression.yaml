@@ -1,0 +1,62 @@
+init:
+  appPath: $WorkingDirectory()
+  state:
+    mode: gen
+    datlyPath: '/tmp/datly'
+
+pipeline:
+  set_sdk:
+    action: sdk.set
+    target: $target
+    sdk: go:1.17
+
+  cleanup:
+    action: exec:run
+    description: clean previous tests
+    target: '$target'
+    checkError: true
+    commands:
+      - mkdir -p ${appPath}/autogen
+      - rm -rf ${appPath}/autogen
+
+  database:
+    action: run
+    request: '@db'
+
+  prepare_tests:
+    action: run
+    request: '@over_cases'
+
+  rebuild_datly:
+    action: exec:run
+    target: '$target'
+    checkError: true
+    commands:
+      - export GO111MODULE=on
+      - cd $appPath/e2e/custom_datly/.datly/cmd/datly
+      - go build -ldflags "-X main.BuildTimeInS=`date +%s`" -trimpath
+      - cp datly /tmp/custom_datly
+
+  copy_plugins_state:
+    action: nop
+    init:
+      'state.mode': copy_plugins
+
+  generate_rules:
+    action: run
+    request: '@over_cases'
+
+  run_tests_state:
+    action: nop
+    init:
+      'state.mode': state_test
+
+  app:
+    description: start datly app with rule generted from SQLs
+    action: run
+    request: '@app'
+
+  run_tests:
+    action: run
+    description: running test cases
+    request: '@over_cases'
