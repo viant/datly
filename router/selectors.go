@@ -422,14 +422,46 @@ func (b *selectorsBuilder) convertAndTransform(ctx context.Context, raw string, 
 }
 
 func (b *selectorsBuilder) buildSelectorParameters(ctx context.Context, selector *view.Selector, parent *ViewDetails, parameters []*view.Parameter) (*view.Parameter, error) {
+	var viewParams []*view.Parameter
 
 	var err error
 	for _, parameter := range parameters {
+		if parameter.In.Kind == view.KindDataView {
+			viewParams = append(viewParams, parameter)
+			continue
+		}
+
 		err = b.handleParam(ctx, selector, parent, parameter)
 		if err != nil {
 			return parameter, err
 		}
 	}
+
+	if len(viewParams) > 0 {
+		wg := &sync.WaitGroup{}
+		mux := &sync.Mutex{}
+
+		var invalidParam *view.Parameter
+		var errParam error
+
+		for _, param := range viewParams {
+			wg.Add(1)
+			go func(param *view.Parameter, wg *sync.WaitGroup) {
+				defer wg.Done()
+				err := b.handleParam(ctx, selector, parent, param)
+				if err != nil {
+					mux.Lock()
+					defer mux.Unlock()
+					invalidParam = param
+					errParam = err
+				}
+			}(param, wg)
+		}
+
+		wg.Wait()
+		return invalidParam, errParam
+	}
+
 	return nil, nil
 }
 

@@ -6,7 +6,7 @@ import (
 
 
 #set($_ = $Foos<[]*Foos>(body/))
-#set($_ = $FoosDBRecords /* {"Required":false} 
+#set($_ = $FoosDBRecords /* {"Required":false}
   #set($FoosId = $Foos.QueryFirst("SELECT ARRAY_AGG(Id) AS Values FROM  `/`"))
   SELECT * FROM FOOS/* {"Selector":{}} */
   WHERE  #if($FoosId.Values.Length() > 0 ) ID IN ( $FoosId.Values ) #else 1 = 0 #end */
