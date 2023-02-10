@@ -1,6 +1,4 @@
 - Add possibility for sqlx ns in order to avoid unneccessary one-one relations.
-- Plugins/custom types
-- $Db[XXX] - for connector support
 - SQL with StructQL simplificaiton ?
 - strinigfy golang type in meta/view endpoint
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/gops/agent"
+	_ "github.com/mattn/go-sqlite3"
 	_ "github.com/viant/afs/embed"
 	_ "github.com/viant/afsc/aws"
 	_ "github.com/viant/afsc/gcp"

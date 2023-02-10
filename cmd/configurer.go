@@ -74,7 +74,7 @@ func (c *ViewConfigurer) OutputConfig() (string, error) {
 }
 
 func (c *ViewConfigurer) Init(SQL string, opt *option.RouteConfig) error {
-	config, viewParams, err := c.buildViewConfig(c.serviceType, c.mainViewName, SQL, opt, nil)
+	aConfig, viewParams, err := c.buildViewConfig(c.serviceType, c.mainViewName, SQL, opt, nil)
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func (c *ViewConfigurer) Init(SQL string, opt *option.RouteConfig) error {
 		return err
 	}
 
-	c.aView = config
+	c.aView = aConfig
 	c.viewParams = append(viewParams, hintedViewParams...)
 	return nil
 }
@@ -131,9 +131,9 @@ func getMetaTemplateHolder(name string) string {
 }
 
 func (c *ViewConfigurer) buildViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
-	config, viewParams, err := c.prepareViewConfig(serviceType, viewName, SQL, opt, parent)
+	aConfig, viewParams, err := c.prepareViewConfig(serviceType, viewName, SQL, opt, parent)
 
-	return config, viewParams, err
+	return aConfig, viewParams, err
 }
 
 func (c *ViewConfigurer) prepareViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
@@ -141,16 +141,16 @@ func (c *ViewConfigurer) prepareViewConfig(serviceType router.ServiceType, viewN
 		return c.buildReaderViewConfig(viewName, SQL, opt, parent)
 	}
 
-	config, err := c.buildExecViewConfig(viewName, SQL)
-	return config, nil, err
+	aConfig, err := c.buildExecViewConfig(viewName, SQL)
+	return aConfig, nil, err
 }
 
 func (c *ViewConfigurer) buildExecViewConfig(viewName string, templateSQL string) (*viewConfig, error) {
 	table := &Table{
 		SQL: templateSQL,
 	}
-	aConfig := newViewConfig(viewName, viewName, nil, table, nil, view.SQLExecMode)
 
+	aConfig := newViewConfig(viewName, viewName, nil, table, nil, view.SQLExecMode)
 	statements := GetStatements(templateSQL)
 	batchInsertEnabled := map[string]bool{}
 	batchInsertDisabled := map[string]bool{}
@@ -392,12 +392,12 @@ func (c *ViewConfigurer) buildViewConfigWithTable(join *query.Join, innerTable *
 		return newViewConfig(join.Alias, join.Alias, join, innerTable, nil, view.SQLQueryMode), nil, nil
 	}
 
-	config, viewParams, err := c.buildViewConfig(c.serviceType, join.Alias, innerTable.SQL, opt, join)
-	if config != nil {
-		config.unexpandedTable = innerTable
+	aConfig, viewParams, err := c.buildViewConfig(c.serviceType, join.Alias, innerTable.SQL, opt, join)
+	if aConfig != nil {
+		aConfig.unexpandedTable = innerTable
 	}
 
-	return config, viewParams, err
+	return aConfig, viewParams, err
 }
 
 func sqlxJoins(aQuery *query.Select, opt *option.RouteConfig) ([]*query.Join, bool) {

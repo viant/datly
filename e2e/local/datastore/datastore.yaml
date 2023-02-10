@@ -47,3 +47,16 @@ pipeline:
       datastore: dev
       expand: true
       URL: ${appPath}/e2e/local/datastore/mysql/populate
+
+  sqlite3:
+    create:
+      action: exec:run
+      commands:
+        - sqlite3 ${appPath}/e2e/local/datastore/sqlite3/test.db
+        - CREATE TABLE IF NOT EXISTS FOOS (
+          ID INTEGER PRIMARY KEY,
+          QUANTITY REAL,
+          NAME TEXT
+          );
+        - INSERT INTO FOOS (ID,QUANTITY,NAME) VALUES (1, 125.5, "Foo - name");
+        - .quit

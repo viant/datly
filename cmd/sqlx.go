@@ -12,6 +12,8 @@ import (
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
 	rdata "github.com/viant/toolbox/data"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -82,8 +84,11 @@ func (c *ViewConfigurer) buildTable(x node.Node, routeOpt *option.RouteConfig) (
 
 	switch actual := x.(type) {
 	case *expr.Raw:
-		_, SQL := extractTableSQL(actual)
+		SQLstmt := actual.Raw
+		_, SQL := extractTableSQL(SQLstmt)
+		SQL = c.runSelectPreprocessor(SQL, table)
 		table.SQL = SQL
+
 		if err := UpdateTableSettings(table, routeOpt); err != nil {
 			return table, err
 		}
@@ -100,6 +105,28 @@ func (c *ViewConfigurer) buildTable(x node.Node, routeOpt *option.RouteConfig) (
 	return table, nil
 }
 
+func (c *ViewConfigurer) runSelectPreprocessor(SQL string, table *Table) string {
+	connectorRegex := regexp.MustCompile(`\$DB\[().*\]\.`)
+	connectorNameRegex := regexp.MustCompile(`\[().*\]`)
+
+	connectors := connectorRegex.FindAllString(SQL, -1)
+
+	for _, connector := range connectors {
+		connName := strings.Trim(connectorNameRegex.FindString(connector), "[]")
+		if unqoted, err := strconv.Unquote(connName); err == nil {
+			connName = unqoted
+		}
+
+		if connName != "" {
+			table.Connector = connName
+		}
+
+		SQL = strings.Replace(SQL, connector, "", 1)
+	}
+
+	return SQL
+}
+
 func extractTableName(node node.Node) (name string, SQL string) {
 	switch actual := node.(type) {
 	case *expr.Selector, *expr.Ident:
@@ -109,8 +136,8 @@ func extractTableName(node node.Node) (name string, SQL string) {
 	return "", ""
 }
 
-func extractTableSQL(actual *expr.Raw) (name string, SQL string) {
-	SQL = strings.TrimSpace(actual.Raw)
+func extractTableSQL(aSQL string) (name string, SQL string) {
+	SQL = strings.TrimSpace(aSQL)
 	trimmedParentheses := true
 	for len(SQL) >= 2 && trimmedParentheses {
 		if SQL[0] == '(' && SQL[len(SQL)-1] == ')' {
