@@ -20,7 +20,7 @@ import(
   { "Auth":"Jwt", "Connector":"dyndb" }
                           SELECT USER_ID AS UserID,
                           ARRAY_EXISTS(ROLE, 'READ_ONLY') AS IsReadOnly,
-                          ARRAY_EXISTS(FEATURE1, 'FEATURE1') AS Feature
+                          ARRAY_EXISTS(FEATURE1, 'FEATURE1') AS Feature1
                           FROM USER_ACL WHERE USER_ID = $Jwt.UserID
  */)
 

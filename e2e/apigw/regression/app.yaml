@@ -26,10 +26,6 @@ pipeline:
     deploy:
       action: aws/lambda:deploy
       credentials: $awsCredentials
-      #       vpcMatcher:
-      #         vpc:
-      #           name: mysql-e2e
-
       functionname: ${appName}
       runtime:  go1.x
       timeout: 540
@@ -61,6 +57,7 @@ pipeline:
           methods:
             - httpMethod: GET
               functionname: ${appName}
+
 
   clean:
     action: exec:run
