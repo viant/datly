@@ -114,5 +114,4 @@ replace (
 	github.com/viant/datly/plugins => ./plugins
 	github.com/viant/datly/xregistry/types/core => ./xregistry/types/core
 	github.com/viant/datly/xregistry/types/custom => ./xregistry/types/custom
-	github.com/viant/xreflect => /Users/klarysz/Documents/github_viant/xreflect
 )
