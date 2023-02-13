@@ -1,4 +1,4 @@
-package foosPerformance
+package changed
 
 import (
 	"fmt"
