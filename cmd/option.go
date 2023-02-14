@@ -33,10 +33,10 @@ type (
 		Connector
 		CacheWarmup
 		Prepare
-		OpenApiURL   string   `short:"o" long:"openapi"`
-		Version      bool     `short:"v" long:"version"  description:"build version"`
-		RelativePath string   `long:"relative" description:"allow to control relative path where path is used"`
-		PluginArgs   []string `long:"pluginArgs" description:"args need to be passed to generate a plugin"`
+		OpenApiURL   string `short:"o" long:"openapi"`
+		Version      bool   `short:"v" long:"version"  description:"build version"`
+		RelativePath string `long:"relative" description:"allow to control relative path where path is used"`
+		Plugins
 	}
 
 	CacheWarmup struct {
@@ -59,6 +59,11 @@ type (
 	Prepare struct {
 		PrepareRule string `short:"G" long:"generate" description:"prepare rule for patch|post|put|delete"`
 		ExecKind    string `long:"execKind"`
+	}
+
+	Plugins struct {
+		PluginArgs           []string `long:"pluginArgs" description:"args need to be passed to generate a plugin"`
+		PluginSingleFileMeta bool     `long:"pluginEncodeMeta" description:"allows to encode generated time and go version in plugin file name"`
 	}
 )
 

@@ -20,6 +20,15 @@ import (
 
 type (
 	Config struct {
+		ExposableConfig
+		UnexposableConfig `json:",omitempty" yaml:",omitempty"`
+	}
+
+	UnexposableConfig struct {
+		APIKeys router.APIKeys
+	}
+
+	ExposableConfig struct {
 		APIPrefix            string //like /v1/api/
 		RouteURL             string
 		DependencyURL        string
@@ -30,7 +39,6 @@ type (
 		JwtSigner            *signer.Config
 		Cognito              *cognito.Config
 		Meta                 meta.Config
-		APIKeys              router.APIKeys
 		AutoDiscovery        *bool
 		ChangeDetection      *ChangeDetection
 		DisableCors          bool

@@ -20,15 +20,19 @@ func (s *Builder) loadConfig(ctx context.Context) (cfg *standalone.Config, err e
 		revealMetrics := true
 		cfg = &standalone.Config{
 			Config: &gateway.Config{
-				APIPrefix: "/v1/api/",
-				APIKeys: router.APIKeys{
-					{
-						URI:    "/v1/api/dev/secured/",
-						Header: "App-Secret-Id",
-						Value:  "changeme",
+				ExposableConfig: gateway.ExposableConfig{
+					APIPrefix:    "/v1/api/",
+					RevealMetric: &revealMetrics,
+				},
+				UnexposableConfig: gateway.UnexposableConfig{
+					APIKeys: router.APIKeys{
+						{
+							URI:    "/v1/api/dev/secured/",
+							Header: "App-Secret-Id",
+							Value:  "changeme",
+						},
 					},
 				},
-				RevealMetric: &revealMetrics,
 			},
 			Endpoint: endpoint.Config{},
 		}

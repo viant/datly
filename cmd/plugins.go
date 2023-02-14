@@ -9,6 +9,7 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/storage"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/plugins"
 	"github.com/viant/xreflect"
 	"go/ast"
@@ -18,6 +19,7 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -192,9 +194,7 @@ func (s *Builder) genPlugin(plugin *pluginGenDeta, aPath string) error {
 		command.Dir = dir
 	}
 
-	//command := exec.Command("bash", `-c`, `/usr/local/bin/go build -buildmode=plugin -o /tmp/main.so`)
 	fmt.Printf("Generating plugin | %v\n", command.String())
-	//command.Dir = "/var/folders/mw/5wzs15hd53sgm1vzs4tryg1w0000gn/T/plugins/1675737394/custom/custom"
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("couldn't generate plugin due to the: %w\n | console output: %s", err, output)
@@ -344,6 +344,11 @@ func (s *Builder) pluginArgs(pluginDst string, pluginPath string, plugin *plugin
 		pluginPath = path.Join(pluginPath, plugin.mainFile)
 	}
 
+	if s.options.PluginSingleFileMeta {
+		ext := path.Ext(pluginDst)
+		pluginDst = strings.ReplaceAll(pluginDst, ext, fmt.Sprintf("_%v_%v", time.Now().Format(gateway.TimePluginsLayout), runtime.Version()))
+	}
+
 	args = append(args,
 		"-o",
 		pluginDst,
@@ -378,6 +383,7 @@ func (s *Builder) readPackageNameValue(plugin *pluginGenDeta) string {
 func (s *Builder) genPluginMetadata(pluginPath string, generatedTime time.Time) error {
 	pluginMeta := &plugins.Metadata{
 		CreationTime: generatedTime,
+		Version:      runtime.Version(),
 	}
 
 	marshal, err := json.Marshal(pluginMeta)

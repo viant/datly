@@ -43,7 +43,7 @@ func (r *Server) Routes() []*router.Route {
 		return []*router.Route{}
 	}
 
-	return aRouter.MatchAll("")
+	return aRouter.MatchAllByPrefix("")
 }
 
 func NewWithAuth(gwayConfig *Config, auth gateway.Authorizer) (*Server, error) {

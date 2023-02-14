@@ -1,8 +1,11 @@
 package build
 
-import "time"
+import (
+	"runtime"
+	"time"
+)
 
 var (
-	Version   string
+	GoVersion = runtime.Version()
 	BuildTime time.Time
 )

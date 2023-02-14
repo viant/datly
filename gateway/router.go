@@ -2,14 +2,15 @@ package gateway
 
 import (
 	"encoding/json"
+	"fmt"
 	furl "github.com/viant/afs/url"
+	"github.com/viant/cloudless/gateway/matcher"
 	"github.com/viant/datly/gateway/runtime/meta"
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
-	"gopkg.in/yaml.v3"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,51 +21,32 @@ import (
 
 type (
 	Router struct {
-		routersIndex    map[string]int
-		routers         []*router.Router
-		routeMatcher    *router.Matcher
-		config          *Config
-		prefixesMatcher *router.Matcher
-		routes          []*router.Route
-		OpenAPIInfo     openapi3.Info
-		metrics         *gmetric.Service
-		statusHandler   http.Handler
-		authorizer      Authorizer
-		availableRoutes []Route
-		apiKeyMatcher   *router.Matcher
-		metaConfig      *meta.Config
+		routeMatcher  *matcher.Matcher
+		config        *Config
+		OpenAPIInfo   openapi3.Info
+		metrics       *gmetric.Service
+		statusHandler http.Handler
+		authorizer    Authorizer
+		apiKeyMatcher *matcher.Matcher
+		routes        []*RouteMeta
 	}
 
 	AvailableRoutesError struct {
 		Message string
-		Routes  []Route
-	}
-
-	Route struct {
-		Method string
-		URL    string
-	}
-
-	Prefix struct {
-		Indexed string
+		Routes  []*RouteMeta
 	}
 
 	ApiKeyWrapper struct {
-		Indexed string
-		apiKey  *router.APIKey
+		apiKey *router.APIKey
 	}
 )
 
-func (a *ApiKeyWrapper) HttpURI() string {
-	return a.Indexed
+func (a *ApiKeyWrapper) URI() string {
+	return a.apiKey.URI
 }
 
-func (a *ApiKeyWrapper) HttpMethod() string {
-	return ""
-}
-
-func (a *ApiKeyWrapper) CorsEnabled() bool {
-	return false
+func (a *ApiKeyWrapper) Namespaces() []string {
+	return []string{""}
 }
 
 func (a *AvailableRoutesError) Error() string {
@@ -72,109 +54,32 @@ func (a *AvailableRoutesError) Error() string {
 	return string(marshal)
 }
 
-func (p *Prefix) HttpURI() string {
-	return p.Indexed
-}
-
-func (p *Prefix) HttpMethod() string {
-	return ""
-}
-
-func (p *Prefix) CorsEnabled() bool {
-	return false
-}
-
 //NewRouter creates new router
-//TODO: http handlers can be chosen by matcher. We can create wrapper for router.Matchable that will handle the request using Route/Routes etc.
 func NewRouter(routersIndex map[string]*router.Router, config *Config, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer) *Router {
-	routers := asRouterSlice(routersIndex)
-	matcher, routes, index := newMatcher(routers)
-
-	var metaConfig meta.Config
-	if config != nil {
-		metaConfig = config.Meta
-		metaConfig.MetricURI = router.AsRelative(metaConfig.MetricURI)
-		metaConfig.ViewURI = router.AsRelative(metaConfig.ViewURI)
-		metaConfig.OpenApiURI = router.AsRelative(metaConfig.OpenApiURI)
-		metaConfig.StatusURI = router.AsRelative(metaConfig.StatusURI)
-		metaConfig.CacheWarmURI = router.AsRelative(metaConfig.CacheWarmURI)
-		metaConfig.ConfigURI = router.AsRelative(metaConfig.ConfigURI)
-	}
-
-	return &Router{
-		routersIndex:  index,
-		routers:       routers,
-		routeMatcher:  matcher,
+	r := &Router{
 		config:        config,
-		routes:        routes,
 		metrics:       metrics,
 		statusHandler: statusHandler,
-		prefixesMatcher: newPrefixMatcher([]string{
-			metaConfig.ViewURI,
-			metaConfig.MetricURI,
-			metaConfig.StatusURI,
-			metaConfig.CacheWarmURI,
-			metaConfig.OpenApiURI,
-			metaConfig.ConfigURI,
-			config.APIPrefix,
-		}),
-		authorizer:      authorizer,
-		availableRoutes: asAvailableRoutes(routes),
-		apiKeyMatcher:   newApiKeyMatcher(config.APIKeys),
-		metaConfig:      &metaConfig,
+		authorizer:    authorizer,
+		apiKeyMatcher: newApiKeyMatcher(config.APIKeys),
 	}
+
+	r.init(routersIndex)
+
+	return r
 }
 
-func newApiKeyMatcher(keys router.APIKeys) *router.Matcher {
-	if len(keys) == 0 {
-		return nil
-	}
-
-	matchables := make([]router.Matchable, 0, len(keys))
+func newApiKeyMatcher(keys router.APIKeys) *matcher.Matcher {
+	matchables := make([]matcher.Matchable, 0, len(keys))
 	for i := range keys {
 		matchables = append(matchables,
 			&ApiKeyWrapper{
-				Indexed: keys[i].URI,
-				apiKey:  keys[i],
+				apiKey: keys[i],
 			},
 		)
 	}
 
-	return router.NewMatcher(matchables)
-}
-
-//TODO: eagerly with ApiKey check
-func asAvailableRoutes(routes []*router.Route) []Route {
-	result := make([]Route, len(routes))
-	for i, route := range routes {
-		result[i] = Route{
-			Method: route.Method,
-			URL:    route.URI,
-		}
-	}
-
-	return result
-}
-
-func newPrefixMatcher(prefixes []string) *router.Matcher {
-	matchables := make([]router.Matchable, 0, len(prefixes))
-	for _, prefix := range prefixes {
-		if prefix == "" {
-			continue
-		}
-
-		matchables = append(matchables, newPrefix(prefix))
-	}
-
-	return router.NewMatcher(matchables)
-}
-
-func newPrefix(prefix string) router.Matchable {
-	indexed := prefix
-
-	return &Prefix{
-		Indexed: router.AsRelative(indexed),
-	}
+	return matcher.NewMatcher(matchables)
 }
 
 func (r *Router) Handle(writer http.ResponseWriter, request *http.Request) {
@@ -193,58 +98,17 @@ func (r *Router) Handle(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (r *Router) handle(writer http.ResponseWriter, request *http.Request) (int, error) {
-	urlPath := request.URL.Path
-	actualPrefix, viewPath := r.asAPIPrefix(urlPath)
-
-	if (actualPrefix != r.config.APIPrefix && !meta.IsAuthorized(request, r.config.Meta.AllowedSubnet)) || !r.apiKeyMatches(urlPath, request) || !r.apiKeyMatches(viewPath, request) {
+	if !meta.IsAuthorized(request, r.config.Meta.AllowedSubnet) {
 		return http.StatusForbidden, nil
 	}
 
-	switch actualPrefix {
-	case r.metaConfig.MetricURI:
-		r.handleMetrics(writer, request)
-		return http.StatusOK, nil
-	case r.metaConfig.ConfigURI:
-		r.handleConfig(writer)
-		return http.StatusOK, nil
-	case r.metaConfig.OpenApiURI:
-		return r.matchByMultiRoutes(writer, request, viewPath)
-	case r.metaConfig.StatusURI:
-		if r.statusHandler == nil {
-			return http.StatusNotFound, nil
-		}
-
-		r.statusHandler.ServeHTTP(writer, request)
-		return http.StatusOK, nil
-	default:
-		return r.matchByRoute(writer, request, viewPath, actualPrefix)
-	}
-}
-
-func (r *Router) matchByRoute(writer http.ResponseWriter, request *http.Request, viewPath string, actualPrefix string) (int, error) {
-	aRoute, aRouter, err := r.Match(request.Method, viewPath)
+	aRoute, err := r.Match(request.Method, request.URL.Path, request)
 	if err != nil {
-		return http.StatusNotFound, r.availableRoutesErr(err)
+		return http.StatusNotFound, err
 	}
 
-	if !r.apiKeyMatches(aRoute.URI, request) {
-		return http.StatusForbidden, nil
-	}
-
-	return r.handleRouteWithPrefix(writer, request, actualPrefix, aRouter, aRoute)
-}
-
-func (r *Router) handleRouteWithPrefix(writer http.ResponseWriter, request *http.Request, actualPrefix string, aRouter *router.Router, aRoute *router.Route) (int, error) {
-	switch actualPrefix {
-	case r.metaConfig.ViewURI:
-		r.handleView(writer, aRoute)
-		return http.StatusOK, nil
-	case r.metaConfig.CacheWarmURI:
-		r.handleCacheWarmup(writer, request, aRoute)
-		return http.StatusOK, nil
-	default:
-		return r.handleRoute(writer, request, aRouter, aRoute)
-	}
+	aRoute.Handle(writer, request)
+	return http.StatusOK, nil
 }
 
 func (r *Router) handleRoute(writer http.ResponseWriter, request *http.Request, aRouter *router.Router, aRoute *router.Route) (int, error) {
@@ -255,213 +119,77 @@ func (r *Router) handleRoute(writer http.ResponseWriter, request *http.Request, 
 	return http.StatusOK, nil
 }
 
-func (r *Router) apiKeyMatches(routePath string, request *http.Request) bool {
-	if r.apiKeyMatcher == nil {
-		return true
-	}
-
-	matched, err := r.apiKeyMatcher.MatchPrefix("", routePath)
-	if err != nil || len(matched) == 0 {
-		return true
-	}
-
-	var apiKey *router.APIKey
-	var numOfSegments int
-
-	for _, matchable := range matched {
-		switch actual := matchable.(type) {
-		case *ApiKeyWrapper:
-			candidateSegments := strings.Count(router.AsRelative(actual.apiKey.URI), "/")
-			if apiKey == nil || candidateSegments > numOfSegments {
-				apiKey = actual.apiKey
-				numOfSegments = candidateSegments
-			}
-		}
-	}
-
-	if apiKey == nil {
-		return true
-	}
-
-	return request.Header.Get(apiKey.Header) == apiKey.Value
-}
-
-func (r *Router) Match(method, URL string) (*router.Route, *router.Router, error) {
-	route, err := r.routeMatcher.MatchOneRoute(method, URL)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return route, r.routers[r.routersIndex[combine(route.Method, route.URI)]], nil
-}
-
-func (r *Router) asAPIPrefix(URIPath string) (prefix string, path string) {
-	URIPath = router.AsRelative(URIPath)
-	matched, err := r.prefixesMatcher.MatchPrefix("", URIPath)
-	if err != nil {
-		return r.config.APIPrefix, URIPath
-	}
-
-	var matchedPrefix *Prefix
-	numOfSegments := 0
-
-	for _, matchable := range matched {
-		asPrefix, ok := matchable.(*Prefix)
+func (r *Router) Match(method, URL string, req *http.Request) (*Route, error) {
+	matched := r.routeMatcher.MatchAll(method, URL)
+	switch len(matched) {
+	case 0:
+		return nil, r.availableRoutesErr(http.StatusNotFound, fmt.Errorf("not found route with Method: %v and URL: %v", method, URL))
+	case 1:
+		asRoute, ok := matched[0].(*Route)
 		if !ok {
-			continue
+			return nil, r.unexpectedType(asRoute, matched[0])
 		}
 
-		candidateSegmentsCount := strings.Count(asPrefix.Indexed, "/")
-		if matchedPrefix == nil || numOfSegments < candidateSegmentsCount {
-			matchedPrefix = asPrefix
-			numOfSegments = candidateSegmentsCount
-		}
-	}
+		return asRoute, nil
 
-	if matchedPrefix == nil {
-		return r.config.APIPrefix, URIPath
-	}
+	default:
+		var routes []*router.Route
+		var lastMatched *Route
+		for _, matchable := range matched {
+			asRoute, ok := matchable.(*Route)
+			if !ok {
+				return nil, r.unexpectedType(asRoute, matched[0])
+			}
 
-	if matchedPrefix.Indexed != matchedPrefix.Indexed {
-		URIPath = URIPath[strings.Index(URIPath, "/")+1:]
-	}
+			if req != nil && !asRoute.CanHandle(req) {
+				continue
+			}
 
-	return matchedPrefix.Indexed, strings.Replace(URIPath, matchedPrefix.Indexed, router.AsRelative(r.config.APIPrefix), 1)
-}
+			if asRoute.NewMultiRoute == nil {
+				return nil, r.availableRoutesErr(http.StatusNotFound, fmt.Errorf("found more than one route with Method: %v and URL: %v", method, URL))
+			}
 
-func (r *Router) handleView(writer http.ResponseWriter, route *router.Route) {
-	errStatusCode, err := r.handleViewWithErr(writer, route)
-	r.handleErrIfNeeded(writer, errStatusCode, err)
-}
+			if lastMatched == nil {
+				lastMatched = asRoute
+				continue
+			}
 
-func (r *Router) handleViewWithErr(writer http.ResponseWriter, route *router.Route) (int, error) {
-	JSON, err := json.Marshal(route.View)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
+			if lastMatched.Kind != asRoute.Kind {
+				return nil, r.availableRoutesErr(http.StatusNotFound, fmt.Errorf("found more than one route with Method: %v and URL: %v", method, URL))
+			}
 
-	transient := map[string]interface{}{}
-	err = json.Unmarshal(JSON, &transient)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
-	YAML, err := yaml.Marshal(transient)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
-	writer.Header().Set("Content-Type", "text/yaml")
-	writer.Write(YAML)
-	return http.StatusOK, nil
-}
-
-func (r *Router) matchByMultiRoutes(writer http.ResponseWriter, request *http.Request, path string) (int, error) {
-	allMatched := r.MatchAll(path)
-
-	var allowed []*router.Route
-	for i, route := range allMatched {
-		if !r.apiKeyMatches(route.URI, request) {
-			continue
+			routes = append(routes, asRoute.Routes...)
 		}
 
-		allowed = append(allowed, allMatched[i])
-	}
+		if len(routes) == 0 {
+			return nil, r.availableRoutesErr(http.StatusForbidden, fmt.Errorf("Forbidden"))
+		}
 
-	if len(allowed) == 0 && len(allMatched) != 0 {
-		return http.StatusForbidden, nil
+		return lastMatched.NewMultiRoute(routes), nil
 	}
-
-	r.handleOpenAPI(writer, allMatched)
-	return http.StatusOK, nil
 }
 
-func (r *Router) handleOpenAPI(writer http.ResponseWriter, routes []*router.Route) {
-	statusCode, err := r.handleOpenAPIWithErr(writer, routes)
-	r.handleErrIfNeeded(writer, statusCode, err)
-}
-
-func (r *Router) handleOpenAPIWithErr(writer http.ResponseWriter, routes []*router.Route) (int, error) {
-	spec, err := router.GenerateOpenAPI3Spec(r.OpenAPIInfo, routes...)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
-	specMarshal, err := yaml.Marshal(spec)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
-	writer.Header().Set("Content-Type", "text/yaml")
-	writer.Write(specMarshal)
-	writer.WriteHeader(http.StatusOK)
-	return http.StatusOK, nil
-}
-
-func (r *Router) MatchAll(path string) []*router.Route {
-	return r.matchAll("", path)
-}
-
-func (r *Router) MatchAllWithMethod(method, path string) []*router.Route {
-	return r.matchAll(method, path)
-}
-
-func (r *Router) matchAll(method, path string) []*router.Route {
-	if path == r.metaConfig.OpenApiURI {
-		return r.routes
-	}
-
-	if path == "" && method == "" {
-		return r.routes
-	}
-
-	matched, _ := r.routeMatcher.MatchAllRoutes("", path)
-	return matched
+func (r *Router) unexpectedType(asRoute *Route, expected interface{}) error {
+	return fmt.Errorf("unexpected Matchable type, wanted %T got %T", asRoute, expected)
 }
 
 func (r *Router) handleErrIfNeeded(writer http.ResponseWriter, errStatusCode int, err error) {
-	if errStatusCode >= http.StatusBadRequest {
-		writer.WriteHeader(errStatusCode)
-		if err != nil {
-			writer.Write([]byte(err.Error()))
+	if errStatusCode < 400 {
+		return
+	}
+
+	var message string
+	if err != nil {
+		switch actual := err.(type) {
+		case StatusCodeError:
+			errStatusCode = actual.StatusCode()
+			message = actual.Message()
+		default:
+			message = err.Error()
 		}
 	}
-}
 
-func (r *Router) handleMetrics(writer http.ResponseWriter, req *http.Request) {
-	gmetric.NewHandler(r.metaConfig.MetricURI, r.metrics).ServeHTTP(writer, req)
-}
-
-func (r *Router) handleConfig(writer http.ResponseWriter) {
-	statusCode, err := r.handleConfigWithErr(writer)
-	r.handleErrIfNeeded(writer, statusCode, err)
-}
-
-func (r *Router) handleConfigWithErr(writer http.ResponseWriter) (int, error) {
-	JSON, err := json.Marshal(r.config)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-	writer.Header().Set("Content-Type", "application/json")
-	writer.Write(JSON)
-	return http.StatusOK, nil
-}
-
-func (r *Router) handleCacheWarmup(writer http.ResponseWriter, request *http.Request, route *router.Route) {
-	statusCode, err := r.handleCacheWarmupWithErr(writer, request, route)
-	r.handleErrIfNeeded(writer, statusCode, err)
-}
-
-func (r *Router) handleCacheWarmupWithErr(writer http.ResponseWriter, request *http.Request, route *router.Route) (int, error) {
-	response := warmup.PreCache(r.extractCacheableViews(route), route.URI)
-	data, err := json.Marshal(response)
-
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
-	writer.Write(data)
-	return http.StatusOK, nil
+	write(writer, errStatusCode, []byte(message))
 }
 
 func (r *Router) ensureRequestURL(request *http.Request) error {
@@ -498,25 +226,33 @@ func (r *Router) authorizeRequestIfNeeded(writer http.ResponseWriter, request *h
 }
 
 func (r *Router) PreCacheables(method string, uri string) ([]*view.View, error) {
-	route, _, err := r.Match(method, uri)
+	route, err := r.Match(method, uri, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return r.extractCacheableViews(route)(method, uri)
+	return r.extractCacheableViews(route.Routes...)(method, uri)
 }
 
-func (r *Router) availableRoutesErr(err error) error {
-	return &AvailableRoutesError{
-		Message: err.Error(),
-		Routes:  r.availableRoutes,
+func (r *Router) availableRoutesErr(statusCode int, err error) error {
+	return &HttpError{
+		Code: statusCode,
+		Err: &AvailableRoutesError{
+			Message: err.Error(),
+			Routes:  r.routes,
+		},
 	}
 }
 
-func (r *Router) extractCacheableViews(route *router.Route) warmup.PreCachables {
+func (r *Router) extractCacheableViews(routes ...*router.Route) warmup.PreCachables {
 	return func(_, _ string) ([]*view.View, error) {
-		return router.ExtractCacheableViews(route), nil
+		return router.ExtractCacheableViews(routes...), nil
 	}
+}
+
+func (r *Router) init(routersIndex map[string]*router.Router) {
+	routers := asRouterSlice(routersIndex)
+	r.routeMatcher, r.routes = r.newMatcher(routers)
 }
 
 func asRouterSlice(routers map[string]*router.Router) []*router.Router {
@@ -531,27 +267,82 @@ func asRouterSlice(routers map[string]*router.Router) []*router.Router {
 	return result
 }
 
-func newMatcher(routers []*router.Router) (*router.Matcher, []*router.Route, map[string]int) {
+func (r *Router) newMatcher(routers []*router.Router) (*matcher.Matcher, []*RouteMeta) {
 	routesSize := 0
-	for _, r := range routers {
-		routesSize += len(r.Routes(""))
+	for _, aRouter := range routers {
+		routesSize += len(aRouter.Routes("")) * 3
 	}
 
-	routes, routerIndex := make([]*router.Route, routesSize), map[string]int{}
+	routes := make([]*Route, 0, routesSize)
 
-	counter := 0
-	for i, aRouter := range routers {
+	for _, aRouter := range routers {
 		routerRoutes := aRouter.Routes("")
-		for routeIndex, route := range routerRoutes {
-			routes[counter] = routerRoutes[routeIndex]
-			routerIndex[combine(route.Method, route.URI)] = i
-			counter++
+
+		for _, route := range routerRoutes {
+			routesLen := len(routes)
+
+			var apiKeys []*router.APIKey
+			if matched := r.config.APIKeys.Match(route.URI); matched != nil {
+				apiKeys = append(apiKeys, matched)
+			}
+
+			routes = append(routes, r.NewRouteHandler(aRouter, route))
+			if views := router.ExtractCacheableViews(route); len(views) > 0 {
+				routes = append(routes, r.NewWarmupRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.CacheWarmURI, route.URI), route))
+			}
+			routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.APIPrefix, r.config.Meta.ViewURI, route.URI), route))
+			routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.OpenApiURI, route.URI), route))
+			routes = append(routes, r.NewStructRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.StructURI, route.URI), route))
+
+			if len(apiKeys) > 0 {
+				for i := routesLen; i < len(routes); i++ {
+					routes[i].ApiKeys = apiKeys
+				}
+			}
 		}
 	}
 
-	return router.NewRouteMatcher(routes), routes, routerIndex
+	routes = append(routes, r.NewStatusRoute(), r.NewMetricRoute(), r.NewConfigRoute())
+
+	matchables := make([]matcher.Matchable, 0, len(routes))
+	routesMetas := make([]*RouteMeta, 0, len(routes))
+
+	for _, route := range routes {
+		matchables = append(matchables, route)
+		routesMetas = append(routesMetas, &route.RouteMeta)
+	}
+
+	for _, route := range routes {
+		matched, err := r.apiKeyMatcher.MatchPrefix("", route.URI())
+		if err != nil {
+			continue
+		}
+
+		for _, matchable := range matched {
+			apiKeyWrapper, ok := matchable.(*ApiKeyWrapper)
+			if !ok {
+				continue
+			}
+
+			route.ApiKeys = append(route.ApiKeys, apiKeyWrapper.apiKey)
+		}
+	}
+
+	return matcher.NewMatcher(matchables), routesMetas
 }
 
-func combine(method string, uri string) string {
-	return method + ":///" + uri
+func (r *Router) MatchAllByPrefix(URL string) []*router.Route {
+	matched := r.routeMatcher.MatchAll("", URL)
+	var routes []*router.Route
+
+	for _, matchable := range matched {
+		route, ok := matchable.(*Route)
+		if !ok {
+			continue
+		}
+
+		routes = append(routes, route.Routes...)
+	}
+
+	return routes
 }

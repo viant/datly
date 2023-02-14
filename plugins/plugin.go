@@ -8,5 +8,6 @@ const TypesName = "Types"
 
 type Metadata struct {
 	CreationTime time.Time `json:",omitempty"`
-	URL          string
+	URL          string    `json:",omitempty"`
+	Version      string    `json:",omitempty"`
 }

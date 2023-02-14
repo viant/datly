@@ -907,9 +907,13 @@ func updateFieldPathsIfNeeded(filter *json.FilterEntry) {
 	}
 }
 
-func ExtractCacheableViews(route *Route) []*view.View {
+func ExtractCacheableViews(routes ...*Route) []*view.View {
 	var views []*view.View
-	appendCacheWarmupViews(route.View, &views)
+
+	for _, route := range routes {
+		appendCacheWarmupViews(route.View, &views)
+	}
+
 	return views
 }
 

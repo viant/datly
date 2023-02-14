@@ -1,6 +1,5 @@
 init:
   parentPath: $parent.path
-  expect: $LoadJSON('${parentPath}/expect.json')
 pipeline:
 
   test:
@@ -10,5 +9,11 @@ pipeline:
         URL: http://127.0.0.1:8080/v1/api/dev/vendors/
         Expect:
           Code: 200
-          JSONBody: $expect
+          JSONBody: $LoadJSON('${parentPath}/expect.json')
 
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/meta/struct/dev/vendors/
+        Expect:
+          Code: 200
+          Body: $Cat('${parentPath}/expect_2.txt')

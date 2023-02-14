@@ -19,6 +19,8 @@ import (
 	"time"
 )
 
+const TimePluginsLayout = "20060102T150405Z0700"
+
 type (
 	pluginDataSlice []*pluginData
 	pluginData      struct {
@@ -156,15 +158,34 @@ func (r *Service) handlePluginTypes(provider *plugin.Plugin, data *pluginData) {
 }
 
 func (r *Service) loadPluginMetadata(ctx context.Context, URL string) (*plugins.Metadata, error) {
-	metadataURL := URL + ".meta"
-	content, err := r.fs.DownloadWithURL(ctx, metadataURL)
-	if err != nil {
-		return nil, err
+	fileName := path.Base(URL)
+	if ext := path.Ext(fileName); ext != "" {
+		fileName = strings.ReplaceAll(fileName, ext, "")
 	}
 
 	pluginsMetadata := &plugins.Metadata{
-		URL: metadataURL,
+		URL: URL,
 	}
+
+	segments := strings.Split(fileName, "_")
+	if len(segments) > 1 {
+		parsedTime, err := time.Parse(TimePluginsLayout, segments[1])
+		if err == nil {
+			pluginsMetadata.CreationTime = parsedTime
+		}
+	}
+
+	if len(segments) > 2 {
+		pluginsMetadata.Version = segments[2]
+		return pluginsMetadata, nil
+	}
+
+	metadataURL := URL + ".meta"
+	content, err := r.fs.DownloadWithURL(ctx, metadataURL)
+	if err != nil {
+		return pluginsMetadata, nil
+	}
+
 	return pluginsMetadata, json.Unmarshal(content, pluginsMetadata)
 }
 
@@ -185,7 +206,7 @@ func (r *Service) loadPluginWithErr(ctx context.Context, URL string) (*pluginDat
 		return nil, err
 	}
 
-	if build.BuildTime.After(metadata.CreationTime) {
+	if build.BuildTime.After(metadata.CreationTime) || (metadata.Version != "" && metadata.Version != build.GoVersion) {
 		go r.fs.Delete(context.Background(), metadata.URL)
 		go r.fs.Delete(context.Background(), URL)
 		return nil, nil

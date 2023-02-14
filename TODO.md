@@ -1,6 +1,5 @@
 - Add possibility for sqlx ns in order to avoid unneccessary one-one relations.
 - SQL with StructQL simplificaiton ?
-- strinigfy golang type in meta/view endpoint
 
 - Async mode 
   - post job, SQL-> (job id , dispotistion -> dest_teable,  temp_table)
