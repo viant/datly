@@ -685,6 +685,8 @@ github.com/viant/velty v0.1.1-0.20230106025837-a471fbfe6a12 h1:/SSRhUOjRYBaaoy5y
 github.com/viant/velty v0.1.1-0.20230106025837-a471fbfe6a12/go.mod h1:Twb7TSlPU0ZuwGJKi3Rx8Qj7bf6zmo6omOAVLqG5Hb8=
 github.com/viant/xreflect v0.0.0-20230204032006-f985101a93d5 h1:8dD3ZLZrIhtLwUjs6Optzr4W4auLJvH+ybTGQb0fMC8=
 github.com/viant/xreflect v0.0.0-20230204032006-f985101a93d5/go.mod h1:uflXFHcw4TQXgYJvTQ7Akf4SAzXYPCVi8NGZgsVlwmA=
+github.com/viant/xreflect v0.0.0-20230213170805-6e62ec0b61c2 h1:XASZqAmulx+Oot+nWwFEjuvZNOF5Is9rLVclCYzhP88=
+github.com/viant/xreflect v0.0.0-20230213170805-6e62ec0b61c2/go.mod h1:uflXFHcw4TQXgYJvTQ7Akf4SAzXYPCVi8NGZgsVlwmA=
 github.com/viant/xunsafe v0.8.0/go.mod h1:niyYv07oGkqPJirAda2yz+yqt5G+eM275y179yVaS3s=
 github.com/viant/xunsafe v0.8.1-0.20220517184704-270ed1a5aec9/go.mod h1:niyYv07oGkqPJirAda2yz+yqt5G+eM275y179yVaS3s=
 github.com/viant/xunsafe v0.8.1-0.20220609224231-1d3e1fcf7bb6/go.mod h1:niyYv07oGkqPJirAda2yz+yqt5G+eM275y179yVaS3s=
