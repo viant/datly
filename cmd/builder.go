@@ -1206,14 +1206,14 @@ func (s *Builder) loadGoTypes() error {
 }
 
 func (s *Builder) parseTypeSrc(imported string) (*option.TypeSrcConfig, error) {
-	importSegments := strings.Split(imported, ".")
-	if len(importSegments) != 2 {
+	index := strings.LastIndex(imported, ".")
+	if index == -1 {
 		return nil, fmt.Errorf(`unsupported import format: %v, supported: "[path].[type]"`, imported)
 	}
 
 	return &option.TypeSrcConfig{
-		URL:   importSegments[0],
-		Types: []string{importSegments[1]},
+		URL:   imported[:index],
+		Types: []string{imported[index+1:]},
 	}, nil
 }
 
