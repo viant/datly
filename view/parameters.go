@@ -618,7 +618,12 @@ func (p ParametersIndex) Register(parameter *Parameter) error {
 
 //NewQueryLocation creates a query location
 func NewQueryLocation(name string) *Location {
-	return &Location{Name: name, Kind: QueryKind}
+	return &Location{Name: name, Kind: KindQuery}
+}
+
+//NewBodyLocation creates a body location
+func NewBodyLocation(name string) *Location {
+	return &Location{Name: name, Kind: KindRequestBody}
 }
 
 func GetOrParseType(typeLookup xreflect.TypeLookupFn, dataType string) (reflect.Type, error) {

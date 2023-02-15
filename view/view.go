@@ -1219,6 +1219,12 @@ func WithViewType(t reflect.Type) ViewOption {
 	}
 }
 
+func WithViewKind(mode Mode) ViewOption {
+	return func(aView *View) {
+		aView.Mode = mode
+	}
+}
+
 //NewView creates a view
 func NewView(name, table string, opts ...ViewOption) *View {
 	ret := &View{Name: name, Table: table}
