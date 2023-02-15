@@ -90,7 +90,7 @@ require (
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/viant/datly/plugins v0.0.0-20230215004138-3dadeee9e924
-	github.com/viant/datly/xregistry/types/core v0.0.0-20230215004138-3dadeee9e924
+	github.com/viant/datly/xregistry/types/core v0.0.0-20230215171714-5c81aace296b
 	github.com/viant/datly/xregistry/types/custom v0.0.0-20230215004138-3dadeee9e924
 	github.com/viant/igo v0.1.0 // indirect
 	github.com/viant/sqlparser v0.3.1-0.20221212220151-be94fb808202
