@@ -30,6 +30,8 @@ type (
 		_sharedMux   *sync.Mutex
 	}
 
+	ConnectorOption func(c *Connector)
+
 	DBConfig struct {
 		MaxIdleConns      int `json:",omitempty" yaml:",omitempty"`
 		ConnMaxIdleTimeMs int `json:",omitempty" yaml:",omitempty"`
@@ -39,12 +41,21 @@ type (
 	}
 )
 
+//ConnMaxIdleTime return connector max iddle time
 func (c *DBConfig) ConnMaxIdleTime() time.Duration {
 	return time.Duration(c.ConnMaxIdleTimeMs) * time.Millisecond
 }
 
+//ConnMaxLifetime returns connector max lifetime
 func (c *DBConfig) ConnMaxLifetime() time.Duration {
 	return time.Duration(c.ConnMaxLifetimeMs) * time.Millisecond
+}
+
+//Apply applies connector option
+func (c *Connector) Apply(opts ...ConnectorOption) {
+	for _, opt := range opts {
+		opt(c)
+	}
 }
 
 //Init initializes connector.
