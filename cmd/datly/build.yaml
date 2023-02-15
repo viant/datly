@@ -18,7 +18,7 @@ pipeline:
       - export GO111MODULE=on
       - cd ${appPath}/cmd/datly
       - go mod download
-      - go mod tidy
+      - go mod tidy -compat=1.17
       - export GOOS=linux
       - export GOOS=linux
       - export GOARCH=amd64
