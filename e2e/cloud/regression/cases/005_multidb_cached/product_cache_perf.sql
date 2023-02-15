@@ -16,7 +16,7 @@ JOIN ( SELECT
     product_id,
     SUM(quantity) AS quantity,
     AVG(payment) * 1.25 AS price
-    FROM `viant-e2e.bqdev.product_performance` t
+    FROM $Db[bqdev]`viant-e2e.bqdev.product_performance` t
     WHERE 1=1
     #if($Unsafe.period == "today")
         AND 1 = 1
