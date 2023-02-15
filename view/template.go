@@ -39,6 +39,8 @@ type (
 		_view            *View
 	}
 
+	TemplateOption func(t *Template)
+
 	CriteriaParam struct {
 		ColumnsIn   string `velty:"COLUMN_IN"`
 		WhereClause string `velty:"CRITERIA"`
@@ -249,6 +251,22 @@ func (t *Template) EvaluateState(externalParams interface{}, presenceMap interfa
 	}
 
 	return Evaluate(t.sqlEvaluator, externalParams, presenceMap, AsViewParam(t._view, nil, batchData, expander), parentParam)
+}
+
+//WithTemplateParameter return parameter template options
+func WithTemplateParameter(parameter *Parameter) TemplateOption {
+	return func(t *Template) {
+		t.Parameters = append(t.Parameters, parameter)
+	}
+}
+
+//NewTemplate creates a tample
+func NewTemplate(source string, opts ...TemplateOption) *Template {
+	ret := &Template{Source: source}
+	for _, opt := range opts {
+		opt(ret)
+	}
+	return ret
 }
 
 func Evaluate(evaluator *expand.Evaluator, externalParams, presenceMap interface{}, viewParam, parentParam *expand.MetaParam) (*est.State, *expand.DataUnit, *logger.Printer, error) {

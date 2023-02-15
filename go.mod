@@ -26,7 +26,6 @@ require (
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.2.1-0.20221005024313-4286a9622882
 	github.com/viant/cloudless v1.3.1-0.20230214231512-6dc83584f50e
-	github.com/viant/datly/plugins v0.0.0-20230111021818-8e2b2f4673d9
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
@@ -90,8 +89,9 @@ require (
 	github.com/lestrrat-go/option v1.0.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/viant/datly/xregistry/types/core v0.0.0-20230203194142-0e99a7c2d722
-	github.com/viant/datly/xregistry/types/custom v0.0.0-20230203194142-0e99a7c2d722
+	github.com/viant/datly/plugins v0.0.0-20230215004138-3dadeee9e924
+	github.com/viant/datly/xregistry/types/core v0.0.0-20230215004138-3dadeee9e924
+	github.com/viant/datly/xregistry/types/custom v0.0.0-20230215004138-3dadeee9e924
 	github.com/viant/igo v0.1.0 // indirect
 	github.com/viant/sqlparser v0.3.1-0.20221212220151-be94fb808202
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect

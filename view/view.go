@@ -78,6 +78,8 @@ type (
 		_excluded     map[string]bool
 	}
 
+	ViewOption func(v *View)
+
 	SelfReference struct {
 		Holder string
 		Parent string
@@ -123,6 +125,18 @@ func (v *View) ViewName() string {
 
 func (v *View) TableAlias() string {
 	return v.Alias
+}
+
+func (v *View) LookupRelation(name string) (*Relation, error) {
+	if len(v.With) == 0 {
+		return nil, fmt.Errorf("relation was empty")
+	}
+	for i, candidate := range v.With {
+		if candidate.Name == name || candidate.Of.Name == name {
+			return v.With[i], nil
+		}
+	}
+	return nil, fmt.Errorf("failed to lookup relation: %v", name)
 }
 
 func (v *View) TableName() string {
@@ -1118,4 +1132,98 @@ func (v *View) findSchemaColumn(fieldName string) (*Column, bool) {
 
 	lookup, err := v._columns.Lookup(fieldName)
 	return lookup, err == nil
+}
+
+//SetParameter sets a view or relation parameter, for relation name has to be prefixed relName:paramName
+func (v *View) SetParameter(name string, selectors *Selectors, value interface{}) error {
+	aView := v
+	if strings.Contains(name, ":") {
+		pair := strings.SplitN(name, ":", 2)
+		name = pair[1]
+		relation, err := v.LookupRelation(pair[0])
+		if err != nil {
+			return err
+		}
+		aView = &relation.Of.View
+	}
+	param, err := aView.ParamByName(name)
+	if err != nil {
+		return err
+	}
+	selector := selectors.Lookup(aView)
+	if selector == nil {
+		return fmt.Errorf("failed to lookup selector: %v", aView.Name)
+	}
+	return param.Set(selector, value)
+}
+
+//WithSQL creates SQL FROM view option
+func WithSQL(SQL string) ViewOption {
+	return func(v *View) {
+		if v.Template == nil {
+			v.Template = &Template{}
+		}
+		v.Template.Source = SQL
+	}
+}
+
+//WithConnector creates connector view option
+func WithConnector(connector *Connector) ViewOption {
+	return func(v *View) {
+		v.Connector = connector
+	}
+}
+
+//WithTemplate creates connector view option
+func WithTemplate(template *Template) ViewOption {
+	return func(v *View) {
+
+		v.Template = template
+	}
+}
+
+//WithOneToMany creates to many relation view option
+func WithOneToMany(holder, column string, ref *ReferenceView) ViewOption {
+	return func(v *View) {
+		relation := &Relation{Cardinality: Many, Column: column, Holder: holder, Of: ref}
+		v.With = append(v.With, relation)
+	}
+}
+
+//WithOneToOne creates to one relation view option
+func WithOneToOne(holder, column string, ref *ReferenceView) ViewOption {
+	return func(v *View) {
+		relation := &Relation{Cardinality: One, Column: column, Holder: holder, Of: ref}
+		v.With = append(v.With, relation)
+	}
+}
+
+//WithCriteria creates criteria constraints view option
+func WithCriteria(columns ...string) ViewOption {
+	return func(v *View) {
+		if v.Selector == nil {
+			v.Selector = &Config{}
+		}
+		if v.Selector.Constraints == nil {
+			v.Selector.Constraints = &Constraints{}
+		}
+		v.Selector.Constraints.Criteria = true
+		v.Selector.Constraints.Filterable = columns
+	}
+}
+
+//WithViewType creates schema type view option
+func WithViewType(t reflect.Type) ViewOption {
+	return func(v *View) {
+		v.Schema = NewSchema(t)
+	}
+}
+
+//NewView creates a view
+func NewView(name, table string, opts ...ViewOption) *View {
+	ret := &View{Name: name, Table: table}
+	for _, opt := range opts {
+		opt(ret)
+	}
+	return ret
 }

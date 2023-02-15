@@ -247,3 +247,8 @@ func (r RelationsSlice) PopulateWithVisitor() []*Relation {
 
 	return result
 }
+
+//NwReferenceView creates a reference view
+func NwReferenceView(field, column string, view *View) *ReferenceView {
+	return &ReferenceView{View: *view, Column: column, Field: field}
+}

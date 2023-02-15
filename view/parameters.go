@@ -49,6 +49,8 @@ type (
 		_literalValue    interface{}
 	}
 
+	ParameterOption func(p *Parameter)
+
 	//Location tells how to get parameter value.
 	Location struct {
 		Kind Kind   `json:",omitempty"`
@@ -631,4 +633,24 @@ func GetOrParseType(typeLookup xreflect.TypeLookupFn, dataType string) (reflect.
 	}
 
 	return nil, fmt.Errorf("couldn't determine struct type: %v, due to the: %w, %v", dataType, lookupErr, parseErr)
+}
+
+//WithParameterType returns schema type parameter option
+func WithParameterType(t reflect.Type) ParameterOption {
+	return func(p *Parameter) {
+		switch t.Kind() {
+		case reflect.String, reflect.Int, reflect.Float64, reflect.Float32, reflect.Bool:
+			p.Schema = &Schema{DataType: t.Kind().String()}
+			return
+		}
+		p.Schema = NewSchema(t)
+	}
+}
+
+func NewParameter(name string, in *Location, opts ...ParameterOption) *Parameter {
+	ret := &Parameter{Name: name, In: in}
+	for _, opt := range opts {
+		opt(ret)
+	}
+	return ret
 }

@@ -51,13 +51,6 @@ func (c *DBConfig) ConnMaxLifetime() time.Duration {
 	return time.Duration(c.ConnMaxLifetimeMs) * time.Millisecond
 }
 
-//Apply applies connector option
-func (c *Connector) Apply(opts ...ConnectorOption) {
-	for _, opt := range opts {
-		opt(c)
-	}
-}
-
 //Init initializes connector.
 //If Ref is specified, then Connector with the name has to be registered in Connectors
 func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
@@ -211,4 +204,19 @@ func (c *Connector) Dialect(ctx context.Context) (*info.Dialect, error) {
 
 	c._dialect = dialect
 	return dialect, nil
+}
+
+func WithSecret(secret *scy.Resource) ConnectorOption {
+	return func(c *Connector) {
+		c.Secret = secret
+	}
+}
+
+//NewConnector creates a connector
+func NewConnector(name, driver, dsn string, opts ...ConnectorOption) *Connector {
+	ret := &Connector{Name: name, Driver: driver, DSN: dsn}
+	for _, opt := range opts {
+		opt(ret)
+	}
+	return ret
 }
