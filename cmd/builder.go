@@ -1208,7 +1208,7 @@ func (s *Builder) loadGoTypes() error {
 func (s *Builder) parseTypeSrc(imported string) (*option.TypeSrcConfig, error) {
 	importSegments := strings.Split(imported, ".")
 	if len(importSegments) != 2 {
-		return nil, fmt.Errorf(`unsupported import format, supported: "[path].[type]"`)
+		return nil, fmt.Errorf(`unsupported import format: %v, supported: "[path].[type]"`, imported)
 	}
 
 	return &option.TypeSrcConfig{
