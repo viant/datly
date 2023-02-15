@@ -9,9 +9,9 @@ JOIN ( SELECT
     product_id,
     SUM(quantity) AS quantity,
     AVG(payment) * 1.25 AS price
-    FROM `viant-e2e.bqdev.product_performance` t
+    FROM `$DB["bqdev"].viant-e2e.bqdev.product_performance` t
     WHERE 1=1
     #if($Unsafe.period == "today")
         AND 1 = 1
     #end
-    GROUP BY 1, 2) performance /*  {"Connector":"bqdev"} */ ON performance.product_id = product.ID
+    GROUP BY 1, 2) performance  ON performance.product_id = product.ID
