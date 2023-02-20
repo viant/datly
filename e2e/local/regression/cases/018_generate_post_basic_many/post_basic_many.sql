@@ -3,5 +3,5 @@
    }
 } */
 
-SELECT events.* /* { "Cardinality": "Many" } */
+SELECT events.*
 FROM (SELECT * FROM EVENTS) events

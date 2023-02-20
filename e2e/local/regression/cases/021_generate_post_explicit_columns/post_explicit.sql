@@ -4,5 +4,5 @@
         }
    } */
 
-SELECT events.*
+SELECT events.* /* { "Cardinality": "One" } */
 FROM (SELECT ID, QUANTITY FROM EVENTS) events

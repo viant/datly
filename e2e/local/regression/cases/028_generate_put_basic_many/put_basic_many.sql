@@ -4,5 +4,5 @@
    }
 } */
 
-SELECT foos.* /* { "Cardinality": "Many" } */
+SELECT foos.*
 FROM (SELECT * FROM FOOS) foos

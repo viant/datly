@@ -125,7 +125,7 @@ func (j *Marshaller) newStructDecoder(path string, dest interface{}, xType *xuns
 				rValue = reflect.New(j.indexUpdater.xField.Type)
 			}
 
-			iface := rValue.Elem().Interface()
+			iface := rValue.Interface()
 			j.indexUpdater.xField.SetValue(destPtr, iface)
 		}
 	}

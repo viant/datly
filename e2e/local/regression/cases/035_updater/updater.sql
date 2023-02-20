@@ -2,5 +2,5 @@
    "URI": "basic/foos-updater", "Method": "PUT"
 } */
 
-SELECT foos.*            /* { "Cardinality": "Many" } */
+SELECT foos.*
 FROM (SELECT * FROM FOOS) foos

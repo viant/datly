@@ -4,5 +4,5 @@
         }
  } */
 
-SELECT events.* EXCEPT NAME
+SELECT events.* EXCEPT NAME /* { "Cardinality": "One" } */
 FROM (SELECT * FROM EVENTS) events

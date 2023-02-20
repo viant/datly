@@ -132,7 +132,7 @@ func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resourc
 	}
 
 	t.Schema = &Schema{}
-	t.Schema.SetType(rType)
+	t.Schema.SetType(reflect.PtrTo(rType))
 	return nil
 }
 

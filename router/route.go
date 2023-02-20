@@ -381,6 +381,10 @@ func (r *Route) PgkPath(fieldName string) string {
 }
 
 func (r *Route) responseFieldType() reflect.Type {
+	if r.ResponseBody != nil && r.ResponseBody._bodyType != nil {
+		return r.ResponseBody._bodyType
+	}
+
 	if r.Cardinality == view.Many {
 		return r.View.Schema.SliceType()
 	}

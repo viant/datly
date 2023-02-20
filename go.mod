@@ -17,7 +17,7 @@ require (
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/lib/pq v1.10.6
-	github.com/mattn/go-sqlite3 v2.0.2+incompatible
+	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/onsi/gomega v1.20.2 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.1
@@ -36,9 +36,9 @@ require (
 	github.com/viant/sqlx v0.4.1
 	github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
-	github.com/viant/velty v0.1.1-0.20230106025837-a471fbfe6a12
+	github.com/viant/velty v0.1.1-0.20230220191359-8d6aefc90a69
 	github.com/viant/xreflect v0.0.0-20230213170805-6e62ec0b61c2
-	github.com/viant/xunsafe v0.8.1
+	github.com/viant/xunsafe v0.8.3-0.20230218034831-ffaf536b6784
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4
 	golang.org/x/oauth2 v0.3.0
 	google.golang.org/api v0.102.0

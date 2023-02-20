@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/plugins"
 	"github.com/viant/structql"
+	"github.com/viant/xunsafe"
 	"reflect"
 )
 
@@ -15,6 +16,7 @@ type (
 	StructQLCodec   struct {
 		query      string
 		_query     *structql.Query
+		_xtype     *xunsafe.Type
 		ownerType  reflect.Type
 		recordType reflect.Type
 	}
@@ -78,6 +80,10 @@ func (s *StructQLCodec) Value(ctx context.Context, raw interface{}, options ...i
 	}
 
 	result, err := query.Select(raw)
+	if result != nil {
+		result = s._xtype.Deref(result)
+	}
+
 	return result, err
 }
 
@@ -97,6 +103,7 @@ func (s *StructQLCodec) init() error {
 	}
 
 	s.recordType = aQuery.Type()
+	s._xtype = xunsafe.NewType(s.recordType)
 
 	return nil
 }

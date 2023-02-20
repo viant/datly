@@ -67,7 +67,7 @@ func selectItemToColumn(query *query.Select, route *option.RouteConfig) Columns 
 }
 
 func (c *ViewConfigurer) buildTableWithWarning(x node.Node, routeOpt *option.RouteConfig, comment string) *Table {
-	aTable, err := c.buildTable(x, routeOpt)
+	aTable, err := c.buildTable(x, routeOpt, comment)
 	if err != nil {
 		fmt.Printf("[WARN] couldn't build full table representation %v\n", aTable.Name)
 	}
@@ -79,8 +79,12 @@ func (c *ViewConfigurer) buildTableWithWarning(x node.Node, routeOpt *option.Rou
 	return aTable
 }
 
-func (c *ViewConfigurer) buildTable(x node.Node, routeOpt *option.RouteConfig) (*Table, error) {
+func (c *ViewConfigurer) buildTable(x node.Node, routeOpt *option.RouteConfig, comment string) (*Table, error) {
 	table := NewTable("")
+
+	if err := tryUnmarshalHint(comment, &table.ViewConfig); err != nil {
+		return table, err
+	}
 
 	switch actual := x.(type) {
 	case *expr.Raw:
@@ -189,6 +193,7 @@ func expandConsts(SQL string, opt *option.RouteConfig) string {
 func hintToStruct(encoded string, aStructPtr interface{}) error {
 	encoded = strings.ReplaceAll(encoded, "/*", "")
 	encoded = strings.ReplaceAll(encoded, "*/", "")
+	encoded = strings.TrimSpace(encoded)
 	return json.Unmarshal([]byte(encoded), aStructPtr)
 }
 

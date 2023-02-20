@@ -892,7 +892,7 @@ func (s *Builder) prepareExternalParameters(paramViewConfig *viewParamConfig) ([
 				In:              &view.Location{Name: "Authorization", Kind: view.HeaderKind},
 				ErrorStatusCode: 401,
 				Required:        boolPtr(true),
-				Output:          &view.Codec{Name: "JwtClaim", Schema: &view.Schema{DataType: "JwtClaims"}},
+				Output:          &view.Codec{Name: "JwtClaim", Schema: &view.Schema{DataType: "*JwtClaims"}},
 				Schema:          &view.Schema{DataType: "string"},
 			}
 

@@ -235,6 +235,7 @@ func (c *ViewConfigurer) buildReaderViewConfig(viewName string, SQL string, opt 
 		return nil, nil, err
 	}
 
+	expandedTable.ViewConfig = result.unexpandedTable.ViewConfig
 	result.expandedTable = expandedTable
 	return result, dataViewParams, err
 }
@@ -318,13 +319,9 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 	var dataViewParams []*viewParamConfig
 	for _, join := range joins {
 		innerTable := c.buildTableWithWarning(join.With, opt, join.Comments)
-		relViewConfig, childViewParams, err := c.buildViewConfigWithTable(join, innerTable, opt)
+		relViewConfig, childViewParams, err := c.buildViewConfigWithTable(join, innerTable, opt, join.Comments)
 		dataViewParams = append(dataViewParams, childViewParams...)
 		if err != nil {
-			return nil, nil, err
-		}
-
-		if err = tryUnmarshalHint(join.Comments, &relViewConfig.unexpandedTable.ViewConfig); err != nil {
 			return nil, nil, err
 		}
 
@@ -387,7 +384,7 @@ func (c *ViewConfigurer) getAlias(asStarExpr *expr.Star) string {
 	return ""
 }
 
-func (c *ViewConfigurer) buildViewConfigWithTable(join *query.Join, innerTable *Table, opt *option.RouteConfig) (*viewConfig, []*viewParamConfig, error) {
+func (c *ViewConfigurer) buildViewConfigWithTable(join *query.Join, innerTable *Table, opt *option.RouteConfig, comments string) (*viewConfig, []*viewParamConfig, error) {
 	if strings.TrimSpace(innerTable.SQL) == "" {
 		return newViewConfig(join.Alias, join.Alias, join, innerTable, nil, view.SQLQueryMode), nil, nil
 	}

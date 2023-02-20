@@ -6,6 +6,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/view"
 	"github.com/viant/scy"
 	"strings"
@@ -58,7 +59,7 @@ type (
 
 	Prepare struct {
 		PrepareRule string `short:"G" long:"generate" description:"prepare rule for patch|post|put|delete"`
-		ExecKind    string `long:"execKind"`
+		ExecKind    string `long:"execKind" description:"allows to switch between sql / dml"`
 	}
 
 	Plugins struct {
@@ -82,11 +83,17 @@ func (o *Options) Init() {
 	if o.ConfigURL != "" {
 		o.ConfigURL = normalizeURL(o.ConfigURL)
 	}
+
 	if o.RouteURL != "" {
 		o.RouteURL = normalizeURL(o.RouteURL)
 	}
+
 	if o.DependencyURL != "" {
 		o.DependencyURL = normalizeURL(o.DependencyURL)
+	}
+
+	if o.ExecKind == "" {
+		o.ExecKind = option.ExecKindService
 	}
 
 	o.PrepareRule = strings.ToLower(o.PrepareRule)

@@ -93,57 +93,57 @@ func newStmtBuilder(sb *strings.Builder, def *inputMetadata, options ...interfac
 	return b
 }
 
-func (sb *stmtBuilder) appendColumnValues(accessor *paramAccessor, withHas bool) error {
-	return sb.appendColumns(accessor, withHas, func(accessor string, field *view.Field) string {
+func (b *stmtBuilder) appendColumnValues(accessor *paramAccessor, withHas bool) error {
+	return b.appendColumns(accessor, withHas, func(accessor string, field *view.Field) string {
 		return fmt.Sprintf("$%v.%v", accessor, field.Name)
 	}, nil)
 }
 
-func (sb *stmtBuilder) appendColumnNameValues(accessor *paramAccessor, withHas bool, fieldSkipper func(field *view.Field) bool) error {
-	return sb.appendColumns(accessor, withHas, func(accessor string, field *view.Field) string {
+func (b *stmtBuilder) appendColumnNameValues(accessor *paramAccessor, withHas bool, fieldSkipper func(field *view.Field) bool) error {
+	return b.appendColumns(accessor, withHas, func(accessor string, field *view.Field) string {
 		return fmt.Sprintf("%v = $%v.%v", field.Column, accessor, field.Name)
 	}, fieldSkipper)
 }
 
-func (sb *stmtBuilder) appendColumnNames(accessor *paramAccessor, withHas bool) error {
-	return sb.appendColumns(accessor, withHas, func(accessor string, field *view.Field) string {
+func (b *stmtBuilder) appendColumnNames(accessor *paramAccessor, withHas bool) error {
+	return b.appendColumns(accessor, withHas, func(accessor string, field *view.Field) string {
 		return field.Column
 	}, nil)
 }
 
-func (sb *stmtBuilder) appendColumns(accessor *paramAccessor, withHas bool, content func(accessor string, field *view.Field) string, skipper func(field *view.Field) bool) error {
+func (b *stmtBuilder) appendColumns(accessor *paramAccessor, withHas bool, content func(accessor string, field *view.Field) string, skipper func(field *view.Field) bool) error {
 	var i = 0
-	for index, field := range sb.typeDef.actualFields {
+	for index, field := range b.typeDef.actualFields {
 		if skipper != nil && skipper(field) {
 			continue
 		}
 
 		if field.Ptr && withHas {
-			sb.writeString(fmt.Sprintf("\n#if($%v.Has.%v == true)", accessor.unsafeRecord, field.Name))
+			b.writeString(fmt.Sprintf("\n#if($%v.Has.%v == true)", accessor.unsafeRecord, field.Name))
 		}
 
 		if i == 0 {
-			sb.writeString("\n")
+			b.writeString("\n")
 		} else {
-			if len(sb.typeDef.actualFields)-1 > index && sb.typeDef.actualFields[index+1].Ptr && withHas {
-				sb.writeString("\n, ")
+			if len(b.typeDef.actualFields)-1 > index && b.typeDef.actualFields[index+1].Ptr && withHas {
+				b.writeString("\n, ")
 			} else {
-				sb.writeString(", \n")
+				b.writeString(", \n")
 			}
 		}
 
 		i++
-		sb.writeString(content(accessor.record, field))
+		b.writeString(content(accessor.record, field))
 
 		if field.Ptr && withHas {
-			sb.writeString("\n#end")
+			b.writeString("\n#end")
 		}
 	}
 
 	return nil
 }
 
-func (sb *stmtBuilder) paramHint(metadata *inputMetadata) (string, error) {
+func (b *stmtBuilder) paramHint(metadata *inputMetadata) (string, error) {
 	hintBuilder := &strings.Builder{}
 	hintBuilder.WriteString("<")
 	if metadata.config.outputConfig.IsMany() {
@@ -152,7 +152,7 @@ func (sb *stmtBuilder) paramHint(metadata *inputMetadata) (string, error) {
 	hintBuilder.WriteString("*")
 	hintBuilder.WriteString(metadata.paramName)
 	hintBuilder.WriteString(">(")
-	hintBuilder.WriteString(sb.paramKind)
+	hintBuilder.WriteString(b.paramKind)
 	hintBuilder.WriteString("/")
 	hintBuilder.WriteString(metadata.bodyHolder)
 	hintBuilder.WriteString(")")
@@ -160,7 +160,7 @@ func (sb *stmtBuilder) paramHint(metadata *inputMetadata) (string, error) {
 	return hintBuilder.String(), nil
 }
 
-func (sb *stmtBuilder) accessParam(parentRecord, record string, withUnsafe bool) string {
+func (b *stmtBuilder) accessParam(parentRecord, record string, withUnsafe bool) string {
 	result := parentRecord
 	if result == "" {
 		result = record
@@ -175,47 +175,53 @@ func (sb *stmtBuilder) accessParam(parentRecord, record string, withUnsafe bool)
 	return result
 }
 
-func (sb *stmtBuilder) writeString(value string) {
-	if sb.indent != "" {
-		value = strings.ReplaceAll(value, "\n", "\n"+sb.indent)
+func (b *stmtBuilder) writeString(value string) {
+	if b.indent != "" {
+		value = strings.ReplaceAll(value, "\n", "\n"+b.indent)
 	}
 
-	sb.sb.WriteString(value)
+	b.sb.WriteString(value)
 }
 
-func (sb *stmtBuilder) appendForEachIfNeeded(parentRecord, name string, withUnsafe bool) (*paramAccessor, bool) {
-	if !sb.isMulti {
+func (b *stmtBuilder) appendForEachIfNeeded(parentRecord, name string, withUnsafe *bool, stack *Stack) (*paramAccessor, bool) {
+	if !b.isMulti {
 		return &paramAccessor{
-			record:       sb.accessParam(parentRecord, name, false),
-			withUnsafe:   withUnsafe,
+			record:       b.accessParam(parentRecord, name, false),
+			withUnsafe:   *withUnsafe,
 			parent:       parentRecord,
-			unsafeRecord: sb.accessParam(parentRecord, name, withUnsafe),
-			unsafeParent: sb.accessParam("", parentRecord, withUnsafe),
+			unsafeRecord: b.accessParam(parentRecord, name, *withUnsafe),
+			unsafeParent: b.accessParam("", parentRecord, *withUnsafe),
 			name:         name,
 		}, false
 	}
 
-	sb.writeString("\n#foreach($")
+	b.writeString("\n#foreach($")
 	recName := "rec" + name
-	sb.writeString(recName)
-	sb.writeString(" in ")
-	sb.writeString("$")
-	sb.writeString(sb.accessParam(parentRecord, name, withUnsafe))
-	sb.writeString(")")
+	b.writeString(recName)
+	b.writeString(" in ")
+	b.writeString("$")
+	b.writeString(b.accessParam(parentRecord, name, *withUnsafe))
+	b.writeString(")")
+
+	defer func() {
+		*withUnsafe = false
+	}()
+
+	stack.Push(b)
 
 	return &paramAccessor{
 		unsafeRecord: recName,
 		parent:       parentRecord,
-		unsafeParent: sb.accessParam("", parentRecord, withUnsafe),
+		unsafeParent: b.accessParam("", parentRecord, *withUnsafe),
 		record:       recName,
 		withUnsafe:   false,
 		name:         name,
 	}, true
 }
 
-func (sb *stmtBuilder) newRelation(rel *inputMetadata) *stmtBuilder {
-	builder := newStmtBuilder(sb.sb, rel, view.KindRequestBody)
-	builder.indent = sb.indent
+func (b *stmtBuilder) newRelation(rel *inputMetadata) *stmtBuilder {
+	builder := newStmtBuilder(b.sb, rel, view.KindRequestBody)
+	builder.indent = b.indent
 	if builder.isMulti {
 		builder.indent += defaultIndent
 	}
@@ -355,6 +361,10 @@ func (s *Builder) readPrimaryKeys(ctx context.Context, db *sql.DB, tableName str
 }
 
 func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys, primaryKeys []sink.Key, aConfig *viewConfig, db *sql.DB, table, parentTable, structPath, actualHolder string) (*inputMetadata, error) {
+	if aConfig.outputConfig.Cardinality == "" {
+		aConfig.outputConfig.Cardinality = view.Many
+	}
+
 	fkIndex := s.indexKeys(foreignKeys)
 	pkIndex := s.indexKeys(primaryKeys)
 
@@ -451,13 +461,14 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	}
 
 	for _, relation := range insertRelations {
-		definition.Fields = append(definition.Fields, &view.Field{
+		relField := &view.Field{
 			Name:        relation.paramName,
 			Fields:      relation.typeDef.Fields,
 			Tag:         fmt.Sprintf(`typeName:"%v" sqlx:"-"`, relation.paramName),
 			Cardinality: relation.config.outputConfig.Cardinality,
 			Ptr:         true,
-		})
+		}
+		definition.Fields = append(definition.Fields, relField)
 	}
 
 	hasFieldName := "Has"
@@ -508,6 +519,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		config:       aConfig,
 		sql:          SQL,
 		sqlName:      paramName + "DBRecords",
+		isPtr:        true,
 	}, nil
 }
 
@@ -649,40 +661,40 @@ func (s *Builder) indexKeys(primaryKeys []sink.Key) map[string]sink.Key {
 	return pkIndex
 }
 
-func (sb *stmtBuilder) appendHintsWithRelations() error {
-	return sb.iterateOverHints(sb.typeDef, func(metadata *inputMetadata) error {
-		return sb.appendHints(metadata)
+func (b *stmtBuilder) appendHintsWithRelations() error {
+	return b.iterateOverHints(b.typeDef, func(metadata *inputMetadata) error {
+		return b.appendHints(metadata)
 	})
 }
 
-func (sb *stmtBuilder) appendSQLWithRelations() error {
-	return sb.iterateOverHints(sb.typeDef, func(metadata *inputMetadata) error {
-		return sb.appendSQLHint(metadata)
+func (b *stmtBuilder) appendSQLWithRelations() error {
+	return b.iterateOverHints(b.typeDef, func(metadata *inputMetadata) error {
+		return b.appendSQLHint(metadata)
 	})
 }
 
-func (sb *stmtBuilder) appendSQLHint(metadata *inputMetadata) error {
-	sqlHint, err := sb.paramSQLHint(metadata)
+func (b *stmtBuilder) appendSQLHint(metadata *inputMetadata) error {
+	sqlHint, err := b.paramSQLHint(metadata)
 	if err != nil {
 		return err
 	}
-	sb.writeString(fmt.Sprintf("\n#set($_ = $%v ", metadata.sqlName))
-	sb.writeString(sb.stringWithIndent(sqlHint))
-	sb.writeString("\n)")
+	b.writeString(fmt.Sprintf("\n#set($_ = $%v ", metadata.sqlName))
+	b.writeString(b.stringWithIndent(sqlHint))
+	b.writeString("\n)")
 	return nil
 }
 
-func (sb *stmtBuilder) appendHints(typeDef *inputMetadata) error {
-	hint, err := sb.paramHint(typeDef)
+func (b *stmtBuilder) appendHints(typeDef *inputMetadata) error {
+	hint, err := b.paramHint(typeDef)
 	if err != nil {
 		return err
 	}
 
-	sb.writeString(fmt.Sprintf("\n#set($_ = $%v%v)", typeDef.paramName, hint))
+	b.writeString(fmt.Sprintf("\n#set($_ = $%v%v)", typeDef.paramName, hint))
 	return nil
 }
 
-func (sb *stmtBuilder) iterateOverHints(metadata *inputMetadata, iterator func(*inputMetadata) error) error {
+func (b *stmtBuilder) iterateOverHints(metadata *inputMetadata, iterator func(*inputMetadata) error) error {
 	if err := iterator(metadata); err != nil {
 		return err
 	}
@@ -696,17 +708,17 @@ func (sb *stmtBuilder) iterateOverHints(metadata *inputMetadata, iterator func(*
 	return nil
 }
 
-func (sb *stmtBuilder) stringWithIndent(value string) string {
+func (b *stmtBuilder) stringWithIndent(value string) string {
 	return strings.ReplaceAll(value, "\n", "\n"+defaultIndent)
 }
 
-func (sb *stmtBuilder) withIndent() *stmtBuilder {
-	aCopy := *sb
+func (b *stmtBuilder) withIndent() *stmtBuilder {
+	aCopy := *b
 	aCopy.indent += defaultIndent
 	return &aCopy
 }
 
-func (sb *stmtBuilder) paramSQLHint(def *inputMetadata) (string, error) {
+func (b *stmtBuilder) paramSQLHint(def *inputMetadata) (string, error) {
 	paramOption := &option.ParameterConfig{
 		Required: boolPtr(false),
 	}
@@ -814,6 +826,7 @@ func (s *Builder) prepareStringBuilder(typeDef *inputMetadata, config *viewConfi
 	if err = s.appendMetadata(typeDef.paramName, routeOption, typeName, typeDef, sb); err != nil {
 		return nil, err
 	}
+
 	return sb, nil
 }
 
@@ -1045,4 +1058,13 @@ func getStruct(rType reflect.Type) reflect.Value {
 		}
 	}
 	return sampleValue
+}
+
+func (b *stmtBuilder) appendOptionalIfNeeded(accessor *paramAccessor, stack *Stack) bool {
+	isOptional := b.typeDef.isPtr
+	if isOptional {
+		b.writeString(fmt.Sprintf("\n#if($%v)", accessor.unsafeRecord))
+		stack.Push(b)
+	}
+	return isOptional
 }

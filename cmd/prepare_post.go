@@ -26,6 +26,7 @@ type (
 		config       *viewConfig
 		sql          string
 		sqlName      string
+		isPtr        bool
 	}
 
 	typeMeta struct {
@@ -129,13 +130,16 @@ func newInsertStmtBuilder(sb *strings.Builder, def *inputMetadata) *insertStmtBu
 }
 
 func (isb *insertStmtBuilder) build(parentRecord string, withUnsafe bool) (string, error) {
-	accessor, ok := isb.appendForEachIfNeeded(parentRecord, isb.paramName, withUnsafe)
+	stack := NewStack()
 	contentBuilder := isb
-	if ok {
+	accessor, isMulti := isb.appendForEachIfNeeded(parentRecord, isb.paramName, &withUnsafe, stack)
+	if isMulti {
 		contentBuilder = contentBuilder.withIndent()
 	}
 
-	withUnsafe = accessor.withUnsafe
+	if isb.appendOptionalIfNeeded(accessor, stack) {
+		contentBuilder = contentBuilder.withIndent()
+	}
 
 	if contentBuilder.parent != nil {
 		contentBuilder.appendSetFk(accessor, contentBuilder.parent.stmtBuilder)
@@ -152,14 +156,12 @@ func (isb *insertStmtBuilder) build(parentRecord string, withUnsafe bool) (strin
 		}
 	}
 
-	if ok {
-		isb.writeString("\n#end")
-	}
+	stack.Flush()
 	return isb.sb.String(), nil
 }
 
 func (isb *insertStmtBuilder) appendInsert(accessor *paramAccessor) error {
-	if strings.ToLower(isb.typeDef.config.expandedTable.ExecKind) == option.ExecKindService {
+	if strings.ToLower(isb.typeDef.config.unexpandedTable.ExecKind) != option.ExecKindDML {
 		isb.writeString(fmt.Sprintf("\n$%v.Insert($%v, \"%v\");", keywords.KeySQL, accessor.record, isb.typeDef.table))
 		return nil
 	}
@@ -179,25 +181,54 @@ func (isb *insertStmtBuilder) appendInsert(accessor *paramAccessor) error {
 	return nil
 }
 
-func (sb *stmtBuilder) appendSetFk(accessor *paramAccessor, parent *stmtBuilder) {
+func (b *stmtBuilder) appendSetFk(accessor *paramAccessor, parent *stmtBuilder) {
 	if parent != nil {
-		for _, meta := range sb.typeDef.meta.metas {
-			if meta.fkKey == nil {
-				continue
-			}
-
-			if meta.fkKey.ReferenceTable != parent.typeDef.table {
-				continue
-			}
-
-			refMeta, ok := parent.typeDef.meta.metaByColName(meta.fkKey.ReferenceColumn)
-			if !ok {
-				continue
-			}
-
-			sb.writeString(fmt.Sprintf("\n#set($%v.%v = $%v.%v)", accessor.unsafeRecord, meta.fieldName, accessor.unsafeParent, refMeta.fieldName))
-		}
+		b.forEachFkMeta(parent, func(refMeta, meta *fieldMeta) {
+			b.writeString(fmt.Sprintf("\n#set($%v.%v = $%v.%v)", accessor.unsafeRecord, refMeta.fieldName, accessor.unsafeParent, meta.fieldName))
+		})
 	}
+}
+
+func (b *stmtBuilder) forEachFkMeta(parent *stmtBuilder, handler func(meta, refMeta *fieldMeta)) {
+	for _, meta := range b.typeDef.meta.metas {
+		if meta.fkKey == nil {
+			continue
+		}
+
+		if meta.fkKey.ReferenceTable != parent.typeDef.table {
+			continue
+		}
+
+		refMeta, ok := parent.typeDef.meta.metaByColName(meta.fkKey.ReferenceColumn)
+		if !ok {
+			continue
+		}
+
+		handler(meta, refMeta)
+	}
+}
+
+func (b *stmtBuilder) appendFkCheck(accessor *paramAccessor, parent *stmtBuilder) bool {
+	if parent == nil {
+		return false
+	}
+
+	found := false
+	b.forEachFkMeta(parent, func(refMeta, meta *fieldMeta) {
+		if !found {
+			b.writeString(fmt.Sprintf("\n#if(($%v.%v == $%v.%v)", accessor.unsafeParent, meta.fieldName, accessor.unsafeRecord, refMeta.fieldName))
+		} else {
+			b.writeString(fmt.Sprintf("&& ($%v.%v == $%v.%v)", accessor.unsafeParent, meta.fieldName, accessor.unsafeRecord, refMeta.fieldName))
+		}
+
+		found = true
+	})
+
+	if found {
+		b.writeString(")")
+	}
+
+	return found
 }
 
 func (isb *insertStmtBuilder) newRelation(rel *inputMetadata) *insertStmtBuilder {

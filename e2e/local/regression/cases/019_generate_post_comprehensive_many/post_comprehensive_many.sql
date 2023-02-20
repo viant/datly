@@ -3,5 +3,5 @@
    },
    "ResponseField": "Data" } */
 
-SELECT events.* /* { "ResponseField": "Data", "Cardinality": "Many" } */
+SELECT events.* /* { "ResponseField": "Data" } */
 FROM (SELECT * FROM EVENTS) events

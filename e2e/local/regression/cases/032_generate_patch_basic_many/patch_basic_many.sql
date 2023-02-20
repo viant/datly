@@ -2,5 +2,5 @@
    "URI": "basic/foos-many", "Method": "PATCH"
 } */
 
-SELECT foos.* /* { "Cardinality": "Many" } */
+SELECT foos.* 
 FROM (SELECT * FROM FOOS) foos

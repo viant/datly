@@ -50,7 +50,7 @@ func (s *Builder) buildUpdateSQL(routeConfig *option.RouteConfig, aViewConfig *v
 	}
 
 	if err = builder.iterateOverHints(metadata, func(currMetadata *inputMetadata) error {
-		if !currMetadata.config.expandedTable.ViewConfig.FetchRecords {
+		if !currMetadata.config.unexpandedTable.ViewConfig.FetchRecords {
 			return nil
 		}
 
@@ -60,7 +60,7 @@ func (s *Builder) buildUpdateSQL(routeConfig *option.RouteConfig, aViewConfig *v
 	}
 
 	if err = builder.iterateOverHints(metadata, func(currMetadata *inputMetadata) error {
-		if !currMetadata.config.expandedTable.ViewConfig.FetchRecords {
+		if !currMetadata.config.unexpandedTable.ViewConfig.FetchRecords {
 			return nil
 		}
 
@@ -74,11 +74,15 @@ func (s *Builder) buildUpdateSQL(routeConfig *option.RouteConfig, aViewConfig *v
 }
 
 func (usb *updateStmtBuilder) build(parentRecord string, withUnsafe bool) (string, error) {
-	accessor, ok := usb.appendForEachIfNeeded(parentRecord, usb.paramName, withUnsafe)
-	withUnsafe = accessor.withUnsafe
+	stack := NewStack()
+	accessor, ok := usb.appendForEachIfNeeded(parentRecord, usb.paramName, &withUnsafe, stack)
 	contentBuilder := usb
 	if ok {
 		contentBuilder = usb.withIndent()
+	}
+
+	if usb.appendOptionalIfNeeded(accessor, stack) {
+		contentBuilder = contentBuilder.withIndent()
 	}
 
 	if err := contentBuilder.appendUpdate(accessor, contentBuilder.parent); err != nil {
@@ -92,15 +96,23 @@ func (usb *updateStmtBuilder) build(parentRecord string, withUnsafe bool) (strin
 		}
 	}
 
-	if ok {
-		usb.writeString("\n#end")
-	}
-
+	stack.Flush()
 	return usb.sb.String(), nil
 }
 
 func (usb *updateStmtBuilder) appendUpdate(accessor *paramAccessor, parent *updateStmtBuilder) error {
-	if strings.ToLower(usb.typeDef.config.expandedTable.ExecKind) == option.ExecKindService {
+	appended := false
+	if parent != nil {
+		appended = usb.appendFkCheck(accessor, parent.stmtBuilder)
+	}
+
+	if appended {
+		defer func() {
+			usb.writeString("\n#end")
+		}()
+	}
+
+	if strings.ToLower(usb.typeDef.config.unexpandedTable.ExecKind) != option.ExecKindDML {
 		usb.writeString(fmt.Sprintf("\n$%v.Update($%v, \"%v\");", keywords.KeySQL, accessor.record, usb.typeDef.table))
 		return nil
 	}

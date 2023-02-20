@@ -4,6 +4,7 @@ import "github.com/viant/datly/view"
 
 const (
 	ExecKindService = "service"
+	ExecKindDML     = "dml"
 )
 
 type (

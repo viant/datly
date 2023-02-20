@@ -81,12 +81,16 @@ func (b *patchStmtBuilder) buildWithMeta(parentRecord string, withUnsafe bool) (
 }
 
 func (b *patchStmtBuilder) build(parentRecord string, withUnsafe bool, indexes []*indexChecker) (string, error) {
-	accessor, multi := b.appendForEachIfNeeded(parentRecord, b.paramName, withUnsafe)
+	stack := NewStack()
+	accessor, multi := b.appendForEachIfNeeded(parentRecord, b.paramName, &withUnsafe, stack)
 	contentBuilder := b
 	if multi {
-		contentBuilder = b.withIndent()
+		contentBuilder = contentBuilder.withIndent()
 	}
-	withUnsafe = accessor.withUnsafe
+
+	if b.appendOptionalIfNeeded(accessor, stack) {
+		contentBuilder = contentBuilder.withIndent()
+	}
 
 	if err := contentBuilder.appendPatchContent(indexes, accessor); err != nil {
 		return "", err
@@ -98,10 +102,7 @@ func (b *patchStmtBuilder) build(parentRecord string, withUnsafe bool, indexes [
 		}
 	}
 
-	if multi {
-		b.writeString("\n#end")
-	}
-
+	stack.Flush()
 	return b.sb.String(), nil
 }
 

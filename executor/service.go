@@ -48,7 +48,7 @@ func (e *Executor) exec(ctx context.Context, session *Session, data []*SQLStatme
 		return nil
 	}
 
-	canBeBatchedGlobally := e.canBeBatchedGlobally(criteria, data) && e.dialectSupportsBatching(ctx, session.View)
+	canBeBatchedGlobally := false
 	db, err := session.View.Db()
 	if err != nil {
 		return err
@@ -101,82 +101,9 @@ func (e *Executor) execData(ctx context.Context, aTx *lazyTx, data *SQLStatment,
 	if executable, ok := criteria.IsServiceExec(data.SQL); ok {
 		switch executable.ExecType {
 		case expand.ExecTypeInsert:
-			dialect, err := session.View.Connector.Dialect(ctx)
-			if err != nil {
-				return err
-			}
-
-			canBeBatched := session.View.TableBatches[executable.Table] && e.dialectSupportsBatching(ctx, session.View)
-
-			service, err := insert.New(ctx, db, executable.Table)
-			if err != nil {
-				return err
-			}
-
-			if !canBeBatched {
-				tx, err := aTx.Tx()
-				if err != nil {
-					return err
-				}
-
-				_, _, err = service.Exec(ctx, executable.Data, tx, dialect)
-				return err
-			}
-
-			collection := session.Collection(executable)
-			collection.Append(executable.Data)
-			if !executable.IsLast {
-				return nil
-			}
-
-			if canBeBatchedGlobally {
-				aBatcher, err := batcherRegistry.GetBatcher(executable.Table, reflect.TypeOf(executable.Data), db, &batcher.Config{
-					MaxElements:   100,
-					MaxDurationMs: 10,
-					BatchSize:     100,
-				})
-
-				if err != nil {
-					return err
-				}
-
-				//TODO: remove reflection
-				rSlice := reflect.ValueOf(collection.Unwrap()).Elem()
-				sliceLen := rSlice.Len()
-				var state *batcher.State
-				for i := 0; i < sliceLen; i++ {
-					state, err = aBatcher.Collect(rSlice.Index(i).Interface())
-					if err != nil {
-						return err
-					}
-				}
-
-				if state != nil {
-					return state.Wait()
-				}
-			}
-
-			options, err := aTx.PrepareTxOptions()
-			if err != nil {
-				return err
-			}
-
-			_, _, err = service.Exec(ctx, collection.Unwrap(), append(options, dialect)...)
-			return err
-
+			return e.handleInsert(ctx, aTx, session, executable, db, canBeBatchedGlobally)
 		case expand.ExecTypeUpdate:
-			service, err := update.New(ctx, db, executable.Table)
-			if err != nil {
-				return err
-			}
-
-			options, err := aTx.PrepareTxOptions()
-			if err != nil {
-				return err
-			}
-
-			_, err = service.Exec(ctx, executable.Data, options...)
-			return err
+			return e.handleUpdate(ctx, aTx, db, executable)
 		default:
 			return fmt.Errorf("unsupported exec type: %v\n", executable.ExecType)
 		}
@@ -188,6 +115,88 @@ func (e *Executor) execData(ctx context.Context, aTx *lazyTx, data *SQLStatment,
 	}
 
 	return e.executeStatement(ctx, tx, data, session)
+}
+
+func (e *Executor) handleUpdate(ctx context.Context, aTx *lazyTx, db *sql.DB, executable *expand.Executable) error {
+	service, err := update.New(ctx, db, executable.Table)
+	if err != nil {
+		return err
+	}
+
+	options, err := aTx.PrepareTxOptions()
+	if err != nil {
+		return err
+	}
+
+	_, err = service.Exec(ctx, executable.Data, options...)
+	return err
+}
+
+func (e *Executor) handleInsert(ctx context.Context, aTx *lazyTx, session *Session, executable *expand.Executable, db *sql.DB, canBeBatchedGlobally bool) error {
+	dialect, err := session.View.Connector.Dialect(ctx)
+	if err != nil {
+		return err
+	}
+
+	canBeBatched := session.View.TableBatches[executable.Table] && e.dialectSupportsBatching(ctx, session.View)
+
+	service, err := insert.New(ctx, db, executable.Table)
+	if err != nil {
+		return err
+	}
+
+	if !canBeBatched {
+		tx, err := aTx.Tx()
+		if err != nil {
+			return err
+		}
+
+		_, _, err = service.Exec(ctx, executable.Data, tx, dialect)
+		return err
+	}
+
+	collection := session.Collection(executable)
+	collection.Append(executable.Data)
+	if !executable.IsLast {
+		return nil
+	}
+
+	if !canBeBatchedGlobally {
+		options, err := aTx.PrepareTxOptions()
+		if err != nil {
+			return err
+		}
+
+		_, _, err = service.Exec(ctx, collection.Unwrap(), append(options, dialect)...)
+		return err
+	}
+
+	aBatcher, err := batcherRegistry.GetBatcher(executable.Table, reflect.TypeOf(executable.Data), db, &batcher.Config{
+		MaxElements:   100,
+		MaxDurationMs: 10,
+		BatchSize:     100,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	//TODO: remove reflection
+	rSlice := reflect.ValueOf(collection.Unwrap()).Elem()
+	sliceLen := rSlice.Len()
+	var state *batcher.State
+	for i := 0; i < sliceLen; i++ {
+		state, err = aBatcher.Collect(rSlice.Index(i).Interface())
+		if err != nil {
+			return err
+		}
+	}
+
+	if state != nil {
+		return state.Wait()
+	}
+
+	return nil
 }
 
 func (e *Executor) dialectSupportsBatching(ctx context.Context, aView *view.View) bool {

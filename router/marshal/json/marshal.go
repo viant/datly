@@ -868,7 +868,6 @@ func isExcluded(filter Filter, name string, config marshal.Default, path string)
 }
 
 func (j *Marshaller) Marshal(value interface{}, filters *Filters) ([]byte, error) {
-
 	if value == nil {
 		return []byte(null), nil
 	}

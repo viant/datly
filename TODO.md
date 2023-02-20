@@ -24,6 +24,7 @@
 - cache metric add detail response about each view case time,records, etc...
 - more than one view in out output nice to have for now
 - improve documentation/examples
+- add support for composite keys
 
 - Management API
 - add GUI

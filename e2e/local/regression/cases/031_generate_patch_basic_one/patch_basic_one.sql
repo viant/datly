@@ -2,5 +2,5 @@
    "URI": "basic/foos", "Method": "PATCH"
 } */
 
-SELECT foos.*
+SELECT foos.* /* { "Cardinality": "One" } */
 FROM (SELECT * FROM FOOS) foos
