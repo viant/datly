@@ -13,7 +13,6 @@ import (
 	"github.com/viant/scy/auth/jwt/verifier"
 	"github.com/viant/toolbox"
 	"gopkg.in/yaml.v3"
-	"sort"
 	"strings"
 	"time"
 )
@@ -77,7 +76,7 @@ func (c *Config) Discovery() bool {
 	return c.AutoDiscovery == nil || *c.AutoDiscovery
 }
 
-func (c *Config) Init() {
+func (c *Config) Init() error {
 	if c.SyncFrequencyMs == 0 {
 		c.SyncFrequencyMs = 5000
 	}
@@ -88,6 +87,7 @@ func (c *Config) Init() {
 
 	c.Meta.Init()
 	c.ChangeDetection.Init()
+	return c.APIKeys.Init()
 }
 
 func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {
@@ -113,7 +113,8 @@ func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg.Init()
-	sort.Sort(cfg.APIKeys)
+	if err = cfg.Init(); err != nil {
+		return nil, err
+	}
 	return cfg, cfg.Validate()
 }
