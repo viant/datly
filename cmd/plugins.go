@@ -27,7 +27,10 @@ import (
 )
 
 const (
-	importsFile = "imports_enc.go"
+	importsFile                = "imports_enc.go"
+	customTypesModule          = "github.com/viant/xdatly/types/custom"
+	coreTypesModule            = "github.com/viant/xdatly/types/core"
+	generatedCustomTypesModule = "github.com/viant/xdatly/types/custom/generated"
 )
 
 type (
@@ -164,7 +167,7 @@ func (s *Builder) genPlugin(plugin *pluginGenDeta, aPath string) error {
 			return err
 		}
 
-		pluginPath = path.Join(pluginPath, base)
+		pluginPath = path.Join(pluginPath, base, "plugin")
 	} else {
 		if err := s.fs.Copy(context.Background(), aPath, pluginPath); err != nil {
 			return err
@@ -448,7 +451,7 @@ func (s *Builder) isPluginBundle(URL string) (string, bool) {
 				return "", false
 			}
 
-			if parse.Module.Mod.Path == "github.com/viant/datly/xregistry/types/custom" {
+			if parse.Module.Mod.Path == customTypesModule {
 				replace := strings.Replace(path.Dir(fileURL), "file://localhost", "", 1)
 				replace = strings.Replace(replace, "file:/localhost", "", 1)
 				return replace, true

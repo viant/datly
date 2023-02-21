@@ -953,7 +953,7 @@ func (s *Builder) relativeOf(modulePath string, outputURL string) string {
 		outputURL = path.Dir(outputURL)
 	}
 
-	URL := url.Join("github.com/viant/datly/xregistry/types/custom", segments...)
+	URL := url.Join(customTypesModule, segments...)
 	fmt.Printf("Generated URL: %v\n", URL)
 	return URL
 }
@@ -981,8 +981,8 @@ var %v = map[string]reflect.Type{
 		packageName = "main"
 	} else {
 		imports = append(imports,
-			"github.com/viant/datly/xregistry/types/core",
-			"github.com/viant/datly/xregistry/types/custom/generated",
+			coreTypesModule,
+			generatedCustomTypesModule,
 			"reflect",
 		)
 

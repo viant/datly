@@ -8,7 +8,7 @@ import (
 	"github.com/viant/datly/cmd/build"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/plugins"
-	"github.com/viant/datly/xregistry/types/core"
+	"github.com/viant/xdatly/types/core"
 	"os"
 	"path"
 	"plugin"

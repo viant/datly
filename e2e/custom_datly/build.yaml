@@ -1,7 +1,6 @@
 init:
   AppVersion: $Cat(${appPath}/Version)
   appPath: $WorkingDirectory(./../..)
-
 pipeline:
   deploy:
     set_sdk:
@@ -10,17 +9,41 @@ pipeline:
       sdk: go:1.17
 
 
+    pullXDatly:
+      action: exec:run
+      skip: $HasResource(${appPath}/e2e/custom_datly/.xdatly/.gitignore)
+      comments: copy datly project
+      target: $target
+      checkError: true
+      commands:
+        - cd ${appPath}/e2e/custom_datly
+        - git clone https://github.com/viant/xdatly.git .xdatly
+
+    updateXDatly:
+      action: exec:run
+      comments: copy datly project
+      target: $target
+      checkError: true
+      commands:
+        - cd ${appPath}/e2e/custom_datly/.xdatly/
+        - echo 'Current directory \/'
+        - pwd
+        - git stash
+        - git pull --rebase
+
+
+
     copyDatly:
       action: exec:run
       comments: copy datly project
       target: $target
       checkError: true
       commands:
-        - export GLOBIGNORE='.datly*'
-        - echo $appPath
-        - pwd
+        - export GLOBIGNORE='e2e*'
+        - echo 'THE APP PATH IS -> $appPath'
+        - cd ${appPath}/e2e/custom_datly
         - rm -rf .datly
-        - rsync -av --progress ../../ .datly/ --exclude .datly
+        - rsync -av --progress ../../ .datly/ --exclude e2e
 
     package:
       action: exec:run

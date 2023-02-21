@@ -16,11 +16,11 @@ pipeline:
   loop:
     generate:
       init:
-        ruleURL: '${appPath}/.datly/xregistry/types/custom/rules/${rule.Path}/${rule.URL}'
-        pregenURL: '${appPath}/.datly/xregistry/types/custom/rules/${rule.Path}/${rule.PregenURL}'
+        ruleURL: '${appPath}/.xdatly/types/custom/rules/${rule.Path}/${rule.URL}'
+        pregenURL: '${appPath}/.xdatly/types/custom/rules/${rule.Path}/${rule.PregenURL}'
         goFile: '$aPath/${rule.GoFile}'
-        outputGoFile: '${appPath}/.datly/xregistry/types/custom/rules/${rule.Path}/dsql/${rule.GoFile}'
-        relative: '${appPath}/.datly/xregistry/types/custom'
+        outputGoFile: '${appPath}/.xdatly/types/custom/rules/${rule.Path}/dsql/${rule.GoFile}'
+        relative: '${appPath}/.xdatly/types/custom'
         pluginGoFile: '$aPath/${rule.PluginGoFile}'
         dbDSN: 'dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev${qMark}parseTime=true'
 
@@ -33,12 +33,12 @@ pipeline:
           checkError: true
           commands:
             - export GO111MODULE=on
-            - mkdir -p ${appPath}/.datly/xregistry/types/custom/rules/${rule.Path}/dsql
+            - mkdir -p ${appPath}/.xdatly/types/custom/rules/${rule.Path}/dsql
             - cp $aPath/${rule.PregenURL} ${pregenURL}
             - /tmp/datly --relative='${relative}' -X='${pregenURL}' -G='${rule.Method}' -C='${dbDSN}'
             - cp $goFile $outputGoFile
             - rm ${pregenURL}
-            - cp $aPath/${rule.URL} ${appPath}/.datly/xregistry/types/custom/rules/${rule.Path}/${rule.URL}
+            - cp $aPath/${rule.URL} ${appPath}/.xdatly/types/custom/rules/${rule.Path}/${rule.URL}
             - /tmp/datly --relative='${relative}' -X='${ruleURL}' -C='${dbDSN}' --pluginArgs='-trimpath' -w=${appPath}/autogen
 
       generatePlugins:

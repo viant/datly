@@ -2,8 +2,8 @@ package changed
 
 import (
 	"fmt"
-	"github.com/viant/datly/xregistry/types/core"
-	"github.com/viant/datly/xregistry/types/custom/generated"
+	"github.com/viant/xdatly/types/core"
+	"github.com/viant/xdatly/types/custom/generated"
 	"reflect"
 )
 

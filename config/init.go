@@ -1,8 +1,8 @@
 package config
 
 import (
-	"github.com/viant/datly/xregistry/types/core"
-	_ "github.com/viant/datly/xregistry/types/custom/imports"
+	"github.com/viant/xdatly/types/core"
+	_ "github.com/viant/xdatly/types/custom/imports"
 	"reflect"
 	"time"
 )

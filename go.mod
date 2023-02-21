@@ -90,8 +90,6 @@ require (
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/viant/datly/plugins v0.0.0-20230215004138-3dadeee9e924
-	github.com/viant/datly/xregistry/types/core v0.0.0-20230215171714-5c81aace296b
-	github.com/viant/datly/xregistry/types/custom v0.0.0-20230215004138-3dadeee9e924
 	github.com/viant/igo v0.1.0 // indirect
 	github.com/viant/sqlparser v0.3.1-0.20221212220151-be94fb808202
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
@@ -110,8 +108,8 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace (
-	github.com/viant/datly/plugins => ./plugins
-	github.com/viant/datly/xregistry/types/core => ./xregistry/types/core
-	github.com/viant/datly/xregistry/types/custom => ./xregistry/types/custom
-)
+require github.com/viant/xdatly/types/core v0.0.0-20230221181206-d2370898f2c4
+
+require github.com/viant/xdatly/types/custom v0.0.0-20230222002420-6546353a48f9
+
+replace github.com/viant/datly/plugins => ./plugins
