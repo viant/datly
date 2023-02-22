@@ -1,3 +1,5 @@
+SET GLOBAL log_bin_trust_function_creators = 1;
+    
 DROP TABLE IF EXISTS USER;
 CREATE TABLE USER (
     ID         INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
