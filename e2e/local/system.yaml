@@ -1,6 +1,20 @@
 init:
   mysqlSecrets:  ${secrets.$mysqlCredentials}
+  arch: ''
 pipeline:
+  checkArch:
+    action: exec:run
+    target: $target
+    commands:
+      - echo '${os.hardware}'
+
+  adjustArch:
+    action: print
+    when: $checkArch.Output:/arm/
+    message: $AsJSON($checkArch.Output)
+    post:
+      arch: arm64v8/
+
   stop:
     services:
       action: docker:stop
@@ -13,7 +27,7 @@ pipeline:
     services:
       mysql_dev:
         action: docker:run
-        image: mysql:5.6
+        image: ${arch}mysql
         name: mysql_dev
         ports:
           3306: 3306
@@ -22,7 +36,7 @@ pipeline:
 
       aerospike:
         action: docker:run
-        image: 'aerospike:ce-6.2.0.2'
+        image: '${arch}aerospike:ce-6.2.0.2'
         name: aero
         ports:
           3000: 3000
