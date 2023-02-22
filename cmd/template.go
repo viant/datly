@@ -629,6 +629,14 @@ func (s *Builder) uploadRuleFile(namespace string, fileName string, fileContent 
 }
 
 func (s *Builder) goURL(fileName string) string {
+	if out := s.options.GoFileOutput; out != "" {
+		if path.Ext(out) != "" {
+			return out
+		}
+
+		return path.Join(out, fileName+".go")
+	}
+
 	detectCase, err := format.NewCase(view.DetectCase(fileName))
 	if err == nil {
 		fileName = detectCase.Format(fileName, format.CaseLowerUnderscore)

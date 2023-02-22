@@ -37,6 +37,7 @@ type (
 		OpenApiURL   string `short:"o" long:"openapi"`
 		Version      bool   `short:"v" long:"version"  description:"build version"`
 		RelativePath string `long:"relative" description:"allow to control relative path where path is used"`
+		GoFileOutput string `long:"goFileOut" description:"destination of go file"`
 		Plugins
 	}
 
