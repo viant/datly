@@ -9,9 +9,8 @@ pipeline:
       - echo '${os.hardware}'
 
   adjustArch:
-    action: print
+    action: nop
     when: $checkArch.Output:/arm/
-    message: $AsJSON($checkArch.Output)
     post:
       arch: arm64v8/
 
