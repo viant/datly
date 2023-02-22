@@ -302,8 +302,8 @@ github.com/viant/velty v0.1.1-0.20230220191359-8d6aefc90a69 h1:LDoU099Q8oiPI7jfy
 github.com/viant/velty v0.1.1-0.20230220191359-8d6aefc90a69/go.mod h1:Cc1ZRfjiWAVEgyS639YfJMeKbSWYFKKLkJqP8142jVQ=
 github.com/viant/xdatly/types/core v0.0.0-20230221181206-d2370898f2c4 h1:ulnZ0trBeVGWJU2fpy0cJPFTZBSwLBSy0fIHvcOqUvw=
 github.com/viant/xdatly/types/core v0.0.0-20230221181206-d2370898f2c4/go.mod h1:LJN2m8xJjtYNCvyvNrVanJwvzj8+hYCuPswL8H4qRG0=
-github.com/viant/xdatly/types/custom v0.0.0-20230222002420-6546353a48f9 h1:a9PWDEZ/iTZMUa5GCzRwY4y5id7eULQQBKsbZAgLwrM=
-github.com/viant/xdatly/types/custom v0.0.0-20230222002420-6546353a48f9/go.mod h1:NVeS+s/uf2dj/M2QlLdY5KXoci0KPMbD9n02Y0m5hBw=
+github.com/viant/xdatly/types/custom v0.0.0-20230222005938-15dd3b2969d2 h1:eeOMoCOVqNvUE3wMdn2izZm6tbUSd0CY9T3Bzbh2xPs=
+github.com/viant/xdatly/types/custom v0.0.0-20230222005938-15dd3b2969d2/go.mod h1:NVeS+s/uf2dj/M2QlLdY5KXoci0KPMbD9n02Y0m5hBw=
 github.com/viant/xreflect v0.0.0-20230213170805-6e62ec0b61c2 h1:XASZqAmulx+Oot+nWwFEjuvZNOF5Is9rLVclCYzhP88=
 github.com/viant/xreflect v0.0.0-20230213170805-6e62ec0b61c2/go.mod h1:uflXFHcw4TQXgYJvTQ7Akf4SAzXYPCVi8NGZgsVlwmA=
 github.com/viant/xunsafe v0.8.3-0.20230218034831-ffaf536b6784 h1:LIVmGBQ8EbbXSL1tBOntDcgjm1+XdhNkeWENWgpupTw=
