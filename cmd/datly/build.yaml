@@ -26,7 +26,7 @@ pipeline:
       - tar cvzf datly_linux_${Ver}_amd64.tar.gz datly
       - export GOOS=windows
       - go build -ldflags="-X 'main.Version=${Ver}'"
-      - tar cvzf datly_windows_${Ver}_amd64.tar.gz datly
+      - tar cvzf datly_windows_${Ver}_amd64.tar.gz datly.exe
       - export GOOS=darwin
       - go build -ldflags="-X 'main.Version=${Ver}'"
       - tar cvzf datly_darwin_${Ver}_amd64.tar.gz datly
