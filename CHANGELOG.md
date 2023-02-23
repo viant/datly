@@ -1,4 +1,7 @@
-## Deb 14 2022 v0.4.3.0
+## Feb 23 2022 v0.4.5.0
+* Plugin customization enhancement
+
+## Dec 14 2022 v0.4.3.0
 * Added external type registration
 * Added dynamic plugin support (experimental)
 
