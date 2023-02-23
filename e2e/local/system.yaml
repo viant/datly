@@ -1,20 +1,6 @@
 init:
   mysqlSecrets:  ${secrets.$mysqlCredentials}
-  arch: ''
-  mysqlVer: 5.6
 pipeline:
-  checkArch:
-    action: exec:run
-    target: $target
-    commands:
-      - echo '${os.hardware}'
-
-  adjustArch:
-    action: nop
-    when: $checkArch.Output:/arm/
-    post:
-      arch: arm64v8/
-      mysqlVer: ''
 
   stop:
     services:
@@ -28,7 +14,8 @@ pipeline:
     services:
       mysql_dev:
         action: docker:run
-        image: ${arch}mysql:${mysqlVer}
+        image: mysql:5.6
+        platform: linux/amd64
         name: mysql_dev
         ports:
           3306: 3306
@@ -37,7 +24,8 @@ pipeline:
 
       aerospike:
         action: docker:run
-        image: '${arch}aerospike:ce-6.2.0.2'
+        platform: linux/amd64
+        image: 'aerospike:ce-6.2.0.2'
         name: aero
         ports:
           3000: 3000
@@ -46,6 +34,7 @@ pipeline:
 
       dynamodb:
         action: docker:run
+        platform: linux/amd64
         image: 'amazon/dynamodb-local'
         name: dynamodb
         ports:
