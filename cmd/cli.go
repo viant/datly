@@ -39,7 +39,7 @@ func (s *Builder) build() (*standalone.Server, error) {
 
 	dumped := false
 	if s.options.PrepareRule != "" {
-		dumpConfiguration("", folderSQL, s.options)
+		dumpConfiguration("", s.options.DSQLOutput, s.options)
 		dumped = true
 	}
 

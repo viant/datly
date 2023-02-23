@@ -630,16 +630,19 @@ func (s *Builder) uploadRuleFile(namespace string, fileName string, fileContent 
 
 func (s *Builder) goURL(fileName string) string {
 	if out := s.options.GoFileOutput; out != "" {
-		if path.Ext(out) != "" {
-			return out
+		fileName = out
+		if strings.HasPrefix(fileName, "/") {
+			return fileName
 		}
 
-		return path.Join(out, fileName+".go")
-	}
-
-	detectCase, err := format.NewCase(view.DetectCase(fileName))
-	if err == nil {
-		fileName = detectCase.Format(fileName, format.CaseLowerUnderscore)
+		if ext := path.Ext(out); ext != "" {
+			fileName = strings.ReplaceAll(fileName, ext, "")
+		}
+	} else {
+		detectCase, err := format.NewCase(view.DetectCase(fileName))
+		if err == nil {
+			fileName = detectCase.Format(fileName, format.CaseLowerUnderscore)
+		}
 	}
 
 	return s.preGenURL(fileName, ".go")
@@ -650,7 +653,7 @@ func (s *Builder) preGenSQLURL(fileName string) string {
 }
 
 func (s *Builder) preGenURL(fileName string, ext string) string {
-	return s.url(folderSQL, fileName, ext)
+	return s.url(s.options.DSQLOutput, fileName, ext)
 }
 
 func (s *Builder) genURL(fileName, ext string) string {
@@ -658,6 +661,21 @@ func (s *Builder) genURL(fileName, ext string) string {
 }
 
 func (s *Builder) url(namespace, fileName string, ext string) string {
+	if namespace != folderDev {
+		URL := normalizeURL(namespace)
+		if strings.HasPrefix(URL, "/") {
+			if actualExt := path.Ext(URL); actualExt != "" {
+				return URL
+			}
+
+			if fileName == "" {
+				return URL
+			}
+
+			return path.Join(URL, fileName+ext)
+		}
+	}
+
 	segments := []string{
 		namespace,
 	}
@@ -666,7 +684,7 @@ func (s *Builder) url(namespace, fileName string, ext string) string {
 		segments = append(segments, fileName+ext)
 	}
 
-	if namespace == folderSQL {
+	if namespace == s.options.DSQLOutput {
 		return url.Join(path.Dir(s.options.Location), segments...)
 	}
 

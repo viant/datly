@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/view"
 	"github.com/viant/scy"
+	"path"
 	"strings"
 )
 
@@ -37,7 +38,6 @@ type (
 		OpenApiURL   string `short:"o" long:"openapi"`
 		Version      bool   `short:"v" long:"version"  description:"build version"`
 		RelativePath string `long:"relative" description:"allow to control relative path where path is used"`
-		GoFileOutput string `long:"goFileOut" description:"destination of go file"`
 		Plugins
 	}
 
@@ -59,8 +59,10 @@ type (
 	}
 
 	Prepare struct {
-		PrepareRule string `short:"G" long:"generate" description:"prepare rule for patch|post|put|delete"`
-		ExecKind    string `long:"execKind" description:"allows to switch between sql / dml"`
+		PrepareRule  string `short:"G" long:"generate" description:"prepare rule for patch|post|put|delete"`
+		ExecKind     string `long:"execKind" description:"allows to switch between sql / dml"`
+		DSQLOutput   string `long:"dsqlOutput" description:"output path"`
+		GoFileOutput string `long:"goFileOut" description:"destination of go file"`
 	}
 
 	Plugins struct {
@@ -95,6 +97,14 @@ func (o *Options) Init() {
 
 	if o.ExecKind == "" {
 		o.ExecKind = option.ExecKindService
+	}
+
+	if o.DSQLOutput == "" {
+		o.DSQLOutput = folderSQL
+	}
+
+	if !strings.HasPrefix(o.DSQLOutput, "/") {
+		o.DSQLOutput = path.Join(path.Dir(o.Location), o.DSQLOutput)
 	}
 
 	o.PrepareRule = strings.ToLower(o.PrepareRule)

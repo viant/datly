@@ -96,8 +96,7 @@ func (s *Builder) uploadPlugins() error {
 
 func (s *Builder) detectMod(pluginMeta *pluginGenDeta, modules map[string]string) error {
 	dir := pluginMeta.URL
-	location := path.Dir(s.options.Location)
-
+	location := s.dsqlDir()
 	upFolders := map[string]bool{}
 	for len(location) > 1 {
 		upFolders[location] = true
@@ -138,6 +137,14 @@ func (s *Builder) detectMod(pluginMeta *pluginGenDeta, modules map[string]string
 	}
 
 	return nil
+}
+
+func (s *Builder) dsqlDir() string {
+	if path.Ext(s.options.DSQLOutput) != "" {
+		return path.Dir(s.options.DSQLOutput)
+	}
+
+	return s.options.DSQLOutput
 }
 
 func (s *Builder) getModPath(plugin *pluginGenDeta, mod map[string]string) (string, bool) {
@@ -430,10 +437,11 @@ func (s *Builder) IsPluginBundle(URL string) (string, bool) {
 
 func (s *Builder) isPluginBundle(URL string) (string, bool) {
 	for len(URL) > 1 {
-		list, err := s.fs.List(context.Background(), URL)
-		if err != nil {
-			return "", false
+		if ext := path.Ext(URL); ext != "" {
+			URL = strings.Replace(URL, ext, "", 1)
 		}
+
+		list, _ := s.fs.List(context.Background(), URL)
 
 		for _, aFile := range list {
 			fileURL := aFile.URL()
