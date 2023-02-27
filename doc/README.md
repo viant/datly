@@ -25,7 +25,7 @@ will be replaced before calling database driver with
   INSERT INTO MY_TABLE(ID, NAME) (?, ?)
 ```
 
-Input variable(s) can be also with $Unsafe namespace ($Unsafe.MyVariable), in that case variable is inlined.
+Input variable(s) can be also be accessed with $Unsafe namespace ($Unsafe.MyVariable), in that case variable is inlined.
 
 
 
