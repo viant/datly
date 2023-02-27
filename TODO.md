@@ -1,6 +1,7 @@
 - Add possibility for sqlx ns in order to avoid unneccessary one-one relations.
 - SQL with StructQL simplificaiton ?
-
+- Executor triggers/notification
+- 
 - Async mode 
   - post job, SQL-> (job id , dispotistion -> dest_teable,  temp_table)
   - job status <- job-id (RUNNING/ERROR/DONE)

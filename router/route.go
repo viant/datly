@@ -72,7 +72,7 @@ type (
 		CaseFormat        view.CaseFormat  `json:",omitempty"`
 		OmitEmpty         bool             `json:",omitempty"`
 		Style             Style            `json:",omitempty"`
-		ResponseField     string           `json:",omitempty"`
+		Field             string           `json:",omitempty"`
 		Transforms        marshal.Transforms
 		Exclude           []string
 		NormalizeExclude  *bool
@@ -134,7 +134,7 @@ func (r *Route) CorsEnabled() bool {
 
 func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if r.Style == BasicStyle {
-		r.ResponseField = ""
+		r.Field = ""
 	}
 
 	if err := r.initCardinality(); err != nil {
@@ -169,7 +169,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err := r.Index.Init(r.View, r.ResponseField); err != nil {
+	if err := r.Index.Init(r.View, r.Field); err != nil {
 		return err
 	}
 
@@ -304,13 +304,13 @@ func (r *Route) initCors(resource *Resource) {
 }
 
 func (r *Route) initStyle() error {
-	if (r.Style == "" || r.Style == BasicStyle) && r.ResponseField == "" {
+	if (r.Style == "" || r.Style == BasicStyle) && r.Field == "" {
 		r.Style = BasicStyle
 		return nil
 	}
 
-	if r.ResponseField == "" {
-		r.ResponseField = "ResponseBody"
+	if r.Field == "" {
+		r.Field = "ResponseBody"
 	}
 
 	responseFields := make([]reflect.StructField, 2)
@@ -320,7 +320,7 @@ func (r *Route) initStyle() error {
 		Anonymous: true,
 	}
 
-	responseFieldPgkPath := r.PgkPath(r.ResponseField)
+	responseFieldPgkPath := r.PgkPath(r.Field)
 
 	fieldType := r.responseFieldType()
 
@@ -329,7 +329,7 @@ func (r *Route) initStyle() error {
 	}
 
 	responseFields[1] = reflect.StructField{
-		Name:    r.ResponseField,
+		Name:    r.Field,
 		PkgPath: responseFieldPgkPath,
 		Type:    fieldType,
 	}
@@ -355,7 +355,7 @@ func (r *Route) initStyle() error {
 	responseType := reflect.StructOf(responseFields)
 	r._responseSetter = &responseSetter{
 		statusField: FieldByName(responseType, "ResponseStatus"),
-		bodyField:   FieldByName(responseType, r.ResponseField),
+		bodyField:   FieldByName(responseType, r.Field),
 		metaField:   FieldByName(responseType, metaFieldName),
 		infoField:   FieldByName(responseType, "DatlyDebug"),
 		rType:       responseType,
@@ -614,12 +614,12 @@ func (r *Route) bodyParamMatches(rType reflect.Type, params []*view.Parameter) e
 }
 
 func (r *Route) addPrefixFieldIfNeeded() {
-	if r.ResponseField == "" {
+	if r.Field == "" {
 		return
 	}
 
 	for i, actual := range r.Exclude {
-		r.Exclude[i] = r.ResponseField + "." + actual
+		r.Exclude[i] = r.Field + "." + actual
 	}
 }
 

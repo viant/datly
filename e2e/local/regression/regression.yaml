@@ -23,11 +23,12 @@ pipeline:
     run_tests:
       tag: $pathMatch
       description: '@info'
-
-      subPath: 'cases/${index}_*'
       data:
         '[]gen': '@gen'
 
+
+
+      subPath: 'cases/${index}_*'
       range: 1..037
       template:
         checkSkip:

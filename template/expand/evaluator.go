@@ -55,7 +55,9 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 
 	if err = evaluator.planner.DefineVariable(
 		Criteria, reflect.TypeOf(&DataUnit{}),
-		keywords.KeySequencer, keywords.KeySQL,
+		keywords.KeySequencer,
+		keywords.KeySQL,
+		keywords.KeySQLx,
 	); err != nil {
 		return nil, err
 	}
@@ -141,7 +143,7 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 		}
 	}
 
-	if err := newState.SetValue(Criteria, viewParam.sanitizer); err != nil {
+	if err := newState.SetValue(Criteria, viewParam.dataUnit); err != nil {
 		return nil, nil, err
 	}
 
@@ -157,7 +159,7 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 		return nil, nil, err
 	}
 
-	return newState, viewParam.sanitizer, nil
+	return newState, viewParam.dataUnit, nil
 }
 
 func (e *Evaluator) updateConsts(params interface{}, presenceMap interface{}) (interface{}, interface{}) {

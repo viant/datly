@@ -6,10 +6,10 @@ import (
 )
 
 type OutputConfig struct {
-	Style         string
-	ResponseField string
-	Kind          string
-	Cardinality   view.Cardinality
+	Style       string
+	Field       string
+	Kind        string
+	Cardinality view.Cardinality
 }
 
 func (o *OutputConfig) IsMany() bool {
@@ -17,17 +17,17 @@ func (o *OutputConfig) IsMany() bool {
 }
 
 func (o *OutputConfig) IsBasic() bool {
-	return o.Style != string(router.ComprehensiveStyle) && o.ResponseField == ""
+	return o.Style != string(router.ComprehensiveStyle) && o.Field == ""
 }
 
-func (o *OutputConfig) Field() string {
+func (o *OutputConfig) GetField() string {
 	if o.IsBasic() {
 		return ""
 	}
 
-	if o.ResponseField == "" {
+	if o.Field == "" {
 		return "Data"
 	}
 
-	return o.ResponseField
+	return o.Field
 }

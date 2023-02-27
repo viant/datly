@@ -15,6 +15,7 @@ var builtInMethods = map[string]bool{
 	keywords.KeyParentView:        true,
 	keywords.KeyView:              true,
 	keywords.KeySQL:               true,
+	keywords.KeySQLx:              true,
 	functions.SlicesFunc:          true,
 	functions.MathFunc:            true,
 	functions.TimeFunc:            true,

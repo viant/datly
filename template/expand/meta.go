@@ -42,7 +42,7 @@ type (
 
 	MetaParam struct {
 		expander            Expander
-		sanitizer           *DataUnit
+		dataUnit            *DataUnit
 		Name                string
 		Alias               string
 		Table               string
@@ -112,7 +112,7 @@ func (m *MetaParam) ColIn(prefix, column string) (string, error) {
 
 func (m *MetaParam) addBindings(args []interface{}) string {
 	_, bindings := AsBindings("", args)
-	m.sanitizer.addAll(args...)
+	m.dataUnit.addAll(args...)
 	return bindings
 }
 
@@ -123,7 +123,7 @@ func (m *MetaParam) In(prefix string) (string, error) {
 //Expand appends SQL and adds binding arguments
 //Deprecated: For the backward compatibility
 func (m *MetaParam) Expand(_ *DataUnit) string {
-	m.sanitizer.addAll(m.Args...)
+	m.dataUnit.addAll(m.Args...)
 	return m.NonWindowSQL
 }
 
@@ -198,7 +198,7 @@ func NewMetaParam(metaSource MetaSource, aSelector MetaExtras, batchData MetaBat
 		Offset:       offset,
 		Args:         args,
 		NonWindowSQL: SQLExec,
-		sanitizer: &DataUnit{
+		dataUnit: &DataUnit{
 			MetaSource: metaSource,
 		},
 		ParentValues: colInArgs,
@@ -219,7 +219,7 @@ func NotZeroOf(values ...int) int {
 
 func MockMetaParam() *MetaParam {
 	return &MetaParam{
-		sanitizer: &DataUnit{},
+		dataUnit: &DataUnit{},
 	}
 }
 

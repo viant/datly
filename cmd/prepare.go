@@ -410,12 +410,8 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		}
 
 		tagContent := "name=" + column.Name
-		if meta.primaryKey {
-			tagContent += ",primaryKey=true"
-		}
-
 		if meta.autoincrement {
-			tagContent += ",generator=autoincrement"
+			tagContent += ",autoincrement"
 		} else if meta.generator != "" {
 			tagContent += ",generator=" + meta.generator
 		}
@@ -424,12 +420,36 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 			jsonTag = ` json:",omitempty"`
 		}
 
-		sqlxTagContent := "name=" + column.Name
+		sqlxTagContent := tagContent
+
 		if meta.primaryKey {
 			sqlxTagContent += ",primaryKey"
+		} else if key := meta.fkKey; key != nil {
+			sqlxTagContent += ",refTable=" + key.ReferenceTable
+			sqlxTagContent += ",refColumn=" + key.ReferenceColumn
+		} else if column.IsUnique() {
+			sqlxTagContent += ",unique,table=" + table
 		}
 
-		aTag := fmt.Sprintf(`sqlx:"%v"%v`, sqlxTagContent, jsonTag)
+		if (!column.IsNullable()) && (column.IsAutoincrement == nil || (column.IsAutoincrement != nil && !*column.IsAutoincrement) || column.Default == nil) {
+			sqlxTagContent += ",required"
+		}
+		if strings.ToLower(column.Type) == "bit" {
+			sqlxTagContent += ",bit"
+		}
+		validationTag := "omitempty"
+		if strings.Contains(strings.ToLower(column.Name), "email") {
+			validationTag += ",email"
+		}
+		if strings.Contains(strings.ToLower(column.Name), "phone") {
+			validationTag += ",phone"
+		}
+		if validationTag == "omitempty" {
+			validationTag = ""
+		} else {
+			validationTag = fmt.Sprintf(` validate:"%v"`, validationTag)
+		}
+		aTag := fmt.Sprintf(`sqlx:"%v"%v%v`, sqlxTagContent, jsonTag, validationTag)
 
 		definition.Fields = append(definition.Fields, &view.Field{
 			Name:   meta.fieldName,
@@ -485,11 +505,11 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	definition.Fields = append(definition.Fields, hasField)
 
 	if !aConfig.outputConfig.IsBasic() {
-		holderName = aConfig.outputConfig.Field()
+		holderName = aConfig.outputConfig.GetField()
 		definition.Name = holderName
 		definition.Fields = []*view.Field{
 			{
-				Name:        aConfig.outputConfig.ResponseField,
+				Name:        aConfig.outputConfig.Field,
 				Fields:      definition.Fields,
 				Cardinality: definition.Cardinality,
 				Tag:         fmt.Sprintf(`typeName:"%v"`, paramName),

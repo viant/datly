@@ -5,7 +5,7 @@ Routes:
       Ref: events_ref
       Name: events
     Style: Comprehensive
-    ResponseField: Result
+    Field: Result
 
 Resource:
   Views:

@@ -9,7 +9,7 @@ require (
 	github.com/francoispqt/gojay v1.2.13
 	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/go-playground/validator v9.31.0+incompatible
-	github.com/go-sql-driver/mysql v1.6.0
+	github.com/go-sql-driver/mysql v1.7.0
 	github.com/goccy/go-json v0.9.7
 	github.com/golang-jwt/jwt/v4 v4.4.1
 	github.com/google/gops v0.3.23
@@ -33,7 +33,7 @@ require (
 	github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac
 	github.com/viant/parsly v0.1.0
 	github.com/viant/scy v0.4.1
-	github.com/viant/sqlx v0.4.1
+	github.com/viant/sqlx v0.5.1
 	github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20230220191359-8d6aefc90a69

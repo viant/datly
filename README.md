@@ -1,4 +1,4 @@
-# Datly - Managed and Autonomous ORM for golang 
+# Datly - Modern flexible ORM for rapid development
 
 [![GoReportCard](https://goreportcard.com/badge/github.com/viant/datly)](https://goreportcard.com/report/github.com/viant/datly)
 [![GoDoc](https://godoc.org/github.com/viant/datly?status.svg)](https://godoc.org/github.com/viant/datly)

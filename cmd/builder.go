@@ -416,9 +416,9 @@ func (s *Builder) buildRouterOutput() error {
 	}
 
 	s.routeBuilder.route.Output.CaseFormat = view.CaseFormat(view.FirstNotEmpty(s.routeBuilder.option.CaseFormat, "lc"))
-	if s.routeBuilder.option.ResponseField != "" {
+	if s.routeBuilder.option.Field != "" {
 		s.routeBuilder.route.Style = router.ComprehensiveStyle
-		s.routeBuilder.route.ResponseField = s.routeBuilder.option.ResponseField
+		s.routeBuilder.route.Field = s.routeBuilder.option.Field
 	}
 
 	if err = s.initRouteRequestBodySchemaIfNeeded(); err != nil {
@@ -722,7 +722,7 @@ func (s *Builder) addTypeDef(schema *view.TypeDefinition) {
 }
 
 func (s *Builder) inheritRouteFromMainConfig(config option.OutputConfig) {
-	s.routeBuilder.route.ResponseField = view.FirstNotEmpty(config.ResponseField, s.routeBuilder.route.ResponseField)
+	s.routeBuilder.route.Field = view.FirstNotEmpty(config.Field, s.routeBuilder.route.Field)
 	s.routeBuilder.route.Style = router.Style(view.FirstNotEmpty(config.Style, string(s.routeBuilder.route.Style)))
 }
 

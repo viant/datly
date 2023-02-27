@@ -26,7 +26,7 @@ INSERT INTO EVENTS (
 );
 
 #foreach($recEventsPerformance in $Unsafe.Events.EventsPerformance)
-	#set($recEventsPerformance.EventId = $Unsafe.Events.Id)
+    #set($recEventsPerformance.EventId = $Unsafe.Events.Id)
 	INSERT INTO EVENTS_PERFORMANCE (
         ID,
         PRICE,

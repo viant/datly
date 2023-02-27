@@ -619,6 +619,8 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 	}
 
 	response := reflect.New(route._responseSetter.rType)
+
+	//TODO extend to unified response
 	r.setResponseStatus(route, response, ResponseStatus{
 		Status:  "error",
 		Message: err,

@@ -1,5 +1,5 @@
 /* {"URI":"meta/vendors-format/"} */
-SELECT vendor.* /* {"Style":"Comprehensive", "ResponseField":"Data"}  */,
+SELECT vendor.* /* {"Style":"Comprehensive", "Field":"Data"}  */,
        products.* EXCEPT VENDOR_ID,
        Meta.* /* {"Kind": "record"} */,
        products_meta.* EXCEPT VENDOR_ID /* {"Kind": "record"} */

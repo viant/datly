@@ -7,6 +7,7 @@ const (
 	KeySQL            = "sql"
 	KeyParentView     = "ParentView"
 	KeySequencer      = "sequencer"
+	KeySQLx           = "sqlx"
 
 	Pagination    = "$PAGINATION"
 	Criteria      = "$CRITERIA"

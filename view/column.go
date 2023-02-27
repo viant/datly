@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
+	"github.com/viant/sqlx/types"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xreflect"
 	"reflect"
@@ -49,12 +50,16 @@ func ParseType(dataType string, typeLookup xreflect.TypeLookupFn) (reflect.Type,
 	}
 
 	switch strings.ToLower(dataType) {
-	case "int", "integer", "bigint", "smallint", "tinyint", "int64", "int32", "int16", "int8", "uint", "uint8", "uint16", "uint32", "uint64", "binary":
+	case "int", "integer", "bigint", "smallint", "unsiged tinyint", "tinyint", "int64", "int32", "int16", "int8", "uint", "uint8", "uint16", "uint32", "uint64", "binary":
 		return reflect.TypeOf(0), nil
 	case "float", "float64", "numeric", "decimal", "double":
 		return reflect.TypeOf(0.0), nil
-	case "bool", "boolean", "bit":
+	case "bool", "boolean":
 		return reflect.TypeOf(false), nil
+	case "types.Bool", "Bool":
+		return reflect.TypeOf(types.Bool(true)), nil
+	case "bit":
+		return reflect.TypeOf(""), nil
 	case "string", "varchar", "char", "text", "longtext", "longblob", "mediumblob", "mediumtext", "blob", "tinytext":
 		return reflect.TypeOf(""), nil
 	case "date", "time", "timestamp", "datetime":

@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/viant/datly/executor/sequencer"
+	"github.com/viant/sqlx/io/validator"
 	"github.com/viant/xunsafe"
 	"reflect"
+	"runtime/debug"
 	"strings"
 	"unsafe"
 )
@@ -17,13 +19,13 @@ type (
 	}
 
 	DataUnit struct {
-		Columns            ColumnsSource
-		ParamsGroup        []interface{}
-		Mock               bool
-		PlaceholderCounter int
-		TemplateSQL        string
-		MetaSource         MetaSource
-
+		Columns              ColumnsSource
+		ParamsGroup          []interface{}
+		Mock                 bool
+		PlaceholderCounter   int
+		TemplateSQL          string
+		MetaSource           MetaSource
+		sqlxValidator        *validator.Service
 		sliceIndex           map[reflect.Type]*xunsafe.Slice
 		executables          []*Executable
 		lastTableExecutables map[string]*Executable
@@ -31,6 +33,37 @@ type (
 		markers              []string
 	}
 )
+
+//ValidatePresent validates any type with presence provider (only check fields that were set)
+func (c *DataUnit) ValidatePresent(dest interface{}) (*validator.Validation, error) {
+	db, err := c.MetaSource.Db()
+	if err != nil {
+		fmt.Printf("error occured while connecting to DB %v\n", err.Error())
+		return nil, fmt.Errorf("error occurred while connecting to DB")
+	}
+	if c.sqlxValidator == nil {
+		c.sqlxValidator = validator.New()
+	}
+	return c.sqlxValidator.Validate(context.Background(), db, dest, validator.WithPresence())
+}
+
+func (c *DataUnit) Validate(dest interface{}) (*validator.Validation, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			debug.PrintStack()
+			panic(r)
+		}
+	}()
+	db, err := c.MetaSource.Db()
+	if err != nil {
+		fmt.Printf("error occured while connecting to DB %v\n", err.Error())
+		return nil, fmt.Errorf("error occurred while connecting to DB")
+	}
+	if c.sqlxValidator == nil {
+		c.sqlxValidator = validator.New()
+	}
+	return c.sqlxValidator.Validate(context.Background(), db, dest)
+}
 
 func (c *DataUnit) Allocate(tableName string, dest interface{}, selector string) (string, error) {
 	db, err := c.MetaSource.Db()

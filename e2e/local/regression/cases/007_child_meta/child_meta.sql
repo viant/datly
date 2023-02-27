@@ -1,5 +1,5 @@
 /* {"URI":"meta/vendors-nested/"} */
-SELECT vendor.* /* {"Style":"Comprehensive", "ResponseField":"Data"}  */,
+SELECT vendor.* /* {"Style":"Comprehensive", "Field":"Data"}  */,
        products.* EXCEPT VENDOR_ID,
        Meta.* /* {"Kind": "record"} */,
        ProductsMeta.* EXCEPT VENDOR_ID /* {"Kind": "record"} */

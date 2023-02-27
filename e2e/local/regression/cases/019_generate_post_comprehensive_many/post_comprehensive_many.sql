@@ -1,7 +1,7 @@
 /* {"URI": "comprehensive/events-many", "Method": "POST", "ResponseBody": {
         "From": "Events"
    },
-   "ResponseField": "Data" } */
+   "Field": "Data" } */
 
-SELECT events.* /* { "ResponseField": "Data" } */
+SELECT events.* /* { "Field": "Data" } */
 FROM (SELECT * FROM EVENTS) events

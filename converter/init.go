@@ -6,4 +6,5 @@ var aValidator *validator.Validate
 
 func init() {
 	aValidator = validator.New()
+	aValidator.RegisterAlias("phone", "e164")
 }

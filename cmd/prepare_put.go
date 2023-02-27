@@ -25,16 +25,13 @@ func (s *Builder) preparePutRule(ctx context.Context, SQL []byte) (string, error
 	if err != nil {
 		return "", err
 	}
-
 	template, err := s.buildUpdateSQL(routeConfig, config, metadata)
 	if err != nil {
 		return "", err
 	}
-
 	if _, err = s.upload(s.preGenSQLURL(s.fileNames.unique(config.fileName)), template); err != nil {
 		return "", nil
 	}
-
 	return template, nil
 }
 

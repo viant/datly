@@ -43,7 +43,7 @@ var orMatcher = parsly.NewToken(orToken, "Or", matcher.NewFragmentsFold([]byte("
 
 var comaMatcher = parsly.NewToken(comaToken, "Coma", matcher.NewTerminator(',', true))
 
-var fieldMatcher = parsly.NewToken(keywordToken, "Field", matcher2.NewIdentity())
+var fieldMatcher = parsly.NewToken(keywordToken, "GetField", matcher2.NewIdentity())
 
 var booleanMatcher = parsly.NewToken(booleanToken, "Boolean", matcher.NewFragments([]byte("true"), []byte("false")))
 var intMatcher = parsly.NewToken(intToken, "Int", matcher2.NewIntMatcher())

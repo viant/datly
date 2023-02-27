@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"github.com/viant/datly/shared"
 	"github.com/viant/velty/est"
 	"github.com/viant/velty/est/op"
 	"github.com/viant/xunsafe"
@@ -66,6 +67,10 @@ func (p *Printer) Log(format string, args ...interface{}) string {
 	return ""
 }
 
+func (p *Printer) Logf(format string, args ...interface{}) string {
+	return p.Log(format, args)
+}
+
 func (p *Printer) Sprintf(format string, args ...interface{}) string {
 	return fmt.Sprintf(strings.ReplaceAll(format, "\\n", "\n"), args...)
 }
@@ -76,6 +81,32 @@ func (p *Printer) Flush() {
 	}
 }
 
-func (p *Printer) Fatal(format string, args ...interface{}) (string, error) {
-	return "", fmt.Errorf(p.Sprintf(format, args...))
+func (p *Printer) Fatal(any interface{}, args ...interface{}) (string, error) {
+	format, ok := any.(string)
+	if ok {
+		return "", fmt.Errorf(p.Sprintf(format, args...))
+	}
+	if err, ok := any.(error); ok {
+		return "", err
+	}
+	return "", fmt.Errorf(p.Sprintf("%+v", any))
+}
+
+//Fatalf fatal with formatting
+func (p *Printer) Fatalf(any interface{}, args ...interface{}) (string, error) {
+	return p.Fatal(any, args...)
+}
+
+//FatalfWithCode logs and terminate with status code
+func (p *Printer) FatalfWithCode(code int, any interface{}, args ...interface{}) (string, error) {
+	format, ok := any.(string)
+	if ok {
+		err := &shared.ResponseError{StatusCode: code, Origin: fmt.Errorf(p.Sprintf(format, args...))}
+		return "", err
+	}
+	if err, ok := any.(error); ok {
+		return "", &shared.ResponseError{StatusCode: code, Origin: err}
+	}
+	err := &shared.ResponseError{StatusCode: code, Origin: fmt.Errorf(p.Sprintf("%+v", any))}
+	return "", err
 }
