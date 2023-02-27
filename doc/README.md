@@ -8,7 +8,7 @@ In custom mode datly also operates as single gateway entry point handling all in
 method/receiver go struct behaviour customization associated with the rule, this is achieved by either golang
 plugins or/and custom type registry integration.
 
-Both autonomous and custom mode datly can be deployed as standalone app or as Docker, Kubernetes Cloud Serverless runtimes (lambda,GCF,Cloud Run).
+Both autonomous and custom mode datly can be deployed as standalone app or as Docker, Kubernetes, Cloud Serverless runtimes (lambda,GCF,Cloud Run).
 
 
 ## [Velty Tamples](https://github.com/viant/velty)
