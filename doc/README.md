@@ -349,9 +349,20 @@ Generated input variable can be one of the following form
 /* ROUTE OPTION */
 import ...
 #set( $_ = ...) input paramter initialization
- DML | velocity syntax (#set|#if|#foreach)
+ DML | velocity expr (#set|#if|#foreach)
 
 ```
+Supported build in functions:
+- $logger.FatalF
+- $logger.LogF
+- $logger.PrintF
+- $differ.Diff
+- $sqlx.Validate
+- $http.Do
+- $http.Get
+
+TODO add all supported and update/add example
+ 
 
 ###### Validation
 
