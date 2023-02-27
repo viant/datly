@@ -1,7 +1,10 @@
-- Add possibility for sqlx ns in order to avoid unneccessary one-one relations.
-- SQL with StructQL simplificaiton ?
-- Executor triggers/notification
-- 
+- status code customization for DB SQL related errors
+- SQL with StructQL simplification
+- Executor triggers/notification (notification message ID in response)
+- remove usage of {"Auth":"Jwt"} with explicit declaration  and codec ?
+  #set($_ = $Jwt<JwtClaim/)(Header/Auth) -- <  {"Auth":"Jwt"}
+
+
 - Async mode 
   - post job, SQL-> (job id , dispotistion -> dest_teable,  temp_table)
   - job status <- job-id (RUNNING/ERROR/DONE)
@@ -9,15 +12,13 @@
 
 - setting customization for (async batch mode - disable by default)
 
-- remove usage of {"Auth":"Jwt"} with explicit declaration  and codec ?
-  #set($_ = $Jwt<JwtClaim/)(Header/Auth) -- <  {"Auth":"Jwt"} 
 
   
 - batch spreedsheet ingestion/response
 
 - multi transaction support on velthy ?
 - XML input / output
-
+- enhence sqlx ns in order to avoid unneccessary one-one relations.
 - Parameter Criteria IN, EXISTS, etc
 
 
