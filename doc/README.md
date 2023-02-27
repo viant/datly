@@ -331,7 +331,7 @@ datly -C='myDB|driver|dsn' -X myRule.sql -G=patch|post|put|delete [--dsqlOutput=
 As a result the following file would be generated:
 - dsql/<myRule>.sql  - initial logic for patch|post|put|delete operations
 - dsql/<myrule>.go   - initial go struct(s)   
-- dsql/<myrule>.json - example of JSON for testing a service
+- dsql/<myrule>Post.json - example of JSON for testing a service
 
 Generated go struct(s) can be modified with additional tags.
 
