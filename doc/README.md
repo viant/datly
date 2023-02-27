@@ -431,13 +431,13 @@ WHERE ID = $Entity.Id
 ```
 
 
-``sql
+```sql
 #set($_ = $InvoiceLines /* {"Required":false}
 #set($Ids = $Invoice.QueryFirst("SELECT ARRAY_AGG(Id) AS Values FROM  `/LineItems/`"))
 SELECT * FROM INVOICE_LINE_ITEM /* {"Selector":{}} */
 WHERE  #if($Ids.Values.Length() > 0 ) ID IN ( $Ids.Values ) #else 1 = 0 #end 
 */)
-``
+```
 
 
 ###### Indexing data
