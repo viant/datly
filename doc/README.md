@@ -494,6 +494,17 @@ WHERE  #if($Ids.Values.Length() > 0 ) ID IN ( $Ids.Values ) #else 1 = 0 #end
 ```
 
 
+### Meta repository
+
+#### OpenAPI
+
+#### Internal View
+
+#### Go Struct
+
+#### Performance metrics
+
+
 
 ### Plugin architecture && Custom Datly
 
