@@ -56,10 +56,8 @@ func ParseType(dataType string, typeLookup xreflect.TypeLookupFn) (reflect.Type,
 		return reflect.TypeOf(0.0), nil
 	case "bool", "boolean":
 		return reflect.TypeOf(false), nil
-	case "types.Bool", "Bool":
-		return reflect.TypeOf(types.Bool(true)), nil
-	case "bit":
-		return reflect.TypeOf(""), nil
+	case "bit", "bitbool":
+		return reflect.TypeOf(types.BitBool(true)), nil
 	case "string", "varchar", "char", "text", "longtext", "longblob", "mediumblob", "mediumtext", "blob", "tinytext":
 		return reflect.TypeOf(""), nil
 	case "date", "time", "timestamp", "datetime":
@@ -104,7 +102,7 @@ func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, co
 	}
 
 	if nonPtrType == nil || nonPtrType.Kind() == reflect.Interface {
-		rType, err := ParseType(c.DataType, resource._types.LookupType)
+		rType, err := GetOrParseType(resource._types.LookupType, c.DataType)
 		if err != nil && c.rType == nil {
 			return err
 		}

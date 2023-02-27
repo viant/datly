@@ -422,6 +422,8 @@ WHERE ID = $Entity.Id
 
 ###### Fetching data with StructQL
 
+- [StructQL](https://github.com/viant/structql)
+
 ```sql
 #set($_ = $Records /* {"Required":false} 
   #set($Ids = $Entities.QueryFirst("SELECT ARRAY_AGG(Id) AS Values FROM  `/`"))
@@ -452,7 +454,7 @@ WHERE  #if($Ids.Values.Length() > 0 ) ID IN ( $Ids.Values ) #else 1 = 0 #end
 #set($ById = $Records.IndexBy("Id"))
 
 #foreach($rec in $Unsafe.$Entities)
-    #if($ById.HasKey($rec) == false) 
+    #if($ById.HasKey($rec.Id) == false) 
         $logger.Fatal("not found record with %v id", $rec.Id) 
     #end
     #set($prev = $ById[$rec.Id])

@@ -113,3 +113,4 @@ require github.com/viant/xdatly/types/core v0.0.0-20230221181206-d2370898f2c4
 require github.com/viant/xdatly/types/custom v0.0.0-20230222005938-15dd3b2969d2
 
 replace github.com/viant/datly/plugins => ./plugins
+

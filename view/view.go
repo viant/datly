@@ -13,6 +13,7 @@ import (
 	"github.com/viant/gmetric/provider"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
+	"github.com/viant/sqlx/types"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -547,9 +548,7 @@ func remapScanType(scanType reflect.Type, name string) reflect.Type {
 	case sqlRawBytesType:
 		switch name {
 		case "BIT":
-			scanType = reflect.TypeOf([]byte{})
-		default:
-			scanType = reflect.TypeOf("")
+			scanType = reflect.TypeOf(types.BitBool(true))
 		}
 	}
 	return scanType
