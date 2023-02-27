@@ -3,8 +3,7 @@
 Datly has been design as modern flexible ORM for rapid development. Datly can operate in 
 managed, autonomous and custom mode.
 In managed mode datly is used as regular GoLang ORM where a user operate on golang struct and datly services programmatically.
-In autonomous mode datly operates as single gateway entry point handling all incoming request
-to corresponding rules.
+In autonomous mode datly operates as single gateway entry point handling all incoming request  with corresponding rules.
 In custom mode datly also operates as single gateway entry point handling all incoming request, allowing
 method/receiver go struct behaviour customization associated with the rule, this is achieved by either golang
 plugins or/and custom type registry integration.
