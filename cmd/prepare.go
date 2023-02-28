@@ -433,9 +433,6 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		if (!column.IsNullable()) && (column.IsAutoincrement == nil || (column.IsAutoincrement != nil && !*column.IsAutoincrement) || column.Default == nil) {
 			sqlxTagContent += ",required"
 		}
-		if strings.ToLower(column.Type) == "bit" {
-			sqlxTagContent += ",bit"
-		}
 		validationTag := "omitempty"
 		if strings.Contains(strings.ToLower(column.Name), "email") {
 			validationTag += ",email"

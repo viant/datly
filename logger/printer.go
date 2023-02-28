@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/velty/est"
@@ -73,6 +74,20 @@ func (p *Printer) Logf(format string, args ...interface{}) string {
 
 func (p *Printer) Sprintf(format string, args ...interface{}) string {
 	return fmt.Sprintf(strings.ReplaceAll(format, "\\n", "\n"), args...)
+}
+
+func (p *Printer) Debugf(format string, params ...interface{}) string {
+	var args = make([]interface{}, 0)
+	for _, param := range params {
+		data, err := json.Marshal(param)
+		if err == nil {
+			args = append(args, string(data))
+			continue
+		}
+		args = append(args, fmt.Sprintf("%+v", param))
+	}
+	fmt.Printf(format, args...)
+	return ""
 }
 
 func (p *Printer) Flush() {

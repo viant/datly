@@ -113,9 +113,24 @@ type (
 		rType       reflect.Type
 	}
 
+	ErrorItem struct {
+		Path    string
+		Field   string
+		Value   interface{}
+		Message string
+		Reason  string
+	}
+
+	WarningItem struct {
+		Message string
+		Reason  string
+	}
+
 	ResponseStatus struct {
-		Status  string      `json:",omitempty"`
-		Message interface{} `json:",omitempty"`
+		Status  string         `json:",omitempty"`
+		Message interface{}    `json:",omitempty"`
+		Errors  []*ErrorItem   `json:",omitempty"`
+		Warning []*WarningItem `json:",omitempty"`
 	}
 )
 

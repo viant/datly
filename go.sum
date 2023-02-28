@@ -273,6 +273,7 @@ github.com/viant/bigquery v0.2.1-0.20221005024313-4286a9622882 h1:9KGMSAlJvMB6It
 github.com/viant/bigquery v0.2.1-0.20221005024313-4286a9622882/go.mod h1:ExB9gkDtW+CpzTCpx1HWEj9ysvyv9pKiTRxl9LAs4ZQ=
 github.com/viant/cloudless v1.3.1-0.20230214231512-6dc83584f50e h1:yo0Kv/wMlcnA8t5iNs8hECgz5owsUPXE0PpTROrM6Lg=
 github.com/viant/cloudless v1.3.1-0.20230214231512-6dc83584f50e/go.mod h1:91dRDldA8C4AuftD1VD+3Ly3Wde22bj/YlI3ljdwlyY=
+github.com/viant/datly/plugins v0.0.0-20230215004138-3dadeee9e924/go.mod h1:v/G4mcEHv3JPQpqvv9peVAISW/4rGht8lyjATyH5++Q=
 github.com/viant/dsc v0.16.2 h1:Kw8zNct6dTISVZpartYK4MlKiwSSqIdRSq5CYjtZcc4=
 github.com/viant/dsc v0.16.2/go.mod h1:vkBPh3XSXUBB/ePbEO0VsKPaiN4JLRuB3QVftbS6KI4=
 github.com/viant/dsunit v0.10.8 h1:egq8LH4ogXTweFhzl/RqPhM9PNJtG35sbe02KnjFj3I=
@@ -291,6 +292,8 @@ github.com/viant/scy v0.4.1 h1:EUy/hSIVId6kO3Hjmni8RfaU2En+//R6BcJPmn5tKjg=
 github.com/viant/scy v0.4.1/go.mod h1:8DdAWhNVjY6OGOT9+2O7FEAPGDRqy2e+fG6cwIY6jNo=
 github.com/viant/sqlparser v0.3.1-0.20221212220151-be94fb808202 h1:+N7WV7q51Ko8PLuFV8dlM9PAup8pDUASoi33pOg4cpU=
 github.com/viant/sqlparser v0.3.1-0.20221212220151-be94fb808202/go.mod h1:ffKCsz9eb+tv0/nfDguYCcvpYmco/rLHhxhf/kMzKzw=
+github.com/viant/sqlx v0.5.1 h1:3NYDaJXJBMibPqVtrRdhU4iKDuyJ+r1vF6vlgPa+FpM=
+github.com/viant/sqlx v0.5.1/go.mod h1:5g5pLX3jlyvw8v0VV9/zXBI4KKWnGqY79ztyJmHT7Qw=
 github.com/viant/sqlx v0.5.2-0.20230228002729-092469acf74b h1:FeKFUK/g5O4W6SZH4OBBDifxj1h7ROrU8AQlnTvfXuI=
 github.com/viant/sqlx v0.5.2-0.20230228002729-092469acf74b/go.mod h1:I8sTdWCBN6DHygZc/kpWsCFuB4Fn3txODLlfF6mhZtk=
 github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd h1:mailUnfn2gsml5WB75MLDuIpL53fDBVGve90mJRpUkY=
