@@ -144,7 +144,7 @@ func (v *VeltyCodec) Value(ctx context.Context, raw interface{}, options ...inte
 		return nil, fmt.Errorf("expected selector not to be nil")
 	}
 
-	aValue, wasNil, err := converter.Convert(rawString, v.codecType, "")
+	aValue, wasNil, err := converter.Convert(rawString, v.codecType, false, "")
 	if err != nil {
 		return nil, err
 	}

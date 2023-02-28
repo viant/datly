@@ -125,7 +125,7 @@ func (p *RequestParams) parseRequestBody(body []byte, route *Route) error {
 		return err
 	}
 
-	convert, _, err := converter.Convert(string(body), unmarshaller.rType, "", unmarshaller.unmarshal)
+	convert, _, err := converter.Convert(string(body), unmarshaller.rType, route.CustomValidation, "", unmarshaller.unmarshal)
 	if err != nil {
 		return err
 	}

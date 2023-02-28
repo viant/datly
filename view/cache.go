@@ -363,7 +363,7 @@ func (c *Cache) getParamValues(ctx context.Context, paramValue *ParamValue) ([]i
 	result := make([]interface{}, len(paramValue.Values), len(paramValue.Values)+1)
 	for i, value := range paramValue.Values {
 		marshal := fmt.Sprintf("%v", value)
-		converted, _, err := converter.Convert(marshal, paramValue._param.Schema.Type(), paramValue._param.DateFormat)
+		converted, _, err := converter.Convert(marshal, paramValue._param.Schema.Type(), false, paramValue._param.DateFormat)
 		if err != nil {
 			return nil, err
 		}

@@ -10,7 +10,9 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/parameter"
+	"github.com/viant/govalidator"
 	"github.com/viant/sqlx/io/load/reader/csv"
+	"github.com/viant/sqlx/io/validator"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -41,15 +43,16 @@ const (
 type (
 	Routes []*Route
 	Route  struct {
-		Visitor     *Fetcher
-		URI         string
-		APIKey      *APIKey
-		Method      string
-		Service     ServiceType
-		View        *view.View
-		Cors        *Cors
-		EnableAudit bool
-		EnableDebug *bool
+		Visitor          *Fetcher
+		URI              string
+		APIKey           *APIKey
+		Method           string
+		CustomValidation bool
+		Service          ServiceType
+		View             *view.View
+		Cors             *Cors
+		EnableAudit      bool
+		EnableDebug      *bool
 		Output
 		Index
 
@@ -114,11 +117,11 @@ type (
 	}
 
 	ErrorItem struct {
-		Path    string
-		Field   string
-		Value   interface{}
-		Message string
-		Check   string
+		Location string
+		Field    string
+		Value    interface{}
+		Message  string
+		Check    string
 	}
 
 	WarningItem struct {
@@ -133,6 +136,34 @@ type (
 		Warning []*WarningItem `json:",omitempty"`
 	}
 )
+
+func (r *ResponseStatus) MergeFrom(err error) {
+
+	vErr, ok := err.(*validator.Validation)
+	if ok && len(vErr.Violations) > 0 {
+		for _, item := range vErr.Violations {
+			r.Errors = append(r.Errors, &ErrorItem{
+				Location: item.Location,
+				Field:    item.Field,
+				Value:    item.Value,
+				Message:  item.Message,
+				Check:    item.Check,
+			})
+		}
+	}
+	gvErr, ok := err.(*govalidator.Validation)
+	if ok && len(gvErr.Violations) > 0 {
+		for _, item := range gvErr.Violations {
+			r.Errors = append(r.Errors, &ErrorItem{
+				Location: item.Location,
+				Field:    item.Field,
+				Value:    item.Value,
+				Message:  item.Message,
+				Check:    item.Check,
+			})
+		}
+	}
+}
 
 func (r *Route) IsRevealMetric() bool {
 	if r.RevealMetric == nil {

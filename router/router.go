@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	goJson "encoding/json"
 	"fmt"
+	"github.com/viant/govalidator"
 	svalidator "github.com/viant/sqlx/io/validator"
 
 	"github.com/go-playground/validator"
@@ -600,8 +601,13 @@ func (r *Router) buildJsonFilters(route *Route, selectors *view.Selectors) ([]*j
 
 func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, statusCode int) {
 	statusCode, err = normalizeErr(err, statusCode)
+	responseStatus := ResponseStatus{
+		Status:  "error",
+		Message: err.Error(),
+	}
+	responseStatus.MergeFrom(err)
 	if route._responseSetter == nil {
-		errAsBytes, marshalErr := goJson.Marshal(err)
+		errAsBytes, marshalErr := goJson.Marshal(responseStatus)
 		if marshalErr != nil {
 			w.Write([]byte("could not parse error message"))
 			w.WriteHeader(http.StatusInternalServerError)
@@ -615,23 +621,6 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 
 	response := reflect.New(route._responseSetter.rType)
 
-	responseStatus := ResponseStatus{
-		Status:  "error",
-		Message: err,
-	}
-	if val, ok := err.(*svalidator.Validation); ok {
-		if len(val.Violations) > 0 {
-			for _, item := range val.Violations {
-				responseStatus.Errors = append(responseStatus.Errors, &ErrorItem{
-					Path:    item.Path,
-					Field:   item.Field,
-					Value:   item.Value,
-					Message: item.Message,
-					Check:   item.Check,
-				})
-			}
-		}
-	}
 	//TODO extend to unified response
 	r.setResponseStatus(route, response, responseStatus, nil)
 
@@ -691,9 +680,15 @@ func (r *Router) createCacheEntry(ctx context.Context, session *ReaderSession) (
 
 func normalizeErr(err error, statusCode int) (int, error) {
 	switch actual := err.(type) {
+	case *svalidator.Validation:
+		return statusCode, actual
+	case *govalidator.Validation:
+		return statusCode, actual
 	case *Errors:
 		for _, anError := range actual.Errors {
 			switch childErr := anError.Err.(type) {
+			case *govalidator.Validation:
+				return statusCode, childErr
 			case validator.ValidationErrors:
 				anError.Object = NewParamErrors(childErr)
 				anError.Message = childErr.Error()
@@ -711,10 +706,8 @@ func normalizeErr(err error, statusCode int) (int, error) {
 		if actual.status != 0 {
 			statusCode = actual.status
 		}
-
 		return statusCode, err
 	}
-
 	return statusCode, &Error{
 		Message: err.Error(),
 	}

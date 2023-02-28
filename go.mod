@@ -20,7 +20,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/onsi/gomega v1.20.2 // indirect
 	github.com/pkg/errors v0.9.1
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	github.com/viant/afs v1.16.1-0.20220708154004-5cc767a16d95
 	github.com/viant/afsc v1.8.1-0.20220721172758-a0713d05bfdd
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
@@ -33,7 +33,7 @@ require (
 	github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac
 	github.com/viant/parsly v0.1.0
 	github.com/viant/scy v0.4.1
-	github.com/viant/sqlx v0.5.2-0.20230228011808-5d8f371d51e4
+	github.com/viant/sqlx v0.5.2
 	github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20230220191359-8d6aefc90a69
@@ -104,9 +104,12 @@ require (
 	google.golang.org/genproto v0.0.0-20221024183307-1bc688fe9f3e // indirect
 	google.golang.org/grpc v1.50.1 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
+	github.com/viant/govalidator v0.0.0-20230228144442-a514751a8a90
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
 require github.com/viant/xdatly/types/core v0.0.0-20230221181206-d2370898f2c4
 
-require github.com/viant/xdatly/types/custom v0.0.0-20230222005938-15dd3b2969d2
+require (
+	github.com/viant/xdatly/types/custom v0.0.0-20230222005938-15dd3b2969d2
+)

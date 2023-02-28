@@ -90,7 +90,7 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 		}
 
 		paramValue := os.Getenv(parameter.In.Name)
-		convert, wasNil, err := converter.Convert(paramValue, parameter.ActualParamType(), parameter.DataType)
+		convert, wasNil, err := converter.Convert(paramValue, parameter.ActualParamType(), false, parameter.DataType)
 		if err != nil {
 			return nil, err
 		}

@@ -414,7 +414,7 @@ func (b *selectorsBuilder) convertAndTransform(ctx context.Context, raw string, 
 	}
 
 	if param.Output == nil {
-		convert, _, err := converter.Convert(raw, param.ActualParamType(), dateFormat)
+		convert, _, err := converter.Convert(raw, param.ActualParamType(), true, dateFormat)
 		return convert, err
 	}
 

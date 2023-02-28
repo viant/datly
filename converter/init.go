@@ -1,10 +1,9 @@
 package converter
 
-import "github.com/go-playground/validator"
+import "github.com/viant/govalidator"
 
-var aValidator *validator.Validate
+var aValidator *govalidator.Service
 
 func init() {
-	aValidator = validator.New()
-	aValidator.RegisterAlias("phone", "e164")
+	aValidator = govalidator.New()
 }

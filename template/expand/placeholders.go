@@ -8,7 +8,6 @@ import (
 	"github.com/viant/sqlx/io/validator"
 	"github.com/viant/xunsafe"
 	"reflect"
-	"runtime/debug"
 	"strings"
 	"unsafe"
 )
@@ -34,26 +33,16 @@ type (
 	}
 )
 
-//ValidatePresent validates any type with presence provider (only check fields that were set)
-func (c *DataUnit) ValidatePresent(dest interface{}) (*validator.Validation, error) {
-	db, err := c.MetaSource.Db()
-	if err != nil {
-		fmt.Printf("error occured while connecting to DB %v\n", err.Error())
-		return nil, fmt.Errorf("error occurred while connecting to DB")
-	}
-	if c.sqlxValidator == nil {
-		c.sqlxValidator = validator.New()
-	}
-	return c.sqlxValidator.Validate(context.Background(), db, dest, validator.WithPresence())
+func (c *DataUnit) WithPresence() interface{} {
+	var opt interface{} = validator.WithPresence()
+	return opt
+}
+func (c *DataUnit) WithLocation(loc string) interface{} {
+	var opt interface{} = validator.WithLocation(loc)
+	return opt
 }
 
-func (c *DataUnit) Validate(dest interface{}) (*validator.Validation, error) {
-	defer func() {
-		if r := recover(); r != nil {
-			debug.PrintStack()
-			panic(r)
-		}
-	}()
+func (c *DataUnit) Validate(dest interface{}, opts ...interface{}) (*validator.Validation, error) {
 	db, err := c.MetaSource.Db()
 	if err != nil {
 		fmt.Printf("error occured while connecting to DB %v\n", err.Error())
@@ -62,7 +51,13 @@ func (c *DataUnit) Validate(dest interface{}) (*validator.Validation, error) {
 	if c.sqlxValidator == nil {
 		c.sqlxValidator = validator.New()
 	}
-	return c.sqlxValidator.Validate(context.Background(), db, dest)
+	var options []validator.Option
+	for _, opt := range opts {
+		if o, ok := (opt).(validator.Option); ok {
+			options = append(options, o)
+		}
+	}
+	return c.sqlxValidator.Validate(context.Background(), db, dest, options...)
 }
 
 func (c *DataUnit) Allocate(tableName string, dest interface{}, selector string) (string, error) {

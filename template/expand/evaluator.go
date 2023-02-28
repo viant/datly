@@ -15,6 +15,7 @@ const (
 	Criteria       = "criteria"
 	Logger         = "logger"
 	FnsHttpService = "http"
+	ValidatorNs    = "validator"
 )
 
 type (
@@ -71,6 +72,9 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	}
 
 	if err = evaluator.planner.DefineVariable(FnsHttpService, reflect.TypeOf(&Http{})); err != nil {
+		return nil, err
+	}
+	if err = evaluator.planner.DefineVariable(ValidatorNs, reflect.TypeOf(goValidator)); err != nil {
 		return nil, err
 	}
 
@@ -152,6 +156,10 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 	}
 
 	if err := newState.SetValue(FnsHttpService, &Http{}); err != nil {
+		return nil, nil, err
+	}
+
+	if err := newState.SetValue(ValidatorNs, goValidator); err != nil {
 		return nil, nil, err
 	}
 

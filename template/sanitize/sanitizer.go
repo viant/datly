@@ -29,6 +29,7 @@ var builtInMethods = map[string]bool{
 	keywords.ColumnsIn[1:]:        true,
 	keywords.KeySequencer:         true,
 	expand.FnsHttpService:         true,
+	expand.ValidatorNs:            true,
 	expand.FnsDiffer:              true,
 }
 

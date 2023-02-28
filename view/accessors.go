@@ -200,7 +200,7 @@ func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue in
 		return err
 	}
 
-	converted, _, err := converter.Convert(string(marshal), xField.Type, format)
+	converted, _, err := converter.Convert(string(marshal), xField.Type, false, format)
 	if err != nil {
 		return err
 	}

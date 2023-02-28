@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"encoding/json"
 	"reflect"
 	"strconv"
@@ -11,7 +12,7 @@ var TimeType = reflect.TypeOf(time.Time{})
 
 type Unmarshaller func([]byte, interface{}) error
 
-func Convert(raw string, toType reflect.Type, format string, options ...interface{}) (value interface{}, wasNil bool, err error) {
+func Convert(raw string, toType reflect.Type, skipValidation bool, format string, options ...interface{}) (value interface{}, wasNil bool, err error) {
 	switch toType.Kind() {
 	case reflect.Bool:
 		parseBool, err := strconv.ParseBool(raw)
@@ -180,8 +181,14 @@ func Convert(raw string, toType reflect.Type, format string, options ...interfac
 		return result, isNil, nil
 	}
 
-	if toType.Kind() == reflect.Struct {
-		err = aValidator.Struct(result)
+	if toType.Kind() == reflect.Struct && !skipValidation {
+		validation, err := aValidator.Validate(context.Background(), result)
+		if err != nil {
+			return nil, false, err
+		}
+		if validation.Failed {
+			return nil, false, validation
+		}
 	}
 
 	if err != nil {
