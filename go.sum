@@ -310,6 +310,7 @@ github.com/viant/xdatly/types/custom v0.0.0-20230222005938-15dd3b2969d2 h1:eeOMo
 github.com/viant/xdatly/types/custom v0.0.0-20230222005938-15dd3b2969d2/go.mod h1:NVeS+s/uf2dj/M2QlLdY5KXoci0KPMbD9n02Y0m5hBw=
 github.com/viant/xreflect v0.0.0-20230228014334-2cea7db162f2 h1:INPHIMMEutNNytA7+wk0nRhpMtSZQyiueDxLOZ1ncaw=
 github.com/viant/xreflect v0.0.0-20230228014334-2cea7db162f2/go.mod h1:uflXFHcw4TQXgYJvTQ7Akf4SAzXYPCVi8NGZgsVlwmA=
+github.com/viant/xreflect v0.0.0-20230228022707-868c539b1c7d/go.mod h1:uflXFHcw4TQXgYJvTQ7Akf4SAzXYPCVi8NGZgsVlwmA=
 github.com/viant/xunsafe v0.8.3-0.20230218034831-ffaf536b6784 h1:LIVmGBQ8EbbXSL1tBOntDcgjm1+XdhNkeWENWgpupTw=
 github.com/viant/xunsafe v0.8.3-0.20230218034831-ffaf536b6784/go.mod h1:niyYv07oGkqPJirAda2yz+yqt5G+eM275y179yVaS3s=
 github.com/xlab/treeprint v1.1.0/go.mod h1:gj5Gd3gPdKtR1ikdDK6fnFLdmIS0X30kTTuNd/WEJu0=
