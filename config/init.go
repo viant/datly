@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/viant/scy/auth/jwt"
+	"github.com/viant/sqlx/types"
 	"github.com/viant/xdatly/types/core"
 	_ "github.com/viant/xdatly/types/custom/imports"
 	"reflect"
@@ -40,5 +41,9 @@ var Config = &Registry{
 		CsvFactory(""),
 		StructQLFactory(""),
 	),
-	Packages: map[string]map[string]reflect.Type{},
+	Packages: map[string]map[string]reflect.Type{
+		"types": {
+			"BitBool": reflect.TypeOf(types.BitBool(true)),
+		},
+	},
 }
