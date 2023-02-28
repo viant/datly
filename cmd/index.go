@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/viant/datly/config"
 	errUtils "github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io"
@@ -66,7 +67,7 @@ func (m *TableMeta) AddSinkColumns(columns []sink.Column) error {
 	var errors []error
 
 	for _, column := range columns {
-		rType, err := view.GetOrParseType(view.Types{}.LookupType, column.Type)
+		rType, err := view.GetOrParseType(config.Config.LookupType, column.Type)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("couldn't convert %v column type %v due to the %w", column.Name, column.Type, err))
 			continue

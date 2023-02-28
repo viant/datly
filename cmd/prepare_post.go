@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/metadata/sink"
@@ -115,8 +116,8 @@ func (s *Builder) recordName(recordName string, config *viewConfig) (string, boo
 	return "rec" + strings.Title(recordName), true
 }
 
-func (s *Builder) buildRequestBodyPostParam(config *viewConfig, def *inputMetadata) (reflect.Type, error) {
-	if err := def.typeDef.Init(context.Background(), view.Types{}.LookupType); err != nil {
+func (s *Builder) buildRequestBodyPostParam(def *inputMetadata) (reflect.Type, error) {
+	if err := def.typeDef.Init(context.Background(), config.Config.LookupType); err != nil {
 		return nil, err
 	}
 

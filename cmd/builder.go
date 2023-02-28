@@ -1034,7 +1034,7 @@ func (s *Builder) loadGoType(typeSrc *option.TypeSrcConfig) error {
 	}
 	s.normalizeURL(typeSrc)
 
-	dirTypes, err := xreflect.ParseTypes(typeSrc.URL)
+	dirTypes, err := xreflect.ParseTypes(typeSrc.URL, xreflect.TypeLookupFn(config.Config.LookupType))
 	if err != nil {
 		return err
 	}

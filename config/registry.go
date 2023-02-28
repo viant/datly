@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -132,6 +133,11 @@ func (r *Registry) overridePackageNamedTypes(packageTypes map[string]map[string]
 }
 
 func (r *Registry) LookupType(_, packageName string, typeName string) (reflect.Type, error) {
+	if packageNameIndex := strings.Index(typeName, "."); packageNameIndex != -1 {
+		packageName = typeName[:packageNameIndex]
+		typeName = typeName[packageNameIndex+1:]
+	}
+
 	registry := r.PackageRegistry(packageName)
 	rType, ok := registry[typeName]
 	if !ok {

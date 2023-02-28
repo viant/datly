@@ -433,6 +433,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		if (!column.IsNullable()) && (column.IsAutoincrement == nil || (column.IsAutoincrement != nil && !*column.IsAutoincrement) || column.Default == nil) {
 			sqlxTagContent += ",required"
 		}
+
 		validationTag := "omitempty"
 		if strings.Contains(strings.ToLower(column.Name), "email") {
 			validationTag += ",email"
@@ -830,7 +831,7 @@ func (s *Builder) prepareStringBuilder(typeDef *inputMetadata, config *viewConfi
 	sb := &strings.Builder{}
 	typeName := typeDef.typeDef.Name
 
-	paramType, err := s.buildRequestBodyPostParam(config, typeDef)
+	paramType, err := s.buildRequestBodyPostParam(typeDef)
 	if err != nil {
 		return nil, err
 	}
@@ -924,7 +925,7 @@ func (s *Builder) uploadGoType(name string, rType reflect.Type, routeOption *opt
 
 func (s *Builder) registerXDatlyGoFile(modulePath string, outputURL string) error {
 	var imports []string
-	types, err := xreflect.ParseTypes(path.Join(modulePath, "imports"))
+	types, err := xreflect.ParseTypes(path.Join(modulePath, "imports"), xreflect.TypeLookupFn(dConfig.Config.LookupType))
 	if err == nil {
 		imports = types.Imports("*" + importsFile)
 	}
