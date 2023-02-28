@@ -118,7 +118,7 @@ type (
 		Field   string
 		Value   interface{}
 		Message string
-		Reason  string
+		Check   string
 	}
 
 	WarningItem struct {

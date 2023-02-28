@@ -627,7 +627,7 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 					Field:   item.Field,
 					Value:   item.Value,
 					Message: item.Message,
-					Reason:  item.Reason,
+					Check:   item.Check,
 				})
 			}
 		}
