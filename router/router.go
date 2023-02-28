@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	goJson "encoding/json"
 	"fmt"
+	svalidator "github.com/viant/sqlx/io/validator"
+
 	"github.com/go-playground/validator"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
@@ -613,11 +615,25 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 
 	response := reflect.New(route._responseSetter.rType)
 
-	//TODO extend to unified response
-	r.setResponseStatus(route, response, ResponseStatus{
+	responseStatus := ResponseStatus{
 		Status:  "error",
 		Message: err,
-	}, nil)
+	}
+	if val, ok := err.(*svalidator.Validation); ok {
+		if len(val.Violations) > 0 {
+			for _, item := range val.Violations {
+				responseStatus.Errors = append(responseStatus.Errors, &ErrorItem{
+					Path:    item.Path,
+					Field:   item.Field,
+					Value:   item.Value,
+					Message: item.Message,
+					Reason:  item.Reason,
+				})
+			}
+		}
+	}
+	//TODO extend to unified response
+	r.setResponseStatus(route, response, responseStatus, nil)
 
 	asBytes, marErr := route._outputMarshaller.Marshal(response.Elem().Interface(), errorFilters)
 	if marErr != nil {
