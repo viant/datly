@@ -9,8 +9,8 @@ import (
 	"github.com/viant/afs/option"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/logger"
-	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/openapi3"
@@ -45,7 +45,7 @@ type (
 		Info             openapi3.Info
 		ColumnsDiscovery bool
 		EnableDebug      *bool
-		_visitors        plugins.CodecsRegistry
+		_visitors        config.CodecsRegistry
 		cfs              afs.Service
 		Resource         *view.Resource
 	}
@@ -254,15 +254,15 @@ func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCach
 	return resource, nil
 }
 
-func readOptions(options []interface{}) (plugins.CodecsRegistry, view.Types, map[string]*view.Resource, *view.Metrics, xreflect.TypeLookupFn) {
-	var visitors plugins.CodecsRegistry
+func readOptions(options []interface{}) (config.CodecsRegistry, view.Types, map[string]*view.Resource, *view.Metrics, xreflect.TypeLookupFn) {
+	var visitors config.CodecsRegistry
 	var types view.Types
 	var resources map[string]*view.Resource
 	var metrics *view.Metrics
 	var typeLookup xreflect.TypeLookupFn
 	for _, anOption := range options {
 		switch actual := anOption.(type) {
-		case plugins.CodecsRegistry:
+		case config.CodecsRegistry:
 			visitors = actual
 		case view.Types:
 			types = actual
@@ -278,7 +278,7 @@ func readOptions(options []interface{}) (plugins.CodecsRegistry, view.Types, map
 			resources = actual
 		case *view.Metrics:
 			metrics = actual
-		case *plugins.Registry:
+		case *config.Registry:
 			types = actual.Types
 			typeLookup = actual.LookupType
 			visitors = actual.Codecs
@@ -294,7 +294,7 @@ func readOptions(options []interface{}) (plugins.CodecsRegistry, view.Types, map
 	}
 
 	if visitors == nil {
-		visitors = map[string]plugins.BasicCodec{}
+		visitors = map[string]interface{}{}
 	}
 
 	return visitors, types, resources, metrics, typeLookup

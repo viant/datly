@@ -1,0 +1,15 @@
+[
+  {},
+  {
+    "ID": 1,
+    "USER_ID": 1,
+    "IS_ENABLED": true,
+    "IS_ACTIVATED": false
+  },
+  {
+    "ID": 2,
+    "USER_ID": 2,
+    "IS_ENABLED": false,
+    "IS_ACTIVATED": true
+  }
+]

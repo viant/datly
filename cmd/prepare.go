@@ -10,7 +10,6 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/option"
 	dConfig "github.com/viant/datly/config"
-	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/router"
 	json2 "github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/template/sanitize"
@@ -982,9 +981,9 @@ func (s *Builder) relativeOf(modulePath string, outputURL string) string {
 	return URL
 }
 
-func (s *Builder) generateGoFileContent(name string, rType reflect.Type, routeOption *option.RouteConfig, config *viewConfig, xDatlyModURL string, packageName string) ([]byte, error) {
+func (s *Builder) generateGoFileContent(name string, rType reflect.Type, routeOption *option.RouteConfig, aConfig *viewConfig, xDatlyModURL string, packageName string) ([]byte, error) {
 	if packageName == "" {
-		base := path.Base(config.fileName)
+		base := path.Base(aConfig.fileName)
 		ext := path.Ext(base)
 		packageName = strings.Replace(base, ext, "", 1)
 	}
@@ -998,7 +997,7 @@ func (s *Builder) generateGoFileContent(name string, rType reflect.Type, routeOp
 var %v = map[string]reflect.Type{
 		"%v": reflect.TypeOf(%v{}),
 }
-`, plugins.TypesName, name, name))
+`, dConfig.TypesName, name, name))
 
 		imports = append(imports, "reflect")
 		packageName = "main"

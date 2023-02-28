@@ -7,7 +7,6 @@ import (
 	furl "github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/build"
 	"github.com/viant/datly/config"
-	"github.com/viant/datly/plugins"
 	"github.com/viant/xdatly/types/core"
 	"os"
 	"path"
@@ -42,13 +41,13 @@ func (p pluginDataSlice) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 
-func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesChange) (*plugins.Registry, error) {
+func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesChange) (*config.Registry, error) {
 	updateSize := len(changes.pluginsIndex.updated)
 	if updateSize == 0 {
 		return nil, nil
 	}
 
-	registry := plugins.NewRegistry()
+	registry := config.NewRegistry()
 	_, cancelFn := core.Types(func(packageName, typeName string, rType reflect.Type, _ time.Time) {
 		registry.AddType(packageName, typeName, rType)
 	})
@@ -98,7 +97,7 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 				registry.OverridePackageTypes(*actual)
 			case *map[string]map[string]reflect.Type:
 				registry.OverridePackageNamedTypes(*actual)
-			case **plugins.Registry:
+			case **config.Registry:
 				registry.Override(*actual)
 			}
 		}
@@ -110,7 +109,7 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 }
 
 func (r *Service) handlePluginConfig(pluginProvider *plugin.Plugin, data *pluginData) {
-	configPlugin, err := pluginProvider.Lookup(plugins.PluginConfig)
+	configPlugin, err := pluginProvider.Lookup(config.PluginConfig)
 	if err != nil {
 		return
 	}
@@ -139,12 +138,12 @@ func (r *Service) pluginDst() string {
 }
 
 func (r *Service) handlePluginTypes(provider *plugin.Plugin, data *pluginData) {
-	types, err := provider.Lookup(plugins.TypesName)
+	types, err := provider.Lookup(config.TypesName)
 	if err != nil {
 		return
 	}
 
-	packageSymbol, err := provider.Lookup(plugins.PackageName)
+	packageSymbol, err := provider.Lookup(config.PackageName)
 	var packageName string
 	if err == nil {
 		name, ok := packageSymbol.(*string)
@@ -157,13 +156,13 @@ func (r *Service) handlePluginTypes(provider *plugin.Plugin, data *pluginData) {
 	data.packageName = packageName
 }
 
-func (r *Service) loadPluginMetadata(ctx context.Context, URL string) (*plugins.Metadata, error) {
+func (r *Service) loadPluginMetadata(ctx context.Context, URL string) (*config.Metadata, error) {
 	fileName := path.Base(URL)
 	if ext := path.Ext(fileName); ext != "" {
 		fileName = strings.ReplaceAll(fileName, ext, "")
 	}
 
-	pluginsMetadata := &plugins.Metadata{
+	pluginsMetadata := &config.Metadata{
 		URL: URL,
 	}
 

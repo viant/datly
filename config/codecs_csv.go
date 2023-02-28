@@ -3,7 +3,6 @@ package config
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/plugins"
 	"github.com/viant/sqlx/io/load/reader/csv"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -17,11 +16,11 @@ type (
 		sliceType  *xunsafe.Slice
 		marshaller *csv.Marshaller
 		config     *csv.Config
-		codec      *plugins.CodecConfig
+		codec      *CodecConfig
 	}
 )
 
-func (c CsvFactory) Valuer() plugins.Valuer {
+func (c CsvFactory) Valuer() Valuer {
 	return c
 }
 
@@ -30,14 +29,14 @@ func (c CsvFactory) Name() string {
 }
 
 func (c CsvFactory) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
-	return nil, plugins.UnexpectedUseError(c)
+	return nil, UnexpectedUseError(c)
 }
 
-func (c *CSV) Valuer() plugins.Valuer {
+func (c *CSV) Valuer() Valuer {
 	return c
 }
 
-func (c CsvFactory) New(codec *plugins.CodecConfig, paramType reflect.Type) (plugins.Valuer, error) {
+func (c CsvFactory) New(codec *CodecConfig, paramType reflect.Type) (Valuer, error) {
 	aCsv := &CSV{
 		codec:     codec,
 		paramType: paramType,

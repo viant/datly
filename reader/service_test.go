@@ -9,7 +9,6 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/logger"
-	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -79,7 +78,7 @@ type usecase struct {
 	resource    *view.Resource
 	dataset     string
 	provider    *base.Provider
-	visitors    plugins.CodecsRegistry
+	visitors    config.CodecsRegistry
 }
 
 type StringsCodec struct {
@@ -468,7 +467,7 @@ func TestRead(t *testing.T) {
 			dataURI:     "case023_columns_codec/",
 			dest:        new(interface{}),
 			view:        "events",
-			visitors: plugins.CodecsRegistry{
+			visitors: config.CodecsRegistry{
 				"Strings": config.NewVisitor("Strings", &StringsCodec{}),
 			},
 			expect: `[{"Name":["John","David","Anna"]}]`,

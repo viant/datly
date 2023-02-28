@@ -1,9 +1,6 @@
 - status code customization for DB SQL related errors
 - SQL with StructQL simplification
 - Executor triggers/notification (notification message ID in response)
-- remove usage of {"Auth":"Jwt"} with explicit declaration  and codec ?
-  #set($_ = $Jwt<JwtClaim/)(Header/Auth) -- <  {"Auth":"Jwt"}
-
 
 - Async mode 
   - post job, SQL-> (job id , dispotistion -> dest_teable,  temp_table)

@@ -17,6 +17,7 @@ type ParameterConfig struct {
 	Const          interface{}      `json:",omitempty" yaml:",omitempty"`
 	CodecType      string           `json:",omitempty" yaml:",omitempty"`
 	Cardinality    view.Cardinality `json:",omitempty" yaml:",omitempty"`
+	StatusCode     *int             `json:",omitempty" yaml:",omitempty"`
 }
 
 type ParamMeta struct {

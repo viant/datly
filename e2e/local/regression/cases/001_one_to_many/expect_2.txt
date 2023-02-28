@@ -5,23 +5,23 @@ import (
 )
 
 type GeneratedStruct struct {
-	Id          int32      `sqlx:"name=ID"`
+	Id          int        `sqlx:"name=ID"`
 	Name        *string    `sqlx:"name=NAME"`
-	AccountId   *int64     `sqlx:"name=ACCOUNT_ID"`
+	AccountId   *int       `sqlx:"name=ACCOUNT_ID"`
 	Created     *time.Time `sqlx:"name=CREATED"`
-	UserCreated *int64     `sqlx:"name=USER_CREATED"`
+	UserCreated *int       `sqlx:"name=USER_CREATED"`
 	Updated     *time.Time `sqlx:"name=UPDATED"`
-	UserUpdated *int64     `sqlx:"name=USER_UPDATED"`
+	UserUpdated *int       `sqlx:"name=USER_UPDATED"`
 	Products    []*Products
 }
 
 type Products struct {
-	Id          int32      `sqlx:"name=ID"`
+	Id          int        `sqlx:"name=ID"`
 	Name        *string    `sqlx:"name=NAME"`
-	VendorId    *int64     `sqlx:"name=VENDOR_ID"`
-	Status      *int64     `sqlx:"name=STATUS"`
+	VendorId    *int       `sqlx:"name=VENDOR_ID"`
+	Status      *int       `sqlx:"name=STATUS"`
 	Created     *time.Time `sqlx:"name=CREATED"`
-	UserCreated *int64     `sqlx:"name=USER_CREATED"`
+	UserCreated *int       `sqlx:"name=USER_CREATED"`
 	Updated     *time.Time `sqlx:"name=UPDATED"`
-	UserUpdated *int64     `sqlx:"name=USER_UPDATED"`
+	UserUpdated *int       `sqlx:"name=USER_UPDATED"`
 }

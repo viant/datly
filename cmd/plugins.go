@@ -9,8 +9,8 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/storage"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway"
-	"github.com/viant/datly/plugins"
 	"github.com/viant/xreflect"
 	"go/ast"
 	"go/format"
@@ -372,7 +372,7 @@ func (s *Builder) pluginArgs(pluginDst string, pluginPath string, plugin *plugin
 }
 
 func (s *Builder) readPackageNameValue(plugin *pluginGenDeta) string {
-	packageValue, err := plugin.filesMeta.Value(plugins.PackageName)
+	packageValue, err := plugin.filesMeta.Value(config.PackageName)
 	if err != nil {
 		return ""
 	}
@@ -391,7 +391,7 @@ func (s *Builder) readPackageNameValue(plugin *pluginGenDeta) string {
 }
 
 func (s *Builder) genPluginMetadata(pluginPath string, generatedTime time.Time) error {
-	pluginMeta := &plugins.Metadata{
+	pluginMeta := &config.Metadata{
 		CreationTime: generatedTime,
 		Version:      runtime.Version(),
 	}

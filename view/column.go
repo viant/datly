@@ -5,12 +5,10 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
-	"github.com/viant/sqlx/types"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
-	"time"
 )
 
 type foo struct {
@@ -49,24 +47,9 @@ func ParseType(dataType string, typeLookup xreflect.TypeLookupFn) (reflect.Type,
 		dataType = dataType[:precisionIndex]
 	}
 
-	switch strings.ToLower(dataType) {
-	case "int", "integer", "bigint", "smallint", "unsiged tinyint", "tinyint", "int64", "int32", "int16", "int8", "uint", "uint8", "uint16", "uint32", "uint64", "binary":
-		return reflect.TypeOf(0), nil
-	case "float", "float64", "numeric", "decimal", "double":
-		return reflect.TypeOf(0.0), nil
-	case "bool", "boolean":
-		return reflect.TypeOf(false), nil
-	case "bit", "bitbool":
-		return reflect.TypeOf(types.BitBool(true)), nil
-	case "string", "varchar", "char", "text", "longtext", "longblob", "mediumblob", "mediumtext", "blob", "tinytext":
-		return reflect.TypeOf(""), nil
-	case "date", "time", "timestamp", "datetime":
-		return reflect.TypeOf(time.Time{}), nil
-	case "sql.RawBytes":
-		return reflect.TypeOf(""), nil
-	case "interface":
-		t := reflect.ValueOf(interface{}(foo{})).FieldByName("Interface").Type()
-		return t, nil
+	rType, ok := io.ParseType(dataType)
+	if ok {
+		return rType, nil
 	}
 
 	return xreflect.ParseWithLookup(dataType, true, typeLookup)

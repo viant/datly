@@ -89,7 +89,6 @@ require (
 	github.com/lestrrat-go/option v1.0.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/viant/datly/plugins v0.0.0-20230215004138-3dadeee9e924
 	github.com/viant/igo v0.1.0 // indirect
 	github.com/viant/sqlparser v0.3.1-0.20221212220151-be94fb808202
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
@@ -108,9 +107,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-require github.com/viant/xdatly/types/core v0.0.0-20230221181206-d2370898f2c4
-
-require github.com/viant/xdatly/types/custom v0.0.0-20230222005938-15dd3b2969d2
-
-replace github.com/viant/datly/plugins => ./plugins
-
+require (
+	github.com/viant/xdatly/types/core v0.0.0-20230221181206-d2370898f2c4
+	github.com/viant/xdatly/types/custom v0.0.0-20230222005938-15dd3b2969d2
+)

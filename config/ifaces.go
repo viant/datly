@@ -1,4 +1,4 @@
-package plugins
+package config
 
 import (
 	"context"
@@ -21,7 +21,12 @@ type (
 	}
 
 	BasicCodec interface {
+		Namer
+		Typer
 		Valuer() Valuer
+	}
+
+	Namer interface {
 		Name() string
 	}
 

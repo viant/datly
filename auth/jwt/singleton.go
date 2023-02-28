@@ -24,15 +24,15 @@ func Init(gwayConfig *gateway.Config, embedFs *embed.FS) (gateway.Authorizer, er
 				embedFs = &cognito.EmbedFs
 			}
 			if cognitoService, err = cognito.New(gwayConfig.Cognito, fs, embedFs); err == nil {
-				provider := New(cognitoService.VerifyIdentity)
-				config.Config.RegisterCodec(config.NewVisitor(config.CodecKeyJwtClaim, provider))
-				config.Config.RegisterCodec(config.NewVisitor(config.CodecCognitoKeyJwtClaim, provider))
+				config.Config.RegisterCodec(New(config.CodecKeyJwtClaim, cognitoService.VerifyIdentity))
+				config.Config.RegisterCodec(New(config.CodecCognitoKeyJwtClaim, cognitoService.VerifyIdentity))
 			}
 		}
 		if gwayConfig.JWTValidator != nil {
 			jwtVerifier = verifier.New(gwayConfig.JWTValidator)
 			if err = jwtVerifier.Init(context.Background()); err == nil {
-				config.Config.RegisterCodec(config.NewVisitor(config.CodecKeyJwtClaim, New(jwtVerifier.VerifyClaims)))
+				config.Config.RegisterCodec(
+					New(config.CodecKeyJwtClaim, jwtVerifier.VerifyClaims))
 			}
 		}
 	})

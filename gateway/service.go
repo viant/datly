@@ -10,7 +10,7 @@ import (
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/auth/secret"
-	"github.com/viant/datly/plugins"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -46,7 +46,7 @@ type (
 		JWTSigner            *signer.Service
 		pluginsInUse         map[string]bool
 		mux                  sync.RWMutex
-		pluginsConfig        *plugins.Registry
+		pluginsConfig        *config.Registry
 	}
 )
 
@@ -74,7 +74,7 @@ func (r *Service) Close() error {
 }
 
 //New creates gateway Service. It is important to call Service.Close before Service got Garbage collected.
-func New(ctx context.Context, config *Config, statusHandler http.Handler, authorizer Authorizer, registry *plugins.Registry, metrics *gmetric.Service) (*Service, error) {
+func New(ctx context.Context, config *Config, statusHandler http.Handler, authorizer Authorizer, registry *config.Registry, metrics *gmetric.Service) (*Service, error) {
 	start := time.Now()
 	config.Init()
 	err := config.Validate()

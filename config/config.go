@@ -1,4 +1,4 @@
-package plugins
+package config
 
 type CodecConfig struct {
 	Query     string `json:",omitempty"`

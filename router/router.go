@@ -10,7 +10,6 @@ import (
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/config"
-	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal/json"
@@ -451,15 +450,12 @@ func (r *Router) putCache(ctx context.Context, route *Route, cacheEntry *cache.E
 }
 
 func (r *Router) runBeforeFetchIfNeeded(response http.ResponseWriter, request *http.Request, route *Route) (shouldContinue bool) {
-	if actual, ok := route.Visitor.Visitor().(plugins.BeforeFetcher); ok {
-		return r.runBeforeFetch(response, request, actual.BeforeFetch)
+	if route.Visitor == nil || route.Visitor._fetcher == nil {
+		return true
 	}
 
-	if actual, ok := route.Visitor.Visitor().(plugins.ClosableBeforeFetcher); ok {
-		return r.runBeforeFetch(response, request, func(response http.ResponseWriter, request *http.Request) error {
-			_, err := actual.BeforeFetch(response, request)
-			return err
-		})
+	if actual, ok := route.Visitor._fetcher.(config.BeforeFetcher); ok {
+		return r.runBeforeFetch(response, request, actual.BeforeFetch)
 	}
 
 	return true
@@ -482,15 +478,12 @@ func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Requ
 }
 
 func (r *Router) runAfterFetchIfNeeded(session *ReaderSession, dest interface{}) (shouldContinue bool) {
-	if actual, ok := session.Route.Visitor.Visitor().(plugins.AfterFetcher); ok {
-		return r.runAfterFetch(session, dest, actual.AfterFetch)
+	if session.Route.Visitor == nil || session.Route.Visitor._fetcher == nil {
+		return true
 	}
 
-	if actual, ok := session.Route.Visitor.Visitor().(plugins.ClosableAfterFetcher); ok {
-		return r.runAfterFetch(session, dest, func(dest interface{}, response http.ResponseWriter, req *http.Request) error {
-			_, err := actual.AfterFetch(dest, response, req)
-			return err
-		})
+	if actual, ok := session.Route.Visitor._fetcher.(config.AfterFetcher); ok {
+		return r.runAfterFetch(session, dest, actual.AfterFetch)
 	}
 
 	return true

@@ -9,8 +9,8 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/runtime/standalone"
-	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/sanitize"
@@ -280,6 +280,10 @@ func (s *Builder) Build(ctx context.Context) error {
 	}
 
 	if err := s.moveConstParameters(); err != nil {
+		return err
+	}
+
+	if err := s.updateParamsByHints(); err != nil {
 		return err
 	}
 
@@ -706,10 +710,6 @@ func (s *Builder) addParameters(params ...*view.Parameter) error {
 			continue
 		}
 
-		if err := s.updateParamByHint(aParam); err != nil {
-			return err
-		}
-
 		s.routeBuilder.routerResource.Resource.Parameters = append(s.routeBuilder.routerResource.Resource.Parameters, params[i])
 		s.routeBuilder.paramsIndex.AddParameter(params[i])
 	}
@@ -936,7 +936,7 @@ func (s *Builder) updateParamByHint(param *view.Parameter) error {
 		return nil
 	}
 
-	JSONHint, _ := sanitize.SplitHint(hint.Hint)
+	JSONHint, SQL := sanitize.SplitHint(hint.Hint)
 	JSONHint = strings.TrimSpace(JSONHint)
 	if JSONHint == "" {
 		return nil
@@ -947,10 +947,10 @@ func (s *Builder) updateParamByHint(param *view.Parameter) error {
 		return err
 	}
 
-	return s.updateViewParam(param, paramConfig)
+	return s.updateViewParam(param, paramConfig, SQL)
 }
 
-func (s *Builder) updateViewParam(param *view.Parameter, config *option.ParameterConfig) error {
+func (s *Builder) updateViewParam(param *view.Parameter, config *option.ParameterConfig, SQL string) error {
 	if config.Const != nil {
 		param.Const = config.Const
 	}
@@ -981,6 +981,18 @@ func (s *Builder) updateViewParam(param *view.Parameter, config *option.Paramete
 
 	if config.CodecType != "" && param.Output != nil {
 		param.Output.Schema = &view.Schema{DataType: config.CodecType}
+	}
+
+	if config.StatusCode != nil {
+		param.ErrorStatusCode = *config.StatusCode
+	}
+
+	if strings.TrimSpace(config.Codec) != "" && isSQLLikeCodec(config.Codec) {
+		if param.Codec == nil {
+			param.Codec = &view.Codec{Reference: shared.Reference{config.Codec}}
+		}
+
+		param.Codec.Query = SQL
 	}
 
 	return nil
@@ -1098,7 +1110,7 @@ func (s *Builder) loadGoType(typeSrc *option.TypeSrcConfig) error {
 }
 
 func (s *Builder) packageName(dirTypes *xreflect.DirTypes) (string, error) {
-	packageValue, err := dirTypes.Value(plugins.PackageName)
+	packageValue, err := dirTypes.Value(config.PackageName)
 	if err != nil {
 		return "", nil
 	}
@@ -1275,7 +1287,7 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 		return matched.Text(cursor), nil
 	}
 
-	config := &option.ParameterConfig{}
+	aConfig := &option.ParameterConfig{}
 	possibilities := []*parsly.Token{typeMatcher, exprGroupMatcher}
 	anyMatched := false
 	for len(possibilities) > 0 {
@@ -1288,15 +1300,15 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 			types := strings.Split(typeContent, ",")
 			dataType := types[0]
 			if strings.HasPrefix(dataType, "[]") {
-				config.Cardinality = view.Many
+				aConfig.Cardinality = view.Many
 				dataType = dataType[2:]
 			} else {
-				config.Cardinality = view.One
+				aConfig.Cardinality = view.One
 			}
 
-			config.DataType = dataType
+			aConfig.DataType = dataType
 			if len(types) > 1 {
-				config.CodecType = types[1]
+				aConfig.CodecType = types[1]
 			}
 
 			possibilities = []*parsly.Token{exprGroupMatcher}
@@ -1306,16 +1318,16 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 			inContent = strings.TrimSpace(inContent[1 : len(inContent)-1])
 
 			segments := strings.Split(inContent, "/")
-			config.Kind = segments[0]
+			aConfig.Kind = segments[0]
 
 			target := ""
 			if len(segments) > 1 {
 				target = strings.Join(segments[1:], ".")
 			}
 
-			config.Target = &target
+			aConfig.Target = &target
 
-			if err := s.readParamConfigs(config, cursor); err != nil {
+			if err := s.readParamConfigs(aConfig, cursor); err != nil {
 				return "", err
 			}
 			possibilities = []*parsly.Token{}
@@ -1327,7 +1339,7 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 		}
 		anyMatched = true
 	}
-	marshal, err := json.Marshal(config)
+	marshal, err := json.Marshal(aConfig)
 	if err != nil {
 		return "", err
 	}
@@ -1336,12 +1348,12 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 }
 
 func (s *Builder) readParamConfigs(config *option.ParameterConfig, cursor *parsly.Cursor) error {
-	matched := cursor.MatchOne(dotMatcher)
-	if matched.Code != dotToken {
-		return nil
-	}
-
 	for cursor.Pos < cursor.InputSize {
+		matched := cursor.MatchOne(dotMatcher)
+		if matched.Code != dotToken {
+			return nil
+		}
+
 		matched = cursor.MatchOne(selectMatcher)
 		if matched.Code != selectToken {
 			return cursor.NewError(selectMatcher)
@@ -1359,9 +1371,26 @@ func (s *Builder) readParamConfigs(config *option.ParameterConfig, cursor *parsl
 		switch text {
 		case "WithCodec":
 			config.Codec = strings.Trim(content, "'")
+		case "WithStatusCode":
+			statusCode, err := strconv.Atoi(content)
+			if err != nil {
+				return err
+			}
+
+			config.StatusCode = &statusCode
 		}
 
 		cursor.MatchOne(whitespaceMatcher)
+	}
+
+	return nil
+}
+
+func (s *Builder) updateParamsByHints() error {
+	for _, parameter := range s.routeBuilder.paramsIndex.parameters {
+		if err := s.updateParamByHint(parameter); err != nil {
+			return err
+		}
 	}
 
 	return nil

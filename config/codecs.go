@@ -1,4 +1,4 @@
-package plugins
+package config
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ type (
 		resultType reflect.Type
 	}
 
-	CodecsRegistry map[string]BasicCodec
+	CodecsRegistry map[string]interface{}
 )
 
 func (c *Codec) Name() string {
@@ -39,7 +39,7 @@ func UnexpectedUseError(on interface{}) error {
 	return fmt.Errorf("unexpected use Value on %T", on)
 }
 
-func NewCodecs(codecs ...BasicCodec) CodecsRegistry {
+func NewCodecs(codecs ...Namer) CodecsRegistry {
 	result := CodecsRegistry{}
 	for i := range codecs {
 		result.Register(codecs[i])
@@ -48,15 +48,33 @@ func NewCodecs(codecs ...BasicCodec) CodecsRegistry {
 	return result
 }
 
-func (v CodecsRegistry) Lookup(name string) (BasicCodec, error) {
+func (v CodecsRegistry) Lookup(name string) (interface{}, error) {
 	visitor, ok := v[name]
 	if !ok {
-		return nil, fmt.Errorf("not found visitor with name %v", name)
+		return nil, fmt.Errorf("not found codec with name %v", name)
 	}
 
 	return visitor, nil
 }
 
-func (v CodecsRegistry) Register(visitor BasicCodec) {
+func (v CodecsRegistry) LookupCodec(name string) (BasicCodec, error) {
+	lookup, err := v.Lookup(name)
+	if err != nil {
+		return nil, err
+	}
+
+	aCodec, ok := lookup.(BasicCodec)
+	if !ok {
+		return nil, fmt.Errorf("expected %T to be type of BasicCodec", aCodec)
+	}
+
+	return aCodec, nil
+}
+
+func (v CodecsRegistry) Register(visitor Namer) {
 	v[visitor.Name()] = visitor
+}
+
+func (v CodecsRegistry) RegisterWithName(name string, codec interface{}) {
+	v[name] = codec
 }

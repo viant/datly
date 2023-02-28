@@ -6,7 +6,6 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/config"
-	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
@@ -171,7 +170,7 @@ func paramCodec(param *Parameter) (*view.Codec, string) {
 	if param.Codec != "" {
 		codec = &view.Codec{
 			Reference: shared.Reference{Ref: param.Codec},
-			CodecConfig: plugins.CodecConfig{
+			CodecConfig: config.CodecConfig{
 				Query: param.SQL,
 			},
 		}

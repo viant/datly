@@ -3,7 +3,6 @@ package config
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/plugins"
 	"github.com/viant/structql"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -22,19 +21,23 @@ type (
 	}
 )
 
-func (s StructQLFactory) Valuer() plugins.Valuer {
+func (s StructQLFactory) ResultType(paramType reflect.Type) (reflect.Type, error) {
+	return nil, UnexpectedUseError(s)
+}
+
+func (s StructQLFactory) Valuer() Valuer {
 	return s
 }
 
 func (s StructQLFactory) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
-	return nil, plugins.UnexpectedUseError(s)
+	return nil, UnexpectedUseError(s)
 }
 
 func (s StructQLFactory) Name() string {
 	return CodecStructql
 }
 
-func (s StructQLFactory) New(codec *plugins.CodecConfig, paramType reflect.Type) (plugins.Valuer, error) {
+func (s StructQLFactory) New(codec *CodecConfig, paramType reflect.Type) (Valuer, error) {
 	if codec.Query == "" {
 		return nil, fmt.Errorf("codec query can't be empty")
 	}
@@ -47,7 +50,7 @@ func (s StructQLFactory) New(codec *plugins.CodecConfig, paramType reflect.Type)
 	return structQLCodec.Valuer(), nil
 }
 
-func (s *StructQLCodec) Valuer() plugins.Valuer {
+func (s *StructQLCodec) Valuer() Valuer {
 	return s
 }
 

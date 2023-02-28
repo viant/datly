@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/logger"
-	"github.com/viant/datly/plugins"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
@@ -13,7 +13,6 @@ import (
 	"github.com/viant/gmetric/provider"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
-	"github.com/viant/sqlx/types"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -513,7 +512,6 @@ func convertIoColumnsToColumns(ioColumns []io.Column, nullable map[string]bool) 
 	columns := make([]*Column, 0)
 	for i := 0; i < len(ioColumns); i++ {
 		scanType := ioColumns[i].ScanType()
-		scanType = remapScanType(scanType, ioColumns[i].DatabaseTypeName())
 		dataTypeName := ioColumns[i].DatabaseTypeName()
 		isNullable, _ := ioColumns[i].Nullable()
 		columns = append(columns, &Column{
@@ -525,33 +523,6 @@ func convertIoColumnsToColumns(ioColumns []io.Column, nullable map[string]bool) 
 		})
 	}
 	return columns
-}
-
-var (
-	sqlNullInt64Type   = reflect.TypeOf(sql.NullInt64{})
-	sqlNullFloat64Type = reflect.TypeOf(sql.NullFloat64{})
-	sqlRawBytesType    = reflect.TypeOf(sql.RawBytes{})
-	sqlNullTimeType    = reflect.TypeOf(sql.NullTime{})
-)
-
-func remapScanType(scanType reflect.Type, name string) reflect.Type {
-	switch scanType {
-	case sqlNullInt64Type:
-		v := int64(0)
-		scanType = reflect.TypeOf(&v)
-	case sqlNullTimeType:
-		t := time.Time{}
-		scanType = reflect.TypeOf(&t)
-	case sqlNullFloat64Type:
-		f := float64(0)
-		scanType = reflect.TypeOf(&f)
-	case sqlRawBytesType:
-		switch name {
-		case "BIT":
-			scanType = reflect.TypeOf(types.BitBool(true))
-		}
-	}
-	return scanType
 }
 
 // ColumnByName returns Column by Column.Name
@@ -1037,18 +1008,18 @@ func (v *View) indexTransforms(resource *Resource, transforms marshal.Transforms
 		}
 
 		columnName := format.CaseUpperCamel.Format(transform.Path, v.Caser)
-		config, ok := v.ColumnsConfig[columnName]
+		aConfig, ok := v.ColumnsConfig[columnName]
 		if !ok {
-			config = &ColumnConfig{}
-			v.ColumnsConfig[columnName] = config
+			aConfig = &ColumnConfig{}
+			v.ColumnsConfig[columnName] = aConfig
 		}
 
-		visitor, ok := resource.VisitorByName(transform.Codec)
+		visitor, ok := resource.CodecByName(transform.Codec)
 		if !ok {
 			return fmt.Errorf("not found codec %v", transform.Codec)
 		}
 
-		actualCodec, ok := visitor.(plugins.CodecDef)
+		actualCodec, ok := visitor.(config.CodecDef)
 		if !ok {
 			return fmt.Errorf("expected %v codec to be type of %T but was %T", transform.Codec, actualCodec, visitor)
 		}
@@ -1057,7 +1028,7 @@ func (v *View) indexTransforms(resource *Resource, transforms marshal.Transforms
 		if err != nil {
 			return err
 		}
-		config.Codec = &Codec{
+		aConfig.Codec = &Codec{
 			Name:     transform.Codec,
 			Schema:   NewSchema(resultType),
 			_codecFn: actualCodec.Valuer().Value,

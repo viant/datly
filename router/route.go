@@ -3,11 +3,11 @@ package router
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/parameter"
 	"github.com/viant/sqlx/io/load/reader/csv"
@@ -41,7 +41,7 @@ const (
 type (
 	Routes []*Route
 	Route  struct {
-		Visitor     *config.Visitor
+		Visitor     *Fetcher
 		URI         string
 		APIKey      *APIKey
 		Method      string
@@ -65,6 +65,11 @@ type (
 		_requestBodyType          reflect.Type
 		_requestBodySlice         *xunsafe.Slice
 		_inputMarshaller          *json.Marshaller
+	}
+
+	Fetcher struct {
+		shared.Reference
+		_fetcher interface{}
 	}
 
 	Output struct {
@@ -246,7 +251,6 @@ func reverse(namespace map[string]string) map[string]string {
 
 func (r *Route) initVisitor(resource *Resource) error {
 	if r.Visitor == nil {
-		r.Visitor = &config.Visitor{}
 		return nil
 	}
 
@@ -256,7 +260,7 @@ func (r *Route) initVisitor(resource *Resource) error {
 			return err
 		}
 
-		r.Visitor.Inherit(refVisitor)
+		r.Visitor._fetcher = refVisitor
 	}
 
 	return nil

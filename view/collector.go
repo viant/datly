@@ -63,7 +63,6 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 	}
 
 	scanType := column.ScanType()
-	scanType = remapScanType(scanType, column.DatabaseTypeName())
 	kind := scanType.Kind()
 	switch kind {
 	case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64, reflect.Uint32, reflect.Int32, reflect.Uint16, reflect.Int16, reflect.Uint8, reflect.Int8:
@@ -88,8 +87,8 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 		default:
 			valuePtr = reflect.New(scanType).Interface()
 		}
-		*buffer = append(*buffer, valuePtr)
 
+		*buffer = append(*buffer, valuePtr)
 		return valuePtr
 	}
 }
