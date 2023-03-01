@@ -976,8 +976,16 @@ func (s *Builder) updateViewParam(param *view.Parameter, config *option.Paramete
 		param.Output = &view.Codec{Reference: shared.Reference{Ref: config.Codec}}
 	}
 
+	if config.MaxAllowedRecords != nil {
+		param.MaxAllowedRecords = config.MaxAllowedRecords
+	}
+
 	if config.ExpectReturned != nil {
-		param.MaxAllowedRecords = config.ExpectReturned
+		param.ExpectedReturned = config.ExpectReturned
+	}
+
+	if config.MinAllowedRecords != nil {
+		param.MinAllowedRecords = config.MinAllowedRecords
 	}
 
 	if config.CodecType != "" && param.Output != nil {

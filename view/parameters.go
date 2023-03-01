@@ -32,6 +32,8 @@ type (
 		DataType          string    `json:",omitempty"`
 		Style             string    `json:",omitempty"`
 		MaxAllowedRecords *int      `json:",omitempty"`
+		MinAllowedRecords *int      `json:",omitempty"`
+		ExpectedReturned  *int      `json:",omitempty"`
 		Schema            *Schema   `json:",omitempty"`
 		//deprecated -> use Codec only to set Output
 		Codec  *Codec      `json:",omitempty"`

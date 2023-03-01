@@ -624,6 +624,15 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 
 	ptr := xunsafe.AsPointer(destSlicePtr)
 	paramLen := slice.Len(ptr)
+
+	if param.MinAllowedRecords != nil && *param.MinAllowedRecords > paramLen {
+		return nil, &JSONError{Object: destSlicePtr}
+	}
+
+	if param.ExpectedReturned != nil && *param.ExpectedReturned != paramLen {
+		return nil, &JSONError{Object: destSlicePtr}
+	}
+
 	if param.MaxAllowedRecords != nil && *param.MaxAllowedRecords < paramLen {
 		return nil, &JSONError{Object: destSlicePtr}
 	}
