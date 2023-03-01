@@ -158,11 +158,11 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 		return nil, err
 	}
 
-	if err := e.executor.Exec(state.State); err != nil {
+	if err := state.SetValue(ValidatorNs, goValidator); err != nil {
 		return nil, err
 	}
 
-	if err := state.SetValue(ValidatorNs, goValidator); err != nil {
+	if err := e.executor.Exec(state.State); err != nil {
 		return nil, err
 	}
 
