@@ -1,4 +1,10 @@
 {
-  "message": "{\"Errors\":[{\"View\":\"post_comprehensive_one\",\"Param\":\"Events\",\"Message\":\"parameter Events is required\"}]}",
-  "status": "error"
+  "status": "error",
+  "errors": [
+    {
+      "view": "post_comprehensive_one",
+      "param": "Events",
+      "message": "parameter Events is required"
+    }
+  ]
 }

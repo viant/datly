@@ -14,8 +14,6 @@ import (
 )
 
 const (
-	//deprecated
-	VeltyCriteriaCodec = "VeltyCriteria"
 	CodecVeltyCriteria = "VeltyCriteria"
 )
 
@@ -566,6 +564,26 @@ type ParametersIndex map[string]*Parameter
 
 //ParametersSlice represents slice of parameters
 type ParametersSlice []*Parameter
+
+func (p ParametersSlice) Len() int {
+	return len(p)
+}
+
+func (p ParametersSlice) Less(i, j int) bool {
+	if p[j].ErrorStatusCode == 401 {
+		return true
+	}
+
+	if p[j].ErrorStatusCode == 403 {
+		return p[i].ErrorStatusCode != 401
+	}
+
+	return false
+}
+
+func (p ParametersSlice) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
 
 //Index indexes parameters by Parameter.Name
 func (p ParametersSlice) Index() (ParametersIndex, error) {

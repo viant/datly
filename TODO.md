@@ -28,7 +28,5 @@
 - Management API
 - add GUI
 
-
-- Errors normalization
 - Validator
 - Warning

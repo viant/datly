@@ -2,7 +2,6 @@ package router
 
 import (
 	"bytes"
-	goJson "encoding/json"
 	"github.com/go-playground/validator"
 	"github.com/viant/toolbox"
 	"sync"
@@ -26,9 +25,10 @@ type (
 	}
 
 	Errors struct {
-		Errors []*Error
-		mutex  sync.Mutex
-		status int
+		Message string `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
+		Errors  []*Error
+		mutex   sync.Mutex
+		status  int
 	}
 
 	ParamErrors []*ParamError
@@ -61,8 +61,7 @@ func (e *Errors) AddError(view, param string, err error) {
 }
 
 func (e *Errors) Error() string {
-	asBytes, _ := goJson.Marshal(e)
-	return string(asBytes)
+	return e.Message
 }
 
 func (e *Errors) setStatus(code int) {

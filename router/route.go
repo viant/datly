@@ -10,9 +10,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/parameter"
-	"github.com/viant/govalidator"
 	"github.com/viant/sqlx/io/load/reader/csv"
-	"github.com/viant/sqlx/io/validator"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -131,39 +129,11 @@ type (
 
 	ResponseStatus struct {
 		Status  string         `json:",omitempty"`
-		Message interface{}    `json:",omitempty"`
-		Errors  []*ErrorItem   `json:",omitempty"`
+		Message string         `json:",omitempty"`
+		Errors  interface{}    `json:",omitempty"`
 		Warning []*WarningItem `json:",omitempty"`
 	}
 )
-
-func (r *ResponseStatus) MergeFrom(err error) {
-
-	vErr, ok := err.(*validator.Validation)
-	if ok && len(vErr.Violations) > 0 {
-		for _, item := range vErr.Violations {
-			r.Errors = append(r.Errors, &ErrorItem{
-				Location: item.Location,
-				Field:    item.Field,
-				Value:    item.Value,
-				Message:  item.Message,
-				Check:    item.Check,
-			})
-		}
-	}
-	gvErr, ok := err.(*govalidator.Validation)
-	if ok && len(gvErr.Violations) > 0 {
-		for _, item := range gvErr.Violations {
-			r.Errors = append(r.Errors, &ErrorItem{
-				Location: item.Location,
-				Field:    item.Field,
-				Value:    item.Value,
-				Message:  item.Message,
-				Check:    item.Check,
-			})
-		}
-	}
-}
 
 func (r *Route) IsRevealMetric() bool {
 	if r.RevealMetric == nil {

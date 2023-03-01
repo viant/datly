@@ -12,6 +12,7 @@ import (
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
+	"sort"
 	"strings"
 )
 
@@ -88,6 +89,7 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 		return err
 	}
 
+	sort.Sort(ParametersSlice(t.Parameters))
 	return t.initMetaIfNeeded(ctx, resource)
 }
 

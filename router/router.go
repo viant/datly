@@ -9,7 +9,6 @@ import (
 	"github.com/viant/govalidator"
 	svalidator "github.com/viant/sqlx/io/validator"
 
-	"github.com/go-playground/validator"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/config"
@@ -51,9 +50,11 @@ const (
 )
 
 var errorFilters = json.NewFilters(&json.FilterEntry{
-	Fields: []string{"Status", "Message"},
+	Fields: []string{"Status", "Message", "Errors"},
 })
+
 var debugEnabled = os.Getenv("DATLY_DEBUG") != ""
+var strErrType = reflect.TypeOf(fmt.Errorf(""))
 
 type (
 	Router struct {
@@ -600,12 +601,8 @@ func (r *Router) buildJsonFilters(route *Route, selectors *view.Selectors) ([]*j
 }
 
 func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, statusCode int) {
-	statusCode, err = normalizeErr(err, statusCode)
-	responseStatus := ResponseStatus{
-		Status:  "error",
-		Message: err.Error(),
-	}
-	responseStatus.MergeFrom(err)
+	statusCode, message, anObjectErr := normalizeErr(err, statusCode)
+	responseStatus := r.responseStatusError(message, anObjectErr)
 	if route._responseSetter == nil {
 		errAsBytes, marshalErr := goJson.Marshal(responseStatus)
 		if marshalErr != nil {
@@ -633,6 +630,15 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 
 	w.WriteHeader(statusCode)
 	w.Write(asBytes)
+}
+
+func (r *Router) responseStatusError(message string, anObject interface{}) ResponseStatus {
+	responseStatus := ResponseStatus{
+		Status:  "error",
+		Message: message,
+		Errors:  anObject,
+	}
+	return responseStatus
 }
 
 func (r *Router) setResponseStatus(route *Route, response reflect.Value, responseStatus ResponseStatus, stats []*reader.Info) {
@@ -678,39 +684,67 @@ func (r *Router) createCacheEntry(ctx context.Context, session *ReaderSession) (
 	return session.Route.Cache.Get(ctx, marshalled, session.Route.View.Name)
 }
 
-func normalizeErr(err error, statusCode int) (int, error) {
+func normalizeErr(err error, statusCode int) (int, string, interface{}) {
 	switch actual := err.(type) {
 	case *svalidator.Validation:
-		return statusCode, actual
+		var errorItems []*ErrorItem
+		for _, item := range actual.Violations {
+			errorItems = append(errorItems, &ErrorItem{
+				Location: item.Location,
+				Field:    item.Field,
+				Value:    item.Value,
+				Message:  item.Message,
+				Check:    item.Check,
+			})
+		}
+
+		return statusCode, err.Error(), errorItems
 	case *govalidator.Validation:
-		return statusCode, actual
+		var items []*ErrorItem
+		for _, item := range actual.Violations {
+			items = append(items, &ErrorItem{
+				Location: item.Location,
+				Field:    item.Field,
+				Value:    item.Value,
+				Message:  item.Message,
+				Check:    item.Check,
+			})
+		}
+
+		return statusCode, actual.Error(), items
+	case *JSONError:
+		return statusCode, "", actual.Object
 	case *Errors:
+		actual.setStatus(statusCode)
 		for _, anError := range actual.Errors {
-			switch childErr := anError.Err.(type) {
-			case *govalidator.Validation:
-				return statusCode, childErr
-			case validator.ValidationErrors:
-				anError.Object = NewParamErrors(childErr)
-				anError.Message = childErr.Error()
-			case *Errors:
-				var errCode int
-				errCode, anError.Object = normalizeErr(anError.Err, statusCode)
-				actual.setStatus(errCode)
-			case *JSONError:
-				anError.Object = childErr
-			default:
-				anError.Message = anError.Error()
+			isObj := isObject(anError.Err)
+			if isObj {
+				statusCode, anError.Message, anError.Object = normalizeErr(anError.Err, statusCode)
+			} else {
+				statusCode, anError.Message, anError.Object = normalizeErr(anError.Err, statusCode)
 			}
 		}
 
-		if actual.status != 0 {
-			statusCode = actual.status
-		}
-		return statusCode, err
+		actual.setStatus(statusCode)
+
+		return actual.status, actual.Message, actual.Errors
+
+	default:
+		return statusCode, err.Error(), nil
 	}
-	return statusCode, &Error{
-		Message: err.Error(),
+}
+
+func isObject(anError interface{}) bool {
+	rType := reflect.TypeOf(anError)
+	if rType == strErrType {
+		return false
 	}
+
+	for rType.Kind() == reflect.Ptr || rType.Kind() == reflect.Slice {
+		rType = rType.Elem()
+	}
+
+	return rType.Kind() == reflect.Struct
 }
 
 func (r *Router) indexRoutes() {

@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader"
@@ -34,17 +33,13 @@ type (
 	}
 
 	JSONError struct {
-		Object interface{}
+		Message string
+		Object  interface{}
 	}
 )
 
-func (e *JSONError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(e.Object)
-}
-
 func (e *JSONError) Error() string {
-	marshal, _ := json.Marshal(e.Object)
-	return string(marshal)
+	return e.Message
 }
 
 func (b *selectorsBuilder) build(ctx context.Context, viewsDetails []*ViewDetails) (*view.Selectors, error) {
@@ -117,9 +112,6 @@ func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.R
 	}
 
 	selectors, err := CreateSelectors(ctx, route._accessors, route.DateFormat, *route._caser, requestMetadata, requestParams, views...)
-	if err != nil {
-		_, err = normalizeErr(err, 400)
-	}
 	return selectors, requestParams, err
 }
 
@@ -626,15 +618,24 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 	paramLen := slice.Len(ptr)
 
 	if param.MinAllowedRecords != nil && *param.MinAllowedRecords > paramLen {
-		return nil, &JSONError{Object: destSlicePtr}
+		return nil, &JSONError{
+			Object:  destSlicePtr,
+			Message: fmt.Sprintf("expected to return at least %v records, but returned %v", *param.MinAllowedRecords, paramLen),
+		}
 	}
 
 	if param.ExpectedReturned != nil && *param.ExpectedReturned != paramLen {
-		return nil, &JSONError{Object: destSlicePtr}
+		return nil, &JSONError{
+			Object:  destSlicePtr,
+			Message: fmt.Sprintf("expected to return %v records, but returned %v", *param.MinAllowedRecords, paramLen),
+		}
 	}
 
 	if param.MaxAllowedRecords != nil && *param.MaxAllowedRecords < paramLen {
-		return nil, &JSONError{Object: destSlicePtr}
+		return nil, &JSONError{
+			Object:  destSlicePtr,
+			Message: fmt.Sprintf("expected to return no more than %v records, but returned %v", *param.MinAllowedRecords, paramLen),
+		}
 	}
 
 	if paramLen == 0 && param.IsRequired() {

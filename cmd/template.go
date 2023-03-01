@@ -550,9 +550,7 @@ func (t *Template) updateParamIfNeeded(param *Parameter, meta *sanitize.ParamMet
 		}
 	}
 
-	if len(meta.MetaType.Typer) > 0 {
-		param.Typer = meta.MetaType.Typer[0]
-	}
+	param.Typer = meta.MetaType.Typer
 
 	if strings.EqualFold(meta.SQLKeyword, sanitize.InKeyword) {
 		param.Repeated = true
@@ -577,15 +575,30 @@ func (t *Template) inheritParamTypesFromTypers() error {
 		}
 
 		var dataType string
-		if p.Typer != nil {
-			switch actual := p.Typer.(type) {
+
+		for _, typer := range p.Typer {
+			var currType string
+			switch actual := typer.(type) {
 			case *sanitize.ColumnType:
 				meta := t.columnTypes[strings.ToLower(actual.ColumnName)]
 				if meta != nil {
-					dataType = meta.Type.String()
+					currType = meta.Type.String()
 				}
 			case *sanitize.LiteralType:
-				dataType = actual.RType.String()
+				currType = actual.RType.String()
+			}
+
+			if dataType == "" {
+				dataType = currType
+				continue
+			}
+
+			if currType == "" {
+				continue
+			}
+
+			if currType != "string" && dataType == "string" {
+				dataType = currType
 			}
 		}
 
