@@ -54,17 +54,17 @@ type (
 )
 
 func (s *Builder) preparePostRule(ctx context.Context, sourceSQL []byte) (string, error) {
-	routeOption, config, paramType, err := s.buildInputMetadata(ctx, sourceSQL)
+	routeOption, aConfig, paramType, err := s.buildInputMetadata(ctx, sourceSQL)
 	if err != nil {
 		return "", err
 	}
 
-	template, err := s.buildInsertSQL(paramType, config, routeOption)
+	template, err := s.buildInsertSQL(paramType, aConfig, routeOption)
 	if err != nil {
 		return "", err
 	}
 
-	if _, err = s.upload(s.preGenSQLURL(s.fileNames.unique(config.fileName)), template); err != nil {
+	if _, err = s.upload(s.preGenSQLURL(s.fileNames.unique(aConfig.fileName)), template); err != nil {
 		return "", nil
 	}
 

@@ -113,18 +113,18 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 		}
 	}
 
-	source, sanitized, _, err := aView.Template.EvaluateSource(params, presence, nil, &BatchData{})
+	state, err := aView.Template.EvaluateSource(params, presence, nil, &BatchData{})
 	if err != nil {
 		return nil, err
 	}
 
-	source, err = expandWithZeroValues(source, aView.Template)
+	source, err := expandWithZeroValues(state.Expanded, aView.Template)
 	if err != nil {
 		return nil, err
 	}
 
 	result.SQL = source
-	result.Args = sanitized.At(0)
+	result.Args = state.DataUnit.At(0)
 	return result, nil
 }
 

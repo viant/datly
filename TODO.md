@@ -10,8 +10,8 @@
 - setting customization for (async batch mode - disable by default)
 
 
-  
 - batch spreedsheet ingestion/response
+
 
 - multi transaction support on velthy ?
 - XML input / output
@@ -28,3 +28,6 @@
 - Management API
 - add GUI
 
+- Errors normalization
+- Validator
+- Warning

@@ -3,14 +3,12 @@ package view
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/parameter"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty"
-	"github.com/viant/velty/est"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -228,20 +226,15 @@ func FilterConstParameters(parameters []*Parameter) []expand.ConstUpdater {
 	return params
 }
 
-func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (string, *expand.DataUnit, *logger.Printer, error) {
+func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (*expand.State, error) {
 	if t.wasEmpty {
-		return t.Source, &expand.DataUnit{}, &logger.Printer{}, nil
+		return expand.StateWithSQL(t.Source), nil
 	}
 
-	state, criteria, printer, err := t.EvaluateState(externalParams, presenceMap, parentParam, batchData, options...)
-	if err != nil {
-		return "", criteria, printer, err
-	}
-
-	return state.Buffer.String(), criteria, printer, err
+	return t.EvaluateState(externalParams, presenceMap, parentParam, batchData, options...)
 }
 
-func (t *Template) EvaluateState(externalParams interface{}, presenceMap interface{}, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (*est.State, *expand.DataUnit, *logger.Printer, error) {
+func (t *Template) EvaluateState(externalParams interface{}, presenceMap interface{}, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (*expand.State, error) {
 	var expander expand.Expander
 	for _, option := range options {
 		switch actual := option.(type) {
@@ -260,7 +253,7 @@ func WithTemplateParameter(parameter *Parameter) TemplateOption {
 	}
 }
 
-//NewTemplate creates a tample
+//NewTemplate creates a template
 func NewTemplate(source string, opts ...TemplateOption) *Template {
 	ret := &Template{Source: source}
 	for _, opt := range opts {
@@ -269,15 +262,8 @@ func NewTemplate(source string, opts ...TemplateOption) *Template {
 	return ret
 }
 
-func Evaluate(evaluator *expand.Evaluator, externalParams, presenceMap interface{}, viewParam, parentParam *expand.MetaParam) (*est.State, *expand.DataUnit, *logger.Printer, error) {
-	printer := &logger.Printer{}
-
-	state, params, err := evaluator.Evaluate(externalParams, presenceMap, viewParam, parentParam, printer)
-	if err != nil {
-		return nil, nil, printer, err
-	}
-
-	return state, params, printer, nil
+func Evaluate(evaluator *expand.Evaluator, externalParams, presenceMap interface{}, viewParam, parentParam *expand.MetaParam) (*expand.State, error) {
+	return evaluator.Evaluate(externalParams, presenceMap, viewParam, parentParam, nil)
 }
 
 func AsViewParam(aView *View, aSelector *Selector, batchData *BatchData, options ...interface{}) *expand.MetaParam {

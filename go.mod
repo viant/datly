@@ -25,7 +25,7 @@ require (
 	github.com/viant/afsc v1.8.1-0.20220721172758-a0713d05bfdd
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.2.1-0.20221005024313-4286a9622882
-	github.com/viant/cloudless v1.3.1-0.20230214231512-6dc83584f50e
+	github.com/viant/cloudless v1.3.1-0.20230301013923-86dc6fc63a6f
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
@@ -33,12 +33,12 @@ require (
 	github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac
 	github.com/viant/parsly v0.1.0
 	github.com/viant/scy v0.4.1
-	github.com/viant/sqlx v0.5.2
+	github.com/viant/sqlx v0.5.3-0.20230301014138-5a9ca541f97f
 	github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20230220191359-8d6aefc90a69
 	github.com/viant/xreflect v0.0.0-20230228022707-868c539b1c7d
-	github.com/viant/xunsafe v0.8.3-0.20230218034831-ffaf536b6784
+	github.com/viant/xunsafe v0.8.3
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4
 	golang.org/x/oauth2 v0.3.0
 	google.golang.org/api v0.102.0
@@ -89,6 +89,7 @@ require (
 	github.com/lestrrat-go/option v1.0.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/viant/govalidator v0.0.0-20230228144442-a514751a8a90
 	github.com/viant/igo v0.1.0 // indirect
 	github.com/viant/sqlparser v0.3.1-0.20221212220151-be94fb808202
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
@@ -104,12 +105,9 @@ require (
 	google.golang.org/genproto v0.0.0-20221024183307-1bc688fe9f3e // indirect
 	google.golang.org/grpc v1.50.1 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
-	github.com/viant/govalidator v0.0.0-20230228144442-a514751a8a90
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
 require github.com/viant/xdatly/types/core v0.0.0-20230221181206-d2370898f2c4
 
-require (
-	github.com/viant/xdatly/types/custom v0.0.0-20230222005938-15dd3b2969d2
-)
+require github.com/viant/xdatly/types/custom v0.0.0-20230222005938-15dd3b2969d2

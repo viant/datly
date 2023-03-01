@@ -167,23 +167,23 @@ func (m *TemplateMeta) prepareSQL(owner *Template) (string, []interface{}, error
 	selectorPresence := expand.NewValue(owner.PresenceSchema.Type())
 	viewParam := AsViewParam(owner._view, nil, nil)
 
-	state, sanitizer, _, err := Evaluate(owner.sqlEvaluator, selectorValues, selectorPresence, viewParam, nil)
+	state, err := Evaluate(owner.sqlEvaluator, selectorValues, selectorPresence, viewParam, nil)
 	if err != nil {
 		return "", nil, err
 	}
 
 	viewParam.NonWindowSQL = ExpandWithFalseCondition(state.Buffer.String())
-	viewParam.Args = sanitizer.ParamsGroup
+	viewParam.Args = state.DataUnit.ParamsGroup
 	return m.Evaluate(selectorValues, selectorPresence, viewParam)
 }
 
 func (m *TemplateMeta) Evaluate(selectorValues interface{}, selectorPresence interface{}, viewParam *expand.MetaParam) (string, []interface{}, error) {
-	state, sanitizer, _, err := Evaluate(m.sqlEvaluator, selectorValues, selectorPresence, viewParam, nil)
+	state, err := Evaluate(m.sqlEvaluator, selectorValues, selectorPresence, viewParam, nil)
 	if err != nil {
 		return "", nil, err
 	}
 
-	return state.Buffer.String(), sanitizer.ParamsGroup, nil
+	return state.Buffer.String(), state.DataUnit.ParamsGroup, nil
 }
 
 func (m *TemplateMeta) initTemplateEvaluator(_ context.Context, owner *Template, resource *Resource) error {

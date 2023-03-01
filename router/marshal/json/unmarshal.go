@@ -12,7 +12,6 @@ import (
 type (
 	decoder struct {
 		marshaller *Marshaller
-		dest       interface{}
 		ptr        unsafe.Pointer
 		path       string
 		xType      *xunsafe.Type
@@ -112,11 +111,10 @@ func (j *Marshaller) unmarshal(data []byte, dest interface{}) error {
 	return d.Decode(dest)
 }
 
-func (j *Marshaller) newStructDecoder(path string, dest interface{}, xType *xunsafe.Type) gojay.UnmarshalerJSONObject {
-	destPtr := xunsafe.AsPointer(dest)
+func (j *Marshaller) newStructDecoder(path string, dest unsafe.Pointer, xType *xunsafe.Type) gojay.UnmarshalerJSONObject {
 
 	if j.indexUpdater != nil {
-		indexPtr := j.indexUpdater.xField.ValuePointer(destPtr)
+		indexPtr := j.indexUpdater.xField.ValuePointer(dest)
 		if indexPtr == nil {
 			var rValue reflect.Value
 			if j.indexUpdater.xField.Type.Kind() == reflect.Ptr {
@@ -126,15 +124,14 @@ func (j *Marshaller) newStructDecoder(path string, dest interface{}, xType *xuns
 			}
 
 			iface := rValue.Interface()
-			j.indexUpdater.xField.SetValue(destPtr, iface)
+			j.indexUpdater.xField.SetValue(dest, iface)
 		}
 	}
 
 	return &decoder{
 		marshaller: j,
 		xType:      xType,
-		dest:       dest,
-		ptr:        destPtr,
+		ptr:        dest,
 		path:       path,
 	}
 }

@@ -28,19 +28,17 @@ func New() *Executor {
 //TODO: remove reflection
 //TODO: customize global batch collector
 func (e *Executor) Exec(ctx context.Context, session *Session) error {
-	state, data, printer, sqlCriteria, err := e.sqlBuilder.Build(session.View, session.Lookup(session.View))
-	session.State = state
-
+	state, data, err := e.sqlBuilder.Build(session.View, session.Lookup(session.View))
 	if err != nil {
 		return err
 	}
 
-	if err = e.exec(ctx, session, data, sqlCriteria); err != nil {
+	session.State = state.State
+	if err = e.exec(ctx, session, data, state.DataUnit); err != nil {
 		return err
 	}
 
-	printer.Flush()
-	return err
+	return state.Flush()
 }
 
 func (e *Executor) exec(ctx context.Context, session *Session, data []*SQLStatment, criteria *expand.DataUnit) error {

@@ -1,0 +1,15 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: POST
+        URL: http://127.0.0.1:8080/v1/api/dev/comprehensive/events-one
+        JSONBody:
+            data: null
+
+        Expect:
+          Code: 400
+          JSONBody: $LoadJSON('${parentPath}/expect_t0.json')

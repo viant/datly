@@ -84,6 +84,7 @@ func (c *ViewConfigurer) Init(SQL string, opt *option.RouteConfig) error {
 		return err
 	}
 
+	c.inheritMainViewConfig(aConfig, opt)
 	c.aView = aConfig
 	c.viewParams = append(viewParams, hintedViewParams...)
 	return nil
@@ -471,6 +472,12 @@ func (c *ViewConfigurer) findDependantTables(tableName string) ([]string, error)
 	}
 
 	return tables, nil
+}
+
+func (c *ViewConfigurer) inheritMainViewConfig(aConfig *viewConfig, opt *option.RouteConfig) {
+	if aConfig.outputConfig.Field == "" {
+		aConfig.outputConfig.Field = opt.Field
+	}
 }
 
 func isSQLLikeCodec(codec string) bool {

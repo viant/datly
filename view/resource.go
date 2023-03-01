@@ -564,9 +564,11 @@ func (r *Resource) SetTypeLookup(lookup xreflect.TypeLookupFn) {
 	r._typeLookup = lookup
 }
 
+//TODO change <->
 func (r *Resource) LookupType(_, packageName, typeName string) (reflect.Type, error) {
-	if packageName == "builtin" {
-		return r._types.Lookup(typeName)
+	lookup, err := r._types.Lookup(typeName)
+	if err == nil {
+		return lookup, err
 	}
 
 	if packageName != "" {
@@ -591,7 +593,7 @@ func (r *Resource) LookupType(_, packageName, typeName string) (reflect.Type, er
 		}
 
 		if rType != nil && packageType != nil && rType != packageType {
-			return nil, fmt.Errorf("ambigious type %v, please specify package or use 'builtin' package to access builtin types", typeName)
+			return nil, fmt.Errorf("ambigious type %v, please specify package name", typeName)
 		}
 
 		if rType == nil {

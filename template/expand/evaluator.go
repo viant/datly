@@ -114,60 +114,69 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	return evaluator, nil
 }
 
-func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam *MetaParam, parentParam *MetaParam, logger *logger.Printer) (*est.State, *DataUnit, error) {
+func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam *MetaParam, parentParam *MetaParam, state *State) (*State, error) {
 	if externalParams != nil {
 		externalType := reflect.TypeOf(externalParams)
 		if e.paramSchema != externalType {
-			return nil, nil, fmt.Errorf("inompactible types, wanted %v got %T", e.paramSchema.String(), externalParams)
+			return nil, fmt.Errorf("inompactible types, wanted %v got %T", e.paramSchema.String(), externalParams)
 		}
 	}
 
+	state = e.ensureState(state, viewParam)
 	externalParams, presenceMap = e.updateConsts(externalParams, presenceMap)
-
-	newState := e.stateProvider()
 	if externalParams != nil {
-		if err := newState.SetValue(keywords.ParamsKey, externalParams); err != nil {
-			return nil, nil, err
+		if err := state.SetValue(keywords.ParamsKey, externalParams); err != nil {
+			return nil, err
 		}
 	}
 
 	if presenceMap != nil {
-		if err := newState.SetValue(keywords.ParamsMetadataKey, presenceMap); err != nil {
-			return nil, nil, err
+		if err := state.SetValue(keywords.ParamsMetadataKey, presenceMap); err != nil {
+			return nil, err
 		}
 	}
 
-	if err := newState.SetValue(keywords.KeyView, viewParam); err != nil {
-		return nil, nil, err
+	if err := state.SetValue(keywords.KeyView, viewParam); err != nil {
+		return nil, err
 	}
 
 	if parentParam != nil {
-		if err := newState.SetValue(keywords.KeyParentView, parentParam); err != nil {
-			return nil, nil, err
+		if err := state.SetValue(keywords.KeyParentView, parentParam); err != nil {
+			return nil, err
 		}
 	}
 
-	if err := newState.SetValue(Criteria, viewParam.dataUnit); err != nil {
-		return nil, nil, err
+	if err := state.SetValue(Criteria, viewParam.dataUnit); err != nil {
+		return nil, err
 	}
 
-	if err := newState.SetValue(Logger, logger); err != nil {
-		return nil, nil, err
+	if err := state.SetValue(Logger, state.Printer); err != nil {
+		return nil, err
 	}
 
-	if err := newState.SetValue(FnsHttpService, &Http{}); err != nil {
-		return nil, nil, err
+	if err := state.SetValue(FnsHttpService, state.Http); err != nil {
+		return nil, err
 	}
 
-	if err := newState.SetValue(ValidatorNs, goValidator); err != nil {
-		return nil, nil, err
+	if err := e.executor.Exec(state.State); err != nil {
+		return nil, err
 	}
 
-	if err := e.executor.Exec(newState); err != nil {
-		return nil, nil, err
+	if err := state.SetValue(ValidatorNs, goValidator); err != nil {
+		return nil, err
 	}
 
-	return newState, viewParam.dataUnit, nil
+	state.Expanded = state.Buffer.String()
+	return state, nil
+}
+
+func (e *Evaluator) ensureState(state *State, param *MetaParam) *State {
+	if state == nil {
+		state = &State{}
+	}
+
+	state.Init(e.stateProvider(), param)
+	return state
 }
 
 func (e *Evaluator) updateConsts(params interface{}, presenceMap interface{}) (interface{}, interface{}) {

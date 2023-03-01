@@ -47,13 +47,13 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 		exclude = &Exclude{}
 	}
 
-	template, sanitized, _, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parent, batchData, expander)
+	state, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parent, batchData, expander)
 	if err != nil {
 		return nil, err
 	}
 
 	if aView.Template.IsActualTemplate() && aView.ShouldTryDiscover() {
-		template = metadata.EnrichWithDiscover(template, true)
+		state.Expanded = metadata.EnrichWithDiscover(state.Expanded, true)
 	}
 
 	sb := strings.Builder{}
@@ -67,13 +67,13 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 	}
 
 	sb.WriteString(fromFragment)
-	sb.WriteString(template)
+	sb.WriteString(state.Expanded)
 	b.appendViewAlias(&sb, aView)
 
-	columnsInMeta := hasKeyword(template, keywords.ColumnsIn)
+	columnsInMeta := hasKeyword(state.Expanded, keywords.ColumnsIn)
 	commonParams := view.CriteriaParam{}
 
-	criteriaMeta := hasKeyword(template, keywords.Criteria)
+	criteriaMeta := hasKeyword(state.Expanded, keywords.Criteria)
 	hasCriteria := criteriaMeta.has()
 
 	b.updateColumnsIn(&commonParams, aView, relation, batchData, columnsInMeta, hasCriteria, exclude)
@@ -102,7 +102,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 		sb.WriteString(keywords.WhereSelectorCriteria)
 	}
 
-	hasPagination := strings.Contains(template, keywords.Pagination)
+	hasPagination := strings.Contains(state.Expanded, keywords.Pagination)
 	if !hasPagination && commonParams.Pagination != "" {
 		sb.WriteString(" ")
 		sb.WriteString(keywords.Pagination)
@@ -111,7 +111,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 
 	var placeholders []interface{}
 
-	SQL, err := aView.Expand(&placeholders, sb.String(), selector, commonParams, batchData, sanitized)
+	SQL, err := aView.Expand(&placeholders, sb.String(), selector, commonParams, batchData, state.DataUnit)
 	if err != nil {
 		return nil, err
 	}

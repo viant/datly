@@ -221,7 +221,7 @@ func (r *Collector) indexValueByRel(fieldValue interface{}, rel *Relation, count
 			r.indexValueToPosition(rel, v, counter)
 		}
 	default:
-		r.indexValueToPosition(rel, normalizeKey(fieldValue), counter)
+		r.indexValueToPosition(rel, io.NormalizeKey(fieldValue), counter)
 	}
 }
 
@@ -243,7 +243,7 @@ func (r *Collector) visitorOne(relation *Relation) func(value interface{}) error
 
 	return func(owner interface{}) error {
 		key = keyField.Interface(xunsafe.AsPointer(owner))
-		key = normalizeKey(key)
+		key = io.NormalizeKey(key)
 		valuePosition := r.parentValuesPositions(relation.Column)
 		positions, ok := valuePosition[key]
 		if !ok {
@@ -282,7 +282,7 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 
 		valuePosition := r.parentValuesPositions(relation.Column)
 
-		key = normalizeKey(key)
+		key = io.NormalizeKey(key)
 		positions, ok := valuePosition[key]
 		if !ok {
 			return nil
@@ -345,7 +345,7 @@ func (r *Collector) indexPositions(name string) {
 		}
 
 		val := xType.Deref(v)
-		val = normalizeKey(val)
+		val = io.NormalizeKey(val)
 		_, ok := r.valuePosition[name][val]
 		if !ok {
 			r.valuePosition[name][val] = make([]int, 0)
@@ -432,7 +432,7 @@ func (r *Collector) ViewMetaHandler(rel *Relation) (func(viewMeta interface{}) e
 			return nil
 		}
 
-		value := normalizeKey(metaChildKeyField.Value(viewMetaPtr))
+		value := io.NormalizeKey(metaChildKeyField.Value(viewMetaPtr))
 		positions, ok := valuesPosition[value]
 		if !ok {
 			return nil
@@ -488,7 +488,7 @@ func (r *Collector) mergeToParent() {
 
 	for i := 0; i < r.slice.Len(destPtr); i++ {
 		value := r.slice.ValuePointerAt(destPtr, i)
-		key := normalizeKey(field.Value(xunsafe.AsPointer(value)))
+		key := io.NormalizeKey(field.Value(xunsafe.AsPointer(value)))
 		positions, ok := valuePositions[key]
 		if !ok {
 			continue
@@ -698,9 +698,9 @@ func BuildTree(schemaType reflect.Type, slice *xunsafe.Slice, nodes interface{},
 }
 
 func key(field *xunsafe.Field, node interface{}) interface{} {
-	return normalizeKey(field.Value(xunsafe.AsPointer(node)))
+	return io.NormalizeKey(field.Value(xunsafe.AsPointer(node)))
 }
 
 func keyAt(field *xunsafe.Field, slice *xunsafe.Slice, nodesPtr unsafe.Pointer, i int) interface{} {
-	return normalizeKey(field.Value(xunsafe.AsPointer(slice.ValuePointerAt(nodesPtr, i))))
+	return io.NormalizeKey(field.Value(xunsafe.AsPointer(slice.ValuePointerAt(nodesPtr, i))))
 }

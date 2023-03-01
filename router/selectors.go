@@ -435,6 +435,15 @@ func (b *selectorsBuilder) buildSelectorParameters(ctx context.Context, selector
 		if err != nil {
 			return parameter, err
 		}
+
+		value, err := parameter.Value(selector.Parameters.Values)
+		if err != nil {
+			return parameter, err
+		}
+
+		if parameter.IsRequired() && isNull(value) {
+			return parameter, requiredParamErr(parameter)
+		}
 	}
 
 	if len(viewParams) > 0 {
@@ -463,6 +472,14 @@ func (b *selectorsBuilder) buildSelectorParameters(ctx context.Context, selector
 	}
 
 	return nil, nil
+}
+
+func isNull(value interface{}) bool {
+	if value == nil {
+		return true
+	}
+
+	return xunsafe.AsPointer(value) == nil
 }
 
 func (b *selectorsBuilder) handleParam(ctx context.Context, selector *view.Selector, parent *ViewDetails, parameter *view.Parameter) error {
@@ -512,7 +529,7 @@ func (b *selectorsBuilder) addEnvVariableParam(ctx context.Context, selector *vi
 
 func (b *selectorsBuilder) addRequestBodyParam(ctx context.Context, selector *view.Selector, param *view.Parameter) error {
 	if param.Required != nil && *param.Required && b.params.requestBody == nil {
-		return fmt.Errorf("parameter %v is required", param.Name)
+		return requiredParamErr(param)
 	}
 
 	if b.params.requestBody == nil {
@@ -521,10 +538,18 @@ func (b *selectorsBuilder) addRequestBodyParam(ctx context.Context, selector *vi
 
 	bodyValue, ok := b.extractBody(param.In.Name)
 	if !ok || bodyValue == nil {
+		if param.IsRequired() {
+			return requiredParamErr(param)
+		}
+
 		return nil
 	}
 
 	return param.ConvertAndSetCtx(ctx, selector, bodyValue)
+}
+
+func requiredParamErr(param *view.Parameter) error {
+	return fmt.Errorf("parameter %v is required", param.Name)
 }
 
 func (b *selectorsBuilder) addCookieParam(ctx context.Context, selector *view.Selector, parameter *view.Parameter) error {
@@ -612,7 +637,7 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 
 func convertAndSet(ctx context.Context, selector *view.Selector, parameter *view.Parameter, rawValue string) error {
 	if parameter.IsRequired() && rawValue == "" {
-		return fmt.Errorf("parameter %v is required", parameter.Name)
+		return requiredParamErr(parameter)
 	}
 
 	if rawValue == "" {

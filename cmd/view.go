@@ -177,6 +177,7 @@ func (s *Builder) discoverySQLColumns(db *sql.DB, table *Table, tableMeta *Table
 	if err != nil {
 		return
 	}
+
 	ioColumns, err := columns.DetectColumns(context.Background(), db, SQL)
 	tableMeta.AddIoColumns(ioColumns)
 }

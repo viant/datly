@@ -1066,7 +1066,7 @@ func (j *Marshaller) unmarshalObject(rType reflect.Type) (unmarshallFieldFn, err
 		xType := GetXType(rType)
 
 		return func(r reflect.Type, pointer unsafe.Pointer, g *gojay.Decoder, nullDecoder *gojay.Decoder) error {
-			return g.Object(j.newStructDecoder(j.path, xType.Interface(pointer), xType))
+			return g.Object(j.newStructDecoder(j.path, pointer, xType))
 		}, nil
 	}
 
