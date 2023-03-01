@@ -89,7 +89,7 @@ require (
 	github.com/lestrrat-go/option v1.0.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/viant/govalidator v0.0.0-20230228144442-a514751a8a90
+	github.com/viant/govalidator v0.0.0-20230301021138-3e2297869dd4
 	github.com/viant/igo v0.1.0 // indirect
 	github.com/viant/sqlparser v0.3.1-0.20221212220151-be94fb808202
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect

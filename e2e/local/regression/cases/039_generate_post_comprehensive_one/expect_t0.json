@@ -1,12 +1,9 @@
 {
-  "status": "error",
-  "message": {
-    "errors": [
-      {
-        "view": "post_comprehensive_one",
-        "param": "Events",
-        "message": "parameter Events is required"
-      }
-    ]
-  }
+  "Errors": [
+    {
+      "View": "post_comprehensive_one",
+      "Param": "Events",
+      "Message": "parameter Events is required"
+    }
+  ]
 }

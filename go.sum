@@ -284,8 +284,8 @@ github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446 h1:hxMOO03kzLySflK
 github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446/go.mod h1:RHqj7bdVZrPahrhQxhZRsFX3p/I7ixUEt7+G3l5z+v0=
 github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac h1:878egV44R105E/x71hjruMd1CQgzyN/HgxDnafm2Y+0=
 github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac/go.mod h1:IRibPmMFuHRS/ntq38xIWBq+XXx97pv/1AtjWwKUeoA=
-github.com/viant/govalidator v0.0.0-20230228144442-a514751a8a90 h1:DMYWtTeZtuzWbWzhKOqrN28HDLRQWU+747XXNh9T1DQ=
-github.com/viant/govalidator v0.0.0-20230228144442-a514751a8a90/go.mod h1:WT0iTKchmqeyspXeBDRmpYmRZjGZtVgVwwg4fXD3b90=
+github.com/viant/govalidator v0.0.0-20230301021138-3e2297869dd4 h1:c66hCw+E9Ym14fevwQ1ZJU8DhmMEyFlJPoDLClQvWyU=
+github.com/viant/govalidator v0.0.0-20230301021138-3e2297869dd4/go.mod h1:vLIOlNTOnq+y6oNGeIEEvfvGok71UhEr7MQOFKINlIY=
 github.com/viant/igo v0.1.0 h1:AdBNAP4hckhNmnnDJgdbinpKgzZJFpl0uT0To3lLksI=
 github.com/viant/igo v0.1.0/go.mod h1:2IhjHP1uijFPY8QqnV4DJx7+9YurIPyJ6Fd/BZvB5hw=
 github.com/viant/parsly v0.1.0 h1:t9sRjhfni3Sb4ZPIe0g/vaIOuGrgaf1ZHbezddTBjkg=
