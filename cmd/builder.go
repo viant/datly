@@ -380,8 +380,9 @@ func (s *Builder) initRoute() error {
 	}
 
 	s.routeBuilder.route = &router.Route{
-		Method:      method,
-		EnableAudit: true,
+		Method:           method,
+		EnableAudit:      true,
+		CustomValidation: s.routeBuilder.option.CustomValidation,
 		Cors: &router.Cors{
 			AllowCredentials: boolPtr(true),
 			AllowHeaders:     stringsPtr("*"),
