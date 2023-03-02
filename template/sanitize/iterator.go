@@ -2,6 +2,7 @@ package sanitize
 
 import (
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/keywords"
 	"github.com/viant/parsly"
 	"github.com/viant/velty/ast"
 	"github.com/viant/velty/ast/expr"
@@ -208,7 +209,7 @@ func (it *ParamMetaIterator) tryBuildParam(SQLKeyword string, param string, pos 
 	occurrenceIndex := it.occurrences[name]
 	it.occurrences[name] = occurrenceIndex + 1
 
-	if builtInMethods[name] {
+	if keywords.ReservedKeywords.Has(name) {
 		return name, false
 	}
 
@@ -264,7 +265,7 @@ func (it *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, raw, SQL
 
 func (it *ParamMetaIterator) addVariable(selector *expr.Select) {
 	_, holderName := GetHolderName(view.FirstNotEmpty(selector.FullName, selector.ID))
-	if builtInMethods[holderName] {
+	if keywords.ReservedKeywords.Has(holderName) {
 		return
 	}
 
@@ -303,6 +304,5 @@ func isSQLKeyword(value string) bool {
 }
 
 func CanBeParam(name string) bool {
-	canBe, ok := builtInMethods[name]
-	return !(canBe && ok)
+	return !keywords.ReservedKeywords.Has(name)
 }

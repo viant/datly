@@ -11,11 +11,11 @@ import (
 	"reflect"
 )
 
-const (
-	Criteria       = "criteria"
-	Logger         = "logger"
-	FnsHttpService = "http"
-	ValidatorNs    = "validator"
+var (
+	Criteria       = keywords.ReservedKeywords.AddAndGet("criteria")
+	Logger         = keywords.ReservedKeywords.AddAndGet("logger")
+	FnsHttpService = keywords.ReservedKeywords.AddAndGet("http")
+	ValidatorNs    = keywords.ReservedKeywords.AddAndGet("validator")
 )
 
 type (

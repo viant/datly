@@ -3,35 +3,9 @@ package sanitize
 import (
 	"bytes"
 	"fmt"
-	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view/keywords"
-	"github.com/viant/velty/functions"
 	"strings"
 )
-
-var builtInMethods = map[string]bool{
-	expand.Logger:                 true,
-	expand.Criteria:               true,
-	keywords.KeyParentView:        true,
-	keywords.KeyView:              true,
-	keywords.KeySQL:               true,
-	keywords.KeySQLx:              true,
-	functions.SlicesFunc:          true,
-	functions.MathFunc:            true,
-	functions.TimeFunc:            true,
-	functions.StringsFunc:         true,
-	functions.ErrorsFunc:          true,
-	functions.StrconvFunc:         true,
-	functions.TypesFunc:           true,
-	keywords.Criteria[1:]:         true,
-	keywords.SelectorCriteria[1:]: true,
-	keywords.Pagination[1:]:       true,
-	keywords.ColumnsIn[1:]:        true,
-	keywords.KeySequencer:         true,
-	expand.FnsHttpService:         true,
-	expand.ValidatorNs:            true,
-	expand.FnsDiffer:              true,
-}
 
 func Sanitize(SQL string, hints map[string]*ParameterHint, consts map[string]interface{}) string {
 	iterator := NewIterator(SQL, hints, consts)

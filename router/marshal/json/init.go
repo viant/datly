@@ -2,8 +2,6 @@ package json
 
 import (
 	"bytes"
-	"github.com/viant/xunsafe"
-	"reflect"
 	"sync"
 )
 
@@ -21,6 +19,7 @@ func ResetCache() {
 	}
 
 	bufferPool.Put(bufferPool.Get())
-	typesPool = map[reflect.Type]*xunsafe.Type{}
-
+	typesPool = &TypesRegistry{
+		aMap: sync.Map{},
+	}
 }

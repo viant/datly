@@ -10,7 +10,11 @@ import (
 
 var timeType = reflect.TypeOf(time.Time{})
 var bufferPool *BufferPool
-var typesPool = map[reflect.Type]*xunsafe.Type{}
+var typesPool *TypesRegistry
+
+type TypesRegistry struct {
+	aMap sync.Map
+}
 
 type BufferPool struct {
 	pool *sync.Pool
@@ -26,12 +30,15 @@ func (p *BufferPool) Put(buffer *bytes.Buffer) {
 }
 
 func GetXType(rType reflect.Type) *xunsafe.Type {
-	load, ok := typesPool[rType]
+	load, ok := typesPool.aMap.Load(rType)
 	if ok {
-		return load
+		xType, ok := load.(*xunsafe.Type)
+		if ok {
+			return xType
+		}
 	}
 
 	xType := xunsafe.NewType(rType)
-	typesPool[rType] = xType
+	typesPool.aMap.Store(rType, xType)
 	return xType
 }

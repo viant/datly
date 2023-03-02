@@ -1,11 +1,12 @@
 package expand
 
 import (
+	"github.com/viant/datly/view/keywords"
 	"github.com/viant/godiff"
 	"reflect"
 )
 
-const FnsDiffer = "differ"
+var FnsDiffer = keywords.ReservedKeywords.AddAndGet("differ")
 
 type (
 	Differ struct{}
