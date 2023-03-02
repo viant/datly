@@ -128,10 +128,11 @@ type (
 	}
 
 	ResponseStatus struct {
-		Status  string         `json:",omitempty"`
-		Message string         `json:",omitempty"`
-		Errors  interface{}    `json:",omitempty"`
-		Warning []*WarningItem `json:",omitempty"`
+		Status  string                 `json:",omitempty"`
+		Message string                 `json:",omitempty"`
+		Errors  interface{}            `json:",omitempty"`
+		Warning []*WarningItem         `json:",omitempty"`
+		Extras  map[string]interface{} `json:",omitempty" default:"embedded=true"`
 	}
 )
 

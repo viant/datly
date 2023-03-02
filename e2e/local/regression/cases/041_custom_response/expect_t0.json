@@ -1,0 +1,4 @@
+{
+  "message": "CustomError message",
+  "CustomField": "Quantity has to be \u003e 0"
+}

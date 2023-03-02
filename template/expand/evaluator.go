@@ -16,6 +16,7 @@ var (
 	Logger         = keywords.ReservedKeywords.AddAndGet("logger")
 	FnsHttpService = keywords.ReservedKeywords.AddAndGet("http")
 	ValidatorNs    = keywords.ReservedKeywords.AddAndGet("validator")
+	Response       = keywords.ReservedKeywords.AddAndGet("response")
 )
 
 type (
@@ -74,7 +75,12 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	if err = evaluator.planner.DefineVariable(FnsHttpService, reflect.TypeOf(&Http{})); err != nil {
 		return nil, err
 	}
+
 	if err = evaluator.planner.DefineVariable(ValidatorNs, reflect.TypeOf(goValidator)); err != nil {
+		return nil, err
+	}
+
+	if err = evaluator.planner.DefineVariable(Response, reflect.TypeOf(&ResponseBuilder{})); err != nil {
 		return nil, err
 	}
 
@@ -159,6 +165,10 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 	}
 
 	if err := state.SetValue(ValidatorNs, goValidator); err != nil {
+		return nil, err
+	}
+
+	if err := state.SetValue(Response, state.ResponseBuilder); err != nil {
 		return nil, err
 	}
 

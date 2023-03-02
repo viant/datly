@@ -61,6 +61,7 @@ type (
 		indirectAccessor *xunsafe.Field
 		derefStart       int
 		indexUpdater     *presenceUpdater
+		tag              *DefaultTag
 	}
 
 	marshallObjFn     func(parentType reflect.Type, ptr unsafe.Pointer, fields []*fieldMarshaller, sb *bytes.Buffer, filters *Filters, path string) error
@@ -126,6 +127,7 @@ func (j *Marshaller) structMarshallers(rType reflect.Type, config marshal.Defaul
 	if elem.Kind() != reflect.Struct {
 		aField := &fieldMarshaller{
 			xField: xunsafe.NewField(reflect.StructField{Name: "TEMP", Type: elem}),
+			tag:    dTag,
 		}
 
 		if err := aField.updateFieldMarshaller(rType, config, j, elem, wasPtr, dTag); err != nil {
@@ -275,6 +277,7 @@ func (j *Marshaller) newFieldMarshaller(marshallers *[]*fieldMarshaller, field r
 		omitEmpty:  tag.OmitEmpty || config.OmitEmpty,
 		path:       path,
 		outputPath: outputPath,
+		tag:        defaultTag,
 	}
 
 	if err := marshaller.init(field, config, j); err != nil {
@@ -481,6 +484,8 @@ func getMarshalFunctions(rType reflect.Type, config marshal.Default, j *Marshall
 		return j.sliceMarshaller(rType, path)
 	case reflect.Struct:
 		return j.structMarshaller(rType, path)
+	case reflect.Map:
+		return j.mapMarshaller(rType, defaultTag, path)
 	}
 
 	return nil, nil, fmt.Errorf("unsupported type %v", rType.String())
@@ -782,8 +787,8 @@ func (j *Marshaller) marshalObject(p reflect.Type, ptr unsafe.Pointer, fields []
 	}
 
 	filter, _ := filterByPath(filters, path)
-	counter := 0
 	sb.WriteByte('{')
+	prevLen := sb.Len()
 	for _, stringifier := range fields {
 		if isExcluded(filter, stringifier.fieldName, j.config, stringifier.path) {
 			continue
@@ -803,16 +808,19 @@ func (j *Marshaller) marshalObject(p reflect.Type, ptr unsafe.Pointer, fields []
 			continue
 		}
 
-		if counter > 0 {
+		if prevLen != sb.Len() {
 			sb.WriteByte(',')
 		}
-		counter++
 
-		sb.WriteByte('"')
-		sb.WriteString(stringifier.jsonName)
-		sb.WriteString(`":`)
+		if !stringifier.tag.Embedded {
+			sb.WriteByte('"')
+			sb.WriteString(stringifier.jsonName)
+			sb.WriteString(`":`)
+		}
 
 		rType := stringifier.xField.Type
+
+		prevLen = sb.Len()
 		if rType.Kind() == reflect.Interface {
 			if valuePtr, ok := value.(*interface{}); ok {
 				value = *valuePtr
@@ -826,7 +834,6 @@ func (j *Marshaller) marshalObject(p reflect.Type, ptr unsafe.Pointer, fields []
 				return err
 			}
 		}
-
 	}
 
 	sb.WriteByte('}')
@@ -1095,7 +1102,55 @@ func (j *Marshaller) genericUnmarshaller(rType reflect.Type) unmarshallFieldFn {
 	}
 }
 
+func (j *Marshaller) mapMarshaller(rType reflect.Type, tag *DefaultTag, path string) (marshallFieldFn, unmarshallFieldFn, error) {
+	key := rType.Key()
+	value := rType.Elem()
+
+	if key.Kind() == reflect.String && value.Kind() == reflect.Interface {
+		isEmbedded := tag.Embedded
+
+		return func(r reflect.Type, pointer unsafe.Pointer, buffer *bytes.Buffer, filters *Filters) error {
+				mapPtr := (*map[string]interface{})(pointer)
+				if mapPtr == nil {
+					return nil
+				}
+
+				if !isEmbedded {
+					buffer.WriteString("{")
+				}
+
+				aMap := *mapPtr
+				counter := 0
+				for aKey, aValue := range aMap {
+					if counter > 0 {
+						buffer.WriteString(",")
+					}
+					counter++
+					marshallerFn, _ := interfaceMarshaller(j.config, j, path)
+					buffer.WriteString(`"`)
+					buffer.WriteString(aKey)
+					buffer.WriteString(`":`)
+					if err := marshallerFn(reflect.TypeOf(aValue), xunsafe.AsPointer(aValue), buffer, filters); err != nil {
+						return err
+					}
+
+				}
+
+				if !isEmbedded {
+					buffer.WriteString("}")
+				}
+
+				return nil
+			}, func(rType reflect.Type, ptr unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+				return fmt.Errorf("unsupported unmarshall dest %v", rType.String())
+			}, nil
+	}
+
+	return nil, nil, fmt.Errorf("unsupported map type %v", rType.String())
+}
+
 func Interface(xType *xunsafe.Type, pointer unsafe.Pointer) interface{} {
+	fmt.Println(xType.Type().String())
 	if xType.Kind() == reflect.Interface {
 		return xunsafe.AsInterface(pointer)
 	}

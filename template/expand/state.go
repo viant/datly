@@ -8,9 +8,10 @@ import (
 type State struct {
 	Expanded string
 	*est.State
-	Printer  *logger.Printer
-	DataUnit *DataUnit
-	Http     *Http
+	Printer         *logger.Printer
+	DataUnit        *DataUnit
+	Http            *Http
+	ResponseBuilder *ResponseBuilder
 }
 
 func (s *State) Init(templateState *est.State, param *MetaParam) {
@@ -26,6 +27,10 @@ func (s *State) Init(templateState *est.State, param *MetaParam) {
 
 	if s.Http == nil {
 		s.Http = &Http{}
+	}
+
+	if s.ResponseBuilder == nil {
+		s.ResponseBuilder = &ResponseBuilder{content: map[string]interface{}{}}
 	}
 
 	s.State = templateState

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	goJson "encoding/json"
 	"fmt"
+	"github.com/viant/datly/template/expand"
 	"github.com/viant/govalidator"
 	svalidator "github.com/viant/sqlx/io/validator"
 
@@ -48,10 +49,6 @@ const (
 	DatlyServiceTimeHeader = "Datly-Service-Time"
 	DatlyServiceInitHeader = "Datly-Service-Init"
 )
-
-var errorFilters = json.NewFilters(&json.FilterEntry{
-	Fields: []string{"Status", "Message", "Errors"},
-})
 
 var debugEnabled = os.Getenv("DATLY_DEBUG") != ""
 var strErrType = reflect.TypeOf(fmt.Errorf(""))
@@ -621,7 +618,7 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 	//TODO extend to unified response
 	r.setResponseStatus(route, response, responseStatus, nil)
 
-	asBytes, marErr := route._outputMarshaller.Marshal(response.Elem().Interface(), errorFilters)
+	asBytes, marErr := route._outputMarshaller.Marshal(response.Elem().Interface(), nil)
 	if marErr != nil {
 		w.Write(asBytes)
 		w.WriteHeader(statusCode)
@@ -636,8 +633,15 @@ func (r *Router) responseStatusError(message string, anObject interface{}) Respo
 	responseStatus := ResponseStatus{
 		Status:  "error",
 		Message: message,
-		Errors:  anObject,
 	}
+
+	asEmbeddable, ok := anObject.(expand.EmbeddableMap)
+	if !ok {
+		responseStatus.Errors = anObject
+	} else {
+		responseStatus.Extras = asEmbeddable
+	}
+
 	return responseStatus
 }
 
@@ -728,7 +732,12 @@ func normalizeErr(err error, statusCode int) (int, string, interface{}) {
 		actual.setStatus(statusCode)
 
 		return actual.status, actual.Message, actual.Errors
+	case *expand.HttpError:
+		if actual.StatusCode != 0 {
+			statusCode = actual.StatusCode
+		}
 
+		return statusCode, actual.Message, actual.Content
 	default:
 		return statusCode, err.Error(), nil
 	}

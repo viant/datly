@@ -15,6 +15,7 @@ const (
 	ValueAttribute    = "value"
 	NullableAttribute = "nullable"
 	RequiredAttribute = "required"
+	Embedded          = "embedded"
 )
 
 type DefaultTag struct {
@@ -22,6 +23,7 @@ type DefaultTag struct {
 	Value    string
 	Nullable *bool
 	Required *bool
+	Embedded bool
 
 	_value interface{}
 	_ptr   unsafe.Pointer
@@ -59,6 +61,8 @@ func (t *DefaultTag) Init(field reflect.StructField) error {
 			t.Nullable = booleanPtr(keyValue[1] == "true")
 		case RequiredAttribute:
 			t.Required = booleanPtr(keyValue[1] == "true")
+		case Embedded:
+			t.Embedded = keyValue[1] == "true"
 		}
 	}
 

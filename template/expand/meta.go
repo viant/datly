@@ -261,6 +261,37 @@ func (c *DataUnit) appendExecutable(data interface{}, tableName string, execType
 }
 
 func copyValue(data interface{}) interface{} {
+	switch actual := data.(type) {
+	case string:
+		return actual
+	case int:
+		return actual
+	case int64:
+		return actual
+	case uint64:
+		return actual
+	case float32:
+		return actual
+	case float64:
+		return actual
+	case uint:
+		return actual
+	case bool:
+		return actual
+	case int8:
+		return actual
+	case uint8:
+		return actual
+	case int32:
+		return actual
+	case uint32:
+		return actual
+	case int16:
+		return actual
+	case uint16:
+		return actual
+	}
+
 	result := reflect.ValueOf(data)
 	switch result.Kind() {
 	case reflect.Slice:

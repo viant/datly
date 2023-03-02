@@ -22,6 +22,8 @@ type (
 		StatusCode int
 		Body       string
 	}
+
+	StatusCode int
 )
 
 func (h *Http) Do(method string, URL string, input interface{}) (HttpResponse, error) {
@@ -65,4 +67,8 @@ func (h *Http) Post(url string, body interface{}) (HttpResponse, error) {
 
 func (h *Http) Get(url string) (HttpResponse, error) {
 	return h.Do(http.MethodGet, url, nil)
+}
+
+func (h *Http) StatusCode(code int) StatusCode {
+	return StatusCode(code)
 }

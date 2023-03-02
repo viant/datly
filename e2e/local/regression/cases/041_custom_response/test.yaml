@@ -1,0 +1,28 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  unauthorizedJWT:
+    action: secret:signJWT
+    privateKey:
+      URL: ${appPath}/e2e/cloud/jwt/private.enc
+      Key: blowfish://default
+    claims:
+      userID: 123
+      firstName: Developer
+      email: dev@viantint.com
+
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: POST
+        URL: http://127.0.0.1:8080/v1/api/dev/comprehensive/custom-response
+        JSONBody:
+            data:
+              name: "41_ invalid qunaitity"
+              quantity: -1234
+
+        Expect:
+          Code: 419
+          JSONBody: $LoadJSON('${parentPath}/expect_t0.json')

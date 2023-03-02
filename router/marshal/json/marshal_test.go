@@ -125,6 +125,14 @@ func TestJson_Marshal(t *testing.T) {
 				CaseFormat: format.CaseLowerCamel,
 			},
 		},
+		{
+			description: "embedded",
+			data:        embeddable,
+			expect:      `{"id":10,"name":"foo","price":125.5}`,
+			defaultConfig: marshal.Default{
+				CaseFormat: format.CaseLowerCamel,
+			},
+		},
 		//TODO: Handle that case
 		//{
 		//	description: "marshal non ptr",
@@ -163,6 +171,21 @@ func TestJson_Marshal(t *testing.T) {
 		if !assert.Equal(t, testcase.expect, string(result), testcase.description) {
 			toolbox.Dump(string(result))
 		}
+	}
+}
+
+func embeddable() interface{} {
+	type Foo struct {
+		ID         int
+		Embeddable map[string]interface{} `default:"embedded=true"`
+	}
+
+	return &Foo{
+		ID: 10,
+		Embeddable: map[string]interface{}{
+			"name":  "foo",
+			"price": 125.5,
+		},
 	}
 }
 
