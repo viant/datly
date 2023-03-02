@@ -1,0 +1,10 @@
+{
+  "status": "error",
+  "errors": [
+    {
+      "view": "parameters_order",
+      "param": "Authorization",
+      "message": "parameter Authorization value is required but no data was found"
+    }
+  ]
+}

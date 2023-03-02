@@ -387,7 +387,7 @@ func (b *selectorsBuilder) extractParamValue(ctx context.Context, param *view.Pa
 	case view.KindQuery:
 		return b.convertAndTransform(ctx, b.params.queryParam(param.In.Name, ""), param, selector)
 	case view.KindRequestBody:
-		return b.params.requestBody, nil
+		return b.params.RequestBody()
 	case view.KindEnvironment:
 		return b.convertAndTransform(ctx, os.Getenv(param.In.Name), param, selector)
 	case view.HeaderKind:
@@ -418,7 +418,7 @@ func (b *selectorsBuilder) buildSelectorParameters(ctx context.Context, selector
 
 	var err error
 	for _, parameter := range parameters {
-		if parameter.In.Kind == view.KindDataView {
+		if parameter.In.Kind == view.KindDataView && parameter.ErrorStatusCode <= 400 {
 			viewParams = append(viewParams, parameter)
 			continue
 		}
@@ -520,11 +520,16 @@ func (b *selectorsBuilder) addEnvVariableParam(ctx context.Context, selector *vi
 }
 
 func (b *selectorsBuilder) addRequestBodyParam(ctx context.Context, selector *view.Selector, param *view.Parameter) error {
-	if param.Required != nil && *param.Required && b.params.requestBody == nil {
+	requestBody, err := b.params.RequestBody()
+	if err != nil {
+		return err
+	}
+
+	if param.Required != nil && *param.Required && requestBody == nil {
 		return requiredParamErr(param)
 	}
 
-	if b.params.requestBody == nil {
+	if requestBody == nil {
 		return nil
 	}
 
@@ -695,7 +700,8 @@ func (b *selectorsBuilder) paramViewValue(param *view.Parameter, value reflect.V
 
 func (b *selectorsBuilder) extractBody(path string) (interface{}, bool) {
 	if path == "" {
-		return b.params.requestBody, true
+		body, err := b.params.RequestBody()
+		return body, err == nil
 	}
 
 	has := b.hasBodyPart(path)
@@ -708,7 +714,12 @@ func (b *selectorsBuilder) extractBody(path string) (interface{}, bool) {
 		return nil, false
 	}
 
-	value, err := accessor.Value(b.params.requestBody)
+	body, err := b.params.RequestBody()
+	if err != nil {
+		return nil, false
+	}
+
+	value, err := accessor.Value(body)
 	if err != nil {
 		return nil, false
 	}

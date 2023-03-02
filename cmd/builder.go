@@ -295,23 +295,41 @@ func (s *Builder) Build(ctx context.Context) error {
 }
 
 func (s *Builder) buildViews(ctx context.Context) error {
-	params, err := s.buildViewParams()
+	utilParams, err := s.buildViewParams()
 	if err != nil {
 		return err
 	}
 
-	config := s.routeBuilder.configProvider.ViewConfig()
+	utilParamsIndex := map[string]bool{}
+	for _, param := range utilParams {
+		utilParamsIndex[param] = true
+	}
 
-	aView, err := s.buildMainView(ctx, config)
+	for paramName := range s.routeBuilder.paramsIndex.hints {
+		if utilParamsIndex[paramName] {
+			continue
+		}
+
+		utilParams = append(utilParams, paramName)
+	}
+
+	aConfig := s.routeBuilder.configProvider.ViewConfig()
+	aView, err := s.buildMainView(ctx, aConfig)
 	if err != nil {
 		return err
 	}
 
 outer:
-	for _, paramName := range params {
+	for _, paramName := range utilParams {
 		for _, viewParameter := range aView.Template.Parameters {
 			if view.FirstNotEmpty(viewParameter.Ref, viewParameter.Name) == paramName {
 				continue outer
+			}
+		}
+
+		if _, ok := s.routeBuilder.paramsIndex.hints[paramName]; !ok {
+			if err = s.addParameters(&view.Parameter{Name: paramName}); err != nil {
+				return err
 			}
 		}
 
@@ -319,7 +337,7 @@ outer:
 	}
 
 	s.setMainView(aView)
-	if err = s.indexExcludedColumns(config); err != nil {
+	if err = s.indexExcludedColumns(aConfig); err != nil {
 		return err
 	}
 
@@ -917,7 +935,7 @@ func (s *Builder) moveConstParameters() error {
 	for i := range s.routeBuilder.routerResource.Resource.Parameters {
 		parameter := s.routeBuilder.routerResource.Resource.Parameters[i]
 
-		if parameter.In.Kind == view.LiteralKind {
+		if parameter.In != nil && parameter.In.Kind == view.LiteralKind {
 			constParams = append(constParams, parameter)
 			continue
 		}
@@ -952,6 +970,14 @@ func (s *Builder) updateParamByHint(param *view.Parameter) error {
 }
 
 func (s *Builder) updateViewParam(param *view.Parameter, config *option.ParameterConfig, SQL string) error {
+	if param.In == nil {
+		param.In = &view.Location{}
+	}
+
+	if param.Schema == nil {
+		param.Schema = &view.Schema{}
+	}
+
 	if config.Const != nil {
 		param.Const = config.Const
 	}
@@ -1284,10 +1310,10 @@ func (s *Builder) buildParamHint(selector *expr.Select, cursor *parsly.Cursor) {
 		return
 	}
 
-	s.routeBuilder.paramsIndex.hints[holderName] = &sanitize.ParameterHint{
+	s.routeBuilder.paramsIndex.AddParamHint(holderName, &sanitize.ParameterHint{
 		Parameter: holderName,
 		Hint:      paramHint,
-	}
+	})
 }
 
 func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
@@ -1387,6 +1413,8 @@ func (s *Builder) readParamConfigs(config *option.ParameterConfig, cursor *parsl
 			}
 
 			config.StatusCode = &statusCode
+		case "UtilParam":
+			config.Util = true
 		}
 
 		cursor.MatchOne(whitespaceMatcher)

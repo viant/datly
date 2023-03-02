@@ -1,0 +1,10 @@
+{
+  "status": "error",
+  "errors": [
+    {
+      "view": "parameters_order",
+      "param": "Jwt",
+      "message": "parameter Jwt is required"
+    }
+  ]
+}

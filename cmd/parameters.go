@@ -70,16 +70,7 @@ func (p *ParametersIndex) AddConsts(consts map[string]interface{}) {
 
 func (p *ParametersIndex) AddHints(hints map[string]*sanitize.ParameterHint) {
 	for paramName := range hints {
-		hint := hints[paramName]
-		p.hints[paramName] = hint
-		actualHint, _ := sanitize.SplitHint(hint.Hint)
-		actualHint = strings.TrimSpace(actualHint)
-
-		paramMeta := &option.ParamMeta{}
-		tryUnmrashalHintWithWarn(actualHint, &paramMeta)
-		if paramMeta.Util {
-			p.utilsIndex[paramName] = true
-		}
+		p.AddParamHint(paramName, hints[paramName])
 	}
 }
 
@@ -139,4 +130,16 @@ func (p *ParametersIndex) ParamsMetaWithComment(paramName, hint string) (*Parame
 	}
 
 	return parameter, nil
+}
+
+func (p *ParametersIndex) AddParamHint(name string, aHint *sanitize.ParameterHint) {
+	p.hints[name] = aHint
+	actualHint, _ := sanitize.SplitHint(aHint.Hint)
+	actualHint = strings.TrimSpace(actualHint)
+
+	paramMeta := &option.ParamMeta{}
+	tryUnmrashalHintWithWarn(actualHint, &paramMeta)
+	if paramMeta.Util {
+		p.utilsIndex[name] = true
+	}
 }

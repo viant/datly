@@ -47,5 +47,7 @@ pipeline:
       - Method: GET
         description: user is authenticated but not authorized for vendor 1 (no data returned)
         URL: http://127.0.0.1:8080/v1/api/dev/auth/vendors/1
+        Header:
+          Authorization: Bearer ${signJWT.TokenString}
         Expect:
-          Code: 401
+          Code: 403

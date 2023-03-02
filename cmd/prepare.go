@@ -679,9 +679,7 @@ func (s *Builder) indexKeys(primaryKeys []sink.Key) map[string]sink.Key {
 }
 
 func (b *stmtBuilder) appendHintsWithRelations() error {
-	return b.iterateOverHints(b.typeDef, func(metadata *inputMetadata) error {
-		return b.appendHints(metadata)
-	})
+	return b.appendHints(b.typeDef)
 }
 
 func (b *stmtBuilder) appendSQLWithRelations() error {

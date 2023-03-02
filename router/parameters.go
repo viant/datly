@@ -9,10 +9,12 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"sync"
 )
 
 type (
 	RequestParams struct {
+		sync.Mutex
 		OutputFormat string
 		InputFormat  string
 
@@ -22,9 +24,11 @@ type (
 		queryIndex url.Values
 		pathIndex  map[string]string
 
-		requestBody interface{}
-		presenceMap map[string]interface{}
-		request     *http.Request
+		requestBody    interface{}
+		presenceMap    map[string]interface{}
+		request        *http.Request
+		route          *Route
+		requestBodyErr error
 	}
 
 	PresenceMapFn func([]byte) (map[string]interface{}, error)
@@ -41,6 +45,7 @@ func NewRequestParameters(request *http.Request, route *Route) (*RequestParams, 
 	parameters := &RequestParams{
 		cookies: request.Cookies(),
 		request: request,
+		route:   route,
 	}
 
 	if paramName, err := parameters.init(request, route); err != nil {
@@ -63,7 +68,7 @@ func (p *RequestParams) init(request *http.Request, route *Route) (string, error
 		p.cookiesIndex[p.cookies[i].Name] = p.cookies[i]
 	}
 
-	return p.initRequestBody(request, route)
+	return "", nil
 }
 
 func (p *RequestParams) queryParam(name string, defaultValue string) string {
@@ -101,33 +106,15 @@ func (p *RequestParams) cookie(name string) string {
 	return cookie.Value
 }
 
-func (p *RequestParams) initRequestBody(request *http.Request, route *Route) (string, error) {
-	if route._requestBodyType == nil {
-		return "", nil
-	}
-
-	body, err := io.ReadAll(request.Body)
-	if err != nil {
-		return "RequestBody", err
-	}
-
-	_ = request.Body.Close()
-	if len(body) == 0 {
-		return "", nil
-	}
-
-	return "RequestBody", p.parseRequestBody(body, route)
-}
-
-func (p *RequestParams) parseRequestBody(body []byte, route *Route) error {
+func (p *RequestParams) parseRequestBody(body []byte, route *Route) (interface{}, error) {
 	unmarshaller, err := p.unmarshaller(route)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	convert, _, err := converter.Convert(string(body), unmarshaller.rType, route.CustomValidation, "", unmarshaller.unmarshal)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	p.presenceMap, err = unmarshaller.presence(body)
@@ -135,12 +122,11 @@ func (p *RequestParams) parseRequestBody(body []byte, route *Route) error {
 	if unmarshaller.unwrapper != nil {
 		convert, err = unmarshaller.unwrapper(convert)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	p.requestBody = convert
-	return nil
+	return convert, nil
 }
 
 func (p *RequestParams) outputFormat() string {
@@ -180,4 +166,32 @@ func (p *RequestParams) jsonPresenceMap() PresenceMapFn {
 		bodyMap := map[string]interface{}{}
 		return bodyMap, json.Unmarshal(b, &bodyMap)
 	}
+}
+
+func (p *RequestParams) RequestBody() (interface{}, error) {
+	p.Mutex.Lock()
+	defer p.Mutex.Unlock()
+
+	if p.requestBody != nil || p.requestBodyErr != nil {
+		return p.requestBody, p.requestBodyErr
+	}
+
+	body, err := p.tryParseRequestBody()
+	p.requestBody, p.requestBodyErr = body, err
+	return body, err
+}
+
+func (p *RequestParams) tryParseRequestBody() (interface{}, error) {
+	body, err := io.ReadAll(p.request.Body)
+	defer p.request.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	requestBody, err := p.parseRequestBody(body, p.route)
+	if err != nil {
+		return nil, err
+	}
+
+	return requestBody, nil
 }

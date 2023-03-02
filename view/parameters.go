@@ -571,14 +571,14 @@ func (p ParametersSlice) Len() int {
 
 func (p ParametersSlice) Less(i, j int) bool {
 	if p[j].ErrorStatusCode == 401 {
-		return true
+		return false
 	}
 
 	if p[j].ErrorStatusCode == 403 {
-		return p[i].ErrorStatusCode != 401
+		return p[i].ErrorStatusCode == 401
 	}
 
-	return false
+	return true
 }
 
 func (p ParametersSlice) Swap(i, j int) {
