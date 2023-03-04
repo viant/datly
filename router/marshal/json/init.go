@@ -2,6 +2,7 @@ package json
 
 import (
 	"bytes"
+	"github.com/viant/toolbox/format"
 	"sync"
 )
 
@@ -22,4 +23,6 @@ func ResetCache() {
 	typesPool = &TypesRegistry{
 		aMap: sync.Map{},
 	}
+
+	namesCaseIndex = &NamesCaseIndex{registry: map[format.Case]map[string]string{}}
 }

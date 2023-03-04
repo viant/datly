@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/router"
 	json2 "github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/template/sanitize"
+	"github.com/viant/datly/utils"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/config"
 	"github.com/viant/sqlx/metadata"
@@ -369,7 +370,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 
 	typesMeta := &typeMeta{fieldIndex: map[string]int{}, columnIndex: map[string]int{}}
 	name := aConfig.expandedTable.HolderName
-	detectCase, err := format.NewCase(view.DetectCase(name))
+	detectCase, err := format.NewCase(utils.DetectCase(name))
 	if err != nil {
 		return nil, err
 	}
@@ -615,7 +616,7 @@ func (s *Builder) buildIncludeIndex(config *viewConfig) map[string]bool {
 }
 
 func (s *Builder) buildFieldMeta(column sink.Column, pkIndex map[string]sink.Key, fkIndex map[string]sink.Key) (*fieldMeta, error) {
-	columnCase, err := format.NewCase(view.DetectCase(column.Name))
+	columnCase, err := format.NewCase(utils.DetectCase(column.Name))
 	if err != nil {
 		return nil, err
 	}

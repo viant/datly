@@ -2,7 +2,6 @@ package expand
 
 import (
 	"fmt"
-	"github.com/viant/datly/logger"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/godiff"
 	"github.com/viant/velty"
@@ -14,6 +13,7 @@ import (
 var (
 	Criteria       = keywords.ReservedKeywords.AddAndGet("criteria")
 	Logger         = keywords.ReservedKeywords.AddAndGet("logger")
+	Fmt            = keywords.ReservedKeywords.AddAndGet("fmt")
 	FnsHttpService = keywords.ReservedKeywords.AddAndGet("http")
 	ValidatorNs    = keywords.ReservedKeywords.AddAndGet("validator")
 	Response       = keywords.ReservedKeywords.AddAndGet("response")
@@ -64,7 +64,7 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
-	if err = evaluator.planner.DefineVariable(Logger, reflect.TypeOf(&logger.Printer{})); err != nil {
+	if err = evaluator.planner.DefineVariable(Logger, reflect.TypeOf(&Printer{}), Fmt); err != nil {
 		return nil, err
 	}
 
@@ -173,7 +173,7 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 	}
 
 	if err := e.executor.Exec(state.State); err != nil {
-		return nil, err
+		return state, err
 	}
 
 	state.Expanded = state.Buffer.String()

@@ -535,7 +535,7 @@ func (r *Router) inAWS() bool {
 
 func (r *Router) result(session *ReaderSession, destValue reflect.Value, filters *json.Filters, meta interface{}, stats []*reader.Info) ([]byte, int, error) {
 	if session.Route.Cardinality == view.Many {
-		result := r.wrapWithResponseIfNeeded(destValue.Elem().Interface(), session.Route, meta, stats)
+		result := r.wrapWithResponseIfNeeded(destValue.Elem().Interface(), session.Route, meta, stats, nil)
 		asBytes, err := session.Route._outputMarshaller.Marshal(result, filters)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
@@ -551,7 +551,7 @@ func (r *Router) result(session *ReaderSession, destValue reflect.Value, filters
 	case 0:
 		return nil, http.StatusNotFound, nil
 	case 1:
-		result := r.wrapWithResponseIfNeeded(session.Route.View.Schema.Slice().ValueAt(slicePtr, 0), session.Route, meta, stats)
+		result := r.wrapWithResponseIfNeeded(session.Route.View.Schema.Slice().ValueAt(slicePtr, 0), session.Route, meta, stats, nil)
 		asBytes, err := session.Route._outputMarshaller.Marshal(result, filters)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
@@ -655,7 +655,7 @@ func (r *Router) setResponseStatus(route *Route, response reflect.Value, respons
 	}
 }
 
-func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route, viewMeta interface{}, stats []*reader.Info) interface{} {
+func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route, viewMeta interface{}, stats []*reader.Info, state *expand.State) interface{} {
 	if route._responseSetter == nil {
 		return response
 	}
@@ -667,7 +667,7 @@ func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route, vi
 		route._responseSetter.metaField.SetValue(responseBodyPtr, viewMeta)
 	}
 
-	r.setResponseStatus(route, newResponse, ResponseStatus{Status: "ok"}, stats)
+	r.setResponseStatus(route, newResponse, r.responseStatusSuccess(state), stats)
 	return newResponse.Elem().Interface()
 }
 
@@ -732,7 +732,7 @@ func normalizeErr(err error, statusCode int) (int, string, interface{}) {
 		actual.setStatus(statusCode)
 
 		return actual.status, actual.Message, actual.Errors
-	case *expand.HttpError:
+	case *expand.ErrorResponse:
 		if actual.StatusCode != 0 {
 			statusCode = actual.StatusCode
 		}
@@ -942,6 +942,15 @@ func (r *Router) marshalAsCSV(session *ReaderSession, sliceValue reflect.Value, 
 	}
 
 	return data, http.StatusOK, nil
+}
+
+func (r *Router) responseStatusSuccess(state *expand.State) ResponseStatus {
+	status := ResponseStatus{Status: "ok"}
+	if state != nil {
+		status.Extras = state.ResponseBuilder.Content
+	}
+
+	return status
 }
 
 func updateFieldPathsIfNeeded(filter *json.FilterEntry) {

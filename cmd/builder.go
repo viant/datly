@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/sanitize"
+	"github.com/viant/datly/utils"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser/query"
@@ -438,7 +439,7 @@ func (s *Builder) buildRouterOutput() error {
 		s.routeBuilder.route.Output.Cardinality = view.Many
 	}
 
-	s.routeBuilder.route.Output.CaseFormat = view.CaseFormat(view.FirstNotEmpty(s.routeBuilder.option.CaseFormat, "lc"))
+	s.routeBuilder.route.Output.CaseFormat = utils.CaseFormat(view.FirstNotEmpty(s.routeBuilder.option.CaseFormat, "lc"))
 	if s.routeBuilder.option.Field != "" {
 		s.routeBuilder.route.Style = router.ComprehensiveStyle
 		s.routeBuilder.route.Field = s.routeBuilder.option.Field
@@ -816,7 +817,7 @@ func (s *Builder) excludeTableColumns(excluded *[]string, table *Table, path str
 }
 
 func (s *Builder) normalizeFieldName(except string) (string, error) {
-	colFormat, err := format.NewCase(view.DetectCase(except))
+	colFormat, err := format.NewCase(utils.DetectCase(except))
 	if err != nil {
 		return "", err
 	}

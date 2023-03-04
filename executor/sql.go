@@ -23,7 +23,7 @@ func NewBuilder() *SqlBuilder {
 func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) (*expand.State, []*SQLStatment, error) {
 	state, err := aView.Template.EvaluateState(paramState.Values, paramState.Has, nil, nil)
 	if err != nil {
-		return nil, nil, err
+		return state, nil, err
 	}
 
 	SQL := state.Buffer.String()

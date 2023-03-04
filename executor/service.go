@@ -29,16 +29,20 @@ func New() *Executor {
 //TODO: customize global batch collector
 func (e *Executor) Exec(ctx context.Context, session *Session) error {
 	state, data, err := e.sqlBuilder.Build(session.View, session.Lookup(session.View))
+	if state != nil {
+		session.State = state
+		defer session.State.Flush(expand.StatusFailure)
+	}
+
 	if err != nil {
 		return err
 	}
 
-	session.State = state.State
 	if err = e.exec(ctx, session, data, state.DataUnit); err != nil {
 		return err
 	}
 
-	return state.Flush()
+	return state.Flush(expand.StatusSuccess)
 }
 
 func (e *Executor) exec(ctx context.Context, session *Session, data []*SQLStatment, criteria *expand.DataUnit) error {

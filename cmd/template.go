@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/sanitize"
+	"github.com/viant/datly/utils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/toolbox/format"
@@ -651,7 +652,7 @@ func (s *Builder) goURL(fileName string) string {
 			fileName = strings.ReplaceAll(fileName, ext, "")
 		}
 	} else {
-		detectCase, err := format.NewCase(view.DetectCase(fileName))
+		detectCase, err := format.NewCase(utils.DetectCase(fileName))
 		if err == nil {
 			fileName = detectCase.Format(fileName, format.CaseLowerUnderscore)
 		}
@@ -784,7 +785,7 @@ func (s *Builder) buildTableFields(meta *TableMeta, tableChecker func(tableName 
 	tableFields := make([]*view.Field, 0, len(meta.Columns))
 	for _, columnMeta := range meta.Columns {
 		columnName := columnMeta.Name
-		detectCase, err := format.NewCase(view.DetectCase(columnName))
+		detectCase, err := format.NewCase(utils.DetectCase(columnName))
 		if err != nil {
 			return tableFields, err
 		}

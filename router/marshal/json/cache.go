@@ -2,6 +2,8 @@ package json
 
 import (
 	"bytes"
+	"github.com/viant/datly/utils"
+	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"sync"
@@ -11,9 +13,39 @@ import (
 var timeType = reflect.TypeOf(time.Time{})
 var bufferPool *BufferPool
 var typesPool *TypesRegistry
+var namesCaseIndex *NamesCaseIndex
 
 type TypesRegistry struct {
 	aMap sync.Map
+}
+
+type NamesCaseIndex struct {
+	mux      sync.Mutex
+	registry map[format.Case]map[string]string
+}
+
+func (n *NamesCaseIndex) FormatTo(value string, dstFormat format.Case) string {
+	n.mux.Lock()
+	defer n.mux.Unlock()
+
+	registry, ok := n.registry[dstFormat]
+	if !ok {
+		registry = map[string]string{}
+		n.registry[dstFormat] = registry
+	}
+
+	formated, ok := registry[value]
+	if !ok {
+		srcFormat, err := format.NewCase(utils.DetectCase(value))
+		if err == nil {
+			formated = srcFormat.Format(value, dstFormat)
+		} else {
+			formated = value
+		}
+		registry[value] = formated
+	}
+
+	return formated
 }
 
 type BufferPool struct {

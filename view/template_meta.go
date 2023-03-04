@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/template/expand"
+	"github.com/viant/datly/utils"
 	"github.com/viant/toolbox/format"
 	"strings"
 )
@@ -36,7 +37,7 @@ func (m *TemplateMeta) Init(ctx context.Context, owner *Template, resource *Reso
 
 	m.Kind = MetaKind(strings.ToLower(string(m.Kind)))
 
-	cFormat, err := format.NewCase(DetectCase(m.Name))
+	cFormat, err := format.NewCase(utils.DetectCase(m.Name))
 	if err == nil && cFormat != format.CaseUpperCamel {
 		m.Name = cFormat.Format(m.Name, format.CaseUpperCamel)
 	}
@@ -108,7 +109,7 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 		columnNames[i] = column.Name
 	}
 
-	newCase, err := format.NewCase(DetectCase(columnNames...))
+	newCase, err := format.NewCase(utils.DetectCase(columnNames...))
 	if err != nil {
 		return err
 	}

@@ -1128,7 +1128,7 @@ func (j *Marshaller) mapMarshaller(rType reflect.Type, tag *DefaultTag, path str
 					counter++
 					marshallerFn, _ := interfaceMarshaller(j.config, j, path)
 					buffer.WriteString(`"`)
-					buffer.WriteString(aKey)
+					buffer.WriteString(namesCaseIndex.FormatTo(aKey, j.config.CaseFormat))
 					buffer.WriteString(`":`)
 					if err := marshallerFn(reflect.TypeOf(aValue), xunsafe.AsPointer(aValue), buffer, filters); err != nil {
 						return err
@@ -1150,7 +1150,6 @@ func (j *Marshaller) mapMarshaller(rType reflect.Type, tag *DefaultTag, path str
 }
 
 func Interface(xType *xunsafe.Type, pointer unsafe.Pointer) interface{} {
-	fmt.Println(xType.Type().String())
 	if xType.Kind() == reflect.Interface {
 		return xunsafe.AsInterface(pointer)
 	}

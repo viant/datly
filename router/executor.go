@@ -8,52 +8,62 @@ import (
 
 func (r *Router) executorHandler(route *Route) viewHandler {
 	return func(response http.ResponseWriter, request *http.Request) {
-		body, err := r.executorHandlerWithError(route, request)
+		successCode, body, err := r.executorHandlerWithError(route, request)
 
 		if err != nil {
 			r.writeErr(response, route, err, 400)
 			return
 		}
 
-		response.WriteHeader(200)
+		if successCode >= 300 || successCode < 200 {
+			successCode = 200
+		}
+
+		response.WriteHeader(successCode)
 		if len(body) > 0 {
 			_, _ = response.Write(body)
 		}
 	}
 }
 
-func (r *Router) executorHandlerWithError(route *Route, request *http.Request) ([]byte, error) {
+func (r *Router) executorHandlerWithError(route *Route, request *http.Request) (int, []byte, error) {
 	ctx := context.Background()
 
 	parameters, err := NewRequestParameters(request, route)
+	statusCode := -1
 	if err != nil {
-		return nil, err
+		return statusCode, nil, err
 	}
 
 	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, parameters, route.Index._viewDetails...)
 	if err != nil {
-		return nil, err
+		return statusCode, nil, err
 	}
 
 	session, err := executor.NewSession(selectors, route.View)
 	if err != nil {
-		return nil, err
+		return statusCode, nil, err
 	}
 
 	anExecutor := executor.New()
 
 	err = anExecutor.Exec(ctx, session)
 	if err != nil || route.ResponseBody == nil {
-		return nil, err
+		return statusCode, nil, err
 	}
 
 	body, err := route.execResponseBody(parameters, session)
 	if err != nil {
-		return nil, err
+		return statusCode, nil, err
 	}
 
-	responseBody := r.wrapWithResponseIfNeeded(body, route, nil, nil)
-	return route._outputMarshaller.Marshal(responseBody, nil)
+	responseBody := r.wrapWithResponseIfNeeded(body, route, nil, nil, session.State)
+	marshal, err := route._outputMarshaller.Marshal(responseBody, nil)
+	if session.State.ResponseBuilder.ResponseCode != 0 {
+		statusCode = session.State.ResponseBuilder.ResponseCode
+	}
+
+	return statusCode, marshal, err
 }
 
 func (r *Route) execResponseBody(parameters *RequestParams, session *executor.Session) (interface{}, error) {

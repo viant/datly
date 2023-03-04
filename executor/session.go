@@ -4,7 +4,6 @@ import (
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/insert/batcher"
-	"github.com/viant/velty/est"
 	"reflect"
 	"sync"
 )
@@ -13,7 +12,7 @@ type Session struct {
 	Parameters  *Parameters
 	View        *view.View
 	mux         sync.Mutex
-	State       *est.State
+	State       *expand.State
 	collections map[string]*batcher.Collection
 }
 

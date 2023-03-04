@@ -260,6 +260,14 @@ func (c *DataUnit) appendExecutable(data interface{}, tableName string, execType
 	return marker
 }
 
+func copyValues(data []interface{}) []interface{} {
+	result := make([]interface{}, 0, len(data))
+	for _, datum := range data {
+		result = append(result, copyValue(datum))
+	}
+	return result
+}
+
 func copyValue(data interface{}) interface{} {
 	switch actual := data.(type) {
 	case string:

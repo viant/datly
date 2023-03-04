@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/columns"
+	"github.com/viant/datly/utils"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
@@ -213,7 +214,7 @@ func (s *Builder) buildRelations(ctx context.Context, config *viewConfig, indexN
 			return nil, err
 		}
 
-		holderFormat, err := format.NewCase(view.DetectCase(relationName))
+		holderFormat, err := format.NewCase(utils.DetectCase(relationName))
 		if err != nil {
 			return nil, err
 		}

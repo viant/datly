@@ -1,22 +1,22 @@
 package expand
 
 import (
-	"github.com/viant/datly/logger"
 	"github.com/viant/velty/est"
 )
 
 type State struct {
-	Expanded string
 	*est.State
-	Printer         *logger.Printer
+	Expanded        string
+	Printer         *Printer
 	DataUnit        *DataUnit
 	Http            *Http
 	ResponseBuilder *ResponseBuilder
+	flushed         bool
 }
 
 func (s *State) Init(templateState *est.State, param *MetaParam) {
 	if s.Printer == nil {
-		s.Printer = &logger.Printer{}
+		s.Printer = &Printer{}
 	}
 
 	if param != nil && param.dataUnit != nil {
@@ -30,14 +30,25 @@ func (s *State) Init(templateState *est.State, param *MetaParam) {
 	}
 
 	if s.ResponseBuilder == nil {
-		s.ResponseBuilder = &ResponseBuilder{content: map[string]interface{}{}}
+		s.ResponseBuilder = &ResponseBuilder{Content: map[string]interface{}{}}
 	}
 
 	s.State = templateState
 }
 
-func (s *State) Flush() error {
-	s.Printer.Flush()
+func (s *State) Flush(status HTTPStatus) error {
+	if s.flushed {
+		return nil
+	}
+	s.flushed = true
+
+	if status == StatusSuccess {
+		s.Printer.Flush()
+	}
+
+	if err := s.Http.Flush(status); err != nil {
+		return err
+	}
 
 	return nil
 }

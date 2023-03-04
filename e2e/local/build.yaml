@@ -30,7 +30,7 @@ pipeline:
         - cd ${appPath}/cmd/datly
         - go mod tidy -compat=1.17
         - go mod download
-        - go build -ldflags "-X main.BuildTimeInS=`date +%s`"
+        - go build -ldflags "-X main.BuildTimeInS=`date +%s`" --tags=debug
         - mv datly /tmp/datly
         - cp /tmp/datly /tmp/datly_utils
         - cd ${appPath}/e2e/local/validator/src

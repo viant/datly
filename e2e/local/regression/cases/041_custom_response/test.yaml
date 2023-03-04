@@ -26,3 +26,14 @@ pipeline:
         Expect:
           Code: 419
           JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
+
+      - Method: POST
+        URL: http://127.0.0.1:8080/v1/api/dev/comprehensive/custom-response
+        JSONBody:
+          data:
+            name: "41_ valid qunaitity"
+            quantity: 12345
+
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect_t1.json')

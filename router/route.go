@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/utils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/parameter"
 	"github.com/viant/sqlx/io/load/reader/csv"
@@ -75,7 +76,7 @@ type (
 
 	Output struct {
 		Cardinality       view.Cardinality `json:",omitempty"`
-		CaseFormat        view.CaseFormat  `json:",omitempty"`
+		CaseFormat        utils.CaseFormat `json:",omitempty"`
 		OmitEmpty         bool             `json:",omitempty"`
 		Style             Style            `json:",omitempty"`
 		Field             string           `json:",omitempty"`
@@ -345,10 +346,6 @@ func (r *Route) initStyle() error {
 
 	fieldType := r.responseFieldType()
 
-	if fieldType.Kind() == reflect.Ptr {
-		fieldType = fieldType.Elem()
-	}
-
 	responseFields[1] = reflect.StructField{
 		Name:    r.Field,
 		PkgPath: responseFieldPgkPath,
@@ -595,7 +592,7 @@ func (r *Route) initCaser() error {
 	}
 
 	if r.CaseFormat == "" {
-		r.CaseFormat = view.UpperCamel
+		r.CaseFormat = utils.UpperCamel
 	}
 
 	var err error

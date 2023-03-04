@@ -1,0 +1,10 @@
+{
+  "status": "ok",
+  "defaultMessageSuccess": "Default message success",
+  "successMessageSuccess": "Success message success",
+  "data": {
+    "id": "@exists@",
+    "name": "41_ valid qunaitity",
+    "quantity": 12345
+  }
+}

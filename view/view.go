@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
+	"github.com/viant/datly/utils"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/gmetric/provider"
 	"github.com/viant/sqlx/io"
@@ -41,10 +42,10 @@ type (
 		From       string     `json:",omitempty"`
 		FromURL    string     `json:",omitempty"`
 
-		Exclude              []string   `json:",omitempty"`
-		Columns              []*Column  `json:",omitempty"`
-		InheritSchemaColumns bool       `json:",omitempty"`
-		CaseFormat           CaseFormat `json:",omitempty"`
+		Exclude              []string         `json:",omitempty"`
+		Columns              []*Column        `json:",omitempty"`
+		InheritSchemaColumns bool             `json:",omitempty"`
+		CaseFormat           utils.CaseFormat `json:",omitempty"`
 
 		Criteria string `json:",omitempty"`
 
@@ -700,7 +701,7 @@ func (v *View) ensureCaseFormat() error {
 			columnNames[i] = column.Name
 		}
 
-		v.CaseFormat = CaseFormat(DetectCase(columnNames...))
+		v.CaseFormat = utils.CaseFormat(utils.DetectCase(columnNames...))
 	}
 
 	if err := v.CaseFormat.Init(); err != nil {

@@ -1,4 +1,6 @@
 {
   "message": "CustomError message",
-  "CustomField": "Quantity has to be \u003e 0"
+  "customField": "Quantity has to be \u003e 0",
+  "defaultMessageSuccess": "Default message success",
+  "failureMessageSuccess": "Failure message success"
 }
