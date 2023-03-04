@@ -2,7 +2,6 @@ package expand
 
 import (
 	"context"
-	"fmt"
 	"github.com/viant/govalidator"
 	"runtime/debug"
 	"strconv"
@@ -41,8 +40,6 @@ func (c *Validator) Validate(dest interface{}, opts ...interface{}) (*govalidato
 			options = append(options, o)
 		}
 	}
-	fmt.Printf("VV: %T %v\n", c, c)
-	fmt.Printf("call %T %v %T %v %v\n", c.Service, c.Service, dest, dest, options)
 	return c.Service.Validate(context.Background(), dest, options...)
 }
 

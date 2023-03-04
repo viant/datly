@@ -17,6 +17,7 @@
   - job status <- job-id (RUNNING/ERROR/DONE)
   - post http, message, storage event
 
+- programatic router (template with ability to reroute)
 - self documents
 
 - batch spreedsheet ingestion/response
