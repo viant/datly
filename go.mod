@@ -36,7 +36,7 @@ require (
 	github.com/viant/sqlx v0.5.3-0.20230301014138-5a9ca541f97f
 	github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
-	github.com/viant/velty v0.1.1-0.20230304004526-d08764f32078
+	github.com/viant/velty v0.1.1-0.20230307212500-b6ee220f4c39
 	github.com/viant/xreflect v0.0.0-20230303201326-f50afb0feb0d
 	github.com/viant/xunsafe v0.8.4-0.20230304004317-9d184b8b025f
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4

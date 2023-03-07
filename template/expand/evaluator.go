@@ -11,12 +11,7 @@ import (
 )
 
 var (
-	Criteria       = keywords.ReservedKeywords.AddAndGet("criteria")
-	Logger         = keywords.ReservedKeywords.AddAndGet("logger")
-	Fmt            = keywords.ReservedKeywords.AddAndGet("fmt")
-	FnsHttpService = keywords.ReservedKeywords.AddAndGet("http")
-	ValidatorNs    = keywords.ReservedKeywords.AddAndGet("validator")
-	Response       = keywords.ReservedKeywords.AddAndGet("response")
+	ValidatorNs = keywords.ReservedKeywords.AddAndGet("validator")
 )
 
 type (
@@ -51,36 +46,7 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
-	if err = evaluator.planner.DefineVariable(keywords.KeyView, reflect.TypeOf(&MetaParam{})); err != nil {
-		return nil, err
-	}
-
-	if err = evaluator.planner.DefineVariable(
-		Criteria, reflect.TypeOf(&DataUnit{}),
-		keywords.KeySequencer,
-		keywords.KeySQL,
-		keywords.KeySQLx,
-	); err != nil {
-		return nil, err
-	}
-
-	if err = evaluator.planner.DefineVariable(Logger, reflect.TypeOf(&Printer{}), Fmt); err != nil {
-		return nil, err
-	}
-
-	if err = evaluator.planner.DefineVariable(keywords.KeyParentView, reflect.TypeOf(&MetaParam{})); err != nil {
-		return nil, err
-	}
-
-	if err = evaluator.planner.DefineVariable(FnsHttpService, reflect.TypeOf(&Http{})); err != nil {
-		return nil, err
-	}
-
-	if err = evaluator.planner.DefineVariable(ValidatorNs, reflect.TypeOf(goValidator)); err != nil {
-		return nil, err
-	}
-
-	if err = evaluator.planner.DefineVariable(Response, reflect.TypeOf(&ResponseBuilder{})); err != nil {
+	if err = evaluator.planner.EmbedVariable(Context{}); err != nil {
 		return nil, err
 	}
 
@@ -128,7 +94,8 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 		}
 	}
 
-	state = e.ensureState(state, viewParam)
+	state = e.ensureState(state, viewParam, parentParam, goValidator)
+
 	externalParams, presenceMap = e.updateConsts(externalParams, presenceMap)
 	if externalParams != nil {
 		if err := state.SetValue(keywords.ParamsKey, externalParams); err != nil {
@@ -142,33 +109,7 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 		}
 	}
 
-	if err := state.SetValue(keywords.KeyView, viewParam); err != nil {
-		return nil, err
-	}
-
-	if parentParam != nil {
-		if err := state.SetValue(keywords.KeyParentView, parentParam); err != nil {
-			return nil, err
-		}
-	}
-
-	if err := state.SetValue(Criteria, viewParam.dataUnit); err != nil {
-		return nil, err
-	}
-
-	if err := state.SetValue(Logger, state.Printer); err != nil {
-		return nil, err
-	}
-
-	if err := state.SetValue(FnsHttpService, state.Http); err != nil {
-		return nil, err
-	}
-
-	if err := state.SetValue(ValidatorNs, goValidator); err != nil {
-		return nil, err
-	}
-
-	if err := state.SetValue(Response, state.ResponseBuilder); err != nil {
+	if err := state.EmbedValue(state.Context); err != nil {
 		return nil, err
 	}
 
@@ -180,12 +121,12 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 	return state, nil
 }
 
-func (e *Evaluator) ensureState(state *State, param *MetaParam) *State {
+func (e *Evaluator) ensureState(state *State, param *MetaParam, parentParam *MetaParam, validator *Validator) *State {
 	if state == nil {
 		state = &State{}
 	}
 
-	state.Init(e.stateProvider(), param)
+	state.Init(e.stateProvider(), param, parentParam, validator)
 	return state
 }
 

@@ -26,7 +26,7 @@ type (
 	ErrorHandler func(err error) error
 
 	Http struct {
-		flushables []*Flushable
+		flushables []*Flushable `velty:"-"`
 	}
 
 	HttpValidation struct {

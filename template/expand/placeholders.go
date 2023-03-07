@@ -18,18 +18,19 @@ type (
 	}
 
 	DataUnit struct {
-		Columns              ColumnsSource
-		ParamsGroup          []interface{}
-		Mock                 bool
-		PlaceholderCounter   int
-		TemplateSQL          string
-		MetaSource           MetaSource
-		sqlxValidator        *validator.Service
-		sliceIndex           map[reflect.Type]*xunsafe.Slice
-		executables          []*Executable
-		lastTableExecutables map[string]*Executable
-		markerIndex          int
-		markers              []string
+		Columns     ColumnsSource
+		ParamsGroup []interface{}
+		Mock        bool
+		TemplateSQL string
+		MetaSource  MetaSource
+
+		placeholderCounter   int                             `velty:"-"`
+		sqlxValidator        *validator.Service              `velty:"-"`
+		sliceIndex           map[reflect.Type]*xunsafe.Slice `velty:"-"`
+		executables          []*Executable                   `velty:"-"`
+		lastTableExecutables map[string]*Executable          `velty:"-"`
+		markerIndex          int                             `velty:"-"`
+		markers              []string                        `velty:"-"`
 	}
 )
 
@@ -180,9 +181,9 @@ func (c *DataUnit) Next() (interface{}, error) {
 		return 0, nil
 	}
 
-	if c.PlaceholderCounter < len(c.ParamsGroup) {
-		index := c.PlaceholderCounter
-		c.PlaceholderCounter++
+	if c.placeholderCounter < len(c.ParamsGroup) {
+		index := c.placeholderCounter
+		c.placeholderCounter++
 		return c.ParamsGroup[index], nil
 	}
 

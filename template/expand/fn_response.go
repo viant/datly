@@ -5,8 +5,8 @@ import (
 )
 
 type ResponseBuilder struct {
-	Content      map[string]interface{}
-	ResponseCode int
+	Content      map[string]interface{} `velty:"-"`
+	ResponseCode int                    `velty:"-"`
 }
 
 type EmbeddableMap map[string]interface{}

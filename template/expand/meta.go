@@ -41,18 +41,19 @@ type (
 	}
 
 	MetaParam struct {
-		expander            Expander
-		dataUnit            *DataUnit
-		Name                string
-		Alias               string
-		Table               string
-		Limit               int
-		Offset              int
-		Page                int
-		Args                []interface{}
-		NonWindowSQL        string
-		ParentValues        []interface{}
-		lastTablExecutables map[string]*Executable
+		Name         string
+		Alias        string
+		Table        string
+		Limit        int
+		Offset       int
+		Page         int
+		Args         []interface{}
+		NonWindowSQL string
+		ParentValues []interface{}
+
+		lastTablExecutables map[string]*Executable `velty:"-"`
+		expander            Expander               `velty:"-"`
+		dataUnit            *DataUnit              `velty:"-"`
 	}
 
 	Executable struct {

@@ -217,9 +217,6 @@ func (v *VeltyCodec) evaluateCriteria(selector *Selector, dest interface{}, wasN
 	}
 
 	criteriaSanitizer := NewCriteria(v.columns)
-	if err := state.SetValue(expand.Criteria, criteriaSanitizer); err != nil {
-		return "", err
-	}
 
 	if err := v.executor.Exec(state); err != nil {
 		return "", err
@@ -345,10 +342,6 @@ func (v *VeltyCodec) init() error {
 	}
 
 	if err = planner.DefineVariable(SafeColumn, ""); err != nil {
-		return err
-	}
-
-	if err = planner.DefineVariable(expand.Criteria, &expand.DataUnit{}); err != nil {
 		return err
 	}
 
