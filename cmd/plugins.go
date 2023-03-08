@@ -28,7 +28,7 @@ import (
 
 const (
 	importsFile                = "init.go"
-	importsDirectory           = "dependencies"
+	importsDirectory           = "dependency"
 	checksumDirectory          = "checksum"
 	checksumFile               = "init.go"
 	customTypesModule          = "github.com/viant/xdatly/types/custom"
