@@ -9,9 +9,28 @@ import (
 	_ "github.com/viant/afsc/gs"
 	_ "github.com/viant/afsc/s3"
 	_ "github.com/viant/bigquery"
+	"github.com/viant/datly/cmd/build"
 	dlambda "github.com/viant/datly/gateway/runtime/lambda"
 	_ "github.com/viant/scy/kms/blowfish"
+	"strconv"
+	"time"
 )
+
+var (
+	Version      = "development"
+	BuildTimeInS string
+)
+
+func init() {
+	if BuildTimeInS != "" {
+		seconds, err := strconv.Atoi(BuildTimeInS)
+		if err != nil {
+			panic(err)
+		}
+
+		build.BuildTime = time.Unix(int64(seconds), 0)
+	}
+}
 
 func main() {
 	lambda.Start(dlambda.HandleRequest)

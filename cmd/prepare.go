@@ -924,7 +924,7 @@ func (s *Builder) uploadGoType(name string, rType reflect.Type, routeOption *opt
 
 func (s *Builder) registerXDatlyGoFile(modulePath string, outputURL string) error {
 	var imports []string
-	types, err := xreflect.ParseTypes(path.Join(modulePath, "imports"), xreflect.TypeLookupFn(dConfig.Config.LookupType))
+	types, err := xreflect.ParseTypes(path.Join(modulePath, importsDirectory), xreflect.TypeLookupFn(dConfig.Config.LookupType))
 	if err == nil {
 		imports = types.Imports("*" + importsFile)
 	}
@@ -958,7 +958,7 @@ func (s *Builder) registerXDatlyGoFile(modulePath string, outputURL string) erro
 		return err
 	}
 
-	registryURL := path.Join(modulePath, "imports", importsFile)
+	registryURL := path.Join(modulePath, importsDirectory, importsFile)
 	return s.fs.Upload(context.Background(), registryURL, file.DefaultFileOsMode, bytes.NewReader(source))
 }
 
