@@ -33,7 +33,7 @@ const (
 	checksumFile               = "init.go"
 	customTypesModule          = "github.com/viant/xdatly/types/custom"
 	coreTypesModule            = "github.com/viant/xdatly/types/core"
-	generatedCustomTypesModule = "github.com/viant/xdatly/types/custom/generated"
+	generatedCustomTypesModule = "github.com/viant/xdatly/types/custom/checksum"
 )
 
 type (

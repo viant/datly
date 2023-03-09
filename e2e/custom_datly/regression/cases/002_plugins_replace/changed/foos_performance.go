@@ -3,7 +3,6 @@ package changed
 import (
 	"fmt"
 	"github.com/viant/xdatly/types/core"
-	"github.com/viant/xdatly/types/custom/generated"
 	"reflect"
 )
 

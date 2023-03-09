@@ -20,10 +20,10 @@ import (
 type (
 	Config struct {
 		ExposableConfig
-		UnexposableConfig `json:",omitempty" yaml:",omitempty"`
+		SensitiveConfig `json:",omitempty" yaml:",omitempty"`
 	}
 
-	UnexposableConfig struct {
+	SensitiveConfig struct {
 		APIKeys router.APIKeys
 	}
 
@@ -31,6 +31,7 @@ type (
 		APIPrefix            string //like /v1/api/
 		RouteURL             string
 		DependencyURL        string
+		EnvURL               string `json:",omitempty" yaml:",omitempty"`
 		UseCacheFS           bool
 		SyncFrequencyMs      int
 		Secrets              []*secret.Resource

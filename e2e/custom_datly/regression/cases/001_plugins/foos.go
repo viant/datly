@@ -3,14 +3,14 @@ package foos
 import (
 	"fmt"
 	"github.com/viant/xdatly/types/core"
-	"github.com/viant/xdatly/types/custom/generated"
+	"github.com/viant/xdatly/types/custom/checksum"
 	"reflect"
 )
 
 var PackageName = "foos"
 
 func init() {
-	core.RegisterType(PackageName, "Foos", reflect.TypeOf(Foos{}), generated.GeneratedTime)
+	core.RegisterType(PackageName, "Foos", reflect.TypeOf(Foos{}), checksum.GeneratedTime)
 }
 
 type Foos struct {

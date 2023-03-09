@@ -4,7 +4,7 @@ import (
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/sqlx/types"
 	"github.com/viant/xdatly/types/core"
-	_ "github.com/viant/xdatly/types/custom/imports"
+	_ "github.com/viant/xdatly/types/custom/dependency"
 	"reflect"
 	"time"
 )

@@ -24,7 +24,7 @@ func (s *Builder) loadConfig(ctx context.Context) (cfg *standalone.Config, err e
 					APIPrefix:    "/v1/api/",
 					RevealMetric: &revealMetrics,
 				},
-				UnexposableConfig: gateway.UnexposableConfig{
+				SensitiveConfig: gateway.SensitiveConfig{
 					APIKeys: router.APIKeys{
 						{
 							URI:    "/v1/api/dev/secured/",
