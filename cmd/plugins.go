@@ -9,6 +9,7 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/storage"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/cmd/build"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/xreflect"
@@ -19,7 +20,6 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -375,7 +375,7 @@ func (s *Builder) pluginArgs(pluginDst string, pluginPath string, plugin *plugin
 
 	if s.options.PluginSingleFileMeta {
 		ext := path.Ext(pluginDst)
-		pluginDst = strings.ReplaceAll(pluginDst, ext, fmt.Sprintf("_%v_%v", time.Now().Format(gateway.TimePluginsLayout), runtime.Version()))
+		pluginDst = strings.ReplaceAll(pluginDst, ext, fmt.Sprintf("_%v_%v", time.Now().Format(gateway.TimePluginsLayout), build.GolangVersion()))
 	}
 
 	args = append(args,
@@ -412,7 +412,7 @@ func (s *Builder) readPackageNameValue(plugin *pluginGenDeta) string {
 func (s *Builder) genPluginMetadata(pluginPath string, generatedTime time.Time) error {
 	pluginMeta := &config.Metadata{
 		CreationTime: generatedTime,
-		Version:      runtime.Version(),
+		Version:      build.GolangVersion(),
 	}
 
 	marshal, err := json.Marshal(pluginMeta)
