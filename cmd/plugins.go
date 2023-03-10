@@ -170,8 +170,7 @@ func (s *Builder) genPlugin(plugin *pluginGenDeta, aPath string) error {
 	bundleURL, isBundle := s.IsPluginBundle(aPath)
 	suffix := strconv.Itoa(nowInNano)
 	name := path.Base(aPath)
-
-	pluginPath := path.Join(os.TempDir(), "plugins", suffix, name)
+	pluginPath := path.Join(os.TempDir(), "plugins", suffix)
 	if isBundle {
 		customPath := ensureDir(aPath)
 
