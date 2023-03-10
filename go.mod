@@ -108,6 +108,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-require github.com/viant/xdatly/types/core v0.0.0-20230308171419-c29a44ad34de
-
-require github.com/viant/xdatly/types/custom v0.0.0-20230308171419-c29a44ad34de
+require (
+	github.com/viant/xdatly/types/core v0.0.0-20230309221732-4dc744a54ac2
+	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
+)

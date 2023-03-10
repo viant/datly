@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/cmd/option"
+	"net/http"
 	"strings"
 )
 
@@ -35,7 +36,7 @@ func newPatchStmtBuilder(sb *strings.Builder, metadata *inputMetadata) *patchStm
 }
 
 func (s *Builder) preparePatchRule(ctx context.Context, sourceSQL []byte) (string, error) {
-	routeOption, config, paramType, err := s.buildInputMetadata(ctx, sourceSQL)
+	routeOption, config, paramType, err := s.buildInputMetadata(ctx, sourceSQL, http.MethodPatch)
 	if err != nil {
 		return "", err
 	}

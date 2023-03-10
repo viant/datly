@@ -48,6 +48,7 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	}
 
 	registry := config.NewRegistry()
+	var types []string
 	_, cancelFn := core.Types(func(packageName, typeName string, rType reflect.Type, _ time.Time) {
 		registry.AddType(packageName, typeName, rType)
 	})
@@ -69,7 +70,7 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 
 		data, err := fn()
 		if err != nil {
-			fmt.Printf("[WARN] error occured while reading plugin %v\n", err.Error())
+			fmt.Printf("[ERROR] error occured while reading plugin %v\n", err.Error())
 			continue
 		}
 
@@ -101,6 +102,10 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 				registry.Override(*actual)
 			}
 		}
+	}
+
+	if len(types) > 0 {
+		fmt.Printf("[INFO] detected plugin changes, overriding types %s\n", types)
 	}
 
 	config.Config.Override(registry)
@@ -205,7 +210,19 @@ func (r *Service) loadPluginWithErr(ctx context.Context, URL string) (*pluginDat
 		return nil, err
 	}
 
-	if build.BuildTime.After(metadata.CreationTime) || (metadata.Version != "" && metadata.Version != build.GoVersion) {
+	isOutdated := build.BuildTime.After(metadata.CreationTime)
+	goVersionDiff := metadata.Version != "" && metadata.Version != build.GoVersion
+	if isOutdated || goVersionDiff {
+		var reasons []string
+		if isOutdated {
+			reasons = append(reasons, "plugin was built before datly")
+		}
+
+		if goVersionDiff {
+			reasons = append(reasons, fmt.Sprintf("go vesion is different, wanted %v got %v", build.GoVersion, metadata.Version))
+		}
+
+		fmt.Printf("[INFO] Ignoring plugin due to the: %v\n", strings.Join(reasons, " | "))
 		go r.fs.Delete(context.Background(), metadata.URL)
 		go r.fs.Delete(context.Background(), URL)
 		return nil, nil
@@ -216,6 +233,7 @@ func (r *Service) loadPluginWithErr(ctx context.Context, URL string) (*pluginDat
 		return nil, err
 	}
 
+	fmt.Printf("[INFO] opening plugin %v\n", URL)
 	pluginProvider, err := plugin.Open(URL)
 	if err != nil {
 		return nil, err

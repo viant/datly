@@ -270,10 +270,10 @@ func (b *stmtBuilder) appendIndex(def *inputMetadata, aMeta *fieldMeta) (string,
 	return indexName, aFieldName
 }
 
-func (s *Builder) buildInputMetadata(ctx context.Context, sourceSQL []byte) (*option.RouteConfig, *viewConfig, *inputMetadata, error) {
+func (s *Builder) buildInputMetadata(ctx context.Context, sourceSQL []byte, httpMethod string) (*option.RouteConfig, *viewConfig, *inputMetadata, error) {
 	hint, SQL := s.extractRouteSettings(sourceSQL)
 
-	routeOption := &option.RouteConfig{}
+	routeOption := &option.RouteConfig{Method: httpMethod}
 	if err := tryUnmarshalHint(hint, routeOption); err != nil {
 		return nil, nil, nil, err
 	}
@@ -1007,9 +1007,9 @@ var %v = map[string]reflect.Type{
 
 		sbBefore.WriteString(fmt.Sprintf(`
 func init() {
-	core.RegisterType(PackageName, "%v", reflect.TypeOf(%v{}), generated.GeneratedTime)
+	core.RegisterType(PackageName, "%v", reflect.TypeOf(%v{}), %v.GeneratedTime)
 }
-`, name, name))
+`, name, name, checksumDirectory))
 	}
 
 	sb := &bytes.Buffer{}

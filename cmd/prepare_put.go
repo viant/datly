@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
+	"net/http"
 	"strings"
 )
 
@@ -21,7 +22,7 @@ func newUpdateStmtBuilder(sb *strings.Builder, def *inputMetadata) *updateStmtBu
 }
 
 func (s *Builder) preparePutRule(ctx context.Context, SQL []byte) (string, error) {
-	routeConfig, config, metadata, err := s.buildInputMetadata(ctx, SQL)
+	routeConfig, config, metadata, err := s.buildInputMetadata(ctx, SQL, http.MethodPut)
 	if err != nil {
 		return "", err
 	}

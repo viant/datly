@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/toolbox/format"
+	"net/http"
 	"reflect"
 	"strings"
 )
@@ -54,7 +55,7 @@ type (
 )
 
 func (s *Builder) preparePostRule(ctx context.Context, sourceSQL []byte) (string, error) {
-	routeOption, aConfig, paramType, err := s.buildInputMetadata(ctx, sourceSQL)
+	routeOption, aConfig, paramType, err := s.buildInputMetadata(ctx, sourceSQL, http.MethodPost)
 	if err != nil {
 		return "", err
 	}

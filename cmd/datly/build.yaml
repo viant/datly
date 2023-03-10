@@ -22,16 +22,16 @@ pipeline:
       - export GOOS=linux
       - export GOOS=linux
       - export GOARCH=amd64
-      - go build -ldflags="-X 'main.Version=${Ver}'"
+      - go build -ldflags="-X 'main.Version=${Ver}'" -trimpath
       - tar cvzf datly_linux_${Ver}_amd64.tar.gz datly
       - export GOOS=windows
-      - go build -ldflags="-X 'main.Version=${Ver}'"
+      - go build -ldflags="-X 'main.Version=${Ver}'" -trimpath
       - tar cvzf datly_windows_${Ver}_amd64.tar.gz datly.exe
       - export GOOS=darwin
-      - go build -ldflags="-X 'main.Version=${Ver}'"
+      - go build -ldflags="-X 'main.Version=${Ver}'" -trimpath
       - tar cvzf datly_darwin_${Ver}_amd64.tar.gz datly
       - export GOOS=darwin
       - export GOARCH=arm64
-      - go build -ldflags="-X 'main.Version=${Ver}'"
+      - go build -ldflags="-X 'main.Version=${Ver}'" -trimpath
       - tar cvzf datly_darwin_${Ver}_arm64.tar.gz datly
    

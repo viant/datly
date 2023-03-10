@@ -237,8 +237,8 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	r._columnsCache = cache
 	r._packageTypes = map[string]Types{}
 	if r._typeLookup == nil {
-		r._typeLookup = func(_, _, typeName string) (reflect.Type, error) {
-			return r._types.Lookup(typeName)
+		r._typeLookup = func(identifier, packageName, typeName string) (reflect.Type, error) {
+			return r._types.LookupType(identifier, packageName, typeName)
 		}
 	}
 
