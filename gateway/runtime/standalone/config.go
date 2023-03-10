@@ -30,6 +30,11 @@ func (c *Config) Init() {
 	if c.Cognito != nil {
 		c.Cognito.Init()
 	}
+
+	//if c.PluginsURL == "" {
+	//	baseURL, _ := url.Split(c.DependencyURL, file.Scheme)
+	//	c.PluginsURL = url.Join(baseURL, "plugins")
+	//}
 }
 
 //Validate validates config

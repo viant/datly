@@ -30,6 +30,7 @@ type (
 	ExposableConfig struct {
 		APIPrefix            string //like /v1/api/
 		RouteURL             string
+		PluginsURL           string
 		DependencyURL        string
 		EnvURL               string `json:",omitempty" yaml:",omitempty"`
 		UseCacheFS           bool

@@ -54,7 +54,7 @@ func (s *Builder) buildTemplate(ctx context.Context, aViewConfig *viewConfig, ex
 func (s *Builder) uploadTemplateSQL(template string, aViewConfig *viewConfig) (SQL string, URI string, err error) {
 	SQL = sanitize.Sanitize(template, s.routeBuilder.paramsIndex.hints, s.routeBuilder.paramsIndex.consts)
 	if SQL != "" && aViewConfig.fileName != "" {
-		URI, err = s.uploadSQL(folderDev, aViewConfig.fileName, SQL)
+		URI, err = s.uploadSQL(s.options.RoutePrefix, aViewConfig.fileName, SQL)
 		if err != nil {
 			return "", "", err
 		}
@@ -670,11 +670,11 @@ func (s *Builder) preGenURL(fileName string, ext string) string {
 }
 
 func (s *Builder) genURL(fileName, ext string) string {
-	return s.url(folderDev, fileName, ext)
+	return s.url(s.options.RoutePrefix, fileName, ext)
 }
 
 func (s *Builder) url(namespace, fileName string, ext string) string {
-	if namespace != folderDev {
+	if namespace != s.options.RoutePrefix {
 		URL := normalizeURL(namespace)
 		if strings.HasPrefix(URL, "/") {
 			if actualExt := path.Ext(URL); actualExt != "" {

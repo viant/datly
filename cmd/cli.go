@@ -44,7 +44,7 @@ func (s *Builder) build() (*standalone.Server, error) {
 	}
 
 	if s.options.WriteLocation != "" {
-		dumpConfiguration(s.options.WriteLocation, folderDev, s.options)
+		dumpConfiguration(s.options.WriteLocation, s.options.RoutePrefix, s.options)
 		return nil, nil
 	}
 

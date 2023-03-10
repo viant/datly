@@ -111,6 +111,13 @@ func buildDefaultConfig(cfg *standalone.Config, options *Options) error {
 			fs.Create(context.Background(), cfg.RouteURL, file.DefaultDirOsMode, true)
 			options.RouteURL = cfg.RouteURL
 		}
+
+		if cfg.PluginsURL == "" {
+			cfg.PluginsURL = "mem://localhost/dev/Datly/plugins"
+			fs.Create(context.Background(), cfg.RouteURL, file.DefaultDirOsMode, true)
+			options.PluginsURL = cfg.PluginsURL
+		}
+
 		if cfg.DependencyURL == "" {
 			cfg.DependencyURL = "mem://localhost/dev/Datly/dependencies"
 			fs.Create(context.Background(), cfg.DependencyURL, file.DefaultDirOsMode, true)

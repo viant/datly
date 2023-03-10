@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	furl "github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/build"
 	"github.com/viant/datly/config"
 	"github.com/viant/xdatly/types/core"
@@ -122,24 +121,11 @@ func (r *Service) handlePluginConfig(pluginProvider *plugin.Plugin, data *plugin
 	data.changes = append(data.changes, configPlugin)
 }
 
-func (r *Service) copyIfNeeded(ctx context.Context, URL string) (string, error) {
-	oldURL := URL
+func (r *Service) copyToPluginLoadLocation(ctx context.Context, src string) (string, error) {
 	suffix := strconv.Itoa(int(time.Now().UnixNano()))
-
-	if urlScheme := furl.Scheme(URL, ""); urlScheme == "mem" {
-		dir := path.Join(os.TempDir(), "plugins", suffix)
-		URL = furl.Join(dir, path.Base(URL))
-	} else {
-		URL = strings.Replace(URL, r.Config.DependencyURL, r.pluginDst(), 1)
-		ext := path.Ext(URL)
-		URL = strings.Replace(URL, ext, suffix+ext, 1)
-	}
-
-	return URL, r.fs.Copy(ctx, oldURL, URL)
-}
-
-func (r *Service) pluginDst() string {
-	return path.Join(r.Config.DependencyURL, pluginsFolder)
+	loadPluginDir := path.Join(os.TempDir(), "plugins", suffix)
+	loadPluginLocation := path.Join(loadPluginDir, path.Base(src))
+	return loadPluginLocation, r.fs.Copy(ctx, src, loadPluginLocation)
 }
 
 func (r *Service) handlePluginTypes(provider *plugin.Plugin, data *pluginData) {
@@ -228,7 +214,7 @@ func (r *Service) loadPluginWithErr(ctx context.Context, URL string) (*pluginDat
 		return nil, nil
 	}
 
-	URL, err = r.copyIfNeeded(ctx, URL)
+	URL, err = r.copyToPluginLoadLocation(ctx, URL)
 	if err != nil {
 		return nil, err
 	}

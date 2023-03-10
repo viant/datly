@@ -94,6 +94,7 @@ func (s *Builder) uploadPlugins() error {
 		}
 	}
 
+	s.config.PluginsURL = s.options.PluginsURL
 	return nil
 }
 
@@ -214,7 +215,7 @@ func (s *Builder) genPlugin(plugin *pluginGenDeta, aPath string) error {
 		return fmt.Errorf("couldn't generate plugin due to the: %w\n | console output: %s", err, output)
 	}
 
-	if err = s.fs.Copy(context.Background(), pluginDst, s.options.DependencyURL); err != nil {
+	if err = s.fs.Copy(context.Background(), pluginDst, s.options.PluginsURL); err != nil {
 		return err
 	}
 
@@ -419,7 +420,7 @@ func (s *Builder) genPluginMetadata(pluginPath string, generatedTime time.Time) 
 		return err
 	}
 
-	return s.fs.Upload(context.Background(), url.Join(s.options.DependencyURL, path.Base(pluginPath)+".meta"), file.DefaultFileOsMode, bytes.NewReader(marshal))
+	return s.fs.Upload(context.Background(), url.Join(s.options.PluginsURL, path.Base(pluginPath)+".meta"), file.DefaultFileOsMode, bytes.NewReader(marshal))
 }
 
 func (s *Builder) updateLastGenPluginMeta(URL string, now time.Time) error {

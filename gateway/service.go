@@ -32,21 +32,22 @@ var unindexedFolders = []string{pluginsFolder, metaFolder}
 
 type (
 	Service struct {
-		Config               *Config
-		routersIndex         map[string]*router.Router
-		fs                   afs.Service
-		cfs                  afs.Service //cache file system
-		routeResourceTracker *resource.Tracker
-		dataResourceTracker  *resource.Tracker
-		dataResourcesIndex   map[string]*view.Resource
-		metrics              *gmetric.Service
-		mainRouter           *Router
-		cancelFn             context.CancelFunc
-		session              *Session
-		JWTSigner            *signer.Service
-		pluginsInUse         map[string]bool
-		mux                  sync.RWMutex
-		pluginsConfig        *config.Registry
+		Config                *Config
+		routersIndex          map[string]*router.Router
+		fs                    afs.Service
+		cfs                   afs.Service //cache file system
+		routeResourceTracker  *resource.Tracker
+		dataResourceTracker   *resource.Tracker
+		dataResourcesIndex    map[string]*view.Resource
+		metrics               *gmetric.Service
+		mainRouter            *Router
+		cancelFn              context.CancelFunc
+		session               *Session
+		JWTSigner             *signer.Service
+		pluginsInUse          map[string]bool
+		mux                   sync.RWMutex
+		pluginsConfig         *config.Registry
+		pluginResourceTracker *resource.Tracker
 	}
 )
 
@@ -86,22 +87,21 @@ func New(ctx context.Context, config *Config, statusHandler http.Handler, author
 	cfs := cache.Singleton(URL)
 
 	srv := &Service{
-		metrics:              metrics,
-		pluginsConfig:        registry,
-		Config:               config,
-		mux:                  sync.RWMutex{},
-		fs:                   afs.New(),
-		cfs:                  cfs,
-		dataResourcesIndex:   map[string]*view.Resource{},
-		routeResourceTracker: resource.New(config.RouteURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
-		dataResourceTracker:  resource.New(config.DependencyURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
-		routersIndex:         map[string]*router.Router{},
-		mainRouter:           NewRouter(map[string]*router.Router{}, config, metrics, statusHandler, authorizer),
-		session:              NewSession(config.ChangeDetection),
-		pluginsInUse:         map[string]bool{},
+		metrics:               metrics,
+		pluginsConfig:         registry,
+		Config:                config,
+		mux:                   sync.RWMutex{},
+		fs:                    afs.New(),
+		cfs:                   cfs,
+		dataResourcesIndex:    map[string]*view.Resource{},
+		routeResourceTracker:  resource.New(config.RouteURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
+		dataResourceTracker:   resource.New(config.DependencyURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
+		pluginResourceTracker: resource.New(config.PluginsURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
+		routersIndex:          map[string]*router.Router{},
+		mainRouter:            NewRouter(map[string]*router.Router{}, config, metrics, statusHandler, authorizer),
+		session:               NewSession(config.ChangeDetection),
+		pluginsInUse:          map[string]bool{},
 	}
-
-	_ = srv.fs.Delete(context.Background(), srv.pluginDst())
 
 	if config.JwtSigner != nil {
 		srv.JWTSigner = signer.New(config.JwtSigner)
@@ -330,6 +330,20 @@ func (r *Service) loadDependencyResource(URL string, ctx context.Context, fs afs
 func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*ResourcesChange, error) {
 	changes := NewResourcesChange()
 	err := r.dataResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
+		for _, folderName := range unindexedFolders {
+			if strings.Contains(URL, folderName) {
+				return
+			}
+		}
+
+		changes.OnChange(operation, URL)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = r.pluginResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
 		for _, folderName := range unindexedFolders {
 			if strings.Contains(URL, folderName) {
 				return

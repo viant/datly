@@ -38,6 +38,7 @@ type (
 		OpenApiURL   string `short:"o" long:"openapi"`
 		Version      bool   `short:"v" long:"version"  description:"build version"`
 		RelativePath string `long:"relative" description:"allow to control relative path where path is used"`
+		RoutePrefix  string `short:"x" long:"routePrefix" description:"route prefix default dev"`
 		Plugins
 	}
 
@@ -68,6 +69,7 @@ type (
 	Plugins struct {
 		PluginArgs           []string `long:"pluginArgs" description:"args need to be passed to generate a plugin"`
 		PluginSingleFileMeta bool     `long:"pluginEncodeMeta" description:"allows to encode generated time and go version in plugin file name"`
+		PluginsURL           string   `long:"pluginsURL" description:"generated plugins destination"`
 	}
 )
 
@@ -106,6 +108,16 @@ func (o *Options) Init() {
 	if !strings.HasPrefix(o.DSQLOutput, "/") {
 		o.DSQLOutput = path.Join(path.Dir(o.Location), o.DSQLOutput)
 	}
+
+	if o.PluginsURL == "" {
+		o.PluginsURL = "plugins"
+	}
+
+	if o.RoutePrefix == "" {
+		o.RoutePrefix = folderDev
+	}
+
+	o.PluginsURL = path.Join(o.WriteLocation, "Datly", o.PluginsURL)
 
 	o.PrepareRule = strings.ToLower(o.PrepareRule)
 	o.Connector.Init()
