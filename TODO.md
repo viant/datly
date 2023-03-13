@@ -1,4 +1,13 @@
+- integrate with viant/pgo
+- code parameter assets (i.e xml validator)
+- pre proxy processor  
+ #if($reportName='abc')
+  $proxy.To('/v1/api/ws/view1')
+ #else if($reportName='xyz')
+  $proxy.To('/v1/api/ws/view2')
+ #end
 
+- app  customized name (i.e. ws instead of dev)
 - Executor triggers/notification (notification message ID in response)
 -> events ->
 
