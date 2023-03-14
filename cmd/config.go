@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
@@ -40,6 +41,17 @@ func (s *Builder) loadConfig(ctx context.Context) (cfg *standalone.Config, err e
 		disable := true
 		cfg.AutoDiscovery = &disable
 		return cfg, nil
+	}
+
+	if s.options.PartialConfigURL != "" {
+		configContent, err := s.fs.DownloadWithURL(ctx, s.options.PartialConfigURL)
+		if err != nil {
+			return nil, err
+		}
+
+		if err = json.Unmarshal(configContent, cfg); err != nil {
+			return nil, err
+		}
 	}
 
 	s.options.ConfigURL = normalizeURL(s.options.ConfigURL)

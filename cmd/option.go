@@ -27,12 +27,13 @@ const (
 
 type (
 	Options struct {
-		Port          int    `short:"p" long:"port" description:"port"  `
-		RouteURL      string `short:"r" long:"route URL" description:"route URL"  `
-		DependencyURL string `short:"d" long:"deps" description:"dependencies URL" `
-		ConfigURL     string `short:"c" long:"config" description:"configuration URL" `
-		JWTVerifier   string `short:"j" long:"jwt" description:"PublicKeyPath|EncKey" `
-		WriteLocation string `short:"w" long:"write" description:"dump all config files to specified location" `
+		Port             int    `short:"p" long:"port" description:"port"  `
+		RouteURL         string `short:"r" long:"route URL" description:"route URL"  `
+		DependencyURL    string `short:"d" long:"deps" description:"dependencies URL" `
+		ConfigURL        string `short:"c" long:"config" description:"configuration URL" `
+		PartialConfigURL string `short:"e" long:"partialConfig" description:"partial configuration file URL"`
+		JWTVerifier      string `short:"j" long:"jwt" description:"PublicKeyPath|EncKey" `
+		WriteLocation    string `short:"w" long:"write" description:"dump all config files to specified location" `
 		Generate
 		Connector
 		CacheWarmup

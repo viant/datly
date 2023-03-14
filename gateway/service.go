@@ -114,13 +114,13 @@ func New(ctx context.Context, config *Config, statusHandler http.Handler, author
 		return nil, err
 	}
 
-	err = srv.createRouterIfNeeded(ctx, metrics, statusHandler, authorizer)
+	err = srv.createRouterIfNeeded(ctx, metrics, statusHandler, authorizer, true)
 	srv.detectChanges(metrics, statusHandler, authorizer)
 	fmt.Printf("initialised datly: %s\n", time.Now().Sub(start))
 	return srv, err
 }
 
-func (r *Service) createRouterIfNeeded(ctx context.Context, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer) error {
+func (r *Service) createRouterIfNeeded(ctx context.Context, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer, isFirst bool) error {
 	defer func() {
 		if r.session == nil {
 			return
@@ -139,9 +139,13 @@ func (r *Service) createRouterIfNeeded(ctx context.Context, metrics *gmetric.Ser
 		return err
 	}
 
-	routers, changed, err := r.getRouters(ctx, fs, resources, changed)
+	routers, changed, err := r.getRouters(ctx, fs, resources, changed, isFirst)
 	if err != nil || !changed {
 		return err
+	}
+
+	if !isFirst {
+		fmt.Printf("[INFO] routers rebuild completed\n")
 	}
 
 	mainRouter := NewRouter(routers, r.Config, metrics, statusHandler, authorizer)
@@ -155,7 +159,7 @@ func (r *Service) createRouterIfNeeded(ctx context.Context, metrics *gmetric.Ser
 	return nil
 }
 
-func (r *Service) getRouters(ctx context.Context, fs afs.Service, resources map[string]*view.Resource, viewResourcesChanged bool) (routers map[string]*router.Router, changed bool, err error) {
+func (r *Service) getRouters(ctx context.Context, fs afs.Service, resources map[string]*view.Resource, viewResourcesChanged bool, isFirst bool) (routers map[string]*router.Router, changed bool, err error) {
 	updatedMap, removedMap, err := r.detectRoutersChanges(ctx, fs)
 	if err != nil {
 		return nil, false, err
@@ -165,6 +169,14 @@ func (r *Service) getRouters(ctx context.Context, fs afs.Service, resources map[
 		return r.routersIndex, false, nil
 	}
 
+	if !isFirst {
+		fmt.Printf("[INFO] detected resources changes, rebuilding routers\n")
+	}
+
+	return r.rebuildRouters(ctx, fs, resources, routers, updatedMap, removedMap, changed)
+}
+
+func (r *Service) rebuildRouters(ctx context.Context, fs afs.Service, resources map[string]*view.Resource, routers map[string]*router.Router, updatedMap map[string]bool, removedMap map[string]bool, changed bool) (map[string]*router.Router, bool, error) {
 	routers = map[string]*router.Router{}
 	for routerURL := range r.routersIndex {
 		if (updatedMap[routerURL] || removedMap[routerURL]) && !changed {
@@ -442,8 +454,8 @@ func (r *Service) detectChanges(metrics *gmetric.Service, statusHandler http.Han
 			case <-cancel.Done():
 				break outer
 			default:
-				if err := r.createRouterIfNeeded(context.TODO(), metrics, statusHandler, authorizer); err != nil {
-					fmt.Printf("error occured while recreating routers: %v \n", err.Error())
+				if err := r.createRouterIfNeeded(context.TODO(), metrics, statusHandler, authorizer, false); err != nil {
+					fmt.Printf("[ERROR] error occured while recreating routers: %v \n", err.Error())
 				}
 			}
 		}

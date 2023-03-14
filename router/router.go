@@ -174,14 +174,26 @@ func (r *Router) HandleRoute(response http.ResponseWriter, request *http.Request
 
 	switch route.Service {
 	case ReaderServiceType:
+		r.prepareViewHandler(response, request, route)
 		r.viewHandler(route)(response, request)
 		return nil
 	case ExecutorServiceType:
+		r.prepareViewHandler(response, request, route)
 		r.executorHandler(route)(response, request)
 		return nil
 	}
 
 	return fmt.Errorf("unsupported service operation %v", request.Method)
+}
+
+func (r *Router) prepareViewHandler(response http.ResponseWriter, request *http.Request, route *Route) {
+	if route.Cors != nil {
+		enableCors(response, request, route.Cors, false)
+	}
+
+	if route.EnableAudit {
+		r.logAudit(request, response, route)
+	}
 }
 
 func New(resource *Resource, options ...interface{}) *Router {
@@ -275,12 +287,6 @@ func (r *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 func (r *Router) viewHandler(route *Route) viewHandler {
 	return func(response http.ResponseWriter, request *http.Request) {
-		if route.Cors != nil {
-			enableCors(response, request, route.Cors, false)
-		}
-		if route.EnableAudit {
-			r.logAudit(request, response, route)
-		}
 
 		if !r.runBeforeFetchIfNeeded(response, request, route) {
 			return
@@ -857,6 +863,10 @@ func (r *Router) logAudit(request *http.Request, response http.ResponseWriter, r
 	headers := request.Header.Clone()
 	if authorization := headers.Get("Authorization"); authorization != "" {
 		r.obfuscateAuthorization(request, response, authorization, headers, route)
+	}
+
+	if route.APIKey != nil {
+		headers.Del(route.APIKey.Header)
 	}
 
 	asBytes, _ := goJson.Marshal(Audit{
