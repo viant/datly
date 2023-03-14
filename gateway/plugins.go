@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/cmd/build"
 	"github.com/viant/datly/config"
+	pgoBuild "github.com/viant/pgo/build"
 	"github.com/viant/xdatly/types/core"
 	"os"
 	"path"
@@ -25,6 +26,12 @@ type (
 		creationTime time.Time
 		packageName  string
 		changes      []interface{}
+	}
+
+	pluginMetadata struct {
+		URL          string
+		CreationTime time.Time
+		pgoBuild.Info
 	}
 )
 
@@ -147,36 +154,38 @@ func (r *Service) handlePluginTypes(provider *plugin.Plugin, data *pluginData) {
 	data.packageName = packageName
 }
 
-func (r *Service) loadPluginMetadata(ctx context.Context, URL string) (*config.Metadata, error) {
+func (r *Service) loadPluginMetadata(ctx context.Context, URL string) (*pluginMetadata, error) {
 	fileName := path.Base(URL)
 	if ext := path.Ext(fileName); ext != "" {
 		fileName = strings.ReplaceAll(fileName, ext, "")
 	}
 
-	pluginsMetadata := &config.Metadata{
+	pluginsMetadata := &pluginMetadata{
 		URL: URL,
 	}
 
-	segments := strings.Split(fileName, "_")
-	if len(segments) > 1 {
-		parsedTime, err := time.Parse(TimePluginsLayout, segments[1])
-		if err == nil {
-			pluginsMetadata.CreationTime = parsedTime
-		}
-	}
-
-	if len(segments) > 2 {
-		pluginsMetadata.Version = segments[2]
-		return pluginsMetadata, nil
-	}
-
-	metadataURL := URL + ".meta"
+	metadataURL := strings.Replace(URL, ".so", ".info", 1)
 	content, err := r.fs.DownloadWithURL(ctx, metadataURL)
 	if err != nil {
+		fmt.Printf("[WARN] not found plugin %v metadata file\n", URL)
 		return pluginsMetadata, nil
 	}
 
-	return pluginsMetadata, json.Unmarshal(content, pluginsMetadata)
+	err = json.Unmarshal(content, &pluginsMetadata.Info)
+	if err != nil {
+		return nil, err
+	}
+
+	if scn := pluginsMetadata.Scn; scn != 0 {
+		creationTime, err := time.ParseInLocation(pgoBuild.ScnLayout, strconv.Itoa(scn), time.UTC)
+		if err != nil {
+			return nil, err
+		}
+
+		pluginsMetadata.CreationTime = creationTime
+	}
+
+	return pluginsMetadata, err
 }
 
 func (r *Service) loadPlugin(ctx context.Context, URL string, aChan chan func() (*pluginData, error)) {
@@ -196,8 +205,9 @@ func (r *Service) loadPluginWithErr(ctx context.Context, URL string) (*pluginDat
 		return nil, err
 	}
 
-	isOutdated := build.BuildTime.After(metadata.CreationTime)
-	goVersionDiff := metadata.Version != "" && metadata.Version != build.GoVersion
+	isOutdated := r.IsOutdated(metadata)
+	goVersion := metadata.Runtime.Version
+	goVersionDiff := goVersion != "" && goVersion != build.GoVersion
 	if isOutdated || goVersionDiff {
 		var reasons []string
 		if isOutdated {
@@ -205,12 +215,10 @@ func (r *Service) loadPluginWithErr(ctx context.Context, URL string) (*pluginDat
 		}
 
 		if goVersionDiff {
-			reasons = append(reasons, fmt.Sprintf("go vesion is different, wanted %v got %v", build.GoVersion, metadata.Version))
+			reasons = append(reasons, fmt.Sprintf("go version is different, wanted %v got %v", build.GoVersion, goVersion))
 		}
 
 		fmt.Printf("[INFO] Ignoring plugin due to the: %v\n", strings.Join(reasons, " | "))
-		go r.fs.Delete(context.Background(), metadata.URL)
-		go r.fs.Delete(context.Background(), URL)
 		return nil, nil
 	}
 
@@ -233,4 +241,12 @@ func (r *Service) loadPluginWithErr(ctx context.Context, URL string) (*pluginDat
 	r.handlePluginTypes(pluginProvider, aData)
 
 	return aData, nil
+}
+
+func (r *Service) IsOutdated(metadata *pluginMetadata) bool {
+	if metadata.CreationTime.IsZero() {
+		return false
+	}
+
+	return build.BuildTime.After(metadata.CreationTime)
 }

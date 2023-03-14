@@ -21,6 +21,8 @@ const (
 
 	folderDev = "dev"
 	folderSQL = "dsql"
+
+	rootFolder = "Datly"
 )
 
 type (
@@ -67,9 +69,8 @@ type (
 	}
 
 	Plugins struct {
-		PluginArgs           []string `long:"pluginArgs" description:"args need to be passed to generate a plugin"`
-		PluginSingleFileMeta bool     `long:"pluginEncodeMeta" description:"allows to encode generated time and go version in plugin file name"`
-		PluginsURL           string   `long:"pluginsURL" description:"generated plugins destination"`
+		PluginArgs []string `long:"pluginArgs" description:"args need to be passed to generate a plugin"`
+		PluginsURL string   `long:"pluginsURL" description:"generated plugins destination"`
 	}
 )
 
@@ -117,7 +118,7 @@ func (o *Options) Init() {
 		o.RoutePrefix = folderDev
 	}
 
-	o.PluginsURL = path.Join(o.WriteLocation, "Datly", o.PluginsURL)
+	o.PluginsURL = path.Join(o.WriteLocation, rootFolder, o.PluginsURL)
 
 	o.PrepareRule = strings.ToLower(o.PrepareRule)
 	o.Connector.Init()

@@ -1,8 +1,9 @@
 package build
 
 import (
-	"os/exec"
+	"github.com/viant/pgo/build"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -12,15 +13,7 @@ var (
 )
 
 func init() {
-	GoVersion = GolangVersion()
-}
-
-func GolangVersion() string {
-	command := exec.Command("go", "version")
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return runtime.Version()
-	}
-
-	return string(output)
+	GoVersion = strings.Replace(runtime.Version(), "go", "", 1)
+	aRuntime := build.Runtime{}
+	aRuntime.Init()
 }

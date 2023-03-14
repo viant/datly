@@ -21,7 +21,7 @@ require (
 	github.com/onsi/gomega v1.20.2 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.2
-	github.com/viant/afs v1.16.1-0.20220708154004-5cc767a16d95
+	github.com/viant/afs v1.20.1-0.20230313193345-7c7f7aa5774c
 	github.com/viant/afsc v1.8.1-0.20220721172758-a0713d05bfdd
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.2.1-0.20221005024313-4286a9622882
@@ -32,19 +32,21 @@ require (
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac
 	github.com/viant/parsly v0.1.0
+	github.com/viant/pgo v0.1.0
 	github.com/viant/scy v0.4.2-0.20230309001211-1f666f44ff5d
 	github.com/viant/sqlx v0.5.3-0.20230301014138-5a9ca541f97f
 	github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20230307212500-b6ee220f4c39
+	github.com/viant/xdatly/types/core v0.0.0-20230309221732-4dc744a54ac2
+	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
 	github.com/viant/xreflect v0.0.0-20230303201326-f50afb0feb0d
 	github.com/viant/xunsafe v0.8.4-0.20230304004317-9d184b8b025f
-	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4
+	golang.org/x/mod v0.9.0
 	golang.org/x/oauth2 v0.3.0
 	google.golang.org/api v0.102.0
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1
-
 )
 
 require (
@@ -106,9 +108,4 @@ require (
 	google.golang.org/grpc v1.50.1 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-)
-
-require (
-	github.com/viant/xdatly/types/core v0.0.0-20230309221732-4dc744a54ac2
-	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
 )
