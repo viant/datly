@@ -18,10 +18,15 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
+	"path"
 	"strings"
 )
 
 func (s *Builder) build() (*standalone.Server, error) {
+	if s.options.IsPluginBuildMode() {
+		return nil, s.buildPlugin(s.options.PluginSrc, s.options.PluginDst, s.options.PluginName, path.Join(pluginDirectory, pluginFile))
+	}
+
 	reportContent(s.logger, "------------ config ------------\n\t "+s.options.ConfigURL, s.options.ConfigURL)
 
 	authenticator, err := jwt.Init(s.config.Config, nil)
@@ -132,7 +137,10 @@ func New(version string, args []string, logger io.Writer) (*standalone.Server, e
 		return nil, err
 	}
 
-	options.Init()
+	if err = options.Init(); err != nil {
+		return nil, err
+	}
+
 	builder, err := NewBuilder(options, logger)
 	if err != nil {
 		return nil, err

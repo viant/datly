@@ -67,11 +67,19 @@ func (c *ResourcesChange) Changed() bool {
 }
 
 func (i *ExtIndex) ResourceUpdated(url string) {
+	if i.updatedIndex[url] {
+		return
+	}
+
 	i.updated = append(i.updated, url)
 	i.updatedIndex[url] = true
 }
 
 func (i *ExtIndex) ResourceDeleted(url string) {
+	if i.deletedIndex[url] {
+		return
+	}
+
 	i.deleted = append(i.deleted, url)
 	i.deletedIndex[url] = true
 }

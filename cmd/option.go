@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	_ "embed"
+	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
@@ -10,6 +11,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/scy"
 	"path"
+	"runtime"
 	"strings"
 )
 
@@ -22,7 +24,9 @@ const (
 	folderDev = "dev"
 	folderSQL = "dsql"
 
-	rootFolder = "Datly"
+	rootFolder          = "Datly"
+	buildModePluginless = "pluginless"
+	buildModePlugin     = "plugin"
 )
 
 type (
@@ -34,6 +38,7 @@ type (
 		PartialConfigURL string `short:"e" long:"partialConfig" description:"partial configuration file URL"`
 		JWTVerifier      string `short:"j" long:"jwt" description:"PublicKeyPath|EncKey" `
 		WriteLocation    string `short:"w" long:"write" description:"dump all config files to specified location" `
+		BuildMode        string `long:"buildmode" description:"values: plugin - generates only plugins, pluginless - generates rule without plugins, plugins need to be created later"`
 		Generate
 		Connector
 		CacheWarmup
@@ -70,15 +75,21 @@ type (
 	}
 
 	Plugins struct {
-		PluginArgs []string `long:"pluginArgs" description:"args need to be passed to generate a plugin"`
-		PluginsURL string   `long:"pluginsURL" description:"generated plugins destination"`
+		PluginDst       string   `long:"pluginDst" description:"output plugin path"`
+		PluginSrc       string   `long:"pluginSrc" description:"input plugin path"`
+		PluginArgs      []string `long:"pluginArgs" description:"args need to be passed to generate a plugin"`
+		PluginsURL      string   `long:"pluginsURL" description:"generated plugins destination"`
+		PluginName      string   `long:"pluginName" description:"plugin name"`
+		PluginGoVersion string
+		PluginOS        string `long:"pluginOS" description:"plugin OS"`
+		PluginArch      string `long:"pluginArch" description:"plugin ARCH"`
 	}
 )
 
 //go:embed resource/mysql.json
 var mysqlDev string
 
-func (o *Options) Init() {
+func (o *Options) Init() error {
 	if o.Location != "" {
 		_, name := url.Split(o.Location, file.Scheme)
 		if index := strings.Index(name, "."); index != -1 {
@@ -122,7 +133,40 @@ func (o *Options) Init() {
 	o.PluginsURL = path.Join(o.WriteLocation, rootFolder, o.PluginsURL)
 
 	o.PrepareRule = strings.ToLower(o.PrepareRule)
+
+	if o.PluginArch == "" {
+		o.PluginArch = runtime.GOARCH
+	}
+
+	if o.PluginOS == "" {
+		o.PluginOS = runtime.GOOS
+	}
+
+	if o.PluginGoVersion == "" {
+		o.PluginGoVersion = strings.Replace(runtime.Version(), "go", "", 1)
+	}
+
+	if o.BuildMode == buildModePlugin {
+		if o.PluginSrc == "" {
+			return fmt.Errorf("PluginSrc can't be empty")
+		}
+
+		if o.PluginDst == "" {
+			return fmt.Errorf("PluginDst can't be empty")
+		}
+	}
+
 	o.Connector.Init()
+
+	return nil
+}
+
+func (o *Options) IsPluginlessBuildMode() bool {
+	return o.BuildMode == buildModePluginless
+}
+
+func (o *Options) IsPluginBuildMode() bool {
+	return o.BuildMode == buildModePlugin
 }
 
 // MatchConnector returns matcher or default connector

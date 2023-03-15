@@ -20,7 +20,6 @@ pipeline:
       - go mod download
       - go mod tidy -compat=1.17
       - export GOOS=linux
-      - export GOOS=linux
       - export GOARCH=amd64
       - go build -ldflags="-X 'main.Version=${Ver}'" -trimpath
       - tar cvzf datly_linux_${Ver}_amd64.tar.gz datly

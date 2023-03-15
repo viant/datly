@@ -11,7 +11,6 @@ import (
 	"go/format"
 	"golang.org/x/mod/modfile"
 	"path"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -131,6 +130,10 @@ func (s *Builder) getModPath(plugin *pluginGenDeta, mod map[string]string) (stri
 }
 
 func (s *Builder) genPlugin(plugin *pluginGenDeta, aPath string) error {
+	if s.options.IsPluginlessBuildMode() {
+		return nil
+	}
+
 	var modPath string
 	var sourceURL string
 	var mainPath string
@@ -155,17 +158,12 @@ func (s *Builder) genPlugin(plugin *pluginGenDeta, aPath string) error {
 		pluginPath = pluginPath[index:]
 	}
 
-	if err := pgo.Build(&pgo.Options{
-		SourceURL:  sourceURL,
-		DestURL:    path.Join(s.options.WriteLocation, pluginPath),
-		Name:       pluginName,
-		Arch:       runtime.GOARCH,
-		Os:         runtime.GOOS,
-		Version:    strings.Replace(runtime.Version(), "go", "", 1),
-		MainPath:   mainPath,
-		BuildArgs:  s.options.PluginArgs,
-		WithLogger: true,
-	}); err != nil {
+	destURL := s.options.PluginDst
+	if destURL == "" {
+		destURL = path.Join(s.options.WriteLocation, pluginPath)
+	}
+
+	if err := s.buildPlugin(sourceURL, destURL, pluginName, mainPath); err != nil {
 		return err
 	}
 
@@ -176,6 +174,20 @@ func (s *Builder) genPlugin(plugin *pluginGenDeta, aPath string) error {
 	}
 
 	return nil
+}
+
+func (s *Builder) buildPlugin(sourceURL string, destURL string, pluginName string, mainPath string) error {
+	return pgo.Build(&pgo.Options{
+		SourceURL:  sourceURL,
+		DestURL:    destURL,
+		Name:       pluginName,
+		Arch:       s.options.PluginArch,
+		Os:         s.options.PluginOS,
+		Version:    s.options.PluginGoVersion,
+		MainPath:   mainPath,
+		BuildArgs:  s.options.PluginArgs,
+		WithLogger: true,
+	})
 }
 
 func (s *Builder) updateLastGenPluginMeta(URL string, now time.Time) error {

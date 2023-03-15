@@ -426,12 +426,12 @@ func (s *Builder) buildRouterOutput() error {
 	}
 
 	s.routeBuilder.route.Output.CSV = s.routeBuilder.option.CSV
-	config, err := s.routeBuilder.configProvider.OutputConfig()
+	aConfig, err := s.routeBuilder.configProvider.OutputConfig()
 	if err != nil {
 		return err
 	}
 
-	if err = tryUnmarshalHint(config, &s.routeBuilder.route.Output); err != nil {
+	if err = tryUnmarshalHint(aConfig, &s.routeBuilder.route.Output); err != nil {
 		return err
 	}
 

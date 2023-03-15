@@ -7,6 +7,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/cache"
 	"github.com/viant/afs/file"
+	"github.com/viant/afs/matcher"
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/auth/secret"
@@ -35,7 +36,6 @@ type (
 		Config                *Config
 		routersIndex          map[string]*router.Router
 		fs                    afs.Service
-		cfs                   afs.Service //cache file system
 		routeResourceTracker  *resource.Tracker
 		dataResourceTracker   *resource.Tracker
 		dataResourcesIndex    map[string]*view.Resource
@@ -75,42 +75,46 @@ func (r *Service) Close() error {
 }
 
 //New creates gateway Service. It is important to call Service.Close before Service got Garbage collected.
-func New(ctx context.Context, config *Config, statusHandler http.Handler, authorizer Authorizer, registry *config.Registry, metrics *gmetric.Service) (*Service, error) {
+func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, authorizer Authorizer, registry *config.Registry, metrics *gmetric.Service) (*Service, error) {
 	start := time.Now()
-	config.Init()
-	err := config.Validate()
+	if err := aConfig.Init(); err != nil {
+		return nil, err
+	}
+
+	err := aConfig.Validate()
 	if err != nil {
 		return nil, err
 	}
 
-	URL, _ := furl.Split(config.RouteURL, file.Scheme)
-	cfs := cache.Singleton(URL)
+	fs, err := newFileService(aConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	srv := &Service{
 		metrics:               metrics,
 		pluginsConfig:         registry,
-		Config:                config,
+		Config:                aConfig,
 		mux:                   sync.RWMutex{},
-		fs:                    afs.New(),
-		cfs:                   cfs,
+		fs:                    fs,
 		dataResourcesIndex:    map[string]*view.Resource{},
-		routeResourceTracker:  resource.New(config.RouteURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
-		dataResourceTracker:   resource.New(config.DependencyURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
-		pluginResourceTracker: resource.New(config.PluginsURL, time.Duration(config.SyncFrequencyMs)*time.Millisecond),
+		routeResourceTracker:  resource.New(aConfig.RouteURL, time.Duration(aConfig.SyncFrequencyMs)*time.Millisecond),
+		dataResourceTracker:   resource.New(aConfig.DependencyURL, time.Duration(aConfig.SyncFrequencyMs)*time.Millisecond),
+		pluginResourceTracker: resource.New(aConfig.PluginsURL, time.Duration(aConfig.SyncFrequencyMs)*time.Millisecond),
 		routersIndex:          map[string]*router.Router{},
-		mainRouter:            NewRouter(map[string]*router.Router{}, config, metrics, statusHandler, authorizer),
-		session:               NewSession(config.ChangeDetection),
+		mainRouter:            NewRouter(map[string]*router.Router{}, aConfig, metrics, statusHandler, authorizer),
+		session:               NewSession(aConfig.ChangeDetection),
 		pluginsInUse:          map[string]bool{},
 	}
 
-	if config.JwtSigner != nil {
-		srv.JWTSigner = signer.New(config.JwtSigner)
+	if aConfig.JwtSigner != nil {
+		srv.JWTSigner = signer.New(aConfig.JwtSigner)
 		if err = srv.JWTSigner.Init(context.Background()); err != nil {
 			return nil, err
 		}
 	}
 
-	if err = initSecrets(ctx, config); err != nil {
+	if err = initSecrets(ctx, aConfig); err != nil {
 		return nil, err
 	}
 
@@ -118,6 +122,64 @@ func New(ctx context.Context, config *Config, statusHandler http.Handler, author
 	srv.detectChanges(metrics, statusHandler, authorizer)
 	fmt.Printf("initialised datly: %s\n", time.Now().Sub(start))
 	return srv, err
+}
+
+func newFileService(aConfig *Config) (afs.Service, error) {
+	if !aConfig.UseCacheFS {
+		return afs.New(), nil
+	}
+
+	URL, err := CommonURL(aConfig.DependencyURL, aConfig.PluginsURL, aConfig.RouteURL)
+	if err != nil {
+		return nil, err
+	}
+
+	return cache.Singleton(URL, &matcher.Ignore{Ext: map[string]bool{
+		".so": true,
+		"so":  true,
+	}}), nil
+}
+
+func CommonURL(URLs ...string) (string, error) {
+	counter := map[string]int{}
+	var base string
+	for i, URL := range URLs {
+		dir, aPath := furl.Split(URL, "file")
+		if base == "" {
+			base = dir
+		} else {
+			if base != dir {
+				return "", fmt.Errorf("paths don't match, wanted %v got %v", base, dir)
+			}
+		}
+
+		URLs[i] = aPath
+	}
+
+	for {
+		allExhausted := true
+
+		for i, URL := range URLs {
+			if len(URL) <= 1 {
+				continue
+			}
+
+			allExhausted = false
+			commonCounter := counter[URL] + 1
+			if commonCounter == len(URLs) {
+				return furl.Join(base, URL), nil
+			}
+
+			counter[URL] = commonCounter
+			URLs[i] = path.Dir(URL)
+		}
+
+		if allExhausted {
+			break
+		}
+	}
+
+	return base, nil
 }
 
 func (r *Service) createRouterIfNeeded(ctx context.Context, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer, isFirst bool) error {
@@ -133,13 +195,12 @@ func (r *Service) createRouterIfNeeded(ctx context.Context, metrics *gmetric.Ser
 		r.session = NewSession(r.Config.ChangeDetection)
 	}
 
-	fs := r.reloadFs()
-	resources, changed, err := r.getDataResources(ctx, fs)
+	resources, changed, err := r.getDataResources(ctx, r.fs)
 	if err != nil {
 		return err
 	}
 
-	routers, changed, err := r.getRouters(ctx, fs, resources, changed, isFirst)
+	routers, changed, err := r.getRouters(ctx, r.fs, resources, changed, isFirst)
 	if err != nil || !changed {
 		return err
 	}
@@ -362,6 +423,11 @@ func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*R
 			}
 		}
 
+		URL = strings.Replace(URL, ".info", ".so", 1)
+		if ok, err := fs.Exists(ctx, URL); !ok || err != nil {
+			return
+		}
+
 		changes.OnChange(operation, URL)
 	})
 
@@ -460,13 +526,6 @@ func (r *Service) detectChanges(metrics *gmetric.Service, statusHandler http.Han
 			}
 		}
 	}()
-}
-
-func (r *Service) reloadFs() afs.Service {
-	if r.Config.UseCacheFS {
-		return r.cfs
-	}
-	return r.fs
 }
 
 func (r *Service) PreCachables(method string, uri string) ([]*view.View, error) {
