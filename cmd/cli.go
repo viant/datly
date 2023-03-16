@@ -28,7 +28,7 @@ func (s *Builder) build() (*standalone.Server, error) {
 	}
 
 	if s.options.IsExecBuildMode() {
-		return nil, s.buildBinary(s.options.ModuleSrc, s.options.ModuleDst, "", s.options.ModuleMain, "exec")
+		return nil, s.buildBinary(s.options.ModuleSrc, s.options.ModuleDst, s.options.ModuleName, s.options.ModuleMain, "exec")
 	}
 
 	reportContent(s.logger, "------------ config ------------\n\t "+s.options.ConfigURL, s.options.ConfigURL)

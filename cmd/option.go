@@ -91,6 +91,7 @@ type (
 		ModuleSrc  string `long:"moduleSrc" description:"input path for building module"`
 		ModuleDst  string `long:"moduleDst" description:"output path for building module"`
 		ModuleMain string `long:"moduleMain" description:"module main file"`
+		ModuleName string `long:"moduleName" description:"module nam"`
 	}
 )
 
@@ -175,6 +176,13 @@ func (o *Options) Init() error {
 
 		if o.ModuleMain == "" {
 			return fmt.Errorf("ModuleMain can't be empty")
+		}
+
+		if o.ModuleMain == "" {
+			base := path.Base(o.ModuleMain)
+			ext := path.Ext(base)
+			base = strings.Replace(base, ext, "", 1)
+			o.ModuleName = base
 		}
 	}
 
