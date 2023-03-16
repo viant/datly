@@ -176,7 +176,7 @@ func (s *Builder) genPlugin(plugin *pluginGenDeta, aPath string) error {
 	return nil
 }
 
-func (s *Builder) buildBinary(sourceURL string, destURL string, pluginName string, mainPath string, buildMod string, buildAsPlugin bool) error {
+func (s *Builder) buildBinary(sourceURL string, destURL string, moduleName string, mainPath string, buildMode string, buildAsPlugin bool) error {
 	arch := s.options.PluginArch
 	os := s.options.PluginOS
 	version := s.options.PluginGoVersion
@@ -192,21 +192,20 @@ func (s *Builder) buildBinary(sourceURL string, destURL string, pluginName strin
 		args = s.options.ModuleArgs
 		dependencies = s.options.ModuleSrc
 	}
-
 	if len(dependencies) > 1 {
 		sources = append(sources, dependencies[1:]...)
 	}
-
 	return pgo.Build(&pgo.Options{
 		SourceURL:  sources,
 		DestURL:    destURL,
-		Name:       pluginName,
+		Name:       moduleName,
 		Arch:       arch,
 		Os:         os,
 		Version:    version,
 		MainPath:   mainPath,
 		BuildArgs:  args,
-		ModPath:    buildMod,
+		BuildMode:  buildMode,
+		LdFlags:    s.options.ModuleLdFlags,
 		WithLogger: true,
 	})
 }

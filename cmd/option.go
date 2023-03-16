@@ -93,6 +93,7 @@ type (
 		ModuleArgs      []string `long:"moduleArgs" description:"args need to be passed to generate a plugin"`
 		ModuleName      string   `long:"moduleName" description:"module name"`
 		ModuleMain      string   `long:"moduleMain" description:"module main"`
+		ModuleLdFlags   string   `long:"moduleFdFlags" description:"module ldflags"`
 		ModuleOS        string   `long:"moduleOS" description:"module OS"`
 		ModuleArch      string   `long:"moduleArch" description:"plugin ARCH"`
 		ModuleGoVersion string
@@ -200,8 +201,8 @@ func (o *Options) Init() error {
 		if o.PluginOS == "" {
 			o.ModuleOS = runtime.GOOS
 		}
-	}
 
+	}
 	o.Connector.Init()
 
 	return nil
