@@ -1,36 +1,27 @@
-- integrate with viant/pgo
 - code parameter assets (i.e xml validator)
-- pre proxy processor  
+
+- pre proxy processor/programatic router  
  #if($reportName='abc')
   $proxy.To('/v1/api/ws/view1')
  #else if($reportName='xyz')
   $proxy.To('/v1/api/ws/view2')
  #end
 
-- app  customized name (i.e. ws instead of dev)
 - Executor triggers/notification (notification message ID in response)
--> events ->
-
 -> logging -> { "Status": "ok", "EventSourceId":"", "EventSource": "Advertier", "EventType":"Insert" "Data":interface{}, "UserId":"", "TraceID":""    }
-
 -> Logger miner ->
    log files, position
-    -> mathch, action execution
-    ->
-
-
-
+    -> match, action execution
 
 - Async mode 
   - post job, SQL-> (job id , dispotistion -> dest_teable,  temp_table)
   - job status <- job-id (RUNNING/ERROR/DONE)
   - post http, message, storage event
-
-- programatic router (template with ability to reroute)
+ 
 - self documents
 
-- batch spreedsheet ingestion/response
 
+- batch spreedsheet ingestion/response
 
 - multi transaction support on velthy ?
 - XML input / output
@@ -51,3 +42,4 @@
 
 - Validator
 - Warning
+- ChatGPT integration
