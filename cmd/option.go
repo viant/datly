@@ -188,6 +188,18 @@ func (o *Options) Init() error {
 			base = strings.Replace(base, ext, "", 1)
 			o.ModuleName = base
 		}
+
+		if o.ModuleGoVersion == "" {
+			o.ModuleGoVersion = strings.Replace(runtime.Version(), "go", "", 1)
+		}
+
+		if o.ModuleArch == "" {
+			o.ModuleArch = runtime.GOARCH
+		}
+
+		if o.PluginOS == "" {
+			o.ModuleOS = runtime.GOOS
+		}
 	}
 
 	o.Connector.Init()
