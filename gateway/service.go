@@ -42,12 +42,14 @@ type (
 		metrics               *gmetric.Service
 		mainRouter            *Router
 		cancelFn              context.CancelFunc
-		session               *Session
+		changeSession         *Session
 		JWTSigner             *signer.Service
 		pluginsInUse          map[string]bool
 		mux                   sync.RWMutex
 		pluginsConfig         *config.Registry
 		pluginResourceTracker *resource.Tracker
+		statusHandler         http.Handler
+		authorizer            Authorizer
 	}
 )
 
@@ -62,6 +64,9 @@ func (r *Service) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (r *Service) Router() (*Router, bool) {
+	if err := r.syncChangesIfNeeded(context.Background(), r.metrics, r.statusHandler, r.authorizer, false); err != nil {
+		fmt.Printf("[ERROR] failed to sync changes: %v\n", err)
+	}
 	mainRouter := r.mainRouter
 	return mainRouter, mainRouter != nil
 }
@@ -103,8 +108,10 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 		pluginResourceTracker: resource.New(aConfig.PluginsURL, time.Duration(aConfig.SyncFrequencyMs)*time.Millisecond),
 		routersIndex:          map[string]*router.Router{},
 		mainRouter:            NewRouter(map[string]*router.Router{}, aConfig, metrics, statusHandler, authorizer),
-		session:               NewSession(aConfig.ChangeDetection),
+		changeSession:         NewSession(aConfig.ChangeDetection),
 		pluginsInUse:          map[string]bool{},
+		statusHandler:         statusHandler,
+		authorizer:            authorizer,
 	}
 
 	if aConfig.JwtSigner != nil {
@@ -118,8 +125,8 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 		return nil, err
 	}
 
-	err = srv.createRouterIfNeeded(ctx, metrics, statusHandler, authorizer, true)
-	srv.detectChanges(metrics, statusHandler, authorizer)
+	err = srv.syncChangesIfNeeded(ctx, metrics, statusHandler, authorizer, true)
+	//srv.detectChanges(metrics, statusHandler, authorizer)
 	fmt.Printf("initialised datly: %s\n", time.Now().Sub(start))
 	return srv, err
 }
@@ -182,19 +189,18 @@ func CommonURL(URLs ...string) (string, error) {
 	return base, nil
 }
 
-func (r *Service) createRouterIfNeeded(ctx context.Context, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer, isFirst bool) error {
+func (r *Service) syncChangesIfNeeded(ctx context.Context, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer, isFirst bool) error {
 	defer func() {
-		if r.session == nil {
+		if r.changeSession == nil {
 			return
 		}
-
-		r.session.UpdateFailureCounter()
+		r.changeSession.UpdateFailureCounter()
 	}()
-
-	if r.session == nil {
-		r.session = NewSession(r.Config.ChangeDetection)
+	r.mux.Lock()
+	if r.changeSession == nil {
+		r.changeSession = NewSession(r.Config.ChangeDetection)
 	}
-
+	r.mux.Unlock()
 	resources, changed, err := r.getDataResources(ctx, r.fs)
 	if err != nil {
 		return err
@@ -214,7 +220,7 @@ func (r *Service) createRouterIfNeeded(ctx context.Context, metrics *gmetric.Ser
 	r.mainRouter = mainRouter
 	r.routersIndex = routers
 	r.dataResourcesIndex = resources
-	r.session = nil
+	r.changeSession = nil
 	r.mux.Unlock()
 
 	return nil
@@ -390,7 +396,7 @@ func (r *Service) populateResourceChan(ctx context.Context, resourceChan chan fu
 }
 
 func (r *Service) loadDependencyResource(URL string, ctx context.Context, fs afs.Service) (*view.Resource, error) {
-	dependency, ok := r.session.Dependencies[URL]
+	dependency, ok := r.changeSession.Dependencies[URL]
 	if ok {
 		return dependency, nil
 	}
@@ -431,8 +437,8 @@ func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*R
 
 		changes.OnChange(operation, URL)
 	})
-	r.session.OnDependencyUpdated(changes.resourcesIndex.updated...)
-	r.session.OnFileChange(changes.resourcesIndex.deleted...)
+	r.changeSession.OnDependencyUpdated(changes.resourcesIndex.updated...)
+	r.changeSession.OnFileChange(changes.resourcesIndex.deleted...)
 	var err error
 	if depErr != nil {
 		err = depErr
@@ -481,13 +487,13 @@ func (r *Service) detectRoutersChanges(ctx context.Context, fs afs.Service) (map
 		}
 	}
 
-	r.session.OnRouterUpdated(updated...)
-	r.session.OnRouterDeleted(deleted...)
+	r.changeSession.OnRouterUpdated(updated...)
+	r.changeSession.OnRouterDeleted(deleted...)
 
 	routerMetaUpdated := r.handleMetaUpdated(metaUpdated)
-	r.session.OnRouterUpdated(routerMetaUpdated...)
+	r.changeSession.OnRouterUpdated(routerMetaUpdated...)
 
-	return r.session.UpdatedRouters, r.session.DeletedRouters, err
+	return r.changeSession.UpdatedRouters, r.changeSession.DeletedRouters, err
 }
 
 func (r *Service) handleMetaUpdated(metaUpdated []string) []string {
@@ -511,26 +517,27 @@ func (r *Service) handleMetaUpdated(metaUpdated []string) []string {
 	return actualUpdated
 }
 
-func (r *Service) detectChanges(metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer) {
-	ctx := context.Background()
-	cancel, cancelFunc := context.WithCancel(ctx)
-	r.cancelFn = cancelFunc
-	go func() {
-	outer:
-		for {
-			time.Sleep(r.Config.ChangeDetection._retry)
-			select {
-			case <-cancel.Done():
-				break outer
-			default:
-				fmt.Printf("[INFO] Waking up to detect changes ...\n")
-				if err := r.createRouterIfNeeded(context.TODO(), metrics, statusHandler, authorizer, false); err != nil {
-					fmt.Printf("[ERROR] error occured while recreating routers: %v \n", err.Error())
-				}
-			}
-		}
-	}()
-}
+//
+//func (r *Service) detectChanges(metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer) {
+//	ctx := context.Background()
+//	cancel, cancelFunc := context.WithCancel(ctx)
+//	r.cancelFn = cancelFunc
+//	go func() {
+//	outer:
+//		for {
+//			time.Sleep(r.Config.ChangeDetection._retry)
+//			select {
+//			case <-cancel.Done():
+//				break outer
+//			default:
+//				fmt.Printf("[INFO] Waking up to detect changes ...\n")
+//				if err := r.syncChangesIfNeeded(context.TODO(), metrics, statusHandler, authorizer, false); err != nil {
+//					fmt.Printf("[ERROR] error occured while recreating routers: %v \n", err.Error())
+//				}
+//			}
+//		}
+//	}()
+//}
 
 func (r *Service) PreCachables(method string, uri string) ([]*view.View, error) {
 	aRouter, ok := r.Router()
@@ -572,7 +579,7 @@ func (r *Service) populateRoutersChan(ctx context.Context, routersChan chan func
 }
 
 func (r *Service) loadRouterResource(URL string, resources map[string]*view.Resource, ctx context.Context, fs afs.Service) (*router.Resource, error) {
-	routerResource, ok := r.session.Routers[URL]
+	routerResource, ok := r.changeSession.Routers[URL]
 	if ok {
 		return routerResource, nil
 	}
@@ -586,7 +593,7 @@ func (r *Service) loadRouterResource(URL string, resources map[string]*view.Reso
 	if err != nil {
 		return nil, err
 	}
-	r.session.AddRouter(URL, routerResource)
+	r.changeSession.AddRouter(URL, routerResource)
 	if err = r.updateCacheConnectorRefIfNeeded(routerResource); err != nil {
 		return nil, err
 	}
@@ -608,7 +615,7 @@ func (r *Service) shouldUpdateRouter(viewSeg string, routeURLs []string) (string
 			continue
 		}
 
-		if r.session.DeletedRouters[routeURL] || r.session.UpdatedRouters[routeURL] {
+		if r.changeSession.DeletedRouters[routeURL] || r.changeSession.UpdatedRouters[routeURL] {
 			continue
 		}
 
