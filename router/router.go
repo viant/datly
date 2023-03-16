@@ -866,7 +866,11 @@ func (r *Router) logAudit(request *http.Request, response http.ResponseWriter, r
 	}
 
 	if route.APIKey != nil {
-		headers.Del(route.APIKey.Header)
+		for key := range headers {
+			if strings.EqualFold(route.APIKey.Header, key) {
+				headers.Set(key, "*****")
+			}
+		}
 	}
 
 	asBytes, _ := goJson.Marshal(Audit{
