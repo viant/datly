@@ -1,3 +1,7 @@
+## March 16 2022 v0.5.1.0
+* Patched lambda with plugins integration
+* Restructured plugin support
+
 ## Feb 27 2022 v0.5.0.0
 * Added sqlx validator integraton
 * renamed "ResponseField" to "Field" (backward compatibility breaking change)
