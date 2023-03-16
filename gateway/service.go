@@ -402,6 +402,7 @@ func (r *Service) loadDependencyResource(URL string, ctx context.Context, fs afs
 
 func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*ResourcesChange, error) {
 	changes := NewResourcesChange()
+	fmt.Printf("[INFO] Dependencies check ...\n")
 	err := r.dataResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
 		for _, folderName := range unindexedFolders {
 			fmt.Printf("[INFO] Dependency changes: %v, Operation: %v\n", URL, operation)
@@ -410,14 +411,13 @@ func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*R
 				return
 			}
 		}
-
 		changes.OnChange(operation, URL)
 	})
-
 	if err != nil {
 		return nil, err
 	}
 
+	fmt.Printf("[INFO] Plugin check ...\n")
 	err = r.pluginResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
 		fmt.Printf("[INFO] Plugin change: %v, Operation: %v\n", URL, operation)
 
