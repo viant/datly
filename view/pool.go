@@ -151,7 +151,11 @@ func (d *db) initDatabase(driver string, dsn string, config *DBConfig) error {
 
 	d.initialized = true
 	var err error
+	started := time.Now()
 	d.actual, err = sql.Open(driver, dsn)
+	if elapsed := time.Since(started); elapsed > 100*time.Millisecond {
+		fmt.Printf("[WARN] %v connection took %s\n", elapsed)
+	}
 	if d.actual != nil {
 		d.configureDB(config, d.actual)
 	}
@@ -214,7 +218,11 @@ func (d *db) keepConnectionAlive(driver string, dsn string, config *DBConfig) {
 
 				var err error
 				if aDb != nil {
+					started := time.Now()
 					err = aDb.PingContext(d.ctx)
+					if elapsed := time.Since(started); elapsed > 100*time.Millisecond {
+						fmt.Printf("[WARN] %v ping took %s\n", elapsed)
+					}
 				}
 
 				if err != nil || aDb == nil {
