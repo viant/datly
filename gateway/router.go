@@ -297,6 +297,9 @@ func (r *Router) newMatcher(routers []*router.Router) (*matcher.Matcher, []*Rout
 			if len(apiKeys) > 0 {
 				for i := routesLen; i < len(routes); i++ {
 					routes[i].ApiKeys = apiKeys
+					for _, aRoute := range routes[i].Routes {
+						aRoute.AddApiKeys(apiKeys...)
+					}
 				}
 			}
 		}

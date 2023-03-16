@@ -67,6 +67,7 @@ type (
 		_requestBodyType          reflect.Type
 		_requestBodySlice         *xunsafe.Slice
 		_inputMarshaller          *json.Marshaller
+		_apiKeys                  []*APIKey
 	}
 
 	Fetcher struct {
@@ -223,6 +224,11 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	}
 
 	r.initDebugStyleIfNeeded()
+
+	if r.APIKey != nil {
+		r._apiKeys = append(r._apiKeys, r.APIKey)
+	}
+
 	return nil
 }
 
@@ -735,4 +741,8 @@ func (c *CSVConfig) unwrapIfNeeded(value interface{}) (interface{}, error) {
 	default:
 		return nil, fmt.Errorf("unexpected number of data, expected 0 or 1 but got %v", sliceLen)
 	}
+}
+
+func (r *Route) AddApiKeys(keys ...*APIKey) {
+	r._apiKeys = append(r._apiKeys, keys...)
 }

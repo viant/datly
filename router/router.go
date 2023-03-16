@@ -865,9 +865,9 @@ func (r *Router) logAudit(request *http.Request, response http.ResponseWriter, r
 		r.obfuscateAuthorization(request, response, authorization, headers, route)
 	}
 
-	if route.APIKey != nil {
+	for _, apiKey := range route._apiKeys {
 		for key := range headers {
-			if strings.EqualFold(route.APIKey.Header, key) {
+			if strings.EqualFold(apiKey.Header, key) {
 				headers.Set(key, "*****")
 			}
 		}
