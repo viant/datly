@@ -204,7 +204,7 @@ func (r *Service) syncChangesIfNeeded(ctx context.Context, metrics *gmetric.Serv
 	defer func() {
 		r.mux.Lock()
 		defer r.mux.Unlock()
-		
+
 		r.nextCheck = time.Now().Add(r.Config.ChangeDetection._retry)
 		r.isBuilding = false
 
@@ -427,11 +427,8 @@ func (r *Service) loadDependencyResource(URL string, ctx context.Context, fs afs
 
 func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*ResourcesChange, error) {
 	changes := NewResourcesChange()
-	fmt.Printf("[INFO] Dependencies check ...\n")
 	depErr := r.dataResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
 		for _, folderName := range unindexedFolders {
-			fmt.Printf("[INFO] Dependency changes: %v, Operation: %v\n", URL, operation)
-
 			if strings.Contains(URL, folderName) {
 				return
 			}
@@ -439,16 +436,12 @@ func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*R
 		changes.OnChange(operation, URL)
 	})
 
-	fmt.Printf("[INFO] Plugin check ...\n")
 	plugErr := r.pluginResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
-		fmt.Printf("[INFO] Plugin change: %v, Operation: %v\n", URL, operation)
-
 		for _, folderName := range unindexedFolders {
 			if strings.Contains(URL, folderName) {
 				return
 			}
 		}
-
 		URL = strings.Replace(URL, ".info", ".so", 1)
 		if ok, err := fs.Exists(ctx, URL); !ok || err != nil {
 			return
@@ -478,16 +471,13 @@ func (r *Service) detectRoutersChanges(ctx context.Context, fs afs.Service) (map
 			metaUpdated = append(metaUpdated, URL[strings.LastIndexByte(URL, '/')+1:])
 			return
 		}
-
 		if strings.HasSuffix(URL, ".sql") {
 			updatedSQLs = append(updatedSQLs, URL)
 			return
 		}
-
 		if !strings.HasSuffix(URL, ".yaml") {
 			return
 		}
-
 		switch operation {
 		case resource.Added, resource.Modified:
 			updated = append(updated, URL)
