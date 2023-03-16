@@ -523,6 +523,7 @@ func (r *Service) detectChanges(metrics *gmetric.Service, statusHandler http.Han
 			case <-cancel.Done():
 				break outer
 			default:
+				fmt.Printf("[INFO] Waking up to detect changes ...\n")
 				if err := r.createRouterIfNeeded(context.TODO(), metrics, statusHandler, authorizer, false); err != nil {
 					fmt.Printf("[ERROR] error occured while recreating routers: %v \n", err.Error())
 				}
