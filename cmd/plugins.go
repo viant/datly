@@ -163,7 +163,7 @@ func (s *Builder) genPlugin(plugin *pluginGenDeta, aPath string) error {
 		destURL = path.Join(s.options.WriteLocation, pluginPath)
 	}
 
-	if err := s.buildPlugin(sourceURL, destURL, pluginName, mainPath); err != nil {
+	if err := s.buildBinary(sourceURL, destURL, pluginName, mainPath, ""); err != nil {
 		return err
 	}
 
@@ -176,7 +176,7 @@ func (s *Builder) genPlugin(plugin *pluginGenDeta, aPath string) error {
 	return nil
 }
 
-func (s *Builder) buildPlugin(sourceURL string, destURL string, pluginName string, mainPath string) error {
+func (s *Builder) buildBinary(sourceURL string, destURL string, pluginName string, mainPath string, buildMod string) error {
 	return pgo.Build(&pgo.Options{
 		SourceURL:  sourceURL,
 		DestURL:    destURL,
@@ -186,6 +186,7 @@ func (s *Builder) buildPlugin(sourceURL string, destURL string, pluginName strin
 		Version:    s.options.PluginGoVersion,
 		MainPath:   mainPath,
 		BuildArgs:  s.options.PluginArgs,
+		ModPath:    buildMod,
 		WithLogger: true,
 	})
 }

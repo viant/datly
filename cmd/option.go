@@ -27,6 +27,7 @@ const (
 	rootFolder          = "Datly"
 	buildModePluginless = "pluginless"
 	buildModePlugin     = "plugin"
+	buildModeExec       = "exec"
 )
 
 type (
@@ -48,6 +49,7 @@ type (
 		RelativePath string `long:"relative" description:"allow to control relative path where path is used"`
 		RoutePrefix  string `short:"x" long:"routePrefix" description:"route prefix default dev"`
 		Plugins
+		Module
 	}
 
 	CacheWarmup struct {
@@ -83,6 +85,12 @@ type (
 		PluginGoVersion string
 		PluginOS        string `long:"pluginOS" description:"plugin OS"`
 		PluginArch      string `long:"pluginArch" description:"plugin ARCH"`
+	}
+
+	Module struct {
+		ModuleSrc  string `long:"moduleSrc" description:"input path for building module"`
+		ModuleDst  string `long:"moduleDst" description:"output path for building module"`
+		ModuleMain string `long:"moduleMain" description:"module main file"`
 	}
 )
 
@@ -156,6 +164,20 @@ func (o *Options) Init() error {
 		}
 	}
 
+	if o.BuildMode == buildModeExec {
+		if o.Module.ModuleDst == "" {
+			return fmt.Errorf("ModuleDst can't be empty")
+		}
+
+		if o.Module.ModuleSrc == "" {
+			return fmt.Errorf("ModuleSrc can't be empty")
+		}
+
+		if o.ModuleMain == "" {
+			return fmt.Errorf("ModuleMain can't be empty")
+		}
+	}
+
 	o.Connector.Init()
 
 	return nil
@@ -167,6 +189,10 @@ func (o *Options) IsPluginlessBuildMode() bool {
 
 func (o *Options) IsPluginBuildMode() bool {
 	return o.BuildMode == buildModePlugin
+}
+
+func (o *Options) IsExecBuildMode() bool {
+	return o.BuildMode == buildModeExec
 }
 
 // MatchConnector returns matcher or default connector
