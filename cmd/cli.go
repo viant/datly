@@ -24,11 +24,11 @@ import (
 
 func (s *Builder) build() (*standalone.Server, error) {
 	if s.options.IsPluginBuildMode() {
-		return nil, s.buildBinary(s.options.PluginSrc, s.options.PluginDst, s.options.PluginName, path.Join(pluginDirectory, pluginFile), "", true)
+		return nil, s.buildBinary(s.options.PluginSrc[0], s.options.PluginDst, s.options.PluginName, path.Join(pluginDirectory, pluginFile), "", true)
 	}
 
 	if s.options.IsExecBuildMode() {
-		return nil, s.buildBinary(s.options.ModuleSrc, s.options.ModuleDst, s.options.ModuleName, s.options.ModuleMain, "exec", false)
+		return nil, s.buildBinary(s.options.ModuleSrc[0], s.options.ModuleDst, s.options.ModuleName, s.options.ModuleMain, "exec", false)
 	}
 
 	reportContent(s.logger, "------------ config ------------\n\t "+s.options.ConfigURL, s.options.ConfigURL)

@@ -78,7 +78,7 @@ type (
 
 	Plugins struct {
 		PluginDst       string   `long:"pluginDst" description:"output plugin path"`
-		PluginSrc       string   `long:"pluginSrc" description:"input plugin path"`
+		PluginSrc       []string `long:"pluginSrc" description:"input plugin path"`
 		PluginArgs      []string `long:"pluginArgs" description:"args need to be passed to generate a plugin"`
 		PluginsURL      string   `long:"pluginsURL" description:"generated plugins destination"`
 		PluginName      string   `long:"pluginName" description:"plugin name"`
@@ -89,7 +89,7 @@ type (
 
 	Module struct {
 		ModuleDst       string   `long:"moduleDst" description:"output module path"`
-		ModuleSrc       string   `long:"moduleSrc" description:"input module path"`
+		ModuleSrc       []string `long:"moduleSrc" description:"input module path"`
 		ModuleArgs      []string `long:"moduleArgs" description:"args need to be passed to generate a plugin"`
 		ModuleName      string   `long:"moduleName" description:"module name"`
 		ModuleMain      string   `long:"moduleMain" description:"module main"`
@@ -160,7 +160,7 @@ func (o *Options) Init() error {
 	}
 
 	if o.BuildMode == buildModePlugin {
-		if o.PluginSrc == "" {
+		if len(o.PluginSrc) == 0 {
 			return fmt.Errorf("PluginSrc can't be empty")
 		}
 
@@ -174,7 +174,7 @@ func (o *Options) Init() error {
 			return fmt.Errorf("ModuleDst can't be empty")
 		}
 
-		if o.Module.ModuleSrc == "" {
+		if len(o.Module.ModuleSrc) == 0 {
 			return fmt.Errorf("ModuleSrc can't be empty")
 		}
 

@@ -181,16 +181,24 @@ func (s *Builder) buildBinary(sourceURL string, destURL string, pluginName strin
 	os := s.options.PluginOS
 	version := s.options.PluginGoVersion
 	args := s.options.PluginArgs
+	sources := []string{sourceURL}
+
+	dependencies := s.options.PluginSrc
 
 	if !buildAsPlugin {
 		arch = s.options.ModuleArch
 		os = s.options.ModuleOS
 		version = s.options.ModuleGoVersion
 		args = s.options.ModuleArgs
+		dependencies = s.options.ModuleSrc
+	}
+
+	if len(dependencies) > 1 {
+		sources = append(sources, dependencies[1:]...)
 	}
 
 	return pgo.Build(&pgo.Options{
-		SourceURL:  sourceURL,
+		SourceURL:  sources,
 		DestURL:    destURL,
 		Name:       pluginName,
 		Arch:       arch,
