@@ -50,6 +50,9 @@ type (
 		pluginResourceTracker *resource.Tracker
 		statusHandler         http.Handler
 		authorizer            Authorizer
+
+		nextCheck  time.Time
+		isBuilding bool
 	}
 )
 
@@ -126,7 +129,6 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 	}
 
 	err = srv.syncChangesIfNeeded(ctx, metrics, statusHandler, authorizer, true)
-	//srv.detectChanges(metrics, statusHandler, authorizer)
 	fmt.Printf("initialised datly: %s\n", time.Now().Sub(start))
 	return srv, err
 }
@@ -190,17 +192,34 @@ func CommonURL(URLs ...string) (string, error) {
 }
 
 func (r *Service) syncChangesIfNeeded(ctx context.Context, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer, isFirst bool) error {
+	r.mux.Lock()
+	if !r.nextCheck.IsZero() && time.Now().Before(r.nextCheck) || r.isBuilding {
+		r.mux.Unlock()
+		return nil
+	}
+
+	r.isBuilding = true
+	r.mux.Unlock()
+
 	defer func() {
+		r.mux.Lock()
+		defer r.mux.Unlock()
+		
+		r.nextCheck = time.Now().Add(r.Config.ChangeDetection._retry)
+		r.isBuilding = false
+
 		if r.changeSession == nil {
 			return
 		}
 		r.changeSession.UpdateFailureCounter()
 	}()
+
 	r.mux.Lock()
 	if r.changeSession == nil {
 		r.changeSession = NewSession(r.Config.ChangeDetection)
 	}
 	r.mux.Unlock()
+
 	resources, changed, err := r.getDataResources(ctx, r.fs)
 	if err != nil {
 		return err
