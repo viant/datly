@@ -39,7 +39,7 @@ type (
 		PartialConfigURL string `short:"e" long:"partialConfig" description:"partial configuration file URL"`
 		JWTVerifier      string `short:"j" long:"jwt" description:"PublicKeyPath|EncKey" `
 		WriteLocation    string `short:"w" long:"write" description:"dump all config files to specified location" `
-		BuildMode        string `long:"buildmode" description:"values: plugin - generates only plugins, pluginless - generates rule without plugins, plugins need to be created later"`
+		BuildMode        string `long:"buildMode" description:"values: plugin - generates only plugins, pluginless - generates rule without plugins, plugins need to be created later"`
 		Generate
 		Connector
 		CacheWarmup
@@ -88,10 +88,14 @@ type (
 	}
 
 	Module struct {
-		ModuleSrc  string `long:"moduleSrc" description:"input path for building module"`
-		ModuleDst  string `long:"moduleDst" description:"output path for building module"`
-		ModuleMain string `long:"moduleMain" description:"module main file"`
-		ModuleName string `long:"moduleName" description:"module nam"`
+		ModuleDst       string   `long:"moduleDst" description:"output module path"`
+		ModuleSrc       string   `long:"moduleSrc" description:"input module path"`
+		ModuleArgs      []string `long:"moduleArgs" description:"args need to be passed to generate a plugin"`
+		ModuleName      string   `long:"moduleName" description:"module name"`
+		ModuleMain      string   `long:"moduleMain" description:"module main"`
+		ModuleOS        string   `long:"moduleOS" description:"module OS"`
+		ModuleArch      string   `long:"moduleArch" description:"plugin ARCH"`
+		ModuleGoVersion string
 	}
 )
 
