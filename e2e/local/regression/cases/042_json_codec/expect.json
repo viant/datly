@@ -1,1 +1,36 @@
-{"Codec":"JSON", "Type": "$Rec.CLASS_NAME"}
+[
+  {
+    "@indexBy@": "id"
+  },
+  {
+    "id": 1,
+    "preferences": {
+      "id": 1,
+      "name": "Foo",
+      "price": 125.5
+    },
+    "className": "com.class.Foo"
+  },
+  {
+    "id": 2,
+    "preferences": {
+      "id": 1,
+      "updatedAt": "03/16/2022",
+      "createdAt": "01/16/2022"
+    },
+    "className": "com.class.Boo"
+  },
+  {
+    "id": 3,
+    "preferences": {
+      "id": 1,
+      "items": [
+        0,
+        "125",
+        250,
+        "275"
+      ]
+    },
+    "className": "com.class.Bar"
+  }
+]
