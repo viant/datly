@@ -228,6 +228,7 @@ func (r *Resource) GetConnectors() Connectors {
 
 //Init initializes Resource
 func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
+
 	types, visitors, cache, transforms := r.readOptions(options)
 	r.indexProviders()
 

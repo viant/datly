@@ -89,6 +89,10 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 		TableBatches:  viewConfig.batchEnabled,
 	}
 
+	if table.DataType != "" {
+		result.Schema = &view.Schema{DataType: table.DataType}
+	}
+
 	s.routeBuilder.AddViews(result)
 
 	return result, nil

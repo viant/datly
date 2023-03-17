@@ -20,7 +20,7 @@ type (
 
 	Record struct {
 		Id          string
-		Preferences interface{} `json:",inline"`
+		Preferences interface{} `xjson:",inline"`
 		ClassName   string
 	}
 )

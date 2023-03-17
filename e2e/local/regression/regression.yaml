@@ -15,6 +15,7 @@ pipeline:
     request: '@rule'
 
   app:
+    when: $debugger!=on
     description: start datly app with rule generted from SQLs
     action: run
     request: '@app'
@@ -27,7 +28,7 @@ pipeline:
         '[]gen': '@gen'
 
       subPath: 'cases/${index}_*'
-      range: 1..041
+      range: 1..042
       template:
         checkSkip:
           action: nop

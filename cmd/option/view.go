@@ -18,6 +18,7 @@ type (
 		Auth              string                 `json:",omitempty"`
 		Selector          *view.Config           `json:",omitempty"`
 		AllowNulls        *bool                  `json:",omitempty"`
+		DataType          string                 `json:",omitempty"`
 	}
 
 	ViewPregenConfig struct {

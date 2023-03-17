@@ -65,6 +65,7 @@ type (
 		tag              *DefaultTag
 	}
 
+	fieldMarshallers  []*fieldMarshaller
 	marshallObjFn     func(parentType reflect.Type, ptr unsafe.Pointer, fields []*fieldMarshaller, sb *bytes.Buffer, filters *Filters, path string) error
 	marshallFieldFn   func(reflect.Type, unsafe.Pointer, *bytes.Buffer, *Filters) error
 	unmarshallFieldFn func(rType reflect.Type, ptr unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error
@@ -162,9 +163,7 @@ func (j *Marshaller) structMarshallers(rType reflect.Type, config marshal.Defaul
 		if err = j.newFieldMarshaller(&marshallers, field, config, path, outputPath, dTag); err != nil {
 			return nil, err
 		}
-		if marshallers[0].inline {
-			break
-		}
+
 	}
 
 	if iUpdater != nil {
@@ -287,9 +286,6 @@ func (j *Marshaller) newFieldMarshaller(marshallers *[]*fieldMarshaller, field r
 
 	if err := marshaller.init(field, config, j); err != nil {
 		return err
-	}
-	if marshaller.inline {
-		*marshallers = []*fieldMarshaller{}
 	}
 	*marshallers = append(*marshallers, marshaller)
 
@@ -793,12 +789,8 @@ func (j *Marshaller) marshalObject(p reflect.Type, ptr unsafe.Pointer, fields []
 		return nil
 	}
 
-	inline := len(fields) == 1 && fields[0].inline
-
 	filter, _ := filterByPath(filters, path)
-	if !inline {
-		sb.WriteByte('{')
-	}
+	sb.WriteByte('{')
 	prevLen := sb.Len()
 	for _, stringifier := range fields {
 		if isExcluded(filter, stringifier.fieldName, j.config, stringifier.path) {
@@ -846,9 +838,7 @@ func (j *Marshaller) marshalObject(p reflect.Type, ptr unsafe.Pointer, fields []
 			}
 		}
 	}
-	if !inline {
-		sb.WriteByte('}')
-	}
+	sb.WriteByte('}')
 	return nil
 }
 

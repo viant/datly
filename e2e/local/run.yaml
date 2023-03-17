@@ -1,6 +1,7 @@
 init:
   yesterday: $FormatTime('yesterdayInUTC', 'yyyy-MM-dd HH:mm:ss')
   today: $FormatTime('nowInUTC', 'yyyy-MM-dd HH:mm:ss')
+  debugger: '$params.debugger?$params.debugger:0'
 
   target:
     URL: ssh://localhost/
