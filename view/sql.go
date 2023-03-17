@@ -3,7 +3,6 @@ package view
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader/metadata"
 	"github.com/viant/datly/template/expand"
@@ -32,10 +31,7 @@ func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column,
 	if err != nil {
 		return nil, "", err
 	}
-
-	fmt.Printf("SS: %s\n", v.Template.Schema.compType.String())
 	columns, SQL, err := detectColumns(ctx, evaluation, v)
-
 	if err != nil {
 		return nil, "", err
 	}
