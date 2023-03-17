@@ -36,18 +36,17 @@ type (
 		Config                *Config
 		routersIndex          map[string]*router.Router
 		fs                    afs.Service
-		routeResourceTracker  *resource.Tracker
-		dataResourceTracker   *resource.Tracker
+		routeResourceTracker  *Tracker
+		dataResourceTracker   *Tracker
+		pluginResourceTracker *Tracker
 		dataResourcesIndex    map[string]*view.Resource
 		metrics               *gmetric.Service
 		mainRouter            *Router
 		cancelFn              context.CancelFunc
 		changeSession         *Session
 		JWTSigner             *signer.Service
-		pluginsInUse          map[string]bool
 		mux                   sync.RWMutex
 		pluginsConfig         *config.Registry
-		pluginResourceTracker *resource.Tracker
 		statusHandler         http.Handler
 		authorizer            Authorizer
 
@@ -100,21 +99,32 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 	}
 
 	srv := &Service{
-		metrics:               metrics,
-		pluginsConfig:         registry,
-		Config:                aConfig,
-		mux:                   sync.RWMutex{},
-		fs:                    fs,
-		dataResourcesIndex:    map[string]*view.Resource{},
-		routeResourceTracker:  resource.New(aConfig.RouteURL, time.Duration(aConfig.SyncFrequencyMs)*time.Millisecond),
-		dataResourceTracker:   resource.New(aConfig.DependencyURL, time.Duration(aConfig.SyncFrequencyMs)*time.Millisecond),
-		pluginResourceTracker: resource.New(aConfig.PluginsURL, time.Duration(aConfig.SyncFrequencyMs)*time.Millisecond),
-		routersIndex:          map[string]*router.Router{},
-		mainRouter:            NewRouter(map[string]*router.Router{}, aConfig, metrics, statusHandler, authorizer),
-		changeSession:         NewSession(aConfig.ChangeDetection),
-		pluginsInUse:          map[string]bool{},
-		statusHandler:         statusHandler,
-		authorizer:            authorizer,
+		metrics:            metrics,
+		pluginsConfig:      registry,
+		Config:             aConfig,
+		mux:                sync.RWMutex{},
+		fs:                 fs,
+		dataResourcesIndex: map[string]*view.Resource{},
+		routeResourceTracker: NewNotifier(
+			aConfig.RouteURL,
+			fs,
+			resource.New(aConfig.RouteURL, time.Duration(aConfig.SyncFrequencyMs)*time.Millisecond),
+		),
+		dataResourceTracker: NewNotifier(
+			aConfig.DependencyURL,
+			fs,
+			resource.New(aConfig.DependencyURL, time.Duration(aConfig.SyncFrequencyMs)*time.Millisecond),
+		),
+		pluginResourceTracker: NewNotifier(
+			aConfig.PluginsURL,
+			fs,
+			resource.New(aConfig.PluginsURL, time.Duration(aConfig.SyncFrequencyMs)*time.Millisecond),
+		),
+		routersIndex:  map[string]*router.Router{},
+		mainRouter:    NewRouter(map[string]*router.Router{}, aConfig, metrics, statusHandler, authorizer),
+		changeSession: NewSession(aConfig.ChangeDetection),
+		statusHandler: statusHandler,
+		authorizer:    authorizer,
 	}
 
 	if aConfig.JwtSigner != nil {
@@ -456,7 +466,7 @@ func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*R
 		err = depErr
 	}
 	if plugErr != nil {
-		err = fmt.Errorf("failed to load pluging: %w, %v", depErr, err)
+		err = fmt.Errorf("failed to load plugin: %w, %v", depErr, err)
 	}
 	return changes, err
 }
@@ -525,28 +535,6 @@ func (r *Service) handleMetaUpdated(metaUpdated []string) []string {
 
 	return actualUpdated
 }
-
-//
-//func (r *Service) detectChanges(metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer) {
-//	ctx := context.Background()
-//	cancel, cancelFunc := context.WithCancel(ctx)
-//	r.cancelFn = cancelFunc
-//	go func() {
-//	outer:
-//		for {
-//			time.Sleep(r.Config.ChangeDetection._retry)
-//			select {
-//			case <-cancel.Done():
-//				break outer
-//			default:
-//				fmt.Printf("[INFO] Waking up to detect changes ...\n")
-//				if err := r.syncChangesIfNeeded(context.TODO(), metrics, statusHandler, authorizer, false); err != nil {
-//					fmt.Printf("[ERROR] error occured while recreating routers: %v \n", err.Error())
-//				}
-//			}
-//		}
-//	}()
-//}
 
 func (r *Service) PreCachables(method string, uri string) ([]*view.View, error) {
 	aRouter, ok := r.Router()

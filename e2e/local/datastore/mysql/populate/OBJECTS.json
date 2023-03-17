@@ -1,0 +1,18 @@
+[
+  {},
+  {
+    "ID": 1,
+    "OBJECT": "{\"Id\":1,\"Name\":\"Foo\",\"Price\":125.5}",
+    "CLASS_NAME": "java.class.Foo"
+  },
+  {
+    "ID": 2,
+    "OBJECT": "{\"Id\":1,\"UpdatedAt\":\"03/16/2022\",\"CreatedAt\":\"01/16/2022\"}",
+    "CLASS_NAME": "java.class.Boo"
+  },
+  {
+    "ID": 3,
+    "OBJECT": "{\"Id\": 1,\"Items\": [0,\"125\",250,\"275\"]}",
+    "CLASS_NAME": "java.class.Bar"
+  }
+]

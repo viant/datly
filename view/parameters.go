@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
@@ -33,7 +34,7 @@ type (
 		MinAllowedRecords *int      `json:",omitempty"`
 		ExpectedReturned  *int      `json:",omitempty"`
 		Schema            *Schema   `json:",omitempty"`
-		//deprecated -> use Codec only to set Output
+		//Deprecated -> use Codec only to set Output
 		Codec  *Codec      `json:",omitempty"`
 		Output *Codec      `json:",omitempty"`
 		Const  interface{} `json:",omitempty"`
@@ -41,8 +42,8 @@ type (
 		DateFormat      string `json:",omitempty"`
 		ErrorStatusCode int    `json:",omitempty"`
 
-		valueAccessor    *Accessor
-		presenceAccessor *Accessor
+		valueAccessor    *types.Accessor
+		presenceAccessor *types.Accessor
 		initialized      bool
 		view             *View
 		_owner           *View
@@ -57,28 +58,29 @@ type (
 		Name string `json:",omitempty"`
 	}
 
-	CodecFn func(context context.Context, rawValue interface{}, options ...interface{}) (interface{}, error)
-	Codec   struct {
+	Codec struct {
 		shared.Reference
 		Name string `json:",omitempty"`
 		config.CodecConfig
-		Schema       *Schema `json:",omitempty"`
+		Schema *Schema `json:",omitempty"`
+
 		_initialized bool
-		_codecFn     CodecFn
+		_codecFn     config.CodecFn
 	}
 )
 
-func (v *Codec) Init(resource *Resource, view *View, paramType reflect.Type) error {
+func (v *Codec) Init(resource *Resource, view *View, ownerType reflect.Type) error {
 	if v._initialized {
 		return nil
 	}
+
 	v._initialized = true
 
-	if err := v.inheritCodecIfNeeded(resource, paramType); err != nil {
+	if err := v.inheritCodecIfNeeded(resource, ownerType); err != nil {
 		return err
 	}
 
-	v.ensureSchema(paramType)
+	v.ensureSchema(ownerType)
 	if v.SourceURL != "" && v.Source == "" {
 		data, err := resource.LoadText(context.Background(), v.SourceURL)
 		if err != nil {
@@ -119,12 +121,12 @@ func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type)
 
 	visitor, ok := resource.CodecByName(v.Ref)
 	if !ok {
-		return fmt.Errorf("not found visitor with name %v", v.Ref)
+		return fmt.Errorf("not found codec with name %v", v.Ref)
 	}
 
 	factory, ok := visitor.(config.CodecFactory)
 	if ok {
-		aCodec, err := factory.New(&v.CodecConfig, paramType)
+		aCodec, err := factory.New(&v.CodecConfig, paramType, xreflect.TypeLookupFn(resource.LookupType))
 		if err != nil {
 			return err
 		}
@@ -157,7 +159,7 @@ func (v *Codec) ensureSchema(paramType reflect.Type) {
 	}
 }
 
-func (v *Codec) extractCodecFn(resource *Resource, paramType reflect.Type, view *View) (CodecFn, error) {
+func (v *Codec) extractCodecFn(resource *Resource, paramType reflect.Type, view *View) (config.CodecFn, error) {
 	switch strings.ToLower(v.Name) {
 	case strings.ToLower(CodecVeltyCriteria):
 		veltyCodec, err := NewVeltyCodec(v.Source, paramType, view)
@@ -397,7 +399,7 @@ func (p *Parameter) initSchema(resource *Resource, structType reflect.Type) erro
 	}
 
 	if schemaType != "" {
-		lookup, err := GetOrParseType(resource.LookupType, schemaType)
+		lookup, err := types.GetOrParseType(resource.LookupType, schemaType)
 		if err != nil {
 			return err
 		}
@@ -426,10 +428,10 @@ func (p *Parameter) initSchemaFromType(structType reflect.Type) error {
 }
 
 func (p *Parameter) UpdatePresence(presencePtr unsafe.Pointer) {
-	p.presenceAccessor.setBool(presencePtr, true)
+	p.presenceAccessor.SetBool(presencePtr, true)
 }
 
-func (p *Parameter) SetAccessor(accessor *Accessor) {
+func (p *Parameter) SetAccessor(accessor *types.Accessor) {
 	p.valueAccessor = accessor
 }
 
@@ -485,15 +487,22 @@ func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr un
 		aCodec = nil
 	}
 
-	return p.valueAccessor.setValue(ctx, paramPtr, value, aCodec, p.DateFormat, options...)
-}
-
-func elem(rType reflect.Type) reflect.Type {
-	for rType.Kind() == reflect.Ptr || rType.Kind() == reflect.Slice {
-		rType = rType.Elem()
+	var codecFn config.CodecFn
+	if aCodec != nil {
+		codecFn = aCodec._codecFn
 	}
 
-	return rType
+	if codecFn != nil {
+		convertedValue, err := codecFn(ctx, value, options...)
+		if err != nil {
+			return err
+		}
+
+		p.valueAccessor.SetValue(paramPtr, convertedValue)
+		return nil
+	}
+
+	return p.valueAccessor.AdjustAndSet(paramPtr, value, p.DateFormat)
 }
 
 func (p *Parameter) Set(selector *Selector, value interface{}) error {
@@ -512,9 +521,7 @@ func (p *Parameter) SetPresenceField(structType reflect.Type) error {
 		return err
 	}
 
-	p.presenceAccessor = &Accessor{
-		xFields: fields,
-	}
+	p.presenceAccessor = types.NewAccessor(fields, structType)
 
 	return nil
 }
@@ -646,20 +653,6 @@ func NewQueryLocation(name string) *Location {
 //NewBodyLocation creates a body location
 func NewBodyLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindRequestBody}
-}
-
-func GetOrParseType(typeLookup xreflect.TypeLookupFn, dataType string) (reflect.Type, error) {
-	lookup, lookupErr := typeLookup("", "", dataType)
-	if lookupErr == nil {
-		return lookup, nil
-	}
-
-	parseType, parseErr := ParseType(dataType, typeLookup)
-	if parseErr == nil {
-		return parseType, nil
-	}
-
-	return nil, fmt.Errorf("couldn't determine struct type: %v, due to the: %w, %v", dataType, lookupErr, parseErr)
 }
 
 //WithParameterType returns schema type parameter option

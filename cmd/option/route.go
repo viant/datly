@@ -27,6 +27,7 @@ type (
 	TypeSrcConfig struct {
 		URL   string
 		Types []string
+		Alias string
 	}
 
 	BodyConfig struct {

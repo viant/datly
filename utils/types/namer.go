@@ -1,4 +1,4 @@
-package view
+package types
 
 import (
 	"github.com/viant/sqlx/io"

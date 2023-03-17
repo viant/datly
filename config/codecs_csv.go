@@ -21,7 +21,7 @@ type (
 )
 
 func (c CsvFactory) Valuer() Valuer {
-	return c
+	panic(UnexpectedUseError("Valuer", c))
 }
 
 func (c CsvFactory) Name() string {
@@ -29,14 +29,14 @@ func (c CsvFactory) Name() string {
 }
 
 func (c CsvFactory) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
-	return nil, UnexpectedUseError(c)
+	panic(UnexpectedUseError("Value", c))
 }
 
 func (c *CSV) Valuer() Valuer {
-	return c
+	panic(UnexpectedUseError("Valuer", c))
 }
 
-func (c CsvFactory) New(codec *CodecConfig, paramType reflect.Type) (Valuer, error) {
+func (c CsvFactory) New(codec *CodecConfig, paramType reflect.Type, options ...interface{}) (Valuer, error) {
 	aCsv := &CSV{
 		codec:     codec,
 		paramType: paramType,

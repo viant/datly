@@ -1,4 +1,4 @@
-package utils
+package formatter
 
 import (
 	"github.com/stretchr/testify/assert"

@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/criteria"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -29,7 +30,7 @@ type (
 		dateFormat      string
 		requestMetadata *RequestMetadata
 		params          *RequestParams
-		accessor        *view.Accessors
+		accessor        *types.Accessors
 	}
 
 	JSONError struct {
@@ -125,7 +126,7 @@ func NewRequestMetadata(route *Route) *RequestMetadata {
 	return requestMetadata
 }
 
-func CreateSelectors(ctx context.Context, accessor *view.Accessors, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, views ...*ViewDetails) (*view.Selectors, error) {
+func CreateSelectors(ctx context.Context, accessor *types.Accessors, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, views ...*ViewDetails) (*view.Selectors, error) {
 	sb := &selectorsBuilder{
 		caser:           inputFormat,
 		dateFormat:      dateFormat,

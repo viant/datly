@@ -14,7 +14,7 @@ import (
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/sanitize"
-	"github.com/viant/datly/utils"
+	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser/query"
@@ -439,7 +439,7 @@ func (s *Builder) buildRouterOutput() error {
 		s.routeBuilder.route.Output.Cardinality = view.Many
 	}
 
-	s.routeBuilder.route.Output.CaseFormat = utils.CaseFormat(view.FirstNotEmpty(s.routeBuilder.option.CaseFormat, "lc"))
+	s.routeBuilder.route.Output.CaseFormat = formatter.CaseFormat(view.FirstNotEmpty(s.routeBuilder.option.CaseFormat, "lc"))
 	if s.routeBuilder.option.Field != "" {
 		s.routeBuilder.route.Style = router.ComprehensiveStyle
 		s.routeBuilder.route.Field = s.routeBuilder.option.Field
@@ -817,7 +817,7 @@ func (s *Builder) excludeTableColumns(excluded *[]string, table *Table, path str
 }
 
 func (s *Builder) normalizeFieldName(except string) (string, error) {
-	colFormat, err := format.NewCase(utils.DetectCase(except))
+	colFormat, err := format.NewCase(formatter.DetectCase(except))
 	if err != nil {
 		return "", err
 	}
@@ -1131,6 +1131,7 @@ func (s *Builder) loadGoType(typeSrc *option.TypeSrcConfig) error {
 			Reference: shared.Reference{
 				Ref: ref,
 			},
+			Alias:    typeSrc.Alias,
 			Name:     actualName,
 			DataType: dataType,
 			Ptr:      asPtr,
@@ -1218,7 +1219,7 @@ func (s *Builder) loadGoTypes() error {
 	switch matched.Code {
 	case quotedToken:
 		text := matched.Text(cursor)
-		typeSrc, err := s.parseTypeSrc(text[1 : len(text)-1])
+		typeSrc, err := s.parseTypeSrc(text[1:len(text)-1], cursor)
 		if err != nil {
 			return err
 		}
@@ -1234,7 +1235,7 @@ func (s *Builder) loadGoTypes() error {
 			switch matched.Code {
 			case quotedToken:
 				text := matched.Text(exprGroupCursor)
-				typeSrc, err := s.parseTypeSrc(text[1 : len(text)-1])
+				typeSrc, err := s.parseTypeSrc(text[1:len(text)-1], exprGroupCursor)
 				if err != nil {
 					return err
 				}
@@ -1253,7 +1254,18 @@ func (s *Builder) loadGoTypes() error {
 	return nil
 }
 
-func (s *Builder) parseTypeSrc(imported string) (*option.TypeSrcConfig, error) {
+func (s *Builder) parseTypeSrc(imported string, cursor *parsly.Cursor) (*option.TypeSrcConfig, error) {
+	var alias string
+	matched := cursor.MatchAfterOptional(whitespaceMatcher, aliasKeywordMatcher)
+	if matched.Code == aliasKeywordToken {
+		matched = cursor.MatchAfterOptional(whitespaceMatcher, quotedMatcher)
+		if matched.Code != quotedToken {
+			return nil, cursor.NewError(quotedMatcher)
+		}
+
+		alias = strings.Trim(matched.Text(cursor), "\"")
+	}
+
 	index := strings.LastIndex(imported, ".")
 	if index == -1 {
 		return nil, fmt.Errorf(`unsupported import format: %v, supported: "[path].[type]"`, imported)
@@ -1262,6 +1274,7 @@ func (s *Builder) parseTypeSrc(imported string) (*option.TypeSrcConfig, error) {
 	return &option.TypeSrcConfig{
 		URL:   imported[:index],
 		Types: []string{imported[index+1:]},
+		Alias: alias,
 	}, nil
 }
 

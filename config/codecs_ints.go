@@ -11,12 +11,12 @@ type AsInts struct {
 }
 
 func (i *AsInts) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
-	asString, ok := raw.(string)
+	aString, ok := raw.(string)
 	if !ok {
-		return nil, fmt.Errorf("unexpected parameter value type, wanted %T, got %T", asString, raw)
+		return nil, UnexpectedValueType(aString, raw)
 	}
 
-	split := strings.Split(asString, ",")
+	split := strings.Split(aString, ",")
 	result := make([]int, len(split))
 
 	var err error
@@ -28,4 +28,8 @@ func (i *AsInts) Value(ctx context.Context, raw interface{}, options ...interfac
 	}
 
 	return result, nil
+}
+
+func UnexpectedValueType(wanted interface{}, got interface{}) error {
+	return fmt.Errorf("unexpected parameter value type, wanted %T, got %T", wanted, got)
 }

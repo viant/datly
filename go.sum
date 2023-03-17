@@ -303,8 +303,6 @@ github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd/go.mod h1:I+B/dOC
 github.com/viant/toolbox v0.24.0/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888 h1:iQ9ehV+Qev9s/L4eXFFaw3zvZVid+xTT5fW3G3ldEdk=
 github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
-github.com/viant/velty v0.1.1-0.20230307212500-b6ee220f4c39 h1:CUCO8kKVo/Ol6HOZzeNxVOjtg///PdbEJI+Os3Ctx5w=
-github.com/viant/velty v0.1.1-0.20230307212500-b6ee220f4c39/go.mod h1:qPz1gKJlNi/nVO2kFKNs1KTMy6QTOhfdkAZ02+8yJRs=
 github.com/viant/xdatly/types/core v0.0.0-20230309221732-4dc744a54ac2 h1:BFfLa2cfMXuaIQcWiRe48H+Tu4t23k5Z+eCWNewS3bs=
 github.com/viant/xdatly/types/core v0.0.0-20230309221732-4dc744a54ac2/go.mod h1:LJN2m8xJjtYNCvyvNrVanJwvzj8+hYCuPswL8H4qRG0=
 github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7 h1:lQZR77wD4CTMZgnk/6+YirrPHQJYicYCK/TVP8Ic6VU=

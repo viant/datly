@@ -1,12 +1,14 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 )
 
 type (
-	Codec struct {
+	CodecFn func(context context.Context, rawValue interface{}, options ...interface{}) (interface{}, error)
+	Codec   struct {
 		name       string
 		visitor    Valuer
 		resultType reflect.Type
@@ -35,8 +37,8 @@ func NewCodec(name string, valuer Valuer, resultType reflect.Type) CodecDef {
 	}
 }
 
-func UnexpectedUseError(on interface{}) error {
-	return fmt.Errorf("unexpected use Value on %T", on)
+func UnexpectedUseError(methodName string, on interface{}) error {
+	return fmt.Errorf("unexpected use %v on %T", methodName, on)
 }
 
 func NewCodecs(codecs ...Namer) CodecsRegistry {

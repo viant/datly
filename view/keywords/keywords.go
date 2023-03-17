@@ -1,23 +1,70 @@
 package keywords
 
+import "github.com/viant/velty/functions"
+
 var (
-	ParamsMetadataKey = ReservedKeywords.AddAndGet("Has")
-	ParamsKey         = ReservedKeywords.AddAndGet("Unsafe")
-	KeySQL            = ReservedKeywords.AddAndGet("sql")
-	KeyParentView     = ReservedKeywords.AddAndGet("ParentView")
+	ParamsMetadataKey = AddAndGet("Has",
+		functions.NewEntry(
+			nil,
+			NewNamespace(),
+		))
+	ParamsKey = AddAndGet("Unsafe", functions.NewEntry(
+		nil,
+		NewNamespace(),
+	))
 
-	Pagination    = ReservedKeywords.AddAndGet("$PAGINATION")
-	Criteria      = ReservedKeywords.AddAndGet("$CRITERIA")
-	WhereCriteria = ReservedKeywords.AddAndGet("$WHERE_CRITERIA")
+	KeySQL = "sql"
 
-	ColumnsIn           = ReservedKeywords.AddAndGet("$COLUMN_IN")
-	AndColumnInPosition = ReservedKeywords.AddAndGet("$AND_COLUMN_IN")
+	Pagination = AddAndGet("$PAGINATION", functions.NewEntry(
+		nil,
+		NewNamespace(),
+	))
 
-	SelectorCriteria      = ReservedKeywords.AddAndGet("$SELECTOR_CRITERIA")
-	WhereSelectorCriteria = ReservedKeywords.AddAndGet("$WHERE_SELECTOR_CRITERIA")
-	AndSelectorCriteria   = ReservedKeywords.AddAndGet("$AND_SELECTOR_CRITERIA")
-	AndCriteria           = ReservedKeywords.AddAndGet("$AND_CRITERIA")
-	OrCriteria            = ReservedKeywords.AddAndGet("$OR_CRITERIA")
+	Criteria = AddAndGet("$CRITERIA", functions.NewEntry(
+		nil,
+		NewNamespace(),
+	))
+
+	WhereCriteria = AddAndGet("$WHERE_CRITERIA", functions.NewEntry(
+		nil,
+		NewNamespace(),
+	))
+
+	ColumnsIn = AddAndGet("$COLUMN_IN", functions.NewEntry(
+		nil,
+		NewNamespace(),
+	))
+	AndColumnInPosition = AddAndGet("$AND_COLUMN_IN", functions.NewEntry(
+		nil,
+		NewNamespace(),
+	))
+
+	SelectorCriteria = AddAndGet("$SELECTOR_CRITERIA", functions.NewEntry(
+		nil,
+		NewNamespace(),
+	))
+	WhereSelectorCriteria = AddAndGet("$WHERE_SELECTOR_CRITERIA", functions.NewEntry(
+		nil,
+		NewNamespace(),
+	))
+
+	AndSelectorCriteria = AddAndGet("$AND_SELECTOR_CRITERIA", functions.NewEntry(
+		nil,
+		NewNamespace(),
+	))
+	AndCriteria = AddAndGet("$AND_CRITERIA", functions.NewEntry(
+		nil,
+		NewNamespace(),
+	))
+	OrCriteria = AddAndGet("$OR_CRITERIA", functions.NewEntry(
+		nil,
+		NewNamespace(),
+	))
+
+	Rec = AddAndGet("$Rec", functions.NewEntry(
+		nil,
+		NewNamespace(),
+	))
 
 	WherePrefix = "WHERE_"
 	AndPrefix   = "AND_"

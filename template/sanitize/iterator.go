@@ -209,7 +209,7 @@ func (it *ParamMetaIterator) tryBuildParam(SQLKeyword string, param string, pos 
 	occurrenceIndex := it.occurrences[name]
 	it.occurrences[name] = occurrenceIndex + 1
 
-	if keywords.ReservedKeywords.Has(name) {
+	if keywords.Has(name) {
 		return name, false
 	}
 
@@ -265,7 +265,7 @@ func (it *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, raw, SQL
 
 func (it *ParamMetaIterator) addVariable(selector *expr.Select) {
 	_, holderName := GetHolderName(view.FirstNotEmpty(selector.FullName, selector.ID))
-	if keywords.ReservedKeywords.Has(holderName) {
+	if keywords.Has(holderName) {
 		return
 	}
 
@@ -304,5 +304,5 @@ func isSQLKeyword(value string) bool {
 }
 
 func CanBeParam(name string) bool {
-	return !keywords.ReservedKeywords.Has(name)
+	return !keywords.Has(name)
 }

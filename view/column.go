@@ -3,10 +3,10 @@ package view
 import (
 	"fmt"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
-	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
 )
@@ -41,20 +41,6 @@ func (c *Column) SqlExpression() string {
 	return c.sqlExpression
 }
 
-func ParseType(dataType string, typeLookup xreflect.TypeLookupFn) (reflect.Type, error) {
-	precisionIndex := strings.Index(dataType, "(")
-	if precisionIndex != -1 {
-		dataType = dataType[:precisionIndex]
-	}
-
-	rType, ok := io.ParseType(dataType)
-	if ok {
-		return rType, nil
-	}
-
-	return xreflect.ParseWithLookup(dataType, true, typeLookup)
-}
-
 //ColumnName returns Column Name
 func (c *Column) ColumnName() string {
 	return c.Name
@@ -85,7 +71,7 @@ func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, co
 	}
 
 	if nonPtrType == nil || nonPtrType.Kind() == reflect.Interface {
-		rType, err := GetOrParseType(resource._types.LookupType, c.DataType)
+		rType, err := types.GetOrParseType(resource._types.LookupType, c.DataType)
 		if err != nil && c.rType == nil {
 			return err
 		}
@@ -102,7 +88,7 @@ func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, co
 	c._fieldName = caser.Format(c.Name, format.CaseUpperCamel)
 
 	if c.Codec != nil {
-		if err := c.Codec.Init(resource, nil, nil); err != nil {
+		if err := c.Codec.Init(resource, nil, c.rType); err != nil {
 			return err
 		}
 	}

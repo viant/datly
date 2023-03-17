@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/parameter"
 	rdata "github.com/viant/toolbox/data"
@@ -28,7 +29,7 @@ type (
 		Meta           *TemplateMeta `json:",omitempty" yaml:",omitempty"`
 
 		sqlEvaluator     *expand.Evaluator
-		accessors        *Accessors
+		accessors        *types.Accessors
 		_fields          []reflect.StructField
 		_fieldIndex      map[string]int
 		_parametersIndex ParametersIndex
@@ -354,17 +355,13 @@ func (t *Template) updateParametersFields() error {
 
 func (t *Template) initAccessors() {
 	if t.accessors == nil {
-		t.accessors = NewAccessors()
+		t.accessors = types.NewAccessors(&types.VeltyNamer{})
 	}
 
 	t.accessors.Init(t.Schema.Type())
 }
 
-func NewAccessors() *Accessors {
-	return &Accessors{index: map[string]int{}}
-}
-
-func (t *Template) AccessorByName(name string) (*Accessor, error) {
+func (t *Template) AccessorByName(name string) (*types.Accessor, error) {
 	return t.accessors.AccessorByName(name)
 }
 

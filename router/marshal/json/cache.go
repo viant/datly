@@ -2,7 +2,7 @@ package json
 
 import (
 	"bytes"
-	"github.com/viant/datly/utils"
+	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -36,7 +36,7 @@ func (n *NamesCaseIndex) FormatTo(value string, dstFormat format.Case) string {
 
 	formated, ok := registry[value]
 	if !ok {
-		srcFormat, err := format.NewCase(utils.DetectCase(value))
+		srcFormat, err := format.NewCase(formatter.DetectCase(value))
 		if err == nil {
 			formated = srcFormat.Format(value, dstFormat)
 		} else {

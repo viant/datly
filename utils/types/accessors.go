@@ -1,7 +1,6 @@
-package view
+package types
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/converter"
@@ -22,41 +21,58 @@ type (
 	}
 
 	Accessor struct {
+		isPtr   bool
+		xType   *xunsafe.Type
 		xFields []*xunsafe.Field
 		xSlices []*xunsafe.Slice
 	}
 )
 
-func (a *Accessor) set(ptr unsafe.Pointer, value interface{}) {
-	ptr, _ = a.upstream(ptr)
-	a.xFields[len(a.xFields)-1].SetValue(ptr, value)
+func NewAccessors(namer Namer) *Accessors {
+	return &Accessors{
+		namer: namer,
+		index: map[string]int{},
+	}
+}
+
+func NewAccessor(fields []*xunsafe.Field, structType reflect.Type) *Accessor {
+	var xType *xunsafe.Type
+	var isPtr bool
+
+	//if structType.Kind() == reflect.Ptr {
+	//	xType = xunsafe.NewType(structType)
+	//	isPtr = true
+	//}
+
+	return &Accessor{
+		isPtr:   isPtr,
+		xType:   xType,
+		xFields: fields,
+	}
 }
 
 func (a *Accessor) Type() reflect.Type {
 	return a.xFields[len(a.xFields)-1].Type
 }
 
-func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue interface{}, valueVisitor *Codec, format string, options ...interface{}) error {
-	ptr, _ = a.upstream(ptr)
-	xField := a.xFields[len(a.xFields)-1]
+func (a *Accessor) SetValue(ptr unsafe.Pointer, value interface{}) {
+	if value == nil {
+		return
+	}
 
-	if valueVisitor != nil {
-		transformed, err := valueVisitor._codecFn(ctx, rawValue, options...)
-		if err != nil {
-			return err
-		}
+	xField, ptr := a.actualPtr(ptr)
+	xField.SetValue(ptr, value)
+}
 
-		if transformed != nil {
-			xField.SetValue(ptr, transformed)
-		}
-
+func (a *Accessor) AdjustAndSet(ptr unsafe.Pointer, value interface{}, format string) error {
+	if value == nil {
 		return nil
 	}
 
-	//TODO: Add remaining types
+	xField, ptr := a.actualPtr(ptr)
 	switch xField.Type.Kind() {
 	case reflect.String:
-		switch actual := rawValue.(type) {
+		switch actual := value.(type) {
 		case *time.Time:
 			xField.SetString(ptr, actual.Format(time.RFC3339))
 			return nil
@@ -81,7 +97,7 @@ func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue in
 		}
 
 	case reflect.Int:
-		switch actual := rawValue.(type) {
+		switch actual := value.(type) {
 		case string:
 			atoi, err := strconv.Atoi(actual)
 			if err != nil {
@@ -128,7 +144,7 @@ func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue in
 		}
 
 	case reflect.Bool:
-		switch actual := rawValue.(type) {
+		switch actual := value.(type) {
 		case bool:
 			xField.SetBool(ptr, actual)
 			return nil
@@ -142,7 +158,7 @@ func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue in
 		}
 
 	case reflect.Float64:
-		switch actual := rawValue.(type) {
+		switch actual := value.(type) {
 		case float64:
 			xField.SetFloat64(ptr, actual)
 			return nil
@@ -190,12 +206,12 @@ func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue in
 		}
 	}
 
-	if reflect.TypeOf(rawValue) == xField.Type {
-		xField.SetValue(ptr, rawValue)
+	if reflect.TypeOf(value) == xField.Type {
+		xField.SetValue(ptr, value)
 		return nil
 	}
 
-	marshal, err := json.Marshal(rawValue)
+	marshal, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
@@ -209,7 +225,22 @@ func (a *Accessor) setValue(ctx context.Context, ptr unsafe.Pointer, rawValue in
 	return nil
 }
 
+func (a *Accessor) actualPtr(ptr unsafe.Pointer) (*xunsafe.Field, unsafe.Pointer) {
+	ptr, _ = a.upstream(ptr)
+	xField := a.xFields[len(a.xFields)-1]
+
+	return xField, ptr
+}
+
 func (a *Accessor) upstream(ptr unsafe.Pointer, indexes ...int) (unsafe.Pointer, int) {
+	if a.isPtr {
+		ptr = xunsafe.DerefPointer(ptr)
+	}
+
+	if ptr == nil {
+		return nil, 0
+	}
+
 	if len(a.xFields) == 1 {
 		return ptr, 0
 	}
@@ -289,13 +320,24 @@ func (a *Accessor) Values(values interface{}, indexes ...int) ([]interface{}, er
 	return placeholders, nil
 }
 
-func (a *Accessor) setBool(ptr unsafe.Pointer, value bool) {
+func (a *Accessor) SetBool(ptr unsafe.Pointer, value bool) {
 	ptr, _ = a.upstream(ptr)
 	a.xFields[len(a.xFields)-1].SetBool(ptr, value)
 }
 
+func (a *Accessor) String(ptr unsafe.Pointer) string {
+	if ptr == nil {
+		return ""
+	}
+
+	xField, ptr := a.actualPtr(ptr)
+	return xField.String(ptr)
+}
+
 func (a *Accessors) indexAccessors(prefix string, parentType reflect.Type, fields []*xunsafe.Field, path string) {
-	parentType = elem(parentType)
+	actualParentType := parentType
+
+	parentType = Elem(parentType)
 	if parentType.Kind() != reflect.Struct {
 		return
 	}
@@ -315,16 +357,14 @@ func (a *Accessors) indexAccessors(prefix string, parentType reflect.Type, field
 				continue
 			}
 
-			a.indexAccessor(accessorName, accessorFields)
+			a.indexAccessor(accessorName, accessorFields, actualParentType)
 			a.indexAccessors(accessorName+".", field.Type, accessorFields, path)
 		}
 	}
 }
 
-func (a *Accessors) indexAccessor(name string, fields []*xunsafe.Field) {
-	fieldAccessor := &Accessor{
-		xFields: fields,
-	}
+func (a *Accessors) indexAccessor(name string, fields []*xunsafe.Field, parentType reflect.Type) {
+	fieldAccessor := NewAccessor(fields, parentType)
 
 	fieldAccessor.xSlices = make([]*xunsafe.Slice, len(fields))
 

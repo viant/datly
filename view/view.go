@@ -9,7 +9,8 @@ import (
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
-	"github.com/viant/datly/utils"
+	"github.com/viant/datly/utils/formatter"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/gmetric/provider"
 	"github.com/viant/sqlx/io"
@@ -42,10 +43,10 @@ type (
 		From       string     `json:",omitempty"`
 		FromURL    string     `json:",omitempty"`
 
-		Exclude              []string         `json:",omitempty"`
-		Columns              []*Column        `json:",omitempty"`
-		InheritSchemaColumns bool             `json:",omitempty"`
-		CaseFormat           utils.CaseFormat `json:",omitempty"`
+		Exclude              []string             `json:",omitempty"`
+		Columns              []*Column            `json:",omitempty"`
+		InheritSchemaColumns bool                 `json:",omitempty"`
+		CaseFormat           formatter.CaseFormat `json:",omitempty"`
 
 		Criteria string `json:",omitempty"`
 
@@ -701,7 +702,7 @@ func (v *View) ensureCaseFormat() error {
 			columnNames[i] = column.Name
 		}
 
-		v.CaseFormat = utils.CaseFormat(utils.DetectCase(columnNames...))
+		v.CaseFormat = formatter.CaseFormat(formatter.DetectCase(columnNames...))
 	}
 
 	if err := v.CaseFormat.Init(); err != nil {
@@ -850,7 +851,7 @@ func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, r
 		}
 
 		sqlxTag := io.ParseTag(field.Tag.Get(option.TagSqlx))
-		elemType := elem(field.Type)
+		elemType := types.Elem(field.Type)
 		if !v.IsHolder(field.Name) && sqlxTag.Ns != "" && elemType.Kind() == reflect.Struct {
 			if err := v.updateColumn(sqlxTag.Ns, elemType, columns, relation, columnsIndex); err != nil {
 				return err
@@ -992,11 +993,14 @@ func (v *View) DatabaseType() reflect.Type {
 
 func (v *View) UnwrapDatabaseType(ctx context.Context, value interface{}) (interface{}, error) {
 	if v._codec != nil {
-		if err := v._codec.updateValue(ctx, value); err != nil {
+		actualRecord := v._codec.unwrapper.Value(xunsafe.AsPointer(value))
+
+		if err := v._codec.updateValue(ctx, value, &config.ParentValue{Value: actualRecord, RType: v.Schema.Type()}); err != nil {
 			return nil, err
 		}
 
-		return v._codec.unwrapper.Value(xunsafe.AsPointer(value)), nil
+		actualRecord = v._codec.unwrapper.Value(xunsafe.AsPointer(value))
+		return actualRecord, nil
 	}
 
 	return value, nil

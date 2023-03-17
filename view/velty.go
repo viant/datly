@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/template/expand"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/velty"
 	"github.com/viant/velty/ast/expr"
@@ -129,7 +130,7 @@ type VeltyCodec struct {
 	newState  func() *est.State
 	executor  *est.Execution
 	columns   ColumnIndex
-	accessors *Accessors
+	accessors *types.Accessors
 }
 
 func (v *VeltyCodec) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
@@ -331,7 +332,7 @@ func escapeSafeKeywords(template string) string {
 }
 
 func (v *VeltyCodec) init() error {
-	v.accessors = &Accessors{index: map[string]int{}}
+	v.accessors = types.NewAccessors(&types.VeltyNamer{})
 	v.accessors.Init(v.codecType)
 
 	planner := velty.New()

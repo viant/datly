@@ -3,6 +3,8 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/config"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strconv"
@@ -13,14 +15,16 @@ const (
 	actualFieldName = "Actual"
 )
 
-type columnsCodec struct {
-	fields    []*xunsafe.Field
-	accessors []*Accessor
+type (
+	columnsCodec struct {
+		fields    []*xunsafe.Field
+		accessors []*types.Accessor
 
-	unwrapper  *xunsafe.Field
-	actualType reflect.Type
-	columns    []*Column
-}
+		unwrapper  *xunsafe.Field
+		actualType reflect.Type
+		columns    []*Column
+	}
+)
 
 func newColumnsCodec(viewType reflect.Type, columns []*Column) (*columnsCodec, error) {
 	var withCodec []*Column
@@ -74,13 +78,10 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 	}
 
 	c.unwrapper = xunsafe.FieldByIndex(c.actualType, 1)
-	accessors := Accessors{
-		namer: &SqlxNamer{},
-		index: map[string]int{},
-	}
+	accessors := types.NewAccessors(&types.SqlxNamer{})
 	accessors.Init(c.actualType)
 
-	c.accessors = make([]*Accessor, len(columns))
+	c.accessors = make([]*types.Accessor, len(columns))
 	for i, column := range columns {
 		c.accessors[i], _ = accessors.AccessorByName(actualFieldName + "." + column.Name)
 	}
@@ -88,16 +89,16 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 	return nil
 }
 
-func (c *columnsCodec) updateValue(ctx context.Context, value interface{}) error {
+func (c *columnsCodec) updateValue(ctx context.Context, value interface{}, record *config.ParentValue) error {
 	asPtr := xunsafe.AsPointer(value)
 	for i, column := range c.columns {
 		fieldValue := c.fields[i].Value(asPtr)
-		decoded, err := column.Codec._codecFn(ctx, fieldValue)
+		decoded, err := column.Codec._codecFn(ctx, fieldValue, record)
 		if err != nil {
 			return err
 		}
 
-		c.accessors[i].set(asPtr, decoded)
+		c.accessors[i].SetValue(asPtr, decoded)
 	}
 
 	return nil

@@ -2,6 +2,7 @@ package view
 
 import (
 	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/sqlx/io/read/cache/ast"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -11,17 +12,15 @@ import (
 
 //Schema represents View as Go type.
 type Schema struct {
-	Name string `json:",omitempty" yaml:"name,omitempty"`
-
-	compType  reflect.Type
-	sliceType reflect.Type
-
-	slice *xunsafe.Slice
-	xType *xunsafe.Type
-
-	autoGen     bool
+	Name        string `json:",omitempty" yaml:"name,omitempty"`
 	DataType    string `json:",omitempty" yaml:"dataType,omitempty"`
 	Cardinality Cardinality
+
+	compType    reflect.Type
+	sliceType   reflect.Type
+	slice       *xunsafe.Slice
+	xType       *xunsafe.Type
+	autoGen     bool
 	initialized bool
 }
 
@@ -76,7 +75,7 @@ func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat f
 	}
 
 	if c.DataType != "" {
-		rType, err := GetOrParseType(resource.LookupType, c.DataType)
+		rType, err := types.GetOrParseType(resource.LookupType, c.DataType)
 		if err != nil {
 			return err
 		}
@@ -248,8 +247,8 @@ func (c *Schema) copy() *Schema {
 	return &schema
 }
 
-func (c *Schema) parseType(types Types) error {
-	parseType, err := GetOrParseType(types.LookupType, FirstNotEmpty(c.DataType, c.Name))
+func (c *Schema) parseType(typesIndex Types) error {
+	parseType, err := types.GetOrParseType(typesIndex.LookupType, FirstNotEmpty(c.DataType, c.Name))
 	if err != nil {
 		return err
 	}

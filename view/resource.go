@@ -236,14 +236,9 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	r._visitors = visitors
 	r._columnsCache = cache
 	r._packageTypes = map[string]Types{}
-	if r._typeLookup == nil {
-		r._typeLookup = func(identifier, packageName, typeName string) (reflect.Type, error) {
-			return r._types.LookupType(identifier, packageName, typeName)
-		}
-	}
 
 	for _, definition := range r.Types {
-		if err := definition.Init(ctx, r._typeLookup); err != nil {
+		if err := definition.Init(ctx, r.LookupType); err != nil {
 			return err
 		}
 
@@ -564,8 +559,14 @@ func (r *Resource) SetTypeLookup(lookup xreflect.TypeLookupFn) {
 	r._typeLookup = lookup
 }
 
-//TODO change <->
-func (r *Resource) LookupType(_, packageName, typeName string) (reflect.Type, error) {
+func (r *Resource) LookupType(packageIdentifier, packageName, typeName string) (reflect.Type, error) {
+	if r._typeLookup != nil {
+		lookup, err := r._typeLookup(packageIdentifier, packageName, typeName)
+		if err == nil {
+			return lookup, nil
+		}
+	}
+
 	lookup, err := r._types.Lookup(typeName)
 	if err == nil {
 		return lookup, err

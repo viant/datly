@@ -10,10 +10,6 @@ import (
 	"reflect"
 )
 
-var (
-	ValidatorNs = keywords.ReservedKeywords.AddAndGet("validator")
-)
-
 type (
 	Evaluator struct {
 		planner        *velty.Planner

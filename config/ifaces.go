@@ -31,7 +31,7 @@ type (
 	}
 
 	CodecFactory interface {
-		New(codecConfig *CodecConfig, paramType reflect.Type) (Valuer, error)
+		New(codecConfig *CodecConfig, rType reflect.Type, options ...interface{}) (Valuer, error)
 	}
 
 	BeforeFetcher interface {

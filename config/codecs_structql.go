@@ -22,22 +22,22 @@ type (
 )
 
 func (s StructQLFactory) ResultType(paramType reflect.Type) (reflect.Type, error) {
-	return nil, UnexpectedUseError(s)
+	panic(UnexpectedUseError("ResultType", s))
 }
 
 func (s StructQLFactory) Valuer() Valuer {
-	return s
+	panic(UnexpectedUseError("Valuer", s))
 }
 
 func (s StructQLFactory) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
-	return nil, UnexpectedUseError(s)
+	panic(UnexpectedUseError("Value", s))
 }
 
 func (s StructQLFactory) Name() string {
 	return CodecStructql
 }
 
-func (s StructQLFactory) New(codec *CodecConfig, paramType reflect.Type) (Valuer, error) {
+func (s StructQLFactory) New(codec *CodecConfig, paramType reflect.Type, options ...interface{}) (Valuer, error) {
 	if codec.Query == "" {
 		return nil, fmt.Errorf("codec query can't be empty")
 	}

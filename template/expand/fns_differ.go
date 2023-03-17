@@ -3,10 +3,16 @@ package expand
 import (
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/godiff"
+	"github.com/viant/velty/functions"
 	"reflect"
 )
 
-var FnsDiffer = keywords.ReservedKeywords.AddAndGet("differ")
+var FnsDiffer = keywords.AddAndGet("differ",
+	functions.NewEntry(
+		&Differ{},
+		functions.NewFunctionNamespace(reflect.TypeOf(&Differ{})),
+	),
+)
 
 type (
 	Differ struct{}

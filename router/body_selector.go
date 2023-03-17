@@ -3,6 +3,7 @@ package router
 import (
 	"fmt"
 	"github.com/viant/datly/executor"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"reflect"
 	"strings"
@@ -14,7 +15,7 @@ type (
 		StateValue string
 
 		_bodyType reflect.Type
-		_accessor *view.Accessor
+		_accessor *types.Accessor
 	}
 )
 
@@ -24,7 +25,7 @@ func (s *BodySelector) Init(aView *view.View) error {
 	}
 
 	stateType := aView.Template.StateType()
-	accessors := view.NewAccessors()
+	accessors := types.NewAccessors(&types.VeltyNamer{})
 
 	actualName := s.stateValue(aView)
 	accessors.InitPath(stateType, actualName)

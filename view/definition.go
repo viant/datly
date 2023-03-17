@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
@@ -15,6 +16,7 @@ type (
 	TypeDefinition struct {
 		shared.Reference `json:",omitempty"`
 		Name             string   `json:",omitempty"`
+		Alias            string   `json:",omitempty"`
 		Fields           []*Field `json:",omitempty"`
 		_fields          map[string]bool
 		Schema           *Schema     `json:",omitempty"`
@@ -65,7 +67,7 @@ func (d *TypeDefinition) Init(ctx context.Context, typeLookup xreflect.TypeLooku
 	}
 
 	if d.Schema != nil {
-		parseType, err := GetOrParseType(typeLookup, d.Schema.DataType)
+		parseType, err := types.GetOrParseType(typeLookup, d.Schema.DataType)
 		if err != nil {
 			return err
 		}
@@ -144,9 +146,9 @@ func (f *Field) initChildren(ctx context.Context, types xreflect.TypeLookupFn, d
 	return nil
 }
 
-func (f *Field) initSchemaType(types xreflect.TypeLookupFn) error {
+func (f *Field) initSchemaType(typesLookup xreflect.TypeLookupFn) error {
 	if f.Schema.DataType != "" {
-		rType, err := GetOrParseType(types, f.Schema.DataType)
+		rType, err := types.GetOrParseType(typesLookup, f.Schema.DataType)
 		if err != nil {
 			return err
 		}
@@ -156,7 +158,7 @@ func (f *Field) initSchemaType(types xreflect.TypeLookupFn) error {
 	}
 
 	if f.Schema.Name != "" {
-		rType, err := types("", "", f.Schema.Name)
+		rType, err := typesLookup("", "", f.Schema.Name)
 		if err != nil {
 			return err
 		}

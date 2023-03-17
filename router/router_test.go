@@ -69,7 +69,7 @@ type (
 )
 
 func (a *asStrings) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
-	rawString, ok := a.asString(raw)
+	rawString, ok := asString(raw)
 	if !ok {
 		return "", fmt.Errorf("expected to got string but got %T", raw)
 	}
@@ -77,7 +77,7 @@ func (a *asStrings) Value(ctx context.Context, raw interface{}, options ...inter
 	return strings.Split(rawString, " "), nil
 }
 
-func (a *asStrings) asString(raw interface{}) (string, bool) {
+func asString(raw interface{}) (string, bool) {
 	rawString, ok := raw.(string)
 	if ok {
 		return rawString, true

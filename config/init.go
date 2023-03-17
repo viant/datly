@@ -26,6 +26,7 @@ const (
 	CodecKeyAsStrings       = "AsStrings"
 	CodecKeyAsInts          = "AsInts"
 	CodecKeyCSV             = "CSV"
+	CodecJSON               = "JSON"
 )
 
 var Config = &Registry{
@@ -40,6 +41,7 @@ var Config = &Registry{
 		NewCodec(CodecKeyAsStrings, &AsStrings{}, reflect.TypeOf([]string{})),
 		CsvFactory(""),
 		StructQLFactory(""),
+		&JSONFactory{},
 	),
 	Packages: map[string]map[string]reflect.Type{
 		"types": {

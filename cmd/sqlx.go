@@ -315,7 +315,7 @@ func appendItem(item *query.Item, result *[]*Column, route *option.RouteConfig) 
 	comments := item.Comments
 	if hint := comments; hint != "" {
 		column := &view.Column{}
-		if err := hintToStruct(hint, &column); err != nil {
+		if err := hintToStruct(hint, column); err != nil {
 		}
 		item.DataType = column.DataType
 	}

@@ -8,7 +8,8 @@ import (
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/utils"
+	"github.com/viant/datly/utils/formatter"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/parameter"
 	"github.com/viant/sqlx/io/load/reader/csv"
@@ -60,7 +61,7 @@ type (
 		Compression      *Compression
 
 		_resource          *view.Resource
-		_accessors         *view.Accessors
+		_accessors         *types.Accessors
 		_presenceProviders map[reflect.Type]*option.PresenceProvider
 
 		_requestBodyParamRequired bool
@@ -76,11 +77,11 @@ type (
 	}
 
 	Output struct {
-		Cardinality       view.Cardinality `json:",omitempty"`
-		CaseFormat        utils.CaseFormat `json:",omitempty"`
-		OmitEmpty         bool             `json:",omitempty"`
-		Style             Style            `json:",omitempty"`
-		Field             string           `json:",omitempty"`
+		Cardinality       view.Cardinality     `json:",omitempty"`
+		CaseFormat        formatter.CaseFormat `json:",omitempty"`
+		OmitEmpty         bool                 `json:",omitempty"`
+		Style             Style                `json:",omitempty"`
+		Field             string               `json:",omitempty"`
 		Transforms        marshal.Transforms
 		Exclude           []string
 		NormalizeExclude  *bool
@@ -462,7 +463,7 @@ func (r *Route) initRequestBodyFromParams() error {
 		return nil
 	}
 
-	accessors := view.NewAccessors()
+	accessors := types.NewAccessors(&types.VeltyNamer{})
 	r._accessors = accessors
 	bodyParam, _ := r.fullBodyParam(params)
 	rType, err := r.initRequestBodyType(bodyParam, params)
@@ -598,7 +599,7 @@ func (r *Route) initCaser() error {
 	}
 
 	if r.CaseFormat == "" {
-		r.CaseFormat = utils.UpperCamel
+		r.CaseFormat = formatter.UpperCamel
 	}
 
 	var err error
