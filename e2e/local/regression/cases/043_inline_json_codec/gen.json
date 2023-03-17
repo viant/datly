@@ -1,0 +1,5 @@
+{
+  "Name": "$tagId",
+  "URL": "$path/inlinejson_codec.sql",
+  "Args": ""
+}

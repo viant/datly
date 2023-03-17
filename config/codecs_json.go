@@ -111,7 +111,7 @@ func (j *JSONFactory) Name() string {
 }
 
 func (j *JSONFactory) New(codecConfig *CodecConfig, rType reflect.Type, options ...interface{}) (Valuer, error) {
-	typeName := codecConfig.JSONType
+	typeName := codecConfig.OutputType
 	if typeName == "" {
 		return nil, fmt.Errorf("JSON output type can't be empty")
 	}
@@ -141,7 +141,7 @@ func (j *JSONFactory) New(codecConfig *CodecConfig, rType reflect.Type, options 
 	}
 
 	result := &JSONParsers{
-		aType:         codecConfig.JSONType,
+		aType:         codecConfig.OutputType,
 		lookup:        lookup,
 		aMap:          sync.Map{},
 		resultType:    resultType,

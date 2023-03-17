@@ -11,7 +11,7 @@ SELECT main.*
 FROM (
          SELECT
              ID as Id,
-             OBJECT AS Preferences /* { "Codec": {"Ref": "JSON", "JSONType": "$Rec.ClassName" } } */,
+             OBJECT AS Preferences /* { "Codec": {"Ref": "JSON", "OutputType": "$Rec.ClassName" } } */,
              CLASS_NAME as ClassName
          FROM OBJECTS /* { "DataType": "Record" } */
      ) main

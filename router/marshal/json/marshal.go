@@ -52,6 +52,7 @@ type (
 		jsonName  string
 		fieldName string
 		omitEmpty bool
+		inline    bool
 
 		path             string
 		isComparable     bool
@@ -160,6 +161,9 @@ func (j *Marshaller) structMarshallers(rType reflect.Type, config marshal.Defaul
 
 		if err = j.newFieldMarshaller(&marshallers, field, config, path, outputPath, dTag); err != nil {
 			return nil, err
+		}
+		if marshallers[0].inline {
+			break
 		}
 	}
 
@@ -275,6 +279,7 @@ func (j *Marshaller) newFieldMarshaller(marshallers *[]*fieldMarshaller, field r
 		fieldName:  field.Name,
 		xField:     xField,
 		omitEmpty:  tag.OmitEmpty || config.OmitEmpty,
+		inline:     tag.Inline,
 		path:       path,
 		outputPath: outputPath,
 		tag:        defaultTag,
@@ -283,7 +288,9 @@ func (j *Marshaller) newFieldMarshaller(marshallers *[]*fieldMarshaller, field r
 	if err := marshaller.init(field, config, j); err != nil {
 		return err
 	}
-
+	if marshaller.inline {
+		*marshallers = []*fieldMarshaller{}
+	}
 	*marshallers = append(*marshallers, marshaller)
 
 	return nil
@@ -786,8 +793,12 @@ func (j *Marshaller) marshalObject(p reflect.Type, ptr unsafe.Pointer, fields []
 		return nil
 	}
 
+	inline := len(fields) == 1 && fields[0].inline
+
 	filter, _ := filterByPath(filters, path)
-	sb.WriteByte('{')
+	if !inline {
+		sb.WriteByte('{')
+	}
 	prevLen := sb.Len()
 	for _, stringifier := range fields {
 		if isExcluded(filter, stringifier.fieldName, j.config, stringifier.path) {
@@ -812,7 +823,7 @@ func (j *Marshaller) marshalObject(p reflect.Type, ptr unsafe.Pointer, fields []
 			sb.WriteByte(',')
 		}
 
-		if !stringifier.tag.Embedded {
+		if !stringifier.tag.Embedded && !stringifier.inline {
 			sb.WriteByte('"')
 			sb.WriteString(stringifier.jsonName)
 			sb.WriteString(`":`)
@@ -835,8 +846,9 @@ func (j *Marshaller) marshalObject(p reflect.Type, ptr unsafe.Pointer, fields []
 			}
 		}
 	}
-
-	sb.WriteByte('}')
+	if !inline {
+		sb.WriteByte('}')
+	}
 	return nil
 }
 
