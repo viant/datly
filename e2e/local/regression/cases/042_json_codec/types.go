@@ -17,4 +17,10 @@ type (
 		Id    int
 		Items []interface{}
 	}
+
+	Record struct {
+		Id          string
+		Preferences interface{}
+		ClassName   string
+	}
 )

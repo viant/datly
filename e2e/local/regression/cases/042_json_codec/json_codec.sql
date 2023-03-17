@@ -1,9 +1,10 @@
 /* {"URI":"json-codec"} */
 
 import (
-	"regression/cases/042_json_codec.Foo" as   "java.class.Foo"
-	"regression/cases/042_json_codec.Boo" as   "java.class.Boo"
-	"regression/cases/042_json_codec.Bar" as   "java.class.Bar"
+	"regression/cases/042_json_codec.Foo"     as   "java.class.Foo"
+	"regression/cases/042_json_codec.Boo"     as   "java.class.Boo"
+	"regression/cases/042_json_codec.Bar"     as   "java.class.Bar"
+	"regression/cases/042_json_codec.Record"
 )
 
 SELECT main.*

@@ -37,7 +37,7 @@ require (
 	github.com/viant/sqlx v0.5.3-0.20230301014138-5a9ca541f97f
 	github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
-	github.com/viant/velty v0.1.1-0.20230307212500-b6ee220f4c39
+	github.com/viant/velty v0.1.1-0.20230317022642-fe2a3853839b
 	github.com/viant/xdatly/types/core v0.0.0-20230309221732-4dc744a54ac2
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
 	github.com/viant/xreflect v0.0.0-20230303201326-f50afb0feb0d
@@ -109,5 +109,3 @@ require (
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-
-replace github.com/viant/velty => /Users/klarysz/Documents/github_viant/velty
