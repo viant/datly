@@ -1,10 +1,13 @@
 package json
 
-import "strings"
+import (
+	"strings"
+)
 
 type Tag struct {
 	FieldName string
 	OmitEmpty bool
+	Inline    bool
 }
 
 const TagName = "json"
@@ -19,6 +22,7 @@ func Parse(tagValue string) *Tag {
 			tag.FieldName = segment
 		case 1:
 			tag.OmitEmpty = segment == "omitempty"
+			tag.Inline = segment == "inline"
 		}
 	}
 

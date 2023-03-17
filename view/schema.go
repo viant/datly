@@ -116,6 +116,7 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 		}
 
 		defaultTag := createDefaultTagIfNeeded(columns[i])
+
 		sqlxTag := `sqlx:"name=` + columnName + `"`
 
 		var aTag string

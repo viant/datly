@@ -872,6 +872,7 @@ func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, r
 		column, ok := v.findSchemaColumn(fieldName)
 		if ok {
 			*columns = append(*columns, column)
+			//			column.field = &field
 			columnsIndex.Register(v.Caser, column)
 		}
 	}
