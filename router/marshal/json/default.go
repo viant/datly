@@ -120,7 +120,7 @@ func parseValue(rType reflect.Type, rawValue string, timeFormat string) (interfa
 				return nil, nil, err
 			}
 
-			return &asTime, unsafe.Pointer(&asTime), nil
+			return asTime, unsafe.Pointer(&asTime), nil
 		}
 	}
 

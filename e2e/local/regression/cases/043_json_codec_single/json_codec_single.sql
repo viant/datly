@@ -1,9 +1,9 @@
 /* {"URI":"json-codec/{Id}"} */
 
 import (
-	"regression/cases/043_json_codec_single.Foo"     as   "com.class.Foo"
-	"regression/cases/043_json_codec_single.Boo"     as   "com.class.Boo"
-	"regression/cases/043_json_codec_single.Bar"     as   "com.class.Bar"
+	"regression/cases/043_json_codec_single.Foo"     as   "com.class.abc.Foo"
+	"regression/cases/043_json_codec_single.Boo"     as   "com.class.abc.Boo"
+	"regression/cases/043_json_codec_single.Bar"     as   "com.class.abc.Bar"
 	"regression/cases/043_json_codec_single.Record"
 )
 

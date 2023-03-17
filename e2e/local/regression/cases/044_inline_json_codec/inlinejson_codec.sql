@@ -1,9 +1,9 @@
 /* {"URI":"inlinejson-codec"} */
 
 import (
-	"regression/cases/044_inline_json_codec.Foo"     as   "com.class.Foo"
-	"regression/cases/044_inline_json_codec.Boo"     as   "com.class.Boo"
-	"regression/cases/044_inline_json_codec.Bar"     as   "com.class.Bar"
+	"regression/cases/044_inline_json_codec.Foo"     as   "com.class.abc.Foo"
+	"regression/cases/044_inline_json_codec.Boo"     as   "com.class.abc.Boo"
+	"regression/cases/044_inline_json_codec.Bar"     as   "com.class.abc.Bar"
 	"regression/cases/044_inline_json_codec.Record"
 )
 

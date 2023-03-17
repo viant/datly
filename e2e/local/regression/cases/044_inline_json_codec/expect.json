@@ -1,27 +1,21 @@
 [
   {
-    "preferences": {
-      "id": 1,
-      "name": "Foo",
-      "price": 125.5
-    }
+    "id": 1,
+    "name": "Foo",
+    "price": 125.5
   },
   {
-    "preferences": {
-      "id": 1,
-      "updatedAt": "03/16/2022",
-      "createdAt": "01/16/2022"
-    }
+    "id": 1,
+    "updatedAt": "03/16/2022",
+    "createdAt": "01/16/2022"
   },
   {
-    "preferences": {
-      "id": 1,
-      "items": [
-        0,
-        "125",
-        250,
-        "275"
-      ]
-    }
+    "id": 1,
+    "items": [
+      0,
+      "125",
+      250,
+      "275"
+    ]
   }
 ]

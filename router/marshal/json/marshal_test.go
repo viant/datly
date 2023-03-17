@@ -4,6 +4,7 @@ import (
 	goJson "encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"github.com/viant/assertly"
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/json"
@@ -90,7 +91,7 @@ func TestJson_Marshal(t *testing.T) {
 		{
 			description: "default tag",
 			data:        defaultTag,
-			expect:      `[{"Int":1,"Int8":2,"Int16":3,"Int32":4,"Int64":5,"Uint":6,"Uint8":7,"Uint16":8,"Uint32":9,"Uint64":10,"IntPtr":1,"Int8Ptr":2,"Int16Ptr":3,"Int32Ptr":4,"Int64Ptr":5,"UintPtr":6,"Uint8Ptr":7,"Uint16Ptr":8,"Uint32Ptr":9,"Uint64Ptr":10,"String":"empty","StringPtr":"empty","Bool":false,"BoolPtr":false,"Float32":10.5,"Float32Ptr":10.5,"Float64":20.5,"Float64Ptr":20.5,"Time":"2012-07-12","TimePtr":2022-02-08}]`,
+			expect:      `[{"Int":1,"Int8":2,"Int16":3,"Int32":4,"Int64":5,"Uint":6,"Uint8":7,"Uint16":8,"Uint32":9,"Uint64":10,"IntPtr":1,"Int8Ptr":2,"Int16Ptr":3,"Int32Ptr":4,"Int64Ptr":5,"UintPtr":6,"Uint8Ptr":7,"Uint16Ptr":8,"Uint32Ptr":9,"Uint64Ptr":10,"String":"empty","StringPtr":"empty","Bool":false,"BoolPtr":false,"Float32":10.5,"Float32Ptr":10.5,"Float64":20.5,"Float64Ptr":20.5,"Time":"2012-07-12","TimePtr":"2022-02-08"}]`,
 		},
 		{
 			description: "primitive slice",
@@ -133,15 +134,14 @@ func TestJson_Marshal(t *testing.T) {
 				CaseFormat: format.CaseLowerCamel,
 			},
 		},
-		//TODO: Handle that case
-		//{
-		//	description: "marshal non ptr",
-		//	data:        nonPtr,
-		//	expect:      `[{"id":10,"name":"foo","price":125.5}]`,
-		//	defaultConfig: marshal.Default{
-		//		CaseFormat: format.CaseLowerCamel,
-		//	},
-		//},
+		{
+			description: "inlining",
+			data:        inlinable,
+			expect:      `{"id":12,"name":"Foo name","price":125.567}`,
+			defaultConfig: marshal.Default{
+				CaseFormat: format.CaseLowerCamel,
+			},
+		},
 	}
 
 	//for i, testcase := range testcases[:len(testcases)-1] {
@@ -168,7 +168,17 @@ func TestJson_Marshal(t *testing.T) {
 			return
 		}
 
-		if !assert.Equal(t, testcase.expect, string(result), testcase.description) {
+		expected := new(interface{})
+		if !assert.Nil(t, goJson.Unmarshal([]byte(testcase.expect), expected), testcase.description) {
+			continue
+		}
+
+		actual := new(interface{})
+		if !assert.Nil(t, goJson.Unmarshal(result, actual), testcase.description) {
+			continue
+		}
+
+		if !assertly.AssertValues(t, expected, actual, testcase.description) {
 			toolbox.Dump(string(result))
 		}
 	}
@@ -185,35 +195,6 @@ func embeddable() interface{} {
 		Embeddable: map[string]interface{}{
 			"name":  "foo",
 			"price": 125.5,
-		},
-	}
-}
-
-func nonPtr() interface{} {
-	type Response struct {
-		Message interface{}
-		Status  string
-	}
-
-	type Event struct {
-		ID    int
-		Name  string
-		Price float64
-	}
-
-	type Data struct {
-		Response
-		Events []*Event
-	}
-
-	return Data{
-		Response: Response{},
-		Events: []*Event{
-			{
-				ID:    1,
-				Name:  "ABC",
-				Price: 125.5,
-			},
 		},
 	}
 }
@@ -769,4 +750,27 @@ func BenchmarkMarshal(b *testing.B) {
 		assert.Nil(b, err)
 		assert.Equal(b, `[{"ID":1,"Name":"Event - 1","Price":123,"Types":[{"TypeID":1,"Type":"Type - 1"},{"TypeID":2,"Type":"Type - 2"}]},{"ID":2,"Name":"Event - 2","Price":226,"Types":[{"TypeID":2,"Type":"Type - 2"},{"TypeID":3,"Type":"Type - 3"},{"TypeID":4,"Type":"Type - 4"},{"TypeID":5,"Type":"Type - 5"},{"TypeID":6,"Type":"Type - 6"},{"TypeID":7,"Type":"Type - 7"}]}]`, string(bytes))
 	})
+}
+func inlinable() interface{} {
+	type Foo struct {
+		ID    int
+		Name  string
+		Price float64
+	}
+
+	type FooAudit struct {
+		CreatedAt time.Time
+		UpdatedAt time.Time
+		Foo       Foo `jsonx:"inline"`
+	}
+
+	return &FooAudit{
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Foo: Foo{
+			ID:    12,
+			Name:  "Foo name",
+			Price: 125.567,
+		},
+	}
 }

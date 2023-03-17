@@ -9,7 +9,7 @@
       "name": "Foo",
       "price": 125.5
     },
-    "className": "com.class.Foo"
+    "className": "com.class.abc.Foo"
   },
   {
     "id": 2,
@@ -18,7 +18,7 @@
       "updatedAt": "03/16/2022",
       "createdAt": "01/16/2022"
     },
-    "className": "com.class.Boo"
+    "className": "com.class.abc.Boo"
   },
   {
     "id": 3,
@@ -31,6 +31,6 @@
         "275"
       ]
     },
-    "className": "com.class.Bar"
+    "className": "com.class.abc.Bar"
   }
 ]

@@ -221,7 +221,7 @@ func (d *db) keepConnectionAlive(driver string, dsn string, config *DBConfig) {
 					started := time.Now()
 					err = aDb.PingContext(d.ctx)
 					if elapsed := time.Since(started); elapsed > 100*time.Millisecond {
-						fmt.Printf("[WARN] %v ping took %s\n", elapsed)
+						fmt.Printf("[WARN] %v ping took\n", elapsed)
 					}
 				}
 

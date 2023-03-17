@@ -2,7 +2,6 @@ package json
 
 import (
 	"bytes"
-	goJson "encoding/json"
 	"fmt"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal"
@@ -41,6 +40,7 @@ type (
 		_marshallersOutput map[string]int
 		_marshallersInput  map[string]int
 		indexUpdater       *presenceUpdater
+		inlinable          bool
 	}
 
 	fieldMarshaller struct {
@@ -125,51 +125,68 @@ func (j *Marshaller) structMarshallers(rType reflect.Type, config marshal.Defaul
 		wasPtr = true
 	}
 
-	elem := shared.Elem(rType)
-	if elem.Kind() != reflect.Struct {
+	elemType := shared.Elem(rType)
+	if elemType.Kind() != reflect.Struct {
 		aField := &fieldMarshaller{
-			xField: xunsafe.NewField(reflect.StructField{Name: "TEMP", Type: elem}),
+			xField: xunsafe.NewField(reflect.StructField{Name: "TEMP", Type: elemType}),
 			tag:    dTag,
 		}
 
-		if err := aField.updateFieldMarshaller(rType, config, j, elem, wasPtr, dTag); err != nil {
+		if err := aField.updateFieldMarshaller(rType, config, j, elemType, wasPtr, dTag); err != nil {
 			return nil, err
 		}
 
 		return []*fieldMarshaller{aField}, nil
 	}
 
-	marshallers := make([]*fieldMarshaller, 0)
-	var iUpdater *presenceUpdater
+	fields := j.groupFields(elemType)
+	marshallers, err := j.createStructMarshallers(fields, config, path, outputPath, dTag)
+	if err != nil {
+		return nil, err
+	}
 
-	numField := elem.NumField()
-	for i := 0; i < numField; i++ {
-		field := elem.Field(i)
-		if IsPresenceField(field) {
-			var err error
-			iUpdater, err = j.presenceUpdater(field)
-			if err != nil {
-				return nil, err
-			}
-
-			continue
-		}
-
-		dTag, err := NewDefaultTag(field)
+	if len(fields.presenceFields) == 1 {
+		updater, err := j.presenceUpdater(fields.presenceFields[0])
 		if err != nil {
 			return nil, err
 		}
 
-		if err = j.newFieldMarshaller(&marshallers, field, config, path, outputPath, dTag); err != nil {
+		j.indexUpdater = updater
+		for _, marshaller := range marshallers {
+			marshaller.indexUpdater = updater
+		}
+	}
+
+	return marshallers, nil
+}
+
+func (j *Marshaller) createStructMarshallers(fields *groupedFields, config marshal.Default, path string, outputPath string, tag *DefaultTag) ([]*fieldMarshaller, error) {
+	marshallers := make([]*fieldMarshaller, 0)
+	if len(fields.inlinable) == 1 {
+		j.inlinable = true
+		field := fields.inlinable[0]
+		marshaller, err := j.NewInlinableMarshaller(field, config, path)
+		if err != nil {
 			return nil, err
 		}
 
-	}
+		marshallers = append(marshallers, &fieldMarshaller{
+			xField:    xunsafe.NewField(field),
+			marshall:  marshaller.MarshallObject,
+			unmarshal: marshaller.UnmarshallObject,
+			tag:       tag,
+		})
 
-	if iUpdater != nil {
-		j.indexUpdater = iUpdater
-		for _, marshaller := range marshallers {
-			marshaller.indexUpdater = iUpdater
+	} else {
+		for _, field := range fields.regularFields {
+			dTag, err := NewDefaultTag(field)
+			if err != nil {
+				return nil, err
+			}
+
+			if err = j.newFieldMarshaller(&marshallers, field, config, path, outputPath, dTag); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -254,7 +271,7 @@ func (j *Marshaller) newFieldMarshaller(marshallers *[]*fieldMarshaller, field r
 		return nil
 	}
 
-	tag := Parse(field.Tag.Get(TagName))
+	tag := ParseXTag(field.Tag.Get(TagName), field.Tag.Get(XTagName))
 	if tag.FieldName == "-" {
 		return nil
 	}
@@ -421,7 +438,7 @@ func getMarshalFunctions(rType reflect.Type, config marshal.Default, j *Marshall
 		}
 
 	case reflect.Interface:
-		marshaller, unmarshaller := interfaceMarshaller(config, j, path)
+		marshaller, unmarshaller := j.storeOrLoadMarshaller(config, path)
 		return marshaller, unmarshaller, nil
 
 	case reflect.Ptr:
@@ -494,7 +511,7 @@ func getMarshalFunctions(rType reflect.Type, config marshal.Default, j *Marshall
 	return nil, nil, fmt.Errorf("unsupported type %v", rType.String())
 }
 
-func interfaceMarshaller(config marshal.Default, j *Marshaller, path string) (marshallFieldFn, unmarshallFieldFn) {
+func (j *Marshaller) storeOrLoadMarshaller(config marshal.Default, path string) (marshallFieldFn, unmarshallFieldFn) {
 	return func(interfaceType reflect.Type, ptr unsafe.Pointer, buffer *bytes.Buffer, filters *Filters) error {
 			marshaller, ok := j.cache.Load(interfaceType)
 			if ok {
@@ -789,6 +806,10 @@ func (j *Marshaller) marshalObject(p reflect.Type, ptr unsafe.Pointer, fields []
 		return nil
 	}
 
+	if j.inlinable {
+		return j.marshallers[0].marshall(p, ptr, sb, filters)
+	}
+
 	filter, _ := filterByPath(filters, path)
 	sb.WriteByte('{')
 	prevLen := sb.Len()
@@ -815,7 +836,7 @@ func (j *Marshaller) marshalObject(p reflect.Type, ptr unsafe.Pointer, fields []
 			sb.WriteByte(',')
 		}
 
-		if !stringifier.tag.Embedded && !stringifier.inline {
+		if !stringifier.tag.Embedded {
 			sb.WriteByte('"')
 			sb.WriteString(stringifier.jsonName)
 			sb.WriteString(`":`)
@@ -924,18 +945,22 @@ func (j *Marshaller) stringifyNonPrimitive(rType reflect.Type) (marshallObjFn, e
 		return j.marshalObject, nil
 	case reflect.Slice:
 		return j.storeOrLoadSliceMarshaller(rType.Elem())
-	default:
+	case reflect.Interface:
 		xType := GetXType(rType)
 		return func(parentType reflect.Type, ptr unsafe.Pointer, fields []*fieldMarshaller, sb *bytes.Buffer, filters *Filters, path string) error {
-			asIface := Interface(xType, ptr)
-			ifaceMarshal, err := goJson.Marshal(asIface)
-			if err != nil {
-				return err
-			}
-			sb.Write(ifaceMarshal)
-			return nil
+			value := Interface(xType, ptr)
+			marshaller, _ := j.storeOrLoadMarshaller(j.config, path)
+			return marshaller(reflect.TypeOf(value), xunsafe.AsPointer(value), sb, filters)
 		}, nil
 	}
+
+	if len(j.marshallers) == 1 {
+		return func(parentType reflect.Type, ptr unsafe.Pointer, fields []*fieldMarshaller, sb *bytes.Buffer, filters *Filters, path string) error {
+			return j.marshallers[0].marshall(parentType, ptr, sb, filters)
+		}, nil
+	}
+
+	return nil, fmt.Errorf("can't marshal %v", rType.String())
 }
 
 func (j *Marshaller) storeOrLoadSliceMarshaller(rType reflect.Type) (marshallObjFn, error) {
@@ -1128,7 +1153,7 @@ func (j *Marshaller) mapMarshaller(rType reflect.Type, tag *DefaultTag, path str
 						buffer.WriteString(",")
 					}
 					counter++
-					marshallerFn, _ := interfaceMarshaller(j.config, j, path)
+					marshallerFn, _ := j.storeOrLoadMarshaller(j.config, path)
 					buffer.WriteString(`"`)
 					buffer.WriteString(namesCaseIndex.FormatTo(aKey, j.config.CaseFormat))
 					buffer.WriteString(`":`)
@@ -1149,6 +1174,33 @@ func (j *Marshaller) mapMarshaller(rType reflect.Type, tag *DefaultTag, path str
 	}
 
 	return nil, nil, fmt.Errorf("unsupported map type %v", rType.String())
+}
+
+func (j *Marshaller) groupFields(elemType reflect.Type) *groupedFields {
+	result := &groupedFields{}
+	numField := elemType.NumField()
+
+	for i := 0; i < numField; i++ {
+		structField := elemType.Field(i)
+		xTag := ParseXTag("", structField.Tag.Get(XTagName))
+		isRegularField := true
+
+		if xTag.Inline {
+			isRegularField = false
+			result.inlinable = append(result.inlinable, structField)
+		}
+
+		if structField.Tag.Get(IndexKey) != "" {
+			isRegularField = false
+			result.presenceFields = append(result.presenceFields, structField)
+		}
+
+		if isRegularField {
+			result.regularFields = append(result.regularFields, structField)
+		}
+	}
+
+	return result
 }
 
 func Interface(xType *xunsafe.Type, pointer unsafe.Pointer) interface{} {
