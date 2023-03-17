@@ -14,5 +14,10 @@
     "ID": 3,
     "OBJECT": "{\"Id\": 1,\"Items\": [0,\"125\",250,\"275\"]}",
     "CLASS_NAME": "com.class.Bar"
+  },
+  {
+    "ID": 4,
+    "OBJECT": "[{\"Id\": 1,\"Items\": [0,\"125\",250,\"275\"]}]",
+    "CLASS_NAME": "com.class.Bar"
   }
 ]

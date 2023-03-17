@@ -1,4 +1,4 @@
-/* {"URI":"json-codec"} */
+/* {"URI":"json-codec/"} */
 
 import (
 	"regression/cases/042_json_codec.Foo"     as   "com.class.Foo"

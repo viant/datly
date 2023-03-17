@@ -77,8 +77,10 @@ func (j *JSONParsers) Value(ctx context.Context, raw interface{}, options ...int
 		return nil, err
 	}
 
+	if strings.HasPrefix(strings.TrimSpace(aString), "[") {
+		rType = reflect.SliceOf(rType)
+	}
 	result := reflect.New(rType)
-
 	if err := j.unmarshalIfNotEmpty(aString, result); err != nil {
 		return nil, err
 	}
