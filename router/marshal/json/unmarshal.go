@@ -1,8 +1,6 @@
 package json
 
 import (
-	"bytes"
-	"fmt"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -11,10 +9,10 @@ import (
 
 type (
 	decoder struct {
-		marshaller *Marshaller
 		ptr        unsafe.Pointer
 		path       string
 		xType      *xunsafe.Type
+		marshaller *StructMarshaller
 	}
 
 	sliceDecoder struct {
@@ -22,24 +20,15 @@ type (
 		ptr      unsafe.Pointer
 		appender *xunsafe.Appender
 		fn       unmarshallFieldFn
-		xType    *xunsafe.Type
-		isPtr    bool
-	}
-
-	presenceUpdater struct {
-		xField *xunsafe.Field
-		fields map[string]*xunsafe.Field
 	}
 )
 
-func newSliceDecoder(rType reflect.Type, ptr unsafe.Pointer, xslice *xunsafe.Slice, unmarshaller unmarshallFieldFn, xType *xunsafe.Type) *sliceDecoder {
+func newSliceDecoder(rType reflect.Type, ptr unsafe.Pointer, xslice *xunsafe.Slice, unmarshaller unmarshallFieldFn) *sliceDecoder {
 	return &sliceDecoder{
 		rType:    rType,
 		ptr:      ptr,
 		appender: xslice.Appender(ptr),
 		fn:       unmarshaller,
-		xType:    xType,
-		isPtr:    xType.Kind() == reflect.Ptr,
 	}
 }
 
@@ -55,12 +44,12 @@ type Fieldx struct {
 }
 
 func (d *decoder) UnmarshalJSONObject(decoder *gojay.Decoder, fieldName string) error {
-	marshaller, ok := d.marshaller.marshalerByName(fieldName)
+	marshaller, ok := d.marshaller.marshallerByName(fieldName)
 	if !ok {
 		return nil
 	}
 
-	if err := marshaller.unmarshal(marshaller.xField.Type, marshaller.xField.Pointer(d.ptr), decoder, nil); err != nil {
+	if err := marshaller.marshaller.UnmarshallObject(marshaller.xField.Type, marshaller.xField.Pointer(d.ptr), decoder, nil); err != nil {
 		return err
 	}
 
@@ -68,7 +57,7 @@ func (d *decoder) UnmarshalJSONObject(decoder *gojay.Decoder, fieldName string) 
 	return nil
 }
 
-func (d *decoder) updatePresenceIfNeeded(marshaller *fieldMarshaller) {
+func (d *decoder) updatePresenceIfNeeded(marshaller *MarshallerWithField) {
 	updater := marshaller.indexUpdater
 	if updater == nil {
 		return
@@ -88,50 +77,11 @@ func (d *decoder) NKeys() int {
 }
 
 func (j *Marshaller) Unmarshal(data []byte, dest interface{}) error {
-	err := j.unmarshal(data, dest)
-	return err
-}
-
-func (j *Marshaller) unmarshal(data []byte, dest interface{}) error {
-	rValue := reflect.ValueOf(dest)
-	if rValue.Kind() != reflect.Ptr {
-		return fmt.Errorf("unsupported dest type, expected Ptr, got %T", dest)
+	rType := reflect.TypeOf(dest).Elem()
+	marshaller, err := j.cache.LoadMarshaller(rType, j.config, "", "", &DefaultTag{})
+	if err != nil {
+		return err
 	}
 
-	d := gojay.NewDecoder(bytes.NewReader(data))
-
-	elemType := rValue.Elem().Type()
-	switch elemType.Kind() {
-	case reflect.Struct:
-		return j.unmarshalElem(elemType, xunsafe.AsPointer(dest), d, nil)
-	case reflect.Slice:
-		return j.unmarshalArr(elemType, xunsafe.AsPointer(dest), d, nil)
-	}
-
-	return d.Decode(dest)
-}
-
-func (j *Marshaller) newStructDecoder(path string, dest unsafe.Pointer, xType *xunsafe.Type) gojay.UnmarshalerJSONObject {
-
-	if j.indexUpdater != nil {
-		indexPtr := j.indexUpdater.xField.ValuePointer(dest)
-		if indexPtr == nil {
-			var rValue reflect.Value
-			if j.indexUpdater.xField.Type.Kind() == reflect.Ptr {
-				rValue = reflect.New(j.indexUpdater.xField.Type.Elem())
-			} else {
-				rValue = reflect.New(j.indexUpdater.xField.Type)
-			}
-
-			iface := rValue.Interface()
-			j.indexUpdater.xField.SetValue(dest, iface)
-		}
-	}
-
-	return &decoder{
-		marshaller: j,
-		xType:      xType,
-		ptr:        dest,
-		path:       path,
-	}
+	return marshaller.UnmarshallObject(rType, xunsafe.AsPointer(dest), nil, nil)
 }

@@ -2,9 +2,13 @@ package json
 
 import (
 	"bytes"
+	"encoding/json"
 	"github.com/viant/toolbox/format"
+	"reflect"
 	"sync"
 )
+
+var rawMessageType = reflect.TypeOf(json.RawMessage{})
 
 func init() {
 	ResetCache()
@@ -20,8 +24,8 @@ func ResetCache() {
 	}
 
 	bufferPool.Put(bufferPool.Get())
-	typesPool = &TypesRegistry{
-		aMap: sync.Map{},
+	typesPool = &TypesPool{
+		xtypesMap: sync.Map{},
 	}
 
 	namesCaseIndex = &NamesCaseIndex{registry: map[format.Case]map[string]string{}}
