@@ -39,7 +39,7 @@ func (t *TimeMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Poi
 	return nil
 }
 
-func (t *TimeMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (t *TimeMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
 	aTime := xunsafe.AsTime(ptr)
 	return appendTime(sb, &aTime, t.tag, t.timeFormat)
 }

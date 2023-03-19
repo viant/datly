@@ -8,7 +8,6 @@ import (
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/json"
-	"github.com/viant/toolbox"
 	"github.com/viant/toolbox/format"
 	"reflect"
 	"testing"
@@ -142,15 +141,39 @@ func TestJson_Marshal(t *testing.T) {
 				CaseFormat: format.CaseLowerCamel,
 			},
 		},
+		{
+			description: "interface slice",
+			expect:      `{"ID":1,"Name":"abc","MgrId":0,"AccountId":2,"Team":[{"ID":10,"Name":"xx","MgrId":0,"AccountId":2,"Team":[]}]}`,
+			data: func() interface{} {
+				type Member struct {
+					ID        int
+					Name      string
+					MgrId     int
+					AccountId int
+					Team      []interface{}
+				}
+
+				return &Member{
+					ID:        1,
+					Name:      "abc",
+					AccountId: 2,
+					Team: []interface{}{
+						&Member{
+							ID:        10,
+							Name:      "xx",
+							AccountId: 2,
+						},
+					},
+				}
+			},
+		},
 	}
 
-	//for i, testcase := range testcases[:len(testcases)-1] {
-	//for i, testcase := range testcases[len(testcases)-1:] {
+	//	for i, testcase := range testcases[len(testcases)-1:] {
 	for i, testcase := range testcases {
 		json.ResetCache()
 		tests.LogHeader(fmt.Sprintf("Running testcase nr: %v out of %v \n ", i, len(testcases)-1))
 		data := testcase.data()
-
 		dataType := reflect.TypeOf(data)
 		if dataType.Kind() == reflect.Slice {
 			dataType = dataType.Elem()
@@ -161,26 +184,20 @@ func TestJson_Marshal(t *testing.T) {
 			t.Fail()
 			return
 		}
-
 		result, err := marshaller.Marshal(data, testcase.filters)
 		if !assert.Nil(t, err, testcase.description) {
 			t.Fail()
 			return
 		}
-
-		expected := new(interface{})
-		if !assert.Nil(t, goJson.Unmarshal([]byte(testcase.expect), expected), testcase.description) {
+		if string(result) == testcase.expect {
 			continue
 		}
+		if !assertly.AssertValues(t, testcase.expect, string(result), testcase.description) {
+			fmt.Println(string(result))
+			fmt.Println(string(testcase.expect))
 
-		actual := new(interface{})
-		if !assert.Nil(t, goJson.Unmarshal(result, actual), testcase.description) {
-			continue
 		}
 
-		if !assertly.AssertValues(t, expected, actual, testcase.description) {
-			toolbox.Dump(string(result))
-		}
 	}
 }
 

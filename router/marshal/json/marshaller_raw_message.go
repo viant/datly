@@ -17,7 +17,7 @@ func NewRawMessageMarshaller() *RawMessageMarshaller {
 func (r *RawMessageMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	bytesPtr := xunsafe.AsBytesPtr(pointer)
 	dst := ""
-	if err := mainDecoder.DecodeString(&dst); err != nil {
+	if err := mainDecoder.String(&dst); err != nil {
 		return err
 	}
 
@@ -25,7 +25,7 @@ func (r *RawMessageMarshaller) UnmarshallObject(rType reflect.Type, pointer unsa
 	return nil
 }
 
-func (r *RawMessageMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (r *RawMessageMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
 	aBytes := xunsafe.AsBytesPtr(ptr)
 	if aBytes == nil {
 		sb.Write(nullBytes)

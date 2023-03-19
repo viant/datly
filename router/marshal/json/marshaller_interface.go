@@ -10,13 +10,14 @@ import (
 )
 
 type InterfaceMarshaller struct {
-	rType      reflect.Type
-	config     marshal.Default
-	path       string
-	outputPath string
-	tag        *DefaultTag
-	cache      *Cache
-	xType      *xunsafe.Type
+	rType       reflect.Type
+	config      marshal.Default
+	path        string
+	outputPath  string
+	tag         *DefaultTag
+	cache       *Cache
+	xType       *xunsafe.Type
+	actualXType *xunsafe.Type
 }
 
 func NewInterfaceMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *Cache) (*InterfaceMarshaller, error) {
@@ -44,13 +45,22 @@ func Interface(xType *xunsafe.Type, pointer unsafe.Pointer) interface{} {
 	return xType.Interface(pointer)
 }
 
-func (i *InterfaceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
-	value := Interface(i.xType, ptr)
-	rType = reflect.TypeOf(value)
+func (i *InterfaceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
+	var value interface{}
+	if rType.Kind() == reflect.Interface {
+		value = Interface(i.xType, ptr)
+		rType = reflect.TypeOf(value)
+	} else {
+		if i.actualXType == nil || i.actualXType.Type() != rType {
+			i.actualXType = xunsafe.NewType(rType)
+		}
+		value = i.actualXType.Value(ptr)
+
+	}
 	marshaller, err := i.cache.LoadMarshaller(rType, i.config, i.path, i.outputPath, i.tag)
 	if err != nil {
 		return err
 	}
-
-	return marshaller.MarshallObject(rType, xunsafe.AsPointer(value), sb, filters)
+	err = marshaller.MarshallObject(rType, xunsafe.AsPointer(value), sb, filters)
+	return err
 }

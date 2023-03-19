@@ -12,7 +12,7 @@ import (
 type PtrMarshaller struct {
 	rType     reflect.Type
 	marshaler Marshaler
-	isPtrLike bool
+	needDeref bool
 	xType     *xunsafe.Type
 }
 
@@ -22,23 +22,27 @@ func NewPtrMarshaller(rType reflect.Type, config marshal.Default, path string, o
 	if err != nil {
 		return nil, err
 	}
-
 	return &PtrMarshaller{
 		xType:     GetXType(rType),
-		isPtrLike: IsPtrLike(elem),
+		needDeref: false,
 		rType:     rType,
 		marshaler: marshaller,
 	}, err
 }
 
-func (i *PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
-	if ptr != nil && i.isPtrLike {
+func (i *PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
+
+	if ptr != nil && i.needDeref {
 		ptr = xunsafe.DerefPointer(ptr)
 	}
 
 	if ptr == nil {
-		sb.Write(nullBytes)
-		return nil
+		if tag := MarshallOptions(opts).DefaultTag(); tag != nil && tag._value != nil {
+			ptr = xunsafe.AsPointer(tag._value)
+		} else {
+			sb.Write(nullBytes)
+			return nil
+		}
 	}
 
 	return i.marshaler.MarshallObject(rType, ptr, sb, filters)
@@ -54,18 +58,24 @@ func (i *PtrMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Poin
 		if err := mainDecoder.EmbeddedJSON(embeddedJSON); err != nil {
 			return err
 		}
-
 		if bytes.Equal(*embeddedJSON, nullBytes) {
 			return nil
 		}
-
 		nullDecoder = gojay.NewDecoder(bytes.NewReader(*embeddedJSON))
 	}
-
 	return i.marshaler.UnmarshallObject(rType, xunsafe.SafeDerefPointer(pointer, rType), nullDecoder, nullDecoder)
 }
 
-func IsPtrLike(rType reflect.Type) bool {
+func IsBasicKind(kind reflect.Kind) bool {
+	switch kind {
+	case reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Float32, reflect.Float64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Bool:
+		return true
+	}
+	return false
+}
+
+func IsRegularPtr(rType reflect.Type) bool {
 	switch rType.Kind() {
 	case reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Float32, reflect.Float64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Bool, reflect.Struct:

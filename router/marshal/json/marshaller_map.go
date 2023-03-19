@@ -53,7 +53,7 @@ func (m *MapMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Poin
 	return fmt.Errorf("unsupported unmarshall to map type, yet")
 }
 
-func (m *MapMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (m *MapMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
 	if m.discoveredMarshaller != nil {
 		return m.discoveredMarshaller(rType, ptr, sb, filters)
 	}

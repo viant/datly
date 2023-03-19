@@ -83,10 +83,10 @@ func (s *StructMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.P
 		path:       s.path,
 	}
 
-	return mainDecoder.DecodeObject(d)
+	return mainDecoder.Object(d)
 }
 
-func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
 	if ptr == nil {
 		sb.WriteString(null)
 		return nil
@@ -106,7 +106,7 @@ func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer
 
 		objPtr := ptr
 		if stringifier.indirectXField != nil {
-			objPtr = stringifier.indirectXField.Pointer(objPtr)
+			objPtr = stringifier.indirectXField.ValuePointer(objPtr)
 		}
 
 		value := stringifier.xField.Value(objPtr)
@@ -126,21 +126,12 @@ func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer
 		}
 
 		fieldType := stringifier.xField.Type
-
 		prevLen = sb.Len()
-		if rType.Kind() == reflect.Interface {
-			if valuePtr, ok := value.(*interface{}); ok {
-				value = *valuePtr
-			}
-			rType = reflect.TypeOf(value)
-			if err := stringifier.marshaller.MarshallObject(fieldType, xunsafe.AsPointer(value), sb, filters); err != nil {
-				return err
-			}
-		} else {
-			if err := stringifier.marshaller.MarshallObject(fieldType, stringifier.xField.ValuePointer(objPtr), sb, filters); err != nil {
-				return err
-			}
+
+		if err := stringifier.marshaller.MarshallObject(fieldType, stringifier.xField.ValuePointer(objPtr), sb, filters, stringifier.tag); err != nil {
+			return err
 		}
+
 	}
 
 	sb.WriteByte('}')

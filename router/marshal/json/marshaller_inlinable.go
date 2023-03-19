@@ -18,7 +18,12 @@ type (
 )
 
 func NewInlinableMarshaller(field reflect.StructField, config marshal.Default, path, outputPath string, dTag *DefaultTag, cache *Cache) (*InlinableMarshaller, error) {
-	marshaler, err := cache.LoadMarshaller(field.Type.Elem(), config, path, outputPath, dTag)
+	fieldType := field.Type
+	if fieldType.Kind() == reflect.Ptr {
+		fieldType = fieldType.Elem()
+	}
+
+	marshaler, err := cache.LoadMarshaller(fieldType, config, path, outputPath, dTag)
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +35,7 @@ func NewInlinableMarshaller(field reflect.StructField, config marshal.Default, p
 	}, nil
 }
 
-func (i *InlinableMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *InlinableMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
 	value := i.accessor.Value(ptr)
 	return i.marshaler.MarshallObject(i.rType, xunsafe.AsPointer(value), sb, filters)
 }

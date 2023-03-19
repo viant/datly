@@ -35,7 +35,7 @@ func (s *SliceMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Po
 	return mainDecoder.Array(newSliceDecoder(rType.Elem(), pointer, s.xslice, s.marshaller.UnmarshallObject))
 }
 
-func (s *SliceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (s *SliceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
 	sliceHeader := (*reflect.SliceHeader)(ptr)
 	if s != nil && sliceHeader.Data == 0 {
 		sb.WriteString("[]")
@@ -54,7 +54,6 @@ func (s *SliceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer,
 		if s.isInterfaceSlice {
 			elemType = reflect.TypeOf(valueAt)
 		}
-
 		if err := s.marshaller.MarshallObject(elemType, xunsafe.AsPointer(valueAt), sb, filters); err != nil {
 			return err
 		}

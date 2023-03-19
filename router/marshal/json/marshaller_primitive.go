@@ -45,11 +45,7 @@ func (p *PrimitiveMarshaller) UnmarshallObject(rType reflect.Type, pointer unsaf
 	return p.unmarshaller(rType, pointer, mainDecoder, nullDecoder)
 }
 
-func (p *PrimitiveMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
-	if p.tag._value != nil {
-
-	}
-
+func (p *PrimitiveMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
 	return p.marshaller(rType, ptr, sb, filters)
 }
 
