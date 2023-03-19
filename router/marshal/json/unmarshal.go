@@ -1,6 +1,7 @@
 package json
 
 import (
+	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -44,15 +45,21 @@ type Fieldx struct {
 }
 
 func (d *decoder) UnmarshalJSONObject(decoder *gojay.Decoder, fieldName string) error {
+
 	marshaller, ok := d.marshaller.marshallerByName(fieldName)
 	if !ok {
 		return nil
 	}
 
-	if err := marshaller.marshaller.UnmarshallObject(marshaller.xField.Type, marshaller.xField.Pointer(d.ptr), decoder, nil); err != nil {
+	fieldType := marshaller.xField.Type
+	if fieldType.Kind() == reflect.Ptr {
+		fieldPtr := marshaller.xField.Pointer(d.ptr)
+		xunsafe.SafeDerefPointer(fieldPtr, fieldType)
+	}
+	fieldPtr := marshaller.xField.ValuePointer(d.ptr)
+	if err := marshaller.marshaller.UnmarshallObject(marshaller.xField.Type, fieldPtr, decoder, nil); err != nil {
 		return err
 	}
-
 	d.updatePresenceIfNeeded(marshaller)
 	return nil
 }
@@ -82,6 +89,7 @@ func (j *Marshaller) Unmarshal(data []byte, dest interface{}) error {
 	if err != nil {
 		return err
 	}
-
-	return marshaller.UnmarshallObject(rType, xunsafe.AsPointer(dest), nil, nil)
+	dec := gojay.NewDecoder(bytes.NewReader(data))
+	err = marshaller.UnmarshallObject(rType, xunsafe.AsPointer(dest), dec, nil)
+	return err
 }

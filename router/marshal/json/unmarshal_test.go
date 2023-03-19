@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
 	"github.com/viant/datly/router/marshal"
+	"github.com/viant/toolbox"
 	"reflect"
 	"testing"
 )
@@ -35,12 +36,12 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 			description: "basic slice",
 			data:        `[{"Name": "Foo", "ID": 1},{"Name": "Boo", "ID": 2}]`,
 			into: func() interface{} {
-				type Foo struct {
+				type Foo1 struct {
 					ID   int
 					Name string
 				}
 
-				return &[]*Foo{}
+				return &[]*Foo1{}
 			},
 		},
 		{
@@ -240,22 +241,76 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 				return &Foo{}
 			},
 		},
-	}
+		{
+			description:  "broken case 17",
+			data:         ` {"Name":"017_"}`,
+			expect:       `{"Id":0,"Name":"017_"}`,
+			stringsEqual: true,
+			into: func() interface{} {
 
-	//for i, testCase := range testCases[len(testCases)-1:] {
-	for i, testCase := range testCases {
+				rType := reflect.TypeOf(struct {
+					Id       int     "sqlx:\"name=ID,autoincrement,primaryKey,required\""
+					Name     *string "sqlx:\"name=NAME\" json:\",omitempty\""
+					Quantity *int    "sqlx:\"name=QUANTITY\" json:\",omitempty\""
+					Has      *struct {
+						Id       bool
+						Name     bool
+						Quantity bool
+					} "presenceIndex:\"true\" typeName:\"EventsHas\" json:\"-\" sqlx:\"presence=true\""
+				}{})
+				v := reflect.New(rType)
+				return v.Interface()
+			},
+		},
+		{
+			description:  "broken case 17",
+			data:         ` {"data":null}`,
+			expect:       `{"Id":0,"Name":"017_"}`,
+			stringsEqual: true,
+			into: func() interface{} {
+
+				rType := reflect.TypeOf(struct {
+					Data *struct {
+						Id       int     "sqlx:\"name=ID,autoincrement,primaryKey,required\""
+						Name     *string "sqlx:\"name=NAME\" json:\",omitempty\""
+						Quantity *int    "sqlx:\"name=QUANTITY\" json:\",omitempty\""
+						Has      *struct {
+							Id       bool
+							Name     bool
+							Quantity bool
+						} "presenceIndex:\"true\" typeName:\"EventsHas\" json:\"-\" sqlx:\"presence=true\""
+					}
+				}{})
+				v := reflect.New(rType)
+				return v.Interface()
+			},
+		},
+		/*
+
+		*struct { Data *struct { Id int "sqlx:\"name=ID,autoincrement,primaryKey,required\""; Name *string "sqlx:\"name=NAME\" json:\",omitempty\""; Quantity *int "sqlx:\"name=QUANTITY\" json:\",omitempty\""; Has *struct { Id bool; Name bool; Quantity bool } "presenceIndex:\"true\" typeName:\"EventsHas\" json:\"-\" sqlx:\"presence=true\"" } } &{Data:<nil>}
+
+		 */
+	}
+	/*
+	*struct { Id int "sqlx:\"name=ID,autoincrement,primaryKey,required\""; Name *string "sqlx:\"name=NAME\" json:\",omitempty\""; Quantity *int "sqlx:\"name=QUANTITY\" json:\",omitempty\""; Has *struct { Id bool; Name bool; Quantity bool } "presenceIndex:\"true\" typeName:\"EventsHas\" json:\"-\" sqlx:\"presence=true\"" } &{Id:0 Name:0xc000ce2c01 Quantity:0x4 Has:0xc0004f1b49}
+
+
+
+	 */
+	for i, testCase := range testCases[len(testCases)-1:] {
+		//for i, testCase := range testCases {
 		fmt.Printf("Running testcase nr#%v\n", i)
-		dest := testCase.into()
-		marshaller, err := New(reflect.TypeOf(dest), marshal.Default{})
+		actual := testCase.into()
+
+		marshaller, err := New(reflect.TypeOf(actual).Elem(), marshal.Default{})
 		if !assert.Nil(t, err, testCase.description) {
 			continue
 		}
-
-		marshalErr := marshaller.Unmarshal([]byte(testCase.data), dest)
-
+		marshalErr := marshaller.Unmarshal([]byte(testCase.data), actual)
 		if (!testCase.expectError && !assert.Nil(t, err, testCase.description)) || (testCase.expectError && assert.NotNil(t, marshalErr, testCase.description)) {
 			continue
 		}
+		toolbox.Dump(actual)
 
 		expect := testCase.expect
 		if testCase.expect == "" {
@@ -263,9 +318,14 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 		}
 
 		if !testCase.stringsEqual {
-			assertly.AssertValues(t, expect, dest, testCase.description)
+			if !assertly.AssertValues(t, expect, actual, testCase.description) {
+				bytes, _ := json.Marshal(actual)
+				fmt.Printf("%s\n", bytes)
+				fmt.Printf("%s\n", expect)
+
+			}
 		} else {
-			bytes, _ := json.Marshal(dest)
+			bytes, _ := json.Marshal(actual)
 			assert.Equal(t, expect, string(bytes), testCase.description)
 		}
 	}

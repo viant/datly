@@ -18,7 +18,7 @@ func (r Types) Register(name string, rType reflect.Type) {
 func (r Types) Lookup(name string) (reflect.Type, error) {
 	rType, ok := r[name]
 	if !ok {
-		return nil, fmt.Errorf("not found type %v", name)
+		return nil, fmt.Errorf("not found type %v at Types", name)
 	}
 
 	return rType, nil

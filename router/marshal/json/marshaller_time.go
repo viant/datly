@@ -31,7 +31,7 @@ func NewTimeMarshaller(tag *DefaultTag, config marshal.Default) *TimeMarshaller 
 	}
 }
 
-func (t *TimeMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (t *TimeMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder, opts ...Option) error {
 	aTime := xunsafe.AsTimePtr(pointer)
 	if err := mainDecoder.AddTime(aTime, t.timeFormat); err != nil {
 		return err
@@ -39,7 +39,7 @@ func (t *TimeMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Poi
 	return nil
 }
 
-func (t *TimeMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
+func (t *TimeMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...Option) error {
 	aTime := xunsafe.AsTime(ptr)
 	return appendTime(sb, &aTime, t.tag, t.timeFormat)
 }

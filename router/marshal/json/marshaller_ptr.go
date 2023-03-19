@@ -12,7 +12,6 @@ import (
 type PtrMarshaller struct {
 	rType     reflect.Type
 	marshaler Marshaler
-	needDeref bool
 	xType     *xunsafe.Type
 }
 
@@ -24,35 +23,27 @@ func NewPtrMarshaller(rType reflect.Type, config marshal.Default, path string, o
 	}
 	return &PtrMarshaller{
 		xType:     GetXType(rType),
-		needDeref: false,
 		rType:     rType,
 		marshaler: marshaller,
 	}, err
 }
 
-func (i *PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
-
-	if ptr != nil && i.needDeref {
-		ptr = xunsafe.DerefPointer(ptr)
-	}
-
+func (i *PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...Option) error {
 	if ptr == nil {
-		if tag := MarshallOptions(opts).DefaultTag(); tag != nil && tag._value != nil {
+		if tag := Options(opts).DefaultTag(); tag != nil && tag._value != nil {
 			ptr = xunsafe.AsPointer(tag._value)
 		} else {
 			sb.Write(nullBytes)
 			return nil
 		}
 	}
-
 	return i.marshaler.MarshallObject(rType, ptr, sb, filters)
 }
 
-func (i *PtrMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *PtrMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder, opts ...Option) error {
 	if pointer == nil {
 		return nil
 	}
-
 	if nullDecoder == nil {
 		embeddedJSON := &gojay.EmbeddedJSON{}
 		if err := mainDecoder.EmbeddedJSON(embeddedJSON); err != nil {
@@ -63,7 +54,7 @@ func (i *PtrMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Poin
 		}
 		nullDecoder = gojay.NewDecoder(bytes.NewReader(*embeddedJSON))
 	}
-	return i.marshaler.UnmarshallObject(rType, xunsafe.SafeDerefPointer(pointer, rType), nullDecoder, nullDecoder)
+	return i.marshaler.UnmarshallObject(rType, pointer, nullDecoder, nullDecoder, opts...)
 }
 
 func IsBasicKind(kind reflect.Kind) bool {
@@ -73,14 +64,4 @@ func IsBasicKind(kind reflect.Kind) bool {
 		return true
 	}
 	return false
-}
-
-func IsRegularPtr(rType reflect.Type) bool {
-	switch rType.Kind() {
-	case reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Float32, reflect.Float64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Bool, reflect.Struct:
-		return false
-	default:
-		return true
-	}
 }

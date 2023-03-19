@@ -49,11 +49,11 @@ func NewMapMarshaller(rType reflect.Type, config marshal.Default, path string, o
 	return result, nil
 }
 
-func (m *MapMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (m *MapMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder, opts ...Option) error {
 	return fmt.Errorf("unsupported unmarshall to map type, yet")
 }
 
-func (m *MapMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
+func (m *MapMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...Option) error {
 	if m.discoveredMarshaller != nil {
 		return m.discoveredMarshaller(rType, ptr, sb, filters)
 	}

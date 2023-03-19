@@ -35,12 +35,16 @@ func NewInlinableMarshaller(field reflect.StructField, config marshal.Default, p
 	}, nil
 }
 
-func (i *InlinableMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
+func (i *InlinableMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...Option) error {
 	value := i.accessor.Value(ptr)
-	return i.marshaler.MarshallObject(i.rType, xunsafe.AsPointer(value), sb, filters)
+	fType := i.rType
+	if i.accessor.Kind() == reflect.Interface {
+		fType = reflect.TypeOf(value)
+	}
+	return i.marshaler.MarshallObject(fType, xunsafe.AsPointer(value), sb, filters)
 }
 
-func (i *InlinableMarshaller) UnmarshallObject(rType reflect.Type, ptr unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *InlinableMarshaller) UnmarshallObject(rType reflect.Type, ptr unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder, opts ...Option) error {
 	aValue := i.accessor.Value(ptr)
-	return i.marshaler.UnmarshallObject(rType, xunsafe.AsPointer(aValue), mainDecoder, nullDecoder)
+	return i.marshaler.UnmarshallObject(rType, xunsafe.AsPointer(aValue), mainDecoder, nullDecoder, opts...)
 }

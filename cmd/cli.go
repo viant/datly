@@ -10,6 +10,7 @@ import (
 	"github.com/viant/afs/modifier"
 	"github.com/viant/datly/auth/jwt"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/router"
@@ -19,6 +20,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"reflect"
 	"strings"
 )
 
@@ -98,6 +100,13 @@ func normalizeMetaTemplateSQL(SQL string, holderViewName string) string {
 }
 
 func NewBuilder(options *Options, logger io.Writer) (*Builder, error) {
+	res := view.NewResource(map[string]reflect.Type{
+		"RawMessage":      reflect.TypeOf(json.RawMessage{}),
+		"json.RawMessage": reflect.TypeOf(json.RawMessage{}),
+	})
+	config.Config.OverrideTypes("json", map[string]reflect.Type{
+		"RawMessage": reflect.TypeOf(json.RawMessage{}),
+	})
 	builder := &Builder{
 		options:    options,
 		tablesMeta: NewTableMetaRegistry(),
@@ -106,7 +115,7 @@ func NewBuilder(options *Options, logger io.Writer) (*Builder, error) {
 		routeBuilder: &routeBuilder{
 			views: map[string]*view.View{},
 			routerResource: &router.Resource{
-				Resource: view.EmptyResource(),
+				Resource: res,
 			},
 			paramsIndex: NewParametersIndex(nil, nil),
 			option: &option.RouteConfig{

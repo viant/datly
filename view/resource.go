@@ -612,7 +612,7 @@ func (r *Resource) LookupType(packageIdentifier, packageName, typeName string) (
 
 func (r *Resource) typeNotFound(packageName string, typeName string) error {
 	if packageName == "" {
-		return fmt.Errorf("not found type %v", typeName)
+		return fmt.Errorf("not found type %v at Resource", typeName)
 	}
 
 	return fmt.Errorf("not found type %v under %v package", typeName, packageName)

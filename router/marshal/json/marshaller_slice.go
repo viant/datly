@@ -31,11 +31,11 @@ func NewSliceMarshaller(rType reflect.Type, config marshal.Default, path string,
 	}, err
 }
 
-func (s *SliceMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (s *SliceMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder, opts ...Option) error {
 	return mainDecoder.Array(newSliceDecoder(rType.Elem(), pointer, s.xslice, s.marshaller.UnmarshallObject))
 }
 
-func (s *SliceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
+func (s *SliceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...Option) error {
 	sliceHeader := (*reflect.SliceHeader)(ptr)
 	if s != nil && sliceHeader.Data == 0 {
 		sb.WriteString("[]")
@@ -49,12 +49,12 @@ func (s *SliceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer,
 		if i != 0 {
 			sb.WriteByte(',')
 		}
-
 		valueAt := s.xslice.ValueAt(ptr, i)
+		valuePtr := xunsafe.AsPointer(valueAt)
 		if s.isInterfaceSlice {
 			elemType = reflect.TypeOf(valueAt)
 		}
-		if err := s.marshaller.MarshallObject(elemType, xunsafe.AsPointer(valueAt), sb, filters); err != nil {
+		if err := s.marshaller.MarshallObject(elemType, valuePtr, sb, filters); err != nil {
 			return err
 		}
 

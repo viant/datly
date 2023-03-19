@@ -32,7 +32,7 @@ func NewInterfaceMarshaller(rType reflect.Type, config marshal.Default, path str
 	}, nil
 }
 
-func (i *InterfaceMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *InterfaceMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder, opts ...Option) error {
 	iface := Interface(i.xType, pointer)
 	return mainDecoder.AddInterface(&iface)
 }
@@ -45,8 +45,9 @@ func Interface(xType *xunsafe.Type, pointer unsafe.Pointer) interface{} {
 	return xType.Interface(pointer)
 }
 
-func (i *InterfaceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
+func (i *InterfaceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...Option) error {
 	var value interface{}
+
 	if rType.Kind() == reflect.Interface {
 		value = Interface(i.xType, ptr)
 		rType = reflect.TypeOf(value)
@@ -55,8 +56,8 @@ func (i *InterfaceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Poin
 			i.actualXType = xunsafe.NewType(rType)
 		}
 		value = i.actualXType.Value(ptr)
-
 	}
+
 	marshaller, err := i.cache.LoadMarshaller(rType, i.config, i.path, i.outputPath, i.tag)
 	if err != nil {
 		return err

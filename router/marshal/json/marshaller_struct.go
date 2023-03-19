@@ -7,6 +7,7 @@ import (
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
+	"strings"
 	"unsafe"
 )
 
@@ -60,7 +61,7 @@ func NewStructMarshaller(config marshal.Default, rType reflect.Type, path string
 	return result, result.init()
 }
 
-func (s *StructMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (s *StructMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder, opts ...Option) error {
 	if s.indexUpdater != nil {
 		indexPtr := s.indexUpdater.xField.ValuePointer(pointer)
 		if indexPtr == nil {
@@ -86,7 +87,10 @@ func (s *StructMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.P
 	return mainDecoder.Object(d)
 }
 
-func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...MarshallOption) error {
+var err error
+var errType = reflect.TypeOf(&err).Elem()
+
+func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...Option) error {
 	if ptr == nil {
 		sb.WriteString(null)
 		return nil
@@ -99,6 +103,7 @@ func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer
 	filter, _ := filterByPath(filters, s.path)
 	sb.WriteByte('{')
 	prevLen := sb.Len()
+
 	for _, stringifier := range s.marshallers {
 		if isExcluded(filter, stringifier.fieldName, s.config, stringifier.path) {
 			continue
@@ -113,6 +118,15 @@ func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer
 		isZeroVal := isZeroValue(objPtr, stringifier, value)
 		if stringifier.omitEmpty && isZeroVal {
 			continue
+		}
+
+		if stringifier.xField.Type.Kind() == reflect.Interface {
+			if isZeroVal || value == nil {
+				continue
+			}
+			if stringifier.xField.Type.AssignableTo(errType) { //skip if error type
+				continue
+			}
 		}
 
 		if prevLen != sb.Len() {
@@ -174,6 +188,7 @@ func (s *StructMarshaller) init() error {
 
 	for i, marshaller := range marshallers {
 		s.marshallersIndex[marshaller.jsonName] = i
+		s.marshallersIndex[strings.ToLower(marshaller.jsonName)] = i
 	}
 
 	s.marshallers = marshallers
@@ -274,7 +289,10 @@ func (s *StructMarshaller) newFieldMarshaller(marshallers *[]*MarshallerWithFiel
 func (s *StructMarshaller) marshallerByName(name string) (*MarshallerWithField, bool) {
 	index, ok := s.marshallersIndex[name]
 	if !ok {
-		return nil, false
+		index, ok = s.marshallersIndex[strings.ToLower(name)]
+		if !ok {
+			return nil, false
+		}
 	}
 
 	return s.marshallers[index], true
