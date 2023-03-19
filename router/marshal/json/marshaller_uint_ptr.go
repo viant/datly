@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -31,7 +30,7 @@ func NewUintPtrMarshaller(dTag *DefaultTag) *UintPtrMarshaller {
 	}
 }
 
-func (i *UintPtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
+func (i *UintPtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	intPtr := xunsafe.AsUintAddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
 		sb.WriteString(i.defaultValue)
@@ -67,7 +66,7 @@ func NewUint8PtrMarshaller(tag *DefaultTag) *Uint8PtrMarshaller {
 	}
 }
 
-func (i *Uint8PtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
+func (i *Uint8PtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	intPtr := xunsafe.AsUint8AddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
 		sb.WriteString(i.defaultValue)
@@ -103,7 +102,7 @@ func NewUint16PtrMarshaller(dTag *DefaultTag) *Uint16PtrMarshaller {
 	}
 }
 
-func (i *Uint16PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *Uint16PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	intPtr := xunsafe.AsUint16AddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
 		sb.WriteString(i.zeroValue)
@@ -139,7 +138,7 @@ func NewUint32PtrMarshaller(dTag *DefaultTag) *Uint32PtrMarshaller {
 	}
 }
 
-func (i *Uint32PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *Uint32PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	intPtr := xunsafe.AsUint32AddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
 		sb.WriteString(i.zeroValue)
@@ -175,7 +174,7 @@ func NewUint64PtrMarshaller(dTag *DefaultTag) *Uint64PtrMarshaller {
 	}
 }
 
-func (i *Uint64PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *Uint64PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	intPtr := xunsafe.AsUint64AddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
 		sb.WriteString(i.zeroValue)

@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/xunsafe"
@@ -32,13 +31,13 @@ func NewInlinableMarshaller(field reflect.StructField, config marshal.Default, p
 	}, nil
 }
 
-func (i *InlinableMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *InlinableMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	value := i.accessor.Value(ptr)
 	if i.isIface {
 		rType = reflect.TypeOf(value)
 	}
 
-	return i.marshaler.MarshallObject(rType, xunsafe.AsPointer(value), sb, filters)
+	return i.marshaler.MarshallObject(rType, xunsafe.AsPointer(value), sb)
 }
 
 func (i *InlinableMarshaller) UnmarshallObject(rType reflect.Type, ptr unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {

@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -26,7 +25,7 @@ func NewBoolMarshaller(dTag *DefaultTag) *BoolMarshaller {
 	}
 }
 
-func (i *BoolMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
+func (i *BoolMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	aBool := xunsafe.AsBoolPtr(ptr)
 	if aBool == nil || !*aBool {
 		sb.WriteString(i.zeroValue)
@@ -41,7 +40,7 @@ func (i *BoolMarshaller) UnmarshallObject(_ reflect.Type, pointer unsafe.Pointer
 	return mainDecoder.AddBool(xunsafe.AsBoolPtr(pointer))
 }
 
-func marshallBool(b bool, sb *bytes.Buffer) {
+func marshallBool(b bool, sb *Session) {
 	if b {
 		sb.WriteString(`true`)
 	} else {

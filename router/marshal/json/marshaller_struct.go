@@ -1,11 +1,9 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/toolbox/format"
-	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -92,23 +90,22 @@ func (s *StructMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.P
 		path:       s.path,
 	}
 
-	return mainDecoder.Object(d)
+	return mainDecoder.DecodeObject(d)
 }
 
-func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	if ptr == nil {
 		sb.WriteString(null)
 		return nil
 	}
 
 	if s.inlinableMarshaller != nil {
-		return s.inlinableMarshaller.MarshallObject(rType, ptr, sb, filters)
+		return s.inlinableMarshaller.MarshallObject(rType, ptr, sb)
 	}
 
-	filter, _ := filterByPath(filters, s.path)
+	filter, _ := filterByPath(sb.Filters, s.path)
 	sb.WriteByte('{')
 	prevLen := sb.Len()
-
 	for _, stringifier := range s.marshallers {
 		if isExcluded(filter, stringifier.fieldName, s.config, stringifier.path) {
 			continue
@@ -125,15 +122,6 @@ func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer
 			continue
 		}
 
-		if stringifier.xField.Type.Kind() == reflect.Interface {
-			if isZeroVal || value == nil {
-				continue
-			}
-			if stringifier.xField.Type.AssignableTo(xreflect.ErrorType) { //skip if error type
-				continue
-			}
-		}
-
 		if prevLen != sb.Len() {
 			sb.WriteByte(',')
 		}
@@ -145,13 +133,20 @@ func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer
 		}
 
 		fieldType := stringifier.xField.Type
-
 		prevLen = sb.Len()
-
-		if err := stringifier.marshaller.MarshallObject(fieldType, stringifier.xField.ValuePointer(objPtr), sb, filters, stringifier.tag); err != nil {
-			return err
+		if fieldType.Kind() == reflect.Interface {
+			if valuePtr, ok := value.(*interface{}); ok {
+				value = *valuePtr
+			}
+			fieldType = reflect.TypeOf(value)
+			if err := stringifier.marshaller.MarshallObject(fieldType, xunsafe.AsPointer(value), sb); err != nil {
+				return err
+			}
+		} else {
+			if err := stringifier.marshaller.MarshallObject(fieldType, stringifier.xField.Pointer(objPtr), sb); err != nil {
+				return err
+			}
 		}
-
 	}
 
 	sb.WriteByte('}')
@@ -194,7 +189,6 @@ func (s *StructMarshaller) init() error {
 
 	for i, marshaller := range marshallers {
 		s.marshallersIndex[marshaller.jsonName] = i
-		s.marshallersIndex[strings.ToLower(marshaller.jsonName)] = i
 	}
 
 	s.marshallers = marshallers

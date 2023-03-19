@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -31,7 +30,7 @@ func NewStringPtrMarshaller(dTag *DefaultTag) *StringPtrMarshaller {
 	}
 }
 
-func (i *StringPtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
+func (i *StringPtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	strPtr := xunsafe.AsStringAddrPtr(ptr)
 	if strPtr == nil || *strPtr == nil {
 		sb.WriteString(i.defaultValue)

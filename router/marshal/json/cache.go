@@ -131,6 +131,10 @@ func (c *PathCache) GetMarshaller(rType reflect.Type, config marshal.Default, pa
 }
 
 func (c *PathCache) getMarshaler(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag) (Marshaler, error) {
+	if tag == nil {
+		tag = &DefaultTag{}
+	}
+
 	switch rType.Kind() {
 	case reflect.Ptr:
 		marshaller, err := NewPtrMarshaller(rType, config, path, outputPath, tag, c.parent)
@@ -149,13 +153,6 @@ func (c *PathCache) getMarshaler(rType reflect.Type, config marshal.Default, pat
 		}
 
 		marshaller, err := NewSliceMarshaller(rType, config, path, outputPath, tag, c.parent)
-		if err != nil {
-			return nil, err
-		}
-
-		return marshaller, nil
-	case reflect.Map:
-		marshaller, err := NewMapMarshaller(rType, config, path, outputPath, tag, c.parent)
 		if err != nil {
 			return nil, err
 		}

@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -30,7 +29,7 @@ func formatFloat(zeroValue float64) string {
 	return strconv.FormatFloat(zeroValue, 'f', -1, 64)
 }
 
-func (i *Float32Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *Float32Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	asFloat32 := xunsafe.AsFloat32(ptr)
 	if asFloat32 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -61,7 +60,7 @@ func NewFloat64Marshaller(dTag *DefaultTag) *Float64Marshaller {
 	}
 }
 
-func (i *Float64Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *Float64Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	asFloat64 := xunsafe.AsFloat64(ptr)
 	if asFloat64 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -71,11 +70,11 @@ func (i *Float64Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointe
 	return appendFloat(asFloat64, false, i.dTag, sb)
 }
 
-func (i *Float64Marshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *Float64Marshaller) UnmarshallObject(_ reflect.Type, pointer unsafe.Pointer, decoder *gojay.Decoder, _ *gojay.Decoder) error {
 	return decoder.AddFloat64((*float64)((pointer)))
 }
 
-func appendFloat(f float64, wasNull bool, tag *DefaultTag, sb *bytes.Buffer) error {
+func appendFloat(f float64, wasNull bool, tag *DefaultTag, sb *Session) error {
 	if wasNull {
 		sb.WriteString(null)
 		return nil

@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -30,7 +29,7 @@ func NewStringMarshaller(dTag *DefaultTag) *StringMarshaller {
 	}
 }
 
-func (i *StringMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
+func (i *StringMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	asString := xunsafe.AsString(ptr)
 	if asString == "" {
 		sb.WriteString(i.defaultValue)
@@ -45,7 +44,7 @@ func (i *StringMarshaller) UnmarshallObject(_ reflect.Type, pointer unsafe.Point
 	return mainDecoder.AddString(xunsafe.AsStringPtr(pointer))
 }
 
-func marshallString(asString string, sb *bytes.Buffer) {
+func marshallString(asString string, sb *Session) {
 	asString = strings.TrimFunc(asString, func(r rune) bool {
 		return !unicode.IsGraphic(r)
 	})

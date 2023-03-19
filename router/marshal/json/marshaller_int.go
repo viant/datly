@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -26,7 +25,7 @@ func NewIntMarshaller(dTag *DefaultTag) *IntMarshaller {
 	}
 }
 
-func (i *IntMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
+func (i *IntMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	asInt := xunsafe.AsInt(ptr)
 	if asInt == 0 {
 		sb.WriteString(i.defaultValue)
@@ -57,7 +56,7 @@ func NewInt8Marshaller(tag *DefaultTag) *Int8Marshaller {
 	}
 }
 
-func (i *Int8Marshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
+func (i *Int8Marshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	asInt8 := xunsafe.AsInt8(ptr)
 	if asInt8 == 0 {
 		sb.WriteString(i.defaultValue)
@@ -88,7 +87,7 @@ func NewInt16Marshaller(dTag *DefaultTag) *Int16Marshaller {
 	}
 }
 
-func (i *Int16Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *Int16Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	asInt16 := xunsafe.AsInt16(ptr)
 	if asInt16 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -119,7 +118,7 @@ func NewInt32Marshaller(dTag *DefaultTag) *Int32Marshaller {
 	}
 }
 
-func (i *Int32Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *Int32Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	asInt32 := xunsafe.AsInt32(ptr)
 	if asInt32 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -150,7 +149,7 @@ func NewInt64Marshaller(dTag *DefaultTag) *Int64Marshaller {
 	}
 }
 
-func (i *Int64Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *Int64Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	asInt64 := xunsafe.AsInt64(ptr)
 	if asInt64 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -164,7 +163,7 @@ func (i *Int64Marshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Po
 	return decoder.AddInt64((*int64)(pointer))
 }
 
-func appendInt(value int, sb *bytes.Buffer) error {
+func appendInt(value int, sb *Session) error {
 	//dest := sb.Next(64)
 	//appended := strconv.AppendInt(dest, int64(value), 10)
 	sb.WriteString(strconv.Itoa(value))

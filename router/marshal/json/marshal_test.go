@@ -1094,8 +1094,8 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 		},
 		{
 			description:  "broken case 17",
-			data:         ` {"data":null}`,
-			expect:       `{"Id":0,"Name":"017_"}`,
+			data:         `{"data":null}`,
+			expect:       `{"Data":null}`,
 			stringsEqual: true,
 			into: func() interface{} {
 
@@ -1120,13 +1120,13 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 	//for i, testCase := range testCases[len(testCases)-1:] {
 	for i, testCase := range testCases {
 		fmt.Printf("Running testcase nr#%v\n", i)
-		dest := testCase.into()
-		marshaller, err := json.New(reflect.TypeOf(dest), marshal.Default{})
+		actual := testCase.into()
+		marshaller, err := json.New(reflect.TypeOf(actual), marshal.Default{})
 		if !assert.Nil(t, err, testCase.description) {
 			continue
 		}
 
-		marshalErr := marshaller.Unmarshal([]byte(testCase.data), dest)
+		marshalErr := marshaller.Unmarshal([]byte(testCase.data), actual)
 
 		if (!testCase.expectError && !assert.Nil(t, err, testCase.description)) || (testCase.expectError && assert.NotNil(t, marshalErr, testCase.description)) {
 			continue

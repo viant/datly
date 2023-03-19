@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/xunsafe"
@@ -51,7 +50,7 @@ func (s *SliceMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Po
 	return mainDecoder.Array(newSliceDecoder(rType.Elem(), pointer, s.xslice, s.marshaller))
 }
 
-func (s *SliceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (s *SliceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	sliceHeader := (*reflect.SliceHeader)(ptr)
 	if s != nil && sliceHeader.Data == 0 {
 		sb.WriteString("[]")
@@ -67,7 +66,7 @@ func (s *SliceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer,
 		}
 
 		valuePtr := s.xslice.PointerAt(ptr, uintptr(i))
-		if err := s.marshaller.MarshallObject(elemType, valuePtr, sb, filters); err != nil {
+		if err := s.marshaller.MarshallObject(elemType, valuePtr, sb); err != nil {
 			return err
 		}
 
@@ -101,7 +100,7 @@ func NewSliceInterfaceMarshaller(config marshal.Default, path string, outputPath
 	}
 }
 
-func (s *SliceInterfaceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (s *SliceInterfaceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	ifaces := xunsafe.AsInterfaces(ptr)
 
 	sb.WriteByte('[')
@@ -120,7 +119,7 @@ func (s *SliceInterfaceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe
 			return err
 		}
 
-		if err = marshaller.MarshallObject(ifaceType, xunsafe.AsPointer(iface), sb, filters); err != nil {
+		if err = marshaller.MarshallObject(ifaceType, xunsafe.AsPointer(iface), sb); err != nil {
 			return err
 		}
 	}

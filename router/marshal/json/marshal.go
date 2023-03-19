@@ -28,7 +28,7 @@ func New(rType reflect.Type, config marshal.Default) (*Marshaller, error) {
 		cache:  NewCache(),
 		config: marshal.Default{},
 	}
-	_, err := m.cache.LoadMarshaller(rType, config, "", "", &DefaultTag{})
+	_, err := m.cache.LoadMarshaller(rType, config, "", "", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func New(rType reflect.Type, config marshal.Default) (*Marshaller, error) {
 	return m, nil
 }
 
-func (j *Marshaller) Marshal(value interface{}, filters *Filters) ([]byte, error) {
+func (j *Marshaller) Marshal(value interface{}, filters *Filters, options ...interface{}) ([]byte, error) {
 	if value == nil {
 		return []byte(null), nil
 	}
@@ -47,7 +47,13 @@ func (j *Marshaller) Marshal(value interface{}, filters *Filters) ([]byte, error
 	}
 
 	buffer := bufferPool.Get()
-	if err = marshaller.MarshallObject(rType, xunsafe.AsPointer(value), buffer, filters); err != nil {
+
+	session := &Session{
+		Filters: filters,
+		Buffer:  buffer,
+	}
+
+	if err = marshaller.MarshallObject(rType, xunsafe.AsPointer(value), session); err != nil {
 		return nil, err
 	}
 
@@ -58,7 +64,7 @@ func (j *Marshaller) Marshal(value interface{}, filters *Filters) ([]byte, error
 	return output, nil
 }
 
-func (j *Marshaller) Unmarshal(data []byte, dest interface{}) error {
+func (j *Marshaller) Unmarshal(data []byte, dest interface{}, options ...interface{}) error {
 	rType := reflect.TypeOf(dest).Elem()
 
 	marshaler, err := j.marshaller(rType)
@@ -72,9 +78,5 @@ func (j *Marshaller) Unmarshal(data []byte, dest interface{}) error {
 }
 
 func (j *Marshaller) marshaller(rType reflect.Type) (Marshaler, error) {
-	if rType.Kind() == reflect.Ptr {
-		return j.cache.LoadMarshaller(rType.Elem(), j.config, "", "", nil)
-	}
-
-	return j.cache.LoadMarshaller(rType, j.config, "", "", nil)
+	return j.cache.ElemMarshallerIfNeeded(rType, j.config, "", "", nil)
 }

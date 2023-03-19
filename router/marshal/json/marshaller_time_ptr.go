@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/xunsafe"
@@ -59,7 +58,7 @@ func (t *TimePtrMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.
 	return nil
 }
 
-func (t *TimePtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (t *TimePtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	aTime := xunsafe.AsTimeAddrPtr(ptr)
 	if aTime == nil || *aTime == nil {
 		sb.WriteString(t.zeroValue)

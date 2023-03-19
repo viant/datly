@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -30,7 +29,7 @@ func NewFloat32PtrMarshaller(dTag *DefaultTag) *Float32PtrMarshaller {
 	}
 }
 
-func (i *Float32PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *Float32PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	f32Ptr := xunsafe.AsFloat32AddrPtr(ptr)
 	if f32Ptr == nil || *f32Ptr == nil {
 		sb.WriteString(i.zeroValue)
@@ -66,7 +65,7 @@ func NewFloat64PtrMarshaller(dTag *DefaultTag) *Float64PtrMarshaller {
 	}
 }
 
-func (i *Float64PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *Float64PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	f32Ptr := xunsafe.AsFloat64AddrPtr(ptr)
 	if f32Ptr == nil || *f32Ptr == nil {
 		sb.WriteString(i.zeroValue)

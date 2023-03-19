@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/xunsafe"
@@ -39,7 +38,7 @@ func NewTimeMarshaller(tag *DefaultTag, config marshal.Default) *TimeMarshaller 
 	}
 }
 
-func (t *TimeMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder, opts ...Option) error {
+func (t *TimeMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	aTime := xunsafe.AsTimePtr(pointer)
 	if err := mainDecoder.AddTime(aTime, t.timeFormat); err != nil {
 		return err
@@ -47,7 +46,7 @@ func (t *TimeMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Poi
 	return nil
 }
 
-func (t *TimeMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...Option) error {
+func (t *TimeMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	aTime := xunsafe.AsTime(ptr)
 	if aTime.IsZero() {
 		sb.WriteString(t.zeroValue)
@@ -57,7 +56,7 @@ func (t *TimeMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, 
 	return appendTime(sb, aTime, t.timeFormat)
 }
 
-func appendTime(sb *bytes.Buffer, aTime time.Time, timeFormat string) error {
+func appendTime(sb *Session, aTime time.Time, timeFormat string) error {
 	sb.WriteByte('"')
 	sb.WriteString(aTime.Format(timeFormat))
 	sb.WriteByte('"')

@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/xunsafe"
@@ -44,7 +43,7 @@ func Interface(xType *xunsafe.Type, pointer unsafe.Pointer) interface{} {
 	return xType.Interface(pointer)
 }
 
-func (i *InterfaceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *InterfaceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	value := Interface(GetXType(rType), ptr)
 	marshaller, err := i.cache.LoadMarshaller(rType, i.config, i.path, i.outputPath, i.tag)
 	if err != nil {
@@ -56,5 +55,5 @@ func (i *InterfaceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Poin
 		ptr = xunsafe.RefPointer(ptr)
 	}
 
-	return marshaller.MarshallObject(rType, ptr, sb, filters)
+	return marshaller.MarshallObject(rType, ptr, sb)
 }

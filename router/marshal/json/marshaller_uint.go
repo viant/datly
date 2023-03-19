@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -26,7 +25,7 @@ func NewUintMarshaller(dTag *DefaultTag) *UintMarshaller {
 	}
 }
 
-func (i *UintMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
+func (i *UintMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	asUint := xunsafe.AsUint(ptr)
 	if asUint == 0 {
 		sb.WriteString(i.defaultValue)
@@ -57,7 +56,7 @@ func NewUint8Marshaller(tag *DefaultTag) *Uint8Marshaller {
 	}
 }
 
-func (i *Uint8Marshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
+func (i *Uint8Marshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	asUint8 := xunsafe.AsUint8(ptr)
 	if asUint8 == 0 {
 		sb.WriteString(i.defaultValue)
@@ -88,7 +87,7 @@ func NewUint16Marshaller(dTag *DefaultTag) *Uint16Marshaller {
 	}
 }
 
-func (i *Uint16Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *Uint16Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	asUint16 := xunsafe.AsUint16(ptr)
 	if asUint16 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -119,7 +118,7 @@ func NewUint32Marshaller(dTag *DefaultTag) *Uint32Marshaller {
 	}
 }
 
-func (i *Uint32Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *Uint32Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	asUint32 := xunsafe.AsUint32(ptr)
 	if asUint32 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -150,7 +149,7 @@ func NewUint64Marshaller(dTag *DefaultTag) *Uint64Marshaller {
 	}
 }
 
-func (i *Uint64Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *Uint64Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	asUint64 := xunsafe.AsUint64(ptr)
 	if asUint64 == 0 {
 		sb.WriteString(i.zeroValue)

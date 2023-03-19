@@ -36,7 +36,7 @@ func NewPtrMarshaller(rType reflect.Type, config marshal.Default, path string, o
 	}, err
 }
 
-func (i *PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+func (i *PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	ptr = xunsafe.DerefPointer(ptr)
 
 	if ptr == nil {
@@ -44,7 +44,7 @@ func (i *PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, s
 		return nil
 	}
 
-	return i.marshaler.MarshallObject(rType, ptr, sb, filters)
+	return i.marshaler.MarshallObject(rType, ptr, sb)
 }
 
 func (i *PtrMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {

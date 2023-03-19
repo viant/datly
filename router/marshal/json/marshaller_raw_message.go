@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -17,7 +16,7 @@ func NewRawMessageMarshaller() *RawMessageMarshaller {
 func (r *RawMessageMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	bytesPtr := xunsafe.AsBytesPtr(pointer)
 	dst := ""
-	if err := mainDecoder.String(&dst); err != nil {
+	if err := mainDecoder.DecodeString(&dst); err != nil {
 		return err
 	}
 
@@ -25,8 +24,8 @@ func (r *RawMessageMarshaller) UnmarshallObject(rType reflect.Type, pointer unsa
 	return nil
 }
 
-func (r *RawMessageMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
-	aBytes := xunsafe.AsBytesPtr(ptr)
+func (r *RawMessageMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+	aBytes := (*[]byte)(ptr)
 	if aBytes == nil {
 		sb.Write(nullBytes)
 		return nil

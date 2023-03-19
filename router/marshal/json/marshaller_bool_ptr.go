@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -31,7 +30,7 @@ func NewBoolPtrMarshaller(dTag *DefaultTag) *BoolPtrMarshaller {
 	}
 }
 
-func (i *BoolPtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, _ *Filters) error {
+func (i *BoolPtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	asBoolPtr := xunsafe.AsBoolAddrPtr(ptr)
 	if asBoolPtr == nil || *asBoolPtr == nil {
 		sb.WriteString(i.zeroValue)
