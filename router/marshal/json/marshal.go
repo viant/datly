@@ -1,6 +1,8 @@
 package json
 
 import (
+	"bytes"
+	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -39,7 +41,7 @@ func (j *Marshaller) Marshal(value interface{}, filters *Filters) ([]byte, error
 		return []byte(null), nil
 	}
 	rType := reflect.TypeOf(value)
-	marshaller, err := j.cache.LoadMarshaller(rType, j.config, "", "", &DefaultTag{})
+	marshaller, err := j.marshaller(rType)
 	if err != nil {
 		return nil, err
 	}
@@ -54,4 +56,25 @@ func (j *Marshaller) Marshal(value interface{}, filters *Filters) ([]byte, error
 	bufferPool.Put(buffer)
 
 	return output, nil
+}
+
+func (j *Marshaller) Unmarshal(data []byte, dest interface{}) error {
+	rType := reflect.TypeOf(dest).Elem()
+
+	marshaler, err := j.marshaller(rType)
+	if err != nil {
+		return err
+	}
+
+	aDecoder := gojay.BorrowDecoder(bytes.NewReader(data))
+	defer aDecoder.Release()
+	return marshaler.UnmarshallObject(rType, xunsafe.AsPointer(dest), aDecoder, nil)
+}
+
+func (j *Marshaller) marshaller(rType reflect.Type) (Marshaler, error) {
+	if rType.Kind() == reflect.Ptr {
+		return j.cache.LoadMarshaller(rType.Elem(), j.config, "", "", nil)
+	}
+
+	return j.cache.LoadMarshaller(rType, j.config, "", "", nil)
 }

@@ -10,14 +10,13 @@ import (
 )
 
 type InterfaceMarshaller struct {
-	rType       reflect.Type
-	config      marshal.Default
-	path        string
-	outputPath  string
-	tag         *DefaultTag
-	cache       *Cache
-	xType       *xunsafe.Type
-	actualXType *xunsafe.Type
+	rType      reflect.Type
+	config     marshal.Default
+	path       string
+	outputPath string
+	tag        *DefaultTag
+	cache      *Cache
+	xType      *xunsafe.Type
 }
 
 func NewInterfaceMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *Cache) (*InterfaceMarshaller, error) {
@@ -32,7 +31,7 @@ func NewInterfaceMarshaller(rType reflect.Type, config marshal.Default, path str
 	}, nil
 }
 
-func (i *InterfaceMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder, opts ...Option) error {
+func (i *InterfaceMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	iface := Interface(i.xType, pointer)
 	return mainDecoder.AddInterface(&iface)
 }
@@ -45,23 +44,17 @@ func Interface(xType *xunsafe.Type, pointer unsafe.Pointer) interface{} {
 	return xType.Interface(pointer)
 }
 
-func (i *InterfaceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...Option) error {
-	var value interface{}
-
-	if rType.Kind() == reflect.Interface {
-		value = Interface(i.xType, ptr)
-		rType = reflect.TypeOf(value)
-	} else {
-		if i.actualXType == nil || i.actualXType.Type() != rType {
-			i.actualXType = xunsafe.NewType(rType)
-		}
-		value = i.actualXType.Value(ptr)
-	}
-
+func (i *InterfaceMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
+	value := Interface(GetXType(rType), ptr)
 	marshaller, err := i.cache.LoadMarshaller(rType, i.config, i.path, i.outputPath, i.tag)
 	if err != nil {
 		return err
 	}
-	err = marshaller.MarshallObject(rType, xunsafe.AsPointer(value), sb, filters)
-	return err
+
+	ptr = xunsafe.AsPointer(value)
+	if rType.Kind() == reflect.Ptr {
+		ptr = xunsafe.RefPointer(ptr)
+	}
+
+	return marshaller.MarshallObject(rType, ptr, sb, filters)
 }

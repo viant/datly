@@ -142,6 +142,22 @@ func TestJson_Marshal(t *testing.T) {
 			},
 		},
 		{
+			description: "*json.RawMessage",
+			data:        jsonRawMessagePtr,
+			expect:      `{"id":12,"name":"Foo name","price":125.567}`,
+			defaultConfig: marshal.Default{
+				CaseFormat: format.CaseLowerCamel,
+			},
+		},
+		{
+			description: "json.RawMessage",
+			data:        jsonRawMessage,
+			expect:      `{"id":12,"name":"Foo name","price":125.567}`,
+			defaultConfig: marshal.Default{
+				CaseFormat: format.CaseLowerCamel,
+			},
+		},
+		{
 			description: "interface slice",
 			expect:      `{"ID":1,"Name":"abc","MgrId":0,"AccountId":2,"Team":[{"ID":10,"Name":"xx","MgrId":0,"AccountId":2,"Team":[]}]}`,
 			data: func() interface{} {
@@ -169,11 +185,13 @@ func TestJson_Marshal(t *testing.T) {
 		},
 	}
 
-	//	for i, testcase := range testcases[len(testcases)-1:] {
+	//for i, testcase := range testcases[:len(testcases)-1] {
+	//for i, testcase := range testcases[len(testcases)-1:] {
 	for i, testcase := range testcases {
 		json.ResetCache()
 		tests.LogHeader(fmt.Sprintf("Running testcase nr: %v out of %v \n ", i, len(testcases)-1))
 		data := testcase.data()
+
 		dataType := reflect.TypeOf(data)
 		if dataType.Kind() == reflect.Slice {
 			dataType = dataType.Elem()
@@ -184,6 +202,7 @@ func TestJson_Marshal(t *testing.T) {
 			t.Fail()
 			return
 		}
+
 		result, err := marshaller.Marshal(data, testcase.filters)
 		if !assert.Nil(t, err, testcase.description) {
 			t.Fail()
@@ -198,6 +217,36 @@ func TestJson_Marshal(t *testing.T) {
 
 		}
 
+	}
+}
+
+func jsonRawMessage() interface{} {
+	type Foo struct {
+		ID       int
+		JSONBody goJson.RawMessage `jsonx:"inline"`
+		Name     string
+	}
+
+	jsonBody := goJson.RawMessage([]byte(`{"id":12,"name":"Foo name","price":125.567}`))
+	return &Foo{
+		ID:       125,
+		Name:     "Abdef",
+		JSONBody: jsonBody,
+	}
+}
+
+func jsonRawMessagePtr() interface{} {
+	type Foo struct {
+		ID       int
+		JSONBody *goJson.RawMessage `jsonx:"inline"`
+		Name     string
+	}
+
+	jsonBody := goJson.RawMessage([]byte(`{"id":12,"name":"Foo name","price":125.567}`))
+	return &Foo{
+		ID:       125,
+		Name:     "Abdef",
+		JSONBody: &jsonBody,
 	}
 }
 
@@ -789,5 +838,315 @@ func inlinable() interface{} {
 			Name:  "Foo name",
 			Price: 125.567,
 		},
+	}
+}
+
+func TestMarshaller_Unmarshal(t *testing.T) {
+	testCases := []struct {
+		description  string
+		data         string
+		into         func() interface{}
+		expect       string
+		expectError  bool
+		stringsEqual bool
+	}{
+		{
+			description: "basic struct",
+			data:        `{"Name": "Foo", "ID": 1}`,
+			into: func() interface{} {
+				type Foo struct {
+					ID   int
+					Name string
+				}
+
+				return &Foo{}
+			},
+		},
+		{
+			description: "basic slice",
+			data:        `[{"Name": "Foo", "ID": 1},{"Name": "Boo", "ID": 2}]`,
+			into: func() interface{} {
+				type Foo struct {
+					ID   int
+					Name string
+				}
+
+				return &[]*Foo{}
+			},
+		},
+		{
+			description: "empty slice",
+			data:        `[]`,
+			into: func() interface{} {
+				type Foo struct {
+					ID   int
+					Name string
+				}
+
+				return &[]*Foo{}
+			},
+		},
+		{
+			description: "has",
+			data:        `[{"ID": 1}, {"Name": "Boo"}]`,
+			into: func() interface{} {
+				type FooHas struct {
+					ID   bool
+					Name bool
+				}
+
+				type Foo struct {
+					ID   int
+					Name string
+					Has  *FooHas `presenceIndex:"true"`
+				}
+
+				return &[]*Foo{}
+			},
+			expect: `[{"ID":1,"Name":"","Has":{"ID":true,"Name":false}},{"ID":0,"Name":"Boo","Has":{"ID":false,"Name":true}}]`,
+		},
+		{
+			description: "setting has",
+			data:        `[{"ID": 1, "Has": {"ID": true, "Name": "true"}}, {"Name": "Boo"}]`,
+			expect:      `[{"ID":1,"Name":"","Has":{"ID":true,"Name":false}},{"ID":0,"Name":"Boo","Has":{"ID":false,"Name":true}}]`,
+			into: func() interface{} {
+				type FooHas struct {
+					ID   bool
+					Name bool
+				}
+
+				type Foo struct {
+					ID   int
+					Name string
+					Has  *FooHas `presenceIndex:"true"`
+				}
+
+				return &[]*Foo{}
+			},
+		},
+		{
+			description: "setting has",
+			data:        `[{"ID": 1, "Has": {"ID": true, "Name": "true"}}, {"Name": "Boo"}]`,
+			expect:      `[{"ID":1,"Name":"","Has":{"ID":true,"Name":false}},{"ID":0,"Name":"Boo","Has":{"ID":false,"Name":true}}]`,
+			into: func() interface{} {
+				type FooHas struct {
+					ID   bool
+					Name bool
+				}
+
+				type Foo struct {
+					ID   int
+					Name string
+					Has  *FooHas `presenceIndex:"true"`
+				}
+
+				return &[]*Foo{}
+			},
+		},
+		{
+			description: "multi nesting",
+			data: `[
+	{
+		"Size": 1,
+		"Foos":[
+			{"WrapperID": 1, "WrapperName": "wrapper - 1", "Foos": [{"ID": 10, "Name": "foo - 10"}]},
+			{"WrapperID": 2, "WrapperName": "wrapper - 2", "Foos": [{"ID": 20, "Name": "foo - 20"}]}
+		]
+	}
+]`,
+			expect: `[{"Foos":[{"WrapperID":1,"WrapperName":"wrapper - 1","Foos":[{"ID":10,"Name":"foo - 10","Has":{"ID":true,"Name":true}}],"Has":{"WrapperID":true,"WrapperName":true}},{"WrapperID":2,"WrapperName":"wrapper - 2","Foos":[{"ID":20,"Name":"foo - 20","Has":{"ID":true,"Name":true}}],"Has":{"WrapperID":true,"WrapperName":true}}],"Size":1}]`,
+			into: func() interface{} {
+				type FooHas struct {
+					ID   bool
+					Name bool
+				}
+
+				type Foo struct {
+					ID   int
+					Name string
+					Has  *FooHas `presenceIndex:"true"`
+				}
+
+				type WrapperHas struct {
+					WrapperID   bool
+					WrapperName bool
+				}
+
+				type FooWrapper struct {
+					WrapperID   int
+					WrapperName string
+					Foos        []*Foo
+					Has         *WrapperHas `presenceIndex:"true"`
+				}
+
+				type Data struct {
+					Foos []*FooWrapper
+					Size int
+				}
+
+				return &[]*Data{}
+			},
+		},
+		{
+			description: "multi nesting",
+			data: `[
+	{
+		"Size": 1,
+		"Foos":[
+			{"WrapperName": "wrapper - 1", "Foos": [{"ID": 10}]},
+			{"WrapperID": 2, "Foos": [{"Name": "foo - 20"}]}
+		]
+	}
+]`,
+			expect: `[{"Foos":[{"WrapperID":0,"WrapperName":"wrapper - 1","Foos":[{"ID":10,"Name":"","Has":{"ID":true,"Name":false}}],"Has":{"WrapperID":false,"WrapperName":true}},{"WrapperID":2,"WrapperName":"","Foos":[{"ID":0,"Name":"foo - 20","Has":{"ID":false,"Name":true}}],"Has":{"WrapperID":true,"WrapperName":false}}],"Size":1}]`,
+			into: func() interface{} {
+				type FooHas struct {
+					ID   bool
+					Name bool
+				}
+
+				type Foo struct {
+					ID   int
+					Name string
+					Has  *FooHas `presenceIndex:"true"`
+				}
+
+				type WrapperHas struct {
+					WrapperID   bool
+					WrapperName bool
+				}
+
+				type FooWrapper struct {
+					WrapperID   int
+					WrapperName string
+					Foos        []*Foo
+					Has         *WrapperHas `presenceIndex:"true"`
+				}
+
+				type Data struct {
+					Foos []*FooWrapper
+					Size int
+				}
+
+				return &[]*Data{}
+			},
+		},
+		{
+			description: "primitive slice",
+			data:        `[1,2,3,4,5]`,
+			expect:      `[1,2,3,4,5]`,
+			into: func() interface{} {
+				return new([]int)
+			},
+		},
+		{
+			description:  "nulls",
+			data:         `{"ID":null,"Name":null}`,
+			stringsEqual: true,
+			into: func() interface{} {
+				type Foo struct {
+					ID   *int
+					Name *string
+				}
+
+				return &Foo{}
+			},
+		},
+		{
+			description:  "empty presence index",
+			data:         `{}`,
+			expect:       `{"Has":{"ID":false,"Name":false}}`,
+			stringsEqual: true,
+			into: func() interface{} {
+				type FooHasIndex struct {
+					ID   bool
+					Name bool
+				}
+				type Foo struct {
+					ID   *int         `json:",omitempty"`
+					Name *string      `json:",omitempty"`
+					Has  *FooHasIndex `presenceIndex:"true"`
+				}
+
+				return &Foo{}
+			},
+		},
+		{
+			description:  "broken case 17",
+			data:         ` {"Name":"017_"}`,
+			expect:       `{"Id":0,"Name":"017_"}`,
+			stringsEqual: true,
+			into: func() interface{} {
+
+				rType := reflect.TypeOf(struct {
+					Id       int     "sqlx:\"name=ID,autoincrement,primaryKey,required\""
+					Name     *string "sqlx:\"name=NAME\" json:\",omitempty\""
+					Quantity *int    "sqlx:\"name=QUANTITY\" json:\",omitempty\""
+					Has      *struct {
+						Id       bool
+						Name     bool
+						Quantity bool
+					} "presenceIndex:\"true\" typeName:\"EventsHas\" json:\"-\" sqlx:\"presence=true\""
+				}{})
+				v := reflect.New(rType)
+				return v.Interface()
+			},
+		},
+		{
+			description:  "broken case 17",
+			data:         ` {"data":null}`,
+			expect:       `{"Id":0,"Name":"017_"}`,
+			stringsEqual: true,
+			into: func() interface{} {
+
+				rType := reflect.TypeOf(struct {
+					Data *struct {
+						Id       int     "sqlx:\"name=ID,autoincrement,primaryKey,required\""
+						Name     *string "sqlx:\"name=NAME\" json:\",omitempty\""
+						Quantity *int    "sqlx:\"name=QUANTITY\" json:\",omitempty\""
+						Has      *struct {
+							Id       bool
+							Name     bool
+							Quantity bool
+						} "presenceIndex:\"true\" typeName:\"EventsHas\" json:\"-\" sqlx:\"presence=true\""
+					}
+				}{})
+				v := reflect.New(rType)
+				return v.Interface()
+			},
+		},
+	}
+
+	//for i, testCase := range testCases[len(testCases)-1:] {
+	for i, testCase := range testCases {
+		fmt.Printf("Running testcase nr#%v\n", i)
+		dest := testCase.into()
+		marshaller, err := json.New(reflect.TypeOf(dest), marshal.Default{})
+		if !assert.Nil(t, err, testCase.description) {
+			continue
+		}
+
+		marshalErr := marshaller.Unmarshal([]byte(testCase.data), dest)
+
+		if (!testCase.expectError && !assert.Nil(t, err, testCase.description)) || (testCase.expectError && assert.NotNil(t, marshalErr, testCase.description)) {
+			continue
+		}
+
+		expect := testCase.expect
+		if testCase.expect == "" {
+			expect = testCase.data
+		}
+
+		if !testCase.stringsEqual {
+			if !assertly.AssertValues(t, expect, actual, testCase.description) {
+				bytes, _ := goJson.Marshal(actual)
+				fmt.Printf("%s\n", bytes)
+				fmt.Printf("%s\n", expect)
+
+			}
+		} else {
+			bytes, _ := goJson.Marshal(actual)
+			assert.Equal(t, expect, string(bytes), testCase.description)
+		}
 	}
 }

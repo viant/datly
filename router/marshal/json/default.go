@@ -1,13 +1,13 @@
 package json
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
-	"unsafe"
 )
 
 const (
@@ -27,7 +27,6 @@ type DefaultTag struct {
 	Embedded bool
 
 	_value interface{}
-	_ptr   unsafe.Pointer
 }
 
 func NewDefaultTag(field reflect.StructField) (*DefaultTag, error) {
@@ -69,7 +68,7 @@ func (t *DefaultTag) Init(field reflect.StructField) error {
 
 	if t.Value != "" {
 		var err error
-		t._value, t._ptr, err = parseValue(field.Type, t.Value, t.Format)
+		t._value, err = parseValue(field.Type, t.Value, t.Format)
 		if err != nil {
 			return err
 		}
@@ -82,50 +81,45 @@ func booleanPtr(b bool) *bool {
 	return &b
 }
 
-func parseValue(rType reflect.Type, rawValue string, timeFormat string) (interface{}, unsafe.Pointer, error) {
-	for rType.Kind() == reflect.Ptr {
-		rType = rType.Elem()
+func parseValue(rType reflect.Type, rawValue string, timeFormat string) (interface{}, error) {
+	elemType := rType
+	var dereferenced bool
+	for elemType.Kind() == reflect.Ptr {
+		elemType = elemType.Elem()
+		dereferenced = true
 	}
 
-	switch rType.Kind() {
-	case reflect.String:
-		return rawValue, unsafe.Pointer(&rawValue), nil
+	if elemType == xreflect.TimeType {
+		if timeFormat == "" {
+			timeFormat = time.RFC3339
+		}
 
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		asInt, err := strconv.Atoi(rawValue)
+		parse, err := time.Parse(timeFormat, rawValue)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
-		return asInt, unsafe.Pointer(&asInt), nil
-
-	case reflect.Bool:
-		asBool, err := strconv.ParseBool(rawValue)
-		if err != nil {
-			return nil, nil, err
+		if dereferenced {
+			return &parse, err
 		}
-		return asBool, unsafe.Pointer(&asBool), nil
 
-	case reflect.Float64, reflect.Float32:
-		asFloat, err := strconv.ParseFloat(rawValue, 64)
-		if err != nil {
-			return nil, nil, err
-		}
-		return asFloat, unsafe.Pointer(&asFloat), nil
-
-	case reflect.Struct:
-		if xreflect.TimeType == rType {
-			asTime, err := time.Parse(timeFormat, rawValue)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			return &asTime, unsafe.Pointer(&asTime), nil
-		}
+		return parse, err
 	}
 
-	return nil, nil, fmt.Errorf("unsupported type %v", rType.String())
+	if elemType.Kind() == reflect.String {
+		rawValue = strconv.Quote(rawValue)
+	}
+
+	if dereferenced {
+		elemType = reflect.PtrTo(elemType)
+	}
+
+	rValue := reflect.New(elemType)
+	if err := json.Unmarshal([]byte(rawValue), rValue.Interface()); err != nil {
+		return nil, err
+	}
+
+	return rValue.Elem().Interface(), nil
 }
 
 func (t *DefaultTag) IsRequired() bool {

@@ -49,5 +49,8 @@ var Config = &Registry{
 			"BitBool":    reflect.TypeOf(types.BitBool(true)),
 			"RawMessage": reflect.TypeOf(json.RawMessage{}),
 		},
+		"json": {
+			"RawMessage": reflect.TypeOf(json.RawMessage{}),
+		},
 	},
 }

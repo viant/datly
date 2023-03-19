@@ -5,6 +5,7 @@ import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -45,6 +46,13 @@ type (
 		outputPath string
 		omitEmpty  bool
 	}
+
+	decoder struct {
+		ptr        unsafe.Pointer
+		path       string
+		xType      *xunsafe.Type
+		marshaller *StructMarshaller
+	}
 )
 
 func NewStructMarshaller(config marshal.Default, rType reflect.Type, path string, outputPath string, dTag *DefaultTag, cache *Cache) (*StructMarshaller, error) {
@@ -61,7 +69,7 @@ func NewStructMarshaller(config marshal.Default, rType reflect.Type, path string
 	return result, result.init()
 }
 
-func (s *StructMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder, opts ...Option) error {
+func (s *StructMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	if s.indexUpdater != nil {
 		indexPtr := s.indexUpdater.xField.ValuePointer(pointer)
 		if indexPtr == nil {
@@ -87,10 +95,7 @@ func (s *StructMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.P
 	return mainDecoder.Object(d)
 }
 
-var err error
-var errType = reflect.TypeOf(&err).Elem()
-
-func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...Option) error {
+func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters) error {
 	if ptr == nil {
 		sb.WriteString(null)
 		return nil
@@ -124,7 +129,7 @@ func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer
 			if isZeroVal || value == nil {
 				continue
 			}
-			if stringifier.xField.Type.AssignableTo(errType) { //skip if error type
+			if stringifier.xField.Type.AssignableTo(xreflect.ErrorType) { //skip if error type
 				continue
 			}
 		}
@@ -140,6 +145,7 @@ func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer
 		}
 
 		fieldType := stringifier.xField.Type
+
 		prevLen = sb.Len()
 
 		if err := stringifier.marshaller.MarshallObject(fieldType, stringifier.xField.ValuePointer(objPtr), sb, filters, stringifier.tag); err != nil {
@@ -288,14 +294,18 @@ func (s *StructMarshaller) newFieldMarshaller(marshallers *[]*MarshallerWithFiel
 
 func (s *StructMarshaller) marshallerByName(name string) (*MarshallerWithField, bool) {
 	index, ok := s.marshallersIndex[name]
-	if !ok {
-		index, ok = s.marshallersIndex[strings.ToLower(name)]
-		if !ok {
-			return nil, false
+
+	if ok {
+		return s.marshallers[index], true
+	}
+
+	for _, marshaller := range s.marshallers {
+		if strings.EqualFold(marshaller.jsonName, name) {
+			return marshaller, true
 		}
 	}
 
-	return s.marshallers[index], true
+	return nil, false
 }
 
 func formatName(jsonName string, caseFormat format.Case) string {
@@ -351,6 +361,8 @@ func isZeroValue(ptr unsafe.Pointer, stringifier *MarshallerWithField, value int
 	case reflect.Slice:
 		s := (*reflect.SliceHeader)(valuePtr)
 		return s != nil && s.Len == 0
+	case reflect.Map:
+		return reflect.ValueOf(value).Len() == 0
 	}
 
 	//this should not happen, all the cases should be covered earlier
@@ -391,4 +403,37 @@ func groupFields(elemType reflect.Type) *groupedFields {
 	}
 
 	return result
+}
+
+func (d *decoder) UnmarshalJSONObject(decoder *gojay.Decoder, fieldName string) error {
+	marshaller, ok := d.marshaller.marshallerByName(fieldName)
+	if !ok {
+		return nil
+	}
+
+	if err := marshaller.marshaller.UnmarshallObject(marshaller.xField.Type, marshaller.xField.Pointer(d.ptr), decoder, nil); err != nil {
+		return err
+	}
+
+	d.updatePresenceIfNeeded(marshaller)
+	return nil
+}
+
+func (d *decoder) updatePresenceIfNeeded(marshaller *MarshallerWithField) {
+	updater := marshaller.indexUpdater
+	if updater == nil {
+		return
+	}
+
+	xField := updater.fields[marshaller.fieldName]
+	if xField == nil {
+		return
+	}
+
+	ptr := updater.xField.ValuePointer(d.ptr)
+	xField.SetBool(ptr, true)
+}
+
+func (d *decoder) NKeys() int {
+	return len(d.marshaller.marshallers)
 }
