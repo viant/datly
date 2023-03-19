@@ -165,7 +165,8 @@ func Convert(raw string, toType reflect.Type, skipValidation bool, format string
 	dest := reflect.New(toType)
 
 	if raw != "" {
-		err = unmarshaller(options)([]byte(raw), dest.Interface())
+		unmarshall := unmarshaller(options)
+		err = unmarshall([]byte(raw), dest.Interface())
 		if err != nil {
 			return nil, false, err
 		}

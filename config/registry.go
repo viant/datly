@@ -145,7 +145,7 @@ func (r *Registry) LookupType(_, packageName string, typeName string) (reflect.T
 			typeName = packageName + "." + typeName
 		}
 
-		return nil, fmt.Errorf("not found type %v", typeName)
+		return nil, fmt.Errorf("not found type %v at Registry", typeName)
 	}
 
 	return rType, nil

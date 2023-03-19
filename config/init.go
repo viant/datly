@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/sqlx/types"
 	"github.com/viant/xdatly/types/core"
@@ -45,7 +46,8 @@ var Config = &Registry{
 	),
 	Packages: map[string]map[string]reflect.Type{
 		"types": {
-			"BitBool": reflect.TypeOf(types.BitBool(true)),
+			"BitBool":    reflect.TypeOf(types.BitBool(true)),
+			"RawMessage": reflect.TypeOf(json.RawMessage{}),
 		},
 	},
 }

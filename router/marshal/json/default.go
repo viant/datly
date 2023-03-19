@@ -2,6 +2,7 @@ package json
 
 import (
 	"fmt"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strconv"
 	"strings"
@@ -114,13 +115,13 @@ func parseValue(rType reflect.Type, rawValue string, timeFormat string) (interfa
 		return asFloat, unsafe.Pointer(&asFloat), nil
 
 	case reflect.Struct:
-		if timeType == rType {
+		if xreflect.TimeType == rType {
 			asTime, err := time.Parse(timeFormat, rawValue)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			return asTime, unsafe.Pointer(&asTime), nil
+			return &asTime, unsafe.Pointer(&asTime), nil
 		}
 	}
 

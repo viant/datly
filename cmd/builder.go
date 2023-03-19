@@ -1239,7 +1239,6 @@ func (s *Builder) loadGoTypes() error {
 				if err != nil {
 					return err
 				}
-
 				if err = s.loadGoType(typeSrc); err != nil {
 					return err
 				}

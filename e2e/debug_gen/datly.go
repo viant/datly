@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/gops/agent"
+	"github.com/viant/afs"
 	_ "github.com/viant/afs/embed"
 	_ "github.com/viant/afsc/aws"
 	_ "github.com/viant/afsc/gcp"
@@ -21,8 +24,10 @@ import (
 	"github.com/viant/toolbox"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -50,18 +55,38 @@ func (c *ConsoleWriter) Write(data []byte) (n int, err error) {
 	return len(data), nil
 }
 
+type Gen struct {
+	Name, URL, Args string
+}
+
 func main() {
-	baseDir := toolbox.CallerDirectory(3)
-	configURL := filepath.Join(baseDir, "../local/autogen/Datly/config.json")
+
+	baseDir := filepath.Join(toolbox.CallerDirectory(3), "..")
+	fmt.Printf("base: %v\n", baseDir)
+	caseName := "045_raw_json"
+	caseFolder := filepath.Join(baseDir, "local/regression/cases/", caseName)
+	gen, err := loadGen(caseFolder, caseName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	toolbox.Dump(gen)
 	os.Args = []string{"",
-		"-c=" + configURL}
+		"-N=" + gen.Name,
+		"-X=" + gen.URL,
+		"-C='dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true'",
+		"-C='dyndb|dynamodb|dynamodb://localhost:8000/us-west-1?key=dummy&secret=dummy'",
+		fmt.Sprintf("-j='%v/local/jwt/public.enc|blowfish://default'", baseDir),
+		"-w=autogen",
+	}
 	fmt.Printf("[INFO] Build time: %v\n", build.BuildTime.String())
 
+	fmt.Printf("%v\n", os.Args)
 	go func() {
 		if err := agent.Listen(agent.Options{}); err != nil {
 			log.Fatal(err)
 		}
 	}()
+	os.Chdir(path.Join(baseDir, "local"))
 
 	server, err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {
@@ -73,4 +98,21 @@ func main() {
 			log.Fatal(err.Error())
 		}
 	}
+}
+
+func loadGen(baseURL string, name string) (*Gen, error) {
+	gen := &Gen{}
+	fs := afs.New()
+	data, err := fs.DownloadWithURL(context.Background(), path.Join(baseURL, "gen.json"))
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(data, gen)
+	if err != nil {
+		return nil, err
+	}
+	caseID := name[4:]
+	gen.URL = strings.ReplaceAll(gen.URL, "$path", baseURL)
+	gen.Name = strings.ReplaceAll(gen.Name, "$tagId", caseID)
+	return gen, nil
 }
