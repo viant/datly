@@ -189,6 +189,7 @@ func (s *StructMarshaller) init() error {
 
 	for i, marshaller := range marshallers {
 		s.marshallersIndex[marshaller.jsonName] = i
+		s.marshallersIndex[strings.ToLower(marshaller.jsonName)] = i
 	}
 
 	s.marshallers = marshallers
@@ -293,10 +294,9 @@ func (s *StructMarshaller) marshallerByName(name string) (*MarshallerWithField, 
 		return s.marshallers[index], true
 	}
 
-	for _, marshaller := range s.marshallers {
-		if strings.EqualFold(marshaller.jsonName, name) {
-			return marshaller, true
-		}
+	index, ok = s.marshallersIndex[strings.ToLower(name)]
+	if ok {
+		return s.marshallers[index], true
 	}
 
 	return nil, false
