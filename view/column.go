@@ -19,6 +19,7 @@ type foo struct {
 type Column struct {
 	Name           string `json:",omitempty"`
 	DataType       string `json:",omitempty"`
+	Tag            string `json:",omitempty"`
 	Expression     string `json:",omitempty"`
 	Filterable     bool   `json:",omitempty"`
 	Nullable       bool   `json:",omitempty"`
@@ -70,7 +71,7 @@ func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, co
 		nonPtrType = nonPtrType.Elem()
 	}
 
-	if nonPtrType == nil || nonPtrType.Kind() == reflect.Interface {
+	if nonPtrType == nil || c.DataType != "" {
 		rType, err := types.GetOrParseType(resource._types.LookupType, c.DataType)
 		if err != nil && c.rType == nil {
 			return err
@@ -152,6 +153,10 @@ func (c *Column) inherit(config *ColumnConfig) {
 
 	if config.DataType != nil {
 		c.DataType = *config.DataType
+	}
+
+	if config.Tag != nil {
+		c.Tag = *config.Tag
 	}
 
 	if config.Format != nil {
@@ -282,4 +287,5 @@ type ColumnConfig struct {
 	Codec      *Codec  `json:",omitempty"`
 	DataType   *string `json:",omitempty"`
 	Format     *string `json:",omitempty"`
+	Tag        *string `json:",omitempty"`
 }

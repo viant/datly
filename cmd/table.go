@@ -32,6 +32,7 @@ type (
 		Alias    string
 		Except   []string
 		DataType string
+		Tag      string
 		Comments string
 	}
 

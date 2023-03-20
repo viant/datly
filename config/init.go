@@ -34,6 +34,7 @@ var Config = &Registry{
 	Types: map[string]reflect.Type{
 		TypeJwtTokenInfo: reflect.TypeOf(&jwt.Claims{}),
 		TypeJwtClaims:    reflect.TypeOf(jwt.Claims{}),
+		"RawMessage":     reflect.TypeOf(json.RawMessage{}),
 	},
 	Codecs: NewCodecs(
 		NewCodec(CodecKeyJwtClaim, &GCPJwtClaim{}, reflect.TypeOf(&jwt.Claims{})),

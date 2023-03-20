@@ -318,6 +318,7 @@ func appendItem(item *query.Item, result *[]*Column, route *option.RouteConfig) 
 		if err := hintToStruct(hint, column); err != nil {
 		}
 		item.DataType = column.DataType
+		item.Tag = column.Tag
 	}
 
 	if actualDataType, ok := route.Declare[item.Alias]; ok {
@@ -352,28 +353,28 @@ func getColumn(item *query.Item) (*Column, error) {
 			}
 		}
 
-		return &Column{Name: call, Alias: item.Alias, DataType: item.DataType}, nil
+		return &Column{Name: call, Alias: item.Alias, DataType: item.DataType, Tag: item.Tag}, nil
 	case *expr.Ident:
-		return &Column{Name: actual.Name, Alias: item.Alias, DataType: item.DataType}, nil
+		return &Column{Name: actual.Name, Alias: item.Alias, DataType: item.DataType, Tag: item.Tag}, nil
 	case *expr.Selector:
-		return &Column{Name: sqlparser.Stringify(actual.X), Ns: actual.Name, DataType: item.DataType, Alias: item.Alias}, nil
+		return &Column{Name: sqlparser.Stringify(actual.X), Ns: actual.Name, DataType: item.DataType, Alias: item.Alias, Tag: item.Tag}, nil
 	case *expr.Star:
 		switch star := actual.X.(type) {
 		case *expr.Ident:
-			return &Column{Name: star.Name, Except: actual.Except}, nil
+			return &Column{Name: star.Name, Except: actual.Except, Tag: item.Tag}, nil
 		case *expr.Selector:
-			return &Column{Name: sqlparser.Stringify(star.X), Ns: star.Name, Except: actual.Except, Comments: actual.Comments}, nil
+			return &Column{Name: sqlparser.Stringify(star.X), Ns: star.Name, Except: actual.Except, Comments: actual.Comments, Tag: item.Tag}, nil
 		}
 	case *expr.Literal:
-		return &Column{Name: "", Alias: item.Alias, DataType: actual.Kind}, nil
+		return &Column{Name: "", Alias: item.Alias, DataType: actual.Kind, Tag: item.Tag}, nil
 	case *expr.Binary:
 		enExpr := sqlparser.Stringify(actual)
 		if item.DataType == "" || (strings.Contains(enExpr, "+") || strings.Contains(enExpr, "-") || strings.Contains(enExpr, "/") || strings.Contains(enExpr, "*")) {
 			item.DataType = "float64"
 		}
-		return &Column{Name: enExpr, Alias: item.Alias, DataType: item.DataType}, nil
+		return &Column{Name: enExpr, Alias: item.Alias, DataType: item.DataType, Tag: item.Tag}, nil
 	case *expr.Parenthesis:
-		return &Column{Name: sqlparser.Stringify(actual), Alias: item.Alias, DataType: item.DataType}, nil
+		return &Column{Name: sqlparser.Stringify(actual), Alias: item.Alias, DataType: item.DataType, Tag: item.Tag}, nil
 	}
 	return nil, fmt.Errorf("invalid type: %T", item.Expr)
 }

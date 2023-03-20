@@ -126,6 +126,13 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 			aTag = sqlxTag + " " + defaultTag
 		}
 
+		if columns[i].Tag != "" {
+			if aTag != "" {
+				aTag += " "
+			}
+			aTag += columns[i].Tag
+		}
+
 		aField := c.newField(aTag, columnName, viewCaseFormat, rType)
 		structFields = append(structFields, aField)
 	}
