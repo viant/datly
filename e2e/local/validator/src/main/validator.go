@@ -104,10 +104,10 @@ func (h *handler) validateEventPerfs(request *http.Request) (int, []byte) {
 
 func (h *handler) transformIntoPerfData(request *http.Request) (int, []byte) {
 	content, err := ioutil.ReadAll(request.Body)
+	defer request.Body.Close()
 	if err != nil {
 		return 500, nil
 	}
-
 	result := &PerformanceBody{}
 	if err := json.Unmarshal(content, &result); err != nil {
 		return 500, nil

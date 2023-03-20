@@ -14,7 +14,7 @@ pipeline:
       immuneToHangups: true
       env:
         TEST: 1
-      command: ./datly -c=$appPath/e2e/local/autogen/Datly/config.json > /tmp/datly.out
+      command: ulimit -Sn 10000 && ./datly -c=$appPath/e2e/local/autogen/Datly/config.json > /tmp/datly.out
 
   validator:
     stop:
