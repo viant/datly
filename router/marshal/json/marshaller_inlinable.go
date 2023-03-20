@@ -1,7 +1,6 @@
 package json
 
 import (
-	"bytes"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/xunsafe"
@@ -14,16 +13,12 @@ type (
 		accessor  *xunsafe.Field
 		rType     reflect.Type
 		marshaler Marshaler
+		isIface   bool
 	}
 )
 
 func NewInlinableMarshaller(field reflect.StructField, config marshal.Default, path, outputPath string, dTag *DefaultTag, cache *Cache) (*InlinableMarshaller, error) {
-	fieldType := field.Type
-	if fieldType.Kind() == reflect.Ptr {
-		fieldType = fieldType.Elem()
-	}
-
-	marshaler, err := cache.LoadMarshaller(fieldType, config, path, outputPath, dTag)
+	marshaler, err := cache.ElemMarshallerIfNeeded(field.Type, config, path, outputPath, dTag)
 	if err != nil {
 		return nil, err
 	}
@@ -31,20 +26,25 @@ func NewInlinableMarshaller(field reflect.StructField, config marshal.Default, p
 	return &InlinableMarshaller{
 		marshaler: marshaler,
 		accessor:  xunsafe.NewField(field),
+		isIface:   field.Type.Kind() == reflect.Interface,
 		rType:     field.Type,
 	}, nil
 }
 
-func (i *InlinableMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *bytes.Buffer, filters *Filters, opts ...Option) error {
+func (i *InlinableMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
 	value := i.accessor.Value(ptr)
-	fType := i.rType
-	if i.accessor.Kind() == reflect.Interface {
-		fType = reflect.TypeOf(value)
+	if i.isIface {
+		rType = reflect.TypeOf(value)
 	}
-	return i.marshaler.MarshallObject(fType, xunsafe.AsPointer(value), sb, filters)
+
+	return i.marshaler.MarshallObject(rType, xunsafe.AsPointer(value), sb)
 }
 
-func (i *InlinableMarshaller) UnmarshallObject(rType reflect.Type, ptr unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder, opts ...Option) error {
+func (i *InlinableMarshaller) UnmarshallObject(rType reflect.Type, ptr unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	aValue := i.accessor.Value(ptr)
-	return i.marshaler.UnmarshallObject(rType, xunsafe.AsPointer(aValue), mainDecoder, nullDecoder, opts...)
+	if i.isIface {
+		rType = reflect.TypeOf(aValue)
+	}
+
+	return i.marshaler.UnmarshallObject(rType, xunsafe.AsPointer(aValue), mainDecoder, nullDecoder)
 }

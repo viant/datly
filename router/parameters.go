@@ -155,9 +155,11 @@ func (p *RequestParams) unmarshaller(route *Route) (*Marshaller, error) {
 	}
 
 	return &Marshaller{
-		unmarshal: route._inputMarshaller.Unmarshal,
-		presence:  p.jsonPresenceMap(),
-		rType:     route._requestBodyType,
+		unmarshal: func(bytes []byte, i interface{}) error {
+			return route._inputMarshaller.Unmarshal(bytes, i)
+		},
+		presence: p.jsonPresenceMap(),
+		rType:    route._requestBodyType,
 	}, nil
 }
 
