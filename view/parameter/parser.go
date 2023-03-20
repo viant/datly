@@ -18,6 +18,9 @@ func Parse(SQL string) ([]*Value, error) {
 			key := text[2 : len(text)-1]
 			result = append(result, &Value{Key: key, TemplateFragment: text})
 		case selectorToken:
+			if cursor.Input[cursor.Pos] == '.' {
+				continue
+			}
 			matched = cursor.MatchOne(whitespaceTerminatorMatcher)
 			aKey := matched.Text(cursor)
 			if aKey != "" {

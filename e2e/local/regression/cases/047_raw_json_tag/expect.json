@@ -1,0 +1,49 @@
+[
+  {
+    "className": "com.class.abc.Foo",
+    "id": 1,
+    "name": "\"Foo\"",
+    "preferences": {
+      "Id": 1,
+      "Name": "Foo",
+      "Price": 125.5
+    }
+  },
+  {
+    "className": "com.class.abc.Boo",
+    "id": 2,
+    "preferences": {
+      "CreatedAt": "01/16/2022",
+      "Id": 1,
+      "UpdatedAt": "03/16/2022"
+    }
+  },
+  {
+    "className": "com.class.abc.Bar",
+    "id": 3,
+    "preferences": {
+      "Id": 1,
+      "Items": [
+        0,
+        "125",
+        250,
+        "275"
+      ]
+    }
+  },
+  {
+    "className": "com.class.abc.Bar",
+    "id": 4,
+    "preferences": [
+      {
+        "Id": 1,
+        "Items": [
+          0,
+          "125",
+          250,
+          "275"
+        ]
+      }
+    ]
+  }
+]
