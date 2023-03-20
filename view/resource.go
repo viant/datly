@@ -246,6 +246,12 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 		if err := r.registerType(definition.Package, definition.Name, definition.Type()); err != nil {
 			return err
 		}
+
+		if definition.Alias != "" {
+			if err := r.registerType("", definition.Alias, definition.Type()); err != nil {
+				return err
+			}
+		}
 	}
 
 	var err error
