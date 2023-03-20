@@ -804,8 +804,7 @@ func (r *Router) writeResponse(ctx context.Context, session *ReaderSession, payl
 		return
 	}
 
-	session.Response.Header().Add(content.Type, session.RequestParams.OutputFormat)
-	session.Response.Header().Add(content.Type, CharsetUTF8)
+	session.Response.Header().Add(content.Type, session.RequestParams.OutputFormat+"; "+CharsetUTF8)
 	session.Response.Header().Add(ContentLength, strconv.Itoa(payloadReader.Size()))
 	for key, value := range payloadReader.Headers() {
 		session.Response.Header().Add(key, value[0])
