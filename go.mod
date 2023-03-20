@@ -32,7 +32,7 @@ require (
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac
 	github.com/viant/parsly v0.1.0
-	github.com/viant/pgo v0.6.0
+	github.com/viant/pgo v0.8.1-0.20230320194651-b5f1d3e4f6c7
 	github.com/viant/scy v0.4.2-0.20230309001211-1f666f44ff5d
 	github.com/viant/sqlx v0.5.3-0.20230301014138-5a9ca541f97f
 	github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd

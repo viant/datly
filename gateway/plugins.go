@@ -2,19 +2,15 @@ package gateway
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"github.com/viant/datly/cmd/build"
 	"github.com/viant/datly/config"
 	pgoBuild "github.com/viant/pgo/build"
+	"github.com/viant/pgo/manager"
 	"github.com/viant/xdatly/types/core"
-	"os"
-	"path"
 	"plugin"
 	"reflect"
 	"sort"
-	"strconv"
-	"strings"
+	"sync"
 	"time"
 )
 
@@ -52,7 +48,10 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	if updateSize == 0 {
 		return nil, nil
 	}
-
+	started := time.Now()
+	defer func() {
+		fmt.Printf("loaded plugins afer %s\n", time.Since(started))
+	}()
 	registry := config.NewRegistry()
 	var types []string
 	_, cancelFn := core.Types(func(packageName, typeName string, rType reflect.Type, _ time.Time) {
@@ -62,9 +61,12 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	defer cancelFn()
 
 	aChan := make(chan func() (*pluginData, error), updateSize)
+	wg := sync.WaitGroup{}
 	for i := 0; i < updateSize; i++ {
-		go r.loadPlugin(ctx, changes.pluginsIndex.updated[i], aChan)
+		wg.Add(1)
+		go r.loadPlugin(ctx, changes.pluginsIndex.updated[i], aChan, &wg)
 	}
+	wg.Wait()
 
 	var pluginsData pluginDataSlice
 	var i = 0
@@ -73,7 +75,6 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 		if i == updateSize {
 			close(aChan)
 		}
-
 		data, err := fn()
 		if err != nil {
 			fmt.Printf("[ERROR] error occured while reading plugin %v\n", err.Error())
@@ -128,19 +129,11 @@ func (r *Service) handlePluginConfig(pluginProvider *plugin.Plugin, data *plugin
 	data.changes = append(data.changes, configPlugin)
 }
 
-func (r *Service) copyToPluginLoadLocation(ctx context.Context, src string) (string, error) {
-	suffix := strconv.Itoa(int(time.Now().UnixNano()))
-	loadPluginDir := path.Join(os.TempDir(), "plugins", suffix)
-	loadPluginLocation := path.Join(loadPluginDir, path.Base(src))
-	return loadPluginLocation, r.fs.Copy(ctx, src, loadPluginLocation)
-}
-
 func (r *Service) handlePluginTypes(provider *plugin.Plugin, data *pluginData) {
 	types, err := provider.Lookup(config.TypesName)
 	if err != nil {
 		return
 	}
-
 	packageSymbol, err := provider.Lookup(config.PackageName)
 	var packageName string
 	if err == nil {
@@ -149,104 +142,36 @@ func (r *Service) handlePluginTypes(provider *plugin.Plugin, data *pluginData) {
 			packageName = *name
 		}
 	}
-
 	data.changes = append(data.changes, types)
 	data.packageName = packageName
 }
 
-func (r *Service) loadPluginMetadata(ctx context.Context, URL string) (*pluginMetadata, error) {
-	fileName := path.Base(URL)
-	if ext := path.Ext(fileName); ext != "" {
-		fileName = strings.ReplaceAll(fileName, ext, "")
-	}
-
-	pluginsMetadata := &pluginMetadata{
-		URL: URL,
-	}
-
-	metadataURL := strings.Replace(URL, ".so", ".info", 1)
-	content, err := r.fs.DownloadWithURL(ctx, metadataURL)
-	if err != nil {
-		fmt.Printf("[WARN] not found plugin %v metadata file\n", URL)
-		return pluginsMetadata, nil
-	}
-
-	err = json.Unmarshal(content, &pluginsMetadata.Info)
-	if err != nil {
-		return nil, err
-	}
-
-	if scn := pluginsMetadata.Scn; scn != 0 {
-		creationTime, err := time.ParseInLocation(pgoBuild.ScnLayout, strconv.Itoa(scn), time.UTC)
-		if err != nil {
-			return nil, err
-		}
-
-		pluginsMetadata.CreationTime = creationTime
-	}
-
-	return pluginsMetadata, err
-}
-
-func (r *Service) loadPlugin(ctx context.Context, URL string, aChan chan func() (*pluginData, error)) {
-	aData, err := r.loadPluginWithErr(ctx, URL)
+func (r *Service) loadPlugin(ctx context.Context, URL string, aChan chan func() (*pluginData, error), wg *sync.WaitGroup) {
+	defer wg.Done()
+	aData, err := r.loadPluginData(ctx, URL)
 	aChan <- func() (*pluginData, error) {
 		return aData, err
 	}
 }
 
-func (r *Service) loadPluginWithErr(ctx context.Context, URL string) (*pluginData, error) {
-	if index := strings.Index(URL, r.Config.DependencyURL); index != -1 {
-		URL = URL[index:]
-	}
-
-	metadata, err := r.loadPluginMetadata(ctx, URL)
+func (r *Service) loadPluginData(ctx context.Context, URL string) (*pluginData, error) {
+	//if index := strings.Index(URL, r.Config.DependencyURL); index != -1 {
+	//	URL = URL[index:]
+	//}
+	var reasons []string
+	info, pluginProvider, err := r.pluginManager.OpenWithInfoURL(ctx, URL)
 	if err != nil {
-		return nil, err
-	}
-
-	isOutdated := r.IsOutdated(metadata)
-	goVersion := metadata.Runtime.Version
-	goVersionDiff := goVersion != "" && goVersion != build.GoVersion
-	if isOutdated || goVersionDiff {
-		var reasons []string
-		if isOutdated {
-			reasons = append(reasons, "plugin was built before datly")
+		if manager.IsPluginOutdated(err) {
+			reasons = append(reasons, err.Error())
+		} else {
+			return nil, err
 		}
-
-		if goVersionDiff {
-			reasons = append(reasons, fmt.Sprintf("go version is different, wanted %v got %v", build.GoVersion, goVersion))
-		}
-
-		fmt.Printf("[INFO] Ignoring plugin due to the: %v\n", strings.Join(reasons, " | "))
-		return nil, nil
 	}
-
-	URL, err = r.copyToPluginLoadLocation(ctx, URL)
-	if err != nil {
-		return nil, err
-	}
-
-	fmt.Printf("[INFO] opening plugin %v\n", URL)
-	pluginProvider, err := plugin.Open(URL)
-	if err != nil {
-		return nil, err
-	}
-
+	createdAt, _ := info.Scn.AsTime()
 	aData := &pluginData{
-		creationTime: metadata.CreationTime,
+		creationTime: createdAt,
 	}
-
 	r.handlePluginConfig(pluginProvider, aData)
 	r.handlePluginTypes(pluginProvider, aData)
-
 	return aData, nil
-}
-
-func (r *Service) IsOutdated(metadata *pluginMetadata) bool {
-	if metadata.CreationTime.IsZero() {
-		return false
-	}
-
-	return build.BuildTime.After(metadata.CreationTime)
 }

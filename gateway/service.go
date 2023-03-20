@@ -11,11 +11,15 @@ import (
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/auth/secret"
+	"github.com/viant/datly/cmd/build"
+	pbuild "github.com/viant/pgo/build"
+
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
+	"github.com/viant/pgo/manager"
 	"github.com/viant/scy/auth/jwt/signer"
 	"net/http"
 	"path"
@@ -47,6 +51,7 @@ type (
 		JWTSigner             *signer.Service
 		mux                   sync.RWMutex
 		pluginsConfig         *config.Registry
+		pluginManager         *manager.Service
 		statusHandler         http.Handler
 		authorizer            Authorizer
 
@@ -97,13 +102,13 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 	if err != nil {
 		return nil, err
 	}
-
 	srv := &Service{
 		metrics:            metrics,
 		pluginsConfig:      registry,
 		Config:             aConfig,
 		mux:                sync.RWMutex{},
 		fs:                 fs,
+		pluginManager:      manager.New(pbuild.NewSequenceChangeNumber(build.BuildTime)),
 		dataResourcesIndex: map[string]*view.Resource{},
 		routeResourceTracker: NewNotifier(
 			aConfig.RouteURL,
@@ -155,6 +160,8 @@ func newFileService(aConfig *Config) (afs.Service, error) {
 
 	return cache.Singleton(URL, &matcher.Ignore{Ext: map[string]bool{
 		".so": true,
+		".gz": true,
+		"gz":  true,
 		"so":  true,
 	}}), nil
 }

@@ -55,7 +55,7 @@ func (c *ResourcesChange) ExtIndex(ext string) (*ExtIndex, bool) {
 	switch ext {
 	case ".yaml":
 		return c.resourcesIndex, true
-	case ".so":
+	case ".pinf": //go plugin info ext
 		return c.pluginsIndex, true
 	}
 

@@ -196,17 +196,18 @@ func (s *Builder) buildBinary(sourceURL string, destURL string, moduleName strin
 		sources = append(sources, dependencies[1:]...)
 	}
 	return pgo.Build(&pgo.Options{
-		SourceURL:  sources,
-		DestURL:    destURL,
-		Name:       moduleName,
-		Arch:       arch,
-		Os:         os,
-		Version:    version,
-		MainPath:   mainPath,
-		BuildArgs:  args,
-		BuildMode:  buildMode,
-		LdFlags:    s.options.ModuleLdFlags,
-		WithLogger: true,
+		SourceURL:   sources,
+		DestURL:     destURL,
+		Name:        moduleName,
+		Arch:        arch,
+		Os:          os,
+		Version:     version,
+		MainPath:    mainPath,
+		BuildArgs:   args,
+		BuildMode:   buildMode,
+		LdFlags:     s.options.ModuleLdFlags,
+		Compression: "gzip",
+		WithLogger:  true,
 	})
 }
 
