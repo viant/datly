@@ -459,13 +459,12 @@ func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*R
 				return
 			}
 		}
-		URL = strings.Replace(URL, ".info", ".so", 1)
-		if ok, err := fs.Exists(ctx, URL); !ok || err != nil {
+		if path.Ext(URL) != ".pinf" {
 			return
 		}
-
 		changes.OnChange(operation, URL)
 	})
+
 	r.changeSession.OnDependencyUpdated(changes.resourcesIndex.updated...)
 	r.changeSession.OnFileChange(changes.resourcesIndex.deleted...)
 	var err error
