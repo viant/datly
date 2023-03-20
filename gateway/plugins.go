@@ -159,7 +159,9 @@ func (r *Service) loadPluginData(ctx context.Context, URL string) (*pluginData, 
 	//	URL = URL[index:]
 	//}
 	var reasons []string
+	started := time.Now()
 	info, pluginProvider, err := r.pluginManager.OpenWithInfoURL(ctx, URL)
+	fmt.Printf("Open plugin after: %s\n", time.Since(started))
 	if err != nil {
 		if manager.IsPluginOutdated(err) {
 			reasons = append(reasons, err.Error())
