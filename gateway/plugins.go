@@ -48,10 +48,6 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	if updateSize == 0 {
 		return nil, nil
 	}
-	started := time.Now()
-	defer func() {
-		fmt.Printf("loaded plugins afer %s\n", time.Since(started))
-	}()
 	registry := config.NewRegistry()
 	var types []string
 	_, cancelFn := core.Types(func(packageName, typeName string, rType reflect.Type, _ time.Time) {
