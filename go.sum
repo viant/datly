@@ -267,6 +267,8 @@ github.com/viant/afs v1.22.1-0.20230321184929-56f2e1ae30f6 h1:HZTW3ZnvDt5gyRoNVw
 github.com/viant/afs v1.22.1-0.20230321184929-56f2e1ae30f6/go.mod h1:bo/jkTH8sBUhG0PQcPsuskvjb/5uEzgiwygGwtaDw8Q=
 github.com/viant/afs v1.22.1-0.20230321211610-6a50a08fa0b5 h1:Ez5cJGc0/IYbF6H6nsUQUJy8x0qdhz7aBk5NEefO37o=
 github.com/viant/afs v1.22.1-0.20230321211610-6a50a08fa0b5/go.mod h1:bo/jkTH8sBUhG0PQcPsuskvjb/5uEzgiwygGwtaDw8Q=
+github.com/viant/afs v1.22.1-0.20230321213218-de5fd6c5c2f4 h1:xmfw4KXZHk6H47llUkpTcqnspxN/H6sw2C2HZVIRwps=
+github.com/viant/afs v1.22.1-0.20230321213218-de5fd6c5c2f4/go.mod h1:bo/jkTH8sBUhG0PQcPsuskvjb/5uEzgiwygGwtaDw8Q=
 github.com/viant/afsc v1.8.1-0.20230321185125-47bc1e4b8e4a h1:6dIKUOdiwLt1eZdkvN4tybRPDyr+LxJqh4kk1WAQhIk=
 github.com/viant/afsc v1.8.1-0.20230321185125-47bc1e4b8e4a/go.mod h1:FA/xVjaMM10qGByabP8anTVMH6N4eUsAeWm5xcEZJJA=
 github.com/viant/assertly v0.4.8/go.mod h1:aGifi++jvCrUaklKEKT0BU95igDNaqkvz+49uaYMPRU=
