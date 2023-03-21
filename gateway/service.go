@@ -165,7 +165,7 @@ func newFileService(aConfig *Config) (afs.Service, error) {
 		"gz":  true,
 		"so":  true,
 	}}, option.WithLogger(func(format string, args ...interface{}) {
-		fmt.Printf("cfs: %s", args...)
+		fmt.Printf(format, args...)
 	})), nil
 }
 
