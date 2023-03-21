@@ -8,6 +8,7 @@ import (
 	"github.com/viant/afs/cache"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/matcher"
+	"github.com/viant/afs/option"
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/auth/secret"
@@ -163,7 +164,9 @@ func newFileService(aConfig *Config) (afs.Service, error) {
 		".gz": true,
 		"gz":  true,
 		"so":  true,
-	}}), nil
+	}}, option.WithLogger(func(format string, args ...interface{}) {
+		fmt.Printf("cfs: %s", args...)
+	})), nil
 }
 
 func CommonURL(URLs ...string) (string, error) {
