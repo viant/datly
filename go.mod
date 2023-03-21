@@ -21,7 +21,7 @@ require (
 	github.com/onsi/gomega v1.20.2 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.2
-	github.com/viant/afs v1.22.1-0.20230321184929-56f2e1ae30f6
+	github.com/viant/afs v1.22.1-0.20230321211610-6a50a08fa0b5
 	github.com/viant/afsc v1.8.1-0.20230321185125-47bc1e4b8e4a
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.2.1-0.20221005024313-4286a9622882
