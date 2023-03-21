@@ -3,7 +3,6 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
-	"reflect"
 	"strconv"
 	"unsafe"
 )
@@ -25,7 +24,7 @@ func NewUintMarshaller(dTag *DefaultTag) *UintMarshaller {
 	}
 }
 
-func (i *UintMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *UintMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	asUint := xunsafe.AsUint(ptr)
 	if asUint == 0 {
 		sb.WriteString(i.defaultValue)
@@ -35,7 +34,7 @@ func (i *UintMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *
 	return appendInt(int(asUint), sb)
 }
 
-func (i *UintMarshaller) UnmarshallObject(_ reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
+func (i *UintMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
 	return mainDecoder.AddUint64(xunsafe.AsUint64Ptr(pointer))
 }
 
@@ -56,7 +55,7 @@ func NewUint8Marshaller(tag *DefaultTag) *Uint8Marshaller {
 	}
 }
 
-func (i *Uint8Marshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Uint8Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	asUint8 := xunsafe.AsUint8(ptr)
 	if asUint8 == 0 {
 		sb.WriteString(i.defaultValue)
@@ -66,7 +65,7 @@ func (i *Uint8Marshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb 
 	return appendInt(int(asUint8), sb)
 }
 
-func (i *Uint8Marshaller) UnmarshallObject(_ reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
+func (i *Uint8Marshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
 	return mainDecoder.AddUint8((*uint8)(pointer))
 }
 
@@ -87,7 +86,7 @@ func NewUint16Marshaller(dTag *DefaultTag) *Uint16Marshaller {
 	}
 }
 
-func (i *Uint16Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Uint16Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	asUint16 := xunsafe.AsUint16(ptr)
 	if asUint16 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -97,7 +96,7 @@ func (i *Uint16Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer
 	return appendInt(int(asUint16), sb)
 }
 
-func (i *Uint16Marshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *Uint16Marshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	return mainDecoder.AddUint16((*uint16)(pointer))
 }
 
@@ -118,7 +117,7 @@ func NewUint32Marshaller(dTag *DefaultTag) *Uint32Marshaller {
 	}
 }
 
-func (i *Uint32Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Uint32Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	asUint32 := xunsafe.AsUint32(ptr)
 	if asUint32 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -128,7 +127,7 @@ func (i *Uint32Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer
 	return appendInt(int(asUint32), sb)
 }
 
-func (i *Uint32Marshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *Uint32Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	return decoder.AddUint32((*uint32)((pointer)))
 }
 
@@ -149,7 +148,7 @@ func NewUint64Marshaller(dTag *DefaultTag) *Uint64Marshaller {
 	}
 }
 
-func (i *Uint64Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Uint64Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	asUint64 := xunsafe.AsUint64(ptr)
 	if asUint64 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -159,6 +158,6 @@ func (i *Uint64Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer
 	return appendInt(int(asUint64), sb)
 }
 
-func (i *Uint64Marshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *Uint64Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	return decoder.AddUint64((*uint64)((pointer)))
 }

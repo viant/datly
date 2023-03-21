@@ -3,7 +3,6 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
-	"reflect"
 	"strconv"
 	"unsafe"
 )
@@ -25,7 +24,7 @@ func NewIntMarshaller(dTag *DefaultTag) *IntMarshaller {
 	}
 }
 
-func (i *IntMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *IntMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	asInt := xunsafe.AsInt(ptr)
 	if asInt == 0 {
 		sb.WriteString(i.defaultValue)
@@ -35,7 +34,7 @@ func (i *IntMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *S
 	return appendInt(asInt, sb)
 }
 
-func (i *IntMarshaller) UnmarshallObject(_ reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
+func (i *IntMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
 	return mainDecoder.AddInt(xunsafe.AsIntPtr(pointer))
 }
 
@@ -56,7 +55,7 @@ func NewInt8Marshaller(tag *DefaultTag) *Int8Marshaller {
 	}
 }
 
-func (i *Int8Marshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Int8Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	asInt8 := xunsafe.AsInt8(ptr)
 	if asInt8 == 0 {
 		sb.WriteString(i.defaultValue)
@@ -66,7 +65,7 @@ func (i *Int8Marshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *
 	return appendInt(int(asInt8), sb)
 }
 
-func (i *Int8Marshaller) UnmarshallObject(_ reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
+func (i *Int8Marshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
 	return mainDecoder.AddInt8((*int8)(pointer))
 }
 
@@ -87,7 +86,7 @@ func NewInt16Marshaller(dTag *DefaultTag) *Int16Marshaller {
 	}
 }
 
-func (i *Int16Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Int16Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	asInt16 := xunsafe.AsInt16(ptr)
 	if asInt16 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -97,7 +96,7 @@ func (i *Int16Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer,
 	return appendInt(int(asInt16), sb)
 }
 
-func (i *Int16Marshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *Int16Marshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	return mainDecoder.AddInt16((*int16)(pointer))
 }
 
@@ -118,7 +117,7 @@ func NewInt32Marshaller(dTag *DefaultTag) *Int32Marshaller {
 	}
 }
 
-func (i *Int32Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Int32Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	asInt32 := xunsafe.AsInt32(ptr)
 	if asInt32 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -128,7 +127,7 @@ func (i *Int32Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer,
 	return appendInt(int(asInt32), sb)
 }
 
-func (i *Int32Marshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *Int32Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	return decoder.AddInt32((*int32)((pointer)))
 }
 
@@ -149,7 +148,7 @@ func NewInt64Marshaller(dTag *DefaultTag) *Int64Marshaller {
 	}
 }
 
-func (i *Int64Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Int64Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	asInt64 := xunsafe.AsInt64(ptr)
 	if asInt64 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -159,13 +158,19 @@ func (i *Int64Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer,
 	return appendInt(int(asInt64), sb)
 }
 
-func (i *Int64Marshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *Int64Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	return decoder.AddInt64((*int64)(pointer))
 }
 
 func appendInt(value int, sb *Session) error {
+	sb.Buffer.Grow(64)
+	dst := sb.Bytes()[sb.Len():]
+	parsed := strconv.AppendInt(dst, int64(value), 10)
+	sb.Write(parsed)
+	return nil
+
 	//dest := sb.Next(64)
 	//appended := strconv.AppendInt(dest, int64(value), 10)
-	sb.WriteString(strconv.Itoa(value))
-	return nil
+	//sb.WriteString(strconv.Itoa(value))
+	//return nil
 }

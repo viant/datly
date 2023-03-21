@@ -3,7 +3,6 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
-	"reflect"
 	"unsafe"
 )
 
@@ -29,17 +28,17 @@ func NewFloat32PtrMarshaller(dTag *DefaultTag) *Float32PtrMarshaller {
 	}
 }
 
-func (i *Float32PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Float32PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	f32Ptr := xunsafe.AsFloat32AddrPtr(ptr)
 	if f32Ptr == nil || *f32Ptr == nil {
 		sb.WriteString(i.zeroValue)
 		return nil
 	}
 
-	return appendFloat(float64(**f32Ptr), false, i.dTag, sb)
+	return appendFloat(float64(**f32Ptr), sb)
 }
 
-func (i *Float32PtrMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *Float32PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	return decoder.AddFloat32Null(xunsafe.AsFloat32AddrPtr(pointer))
 }
 
@@ -65,16 +64,16 @@ func NewFloat64PtrMarshaller(dTag *DefaultTag) *Float64PtrMarshaller {
 	}
 }
 
-func (i *Float64PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Float64PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	f32Ptr := xunsafe.AsFloat64AddrPtr(ptr)
 	if f32Ptr == nil || *f32Ptr == nil {
 		sb.WriteString(i.zeroValue)
 		return nil
 	}
 
-	return appendFloat(**f32Ptr, false, i.dTag, sb)
+	return appendFloat(**f32Ptr, sb)
 }
 
-func (i *Float64PtrMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *Float64PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	return decoder.AddFloat64Null(xunsafe.AsFloat64AddrPtr(pointer))
 }

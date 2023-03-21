@@ -1,4 +1,5 @@
 SET GLOBAL log_bin_trust_function_creators = 1;
+SET GLOBAL sql_mode = '';
 
 DROP TABLE IF EXISTS USER;
 CREATE TABLE USER (

@@ -623,7 +623,7 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 	//TODO extend to unified response
 	r.setResponseStatus(route, response, responseStatus, nil)
 
-	asBytes, marErr := route._outputMarshaller.Marshal(response.Elem().Interface(), nil)
+	asBytes, marErr := route._outputMarshaller.Marshal(response.Elem().Interface())
 	if marErr != nil {
 		w.Write(asBytes)
 		w.WriteHeader(statusCode)

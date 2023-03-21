@@ -3,7 +3,6 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
-	"reflect"
 	"strconv"
 	"unsafe"
 )
@@ -30,7 +29,7 @@ func NewUintPtrMarshaller(dTag *DefaultTag) *UintPtrMarshaller {
 	}
 }
 
-func (i *UintPtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *UintPtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	intPtr := xunsafe.AsUintAddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
 		sb.WriteString(i.defaultValue)
@@ -40,7 +39,7 @@ func (i *UintPtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, s
 	return appendInt(int(**intPtr), sb)
 }
 
-func (i *UintPtrMarshaller) UnmarshallObject(_ reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
+func (i *UintPtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
 	return mainDecoder.AddUint64Null(xunsafe.AsUint64AddrPtr(pointer))
 }
 
@@ -66,7 +65,7 @@ func NewUint8PtrMarshaller(tag *DefaultTag) *Uint8PtrMarshaller {
 	}
 }
 
-func (i *Uint8PtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Uint8PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	intPtr := xunsafe.AsUint8AddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
 		sb.WriteString(i.defaultValue)
@@ -76,7 +75,7 @@ func (i *Uint8PtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, 
 	return appendInt(int(**intPtr), sb)
 }
 
-func (i *Uint8PtrMarshaller) UnmarshallObject(_ reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
+func (i *Uint8PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
 	return mainDecoder.AddUint8Null(xunsafe.AsUint8AddrPtr(pointer))
 }
 
@@ -102,7 +101,7 @@ func NewUint16PtrMarshaller(dTag *DefaultTag) *Uint16PtrMarshaller {
 	}
 }
 
-func (i *Uint16PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Uint16PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	intPtr := xunsafe.AsUint16AddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
 		sb.WriteString(i.zeroValue)
@@ -112,7 +111,7 @@ func (i *Uint16PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Poin
 	return appendInt(int(**intPtr), sb)
 }
 
-func (i *Uint16PtrMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *Uint16PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	return mainDecoder.AddUint16Null(xunsafe.AsUint16AddrPtr(pointer))
 }
 
@@ -138,7 +137,7 @@ func NewUint32PtrMarshaller(dTag *DefaultTag) *Uint32PtrMarshaller {
 	}
 }
 
-func (i *Uint32PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Uint32PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	intPtr := xunsafe.AsUint32AddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
 		sb.WriteString(i.zeroValue)
@@ -148,7 +147,7 @@ func (i *Uint32PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Poin
 	return appendInt(int(**intPtr), sb)
 }
 
-func (i *Uint32PtrMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *Uint32PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	return decoder.AddUint32Null(xunsafe.AsUint32AddrPtr(pointer))
 }
 
@@ -174,7 +173,7 @@ func NewUint64PtrMarshaller(dTag *DefaultTag) *Uint64PtrMarshaller {
 	}
 }
 
-func (i *Uint64PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Uint64PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	intPtr := xunsafe.AsUint64AddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
 		sb.WriteString(i.zeroValue)
@@ -184,6 +183,6 @@ func (i *Uint64PtrMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Poin
 	return appendInt(int(**intPtr), sb)
 }
 
-func (i *Uint64PtrMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *Uint64PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	return decoder.AddUint64Null(xunsafe.AsUint64AddrPtr(pointer))
 }

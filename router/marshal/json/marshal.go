@@ -7,6 +7,7 @@ import (
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
+	"unsafe"
 )
 
 const null = `null`
@@ -36,32 +37,71 @@ func New(rType reflect.Type, config marshal.Default) (*Marshaller, error) {
 	return m, nil
 }
 
-func (j *Marshaller) Marshal(value interface{}, filters *Filters, options ...interface{}) ([]byte, error) {
+func (j *Marshaller) Marshal(value interface{}, options ...interface{}) ([]byte, error) {
 	if value == nil {
 		return []byte(null), nil
 	}
+
 	rType := reflect.TypeOf(value)
 	marshaller, err := j.marshaller(rType)
 	if err != nil {
 		return nil, err
 	}
 
-	buffer := bufferPool.Get()
-
-	session := &Session{
-		Filters: filters,
-		Buffer:  buffer,
+	session, putBufferBack := j.PrepareSession(options)
+	if putBufferBack {
+		defer bufferPool.Put(session.Buffer)
 	}
 
-	if err = marshaller.MarshallObject(rType, xunsafe.AsPointer(value), session); err != nil {
+	pointer := AsPtr(value, rType)
+
+	if err = marshaller.MarshallObject(pointer, session); err != nil {
 		return nil, err
 	}
 
-	output := make([]byte, len(buffer.Bytes()))
-	copy(output, buffer.Bytes())
-	bufferPool.Put(buffer)
+	output := make([]byte, len(session.Buffer.Bytes()))
+	copy(output, session.Bytes())
 
 	return output, nil
+}
+
+func (j *Marshaller) PrepareSession(options []interface{}) (*Session, bool) {
+	if len(options) == 0 {
+		return &Session{
+			Buffer: bufferPool.Get(),
+		}, true
+	}
+
+	var session *Session
+	var filters *Filters
+	var putBufferBack bool
+
+	for _, option := range options {
+		if option == nil {
+			continue
+		}
+
+		switch actual := option.(type) {
+		case *Session:
+			session = actual
+			putBufferBack = session.Buffer == nil
+		}
+	}
+
+	if session == nil {
+		session = &Session{
+			Options: options,
+			Buffer:  bufferPool.Get(),
+		}
+
+		putBufferBack = true
+	}
+
+	if session.Filters == nil {
+		session.Filters = filters
+	}
+
+	return session, putBufferBack
 }
 
 func (j *Marshaller) Unmarshal(data []byte, dest interface{}, options ...interface{}) error {
@@ -74,9 +114,32 @@ func (j *Marshaller) Unmarshal(data []byte, dest interface{}, options ...interfa
 
 	aDecoder := gojay.BorrowDecoder(bytes.NewReader(data))
 	defer aDecoder.Release()
-	return marshaler.UnmarshallObject(rType, xunsafe.AsPointer(dest), aDecoder, nil)
+	pointer := xunsafe.AsPointer(dest)
+
+	result := marshaler.UnmarshallObject(pointer, aDecoder, nil)
+
+	return result
+}
+
+func AsPtr(dest interface{}, rType reflect.Type) unsafe.Pointer {
+	switch rType.Kind() {
+	case reflect.Interface:
+		return unsafe.Pointer(&dest)
+	case reflect.Ptr:
+		return xunsafe.RefPointer(xunsafe.AsPointer(dest))
+	default:
+		return xunsafe.AsPointer(dest)
+	}
+}
+
+func EnsureType(rType reflect.Type, ptr unsafe.Pointer) reflect.Type {
+	inlinableType := rType
+	if inlinableType.Kind() == reflect.Interface {
+		inlinableType = reflect.TypeOf(xunsafe.AsInterface(ptr))
+	}
+	return inlinableType
 }
 
 func (j *Marshaller) marshaller(rType reflect.Type) (Marshaler, error) {
-	return j.cache.ElemMarshallerIfNeeded(rType, j.config, "", "", nil)
+	return j.cache.LoadMarshaller(rType, j.config, "", "", nil)
 }

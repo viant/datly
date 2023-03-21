@@ -3,7 +3,6 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
-	"reflect"
 	"strconv"
 	"strings"
 	"unicode"
@@ -29,7 +28,7 @@ func NewStringMarshaller(dTag *DefaultTag) *StringMarshaller {
 	}
 }
 
-func (i *StringMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *StringMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	asString := xunsafe.AsString(ptr)
 	if asString == "" {
 		sb.WriteString(i.defaultValue)
@@ -40,7 +39,7 @@ func (i *StringMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb
 	return nil
 }
 
-func (i *StringMarshaller) UnmarshallObject(_ reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
+func (i *StringMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
 	return mainDecoder.AddString(xunsafe.AsStringPtr(pointer))
 }
 

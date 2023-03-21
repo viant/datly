@@ -67,7 +67,7 @@ func NewStructMarshaller(config marshal.Default, rType reflect.Type, path string
 	return result, result.init()
 }
 
-func (s *StructMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (s *StructMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
 	if s.indexUpdater != nil {
 		indexPtr := s.indexUpdater.xField.ValuePointer(pointer)
 		if indexPtr == nil {
@@ -93,14 +93,14 @@ func (s *StructMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.P
 	return mainDecoder.DecodeObject(d)
 }
 
-func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (s *StructMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	if ptr == nil {
 		sb.WriteString(null)
 		return nil
 	}
 
 	if s.inlinableMarshaller != nil {
-		return s.inlinableMarshaller.MarshallObject(rType, ptr, sb)
+		return s.inlinableMarshaller.MarshallObject(ptr, sb)
 	}
 
 	filter, _ := filterByPath(sb.Filters, s.path)
@@ -132,20 +132,9 @@ func (s *StructMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer
 			sb.WriteString(`":`)
 		}
 
-		fieldType := stringifier.xField.Type
 		prevLen = sb.Len()
-		if fieldType.Kind() == reflect.Interface {
-			if valuePtr, ok := value.(*interface{}); ok {
-				value = *valuePtr
-			}
-			fieldType = reflect.TypeOf(value)
-			if err := stringifier.marshaller.MarshallObject(fieldType, xunsafe.AsPointer(value), sb); err != nil {
-				return err
-			}
-		} else {
-			if err := stringifier.marshaller.MarshallObject(fieldType, stringifier.xField.Pointer(objPtr), sb); err != nil {
-				return err
-			}
+		if err := stringifier.marshaller.MarshallObject(stringifier.xField.Pointer(objPtr), sb); err != nil {
+			return err
 		}
 	}
 
@@ -249,7 +238,7 @@ func (s *StructMarshaller) newFieldMarshaller(marshallers *[]*MarshallerWithFiel
 	}
 
 	tag := ParseXTag(field.Tag.Get(TagName), field.Tag.Get(XTagName))
-	if tag.FieldName == "-" {
+	if tag.Transient {
 		return nil
 	}
 
@@ -405,7 +394,7 @@ func (d *decoder) UnmarshalJSONObject(decoder *gojay.Decoder, fieldName string) 
 		return nil
 	}
 
-	if err := marshaller.marshaller.UnmarshallObject(marshaller.xField.Type, marshaller.xField.Pointer(d.ptr), decoder, nil); err != nil {
+	if err := marshaller.marshaller.UnmarshallObject(marshaller.xField.Pointer(d.ptr), decoder, nil); err != nil {
 		return err
 	}
 

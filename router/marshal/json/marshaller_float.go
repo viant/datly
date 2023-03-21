@@ -3,7 +3,6 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
-	"reflect"
 	"strconv"
 	"unsafe"
 )
@@ -29,17 +28,17 @@ func formatFloat(zeroValue float64) string {
 	return strconv.FormatFloat(zeroValue, 'f', -1, 64)
 }
 
-func (i *Float32Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Float32Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	asFloat32 := xunsafe.AsFloat32(ptr)
 	if asFloat32 == 0 {
 		sb.WriteString(i.zeroValue)
 		return nil
 	}
 
-	return appendFloat(float64(asFloat32), false, i.dTag, sb)
+	return appendFloat(float64(asFloat32), sb)
 }
 
-func (i *Float32Marshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *Float32Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
 	return decoder.AddFloat32((*float32)(pointer))
 }
 
@@ -60,36 +59,25 @@ func NewFloat64Marshaller(dTag *DefaultTag) *Float64Marshaller {
 	}
 }
 
-func (i *Float64Marshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *Float64Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	asFloat64 := xunsafe.AsFloat64(ptr)
 	if asFloat64 == 0 {
 		sb.WriteString(i.zeroValue)
 		return nil
 	}
 
-	return appendFloat(asFloat64, false, i.dTag, sb)
+	return appendFloat(asFloat64, sb)
 }
 
-func (i *Float64Marshaller) UnmarshallObject(_ reflect.Type, pointer unsafe.Pointer, decoder *gojay.Decoder, _ *gojay.Decoder) error {
+func (i *Float64Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, _ *gojay.Decoder) error {
 	return decoder.AddFloat64((*float64)((pointer)))
 }
 
-func appendFloat(f float64, wasNull bool, tag *DefaultTag, sb *Session) error {
-	if wasNull {
-		sb.WriteString(null)
-		return nil
-	}
-
-	if f == 0 && tag._value != nil {
-		sb.WriteString(strconv.FormatFloat(tag._value.(float64), 'f', -1, 64))
-		return nil
-	}
-
-	if wasNull {
-		sb.WriteString("0")
-		return nil
-	}
-
-	sb.WriteString(strconv.FormatFloat(f, 'f', -1, 64))
+func appendFloat(f float64, sb *Session) error {
+	sb.Buffer.Grow(14)
+	dst := sb.Bytes()[sb.Len():]
+	parsed := strconv.AppendFloat(dst, f, 'f', -1, 64)
+	sb.Write(parsed)
+	//sb.WriteString(strconv.FormatFloat(f, 'f', -1, 64))
 	return nil
 }

@@ -3,7 +3,6 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
-	"reflect"
 	"strconv"
 	"unsafe"
 )
@@ -30,7 +29,7 @@ func NewStringPtrMarshaller(dTag *DefaultTag) *StringPtrMarshaller {
 	}
 }
 
-func (i *StringPtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *StringPtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	strPtr := xunsafe.AsStringAddrPtr(ptr)
 	if strPtr == nil || *strPtr == nil {
 		sb.WriteString(i.defaultValue)
@@ -41,6 +40,6 @@ func (i *StringPtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer,
 	return nil
 }
 
-func (i *StringPtrMarshaller) UnmarshallObject(_ reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
+func (i *StringPtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
 	return mainDecoder.AddStringNull(xunsafe.AsStringAddrPtr(pointer))
 }

@@ -3,7 +3,6 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
-	"reflect"
 	"strconv"
 	"unsafe"
 )
@@ -30,7 +29,7 @@ func NewBoolPtrMarshaller(dTag *DefaultTag) *BoolPtrMarshaller {
 	}
 }
 
-func (i *BoolPtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (i *BoolPtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	asBoolPtr := xunsafe.AsBoolAddrPtr(ptr)
 	if asBoolPtr == nil || *asBoolPtr == nil {
 		sb.WriteString(i.zeroValue)
@@ -41,6 +40,6 @@ func (i *BoolPtrMarshaller) MarshallObject(_ reflect.Type, ptr unsafe.Pointer, s
 	return nil
 }
 
-func (i *BoolPtrMarshaller) UnmarshallObject(_ reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
+func (i *BoolPtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
 	return mainDecoder.AddBool(xunsafe.AsBoolPtr(pointer))
 }

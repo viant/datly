@@ -810,7 +810,7 @@ func BenchmarkMarshal(b *testing.B) {
 		var err error
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			bytes, err = benchMarshaller.Marshal(benchEvents, nil)
+			bytes, err = benchMarshaller.Marshal(benchEvents)
 		}
 
 		assert.Nil(b, err)

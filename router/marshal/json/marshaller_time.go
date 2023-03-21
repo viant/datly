@@ -4,7 +4,6 @@ import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/xunsafe"
-	"reflect"
 	"strconv"
 	"time"
 	"unsafe"
@@ -38,7 +37,7 @@ func NewTimeMarshaller(tag *DefaultTag, config marshal.Default) *TimeMarshaller 
 	}
 }
 
-func (t *TimeMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (t *TimeMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
 	aTime := xunsafe.AsTimePtr(pointer)
 	if err := mainDecoder.AddTime(aTime, t.timeFormat); err != nil {
 		return err
@@ -46,7 +45,7 @@ func (t *TimeMarshaller) UnmarshallObject(rType reflect.Type, pointer unsafe.Poi
 	return nil
 }
 
-func (t *TimeMarshaller) MarshallObject(rType reflect.Type, ptr unsafe.Pointer, sb *Session) error {
+func (t *TimeMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	aTime := xunsafe.AsTime(ptr)
 	if aTime.IsZero() {
 		sb.WriteString(t.zeroValue)
