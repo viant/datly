@@ -80,9 +80,8 @@ func (c *Config) Discovery() bool {
 
 func (c *Config) Init() error {
 	if c.SyncFrequencyMs == 0 {
-		c.SyncFrequencyMs = 5000
+		c.SyncFrequencyMs = 2000
 	}
-
 	if c.ChangeDetection == nil {
 		c.ChangeDetection = &ChangeDetection{}
 	}
