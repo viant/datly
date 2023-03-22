@@ -113,6 +113,9 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 }
 
 func (r *Service) handlePluginConfig(pluginProvider *plugin.Plugin, data *pluginData) {
+	if pluginProvider == nil {
+		return
+	}
 	configPlugin, err := pluginProvider.Lookup(config.PluginConfig)
 	if err != nil {
 		return
@@ -146,14 +149,12 @@ func (r *Service) loadPlugin(ctx context.Context, URL string, aChan chan func() 
 }
 
 func (r *Service) loadPluginData(ctx context.Context, URL string) (*pluginData, error) {
-	//if index := strings.Index(URL, r.Config.DependencyURL); index != -1 {
-	//	URL = URL[index:]
-	//}
 	var reasons []string
 	info, pluginProvider, err := r.pluginManager.OpenWithInfoURL(ctx, URL)
 	if err != nil {
 		if manager.IsPluginOutdated(err) {
 			reasons = append(reasons, err.Error())
+			return nil, nil
 		} else {
 			return nil, err
 		}
