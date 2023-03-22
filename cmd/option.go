@@ -33,7 +33,7 @@ const (
 type (
 	Options struct {
 		Port             int    `short:"p" long:"port" description:"port"  `
-		RouteURL         string `short:"r" long:"route URL" description:"route URL"  `
+		RouteURL         string `short:"r" long:"routeURL" description:"route URL"  `
 		DependencyURL    string `short:"d" long:"deps" description:"dependencies URL" `
 		ConfigURL        string `short:"c" long:"config" description:"configuration URL" `
 		PartialConfigURL string `short:"e" long:"partialConfig" description:"partial configuration file URL"`
@@ -49,7 +49,13 @@ type (
 		RelativePath string `long:"relative" description:"allow to control relative path where path is used"`
 		RoutePrefix  string `short:"x" long:"routePrefix" description:"route prefix default dev"`
 		Plugins
+		Package
 		Module
+	}
+
+	Package struct {
+		RuleSourceURL string `short:"P" long:"packageSrc" description:"package rule source URL " `
+		RuleDestURL   string `short:"R" long:"packageDest" description:"package rule destination URL rewrite" `
 	}
 
 	CacheWarmup struct {

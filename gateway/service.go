@@ -149,6 +149,10 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 	return srv, err
 }
 
+const (
+	PackageFile = "datly.pkg"
+)
+
 func newFileService(aConfig *Config) (afs.Service, error) {
 	if !aConfig.UseCacheFS {
 		return afs.New(), nil
@@ -158,15 +162,12 @@ func newFileService(aConfig *Config) (afs.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	return cache.Singleton(URL, &matcher.Ignore{Ext: map[string]bool{
-		".so": true,
-		".gz": true,
-		"gz":  true,
-		"so":  true,
-	}}, option.WithLogger(func(format string, args ...interface{}) {
-		fmt.Printf(format, args...)
-	})), nil
+	return cache.Singleton(URL,
+		matcher.WithExtExclusion(".so", "so", ".gz", "gz"),
+		option.WithCache(PackageFile, "gzip"),
+		option.WithLogger(func(format string, args ...interface{}) {
+			fmt.Printf(format, args...)
+		})), nil
 }
 
 func CommonURL(URLs ...string) (string, error) {

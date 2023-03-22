@@ -6,11 +6,15 @@ import (
 	"fmt"
 	"github.com/jessevdk/go-flags"
 	"github.com/viant/afs"
+	"github.com/viant/afs/cache"
+	soption "github.com/viant/afs/option"
+
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/modifier"
 	"github.com/viant/datly/auth/jwt"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/config"
+	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/router"
@@ -146,6 +150,10 @@ func New(version string, args []string, logger io.Writer) (*standalone.Server, e
 		return nil, nil
 	}
 
+	if options.Package.RuleSourceURL != "" {
+		return nil, packageConfig(options)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -160,6 +168,16 @@ func New(version string, args []string, logger io.Writer) (*standalone.Server, e
 	}
 
 	return builder.build()
+}
+
+func packageConfig(options *Options) error {
+	if options.Package.RuleDestURL == "" {
+		return fmt.Errorf("package rule dest url was empty")
+	}
+	ruleSourceURL := normalizeURL(options.Package.RuleSourceURL)
+	ruleDestURL := normalizeURL(options.Package.RuleDestURL)
+	cacheSetting := soption.WithCache(gateway.PackageFile, "gzip")
+	return cache.Package(context.Background(), ruleSourceURL, ruleDestURL, cacheSetting)
 }
 
 func dumpConfiguration(location, folder string, options *Options) {
