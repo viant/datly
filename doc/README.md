@@ -1,5 +1,7 @@
 # Datly 
 
+
+
 Datly has been design as modern flexible ORM for rapid development. Datly can operate in 
 managed, autonomous and custom mode.
 In managed mode datly is used as regular GoLang ORM where a user operate on golang struct and datly services programmatically.
@@ -518,4 +520,5 @@ WHERE  #if($Ids.Values.Length() > 0 ) ID IN ( $Ids.Values ) #else 1 = 0 #end
 
 
 
+#### 
 
