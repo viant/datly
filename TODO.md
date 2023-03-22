@@ -1,5 +1,5 @@
-- code parameter assets (i.e xml validator)
 
+- code parameter assets (i.e xml validator)
 - pre proxy processor/programatic router
 
 /* {URI":"foresactint/{xty}"} */
@@ -10,10 +10,7 @@
   $proxy.To('/v1/api/ws/view2')
  #end
 
-type Validation struct {
-    IsValid bool
-    Error string
-}
+
 
 
 - Executor triggers/notification (notification message ID in response)
@@ -38,8 +35,6 @@ type Validation struct {
 - SQL with StructQL simplification
 
 
-- performance profiling/tuning
-- cache metric add detail response about each view case time,records, etc...
 - more than one view in out output nice to have for now
 - improve documentation/examples
 - add support for composite keys
