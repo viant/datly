@@ -213,8 +213,9 @@ func CommonURL(URLs ...string) (string, error) {
 }
 
 func (r *Service) syncChangesIfNeeded(ctx context.Context, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer, isFirst bool) error {
+	started := time.Now()
 	r.mux.Lock()
-	if !r.nextCheck.IsZero() && time.Now().Before(r.nextCheck) || r.isBuilding {
+	if !r.nextCheck.IsZero() && started.Before(r.nextCheck) || r.isBuilding {
 		r.mux.Unlock()
 		return nil
 	}
@@ -252,7 +253,7 @@ func (r *Service) syncChangesIfNeeded(ctx context.Context, metrics *gmetric.Serv
 	}
 
 	if !isFirst {
-		fmt.Printf("[INFO] routers rebuild completed\n")
+		fmt.Printf("[INFO] routers rebuild completed after: %s\n", time.Since(started))
 	}
 
 	mainRouter := NewRouter(routers, r.Config, metrics, statusHandler, authorizer)
@@ -327,12 +328,6 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (resourc
 	if !changes.Changed() {
 		return copyResourcesMap(r.dataResourcesIndex), false, nil
 	}
-
-	fmt.Printf("detected changes\n")
-	started := time.Now()
-	defer func() {
-		fmt.Printf("loaded changes: %s\n", time.Since(started))
-	}()
 	pluginsChanges, err := r.handlePluginsChanges(ctx, changes)
 	if pluginsChanges != nil {
 	outer:
@@ -350,12 +345,10 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (resourc
 	if err != nil {
 		return nil, false, err
 	}
-	fmt.Printf("reload resource\n")
 	resources, err = r.reloadResources(ctx, fs, changes)
 	if err != nil {
 		return nil, false, err
 	}
-
 	return resources, true, nil
 }
 
