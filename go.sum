@@ -271,6 +271,8 @@ github.com/viant/afs v1.23.1-0.20230322172956-a73df7d9e796 h1:zqB/R/GSC4/YDpWDVd
 github.com/viant/afs v1.23.1-0.20230322172956-a73df7d9e796/go.mod h1:bo/jkTH8sBUhG0PQcPsuskvjb/5uEzgiwygGwtaDw8Q=
 github.com/viant/afs v1.23.1-0.20230322173644-27e751c234df h1:taIaAaoohOPGZI7+vKoBSN3hUK1z98DgicvgRL2uTW8=
 github.com/viant/afs v1.23.1-0.20230322173644-27e751c234df/go.mod h1:bo/jkTH8sBUhG0PQcPsuskvjb/5uEzgiwygGwtaDw8Q=
+github.com/viant/afs v1.23.1-0.20230322174251-e9eb06d43c87 h1:ILiMcPS/TYIVOLV8LbPqN05/iNXD2iJbdADcOPiMhtw=
+github.com/viant/afs v1.23.1-0.20230322174251-e9eb06d43c87/go.mod h1:bo/jkTH8sBUhG0PQcPsuskvjb/5uEzgiwygGwtaDw8Q=
 github.com/viant/afsc v1.8.1-0.20230321185125-47bc1e4b8e4a h1:6dIKUOdiwLt1eZdkvN4tybRPDyr+LxJqh4kk1WAQhIk=
 github.com/viant/afsc v1.8.1-0.20230321185125-47bc1e4b8e4a/go.mod h1:FA/xVjaMM10qGByabP8anTVMH6N4eUsAeWm5xcEZJJA=
 github.com/viant/afsc v1.9.0/go.mod h1:FA/xVjaMM10qGByabP8anTVMH6N4eUsAeWm5xcEZJJA=
