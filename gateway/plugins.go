@@ -10,7 +10,6 @@ import (
 	"plugin"
 	"reflect"
 	"sort"
-	"sync"
 	"time"
 )
 
@@ -48,6 +47,11 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	if updateSize == 0 {
 		return nil, nil
 	}
+	started := time.Now()
+	defer func() {
+		fmt.Printf("loaded plugin after: %s\n", time.Since(started))
+	}()
+
 	registry := config.NewRegistry()
 	var types []string
 	_, cancelFn := core.Types(func(packageName, typeName string, rType reflect.Type, _ time.Time) {
@@ -57,12 +61,9 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	defer cancelFn()
 
 	aChan := make(chan func() (*pluginData, error), updateSize)
-	wg := sync.WaitGroup{}
 	for i := 0; i < updateSize; i++ {
-		wg.Add(1)
-		go r.loadPlugin(ctx, changes.pluginsIndex.updated[i], aChan, &wg)
+		go r.loadPlugin(ctx, changes.pluginsIndex.updated[i], aChan)
 	}
-	wg.Wait()
 
 	var pluginsData pluginDataSlice
 	var i = 0
@@ -76,15 +77,12 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 			fmt.Printf("[ERROR] error occured while reading plugin %v\n", err.Error())
 			continue
 		}
-
 		if data == nil {
 			continue
 		}
-
 		if len(data.changes) == 0 {
 			continue
 		}
-
 		pluginsData = append(pluginsData, data)
 	}
 
@@ -110,9 +108,7 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	if len(types) > 0 {
 		fmt.Printf("[INFO] detected plugin changes, overriding types %s\n", types)
 	}
-
 	config.Config.Override(registry)
-
 	return registry, nil
 }
 
@@ -142,8 +138,7 @@ func (r *Service) handlePluginTypes(provider *plugin.Plugin, data *pluginData) {
 	data.packageName = packageName
 }
 
-func (r *Service) loadPlugin(ctx context.Context, URL string, aChan chan func() (*pluginData, error), wg *sync.WaitGroup) {
-	defer wg.Done()
+func (r *Service) loadPlugin(ctx context.Context, URL string, aChan chan func() (*pluginData, error)) {
 	aData, err := r.loadPluginData(ctx, URL)
 	aChan <- func() (*pluginData, error) {
 		return aData, err
@@ -155,9 +150,7 @@ func (r *Service) loadPluginData(ctx context.Context, URL string) (*pluginData, 
 	//	URL = URL[index:]
 	//}
 	var reasons []string
-	started := time.Now()
 	info, pluginProvider, err := r.pluginManager.OpenWithInfoURL(ctx, URL)
-	fmt.Printf("Open plugin after: %s\n", time.Since(started))
 	if err != nil {
 		if manager.IsPluginOutdated(err) {
 			reasons = append(reasons, err.Error())
