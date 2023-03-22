@@ -36,8 +36,9 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 	}
 
 	var err error
+	fs := gateway.NewFs(configURL)
 	configInit.Do(func() {
-		gwayConfig, err = gateway.NewConfigFromURL(context.Background(), configURL)
+		gwayConfig, err = gateway.NewConfigFromURL(context.Background(), fs, configURL)
 	})
 
 	if err != nil {

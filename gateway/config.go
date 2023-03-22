@@ -91,8 +91,7 @@ func (c *Config) Init() error {
 	return c.APIKeys.Init()
 }
 
-func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {
-	fs := afs.New()
+func NewConfigFromURL(ctx context.Context, fs afs.Service, URL string) (*Config, error) {
 	data, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, err

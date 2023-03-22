@@ -157,17 +157,20 @@ func newFileService(aConfig *Config) (afs.Service, error) {
 	if !aConfig.UseCacheFS {
 		return afs.New(), nil
 	}
-
 	URL, err := CommonURL(aConfig.DependencyURL, aConfig.PluginsURL, aConfig.RouteURL)
 	if err != nil {
 		return nil, err
 	}
+	return NewCacheFs(URL), nil
+}
+
+func NewCacheFs(URL string) afs.Service {
 	return cache.Singleton(URL,
 		matcher.WithExtExclusion(".so", "so", ".gz", "gz"),
 		option.WithCache(PackageFile, "gzip"),
 		option.WithLogger(func(format string, args ...interface{}) {
 			fmt.Printf(format, args...)
-		})), nil
+		}))
 }
 
 func CommonURL(URLs ...string) (string, error) {

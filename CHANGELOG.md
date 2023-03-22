@@ -1,3 +1,7 @@
+## March 16 2022 v0.5.7.0
+* Optimize aws lambda reloading with go plugin
+* Add datly package rule option
+
 ## March 16 2022 v0.5.1.0
 * Patched lambda with plugins integration
 * Restructured plugin support

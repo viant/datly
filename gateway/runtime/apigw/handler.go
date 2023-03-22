@@ -37,8 +37,9 @@ func HandleHttpRequest(writer http.ResponseWriter, apiRequest *adapter.Request) 
 		return fmt.Errorf("config was emty")
 	}
 	var err error
+	fs := gateway.NewFs(configURL)
 	configInit.Do(func() {
-		gwayConfig, err = gateway.NewConfigFromURL(context.Background(), configURL)
+		gwayConfig, err = gateway.NewConfigFromURL(context.Background(), fs, configURL)
 	})
 
 	if err != nil {
