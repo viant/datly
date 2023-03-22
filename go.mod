@@ -33,7 +33,7 @@ require (
 	github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac
 	github.com/viant/parsly v0.1.0
 	github.com/viant/pgo v0.9.1-0.20230320232742-4509ce2cc1cb
-	github.com/viant/scy v0.4.2-0.20230309001211-1f666f44ff5d
+	github.com/viant/scy v0.5.0
 	github.com/viant/sqlx v0.5.3-0.20230301014138-5a9ca541f97f
 	github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
