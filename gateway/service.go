@@ -350,7 +350,7 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (resourc
 	if err != nil {
 		return nil, false, err
 	}
-
+	fmt.Printf("reload resource\n")
 	resources, err = r.reloadResources(ctx, fs, changes)
 	if err != nil {
 		return nil, false, err
@@ -369,7 +369,11 @@ func (r *Service) reloadResources(ctx context.Context, fs afs.Service, changes *
 		result[resourceURL] = r.dataResourcesIndex[resourceURL]
 	}
 
-	resourceChan := make(chan func() (*view.Resource, string, error))
+	if len(changes.resourcesIndex.updatedIndex) == 0 { //add to avoid deadlock
+		return result, nil
+	}
+
+	resourceChan := make(chan func() (*view.Resource, string, error), len(changes.resourcesIndex.updatedIndex))
 	channelSize := r.populateResourceChan(ctx, resourceChan, fs, changes.resourcesIndex.updatedIndex)
 	counter := 0
 	var errors []error
