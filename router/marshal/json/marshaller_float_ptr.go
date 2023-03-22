@@ -6,12 +6,12 @@ import (
 	"unsafe"
 )
 
-type Float32PtrMarshaller struct {
+type float32PtrMarshaller struct {
 	zeroValue string
 	dTag      *DefaultTag
 }
 
-func NewFloat32PtrMarshaller(dTag *DefaultTag) *Float32PtrMarshaller {
+func newFloat32PtrMarshaller(dTag *DefaultTag) *float32PtrMarshaller {
 	var zeroValue *float32
 	if dTag._value != nil {
 		zeroValue, _ = dTag._value.(*float32)
@@ -22,13 +22,13 @@ func NewFloat32PtrMarshaller(dTag *DefaultTag) *Float32PtrMarshaller {
 		zeroString = formatFloat(float64(*zeroValue))
 	}
 
-	return &Float32PtrMarshaller{
+	return &float32PtrMarshaller{
 		zeroValue: zeroString,
 		dTag:      dTag,
 	}
 }
 
-func (i *Float32PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *float32PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	f32Ptr := xunsafe.AsFloat32AddrPtr(ptr)
 	if f32Ptr == nil || *f32Ptr == nil {
 		sb.WriteString(i.zeroValue)
@@ -38,16 +38,16 @@ func (i *Float32PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) e
 	return appendFloat(float64(**f32Ptr), sb)
 }
 
-func (i *Float32PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *float32PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
 	return decoder.AddFloat32Null(xunsafe.AsFloat32AddrPtr(pointer))
 }
 
-type Float64PtrMarshaller struct {
+type float64PtrMarshaller struct {
 	zeroValue string
 	dTag      *DefaultTag
 }
 
-func NewFloat64PtrMarshaller(dTag *DefaultTag) *Float64PtrMarshaller {
+func newFloat64PtrMarshaller(dTag *DefaultTag) *float64PtrMarshaller {
 	var zeroValue *float64
 	if dTag._value != nil {
 		zeroValue, _ = dTag._value.(*float64)
@@ -58,13 +58,13 @@ func NewFloat64PtrMarshaller(dTag *DefaultTag) *Float64PtrMarshaller {
 		zeroString = formatFloat(*zeroValue)
 	}
 
-	return &Float64PtrMarshaller{
+	return &float64PtrMarshaller{
 		zeroValue: zeroString,
 		dTag:      dTag,
 	}
 }
 
-func (i *Float64PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *float64PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	f32Ptr := xunsafe.AsFloat64AddrPtr(ptr)
 	if f32Ptr == nil || *f32Ptr == nil {
 		sb.WriteString(i.zeroValue)
@@ -74,6 +74,6 @@ func (i *Float64PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) e
 	return appendFloat(**f32Ptr, sb)
 }
 
-func (i *Float64PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *float64PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
 	return decoder.AddFloat64Null(xunsafe.AsFloat64AddrPtr(pointer))
 }

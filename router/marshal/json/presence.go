@@ -7,12 +7,12 @@ import (
 	"reflect"
 )
 
-type PresenceUpdater struct {
+type presenceUpdater struct {
 	xField *xunsafe.Field
 	fields map[string]*xunsafe.Field
 }
 
-func NewPresenceUpdater(field reflect.StructField) (*PresenceUpdater, error) {
+func newPresenceUpdater(field reflect.StructField) (*presenceUpdater, error) {
 	presenceFields, err := getFields(field.Type)
 	if err != nil {
 		return nil, err
@@ -23,7 +23,7 @@ func NewPresenceUpdater(field reflect.StructField) (*PresenceUpdater, error) {
 		presenceFieldsIndex[presenceField.Name] = presenceFields[i]
 	}
 
-	iUpdater := &PresenceUpdater{
+	iUpdater := &presenceUpdater{
 		xField: xunsafe.NewField(field),
 		fields: presenceFieldsIndex,
 	}

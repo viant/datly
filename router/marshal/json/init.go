@@ -9,24 +9,25 @@ import (
 )
 
 var rawMessageType = reflect.TypeOf(json.RawMessage{})
+var mapStringIfaceType = reflect.TypeOf(map[string]interface{}{})
 
 func init() {
 	ResetCache()
 }
 
 func ResetCache() {
-	bufferPool = &BufferPool{}
-	bufferPool.pool = &sync.Pool{
+	buffersPool = &buffers{}
+	buffersPool.pool = &sync.Pool{
 		New: func() interface{} {
 			buffer := bytes.Buffer{}
 			return &buffer
 		},
 	}
 
-	bufferPool.Put(bufferPool.Get())
-	typesPool = &TypesPool{
+	buffersPool.put(buffersPool.get())
+	types = &typesPool{
 		xtypesMap: sync.Map{},
 	}
 
-	namesCaseIndex = &NamesCaseIndex{registry: map[format.Case]map[string]string{}}
+	namesIndex = &namesCaseIndex{registry: map[format.Case]map[string]string{}}
 }

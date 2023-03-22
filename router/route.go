@@ -13,7 +13,6 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/parameter"
 	"github.com/viant/sqlx/io/load/reader/csv"
-	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"net/http"
@@ -53,6 +52,8 @@ type (
 		Cors             *Cors
 		EnableAudit      bool
 		EnableDebug      *bool
+		Transforms       marshal.Transforms
+
 		Output
 		Index
 
@@ -60,14 +61,13 @@ type (
 		Cache            *cache.Cache
 		Compression      *Compression
 
-		_resource          *view.Resource
-		_accessors         *types.Accessors
-		_presenceProviders map[reflect.Type]*option.PresenceProvider
+		_resource  *view.Resource
+		_accessors *types.Accessors
 
 		_requestBodyParamRequired bool
 		_requestBodyType          reflect.Type
 		_requestBodySlice         *xunsafe.Slice
-		_inputMarshaller          *json.Marshaller
+		_marshaller               *json.Marshaller
 		_apiKeys                  []*APIKey
 	}
 
@@ -82,21 +82,18 @@ type (
 		OmitEmpty         bool                 `json:",omitempty"`
 		Style             Style                `json:",omitempty"`
 		Field             string               `json:",omitempty"`
-		Transforms        marshal.Transforms
 		Exclude           []string
 		NormalizeExclude  *bool
 		DateFormat        string     `json:",omitempty"`
 		CSV               *CSVConfig `json:",omitempty"`
 		RevealMetric      *bool
 		DebugKind         view.MetaKind
-		ReturnBody        bool `json:",omitempty"`
 		RequestBodySchema *view.Schema
 		ResponseBody      *BodySelector
 
-		_caser            *format.Case
-		_excluded         map[string]bool
-		_outputMarshaller *json.Marshaller
-		_responseSetter   *responseSetter
+		_caser          *format.Case
+		_excluded       map[string]bool
+		_responseSetter *responseSetter
 	}
 
 	CSVConfig struct {
@@ -303,17 +300,6 @@ func (r *Route) initCardinality() error {
 	}
 }
 
-func (r *Route) initMarshaller() error {
-	marshaller, err := json.New(r.responseType(), r.jsonConfig())
-
-	if err != nil {
-		return err
-	}
-
-	r._outputMarshaller = marshaller
-	return nil
-}
-
 func (r *Route) jsonConfig() marshal.Default {
 	return marshal.Default{
 		OmitEmpty:  r.OmitEmpty,
@@ -472,10 +458,6 @@ func (r *Route) initRequestBodyFromParams() error {
 	}
 
 	r._requestBodyType = rType
-	r._inputMarshaller, err = json.New(rType, r.jsonConfig())
-	if err != nil {
-		return err
-	}
 
 	r._accessors.Init(r._requestBodyType)
 	for _, param := range params {
@@ -746,4 +728,10 @@ func (c *CSVConfig) unwrapIfNeeded(value interface{}) (interface{}, error) {
 
 func (r *Route) AddApiKeys(keys ...*APIKey) {
 	r._apiKeys = append(r._apiKeys, keys...)
+}
+
+func (r *Route) initMarshaller() error {
+	var err error
+	r._marshaller, err = json.New(r.jsonConfig())
+	return err
 }

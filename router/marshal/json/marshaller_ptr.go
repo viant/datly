@@ -9,34 +9,29 @@ import (
 	"unsafe"
 )
 
-type PtrMarshaller struct {
+type ptrMarshaller struct {
 	rType       reflect.Type
 	marshaler   Marshaler
 	xType       *xunsafe.Type
 	isElemIface bool
 }
 
-func NewPtrMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *Cache) (Marshaler, error) {
+func newPtrMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (Marshaler, error) {
 	elem := rType.Elem()
-	marshaller, ok := cache.getPredefinedPtrMarshaller(elem, config, path, outputPath, tag, cache)
-	if ok {
-		return marshaller, nil
-	}
-
-	marshaller, err := cache.LoadMarshaller(elem, config, path, outputPath, tag)
+	marshaller, err := cache.loadMarshaller(elem, config, path, outputPath, tag)
 	if err != nil {
 		return nil, err
 	}
 
-	return &PtrMarshaller{
-		xType:       GetXType(elem),
+	return &ptrMarshaller{
+		xType:       getXType(elem),
 		rType:       rType,
 		marshaler:   marshaller,
 		isElemIface: elem.Kind() == reflect.Interface,
 	}, err
 }
 
-func (i *PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *ptrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	ptr = xunsafe.DerefPointer(ptr)
 
 	if ptr == nil {
@@ -47,14 +42,14 @@ func (i *PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	return i.marshaler.MarshallObject(ptr, sb)
 }
 
-func (i *PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *ptrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
 	if pointer == nil {
 		return nil
 	}
 
-	if nullDecoder == nil {
+	if auxiliaryDecoder == nil {
 		embeddedJSON := &gojay.EmbeddedJSON{}
-		if err := mainDecoder.EmbeddedJSON(embeddedJSON); err != nil {
+		if err := decoder.EmbeddedJSON(embeddedJSON); err != nil {
 			return err
 		}
 
@@ -62,8 +57,8 @@ func (i *PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *go
 			return nil
 		}
 
-		nullDecoder = gojay.NewDecoder(bytes.NewReader(*embeddedJSON))
+		auxiliaryDecoder = gojay.NewDecoder(bytes.NewReader(*embeddedJSON))
 	}
 
-	return i.marshaler.UnmarshallObject(xunsafe.SafeDerefPointer(pointer, i.rType), nullDecoder, nullDecoder)
+	return i.marshaler.UnmarshallObject(xunsafe.SafeDerefPointer(pointer, i.rType), auxiliaryDecoder, auxiliaryDecoder, session)
 }

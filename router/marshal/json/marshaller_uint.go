@@ -7,24 +7,24 @@ import (
 	"unsafe"
 )
 
-type UintMarshaller struct {
+type uintMarshaller struct {
 	defaultValue string
 	dTag         *DefaultTag
 }
 
-func NewUintMarshaller(dTag *DefaultTag) *UintMarshaller {
+func newUintMarshaller(dTag *DefaultTag) *uintMarshaller {
 	var zeroValue uint
 	if dTag._value != nil {
 		zeroValue, _ = dTag._value.(uint)
 	}
 
-	return &UintMarshaller{
+	return &uintMarshaller{
 		dTag:         dTag,
 		defaultValue: strconv.Itoa(int(zeroValue)),
 	}
 }
 
-func (i *UintMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *uintMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	asUint := xunsafe.AsUint(ptr)
 	if asUint == 0 {
 		sb.WriteString(i.defaultValue)
@@ -34,28 +34,28 @@ func (i *UintMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	return appendInt(int(asUint), sb)
 }
 
-func (i *UintMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
-	return mainDecoder.AddUint64(xunsafe.AsUint64Ptr(pointer))
+func (i *uintMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+	return decoder.AddUint64(xunsafe.AsUint64Ptr(pointer))
 }
 
-type Uint8Marshaller struct {
+type uint8Marshaller struct {
 	defaultValue string
 	dTag         *DefaultTag
 }
 
-func NewUint8Marshaller(tag *DefaultTag) *Uint8Marshaller {
+func newUint8Marshaller(tag *DefaultTag) *uint8Marshaller {
 	var zeroValue uint8
 	if tag._value != nil {
 		zeroValue, _ = tag._value.(uint8)
 	}
 
-	return &Uint8Marshaller{
+	return &uint8Marshaller{
 		defaultValue: strconv.Itoa(int(zeroValue)),
 		dTag:         tag,
 	}
 }
 
-func (i *Uint8Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *uint8Marshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	asUint8 := xunsafe.AsUint8(ptr)
 	if asUint8 == 0 {
 		sb.WriteString(i.defaultValue)
@@ -65,28 +65,28 @@ func (i *Uint8Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error 
 	return appendInt(int(asUint8), sb)
 }
 
-func (i *Uint8Marshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
-	return mainDecoder.AddUint8((*uint8)(pointer))
+func (i *uint8Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+	return decoder.AddUint8((*uint8)(pointer))
 }
 
-type Uint16Marshaller struct {
+type uint16Marshaller struct {
 	zeroValue string
 	dTag      *DefaultTag
 }
 
-func NewUint16Marshaller(dTag *DefaultTag) *Uint16Marshaller {
+func newUint16Marshaller(dTag *DefaultTag) *uint16Marshaller {
 	var zeroValue uint16
 	if dTag._value != nil {
 		zeroValue, _ = dTag._value.(uint16)
 	}
 
-	return &Uint16Marshaller{
+	return &uint16Marshaller{
 		zeroValue: strconv.Itoa(int(zeroValue)),
 		dTag:      dTag,
 	}
 }
 
-func (i *Uint16Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *uint16Marshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	asUint16 := xunsafe.AsUint16(ptr)
 	if asUint16 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -96,28 +96,28 @@ func (i *Uint16Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error
 	return appendInt(int(asUint16), sb)
 }
 
-func (i *Uint16Marshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
-	return mainDecoder.AddUint16((*uint16)(pointer))
+func (i *uint16Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+	return decoder.AddUint16((*uint16)(pointer))
 }
 
-type Uint32Marshaller struct {
+type uint32Marshaller struct {
 	zeroValue string
 	dTag      *DefaultTag
 }
 
-func NewUint32Marshaller(dTag *DefaultTag) *Uint32Marshaller {
+func newUint32Marshaller(dTag *DefaultTag) *uint32Marshaller {
 	var zeroValue uint32
 	if dTag._value != nil {
 		zeroValue, _ = dTag._value.(uint32)
 	}
 
-	return &Uint32Marshaller{
+	return &uint32Marshaller{
 		zeroValue: strconv.Itoa(int(zeroValue)),
 		dTag:      dTag,
 	}
 }
 
-func (i *Uint32Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *uint32Marshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	asUint32 := xunsafe.AsUint32(ptr)
 	if asUint32 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -127,28 +127,28 @@ func (i *Uint32Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error
 	return appendInt(int(asUint32), sb)
 }
 
-func (i *Uint32Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *uint32Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
 	return decoder.AddUint32((*uint32)((pointer)))
 }
 
-type Uint64Marshaller struct {
+type uint64Marshaller struct {
 	zeroValue string
 	dTag      *DefaultTag
 }
 
-func NewUint64Marshaller(dTag *DefaultTag) *Uint64Marshaller {
+func newUint64Marshaller(dTag *DefaultTag) *uint64Marshaller {
 	var zeroValue uint64
 	if dTag._value != nil {
 		zeroValue, _ = dTag._value.(uint64)
 	}
 
-	return &Uint64Marshaller{
+	return &uint64Marshaller{
 		zeroValue: strconv.Itoa(int(zeroValue)),
 		dTag:      dTag,
 	}
 }
 
-func (i *Uint64Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *uint64Marshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	asUint64 := xunsafe.AsUint64(ptr)
 	if asUint64 == 0 {
 		sb.WriteString(i.zeroValue)
@@ -158,6 +158,6 @@ func (i *Uint64Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error
 	return appendInt(int(asUint64), sb)
 }
 
-func (i *Uint64Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *uint64Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
 	return decoder.AddUint64((*uint64)((pointer)))
 }

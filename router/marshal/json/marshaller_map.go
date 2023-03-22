@@ -9,23 +9,21 @@ import (
 	"unsafe"
 )
 
-var mapStringIfaceType = reflect.TypeOf(map[string]interface{}{})
-
-type MapMarshaller struct {
-	discoveredMarshaller func(ptr unsafe.Pointer, sb *Session) error
+type mapMarshaller struct {
+	discoveredMarshaller func(ptr unsafe.Pointer, sb *MarshallSession) error
 	keyMarshaller        Marshaler
 	valueMarshaller      Marshaler
 	isEmbedded           bool
-	cache                *Cache
+	cache                *marshallersCache
 	config               marshal.Default
 	xType                *xunsafe.Type
 	valueType            reflect.Type
 	keyType              reflect.Type
 }
 
-func NewMapMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *Cache) (*MapMarshaller, error) {
-	result := &MapMarshaller{
-		xType:      GetXType(rType),
+func newMapMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (*mapMarshaller, error) {
+	result := &mapMarshaller{
+		xType:      getXType(rType),
 		isEmbedded: tag.Embedded,
 		cache:      cache,
 		config:     config,
@@ -33,7 +31,7 @@ func NewMapMarshaller(rType reflect.Type, config marshal.Default, path string, o
 		keyType:    rType.Key(),
 	}
 
-	valueMarshaller, err := cache.LoadMarshaller(rType.Elem(), config, path, outputPath, tag)
+	valueMarshaller, err := cache.loadMarshaller(rType.Elem(), config, path, outputPath, tag)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +40,7 @@ func NewMapMarshaller(rType reflect.Type, config marshal.Default, path string, o
 	if rType == mapStringIfaceType {
 		result.discoveredMarshaller = result.mapStringIfaceMarshaller()
 	} else {
-		keyMarshaller, err := cache.LoadMarshaller(rType.Key(), config, path, outputPath, tag)
+		keyMarshaller, err := cache.loadMarshaller(rType.Key(), config, path, outputPath, tag)
 		if err != nil {
 			return nil, err
 		}
@@ -52,16 +50,16 @@ func NewMapMarshaller(rType reflect.Type, config marshal.Default, path string, o
 	return result, nil
 }
 
-func (m *MapMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (m *mapMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
 	return fmt.Errorf("unsupported unmarshall to map type, yet")
 }
 
-func (m *MapMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (m *mapMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	if m.discoveredMarshaller != nil {
 		return m.discoveredMarshaller(ptr, sb)
 	}
 
-	aMap := reflect.ValueOf(Interface(m.xType, ptr))
+	aMap := reflect.ValueOf(asInterface(m.xType, ptr))
 	if aMap.IsNil() {
 		return nil
 	}
@@ -103,8 +101,8 @@ func (m *MapMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	return nil
 }
 
-func (m *MapMarshaller) mapStringIfaceMarshaller() func(pointer unsafe.Pointer, sb *Session) error {
-	return func(pointer unsafe.Pointer, sb *Session) error {
+func (m *mapMarshaller) mapStringIfaceMarshaller() func(pointer unsafe.Pointer, sb *MarshallSession) error {
+	return func(pointer unsafe.Pointer, sb *MarshallSession) error {
 		mapPtr := (*map[string]interface{})(pointer)
 		if mapPtr == nil {
 			return nil
@@ -122,7 +120,7 @@ func (m *MapMarshaller) mapStringIfaceMarshaller() func(pointer unsafe.Pointer, 
 			}
 			counter++
 			sb.WriteString(`"`)
-			sb.WriteString(namesCaseIndex.FormatTo(aKey, m.config.CaseFormat))
+			sb.WriteString(namesIndex.formatTo(aKey, m.config.CaseFormat))
 			sb.WriteString(`":`)
 
 			if err := m.valueMarshaller.MarshallObject(AsPtr(aValue, m.valueType), sb); err != nil {

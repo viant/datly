@@ -1,9 +1,22 @@
 package json
 
-import "bytes"
+import (
+	"bytes"
+	"github.com/francoispqt/gojay"
+)
 
-type Session struct {
-	Filters *Filters
-	Options []interface{}
-	*bytes.Buffer
-}
+type (
+	MarshallSession struct {
+		Filters *Filters
+		Options []interface{}
+		*bytes.Buffer
+	}
+
+	Interceptors      map[string]UnmarshallInterceptor
+	UnmarshallSession struct {
+		Interceptors Interceptors
+		Options      []interface{}
+	}
+
+	UnmarshallInterceptor func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error
+)

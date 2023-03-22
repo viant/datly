@@ -9,12 +9,12 @@ import (
 	"unsafe"
 )
 
-type StringMarshaller struct {
+type stringMarshaller struct {
 	defaultValue string
 	dTag         *DefaultTag
 }
 
-func NewStringMarshaller(dTag *DefaultTag) *StringMarshaller {
+func newStringMarshaller(dTag *DefaultTag) *stringMarshaller {
 	var zeroValue string
 	if dTag._value != nil {
 		zeroValue, _ = dTag._value.(string)
@@ -22,13 +22,13 @@ func NewStringMarshaller(dTag *DefaultTag) *StringMarshaller {
 
 	zeroValue = strconv.Quote(zeroValue)
 
-	return &StringMarshaller{
+	return &stringMarshaller{
 		dTag:         dTag,
 		defaultValue: zeroValue,
 	}
 }
 
-func (i *StringMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *stringMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	asString := xunsafe.AsString(ptr)
 	if asString == "" {
 		sb.WriteString(i.defaultValue)
@@ -39,11 +39,11 @@ func (i *StringMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error
 	return nil
 }
 
-func (i *StringMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
-	return mainDecoder.AddString(xunsafe.AsStringPtr(pointer))
+func (i *stringMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+	return decoder.AddString(xunsafe.AsStringPtr(pointer))
 }
 
-func marshallString(asString string, sb *Session) {
+func marshallString(asString string, sb *MarshallSession) {
 	asString = strings.TrimFunc(asString, func(r rune) bool {
 		return !unicode.IsGraphic(r)
 	})

@@ -15,12 +15,12 @@ paths:
                   in: query
                   description: allows to control view event_types fields present in response
                   schema:
-                      $ref: '#/components/schema/_fields'
+                    $ref: '#/components/schema/_fields'
                 - name: ev_fields
                   in: query
                   description: allows to control view events fields present in response
                   schema:
-                      $ref: '#/components/schema/_fields'
+                    $ref: '#/components/schema/_fields'
             responses:
                 "200":
                     description: Success response
@@ -61,6 +61,13 @@ paths:
                             schema:
                                 type: object
                                 properties:
+                                    Err:
+                                        anyOf:
+                                            - type: string
+                                            - type: object
+                                            - type: array
+                                            - type: number
+                                            - type: boolean
                                     Message:
                                         type: string
                                         nullable: true

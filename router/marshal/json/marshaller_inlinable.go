@@ -9,7 +9,7 @@ import (
 )
 
 type (
-	InlinableMarshaller struct {
+	inlinableMarshaller struct {
 		accessor  *xunsafe.Field
 		rType     reflect.Type
 		marshaler Marshaler
@@ -17,13 +17,13 @@ type (
 	}
 )
 
-func NewInlinableMarshaller(field reflect.StructField, config marshal.Default, path, outputPath string, dTag *DefaultTag, cache *Cache) (*InlinableMarshaller, error) {
-	marshaler, err := cache.LoadMarshaller(field.Type, config, path, outputPath, dTag)
+func newInlinableMarshaller(field reflect.StructField, config marshal.Default, path, outputPath string, dTag *DefaultTag, cache *marshallersCache) (*inlinableMarshaller, error) {
+	marshaler, err := cache.loadMarshaller(field.Type, config, path, outputPath, dTag)
 	if err != nil {
 		return nil, err
 	}
 
-	return &InlinableMarshaller{
+	return &inlinableMarshaller{
 		marshaler: marshaler,
 		accessor:  xunsafe.NewField(field),
 		isIface:   field.Type.Kind() == reflect.Interface,
@@ -31,14 +31,14 @@ func NewInlinableMarshaller(field reflect.StructField, config marshal.Default, p
 	}, nil
 }
 
-func (i *InlinableMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *inlinableMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	value := i.accessor.Value(ptr)
 	pointer := AsPtr(value, i.rType)
 	return i.marshaler.MarshallObject(pointer, sb)
 }
 
-func (i *InlinableMarshaller) UnmarshallObject(ptr unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
-	aValue := i.accessor.Value(ptr)
-	pointer := AsPtr(aValue, i.rType)
-	return i.marshaler.UnmarshallObject(pointer, mainDecoder, nullDecoder)
+func (i *inlinableMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+	aValue := i.accessor.Value(pointer)
+	pointer = AsPtr(aValue, i.rType)
+	return i.marshaler.UnmarshallObject(pointer, decoder, auxiliaryDecoder, session)
 }

@@ -12,36 +12,36 @@ import (
 	"sync"
 )
 
-var bufferPool *BufferPool
-var typesPool *TypesPool
-var namesCaseIndex *NamesCaseIndex
+var buffersPool *buffers
+var types *typesPool
+var namesIndex *namesCaseIndex
 
 type (
-	TypesRegistry struct {
-		aMap sync.Map
-	}
-
-	NamesCaseIndex struct {
+	namesCaseIndex struct {
 		mux      sync.Mutex
 		registry map[format.Case]map[string]string
 	}
 
-	Cache struct {
-		pathCaches sync.Map // path -> PathCache
+	marshallersCache struct {
+		pathCaches sync.Map // path -> pathCache
 	}
 
-	PathCache struct {
-		parent *Cache
+	pathCache struct {
+		parent *marshallersCache
 		path   string
 		cache  sync.Map // rType -> Marshaler
 	}
+
+	typesPool struct {
+		xtypesMap sync.Map
+	}
 )
 
-func NewCache() *Cache {
-	return &Cache{pathCaches: sync.Map{}}
+func newCache() *marshallersCache {
+	return &marshallersCache{pathCaches: sync.Map{}}
 }
 
-func (n *NamesCaseIndex) FormatTo(value string, dstFormat format.Case) string {
+func (n *namesCaseIndex) formatTo(value string, dstFormat format.Case) string {
 	n.mux.Lock()
 	defer n.mux.Unlock()
 
@@ -65,37 +65,33 @@ func (n *NamesCaseIndex) FormatTo(value string, dstFormat format.Case) string {
 	return formated
 }
 
-type BufferPool struct {
+type buffers struct {
 	pool *sync.Pool
 }
 
-func (p *BufferPool) Get() *bytes.Buffer {
+func (p *buffers) get() *bytes.Buffer {
 	return p.pool.Get().(*bytes.Buffer)
 }
 
-func (p *BufferPool) Put(buffer *bytes.Buffer) {
+func (p *buffers) put(buffer *bytes.Buffer) {
 	buffer.Reset()
 	p.pool.Put(buffer)
 }
 
-type TypesPool struct {
-	xtypesMap sync.Map
-}
-
-func GetXType(rType reflect.Type) *xunsafe.Type {
-	load, ok := typesPool.xtypesMap.Load(rType)
+func getXType(rType reflect.Type) *xunsafe.Type {
+	load, ok := types.xtypesMap.Load(rType)
 	if ok {
 		return load.(*xunsafe.Type)
 	}
 
 	xType := xunsafe.NewType(rType)
-	typesPool.xtypesMap.Store(rType, xType)
+	types.xtypesMap.Store(rType, xType)
 	return xType
 }
 
-func (m *Cache) LoadMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, defaultTag *DefaultTag) (Marshaler, error) {
-	pathCache := m.pathCache(path)
-	marshaller, err := pathCache.GetMarshaller(rType, config, path, outputPath, defaultTag)
+func (m *marshallersCache) loadMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, defaultTag *DefaultTag) (Marshaler, error) {
+	aCache := m.pathCache(path)
+	marshaller, err := aCache.loadOrGetMarshaller(rType, config, path, outputPath, defaultTag)
 	if err != nil {
 		return nil, err
 	}
@@ -103,41 +99,79 @@ func (m *Cache) LoadMarshaller(rType reflect.Type, config marshal.Default, path 
 	return marshaller, nil
 }
 
-func (m *Cache) ElemMarshallerIfNeeded(rType reflect.Type, config marshal.Default, path string, outputPath string, defaultTag *DefaultTag) (Marshaler, error) {
-	if rType.Kind() == reflect.Ptr {
-		rType = rType.Elem()
-	}
-
-	return m.LoadMarshaller(rType, config, path, outputPath, defaultTag)
-}
-
-func (c *PathCache) GetMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag) (Marshaler, error) {
+func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag) (Marshaler, error) {
 	value, ok := c.cache.Load(rType)
 	if ok {
 		return value.(Marshaler), nil
 	}
 
-	marshaler, err := c.getMarshaler(rType, config, path, outputPath, tag)
-	if tag == nil {
-		tag = &DefaultTag{}
-	}
+	marshaler, err := c.getMarshaller(rType, config, path, outputPath, tag)
 
 	if err != nil {
 		return nil, err
 	}
 
-	c.StoreMarshaler(rType, marshaler)
+	c.storeMarshaler(rType, marshaler)
 	return marshaler, nil
 }
 
-func (c *PathCache) getMarshaler(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag) (Marshaler, error) {
+func (c *pathCache) getMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag) (Marshaler, error) {
 	if tag == nil {
 		tag = &DefaultTag{}
 	}
 
+	switch rType {
+	case xreflect.TimePtrType:
+		return newTimePtrMarshaller(tag, config), nil
+	}
+
 	switch rType.Kind() {
 	case reflect.Ptr:
-		marshaller, err := NewPtrMarshaller(rType, config, path, outputPath, tag, c.parent)
+		switch rType.Elem().Kind() {
+		case reflect.Int:
+			return newIntPtrMarshaller(tag), nil
+
+		case reflect.Int8:
+			return newInt8PtrMarshaller(tag), nil
+
+		case reflect.Int16:
+			return newInt16PtrMarshaller(tag), nil
+
+		case reflect.Int32:
+			return newInt32PtrMarshaller(tag), nil
+
+		case reflect.Int64:
+			return newInt64PtrMarshaller(tag), nil
+
+		case reflect.Uint:
+			return newUintPtrMarshaller(tag), nil
+
+		case reflect.Uint8:
+			return newUint8PtrMarshaller(tag), nil
+
+		case reflect.Uint16:
+			return newUint16PtrMarshaller(tag), nil
+
+		case reflect.Uint32:
+			return newUint32PtrMarshaller(tag), nil
+
+		case reflect.Uint64:
+			return newUint64PtrMarshaller(tag), nil
+
+		case reflect.Float32:
+			return newFloat32PtrMarshaller(tag), nil
+
+		case reflect.Float64:
+			return newFloat64PtrMarshaller(tag), nil
+
+		case reflect.String:
+			return newStringPtrMarshaller(tag), nil
+
+		case reflect.Bool:
+			return newBoolPtrMarshaller(tag), nil
+		}
+
+		marshaller, err := newPtrMarshaller(rType, config, path, outputPath, tag, c.parent)
 		if err != nil {
 			return nil, err
 		}
@@ -145,14 +179,14 @@ func (c *PathCache) getMarshaler(rType reflect.Type, config marshal.Default, pat
 
 	case reflect.Slice:
 		if rType.Elem().Kind() == reflect.Interface {
-			return NewSliceInterfaceMarshaller(config, path, outputPath, tag, c.parent), nil
+			return newSliceInterfaceMarshaller(config, path, outputPath, tag, c.parent), nil
 		}
 
 		if rType == rawMessageType {
-			return NewRawMessageMarshaller(), nil
+			return newRawMessageMarshaller(), nil
 		}
 
-		marshaller, err := NewSliceMarshaller(rType, config, path, outputPath, tag, c.parent)
+		marshaller, err := newSliceMarshaller(rType, config, path, outputPath, tag, c.parent)
 		if err != nil {
 			return nil, err
 		}
@@ -161,10 +195,10 @@ func (c *PathCache) getMarshaler(rType reflect.Type, config marshal.Default, pat
 
 	case reflect.Struct:
 		if rType == xreflect.TimeType {
-			return NewTimeMarshaller(tag, config), nil
+			return newTimeMarshaller(tag, config), nil
 		}
 
-		marshaller, err := NewStructMarshaller(config, rType, path, outputPath, tag, c.parent)
+		marshaller, err := newStructMarshaller(config, rType, path, outputPath, tag, c.parent)
 		if err != nil {
 			return nil, err
 		}
@@ -172,7 +206,7 @@ func (c *PathCache) getMarshaler(rType reflect.Type, config marshal.Default, pat
 		return marshaller, nil
 
 	case reflect.Interface:
-		marshaller, err := NewInterfaceMarshaller(rType, config, path, outputPath, tag, c.parent)
+		marshaller, err := newInterfaceMarshaller(rType, config, path, outputPath, tag, c.parent)
 		if err != nil {
 			return nil, err
 		}
@@ -180,7 +214,7 @@ func (c *PathCache) getMarshaler(rType reflect.Type, config marshal.Default, pat
 		return marshaller, nil
 
 	case reflect.Map:
-		marshaller, err := NewMapMarshaller(rType, config, path, outputPath, tag, c.parent)
+		marshaller, err := newMapMarshaller(rType, config, path, outputPath, tag, c.parent)
 		if err != nil {
 			return nil, err
 		}
@@ -188,59 +222,59 @@ func (c *PathCache) getMarshaler(rType reflect.Type, config marshal.Default, pat
 		return marshaller, nil
 
 	case reflect.Int:
-		return NewIntMarshaller(tag), nil
+		return newIntMarshaller(tag), nil
 
 	case reflect.Int8:
 		return NewInt8Marshaller(tag), nil
 
 	case reflect.Int16:
-		return NewInt16Marshaller(tag), nil
+		return newInt16Marshaller(tag), nil
 
 	case reflect.Int32:
-		return NewInt32Marshaller(tag), nil
+		return newInt32Marshaller(tag), nil
 
 	case reflect.Int64:
-		return NewInt64Marshaller(tag), nil
+		return newInt64Marshaller(tag), nil
 
 	case reflect.Uint:
-		return NewUintMarshaller(tag), nil
+		return newUintMarshaller(tag), nil
 
 	case reflect.Uint8:
-		return NewUint8Marshaller(tag), nil
+		return newUint8Marshaller(tag), nil
 
 	case reflect.Uint16:
-		return NewUint16Marshaller(tag), nil
+		return newUint16Marshaller(tag), nil
 
 	case reflect.Uint32:
-		return NewUint32Marshaller(tag), nil
+		return newUint32Marshaller(tag), nil
 
 	case reflect.Uint64:
-		return NewUint64Marshaller(tag), nil
+		return newUint64Marshaller(tag), nil
 
 	case reflect.Float64:
-		return NewFloat64Marshaller(tag), nil
+		return newFloat64Marshaller(tag), nil
 
 	case reflect.Float32:
-		return NewFloat32Marshaller(tag), nil
+		return newFloat32Marshaller(tag), nil
 
 	case reflect.Bool:
-		return NewBoolMarshaller(tag), nil
+		return newBoolMarshaller(tag), nil
 
 	case reflect.String:
-		return NewStringMarshaller(tag), nil
+		return newStringMarshaller(tag), nil
 
 	default:
 		return nil, fmt.Errorf("unsupported type %v", rType.String())
 	}
 }
 
-func (m *Cache) pathCache(path string) *PathCache {
+func (m *marshallersCache) pathCache(path string) *pathCache {
 	value, ok := m.pathCaches.Load(path)
 	if ok {
-		return value.(*PathCache)
+		return value.(*pathCache)
 	}
 
-	result := &PathCache{
+	result := &pathCache{
 		parent: m,
 		path:   path,
 		cache:  sync.Map{},
@@ -249,22 +283,7 @@ func (m *Cache) pathCache(path string) *PathCache {
 	return result
 }
 
-func (m *Cache) getPredefinedPtrMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *Cache) (Marshaler, bool) {
-	pathCache := m.pathCache(path)
-	marshaller, ok := pathCache.LoadMarshaller(rType)
-	if ok {
-		return marshaller, true
-	}
-
-	marshaler, ok := m.isPredefinedPtrMarshaller(rType, config, tag)
-	if ok {
-		pathCache.StoreMarshaler(rType, marshaler)
-	}
-
-	return marshaler, ok
-}
-
-func (c *PathCache) LoadMarshaller(rType reflect.Type) (Marshaler, bool) {
+func (c *pathCache) loadMarshaller(rType reflect.Type) (Marshaler, bool) {
 	value, ok := c.cache.Load(rType)
 	if ok {
 		return value.(Marshaler), true
@@ -273,58 +292,6 @@ func (c *PathCache) LoadMarshaller(rType reflect.Type) (Marshaler, bool) {
 	return nil, false
 }
 
-func (c *PathCache) StoreMarshaler(rType reflect.Type, marshaler Marshaler) {
+func (c *pathCache) storeMarshaler(rType reflect.Type, marshaler Marshaler) {
 	c.cache.Store(rType, marshaler)
-}
-
-func (m *Cache) isPredefinedPtrMarshaller(rType reflect.Type, config marshal.Default, tag *DefaultTag) (Marshaler, bool) {
-	if rType == xreflect.TimeType {
-		return NewTimePtrMarshaller(tag, config), true
-	}
-
-	switch rType.Kind() {
-	case reflect.Int:
-		return NewIntPtrMarshaller(tag), true
-
-	case reflect.Int8:
-		return NewInt8PtrMarshaller(tag), true
-
-	case reflect.Int16:
-		return NewInt16PtrMarshaller(tag), true
-
-	case reflect.Int32:
-		return NewInt32PtrMarshaller(tag), true
-
-	case reflect.Int64:
-		return NewInt64PtrMarshaller(tag), true
-
-	case reflect.Uint:
-		return NewUintPtrMarshaller(tag), true
-
-	case reflect.Uint8:
-		return NewUint8PtrMarshaller(tag), true
-
-	case reflect.Uint16:
-		return NewUint16PtrMarshaller(tag), true
-
-	case reflect.Uint32:
-		return NewUint32PtrMarshaller(tag), true
-
-	case reflect.Uint64:
-		return NewUint64PtrMarshaller(tag), true
-
-	case reflect.Float32:
-		return NewFloat32PtrMarshaller(tag), true
-
-	case reflect.Float64:
-		return NewFloat64PtrMarshaller(tag), true
-
-	case reflect.String:
-		return NewStringPtrMarshaller(tag), true
-
-	case reflect.Bool:
-		return NewBoolPtrMarshaller(tag), true
-	}
-
-	return nil, false
 }

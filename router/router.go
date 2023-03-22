@@ -541,7 +541,7 @@ func (r *Router) inAWS() bool {
 func (r *Router) result(session *ReaderSession, destValue reflect.Value, filters *json.Filters, meta interface{}, stats []*reader.Info) ([]byte, int, error) {
 	if session.Route.Cardinality == view.Many {
 		result := r.wrapWithResponseIfNeeded(destValue.Elem().Interface(), session.Route, meta, stats, nil)
-		asBytes, err := session.Route._outputMarshaller.Marshal(result, filters)
+		asBytes, err := session.Route._marshaller.Marshal(result, filters)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
@@ -557,7 +557,7 @@ func (r *Router) result(session *ReaderSession, destValue reflect.Value, filters
 		return nil, http.StatusNotFound, nil
 	case 1:
 		result := r.wrapWithResponseIfNeeded(session.Route.View.Schema.Slice().ValueAt(slicePtr, 0), session.Route, meta, stats, nil)
-		asBytes, err := session.Route._outputMarshaller.Marshal(result, filters)
+		asBytes, err := session.Route._marshaller.Marshal(result, filters)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
@@ -623,7 +623,7 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 	//TODO extend to unified response
 	r.setResponseStatus(route, response, responseStatus, nil)
 
-	asBytes, marErr := route._outputMarshaller.Marshal(response.Elem().Interface())
+	asBytes, marErr := route._marshaller.Marshal(response.Elem().Interface())
 	if marErr != nil {
 		w.Write(asBytes)
 		w.WriteHeader(statusCode)

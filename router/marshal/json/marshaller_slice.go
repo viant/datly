@@ -9,7 +9,7 @@ import (
 )
 
 type (
-	SliceMarshaller struct {
+	sliceMarshaller struct {
 		xslice     *xunsafe.Slice
 		elemType   reflect.Type
 		marshaller Marshaler
@@ -20,10 +20,11 @@ type (
 		ptr          unsafe.Pointer
 		appender     *xunsafe.Appender
 		unmarshaller Marshaler
+		session      *UnmarshallSession
 	}
 
-	SliceInterfaceMarshaller struct {
-		cache      *Cache
+	sliceInterfaceMarshaller struct {
+		cache      *marshallersCache
 		config     marshal.Default
 		outputPath string
 		path       string
@@ -31,26 +32,26 @@ type (
 	}
 )
 
-func NewSliceMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *Cache) (Marshaler, error) {
+func newSliceMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (Marshaler, error) {
 	elemType := rType.Elem()
 
-	marshaller, err := cache.LoadMarshaller(elemType, config, path, outputPath, tag)
+	marshaller, err := cache.loadMarshaller(elemType, config, path, outputPath, tag)
 	if err != nil {
 		return nil, err
 	}
 
-	return &SliceMarshaller{
+	return &sliceMarshaller{
 		elemType:   elemType,
 		marshaller: marshaller,
 		xslice:     xunsafe.NewSlice(rType, xunsafe.UseItemAddrOpt(true)),
 	}, err
 }
 
-func (s *SliceMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
-	return mainDecoder.Array(newSliceDecoder(s.elemType, pointer, s.xslice, s.marshaller))
+func (s *sliceMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+	return decoder.AddArray(newSliceDecoder(s.elemType, pointer, s.xslice, s.marshaller, session))
 }
 
-func (s *SliceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (s *sliceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	sliceHeader := (*reflect.SliceHeader)(ptr)
 	if s != nil && sliceHeader.Data == 0 {
 		sb.WriteString("[]")
@@ -75,22 +76,23 @@ func (s *SliceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error 
 	return nil
 }
 
-func newSliceDecoder(rType reflect.Type, ptr unsafe.Pointer, xslice *xunsafe.Slice, unmarshaller Marshaler) *sliceDecoder {
+func newSliceDecoder(rType reflect.Type, ptr unsafe.Pointer, xslice *xunsafe.Slice, unmarshaller Marshaler, session *UnmarshallSession) *sliceDecoder {
 	return &sliceDecoder{
 		rType:        rType,
 		ptr:          ptr,
 		appender:     xslice.Appender(ptr),
 		unmarshaller: unmarshaller,
+		session:      session,
 	}
 }
 
 func (s *sliceDecoder) UnmarshalJSONArray(d *gojay.Decoder) error {
 	add := s.appender.Add()
-	return s.unmarshaller.UnmarshallObject(xunsafe.AsPointer(add), d, nil)
+	return s.unmarshaller.UnmarshallObject(xunsafe.AsPointer(add), d, nil, s.session)
 }
 
-func NewSliceInterfaceMarshaller(config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *Cache) Marshaler {
-	return &SliceInterfaceMarshaller{
+func newSliceInterfaceMarshaller(config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) Marshaler {
+	return &sliceInterfaceMarshaller{
 		cache:      cache,
 		config:     config,
 		path:       path,
@@ -99,7 +101,7 @@ func NewSliceInterfaceMarshaller(config marshal.Default, path string, outputPath
 	}
 }
 
-func (s *SliceInterfaceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (s *sliceInterfaceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	ifaces := xunsafe.AsInterfaces(ptr)
 
 	sb.WriteByte('[')
@@ -110,7 +112,7 @@ func (s *SliceInterfaceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Sessio
 
 		ifaceType := reflect.TypeOf(iface)
 
-		marshaller, err := s.cache.LoadMarshaller(ifaceType, s.config, s.path, s.outputPath, s.tag)
+		marshaller, err := s.cache.loadMarshaller(ifaceType, s.config, s.path, s.outputPath, s.tag)
 		if err != nil {
 			return err
 		}
@@ -126,7 +128,7 @@ func (s *SliceInterfaceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Sessio
 	return nil
 }
 
-func (s *SliceInterfaceMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (s *sliceInterfaceMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
 	ifaces := (*[]interface{})(pointer)
 
 	var result interface{}

@@ -3,12 +3,14 @@ package json_test
 import (
 	goJson "encoding/json"
 	"fmt"
+	"github.com/francoispqt/gojay"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/toolbox/format"
+	"net/http"
 	"reflect"
 	"testing"
 	"time"
@@ -197,7 +199,7 @@ func TestJson_Marshal(t *testing.T) {
 			dataType = dataType.Elem()
 		}
 
-		marshaller, err := json.New(dataType, testcase.defaultConfig)
+		marshaller, err := json.New(testcase.defaultConfig)
 		if !assert.Nil(t, err, testcase.description) {
 			t.Fail()
 			return
@@ -791,7 +793,7 @@ func BenchmarkMarshal(b *testing.B) {
 		},
 	}
 
-	benchMarshaller, _ = json.New(reflect.TypeOf(&Event{}), marshal.Default{})
+	benchMarshaller, _ = json.New(marshal.Default{})
 
 	b.Run("SDK json", func(b *testing.B) {
 		var bytes []byte
@@ -841,15 +843,18 @@ func inlinable() interface{} {
 	}
 }
 
+type unmarshallTestcase struct {
+	description  string
+	data         string
+	into         func() interface{}
+	expect       string
+	expectError  bool
+	stringsEqual bool
+	options      []interface{}
+}
+
 func TestMarshaller_Unmarshal(t *testing.T) {
-	testCases := []struct {
-		description  string
-		data         string
-		into         func() interface{}
-		expect       string
-		expectError  bool
-		stringsEqual bool
-	}{
+	testCases := []unmarshallTestcase{
 		{
 			description: "basic struct",
 			data:        `{"Name": "Foo", "ID": 1}`,
@@ -1115,18 +1120,20 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 				return v.Interface()
 			},
 		},
+		httpUnmarshallTestcase("Boo", `{"Object": {"Value1": "Abc", "Value2": 125.5}}`, `{"ID":0,"Object":{"Value1":"Abc","Value2":125.5},"Name":""}`),
+		httpUnmarshallTestcase("Bar", `{"Object": {"CreatedAt": "time.Now", "UpdatedAt": "time.Now + 5 Days"}}`, `{"ID":0,"Object":{"CreatedAt":"time.Now","UpdatedAt":"time.Now + 5 Days"},"Name":""}`),
 	}
 
 	//for i, testCase := range testCases[len(testCases)-1:] {
 	for i, testCase := range testCases {
 		fmt.Printf("Running testcase nr#%v\n", i)
 		actual := testCase.into()
-		marshaller, err := json.New(reflect.TypeOf(actual), marshal.Default{})
+		marshaller, err := json.New(marshal.Default{})
 		if !assert.Nil(t, err, testCase.description) {
 			continue
 		}
 
-		marshalErr := marshaller.Unmarshal([]byte(testCase.data), actual)
+		marshalErr := marshaller.Unmarshal([]byte(testCase.data), actual, testCase.options...)
 
 		if (!testCase.expectError && !assert.Nil(t, err, testCase.description)) || (testCase.expectError && assert.NotNil(t, marshalErr, testCase.description)) {
 			continue
@@ -1148,5 +1155,80 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 			bytes, _ := goJson.Marshal(actual)
 			assert.Equal(t, expect, string(bytes), testCase.description)
 		}
+	}
+}
+
+func httpUnmarshallTestcase(typeName string, data string, expected string) unmarshallTestcase {
+	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:8080/v1/api/dev/custom-unmarshall?type=%v", typeName), nil)
+	if err != nil {
+		panic(err)
+	}
+
+	type Foo struct {
+		ID     int
+		Object interface{}
+		Name   string
+	}
+
+	type Bar struct {
+		CreatedAt string
+		UpdatedAt string
+	}
+
+	type Boo struct {
+		Value1 string
+		Value2 float64
+	}
+
+	return unmarshallTestcase{
+		description:  "broken case 17",
+		data:         data,
+		expect:       expected,
+		stringsEqual: true,
+		options: []interface{}{
+			request,
+			json.Interceptors{
+				"Object": func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
+					var httpRequest *http.Request
+					for _, option := range options {
+						switch actual := option.(type) {
+						case *http.Request:
+							httpRequest = actual
+						}
+					}
+
+					embeddedJSON := gojay.EmbeddedJSON{}
+					if err = decoder.EmbeddedJSON(&embeddedJSON); err != nil {
+						return err
+					}
+
+					actualDst := dst.(*interface{})
+					query := httpRequest.URL.Query()
+					switch query.Get("type") {
+					case "Bar":
+						aBar := &Bar{}
+
+						if err = goJson.Unmarshal(embeddedJSON, aBar); err != nil {
+							return err
+						}
+
+						*actualDst = aBar
+						return nil
+
+					default:
+						aBoo := &Boo{}
+						if err = goJson.Unmarshal(embeddedJSON, aBoo); err != nil {
+							return err
+						}
+
+						*actualDst = aBoo
+						return nil
+					}
+				},
+			},
+		},
+		into: func() interface{} {
+			return &Foo{}
+		},
 	}
 }

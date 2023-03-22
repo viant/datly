@@ -60,7 +60,7 @@ Resource:
           #if($i != 0)
           AND
           #end
-          id = $Safe_Int($id)
+          id = $criteria.AsBinding($id)
         '
 
   Types:

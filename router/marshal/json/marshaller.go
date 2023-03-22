@@ -6,6 +6,6 @@ import (
 )
 
 type Marshaler interface {
-	MarshallObject(ptr unsafe.Pointer, sb *Session) error
-	UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error
+	MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error
+	UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error
 }

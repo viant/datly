@@ -19,19 +19,15 @@ const IndexKey = "presenceIndex"
 
 type (
 	Marshaller struct {
-		cache  *Cache
+		cache  *marshallersCache
 		config marshal.Default
 	}
 )
 
-func New(rType reflect.Type, config marshal.Default) (*Marshaller, error) {
+func New(config marshal.Default) (*Marshaller, error) {
 	m := &Marshaller{
-		cache:  NewCache(),
-		config: marshal.Default{},
-	}
-	_, err := m.cache.LoadMarshaller(rType, config, "", "", nil)
-	if err != nil {
-		return nil, err
+		cache:  newCache(),
+		config: config,
 	}
 
 	return m, nil
@@ -48,9 +44,9 @@ func (j *Marshaller) Marshal(value interface{}, options ...interface{}) ([]byte,
 		return nil, err
 	}
 
-	session, putBufferBack := j.PrepareSession(options)
+	session, putBufferBack := j.prepareMarshallSession(options)
 	if putBufferBack {
-		defer bufferPool.Put(session.Buffer)
+		defer buffersPool.put(session.Buffer)
 	}
 
 	pointer := AsPtr(value, rType)
@@ -65,14 +61,14 @@ func (j *Marshaller) Marshal(value interface{}, options ...interface{}) ([]byte,
 	return output, nil
 }
 
-func (j *Marshaller) PrepareSession(options []interface{}) (*Session, bool) {
+func (j *Marshaller) prepareMarshallSession(options []interface{}) (*MarshallSession, bool) {
 	if len(options) == 0 {
-		return &Session{
-			Buffer: bufferPool.Get(),
+		return &MarshallSession{
+			Buffer: buffersPool.get(),
 		}, true
 	}
 
-	var session *Session
+	var session *MarshallSession
 	var filters *Filters
 	var putBufferBack bool
 
@@ -82,16 +78,16 @@ func (j *Marshaller) PrepareSession(options []interface{}) (*Session, bool) {
 		}
 
 		switch actual := option.(type) {
-		case *Session:
+		case *MarshallSession:
 			session = actual
 			putBufferBack = session.Buffer == nil
 		}
 	}
 
 	if session == nil {
-		session = &Session{
+		session = &MarshallSession{
 			Options: options,
-			Buffer:  bufferPool.Get(),
+			Buffer:  buffersPool.get(),
 		}
 
 		putBufferBack = true
@@ -105,7 +101,7 @@ func (j *Marshaller) PrepareSession(options []interface{}) (*Session, bool) {
 }
 
 func (j *Marshaller) Unmarshal(data []byte, dest interface{}, options ...interface{}) error {
-	rType := reflect.TypeOf(dest).Elem()
+	rType := reflect.TypeOf(dest)
 
 	marshaler, err := j.marshaller(rType)
 	if err != nil {
@@ -114,10 +110,8 @@ func (j *Marshaller) Unmarshal(data []byte, dest interface{}, options ...interfa
 
 	aDecoder := gojay.BorrowDecoder(bytes.NewReader(data))
 	defer aDecoder.Release()
-	pointer := xunsafe.AsPointer(dest)
 
-	result := marshaler.UnmarshallObject(pointer, aDecoder, nil)
-
+	result := marshaler.UnmarshallObject(AsPtr(dest, rType), aDecoder, nil, j.prepareUnmarshallSession(options))
 	return result
 }
 
@@ -141,5 +135,30 @@ func EnsureType(rType reflect.Type, ptr unsafe.Pointer) reflect.Type {
 }
 
 func (j *Marshaller) marshaller(rType reflect.Type) (Marshaler, error) {
-	return j.cache.LoadMarshaller(rType, j.config, "", "", nil)
+	return j.cache.loadMarshaller(rType, j.config, "", "", nil)
+}
+
+func (j *Marshaller) prepareUnmarshallSession(options []interface{}) *UnmarshallSession {
+	var unmarshallSession *UnmarshallSession
+	var interceptors Interceptors
+	for _, option := range options {
+		switch actual := option.(type) {
+		case *UnmarshallSession:
+			unmarshallSession = actual
+		case Interceptors:
+			interceptors = actual
+		}
+	}
+
+	if unmarshallSession == nil {
+		unmarshallSession = &UnmarshallSession{}
+	}
+
+	if len(unmarshallSession.Interceptors) == 0 {
+		unmarshallSession.Interceptors = interceptors
+	}
+
+	unmarshallSession.Options = append(unmarshallSession.Options, options...)
+
+	return unmarshallSession
 }

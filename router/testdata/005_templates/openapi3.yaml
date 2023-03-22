@@ -1,77 +1,84 @@
 openapi: 3.1.0
 info:
-  title: ""
-  version: ""
+    title: ""
+    version: ""
 paths:
-  /api/events:
-    get:
-      parameters:
-        - name: quantity
-          in: query
-          description: Parameter QUANTITY, Located in query with name quantity
-          schema:
-            type: number
-            description: Parameter QUANTITY schema
-            format: double
-        - name: user_id
-          in: query
-          description: Parameter USER_ID, Located in query with name user_id
-          schema:
-            type: integer
-            description: Parameter USER_ID schema
-            format: int64
-        - name: _fields
-          in: query
-          description: allows to control view events fields present in response
-          schema:
-            type: string
-            description: Parameter _fields schema
-      responses:
-        "200":
-          description: Success response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  EventTypeId:
+    /api/events:
+        get:
+            parameters:
+                - name: user_id
+                  in: query
+                  description: Parameter USER_ID, Located in query with name user_id
+                  schema:
                     type: integer
+                    description: Parameter USER_ID schema
                     format: int64
-                  Id:
-                    type: integer
-                    format: int64
-                  Quantity:
+                - name: quantity
+                  in: query
+                  description: Parameter QUANTITY, Located in query with name quantity
+                  schema:
                     type: number
+                    description: Parameter QUANTITY schema
                     format: double
-                  Timestamp:
+                - name: _fields
+                  in: query
+                  description: allows to control view events fields present in response
+                  schema:
                     type: string
-                    format: 2006-01-02T15:04:05Z07:00
-                  UserId:
-                    type: integer
-                    format: int64
-                description: Success object schema
-        Default:
-          description: Error response. The view and param may be empty, but one of the message or object should be specified
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  Message:
-                    type: string
-                    nullable: true
-                  Object:
-                    anyOf:
-                      - type: string
-                      - type: object
-                      - type: array
-                      - type: number
-                      - type: boolean
-                    nullable: true
-                  Param:
-                    type: string
-                    nullable: true
-                  View:
-                    type: string
-                    nullable: true
-                description: Error object schema
+                    description: Parameter _fields schema
+            responses:
+                "200":
+                    description: Success response
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    EventTypeId:
+                                        type: integer
+                                        format: int64
+                                    Id:
+                                        type: integer
+                                        format: int64
+                                    Quantity:
+                                        type: number
+                                        format: double
+                                    Timestamp:
+                                        type: string
+                                        format: 2006-01-02T15:04:05Z07:00
+                                    UserId:
+                                        type: integer
+                                        format: int64
+                                description: Success object schema
+                Default:
+                    description: Error response. The view and param may be empty, but one of the message or object should be specified
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    Err:
+                                        anyOf:
+                                            - type: string
+                                            - type: object
+                                            - type: array
+                                            - type: number
+                                            - type: boolean
+                                    Message:
+                                        type: string
+                                        nullable: true
+                                    Object:
+                                        anyOf:
+                                            - type: string
+                                            - type: object
+                                            - type: array
+                                            - type: number
+                                            - type: boolean
+                                        nullable: true
+                                    Param:
+                                        type: string
+                                        nullable: true
+                                    View:
+                                        type: string
+                                        nullable: true
+                                description: Error object schema

@@ -7,12 +7,12 @@ import (
 	"unsafe"
 )
 
-type IntPtrMarshaller struct {
+type intPtrMarshaller struct {
 	defaultValue string
 	dTag         *DefaultTag
 }
 
-func NewIntPtrMarshaller(dTag *DefaultTag) *IntPtrMarshaller {
+func newIntPtrMarshaller(dTag *DefaultTag) *intPtrMarshaller {
 	var zeroValue *int
 	if dTag._value != nil {
 		zeroValue, _ = dTag._value.(*int)
@@ -23,13 +23,13 @@ func NewIntPtrMarshaller(dTag *DefaultTag) *IntPtrMarshaller {
 		zeroString = strconv.Itoa(*zeroValue)
 	}
 
-	return &IntPtrMarshaller{
+	return &intPtrMarshaller{
 		dTag:         dTag,
 		defaultValue: zeroString,
 	}
 }
 
-func (i *IntPtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *intPtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	intPtr := xunsafe.AsIntAddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
 		sb.WriteString(i.defaultValue)
@@ -39,16 +39,16 @@ func (i *IntPtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error
 	return appendInt(**intPtr, sb)
 }
 
-func (i *IntPtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
-	return mainDecoder.AddIntNull(xunsafe.AsIntAddrPtr(pointer))
+func (i *intPtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+	return decoder.AddIntNull(xunsafe.AsIntAddrPtr(pointer))
 }
 
-type Int8PtrMarshaller struct {
+type nnt8PtrMarshaller struct {
 	defaultValue string
 	dTag         *DefaultTag
 }
 
-func NewInt8PtrMarshaller(tag *DefaultTag) *Int8PtrMarshaller {
+func newInt8PtrMarshaller(tag *DefaultTag) *nnt8PtrMarshaller {
 	var zeroValue *int8
 	if tag._value != nil {
 		zeroValue, _ = tag._value.(*int8)
@@ -59,13 +59,13 @@ func NewInt8PtrMarshaller(tag *DefaultTag) *Int8PtrMarshaller {
 		zeroString = strconv.Itoa(int(*zeroValue))
 	}
 
-	return &Int8PtrMarshaller{
+	return &nnt8PtrMarshaller{
 		defaultValue: zeroString,
 		dTag:         tag,
 	}
 }
 
-func (i *Int8PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *nnt8PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	intPtr := xunsafe.AsInt8AddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
 		sb.WriteString(i.defaultValue)
@@ -75,16 +75,16 @@ func (i *Int8PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) erro
 	return appendInt(int(**intPtr), sb)
 }
 
-func (i *Int8PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
-	return mainDecoder.AddInt8Null(xunsafe.AsInt8AddrPtr(pointer))
+func (i *nnt8PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+	return decoder.AddInt8Null(xunsafe.AsInt8AddrPtr(pointer))
 }
 
-type Int16PtrMarshaller struct {
+type int16PtrMarshaller struct {
 	zeroValue string
 	dTag      *DefaultTag
 }
 
-func NewInt16PtrMarshaller(dTag *DefaultTag) *Int16PtrMarshaller {
+func newInt16PtrMarshaller(dTag *DefaultTag) *int16PtrMarshaller {
 	var zeroValue *int16
 	if dTag._value != nil {
 		zeroValue, _ = dTag._value.(*int16)
@@ -95,13 +95,13 @@ func NewInt16PtrMarshaller(dTag *DefaultTag) *Int16PtrMarshaller {
 		zeroString = strconv.Itoa(int(*zeroValue))
 	}
 
-	return &Int16PtrMarshaller{
+	return &int16PtrMarshaller{
 		zeroValue: zeroString,
 		dTag:      dTag,
 	}
 }
 
-func (i *Int16PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *int16PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	intPtr := xunsafe.AsInt16AddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
 		sb.WriteString(i.zeroValue)
@@ -111,16 +111,16 @@ func (i *Int16PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) err
 	return appendInt(int(**intPtr), sb)
 }
 
-func (i *Int16PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
-	return mainDecoder.AddInt16Null(xunsafe.AsInt16AddrPtr(pointer))
+func (i *int16PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+	return decoder.AddInt16Null(xunsafe.AsInt16AddrPtr(pointer))
 }
 
-type Int32PtrMarshaller struct {
+type int32PtrMarshaller struct {
 	zeroValue string
 	dTag      *DefaultTag
 }
 
-func NewInt32PtrMarshaller(dTag *DefaultTag) *Int32PtrMarshaller {
+func newInt32PtrMarshaller(dTag *DefaultTag) *int32PtrMarshaller {
 	var zeroValue *int32
 	if dTag._value != nil {
 		zeroValue, _ = dTag._value.(*int32)
@@ -131,13 +131,13 @@ func NewInt32PtrMarshaller(dTag *DefaultTag) *Int32PtrMarshaller {
 		zeroString = strconv.Itoa(int(*zeroValue))
 	}
 
-	return &Int32PtrMarshaller{
+	return &int32PtrMarshaller{
 		zeroValue: zeroString,
 		dTag:      dTag,
 	}
 }
 
-func (i *Int32PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *int32PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	intPtr := xunsafe.AsInt32AddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
 		sb.WriteString(i.zeroValue)
@@ -147,16 +147,16 @@ func (i *Int32PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) err
 	return appendInt(int(**intPtr), sb)
 }
 
-func (i *Int32PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *int32PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
 	return decoder.AddInt32Null(xunsafe.AsInt32AddrPtr(pointer))
 }
 
-type IntPtr64Marshaller struct {
+type intPtr64Marshaller struct {
 	zeroValue string
 	dTag      *DefaultTag
 }
 
-func NewInt64PtrMarshaller(dTag *DefaultTag) *IntPtr64Marshaller {
+func newInt64PtrMarshaller(dTag *DefaultTag) *intPtr64Marshaller {
 	var zeroValue *int64
 	if dTag._value != nil {
 		zeroValue, _ = dTag._value.(*int64)
@@ -167,13 +167,13 @@ func NewInt64PtrMarshaller(dTag *DefaultTag) *IntPtr64Marshaller {
 		zeroString = strconv.Itoa(int(*zeroValue))
 	}
 
-	return &IntPtr64Marshaller{
+	return &intPtr64Marshaller{
 		zeroValue: zeroString,
 		dTag:      dTag,
 	}
 }
 
-func (i *IntPtr64Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *intPtr64Marshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	intPtr := xunsafe.AsInt64AddrPtr(ptr)
 	if intPtr == nil || *intPtr == nil {
 		sb.WriteString(i.zeroValue)
@@ -183,6 +183,6 @@ func (i *IntPtr64Marshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) err
 	return appendInt(int(**intPtr), sb)
 }
 
-func (i *IntPtr64Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (i *intPtr64Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
 	return decoder.AddInt64Null(xunsafe.AsInt64AddrPtr(pointer))
 }

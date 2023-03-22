@@ -1,96 +1,103 @@
 openapi: 3.1.0
 info:
-  title: ""
-  version: ""
+    title: ""
+    version: ""
 paths:
-  /api/events:
-    get:
-      parameters:
-        - name: _criteria
-          in: query
-          description: allows to filter view events data that matches given criteria
-          schema:
-            type: string
-            description: Parameter _criteria schema
-        - name: limit
-          in: query
-          description: Parameter Limit, Located in query with name limit
-          schema:
-            type: integer
-            description: Parameter Limit schema
-            format: int64
-        - name: skip
-          in: query
-          description: Parameter Offset, Located in query with name skip
-          schema:
-            type: integer
-            description: Parameter Offset schema
-            format: int64
-        - name: _page
-          in: query
-          description: allows to skip first page * limit values, starting from 1 page. Has precedence over offset
-          schema:
-            type: integer
-            description: Parameter _page schema
-            format: int64
-        - name: sort
-          in: query
-          description: Parameter OrderBy, Located in query with name sort
-          schema:
-            type: string
-            description: Parameter OrderBy schema
-        - name: names
-          in: query
-          description: Parameter Fields, Located in query with name names
-          schema:
-            type: string
-            description: Parameter Fields schema
-      responses:
-        "200":
-          description: Success response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  EventTypeId:
+    /api/events:
+        get:
+            parameters:
+                - name: _criteria
+                  in: query
+                  description: allows to filter view events data that matches given criteria
+                  schema:
+                    type: string
+                    description: Parameter _criteria schema
+                - name: limit
+                  in: query
+                  description: Parameter Limit, Located in query with name limit
+                  schema:
                     type: integer
+                    description: Parameter Limit schema
                     format: int64
-                  Id:
+                - name: skip
+                  in: query
+                  description: Parameter Offset, Located in query with name skip
+                  schema:
                     type: integer
+                    description: Parameter Offset schema
                     format: int64
-                  Quantity:
-                    type: number
-                    format: double
-                  Timestamp:
-                    type: string
-                    format: 2006-01-02T15:04:05Z07:00
-                  UserId:
+                - name: _page
+                  in: query
+                  description: allows to skip first page * limit values, starting from 1 page. Has precedence over offset
+                  schema:
                     type: integer
+                    description: Parameter _page schema
                     format: int64
-                description: Success object schema
-        Default:
-          description: Error response. The view and param may be empty, but one of the message or object should be specified
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  Message:
+                - name: sort
+                  in: query
+                  description: Parameter OrderBy, Located in query with name sort
+                  schema:
                     type: string
-                    nullable: true
-                  Object:
-                    anyOf:
-                      - type: string
-                      - type: object
-                      - type: array
-                      - type: number
-                      - type: boolean
-                    nullable: true
-                  Param:
+                    description: Parameter OrderBy schema
+                - name: names
+                  in: query
+                  description: Parameter Fields, Located in query with name names
+                  schema:
                     type: string
-                    nullable: true
-                  View:
-                    type: string
-                    nullable: true
-                description: Error object schema
+                    description: Parameter Fields schema
+            responses:
+                "200":
+                    description: Success response
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    EventTypeId:
+                                        type: integer
+                                        format: int64
+                                    Id:
+                                        type: integer
+                                        format: int64
+                                    Quantity:
+                                        type: number
+                                        format: double
+                                    Timestamp:
+                                        type: string
+                                        format: 2006-01-02T15:04:05Z07:00
+                                    UserId:
+                                        type: integer
+                                        format: int64
+                                description: Success object schema
+                Default:
+                    description: Error response. The view and param may be empty, but one of the message or object should be specified
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    Err:
+                                        anyOf:
+                                            - type: string
+                                            - type: object
+                                            - type: array
+                                            - type: number
+                                            - type: boolean
+                                    Message:
+                                        type: string
+                                        nullable: true
+                                    Object:
+                                        anyOf:
+                                            - type: string
+                                            - type: object
+                                            - type: array
+                                            - type: number
+                                            - type: boolean
+                                        nullable: true
+                                    Param:
+                                        type: string
+                                        nullable: true
+                                    View:
+                                        type: string
+                                        nullable: true
+                                description: Error object schema

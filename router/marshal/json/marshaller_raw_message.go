@@ -6,16 +6,16 @@ import (
 	"unsafe"
 )
 
-type RawMessageMarshaller struct{}
+type rawMessageMarshaller struct{}
 
-func NewRawMessageMarshaller() *RawMessageMarshaller {
-	return &RawMessageMarshaller{}
+func newRawMessageMarshaller() *rawMessageMarshaller {
+	return &rawMessageMarshaller{}
 }
 
-func (r *RawMessageMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, nullDecoder *gojay.Decoder) error {
+func (r *rawMessageMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
 	bytesPtr := xunsafe.AsBytesPtr(pointer)
 	dst := ""
-	if err := mainDecoder.DecodeString(&dst); err != nil {
+	if err := decoder.DecodeString(&dst); err != nil {
 		return err
 	}
 
@@ -23,7 +23,7 @@ func (r *RawMessageMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDeco
 	return nil
 }
 
-func (r *RawMessageMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (r *rawMessageMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	aBytes := (*[]byte)(ptr)
 	if aBytes == nil {
 		sb.Write(nullBytes)

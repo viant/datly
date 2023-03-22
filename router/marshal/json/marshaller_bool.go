@@ -7,24 +7,24 @@ import (
 	"unsafe"
 )
 
-type BoolMarshaller struct {
+type boolMarshaller struct {
 	zeroValue string
 	dTag      *DefaultTag
 }
 
-func NewBoolMarshaller(dTag *DefaultTag) *BoolMarshaller {
+func newBoolMarshaller(dTag *DefaultTag) *boolMarshaller {
 	var zeroValue bool
 	if dTag._value != nil {
 		zeroValue, _ = dTag._value.(bool)
 	}
 
-	return &BoolMarshaller{
+	return &boolMarshaller{
 		dTag:      dTag,
 		zeroValue: strconv.FormatBool(zeroValue),
 	}
 }
 
-func (i *BoolMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *boolMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	aBool := xunsafe.AsBoolPtr(ptr)
 	if aBool == nil || !*aBool {
 		sb.WriteString(i.zeroValue)
@@ -35,11 +35,11 @@ func (i *BoolMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	return nil
 }
 
-func (i *BoolMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
-	return mainDecoder.AddBool(xunsafe.AsBoolPtr(pointer))
+func (i *boolMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+	return decoder.AddBool(xunsafe.AsBoolPtr(pointer))
 }
 
-func marshallBool(b bool, sb *Session) {
+func marshallBool(b bool, sb *MarshallSession) {
 	if b {
 		sb.WriteString(`true`)
 	} else {

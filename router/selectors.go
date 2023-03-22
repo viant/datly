@@ -633,14 +633,14 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 	if param.ExpectedReturned != nil && *param.ExpectedReturned != paramLen {
 		return nil, &JSONError{
 			Object:  destSlicePtr,
-			Message: fmt.Sprintf("expected to return %v records, but returned %v", *param.MinAllowedRecords, paramLen),
+			Message: fmt.Sprintf("expected to return %v records, but returned %v", *param.ExpectedReturned, paramLen),
 		}
 	}
 
 	if param.MaxAllowedRecords != nil && *param.MaxAllowedRecords < paramLen {
 		return nil, &JSONError{
 			Object:  destSlicePtr,
-			Message: fmt.Sprintf("expected to return no more than %v records, but returned %v", *param.MinAllowedRecords, paramLen),
+			Message: fmt.Sprintf("expected to return no more than %v records, but returned %v", *param.MaxAllowedRecords, paramLen),
 		}
 	}
 

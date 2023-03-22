@@ -8,19 +8,19 @@ import (
 	"unsafe"
 )
 
-type InterfaceMarshaller struct {
+type interfaceMarshaller struct {
 	rType      reflect.Type
 	config     marshal.Default
 	path       string
 	outputPath string
 	tag        *DefaultTag
-	cache      *Cache
+	cache      *marshallersCache
 	xType      *xunsafe.Type
 	hasMethod  bool
 }
 
-func NewInterfaceMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *Cache) (*InterfaceMarshaller, error) {
-	return &InterfaceMarshaller{
+func newInterfaceMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (*interfaceMarshaller, error) {
+	return &interfaceMarshaller{
 		xType:      xunsafe.NewType(rType),
 		rType:      rType,
 		config:     config,
@@ -32,12 +32,12 @@ func NewInterfaceMarshaller(rType reflect.Type, config marshal.Default, path str
 	}, nil
 }
 
-func (i *InterfaceMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
-	iface := Interface(i.xType, pointer)
-	return mainDecoder.AddInterface(&iface)
+func (i *interfaceMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+	iface := i.AsInterface(pointer)
+	return decoder.AddInterface(&iface)
 }
 
-func Interface(xType *xunsafe.Type, pointer unsafe.Pointer) interface{} {
+func asInterface(xType *xunsafe.Type, pointer unsafe.Pointer) interface{} {
 	if xType.Kind() == reflect.Interface {
 		return xunsafe.AsInterface(pointer)
 	}
@@ -45,11 +45,11 @@ func Interface(xType *xunsafe.Type, pointer unsafe.Pointer) interface{} {
 	return xType.Interface(pointer)
 }
 
-func (i *InterfaceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *interfaceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	value := i.AsInterface(ptr)
 	rType := reflect.TypeOf(value)
 
-	marshaller, err := i.cache.LoadMarshaller(rType, i.config, i.path, i.outputPath, i.tag)
+	marshaller, err := i.cache.loadMarshaller(rType, i.config, i.path, i.outputPath, i.tag)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func (i *InterfaceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) er
 	return marshaller.MarshallObject(pointer, sb)
 }
 
-func (i *InterfaceMarshaller) AsInterface(ptr unsafe.Pointer) interface{} {
+func (i *interfaceMarshaller) AsInterface(ptr unsafe.Pointer) interface{} {
 	if !i.hasMethod {
 		return xunsafe.AsInterface(ptr)
 	}

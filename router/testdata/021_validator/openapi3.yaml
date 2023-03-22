@@ -10,8 +10,8 @@ paths:
                   in: query
                   description: allows to control view events fields present in response
                   schema:
-                      type: string
-                      description: Parameter _fields schema
+                    type: string
+                    description: Parameter _fields schema
             requestBody:
                 content:
                     application/json:
@@ -50,6 +50,13 @@ paths:
                             schema:
                                 type: object
                                 properties:
+                                    Err:
+                                        anyOf:
+                                            - type: string
+                                            - type: object
+                                            - type: array
+                                            - type: number
+                                            - type: boolean
                                     Message:
                                         type: string
                                         nullable: true

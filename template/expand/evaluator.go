@@ -38,8 +38,10 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
-	if err = evaluator.planner.DefineVariable(keywords.ParamsMetadataKey, presenceSchema); err != nil {
-		return nil, err
+	if presenceSchema != nil {
+		if err = evaluator.planner.DefineVariable(keywords.ParamsMetadataKey, presenceSchema); err != nil {
+			return nil, err
+		}
 	}
 
 	if err = evaluator.planner.EmbedVariable(Context{}); err != nil {

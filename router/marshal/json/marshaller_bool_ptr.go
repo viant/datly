@@ -7,12 +7,12 @@ import (
 	"unsafe"
 )
 
-type BoolPtrMarshaller struct {
+type boolPtrMarshaller struct {
 	zeroValue string
 	dTag      *DefaultTag
 }
 
-func NewBoolPtrMarshaller(dTag *DefaultTag) *BoolPtrMarshaller {
+func newBoolPtrMarshaller(dTag *DefaultTag) *boolPtrMarshaller {
 	var zeroValue *bool
 	if dTag._value != nil {
 		zeroValue, _ = dTag._value.(*bool)
@@ -23,13 +23,13 @@ func NewBoolPtrMarshaller(dTag *DefaultTag) *BoolPtrMarshaller {
 		zeroString = strconv.FormatBool(*zeroValue)
 	}
 
-	return &BoolPtrMarshaller{
+	return &boolPtrMarshaller{
 		dTag:      dTag,
 		zeroValue: zeroString,
 	}
 }
 
-func (i *BoolPtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (i *boolPtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	asBoolPtr := xunsafe.AsBoolAddrPtr(ptr)
 	if asBoolPtr == nil || *asBoolPtr == nil {
 		sb.WriteString(i.zeroValue)
@@ -40,6 +40,6 @@ func (i *BoolPtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) erro
 	return nil
 }
 
-func (i *BoolPtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
-	return mainDecoder.AddBool(xunsafe.AsBoolPtr(pointer))
+func (i *boolPtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+	return decoder.AddBool(xunsafe.AsBoolPtr(pointer))
 }

@@ -58,7 +58,7 @@ func (r *Router) executorHandlerWithError(route *Route, request *http.Request) (
 	}
 
 	responseBody := r.wrapWithResponseIfNeeded(body, route, nil, nil, session.State)
-	marshal, err := route._outputMarshaller.Marshal(responseBody)
+	marshal, err := route._marshaller.Marshal(responseBody)
 	if session.State.ResponseBuilder.ResponseCode != 0 {
 		statusCode = session.State.ResponseBuilder.ResponseCode
 	}

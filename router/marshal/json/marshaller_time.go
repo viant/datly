@@ -9,13 +9,13 @@ import (
 	"unsafe"
 )
 
-type TimeMarshaller struct {
+type timeMarshaller struct {
 	timeFormat string
 	zeroValue  string
 	tag        *DefaultTag
 }
 
-func NewTimeMarshaller(tag *DefaultTag, config marshal.Default) *TimeMarshaller {
+func newTimeMarshaller(tag *DefaultTag, config marshal.Default) *timeMarshaller {
 	timeFormat := time.RFC3339
 	if tag.Format != "" {
 		timeFormat = tag.Format
@@ -30,22 +30,22 @@ func NewTimeMarshaller(tag *DefaultTag, config marshal.Default) *TimeMarshaller 
 		zeroValue, _ = tag._value.(time.Time)
 	}
 
-	return &TimeMarshaller{
+	return &timeMarshaller{
 		timeFormat: timeFormat,
 		zeroValue:  strconv.Quote(zeroValue.Format(timeFormat)),
 		tag:        tag,
 	}
 }
 
-func (t *TimeMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
+func (t *timeMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
 	aTime := xunsafe.AsTimePtr(pointer)
-	if err := mainDecoder.AddTime(aTime, t.timeFormat); err != nil {
+	if err := decoder.AddTime(aTime, t.timeFormat); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t *TimeMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (t *timeMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	aTime := xunsafe.AsTime(ptr)
 	if aTime.IsZero() {
 		sb.WriteString(t.zeroValue)
@@ -55,7 +55,7 @@ func (t *TimeMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
 	return appendTime(sb, aTime, t.timeFormat)
 }
 
-func appendTime(sb *Session, aTime time.Time, timeFormat string) error {
+func appendTime(sb *MarshallSession, aTime time.Time, timeFormat string) error {
 	sb.WriteByte('"')
 	sb.WriteString(aTime.Format(timeFormat))
 	sb.WriteByte('"')

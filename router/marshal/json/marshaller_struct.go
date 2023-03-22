@@ -11,31 +11,31 @@ import (
 )
 
 type (
-	StructMarshaller struct {
+	structMarshaller struct {
 		rType               reflect.Type
-		inlinableMarshaller *InlinableMarshaller
-		indexUpdater        *PresenceUpdater
+		inlinableMarshaller *inlinableMarshaller
+		indexUpdater        *presenceUpdater
 		marshallersIndex    map[string]int
-		marshallers         []*MarshallerWithField
+		marshallers         []*marshallerWithField
 		config              marshal.Default
 
 		path       string
 		outputPath string
 
-		cache *Cache
+		cache *marshallersCache
 		xType *xunsafe.Type
 	}
 
-	MarshallerWithField struct {
+	marshallerWithField struct {
 		marshaller     Marshaler
 		xField         *xunsafe.Field
 		indirectXField *xunsafe.Field //in case anonymous pointer field
 		tag            *DefaultTag
-		indexUpdater   *PresenceUpdater
-		MarshallerMetadata
+		indexUpdater   *presenceUpdater
+		marshallerMetadata
 	}
 
-	MarshallerMetadata struct {
+	marshallerMetadata struct {
 		fieldName  string
 		jsonName   string
 		path       string
@@ -45,19 +45,20 @@ type (
 		omitEmpty  bool
 	}
 
-	decoder struct {
+	structDecoder struct {
 		ptr        unsafe.Pointer
 		path       string
 		xType      *xunsafe.Type
-		marshaller *StructMarshaller
+		marshaller *structMarshaller
+		session    *UnmarshallSession
 	}
 )
 
-func NewStructMarshaller(config marshal.Default, rType reflect.Type, path string, outputPath string, dTag *DefaultTag, cache *Cache) (*StructMarshaller, error) {
-	result := &StructMarshaller{
+func newStructMarshaller(config marshal.Default, rType reflect.Type, path string, outputPath string, dTag *DefaultTag, cache *marshallersCache) (*structMarshaller, error) {
+	result := &structMarshaller{
 		path:             path,
 		outputPath:       outputPath,
-		xType:            GetXType(rType),
+		xType:            getXType(rType),
 		rType:            rType,
 		config:           config,
 		cache:            cache,
@@ -67,7 +68,7 @@ func NewStructMarshaller(config marshal.Default, rType reflect.Type, path string
 	return result, result.init()
 }
 
-func (s *StructMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder *gojay.Decoder, _ *gojay.Decoder) error {
+func (s *structMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
 	if s.indexUpdater != nil {
 		indexPtr := s.indexUpdater.xField.ValuePointer(pointer)
 		if indexPtr == nil {
@@ -83,17 +84,18 @@ func (s *StructMarshaller) UnmarshallObject(pointer unsafe.Pointer, mainDecoder 
 		}
 	}
 
-	d := &decoder{
+	d := &structDecoder{
 		marshaller: s,
 		xType:      s.xType,
 		ptr:        pointer,
 		path:       s.path,
+		session:    session,
 	}
 
-	return mainDecoder.DecodeObject(d)
+	return decoder.AddObject(d)
 }
 
-func (s *StructMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Session) error {
+func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 	if ptr == nil {
 		sb.WriteString(null)
 		return nil
@@ -157,7 +159,7 @@ func isExcluded(filter Filter, name string, config marshal.Default, path string)
 	return !ok
 }
 
-func (s *StructMarshaller) init() error {
+func (s *structMarshaller) init() error {
 	fields := groupFields(s.rType)
 	marshallers, err := s.createStructMarshallers(fields, s.path, s.outputPath, &DefaultTag{})
 	if err != nil {
@@ -165,7 +167,7 @@ func (s *StructMarshaller) init() error {
 	}
 
 	if len(fields.presenceFields) == 1 {
-		updater, err := NewPresenceUpdater(fields.presenceFields[0])
+		updater, err := newPresenceUpdater(fields.presenceFields[0])
 		if err != nil {
 			return err
 		}
@@ -186,11 +188,11 @@ func (s *StructMarshaller) init() error {
 	return nil
 }
 
-func (s *StructMarshaller) createStructMarshallers(fields *groupedFields, path string, outputPath string, dTag *DefaultTag) ([]*MarshallerWithField, error) {
-	marshallers := make([]*MarshallerWithField, 0)
+func (s *structMarshaller) createStructMarshallers(fields *groupedFields, path string, outputPath string, dTag *DefaultTag) ([]*marshallerWithField, error) {
+	marshallers := make([]*marshallerWithField, 0)
 	if len(fields.inlinable) == 1 {
 		field := fields.inlinable[0]
-		marshaller, err := NewInlinableMarshaller(field, s.config, path, outputPath, dTag, s.cache)
+		marshaller, err := newInlinableMarshaller(field, s.config, path, outputPath, dTag, s.cache)
 		if err != nil {
 			return nil, err
 		}
@@ -212,7 +214,7 @@ func (s *StructMarshaller) createStructMarshallers(fields *groupedFields, path s
 	return marshallers, nil
 }
 
-func (s *StructMarshaller) newFieldMarshaller(marshallers *[]*MarshallerWithField, field reflect.StructField, path string, outputPath string, dTag *DefaultTag) error {
+func (s *structMarshaller) newFieldMarshaller(marshallers *[]*marshallerWithField, field reflect.StructField, path string, outputPath string, dTag *DefaultTag) error {
 	if field.Anonymous {
 		rType, ptrSize := field.Type, 0
 		for rType.Kind() == reflect.Ptr {
@@ -256,10 +258,10 @@ func (s *StructMarshaller) newFieldMarshaller(marshallers *[]*MarshallerWithFiel
 	path, outputPath = addToPath(path, field.Name), addToPath(outputPath, jsonName)
 
 	xField := xunsafe.NewField(field)
-	marshaller := &MarshallerWithField{
+	marshaller := &marshallerWithField{
 		xField: xField,
 		tag:    dTag,
-		MarshallerMetadata: MarshallerMetadata{
+		marshallerMetadata: marshallerMetadata{
 			path:       path,
 			outputPath: outputPath,
 			omitEmpty:  tag.OmitEmpty || s.config.OmitEmpty,
@@ -276,7 +278,7 @@ func (s *StructMarshaller) newFieldMarshaller(marshallers *[]*MarshallerWithFiel
 	return nil
 }
 
-func (s *StructMarshaller) marshallerByName(name string) (*MarshallerWithField, bool) {
+func (s *structMarshaller) marshallerByName(name string) (*marshallerWithField, bool) {
 	index, ok := s.marshallersIndex[name]
 
 	if ok {
@@ -312,7 +314,7 @@ func addToPath(path, field string) string {
 	return path + "." + field
 }
 
-func (f *MarshallerWithField) init(field reflect.StructField, config marshal.Default, cache *Cache) error {
+func (f *marshallerWithField) init(field reflect.StructField, config marshal.Default, cache *marshallersCache) error {
 	defaultTag, err := NewDefaultTag(field)
 	if err != nil {
 		return err
@@ -326,12 +328,12 @@ func (f *MarshallerWithField) init(field reflect.StructField, config marshal.Def
 	f.comparable = rType.Comparable()
 	f.zeroValue = reflect.Zero(field.Type).Interface()
 
-	marshaller, err := cache.LoadMarshaller(field.Type, config, f.path, f.outputPath, defaultTag)
+	marshaller, err := cache.loadMarshaller(field.Type, config, f.path, f.outputPath, defaultTag)
 	f.marshaller = marshaller
 	return err
 }
 
-func isZeroValue(ptr unsafe.Pointer, stringifier *MarshallerWithField, value interface{}) bool {
+func isZeroValue(ptr unsafe.Pointer, stringifier *marshallerWithField, value interface{}) bool {
 	if stringifier.comparable {
 		return stringifier.zeroValue == value
 	}
@@ -388,13 +390,20 @@ func groupFields(elemType reflect.Type) *groupedFields {
 	return result
 }
 
-func (d *decoder) UnmarshalJSONObject(decoder *gojay.Decoder, fieldName string) error {
+func (d *structDecoder) UnmarshalJSONObject(decoder *gojay.Decoder, fieldName string) error {
 	marshaller, ok := d.marshaller.marshallerByName(fieldName)
+	if len(d.session.Interceptors) > 0 {
+		interceptor, ok := d.session.Interceptors[marshaller.path]
+		if ok {
+			return interceptor(marshaller.xField.Addr(d.ptr), decoder, d.session.Options...)
+		}
+	}
+
 	if !ok {
 		return nil
 	}
 
-	if err := marshaller.marshaller.UnmarshallObject(marshaller.xField.Pointer(d.ptr), decoder, nil); err != nil {
+	if err := marshaller.marshaller.UnmarshallObject(marshaller.xField.Pointer(d.ptr), decoder, nil, d.session); err != nil {
 		return err
 	}
 
@@ -402,7 +411,7 @@ func (d *decoder) UnmarshalJSONObject(decoder *gojay.Decoder, fieldName string) 
 	return nil
 }
 
-func (d *decoder) updatePresenceIfNeeded(marshaller *MarshallerWithField) {
+func (d *structDecoder) updatePresenceIfNeeded(marshaller *marshallerWithField) {
 	updater := marshaller.indexUpdater
 	if updater == nil {
 		return
@@ -417,6 +426,6 @@ func (d *decoder) updatePresenceIfNeeded(marshaller *MarshallerWithField) {
 	xField.SetBool(ptr, true)
 }
 
-func (d *decoder) NKeys() int {
+func (d *structDecoder) NKeys() int {
 	return len(d.marshaller.marshallers)
 }
