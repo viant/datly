@@ -1,11 +1,20 @@
 - code parameter assets (i.e xml validator)
 
-- pre proxy processor/programatic router  
+- pre proxy processor/programatic router
+
+/* {URI":"foresactint/{xty}"} */
+#set(_ = $paramX<Qurystrihn/ab>)
  #if($reportName='abc')
-  $proxy.To('/v1/api/ws/view1')
+  $proxy.To('/v1/api/ws/view1%v', )
  #else if($reportName='xyz')
   $proxy.To('/v1/api/ws/view2')
  #end
+
+type Validation struct {
+    IsValid bool
+    Error string
+}
+
 
 - Executor triggers/notification (notification message ID in response)
 -> logging -> { "Status": "ok", "EventSourceId":"", "EventSource": "Advertier", "EventType":"Insert" "Data":interface{}, "UserId":"", "TraceID":""    }
@@ -19,7 +28,6 @@
   - post http, message, storage event
  
 - self documents
-
 
 - batch spreedsheet ingestion/response
 
