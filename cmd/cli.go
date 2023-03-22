@@ -7,6 +7,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/viant/afs"
 	"github.com/viant/afs/cache"
+	"github.com/viant/afs/matcher"
 	soption "github.com/viant/afs/option"
 
 	"github.com/viant/afs/file"
@@ -177,7 +178,10 @@ func packageConfig(options *Options) error {
 	ruleSourceURL := normalizeURL(options.Package.RuleSourceURL)
 	ruleDestURL := normalizeURL(options.Package.RuleDestURL)
 	cacheSetting := soption.WithCache(gateway.PackageFile, "gzip")
-	return cache.Package(context.Background(), ruleSourceURL, ruleDestURL, cacheSetting)
+	return cache.Package(context.Background(), ruleSourceURL, ruleDestURL,
+		cacheSetting,
+		matcher.WithExtExclusion(".so", "so", ".gz", "gz"),
+	)
 }
 
 func dumpConfiguration(location, folder string, options *Options) {
