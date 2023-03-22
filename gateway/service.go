@@ -323,16 +323,16 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (resourc
 	if err != nil {
 		return nil, false, err
 	}
-	fmt.Printf("detected changes\n")
-	started := time.Now()
-	defer func() {
-		fmt.Printf("loaded changes: %s\n", time.Since(started))
-	}()
 
 	if !changes.Changed() {
 		return copyResourcesMap(r.dataResourcesIndex), false, nil
 	}
 
+	fmt.Printf("detected changes\n")
+	started := time.Now()
+	defer func() {
+		fmt.Printf("loaded changes: %s\n", time.Since(started))
+	}()
 	pluginsChanges, err := r.handlePluginsChanges(ctx, changes)
 	if pluginsChanges != nil {
 	outer:
