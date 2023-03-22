@@ -87,8 +87,22 @@ func (s *Builder) initConfig(ctx context.Context, cfg *standalone.Config) error 
 		cfg.DependencyURL = normalizeURL(cfg.DependencyURL)
 	}
 
-	if s.options.JWTVerifier != "" {
-		pair := strings.Split(s.options.JWTVerifier, "|")
+	s.initJWTVerifier(cfg)
+
+	err = buildDefaultConfig(cfg, s.options)
+	if err != nil {
+		return err
+	}
+	if cfg.DependencyURL != "" && s.options.DependencyURL == "" {
+		s.options.DependencyURL = cfg.DependencyURL
+	}
+
+	return nil
+}
+
+func (s *Builder) initJWTVerifier(cfg *standalone.Config) {
+	if s.options.JWTVerifierRSAKey != "" {
+		pair := strings.Split(s.options.JWTVerifierRSAKey, "|")
 		switch len(pair) {
 		case 1:
 			cfg.JWTValidator = &verifier.Config{RSA: &scy.Resource{URL: pair[0]}}
@@ -103,15 +117,21 @@ func (s *Builder) initConfig(ctx context.Context, cfg *standalone.Config) error 
 		}
 	}
 
-	err = buildDefaultConfig(cfg, s.options)
-	if err != nil {
-		return err
+	if s.options.JWTVerifierHMACKey != "" {
+		pair := strings.Split(s.options.JWTVerifierHMACKey, "|")
+		switch len(pair) {
+		case 1:
+			cfg.JWTValidator = &verifier.Config{HMAC: &scy.Resource{URL: pair[0]}}
+		case 2:
+			cfg.JWTValidator = &verifier.Config{HMAC: &scy.Resource{URL: pair[0], Key: pair[1]}}
+		}
+		if cfg.JWTValidator != nil && cfg.JWTValidator.HMAC != nil {
+			URL := cfg.JWTValidator.HMAC.URL
+			if url.Scheme(URL, "e") == "e" && URL[0] != '/' {
+				cfg.JWTValidator.HMAC.URL = normalizeURL(URL)
+			}
+		}
 	}
-	if cfg.DependencyURL != "" && s.options.DependencyURL == "" {
-		s.options.DependencyURL = cfg.DependencyURL
-	}
-
-	return nil
 }
 
 func buildDefaultConfig(cfg *standalone.Config, options *Options) error {

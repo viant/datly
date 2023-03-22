@@ -32,14 +32,15 @@ const (
 
 type (
 	Options struct {
-		Port             int    `short:"p" long:"port" description:"port"  `
-		RouteURL         string `short:"r" long:"routeURL" description:"route URL"  `
-		DependencyURL    string `short:"d" long:"deps" description:"dependencies URL" `
-		ConfigURL        string `short:"c" long:"config" description:"configuration URL" `
-		PartialConfigURL string `short:"e" long:"partialConfig" description:"partial configuration file URL"`
-		JWTVerifier      string `short:"j" long:"jwt" description:"PublicKeyPath|EncKey" `
-		WriteLocation    string `short:"w" long:"write" description:"dump all config files to specified location" `
-		BuildMode        string `long:"buildMode" description:"values: plugin - generates only plugins, pluginless - generates rule without plugins, plugins need to be created later"`
+		Port               int    `short:"p" long:"port" description:"port"  `
+		RouteURL           string `short:"r" long:"routeURL" description:"route URL"  `
+		DependencyURL      string `short:"d" long:"deps" description:"dependencies URL" `
+		ConfigURL          string `short:"c" long:"config" description:"configuration URL" `
+		PartialConfigURL   string `short:"e" long:"partialConfig" description:"partial configuration file URL"`
+		JWTVerifierRSAKey  string `short:"j" long:"jwtRSAKey" description:"PublicKeyPath|EncKey" `
+		JWTVerifierHMACKey string `short:"m" long:"jwtHMACKey" description:"digest key" `
+		WriteLocation      string `short:"w" long:"write" description:"dump all config files to specified location" `
+		BuildMode          string `long:"buildMode" description:"values: plugin - generates only plugins, pluginless - generates rule without plugins, plugins need to be created later"`
 		Generate
 		Connector
 		CacheWarmup
