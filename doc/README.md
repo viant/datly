@@ -1,7 +1,6 @@
 # Datly 
 
 
-
 Datly has been design as modern flexible ORM for rapid development. Datly can operate in 
 managed, autonomous and custom mode.
 In managed mode datly is used as regular GoLang ORM where a user operate on golang struct and datly services programmatically.
@@ -520,5 +519,38 @@ WHERE  #if($Ids.Values.Length() > 0 ) ID IN ( $Ids.Values ) #else 1 = 0 #end
 
 
 
-#### 
+## Deployment
+
+Datly is runtime agnostic and can be deployed as standalone app, or AWS Lambda, Google cloud function, Google Cloud run.
+Entry point with deployment example are define under [Runtime](../gateway/runtime)
+
+On both autonomous and custom mode 'datly' uses set of rule, and plugins. 
+On cloud deployment these assets are stored on cloud storage, thus to reduce cold start or rule changes detection and reload
+it's recommend to set flag "UseCacheFS" in the datly config. This setting would enable daytly to use **datly.pkg.gz** cache file, storing
+all underlying assets. Cache file is created every time it's deleted from a file storage.
+
+
+#### Generating pre-packaged datly rule  
+
+While building cache file with hundreds rules and assets cache file provides both cost and performance optimization on cloud storage, 
+to prepackage  **datly rule** ahead of time run the following command:
+
+
+```bash
+    datly -P DATLY_ROOT_CONFIG -R CLOUD_STORAGE_DATLY_CONFIG_URL
+  
+    i.e  datly -P /opt/ws/Datly -R s3://myog-serverless-config/Datly
+```
+
+The above command creates datly.pkg.gz file containing all assets from DATLY_ROOT_CONFIG location, 
+where each asset URL is rewritten with CLOUD_STORAGE_DATLY_CONFIG_URL
+
+
+### On AWS
+
+#### Autonomous Datly
+
+#### Custom Datly
+
+
 

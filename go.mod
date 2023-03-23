@@ -109,3 +109,5 @@ require (
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
+require github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
