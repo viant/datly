@@ -101,37 +101,32 @@ func (s *Builder) initConfig(ctx context.Context, cfg *standalone.Config) error 
 }
 
 func (s *Builder) initJWTVerifier(cfg *standalone.Config) {
+	if s.options.JWTVerifierRSAKey == "" && s.options.JWTVerifierHMACKey == "" {
+		return
+	}
+	cfg.JWTValidator = &verifier.Config{}
 	if s.options.JWTVerifierRSAKey != "" {
-		pair := strings.Split(s.options.JWTVerifierRSAKey, "|")
-		switch len(pair) {
-		case 1:
-			cfg.JWTValidator = &verifier.Config{RSA: &scy.Resource{URL: pair[0]}}
-		case 2:
-			cfg.JWTValidator = &verifier.Config{RSA: &scy.Resource{URL: pair[0], Key: pair[1]}}
-		}
-		if cfg.JWTValidator != nil && cfg.JWTValidator.RSA != nil {
-			URL := cfg.JWTValidator.RSA.URL
-			if url.Scheme(URL, "e") == "e" && URL[0] != '/' {
-				cfg.JWTValidator.RSA.URL = normalizeURL(URL)
-			}
-		}
+		cfg.JWTValidator.RSA = getScyResource(s.options.JWTVerifierRSAKey)
 	}
-
 	if s.options.JWTVerifierHMACKey != "" {
-		pair := strings.Split(s.options.JWTVerifierHMACKey, "|")
-		switch len(pair) {
-		case 1:
-			cfg.JWTValidator = &verifier.Config{HMAC: &scy.Resource{URL: pair[0]}}
-		case 2:
-			cfg.JWTValidator = &verifier.Config{HMAC: &scy.Resource{URL: pair[0], Key: pair[1]}}
-		}
-		if cfg.JWTValidator != nil && cfg.JWTValidator.HMAC != nil {
-			URL := cfg.JWTValidator.HMAC.URL
-			if url.Scheme(URL, "e") == "e" && URL[0] != '/' {
-				cfg.JWTValidator.HMAC.URL = normalizeURL(URL)
-			}
-		}
+		cfg.JWTValidator.HMAC = getScyResource(s.options.JWTVerifierHMACKey)
 	}
+}
+
+func getScyResource(location string) *scy.Resource {
+	pair := strings.Split(location, "|")
+	var result *scy.Resource
+	switch len(pair) {
+	case 2:
+		result = &scy.Resource{URL: pair[0], Key: pair[1]}
+	default:
+		result = &scy.Resource{URL: pair[0]}
+	}
+	URL := result.URL
+	if url.Scheme(URL, "e") == "e" && URL[0] != '/' {
+		result.URL = normalizeURL(URL)
+	}
+	return result
 }
 
 func buildDefaultConfig(cfg *standalone.Config, options *Options) error {
