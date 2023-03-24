@@ -12,11 +12,11 @@ type (
 		*bytes.Buffer
 	}
 
-	UnmarshallerInterceptors map[string]UnmarshallInterceptor
-	UnmarshallSession        struct {
-		Interceptors UnmarshallerInterceptors
+	UnmarshalerInterceptors map[string]UnmarshalInterceptor
+	UnmarshalSession        struct {
+		Interceptors UnmarshalerInterceptors
 		Options      []interface{}
 	}
 
-	UnmarshallInterceptor func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error
+	UnmarshalInterceptor func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error
 )

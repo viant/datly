@@ -3,7 +3,7 @@ package json
 import (
 	"fmt"
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -15,13 +15,13 @@ type mapMarshaller struct {
 	valueMarshaller      marshaler
 	isEmbedded           bool
 	cache                *marshallersCache
-	config               marshal.Default
+	config               _default.Default
 	xType                *xunsafe.Type
 	valueType            reflect.Type
 	keyType              reflect.Type
 }
 
-func newMapMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (*mapMarshaller, error) {
+func newMapMarshaller(rType reflect.Type, config _default.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (*mapMarshaller, error) {
 	result := &mapMarshaller{
 		xType:      getXType(rType),
 		isEmbedded: tag.Embedded,
@@ -50,7 +50,7 @@ func newMapMarshaller(rType reflect.Type, config marshal.Default, path string, o
 	return result, nil
 }
 
-func (m *mapMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (m *mapMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	return fmt.Errorf("unsupported unmarshall to map type, yet")
 }
 

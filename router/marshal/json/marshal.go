@@ -3,7 +3,7 @@ package json
 import (
 	"bytes"
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -20,11 +20,11 @@ const IndexKey = "presenceIndex"
 type (
 	Marshaller struct {
 		cache  *marshallersCache
-		config marshal.Default
+		config _default.Default
 	}
 )
 
-func New(config marshal.Default) (*Marshaller, error) {
+func New(config _default.Default) (*Marshaller, error) {
 	m := &Marshaller{
 		cache:  newCache(),
 		config: config,
@@ -103,7 +103,7 @@ func (j *Marshaller) prepareMarshallSession(options []interface{}) (*MarshallSes
 func (j *Marshaller) Unmarshal(data []byte, dest interface{}, options ...interface{}) error {
 	rType := reflect.TypeOf(dest)
 
-	marshaler, err := j.marshaller(rType)
+	aMarshaler, err := j.marshaller(rType)
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func (j *Marshaller) Unmarshal(data []byte, dest interface{}, options ...interfa
 	aDecoder := gojay.BorrowDecoder(bytes.NewReader(data))
 	defer aDecoder.Release()
 
-	result := marshaler.UnmarshallObject(AsPtr(dest, rType), aDecoder, nil, j.prepareUnmarshallSession(options))
+	result := aMarshaler.UnmarshallObject(AsPtr(dest, rType), aDecoder, nil, j.prepareUnmarshallSession(options))
 	return result
 }
 
@@ -138,20 +138,20 @@ func (j *Marshaller) marshaller(rType reflect.Type) (marshaler, error) {
 	return j.cache.loadMarshaller(rType, j.config, "", "", nil)
 }
 
-func (j *Marshaller) prepareUnmarshallSession(options []interface{}) *UnmarshallSession {
-	var unmarshallSession *UnmarshallSession
-	var interceptors UnmarshallerInterceptors
+func (j *Marshaller) prepareUnmarshallSession(options []interface{}) *UnmarshalSession {
+	var unmarshallSession *UnmarshalSession
+	var interceptors UnmarshalerInterceptors
 	for _, option := range options {
 		switch actual := option.(type) {
-		case *UnmarshallSession:
+		case *UnmarshalSession:
 			unmarshallSession = actual
-		case UnmarshallerInterceptors:
+		case UnmarshalerInterceptors:
 			interceptors = actual
 		}
 	}
 
 	if unmarshallSession == nil {
-		unmarshallSession = &UnmarshallSession{}
+		unmarshallSession = &UnmarshalSession{}
 	}
 
 	if len(unmarshallSession.Interceptors) == 0 {

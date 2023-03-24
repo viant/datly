@@ -4,7 +4,9 @@ import (
 	"context"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/afs"
+	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/template/expand"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/xreflect"
 	"net/http"
 	"net/url"
@@ -17,13 +19,16 @@ const (
 
 type (
 	Transform struct {
-		ParamName  string `json:",omitempty" yaml:",omitempty"`
-		Kind       string `json:",omitempty" yaml:",omitempty"`
-		Path       string `json:",omitempty" yaml:",omitempty"`
-		Codec      string `json:",omitempty" yaml:",omitempty"`
-		Source     string `json:",omitempty" yaml:",omitempty"`
-		SourceURL  string `json:",omitempty" yaml:",omitempty"`
-		_evaluator *expand.Evaluator
+		ParamName   string `json:",omitempty" yaml:",omitempty"`
+		Kind        string `json:",omitempty" yaml:",omitempty"`
+		Path        string `json:",omitempty" yaml:",omitempty"`
+		Codec       string `json:",omitempty" yaml:",omitempty"`
+		Source      string `json:",omitempty" yaml:",omitempty"`
+		SourceURL   string `json:",omitempty" yaml:",omitempty"`
+		Transformer string `json:",omitempty" yaml:",omitempty"`
+
+		_evaluator   *expand.Evaluator
+		_unmarshaler json.UnmarshalerInto
 	}
 )
 
@@ -46,6 +51,22 @@ func (t *Transform) Init(ctx context.Context, fs afs.Service, lookup xreflect.Ty
 		if err != nil {
 			return err
 		}
+	}
+
+	if t.Transformer != "" {
+		rType, err := types.GetOrParseType(lookup, t.Transformer)
+		if err != nil {
+			return err
+		}
+
+		value := expand.NewValue(rType)
+
+		unmarshaler, ok := value.(json.UnmarshalerInto)
+		if ok {
+			t._unmarshaler = unmarshaler
+		}
+
+		t.Kind = TransformKindUnmarshal
 	}
 
 	return nil
@@ -83,6 +104,10 @@ func (t *Transform) newCtx(ctx CustomContext) *expand.CustomContext {
 	}
 
 	return result
+}
+
+func (t *Transform) UnmarshalerInto() json.UnmarshalerInto {
+	return t._unmarshaler
 }
 
 func (t Transforms) Index() map[string]*Transform {

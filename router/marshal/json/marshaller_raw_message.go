@@ -12,7 +12,7 @@ func newRawMessageMarshaller() *rawMessageMarshaller {
 	return &rawMessageMarshaller{}
 }
 
-func (r *rawMessageMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (r *rawMessageMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	bytesPtr := xunsafe.AsBytesPtr(pointer)
 	dst := ""
 	if err := decoder.DecodeString(&dst); err != nil {

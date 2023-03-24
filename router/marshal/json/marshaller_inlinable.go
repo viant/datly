@@ -2,7 +2,7 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -17,7 +17,7 @@ type (
 	}
 )
 
-func newInlinableMarshaller(field reflect.StructField, config marshal.Default, path, outputPath string, dTag *DefaultTag, cache *marshallersCache) (*inlinableMarshaller, error) {
+func newInlinableMarshaller(field reflect.StructField, config _default.Default, path, outputPath string, dTag *DefaultTag, cache *marshallersCache) (*inlinableMarshaller, error) {
 	marshaler, err := cache.loadMarshaller(field.Type, config, path, outputPath, dTag)
 	if err != nil {
 		return nil, err
@@ -37,7 +37,7 @@ func (i *inlinableMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSes
 	return i.marshaler.MarshallObject(pointer, sb)
 }
 
-func (i *inlinableMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (i *inlinableMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	aValue := i.accessor.Value(pointer)
 	pointer = AsPtr(aValue, i.rType)
 	return i.marshaler.UnmarshallObject(pointer, decoder, auxiliaryDecoder, session)

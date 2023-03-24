@@ -2,7 +2,7 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -17,7 +17,7 @@ type (
 		indexUpdater        *presenceUpdater
 		marshallersIndex    map[string]int
 		marshallers         []*marshallerWithField
-		config              marshal.Default
+		config              _default.Default
 
 		path       string
 		outputPath string
@@ -50,11 +50,11 @@ type (
 		path       string
 		xType      *xunsafe.Type
 		marshaller *structMarshaller
-		session    *UnmarshallSession
+		session    *UnmarshalSession
 	}
 )
 
-func newStructMarshaller(config marshal.Default, rType reflect.Type, path string, outputPath string, dTag *DefaultTag, cache *marshallersCache) (*structMarshaller, error) {
+func newStructMarshaller(config _default.Default, rType reflect.Type, path string, outputPath string, dTag *DefaultTag, cache *marshallersCache) (*structMarshaller, error) {
 	result := &structMarshaller{
 		path:             path,
 		outputPath:       outputPath,
@@ -68,7 +68,7 @@ func newStructMarshaller(config marshal.Default, rType reflect.Type, path string
 	return result, result.init()
 }
 
-func (s *structMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (s *structMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	if s.indexUpdater != nil {
 		indexPtr := s.indexUpdater.xField.ValuePointer(pointer)
 		if indexPtr == nil {
@@ -144,7 +144,7 @@ func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 	return nil
 }
 
-func isExcluded(filter Filter, name string, config marshal.Default, path string) bool {
+func isExcluded(filter Filter, name string, config _default.Default, path string) bool {
 	if config.Exclude != nil {
 		if _, ok := config.Exclude[path]; ok {
 			return true
@@ -314,7 +314,7 @@ func addToPath(path, field string) string {
 	return path + "." + field
 }
 
-func (f *marshallerWithField) init(field reflect.StructField, config marshal.Default, cache *marshallersCache) error {
+func (f *marshallerWithField) init(field reflect.StructField, config _default.Default, cache *marshallersCache) error {
 	defaultTag, err := NewDefaultTag(field)
 	if err != nil {
 		return err

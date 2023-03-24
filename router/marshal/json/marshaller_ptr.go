@@ -3,7 +3,7 @@ package json
 import (
 	"bytes"
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -16,7 +16,7 @@ type ptrMarshaller struct {
 	isElemIface bool
 }
 
-func newPtrMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
+func newPtrMarshaller(rType reflect.Type, config _default.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
 	elem := rType.Elem()
 	marshaller, err := cache.loadMarshaller(elem, config, path, outputPath, tag)
 	if err != nil {
@@ -42,7 +42,7 @@ func (i *ptrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) 
 	return i.marshaler.MarshallObject(ptr, sb)
 }
 
-func (i *ptrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (i *ptrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	if pointer == nil {
 		return nil
 	}

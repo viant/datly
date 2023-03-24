@@ -2,14 +2,14 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
 )
 
 type customMarshaller struct {
-	config     marshal.Default
+	config     _default.Default
 	path       string
 	outputPath string
 	tag        *DefaultTag
@@ -19,7 +19,7 @@ type customMarshaller struct {
 	addrType   *xunsafe.Type
 }
 
-func newCustomUnmarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
+func newCustomUnmarshaller(rType reflect.Type, config _default.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
 	marshaller, err := cache.loadMarshaller(rType, config, path, outputPath, tag, &cacheConfig{ignoreCustomUnmarshaller: true})
 	if err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func (c *customMarshaller) MarshallObject(ptr unsafe.Pointer, session *MarshallS
 	return c.marshaller.MarshallObject(ptr, session)
 }
 
-func (c *customMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (c *customMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	value := c.valueType.Interface(pointer)
 	asUnmarshaler, ok := value.(UnmarshalerInto)
 	if ok {

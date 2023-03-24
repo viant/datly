@@ -39,7 +39,7 @@ func (i *stringMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 	return nil
 }
 
-func (i *stringMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (i *stringMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	return decoder.AddString(xunsafe.AsStringPtr(pointer))
 }
 

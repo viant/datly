@@ -2,7 +2,7 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -10,7 +10,7 @@ import (
 
 type interfaceMarshaller struct {
 	rType      reflect.Type
-	config     marshal.Default
+	config     _default.Default
 	path       string
 	outputPath string
 	tag        *DefaultTag
@@ -19,7 +19,7 @@ type interfaceMarshaller struct {
 	hasMethod  bool
 }
 
-func newInterfaceMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (*interfaceMarshaller, error) {
+func newInterfaceMarshaller(rType reflect.Type, config _default.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (*interfaceMarshaller, error) {
 	return &interfaceMarshaller{
 		xType:      xunsafe.NewType(rType),
 		rType:      rType,
@@ -32,7 +32,7 @@ func newInterfaceMarshaller(rType reflect.Type, config marshal.Default, path str
 	}, nil
 }
 
-func (i *interfaceMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (i *interfaceMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	iface := i.AsInterface(pointer)
 	return decoder.AddInterface(&iface)
 }

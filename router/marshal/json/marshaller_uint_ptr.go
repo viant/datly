@@ -39,7 +39,7 @@ func (i *uintPtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessi
 	return appendInt(int(**intPtr), sb)
 }
 
-func (i *uintPtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (i *uintPtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	return decoder.AddUint64Null(xunsafe.AsUint64AddrPtr(pointer))
 }
 
@@ -75,7 +75,7 @@ func (i *uint8PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSess
 	return appendInt(int(**intPtr), sb)
 }
 
-func (i *uint8PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (i *uint8PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	return decoder.AddUint8Null(xunsafe.AsUint8AddrPtr(pointer))
 }
 
@@ -111,7 +111,7 @@ func (i *uint16PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSes
 	return appendInt(int(**intPtr), sb)
 }
 
-func (i *uint16PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (i *uint16PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	return decoder.AddUint16Null(xunsafe.AsUint16AddrPtr(pointer))
 }
 
@@ -147,7 +147,7 @@ func (i *uint32PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSes
 	return appendInt(int(**intPtr), sb)
 }
 
-func (i *uint32PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (i *uint32PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	return decoder.AddUint32Null(xunsafe.AsUint32AddrPtr(pointer))
 }
 
@@ -183,6 +183,6 @@ func (i *uint64PtrMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSes
 	return appendInt(int(**intPtr), sb)
 }
 
-func (i *uint64PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (i *uint64PtrMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	return decoder.AddUint64Null(xunsafe.AsUint64AddrPtr(pointer))
 }

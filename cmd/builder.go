@@ -1345,11 +1345,12 @@ func (s *Builder) buildParamHint(selector *expr.Select, cursor *parsly.Cursor) e
 
 		_, paramName := sanitize.GetHolderName(holderName)
 		s.routeBuilder.transforms = append(s.routeBuilder.transforms, &marshal.Transform{
-			ParamName: paramName,
-			Kind:      aTransform.TransformKind,
-			Path:      holderName[pathStartIndex+1:],
-			Codec:     aTransform.Codec,
-			Source:    strings.TrimSpace(sql),
+			ParamName:   paramName,
+			Kind:        aTransform.TransformKind,
+			Path:        holderName[pathStartIndex+1:],
+			Codec:       aTransform.Codec,
+			Source:      strings.TrimSpace(sql),
+			Transformer: aTransform.Transformer,
 		})
 
 		return nil

@@ -2,7 +2,7 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -20,19 +20,19 @@ type (
 		ptr          unsafe.Pointer
 		appender     *xunsafe.Appender
 		unmarshaller marshaler
-		session      *UnmarshallSession
+		session      *UnmarshalSession
 	}
 
 	sliceInterfaceMarshaller struct {
 		cache      *marshallersCache
-		config     marshal.Default
+		config     _default.Default
 		outputPath string
 		path       string
 		tag        *DefaultTag
 	}
 )
 
-func newSliceMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
+func newSliceMarshaller(rType reflect.Type, config _default.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
 	elemType := rType.Elem()
 
 	marshaller, err := cache.loadMarshaller(elemType, config, path, outputPath, tag)
@@ -47,7 +47,7 @@ func newSliceMarshaller(rType reflect.Type, config marshal.Default, path string,
 	}, err
 }
 
-func (s *sliceMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (s *sliceMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	return decoder.AddArray(newSliceDecoder(s.elemType, pointer, s.xslice, s.marshaller, session))
 }
 
@@ -76,7 +76,7 @@ func (s *sliceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession
 	return nil
 }
 
-func newSliceDecoder(rType reflect.Type, ptr unsafe.Pointer, xslice *xunsafe.Slice, unmarshaller marshaler, session *UnmarshallSession) *sliceDecoder {
+func newSliceDecoder(rType reflect.Type, ptr unsafe.Pointer, xslice *xunsafe.Slice, unmarshaller marshaler, session *UnmarshalSession) *sliceDecoder {
 	return &sliceDecoder{
 		rType:        rType,
 		ptr:          ptr,
@@ -91,7 +91,7 @@ func (s *sliceDecoder) UnmarshalJSONArray(d *gojay.Decoder) error {
 	return s.unmarshaller.UnmarshallObject(xunsafe.AsPointer(add), d, nil, s.session)
 }
 
-func newSliceInterfaceMarshaller(config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) marshaler {
+func newSliceInterfaceMarshaller(config _default.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) marshaler {
 	return &sliceInterfaceMarshaller{
 		cache:      cache,
 		config:     config,
@@ -128,7 +128,7 @@ func (s *sliceInterfaceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *Marsha
 	return nil
 }
 
-func (s *sliceInterfaceMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (s *sliceInterfaceMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	ifaces := (*[]interface{})(pointer)
 
 	var result interface{}

@@ -38,7 +38,7 @@ func (i *float32Marshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessi
 	return appendFloat(float64(asFloat32), sb)
 }
 
-func (i *float32Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (i *float32Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	return decoder.AddFloat32((*float32)(pointer))
 }
 
@@ -69,7 +69,7 @@ func (i *float64Marshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessi
 	return appendFloat(asFloat64, sb)
 }
 
-func (i *float64Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (i *float64Marshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	return decoder.AddFloat64((*float64)((pointer)))
 }
 

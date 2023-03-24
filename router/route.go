@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
@@ -216,6 +217,10 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
+	if err := r.initTransforms(ctx); err != nil {
+		return nil
+	}
+
 	if err := r.initMarshallerInterceptor(); err != nil {
 		return err
 	}
@@ -240,10 +245,6 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 
 	if r.APIKey != nil {
 		r._apiKeys = append(r._apiKeys, r.APIKey)
-	}
-
-	if err := r.initTransforms(ctx); err != nil {
-		return nil
 	}
 
 	return nil
@@ -319,11 +320,11 @@ func (r *Route) initCardinality() error {
 	}
 }
 
-func (r *Route) jsonConfig() marshal.Default {
-	return marshal.Default{
+func (r *Route) jsonConfig() _default.Default {
+	return _default.Default{
 		OmitEmpty:  r.OmitEmpty,
 		CaseFormat: *r._caser,
-		Exclude:    marshal.Exclude(r.Exclude).Index(),
+		Exclude:    _default.Exclude(r.Exclude).Index(),
 		DateLayout: r.DateFormat,
 	}
 }
@@ -775,23 +776,33 @@ func (r *Route) initMarshallerInterceptor() error {
 	return nil
 }
 
-func (r *Route) unmarshallerInterceptors(params *RequestParams) json.UnmarshallerInterceptors {
-	result := json.UnmarshallerInterceptors{}
-	for _, transform := range r._unmarshallerInterceptors {
-		result[transform.transform.Path] = func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
-			evaluate, err := transform.transform.Evaluate(params.cookiesIndex, params.pathIndex, params.queryIndex, params.request.Header, decoder, r._resource.LookupType)
-			if err != nil {
-				return err
-			}
-
-			if evaluate.Ctx.Decoder.Decoded != nil {
-				reflect.ValueOf(dst).Elem().Set(reflect.ValueOf(evaluate.Ctx.Decoder.Decoded))
-			}
-
-			return nil
-		}
+func (r *Route) unmarshallerInterceptors(params *RequestParams) json.UnmarshalerInterceptors {
+	result := json.UnmarshalerInterceptors{}
+	for i := range r._unmarshallerInterceptors {
+		transform := r._unmarshallerInterceptors[i].transform
+		result[transform.Path] = r.transformFn(params, transform)
 	}
 	return result
+}
+
+func (r *Route) transformFn(params *RequestParams, transform *marshal.Transform) func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
+	unmarshaller := transform.UnmarshalerInto()
+	if unmarshaller != nil {
+		return unmarshaller.UnmarshalJSONWithOptions
+	}
+
+	return func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
+		evaluate, err := transform.Evaluate(params.cookiesIndex, params.pathIndex, params.queryIndex, params.request.Header, decoder, r._resource.LookupType)
+		if err != nil {
+			return err
+		}
+
+		if evaluate.Ctx.Decoder.Decoded != nil {
+			reflect.ValueOf(dst).Elem().Set(reflect.ValueOf(evaluate.Ctx.Decoder.Decoded))
+		}
+
+		return nil
+	}
 }
 
 func (r *Route) initTransforms(ctx context.Context) error {

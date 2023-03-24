@@ -2,7 +2,7 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/xunsafe"
 	"strconv"
 	"time"
@@ -15,7 +15,7 @@ type timeMarshaller struct {
 	tag        *DefaultTag
 }
 
-func newTimeMarshaller(tag *DefaultTag, config marshal.Default) *timeMarshaller {
+func newTimeMarshaller(tag *DefaultTag, config _default.Default) *timeMarshaller {
 	timeFormat := time.RFC3339
 	if tag.Format != "" {
 		timeFormat = tag.Format
@@ -37,7 +37,7 @@ func newTimeMarshaller(tag *DefaultTag, config marshal.Default) *timeMarshaller 
 	}
 }
 
-func (t *timeMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error {
+func (t *timeMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	aTime := xunsafe.AsTimePtr(pointer)
 	if err := decoder.AddTime(aTime, t.timeFormat); err != nil {
 		return err

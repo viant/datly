@@ -32,6 +32,7 @@ pipeline:
         - git pull --rebase
         - cd ${appPath}/e2e/custom_datly/.xdatly/types/custom
         - go get github.com/francoispqt/gojay@1398296
+        - cp ${appPath}/e2e/custom_datly/imports.go ${appPath}/e2e/custom_datly/.xdatly/types/custom/dependency
         - go mod tidy -compat=1.17
 
     copyDatly:

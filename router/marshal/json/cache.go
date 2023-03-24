@@ -3,7 +3,7 @@ package json
 import (
 	"bytes"
 	"fmt"
-	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xreflect"
@@ -89,7 +89,7 @@ func getXType(rType reflect.Type) *xunsafe.Type {
 	return xType
 }
 
-func (m *marshallersCache) loadMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, defaultTag *DefaultTag, options ...interface{}) (marshaler, error) {
+func (m *marshallersCache) loadMarshaller(rType reflect.Type, config _default.Default, path string, outputPath string, defaultTag *DefaultTag, options ...interface{}) (marshaler, error) {
 	aCache := m.pathCache(path)
 	marshaller, err := aCache.loadOrGetMarshaller(rType, config, path, outputPath, defaultTag, options...)
 	if err != nil {
@@ -99,7 +99,7 @@ func (m *marshallersCache) loadMarshaller(rType reflect.Type, config marshal.Def
 	return marshaller, nil
 }
 
-func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, options ...interface{}) (marshaler, error) {
+func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, config _default.Default, path string, outputPath string, tag *DefaultTag, options ...interface{}) (marshaler, error) {
 	value, ok := c.cache.Load(rType)
 	if ok {
 		return value.(marshaler), nil
@@ -115,7 +115,7 @@ func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, config marshal.Defau
 	return aMarshaler, nil
 }
 
-func (c *pathCache) getMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, options ...interface{}) (marshaler, error) {
+func (c *pathCache) getMarshaller(rType reflect.Type, config _default.Default, path string, outputPath string, tag *DefaultTag, options ...interface{}) (marshaler, error) {
 	if tag == nil {
 		tag = &DefaultTag{}
 	}
