@@ -524,11 +524,13 @@ WHERE  #if($Ids.Values.Length() > 0 ) ID IN ( $Ids.Values ) #else 1 = 0 #end
 Datly is runtime agnostic and can be deployed as standalone app, or AWS Lambda, Google cloud function, Google Cloud run.
 Entry point with deployment example are define under [Runtime](../gateway/runtime)
 
+Datly deployment is entails datly binary deployment with initial rule set, follow by just rule synchronization.
+
+
 On both autonomous and custom mode 'datly' uses set of rule, and plugins. 
 On cloud deployment these assets are stored on cloud storage, thus to reduce cold start or rule changes detection and reload
-it's recommend to set flag "UseCacheFS" in the datly config. This setting would enable daytly to use **datly.pkg.gz** cache file, storing
-all underlying assets. Cache file is created every time it's deleted from a file storage.
-
+it's recommend to set flag "UseCacheFS" in the datly config. This setting instructs daytly to use **datly.pkg.gz** cache file, for all underlying assets. 
+Cache is created every time a cache file is deleted from a file storage.
 
 #### Generating pre-packaged datly rule  
 
@@ -585,13 +587,45 @@ The following layout organizes datly specific resources
 
 Datly integrates with [Scy - secure store api](https://github.com/viant/scy) when operating on credentials.
 
-#### Securing database/sql DSN
-    
 
+#### Securing database/sql DSN
+
+In **dependencies** folder datly stores connection details make sure that before deploying to stage/prod all
+credentials details are replaced with the following macros
+
+```connections.yaml
+Connectors:
+    - DSN: ${Username}:${Password}@tcp(${Endpoint}:3306)/ci_ads?parseTime=true
+      Driver: mysql
+      Name: mydb
+      Secret:
+        URL: secure_storage_url
+        Key:  blowfish://default
+  - DSN: bigquery://my_org_project/myDataset?credURL=url_encoded_secure_storage_N_url
+    Driver: bigquery
+    Name: mybqdb
+```
+
+Where secure_storage_url could be any file system, including secret storage manager
+    - AWS SecretManager i.e. aws://secretmanager/us-west-2/secret/myorg/datly/e2e/mysql/mydb
+    - AWS SystemManager i.e. aws://ssm/us-west-1/parameter/MyOrgDatlyE2eMySQLMyDb
+    - GCP SecretManager i.e. gcp://secretmanager/projects/myorf-e2e/secrets/mysqlMyDB
+
+
+To secure database credentials create [raw_credentials.json](asset/raw_credentials.json) file
+and the use the following [scy](https://github.com/viant/scy) command
+
+```bash
+scy -s=raw_credentials.json -d=secure_storage_url -t=basic -k=blowfish://default
+```
+
+To secure Google Service Account Secret use the following [scy](https://github.com/viant/scy) command
+
+```bash
+scy -s=myServiceAccountSecret.json -d=secure_storage_url -t=raw -k=blowfish://default
+```
 
 #### Autonomous Datly
-
-
 
 
 
@@ -599,7 +633,6 @@ Datly integrates with [Scy - secure store api](https://github.com/viant/scy) whe
 
 In custom datly (xdatly) mode you get integrated with your local go module to define application specific type with method, so these method can be invoked directly from dsql.
 In this scenario datly uses both direct go module integration and go plugin to synchronize dynamic rules without need of rebuilding custom datly.
-
 
 
 
