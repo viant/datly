@@ -546,11 +546,60 @@ The above command creates datly.pkg.gz file containing all assets from DATLY_ROO
 where each asset URL is rewritten with CLOUD_STORAGE_DATLY_CONFIG_URL
 
 
-### On AWS
+#### Project layout
+
+The following layout organizes datly specific resources
+```bash
+  ProjectRoot
+      | -  dsql
+            | - business Unit 1 (appName)
+                  - entity_X_get.sql
+                  - entity_X_put.sql 
+                  - entity_X_post.sql 
+                  - entity_X_patch.sql 
+                ....
+                  - entity_N_get.sql
+    
+            | - business Unit N (appName)                 
+   - e2e (end to end testing workflows)
+   - pkg         
+      | -  mypackage1   
+             | - entityX.go
+   - deployment 
+      - prod
+         | - Datly
+               | - dependencies
+               | - plugins
+               | - routes
+               |  config.json
+      - stage        
+         | - Datly
+               | - dependencies
+               | - plugins
+               | - routes
+               |   config.json   
+```
+
+
+#### Securing secret
+
+Datly integrates with [Scy - secure store api](https://github.com/viant/scy) when operating on credentials.
+
+#### Securing database/sql DSN
+    
+
 
 #### Autonomous Datly
 
+
+
+
+
 #### Custom Datly
+
+In custom datly (xdatly) mode you get integrated with your local go module to define application specific type with method, so these method can be invoked directly from dsql.
+In this scenario datly uses both direct go module integration and go plugin to synchronize dynamic rules without need of rebuilding custom datly.
+
 
 
 

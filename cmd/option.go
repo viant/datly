@@ -89,9 +89,9 @@ type (
 		PluginArgs      []string `long:"pluginArgs" description:"args need to be passed to generate a plugin"`
 		PluginsURL      string   `long:"pluginsURL" description:"generated plugins destination"`
 		PluginName      string   `long:"pluginName" description:"plugin name"`
-		PluginGoVersion string
-		PluginOS        string `long:"pluginOS" description:"plugin OS"`
-		PluginArch      string `long:"pluginArch" description:"plugin ARCH"`
+		PluginGoVersion string   `long:"pluginGoVersion" description:"plugin go Version"`
+		PluginOS        string   `long:"pluginOS" description:"plugin OS"`
+		PluginArch      string   `long:"pluginArch" description:"plugin ARCH"`
 	}
 
 	Module struct {
@@ -103,7 +103,7 @@ type (
 		ModuleLdFlags   string   `long:"moduleLdFlags" description:"module ldflags"`
 		ModuleOS        string   `long:"moduleOS" description:"module OS"`
 		ModuleArch      string   `long:"moduleArch" description:"plugin ARCH"`
-		ModuleGoVersion string
+		ModuleGoVersion string   `long:"moduleGoVersion" description:"module go Version"`
 	}
 )
 
