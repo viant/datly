@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/utils/formatter"
@@ -52,6 +53,7 @@ type (
 	routeBuilder struct {
 		configProvider *ViewConfigurer
 		paramsIndex    *ParametersIndex
+		transforms     []*marshal.Transform
 		routerResource *router.Resource
 		route          *router.Route
 		option         *option.RouteConfig
@@ -256,10 +258,6 @@ func (s *Builder) Build(ctx context.Context) error {
 		return nil
 	}
 
-	if err := s.readArtificialParamHints(); err != nil {
-		return err
-	}
-
 	if err := s.readRouteSettings(); err != nil {
 		return err
 	}
@@ -401,6 +399,7 @@ func (s *Builder) initRoute() error {
 	s.routeBuilder.route = &router.Route{
 		Method:           method,
 		EnableAudit:      true,
+		Transforms:       s.routeBuilder.transforms,
 		CustomValidation: s.routeBuilder.option.CustomValidation,
 		Cors: &router.Cors{
 			AllowCredentials: boolPtr(true),
@@ -524,6 +523,11 @@ func (s *Builder) loadSQL(ctx context.Context) error {
 	}
 
 	hint, SQL := s.extractRouteSettings([]byte(SQL))
+
+	if SQL, err = s.readArtificialParamHints(SQL); err != nil {
+		return err
+	}
+
 	hints := sanitize.ExtractParameterHints(SQL)
 	SQL = sanitize.RemoveParameterHints(SQL, hints)
 
@@ -1277,8 +1281,9 @@ func (s *Builder) parseTypeSrc(imported string, cursor *parsly.Cursor) (*option.
 	}, nil
 }
 
-func (s *Builder) readArtificialParamHints() error {
-	cursor := parsly.NewCursor("", []byte(s.routeBuilder.sqlStmt), 0)
+func (s *Builder) readArtificialParamHints(SQL string) (string, error) {
+	SQLBytes := []byte(SQL)
+	cursor := parsly.NewCursor("", SQLBytes, 0)
 	for {
 		matched := cursor.MatchOne(setTerminatedMatcher)
 		switch matched.Code {
@@ -1307,26 +1312,55 @@ func (s *Builder) readArtificialParamHints() error {
 				continue
 			}
 
-			s.buildParamHint(selector, contentCursor)
+			if err = s.buildParamHint(selector, contentCursor); err != nil {
+				return "", err
+			}
+
 			s.routeBuilder.sqlStmt = strings.Replace(s.routeBuilder.sqlStmt, string(cursor.Input[setStart:selEnd]), "", 1)
 
+			for i := setStart; i < cursor.Pos; i++ {
+				SQLBytes[i] = ' '
+			}
+
 		default:
-			return nil
+			return string(SQLBytes), nil
 		}
 	}
 }
 
-func (s *Builder) buildParamHint(selector *expr.Select, cursor *parsly.Cursor) {
-	_, holderName := sanitize.GetHolderName(view.FirstNotEmpty(selector.FullName, selector.ID))
-	paramHint, _ := s.parseParamHint(cursor)
-	if paramHint == "" {
-		return
+func (s *Builder) buildParamHint(selector *expr.Select, cursor *parsly.Cursor) error {
+	paramHint, err := s.parseParamHint(cursor)
+	if paramHint == "" || err != nil {
+		return err
+	}
+
+	holderName := strings.Trim(view.FirstNotEmpty(selector.FullName, selector.ID), "${}")
+	if pathStartIndex := strings.Index(holderName, "."); pathStartIndex >= 0 {
+		hint, sql := sanitize.SplitHint(paramHint)
+
+		aTransform := &option.TransformOption{}
+		if err = tryUnmarshalHint(hint, aTransform); err != nil {
+			return err
+		}
+
+		_, paramName := sanitize.GetHolderName(holderName)
+		s.routeBuilder.transforms = append(s.routeBuilder.transforms, &marshal.Transform{
+			ParamName: paramName,
+			Kind:      aTransform.TransformKind,
+			Path:      holderName[pathStartIndex+1:],
+			Codec:     aTransform.Codec,
+			Source:    strings.TrimSpace(sql),
+		})
+
+		return nil
 	}
 
 	s.routeBuilder.paramsIndex.AddParamHint(holderName, &sanitize.ParameterHint{
 		Parameter: holderName,
 		Hint:      paramHint,
 	})
+
+	return nil
 }
 
 func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {

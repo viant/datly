@@ -11,4 +11,5 @@ FROM (
              OBJECT AS Preferences,
              CLASS_NAME as ClassName
          FROM OBJECTS
+         WHERE ID != 999
      ) main  /* { "DataType": "Record" } */

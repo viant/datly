@@ -12,9 +12,9 @@ type (
 		*bytes.Buffer
 	}
 
-	Interceptors      map[string]UnmarshallInterceptor
-	UnmarshallSession struct {
-		Interceptors Interceptors
+	UnmarshallerInterceptors map[string]UnmarshallInterceptor
+	UnmarshallSession        struct {
+		Interceptors UnmarshallerInterceptors
 		Options      []interface{}
 	}
 

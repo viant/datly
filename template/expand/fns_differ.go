@@ -7,7 +7,7 @@ import (
 	"reflect"
 )
 
-var FnsDiffer = keywords.AddAndGet("differ",
+var fnsDiffer = keywords.AddAndGet("differ",
 	functions.NewEntry(
 		&Differ{},
 		functions.NewFunctionNamespace(reflect.TypeOf(&Differ{})),

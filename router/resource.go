@@ -106,7 +106,7 @@ func (r *Resource) Init(ctx context.Context) error {
 			continue
 		}
 
-		transforms[route.View.Ref] = route.Transforms
+		route.Transforms, transforms[route.View.Ref] = r.filterTransforms(route)
 	}
 
 	r.initialised = true
@@ -167,6 +167,18 @@ func (r *Resource) Init(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (r *Resource) filterTransforms(route *Route) (routeTransforms marshal.Transforms, viewTransforms marshal.Transforms) {
+	for _, transform := range route.Transforms {
+		if transform.ParamName == "" {
+			viewTransforms = append(viewTransforms, transform)
+		} else {
+			routeTransforms = append(routeTransforms, transform)
+		}
+	}
+
+	return routeTransforms, viewTransforms
 }
 
 func (r *Resource) addLoggersIfNeeded() error {

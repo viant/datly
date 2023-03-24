@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
@@ -48,6 +49,7 @@ type Resource struct {
 	ModTime   time.Time `json:",omitempty"`
 
 	_columnsCache map[string]Columns
+	_cache        *types.Cache
 	_typeLookup   xreflect.TypeLookupFn
 }
 
@@ -228,12 +230,18 @@ func (r *Resource) GetConnectors() Connectors {
 
 //Init initializes Resource
 func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
+	r._cache = types.NewCache(func(packagePath, packageIdentifier, typeName string) (reflect.Type, error) {
+		if r._typeLookup == nil {
+			return nil, fmt.Errorf("not found type %v", typeName)
+		}
 
-	types, visitors, cache, transforms := r.readOptions(options)
+		return r._typeLookup(packagePath, packageIdentifier, typeName)
+	})
+
+	customTypes, visitors, cache, transforms := r.readOptions(options)
 	r.indexProviders()
-
 	r._typesIndex = map[reflect.Type]string{}
-	r._types = types.copy()
+	r._types = customTypes.copy()
 	r._visitors = visitors
 	r._columnsCache = cache
 	r._packageTypes = map[string]Types{}
@@ -567,6 +575,11 @@ func (r *Resource) SetTypeLookup(lookup xreflect.TypeLookupFn) {
 }
 
 func (r *Resource) LookupType(packageIdentifier, packageName, typeName string) (reflect.Type, error) {
+	loadType, err := r._cache.LoadType(packageIdentifier, packageName, typeName)
+	if err == nil {
+		return loadType, nil
+	}
+
 	if r._typeLookup != nil {
 		lookup, err := r._typeLookup(packageIdentifier, packageName, typeName)
 		if err == nil {

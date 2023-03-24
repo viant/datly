@@ -12,12 +12,14 @@ import (
 
 type (
 	Evaluator struct {
-		planner        *velty.Planner
-		executor       *est.Execution
-		stateProvider  func() *est.State
-		constParams    []ConstUpdater
-		paramSchema    reflect.Type
-		presenceSchema reflect.Type
+		planner          *velty.Planner
+		executor         *est.Execution
+		stateProvider    func() *est.State
+		constParams      []ConstUpdater
+		paramSchema      reflect.Type
+		presenceSchema   reflect.Type
+		supportsPresence bool
+		supportsParams   bool
 	}
 
 	ConstUpdater interface {
@@ -25,20 +27,27 @@ type (
 	}
 )
 
-func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.TypeLookupFn) (*Evaluator, error) {
+func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.TypeLookupFn, options ...interface{}) (*Evaluator, error) {
 	evaluator := &Evaluator{
-		constParams:    consts,
-		paramSchema:    paramSchema,
-		presenceSchema: presenceSchema,
+		constParams:      consts,
+		paramSchema:      paramSchema,
+		presenceSchema:   presenceSchema,
+		supportsPresence: presenceSchema != nil,
+		supportsParams:   paramSchema != nil,
 	}
+
+	aCofnig := createConfig(options)
 
 	var err error
-	evaluator.planner = velty.New(velty.BufferSize(len(template)), velty.PanicOnError(true))
-	if err = evaluator.planner.DefineVariable(keywords.ParamsKey, paramSchema); err != nil {
-		return nil, err
+	evaluator.planner = velty.New(velty.BufferSize(len(template)), aCofnig.panicOnError)
+
+	if evaluator.supportsParams {
+		if err = evaluator.planner.DefineVariable(keywords.ParamsKey, paramSchema); err != nil {
+			return nil, err
+		}
 	}
 
-	if presenceSchema != nil {
+	if evaluator.supportsPresence {
 		if err = evaluator.planner.DefineVariable(keywords.ParamsMetadataKey, presenceSchema); err != nil {
 			return nil, err
 		}
@@ -68,8 +77,18 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
-	if err = evaluator.planner.RegisterFuncNs(FnsDiffer, Differ{}); err != nil {
+	if err = evaluator.planner.RegisterFuncNs(fnsJSON, jsoner); err != nil {
 		return nil, err
+	}
+
+	if err = evaluator.planner.RegisterFuncNs(fnsDiffer, Differ{}); err != nil {
+		return nil, err
+	}
+
+	for _, valueType := range aCofnig.valueTypes {
+		if err = evaluator.planner.EmbedVariable(valueType.Type); err != nil {
+			return nil, err
+		}
 	}
 
 	if err = evaluator.planner.RegisterTypeFunc(reflect.TypeOf(&godiff.ChangeLog{}), funcChanged); err != nil {
@@ -84,7 +103,23 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	return evaluator, nil
 }
 
-func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam *MetaParam, parentParam *MetaParam, state *State) (*State, error) {
+func createConfig(options []interface{}) *config {
+	instance := newConfig()
+	for _, option := range options {
+		switch actual := option.(type) {
+		case []*CustomContext:
+			instance.valueTypes = append(instance.valueTypes, actual...)
+		case *CustomContext:
+			instance.valueTypes = append(instance.valueTypes, actual)
+		case velty.PanicOnError:
+			instance.panicOnError = actual
+		}
+	}
+
+	return instance
+}
+
+func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam *MetaParam, parentParam *MetaParam, state *State, options ...interface{}) (*State, error) {
 	if externalParams != nil {
 		externalType := reflect.TypeOf(externalParams)
 		if e.paramSchema != externalType {
@@ -95,13 +130,13 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 	state = e.ensureState(state, viewParam, parentParam, goValidator)
 
 	externalParams, presenceMap = e.updateConsts(externalParams, presenceMap)
-	if externalParams != nil {
+	if externalParams != nil && e.supportsParams {
 		if err := state.SetValue(keywords.ParamsKey, externalParams); err != nil {
 			return nil, err
 		}
 	}
 
-	if presenceMap != nil {
+	if presenceMap != nil && e.supportsPresence {
 		if err := state.SetValue(keywords.ParamsMetadataKey, presenceMap); err != nil {
 			return nil, err
 		}
@@ -109,6 +144,22 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 
 	if err := state.EmbedValue(state.Context); err != nil {
 		return nil, err
+	}
+
+	for _, option := range options {
+		switch actual := option.(type) {
+		case *CustomContext:
+			actualType := reflect.TypeOf(actual.Value)
+			if actualType != actual.Type {
+				return nil, fmt.Errorf("type missmatch, wanted %v got %v", actualType.String(), actual.Type.String())
+			}
+
+			if actual.Value != nil {
+				if err := state.State.EmbedValue(actual.Value); err != nil {
+					return nil, err
+				}
+			}
+		}
 	}
 
 	if err := e.executor.Exec(state.State); err != nil {

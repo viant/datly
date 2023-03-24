@@ -8,4 +8,5 @@ FROM (
              OBJECT AS Preferences /* {"DataType": "json.RawMessage", "Tag":"jsonx:\",inline\""} */,
              CLASS_NAME as ClassName
          FROM OBJECTS
+         WHERE ID != 999
      ) main

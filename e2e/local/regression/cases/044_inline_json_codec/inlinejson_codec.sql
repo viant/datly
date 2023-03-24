@@ -14,4 +14,5 @@ FROM (
              OBJECT AS Preferences /* { "Codec": {"Ref": "JSON", "OutputType": "$Rec.ClassName" } } */,
              CLASS_NAME as ClassName
          FROM OBJECTS
+         WHERE ID != 999
      ) main  /* { "DataType": "Record" } */

@@ -9,4 +9,5 @@ FROM (
              (OBJECT->'$.Name') AS Name /* {"DataType":"string"} */,
              CLASS_NAME as ClassName
          FROM OBJECTS
+         WHERE ID != 999
      ) main

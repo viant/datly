@@ -3,6 +3,8 @@ package router
 import (
 	"context"
 	"fmt"
+	"github.com/francoispqt/gojay"
+	"github.com/viant/afs"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
@@ -54,6 +56,7 @@ type (
 		EnableDebug      *bool
 		Transforms       marshal.Transforms
 
+		JSON
 		Output
 		Index
 
@@ -67,13 +70,21 @@ type (
 		_requestBodyParamRequired bool
 		_requestBodyType          reflect.Type
 		_requestBodySlice         *xunsafe.Slice
-		_marshaller               *json.Marshaller
 		_apiKeys                  []*APIKey
 	}
 
 	Fetcher struct {
 		shared.Reference
 		_fetcher interface{}
+	}
+
+	JSON struct {
+		_marshaller               *json.Marshaller
+		_unmarshallerInterceptors []*unmarshallerInterceptorFactory
+	}
+
+	unmarshallerInterceptorFactory struct {
+		transform *marshal.Transform
 	}
 
 	Output struct {
@@ -205,6 +216,10 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
+	if err := r.initMarshallerInterceptor(); err != nil {
+		return err
+	}
+
 	if err := r.initServiceType(); err != nil {
 		return err
 	}
@@ -225,6 +240,10 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 
 	if r.APIKey != nil {
 		r._apiKeys = append(r._apiKeys, r.APIKey)
+	}
+
+	if err := r.initTransforms(ctx); err != nil {
+		return nil
 	}
 
 	return nil
@@ -734,4 +753,53 @@ func (r *Route) initMarshaller() error {
 	var err error
 	r._marshaller, err = json.New(r.jsonConfig())
 	return err
+}
+
+func (r *Route) initMarshallerInterceptor() error {
+	var outputTransforms []*marshal.Transform
+	for _, transform := range r.Transforms {
+		if transform.Kind != marshal.TransformKindUnmarshal {
+			continue
+		}
+
+		outputTransforms = append(outputTransforms, transform)
+	}
+
+	r._unmarshallerInterceptors = []*unmarshallerInterceptorFactory{}
+	for _, transform := range outputTransforms {
+		r._unmarshallerInterceptors = append(r._unmarshallerInterceptors, &unmarshallerInterceptorFactory{
+			transform: transform,
+		})
+	}
+
+	return nil
+}
+
+func (r *Route) unmarshallerInterceptors(params *RequestParams) json.UnmarshallerInterceptors {
+	result := json.UnmarshallerInterceptors{}
+	for _, transform := range r._unmarshallerInterceptors {
+		result[transform.transform.Path] = func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
+			evaluate, err := transform.transform.Evaluate(params.cookiesIndex, params.pathIndex, params.queryIndex, params.request.Header, decoder, r._resource.LookupType)
+			if err != nil {
+				return err
+			}
+
+			if evaluate.Ctx.Decoder.Decoded != nil {
+				reflect.ValueOf(dst).Elem().Set(reflect.ValueOf(evaluate.Ctx.Decoder.Decoded))
+			}
+
+			return nil
+		}
+	}
+	return result
+}
+
+func (r *Route) initTransforms(ctx context.Context) error {
+	for _, transform := range r.Transforms {
+		if err := transform.Init(ctx, afs.New(), r._resource.LookupType); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

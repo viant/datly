@@ -1187,7 +1187,7 @@ func httpUnmarshallTestcase(typeName string, data string, expected string) unmar
 		stringsEqual: true,
 		options: []interface{}{
 			request,
-			json.Interceptors{
+			json.UnmarshallerInterceptors{
 				"Object": func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
 					var httpRequest *http.Request
 					for _, option := range options {

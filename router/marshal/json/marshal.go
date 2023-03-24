@@ -140,12 +140,12 @@ func (j *Marshaller) marshaller(rType reflect.Type) (Marshaler, error) {
 
 func (j *Marshaller) prepareUnmarshallSession(options []interface{}) *UnmarshallSession {
 	var unmarshallSession *UnmarshallSession
-	var interceptors Interceptors
+	var interceptors UnmarshallerInterceptors
 	for _, option := range options {
 		switch actual := option.(type) {
 		case *UnmarshallSession:
 			unmarshallSession = actual
-		case Interceptors:
+		case UnmarshallerInterceptors:
 			interceptors = actual
 		}
 	}
