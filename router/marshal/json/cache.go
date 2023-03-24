@@ -89,9 +89,9 @@ func getXType(rType reflect.Type) *xunsafe.Type {
 	return xType
 }
 
-func (m *marshallersCache) loadMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, defaultTag *DefaultTag) (Marshaler, error) {
+func (m *marshallersCache) loadMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, defaultTag *DefaultTag, options ...interface{}) (marshaler, error) {
 	aCache := m.pathCache(path)
-	marshaller, err := aCache.loadOrGetMarshaller(rType, config, path, outputPath, defaultTag)
+	marshaller, err := aCache.loadOrGetMarshaller(rType, config, path, outputPath, defaultTag, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -99,30 +99,37 @@ func (m *marshallersCache) loadMarshaller(rType reflect.Type, config marshal.Def
 	return marshaller, nil
 }
 
-func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag) (Marshaler, error) {
+func (c *pathCache) loadOrGetMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, options ...interface{}) (marshaler, error) {
 	value, ok := c.cache.Load(rType)
 	if ok {
-		return value.(Marshaler), nil
+		return value.(marshaler), nil
 	}
 
-	marshaler, err := c.getMarshaller(rType, config, path, outputPath, tag)
+	aMarshaler, err := c.getMarshaller(rType, config, path, outputPath, tag, options...)
 
 	if err != nil {
 		return nil, err
 	}
 
-	c.storeMarshaler(rType, marshaler)
-	return marshaler, nil
+	c.storeMarshaler(rType, aMarshaler)
+	return aMarshaler, nil
 }
 
-func (c *pathCache) getMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag) (Marshaler, error) {
+func (c *pathCache) getMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, options ...interface{}) (marshaler, error) {
 	if tag == nil {
 		tag = &DefaultTag{}
+	}
+
+	aConfig := c.parseConfig(options)
+	if (aConfig == nil || !aConfig.ignoreCustomUnmarshaller) && rType.Implements(unmarshallerIntoType) {
+		return newCustomUnmarshaller(rType, config, path, outputPath, tag, c.parent)
 	}
 
 	switch rType {
 	case xreflect.TimePtrType:
 		return newTimePtrMarshaller(tag, config), nil
+	case rawMessageType:
+		return newRawMessageMarshaller(), nil
 	}
 
 	switch rType.Kind() {
@@ -180,10 +187,6 @@ func (c *pathCache) getMarshaller(rType reflect.Type, config marshal.Default, pa
 	case reflect.Slice:
 		if rType.Elem().Kind() == reflect.Interface {
 			return newSliceInterfaceMarshaller(config, path, outputPath, tag, c.parent), nil
-		}
-
-		if rType == rawMessageType {
-			return newRawMessageMarshaller(), nil
 		}
 
 		marshaller, err := newSliceMarshaller(rType, config, path, outputPath, tag, c.parent)
@@ -283,15 +286,28 @@ func (m *marshallersCache) pathCache(path string) *pathCache {
 	return result
 }
 
-func (c *pathCache) loadMarshaller(rType reflect.Type) (Marshaler, bool) {
+func (c *pathCache) loadMarshaller(rType reflect.Type) (marshaler, bool) {
 	value, ok := c.cache.Load(rType)
 	if ok {
-		return value.(Marshaler), true
+		return value.(marshaler), true
 	}
 
 	return nil, false
 }
 
-func (c *pathCache) storeMarshaler(rType reflect.Type, marshaler Marshaler) {
+func (c *pathCache) storeMarshaler(rType reflect.Type, marshaler marshaler) {
 	c.cache.Store(rType, marshaler)
+}
+
+func (c *pathCache) parseConfig(options []interface{}) *cacheConfig {
+	var aConfig *cacheConfig
+
+	for _, option := range options {
+		switch actual := option.(type) {
+		case *cacheConfig:
+			aConfig = actual
+		}
+	}
+
+	return aConfig
 }

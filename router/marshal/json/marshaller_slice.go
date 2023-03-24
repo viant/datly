@@ -12,14 +12,14 @@ type (
 	sliceMarshaller struct {
 		xslice     *xunsafe.Slice
 		elemType   reflect.Type
-		marshaller Marshaler
+		marshaller marshaler
 	}
 
 	sliceDecoder struct {
 		rType        reflect.Type
 		ptr          unsafe.Pointer
 		appender     *xunsafe.Appender
-		unmarshaller Marshaler
+		unmarshaller marshaler
 		session      *UnmarshallSession
 	}
 
@@ -32,7 +32,7 @@ type (
 	}
 )
 
-func newSliceMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (Marshaler, error) {
+func newSliceMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
 	elemType := rType.Elem()
 
 	marshaller, err := cache.loadMarshaller(elemType, config, path, outputPath, tag)
@@ -76,7 +76,7 @@ func (s *sliceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession
 	return nil
 }
 
-func newSliceDecoder(rType reflect.Type, ptr unsafe.Pointer, xslice *xunsafe.Slice, unmarshaller Marshaler, session *UnmarshallSession) *sliceDecoder {
+func newSliceDecoder(rType reflect.Type, ptr unsafe.Pointer, xslice *xunsafe.Slice, unmarshaller marshaler, session *UnmarshallSession) *sliceDecoder {
 	return &sliceDecoder{
 		rType:        rType,
 		ptr:          ptr,
@@ -91,7 +91,7 @@ func (s *sliceDecoder) UnmarshalJSONArray(d *gojay.Decoder) error {
 	return s.unmarshaller.UnmarshallObject(xunsafe.AsPointer(add), d, nil, s.session)
 }
 
-func newSliceInterfaceMarshaller(config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) Marshaler {
+func newSliceInterfaceMarshaller(config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) marshaler {
 	return &sliceInterfaceMarshaller{
 		cache:      cache,
 		config:     config,

@@ -80,10 +80,10 @@ type (
 
 	JSON struct {
 		_marshaller               *json.Marshaller
-		_unmarshallerInterceptors []*unmarshallerInterceptorFactory
+		_unmarshallerInterceptors []*jsonUnmarshallerInterceptors
 	}
 
-	unmarshallerInterceptorFactory struct {
+	jsonUnmarshallerInterceptors struct {
 		transform *marshal.Transform
 	}
 
@@ -765,9 +765,9 @@ func (r *Route) initMarshallerInterceptor() error {
 		outputTransforms = append(outputTransforms, transform)
 	}
 
-	r._unmarshallerInterceptors = []*unmarshallerInterceptorFactory{}
+	r._unmarshallerInterceptors = []*jsonUnmarshallerInterceptors{}
 	for _, transform := range outputTransforms {
-		r._unmarshallerInterceptors = append(r._unmarshallerInterceptors, &unmarshallerInterceptorFactory{
+		r._unmarshallerInterceptors = append(r._unmarshallerInterceptors, &jsonUnmarshallerInterceptors{
 			transform: transform,
 		})
 	}

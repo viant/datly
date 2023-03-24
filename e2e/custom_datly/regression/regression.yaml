@@ -33,6 +33,7 @@ pipeline:
     checkError: true
     commands:
       - export GO111MODULE=on
+      - cd $appPath/e2e/custom_datly/.xdatly/types/custom
       - cd $appPath/e2e/custom_datly/.datly/cmd/datly
       - go mod edit -replace github.com/viant/xdatly/types/custom=${appPath}/e2e/custom_datly/.xdatly/types/custom
       - go mod tidy -compat=1.17

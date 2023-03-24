@@ -1,0 +1,9 @@
+{
+  "Method": "POST",
+  "Args": "",
+  "GoFile": "bars.go",
+  "Path": "003_custom_json",
+  "URL": "bars.sql",
+  "PregenURL": "pre_bars_replace.sql",
+  "PluginGoFile": "changed/bars.go"
+}

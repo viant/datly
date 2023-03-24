@@ -13,3 +13,10 @@ CREATE TABLE FOOS_PERFORMANCE (
                                   FOO_ID INT,
                                   FOREIGN KEY (FOO_ID) REFERENCES FOOS(ID)
 );
+
+DROP TABLE IF EXISTS BARS;
+CREATE TABLE BARS (
+                      ID INT AUTO_INCREMENT PRIMARY KEY,
+                      NAME varchar(255),
+                      INTS INT
+);

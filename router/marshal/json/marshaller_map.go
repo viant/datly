@@ -11,8 +11,8 @@ import (
 
 type mapMarshaller struct {
 	discoveredMarshaller func(ptr unsafe.Pointer, sb *MarshallSession) error
-	keyMarshaller        Marshaler
-	valueMarshaller      Marshaler
+	keyMarshaller        marshaler
+	valueMarshaller      marshaler
 	isEmbedded           bool
 	cache                *marshallersCache
 	config               marshal.Default

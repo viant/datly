@@ -27,7 +27,7 @@ type (
 	}
 
 	marshallerWithField struct {
-		marshaller     Marshaler
+		marshaller     marshaler
 		xField         *xunsafe.Field
 		indirectXField *xunsafe.Field //in case anonymous pointer field
 		tag            *DefaultTag

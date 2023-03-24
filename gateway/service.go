@@ -145,7 +145,7 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 	}
 
 	err = srv.syncChangesIfNeeded(ctx, metrics, statusHandler, authorizer, true)
-	fmt.Printf("initialised datly: %s\n", time.Now().Sub(start))
+	fmt.Printf("[INFO] initialised datly: %s\n", time.Now().Sub(start))
 	return srv, err
 }
 

@@ -11,12 +11,12 @@ import (
 
 type ptrMarshaller struct {
 	rType       reflect.Type
-	marshaler   Marshaler
+	marshaler   marshaler
 	xType       *xunsafe.Type
 	isElemIface bool
 }
 
-func newPtrMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (Marshaler, error) {
+func newPtrMarshaller(rType reflect.Type, config marshal.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
 	elem := rType.Elem()
 	marshaller, err := cache.loadMarshaller(elem, config, path, outputPath, tag)
 	if err != nil {

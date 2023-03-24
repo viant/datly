@@ -134,16 +134,15 @@ func (c *DataUnit) expandCopy(value interface{}) ([]interface{}, string) {
 	case *uint16:
 		return []interface{}{actual}, "?"
 	}
-	valueType := reflect.TypeOf(value)
+	srcValue := reflect.ValueOf(value)
 	valuePtr := xunsafe.AsPointer(value)
-	if valueType.Kind() == reflect.Slice {
-		return c.copyAndExpandSlice(valueType, valuePtr)
+	if srcValue.Kind() == reflect.Slice {
+		return c.copyAndExpandSlice(srcValue.Type(), valuePtr)
 	}
 
-	valueCopy := reflect.New(valueType).Elem().Interface()
-	if valuePtr != nil {
-		xunsafe.Copy(xunsafe.AsPointer(valueCopy), valuePtr, int(valueType.Size()))
-	}
+	dstValue := reflect.New(srcValue.Type())
+	dstValue.Elem().Set(srcValue)
+	valueCopy := dstValue.Elem().Interface()
 
 	return []interface{}{valueCopy}, "?"
 }

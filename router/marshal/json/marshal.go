@@ -134,7 +134,7 @@ func EnsureType(rType reflect.Type, ptr unsafe.Pointer) reflect.Type {
 	return inlinableType
 }
 
-func (j *Marshaller) marshaller(rType reflect.Type) (Marshaler, error) {
+func (j *Marshaller) marshaller(rType reflect.Type) (marshaler, error) {
 	return j.cache.loadMarshaller(rType, j.config, "", "", nil)
 }
 

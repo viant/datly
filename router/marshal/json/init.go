@@ -9,6 +9,7 @@ import (
 )
 
 var rawMessageType = reflect.TypeOf(json.RawMessage{})
+var unmarshallerIntoType = reflect.TypeOf((*UnmarshalerInto)(nil)).Elem()
 var mapStringIfaceType = reflect.TypeOf(map[string]interface{}{})
 
 func init() {

@@ -5,7 +5,7 @@ import (
 	"unsafe"
 )
 
-type Marshaler interface {
-	MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error
+type marshaler interface {
+	MarshallObject(ptr unsafe.Pointer, session *MarshallSession) error
 	UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshallSession) error
 }

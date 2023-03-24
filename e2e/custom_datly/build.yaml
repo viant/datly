@@ -30,8 +30,9 @@ pipeline:
         - pwd
         - git stash
         - git pull --rebase
-
-
+        - cd ${appPath}/e2e/custom_datly/.xdatly/types/custom
+        - go get github.com/francoispqt/gojay@1398296
+        - go mod tidy -compat=1.17
 
     copyDatly:
       action: exec:run

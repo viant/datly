@@ -12,7 +12,7 @@ type (
 	inlinableMarshaller struct {
 		accessor  *xunsafe.Field
 		rType     reflect.Type
-		marshaler Marshaler
+		marshaler marshaler
 		isIface   bool
 	}
 )

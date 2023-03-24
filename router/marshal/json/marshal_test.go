@@ -844,13 +844,31 @@ func inlinable() interface{} {
 }
 
 type unmarshallTestcase struct {
-	description  string
-	data         string
-	into         func() interface{}
-	expect       string
-	expectError  bool
-	stringsEqual bool
-	options      []interface{}
+	description   string
+	data          string
+	into          func() interface{}
+	expect        string
+	expectError   bool
+	stringsEqual  bool
+	options       []interface{}
+	marshallEqual bool
+}
+
+type intsSum int
+
+func (i *intsSum) UnmarshalJSONWithOptions(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
+	var ints []int
+	if err := decoder.SliceInt(&ints); err != nil {
+		return err
+	}
+
+	sum := intsSum(0)
+	for _, value := range ints {
+		sum = intsSum(value) + sum
+	}
+
+	*dst.(**intsSum) = &sum
+	return nil
 }
 
 func TestMarshaller_Unmarshal(t *testing.T) {
@@ -1122,6 +1140,21 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 		},
 		httpUnmarshallTestcase("Boo", `{"Object": {"Value1": "Abc", "Value2": 125.5}}`, `{"ID":0,"Object":{"Value1":"Abc","Value2":125.5},"Name":""}`),
 		httpUnmarshallTestcase("Bar", `{"Object": {"CreatedAt": "time.Now", "UpdatedAt": "time.Now + 5 Days"}}`, `{"ID":0,"Object":{"CreatedAt":"time.Now","UpdatedAt":"time.Now + 5 Days"},"Name":""}`),
+		{
+			description: "ints slice",
+			data:        `{"Name": "Foo", "Ints": [1,2,3,4,5,6,7,8,9,10]}`,
+			into: func() interface{} {
+				type Foo struct {
+					Name string
+					Ints *intsSum
+				}
+
+				return &Foo{}
+			},
+			expect:        `{"Name":"Foo","Ints":55}`,
+			stringsEqual:  true,
+			marshallEqual: true,
+		},
 	}
 
 	//for i, testCase := range testCases[len(testCases)-1:] {
@@ -1154,6 +1187,15 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 		} else {
 			bytes, _ := goJson.Marshal(actual)
 			assert.Equal(t, expect, string(bytes), testCase.description)
+		}
+
+		if testCase.marshallEqual {
+			actualBytes, err := marshaller.Marshal(actual)
+			if !assert.Nil(t, err, testCase.description) {
+				continue
+			}
+
+			assertly.AssertValues(t, testCase.expect, string(actualBytes), testCase.description)
 		}
 	}
 }

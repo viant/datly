@@ -49,7 +49,7 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	}
 	started := time.Now()
 	defer func() {
-		fmt.Printf("loaded plugin after: %s\n", time.Since(started))
+		fmt.Printf("[INFO] loaded plugin after: %s\n", time.Since(started))
 	}()
 
 	registry := config.NewRegistry()

@@ -20,3 +20,8 @@ func (o Options) DefaultTag() *DefaultTag {
 	}
 	return nil
 }
+
+type cacheConfig struct {
+	ignoreCustomUnmarshaller bool
+	ignoreCustomMarshaller   bool
+}
