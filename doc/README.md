@@ -627,6 +627,19 @@ scy -s=myServiceAccountSecret.json -d=secure_storage_url -t=raw -k=blowfish://de
 
 #### Autonomous Datly
 
+To build standalone binary:
+```bash
+git clone https://github.com/viant/datly.git
+cd datly/cmd/datly
+go build
+datly -h
+```
+
+To build datly for  Docker or cloud specific[Runtimes](../gateway/runtime) 
+check **deploy.yaml** [endly](https://github.com/viant/endly) deployment workflows.
+
+
+
 
 
 #### Custom Datly
