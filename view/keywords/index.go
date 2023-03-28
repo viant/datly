@@ -25,7 +25,7 @@ func Has(name string) bool {
 	return registryInstance.IsDefined(name)
 }
 
-func RegisterType(rType reflect.Type) {
+func RegisterType(contextName string, rType reflect.Type) {
 	if rType.Kind() == reflect.Ptr {
 		rType = rType.Elem()
 	}
@@ -39,11 +39,15 @@ func RegisterType(rType reflect.Type) {
 		field := rType.Field(i)
 		fieldTag := velty.Parse(field.Tag.Get("velty"))
 		for _, name := range fieldTag.Names {
+			metadata := interface{}(functions.NewFunctionNamespace(field.Type))
+			if contextName != "" {
+				metadata = NewContextMetadata(name, metadata)
+			}
+
 			Add(name, functions.NewEntry(
 				nil,
-				functions.NewFunctionNamespace(field.Type),
+				metadata,
 			))
 		}
 	}
-
 }

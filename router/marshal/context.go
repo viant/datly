@@ -3,9 +3,8 @@ package marshal
 import (
 	"encoding/json"
 	"github.com/francoispqt/gojay"
+	"github.com/viant/datly/httputils"
 	"github.com/viant/xreflect"
-	"net/http"
-	"net/url"
 	"reflect"
 	"strconv"
 )
@@ -16,8 +15,8 @@ func init() {
 
 type (
 	CustomContext struct {
-		Decoder *Decoder `velty:"names=decoder"`
-		Request *Request `velty:"names=request"`
+		Decoder *Decoder           `velty:"names=decoder"`
+		Request *httputils.Request `velty:"names=request"`
 	}
 
 	Decoder struct {
@@ -25,17 +24,9 @@ type (
 		typeLookup xreflect.TypeLookupFn `velty:"-"`
 		decoder    *gojay.Decoder        `velty:"-"`
 	}
-
-	Request struct {
-		Url           string            `velty:"-"`
-		QueryParams   url.Values        `velty:"-"`
-		PathVariables map[string]string `velty:"-"`
-		Headers       http.Header       `velty:"-"`
-		cookies       map[string]*http.Cookie
-	}
 )
 
-func (d *Decoder) UnmarshallInto(typeName string, unescape bool) (string, error) {
+func (d *Decoder) UnmarshalInto(typeName string, unescape bool) (string, error) {
 	resultType, err := d.typeLookup("", "", typeName)
 	if err != nil {
 		return "", err
@@ -59,29 +50,4 @@ func (d *Decoder) UnmarshallInto(typeName string, unescape bool) (string, error)
 
 	d.Decoded = rValue.Elem().Interface()
 	return "", err
-}
-
-func (r *Request) QueryParam(name string) string {
-	return r.QueryParams.Get(name)
-}
-
-func (r *Request) HasQuery(name string) bool {
-	return r.QueryParams.Has(name)
-}
-
-func (r *Request) PathVariable(name string) string {
-	return r.PathVariables[name]
-}
-
-func (r *Request) HasPathVariable(name string) bool {
-	_, ok := r.PathVariables[name]
-	return ok
-}
-func (r *Request) Cookie(name string) *http.Cookie {
-	return r.cookies[name]
-}
-
-func (r *Request) HasCookie(name string) bool {
-	_, ok := r.cookies[name]
-	return ok
 }

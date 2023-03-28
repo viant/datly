@@ -1,0 +1,3 @@
+#if(($request.Path() == "/v1/api/dev/redirect/foo") && ($request.QueryParam("redirectTo") != ""))
+    $router.RedirectTo("/v1/api/dev/redirect/foo-redirected")
+#end

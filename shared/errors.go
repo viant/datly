@@ -23,6 +23,10 @@ func (r *Errors) AddError(err error, index int) {
 
 //Append appends error.
 func (r *Errors) Append(err error) {
+	if err == nil {
+		return
+	}
+
 	r.locker.Lock()
 	defer r.locker.Unlock()
 	r.errors = append(r.errors, err)

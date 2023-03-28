@@ -52,6 +52,7 @@ type (
 		Plugins
 		Package
 		Module
+		AssetsURL string `short:"a" long:"assetsURL" description:"assets destination"`
 	}
 
 	Package struct {
@@ -210,6 +211,7 @@ func (o *Options) Init() error {
 		}
 
 	}
+
 	o.Connector.Init()
 
 	return nil

@@ -4,6 +4,8 @@ import (
 	"context"
 	"github.com/viant/afs"
 	"github.com/viant/cloudless/resource"
+	"strings"
+	"time"
 )
 
 type Tracker struct {
@@ -13,12 +15,12 @@ type Tracker struct {
 	notifier *resource.Tracker
 }
 
-func NewNotifier(URL string, fs afs.Service, notifier *resource.Tracker) *Tracker {
+func NewNotifier(URL string, fs afs.Service, syncTime time.Duration) *Tracker {
 	return &Tracker{
 		assets:   map[string]bool{},
 		url:      URL,
 		fs:       fs,
-		notifier: notifier,
+		notifier: resource.New(URL, syncTime),
 	}
 }
 
@@ -40,6 +42,13 @@ func (t *Tracker) Notify(ctx context.Context, fs afs.Service, callback func(URL 
 		case resource.Added:
 			t.assets[URL] = true
 		}
+
+		for _, folderName := range unindexedFolders {
+			if strings.Contains(URL, folderName) {
+				return
+			}
+		}
+
 		callback(URL, operation)
 	})
 

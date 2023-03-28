@@ -9,6 +9,7 @@ type (
 	ResourcesChange struct {
 		pluginsIndex   *ExtIndex
 		resourcesIndex *ExtIndex
+		routersIndex   *ExtIndex
 		changed        bool
 	}
 
@@ -24,6 +25,7 @@ func NewResourcesChange() *ResourcesChange {
 	return &ResourcesChange{
 		resourcesIndex: NewExtIndex(),
 		pluginsIndex:   NewExtIndex(),
+		routersIndex:   NewExtIndex(),
 	}
 }
 
@@ -57,6 +59,8 @@ func (c *ResourcesChange) ExtIndex(ext string) (*ExtIndex, bool) {
 		return c.resourcesIndex, true
 	case ".pinf": //go plugin info ext
 		return c.pluginsIndex, true
+	case ".rt":
+		return c.routersIndex, true
 	}
 
 	return nil, false

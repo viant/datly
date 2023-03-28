@@ -51,6 +51,10 @@ func NewErrors() *Errors {
 }
 
 func (e *Errors) AddError(view, param string, err error) {
+	if err == nil {
+		return
+	}
+
 	e.mutex.Lock()
 	e.Errors = append(e.Errors, &Error{
 		View:  view,

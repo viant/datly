@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/afs"
+	"github.com/viant/datly/httputils"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/utils/types"
@@ -77,13 +78,7 @@ func (t *Transform) Evaluate(cookies map[string]*http.Cookie, pathVariables map[
 		typeLookup: fn,
 		decoder:    decoder,
 	}
-	request := &Request{
-		Url:           "",
-		QueryParams:   queryParams,
-		PathVariables: pathVariables,
-		Headers:       headers,
-		cookies:       cookies,
-	}
+	request := httputils.NewRequest(cookies, pathVariables, queryParams, headers)
 
 	ctx := CustomContext{
 		Decoder: d,

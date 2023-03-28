@@ -7,5 +7,5 @@ import (
 
 func init() {
 	ctxType := reflect.TypeOf(Context{})
-	keywords.RegisterType(ctxType)
+	keywords.RegisterType("", ctxType)
 }

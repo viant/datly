@@ -8,5 +8,5 @@ import (
 var ctxType = reflect.TypeOf(CustomContext{})
 
 func init() {
-	keywords.RegisterType(ctxType)
+	keywords.RegisterType("Marshal", ctxType)
 }

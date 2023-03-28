@@ -39,7 +39,9 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	aCofnig := createConfig(options)
 
 	var err error
-	evaluator.planner = velty.New(velty.BufferSize(len(template)), aCofnig.panicOnError)
+	evaluator.planner = velty.New(velty.BufferSize(len(template)), aCofnig.panicOnError, velty.TypeParser(func(typeRepresentation string) (reflect.Type, error) {
+		return typeLookup("", "", typeRepresentation)
+	}))
 
 	if evaluator.supportsParams {
 		if err = evaluator.planner.DefineVariable(keywords.ParamsKey, paramSchema); err != nil {
@@ -74,10 +76,6 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	}
 
 	if err = evaluator.planner.RegisterFunctionKind(fnQueryFirst, queryFirstFnHandler); err != nil {
-		return nil, err
-	}
-
-	if err = evaluator.planner.RegisterFuncNs(fnsJSON, jsoner); err != nil {
 		return nil, err
 	}
 

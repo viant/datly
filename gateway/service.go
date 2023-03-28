@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/auth/secret"
 	"github.com/viant/datly/cmd/build"
 	pbuild "github.com/viant/pgo/build"
+	"sync/atomic"
 
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/router"
@@ -44,20 +45,29 @@ type (
 		routeResourceTracker  *Tracker
 		dataResourceTracker   *Tracker
 		pluginResourceTracker *Tracker
-		dataResourcesIndex    map[string]*view.Resource
-		metrics               *gmetric.Service
-		mainRouter            *Router
-		cancelFn              context.CancelFunc
-		changeSession         *Session
-		JWTSigner             *signer.Service
-		mux                   sync.RWMutex
-		pluginsConfig         *config.Registry
-		pluginManager         *manager.Service
-		statusHandler         http.Handler
-		authorizer            Authorizer
+		assetsResourceTracker *Tracker
 
-		nextCheck  time.Time
-		isBuilding bool
+		dataResourcesIndex map[string]*view.Resource
+		metrics            *gmetric.Service
+		mainRouter         *Router
+		cancelFn           context.CancelFunc
+		changeSession      *Session
+		JWTSigner          *signer.Service
+		mux                sync.RWMutex
+		configRegistry     *config.Registry
+		pluginManager      *manager.Service
+		statusHandler      http.Handler
+		authorizer         Authorizer
+
+		interceptors RouterInterceptors
+		nextCheck    time.Time
+		isBuilding   int64
+	}
+
+	routerConfig struct {
+		changed      bool
+		resources    map[string]*view.Resource
+		interceptors RouterInterceptors
 	}
 )
 
@@ -103,9 +113,10 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 	if err != nil {
 		return nil, err
 	}
+	syncTime := time.Duration(aConfig.SyncFrequencyMs) * time.Millisecond
 	srv := &Service{
 		metrics:            metrics,
-		pluginsConfig:      registry,
+		configRegistry:     registry,
 		Config:             aConfig,
 		mux:                sync.RWMutex{},
 		fs:                 fs,
@@ -114,23 +125,29 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 		routeResourceTracker: NewNotifier(
 			aConfig.RouteURL,
 			fs,
-			resource.New(aConfig.RouteURL, time.Duration(aConfig.SyncFrequencyMs)*time.Millisecond),
+			syncTime,
 		),
 		dataResourceTracker: NewNotifier(
 			aConfig.DependencyURL,
 			fs,
-			resource.New(aConfig.DependencyURL, time.Duration(aConfig.SyncFrequencyMs)*time.Millisecond),
+			syncTime,
 		),
 		pluginResourceTracker: NewNotifier(
 			aConfig.PluginsURL,
 			fs,
-			resource.New(aConfig.PluginsURL, time.Duration(aConfig.SyncFrequencyMs)*time.Millisecond),
+			syncTime,
+		),
+		assetsResourceTracker: NewNotifier(
+			aConfig.AssetsURL,
+			fs,
+			syncTime,
 		),
 		routersIndex:  map[string]*router.Router{},
-		mainRouter:    NewRouter(map[string]*router.Router{}, aConfig, metrics, statusHandler, authorizer),
+		mainRouter:    NewRouter(map[string]*router.Router{}, aConfig, metrics, statusHandler, authorizer, nil),
 		changeSession: NewSession(aConfig.ChangeDetection),
 		statusHandler: statusHandler,
 		authorizer:    authorizer,
+		interceptors:  RouterInterceptors{},
 	}
 
 	if aConfig.JwtSigner != nil {
@@ -217,21 +234,20 @@ func CommonURL(URLs ...string) (string, error) {
 
 func (r *Service) syncChangesIfNeeded(ctx context.Context, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer, isFirst bool) error {
 	started := time.Now()
-	r.mux.Lock()
-	if !r.nextCheck.IsZero() && started.Before(r.nextCheck) || r.isBuilding {
-		r.mux.Unlock()
+	if started.Before(r.nextCheck) {
 		return nil
 	}
 
-	r.isBuilding = true
-	r.mux.Unlock()
+	if !atomic.CompareAndSwapInt64(&r.isBuilding, r.isBuilding, 1) {
+		return nil
+	}
 
 	defer func() {
 		r.mux.Lock()
 		defer r.mux.Unlock()
 
 		r.nextCheck = time.Now().Add(r.Config.ChangeDetection._retry)
-		r.isBuilding = false
+		r.isBuilding = 0
 
 		if r.changeSession == nil {
 			return
@@ -245,12 +261,12 @@ func (r *Service) syncChangesIfNeeded(ctx context.Context, metrics *gmetric.Serv
 	}
 	r.mux.Unlock()
 
-	resources, changed, err := r.getDataResources(ctx, r.fs)
+	aRouterConfig, err := r.getDataResources(ctx, r.fs)
 	if err != nil {
 		return err
 	}
 
-	routers, changed, err := r.getRouters(ctx, r.fs, resources, changed, isFirst)
+	routers, changed, err := r.getRouters(ctx, r.fs, aRouterConfig.resources, aRouterConfig.changed, isFirst)
 	if err != nil || !changed {
 		return err
 	}
@@ -259,11 +275,12 @@ func (r *Service) syncChangesIfNeeded(ctx context.Context, metrics *gmetric.Serv
 		fmt.Printf("[INFO] routers rebuild completed after: %s\n", time.Since(started))
 	}
 
-	mainRouter := NewRouter(routers, r.Config, metrics, statusHandler, authorizer)
+	mainRouter := NewRouter(routers, r.Config, metrics, statusHandler, authorizer, aRouterConfig.interceptors.AsSlice())
 	r.mux.Lock()
 	r.mainRouter = mainRouter
 	r.routersIndex = routers
-	r.dataResourcesIndex = resources
+	r.dataResourcesIndex = aRouterConfig.resources
+	r.interceptors = aRouterConfig.interceptors
 	r.changeSession = nil
 	r.mux.Unlock()
 
@@ -322,15 +339,18 @@ func (r *Service) rebuildRouters(ctx context.Context, fs afs.Service, resources 
 	return routers, true, nil
 }
 
-func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (resources map[string]*view.Resource, changed bool, err error) {
+func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (*routerConfig, error) {
 	changes, err := r.detectResourceChanges(ctx, fs)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	if !changes.Changed() {
-		return copyResourcesMap(r.dataResourcesIndex), false, nil
+		return &routerConfig{
+			resources: copyResourcesMap(r.dataResourcesIndex),
+		}, nil
 	}
+
 	pluginsChanges, err := r.handlePluginsChanges(ctx, changes)
 	if pluginsChanges != nil {
 	outer:
@@ -346,13 +366,21 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (resourc
 	}
 
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	resources, err = r.reloadResources(ctx, fs, changes)
+
+	resources, err := r.reloadResources(ctx, fs, changes)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	return resources, true, nil
+
+	interceptors, err := r.buildInterceptors(ctx, changes.routersIndex)
+
+	return &routerConfig{
+		changed:      true,
+		resources:    resources,
+		interceptors: interceptors,
+	}, err
 }
 
 func (r *Service) reloadResources(ctx context.Context, fs afs.Service, changes *ResourcesChange) (map[string]*view.Resource, error) {
@@ -453,37 +481,43 @@ func (r *Service) loadDependencyResource(URL string, ctx context.Context, fs afs
 
 func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*ResourcesChange, error) {
 	changes := NewResourcesChange()
-	depErr := r.dataResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
-		for _, folderName := range unindexedFolders {
-			if strings.Contains(URL, folderName) {
-				return
-			}
-		}
+	errors := shared.NewErrors(0)
+
+	err := r.dataResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
 		changes.OnChange(operation, URL)
 	})
 
+	if err != nil {
+		errors.Append(fmt.Errorf("failed to load resources: %v", err))
+	}
+
 	plugErr := r.pluginResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
-		for _, folderName := range unindexedFolders {
-			if strings.Contains(URL, folderName) {
-				return
-			}
-		}
 		if path.Ext(URL) != ".pinf" {
 			return
 		}
+
 		changes.OnChange(operation, URL)
 	})
 
+	err = r.assetsResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
+		if path.Ext(URL) != ".rt" {
+			return
+		}
+
+		changes.OnChange(operation, URL)
+	})
+
+	if err != nil {
+		errors.Append(fmt.Errorf("failed to load interceptors: %v", err))
+	}
+
 	r.changeSession.OnDependencyUpdated(changes.resourcesIndex.updated...)
 	r.changeSession.OnFileChange(changes.resourcesIndex.deleted...)
-	var err error
-	if depErr != nil {
-		err = depErr
-	}
 	if plugErr != nil {
-		err = fmt.Errorf("failed to load plugin: %w, %v", depErr, err)
+		errors.Append(fmt.Errorf("failed to load plugin:  %v", plugErr))
 	}
-	return changes, err
+
+	return changes, errors.Error()
 }
 
 func (r *Service) detectRoutersChanges(ctx context.Context, fs afs.Service) (map[string]bool, map[string]bool, error) {
@@ -601,7 +635,7 @@ func (r *Service) loadRouterResource(URL string, resources map[string]*view.Reso
 		return nil, err
 	}
 
-	routerResource, err = router.LoadResource(ctx, fs, URL, r.Config.Discovery(), r.pluginsConfig, r.metrics, copyResources)
+	routerResource, err = router.LoadResource(ctx, fs, URL, r.Config.Discovery(), r.configRegistry, r.metrics, copyResources)
 	if err != nil {
 		return nil, err
 	}
@@ -774,4 +808,45 @@ func (r *Service) LogInitTimeIfNeeded(start time.Time, writer http.ResponseWrite
 	}
 
 	writer.Header().Set(router.DatlyServiceInitHeader, time.Since(start).String())
+}
+
+func (r *Service) buildInterceptors(ctx context.Context, index *ExtIndex) (RouterInterceptors, error) {
+	interceptors := r.interceptors.Copy()
+	for key, _ := range index.deletedIndex {
+		delete(interceptors, key)
+	}
+
+	expectedSize := len(index.updated)
+	if expectedSize == 0 {
+		return interceptors, nil
+	}
+
+	resultChan := make(chan func() (*RouteInterceptor, error), expectedSize)
+	for _, URL := range index.updated {
+		go func(ctx context.Context, URL string, collector chan func() (*RouteInterceptor, error)) {
+			resultChan <- func() (*RouteInterceptor, error) {
+				return NewInterceptorFromURL(ctx, r.fs, URL, r.configRegistry.LookupType)
+			}
+		}(ctx, URL, resultChan)
+	}
+
+	var i = 0
+	var resultErr error
+
+	for fn := range resultChan {
+		i++
+		if i == expectedSize {
+			close(resultChan)
+		}
+
+		interceptor, err := fn()
+		if err != nil {
+			resultErr = err
+			continue
+		}
+
+		interceptors[interceptor.URL] = interceptor
+	}
+
+	return interceptors, resultErr
 }

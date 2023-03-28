@@ -17,6 +17,14 @@ type ErrorResponse struct {
 	StatusCode int
 }
 
+func (h *ErrorResponse) ErrorMessage() string {
+	return h.Message
+}
+
+func (h *ErrorResponse) ErrorStatusCode() int {
+	return h.StatusCode
+}
+
 func (h *ErrorResponse) Error() string {
 	return h.Message
 }

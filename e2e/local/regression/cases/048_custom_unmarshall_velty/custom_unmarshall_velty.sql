@@ -9,7 +9,7 @@ import (
 #set($_ = $className<string>(query/className))
 #set($_ = $Preference.Object /*
         {"TransformKind": "Unmarshal"}
-        $decoder.UnmarshallInto($request.QueryParam("className"), true)
+        $decoder.UnmarshalInto($request.QueryParam("className"), true)
     */)
 
 #if($Unsafe.Preference)
@@ -18,7 +18,7 @@ SET
     ID = $Preference.Id,
     CLASS_NAME = $className
   #if($Unsafe.Preference.Has.Object == true)
-  , OBJECT = $json.Marshall($Preference.Object)
+  , OBJECT = $json.Marshal($Preference.Object)
   #end
 WHERE ID = $Preference.Id
 AND CLASS_NAME = $className;

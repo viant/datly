@@ -7,6 +7,7 @@ import (
 	"github.com/viant/cloudless/gateway/matcher"
 	"github.com/viant/datly/gateway/runtime/meta"
 	"github.com/viant/datly/gateway/warmup"
+	"github.com/viant/datly/httputils"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
@@ -28,6 +29,7 @@ type (
 		statusHandler http.Handler
 		authorizer    Authorizer
 		apiKeyMatcher *matcher.Matcher
+		interceptors  []*RouteInterceptor
 		routes        []*RouteMeta
 	}
 
@@ -55,13 +57,14 @@ func (a *AvailableRoutesError) Error() string {
 }
 
 //NewRouter creates new router
-func NewRouter(routersIndex map[string]*router.Router, config *Config, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer) *Router {
+func NewRouter(routersIndex map[string]*router.Router, config *Config, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer, interceptors []*RouteInterceptor) *Router {
 	r := &Router{
 		config:        config,
 		metrics:       metrics,
 		statusHandler: statusHandler,
 		authorizer:    authorizer,
 		apiKeyMatcher: newApiKeyMatcher(config.APIKeys),
+		interceptors:  interceptors,
 	}
 
 	r.init(routersIndex)
@@ -86,6 +89,12 @@ func (r *Router) Handle(writer http.ResponseWriter, request *http.Request) {
 	err := r.ensureRequestURL(request)
 	if err != nil {
 		r.handleErrIfNeeded(writer, http.StatusInternalServerError, err)
+		return
+	}
+
+	if err = r.interceptIfNeeded(request); err != nil {
+		code, message := httputils.BuildErrorResponse(err)
+		write(writer, code, []byte(message))
 		return
 	}
 
@@ -348,4 +357,21 @@ func (r *Router) MatchAllByPrefix(URL string) []*router.Route {
 	}
 
 	return routes
+}
+
+func (r *Router) interceptIfNeeded(request *http.Request) error {
+	if len(r.interceptors) == 0 {
+		return nil
+	}
+
+	for _, interceptor := range r.interceptors {
+		evaluate, err := interceptor.Evaluate(request)
+		if err == nil && !evaluate.Context.Router.redirected {
+			continue
+		} else {
+			return err
+		}
+	}
+
+	return nil
 }
