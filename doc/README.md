@@ -555,14 +555,18 @@ The following layout organizes datly specific resources
   ProjectRoot
       | -  dsql
             | - business Unit 1 (appName)
-                  - entity_X_get.sql
-                  - entity_X_put.sql 
-                  - entity_X_post.sql 
-                  - entity_X_patch.sql 
+                 | - entity_X_get.sql
+                 | - entity_X_put.sql 
+                 | - entity_X_post.sql 
+                 | - entity_X_patch.sql 
                 ....
-                  - entity_N_get.sql
+                 | - entity_N_get.sql
+                 | - routerY.rt   
     
-            | - business Unit N (appName)                 
+            | - business Unit N (appName)       
+                 | - entityM_get.sql
+                 ...
+                 | - routerY.rt            
    - e2e (end to end testing workflows)
    - pkg         
       | -  mypackage1   
