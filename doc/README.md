@@ -562,6 +562,9 @@ The following layout organizes datly specific resources
                 ....
                  | - entity_N_get.sql
                  | - routerY.rt   
+                 | - entity_N
+                      - other_asset.xsd
+                      
     
             | - business Unit N (appName)       
                  | - entityM_get.sql
@@ -569,8 +572,10 @@ The following layout organizes datly specific resources
                  | - routerY.rt            
    - e2e (end to end testing workflows)
    - pkg         
-      | -  mypackage1   
-             | - entityX.go
+      | -  mypackage1(business Unit 1)   
+      |       | - entityX.go
+      | -  mypackageN(business Unit Y)
+              |  - ...      
    - deployment 
       - prod
          | - Datly
