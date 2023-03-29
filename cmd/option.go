@@ -20,8 +20,9 @@ const (
 	PreparePut    = "put"
 	PreparePatch  = "patch"
 	PrepareDelete = "delete"
+	APIPrefix     = "/v1/api/"
 
-	folderDev = "dev"
+	//folderDev = "dev"
 	folderSQL = "dsql"
 
 	rootFolder          = "Datly"
@@ -49,6 +50,7 @@ type (
 		Version      bool   `short:"v" long:"version"  description:"build version"`
 		RelativePath string `long:"relative" description:"allow to control relative path where path is used"`
 		RoutePrefix  string `short:"x" long:"routePrefix" description:"route prefix default dev"`
+		ApiURIPrefix string `short:"i" long:"apiPrefix" description:"api prefix default /v1/api/"`
 		Plugins
 		Package
 		Module
@@ -147,13 +149,13 @@ func (o *Options) Init() error {
 	if o.PluginsURL == "" {
 		o.PluginsURL = "plugins"
 	}
-
 	if o.RoutePrefix == "" {
-		o.RoutePrefix = folderDev
+		o.RoutePrefix = "dev"
 	}
-
+	if o.ApiURIPrefix == "" {
+		o.ApiURIPrefix = APIPrefix
+	}
 	o.PluginsURL = path.Join(o.WriteLocation, rootFolder, o.PluginsURL)
-
 	o.PrepareRule = strings.ToLower(o.PrepareRule)
 
 	if o.PluginArch == "" {
@@ -352,7 +354,7 @@ func (o *Options) RouterURI(name string) string {
 	if name == "" {
 		name = o.Generate.Name
 	}
-	return "dev/" + name
+	return o.RoutePrefix + "/" + name
 }
 
 func (o *Options) RouterURL() string {

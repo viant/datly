@@ -1,7 +1,7 @@
 init:
   appPath: $WorkingDirectory(..)
   Version: $Cat(${appPath}/Version}
-  buildPath: /tmp/sitelist
+  buildPath: /tmp/datly
   target:
     URL: ssh://127.0.0.1/
     credentials: localhost

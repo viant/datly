@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
@@ -13,6 +14,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/scy"
 	"github.com/viant/scy/auth/jwt/verifier"
+	"path"
 	"strings"
 )
 
@@ -22,13 +24,13 @@ func (s *Builder) loadConfig(ctx context.Context) (cfg *standalone.Config, err e
 		cfg = &standalone.Config{
 			Config: &gateway.Config{
 				ExposableConfig: gateway.ExposableConfig{
-					APIPrefix:    "/v1/api/",
+					APIPrefix:    s.options.ApiURIPrefix,
 					RevealMetric: &revealMetrics,
 				},
 				SensitiveConfig: gateway.SensitiveConfig{
 					APIKeys: router.APIKeys{
 						{
-							URI:    "/v1/api/dev/secured/",
+							URI:    path.Join(s.options.ApiURIPrefix, "secured/"),
 							Header: "App-Secret-Id",
 							Value:  "changeme",
 						},
@@ -132,27 +134,27 @@ func getScyResource(location string) *scy.Resource {
 func buildDefaultConfig(cfg *standalone.Config, options *Options) error {
 	fs := afs.New()
 	if cfg.URL == "" {
-		cfg.URL = "mem://localhost/dev/Datly/config.json"
+		cfg.URL = fmt.Sprintf("mem://localhost/%s/Datly/config.json", options.RoutePrefix)
 		if cfg.RouteURL == "" {
-			cfg.RouteURL = "mem://localhost/dev/Datly/routes"
+			cfg.RouteURL = fmt.Sprintf("mem://localhost/%s/Datly/routes", options.RoutePrefix)
 			fs.Create(context.Background(), cfg.RouteURL, file.DefaultDirOsMode, true)
 			options.RouteURL = cfg.RouteURL
 		}
 
 		if cfg.PluginsURL == "" {
-			cfg.PluginsURL = "mem://localhost/dev/Datly/plugins"
+			cfg.PluginsURL = fmt.Sprintf("mem://localhost/%s/Datly/plugins", options.RoutePrefix)
 			_ = fs.Create(context.Background(), cfg.RouteURL, file.DefaultDirOsMode, true)
 			options.PluginsURL = cfg.PluginsURL
 		}
 
 		if cfg.AssetsURL == "" {
-			cfg.AssetsURL = "mem://localhost/dev/Datly/assets"
+			cfg.AssetsURL = fmt.Sprintf("mem://localhost/%s/Datly/assets", options.RoutePrefix)
 			_ = fs.Create(context.Background(), cfg.AssetsURL, file.DefaultDirOsMode, true)
 		}
 
 		if cfg.DependencyURL == "" {
 			if options.AssetsURL == "" {
-				options.AssetsURL = "mem://localhost/dev/Datly/dependencies"
+				options.AssetsURL = fmt.Sprintf("mem://localhost/%s/Datly/dependencies", options.RoutePrefix)
 			}
 
 			cfg.DependencyURL = options.AssetsURL
