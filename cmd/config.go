@@ -140,7 +140,6 @@ func buildDefaultConfig(cfg *standalone.Config, options *Options) error {
 			fs.Create(context.Background(), cfg.RouteURL, file.DefaultDirOsMode, true)
 			options.RouteURL = cfg.RouteURL
 		}
-
 		if cfg.PluginsURL == "" {
 			cfg.PluginsURL = fmt.Sprintf("mem://localhost/%s/Datly/plugins", options.RoutePrefix)
 			_ = fs.Create(context.Background(), cfg.RouteURL, file.DefaultDirOsMode, true)
@@ -151,7 +150,6 @@ func buildDefaultConfig(cfg *standalone.Config, options *Options) error {
 			cfg.AssetsURL = fmt.Sprintf("mem://localhost/%s/Datly/assets", options.RoutePrefix)
 			_ = fs.Create(context.Background(), cfg.AssetsURL, file.DefaultDirOsMode, true)
 		}
-
 		if cfg.DependencyURL == "" {
 			if options.AssetsURL == "" {
 				options.AssetsURL = fmt.Sprintf("mem://localhost/%s/Datly/dependencies", options.RoutePrefix)
@@ -160,7 +158,28 @@ func buildDefaultConfig(cfg *standalone.Config, options *Options) error {
 			cfg.DependencyURL = options.AssetsURL
 			_ = fs.Create(context.Background(), cfg.DependencyURL, file.DefaultDirOsMode, true)
 		}
-
+		cfg.Meta.Init()
+		if !strings.HasPrefix(cfg.Meta.MetricURI, options.ApiURIPrefix) {
+			cfg.Meta.MetricURI = strings.Replace(cfg.Meta.MetricURI, APIPrefix, options.ApiURIPrefix, 1)
+		}
+		if !strings.HasPrefix(cfg.Meta.StatusURI, options.ApiURIPrefix) {
+			cfg.Meta.StatusURI = strings.Replace(cfg.Meta.StatusURI, APIPrefix, options.ApiURIPrefix, 1)
+		}
+		if !strings.HasPrefix(cfg.Meta.ConfigURI, options.ApiURIPrefix) {
+			cfg.Meta.ConfigURI = strings.Replace(cfg.Meta.ConfigURI, APIPrefix, options.ApiURIPrefix, 1)
+		}
+		if !strings.HasPrefix(cfg.Meta.ViewURI, options.ApiURIPrefix) {
+			cfg.Meta.ViewURI = strings.Replace(cfg.Meta.ViewURI, APIPrefix, options.ApiURIPrefix, 1)
+		}
+		if !strings.HasPrefix(cfg.Meta.OpenApiURI, options.ApiURIPrefix) {
+			cfg.Meta.OpenApiURI = strings.Replace(cfg.Meta.OpenApiURI, APIPrefix, options.ApiURIPrefix, 1)
+		}
+		if !strings.HasPrefix(cfg.Meta.CacheWarmURI, options.ApiURIPrefix) {
+			cfg.Meta.CacheWarmURI = strings.Replace(cfg.Meta.CacheWarmURI, APIPrefix, options.ApiURIPrefix, 1)
+		}
+		if !strings.HasPrefix(cfg.Meta.StructURI, options.ApiURIPrefix) {
+			cfg.Meta.StructURI = strings.Replace(cfg.Meta.StructURI, APIPrefix, options.ApiURIPrefix, 1)
+		}
 		if err := fsAddJSON(fs, cfg.URL, cfg); err != nil {
 			return err
 		}
