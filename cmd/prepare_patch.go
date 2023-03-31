@@ -35,26 +35,26 @@ func newPatchStmtBuilder(sb *strings.Builder, metadata *inputMetadata) *patchStm
 	}
 }
 
-func (s *Builder) preparePatchRule(ctx context.Context, sourceSQL []byte) (string, error) {
-	routeOption, config, paramType, err := s.buildInputMetadata(ctx, sourceSQL, http.MethodPatch)
+func (s *Builder) preparePatchRule(ctx context.Context, builder *routeBuilder, sourceSQL []byte) (string, error) {
+	routeOption, config, paramType, err := s.buildInputMetadata(ctx, builder, sourceSQL, http.MethodPatch)
 	if err != nil {
 		return "", err
 	}
 
-	SQL, err := s.buildPatchSQL(routeOption, config, paramType)
+	SQL, err := s.buildPatchSQL(builder, routeOption, config, paramType)
 	if err != nil {
 		return "", err
 	}
 
-	if _, err = s.upload(s.preGenSQLURL(s.fileNames.unique(config.fileName)), SQL); err != nil {
+	if _, err = s.upload(builder, builder.session.TemplateURL(s.fileNames.unique(config.fileName))+".sql", SQL); err != nil {
 		return "", err
 	}
 
 	return SQL, err
 }
 
-func (s *Builder) buildPatchSQL(routeOption *option.RouteConfig, config *viewConfig, metadata *inputMetadata) (string, error) {
-	sb, err := s.prepareStringBuilder(metadata, config, routeOption)
+func (s *Builder) buildPatchSQL(builder *routeBuilder, routeOption *option.RouteConfig, config *viewConfig, metadata *inputMetadata) (string, error) {
+	sb, err := s.prepareStringBuilder(builder, metadata, config, routeOption)
 	if err != nil {
 		return "", err
 	}

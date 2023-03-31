@@ -9,6 +9,7 @@ import (
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/config"
+	"github.com/viant/datly/httputils"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal/json"
@@ -20,7 +21,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -73,23 +73,7 @@ type (
 		Response      http.ResponseWriter
 		Selectors     *view.Selectors
 	}
-
-	ClosableResponse struct {
-		http.ResponseWriter
-		closed bool
-	}
 )
-
-func NewClosableResponse(response http.ResponseWriter) *ClosableResponse {
-	return &ClosableResponse{
-		ResponseWriter: response,
-	}
-}
-
-func (c *ClosableResponse) WriteHeader(statusCode int) {
-	c.closed = true
-	c.ResponseWriter.WriteHeader(statusCode)
-}
 
 func (s *ReaderSession) IsMetricsEnabled() bool {
 	return s.Route.DebugKind == view.MetaTypeHeader || (s.IsMetricInfo() || s.IsMetricDebug())
@@ -150,6 +134,16 @@ func (r *Router) View(name string) (*view.View, error) {
 }
 
 func (r *Router) Handle(response http.ResponseWriter, request *http.Request) error {
+	if r.resource.Interceptor != nil {
+		_, err := r.resource.Interceptor.Intercept(request)
+		if err != nil {
+			code, message := httputils.BuildErrorResponse(err)
+			response.WriteHeader(code)
+			response.Write([]byte(message))
+			return nil
+		}
+	}
+
 	route, err := r.Matcher.MatchOneRoute(request.Method, request.URL.Path)
 	if err != nil {
 		return err
@@ -215,15 +209,27 @@ func New(resource *Resource, options ...interface{}) *Router {
 	return router
 }
 
-func (r *Router) Init(routes Routes, apiPrefix string) {
+func (r *Router) Init(routes Routes, apiPrefix string) error {
 	for _, route := range routes {
-		r.normalizeRouteURI(apiPrefix, route)
+		route.URI = r.normalizeURI(apiPrefix, route.URI)
 
 		route._resource = r.resource.Resource
 	}
 
 	r.indexRoutes()
 	r.initMatcher()
+
+	if r.resource.URL != "" {
+		r.resource.URL = r.normalizeURI(apiPrefix, r.resource.URL)
+	}
+
+	if r.resource.Interceptor != nil {
+		if err := r.resource.Interceptor.init(r.resource.URL); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func corsHandler(request *http.Request, cors *Cors) func(writer http.ResponseWriter) {
@@ -468,9 +474,9 @@ func (r *Router) runBeforeFetchIfNeeded(response http.ResponseWriter, request *h
 }
 
 func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Request, fn func(response http.ResponseWriter, request *http.Request) error) bool {
-	respWrapper := NewClosableResponse(response)
+	respWrapper := httputils.NewClosableResponse(response)
 	err := fn(respWrapper, request)
-	if respWrapper.closed {
+	if respWrapper.Closed {
 		return false
 	}
 
@@ -496,10 +502,10 @@ func (r *Router) runAfterFetchIfNeeded(session *ReaderSession, dest interface{})
 }
 
 func (r *Router) runAfterFetch(session *ReaderSession, dest interface{}, fn func(dest interface{}, response http.ResponseWriter, req *http.Request) error) bool {
-	respWrapper := NewClosableResponse(session.Response)
+	respWrapper := httputils.NewClosableResponse(session.Response)
 	err := fn(dest, session.Response, session.Request)
 
-	if respWrapper.closed {
+	if respWrapper.Closed {
 		return false
 	}
 
@@ -769,10 +775,6 @@ func (r *Router) indexRoutes() {
 	}
 }
 
-func (r *Router) ApiPrefix() string {
-	return r.resource.APIURI
-}
-
 func (r *Router) Routes(route string) []*Route {
 	if route == "" {
 		return r.routes
@@ -909,25 +911,16 @@ func (r *Router) initMatcher() {
 	r.Matcher = NewRouteMatcher(r.routes)
 }
 
-func (r *Router) normalizeRouteURI(prefix string, route *Route) {
-	if prefix == "" {
-		return
+func (r *Router) normalizeURI(prefix string, URI string) string {
+	if strings.HasPrefix(URI, prefix) {
+		return URI
 	}
 
-	if strings.HasPrefix(route.URI, prefix) {
-		return
+	if r.resource.URL != "" {
+		return url.Join(prefix, r.resource.URL, URI)
 	}
 
-	if prefix[len(prefix)-1] == '/' {
-		prefix = prefix[:len(prefix)-1]
-	}
-
-	URI := route.URI
-	if URI != "" && URI[len(URI)-1] == '/' {
-		URI = URI[:len(URI)-1]
-	}
-
-	route.URI = path.Join(prefix, URI)
+	return url.Join(prefix, URI)
 }
 
 func (r *Router) marshalAsCSV(session *ReaderSession, sliceValue reflect.Value, filters []*json.FilterEntry) ([]byte, int, error) {
@@ -963,6 +956,14 @@ func (r *Router) responseStatusSuccess(state *expand.State) ResponseStatus {
 	}
 
 	return status
+}
+
+func (r *Router) Interceptor() (*RouteInterceptor, bool) {
+	return r.resource.Interceptor, r.resource.Interceptor != nil
+}
+
+func (r *Router) Resource() *Resource {
+	return r.resource
 }
 
 func updateFieldPathsIfNeeded(filter *json.FilterEntry) {

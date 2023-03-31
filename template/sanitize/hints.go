@@ -46,7 +46,7 @@ func SplitHint(hint string) (marshal string, SQL string) {
 		return jsonHint, strings.TrimSpace(string(hintCursor.Input[hintCursor.Pos:]))
 	}
 
-	return "", hint
+	return "", strings.TrimSpace(hint)
 }
 
 func ExtractParameterHints(text string) ParameterHints {

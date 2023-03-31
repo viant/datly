@@ -14,7 +14,6 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/scy"
 	"github.com/viant/scy/auth/jwt/verifier"
-	"path"
 	"strings"
 )
 
@@ -30,7 +29,7 @@ func (s *Builder) loadConfig(ctx context.Context) (cfg *standalone.Config, err e
 				SensitiveConfig: gateway.SensitiveConfig{
 					APIKeys: router.APIKeys{
 						{
-							URI:    path.Join(s.options.ApiURIPrefix, "secured/"),
+							URI:    combineURLs(s.options.ApiURIPrefix, s.options.RoutePrefix, "secured"),
 							Header: "App-Secret-Id",
 							Value:  "changeme",
 						},

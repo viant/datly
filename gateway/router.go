@@ -22,15 +22,16 @@ import (
 
 type (
 	Router struct {
-		routeMatcher  *matcher.Matcher
-		config        *Config
-		OpenAPIInfo   openapi3.Info
-		metrics       *gmetric.Service
-		statusHandler http.Handler
-		authorizer    Authorizer
-		apiKeyMatcher *matcher.Matcher
-		interceptors  []*RouteInterceptor
-		routes        []*RouteMeta
+		routeMatcher            *matcher.Matcher
+		localInterceptorMatcher *matcher.Matcher
+		apiKeyMatcher           *matcher.Matcher
+		config                  *Config
+		OpenAPIInfo             openapi3.Info
+		metrics                 *gmetric.Service
+		statusHandler           http.Handler
+		authorizer              Authorizer
+		interceptors            []*router.RouteInterceptor
+		routes                  []*RouteMeta
 	}
 
 	AvailableRoutesError struct {
@@ -57,14 +58,15 @@ func (a *AvailableRoutesError) Error() string {
 }
 
 //NewRouter creates new router
-func NewRouter(routersIndex map[string]*router.Router, config *Config, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer, interceptors []*RouteInterceptor) *Router {
+func NewRouter(routersIndex map[string]*router.Router, config *Config, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer, interceptors []*router.RouteInterceptor) *Router {
 	r := &Router{
-		config:        config,
-		metrics:       metrics,
-		statusHandler: statusHandler,
-		authorizer:    authorizer,
-		apiKeyMatcher: newApiKeyMatcher(config.APIKeys),
-		interceptors:  interceptors,
+		config:                  config,
+		metrics:                 metrics,
+		statusHandler:           statusHandler,
+		authorizer:              authorizer,
+		apiKeyMatcher:           newApiKeyMatcher(config.APIKeys),
+		localInterceptorMatcher: newLocalInterceptorMatcher(routersIndex),
+		interceptors:            interceptors,
 	}
 
 	r.init(routersIndex)
@@ -92,9 +94,7 @@ func (r *Router) Handle(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	if err = r.interceptIfNeeded(request); err != nil {
-		code, message := httputils.BuildErrorResponse(err)
-		write(writer, code, []byte(message))
+	if !r.interceptIfNeeded(writer, request) {
 		return
 	}
 
@@ -359,18 +359,49 @@ func (r *Router) MatchAllByPrefix(URL string) []*router.Route {
 	return routes
 }
 
-func (r *Router) interceptIfNeeded(request *http.Request) error {
-	if len(r.interceptors) == 0 {
-		return nil
+func (r *Router) interceptIfNeeded(writer http.ResponseWriter, request *http.Request) bool {
+	for _, interceptor := range r.interceptors {
+		redirected, err := interceptor.Intercept(request)
+		if err != nil {
+			code, message := httputils.BuildErrorResponse(err)
+			write(writer, code, []byte(message))
+			return false
+		}
+
+		if redirected {
+			break
+		}
 	}
 
-	for _, interceptor := range r.interceptors {
-		evaluate, err := interceptor.Evaluate(request)
-		if err == nil && !evaluate.Context.Router.redirected {
-			continue
-		} else {
-			return err
+	if r.localInterceptorMatcher != nil {
+		matched, err := r.localInterceptorMatcher.MatchPrefix("", request.URL.Path)
+		if err == nil {
+			response := httputils.NewClosableResponse(writer)
+			for _, matchable := range matched {
+				matchable.(*Route).Handle(response, request)
+				if response.Closed {
+					return false
+				}
+			}
 		}
+	}
+
+	return true
+}
+
+func newLocalInterceptorMatcher(index map[string]*router.Router) *matcher.Matcher {
+	matchable := make([]matcher.Matchable, 0)
+	for _, aRouter := range index {
+		routerInterceptor, ok := aRouter.Interceptor()
+		if !ok {
+			continue
+		}
+
+		matchable = append(matchable, NewInterceptorRoute(aRouter, routerInterceptor))
+	}
+
+	if len(matchable) > 0 {
+		return matcher.NewMatcher(matchable)
 	}
 
 	return nil

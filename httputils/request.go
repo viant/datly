@@ -1,8 +1,10 @@
 package httputils
 
 import (
+	"github.com/viant/toolbox"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 type Request struct {
@@ -23,20 +25,29 @@ func NewRequest(cookies map[string]*http.Cookie, pathVariables map[string]string
 	}
 }
 
-func RequestOf(r *http.Request) *Request {
+func RequestOf(r *http.Request, templateURI string) (*Request, error) {
 	cookies := r.Cookies()
 	cookiesMap := map[string]*http.Cookie{}
 	for _, cookie := range cookies {
 		cookiesMap[cookie.Name] = cookie
 	}
 
+	pathVariables := map[string]string{}
+	if templateURI != "" {
+		uriParams, ok := toolbox.ExtractURIParameters(templateURI, r.RequestURI)
+		if ok {
+			pathVariables = uriParams
+		}
+	}
+
 	return &Request{
+		Url:           templateURI,
 		QueryParams:   r.URL.Query(),
-		PathVariables: map[string]string{},
+		PathVariables: pathVariables,
 		Headers:       r.Header,
 		cookies:       cookiesMap,
 		request:       r,
-	}
+	}, nil
 }
 
 func (r *Request) QueryParam(name string) string {
@@ -66,4 +77,12 @@ func (r *Request) HasCookie(name string) bool {
 
 func (r *Request) Path() string {
 	return r.request.URL.Path
+}
+
+func (r *Request) RelativePath() string {
+	if r.Url == "" {
+		return r.request.URL.Path
+	}
+
+	return strings.Replace(r.request.URL.Path, r.Url, "", 1)
 }

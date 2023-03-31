@@ -51,7 +51,7 @@ func (c *ViewConfigurer) DefaultHTTPMethod() string {
 	return http.MethodGet
 }
 
-func NewConfigProviderReader(mainViewName string, SQL string, routeOpt *option.RouteConfig, serviceType router.ServiceType, index *ParametersIndex, prepare *Prepare, connectors *Connector) (*ViewConfigurer, error) {
+func NewConfigProviderReader(mainViewName string, SQL string, routeOpt *option.RouteConfig, serviceType router.ServiceType, index *ParametersIndex, prepare *Prepare, connectors *Connector, builder *routeBuilder) (*ViewConfigurer, error) {
 	result := &ViewConfigurer{
 		tables:       map[string]*Table{},
 		mainViewName: mainViewName,
@@ -61,7 +61,12 @@ func NewConfigProviderReader(mainViewName string, SQL string, routeOpt *option.R
 		connectors:   connectors,
 	}
 
-	return result, result.Init(SQL, routeOpt)
+	if err := result.Init(SQL, routeOpt); err != nil {
+		return nil, err
+	}
+
+	builder.session.setMainViewConfig(result.ViewConfig())
+	return result, nil
 }
 
 func (c *ViewConfigurer) OutputConfig() (string, error) {

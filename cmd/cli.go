@@ -13,19 +13,15 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/modifier"
 	"github.com/viant/datly/auth/jwt"
-	"github.com/viant/datly/cmd/option"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/openapi3"
-	"github.com/viant/datly/view"
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
 	"path"
-	"reflect"
 	"strings"
 )
 
@@ -38,20 +34,14 @@ func (s *Builder) build() (*standalone.Server, error) {
 		return nil, s.buildBinary(s.options.ModuleSrc[0], s.options.ModuleDst, s.options.ModuleName, s.options.ModuleMain, "exec", false)
 	}
 
-	reportContent(s.logger, "------------ config ------------\n\t "+s.options.ConfigURL, s.options.ConfigURL)
+	_, _ = s.logger.Write([]byte(reportContent("------------ config ------------\n\t "+s.options.ConfigURL, s.options.ConfigURL)))
 
 	authenticator, err := jwt.Init(s.config.Config, nil)
 	if authenticator != nil {
 		fmt.Printf("with auth Service: %T\n", authenticator)
 	}
 
-	if URL := s.options.DepURL("connections"); URL != "" {
-		reportContent(s.logger, "---------- connections: -----------\n\t"+URL, URL)
-	}
-
-	if URL := s.options.RouterURL(); URL != "" {
-		reportContent(s.logger, "-------------- view --- -----------\n\t"+URL, URL)
-	}
+	s.flushLogs(s.logger)
 
 	dumped := false
 	if s.options.PrepareRule != "" {
@@ -105,33 +95,15 @@ func normalizeMetaTemplateSQL(SQL string, holderViewName string) string {
 }
 
 func NewBuilder(options *Options, logger io.Writer) (*Builder, error) {
-	res := view.NewResource(map[string]reflect.Type{
-		"RawMessage":      reflect.TypeOf(json.RawMessage{}),
-		"json.RawMessage": reflect.TypeOf(json.RawMessage{}),
-	})
-	config.Config.OverrideTypes("json", map[string]reflect.Type{
-		"RawMessage": reflect.TypeOf(json.RawMessage{}),
-	})
 	builder := &Builder{
 		options:    options,
 		tablesMeta: NewTableMetaRegistry(),
 		logger:     logger,
 		fs:         afs.New(),
-		routeBuilder: &routeBuilder{
-			views: map[string]*view.View{},
-			routerResource: &router.Resource{
-				Resource: res,
-			},
-			paramsIndex: NewParametersIndex(nil, nil),
-			option: &option.RouteConfig{
-				Declare: map[string]string{},
-				Const:   map[string]interface{}{},
-			},
-		},
-		fileNames: newUniqueIndex(false),
-		viewNames: newUniqueIndex(true),
-		types:     newUniqueIndex(true),
-		bundles:   map[string]string{},
+		fileNames:  newUniqueIndex(false),
+		viewNames:  newUniqueIndex(true),
+		types:      newUniqueIndex(true),
+		bundles:    map[string]string{},
 	}
 
 	return builder, builder.Build(context.TODO())
@@ -198,11 +170,10 @@ func dumpFolder(options *Options, location, folder string) {
 	}))
 }
 
-func reportContent(logger io.Writer, message string, URL string) {
-	_, _ = logger.Write([]byte(message))
+func reportContent(message string, URL string) string {
 	fs := afs.New()
 	data, _ := fs.DownloadWithURL(context.Background(), URL)
-	_, _ = logger.Write([]byte(fmt.Sprintf("%s\n", data)))
+	return fmt.Sprintf("%v %s\n", message, data)
 }
 
 func isOption(key string, args []string) bool {

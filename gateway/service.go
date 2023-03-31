@@ -59,7 +59,7 @@ type (
 		statusHandler      http.Handler
 		authorizer         Authorizer
 
-		interceptors RouterInterceptors
+		interceptors router.RouterInterceptors
 		nextCheck    time.Time
 		isBuilding   int64
 	}
@@ -67,7 +67,7 @@ type (
 	routerConfig struct {
 		changed      bool
 		resources    map[string]*view.Resource
-		interceptors RouterInterceptors
+		interceptors router.RouterInterceptors
 	}
 )
 
@@ -147,7 +147,7 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 		changeSession: NewSession(aConfig.ChangeDetection),
 		statusHandler: statusHandler,
 		authorizer:    authorizer,
-		interceptors:  RouterInterceptors{},
+		interceptors:  router.RouterInterceptors{},
 	}
 
 	if aConfig.JwtSigner != nil {
@@ -810,7 +810,7 @@ func (r *Service) LogInitTimeIfNeeded(start time.Time, writer http.ResponseWrite
 	writer.Header().Set(router.DatlyServiceInitHeader, time.Since(start).String())
 }
 
-func (r *Service) buildInterceptors(ctx context.Context, index *ExtIndex) (RouterInterceptors, error) {
+func (r *Service) buildInterceptors(ctx context.Context, index *ExtIndex) (router.RouterInterceptors, error) {
 	interceptors := r.interceptors.Copy()
 	for key, _ := range index.deletedIndex {
 		delete(interceptors, key)
@@ -821,11 +821,11 @@ func (r *Service) buildInterceptors(ctx context.Context, index *ExtIndex) (Route
 		return interceptors, nil
 	}
 
-	resultChan := make(chan func() (*RouteInterceptor, error), expectedSize)
+	resultChan := make(chan func() (*router.RouteInterceptor, error), expectedSize)
 	for _, URL := range index.updated {
-		go func(ctx context.Context, URL string, collector chan func() (*RouteInterceptor, error)) {
-			resultChan <- func() (*RouteInterceptor, error) {
-				return NewInterceptorFromURL(ctx, r.fs, URL, r.configRegistry.LookupType)
+		go func(ctx context.Context, URL string, collector chan func() (*router.RouteInterceptor, error)) {
+			resultChan <- func() (*router.RouteInterceptor, error) {
+				return router.NewInterceptorFromURL(ctx, r.fs, URL, r.configRegistry.LookupType)
 			}
 		}(ctx, URL, resultChan)
 	}
@@ -845,7 +845,7 @@ func (r *Service) buildInterceptors(ctx context.Context, index *ExtIndex) (Route
 			continue
 		}
 
-		interceptors[interceptor.URL] = interceptor
+		interceptors[interceptor.SourceURL] = interceptor
 	}
 
 	return interceptors, resultErr

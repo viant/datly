@@ -1,0 +1,22 @@
+[
+  {
+    "accountId": 100,
+    "id": 1,
+    "name": "Vendor 1",
+    "products": [
+      {
+        "@indexBy@": "id"
+      },
+      {
+        "id": 1,
+        "name": "V1 Product 1"
+      },
+      {
+        "id": 2,
+        "name": "V1 Product 2"
+      }
+    ],
+    "userCreated": 1,
+    "userUpdated": 0
+  }
+]

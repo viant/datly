@@ -21,23 +21,24 @@ func newUpdateStmtBuilder(sb *strings.Builder, def *inputMetadata) *updateStmtBu
 	}
 }
 
-func (s *Builder) preparePutRule(ctx context.Context, SQL []byte) (string, error) {
-	routeConfig, config, metadata, err := s.buildInputMetadata(ctx, SQL, http.MethodPut)
+func (s *Builder) preparePutRule(ctx context.Context, builder *routeBuilder, SQL []byte) (string, error) {
+	routeConfig, config, metadata, err := s.buildInputMetadata(ctx, builder, SQL, http.MethodPut)
 	if err != nil {
 		return "", err
 	}
-	template, err := s.buildUpdateSQL(routeConfig, config, metadata)
+	template, err := s.buildUpdateSQL(builder, routeConfig, config, metadata)
 	if err != nil {
 		return "", err
 	}
-	if _, err = s.upload(s.preGenSQLURL(s.fileNames.unique(config.fileName)), template); err != nil {
+	if _, err = s.upload(builder, builder.session.TemplateURL(s.fileNames.unique(config.fileName))+".sql", template); err != nil {
 		return "", nil
 	}
+
 	return template, nil
 }
 
-func (s *Builder) buildUpdateSQL(routeConfig *option.RouteConfig, aViewConfig *viewConfig, metadata *inputMetadata) (string, error) {
-	sb, err := s.prepareStringBuilder(metadata, aViewConfig, routeConfig)
+func (s *Builder) buildUpdateSQL(aRouteBuilder *routeBuilder, routeConfig *option.RouteConfig, aViewConfig *viewConfig, metadata *inputMetadata) (string, error) {
+	sb, err := s.prepareStringBuilder(aRouteBuilder, metadata, aViewConfig, routeConfig)
 	if err != nil {
 		return "", err
 	}

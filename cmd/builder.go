@@ -36,18 +36,17 @@ import (
 
 type (
 	Builder struct {
-		tablesMeta      *TableMetaRegistry
-		routeBuilder    *routeBuilder
-		options         *Options
-		config          *standalone.Config
-		logger          io.Writer
-		fs              afs.Service
-		constParameters []*view.Parameter
-		fileNames       *uniqueIndex
-		viewNames       *uniqueIndex
-		types           *uniqueIndex
-		plugins         []*pluginGenDeta
-		bundles         map[string]string
+		tablesMeta *TableMetaRegistry
+		options    *Options
+		config     *standalone.Config
+		logger     io.Writer
+		fs         afs.Service
+		fileNames  *uniqueIndex
+		viewNames  *uniqueIndex
+		types      *uniqueIndex
+		plugins    []*pluginGenDeta
+		bundles    map[string]string
+		logs       []string
 	}
 
 	routeBuilder struct {
@@ -59,6 +58,8 @@ type (
 		option         *option.RouteConfig
 		sqlStmt        string
 		views          map[string]*view.View
+
+		session *session
 	}
 
 	viewConfig struct {
@@ -104,6 +105,11 @@ type (
 		Types     []string
 		fileURL   string
 		mainFile  string
+	}
+
+	constFileContent struct {
+		URL    string
+		params []*view.Parameter
 	}
 )
 
@@ -250,51 +256,111 @@ func (s *Builder) Build(ctx context.Context) error {
 		return err
 	}
 
-	if err := s.loadSQL(ctx); err != nil {
+	routerResource := &router.Resource{
+		Resource: view.NewResource(config.Config.FlattenTypes()),
+	}
+
+	paramIndex := NewParametersIndex(nil, nil)
+	var viewCaches []*view.Cache
+	consts := &constFileContent{}
+
+	fileName, routerRoutes, err := s.readRouterOptionIfNeeded(routerResource)
+	if err != nil || (len(routerRoutes) == 1 && routerRoutes[0].sourceURL == "") {
 		return err
 	}
 
-	if strings.TrimSpace(s.routeBuilder.sqlStmt) == "" {
-		return nil
+	var routes []*routeBuilder
+	for _, aFile := range routerRoutes {
+		builder := s.newRouteBuilder(routerResource, paramIndex, aFile)
+		routes = append(routes, builder)
+		if err = s.buildRoute(ctx,
+			builder,
+			consts,
+			&viewCaches,
+		); err != nil {
+			return err
+		}
 	}
 
-	if err := s.readRouteSettings(); err != nil {
+	if err = s.updateParamsByHints(routerResource.Resource, paramIndex); err != nil {
 		return err
 	}
 
-	if err := s.initConfigProvider(); err != nil {
-		return err
+	if len(routes) == 1 {
+		ruleName := routes[0].session.ruleName
+		if ruleName != "" {
+			fileName = ruleName
+		}
 	}
 
-	if err := s.initRoute(); err != nil {
-		return err
-	}
-
-	if err := s.initRouterResource(); err != nil {
-		return err
-	}
-
-	if err := s.buildViews(ctx); err != nil {
-		return err
-	}
-
-	if err := s.moveConstParameters(); err != nil {
-		return err
-	}
-
-	if err := s.updateParamsByHints(); err != nil {
-		return err
-	}
-
-	if err := s.uploadFiles(); err != nil {
+	if err = s.uploadFiles(fileName, consts, routerResource, viewCaches); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *Builder) buildViews(ctx context.Context) error {
-	utilParams, err := s.buildViewParams()
+func (s *Builder) newRouteBuilder(routerResource *router.Resource, paramIndex *ParametersIndex, aFile *session) *routeBuilder {
+	return &routeBuilder{
+		session:        aFile,
+		views:          map[string]*view.View{},
+		routerResource: routerResource,
+		paramsIndex:    paramIndex,
+		option: &option.RouteConfig{
+			Declare: map[string]string{},
+			Const:   map[string]interface{}{},
+		},
+	}
+}
+
+func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts *constFileContent, viewCaches *[]*view.Cache) error {
+	if err := s.loadSQL(ctx, builder, builder.session.sourceURL); err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(builder.sqlStmt) == "" {
+		return nil
+	}
+
+	if err := s.readRouteSettings(builder); err != nil {
+		return err
+	}
+
+	if consts.URL == "" {
+		consts.URL = builder.option.ConstFileURL
+	} else if consts.URL != builder.option.ConstFileURL && builder.option.ConstFileURL != "" {
+		return fmt.Errorf("missmatch const destination, %v - %v", consts.URL, builder.option.ConstFileURL)
+	}
+
+	if err := s.initConfigProvider(builder); err != nil {
+		return err
+	}
+
+	if err := s.initRoute(builder); err != nil {
+		return err
+	}
+
+	if err := s.initRouterResource(builder); err != nil {
+		return err
+	}
+
+	if err := s.buildViews(ctx, builder); err != nil {
+		return err
+	}
+
+	if err := s.moveConstParameters(builder, &consts.params); err != nil {
+		return err
+	}
+
+	if builder.option.Cache != nil {
+		*viewCaches = append(*viewCaches, builder.option.Cache)
+	}
+
+	return nil
+}
+
+func (s *Builder) buildViews(ctx context.Context, builder *routeBuilder) error {
+	utilParams, err := s.buildViewParams(builder)
 	if err != nil {
 		return err
 	}
@@ -304,7 +370,7 @@ func (s *Builder) buildViews(ctx context.Context) error {
 		utilParamsIndex[param] = true
 	}
 
-	for paramName := range s.routeBuilder.paramsIndex.hints {
+	for paramName := range builder.paramsIndex.hints {
 		if utilParamsIndex[paramName] {
 			continue
 		}
@@ -312,8 +378,8 @@ func (s *Builder) buildViews(ctx context.Context) error {
 		utilParams = append(utilParams, paramName)
 	}
 
-	aConfig := s.routeBuilder.configProvider.ViewConfig()
-	aView, err := s.buildMainView(ctx, aConfig)
+	aConfig := builder.configProvider.ViewConfig()
+	aView, err := s.buildMainView(ctx, builder, aConfig)
 	if err != nil {
 		return err
 	}
@@ -326,8 +392,8 @@ outer:
 			}
 		}
 
-		if _, ok := s.routeBuilder.paramsIndex.hints[paramName]; !ok {
-			if err = s.addParameters(&view.Parameter{Name: paramName}); err != nil {
+		if _, ok := builder.paramsIndex.hints[paramName]; !ok {
+			if err = s.addParameters(builder, &view.Parameter{Name: paramName}); err != nil {
 				return err
 			}
 		}
@@ -335,12 +401,14 @@ outer:
 		aView.Template.Parameters = append(aView.Template.Parameters, &view.Parameter{Reference: shared.Reference{Ref: paramName}})
 	}
 
-	s.setMainView(aView)
-	if err = s.indexExcludedColumns(aConfig); err != nil {
+	s.setMainView(builder, aView)
+	if err = s.indexExcludedColumns(builder, aConfig); err != nil {
 		return err
 	}
 
-	s.inheritRouteServiceType(aView)
+	s.inheritRouteServiceType(builder, aView)
+	result, _ := json.MarshalIndent(aView, "", "  ")
+	s.logs = append(s.logs, fmt.Sprintf("---------- connections: -----------\n\t %s \n", string(result)))
 	return nil
 }
 
@@ -359,16 +427,16 @@ func (s *Builder) loadAndInitConfig(ctx context.Context) error {
 	return nil
 }
 
-func (s *Builder) readRouteSettings() error {
-	if s.routeBuilder.option.Declare != nil {
-		s.routeBuilder.paramsIndex.AddParamTypes(s.routeBuilder.option.Declare)
+func (s *Builder) readRouteSettings(builder *routeBuilder) error {
+	if builder.option.Declare != nil {
+		builder.paramsIndex.AddParamTypes(builder.option.Declare)
 	}
 
-	if s.routeBuilder.option.Const != nil {
-		s.routeBuilder.paramsIndex.AddConsts(s.routeBuilder.option.Const)
+	if builder.option.Const != nil {
+		builder.paramsIndex.AddConsts(builder.option.Const)
 	}
 
-	if err := s.loadGoTypes(); err != nil {
+	if err := s.loadGoTypes(builder); err != nil {
 		return err
 	}
 
@@ -390,17 +458,17 @@ func extractURIParams(URI string) map[string]bool {
 	return result
 }
 
-func (s *Builder) initRoute() error {
-	method := s.routeBuilder.configProvider.DefaultHTTPMethod()
-	if s.routeBuilder.option.Method != "" {
-		method = s.routeBuilder.option.Method
+func (s *Builder) initRoute(builder *routeBuilder) error {
+	method := builder.configProvider.DefaultHTTPMethod()
+	if builder.option.Method != "" {
+		method = builder.option.Method
 	}
 
-	s.routeBuilder.route = &router.Route{
+	builder.route = &router.Route{
 		Method:           method,
 		EnableAudit:      true,
-		Transforms:       s.routeBuilder.transforms,
-		CustomValidation: s.routeBuilder.option.CustomValidation,
+		Transforms:       builder.transforms,
+		CustomValidation: builder.option.CustomValidation,
 		Cors: &router.Cors{
 			AllowCredentials: boolPtr(true),
 			AllowHeaders:     stringsPtr("*"),
@@ -408,48 +476,48 @@ func (s *Builder) initRoute() error {
 			AllowOrigins:     stringsPtr("*"),
 			ExposeHeaders:    stringsPtr("*"),
 		},
-		URI:   s.config.APIPrefix + s.options.RouterURI(s.routeBuilder.option.URI),
+		URI:   combineURLs(s.config.APIPrefix, s.options.RoutePrefix, builder.session.routePrefix, builder.option.URI),
 		Index: router.Index{Namespace: map[string]string{}},
 		Output: router.Output{
 			CaseFormat: "lc",
 		},
 	}
 
-	s.routeBuilder.paramsIndex.AddUriParams(extractURIParams(s.routeBuilder.route.URI))
-	return s.buildRouterOutput()
+	builder.paramsIndex.AddUriParams(extractURIParams(builder.route.URI))
+	return s.buildRouterOutput(builder)
 }
 
-func (s *Builder) buildRouterOutput() error {
-	if s.routeBuilder.option.DateFormat != "" {
-		s.routeBuilder.route.Output.DateFormat = s.routeBuilder.option.DateFormat
+func (s *Builder) buildRouterOutput(builder *routeBuilder) error {
+	if builder.option.DateFormat != "" {
+		builder.route.Output.DateFormat = builder.option.DateFormat
 	}
 
-	s.routeBuilder.route.Output.CSV = s.routeBuilder.option.CSV
-	aConfig, err := s.routeBuilder.configProvider.OutputConfig()
+	builder.route.Output.CSV = builder.option.CSV
+	aConfig, err := builder.configProvider.OutputConfig()
 	if err != nil {
 		return err
 	}
 
-	if err = tryUnmarshalHint(aConfig, &s.routeBuilder.route.Output); err != nil {
+	if err = tryUnmarshalHint(aConfig, &builder.route.Output); err != nil {
 		return err
 	}
 
-	if s.routeBuilder.route.Output.Cardinality == "" {
-		s.routeBuilder.route.Output.Cardinality = view.Many
+	if builder.route.Output.Cardinality == "" {
+		builder.route.Output.Cardinality = view.Many
 	}
 
-	s.routeBuilder.route.Output.CaseFormat = formatter.CaseFormat(view.FirstNotEmpty(s.routeBuilder.option.CaseFormat, "lc"))
-	if s.routeBuilder.option.Field != "" {
-		s.routeBuilder.route.Style = router.ComprehensiveStyle
-		s.routeBuilder.route.Field = s.routeBuilder.option.Field
+	builder.route.Output.CaseFormat = formatter.CaseFormat(view.FirstNotEmpty(builder.option.CaseFormat, "lc"))
+	if builder.option.Field != "" {
+		builder.route.Style = router.ComprehensiveStyle
+		builder.route.Field = builder.option.Field
 	}
 
-	if err = s.initRouteRequestBodySchemaIfNeeded(); err != nil {
+	if err = s.initRouteRequestBodySchemaIfNeeded(builder); err != nil {
 		return err
 	}
 
-	if rBody := s.routeBuilder.option.ResponseBody; rBody != nil {
-		s.routeBuilder.route.ResponseBody = &router.BodySelector{
+	if rBody := builder.option.ResponseBody; rBody != nil {
+		builder.route.ResponseBody = &router.BodySelector{
 			StateValue: rBody.From,
 		}
 	}
@@ -457,8 +525,8 @@ func (s *Builder) buildRouterOutput() error {
 	return nil
 }
 
-func (s *Builder) initRouteRequestBodySchemaIfNeeded() error {
-	body := s.routeBuilder.option.RequestBody
+func (s *Builder) initRouteRequestBodySchemaIfNeeded(builder *routeBuilder) error {
+	body := builder.option.RequestBody
 	if body == nil {
 		return nil
 	}
@@ -468,7 +536,7 @@ func (s *Builder) initRouteRequestBodySchemaIfNeeded() error {
 		return nil
 	}
 
-	s.routeBuilder.route.RequestBodySchema = &view.Schema{DataType: bodyType}
+	builder.route.RequestBodySchema = &view.Schema{DataType: bodyType}
 	return nil
 }
 
@@ -481,37 +549,37 @@ func (s *Builder) unmarshalRouterOutput(startExpr *Column, output *router.Output
 	return err
 }
 
-func (s *Builder) initConfigProvider() error {
-	if s.routeBuilder.sqlStmt == "" {
+func (s *Builder) initConfigProvider(builder *routeBuilder) error {
+	if builder.sqlStmt == "" {
 		return nil
 	}
 
-	SQL := s.routeBuilder.sqlStmt
-	configProvider, err := s.buildConfigProvider(SQL)
+	SQL := builder.sqlStmt
+	configProvider, err := s.buildConfigProvider(SQL, builder)
 	if err != nil {
 		return err
 	}
 
-	s.routeBuilder.configProvider = configProvider
+	builder.configProvider = configProvider
 	return nil
 }
 
-func (s *Builder) buildConfigProvider(SQL string) (*ViewConfigurer, error) {
+func (s *Builder) buildConfigProvider(SQL string, builder *routeBuilder) (*ViewConfigurer, error) {
 	serviceType := router.ReaderServiceType
 
 	if IsSQLExecMode(SQL) {
 		serviceType = router.ExecutorServiceType
 	}
 
-	return NewConfigProviderReader(s.options.Generate.Name, SQL, s.routeBuilder.option, serviceType, s.routeBuilder.paramsIndex, nil, &s.options.Connector)
+	return NewConfigProviderReader(view.FirstNotEmpty(s.options.Generate.Name, s.fileName(builder.session.sourceURL)), SQL, builder.option, serviceType, builder.paramsIndex, nil, &s.options.Connector, builder)
 }
 
-func (s *Builder) loadSQL(ctx context.Context) error {
-	if s.options.Location == "" {
+func (s *Builder) loadSQL(ctx context.Context, builder *routeBuilder, location string) error {
+	if location == "" {
 		return nil
 	}
 
-	sourceURL := normalizeURL(s.options.Location)
+	sourceURL := normalizeURL(location)
 	SQLbytes, err := s.fs.DownloadWithURL(context.Background(), sourceURL)
 	if err != nil {
 		return err
@@ -524,49 +592,49 @@ func (s *Builder) loadSQL(ctx context.Context) error {
 
 	hint, SQL := s.extractRouteSettings([]byte(SQL))
 
-	if SQL, err = s.readArtificialParamHints(SQL); err != nil {
+	if SQL, err = s.readArtificialParamHints(builder, SQL); err != nil {
 		return err
 	}
 
 	hints := sanitize.ExtractParameterHints(SQL)
 	SQL = sanitize.RemoveParameterHints(SQL, hints)
 
-	tryUnmrashalHintWithWarn(hint, s.routeBuilder.option)
+	tryUnmrashalHintWithWarn(hint, builder.option)
 
-	for paramName, paramType := range s.routeBuilder.option.Declare {
-		actualName, err := s.Type(paramType)
+	for paramName, paramType := range builder.option.Declare {
+		actualName, err := s.Type(builder.routerResource.Resource, paramType)
 		if err != nil {
 			return err
 		}
 
-		s.routeBuilder.option.Declare[paramName] = actualName
+		builder.option.Declare[paramName] = actualName
 	}
 
-	s.routeBuilder.sqlStmt = SQL
-	s.routeBuilder.paramsIndex.AddHints(hints.Index())
+	builder.sqlStmt = SQL
+	builder.paramsIndex.AddHints(hints.Index())
 	return nil
 }
 
-func (s *Builder) initRouterResource() error {
+func (s *Builder) initRouterResource(builder *routeBuilder) error {
 	var redirect *router.Redirect
 
-	s.routeBuilder.routerResource.Redirect = redirect
-	s.routeBuilder.routerResource.Routes = []*router.Route{s.routeBuilder.route}
-	s.routeBuilder.routerResource.ColumnsDiscovery = true
+	builder.routerResource.Redirect = redirect
+	builder.routerResource.Routes = append(builder.routerResource.Routes, builder.route)
+	builder.routerResource.ColumnsDiscovery = true
 
 	return nil
 }
 
-func (s *Builder) uploadFiles() error {
-	if err := s.uploadConnectionsDep(); err != nil {
+func (s *Builder) uploadFiles(resourceName string, consts *constFileContent, resource *router.Resource, caches []*view.Cache) error {
+	if err := s.uploadConnectionsDep(resource); err != nil {
 		return err
 	}
 
-	if err := s.uploadCacheDep(); err != nil {
+	if err := s.uploadCacheDep(resource, caches); err != nil {
 		return err
 	}
 
-	if err := s.uploadVariablesDep(); err != nil {
+	if err := s.uploadVariablesDep(resource, consts); err != nil {
 		return err
 	}
 
@@ -574,46 +642,50 @@ func (s *Builder) uploadFiles() error {
 		return err
 	}
 
-	return fsAddYAML(s.fs, s.options.RouterURL(), s.routeBuilder.routerResource)
+	return fsAddYAML(s.fs, s.options.RouterURL(resourceName), resource)
 }
 
-func (s *Builder) uploadConnectionsDep() error {
-	s.routeBuilder.routerResource.With = append(s.routeBuilder.routerResource.With, "connections")
+func (s *Builder) uploadConnectionsDep(resource *router.Resource) error {
+	resource.With = append(resource.With, "connections")
 	dependency := &view.Resource{
 		ModTime:    TimeNow(),
 		Connectors: s.options.Connectors(),
 	}
 
-	s.routeBuilder.routerResource.Resource.Connectors = nil
+	resource.Resource.Connectors = nil
 	depURL := s.options.DepURL("connections")
-	return fsAddYAML(s.fs, depURL, dependency)
+	if err := fsAddYAML(s.fs, depURL, dependency); err != nil {
+		return err
+	}
+
+	s.logs = append(s.logs, reportContent("---------- connections: -----------\n\t"+depURL, depURL))
+	return nil
 }
 
-func (s *Builder) uploadCacheDep() error {
-	cache := s.routeBuilder.option.Cache
-	if cache == nil {
+func (s *Builder) uploadCacheDep(resource *router.Resource, caches []*view.Cache) error {
+	if len(caches) == 0 {
 		return nil
 	}
 
-	s.routeBuilder.routerResource.With = append(s.routeBuilder.routerResource.With, "cache")
+	resource.With = append(resource.With, "cache")
 	cacheDependency := &view.Resource{ModTime: TimeNow()}
 	cacheURL := s.options.DepURL("cache")
-	cacheDependency.CacheProviders = append(cacheDependency.CacheProviders, cache)
+	cacheDependency.CacheProviders = append(cacheDependency.CacheProviders, caches...)
 	return fsAddYAML(s.fs, cacheURL, cacheDependency)
 }
 
-func (s *Builder) uploadVariablesDep() error {
-	if len(s.constParameters) == 0 {
+func (s *Builder) uploadVariablesDep(resource *router.Resource, consts *constFileContent) error {
+	if len(consts.params) == 0 {
 		return nil
 	}
 
 	fileName := "variables"
-	if s.routeBuilder.option.ConstFileURL != "" {
-		fileName = s.routeBuilder.option.ConstFileURL
+	if consts.URL != "" {
+		fileName = consts.URL
 	}
 
-	s.routeBuilder.routerResource.With = append(s.routeBuilder.routerResource.With, fileName)
-	variablesDep := &view.Resource{ModTime: TimeNow(), Parameters: s.constParameters}
+	resource.With = append(resource.With, fileName)
+	variablesDep := &view.Resource{ModTime: TimeNow(), Parameters: consts.params}
 	variablesURL := s.options.DepURL(fileName)
 	return fsAddYAML(s.fs, variablesURL, variablesDep)
 }
@@ -629,9 +701,9 @@ func fsAddJSON(fs afs.Service, URL string, any interface{}) error {
 func fsAddYAML(fs afs.Service, URL string, any interface{}) error {
 	aMap := map[string]interface{}{}
 	data, _ := json.Marshal(any)
-	json.Unmarshal(data, &aMap)
+	_ = json.Unmarshal(data, &aMap)
 	compacted := map[string]interface{}{}
-	toolbox.CopyNonEmptyMapEntries(aMap, compacted)
+	_ = toolbox.CopyNonEmptyMapEntries(aMap, compacted)
 	data, err := yaml.Marshal(compacted)
 	if err != nil {
 		return err
@@ -639,10 +711,10 @@ func fsAddYAML(fs afs.Service, URL string, any interface{}) error {
 	return fs.Upload(context.Background(), URL, file.DefaultFileOsMode, bytes.NewReader(data))
 }
 
-func (s *Builder) buildMainView(ctx context.Context, config *viewConfig) (*view.View, error) {
-	s.inheritRouteFromMainConfig(config.outputConfig)
+func (s *Builder) buildMainView(ctx context.Context, builder *routeBuilder, config *viewConfig) (*view.View, error) {
+	s.inheritRouteFromMainConfig(builder, config.outputConfig)
 
-	aView, err := s.buildAndAddViewWithLog(ctx, config, &view.Config{
+	aView, err := s.buildAndAddViewWithLog(ctx, builder, config, &view.Config{
 		Limit: 25,
 		Constraints: &view.Constraints{
 			Filterable: []string{"*"},
@@ -656,8 +728,8 @@ func (s *Builder) buildMainView(ctx context.Context, config *viewConfig) (*view.
 	return aView, err
 }
 
-func (s *Builder) setMainView(aView *view.View) {
-	s.routeBuilder.route.View = &view.View{Reference: shared.Reference{Ref: aView.Name}}
+func (s *Builder) setMainView(builder *routeBuilder, aView *view.View) {
+	builder.route.View = &view.View{Reference: shared.Reference{Ref: aView.Name}}
 }
 
 func updateAsAuthParamIfNeeded(auth string, param *view.Parameter) {
@@ -669,10 +741,10 @@ func updateAsAuthParamIfNeeded(auth string, param *view.Parameter) {
 	param.Required = boolPtr(true)
 }
 
-func (s *Builder) paramByName(name string) *view.Parameter {
-	param, ok := s.routeBuilder.paramsIndex.Param(name)
+func (s *Builder) paramByName(builder *routeBuilder, name string) *view.Parameter {
+	param, ok := builder.paramsIndex.Param(name)
 	if !ok {
-		s.routeBuilder.routerResource.Resource.AddParameters(param)
+		builder.routerResource.Resource.AddParameters(param)
 	}
 
 	return param
@@ -728,35 +800,35 @@ func copyWarmup(warmup map[string]interface{}) map[string]interface{} {
 
 }
 
-func (s *Builder) addParameters(params ...*view.Parameter) error {
+func (s *Builder) addParameters(builder *routeBuilder, params ...*view.Parameter) error {
 	for i, aParam := range params {
-		if _, ok := s.routeBuilder.paramsIndex.parameters[aParam.Name]; ok {
+		if _, ok := builder.paramsIndex.parameters[aParam.Name]; ok {
 			continue
 		}
 
-		s.routeBuilder.routerResource.Resource.Parameters = append(s.routeBuilder.routerResource.Resource.Parameters, params[i])
-		s.routeBuilder.paramsIndex.AddParameter(params[i])
+		builder.routerResource.Resource.Parameters = append(builder.routerResource.Resource.Parameters, params[i])
+		builder.paramsIndex.AddParameter(params[i])
 	}
 
 	return nil
 }
 
-func (s *Builder) addTypeDef(schema *view.TypeDefinition) {
-	s.routeBuilder.routerResource.Resource.Types = append(s.routeBuilder.routerResource.Resource.Types, schema)
+func (s *Builder) addTypeDef(resource *view.Resource, schema *view.TypeDefinition) {
+	resource.Types = append(resource.Types, schema)
 }
 
-func (s *Builder) inheritRouteFromMainConfig(config option.OutputConfig) {
-	s.routeBuilder.route.Field = view.FirstNotEmpty(config.Field, s.routeBuilder.route.Field)
-	s.routeBuilder.route.Style = router.Style(view.FirstNotEmpty(config.Style, string(s.routeBuilder.route.Style)))
+func (s *Builder) inheritRouteFromMainConfig(builder *routeBuilder, config option.OutputConfig) {
+	builder.route.Field = view.FirstNotEmpty(config.Field, builder.route.Field)
+	builder.route.Style = router.Style(view.FirstNotEmpty(config.Style, string(builder.route.Style)))
 }
 
-func (s *Builder) indexExcludedColumns(config *viewConfig) error {
-	err := s.appendExcluded(&s.routeBuilder.route.Exclude, config, "")
+func (s *Builder) indexExcludedColumns(builder *routeBuilder, config *viewConfig) error {
+	err := s.appendExcluded(&builder.route.Exclude, config, "")
 	if err != nil {
 		return err
 	}
 
-	if err := s.appendMetaExcluded(&s.routeBuilder.route.Exclude, config, ""); err != nil {
+	if err := s.appendMetaExcluded(&builder.route.Exclude, config, ""); err != nil {
 		return err
 	}
 
@@ -843,19 +915,19 @@ func combineSegments(segments ...string) string {
 	return result
 }
 
-func (s *Builder) buildViewParams() ([]string, error) {
-	paramViews := s.routeBuilder.configProvider.ViewParams()
+func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
+	paramViews := builder.configProvider.ViewParams()
 	var utilParams []string
 
 	for _, paramViewConfig := range paramViews {
-		externalParams, err := s.prepareExternalParameters(paramViewConfig)
+		externalParams, err := s.prepareExternalParameters(builder, paramViewConfig)
 		if err != nil {
 			return nil, err
 		}
 
 		childViewConfig := paramViewConfig.viewConfig
 
-		aView, err := s.buildAndAddViewWithLog(context.TODO(), paramViewConfig.viewConfig, &view.Config{
+		aView, err := s.buildAndAddViewWithLog(context.TODO(), builder, paramViewConfig.viewConfig, &view.Config{
 			Constraints: &view.Constraints{
 				Criteria:   false,
 				Limit:      true,
@@ -876,7 +948,7 @@ func (s *Builder) buildViewParams() ([]string, error) {
 			return nil, err
 		}
 
-		s.addTypeDef(typeDef)
+		s.addTypeDef(builder.routerResource.Resource, typeDef)
 
 		aParam := childViewConfig.unexpandedTable.ViewConfig.DataViewParameter
 
@@ -894,11 +966,11 @@ func (s *Builder) buildViewParams() ([]string, error) {
 
 		aView.Schema = s.NewSchema(typeDef.Name, "")
 		updateAsAuthParamIfNeeded(childViewConfig.unexpandedTable.Auth, aParam)
-		if err = s.addParameters(aParam); err != nil {
+		if err = s.addParameters(builder, aParam); err != nil {
 			return nil, err
 		}
 
-		if s.isUtilParam(aParam) {
+		if s.isUtilParam(builder, aParam) {
 			utilParams = append(utilParams, aParam.Name)
 		}
 	}
@@ -906,7 +978,7 @@ func (s *Builder) buildViewParams() ([]string, error) {
 	return utilParams, nil
 }
 
-func (s *Builder) prepareExternalParameters(paramViewConfig *viewParamConfig) ([]*view.Parameter, error) {
+func (s *Builder) prepareExternalParameters(builder *routeBuilder, paramViewConfig *viewParamConfig) ([]*view.Parameter, error) {
 	var externalParams []*view.Parameter
 
 	for _, parameter := range paramViewConfig.params {
@@ -920,7 +992,7 @@ func (s *Builder) prepareExternalParameters(paramViewConfig *viewParamConfig) ([
 				Schema:          &view.Schema{DataType: "string"},
 			}
 
-			if err := s.addParameters(authParam); err != nil {
+			if err := s.addParameters(builder, authParam); err != nil {
 				return nil, err
 			}
 
@@ -934,11 +1006,11 @@ func (s *Builder) prepareExternalParameters(paramViewConfig *viewParamConfig) ([
 	return externalParams, nil
 }
 
-func (s *Builder) moveConstParameters() error {
+func (s *Builder) moveConstParameters(builder *routeBuilder, dest *[]*view.Parameter) error {
 	newParams := make([]*view.Parameter, 0)
 	constParams := make([]*view.Parameter, 0)
-	for i := range s.routeBuilder.routerResource.Resource.Parameters {
-		parameter := s.routeBuilder.routerResource.Resource.Parameters[i]
+	for i := range builder.routerResource.Resource.Parameters {
+		parameter := builder.routerResource.Resource.Parameters[i]
 
 		if parameter.In != nil && parameter.In.Kind == view.LiteralKind {
 			constParams = append(constParams, parameter)
@@ -948,14 +1020,14 @@ func (s *Builder) moveConstParameters() error {
 		newParams = append(newParams, parameter)
 	}
 
-	s.routeBuilder.routerResource.Resource.Parameters = newParams
-	s.constParameters = constParams
+	builder.routerResource.Resource.Parameters = newParams
+	*dest = append(*dest, constParams...)
 
 	return nil
 }
 
-func (s *Builder) updateParamByHint(param *view.Parameter) error {
-	hint, ok := s.routeBuilder.paramsIndex.hints[param.Name]
+func (s *Builder) updateParamByHint(resource *view.Resource, paramIndex *ParametersIndex, param *view.Parameter) error {
+	hint, ok := paramIndex.hints[param.Name]
 	if !ok {
 		return nil
 	}
@@ -971,10 +1043,10 @@ func (s *Builder) updateParamByHint(param *view.Parameter) error {
 		return err
 	}
 
-	return s.updateViewParam(param, paramConfig, SQL)
+	return s.updateViewParam(resource, param, paramConfig, SQL)
 }
 
-func (s *Builder) updateViewParam(param *view.Parameter, config *option.ParameterConfig, SQL string) error {
+func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter, config *option.ParameterConfig, SQL string) error {
 	if param.In == nil {
 		param.In = &view.Location{}
 	}
@@ -997,7 +1069,7 @@ func (s *Builder) updateViewParam(param *view.Parameter, config *option.Paramete
 	}
 
 	param.In.Kind = view.Kind(view.FirstNotEmpty(config.Kind, string(param.In.Kind)))
-	paramType, err := s.Type(view.FirstNotEmpty(config.DataType, param.Schema.DataType))
+	paramType, err := s.Type(resource, view.FirstNotEmpty(config.DataType, param.Schema.DataType))
 	if err != nil {
 		return err
 	}
@@ -1038,16 +1110,16 @@ func (s *Builder) updateViewParam(param *view.Parameter, config *option.Paramete
 	return nil
 }
 
-func (s *Builder) isUtilParam(param *view.Parameter) bool {
-	return s.routeBuilder.paramsIndex.utilsIndex[param.Name]
+func (s *Builder) isUtilParam(builder *routeBuilder, param *view.Parameter) bool {
+	return builder.paramsIndex.utilsIndex[param.Name]
 }
 
-func (s *Builder) inheritRouteServiceType(aView *view.View) {
+func (s *Builder) inheritRouteServiceType(builder *routeBuilder, aView *view.View) {
 	switch aView.Mode {
 	case "", view.SQLQueryMode:
-		s.routeBuilder.route.Service = router.ReaderServiceType
+		builder.route.Service = router.ReaderServiceType
 	case view.SQLExecMode:
-		s.routeBuilder.route.Service = router.ExecutorServiceType
+		builder.route.Service = router.ExecutorServiceType
 	}
 }
 
@@ -1056,19 +1128,34 @@ func (s *Builder) prepareRuleIfNeeded(SQL []byte) (string, error) {
 		return string(SQL), nil
 	}
 
+	goFileOutput := s.options.DSQLOutput
+	if output := s.options.GoFileOutput; output != "" {
+		if strings.HasPrefix(output, "/") {
+			goFileOutput = output
+		} else {
+			goFileOutput = path.Join(goFileOutput, output)
+		}
+	}
+
+	preparedRouteBuilder := s.newRouteBuilder(
+		&router.Resource{Resource: view.EmptyResource()},
+		NewParametersIndex(nil, nil),
+		newSession(path.Dir(s.options.Location), s.options.Location, s.options.PluginDst, s.options.DSQLOutput, s.options.DSQLOutput, goFileOutput),
+	)
+
 	switch strings.ToLower(s.options.PrepareRule) {
 	case PreparePost:
-		return s.preparePostRule(context.Background(), SQL)
+		return s.preparePostRule(context.Background(), preparedRouteBuilder, SQL)
 	case PreparePatch:
-		return s.preparePatchRule(context.Background(), SQL)
+		return s.preparePatchRule(context.Background(), preparedRouteBuilder, SQL)
 	case PreparePut:
-		return s.preparePutRule(context.Background(), SQL)
+		return s.preparePutRule(context.Background(), preparedRouteBuilder, SQL)
 	default:
 		return "", fmt.Errorf("unsupported prepare rule type")
 	}
 }
 
-func (s *Builder) loadGoType(typeSrc *option.TypeSrcConfig) error {
+func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcConfig) error {
 	if typeSrc == nil {
 		return nil
 	}
@@ -1131,7 +1218,7 @@ func (s *Builder) loadGoType(typeSrc *option.TypeSrcConfig) error {
 			return err
 		}
 
-		s.addTypeDef(&view.TypeDefinition{
+		s.addTypeDef(resource, &view.TypeDefinition{
 			Reference: shared.Reference{
 				Ref: ref,
 			},
@@ -1164,7 +1251,7 @@ func (s *Builder) packageName(dirTypes *xreflect.DirTypes) (string, error) {
 	return strconv.Unquote(lit.Value)
 }
 
-func (s *Builder) Type(typeName string) (string, error) {
+func (s *Builder) Type(resource *view.Resource, typeName string) (string, error) {
 	index := strings.LastIndex(typeName, ".")
 	if index == -1 {
 		return typeName, nil
@@ -1181,7 +1268,7 @@ func (s *Builder) Type(typeName string) (string, error) {
 		actualName = "*" + actualName
 	}
 
-	return typeName, s.loadGoType(&option.TypeSrcConfig{
+	return typeName, s.loadGoType(resource, &option.TypeSrcConfig{
 		URL:   sourcePath,
 		Types: []string{actualName},
 	})
@@ -1204,14 +1291,14 @@ func (s *Builder) normalizeURL(typeSrc *option.TypeSrcConfig) {
 	}
 }
 
-func (s *Builder) loadGoTypes() error {
-	if err := s.loadGoType(s.routeBuilder.option.TypeSrc); err != nil {
+func (s *Builder) loadGoTypes(builder *routeBuilder) error {
+	if err := s.loadGoType(builder.routerResource.Resource, builder.option.TypeSrc); err != nil {
 		return err
 	}
 
-	cursor := parsly.NewCursor("", []byte(s.routeBuilder.sqlStmt), 0)
+	cursor := parsly.NewCursor("", []byte(builder.sqlStmt), 0)
 	defer func() {
-		s.routeBuilder.sqlStmt = s.routeBuilder.sqlStmt[cursor.Pos:]
+		builder.sqlStmt = builder.sqlStmt[cursor.Pos:]
 	}()
 
 	matched := cursor.MatchAfterOptional(whitespaceMatcher, importKeywordMatcher)
@@ -1228,7 +1315,7 @@ func (s *Builder) loadGoTypes() error {
 			return err
 		}
 
-		return s.loadGoType(typeSrc)
+		return s.loadGoType(builder.routerResource.Resource, typeSrc)
 	case exprGroupToken:
 		exprContent := matched.Text(cursor)
 		exprGroupCursor := parsly.NewCursor("", []byte(exprContent[1:len(exprContent)-1]), 0)
@@ -1243,7 +1330,7 @@ func (s *Builder) loadGoTypes() error {
 				if err != nil {
 					return err
 				}
-				if err = s.loadGoType(typeSrc); err != nil {
+				if err = s.loadGoType(builder.routerResource.Resource, typeSrc); err != nil {
 					return err
 				}
 			case parsly.EOF:
@@ -1281,7 +1368,7 @@ func (s *Builder) parseTypeSrc(imported string, cursor *parsly.Cursor) (*option.
 	}, nil
 }
 
-func (s *Builder) readArtificialParamHints(SQL string) (string, error) {
+func (s *Builder) readArtificialParamHints(builder *routeBuilder, SQL string) (string, error) {
 	SQLBytes := []byte(SQL)
 	cursor := parsly.NewCursor("", SQLBytes, 0)
 	for {
@@ -1312,11 +1399,11 @@ func (s *Builder) readArtificialParamHints(SQL string) (string, error) {
 				continue
 			}
 
-			if err = s.buildParamHint(selector, contentCursor); err != nil {
+			if err = s.buildParamHint(builder, selector, contentCursor); err != nil {
 				return "", err
 			}
 
-			s.routeBuilder.sqlStmt = strings.Replace(s.routeBuilder.sqlStmt, string(cursor.Input[setStart:selEnd]), "", 1)
+			builder.sqlStmt = strings.Replace(builder.sqlStmt, string(cursor.Input[setStart:selEnd]), "", 1)
 
 			for i := setStart; i < cursor.Pos; i++ {
 				SQLBytes[i] = ' '
@@ -1328,7 +1415,7 @@ func (s *Builder) readArtificialParamHints(SQL string) (string, error) {
 	}
 }
 
-func (s *Builder) buildParamHint(selector *expr.Select, cursor *parsly.Cursor) error {
+func (s *Builder) buildParamHint(builder *routeBuilder, selector *expr.Select, cursor *parsly.Cursor) error {
 	paramHint, err := s.parseParamHint(cursor)
 	if paramHint == "" || err != nil {
 		return err
@@ -1344,7 +1431,7 @@ func (s *Builder) buildParamHint(selector *expr.Select, cursor *parsly.Cursor) e
 		}
 
 		_, paramName := sanitize.GetHolderName(holderName)
-		s.routeBuilder.transforms = append(s.routeBuilder.transforms, &marshal.Transform{
+		builder.transforms = append(builder.transforms, &marshal.Transform{
 			ParamName:   paramName,
 			Kind:        aTransform.TransformKind,
 			Path:        holderName[pathStartIndex+1:],
@@ -1356,7 +1443,7 @@ func (s *Builder) buildParamHint(selector *expr.Select, cursor *parsly.Cursor) e
 		return nil
 	}
 
-	s.routeBuilder.paramsIndex.AddParamHint(holderName, &sanitize.ParameterHint{
+	builder.paramsIndex.AddParamHint(holderName, &sanitize.ParameterHint{
 		Parameter: holderName,
 		Hint:      paramHint,
 	})
@@ -1471,12 +1558,102 @@ func (s *Builder) readParamConfigs(config *option.ParameterConfig, cursor *parsl
 	return nil
 }
 
-func (s *Builder) updateParamsByHints() error {
-	for _, parameter := range s.routeBuilder.paramsIndex.parameters {
-		if err := s.updateParamByHint(parameter); err != nil {
+func (s *Builder) updateParamsByHints(resource *view.Resource, paramIndex *ParametersIndex) error {
+	for _, parameter := range paramIndex.parameters {
+		if err := s.updateParamByHint(resource, paramIndex, parameter); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (s *Builder) readRouterOptionIfNeeded(resource *router.Resource) (string, []*session, error) {
+	basePath := url.Join(s.options.RouteURL, s.options.RoutePrefix)
+	routerURL := s.options.CustomRouterURL
+	if routerURL == "" {
+		return view.FirstNotEmpty(s.options.Generate.Name, s.fileName(s.options.Location)), []*session{newSession(basePath, s.options.Location, s.options.PluginDst, "", "", s.options.GoFileOutput)}, nil
+	}
+
+	routerContent, err := afs.New().DownloadWithURL(context.Background(), routerURL)
+	if err != nil {
+		return "", nil, err
+	}
+
+	routerConfig := &option.RouterConfig{}
+	hintContent := sanitize.ExtractHint(string(routerContent))
+
+	hint, _ := sanitize.SplitHint(hintContent)
+	if err = tryUnmarshalHint(hint, routerConfig); err != nil {
+		return "", nil, err
+	}
+
+	if template := strings.TrimSpace(strings.Replace(string(routerContent), hintContent, "", 1)); template != "" {
+		resource.Interceptor = &router.RouteInterceptor{
+			Template: template,
+		}
+	}
+
+	if routerConfig.URL != "" {
+		resource.URL = combineURLs(s.options.ApiURIPrefix, s.options.RoutePrefix, routerConfig.URL)
+	}
+
+	routes := make([]*session, 0, len(routerConfig.Routes))
+	routerFileName := view.FirstNotEmpty(s.options.Generate.Name, s.fileName(routerURL))
+	basePath = url.Join(basePath, routerFileName)
+	for _, route := range routerConfig.Routes {
+		var actualSourceURL string
+		templatesFolder := path.Dir(routerURL)
+		if strings.HasPrefix(route.SourceURL, "/") {
+			actualSourceURL = route.SourceURL
+		} else {
+			actualSourceURL = path.Join(templatesFolder, route.SourceURL)
+		}
+
+		aRouteFile := newSession(basePath, actualSourceURL, s.options.PluginDst, "", s.fileName(actualSourceURL), s.options.GoFileOutput)
+		aRouteFile.pathDiff = path.Base(basePath)
+		aRouteFile.routePrefix = routerConfig.URL
+		routes = append(routes, aRouteFile)
+	}
+
+	return routerFileName, routes, nil
+}
+
+func (s *Builder) fileName(URL string) string {
+	routerFileName := path.Base(URL)
+	if ext := path.Ext(routerFileName); ext != "" {
+		routerFileName = strings.Replace(routerFileName, ext, "", 1)
+	}
+	return routerFileName
+}
+
+func (s *Builder) flushLogs(logger io.Writer) {
+	for _, log := range s.logs {
+		_, _ = logger.Write([]byte(log))
+	}
+}
+
+func combineURLs(basePath string, segments ...string) string {
+	basePath = strings.TrimRight(basePath, "/")
+	var actualSegments []string
+	for _, segment := range segments {
+		if segment == "" {
+			continue
+		}
+
+		actualSegments = append(actualSegments, strings.TrimLeft(segment, "/"))
+	}
+
+	if basePath == "" {
+		switch len(actualSegments) {
+		case 0:
+			return ""
+		case 1:
+			return actualSegments[0]
+		default:
+			return url.Join(actualSegments[0], actualSegments[1:]...)
+		}
+	}
+
+	return url.Join(basePath, actualSegments...)
 }

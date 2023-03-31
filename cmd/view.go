@@ -13,9 +13,9 @@ import (
 	"github.com/viant/toolbox/format"
 )
 
-func (s *Builder) buildAndAddViewWithLog(ctx context.Context, viewConfig *viewConfig, selector *view.Config, indexNamespace bool, parameters ...*view.Parameter) (*view.View, error) {
+func (s *Builder) buildAndAddViewWithLog(ctx context.Context, builder *routeBuilder, viewConfig *viewConfig, selector *view.Config, indexNamespace bool, parameters ...*view.Parameter) (*view.View, error) {
 	fmt.Printf("[INFO] building view %v\n", viewConfig.viewName)
-	aView, err := s.buildAndAddView(ctx, viewConfig, selector, indexNamespace, parameters)
+	aView, err := s.buildAndAddView(ctx, builder, viewConfig, selector, indexNamespace, parameters)
 	if err != nil {
 		fmt.Printf("[ERROR] couldn't build view %v due to the %v\n", viewConfig.viewName, err.Error())
 	} else {
@@ -25,7 +25,7 @@ func (s *Builder) buildAndAddViewWithLog(ctx context.Context, viewConfig *viewCo
 	return aView, err
 }
 
-func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, selector *view.Config, indexNamespace bool, parameters []*view.Parameter) (*view.View, error) {
+func (s *Builder) buildAndAddView(ctx context.Context, builder *routeBuilder, viewConfig *viewConfig, selector *view.Config, indexNamespace bool, parameters []*view.Parameter) (*view.View, error) {
 	table := viewConfig.unexpandedTable
 	viewName := s.viewNames.unique(viewConfig.viewName)
 	connector, err := s.ConnectorRef(view.FirstNotEmpty(table.Connector, s.options.Connector.DbName))
@@ -41,12 +41,12 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 	if tableName, err := s.readColumnTypes(ctx, db, table); err != nil {
 		fmt.Printf("[WARN] %v", fmt.Errorf("couldn't read table %v column types %w ", tableName, err).Error())
 	}
-	template, err := s.buildTemplate(ctx, viewConfig, parameters)
+	template, err := s.buildTemplate(ctx, builder, viewConfig, parameters)
 	if err != nil {
 		return nil, err
 	}
 
-	relations, err := s.buildRelations(ctx, viewConfig, indexNamespace)
+	relations, err := s.buildRelations(ctx, builder, viewConfig, indexNamespace)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (s *Builder) buildAndAddView(ctx context.Context, viewConfig *viewConfig, s
 		result.Schema = &view.Schema{DataType: table.DataType}
 	}
 
-	s.routeBuilder.AddViews(result)
+	builder.AddViews(result)
 
 	return result, nil
 }
@@ -206,11 +206,11 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
-func (s *Builder) buildRelations(ctx context.Context, config *viewConfig, indexNamespace bool) ([]*view.Relation, error) {
+func (s *Builder) buildRelations(ctx context.Context, builder *routeBuilder, config *viewConfig, indexNamespace bool) ([]*view.Relation, error) {
 	result := make([]*view.Relation, 0, len(config.relations))
 	for _, relation := range config.relations {
 		relationName := relation.queryJoin.Alias
-		relView, err := s.buildAndAddViewWithLog(ctx, relation, &view.Config{
+		relView, err := s.buildAndAddViewWithLog(ctx, builder, relation, &view.Config{
 			Limit: 40,
 		}, indexNamespace)
 

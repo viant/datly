@@ -58,7 +58,7 @@ func NewRequestParameters(request *http.Request, route *Route) (*RequestParams, 
 }
 
 func (p *RequestParams) init(request *http.Request, route *Route) (string, error) {
-	p.pathIndex, _ = toolbox.ExtractURIParameters(route.URI, request.RequestURI)
+	p.pathIndex, _ = toolbox.ExtractURIParameters(route.URI, request.URL.Path)
 	p.queryIndex = request.URL.Query()
 	p.OutputFormat = p.outputFormat()
 	p.InputFormat = p.header(HeaderContentType)

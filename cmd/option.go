@@ -35,6 +35,7 @@ type (
 	Options struct {
 		Port               int    `short:"p" long:"port" description:"port"  `
 		RouteURL           string `short:"r" long:"routeURL" description:"route URL"  `
+		CustomRouterURL    string `long:"routerConfig" description:"custom router template/config URL"`
 		DependencyURL      string `short:"d" long:"deps" description:"dependencies URL" `
 		ConfigURL          string `short:"c" long:"config" description:"configuration URL" `
 		PartialConfigURL   string `short:"e" long:"partialConfig" description:"partial configuration file URL"`
@@ -351,41 +352,15 @@ func (c *Connector) New() *view.Connector {
 }
 
 func (o *Options) RouterURI(name string) string {
-	if name == "" {
-		name = o.Generate.Name
-	}
-	return o.RoutePrefix + "/" + name
+	return combineURLs(o.RoutePrefix, name)
 }
 
-func (o *Options) RouterURL() string {
-	if o.Generate.Name == "" {
-		return ""
-	}
-	return url.Join(o.RouteURL, o.RouterURI("")+".yaml")
+func (o *Options) RouterURL(fileName string) string {
+	return url.Join(o.RouteURL, o.RouterURI(fileName)+".yaml")
 }
 
 func (o *Options) DepURL(uri string) string {
-	if o.Generate.Name == "" {
-		return ""
-	}
 	return url.Join(o.DependencyURL, uri+".yaml")
-}
-
-func (o *Options) URL(folder, name string, inRoutes bool, extension string) string {
-	if !inRoutes {
-		return url.Join(folder, name+extension)
-	}
-
-	pathSegments := []string{folder}
-	location := o.Location[strings.LastIndex(o.Location, "/")+1:]
-	extensionIndex := strings.LastIndex(location, ".")
-	if extensionIndex != -1 {
-		location = location[:extensionIndex]
-	}
-	pathSegments = append(pathSegments, location)
-
-	pathSegments = append(pathSegments, name+extension)
-	return url.Join(o.RouteURL, pathSegments...)
 }
 
 func namespace(name string) string {

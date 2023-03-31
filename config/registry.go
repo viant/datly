@@ -158,3 +158,19 @@ func (r *Registry) AddType(packageName string, typeName string, rType reflect.Ty
 	regsitry := r.getTypesRegsitry(packageName)
 	regsitry[typeName] = rType
 }
+
+func (r *Registry) FlattenTypes() map[string]reflect.Type {
+	types := map[string]reflect.Type{}
+
+	for key, rType := range r.Types {
+		types[key] = rType
+	}
+
+	for packageName, pTypes := range r.Packages {
+		for typeName, rType := range pTypes {
+			types[strings.Join([]string{packageName, typeName}, ".")] = rType
+		}
+	}
+
+	return types
+}

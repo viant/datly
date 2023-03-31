@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"github.com/viant/afs/file"
-	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
@@ -17,18 +16,17 @@ import (
 	"github.com/viant/velty/ast/stmt"
 	"github.com/viant/velty/parser"
 	"net/http"
-	"path"
 	"reflect"
 	"strings"
 )
 
-func (s *Builder) buildTemplate(ctx context.Context, aViewConfig *viewConfig, externalParams []*view.Parameter) (*view.Template, error) {
-	template, err := s.Parse(ctx, aViewConfig, externalParams)
+func (s *Builder) buildTemplate(ctx context.Context, builder *routeBuilder, aViewConfig *viewConfig, externalParams []*view.Parameter) (*view.Template, error) {
+	template, err := s.Parse(ctx, builder, aViewConfig, externalParams)
 	if err != nil {
 		return nil, err
 	}
 
-	parameters, err := s.convertParams(template)
+	parameters, err := s.convertParams(builder, template)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +36,7 @@ func (s *Builder) buildTemplate(ctx context.Context, aViewConfig *viewConfig, ex
 		return nil, err
 	}
 
-	SQL, URI, err := s.uploadTemplateSQL(template.SQL, aViewConfig)
+	SQL, URI, err := s.uploadTemplateSQL(builder, template.SQL, aViewConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -51,10 +49,15 @@ func (s *Builder) buildTemplate(ctx context.Context, aViewConfig *viewConfig, ex
 	}, nil
 }
 
-func (s *Builder) uploadTemplateSQL(template string, aViewConfig *viewConfig) (SQL string, URI string, err error) {
-	SQL = sanitize.Sanitize(template, s.routeBuilder.paramsIndex.hints, s.routeBuilder.paramsIndex.consts)
+func (s *Builder) uploadTemplateSQL(builder *routeBuilder, template string, aViewConfig *viewConfig) (SQL string, URI string, err error) {
+	SQL = sanitize.Sanitize(template, builder.paramsIndex.hints, builder.paramsIndex.consts)
 	if SQL != "" && aViewConfig.fileName != "" {
-		URI, err = s.uploadSQL(s.options.RoutePrefix, aViewConfig.fileName, SQL)
+		URI, err = s.upload(
+			builder,
+			builder.session.TemplateURL(s.fileNames.unique(aViewConfig.fileName)+".sql"),
+			SQL,
+		)
+
 		if err != nil {
 			return "", "", err
 		}
@@ -64,19 +67,19 @@ func (s *Builder) uploadTemplateSQL(template string, aViewConfig *viewConfig) (S
 	return SQL, URI, nil
 }
 
-func (s *Builder) Parse(ctx context.Context, aViewConfig *viewConfig, params []*view.Parameter) (*Template, error) {
+func (s *Builder) Parse(ctx context.Context, builder *routeBuilder, aViewConfig *viewConfig, params []*view.Parameter) (*Template, error) {
 	table := aViewConfig.unexpandedTable
 
 	SQL := table.SQL
-	iterator := sanitize.NewIterator(SQL, s.routeBuilder.paramsIndex.hints, s.routeBuilder.option.Const)
+	iterator := sanitize.NewIterator(SQL, builder.paramsIndex.hints, builder.option.Const)
 	SQL = iterator.SQL
 
 	defaultParamType := view.KindQuery
-	if s.routeBuilder.option.Method == http.MethodPost {
+	if builder.option.Method == http.MethodPost {
 		defaultParamType = view.KindRequestBody
 	}
 
-	return NewTemplate(s.routeBuilder.paramsIndex, SQL, defaultParamType, params, s.columnTypes(aViewConfig.expandedTable))
+	return NewTemplate(builder.paramsIndex, SQL, defaultParamType, params, s.columnTypes(aViewConfig.expandedTable))
 }
 
 func (s *Builder) NewSchema(dataType string, cardinality string) *view.Schema {
@@ -87,17 +90,17 @@ func (s *Builder) NewSchema(dataType string, cardinality string) *view.Schema {
 	return schema
 }
 
-func (s *Builder) convertParams(template *Template) ([]*view.Parameter, error) {
+func (s *Builder) convertParams(builder *routeBuilder, template *Template) ([]*view.Parameter, error) {
 	parameters := template.Parameters
 	result := make([]*view.Parameter, 0, len(parameters))
-	if err := s.addParameters(template.viewParams...); err != nil {
+	if err := s.addParameters(builder, template.viewParams...); err != nil {
 		return nil, err
 	}
 
 	added := map[string]bool{}
 	for _, parameter := range parameters {
-		existingParam := s.paramByName(parameter.Name)
-		newParam, err := convertMetaParameter(parameter, s.routeBuilder.option.Const, s.routeBuilder.paramsIndex.hints)
+		existingParam := s.paramByName(builder, parameter.Name)
+		newParam, err := convertMetaParameter(parameter, builder.option.Const, builder.paramsIndex.hints)
 		if err != nil {
 			return nil, err
 		}
@@ -628,101 +631,12 @@ func isParameter(variables map[string]bool, paramName string) bool {
 	return sanitize.CanBeParam(paramName)
 }
 
-func (s *Builder) uploadSQL(namespace, fileName string, fileContent string) (string, error) {
-	return s.uploadRuleFile(namespace, fileName, fileContent, ".sql", true)
-}
-
-func (s *Builder) uploadRuleFile(namespace string, fileName string, fileContent string, extension string, ensureUniques bool) (string, error) {
-	if ensureUniques {
-		fileName = s.fileNames.unique(fileName)
-	}
-
-	sourceURL := s.url(namespace, fileName, extension)
-	return s.upload(sourceURL, fileContent)
-}
-
-func (s *Builder) goURL(fileName string) string {
-	if out := s.options.GoFileOutput; out != "" {
-		fileName = out
-		if strings.HasPrefix(fileName, "/") {
-			return fileName
-		}
-
-		if ext := path.Ext(out); ext != "" {
-			fileName = strings.ReplaceAll(fileName, ext, "")
-		}
-	} else {
-		detectCase, err := format.NewCase(formatter.DetectCase(fileName))
-		if err == nil {
-			fileName = detectCase.Format(fileName, format.CaseLowerUnderscore)
-		}
-	}
-
-	return s.preGenURL(fileName, ".go")
-}
-
-func (s *Builder) preGenSQLURL(fileName string) string {
-	return s.preGenURL(fileName, ".sql")
-}
-
-func (s *Builder) preGenURL(fileName string, ext string) string {
-	return s.url(s.options.DSQLOutput, fileName, ext)
-}
-
-func (s *Builder) genURL(fileName, ext string) string {
-	return s.url(s.options.RoutePrefix, fileName, ext)
-}
-
-func (s *Builder) url(namespace, fileName string, ext string) string {
-	if namespace != s.options.RoutePrefix {
-		URL := normalizeURL(namespace)
-		if strings.HasPrefix(URL, "/") {
-			if actualExt := path.Ext(URL); actualExt != "" {
-				return URL
-			}
-
-			if fileName == "" {
-				return URL
-			}
-
-			return path.Join(URL, fileName+ext)
-		}
-	}
-
-	segments := []string{
-		namespace,
-	}
-
-	if fileName != "" {
-		segments = append(segments, fileName+ext)
-	}
-
-	if namespace == s.options.DSQLOutput {
-		return url.Join(path.Dir(s.options.Location), segments...)
-	}
-
-	sourceURL := s.options.URL(namespace, s.fileNames.unique(fileName), true, ext)
-	return sourceURL
-}
-
-func (s *Builder) upload(destURL string, fileContent string) (string, error) {
+func (s *Builder) upload(builder *routeBuilder, destURL string, fileContent string) (string, error) {
 	if err := s.fs.Upload(context.Background(), destURL, file.DefaultFileOsMode, strings.NewReader(fileContent)); err != nil {
 		return "", err
 	}
 
-	skipped := 0
-	anIndex := strings.LastIndexFunc(destURL, func(r rune) bool {
-		if r == '/' {
-			skipped++
-		}
-
-		if skipped == 2 {
-			return true
-		}
-		return false
-	})
-	destURL = destURL[anIndex+1:]
-	return destURL, nil
+	return builder.session.RelativeOfBasePath(destURL), nil
 }
 
 func (s *Builder) buildSchemaFromTable(schemaName string, table *Table, columnTypes map[string]*ColumnMeta) (*view.TypeDefinition, error) {

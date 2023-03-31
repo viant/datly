@@ -1,13 +1,11 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/afs"
-	"github.com/viant/afs/file"
 	"github.com/viant/afs/mem"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone"
@@ -99,10 +97,6 @@ func TestRun(t *testing.T) {
 		checkReadData(t, server, testCase, loader, testLocation)
 		//generateLogs(loader, testLocation, logger, testCase)
 	}
-}
-
-func generateLogs(loader afs.Service, testLocation string, logger *memoryWriter, testCase *testcase) {
-	_ = loader.Upload(context.TODO(), path.Join(testLocation, "log.txt"), file.DefaultFileOsMode, bytes.NewReader(logger.data))
 }
 
 func checkReadData(t *testing.T, server *standalone.Server, testCase *testcase, loader afs.Service, testLocation string) {

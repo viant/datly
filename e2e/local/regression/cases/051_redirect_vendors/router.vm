@@ -1,0 +1,16 @@
+/*
+
+{
+    "URL": "/custom-redirect/",
+    "TemplateURL": "./router.vm",
+    "Routes": [
+        {"SourceURL": "./redirect_vendor_details.sql"},
+        {"SourceURL": "./redirect_vendor_list.sql"}
+    ]
+}
+
+*/
+
+#if(($request.QueryParam("vendorID") != ""))
+    ${router.RedirectTo("/vendors/" +  $request.QueryParam("vendorID"))}
+#end

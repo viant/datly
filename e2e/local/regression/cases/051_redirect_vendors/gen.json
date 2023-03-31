@@ -1,0 +1,5 @@
+{
+  "Name": "$tagId",
+  "URL": "$path/redirect_vendor_list.sql",
+  "Args": "--routerConfig='$path/router.vm'"
+}

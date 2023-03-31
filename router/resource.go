@@ -26,8 +26,7 @@ import (
 
 type (
 	Resource struct {
-		initialised  bool
-		APIURI       string
+		URL          string `json:",omitempty" yaml:",omitempty"`
 		MetaCacheURI string
 		SourceURL    string
 		With         []string //list of resource to inherit from
@@ -45,9 +44,13 @@ type (
 		Info             openapi3.Info
 		ColumnsDiscovery bool
 		EnableDebug      *bool
-		_visitors        config.CodecsRegistry
-		cfs              afs.Service
-		Resource         *view.Resource
+		Interceptor      *RouteInterceptor
+
+		_visitors    config.CodecsRegistry
+		_initialised bool
+
+		cfs      afs.Service
+		Resource *view.Resource
 	}
 
 	Logger struct {
@@ -92,7 +95,7 @@ func (r *Redirect) Apply(ctx context.Context, viewName string, payload PayloadRe
 }
 
 func (r *Resource) Init(ctx context.Context) error {
-	if r.initialised {
+	if r._initialised {
 		return nil
 	}
 
@@ -109,7 +112,7 @@ func (r *Resource) Init(ctx context.Context) error {
 		route.Transforms, transforms[route.View.Ref] = r.filterTransforms(route)
 	}
 
-	r.initialised = true
+	r._initialised = true
 
 	var columnCacheExists bool
 	if r.ColumnsDiscovery {

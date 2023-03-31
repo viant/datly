@@ -271,7 +271,7 @@ func (b *stmtBuilder) appendIndex(def *inputMetadata, aMeta *fieldMeta) (string,
 	return indexName, aFieldName
 }
 
-func (s *Builder) buildInputMetadata(ctx context.Context, sourceSQL []byte, httpMethod string) (*option.RouteConfig, *viewConfig, *inputMetadata, error) {
+func (s *Builder) buildInputMetadata(ctx context.Context, builder *routeBuilder, sourceSQL []byte, httpMethod string) (*option.RouteConfig, *viewConfig, *inputMetadata, error) {
 	hint, SQL := s.extractRouteSettings(sourceSQL)
 
 	routeOption := &option.RouteConfig{Method: httpMethod}
@@ -281,7 +281,7 @@ func (s *Builder) buildInputMetadata(ctx context.Context, sourceSQL []byte, http
 
 	paramIndex := NewParametersIndex(routeOption, map[string]*sanitize.ParameterHint{})
 
-	configurer, err := NewConfigProviderReader("", SQL, routeOption, router.ReaderServiceType, paramIndex, &s.options.Prepare, &s.options.Connector)
+	configurer, err := NewConfigProviderReader("", SQL, routeOption, router.ReaderServiceType, paramIndex, &s.options.Prepare, &s.options.Connector, builder)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -827,7 +827,7 @@ func (b *patchStmtBuilder) generateIndexes() ([]*indexChecker, error) {
 	return checkers, err
 }
 
-func (s *Builder) prepareStringBuilder(typeDef *inputMetadata, config *viewConfig, routeOption *option.RouteConfig) (*strings.Builder, error) {
+func (s *Builder) prepareStringBuilder(routeBuilder *routeBuilder, typeDef *inputMetadata, config *viewConfig, routeOption *option.RouteConfig) (*strings.Builder, error) {
 	sb := &strings.Builder{}
 	typeName := typeDef.typeDef.Name
 
@@ -836,18 +836,18 @@ func (s *Builder) prepareStringBuilder(typeDef *inputMetadata, config *viewConfi
 		return nil, err
 	}
 
-	if err = s.uploadGoType(typeName, paramType, routeOption, config); err != nil {
+	if err = s.uploadGoType(routeBuilder, typeName, paramType, routeOption, config); err != nil {
 		return nil, err
 	}
 
-	if err = s.appendMetadata(typeDef.paramName, routeOption, typeName, typeDef, sb); err != nil {
+	if err = s.appendMetadata(routeBuilder, typeDef.paramName, routeOption, typeName, typeDef, sb); err != nil {
 		return nil, err
 	}
 
 	return sb, nil
 }
 
-func (s *Builder) appendMetadata(paramName string, routeOption *option.RouteConfig, typeName string, typeDef *inputMetadata, sb *strings.Builder) error {
+func (s *Builder) appendMetadata(builder *routeBuilder, paramName string, routeOption *option.RouteConfig, typeName string, typeDef *inputMetadata, sb *strings.Builder) error {
 	routeOption.ResponseBody = &option.ResponseBodyConfig{
 		From: paramName,
 	}
@@ -869,7 +869,7 @@ func (s *Builder) appendMetadata(paramName string, routeOption *option.RouteConf
 	if len(requiredTypes) > 0 {
 		sb.WriteString("\nimport (")
 		for _, requiredType := range requiredTypes {
-			URL := s.goURL("")
+			URL := builder.session.GoFileURL("")
 			if ext := path.Ext(URL); ext != "" {
 				URL = path.Dir(URL)
 			}
@@ -895,8 +895,9 @@ func (s *Builder) extractRouteSettings(sourceSQL []byte) (string, string) {
 	return hint, SQL
 }
 
-func (s *Builder) uploadGoType(name string, rType reflect.Type, routeOption *option.RouteConfig, config *viewConfig) error {
-	goURL := s.goURL(name)
+func (s *Builder) uploadGoType(builder *routeBuilder, name string, rType reflect.Type, routeOption *option.RouteConfig, config *viewConfig) error {
+	goURL := builder.session.GoFileURL(s.fileNames.unique(name)) + ".go"
+
 	modulePath, isXDatly := s.IsPluginBundle(goURL)
 
 	content, err := s.generateGoFileContent(name, rType, routeOption, config, modulePath, routeOption.Package)
@@ -904,7 +905,7 @@ func (s *Builder) uploadGoType(name string, rType reflect.Type, routeOption *opt
 		return err
 	}
 
-	if _, err = s.upload(goURL, string(content)); err != nil {
+	if _, err = s.upload(builder, goURL, string(content)); err != nil {
 		return err
 	}
 
@@ -917,7 +918,7 @@ func (s *Builder) uploadGoType(name string, rType reflect.Type, routeOption *opt
 	sampleValue := getStruct(rType)
 	sample := sampleValue.Interface()
 	if data, err := json.Marshal(sample); err == nil {
-		_, _ = s.uploadRuleFile(s.options.DSQLOutput, name+"Post", string(data), ".json", true)
+		_, _ = s.upload(builder, builder.session.SampleFileURL(name+"Post")+".json", string(data))
 	}
 
 	return nil

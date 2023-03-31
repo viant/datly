@@ -54,26 +54,26 @@ type (
 	}
 )
 
-func (s *Builder) preparePostRule(ctx context.Context, sourceSQL []byte) (string, error) {
-	routeOption, aConfig, paramType, err := s.buildInputMetadata(ctx, sourceSQL, http.MethodPost)
+func (s *Builder) preparePostRule(ctx context.Context, builder *routeBuilder, sourceSQL []byte) (string, error) {
+	routeOption, aConfig, paramType, err := s.buildInputMetadata(ctx, builder, sourceSQL, http.MethodPost)
 	if err != nil {
 		return "", err
 	}
 
-	template, err := s.buildInsertSQL(paramType, aConfig, routeOption)
+	template, err := s.buildInsertSQL(builder, paramType, aConfig, routeOption)
 	if err != nil {
 		return "", err
 	}
 
-	if _, err = s.upload(s.preGenSQLURL(s.fileNames.unique(aConfig.fileName)), template); err != nil {
+	if _, err = s.upload(builder, builder.session.TemplateURL(s.fileNames.unique(aConfig.fileName))+".sql", template); err != nil {
 		return "", nil
 	}
 
 	return template, nil
 }
 
-func (s *Builder) buildInsertSQL(typeDef *inputMetadata, config *viewConfig, routeOption *option.RouteConfig) (string, error) {
-	sb, err := s.prepareStringBuilder(typeDef, config, routeOption)
+func (s *Builder) buildInsertSQL(aRouteBuilder *routeBuilder, typeDef *inputMetadata, config *viewConfig, routeOption *option.RouteConfig) (string, error) {
+	sb, err := s.prepareStringBuilder(aRouteBuilder, typeDef, config, routeOption)
 	if err != nil {
 		return "", err
 	}
