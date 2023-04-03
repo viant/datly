@@ -25,6 +25,10 @@ func NewNotifier(URL string, fs afs.Service, syncTime time.Duration) *Tracker {
 }
 
 func (t *Tracker) Notify(ctx context.Context, fs afs.Service, callback func(URL string, operation resource.Operation)) error {
+	if t.url == "" {
+		return nil
+	}
+
 	exists, err := fs.Exists(ctx, t.url)
 	if !exists || err != nil {
 		for key := range t.assets {

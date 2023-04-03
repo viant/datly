@@ -66,7 +66,7 @@ func (s *Builder) build() (*standalone.Server, error) {
 	}
 
 	if len(s.options.WarmupURIs) > 0 {
-		fmt.Printf("starting cache warmup for: %v\n", s.options.WarmupURIs)
+		fmt.Printf("[INFO] starting cache warmup for: %v\n", s.options.WarmupURIs)
 		response := warmup.PreCache(srv.Service.PreCachables, s.options.WarmupURIs...)
 		data, _ := json.Marshal(response)
 		fmt.Printf("%s\n", data)
