@@ -25,6 +25,7 @@ import (
 	"github.com/viant/velty/parser"
 	"github.com/viant/xreflect"
 	"go/ast"
+	goFormat "go/format"
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
@@ -45,7 +46,7 @@ type (
 		viewNames  *uniqueIndex
 		types      *uniqueIndex
 		plugins    []*pluginGenDeta
-		bundles    map[string]string
+		bundles    map[string]*bundleMetadata
 		logs       []string
 	}
 
@@ -1631,6 +1632,42 @@ func (s *Builder) flushLogs(logger io.Writer) {
 	for _, log := range s.logs {
 		_, _ = logger.Write([]byte(log))
 	}
+}
+
+func (s *Builder) ensureSideefectsImports(bundle *bundleMetadata) error {
+	packageName := bundle.moduleName
+	if asBase := path.Base(packageName); len(asBase) <= 2 {
+		packageName = asBase
+	}
+
+	source := fmt.Sprintf(`
+			package %v
+			
+			import (
+				_ "%v"
+			)
+`, packageName, bundle.moduleName+"/"+importsDirectory)
+
+	asBytes, err := goFormat.Source([]byte(source))
+	if err != nil {
+		return err
+	}
+
+	return s.fs.Upload(context.Background(), path.Join(bundle.url, fileSideefectsImports+".go"), file.DefaultFileOsMode, bytes.NewReader(asBytes))
+
+}
+
+func (s *Builder) ensureChecksum(bundle *bundleMetadata) error {
+	checksumPath := path.Join(bundle.url, checksumDirectory)
+	if ok, _ := s.fs.Exists(context.Background(), checksumPath); ok {
+		return nil
+	}
+
+	if err := s.fs.Create(context.Background(), checksumPath, file.DefaultDirOsMode, true); err != nil {
+		return err
+	}
+
+	return s.updateLastGenPluginMeta(bundle, TimeNow())
 }
 
 func combineURLs(basePath string, segments ...string) string {
