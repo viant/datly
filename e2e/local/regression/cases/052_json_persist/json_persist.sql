@@ -5,8 +5,8 @@ import (
 )
 
 #set($_ = $Preference<*Preference>(body/))
-
+#set($objectJSON = $json.Marshal($Unsafe.Preference.Object))
 
 UPDATE OBJECTS SET
-   OBJECT = '$json.Marshal($Unsafe.Preference.Object)'
+   OBJECT = $objectJSON
 WHERE ID = $Preference.Id

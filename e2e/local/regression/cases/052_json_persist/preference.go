@@ -18,11 +18,4 @@ type Foo struct {
 	Id    int
 	Name  string
 	Price float64
-	Has   *FooFoo `presenceIndex:"true" typeName:"PreferenceHas" json:"-" sqlx:"presence=true"`
-}
-
-type FooFoo struct {
-	Id    bool
-	Name  bool
-	Price bool
 }
