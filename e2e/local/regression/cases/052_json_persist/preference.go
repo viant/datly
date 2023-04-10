@@ -1,0 +1,28 @@
+package _48_custom_unmarshall_velty
+
+var PackageName = "preference"
+
+type Preference struct {
+	Id     int            `sqlx:"name=ID,autoincrement,primaryKey,required"`
+	Object *Foo           `sqlx:"name=OBJECT" json:",omitempty"`
+	Has    *PreferenceHas `presenceIndex:"true" typeName:"PreferenceHas" json:"-" sqlx:"presence=true"`
+}
+
+type PreferenceHas struct {
+	Id        bool
+	Object    bool
+	ClassName bool
+}
+
+type Foo struct {
+	Id    int
+	Name  string
+	Price float64
+	Has   *FooFoo `presenceIndex:"true" typeName:"PreferenceHas" json:"-" sqlx:"presence=true"`
+}
+
+type FooFoo struct {
+	Id    bool
+	Name  bool
+	Price bool
+}
