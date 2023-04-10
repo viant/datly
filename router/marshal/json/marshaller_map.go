@@ -51,7 +51,84 @@ func newMapMarshaller(rType reflect.Type, config _default.Default, path string, 
 }
 
 func (m *mapMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
+	aMap := reflect.New(m.xType.Type()).Elem().Interface()
+
+	var unMarshaller gojay.UnmarshalerJSONObject
+
+	switch aMap.(type) {
+	case map[string]int:
+		*(*map[string]int)(pointer) = make(map[string]int)
+		actual := *(*map[string]int)(pointer)
+		unMarshaller = &mapStringIntUnmarshaler{actual}
+	case map[string]float64:
+		*(*map[string]float64)(pointer) = make(map[string]float64)
+		actual := *(*map[string]float64)(pointer)
+
+		unMarshaller = &mapStringFloatUnmarshaler{actual}
+	case map[string]string:
+		*(*map[string]string)(pointer) = make(map[string]string)
+		actual := *(*map[string]string)(pointer)
+		unMarshaller = &mapStringStringUnmarshaler{actual}
+	}
+
+	if unMarshaller != nil {
+		return decoder.AddObject(unMarshaller)
+	}
 	return fmt.Errorf("unsupported unmarshall to map type, yet")
+}
+
+type mapStringIntUnmarshaler struct {
+	aMap map[string]int
+}
+
+func (m *mapStringIntUnmarshaler) UnmarshalJSONObject(dec *gojay.Decoder, key string) error {
+	value := 0
+	err := dec.Int(&value)
+	if err != nil {
+		return err
+	}
+	m.aMap[key] = value
+	return nil
+}
+
+func (m *mapStringIntUnmarshaler) NKeys() int {
+	return len(m.aMap)
+}
+
+type mapStringFloatUnmarshaler struct {
+	aMap map[string]float64
+}
+
+func (m *mapStringFloatUnmarshaler) UnmarshalJSONObject(dec *gojay.Decoder, key string) error {
+	value := 0.0
+	err := dec.Float64(&value)
+	if err != nil {
+		return err
+	}
+	m.aMap[key] = value
+	return nil
+}
+
+func (m *mapStringFloatUnmarshaler) NKeys() int {
+	return len(m.aMap)
+}
+
+type mapStringStringUnmarshaler struct {
+	aMap map[string]string
+}
+
+func (m *mapStringStringUnmarshaler) UnmarshalJSONObject(dec *gojay.Decoder, key string) error {
+	value := ""
+	err := dec.String(&value)
+	if err != nil {
+		return err
+	}
+	m.aMap[key] = value
+	return nil
+}
+
+func (m mapStringStringUnmarshaler) NKeys() int {
+	return len(m.aMap)
 }
 
 func (m *mapMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
@@ -70,9 +147,6 @@ func (m *mapMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) 
 
 	counter := 0
 	iterator := aMap.MapRange()
-	if !m.isEmbedded {
-		sb.WriteString("{")
-	}
 
 	for iterator.Next() {
 		if counter > 0 {

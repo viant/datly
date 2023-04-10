@@ -13,6 +13,9 @@ pipeline:
             Id: 1
             Name: Foo
             Price: 125.5
+            Info:
+              k1: 2
+              K2: 3
         Expect:
           Code: 200
           JSONBody: $LoadJSON('${parentPath}/expect.json')

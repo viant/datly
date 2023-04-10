@@ -18,4 +18,5 @@ type Foo struct {
 	Id    int
 	Name  string
 	Price float64
+	Info  map[string]int
 }

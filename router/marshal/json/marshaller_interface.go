@@ -41,7 +41,6 @@ func asInterface(xType *xunsafe.Type, pointer unsafe.Pointer) interface{} {
 	if xType.Kind() == reflect.Interface {
 		return xunsafe.AsInterface(pointer)
 	}
-
 	return xType.Interface(pointer)
 }
 
