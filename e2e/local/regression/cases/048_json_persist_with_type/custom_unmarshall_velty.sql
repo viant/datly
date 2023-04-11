@@ -1,8 +1,8 @@
 /* {"URI":"custom-unmarshall-velty","Method":"PUT","ResponseBody":{"From":"Preference"}} */
 
 import (
-	"regression/cases/048_json_persist.Preference"
-	"regression/cases/048_json_persist.Foo" as "com.class.abc.Foo"
+	"regression/cases/048_json_persist_with_type.Preference"
+	"regression/cases/048_json_persist_with_type.Foo" as "com.class.abc.Foo"
 )
 
 #set($_ = $Preference<*Preference>(body/))
