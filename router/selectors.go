@@ -692,6 +692,8 @@ func (b *selectorsBuilder) paramViewValue(param *view.Parameter, value reflect.V
 	}
 
 	switch paramLen {
+	case 0:
+		return reflect.New(aSlice.Type.Elem()).Elem().Interface(), nil
 	case 1:
 		return aSlice.ValuePointerAt(ptr, 0), nil
 	default:
