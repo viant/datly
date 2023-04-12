@@ -11,9 +11,10 @@ var Types = map[string]reflect.Type{
 }
 
 type Preference struct {
-	Id     int            `sqlx:"name=ID,autoincrement,primaryKey,required"`
-	Object interface{}    `sqlx:"name=OBJECT" json:",omitempty"`
-	Has    *PreferenceHas `presenceIndex:"true" typeName:"PreferenceHas" json:"-" sqlx:"presence=true"`
+	Id        int            `sqlx:"name=ID,autoincrement,primaryKey,required"`
+	Object    interface{}    `sqlx:"name=OBJECT" json:",omitempty"`
+	ClassName string         `sqlx:"name=CLASS_NAME" `
+	Has       *PreferenceHas `presenceIndex:"true" typeName:"PreferenceHas" json:"-" sqlx:"presence=true"`
 }
 
 type PreferenceHas struct {
