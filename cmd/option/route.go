@@ -7,6 +7,7 @@ import (
 
 type (
 	RouteConfig struct {
+		Async            *AsyncConfig              `json:",omitempty"`
 		URI              string                    `json:",omitempty"`
 		ConstFileURL     string                    `json:",omitempty"`
 		Cache            *view.Cache               `json:",omitempty"`

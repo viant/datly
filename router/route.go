@@ -52,6 +52,7 @@ const (
 type (
 	Routes []*Route
 	Route  struct {
+		Async            *Async `json:",omitempty" yaml:",omitempty"`
 		Visitor          *Fetcher
 		URI              string
 		APIKey           *APIKey
@@ -295,6 +296,10 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 
 	if r.APIKey != nil {
 		r._apiKeys = append(r._apiKeys, r.APIKey)
+	}
+
+	if err := r.initAsyncIfNeeded(ctx); err != nil {
+		return err
 	}
 
 	return nil
@@ -920,4 +925,12 @@ func (r *Route) initTransforms(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (r *Route) initAsyncIfNeeded(ctx context.Context) error {
+	if r.Async == nil {
+		return nil
+	}
+
+	return r.Async.Init(ctx, r._resource)
 }

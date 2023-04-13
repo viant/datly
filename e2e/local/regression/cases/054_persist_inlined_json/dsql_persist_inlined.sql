@@ -1,4 +1,4 @@
-/* {"URI":"dsql-persist","Method":"PUT","ResponseBody":{"From":"Preference"}} */
+/* {"URI":"dsql-persist-inlined","Method":"PUT","ResponseBody":{"From":"Preference"}} */
 
 import (
     "regression/cases/054_persist_inlined_json.Preference"

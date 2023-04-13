@@ -25,7 +25,7 @@ pipeline:
         commands:
           - pwd
           - cd ${appPath}/e2e/local
-          - /tmp/datly -N=${rule.Name} -X=${rule.URL} -w=autogen -C='dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev${qMark}parseTime=true' -C='dyndb|dynamodb|dynamodb://localhost:8000/us-west-1${qMark}key=dummy&secret=dummy'  -j='${appPath}/e2e/local/jwt/public.enc|blowfish://default' -m='${appPath}/e2e/local/jwt/hmac.enc|blowfish://default'     ${rule.Args}
+          - /tmp/datly -N=${rule.Name} -X=${rule.URL} -w=autogen -C='dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev${qMark}parseTime=true' -C='dyndb|dynamodb|dynamodb://localhost:8000/us-west-1${qMark}key=dummy&secret=dummy'  -j='${appPath}/e2e/local/jwt/public.enc|blowfish://default' -m='${appPath}/e2e/local/jwt/hmac.enc|blowfish://default' --partialConfig='${appPath}/e2e/local/regression/partial_config.json'  ${rule.Args}
 
     increment:
       action: nop

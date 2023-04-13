@@ -1,0 +1,16 @@
+{
+  "APIKeys": [
+    {
+      "URI": "/v1/api/ws/secured",
+      "Value": "changeme",
+      "Header": "App-Secret-Id",
+      "Secret": null
+    },
+    {
+      "URI": "/v1/api/dev/secured",
+      "Value": "changeme",
+      "Header": "App-Secret-Id",
+      "Secret": null
+    }
+  ]
+}

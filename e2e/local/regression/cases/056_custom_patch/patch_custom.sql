@@ -1,4 +1,4 @@
-/* {"URI":"basic/foos-many-many-custom","Method":"PATCH","ResponseBody":{"From":"Foos"}} */
+/* {"URI":"basic/patch-custom","Method":"PATCH","ResponseBody":{"From":"Foos"}} */
 
 import (
 	"regression/cases/056_custom_patch.Foos"

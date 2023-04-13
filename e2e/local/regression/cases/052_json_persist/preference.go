@@ -9,9 +9,8 @@ type Preference struct {
 }
 
 type PreferenceHas struct {
-	Id        bool
-	Object    bool
-	ClassName bool
+	Id     bool
+	Object bool
 }
 
 type Foo struct {

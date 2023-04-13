@@ -6,7 +6,7 @@ pipeline:
     action: http/runner:send
     requests:
       - Method: PATCH
-        URL: http://127.0.0.1:8080/v1/api/dev/basic/foos-many-many-custom
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/patch-types
         JsonBody:
           - ID: 10
             Quantity: 5000

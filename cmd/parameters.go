@@ -121,7 +121,9 @@ func (p *ParametersIndex) ParamsMetaWithHint(paramName string, hint *sanitize.Pa
 		parameter.Kind = string(view.KindParam)
 	} else if isSQLLikeCodec(parameter.Codec) {
 		parameter.SQL = SQL
-		if !strings.Contains(SQL, " LIMIT ") {
+
+		sqlUpperCased := strings.ToUpper(SQL)
+		if !strings.Contains(sqlUpperCased, " LIMIT ") && strings.Contains(sqlUpperCased, "ARRAY_AGG") {
 			parameter.SQL += " LIMIT 1"
 		}
 		parameter.SQLCodec = true

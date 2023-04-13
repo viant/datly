@@ -6,7 +6,7 @@ pipeline:
     action: http/runner:send
     requests:
       - Method: PUT
-        URL: http://127.0.0.1:8080/v1/api/dev/dsql-persist
+        URL: http://127.0.0.1:8080/v1/api/dev/dsql-persist-inlined
         JSONBody:
           Id: 999
           Object:

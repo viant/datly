@@ -603,6 +603,21 @@ func (s *Builder) initRoute(builder *routeBuilder) error {
 	}
 
 	builder.paramsIndex.AddUriParams(extractURIParams(builder.route.URI))
+	if async := builder.option.Async; async != nil {
+		ref, err := s.ConnectorRef(async.Connector)
+		if err != nil {
+			return err
+		}
+
+		builder.route.Async = &router.Async{
+			TableName:     async.TableName,
+			EnsureDBTable: async.EnsureTable == nil || *async.EnsureTable,
+			Connector:     ref,
+			Qualifier:     async.Qualifier,
+			ExpiryTimeInS: async.ExpiryTimeInS,
+		}
+	}
+
 	return s.buildRouterOutput(builder)
 }
 

@@ -4,15 +4,14 @@ type (
 	ContextMetadata struct {
 		ContextName string
 		Metadata    interface{}
-	}
-
-	FunctionMetadata struct {
+		UnexpandRaw bool
 	}
 )
 
-func NewContextMetadata(name string, metadata interface{}) *ContextMetadata {
+func NewContextMetadata(name string, metadata interface{}, unexpandRaw bool) *ContextMetadata {
 	return &ContextMetadata{
 		ContextName: name,
 		Metadata:    metadata,
+		UnexpandRaw: unexpandRaw,
 	}
 }

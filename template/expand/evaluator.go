@@ -136,6 +136,7 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 	state = e.ensureState(state, viewParam, parentParam, goValidator)
 
 	externalParams, presenceMap = e.updateConsts(externalParams, presenceMap)
+
 	if externalParams != nil && e.supportsParams {
 		if err := state.SetValue(keywords.ParamsKey, externalParams); err != nil {
 			return nil, err

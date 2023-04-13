@@ -2,10 +2,12 @@ package router
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/datly/converter"
+	"github.com/viant/datly/view"
 	"github.com/viant/toolbox"
 	"io"
 	"net/http"
@@ -249,4 +251,22 @@ func wrapJSONSyntaxErrorIfNeeded(err error, buff []byte) error {
 	}
 
 	return fmt.Errorf("json syntax error at position %d: %w:\n%s", syntaxErr.Offset, err, buffer.String())
+}
+
+func (p *RequestParams) ExtractHttpParam(ctx context.Context, param *view.Parameter, options ...interface{}) (interface{}, error) {
+	switch param.In.Kind {
+	case view.KindPath:
+		return p.convertAndTransform(ctx, p.pathVariable(param.In.Name, ""), param, options...)
+	case view.KindQuery:
+		return p.convertAndTransform(ctx, p.queryParam(param.In.Name, ""), param, options...)
+	case view.KindRequestBody:
+		return p.RequestBody()
+
+	case view.KindHeader:
+		return p.convertAndTransform(ctx, p.header(param.In.Name), param, options...)
+	case view.KindCookie:
+		return p.convertAndTransform(ctx, p.cookie(param.In.Name), param, options...)
+	}
+
+	return nil, fmt.Errorf("unsupported param kind %v", param.In.Kind)
 }

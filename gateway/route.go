@@ -3,6 +3,7 @@ package gateway
 import (
 	"encoding/json"
 	"github.com/viant/datly/router"
+	"github.com/viant/toolbox"
 	"net/http"
 	"path"
 	"strings"
@@ -31,6 +32,8 @@ type (
 )
 
 func (r *Route) Handle(res http.ResponseWriter, req *http.Request) {
+	toolbox.Dump(r.ApiKeys)
+
 	if !r.CanHandle(req) {
 		write(res, http.StatusForbidden, nil)
 		return

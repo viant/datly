@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	goJson "encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/config"
@@ -24,6 +25,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 )
 
@@ -314,17 +316,14 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 			return
 		}
 
-		cacheEntry, err := r.cacheEntry(ctx, session)
+		payloadReader, err := r.payloadReader(ctx, session, route)
 		if err != nil {
-			r.writeErr(session.Response, session.Route, err, http.StatusInternalServerError)
-		}
-
-		if cacheEntry != nil && cacheEntry.Has() {
-			r.writeResponse(ctx, session, cacheEntry)
+			code, _ := httputils.BuildErrorResponse(err)
+			r.writeErr(response, route, err, code)
 			return
 		}
 
-		r.writeResponseWithErrorHandler(ctx, session, cacheEntry)
+		r.writeResponse(ctx, session, payloadReader)
 	}
 }
 
@@ -360,39 +359,32 @@ func UnsupportedFormatErr(format string) error {
 	return fmt.Errorf("unsupported output format %v", format)
 }
 
-func (r *Router) writeResponseWithErrorHandler(ctx context.Context, session *ReaderSession, cacheEntry *cache.Entry) {
-	httpCode, err := r.readAndWriteResponse(ctx, session, cacheEntry)
-	if err != nil {
-		r.writeErr(session.Response, session.Route, err, httpCode)
-	}
-}
-
-func (r *Router) readAndWriteResponse(ctx context.Context, session *ReaderSession, entry *cache.Entry) (statusCode int, err error) {
+func (r *Router) readResponse(ctx context.Context, session *ReaderSession) (PayloadReader, error) {
 	rValue, viewMeta, readerStats, err := r.readValue(session)
 
 	if err != nil {
-		return http.StatusInternalServerError, err
+		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
 	}
 
 	if !r.runAfterFetchIfNeeded(session, rValue.Interface()) {
-		return -1, nil
+		return nil, nil
 	}
 
 	resultMarshalled, statusCode, err := r.marshalResult(session, rValue, viewMeta, readerStats)
 	if err != nil {
-		return statusCode, err
+		return nil, httputils.NewHttpMessageError(statusCode, err)
 	}
 
 	payloadReader, err := r.compressIfNeeded(resultMarshalled, session.Route)
 	if err != nil {
-		return http.StatusInternalServerError, err
+		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
 	}
 
 	templateMeta := session.Route.View.Template.Meta
 	if templateMeta != nil && templateMeta.Kind == view.MetaTypeHeader && viewMeta != nil {
 		data, err := goJson.Marshal(viewMeta)
 		if err != nil {
-			return http.StatusInternalServerError, err
+			return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
 		}
 
 		payloadReader.AddHeader(templateMeta.Name, string(data))
@@ -403,15 +395,11 @@ func (r *Router) readAndWriteResponse(ctx context.Context, session *ReaderSessio
 		if err != nil {
 			continue
 		}
+
 		payloadReader.AddHeader(DatlyResponseHeaderMetrics+"-"+stat.Name(), string(marshal))
 	}
 
-	if entry != nil {
-		r.updateCache(ctx, session.Route, entry, payloadReader)
-	}
-
-	r.writeResponse(ctx, session, payloadReader)
-	return -1, nil
+	return payloadReader, nil
 }
 
 func (r *Router) readValue(readerSession *ReaderSession) (reflect.Value, interface{}, []*reader.Info, error) {
@@ -439,7 +427,7 @@ func (r *Router) readValue(readerSession *ReaderSession) (reflect.Value, interfa
 	return destValue, session.ViewMeta, readerStats, nil
 }
 
-func (r *Router) updateCache(ctx context.Context, route *Route, cacheEntry *cache.Entry, response *RequestDataReader) {
+func (r *Router) updateCache(ctx context.Context, route *Route, cacheEntry *cache.Entry, response PayloadReader) {
 	if !debugEnabled {
 		go r.putCache(ctx, route, cacheEntry, response)
 		return
@@ -461,8 +449,11 @@ func (r *Router) cacheEntry(ctx context.Context, session *ReaderSession) (*cache
 	return cacheEntry, nil
 }
 
-func (r *Router) putCache(ctx context.Context, route *Route, cacheEntry *cache.Entry, payloadReader *RequestDataReader) {
-	_ = route.Cache.Put(ctx, cacheEntry, payloadReader.buffer.Bytes(), payloadReader.CompressionType(), payloadReader.Headers())
+func (r *Router) putCache(ctx context.Context, route *Route, cacheEntry *cache.Entry, payloadReader PayloadReader) {
+	data, err := io.ReadAll(payloadReader)
+	if err == nil {
+		_ = route.Cache.Put(ctx, cacheEntry, data, payloadReader.CompressionType(), payloadReader.Headers())
+	}
 }
 
 func (r *Router) runBeforeFetchIfNeeded(response http.ResponseWriter, request *http.Request, route *Route) (shouldContinue bool) {
@@ -1018,6 +1009,126 @@ func (r *Router) Interceptor() (*RouteInterceptor, bool) {
 
 func (r *Router) Resource() *Resource {
 	return r.resource
+}
+
+func (r *Router) payloadReader(ctx context.Context, session *ReaderSession, route *Route) (PayloadReader, error) {
+	if route.Async != nil {
+		return r.readAsyncResponse(ctx, session)
+	}
+
+	return r.readSyncResponse(ctx, session)
+}
+
+func (r *Router) readSyncResponse(ctx context.Context, session *ReaderSession) (PayloadReader, error) {
+	cacheEntry, err := r.cacheEntry(ctx, session)
+	if err != nil {
+		r.writeErr(session.Response, session.Route, err, http.StatusInternalServerError)
+	}
+
+	if cacheEntry != nil && cacheEntry.Has() {
+		return cacheEntry, nil
+	}
+
+	response, err := r.readResponse(ctx, session)
+	if err != nil {
+		return nil, err
+	}
+
+	if cacheEntry != nil {
+		r.updateCache(ctx, session.Route, cacheEntry, response)
+	}
+
+	return response, err
+}
+
+func (r *Router) readAsyncResponse(ctx context.Context, session *ReaderSession) (PayloadReader, error) {
+	async := session.Route.Async
+	var qualifierValue *string
+
+	if asyncQualifier := async._qualifier; asyncQualifier != nil && asyncQualifier.parameter != nil {
+		value, err := session.RequestParams.ExtractHttpParam(ctx, asyncQualifier.parameter)
+		if err != nil {
+			return nil, err
+		}
+
+		if asyncQualifier.accessor != nil {
+			value, err = asyncQualifier.accessor.Value(value)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		marshal, err := goJson.Marshal(value)
+		if err != nil {
+			return nil, err
+		}
+
+		asString := string(marshal)
+		qualifierValue = &asString
+	}
+
+	record := &AsyncRecord{
+		CreationTime: time.Now(),
+		JobID:        uuid.New().String(),
+		Qualifier:    qualifierValue,
+		State:        AsyncStateRunning,
+	}
+
+	if _, _, err := async._inserter.Exec(ctx, record); err != nil {
+		return nil, err
+	}
+
+	payloadReader, err := r.marshalAsyncRecord(session, record)
+	if err != nil {
+		return nil, err
+	}
+
+	go r.readAsync(ctx, session, record)
+
+	return payloadReader, nil
+}
+
+func (r *Router) marshalAsyncRecord(session *ReaderSession, record *AsyncRecord) (PayloadReader, error) {
+	marshal, err := session.Route.JSON._marshaller.Marshal(record)
+	if err != nil {
+		return nil, err
+	}
+
+	payloadReader, err := r.compressIfNeeded(marshal, session.Route)
+	if err != nil {
+		return nil, err
+	}
+
+	return payloadReader, nil
+}
+
+func (r *Router) readAsync(ctx context.Context, session *ReaderSession, record *AsyncRecord) {
+	response, err := r.readSyncResponse(ctx, session)
+	if err != nil {
+		_, message, object := normalizeErr(err, 400)
+		if object != nil {
+			marshal, _ := session.Route.JSON._marshaller.Marshal(object)
+			asString := string(marshal)
+			record.Error = &asString
+		} else {
+			record.Error = &message
+		}
+	} else {
+		data, err := io.ReadAll(response)
+		if err != nil {
+			message := err.Error()
+			record.Error = &message
+		} else {
+			result := string(data)
+			record.Value = &result
+		}
+	}
+
+	record.State = AsyncStateDone
+	async := session.Route.Async
+	if _, err = async._updater.Exec(ctx, record); err != nil {
+		fmt.Printf("[ERROR] error when trying to update async record: %v\n", err.Error())
+	}
 }
 
 func updateFieldPathsIfNeeded(filter *json.FilterEntry) {

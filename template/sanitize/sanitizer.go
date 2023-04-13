@@ -8,32 +8,85 @@ import (
 )
 
 func Sanitize(SQL string, hints map[string]*ParameterHint, consts map[string]interface{}) string {
-	iterator := NewIterator(SQL, hints, consts)
+	iterator := NewIterator(SQL, hints, consts, true)
 	offset := 0
 
 	modifiable := []byte(SQL)
-	for iterator.Has() {
-		paramMeta := iterator.Next()
-		if paramMeta.IsVariable && (paramMeta.OccurrenceIndex == 0 && paramMeta.Context == SetContext) {
-			continue
+	var paramsBuffer []*ParamMeta
+	for {
+		next, ok := popNextParamMeta(&paramsBuffer, iterator)
+		if !ok {
+			break
 		}
 
-		paramName, hadBrackets := unwrapBrackets(paramMeta.FullName)
-		sanitized := sanitizeParameter(paramMeta.Context, paramMeta.Prefix, paramMeta.Holder, paramName, iterator.assignedVars, iterator.consts)
-
-		if hadBrackets {
-			sanitized = strings.Replace(sanitized, "$", "${", 1) + "}"
-		}
-
-		if sanitized == paramMeta.FullName {
-			continue
-		}
-
-		modifiable = append(modifiable[:offset+paramMeta.Start], bytes.Replace(modifiable[paramMeta.Start+offset:], []byte(paramMeta.FullName), []byte(sanitized), 1)...)
-		offset += len(sanitized) - len(paramMeta.FullName)
+		modifiable, offset = sanitize(iterator, &paramsBuffer, next, modifiable, offset, 0)
 	}
 
-	return string(modifiable)
+	return strings.TrimSpace(string(modifiable))
+}
+
+func popNextParamMeta(buffer *[]*ParamMeta, iterator *ParamMetaIterator) (*ParamMeta, bool) {
+	if len(*buffer) > 0 {
+		actual := (*buffer)[0]
+		*buffer = (*buffer)[1:]
+		return actual, true
+	}
+
+	has := iterator.Has()
+	if has {
+		return iterator.Next(), true
+	}
+
+	return nil, false
+}
+
+func sanitize(iterator *ParamMetaIterator, paramsBuffer *[]*ParamMeta, paramMeta *ParamMeta, dst []byte, accumulatedOffset int, cursorOffset int) ([]byte, int) {
+	if paramMeta.IsVariable && (paramMeta.OccurrenceIndex == 0 && paramMeta.Context == SetContext) {
+		return dst, accumulatedOffset
+	}
+
+	paramExpression, hadBrackets := unwrapBrackets(paramMeta.FullName)
+	paramExpression = sanitizeContent(iterator, paramsBuffer, paramMeta, paramExpression)
+	sanitized := sanitizeParameter(paramMeta, paramExpression, iterator, dst, accumulatedOffset)
+
+	if hadBrackets {
+		sanitized = strings.Replace(sanitized, "$", "${", 1) + "}"
+	}
+
+	if sanitized == paramMeta.FullName {
+		return dst, accumulatedOffset
+	}
+
+	start := paramMeta.Start - cursorOffset
+	dst = append(dst[:accumulatedOffset+start], bytes.Replace(dst[start+accumulatedOffset:], []byte(paramMeta.FullName), []byte(sanitized), 1)...)
+	accumulatedOffset += len(sanitized) - len(paramMeta.FullName)
+	return dst, accumulatedOffset
+}
+
+func sanitizeContent(iterator *ParamMetaIterator, buffer *[]*ParamMeta, meta *ParamMeta, expression string) string {
+	var argsParams []*ParamMeta
+
+	for iterator.Has() {
+		next := iterator.Next()
+		if next.Start < meta.End {
+			argsParams = append(argsParams, next)
+		} else {
+			*buffer = append(*buffer, next)
+			break
+		}
+	}
+
+	if len(argsParams) == 0 {
+		return expression
+	}
+
+	asBytes := []byte(expression)
+	offset := 0
+	for _, argParam := range argsParams {
+		asBytes, offset = sanitize(iterator, buffer, argParam, asBytes, offset, meta.Start)
+	}
+
+	return string(asBytes)
 }
 
 func unwrapBrackets(name string) (string, bool) {
@@ -44,7 +97,14 @@ func unwrapBrackets(name string) (string, bool) {
 	return "$" + name[2:len(name)-1], true
 }
 
-func sanitizeParameter(context Context, prefix, paramName, raw string, variables map[string]bool, consts map[string]interface{}) string {
+func sanitizeParameter(paramMeta *ParamMeta, raw string, iterator *ParamMetaIterator, dst []byte, offset int) string {
+	context := paramMeta.Context
+	prefix := paramMeta.Prefix
+	paramName := paramMeta.Holder
+	variables := iterator.assignedVars
+	consts := iterator.consts
+
+
 	if fn, ok := keywords.Get(paramName); ok {
 		_, ok = fn.Metadata.(*keywords.StandaloneFn)
 		if ok {
@@ -56,11 +116,22 @@ func sanitizeParameter(context Context, prefix, paramName, raw string, variables
 		return raw
 	}
 
+	if paramMeta.Entry != nil {
+		_, ok := paramMeta.Entry.Metadata.(*keywords.Namespace)
+		if ok {
+			return raw
+		}
+	}
+
 	if _, ok := consts[paramName]; ok {
 		return strings.Replace(raw, "$", fmt.Sprintf("$%v.", keywords.ParamsKey), 1)
 	}
 
 	if context == FuncContext || context == ForEachContext || context == IfContext || context == SetContext {
+		if paramMeta.Entry != nil {
+			return raw
+		}
+
 		if variables[paramName] {
 			if prefix == keywords.ParamsKey {
 				return strings.Replace(raw, fmt.Sprintf("$%v.", keywords.ParamsKey), "$", 1)
@@ -88,9 +159,20 @@ func sanitizeParameter(context Context, prefix, paramName, raw string, variables
 		return raw
 	}
 
+	if paramMeta.Entry != nil {
+		metadata, ok := paramMeta.Entry.Metadata.(*keywords.ContextMetadata)
+		if ok {
+			if metadata.UnexpandRaw {
+				return raw
+			}
+		}
+
+		return sanitizeAsPlaceholder(raw)
+	}
+
 	return sanitizeAsPlaceholder(strings.Replace(raw, "$", fmt.Sprintf("$%v.", keywords.ParamsKey), 1))
 }
 
 func sanitizeAsPlaceholder(paramName string) string {
-	return fmt.Sprintf(" $criteria.AppendBinding(%v)", paramName)
+	return fmt.Sprintf("$criteria.AppendBinding(%v)", paramName)
 }

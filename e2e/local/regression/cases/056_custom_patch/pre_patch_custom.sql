@@ -1,5 +1,5 @@
 /* {
-   "URI": "basic/foos-many-many-custom", "Method": "PATCH"
+   "URI": "basic/patch-custom", "Method": "PATCH"
 } */
 
 SELECT foos.*,

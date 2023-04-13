@@ -6,7 +6,7 @@ pipeline:
     action: http/runner:send
     requests:
       - Method: PATCH
-        URL: http://127.0.0.1:8080/v1/api/dev/basic/foos-many-many-custom
+        URL: http://127.0.0.1:8080/v1/api/dev/basic/patch-custom
         JsonBody:
           - ID: 10
             Quantity: 5000
@@ -17,10 +17,10 @@ pipeline:
           JSONBody: $LoadJSON('${parentPath}/expect_t0.json')
 
 
-
-#  checkDb:
-#    action: 'dsunit:expect'
-#    datastore: dev
-#    expand: true
-#    checkPolicy: 1
-#    URL: ${parentPath}/expect
+  checkDB:
+    action: 'dsunit:query'
+    dataStore: dev
+    SQL: |
+      SELECT (CASE  WHEN COUNT(*) = 0 THEN FALSE ELSE TRUE END) AS UPDATED_FOOS FROM ( SELECT * FROM FOOS_CHANGES WHERE PREVIOUS = '{"Id":10,"Name":"FOO - 10","Quantity":3500,"FoosPerformance":null}') T;
+    expect:
+      - UPDATED_FOOS: true

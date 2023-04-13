@@ -222,7 +222,7 @@ func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.
 	}
 
 	for _, qualifier := range details.View.Qualifiers {
-		value, err := b.extractParamValue(ctx, qualifier.Parameter, details)
+		value, err := b.extractParamValue(ctx, qualifier.Parameter, details, selector)
 		if err != nil {
 			return "", err
 		}
@@ -414,32 +414,25 @@ func (b *selectorsBuilder) fieldRawValue(ctx context.Context, details *ViewDetai
 	return "", ValuesSeparator, typeMismatchError(param, paramValue)
 }
 
-func (b *selectorsBuilder) extractParamValue(ctx context.Context, param *view.Parameter, details *ViewDetails, options ...interface{}) (interface{}, error) {
+func (b *selectorsBuilder) extractParamValue(ctx context.Context, param *view.Parameter, details *ViewDetails, selector *view.Selector) (interface{}, error) {
+	return b.extractParamValueWithOptions(ctx, param, details, selector)
+}
+
+func (b *selectorsBuilder) extractParamValueWithOptions(ctx context.Context, param *view.Parameter, details *ViewDetails, options ...interface{}) (interface{}, error) {
 	switch param.In.Kind {
 	case view.KindDataView:
 		return b.viewParamValue(ctx, details, param)
+	case view.KindEnvironment:
+		return b.params.convertAndTransform(ctx, os.Getenv(param.In.Name), param, options...)
 	case view.KindParam:
 		return b.paramBasedParamValue(ctx, details, param, options...)
-	case view.KindPath:
-		return b.convertAndTransform(ctx, b.params.pathVariable(param.In.Name, ""), param, options...)
-	case view.KindQuery:
-		return b.convertAndTransform(ctx, b.params.queryParam(param.In.Name, ""), param, options...)
-	case view.KindRequestBody:
-		bodyValue, _ := b.extractBody(param.In.Name)
-		return bodyValue, nil
-	case view.KindEnvironment:
-		return b.convertAndTransform(ctx, os.Getenv(param.In.Name), param, options...)
-	case view.KindHeader:
-		return b.convertAndTransform(ctx, b.params.header(param.In.Name), param, options...)
-	case view.KindCookie:
-		return b.convertAndTransform(ctx, b.params.cookie(param.In.Name), param, options...)
 	}
 
-	return nil, fmt.Errorf("unsupported param kind %v", param.In.Kind)
+	return b.params.ExtractHttpParam(ctx, param, options...)
 }
 
-func (b *selectorsBuilder) convertAndTransform(ctx context.Context, raw string, param *view.Parameter, options ...interface{}) (interface{}, error) {
-	dateFormat := b.dateFormat
+func (p *RequestParams) convertAndTransform(ctx context.Context, raw string, param *view.Parameter, options ...interface{}) (interface{}, error) {
+	dateFormat := p.route.DateFormat
 	if param.DateFormat != "" {
 		dateFormat = param.DateFormat
 	}
@@ -836,7 +829,7 @@ func (b *selectorsBuilder) populatePage(ctx context.Context, selector *view.Sele
 
 func (b *selectorsBuilder) paramBasedParamValue(ctx context.Context, details *ViewDetails, param *view.Parameter, options ...interface{}) (interface{}, error) {
 	parent := param.Parent()
-	value, err := b.extractParamValue(ctx, parent, details, options...)
+	value, err := b.extractParamValueWithOptions(ctx, parent, details, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -844,7 +837,7 @@ func (b *selectorsBuilder) paramBasedParamValue(ctx context.Context, details *Vi
 }
 
 func (b *selectorsBuilder) addParamBasedParam(ctx context.Context, parent *ViewDetails, selector *view.Selector, parameter *view.Parameter) error {
-	value, err := b.extractParamValue(ctx, parameter, parent)
+	value, err := b.extractParamValue(ctx, parameter, parent, selector)
 	if err != nil {
 		return err
 	}

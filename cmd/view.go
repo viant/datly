@@ -135,6 +135,13 @@ func (s *Builder) DB(connector *view.Connector) (*sql.DB, error) {
 }
 
 func (s *Builder) ConnectorRef(name string) (*view.Connector, error) {
+	if name == "" {
+		connector := s.options.Connector.MatchConnector(name)
+		return &view.Connector{Reference: shared.Reference{
+			Ref: connector.Name,
+		}}, nil
+	}
+
 	connector, ok := s.options.Lookup(name)
 	if !ok {
 		return nil, fmt.Errorf("not found connector %v", name)

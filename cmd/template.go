@@ -68,7 +68,7 @@ func (s *Builder) Parse(ctx context.Context, builder *routeBuilder, aViewConfig 
 	table := aViewConfig.unexpandedTable
 
 	SQL := table.SQL
-	iterator := sanitize.NewIterator(SQL, builder.paramsIndex.hints, builder.option.Const)
+	iterator := sanitize.NewIterator(SQL, builder.paramsIndex.hints, builder.option.Const, false)
 	SQL = iterator.SQL
 
 	defaultParamType := view.KindQuery
@@ -524,7 +524,7 @@ func (t *Template) AddParameter(param *Parameter) {
 }
 
 func (t *Template) unmarshalParamsHints() error {
-	iterator := sanitize.NewIterator(t.SQL, t.paramsMeta.hints, t.paramsMeta.consts)
+	iterator := sanitize.NewIterator(t.SQL, t.paramsMeta.hints, t.paramsMeta.consts, false)
 	for iterator.Has() {
 		paramMeta := iterator.Next()
 		aParam := t.ParamByName(paramMeta.Holder)

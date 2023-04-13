@@ -7,6 +7,7 @@ import (
 	"github.com/viant/velty/ast"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/ast/stmt"
+	"github.com/viant/velty/functions"
 	"github.com/viant/velty/parser"
 	"strings"
 )
@@ -35,15 +36,16 @@ type (
 		SQL    string
 		cursor *parsly.Cursor
 
-		paramMeta      *ParamMeta
-		contexts       []*ParamContext
-		counter        int
-		assignedVars   map[string]bool
-		occurrences    map[string]int
-		paramMetaTypes map[string]*ParamMetaType
-		hints          map[string]*ParameterHint
-		paramMatcher   *ParamMatcher
-		consts         map[string]interface{}
+		paramMeta       *ParamMeta
+		contexts        []*ParamContext
+		counter         int
+		assignedVars    map[string]bool
+		occurrences     map[string]int
+		paramMetaTypes  map[string]*ParamMetaType
+		hints           map[string]*ParameterHint
+		paramMatcher    *ParamMatcher
+		consts          map[string]interface{}
+		indexPredefined bool
 	}
 
 	ParamContext struct {
@@ -64,6 +66,7 @@ type (
 		OccurrenceIndex int
 		MetaType        *ParamMetaType
 		SQLKeyword      string
+		Entry           *functions.Entry
 	}
 
 	ParamMetaType struct {
@@ -73,19 +76,20 @@ type (
 	}
 )
 
-func NewIterator(SQL string, hints map[string]*ParameterHint, consts map[string]interface{}) *ParamMetaIterator {
+func NewIterator(SQL string, hints map[string]*ParameterHint, consts map[string]interface{}, indexPredefined bool) *ParamMetaIterator {
 	if consts == nil {
 		consts = map[string]interface{}{}
 	}
 
 	result := &ParamMetaIterator{
-		SQL:            SQL,
-		assignedVars:   map[string]bool{},
-		occurrences:    map[string]int{},
-		paramMetaTypes: map[string]*ParamMetaType{},
-		paramMatcher:   NewParamMatcher(),
-		hints:          hints,
-		consts:         consts,
+		SQL:             SQL,
+		assignedVars:    map[string]bool{},
+		occurrences:     map[string]int{},
+		paramMetaTypes:  map[string]*ParamMetaType{},
+		paramMatcher:    NewParamMatcher(),
+		hints:           hints,
+		consts:          consts,
+		indexPredefined: indexPredefined,
 	}
 
 	result.init()
@@ -213,11 +217,12 @@ func (it *ParamMetaIterator) tryBuildParam(SQLKeyword string, param *expr.Select
 	occurrenceIndex := it.occurrences[name]
 	it.occurrences[name] = occurrenceIndex + 1
 
-	if keywords.Has(name) {
+	entry, ok := keywords.Get(name)
+	if ok && !it.indexPredefined {
 		return name, false
 	}
 
-	it.buildMetaParam(index, occurrenceIndex, pos, param, SQLKeyword)
+	it.buildMetaParam(index, occurrenceIndex, pos, param, SQLKeyword, entry)
 	return "", true
 }
 
@@ -240,7 +245,7 @@ func (it *ParamMetaIterator) init() {
 	it.initMetaTypes(it.SQL)
 }
 
-func (it *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, selector *expr.Select, SQLKeyword string) {
+func (it *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, selector *expr.Select, SQLKeyword string, entry *functions.Entry) {
 	context := UnspecifiedContext
 	var fnName string
 	if len(it.contexts) > 0 {
@@ -268,6 +273,7 @@ func (it *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, selector
 		MetaType:        paramMetaType,
 		SQLKeyword:      SQLKeyword,
 		FnName:          fnName,
+		Entry:           entry,
 	}
 }
 
