@@ -34,7 +34,6 @@ pipeline:
 
       dynamodb:
         action: docker:run
-        platform: linux/amd64
         image: 'amazon/dynamodb-local'
         name: dynamodb
         ports:
