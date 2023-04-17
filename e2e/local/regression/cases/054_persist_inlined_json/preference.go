@@ -3,9 +3,10 @@ package _48_custom_unmarshall_velty
 var PackageName = "preference"
 
 type Preference struct {
-	Id     int            `sqlx:"name=ID,autoincrement,primaryKey,required"`
-	Object *Foo           `sqlx:"name=OBJECT,format=JSON" json:",omitempty" `
-	Has    *PreferenceHas `presenceIndex:"true" typeName:"PreferenceHas" json:"-" sqlx:"presence=true"`
+	Id        int  `sqlx:"name=ID,autoincrement,primaryKey,required"`
+	Object    *Foo `sqlx:"name=OBJECT,enc=JSON" json:",omitempty" `
+	ClassName string
+	Has       *PreferenceHas `presenceIndex:"true" typeName:"PreferenceHas" json:"-" sqlx:"presence=true"`
 }
 
 type PreferenceHas struct {

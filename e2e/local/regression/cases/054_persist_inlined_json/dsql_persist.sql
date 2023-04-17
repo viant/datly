@@ -1,7 +1,7 @@
 /* {"URI":"dsql-persist","Method":"PUT","ResponseBody":{"From":"Preference"}} */
 
 import (
-	"regression/cases/053_dsql_persist.Preference"
+    "regression/cases/054_persist_inlined_json.Preference"
 )
 
 #set($_ = $Preference<*Preference>(body/))
@@ -11,9 +11,8 @@ import (
 SELECT ID as Id, OBJECT AS obj, '' AS Abc FROM OBJECTS /* {"Selector":{}} */ WHERE ID = $Preference.Id
 */)
 
-$fmt.Printf("has previous record: %T %v\n", $Unsafe.Records, $Unsafe.Records)
+$fmt.Printf("has previous record: %T %v\n", $Unsafe.Record, $Unsafe.Record)
 
-#set($objectJSON = $json.Marshal($Unsafe.Preference.Object))
 #if($Unsafe.Record.Id == 0)
      $response.StatusCode(419)
     $response.Failf("CustomError message")
