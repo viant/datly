@@ -8,7 +8,8 @@ JOIN ( SELECT
     location_id,
     product_id,
     SUM(quantity) AS quantity,
-    AVG(payment) * 1.25 AS price
+    AVG(payment) * 1.25 AS price,
+    CURRENT_TIMESTAMP() AS now
     FROM `$DB["bqdev"].viant-e2e.bqdev.product_performance` t
     WHERE 1=1
     #if($Unsafe.period == "today")
