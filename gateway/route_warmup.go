@@ -11,7 +11,7 @@ import (
 func (r *Router) NewWarmupRoute(URL string, routes ...*router.Route) *Route {
 	return &Route{
 		RouteMeta: RouteMeta{
-			Method: http.MethodPost,
+			Method: http.MethodGet,
 			URL:    URL,
 		},
 		Routes: routes,
@@ -32,13 +32,15 @@ func (r *Router) handleCacheWarmup(writer http.ResponseWriter, routes []*router.
 
 func (r *Router) handleCacheWarmupWithErr(routes []*router.Route) (int, []byte) {
 	var views []*view.View
-	for _, route := range routes {
+	URIs := make([]string, len(routes))
+	for i, route := range routes {
 		views = append(views, router.ExtractCacheableViews(route)...)
+		URIs[i] = route.URI
 	}
 
 	response := warmup.PreCache(func(_, _ string) ([]*view.View, error) {
 		return views, nil
-	})
+	}, URIs...)
 
 	data, err := json.Marshal(response)
 
