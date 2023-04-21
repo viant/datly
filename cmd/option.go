@@ -56,6 +56,7 @@ type (
 		Package
 		Module
 		AssetsURL string `short:"a" long:"assetsURL" description:"assets destination"`
+		ConstURL  string `long:"constURL" description:"path where const files are stored"`
 	}
 
 	Package struct {

@@ -103,3 +103,11 @@ func (f *session) RelativeOfBasePath(destURL string) string {
 
 	return aPath
 }
+
+func (f *session) JoinWithSourceURL(aPath string) string {
+	if strings.HasPrefix(aPath, "/") {
+		return aPath
+	}
+
+	return url.JoinUNC(url.Dir(f.sourceURL), aPath)
+}

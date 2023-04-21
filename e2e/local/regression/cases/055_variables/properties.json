@@ -1,0 +1,8 @@
+{
+  "Vendor": "VENDOR",
+  "Product": "PRODUCT",
+  "Var1": "setting1",
+  "Var2": "setting2",
+  "Var3": true,
+  "DummyTable": "DUAL"
+}

@@ -433,6 +433,22 @@ func (s *Builder) readRouteSettings(builder *routeBuilder) error {
 		builder.paramsIndex.AddParamTypes(builder.option.Declare)
 	}
 
+	if s.options.ConstURL != "" {
+		builder.option.ConstURL = s.options.ConstURL
+	}
+
+	if constURL := builder.option.ConstURL; constURL != "" {
+		sourceURL := builder.session.JoinWithSourceURL(constURL)
+		content, err := s.fs.DownloadWithURL(context.Background(), sourceURL)
+		if err != nil {
+			return err
+		}
+
+		if err = json.Unmarshal(bytes.TrimSpace(content), &builder.option.Const); err != nil {
+			return err
+		}
+	}
+
 	if builder.option.Const != nil {
 		builder.paramsIndex.AddConsts(builder.option.Const)
 	}

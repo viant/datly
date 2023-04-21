@@ -17,6 +17,7 @@ type (
 		CSV              *router.CSVConfig      `json:",omitempty"`
 		Declare          map[string]string      `json:",omitempty"`
 		Const            map[string]interface{} `json:",omitempty"`
+		ConstURL         string                 `json:",omitempty"`
 		Field            string                 `json:",omitempty"`
 		RequestBody      *BodyConfig            `json:",omitempty"`
 		TypeSrc          *TypeSrcConfig         `json:",omitempty"`
