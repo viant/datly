@@ -103,3 +103,7 @@ func (f *session) RelativeOfBasePath(destURL string) string {
 
 	return aPath
 }
+
+func (f *session) JoinWithSourceURL(path string) string {
+	return url.JoinUNC(url.Dir(f.sourceURL), path)
+}

@@ -1,15 +1,14 @@
 /*
  {
   "URI": "vars/",
-  "Const": {
-    "Vendor": "VENDOR",
-    "Product": "PRODUCT",
-    "Var1": "setting1",
-    "Var2": "setting2"
-  }
+  "ConstURL": "./properties.json"
 }
  */
 SELECT main.*
 FROM (
-    SELECT Key1, Key2 FROM (SELECT '$Var1 - $Vendor' AS Key1, '$Var2 - $Product' AS Key2) t
-) main
+         SELECT
+             '$Var1 - $Vendor' AS Key1,
+             '$Var2 - $Product' AS Key2,
+             $Var3 as Key3 /* { "DataType": "bool" } */
+         FROM $DummyTable
+     ) main
