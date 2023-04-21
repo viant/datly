@@ -433,6 +433,10 @@ func (s *Builder) readRouteSettings(builder *routeBuilder) error {
 		builder.paramsIndex.AddParamTypes(builder.option.Declare)
 	}
 
+	if s.options.ConstURL != "" {
+		builder.option.ConstURL = s.options.ConstURL
+	}
+
 	if constURL := builder.option.ConstURL; constURL != "" {
 		sourceURL := builder.session.JoinWithSourceURL(constURL)
 		content, err := s.fs.DownloadWithURL(context.Background(), sourceURL)
