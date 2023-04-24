@@ -1,8 +1,8 @@
 # Datly 
 
 
-Datly has been design as modern flexible ORM for rapid development. Datly can operate in 
-managed, autonomous and custom mode.
+Datly has been design as modern flexible ORM for rapid development. 
+Datly can operate in  managed, autonomous and custom mode.
 In managed mode datly is used as regular GoLang ORM where a user operate on golang struct and datly services programmatically.
 In autonomous mode datly operates as single gateway entry point handling all incoming request  with corresponding rules.
 In custom mode datly also operates as single gateway entry point handling all incoming request, allowing
@@ -52,7 +52,63 @@ where -w would persist rule with datly config to specific myProjectLocation
 
 #### Managed mode
 
-TODO some more example here.
+In manage mode you use directly reader.Service, with provided view and underlying go struct.
+
+```go
+package mypkg
+
+type Invoice struct {
+	Id           int32      `sqlx:"name=id"`
+	CustomerName *string    `sqlx:"name=customer_name"`
+	InvoiceDate  *time.Time `sqlx:"name=invoice_date"`
+	DueDate      *time.Time `sqlx:"name=due_date"`
+	TotalAmount  *string    `sqlx:"name=total_amount"`
+	Items        []*Item
+}
+
+type Item struct {
+	Id          int32   `sqlx:"name=id"`
+	InvoiceId   *int64  `sqlx:"name=invoice_id"`
+	ProductName *string `sqlx:"name=product_name"`
+	Quantity    *int64  `sqlx:"name=quantity"`
+	Price       *string `sqlx:"name=price"`
+	Total       *string `sqlx:"name=total"`
+}
+
+func ExampleService_ReadDataView() {
+
+	aReader := reader.New()
+	conn := aReader.Resource.AddConnector("dbName", "database/sql  driverName", "database/sql dsn")
+
+	invoiceView := view.NewView("invoice", "INVOICE",
+		view.WithConnector(conn),
+		view.WithCriteria("id"),
+		view.WithViewType(reflect.TypeOf(&Invoice{})),
+		view.WithOneToMany("Items", "id",
+			view.NwReferenceView("", "invoice_id",
+				view.NewView("items", "invoice_list_item", view.WithConnector(conn)))),
+	)
+
+	aReader.Resource.AddViews(invoiceView)
+	if err := aReader.Resource.Init(context.Background()); err != nil {
+		log.Fatal(err)
+	}
+
+	var  invoices= make([]*Invoice, 0)
+	if err := aReader.ReadInto(context.Background(), "invoice", &invoices, reader.WithCriteria( "status = ?",1));err != nil {
+		log.Fatal(err)
+	}
+	invociesJSON, _:=json.Marshal(invoices)
+	fmt.Printf("invocies: %s\n", invociesJSON)
+
+	
+}
+
+
+```
+
+See [Reader Service](../reader/README.md) for more details
+
 
 
 #### Autonomous mode
@@ -107,7 +163,7 @@ JOIN EMP employee ON dept.ID = employee.DEPT_ID
 ```
 
 ```bash
-datly -N=dept -X=rule.sql
+datly -N=dept -X=rule.sql -C='mydb|mydb_driver|mydb_driver_dsn' 
 ```
 
 
@@ -125,7 +181,7 @@ JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
 ```
 
 ```bash
-datly -N=dept -X=rule.sql
+datly -N=dept -X=rule.sql  -C='mydb|mydb_driver|mydb_driver_dsn' 
 ```
 
 ###### Excluding output column
@@ -142,7 +198,7 @@ JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
 ```
 
 ```bash
-datly -N=dept -X=rule.sql
+datly -N=dept -X=rule.sql  -C='mydb|mydb_driver|mydb_driver_dsn' 
 ```
 
 
@@ -161,7 +217,7 @@ JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
 ```
 
 ```bash
-datly -N=dept -X=rule.sql
+datly -N=dept -X=rule.sql  -C='mydb|mydb_driver|mydb_driver_dsn' 
 ```
 
 

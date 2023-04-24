@@ -18,15 +18,41 @@ Please refer to [`CHANGELOG.md`](../CHANGELOG.md) if you encounter breaking chan
 The goal of this project is to simplify and speed up data layer prototyping and development.
 It can be used as golang ORM or purely rule based.
 This is achieved by utilising rules to govern data mapping and binding for all data interaction.
-This project can be deployed as standalone or serverless with REST or Micro service style.
+
+## Introduction
+
+Datly has been design as modern flexible ORM for rapid development, 
+allowing reading/transforming, and changing data with POST/PUT/PATCH/DELETE operation.
+
+Datly can be used as regular ORM or in  mode
+
+
+**dept.sql**
+```sql
+SELECT 
+    dept.* EXCEPT ORG_ID
+    employee.* EXCEPT DEPT_ID, 
+    organization.* 
+FROM (SELECT * FROM DEPARMENT t) dept
+JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee ON dept.ID = employee.DEPT_ID
+JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
+```
+
+
+```bash
+datly -C='mydb|mysql|myusser:mypass@tcp(127.0.0.1:3306)/demo?parseTime=true' -X dept.sql
+open http://127.0.0.1:8080/v1/api/dev/dept    
+```
+
 
 ## Usage
 
-For read views from external file, see: [read view from file](./yaml-usage.md)
-
-For creating views programmatically, see: [create view programmatically](./go-usage.md)
+#### Managed mode
 
 For reader usage, see: [how to use reader](./reader/README.md) 
+For executor usage, see: [how to use executor](./executor/README.md)
+
+#### Autonomus mode
 
 ## Contributing to datly
 
