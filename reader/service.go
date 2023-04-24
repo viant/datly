@@ -24,6 +24,19 @@ type Service struct {
 	Resource   *view.Resource
 }
 
+//ReadInto reads data into provided destination, * dDest` is required. It has to be a pointer to `interface{}` or pointer to slice of `T` or `*T`
+func (s *Service) ReadInto(ctx context.Context, viewName string, dest interface{}, opts ...SessionOption) error {
+	aView, err := s.Resource.View(viewName)
+	if err != nil {
+		return err
+	}
+	session := NewSession(dest, aView)
+	for _, opt := range opts {
+		opt(session, aView)
+	}
+	return s.Read(ctx, session)
+}
+
 // Read select view from database based on View and assign it to dest. ParentDest has to be pointer.
 func (s *Service) Read(ctx context.Context, session *Session) error {
 	var err error

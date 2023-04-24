@@ -12,6 +12,7 @@ import (
         $decoder.UnmarshalInto($request.QueryParam("className"), true)
     */)
 
+
 #if($Unsafe.Preference)
 UPDATE OBJECTS
 SET

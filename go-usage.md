@@ -1,4 +1,7 @@
-###Create Views programmatically
+### Create Views programmatically
+
+
+
 
 One of the most important concept used across the datly, are `Views`. `View `represents database table, and also allows
 filtering rows and columns. You can load them from `.yaml` files, as one of the Resources:

@@ -29,7 +29,7 @@ type audience struct {
 	Info          string
 	Info2         string
 	DealsId       []int
-	Deals         []Deal
+	Deals         []XDeal
 	StringDealsId []string
 	DealsSize     int
 }
@@ -38,7 +38,7 @@ func (a *audience) OnRelation(ctx context.Context) {
 	a.DealsSize = len(a.Deals)
 }
 
-type Deal struct {
+type XDeal struct {
 	Id     int
 	Name   string
 	DealId string

@@ -464,6 +464,13 @@ func (r *Resource) AddViews(views ...*View) {
 	r.Views = append(r.Views, views...)
 }
 
+//AddConnector adds connector
+func (r *Resource) AddConnector(name string, driver string, dsn string, opts ...ConnectorOption) *Connector {
+	connector := NewConnector(name, driver, dsn, opts...)
+	r.AddConnectors(connector)
+	return connector
+}
+
 //AddConnectors register connectors in the resource
 func (r *Resource) AddConnectors(connectors ...*Connector) {
 	if r.Connectors == nil {
