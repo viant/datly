@@ -704,9 +704,6 @@ To build datly for  Docker or cloud specific[Runtimes](../gateway/runtime)
 check **deploy.yaml** [endly](https://github.com/viant/endly) deployment workflows.
 
 
-
-
-
 #### Custom Datly
 
 In custom datly (xdatly) mode you get integrated with your local go module to define application specific type with method, so these method can be invoked directly from dsql.

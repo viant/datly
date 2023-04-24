@@ -24,7 +24,10 @@ This is achieved by utilising rules to govern data mapping and binding for all d
 Datly has been design as modern flexible ORM for rapid development, 
 allowing reading/transforming, and changing data with POST/PUT/PATCH/DELETE operation.
 
-Datly can be used as regular ORM or in  mode
+Datly can be used as regular ORM or in mode autonomous (rule based) mode.
+
+Datly use [dsql](doc/README.md#datly-sql--dsql-) to auto generate struct or internal datly rule
+
 
 
 **dept.sql**
@@ -38,11 +41,14 @@ JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee ON dept.ID = employee.DEPT_I
 JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
 ```
 
+The following command bootstrap 
 
 ```bash
 datly -C='mydb|mysql|myusser:mypass@tcp(127.0.0.1:3306)/demo?parseTime=true' -X dept.sql
 open http://127.0.0.1:8080/v1/api/dev/dept    
 ```
+
+
 
 
 ## Usage
