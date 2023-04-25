@@ -41,8 +41,7 @@ JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee ON dept.ID = employee.DEPT_I
 JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
 ```
 
-The following command bootstrap in memory test mode with provided SQL
-
+To test dsql vi reset endpoint run the following command
 ```bash
 datly -C='mydb|mysql|myusser:mypass@tcp(127.0.0.1:3306)/mydb?parseTime=true' -X dept.sql
 open http://127.0.0.1:8080/v1/api/dev/dept    
