@@ -50,6 +50,9 @@ datly -C='myDB|driver|dsn' -X myRule.sql [-w=myProjectLocation ]
 ```
 where -w would persist rule with datly config to specific myProjectLocation
 
+Once datly rules are stored, you can start datly with datly -c=myProjectLocation/Datly/config.json
+
+
 #### Managed mode
 
 In manage mode you use directly reader.Service, with provided view and underlying go struct.

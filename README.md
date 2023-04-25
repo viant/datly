@@ -41,11 +41,27 @@ JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee ON dept.ID = employee.DEPT_I
 JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
 ```
 
-The following command bootstrap 
+The following command bootstrap in memory test mode with provided SQL
 
 ```bash
-datly -C='mydb|mysql|myusser:mypass@tcp(127.0.0.1:3306)/demo?parseTime=true' -X dept.sql
+datly -C='mydb|mysql|myusser:mypass@tcp(127.0.0.1:3306)/mydb?parseTime=true' -X dept.sql
 open http://127.0.0.1:8080/v1/api/dev/dept    
+```
+
+To persist rule and then run datly run the following
+```bash
+datly -C='mydb|mysql|myusser:mypass@tcp(127.0.0.1:3306)/mydb?parseTime=true' -X dept.sql -w=proj
+datly -c=proj/Datly/config.json
+```
+
+To see go struct generated for the view run the following
+```bash
+open http://127.0.0.1:8080/v1/api/meta/struct/dev/dept
+```
+
+To see go openapi for the view run the following
+```bash
+open http://127.0.0.1:8080/v1/api/meta/openapi/dev/dept
 ```
 
 
