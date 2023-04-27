@@ -2,19 +2,18 @@
 
 
 Datly has been design as modern flexible ORM for rapid development. 
-Datly can operate in  managed, autonomous and custom mode.
-In managed mode datly is used as regular GoLang ORM where a user operate on golang struct and datly services programmatically.
-In autonomous mode datly operates as single gateway entry point handling all incoming request  with corresponding rules.
+Datly can operate in  **managed** , **autonomous** and **custom mode**.
+In managed mode datly is used as regular GoLang ORM where you operate on golang struct and datly services programmatically.
+In autonomous mode datly uses a **dsql** based rules with single gateway entry point handling all incoming request matching defined rules.
 In custom mode datly also operates as single gateway entry point handling all incoming request, allowing
 method/receiver go struct behaviour customization associated with the rule, this is achieved by either golang
 plugins or/and custom type registry integration.
+Both _autonomous_ and _custom_ mode datly can be deployed as standalone app or as Docker, Kubernetes, Cloud Serverless runtimes (lambda,GCF,Cloud Run).
 
-Both autonomous and custom mode datly can be deployed as standalone app or as Docker, Kubernetes, Cloud Serverless runtimes (lambda,GCF,Cloud Run).
+### Introduction
 
-
-## [Velty Tamples](https://github.com/viant/velty)
-Datly has ability to dynamically customize both reader and executor service with templates.
-
+Datly promotes using datly SQL (dsql) dialect to define CRUD operations. 
+DSQL accept a SQL supported by specific database vendor on top of that it provide hints and template language using [Velty Engine](https://github.com/viant/velty) .
 To protect against SQL Injection any input $Variable reference is converted to SQL driver placeholder.
 
 Take the following snippet example
@@ -29,14 +28,32 @@ will be replaced before calling database driver with
 Input variable(s) can be also be accessed with $Unsafe namespace ($Unsafe.MyVariable), in that case variable is inlined.
 
 
+## The hints helps customize various aspect of data mapping/routing
+
+### Reader hints
+- **RouteConfig** is JSON representation of [Route](option/route.go) settings i.e {"URI":"app1/view1/{Id}"}
+- **OutputConfig** is JSON representation of [Output](option/output.go) settings i.e {"Style":"Comprehensive"}
+- **ColumnConfig** is JSON representation of [Column](option/column.go) settings i.e {"DataType":"bool"}
+- **ViewConfig**  is JSON representation of [View](option/view.go) settings i.e {"Cache":{"Ref":"aerospike"}}
+
+### Executor hints
+
+- **View Parameter Hints** defines SQL based data view parameter
+```#set($_ = $Records /* 
+  SELECT * FROM MY_TABLE /* {"Selector":{}} */ WHERE ID = $Entity.ID
+  */)
+ ```
+
+## [Velty Tamples](https://github.com/viant/velty)
+Datly has ability to dynamically customize both reader and executor service with templates.
+
 
 ## Reader
 
 The reader service is used to retrieve specific pieces of data or to search for data that meets certain criteria. 
 The specific pieces of data is defined as single or multi relational view, where each view originate from a table, query or
 **Velty Templates**
-The reader service allows client to control additional functionality, such as sorting, filtering, and selecting column, formatting the data in a way that is easy to read and analyze. 
-
+The reader service allows client to control additional functionality, such as sorting, filtering, and selecting column, formatting the data in a way that is easy to read and analyze.
 
 
 ### Datly SQL (DSQL) 
@@ -111,7 +128,6 @@ func ExampleService_ReadDataView() {
 ```
 
 See [Reader Service](../reader/README.md) for more details
-
 
 
 #### Autonomous mode
@@ -339,10 +355,7 @@ JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee  /* {"Selector":{"Limit": 80
 
 ### Authentication
 
-
 ### Authorization
-
-
 
 ##  Executor
 
@@ -411,17 +424,35 @@ import ...
  DML | velocity expr (#set|#if|#foreach)
 
 ```
-Supported build in functions:
+#### Supported build in functions:
+
+#### Logger/Formatter
 - $logger.FatalF
 - $logger.LogF
 - $logger.PrintF
-- $differ.Diff
+- $fmt.Sprintf
+
+#### SQL
+- $sequencer.Allocate(tableName string, dest interface{}, selector string) 
 - $sqlx.Validate
+
+
+#### Validator
+ - $sqlx.Validate - validates a struct with sqlx tags
+ - $validator.Validate - validates struct with validate tag
+
+#### HTTP
 - $http.Do
 - $http.Get
+- $response.Failf
+- $response.FailfWithStatusCode
+- $response.StatusCode
+
+#### Comparators
+- $differ.Diff
 
 TODO add all supported and update/add example
- 
+
 
 ###### Validation
 
@@ -501,7 +532,6 @@ WHERE  #if($Ids.Values.Length() > 0 ) ID IN ( $Ids.Values ) #else 1 = 0 #end
 */)
 ```
 
-
 ###### Indexing data
 
 ```sql
@@ -523,13 +553,21 @@ WHERE  #if($Ids.Values.Length() > 0 ) ID IN ( $Ids.Values ) #else 1 = 0 #end
 
 ```
 
+
+
 ###### Authentication & Authorization
 
+
 ```sql
-#set($_ = $Acl /*  {"Auth":"Jwt"}  
-    SELECT ID, STATUS, (IS_ENTITY_AUTHORIZED($Jwt.UserID, ID)) AS IS_AUTH FROM MY_TABLE WHERE ID = $Entity.Id
+#set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
+#set($_ = $Authorization  /*
+    {"Type": "Authorizer", "StatusCode": 403}
+    SELECT Authorized /* {"DataType":"bool"} */
+    FROM (SELECT IS_VENDOR_AUTHORIZED($Jwt.UserID, $vendorID) AS Authorized) t
+    WHERE Authorized
 */)
 ```
+
 
 ###### Record Differ
 
@@ -555,7 +593,6 @@ WHERE  #if($Ids.Values.Length() > 0 ) ID IN ( $Ids.Values ) #else 1 = 0 #end
 #end
 ```
 
-
 ### Meta repository
 
 #### OpenAPI
@@ -566,8 +603,6 @@ WHERE  #if($Ids.Values.Length() > 0 ) ID IN ( $Ids.Values ) #else 1 = 0 #end
 
 #### Performance metrics
 
-
-
 ### Plugin architecture && Custom Datly
 
 ### Caching architecture
@@ -575,7 +610,6 @@ WHERE  #if($Ids.Values.Length() > 0 ) ID IN ( $Ids.Values ) #else 1 = 0 #end
 #### Lazy Mode
 
 #### Smart Mode
-
 
 
 ## Deployment
