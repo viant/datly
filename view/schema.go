@@ -1,6 +1,7 @@
 package view
 
 import (
+	"fmt"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/sqlx/io/read/cache/ast"
@@ -133,6 +134,10 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 			aTag += columns[i].Tag
 		}
 
+		if !strings.Contains(aTag, "velty") {
+			aTag += fmt.Sprintf(" velty`names=%v|%v`", columnName, StructFieldName(viewCaseFormat, columnName))
+		}
+
 		aField := c.newField(aTag, columnName, viewCaseFormat, rType)
 		structFields = append(structFields, aField)
 	}
@@ -177,12 +182,7 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 }
 
 func (c *Schema) newField(aTag string, columnName string, sourceCaseFormat format.Case, rType reflect.Type) reflect.StructField {
-	var structFieldName string
-	if sourceCaseFormat == format.CaseUpperCamel {
-		structFieldName = columnName
-	} else {
-		structFieldName = sourceCaseFormat.Format(columnName, format.CaseUpperCamel)
-	}
+	structFieldName := StructFieldName(sourceCaseFormat, columnName)
 
 	var fieldPkgPath string
 	if structFieldName[0] < 'A' || structFieldName[0] > 'Z' {
@@ -196,6 +196,16 @@ func (c *Schema) newField(aTag string, columnName string, sourceCaseFormat forma
 		PkgPath: fieldPkgPath,
 	}
 	return aField
+}
+
+func StructFieldName(sourceCaseFormat format.Case, columnName string) string {
+	var structFieldName string
+	if sourceCaseFormat == format.CaseUpperCamel {
+		structFieldName = columnName
+	} else {
+		structFieldName = sourceCaseFormat.Format(columnName, format.CaseUpperCamel)
+	}
+	return structFieldName
 }
 
 func createDefaultTagIfNeeded(column *Column) string {

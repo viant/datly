@@ -643,3 +643,7 @@ func (r *Resource) typeNotFound(packageName string, typeName string) error {
 
 	return fmt.Errorf("not found type %v under %v package", typeName, packageName)
 }
+
+func (r *Resource) ParamByName(name string) (*Parameter, error) {
+	return r._parameters.Lookup(name)
+}

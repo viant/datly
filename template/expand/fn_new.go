@@ -1,0 +1,48 @@
+package expand
+
+import (
+	"fmt"
+	"github.com/viant/datly/utils/types"
+	"github.com/viant/datly/view/keywords"
+	"github.com/viant/velty/ast/expr"
+	"github.com/viant/velty/functions"
+	"github.com/viant/xreflect"
+	"reflect"
+)
+
+var fnNew = keywords.AddAndGet("newer", &functions.Entry{
+	Metadata: &keywords.FunctionMetadata{},
+	Handler:  nil,
+})
+
+type newer struct {
+	lookup xreflect.TypeLookupFn
+}
+
+func (n *newer) New(aType string) (interface{}, error) {
+	parseType, err := types.GetOrParseType(n.lookup, aType)
+	if err != nil {
+		return nil, err
+	}
+
+	return reflect.New(parseType).Elem().Interface(), nil
+
+}
+
+func (n *newer) MethodResultType(methodName string, call *expr.Call) (reflect.Type, error) {
+	switch methodName {
+	case "New":
+		if len(call.Args) != 1 {
+			return nil, fmt.Errorf("expected %v method to be called with 1 arg but was called with %v", methodName, len(call.Args))
+		}
+
+		expression, ok := call.Args[1].(*expr.Literal)
+		if !ok {
+			return nil, fmt.Errorf("expected arg to be type of %T but was %T", expression, call.Args[1])
+		}
+		return types.GetOrParseType(n.lookup, expression.Value)
+	}
+
+	return nil, fmt.Errorf("didn't find method %v at type %T", methodName, n)
+
+}

@@ -41,7 +41,10 @@ func (s *Builder) preparePatchRule(ctx context.Context, builder *routeBuilder, s
 		return "", err
 	}
 
-	SQL, err := s.buildPatchSQL(builder, routeOption, config, paramType)
+	_, sqlPart := s.extractRouteSettings(sourceSQL)
+	sourceSQL = []byte(sqlPart)
+
+	SQL, err := s.buildPatchSQL(builder, routeOption, config, paramType, sqlPart)
 	if err != nil {
 		return "", err
 	}
@@ -53,32 +56,32 @@ func (s *Builder) preparePatchRule(ctx context.Context, builder *routeBuilder, s
 	return SQL, err
 }
 
-func (s *Builder) buildPatchSQL(builder *routeBuilder, routeOption *option.RouteConfig, config *viewConfig, metadata *inputMetadata) (string, error) {
+func (s *Builder) buildPatchSQL(builder *routeBuilder, routeOption *option.RouteConfig, config *viewConfig, metadata *inputMetadata, preSQL string) (string, error) {
 	sb, err := s.prepareStringBuilder(builder, metadata, config, routeOption)
 	if err != nil {
 		return "", err
 	}
 
 	patchBuilder := newPatchStmtBuilder(sb, metadata)
-	return patchBuilder.buildWithMeta("", true)
+	return patchBuilder.buildWithMeta(s.options.Prepare, preSQL)
 }
 
-func (b *patchStmtBuilder) buildWithMeta(parentRecord string, withUnsafe bool) (string, error) {
+func (b *patchStmtBuilder) buildWithMeta(opt Prepare, preSQL string) (string, error) {
 	if err := b.stmtBuilder.appendHints(b.typeDef); err != nil {
 		return "", err
 	}
 
-	if err := b.stmtBuilder.appendSQLWithRelations(); err != nil {
+	if err := b.stmtBuilder.appendSQLWithRelations(opt.LoadPrevious, preSQL); err != nil {
 		return "", err
 	}
 
 	b.insert.appendAllocation(b.typeDef, "", b.typeDef.paramName)
-	indexes, err := b.generateIndexes()
+	indexes, err := b.generateIndexes(opt.LoadPrevious, true)
 	if err != nil {
 		return "", nil
 	}
 
-	return b.build(parentRecord, withUnsafe, indexes)
+	return b.build("", true, indexes)
 }
 
 func (b *patchStmtBuilder) build(parentRecord string, withUnsafe bool, indexes []*indexChecker) (string, error) {

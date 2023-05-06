@@ -1,0 +1,21 @@
+[
+  {
+    "id": 5,
+    "name": "changed - foo 5",
+    "quantity": 5000,
+    "foosPerformance": [
+      {
+        "id": 5,
+        "perfName": "updated foos perf - 5",
+        "perfQuantity": -1000,
+        "fooId": 5
+      }
+    ]
+  },
+  {
+    "id": "@exists@",
+    "name": "created - foo 6",
+    "quantity": 9898,
+    "foosPerformance": []
+  }
+]

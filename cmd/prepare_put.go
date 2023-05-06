@@ -48,7 +48,7 @@ func (s *Builder) buildUpdateSQL(aRouteBuilder *routeBuilder, routeConfig *optio
 		return "", err
 	}
 
-	if err = builder.iterateOverHints(metadata, func(currMetadata *inputMetadata) error {
+	if err = builder.IterateOverHints(metadata, func(currMetadata *inputMetadata, _ []*inputMetadata) error {
 		if !currMetadata.config.unexpandedTable.ViewConfig.FetchRecords {
 			return nil
 		}
@@ -58,14 +58,7 @@ func (s *Builder) buildUpdateSQL(aRouteBuilder *routeBuilder, routeConfig *optio
 		return "", err
 	}
 
-	if err = builder.iterateOverHints(metadata, func(currMetadata *inputMetadata) error {
-		if !currMetadata.config.unexpandedTable.ViewConfig.FetchRecords {
-			return nil
-		}
-
-		builder.generateIndexIfNeeded(currMetadata)
-		return nil
-	}); err != nil {
+	if _, err = builder.generateIndexes(s.options.LoadPrevious, false); err != nil {
 		return "", err
 	}
 

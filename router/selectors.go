@@ -203,6 +203,15 @@ func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.
 		return "", fmt.Errorf("can't use offset without limit")
 	}
 
+	for _, qualifier := range details.View.Qualifiers {
+		value, err := b.extractParamValue(ctx, qualifier.Parameter, details)
+		if err != nil {
+			return "", err
+		}
+
+		qualifier.ExtractValues(value)
+	}
+
 	return "", nil
 }
 
@@ -379,28 +388,28 @@ func (b *selectorsBuilder) fieldRawValue(ctx context.Context, details *ViewDetai
 	return "", ValuesSeparator, typeMismatchError(param, paramValue)
 }
 
-func (b *selectorsBuilder) extractParamValue(ctx context.Context, param *view.Parameter, details *ViewDetails, selector *view.Selector) (interface{}, error) {
+func (b *selectorsBuilder) extractParamValue(ctx context.Context, param *view.Parameter, details *ViewDetails, options ...interface{}) (interface{}, error) {
 	switch param.In.Kind {
 	case view.KindDataView:
 		return b.viewParamValue(ctx, details, param)
 	case view.KindPath:
-		return b.convertAndTransform(ctx, b.params.pathVariable(param.In.Name, ""), param, selector)
+		return b.convertAndTransform(ctx, b.params.pathVariable(param.In.Name, ""), param, options...)
 	case view.KindQuery:
-		return b.convertAndTransform(ctx, b.params.queryParam(param.In.Name, ""), param, selector)
+		return b.convertAndTransform(ctx, b.params.queryParam(param.In.Name, ""), param, options...)
 	case view.KindRequestBody:
 		return b.params.RequestBody()
 	case view.KindEnvironment:
-		return b.convertAndTransform(ctx, os.Getenv(param.In.Name), param, selector)
+		return b.convertAndTransform(ctx, os.Getenv(param.In.Name), param, options...)
 	case view.HeaderKind:
-		return b.convertAndTransform(ctx, b.params.header(param.In.Name), param, selector)
+		return b.convertAndTransform(ctx, b.params.header(param.In.Name), param, options...)
 	case view.CookieKind:
-		return b.convertAndTransform(ctx, b.params.cookie(param.In.Name), param, selector)
+		return b.convertAndTransform(ctx, b.params.cookie(param.In.Name), param, options...)
 	}
 
 	return nil, fmt.Errorf("unsupported param kind %v", param.In.Kind)
 }
 
-func (b *selectorsBuilder) convertAndTransform(ctx context.Context, raw string, param *view.Parameter, selector *view.Selector) (interface{}, error) {
+func (b *selectorsBuilder) convertAndTransform(ctx context.Context, raw string, param *view.Parameter, options ...interface{}) (interface{}, error) {
 	dateFormat := b.dateFormat
 	if param.DateFormat != "" {
 		dateFormat = param.DateFormat
@@ -411,7 +420,7 @@ func (b *selectorsBuilder) convertAndTransform(ctx context.Context, raw string, 
 		return convert, err
 	}
 
-	return param.Output.Transform(ctx, raw, selector)
+	return param.Output.Transform(ctx, raw, options...)
 }
 
 func (b *selectorsBuilder) buildSelectorParameters(ctx context.Context, selector *view.Selector, parent *ViewDetails, parameters []*view.Parameter) (*view.Parameter, error) {

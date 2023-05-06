@@ -86,6 +86,7 @@ type (
 		ExecKind     string `long:"execKind" description:"allows to switch between sql / dml"`
 		DSQLOutput   string `long:"dsqlOutput" description:"output path"`
 		GoFileOutput string `long:"goFileOut" description:"destination of go file"`
+		LoadPrevious bool   `long:"loadSQL" description:"decides whether to load records using "`
 	}
 
 	Plugins struct {

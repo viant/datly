@@ -29,6 +29,7 @@ type (
 		sql          string
 		sqlName      string
 		isPtr        bool
+		path         string
 	}
 
 	typeMeta struct {
@@ -114,7 +115,7 @@ func (s *Builder) recordName(recordName string, config *viewConfig) (string, boo
 		return recordName, false
 	}
 
-	return "rec" + strings.Title(recordName), true
+	return "rec" + strings.ToTitle(recordName), true
 }
 
 func (s *Builder) buildRequestBodyPostParam(def *inputMetadata) (reflect.Type, error) {
