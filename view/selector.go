@@ -21,6 +21,7 @@ type (
 		Parameters     ParamState    `json:",omitempty"`
 		Criteria       string        `json:",omitempty"`
 		Placeholders   []interface{} `json:",omitempty"`
+		Qualifier      []SelectorQualifier
 		Page           int
 
 		initialized  bool
@@ -31,6 +32,11 @@ type (
 	ParamState struct {
 		Values interface{} `json:",omitempty"`
 		Has    interface{} `json:",omitempty"`
+	}
+
+	SelectorQualifier struct {
+		Column string
+		Values []interface{}
 	}
 )
 

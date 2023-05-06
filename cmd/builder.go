@@ -959,13 +959,22 @@ func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
 			return nil, err
 		}
 
-		paramName := aView.Name
-		typeDef, err := s.buildSchemaFromTable(paramName, childViewConfig.unexpandedTable, s.columnTypes(childViewConfig.unexpandedTable))
-		if err != nil {
-			return nil, err
+		for _, param := range paramViewConfig.params {
+			for _, qualifier := range param.Qualifiers {
+				aView.Qualifiers = append(aView.Qualifiers, &view.Qualifier{
+					Value:  qualifier.Value,
+					Column: qualifier.Column,
+				})
+			}
 		}
 
-		s.addTypeDef(builder.routerResource.Resource, typeDef)
+		paramName := aView.Name
+		//typeDef, err := s.buildSchemaFromTable(paramName, childViewConfig.unexpandedTable, s.columnTypes(childViewConfig.unexpandedTable))
+		//if err != nil {
+		//	return nil, err
+		//}
+		//
+		//s.addTypeDef(builder.routerResource.Resource, typeDef)
 
 		aParam := childViewConfig.unexpandedTable.ViewConfig.DataViewParameter
 
@@ -979,9 +988,9 @@ func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
 				Required: boolPtr(true),
 			}
 		}
-		aParam.Schema = s.NewSchema(typeDef.Name, "")
 
-		aView.Schema = s.NewSchema(typeDef.Name, "")
+		//aParam.Schema = s.NewSchema(typeDef.Name, "")
+		//aView.Schema = s.NewSchema(typeDef.Name, "")
 		updateAsAuthParamIfNeeded(childViewConfig.unexpandedTable.Auth, aParam)
 		if err = s.addParameters(builder, aParam); err != nil {
 			return nil, err
@@ -1315,7 +1324,7 @@ func (s *Builder) loadGoTypes(builder *routeBuilder) error {
 
 	cursor := parsly.NewCursor("", []byte(builder.sqlStmt), 0)
 	defer func() {
-		builder.sqlStmt = builder.sqlStmt[cursor.Pos:]
+		builder.sqlStmt = strings.TrimSpace(builder.sqlStmt[cursor.Pos:])
 	}()
 
 	matched := cursor.MatchAfterOptional(whitespaceMatcher, importKeywordMatcher)

@@ -72,6 +72,7 @@ type (
 		SelfReference *SelfReference           `json:",omitempty"`
 		Namespaces    []*Namespace             `json:",omitempty"`
 		TableBatches  map[string]bool          `json:",omitempty"`
+		Qualifiers    []*Qualifier             `json:",omitempty"`
 
 		_initialized  bool
 		_newCollector newCollectorFn
@@ -394,6 +395,10 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 		v.TableBatches = map[string]bool{}
 	}
 
+	if err = v.initQualifiersIfNeeded(ctx, resource); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -668,6 +673,10 @@ func (v *View) inherit(view *View) error {
 
 	if v.TableBatches == nil {
 		v.TableBatches = view.TableBatches
+	}
+
+	if len(v.Qualifiers) == 0 {
+		v.Qualifiers = view.Qualifiers
 	}
 
 	return nil
@@ -1131,6 +1140,16 @@ func (v *View) SetParameter(name string, selectors *Selectors, value interface{}
 		return fmt.Errorf("failed to lookup selector: %v", aView.Name)
 	}
 	return param.Set(selector, value)
+}
+
+func (v *View) initQualifiersIfNeeded(ctx context.Context, resource *Resource) error {
+	for _, qualifier := range v.Qualifiers {
+		if err := qualifier.Init(ctx, resource, v, v._columns); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 //WithSQL creates SQL FROM view option

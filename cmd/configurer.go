@@ -395,7 +395,7 @@ func (c *ViewConfigurer) buildViewConfigWithTable(join *query.Join, innerTable *
 		return newViewConfig(join.Alias, join.Alias, join, innerTable, nil, view.SQLQueryMode), nil, nil
 	}
 
-	aConfig, viewParams, err := c.buildViewConfig(c.serviceType, join.Alias, innerTable.SQL, opt, join)
+	aConfig, viewParams, err := c.buildViewConfig(router.ReaderServiceType, join.Alias, innerTable.SQL, opt, join)
 	if aConfig != nil {
 		aConfig.unexpandedTable = innerTable
 	}

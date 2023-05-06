@@ -230,44 +230,23 @@ func (b *stmtBuilder) newRelation(rel *inputMetadata) *stmtBuilder {
 	return builder
 }
 
-func (b *stmtBuilder) generateIndexes() ([]*indexChecker, error) {
-	var checkers []*indexChecker
-	err := b.iterateOverHints(b.typeDef, func(def *inputMetadata) error {
-		index, ok := b.generateIndexIfNeeded(def)
-		if ok {
-			checkers = append(checkers, index)
-		}
-
-		return nil
-	})
-
-	return checkers, err
-}
-
-func (b *stmtBuilder) generateIndexIfNeeded(def *inputMetadata) (*indexChecker, bool) {
-	for _, field := range def.actualFields {
-		aMeta, ok := def.meta.metaByColName(field.Column)
-		if !ok || !aMeta.primaryKey {
-			continue
-		}
-
-		indexName, aFieldName := b.appendIndex(def, aMeta)
-
-		return &indexChecker{
-			indexName: indexName,
-			field:     aFieldName,
-			paramName: def.paramName,
-		}, true
-	}
-	return nil, false
-}
-
-func (b *stmtBuilder) appendIndex(def *inputMetadata, aMeta *fieldMeta) (string, string) {
-	indexName := fmt.Sprintf("%vIndex", def.sqlName)
+func (b *stmtBuilder) appendIndex(def *inputMetadata, aMeta *fieldMeta, inputPath []*inputMetadata, previous bool) (string, string) {
 	aFieldName := aMeta.fieldName
+	indexName := fmt.Sprintf("%vBy%v", def.sqlName, strings.ToTitle(aFieldName))
+	src := def.sqlName
+	if previous && len(inputPath) > 0 {
+		actualPath := strings.Trim(def.path, "/")
+		if actualPath == "" {
+			actualPath = "/"
+		} else {
+			actualPath = "/" + actualPath + "/"
+		}
+
+		src = fmt.Sprintf("%v.Query(\"SELECT * FROM `%v`\")", inputPath[0].paramName, actualPath)
+	}
 
 	b.sb.WriteString("\n")
-	b.writeString(fmt.Sprintf("#set($%v = $%v.IndexBy(\"%v\"))", indexName, def.sqlName, aFieldName))
+	b.writeString(fmt.Sprintf("#set($%v = $%v.IndexBy(\"%v\"))", indexName, src, aFieldName))
 	return indexName, aFieldName
 }
 
@@ -537,8 +516,9 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		table:        table,
 		config:       aConfig,
 		sql:          SQL,
-		sqlName:      paramName + "DBRecords",
+		sqlName:      "prev" + strings.Title(paramName),
 		isPtr:        true,
+		path:         strings.TrimRight(actualPath, "/"),
 	}, nil
 }
 
@@ -684,8 +664,33 @@ func (b *stmtBuilder) appendHintsWithRelations() error {
 	return b.appendHints(b.typeDef)
 }
 
-func (b *stmtBuilder) appendSQLWithRelations() error {
-	return b.iterateOverHints(b.typeDef, func(metadata *inputMetadata) error {
+func (b *stmtBuilder) appendSQLWithRelations(loadPrevious bool, preSQL string) error {
+	if loadPrevious {
+		var qualifiers []*option.Qualifier
+		var viewHint string
+		for _, field := range b.typeDef.actualFields {
+			if strings.Contains(strings.ToLower(field.Tag), "primarykey") {
+				qualifiers = append(qualifiers, &option.Qualifier{
+					Column: field.Column,
+					Value:  b.paramName + "." + field.Name,
+				})
+			}
+		}
+
+		if len(qualifiers) > 0 {
+			vConfig := option.ParameterConfig{
+				Qualifiers: qualifiers,
+			}
+
+			marshal, _ := json.Marshal(vConfig)
+			viewHint = string(marshal)
+		}
+
+		b.appendParamHint(b.typeDef, fmt.Sprintf("/* %v %v */", viewHint, preSQL))
+		return nil
+	}
+
+	return b.IterateOverHints(b.typeDef, func(metadata *inputMetadata, _ []*inputMetadata) error {
 		return b.appendSQLHint(metadata)
 	})
 }
@@ -695,10 +700,15 @@ func (b *stmtBuilder) appendSQLHint(metadata *inputMetadata) error {
 	if err != nil {
 		return err
 	}
-	b.writeString(fmt.Sprintf("\n#set($_ = $%v ", metadata.sqlName))
-	b.writeString(b.stringWithIndent(sqlHint))
-	b.writeString("\n)")
+
+	b.appendParamHint(metadata, sqlHint)
 	return nil
+}
+
+func (b *stmtBuilder) appendParamHint(metadata *inputMetadata, hint string) {
+	b.writeString(fmt.Sprintf("\n#set($_ = $%v ", metadata.sqlName))
+	b.writeString(b.stringWithIndent(hint))
+	b.writeString("\n)")
 }
 
 func (b *stmtBuilder) appendHints(typeDef *inputMetadata) error {
@@ -711,13 +721,20 @@ func (b *stmtBuilder) appendHints(typeDef *inputMetadata) error {
 	return nil
 }
 
-func (b *stmtBuilder) iterateOverHints(metadata *inputMetadata, iterator func(*inputMetadata) error) error {
-	if err := iterator(metadata); err != nil {
+func (b *stmtBuilder) IterateOverHints(metadata *inputMetadata, iterator func(*inputMetadata, []*inputMetadata) error) error {
+	return b.iterateOverHints(metadata, iterator)
+}
+
+func (b *stmtBuilder) iterateOverHints(metadata *inputMetadata, iterator func(curr *inputMetadata, metadataPath []*inputMetadata) error, path ...*inputMetadata) error {
+	if err := iterator(metadata, path); err != nil {
 		return err
 	}
 
+	aPath := append([]*inputMetadata{}, path...)
+	aPath = append(aPath, b.typeDef)
+
 	for _, relation := range metadata.relations {
-		if err := iterator(relation); err != nil {
+		if err := b.iterateOverHints(relation, iterator, aPath...); err != nil {
 			return err
 		}
 	}
@@ -803,16 +820,20 @@ func (s *Builder) appendSelectField(aFieldMeta *fieldMeta, sb *strings.Builder, 
 	return recName + "." + "Values"
 }
 
-func (b *patchStmtBuilder) generateIndexes() ([]*indexChecker, error) {
+func (b *stmtBuilder) generateIndexes(loadPrevious bool, ensureIndexes bool) ([]*indexChecker, error) {
 	var checkers []*indexChecker
-	err := b.iterateOverHints(b.typeDef, func(def *inputMetadata) error {
+	err := b.IterateOverHints(b.typeDef, func(def *inputMetadata, inputPath []*inputMetadata) error {
+		if !def.config.unexpandedTable.ViewConfig.FetchRecords && !ensureIndexes {
+			return nil
+		}
+
 		for _, field := range def.actualFields {
 			aMeta, ok := def.meta.metaByColName(field.Column)
 			if !ok || !aMeta.primaryKey {
 				continue
 			}
 
-			indexName, aFieldName := b.appendIndex(def, aMeta)
+			indexName, aFieldName := b.appendIndex(def, aMeta, inputPath, loadPrevious)
 
 			checkers = append(checkers, &indexChecker{
 				indexName: indexName,

@@ -93,6 +93,10 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
+	if err := evaluator.planner.RegisterFuncNs(fnNew, &newer{lookup: typeLookup}); err != nil {
+		return nil, err
+	}
+
 	evaluator.executor, evaluator.stateProvider, err = evaluator.planner.Compile([]byte(template))
 	if err != nil {
 		return nil, err
