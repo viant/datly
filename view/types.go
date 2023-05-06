@@ -38,3 +38,22 @@ func (r Types) LookupType(path string, identifier string, name string) (reflect.
 	lookup, err := r.Lookup(name)
 	return lookup, err
 }
+
+func isSlice(fType reflect.Type) bool {
+	if fType.Kind() == reflect.Ptr {
+		fType = fType.Elem()
+	}
+	return fType.Kind() == reflect.Slice
+}
+
+func getStruct(fType reflect.Type) reflect.Type {
+	switch fType.Kind() {
+	case reflect.Ptr:
+		return getStruct(fType.Elem())
+	case reflect.Slice:
+		return getStruct(fType.Elem())
+	case reflect.Struct:
+		return fType
+	}
+	return nil
+}

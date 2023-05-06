@@ -145,7 +145,9 @@ func (r *Relation) Validate() error {
 	if r.Of == nil {
 		return fmt.Errorf("relation of can't be nil")
 	}
-
+	if err := r.Of.Validate(); err != nil {
+		return err
+	}
 	if r.Holder == "" {
 		return fmt.Errorf("refHolder can't be empty")
 	}

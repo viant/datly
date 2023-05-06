@@ -82,6 +82,8 @@ type (
 
 	ViewOption func(v *View)
 
+	ViewOptions []ViewOption
+
 	SelfReference struct {
 		Holder string
 		Parent string
@@ -213,6 +215,13 @@ func (v *View) Init(ctx context.Context, resource *Resource, options ...interfac
 		v.Name: true,
 	}
 
+	if schema := v.Schema; schema != nil && len(v.With) == 0 {
+		if err := v.inheritRelationsFromTag(schema, resource); err != nil {
+			return err
+		}
+
+	}
+
 	if err := v.initViews(ctx, resource, v.With, nameTaken, transforms); err != nil {
 		return err
 	}
@@ -224,8 +233,54 @@ func (v *View) Init(ctx context.Context, resource *Resource, options ...interfac
 	if err := v.updateRelations(ctx, resource, v.With); err != nil {
 		return err
 	}
-
 	return nil
+}
+
+func (v *View) inheritRelationsFromTag(schema *Schema, resource *Resource) error {
+	sType := schema.Type()
+	if sType == nil {
+		return nil
+	}
+	recType := getStruct(sType)
+	if recType == nil {
+		return nil
+	}
+	for i := 0; i < recType.NumField(); i++ {
+		field := recType.Field(i)
+		rawTag, ok := field.Tag.Lookup(DatlyTag)
+		if !ok {
+			continue
+		}
+		tag := ParseTag(rawTag)
+		if !tag.HasRelationSpec() {
+			continue
+		}
+		refViewOptions, err := v.buildRefViewOptions(tag, resource)
+		if err != nil {
+			return err
+		}
+		if viewOptions := tag.RelationOption(field, refViewOptions...); len(viewOptions) > 0 {
+			viewOptions.Apply(v)
+		}
+	}
+	return nil
+}
+
+func (v *View) buildRefViewOptions(tag *Tag, resource *Resource) ([]ViewOption, error) {
+	var refViewOptions []ViewOption
+	var err error
+	var connector *Connector
+	if tag.RefConnector != "" {
+		if connector, err = resource.Connector(tag.RefConnector); err != nil {
+			return nil, fmt.Errorf("%w, ref view '%v' connector: '%v'", err, tag.RefName, tag.RefConnector)
+		}
+	} else if v.Connector != nil {
+		connector = v.Connector
+	}
+	if connector != nil {
+		refViewOptions = append(refViewOptions, WithConnector(connector))
+	}
+	return refViewOptions, nil
 }
 
 func (v *View) loadFromWithURL(ctx context.Context, resource *Resource) error {
@@ -1201,11 +1256,18 @@ func WithViewKind(mode Mode) ViewOption {
 	}
 }
 
+func (o ViewOptions) Apply(view *View) {
+	if len(o) == 0 {
+		return
+	}
+	for _, opt := range o {
+		opt(view)
+	}
+}
+
 //NewView creates a view
 func NewView(name, table string, opts ...ViewOption) *View {
 	ret := &View{Name: name, Table: table}
-	for _, opt := range opts {
-		opt(ret)
-	}
+	ViewOptions(opts).Apply(ret)
 	return ret
 }
