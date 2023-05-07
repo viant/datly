@@ -655,6 +655,11 @@ func NewBodyLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindRequestBody}
 }
 
+//NewDataViewLocation creates a dataview location
+func NewDataViewLocation(name string) *Location {
+	return &Location{Name: name, Kind: KindDataView}
+}
+
 //WithParameterType returns schema type parameter option
 func WithParameterType(t reflect.Type) ParameterOption {
 	return func(p *Parameter) {
@@ -667,6 +672,7 @@ func WithParameterType(t reflect.Type) ParameterOption {
 	}
 }
 
+//NewParameter creates a parameter
 func NewParameter(name string, in *Location, opts ...ParameterOption) *Parameter {
 	ret := &Parameter{Name: name, In: in}
 	for _, opt := range opts {

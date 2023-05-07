@@ -19,7 +19,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -569,15 +568,12 @@ FROM events`,
 }
 
 func testView(t *testing.T, testCase usecase, dataView *view.View, err error, service *reader.Service) {
-	selectors := view.Selectors{
-		Index:   testCase.selectors,
-		RWMutex: sync.RWMutex{},
-	}
+	selectors := view.NewSelectors()
 
 	session := &reader.Session{
 		Dest:      testCase.dest,
 		View:      dataView,
-		Selectors: &selectors,
+		Selectors: selectors,
 	}
 
 	err = service.Read(context.TODO(), session)

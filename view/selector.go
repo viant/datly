@@ -79,6 +79,14 @@ func (s *Selector) Add(fieldName string, isHolder bool) {
 	}
 }
 
+//NewSelector creates a selector
+func NewSelector() *Selector {
+	return &Selector{
+		_columnNames: map[string]bool{},
+		initialized:  true,
+	}
+}
+
 //Selectors represents Selector registry
 type Selectors struct {
 	Index map[string]*Selector
@@ -101,10 +109,11 @@ func (s *Selectors) Lookup(view *View) *Selector {
 	return selector
 }
 
-func NewSelector() *Selector {
-	return &Selector{
-		_columnNames: map[string]bool{},
-		initialized:  true,
+//NewSelectors creates a selector
+func NewSelectors() *Selectors {
+	return &Selectors{
+		Index:   map[string]*Selector{},
+		RWMutex: sync.RWMutex{},
 	}
 }
 

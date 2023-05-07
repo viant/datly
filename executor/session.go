@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"fmt"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/insert/batcher"
@@ -14,9 +15,13 @@ type Session struct {
 	mux         sync.Mutex
 	State       *expand.State
 	collections map[string]*batcher.Collection
+	selectors   *view.Selectors
 }
 
 func NewSession(selectors *view.Selectors, aView *view.View) (*Session, error) {
+	if aView == nil {
+		return nil, fmt.Errorf("view was empty")
+	}
 	parameters := NewParameters()
 	for viewName := range selectors.Index {
 		parameters.Add(viewName, selectors.Index[viewName])
@@ -24,6 +29,7 @@ func NewSession(selectors *view.Selectors, aView *view.View) (*Session, error) {
 
 	return &Session{
 		Parameters:  parameters,
+		selectors:   selectors,
 		View:        aView,
 		mux:         sync.Mutex{},
 		collections: map[string]*batcher.Collection{},

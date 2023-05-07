@@ -101,7 +101,7 @@ func NewSession(dest interface{}, aView *view.View, options ...interface{}) *Ses
 	return &Session{
 		Dest:      dest,
 		View:      aView,
-		Selectors: &view.Selectors{Index: make(map[string]*view.Selector)},
+		Selectors: view.NewSelectors(),
 		Parent:    parent,
 	}
 }

@@ -25,6 +25,16 @@ func New() *Executor {
 	}
 }
 
+//Execute executes view dsql
+func (e *Executor) Execute(ctx context.Context, aView *view.View, options ...Option) error {
+	session, err := NewSession(view.NewSelectors(), aView)
+	if err != nil {
+		return err
+	}
+	Options(options).Apply(session)
+	return e.Exec(ctx, session)
+}
+
 //TODO: remove reflection
 //TODO: customize global batch collector
 func (e *Executor) Exec(ctx context.Context, session *Session) error {

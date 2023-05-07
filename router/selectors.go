@@ -44,7 +44,7 @@ func (e *JSONError) Error() string {
 }
 
 func (b *selectorsBuilder) build(ctx context.Context, viewsDetails []*ViewDetails) (*view.Selectors, error) {
-	selectors := view.Selectors{}
+	selectors := view.NewSelectors()
 	wg := sync.WaitGroup{}
 	errors := NewErrors()
 	for _, details := range viewsDetails {
@@ -87,7 +87,7 @@ func (b *selectorsBuilder) build(ctx context.Context, viewsDetails []*ViewDetail
 
 	wg.Wait()
 	if len(errors.Errors) == 0 {
-		return &selectors, nil
+		return selectors, nil
 	}
 
 	return nil, errors
