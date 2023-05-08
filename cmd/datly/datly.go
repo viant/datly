@@ -10,6 +10,7 @@ import (
 	_ "github.com/viant/afsc/gs"
 	_ "github.com/viant/afsc/s3"
 	_ "github.com/viant/bigquery"
+	_ "github.com/viant/cloudless/async/mbus/aws"
 	"github.com/viant/datly/cmd"
 	"github.com/viant/datly/cmd/build"
 	_ "github.com/viant/dyndb"
