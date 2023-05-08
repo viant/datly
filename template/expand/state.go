@@ -1,6 +1,7 @@
 package expand
 
 import (
+	"github.com/viant/datly/executor/mbus"
 	"github.com/viant/velty/est"
 )
 
@@ -20,6 +21,7 @@ type (
 		ViewParam       *MetaParam       `velty:"names=View"`
 		ParentParam     *MetaParam       `velty:"names=ParentView"`
 		Validator       *Validator       `velty:"names=validator"`
+		MessageBus      *mbus.Service
 	}
 )
 
@@ -53,7 +55,9 @@ func (s *State) Init(templateState *est.State, param *MetaParam, parent *MetaPar
 	if s.Validator == nil {
 		s.Validator = validator
 	}
-
+	if s.MessageBus == nil {
+		s.MessageBus = &mbus.Service{}
+	}
 	s.State = templateState
 }
 

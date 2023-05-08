@@ -25,7 +25,7 @@ require (
 	github.com/viant/afsc v1.9.0
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.2.1-0.20221005024313-4286a9622882
-	github.com/viant/cloudless v1.3.1-0.20230301013923-86dc6fc63a6f
+	github.com/viant/cloudless v1.7.0
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
@@ -44,25 +44,33 @@ require (
 	github.com/viant/xunsafe v0.8.4-0.20230304004317-9d184b8b025f
 	golang.org/x/mod v0.9.0
 	golang.org/x/oauth2 v0.6.0
-	google.golang.org/api v0.102.0
+	google.golang.org/api v0.103.0
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	cloud.google.com/go v0.104.0 // indirect
+	github.com/viant/govalidator v0.0.0-20230301021138-3e2297869dd4
+	github.com/viant/sqlparser v0.3.1-0.20230320162628-96274e82953f
+	golang.org/x/crypto v0.7.0 // indirect
+)
+
+require github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
+
+require (
+	cloud.google.com/go v0.107.0 // indirect
 	cloud.google.com/go/compute v1.12.1 // indirect
 	cloud.google.com/go/compute/metadata v0.2.1 // indirect
-	cloud.google.com/go/iam v0.5.0 // indirect
-	cloud.google.com/go/secretmanager v1.6.0 // indirect
+	cloud.google.com/go/iam v0.8.0 // indirect
+	cloud.google.com/go/secretmanager v1.9.0 // indirect
 	github.com/aws/aws-sdk-go v1.44.12 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.17.2 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.18.0 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.18.3 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.13.3 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.10.7 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.12.19 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.26 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.20 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.33 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.27 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.26 // indirect
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.17.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.13.27 // indirect
@@ -81,8 +89,9 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.0 // indirect
-	github.com/googleapis/gax-go/v2 v2.6.0 // indirect
+	github.com/googleapis/gax-go/v2 v2.7.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/kr/pretty v0.2.1 // indirect
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.0 // indirect
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
@@ -91,12 +100,9 @@ require (
 	github.com/lestrrat-go/option v1.0.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/viant/govalidator v0.0.0-20230301021138-3e2297869dd4
 	github.com/viant/igo v0.1.0 // indirect
-	github.com/viant/sqlparser v0.3.1-0.20230320162628-96274e82953f
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
-	go.opencensus.io v0.23.0 // indirect
-	golang.org/x/crypto v0.7.0 // indirect
+	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.6.0 // indirect
@@ -104,10 +110,8 @@ require (
 	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20221024183307-1bc688fe9f3e // indirect
-	google.golang.org/grpc v1.50.1 // indirect
+	google.golang.org/genproto v0.0.0-20221201164419-0e50fba7f41c // indirect
+	google.golang.org/grpc v1.51.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-
-require github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
