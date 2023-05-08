@@ -1271,3 +1271,14 @@ func NewView(name, table string, opts ...ViewOption) *View {
 	ViewOptions(opts).Apply(ret)
 	return ret
 }
+
+//NewExecView creates an execution view
+func NewExecView(name, table string, template string, parameters []*Parameter, opts ...ViewOption) *View {
+	var templateParameters []TemplateOption
+	for i := range parameters {
+		templateParameters = append(templateParameters, WithTemplateParameter(parameters[i]))
+	}
+	opts = append(opts, WithViewKind(SQLExecMode),
+		WithTemplate(NewTemplate(template, templateParameters...)))
+	return NewView(name, table, opts...)
+}

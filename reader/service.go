@@ -25,7 +25,7 @@ type Service struct {
 }
 
 //ReadInto reads data into provided destination, * dDest` is required. It has to be a pointer to `interface{}` or pointer to slice of `T` or `*T`
-func (s *Service) ReadInto(ctx context.Context, viewName string, dest interface{}, opts ...SessionOption) error {
+func (s *Service) ReadInto(ctx context.Context, viewName string, dest interface{}, opts ...Option) error {
 	aView, err := s.Resource.View(viewName)
 	if err != nil {
 		return err

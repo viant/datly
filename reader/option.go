@@ -5,11 +5,27 @@ import (
 	"strings"
 )
 
-//SessionOption represents a session option
-type SessionOption func(session *Session, aView *view.View) error
+//Option represents a session option
+type Option func(session *Session, aView *view.View) error
+
+//Options represents option slice
+type Options []Option
+
+//Apply applies options
+func (o Options) Apply(session *Session, aView *view.View) error {
+	if len(o) == 0 {
+		return nil
+	}
+	for _, opt := range o {
+		if err := opt(session, aView); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 //WithCriteria returns criteria option
-func WithCriteria(whereClause string, parameters ...interface{}) SessionOption {
+func WithCriteria(whereClause string, parameters ...interface{}) Option {
 	return func(session *Session, aView *view.View) error {
 		session.AddCriteria(aView, whereClause, parameters...)
 		return nil
@@ -17,7 +33,7 @@ func WithCriteria(whereClause string, parameters ...interface{}) SessionOption {
 }
 
 //WithParameter returns set parameter option
-func WithParameter(name string, value interface{}) SessionOption {
+func WithParameter(name string, value interface{}) Option {
 	return func(session *Session, aView *view.View) error {
 		paramName := name
 		if !strings.Contains(paramName, ":") {
