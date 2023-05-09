@@ -31,7 +31,7 @@ require (
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac
-	github.com/viant/parsly v0.1.0
+	github.com/viant/parsly v0.1.1-0.20230509195447-4946fbf38a3b
 	github.com/viant/pgo v0.9.1-0.20230327170450-b328ca3ff3e0
 	github.com/viant/scy v0.5.0
 	github.com/viant/sqlx v0.5.3

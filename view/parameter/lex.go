@@ -10,6 +10,8 @@ const (
 	whitespaceToken = iota
 	anyToken
 	quotesToken
+	doubleQuotesToken
+
 	commentBlockToken
 	placeholderToken
 	selectorBlockToken
@@ -20,7 +22,7 @@ const (
 var anyMatcher = parsly.NewToken(anyToken, "Any", NewAnyMatcher())
 var whitespaceMatcher = parsly.NewToken(whitespaceToken, "Whitespace", matcher.NewWhiteSpace())
 var singleQuotesMatcher = parsly.NewToken(quotesToken, "Quotes", matcher.NewBlock('\'', '\'', '\\'))
-var doubleQuotesMatcher = parsly.NewToken(quotesToken, "Double quotes", matcher.NewBlock('"', '"', '\\'))
+var doubleQuotesMatcher = parsly.NewToken(doubleQuotesToken, "Double quotes", matcher.NewBlock('"', '"', '\\'))
 var commentBlockMatcher = parsly.NewToken(commentBlockToken, "Comment block", matcher.NewSeqBlock("/*", "*/"))
 var placeholderMatcher = parsly.NewToken(placeholderToken, "Placeholder", matcher.NewByte('?'))
 var selectorBlockMatcher = parsly.NewToken(selectorBlockToken, "Selector block", matcher.NewSeqBlock("${", "}"))
