@@ -12,8 +12,8 @@ import (
   SELECT * FROM CI_CAMPAIGN  WHERE  ID = $Campaign.Id
 */)
   
-#set($_ = $advertiserIds /* 
-  SELECT ARRAY_AGG(Id) AS Values FROM `/Advertiser/`
+#set($_ = $advertiserIds /*
+  SELECT ARRAY_AGG(Id) AS Values FROM `Campaign:/Advertiser/`
 */)   
 
 #set($_ = $prevAdvertiser /* 
