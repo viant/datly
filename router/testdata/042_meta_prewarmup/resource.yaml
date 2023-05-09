@@ -1,4 +1,5 @@
 RevealMetric: true
+EnableDebug: true
 Routes:
   - URI: "/api/event-types"
     Method: GET

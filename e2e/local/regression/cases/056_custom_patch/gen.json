@@ -1,5 +1,5 @@
 {
   "Name": "$tagId",
-  "URL": "$path/pre_patch_custom.sql",
-  "Args": "-G=patch --loadSQL"
+  "URL": "$path/patch_custom.sql",
+  "Args": ""
 }

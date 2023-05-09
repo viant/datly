@@ -59,6 +59,8 @@ func (p *Printer) Println(args ...interface{}) string {
 }
 
 func (p *Printer) Printf(format string, args ...interface{}) string {
+	p.derefArgs(args)
+
 	fmt.Printf(p.Sprintf(format, args...))
 	return ""
 }
@@ -73,10 +75,14 @@ func (p *Printer) Logf(format string, args ...interface{}) string {
 }
 
 func (p *Printer) Sprintf(format string, args ...interface{}) string {
+	p.derefArgs(args)
+
 	return fmt.Sprintf(strings.ReplaceAll(format, "\\n", "\n"), args...)
 }
 
 func (p *Printer) Debugf(format string, params ...interface{}) string {
+	p.derefArgs(params)
+
 	var args = make([]interface{}, 0)
 	for _, param := range params {
 		data, err := json.Marshal(param)
@@ -97,6 +103,8 @@ func (p *Printer) Flush() {
 }
 
 func (p *Printer) Fatal(any interface{}, args ...interface{}) (string, error) {
+	p.derefArgs(args)
+
 	format, ok := any.(string)
 	if ok {
 		return "", fmt.Errorf(p.Sprintf(format, args...))
@@ -124,4 +132,15 @@ func (p *Printer) FatalfWithCode(code int, any interface{}, args ...interface{})
 	}
 	err := &shared.ResponseError{StatusCode: code, Origin: fmt.Errorf(p.Sprintf("%+v", any))}
 	return "", err
+}
+
+func (p *Printer) derefArgs(args []interface{}) {
+	for i, arg := range args {
+		result := reflect.ValueOf(arg)
+		for result.Kind() == reflect.Ptr && !result.IsNil() && !result.IsZero() {
+			result = result.Elem()
+		}
+
+		args[i] = result.Interface()
+	}
 }

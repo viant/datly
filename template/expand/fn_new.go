@@ -29,20 +29,15 @@ func (n *newer) New(aType string) (interface{}, error) {
 
 }
 
-func (n *newer) MethodResultType(methodName string, call *expr.Call) (reflect.Type, error) {
-	switch methodName {
-	case "New":
-		if len(call.Args) != 1 {
-			return nil, fmt.Errorf("expected %v method to be called with 1 arg but was called with %v", methodName, len(call.Args))
-		}
-
-		expression, ok := call.Args[1].(*expr.Literal)
-		if !ok {
-			return nil, fmt.Errorf("expected arg to be type of %T but was %T", expression, call.Args[1])
-		}
-		return types.GetOrParseType(n.lookup, expression.Value)
+func (n *newer) NewResultType(call *expr.Call) (reflect.Type, error) {
+	if len(call.Args) != 1 {
+		return nil, fmt.Errorf("expected New method to be called with 1 arg but was called with %v", len(call.Args))
 	}
 
-	return nil, fmt.Errorf("didn't find method %v at type %T", methodName, n)
+	expression, ok := call.Args[1].(*expr.Literal)
+	if !ok {
+		return nil, fmt.Errorf("expected arg to be type of %T but was %T", expression, call.Args[1])
+	}
 
+	return types.GetOrParseType(n.lookup, expression.Value)
 }

@@ -237,6 +237,11 @@ func updateParamPrecedence(dest *view.Parameter, source *view.Parameter) {
 	if source.Const != nil {
 		dest.Const = source.Const
 	}
+
+	if dest.In != nil && dest.In.Kind == view.KindDataView && dest.Schema != nil {
+		dest.Schema.DataType = ""
+		dest.Schema.Name = ""
+	}
 }
 
 func updateDestSchema(dest *view.Parameter, source *view.Parameter) {

@@ -214,12 +214,13 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 	if p.initialized == true {
 		return nil
 	}
+	p.initialized = true
+
 	if p.Codec != nil {
 		p.Output = p.Codec
 		p.Codec = nil
 	}
 
-	p.initialized = true
 	p._owner = view
 
 	if err := p.inheritParamIfNeeded(ctx, view, resource, structType); err != nil {
@@ -251,9 +252,20 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 		}
 
 		p.view = aView
-
 		if p.Schema == nil {
-			p.Schema = aView.Schema
+			p.Schema = NewSchema(aView.Schema.SliceType())
+		} else {
+			p.Schema.DataType = aView.Schema.DataType
+			p.Schema.Name = aView.Schema.Name
+
+			if FirstNotEmpty(p.Schema.DataType, p.Schema.Name) == "" {
+				elemType := aView.Schema.Type()
+				if elemType.Kind() == reflect.Slice {
+					elemType = elemType.Elem()
+				}
+
+				p.Schema.SetType(elemType)
+			}
 		}
 	}
 

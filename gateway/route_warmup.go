@@ -11,7 +11,7 @@ import (
 func (r *Router) NewWarmupRoute(URL string, routes ...*router.Route) *Route {
 	return &Route{
 		RouteMeta: RouteMeta{
-			Method: http.MethodGet,
+			Method: http.MethodPost,
 			URL:    URL,
 		},
 		Routes: routes,

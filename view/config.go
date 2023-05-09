@@ -8,12 +8,13 @@ import (
 )
 
 const (
-	FieldsQuery   = "_fields"
-	OffsetQuery   = "_offset"
-	LimitQuery    = "_limit"
-	CriteriaQuery = "_criteria"
-	OrderByQuery  = "_orderby"
-	PageQuery     = "_page"
+	FieldsQuery    = "_fields"
+	OffsetQuery    = "_offset"
+	LimitQuery     = "_limit"
+	CriteriaQuery  = "_criteria"
+	OrderByQuery   = "_orderby"
+	PageQuery      = "_page"
+	QualifierParam = "qualifier"
 )
 
 var intType = reflect.TypeOf(0)

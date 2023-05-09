@@ -209,7 +209,15 @@ func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.
 			return "", err
 		}
 
-		qualifier.ExtractValues(value)
+		values, err := qualifier.ExtractValues(value)
+		if err != nil {
+			return view.QualifierParam, nil
+		}
+
+		selector.Qualifier = append(selector.Qualifier, view.SelectorQualifier{
+			Column: qualifier.Column,
+			Values: values,
+		})
 	}
 
 	return "", nil

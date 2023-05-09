@@ -35,9 +35,9 @@ require (
 	github.com/viant/pgo v0.9.1-0.20230327170450-b328ca3ff3e0
 	github.com/viant/scy v0.5.0
 	github.com/viant/sqlx v0.5.3
-	github.com/viant/structql v0.1.1-0.20221217012101-59b3abd0f9fd
+	github.com/viant/structql v0.1.1-0.20230506202747-6f83be0426ba
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
-	github.com/viant/velty v0.1.1-0.20230327195712-c2d886cc9988
+	github.com/viant/velty v0.1.1-0.20230509001836-0709296ae922
 	github.com/viant/xdatly/types/core v0.0.0-20230309221732-4dc744a54ac2
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
 	github.com/viant/xreflect v0.0.0-20230303201326-f50afb0feb0d
@@ -77,6 +77,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.9.11 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.7.20 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.19 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sqs v1.22.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.11.25 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.13.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.17.5 // indirect

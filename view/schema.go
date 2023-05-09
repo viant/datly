@@ -135,7 +135,11 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 		}
 
 		if !strings.Contains(aTag, "velty") {
-			aTag += fmt.Sprintf(" velty`names=%v|%v`", columnName, StructFieldName(viewCaseFormat, columnName))
+			names := columnName
+			if aFieldName := StructFieldName(viewCaseFormat, columnName); aFieldName != names {
+				names = names + "|" + aFieldName
+			}
+			aTag += fmt.Sprintf(` velty:"names=%v"`, names)
 		}
 
 		aField := c.newField(aTag, columnName, viewCaseFormat, rType)

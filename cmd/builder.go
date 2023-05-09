@@ -969,13 +969,6 @@ func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
 		}
 
 		paramName := aView.Name
-		//typeDef, err := s.buildSchemaFromTable(paramName, childViewConfig.unexpandedTable, s.columnTypes(childViewConfig.unexpandedTable))
-		//if err != nil {
-		//	return nil, err
-		//}
-		//
-		//s.addTypeDef(builder.routerResource.Resource, typeDef)
-
 		aParam := childViewConfig.unexpandedTable.ViewConfig.DataViewParameter
 
 		if aParam == nil {
@@ -989,8 +982,6 @@ func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
 			}
 		}
 
-		//aParam.Schema = s.NewSchema(typeDef.Name, "")
-		//aView.Schema = s.NewSchema(typeDef.Name, "")
 		updateAsAuthParamIfNeeded(childViewConfig.unexpandedTable.Auth, aParam)
 		if err = s.addParameters(builder, aParam); err != nil {
 			return nil, err

@@ -45,6 +45,12 @@ type (
 		ColumnsIn   string `velty:"COLUMN_IN"`
 		WhereClause string `velty:"CRITERIA"`
 		Pagination  string `velty:"PAGINATION"`
+		Qualifier   ParamQualifier
+	}
+
+	ParamQualifier struct {
+		SQL  string
+		Args []interface{}
 	}
 )
 
@@ -449,7 +455,18 @@ func (t *Template) replacementEntry(key string, params CriteriaParam, selector *
 		return key, params.ColumnsIn, nil
 	case keywords.SelectorCriteria[1:]:
 		*placeholders = append(*placeholders, selector.Placeholders...)
-		return key, selector.Criteria, nil
+		criteria := selector.Criteria
+
+		if len(params.Qualifier.SQL) > 0 {
+			*placeholders = append(*placeholders, params.Qualifier.Args...)
+			if len(criteria) > 0 {
+				criteria = criteria + " AND "
+			}
+
+			criteria = criteria + params.Qualifier.SQL
+		}
+		
+		return key, criteria, nil
 	default:
 		if strings.HasPrefix(key, keywords.WherePrefix) {
 			_, aValue, err := t.replacementEntry(key[len(keywords.WherePrefix):], params, selector, batchData, placeholders, sanitized)

@@ -6,6 +6,7 @@ import (
 	"github.com/viant/godiff"
 	"github.com/viant/velty"
 	"github.com/viant/velty/est"
+	"github.com/viant/velty/est/op"
 	"github.com/viant/xreflect"
 	"reflect"
 )
@@ -93,7 +94,11 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
-	if err := evaluator.planner.RegisterFuncNs(fnNew, &newer{lookup: typeLookup}); err != nil {
+	aNewer := &newer{lookup: typeLookup}
+	if err := evaluator.planner.RegisterStandaloneFunction(fnNew, &op.Function{
+		Handler:     aNewer.New,
+		ResultTyper: aNewer.NewResultType,
+	}); err != nil {
 		return nil, err
 	}
 

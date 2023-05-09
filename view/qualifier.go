@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/structql"
+	"github.com/viant/xunsafe"
+	"reflect"
 	"strings"
 )
 
@@ -13,9 +15,12 @@ type Qualifier struct {
 	Column    string
 	Parameter *Parameter
 
-	_accessor   *types.Accessor
-	_query      *structql.Query
-	initialized bool
+	_accessor     *types.Accessor
+	_query        *structql.Query
+	_resultSlice  *xunsafe.Slice
+	_xField       *xunsafe.Field
+	_derefCounter int
+	initialized   bool
 }
 
 func (q *Qualifier) Init(ctx context.Context, resource *Resource, view *View, columns ColumnIndex) error {
@@ -92,13 +97,46 @@ func (q *Qualifier) ensureParam(ctx context.Context, resource *Resource, view *V
 		if err != nil {
 			return err
 		}
+
+		q._resultSlice = xunsafe.NewSlice(q._query.Type())
+		queryType := q._query.Type().Elem()
+		for queryType.Kind() == reflect.Ptr {
+			q._derefCounter++
+			queryType = queryType.Elem()
+		}
+
+		q._xField = xunsafe.FieldByIndex(queryType, 0)
 	}
 
 	return nil
 }
 
-//TODO: extract values from Query, but currently SELECT * is not supported
-//TODO: remove newer, replace just with new.
-func (q *Qualifier) ExtractValues(value interface{}) {
+func (q *Qualifier) ExtractValues(value interface{}) ([]interface{}, error) {
+	selected, err := q._query.Select(value)
+	if err != nil {
+		return nil, err
+	}
 
+	pointer := xunsafe.AsPointer(selected)
+	if pointer == nil {
+		return []interface{}{}, nil
+	}
+
+	size := q._resultSlice.Len(pointer)
+	result := make([]interface{}, 0, size)
+	for i := 0; i < size; i++ {
+		valuePtr := q._resultSlice.PointerAt(pointer, uintptr(i))
+		for j := 0; j < q._derefCounter && valuePtr != nil; j++ {
+			valuePtr = xunsafe.DerefPointer(valuePtr)
+		}
+
+		if valuePtr == nil {
+			result = append(result, reflect.New(q._xField.Type).Elem().Interface())
+		} else {
+			fieldValue := q._xField.Value(valuePtr)
+			result = append(result, fieldValue)
+		}
+	}
+
+	return result, nil
 }

@@ -1,0 +1,5 @@
+{
+  "Name": "$tagId",
+  "URL": "$path/pre_patch_types.sql",
+  "Args": "-G=patch"
+}

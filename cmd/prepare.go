@@ -232,7 +232,7 @@ func (b *stmtBuilder) newRelation(rel *inputMetadata) *stmtBuilder {
 
 func (b *stmtBuilder) appendIndex(def *inputMetadata, aMeta *fieldMeta, inputPath []*inputMetadata, previous bool) (string, string) {
 	aFieldName := aMeta.fieldName
-	indexName := fmt.Sprintf("%vBy%v", def.sqlName, strings.ToTitle(aFieldName))
+	indexName := fmt.Sprintf("%vBy%v", def.sqlName, strings.Title(aFieldName))
 	src := def.sqlName
 	if previous && len(inputPath) > 0 {
 		actualPath := strings.Trim(def.path, "/")
@@ -242,7 +242,7 @@ func (b *stmtBuilder) appendIndex(def *inputMetadata, aMeta *fieldMeta, inputPat
 			actualPath = "/" + actualPath + "/"
 		}
 
-		src = fmt.Sprintf("%v.Query(\"SELECT * FROM `%v`\")", inputPath[0].paramName, actualPath)
+		src = fmt.Sprintf("%v.Query(\"SELECT * FROM `%v`\")", inputPath[0].sqlName, actualPath)
 	}
 
 	b.sb.WriteString("\n")

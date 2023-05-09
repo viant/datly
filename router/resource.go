@@ -134,8 +134,7 @@ func (r *Resource) Init(ctx context.Context) error {
 			route.RevealMetric = r.RevealMetric
 		}
 
-		aBool := true
-		route.EnableDebug = &aBool
+		route.EnableDebug = r.EnableDebug
 	}
 
 	columnsCache := map[string]view.Columns{}
