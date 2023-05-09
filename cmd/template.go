@@ -7,10 +7,8 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/sanitize"
-	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
-	"github.com/viant/toolbox/format"
 	"github.com/viant/velty/ast"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/ast/stmt"
@@ -530,7 +528,7 @@ func (t *Template) unmarshalParamsHints() error {
 
 func (t *Template) updateParamIfNeeded(param *Parameter, meta *sanitize.ParamMeta) error {
 	if value, ok := t.paramsMeta.consts[param.Name]; ok {
-		param.Kind = string(view.LiteralKind)
+		param.Kind = string(view.KindLiteral)
 		param.DataType = reflect.TypeOf(value).String()
 		param.Const = value
 	}
@@ -642,80 +640,6 @@ func (s *Builder) upload(builder *routeBuilder, destURL string, fileContent stri
 	}
 
 	return builder.session.RelativeOfBasePath(destURL), nil
-}
-
-func (s *Builder) buildSchemaFromTable(schemaName string, table *Table, columnTypes map[string]*ColumnMeta) (*view.TypeDefinition, error) {
-	var fields = make([]*view.Field, 0)
-	for _, column := range table.Inner {
-		structFieldName := column.Alias
-		if structFieldName == "" {
-			structFieldName = column.Name
-		}
-
-		if structFieldName == "" {
-			continue
-		}
-
-		switch structFieldName {
-		case "*":
-			var tableChecker func(name string) bool
-			if column.Ns != "" {
-				tableChecker = func(name string) bool {
-					return name == column.Ns
-				}
-			}
-
-			meta := s.tablesMeta.TableMeta(table.Name)
-			tableFields, err := s.buildTableFields(meta, tableChecker)
-			if err != nil {
-				return nil, err
-			}
-
-			fields = append(fields, tableFields...)
-
-			for _, relation := range table.Relations {
-				relMeta := s.tablesMeta.TableMeta(relation.Table.Name)
-				relFields, err := s.buildTableFields(relMeta, tableChecker)
-				if err != nil {
-					return nil, err
-				}
-
-				fields = append(fields, relFields...)
-
-			}
-
-		default:
-			aField := s.newViewField(column, columnTypes, structFieldName)
-			fields = append(fields, aField)
-		}
-	}
-
-	return &view.TypeDefinition{
-		Name:   s.types.unique(schemaName),
-		Fields: fields,
-	}, nil
-}
-
-func (s *Builder) buildTableFields(meta *TableMeta, tableChecker func(tableName string) bool) ([]*view.Field, error) {
-	if tableChecker != nil && !tableChecker(meta.TableName) {
-		return []*view.Field{}, nil
-	}
-
-	tableFields := make([]*view.Field, 0, len(meta.Columns))
-	for _, columnMeta := range meta.Columns {
-		columnName := columnMeta.Name
-		detectCase, err := format.NewCase(formatter.DetectCase(columnName))
-		if err != nil {
-			return tableFields, err
-		}
-
-		tableFields = append(tableFields, &view.Field{
-			Name:   detectCase.Format(columnName, format.CaseUpperCamel),
-			Schema: &view.Schema{DataType: columnMeta.Type.String()},
-		})
-	}
-
-	return tableFields, nil
 }
 
 func (s *Builder) newViewField(column *Column, columnTypes map[string]*ColumnMeta, structFieldName string) *view.Field {

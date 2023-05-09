@@ -18,6 +18,7 @@ import (
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
+	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/toolbox"
 	"github.com/viant/toolbox/format"
@@ -952,7 +953,7 @@ func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
 				OrderBy:    false,
 				Projection: false,
 			},
-			Limit: 25,
+			Limit: 1000,
 		}, false, externalParams...)
 
 		if err != nil {
@@ -1002,7 +1003,7 @@ func (s *Builder) prepareExternalParameters(builder *routeBuilder, paramViewConf
 		if parameter.Auth != "" {
 			authParam := &view.Parameter{
 				Name:            parameter.Auth,
-				In:              &view.Location{Name: "Authorization", Kind: view.HeaderKind},
+				In:              &view.Location{Name: "Authorization", Kind: view.KindHeader},
 				ErrorStatusCode: 401,
 				Required:        boolPtr(true),
 				Output:          &view.Codec{Name: "JwtClaim", Schema: &view.Schema{DataType: "*JwtClaims"}},
@@ -1029,7 +1030,7 @@ func (s *Builder) moveConstParameters(builder *routeBuilder, dest *[]*view.Param
 	for i := range builder.routerResource.Resource.Parameters {
 		parameter := builder.routerResource.Resource.Parameters[i]
 
-		if parameter.In != nil && parameter.In.Kind == view.LiteralKind {
+		if parameter.In != nil && parameter.In.Kind == view.KindLiteral {
 			constParams = append(constParams, parameter)
 			continue
 		}
@@ -1059,11 +1060,14 @@ func (s *Builder) updateParamByHint(resource *view.Resource, paramIndex *Paramet
 	if err := tryUnmarshalHint(JSONHint, paramConfig); err != nil {
 		return err
 	}
+	if hint.IsStructSQL {
+		paramConfig.Kind = string(view.KindStructQL)
+	}
 
-	return s.updateViewParam(resource, param, paramConfig, SQL)
+	return s.updateViewParam(resource, param, paramConfig, SQL, paramIndex)
 }
 
-func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter, config *option.ParameterConfig, SQL string) error {
+func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter, config *option.ParameterConfig, SQL string, index *ParametersIndex) error {
 	if param.In == nil {
 		param.In = &view.Location{}
 	}
@@ -1074,6 +1078,10 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 
 	if config.Const != nil {
 		param.Const = config.Const
+	}
+
+	if config.Kind == string(view.KindDataView) {
+		param.Query = SQL
 	}
 
 	param.Name = view.FirstNotEmpty(config.Name, param.Name)
@@ -1461,11 +1469,24 @@ func (s *Builder) buildParamHint(builder *routeBuilder, selector *expr.Select, c
 	}
 
 	builder.paramsIndex.AddParamHint(holderName, &sanitize.ParameterHint{
-		Parameter: holderName,
-		Hint:      paramHint,
+		Parameter:   holderName,
+		Hint:        paramHint,
+		IsStructSQL: isStructQL(paramHint),
 	})
 
 	return nil
+}
+
+func isStructQL(hint string) bool {
+	_, SQL := sanitize.SplitHint(hint)
+	if SQL == "" {
+		return false
+	}
+	query, _ := sqlparser.ParseQuery(SQL)
+	if query == nil || query.From.X == nil {
+		return false
+	}
+	return strings.Contains(sqlparser.Stringify(query.From.X), "/")
 }
 
 func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {

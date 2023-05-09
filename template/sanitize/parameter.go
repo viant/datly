@@ -1,8 +1,9 @@
 package sanitize
 
 type ParameterHint struct {
-	Parameter string
-	Hint      string
+	Parameter   string
+	Hint        string
+	IsStructSQL bool
 }
 
 func NewParameterHint(name, hint string) *ParameterHint {

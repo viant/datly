@@ -408,9 +408,9 @@ func (b *selectorsBuilder) extractParamValue(ctx context.Context, param *view.Pa
 		return b.params.RequestBody()
 	case view.KindEnvironment:
 		return b.convertAndTransform(ctx, os.Getenv(param.In.Name), param, options...)
-	case view.HeaderKind:
+	case view.KindHeader:
 		return b.convertAndTransform(ctx, b.params.header(param.In.Name), param, options...)
-	case view.CookieKind:
+	case view.KindCookie:
 		return b.convertAndTransform(ctx, b.params.cookie(param.In.Name), param, options...)
 	}
 
@@ -494,12 +494,12 @@ func isNull(value interface{}) bool {
 
 func (b *selectorsBuilder) handleParam(ctx context.Context, selector *view.Selector, parent *ViewDetails, parameter *view.Parameter) error {
 	switch parameter.In.Kind {
-	case view.QueryKind:
+	case view.KindQuery:
 		if err := b.addQueryParam(ctx, selector, parameter); err != nil {
 			return err
 		}
 
-	case view.PathKind:
+	case view.KindPath:
 		if err := b.addPathParam(ctx, selector, parameter); err != nil {
 			return err
 		}
@@ -509,7 +509,7 @@ func (b *selectorsBuilder) handleParam(ctx context.Context, selector *view.Selec
 			return err
 		}
 
-	case view.CookieKind:
+	case view.KindCookie:
 		if err := b.addCookieParam(ctx, selector, parameter); err != nil {
 			return err
 		}
@@ -519,12 +519,12 @@ func (b *selectorsBuilder) handleParam(ctx context.Context, selector *view.Selec
 			return err
 		}
 
-	case view.RequestBodyKind:
+	case view.KindRequestBody:
 		if err := b.addRequestBodyParam(ctx, selector, parameter); err != nil {
 			return err
 		}
 
-	case view.EnvironmentKind:
+	case view.KindEnvironment:
 		if err := b.addEnvVariableParam(ctx, selector, parameter); err != nil {
 			return err
 		}

@@ -439,7 +439,7 @@ func (c *ViewConfigurer) extractViewParamsFromHints(opt *option.RouteConfig) ([]
 			return nil, err
 		}
 
-		if param.SQLCodec || param.SQL == "" {
+		if param.SQLCodec || param.SQL == "" || hint.IsStructSQL {
 			continue
 		}
 

@@ -84,7 +84,7 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 	}
 
 	for _, parameter := range aView.Template.Parameters {
-		if parameter.In.Kind != EnvironmentKind {
+		if parameter.In.Kind != KindEnvironment {
 			continue
 		}
 

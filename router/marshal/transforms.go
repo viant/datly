@@ -20,14 +20,13 @@ const (
 
 type (
 	Transform struct {
-		ParamName   string `json:",omitempty" yaml:",omitempty"`
-		Kind        string `json:",omitempty" yaml:",omitempty"`
-		Path        string `json:",omitempty" yaml:",omitempty"`
-		Codec       string `json:",omitempty" yaml:",omitempty"`
-		Source      string `json:",omitempty" yaml:",omitempty"`
-		SourceURL   string `json:",omitempty" yaml:",omitempty"`
-		Transformer string `json:",omitempty" yaml:",omitempty"`
-
+		ParamName    string `json:",omitempty" yaml:",omitempty"`
+		Kind         string `json:",omitempty" yaml:",omitempty"`
+		Path         string `json:",omitempty" yaml:",omitempty"`
+		Codec        string `json:",omitempty" yaml:",omitempty"`
+		Source       string `json:",omitempty" yaml:",omitempty"`
+		SourceURL    string `json:",omitempty" yaml:",omitempty"`
+		Transformer  string `json:",omitempty" yaml:",omitempty"`
 		_evaluator   *expand.Evaluator
 		_unmarshaler json.UnmarshalerInto
 	}

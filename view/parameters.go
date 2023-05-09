@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/structql"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
@@ -35,13 +36,13 @@ type (
 		ExpectedReturned  *int      `json:",omitempty"`
 		Schema            *Schema   `json:",omitempty"`
 		//Deprecated -> use Codec only to set Output
-		Codec  *Codec      `json:",omitempty"`
-		Output *Codec      `json:",omitempty"`
-		Const  interface{} `json:",omitempty"`
-
-		DateFormat      string `json:",omitempty"`
-		ErrorStatusCode int    `json:",omitempty"`
-
+		Codec            *Codec      `json:",omitempty"`
+		Output           *Codec      `json:",omitempty"`
+		Const            interface{} `json:",omitempty"`
+		Query            string      `json:",omitempty"`
+		structQL         *structql.Query
+		DateFormat       string `json:",omitempty"`
+		ErrorStatusCode  int    `json:",omitempty"`
 		valueAccessor    *types.Accessor
 		presenceAccessor *types.Accessor
 		initialized      bool
@@ -242,30 +243,13 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 	}
 
 	if p.In.Kind == KindDataView {
-		aView, err := resource.View(p.In.Name)
-		if err != nil {
-			return fmt.Errorf("failed to lookup parameter %v view %w", p.Name, err)
-		}
-
-		if err = aView.Init(ctx, resource); err != nil {
+		if err := p.initDataViewParameter(ctx, resource); err != nil {
 			return err
 		}
-
-		p.view = aView
-		if p.Schema == nil {
-			p.Schema = NewSchema(aView.Schema.SliceType())
-		} else {
-			p.Schema.DataType = aView.Schema.DataType
-			p.Schema.Name = aView.Schema.Name
-
-			if FirstNotEmpty(p.Schema.DataType, p.Schema.Name) == "" {
-				elemType := aView.Schema.Type()
-				if elemType.Kind() == reflect.Slice {
-					elemType = elemType.Elem()
-				}
-
-				p.Schema.SetType(elemType)
-			}
+	}
+	if p.In.Kind == KindStructQL {
+		if err := p.initStructQLParameter(ctx, view, resource); err != nil {
+			return err
 		}
 	}
 
@@ -278,6 +262,67 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 	}
 
 	return p.Validate()
+}
+
+func (p *Parameter) initStructQLParameter(ctx context.Context, view *View, resource *Resource) error {
+
+	if p.Query == "" {
+		return fmt.Errorf("structql param: %v, query is empty", p.Name)
+	}
+	name := p.In.Name
+	var pType reflect.Type
+	if name == "" {
+		pType = view.Schema.Type()
+	} else {
+		refParam, err := view.ParamByName(name)
+		if err != nil {
+			return fmt.Errorf("failed to build structql param: %v, %w", name, err)
+		}
+		if refParam.Schema == nil {
+			_ = refParam.Init(ctx, view, resource, nil)
+		}
+		if refParam.Schema == nil {
+			return fmt.Errorf("failed to build structql param %v, ref param %v schema was nil", name, refParam.Name)
+		}
+		pType = refParam.Schema.Type()
+	}
+
+	query, err := structql.NewQuery(p.Query, pType, nil)
+	if err != nil {
+		return fmt.Errorf("failed to build structql param: %v, %w", name, err)
+	}
+	p.structQL = query
+	p.Schema = NewSchema(query.Type())
+	return nil
+}
+
+func (p *Parameter) initDataViewParameter(ctx context.Context, resource *Resource) error {
+	aView, err := resource.View(p.In.Name)
+	if err != nil {
+		return fmt.Errorf("failed to lookup parameter %v view %w", p.Name, err)
+	}
+
+	if err = aView.Init(ctx, resource); err != nil {
+		return err
+	}
+
+	p.view = aView
+	if p.Schema == nil {
+		p.Schema = NewSchema(aView.Schema.SliceType())
+	} else {
+		p.Schema.DataType = aView.Schema.DataType
+		p.Schema.Name = aView.Schema.Name
+
+		if FirstNotEmpty(p.Schema.DataType, p.Schema.Name) == "" {
+			elemType := aView.Schema.Type()
+			if elemType.Kind() == reflect.Slice {
+				elemType = elemType.Elem()
+			}
+
+			p.Schema.SetType(elemType)
+		}
+	}
+	return nil
 }
 
 func (p *Parameter) inheritParamIfNeeded(ctx context.Context, view *View, resource *Resource, structType reflect.Type) error {
@@ -373,7 +418,7 @@ func (p *Parameter) IsRequired() bool {
 
 func (p *Parameter) initSchema(resource *Resource, structType reflect.Type) error {
 	if p.Schema == nil {
-		if p.In.Kind == LiteralKind {
+		if p.In.Kind == KindLiteral {
 			p.Schema = NewSchema(reflect.TypeOf(p.Const))
 		} else {
 			return fmt.Errorf("parameter %v schema can't be empty", p.Name)
@@ -388,7 +433,7 @@ func (p *Parameter) initSchema(resource *Resource, structType reflect.Type) erro
 		return p.initSchemaFromType(structType)
 	}
 
-	if p.In.Kind == LiteralKind {
+	if p.In.Kind == KindLiteral {
 		p.Schema = NewSchema(reflect.TypeOf(p.Const))
 		return nil
 	}
@@ -670,6 +715,11 @@ func NewBodyLocation(name string) *Location {
 //NewDataViewLocation creates a dataview location
 func NewDataViewLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindDataView}
+}
+
+//NewStructQLLocation creates a structql
+func NewStructQLLocation(name string) *Location {
+	return &Location{Name: name, Kind: KindStructQL}
 }
 
 //WithParameterType returns schema type parameter option

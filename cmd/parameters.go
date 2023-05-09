@@ -42,12 +42,16 @@ func NewParametersIndex(routeConfig *option.RouteConfig, hints map[string]*sanit
 
 func (p *ParametersIndex) AddUriParams(params map[string]bool) {
 	for paramName := range params {
-		p.parameterKinds[paramName] = view.PathKind
+		p.parameterKinds[paramName] = view.KindPath
 	}
 }
 
 func (p *ParametersIndex) AddDataViewParam(paramName string) {
-	p.parameterKinds[paramName] = view.DataViewKind
+	p.parameterKinds[paramName] = view.KindDataView
+}
+
+func (p *ParametersIndex) AddStructQLParam(paramName string) {
+	p.parameterKinds[paramName] = view.KindStructQL
 }
 
 func (p *ParametersIndex) ParamType(paramName string) (view.Kind, bool) {
@@ -64,7 +68,7 @@ func (p *ParametersIndex) AddParamTypes(paramTypes map[string]string) {
 func (p *ParametersIndex) AddConsts(consts map[string]interface{}) {
 	for key := range consts {
 		p.consts[key] = consts[key]
-		p.parameterKinds[key] = view.LiteralKind
+		p.parameterKinds[key] = view.KindLiteral
 	}
 }
 

@@ -218,7 +218,7 @@ func TestBuilder_Build(t *testing.T) {
 						{
 							Name: "EventId",
 							In: &view.Location{
-								Kind: view.PathKind,
+								Kind: view.KindPath,
 								Name: "eventId",
 							},
 							Schema: &view.Schema{
@@ -263,7 +263,7 @@ func TestBuilder_Build(t *testing.T) {
 						{
 							Name: "EventId",
 							In: &view.Location{
-								Kind: view.PathKind,
+								Kind: view.KindPath,
 								Name: "eventId",
 							},
 							Schema: &view.Schema{
@@ -310,7 +310,7 @@ func TestBuilder_Build(t *testing.T) {
 						{
 							Name: "EventId",
 							In: &view.Location{
-								Kind: view.PathKind,
+								Kind: view.KindPath,
 								Name: "eventId",
 							},
 							Schema: &view.Schema{
@@ -355,7 +355,7 @@ func TestBuilder_Build(t *testing.T) {
 						{
 							Name: "EventId",
 							In: &view.Location{
-								Kind: view.PathKind,
+								Kind: view.KindPath,
 								Name: "eventId",
 							},
 							Schema: &view.Schema{
