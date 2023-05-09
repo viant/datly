@@ -16,6 +16,10 @@ import (
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
+	"github.com/viant/sqlparser"
+	qexpr "github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/node"
+	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx/io/config"
 	"github.com/viant/sqlx/metadata"
 	"github.com/viant/sqlx/metadata/info"
@@ -457,12 +461,17 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	if err != nil {
 		return nil, err
 	}
-
 	for _, relation := range insertRelations {
+
+		datlyTagSpec := s.buildDatlyTagSpec(relation)
+		if s.isToOne(relation) {
+			relation.config.outputConfig.Cardinality = view.One
+		}
+		//relation.config.outputConfig.Cardinality
 		relField := &view.Field{
 			Name:        relation.paramName,
 			Fields:      relation.typeDef.Fields,
-			Tag:         fmt.Sprintf(`typeName:"%v" sqlx:"-"`, relation.paramName),
+			Tag:         fmt.Sprintf(`typeName:"%v" sqlx:"-"`+datlyTagSpec, relation.paramName),
 			Cardinality: relation.config.outputConfig.Cardinality,
 			Ptr:         true,
 		}
@@ -520,6 +529,56 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		isPtr:        true,
 		path:         strings.TrimRight(actualPath, "/"),
 	}, nil
+}
+
+func (s *Builder) isToOne(relation *inputMetadata) bool {
+	if join := relation.config.queryJoin; join != nil {
+		return strings.Contains(sqlparser.Stringify(join.On), "1 = 1")
+	}
+	return false
+}
+
+func (s *Builder) buildDatlyTagSpec(relation *inputMetadata) string {
+	datlyTagSpec := ""
+	if join := relation.config.queryJoin; join != nil {
+		relColumn, refColumn := extractRelationColumns(join)
+		source := ""
+		if refTable := relation.table; refTable != "" {
+			source = fmt.Sprintf("refTable=%v", refTable)
+		}
+		datlyTagSpec = " " + fmt.Sprintf(view.DatlyTag+`:"relName=%v,relColumn=%v,refColumn=%v,refTable=%v"`, join.Alias, relColumn, refColumn, source)
+		if rawSQL := strings.Trim(sqlparser.Stringify(join.With), " )("); rawSQL != "" {
+			datlyTagSpec += ` sql:"` + rawSQL + `"`
+		}
+	}
+	return datlyTagSpec
+}
+
+func extractRelationColumns(join *query.Join) (string, string) {
+	relColumn := ""
+	refColumn := ""
+	sqlparser.Traverse(join.On, func(n node.Node) bool {
+		switch actual := n.(type) {
+		case *qexpr.Binary:
+			if xSel, ok := actual.X.(*qexpr.Selector); ok {
+				if xSel.Name == join.Alias {
+					refColumn = sqlparser.Stringify(xSel.X)
+				} else if relColumn == "" {
+					relColumn = sqlparser.Stringify(xSel.X)
+				}
+			}
+			if ySel, ok := actual.Y.(*qexpr.Selector); ok {
+				if ySel.Name == join.Alias {
+					refColumn = sqlparser.Stringify(ySel.X)
+				} else if relColumn == "" {
+					relColumn = sqlparser.Stringify(ySel.X)
+				}
+			}
+			return true
+		}
+		return true
+	})
+	return relColumn, refColumn
 }
 
 func (s *Builder) shouldFilterColumnByMeta(parentTable string, fkIndex map[string]sink.Key, fieldMeta *fieldMeta) bool {

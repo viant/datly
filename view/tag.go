@@ -65,6 +65,9 @@ func (t *Tag) Init(field reflect.StructField) {
 	if t.RefColumn == "" {
 		t.RefColumn = t.RefField
 	}
+	if t.RefSQL == "" {
+		t.RefSQL, _ = field.Tag.Lookup("sql")
+	}
 }
 
 //ParseTag parses datly tag
