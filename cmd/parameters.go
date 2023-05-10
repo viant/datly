@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
 	"strings"
@@ -97,7 +98,7 @@ func (p *ParametersIndex) AddParameter(parameter *view.Parameter) {
 }
 
 func (p *ParametersIndex) ParamsMetaWithHint(paramName string, hint *sanitize.ParameterHint) (*Parameter, error) {
-	parameter := p.getOrCreateParam(paramName)
+	parameter := p.ParamMeta(paramName)
 	if hint == nil {
 		return parameter, nil
 	}
@@ -108,23 +109,38 @@ func (p *ParametersIndex) ParamsMetaWithHint(paramName string, hint *sanitize.Pa
 		return nil, err
 	}
 
-	parameter.SQLCodec = isSQLLikeCodec(parameter.Codec)
-	parameter.SQL = SQL
+	if hint.StructQLQuery != nil {
+		parameter.Codec = config.CodecStructql
+		parameter.SQL = hint.StructQLQuery.SQL
+		parameter.SQLCodec = true
+		parameter.Target = &hint.StructQLQuery.Source
+	} else if isSQLLikeCodec(parameter.Codec) {
+		parameter.SQL = SQL
+		parameter.SQLCodec = true
+	} else if strings.TrimSpace(SQL) != "" {
+		parameter.Kind = string(view.KindDataView)
+		parameter.SQL = SQL
+	}
 
 	return parameter, nil
 }
 
-func (p *ParametersIndex) getOrCreateParam(paramName string) *Parameter {
+func (p *ParametersIndex) ParamMeta(paramName string) *Parameter {
 	parameter, ok := p.paramsMeta[paramName]
 	if !ok {
-		parameter = &Parameter{}
+		parameter = &Parameter{
+			ParameterConfig: option.ParameterConfig{
+				Name: paramName,
+			},
+			Assumed: true,
+		}
 		p.paramsMeta[paramName] = parameter
 	}
 	return parameter
 }
 
 func (p *ParametersIndex) ParamsMetaWithComment(paramName, hint string) (*Parameter, error) {
-	parameter := p.getOrCreateParam(paramName)
+	parameter := p.ParamMeta(paramName)
 	if hint == "" {
 		return parameter, nil
 	}

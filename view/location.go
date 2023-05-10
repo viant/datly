@@ -20,6 +20,7 @@ const (
 	KindEnvironment Kind = "env"
 	KindLiteral     Kind = "literal"
 	KindStructQL    Kind = "structql"
+	KindParam       Kind = "param"
 )
 
 //Validate checks if Kind is valid.

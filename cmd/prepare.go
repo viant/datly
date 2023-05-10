@@ -254,7 +254,7 @@ func (b *stmtBuilder) appendIndex(def *inputMetadata, aMeta *fieldMeta, inputPat
 	return indexName, aFieldName
 }
 
-func (s *Builder) buildInputMetadata(ctx context.Context, builder *routeBuilder, sourceSQL []byte, httpMethod string) (*option.RouteConfig, *viewConfig, *inputMetadata, error) {
+func (s *Builder) buildInputMetadata(ctx context.Context, builder *routeBuilder, sourceSQL []byte, httpMethod string) (*option.RouteConfig, *ViewConfig, *inputMetadata, error) {
 	hint, SQL := s.extractRouteSettings(sourceSQL)
 
 	routeOption := &option.RouteConfig{Method: httpMethod}
@@ -288,7 +288,7 @@ func (s *Builder) buildInputMetadata(ctx context.Context, builder *routeBuilder,
 	return routeOption, aConfig, paramType, nil
 }
 
-func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName string, config *viewConfig, parentTable, path, actualHolder string) (*inputMetadata, error) {
+func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName string, config *ViewConfig, parentTable, path, actualHolder string) (*inputMetadata, error) {
 	columns, err := s.readSinkColumns(ctx, db, tableName)
 	if err != nil {
 		return nil, err
@@ -344,7 +344,7 @@ func (s *Builder) readPrimaryKeys(ctx context.Context, db *sql.DB, tableName str
 	return filterKeys(keys, tableName), nil
 }
 
-func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys, primaryKeys []sink.Key, aConfig *viewConfig, db *sql.DB, table, parentTable, structPath, actualHolder string) (*inputMetadata, error) {
+func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys, primaryKeys []sink.Key, aConfig *ViewConfig, db *sql.DB, table, parentTable, structPath, actualHolder string) (*inputMetadata, error) {
 	if aConfig.outputConfig.Cardinality == "" {
 		aConfig.outputConfig.Cardinality = view.Many
 	}
@@ -603,7 +603,7 @@ func filterKeys(keys []sink.Key, tableName string) []sink.Key {
 	return tableKeys
 }
 
-func (s *Builder) buildInsertRelations(config *viewConfig, db *sql.DB, path string, holder string) ([]*inputMetadata, error) {
+func (s *Builder) buildInsertRelations(config *ViewConfig, db *sql.DB, path string, holder string) ([]*inputMetadata, error) {
 	var relations []*inputMetadata
 	for _, relation := range config.relations {
 		relationConfig, err := s.detectInputType(context.TODO(), db, relation.expandedTable.Name, relation, config.expandedTable.Name, path, holder)
@@ -630,7 +630,7 @@ func (s *Builder) shouldSkipColumn(exceptIndex map[string]bool, includeIndex map
 	return false
 }
 
-func (s *Builder) buildExceptIndex(config *viewConfig) map[string]bool {
+func (s *Builder) buildExceptIndex(config *ViewConfig) map[string]bool {
 	exceptIndex := map[string]bool{}
 	for _, column := range config.expandedTable.Columns {
 		for _, except := range column.Except {
@@ -641,7 +641,7 @@ func (s *Builder) buildExceptIndex(config *viewConfig) map[string]bool {
 	return exceptIndex
 }
 
-func (s *Builder) buildIncludeIndex(config *viewConfig) map[string]bool {
+func (s *Builder) buildIncludeIndex(config *ViewConfig) map[string]bool {
 	includeIndex := map[string]bool{}
 	for _, column := range config.expandedTable.Inner {
 		if column.Name == "*" {
@@ -907,7 +907,7 @@ func (b *stmtBuilder) generateIndexes(loadPrevious bool, ensureIndexes bool) ([]
 	return checkers, err
 }
 
-func (s *Builder) prepareStringBuilder(routeBuilder *routeBuilder, typeDef *inputMetadata, config *viewConfig, routeOption *option.RouteConfig) (*strings.Builder, error) {
+func (s *Builder) prepareStringBuilder(routeBuilder *routeBuilder, typeDef *inputMetadata, config *ViewConfig, routeOption *option.RouteConfig) (*strings.Builder, error) {
 	sb := &strings.Builder{}
 	typeName := typeDef.typeDef.Name
 
@@ -975,7 +975,7 @@ func (s *Builder) extractRouteSettings(sourceSQL []byte) (string, string) {
 	return hint, SQL
 }
 
-func (s *Builder) uploadGoType(builder *routeBuilder, name string, rType reflect.Type, routeOption *option.RouteConfig, config *viewConfig) error {
+func (s *Builder) uploadGoType(builder *routeBuilder, name string, rType reflect.Type, routeOption *option.RouteConfig, config *ViewConfig) error {
 	goURL := builder.session.GoFileURL(s.fileNames.unique(name)) + ".go"
 
 	modBundle, isXDatly := s.isPluginBundle(goURL)
@@ -1083,7 +1083,7 @@ func (s *Builder) relativeOf(modulePath string, outputURL string, moduleName str
 	return URL
 }
 
-func (s *Builder) generateGoFileContent(name string, rType reflect.Type, routeOption *option.RouteConfig, aConfig *viewConfig, xDatlyModURL *bundleMetadata, packageName string) ([]byte, error) {
+func (s *Builder) generateGoFileContent(name string, rType reflect.Type, routeOption *option.RouteConfig, aConfig *ViewConfig, xDatlyModURL *bundleMetadata, packageName string) ([]byte, error) {
 	if packageName == "" {
 		base := path.Base(aConfig.fileName)
 		ext := path.Ext(base)

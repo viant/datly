@@ -37,7 +37,7 @@ func (s *Builder) preparePutRule(ctx context.Context, builder *routeBuilder, SQL
 	return template, nil
 }
 
-func (s *Builder) buildUpdateSQL(aRouteBuilder *routeBuilder, routeConfig *option.RouteConfig, aViewConfig *viewConfig, metadata *inputMetadata) (string, error) {
+func (s *Builder) buildUpdateSQL(aRouteBuilder *routeBuilder, routeConfig *option.RouteConfig, aViewConfig *ViewConfig, metadata *inputMetadata) (string, error) {
 	sb, err := s.prepareStringBuilder(aRouteBuilder, metadata, aViewConfig, routeConfig)
 	if err != nil {
 		return "", err

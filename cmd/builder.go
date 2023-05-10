@@ -18,7 +18,6 @@ import (
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
-	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/toolbox"
 	"github.com/viant/toolbox/format"
@@ -64,13 +63,13 @@ type (
 		session *session
 	}
 
-	viewConfig struct {
+	ViewConfig struct {
 		viewName        string
 		queryJoin       *query.Join
 		unexpandedTable *Table
 		outputConfig    option.OutputConfig
 
-		relations      []*viewConfig
+		relations      []*ViewConfig
 		relationsIndex map[string]int
 		metasBuffer    map[string]*Table
 		templateMeta   *templateMetaConfig
@@ -88,11 +87,11 @@ type (
 		except []string
 	}
 
-	viewParamConfig struct {
+	ViewParamConfig struct {
 		viewName string
 		viewFile string
 
-		viewConfig *viewConfig
+		viewConfig *ViewConfig
 		params     []*Parameter
 	}
 
@@ -160,7 +159,7 @@ func (b *routeBuilder) AddViews(aView *view.View) {
 	}
 }
 
-func (c *viewConfig) ensureTableName(tableName string) {
+func (c *ViewConfig) ensureTableName(tableName string) {
 	if c.unexpandedTable.Name != "" {
 		return
 	}
@@ -168,7 +167,7 @@ func (c *viewConfig) ensureTableName(tableName string) {
 	c.unexpandedTable.Name = tableName
 }
 
-func (c *viewConfig) ensureOuterAlias(alias string) {
+func (c *ViewConfig) ensureOuterAlias(alias string) {
 	if c.unexpandedTable.HolderName != "" {
 		return
 	}
@@ -176,7 +175,7 @@ func (c *viewConfig) ensureOuterAlias(alias string) {
 	c.unexpandedTable.HolderName = alias
 }
 
-func (c *viewConfig) ensureInnerAlias(name string) {
+func (c *ViewConfig) ensureInnerAlias(name string) {
 	if c.unexpandedTable.InnerAlias != "" {
 		return
 	}
@@ -184,7 +183,7 @@ func (c *viewConfig) ensureInnerAlias(name string) {
 	c.unexpandedTable.InnerAlias = name
 }
 
-func (c *viewConfig) ensureFileName(name string) {
+func (c *ViewConfig) ensureFileName(name string) {
 	if c.fileName != "" {
 		return
 	}
@@ -192,7 +191,7 @@ func (c *viewConfig) ensureFileName(name string) {
 	c.fileName = name
 }
 
-func (c *viewConfig) AddMetaTemplate(metaName string, holder string, config *Table) {
+func (c *ViewConfig) AddMetaTemplate(metaName string, holder string, config *Table) {
 	if c.unexpandedTable.HolderName == holder {
 		c.templateMeta = &templateMetaConfig{
 			name:  metaName,
@@ -213,7 +212,7 @@ func (c *viewConfig) AddMetaTemplate(metaName string, holder string, config *Tab
 	c.metasBuffer[holder] = config
 }
 
-func (c *viewConfig) AddRelation(viewConfig *viewConfig) {
+func (c *ViewConfig) AddRelation(viewConfig *ViewConfig) {
 	holderName := viewConfig.unexpandedTable.HolderName
 
 	c.relationsIndex[holderName] = len(c.relations)
@@ -225,7 +224,7 @@ func (c *viewConfig) AddRelation(viewConfig *viewConfig) {
 	}
 }
 
-func (c *viewConfig) ViewConfig(holder string) (*viewConfig, bool) {
+func (c *ViewConfig) ViewConfig(holder string) (*ViewConfig, bool) {
 	if holder == c.unexpandedTable.HolderName {
 		return c, true
 	}
@@ -239,7 +238,7 @@ func (c *viewConfig) ViewConfig(holder string) (*viewConfig, bool) {
 	return nil, false
 }
 
-func (c *viewConfig) metaConfigByName(holder string) (*templateMetaConfig, bool) {
+func (c *ViewConfig) metaConfigByName(holder string) (*templateMetaConfig, bool) {
 	if c.templateMeta != nil && c.templateMeta.name == holder {
 		return c.templateMeta, true
 	}
@@ -729,7 +728,7 @@ func fsAddYAML(fs afs.Service, URL string, any interface{}) error {
 	return fs.Upload(context.Background(), URL, file.DefaultFileOsMode, bytes.NewReader(data))
 }
 
-func (s *Builder) buildMainView(ctx context.Context, builder *routeBuilder, config *viewConfig) (*view.View, error) {
+func (s *Builder) buildMainView(ctx context.Context, builder *routeBuilder, config *ViewConfig) (*view.View, error) {
 	s.inheritRouteFromMainConfig(builder, config.outputConfig)
 
 	aView, err := s.buildAndAddViewWithLog(ctx, builder, config, &view.Config{
@@ -759,10 +758,10 @@ func updateAsAuthParamIfNeeded(auth string, param *view.Parameter) {
 	param.Required = boolPtr(true)
 }
 
-func (s *Builder) paramByName(builder *routeBuilder, name string) *view.Parameter {
-	param, ok := builder.paramsIndex.Param(name)
+func (b *routeBuilder) paramByName(name string) *view.Parameter {
+	param, ok := b.paramsIndex.Param(name)
 	if !ok {
-		builder.routerResource.Resource.AddParameters(param)
+		b.routerResource.Resource.AddParameters(param)
 	}
 
 	return param
@@ -840,7 +839,7 @@ func (s *Builder) inheritRouteFromMainConfig(builder *routeBuilder, config optio
 	builder.route.Style = router.Style(view.FirstNotEmpty(config.Style, string(builder.route.Style)))
 }
 
-func (s *Builder) indexExcludedColumns(builder *routeBuilder, config *viewConfig) error {
+func (s *Builder) indexExcludedColumns(builder *routeBuilder, config *ViewConfig) error {
 	err := s.appendExcluded(&builder.route.Exclude, config, "")
 	if err != nil {
 		return err
@@ -853,7 +852,7 @@ func (s *Builder) indexExcludedColumns(builder *routeBuilder, config *viewConfig
 	return err
 }
 
-func (s *Builder) appendExcluded(excluded *[]string, config *viewConfig, path string) error {
+func (s *Builder) appendExcluded(excluded *[]string, config *ViewConfig, path string) error {
 	if err := s.excludeTableColumns(excluded, config.expandedTable, path); err != nil {
 		return err
 	}
@@ -876,7 +875,7 @@ func (s *Builder) appendExcluded(excluded *[]string, config *viewConfig, path st
 	return nil
 }
 
-func (s *Builder) appendMetaExcluded(excluded *[]string, config *viewConfig, path string) error {
+func (s *Builder) appendMetaExcluded(excluded *[]string, config *ViewConfig, path string) error {
 	if config.templateMeta != nil {
 		for _, field := range config.templateMeta.except {
 			actualFieldName, err := s.normalizeFieldName(field)
@@ -996,10 +995,11 @@ func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
 	return utilParams, nil
 }
 
-func (s *Builder) prepareExternalParameters(builder *routeBuilder, paramViewConfig *viewParamConfig) ([]*view.Parameter, error) {
+func (s *Builder) prepareExternalParameters(builder *routeBuilder, paramViewConfig *ViewParamConfig) ([]*view.Parameter, error) {
 	var externalParams []*view.Parameter
 
 	for _, parameter := range paramViewConfig.params {
+
 		if parameter.Auth != "" {
 			authParam := &view.Parameter{
 				Name:            parameter.Auth,
@@ -1060,8 +1060,8 @@ func (s *Builder) updateParamByHint(resource *view.Resource, paramIndex *Paramet
 	if err := tryUnmarshalHint(JSONHint, paramConfig); err != nil {
 		return err
 	}
-	if hint.IsStructSQL {
-		paramConfig.Kind = string(view.KindStructQL)
+	if hint.StructQLQuery != nil {
+		paramConfig.Kind = string(view.KindParam)
 	}
 
 	return s.updateViewParam(resource, param, paramConfig, SQL, paramIndex)
@@ -1125,11 +1125,11 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 	}
 
 	if strings.TrimSpace(config.Codec) != "" && isSQLLikeCodec(config.Codec) {
-		if param.Codec == nil {
-			param.Codec = &view.Codec{Reference: shared.Reference{config.Codec}}
+		if param.Output == nil {
+			param.Output = &view.Codec{Reference: shared.Reference{config.Codec}}
 		}
 
-		param.Codec.Query = SQL
+		param.Output.Query = SQL
 	}
 
 	return nil
@@ -1468,38 +1468,21 @@ func (s *Builder) buildParamHint(builder *routeBuilder, selector *expr.Select, c
 		return nil
 	}
 
+	qlQuery, _ := sanitize.TryParseStructQLHint(paramHint)
 	builder.paramsIndex.AddParamHint(holderName, &sanitize.ParameterHint{
-		Parameter:   holderName,
-		Hint:        paramHint,
-		IsStructSQL: isStructQL(paramHint),
+		Parameter:     holderName,
+		Hint:          paramHint,
+		StructQLQuery: qlQuery,
 	})
 
 	return nil
 }
 
-func isStructQL(hint string) bool {
-	_, SQL := sanitize.SplitHint(hint)
-	if SQL == "" {
-		return false
-	}
-	query, _ := sqlparser.ParseQuery(SQL)
-	if query == nil || query.From.X == nil {
-		return false
-	}
-	return strings.Contains(sqlparser.Stringify(query.From.X), "/")
-}
-
 func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
-	matched := cursor.MatchAfterOptional(whitespaceMatcher, commentMatcher)
-	if matched.Code == commentToken {
-		return matched.Text(cursor), nil
-	}
-
 	aConfig := &option.ParameterConfig{}
 	possibilities := []*parsly.Token{typeMatcher, exprGroupMatcher}
-	anyMatched := false
 	for len(possibilities) > 0 {
-		matched = cursor.MatchAfterOptional(whitespaceMatcher, possibilities...)
+		matched := cursor.MatchAfterOptional(whitespaceMatcher, possibilities...)
 		switch matched.Code {
 		case typeToken:
 			typeContent := matched.Text(cursor)
@@ -1540,19 +1523,28 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 			}
 			possibilities = []*parsly.Token{}
 		default:
-			if !anyMatched {
-				return "", nil
-			}
 			possibilities = []*parsly.Token{}
 		}
-		anyMatched = true
 	}
-	marshal, err := json.Marshal(aConfig)
+
+	matched := cursor.MatchAfterOptional(whitespaceMatcher, commentMatcher)
+	var sql string
+	if matched.Code == commentToken {
+		sql = matched.Text(cursor)
+		sql = sql[2 : len(sql)-2]
+	}
+
+	configJson, err := json.Marshal(aConfig)
 	if err != nil {
 		return "", err
 	}
 
-	return string(marshal), nil
+	result := string(configJson)
+	if sql != "" {
+		result += " " + sql
+	}
+
+	return result, nil
 }
 
 func (s *Builder) readParamConfigs(config *option.ParameterConfig, cursor *parsly.Cursor) error {

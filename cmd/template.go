@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"github.com/viant/afs/file"
-	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/sanitize"
@@ -18,7 +17,7 @@ import (
 	"strings"
 )
 
-func (s *Builder) buildTemplate(ctx context.Context, builder *routeBuilder, aViewConfig *viewConfig, externalParams []*view.Parameter) (*view.Template, error) {
+func (s *Builder) buildTemplate(ctx context.Context, builder *routeBuilder, aViewConfig *ViewConfig, externalParams []*view.Parameter) (*view.Template, error) {
 	template, err := s.Parse(ctx, builder, aViewConfig, externalParams)
 	if err != nil {
 		return nil, err
@@ -47,7 +46,7 @@ func (s *Builder) buildTemplate(ctx context.Context, builder *routeBuilder, aVie
 	}, nil
 }
 
-func (s *Builder) uploadTemplateSQL(builder *routeBuilder, template string, aViewConfig *viewConfig) (SQL string, URI string, err error) {
+func (s *Builder) uploadTemplateSQL(builder *routeBuilder, template string, aViewConfig *ViewConfig) (SQL string, URI string, err error) {
 	SQL = sanitize.Sanitize(template, builder.paramsIndex.hints, builder.paramsIndex.consts)
 	if SQL != "" && aViewConfig.fileName != "" {
 		URI, err = s.upload(
@@ -65,7 +64,7 @@ func (s *Builder) uploadTemplateSQL(builder *routeBuilder, template string, aVie
 	return SQL, URI, nil
 }
 
-func (s *Builder) Parse(ctx context.Context, builder *routeBuilder, aViewConfig *viewConfig, params []*view.Parameter) (*Template, error) {
+func (s *Builder) Parse(ctx context.Context, builder *routeBuilder, aViewConfig *ViewConfig, params []*view.Parameter) (*Template, error) {
 	table := aViewConfig.unexpandedTable
 
 	SQL := table.SQL
@@ -97,7 +96,7 @@ func (s *Builder) convertParams(builder *routeBuilder, template *Template) ([]*v
 
 	added := map[string]bool{}
 	for _, parameter := range parameters {
-		existingParam := s.paramByName(builder, parameter.Name)
+		existingParam := builder.paramByName(parameter.Name)
 		newParam, err := convertMetaParameter(parameter, builder.option.Const, builder.paramsIndex.hints)
 		if err != nil {
 			return nil, err
@@ -141,6 +140,11 @@ func convertMetaParameter(param *Parameter, values map[string]interface{}, hints
 		targetName = *param.Target
 	}
 
+	cardinality := param.Cardinality
+	if param.Multi && param.Kind == string(view.KindDataView) {
+		cardinality = view.Many
+	}
+
 	return &view.Parameter{
 		Name:         param.Id,
 		Output:       aCodec,
@@ -148,7 +152,7 @@ func convertMetaParameter(param *Parameter, values map[string]interface{}, hints
 		PresenceName: param.Name,
 		Schema: &view.Schema{
 			DataType:    dataType,
-			Cardinality: param.Cardinality,
+			Cardinality: cardinality,
 		},
 		In: &view.Location{
 			Kind: view.Kind(param.Kind),
@@ -269,7 +273,7 @@ func updateDestSchema(dest *view.Parameter, source *view.Parameter) {
 	}
 }
 
-func (s *Builder) buildTemplateMeta(aConfig *viewConfig) (*view.TemplateMeta, error) {
+func (s *Builder) buildTemplateMeta(aConfig *ViewConfig) (*view.TemplateMeta, error) {
 	var table *Table
 	if aConfig.templateMeta != nil {
 		table = aConfig.templateMeta.table
@@ -297,7 +301,7 @@ type Template struct {
 	defaultParamKind view.Kind
 	variables        map[string]bool
 	paramsMeta       *ParametersIndex
-	index            map[string]int
+	added            map[string]bool
 	columnTypes      ColumnIndex
 	viewParams       []*view.Parameter
 }
@@ -306,7 +310,7 @@ func NewTemplate(paramsMeta *ParametersIndex, SQL string, defaultParamKind view.
 	t := &Template{
 		SQL:              SQL,
 		paramsMeta:       paramsMeta,
-		index:            map[string]int{},
+		added:            map[string]bool{},
 		defaultParamKind: defaultParamKind,
 		columnTypes:      columnTypes,
 		viewParams:       viewParams,
@@ -432,9 +436,10 @@ func (t *Template) indexParameter(actual *expr.Select, required bool, rType refl
 		multi = multi || selector.ID == "IndexBy"
 	}
 
-	pType := "string"
-	assumed := true
+	param := t.ParamByName(paramName)
 
+	pType := "string"
+	assumed := param.Assumed
 	if declared, ok := t.paramsMeta.types[paramName]; ok {
 		pType = declared
 		assumed = false
@@ -450,19 +455,33 @@ func (t *Template) indexParameter(actual *expr.Select, required bool, rType refl
 		kind = string(paramKind)
 	}
 
-	t.AddParameter(&Parameter{
-		Assumed: assumed,
-		ParameterConfig: option.ParameterConfig{
-			Id:       paramName,
-			Name:     paramName,
-			Kind:     kind,
-			DataType: pType,
-			Required: BoolPtr(required && prefix != keywords.ParamsMetadataKey),
-		},
-		FullName: actual.FullName,
-		Multi:    multi,
-		Has:      prefix == keywords.ParamsMetadataKey,
-	})
+	if param.Id == "" {
+		param.Id = paramName
+	}
+
+	if param.Name == "" {
+		param.Name = paramName
+	}
+
+	if param.FullName == "" {
+		param.FullName = actual.FullName
+	}
+
+	if param.Kind == "" {
+		param.Kind = kind
+	}
+
+	if param.Assumed {
+		if param.DataType == "string" || param.DataType == "" {
+			param.DataType = pType
+		}
+	}
+
+	param.Assumed = param.Assumed && assumed
+	param.Multi = param.Multi || multi
+	param.Has = param.Has || prefix == keywords.ParamsMetadataKey
+	param.Required = BoolPtr((required && prefix != keywords.ParamsMetadataKey) || param.Required != nil && *param.Required)
+	t.AddParameter(param)
 }
 
 func getContextSelector(prefix string, x ast.Expression) (*expr.Select, bool) {
@@ -484,40 +503,17 @@ func (t *Template) AddParameter(param *Parameter) {
 		return
 	}
 
-	if param.Multi {
-		param.Cardinality = view.Many
+	if !t.added[param.Id] {
+		t.Parameters = append(t.Parameters, param)
+		t.added[param.Id] = true
 	}
-
-	if index, ok := t.index[param.Id]; ok {
-		parameter := t.Parameters[index]
-		parameter.Multi = param.Multi || parameter.Multi
-		if parameter.Multi {
-			parameter.Cardinality = view.Many
-		}
-
-		parameter.Repeated = parameter.Repeated || param.Repeated
-
-		parameter.Required = BoolPtr(((parameter.Required != nil && *parameter.Required) || (param.Required != nil && *param.Required)) && !(param.Has || parameter.Has))
-		if parameter.Assumed {
-			parameter.DataType = param.DataType
-		}
-
-		return
-	}
-
-	t.index[param.Id] = len(t.Parameters)
-	t.Parameters = append(t.Parameters, param)
 }
 
 func (t *Template) unmarshalParamsHints() error {
 	iterator := sanitize.NewIterator(t.SQL, t.paramsMeta.hints, t.paramsMeta.consts)
 	for iterator.Has() {
 		paramMeta := iterator.Next()
-		aParam, ok := t.ParamByName(paramMeta.Holder)
-		if !ok {
-			continue
-		}
-
+		aParam := t.ParamByName(paramMeta.Holder)
 		if err := t.updateParamIfNeeded(aParam, paramMeta); err != nil {
 			return err
 		}
@@ -546,19 +542,13 @@ func (t *Template) updateParamIfNeeded(param *Parameter, meta *sanitize.ParamMet
 	param.Assumed = param.Assumed && oldType == param.DataType
 
 	if len(meta.MetaType.SQL) != 0 {
-		existingMeta, err := t.paramsMeta.ParamsMetaWithComment(param.Name, "")
-		if err != nil {
-			return err
-		}
-
-		param.SQL = existingMeta.SQL
-		if !existingMeta.SQLCodec {
+		param.SQL = meta.MetaType.SQL
+		if !param.SQLCodec {
 			param.Kind = string(view.KindDataView)
 		}
 	}
 
 	param.Typer = meta.MetaType.Typer
-
 	if strings.EqualFold(meta.SQLKeyword, sanitize.InKeyword) {
 		param.Repeated = true
 	}
@@ -566,13 +556,8 @@ func (t *Template) updateParamIfNeeded(param *Parameter, meta *sanitize.ParamMet
 	return nil
 }
 
-func (t *Template) ParamByName(holder string) (*Parameter, bool) {
-	index, ok := t.index[holder]
-	if !ok {
-		return nil, false
-	}
-
-	return t.Parameters[index], true
+func (t *Template) ParamByName(holder string) *Parameter {
+	return t.paramsMeta.ParamMeta(holder)
 }
 
 func (t *Template) inheritParamTypesFromTypers() error {

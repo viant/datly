@@ -32,13 +32,13 @@ type (
 	}
 )
 
-func newViewConfig(viewName string, fileName string, parent *query.Join, aTable *Table, templateMeta *Table, mode view.Mode) *viewConfig {
+func newViewConfig(viewName string, fileName string, parent *query.Join, aTable *Table, templateMeta *Table, mode view.Mode) *ViewConfig {
 	var metaConfig *templateMetaConfig
 	if templateMeta != nil {
 		metaConfig = &templateMetaConfig{table: templateMeta}
 	}
 
-	result := &viewConfig{
+	result := &ViewConfig{
 		viewName:        viewName,
 		queryJoin:       parent,
 		unexpandedTable: aTable,
