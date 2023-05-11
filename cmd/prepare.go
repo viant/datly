@@ -833,7 +833,6 @@ func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, ta
 	if err != nil {
 		return "", err
 	}
-
 	sb := &strings.Builder{}
 	sqlSb := &strings.Builder{}
 	sqlSb.WriteString("SELECT * FROM ")
@@ -844,6 +843,7 @@ func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, ta
 
 	var i int
 	for _, field := range fields {
+
 		aFieldMeta, ok := meta.metaByColName(field.Column)
 		if !ok || !aFieldMeta.primaryKey {
 			continue
@@ -856,8 +856,8 @@ func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, ta
 		}
 		i++
 
-		recName := s.appendSelectField(aFieldMeta, setSb, holder, path)
-		sqlSb.WriteString(fmt.Sprintf(" #if($%v.Length() > 0 ) ", recName))
+		recName := s.getStructQLName(aFieldMeta, holder)
+		//sqlSb.WriteString(fmt.Sprintf(" #if($%v.Length() > 0 ) ", recName))
 		sqlSb.WriteString(aFieldMeta.columnName)
 		sqlSb.WriteString(" IN ( $")
 		sqlSb.WriteString(recName)
@@ -871,12 +871,17 @@ func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, ta
 	return sb.String(), nil
 }
 
-func (s *Builder) appendSelectField(aFieldMeta *fieldMeta, sb *strings.Builder, paramName string, path string) string {
+func (s *Builder) getStructSQLParam(aFieldMeta *fieldMeta, paramName string, path string) string {
+	query := fmt.Sprintf("SELECT ARRAY_AGG(%v) AS Values FROM  `/%v`", aFieldMeta.fieldName, path)
+	return fmt.Sprintf(`
+#set($_ = $v<>(param/%v) /*
+    %v
+  */)
+`, paramName, query)
+}
+
+func (s *Builder) getStructQLName(aFieldMeta *fieldMeta, paramName string) string {
 	recName := paramName + aFieldMeta.fieldName
-	sb.WriteString(fmt.Sprintf(
-		"\n#set($%v = $%v.QueryFirst(\"SELECT ARRAY_AGG(%v) AS Values FROM  `%v`\"))",
-		recName, paramName, aFieldMeta.fieldName, path,
-	))
 	return recName + "." + "Values"
 }
 
