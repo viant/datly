@@ -1,9 +1,9 @@
 package poc
 
 type Campaign struct {
-	ID         int
+	Id         int
 	Advertiser struct {
-		ID   int
+		Id   int
 		Name string
 	}
 }

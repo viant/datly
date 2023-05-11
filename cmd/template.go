@@ -244,6 +244,10 @@ func updateParamPrecedence(dest *view.Parameter, source *view.Parameter) {
 		dest.Schema.DataType = ""
 		dest.Schema.Name = ""
 	}
+
+	if dest.In != nil && dest.In.Kind == view.KindParam {
+		dest.Schema = nil
+	}
 }
 
 func updateDestSchema(dest *view.Parameter, source *view.Parameter) {
@@ -540,15 +544,8 @@ func (t *Template) updateParamIfNeeded(param *Parameter, meta *sanitize.ParamMet
 	}
 
 	param.Assumed = param.Assumed && oldType == param.DataType
-
-	if len(meta.MetaType.SQL) != 0 {
-		param.SQL = meta.MetaType.SQL
-		if !param.SQLCodec {
-			param.Kind = string(view.KindDataView)
-		}
-	}
-
 	param.Typer = meta.MetaType.Typer
+
 	if strings.EqualFold(meta.SQLKeyword, sanitize.InKeyword) {
 		param.Repeated = true
 	}

@@ -1,8 +1,7 @@
 /* {"Method":"PATCH","ResponseBody":{"From":"Campaign"}} */
 
 import (
-	"/Users/awitas/go/src/github.com/viant/datly/poc/xxx/.Campaign"
-	"/Users/awitas/go/src/github.com/viant/datly/poc/xxx/.Entity"
+	"/Users/klarysz/Documents/datly/poc.Campaign"
 )
 
 

@@ -114,6 +114,7 @@ func (p *ParametersIndex) ParamsMetaWithHint(paramName string, hint *sanitize.Pa
 		parameter.SQL = hint.StructQLQuery.SQL
 		parameter.SQLCodec = true
 		parameter.Target = &hint.StructQLQuery.Source
+		parameter.Kind = string(view.KindParam)
 	} else if isSQLLikeCodec(parameter.Codec) {
 		parameter.SQL = SQL
 		parameter.SQLCodec = true

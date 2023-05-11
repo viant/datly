@@ -112,6 +112,11 @@ type (
 		URL    string
 		params []*view.Parameter
 	}
+
+	paramJSONHintConfig struct {
+		option.ParameterConfig
+		option.TransformOption
+	}
 )
 
 func newUniqueIndex(caseSensitive bool) *uniqueIndex {
@@ -1060,9 +1065,6 @@ func (s *Builder) updateParamByHint(resource *view.Resource, paramIndex *Paramet
 	if err := tryUnmarshalHint(JSONHint, paramConfig); err != nil {
 		return err
 	}
-	if hint.StructQLQuery != nil {
-		paramConfig.Kind = string(view.KindParam)
-	}
 
 	return s.updateViewParam(resource, param, paramConfig, SQL, paramIndex)
 }
@@ -1078,10 +1080,6 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 
 	if config.Const != nil {
 		param.Const = config.Const
-	}
-
-	if config.Kind == string(view.KindDataView) {
-		param.Query = SQL
 	}
 
 	param.Name = view.FirstNotEmpty(config.Name, param.Name)
@@ -1101,7 +1099,11 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 
 	param.Schema.DataType = paramType
 	if config.Codec != "" {
-		param.Output = &view.Codec{Reference: shared.Reference{Ref: config.Codec}}
+		if param.Output == nil {
+			param.Output = &view.Codec{}
+		}
+
+		param.Output.Ref = config.Codec
 	}
 
 	if config.MaxAllowedRecords != nil {
@@ -1126,10 +1128,8 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 
 	if strings.TrimSpace(config.Codec) != "" && isSQLLikeCodec(config.Codec) {
 		if param.Output == nil {
-			param.Output = &view.Codec{Reference: shared.Reference{config.Codec}}
+			param.Output = &view.Codec{Reference: shared.Reference{Ref: config.Codec}}
 		}
-
-		param.Output.Query = SQL
 	}
 
 	return nil
@@ -1479,7 +1479,7 @@ func (s *Builder) buildParamHint(builder *routeBuilder, selector *expr.Select, c
 }
 
 func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
-	aConfig := &option.ParameterConfig{}
+	aConfig := &paramJSONHintConfig{}
 	possibilities := []*parsly.Token{typeMatcher, exprGroupMatcher}
 	for len(possibilities) > 0 {
 		matched := cursor.MatchAfterOptional(whitespaceMatcher, possibilities...)
@@ -1518,7 +1518,7 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 
 			aConfig.Target = &target
 
-			if err := s.readParamConfigs(aConfig, cursor); err != nil {
+			if err := s.readParamConfigs(&aConfig.ParameterConfig, cursor); err != nil {
 				return "", err
 			}
 			possibilities = []*parsly.Token{}
@@ -1528,13 +1528,23 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 	}
 
 	matched := cursor.MatchAfterOptional(whitespaceMatcher, commentMatcher)
+	actualHint := map[string]interface{}{}
 	var sql string
 	if matched.Code == commentToken {
-		sql = matched.Text(cursor)
-		sql = sql[2 : len(sql)-2]
+		aComment := matched.Text(cursor)
+		aComment = aComment[2 : len(aComment)-2]
+
+		hint, SQL := sanitize.SplitHint(aComment)
+		if hint != "" {
+			if err := json.Unmarshal([]byte(hint), &actualHint); err != nil {
+				return "", err
+			}
+		}
+
+		sql = SQL
 	}
 
-	configJson, err := json.Marshal(aConfig)
+	configJson, err := mergeJsonStructs(aConfig.TransformOption, aConfig.ParameterConfig, actualHint)
 	if err != nil {
 		return "", err
 	}
@@ -1545,6 +1555,27 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 	}
 
 	return result, nil
+}
+
+func mergeJsonStructs(args ...interface{}) ([]byte, error) {
+	result := map[string]interface{}{}
+
+	for _, arg := range args {
+		marshalled, err := json.Marshal(arg)
+		if err != nil {
+			return nil, err
+		}
+
+		if string(marshalled) == "null" || string(marshalled) == "" {
+			continue
+		}
+
+		if err := json.Unmarshal(marshalled, &result); err != nil {
+			return nil, err
+		}
+	}
+
+	return json.Marshal(result)
 }
 
 func (s *Builder) readParamConfigs(config *option.ParameterConfig, cursor *parsly.Cursor) error {

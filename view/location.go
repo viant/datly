@@ -26,7 +26,7 @@ const (
 //Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case DataViewKind, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindLiteral, KindStructQL:
+	case DataViewKind, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindLiteral, KindStructQL, KindParam:
 		return nil
 	}
 
@@ -45,7 +45,7 @@ func (p ParamName) Validate(kind Kind) error {
 	}
 
 	switch kind {
-	case DataViewKind, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindLiteral, KindStructQL:
+	case DataViewKind, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindLiteral, KindStructQL, KindParam:
 		return nil
 	case KindEnvironment:
 		if os.Getenv(string(p)) == "" {

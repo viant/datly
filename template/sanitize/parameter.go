@@ -47,12 +47,11 @@ func TryParseStructQLHint(hint string) (*StructQLQuery, bool) {
 
 	source := sqlparser.Stringify(query.From.X)
 	colonIndex := strings.Index(source, ":")
-	if strings.HasPrefix(source, "/") {
+	if strings.HasPrefix(source, "/") || colonIndex == -1 {
 		return nil, false
 	}
-	if colonIndex != -1 {
-		source = source[:colonIndex]
-	}
+
+	source = strings.Trim(source, "`")[:colonIndex-1]
 
 	return &StructQLQuery{
 		Source: source,

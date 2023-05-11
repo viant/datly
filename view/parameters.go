@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
-	"github.com/viant/structql"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
@@ -36,19 +35,19 @@ type (
 		ExpectedReturned  *int      `json:",omitempty"`
 		Schema            *Schema   `json:",omitempty"`
 		//Deprecated -> use Codec only to set Output
-		Codec            *Codec      `json:",omitempty"`
-		Output           *Codec      `json:",omitempty"`
-		Const            interface{} `json:",omitempty"`
-		Query            string      `json:",omitempty"`
-		structQL         *structql.Query
-		DateFormat       string `json:",omitempty"`
-		ErrorStatusCode  int    `json:",omitempty"`
-		valueAccessor    *types.Accessor
-		presenceAccessor *types.Accessor
-		initialized      bool
-		view             *View
-		_owner           *View
-		_literalValue    interface{}
+		Codec           *Codec      `json:",omitempty"`
+		Output          *Codec      `json:",omitempty"`
+		Const           interface{} `json:",omitempty"`
+		DateFormat      string      `json:",omitempty"`
+		ErrorStatusCode int         `json:",omitempty"`
+
+		_valueAccessor    *types.Accessor
+		_presenceAccessor *types.Accessor
+		_initialized      bool
+		_view             *View
+		_owner            *View
+		_literalValue     interface{}
+		_dependsOn        *Parameter
 	}
 
 	ParameterOption func(p *Parameter)
@@ -212,11 +211,10 @@ func (v *Codec) initSchemaIfNeeded(resource *Resource) error {
 
 //Init initializes Parameter
 func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, structType reflect.Type) error {
-	if p.initialized == true {
+	if p._initialized == true {
 		return nil
 	}
-	p.initialized = true
-
+	p._initialized = true
 	if p.Codec != nil {
 		p.Output = p.Codec
 		p.Codec = nil
@@ -247,8 +245,9 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 			return err
 		}
 	}
-	if p.In.Kind == KindStructQL {
-		if err := p.initStructQLParameter(ctx, view, resource); err != nil {
+
+	if p.In.Kind == KindParam {
+		if err := p.initParamBasedParameter(ctx, view, resource); err != nil {
 			return err
 		}
 	}
@@ -264,37 +263,37 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 	return p.Validate()
 }
 
-func (p *Parameter) initStructQLParameter(ctx context.Context, view *View, resource *Resource) error {
-
-	if p.Query == "" {
-		return fmt.Errorf("structql param: %v, query is empty", p.Name)
-	}
-	name := p.In.Name
-	var pType reflect.Type
-	if name == "" {
-		pType = view.Schema.Type()
-	} else {
-		refParam, err := view.ParamByName(name)
-		if err != nil {
-			return fmt.Errorf("failed to build structql param: %v, %w", name, err)
-		}
-		if refParam.Schema == nil {
-			_ = refParam.Init(ctx, view, resource, nil)
-		}
-		if refParam.Schema == nil {
-			return fmt.Errorf("failed to build structql param %v, ref param %v schema was nil", name, refParam.Name)
-		}
-		pType = refParam.Schema.Type()
-	}
-
-	query, err := structql.NewQuery(p.Query, pType, nil)
-	if err != nil {
-		return fmt.Errorf("failed to build structql param: %v, %w", name, err)
-	}
-	p.structQL = query
-	p.Schema = NewSchema(query.Type())
-	return nil
-}
+//func (p *Parameter) initStructQLParameter(ctx context.Context, view *View, resource *Resource) error {
+//
+//	if p.Query == "" {
+//		return fmt.Errorf("structql param: %v, query is empty", p.Name)
+//	}
+//	name := p.In.Name
+//	var pType reflect.Type
+//	if name == "" {
+//		pType = view.Schema.Type()
+//	} else {
+//		refParam, err := view.ParamByName(name)
+//		if err != nil {
+//			return fmt.Errorf("failed to build structql param: %v, %w", name, err)
+//		}
+//		if refParam.Schema == nil {
+//			_ = refParam.Init(ctx, view, resource, nil)
+//		}
+//		if refParam.Schema == nil {
+//			return fmt.Errorf("failed to build structql param %v, ref param %v schema was nil", name, refParam.Name)
+//		}
+//		pType = refParam.Schema.Type()
+//	}
+//
+//	query, err := structql.NewQuery(p.Query, pType, nil)
+//	if err != nil {
+//		return fmt.Errorf("failed to build structql param: %v, %w", name, err)
+//	}
+//	p.structQL = query
+//	p.Schema = NewSchema(query.Type())
+//	return nil
+//}
 
 func (p *Parameter) initDataViewParameter(ctx context.Context, resource *Resource) error {
 	aView, err := resource.View(p.In.Name)
@@ -306,7 +305,7 @@ func (p *Parameter) initDataViewParameter(ctx context.Context, resource *Resourc
 		return err
 	}
 
-	p.view = aView
+	p._view = aView
 	if p.Schema == nil {
 		p.Schema = NewSchema(aView.Schema.SliceType())
 	} else {
@@ -368,8 +367,8 @@ func (p *Parameter) inherit(param *Parameter) {
 		p.Output = param.Output
 	}
 
-	if p.view == nil {
-		p.view = param.view
+	if p._view == nil {
+		p._view = param._view
 	}
 
 	if p.ErrorStatusCode == 0 {
@@ -396,7 +395,7 @@ func (p *Parameter) Validate() error {
 
 //View returns View related with Parameter if Location.Kind is set to data_view
 func (p *Parameter) View() *View {
-	return p.view
+	return p._view
 }
 
 //Validate checks if Location is valid
@@ -485,11 +484,11 @@ func (p *Parameter) initSchemaFromType(structType reflect.Type) error {
 }
 
 func (p *Parameter) UpdatePresence(presencePtr unsafe.Pointer) {
-	p.presenceAccessor.SetBool(presencePtr, true)
+	p._presenceAccessor.SetBool(presencePtr, true)
 }
 
 func (p *Parameter) SetAccessor(accessor *types.Accessor) {
-	p.valueAccessor = accessor
+	p._valueAccessor = accessor
 }
 
 func (p *Parameter) pathFields(path string, structType reflect.Type) ([]*xunsafe.Field, error) {
@@ -517,28 +516,29 @@ func (p *Parameter) pathFields(path string, structType reflect.Type) ([]*xunsafe
 }
 
 func (p *Parameter) Value(values interface{}) (interface{}, error) {
-	return p.valueAccessor.Value(values)
+	return p._valueAccessor.Value(values)
 }
 
 func (p *Parameter) ConvertAndSetCtx(ctx context.Context, selector *Selector, value interface{}) error {
-	return p.convertAndSet(ctx, selector, value, false)
+	_, err := p.convertAndSet(ctx, selector, value, false)
+	return err
 }
 
-func (p *Parameter) convertAndSet(ctx context.Context, selector *Selector, value interface{}, converted bool) error {
+func (p *Parameter) convertAndSet(ctx context.Context, selector *Selector, value interface{}, converted bool) (interface{}, error) {
 	p.ensureSelectorParamValue(selector)
 
 	paramPtr, presencePtr := asValuesPtr(selector)
 
-	err := p.setValue(ctx, value, paramPtr, converted, selector)
+	value, err := p.setValue(ctx, value, paramPtr, converted, selector)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	p.UpdatePresence(presencePtr)
-	return nil
+	return value, nil
 }
 
-func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr unsafe.Pointer, converted bool, options ...interface{}) error {
+func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr unsafe.Pointer, converted bool, options ...interface{}) (interface{}, error) {
 	aCodec := p.Output
 	if converted {
 		aCodec = nil
@@ -552,17 +552,22 @@ func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr un
 	if codecFn != nil {
 		convertedValue, err := codecFn(ctx, value, options...)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		p.valueAccessor.SetValue(paramPtr, convertedValue)
-		return nil
+		p._valueAccessor.SetValue(paramPtr, convertedValue)
+		return convertedValue, nil
 	}
 
-	return p.valueAccessor.AdjustAndSet(paramPtr, value, p.DateFormat)
+	return p._valueAccessor.SetConvertedAndGet(paramPtr, value, p.DateFormat)
 }
 
 func (p *Parameter) Set(selector *Selector, value interface{}) error {
+	_, err := p.convertAndSet(context.Background(), selector, value, true)
+	return err
+}
+
+func (p *Parameter) SetAndGet(selector *Selector, value interface{}) (interface{}, error) {
 	return p.convertAndSet(context.Background(), selector, value, true)
 }
 
@@ -578,7 +583,7 @@ func (p *Parameter) SetPresenceField(structType reflect.Type) error {
 		return err
 	}
 
-	p.presenceAccessor = types.NewAccessor(fields, structType)
+	p._presenceAccessor = types.NewAccessor(fields, structType)
 
 	return nil
 }
@@ -615,12 +620,31 @@ func (p *Parameter) UpdateValue(params interface{}, presenceMap interface{}) err
 	paramsPtr := xunsafe.AsPointer(params)
 	presenceMapPtr := xunsafe.AsPointer(presenceMap)
 
-	if err := p.setValue(context.Background(), p.Const, paramsPtr, true); err != nil {
+	if _, err := p.setValue(context.Background(), p.Const, paramsPtr, true); err != nil {
 		return err
 	}
 
 	p.UpdatePresence(presenceMapPtr)
 	return nil
+}
+
+func (p *Parameter) initParamBasedParameter(ctx context.Context, view *View, resource *Resource) error {
+	param, err := resource.ParamByName(p.In.Name)
+	if err != nil {
+		return err
+	}
+
+	if err = param.Init(ctx, view, resource, nil); err != nil {
+		return err
+	}
+
+	p.Schema = param.Schema.copy()
+	p._dependsOn = param
+	return nil
+}
+
+func (p *Parameter) Parent() *Parameter {
+	return p._dependsOn
 }
 
 //ParametersIndex represents Parameter map indexed by Parameter.Name
