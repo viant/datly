@@ -16,20 +16,21 @@ import (
 
 type (
 	inputMetadata struct {
-		typeDef      *view.TypeDefinition
-		meta         *typeMeta
-		actualFields []*view.Field
-		bodyHolder   string
-		paramName    string
-		relations    []*inputMetadata
-		fkIndex      map[string]sink.Key
-		pkIndex      map[string]sink.Key
-		table        string
-		config       *ViewConfig
-		sql          string
-		sqlName      string
-		isPtr        bool
-		path         string
+		typeDef         *view.TypeDefinition
+		meta            *typeMeta
+		actualFields    []*view.Field
+		bodyHolder      string
+		paramName       string
+		relations       []*inputMetadata
+		fkIndex         map[string]sink.Key
+		pkIndex         map[string]sink.Key
+		table           string
+		config          *ViewConfig
+		sql             string
+		prevNamePrefix  string
+		indexNamePrefix string
+		isPtr           bool
+		path            string
 	}
 
 	typeMeta struct {

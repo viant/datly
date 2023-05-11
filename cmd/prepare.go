@@ -236,8 +236,8 @@ func (b *stmtBuilder) newRelation(rel *inputMetadata) *stmtBuilder {
 
 func (b *stmtBuilder) appendIndex(def *inputMetadata, aMeta *fieldMeta, inputPath []*inputMetadata, previous bool) (string, string) {
 	aFieldName := aMeta.fieldName
-	indexName := fmt.Sprintf("%vBy%v", def.sqlName, strings.Title(aFieldName))
-	src := def.sqlName
+	indexName := fmt.Sprintf("%vBy%v", def.indexNamePrefix, strings.Title(aFieldName))
+	src := def.prevNamePrefix
 	if previous && len(inputPath) > 0 {
 		actualPath := strings.Trim(def.path, "/")
 		if actualPath == "" {
@@ -246,7 +246,7 @@ func (b *stmtBuilder) appendIndex(def *inputMetadata, aMeta *fieldMeta, inputPat
 			actualPath = "/" + actualPath + "/"
 		}
 
-		src = fmt.Sprintf("%v.Query(\"SELECT * FROM `%v`\")", inputPath[0].sqlName, actualPath)
+		src = fmt.Sprintf("%v.Query(\"SELECT * FROM `%v`\")", inputPath[0].prevNamePrefix, actualPath)
 	}
 
 	b.sb.WriteString("\n")
@@ -514,20 +514,21 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	}
 
 	return &inputMetadata{
-		typeDef:      definition,
-		meta:         typesMeta,
-		actualFields: actualFields,
-		paramName:    paramName,
-		bodyHolder:   holderName,
-		relations:    insertRelations,
-		fkIndex:      fkIndex,
-		pkIndex:      pkIndex,
-		table:        table,
-		config:       aConfig,
-		sql:          SQL,
-		sqlName:      "prev" + strings.Title(paramName),
-		isPtr:        true,
-		path:         strings.TrimRight(actualPath, "/"),
+		typeDef:         definition,
+		meta:            typesMeta,
+		actualFields:    actualFields,
+		paramName:       paramName,
+		bodyHolder:      holderName,
+		relations:       insertRelations,
+		fkIndex:         fkIndex,
+		pkIndex:         pkIndex,
+		table:           table,
+		config:          aConfig,
+		sql:             SQL,
+		prevNamePrefix:  "prev" + strings.Title(paramName),
+		indexNamePrefix: strings.ToLower(paramName[0:1]) + paramName[1:],
+		isPtr:           true,
+		path:            strings.TrimRight(actualPath, "/"),
 	}, nil
 }
 
@@ -765,7 +766,7 @@ func (b *stmtBuilder) appendSQLHint(metadata *inputMetadata) error {
 }
 
 func (b *stmtBuilder) appendParamHint(metadata *inputMetadata, hint string) {
-	b.writeString(fmt.Sprintf("\n#set($_ = $%v ", metadata.sqlName))
+	b.writeString(fmt.Sprintf("\n#set($_ = $%v ", metadata.prevNamePrefix))
 	b.writeString(b.stringWithIndent(hint))
 	b.writeString("\n)")
 }
