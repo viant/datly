@@ -10,11 +10,13 @@ import (
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/router/marshal/tabjson"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/parameter"
+	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/load/reader/csv"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -40,6 +42,9 @@ const (
 	FormatQuery    = "_format"
 
 	HeaderContentType = "Content-Type"
+
+	TabularJSONQueryFormat = "tabular_json"
+	TabularJSONFormat      = "application/json"
 )
 
 type (
@@ -96,8 +101,9 @@ type (
 		Field             string               `json:",omitempty"`
 		Exclude           []string
 		NormalizeExclude  *bool
-		DateFormat        string     `json:",omitempty"`
-		CSV               *CSVConfig `json:",omitempty"`
+		DateFormat        string             `json:",omitempty"`
+		CSV               *CSVConfig         `json:",omitempty"`
+		TabularJSON       *TabularJSONConfig `json:",omitempty"`
 		RevealMetric      *bool
 		DebugKind         view.MetaKind
 		RequestBodySchema *view.Schema
@@ -114,6 +120,15 @@ type (
 		_config                *csv.Config
 		_requestBodyMarshaller *csv.Marshaller
 		_outputMarshaller      *csv.Marshaller
+		_unwrapperSlice        *xunsafe.Slice
+	}
+
+	TabularJSONConfig struct {
+		//Separator              string
+		//NullValue              string
+		Config                 *tabjson.Config
+		_requestBodyMarshaller *tabjson.Marshaller
+		_outputMarshaller      *tabjson.Marshaller
 		_unwrapperSlice        *xunsafe.Slice
 	}
 
@@ -155,6 +170,33 @@ func (r *Route) IsRevealMetric() bool {
 	return *r.RevealMetric
 }
 func (r *Route) HttpURI() string {
+	x := &tabjson.Config{
+		FieldSeparator:  "",
+		ObjectSeparator: "",
+		EncloseBy:       "",
+		EscapeBy:        "",
+		NullValue:       "",
+		Stringify: tabjson.StringifyConfig{
+			IgnoreFieldSeparator:  false,
+			IgnoreObjectSeparator: false,
+			IgnoreEncloseBy:       false,
+		},
+		UniqueFields:  nil,
+		References:    nil,
+		ExcludedPaths: nil,
+		StringifierConfig: io.StringifierConfig{
+			Fields:     nil,
+			CaseFormat: 0,
+			StringifierFloat32Config: io.StringifierFloat32Config{
+				Precision: "",
+			},
+			StringifierFloat64Config: io.StringifierFloat64Config{
+				Precision: "",
+			},
+		},
+	}
+	if x == nil {
+	} // TODO DELETE ABOVE
 	return r.URI
 }
 
@@ -238,6 +280,10 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	r.indexExcluded()
 
 	if err := r.initCSVIfNeeded(); err != nil {
+		return err
+	}
+
+	if err := r.initTabJSONIfNeeded(); err != nil {
 		return err
 	}
 
@@ -688,6 +734,62 @@ func (r *Route) initCSVIfNeeded() error {
 
 	r.CSV._unwrapperSlice = r._requestBodySlice
 	r.CSV._requestBodyMarshaller, err = csv.NewMarshaller(r._requestBodyType, nil)
+	return err
+}
+
+func (r *Route) initTabJSONIfNeeded() error {
+
+	if r.TabularJSON == nil {
+		return nil
+	}
+
+	if r.TabularJSON.Config == nil {
+		r.TabularJSON.Config = &tabjson.Config{}
+	}
+
+	if r.TabularJSON.Config.FieldSeparator == "" {
+		r.TabularJSON.Config.FieldSeparator = ","
+	}
+
+	if len(r.TabularJSON.Config.FieldSeparator) != 1 {
+		return fmt.Errorf("separator has to be a single char, but was %v", r.TabularJSON.Config.FieldSeparator)
+	}
+
+	if r.TabularJSON.Config.NullValue == "" {
+		r.TabularJSON.Config.NullValue = "null"
+	}
+
+	// TODO MFI UPDATE?
+	//r.TabularJSON._config = &tabjson.Config{
+	//	FieldSeparator:  r.TabularJSON.Separator,
+	//	ObjectSeparator: ",\n",
+	//	EncloseBy:       `"`,
+	//	EscapeBy:        "\\",
+	//	NullValue:       r.TabularJSON.NullValue, // TODO set "null"
+	//	//Stringify:       tabjson.StringifyConfig{},
+	//	//UniqueFields:    nil,
+	//	//References:      nil,
+	//	//ExcludedPaths:   nil,
+	//}
+
+	schemaType := r.View.Schema.Type()
+	if schemaType.Kind() == reflect.Ptr {
+		schemaType = schemaType.Elem()
+	}
+
+	var err error
+	//r.TabularJSON._outputMarshaller, err = tabjson.NewMarshaller(schemaType, r.TabularJSON._config)
+	r.TabularJSON._outputMarshaller, err = tabjson.NewMarshaller(schemaType, r.TabularJSON.Config)
+	if err != nil {
+		return err
+	}
+
+	if r._requestBodyType == nil {
+		return nil
+	}
+
+	r.TabularJSON._unwrapperSlice = r._requestBodySlice
+	r.TabularJSON._requestBodyMarshaller, err = tabjson.NewMarshaller(r._requestBodyType, nil)
 	return err
 }
 

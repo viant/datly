@@ -15,8 +15,9 @@ import (
 type (
 	RequestParams struct {
 		sync.Mutex
-		OutputFormat string
-		InputFormat  string
+		OutputFormat     string
+		outputFormatKind string
+		InputFormat      string
 
 		cookiesIndex map[string]*http.Cookie
 		cookies      []*http.Cookie
@@ -61,6 +62,7 @@ func (p *RequestParams) init(request *http.Request, route *Route) (string, error
 	p.pathIndex, _ = toolbox.ExtractURIParameters(route.URI, request.URL.Path)
 	p.queryIndex = request.URL.Query()
 	p.OutputFormat = p.outputFormat()
+	p.outputFormatKind = p.outputQueryFormat()
 	p.InputFormat = p.header(HeaderContentType)
 
 	p.cookiesIndex = map[string]*http.Cookie{}
@@ -134,9 +136,15 @@ func (p *RequestParams) outputFormat() string {
 	switch requestedFormat {
 	case CSVQueryFormat:
 		return CSVFormat
+	case TabularJSONQueryFormat:
+		return TabularJSONFormat
 	}
 
 	return JSONFormat
+}
+
+func (p *RequestParams) outputQueryFormat() string {
+	return strings.ToLower(p.queryParam(FormatQuery, ""))
 }
 
 func (p *RequestParams) unmarshaller(route *Route) (*Marshaller, error) {

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	//_ "github.com/go-sql-driver/mysql"
 	"github.com/golang-jwt/jwt/v4"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -44,6 +45,7 @@ type testcase struct {
 	resourceURI         string
 	uri                 string
 	method              string
+	useAssertPkg        bool
 	expected            string
 	visitors            config.CodecsRegistry
 	types               view.Types
@@ -753,13 +755,14 @@ func TestRouter(t *testing.T) {
 			resourceURI: "040_csv_output",
 			uri:         "/api/events?_format=CSV",
 			expected: `"Id","Timestamp","EventTypeId","Quantity","UserId"
-1,"2019-03-11T02:20:33Z",2,33.2343237400054931640625000000000000000000000000000000000000000000,1
-10,"2019-03-15T12:07:33Z",11,21.9579623341560363769531250000000000000000000000000000000000000000,2
-100,"2019-04-10T05:15:33Z",111,5.0849400460720062255859375000000000000000000000000000000000000000,3`,
+1,"2019-03-11T02:20:33Z",2,33.23432374000549,1
+10,"2019-03-15T12:07:33Z",11,21.957962334156036,2
+100,"2019-04-10T05:15:33Z",111,5.084940046072006,3`,
 			method: http.MethodGet,
 			expectedHeaders: map[string][]string{
 				"Content-Type": {"text/csv; charset=utf-8"},
 			},
+			useAssertPkg: true,
 		},
 		{
 			description: "csv input",
@@ -866,6 +869,28 @@ func TestRouter(t *testing.T) {
 			{"Id": 3, "Quantity": 300, "Timestamp": "2020-01-09T23:10:17.720975+02:00"}
 ]}`,
 			expected: `{"Items":[{"Id":1,"Quantity":125.5,"Timestamp":"2022-08-09T23:10:17+02:00"},{"Id":2,"Quantity":250.5,"Timestamp":"2022-01-09T23:10:17+02:00"},{"Id":3,"Quantity":300,"Timestamp":"2020-01-09T23:10:17+02:00"}]}`,
+		},
+		{
+			description:  "tabular json output format with default config - float prec == -1",
+			resourceURI:  "046_tabular_json_output_default",
+			uri:          "/api/events?_format=TABULAR_JSON",
+			useAssertPkg: true,
+			expected:     `[["Id","Timestamp","EventTypeId","Quantity","UserId"],[1,"2019-03-11T02:20:33Z",2,33.23432374000549,1],[10,"2019-03-15T12:07:33Z",11,21.957962334156036,2],[100,"2019-04-10T05:15:33Z",111,5.084940046072006,3]]`,
+			method:       http.MethodGet,
+			expectedHeaders: map[string][]string{
+				"Content-Type": {"application/json; charset=utf-8"},
+			},
+		},
+		{
+			description:  "tabular json output format with custom config - float prec == 3",
+			resourceURI:  "047_tabular_json_output",
+			uri:          "/api/events?_format=TABULAR_JSON",
+			useAssertPkg: true,
+			expected:     `[["Id","Timestamp","EventTypeId","Quantity","UserId"],[1,"2019-03-11T02:20:33Z",2,33.234323740005493164062500000000,1],[10,"2019-03-15T12:07:33Z",11,21.957962334156036376953125000000,2],[100,"2019-04-10T05:15:33Z",111,5.084940046072006225585937500000,3]]`,
+			method:       http.MethodGet,
+			expectedHeaders: map[string][]string{
+				"Content-Type": {"application/json; charset=utf-8"},
+			},
 		},
 	}
 
@@ -1098,6 +1123,12 @@ func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router, shouldD
 
 	if !assertly.AssertValues(t, expected, string(response), c.description) {
 		fmt.Println(string(response))
+	}
+
+	if c.useAssertPkg {
+		if !assert.EqualValues(t, expected, string(response), c.description) {
+			fmt.Println(string(response))
+		}
 	}
 
 	for key, value := range expectedHeaders {

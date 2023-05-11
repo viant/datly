@@ -1,0 +1,24 @@
+Routes:
+  - URI: "/api/events"
+    Method: GET
+    TabularJSON:
+      Config:
+        FieldSeparator:  ","
+    View:
+      Ref: events_ref
+      Name: events
+
+Resource:
+  Views:
+    - Name: events_ref
+      Connector:
+        Ref: db
+      Table: events
+      Selector:
+        Constraints:
+          Projection: true
+
+  Connectors:
+    - Name: db
+      Driver: sqlite3
+      DSN: "./testdata/db/db.db"

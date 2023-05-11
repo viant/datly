@@ -335,7 +335,11 @@ func (r *Router) buildSession(ctx context.Context, response http.ResponseWriter,
 	}
 
 	if route.CSV == nil && requestParams.OutputFormat == CSVFormat {
-		return nil, http.StatusBadRequest, UnsupportedFormatErr(CSVFormat)
+		return nil, http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output CSV config?)", CSVFormat))
+	}
+
+	if route.TabularJSON == nil && requestParams.outputFormatKind == TabularJSONQueryFormat {
+		return nil, http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output TabularJSON config?)", TabularJSONFormat))
 	}
 
 	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, requestParams, route.Index._viewDetails...)
@@ -526,6 +530,8 @@ func (r *Router) marshalResult(session *ReaderSession, destValue reflect.Value, 
 	switch strings.ToLower(formatType) {
 	case CSVQueryFormat:
 		return r.marshalAsCSV(session, destValue, filters)
+	case TabularJSONQueryFormat:
+		return r.marshalAsTabularJSON(session, destValue, filters)
 	}
 
 	return r.marshalAsJSON(session, destValue, json.NewFilters(filters...), viewMeta, stats)
@@ -941,6 +947,48 @@ func (r *Router) marshalAsCSV(session *ReaderSession, sliceValue reflect.Value, 
 	}
 
 	data, err := session.Route.CSV._outputMarshaller.Marshal(sliceValue.Elem().Interface())
+
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	return data, http.StatusOK, nil
+}
+
+func (r *Router) marshalAsTabularJSON(session *ReaderSession, sliceValue reflect.Value, filters []*json.FilterEntry) ([]byte, int, error) {
+	if session.Route.View.Schema.Slice().Len(unsafe.Pointer(sliceValue.Pointer())) == 0 {
+		return nil, http.StatusOK, nil
+	}
+
+	fieldsLen := 0
+	for _, filter := range filters {
+		fieldsLen += len(filter.Fields)
+	}
+
+	fields := make([]string, 0, fieldsLen)
+	offset := 0
+	for _, filter := range filters {
+		updateFieldPathsIfNeeded(filter)
+		offset = copy(fields[offset:], filter.Fields)
+	}
+
+	// TODO EXTEND CONFIG
+	// USE //	session.Route.Output.Style
+	////	session.Route.Output.Field
+
+	//config := tabjson.Config{
+	//	FieldSeparator:  "",
+	//	ObjectSeparator: "",
+	//	EncloseBy:       "",
+	//	EscapeBy:        "",
+	//	NullValue:       "",
+	//	Stringify:       tabjson.StringifyConfig{},
+	//	UniqueFields:    nil,
+	//	References:      nil,
+	//	ExcludedPaths:   nil,
+	//}
+
+	data, err := session.Route.TabularJSON._outputMarshaller.Marshal(sliceValue.Elem().Interface()) // pass config
 
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
