@@ -5,7 +5,6 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/xreflect"
 	"reflect"
-	"strings"
 )
 
 func GetOrParseType(typeLookup xreflect.TypeLookupFn, dataType string) (reflect.Type, error) {
@@ -23,11 +22,6 @@ func GetOrParseType(typeLookup xreflect.TypeLookupFn, dataType string) (reflect.
 }
 
 func ParseType(dataType string, typeLookup xreflect.TypeLookupFn) (reflect.Type, error) {
-	precisionIndex := strings.Index(dataType, "(")
-	if precisionIndex != -1 {
-		dataType = dataType[:precisionIndex]
-	}
-
 	rType, ok := io.ParseType(dataType)
 	if ok {
 		return rType, nil
