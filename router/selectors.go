@@ -101,6 +101,24 @@ func validateSelector(selector *view.Selector, aView *view.View) error {
 	return nil
 }
 
+func CreateRouteSelectors(ctx context.Context, route *Route, request *http.Request) (*view.Selectors, error) {
+	requestMetadata := NewRequestMetadata(route)
+	requestParams, err := NewRequestParameters(request, route)
+	if err != nil {
+		return nil, err
+	}
+
+	if requestParams == nil {
+		var err error
+		requestParams, err = NewRequestParameters(request, route)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return CreateSelectors(ctx, route._accessors, route.DateFormat, *route._caser, requestMetadata, requestParams, route.Index._viewDetails...)
+}
+
 func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, requestParams *RequestParams, views ...*ViewDetails) (*view.Selectors, *RequestParams, error) {
 	requestMetadata := NewRequestMetadata(route)
 
