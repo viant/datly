@@ -11,7 +11,7 @@ import (
 )
 
 var fnNew = keywords.AddAndGet("New", &functions.Entry{
-	Metadata: &keywords.FunctionMetadata{},
+	Metadata: &keywords.StandaloneFn{},
 	Handler:  nil,
 })
 

@@ -197,7 +197,7 @@ func (it *ParamMetaIterator) Has() bool {
 			continue
 		}
 
-		_, holderName := GetHolderName(param)
+		_, holderName := GetHolderNameFromSelector(param)
 		it.cursor.Pos = afterMatchedWhitespace + len(holderName) + 1
 		return true
 	}
@@ -205,11 +205,11 @@ func (it *ParamMetaIterator) Has() bool {
 	return false
 }
 
-func (it *ParamMetaIterator) tryBuildParam(SQLKeyword string, param string, pos int) (string, bool) {
+func (it *ParamMetaIterator) tryBuildParam(SQLKeyword string, param *expr.Select, pos int) (string, bool) {
 	index := it.counter
 	it.counter++
 
-	_, name := GetHolderName(param)
+	_, name := GetHolderNameFromSelector(param)
 	occurrenceIndex := it.occurrences[name]
 	it.occurrences[name] = occurrenceIndex + 1
 
@@ -240,7 +240,7 @@ func (it *ParamMetaIterator) init() {
 	it.initMetaTypes(it.SQL)
 }
 
-func (it *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, raw, SQLKeyword string) {
+func (it *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, selector *expr.Select, SQLKeyword string) {
 	context := UnspecifiedContext
 	var fnName string
 	if len(it.contexts) > 0 {
@@ -248,7 +248,8 @@ func (it *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, raw, SQL
 		fnName = it.contexts[index].FnName
 	}
 
-	prefix, holder := GetHolderName(raw)
+	raw := view.FirstNotEmpty(selector.FullName, selector.ID)
+	prefix, holder := GetHolderNameFromSelector(selector)
 
 	var paramMetaType *ParamMetaType
 	if metaType, ok := it.paramMetaTypes[holder]; ok {

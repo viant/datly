@@ -1,8 +1,8 @@
 package sanitize
 
 import (
-	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
+	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
 )
 
@@ -16,17 +16,18 @@ func NewParamMatcher() *ParamMatcher {
 	return &ParamMatcher{}
 }
 
-func (p *ParamMatcher) TryMatchParam(cursor *parsly.Cursor) (string, int) {
+func (p *ParamMatcher) TryMatchParam(cursor *parsly.Cursor) (*expr.Select, int) {
 	matchedPos := cursor.Pos
 	p.matched = cursor.MatchOne(selectorStartMatcher)
 	if p.matched.Code != selectorStartToken {
-		return "", -1
+		return nil, -1
 	}
 
 	selector, err := parser.MatchSelector(cursor)
 	if err != nil {
-		return "", -1
+		return nil, -1
 	}
 
-	return view.FirstNotEmpty(selector.FullName, selector.ID), matchedPos
+	return selector, matchedPos
+	//return selector, view.FirstNotEmpty(selector.FullName, selector.ID), matchedPos
 }

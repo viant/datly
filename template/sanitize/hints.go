@@ -75,7 +75,7 @@ func ExtractParameterHints(text string) ParameterHints {
 	matcher := NewParamMatcher()
 
 	for cursor.Pos < cursor.InputSize {
-		paramName, pos := matcher.TryMatchParam(cursor)
+		paramSelector, pos := matcher.TryMatchParam(cursor)
 		if pos == -1 {
 			cursor.Pos++
 			continue
@@ -86,7 +86,7 @@ func ExtractParameterHints(text string) ParameterHints {
 			continue
 		}
 
-		_, holder := GetHolderName(paramName)
+		_, holder := GetHolderNameFromSelector(paramSelector)
 		hints = append(hints, &ParameterHint{
 			Parameter: holder,
 			Hint:      matched.Text(cursor),

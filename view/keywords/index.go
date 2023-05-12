@@ -51,3 +51,8 @@ func RegisterType(contextName string, rType reflect.Type) {
 		}
 	}
 }
+
+func Get(name string) (*functions.Entry, bool) {
+	entry, ok := registryInstance.Entries[name]
+	return entry, ok
+}
