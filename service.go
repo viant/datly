@@ -72,6 +72,14 @@ func (s *Service) Connector(name string) (*view.Connector, error) {
 	return s.reader.Resource.Connector(name)
 }
 
+func (s *Service) MergeResource(resource *view.Resource, types view.Types) error {
+	if err := s.ensureNotInitialised(); err != nil {
+		return err
+	}
+	s.reader.Resource.MergeFrom(resource, types)
+	return nil
+}
+
 //AddParameter add global parameters
 func (s *Service) AddParameter(parameters ...*view.Parameter) error {
 	if err := s.ensureNotInitialised(); err != nil {
