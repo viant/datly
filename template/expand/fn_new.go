@@ -10,7 +10,7 @@ import (
 	"reflect"
 )
 
-var fnNew = keywords.AddAndGet("newer", &functions.Entry{
+var fnNew = keywords.AddAndGet("New", &functions.Entry{
 	Metadata: &keywords.FunctionMetadata{},
 	Handler:  nil,
 })
