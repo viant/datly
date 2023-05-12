@@ -239,6 +239,7 @@ func (a *Audience) OnFetch(ctx context.Context) error {
 			return true
 		})
 	}
+
 	return nil
 }
 

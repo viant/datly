@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/viant/parsly"
+	"github.com/viant/toolbox"
 	"strings"
 )
 
@@ -46,7 +47,26 @@ func SplitHint(hint string) (marshal string, SQL string) {
 		return jsonHint, strings.TrimSpace(string(hintCursor.Input[hintCursor.Pos:]))
 	}
 
-	return "", strings.TrimSpace(hint)
+	SQL = strings.TrimSpace(hint)
+	if SQL == "" {
+		return "", ""
+	}
+	jsonHint := ""
+	switch SQL[0] {
+	case '?':
+		SQL = SQL[1:]
+		jsonHint = `{"Required":false}`
+
+	case '!':
+		SQL = SQL[1:]
+		if statCode := toolbox.AsInt(SQL[:3]); statCode > 0 {
+			SQL = SQL[3:]
+			jsonHint = fmt.Sprintf(`{"Required":true, "StatusCode": %v}`, statCode)
+		} else {
+			jsonHint = `{"Required":true}`
+		}
+	}
+	return jsonHint, SQL
 }
 
 func ExtractParameterHints(text string) ParameterHints {

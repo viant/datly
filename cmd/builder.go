@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/viant/afs"
@@ -18,16 +19,20 @@ import (
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
+	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
+	sio "github.com/viant/sqlx/io"
+	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/toolbox"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
 	"github.com/viant/xreflect"
+	"io"
+
 	"go/ast"
 	goFormat "go/format"
 	"gopkg.in/yaml.v3"
-	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -65,6 +70,7 @@ type (
 
 	ViewConfig struct {
 		viewName        string
+		isVirtual       bool
 		queryJoin       *query.Join
 		unexpandedTable *Table
 		outputConfig    option.OutputConfig
@@ -1447,8 +1453,9 @@ func (s *Builder) buildParamHint(builder *routeBuilder, selector *expr.Select, c
 	}
 
 	holderName := strings.Trim(view.FirstNotEmpty(selector.FullName, selector.ID), "${}")
+	hint, SQL := sanitize.SplitHint(paramHint)
+
 	if pathStartIndex := strings.Index(holderName, "."); pathStartIndex >= 0 {
-		hint, sql := sanitize.SplitHint(paramHint)
 
 		aTransform := &option.TransformOption{}
 		if err = tryUnmarshalHint(hint, aTransform); err != nil {
@@ -1461,7 +1468,7 @@ func (s *Builder) buildParamHint(builder *routeBuilder, selector *expr.Select, c
 			Kind:        aTransform.TransformKind,
 			Path:        holderName[pathStartIndex+1:],
 			Codec:       aTransform.Codec,
-			Source:      strings.TrimSpace(sql),
+			Source:      strings.TrimSpace(SQL),
 			Transformer: aTransform.Transformer,
 		})
 
@@ -1751,6 +1758,47 @@ func (s *Builder) ensureChecksum(bundle *bundleMetadata) error {
 	}
 
 	return s.updateLastGenPluginMeta(bundle, TimeNow())
+}
+
+func (s *Builder) detectSinkColumn(ctx context.Context, db *sql.DB, SQL string) ([]sink.Column, error) {
+	SQL = strings.Trim(strings.TrimSpace(SQL), "()")
+	query, err := sqlparser.ParseQuery(SQL)
+	if query != nil {
+		from := sqlparser.Stringify(query.From.X)
+		if query.List.IsStarExpr() && !strings.Contains(from, "SELECT") {
+			return nil, nil //use table metadata
+		}
+		query.Window = nil
+		query.Qualify = nil
+		query.Limit = nil
+		query.Offset = nil
+		SQL = sqlparser.Stringify(query)
+		SQL += " LIMIT 1"
+	}
+	stmt, err := db.PrepareContext(ctx, SQL)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+	rows, err := stmt.QueryContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []sink.Column
+	rows.Next()
+	if rows != nil {
+		if columnsTypes, _ := rows.ColumnTypes(); len(columnsTypes) != 0 {
+			columns := sio.TypesToColumns(columnsTypes)
+			for _, item := range columns {
+				result = append(result, sink.Column{
+					Name: item.Name(),
+					Type: item.DatabaseTypeName(),
+				})
+			}
+		}
+	}
+	return result, nil
 }
 
 func combineURLs(basePath string, segments ...string) string {

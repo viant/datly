@@ -285,20 +285,36 @@ func (s *Builder) buildInputMetadata(ctx context.Context, builder *routeBuilder,
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
-	paramType, err := s.detectInputType(ctx, db, aConfig.expandedTable.Name, aConfig, "", "/", "")
+	joinSQL := ""
+	if join := aConfig.queryJoin; join != nil {
+		joinSQL = sqlparser.Stringify(aConfig.queryJoin.With)
+	}
+	paramType, err := s.detectInputType(ctx, db, aConfig.expandedTable.Name, joinSQL, aConfig, "", "/", "")
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	return routeOption, aConfig, paramType, nil
 }
 
-func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName string, config *ViewConfig, parentTable, path, actualHolder string) (*inputMetadata, error) {
-	columns, err := s.readSinkColumns(ctx, db, tableName)
-	if err != nil {
-		return nil, err
+func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName, SQL string, config *ViewConfig, parentTable, path, actualHolder string) (*inputMetadata, error) {
+
+	var columns []sink.Column
+	var err error
+	if SQL != "" {
+		if columns, err = s.detectSinkColumn(ctx, db, SQL); err != nil {
+			return nil, err
+		}
+	}
+	if len(columns) == 0 {
+		if columns, err = s.readSinkColumns(ctx, db, tableName); err != nil {
+			return nil, err
+		}
 	}
 
+	//fmt.Printf("column: %v %+v\n--------\n\n\n"+
+	//	""+
+	//	""+
+	//	"", tableName, columns)
 	if len(columns) == 0 {
 		return nil, fmt.Errorf("not found table %v columns", tableName)
 	}
@@ -330,6 +346,9 @@ func (s *Builder) readSinkColumns(ctx context.Context, db *sql.DB, tableName str
 }
 
 func readForeignKeys(ctx context.Context, db *sql.DB, tableName string) ([]sink.Key, error) {
+	if tableName == "" {
+		return nil, nil
+	}
 	meta := metadata.New()
 	var keys []sink.Key
 	if err := meta.Info(ctx, db, info.KindForeignKeys, &keys); err != nil {
@@ -340,6 +359,9 @@ func readForeignKeys(ctx context.Context, db *sql.DB, tableName string) ([]sink.
 }
 
 func (s *Builder) readPrimaryKeys(ctx context.Context, db *sql.DB, tableName string) ([]sink.Key, error) {
+	if tableName == "" {
+		return nil, nil
+	}
 	meta := metadata.New()
 	var keys []sink.Key
 	if err := meta.Info(ctx, db, info.KindPrimaryKeys, &keys); err != nil {
@@ -384,6 +406,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	exceptIndex := s.buildExceptIndex(aConfig)
 	includeIndex := s.buildIncludeIndex(aConfig)
 
+	var fieldByName = map[string]bool{}
 	for _, column := range columns {
 		if s.shouldSkipColumn(exceptIndex, includeIndex, column) {
 			continue
@@ -438,6 +461,11 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		}
 		aTag := fmt.Sprintf(`sqlx:"%v"%v%v`, sqlxTagContent, jsonTag, validationTag)
 
+		if fieldByName[meta.fieldName] {
+			panic(fmt.Sprintf("filed already added %v, %v -- %v", meta.fieldName, table, parentTable))
+			continue
+		}
+		fieldByName[meta.fieldName] = true
 		definition.Fields = append(definition.Fields, &view.Field{
 			Name:   meta.fieldName,
 			Tag:    aTag,
@@ -462,7 +490,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		actualPath += paramName + "/"
 	}
 
-	insertRelations, err := s.buildInsertRelations(aConfig, db, actualPath, actualHolder)
+	insertRelations, err := s.buildExecRelations(aConfig, db, actualPath, actualHolder)
 	if err != nil {
 		return nil, err
 	}
@@ -610,18 +638,30 @@ func filterKeys(keys []sink.Key, tableName string) []sink.Key {
 	return tableKeys
 }
 
-func (s *Builder) buildInsertRelations(config *ViewConfig, db *sql.DB, path string, holder string) ([]*inputMetadata, error) {
+func (s *Builder) buildExecRelations(config *ViewConfig, db *sql.DB, path string, holder string) ([]*inputMetadata, error) {
 	var relations []*inputMetadata
 	for _, relation := range config.relations {
-		relationConfig, err := s.detectInputType(context.TODO(), db, relation.expandedTable.Name, relation, config.expandedTable.Name, path, holder)
+		SQL := sqlparser.Stringify(relation.queryJoin.With)
+		relation.isVirtual = isVirtualQuery(SQL)
+		tableName := relation.expandedTable.Name
+		relationConfig, err := s.detectInputType(context.TODO(), db, tableName, SQL, relation, config.expandedTable.Name, path, holder)
 		if err != nil {
 			return nil, err
 		}
-
 		relations = append(relations, relationConfig)
 	}
 
 	return relations, nil
+}
+
+func isVirtualQuery(SQL string) bool {
+	SQL = strings.Trim(strings.TrimSpace(SQL), "()")
+	query, _ := sqlparser.ParseQuery(SQL)
+	if query == nil {
+		return true
+	}
+	from := sqlparser.Stringify(query.From.X)
+	return strings.Contains(from, "(")
 }
 
 func (s *Builder) shouldSkipColumn(exceptIndex map[string]bool, includeIndex map[string]bool, column sink.Column) bool {
@@ -732,6 +772,7 @@ func (b *stmtBuilder) appendHintsWithRelations() error {
 
 func (b *stmtBuilder) appendSQLWithRelations(loadPrevious bool, preSQL string) error {
 	if loadPrevious {
+
 		var qualifiers []*option.Qualifier
 		var viewHint string
 		for _, field := range b.typeDef.actualFields {
@@ -838,32 +879,33 @@ func (b *stmtBuilder) withIndent() *stmtBuilder {
 }
 
 func (b *stmtBuilder) paramSQLHint(def *inputMetadata) (string, error) {
-	paramOption := &option.ParameterConfig{
-		Required: boolPtr(false),
-	}
+	//paramOption := &option.ParameterConfig{
+	//	Required: boolPtr(false),
+	//}
 
-	marshal, err := json.Marshal(paramOption)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("/* %v %v */", string(marshal), def.sql), nil
+	//marshal, err := json.Marshal(paramOption)
+	//if err != nil {
+	//	return "", err
+	//}
+	marshal := "?"
+	return fmt.Sprintf("/* %v %v \n*/", string(marshal), def.sql), nil
 }
 
 func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, table string, paramName string, aPath string, holder string) (string, []*idParam, error) {
-	vConfig := &option.ViewConfig{
-		Selector: &view.Config{},
-	}
+	//vConfig := &option.ViewConfig{
+	//	Selector: &view.Config{},
+	//}
 
 	var idParams []*idParam
-	marshal, err := json.Marshal(vConfig)
-	if err != nil {
-		return "", nil, err
-	}
+	//marshal, err := json.Marshal(vConfig)
+	//	if err != nil {
+	//		return "", nil, err
+	//	}
 	sb := &strings.Builder{}
 	sqlSb := &strings.Builder{}
 	sqlSb.WriteString("SELECT * FROM ")
 	sqlSb.WriteString(table)
-	sqlSb.WriteString(fmt.Sprintf("/* %v */", string(marshal)))
+	//sqlSb.WriteString(fmt.Sprintf("/* %v */", string(marshal)))
 
 	setSb := &strings.Builder{}
 
