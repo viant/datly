@@ -429,7 +429,17 @@ func (t *Template) indexStmt(actual *stmt.Statement, required bool, rType reflec
 }
 
 func (t *Template) indexParameter(actual *expr.Select, required bool, rType reflect.Type, multi bool) {
-	prefix, paramName := sanitize.GetHolderName(actual.FullName)
+
+	var prefix, paramName string
+	if actual.X != nil {
+		if _, ok := actual.X.(*expr.Call); ok {
+			paramName = actual.ID
+		}
+	}
+
+	if paramName == "" {
+		prefix, paramName = sanitize.GetHolderName(actual.FullName)
+	}
 
 	if !isParameter(t.variables, paramName) {
 		return
