@@ -1016,7 +1016,7 @@ func (s *Builder) appendMetadata(builder *routeBuilder, paramName string, routeO
 	}
 
 	if len(requiredTypes) > 0 {
-		sb.WriteString("\nimport (\n\t_ \"github.com/viant/xdatly/types/core\"\n")
+		sb.WriteString("\nimport (\n")
 
 		for _, requiredType := range requiredTypes {
 			URL := builder.session.GoFileURL("")

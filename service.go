@@ -119,6 +119,11 @@ func (s *Service) Init(ctx context.Context, options ...interface{}) error {
 	return s.reader.Resource.Init(ctx, options...)
 }
 
+func (s *Service) SetResource(resource *view.Resource) error {
+	s.reader.Resource = resource
+	return nil
+}
+
 //New creates a datly service
 func New(cfg *Config) *Service {
 	ret := &Service{
