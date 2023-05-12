@@ -1469,6 +1469,21 @@ func (s *Builder) buildParamHint(builder *routeBuilder, selector *expr.Select, c
 	}
 
 	qlQuery, _ := sanitize.TryParseStructQLHint(paramHint)
+	if qlQuery == nil {
+		paramConfig := option.ParameterConfig{}
+		hint, sqlQuery := sanitize.SplitHint(paramHint)
+		if err = tryUnmarshalHint(hint, &paramConfig); err != nil {
+			return err
+		}
+
+		if paramConfig.Kind == string(view.KindParam) && paramConfig.Target != nil {
+			qlQuery = &sanitize.StructQLQuery{
+				SQL:    sqlQuery,
+				Source: *paramConfig.Target,
+			}
+		}
+	}
+
 	builder.paramsIndex.AddParamHint(holderName, &sanitize.ParameterHint{
 		Parameter:     holderName,
 		Hint:          paramHint,
@@ -1488,19 +1503,7 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 			typeContent := matched.Text(cursor)
 			typeContent = strings.TrimSpace(typeContent[1 : len(typeContent)-1])
 
-			types := strings.Split(typeContent, ",")
-			dataType := types[0]
-			if strings.HasPrefix(dataType, "[]") {
-				aConfig.Cardinality = view.Many
-				dataType = dataType[2:]
-			} else {
-				aConfig.Cardinality = view.One
-			}
-
-			aConfig.DataType = dataType
-			if len(types) > 1 {
-				aConfig.CodecType = types[1]
-			}
+			s.tryUpdateConfigType(typeContent, aConfig)
 
 			possibilities = []*parsly.Token{exprGroupMatcher}
 
@@ -1555,6 +1558,26 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 	}
 
 	return result, nil
+}
+
+func (s *Builder) tryUpdateConfigType(typeContent string, aConfig *paramJSONHintConfig) {
+	if typeContent == "?" {
+		return
+	}
+
+	types := strings.Split(typeContent, ",")
+	dataType := types[0]
+	if strings.HasPrefix(dataType, "[]") {
+		aConfig.Cardinality = view.Many
+		dataType = dataType[2:]
+	} else {
+		aConfig.Cardinality = view.One
+	}
+
+	aConfig.DataType = dataType
+	if len(types) > 1 {
+		aConfig.CodecType = types[1]
+	}
 }
 
 func mergeJsonStructs(args ...interface{}) ([]byte, error) {

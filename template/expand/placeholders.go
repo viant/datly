@@ -242,3 +242,20 @@ func (c *DataUnit) FilterExecutables(statements []string, stopOnNonExec bool) []
 
 	return result
 }
+
+func (c *DataUnit) In(columnName string, args interface{}) (string, error) {
+	of := reflect.ValueOf(args)
+	switch of.Kind() {
+	case reflect.Slice:
+		if of.Len() == 0 {
+			return "1=0", nil
+		}
+	}
+
+	sb := &strings.Builder{}
+	sb.WriteString(columnName)
+	sb.WriteString(" IN (")
+	sb.WriteString(c.AppendBinding(args))
+	sb.WriteString(")")
+	return sb.String(), nil
+}

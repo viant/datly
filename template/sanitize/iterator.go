@@ -49,6 +49,7 @@ type (
 	ParamContext struct {
 		ParamName string
 		Context   Context
+		FnName    string
 	}
 
 	ParamMeta struct {
@@ -58,6 +59,7 @@ type (
 		Prefix          string
 		Holder          string
 		Context         Context
+		FnName          string
 		IsVariable      bool
 		OccurrenceIndex int
 		MetaType        *ParamMetaType
@@ -91,14 +93,15 @@ func NewIterator(SQL string, hints map[string]*ParameterHint, consts map[string]
 	return result
 }
 
-func NewParamContext(name string, context Context) *ParamContext {
+func NewParamContext(name string, fnName string, context Context) *ParamContext {
 	return &ParamContext{
 		ParamName: name,
 		Context:   context,
+		FnName:    fnName,
 	}
 }
 
-func (it *ParamMetaIterator) buildContexts(context Context, statements ...ast.Statement) {
+func (it *ParamMetaIterator) buildContexts(context Context, fnName string, statements ...ast.Statement) {
 
 outer:
 	for _, statement := range statements {
@@ -108,7 +111,8 @@ outer:
 
 		switch actual := statement.(type) {
 		case *expr.Select:
-			it.contexts = append(it.contexts, NewParamContext(view.FirstNotEmpty(actual.FullName, actual.ID), context))
+			it.contexts = append(it.contexts, NewParamContext(view.FirstNotEmpty(actual.FullName, actual.ID), fnName, context))
+			currentSelector := actual
 
 			for actual.X != nil {
 				xSelect, ok := actual.X.(*expr.Select)
@@ -120,33 +124,33 @@ outer:
 				asFunc, ok := actual.X.(*expr.Call)
 				if ok {
 					for _, arg := range asFunc.Args {
-						it.buildContexts(FuncContext, arg)
+						it.buildContexts(FuncContext, currentSelector.ID+"."+actual.ID, arg)
 					}
 				}
 
 				asSlice, ok := actual.X.(*expr.SliceIndex)
 				if ok {
-					it.buildContexts(context, asSlice.X, asSlice.Y)
+					it.buildContexts(context, fnName, asSlice.X, asSlice.Y)
 				}
 
 				continue outer
 			}
 
 		case *expr.Parentheses:
-			it.buildContexts(context, actual.P)
+			it.buildContexts(context, fnName, actual.P)
 		case *expr.Unary:
-			it.buildContexts(context, actual.X)
+			it.buildContexts(context, fnName, actual.X)
 		case *expr.Binary:
-			it.buildContexts(context, actual.X, actual.Y)
+			it.buildContexts(context, fnName, actual.X, actual.Y)
 		case *stmt.ForEach:
 			it.addVariable(actual.Item)
-			it.buildContexts(ForEachContext, actual.Item, actual.Set)
-			it.buildContexts(AppendContext, actual.Body.Stmt...)
+			it.buildContexts(ForEachContext, "", actual.Item, actual.Set)
+			it.buildContexts(AppendContext, "", actual.Body.Stmt...)
 		case *stmt.If:
-			it.buildContexts(IfContext, actual.Condition)
-			it.buildContexts(AppendContext, actual.Body.Stmt...)
+			it.buildContexts(IfContext, "", actual.Condition)
+			it.buildContexts(AppendContext, "", actual.Body.Stmt...)
 			if actual.Else != nil {
-				it.buildContexts(IfContext, actual.Else)
+				it.buildContexts(IfContext, "", actual.Else)
 			}
 		case *stmt.Statement:
 			selector, ok := actual.X.(*expr.Select)
@@ -155,7 +159,7 @@ outer:
 			}
 
 			it.addVariable(selector)
-			it.buildContexts(SetContext, actual.X, actual.Y)
+			it.buildContexts(SetContext, "", actual.X, actual.Y)
 		}
 	}
 }
@@ -229,7 +233,7 @@ func (it *ParamMetaIterator) init() {
 
 	block, err := parser.Parse([]byte(it.SQL))
 	if err == nil {
-		it.buildContexts(AppendContext, block.Statements()...)
+		it.buildContexts(AppendContext, "", block.Statements()...)
 	}
 
 	it.cursor = parsly.NewCursor("", []byte(it.SQL), 0)
@@ -238,8 +242,10 @@ func (it *ParamMetaIterator) init() {
 
 func (it *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, raw, SQLKeyword string) {
 	context := UnspecifiedContext
+	var fnName string
 	if len(it.contexts) > 0 {
 		context = it.contexts[index].Context
+		fnName = it.contexts[index].FnName
 	}
 
 	prefix, holder := GetHolderName(raw)
@@ -260,6 +266,7 @@ func (it *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, raw, SQL
 		OccurrenceIndex: occurrence,
 		MetaType:        paramMetaType,
 		SQLKeyword:      SQLKeyword,
+		FnName:          fnName,
 	}
 }
 

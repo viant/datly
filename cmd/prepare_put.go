@@ -53,7 +53,7 @@ func (s *Builder) buildUpdateSQL(aRouteBuilder *routeBuilder, routeConfig *optio
 			return nil
 		}
 
-		return builder.appendSQLHint(currMetadata)
+		return builder.appendSQLHint(metadata, currMetadata)
 	}); err != nil {
 		return "", err
 	}

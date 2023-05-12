@@ -10,7 +10,10 @@ type (
 		Filters *Filters
 		Options []interface{}
 		*bytes.Buffer
+		Custom map[string]CustomMarshallerFn
 	}
+
+	CustomMarshallerFn func() ([]byte, error)
 
 	UnmarshalerInterceptors map[string]UnmarshalInterceptor
 	UnmarshalSession        struct {

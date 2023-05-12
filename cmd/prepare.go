@@ -57,6 +57,11 @@ type (
 		name         interface{}
 	}
 
+	idParam struct {
+		name  string
+		query string
+	}
+
 	withSQL    bool
 	viewFields []*view.Field
 )
@@ -508,7 +513,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 
 	sort.Sort(viewFields(actualFields))
 
-	SQL, err := s.buildInputMetadataSQL(actualFields, typesMeta, table, paramName, actualPath, actualHolder)
+	SQL, idParams, err := s.buildInputMetadataSQL(actualFields, typesMeta, table, paramName, actualPath, actualHolder)
 	if err != nil {
 		return nil, err
 	}
@@ -529,6 +534,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		indexNamePrefix: strings.ToLower(paramName[0:1]) + paramName[1:],
 		isPtr:           true,
 		path:            strings.TrimRight(actualPath, "/"),
+		idParams:        idParams,
 	}, nil
 }
 
@@ -746,27 +752,46 @@ func (b *stmtBuilder) appendSQLWithRelations(loadPrevious bool, preSQL string) e
 			viewHint = string(marshal)
 		}
 
-		b.appendParamHint(b.typeDef, fmt.Sprintf("/* %v %v */", viewHint, preSQL))
+		b.appendParamHint(b.typeDef.prevNamePrefix, fmt.Sprintf("/* %v %v */", viewHint, preSQL), "", "", "")
 		return nil
 	}
 
 	return b.IterateOverHints(b.typeDef, func(metadata *inputMetadata, _ []*inputMetadata) error {
-		return b.appendSQLHint(metadata)
+		return b.appendSQLHint(b.typeDef, metadata)
 	})
 }
 
-func (b *stmtBuilder) appendSQLHint(metadata *inputMetadata) error {
+func (b *stmtBuilder) appendSQLHint(main, metadata *inputMetadata) error {
+	for _, param := range metadata.idParams {
+		b.appendParamHint(param.name, fmt.Sprintf("/* \n %v \n */", param.query), "", string(view.KindParam), main.paramName)
+	}
+
 	sqlHint, err := b.paramSQLHint(metadata)
 	if err != nil {
 		return err
 	}
 
-	b.appendParamHint(metadata, sqlHint)
+	b.appendParamHint(metadata.prevNamePrefix, sqlHint, "", "", "")
+
 	return nil
 }
 
-func (b *stmtBuilder) appendParamHint(metadata *inputMetadata, hint string) {
-	b.writeString(fmt.Sprintf("\n#set($_ = $%v ", metadata.prevNamePrefix))
+func (b *stmtBuilder) appendParamHint(paramName string, hint string, resultType string, in string, target string) {
+	artificialParam := fmt.Sprintf("\n#set($_ = $%v", paramName)
+	if resultType == "" && in != "" {
+		resultType = "?"
+	}
+
+	if resultType != "" {
+		artificialParam += fmt.Sprintf("<%v>", resultType)
+	}
+
+	if in != "" {
+		artificialParam += fmt.Sprintf("(%v/%v)", in, target)
+	}
+
+	artificialParam += " "
+	b.writeString(artificialParam)
 	b.writeString(b.stringWithIndent(hint))
 	b.writeString("\n)")
 }
@@ -824,14 +849,15 @@ func (b *stmtBuilder) paramSQLHint(def *inputMetadata) (string, error) {
 	return fmt.Sprintf("/* %v %v */", string(marshal), def.sql), nil
 }
 
-func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, table string, paramName string, path string, holder string) (string, error) {
+func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, table string, paramName string, aPath string, holder string) (string, []*idParam, error) {
 	vConfig := &option.ViewConfig{
 		Selector: &view.Config{},
 	}
 
+	var idParams []*idParam
 	marshal, err := json.Marshal(vConfig)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	sb := &strings.Builder{}
 	sqlSb := &strings.Builder{}
@@ -856,33 +882,28 @@ func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, ta
 		}
 		i++
 
-		recName := s.getStructQLName(aFieldMeta, holder)
-		//sqlSb.WriteString(fmt.Sprintf(" #if($%v.Length() > 0 ) ", recName))
-		sqlSb.WriteString(aFieldMeta.columnName)
-		sqlSb.WriteString(" IN ( $")
-		sqlSb.WriteString(recName)
-		sqlSb.WriteString(" ) ")
-		sqlSb.WriteString("#else 1 = 0 #end")
+		recName := s.getStructQLName(aFieldMeta, paramName)
+		sqlSb.WriteString(fmt.Sprintf(`$criteria.In("%v", $%v.Values)`, aFieldMeta.columnName, recName))
+
+		idParams = append(idParams, &idParam{
+			name:  recName,
+			query: s.getStructSQLParam(aFieldMeta, aPath),
+		})
 	}
 
 	sb.WriteString(setSb.String())
 	sb.WriteString("\n")
 	sb.WriteString(sqlSb.String())
-	return sb.String(), nil
+	return sb.String(), idParams, nil
 }
 
-func (s *Builder) getStructSQLParam(aFieldMeta *fieldMeta, paramName string, path string) string {
-	query := fmt.Sprintf("SELECT ARRAY_AGG(%v) AS Values FROM  `/%v`", aFieldMeta.fieldName, path)
-	return fmt.Sprintf(`
-#set($_ = $v<>(param/%v) /*
-    %v
-  */)
-`, paramName, query)
+func (s *Builder) getStructSQLParam(aFieldMeta *fieldMeta, path string) string {
+	qlQuery := fmt.Sprintf("SELECT ARRAY_AGG(%v) AS Values FROM  `%v` LIMIT 1", aFieldMeta.fieldName, path)
+	return qlQuery
 }
 
 func (s *Builder) getStructQLName(aFieldMeta *fieldMeta, paramName string) string {
-	recName := paramName + aFieldMeta.fieldName
-	return recName + "." + "Values"
+	return paramName + aFieldMeta.fieldName
 }
 
 func (b *stmtBuilder) generateIndexes(loadPrevious bool, ensureIndexes bool) ([]*indexChecker, error) {
@@ -967,7 +988,7 @@ func (s *Builder) appendMetadata(builder *routeBuilder, paramName string, routeO
 				}
 			}
 
-			sb.WriteString(fmt.Sprintf("\n	\"%v.%v\"", URL, requiredType))
+			sb.WriteString(fmt.Sprintf("\n	\"%v.%v\"", strings.TrimRight(URL, "/"), requiredType))
 		}
 		sb.WriteString("\n)\n\n")
 	}

@@ -63,7 +63,7 @@ func main() {
 
 	baseDir := filepath.Join(toolbox.CallerDirectory(3), "..")
 	fmt.Printf("base: %v\n", baseDir)
-	caseName := "046_raw_json_tag"
+	caseName := "032_generate_patch_basic_many"
 	caseFolder := filepath.Join(baseDir, "local/regression/cases/", caseName)
 	gen, err := loadGen(caseFolder, caseName)
 	if err != nil {

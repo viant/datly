@@ -546,7 +546,7 @@ func (t *Template) updateParamIfNeeded(param *Parameter, meta *sanitize.ParamMet
 	param.Assumed = param.Assumed && oldType == param.DataType
 	param.Typer = meta.MetaType.Typer
 
-	if strings.EqualFold(meta.SQLKeyword, sanitize.InKeyword) {
+	if strings.EqualFold(meta.SQLKeyword, sanitize.InKeyword) || strings.Contains(meta.FnName, "criteria.In") {
 		param.Repeated = true
 	}
 

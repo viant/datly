@@ -31,6 +31,7 @@ type (
 		indexNamePrefix string
 		isPtr           bool
 		path            string
+		idParams        []*idParam
 	}
 
 	typeMeta struct {
