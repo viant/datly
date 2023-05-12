@@ -154,8 +154,8 @@ func (j *Marshaller) prepareUnmarshallSession(options []interface{}) *UnmarshalS
 		unmarshallSession = &UnmarshalSession{}
 	}
 
-	if len(unmarshallSession.Interceptors) == 0 {
-		unmarshallSession.Interceptors = interceptors
+	if len(unmarshallSession.PathMarshaller) == 0 {
+		unmarshallSession.PathMarshaller = interceptors
 	}
 
 	unmarshallSession.Options = append(unmarshallSession.Options, options...)

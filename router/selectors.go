@@ -400,6 +400,8 @@ func (b *selectorsBuilder) extractParamValue(ctx context.Context, param *view.Pa
 	switch param.In.Kind {
 	case view.KindDataView:
 		return b.viewParamValue(ctx, details, param)
+	case view.KindParam:
+		return b.paramBasedParamValue(ctx, details, param, options...)
 	case view.KindPath:
 		return b.convertAndTransform(ctx, b.params.pathVariable(param.In.Name, ""), param, options...)
 	case view.KindQuery:
@@ -408,9 +410,9 @@ func (b *selectorsBuilder) extractParamValue(ctx context.Context, param *view.Pa
 		return b.params.RequestBody()
 	case view.KindEnvironment:
 		return b.convertAndTransform(ctx, os.Getenv(param.In.Name), param, options...)
-	case view.HeaderKind:
+	case view.KindHeader:
 		return b.convertAndTransform(ctx, b.params.header(param.In.Name), param, options...)
-	case view.CookieKind:
+	case view.KindCookie:
 		return b.convertAndTransform(ctx, b.params.cookie(param.In.Name), param, options...)
 	}
 
@@ -494,12 +496,17 @@ func isNull(value interface{}) bool {
 
 func (b *selectorsBuilder) handleParam(ctx context.Context, selector *view.Selector, parent *ViewDetails, parameter *view.Parameter) error {
 	switch parameter.In.Kind {
-	case view.QueryKind:
+	case view.KindParam:
+		if err := b.addParamBasedParam(ctx, parent, selector, parameter); err != nil {
+			return err
+		}
+
+	case view.KindQuery:
 		if err := b.addQueryParam(ctx, selector, parameter); err != nil {
 			return err
 		}
 
-	case view.PathKind:
+	case view.KindPath:
 		if err := b.addPathParam(ctx, selector, parameter); err != nil {
 			return err
 		}
@@ -509,7 +516,7 @@ func (b *selectorsBuilder) handleParam(ctx context.Context, selector *view.Selec
 			return err
 		}
 
-	case view.CookieKind:
+	case view.KindCookie:
 		if err := b.addCookieParam(ctx, selector, parameter); err != nil {
 			return err
 		}
@@ -519,12 +526,12 @@ func (b *selectorsBuilder) handleParam(ctx context.Context, selector *view.Selec
 			return err
 		}
 
-	case view.RequestBodyKind:
+	case view.KindRequestBody:
 		if err := b.addRequestBodyParam(ctx, selector, parameter); err != nil {
 			return err
 		}
 
-	case view.EnvironmentKind:
+	case view.KindEnvironment:
 		if err := b.addEnvVariableParam(ctx, selector, parameter); err != nil {
 			return err
 		}
@@ -806,6 +813,25 @@ func (b *selectorsBuilder) populatePage(ctx context.Context, selector *view.Sele
 	selector.Limit = actualLimit
 	selector.Page = page
 	return nil
+}
+
+func (b *selectorsBuilder) paramBasedParamValue(ctx context.Context, details *ViewDetails, param *view.Parameter, options ...interface{}) (interface{}, error) {
+	parent := param.Parent()
+	value, err := b.extractParamValue(ctx, parent, details, options...)
+	if err != nil {
+		return nil, err
+	}
+
+	return value, nil
+}
+
+func (b *selectorsBuilder) addParamBasedParam(ctx context.Context, parent *ViewDetails, selector *view.Selector, parameter *view.Parameter) error {
+	value, err := b.extractParamValue(ctx, parameter, parent)
+	if err != nil {
+		return err
+	}
+
+	return parameter.ConvertAndSetCtx(ctx, selector, value)
 }
 
 func canUseColumn(aView *view.View, columnName string) error {

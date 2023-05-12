@@ -63,13 +63,13 @@ type (
 		session *session
 	}
 
-	viewConfig struct {
+	ViewConfig struct {
 		viewName        string
 		queryJoin       *query.Join
 		unexpandedTable *Table
 		outputConfig    option.OutputConfig
 
-		relations      []*viewConfig
+		relations      []*ViewConfig
 		relationsIndex map[string]int
 		metasBuffer    map[string]*Table
 		templateMeta   *templateMetaConfig
@@ -87,11 +87,11 @@ type (
 		except []string
 	}
 
-	viewParamConfig struct {
+	ViewParamConfig struct {
 		viewName string
 		viewFile string
 
-		viewConfig *viewConfig
+		viewConfig *ViewConfig
 		params     []*Parameter
 	}
 
@@ -111,6 +111,11 @@ type (
 	constFileContent struct {
 		URL    string
 		params []*view.Parameter
+	}
+
+	paramJSONHintConfig struct {
+		option.ParameterConfig
+		option.TransformOption
 	}
 )
 
@@ -159,7 +164,7 @@ func (b *routeBuilder) AddViews(aView *view.View) {
 	}
 }
 
-func (c *viewConfig) ensureTableName(tableName string) {
+func (c *ViewConfig) ensureTableName(tableName string) {
 	if c.unexpandedTable.Name != "" {
 		return
 	}
@@ -167,7 +172,7 @@ func (c *viewConfig) ensureTableName(tableName string) {
 	c.unexpandedTable.Name = tableName
 }
 
-func (c *viewConfig) ensureOuterAlias(alias string) {
+func (c *ViewConfig) ensureOuterAlias(alias string) {
 	if c.unexpandedTable.HolderName != "" {
 		return
 	}
@@ -175,7 +180,7 @@ func (c *viewConfig) ensureOuterAlias(alias string) {
 	c.unexpandedTable.HolderName = alias
 }
 
-func (c *viewConfig) ensureInnerAlias(name string) {
+func (c *ViewConfig) ensureInnerAlias(name string) {
 	if c.unexpandedTable.InnerAlias != "" {
 		return
 	}
@@ -183,7 +188,7 @@ func (c *viewConfig) ensureInnerAlias(name string) {
 	c.unexpandedTable.InnerAlias = name
 }
 
-func (c *viewConfig) ensureFileName(name string) {
+func (c *ViewConfig) ensureFileName(name string) {
 	if c.fileName != "" {
 		return
 	}
@@ -191,7 +196,7 @@ func (c *viewConfig) ensureFileName(name string) {
 	c.fileName = name
 }
 
-func (c *viewConfig) AddMetaTemplate(metaName string, holder string, config *Table) {
+func (c *ViewConfig) AddMetaTemplate(metaName string, holder string, config *Table) {
 	if c.unexpandedTable.HolderName == holder {
 		c.templateMeta = &templateMetaConfig{
 			name:  metaName,
@@ -212,7 +217,7 @@ func (c *viewConfig) AddMetaTemplate(metaName string, holder string, config *Tab
 	c.metasBuffer[holder] = config
 }
 
-func (c *viewConfig) AddRelation(viewConfig *viewConfig) {
+func (c *ViewConfig) AddRelation(viewConfig *ViewConfig) {
 	holderName := viewConfig.unexpandedTable.HolderName
 
 	c.relationsIndex[holderName] = len(c.relations)
@@ -224,7 +229,7 @@ func (c *viewConfig) AddRelation(viewConfig *viewConfig) {
 	}
 }
 
-func (c *viewConfig) ViewConfig(holder string) (*viewConfig, bool) {
+func (c *ViewConfig) ViewConfig(holder string) (*ViewConfig, bool) {
 	if holder == c.unexpandedTable.HolderName {
 		return c, true
 	}
@@ -238,7 +243,7 @@ func (c *viewConfig) ViewConfig(holder string) (*viewConfig, bool) {
 	return nil, false
 }
 
-func (c *viewConfig) metaConfigByName(holder string) (*templateMetaConfig, bool) {
+func (c *ViewConfig) metaConfigByName(holder string) (*templateMetaConfig, bool) {
 	if c.templateMeta != nil && c.templateMeta.name == holder {
 		return c.templateMeta, true
 	}
@@ -728,7 +733,7 @@ func fsAddYAML(fs afs.Service, URL string, any interface{}) error {
 	return fs.Upload(context.Background(), URL, file.DefaultFileOsMode, bytes.NewReader(data))
 }
 
-func (s *Builder) buildMainView(ctx context.Context, builder *routeBuilder, config *viewConfig) (*view.View, error) {
+func (s *Builder) buildMainView(ctx context.Context, builder *routeBuilder, config *ViewConfig) (*view.View, error) {
 	s.inheritRouteFromMainConfig(builder, config.outputConfig)
 
 	aView, err := s.buildAndAddViewWithLog(ctx, builder, config, &view.Config{
@@ -758,10 +763,10 @@ func updateAsAuthParamIfNeeded(auth string, param *view.Parameter) {
 	param.Required = boolPtr(true)
 }
 
-func (s *Builder) paramByName(builder *routeBuilder, name string) *view.Parameter {
-	param, ok := builder.paramsIndex.Param(name)
+func (b *routeBuilder) paramByName(name string) *view.Parameter {
+	param, ok := b.paramsIndex.Param(name)
 	if !ok {
-		builder.routerResource.Resource.AddParameters(param)
+		b.routerResource.Resource.AddParameters(param)
 	}
 
 	return param
@@ -839,7 +844,7 @@ func (s *Builder) inheritRouteFromMainConfig(builder *routeBuilder, config optio
 	builder.route.Style = router.Style(view.FirstNotEmpty(config.Style, string(builder.route.Style)))
 }
 
-func (s *Builder) indexExcludedColumns(builder *routeBuilder, config *viewConfig) error {
+func (s *Builder) indexExcludedColumns(builder *routeBuilder, config *ViewConfig) error {
 	err := s.appendExcluded(&builder.route.Exclude, config, "")
 	if err != nil {
 		return err
@@ -852,7 +857,7 @@ func (s *Builder) indexExcludedColumns(builder *routeBuilder, config *viewConfig
 	return err
 }
 
-func (s *Builder) appendExcluded(excluded *[]string, config *viewConfig, path string) error {
+func (s *Builder) appendExcluded(excluded *[]string, config *ViewConfig, path string) error {
 	if err := s.excludeTableColumns(excluded, config.expandedTable, path); err != nil {
 		return err
 	}
@@ -875,7 +880,7 @@ func (s *Builder) appendExcluded(excluded *[]string, config *viewConfig, path st
 	return nil
 }
 
-func (s *Builder) appendMetaExcluded(excluded *[]string, config *viewConfig, path string) error {
+func (s *Builder) appendMetaExcluded(excluded *[]string, config *ViewConfig, path string) error {
 	if config.templateMeta != nil {
 		for _, field := range config.templateMeta.except {
 			actualFieldName, err := s.normalizeFieldName(field)
@@ -952,7 +957,7 @@ func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
 				OrderBy:    false,
 				Projection: false,
 			},
-			Limit: 25,
+			Limit: 1000,
 		}, false, externalParams...)
 
 		if err != nil {
@@ -995,14 +1000,15 @@ func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
 	return utilParams, nil
 }
 
-func (s *Builder) prepareExternalParameters(builder *routeBuilder, paramViewConfig *viewParamConfig) ([]*view.Parameter, error) {
+func (s *Builder) prepareExternalParameters(builder *routeBuilder, paramViewConfig *ViewParamConfig) ([]*view.Parameter, error) {
 	var externalParams []*view.Parameter
 
 	for _, parameter := range paramViewConfig.params {
+
 		if parameter.Auth != "" {
 			authParam := &view.Parameter{
 				Name:            parameter.Auth,
-				In:              &view.Location{Name: "Authorization", Kind: view.HeaderKind},
+				In:              &view.Location{Name: "Authorization", Kind: view.KindHeader},
 				ErrorStatusCode: 401,
 				Required:        boolPtr(true),
 				Output:          &view.Codec{Name: "JwtClaim", Schema: &view.Schema{DataType: "*JwtClaims"}},
@@ -1029,7 +1035,7 @@ func (s *Builder) moveConstParameters(builder *routeBuilder, dest *[]*view.Param
 	for i := range builder.routerResource.Resource.Parameters {
 		parameter := builder.routerResource.Resource.Parameters[i]
 
-		if parameter.In != nil && parameter.In.Kind == view.LiteralKind {
+		if parameter.In != nil && parameter.In.Kind == view.KindLiteral {
 			constParams = append(constParams, parameter)
 			continue
 		}
@@ -1060,10 +1066,10 @@ func (s *Builder) updateParamByHint(resource *view.Resource, paramIndex *Paramet
 		return err
 	}
 
-	return s.updateViewParam(resource, param, paramConfig, SQL)
+	return s.updateViewParam(resource, param, paramConfig, SQL, paramIndex)
 }
 
-func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter, config *option.ParameterConfig, SQL string) error {
+func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter, config *option.ParameterConfig, SQL string, index *ParametersIndex) error {
 	if param.In == nil {
 		param.In = &view.Location{}
 	}
@@ -1093,7 +1099,11 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 
 	param.Schema.DataType = paramType
 	if config.Codec != "" {
-		param.Output = &view.Codec{Reference: shared.Reference{Ref: config.Codec}}
+		if param.Output == nil {
+			param.Output = &view.Codec{}
+		}
+
+		param.Output.Ref = config.Codec
 	}
 
 	if config.MaxAllowedRecords != nil {
@@ -1117,11 +1127,9 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 	}
 
 	if strings.TrimSpace(config.Codec) != "" && isSQLLikeCodec(config.Codec) {
-		if param.Codec == nil {
-			param.Codec = &view.Codec{Reference: shared.Reference{config.Codec}}
+		if param.Output == nil {
+			param.Output = &view.Codec{Reference: shared.Reference{Ref: config.Codec}}
 		}
-
-		param.Codec.Query = SQL
 	}
 
 	return nil
@@ -1460,43 +1468,42 @@ func (s *Builder) buildParamHint(builder *routeBuilder, selector *expr.Select, c
 		return nil
 	}
 
+	qlQuery, _ := sanitize.TryParseStructQLHint(paramHint)
+	if qlQuery == nil {
+		paramConfig := option.ParameterConfig{}
+		hint, sqlQuery := sanitize.SplitHint(paramHint)
+		if err = tryUnmarshalHint(hint, &paramConfig); err != nil {
+			return err
+		}
+
+		if paramConfig.Kind == string(view.KindParam) && paramConfig.Target != nil {
+			qlQuery = &sanitize.StructQLQuery{
+				SQL:    sqlQuery,
+				Source: *paramConfig.Target,
+			}
+		}
+	}
+
 	builder.paramsIndex.AddParamHint(holderName, &sanitize.ParameterHint{
-		Parameter: holderName,
-		Hint:      paramHint,
+		Parameter:     holderName,
+		Hint:          paramHint,
+		StructQLQuery: qlQuery,
 	})
 
 	return nil
 }
 
 func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
-	matched := cursor.MatchAfterOptional(whitespaceMatcher, commentMatcher)
-	if matched.Code == commentToken {
-		return matched.Text(cursor), nil
-	}
-
-	aConfig := &option.ParameterConfig{}
+	aConfig := &paramJSONHintConfig{}
 	possibilities := []*parsly.Token{typeMatcher, exprGroupMatcher}
-	anyMatched := false
 	for len(possibilities) > 0 {
-		matched = cursor.MatchAfterOptional(whitespaceMatcher, possibilities...)
+		matched := cursor.MatchAfterOptional(whitespaceMatcher, possibilities...)
 		switch matched.Code {
 		case typeToken:
 			typeContent := matched.Text(cursor)
 			typeContent = strings.TrimSpace(typeContent[1 : len(typeContent)-1])
 
-			types := strings.Split(typeContent, ",")
-			dataType := types[0]
-			if strings.HasPrefix(dataType, "[]") {
-				aConfig.Cardinality = view.Many
-				dataType = dataType[2:]
-			} else {
-				aConfig.Cardinality = view.One
-			}
-
-			aConfig.DataType = dataType
-			if len(types) > 1 {
-				aConfig.CodecType = types[1]
-			}
+			s.tryUpdateConfigType(typeContent, aConfig)
 
 			possibilities = []*parsly.Token{exprGroupMatcher}
 
@@ -1514,24 +1521,84 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 
 			aConfig.Target = &target
 
-			if err := s.readParamConfigs(aConfig, cursor); err != nil {
+			if err := s.readParamConfigs(&aConfig.ParameterConfig, cursor); err != nil {
 				return "", err
 			}
 			possibilities = []*parsly.Token{}
 		default:
-			if !anyMatched {
-				return "", nil
-			}
 			possibilities = []*parsly.Token{}
 		}
-		anyMatched = true
 	}
-	marshal, err := json.Marshal(aConfig)
+
+	matched := cursor.MatchAfterOptional(whitespaceMatcher, commentMatcher)
+	actualHint := map[string]interface{}{}
+	var sql string
+	if matched.Code == commentToken {
+		aComment := matched.Text(cursor)
+		aComment = aComment[2 : len(aComment)-2]
+
+		hint, SQL := sanitize.SplitHint(aComment)
+		if hint != "" {
+			if err := json.Unmarshal([]byte(hint), &actualHint); err != nil {
+				return "", err
+			}
+		}
+
+		sql = SQL
+	}
+
+	configJson, err := mergeJsonStructs(aConfig.TransformOption, aConfig.ParameterConfig, actualHint)
 	if err != nil {
 		return "", err
 	}
 
-	return string(marshal), nil
+	result := string(configJson)
+	if sql != "" {
+		result += " " + sql
+	}
+
+	return result, nil
+}
+
+func (s *Builder) tryUpdateConfigType(typeContent string, aConfig *paramJSONHintConfig) {
+	if typeContent == "?" {
+		return
+	}
+
+	types := strings.Split(typeContent, ",")
+	dataType := types[0]
+	if strings.HasPrefix(dataType, "[]") {
+		aConfig.Cardinality = view.Many
+		dataType = dataType[2:]
+	} else {
+		aConfig.Cardinality = view.One
+	}
+
+	aConfig.DataType = dataType
+	if len(types) > 1 {
+		aConfig.CodecType = types[1]
+	}
+}
+
+func mergeJsonStructs(args ...interface{}) ([]byte, error) {
+	result := map[string]interface{}{}
+
+	for _, arg := range args {
+		marshalled, err := json.Marshal(arg)
+		if err != nil {
+			return nil, err
+		}
+
+		if string(marshalled) == "null" || string(marshalled) == "" {
+			continue
+		}
+
+		if err := json.Unmarshal(marshalled, &result); err != nil {
+			return nil, err
+		}
+	}
+
+	return json.Marshal(result)
 }
 
 func (s *Builder) readParamConfigs(config *option.ParameterConfig, cursor *parsly.Cursor) error {

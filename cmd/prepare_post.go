@@ -16,20 +16,22 @@ import (
 
 type (
 	inputMetadata struct {
-		typeDef      *view.TypeDefinition
-		meta         *typeMeta
-		actualFields []*view.Field
-		bodyHolder   string
-		paramName    string
-		relations    []*inputMetadata
-		fkIndex      map[string]sink.Key
-		pkIndex      map[string]sink.Key
-		table        string
-		config       *viewConfig
-		sql          string
-		sqlName      string
-		isPtr        bool
-		path         string
+		typeDef         *view.TypeDefinition
+		meta            *typeMeta
+		actualFields    []*view.Field
+		bodyHolder      string
+		paramName       string
+		relations       []*inputMetadata
+		fkIndex         map[string]sink.Key
+		pkIndex         map[string]sink.Key
+		table           string
+		config          *ViewConfig
+		sql             string
+		prevNamePrefix  string
+		indexNamePrefix string
+		isPtr           bool
+		path            string
+		idParams        []*idParam
 	}
 
 	typeMeta struct {
@@ -73,7 +75,7 @@ func (s *Builder) preparePostRule(ctx context.Context, builder *routeBuilder, so
 	return template, nil
 }
 
-func (s *Builder) buildInsertSQL(aRouteBuilder *routeBuilder, typeDef *inputMetadata, config *viewConfig, routeOption *option.RouteConfig) (string, error) {
+func (s *Builder) buildInsertSQL(aRouteBuilder *routeBuilder, typeDef *inputMetadata, config *ViewConfig, routeOption *option.RouteConfig) (string, error) {
 	sb, err := s.prepareStringBuilder(aRouteBuilder, typeDef, config, routeOption)
 	if err != nil {
 		return "", err
@@ -110,7 +112,7 @@ func (isb *insertStmtBuilder) appendAllocation(def *inputMetadata, path, holderN
 	}
 }
 
-func (s *Builder) recordName(recordName string, config *viewConfig) (string, bool) {
+func (s *Builder) recordName(recordName string, config *ViewConfig) (string, bool) {
 	if !config.outputConfig.IsMany() {
 		return recordName, false
 	}

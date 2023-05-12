@@ -56,7 +56,7 @@ func (s *Builder) preparePatchRule(ctx context.Context, builder *routeBuilder, s
 	return SQL, err
 }
 
-func (s *Builder) buildPatchSQL(builder *routeBuilder, routeOption *option.RouteConfig, config *viewConfig, metadata *inputMetadata, preSQL string) (string, error) {
+func (s *Builder) buildPatchSQL(builder *routeBuilder, routeOption *option.RouteConfig, config *ViewConfig, metadata *inputMetadata, preSQL string) (string, error) {
 	sb, err := s.prepareStringBuilder(builder, metadata, config, routeOption)
 	if err != nil {
 		return "", err

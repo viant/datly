@@ -46,31 +46,25 @@ func (m *TemplateMeta) Init(ctx context.Context, owner *Template, resource *Reso
 	if m.Name == "" {
 		return fmt.Errorf("template meta name can't be empty")
 	}
-
 	if m.SourceURL != "" {
 		template, err := resource.LoadText(ctx, m.SourceURL)
 		if err != nil {
 			return err
 		}
-
 		m.Source = template
 	}
 
 	if m.Source == "" {
 		return fmt.Errorf("template meta Source or SourceURL can't be empty")
 	}
-
 	m.initialized = true
 	m._owner = owner
-
 	if err := m.initTemplateEvaluator(ctx, owner, resource); err != nil {
 		return err
 	}
-
 	if err := m.initSchemaIfNeeded(ctx, owner, resource); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -104,7 +98,6 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 	if err != nil {
 		return fmt.Errorf("couldn't resolve template meta SQL due to the: %w", err)
 	}
-
 	columnNames := make([]string, len(columns))
 	for i, column := range columns {
 		columnNames[i] = column.Name

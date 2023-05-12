@@ -12,7 +12,7 @@ type (
 	session struct {
 		sourceURL   string
 		output      outputFile
-		routeConfig *viewConfig
+		routeConfig *ViewConfig
 		basePath    string
 		ruleName    string
 		pathDiff    string
@@ -81,7 +81,7 @@ func (f *session) SampleFileURL(fileName string) string {
 	return url.Join(f.output.sampleURL, fileName)
 }
 
-func (f *session) setMainViewConfig(config *viewConfig) {
+func (f *session) setMainViewConfig(config *ViewConfig) {
 	f.routeConfig = config
 	if f.output.sqlURL == "" {
 		mainViewFileName := f.routeConfig.viewName

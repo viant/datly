@@ -307,8 +307,8 @@ github.com/viant/sqlparser v0.3.1-0.20230320162628-96274e82953f h1:pWKcqNuqVZmi0
 github.com/viant/sqlparser v0.3.1-0.20230320162628-96274e82953f/go.mod h1:ffKCsz9eb+tv0/nfDguYCcvpYmco/rLHhxhf/kMzKzw=
 github.com/viant/sqlx v0.5.3 h1:NqKt7j9mTikPbs8iMA6zFl4dqpmWEQuxA+kaPgRtMj8=
 github.com/viant/sqlx v0.5.3/go.mod h1:I8sTdWCBN6DHygZc/kpWsCFuB4Fn3txODLlfF6mhZtk=
-github.com/viant/structql v0.1.1-0.20230506202747-6f83be0426ba h1:frUu286rbGkc+6gAk/SrpJrMMhhBtYx1zFV1jHaf1PA=
-github.com/viant/structql v0.1.1-0.20230506202747-6f83be0426ba/go.mod h1:gHebhXqfhtTpehk9VyeDq6D1rO87hv62AgG4p/e91UY=
+github.com/viant/structql v0.1.1-0.20230511224816-d89fa3f1c791 h1:WYiSQ2oXy43C3k6EOUhwEBV3bhH8S5i1+t+YyHL2VWM=
+github.com/viant/structql v0.1.1-0.20230511224816-d89fa3f1c791/go.mod h1:gHebhXqfhtTpehk9VyeDq6D1rO87hv62AgG4p/e91UY=
 github.com/viant/toolbox v0.24.0/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888 h1:iQ9ehV+Qev9s/L4eXFFaw3zvZVid+xTT5fW3G3ldEdk=
 github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=

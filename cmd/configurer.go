@@ -24,21 +24,21 @@ import (
 
 type ViewConfigurer struct {
 	tables       map[string]*Table
-	aView        *viewConfig
+	aView        *ViewConfig
 	relations    []*Relation
 	mainViewName string
 	serviceType  router.ServiceType
-	viewParams   []*viewParamConfig
+	viewParams   []*ViewParamConfig
 	paramIndex   *ParametersIndex
 	prepare      *Prepare
 	connectors   *Connector
 }
 
-func (c *ViewConfigurer) ViewConfig() *viewConfig {
+func (c *ViewConfigurer) ViewConfig() *ViewConfig {
 	return c.aView
 }
 
-func (c *ViewConfigurer) ViewParams() []*viewParamConfig {
+func (c *ViewConfigurer) ViewParams() []*ViewParamConfig {
 	return c.viewParams
 }
 
@@ -84,7 +84,7 @@ func (c *ViewConfigurer) Init(SQL string, opt *option.RouteConfig) error {
 		return err
 	}
 
-	hintedViewParams, err := c.extractViewParamsFromHints(opt)
+	hintedViewParams, err := c.preProcessHints(opt)
 	if err != nil {
 		return err
 	}
@@ -136,13 +136,13 @@ func getMetaTemplateHolder(name string) string {
 	return name[:index]
 }
 
-func (c *ViewConfigurer) buildViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
+func (c *ViewConfigurer) buildViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*ViewConfig, []*ViewParamConfig, error) {
 	aConfig, viewParams, err := c.prepareViewConfig(serviceType, viewName, SQL, opt, parent)
 
 	return aConfig, viewParams, err
 }
 
-func (c *ViewConfigurer) prepareViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
+func (c *ViewConfigurer) prepareViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*ViewConfig, []*ViewParamConfig, error) {
 	if serviceType == router.ReaderServiceType {
 		return c.buildReaderViewConfig(viewName, SQL, opt, parent)
 	}
@@ -151,7 +151,7 @@ func (c *ViewConfigurer) prepareViewConfig(serviceType router.ServiceType, viewN
 	return aConfig, nil, err
 }
 
-func (c *ViewConfigurer) buildExecViewConfig(viewName string, templateSQL string) (*viewConfig, error) {
+func (c *ViewConfigurer) buildExecViewConfig(viewName string, templateSQL string) (*ViewConfig, error) {
 	table := &Table{
 		SQL: templateSQL,
 	}
@@ -198,7 +198,7 @@ func (c *ViewConfigurer) buildExecViewConfig(viewName string, templateSQL string
 	return aConfig, nil
 }
 
-func (c *ViewConfigurer) updateConfigWithExecStmt(statement *Statement, aConfig *viewConfig, batchInsertEnabled map[string]bool, templateSQL string) (string, error) {
+func (c *ViewConfigurer) updateConfigWithExecStmt(statement *Statement, aConfig *ViewConfig, batchInsertEnabled map[string]bool, templateSQL string) (string, error) {
 	if statement.Selector != nil {
 		call, ok := statement.Selector.X.(*expr2.Call)
 		if !ok {
@@ -225,7 +225,7 @@ func (c *ViewConfigurer) updateConfigWithExecStmt(statement *Statement, aConfig 
 	}
 }
 
-func (c *ViewConfigurer) buildReaderViewConfig(viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
+func (c *ViewConfigurer) buildReaderViewConfig(viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*ViewConfig, []*ViewParamConfig, error) {
 	result, dataViewParams, err := c.prepareUnexpanded(viewName, SQL, opt, parent)
 	if err != nil {
 		return nil, nil, err
@@ -283,7 +283,7 @@ func buildExpandMap(paramsIndex *ParametersIndex) (rdata.Map, error) {
 	return result, nil
 }
 
-func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*viewConfig, []*viewParamConfig, error) {
+func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*ViewConfig, []*ViewParamConfig, error) {
 	boundary := GetStatements(SQL)
 	if len(boundary) == 0 {
 		return nil, nil, fmt.Errorf("not found select in %v", SQL)
@@ -322,7 +322,7 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 
 	result := newViewConfig(viewName, view.FirstNotEmpty(aQuery.From.Alias, viewName), parent, aTable, nil, view.SQLQueryMode)
 
-	var dataViewParams []*viewParamConfig
+	var dataViewParams []*ViewParamConfig
 	for _, join := range joins {
 		innerTable := c.buildTableWithWarning(join.With, opt, join.Comments)
 		relViewConfig, childViewParams, err := c.buildViewConfigWithTable(join, innerTable, opt, join.Comments)
@@ -343,7 +343,7 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 				return nil, nil, err
 			}
 
-			dataViewParams = append(dataViewParams, &viewParamConfig{
+			dataViewParams = append(dataViewParams, &ViewParamConfig{
 				viewConfig: relViewConfig,
 				params:     []*Parameter{paramOption},
 			})
@@ -390,7 +390,7 @@ func (c *ViewConfigurer) getAlias(asStarExpr *expr.Star) string {
 	return ""
 }
 
-func (c *ViewConfigurer) buildViewConfigWithTable(join *query.Join, innerTable *Table, opt *option.RouteConfig, comments string) (*viewConfig, []*viewParamConfig, error) {
+func (c *ViewConfigurer) buildViewConfigWithTable(join *query.Join, innerTable *Table, opt *option.RouteConfig, comments string) (*ViewConfig, []*ViewParamConfig, error) {
 	if strings.TrimSpace(innerTable.SQL) == "" {
 		return newViewConfig(join.Alias, join.Alias, join, innerTable, nil, view.SQLQueryMode), nil, nil
 	}
@@ -429,10 +429,10 @@ func isSQLXRelation(rel node.Node) bool {
 	return columns.ContainsSelect(candidate) || !columns.CanBeTableName(candidate)
 }
 
-func (c *ViewConfigurer) extractViewParamsFromHints(opt *option.RouteConfig) ([]*viewParamConfig, error) {
+func (c *ViewConfigurer) preProcessHints(opt *option.RouteConfig) ([]*ViewParamConfig, error) {
 	hints := c.paramIndex.hints
 
-	var viewParams []*viewParamConfig
+	var viewParams []*ViewParamConfig
 	for paramName, hint := range hints {
 		param, err := c.paramIndex.ParamsMetaWithHint(paramName, hint)
 		if err != nil {
@@ -449,7 +449,6 @@ func (c *ViewConfigurer) extractViewParamsFromHints(opt *option.RouteConfig) ([]
 		}
 
 		viewParams = append(viewParams, newViewParamConfig(aViewConfig, param))
-
 		viewParams = append(viewParams, childViewParams...)
 	}
 
@@ -479,7 +478,7 @@ func (c *ViewConfigurer) findDependantTables(tableName string) ([]string, error)
 	return tables, nil
 }
 
-func (c *ViewConfigurer) inheritMainViewConfig(aConfig *viewConfig, opt *option.RouteConfig) {
+func (c *ViewConfigurer) inheritMainViewConfig(aConfig *ViewConfig, opt *option.RouteConfig) {
 	if aConfig.outputConfig.Field == "" {
 		aConfig.outputConfig.Field = opt.Field
 	}
@@ -494,14 +493,14 @@ func isSQLLikeCodec(codec string) bool {
 	return false
 }
 
-func newViewParamConfig(aViewConfig *viewConfig, param ...*Parameter) *viewParamConfig {
-	return &viewParamConfig{
+func newViewParamConfig(aViewConfig *ViewConfig, param ...*Parameter) *ViewParamConfig {
+	return &ViewParamConfig{
 		viewConfig: aViewConfig,
 		params:     param,
 	}
 }
 
-func updateExecViewConfig(stmtType byte, SQLStmt string, view *viewConfig) (string, error) {
+func updateExecViewConfig(stmtType byte, SQLStmt string, view *ViewConfig) (string, error) {
 	rawSQL := RemoveCondBlocks(SQLStmt)
 
 	switch stmtType | ' ' {
@@ -539,20 +538,20 @@ func updateExecViewConfig(stmtType byte, SQLStmt string, view *viewConfig) (stri
 	return "", nil
 }
 
-func inheritFromTarget(target node.Node, view *viewConfig, tableNameComment string) {
+func inheritFromTarget(target node.Node, view *ViewConfig, tableNameComment string) {
 	tableName := sqlparser.Stringify(target)
 	inheritFromTableName(view, tableName)
 	view.parseComment(tableNameComment)
 }
 
-func inheritFromTableName(view *viewConfig, tableName string) {
+func inheritFromTableName(view *ViewConfig, tableName string) {
 	view.ensureTableName(tableName)
 	view.ensureOuterAlias(tableName)
 	view.ensureInnerAlias(tableName)
 	view.ensureFileName(tableName)
 }
 
-func (c *viewConfig) parseComment(comment string) {
+func (c *ViewConfig) parseComment(comment string) {
 	hint, _ := sanitize.SplitHint(comment)
 	tryUnmrashalHintWithWarn(hint, &c.expandedTable.ViewConfig)
 }

@@ -10,37 +10,23 @@ import (
 type Kind string
 
 const (
-	//deprecated
-	DataViewKind Kind = "data_view"
-	KindDataView Kind = "data_view"
-	//deprecated
-	HeaderKind Kind = "header"
-	KindHeader Kind = "header"
-	//deprecated
-	QueryKind Kind = "query"
-	KindQuery Kind = "query"
-	//deprecated
-	PathKind Kind = "path"
-	KindPath Kind = "path"
-	//deprecated
-	CookieKind Kind = "cookie"
-	KindCookie Kind = "cookie"
-	//deprecated
-	RequestBodyKind Kind = "body"
+	DataViewKind    Kind = "data_view"
+	KindDataView    Kind = "data_view"
+	KindHeader      Kind = "header"
+	KindQuery       Kind = "query"
+	KindPath        Kind = "path"
+	KindCookie      Kind = "cookie"
 	KindRequestBody Kind = "body"
-	//deprecated
-	EnvironmentKind Kind = "env"
 	KindEnvironment Kind = "env"
-	//deprecated
-	LiteralKind  Kind = "literal"
-	KindLiteral  Kind = "literal"
-	KindStructQL Kind = "structql"
+	KindLiteral     Kind = "literal"
+	KindStructQL    Kind = "structql"
+	KindParam       Kind = "param"
 )
 
 //Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case DataViewKind, PathKind, QueryKind, HeaderKind, CookieKind, RequestBodyKind, EnvironmentKind, LiteralKind:
+	case DataViewKind, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindLiteral, KindStructQL, KindParam:
 		return nil
 	}
 
@@ -49,19 +35,19 @@ func (k Kind) Validate() error {
 
 //ParamName represents name of parameter in given Location.Kind
 //i.e. if you want to extract lang from query string: ?foo=bar&lang=eng
-//required Kind is QueryKind and ParamName `lang`
+//required Kind is KindQuery and ParamName `lang`
 type ParamName string
 
 //Validate checks if ParamName is valid
 func (p ParamName) Validate(kind Kind) error {
-	if p == "" && kind != RequestBodyKind {
+	if p == "" && kind != KindRequestBody {
 		return fmt.Errorf("param name can't be empty")
 	}
 
 	switch kind {
-	case DataViewKind, PathKind, QueryKind, HeaderKind, CookieKind, RequestBodyKind, LiteralKind:
+	case DataViewKind, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindLiteral, KindStructQL, KindParam:
 		return nil
-	case EnvironmentKind:
+	case KindEnvironment:
 		if os.Getenv(string(p)) == "" {
 			return fmt.Errorf("env variable %s not set", p)
 		}
