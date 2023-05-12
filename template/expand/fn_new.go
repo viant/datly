@@ -25,7 +25,12 @@ func (n *newer) New(aType string) (interface{}, error) {
 		return nil, err
 	}
 
-	return reflect.New(parseType).Elem().Interface(), nil
+	resultType := parseType
+	if resultType.Kind() == reflect.Ptr {
+		return reflect.New(resultType.Elem()).Interface(), nil
+	}
+
+	return reflect.New(resultType).Elem().Interface(), nil
 
 }
 

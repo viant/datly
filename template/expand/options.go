@@ -5,6 +5,12 @@ import (
 	"reflect"
 )
 
+var isDebugEnabled = true
+
+func SetPanicOnError(value bool) {
+	isDebugEnabled = value
+}
+
 type CustomContext struct {
 	Type  reflect.Type
 	Value interface{}
@@ -17,6 +23,6 @@ type config struct {
 
 func newConfig() *config {
 	return &config{
-		panicOnError: true,
+		panicOnError: velty.PanicOnError(isDebugEnabled),
 	}
 }
