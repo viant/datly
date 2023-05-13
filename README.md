@@ -33,7 +33,7 @@ While Datly in autonomous mode purely uses a meta-driven approach, custom Datly 
 As opposed to the purely meta-driven approach, Datly allows both modes to be debugged and troubleshooted with traditional debuggers.
 Datly automatically generates openAPI documentation allowing any programing languages integrated seamlessly with Datly based micro/rest services.
 Datly is runtime agnostic, and it can be deployed as standalone, serverless (lambda, cloud function), or Dockerized.
-Datly is deployment time optimized, allowing rule and logic deployment with powerful Go plugins under seconds on Lambda and other serverless solutions.
+Datly is deployment time optimized, allowing rule and logic deployment with powerful Go plugins under seconds on Lambda and other serverless cloud platform.
 
 
 **Performance** is achieved by utilizing Go with GoLang structs (never maps), while other frameworks manipulating data use Go reflection, 
