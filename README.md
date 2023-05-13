@@ -28,7 +28,7 @@ Datly is SQL-centric, where data comes first.
 allowing developers to focus on addressing business requirements. 
 In addition, more complex cases can be easily delegated to pure Golang, where Datly intermediates with data access and modification. 
 Higher abstraction languages offload developers from writing the same code over and over again, which includes routing, struct mapping, 
-security, common validation, caching, scaling, runtime coupling, and more.
+security, common validation, pagination, dynamic field selection, dynamic criteria, caching, scaling, runtime coupling, and more.
 While Datly in autonomous mode purely uses a meta-driven approach, custom Datly allows blending Go-developed code into rules.
 As opposed to the purely meta-driven approach, Datly allows both modes to be debugged and troubleshooted with traditional debuggers.
 Datly automatically generates openAPI documentation allowing any programing languages integrated seamlessly with Datly based micro/rest services.
@@ -53,7 +53,7 @@ Datly provides an easy way to build POST/PUT/DELETE and truly performant PATCH o
 **Security**
 Datly is secure. It's resilient against SQL injection attacks. 
 On top of that, it promotes secure secrets storage natively with all database/sql drivers. 
-Finally, it's integrated with OAuth, which provides a convenient way for both controlling authentication and authorization.
+Finally, it's integrated with OAuth, which provides a convenient way for both controlling authentication and row and column based authorization.
 
 
 
