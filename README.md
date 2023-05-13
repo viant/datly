@@ -53,7 +53,7 @@ Datly provides an easy way to build POST/PUT/DELETE and truly performant PATCH o
 **Security**
 Datly is secure. It's resilient against SQL injection attacks. 
 On top of that, it promotes secure secrets storage natively with all database/sql drivers. 
-Finally, it's integrated with OAuth, which provides a convenient way for path controlling authentication and authorization.
+Finally, it's integrated with OAuth, which provides a convenient way for both controlling authentication and authorization.
 
 
 
