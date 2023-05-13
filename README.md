@@ -40,7 +40,7 @@ Datly is deployment time optimized, allowing rule and logic deployment with powe
 which is around 100x slower than natively typed code,  Datly uses [xunsafe](https://github.com/viant/xunsafe) custom Go reflection, which is only around 5x slower than natively typed code.
 Datly has the ability to read and assemble data from various database vendors at once and provides powerful optimization techniques like seamless smart caching, 
 driving both client performance and substantially reducing cost. 
-Datly uses Velocity inspired [velty](https://github.com/viant/velty) templating language which is one the fastest whole Go echo system.
+Datly uses Velocity inspired [velty](https://github.com/viant/velty) templating language which is one of the fastest int the whole Go echo system.
 On average velty is 20x faster than go Text/template and 8-15x faster than JDK Apache Velocity
 
 Datly can operate on both SQL and NoSQL databases. Large datasets (e.g., BigQuery) can be pre-warmed up without engineers writing a single line of code. 
