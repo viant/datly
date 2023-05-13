@@ -24,14 +24,20 @@ This is achieved by utilising rules to govern data mapping and binding for all d
 Datly is a modern and flexible ORM and data management platform designed with three principles in mind: **performance**, **productivity**, and **security**.
 Datly is SQL-centric, where data comes first.
 
-Productivity is achieved by using a higher 4th generation language called DSQL (Datly SQL dialect) to address common problems of manipulating data, 
+**Productivity** is achieved by using a higher 4th generation language called DSQL (Datly SQL dialect) to address common problems of manipulating data, 
 allowing developers to focus on addressing business requirements. 
 In addition, more complex cases can be easily delegated to pure Golang, where Datly intermediates with data access and modification. 
 Higher abstraction languages offload developers from writing the same code over and over again, which includes routing, struct mapping, 
 security, common validation, caching, scaling, runtime coupling, and more.
-While other frameworks manipulating data use Go reflection, which is around 100x slower than natively typed code, 
-Datly uses custom Go reflection, which is only around 5x slower than natively typed code.
+While Datly in autonomous mode purely uses a meta-driven approach, custom Datly allows blending Go-developed code into rules.
+As opposed to the purely meta-driven approach, Datly allows both modes to be debugged and troubleshooted with traditional debuggers.
+Datly automatically generates openAPI documentation allowing any programing languages integrated seamlessly with Datly based micro/rest services.
+Datly is runtime agnostic, and it can be deployed as standalone, serverless (lambda, cloud function), or Dockerized.
+Datly is deployment time optimized, allowing rule and logic deployment with powerful Go plugins under seconds on Lambda and other serverless solutions.
 
+
+**Performance** is achieved by utilizes Go with GoLang structs (never maps), while other frameworks manipulating data useing Go reflection, 
+which is around 100x slower than natively typed code,  Datly uses custom Go reflection, which is only around 5x slower than natively typed code.
 Datly has the ability to read and assemble data from various database vendors at once and provides powerful optimization techniques like seamless smart caching, 
 driving both client performance and substantially reducing cost. 
 Datly can operate on both SQL and NoSQL databases. Large datasets (e.g., BigQuery) can be pre-warmed up without engineers writing a single line of code. 
@@ -40,15 +46,13 @@ Datly comes with powerful metrics that provide execution time breakdowns for eac
 When it comes to data modification, Datly can leverage seamless batch and load operations, speeding up data ingestion by 25-50x compared to traditional insert techniques. 
 Datly provides an easy way to build POST/PUT/DELETE and truly performant PATCH operations.
 
-Datly is runtime agnostic, and it can be deployed as standalone, serverless (lambda, cloud function), or Dockerized. 
-Datly is deployment time optimized, allowing rule and logic deployment with powerful Go plugins under seconds on Lambda and other serverless solutions.
 
+**Security**
 Datly is secure. It's resilient against SQL injection attacks. 
 On top of that, it promotes secure secrets storage natively with all database/sql drivers. 
 Finally, it's integrated with OAuth, which provides a convenient way for path controlling authentication and authorization.
 
-While Datly in autonomous mode purely uses a meta-driven approach, custom Datly allows blending Go-developed code into rules. 
-As opposed to the purely meta-driven approach, Datly allows both modes to be debugged and troubleshooted with traditional debuggers.
+
 
 
 Datly use [dsql](doc/README.md#datly-sql--dsql-) to auto generate struct or internal datly rule
