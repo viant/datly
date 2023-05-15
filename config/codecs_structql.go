@@ -91,10 +91,9 @@ func (s *StructQLCodec) Value(ctx context.Context, raw interface{}, options ...i
 }
 
 func (s *StructQLCodec) selectQuery(query *structql.Query, raw interface{}) (interface{}, error) {
-	if s._query.Limit == 1 {
+	if query.Limit == 1 {
 		return query.First(raw)
 	}
-
 	result, err := query.Select(raw)
 	if err == nil {
 		result = s._xtype.Deref(result)

@@ -31,7 +31,9 @@ func (e *Executor) Execute(ctx context.Context, aView *view.View, options ...Opt
 	if err != nil {
 		return err
 	}
-	Options(options).Apply(session)
+	if err := Options(options).Apply(session); err != nil {
+		return err
+	}
 	return e.Exec(ctx, session)
 }
 
@@ -43,7 +45,6 @@ func (e *Executor) Exec(ctx context.Context, session *Session) error {
 		session.State = state
 		defer session.State.Flush(expand.StatusFailure)
 	}
-
 	if err != nil {
 		return err
 	}

@@ -3,6 +3,7 @@ package sequencer
 import (
 	"fmt"
 	"github.com/viant/xunsafe"
+	"unsafe"
 )
 
 type Walker struct {
@@ -58,6 +59,9 @@ func (w *Walker) allocate(aNode *node, value interface{}, seq *Sequence) error {
 
 func (w *Walker) countEmpty(aNode *node, value interface{}) (int, error) {
 	ptr := xunsafe.AsPointer(value)
+	if (*unsafe.Pointer)(ptr) == nil {
+		return 0, fmt.Errorf("%T was nil", value)
+	}
 	var result = 0
 	var item interface{}
 	switch aNode.kind {

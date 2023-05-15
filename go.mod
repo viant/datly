@@ -33,8 +33,8 @@ require (
 	github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac
 	github.com/viant/parsly v0.1.1-0.20230509195447-4946fbf38a3b
 	github.com/viant/pgo v0.9.1-0.20230327170450-b328ca3ff3e0
-	github.com/viant/scy v0.5.0
-	github.com/viant/sqlx v0.5.3
+	github.com/viant/scy v0.5.2
+	github.com/viant/sqlx v0.5.4
 	github.com/viant/structql v0.1.1-0.20230511224816-d89fa3f1c791
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20230509001836-0709296ae922
@@ -50,7 +50,7 @@ require (
 )
 
 require (
-	github.com/viant/govalidator v0.0.0-20230301021138-3e2297869dd4
+	github.com/viant/govalidator v0.1.0
 	github.com/viant/sqlparser v0.3.1-0.20230320162628-96274e82953f
 	golang.org/x/crypto v0.7.0 // indirect
 )

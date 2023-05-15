@@ -986,7 +986,7 @@ func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
 			aParam = &view.Parameter{
 				Name: paramName,
 				In: &view.Location{
-					Kind: view.DataViewKind,
+					Kind: view.KindDataView,
 					Name: paramName,
 				},
 				Required: boolPtr(true),

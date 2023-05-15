@@ -409,11 +409,27 @@ Generated go struct(s) can be modified with additional tags.
 
 Datly uses 'validate' and 'sqlx' tags to control input validation. 
 
-Generated input variable can be one of the following form
+Datly generate basic tempalte with the following parameters expressions
+
 - #set($_ = $Entity<*Entity>(body/))  for simple object ({})
 - #set($_ = $Entities<[]*Entity>(body/))  for simple array ([])
 - #set($_ = $Entity<*Entity>(body/data))  for namespaced object ({"data":{}})
 - #set($_ = $Entities<[]*Entity>(body/data))  for namespaced array ({"data":[]})
+
+
+After adjusting logic in executor dsql, 
+datly -C='myDB|driver|dsn' -X exeuctor_dsql_rule.sql --relative=mystructgopath -w=mydatlyproject
+
+
+For simplicity it's recommended to leave in velhy tempalte just a bare data read/write wiring, thus
+delegate validation and initialization with previous state to go code and simple call from dsql.
+
+For example:
+
+
+
+
+
 
 ##### Executor DSQL 
 
@@ -421,6 +437,7 @@ Generated input variable can be one of the following form
 /* ROUTE OPTION */
 import ...
 #set( $_ = ...) input paramter initialization
+
  DML | velocity expr (#set|#if|#foreach)
 
 ```
@@ -502,44 +519,108 @@ UPDATE MY_TABLE SET
 WHERE ID = $Entity.Id
 ```
 
-
-###### Fetching existing data
+###### Importing go types
 
 ```sql
-#set($_ = $Records /* {"Required":false} 
-  SELECT * FROM MY_TABLE /* {"Selector":{}} */ WHERE ID = $Entity.ID
+
+/* {"Method":"PATCH","ResponseBody":{"From":"Product"}} */
+
+import (
+	"./product.Product"
+)
+#set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
+#set($_ = $Campaign<*[]Product>(body/Entity))
+```
+
+
+###### Blending go call within dsql
+
+```sql
+
+/* {"Method":"PATCH","ResponseBody":{"From":"Product"}} */
+
+import (
+	"./product.Product"
+)
+#set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
+#set($_ = $Campaign<*[]Product>(body/Entity))
+
+#set($validation = $New("*Validation"))
+#set($hasError = $Product.Init($validation))
+
+....
+
+#set($hasError = $Product.Validate($validation))
+
+```
+
+
+###### Fetching existing data with data view parameters
+
+```sql
+#set($_ = $Records /*  
+  SELECT * FROM MY_TABLE  WHERE ID = $Entity.ID
 */)
 ```
+
+Data view parameters use regular reader DSQL and can return one or more records.
+
+By default all parameters are required,  adding '?' character before SELECT keyword would make parameter option, 
+to 
+```sql
+#set($_ = $Records /*  
+  ? SELECT * FROM MY_TABLE  WHERE ID = $Entity.ID
+*/)
+```
+
+To specify required parameter with error code you can simple add !3DigitErrotCode 
+
+```sql
+#set($_ = $Records /*  
+  !401 SELECT * FROM MY_TABLE  WHERE ID = $Entity.ID
+*/)
+```
+
+
 
 ###### Fetching data with StructQL
 
 - [StructQL](https://github.com/viant/structql)
 
-```sql
-#set($_ = $Records /* {"Required":false} 
-  #set($Ids = $Entities.QueryFirst("SELECT ARRAY_AGG(Id) AS Values FROM  `/`"))
-  SELECT * FROM MY_TABLE /* {"Selector":{}} */
-  WHERE  #if($Ids.Values.Length() > 0 ) ID IN ( $Ids.Values ) #else 1 = 0 #end 
-*/)
-```
-
 
 ```sql
-#set($_ = $InvoiceLines /* {"Required":false}
-#set($Ids = $Invoice.QueryFirst("SELECT ARRAY_AGG(Id) AS Values FROM  `/LineItems/`"))
-SELECT * FROM INVOICE_LINE_ITEM /* {"Selector":{}} */
-WHERE  #if($Ids.Values.Length() > 0 ) ID IN ( $Ids.Values ) #else 1 = 0 #end 
+
+import (
+	"./product.Product"
+)
+
+#set($_ = $Products<*[]Product>(body/Data))
+
+#set($_ = $ProductsIds<?>(param/Products) /* 
+   SELECT ARRAY_AGG(Id) AS Values FROM  `/`
+*/)
+
+#set($_ = $prevProducts<*[]Product>()/*
+SELECT * FROM Products WHERE $criteria.In("ID", $ProductsIds.Values) 
 */)
 ```
+In the example above in the first step collection of products is defined from POST body data field.
+Second parameter extract all products Id with structql, in the final prevProducts fetches all produces
+where ID is listed in ProductsIds parameters.
+Note that we use $criteria.In function to automatically generate IN statement if parameter len is greater than zero
+otherwise the criteria.In function returns false, to ensure correct SQL generation and expected behaviours
+
 
 ###### Indexing data
 
+Any go collection can be index with IndexBy dsql method 
+
 ```sql
-#set($_ = $Records /* {"Required":false}
-  #set($Ids = $Entities.QueryFirst("SELECT ARRAY_AGG(Id) AS Vals FROM  `/`"))
-  SELECT * FROM MY_TABLE /* {"Selector":{}} */
-  WHERE  #if($Ids.Vals.Length() > 0 ) ID IN ( $Ids.Vals ) #else 1 = 0 #end */
-)
+
+#set($_ = $Records /*
+  SELECT * FROM MY_TABLE
+*/)
+
 
 #set($ById = $Records.IndexBy("Id"))
 
@@ -548,7 +629,6 @@ WHERE  #if($Ids.Values.Length() > 0 ) ID IN ( $Ids.Values ) #else 1 = 0 #end
         $logger.Fatal("not found record with %v id", $rec.Id) 
     #end
     #set($prev = $ById[$rec.Id])
-
 #end
 
 ```
@@ -567,6 +647,7 @@ WHERE  #if($Ids.Values.Length() > 0 ) ID IN ( $Ids.Values ) #else 1 = 0 #end
     WHERE Authorized
 */)
 ```
+
 
 
 ###### Record Differ
@@ -748,3 +829,65 @@ In this scenario datly uses both direct go module integration and go plugin to s
 
 
 
+
+
+
+
+
+#### Executing rule in go program & debugging
+
+Datly is purely written and go, and thus it's possible to take any rule and load it and run it as if it was
+defined in the managed mode, for hava breakpoint on any rule to go call methods.
+
+```go
+//If you create rule for executor service (PATH/PUT/POST) you can execute and debug it in the pure golang.
+func Example_RuleExecution() {
+
+	//Uncomment various additional debugging option and debugging and troubleshooting
+	// expand.SetPanicOnError(false)
+	// read.ShowSQL(true)
+	// update.ShowSQL(true)
+	// insert.ShowSQL(true)
+
+	ctx := context.Background()
+
+	service := datly.New(datly.NewConfig())
+	viewName := "product"
+	ruleURL := fmt.Sprintf("yyyyyyy/Datly/routes/dev/%v.yaml", viewName)
+	err := service.LoadRoute(ctx, ruleURL,
+		view.NewPackagedType("domain", "Product", reflect.TypeOf(Product{})),
+		view.NewPackagedType("domain", "Validation", reflect.TypeOf(Validation{})),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = service.Init(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	//Create http Patch request for example
+	URL, _ := surl.Parse("http://127.0.0.1:8080/v1/api/dev")
+	httpRequest := &http.Request{
+		URL:    URL,
+		Method: "PUT",
+		Body:   io.NopCloser(strings.NewReader(`{"Entity":{"VendorId":5672}}`)),
+		Header: http.Header{},
+	}
+	token, err := service.JwtSigner.Create(time.Hour, &jwt.Claims{
+		Email:  "dev@viantinc.com",
+		UserID: 111,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	httpRequest.Header.Set("Authorization", "Bearer "+token)
+	routeRes, _ := service.Routes()
+	route := routeRes.Routes[0] //make sure you are using correct route
+	err = service.Exec(ctx, viewName, datly.WithExecHttpRequest(ctx, route, httpRequest))
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+```

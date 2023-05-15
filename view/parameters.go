@@ -263,38 +263,6 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 	return p.Validate()
 }
 
-//func (p *Parameter) initStructQLParameter(ctx context.Context, view *View, resource *Resource) error {
-//
-//	if p.Query == "" {
-//		return fmt.Errorf("structql param: %v, query is empty", p.Name)
-//	}
-//	name := p.In.Name
-//	var pType reflect.Type
-//	if name == "" {
-//		pType = view.Schema.Type()
-//	} else {
-//		refParam, err := view.ParamByName(name)
-//		if err != nil {
-//			return fmt.Errorf("failed to build structql param: %v, %w", name, err)
-//		}
-//		if refParam.Schema == nil {
-//			_ = refParam.Init(ctx, view, resource, nil)
-//		}
-//		if refParam.Schema == nil {
-//			return fmt.Errorf("failed to build structql param %v, ref param %v schema was nil", name, refParam.Name)
-//		}
-//		pType = refParam.Schema.Type()
-//	}
-//
-//	query, err := structql.NewQuery(p.Query, pType, nil)
-//	if err != nil {
-//		return fmt.Errorf("failed to build structql param: %v, %w", name, err)
-//	}
-//	p.structQL = query
-//	p.Schema = NewSchema(query.Type())
-//	return nil
-//}
-
 func (p *Parameter) initDataViewParameter(ctx context.Context, resource *Resource) error {
 	aView, err := resource.View(p.In.Name)
 	if err != nil {
@@ -554,7 +522,6 @@ func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr un
 		if err != nil {
 			return nil, err
 		}
-
 		p._valueAccessor.SetValue(paramPtr, convertedValue)
 		return convertedValue, nil
 	}
@@ -708,11 +675,9 @@ func (p ParametersIndex) merge(with ParametersIndex) {
 
 //Lookup returns Parameter with given name
 func (p ParametersIndex) Lookup(paramName string) (*Parameter, error) {
-
 	if param, ok := p[paramName]; ok {
 		return param, nil
 	}
-
 	return nil, fmt.Errorf("not found parameter %v", paramName)
 }
 
@@ -741,9 +706,9 @@ func NewDataViewLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindDataView}
 }
 
-//NewStructQLLocation creates a structql
-func NewStructQLLocation(name string) *Location {
-	return &Location{Name: name, Kind: KindStructQL}
+//NewPathLocation creates a structql
+func NewPathLocation(name string) *Location {
+	return &Location{Name: name, Kind: KindParam}
 }
 
 //WithParameterType returns schema type parameter option

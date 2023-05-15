@@ -43,8 +43,7 @@ func (e *JSONError) Error() string {
 	return e.Message
 }
 
-func (b *selectorsBuilder) build(ctx context.Context, viewsDetails []*ViewDetails) (*view.Selectors, error) {
-	selectors := view.NewSelectors()
+func (b *selectorsBuilder) build(ctx context.Context, viewsDetails []*ViewDetails, selectors *view.Selectors) error {
 	wg := sync.WaitGroup{}
 	errors := NewErrors()
 	for _, details := range viewsDetails {
@@ -87,10 +86,10 @@ func (b *selectorsBuilder) build(ctx context.Context, viewsDetails []*ViewDetail
 
 	wg.Wait()
 	if len(errors.Errors) == 0 {
-		return selectors, nil
+		return nil
 	}
 
-	return nil, errors
+	return errors
 }
 
 func validateSelector(selector *view.Selector, aView *view.View) error {
@@ -101,22 +100,21 @@ func validateSelector(selector *view.Selector, aView *view.View) error {
 	return nil
 }
 
-func CreateRouteSelectors(ctx context.Context, route *Route, request *http.Request) (*view.Selectors, error) {
+func BuildRouteSelectors(ctx context.Context, selectors *view.Selectors, route *Route, request *http.Request) error {
 	requestMetadata := NewRequestMetadata(route)
 	requestParams, err := NewRequestParameters(request, route)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if requestParams == nil {
 		var err error
 		requestParams, err = NewRequestParameters(request, route)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-
-	return CreateSelectors(ctx, route._accessors, route.DateFormat, *route._caser, requestMetadata, requestParams, route.Index._viewDetails...)
+	return CreateSelectors(ctx, route._accessors, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, route.Index._viewDetails...)
 }
 
 func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, requestParams *RequestParams, views ...*ViewDetails) (*view.Selectors, *RequestParams, error) {
@@ -130,8 +128,11 @@ func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.R
 		}
 	}
 
-	selectors, err := CreateSelectors(ctx, route._accessors, route.DateFormat, *route._caser, requestMetadata, requestParams, views...)
-	return selectors, requestParams, err
+	selectors := view.NewSelectors()
+	if err := CreateSelectors(ctx, route._accessors, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, views...); err != nil {
+		return nil, nil, err
+	}
+	return selectors, requestParams, nil
 }
 
 func NewRequestMetadata(route *Route) *RequestMetadata {
@@ -144,7 +145,7 @@ func NewRequestMetadata(route *Route) *RequestMetadata {
 	return requestMetadata
 }
 
-func CreateSelectors(ctx context.Context, accessor *types.Accessors, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, views ...*ViewDetails) (*view.Selectors, error) {
+func CreateSelectors(ctx context.Context, accessor *types.Accessors, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, selectors *view.Selectors, views ...*ViewDetails) error {
 	sb := &selectorsBuilder{
 		caser:           inputFormat,
 		dateFormat:      dateFormat,
@@ -152,8 +153,7 @@ func CreateSelectors(ctx context.Context, accessor *types.Accessors, dateFormat 
 		params:          requestParams,
 		accessor:        accessor,
 	}
-
-	return sb.build(ctx, views)
+	return sb.build(ctx, views, selectors)
 }
 
 func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.Selector, details *ViewDetails) (string, error) {
@@ -425,7 +425,8 @@ func (b *selectorsBuilder) extractParamValue(ctx context.Context, param *view.Pa
 	case view.KindQuery:
 		return b.convertAndTransform(ctx, b.params.queryParam(param.In.Name, ""), param, options...)
 	case view.KindRequestBody:
-		return b.params.RequestBody()
+		bodyValue, _ := b.extractBody(param.In.Name)
+		return bodyValue, nil
 	case view.KindEnvironment:
 		return b.convertAndTransform(ctx, os.Getenv(param.In.Name), param, options...)
 	case view.KindHeader:
@@ -539,7 +540,7 @@ func (b *selectorsBuilder) handleParam(ctx context.Context, selector *view.Selec
 			return err
 		}
 
-	case view.DataViewKind:
+	case view.KindDataView:
 		if err := b.addViewParam(ctx, selector, parent, parameter); err != nil {
 			return err
 		}
@@ -650,15 +651,15 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 		Index:    newIndex,
 		MainView: nil,
 	}
+	selectors := view.NewSelectors()
 
-	selectors, err := CreateSelectors(ctx, b.accessor, b.dateFormat, b.caser, newRequestMetadata, b.params, &ViewDetails{View: aView})
-	if err != nil {
+	if err := CreateSelectors(ctx, b.accessor, b.dateFormat, b.caser, newRequestMetadata, b.params, selectors, &ViewDetails{View: aView}); err != nil {
 		return nil, err
 	}
 
 	session := reader.NewSession(destSlicePtr, aView, viewDetails.View)
 	session.Selectors = selectors
-	if err = reader.New().Read(ctx, session); err != nil {
+	if err := reader.New().Read(ctx, session); err != nil {
 		return nil, err
 	}
 
@@ -739,7 +740,7 @@ func (b *selectorsBuilder) paramViewValue(param *view.Parameter, value reflect.V
 	case 1:
 		return aSlice.ValuePointerAt(ptr, 0), nil
 	default:
-		return nil, fmt.Errorf("parameter %v return more than one value", param.Name)
+		return nil, fmt.Errorf("parameter %v return more than one value, len: %v rows ", param.Name, paramLen)
 	}
 }
 
@@ -839,7 +840,6 @@ func (b *selectorsBuilder) paramBasedParamValue(ctx context.Context, details *Vi
 	if err != nil {
 		return nil, err
 	}
-
 	return value, nil
 }
 
@@ -848,7 +848,6 @@ func (b *selectorsBuilder) addParamBasedParam(ctx context.Context, parent *ViewD
 	if err != nil {
 		return err
 	}
-
 	return parameter.ConvertAndSetCtx(ctx, selector, value)
 }
 

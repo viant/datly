@@ -51,8 +51,8 @@ func (p *ParametersIndex) AddDataViewParam(paramName string) {
 	p.parameterKinds[paramName] = view.KindDataView
 }
 
-func (p *ParametersIndex) AddStructQLParam(paramName string) {
-	p.parameterKinds[paramName] = view.KindStructQL
+func (p *ParametersIndex) AddParamParam(paramName string) {
+	p.parameterKinds[paramName] = view.KindParam
 }
 
 func (p *ParametersIndex) ParamType(paramName string) (view.Kind, bool) {
@@ -111,6 +111,10 @@ func (p *ParametersIndex) ParamsMetaWithHint(paramName string, hint *sanitize.Pa
 
 	if hint.StructQLQuery != nil {
 		parameter.Codec = config.CodecStructql
+
+		if parameter.Required == nil {
+			parameter.Required = boolPtr(false)
+		}
 		parameter.SQL = hint.StructQLQuery.SQL
 		parameter.SQLCodec = true
 		parameter.Target = &hint.StructQLQuery.Source
