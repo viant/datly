@@ -32,7 +32,8 @@ security handling, common validation, pagination, dynamic field selection, dynam
 notification vi universal message bus (sqs/sns/kafka/pubsub) and more.
 
 Datly promotes data cohesion with grouping/batching operation. For example  to boostrap your patch operation you would first
-analyze all inputs with required data points driving business logic, then define patch generation SQL to generate initial patch rule for example
+analyze all inputs with driving business logic, then define patch generation SQL 
+with only needed data points to generate initial patch rule for example
 
 ```sql
 SELECT  Products.* /* { "Cardinality": "One", "Field":"Entity" } */,
