@@ -55,8 +55,8 @@ LEFT JOIN (
 ) Acl ON Acl.USER_ID = Products.USER_ID AND 1=1
 LEFT JOIN (SELECT
          ID USER_ID,
-         HasFeatureEnabled(ACCOUNT_ID, 'EXPOSE_FEATURE_1') AS FEATURE_1,
-        HasFeatureEnabled(ACCOUNT_ID, 'EXPOSE_FEATURE_2') AS FEATURE_2
+         HasFeatureEnabled(ID, 'EXPOSE_FEATURE_1') AS FEATURE_1,
+        HasFeatureEnabled(ID, 'EXPOSE_FEATURE_2') AS FEATURE_2
         FROM (USERS)
 ) Features ON Features.USER_ID = Products.USER_ID AND 1=1
 ```
