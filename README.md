@@ -27,13 +27,17 @@ Datly is SQL-centric, where data comes first.
 **Productivity** is achieved by using a higher 4th generation language called DSQL (Datly SQL dialect) to address common problems of manipulating data, 
 allowing developers to focus on addressing business requirements. 
 In addition, more complex cases can be easily delegated to pure Golang, where Datly intermediates with data access and modification. 
-Higher abstraction languages offload developers from writing the same code over and over again, which includes routing, struct mapping, 
-security handling, common validation, pagination, dynamic field selection, dynamic criteria, data encoding: json,json-tabular, csv, caching, scaling, runtime/platform independence, and more.
+Higher abstraction languages promotes development consistency, offload developers from writing the same code over and over again, which includes routing, struct mapping, batching, 
+security handling, common validation, pagination, dynamic field selection, dynamic criteria, data encoding: json,json-tabular, csv, caching, scaling, runtime/platform independence, sending 
+notification vi universal message bus (sqs/sns/kafka/pubsub) and more.
+
+
 While Datly in autonomous mode purely uses a meta-driven approach, custom Datly allows blending Go-developed code into rules.
 As opposed to the purely meta-driven approach, Datly allows both modes to be debugged and troubleshooted with traditional debuggers.
 Datly automatically generates openAPI documentation allowing any programing languages integrated seamlessly with Datly based micro/rest services.
 Datly is runtime agnostic, and it can be deployed as standalone, serverless (lambda, cloud function), or Dockerized.
 Datly is deployment time optimized, allowing rule and logic deployment with powerful Go plugins under seconds on Lambda and other serverless cloud platform.
+
 
 
 **Performance** is achieved by utilizing Go with GoLang structs (never maps), while other frameworks manipulating data use Go reflection, 

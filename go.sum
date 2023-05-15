@@ -281,6 +281,8 @@ github.com/viant/bigquery v0.2.1-0.20221005024313-4286a9622882 h1:9KGMSAlJvMB6It
 github.com/viant/bigquery v0.2.1-0.20221005024313-4286a9622882/go.mod h1:ExB9gkDtW+CpzTCpx1HWEj9ysvyv9pKiTRxl9LAs4ZQ=
 github.com/viant/cloudless v1.7.0 h1:JjLeEp/V/ZRddyt02xZlxjWTaU82eZ5qvI8p1B8XtT0=
 github.com/viant/cloudless v1.7.0/go.mod h1:dDR2JFxGaAO4NbulJM5XpqNAktC/wawfRAXwZCqSNRI=
+github.com/viant/cloudless v1.7.1-0.20230513210250-5670fa470f58 h1:oEx61OgA+4y3VLNJVeKp0pK0sGdRqHBNjHvB3qYBpTY=
+github.com/viant/cloudless v1.7.1-0.20230513210250-5670fa470f58/go.mod h1:t6BDFAXg3s3/aULrPrR885vNmyI4MoHfXNu+TIzl/M0=
 github.com/viant/dsc v0.16.2 h1:Kw8zNct6dTISVZpartYK4MlKiwSSqIdRSq5CYjtZcc4=
 github.com/viant/dsc v0.16.2/go.mod h1:vkBPh3XSXUBB/ePbEO0VsKPaiN4JLRuB3QVftbS6KI4=
 github.com/viant/dsunit v0.10.8 h1:egq8LH4ogXTweFhzl/RqPhM9PNJtG35sbe02KnjFj3I=
