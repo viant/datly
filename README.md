@@ -62,8 +62,8 @@ LEFT JOIN (SELECT
 ) Features ON Features.USER_ID = Products.USER_ID AND 1=1
 ```
 
-Note that in the example above Products, Flights and Vendor represents previous state, Acl defines access-control list, 
-and Features application feature activator in the application. 
+In the example above Products, Flights and Vendor represents previous state, Acl defines access-control list, 
+and Features represents feature activator in the UI application. 
 
 While Datly in autonomous mode purely uses a meta-driven approach, custom Datly allows blending Go-developed code into rules.
 As opposed to the purely meta-driven approach, Datly allows both modes to be debugged and troubleshooted with traditional debuggers.
