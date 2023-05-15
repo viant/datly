@@ -43,7 +43,6 @@ func (s *Builder) preparePatchRule(ctx context.Context, builder *routeBuilder, s
 
 	_, sqlPart := s.extractRouteSettings(sourceSQL)
 	sourceSQL = []byte(sqlPart)
-
 	SQL, err := s.buildPatchSQL(builder, routeOption, config, paramType, sqlPart)
 	if err != nil {
 		return "", err

@@ -381,6 +381,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 
 	typesMeta := &typeMeta{fieldIndex: map[string]int{}, columnIndex: map[string]int{}}
 	name := aConfig.expandedTable.HolderName
+
 	detectCase, err := format.NewCase(formatter.DetectCase(name))
 	if err != nil {
 		return nil, err
@@ -541,7 +542,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 
 	sort.Sort(viewFields(actualFields))
 
-	SQL, idParams, err := s.buildInputMetadataSQL(actualFields, typesMeta, table, paramName, actualPath, actualHolder)
+	SQL, idParams, err := s.buildInputMetadataSQL(actualFields, typesMeta, table, aConfig.expandedTable.SQL, paramName, actualPath, actualHolder)
 	if err != nil {
 		return nil, err
 	}
@@ -558,7 +559,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		table:           table,
 		config:          aConfig,
 		sql:             SQL,
-		prevNamePrefix:  "prev" + strings.Title(paramName),
+		prevNamePrefix:  "cur" + strings.Title(paramName),
 		indexNamePrefix: strings.ToLower(paramName[0:1]) + paramName[1:],
 		isPtr:           true,
 		path:            strings.TrimRight(actualPath, "/"),
@@ -776,7 +777,6 @@ func (b *stmtBuilder) appendHintsWithRelations() error {
 
 func (b *stmtBuilder) appendSQLWithRelations(loadPrevious bool, preSQL string) error {
 	if loadPrevious {
-
 		var qualifiers []*option.Qualifier
 		var viewHint string
 		for _, field := range b.typeDef.actualFields {
@@ -895,7 +895,7 @@ func (b *stmtBuilder) paramSQLHint(def *inputMetadata) (string, error) {
 	return fmt.Sprintf("/* %v %v \n*/", string(marshal), def.sql), nil
 }
 
-func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, table string, paramName string, aPath string, holder string) (string, []*idParam, error) {
+func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, table, SQL string, paramName string, aPath string, holder string) (string, []*idParam, error) {
 	//vConfig := &option.ViewConfig{
 	//	Selector: &view.Config{},
 	//}
@@ -907,8 +907,14 @@ func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, ta
 	//	}
 	sb := &strings.Builder{}
 	sqlSb := &strings.Builder{}
-	sqlSb.WriteString("SELECT * FROM ")
-	sqlSb.WriteString(table)
+
+	if SQL != "" {
+		sqlSb.WriteString(SQL)
+
+	} else {
+		sqlSb.WriteString("SELECT * FROM ")
+		sqlSb.WriteString(table)
+	}
 	//sqlSb.WriteString(fmt.Sprintf("/* %v */", string(marshal)))
 
 	setSb := &strings.Builder{}

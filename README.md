@@ -31,13 +31,40 @@ Higher abstraction languages promotes development consistency, offload developer
 security handling, common validation, pagination, dynamic field selection, dynamic criteria, data encoding: json,json-tabular, csv, caching, scaling, runtime/platform independence, sending 
 notification vi universal message bus (sqs/sns/kafka/pubsub) and more.
 
+Datly promotes data cohesion with grouping/batching operation. For example  to boostrap your patch operation you would first
+analyze all inputs with required data points driving business logic, then define patch generation SQL to generate initial patch rule for example
 
+```sql
+SELECT  Products.* /* { "Cardinality": "One", "Field":"Entity" } */,
+        ProductFlights.*,
+        Vendor.*,
+        Acl.*,
+        Features.*
+FROM (SELECT * FROM PRODUCTS) Products,
+LEFT JOIN (SELECT * FROM PRODUCT_FLIGHTS) ProductFlights WHERE ProductFlights.PRODUCT_ID = Products.ID
+LEFT JOIN (SELECT ID, 
+                CURRENCY_ID,
+                (SELECT ctz.IANA_TIMEZONE FROM TIME_ZONE ctz WHERE v.TIME_ZONE_ID = ctz.ID) AS IANA_TIMEZONE
+            FROM Vendor v
+) Vendor  ON Vendor.ID = Product.VENDOR_ID AND 1=1
+LEFT JOIN (
+    SELECT ID USER_ID,
+           HasUserRole(ID, 'ROLE_READ_ONLY') AS IS_READ_ONLY,
+           HasUserRole(ID, 'ADMIN') AS IS_ADMIN
+    FROM (USERS)
+) Acl ON Acl.USER_ID = Products.USER_ID AND 1=1
+LEFT JOIN (SELECT
+         ID USER_ID,
+         HasFeatureEnabled(ACCOUNT_ID, 'EXPOSE_FEATURE_1') AS FEATURE_1,
+        HasFeatureEnabled(ACCOUNT_ID, 'EXPOSE_FEATURE_2') AS FEATURE_2
+        FROM (USERS)
+) Features ON Features.USER_ID = Products.USER_ID AND 1=1
+```
 While Datly in autonomous mode purely uses a meta-driven approach, custom Datly allows blending Go-developed code into rules.
 As opposed to the purely meta-driven approach, Datly allows both modes to be debugged and troubleshooted with traditional debuggers.
 Datly automatically generates openAPI documentation allowing any programing languages integrated seamlessly with Datly based micro/rest services.
 Datly is runtime agnostic, and it can be deployed as standalone, serverless (lambda, cloud function), or Dockerized.
 Datly is deployment time optimized, allowing rule and logic deployment with powerful Go plugins under seconds on Lambda and other serverless cloud platform.
-
 
 
 **Performance** is achieved by utilizing Go with GoLang structs (never maps), while other frameworks manipulating data use Go reflection, 
