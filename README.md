@@ -61,6 +61,8 @@ LEFT JOIN (SELECT
         FROM (USERS)
 ) Features ON Features.USER_ID = Products.USER_ID AND 1=1
 ```
+
+
 While Datly in autonomous mode purely uses a meta-driven approach, custom Datly allows blending Go-developed code into rules.
 As opposed to the purely meta-driven approach, Datly allows both modes to be debugged and troubleshooted with traditional debuggers.
 Datly automatically generates openAPI documentation allowing any programing languages integrated seamlessly with Datly based micro/rest services.
