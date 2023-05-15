@@ -117,16 +117,15 @@ func (f *Field) Init(ctx context.Context, typeLookup xreflect.TypeLookupFn, d *T
 	if err := f.initChildren(ctx, typeLookup, d); err != nil {
 		return err
 	}
-
 	if err := f.initType(typeLookup); err != nil {
-		return err
+		return fmt.Errorf("type %v has not fileds, %w", d.Name, err)
 	}
-
 	return nil
 }
 
 func (f *Field) initType(typeLookup xreflect.TypeLookupFn) error {
 	if f.Schema == nil && len(f.Fields) == 0 {
+
 		return fmt.Errorf("_field definition has to have schema or defined other fields")
 	}
 

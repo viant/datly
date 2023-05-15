@@ -697,7 +697,11 @@ func (s *Builder) buildIncludeIndex(config *ViewConfig) map[string]bool {
 	}
 
 	for _, column := range config.expandedTable.Inner {
+		if column.Alias != "" {
+			includeIndex[strings.ToLower(column.Alias)] = true
+		}
 		includeIndex[strings.ToLower(column.Name)] = true
+
 	}
 	return includeIndex
 }
