@@ -13,6 +13,11 @@ type Validator struct {
 	*govalidator.Service
 }
 
+//Checker returns *govalidator.Service
+func (c *Validator) Checker() *govalidator.Service {
+	return c.Service
+}
+
 func (c *Validator) WithPresence() govalidator.Option {
 	return govalidator.WithPresence()
 }
