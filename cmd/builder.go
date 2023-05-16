@@ -28,11 +28,10 @@ import (
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
 	"github.com/viant/xreflect"
-	"io"
-
 	"go/ast"
 	goFormat "go/format"
 	"gopkg.in/yaml.v3"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -42,17 +41,18 @@ import (
 
 type (
 	Builder struct {
-		tablesMeta *TableMetaRegistry
-		options    *Options
-		config     *standalone.Config
-		logger     io.Writer
-		fs         afs.Service
-		fileNames  *uniqueIndex
-		viewNames  *uniqueIndex
-		types      *uniqueIndex
-		plugins    []*pluginGenDeta
-		bundles    map[string]*bundleMetadata
-		logs       []string
+		pluginTypes map[string]bool
+		tablesMeta  *TableMetaRegistry
+		options     *Options
+		config      *standalone.Config
+		logger      io.Writer
+		fs          afs.Service
+		fileNames   *uniqueIndex
+		viewNames   *uniqueIndex
+		types       *uniqueIndex
+		plugins     []*pluginGenDeta
+		bundles     map[string]*bundleMetadata
+		logs        []string
 	}
 
 	routeBuilder struct {
@@ -970,6 +970,16 @@ func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
 			return nil, err
 		}
 
+		if len(paramViewConfig.params) > 0 {
+			for _, candidate := range paramViewConfig.params {
+				if candidate.Name == childViewConfig.viewName && candidate.ParameterConfig.DataType != "" {
+					aView.Schema = &view.Schema{
+						DataType: paramViewConfig.params[0].ParameterConfig.DataType,
+					}
+				}
+			}
+		}
+
 		for _, param := range paramViewConfig.params {
 			for _, qualifier := range param.Qualifiers {
 				aView.Qualifiers = append(aView.Qualifiers, &view.Qualifier{
@@ -1202,6 +1212,22 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 		filesMeta: dirTypes,
 	}
 
+	if len(s.pluginTypes) == 0 {
+		s.pluginTypes = map[string]bool{}
+	}
+	for _, typeName := range typeSrc.Types {
+		if strings.HasPrefix(typeName, "*") {
+			typeName = typeName[1:]
+		}
+		if err != nil {
+			return err
+		}
+		if shouldGenPlugin := s.shouldGenPlugin(typeName, dirTypes); shouldGenPlugin {
+			s.pluginTypes[typeName] = true
+		}
+		expandDependentTypes(s.pluginTypes, dirTypes.Methods(typeName))
+	}
+
 	for _, typeName := range typeSrc.Types {
 		actualName, asPtr := typeName, false
 		if strings.HasPrefix(typeName, "*") {
@@ -1225,7 +1251,8 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 
 		var dataType string
 		var ref string
-		if !s.shouldGenPlugin(actualName, dirTypes) {
+		shouldGenPlugin := s.pluginTypes[actualName]
+		if !shouldGenPlugin {
 			dataType = rType.String()
 		} else {
 			dataType = actualName
@@ -1266,6 +1293,21 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 	}
 
 	return nil
+}
+
+func expandDependentTypes(types map[string]bool, methods []*ast.FuncDecl) {
+	for _, m := range methods {
+
+		if len(m.Type.Params.List) > 0 {
+			for _, field := range m.Type.Params.List {
+				parameterType := StringifyAst(field.Type)
+				if strings.HasPrefix(parameterType, "*") {
+					parameterType = parameterType[1:]
+				}
+				types[parameterType] = true
+			}
+		}
+	}
 }
 
 func (s *Builder) packageName(dirTypes *xreflect.DirTypes) (string, error) {
@@ -1824,4 +1866,70 @@ func combineURLs(basePath string, segments ...string) string {
 	}
 
 	return url.Join(basePath, actualSegments...)
+}
+
+func StringifyAst(expr ast.Expr) string {
+	builder := strings.Builder{}
+	stringifyAst(expr, &builder)
+	return builder.String()
+}
+func stringifyAst(expr ast.Expr, builder *strings.Builder) error {
+	switch actual := expr.(type) {
+	case *ast.BasicLit:
+		builder.WriteString(actual.Value)
+	case *ast.Ident:
+		builder.WriteString(actual.Name)
+	case *ast.IndexExpr:
+		if err := stringifyAst(actual.X, builder); err != nil {
+			return err
+		}
+		builder.WriteString("[")
+		if err := stringifyAst(actual.Index, builder); err != nil {
+			return err
+		}
+		builder.WriteString("]")
+	case *ast.SelectorExpr:
+		if err := stringifyAst(actual.X, builder); err != nil {
+			return err
+		}
+		builder.WriteString(".")
+		return stringifyAst(actual.Sel, builder)
+	case *ast.ParenExpr:
+		builder.WriteString("(")
+		if err := stringifyAst(actual.X, builder); err != nil {
+			return err
+		}
+		builder.WriteString(")")
+	case *ast.CallExpr:
+		if err := stringifyAst(actual.Fun, builder); err != nil {
+			return err
+		}
+		builder.WriteString("(")
+		for i := 0; i < len(actual.Args); i++ {
+			if i > 0 {
+				builder.WriteString(",")
+			}
+			if err := stringifyAst(actual.Args[i], builder); err != nil {
+				return err
+			}
+		}
+		builder.WriteString(")")
+	case *ast.BinaryExpr:
+		if err := stringifyAst(actual.X, builder); err != nil {
+			return err
+		}
+		builder.WriteString(actual.Op.String())
+		return stringifyAst(actual.Y, builder)
+	case *ast.UnaryExpr:
+		builder.WriteString(actual.Op.String())
+		return stringifyAst(actual.X, builder)
+	case *ast.ArrayType:
+		return stringifyAst(actual.Elt, builder)
+	case *ast.StarExpr:
+		builder.WriteString("*")
+		return stringifyAst(actual.X, builder)
+	default:
+		return fmt.Errorf("unsupported node: %T", actual)
+	}
+	return nil
 }

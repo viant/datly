@@ -887,6 +887,8 @@ github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888 h1:iQ9ehV+Qev9s/L
 github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/velty v0.1.1-0.20230509001836-0709296ae922 h1:tfJb+hRNjMBaFg9Z+UZksevs+t3HKAh6MG9Ie09Qd3s=
 github.com/viant/velty v0.1.1-0.20230509001836-0709296ae922/go.mod h1:C9LNTFXg7DR8B9+tcY2STVqiRQasDr8AZxMhy/lIpOU=
+github.com/viant/xdatly v0.1.0 h1:T8SNlHpIJSvYj+OlMcAdCfJA7Vp/LKrw1o1A+98Hvz8=
+github.com/viant/xdatly v0.1.0/go.mod h1:VElB75XaMgWXTSAqbwpDSlZQeavN8yvqWBnAPTyCfzI=
 github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6 h1:smo1mQEneoMzqnC0ThQpGZmx0gDywu7GFUmjab9rVYM=
 github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6/go.mod h1:fb8YgbVadk8X5ZLz49LWGzWmQlZd7Y/I5wE0ru44bIo=
 github.com/viant/xdatly/types/core v0.0.0-20230221181206-d2370898f2c4/go.mod h1:LJN2m8xJjtYNCvyvNrVanJwvzj8+hYCuPswL8H4qRG0=
