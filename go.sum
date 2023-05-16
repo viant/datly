@@ -295,6 +295,8 @@ github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac h1:878egV44R105E/x71h
 github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac/go.mod h1:IRibPmMFuHRS/ntq38xIWBq+XXx97pv/1AtjWwKUeoA=
 github.com/viant/govalidator v0.1.4 h1:4TtaFhQUnI1wUzVnon6XWSdfskZ6KRTMNS7v3QHthOM=
 github.com/viant/govalidator v0.1.4/go.mod h1:vLIOlNTOnq+y6oNGeIEEvfvGok71UhEr7MQOFKINlIY=
+github.com/viant/govalidator v0.1.5-0.20230516194242-18a0943630b0 h1:MpscqVqIdbX/3UEAJTYSDb4grsW2NTWK0GEtMYpv9Ao=
+github.com/viant/govalidator v0.1.5-0.20230516194242-18a0943630b0/go.mod h1:vLIOlNTOnq+y6oNGeIEEvfvGok71UhEr7MQOFKINlIY=
 github.com/viant/igo v0.1.0 h1:AdBNAP4hckhNmnnDJgdbinpKgzZJFpl0uT0To3lLksI=
 github.com/viant/igo v0.1.0/go.mod h1:2IhjHP1uijFPY8QqnV4DJx7+9YurIPyJ6Fd/BZvB5hw=
 github.com/viant/parsly v0.1.1-0.20230509195447-4946fbf38a3b h1:JRf/gE1m74OrGOz+N5z84kMWkN2S9X2sh8KEURros2I=
