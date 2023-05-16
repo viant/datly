@@ -973,8 +973,11 @@ func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
 		if len(paramViewConfig.params) > 0 {
 			for _, candidate := range paramViewConfig.params {
 				if candidate.Name == childViewConfig.viewName && candidate.ParameterConfig.DataType != "" {
+					dataType := candidate.ParameterConfig.DataType
+
 					aView.Schema = &view.Schema{
-						DataType: paramViewConfig.params[0].ParameterConfig.DataType,
+						DataType:    dataType,
+						Cardinality: candidate.ParameterConfig.Cardinality,
 					}
 				}
 			}
@@ -1114,12 +1117,22 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 	}
 
 	param.Schema.DataType = paramType
+	if config.Cardinality == view.Many {
+		param.Schema.Cardinality = view.Many
+		if !strings.HasPrefix(paramType, "[]") {
+			param.Schema.DataType = "[]" + paramType
+		}
+
+	}
+
 	if config.Codec != "" {
 		if param.Output == nil {
 			param.Output = &view.Codec{}
 		}
 
 		param.Output.Ref = config.Codec
+		param.Output.OutputType = param.Schema.DataType
+
 	}
 
 	if config.MaxAllowedRecords != nil {

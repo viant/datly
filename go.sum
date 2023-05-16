@@ -858,6 +858,12 @@ github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac h1:878egV44R105E/x71h
 github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac/go.mod h1:IRibPmMFuHRS/ntq38xIWBq+XXx97pv/1AtjWwKUeoA=
 github.com/viant/govalidator v0.1.0 h1:nAM+uxbs+LjsqHcMiMsx74CPX7mLGElrU+yiDmV7BgA=
 github.com/viant/govalidator v0.1.0/go.mod h1:vLIOlNTOnq+y6oNGeIEEvfvGok71UhEr7MQOFKINlIY=
+github.com/viant/govalidator v0.1.1 h1:l7djfefXv3WLmccutcYDAoQxrspM0m/DJ0iEpXocFy4=
+github.com/viant/govalidator v0.1.1/go.mod h1:vLIOlNTOnq+y6oNGeIEEvfvGok71UhEr7MQOFKINlIY=
+github.com/viant/govalidator v0.1.2-0.20230516050734-007935fed2e5 h1:dAzSyBeFznJvqz4UdMuXEwZA4+qyt5UK89sdy2VnMVo=
+github.com/viant/govalidator v0.1.2-0.20230516050734-007935fed2e5/go.mod h1:vLIOlNTOnq+y6oNGeIEEvfvGok71UhEr7MQOFKINlIY=
+github.com/viant/govalidator v0.1.2-0.20230516052332-823a4742e660 h1:6MsRacHFOLSAuv9EcyLyKZX4N/ztWOP+51U0t4ChY80=
+github.com/viant/govalidator v0.1.2-0.20230516052332-823a4742e660/go.mod h1:vLIOlNTOnq+y6oNGeIEEvfvGok71UhEr7MQOFKINlIY=
 github.com/viant/igo v0.1.0 h1:AdBNAP4hckhNmnnDJgdbinpKgzZJFpl0uT0To3lLksI=
 github.com/viant/igo v0.1.0/go.mod h1:2IhjHP1uijFPY8QqnV4DJx7+9YurIPyJ6Fd/BZvB5hw=
 github.com/viant/parsly v0.0.0-20220309230857-3a8c3e9c4030/go.mod h1:4PKQzioRT9R99ceIhZ6tCD3tp0H0n2dEoIOaLulVvrg=
@@ -887,11 +893,8 @@ github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888 h1:iQ9ehV+Qev9s/L
 github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/velty v0.1.1-0.20230509001836-0709296ae922 h1:tfJb+hRNjMBaFg9Z+UZksevs+t3HKAh6MG9Ie09Qd3s=
 github.com/viant/velty v0.1.1-0.20230509001836-0709296ae922/go.mod h1:C9LNTFXg7DR8B9+tcY2STVqiRQasDr8AZxMhy/lIpOU=
-github.com/viant/xdatly v0.3.0 h1:pUWAw6zGnztSZYwh+fnLwthhnyWxlc2i7h7NZjkpN24=
-github.com/viant/xdatly v0.3.0/go.mod h1:VElB75XaMgWXTSAqbwpDSlZQeavN8yvqWBnAPTyCfzI=
 github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6 h1:smo1mQEneoMzqnC0ThQpGZmx0gDywu7GFUmjab9rVYM=
 github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6/go.mod h1:fb8YgbVadk8X5ZLz49LWGzWmQlZd7Y/I5wE0ru44bIo=
-github.com/viant/xdatly/types/core v0.0.0-20230221181206-d2370898f2c4 h1:ulnZ0trBeVGWJU2fpy0cJPFTZBSwLBSy0fIHvcOqUvw=
 github.com/viant/xdatly/types/core v0.0.0-20230221181206-d2370898f2c4/go.mod h1:LJN2m8xJjtYNCvyvNrVanJwvzj8+hYCuPswL8H4qRG0=
 github.com/viant/xdatly/types/core v0.0.0-20230516015609-1c396db11faa h1:bcPAnNiyMuSrFnnt8nfUmcZBcJxTMYxIWmIvc2yyA6c=
 github.com/viant/xdatly/types/core v0.0.0-20230516015609-1c396db11faa/go.mod h1:LJN2m8xJjtYNCvyvNrVanJwvzj8+hYCuPswL8H4qRG0=
