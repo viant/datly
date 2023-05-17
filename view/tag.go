@@ -34,7 +34,7 @@ func (t *Tag) RelationOption(field reflect.StructField, refViewOptions ...ViewOp
 	}
 	t.Init(field)
 	if t.RefSQL != "" {
-		refViewOptions = append(refViewOptions, WithSQL(t.RefSQL))
+		refViewOptions = append(refViewOptions, WithTemplate(NewTemplate(t.RefSQL)))
 	}
 	if isSlice(field.Type) {
 		result = append(result, WithOneToMany(field.Name, t.RelColumn,
@@ -71,8 +71,8 @@ func (t *Tag) Init(field reflect.StructField) {
 }
 
 //ParseTag parses datly tag
-func ParseTag(tagString string) *Tag {
-	tag := &Tag{}
+func ParseTag(tagString, sqlTag string) *Tag {
+	tag := &Tag{RefSQL: sqlTag}
 	elements := strings.Split(tagString, ",")
 	if len(elements) == 0 {
 		return tag

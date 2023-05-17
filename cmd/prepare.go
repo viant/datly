@@ -582,9 +582,9 @@ func (s *Builder) buildDatlyTagSpec(relation *inputMetadata) string {
 		if refTable := relation.table; refTable != "" {
 			source = fmt.Sprintf("refTable=%v", refTable)
 		}
-		datlyTagSpec = " " + fmt.Sprintf(view.DatlyTag+`:"relName=%v,relColumn=%v,refColumn=%v,refTable=%v"`, join.Alias, relColumn, refColumn, source)
+		datlyTagSpec = " " + fmt.Sprintf(view.DatlyTag+`:"relName=%v,relColumn=%v,refColumn=%v,%v"`, join.Alias, relColumn, refColumn, source)
 		if rawSQL := strings.Trim(sqlparser.Stringify(join.With), " )("); rawSQL != "" {
-			datlyTagSpec += ` sql:"` + rawSQL + `"`
+			datlyTagSpec += ` sql:"` + strings.ReplaceAll(rawSQL, "\n", " ") + `"`
 		}
 	}
 	return datlyTagSpec
