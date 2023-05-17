@@ -453,6 +453,16 @@ import ...
 - $sequencer.Allocate(tableName string, dest interface{}, selector string) 
 - $sqlx.Validate
 
+#### Message bus
+Universal message bus, provide ability to send/publish asyn message a message bus (i.e sqs/sns,pubsub,kafka) 
+ - $messageBus.Message creates a message
+ - $messageBus.Push push a message
+ - 
+```vm
+ - #set($msg = $messageBus.Message("aws/topic/us-west-1/mytopic", $data))
+  #set($confirmation = $messageBus.Push($msg))
+  $logger.Printf("confirmation:%v", $confirmation.MessageID)
+```
 
 #### Validator
  - $sqlx.Validate - validates a struct with sqlx tags
