@@ -22,7 +22,7 @@ func (s *Service) Push(message *mbus.Message) (*mbus.Confirmation, error) {
 }
 
 func (s *Service) Message(dest string, data interface{}) (*mbus.Message, error) {
-	parts := strings.Split(dest, "")
+	parts := strings.Split(dest, "/")
 	if len(parts) < 4 {
 		return nil, fmt.Errorf("invalid dest format: expect: vendor/resourceType/region/nameOrURI")
 	}
@@ -33,8 +33,9 @@ func (s *Service) Message(dest string, data interface{}) (*mbus.Message, error) 
 		Region: region,
 	}
 	URI := strings.Join(parts[3:], "/")
-	if len(parts) > 3 {
+	if len(parts) > 4 {
 		resource.URL = URI
+		resource.Name = parts[len(parts)-1]
 	} else {
 		resource.Name = URI
 	}
