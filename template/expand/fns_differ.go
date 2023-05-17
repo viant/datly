@@ -20,12 +20,12 @@ type (
 
 var differRegistry = godiff.NewRegistry()
 
-func (d Differ) Diff(val1 interface{}, val2 interface{}) *godiff.ChangeLog {
-	differ, err := differRegistry.Get(reflect.TypeOf(val1), reflect.TypeOf(val2), &godiff.Tag{})
+func (d Differ) Diff(from interface{}, fo interface{}) *godiff.ChangeLog {
+	differ, err := differRegistry.Get(reflect.TypeOf(from), reflect.TypeOf(fo), &godiff.Tag{})
 	if err != nil {
 		return nil
 	}
 
-	diff := differ.Diff(val1, val2)
+	diff := differ.Diff(from, fo)
 	return diff
 }

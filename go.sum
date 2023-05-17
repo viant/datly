@@ -293,6 +293,8 @@ github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446 h1:hxMOO03kzLySflK
 github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446/go.mod h1:RHqj7bdVZrPahrhQxhZRsFX3p/I7ixUEt7+G3l5z+v0=
 github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac h1:878egV44R105E/x71hjruMd1CQgzyN/HgxDnafm2Y+0=
 github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac/go.mod h1:IRibPmMFuHRS/ntq38xIWBq+XXx97pv/1AtjWwKUeoA=
+github.com/viant/godiff v0.1.0 h1:STSK5Wj9vdnYr/jyrstcKCAIFIAj+ZdlEiCl6NydW6U=
+github.com/viant/godiff v0.1.0/go.mod h1:IRibPmMFuHRS/ntq38xIWBq+XXx97pv/1AtjWwKUeoA=
 github.com/viant/govalidator v0.1.4 h1:4TtaFhQUnI1wUzVnon6XWSdfskZ6KRTMNS7v3QHthOM=
 github.com/viant/govalidator v0.1.4/go.mod h1:vLIOlNTOnq+y6oNGeIEEvfvGok71UhEr7MQOFKINlIY=
 github.com/viant/govalidator v0.1.5-0.20230516194242-18a0943630b0 h1:MpscqVqIdbX/3UEAJTYSDb4grsW2NTWK0GEtMYpv9Ao=
