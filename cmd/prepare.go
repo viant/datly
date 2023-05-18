@@ -515,7 +515,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	hasFieldName := "Has"
 	hasField := &view.Field{
 		Name: hasFieldName,
-		Tag:  fmt.Sprintf(`%v:"true" typeName:"%v" json:"-" sqlx:"presence=true"`, json2.IndexKey, definition.Name+"Has"),
+		Tag:  fmt.Sprintf(`%v:"true" typeName:"%v" json:"-" diff:"presence=true" sqlx:"presence=true"`, json2.IndexKey, definition.Name+"Has"),
 		Ptr:  true,
 	}
 

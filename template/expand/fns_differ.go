@@ -2,7 +2,7 @@ package expand
 
 import (
 	"github.com/viant/datly/view/keywords"
-	"github.com/viant/godiff"
+	godiff "github.com/viant/godiff"
 	"github.com/viant/velty/functions"
 	"reflect"
 )
@@ -21,7 +21,7 @@ type (
 var differRegistry = godiff.NewRegistry()
 
 func (d Differ) Diff(from interface{}, fo interface{}) *godiff.ChangeLog {
-	differ, err := differRegistry.Get(reflect.TypeOf(from), reflect.TypeOf(fo), &godiff.Tag{})
+	differ, err := differRegistry.Get(reflect.TypeOf(from), reflect.TypeOf(fo), &godiff.Tag{}, godiff.WithPresence(true))
 	if err != nil {
 		return nil
 	}
