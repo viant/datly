@@ -350,6 +350,8 @@ github.com/viant/xdatly/types/core v0.0.0-20230516015609-1c396db11faa h1:bcPAnNi
 github.com/viant/xdatly/types/core v0.0.0-20230516015609-1c396db11faa/go.mod h1:LJN2m8xJjtYNCvyvNrVanJwvzj8+hYCuPswL8H4qRG0=
 github.com/viant/xdatly/types/core v0.0.0-20230518134627-22c07556291d h1:g7HFq3MIs7d3FVUO9E28l6zwXGZMSvsSRy0WFLtKDXY=
 github.com/viant/xdatly/types/core v0.0.0-20230518134627-22c07556291d/go.mod h1:LJN2m8xJjtYNCvyvNrVanJwvzj8+hYCuPswL8H4qRG0=
+github.com/viant/xdatly/types/core v0.0.0-20230518142915-e849977dfa52 h1:+e/l/IhlQRKqUfdTphGrB2k7ZeKLG3Y6bg5pip8Tqss=
+github.com/viant/xdatly/types/core v0.0.0-20230518142915-e849977dfa52/go.mod h1:LJN2m8xJjtYNCvyvNrVanJwvzj8+hYCuPswL8H4qRG0=
 github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7 h1:lQZR77wD4CTMZgnk/6+YirrPHQJYicYCK/TVP8Ic6VU=
 github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7/go.mod h1:NVeS+s/uf2dj/M2QlLdY5KXoci0KPMbD9n02Y0m5hBw=
 github.com/viant/xreflect v0.0.0-20230303201326-f50afb0feb0d h1:zMKhSRx3xy89QlYcbjV3cgR98SlHnA8cGaBQJgmMeWE=

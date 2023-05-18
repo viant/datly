@@ -56,7 +56,7 @@ require (
 
 require (
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
-	github.com/viant/xdatly/types/core v0.0.0-20230518134627-22c07556291d
+	github.com/viant/xdatly/types/core v0.0.0-20230518142915-e849977dfa52
 )
 
 require (
