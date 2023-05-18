@@ -9,6 +9,7 @@ import (
 	"github.com/viant/sqlx/io/insert"
 	"github.com/viant/sqlx/io/insert/batcher"
 	"github.com/viant/sqlx/io/update"
+	"github.com/viant/sqlx/option"
 	"reflect"
 	"strings"
 )
@@ -179,7 +180,11 @@ func (e *Executor) handleInsert(ctx context.Context, aTx *lazyTx, session *Sessi
 		if err != nil {
 			return err
 		}
-
+		batchSize := 100
+		if collection.Len() < batchSize {
+			batchSize = collection.Len()
+		}
+		options = append(options, option.BatchSize(batchSize))
 		_, _, err = service.Exec(ctx, collection.Unwrap(), append(options, dialect)...)
 		return err
 	}
