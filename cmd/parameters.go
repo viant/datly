@@ -121,6 +121,9 @@ func (p *ParametersIndex) ParamsMetaWithHint(paramName string, hint *sanitize.Pa
 		parameter.Kind = string(view.KindParam)
 	} else if isSQLLikeCodec(parameter.Codec) {
 		parameter.SQL = SQL
+		if !strings.Contains(SQL, " LIMIT ") {
+			parameter.SQL += " LIMIT 1"
+		}
 		parameter.SQLCodec = true
 	} else if strings.TrimSpace(SQL) != "" {
 		parameter.Kind = string(view.KindDataView)
