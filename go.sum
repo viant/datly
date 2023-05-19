@@ -360,6 +360,8 @@ github.com/viant/xunsafe v0.8.4-0.20230304004317-9d184b8b025f h1:sfA5RcsRYKSXq/7
 github.com/viant/xunsafe v0.8.4-0.20230304004317-9d184b8b025f/go.mod h1:V3RCwtqpbNPznhmHysyAOpsyuSVkIYWo1Ewip7qb9/s=
 github.com/viant/xunsafe v0.8.4-0.20230518143747-d0d9968fd91b h1:lz5Oiqsv6S3XrqFNShuqxyNthaniEzTleYkgz3vFdGc=
 github.com/viant/xunsafe v0.8.4-0.20230518143747-d0d9968fd91b/go.mod h1:V3RCwtqpbNPznhmHysyAOpsyuSVkIYWo1Ewip7qb9/s=
+github.com/viant/xunsafe v0.8.4-0.20230519135301-80b30dfaf4b6 h1:uLsCYXfSGsSb7DJo9cpvC3fiAuXtQWMOSE2vccB+FHs=
+github.com/viant/xunsafe v0.8.4-0.20230519135301-80b30dfaf4b6/go.mod h1:V3RCwtqpbNPznhmHysyAOpsyuSVkIYWo1Ewip7qb9/s=
 github.com/xlab/treeprint v1.1.0/go.mod h1:gj5Gd3gPdKtR1ikdDK6fnFLdmIS0X30kTTuNd/WEJu0=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f h1:wihIB0V/mGpVYrL8I7n/WxVqWnP07CBXZ5uCgxUP1tI=
