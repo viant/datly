@@ -4,9 +4,10 @@ import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/toolbox/format"
-        "github.com/viant/xunsafe"
+	xunsafe "github.com/viant/xunsafe"
 	"reflect"
 	"strings"
+	"unicode"
 	"unsafe"
 )
 
@@ -248,12 +249,16 @@ func (s *structMarshaller) newFieldMarshaller(marshallers *[]*marshallerWithFiel
 	}
 
 	jsonName := field.Name
-	if jsonName[0] > 'Z' || jsonName[0] < 'A' && tag.FieldName == "" {
+	if !unicode.IsLetter(rune(jsonName[0])) && tag.FieldName == "" {
 		return nil
 	}
 
 	if tag.FieldName != "" {
 		jsonName = tag.FieldName
+	} else if dTag.IgnoreCaseFormatter {
+		if dTag.Name != "" {
+			jsonName = dTag.Name
+		}
 	} else if s.config.CaseFormat != 0 {
 		jsonName = formatName(jsonName, s.config.CaseFormat)
 	}

@@ -6,7 +6,7 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/sqlx/io/read/cache/ast"
 	"github.com/viant/toolbox/format"
-	"github.com/viant/xunsafe"
+	xunsafe "github.com/viant/xunsafe"
 	"reflect"
 	"strings"
 )
@@ -221,7 +221,9 @@ func createDefaultTagIfNeeded(column *Column) string {
 	if column.Format != "" {
 		attributes = append(attributes, json.FormatAttribute+"="+column.Format)
 	}
-
+	if column.IgnoreCaseFormatter {
+		attributes = append(attributes, json.IgnoreCaseFormatter+"=true,name="+column.Name)
+	}
 	if column.Default != "" {
 		attributes = append(attributes, json.ValueAttribute+"="+column.Default)
 	}

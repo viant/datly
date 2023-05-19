@@ -11,31 +11,34 @@ import (
 )
 
 const (
-	DefaultTagName    = "default"
-	FormatAttribute   = "format"
+	DefaultTagName      = "default"
+	FormatAttribute     = "format"
+	IgnoreCaseFormatter = "ignorecaseformatter"
+
 	ValueAttribute    = "value"
 	NullableAttribute = "nullable"
+	NameAttribute     = "name"
 	RequiredAttribute = "required"
 	Embedded          = "embedded"
 )
 
 type DefaultTag struct {
-	Format   string
-	Value    string
-	Nullable *bool
-	Required *bool
-	Embedded bool
+	Format              string
+	Name                string
+	IgnoreCaseFormatter bool
+	Value               string
+	Nullable            *bool
+	Required            *bool
+	Embedded            bool
 
 	_value interface{}
 }
 
 func NewDefaultTag(field reflect.StructField) (*DefaultTag, error) {
 	aTag := &DefaultTag{}
-
 	if err := aTag.Init(field); err != nil {
 		return nil, err
 	}
-
 	return aTag, nil
 }
 
@@ -57,10 +60,14 @@ func (t *DefaultTag) Init(field reflect.StructField) error {
 			t.Value = keyValue[1]
 		case FormatAttribute:
 			t.Format = keyValue[1]
+		case IgnoreCaseFormatter:
+			t.IgnoreCaseFormatter = keyValue[1] == "true"
 		case NullableAttribute:
 			t.Nullable = booleanPtr(keyValue[1] == "true")
 		case RequiredAttribute:
 			t.Required = booleanPtr(keyValue[1] == "true")
+		case NameAttribute:
+			t.Name = keyValue[1]
 		case Embedded:
 			t.Embedded = keyValue[1] == "true"
 		}

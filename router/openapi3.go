@@ -251,7 +251,9 @@ func (g *generator) addToSchema(schema *openapi3.Schema, route *Route, rType ref
 			}
 
 			fieldName := aField.Name
-			if isOutputSchema {
+			if defaultTag.IgnoreCaseFormatter {
+				fieldName = aField.Name
+			} else if isOutputSchema {
 				fieldName = format.CaseUpperCamel.Format(aField.Name, *route._caser)
 			}
 

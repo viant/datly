@@ -17,17 +17,18 @@ type foo struct {
 
 //Column represents view View column
 type Column struct {
-	Name           string `json:",omitempty"`
-	DataType       string `json:",omitempty"`
-	Tag            string `json:",omitempty"`
-	Expression     string `json:",omitempty"`
-	Filterable     bool   `json:",omitempty"`
-	Nullable       bool   `json:",omitempty"`
-	Default        string `json:",omitempty"`
-	Format         string `json:",omitempty"`
-	Codec          *Codec `json:",omitempty"`
-	DatabaseColumn string `json:",omitempty"`
-	IndexedBy      string `json:",omitempty"`
+	Name                string `json:",omitempty"`
+	DataType            string `json:",omitempty"`
+	Tag                 string `json:",omitempty"`
+	IgnoreCaseFormatter bool   `json:",omitempty"`
+	Expression          string `json:",omitempty"`
+	Filterable          bool   `json:",omitempty"`
+	Nullable            bool   `json:",omitempty"`
+	Default             string `json:",omitempty"`
+	Format              string `json:",omitempty"`
+	Codec               *Codec `json:",omitempty"`
+	DatabaseColumn      string `json:",omitempty"`
+	IndexedBy           string `json:",omitempty"`
 
 	rType         reflect.Type
 	tag           *io.Tag
@@ -162,6 +163,9 @@ func (c *Column) inherit(config *ColumnConfig) {
 	if config.Format != nil {
 		c.Format = *config.Format
 	}
+	if config.IgnoreCaseFormatter != nil {
+		c.IgnoreCaseFormatter = *config.IgnoreCaseFormatter
+	}
 }
 
 //Columns wrap slice of Column
@@ -282,10 +286,11 @@ func (c Columns) updateTypes(columns []*Column, caser format.Case) {
 }
 
 type ColumnConfig struct {
-	Name       string  `json:",omitempty"`
-	Expression *string `json:",omitempty"`
-	Codec      *Codec  `json:",omitempty"`
-	DataType   *string `json:",omitempty"`
-	Format     *string `json:",omitempty"`
-	Tag        *string `json:",omitempty"`
+	Name                string  `json:",omitempty"`
+	IgnoreCaseFormatter *bool   `json:",omitempty"`
+	Expression          *string `json:",omitempty"`
+	Codec               *Codec  `json:",omitempty"`
+	DataType            *string `json:",omitempty"`
+	Format              *string `json:",omitempty"`
+	Tag                 *string `json:",omitempty"`
 }
