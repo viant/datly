@@ -1,6 +1,6 @@
-/* {"URI":"meta/vendors/"} */
+/* {"URI":"meta/vendors/", "CaseFormat":"lu"} */
 SELECT vendor.* /* {"Style":"Comprehensive", "Field":"Data"}  */,
-       products.* EXCEPT VENDOR_ID,
+       products.* EXCEPT VENDOR_ID, CREATED,
        Meta.* /* {"Kind": "record"} */
 FROM (SELECT t.* FROM VENDOR t WHERE 1=1  ) vendor
     JOIN (SELECT * FROM PRODUCT t) products  ON products.VENDOR_ID = vendor.ID

@@ -913,12 +913,14 @@ func (s *Builder) excludeTableColumns(excluded *[]string, table *Table, path str
 				return err
 			}
 			ns, _ := s.normalizeFieldName(column.Ns)
-			if path == "" {
-				path = ns
+
+			prefix := path
+			if prefix == "" {
+				prefix = ns
 			} else {
-				path += "." + ns
+				prefix += "." + ns
 			}
-			excludedFieldPath := combineSegments(path, actualFieldName)
+			excludedFieldPath := combineSegments(prefix, actualFieldName)
 			*excluded = append(*excluded, excludedFieldPath)
 		}
 	}
