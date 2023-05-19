@@ -4,6 +4,7 @@ import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/toolbox/format"
+        "github.com/viant/xunsafe"
 	"reflect"
 	"strings"
 	"unsafe"
