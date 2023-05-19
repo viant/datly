@@ -2,6 +2,7 @@ package _default
 
 import (
 	"github.com/viant/toolbox/format"
+	"strings"
 )
 
 type Default struct {
@@ -9,6 +10,10 @@ type Default struct {
 	CaseFormat format.Case
 	Exclude    map[string]bool
 	DateLayout string
+}
+
+func NormalizeExclusionKey(item string) string {
+	return strings.ToLower(strings.ReplaceAll(item, "_", ""))
 }
 
 type Exclude []string
@@ -20,7 +25,7 @@ func (e Exclude) Index() map[string]bool {
 	}
 	for _, item := range e {
 		result[item] = true
+		result[NormalizeExclusionKey(item)] = true
 	}
 	return result
-
 }

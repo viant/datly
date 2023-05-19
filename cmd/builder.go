@@ -912,7 +912,12 @@ func (s *Builder) excludeTableColumns(excluded *[]string, table *Table, path str
 			if err != nil {
 				return err
 			}
-
+			ns, _ := s.normalizeFieldName(column.Ns)
+			if path == "" {
+				path = ns
+			} else {
+				path += "." + ns
+			}
 			excludedFieldPath := combineSegments(path, actualFieldName)
 			*excluded = append(*excluded, excludedFieldPath)
 		}

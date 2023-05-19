@@ -4,7 +4,6 @@ import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/toolbox/format"
-	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
 	"unsafe"
@@ -149,12 +148,15 @@ func isExcluded(filter Filter, name string, config _default.Default, path string
 		if _, ok := config.Exclude[path]; ok {
 			return true
 		}
+		normalizedPath := _default.NormalizeExclusionKey(path)
+		if _, ok := config.Exclude[normalizedPath]; ok {
+			return true
+		}
 	}
 
 	if filter == nil {
 		return false
 	}
-
 	_, ok := filter[name]
 	return !ok
 }
