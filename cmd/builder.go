@@ -69,6 +69,7 @@ type (
 	}
 
 	ViewConfig struct {
+		mainHolder      string
 		viewName        string
 		isVirtual       bool
 		queryJoin       *query.Join
@@ -125,6 +126,16 @@ type (
 	}
 )
 
+func (c *ViewConfig) refName() string {
+	if c.queryJoin == nil {
+		return ""
+	}
+	rel, ref := extractRelationAliases(c.queryJoin)
+	if c.queryJoin.Alias == rel {
+		return ref
+	}
+	return rel
+}
 func newUniqueIndex(caseSensitive bool) *uniqueIndex {
 	return &uniqueIndex{
 		taken:         map[string]int{},
@@ -851,7 +862,7 @@ func (s *Builder) inheritRouteFromMainConfig(builder *routeBuilder, config optio
 }
 
 func (s *Builder) indexExcludedColumns(builder *routeBuilder, config *ViewConfig) error {
-	err := s.appendExcluded(&builder.route.Exclude, config, "")
+	err := s.appendExcluded(builder.route, config, "")
 	if err != nil {
 		return err
 	}
@@ -863,8 +874,8 @@ func (s *Builder) indexExcludedColumns(builder *routeBuilder, config *ViewConfig
 	return err
 }
 
-func (s *Builder) appendExcluded(excluded *[]string, config *ViewConfig, path string) error {
-	if err := s.excludeTableColumns(excluded, config.expandedTable, path); err != nil {
+func (s *Builder) appendExcluded(route *router.Route, config *ViewConfig, path string) error {
+	if err := s.excludeTableColumns(route, config, path); err != nil {
 		return err
 	}
 
@@ -874,11 +885,11 @@ func (s *Builder) appendExcluded(excluded *[]string, config *ViewConfig, path st
 			return err
 		}
 
-		if err := s.appendExcluded(excluded, relation, combineSegments(path, holderName)); err != nil {
+		if err := s.appendExcluded(route, relation, combineSegments(path, holderName)); err != nil {
 			return err
 		}
 
-		if err := s.appendMetaExcluded(excluded, relation, path); err != nil {
+		if err := s.appendMetaExcluded(&route.Exclude, relation, path); err != nil {
 			return err
 		}
 	}
@@ -905,7 +916,8 @@ func (s *Builder) appendMetaExcluded(excluded *[]string, config *ViewConfig, pat
 	return nil
 }
 
-func (s *Builder) excludeTableColumns(excluded *[]string, table *Table, path string) error {
+func (s *Builder) excludeTableColumns(route *router.Route, viewConfig *ViewConfig, path string) error {
+	table := viewConfig.expandedTable
 	for _, column := range table.Columns {
 		for _, except := range column.Except {
 			actualFieldName, err := s.normalizeFieldName(except)
@@ -913,15 +925,16 @@ func (s *Builder) excludeTableColumns(excluded *[]string, table *Table, path str
 				return err
 			}
 			ns, _ := s.normalizeFieldName(column.Ns)
-
 			prefix := path
-			if prefix == "" {
-				prefix = ns
-			} else {
-				prefix += "." + ns
+			if strings.ToLower(viewConfig.mainHolder) != strings.ToLower(ns) { //avoid prefix
+				if prefix == "" {
+					prefix = ns
+				} else {
+					prefix += "." + ns
+				}
 			}
 			excludedFieldPath := combineSegments(prefix, actualFieldName)
-			*excluded = append(*excluded, excludedFieldPath)
+			route.Exclude = append(route.Exclude, excludedFieldPath)
 		}
 	}
 	return nil

@@ -617,6 +617,35 @@ func extractRelationColumns(join *query.Join) (string, string) {
 	return relColumn, refColumn
 }
 
+func extractRelationAliases(join *query.Join) (string, string) {
+	relAlias := ""
+	refAlias := ""
+	sqlparser.Traverse(join.On, func(n node.Node) bool {
+		switch actual := n.(type) {
+		case *qexpr.Binary:
+			if xSel, ok := actual.X.(*qexpr.Selector); ok {
+
+				if xSel.Name == join.Alias {
+
+					refAlias = xSel.Name
+				} else if relAlias == "" {
+					relAlias = xSel.Name
+				}
+			}
+			if ySel, ok := actual.Y.(*qexpr.Selector); ok {
+				if ySel.Name == join.Alias {
+					refAlias = ySel.Name
+				} else if relAlias == "" {
+					relAlias = ySel.Name
+				}
+			}
+			return true
+		}
+		return true
+	})
+	return relAlias, refAlias
+}
+
 func (s *Builder) shouldFilterColumnByMeta(parentTable string, fkIndex map[string]sink.Key, fieldMeta *fieldMeta) bool {
 	if fieldMeta.fkKey == nil {
 		return false

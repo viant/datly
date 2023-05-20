@@ -74,6 +74,14 @@ func (s *Builder) buildAndAddView(ctx context.Context, builder *routeBuilder, vi
 		return nil, err
 	}
 
+	holderName := ""
+	if viewConfig.unexpandedTable != nil {
+		holderName = viewConfig.unexpandedTable.HolderName
+	}
+
+	if viewConfig.mainHolder == "" {
+		viewConfig.mainHolder = holderName
+	}
 	result := &view.View{
 		Name:          viewName,
 		Table:         tableName,
@@ -208,15 +216,16 @@ func boolPtr(b bool) *bool {
 
 func (s *Builder) buildRelations(ctx context.Context, builder *routeBuilder, config *ViewConfig, indexNamespace bool) ([]*view.Relation, error) {
 	result := make([]*view.Relation, 0, len(config.relations))
+	views := map[string]*view.View{}
 	for _, relation := range config.relations {
 		relationName := relation.queryJoin.Alias
 		relView, err := s.buildAndAddViewWithLog(ctx, builder, relation, &view.Config{
 			Limit: 40,
 		}, indexNamespace)
-
 		if err != nil {
 			return nil, err
 		}
+		views[relView.Name] = relView
 
 		holderFormat, err := format.NewCase(formatter.DetectCase(relationName))
 		if err != nil {
@@ -228,6 +237,28 @@ func (s *Builder) buildRelations(ctx context.Context, builder *routeBuilder, con
 			cardinality = view.One
 		} else {
 			cardinality = view.Many
+		}
+
+		refName := relation.refName()
+		if parentView := views[refName]; parentView != nil {
+			parentView.With = append(parentView.With, &view.Relation{
+				Name: config.viewName + "_" + relationName,
+				Of: &view.ReferenceView{
+					View: view.View{
+						Reference: shared.Reference{Ref: relView.Name},
+						Name:      relationName + "#",
+					},
+					Field:  relation.aKey.child.Field,
+					Column: relation.aKey.child.Column,
+				},
+				Column:        relation.aKey.owner.Field,
+				Field:         relation.aKey.owner.Field,
+				ColumnAlias:   relation.aKey.child.Alias,
+				Holder:        holderFormat.Format(relationName, format.CaseUpperCamel),
+				IncludeColumn: true,
+				Cardinality:   cardinality,
+			})
+			continue
 		}
 
 		result = append(result, &view.Relation{

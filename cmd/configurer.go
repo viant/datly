@@ -323,7 +323,11 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 	result := newViewConfig(viewName, view.FirstNotEmpty(aQuery.From.Alias, viewName), parent, aTable, nil, view.SQLQueryMode)
 
 	var dataViewParams []*ViewParamConfig
+	tables := map[string]*Table{}
+
+	tables[aTable.HolderName] = aTable
 	for _, join := range joins {
+
 		innerTable := c.buildTableWithWarning(join.With, opt, join.Comments)
 		relViewConfig, childViewParams, err := c.buildViewConfigWithTable(join, innerTable, opt, join.Comments)
 		dataViewParams = append(dataViewParams, childViewParams...)
@@ -349,7 +353,8 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 			})
 
 		} else {
-			relViewConfig.aKey, err = relationKeyOf(aTable, innerTable, join)
+			tables[innerTable.HolderName] = innerTable
+			relViewConfig.aKey, err = relationKeyOf(aTable, innerTable, join, tables)
 			if err != nil {
 				return nil, nil, err
 			}

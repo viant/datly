@@ -16,7 +16,7 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
-	"github.com/viant/xunsafe"
+	xunsafe "github.com/viant/xunsafe"
 	"reflect"
 	"strings"
 	"time"

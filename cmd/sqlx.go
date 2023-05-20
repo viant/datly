@@ -206,14 +206,20 @@ func isParamPredicate(criteria string) bool {
 	return isParamView
 }
 
-func relationKeyOf(parentTable *Table, relTable *Table, join *query.Join) (*relationKey, error) {
+func relationKeyOf(parentTable *Table, relTable *Table, join *query.Join, tables map[string]*Table) (*relationKey, error) {
 	x := extractSelector(join.On.X, true)
 	y := extractSelector(join.On.X, false)
 
-	actualTableName := view.FirstNotEmpty(parentTable.HolderName, parentTable.Name)
-	if actualTableName != y.Name && actualTableName != x.Name {
-		return nil, fmt.Errorf("unknow view alias: %v %v", actualTableName, parentTable.Name)
+	if x.Name == view.FirstNotEmpty(relTable.HolderName, relTable.Name) {
+		parentTable = tables[y.Name]
+	} else {
+		parentTable = tables[x.Name]
 	}
+	actualTableName := view.FirstNotEmpty(parentTable.HolderName, parentTable.Name)
+
+	//if actualTableName != y.Name && actualTableName != x.Name {
+	//	return nil, fmt.Errorf("unknow view alias: %v %v", actualTableName, parentTable.Name)
+	//}
 
 	if actualTableName == y.Name {
 		y, x = x, y

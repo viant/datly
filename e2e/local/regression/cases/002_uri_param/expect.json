@@ -1,26 +1,44 @@
 [
   {
-    "id": 2,
-    "name": "Vendor 2",
-    "products": [
+    "setting": [
       {
-        "@indexBy@": "id"
-      },
-      {
-        "id": 3,
-        "name": "V2 Product 1",
-        "userCreated": 2
-      },
-      {
-        "id": 4,
-        "name": "V2 Product 2",
-        "userCreated": 2
-      },
-      {
-        "id": 5,
-        "name": "V2 Product 3",
-        "userCreated": 2
+        "channel": 3,
+        "isActive": 1
       }
-    ]
+    ],
+    "vendor": {
+      "accountId": 101,
+      "id": 2,
+      "name": "Vendor 2",
+      "products": [
+        {"@indexBy@": "id"},
+        {
+          "id": 3,
+          "name": "V2 Product 1",
+          "status": 1,
+          "userCreated": 2,
+          "userUpdated": 0,
+          "vendorId": 2
+        },
+        {
+          "id": 4,
+          "name": "V2 Product 2",
+          "status": 1,
+          "userCreated": 2,
+          "userUpdated": 0,
+          "vendorId": 2
+        },
+        {
+          "id": 5,
+          "name": "V2 Product 3",
+          "status": 1,
+          "userCreated": 2,
+          "userUpdated": 0,
+          "vendorId": 2
+        }
+      ],
+      "userCreated": 2,
+      "userUpdated": 0
+    }
   }
 ]
