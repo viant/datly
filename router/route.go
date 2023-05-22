@@ -110,7 +110,7 @@ type (
 		DebugKind         view.MetaKind
 		RequestBodySchema *view.Schema
 		ResponseBody      *BodySelector
-		DataFormat        string
+		DataFormat        string `json:",omitempty"`
 
 		_caser          *format.Case
 		_excluded       map[string]bool

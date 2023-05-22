@@ -532,6 +532,7 @@ func (s *Builder) buildRouterOutput(builder *routeBuilder) error {
 	}
 
 	builder.route.Output.CSV = builder.option.CSV
+	builder.route.Output.DataFormat = builder.option.DataFormat
 	aConfig, err := builder.configProvider.OutputConfig()
 	if err != nil {
 		return err

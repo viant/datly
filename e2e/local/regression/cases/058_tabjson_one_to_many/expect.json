@@ -1,0 +1,107 @@
+[
+  [
+    "Id",
+    "Name",
+    "AccountId",
+    "Created",
+    "UserCreated",
+    "Updated",
+    "UserUpdated",
+    "Products"
+  ],
+  [
+    1,
+    "Vendor 1",
+    100,
+    "2023-05-22T00:00:00Z",
+    1,
+    null,
+    0,
+    [
+      [
+        "Id",
+        "Name",
+        "Status",
+        "Created",
+        "UserCreated",
+        "Updated",
+        "UserUpdated"
+      ],
+      [
+        1,
+        "V1 Product 1",
+        1,
+        "2023-05-22T00:00:00Z",
+        1,
+        null,
+        0
+      ],
+      [
+        2,
+        "V1 Product 2",
+        1,
+        "2023-05-22T00:00:00Z",
+        1,
+        null,
+        0
+      ]
+    ]
+  ],
+  [
+    2,
+    "Vendor 2",
+    101,
+    "2023-05-22T00:00:00Z",
+    2,
+    null,
+    0,
+    [
+      [
+        "Id",
+        "Name",
+        "Status",
+        "Created",
+        "UserCreated",
+        "Updated",
+        "UserUpdated"
+      ],
+      [
+        3,
+        "V2 Product 1",
+        1,
+        "2023-05-22T00:00:00Z",
+        2,
+        null,
+        0
+      ],
+      [
+        4,
+        "V2 Product 2",
+        1,
+        "2023-05-22T00:00:00Z",
+        2,
+        null,
+        0
+      ],
+      [
+        5,
+        "V2 Product 3",
+        1,
+        "2023-05-22T00:00:00Z",
+        2,
+        null,
+        0
+      ]
+    ]
+  ],
+  [
+    3,
+    "Vendor 3",
+    100,
+    "2023-05-22T00:00:00Z",
+    1,
+    null,
+    0,
+    null
+  ]
+]

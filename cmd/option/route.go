@@ -24,6 +24,7 @@ type (
 		ResponseBody     *ResponseBodyConfig    `json:",omitempty"`
 		Package          string                 `json:",omitempty"`
 		Router           *RouterConfig          `json:",omitempty" yaml:",omitempty"`
+		DataFormat       string                 `json:",omitempty"`
 	}
 
 	TypeSrcConfig struct {
