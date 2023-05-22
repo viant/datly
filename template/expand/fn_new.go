@@ -10,8 +10,8 @@ import (
 	"reflect"
 )
 
-var fnNew = keywords.AddAndGet("newer", &functions.Entry{
-	Metadata: &keywords.FunctionMetadata{},
+var fnNew = keywords.AddAndGet("New", &functions.Entry{
+	Metadata: &keywords.StandaloneFn{},
 	Handler:  nil,
 })
 
@@ -25,7 +25,12 @@ func (n *newer) New(aType string) (interface{}, error) {
 		return nil, err
 	}
 
-	return reflect.New(parseType).Elem().Interface(), nil
+	resultType := parseType
+	if resultType.Kind() == reflect.Ptr {
+		return reflect.New(resultType.Elem()).Interface(), nil
+	}
+
+	return reflect.New(resultType).Elem().Interface(), nil
 
 }
 
@@ -34,7 +39,7 @@ func (n *newer) NewResultType(call *expr.Call) (reflect.Type, error) {
 		return nil, fmt.Errorf("expected New method to be called with 1 arg but was called with %v", len(call.Args))
 	}
 
-	expression, ok := call.Args[1].(*expr.Literal)
+	expression, ok := call.Args[0].(*expr.Literal)
 	if !ok {
 		return nil, fmt.Errorf("expected arg to be type of %T but was %T", expression, call.Args[1])
 	}

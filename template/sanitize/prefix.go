@@ -1,12 +1,29 @@
 package sanitize
 
 import (
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/velty/ast/expr"
 	"sort"
 	"strings"
 )
 
 func GetHolderName(identifier string) (string, string) {
+	paramName := paramId(identifier)
+	prefix, paramName := removePrefixIfNeeded(paramName)
+	paramName = withoutPath(paramName)
+	return prefix, paramName
+}
+
+func GetHolderNameFromSelector(selector *expr.Select) (string, string) {
+	if selector.X != nil {
+		_, ok := selector.X.(*expr.Call)
+		if ok {
+			return "", selector.ID
+		}
+	}
+
+	identifier := view.FirstNotEmpty(selector.FullName, selector.ID)
 	paramName := paramId(identifier)
 	prefix, paramName := removePrefixIfNeeded(paramName)
 	paramName = withoutPath(paramName)

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
 	"strings"
@@ -42,12 +43,16 @@ func NewParametersIndex(routeConfig *option.RouteConfig, hints map[string]*sanit
 
 func (p *ParametersIndex) AddUriParams(params map[string]bool) {
 	for paramName := range params {
-		p.parameterKinds[paramName] = view.PathKind
+		p.parameterKinds[paramName] = view.KindPath
 	}
 }
 
 func (p *ParametersIndex) AddDataViewParam(paramName string) {
-	p.parameterKinds[paramName] = view.DataViewKind
+	p.parameterKinds[paramName] = view.KindDataView
+}
+
+func (p *ParametersIndex) AddParamParam(paramName string) {
+	p.parameterKinds[paramName] = view.KindParam
 }
 
 func (p *ParametersIndex) ParamType(paramName string) (view.Kind, bool) {
@@ -64,7 +69,7 @@ func (p *ParametersIndex) AddParamTypes(paramTypes map[string]string) {
 func (p *ParametersIndex) AddConsts(consts map[string]interface{}) {
 	for key := range consts {
 		p.consts[key] = consts[key]
-		p.parameterKinds[key] = view.LiteralKind
+		p.parameterKinds[key] = view.KindLiteral
 	}
 }
 
@@ -93,7 +98,7 @@ func (p *ParametersIndex) AddParameter(parameter *view.Parameter) {
 }
 
 func (p *ParametersIndex) ParamsMetaWithHint(paramName string, hint *sanitize.ParameterHint) (*Parameter, error) {
-	parameter := p.getOrCreateParam(paramName)
+	parameter := p.ParamMeta(paramName)
 	if hint == nil {
 		return parameter, nil
 	}
@@ -104,23 +109,46 @@ func (p *ParametersIndex) ParamsMetaWithHint(paramName string, hint *sanitize.Pa
 		return nil, err
 	}
 
-	parameter.SQLCodec = isSQLLikeCodec(parameter.Codec)
-	parameter.SQL = SQL
+	if hint.StructQLQuery != nil {
+		parameter.Codec = config.CodecStructql
+
+		if parameter.Required == nil {
+			parameter.Required = boolPtr(false)
+		}
+		parameter.SQL = hint.StructQLQuery.SQL
+		parameter.SQLCodec = true
+		parameter.Target = &hint.StructQLQuery.Source
+		parameter.Kind = string(view.KindParam)
+	} else if isSQLLikeCodec(parameter.Codec) {
+		parameter.SQL = SQL
+		if !strings.Contains(SQL, " LIMIT ") {
+			parameter.SQL += " LIMIT 1"
+		}
+		parameter.SQLCodec = true
+	} else if strings.TrimSpace(SQL) != "" {
+		parameter.Kind = string(view.KindDataView)
+		parameter.SQL = SQL
+	}
 
 	return parameter, nil
 }
 
-func (p *ParametersIndex) getOrCreateParam(paramName string) *Parameter {
+func (p *ParametersIndex) ParamMeta(paramName string) *Parameter {
 	parameter, ok := p.paramsMeta[paramName]
 	if !ok {
-		parameter = &Parameter{}
+		parameter = &Parameter{
+			ParameterConfig: option.ParameterConfig{
+				Name: paramName,
+			},
+			Assumed: true,
+		}
 		p.paramsMeta[paramName] = parameter
 	}
 	return parameter
 }
 
 func (p *ParametersIndex) ParamsMetaWithComment(paramName, hint string) (*Parameter, error) {
-	parameter := p.getOrCreateParam(paramName)
+	parameter := p.ParamMeta(paramName)
 	if hint == "" {
 		return parameter, nil
 	}

@@ -43,7 +43,6 @@ func (s *Builder) preparePatchRule(ctx context.Context, builder *routeBuilder, s
 
 	_, sqlPart := s.extractRouteSettings(sourceSQL)
 	sourceSQL = []byte(sqlPart)
-
 	SQL, err := s.buildPatchSQL(builder, routeOption, config, paramType, sqlPart)
 	if err != nil {
 		return "", err
@@ -56,7 +55,7 @@ func (s *Builder) preparePatchRule(ctx context.Context, builder *routeBuilder, s
 	return SQL, err
 }
 
-func (s *Builder) buildPatchSQL(builder *routeBuilder, routeOption *option.RouteConfig, config *viewConfig, metadata *inputMetadata, preSQL string) (string, error) {
+func (s *Builder) buildPatchSQL(builder *routeBuilder, routeOption *option.RouteConfig, config *ViewConfig, metadata *inputMetadata, preSQL string) (string, error) {
 	sb, err := s.prepareStringBuilder(builder, metadata, config, routeOption)
 	if err != nil {
 		return "", err
@@ -101,6 +100,9 @@ func (b *patchStmtBuilder) build(parentRecord string, withUnsafe bool, indexes [
 	}
 
 	for _, relation := range contentBuilder.typeDef.relations {
+		if relation.config.isVirtual {
+			continue
+		}
 		if _, err := contentBuilder.newRelation(relation).build(accessor.record, withUnsafe, indexes); err != nil {
 			return "", nil
 		}

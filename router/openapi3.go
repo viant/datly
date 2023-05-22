@@ -251,7 +251,9 @@ func (g *generator) addToSchema(schema *openapi3.Schema, route *Route, rType ref
 			}
 
 			fieldName := aField.Name
-			if isOutputSchema {
+			if defaultTag.IgnoreCaseFormatter {
+				fieldName = aField.Name
+			} else if isOutputSchema {
 				fieldName = format.CaseUpperCamel.Format(aField.Name, *route._caser)
 			}
 
@@ -422,7 +424,7 @@ func (g *generator) appendBuiltInParam(params *[]*openapi3.Parameter, route *Rou
 }
 
 func (g *generator) convertParam(route *Route, param *view.Parameter, description string) (*openapi3.Parameter, bool, error) {
-	if param.In.Kind == view.DataViewKind || param.In.Kind == view.RequestBodyKind || param.In.Kind == view.EnvironmentKind || param.In.Kind == view.LiteralKind {
+	if param.In.Kind == view.KindDataView || param.In.Kind == view.KindRequestBody || param.In.Kind == view.KindEnvironment || param.In.Kind == view.KindLiteral {
 		return nil, false, nil
 	}
 

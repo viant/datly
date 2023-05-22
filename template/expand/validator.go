@@ -10,7 +10,7 @@ import (
 var goValidator = NewValidator()
 
 type Validator struct {
-	*govalidator.Service
+	Service *govalidator.Service
 }
 
 func (c *Validator) WithPresence() govalidator.Option {

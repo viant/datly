@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/reader/metadata"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/sqlparser"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
 	rdata "github.com/viant/toolbox/data"
@@ -32,6 +33,9 @@ func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column,
 		return nil, "", err
 	}
 	columns, SQL, err := detectColumns(ctx, evaluation, v)
+	if err != nil {
+		panic(err)
+	}
 	if err != nil {
 		return nil, "", err
 	}
@@ -84,7 +88,7 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 	}
 
 	for _, parameter := range aView.Template.Parameters {
-		if parameter.In.Kind != EnvironmentKind {
+		if parameter.In.Kind != KindEnvironment {
 			continue
 		}
 
@@ -194,24 +198,7 @@ func columnsMetadata(ctx context.Context, db *sql.DB, v *View, columns []io.Colu
 }
 
 func detectColumnsSQL(evaluation *TemplateEvaluation, v *View) (string, []interface{}, error) {
-	source := evaluation.SQL
-
-	sb := strings.Builder{}
-	sb.WriteString("SELECT ")
-	if v.Alias != "" {
-		sb.WriteString(v.Alias)
-		sb.WriteString(".")
-	}
-	sb.WriteString("* FROM ")
-	sb.WriteString(source)
-	sb.WriteString(" ")
-	sb.WriteString(v.Alias)
-	sb.WriteString(" WHERE 1=0")
-
-	SQL := sb.String()
-	if source != v.Name && source != v.Table {
-		SQL = ExpandWithFalseCondition(source)
-	}
+	SQL := ensureSelectStatement(evaluation, v)
 
 	var placeholders []interface{}
 	var err error
@@ -228,6 +215,37 @@ func detectColumnsSQL(evaluation *TemplateEvaluation, v *View) (string, []interf
 	}
 
 	return SQL, placeholders, nil
+}
+
+func ensureSelectStatement(evaluation *TemplateEvaluation, v *View) string {
+	source := evaluation.SQL
+	if source != v.Name && source != v.Table {
+		if query, _ := sqlparser.ParseQuery(source); query != nil && query.From.X == nil {
+			return wrapWithSelect(v, source)
+		}
+
+		return source
+	}
+
+	SQL := wrapWithSelect(v, source)
+	return SQL
+}
+
+func wrapWithSelect(v *View, source string) string {
+	sb := strings.Builder{}
+	sb.WriteString("SELECT ")
+	if v.Alias != "" {
+		sb.WriteString(v.Alias)
+		sb.WriteString(".")
+	}
+	sb.WriteString("* FROM ")
+	sb.WriteString(source)
+	sb.WriteString(" ")
+	sb.WriteString(v.Alias)
+	sb.WriteString(" WHERE 1=0")
+
+	SQL := sb.String()
+	return SQL
 }
 
 func NewMockSanitizer() *expand.DataUnit {

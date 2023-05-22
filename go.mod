@@ -25,21 +25,23 @@ require (
 	github.com/viant/afsc v1.9.0
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.2.1-0.20221005024313-4286a9622882
-	github.com/viant/cloudless v1.7.0
+	github.com/viant/cloudless v0.1.8
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
-	github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac
-	github.com/viant/parsly v0.1.0
+	github.com/viant/godiff v0.3.0
+	github.com/viant/parsly v0.2.0
 	github.com/viant/pgo v0.9.1-0.20230327170450-b328ca3ff3e0
-	github.com/viant/structql v0.1.1-0.20230506202747-6f83be0426ba
+	github.com/viant/scy v0.5.2
+	github.com/viant/sqlx v0.6.1-0.20230522090144-6bfb38b00e55
+	github.com/viant/structql v0.2.0
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20230509001836-0709296ae922
 	github.com/viant/xdatly/types/core v0.0.0-20230309221732-4dc744a54ac2
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
 	github.com/viant/xreflect v0.0.0-20230303201326-f50afb0feb0d
-	github.com/viant/xunsafe v0.8.4-0.20230304004317-9d184b8b025f
+	github.com/viant/xunsafe v0.8.4
 	golang.org/x/mod v0.9.0
 	golang.org/x/oauth2 v0.6.0
 	google.golang.org/api v0.103.0
@@ -48,15 +50,14 @@ require (
 )
 
 require (
-	github.com/viant/govalidator v0.0.0-20230301021138-3e2297869dd4
+	github.com/viant/govalidator v0.1.8
 	github.com/viant/sqlparser v0.3.1-0.20230320162628-96274e82953f
 	golang.org/x/crypto v0.7.0 // indirect
 )
 
 require (
-	github.com/viant/scy v0.4.1
-	github.com/viant/sqlx v0.6.1-0.20230522090144-6bfb38b00e55
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
+	github.com/viant/xdatly/types/core v0.0.0-20230518142915-e849977dfa52
 )
 
 require (
@@ -79,6 +80,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.9.11 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.7.20 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.19 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sns v1.20.11 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.22.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.11.25 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.13.8 // indirect

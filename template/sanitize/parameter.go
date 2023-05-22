@@ -1,8 +1,19 @@
 package sanitize
 
+import (
+	"github.com/viant/sqlparser"
+	"strings"
+)
+
 type ParameterHint struct {
-	Parameter string
-	Hint      string
+	Parameter     string
+	Hint          string
+	StructQLQuery *StructQLQuery
+}
+
+type StructQLQuery struct {
+	SQL    string
+	Source string
 }
 
 func NewParameterHint(name, hint string) *ParameterHint {
@@ -21,4 +32,29 @@ func (p *ParameterHints) Index() map[string]*ParameterHint {
 	}
 
 	return result
+}
+
+func TryParseStructQLHint(hint string) (*StructQLQuery, bool) {
+	_, SQL := SplitHint(hint)
+	if SQL == "" {
+		return nil, false
+	}
+
+	query, err := sqlparser.ParseQuery(SQL)
+	if query == nil || query.From.X == nil || err != nil {
+		return nil, false
+	}
+
+	source := sqlparser.Stringify(query.From.X)
+	colonIndex := strings.Index(source, ":")
+	if strings.HasPrefix(source, "/") || colonIndex == -1 {
+		return nil, false
+	}
+
+	source = strings.Trim(source, "`")[:colonIndex-1]
+
+	return &StructQLQuery{
+		Source: source,
+		SQL:    strings.ReplaceAll(SQL, source+":", ""),
+	}, true
 }

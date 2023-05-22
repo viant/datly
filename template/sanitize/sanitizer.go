@@ -45,6 +45,13 @@ func unwrapBrackets(name string) (string, bool) {
 }
 
 func sanitizeParameter(context Context, prefix, paramName, raw string, variables map[string]bool, consts map[string]interface{}) string {
+	if fn, ok := keywords.Get(paramName); ok {
+		_, ok = fn.Metadata.(*keywords.StandaloneFn)
+		if ok {
+			return raw
+		}
+	}
+
 	if prefix == keywords.ParamsMetadataKey {
 		return raw
 	}

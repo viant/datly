@@ -61,6 +61,7 @@ func (e *Errors) AddError(view, param string, err error) {
 		Param: param,
 		Err:   err,
 	})
+	e.Message = err.Error()
 	e.mutex.Unlock()
 }
 

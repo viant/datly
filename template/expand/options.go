@@ -2,8 +2,15 @@ package expand
 
 import (
 	"github.com/viant/velty"
+	"os"
 	"reflect"
 )
+
+var isDebugEnabled = os.Getenv("DATLY_NOPANIC") == ""
+
+func SetPanicOnError(value bool) {
+	isDebugEnabled = value
+}
 
 type CustomContext struct {
 	Type  reflect.Type
@@ -17,6 +24,6 @@ type config struct {
 
 func newConfig() *config {
 	return &config{
-		panicOnError: true,
+		panicOnError: velty.PanicOnError(isDebugEnabled),
 	}
 }

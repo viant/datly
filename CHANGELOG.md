@@ -1,3 +1,10 @@
+## March 16 2022 v0.5.12.0
+* Simplified data flow for executor generator
+* Introduced parameter transformer
+* Added base service for managed datly and datly debugging and troubleshooting
+* Added jwt mock service
+* Improved documentation
+
 ## March 16 2022 v0.5.7.0
 * Optimize aws lambda reloading with go plugin
 * Add datly package rule option

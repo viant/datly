@@ -1,6 +1,8 @@
 package parameter
 
-import "github.com/viant/parsly"
+import (
+	"github.com/viant/parsly"
+)
 
 func Parse(SQL string) ([]*Value, error) {
 	cursor := parsly.NewCursor("", []byte(SQL), 0)
@@ -26,6 +28,7 @@ func Parse(SQL string) ([]*Value, error) {
 			if aKey != "" {
 				result = append(result, &Value{Key: aKey, TemplateFragment: "$" + aKey})
 			}
+		case anyToken:
 		case parsly.Invalid:
 			return nil, cursor.NewError(candidates...)
 		}

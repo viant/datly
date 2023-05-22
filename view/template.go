@@ -225,7 +225,7 @@ func NewEvaluator(parameters []*Parameter, paramSchema, presenceSchema reflect.T
 func FilterConstParameters(parameters []*Parameter) []expand.ConstUpdater {
 	params := make([]expand.ConstUpdater, 0)
 	for i := range parameters {
-		if parameters[i].In.Kind != LiteralKind {
+		if parameters[i].In.Kind != KindLiteral {
 			continue
 		}
 
@@ -465,7 +465,7 @@ func (t *Template) replacementEntry(key string, params CriteriaParam, selector *
 
 			criteria = criteria + params.Qualifier.SQL
 		}
-		
+
 		return key, criteria, nil
 	default:
 		if strings.HasPrefix(key, keywords.WherePrefix) {

@@ -57,3 +57,14 @@ func getStruct(fType reflect.Type) reflect.Type {
 	}
 	return nil
 }
+
+//PackagedType represtns a package type
+type PackagedType struct {
+	Package string
+	Name    string
+	reflect.Type
+}
+
+func NewPackagedType(pkg string, name string, t reflect.Type) *PackagedType {
+	return &PackagedType{Package: pkg, Name: name, Type: t}
+}

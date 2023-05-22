@@ -1,3 +1,17 @@
+
+### Introduction
+
+Resource:
+
+View:
+ - Reader
+ - Executor
+
+Parameters:
+ - External
+ - Internal
+
+
 ### Resource
 
 Resource groups and represents set of Views, Connectors, Parameters and Types needed to build all views provided in

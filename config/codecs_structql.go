@@ -82,8 +82,20 @@ func (s *StructQLCodec) Value(ctx context.Context, raw interface{}, options ...i
 		return nil, err
 	}
 
+	result, err := s.selectQuery(query, raw)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, err
+}
+
+func (s *StructQLCodec) selectQuery(query *structql.Query, raw interface{}) (interface{}, error) {
+	if query.Limit == 1 {
+		return query.First(raw)
+	}
 	result, err := query.Select(raw)
-	if result != nil {
+	if err == nil {
 		result = s._xtype.Deref(result)
 	}
 
@@ -106,6 +118,10 @@ func (s *StructQLCodec) init() error {
 	}
 
 	s.recordType = aQuery.Type()
+	if s._query.Limit == 1 {
+		s.recordType = s.recordType.Elem()
+	}
+
 	s._xtype = xunsafe.NewType(s.recordType)
 
 	return nil

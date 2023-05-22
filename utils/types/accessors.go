@@ -39,11 +39,6 @@ func NewAccessor(fields []*xunsafe.Field, structType reflect.Type) *Accessor {
 	var xType *xunsafe.Type
 	var isPtr bool
 
-	//if structType.Kind() == reflect.Ptr {
-	//	xType = xunsafe.NewType(structType)
-	//	isPtr = true
-	//}
-
 	return &Accessor{
 		isPtr:   isPtr,
 		xType:   xType,
@@ -64,9 +59,18 @@ func (a *Accessor) SetValue(ptr unsafe.Pointer, value interface{}) {
 	xField.SetValue(ptr, value)
 }
 
-func (a *Accessor) AdjustAndSet(ptr unsafe.Pointer, value interface{}, format string) error {
+func (a *Accessor) SetConvertedAndGet(ptr unsafe.Pointer, value interface{}, format string) (interface{}, error) {
+	return a.adjustAndSet(ptr, value, format)
+}
+
+func (a *Accessor) SetConverted(ptr unsafe.Pointer, value interface{}, format string) error {
+	_, err := a.adjustAndSet(ptr, value, format)
+	return err
+}
+
+func (a *Accessor) adjustAndSet(ptr unsafe.Pointer, value interface{}, format string) (interface{}, error) {
 	if value == nil {
-		return nil
+		return nil, nil
 	}
 
 	xField, ptr := a.actualPtr(ptr)
@@ -74,26 +78,32 @@ func (a *Accessor) AdjustAndSet(ptr unsafe.Pointer, value interface{}, format st
 	case reflect.String:
 		switch actual := value.(type) {
 		case *time.Time:
-			xField.SetString(ptr, actual.Format(time.RFC3339))
-			return nil
+			result := actual.Format(time.RFC3339)
+			xField.SetString(ptr, result)
+			return result, nil
 		case time.Time:
-			xField.SetString(ptr, actual.Format(time.RFC3339))
-			return nil
+			result := actual.Format(time.RFC3339)
+			xField.SetString(ptr, result)
+			return result, nil
 		case string:
 			xField.SetString(ptr, actual)
-			return nil
+			return actual, nil
 		case int:
-			xField.SetString(ptr, strconv.Itoa(actual))
-			return nil
+			result := strconv.Itoa(actual)
+			xField.SetString(ptr, result)
+			return result, nil
 		case float64:
-			xField.SetString(ptr, strconv.FormatFloat(actual, 'f', -1, 64))
-			return nil
+			result := strconv.FormatFloat(actual, 'f', -1, 64)
+			xField.SetString(ptr, result)
+			return result, nil
 		case bool:
-			xField.SetString(ptr, strconv.FormatBool(actual))
-			return nil
+			result := strconv.FormatBool(actual)
+			xField.SetString(ptr, result)
+			return result, nil
 		case int64:
-			xField.SetString(ptr, strconv.Itoa(int(actual)))
-			return nil
+			result := strconv.Itoa(int(actual))
+			xField.SetString(ptr, result)
+			return result, nil
 		}
 
 	case reflect.Int:
@@ -101,128 +111,152 @@ func (a *Accessor) AdjustAndSet(ptr unsafe.Pointer, value interface{}, format st
 		case string:
 			atoi, err := strconv.Atoi(actual)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			xField.SetInt(ptr, atoi)
-			return nil
+			return atoi, nil
 		case int:
 			xField.SetInt(ptr, actual)
-			return nil
+			return actual, nil
 		case int8:
-			xField.SetInt(ptr, int(actual))
-			return nil
+			result := int(actual)
+			xField.SetInt(ptr, result)
+			return result, nil
 		case int16:
-			xField.SetInt(ptr, int(actual))
-			return nil
+			result := int(actual)
+			xField.SetInt(ptr, result)
+			return result, nil
 		case int32:
-			xField.SetInt(ptr, int(actual))
-			return nil
+			result := int(actual)
+			xField.SetInt(ptr, result)
+			return result, nil
 		case int64:
-			xField.SetInt(ptr, int(actual))
-			return nil
+			result := int(actual)
+			xField.SetInt(ptr, result)
+			return result, nil
 		case uint:
-			xField.SetInt(ptr, int(actual))
-			return nil
+			result := int(actual)
+			xField.SetInt(ptr, result)
+			return result, nil
 		case uint8:
-			xField.SetInt(ptr, int(actual))
-			return nil
+			result := int(actual)
+			xField.SetInt(ptr, result)
+			return result, nil
 		case uint16:
-			xField.SetInt(ptr, int(actual))
-			return nil
+			result := int(actual)
+			xField.SetInt(ptr, result)
+			return result, nil
 		case uint32:
-			xField.SetInt(ptr, int(actual))
-			return nil
+			result := int(actual)
+			xField.SetInt(ptr, result)
+			return result, nil
 		case uint64:
-			xField.SetInt(ptr, int(actual))
-			return nil
+			result := int(actual)
+			xField.SetInt(ptr, result)
+			return result, nil
 		case float64:
-			xField.SetInt(ptr, int(actual))
-			return nil
+			result := int(actual)
+			xField.SetInt(ptr, result)
+			return result, nil
 		case float32:
-			xField.SetInt(ptr, int(actual))
-			return nil
+			result := int(actual)
+			xField.SetInt(ptr, result)
+			return result, nil
 		}
 
 	case reflect.Bool:
 		switch actual := value.(type) {
 		case bool:
 			xField.SetBool(ptr, actual)
-			return nil
+			return actual, nil
 		case string:
 			parseBool, err := strconv.ParseBool(actual)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			xField.SetBool(ptr, parseBool)
-			return nil
+
+			result := parseBool
+			xField.SetBool(ptr, result)
+			return result, nil
 		}
 
 	case reflect.Float64:
 		switch actual := value.(type) {
 		case float64:
 			xField.SetFloat64(ptr, actual)
-			return nil
+			return actual, nil
 		case float32:
-			xField.SetFloat64(ptr, float64(actual))
-			return nil
+			result := float64(actual)
+			xField.SetFloat64(ptr, result)
+			return result, nil
 		case string:
 			float, err := strconv.ParseFloat(actual, 64)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			xField.SetFloat64(ptr, float)
-			return nil
+			return float, nil
 		case int:
-			xField.SetFloat64(ptr, float64(actual))
-			return nil
+			result := float64(actual)
+			xField.SetFloat64(ptr, result)
+			return result, nil
 		case int8:
-			xField.SetFloat64(ptr, float64(actual))
-			return nil
+			result := float64(actual)
+			xField.SetFloat64(ptr, result)
+			return result, nil
 		case int16:
-			xField.SetFloat64(ptr, float64(actual))
-			return nil
+			result := float64(actual)
+			xField.SetFloat64(ptr, result)
+			return result, nil
 		case int32:
-			xField.SetFloat64(ptr, float64(actual))
-			return nil
+			result := float64(actual)
+			xField.SetFloat64(ptr, result)
+			return result, nil
 		case int64:
-			xField.SetFloat64(ptr, float64(actual))
-			return nil
+			result := float64(actual)
+			xField.SetFloat64(ptr, result)
+			return result, nil
 		case uint:
-			xField.SetFloat64(ptr, float64(actual))
-			return nil
+			result := float64(actual)
+			xField.SetFloat64(ptr, result)
+			return result, nil
 		case uint8:
-			xField.SetFloat64(ptr, float64(actual))
-			return nil
+			result := float64(actual)
+			xField.SetFloat64(ptr, result)
+			return result, nil
 		case uint16:
-			xField.SetFloat64(ptr, float64(actual))
-			return nil
+			result := float64(actual)
+			xField.SetFloat64(ptr, result)
+			return result, nil
 		case uint32:
-			xField.SetFloat64(ptr, float64(actual))
-			return nil
+			result := float64(actual)
+			xField.SetFloat64(ptr, result)
+			return result, nil
 		case uint64:
-			xField.SetFloat64(ptr, float64(actual))
-			return nil
+			result := float64(actual)
+			xField.SetFloat64(ptr, result)
+			return result, nil
 		}
 	}
 
 	if reflect.TypeOf(value) == xField.Type {
 		xField.SetValue(ptr, value)
-		return nil
+		return value, nil
 	}
 
 	marshal, err := json.Marshal(value)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	converted, _, err := converter.Convert(string(marshal), xField.Type, false, format)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	xField.SetValue(ptr, converted)
-	return nil
+	return converted, nil
 }
 
 func (a *Accessor) actualPtr(ptr unsafe.Pointer) (*xunsafe.Field, unsafe.Pointer) {

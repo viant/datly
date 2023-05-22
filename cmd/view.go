@@ -13,7 +13,7 @@ import (
 	"github.com/viant/toolbox/format"
 )
 
-func (s *Builder) buildAndAddViewWithLog(ctx context.Context, builder *routeBuilder, viewConfig *viewConfig, selector *view.Config, indexNamespace bool, parameters ...*view.Parameter) (*view.View, error) {
+func (s *Builder) buildAndAddViewWithLog(ctx context.Context, builder *routeBuilder, viewConfig *ViewConfig, selector *view.Config, indexNamespace bool, parameters ...*view.Parameter) (*view.View, error) {
 	fmt.Printf("[INFO] building view %v\n", viewConfig.viewName)
 	aView, err := s.buildAndAddView(ctx, builder, viewConfig, selector, indexNamespace, parameters)
 	if err != nil {
@@ -25,7 +25,7 @@ func (s *Builder) buildAndAddViewWithLog(ctx context.Context, builder *routeBuil
 	return aView, err
 }
 
-func (s *Builder) buildAndAddView(ctx context.Context, builder *routeBuilder, viewConfig *viewConfig, selector *view.Config, indexNamespace bool, parameters []*view.Parameter) (*view.View, error) {
+func (s *Builder) buildAndAddView(ctx context.Context, builder *routeBuilder, viewConfig *ViewConfig, selector *view.Config, indexNamespace bool, parameters []*view.Parameter) (*view.View, error) {
 	table := viewConfig.unexpandedTable
 	viewName := s.viewNames.unique(viewConfig.viewName)
 	connector, err := s.ConnectorRef(view.FirstNotEmpty(table.Connector, s.options.Connector.DbName))
@@ -74,6 +74,14 @@ func (s *Builder) buildAndAddView(ctx context.Context, builder *routeBuilder, vi
 		return nil, err
 	}
 
+	holderName := ""
+	if viewConfig.unexpandedTable != nil {
+		holderName = viewConfig.unexpandedTable.HolderName
+	}
+
+	if viewConfig.mainHolder == "" {
+		viewConfig.mainHolder = holderName
+	}
 	result := &view.View{
 		Name:          viewName,
 		Table:         tableName,
@@ -206,17 +214,18 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
-func (s *Builder) buildRelations(ctx context.Context, builder *routeBuilder, config *viewConfig, indexNamespace bool) ([]*view.Relation, error) {
+func (s *Builder) buildRelations(ctx context.Context, builder *routeBuilder, config *ViewConfig, indexNamespace bool) ([]*view.Relation, error) {
 	result := make([]*view.Relation, 0, len(config.relations))
+	views := map[string]*view.View{}
 	for _, relation := range config.relations {
 		relationName := relation.queryJoin.Alias
 		relView, err := s.buildAndAddViewWithLog(ctx, builder, relation, &view.Config{
 			Limit: 40,
 		}, indexNamespace)
-
 		if err != nil {
 			return nil, err
 		}
+		views[relView.Name] = relView
 
 		holderFormat, err := format.NewCase(formatter.DetectCase(relationName))
 		if err != nil {
@@ -228,6 +237,28 @@ func (s *Builder) buildRelations(ctx context.Context, builder *routeBuilder, con
 			cardinality = view.One
 		} else {
 			cardinality = view.Many
+		}
+
+		refName := relation.refName()
+		if parentView := views[refName]; parentView != nil {
+			parentView.With = append(parentView.With, &view.Relation{
+				Name: config.viewName + "_" + relationName,
+				Of: &view.ReferenceView{
+					View: view.View{
+						Reference: shared.Reference{Ref: relView.Name},
+						Name:      relationName + "#",
+					},
+					Field:  relation.aKey.child.Field,
+					Column: relation.aKey.child.Column,
+				},
+				Column:        relation.aKey.owner.Field,
+				Field:         relation.aKey.owner.Field,
+				ColumnAlias:   relation.aKey.child.Alias,
+				Holder:        holderFormat.Format(relationName, format.CaseUpperCamel),
+				IncludeColumn: true,
+				Cardinality:   cardinality,
+			})
+			continue
 		}
 
 		result = append(result, &view.Relation{
@@ -252,7 +283,7 @@ func (s *Builder) buildRelations(ctx context.Context, builder *routeBuilder, con
 	return result, nil
 }
 
-func (s *Builder) buildColumnsConfig(ctx context.Context, config *viewConfig) (map[string]*view.ColumnConfig, error) {
+func (s *Builder) buildColumnsConfig(ctx context.Context, config *ViewConfig) (map[string]*view.ColumnConfig, error) {
 	result := map[string]*view.ColumnConfig{}
 	for _, column := range config.unexpandedTable.Inner {
 		if column.Comments == "" {
@@ -269,7 +300,7 @@ func (s *Builder) buildColumnsConfig(ctx context.Context, config *viewConfig) (m
 	return result, nil
 }
 
-func (s *Builder) buildCache(viewConfig *viewConfig) (*view.Cache, error) {
+func (s *Builder) buildCache(viewConfig *ViewConfig) (*view.Cache, error) {
 	meta := viewConfig.unexpandedTable.ViewConfig
 	if meta.Cache == nil {
 		return nil, nil

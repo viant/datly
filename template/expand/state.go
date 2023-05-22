@@ -21,7 +21,7 @@ type (
 		ViewParam       *MetaParam       `velty:"names=View"`
 		ParentParam     *MetaParam       `velty:"names=ParentView"`
 		Validator       *Validator       `velty:"names=validator"`
-		MessageBus      *mbus.Service
+		MessageBus      *mbus.Service    `velty:"names=messageBus"`
 	}
 )
 

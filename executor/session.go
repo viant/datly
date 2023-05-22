@@ -62,3 +62,7 @@ func (s *Session) Collection(executable *expand.Executable) *batcher.Collection 
 	s.collections[executable.Table] = collection
 	return collection
 }
+
+func (s *Session) Selectors() *view.Selectors {
+	return s.selectors
+}

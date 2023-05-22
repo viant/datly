@@ -4,9 +4,10 @@ import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/toolbox/format"
-	"github.com/viant/xunsafe"
+	xunsafe "github.com/viant/xunsafe"
 	"reflect"
 	"strings"
+	"unicode"
 	"unsafe"
 )
 
@@ -149,12 +150,15 @@ func isExcluded(filter Filter, name string, config _default.Default, path string
 		if _, ok := config.Exclude[path]; ok {
 			return true
 		}
+		normalizedPath := _default.NormalizeExclusionKey(path)
+		if _, ok := config.Exclude[normalizedPath]; ok {
+			return true
+		}
 	}
 
 	if filter == nil {
 		return false
 	}
-
 	_, ok := filter[name]
 	return !ok
 }
@@ -245,12 +249,16 @@ func (s *structMarshaller) newFieldMarshaller(marshallers *[]*marshallerWithFiel
 	}
 
 	jsonName := field.Name
-	if jsonName[0] > 'Z' || jsonName[0] < 'A' && tag.FieldName == "" {
+	if !unicode.IsLetter(rune(jsonName[0])) && tag.FieldName == "" {
 		return nil
 	}
 
 	if tag.FieldName != "" {
 		jsonName = tag.FieldName
+	} else if dTag.IgnoreCaseFormatter {
+		if dTag.Name != "" {
+			jsonName = dTag.Name
+		}
 	} else if s.config.CaseFormat != 0 {
 		jsonName = formatName(jsonName, s.config.CaseFormat)
 	}
@@ -392,8 +400,8 @@ func groupFields(elemType reflect.Type) *groupedFields {
 
 func (d *structDecoder) UnmarshalJSONObject(decoder *gojay.Decoder, fieldName string) error {
 	marshaller, ok := d.marshaller.marshallerByName(fieldName)
-	if len(d.session.Interceptors) > 0 {
-		interceptor, ok := d.session.Interceptors[marshaller.path]
+	if len(d.session.PathMarshaller) > 0 {
+		interceptor, ok := d.session.PathMarshaller[marshaller.path]
 		if ok {
 			return interceptor(marshaller.xField.Addr(d.ptr), decoder, d.session.Options...)
 		}

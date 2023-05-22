@@ -187,7 +187,6 @@ func (p *RequestParams) jsonPresenceMap() PresenceMapFn {
 func (p *RequestParams) RequestBody() (interface{}, error) {
 	p.Mutex.Lock()
 	defer p.Mutex.Unlock()
-
 	if p.requestBody != nil || p.requestBodyErr != nil {
 		return p.requestBody, p.requestBodyErr
 	}

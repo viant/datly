@@ -9,6 +9,7 @@ import (
 	"github.com/viant/sqlx/io/insert"
 	"github.com/viant/sqlx/io/insert/batcher"
 	"github.com/viant/sqlx/io/update"
+	"github.com/viant/sqlx/option"
 	"reflect"
 	"strings"
 )
@@ -31,7 +32,9 @@ func (e *Executor) Execute(ctx context.Context, aView *view.View, options ...Opt
 	if err != nil {
 		return err
 	}
-	Options(options).Apply(session)
+	if err := Options(options).Apply(session); err != nil {
+		return err
+	}
 	return e.Exec(ctx, session)
 }
 
@@ -43,7 +46,6 @@ func (e *Executor) Exec(ctx context.Context, session *Session) error {
 		session.State = state
 		defer session.State.Flush(expand.StatusFailure)
 	}
-
 	if err != nil {
 		return err
 	}
@@ -178,7 +180,11 @@ func (e *Executor) handleInsert(ctx context.Context, aTx *lazyTx, session *Sessi
 		if err != nil {
 			return err
 		}
-
+		batchSize := 100
+		if collection.Len() < batchSize {
+			batchSize = collection.Len()
+		}
+		options = append(options, option.BatchSize(batchSize))
 		_, _, err = service.Exec(ctx, collection.Unwrap(), append(options, dialect)...)
 		return err
 	}

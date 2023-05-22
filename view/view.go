@@ -16,7 +16,7 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
-	"github.com/viant/xunsafe"
+	xunsafe "github.com/viant/xunsafe"
 	"reflect"
 	"strings"
 	"time"
@@ -217,6 +217,7 @@ func (v *View) Init(ctx context.Context, resource *Resource, options ...interfac
 	}
 
 	if schema := v.Schema; schema != nil && len(v.With) == 0 {
+
 		if err := v.inheritRelationsFromTag(schema, resource); err != nil {
 			return err
 		}
@@ -240,7 +241,10 @@ func (v *View) Init(ctx context.Context, resource *Resource, options ...interfac
 func (v *View) inheritRelationsFromTag(schema *Schema, resource *Resource) error {
 	sType := schema.Type()
 	if sType == nil {
-		return nil
+		sType, _ = types.GetOrParseType(resource.LookupType, schema.DataType)
+		if sType == nil {
+			return nil
+		}
 	}
 	recType := getStruct(sType)
 	if recType == nil {
@@ -252,7 +256,8 @@ func (v *View) inheritRelationsFromTag(schema *Schema, resource *Resource) error
 		if !ok {
 			continue
 		}
-		tag := ParseTag(rawTag)
+		sqlTag, _ := field.Tag.Lookup("sql")
+		tag := ParseTag(rawTag, sqlTag)
 		if !tag.HasRelationSpec() {
 			continue
 		}
