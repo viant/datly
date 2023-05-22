@@ -18,8 +18,8 @@ type (
 
 	UnmarshalerInterceptors map[string]UnmarshalInterceptor
 	UnmarshalSession        struct {
-		Interceptors UnmarshalerInterceptors
-		Options      []interface{}
+		PathMarshaller UnmarshalerInterceptors
+		Options        []interface{}
 	}
 
 	UnmarshalInterceptor func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error
