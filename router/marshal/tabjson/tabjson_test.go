@@ -279,8 +279,8 @@ func Test_TabularJSON_Marshal(t *testing.T) {
 				},
 				{
 					ID:      3,
-					Time:    time.Date(2021, 8, 15, 14, 30, 45, 0, getLocation2(time.LoadLocation("America/New_York"))),
-					TimePtr: timePtr(time.Date(2021, 8, 15, 14, 30, 45, 0, getLocation2(time.LoadLocation("Asia/Tokyo")))),
+					Time:    time.Date(2021, 8, 15, 14, 30, 45, 0, getLocation(time.LoadLocation("America/New_York"))),
+					TimePtr: timePtr(time.Date(2021, 8, 15, 14, 30, 45, 0, getLocation(time.LoadLocation("Asia/Tokyo")))),
 				},
 			},
 			rType: reflect.TypeOf(&FooWithTime{}),
@@ -664,11 +664,63 @@ func Test_TabularJSON_Marshal(t *testing.T) {
    ]
 ]`,
 		},
+		{
+			description:  "primitive",
+			input:        event,
+			useAssertPkg: true,
+			rType:        nil,
+			expected:     `[["Int","Int8","Uint8","Int16","Uint16","Int32","Uint32","Int64","Uint64","Byte","String","Float32","Float64","Bool"],[1,2,3,4,5,6,7,8,9,10,"string",5.5,11.5,true]]`,
+		},
+		{
+			description:  "primitive pointers",
+			input:        eventPtr,
+			useAssertPkg: true,
+			rType:        nil,
+			expected:     `[["Int","Int8","Uint8","Int16","Uint16","Int32","Uint32","Int64","Uint64","Byte","String","Float32","Float64","Bool"],[1,2,3,4,5,6,7,8,9,10,"string",5.5,11.5,true]]`,
+		},
+		{
+			description:  "nils",
+			input:        nilsPtr,
+			useAssertPkg: true,
+			rType:        nil,
+			expected:     `[["Int","Int8","Uint8","Int16","Uint16","Int32","Uint32","Int64","Uint64","Byte","String","Float32","Float64","Bool"],[null,null,null,null,null,null,null,null,null,null,null,null,null,null]]`,
+		},
+		{
+			description:  "slice without relations",
+			input:        sliceWithoutRelations,
+			useAssertPkg: true,
+			expected:     `[["Int","String","Float64"],[10,"str - 1",20.5],[15,"str - 2",40.5],[5,"str - 0",0.5]]`,
+		},
+		{
+			description:  "slice with relations",
+			input:        sliceWithRelations,
+			useAssertPkg: true,
+			rType:        nil,
+			expected:     `[["Int","String","Float64","EventType"],[100,"abc",0,[["Id","Type"],[200,"event-type-1"]]]]`,
+		},
+		{
+			description:  "nil slice and *T",
+			input:        nilNonPrimitives,
+			useAssertPkg: true,
+			rType:        nil,
+			expected:     `[["Id","Name","EventTypesEmpty","EventTypes","EventType"],[231,"",null,[["Id","Type"],[1,"t - 1"],[null,null],[1,"t - 3"]],null]]`,
+		},
 	}
-	for _, testCase := range testCases {
-		//for i, testCase := range testCases[0:1] {
 
+	for _, testCase := range testCases {
+		//for i, testCase := range testCases {
 		//fmt.Println("====", i, " ", testCase.description)
+
+		if testCase.rType == nil {
+			fn, ok := (testCase.input).(func() interface{})
+			assert.True(t, ok, testCase.description)
+
+			testCase.input = fn()
+			testCase.rType = reflect.TypeOf(testCase.input)
+			if testCase.rType.Kind() == reflect.Slice {
+				testCase.rType = testCase.rType.Elem()
+			}
+		}
 
 		marshaller, err := NewMarshaller(testCase.rType, testCase.config)
 		if !assert.Nil(t, err, testCase.description) {
@@ -685,11 +737,13 @@ func Test_TabularJSON_Marshal(t *testing.T) {
 		}
 
 		actual := string(marshal)
-		assertly.AssertValues(t, testCase.expected, actual)
 
 		if testCase.useAssertPkg {
 			assert.EqualValues(t, testCase.expected, actual)
+			continue
 		}
+
+		assertly.AssertValues(t, testCase.expected, actual)
 	}
 }
 
@@ -706,14 +760,194 @@ func newTimePtr(date string) *time.Time {
 	return &aTime
 }
 
-func getLocation() *time.Location {
-	location, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		return nil
-	}
+func getLocation(location *time.Location, err error) *time.Location {
 	return location
 }
 
-func getLocation2(location *time.Location, err error) *time.Location {
-	return location
+func nilNonPrimitives() interface{} {
+	type eventType struct {
+		Id   int
+		Type string
+	}
+
+	type event struct {
+		Id              int
+		EventTypesEmpty []*eventType
+		EventTypes      []*eventType
+		Name            string
+		EventType       *eventType
+	}
+
+	return []*event{
+		{
+			Id: 231,
+			EventTypes: []*eventType{
+				{
+					Id:   1,
+					Type: "t - 1",
+				},
+				nil,
+				{
+					Id:   1,
+					Type: "t - 3",
+				},
+			},
+		},
+	}
+}
+
+func sliceWithRelations() interface{} {
+	type eventType struct {
+		Id   int
+		Type string
+	}
+
+	type event struct {
+		Int       int
+		String    string
+		Float64   float64
+		EventType eventType
+	}
+
+	return event{
+		Int:    100,
+		String: "abc",
+		EventType: eventType{
+			Id:   200,
+			Type: "event-type-1",
+		},
+	}
+}
+
+func sliceWithoutRelations() interface{} {
+	type event struct {
+		Int     int
+		String  string
+		Float64 float64
+	}
+
+	return []event{
+		{
+			Int:     10,
+			String:  "str - 1",
+			Float64: 20.5,
+		},
+		{
+			Int:     15,
+			String:  "str - 2",
+			Float64: 40.5,
+		},
+		{
+			Int:     5,
+			String:  "str - 0",
+			Float64: 0.5,
+		},
+	}
+}
+
+func nilsPtr() interface{} {
+	type event struct {
+		Int     *int
+		Int8    *int8
+		Uint8   *uint8
+		Int16   *int16
+		Uint16  *uint16
+		Int32   *int32
+		Uint32  *uint32
+		Int64   *int64
+		Uint64  *uint64
+		Byte    *byte
+		String  *string
+		Float32 *float32
+		Float64 *float64
+		Bool    *bool
+	}
+	return &event{}
+}
+
+func event() interface{} {
+	type event struct {
+		Int     int
+		Int8    int8
+		Uint8   uint8
+		Int16   int16
+		Uint16  uint16
+		Int32   int32
+		Uint32  uint32
+		Int64   int64
+		Uint64  uint64
+		Byte    byte
+		String  string
+		Float32 float32
+		Float64 float64
+		Bool    bool
+	}
+
+	return event{
+		Int:     1,
+		Int8:    2,
+		Uint8:   3,
+		Int16:   4,
+		Uint16:  5,
+		Int32:   6,
+		Uint32:  7,
+		Int64:   8,
+		Uint64:  9,
+		Byte:    10,
+		String:  "string",
+		Float32: 5.5,
+		Float64: 11.5,
+		Bool:    true,
+	}
+}
+
+func eventPtr() interface{} {
+	type event struct {
+		Int     *int
+		Int8    *int8
+		Uint8   *uint8
+		Int16   *int16
+		Uint16  *uint16
+		Int32   *int32
+		Uint32  *uint32
+		Int64   *int64
+		Uint64  *uint64
+		Byte    *byte
+		String  *string
+		Float32 *float32
+		Float64 *float64
+		Bool    *bool
+	}
+
+	intV := 1
+	int8V := int8(2)
+	uint8V := uint8(3)
+	int16V := int16(4)
+	uint16V := uint16(5)
+	int32V := int32(6)
+	uint32V := uint32(7)
+	int64V := int64(8)
+	uint64V := uint64(9)
+	byteV := byte(10)
+	stringV := "string"
+	float32V := float32(5.5)
+	float64V := 11.5
+	boolV := true
+
+	return event{
+		Int:     &intV,
+		Int8:    &int8V,
+		Uint8:   &uint8V,
+		Int16:   &int16V,
+		Uint16:  &uint16V,
+		Int32:   &int32V,
+		Uint32:  &uint32V,
+		Int64:   &int64V,
+		Uint64:  &uint64V,
+		Byte:    &byteV,
+		String:  &stringV,
+		Float32: &float32V,
+		Float64: &float64V,
+		Bool:    &boolV,
+	}
 }

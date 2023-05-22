@@ -10,7 +10,11 @@ type (
 		Filters *Filters
 		Options []interface{}
 		*bytes.Buffer
+		Interceptors MarshalerInterceptors
 	}
+
+	MarshalInterceptor    func() ([]byte, int, error)
+	MarshalerInterceptors map[string]MarshalInterceptor
 
 	UnmarshalerInterceptors map[string]UnmarshalInterceptor
 	UnmarshalSession        struct {

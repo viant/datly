@@ -33,8 +33,6 @@ require (
 	github.com/viant/godiff v0.0.0-20230105175448-93ea25ecc0ac
 	github.com/viant/parsly v0.1.0
 	github.com/viant/pgo v0.9.1-0.20230327170450-b328ca3ff3e0
-	github.com/viant/scy v0.5.0
-	github.com/viant/sqlx v0.5.3
 	github.com/viant/structql v0.1.1-0.20230506202747-6f83be0426ba
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20230509001836-0709296ae922
@@ -55,7 +53,11 @@ require (
 	golang.org/x/crypto v0.7.0 // indirect
 )
 
-require github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
+require (
+	github.com/viant/scy v0.4.1
+	github.com/viant/sqlx v0.6.1-0.20230522090144-6bfb38b00e55
+	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
+)
 
 require (
 	cloud.google.com/go v0.107.0 // indirect

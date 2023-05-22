@@ -4,6 +4,13 @@ Routes:
     TabularJSON:
       Config:
         FieldSeparator:  ","
+        NullValue:       "null"
+        StringifierConfig:
+          StringifierFloat32Config:
+            Precision: "30"
+          StringifierFloat64Config:
+            Precision: "30"
+
     View:
       Ref: events_ref
       Name: events

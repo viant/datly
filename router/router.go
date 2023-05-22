@@ -526,19 +526,36 @@ func (r *Router) marshalResult(session *ReaderSession, destValue reflect.Value, 
 		return nil, http.StatusBadRequest, err
 	}
 
-	formatType := session.RequestParams.queryParam(FormatQuery, "")
-	switch strings.ToLower(formatType) {
+	format := session.RequestParams.outputQueryFormat(session.Route)
+
+	switch strings.ToLower(format) {
 	case CSVQueryFormat:
 		return r.marshalAsCSV(session, destValue, filters)
 	case TabularJSONQueryFormat:
+		if session.Route.Style == ComprehensiveStyle {
+			tabJSONInterceptors := r.tabJSONInterceptors(session, destValue, filters)
+			return r.marshalAsJSON(session, destValue, filters, viewMeta, stats, tabJSONInterceptors)
+		}
 		return r.marshalAsTabularJSON(session, destValue, filters)
 	}
 
-	return r.marshalAsJSON(session, destValue, json.NewFilters(filters...), viewMeta, stats)
+	return r.marshalAsJSON(session, destValue, filters, viewMeta, stats)
 }
 
-func (r *Router) marshalAsJSON(session *ReaderSession, destValue reflect.Value, filters *json.Filters, viewMeta interface{}, stats []*reader.Info) ([]byte, int, error) {
-	payload, httpStatus, err := r.result(session, destValue, filters, viewMeta, stats)
+func (r *Router) tabJSONInterceptors(session *ReaderSession, destValue reflect.Value, filters []*json.FilterEntry) json.MarshalerInterceptors {
+	interceptors := make(map[string]json.MarshalInterceptor)
+
+	f := func() ([]byte, int, error) {
+		return r.marshalAsTabularJSON(session, destValue, filters)
+	}
+
+	interceptors[session.Route.Field] = json.MarshalInterceptor(f)
+	return interceptors
+
+}
+
+func (r *Router) marshalAsJSON(session *ReaderSession, destValue reflect.Value, filters []*json.FilterEntry, viewMeta interface{}, stats []*reader.Info, options ...interface{}) ([]byte, int, error) {
+	payload, httpStatus, err := r.result(session, destValue, filters, viewMeta, stats, options...)
 	if err != nil {
 		return nil, httpStatus, err
 	}
@@ -550,10 +567,15 @@ func (r *Router) inAWS() bool {
 	return scheme == "s3"
 }
 
-func (r *Router) result(session *ReaderSession, destValue reflect.Value, filters *json.Filters, meta interface{}, stats []*reader.Info) ([]byte, int, error) {
+func (r *Router) result(session *ReaderSession, destValue reflect.Value, filters []*json.FilterEntry, meta interface{}, stats []*reader.Info, options ...interface{}) ([]byte, int, error) {
+	aFilters := json.NewFilters(filters...)
+	aOptions := []interface{}{aFilters}
+	aOptions = append(aOptions, options...)
+
 	if session.Route.Cardinality == view.Many {
 		result := r.wrapWithResponseIfNeeded(destValue.Elem().Interface(), session.Route, meta, stats, nil)
-		asBytes, err := session.Route._marshaller.Marshal(result, filters)
+		asBytes, err := session.Route._marshaller.Marshal(result, aOptions...)
+
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
@@ -569,7 +591,7 @@ func (r *Router) result(session *ReaderSession, destValue reflect.Value, filters
 		return nil, http.StatusNotFound, nil
 	case 1:
 		result := r.wrapWithResponseIfNeeded(session.Route.View.Schema.Slice().ValueAt(slicePtr, 0), session.Route, meta, stats, nil)
-		asBytes, err := session.Route._marshaller.Marshal(result, filters)
+		asBytes, err := session.Route._marshaller.Marshal(result, aOptions...)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
@@ -972,23 +994,7 @@ func (r *Router) marshalAsTabularJSON(session *ReaderSession, sliceValue reflect
 		offset = copy(fields[offset:], filter.Fields)
 	}
 
-	// TODO EXTEND CONFIG
-	// USE //	session.Route.Output.Style
-	////	session.Route.Output.Field
-
-	//config := tabjson.Config{
-	//	FieldSeparator:  "",
-	//	ObjectSeparator: "",
-	//	EncloseBy:       "",
-	//	EscapeBy:        "",
-	//	NullValue:       "",
-	//	Stringify:       tabjson.StringifyConfig{},
-	//	UniqueFields:    nil,
-	//	References:      nil,
-	//	ExcludedPaths:   nil,
-	//}
-
-	data, err := session.Route.TabularJSON._outputMarshaller.Marshal(sliceValue.Elem().Interface()) // pass config
+	data, err := session.Route.TabularJSON._outputMarshaller.Marshal(sliceValue.Elem().Interface())
 
 	if err != nil {
 		return nil, http.StatusInternalServerError, err

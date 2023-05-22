@@ -871,9 +871,9 @@ func TestRouter(t *testing.T) {
 			expected: `{"Items":[{"Id":1,"Quantity":125.5,"Timestamp":"2022-08-09T23:10:17+02:00"},{"Id":2,"Quantity":250.5,"Timestamp":"2022-01-09T23:10:17+02:00"},{"Id":3,"Quantity":300,"Timestamp":"2020-01-09T23:10:17+02:00"}]}`,
 		},
 		{
-			description:  "tabular json output format with default config - float prec == -1",
-			resourceURI:  "046_tabular_json_output_default",
-			uri:          "/api/events?_format=TABULAR_JSON",
+			description:  "tabular json output format with default config: float prec == -1, no _format param needed in uri",
+			resourceURI:  "046_tabjson_output_def_conf",
+			uri:          "/api/events",
 			useAssertPkg: true,
 			expected:     `[["Id","Timestamp","EventTypeId","Quantity","UserId"],[1,"2019-03-11T02:20:33Z",2,33.23432374000549,1],[10,"2019-03-15T12:07:33Z",11,21.957962334156036,2],[100,"2019-04-10T05:15:33Z",111,5.084940046072006,3]]`,
 			method:       http.MethodGet,
@@ -892,15 +892,68 @@ func TestRouter(t *testing.T) {
 				"Content-Type": {"application/json; charset=utf-8"},
 			},
 		},
+		{
+			description:  "styles | error | comprehensive - tabular JSON",
+			resourceURI:  "048_tabjson_style",
+			uri:          "/api/events?_format=TABULAR_JSON&_criteria=(id%20=%201%20UNION%20ALL%20SELECT%209%20as%20id%2C%20To_Date%28%222019-03-11T02%3A20%3A33Z%22%29%20as%20timestamp%2C%2010%20as%20event_type_id%2C%2020%20as%20quantity%2C%206%20as%20user_id)",
+			useAssertPkg: true,
+			expected:     `{"Status":"error","Errors":[{"View":"events","Param":"_criteria","Message":"can't use criteria on view events"}],"Result":[]}`,
+			method:       http.MethodGet,
+		},
+		{
+			description:  "pagination over main view | comprehensive, record | comprehensive - tabular JSON",
+			resourceURI:  "049_tabjson_pagination_comprehensive",
+			uri:          "/api/events?_format=TABULAR_JSON&_page=2",
+			method:       http.MethodGet,
+			visitors:     map[string]interface{}{},
+			useAssertPkg: true,
+			expected:     `{"Status":"ok","ResponseBody":[["Id","Timestamp","EventTypeId","Quantity","UserId"],[100,"2019-04-10T05:15:33Z",111,5.084940046072006,3],[101,"2019-04-10T05:15:33Z",111,5.084940046072006,3]],"EventsMeta":{"TotalRecords":6,"CurrentPage":2,"PageSize":2}}`,
+		},
+		{
+			description:  "meta over nested view | comprehensive, record - tabular JSON",
+			resourceURI:  "050_tabjson_pagination_nested",
+			uri:          "/api/event-types?_format=TABULAR_JSON",
+			method:       http.MethodGet,
+			visitors:     map[string]interface{}{},
+			useAssertPkg: true,
+			expected:     `{"Status":"ok","ResponseBody":[["Id","Type","Code","Events","EventsMeta"],[1,"type - 1","code - 1",null,null],[2,"type - 2","code - 2",[["Id","Timestamp","EventTypeId","Quantity","UserId"],[1,"2019-03-11T02:20:33Z",2,33.23432374000549,1]],[["EventTypeId","TotalCount"],[2,1]]],[11,"type - 11","code - 11",[["Id","Timestamp","EventTypeId","Quantity","UserId"],[10,"2019-03-15T12:07:33Z",11,21.957962334156036,2]],[["EventTypeId","TotalCount"],[11,1]]],[111,"type - 111","code - 111",[["Id","Timestamp","EventTypeId","Quantity","UserId"],[100,"2019-04-10T05:15:33Z",111,5.084940046072006,3],[101,"2019-04-10T05:15:33Z",111,5.084940046072006,3],[102,"2019-04-10T05:15:33Z",111,5.084940046072006,3],[103,"2019-04-10T05:15:33Z",111,5.084940046072006,3]],[["EventTypeId","TotalCount"],[111,4]]]]}`,
+		},
+		{
+			description: "meta prewarmup | DebugKind record | comprehensive - tabular JSON",
+			resourceURI: "051_tabjson_meta_prewarmup",
+			uri:         "/api/event-types?_format=TABULAR_JSON",
+			method:      http.MethodGet,
+			preWarmup:   true,
+			closeAfterPreWarmup: map[string]bool{
+				"events": true,
+			},
+			useAssertPkg: true,
+			expected:     `{"Status":"ok","ResponseBody":[["Id","Type","Code","Events","EventsMeta"],[1,"type - 1","code - 1",null,null],[2,"type - 2","code - 2",[["Id","Timestamp","EventTypeId","Quantity","UserId"],[1,"2019-03-11T02:20:33Z",2,33.23432374000549,1]],[["EventTypeId","TotalCount"],[2,1]]],[11,"type - 11","code - 11",[["Id","Timestamp","EventTypeId","Quantity","UserId"],[10,"2019-03-15T12:07:33Z",11,21.957962334156036,2]],[["EventTypeId","TotalCount"],[11,1]]],[111,"type - 111","code - 111",[["Id","Timestamp","EventTypeId","Quantity","UserId"],[100,"2019-04-10T05:15:33Z",111,5.084940046072006,3],[101,"2019-04-10T05:15:33Z",111,5.084940046072006,3],[102,"2019-04-10T05:15:33Z",111,5.084940046072006,3],[103,"2019-04-10T05:15:33Z",111,5.084940046072006,3]],[["EventTypeId","TotalCount"],[111,4]]]]}`,
+		},
+		{
+			description: "csv output format with default config: float prec == -1, no _format param needed in uri\",",
+			resourceURI: "052_csv_output_def_config",
+			uri:         "/api/events",
+			expected: `"Id","Timestamp","EventTypeId","Quantity","UserId"
+1,"2019-03-11T02:20:33Z",2,33.23432374000549,1
+10,"2019-03-15T12:07:33Z",11,21.957962334156036,2
+100,"2019-04-10T05:15:33Z",111,5.084940046072006,3`,
+			method: http.MethodGet,
+			expectedHeaders: map[string][]string{
+				"Content-Type": {"text/csv; charset=utf-8"},
+			},
+			useAssertPkg: true,
+		},
 	}
 
 	//for i, tCase := range testcases[len(testcases)-1:] {
 	for i, tCase := range testcases {
+		testcases[0].cleanup()
 		if i != 0 {
 			testcases[i-1].cleanup()
 		}
 
-		tests.LogHeader(fmt.Sprintf("Running testcase  %v, %v\n", i, tCase.description))
+		tests.LogHeader(fmt.Sprintf("\n==> Running testcase  %v, %v\n", i, tCase.description))
 		testUri := path.Join(testLocation, "testdata")
 		routingHandler, ok := tCase.init(t, testUri)
 		if !ok {
@@ -1122,7 +1175,11 @@ func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router, shouldD
 	}
 
 	if !assertly.AssertValues(t, expected, string(response), c.description) {
+		fmt.Println("*** ACTUAL")
 		fmt.Println(string(response))
+		fmt.Println()
+		fmt.Println("*** EXPECTED")
+		fmt.Println(expected)
 	}
 
 	if c.useAssertPkg {
@@ -1140,7 +1197,7 @@ func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router, shouldD
 		}
 
 		if !assert.True(t, readOrWrite == actual || writeOrRead == actual, c.description) {
-			fmt.Printf("")
+			fmt.Println("*** ACTUAL HEADER: ", actual)
 		}
 	}
 

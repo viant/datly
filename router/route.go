@@ -36,12 +36,14 @@ const (
 	ReaderServiceType   ServiceType = "Reader"
 	ExecutorServiceType ServiceType = "Executor"
 
+	HeaderContentType = "Content-Type"
+
+	FormatQuery = "_format"
+
 	CSVQueryFormat = "csv"
 	CSVFormat      = "text/csv"
-	JSONFormat     = "application/json"
-	FormatQuery    = "_format"
 
-	HeaderContentType = "Content-Type"
+	JSONFormat = "application/json"
 
 	TabularJSONQueryFormat = "tabular_json"
 	TabularJSONFormat      = "application/json"
@@ -108,6 +110,7 @@ type (
 		DebugKind         view.MetaKind
 		RequestBodySchema *view.Schema
 		ResponseBody      *BodySelector
+		DefaultFormat     string
 
 		_caser          *format.Case
 		_excluded       map[string]bool
