@@ -1,15 +1,9 @@
 Routes:
   - URI: "/api/events"
     Method: GET
+    DataFormat: tabular
     TabularJSON:
-      Config:
-        FieldSeparator:  ","
-        NullValue:       "null"
-        StringifierConfig:
-          StringifierFloat32Config:
-            Precision: "30"
-          StringifierFloat64Config:
-            Precision: "30"
+      FloatPrecision: 30
 
     View:
       Ref: events_ref

@@ -1,9 +1,8 @@
 Routes:
   - URI: "/api/events"
     Method: GET
-    TabularJSON:
-      Config:
-        FieldSeparator: ","
+    DataFormat: tabular
+
     View:
       Ref: events_ref
       Name: events

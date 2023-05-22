@@ -15,9 +15,8 @@ import (
 type (
 	RequestParams struct {
 		sync.Mutex
-		OutputFormat     string
-		outputFormatKind string
-		InputFormat      string
+		OutputFormat string
+		InputFormat  string
 
 		cookiesIndex map[string]*http.Cookie
 		cookies      []*http.Cookie
@@ -62,7 +61,6 @@ func (p *RequestParams) init(request *http.Request, route *Route) (string, error
 	p.pathIndex, _ = toolbox.ExtractURIParameters(route.URI, request.URL.Path)
 	p.queryIndex = request.URL.Query()
 	p.OutputFormat = p.outputFormat(route)
-	p.outputFormatKind = p.outputQueryFormat(route)
 	p.InputFormat = p.header(HeaderContentType)
 
 	p.cookiesIndex = map[string]*http.Cookie{}
@@ -148,7 +146,7 @@ func (p *RequestParams) outputFormat(route *Route) string {
 func (p *RequestParams) outputQueryFormat(route *Route) string {
 	format := strings.ToLower(p.queryParam(FormatQuery, ""))
 	if format == "" {
-		format = route.Output.DefaultFormat
+		format = route.Output.DataFormat
 	}
 	return format
 }

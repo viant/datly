@@ -45,7 +45,7 @@ const (
 
 	JSONFormat = "application/json"
 
-	TabularJSONQueryFormat = "tabular_json"
+	TabularJSONQueryFormat = "tabular"
 	TabularJSONFormat      = "application/json"
 )
 
@@ -110,7 +110,7 @@ type (
 		DebugKind         view.MetaKind
 		RequestBodySchema *view.Schema
 		ResponseBody      *BodySelector
-		DefaultFormat     string
+		DataFormat        string
 
 		_caser          *format.Case
 		_excluded       map[string]bool
@@ -129,7 +129,8 @@ type (
 	TabularJSONConfig struct {
 		//Separator              string
 		//NullValue              string
-		Config                 *tabjson.Config
+		FloatPrecision         string
+		_config                *tabjson.Config
 		_requestBodyMarshaller *tabjson.Marshaller
 		_outputMarshaller      *tabjson.Marshaller
 		_unwrapperSlice        *xunsafe.Slice
@@ -744,38 +745,38 @@ func (r *Route) initCSVIfNeeded() error {
 
 func (r *Route) initTabJSONIfNeeded() error {
 
-	if r.TabularJSON == nil {
+	if r.Output.DataFormat != TabularJSONQueryFormat {
 		return nil
 	}
 
-	if r.TabularJSON.Config == nil {
-		r.TabularJSON.Config = &tabjson.Config{}
+	if r.TabularJSON == nil {
+		r.TabularJSON = &TabularJSONConfig{}
 	}
 
-	if r.TabularJSON.Config.FieldSeparator == "" {
-		r.TabularJSON.Config.FieldSeparator = ","
+	if r.TabularJSON._config == nil {
+		r.TabularJSON._config = &tabjson.Config{}
 	}
 
-	if len(r.TabularJSON.Config.FieldSeparator) != 1 {
-		return fmt.Errorf("separator has to be a single char, but was %v", r.TabularJSON.Config.FieldSeparator)
+	if r.TabularJSON._config.FieldSeparator == "" {
+		r.TabularJSON._config.FieldSeparator = ","
 	}
 
-	if r.TabularJSON.Config.NullValue == "" {
-		r.TabularJSON.Config.NullValue = "null"
+	if len(r.TabularJSON._config.FieldSeparator) != 1 {
+		return fmt.Errorf("separator has to be a single char, but was %v", r.TabularJSON._config.FieldSeparator)
 	}
 
-	// TODO MFI UPDATE?
-	//r.TabularJSON._config = &tabjson.Config{
-	//	FieldSeparator:  r.TabularJSON.Separator,
-	//	ObjectSeparator: ",\n",
-	//	EncloseBy:       `"`,
-	//	EscapeBy:        "\\",
-	//	NullValue:       r.TabularJSON.NullValue, // TODO set "null"
-	//	//Stringify:       tabjson.StringifyConfig{},
-	//	//UniqueFields:    nil,
-	//	//References:      nil,
-	//	//ExcludedPaths:   nil,
-	//}
+	if r.TabularJSON._config.NullValue == "" {
+		r.TabularJSON._config.NullValue = "null"
+	}
+
+	if r.TabularJSON.FloatPrecision != "" {
+		r.TabularJSON._config.StringifierConfig.StringifierFloat32Config.Precision = r.TabularJSON.FloatPrecision
+		r.TabularJSON._config.StringifierConfig.StringifierFloat64Config.Precision = r.TabularJSON.FloatPrecision
+	}
+
+	if len(r.Exclude) > 0 {
+		r.TabularJSON._config.ExcludedPaths = r.Exclude
+	}
 
 	schemaType := r.View.Schema.Type()
 	if schemaType.Kind() == reflect.Ptr {
@@ -783,8 +784,7 @@ func (r *Route) initTabJSONIfNeeded() error {
 	}
 
 	var err error
-	//r.TabularJSON._outputMarshaller, err = tabjson.NewMarshaller(schemaType, r.TabularJSON._config)
-	r.TabularJSON._outputMarshaller, err = tabjson.NewMarshaller(schemaType, r.TabularJSON.Config)
+	r.TabularJSON._outputMarshaller, err = tabjson.NewMarshaller(schemaType, r.TabularJSON._config)
 	if err != nil {
 		return err
 	}

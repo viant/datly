@@ -822,15 +822,15 @@ func TestRouter(t *testing.T) {
 			expected: `{"Status":"ok","ResponseBody":[{"Id":1,"Type":"type - 1","Code":"code - 1","Events":[]},{"Id":2,"Type":"type - 2","Code":"code - 2","Events":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}],"EventsMeta":{"EventTypeId":2,"TotalCount":1}},{"Id":11,"Type":"type - 11","Code":"code - 11","Events":[{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}],"EventsMeta":{"EventTypeId":11,"TotalCount":1}},{"Id":111,"Type":"type - 111","Code":"code - 111","Events":[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":102,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":103,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}],"EventsMeta":{"EventTypeId":111,"TotalCount":4}}],"_datly_debug_":[{"View":"event_types","Template":[{"SQL":"SELECT  COALESCE(id,0) AS id,  COALESCE(type,\"\") AS type,  COALESCE(code,\"\") AS code FROM (SELECT * FROM EVENT_TYPES   ) AS t ","CacheStats":{"Type":"lazy","RecordsCounter":1,"Key":"-7975909061465053937","FoundLazy":true}}],"TemplateMeta":[{"SQL":"SELECT COUNT(*) AS total_count FROM (SELECT  COALESCE(id,0) AS id,  COALESCE(type,\"\") AS type,  COALESCE(code,\"\") AS code FROM (SELECT * FROM EVENT_TYPES   ) AS t ) T","CacheStats":{"Type":"lazy","RecordsCounter":1,"Key":"4341218873677092370","FoundLazy":true}}],"Elapsed":"5ms"},{"View":"events","Template":[{"SQL":"SELECT  COALESCE(id,0) AS id,  t.timestamp,  COALESCE(event_type_id,0) AS event_type_id,  COALESCE(quantity,0) AS quantity,  COALESCE(user_id,0) AS user_id FROM (SELECT * FROM EVENTS WHERE 1 = 1 AND EVENT_TYPE_ID IN (?, ?, ?, ? )  AND ( event_type_id IN (?, ?, ?, ?))  ) AS t ","Args":[1,2,11,111,1,2,11,111],"CacheStats":{"Type":"warmup","RecordsCounter":4,"Key":"event_type_id#-4347759850797876299","FoundWarmup":true}}],"TemplateMeta":[{"SQL":"SELECT event_type_id, COUNT(*) AS total_count FROM (SELECT  COALESCE(id,0) AS id,  t.timestamp,  COALESCE(event_type_id,0) AS event_type_id,  COALESCE(quantity,0) AS quantity,  COALESCE(user_id,0) AS user_id FROM (SELECT * FROM EVENTS WHERE 1 = 1 AND EVENT_TYPE_ID IN (?, ?, ?, ? )  AND ( event_type_id IN (?, ?, ?, ?))  ) AS t ) T GROUP BY event_type_id","Args":[1,2,11,111,1,2,11,111],"CacheStats":{"Type":"warmup","RecordsCounter":4,"Key":"event_type_id#2930711288512290438","FoundWarmup":true}}],"Elapsed":"5ms"}]}`,
 		},
 		{
-			description: "csv output format",
+			description: "csv output format with default config: float prec == -1",
 			resourceURI: "043_nested_csv_output",
 			uri:         "/api/event-types?_format=CSV",
 			expected: `"Id","Type","Code","Events.Id","Events.Timestamp","Events.Quantity","Events.UserId"
 1,"type - 1","code - 1",null,null,null,null
-2,"type - 2","code - 2",1,"2019-03-11T02:20:33Z",33.2343237400054931640625000000000000000000000000000000000000000000,1
-2,"type - 2","code - 2",123,"2019-04-10T05:15:33Z",5.0000000000000000000000000000000000000000000000000000000000000000,10
-11,"type - 11","code - 11",10,"2019-03-15T12:07:33Z",21.9579623341560363769531250000000000000000000000000000000000000000,2
-111,"type - 111","code - 111",100,"2019-04-10T05:15:33Z",5.0849400460720062255859375000000000000000000000000000000000000000,3`,
+2,"type - 2","code - 2",1,"2019-03-11T02:20:33Z",33.23432374000549,1
+2,"type - 2","code - 2",123,"2019-04-10T05:15:33Z",5,10
+11,"type - 11","code - 11",10,"2019-03-15T12:07:33Z",21.957962334156036,2
+111,"type - 111","code - 111",100,"2019-04-10T05:15:33Z",5.084940046072006,3`,
 			method: http.MethodGet,
 			expectedHeaders: map[string][]string{
 				"Content-Type": {"text/csv; charset=utf-8"},
@@ -871,7 +871,7 @@ func TestRouter(t *testing.T) {
 			expected: `{"Items":[{"Id":1,"Quantity":125.5,"Timestamp":"2022-08-09T23:10:17+02:00"},{"Id":2,"Quantity":250.5,"Timestamp":"2022-01-09T23:10:17+02:00"},{"Id":3,"Quantity":300,"Timestamp":"2020-01-09T23:10:17+02:00"}]}`,
 		},
 		{
-			description:  "tabular json output format with default config: float prec == -1, no _format param needed in uri",
+			description:  "tabular json output format with default config: float prec == -1",
 			resourceURI:  "046_tabjson_output_def_conf",
 			uri:          "/api/events",
 			useAssertPkg: true,
@@ -884,7 +884,7 @@ func TestRouter(t *testing.T) {
 		{
 			description:  "tabular json output format with custom config - float prec == 3",
 			resourceURI:  "047_tabular_json_output",
-			uri:          "/api/events?_format=TABULAR_JSON",
+			uri:          "/api/events",
 			useAssertPkg: true,
 			expected:     `[["Id","Timestamp","EventTypeId","Quantity","UserId"],[1,"2019-03-11T02:20:33Z",2,33.234323740005493164062500000000,1],[10,"2019-03-15T12:07:33Z",11,21.957962334156036376953125000000,2],[100,"2019-04-10T05:15:33Z",111,5.084940046072006225585937500000,3]]`,
 			method:       http.MethodGet,
@@ -895,15 +895,15 @@ func TestRouter(t *testing.T) {
 		{
 			description:  "styles | error | comprehensive - tabular JSON",
 			resourceURI:  "048_tabjson_style",
-			uri:          "/api/events?_format=TABULAR_JSON&_criteria=(id%20=%201%20UNION%20ALL%20SELECT%209%20as%20id%2C%20To_Date%28%222019-03-11T02%3A20%3A33Z%22%29%20as%20timestamp%2C%2010%20as%20event_type_id%2C%2020%20as%20quantity%2C%206%20as%20user_id)",
+			uri:          "/api/events?_criteria=(id%20=%201%20UNION%20ALL%20SELECT%209%20as%20id%2C%20To_Date%28%222019-03-11T02%3A20%3A33Z%22%29%20as%20timestamp%2C%2010%20as%20event_type_id%2C%2020%20as%20quantity%2C%206%20as%20user_id)",
 			useAssertPkg: true,
-			expected:     `{"Status":"error","Errors":[{"View":"events","Param":"_criteria","Message":"can't use criteria on view events"}],"Result":[]}`,
+			expected:     `{"Status":"error","Message":"can't use criteria on view events","Errors":[{"View":"events","Param":"_criteria","Message":"can't use criteria on view events"}],"Result":[]}`,
 			method:       http.MethodGet,
 		},
 		{
 			description:  "pagination over main view | comprehensive, record | comprehensive - tabular JSON",
 			resourceURI:  "049_tabjson_pagination_comprehensive",
-			uri:          "/api/events?_format=TABULAR_JSON&_page=2",
+			uri:          "/api/events?_page=2",
 			method:       http.MethodGet,
 			visitors:     map[string]interface{}{},
 			useAssertPkg: true,
@@ -912,7 +912,7 @@ func TestRouter(t *testing.T) {
 		{
 			description:  "meta over nested view | comprehensive, record - tabular JSON",
 			resourceURI:  "050_tabjson_pagination_nested",
-			uri:          "/api/event-types?_format=TABULAR_JSON",
+			uri:          "/api/event-types",
 			method:       http.MethodGet,
 			visitors:     map[string]interface{}{},
 			useAssertPkg: true,
@@ -921,7 +921,7 @@ func TestRouter(t *testing.T) {
 		{
 			description: "meta prewarmup | DebugKind record | comprehensive - tabular JSON",
 			resourceURI: "051_tabjson_meta_prewarmup",
-			uri:         "/api/event-types?_format=TABULAR_JSON",
+			uri:         "/api/event-types",
 			method:      http.MethodGet,
 			preWarmup:   true,
 			closeAfterPreWarmup: map[string]bool{
@@ -943,6 +943,15 @@ func TestRouter(t *testing.T) {
 				"Content-Type": {"text/csv; charset=utf-8"},
 			},
 			useAssertPkg: true,
+		},
+		{
+			description:  "exclude | remove columns | tabular JSON",
+			resourceURI:  "053_tabjson_exclude",
+			useAssertPkg: true,
+			//expected:     `[["id","quantity","EventType"],[1,33.23432374000549,[["id","type"],[2,"type - 2"]]],[10,21.957962334156036,[["id","type"],[11,"type - 11"]]],[100,5.084940046072006,[["id","type"],[111,"type - 111"]]]]`,
+			expected: `[["Id","Quantity","EventType"],[1,33.23432374000549,[["Id","Type"],[2,"type - 2"]]],[10,21.957962334156036,[["Id","Type"],[11,"type - 11"]]],[100,5.084940046072006,[["Id","Type"],[111,"type - 111"]]]]`,
+			uri:      "/api/events",
+			method:   http.MethodGet,
 		},
 	}
 

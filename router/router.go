@@ -338,8 +338,8 @@ func (r *Router) buildSession(ctx context.Context, response http.ResponseWriter,
 		return nil, http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output CSV config?)", CSVFormat))
 	}
 
-	if route.TabularJSON == nil && requestParams.outputFormatKind == TabularJSONQueryFormat {
-		return nil, http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output TabularJSON config?)", TabularJSONFormat))
+	if route.TabularJSON == nil && route.DateFormat == TabularJSONQueryFormat {
+		return nil, http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", TabularJSONFormat))
 	}
 
 	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, requestParams, route.Index._viewDetails...)

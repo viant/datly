@@ -6,9 +6,8 @@ Routes:
     RevealMetric: true
     Style: Comprehensive
     DebugKind: record
-    TabularJSON:
-      Config:
-        FieldSeparator: ","
+    DataFormat: tabular
+
     View:
       Ref: event_types
 

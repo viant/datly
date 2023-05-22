@@ -2,9 +2,8 @@ Routes:
   - URI: "/api/event-types"
     Method: GET
     Style: Comprehensive
-    TabularJSON:
-      Config:
-        FieldSeparator: ","
+    DataFormat: tabular
+
     View:
       Ref: event_types
 

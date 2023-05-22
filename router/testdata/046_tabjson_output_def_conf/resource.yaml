@@ -1,10 +1,7 @@
 Routes:
   - URI: "/api/events"
     Method: GET
-    DefaultFormat: tabular_json
-    TabularJSON:
-      Config:
-        FieldSeparator:  ","
+    DataFormat: tabular
 
     View:
       Ref: events_ref

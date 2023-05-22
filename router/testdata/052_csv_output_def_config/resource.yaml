@@ -1,7 +1,7 @@
 Routes:
   - URI: "/api/events"
     Method: GET
-    DefaultFormat: csv
+    DataFormat: csv
     CSV:
       Separator: ','
     View:
