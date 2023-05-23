@@ -948,10 +948,9 @@ func TestRouter(t *testing.T) {
 			description:  "exclude | remove columns | tabular JSON",
 			resourceURI:  "053_tabjson_exclude",
 			useAssertPkg: true,
-			//expected:     `[["id","quantity","EventType"],[1,33.23432374000549,[["id","type"],[2,"type - 2"]]],[10,21.957962334156036,[["id","type"],[11,"type - 11"]]],[100,5.084940046072006,[["id","type"],[111,"type - 111"]]]]`,
-			expected: `[["Id","Quantity","EventType"],[1,33.23432374000549,[["Id","Type"],[2,"type - 2"]]],[10,21.957962334156036,[["Id","Type"],[11,"type - 11"]]],[100,5.084940046072006,[["Id","Type"],[111,"type - 111"]]]]`,
-			uri:      "/api/events",
-			method:   http.MethodGet,
+			expected:     `[["Id","Quantity","EventType"],[1,33.23432374000549,[["Id","Type"],[2,"type - 2"]]],[10,21.957962334156036,[["Id","Type"],[11,"type - 11"]]],[100,5.084940046072006,[["Id","Type"],[111,"type - 111"]]]]`,
+			uri:          "/api/events",
+			method:       http.MethodGet,
 		},
 	}
 
