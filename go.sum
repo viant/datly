@@ -858,6 +858,8 @@ github.com/viant/godiff v0.2.3 h1:mP4KB5s8fKv1MuDvddJRyVgdJORU5qoOle+M3P5P/k4=
 github.com/viant/godiff v0.2.3/go.mod h1:IRibPmMFuHRS/ntq38xIWBq+XXx97pv/1AtjWwKUeoA=
 github.com/viant/godiff v0.3.0 h1:BSVD2UNpxn8XMkkO0rGcu0y82Zvzwu6PgqwIfDQjPf8=
 github.com/viant/godiff v0.3.0/go.mod h1:IRibPmMFuHRS/ntq38xIWBq+XXx97pv/1AtjWwKUeoA=
+github.com/viant/godiff v0.3.1 h1:z3blwGFSqLPMSs3+G4l8X0E+P5/g+xCqU+ayQwmuS7U=
+github.com/viant/godiff v0.3.1/go.mod h1:IRibPmMFuHRS/ntq38xIWBq+XXx97pv/1AtjWwKUeoA=
 github.com/viant/govalidator v0.1.8 h1:nonWnTbqVZyJPhS6a4KSbwO3tllRYJpUb4OKkMbmtEE=
 github.com/viant/govalidator v0.1.8/go.mod h1:vLIOlNTOnq+y6oNGeIEEvfvGok71UhEr7MQOFKINlIY=
 github.com/viant/igo v0.1.0 h1:AdBNAP4hckhNmnnDJgdbinpKgzZJFpl0uT0To3lLksI=
@@ -879,6 +881,8 @@ github.com/viant/sqlparser v0.3.1-0.20230320162628-96274e82953f h1:pWKcqNuqVZmi0
 github.com/viant/sqlparser v0.3.1-0.20230320162628-96274e82953f/go.mod h1:ffKCsz9eb+tv0/nfDguYCcvpYmco/rLHhxhf/kMzKzw=
 github.com/viant/sqlx v0.6.0 h1:E5M8jsz1+KZqOgHJKszFCIlddkuM8hR5joxokIiySHs=
 github.com/viant/sqlx v0.6.0/go.mod h1:hdV1LoexnjnTS8wB+/rIV5I6y69WYVA62v2DtaMEBBc=
+github.com/viant/sqlx v0.6.1 h1:xi8lxucXXcLDv0RjISxAm/u6F+X9XLIOmkFwSpi32mI=
+github.com/viant/sqlx v0.6.1/go.mod h1:hdV1LoexnjnTS8wB+/rIV5I6y69WYVA62v2DtaMEBBc=
 github.com/viant/structql v0.2.0 h1:qezvnG53yba2JrBrWBF/k3n3kgf8vud0WtIJHcUI1tk=
 github.com/viant/structql v0.2.0/go.mod h1:gHebhXqfhtTpehk9VyeDq6D1rO87hv62AgG4p/e91UY=
 github.com/viant/tapper v0.6.3/go.mod h1:352sUwaNJy99s3/U/SsW53QayCeSzndfbHhTOtvo414=

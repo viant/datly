@@ -38,7 +38,6 @@ require (
 	github.com/viant/structql v0.2.0
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20230509001836-0709296ae922
-	github.com/viant/xdatly/types/core v0.0.0-20230309221732-4dc744a54ac2
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
 	github.com/viant/xreflect v0.0.0-20230303201326-f50afb0feb0d
 	github.com/viant/xunsafe v0.8.4
