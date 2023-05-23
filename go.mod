@@ -25,16 +25,16 @@ require (
 	github.com/viant/afsc v1.9.0
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.2.1-0.20221005024313-4286a9622882
-	github.com/viant/cloudless v0.1.8
+	github.com/viant/cloudless v1.8.0
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
-	github.com/viant/godiff v0.3.1
+	github.com/viant/godiff v0.3.0
 	github.com/viant/parsly v0.2.0
 	github.com/viant/pgo v0.9.1-0.20230327170450-b328ca3ff3e0
 	github.com/viant/scy v0.5.2
-	github.com/viant/sqlx v0.6.1
+	github.com/viant/sqlx v0.6.1-0.20230522090144-6bfb38b00e55
 	github.com/viant/structql v0.2.0
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20230509001836-0709296ae922

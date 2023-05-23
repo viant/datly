@@ -1,0 +1,19 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/tabular/basic/vendors/
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect.json')
+
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/meta/struct/dev/tabular/basic/vendors/
+        Expect:
+          Code: 200
+          Body: $Cat('${parentPath}/expect_2.txt')

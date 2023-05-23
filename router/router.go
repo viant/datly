@@ -335,7 +335,11 @@ func (r *Router) buildSession(ctx context.Context, response http.ResponseWriter,
 	}
 
 	if route.CSV == nil && requestParams.OutputFormat == CSVFormat {
-		return nil, http.StatusBadRequest, UnsupportedFormatErr(CSVFormat)
+		return nil, http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output CSV config?)", CSVFormat))
+	}
+
+	if route.TabularJSON == nil && route.DateFormat == TabularJSONQueryFormat {
+		return nil, http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", TabularJSONFormat))
 	}
 
 	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, requestParams, route.Index._viewDetails...)
@@ -522,17 +526,36 @@ func (r *Router) marshalResult(session *ReaderSession, destValue reflect.Value, 
 		return nil, http.StatusBadRequest, err
 	}
 
-	formatType := session.RequestParams.queryParam(FormatQuery, "")
-	switch strings.ToLower(formatType) {
+	format := session.RequestParams.outputQueryFormat(session.Route)
+
+	switch strings.ToLower(format) {
 	case CSVQueryFormat:
 		return r.marshalAsCSV(session, destValue, filters)
+	case TabularJSONQueryFormat:
+		if session.Route.Style == ComprehensiveStyle {
+			tabJSONInterceptors := r.tabJSONInterceptors(session, destValue, filters)
+			return r.marshalAsJSON(session, destValue, filters, viewMeta, stats, tabJSONInterceptors)
+		}
+		return r.marshalAsTabularJSON(session, destValue, filters)
 	}
 
-	return r.marshalAsJSON(session, destValue, json.NewFilters(filters...), viewMeta, stats)
+	return r.marshalAsJSON(session, destValue, filters, viewMeta, stats)
 }
 
-func (r *Router) marshalAsJSON(session *ReaderSession, destValue reflect.Value, filters *json.Filters, viewMeta interface{}, stats []*reader.Info) ([]byte, int, error) {
-	payload, httpStatus, err := r.result(session, destValue, filters, viewMeta, stats)
+func (r *Router) tabJSONInterceptors(session *ReaderSession, destValue reflect.Value, filters []*json.FilterEntry) json.MarshalerInterceptors {
+	interceptors := make(map[string]json.MarshalInterceptor)
+
+	f := func() ([]byte, int, error) {
+		return r.marshalAsTabularJSON(session, destValue, filters)
+	}
+
+	interceptors[session.Route.Field] = json.MarshalInterceptor(f)
+	return interceptors
+
+}
+
+func (r *Router) marshalAsJSON(session *ReaderSession, destValue reflect.Value, filters []*json.FilterEntry, viewMeta interface{}, stats []*reader.Info, options ...interface{}) ([]byte, int, error) {
+	payload, httpStatus, err := r.result(session, destValue, filters, viewMeta, stats, options...)
 	if err != nil {
 		return nil, httpStatus, err
 	}
@@ -544,10 +567,15 @@ func (r *Router) inAWS() bool {
 	return scheme == "s3"
 }
 
-func (r *Router) result(session *ReaderSession, destValue reflect.Value, filters *json.Filters, meta interface{}, stats []*reader.Info) ([]byte, int, error) {
+func (r *Router) result(session *ReaderSession, destValue reflect.Value, filters []*json.FilterEntry, meta interface{}, stats []*reader.Info, options ...interface{}) ([]byte, int, error) {
+	aFilters := json.NewFilters(filters...)
+	aOptions := []interface{}{aFilters}
+	aOptions = append(aOptions, options...)
+
 	if session.Route.Cardinality == view.Many {
 		result := r.wrapWithResponseIfNeeded(destValue.Elem().Interface(), session.Route, meta, stats, nil)
-		asBytes, err := session.Route._marshaller.Marshal(result, filters)
+		asBytes, err := session.Route._marshaller.Marshal(result, aOptions...)
+
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
@@ -563,7 +591,7 @@ func (r *Router) result(session *ReaderSession, destValue reflect.Value, filters
 		return nil, http.StatusNotFound, nil
 	case 1:
 		result := r.wrapWithResponseIfNeeded(session.Route.View.Schema.Slice().ValueAt(slicePtr, 0), session.Route, meta, stats, nil)
-		asBytes, err := session.Route._marshaller.Marshal(result, filters)
+		asBytes, err := session.Route._marshaller.Marshal(result, aOptions...)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
@@ -941,6 +969,32 @@ func (r *Router) marshalAsCSV(session *ReaderSession, sliceValue reflect.Value, 
 	}
 
 	data, err := session.Route.CSV._outputMarshaller.Marshal(sliceValue.Elem().Interface())
+
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	return data, http.StatusOK, nil
+}
+
+func (r *Router) marshalAsTabularJSON(session *ReaderSession, sliceValue reflect.Value, filters []*json.FilterEntry) ([]byte, int, error) {
+	if session.Route.View.Schema.Slice().Len(unsafe.Pointer(sliceValue.Pointer())) == 0 {
+		return nil, http.StatusOK, nil
+	}
+
+	fieldsLen := 0
+	for _, filter := range filters {
+		fieldsLen += len(filter.Fields)
+	}
+
+	fields := make([]string, 0, fieldsLen)
+	offset := 0
+	for _, filter := range filters {
+		updateFieldPathsIfNeeded(filter)
+		offset = copy(fields[offset:], filter.Fields)
+	}
+
+	data, err := session.Route.TabularJSON._outputMarshaller.Marshal(sliceValue.Elem().Interface())
 
 	if err != nil {
 		return nil, http.StatusInternalServerError, err

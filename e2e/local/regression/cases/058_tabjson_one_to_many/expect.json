@@ -1,0 +1,85 @@
+[
+    [
+        "Id",
+        "Name",
+        "AccountId",
+        "UserCreated",
+        "UserUpdated",
+        "Products"
+    ],
+    [
+        1,
+        "Vendor 1",
+        100,
+        1,
+        0,
+        [
+            [
+                "Id",
+                "Name",
+                "Status",
+                "UserCreated",
+                "UserUpdated"
+            ],
+            [
+                1,
+                "V1 Product 1",
+                2,
+                1,
+                0
+            ],
+            [
+                2,
+                "V1 Product 2",
+                1,
+                1,
+                0
+            ]
+        ]
+    ],
+    [
+        2,
+        "Vendor 2",
+        101,
+        2,
+        0,
+        [
+            [
+                "Id",
+                "Name",
+                "Status",
+                "UserCreated",
+                "UserUpdated"
+            ],
+            [
+                3,
+                "V2 Product 1",
+                1,
+                2,
+                0
+            ],
+            [
+                4,
+                "V2 Product 2",
+                1,
+                2,
+                0
+            ],
+            [
+                5,
+                "V2 Product 3",
+                1,
+                2,
+                0
+            ]
+        ]
+    ],
+    [
+        3,
+        "Vendor 3",
+        100,
+        1,
+        0,
+        null
+    ]
+]

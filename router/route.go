@@ -10,11 +10,13 @@ import (
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/default"
 	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/router/marshal/tabjson"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/parameter"
+	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/load/reader/csv"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -34,12 +36,17 @@ const (
 	ReaderServiceType   ServiceType = "Reader"
 	ExecutorServiceType ServiceType = "Executor"
 
+	HeaderContentType = "Content-Type"
+
+	FormatQuery = "_format"
+
 	CSVQueryFormat = "csv"
 	CSVFormat      = "text/csv"
-	JSONFormat     = "application/json"
-	FormatQuery    = "_format"
 
-	HeaderContentType = "Content-Type"
+	JSONFormat = "application/json"
+
+	TabularJSONQueryFormat = "tabular"
+	TabularJSONFormat      = "application/json"
 )
 
 type (
@@ -96,12 +103,14 @@ type (
 		Field             string               `json:",omitempty"`
 		Exclude           []string
 		NormalizeExclude  *bool
-		DateFormat        string     `json:",omitempty"`
-		CSV               *CSVConfig `json:",omitempty"`
+		DateFormat        string             `json:",omitempty"`
+		CSV               *CSVConfig         `json:",omitempty"`
+		TabularJSON       *TabularJSONConfig `json:",omitempty"`
 		RevealMetric      *bool
 		DebugKind         view.MetaKind
 		RequestBodySchema *view.Schema
 		ResponseBody      *BodySelector
+		DataFormat        string `json:",omitempty"`
 
 		_caser          *format.Case
 		_excluded       map[string]bool
@@ -114,6 +123,16 @@ type (
 		_config                *csv.Config
 		_requestBodyMarshaller *csv.Marshaller
 		_outputMarshaller      *csv.Marshaller
+		_unwrapperSlice        *xunsafe.Slice
+	}
+
+	TabularJSONConfig struct {
+		//Separator              string
+		//NullValue              string
+		FloatPrecision         string
+		_config                *tabjson.Config
+		_requestBodyMarshaller *tabjson.Marshaller
+		_outputMarshaller      *tabjson.Marshaller
 		_unwrapperSlice        *xunsafe.Slice
 	}
 
@@ -155,6 +174,33 @@ func (r *Route) IsRevealMetric() bool {
 	return *r.RevealMetric
 }
 func (r *Route) HttpURI() string {
+	x := &tabjson.Config{
+		FieldSeparator:  "",
+		ObjectSeparator: "",
+		EncloseBy:       "",
+		EscapeBy:        "",
+		NullValue:       "",
+		Stringify: tabjson.StringifyConfig{
+			IgnoreFieldSeparator:  false,
+			IgnoreObjectSeparator: false,
+			IgnoreEncloseBy:       false,
+		},
+		UniqueFields:  nil,
+		References:    nil,
+		ExcludedPaths: nil,
+		StringifierConfig: io.StringifierConfig{
+			Fields:     nil,
+			CaseFormat: 0,
+			StringifierFloat32Config: io.StringifierFloat32Config{
+				Precision: "",
+			},
+			StringifierFloat64Config: io.StringifierFloat64Config{
+				Precision: "",
+			},
+		},
+	}
+	if x == nil {
+	} // TODO DELETE ABOVE
 	return r.URI
 }
 
@@ -238,6 +284,10 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	r.indexExcluded()
 
 	if err := r.initCSVIfNeeded(); err != nil {
+		return err
+	}
+
+	if err := r.initTabJSONIfNeeded(); err != nil {
 		return err
 	}
 
@@ -690,6 +740,61 @@ func (r *Route) initCSVIfNeeded() error {
 
 	r.CSV._unwrapperSlice = r._requestBodySlice
 	r.CSV._requestBodyMarshaller, err = csv.NewMarshaller(r._requestBodyType, nil)
+	return err
+}
+
+func (r *Route) initTabJSONIfNeeded() error {
+
+	if r.Output.DataFormat != TabularJSONQueryFormat {
+		return nil
+	}
+
+	if r.TabularJSON == nil {
+		r.TabularJSON = &TabularJSONConfig{}
+	}
+
+	if r.TabularJSON._config == nil {
+		r.TabularJSON._config = &tabjson.Config{}
+	}
+
+	if r.TabularJSON._config.FieldSeparator == "" {
+		r.TabularJSON._config.FieldSeparator = ","
+	}
+
+	if len(r.TabularJSON._config.FieldSeparator) != 1 {
+		return fmt.Errorf("separator has to be a single char, but was %v", r.TabularJSON._config.FieldSeparator)
+	}
+
+	if r.TabularJSON._config.NullValue == "" {
+		r.TabularJSON._config.NullValue = "null"
+	}
+
+	if r.TabularJSON.FloatPrecision != "" {
+		r.TabularJSON._config.StringifierConfig.StringifierFloat32Config.Precision = r.TabularJSON.FloatPrecision
+		r.TabularJSON._config.StringifierConfig.StringifierFloat64Config.Precision = r.TabularJSON.FloatPrecision
+	}
+
+	if len(r.Exclude) > 0 {
+		r.TabularJSON._config.ExcludedPaths = r.Exclude
+	}
+
+	schemaType := r.View.Schema.Type()
+	if schemaType.Kind() == reflect.Ptr {
+		schemaType = schemaType.Elem()
+	}
+
+	var err error
+	r.TabularJSON._outputMarshaller, err = tabjson.NewMarshaller(schemaType, r.TabularJSON._config)
+	if err != nil {
+		return err
+	}
+
+	if r._requestBodyType == nil {
+		return nil
+	}
+
+	r.TabularJSON._unwrapperSlice = r._requestBodySlice
+	r.TabularJSON._requestBodyMarshaller, err = tabjson.NewMarshaller(r._requestBodyType, nil)
 	return err
 }
 

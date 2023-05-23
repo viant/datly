@@ -233,11 +233,6 @@ func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCach
 		return nil, err
 	}
 
-	transient := map[string]interface{}{}
-	if err := yaml.Unmarshal(resourceData, &transient); err != nil {
-		return nil, err
-	}
-
 	aMap := map[string]interface{}{}
 	if err := yaml.Unmarshal(resourceData, &aMap); err != nil {
 		return nil, err

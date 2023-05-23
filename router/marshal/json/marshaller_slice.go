@@ -13,6 +13,7 @@ type (
 		xslice     *xunsafe.Slice
 		elemType   reflect.Type
 		marshaller marshaler
+		path       string
 	}
 
 	sliceDecoder struct {
@@ -41,6 +42,7 @@ func newSliceMarshaller(rType reflect.Type, config _default.Default, path string
 	}
 
 	return &sliceMarshaller{
+		path:       path,
 		elemType:   elemType,
 		marshaller: marshaller,
 		xslice:     xunsafe.NewSlice(rType, xunsafe.UseItemAddrOpt(true)),
@@ -52,6 +54,17 @@ func (s *sliceMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *goja
 }
 
 func (s *sliceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
+
+	if fn, ok := sb.Interceptors[s.path]; ok {
+		result, _, err := fn()
+		if err != nil {
+			return err
+		}
+
+		sb.Write(result)
+		return nil
+	}
+
 	sliceHeader := (*reflect.SliceHeader)(ptr)
 	if s != nil && sliceHeader.Data == 0 {
 		sb.WriteString("[]")

@@ -60,7 +60,7 @@ func NewRequestParameters(request *http.Request, route *Route) (*RequestParams, 
 func (p *RequestParams) init(request *http.Request, route *Route) (string, error) {
 	p.pathIndex, _ = toolbox.ExtractURIParameters(route.URI, request.URL.Path)
 	p.queryIndex = request.URL.Query()
-	p.OutputFormat = p.outputFormat()
+	p.OutputFormat = p.outputFormat(route)
 	p.InputFormat = p.header(HeaderContentType)
 
 	p.cookiesIndex = map[string]*http.Cookie{}
@@ -129,14 +129,26 @@ func (p *RequestParams) parseRequestBody(body []byte, route *Route) (interface{}
 	return convert, nil
 }
 
-func (p *RequestParams) outputFormat() string {
-	requestedFormat := strings.ToLower(p.queryParam(FormatQuery, ""))
-	switch requestedFormat {
+func (p *RequestParams) outputFormat(route *Route) string {
+
+	format := p.outputQueryFormat(route)
+
+	switch format {
 	case CSVQueryFormat:
 		return CSVFormat
+	case TabularJSONQueryFormat:
+		return TabularJSONFormat
 	}
 
 	return JSONFormat
+}
+
+func (p *RequestParams) outputQueryFormat(route *Route) string {
+	format := strings.ToLower(p.queryParam(FormatQuery, ""))
+	if format == "" {
+		format = route.Output.DataFormat
+	}
+	return format
 }
 
 func (p *RequestParams) unmarshaller(route *Route) (*Marshaller, error) {

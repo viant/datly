@@ -175,3 +175,11 @@ CREATE TABLE OBJECTS (
                               OBJECT TEXT,
                               CLASS_NAME VARCHAR(255)
 );
+
+DROP TABLE IF EXISTS BAR;
+CREATE TABLE BAR (
+                      ID INT AUTO_INCREMENT PRIMARY KEY,
+                      NAME varchar(255),
+                      PRICE DOUBLE PRECISION,
+                      TAX FLOAT
+);

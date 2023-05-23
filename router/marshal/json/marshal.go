@@ -92,9 +92,24 @@ func (j *Marshaller) prepareMarshallSession(options []interface{}) (*MarshallSes
 
 		putBufferBack = true
 	}
-
+	// TODO MFI WHY FILTERS ARE NIL AND WE SET NIL AGAIN?
 	if session.Filters == nil {
 		session.Filters = filters
+	}
+
+	for _, option := range options {
+		if option == nil {
+			continue
+		}
+
+		switch actual := option.(type) {
+		case MarshalerInterceptors:
+			session.Interceptors = actual
+		}
+	}
+
+	if session.Interceptors == nil {
+		session.Interceptors = make(map[string]MarshalInterceptor)
 	}
 
 	return session, putBufferBack
