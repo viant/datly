@@ -852,6 +852,9 @@ func (b *stmtBuilder) appendSQLHint(main, metadata *inputMetadata) error {
 	}
 	resultType := multi + "*" + metadata.paramName
 	in := "data_view/" + metadata.prevNamePrefix
+
+	resultType = ""
+	in = ""
 	b.appendParamHint(metadata.prevNamePrefix, sqlHint, resultType, in, "")
 
 	return nil
