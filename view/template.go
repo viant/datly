@@ -398,6 +398,7 @@ func (t *Template) IsActualTemplate() bool {
 
 func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error) {
 	values, err := parameter.Parse(SQL)
+	fmt.Printf("SQL:(%v): %v\n ", len(values), SQL)
 	if err != nil {
 		return "", err
 	}
@@ -405,7 +406,6 @@ func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Sel
 	replacement := &rdata.Map{}
 
 	for _, value := range values {
-		fmt.Printf("expanding values: %v %v\n", value.Key, value.TemplateFragment)
 		if value.Key == "?" {
 			placeholder, err := sanitized.Next()
 			if err != nil {
