@@ -51,15 +51,21 @@ type Resource struct {
 	_columnsCache map[string]Columns
 	_cache        *types.Cache
 	_typeLookup   xreflect.TypeLookupFn
+	fs            afs.Service
 }
 
+func (r *Resource) SetFs(fs afs.Service) {
+	r.fs = fs
+}
 func (r *Resource) LoadText(ctx context.Context, URL string) (string, error) {
 	if url.Scheme(URL, "") == "" && r.SourceURL != "" {
 		parent, _ := url.Split(r.SourceURL, file.Scheme)
 		URL = url.Join(parent, URL)
 	}
-
-	fs := afs.New()
+	fs := r.fs
+	if fs == nil {
+		fs = afs.New()
+	}
 	data, err := fs.DownloadWithURL(ctx, URL)
 
 	if err = r.updateTime(ctx, URL, err); err != nil {
@@ -375,7 +381,7 @@ func LoadResourceFromURL(ctx context.Context, URL string, fs afs.Service) (*Reso
 	if err != nil {
 		return nil, err
 	}
-
+	resource.fs = fs
 	resource.SourceURL = URL
 	resource.ModTime = object.ModTime()
 	return resource, err

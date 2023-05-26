@@ -282,7 +282,7 @@ func (s *Builder) Build(ctx context.Context) error {
 	routerResource := &router.Resource{
 		Resource: view.NewResource(config.Config.FlattenTypes()),
 	}
-
+	routerResource.Resource.SetFs(s.fs)
 	paramIndex := NewParametersIndex(nil, nil)
 	var viewCaches []*view.Cache
 	consts := &constFileContent{}
