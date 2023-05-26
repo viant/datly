@@ -115,6 +115,9 @@ func (t *Template) loadSourceFromURL(ctx context.Context, resource *Resource) er
 	}
 	var err error
 	t.Source, err = resource.LoadText(ctx, t.SourceURL)
+	if strings.Contains(t.Source, "#set") {
+		fmt.Printf("%v -> %v\n", t.SourceURL, t.Source)
+	}
 	return err
 }
 
