@@ -1,14 +1,18 @@
 package expand
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/godiff"
+	"github.com/viant/toolbox"
 	"github.com/viant/velty"
 	"github.com/viant/velty/est"
 	"github.com/viant/velty/est/op"
+	vparser "github.com/viant/velty/parser"
 	"github.com/viant/xreflect"
 	"reflect"
+	"strings"
 )
 
 type (
@@ -102,6 +106,13 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
+	if strings.Contains(template, "#set") {
+		root, _ := vparser.Parse([]byte(template))
+		aMap := map[string]interface{}{}
+		toolbox.DefaultConverter.AssignConverted(&aMap, root)
+		data, _ := json.Marshal(aMap)
+		fmt.Printf("AST: %s\n", data)
+	}
 	evaluator.executor, evaluator.stateProvider, err = evaluator.planner.Compile([]byte(template))
 	if err != nil {
 		return nil, err
