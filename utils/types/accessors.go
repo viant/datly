@@ -409,8 +409,8 @@ func (a *Accessors) indexAccessor(name string, fields []*xunsafe.Field, parentTy
 			fieldAccessor.xSlices[i] = xunsafe.NewSlice(field.Type)
 		}
 	}
-	if name == "FlightsById" {
-		fmt.Printf("adding FlightsById: %v\n", parentType.String())
+	if strings.Contains(name, "FlightsById") {
+		fmt.Printf("adding FlightsById: %v %v\n", name, parentType.String())
 		debug.PrintStack()
 	}
 	a.index[name] = len(a.accessors)
@@ -423,6 +423,7 @@ func (a *Accessors) Init(rType reflect.Type) {
 	}
 
 	a.indexAccessors("", rType, []*xunsafe.Field{}, "")
+	fmt.Printf("index: %v\n", a.index)
 }
 
 func (a *Accessors) InitPath(rType reflect.Type, path string) {
