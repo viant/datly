@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/converter"
 	"github.com/viant/xunsafe"
 	"reflect"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -409,10 +408,6 @@ func (a *Accessors) indexAccessor(name string, fields []*xunsafe.Field, parentTy
 			fieldAccessor.xSlices[i] = xunsafe.NewSlice(field.Type)
 		}
 	}
-	if strings.Contains(name, "FlightsById") {
-		fmt.Printf("adding FlightsById: %v %v\n", name, parentType.String())
-		debug.PrintStack()
-	}
 	a.index[name] = len(a.accessors)
 	a.accessors = append(a.accessors, fieldAccessor)
 }
@@ -422,8 +417,6 @@ func (a *Accessors) Init(rType reflect.Type) {
 		return
 	}
 	a.indexAccessors("", rType, []*xunsafe.Field{}, "")
-	data, _ := json.Marshal(a.index)
-	fmt.Printf("index: %s %s\n", rType.String(), data)
 }
 
 func (a *Accessors) InitPath(rType reflect.Type, path string) {
