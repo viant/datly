@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/converter"
 	"github.com/viant/xunsafe"
 	"reflect"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -443,6 +444,8 @@ func (a *Accessors) init() bool {
 func (a *Accessors) AccessorByName(name string) (*Accessor, error) {
 	i, ok := a.index[name]
 	if !ok {
+		fmt.Printf("All params: %v\n", a.index)
+		debug.PrintStack()
 		return nil, fmt.Errorf("not found accessor for param %v", name)
 	}
 
