@@ -30,7 +30,7 @@ func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) (*expa
 	SQL := state.Buffer.String()
 
 	if strings.Contains(SQL, "#set") {
-		fmt.Printf("??? %v %T %+v\n", SQL, paramState.Values, paramState.Values)
+		fmt.Printf("??? %v %T %+v\n%v\n", SQL, paramState.Values, paramState.Values, aView.Template.Source)
 	}
 	for {
 		SQL = strings.TrimSpace(SQL)
