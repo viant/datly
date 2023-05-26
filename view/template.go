@@ -405,6 +405,7 @@ func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Sel
 	replacement := &rdata.Map{}
 
 	for _, value := range values {
+		fmt.Printf("expanding values: %v %v\n", value.Key, value.TemplateFragment)
 		if value.Key == "?" {
 			placeholder, err := sanitized.Next()
 			if err != nil {
