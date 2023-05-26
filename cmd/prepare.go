@@ -391,10 +391,11 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		name = detectCase.Format(name, format.CaseUpperCamel)
 	}
 
-	cardinality := view.One
-	if aConfig.outputConfig.IsMany() {
-		cardinality = view.Many
+	cardinality := view.Many
+	if s.isToOne(aConfig.queryJoin) {
+		cardinality = view.One
 	}
+
 	definition := &view.TypeDefinition{
 		Name:        name,
 		Cardinality: cardinality,
@@ -498,7 +499,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	for _, relation := range insertRelations {
 
 		datlyTagSpec := s.buildDatlyTagSpec(relation)
-		if s.isToOne(relation) {
+		if s.isToOne(relation.config.queryJoin) {
 			relation.config.outputConfig.Cardinality = view.One
 		}
 		//relation.config.outputConfig.Cardinality
@@ -567,11 +568,11 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	}, nil
 }
 
-func (s *Builder) isToOne(relation *inputMetadata) bool {
-	if join := relation.config.queryJoin; join != nil {
-		return strings.Contains(sqlparser.Stringify(join.On), "1 = 1")
+func (s *Builder) isToOne(join *query.Join) bool {
+	if join == nil {
+		return false
 	}
-	return false
+	return strings.Contains(sqlparser.Stringify(join.On), "1 = 1")
 }
 
 func (s *Builder) buildDatlyTagSpec(relation *inputMetadata) string {
@@ -845,7 +846,13 @@ func (b *stmtBuilder) appendSQLHint(main, metadata *inputMetadata) error {
 		return err
 	}
 
-	b.appendParamHint(metadata.prevNamePrefix, sqlHint, "", "", "")
+	multi := ""
+	if metadata.typeDef != nil && metadata.typeDef.Cardinality == view.Many {
+		multi = "[]"
+	}
+	resultType := multi + "*" + metadata.paramName
+	in := "data_view/" + metadata.prevNamePrefix
+	b.appendParamHint(metadata.prevNamePrefix, sqlHint, resultType, in, "")
 
 	return nil
 }
@@ -876,7 +883,8 @@ func (b *stmtBuilder) appendHints(typeDef *inputMetadata) error {
 		return err
 	}
 
-	b.writeString(fmt.Sprintf("\n#set($_ = $%v%v)", typeDef.paramName, hint))
+	paramDeclaration := fmt.Sprintf("\n#set($_ = $%v%v)", typeDef.paramName, hint)
+	b.writeString(paramDeclaration)
 	return nil
 }
 

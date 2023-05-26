@@ -178,7 +178,6 @@ func newFileService(aConfig *Config) (afs.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("cfs URL: %v\n", URL)
 	return NewCacheFs(URL), nil
 }
 
