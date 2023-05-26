@@ -398,7 +398,6 @@ func (t *Template) IsActualTemplate() bool {
 
 func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error) {
 	values, err := parameter.Parse(SQL)
-	fmt.Printf("SQL:(%v): %v\n ", len(values), SQL)
 	if err != nil {
 		return "", err
 	}
