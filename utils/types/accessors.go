@@ -399,6 +399,7 @@ func (a *Accessors) indexAccessors(prefix string, parentType reflect.Type, field
 }
 
 func (a *Accessors) indexAccessor(name string, fields []*xunsafe.Field, parentType reflect.Type) {
+
 	fieldAccessor := NewAccessor(fields, parentType)
 
 	fieldAccessor.xSlices = make([]*xunsafe.Slice, len(fields))
@@ -408,7 +409,10 @@ func (a *Accessors) indexAccessor(name string, fields []*xunsafe.Field, parentTy
 			fieldAccessor.xSlices[i] = xunsafe.NewSlice(field.Type)
 		}
 	}
-
+	if name == "FlightsById" {
+		fmt.Printf("adding FlightsById: %v\n", parentType.String())
+		debug.PrintStack()
+	}
 	a.index[name] = len(a.accessors)
 	a.accessors = append(a.accessors, fieldAccessor)
 }
@@ -444,8 +448,6 @@ func (a *Accessors) init() bool {
 func (a *Accessors) AccessorByName(name string) (*Accessor, error) {
 	i, ok := a.index[name]
 	if !ok {
-		fmt.Printf("All params: %v\n", a.index)
-		debug.PrintStack()
 		return nil, fmt.Errorf("not found accessor for param %v", name)
 	}
 
