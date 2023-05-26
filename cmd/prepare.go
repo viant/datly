@@ -851,11 +851,9 @@ func (b *stmtBuilder) appendSQLHint(main, metadata *inputMetadata) error {
 		multi = "[]"
 	}
 	resultType := multi + "*" + metadata.paramName
-	in := "data_view/" + metadata.prevNamePrefix
-
-	resultType = ""
-	in = ""
-	b.appendParamHint(metadata.prevNamePrefix, sqlHint, resultType, in, "")
+	in := "data_view"
+	target := metadata.prevNamePrefix
+	b.appendParamHint(metadata.prevNamePrefix, sqlHint, resultType, in, target)
 
 	return nil
 }
@@ -1063,6 +1061,12 @@ func (s *Builder) appendMetadata(builder *routeBuilder, paramName string, routeO
 	requiredTypes := []string{typeDef.paramName}
 	if typeDef.bodyHolder != "" {
 		requiredTypes = append(requiredTypes, typeDef.bodyHolder)
+	}
+
+	for _, r := range typeDef.relations {
+		if r.typeDef.Name != "" {
+			requiredTypes = append(requiredTypes, r.typeDef.Name)
+		}
 	}
 
 	if len(requiredTypes) > 0 {
