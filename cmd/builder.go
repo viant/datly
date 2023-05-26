@@ -402,6 +402,14 @@ func (s *Builder) buildViews(ctx context.Context, builder *routeBuilder) error {
 	}
 
 	aConfig := builder.configProvider.ViewConfig()
+	if table := aConfig.unexpandedTable; table != nil && len(table.Inner) == 0 && table.SQL != "" {
+		tableSQL := expandConsts(table.SQL, builder.option)
+		innerSQL, _ := ExtractCondBlock(tableSQL)
+		if innerQuery, _ := sqlparser.ParseQuery(innerSQL); innerQuery != nil {
+			updaterInnerColumns(table, innerQuery, builder.option)
+		}
+	}
+
 	aView, err := s.buildMainView(ctx, builder, aConfig)
 	if err != nil {
 		return err
@@ -754,7 +762,6 @@ func fsAddYAML(fs afs.Service, URL string, any interface{}) error {
 
 func (s *Builder) buildMainView(ctx context.Context, builder *routeBuilder, config *ViewConfig) (*view.View, error) {
 	s.inheritRouteFromMainConfig(builder, config.outputConfig)
-
 	aView, err := s.buildAndAddViewWithLog(ctx, builder, config, &view.Config{
 		Limit: 25,
 		Constraints: &view.Constraints{

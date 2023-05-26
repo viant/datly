@@ -164,7 +164,7 @@ func UpdateTableSettings(table *Table, routeOpt *option.RouteConfig) error {
 
 	if innerQuery != nil && innerQuery.From.X != nil {
 		table.Name = strings.Trim(sqlparser.Stringify(innerQuery.From.X), "`")
-		table.Inner = selectItemToColumn(innerQuery, routeOpt)
+		updaterInnerColumns(table, innerQuery, routeOpt)
 		if len(innerQuery.Joins) > 0 {
 			for _, join := range innerQuery.Joins {
 				table.Deps[Alias(join.Alias)] = TableName(strings.Trim(sqlparser.Stringify(join.With), "`"))
@@ -179,6 +179,10 @@ func UpdateTableSettings(table *Table, routeOpt *option.RouteConfig) error {
 	}
 
 	return nil
+}
+
+func updaterInnerColumns(table *Table, innerQuery *query.Select, routeOpt *option.RouteConfig) {
+	table.Inner = selectItemToColumn(innerQuery, routeOpt)
 }
 
 func expandConsts(SQL string, opt *option.RouteConfig) string {
@@ -321,7 +325,7 @@ func appendItem(item *query.Item, result *[]*Column, route *option.RouteConfig) 
 	comments := item.Comments
 	if hint := comments; hint != "" {
 		column := &view.Column{}
-		if err := hintToStruct(hint, column); err != nil {
+		if err := tryUnmarshalHint(hint, column); err != nil {
 		}
 		item.DataType = column.DataType
 		item.Tag = column.Tag
