@@ -421,9 +421,9 @@ func (a *Accessors) Init(rType reflect.Type) {
 	if a.init() {
 		return
 	}
-
 	a.indexAccessors("", rType, []*xunsafe.Field{}, "")
-	fmt.Printf("index: %v\n", a.index)
+	data, _ := json.Marshal(a.index)
+	fmt.Printf("index: %s %s\n", rType.String(), data)
 }
 
 func (a *Accessors) InitPath(rType reflect.Type, path string) {
