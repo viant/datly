@@ -25,8 +25,7 @@ func (c *Cache) Load(ctx context.Context) error {
 	if err == nil {
 		return yaml.Unmarshal(data, c)
 	}
-	fs := afs.New()
-	data, err = fs.DownloadWithURL(ctx, c.SourceURL)
+	data, err = c.fs.DownloadWithURL(ctx, c.SourceURL)
 	if err != nil {
 		return err
 	}
@@ -49,7 +48,6 @@ func (c *Cache) Store(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
 	return c.fs.Upload(ctx, sourceURL, file.DefaultFileOsMode, bytes.NewReader(asBytes))
 }
 

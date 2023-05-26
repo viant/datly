@@ -49,7 +49,7 @@ type (
 		_visitors    config.CodecsRegistry
 		_initialised bool
 
-		cfs      afs.Service
+		fs       afs.Service
 		Resource *view.Resource
 	}
 
@@ -118,7 +118,7 @@ func (r *Resource) Init(ctx context.Context) error {
 	if r.ColumnsDiscovery {
 		parent, name := url.Split(r.SourceURL, file.Scheme)
 		metaURL := url.Join(parent, ".meta", name)
-		r.ColumnsCache = discover.New(metaURL, r.cfs)
+		r.ColumnsCache = discover.New(metaURL, r.fs)
 		if columnCacheExists = r.ColumnsCache.Exists(ctx); columnCacheExists {
 			if err := r.ColumnsCache.Load(ctx); err != nil {
 				return err
@@ -238,13 +238,13 @@ func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCach
 		return nil, err
 	}
 
-	resource := &Resource{SourceURL: URL, cfs: fs}
+	resource := &Resource{SourceURL: URL, fs: fs}
 	err = toolbox.DefaultConverter.AssignConverted(resource, aMap)
 	if err != nil {
 		return nil, err
 	}
 
-	resource.cfs = fs
+	resource.fs = fs
 	if resource.Resource == nil {
 		return nil, fmt.Errorf("resource was empty: %v", URL)
 	}
