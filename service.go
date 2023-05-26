@@ -137,6 +137,7 @@ func (s *Service) Init(ctx context.Context, options ...interface{}) error {
 	}
 
 	if s.routerResource != nil {
+		s.routerResource.Resource.SetFs(s.fs)
 		if err := s.routerResource.Init(ctx); err != nil {
 			return err
 		}

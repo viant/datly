@@ -640,6 +640,7 @@ func (r *Service) loadRouterResource(URL string, resources map[string]*view.Reso
 	if err != nil {
 		return nil, err
 	}
+	routerResource.Resource.SetFs(fs)
 	r.changeSession.AddRouter(URL, routerResource)
 	if err = r.updateCacheConnectorRefIfNeeded(routerResource); err != nil {
 		return nil, err
@@ -652,7 +653,6 @@ func (r *Service) loadRouterResource(URL string, resources map[string]*view.Reso
 	if r.Config.RevealMetric != nil {
 		routerResource.RevealMetric = r.Config.RevealMetric
 	}
-
 	return routerResource, routerResource.Init(ctx)
 }
 

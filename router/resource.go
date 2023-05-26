@@ -221,7 +221,7 @@ func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, useColu
 	if err := resource.Init(ctx); err != nil {
 		return nil, err
 	}
-
+	resource.Resource.SetFs(fs)
 	return resource, err
 }
 
