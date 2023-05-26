@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/httputils"
@@ -80,10 +81,13 @@ func NewInterceptorFromURL(ctx context.Context, fs afs.Service, URL string, fn x
 	if err != nil {
 		return nil, err
 	}
-
+	tt := string(veltyContent)
+	if strings.Contains(tt, "#set") {
+		fmt.Printf("loaded tempalte: %s\n", tt)
+	}
 	result := &RouteInterceptor{
 		SourceURL:  URL,
-		Template:   string(veltyContent),
+		Template:   tt,
 		typeLookup: fn,
 	}
 
