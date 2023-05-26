@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"fmt"
 	"github.com/viant/datly/executor/parser"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
@@ -29,9 +28,6 @@ func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) (*expa
 
 	SQL := state.Buffer.String()
 
-	if strings.Contains(SQL, "#set") {
-		fmt.Printf("??? %v %T %+v\n%v\n", SQL, paramState.Values, paramState.Values, aView.Template.Source)
-	}
 	for {
 		SQL = strings.TrimSpace(SQL)
 		if len(SQL) == 0 || SQL[0] != '(' || SQL[len(SQL)-1] != ')' {
