@@ -111,13 +111,13 @@ JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
 
 To test dsql vi reset endpoint run the following command
 ```bash
-datly -C='mydb|mysql|myusser:mypass@tcp(127.0.0.1:3306)/mydb?parseTime=true' -X dept.sql
+datly dsql -c='dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true' -s=dept.sql 
 open http://127.0.0.1:8080/v1/api/dev/dept    
 ```
 
 To persist rule and then run datly run the following
 ```bash
-datly -C='mydb|mysql|myusser:mypass@tcp(127.0.0.1:3306)/mydb?parseTime=true' -X dept.sql -w=proj
+datly dsql -c='mydb|mysql|myusser:mypass@tcp(127.0.0.1:3306)/mydb?parseTime=true' -s=dept.sql -d=proj
 datly -c=proj/Datly/config.json
 ```
 
@@ -130,7 +130,6 @@ To see go openapi for the view run the following
 ```bash
 open http://127.0.0.1:8080/v1/api/meta/openapi/dev/dept
 ```
-
 
 
 

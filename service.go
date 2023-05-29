@@ -1,6 +1,7 @@
 package datly
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/viant/afs"
@@ -16,10 +17,13 @@ import (
 	sjwt "github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
+	"io"
 	"net/http"
+	surl "net/url"
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"sync/atomic"
 )
@@ -159,6 +163,31 @@ func (s *Service) Routes() (*router.Resource, error) {
 		return nil, fmt.Errorf("route resource was not loaded")
 	}
 	return s.routerResource, nil
+}
+
+//NewHttpRequest creates http request with auth header
+func (s *Service) NewHttpRequest(method, URL string, jwtClaim *sjwt.Claims, body []byte) (*http.Request, error) {
+	reqURL, err := surl.Parse(URL)
+	if err != nil {
+		return nil, err
+	}
+	httpRequest := &http.Request{
+		URL:    reqURL,
+		Method: method,
+		Header: http.Header{},
+	}
+	if jwtClaim != nil {
+		token, err := s.JwtSigner.Create(time.Hour, jwtClaim)
+		if err == nil {
+			httpRequest.Header.Set("Authorization", "Bearer "+token)
+		} else {
+			return nil, err
+		}
+	}
+	if len(body) > 0 {
+		httpRequest.Body = io.NopCloser(bytes.NewReader(body))
+	}
+	return httpRequest, nil
 }
 
 func (s *Service) LoadRoute(ctx context.Context, URL string, types ...*view.PackagedType) error {

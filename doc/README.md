@@ -849,14 +849,16 @@ In this scenario datly uses both direct go module integration and go plugin to s
 
 
 
-#### Executing rule in go program & debugging
+#### Executing rule with go debuger
 
 Datly is purely written and go, and thus it's possible to take any rule and load it and run it as if it was
 defined in the managed mode, for hava breakpoint on any rule to go call methods.
 
+##### Debugging executor rule
+
 ```go
 //If you create rule for executor service (PATH/PUT/POST) you can execute and debug it in the pure golang.
-func Example_RuleExecution() {
+func Example_ExecutionRuleDebuging() {
 
 	//Uncomment various additional debugging option and debugging and troubleshooting
 	// expand.SetPanicOnError(false)
@@ -865,44 +867,72 @@ func Example_RuleExecution() {
 	// insert.ShowSQL(true)
 
 	ctx := context.Background()
-
 	service := datly.New(datly.NewConfig())
-	viewName := "product"
-	ruleURL := fmt.Sprintf("yyyyyyy/Datly/routes/dev/%v.yaml", viewName)
+    ruleURL := "yyyyyyy/Datly/routes/dev/product.yaml"
+    err := service.LoadRoute(ctx, ruleURL,
+        view.NewPackagedType("domain", "Product", reflect.TypeOf(Product{})),
+        view.NewPackagedType("domain", "Validation", reflect.TypeOf(Validation{})),
+    )
+	//set breakpoint for Init, Validate method on Product struct
+    if err == nil {
+        err = service.Init(ctx)
+    }
+    httpRequest, err := service.NewHttpRequest("PUT", "http://127.0.0.1:8080/v1/api/dev",
+    &jwt.Claims{
+    Email:  "dev1@viantinc.com",
+    UserID: 111,
+    }, []byte(`{"Name":"IPad"}`))
+    
+    if err != nil {
+        log.Fatal(err)
+    }
+    routeRes, _ := service.Routes()
+    route := routeRes.Routes[0] //make sure you are using correct route
+    err = service.Exec(ctx, "product", datly.WithExecHttpRequest(ctx, route, httpRequest))
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+
+##### Debugging reader rule
+
+```go
+
+//Example_ReadRuleExecution show how to programmatically execute read rule
+func Example_ReadRuleDebuging() {
+	//Uncomment various additional debugging and troubleshuting
+	// expand.SetPanicOnError(false)
+	// read.ShowSQL(true)
+
+	ctx := context.Background()
+	service := datly.New(datly.NewConfig())
+	ruleURL := "yyyyyyy/Datly/routes/dev/product_get.yaml"
 	err := service.LoadRoute(ctx, ruleURL,
 		view.NewPackagedType("domain", "Product", reflect.TypeOf(Product{})),
-		view.NewPackagedType("domain", "Validation", reflect.TypeOf(Validation{})),
 	)
+	//note that product has to have OnFetch(ctx context.Context) error with breakpoint for go customization
+	if err == nil {
+		err = service.Init(ctx)
+	}
+	httpRequest, err := service.NewHttpRequest("GET", "http://127.0.0.1:8080/v1/api/dev",
+		&jwt.Claims{
+			Email:  "dev2@viantinc.com",
+			UserID: 222,
+		}, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = service.Init(ctx)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	//Create http Patch request for example
-	URL, _ := surl.Parse("http://127.0.0.1:8080/v1/api/dev")
-	httpRequest := &http.Request{
-		URL:    URL,
-		Method: "PUT",
-		Body:   io.NopCloser(strings.NewReader(`{"Entity":{"VendorId":5672}}`)),
-		Header: http.Header{},
-	}
-	token, err := service.JwtSigner.Create(time.Hour, &jwt.Claims{
-		Email:  "dev@viantinc.com",
-		UserID: 111,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	httpRequest.Header.Set("Authorization", "Bearer "+token)
 	routeRes, _ := service.Routes()
 	route := routeRes.Routes[0] //make sure you are using correct route
-	err = service.Exec(ctx, viewName, datly.WithExecHttpRequest(ctx, route, httpRequest))
+
+	var products []*Product
+	err = service.Read(ctx, "product_get", &products, datly.WithReadHttpRequest(ctx, route, httpRequest))
 	if err != nil {
 		log.Fatal(err)
 	}
+	toolbox.Dump(products)
 }
 
 ```
