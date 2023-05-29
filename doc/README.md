@@ -63,7 +63,7 @@ Datly uses specific dialect of SQL to define rule for view(s) and relation betwe
 DSQL is transformed into datly internal view representation with the following command:
 
 ```go
-datly -C='myDB|driver|dsn' -X myRule.sql [-w=myProjectLocation ]
+datly -C='myDB|driver|dsn|secretURL|secretKey' -X myRule.sql [-w=myProjectLocation ]
 ```
 where -w would persist rule with datly config to specific myProjectLocation
 
@@ -288,8 +288,46 @@ JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
 WHERE ID = $Id
 ```
 
+
 ###### Supported conversion Codecs
     - AsStrings: converts coma separated value into []string
+
+###### Meta Views (aggregated views)
+
+###### Data View Optimization
+
+Datly default data assembly method use IN operation join with parent view data.
+
+```sql
+SELECT vendor.*,
+products.* EXCEPT VENDOR_ID
+FROM (SELECT * FROM VENDOR t ) vendor
+JOIN (
+    SELECT * FROM (
+    SELECT ID, NAME, VENDOR_ID FROM PRODUCT t
+    UNION ALL
+    SELECT ID, NAME, VENDOR_ID FROM PRODUCT_ARCHIVE t
+    ) t
+)  products WHERE    products.VENDOR_ID = vendor.ID
+```
+
+in the following scenario  datly is unable to adjust product SQL with WHERE  products.VENDOR_ID IN(?,..,?) due to its complexity,
+and would filter products data only after reading all UNION-ed data.
+To address this potential data fetch performance issue you can use the following expression $View.ParentJoinOn("AND","VENDOR_ID")
+
+```sql
+SELECT vendor.*,
+products.* EXCEPT VENDOR_ID
+FROM (SELECT * FROM VENDOR t ) vendor
+JOIN (
+    SELECT * FROM (
+    SELECT ID, NAME, VENDOR_ID FROM PRODUCT t  WHERE 1 = 1 $View.ParentJoinOn("AND","VENDOR_ID")
+    UNION ALL
+    SELECT ID, NAME, VENDOR_ID FROM PRODUCT_ARCHIVE t
+    WHERE 1 = 1 $View.ParentJoinOn("AND","VENDOR_ID")
+    ) t
+)  products WHERE    products.VENDOR_ID = vendor.ID
+```
 
 
 ###### Setting matching URI
@@ -306,22 +344,6 @@ JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee
 
 
 ###### Setting data caching
-
-```sql
-/* {"URI":"dept/", 
-   "Cache":{
-         "Name": "fs"
-         "Location": "/tmp/cache/${view.Name}",
-         "TimeToLiveMs": 360000
-         }
-   } */
-SELECT
-dept.* EXCEPT ORG_ID
-employee.* EXCEPT DEPT_ID
-FROM (SELECT * FROM DEPARMENT t) dept                /* {"Cache":{"Ref":"fs"}} */
-JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee  /* {"Cache":{"Ref":"fsgit p"}} */
- ON dept.ID = employee.DEPT_ID
-```
 
 
 ```sql
@@ -355,22 +377,27 @@ JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee  /* {"Selector":{"Limit": 80
 
 ### Authentication
 
+
 ### Authorization
+
+
 
 ##  Executor
 
 Executor service is used to validate, transform and modify data in database programmatically.
-Post (insert), Put(update), Patch(insert/update) and Delete operation are supported.  
-
+Post (insert), Put(update), Patch(insert/update) are supported.  
 
 #### Autonomous mode
 
 To generate initial executor DSQL datly would use regular reader DSQL defining
 one or multi view with corresponding relations with additional input hints
+
+
 All DML operation are executed in the one transaction, any errors trigger either 
 by database or programmatically  ($logger.Fatalf) cause transaction rollback.
 
-Executor service can accept input in the following form:
+
+Dsql executor rule can be generated from regular reader dsql
 
 - **simple object ({})** 
 ```sql 
@@ -396,14 +423,27 @@ Executor service can accept input in the following form:
   FROM (SELECT * FROM MY_TABLE) myTable
 ```
 
+- **nested relation**
+```sql
+SELECT
+    dept.* /* { "Cardinality": "One", "Field":"Data" } */,
+    employee.*,
+    organization.*
+FROM (SELECT * FROM DEPARMENT) dept
+JOIN (SELECT * FROM EMP) employee ON dept.ID = employee.DEPT_ID
+JOIN (SELECT * FROM ORG) organization ON organization.ID = demp.ORG_ID AND 1=1
+```
+
 ```go
-datly -C='myDB|driver|dsn' -X myRule.sql -G=patch|post|put|delete [--dsqlOutput=dslOutpuPath] [--goFileOut=goFileOutPath]
+datly gen -h
+datly gen -o=patch|post|put|delete  -s=myRule.sql -c='myDB|driver|dsn[|secretURL|secretKey]'  -p=$myProjectLocation
 ```
 
 As a result the following file would be generated:
 - dsql/<myRule>.sql  - initial logic for patch|post|put|delete operations
-- dsql/<myrule>.go   - initial go struct(s)   
 - dsql/<myrule>Post.json - example of JSON for testing a service
+- pkg/<myrule>.go   - initial go struct(s)
+
 
 Generated go struct(s) can be modified with additional tags.
 
@@ -418,18 +458,12 @@ Datly generate basic tempalte with the following parameters expressions
 
 
 After adjusting logic in executor dsql, 
-datly -C='myDB|driver|dsn' -X exeuctor_dsql_rule.sql --relative=mystructgopath -w=mydatlyproject
+```bash
+datly dsql -c='myDB|driver|dsn' -s=exeuctor_dsql_rule.sql  -p=$myProjectLocation
+```
 
-
-For simplicity it's recommended to leave in velhy tempalte just a bare data read/write wiring, thus
-delegate validation and initialization with previous state to go code and simple call from dsql.
-
-For example:
-
-
-
-
-
+For "complex" validation logic it's recommend to use datly in custom mode where all custom logic is implemented/unit tested in go
+and datly just intermediate in data retrievel, go invocation and actual data modification.
 
 ##### Executor DSQL 
 
@@ -441,6 +475,16 @@ import ...
  DML | velocity expr (#set|#if|#foreach)
 
 ```
+
+View input parameter initialization use the following syntax:
+```sql
+#set($_ = $PARAM_NAME<PARAM_TYPE>(PARAM_KIND/SOURCE) /* 
+  optional SQL hint
+*/)
+```    
+
+
+
 #### Supported build in functions:
 
 #### Logger/Formatter
@@ -536,7 +580,7 @@ WHERE ID = $Entity.Id
 /* {"Method":"PATCH","ResponseBody":{"From":"Product"}} */
 
 import (
-	"./product.Product"
+	"product.Product"
 )
 #set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
 #set($_ = $Campaign<*[]Product>(body/Entity))
@@ -564,39 +608,51 @@ import (
 
 ```
 
-
 ###### Fetching existing data with data view parameters
 
+By default, all parameters are required,  adding '?' character before SELECT keyword would make parameter optional.
+or !ErroCode for required with error code.
+
+Note that all example below use '#set( $_ = ...)' syntax which defines datly parameters, 
+where all these parameters are resolved
+before template code runs.
+
+Data view parameters use regular reader DSQL and can return one or more records.
+
 ```sql
-#set($_ = $Records /*  
+#set($_ = $Records /*  !401 
   SELECT * FROM MY_TABLE  WHERE ID = $Entity.ID
 */)
 ```
 
-Data view parameters use regular reader DSQL and can return one or more records.
-
-By default all parameters are required,  adding '?' character before SELECT keyword would make parameter option, 
-to 
 ```sql
-#set($_ = $Records /*  
-  ? SELECT * FROM MY_TABLE  WHERE ID = $Entity.ID
+#set($_ = $Records /*  ? 
+   SELECT * FROM MY_TABLE  WHERE ID = $Entity.ID
 */)
 ```
 
-To specify required parameter with error code you can simple add !3DigitErrotCode 
+
+In addition, records can be fetched to imported struct
 
 ```sql
-#set($_ = $Records /*  
-  !401 SELECT * FROM MY_TABLE  WHERE ID = $Entity.ID
+
+import (
+	"./product.Product"
+)
+
+...
+    
+#set($_ = $Records<[]*Product>(data_view/Product) /*  
+  ? SELECT * FROM Producct  WHERE STATUS = $status
 */)
 ```
-
 
 
 ###### Fetching data with StructQL
 
 - [StructQL](https://github.com/viant/structql)
 
+Datly parameter can be also of 'param' kind to transform any other existing parameter with structQL.
 
 ```sql
 
@@ -606,7 +662,7 @@ import (
 
 #set($_ = $Products<*[]Product>(body/Data))
 
-#set($_ = $ProductsIds<?>(param/Products) /* 
+#set($_ = $ProductsIds<?>(param/Products) /* ?
    SELECT ARRAY_AGG(Id) AS Values FROM  `/`
 */)
 
@@ -614,11 +670,15 @@ import (
 SELECT * FROM Products WHERE $criteria.In("ID", $ProductsIds.Values) 
 */)
 ```
+
+
 In the example above in the first step collection of products is defined from POST body data field.
-Second parameter extract all products Id with structql, in the final prevProducts fetches all produces
+Second parameter extract all products ID with [structql](https://github.com/viant/structql), in the final prevProducts fetches all produces
 where ID is listed in ProductsIds parameters.
 Note that we use $criteria.In function to automatically generate IN statement if parameter len is greater than zero
-otherwise the criteria.In function returns false, to ensure correct SQL generation and expected behaviours
+otherwise the $criteria.In function returns false, to ensure correct SQL generation and expected behaviours
+
+
 
 
 ###### Indexing data
@@ -644,9 +704,7 @@ Any go collection can be index with IndexBy dsql method
 ```
 
 
-
 ###### Authentication & Authorization
-
 
 ```sql
 #set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
@@ -657,7 +715,6 @@ Any go collection can be index with IndexBy dsql method
     WHERE Authorized
 */)
 ```
-
 
 
 ###### Record Differ
@@ -686,15 +743,14 @@ Any go collection can be index with IndexBy dsql method
 
 ### Meta repository
 
+
 #### OpenAPI
 
 #### Internal View
 
 #### Go Struct
 
-
 #### Performance metrics
-
 
 ### Extending datly in custom mode
 
