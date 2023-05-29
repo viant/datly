@@ -8,6 +8,7 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/view"
 	"github.com/viant/scy"
 	"path"
@@ -57,6 +58,7 @@ type (
 		Module
 		AssetsURL string `short:"a" long:"assetsURL" description:"assets destination"`
 		ConstURL  string `long:"constURL" description:"path where const files are stored"`
+		Legacy    bool   `short:"l"`
 	}
 
 	Package struct {
@@ -69,7 +71,7 @@ type (
 	}
 
 	Connector struct {
-		Connects []string `short:"C" long:"conn" description:"name|driver|dsn" `
+		Connects []string `short:"C" long:"conn" description:"name|driver|dsn|secret|secretkey" `
 		DbName   string   `short:"V" long:"dbname" description:"db/connector name" `
 		Driver   string   `short:"D" long:"driver" description:"driver" `
 		DSN      string   `short:"A" long:"dsn" description:"DSN" `
@@ -86,6 +88,7 @@ type (
 		ExecKind     string `long:"execKind" description:"allows to switch between sql / dml"`
 		DSQLOutput   string `long:"dsqlOutput" description:"output path"`
 		GoFileOutput string `long:"goFileOut" description:"destination of go file"`
+		GoModulePkg  string `long:"goModulePkg" description:"go module package"`
 		LoadPrevious bool   `long:"loadSQL" description:"decides whether to load records using "`
 	}
 
@@ -145,7 +148,7 @@ func (o *Options) Init() error {
 		o.DSQLOutput = folderSQL
 	}
 
-	if !strings.HasPrefix(o.DSQLOutput, "/") {
+	if url.IsRelative(o.DSQLOutput) {
 		o.DSQLOutput = path.Join(path.Dir(o.Location), o.DSQLOutput)
 	}
 
@@ -316,6 +319,13 @@ outer:
 			DSN:    parts[2],
 		}
 
+		switch len(parts) {
+		case 4:
+			conn.Secret = &scy.Resource{URL: parts[3]}
+		case 5:
+			conn.Secret = &scy.Resource{URL: parts[3], Key: parts[4]}
+		}
+
 		for _, connector := range result {
 			if connector.Name == conn.Name {
 				continue outer
@@ -363,6 +373,73 @@ func (o *Options) RouterURL(fileName string) string {
 
 func (o *Options) DepURL(uri string) string {
 	return url.Join(o.DependencyURL, uri+".yaml")
+}
+
+func (o *Options) MergeFromBuild(build *options.Build) {
+	o.BuildMode = "exec"
+	o.ModuleName = "datly"
+	switch build.Runtime {
+	case "lambda/url":
+		o.ModuleMain = "gateway/runtime/lambda/app/"
+	case "lambda/apigw":
+		o.ModuleMain = "gateway/runtime/apigw/app/"
+	case "standalone":
+		o.ModuleMain = "cmd/datly/"
+	}
+	o.ModuleSrc = build.Source
+	o.ModuleDst = build.Dest
+	o.ModuleLdFlags = *build.LdFlags
+	o.ModuleArgs = build.BuildArgs
+	o.ModuleOS = build.GoOs
+	o.ModuleArch = build.GoArch
+	o.ModuleGoVersion = build.GoVersion
+}
+
+func (o *Options) MergeFromPlugin(plugin *options.Plugin) {
+	o.BuildMode = "plugin"
+	o.PluginSrc = plugin.Source
+	o.PluginDst = plugin.Dest
+	o.PluginArgs = plugin.BuildArgs
+	o.PluginOS = plugin.GoOs
+	o.PluginArch = plugin.GoArch
+	o.PluginGoVersion = plugin.GoVersion
+}
+
+func (o *Options) MergeFromGenerate(generate *options.Gen) {
+	o.Connects = generate.Connectors
+	o.PrepareRule = generate.Operation
+	o.Name = generate.Name
+	o.Generate.Location = generate.Source
+	if generate.Module != "" {
+		o.GoFileOutput = generate.Module
+		o.RelativePath = generate.Module
+	}
+	o.GoModulePkg = generate.Package
+	o.DSQLOutput = generate.Dest
+}
+
+func (o *Options) MergeFromCache(cache *options.Cache) {
+	o.CacheWarmup.WarmupURIs = cache.WarmupURIs
+	o.ConstURL = cache.ConfigURL
+}
+
+func (o *Options) MergeFromRun(run *options.Run) {
+	o.ConfigURL = run.ConfigURL
+}
+
+func (o *Options) MergeFromDSql(dsql *options.DSql) {
+	o.WriteLocation = dsql.Dest
+	o.Name = dsql.Name
+	o.Location = dsql.Source
+	o.Connects = dsql.Connectors
+	o.JWTVerifierHMACKey = string(dsql.JwtVerifier.HMAC)
+	o.JWTVerifierRSAKey = string(dsql.JwtVerifier.RSA)
+	o.ConstURL = dsql.Const
+	o.Port = dsql.Port
+	o.RoutePrefix = dsql.RoutePrefix
+	if dsql.Module != "" {
+		o.RelativePath = dsql.Module
+	}
 }
 
 func namespace(name string) string {

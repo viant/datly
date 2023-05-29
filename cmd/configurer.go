@@ -330,6 +330,7 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 
 		innerTable := c.buildTableWithWarning(join.With, opt, join.Comments)
 		relViewConfig, childViewParams, err := c.buildViewConfigWithTable(join, innerTable, opt, join.Comments)
+		relViewConfig.parent = result
 		dataViewParams = append(dataViewParams, childViewParams...)
 		if err != nil {
 			return nil, nil, err

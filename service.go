@@ -272,3 +272,15 @@ func WithExecHttpRequest(ctx context.Context, route *router.Route, request *http
 		return err
 	}
 }
+
+//WithReadHttpRequest create http based parameters set execution option
+func WithReadHttpRequest(ctx context.Context, route *router.Route, request *http.Request) reader.Option {
+	return func(session *reader.Session, view *view.View) error {
+		selectors := session.Selectors
+		err := router.BuildRouteSelectors(ctx, selectors, route, request)
+		sel := selectors.Lookup(view)
+		paramState := session.Lookup(session.View)
+		*paramState = sel.Parameters
+		return err
+	}
+}

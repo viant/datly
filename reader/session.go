@@ -139,3 +139,12 @@ func (d *ParentData) AsParam() *expand.MetaParam {
 func (s *Session) IsCacheEnabled(aView *view.View) bool {
 	return !s.CacheDisabled && aView.Cache != nil
 }
+
+func (s *Session) Lookup(v *view.View) *view.ParamState {
+	s.mux.Lock()
+	sel := s.Selectors.Lookup(v)
+	state := sel.Parameters
+	s.mux.Unlock()
+	state.Init(v)
+	return &state
+}

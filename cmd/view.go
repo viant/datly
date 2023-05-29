@@ -233,7 +233,7 @@ func (s *Builder) buildRelations(ctx context.Context, builder *routeBuilder, con
 		}
 
 		var cardinality view.Cardinality
-		if hasOneCardinalityPredicate(relation.queryJoin.On.X) {
+		if s.isToOne(relation.queryJoin) {
 			cardinality = view.One
 		} else {
 			cardinality = view.Many

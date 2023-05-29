@@ -575,6 +575,16 @@ func (s *Builder) isToOne(join *query.Join) bool {
 	return strings.Contains(sqlparser.Stringify(join.On), "1 = 1")
 }
 
+func (c *ViewConfig) IsToMany() bool {
+	if c.parent == nil {
+		return c.outputConfig.IsMany()
+	}
+	if c.parent.IsToMany() {
+		return true
+	}
+	return false
+}
+
 func (s *Builder) buildDatlyTagSpec(relation *inputMetadata) string {
 	datlyTagSpec := ""
 	if join := relation.config.queryJoin; join != nil {
@@ -847,7 +857,7 @@ func (b *stmtBuilder) appendSQLHint(main, metadata *inputMetadata) error {
 	}
 
 	multi := ""
-	if metadata.typeDef != nil && metadata.typeDef.Cardinality == view.Many {
+	if metadata.typeDef != nil && (metadata.config.IsToMany() || metadata.typeDef.Cardinality == view.Many) {
 		multi = "[]"
 	}
 	resultType := multi + "*" + metadata.paramName
@@ -1073,24 +1083,28 @@ func (s *Builder) appendMetadata(builder *routeBuilder, paramName string, routeO
 		sb.WriteString("\nimport (\n")
 
 		for _, requiredType := range requiredTypes {
-			URL := builder.session.GoFileURL("")
-			if ext := path.Ext(URL); ext != "" {
-				URL = path.Dir(URL)
-			}
-
-			if s.options.RelativePath != "" && strings.HasPrefix(URL, s.options.RelativePath) {
-				URL = strings.Replace(URL, s.options.RelativePath, "", 1)
-				if len(URL) > 0 && URL[0] == '/' {
-					URL = URL[1:]
-				}
-			}
-
-			sb.WriteString(fmt.Sprintf("\n	\"%v.%v\"", strings.TrimRight(URL, "/"), requiredType))
+			importPath := s.adjustImportPath(builder)
+			sb.WriteString(fmt.Sprintf("\n	\"%v.%v\"", strings.TrimRight(importPath, "/"), requiredType))
 		}
 		sb.WriteString("\n)\n\n")
 	}
 
 	return nil
+}
+
+func (s *Builder) adjustImportPath(builder *routeBuilder) string {
+	URL := builder.session.GoFileURL("")
+	if ext := path.Ext(URL); ext != "" {
+		URL = path.Dir(URL)
+	}
+
+	if s.options.RelativePath != "" && strings.HasPrefix(URL, s.options.RelativePath) {
+		URL = strings.Replace(URL, s.options.RelativePath, "", 1)
+		if len(URL) > 0 && URL[0] == '/' {
+			URL = strings.ToLower(URL[1:])
+		}
+	}
+	return URL
 }
 
 func (s *Builder) extractRouteSettings(sourceSQL []byte) (string, string) {

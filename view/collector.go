@@ -453,7 +453,7 @@ func (r *Collector) View() *View {
 	return r.view
 }
 
-//Dest returns collector slice
+//Project returns collector slice
 func (r *Collector) Dest() interface{} {
 	return r.dest
 }

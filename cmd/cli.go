@@ -9,6 +9,8 @@ import (
 	"github.com/viant/afs/cache"
 	"github.com/viant/afs/matcher"
 	soption "github.com/viant/afs/option"
+	"github.com/viant/datly/cmd/command"
+	soptions "github.com/viant/datly/cmd/options"
 
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/modifier"
@@ -109,20 +111,64 @@ func NewBuilder(options *Options, logger io.Writer) (*Builder, error) {
 	return builder, builder.Build(context.TODO())
 }
 
-func New(version string, args []string, logger io.Writer) (*standalone.Server, error) {
+func New(version string, args soptions.Arguments, logger io.Writer) (*standalone.Server, error) {
 	os.Setenv("AWS_SDK_LOAD_CONFIG", "true")
-	options := &Options{}
-	_, err := flags.ParseArgs(options, args)
+	var options *Options
+	if (args.SubMode() || args.IsHelp()) && !args.IsLegacy() {
+		opts := soptions.NewOptions(args)
+		if _, err := flags.ParseArgs(opts, args); err != nil {
+			return nil, err
+		}
+		if args.IsHelp() {
+			return nil, nil
+		}
+		if err := opts.Init(); err != nil {
+			return nil, err
+		}
+		cmd := command.New()
+		done, err := cmd.Run(context.Background(), opts)
+		if err != nil || done {
+			return nil, err
+		}
+		options = &Options{}
+		if opts.Legacy {
+			options = nil
+		} else if opts.Build != nil {
+			options.MergeFromBuild(opts.Build)
+		} else if opts.Plugin != nil {
+			options.MergeFromPlugin(opts.Plugin)
+		} else if opts.Generate != nil {
+			options.MergeFromGenerate(opts.Generate)
+		} else if opts.Cache != nil {
+			options.MergeFromCache(opts.Cache)
+		} else if opts.Run != nil {
+			options.MergeFromRun(opts.Run)
+		} else if opts.DSql != nil {
+			options.MergeFromDSql(opts.DSql)
+		} else {
+			options = nil
+		}
+	}
+
+	if options == nil {
+		options = &Options{}
+		if _, err := flags.ParseArgs(options, args); err != nil {
+			return nil, err
+		}
+	}
 
 	if options.Version {
 		fmt.Printf("Datly: version: %v\n", version)
 		return nil, nil
 	}
-
 	if isOption("-h", args) {
 		return nil, nil
 	}
+	return runInLegacyMode(options, logger)
+}
 
+func runInLegacyMode(options *Options, logger io.Writer) (*standalone.Server, error) {
+	var err error
 	if options.Package.RuleSourceURL != "" {
 		return nil, packageConfig(options)
 	}

@@ -36,13 +36,11 @@ func init() {
 		if err != nil {
 			panic(err)
 		}
-
 		build.BuildTime = time.Unix(int64(seconds), 0)
 	}
 }
 
-type ConsoleWriter struct {
-}
+type ConsoleWriter struct{}
 
 func (c *ConsoleWriter) Write(data []byte) (n int, err error) {
 	fmt.Println(string(data))

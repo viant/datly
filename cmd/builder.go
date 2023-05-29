@@ -69,6 +69,7 @@ type (
 	}
 
 	ViewConfig struct {
+		parent          *ViewConfig
 		mainHolder      string
 		viewName        string
 		isVirtual       bool
@@ -1219,11 +1220,16 @@ func (s *Builder) prepareRuleIfNeeded(SQL []byte) (string, error) {
 			goFileOutput = path.Join(goFileOutput, output)
 		}
 	}
+	dsqlOutput := s.options.DSQLOutput
+	if s.options.GoModulePkg != "" {
+		goFileOutput = path.Join(goFileOutput, s.options.GoModulePkg)
+		dsqlOutput = path.Join(dsqlOutput, s.options.GoModulePkg)
+	}
 
 	preparedRouteBuilder := s.newRouteBuilder(
 		&router.Resource{Resource: view.EmptyResource()},
 		NewParametersIndex(nil, nil),
-		newSession(path.Dir(s.options.Location), s.options.Location, s.options.PluginDst, s.options.DSQLOutput, s.options.DSQLOutput, goFileOutput),
+		newSession(path.Dir(s.options.Location), s.options.Location, s.options.PluginDst, dsqlOutput, dsqlOutput, goFileOutput),
 	)
 
 	switch strings.ToLower(s.options.PrepareRule) {
@@ -1326,7 +1332,7 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 			Name:     actualName,
 			DataType: dataType,
 			Ptr:      asPtr,
-			Package:  packageName,
+			Package:  strings.ToLower(packageName),
 		})
 	}
 

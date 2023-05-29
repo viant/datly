@@ -55,7 +55,7 @@ func (m *TemplateMeta) Init(ctx context.Context, owner *Template, resource *Reso
 	}
 
 	if m.Source == "" {
-		return fmt.Errorf("template meta Source or SourceURL can't be empty")
+		return fmt.Errorf("template meta Source or Source can't be empty")
 	}
 	m.initialized = true
 	m._owner = owner

@@ -118,9 +118,9 @@ func (p *RequestParams) parseRequestBody(body []byte, route *Route) (interface{}
 	}
 
 	p.presenceMap, err = unmarshaller.presence(body)
-	if err != nil {
-		return nil, err
-	}
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	if unmarshaller.unwrapper != nil {
 		convert, err = unmarshaller.unwrapper(convert)

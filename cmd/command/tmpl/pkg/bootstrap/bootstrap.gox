@@ -1,0 +1,16 @@
+package bootstrap
+
+import (
+	"github.com/viant/xdatly/types/core"
+	"${module}/checksum"
+	"reflect"
+)
+
+
+var PackageName = "bootstrap"
+
+func init() {
+	core.RegisterType(PackageName, "Bootstrap", reflect.TypeOf(struct{}{}), checksum.GeneratedTime)
+}
+
+
