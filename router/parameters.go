@@ -1,6 +1,7 @@
 package router
 
 import (
+	"bytes"
 	"encoding/json"
 	"github.com/viant/datly/converter"
 	"github.com/viant/toolbox"
@@ -117,10 +118,11 @@ func (p *RequestParams) parseRequestBody(body []byte, route *Route) (interface{}
 		return nil, err
 	}
 
+	//TODO replace with structql
 	p.presenceMap, err = unmarshaller.presence(body)
-	//if err != nil {
-	//	return nil, err
-	//}
+	if err != nil {
+		return nil, err
+	}
 
 	if unmarshaller.unwrapper != nil {
 		convert, err = unmarshaller.unwrapper(convert)
@@ -180,7 +182,11 @@ func (p *RequestParams) unmarshaller(route *Route) (*Marshaller, error) {
 
 func (p *RequestParams) jsonPresenceMap() PresenceMapFn {
 	return func(b []byte) (map[string]interface{}, error) {
+		b = bytes.TrimSpace(b)
 		bodyMap := map[string]interface{}{}
+		if len(b) > 0 && b[0] == '[' {
+			return bodyMap, nil
+		}
 		return bodyMap, json.Unmarshal(b, &bodyMap)
 	}
 }
