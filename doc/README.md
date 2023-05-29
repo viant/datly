@@ -696,9 +696,9 @@ Any go collection can be index with IndexBy dsql method
 #### Performance metrics
 
 
-### Plugin architecture && Custom Datly
+### Extending datly in custom mode
 
-[Data extension](extension/README.md)
+[Datly extension](extension/README.md)
 
 
 ### Caching architecture
@@ -835,18 +835,6 @@ datly -h
 
 To build datly for  Docker or cloud specific[Runtimes](../gateway/runtime) 
 check **deploy.yaml** [endly](https://github.com/viant/endly) deployment workflows.
-
-
-#### Custom Datly
-
-In custom datly (xdatly) mode you get integrated with your local go module to define application specific type with method, so these method can be invoked directly from dsql.
-In this scenario datly uses both direct go module integration and go plugin to synchronize dynamic rules without need of rebuilding custom datly.
-
-
-
-
-
-
 
 
 #### Executing rule with go debuger
