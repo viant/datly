@@ -31,22 +31,20 @@ improving substantially  service response time and reduce data access cost.
 
 #### Executor service
 
-- **View Parameter Hints** defines SQL based data view parameter
+![Datly Executor Service](asset/datly_executor.drawio.png)
 
-```sql
- #set($_ = $Records /* 
-  SELECT * FROM MY_TABLE /* {"Selector":{}} */ WHERE ID = $Entity.ID
-  */)
-```
+Executor service is used to validate, transform and modify data in database programmatically.
+Post (insert), Put(update), Patch(insert/update) operation are supported.
+
+Executor service use [velty](https://github.com/viant/velty) temple engine to operates on GoLang struct.
+You can use ```datly gen``` command to generate initial dsql with corresponding go struct(s) 
+for single or multi relation data mutation.  Datly uses transaction to modify data in database.
+
+For patch/update operation datly support input state distinction, with Has marker,
+allowing handling user input effectively, ensuring data integrity, and improving the security of applications or systems.
+This approach simplify input validation and tracking actual changes supplied by a client.
 
 
-View input parameter initialization use the following syntax:
-
-```sql
-#set($_ = $PARAM_NAME<PARAM_TYPE>(PARAM_KIND/SOURCE) /* 
-  optional SQL hint
-*/)
-```    
 
 
 ## Reader
@@ -55,6 +53,13 @@ View input parameter initialization use the following syntax:
 
 ```sql
 [RouteConfig]
+    
+import( 
+    ... // go struct import
+)   
+
+#set( $_ = ...) //Parameter declaration    
+    
 SELECT mainViewAlias.*  [EXCEPT COLUMN][OutputConfig]
 [, secondViewAlias.*       [OutputConfig]  ]
 [, NviewAlias.*            [OutputConfig]  ]
@@ -385,17 +390,42 @@ JOIN (SELECT ID, NAME, DEPT_ID FROM EMP t) employee  /* {"Selector":{"Limit": 80
 Executor service is used to validate, transform and modify data in database programmatically.
 Post (insert), Put(update), Patch(insert/update) are supported.  
 
-#### Autonomous mode
 
-To generate initial executor DSQL datly would use regular reader DSQL defining
+##### Executor DSQL
+
+Executor DSQL uses the following structure
+```dsql
+/* ROUTE OPTION */
+import ...
+#set( $_ = ...) //input paramter initialization
+
+ DML | velocity expr (#set|#if|#foreach)
+
+```
+Where
+- **View Parameter Hints** defines SQL based data view parameter
+
+```sql
+ #set($_ = $Records /* 
+  SELECT * FROM MY_TABLE /* {"Selector":{}} */ WHERE ID = $Entity.ID
+  */)
+```
+
+```sql
+#set($_ = $PARAM_NAME<PARAM_TYPE>(PARAM_KIND/SOURCE) /* 
+  optional SQL hint
+*/)
+```    
+
+
+To generate initial executor DSQL, use ```datly gen``` with reader dsql defining
 one or multi view with corresponding relations with additional input hints
-
 
 All DML operation are executed in the one transaction, any errors trigger either 
 by database or programmatically  ($logger.Fatalf) cause transaction rollback.
 
 
-Dsql executor rule can be generated from regular reader dsql
+Executor dsql rule can be generated from regular reader dsql
 
 - **simple object ({})** 
 ```sql 
@@ -432,6 +462,7 @@ JOIN (SELECT * FROM EMP) employee ON dept.ID = employee.DEPT_ID
 JOIN (SELECT * FROM ORG) organization ON organization.ID = demp.ORG_ID AND 1=1
 ```
 
+
 ```go
 datly gen -h
 datly gen -o=patch|post|put|delete  -s=myRule.sql -c='myDB|driver|dsn[|secretURL|secretKey]'  -p=$myProjectLocation
@@ -460,22 +491,8 @@ After adjusting logic in executor dsql,
 datly dsql -c='myDB|driver|dsn' -s=exeuctor_dsql_rule.sql  -p=$myProjectLocation
 ```
 
-For "complex" validation logic it's recommend to use datly in custom mode where all custom logic is implemented/unit tested in go
-and datly just intermediate in data retrievel, go invocation and actual data modification.
-
-##### Executor DSQL 
-
-```dsql
-/* ROUTE OPTION */
-import ...
-#set( $_ = ...) input paramter initialization
-
- DML | velocity expr (#set|#if|#foreach)
-
-```
-
-
-
+For "complex" validation logic it's recommend to use datly in custom mode where all custom logic is implemented/unit tested 
+in pure go  and datly intermediates in data retrieval and actual data modification.
 
 #### Supported build in functions:
 
@@ -671,8 +688,6 @@ Note that we use $criteria.In function to automatically generate IN statement if
 otherwise the $criteria.In function returns false, to ensure correct SQL generation and expected behaviours
 
 
-
-
 ###### Indexing data
 
 Any go collection can be index with IndexBy dsql method 
@@ -701,8 +716,7 @@ Any go collection can be index with IndexBy dsql method
 ```sql
 #set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
 #set($_ = $Authorization  /*
-    {"Type": "Authorizer", "StatusCode": 403}
-    SELECT Authorized /* {"DataType":"bool"} */
+   !401 SELECT Authorized /* {"DataType":"bool"} */
     FROM (SELECT IS_VENDOR_AUTHORIZED($Jwt.UserID, $vendorID) AS Authorized) t
     WHERE Authorized
 */)
