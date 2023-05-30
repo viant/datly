@@ -3,6 +3,8 @@ package router
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"github.com/pkg/errors"
 	"github.com/viant/datly/converter"
 	"github.com/viant/toolbox"
 	"io"
@@ -121,7 +123,7 @@ func (p *RequestParams) parseRequestBody(body []byte, route *Route) (interface{}
 	//TODO replace with structql
 	p.presenceMap, err = unmarshaller.presence(body)
 	if err != nil {
-		return nil, err
+		return nil, wrapJSONSyntaxErrorIfNeeded(err, body)
 	}
 
 	if unmarshaller.unwrapper != nil {
@@ -216,4 +218,35 @@ func (p *RequestParams) tryParseRequestBody() (interface{}, error) {
 	}
 
 	return requestBody, nil
+}
+
+func wrapJSONSyntaxErrorIfNeeded(err error, buff []byte) error {
+
+	syntaxErr := new(json.SyntaxError)
+	if !errors.As(err, &syntaxErr) {
+		return err
+	}
+
+	var buffer bytes.Buffer
+	bodyLen := int64(len(buff))
+	minPos := syntaxErr.Offset - 50
+	maxPos := syntaxErr.Offset + 50
+	if minPos < 0 {
+		minPos = 0
+	}
+	if maxPos >= bodyLen {
+		maxPos = bodyLen
+	}
+
+	offset := syntaxErr.Offset
+	if offset == 0 {
+		buffer.Write([]byte("(*)"))
+		buffer.Write(buff[:maxPos+1])
+	} else {
+		buffer.Write(buff[minPos : offset-1])
+		buffer.Write([]byte("(*)"))
+		buffer.Write(buff[offset-1 : maxPos])
+	}
+
+	return fmt.Errorf("json syntax error at position %d: %w:\n%s", syntaxErr.Offset, err, buffer.String())
 }

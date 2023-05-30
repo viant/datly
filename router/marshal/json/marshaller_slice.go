@@ -50,7 +50,7 @@ func newSliceMarshaller(rType reflect.Type, config _default.Default, path string
 }
 
 func (s *sliceMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
-	return decoder.AddArray(newSliceDecoder(s.elemType, pointer, s.xslice, s.marshaller, session))
+	return decoder.Decode(newSliceDecoder(s.elemType, pointer, s.xslice, s.marshaller, session))
 }
 
 func (s *sliceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {

@@ -874,6 +874,20 @@ func (i *intsSum) UnmarshalJSONWithOptions(dst interface{}, decoder *gojay.Decod
 func TestMarshaller_Unmarshal(t *testing.T) {
 	testCases := []unmarshallTestcase{
 		{
+			description: "basic struct with missing colon",
+			data:        `{"Name": "Foo" "ID": 2}`,
+			expect:      `{"Name": "Foo","ID": 2}`,
+			expectError: false,
+			into: func() interface{} {
+				type Foo struct {
+					ID   int
+					Name string
+				}
+
+				return &Foo{}
+			},
+		},
+		{
 			description: "basic struct",
 			data:        `{"Name": "Foo", "ID": 1}`,
 			into: func() interface{} {
@@ -1155,6 +1169,34 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 			stringsEqual:  true,
 			marshallEqual: true,
 		},
+		{
+			description: "invalid conversion object to slice",
+			data:        `{"Name":"Foo", "ID": 1}`,
+			expect:      `{"Name":"Foo", "ID": 1}`,
+			expectError: true,
+			into: func() interface{} {
+				type Foo struct {
+					ID   int
+					Name string
+				}
+
+				return []*Foo{}
+			},
+		},
+		{
+			description: "invalid conversion slice to object",
+			data:        `[{"Name":"Foo", "ID": 1}]`,
+			expect:      `[{"Name": "Foo","ID": 1}]`,
+			expectError: true,
+			into: func() interface{} {
+				type Foo struct {
+					ID   int
+					Name string
+				}
+
+				return &Foo{}
+			},
+		},
 	}
 
 	//for i, testCase := range testCases[len(testCases)-1:] {
@@ -1168,7 +1210,13 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 
 		marshalErr := marshaller.Unmarshal([]byte(testCase.data), actual, testCase.options...)
 
-		if (!testCase.expectError && !assert.Nil(t, err, testCase.description)) || (testCase.expectError && assert.NotNil(t, marshalErr, testCase.description)) {
+		if testCase.expectError {
+			assert.NotNil(t, marshalErr, testCase.description)
+			continue
+		}
+
+		if !assert.Nil(t, marshalErr, testCase.description) {
+			fmt.Println(marshalErr)
 			continue
 		}
 

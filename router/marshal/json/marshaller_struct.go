@@ -93,7 +93,7 @@ func (s *structMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *goj
 		session:    session,
 	}
 
-	return decoder.AddObject(d)
+	return decoder.Decode(d)
 }
 
 func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
