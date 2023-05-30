@@ -904,7 +904,18 @@ check **deploy.yaml** [endly](https://github.com/viant/endly) deployment workflo
 #### Executing rule with go debuger
 
 Datly is purely written and go, and thus it's possible to take any rule and load it and run it as if it was
-defined in the managed mode, for hava breakpoint on any rule to go call methods.
+defined in the managed mode, you can set breakpoint to any method call from template.
+In addition, you can implement one of the following to be invoked on actual insert or update.
+
+```go
+type Insertable interface {
+    OnInsert(ctx context.Context) error
+}
+
+type Updatable interface {
+    OnUpdate(ctx context.Context) error
+}
+```
 
 ##### Debugging executor rule
 
@@ -949,6 +960,12 @@ func Example_ExecutionRuleDebuging() {
 
 
 ##### Debugging reader rule
+
+You can define of one to following for setting debugger breakpoint:
+
+- **OnFetch(ctx context.Context) error**: invoked by reader one record is fetched from database
+- **OnRelation(ctx context.Context)**: invoked by reader once all relations are assembled
+
 
 ```go
 
