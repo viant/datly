@@ -967,7 +967,7 @@ To debug reader, add go struct import statement at the top of the rule, you can 
 open http://127.0.0.1:8080/v1/api/meta/struct/dev/product_get
 ```
 
-product.yaml
+- **product.yaml**
 
 ```sql
 /* {"URI":"dev/products"} */
@@ -979,7 +979,6 @@ import (
 SELECT product.*
 FROM (SELECT * FROM PRODUCT) product /* {"DataType":"*Product"} */
 ```
-
 
 
 You can define of one to following for setting debugger breakpoint:
