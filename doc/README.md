@@ -32,12 +32,16 @@ improving substantially  service response time and reduce data access cost.
 #### Executor service
 
 - **View Parameter Hints** defines SQL based data view parameter
-```#set($_ = $Records /* 
+
+```sql
+ #set($_ = $Records /* 
   SELECT * FROM MY_TABLE /* {"Selector":{}} */ WHERE ID = $Entity.ID
   */)
- ```
+```
+
 
 View input parameter initialization use the following syntax:
+
 ```sql
 #set($_ = $PARAM_NAME<PARAM_TYPE>(PARAM_KIND/SOURCE) /* 
   optional SQL hint

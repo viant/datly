@@ -12,7 +12,6 @@ Please refer to [`CHANGELOG.md`](../CHANGELOG.md) if you encounter breaking chan
 - [Usage](#usage)
 - [License](#license)
 
-
 ## Motivation
 
 The goal of this project is to simplify and speed up data layer prototyping and development.
@@ -91,6 +90,7 @@ Datly is secure. It's resilient against SQL injection attacks.
 On top of that, it promotes secure secrets storage natively with all database/sql drivers. 
 Finally, it's integrated with OAuth, which provides a convenient way for both controlling authentication and row and column based authorization.
 
+See more [Datly secutity](doc/security/README.md)
 
 
 

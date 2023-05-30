@@ -17,7 +17,6 @@ Copy endly to /usr/local/bin
 4. Checkout this repo
 ```bahs
 git clone https://github.com/viant/datly.git
-
 ```
 
 ### Running local test
