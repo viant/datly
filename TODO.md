@@ -1,49 +1,18 @@
 
-- code parameter assets (i.e xml validator)
-- 
-- pre proxy processor/programatic router
-
-/* {URI":"foresactint/{xty}"} */
-#set(_ = $paramX<Qurystrihn/ab>)
- #if($reportName='abc')
-  $proxy.To('/v1/api/ws/view1%v', )
- #else if($reportName='xyz')
-  $proxy.To('/v1/api/ws/view2')
- #end
 
 
-
-
-- Executor triggers/notification (notification message ID in response)
--> logging -> { "Status": "ok", "EventSourceId":"", "EventSource": "Advertier", "EventType":"Insert" "Data":interface{}, "UserId":"", "TraceID":""    }
--> Logger miner ->
-   log files, position
-    -> match, action execution
-
-- Async mode 
-  - post job, SQL-> (job id , dispotistion -> dest_teable,  temp_table)
-  - job status <- job-id (RUNNING/ERROR/DONE)
-  - post http, message, storage event
- 
-- self documents
-
-- batch spreedsheet ingestion/response
-
-- multi transaction support on velthy ?
+- Datly Go Handler
+- Route Parameters
+- Multi transaction support
+- Executor triggers/notification
+- Self documenting / Improve documentation
+- Batch spreadsheet ingestion
 - XML input / output
-- enhence sqlx ns in order to avoid unneccessary one-one relations.
+- Enhance sqlx ns in order to avoid unnecessary one-one relations.
 - Parameter Criteria IN, EXISTS, etc
-- SQL with StructQL simplification
-
-
-- more than one view in out output nice to have for now
-- improve documentation/examples
-- add support for composite keys
-- setting customization for (async batch mode - disable by default)
-
+- Improve documentation/examplesfrdesz
+- Add support for composite keys
 - Management API
+- LLM integration (OpenAI/GoogleAI)
 - add GUI
 
-- Validator
-- Warning
-- ChatGPT integration
