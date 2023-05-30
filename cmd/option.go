@@ -85,7 +85,7 @@ type (
 
 	Prepare struct {
 		PrepareRule  string `short:"G" long:"generate" description:"prepare rule for patch|post|put|delete"`
-		ExecKind     string `long:"execKind" description:"allows to switch between sql / dml"`
+		ExecKind     string `long:"execKind" description:"allows to switch between service / dml"`
 		DSQLOutput   string `long:"dsqlOutput" description:"output path"`
 		GoFileOutput string `long:"goFileOut" description:"destination of go file"`
 		GoModulePkg  string `long:"goModulePkg" description:"go module package"`

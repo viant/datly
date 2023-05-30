@@ -1816,6 +1816,12 @@ func (s *Builder) flushLogs(logger io.Writer) {
 
 func (s *Builder) ensureSideefectsImports(bundle *bundleMetadata) error {
 	packageName := bundle.moduleName
+	if index := strings.LastIndex(packageName, "/"); index != -1 {
+		packageName = packageName[index+1:]
+	}
+	if index := strings.LastIndex(packageName, "."); index != -1 {
+		packageName = packageName[index+1:]
+	}
 	if asBase := path.Base(packageName); len(asBase) <= 2 {
 		packageName = asBase
 	}
@@ -1830,7 +1836,7 @@ func (s *Builder) ensureSideefectsImports(bundle *bundleMetadata) error {
 
 	asBytes, err := goFormat.Source([]byte(source))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to generate sideeffect import: %w, %s", err, source)
 	}
 
 	return s.fs.Upload(context.Background(), path.Join(bundle.url, fileSideefectsImports+".go"), file.DefaultFileOsMode, bytes.NewReader(asBytes))

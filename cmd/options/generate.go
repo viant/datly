@@ -1,6 +1,7 @@
 package options
 
 import (
+	"github.com/viant/afs/url"
 	"os"
 )
 
@@ -16,8 +17,12 @@ func (g *Generate) Init() error {
 	if g.Project == "" {
 		g.Project, _ = os.Getwd()
 	}
+	g.Project = ensureAbsPath(g.Project)
 	if g.Module == "" {
 		g.Module = "pkg"
+	}
+	if url.IsRelative(g.Module) && g.Project != "" {
+		g.Module = url.Join(g.Project, g.Module)
 	}
 	g.Module = ensureAbsPath(g.Module)
 	return nil

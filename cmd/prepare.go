@@ -1117,8 +1117,8 @@ func (s *Builder) uploadGoType(builder *routeBuilder, name string, rType reflect
 	goURL := builder.session.GoFileURL(s.fileNames.unique(name)) + ".go"
 
 	modBundle, isXDatly := s.isPluginBundle(goURL)
-
-	content, err := s.generateGoFileContent(name, rType, routeOption, config, modBundle, routeOption.Package)
+	modulePackage := s.options.Prepare.GoModulePkg
+	content, err := s.generateGoFileContent(name, rType, routeOption, config, modBundle, modulePackage)
 	if err != nil {
 		return err
 	}
@@ -1144,7 +1144,13 @@ func (s *Builder) uploadGoType(builder *routeBuilder, name string, rType reflect
 
 func (s *Builder) registerXDatlyGoFile(moduleBundle *bundleMetadata, outputURL string) error {
 	var imports []string
-	types, err := xreflect.ParseTypes(path.Join(moduleBundle.moduleName, importsDirectory), xreflect.TypeLookupFn(dConfig.Config.LookupType))
+
+	goModulePath := moduleBundle.moduleName
+	if ok, _ := s.fs.Exists(context.Background(), goModulePath); !ok {
+		goModulePath = moduleBundle.url
+	}
+
+	types, err := xreflect.ParseTypes(path.Join(goModulePath, importsDirectory), xreflect.TypeLookupFn(dConfig.Config.LookupType))
 	if err == nil {
 		imports = types.Imports("*" + importsFile)
 	}
@@ -1175,7 +1181,7 @@ func (s *Builder) registerXDatlyGoFile(moduleBundle *bundleMetadata, outputURL s
 
 	source, err := goFormat.Source(result.Bytes())
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to generate dep go code: %w, %s", err, source)
 	}
 
 	registryURL := path.Join(moduleBundle.url, importsDirectory, importsFile)
@@ -1259,10 +1265,9 @@ func init() {
 	generatedStruct := xreflect.GenerateStruct(name, rType, imports, xreflect.AppendBeforeType(sbBefore.String()), xreflect.PackageName(packageName))
 	sb.WriteString(generatedStruct)
 	sb.WriteString("\n")
-
 	source, err := goFormat.Source(sb.Bytes())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("faield to generate go code: %w, %s", err, sb.Bytes())
 	}
 
 	return source, nil

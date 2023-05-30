@@ -27,9 +27,11 @@ func (e *Extension) Init() error {
 	if e.Project == "" {
 		e.Project, _ = os.Getwd()
 	}
+	e.Project = ensureAbsPath(e.Project)
 	if e.Datly.Location == "" {
 		e.Datly.Location = url.Join(e.Project, ".build")
 	}
+
 	if e.Repository == nil {
 		repo := "github.com/" + os.Getenv("USER")
 		e.Repository = &repo
