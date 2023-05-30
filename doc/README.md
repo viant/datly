@@ -977,7 +977,7 @@ import (
 )
 
 SELECT product.*
-FROM (SELECT * FROM PRODUCT) product /* {"DataType":"[]*Product"} */
+FROM (SELECT * FROM PRODUCT) product /* {"DataType":"*Product"} */
 ```
 
 
