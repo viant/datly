@@ -14,8 +14,12 @@ Both _autonomous_ and _custom_ mode datly can be deployed as standalone app or a
 
 ### Introduction
 
-#### Reader Service
+#### Datly architecture
 
+![Datly Architecture](asset/datly_arch.drawio.png)
+
+
+#### Reader Service
 
 ![Datly Reader Service](asset/datly_reader.drawio.png)
 

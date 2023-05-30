@@ -1,8 +1,8 @@
 package options
 
 type Bundle struct {
-	Source   string `short:"s" long:"src" description:"runtime rule dalty project " `
-	RuleDest string `short:"d" long:"dest" description:"datly rule rewrite dest ie.: s3://vaint-e2e-config/datly-xxx/" `
+	Source   string `short:"s" long:"src" description:"datly rule repository " `
+	RuleDest string `short:"d" long:"dest" description:"datly rule repository rewrite deployment dest ie.: s3://vaint-e2e-config/datly-xxx/" `
 }
 
 func (b *Bundle) Init() error {
