@@ -964,7 +964,7 @@ func Example_ExecutionRuleDebuging() {
 To debug reader, add go struct import statement at the top of the rule, you can get struct definition from
 
 ```bash
-open http://127.0.0.1:8080/v1/api/meta/struct/dev/product_get
+open http://127.0.0.1:8080/v1/api/meta/struct/dev/products
 ```
 
 - **product.yaml**
@@ -999,7 +999,7 @@ func Example_ReadRuleDebuging() {
 
 	ctx := context.Background()
 	service := datly.New(datly.NewConfig())
-	ruleURL := "yyyyyyy/Datly/routes/dev/product_get.yaml"
+	ruleURL := "yyyyyyy/Datly/routes/dev/products.yaml"
 	err := service.LoadRoute(ctx, ruleURL,
 		view.NewPackagedType("domain", "Product", reflect.TypeOf(Product{})),
 	)
@@ -1007,7 +1007,7 @@ func Example_ReadRuleDebuging() {
 	if err == nil {
 		err = service.Init(ctx)
 	}
-	httpRequest, err := service.NewHttpRequest("GET", "http://127.0.0.1:8080/v1/api/dev",
+	httpRequest, err := service.NewHttpRequest("GET", "http://127.0.0.1:8080/v1/api/dev/products",
 		&jwt.Claims{
 			Email:  "dev2@viantinc.com",
 			UserID: 222,
@@ -1019,7 +1019,7 @@ func Example_ReadRuleDebuging() {
 	route := routeRes.Routes[0] //make sure you are using correct route
 
 	var products []*Product
-	err = service.Read(ctx, "product_get", &products, datly.WithReadHttpRequest(ctx, route, httpRequest))
+	err = service.Read(ctx, "products", &products, datly.WithReadHttpRequest(ctx, route, httpRequest))
 	if err != nil {
 		log.Fatal(err)
 	}
