@@ -945,7 +945,6 @@ func Example_ExecutionRuleDebuging() {
     Email:  "dev1@viantinc.com",
     UserID: 111,
     }, []byte(`{"Name":"IPad"}`))
-    
     if err != nil {
         log.Fatal(err)
     }
@@ -1007,6 +1006,9 @@ func Example_ReadRuleDebuging() {
 	if err == nil {
 		err = service.Init(ctx)
 	}
+    if err != nil {
+        log.Fatal(err)
+    }
 	httpRequest, err := service.NewHttpRequest("GET", "http://127.0.0.1:8080/v1/api/dev/products",
 		&jwt.Claims{
 			Email:  "dev2@viantinc.com",
