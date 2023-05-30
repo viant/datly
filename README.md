@@ -78,11 +78,12 @@ driving both client performance and substantially reducing cost.
 Datly uses Velocity inspired [velty](https://github.com/viant/velty) templating language which is one of the fastest in the whole Go echo system.
 On average velty is 20x faster than go Text/template and 8-15x faster than JDK Apache Velocity
 
-Datly can operate on both SQL and NoSQL databases. Large datasets (e.g., BigQuery) can be pre-warmed up without engineers writing a single line of code. 
+Datly can operate on both SQL and NoSQL databases. Large datasets (e.g., BigQuery) can be cached pre-warmed up without engineers writing a single line of code. 
 Datly comes with powerful metrics that provide execution time breakdowns for each data access operation.
 
 When it comes to data modification, Datly can leverage seamless batch and load operations, speeding up data ingestion by 25-50x compared to traditional insert techniques. 
 Datly provides an easy way to build POST/PUT/DELETE and truly performant PATCH operations.
+Datly use modification marker to distinct input state, allowing handling user input effectively, ensuring data integrity, and improving the security of applications.
 
 
 **Security**
