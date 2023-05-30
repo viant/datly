@@ -963,7 +963,24 @@ func Example_ExecutionRuleDebuging() {
 
 To debug reader, add go struct import statement at the top of the rule, you can get struct definition from
 
+```bash
 open http://127.0.0.1:8080/v1/api/meta/struct/dev/product_get
+```
+
+product.yaml
+
+```sql
+/* {"URI":"dev/products"} */
+
+import (
+    "product.Product"
+)
+
+SELECT product.*
+FROM (SELECT * FROM PRODUCT) product /* {"DataType":"[]*Product"} */
+```
+
+
 
 You can define of one to following for setting debugger breakpoint:
 
