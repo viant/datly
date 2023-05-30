@@ -1,4 +1,8 @@
-## March 16 2022 v0.5.12.0
+## May 30 2023 v0.6.0.0
+* Message bus integration
+* Generator improvement
+* Minor improvement
+## March 16 2023 v0.5.12.0
 * Simplified data flow for executor generator
 * Introduced parameter transformer
 * Added base service for managed datly and datly debugging and troubleshooting
