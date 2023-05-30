@@ -961,10 +961,16 @@ func Example_ExecutionRuleDebuging() {
 
 ##### Debugging reader rule
 
+To debug reader, add go struct import statement at the top of the rule, you can get struct definition from
+
+open http://127.0.0.1:8080/v1/api/meta/struct/dev/product_get
+
 You can define of one to following for setting debugger breakpoint:
 
 - **OnFetch(ctx context.Context) error**: invoked by reader one record is fetched from database
 - **OnRelation(ctx context.Context)**: invoked by reader once all relations are assembled
+
+
 
 
 ```go
