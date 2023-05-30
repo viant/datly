@@ -982,7 +982,7 @@ FROM (SELECT * FROM PRODUCT) product /* {"DataType":"*Product"} */
 
 You can define of one to following for setting debugger breakpoint:
 
-- **OnFetch(ctx context.Context) error**: invoked by reader one record is fetched from database
+- **OnFetch(ctx context.Context) error**: invoked by reader once record is fetched from database
 - **OnRelation(ctx context.Context)**: invoked by reader once all relations are assembled
 
 

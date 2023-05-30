@@ -1,7 +1,6 @@
 package options
 
 import (
-	"github.com/viant/afs/url"
 	"os"
 	"path"
 	"runtime"
@@ -40,9 +39,7 @@ func (b *GoBuild) Init() {
 	if b.GoVersion == "" {
 		b.GoVersion = strings.Replace(runtime.Version(), "go", "", 1)
 	}
-	if b.Dest != "" && url.IsRelative(b.Dest) {
-		b.Dest = url.Join(b.Project, b.Dest)
-	}
+	b.Dest = ensureAbsPath(b.Dest)
 }
 
 func (b *Build) Init() error {

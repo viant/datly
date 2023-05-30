@@ -36,8 +36,8 @@ JOIN (SELECT * FROM invoice_list_item) item ON item.invoice_id = invoice.id
 
 Provided struct may optionally define the following method to customize fetched/assembled data.
 
-- **OnFetch(ctx context.Context) error**: invoked by reader one record is fetched from database
-- **OnRelation(ctx context.Context)**: invoked by reader one all relations are assembled
+- **OnFetch(ctx context.Context) error**: invoked by reader once record is fetched from database
+- **OnRelation(ctx context.Context)**: invoked by reader once all relations are assembled
 
 
 
@@ -292,8 +292,8 @@ func ExampleService_ReadWithTemplate() {
 
 Data view underlying struct has ability to customize final data by implementing the following methods:
 
-- **OnFetch(ctx context.Context) error**: invoked by reader one record is fetched from database
-- **OnRelation(ctx context.Context)**: invoked by reader one all relations are assembled
+- **OnFetch(ctx context.Context) error**: invoked by reader once record is fetched from database
+- **OnRelation(ctx context.Context)**: invoked by reader once all relations are assembled
 
 
 ```go

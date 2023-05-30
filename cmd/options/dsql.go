@@ -1,14 +1,5 @@
 package options
 
-/*
-
-	dsql,ext,build,deploy,gen,cache
-
-	src
-    dest
-	datly dsql -s= -d=autogen
-*/
-
 type DSql struct {
 	Connector
 	JwtVerifier

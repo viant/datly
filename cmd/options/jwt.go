@@ -8,5 +8,3 @@ type (
 
 	SecretKey string
 )
-
-//-j = '${appPath}/e2e/local/jwt/public.enc|blowfish://default' -m = '${appPath}/e2e/local/jwt/hmac.enc|blowfish://default'
