@@ -52,18 +52,28 @@ func SplitHint(hint string) (marshal string, SQL string) {
 		return "", ""
 	}
 	jsonHint := ""
+
 	switch SQL[0] {
 	case '?':
 		SQL = SQL[1:]
 		jsonHint = `{"Required":false}`
 
 	case '!':
+		isUtil := false
 		SQL = SQL[1:]
+		if len(SQL) > 0 && SQL[0] == '!' {
+			isUtil = true
+			SQL = SQL[1:]
+		}
+		utilFragment := ""
+		if isUtil {
+			utilFragment = `, "Util":true `
+		}
 		if statCode := toolbox.AsInt(SQL[:3]); statCode > 0 {
 			SQL = SQL[3:]
-			jsonHint = fmt.Sprintf(`{"Required":true, "StatusCode": %v}`, statCode)
+			jsonHint = fmt.Sprintf(`{"Required":true, "StatusCode": %v%s}`, statCode, utilFragment)
 		} else {
-			jsonHint = `{"Required":true}`
+			jsonHint = fmt.Sprintf(`{"Required":true%s}`, utilFragment)
 		}
 	}
 	return jsonHint, SQL

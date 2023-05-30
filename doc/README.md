@@ -1,42 +1,35 @@
 # Datly 
 
-
 Datly has been design as modern flexible ORM for rapid development. 
 Datly can operate in  **managed** , **autonomous** and **custom mode**.
-In managed mode datly is used as regular GoLang ORM where you operate on golang struct and datly services programmatically.
+In managed mode datly is used as regular GoLang ORM where you operate on golang struct and datly reader or executor service programmatically.
+
 In autonomous mode datly uses a **dsql** based rules with single gateway entry point handling all incoming request matching defined rules.
+
 In custom mode datly also operates as single gateway entry point handling all incoming request, allowing
-method/receiver go struct behaviour customization associated with the rule, this is achieved by either golang
-plugins or/and custom type registry integration.
-Both _autonomous_ and _custom_ mode datly can be deployed as standalone app or as Docker, Kubernetes, Cloud Serverless runtimes (lambda,GCF,Cloud Run).
+method/receiver go struct behaviour customization associated with the rule, this is achieved by custom data type registry 
+with customize
+
+Both _autonomous_ and _custom_ mode datly can be deployed as standalone app or as Docker, Kubernetes,or as Cloud Serverless runtimes (lambda,GCF,Cloud Run).
 
 ### Introduction
 
-Datly promotes using datly SQL (dsql) dialect to define CRUD operations. 
-DSQL accept a SQL supported by specific database vendor on top of that it provide hints and template language using [Velty Engine](https://github.com/viant/velty) .
-To protect against SQL Injection any input $Variable reference is converted to SQL driver placeholder.
-
-Take the following snippet example
-```sql
-  INSERT INTO MY_TABLE(ID, NAME) ($Entity.ID, $Entity.Name)
-```
-will be replaced before calling database driver with
-```sql
-  INSERT INTO MY_TABLE(ID, NAME) (?, ?)
-```
-
-Input variable(s) can be also be accessed with $Unsafe namespace ($Unsafe.MyVariable), in that case variable is inlined.
+#### Reader Service
 
 
-## The hints helps customize various aspect of data mapping/routing
+![Datly Reader Service](asset/datly_reader.drawio.png)
 
-### Reader hints
-- **RouteConfig** is JSON representation of [Route](option/route.go) settings i.e {"URI":"app1/view1/{Id}"}
-- **OutputConfig** is JSON representation of [Output](option/output.go) settings i.e {"Style":"Comprehensive"}
-- **ColumnConfig** is JSON representation of [Column](option/column.go) settings i.e {"DataType":"bool"}
-- **ViewConfig**  is JSON representation of [View](option/view.go) settings i.e {"Cache":{"Ref":"aerospike"}}
+Reader service allows reading and transforming data from various database vendors at once, datly
+is responsible for assembling final data view. 
+Datly can dynamically generate SQL Query with [velty](https://github.com/viant/velty) 
+template language based on input parameters.
+In addition, view data can be dynamically adjusted with pagination, field/column project 
+or criteria selection or event case formatting all controlled by a client. 
+On top of that any individual view data can be cached or pre-cache on the SQL based level, 
+improving substantially  service response time and reduce data access cost.
 
-### Executor hints
+
+#### Executor service
 
 - **View Parameter Hints** defines SQL based data view parameter
 ```#set($_ = $Records /* 
@@ -44,31 +37,64 @@ Input variable(s) can be also be accessed with $Unsafe namespace ($Unsafe.MyVari
   */)
  ```
 
-## [Velty Tamples](https://github.com/viant/velty)
-Datly has ability to dynamically customize both reader and executor service with templates.
+View input parameter initialization use the following syntax:
+```sql
+#set($_ = $PARAM_NAME<PARAM_TYPE>(PARAM_KIND/SOURCE) /* 
+  optional SQL hint
+*/)
+```    
 
 
 ## Reader
 
-The reader service is used to retrieve specific pieces of data or to search for data that meets certain criteria. 
-The specific pieces of data is defined as single or multi relational view, where each view originate from a table, query or
-**Velty Templates**
-The reader service allows client to control additional functionality, such as sorting, filtering, and selecting column, formatting the data in a way that is easy to read and analyze.
+##### Reader dsql structure
 
+```sql
+[RouteConfig]
+SELECT mainViewAlias.*  [EXCEPT COLUMN][OutputConfig]
+[, secondViewAlias.*       [OutputConfig]  ]
+[, NviewAlias.*            [OutputConfig]  ]
+FROM (
+    SELECT
+    ID  [ColumnConfig],
+    ...,
+     other_column   
+    FROM table1
+    ) mainViewAlias [ViewConfig],
 
-### Datly SQL (DSQL) 
+[
+ JOIN (
+    SELECT OTHER_ID,
+        ...,
+        other_column
+    FROM table2
+    ) secondViewAlias  [ViewConfig] ON mainViewAlias.ID = secondViewAlias.OTHER_ID
+    
+]    
+```
+
+#### Reader hints
+- **RouteConfig** is JSON representation of [Route](option/route.go) settings i.e {"URI":"app1/view1/{Id}"}
+- **OutputConfig** is JSON representation of [Output](option/output.go) settings i.e {"Style":"Comprehensive"}
+- **ColumnConfig** is JSON representation of [Column](option/column.go) settings i.e {"DataType":"bool"}
+- **ViewConfig**  is JSON representation of [View](option/view.go) settings i.e {"Cache":{"Ref":"aerospike"}}
+
 
 Datly uses specific dialect of SQL to define rule for view(s) and relation between them.
 
 DSQL is transformed into datly internal view representation with the following command:
 
 ```go
-datly -C='myDB|driver|dsn|secretURL|secretKey' -X myRule.sql [-w=myProjectLocation ]
+datly dsql -c='myDB|driver|dsn|secretURL|secretKey' -s=myRule.sql -d=autogen
 ```
-where -w would persist rule with datly config to specific myProjectLocation
 
-Once datly rules are stored, you can start datly with datly -c=myProjectLocation/Datly/config.json
+where -d would persist rule with datly config to specific myProjectLocation
 
+Once datly rules are stored, you can start datly with
+
+```bash
+datly run -c=myProjectLocation/Datly/config.json
+```
 
 #### Managed mode
 
@@ -132,38 +158,6 @@ See [Reader Service](../reader/README.md) for more details
 
 #### Autonomous mode
 
-
-##### DSQL structure 
-
-```sql
-[RouteConfig]
-SELECT mainViewAlias.*  [EXCEPT COLUMN][OutputConfig]
-[, secondViewAlias.*       [OutputConfig]  ]
-[, NviewAlias.*            [OutputConfig]  ]
-FROM (
-    SELECT
-    ID  [ColumnConfig],
-    ...,
-     other_column   
-    FROM table1
-    ) mainViewAlias [ViewConfig],
-
-[
- JOIN (
-    SELECT OTHER_ID,
-        ...,
-        other_column
-    FROM table2
-    ) secondViewAlias  [ViewConfig] ON mainViewAlias.ID = secondViewAlias.OTHER_ID
-    
-]    
-```
-
-Where
-- **RouteConfig** is JSON representation of [Route](option/route.go) settings i.e {"URI":"app1/view1/{Id}"}
-- **OutputConfig** is JSON representation of [Output](option/output.go) settings i.e {"Style":"Comprehensive"}
-- **ColumnConfig** is JSON representation of [Column](option/column.go) settings i.e {"DataType":"bool"}
-- **ViewConfig**  is JSON representation of [View](option/view.go) settings i.e {"Cache":{"Ref":"aerospike"}}
 
 See e2e [testcase](../e2e/local/regression/cases) for more examples
 
@@ -476,12 +470,6 @@ import ...
 
 ```
 
-View input parameter initialization use the following syntax:
-```sql
-#set($_ = $PARAM_NAME<PARAM_TYPE>(PARAM_KIND/SOURCE) /* 
-  optional SQL hint
-*/)
-```    
 
 
 
@@ -878,6 +866,8 @@ To secure Google Service Account Secret use the following [scy](https://github.c
 ```bash
 scy -s=myServiceAccountSecret.json -d=secure_storage_url -t=raw -k=blowfish://default
 ```
+
+
 
 #### Autonomous Datly
 
