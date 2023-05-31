@@ -1,5 +1,7 @@
 package options
 
+import "github.com/viant/afs/url"
+
 type DSql struct {
 	Connector
 	JwtVerifier
@@ -13,6 +15,9 @@ type DSql struct {
 func (d *DSql) Init() error {
 	if err := d.Generate.Init(); err != nil {
 		return err
+	}
+	if url.IsRelative(d.Dest) && d.Project != "" {
+		d.Dest = url.Join(d.Project, d.Dest)
 	}
 	return nil
 }

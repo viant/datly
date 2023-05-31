@@ -426,9 +426,13 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		tagContent := "name=" + column.Name
 		if meta.autoincrement {
 			tagContent += ",autoincrement"
-		} else if meta.generator != "" {
-			tagContent += ",generator=" + meta.generator
 		}
+
+		// supper for know as there are some problems
+		//} else if meta.generator != "" {
+		//	tagContent += ",generator=" + meta.generator
+		//}
+
 		var jsonTag string
 		if !meta.required {
 			jsonTag = ` json:",omitempty"`

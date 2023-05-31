@@ -1,9 +1,11 @@
 package options
 
+import "github.com/viant/afs/url"
+
 type Gen struct {
 	Connector
 	Generate
-	Dest      string `short:"d" long:"dest" description:"dsql location"`
+	Dest      string `short:"d" long:"dest" description:"dsql location" default:"dsql"`
 	Operation string `short:"o" long:"op" description:"operation" choice:"post" choice:"patch" choice:"put"`
 	Kind      string `short:"k" long:"kind" description:"execution kind" choice:"dml" choice:"sql"`
 	LoadPrev  bool   `short:"l" long:"loadPrev" description:"load previous state" `
@@ -16,7 +18,8 @@ func (g *Gen) Init() error {
 	if g.Dest == "" {
 		g.Dest = "dsql"
 	}
-	expandRelativeIfNeeded(&g.Source, g.Project)
-	expandRelativeIfNeeded(&g.Dest, g.Project)
+	if url.IsRelative(g.Dest) {
+		g.Dest = url.Join(g.Project, g.Dest)
+	}
 	return nil
 }
