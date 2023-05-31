@@ -26,7 +26,7 @@ const (
 	moduleCoreTypes   = "github.com/viant/xdatly/types/core"
 
 	moduleCustomChecksum  = "github.com/viant/xdatly/types/custom/checksum"
-	fileSideefectsImports = "xdatly_init"
+	fileSideefectsImports = "xinit"
 )
 
 type bundleMetadata struct {

@@ -134,7 +134,7 @@ func (s *Service) generatePackage(ctx context.Context, pkgLocation string, init 
 	if err := s.fs.Upload(ctx, dependencyDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(dependecnyContent))); err != nil {
 		return err
 	}
-	initDest := url.Join(pkgLocation, "init.go")
+	initDest := url.Join(pkgLocation, "xinit.go")
 	if err := s.fs.Upload(ctx, initDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(initContent))); err != nil {
 		return err
 	}
