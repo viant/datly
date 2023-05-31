@@ -16,10 +16,10 @@ type (
 	}
 	Module struct {
 		Repository *string `short:"r" long:"module repo" description:"module repo"`
-		Name       string  `short:"n" long:"name" description:"module name"`
+		Name       string  `short:"n" long:"name" description:"module name" default:"myapp"`
 	}
 	Datly struct {
-		Location string `short:"x" long:"dsrc" description:"datly location"`
+		Location string `short:"x" long:"dsrc" description:"datly location" default:".build"`
 		Tag      string `short:"t" long:"tag" description:" datly tag"`
 	}
 )

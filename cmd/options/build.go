@@ -9,9 +9,9 @@ import (
 
 type GoBuild struct {
 	Project   string `short:"p" long:"proj" description:"project"`
-	Module    string `short:"m" long:"module" description:"custom go module location"`
-	Extension string `short:"e" long:"ext" description:"extension technical loc"`
-	Datly     string `short:"x" long:"xdatly" description:"custom extended datly location"`
+	Module    string `short:"m" long:"module" description:"custom go module location" default:"pkg" `
+	Extension string `short:"e" long:"ext" description:"extension replace project" default:".build/ext"`
+	Datly     string `short:"l" long:"xdatly" description:"custom extended datly location" default:".build"`
 
 	Source    []string `short:"s" long:"source" description:"source locations"`
 	Dest      string   `short:"d" long:"dest" description:"dest location"`
