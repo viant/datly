@@ -20,7 +20,6 @@ func (s *Service) runInitExtension(ctx context.Context, init *options.Extension)
 
 	customDatlySrc := url.Join(init.Datly.Location, datlyFolder)
 	ok, _ := s.fs.Exists(ctx, customDatlySrc)
-	fmt.Printf("checking dataly src: %v: %v\n", customDatlySrc, ok)
 	if !ok {
 		if err := s.ensureDatly(ctx, init); err != nil {
 			return err
@@ -75,7 +74,6 @@ func (s *Service) ensureDatly(ctx context.Context, init *options.Extension) erro
 		sourceURL = fmt.Sprintf(datlyTagURL, init.Tag)
 		moveSource = path.Join(init.Datly.Location, datlyFolder+"-"+init.Tag[1:])
 	}
-	fmt.Printf("checking %v into %v\n", sourceURL, init.Datly.Location)
 	if err := s.fs.Copy(ctx, sourceURL, init.Datly.Location); err != nil {
 		return err
 	}
