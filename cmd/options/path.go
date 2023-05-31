@@ -22,10 +22,7 @@ func ensureAbsPath(location string) string {
 	}
 
 	if wd, _ := os.Getwd(); wd != "" {
-		candidate := url.Join(wd, location)
-		if ok, _ := fs.Exists(context.Background(), candidate); ok {
-			return candidate
-		}
+		return url.Join(wd, location)
 	}
 	return location
 }

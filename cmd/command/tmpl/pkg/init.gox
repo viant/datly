@@ -1,0 +1,5 @@
+package $moduleName
+
+import (
+	_ "$module/dependency"
+)

@@ -1,14 +1,18 @@
 package options
 
 import (
+	"github.com/viant/afs/url"
 	"os"
-	"path"
 	"runtime"
 	"strings"
 )
 
 type GoBuild struct {
-	Project   string   `short:"p" long:"proj" description:"project"`
+	Project   string `short:"p" long:"proj" description:"project"`
+	Module    string `short:"m" long:"module" description:"custom go module location"`
+	Extension string `short:"e" long:"ext" description:"extension technical loc"`
+	Datly     string `short:"x" long:"xdatly" description:"custom extended datly location"`
+
 	Source    []string `short:"s" long:"source" description:"source locations"`
 	Dest      string   `short:"d" long:"dest" description:"dest location"`
 	BuildArgs []string `short:"b" long:"buildArgs" description:"build args"`
@@ -18,7 +22,7 @@ type GoBuild struct {
 }
 
 type Build struct {
-	Plugin
+	GoBuild
 	LdFlags *string `short:"f" long:"ldflags" description:"build ldflags"`
 	Runtime string  `short:"r" long:"runtime" description:"runtime binary" choice:"standalone" choice:"lambda/url" choice:"lambda/apigw"`
 }
@@ -28,9 +32,32 @@ func (b *GoBuild) Init() {
 		b.Project, _ = os.Getwd()
 	}
 	b.Project = ensureAbsPath(b.Project)
+
+	if b.Module == "" {
+		b.Module = "pkg"
+	}
+	if url.IsRelative(b.Module) {
+		b.Module = url.Join(b.Project, b.Module)
+	}
+
+	if b.Datly == "" {
+		b.Datly = ".build"
+	}
+	if url.IsRelative(b.Datly) {
+		b.Datly = url.Join(b.Project, b.Datly)
+	}
+
+	if b.Extension == "" {
+		b.Extension = ".build/ext"
+	}
+	if url.IsRelative(b.Extension) {
+		b.Extension = url.Join(b.Project, b.Extension)
+	}
+
 	if len(b.BuildArgs) == 0 {
 		b.BuildArgs = append(b.BuildArgs, "-trimpath")
 	}
+
 	if b.GoOs == "" {
 		b.GoOs = runtime.GOOS
 	}
@@ -40,15 +67,15 @@ func (b *GoBuild) Init() {
 	if b.GoVersion == "" {
 		b.GoVersion = strings.Replace(runtime.Version(), "go", "", 1)
 	}
+
 	b.Dest = ensureAbsPath(b.Dest)
 }
 
 func (b *Build) Init() error {
 	b.GoBuild.Init()
 	if len(b.Source) == 0 {
-		b.Source = append(b.Source, path.Join(b.Project, ".build/datly"), path.Join(b.Project, "pkg"))
+		b.Source = append(b.Source, b.Datly, b.Module, b.Extension)
 	}
-
 	flags := "-X main.BuildTimeInS=`date +%s`"
 	if b.LdFlags == nil {
 		b.LdFlags = &flags

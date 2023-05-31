@@ -4,6 +4,7 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/toolbox/data"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -52,9 +53,25 @@ func (e *Module) Module() string {
 func (e *Extension) Replacer(shared *Module) data.Map {
 	var replacer = data.Map{}
 	now := time.Now().UTC().Format(time.RFC3339)
-	replacer.Put("module", shared.Module())
+	module := shared.Module()
+	name := extractModuleName(module)
+
+	replacer.Put("module", module)
+	replacer.Put("moduleName", name)
+	replacer.Put("modulePath", url.Join(e.Project, "pkg"))
+	replacer.Put("extModulePath", url.Join(e.Project, ".build/ext"))
 	replacer.Put("generatedAt", now)
 	return replacer
+}
+
+func extractModuleName(name string) string {
+	if index := strings.LastIndex(name, "."); index != -1 {
+		name = name[index+1:]
+	}
+	if index := strings.LastIndex(name, "/"); index != -1 {
+		name = name[index+1:]
+	}
+	return name
 }
 
 func (e *Extension) GoModInitArgs(shared *Module) []string {

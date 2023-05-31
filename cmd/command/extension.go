@@ -12,6 +12,10 @@ import (
 	"strings"
 )
 
+const (
+	goInitVersion = "v0.0.0-00010101000000-000000000000"
+)
+
 func (s *Service) runInitExtension(ctx context.Context, init *options.Extension) error {
 
 	if ok, _ := s.fs.Exists(ctx, url.Join(init.Datly.Location, datlyFolder)); !ok {
@@ -31,10 +35,32 @@ func (s *Service) runInitExtension(ctx context.Context, init *options.Extension)
 			return err
 		}
 	}
+	if err := s.generateExtensionModule(ctx, init); err != nil {
+		return err
+	}
+
 	if err := s.extendDatly(ctx, init); err != nil {
 		return nil
 	}
 	return nil
+}
+
+//go:embed tmpl/ext/go.modx
+var extGoModuleContent string
+
+//go:embed tmpl/ext/init.gox
+var extContent string
+
+func (s *Service) generateExtensionModule(ctx context.Context, init *options.Extension) error {
+	extLocation := s.extLocation(init)
+	replacer := init.Replacer(&init.Module)
+	if err := s.fs.Upload(ctx, path.Join(extLocation, "init.go"), file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(extContent))); err != nil {
+		return err
+	}
+	if err := s.fs.Upload(ctx, path.Join(extLocation, "go.mod"), file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(extGoModuleContent))); err != nil {
+		return err
+	}
+	return s.syncSourceDependencies(ctx, extLocation)
 }
 
 func (s *Service) ensureDatly(ctx context.Context, init *options.Extension) error {
@@ -61,13 +87,21 @@ func (s *Service) extendDatly(ctx context.Context, init *options.Extension) erro
 	if err != nil {
 		return err
 	}
+	pkgLocation := url.Join(init.Project, "pkg")
 	datlyLocation := url.Join(init.Datly.Location, "datly")
-	pkgDest := url.Join(init.Project, pkgFolder)
-	_, err = s.runCommand(datlyLocation, goBinLocation, "mod", "edit", "-replace", "github.com/viant/xdatly/extension="+pkgDest)
+	extLocation := s.extLocation(init)
+	_, err = s.runCommand(datlyLocation, goBinLocation, "mod", "edit", "-require", init.Module.Module()+"@"+goInitVersion)
+	_, err = s.runCommand(datlyLocation, goBinLocation, "mod", "edit", "-replace", init.Module.Module()+"="+pkgLocation)
+	_, err = s.runCommand(datlyLocation, goBinLocation, "mod", "edit", "-replace", "github.com/viant/xdatly/extension="+extLocation)
 	if err = s.syncSourceDependencies(ctx, datlyLocation); err != nil {
 		return err
 	}
 	return err
+}
+
+func (s *Service) extLocation(init *options.Extension) string {
+	extLoc := url.Join(init.Project, extFolder)
+	return extLoc
 }
 
 //go:embed tmpl/pkg/bootstrap/bootstrap.gox
@@ -75,6 +109,12 @@ var bootstrapContent string
 
 //go:embed tmpl/pkg/checksum/init.gox
 var checksumContent string
+
+//go:embed tmpl/pkg/dependency/init.gox
+var dependecnyContent string
+
+//go:embed tmpl/pkg/init.gox
+var initContent string
 
 func (s *Service) generatePackage(ctx context.Context, pkgLocation string, init *options.Extension) error {
 	goBinLocation, err := s.getGoBinLocation(ctx)
@@ -90,9 +130,19 @@ func (s *Service) generatePackage(ctx context.Context, pkgLocation string, init 
 	if err := s.fs.Upload(ctx, checksumDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(checksumContent))); err != nil {
 		return err
 	}
+	dependencyDest := url.Join(pkgLocation, "dependency/init.go")
+	if err := s.fs.Upload(ctx, dependencyDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(dependecnyContent))); err != nil {
+		return err
+	}
+	initDest := url.Join(pkgLocation, "init.go")
+	if err := s.fs.Upload(ctx, initDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(initContent))); err != nil {
+		return err
+	}
+
 	if _, err = s.runCommand(pkgLocation, goBinLocation, init.GoModInitArgs(&init.Module)...); err != nil {
 		return err
 	}
+
 	if err := s.syncSourceDependencies(ctx, pkgLocation); err != nil {
 		return err
 	}
