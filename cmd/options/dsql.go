@@ -9,3 +9,10 @@ type DSql struct {
 	Port        int    `short:"P" long:"port" description:"endpoint port" `
 	RoutePrefix string `short:"f" long:"routePrefix" description:"routePrefix default: dev/"`
 }
+
+func (d *DSql) Init() error {
+	if err := d.Generate.Init(); err != nil {
+		return err
+	}
+	return nil
+}

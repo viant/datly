@@ -1,10 +1,14 @@
 package options
 
 import (
+	"context"
+	"github.com/viant/afs"
 	"github.com/viant/afs/url"
 	"os"
 	"strings"
 )
+
+var fs = afs.New()
 
 func ensureAbsPath(location string) string {
 	if strings.Contains(location, "~") {
@@ -18,7 +22,26 @@ func ensureAbsPath(location string) string {
 	}
 
 	if wd, _ := os.Getwd(); wd != "" {
-		return url.Join(wd, location)
+		candidate := url.Join(wd, location)
+		if ok, _ := fs.Exists(context.Background(), candidate); ok {
+			return candidate
+		}
 	}
 	return location
+}
+
+func expandRelativeIfNeeded(location *string, projectRoot string) {
+	if !url.IsRelative(*location) {
+		return
+	}
+	//check relative first
+	if wd, _ := os.Getwd(); wd != "" {
+		candidate := url.Join(wd, *location)
+		if ok, _ := fs.Exists(context.Background(), candidate); ok || projectRoot == "" {
+			*location = candidate
+			return
+		}
+	}
+	loc := url.Join(projectRoot, *location)
+	*location = loc
 }

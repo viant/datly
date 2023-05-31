@@ -1,10 +1,5 @@
 package options
 
-import (
-	"github.com/viant/afs/url"
-	"path"
-)
-
 type Gen struct {
 	Connector
 	Generate
@@ -21,14 +16,7 @@ func (g *Gen) Init() error {
 	if g.Dest == "" {
 		g.Dest = "dsql"
 	}
-	if url.IsRelative(g.Source) && g.Project != "" {
-		g.Source = path.Join(g.Project, g.Source)
-	}
-	if url.IsRelative(g.Dest) && g.Project != "" {
-		g.Dest = path.Join(g.Project, g.Dest)
-	}
-
-	g.Source = ensureAbsPath(g.Source)
-	g.Dest = ensureAbsPath(g.Dest)
+	expandRelativeIfNeeded(&g.Source, g.Project)
+	expandRelativeIfNeeded(&g.Dest, g.Project)
 	return nil
 }

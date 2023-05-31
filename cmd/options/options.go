@@ -26,6 +26,9 @@ func (o *Options) Init() error {
 	if o.Generate != nil {
 		return o.Generate.Init()
 	}
+	if o.DSql != nil {
+		return o.DSql.Init()
+	}
 	if o.Run != nil {
 		return o.Run.Init()
 	}
