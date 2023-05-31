@@ -17,9 +17,6 @@ func (g *Generate) Init() error {
 		g.Project, _ = os.Getwd()
 	}
 	g.Project = ensureAbsPath(g.Project)
-	if g.Module == "" {
-		g.Module = "pkg"
-	}
 	expandRelativeIfNeeded(&g.Module, g.Project)
 	expandRelativeIfNeeded(&g.Source, g.Project)
 	return nil
