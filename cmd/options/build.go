@@ -27,6 +27,7 @@ func (b *GoBuild) Init() {
 	if b.Project == "" {
 		b.Project, _ = os.Getwd()
 	}
+	b.Project = ensureAbsPath(b.Project)
 	if len(b.BuildArgs) == 0 {
 		b.BuildArgs = append(b.BuildArgs, "-trimpath")
 	}
@@ -47,6 +48,7 @@ func (b *Build) Init() error {
 	if len(b.Source) == 0 {
 		b.Source = append(b.Source, path.Join(b.Project, ".build/datly"), path.Join(b.Project, "pkg"))
 	}
+
 	flags := "-X main.BuildTimeInS=`date +%s`"
 	if b.LdFlags == nil {
 		b.LdFlags = &flags

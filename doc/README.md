@@ -45,7 +45,7 @@ You can use ```datly gen``` command to generate initial dsql with corresponding 
 for single or multi relation data mutation.  Datly uses transaction to modify data in database.
 
 For patch/update operation datly support input state distinction, with Has marker,
-allowing handling user input effectively, ensuring data integrity, and improving the security of applications or systems.
+allowing handling user input effectively, ensuring data integrity, and improving the security of applications.
 This approach simplify input validation and tracking actual changes supplied by a client.
 
 
