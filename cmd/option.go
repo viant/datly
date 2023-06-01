@@ -71,11 +71,13 @@ type (
 	}
 
 	Connector struct {
-		Connects []string `short:"C" long:"conn" description:"name|driver|dsn|secret|secretkey" `
-		DbName   string   `short:"V" long:"dbname" description:"db/connector name" `
-		Driver   string   `short:"D" long:"driver" description:"driver" `
-		DSN      string   `short:"A" long:"dsn" description:"DSN" `
-		Secret   string   `short:"E" long:"secret" description:"database secret" `
+		connectors []*view.Connector
+		Connects   []string `short:"C" long:"conn" description:"name|driver|dsn|secret|secretkey" `
+		DbName     string   `short:"V" long:"dbname" description:"db/connector name" `
+		Driver     string   `short:"D" long:"driver" description:"driver" `
+		DSN        string   `short:"A" long:"dsn" description:"DSN" `
+		Secret     string   `short:"E" long:"secret" description:"database secret" `
+		SecretKey  string
 	}
 
 	Generate struct {
@@ -115,6 +117,33 @@ type (
 		ModuleGoVersion string   `long:"moduleGoVersion" description:"module go Version"`
 	}
 )
+
+func (c *Connector) SetConnectors(connectors []*view.Connector) {
+	if len(connectors) == 0 {
+		return
+	}
+	var merged = make([]*view.Connector, 0, len(connectors))
+	c.DbName = connectors[0].Name
+	c.Driver = connectors[0].Driver
+	c.DSN = connectors[0].DSN
+	if connectors[0].Secret != nil {
+		c.Secret = connectors[0].Secret.URL
+		c.SecretKey = connectors[0].Secret.Key
+	}
+	var index = map[string]bool{
+		c.DbName: true,
+	}
+	merged = append(merged, connectors[0])
+	for i := 1; i < len(connectors); i++ {
+		connector := connectors[i]
+		if index[connector.Name] {
+			continue
+		}
+		index[connector.Name] = true
+		merged = append(merged, connector)
+	}
+	c.connectors = merged
+}
 
 //go:embed resource/mysql.json
 var mysqlDev string
@@ -263,6 +292,18 @@ func (c *Connector) Init() {
 			c.DbName = parts[0]
 			c.Driver = parts[1]
 			c.DSN = parts[2]
+		case 4:
+			c.DbName = parts[0]
+			c.Driver = parts[1]
+			c.DSN = parts[2]
+			c.Secret = parts[3]
+		case 5:
+			c.DbName = parts[0]
+			c.Driver = parts[1]
+			c.DSN = parts[2]
+			c.Secret = parts[3]
+			c.SecretKey = parts[4]
+
 		}
 	}
 
@@ -299,11 +340,27 @@ func (c *Connector) Registry() map[string]*view.Connector {
 }
 
 func (c *Connector) Connectors() []*view.Connector {
+	if len(c.connectors) > 0 {
+		return c.connectors
+	}
+	c.connectors = c.decodeConnectors()
+	return c.connectors
+}
+
+func (c *Connector) decodeConnectors() []*view.Connector {
+	var secret *scy.Resource
+	if c.Secret != "" {
+		secret = &scy.Resource{URL: c.Secret}
+		if c.SecretKey != "" {
+			secret.Key = c.SecretKey
+		}
+	}
 	result := []*view.Connector{
 		{
 			Name:   c.DbName,
 			Driver: c.Driver,
 			DSN:    c.DSN,
+			Secret: secret,
 		},
 	}
 
@@ -420,7 +477,7 @@ func (o *Options) MergeFromGenerate(generate *options.Gen) {
 
 func (o *Options) MergeFromCache(cache *options.Cache) {
 	o.CacheWarmup.WarmupURIs = cache.WarmupURIs
-	o.ConstURL = cache.ConfigURL
+	o.ConfigURL = cache.ConfigURL
 }
 
 func (o *Options) MergeFromRun(run *options.Run) {
@@ -428,7 +485,7 @@ func (o *Options) MergeFromRun(run *options.Run) {
 }
 
 func (o *Options) MergeFromDSql(dsql *options.DSql) {
-	o.WriteLocation = dsql.Dest
+	o.WriteLocation = dsql.Repo
 	o.Name = dsql.Name
 	o.Location = dsql.Source
 	o.Connects = dsql.Connectors
@@ -440,6 +497,16 @@ func (o *Options) MergeFromDSql(dsql *options.DSql) {
 	if dsql.Module != "" {
 		o.RelativePath = dsql.Module
 	}
+}
+
+func (o *Options) MergeFromInit(cmd *options.Init) {
+	o.Connects = cmd.Connectors
+	o.JWTVerifierHMACKey = string(cmd.JwtVerifier.HMAC)
+	o.JWTVerifierRSAKey = string(cmd.JwtVerifier.RSA)
+	o.Port = cmd.Port
+	o.ConstURL = cmd.Const
+	o.WriteLocation = cmd.Repo
+	o.PartialConfigURL = cmd.ConfigURL
 }
 
 func namespace(name string) string {

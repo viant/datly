@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
@@ -18,6 +17,13 @@ import (
 )
 
 func (s *Builder) loadConfig(ctx context.Context) (cfg *standalone.Config, err error) {
+
+	if s.options.PartialConfigURL != "" {
+		cfg, err = standalone.NewConfigFromURL(ctx, s.options.PartialConfigURL)
+		s.mergeFromPreviousConfig(cfg)
+		return cfg, nil
+	}
+
 	if s.options.ConfigURL == "" {
 		revealMetrics := true
 		cfg = &standalone.Config{
@@ -44,21 +50,29 @@ func (s *Builder) loadConfig(ctx context.Context) (cfg *standalone.Config, err e
 		return cfg, nil
 	}
 
-	if s.options.PartialConfigURL != "" {
-		configContent, err := s.fs.DownloadWithURL(ctx, s.options.PartialConfigURL)
-		if err != nil {
-			return nil, err
-		}
-
-		if err = json.Unmarshal(configContent, cfg); err != nil {
-			return nil, err
-		}
-	}
-
 	s.options.ConfigURL = normalizeURL(s.options.ConfigURL)
 	cfg, err = standalone.NewConfigFromURL(ctx, s.options.ConfigURL)
-
+	if cfg.DependencyURL != "" {
+		s.options.DependencyURL = cfg.DependencyURL
+	}
 	return cfg, err
+}
+
+func (s *Builder) mergeFromPreviousConfig(cfg *standalone.Config) {
+	if cfg == nil {
+		return
+	}
+	if cfg.DependencyURL != "" {
+		s.options.DependencyURL = cfg.DependencyURL
+	}
+	if jwtValidator := cfg.JWTValidator; jwtValidator != nil {
+		if s.options.JWTVerifierRSAKey == "" && jwtValidator.RSA != nil {
+			s.options.JWTVerifierRSAKey = fmt.Sprintf("%v|%v", jwtValidator.RSA.URL, jwtValidator.RSA.Key)
+		}
+		if s.options.JWTVerifierHMACKey == "" && jwtValidator.HMAC != nil {
+			s.options.JWTVerifierHMACKey = fmt.Sprintf("%v|%v", jwtValidator.HMAC.URL, jwtValidator.HMAC.Key)
+		}
+	}
 }
 
 func (s *Builder) initConfig(ctx context.Context, cfg *standalone.Config) error {
@@ -76,9 +90,22 @@ func (s *Builder) initConfig(ctx context.Context, cfg *standalone.Config) error 
 
 	cfg.Init()
 
-	_, err := loadConnectors(cfg, s.options)
-	if err != nil {
-		return err
+	if s.options.PartialConfigURL != "" {
+		if connectorResource, _ := loadResource(s.options.DependencyURL, "connections.yaml"); connectorResource != nil {
+			s.options.SetConnectors(append(s.options.connectors, connectorResource.Connectors...))
+		}
+		if constantResource, _ := loadResource(s.options.DependencyURL, constFileName+".yaml"); constantResource != nil {
+			//	var constants =
+			if len(constantResource.Parameters) > 0 {
+
+			}
+		}
+
+		//constFileContent := &s.constFileContent
+		//if connectorResource, _ := loadConstant(cfg, s.options); connectorResource != nil {
+		//	s.options.connectors = append(connectorResource.Connectors, s.options.decodeConnectors()...)
+		//}
+
 	}
 
 	if s.options.RouteURL != "" {
@@ -90,7 +117,7 @@ func (s *Builder) initConfig(ctx context.Context, cfg *standalone.Config) error 
 
 	s.initJWTVerifier(cfg)
 
-	err = buildDefaultConfig(cfg, s.options)
+	err := buildDefaultConfig(cfg, s.options)
 	if err != nil {
 		return err
 	}
@@ -153,7 +180,6 @@ func buildDefaultConfig(cfg *standalone.Config, options *Options) error {
 			if options.AssetsURL == "" {
 				options.AssetsURL = fmt.Sprintf("mem://localhost/%s/Datly/dependencies", options.RoutePrefix)
 			}
-
 			cfg.DependencyURL = options.AssetsURL
 			_ = fs.Create(context.Background(), cfg.DependencyURL, file.DefaultDirOsMode, true)
 		}
@@ -187,16 +213,10 @@ func buildDefaultConfig(cfg *standalone.Config, options *Options) error {
 	return nil
 }
 
-func loadConnectors(cfg *standalone.Config, options *Options) (map[string]*view.Connector, error) {
-	var resource *view.Resource
-	var connectors = make(map[string]*view.Connector)
-	var err error
-	if options.DependencyURL != "" {
-		if resource, err = view.LoadResourceFromURL(context.Background(), options.DependencyURL, afs.New()); err != nil {
-			return nil, err
-		}
-		connectors = resource.ConnectorByName()
-		cfg.DependencyURL = options.DependencyURL
+func loadResource(dependencyURL, resourceName string) (*view.Resource, error) {
+	if dependencyURL != "" {
+		connectorURL := url.Join(dependencyURL, resourceName)
+		return view.LoadResourceFromURL(context.Background(), connectorURL, afs.New())
 	}
-	return connectors, err
+	return nil, nil
 }

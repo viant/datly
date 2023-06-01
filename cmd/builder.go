@@ -41,18 +41,19 @@ import (
 
 type (
 	Builder struct {
-		pluginTypes map[string]bool
-		tablesMeta  *TableMetaRegistry
-		options     *Options
-		config      *standalone.Config
-		logger      io.Writer
-		fs          afs.Service
-		fileNames   *uniqueIndex
-		viewNames   *uniqueIndex
-		types       *uniqueIndex
-		plugins     []*pluginGenDeta
-		bundles     map[string]*bundleMetadata
-		logs        []string
+		pluginTypes      map[string]bool
+		constFileContent constFileContent
+		tablesMeta       *TableMetaRegistry
+		options          *Options
+		config           *standalone.Config
+		logger           io.Writer
+		fs               afs.Service
+		fileNames        *uniqueIndex
+		viewNames        *uniqueIndex
+		types            *uniqueIndex
+		plugins          []*pluginGenDeta
+		bundles          map[string]*bundleMetadata
+		logs             []string
 	}
 
 	routeBuilder struct {
@@ -286,10 +287,13 @@ func (s *Builder) Build(ctx context.Context) error {
 	routerResource.Resource.SetFs(s.fs)
 	paramIndex := NewParametersIndex(nil, nil)
 	var viewCaches []*view.Cache
-	consts := &constFileContent{}
+	consts := &s.constFileContent
 
 	fileName, routerRoutes, err := s.readRouterOptionIfNeeded(routerResource)
 	if err != nil || (len(routerRoutes) == 1 && routerRoutes[0].sourceURL == "") {
+		if err = s.uploadConfigFiles(consts, routerResource, viewCaches); err != nil {
+			return err
+		}
 		return err
 	}
 
@@ -675,7 +679,7 @@ func (s *Builder) initRouterResource(builder *routeBuilder) error {
 	return nil
 }
 
-func (s *Builder) uploadFiles(resourceName string, consts *constFileContent, resource *router.Resource, caches []*view.Cache) error {
+func (s *Builder) uploadConfigFiles(consts *constFileContent, resource *router.Resource, caches []*view.Cache) error {
 	if err := s.uploadConnectionsDep(resource); err != nil {
 		return err
 	}
@@ -691,7 +695,13 @@ func (s *Builder) uploadFiles(resourceName string, consts *constFileContent, res
 	if err := s.uploadPlugins(); err != nil {
 		return err
 	}
+	return nil
+}
 
+func (s *Builder) uploadFiles(resourceName string, consts *constFileContent, resource *router.Resource, caches []*view.Cache) error {
+	if err := s.uploadConfigFiles(consts, resource, caches); err != nil {
+		return err
+	}
 	return fsAddYAML(s.fs, s.options.RouterURL(resourceName), resource)
 }
 
@@ -701,7 +711,9 @@ func (s *Builder) uploadConnectionsDep(resource *router.Resource) error {
 		ModTime:    TimeNow(),
 		Connectors: s.options.Connectors(),
 	}
-
+	if resource.Resource == nil {
+		return nil
+	}
 	resource.Resource.Connectors = nil
 	depURL := s.options.DepURL("connections")
 	if err := fsAddYAML(s.fs, depURL, dependency); err != nil {
@@ -724,19 +736,19 @@ func (s *Builder) uploadCacheDep(resource *router.Resource, caches []*view.Cache
 	return fsAddYAML(s.fs, cacheURL, cacheDependency)
 }
 
+var constFileName = "const"
+
 func (s *Builder) uploadVariablesDep(resource *router.Resource, consts *constFileContent) error {
 	if len(consts.params) == 0 {
 		return nil
 	}
 
-	fileName := "variables"
 	if consts.URL != "" {
-		fileName = consts.URL
+		constFileName = consts.URL
 	}
-
-	resource.With = append(resource.With, fileName)
+	resource.With = append(resource.With, constFileName)
 	variablesDep := &view.Resource{ModTime: TimeNow(), Parameters: consts.params}
-	variablesURL := s.options.DepURL(fileName)
+	variablesURL := s.options.DepURL(constFileName)
 	return fsAddYAML(s.fs, variablesURL, variablesDep)
 }
 
@@ -1088,7 +1100,6 @@ func (s *Builder) moveConstParameters(builder *routeBuilder, dest *[]*view.Param
 			constParams = append(constParams, parameter)
 			continue
 		}
-
 		newParams = append(newParams, parameter)
 	}
 

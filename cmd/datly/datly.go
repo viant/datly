@@ -54,7 +54,6 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-
 	server, err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {
 		log.Fatal(err)

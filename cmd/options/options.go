@@ -9,8 +9,8 @@ type Options struct {
 	Cache    *Cache     `command:"cache" description:"warmup cache"`
 	Run      *Run       `command:"run" description:"start datly in standalone mode"`
 	Bundle   *Bundle    `command:"bundle" description:"bundles rules for cloud deployment (speed/cost optimization)"`
-	//InitCmd  *Init      `command:"init" description:"initialises datly rule project"`
-	Legacy bool `short:"l" long:"legacy" description:"show legacy datly option"`
+	InitCmd  *Init      `command:"init" description:"init datly rule repository"`
+	Legacy   bool       `short:"l" long:"legacy" description:"show legacy datly option"`
 }
 
 func (o *Options) Init() error {
@@ -35,6 +35,9 @@ func (o *Options) Init() error {
 	if o.Bundle != nil {
 		return o.Bundle.Init()
 	}
+	if o.InitCmd != nil {
+		return o.InitCmd.Init()
+	}
 	return nil
 }
 
@@ -49,6 +52,8 @@ func NewOptions(args Arguments) *Options {
 		ret.InitExt = &Extension{}
 	case "gen":
 		ret.Generate = &Gen{}
+	case "init":
+		ret.InitCmd = &Init{}
 	case "dsql":
 		ret.DSql = &DSql{}
 	case "cache":
@@ -57,9 +62,6 @@ func NewOptions(args Arguments) *Options {
 		ret.Run = &Run{}
 	case "bundle":
 		ret.Bundle = &Bundle{}
-		//case "init":
-		//	ret.InitCmd = &Init{}
-
 	}
 	return ret
 }

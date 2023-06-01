@@ -847,49 +847,6 @@ The following layout organizes datly specific resources
 ```
 
 
-#### Securing secret
-
-Datly integrates with [Scy - secure store api](https://github.com/viant/scy) when operating on credentials.
-
-
-#### Securing database/sql DSN
-
-In **dependencies** folder datly stores connection details make sure that before deploying to stage/prod all
-credentials details are replaced with the following macros
-
-```connections.yaml
-Connectors:
-    - DSN: ${Username}:${Password}@tcp(${Endpoint}:3306)/ci_ads?parseTime=true
-      Driver: mysql
-      Name: mydb
-      Secret:
-        URL: secure_storage_url
-        Key:  blowfish://default
-  - DSN: bigquery://my_org_project/myDataset?credURL=url_encoded_secure_storage_N_url
-    Driver: bigquery
-    Name: mybqdb
-```
-
-Where secure_storage_url could be any file system, including secret storage manager
-    - AWS SecretManager i.e. aws://secretmanager/us-west-2/secret/myorg/datly/e2e/mysql/mydb
-    - AWS SystemManager i.e. aws://ssm/us-west-1/parameter/MyOrgDatlyE2eMySQLMyDb
-    - GCP SecretManager i.e. gcp://secretmanager/projects/myorf-e2e/secrets/mysqlMyDB
-
-
-To secure database credentials create [raw_credentials.json](asset/raw_credentials.json) file
-and the use the following [scy](https://github.com/viant/scy) command
-
-```bash
-scy -s=raw_credentials.json -d=secure_storage_url -t=basic -k=blowfish://default
-```
-
-To secure Google Service Account Secret use the following [scy](https://github.com/viant/scy) command
-
-```bash
-scy -s=myServiceAccountSecret.json -d=secure_storage_url -t=raw -k=blowfish://default
-```
-
-
 
 #### Autonomous Datly
 

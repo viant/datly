@@ -145,6 +145,8 @@ func New(version string, args soptions.Arguments, logger io.Writer) (*standalone
 			options.MergeFromRun(opts.Run)
 		} else if opts.DSql != nil {
 			options.MergeFromDSql(opts.DSql)
+		} else if opts.InitCmd != nil {
+			options.MergeFromInit(opts.InitCmd)
 		} else {
 			options = nil
 		}

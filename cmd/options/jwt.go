@@ -2,9 +2,12 @@ package options
 
 type (
 	JwtVerifier struct {
-		HMAC SecretKey `short:"j" long:"jwtHMAC" description:"HMACKeyPath|EncKey" `
-		RSA  SecretKey `short:"r" long:"jwtRSA" description:"PublicKeyPath|EncKey" `
+		HMAC string `short:"a" long:"jwtHMAC" description:"HMACKeyPath|EncKey" `
+		RSA  string `short:"j" long:"jwtRSA" description:"PublicKeyPath|EncKey" `
 	}
-
-	SecretKey string
 )
+
+func (v *JwtVerifier) Init() {
+	v.HMAC = ensureAbsPath(v.HMAC)
+	v.RSA = ensureAbsPath(v.RSA)
+}
