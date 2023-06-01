@@ -865,6 +865,8 @@ github.com/viant/parsly v0.0.0-20220913214053-cb272791c00f/go.mod h1:4PKQzioRT9R
 github.com/viant/parsly v0.1.0/go.mod h1:4PKQzioRT9R99ceIhZ6tCD3tp0H0n2dEoIOaLulVvrg=
 github.com/viant/parsly v0.2.0 h1:w0i949chDeyI5qdSjwVPggWhcoqX3zB5ut/k0jbAjrU=
 github.com/viant/parsly v0.2.0/go.mod h1:4PKQzioRT9R99ceIhZ6tCD3tp0H0n2dEoIOaLulVvrg=
+github.com/viant/pgo v0.10.1 h1:rq+rDH1s7SeKBiObUEfRc1/JvMoVGtHq93tIoXEGQaw=
+github.com/viant/pgo v0.10.1/go.mod h1:MFzHmkRFZlciugEgUvpl/3grK789PBSH4dUVSLOSo+Q=
 github.com/viant/scy v0.3.2-0.20220825213848-acc5c59cde78/go.mod h1:n9aw1NKilNgadT5NKbDLAAdSeQGm0UY45e2P2X8UeS4=
 github.com/viant/scy v0.4.1/go.mod h1:8DdAWhNVjY6OGOT9+2O7FEAPGDRqy2e+fG6cwIY6jNo=
 github.com/viant/scy v0.5.2 h1:60vR2eIi5OE4zFnnfh0Rgeyd88iiPOpnNIF9RX7X3qg=
