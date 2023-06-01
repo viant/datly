@@ -318,20 +318,21 @@ func (r *Service) rebuildRouters(ctx context.Context, fs afs.Service, resources 
 	channelSize := r.populateRoutersChan(ctx, routersChan, updatedMap, fs, resources)
 	counter := 0
 	var errors []error
-	for fn := range routersChan {
-		routerResource, URL, err := fn()
-		if err != nil {
-			errors = append(errors, err)
-		} else {
-			routers[URL] = router.New(routerResource, router.ApiPrefix(r.Config.APIPrefix))
-		}
+	if channelSize > 0 {
+		for fn := range routersChan {
+			routerResource, URL, err := fn()
+			if err != nil {
+				errors = append(errors, err)
+			} else {
+				routers[URL] = router.New(routerResource, router.ApiPrefix(r.Config.APIPrefix))
+			}
 
-		counter++
-		if counter >= channelSize {
-			close(routersChan)
+			counter++
+			if counter >= channelSize {
+				close(routersChan)
+			}
 		}
 	}
-
 	if err := r.combineErrors("routers", errors); err != nil {
 		return nil, false, err
 	}
