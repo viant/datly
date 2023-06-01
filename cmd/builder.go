@@ -121,6 +121,7 @@ type (
 	constFileContent struct {
 		URL    string
 		params []*view.Parameter
+		index  map[string]bool
 	}
 
 	paramJSONHintConfig struct {
@@ -128,6 +129,40 @@ type (
 		option.TransformOption
 	}
 )
+
+func (c *constFileContent) MergeFrom(params ...*view.Parameter) {
+	if len(params) == 0 {
+		return
+	}
+	if len(c.index) == 0 {
+		c.index = map[string]bool{}
+	}
+	for i, candidate := range params {
+		if c.index[candidate.Name] || candidate.In.Kind != view.KindLiteral {
+			continue
+		}
+		c.params = append(c.params, params[i])
+	}
+}
+
+func (c *constFileContent) AddConst(name string, value interface{}) {
+	if len(c.index) == 0 {
+		c.index = map[string]bool{}
+	}
+	if c.index[name] {
+		return
+	}
+	param := &view.Parameter{Name: name, In: &view.Location{Kind: view.KindLiteral}, Const: value}
+	switch value.(type) {
+	case string:
+		param.Schema = &view.Schema{DataType: "string"}
+	case int, int64, uint64:
+		param.Schema = &view.Schema{DataType: "int"}
+	case bool:
+		param.Schema = &view.Schema{DataType: "bool"}
+	}
+	c.params = append(c.params, param)
+}
 
 func (c *ViewConfig) refName() string {
 	if c.queryJoin == nil {
@@ -292,8 +327,10 @@ func (s *Builder) Build(ctx context.Context) error {
 
 	fileName, routerRoutes, err := s.readRouterOptionIfNeeded(routerResource)
 	if err != nil || (len(routerRoutes) == 1 && routerRoutes[0].sourceURL == "") {
-		if err = s.uploadConfigFiles(consts, routerResource, viewCaches); err != nil {
-			return err
+		if s.options.PartialConfigURL != "" { //partial config can be updated
+			if err = s.uploadConfigFiles(consts, routerResource, viewCaches); err != nil {
+				return err
+			}
 		}
 		return err
 	}
@@ -494,6 +531,9 @@ func (s *Builder) readRouteSettings(builder *routeBuilder) error {
 func (s *Builder) loadConstants(sourceURL string, dest *map[string]interface{}) error {
 	if dest == nil {
 		*dest = map[string]interface{}{}
+	}
+	if sourceURL == "" {
+		return nil
 	}
 	content, err := s.fs.DownloadWithURL(context.Background(), sourceURL)
 	if err != nil {

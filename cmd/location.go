@@ -8,6 +8,7 @@ import (
 )
 
 func normalizeURL(loc string) string {
+	loc = strings.Replace(loc, "~", os.Getenv("HOME"), 1)
 	if strings.HasPrefix(loc, "/") {
 		return loc
 	}

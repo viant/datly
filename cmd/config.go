@@ -95,17 +95,17 @@ func (s *Builder) initConfig(ctx context.Context, cfg *standalone.Config) error 
 			s.options.SetConnectors(append(s.options.connectors, connectorResource.Connectors...))
 		}
 		if constantResource, _ := loadResource(s.options.DependencyURL, constFileName+".yaml"); constantResource != nil {
-			//	var constants =
-			if len(constantResource.Parameters) > 0 {
-
+			s.constFileContent.MergeFrom(constantResource.Parameters...)
+		}
+		var constMap = map[string]interface{}{}
+		if err := s.loadConstants(s.options.ConstURL, &constMap); err != nil {
+			return err
+		}
+		if len(constMap) > 0 {
+			for k, v := range constMap {
+				s.constFileContent.AddConst(k, v)
 			}
 		}
-
-		//constFileContent := &s.constFileContent
-		//if connectorResource, _ := loadConstant(cfg, s.options); connectorResource != nil {
-		//	s.options.connectors = append(connectorResource.Connectors, s.options.decodeConnectors()...)
-		//}
-
 	}
 
 	if s.options.RouteURL != "" {
