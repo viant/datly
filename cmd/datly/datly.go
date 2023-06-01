@@ -55,15 +55,7 @@ func main() {
 		}
 	}()
 	//
-	os.Args = []string{
-		"",
-		"build",
-		"-p=~/myproject",
-		"-r=standalone",
-		"-d=~/myproject/bin",
-		"-o=darwin",
-		"-a=arm64",
-	}
+
 	server, err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 
 	if err != nil {
