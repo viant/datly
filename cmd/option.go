@@ -59,6 +59,7 @@ type (
 		AssetsURL string `short:"a" long:"assetsURL" description:"assets destination"`
 		ConstURL  string `long:"constURL" description:"path where const files are stored"`
 		Legacy    bool   `short:"l"`
+		ModuleURL string
 	}
 
 	Package struct {
@@ -249,7 +250,7 @@ func (o *Options) Init() error {
 
 	}
 
-	o.Connector.Init()
+	o.Connector.Init(o.PartialConfigURL == "")
 
 	return nil
 }
@@ -278,7 +279,7 @@ func (c *Connector) MatchConnector(name string) *view.Connector {
 	return c.New()
 }
 
-func (c *Connector) Init() {
+func (c *Connector) Init(fallbackToDefault bool) {
 
 	if len(c.Connects) > 0 {
 		parts := strings.Split(c.Connects[0], "|")
@@ -305,6 +306,9 @@ func (c *Connector) Init() {
 			c.SecretKey = parts[4]
 
 		}
+	}
+	if !fallbackToDefault {
+		return
 	}
 
 	if c.Driver == "" {
@@ -355,15 +359,15 @@ func (c *Connector) decodeConnectors() []*view.Connector {
 			secret.Key = c.SecretKey
 		}
 	}
-	result := []*view.Connector{
-		{
+	result := []*view.Connector{}
+	if c.DSN != "" {
+		result = append(result, &view.Connector{
 			Name:   c.DbName,
 			Driver: c.Driver,
 			DSN:    c.DSN,
 			Secret: secret,
-		},
+		})
 	}
-
 outer:
 	for i := 0; i < len(c.Connects); i++ {
 		parts := strings.Split(c.Connects[i], "|")
@@ -494,9 +498,11 @@ func (o *Options) MergeFromDSql(dsql *options.DSql) {
 	o.ConstURL = dsql.Const
 	o.Port = dsql.Port
 	o.RoutePrefix = dsql.RoutePrefix
+	o.PartialConfigURL = dsql.ConfigURL
 	if dsql.Module != "" {
 		o.RelativePath = dsql.Module
 	}
+	o.ModuleURL = dsql.Module
 }
 
 func (o *Options) MergeFromInit(cmd *options.Init) {

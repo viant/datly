@@ -92,7 +92,7 @@ func (s *Builder) initConfig(ctx context.Context, cfg *standalone.Config) error 
 
 	if s.options.PartialConfigURL != "" {
 		if connectorResource, _ := loadResource(s.options.DependencyURL, "connections.yaml"); connectorResource != nil {
-			s.options.SetConnectors(append(s.options.connectors, connectorResource.Connectors...))
+			s.options.SetConnectors(append(s.options.Connectors(), connectorResource.Connectors...))
 		}
 		if constantResource, _ := loadResource(s.options.DependencyURL, constFileName+".yaml"); constantResource != nil {
 			s.constFileContent.MergeFrom(constantResource.Parameters...)

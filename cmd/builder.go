@@ -164,6 +164,21 @@ func (c *constFileContent) AddConst(name string, value interface{}) {
 	c.params = append(c.params, param)
 }
 
+func (c *constFileContent) dedupe() {
+	var params []*view.Parameter
+	c.index = map[string]bool{}
+	if len(c.params) == 0 {
+		return
+	}
+	for i, candidate := range c.params {
+		if c.index[candidate.Name] {
+			continue
+		}
+		params = append(params, c.params[i])
+	}
+	c.params = params
+}
+
 func (c *ViewConfig) refName() string {
 	if c.queryJoin == nil {
 		return ""
@@ -414,6 +429,7 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 		return err
 	}
 
+	consts.dedupe()
 	if err := s.moveConstParameters(builder, &consts.params); err != nil {
 		return err
 	}
@@ -792,7 +808,7 @@ func (s *Builder) uploadVariablesDep(resource *router.Resource, consts *constFil
 	if len(consts.params) == 0 {
 		return nil
 	}
-
+	consts.dedupe()
 	if consts.URL != "" {
 		constFileName = consts.URL
 	}

@@ -74,9 +74,10 @@ func (s *Builder) uploadPlugins() error {
 			pluginPath = modPath
 			generated[modPath] = true
 		}
-
-		if err := s.genPlugin(aPlugin, pluginPath); err != nil {
-			return err
+		if modPath == "" {
+			if err := s.genPlugin(aPlugin, pluginPath); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -87,6 +88,9 @@ func (s *Builder) uploadPlugins() error {
 func (s *Builder) detectMod(pluginMeta *pluginGenDeta, modules map[string]string) error {
 	dir := pluginMeta.URL
 	location := s.dsqlDir()
+	if s.options.ModuleURL != "" {
+		location = s.options.ModuleURL
+	}
 	upFolders := map[string]bool{}
 	for len(location) > 1 {
 		upFolders[location] = true

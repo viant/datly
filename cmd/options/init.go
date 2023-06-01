@@ -6,6 +6,7 @@ type Init struct {
 }
 
 func (i *Init) Init() error {
+	i.Project = ensureAbsPath(i.Project)
 	i.Repository.Init(i.Project)
 	return nil
 }

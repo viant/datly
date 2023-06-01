@@ -26,10 +26,7 @@ func ensureAbsPath(location string) string {
 }
 
 func expandHomeDir(location string) string {
-	if strings.Contains(location, "~") {
-		location = strings.Replace(location, "~", os.Getenv("HOME"), 1)
-	}
-	return location
+	return strings.Replace(location, "~", os.Getenv("HOME"), 1)
 }
 
 func expandRelativeIfNeeded(location *string, projectRoot string) {
@@ -39,6 +36,7 @@ func expandRelativeIfNeeded(location *string, projectRoot string) {
 	if !url.IsRelative(*location) {
 		return
 	}
+	*location = expandHomeDir(*location)
 
 	//check relative first
 	if wd, _ := os.Getwd(); wd != "" {

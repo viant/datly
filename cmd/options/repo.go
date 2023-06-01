@@ -2,6 +2,7 @@ package options
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/afs/url"
 )
 
@@ -14,13 +15,18 @@ type Repository struct {
 	ConfigURL string
 }
 
-func (r *Repository) Init(project string) {
+func (r *Repository) Init(project string) error {
+	if r.Repo == "" {
+		return fmt.Errorf("rule repository location was empty")
+	}
 	r.Connector.Init()
 	r.JwtVerifier.Init()
-	expandRelativeIfNeeded(&r.Const, project)
+
 	expandRelativeIfNeeded(&r.Repo, project)
+	expandRelativeIfNeeded(&r.Const, project)
 	configURL := url.Join(r.Repo, "Datly/config.json")
 	if ok, _ := fs.Exists(context.Background(), configURL); ok {
-		r.ConfigURL = configURL
+		//	r.ConfigURL = configURL
 	}
+	return nil
 }

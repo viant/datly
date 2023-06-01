@@ -10,6 +10,5 @@ func (d *DSql) Init() error {
 	if err := d.Generate.Init(); err != nil {
 		return err
 	}
-	d.Repository.Init(d.Project)
-	return nil
+	return d.Repository.Init(d.Project)
 }

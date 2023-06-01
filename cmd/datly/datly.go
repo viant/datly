@@ -58,7 +58,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	if server != nil {
 		if err := server.ListenAndServe(); err != nil {
 			log.Fatal(err.Error())
