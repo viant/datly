@@ -43,6 +43,7 @@ type (
 	Builder struct {
 		pluginTypes      map[string]bool
 		constFileContent constFileContent
+		constIndex       ParametersIndex
 		tablesMeta       *TableMetaRegistry
 		options          *Options
 		config           *standalone.Config
@@ -474,12 +475,7 @@ func (s *Builder) readRouteSettings(builder *routeBuilder) error {
 
 	if constURL := builder.option.ConstURL; constURL != "" {
 		sourceURL := builder.session.JoinWithSourceURL(constURL)
-		content, err := s.fs.DownloadWithURL(context.Background(), sourceURL)
-		if err != nil {
-			return err
-		}
-
-		if err = json.Unmarshal(bytes.TrimSpace(content), &builder.option.Const); err != nil {
+		if err := s.loadConstants(sourceURL, &builder.option.Const); err != nil {
 			return err
 		}
 	}
@@ -492,6 +488,20 @@ func (s *Builder) readRouteSettings(builder *routeBuilder) error {
 		return err
 	}
 
+	return nil
+}
+
+func (s *Builder) loadConstants(sourceURL string, dest *map[string]interface{}) error {
+	if dest == nil {
+		*dest = map[string]interface{}{}
+	}
+	content, err := s.fs.DownloadWithURL(context.Background(), sourceURL)
+	if err != nil {
+		return err
+	}
+	if err = json.Unmarshal(bytes.TrimSpace(content), dest); err != nil {
+		return err
+	}
 	return nil
 }
 

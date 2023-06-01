@@ -33,6 +33,9 @@ func expandHomeDir(location string) string {
 }
 
 func expandRelativeIfNeeded(location *string, projectRoot string) {
+	if location == nil || *location == "" {
+		return
+	}
 	if !url.IsRelative(*location) {
 		return
 	}
