@@ -47,7 +47,11 @@ func (s *Builder) buildTemplate(ctx context.Context, builder *routeBuilder, aVie
 }
 
 func (s *Builder) uploadTemplateSQL(builder *routeBuilder, template string, aViewConfig *ViewConfig) (SQL string, URI string, err error) {
-	SQL = sanitize.Sanitize(template, builder.paramsIndex.hints, builder.paramsIndex.consts)
+	SQL, err = sanitize.Sanitize(template, builder.paramsIndex.hints, builder.paramsIndex.consts)
+	if err != nil {
+		return "", "", err
+	}
+
 	if SQL != "" && aViewConfig.fileName != "" {
 		URI, err = s.upload(
 			builder,
@@ -68,7 +72,10 @@ func (s *Builder) Parse(ctx context.Context, builder *routeBuilder, aViewConfig 
 	table := aViewConfig.unexpandedTable
 
 	SQL := table.SQL
-	iterator := sanitize.NewIterator(SQL, builder.paramsIndex.hints, builder.option.Const, false)
+	iterator, err := sanitize.NewIterator(SQL, builder.paramsIndex.hints, builder.option.Const, false)
+	if err != nil {
+		return nil, err
+	}
 	SQL = iterator.SQL
 
 	defaultParamType := view.KindQuery
@@ -524,7 +531,11 @@ func (t *Template) AddParameter(param *Parameter) {
 }
 
 func (t *Template) unmarshalParamsHints() error {
-	iterator := sanitize.NewIterator(t.SQL, t.paramsMeta.hints, t.paramsMeta.consts, false)
+	iterator, err := sanitize.NewIterator(t.SQL, t.paramsMeta.hints, t.paramsMeta.consts, false)
+	if err != nil {
+		return err
+	}
+
 	for iterator.Has() {
 		paramMeta := iterator.Next()
 		aParam := t.ParamByName(paramMeta.Holder)

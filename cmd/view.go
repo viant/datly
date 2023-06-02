@@ -74,6 +74,14 @@ func (s *Builder) buildAndAddView(ctx context.Context, builder *routeBuilder, vi
 		return nil, err
 	}
 
+	var async *view.Async
+	if asyncConf := builder.option.Async; asyncConf != nil {
+		async = &view.Async{
+			MarshalRelations: asyncConf.MarshalRelations == nil || *asyncConf.MarshalRelations,
+			Table:            viewConfig.expandedTable.ViewConfig.AsyncTableName,
+		}
+	}
+
 	holderName := ""
 	if viewConfig.unexpandedTable != nil {
 		holderName = viewConfig.unexpandedTable.HolderName
@@ -95,6 +103,7 @@ func (s *Builder) buildAndAddView(ctx context.Context, builder *routeBuilder, vi
 		Cache:         cache,
 		Mode:          viewConfig.viewType,
 		TableBatches:  viewConfig.batchEnabled,
+		Async:         async,
 	}
 
 	if table.DataType != "" {
@@ -128,10 +137,14 @@ func (s *Builder) DB(connector *view.Connector) (*sql.DB, error) {
 	connectorName := view.FirstNotEmpty(connector.Name, connector.Ref)
 	connector, ok := s.options.Lookup(connectorName)
 	if !ok {
-		return nil, fmt.Errorf("not found connector %v", connectorName)
+		return nil, connectorNotFoundError(connectorName)
 	}
 
 	return connector.DB()
+}
+
+func connectorNotFoundError(connectorName string) error {
+	return fmt.Errorf("not found connector %v", connectorName)
 }
 
 func (s *Builder) ConnectorRef(name string) (*view.Connector, error) {
@@ -144,7 +157,7 @@ func (s *Builder) ConnectorRef(name string) (*view.Connector, error) {
 
 	connector, ok := s.options.Lookup(name)
 	if !ok {
-		return nil, fmt.Errorf("not found connector %v", name)
+		return nil, connectorNotFoundError(name)
 	}
 
 	return &view.Connector{

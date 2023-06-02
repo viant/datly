@@ -462,11 +462,13 @@ func (c *ViewConfigurer) preProcessHints(opt *option.RouteConfig) ([]*ViewParamC
 }
 
 func (c *ViewConfigurer) findDependantTables(tableName string) ([]string, error) {
-	if len(c.connectors.Connectors()) == 0 {
+	connectors := c.connectors.Connectors()
+
+	if len(connectors) == 0 {
 		return nil, fmt.Errorf("not found any connector")
 	}
 
-	db, err := c.connectors.Connectors()[0].DB()
+	db, err := connectors[0].DB()
 	if err != nil {
 		return nil, err
 	}

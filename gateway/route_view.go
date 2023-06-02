@@ -3,6 +3,7 @@ package gateway
 import (
 	"encoding/json"
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/router/async"
 	"gopkg.in/yaml.v3"
 	"net/http"
 )
@@ -14,7 +15,7 @@ func (r *Router) NewViewMetaHandler(URL string, route *router.Route) *Route {
 			URL:    URL,
 		},
 		Routes: []*router.Route{route},
-		handler: func(r http.ResponseWriter, req *http.Request) {
+		Handler: func(r http.ResponseWriter, req *http.Request, _ *async.Record) {
 			handleViewMeta(r, route)
 		},
 	}

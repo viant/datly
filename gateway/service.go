@@ -12,7 +12,8 @@ import (
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/auth/secret"
-	"github.com/viant/datly/cmd/build"
+	"github.com/viant/datly/cmd/env"
+	"github.com/viant/datly/router/async"
 	pbuild "github.com/viant/pgo/build"
 	"sync/atomic"
 
@@ -72,19 +73,30 @@ type (
 )
 
 func (r *Service) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	aRouter, writer, ok := r.router(writer)
+	if !ok {
+		return
+	}
+
+	aRouter.Handle(writer, request)
+}
+
+func (r *Service) router(writer http.ResponseWriter) (*Router, http.ResponseWriter, bool) {
 	aRouter, ok := r.Router()
 	if !ok {
 		writer.WriteHeader(http.StatusNotFound)
+		return nil, nil, false
 	}
 
 	writer = r.WrapResponseIfNeeded(writer)
-	aRouter.Handle(writer, request)
+	return aRouter, writer, true
 }
 
 func (r *Service) Router() (*Router, bool) {
 	if err := r.syncChangesIfNeeded(context.Background(), r.metrics, r.statusHandler, r.authorizer, false); err != nil {
 		fmt.Printf("[ERROR] failed to sync changes: %v\n", err)
 	}
+
 	mainRouter := r.mainRouter
 	return mainRouter, mainRouter != nil
 }
@@ -120,7 +132,7 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 		Config:             aConfig,
 		mux:                sync.RWMutex{},
 		fs:                 fs,
-		pluginManager:      manager.New(pbuild.NewSequenceChangeNumber(build.BuildTime)),
+		pluginManager:      manager.New(pbuild.NewSequenceChangeNumber(env.BuildTime)),
 		dataResourcesIndex: map[string]*view.Resource{},
 		routeResourceTracker: NewNotifier(
 			aConfig.RouteURL,
@@ -199,7 +211,7 @@ func CommonURL(URLs ...string) (string, error) {
 			base = dir
 		} else {
 			if base != dir {
-				return "", fmt.Errorf("paths don't match, wanted %v got %v", base, dir)
+				return base, nil
 			}
 		}
 
@@ -324,7 +336,10 @@ func (r *Service) rebuildRouters(ctx context.Context, fs afs.Service, resources 
 			if err != nil {
 				errors = append(errors, err)
 			} else {
-				routers[URL] = router.New(routerResource, router.ApiPrefix(r.Config.APIPrefix))
+				routers[URL], err = router.New(routerResource, router.ApiPrefix(r.Config.APIPrefix))
+				if err != nil {
+					errors = append(errors, err)
+				}
 			}
 
 			counter++
@@ -489,7 +504,7 @@ func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*R
 	})
 
 	if err != nil {
-		errors.Append(fmt.Errorf("failed to load resources: %v", err))
+		errors.Append(fmt.Errorf("[ERROR] failed to load resources: %v", err))
 	}
 
 	plugErr := r.pluginResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
@@ -788,6 +803,7 @@ func initSecrets(ctx context.Context, config *Config) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -850,4 +866,13 @@ func (r *Service) buildInterceptors(ctx context.Context, index *ExtIndex) (route
 	}
 
 	return interceptors, resultErr
+}
+
+func (r *Service) ServeHTTPAsync(writer http.ResponseWriter, request *http.Request, record *async.Record) {
+	aRouter, writer, ok := r.router(writer)
+	if !ok {
+		return
+	}
+
+	aRouter.HandleAsync(writer, request, record)
 }

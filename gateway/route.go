@@ -3,7 +3,7 @@ package gateway
 import (
 	"encoding/json"
 	"github.com/viant/datly/router"
-	"github.com/viant/toolbox"
+	"github.com/viant/datly/router/async"
 	"net/http"
 	"path"
 	"strings"
@@ -22,7 +22,7 @@ type (
 		ApiKeys       []*router.APIKey
 		Routes        []*router.Route
 		NewMultiRoute func(routes []*router.Route) *Route
-		handler       func(response http.ResponseWriter, req *http.Request)
+		Handler       func(response http.ResponseWriter, req *http.Request, record *async.Record)
 	}
 
 	RouteMeta struct {
@@ -31,15 +31,13 @@ type (
 	}
 )
 
-func (r *Route) Handle(res http.ResponseWriter, req *http.Request) {
-	toolbox.Dump(r.ApiKeys)
-
+func (r *Route) Handle(res http.ResponseWriter, req *http.Request, record *async.Record) {
 	if !r.CanHandle(req) {
 		write(res, http.StatusForbidden, nil)
 		return
 	}
 
-	r.handler(res, req)
+	r.Handler(res, req, record)
 }
 
 func (r *Route) CanHandle(req *http.Request) bool {
@@ -53,7 +51,7 @@ func (r *Route) CanHandle(req *http.Request) bool {
 	return true
 }
 
-func (r *Router) NewRouteHandler(router *router.Router, route *router.Route) *Route {
+func (r *Router) NewRouteHandler(aRouter *router.Router, route *router.Route) *Route {
 	URI := route.URI
 	if !strings.HasPrefix(URI, "/") {
 		URI = "/" + URI
@@ -64,8 +62,9 @@ func (r *Router) NewRouteHandler(router *router.Router, route *router.Route) *Ro
 			Method: route.Method,
 			URL:    URI,
 		},
-		handler: func(r http.ResponseWriter, req *http.Request) {
-			err := router.HandleRoute(r, req, route)
+		Routes: []*router.Route{route},
+		Handler: func(r http.ResponseWriter, req *http.Request, record *async.Record) {
+			err := aRouter.HandleAsyncRoute(r, req, route, record)
 			if err != nil {
 				r.WriteHeader(http.StatusNotFound)
 			}

@@ -3,7 +3,7 @@ package json
 import (
 	"bytes"
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/router/marshal/default"
+	"github.com/viant/datly/router/marshal/common"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -16,7 +16,7 @@ type ptrMarshaller struct {
 	isElemIface bool
 }
 
-func newPtrMarshaller(rType reflect.Type, config _default.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
+func newPtrMarshaller(rType reflect.Type, config common.DefaultConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
 	elem := rType.Elem()
 	marshaller, err := cache.loadMarshaller(elem, config, path, outputPath, tag)
 	if err != nil {

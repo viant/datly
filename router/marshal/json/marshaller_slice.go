@@ -2,7 +2,7 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/router/marshal/default"
+	"github.com/viant/datly/router/marshal/common"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -26,14 +26,14 @@ type (
 
 	sliceInterfaceMarshaller struct {
 		cache      *marshallersCache
-		config     _default.Default
+		config     common.DefaultConfig
 		outputPath string
 		path       string
 		tag        *DefaultTag
 	}
 )
 
-func newSliceMarshaller(rType reflect.Type, config _default.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
+func newSliceMarshaller(rType reflect.Type, config common.DefaultConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
 	elemType := rType.Elem()
 
 	marshaller, err := cache.loadMarshaller(elemType, config, path, outputPath, tag)
@@ -56,7 +56,7 @@ func (s *sliceMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *goja
 func (s *sliceMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSession) error {
 
 	if fn, ok := sb.Interceptors[s.path]; ok {
-		result, _, err := fn()
+		result, err := fn()
 		if err != nil {
 			return err
 		}
@@ -104,7 +104,7 @@ func (s *sliceDecoder) UnmarshalJSONArray(d *gojay.Decoder) error {
 	return s.unmarshaller.UnmarshallObject(xunsafe.AsPointer(add), d, nil, s.session)
 }
 
-func newSliceInterfaceMarshaller(config _default.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) marshaler {
+func newSliceInterfaceMarshaller(config common.DefaultConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) marshaler {
 	return &sliceInterfaceMarshaller{
 		cache:      cache,
 		config:     config,

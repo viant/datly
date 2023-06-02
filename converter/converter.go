@@ -3,12 +3,11 @@ package converter
 import (
 	"context"
 	"encoding/json"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strconv"
 	"time"
 )
-
-var TimeType = reflect.TypeOf(time.Time{})
 
 type Unmarshaller func([]byte, interface{}) error
 
@@ -146,7 +145,7 @@ func Convert(raw string, toType reflect.Type, skipValidation bool, format string
 	case reflect.String:
 		return raw, false, nil
 	case reflect.Struct:
-		if toType == TimeType {
+		if toType == xreflect.TimeType {
 			if format == "" {
 				format = time.RFC3339
 			}

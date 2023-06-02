@@ -1,3 +1,6 @@
+init:
+  bucketConfig: $LoadJSON(${env.HOME}/.datly_dev/lambda/datly-s3.json)
+
 pipeline:
   deployConfig:
     action: storage:copy

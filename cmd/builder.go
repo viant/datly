@@ -24,6 +24,7 @@ import (
 	sio "github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/toolbox"
+	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
@@ -610,11 +611,12 @@ func (s *Builder) initRoute(builder *routeBuilder) error {
 		}
 
 		builder.route.Async = &router.Async{
-			TableName:     async.TableName,
-			EnsureDBTable: async.EnsureTable == nil || *async.EnsureTable,
-			Connector:     ref,
-			Qualifier:     async.Qualifier,
-			ExpiryTimeInS: async.ExpiryTimeInS,
+			EnsureDBTable:    async.EnsureTable == nil || *async.EnsureTable,
+			Connector:        ref,
+			PrincipalSubject: async.PrincipalSubject,
+			ExpiryTimeInS:    async.ExpiryTimeInS,
+			Dataset:          async.Dataset,
+			BucketURL:        async.BucketURL,
 		}
 	}
 
@@ -721,6 +723,24 @@ func (s *Builder) loadSQL(ctx context.Context, builder *routeBuilder, location s
 		return err
 	}
 
+	if envURL := s.options.EnvURL; envURL != "" {
+		envContent, err := s.fs.DownloadWithURL(ctx, envURL)
+		if err != nil {
+			return err
+		}
+
+		aMap := rdata.NewMap()
+		if err = json.Unmarshal(envContent, &aMap); err != nil {
+			return err
+		}
+
+		env := rdata.NewMap()
+		env.SetValue("env", aMap)
+
+		templateContent := env.ExpandWithoutUDF(string(SQLbytes))
+		SQLbytes = []byte(templateContent)
+	}
+
 	SQL, err := s.prepareRuleIfNeeded(SQLbytes)
 	if err != nil {
 		return err
@@ -789,9 +809,11 @@ func (s *Builder) uploadFiles(resourceName string, consts *constFileContent, res
 
 func (s *Builder) uploadConnectionsDep(resource *router.Resource) error {
 	resource.With = append(resource.With, "connections")
+	connectors := s.options.Connectors()
+
 	dependency := &view.Resource{
 		ModTime:    TimeNow(),
-		Connectors: s.options.Connectors(),
+		Connectors: connectors,
 	}
 	if resource.Resource == nil {
 		return nil
@@ -2020,6 +2042,7 @@ func StringifyAst(expr ast.Expr) string {
 	stringifyAst(expr, &builder)
 	return builder.String()
 }
+
 func stringifyAst(expr ast.Expr, builder *strings.Builder) error {
 	switch actual := expr.(type) {
 	case *ast.BasicLit:

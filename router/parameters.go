@@ -29,11 +29,14 @@ type (
 		queryIndex url.Values
 		pathIndex  map[string]string
 
-		requestBody    interface{}
-		presenceMap    map[string]interface{}
-		request        *http.Request
-		route          *Route
-		requestBodyErr error
+		presenceMap map[string]interface{}
+		request     *http.Request
+		route       *Route
+
+		requestBodyContent []byte
+		requestBody        interface{}
+		requestBodyErr     error
+		readRequestBody    bool
 	}
 
 	PresenceMapFn func([]byte) (map[string]interface{}, error)
@@ -113,7 +116,7 @@ func (p *RequestParams) cookie(name string) string {
 
 func (p *RequestParams) parseRequestBody(body []byte, route *Route) (interface{}, error) {
 	unmarshaller, err := p.unmarshaller(route)
-	if err != nil {
+	if err != nil || unmarshaller.rType == nil {
 		return nil, err
 	}
 
@@ -188,9 +191,10 @@ func (p *RequestParams) jsonPresenceMap() PresenceMapFn {
 	return func(b []byte) (map[string]interface{}, error) {
 		b = bytes.TrimSpace(b)
 		bodyMap := map[string]interface{}{}
-		if len(b) > 0 && b[0] == '[' {
+		if len(b) > 0 && b[0] == '[' || len(b) == 0 {
 			return bodyMap, nil
 		}
+
 		return bodyMap, json.Unmarshal(b, &bodyMap)
 	}
 }
@@ -198,7 +202,7 @@ func (p *RequestParams) jsonPresenceMap() PresenceMapFn {
 func (p *RequestParams) RequestBody() (interface{}, error) {
 	p.Mutex.Lock()
 	defer p.Mutex.Unlock()
-	if p.requestBody != nil || p.requestBodyErr != nil {
+	if p.requestBody != nil || p.requestBodyErr != nil || p.readRequestBody {
 		return p.requestBody, p.requestBodyErr
 	}
 
@@ -208,8 +212,17 @@ func (p *RequestParams) RequestBody() (interface{}, error) {
 }
 
 func (p *RequestParams) tryParseRequestBody() (interface{}, error) {
+	if p.request.Body == nil {
+		return nil, nil
+	}
+
 	body, err := io.ReadAll(p.request.Body)
-	defer p.request.Body.Close()
+	defer func() {
+		p.request.Body.Close()
+		p.readRequestBody = true
+	}()
+
+	p.requestBodyContent = body
 	if err != nil {
 		return nil, err
 	}
@@ -269,4 +282,13 @@ func (p *RequestParams) ExtractHttpParam(ctx context.Context, param *view.Parame
 	}
 
 	return nil, fmt.Errorf("unsupported param kind %v", param.In.Kind)
+}
+
+func (p *RequestParams) Header() http.Header {
+	return p.request.Header
+}
+
+func (p *RequestParams) BodyContent() ([]byte, error) {
+	_, err := p.RequestBody()
+	return p.requestBodyContent, err
 }

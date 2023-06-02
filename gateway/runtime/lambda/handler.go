@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/lambda/adapter"
+	"github.com/viant/datly/router/async"
 	"github.com/viant/datly/router/proxy"
 	"net/http"
 	"os"
@@ -28,11 +29,31 @@ func HandleRequest(ctx context.Context, request *adapter.Request) (*events.Lambd
 }
 
 func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) error {
+	service, err := prepareHandler(writer)
+	if err != nil {
+		return err
+	}
+	service.ServeHTTP(writer, httpRequest)
+	return nil
+}
+
+func HandleHTTPAsyncRequest(writer http.ResponseWriter, httpRequest *http.Request, record *async.Record) error {
+	handler, err := prepareHandler(writer)
+	if err != nil {
+		return err
+	}
+
+	handler.ServeHTTPAsync(writer, httpRequest, record)
+
+	return nil
+}
+
+func prepareHandler(writer http.ResponseWriter) (*gateway.Service, error) {
 	now := time.Now()
 
 	configURL := os.Getenv("CONFIG_URL")
 	if configURL == "" {
-		return fmt.Errorf("config was emty")
+		return nil, fmt.Errorf("config was emty")
 	}
 
 	var err error
@@ -43,22 +64,21 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 
 	if err != nil {
 		configInit = sync.Once{}
-		return err
+		return nil, err
 	}
 
 	var authorizer gateway.Authorizer
 	if jwtAuthorizer, err := jwt.Init(gwayConfig, nil); err == nil {
 		authorizer = jwtAuthorizer
 	} else {
-		return err
+		return nil, err
 	}
 
 	service, err := gateway.SingletonWithConfig(gwayConfig, nil, authorizer, config.Config, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	service.LogInitTimeIfNeeded(now, writer)
-	service.ServeHTTP(writer, httpRequest)
-	return nil
+	return service, nil
 }

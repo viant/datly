@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/router/async"
 	"github.com/viant/datly/view"
 	"net/http"
 )
@@ -15,7 +16,7 @@ func (r *Router) NewWarmupRoute(URL string, routes ...*router.Route) *Route {
 			URL:    URL,
 		},
 		Routes: routes,
-		handler: func(response http.ResponseWriter, req *http.Request) {
+		Handler: func(response http.ResponseWriter, req *http.Request, _ *async.Record) {
 			r.handleCacheWarmup(response, routes)
 		},
 		Kind: RouteWarmupKind,

@@ -3,7 +3,7 @@ package json
 import (
 	"fmt"
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/router/marshal/default"
+	"github.com/viant/datly/router/marshal/common"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -15,13 +15,13 @@ type mapMarshaller struct {
 	valueMarshaller      marshaler
 	isEmbedded           bool
 	cache                *marshallersCache
-	config               _default.Default
+	config               common.DefaultConfig
 	xType                *xunsafe.Type
 	valueType            reflect.Type
 	keyType              reflect.Type
 }
 
-func newMapMarshaller(rType reflect.Type, config _default.Default, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (*mapMarshaller, error) {
+func newMapMarshaller(rType reflect.Type, config common.DefaultConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (*mapMarshaller, error) {
 	result := &mapMarshaller{
 		xType:      getXType(rType),
 		isEmbedded: tag.Embedded,

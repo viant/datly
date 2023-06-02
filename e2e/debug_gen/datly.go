@@ -14,7 +14,7 @@ import (
 	_ "github.com/viant/afsc/s3"
 	_ "github.com/viant/bigquery"
 	"github.com/viant/datly/cmd"
-	"github.com/viant/datly/cmd/build"
+	"github.com/viant/datly/cmd/env"
 	_ "github.com/viant/dyndb"
 	_ "github.com/viant/scy/kms/blowfish"
 	_ "github.com/viant/sqlx/metadata/product/bigquery"
@@ -43,7 +43,7 @@ func init() {
 			panic(err)
 		}
 
-		build.BuildTime = time.Unix(int64(seconds), 0)
+		env.BuildTime = time.Unix(int64(seconds), 0)
 	}
 }
 
@@ -79,7 +79,7 @@ func main() {
 		"-w=autogen",
 	}
 
-	fmt.Printf("[INFO] Build time: %v\n", build.BuildTime.String())
+	fmt.Printf("[INFO] Build time: %v\n", env.BuildTime.String())
 
 	fmt.Printf("%v\n", os.Args)
 	go func() {

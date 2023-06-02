@@ -1,6 +1,9 @@
 package gateway
 
-import "net/http"
+import (
+	"github.com/viant/datly/router/async"
+	"net/http"
+)
 
 func (r *Router) NewStatusRoute() *Route {
 	return &Route{
@@ -8,7 +11,7 @@ func (r *Router) NewStatusRoute() *Route {
 			Method: http.MethodGet,
 			URL:    r.config.Meta.StatusURI,
 		},
-		handler: func(writer http.ResponseWriter, req *http.Request) {
+		Handler: func(writer http.ResponseWriter, req *http.Request, _ *async.Record) {
 			r.statusHandler.ServeHTTP(writer, req)
 		},
 	}

@@ -8,7 +8,7 @@ import (
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
-	"github.com/viant/datly/router/marshal/default"
+	"github.com/viant/datly/router/marshal/common"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/router/marshal/tabjson"
 	"github.com/viant/datly/shared"
@@ -375,11 +375,11 @@ func (r *Route) initCardinality() error {
 	}
 }
 
-func (r *Route) jsonConfig() _default.Default {
-	return _default.Default{
+func (r *Route) jsonConfig() common.DefaultConfig {
+	return common.DefaultConfig{
 		OmitEmpty:  r.OmitEmpty,
 		CaseFormat: *r._caser,
-		Exclude:    _default.Exclude(r.Exclude).Index(),
+		Exclude:    common.Exclude(r.Exclude).Index(),
 		DateLayout: r.DateFormat,
 	}
 }
@@ -553,7 +553,7 @@ func (r *Route) initRequestBodyType(bodyParam *view.Parameter, params []*view.Pa
 	}
 
 	if r.RequestBodySchema != nil {
-		if err := r.RequestBodySchema.Init(nil, nil, *r.Output._caser, r._resource, nil); err != nil {
+		if err := r.RequestBodySchema.Init(r._resource, *r.Output._caser); err != nil {
 			return nil, err
 		}
 
@@ -863,9 +863,8 @@ func (r *Route) AddApiKeys(keys ...*APIKey) {
 }
 
 func (r *Route) initMarshaller() error {
-	var err error
-	r._marshaller, err = json.New(r.jsonConfig())
-	return err
+	r._marshaller = json.New(r.jsonConfig())
+	return nil
 }
 
 func (r *Route) initMarshallerInterceptor() error {
@@ -932,5 +931,5 @@ func (r *Route) initAsyncIfNeeded(ctx context.Context) error {
 		return nil
 	}
 
-	return r.Async.Init(ctx, r._resource)
+	return r.Async.Init(ctx, r._resource, r.View)
 }

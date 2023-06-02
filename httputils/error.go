@@ -34,6 +34,9 @@ type HttpMessageError struct {
 	err        error
 }
 
+func NewHttpStatusError(statusCode int) *HttpMessageError {
+	return &HttpMessageError{statusCode: statusCode}
+}
 func NewHttpMessageError(statusCode int, err error) *HttpMessageError {
 	return &HttpMessageError{
 		statusCode: statusCode,
@@ -42,6 +45,10 @@ func NewHttpMessageError(statusCode int, err error) *HttpMessageError {
 }
 
 func (h *HttpMessageError) ErrorMessage() string {
+	if h.err == nil {
+		return ""
+	}
+
 	return h.err.Error()
 }
 
@@ -49,6 +56,14 @@ func (h *HttpMessageError) ErrorStatusCode() int {
 	return h.statusCode
 }
 
+func (h *HttpMessageError) Err() error {
+	return h.err
+}
+
 func (h *HttpMessageError) Error() string {
+	if h.err == nil {
+		return ""
+	}
+
 	return h.err.Error()
 }

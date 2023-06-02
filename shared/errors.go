@@ -12,13 +12,8 @@ type Errors struct {
 func NewErrors(size int) *Errors {
 	return &Errors{
 		locker: sync.Mutex{},
-		errors: make([]error, size),
+		errors: make([]error, 0, size),
 	}
-}
-
-//AddError add error on given index
-func (r *Errors) AddError(err error, index int) {
-	r.errors[index] = err
 }
 
 //Append appends error.

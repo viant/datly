@@ -14,6 +14,7 @@ type (
 		CompressionType() string
 		Close() error
 		Headers() http.Header
+		AddOnClose(fn func())
 	}
 
 	RequestDataReader struct {
@@ -21,6 +22,7 @@ type (
 		compression string
 		size        int
 		headers     http.Header
+		onClose     []func()
 	}
 )
 
@@ -29,6 +31,10 @@ func (b *RequestDataReader) Read(p []byte) (n int, err error) {
 }
 
 func (b *RequestDataReader) Close() error {
+	for _, f := range b.onClose {
+		f()
+	}
+
 	return nil
 }
 
@@ -46,6 +52,10 @@ func (b *RequestDataReader) Headers() http.Header {
 
 func (b *RequestDataReader) AddHeader(name string, value string) {
 	b.headers.Add(name, value)
+}
+
+func (b *RequestDataReader) AddOnClose(f func()) {
+	b.onClose = append(b.onClose, f)
 }
 
 func NewBytesReader(data []byte, compression string) *RequestDataReader {

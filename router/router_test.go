@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	//_ "github.com/go-sql-driver/mysql"
 	"github.com/golang-jwt/jwt/v4"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -249,6 +248,7 @@ func TestRouter(t *testing.T) {
 			resourceURI: "003_route_config",
 			uri:         "/api/events/3",
 			method:      http.MethodGet,
+			expected:    `{"Status":"error"}`,
 		},
 		{
 			description: "visitors | AfterFetcher",
@@ -1021,7 +1021,7 @@ func (c *testcase) init(t *testing.T, testDataLocation string) (*router.Router, 
 		return nil, false
 	}
 
-	aRouter := router.New(resource)
+	aRouter, _ := router.New(resource)
 
 	//if !c.checkGeneratedOpenAPI(t, resource, resourceURI, fs) {
 	//	return nil, false
@@ -1176,10 +1176,11 @@ func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router, shouldD
 	if shouldDecompress {
 		assert.Equal(t, router.EncodingGzip, responseWriter.Header().Get(content.Encoding), c.description)
 		reader, err := gzip.NewReader(bytes.NewReader(response))
-		assert.Nil(t, err, c.description)
-		decompressed, err := ioutil.ReadAll(reader)
-		assert.Nil(t, err, c.description)
-		response = decompressed
+		if assert.Nil(t, err, c.description) {
+			decompressed, err := ioutil.ReadAll(reader)
+			assert.Nil(t, err, c.description)
+			response = decompressed
+		}
 	}
 
 	if !assertly.AssertValues(t, expected, string(response), c.description) {

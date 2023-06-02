@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
 )
@@ -331,7 +332,7 @@ func expressionTokenCandidates(fieldType reflect.Type) ([]*parsly.Token, error) 
 		return []*parsly.Token{notEqualMatcher, equalMatcher, likeMatcher, inMatcher}, nil
 
 	case reflect.Struct:
-		if fieldType == converter.TimeType {
+		if fieldType == xreflect.TimeType {
 			return numericTokens, nil
 		}
 	}
@@ -355,7 +356,7 @@ func expressionValueCandidates(columnType reflect.Type) ([]*parsly.Token, error)
 		return []*parsly.Token{stringMatcher, fieldMatcher}, nil
 
 	case reflect.Struct:
-		if columnType == converter.TimeType {
+		if columnType == xreflect.TimeType {
 			return []*parsly.Token{timeMatcher, fieldMatcher}, nil
 		}
 	}

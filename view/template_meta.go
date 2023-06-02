@@ -108,8 +108,7 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 		return err
 	}
 
-	m.Schema.initByColumns(columns, nil, nil, newCase)
-	return nil
+	return m.Schema.Init(resource, newCase, columns)
 }
 
 func (m *TemplateMeta) getColumns(ctx context.Context, resource *Resource, owner *Template) ([]*Column, error) {

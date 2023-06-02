@@ -3,7 +3,7 @@ package json
 import (
 	"bytes"
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/router/marshal/default"
+	"github.com/viant/datly/router/marshal/common"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -20,17 +20,17 @@ const IndexKey = "setMarker"
 type (
 	Marshaller struct {
 		cache  *marshallersCache
-		config _default.Default
+		config common.DefaultConfig
 	}
 )
 
-func New(config _default.Default) (*Marshaller, error) {
+func New(config common.DefaultConfig) *Marshaller {
 	m := &Marshaller{
 		cache:  newCache(),
 		config: config,
 	}
 
-	return m, nil
+	return m
 }
 
 func (j *Marshaller) Marshal(value interface{}, options ...interface{}) ([]byte, error) {
@@ -139,14 +139,6 @@ func AsPtr(dest interface{}, rType reflect.Type) unsafe.Pointer {
 	default:
 		return xunsafe.AsPointer(dest)
 	}
-}
-
-func EnsureType(rType reflect.Type, ptr unsafe.Pointer) reflect.Type {
-	inlinableType := rType
-	if inlinableType.Kind() == reflect.Interface {
-		inlinableType = reflect.TypeOf(xunsafe.AsInterface(ptr))
-	}
-	return inlinableType
 }
 
 func (j *Marshaller) marshaller(rType reflect.Type) (marshaler, error) {

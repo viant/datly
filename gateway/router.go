@@ -9,6 +9,9 @@ import (
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/httputils"
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/router/async"
+	"github.com/viant/datly/router/marshal/common"
+	cusJson "github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
@@ -17,8 +20,6 @@ import (
 	"os"
 	"strings"
 )
-
-//const wildcard = `{DATLY_WILDCARD}`
 
 type (
 	Router struct {
@@ -41,6 +42,11 @@ type (
 
 	ApiKeyWrapper struct {
 		apiKey *router.APIKey
+	}
+
+	apiKeyMapKey struct {
+		header string
+		value  string
 	}
 )
 
@@ -88,6 +94,10 @@ func newApiKeyMatcher(keys router.APIKeys) *matcher.Matcher {
 }
 
 func (r *Router) Handle(writer http.ResponseWriter, request *http.Request) {
+	r.handle(writer, request, nil)
+}
+
+func (r *Router) handle(writer http.ResponseWriter, request *http.Request, record *async.Record) {
 	err := r.ensureRequestURL(request)
 	if err != nil {
 		r.handleErrIfNeeded(writer, http.StatusInternalServerError, err)
@@ -101,34 +111,36 @@ func (r *Router) Handle(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	errStatusCode, err := r.handle(writer, request)
+	errStatusCode, err := r.handleWithError(writer, request, r.routeMatcher, record)
+	if record != nil {
+		fmt.Println(5)
+		fmt.Printf("err: %v\n", err)
+	}
+
 	r.handleErrIfNeeded(writer, errStatusCode, err)
 }
 
-func (r *Router) handle(writer http.ResponseWriter, request *http.Request) (int, error) {
+func (r *Router) handleWithError(writer http.ResponseWriter, request *http.Request, matcher *matcher.Matcher, record *async.Record) (int, error) {
 	if !meta.IsAuthorized(request, r.config.Meta.AllowedSubnet) {
 		return http.StatusForbidden, nil
 	}
 
-	aRoute, err := r.Match(request.Method, request.URL.Path, request)
+	aRoute, err := r.match(matcher, request.Method, request.URL.Path, request)
 	if err != nil {
 		return http.StatusNotFound, err
 	}
 
-	aRoute.Handle(writer, request)
-	return http.StatusOK, nil
-}
-
-func (r *Router) handleRoute(writer http.ResponseWriter, request *http.Request, aRouter *router.Router, aRoute *router.Route) (int, error) {
-	if err := aRouter.HandleRoute(writer, request, aRoute); err != nil {
-		return http.StatusNotFound, err
-	}
+	aRoute.Handle(writer, request, record)
 
 	return http.StatusOK, nil
 }
 
 func (r *Router) Match(method, URL string, req *http.Request) (*Route, error) {
-	matched := r.routeMatcher.MatchAll(method, URL)
+	return r.match(r.routeMatcher, method, URL, req)
+}
+
+func (r *Router) match(matcher *matcher.Matcher, method string, URL string, req *http.Request) (*Route, error) {
+	matched := matcher.MatchAll(method, URL)
 	switch len(matched) {
 	case 0:
 		return nil, r.availableRoutesErr(http.StatusNotFound, fmt.Errorf("not found route with Method: %v and URL: %v", method, URL))
@@ -283,6 +295,10 @@ func (r *Router) newMatcher(routers []*router.Router) (*matcher.Matcher, []*Rout
 
 	routes := make([]*Route, 0, routesSize)
 
+	var jobKeys []*router.APIKey
+	var hasAsyncRoute bool
+	jobKeysMap := map[apiKeyMapKey]bool{}
+
 	for _, aRouter := range routers {
 		routerRoutes := aRouter.Routes("")
 
@@ -294,10 +310,26 @@ func (r *Router) newMatcher(routers []*router.Router) (*matcher.Matcher, []*Rout
 				apiKeys = append(apiKeys, matched)
 			}
 
+			if route.Async != nil {
+				hasAsyncRoute = true
+				for _, key := range apiKeys {
+					mapKey := apiKeyMapKey{
+						header: key.Header,
+						value:  key.Value,
+					}
+					ok := jobKeysMap[mapKey]
+					if !ok {
+						jobKeysMap[mapKey] = true
+						jobKeys = append(jobKeys, key)
+					}
+				}
+			}
+
 			routes = append(routes, r.NewRouteHandler(aRouter, route))
 			if views := router.ExtractCacheableViews(route); len(views) > 0 {
 				routes = append(routes, r.NewWarmupRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.CacheWarmURI, route.URI), route))
 			}
+
 			routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.APIPrefix, r.config.Meta.ViewURI, route.URI), route))
 			routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.OpenApiURI, route.URI), route))
 			routes = append(routes, r.NewStructRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.StructURI, route.URI), route))
@@ -313,7 +345,22 @@ func (r *Router) newMatcher(routers []*router.Router) (*matcher.Matcher, []*Rout
 		}
 	}
 
-	routes = append(routes, r.NewStatusRoute(), r.NewMetricRoute(), r.NewConfigRoute())
+	routes = append(
+		routes,
+		r.NewStatusRoute(),
+		r.NewMetricRoute(),
+		r.NewConfigRoute(),
+	)
+
+	if hasAsyncRoute {
+		marshaller := cusJson.New(common.DefaultConfig{})
+		routes = append(
+			routes,
+			NewJobsRoute("/datly-jobs", routers, jobKeys, marshaller),
+			NewJobByIDRoute("/datly-jobs/{jobID}", "jobID", routers, jobKeys, marshaller),
+			NewJobRecords("/datly-jobs/{jobID}/records", "jobID", routers, nil, marshaller, r.Match),
+		)
+	}
 
 	matchables := make([]matcher.Matchable, 0, len(routes))
 	routesMetas := make([]*RouteMeta, 0, len(routes))
@@ -377,7 +424,7 @@ func (r *Router) interceptIfNeeded(writer http.ResponseWriter, request *http.Req
 		if err == nil {
 			response := httputils.NewClosableResponse(writer)
 			for _, matchable := range matched {
-				matchable.(*Route).Handle(response, request)
+				matchable.(*Route).Handle(response, request, nil)
 				if response.Closed {
 					return false
 				}
@@ -386,6 +433,10 @@ func (r *Router) interceptIfNeeded(writer http.ResponseWriter, request *http.Req
 	}
 
 	return true
+}
+
+func (r *Router) HandleAsync(writer http.ResponseWriter, req *http.Request, rec *async.Record) {
+	r.handle(writer, req, rec)
 }
 
 func newLocalInterceptorMatcher(index map[string]*router.Router) *matcher.Matcher {

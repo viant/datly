@@ -3,11 +3,12 @@ package router
 import (
 	"context"
 	"github.com/viant/datly/executor"
+	"github.com/viant/datly/router/async"
 	"net/http"
 )
 
 func (r *Router) executorHandler(route *Route) viewHandler {
-	return func(response http.ResponseWriter, request *http.Request) {
+	return func(response http.ResponseWriter, request *http.Request, _ *async.Record) {
 		successCode, body, err := r.executorHandlerWithError(route, request)
 
 		if err != nil {

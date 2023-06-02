@@ -16,7 +16,7 @@ pipeline:
       checkError: true
       commands:
         - export GO111MODULE=on
-        - cd ${appPath}/e2e/local/validator/src
+        - cd '${appPath}/e2e/local/validator/src'
         - go build main/validator.go
         - mv validator /tmp/validator_24
 

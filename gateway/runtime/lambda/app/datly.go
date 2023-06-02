@@ -9,15 +9,9 @@ import (
 	_ "github.com/viant/afsc/gs"
 	_ "github.com/viant/afsc/s3"
 	_ "github.com/viant/bigquery"
-	_ "github.com/viant/cloudless/async/mbus/aws"
-	"github.com/viant/datly/cmd/build"
+	"github.com/viant/datly/cmd/env"
 	dlambda "github.com/viant/datly/gateway/runtime/lambda"
-	_ "github.com/viant/dyndb"
 	_ "github.com/viant/scy/kms/blowfish"
-	_ "github.com/viant/sqlx/metadata/product/bigquery"
-	_ "github.com/viant/sqlx/metadata/product/mysql"
-	_ "github.com/viant/sqlx/metadata/product/pg"
-	_ "github.com/viant/sqlx/metadata/product/sqlite"
 	"strconv"
 	"time"
 )
@@ -34,8 +28,10 @@ func init() {
 			panic(err)
 		}
 
-		build.BuildTime = time.Unix(int64(seconds), 0)
+		env.BuildTime = time.Unix(int64(seconds), 0)
 	}
+
+	env.BuildType = env.BuildTypeKindLambda
 }
 
 func main() {

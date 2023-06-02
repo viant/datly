@@ -19,3 +19,29 @@ pipeline:
       datastore: bqdev
       expand: true
       URL: ${appPath}/e2e/cloud/datastore/bq/populate
+
+#  mysql-dev:
+#    create:
+#      action: dsunit:init
+#      datastore: dev
+#      recreate: false
+#      config:
+#        driverName: mysql
+#        descriptor: '[username]:[password]@tcp(${dbIP.mysql}:3306)/[dbname]?parseTime=true'
+#        credentials: $mysqlCredentials
+#      admin:
+#        datastore: mysql
+#        ping: true
+#        config:
+#          driverName: mysql
+#          descriptor: '[username]:[password]@tcp(${dbIP.mysql}:3306)/[dbname]?parseTime=true'
+#          credentials: $mysqlCredentials
+#      scripts:
+#        - URL: ${appPath}/e2e/local/datastore/mysql/schema.ddl
+#
+#    prepare:
+#      action: 'dsunit:prepare'
+#      datastore: dev
+#      expand: true
+#      URL: ${appPath}/e2e/local/datastore/mysql/populate
+#

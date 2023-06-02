@@ -1,4 +1,4 @@
-package build
+package env
 
 import (
 	"github.com/viant/pgo/build"
@@ -10,6 +10,7 @@ import (
 var (
 	GoVersion string
 	BuildTime time.Time
+	BuildType BuildTypeKind
 )
 
 func init() {

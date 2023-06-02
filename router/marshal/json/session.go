@@ -13,7 +13,7 @@ type (
 		Interceptors MarshalerInterceptors
 	}
 
-	MarshalInterceptor    func() ([]byte, int, error)
+	MarshalInterceptor    func() ([]byte, error)
 	MarshalerInterceptors map[string]MarshalInterceptor
 
 	UnmarshalerInterceptors map[string]UnmarshalInterceptor

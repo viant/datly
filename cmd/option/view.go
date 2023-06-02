@@ -19,6 +19,7 @@ type (
 		Selector          *view.Config           `json:",omitempty"`
 		AllowNulls        *bool                  `json:",omitempty"`
 		DataType          string                 `json:",omitempty"`
+		AsyncTableName    string                 `json:",omitempty"`
 	}
 
 	ViewPregenConfig struct {

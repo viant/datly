@@ -11,6 +11,7 @@ init:
   bqCredentials: $authWith
   gcpProjectID: $bqCredentials
   awsCredentials: aws-e2e
+  mysqlCredentials: datly-aws-e2e
 
 pipeline:
   init:

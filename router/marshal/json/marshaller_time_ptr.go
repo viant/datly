@@ -2,7 +2,7 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/router/marshal/default"
+	"github.com/viant/datly/router/marshal/common"
 	"github.com/viant/xunsafe"
 	"strconv"
 	"time"
@@ -15,7 +15,7 @@ type timePtrMarshaller struct {
 	tag        *DefaultTag
 }
 
-func newTimePtrMarshaller(tag *DefaultTag, config _default.Default) *timePtrMarshaller {
+func newTimePtrMarshaller(tag *DefaultTag, config common.DefaultConfig) *timePtrMarshaller {
 	timeFormat := time.RFC3339
 	if tag.Format != "" {
 		timeFormat = tag.Format

@@ -63,6 +63,7 @@ type (
 		Legacy    bool   `short:"l"`
 		ModuleURL string
 		cache     *view.Cache
+		EnvURL    string `long:"envURL" description:"environment url, expands template before processing"`
 	}
 
 	Package struct {
@@ -249,6 +250,10 @@ func (o *Options) Init() error {
 		if o.PluginOS == "" {
 			o.ModuleOS = runtime.GOOS
 		}
+	}
+
+	if o.RouteURL == "" {
+		o.RouteURL = normalizeURL(path.Join(o.WriteLocation, "Datly", "routes"))
 	}
 
 	o.Connector.Init(o.PartialConfigURL == "")

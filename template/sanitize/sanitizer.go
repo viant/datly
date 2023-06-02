@@ -7,8 +7,11 @@ import (
 	"strings"
 )
 
-func Sanitize(SQL string, hints map[string]*ParameterHint, consts map[string]interface{}) string {
-	iterator := NewIterator(SQL, hints, consts, true)
+func Sanitize(SQL string, hints map[string]*ParameterHint, consts map[string]interface{}) (string, error) {
+	iterator, err := NewIterator(SQL, hints, consts, true)
+	if err != nil {
+		return "", err
+	}
 	offset := 0
 
 	modifiable := []byte(SQL)
@@ -22,7 +25,7 @@ func Sanitize(SQL string, hints map[string]*ParameterHint, consts map[string]int
 		modifiable, offset = sanitize(iterator, &paramsBuffer, next, modifiable, offset, 0)
 	}
 
-	return strings.TrimSpace(string(modifiable))
+	return strings.TrimSpace(string(modifiable)), nil
 }
 
 func popNextParamMeta(buffer *[]*ParamMeta, iterator *ParamMetaIterator) (*ParamMeta, bool) {
@@ -103,7 +106,6 @@ func sanitizeParameter(paramMeta *ParamMeta, raw string, iterator *ParamMetaIter
 	paramName := paramMeta.Holder
 	variables := iterator.assignedVars
 	consts := iterator.consts
-
 
 	if fn, ok := keywords.Get(paramName); ok {
 		_, ok = fn.Metadata.(*keywords.StandaloneFn)

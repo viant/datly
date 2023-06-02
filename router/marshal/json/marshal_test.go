@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
 	"github.com/viant/datly/internal/tests"
-	"github.com/viant/datly/router/marshal/default"
+	"github.com/viant/datly/router/marshal/common"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/toolbox/format"
 	"net/http"
@@ -21,7 +21,7 @@ func TestJson_Marshal(t *testing.T) {
 		description   string
 		data          func() interface{}
 		expect        string
-		defaultConfig _default.Default
+		defaultConfig common.DefaultConfig
 		filters       *json.Filters
 	}{
 		{
@@ -58,7 +58,7 @@ func TestJson_Marshal(t *testing.T) {
 			description: "caser and json tags",
 			data:        caserAndJson,
 			expect:      `[{"id":1,"quantity":125.5,"EventName":"ev-1","time_ptr":"2012-07-12T00:00:00Z"},{"id":2,"quantity":250.5,"time":"2022-05-10T00:00:00Z"}]`,
-			defaultConfig: _default.Default{
+			defaultConfig: common.DefaultConfig{
 				OmitEmpty:  true,
 				CaseFormat: format.CaseLowerUnderscore,
 			},
@@ -123,7 +123,7 @@ func TestJson_Marshal(t *testing.T) {
 			description: "ID field",
 			data:        idStruct,
 			expect:      `[{"id":10,"name":"foo","price":125.5}]`,
-			defaultConfig: _default.Default{
+			defaultConfig: common.DefaultConfig{
 				CaseFormat: format.CaseLowerCamel,
 			},
 		},
@@ -131,7 +131,7 @@ func TestJson_Marshal(t *testing.T) {
 			description: "embedded",
 			data:        embeddable,
 			expect:      `{"id":10,"name":"foo","price":125.5}`,
-			defaultConfig: _default.Default{
+			defaultConfig: common.DefaultConfig{
 				CaseFormat: format.CaseLowerCamel,
 			},
 		},
@@ -139,7 +139,7 @@ func TestJson_Marshal(t *testing.T) {
 			description: "inlining",
 			data:        inlinable,
 			expect:      `{"id":12,"name":"Foo name","price":125.567}`,
-			defaultConfig: _default.Default{
+			defaultConfig: common.DefaultConfig{
 				CaseFormat: format.CaseLowerCamel,
 			},
 		},
@@ -147,7 +147,7 @@ func TestJson_Marshal(t *testing.T) {
 			description: "*json.RawMessage",
 			data:        jsonRawMessagePtr,
 			expect:      `{"id":12,"name":"Foo name","price":125.567}`,
-			defaultConfig: _default.Default{
+			defaultConfig: common.DefaultConfig{
 				CaseFormat: format.CaseLowerCamel,
 			},
 		},
@@ -155,7 +155,7 @@ func TestJson_Marshal(t *testing.T) {
 			description: "json.RawMessage",
 			data:        jsonRawMessage,
 			expect:      `{"id":12,"name":"Foo name","price":125.567}`,
-			defaultConfig: _default.Default{
+			defaultConfig: common.DefaultConfig{
 				CaseFormat: format.CaseLowerCamel,
 			},
 		},
@@ -199,12 +199,7 @@ func TestJson_Marshal(t *testing.T) {
 			dataType = dataType.Elem()
 		}
 
-		marshaller, err := json.New(testcase.defaultConfig)
-		if !assert.Nil(t, err, testcase.description) {
-			t.Fail()
-			return
-		}
-
+		marshaller := json.New(testcase.defaultConfig)
 		result, err := marshaller.Marshal(data, testcase.filters)
 		if !assert.Nil(t, err, testcase.description) {
 			t.Fail()
@@ -793,7 +788,7 @@ func BenchmarkMarshal(b *testing.B) {
 		},
 	}
 
-	benchMarshaller, _ = json.New(_default.Default{})
+	benchMarshaller = json.New(common.DefaultConfig{})
 
 	b.Run("SDK json", func(b *testing.B) {
 		var bytes []byte
@@ -1203,10 +1198,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 	for i, testCase := range testCases {
 		fmt.Printf("Running testcase nr#%v\n", i)
 		actual := testCase.into()
-		marshaller, err := json.New(_default.Default{})
-		if !assert.Nil(t, err, testCase.description) {
-			continue
-		}
+		marshaller := json.New(common.DefaultConfig{})
 
 		marshalErr := marshaller.Unmarshal([]byte(testCase.data), actual, testCase.options...)
 

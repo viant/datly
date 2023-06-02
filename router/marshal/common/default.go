@@ -1,11 +1,11 @@
-package _default
+package common
 
 import (
 	"github.com/viant/toolbox/format"
 	"strings"
 )
 
-type Default struct {
+type DefaultConfig struct {
 	OmitEmpty  bool
 	CaseFormat format.Case
 	Exclude    map[string]bool

@@ -2,6 +2,7 @@ init:
   i: 0
   gcpCredURL: 'aws://secretmanager/us-west-1/secret/dev/gcp/${gcpProjectID}'
   URLEncGcpCredURL: $QueryEscape(${gcpCredURL})
+  bucketConfig: $LoadJSON(${env.HOME}/.datly_dev/lambda/datly-s3.json)
 
 pipeline:
 
@@ -18,7 +19,7 @@ pipeline:
         AWS_SDK_LOAD_CONFIG: true
       commands:
         - cd ${appPath}/e2e/lambda
-        - /tmp/datly -N=${rule.Name} -X=${rule.URL}  -C='bqdev|bigquery|bigquery://${gcpProjectID}/bqdev${qMark}credURL=${URLEncGcpCredURL}' -w=autogen
+        - /tmp/datly -N=${rule.Name} -X=${rule.URL}  -C='bqdev|bigquery|bigquery://${gcpProjectID}/bqdev${qMark}credURL=${URLEncGcpCredURL}' -w=autogen -C='mysql-dev|mysql|${Username}:${Password}@tcp(${Endpoint}:3306)/ci_ads${qMark}parseTime=true|~/.secret/aws-e2e-datly.json' ${rule.Args}
 
     increment:
       action: nop
@@ -28,6 +29,7 @@ pipeline:
       when: $i < $Len(${data.gen})
       action: goto
       task: loop
+
   uploadRules:
     clearSetup:
       action: storage:remove
@@ -38,6 +40,8 @@ pipeline:
           credentials: $awsCredentials
         - URL: s3://${configBucket}/_.cache
           credentials: $awsCredentials
+        - URL: s3://${bucketConfig.BucketName}/
+          credentials: $awsCredentials
 
     updatesRoutes:
       action: storage:copy
@@ -46,6 +50,7 @@ pipeline:
       dest:
         URL: s3://${configBucket}/${appName}/routes/
         credentials: $awsCredentials
+
     updatesDependencies:
       action: storage:copy
       source:
@@ -54,4 +59,26 @@ pipeline:
         URL: s3://${configBucket}/${appName}/dependencies/
         credentials: $awsCredentials
 
+    updatesS3Dependencies:
+      action: storage:copy
+      source:
+        URL: ${appPath}/e2e/lambda/autogen/Datly/
+      dest:
+        URL: s3://${bucketConfig.BucketName}/${appName}
+        credentials: $awsCredentials
 
+    clearS3Config:
+      action: storage:remove
+      assets:
+        - URL: s3://${bucketConfig.BucketName}/${appName}/config.json
+          credentials: $awsCredentials
+
+
+    updatesS3Config:
+      action: storage:copy
+      expand: true
+      source:
+        URL: ${appPath}/e2e/lambda/resource/config-s3.json
+      dest:
+        URL: s3://${bucketConfig.BucketName}/${appName}/config.json
+        credentials: $awsCredentials

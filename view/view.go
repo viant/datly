@@ -16,7 +16,7 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
-	xunsafe "github.com/viant/xunsafe"
+	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
 	"time"
@@ -25,23 +25,27 @@ import (
 const (
 	SQLExecMode  = "SQLExec"
 	SQLQueryMode = "SQLQuery"
+
+	AsyncJobsTable = "DATLY_JOBS"
+	AsyncTagName   = "sqlxAsync"
 )
 
 type (
 	Mode string
 
-	//View represents a view View
+	//View represents a View
 	View struct {
 		shared.Reference
-		Mode Mode `json:",omitempty"`
+		Mode      Mode       `json:",omitempty"`
+		Connector *Connector `json:",omitempty"`
+		Async     *Async     `json:",omitempty"`
 
-		Connector  *Connector `json:",omitempty"`
-		Standalone bool       `json:",omitempty"`
-		Name       string     `json:",omitempty"`
-		Alias      string     `json:",omitempty"`
-		Table      string     `json:",omitempty"`
-		From       string     `json:",omitempty"`
-		FromURL    string     `json:",omitempty"`
+		Standalone bool   `json:",omitempty"`
+		Name       string `json:",omitempty"`
+		Alias      string `json:",omitempty"`
+		Table      string `json:",omitempty"`
+		From       string `json:",omitempty"`
+		FromURL    string `json:",omitempty"`
 
 		Exclude              []string             `json:",omitempty"`
 		Columns              []*Column            `json:",omitempty"`
@@ -122,6 +126,12 @@ type (
 		Prefix string
 		Holder string
 	}
+
+	Async struct {
+		MarshalRelations bool   `json:",omitempty"`
+		Table            string `json:",omitempty"`
+		_initialized     bool
+	}
 )
 
 func (v *View) ViewName() string {
@@ -159,7 +169,7 @@ func (m *Method) init(resource *Resource) error {
 
 	for _, arg := range m.Args {
 		//TODO: Check format
-		if err := arg.Init(nil, nil, format.CaseUpperCamel, resource, nil); err != nil {
+		if err := arg.Init(resource, format.CaseUpperCamel); err != nil {
 			return err
 		}
 	}
@@ -459,6 +469,10 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 		return err
 	}
 
+	if err = v.ensureAsyncTableNameIfNeeded(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -630,7 +644,7 @@ func (v *View) ensureSchema(resource *Resource) error {
 		}
 	}
 
-	return v.Schema.Init(v.Columns, v.With, v.Caser, resource, v.SelfReference)
+	return v.Schema.Init(resource, v.Caser, v.Columns, v.With, v.SelfReference, v.Async)
 }
 
 // Db returns database connection that View was assigned to.
@@ -737,6 +751,10 @@ func (v *View) inherit(view *View) error {
 
 	if len(v.Qualifiers) == 0 {
 		v.Qualifiers = view.Qualifiers
+	}
+
+	if v.Async == nil {
+		v.Async = view.Async
 	}
 
 	return nil
@@ -1210,6 +1228,34 @@ func (v *View) initQualifiersIfNeeded(ctx context.Context, resource *Resource) e
 	}
 
 	return nil
+}
+
+func (v *View) ensureAsyncTableNameIfNeeded() error {
+	if v.Async == nil {
+		return nil
+	}
+
+	if v.Async.Table == "" {
+		viewName := removeNonAlphaNumeric(v.Name)
+		v.Async.Table = AsyncJobsTable + "_" + strings.ToUpper(viewName)
+	}
+
+	return nil
+}
+
+func removeNonAlphaNumeric(name string) string {
+	result := &strings.Builder{}
+	for _, aByte := range name {
+		if isInRange(aByte, 'A', 'Z') || isInRange(aByte, 'a', 'z') || isInRange(aByte, '0', '9') {
+			result.WriteByte(byte(aByte))
+		}
+	}
+
+	return result.String()
+}
+
+func isInRange(aByte int32, lowerBound int32, upperBound int32) bool {
+	return aByte >= lowerBound && aByte <= upperBound
 }
 
 //WithSQL creates SQL FROM view option

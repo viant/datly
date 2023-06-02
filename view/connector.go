@@ -172,8 +172,8 @@ func (c *Connector) inherit(connector *Connector) {
 		c.DBConfig = connector.DBConfig
 	}
 
-	if c._sharedMux == nil {
-
+	if c.Secret == nil {
+		c.Secret = connector.Secret
 	}
 }
 

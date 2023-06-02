@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/router/async"
 	"github.com/viant/xreflect"
 	"net/http"
 	"reflect"
@@ -14,7 +15,7 @@ func (r *Router) NewStructRoute(URL string, route *router.Route) *Route {
 			URL:    URL,
 		},
 		Routes: []*router.Route{route},
-		handler: func(response http.ResponseWriter, req *http.Request) {
+		Handler: func(response http.ResponseWriter, req *http.Request, _ *async.Record) {
 			r.handleGolangStruct(response, route)
 		},
 	}

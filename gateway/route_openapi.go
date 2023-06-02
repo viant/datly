@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/router/async"
 	"gopkg.in/yaml.v3"
 	"net/http"
 )
@@ -13,7 +14,7 @@ func (r *Router) NewOpenAPIRoute(URL string, routes ...*router.Route) *Route {
 			URL:    URL,
 		},
 		Routes: routes,
-		handler: func(response http.ResponseWriter, req *http.Request) {
+		Handler: func(response http.ResponseWriter, req *http.Request, _ *async.Record) {
 			r.handleOpenAPI(response, req, routes)
 		},
 		Kind: RouteOpenAPIKind,

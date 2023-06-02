@@ -5,7 +5,7 @@ import (
 	_ "github.com/lib/pq"
 	_ "github.com/viant/afsc/gs"
 	_ "github.com/viant/bigquery"
-	"github.com/viant/datly/cmd/build"
+	"github.com/viant/datly/cmd/env"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"os"
 	"strconv"
@@ -25,7 +25,7 @@ func init() {
 			panic(err)
 		}
 
-		build.BuildTime = time.Unix(int64(seconds), 0)
+		env.BuildTime = time.Unix(int64(seconds), 0)
 	}
 }
 

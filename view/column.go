@@ -34,7 +34,7 @@ type Column struct {
 	tag           *io.Tag
 	sqlExpression string
 	field         *reflect.StructField
-	initialized   bool
+	_initialized  bool
 	_fieldName    string
 }
 
@@ -50,11 +50,11 @@ func (c *Column) ColumnName() string {
 
 //Init initializes Column
 func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, config *ColumnConfig) error {
-	if c.initialized {
+	if c._initialized {
 		return nil
 	}
 
-	c.initialized = true
+	c._initialized = true
 	if config != nil {
 		c.inherit(config)
 	}

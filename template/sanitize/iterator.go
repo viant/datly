@@ -76,7 +76,7 @@ type (
 	}
 )
 
-func NewIterator(SQL string, hints map[string]*ParameterHint, consts map[string]interface{}, indexPredefined bool) *ParamMetaIterator {
+func NewIterator(SQL string, hints map[string]*ParameterHint, consts map[string]interface{}, indexPredefined bool) (*ParamMetaIterator, error) {
 	if consts == nil {
 		consts = map[string]interface{}{}
 	}
@@ -92,9 +92,7 @@ func NewIterator(SQL string, hints map[string]*ParameterHint, consts map[string]
 		indexPredefined: indexPredefined,
 	}
 
-	result.init()
-
-	return result
+	return result, result.init()
 }
 
 func NewParamContext(name string, fnName string, context Context) *ParamContext {
@@ -233,16 +231,19 @@ func (it *ParamMetaIterator) Next() *ParamMeta {
 	return meta
 }
 
-func (it *ParamMetaIterator) init() {
+func (it *ParamMetaIterator) init() error {
 	it.extractHints()
 
 	block, err := parser.Parse([]byte(it.SQL))
-	if err == nil {
-		it.buildContexts(AppendContext, "", block.Statements()...)
+	if err != nil {
+		return err
 	}
 
+	it.buildContexts(AppendContext, "", block.Statements()...)
 	it.cursor = parsly.NewCursor("", []byte(it.SQL), 0)
 	it.initMetaTypes(it.SQL)
+
+	return nil
 }
 
 func (it *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, selector *expr.Select, SQLKeyword string, entry *functions.Entry) {

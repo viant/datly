@@ -1,0 +1,7 @@
+{
+  "APIPrefix": "/v1/api/",
+  "RouteURL": "s3://${bucketConfig.BucketName}/${appName}/routes/",
+  "DependencyURL": "s3://${configBucket}/${appName}/dependencies/",
+  "UseCacheFS": false,
+  "SyncFrequencyMs": 2000
+}

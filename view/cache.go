@@ -31,9 +31,9 @@ type (
 		AerospikeConfig
 		Warmup *Warmup `json:",omitempty" yaml:",omitempty"`
 
-		newCache    func() (cache.Cache, error)
-		initialized bool
-		mux         sync.Mutex
+		newCache     func() (cache.Cache, error)
+		_initialized bool
+		mux          sync.Mutex
 	}
 
 	Caches []*Cache
@@ -82,11 +82,11 @@ const (
 )
 
 func (c *Cache) init(ctx context.Context, resource *Resource, aView *View) error {
-	if c.initialized {
+	if c._initialized {
 		return nil
 	}
 
-	c.initialized = true
+	c._initialized = true
 	c.owner = aView
 	var viewName string
 	if aView != nil {

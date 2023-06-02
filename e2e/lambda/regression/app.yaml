@@ -1,6 +1,7 @@
 init:
   appArchive: ${appPath}/gateway/runtime/lambda/app/datly.zip
   privilegePolicy: policy/datly.json
+  bucketConfig: $LoadJSON(${env.HOME}/.datly_dev/lambda/datly-s3.json)
 pipeline:
 
 
@@ -18,7 +19,7 @@ pipeline:
       commands:
         - cd ${appPath}/gateway/runtime/lambda/app/
         - export GOOS=linux
-        - go mod tidy
+        - go mod tidy -compat=1.17
         - go build datly.go
         - zip -j ${appArchive} datly
 
@@ -62,6 +63,11 @@ pipeline:
         - policyarn: arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - policyarn: arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
 
+
+  deployS3Datly:
+    action: run
+    request: '@deploy_s3'
+
   clean:
     action: exec:run
     comments: vendor build for deployment speedup
@@ -74,3 +80,4 @@ pipeline:
 
 post:
   awsEndpointURL: ${deploy.URL}
+

@@ -3,6 +3,7 @@ package gateway
 import (
 	"github.com/viant/datly/httputils"
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/router/async"
 	"net/http"
 )
 
@@ -12,7 +13,7 @@ func NewInterceptorRoute(aRouter *router.Router, routerInterceptor *router.Route
 			URL: aRouter.Resource().URL,
 		},
 		Routes: aRouter.Routes(""),
-		handler: func(response http.ResponseWriter, req *http.Request) {
+		Handler: func(response http.ResponseWriter, req *http.Request, _ *async.Record) {
 			_, err := routerInterceptor.Intercept(req)
 			if err != nil {
 				code, message := httputils.BuildErrorResponse(err)

@@ -60,7 +60,29 @@ func (c *Schema) updateSliceType() {
 }
 
 //Init build struct type
-func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat format.Case, resource *Resource, selfRef *SelfReference) error {
+func (c *Schema) Init(resource *Resource, viewCaseFormat format.Case, options ...interface{}) error {
+	var columns []*Column
+	var relations []*Relation
+	var selfRef *SelfReference
+	var async *Async
+
+	for _, option := range options {
+		if option == nil {
+			continue
+		}
+
+		switch actual := option.(type) {
+		case []*Column:
+			columns = actual
+		case []*Relation:
+			relations = actual
+		case *SelfReference:
+			selfRef = actual
+		case *Async:
+			async = actual
+		}
+	}
+
 	if c.initialized {
 		return nil
 	}
@@ -85,13 +107,13 @@ func (c *Schema) Init(columns []*Column, relations []*Relation, viewCaseFormat f
 		return nil
 	}
 
-	c.initByColumns(columns, relations, selfRef, viewCaseFormat)
+	c.initByColumns(columns, relations, selfRef, viewCaseFormat, async)
 	c.autoGen = true
 
 	return nil
 }
 
-func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef *SelfReference, viewCaseFormat format.Case) {
+func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef *SelfReference, viewCaseFormat format.Case, async *Async) {
 	excluded := make(map[string]bool)
 	for _, rel := range relations {
 		if !rel.IncludeColumn && rel.Cardinality == One {
@@ -162,10 +184,20 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 			rType = reflect.SliceOf(rType)
 		}
 
+		var fieldTag string
+		if async != nil {
+			if async.MarshalRelations {
+				fieldTag = AsyncTagName + `:"enc=JSON" jsonx:"rawJSON"`
+			} else {
+				fieldTag = AsyncTagName + `:"table=` + async.Table + `"`
+			}
+		}
+
 		holders[rel.Holder] = true
 		structFields = append(structFields, reflect.StructField{
 			Name: rel.Holder,
 			Type: rType,
+			Tag:  reflect.StructTag(fieldTag),
 		})
 
 		if meta := rel.Of.View.Template.Meta; meta != nil {
@@ -174,7 +206,8 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 				metaType = reflect.PtrTo(metaType)
 			}
 
-			structFields = append(structFields, c.newField(`json:",omitempty" yaml:",omitempty"`, meta.Name, format.CaseUpperCamel, metaType))
+			tag := `json:",omitempty" yaml:",omitempty" sqlx:"-"`
+			structFields = append(structFields, c.newField(tag, meta.Name, format.CaseUpperCamel, metaType))
 		}
 	}
 
