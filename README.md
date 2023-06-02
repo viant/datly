@@ -112,7 +112,7 @@ JOIN ORG organization ON organization.ID = demp.ORG_ID AND 1=1
 
 To test dsql vi reset endpoint run the following command
 ```bash
-datly dsql -c='dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true' -s=dept.sql 
+datly dsql -c='dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true' -s=dept.sql -P=8080
 open http://127.0.0.1:8080/v1/api/dev/dept    
 ```
 
