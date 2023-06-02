@@ -15,7 +15,7 @@ func (p *Plugin) Init() error {
 	if len(p.Source) == 0 {
 		p.Source = append(p.Source, p.Module)
 	}
-	p.Repo = ensureAbsPath(p.Repo)
+	expandRelativeIfNeeded(&p.Repo, p.Project)
 	if p.Dest == "" && p.Repo != "" {
 		p.Dest = url.Join(p.Repo, "Datly/plugins")
 	}
