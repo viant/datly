@@ -90,10 +90,13 @@ func (s *Builder) initConfig(ctx context.Context, cfg *standalone.Config) error 
 
 	cfg.Init()
 
-	if s.options.PartialConfigURL != "" {
+	if s.options.PartialConfigURL != "" || s.options.isInit {
+		var connectors []*view.Connector
+		connectors = s.options.Connectors()
 		if connectorResource, _ := loadResource(s.options.DependencyURL, "connections.yaml"); connectorResource != nil {
-			s.options.SetConnectors(append(s.options.Connectors(), connectorResource.Connectors...))
+			connectors = append(connectors, connectorResource.Connectors...)
 		}
+		s.options.SetConnectors(connectors)
 		err := s.mergeConstants()
 		if err != nil {
 			return err

@@ -343,7 +343,7 @@ func (s *Builder) Build(ctx context.Context) error {
 
 	fileName, routerRoutes, err := s.readRouterOptionIfNeeded(routerResource)
 	if err != nil || (len(routerRoutes) == 1 && routerRoutes[0].sourceURL == "") {
-		if s.options.PartialConfigURL != "" { //partial config can be updated
+		if s.options.PartialConfigURL != "" || s.options.isInit { //partial config can be updated
 			if err = s.uploadConfigFiles(consts, routerResource, viewCaches); err != nil {
 				return err
 			}

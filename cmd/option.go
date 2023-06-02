@@ -41,6 +41,7 @@ type (
 		DependencyURL      string `short:"d" long:"deps" description:"dependencies URL" `
 		ConfigURL          string `short:"c" long:"config" description:"configuration URL" `
 		PartialConfigURL   string `short:"e" long:"partialConfig" description:"partial configuration file URL"`
+		isInit             bool
 		JWTVerifierRSAKey  string `short:"j" long:"jwtRSAKey" description:"PublicKeyPath|EncKey" `
 		JWTVerifierHMACKey string `short:"m" long:"jwtHMACKey" description:"digest key" `
 		WriteLocation      string `short:"w" long:"write" description:"dump all config files to specified location" `
@@ -513,6 +514,7 @@ func (o *Options) MergeFromDSql(dsql *options.DSql) {
 }
 
 func (o *Options) MergeFromInit(init *options.Init) {
+	o.isInit = true
 	o.Connects = init.Connectors
 	o.JWTVerifierHMACKey = string(init.JwtVerifier.HMAC)
 	o.JWTVerifierRSAKey = string(init.JwtVerifier.RSA)
