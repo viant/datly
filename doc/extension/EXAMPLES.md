@@ -1,6 +1,6 @@
 # How-to Guides
 ## General prerequisites
-### Datly (TODO which version)
+### Datly
 
 + Download [Datly](https://github.com/viant/datly) project
 + Build datly
@@ -117,7 +117,7 @@ The following folders and files get generated or updated
 + init.go - updated imports
 
 
-### 1.7 Initialise datly rule repository
+### 1.6 Initialise datly rule repository
 ```shell
 datly init -p=~/myproject \
 -c='sakiladb|mysql|root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila?parseTime=true' \
@@ -169,17 +169,15 @@ ModTime: "2023-06-02T20:16:54.658521+02:00"
 ```
 
 First connector in connections.yaml is a default connector for all dsql files.
-If you want use different than default connector you have to add $DB[<connector_name>] param prefix before db source
-inside dsql file i.e. in Actor.sql:
+You can use different than default connector (option implemented just for readers, not for executors). 
+Add $DB[<connector_name>] param prefix before db source inside dsql file i.e. in ActorReader.sql:
 ```sql
-#set($_ = $curActor<[]*Actor>(data_view/curActor) /* ? 
-  select * from $DB[sakiladb02].actor
-  WHERE $criteria.In("actor_id", $ActorActorId.Values) 
-  */
-)
+/* { "URI":"reader/actor"} */
+SELECT  actor.*
+FROM (select * from $DB[sakiladb02].actor) actor
 ```
 
-### 1.8 Generate repo rules from dsql
+### 1.7 Generate repo rules from dsql
 ```shell
 datly dsql -s=dsql/actor/Actor.sql \
 -p=~/myproject \
@@ -202,7 +200,7 @@ The following folders and files get generated
   ...
 ```
 
-### 1.10 Build standalone app
+### 1.8 Build standalone app
 linux
 ```shell
 datly build -p=~/myproject -r=standalone -d=~/myproject/bin -o=linux -a=amd64
@@ -214,7 +212,7 @@ datly build -p=~/myproject -r=standalone -d=~/myproject/bin -o=darwin -a=amd64
 chmod u+x ~/myproject/bin/datly
 ```
 
-### 1.11 Run app
+### 1.9 Run app
 ```shell
 ~/myproject/bin/datly run -c=~/myproject/repo/dev/Datly/config.json
 ```
