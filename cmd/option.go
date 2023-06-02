@@ -34,7 +34,8 @@ const (
 
 type (
 	Options struct {
-		Port               int    `short:"p" long:"port" description:"port"  `
+		Port               int `short:"p" long:"port" description:"port"  `
+		hasPort            bool
 		RouteURL           string `short:"r" long:"routeURL" description:"route URL"  `
 		CustomRouterURL    string `long:"routerConfig" description:"custom router template/config URL"`
 		DependencyURL      string `short:"d" long:"deps" description:"dependencies URL" `
@@ -496,13 +497,18 @@ func (o *Options) MergeFromDSql(dsql *options.DSql) {
 	o.JWTVerifierHMACKey = string(dsql.JwtVerifier.HMAC)
 	o.JWTVerifierRSAKey = string(dsql.JwtVerifier.RSA)
 	o.ConstURL = dsql.Const
-	o.Port = dsql.Port
+	if dsql.Port != nil {
+		o.Port = *dsql.Port
+		o.hasPort = true
+	}
 	o.RoutePrefix = dsql.RoutePrefix
 	if dsql.Module != "" {
 		o.RelativePath = dsql.Module
 	}
-	o.RouteURL = url.Join(dsql.Repo, "Datly/routes")
-	o.PartialConfigURL = dsql.ConfigURL
+	if dsql.Port == nil {
+		o.PartialConfigURL = dsql.ConfigURL
+		o.RouteURL = url.Join(dsql.Repo, "Datly/routes")
+	}
 	o.ModuleURL = dsql.Module
 }
 
@@ -510,7 +516,9 @@ func (o *Options) MergeFromInit(init *options.Init) {
 	o.Connects = init.Connectors
 	o.JWTVerifierHMACKey = string(init.JwtVerifier.HMAC)
 	o.JWTVerifierRSAKey = string(init.JwtVerifier.RSA)
-	o.Port = init.Port
+	if init.Port != nil {
+		o.Port = *init.Port
+	}
 	o.ConstURL = init.Const
 	o.WriteLocation = init.Repo
 	o.PartialConfigURL = init.ConfigURL

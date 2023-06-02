@@ -9,9 +9,9 @@ import (
 type Repository struct {
 	Connector
 	JwtVerifier
-	Repo      string `short:"r" long:"repo" description:"datly rule repository location" `
+	Repo      string `short:"r" long:"repo" description:"datly rule repository location"  default:"repo/dev" `
 	Const     string `short:"o" long:"const" description:"const location" `
-	Port      int    `short:"P" long:"port" description:"endpoint port" default:"8080"`
+	Port      *int   `short:"P" long:"port" description:"endpoint port" `
 	ConfigURL string
 }
 
