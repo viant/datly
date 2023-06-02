@@ -120,6 +120,13 @@ func (s *Service) AddConnectors(connectors ...*view.Connector) error {
 	return nil
 }
 
+//AddConnector adds connector
+func (s *Service) AddConnector(name, driver, dsn string, opts ...view.ConnectorOption) (*view.Connector, error) {
+	connector := view.NewConnector(name, driver, dsn, opts...)
+	err := s.AddConnectors(connector)
+	return connector, err
+}
+
 func (s *Service) ensureNotInitialised() error {
 	if atomic.LoadInt32(&s.initialized) == 1 {
 		return fmt.Errorf("can not update resource after server was initialised")
