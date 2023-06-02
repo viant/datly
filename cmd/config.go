@@ -94,18 +94,17 @@ func (s *Builder) initConfig(ctx context.Context, cfg *standalone.Config) error 
 		if connectorResource, _ := loadResource(s.options.DependencyURL, "connections.yaml"); connectorResource != nil {
 			s.options.SetConnectors(append(s.options.Connectors(), connectorResource.Connectors...))
 		}
-		if constantResource, _ := loadResource(s.options.DependencyURL, constFileName+".yaml"); constantResource != nil {
-			s.constFileContent.MergeFrom(constantResource.Parameters...)
-		}
-		var constMap = map[string]interface{}{}
-		if err := s.loadConstants(s.options.ConstURL, &constMap); err != nil {
+		err := s.mergeConstants()
+		if err != nil {
 			return err
 		}
-		if len(constMap) > 0 {
-			for k, v := range constMap {
-				s.constFileContent.AddConst(k, v)
+		if cacheResource, _ := loadResource(s.options.DependencyURL, "cache.yaml"); cacheResource != nil {
+			s.caches = append(s.caches, cacheResource.CacheProviders...)
+			if s.options.cache != nil {
+				s.caches = append(s.caches, s.options.cache)
 			}
 		}
+
 	}
 
 	if s.options.RouteURL != "" {
@@ -125,6 +124,22 @@ func (s *Builder) initConfig(ctx context.Context, cfg *standalone.Config) error 
 		s.options.DependencyURL = cfg.DependencyURL
 	}
 
+	return nil
+}
+
+func (s *Builder) mergeConstants() error {
+	if constantResource, _ := loadResource(s.options.DependencyURL, constFileName+".yaml"); constantResource != nil {
+		s.constFileContent.MergeFrom(constantResource.Parameters...)
+	}
+	var constMap = map[string]interface{}{}
+	if err := s.loadConstants(s.options.ConstURL, &constMap); err != nil {
+		return err
+	}
+	if len(constMap) > 0 {
+		for k, v := range constMap {
+			s.constFileContent.AddConst(k, v)
+		}
+	}
 	return nil
 }
 
@@ -208,8 +223,8 @@ func buildDefaultConfig(cfg *standalone.Config, options *Options) error {
 		if err := fsAddJSON(fs, cfg.URL, cfg); err != nil {
 			return err
 		}
-		options.ConfigURL = cfg.URL
 	}
+	options.ConfigURL = cfg.URL
 	return nil
 }
 

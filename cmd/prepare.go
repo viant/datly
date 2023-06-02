@@ -1002,7 +1002,7 @@ func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, ta
 }
 
 func (s *Builder) getStructSQLParam(aFieldMeta *fieldMeta, path string) string {
-	qlQuery := fmt.Sprintf("SELECT ARRAY_AGG(%v) AS Values FROM  `%v` LIMIT 1", aFieldMeta.fieldName, path)
+	qlQuery := fmt.Sprintf("? SELECT ARRAY_AGG(%v) AS Values FROM  `%v` LIMIT 1", aFieldMeta.fieldName, path)
 	return qlQuery
 }
 
@@ -1238,6 +1238,21 @@ func (s *Builder) generateGoFileContent(name string, rType reflect.Type, routeOp
 		packageName = strings.Replace(base, ext, "", 1)
 	}
 
+	var extraTypes = map[string]reflect.Type{}
+
+	for i := 0; i < rType.NumField(); i++ {
+		field := rType.Field(i)
+		if fieldType := extractStruct(field.Type); fieldType != nil && fieldType.PkgPath() == rType.PkgPath() {
+			key := field.Type.Name()
+			if typeName, ok := field.Tag.Lookup("typeName"); ok && typeName != "" {
+				key = typeName
+			}
+			if key != "" {
+				extraTypes[key] = fieldType
+			}
+		}
+	}
+
 	sbBefore := &bytes.Buffer{}
 	sbBefore.WriteString(fmt.Sprintf("var PackageName = \"%v\"\n", packageName))
 
@@ -1252,17 +1267,25 @@ var %v = map[string]reflect.Type{
 		imports = append(imports, "reflect")
 		packageName = "main"
 	} else {
+
 		imports = append(imports,
 			moduleCoreTypes,
 			path.Join(xDatlyModURL.moduleName, checksumDirectory),
 			"reflect",
 		)
+		var items = []string{
+			expandRegisterType(name, name, checksumDirectory),
+		}
+		for k := range extraTypes {
+			items = append(items, expandRegisterType(k, k, checksumDirectory))
+		}
 
 		sbBefore.WriteString(fmt.Sprintf(`
 func init() {
-	core.RegisterType(PackageName, "%v", reflect.TypeOf(%v{}), %v.GeneratedTime)
+	%s
 }
-`, name, name, checksumDirectory))
+`, strings.Join(items, "\n")))
+
 	}
 
 	sb := &bytes.Buffer{}
@@ -1275,6 +1298,22 @@ func init() {
 	}
 
 	return source, nil
+}
+
+func expandRegisterType(name, typeName, checksumHolder string) string {
+	return fmt.Sprintf(`core.RegisterType(PackageName, "%v", reflect.TypeOf(%v{}), %v.GeneratedTime)`, name, typeName, checksumHolder)
+}
+
+func extractStruct(t reflect.Type) reflect.Type {
+	switch t.Kind() {
+	case reflect.Struct:
+		return t
+	case reflect.Slice:
+		return extractStruct(t.Elem())
+	case reflect.Ptr:
+		return extractStruct(t.Elem())
+	}
+	return nil
 }
 
 func getStruct(rType reflect.Type) reflect.Value {

@@ -36,6 +36,8 @@ type (
 		mux         sync.Mutex
 	}
 
+	Caches []*Cache
+
 	AerospikeConfig struct {
 		SleepBetweenRetriesInMs int `json:",omitempty"`
 		MaxRetries              int `json:",omitempty"`
@@ -498,4 +500,20 @@ func (c *Cache) NewInput(selector *Selector) *CacheInput {
 		MetaColumn: c.Warmup.IndexColumn,
 		IndexMeta:  (c.Warmup.IndexMeta || c.Warmup.IndexColumn != "") && c.owner.Template.Meta != nil,
 	}
+}
+
+func (c Caches) Unique() []*Cache {
+	if len(c) == 0 {
+		return []*Cache{}
+	}
+	var result []*Cache
+	var index = make(map[string]bool, len(c))
+	for i, item := range c {
+		if index[item.Name] {
+			continue
+		}
+		result = append(result, c[i])
+		index[item.Name] = true
+	}
+	return result
 }

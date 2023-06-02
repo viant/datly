@@ -66,7 +66,6 @@ func (s *StructQLCodec) evaluateQuery() (*structql.Query, error) {
 	if s._query != nil {
 		return s._query, nil
 	}
-
 	query, err := structql.NewQuery(s.query, s.ownerType, nil)
 	if err != nil {
 		return nil, err

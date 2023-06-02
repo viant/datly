@@ -26,7 +26,7 @@ func (r *Repository) Init(project string) error {
 	expandRelativeIfNeeded(&r.Const, project)
 	configURL := url.Join(r.Repo, "Datly/config.json")
 	if ok, _ := fs.Exists(context.Background(), configURL); ok {
-		//	r.ConfigURL = configURL
+		r.ConfigURL = configURL
 	}
 	return nil
 }

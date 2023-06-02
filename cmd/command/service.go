@@ -33,6 +33,10 @@ func (s *Service) Run(ctx context.Context, opts *options.Options) (bool, error) 
 	if opts.Bundle != nil {
 		return true, s.bundleRules(ctx, opts.Bundle)
 	}
+	if opts.Touch != nil {
+		s.Touch(ctx, opts.Touch)
+		return true, nil
+	}
 	if opts.Build != nil {
 		return false, s.prepareBuild(ctx, opts.Build)
 	}

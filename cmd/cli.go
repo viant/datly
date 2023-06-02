@@ -137,6 +137,9 @@ func New(version string, args soptions.Arguments, logger io.Writer) (*standalone
 			options.MergeFromBuild(opts.Build)
 		} else if opts.Plugin != nil {
 			options.MergeFromPlugin(opts.Plugin)
+			if opts.Plugin.IsRepositoryPlugin() {
+				defer cmd.Touch(context.Background(), opts.Plugin.Touch())
+			}
 		} else if opts.Generate != nil {
 			options.MergeFromGenerate(opts.Generate)
 		} else if opts.Cache != nil {

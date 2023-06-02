@@ -60,6 +60,7 @@ type (
 		ConstURL  string `long:"constURL" description:"path where const files are stored"`
 		Legacy    bool   `short:"l"`
 		ModuleURL string
+		cache     *view.Cache
 	}
 
 	Package struct {
@@ -235,7 +236,6 @@ func (o *Options) Init() error {
 			base = strings.Replace(base, ext, "", 1)
 			o.ModuleName = base
 		}
-
 		if o.ModuleGoVersion == "" {
 			o.ModuleGoVersion = strings.Replace(runtime.Version(), "go", "", 1)
 		}
@@ -247,7 +247,6 @@ func (o *Options) Init() error {
 		if o.PluginOS == "" {
 			o.ModuleOS = runtime.GOOS
 		}
-
 	}
 
 	o.Connector.Init(o.PartialConfigURL == "")
@@ -469,6 +468,7 @@ func (o *Options) MergeFromPlugin(plugin *options.Plugin) {
 func (o *Options) MergeFromGenerate(generate *options.Gen) {
 	o.Connects = generate.Connectors
 	o.PrepareRule = generate.Operation
+	o.ExecKind = generate.Kind
 	o.Name = generate.Name
 	o.Generate.Location = generate.Source
 	if generate.Module != "" {
@@ -479,8 +479,8 @@ func (o *Options) MergeFromGenerate(generate *options.Gen) {
 	o.DSQLOutput = generate.Dest
 }
 
-func (o *Options) MergeFromCache(cache *options.Cache) {
-	o.CacheWarmup.WarmupURIs = cache.WarmupURIs
+func (o *Options) MergeFromCache(cache *options.CacheWarmup) {
+	o.CacheWarmup.WarmupURIs = cache.URIs
 	o.ConfigURL = cache.ConfigURL
 }
 
@@ -498,21 +498,30 @@ func (o *Options) MergeFromDSql(dsql *options.DSql) {
 	o.ConstURL = dsql.Const
 	o.Port = dsql.Port
 	o.RoutePrefix = dsql.RoutePrefix
-	o.PartialConfigURL = dsql.ConfigURL
 	if dsql.Module != "" {
 		o.RelativePath = dsql.Module
 	}
+	o.RouteURL = url.Join(dsql.Repo, "Datly/routes")
+	o.PartialConfigURL = dsql.ConfigURL
 	o.ModuleURL = dsql.Module
 }
 
-func (o *Options) MergeFromInit(cmd *options.Init) {
-	o.Connects = cmd.Connectors
-	o.JWTVerifierHMACKey = string(cmd.JwtVerifier.HMAC)
-	o.JWTVerifierRSAKey = string(cmd.JwtVerifier.RSA)
-	o.Port = cmd.Port
-	o.ConstURL = cmd.Const
-	o.WriteLocation = cmd.Repo
-	o.PartialConfigURL = cmd.ConfigURL
+func (o *Options) MergeFromInit(init *options.Init) {
+	o.Connects = init.Connectors
+	o.JWTVerifierHMACKey = string(init.JwtVerifier.HMAC)
+	o.JWTVerifierRSAKey = string(init.JwtVerifier.RSA)
+	o.Port = init.Port
+	o.ConstURL = init.Const
+	o.WriteLocation = init.Repo
+	o.PartialConfigURL = init.ConfigURL
+	if init.CacheProvider.ProviderURL != "" {
+		o.cache = &view.Cache{
+			Name:         init.Name,
+			Location:     init.Location,
+			Provider:     init.ProviderURL,
+			TimeToLiveMs: init.TimeToLiveMs,
+		}
+	}
 }
 
 func namespace(name string) string {

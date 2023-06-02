@@ -55,6 +55,7 @@ type (
 		plugins          []*pluginGenDeta
 		bundles          map[string]*bundleMetadata
 		logs             []string
+		caches           view.Caches
 	}
 
 	routeBuilder struct {
@@ -337,7 +338,7 @@ func (s *Builder) Build(ctx context.Context) error {
 	}
 	routerResource.Resource.SetFs(s.fs)
 	paramIndex := NewParametersIndex(nil, nil)
-	var viewCaches []*view.Cache
+	var viewCaches = s.caches.Unique()
 	consts := &s.constFileContent
 
 	fileName, routerRoutes, err := s.readRouterOptionIfNeeded(routerResource)
