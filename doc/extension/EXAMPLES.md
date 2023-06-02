@@ -202,26 +202,7 @@ The following folders and files get generated
   ...
 ```
 
-TODO
-if you want user more connections
-describe how to play with more than 1 connection
-
-if you want use different repo use -f option like here:
-datly init \
--p=~/myproject \
--c='ci_ads|mysql|root:dev@tcp(127.0.0.1:3306)/ci_ads?parseTime=true' \
--r=repo/dev/
--f=ws
-
-
-+ connections.yaml
-+ Actor.sql
-+ curActor.sql
-+ Actor.yaml
-+ config.json
-
-
-### 1.10 Build standalone app 
+### 1.10 Build standalone app
 linux
 ```shell
 datly build -p=~/myproject -r=standalone -d=~/myproject/bin -o=linux -a=amd64
@@ -235,10 +216,5 @@ chmod u+x ~/myproject/bin/datly
 
 ### 1.11 Run app
 ```shell
-~/myproject/bin/datly run -c=~/myproject/repo/p_ssW0rd/Datly/config.json
+~/myproject/bin/datly run -c=~/myproject/repo/dev/Datly/config.json
 ```
-
-+single insert
-+single update
-+multi insert
-+multi update
