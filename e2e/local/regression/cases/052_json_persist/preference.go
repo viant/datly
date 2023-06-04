@@ -5,7 +5,7 @@ var PackageName = "preference"
 type Preference struct {
 	Id     int            `sqlx:"name=ID,autoincrement,primaryKey,required"`
 	Object *Foo           `sqlx:"name=OBJECT" json:",omitempty"`
-	Has    *PreferenceHas `presenceIndex:"true" typeName:"PreferenceHas" json:"-" sqlx:"presence=true"`
+	Has    *PreferenceHas `setMarker:"true" typeName:"PreferenceHas" json:"-" `
 }
 
 type PreferenceHas struct {

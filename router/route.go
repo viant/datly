@@ -513,8 +513,8 @@ func (r *Route) initRequestBody() error {
 
 func (r *Route) initRequestBodyFromParams() error {
 	params := make([]*view.Parameter, 0)
-	presenceIndex := map[string]bool{}
-	r.findRequestBodyParams(r.View, &params, presenceIndex)
+	setMarker := map[string]bool{}
+	r.findRequestBodyParams(r.View, &params, setMarker)
 
 	if len(params) == 0 {
 		return nil
@@ -567,20 +567,20 @@ func (r *Route) initRequestBodyType(bodyParam *view.Parameter, params []*view.Pa
 	return typeBuilder.Build(), nil
 }
 
-func (r *Route) findRequestBodyParams(aView *view.View, params *[]*view.Parameter, presenceIndex map[string]bool) {
+func (r *Route) findRequestBodyParams(aView *view.View, params *[]*view.Parameter, setMarker map[string]bool) {
 	for i, param := range aView.Template.Parameters {
-		if param.In.Kind == view.KindRequestBody && !presenceIndex[param.Name] {
-			presenceIndex[param.Name] = true
+		if param.In.Kind == view.KindRequestBody && !setMarker[param.Name] {
+			setMarker[param.Name] = true
 			*params = append(*params, aView.Template.Parameters[i])
 		}
 
 		if param.View() != nil {
-			r.findRequestBodyParams(param.View(), params, presenceIndex)
+			r.findRequestBodyParams(param.View(), params, setMarker)
 		}
 	}
 
 	for _, relation := range aView.With {
-		r.findRequestBodyParams(&relation.Of.View, params, presenceIndex)
+		r.findRequestBodyParams(&relation.Of.View, params, setMarker)
 	}
 }
 

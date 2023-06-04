@@ -15,7 +15,7 @@ type Foos struct {
 	Name            *string            `sqlx:"name=NAME" json:",omitempty"`
 	Quantity        *int               `sqlx:"name=QUANTITY" json:",omitempty"`
 	FoosPerformance []*FoosPerformance `typeName:"FoosPerformance" sqlx:"-"`
-	Has             *FoosHas           `presenceIndex:"true" typeName:"FoosHas" json:"-" sqlx:"presence=true"`
+	Has             *FoosHas           `setMarker:"true" typeName:"FoosHas" json:"-" sqlx:"-"`
 }
 
 type FoosPerformance struct {
@@ -23,7 +23,7 @@ type FoosPerformance struct {
 	PerfName     *string             `sqlx:"name=PERF_NAME" json:",omitempty"`
 	PerfQuantity *int                `sqlx:"name=PERF_QUANTITY" json:",omitempty"`
 	FooId        *int                `sqlx:"name=FOO_ID,refTable=FOOS,refColumn=ID" json:",omitempty"`
-	Has          *FoosPerformanceHas `presenceIndex:"true" typeName:"FoosPerformanceHas" json:"-" sqlx:"presence=true"`
+	Has          *FoosPerformanceHas `setMarker:"true" typeName:"FoosPerformanceHas" json:"-" sqlx:"-"`
 }
 
 type FoosPerformanceHas struct {

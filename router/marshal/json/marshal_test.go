@@ -935,7 +935,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 				type Foo struct {
 					ID   int
 					Name string
-					Has  *FooHas `presenceIndex:"true"`
+					Has  *FooHas `setMarker:"true"`
 				}
 
 				return &[]*Foo{}
@@ -955,7 +955,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 				type Foo struct {
 					ID   int
 					Name string
-					Has  *FooHas `presenceIndex:"true"`
+					Has  *FooHas `setMarker:"true"`
 				}
 
 				return &[]*Foo{}
@@ -974,7 +974,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 				type Foo struct {
 					ID   int
 					Name string
-					Has  *FooHas `presenceIndex:"true"`
+					Has  *FooHas `setMarker:"true"`
 				}
 
 				return &[]*Foo{}
@@ -1001,7 +1001,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 				type Foo struct {
 					ID   int
 					Name string
-					Has  *FooHas `presenceIndex:"true"`
+					Has  *FooHas `setMarker:"true"`
 				}
 
 				type WrapperHas struct {
@@ -1013,7 +1013,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 					WrapperID   int
 					WrapperName string
 					Foos        []*Foo
-					Has         *WrapperHas `presenceIndex:"true"`
+					Has         *WrapperHas `setMarker:"true"`
 				}
 
 				type Data struct {
@@ -1045,7 +1045,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 				type Foo struct {
 					ID   int
 					Name string
-					Has  *FooHas `presenceIndex:"true"`
+					Has  *FooHas `setMarker:"true"`
 				}
 
 				type WrapperHas struct {
@@ -1057,7 +1057,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 					WrapperID   int
 					WrapperName string
 					Foos        []*Foo
-					Has         *WrapperHas `presenceIndex:"true"`
+					Has         *WrapperHas `setMarker:"true"`
 				}
 
 				type Data struct {
@@ -1102,7 +1102,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 				type Foo struct {
 					ID   *int         `json:",omitempty"`
 					Name *string      `json:",omitempty"`
-					Has  *FooHasIndex `presenceIndex:"true"`
+					Has  *FooHasIndex `setMarker:"true"`
 				}
 
 				return &Foo{}
@@ -1123,7 +1123,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 						Id       bool
 						Name     bool
 						Quantity bool
-					} "presenceIndex:\"true\" typeName:\"EventsHas\" json:\"-\" sqlx:\"presence=true\""
+					} "setMarker:\"true\" typeName:\"EventsHas\" json:\"-\" sqlx:\"presence=true\""
 				}{})
 				v := reflect.New(rType)
 				return v.Interface()
@@ -1145,7 +1145,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 							Id       bool
 							Name     bool
 							Quantity bool
-						} "presenceIndex:\"true\" typeName:\"EventsHas\" json:\"-\" sqlx:\"presence=true\""
+						} "setMarker:\"true\" typeName:\"EventsHas\" json:\"-\" sqlx:\"presence=true\""
 					}
 				}{})
 				v := reflect.New(rType)

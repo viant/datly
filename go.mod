@@ -3,7 +3,7 @@ module github.com/viant/datly
 go 1.17
 
 require (
-	cloud.google.com/go/storage v1.28.0 // indirect
+	cloud.google.com/go/storage v1.28.1 // indirect
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
 	github.com/francoispqt/gojay v1.2.13
@@ -20,21 +20,21 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/onsi/gomega v1.20.2 // indirect
 	github.com/pkg/errors v0.9.1
-	github.com/stretchr/testify v1.8.2
+	github.com/stretchr/testify v1.8.4
 	github.com/viant/afs v1.24.2
 	github.com/viant/afsc v1.9.0
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
-	github.com/viant/bigquery v0.2.1-0.20221005024313-4286a9622882
+	github.com/viant/bigquery v0.2.1
 	github.com/viant/cloudless v1.8.0
 	github.com/viant/dsc v0.16.2 // indirect
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
-	github.com/viant/godiff v0.3.0
+	github.com/viant/godiff v0.4.0
 	github.com/viant/parsly v0.2.0
 	github.com/viant/pgo v0.10.2
 	github.com/viant/scy v0.5.2
-	github.com/viant/sqlx v0.6.1-0.20230522090144-6bfb38b00e55
+	github.com/viant/sqlx v0.7.0
 	github.com/viant/structql v0.2.0
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.1.1-0.20230509001836-0709296ae922
@@ -42,29 +42,30 @@ require (
 	github.com/viant/xreflect v0.0.0-20230303201326-f50afb0feb0d
 	github.com/viant/xunsafe v0.8.4
 	golang.org/x/mod v0.9.0
-	golang.org/x/oauth2 v0.6.0
-	google.golang.org/api v0.103.0
+	golang.org/x/oauth2 v0.7.0
+	google.golang.org/api v0.114.0
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	github.com/viant/govalidator v0.1.8
+	github.com/viant/govalidator v0.2.0
 	github.com/viant/sqlparser v0.3.1-0.20230320162628-96274e82953f
 	golang.org/x/crypto v0.7.0 // indirect
 )
 
 require (
+	github.com/viant/structology v0.1.0
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
 	github.com/viant/xdatly/types/core v0.0.0-20230518142915-e849977dfa52
 )
 
 require (
-	cloud.google.com/go v0.107.0 // indirect
-	cloud.google.com/go/compute v1.12.1 // indirect
-	cloud.google.com/go/compute/metadata v0.2.1 // indirect
-	cloud.google.com/go/iam v0.8.0 // indirect
-	cloud.google.com/go/secretmanager v1.9.0 // indirect
+	cloud.google.com/go v0.110.0 // indirect
+	cloud.google.com/go/compute v1.19.0 // indirect
+	cloud.google.com/go/compute/metadata v0.2.3 // indirect
+	cloud.google.com/go/iam v0.13.0 // indirect
+	cloud.google.com/go/secretmanager v1.10.0 // indirect
 	github.com/aws/aws-sdk-go v1.44.12 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.18.0 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.18.3 // indirect
@@ -90,10 +91,10 @@ require (
 	github.com/go-errors/errors v1.4.2 // indirect
 	github.com/go-playground/locales v0.14.0 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.2.0 // indirect
-	github.com/googleapis/gax-go/v2 v2.7.0 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect
+	github.com/googleapis/gax-go/v2 v2.8.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
@@ -107,15 +108,15 @@ require (
 	github.com/viant/igo v0.1.0 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/net v0.8.0 // indirect
+	golang.org/x/net v0.9.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
-	golang.org/x/term v0.6.0 // indirect
-	golang.org/x/text v0.8.0 // indirect
+	golang.org/x/sys v0.7.0 // indirect
+	golang.org/x/term v0.7.0 // indirect
+	golang.org/x/text v0.9.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20221201164419-0e50fba7f41c // indirect
-	google.golang.org/grpc v1.51.0 // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
+	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
+	google.golang.org/grpc v1.54.0 // indirect
+	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )

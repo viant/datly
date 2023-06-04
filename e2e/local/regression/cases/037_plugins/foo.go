@@ -14,7 +14,7 @@ type FooPlugin struct {
 	Id       int           `sqlx:"name=ID,primaryKey"`
 	Name     *string       `sqlx:"name=NAME" json:",omitempty"`
 	Quantity *int          `sqlx:"name=QUANTITY" json:",omitempty"`
-	Has      *FooPluginHas `presenceIndex:"true" typeName:"FoosHas" json:"-" sqlx:"presence=true"`
+	Has      *FooPluginHas `setMarker:"true" typeName:"FoosHas" json:"-" sqlx:"-"`
 }
 
 type FooPluginHas struct {

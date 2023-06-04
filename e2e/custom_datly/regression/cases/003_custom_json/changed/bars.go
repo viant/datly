@@ -18,7 +18,7 @@ type (
 		Id   int      `sqlx:"name=ID,primaryKey"`
 		Ints *intsSum `sqlx:"name=INTS" json:",omitempty"`
 		Name *string  `sqlx:"NAME" json:",omitempty"`
-		Has  *BarHas  `presenceIndex:"true" typeName:"FoosPerformanceHas" json:"-" sqlx:"presence=true"`
+		Has  *BarHas  `setMarker:"true" typeName:"FoosPerformanceHas" json:"-" sqlx:"-"`
 	}
 
 	intsSum int

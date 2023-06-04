@@ -1,6 +1,9 @@
 package options
 
-import "github.com/viant/afs/url"
+import (
+	"fmt"
+	"github.com/viant/afs/url"
+)
 
 type Gen struct {
 	Connector
@@ -14,6 +17,9 @@ type Gen struct {
 func (g *Gen) Init() error {
 	if err := g.Generate.Init(); err != nil {
 		return err
+	}
+	if g.Operation == "" {
+		return fmt.Errorf("operation was empty")
 	}
 	if g.Dest == "" {
 		g.Dest = "dsql"

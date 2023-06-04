@@ -93,7 +93,6 @@ func (r *Router) Handle(writer http.ResponseWriter, request *http.Request) {
 		r.handleErrIfNeeded(writer, http.StatusInternalServerError, err)
 		return
 	}
-
 	if !r.interceptIfNeeded(writer, request) {
 		return
 	}

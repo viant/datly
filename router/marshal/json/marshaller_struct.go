@@ -3,6 +3,7 @@ package json
 import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/datly/router/marshal/default"
+	structology "github.com/viant/structology"
 	"github.com/viant/toolbox/format"
 	xunsafe "github.com/viant/xunsafe"
 	"reflect"
@@ -385,7 +386,7 @@ func groupFields(elemType reflect.Type) *groupedFields {
 			result.inlinable = append(result.inlinable, structField)
 		}
 
-		if structField.Tag.Get(IndexKey) != "" {
+		if structology.IsSetMarker(structField.Tag) {
 			isRegularField = false
 			result.presenceFields = append(result.presenceFields, structField)
 		}

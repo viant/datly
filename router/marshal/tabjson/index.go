@@ -10,33 +10,33 @@ type (
 		appenders       map[interface{}]*xunsafe.Appender
 	}
 
-	ObjectIndex   map[interface{}]PresenceIndex
-	PresenceIndex map[interface{}]bool
+	ObjectIndex map[interface{}]setMarker
+	setMarker   map[interface{}]bool
 )
 
 func (i *Index) Has(owner, value interface{}) bool {
-	presenceIndex := i.objectIndex.Index(owner)
-	ok := presenceIndex[value]
+	setMarker := i.objectIndex.Index(owner)
+	ok := setMarker[value]
 	if ok {
 		return true
 	}
 
-	presenceIndex[value] = true
+	setMarker[value] = true
 	return false
 }
 
-func (i ObjectIndex) Index(value interface{}) PresenceIndex {
+func (i ObjectIndex) Index(value interface{}) setMarker {
 	index, ok := i[value]
 	if ok {
 		return index
 	}
 
-	index = PresenceIndex{}
+	index = setMarker{}
 	i[value] = index
 	return index
 }
 
-func (p PresenceIndex) Has(value interface{}) bool {
+func (p setMarker) Has(value interface{}) bool {
 	return p[value]
 }
 

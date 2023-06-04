@@ -11,7 +11,6 @@ import (
 	"github.com/viant/datly/cmd/option"
 	dConfig "github.com/viant/datly/config"
 	"github.com/viant/datly/router"
-	json2 "github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
@@ -520,7 +519,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 	hasFieldName := "Has"
 	hasField := &view.Field{
 		Name: hasFieldName,
-		Tag:  fmt.Sprintf(`%v:"true" typeName:"%v" json:"-" diff:"presence=true" sqlx:"presence=true" validate:"presence=true"`, json2.IndexKey, definition.Name+"Has"),
+		Tag:  fmt.Sprintf(`setMarker:"true" typeName:"%v" json:"-"  sqlx:"-" `, definition.Name+"Has"),
 		Ptr:  true,
 	}
 
