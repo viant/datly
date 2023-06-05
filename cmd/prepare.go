@@ -305,6 +305,8 @@ func (s *Builder) detectInputType(ctx context.Context, db *sql.DB, tableName, SQ
 		}
 	}
 	if len(columns) == 0 {
+		tableName = strings.TrimSpace(tableName)
+		tableName = strings.Trim(tableName, "()")
 		if columns, err = s.readSinkColumns(ctx, db, tableName); err != nil {
 			return nil, err
 		}
