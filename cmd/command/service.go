@@ -49,7 +49,7 @@ func (s *Service) runCommand(dir string, cmd string, args ...string) (string, er
 	command.Dir = dir
 	output, err := command.CombinedOutput()
 	if err != nil {
-		return "", err
+		return string(output), err
 	}
 	return string(output), nil
 }
@@ -59,11 +59,11 @@ func (s *Service) prepareBuild(ctx context.Context, build *options.Build) error 
 	if err != nil {
 		return fmt.Errorf("failed to preapre build, unable to find go %w", err)
 	}
-	if _, err = s.runCommand(build.Module, goBinLoc, "mod", "tidy"); err != nil {
-		return fmt.Errorf("failed to go mod module '%v' %w", build.Module, err)
+	if out, err := s.runCommand(build.Module, goBinLoc, "mod", "tidy"); err != nil {
+		return fmt.Errorf("failed to go mod module '%v', %s %w", build.Module, out, err)
 	}
-	if _, err = s.runCommand(build.Datly, goBinLoc, "mod", "tidy"); err != nil {
-		return fmt.Errorf("failed to go mod customized datly %v %w", build.Module, err)
+	if out, err := s.runCommand(build.Datly, goBinLoc, "mod", "tidy", "-compat=1.17"); err != nil {
+		return fmt.Errorf("failed to go mod customized datly %v, %s %w", build.Module, out, err)
 	}
 	return nil
 }
