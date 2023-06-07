@@ -1,5 +1,5 @@
 {
   "Name": "$tagId",
   "URL": "$path/vars.sql",
-  "Args": "-x=ws --constURL='./properties.json'"
+  "Args": "-x='ws'"
 }

@@ -252,10 +252,6 @@ func (o *Options) Init() error {
 		}
 	}
 
-	if o.RouteURL == "" {
-		o.RouteURL = normalizeURL(path.Join(o.WriteLocation, "Datly", "routes"))
-	}
-
 	o.Connector.Init(o.PartialConfigURL == "")
 
 	return nil

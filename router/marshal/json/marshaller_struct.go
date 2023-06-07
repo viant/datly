@@ -2,9 +2,8 @@ package json
 
 import (
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/router/marshal/default"
-	structology "github.com/viant/structology"
 	"github.com/viant/datly/router/marshal/common"
+	structology "github.com/viant/structology"
 	"github.com/viant/toolbox/format"
 	xunsafe "github.com/viant/xunsafe"
 	"reflect"

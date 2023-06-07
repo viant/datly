@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
@@ -18,49 +17,9 @@ import (
 )
 
 func (s *Builder) loadConfig(ctx context.Context) (cfg *standalone.Config, err error) {
-
-	if s.options.PartialConfigURL != "" {
-		cfg, err = standalone.NewConfigFromURL(ctx, s.options.PartialConfigURL)
-		s.mergeFromPreviousConfig(cfg)
-		return cfg, nil
-	}
-
 	if s.options.ConfigURL == "" {
-		revealMetrics := true
-		cfg = &standalone.Config{
-			Config: &gateway.Config{
-				ExposableConfig: gateway.ExposableConfig{
-					APIPrefix:    s.options.ApiURIPrefix,
-					RevealMetric: &revealMetrics,
-				},
-				SensitiveConfig: gateway.SensitiveConfig{
-					APIKeys: router.APIKeys{
-						{
-							URI:    combineURLs(s.options.ApiURIPrefix, s.options.RoutePrefix, "secured"),
-							Header: "App-Secret-Id",
-							Value:  "changeme",
-						},
-					},
-				},
-			},
-			Endpoint: endpoint.Config{},
-		}
-		cfg.Init()
-		disable := true
-		cfg.AutoDiscovery = &disable
-
-		if s.options.PartialConfigURL != "" {
-			configContent, err := s.fs.DownloadWithURL(ctx, s.options.PartialConfigURL)
-			if err != nil {
-				return nil, err
-			}
-
-			if err = json.Unmarshal(configContent, cfg); err != nil {
-				return nil, err
-			}
-		}
-
-		return cfg, nil
+		defaultCfg, err := s.createInMemoryConfig()
+		return defaultCfg, err
 	}
 
 	s.options.ConfigURL = normalizeURL(s.options.ConfigURL)
@@ -68,16 +27,63 @@ func (s *Builder) loadConfig(ctx context.Context) (cfg *standalone.Config, err e
 	if cfg.DependencyURL != "" {
 		s.options.DependencyURL = cfg.DependencyURL
 	}
+
 	return cfg, err
 }
 
-func (s *Builder) mergeFromPreviousConfig(cfg *standalone.Config) {
+func (s *Builder) createInMemoryConfig() (*standalone.Config, error) {
+	revealMetrics := true
+	cfg := &standalone.Config{
+		Config: &gateway.Config{
+			ExposableConfig: gateway.ExposableConfig{
+				APIPrefix:    s.options.ApiURIPrefix,
+				RevealMetric: &revealMetrics,
+			},
+			SensitiveConfig: gateway.SensitiveConfig{
+				APIKeys: router.APIKeys{
+					{
+						URI:    combineURLs(s.options.ApiURIPrefix, s.options.RoutePrefix, "secured"),
+						Header: "App-Secret-Id",
+						Value:  "changeme",
+					},
+				},
+			},
+		},
+		Endpoint: endpoint.Config{},
+	}
+
+	if err := buildDefaultConfig(cfg, s.options); err != nil {
+		return nil, err
+	}
+
+	cfg.Init()
+	disable := true
+	cfg.AutoDiscovery = &disable
+
+	return cfg, nil
+}
+
+func (s *Builder) mergeFromPreviousConfig(cfg *standalone.Config, defaultCfg *standalone.Config) {
 	if cfg == nil {
 		return
 	}
+
+	setIfEmpty(&cfg.RouteURL, defaultCfg.RouteURL)
+	setIfEmpty(&cfg.DependencyURL, defaultCfg.DependencyURL)
+	setIfEmpty(&cfg.AssetsURL, defaultCfg.AssetsURL)
+	setIfEmpty(&cfg.PluginsURL, defaultCfg.PluginsURL)
+	setIfEmpty(&cfg.EnvURL, defaultCfg.EnvURL)
+	setIfEmpty(&cfg.APIPrefix, defaultCfg.APIPrefix)
+	setIfEmpty(&cfg.CacheConnectorPrefix, defaultCfg.CacheConnectorPrefix)
+
 	if cfg.DependencyURL != "" {
 		s.options.DependencyURL = cfg.DependencyURL
 	}
+
+	if len(defaultCfg.APIKeys) > 0 {
+		cfg.APIKeys = defaultCfg.APIKeys
+	}
+
 	if jwtValidator := cfg.JWTValidator; jwtValidator != nil {
 		if s.options.JWTVerifierRSAKey == "" && jwtValidator.RSA != nil {
 			s.options.JWTVerifierRSAKey = fmt.Sprintf("%v|%v", jwtValidator.RSA.URL, jwtValidator.RSA.Key)
@@ -85,6 +91,12 @@ func (s *Builder) mergeFromPreviousConfig(cfg *standalone.Config) {
 		if s.options.JWTVerifierHMACKey == "" && jwtValidator.HMAC != nil {
 			s.options.JWTVerifierHMACKey = fmt.Sprintf("%v|%v", jwtValidator.HMAC.URL, jwtValidator.HMAC.Key)
 		}
+	}
+}
+
+func setIfEmpty(dest *string, source string) {
+	if *dest == "" && source != "" {
+		*dest = source
 	}
 }
 
@@ -109,6 +121,7 @@ func (s *Builder) initConfig(ctx context.Context, cfg *standalone.Config) error 
 		if connectorResource, _ := loadResource(s.options.DependencyURL, "connections.yaml"); connectorResource != nil {
 			connectors = append(connectors, connectorResource.Connectors...)
 		}
+
 		s.options.SetConnectors(connectors)
 		err := s.mergeConstants()
 		if err != nil {
@@ -132,10 +145,6 @@ func (s *Builder) initConfig(ctx context.Context, cfg *standalone.Config) error 
 
 	s.initJWTVerifier(cfg)
 
-	err := buildDefaultConfig(cfg, s.options)
-	if err != nil {
-		return err
-	}
 	if cfg.DependencyURL != "" && s.options.DependencyURL == "" {
 		s.options.DependencyURL = cfg.DependencyURL
 	}
@@ -235,9 +244,6 @@ func buildDefaultConfig(cfg *standalone.Config, options *Options) error {
 		}
 		if !strings.HasPrefix(cfg.Meta.StructURI, options.ApiURIPrefix) {
 			cfg.Meta.StructURI = strings.Replace(cfg.Meta.StructURI, APIPrefix, options.ApiURIPrefix, 1)
-		}
-		if err := fsAddJSON(fs, cfg.URL, cfg); err != nil {
-			return err
 		}
 	}
 	options.ConfigURL = cfg.URL

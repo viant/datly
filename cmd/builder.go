@@ -510,12 +510,27 @@ func (s *Builder) loadAndInitConfig(ctx context.Context) error {
 		return err
 	}
 
+	if s.options.PartialConfigURL != "" {
+		partialConfig, err := standalone.NewConfigFromURL(ctx, s.options.PartialConfigURL)
+		if err != nil {
+			return err
+		}
+
+		s.mergeFromPreviousConfig(aConfig, partialConfig)
+	}
+
 	err = s.initConfig(ctx, aConfig)
 	if err != nil {
 		return err
 	}
 
 	s.config = aConfig
+	if s.options.WriteLocation != "" {
+		if err := fsAddJSON(s.fs, aConfig.URL, aConfig); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -1267,7 +1282,6 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 		//if !strings.HasPrefix(paramType, "[]") {
 		//	param.Schema.DataType = "[]" + paramType
 		//}
-
 	}
 
 	if config.Codec != "" {
