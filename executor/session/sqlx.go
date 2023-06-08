@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"github.com/viant/xdatly/handler/sqlx"
+	"github.com/viant/xdatly/handler/validator"
 )
 
 type Manager struct {
@@ -11,4 +12,9 @@ type Manager struct {
 	tx           *sql.Tx
 	db           *sql.DB
 	dbProvider   func(ctx context.Context) (*sql.DB, error)
+}
+
+func (m *Manager) Validator() validator.Service {
+	//TO resolve db, maybe change signature to service , error
+	return &SqlxValidator{db: m.db}
 }
