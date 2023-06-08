@@ -9,11 +9,9 @@ import (
 
 var differRegistry = godiff.NewRegistry()
 
-type Differ struct {
-}
+type Differ struct{}
 
 func (d *Differ) Diff(ctx context.Context, from, to interface{}, opts ...differ.Option) *differ.ChangeLog {
-
 	var diffOptions []godiff.Option
 	options := differ.Options{}
 	options.Apply(opts...)
@@ -31,10 +29,9 @@ func (d *Differ) Diff(ctx context.Context, from, to interface{}, opts ...differ.
 	var result = differ.ChangeLog{}
 	if len(diff.Changes) > 0 {
 		for _, item := range diff.Changes {
-			//	aPath := differ.Path(*item.Path)
 			aChange := differ.Change{
 				Type:  differ.ChangeType(item.Type),
-				Path:  nil,
+				Path:  asPath(item.Path),
 				From:  item.From,
 				To:    item.To,
 				Error: item.Error,
@@ -43,4 +40,17 @@ func (d *Differ) Diff(ctx context.Context, from, to interface{}, opts ...differ.
 		}
 	}
 	return &result
+}
+
+func asPath(from *godiff.Path) *differ.Path {
+	if from == nil {
+		return nil
+	}
+	aPath := &differ.Path{}
+	aPath.Kind = differ.PathKind(from.Kind)
+	aPath.Name = from.Name
+	aPath.Index = from.Index
+	aPath.Key = from.Key
+	aPath.Path = asPath(from.Path)
+	return aPath
 }
