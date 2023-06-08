@@ -184,8 +184,8 @@ func (v *Codec) extractCodecFn(resource *Resource, paramType reflect.Type, view 
 	}
 }
 
-func (v *Codec) Transform(ctx context.Context, raw string, options ...interface{}) (interface{}, error) {
-	return v._codecFn(ctx, raw, options...)
+func (v *Codec) Transform(ctx context.Context, value interface{}, options ...interface{}) (interface{}, error) {
+	return v._codecFn(ctx, value, options...)
 }
 
 func (v *Codec) inherit(asCodec config.CodecDef, paramType reflect.Type) error {
@@ -530,7 +530,11 @@ func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr un
 }
 
 func (p *Parameter) Set(selector *Selector, value interface{}) error {
-	_, err := p.convertAndSet(context.Background(), selector, value, true)
+	return p.SetCtx(context.Background(), selector, value)
+}
+
+func (p *Parameter) SetCtx(ctx context.Context, selector *Selector, value interface{}) error {
+	_, err := p.convertAndSet(ctx, selector, value, true)
 	return err
 }
 

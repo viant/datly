@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/datly/converter"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox"
 	"io"
@@ -37,6 +38,7 @@ type (
 		requestBody        interface{}
 		requestBodyErr     error
 		readRequestBody    bool
+		accessors          *types.Accessors
 	}
 
 	PresenceMapFn func([]byte) (map[string]interface{}, error)
@@ -51,9 +53,10 @@ type (
 
 func NewRequestParameters(request *http.Request, route *Route) (*RequestParams, error) {
 	parameters := &RequestParams{
-		cookies: request.Cookies(),
-		request: request,
-		route:   route,
+		cookies:   request.Cookies(),
+		request:   request,
+		route:     route,
+		accessors: route._accessors,
 	}
 
 	if paramName, err := parameters.init(request, route); err != nil {
@@ -211,6 +214,24 @@ func (p *RequestParams) RequestBody() (interface{}, error) {
 	return body, err
 }
 
+func (p *RequestParams) paramRequestBody(ctx context.Context, param *view.Parameter, options ...interface{}) (interface{}, error) {
+	requestBody, err := p.RequestBody()
+	if err != nil {
+		return nil, err
+	}
+
+	bodyValue, ok := p.extractBody(requestBody, param.In.Name)
+	if (!ok || bodyValue == nil) && param.IsRequired() {
+		return nil, requiredParamErr(param)
+	}
+
+	if param.Output != nil {
+		return param.Output.Transform(ctx, bodyValue, options...)
+	}
+
+	return bodyValue, nil
+}
+
 func (p *RequestParams) tryParseRequestBody() (interface{}, error) {
 	if p.request.Body == nil {
 		return nil, nil
@@ -233,6 +254,44 @@ func (p *RequestParams) tryParseRequestBody() (interface{}, error) {
 	}
 
 	return requestBody, nil
+}
+
+func (p *RequestParams) hasBodyPart(path string) bool {
+	if _, ok := p.presenceMap[path]; ok {
+		return true
+	}
+
+	segments := strings.Split(path, ".")
+
+	var rawValue interface{} = p.presenceMap
+	for _, segment := range segments {
+		actualMap, ok := rawValue.(map[string]interface{})
+		if !ok {
+			return false
+		}
+
+		segmentValue, ok := actualMap[segment]
+		if !ok {
+			segmentValue, ok = checkCaseInsensitive(actualMap, segment)
+			if !ok {
+				return false
+			}
+		}
+
+		rawValue = segmentValue
+	}
+
+	return true
+}
+
+func checkCaseInsensitive(actualMap map[string]interface{}, segment string) (interface{}, bool) {
+	for key, value := range actualMap {
+		if strings.EqualFold(key, segment) {
+			return value, true
+		}
+	}
+
+	return nil, false
 }
 
 func wrapJSONSyntaxErrorIfNeeded(err error, buff []byte) error {
@@ -273,8 +332,7 @@ func (p *RequestParams) ExtractHttpParam(ctx context.Context, param *view.Parame
 	case view.KindQuery:
 		return p.convertAndTransform(ctx, p.queryParam(param.In.Name, ""), param, options...)
 	case view.KindRequestBody:
-		return p.RequestBody()
-
+		return p.paramRequestBody(ctx, param, options...)
 	case view.KindHeader:
 		return p.convertAndTransform(ctx, p.header(param.In.Name), param, options...)
 	case view.KindCookie:

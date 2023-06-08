@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"reflect"
-	"strings"
 	"sync"
 	"unsafe"
 )
@@ -31,11 +30,29 @@ type (
 		requestMetadata *RequestMetadata
 		params          *RequestParams
 		accessor        *types.Accessors
+		cache           *paramsValueCache
 	}
 
 	JSONError struct {
 		Message string
 		Object  interface{}
+	}
+
+	paramsValueCache struct {
+		index sync.Map
+	}
+
+	paramsValueKey struct {
+		name     string
+		target   string
+		location view.Kind
+	}
+
+	paramValue struct {
+		once   sync.Once
+		value  interface{}
+		err    error
+		valuer func() (interface{}, error)
 	}
 )
 
@@ -152,6 +169,7 @@ func CreateSelectors(ctx context.Context, accessor *types.Accessors, dateFormat 
 		requestMetadata: requestMetadata,
 		params:          requestParams,
 		accessor:        accessor,
+		cache:           newParamsValueCache(),
 	}
 	return sb.build(ctx, views, selectors)
 }
@@ -161,19 +179,11 @@ func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.
 		if err := b.populateFields(ctx, selector, details); err != nil {
 			return view.FieldsQuery, err
 		}
-	} else {
-		if b.isParamPresent(details, view.FieldsQuery) {
-			return view.FieldsQuery, fmt.Errorf("can't use fields on view %v", details.View.Name)
-		}
 	}
 
 	if details.View.Selector.LimitParam != nil {
 		if err := b.populateLimit(ctx, selector, details); err != nil {
 			return view.LimitQuery, err
-		}
-	} else {
-		if b.isParamPresent(details, view.LimitQuery) {
-			return view.LimitQuery, fmt.Errorf("can't use limit on view %v", details.View.Name)
 		}
 	}
 
@@ -181,19 +191,11 @@ func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.
 		if err := b.populateOffset(ctx, selector, details); err != nil {
 			return view.OffsetQuery, err
 		}
-	} else {
-		if b.isParamPresent(details, view.OffsetQuery) {
-			return view.OffsetQuery, fmt.Errorf("can't use offset on view %v", details.View.Name)
-		}
 	}
 
 	if details.View.Selector.OrderByParam != nil {
 		if err := b.populateOrderBy(ctx, selector, details); err != nil {
 			return view.OrderByQuery, err
-		}
-	} else {
-		if b.isParamPresent(details, view.OrderByQuery) {
-			return view.OrderByQuery, fmt.Errorf("can't use order by on view %v", details.View.Name)
 		}
 	}
 
@@ -201,19 +203,11 @@ func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.
 		if err := b.populateCriteria(ctx, selector, details); err != nil {
 			return view.CriteriaQuery, err
 		}
-	} else {
-		if b.isParamPresent(details, view.CriteriaQuery) {
-			return view.CriteriaQuery, fmt.Errorf("can't use criteria on view %v", details.View.Name)
-		}
 	}
 
 	if details.View.Selector.PageParam != nil {
 		if err := b.populatePage(ctx, selector, details); err != nil {
 			return view.PageQuery, err
-		}
-	} else {
-		if b.isParamPresent(details, view.PageQuery) {
-			return view.PageQuery, fmt.Errorf("can't use page on view %v", details.View.Name)
 		}
 	}
 
@@ -239,14 +233,6 @@ func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.
 	}
 
 	return "", nil
-}
-
-func (b *selectorsBuilder) isParamPresent(details *ViewDetails, defaultParamName string) bool {
-	if len(details.Prefixes) == 0 {
-		return false
-	}
-
-	return b.params.queryParam(details.Prefixes[0]+defaultParamName, "") != ""
 }
 
 func (b *selectorsBuilder) populateCriteria(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
@@ -419,19 +405,38 @@ func (b *selectorsBuilder) extractParamValue(ctx context.Context, param *view.Pa
 }
 
 func (b *selectorsBuilder) extractParamValueWithOptions(ctx context.Context, param *view.Parameter, details *ViewDetails, options ...interface{}) (interface{}, error) {
-	switch param.In.Kind {
-	case view.KindDataView:
-		return b.viewParamValue(ctx, details, param)
-	case view.KindEnvironment:
-		return b.params.convertAndTransform(ctx, os.Getenv(param.In.Name), param, options...)
-	case view.KindParam:
-		return b.paramBasedParamValue(ctx, details, param, options...)
-	}
+	return b.cache.paramValue(param, func() (interface{}, error) {
+		switch param.In.Kind {
+		case view.KindDataView:
+			value, err := b.viewParamValue(ctx, details, param)
+			if err != nil {
+				return nil, err
+			}
 
-	return b.params.ExtractHttpParam(ctx, param, options...)
+			return b.transformIfNeeded(ctx, param, value, options...)
+		case view.KindEnvironment:
+			return b.params.convertAndTransform(ctx, os.Getenv(param.In.Name), param, options...)
+		case view.KindParam:
+			value, err := b.paramBasedParamValue(ctx, details, param, options...)
+			if err != nil {
+				return nil, err
+			}
+
+			return b.transformIfNeeded(ctx, param, value, options...)
+
+		case view.KindLiteral:
+			return b.transformIfNeeded(ctx, param, param.Const, options...)
+		}
+
+		return b.params.ExtractHttpParam(ctx, param, options...)
+	})
 }
 
 func (p *RequestParams) convertAndTransform(ctx context.Context, raw string, param *view.Parameter, options ...interface{}) (interface{}, error) {
+	if raw == "" && param.IsRequired() {
+		return nil, requiredParamErr(param)
+	}
+
 	dateFormat := p.route.DateFormat
 	if param.DateFormat != "" {
 		dateFormat = param.DateFormat
@@ -507,116 +512,24 @@ func isNull(value interface{}) bool {
 }
 
 func (b *selectorsBuilder) handleParam(ctx context.Context, selector *view.Selector, parent *ViewDetails, parameter *view.Parameter) error {
-	switch parameter.In.Kind {
-	case view.KindParam:
-		if err := b.addParamBasedParam(ctx, parent, selector, parameter); err != nil {
-			return err
-		}
-
-	case view.KindQuery:
-		if err := b.addQueryParam(ctx, selector, parameter); err != nil {
-			return err
-		}
-
-	case view.KindPath:
-		if err := b.addPathParam(ctx, selector, parameter); err != nil {
-			return err
-		}
-
-	case view.KindHeader:
-		if err := b.addHeaderParam(ctx, selector, parameter); err != nil {
-			return err
-		}
-
-	case view.KindCookie:
-		if err := b.addCookieParam(ctx, selector, parameter); err != nil {
-			return err
-		}
-
-	case view.KindDataView:
-		if err := b.addViewParam(ctx, selector, parent, parameter); err != nil {
-			return err
-		}
-
-	case view.KindRequestBody:
-		if err := b.addRequestBodyParam(ctx, selector, parameter); err != nil {
-			return err
-		}
-
-	case view.KindEnvironment:
-		if err := b.addEnvVariableParam(ctx, selector, parameter); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (b *selectorsBuilder) addEnvVariableParam(ctx context.Context, selector *view.Selector, parameter *view.Parameter) error {
-	return convertAndSet(ctx, selector, parameter, os.Getenv(parameter.In.Name))
-}
-
-func (b *selectorsBuilder) addRequestBodyParam(ctx context.Context, selector *view.Selector, param *view.Parameter) error {
-	requestBody, err := b.params.RequestBody()
+	value, err := b.extractParamValue(ctx, parameter, parent, selector)
 	if err != nil {
 		return err
 	}
 
-	if param.Required != nil && *param.Required && requestBody == nil {
-		return requiredParamErr(param)
+	if parameter.IsRequired() && value == nil {
+		return requiredParamErr(parameter)
 	}
 
-	if requestBody == nil {
-		return nil
+	if value != nil {
+		return parameter.SetCtx(ctx, selector, value)
 	}
 
-	bodyValue, ok := b.extractBody(param.In.Name)
-	if !ok || bodyValue == nil {
-		if param.IsRequired() {
-			return requiredParamErr(param)
-		}
-
-		return nil
-	}
-
-	return param.ConvertAndSetCtx(ctx, selector, bodyValue)
+	return nil
 }
 
 func requiredParamErr(param *view.Parameter) error {
 	return fmt.Errorf("parameter %v is required", param.Name)
-}
-
-func (b *selectorsBuilder) addCookieParam(ctx context.Context, selector *view.Selector, parameter *view.Parameter) error {
-	return convertAndSet(ctx, selector, parameter, b.params.cookie(parameter.In.Name))
-}
-
-func (b *selectorsBuilder) addHeaderParam(ctx context.Context, selector *view.Selector, parameter *view.Parameter) error {
-	return convertAndSet(ctx, selector, parameter, b.params.header(parameter.In.Name))
-}
-
-func (b *selectorsBuilder) addQueryParam(ctx context.Context, selector *view.Selector, parameter *view.Parameter) error {
-	return convertAndSet(ctx, selector, parameter, b.params.queryParam(parameter.In.Name, ""))
-}
-
-func (b *selectorsBuilder) addPathParam(ctx context.Context, selector *view.Selector, parameter *view.Parameter) error {
-	return convertAndSet(ctx, selector, parameter, b.params.pathVariable(parameter.In.Name, ""))
-}
-
-func (b *selectorsBuilder) addViewParam(ctx context.Context, selector *view.Selector, viewDetails *ViewDetails, param *view.Parameter) error {
-	paramValue, err := b.viewParamValue(ctx, viewDetails, param)
-	if err != nil {
-		return err
-	}
-
-	if paramValue == nil {
-		return nil
-	}
-
-	if err = param.Set(selector, paramValue); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *ViewDetails, param *view.Parameter) (interface{}, error) {
@@ -687,22 +600,6 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 	return b.paramViewValue(param, sliceValue, returnMulti, paramLen, slice, ptr)
 }
 
-func convertAndSet(ctx context.Context, selector *view.Selector, parameter *view.Parameter, rawValue string) error {
-	if parameter.IsRequired() && rawValue == "" {
-		return requiredParamErr(parameter)
-	}
-
-	if rawValue == "" {
-		return nil
-	}
-
-	if err := parameter.ConvertAndSetCtx(ctx, selector, rawValue); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (b *selectorsBuilder) buildFields(aView *view.View, selector *view.Selector, fieldsQuery string, separator int32) error {
 	fieldIt := NewParamIt(fieldsQuery, separator)
 	for fieldIt.Has() {
@@ -737,23 +634,12 @@ func (b *selectorsBuilder) paramViewValue(param *view.Parameter, value reflect.V
 	}
 }
 
-func (b *selectorsBuilder) extractBody(path string) (interface{}, bool) {
+func (p *RequestParams) extractBody(body interface{}, path string) (interface{}, bool) {
 	if path == "" {
-		body, err := b.params.RequestBody()
-		return body, err == nil
+		return body, true
 	}
 
-	has := b.hasBodyPart(path)
-	if !has {
-		return nil, false
-	}
-
-	accessor, err := b.accessor.AccessorByName(path)
-	if err != nil {
-		return nil, false
-	}
-
-	body, err := b.params.RequestBody()
+	accessor, err := p.accessors.AccessorByName(path)
 	if err != nil {
 		return nil, false
 	}
@@ -764,44 +650,6 @@ func (b *selectorsBuilder) extractBody(path string) (interface{}, bool) {
 	}
 
 	return value, true
-}
-
-func (b *selectorsBuilder) hasBodyPart(path string) bool {
-	if _, ok := b.params.presenceMap[path]; ok {
-		return true
-	}
-
-	segments := strings.Split(path, ".")
-
-	var rawValue interface{} = b.params.presenceMap
-	for _, segment := range segments {
-		actualMap, ok := rawValue.(map[string]interface{})
-		if !ok {
-			return false
-		}
-
-		segmentValue, ok := actualMap[segment]
-		if !ok {
-			segmentValue, ok = checkCaseInsensitive(actualMap, segment)
-			if !ok {
-				return false
-			}
-		}
-
-		rawValue = segmentValue
-	}
-
-	return true
-}
-
-func checkCaseInsensitive(actualMap map[string]interface{}, segment string) (interface{}, bool) {
-	for key, value := range actualMap {
-		if strings.EqualFold(key, segment) {
-			return value, true
-		}
-	}
-
-	return nil, false
 }
 
 func (b *selectorsBuilder) populatePage(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
@@ -844,6 +692,14 @@ func (b *selectorsBuilder) addParamBasedParam(ctx context.Context, parent *ViewD
 	return parameter.ConvertAndSetCtx(ctx, selector, value)
 }
 
+func (b *selectorsBuilder) transformIfNeeded(ctx context.Context, param *view.Parameter, value interface{}, options ...interface{}) (interface{}, error) {
+	if param.Output == nil {
+		return value, nil
+	}
+
+	return param.Output.Transform(ctx, value, options...)
+}
+
 func canUseColumn(aView *view.View, columnName string) error {
 	_, ok := aView.ColumnByName(columnName)
 	if !ok {
@@ -854,4 +710,33 @@ func canUseColumn(aView *view.View, columnName string) error {
 
 func typeMismatchError(param *view.Parameter, value interface{}) error {
 	return fmt.Errorf("parameter %v value type missmatch, wanted %v but got %T", param.Name, param.Schema.Type().String(), value)
+}
+
+func newParamsValueCache() *paramsValueCache {
+	return &paramsValueCache{
+		index: sync.Map{},
+	}
+}
+
+func (p *paramsValueCache) paramValue(param *view.Parameter, valuer func() (interface{}, error)) (interface{}, error) {
+	actual, _ := p.index.LoadOrStore(paramsValueKey{
+		name:     param.Name,
+		target:   param.In.Name,
+		location: param.In.Kind,
+	}, &paramValue{
+		valuer: valuer,
+		once:   sync.Once{},
+	})
+
+	value := actual.(*paramValue)
+	return value.get()
+}
+
+func (v *paramValue) get() (interface{}, error) {
+	v.once.Do(v.init)
+	return v.value, v.err
+}
+
+func (v *paramValue) init() {
+	v.value, v.err = v.valuer()
 }
