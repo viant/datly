@@ -30,10 +30,10 @@ require (
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
-	github.com/viant/godiff v0.4.0
+	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.2.0
 	github.com/viant/pgo v0.10.2
-	github.com/viant/scy v0.5.2
+	github.com/viant/scy v0.6.0
 	github.com/viant/sqlx v0.7.0
 	github.com/viant/structql v0.2.0
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
@@ -49,7 +49,7 @@ require (
 )
 
 require (
-	github.com/viant/govalidator v0.2.0
+	github.com/viant/govalidator v0.2.1
 	github.com/viant/sqlparser v0.3.1-0.20230320162628-96274e82953f
 	golang.org/x/crypto v0.7.0 // indirect
 )
@@ -60,6 +60,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.33.1
 	github.com/viant/structology v0.1.0
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
+	github.com/viant/xdatly/handler v0.0.0-20230608182151-294121a8713c
 	github.com/viant/xdatly/types/core v0.0.0-20230518142915-e849977dfa52
 )
 
@@ -111,6 +112,7 @@ require (
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/viant/igo v0.1.0 // indirect
+	github.com/viant/xdatly v0.3.1-0.20230608182151-294121a8713c // indirect
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/net v0.9.0 // indirect
@@ -125,3 +127,4 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+

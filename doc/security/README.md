@@ -46,9 +46,10 @@ and Authentication data view parameters to check if UserID from JWT Claims exist
 */)
 ```
 
+'!' - mean that query has to return at least one record otherwise datly return specified error code in that case 401
+
 
 ### Authorization
-
 
 
 ### API Keys
@@ -59,7 +60,6 @@ Datly support API keys as a means of authentication and access control for APIs.
 ### Handling secret
 
 
-
 #### Securing secret
 
 Datly integrates with [Scy - secure store api](https://github.com/viant/scy) when operating on credentials.
@@ -67,6 +67,16 @@ Datly integrates with [Scy - secure store api](https://github.com/viant/scy) whe
 
 #### Securing database/sql DSN
 
+When connector parameter is use instead of hardcoding credentials
+```bash
+-c='name|mysql|root:dev@tcp(127.0.0.1:3306)/demo?parseTime=true'
+```
+
+use the [scy](https://github.com/viant/scy) secure alternative
+
+```bash
+-c='name|mysql|${Username}:${Password}@tcp(127.0.0.1:3306)/demo?parseTime=true|secure_storage_url|blowfish://default'
+```
 
 
 In **dependencies** folder datly stores connection details make sure that before deploying to stage/prod all
@@ -104,6 +114,92 @@ To secure Google Service Account Secret use the following [scy](https://github.c
 scy -s=myServiceAccountSecret.json -d=secure_storage_url -t=raw -k=blowfish://default
 ```
 
+
+### Oauth configuration
+
+
+JWTValidator section in datly repository config define OAuth setting, 
+or Cognito to get certificate generate for the AWS user pool.
+
+```json
+{
+  "JWTValidator": {
+    "RSA": {
+      "URL": "public_key_url.enc",
+      "Key": "blowfish://default"
+    },
+    "HMAC": {
+      "URL": "hmac_url.enc",
+      "Key": "blowfish://default"
+    },
+    "CertURL": "public_cert_url"
+  },
+  "Cognito": {}
+}
+```
+
+#### Custom RSA private/public key
+
+1. Generate RSA key
+```bash
+# Created Private key
+openssl genpkey -out private.txt -outform PEM -algorithm RSA -pkeyopt rsa_keygen_bits:4096
+#  Created public key with:
+openssl pkey -inform PEM -outform PEM -in private.txt -pubout -out public.txt
+```
+
+Secure both key with scy:
+
+```bash
+    scy -m=secure -s=public.txt -d=public_key_url.enc -t=raw -k=blowfish://default ## on prod, use secure store instead of local fs
+
+    ### in case you want to generate test token please also secure private key
+    scy -m=secure -s=private.txt -d=private_key_url.enc -t=raw -k=blowfish://default ## on prod, use secure store instead of local fs
+```
+
+#### Custom HMAC key
+
+1. Generate HMAC key
+
+```bash
+openssl rand -base64 256 -out hmac.txt
+```
+```bash
+    scy -m=secure -s=hmac.txt -d=hmac.enc -t=raw -k=blowfish://default ## on prod, use secure store instead of local fs
+
+```
+
+### Generating JWT token 
+
+Creates jwt [Claim](https://github.com/viant/scy/blob/main/auth/jwt/claims.go) in JSON format
+```bash
+   echo '{"user_id":123,"email":"dev@viantinc.com"}' > claims.json 
+```
+
+#### Custom RSA
+
+Sign claim
+```bash
+   scy -m=signJwt -s=claims.json -e=600 -r=private.scy -k=blowfish://default
+```
+
+To verify JWT Claim
+```bash
+   scy -m=verifyJwt -s=token.json -r=public.enc -k=blowfish://default
+``` 
+
+#### Custom HMAC
+
+Sign claim
+
+```bash
+   scy -m=signJwt -s=claims.json -e=600 -r=private.scy -k=blowfish://default
+``` 
+
+To verify JWT Claim
+```bash
+   scy -m=verifyJwt -s=token.json -a=hmac.enc -k=blowfish://default
+``` 
 
 
 
