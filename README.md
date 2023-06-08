@@ -30,9 +30,10 @@ Higher abstraction languages promotes development consistency, offload developer
 security handling, common validation, pagination, dynamic field selection, dynamic criteria, data encoding: json,json-tabular, csv, caching, scaling, runtime/platform independence, sending 
 notification vi universal message bus (sqs/sns/kafka/pubsub) and more.
 
-Datly promotes data cohesion with grouping/batching operation. For example  to boostrap your patch operation you would first
-analyze all inputs driving business logic, then define patch generation SQL 
-with only needed data points to generate initial patch rule, for example
+Datly promotes data cohesion with grouping/batching operation. 
+For example  to boostrap your patch operation you would first  analyze all inputs driving business logic, 
+then define patch source generation SQL  with only needed data points to generate initial patch rule, for example
+
 
 ```sql
 SELECT  Products.* /* { "Cardinality": "One", "Field":"Entity" } */,
@@ -62,7 +63,8 @@ LEFT JOIN (SELECT
 ```
 
 In the example above Products, Flights and Vendor represents previous state, Acl defines access-control list, 
-and Features represents feature activator in the UI application. 
+and Features represents feature activator in the UI application.
+
 
 While Datly in autonomous mode purely uses a meta-driven approach, custom Datly allows blending Go-developed code into rules.
 As opposed to the purely meta-driven approach, Datly allows both modes to be debugged and troubleshooted with traditional debuggers.
@@ -94,9 +96,7 @@ Finally, it's integrated with OAuth, which provides a convenient way for both co
 See more [Datly secutity](doc/security/README.md)
 
 
-
 Datly use [dsql](doc/README.md#datly-sql--dsql-) to auto generate struct or internal datly rule
-
 
 
 **dept.sql**
@@ -118,8 +118,8 @@ open http://127.0.0.1:8080/v1/api/dev/dept
 
 To persist rule and then run datly run the following
 ```bash
-datly dsql -c='mydb|mysql|myusser:mypass@tcp(127.0.0.1:3306)/mydb?parseTime=true' -s=dept.sql -d=proj
-datly -c=proj/Datly/config.json
+datly dsql -c='mydb|mysql|myusser:mypass@tcp(127.0.0.1:3306)/mydb?parseTime=true' -s=dept.sql -r=reop/dev
+datly run -c=proj/Datly/config.json
 ```
 
 To see go struct generated for the view run the following

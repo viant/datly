@@ -14,7 +14,7 @@ type Validator struct {
 }
 
 func (c *Validator) WithPresence() govalidator.Option {
-	return govalidator.WithPresence()
+	return govalidator.WithSetMarker()
 }
 
 func (c *Validator) WithLocation(loc string) govalidator.Option {

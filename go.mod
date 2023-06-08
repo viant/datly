@@ -33,7 +33,7 @@ require (
 	github.com/viant/godiff v0.4.0
 	github.com/viant/parsly v0.2.0
 	github.com/viant/pgo v0.10.2
-	github.com/viant/scy v0.5.2
+	github.com/viant/scy v0.6.0
 	github.com/viant/sqlx v0.7.0
 	github.com/viant/structql v0.2.0
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
@@ -49,7 +49,7 @@ require (
 )
 
 require (
-	github.com/viant/govalidator v0.2.0
+	github.com/viant/govalidator v0.2.1
 	github.com/viant/sqlparser v0.3.1-0.20230320162628-96274e82953f
 	golang.org/x/crypto v0.7.0 // indirect
 )
@@ -60,6 +60,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.33.1
 	github.com/viant/structology v0.1.0
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
+	github.com/viant/xdatly/handler v0.0.0-20230607222027-e0e7eba96fde
 	github.com/viant/xdatly/types/core v0.0.0-20230518142915-e849977dfa52
 )
 
@@ -125,3 +126,5 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
+replace github.com/viant/xdatly/handler => /Users/awitas/go/src/github.com/viant/xdatly/handler
