@@ -30,7 +30,7 @@ require (
 	github.com/viant/dsunit v0.10.8
 	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
-	github.com/viant/godiff v0.4.0
+	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.2.0
 	github.com/viant/pgo v0.10.2
 	github.com/viant/scy v0.6.0
@@ -60,7 +60,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.33.1
 	github.com/viant/structology v0.1.0
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
-	github.com/viant/xdatly/handler v0.0.0-20230607222027-e0e7eba96fde
+	github.com/viant/xdatly/handler v0.0.0-20230608182151-294121a8713c
 	github.com/viant/xdatly/types/core v0.0.0-20230518142915-e849977dfa52
 )
 
@@ -112,6 +112,7 @@ require (
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/viant/igo v0.1.0 // indirect
+	github.com/viant/xdatly v0.3.1-0.20230608182151-294121a8713c // indirect
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/net v0.9.0 // indirect
@@ -127,4 +128,3 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace github.com/viant/xdatly/handler => /Users/awitas/go/src/github.com/viant/xdatly/handler
