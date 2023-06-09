@@ -79,7 +79,6 @@ func (v *Validator) validateWithSqlx(ctx context.Context, any interface{}, valid
 		if ret != nil && len(ret.Violations) > 0 {
 			validation.Violations = Violations(validation.Violations).MergeSqlViolation(ret.Violations)
 		}
-
 		return err
 	}
 	return fmt.Errorf("%T was nil", db)

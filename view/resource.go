@@ -7,6 +7,7 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/storage"
 	"github.com/viant/afs/url"
+	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/marshal"
@@ -30,6 +31,9 @@ type Resource struct {
 
 	Connectors  []*Connector
 	_connectors Connectors
+
+	MessageBuses  []*mbus.Resource
+	_messageBuses MessageBuses
 
 	Views  []*View `json:",omitempty"`
 	_views Views
@@ -225,11 +229,8 @@ func (r *Resource) GetViews() Views {
 
 //GetConnectors returns Connectors supplied with the Resource
 func (r *Resource) GetConnectors() Connectors {
-	if len(r.Connectors) == 0 {
-		r._connectors = Connectors{}
-		for i, connector := range r.Connectors {
-			r._connectors[connector.Name] = r.Connectors[i]
-		}
+	if len(r.Connectors) > len(r._connectors) {
+		r._connectors = ConnectorSlice(r.Connectors).Index()
 	}
 	return r._connectors
 }
@@ -275,6 +276,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	}
 
 	r._connectors = ConnectorSlice(r.Connectors).Index()
+	r._messageBuses = MessageBusSlice(r.MessageBuses).Index()
 	r._parameters, err = ParametersSlice(r.Parameters).Index()
 	if err != nil {
 		return err
@@ -445,14 +447,16 @@ func isChildOfAny(view *View, with []*Relation) bool {
 
 func EmptyResource() *Resource {
 	return &Resource{
-		Connectors:  make([]*Connector, 0),
-		_connectors: Connectors{},
-		Views:       make([]*View, 0),
-		_views:      Views{},
-		Parameters:  make([]*Parameter, 0),
-		_parameters: ParametersIndex{},
-		_types:      Types{},
-		_typesIndex: map[reflect.Type]string{},
+		Connectors:    make([]*Connector, 0),
+		_connectors:   Connectors{},
+		MessageBuses:  make([]*mbus.Resource, 0),
+		_messageBuses: MessageBuses{},
+		Views:         make([]*View, 0),
+		_views:        Views{},
+		Parameters:    make([]*Parameter, 0),
+		_parameters:   ParametersIndex{},
+		_types:        Types{},
+		_typesIndex:   map[reflect.Type]string{},
 	}
 }
 
@@ -490,6 +494,20 @@ func (r *Resource) AddConnectors(connectors ...*Connector) {
 		}
 
 		r.Connectors = append(r.Connectors, connectors[i])
+	}
+}
+
+func (r *Resource) AddMessageBus(messageBuses ...*mbus.Resource) {
+	if r.MessageBus == nil {
+		r.MessageBuses = make([]*mbus.Resource, 0)
+		r._messageBuses = map[string]*mbus.Resource{}
+	}
+
+	for i, messageBus := range messageBuses {
+		if _, ok := r._messageBuses[messageBus.Name]; ok {
+			continue
+		}
+		r.MessageBuses = append(r.MessageBuses, messageBuses[i])
 	}
 }
 
@@ -581,6 +599,13 @@ func (r *Resource) Connector(name string) (*Connector, error) {
 	}
 
 	return r._connectors.Lookup(name)
+}
+
+func (r *Resource) MessageBus(name string) (*mbus.Resource, error) {
+	if len(r._messageBuses) == 0 {
+		r._messageBuses = MessageBusSlice(r.MessageBuses).Index()
+	}
+	return r._messageBuses.Lookup(name)
 }
 
 func (r *Resource) SetTypeLookup(lookup xreflect.TypeLookupFn) {
