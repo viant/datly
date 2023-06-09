@@ -35,7 +35,7 @@ type (
 )
 
 func (c *DataUnit) WithPresence() interface{} {
-	var opt interface{} = validator.WithPresence()
+	var opt interface{} = validator.WithSetMarker()
 	return opt
 }
 func (c *DataUnit) WithLocation(loc string) interface{} {

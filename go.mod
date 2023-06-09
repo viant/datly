@@ -112,7 +112,6 @@ require (
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/viant/igo v0.1.0 // indirect
-	github.com/viant/xdatly v0.3.1-0.20230609023932-1718014518f1 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/net v0.9.0 // indirect
@@ -127,4 +126,3 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-

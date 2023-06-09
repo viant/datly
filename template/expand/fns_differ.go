@@ -25,6 +25,6 @@ func (d Differ) Diff(from interface{}, fo interface{}) *godiff.ChangeLog {
 	if err != nil {
 		return nil
 	}
-	diff := differ.Diff(from, fo, godiff.WithPresence(true))
+	diff := differ.Diff(from, fo, godiff.WithSetMarker(true))
 	return diff
 }
