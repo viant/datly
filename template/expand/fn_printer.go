@@ -3,7 +3,7 @@ package expand
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/viant/datly/shared"
+	"github.com/viant/datly/httputils"
 	"github.com/viant/velty/est"
 	"github.com/viant/velty/est/op"
 	"github.com/viant/xunsafe"
@@ -124,14 +124,13 @@ func (p *Printer) Fatalf(any interface{}, args ...interface{}) (string, error) {
 func (p *Printer) FatalfWithCode(code int, any interface{}, args ...interface{}) (string, error) {
 	format, ok := any.(string)
 	if ok {
-		err := &shared.ResponseError{StatusCode: code, Origin: fmt.Errorf(p.Sprintf(format, args...))}
-		return "", err
+		return "", httputils.NewHttpMessageError(code, fmt.Errorf(p.Sprintf(format, args...)))
 	}
 	if err, ok := any.(error); ok {
-		return "", &shared.ResponseError{StatusCode: code, Origin: err}
+		return "", httputils.NewHttpMessageError(code, err)
 	}
-	err := &shared.ResponseError{StatusCode: code, Origin: fmt.Errorf(p.Sprintf("%+v", any))}
-	return "", err
+
+	return "", httputils.NewHttpMessageError(code, fmt.Errorf(p.Sprintf("%+v", any)))
 }
 
 func (p *Printer) derefArgs(args []interface{}) {

@@ -1143,11 +1143,11 @@ func (v *View) ensureParameters(selector *Selector) {
 	}
 
 	if selector.Parameters.Values == nil {
-		selector.Parameters.Values = expand.NewValue(v.Template.Schema.Type())
+		selector.Parameters.Values = types.NewValue(v.Template.Schema.Type())
 	}
 
 	if selector.Parameters.Has == nil {
-		selector.Parameters.Has = expand.NewValue(v.Template.PresenceSchema.Type())
+		selector.Parameters.Has = types.NewValue(v.Template.PresenceSchema.Type())
 	}
 }
 

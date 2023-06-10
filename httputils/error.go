@@ -1,27 +1,17 @@
 package httputils
 
-type ErrorStatusCoder interface {
-	ErrorStatusCode() int
-}
-
-type ErrorMessager interface {
-	ErrorMessage() string
-}
-
-type ErrorObjecter interface {
-	ErrorObject() interface{}
-}
+import "github.com/viant/xdatly/handler/http"
 
 func BuildErrorResponse(err error) (statusCode int, errorMessage string) {
 	statusCode = 400
 	errorMessage = ""
 
-	messager, ok := err.(ErrorMessager)
+	messager, ok := err.(http.ErrorMessager)
 	if ok {
 		errorMessage = messager.ErrorMessage()
 	}
 
-	coder, ok := err.(ErrorStatusCoder)
+	coder, ok := err.(http.ErrorStatusCoder)
 	if ok {
 		statusCode = coder.ErrorStatusCode()
 	}

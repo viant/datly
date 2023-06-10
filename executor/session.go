@@ -4,18 +4,16 @@ import (
 	"fmt"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
-	"github.com/viant/sqlx/io/insert/batcher"
-	"reflect"
 	"sync"
 )
 
 type Session struct {
-	Parameters  *Parameters
-	View        *view.View
-	mux         sync.Mutex
-	State       *expand.State
-	collections map[string]*batcher.Collection
-	selectors   *view.Selectors
+	Parameters *Parameters
+	View       *view.View
+	State      *expand.State
+
+	mux       sync.Mutex
+	selectors *view.Selectors
 }
 
 func NewSession(selectors *view.Selectors, aView *view.View) (*Session, error) {
@@ -28,11 +26,10 @@ func NewSession(selectors *view.Selectors, aView *view.View) (*Session, error) {
 	}
 
 	return &Session{
-		Parameters:  parameters,
-		selectors:   selectors,
-		View:        aView,
-		mux:         sync.Mutex{},
-		collections: map[string]*batcher.Collection{},
+		Parameters: parameters,
+		selectors:  selectors,
+		View:       aView,
+		mux:        sync.Mutex{},
 	}, nil
 }
 
@@ -51,16 +48,6 @@ func (s *Session) Lookup(v *view.View) *view.ParamState {
 
 	state.Init(v)
 	return state
-}
-
-func (s *Session) Collection(executable *expand.Executable) *batcher.Collection {
-	if collection, ok := s.collections[executable.Table]; ok {
-		return collection
-	}
-
-	collection := batcher.NewCollection(reflect.TypeOf(executable.Data))
-	s.collections[executable.Table] = collection
-	return collection
 }
 
 func (s *Session) Selectors() *view.Selectors {

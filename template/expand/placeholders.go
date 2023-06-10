@@ -28,10 +28,12 @@ type (
 		sqlxValidator        *validator.Service              `velty:"-"`
 		sliceIndex           map[reflect.Type]*xunsafe.Slice `velty:"-"`
 		executables          []*Executable                   `velty:"-"`
-		lastTableExecutables map[string]*Executable          `velty:"-"`
+		lastTableExecutables ExecutablesIndex                `velty:"-"`
 		markerIndex          int                             `velty:"-"`
 		markers              []string                        `velty:"-"`
 	}
+
+	ExecutablesIndex map[string]*Executable
 )
 
 func (c *DataUnit) WithPresence() interface{} {

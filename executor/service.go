@@ -4,13 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/datly/logger"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/insert/batcher"
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/option"
 	"reflect"
-	"strings"
 )
 
 type (
@@ -20,16 +20,25 @@ type (
 
 	dbSession struct {
 		*sqlxIO
+		dialect *info.Dialect
+
 		tx *lazyTx
-		*info.Dialect
+		*dbSession
+		canBeBatchedGlobally bool
+		dbSource             DBSource
+		collections          map[string]*batcher.Collection
+		logger               *logger.Adapter
 	}
 )
 
-func newDbIo(tx *lazyTx, dialect *info.Dialect) *dbSession {
+func newDbIo(tx *lazyTx, dialect *info.Dialect, dbSource DBSource, canBeBatchedGlobally bool, logger *logger.Adapter) *dbSession {
 	return &dbSession{
-		sqlxIO:  newSqlxIO(),
-		tx:      tx,
-		Dialect: dialect,
+		sqlxIO:               newSqlxIO(),
+		tx:                   tx,
+		dialect:              dialect,
+		dbSource:             dbSource,
+		canBeBatchedGlobally: canBeBatchedGlobally,
+		collections:          map[string]*batcher.Collection{},
 	}
 }
 
@@ -53,67 +62,60 @@ func (e *Executor) Execute(ctx context.Context, aView *view.View, options ...Opt
 
 //TODO: remove reflection
 //TODO: customize global batch collector
-func (e *Executor) Exec(ctx context.Context, session *Session) error {
-	state, data, err := e.sqlBuilder.Build(session.View, session.Lookup(session.View))
+func (e *Executor) Exec(ctx context.Context, sess *Session) error {
+	state, data, err := e.sqlBuilder.Build(sess.View, sess.Lookup(sess.View))
 	if state != nil {
-		session.State = state
-		defer session.State.Flush(expand.StatusFailure)
+		sess.State = state
+		defer sess.State.Flush(expand.StatusFailure)
 	}
+
 	if err != nil {
 		return err
 	}
 
-	if err = e.exec(ctx, session, data, state.DataUnit); err != nil {
+	if err = e.ExecuteStmts(ctx, NewViewDBSource(sess.View), NewTemplateStmtIterator(state.DataUnit, data), sess.View.Logger); err != nil {
 		return err
 	}
 
 	return state.Flush(expand.StatusSuccess)
 }
 
-func (e *Executor) exec(ctx context.Context, session *Session, data []*SQLStatment, criteria *expand.DataUnit) error {
-	if len(data) == 0 {
+func (e *Executor) ExecuteStmts(ctx context.Context, dbSource DBSource, it StmtIterator, options ...interface{}) error {
+	if !it.HasAny() {
 		return nil
 	}
 
-	canBeBatchedGlobally := false
-	db, err := session.View.Db()
+	var log *logger.Adapter
+	for _, anOption := range options {
+		switch actual := anOption.(type) {
+		case *logger.Adapter:
+			log = actual
+		}
+	}
+
+	canBeBatchedGlobally := dbSource.CanBatchGlobally()
+	db, err := dbSource.Db(ctx)
 	if err != nil {
 		return err
 	}
 
-	dialect, err := session.View.Connector.Dialect(ctx)
+	dialect, err := dbSource.Dialect(ctx)
 	if err != nil {
 		return err
 	}
+
 	aTx := newLazyTx(db, canBeBatchedGlobally)
-	dbSession := newDbIo(aTx, dialect)
+	aDbSession := newDbIo(aTx, dialect, dbSource, canBeBatchedGlobally, log)
 
-	for i := range data {
-		if err = e.execData(ctx, dbSession, data[i], session, criteria, db, canBeBatchedGlobally); err != nil {
+	for it.HasNext() {
+		next := it.Next()
+		if err = e.execData(ctx, aDbSession, next, db); err != nil {
 			_ = aTx.RollbackIfNeeded()
 			return err
 		}
 	}
 
 	return aTx.CommitIfNeeded()
-}
-
-func (e *Executor) canBeBatchedGlobally(criteria *expand.DataUnit, data []*SQLStatment) bool {
-	executables := criteria.FilterExecutables(extractStatements(data), true)
-	if len(executables) != len(data) {
-		return false
-	}
-
-	tableNamesIndex := map[string]bool{}
-	for _, executable := range executables {
-		if executable.ExecType == expand.ExecTypeUpdate {
-			return false
-		}
-
-		tableNamesIndex[executable.Table] = true
-	}
-
-	return len(tableNamesIndex) == 1
 }
 
 func extractStatements(data []*SQLStatment) []string {
@@ -125,37 +127,41 @@ func extractStatements(data []*SQLStatment) []string {
 	return result
 }
 
-func (e *Executor) execData(ctx context.Context, dbSession *dbSession, data *SQLStatment, session *Session, criteria *expand.DataUnit, db *sql.DB, canBeBatchedGlobally bool) error {
-	if strings.TrimSpace(data.SQL) == "" {
-		return nil
-	}
-	if executable, ok := criteria.IsServiceExec(data.SQL); ok {
-		switch executable.ExecType {
+func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface{}, db *sql.DB) error {
+	switch actual := data.(type) {
+	case *expand.Executable:
+		switch actual.ExecType {
 		case expand.ExecTypeInsert:
-			return e.handleInsert(ctx, dbSession, session, executable, db, canBeBatchedGlobally)
+			return e.handleInsert(ctx, sess, actual, db)
 		case expand.ExecTypeUpdate:
-			return e.handleUpdate(ctx, dbSession, db, executable)
+			return e.handleUpdate(ctx, sess, db, actual)
 		default:
-			return fmt.Errorf("unsupported exec type: %v\n", executable.ExecType)
+			return fmt.Errorf("unsupported exec type: %v\n", actual.ExecType)
 		}
-	}
-	tx, err := dbSession.tx.Tx()
-	if err != nil {
-		return err
+
+	case *SQLStatment:
+		if len(actual.SQL) == 0 {
+			return nil
+		}
+
+		tx, err := sess.tx.Tx()
+		if err != nil {
+			return err
+		}
+
+		return e.executeStatement(ctx, tx, actual, sess)
 	}
 
-	return e.executeStatement(ctx, tx, data, session)
+	return fmt.Errorf("unsupported query type %T", data)
 }
 
-func (e *Executor) handleUpdate(ctx context.Context, dbSession *dbSession, db *sql.DB, executable *expand.Executable) error {
-
-	//service, err := update.New(ctx, db, executable.Table)
-	service, err := dbSession.Updater(ctx, db, executable.Table, dbSession.Dialect)
+func (e *Executor) handleUpdate(ctx context.Context, sess *dbSession, db *sql.DB, executable *expand.Executable) error {
+	service, err := sess.Updater(ctx, db, executable.Table, e.dbOptions(db, sess))
 	if err != nil {
 		return err
 	}
 
-	options, err := dbSession.tx.PrepareTxOptions()
+	options, err := sess.tx.PrepareTxOptions()
 	if err != nil {
 		return err
 	}
@@ -164,21 +170,16 @@ func (e *Executor) handleUpdate(ctx context.Context, dbSession *dbSession, db *s
 	return err
 }
 
-func (e *Executor) handleInsert(ctx context.Context, dbSession *dbSession, session *Session, executable *expand.Executable, db *sql.DB, canBeBatchedGlobally bool) error {
-
-	canBeBatched := session.View.TableBatches[executable.Table] && e.dialectSupportsBatching(ctx, session.View)
-
-	var options []option.Option
-	options = append(options, dbSession.Dialect, db)
-
-	//service, err := insert.New(ctx, db, executable.Table)
-	service, err := dbSession.Inserter(ctx, db, executable.Table, options...)
+func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable *expand.Executable, db *sql.DB) error {
+	canBeBatched := sess.supportLocalBatch() && sess.dbSource.CanBatch(executable.Table)
+	options := e.dbOptions(db, sess)
+	service, err := sess.Inserter(ctx, db, executable.Table, options...)
 	if err != nil {
 		return err
 	}
 
 	if !canBeBatched {
-		tx, err := dbSession.tx.Tx()
+		tx, err := sess.tx.Tx()
 		if err != nil {
 			return err
 		}
@@ -188,14 +189,14 @@ func (e *Executor) handleInsert(ctx context.Context, dbSession *dbSession, sessi
 		return err
 	}
 
-	collection := session.Collection(executable)
+	collection := sess.collection(executable)
 	collection.Append(executable.Data)
 	if !executable.IsLast {
 		return nil
 	}
 
-	if !canBeBatchedGlobally {
-		options, err := dbSession.tx.PrepareTxOptions()
+	if !sess.canBeBatchedGlobally {
+		options, err := sess.tx.PrepareTxOptions()
 		if err != nil {
 			return err
 		}
@@ -203,8 +204,10 @@ func (e *Executor) handleInsert(ctx context.Context, dbSession *dbSession, sessi
 		if collection.Len() < batchSize {
 			batchSize = collection.Len()
 		}
+
 		options = append(options, option.BatchSize(batchSize))
-		_, _, err = service.Exec(ctx, collection.Unwrap(), append(options, dbSession.Dialect)...)
+		options = append(options, e.dbOptions(db, sess))
+		_, _, err = service.Exec(ctx, collection.Unwrap(), options...)
 		return err
 	}
 
@@ -236,17 +239,42 @@ func (e *Executor) handleInsert(ctx context.Context, dbSession *dbSession, sessi
 	return nil
 }
 
+func (e *Executor) dbOptions(db *sql.DB, sess *dbSession) []option.Option {
+	options := []option.Option{db}
+	if sess.dialect != nil {
+		options = append(options, sess.dialect)
+	}
+	return options
+}
+
 func (e *Executor) dialectSupportsBatching(ctx context.Context, aView *view.View) bool {
 	dialect, err := aView.Connector.Dialect(ctx)
 	return err == nil && dialect.Insert.MultiValues()
 }
 
-func (e *Executor) executeStatement(ctx context.Context, tx *sql.Tx, stmt *SQLStatment, session *Session) error {
+func (e *Executor) executeStatement(ctx context.Context, tx *sql.Tx, stmt *SQLStatment, sess *dbSession) error {
 	_, err := tx.ExecContext(ctx, stmt.SQL, stmt.Args...)
 	if err != nil {
-		session.View.Logger.LogDatabaseErr(stmt.SQL, err)
+		if sess.logger != nil {
+			sess.logger.LogDatabaseErr(stmt.SQL, err)
+		}
+
 		err = fmt.Errorf("error occured while connecting to database")
 	}
 
 	return err
+}
+
+func (s *dbSession) collection(executable *expand.Executable) *batcher.Collection {
+	if collection, ok := s.collections[executable.Table]; ok {
+		return collection
+	}
+
+	collection := batcher.NewCollection(reflect.TypeOf(executable.Data))
+	s.collections[executable.Table] = collection
+	return collection
+}
+
+func (s *dbSession) supportLocalBatch() bool {
+	return s.dialect != nil && s.dialect.Insert.MultiValues()
 }

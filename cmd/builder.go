@@ -718,10 +718,10 @@ func (s *Builder) initConfigProvider(builder *routeBuilder) error {
 }
 
 func (s *Builder) buildConfigProvider(SQL string, builder *routeBuilder) (*ViewConfigurer, error) {
-	serviceType := router.ReaderServiceType
+	serviceType := router.ServiceTypeReader
 
 	if IsSQLExecMode(SQL) {
-		serviceType = router.ExecutorServiceType
+		serviceType = router.ServiceTypeExecutor
 	}
 
 	return NewConfigProviderReader(view.FirstNotEmpty(s.options.Generate.Name, s.fileName(builder.session.sourceURL)), SQL, builder.option, serviceType, builder.paramsIndex, nil, &s.options.Connector, builder)
@@ -1330,9 +1330,9 @@ func (s *Builder) isUtilParam(builder *routeBuilder, param *view.Parameter) bool
 func (s *Builder) inheritRouteServiceType(builder *routeBuilder, aView *view.View) {
 	switch aView.Mode {
 	case "", view.SQLQueryMode:
-		builder.route.Service = router.ReaderServiceType
+		builder.route.Service = router.ServiceTypeReader
 	case view.SQLExecMode:
-		builder.route.Service = router.ExecutorServiceType
+		builder.route.Service = router.ServiceTypeExecutor
 	}
 }
 

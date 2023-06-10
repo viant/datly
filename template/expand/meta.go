@@ -3,6 +3,7 @@ package expand
 import (
 	"database/sql"
 	"github.com/google/uuid"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -11,6 +12,7 @@ import (
 const (
 	ExecTypeInsert ExecType = iota
 	ExecTypeUpdate
+	ExecTypeDelete
 )
 
 type (
@@ -249,16 +251,19 @@ func (c *DataUnit) appendExecutable(data interface{}, tableName string, execType
 	c.executables = append(c.executables, newExecutable)
 	marker := uuid.New().String()
 	c.markers = append(c.markers, marker)
+	c.lastTableExecutables.UpdateLastExecutable(execType, tableName, newExecutable)
 
+	return marker
+}
+
+func (i ExecutablesIndex) UpdateLastExecutable(execType ExecType, tableName string, newExecutable *Executable) {
 	if execType == ExecTypeInsert {
-		if lastExecutable, ok := c.lastTableExecutables[tableName]; ok {
+		if lastExecutable, ok := i[tableName]; ok {
 			lastExecutable.IsLast = false
 		}
 
-		c.lastTableExecutables[tableName] = newExecutable
+		i[tableName] = newExecutable
 	}
-
-	return marker
 }
 
 func copyValues(data []interface{}) []interface{} {
@@ -308,7 +313,7 @@ func copyValue(data interface{}) interface{} {
 		reflect.Copy(sliceResult, result)
 		return result.Elem().Interface()
 	default:
-		dest := NewValue(result.Type())
+		dest := types.NewValue(result.Type())
 		actualType := result.Type()
 		if actualType.Kind() == reflect.Ptr {
 			actualType = actualType.Elem()

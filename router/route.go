@@ -33,8 +33,10 @@ const (
 	BasicStyle         Style = "Basic"
 	ComprehensiveStyle Style = "Comprehensive"
 
-	ReaderServiceType   ServiceType = "Reader"
-	ExecutorServiceType ServiceType = "Executor"
+	ServiceTypeReader   ServiceType = "Reader"
+	ServiceTypeExecutor ServiceType = "Executor"
+
+	ServiceTypeHandler ServiceType = "Handler"
 
 	HeaderContentType = "Content-Type"
 
@@ -72,6 +74,7 @@ type (
 		ParamStatusError *int
 		Cache            *cache.Cache
 		Compression      *Compression
+		Handler          *Handler
 
 		_resource  *view.Resource
 		_accessors *types.Accessors
@@ -492,16 +495,16 @@ func (r *Route) responseType() reflect.Type {
 
 func (r *Route) initServiceType() error {
 	switch r.Service {
-	case "", ReaderServiceType:
-		r.Service = ReaderServiceType
+	case "", ServiceTypeReader:
+		r.Service = ServiceTypeReader
 		return nil
-	case ExecutorServiceType:
+	case ServiceTypeExecutor:
 		return nil
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		r.Service = ReaderServiceType
+		r.Service = ServiceTypeReader
 		return nil
 	default:
 		return fmt.Errorf("http method %v unsupported, no default service specified for given method", r.Method)
