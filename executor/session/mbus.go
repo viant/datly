@@ -45,7 +45,7 @@ func (m *MBus) Message(dest string, data interface{}, opts ...xmbus.Option) *xmb
 
 func (m *MBus) Resource(dest string) (*mbus.Resource, error) {
 	if isEncoded := isEncoded(dest); isEncoded {
-		if resource := decodeResource(dest); resource != nil {
+		if resource, _ := mbus.EncodedResource(dest).Decode(); resource != nil {
 			return resource, nil
 		}
 	}
@@ -55,22 +55,4 @@ func (m *MBus) Resource(dest string) (*mbus.Resource, error) {
 func isEncoded(encoded string) bool {
 	isEncoded := strings.Contains(encoded, "/")
 	return isEncoded
-}
-
-func decodeResource(dest string) *mbus.Resource {
-	parts := strings.Split(dest, "/")
-	var vendor, resourceType, region = parts[0], parts[1], parts[2]
-	resource := &mbus.Resource{
-		Vendor: vendor,
-		Type:   resourceType,
-		Region: region,
-	}
-	URI := strings.Join(parts[3:], "/")
-	if len(parts) > 4 {
-		resource.URL = URI
-		resource.Name = parts[len(parts)-1]
-	} else {
-		resource.Name = URI
-	}
-	return resource
 }

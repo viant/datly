@@ -112,6 +112,7 @@ func (r *Resource) MergeFrom(resource *Resource, types Types) {
 	r.mergeParameters(resource)
 	r.mergeTypes(resource, types)
 	r.mergeConnectors(resource)
+	r.mergeMessageBuses(resource)
 	r.mergeProviders(resource)
 }
 
@@ -183,7 +184,8 @@ func (r *Resource) viewByName() map[string]*View {
 	return index
 }
 
-func (r *Resource) ConnectorByName() map[string]*Connector {
+func (r *Resource) ConnectorByName() Connectors {
+	ConnectorSlice(r.Connectors).Index()
 	index := map[string]*Connector{}
 	if len(r.Connectors) == 0 {
 		return index
@@ -677,4 +679,17 @@ func (r *Resource) typeNotFound(packageName string, typeName string) error {
 
 func (r *Resource) ParamByName(name string) (*Parameter, error) {
 	return r._parameters.Lookup(name)
+}
+
+func (r *Resource) mergeMessageBuses(resource *Resource) {
+	if len(resource.MessageBuses) == 0 {
+		return
+	}
+	messageBusByName := MessageBusSlice(r.MessageBuses).Index()
+	for i, candidate := range resource.MessageBuses {
+		if _, ok := messageBusByName[candidate.Name]; !ok {
+			messageBus := *resource.MessageBuses[i]
+			r.MessageBuses = append(r.MessageBuses, &messageBus)
+		}
+	}
 }

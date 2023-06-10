@@ -8,6 +8,7 @@ import (
 
 type Repository struct {
 	Connector
+	Mbus
 	JwtVerifier
 	Repo      string `short:"r" long:"repo" description:"datly rule repository location"  default:"repo/dev" `
 	Const     string `short:"o" long:"const" description:"const location" `

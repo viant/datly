@@ -3,7 +3,6 @@ package view
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/shared"
 )
 
 //Connectors represents Connector registry
@@ -15,11 +14,7 @@ func (v *Connectors) Register(connector *Connector) {
 	if len(*v) == 0 {
 		*v = make(map[string]*Connector)
 	}
-
-	keys := shared.KeysOf(connector.Name, false)
-	for i := range keys {
-		(*v)[keys[i]] = connector
-	}
+	(*v)[connector.Name] = connector
 }
 
 //Lookup returns Connector by Connector.Name
