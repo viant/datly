@@ -499,7 +499,7 @@ datly dsql -s=dsql/actor/Actor.sql \
 -r=repo/dev
 ```
 
-### 1.14 Check if InitialiseForUpdate works
+### 1.15 Check if InitialiseForUpdate works
 
 ```http request
 PATCH /v1/api/dev/actor HTTP/1.1
@@ -534,6 +534,231 @@ You can also see on app console that the plugin and routes were reloaded:
 [INFO] detected resources changes, rebuilding routers
 [INFO] routers rebuild completed after: 441.979753ms
 ```
+
+
+### 1.17 Refactor init functions
+
+- Change ~/myproject/pkg/actor/init.go file:
+  - Change InitialiseForInsert and InitialiseForUpdate methods to private ones.
+  - Wrap them into new Init method.
+```go
+func (a *Actor) Init(cur *Actor) bool {
+	isInsert := cur == nil
+	if isInsert {
+		return a.initialiseForInsert()
+	} else {
+		return a.initialiseForUpdate(cur)
+	}
+}
+```
+
++ adjust file ~/myproject/dsql/actor/Actor.sql
+```code
+#foreach($recActor in $Unsafe.Actor)
+    #if($recActor)
+        #set($inited = $recActor.Init($curActorByActorId[$recActor.ActorId]))
+
+        #if(($curActorByActorId.HasKey($recActor.ActorId) == true))
+          $sql.Update($recActor, "actor");
+        #else
+          $sql.Insert($recActor, "actor");
+        #end
+    #end
+#end
+```
++ Generate plugin
++ Generate repo rules for Actor.sql
+
+### 1.17 Add custom validation
++ create folder ~/myproject/pkg/shared
++ create file ~/myproject/pkg/shared/message.go
+```go
+package shared
+
+const (
+	MessageLevelInfo = iota
+	MessageLevelWarning
+	MessageLevelError
+)
+
+type Message struct {
+	Level   int
+	Code    string
+	Message string
+}
+
+type Messages struct {
+	Messages []*Message
+	Error    string
+	HasError bool
+}
+
+func (m *Messages) AddInfo(code, message string) {
+	m.Messages = append(m.Messages, &Message{Message: message, Code: code, Level: MessageLevelInfo})
+}
+
+func (m *Messages) AddWarning(code, message string) {
+	m.Messages = append(m.Messages, &Message{Message: message, Code: code, Level: MessageLevelWarning})
+
+}
+
+func (m *Messages) AddError(code, message string) {
+	m.Messages = append(m.Messages, &Message{Message: message, Code: code, Level: MessageLevelError})
+	m.HasError = true
+	m.Error = message
+}
+```
+
++ create file ~/myproject/pkg/shared/validation.go
+```go
+package shared
+
+import (
+	"context"
+	"github.com/viant/govalidator"
+)
+
+var validator = govalidator.New()
+
+//Validation represents validation info
+type Validation struct {
+	Validation govalidator.Validation
+	Messages
+}
+
+func (v *Validation) UpdateStatus() {
+	if v.Validation.Failed {
+		v.Messages.AddError("VALIDATION_ERROR", v.Validation.String())
+	}
+}
+
+func (v *Validation) FloatPairRequired(first, second *float64, location, message string) {
+	if first == nil && second == nil {
+		return
+	}
+	if second == nil {
+		v.Validation.AddViolation(location, nil, "pairRequired", message)
+	}
+}
+
+func (v *Validation) Validate(any interface{}, options ...govalidator.Option) bool {
+	validation, err := validator.Validate(context.Background(), any, options...)
+	if err != nil {
+		v.Messages.AddError("VALIDATION_ERROR", err.Error())
+		return false
+	}
+
+	if validation != nil {
+		v.Validation.Violations = append(v.Validation.Violations, validation.Violations...)
+		if validation.Failed {
+			v.Validation.Failed = validation.Failed
+		}
+	}
+	return v.Validation.Failed
+}
+
+func NewValidationInfo() *Validation {
+	return &Validation{Validation: govalidator.Validation{}}
+}
+```
+
++ add required module (version can be different) in ~/myproject/pkg/go.mod
+```text
+github.com/viant/govalidator v0.2.1
+```
+
++ **add file ~/myproject/pkg/actor/validate.go**
+```go
+package actor
+
+import (
+	"fmt"
+	"github.com/michael/mymodule/shared"
+	"github.com/viant/govalidator"
+	"strings"
+)
+
+func (a *Actor) Validate(cur *Actor) *shared.Validation {
+	info := shared.NewValidationInfo()
+	defer info.UpdateStatus()
+
+	isInsert := cur == nil
+	if isInsert {
+		a.validateForInsert(info)
+	} else {
+		a.validateForUpdate(info, cur)
+	}
+	return info
+}
+
+func (a *Actor) validateForInsert(info *shared.Validation) {
+	info.Validate(a, govalidator.WithShallow(true), govalidator.WithSetMarker())
+
+	if a.Has.FirstName && a.Has.LastName {
+		a.validateNames(info, a.FirstName, a.LastName)
+	}
+}
+
+func (a *Actor) validateForUpdate(info *shared.Validation, cur *Actor) {
+	info.Validate(a, govalidator.WithShallow(true), govalidator.WithSetMarker())
+
+	firstName := cur.FirstName
+	lastName := cur.LastName
+
+	if a.Has.FirstName {
+		firstName = a.FirstName
+	}
+
+	if a.Has.LastName {
+		lastName = a.LastName
+	}
+
+	a.validateNames(info, firstName, lastName)
+}
+
+func (a *Actor) validateNames(info *shared.Validation, firstName string, lastName string) {
+	if len(firstName) > 0 && len(a.LastName) > 0 {
+		if strings.ToUpper(string([]rune(firstName)[0])) == strings.ToUpper(string([]rune(lastName)[0])) {
+			info.Validation.AddViolation("[FirstName, LastName]", fmt.Sprintf("%s %s", firstName, lastName), "theSameFirstLetter",
+				fmt.Sprintf("First name and last name can't start with the same letter %s %s", firstName, lastName))
+		}
+	}
+}
+```
++ add Validate invocation inside file ~/myproject/dsql/actor/Actor.sql
+
+```code
+#foreach($recActor in $Unsafe.Actor)
+    #if($recActor)
+        #set($inited = $recActor.Init($curActorByActorId[$recActor.ActorId]))
+
+        #set($info = $recActor.Validate($curActorByActorId[$recActor.ActorId]))
+        #if($info.HasError ==  true)
+            $response.StatusCode(401)
+            $response.Failf("%v",$info.Error)
+        #end
+
+        #if(($curActorByActorId.HasKey($recActor.ActorId) == true))
+          $sql.Update($recActor, "actor");
+        #else
+          $sql.Insert($recActor, "actor");
+        #end
+    #end
+#end
+```
++ Generate plugin (see previous chapters)
++ Generate again repo rules for Actor.sql (see previous chapters)
+
++ **If you insert/update (patch) actor with a first name and last name beginning with the same char 
+then you get a validation error like this:**
+```text
+{
+    "Status": "error",
+    "Message": "Failed validation for [FirstName, LastName](theSameFirstLetter)"
+}
+```
+
+
 
 ## Troubleshooting
 
@@ -587,3 +812,41 @@ Now you can try to build datly again.
 datly plugin -p=~/myproject -r=repo/dev -o=darwin -a=amd64
 ```
 
+
+
+### Troubleshooting datly load plugin
+If you build a plugin that uses a module with a different version than datly inside your_project_dir/.build 
+then this kind of error can occur when you run app or reload plugin:
+
+- command:
+```shell
+ ~/myproject/bin/datly run -c=~/myproject/repo/dev/Datly/config.json
+```
+
+- error message:
+```shell
+[ERROR] error occured while reading plugin 
+        plugin.Open("/var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/20230609122553/main_1_17_1_darwin_amd64"): 
+        plugin was built with a different version of package github.com/viant/govalidator
+```
+
+- In this case go.mod files had different version of github.com/viant/govalidator  
+
+  - myproject/pkg/go.mod:
+  ```text
+  github.com/viant/govalidator v0.2.1
+  ```
+  
+  - myproject/.build/datly/go.mod:
+  ```text
+  github.com/viant/govalidator v0.2.0
+  ```
+
+Because these versions weren't compatible I decided 
+to update .build/datly to latest version that uses v0.2.1  
+
+After deleting whole .build dir run command to recreate it:
+```shell
+datly initExt -p=~/myproject -n=mymodule   
+```
+Now you should be able to load the plugin.
