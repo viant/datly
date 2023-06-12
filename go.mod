@@ -3,14 +3,13 @@ module github.com/viant/datly
 go 1.17
 
 require (
-	cloud.google.com/go/storage v1.28.1 // indirect
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
 	github.com/francoispqt/gojay v1.2.13
 	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/go-playground/validator v9.31.0+incompatible
 	github.com/go-sql-driver/mysql v1.7.0
-	github.com/goccy/go-json v0.9.7
+	github.com/goccy/go-json v0.9.11
 	github.com/golang-jwt/jwt/v4 v4.4.1
 	github.com/google/gops v0.3.23
 	github.com/google/uuid v1.3.0
@@ -32,7 +31,7 @@ require (
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.2.0
-	github.com/viant/pgo v0.10.2
+	github.com/viant/pgo v0.10.3
 	github.com/viant/scy v0.6.0
 	github.com/viant/sqlx v0.7.1
 	github.com/viant/structql v0.2.0
@@ -70,6 +69,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v0.13.0 // indirect
 	cloud.google.com/go/secretmanager v1.10.0 // indirect
+	cloud.google.com/go/storage v1.29.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.18.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.10 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.13.3 // indirect
@@ -102,7 +102,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect
 	github.com/googleapis/gax-go/v2 v2.8.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/kr/pretty v0.2.1 // indirect
+	github.com/kr/pretty v0.3.0 // indirect
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.0 // indirect
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
@@ -111,6 +111,7 @@ require (
 	github.com/lestrrat-go/option v1.0.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/viant/igo v0.1.0 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
 	go.opencensus.io v0.24.0 // indirect
