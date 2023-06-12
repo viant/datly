@@ -18,9 +18,9 @@ type SqlxValidator struct {
 }
 
 func (v *SqlxValidator) Validate(ctx context.Context, any interface{}, opts ...validator.Option) *validator.Validation {
-	validation := &validator.Validation{Violations: make([]*validator.Violation, 0)}
 	options := &validator.Options{}
 	options.Apply(opts)
+	validation := getOrCreateValidation(options)
 	err := v.validator.validateWithSqlx(ctx, any, validation, options)
 	if err != nil {
 		validation.Append("/", "", "", "error", err.Error())
@@ -33,14 +33,24 @@ type Validator struct{}
 func (v *Validator) Validate(ctx context.Context, any interface{}, opts ...validator.Option) *validator.Validation {
 	options := &validator.Options{}
 	options.Apply(opts)
-	validation := &validator.Validation{Violations: make([]*validator.Violation, 0)}
-
+	validation := getOrCreateValidation(options)
 	err := v.validateWithGoValidator(ctx, any, validation, options)
 	if err != nil {
 		validation.Append("/", "", "", "error", err.Error())
 	}
 	if err = v.validateWithSqlx(ctx, any, validation, options); err != nil {
 		validation.Append("/", "", "", "error", err.Error())
+	}
+	return validation
+}
+
+func getOrCreateValidation(options *validator.Options) *validator.Validation {
+	var validation *validator.Validation
+	if options.WithValidation != nil {
+		validation = options.WithValidation
+	}
+	if validation == nil {
+		validation = &validator.Validation{Violations: make([]*validator.Violation, 0)}
 	}
 	return validation
 }
@@ -54,10 +64,6 @@ func (v *Validator) validateWithGoValidator(ctx context.Context, any interface{}
 		gOptions = append(gOptions, govalidator.WithSetMarker())
 	}
 
-	if options.WithValidation != nil && len(options.WithValidation.Violations) > 0 {
-		validation.Violations = append(validation.Violations, options.WithValidation.Violations...)
-		validation.Failed = len(validation.Violations) > 0
-	}
 	ret, err := goValidator.Validate(ctx, any, gOptions...)
 	if ret != nil && len(ret.Violations) > 0 {
 		validation.Violations = Violations(validation.Violations).MergeGoViolation(ret.Violations)
