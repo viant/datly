@@ -4,13 +4,12 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/cloudless/async/mbus"
-	"github.com/viant/datly/view"
 	xmbus "github.com/viant/xdatly/handler/mbus"
 	"strings"
 )
 
 type MBus struct {
-	view.MessageBuses
+	MessageBuses map[string]*mbus.Resource
 }
 
 func (m *MBus) Push(ctx context.Context, msg *xmbus.Message) (*xmbus.Confirmation, error) {
@@ -49,10 +48,21 @@ func (m *MBus) Resource(dest string) (*mbus.Resource, error) {
 			return resource, nil
 		}
 	}
-	return m.MessageBuses.Lookup(dest)
+	res, ok := m.MessageBuses[dest]
+	if !ok {
+		return nil, fmt.Errorf("failed to locate mbus for %v", dest)
+	}
+	return res, nil
 }
 
 func isEncoded(encoded string) bool {
 	isEncoded := strings.Contains(encoded, "/")
 	return isEncoded
+}
+
+func NewMBus(messageBusses map[string]*mbus.Resource) *MBus {
+	if len(messageBusses) == 0 {
+		messageBusses = map[string]*mbus.Resource{}
+	}
+	return &MBus{MessageBuses: messageBusses}
 }

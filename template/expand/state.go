@@ -1,8 +1,11 @@
 package expand
 
 import (
-	"github.com/viant/datly/executor/mbus"
+	"github.com/viant/datly/executor/session"
 	"github.com/viant/velty/est"
+	"github.com/viant/xdatly/handler"
+	"github.com/viant/xdatly/handler/mbus"
+	"github.com/viant/xdatly/handler/validator"
 )
 
 type (
@@ -14,14 +17,15 @@ type (
 	}
 
 	Context struct {
-		Printer         *Printer         `velty:"names=logger|fmt"`
-		DataUnit        *DataUnit        `velty:"names=sql|sqlx|sequencer|criteria"`
-		Http            *Http            `velty:"names=http"`
-		ResponseBuilder *ResponseBuilder `velty:"names=response"`
-		ViewParam       *MetaParam       `velty:"names=View"`
-		ParentParam     *MetaParam       `velty:"names=ParentView"`
-		Validator       *Validator       `velty:"names=validator"`
-		MessageBus      *mbus.Service    `velty:"names=messageBus"`
+		Printer         *Printer          `velty:"names=logger|fmt"`
+		DataUnit        *DataUnit         `velty:"names=sql|sqlx|sequencer|criteria"`
+		Http            *Http             `velty:"names=http"`
+		ResponseBuilder *ResponseBuilder  `velty:"names=response"`
+		ViewParam       *MetaParam        `velty:"names=View"`
+		ParentParam     *MetaParam        `velty:"names=ParentView"`
+		Session         handler.Session   `velty:"names=session"`
+		Validator       validator.Service `velty:"names=validator"`
+		MessageBus      mbus.Service      `velty:"names=messageBus"`
 	}
 )
 
@@ -29,7 +33,7 @@ func (s *State) Init(templateState *est.State, param *MetaParam, parent *MetaPar
 	if s.Printer == nil {
 		s.Printer = &Printer{}
 	}
-
+	s.Session = session.NewSession()
 	if param != nil && param.dataUnit != nil {
 		s.DataUnit = param.dataUnit
 	} else if s.DataUnit == nil {
@@ -53,10 +57,11 @@ func (s *State) Init(templateState *est.State, param *MetaParam, parent *MetaPar
 	}
 
 	if s.Validator == nil {
-		s.Validator = validator
+		s.Validator = s.Session.Validator()
 	}
+
 	if s.MessageBus == nil {
-		s.MessageBus = &mbus.Service{}
+		s.MessageBus = s.Session.MessageBus()
 	}
 	s.State = templateState
 }
