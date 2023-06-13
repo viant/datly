@@ -388,13 +388,8 @@ The following folders and files get generated
   $sql.Insert($recActor, "actor");
 #end
 ```
-+ **Generate again repo rules for Actor.sql**
-```shell
-datly dsql -s=dsql/actor/Actor.sql \
--p=~/myproject \
--c='sakiladb|mysql|root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila?parseTime=true' \
--r=repo/dev
-```
+
+- [Generate again repo rules for Actor.sql](#1.7-Generate-repo-rules-from-dsql)
 
 **Tip:**  
 You don't have to build and deploy app after changing rules or code in go.
@@ -491,13 +486,9 @@ datly plugin -p=~/myproject -r=repo/dev -o=darwin -a=amd64
   $sql.Insert($recActor, "actor");
 #end
 ```
-+ **Generate again repo rules for Actor.sql**
-```shell
-datly dsql -s=dsql/actor/Actor.sql \
--p=~/myproject \
--c='sakiladb|mysql|root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila?parseTime=true' \
--r=repo/dev
-```
+
+- [Generate again repo rules for Actor.sql](#1.7-Generate-repo-rules-from-dsql)
+
 
 ### 1.15 Check if InitialiseForUpdate works
 
@@ -569,7 +560,7 @@ func (a *Actor) Init(cur *Actor) bool {
 + Generate plugin
 + Generate repo rules for Actor.sql
 
-### 1.17 Add custom validation
+### 1.17 Add struct's validation with tags
 + create folder ~/myproject/pkg/shared
 + create file ~/myproject/pkg/shared/message.go
 ```go
@@ -682,47 +673,9 @@ func (a *Actor) Validate(cur *Actor) *shared.Validation {
 	info := shared.NewValidationInfo()
 	defer info.UpdateStatus()
 
-	isInsert := cur == nil
-	if isInsert {
-		a.validateForInsert(info)
-	} else {
-		a.validateForUpdate(info, cur)
-	}
+    info.Validate(a, govalidator.WithShallow(true), govalidator.WithSetMarker())
+	
 	return info
-}
-
-func (a *Actor) validateForInsert(info *shared.Validation) {
-	info.Validate(a, govalidator.WithShallow(true), govalidator.WithSetMarker())
-
-	if a.Has.FirstName && a.Has.LastName {
-		a.validateNames(info, a.FirstName, a.LastName)
-	}
-}
-
-func (a *Actor) validateForUpdate(info *shared.Validation, cur *Actor) {
-	info.Validate(a, govalidator.WithShallow(true), govalidator.WithSetMarker())
-
-	firstName := cur.FirstName
-	lastName := cur.LastName
-
-	if a.Has.FirstName {
-		firstName = a.FirstName
-	}
-
-	if a.Has.LastName {
-		lastName = a.LastName
-	}
-
-	a.validateNames(info, firstName, lastName)
-}
-
-func (a *Actor) validateNames(info *shared.Validation, firstName string, lastName string) {
-	if len(firstName) > 0 && len(a.LastName) > 0 {
-		if strings.ToUpper(string([]rune(firstName)[0])) == strings.ToUpper(string([]rune(lastName)[0])) {
-			info.Validation.AddViolation("[FirstName, LastName]", fmt.Sprintf("%s %s", firstName, lastName), "theSameFirstLetter",
-				fmt.Sprintf("First name and last name can't start with the same letter %s %s", firstName, lastName))
-		}
-	}
 }
 ```
 + add Validate invocation inside file ~/myproject/dsql/actor/Actor.sql
@@ -746,8 +699,120 @@ func (a *Actor) validateNames(info *shared.Validation, firstName string, lastNam
     #end
 #end
 ```
-+ Generate plugin (see previous chapters)
-+ Generate again repo rules for Actor.sql (see previous chapters)
+
++ **add validate tags in Actor struct in file ~/myproject/pkg/actor/entity.go**
+```go
+type Actor struct {
+	ActorId    int       `sqlx:"name=actor_id,autoincrement,primaryKey,required"`
+	FirstName  string    `sqlx:"name=first_name,required" validate:"gt(2),lt(15)"`
+	LastName   string    `sqlx:"name=last_name,unique,table=actor,required"  validate:"gt(2),lt(15)"`
+	LastUpdate time.Time `sqlx:"name=last_update,required"`
+	Has        *ActorHas `setMarker:"true" typeName:"ActorHas" json:"-"  sqlx:"-" `
+}
+```
+- We can use tags for struct validation from sqlx and govalidator package
+  - Tag: validate:"gt(2),lt(15)" allows for strings with length between 3 and 14.
+  - Tag: sqlx:"required" allows not nil value
+  - Tag: sqlx:"unique,table=actor" checks in table actor if a value is unique
+
+  
+- Check for more tags
+  - [sqlx](https://github.com/viant/sqlx#validator-service)
+  - [govalidator](https://github.com/viant/govalidator#usage)
+
+
+- [Generate plugin](#generate-plugin)
+- [Generate again repo rules for Actor.sql](#1.7-Generate-repo-rules-from-dsql)
+
++ **If you insert/update (patch) an actor with a first name which length is less than 3 
+then you get a validation error like this**
+```text
+{
+    "Status": "error",
+    "Message": "Failed validation for FirstName(gt)"
+}
+```
+
+### 1.18 Add custom validation
++ **modify file ~/myproject/pkg/actor/validate.go**
+```go
+package actor
+
+import (
+	"fmt"
+	"github.com/michael/mymodule/shared"
+	"github.com/viant/govalidator"
+	"strings"
+)
+
+func (a *Actor) Validate(cur *Actor) *shared.Validation {
+	info := shared.NewValidationInfo()
+	info.Validate(a, govalidator.WithShallow(true), govalidator.WithSetMarker())
+	defer info.UpdateStatus()
+
+	isInsert := cur == nil
+	if isInsert {
+		a.validateForInsert(info)
+	} else {
+		a.validateForUpdate(info, cur)
+	}
+	return info
+}
+
+func (a *Actor) validateForInsert(info *shared.Validation) {
+	if a.Has.FirstName && a.Has.LastName {
+		a.validateNames(info, a.FirstName, a.LastName)
+	}
+}
+
+func (a *Actor) validateForUpdate(info *shared.Validation, cur *Actor) {
+	firstName := cur.FirstName
+	lastName := cur.LastName
+
+	if a.Has.FirstName {
+		firstName = cur.FirstName
+	}
+
+	if a.Has.LastName {
+		lastName = a.LastName
+	}
+
+	a.validateNames(info, firstName, lastName)
+}
+
+func (a *Actor) validateNames(info *shared.Validation, firstName string, lastName string) {
+	if len(firstName) > 0 && len(a.LastName) > 0 {
+		if strings.ToUpper(string([]rune(firstName)[0])) == strings.ToUpper(string([]rune(lastName)[0])) {
+			info.Validation.AddViolation("[FirstName, LastName]", fmt.Sprintf("%s %s", firstName, lastName), "theSameFirstLetter",
+				fmt.Sprintf("First name and last name can't start with the same letter %s %s", firstName, lastName))
+		}
+	}
+}
+```
+
++ check if exists Validate invocation inside file ~/myproject/dsql/actor/Actor.sql
+```code
+#foreach($recActor in $Unsafe.Actor)
+    #if($recActor)
+        #set($inited = $recActor.Init($curActorByActorId[$recActor.ActorId]))
+
+        #set($info = $recActor.Validate($curActorByActorId[$recActor.ActorId]))
+        #if($info.HasError ==  true)
+            $response.StatusCode(401)
+            $response.Failf("%v",$info.Error)
+        #end
+
+        #if(($curActorByActorId.HasKey($recActor.ActorId) == true))
+          $sql.Update($recActor, "actor");
+        #else
+          $sql.Insert($recActor, "actor");
+        #end
+    #end
+#end
+```
+
+- [Generate plugin](#generate-plugin)
+- [Generate again repo rules for Actor.sql](#1.7-Generate-repo-rules-from-dsql)
 
 + **If you insert/update (patch) actor with a first name and last name beginning with the same char 
 then you get a validation error like this:**
@@ -798,12 +863,23 @@ package github.com/viant/datly/cmd/datly
         env: [GOROOT=/var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/go/go1.17.1/go HOME=/var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/home PATH=/usr/bin:/usr/local/bin:/bin:/sbin:/usr/sbin GOPRIVATE=github.com/michael/mymodule/*]
 ```
 
-Try to detect in log folder similar to this:  
-**/var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/go**
+First, try to find in your log fragment like this:
+```shell
+env: [GOROOT=/var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/go/go1.17.1/go HOME=/var/folder[...]
+```
 
-Remove it with all files inside
+Next, try to delete subfolders from  
+- GOROOT  
+**/var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/go/go1.17.1/go** 
+  
+
+- HOME  
+**/var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/home** 
+
+like figured below:
 ```shell
 rm -rf /var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/go
+rm -rf /var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/home
 ```
 
 Now you can try to build datly again.
