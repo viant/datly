@@ -1,6 +1,7 @@
 package options
 
 import (
+	"context"
 	"github.com/viant/afs/url"
 	"os"
 	"runtime"
@@ -74,7 +75,11 @@ func (b *GoBuild) Init() {
 func (b *Build) Init() error {
 	b.GoBuild.Init()
 	if len(b.Source) == 0 {
-		b.Source = append(b.Source, b.Datly, b.Module, b.Extension)
+		b.Source = append(b.Source, b.Datly, b.Module)
+		if ok, _ := fs.Exists(context.Background(), b.Extension); ok {
+			b.Source = append(b.Source, b.Extension)
+		}
+
 	}
 	flags := "-X main.BuildTimeInS=`date +%s`"
 	if b.LdFlags == nil {
