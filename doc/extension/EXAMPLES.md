@@ -550,8 +550,8 @@ func (a *Actor) Init(cur *Actor) bool {
 ```
 - [Generate plugin](#generate-plugin)
 - [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
-- 
-### 1.17 Add struct's validation with tags
+
+### 1.19 Add struct's validation with tags
 + create folder ~/myproject/pkg/shared
 + create file ~/myproject/pkg/shared/message.go
 ```go
@@ -724,7 +724,7 @@ then you get a validation error like this**
 }
 ```
 
-### 1.18 Add custom validation
+### 1.19 Add custom validation
 + **modify file ~/myproject/pkg/actor/validate.go**
 ```go
 package actor
