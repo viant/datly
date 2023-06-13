@@ -356,7 +356,7 @@ func (a *Actor) InitialiseForInsert() bool {
   return true
 }
 ```
-+ **generate plugin**  
+#### Generate plugin  
 
 linux
 ```shell
@@ -389,7 +389,7 @@ The following folders and files get generated
 #end
 ```
 
-- [Generate again repo rules for Actor.sql](#1.7-Generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
 
 **Tip:**  
 You don't have to build and deploy app after changing rules or code in go.
@@ -464,16 +464,7 @@ func (a *Actor) InitialiseForUpdate(cur *Actor) bool {
 	return true
 }
 ```
-+ **generate plugin**
-
-linux
-```shell
-datly plugin -p=~/myproject -r=repo/dev -o=linux -a=amd64
-```
-macos
-```shell
-datly plugin -p=~/myproject -r=repo/dev -o=darwin -a=amd64
-```
+- [Generate plugin](#generate-plugin)
 
 + add InitialiseForUpdate invocation inside file ~/myproject/dsql/actor/Actor.sql
 
@@ -487,7 +478,7 @@ datly plugin -p=~/myproject -r=repo/dev -o=darwin -a=amd64
 #end
 ```
 
-- [Generate again repo rules for Actor.sql](#1.7-Generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
 
 
 ### 1.15 Check if InitialiseForUpdate works
@@ -557,9 +548,9 @@ func (a *Actor) Init(cur *Actor) bool {
     #end
 #end
 ```
-+ Generate plugin
-+ Generate repo rules for Actor.sql
-
+- [Generate plugin](#generate-plugin)
+- [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
+- 
 ### 1.17 Add struct's validation with tags
 + create folder ~/myproject/pkg/shared
 + create file ~/myproject/pkg/shared/message.go
@@ -722,7 +713,7 @@ type Actor struct {
 
 
 - [Generate plugin](#generate-plugin)
-- [Generate again repo rules for Actor.sql](#1.7-Generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
 
 + **If you insert/update (patch) an actor with a first name which length is less than 3 
 then you get a validation error like this**
@@ -812,7 +803,7 @@ func (a *Actor) validateNames(info *shared.Validation, firstName string, lastNam
 ```
 
 - [Generate plugin](#generate-plugin)
-- [Generate again repo rules for Actor.sql](#1.7-Generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
 
 + **If you insert/update (patch) actor with a first name and last name beginning with the same char 
 then you get a validation error like this:**
