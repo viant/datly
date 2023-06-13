@@ -33,6 +33,7 @@ import (
 )
 
 const defaultIndent = "  "
+const cur = "cur"
 
 type (
 	stmtBuilder struct {
@@ -461,6 +462,10 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		if strings.Contains(strings.ToLower(column.Name), "phone") {
 			validationTag += ",phone"
 		}
+		if column.Length != nil {
+			validationTag += fmt.Sprintf(",le(%d)", *column.Length)
+		}
+
 		if validationTag == "omitempty" {
 			validationTag = ""
 		} else {
@@ -565,8 +570,8 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		table:           table,
 		config:          aConfig,
 		sql:             SQL,
-		prevNamePrefix:  "cur" + strings.Title(paramName),
-		indexNamePrefix: strings.ToLower(paramName[0:1]) + paramName[1:],
+		prevNamePrefix:  cur + strings.Title(paramName),
+		indexNamePrefix: cur + strings.ToUpper(paramName[0:1]) + paramName[1:],
 		isPtr:           true,
 		path:            strings.TrimRight(actualPath, "/"),
 		idParams:        idParams,
