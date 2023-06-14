@@ -564,20 +564,6 @@ func (b *selectorsBuilder) addRequestBodyParam(ctx context.Context, selector *vi
 	if param.Required != nil && *param.Required && paramValue == nil {
 		return requiredParamErr(param)
 	}
-
-	if paramValue == nil {
-		return nil
-	}
-
-	//bodyValue, ok := b.extractBody(param.In.Name)
-	//if !ok || bodyValue == nil {
-	//	if param.IsRequired() {
-	//		return requiredParamErr(param)
-	//	}
-	//
-	//	return nil
-	//}
-
 	return param.ConvertAndSetCtx(ctx, selector, paramValue)
 }
 
