@@ -34,9 +34,9 @@ require (
 	github.com/viant/pgo v0.10.3
 	github.com/viant/scy v0.6.0
 	github.com/viant/sqlx v0.7.1
-	github.com/viant/structql v0.2.0
+	github.com/viant/structql v0.2.2
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
-	github.com/viant/velty v0.1.1-0.20230509001836-0709296ae922
+	github.com/viant/velty v0.2.0
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
 	github.com/viant/xreflect v0.0.0-20230303201326-f50afb0feb0d
 	github.com/viant/xunsafe v0.8.4
@@ -57,7 +57,7 @@ require (
 	github.com/aws/aws-sdk-go v1.44.12
 	github.com/aws/aws-sdk-go-v2/config v1.18.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.33.1
-	github.com/viant/structology v0.1.0
+	github.com/viant/structology v0.2.0
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
 	github.com/viant/xdatly/handler v0.0.0-20230614011632-b362053405cd
 	github.com/viant/xdatly/types/core v0.0.0-20230518142915-e849977dfa52

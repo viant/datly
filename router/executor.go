@@ -72,5 +72,5 @@ func (r *Route) execResponseBody(parameters *RequestParams, session *executor.Se
 		return r.ResponseBody.getValue(session)
 	}
 
-	return parameters.RequestBody()
+	return parameters.BodyParameter(nil)
 }

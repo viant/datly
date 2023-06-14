@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"reflect"
-	"strings"
 	"sync"
 	"unsafe"
 )
@@ -557,29 +556,29 @@ func (b *selectorsBuilder) addEnvVariableParam(ctx context.Context, selector *vi
 }
 
 func (b *selectorsBuilder) addRequestBodyParam(ctx context.Context, selector *view.Selector, param *view.Parameter) error {
-	requestBody, err := b.params.RequestBody()
+	paramValue, err := b.params.BodyParameter(param)
 	if err != nil {
 		return err
 	}
 
-	if param.Required != nil && *param.Required && requestBody == nil {
+	if param.Required != nil && *param.Required && paramValue == nil {
 		return requiredParamErr(param)
 	}
 
-	if requestBody == nil {
+	if paramValue == nil {
 		return nil
 	}
 
-	bodyValue, ok := b.extractBody(param.In.Name)
-	if !ok || bodyValue == nil {
-		if param.IsRequired() {
-			return requiredParamErr(param)
-		}
+	//bodyValue, ok := b.extractBody(param.In.Name)
+	//if !ok || bodyValue == nil {
+	//	if param.IsRequired() {
+	//		return requiredParamErr(param)
+	//	}
+	//
+	//	return nil
+	//}
 
-		return nil
-	}
-
-	return param.ConvertAndSetCtx(ctx, selector, bodyValue)
+	return param.ConvertAndSetCtx(ctx, selector, paramValue)
 }
 
 func requiredParamErr(param *view.Parameter) error {
@@ -735,73 +734,6 @@ func (b *selectorsBuilder) paramViewValue(param *view.Parameter, value reflect.V
 	default:
 		return nil, fmt.Errorf("parameter %v return more than one value, len: %v rows ", param.Name, paramLen)
 	}
-}
-
-func (b *selectorsBuilder) extractBody(path string) (interface{}, bool) {
-	if path == "" {
-		body, err := b.params.RequestBody()
-		return body, err == nil
-	}
-
-	has := b.hasBodyPart(path)
-	if !has {
-		return nil, false
-	}
-
-	accessor, err := b.accessor.AccessorByName(path)
-	if err != nil {
-		return nil, false
-	}
-
-	body, err := b.params.RequestBody()
-	if err != nil {
-		return nil, false
-	}
-
-	value, err := accessor.Value(body)
-	if err != nil {
-		return nil, false
-	}
-
-	return value, true
-}
-
-func (b *selectorsBuilder) hasBodyPart(path string) bool {
-	if _, ok := b.params.presenceMap[path]; ok {
-		return true
-	}
-
-	segments := strings.Split(path, ".")
-
-	var rawValue interface{} = b.params.presenceMap
-	for _, segment := range segments {
-		actualMap, ok := rawValue.(map[string]interface{})
-		if !ok {
-			return false
-		}
-
-		segmentValue, ok := actualMap[segment]
-		if !ok {
-			segmentValue, ok = checkCaseInsensitive(actualMap, segment)
-			if !ok {
-				return false
-			}
-		}
-
-		rawValue = segmentValue
-	}
-
-	return true
-}
-
-func checkCaseInsensitive(actualMap map[string]interface{}, segment string) (interface{}, bool) {
-	for key, value := range actualMap {
-		if strings.EqualFold(key, segment) {
-			return value, true
-		}
-	}
-
-	return nil, false
 }
 
 func (b *selectorsBuilder) populatePage(ctx context.Context, selector *view.Selector, details *ViewDetails) error {

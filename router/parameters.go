@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox"
+	"github.com/viant/xunsafe"
 	"io"
 	"net/http"
 	"net/url"
@@ -29,12 +30,12 @@ type (
 		queryIndex url.Values
 		pathIndex  map[string]string
 
-		presenceMap map[string]interface{}
-		request     *http.Request
-		route       *Route
+		request *http.Request
+		route   *Route
 
 		requestBodyContent []byte
-		requestBody        interface{}
+		bodyParam          interface{}
+		bodyPathParam      map[string]interface{}
 		requestBodyErr     error
 		readRequestBody    bool
 	}
@@ -51,9 +52,11 @@ type (
 
 func NewRequestParameters(request *http.Request, route *Route) (*RequestParams, error) {
 	parameters := &RequestParams{
-		cookies: request.Cookies(),
-		request: request,
-		route:   route,
+		cookies:       request.Cookies(),
+		request:       request,
+		route:         route,
+		bodyPathParam: map[string]interface{}{},
+		cookiesIndex:  map[string]*http.Cookie{},
 	}
 
 	if paramName, err := parameters.init(request, route); err != nil {
@@ -71,7 +74,6 @@ func (p *RequestParams) init(request *http.Request, route *Route) (string, error
 	p.OutputFormat = p.outputFormat(route)
 	p.InputFormat = p.header(HeaderContentType)
 
-	p.cookiesIndex = map[string]*http.Cookie{}
 	for i := range p.cookies {
 		p.cookiesIndex[p.cookies[i].Name] = p.cookies[i]
 	}
@@ -120,25 +122,22 @@ func (p *RequestParams) parseRequestBody(body []byte, route *Route) (interface{}
 		return nil, err
 	}
 
-	convert, _, err := converter.Convert(string(body), unmarshaller.rType, route.CustomValidation, "", unmarshaller.unmarshal)
+	converted, _, err := converter.Convert(string(body), unmarshaller.rType, route.CustomValidation, "", unmarshaller.unmarshal)
 	if err != nil {
 		return nil, err
 	}
-
-	//TODO replace with structql
-	p.presenceMap, err = unmarshaller.presence(body)
 	if err != nil {
 		return nil, wrapJSONSyntaxErrorIfNeeded(err, body)
 	}
 
 	if unmarshaller.unwrapper != nil {
-		convert, err = unmarshaller.unwrapper(convert)
+		converted, err = unmarshaller.unwrapper(converted)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return convert, nil
+	return converted, nil
 }
 
 func (p *RequestParams) outputFormat(route *Route) string {
@@ -199,40 +198,52 @@ func (p *RequestParams) jsonPresenceMap() PresenceMapFn {
 	}
 }
 
-func (p *RequestParams) RequestBody() (interface{}, error) {
+func (p *RequestParams) BodyParameter(param *view.Parameter) (interface{}, error) {
 	p.Mutex.Lock()
 	defer p.Mutex.Unlock()
-	if p.requestBody != nil || p.requestBodyErr != nil || p.readRequestBody {
-		return p.requestBody, p.requestBodyErr
+	err := p.readBody()
+	if err != nil {
+		return nil, err
 	}
-
-	body, err := p.tryParseRequestBody()
-	p.requestBody, p.requestBodyErr = body, err
-	return body, err
+	if param == nil || param.In.Name == "" {
+		return p.bodyParam, nil
+	}
+	value, ok := p.bodyPathParam[param.In.Name]
+	if ok {
+		return value, nil
+	}
+	aQuery, ok := p.route.bodyParamQuery[param.In.Name]
+	if !ok {
+		return nil, fmt.Errorf("unable to locate param aQuery: %s", param.Name)
+	}
+	if value, err = aQuery.First(p.bodyParam); err == nil {
+		ptr := xunsafe.AsPointer(value)
+		value = aQuery.field.Value(ptr)
+		p.bodyPathParam[param.In.Name] = value
+	}
+	return value, err
 }
 
-func (p *RequestParams) tryParseRequestBody() (interface{}, error) {
-	if p.request.Body == nil {
-		return nil, nil
+func (p *RequestParams) readBody() error {
+	if p.request.Body == nil || p.readRequestBody {
+		return p.requestBodyErr
 	}
-
 	body, err := io.ReadAll(p.request.Body)
 	defer func() {
 		p.request.Body.Close()
 		p.readRequestBody = true
 	}()
-
+	if err != nil {
+		p.requestBodyErr = err
+		return err
+	}
 	p.requestBodyContent = body
+	requestData, err := p.parseRequestBody(body, p.route)
 	if err != nil {
-		return nil, err
+		p.requestBodyErr = err
 	}
-
-	requestBody, err := p.parseRequestBody(body, p.route)
-	if err != nil {
-		return nil, err
-	}
-
-	return requestBody, nil
+	p.bodyParam = requestData
+	return p.requestBodyErr
 }
 
 func wrapJSONSyntaxErrorIfNeeded(err error, buff []byte) error {
@@ -273,7 +284,7 @@ func (p *RequestParams) ExtractHttpParam(ctx context.Context, param *view.Parame
 	case view.KindQuery:
 		return p.convertAndTransform(ctx, p.queryParam(param.In.Name, ""), param, options...)
 	case view.KindRequestBody:
-		return p.RequestBody()
+		return p.BodyParameter(param)
 
 	case view.KindHeader:
 		return p.convertAndTransform(ctx, p.header(param.In.Name), param, options...)
@@ -289,6 +300,5 @@ func (p *RequestParams) Header() http.Header {
 }
 
 func (p *RequestParams) BodyContent() ([]byte, error) {
-	_, err := p.RequestBody()
-	return p.requestBodyContent, err
+	return p.requestBodyContent, p.readBody()
 }

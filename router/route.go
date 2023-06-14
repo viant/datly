@@ -18,6 +18,7 @@ import (
 	"github.com/viant/datly/view/parameter"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/load/reader/csv"
+	"github.com/viant/structql"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"net/http"
@@ -68,7 +69,7 @@ type (
 		JSON
 		Output
 		Index
-
+		bodyParamQuery   map[string]*query
 		ParamStatusError *int
 		Cache            *cache.Cache
 		Compression      *Compression
@@ -82,6 +83,10 @@ type (
 		_apiKeys                  []*APIKey
 	}
 
+	query struct {
+		*structql.Query
+		field *xunsafe.Field
+	}
 	Fetcher struct {
 		shared.Reference
 		_fetcher interface{}
@@ -517,6 +522,7 @@ func (r *Route) initRequestBody() error {
 }
 
 func (r *Route) initRequestBodyFromParams() error {
+
 	params := make([]*view.Parameter, 0)
 	setMarker := map[string]bool{}
 	r.findRequestBodyParams(r.View, &params, setMarker)
@@ -524,7 +530,7 @@ func (r *Route) initRequestBodyFromParams() error {
 	if len(params) == 0 {
 		return nil
 	}
-
+	r.bodyParamQuery = map[string]*query{}
 	accessors := types.NewAccessors(&types.VeltyNamer{})
 	r._accessors = accessors
 	bodyParam, _ := r.fullBodyParam(params)
@@ -537,6 +543,17 @@ func (r *Route) initRequestBodyFromParams() error {
 
 	r._accessors.Init(r._requestBodyType)
 	for _, param := range params {
+		if param.In.Name != "" {
+			aQuery := &query{}
+			QL := fmt.Sprintf("SELECT %v FROM `/`", param.In.Name)
+			if aQuery.Query, err = structql.NewQuery(QL, rType, nil); err != nil {
+				return fmt.Errorf("failed build query for param %v in requet type: %s due to: %w", param.In.Name, rType.String(), err)
+			}
+			if destType := aQuery.StructType(); destType != nil {
+				aQuery.field = xunsafe.NewField(destType.Field(0))
+			}
+			r.bodyParamQuery[param.In.Name] = aQuery
+		}
 		r._requestBodyParamRequired = r._requestBodyParamRequired || param.IsRequired()
 	}
 
