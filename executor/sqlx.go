@@ -18,10 +18,10 @@ type sqlxIO struct {
 func (s *sqlxIO) Updater(ctx context.Context, db *sql.DB, table string, options ...option.Option) (*update.Service, error) {
 	s.RWMutex.RLock()
 	service, ok := s.update[table]
+	s.RWMutex.RUnlock()
 	if ok {
 		return service, nil
 	}
-	s.RWMutex.RUnlock()
 	var err error
 	service, err = update.New(ctx, db, table, options...)
 	if err == nil {
@@ -35,10 +35,11 @@ func (s *sqlxIO) Updater(ctx context.Context, db *sql.DB, table string, options 
 func (s *sqlxIO) Inserter(ctx context.Context, db *sql.DB, table string, options ...option.Option) (*insert.Service, error) {
 	s.RWMutex.RLock()
 	service, ok := s.insert[table]
+	s.RWMutex.RUnlock()
 	if ok {
 		return service, nil
 	}
-	s.RWMutex.RUnlock()
+
 	var err error
 	service, err = insert.New(ctx, db, table, options...)
 	if err == nil {
