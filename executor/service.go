@@ -29,6 +29,12 @@ type (
 		collections          map[string]*batcher.Collection
 		logger               *logger.Adapter
 	}
+
+	DBOption  func(options *DBOptions)
+	DBOptions struct {
+		tx     *sql.Tx
+		logger *logger.Adapter
+	}
 )
 
 func newDbIo(tx *lazyTx, dialect *info.Dialect, dbSource DBSource, canBeBatchedGlobally bool, logger *logger.Adapter) *dbSession {
@@ -39,6 +45,7 @@ func newDbIo(tx *lazyTx, dialect *info.Dialect, dbSource DBSource, canBeBatchedG
 		dbSource:             dbSource,
 		canBeBatchedGlobally: canBeBatchedGlobally,
 		collections:          map[string]*batcher.Collection{},
+		logger:               logger,
 	}
 }
 
@@ -73,24 +80,21 @@ func (e *Executor) Exec(ctx context.Context, sess *Session) error {
 		return err
 	}
 
-	if err = e.ExecuteStmts(ctx, NewViewDBSource(sess.View), NewTemplateStmtIterator(state.DataUnit, data), sess.View.Logger); err != nil {
+	if err = e.ExecuteStmts(ctx, NewViewDBSource(sess.View), NewTemplateStmtIterator(state.DataUnit, data), WithLogger(sess.View.Logger)); err != nil {
 		return err
 	}
 
 	return state.Flush(expand.StatusSuccess)
 }
 
-func (e *Executor) ExecuteStmts(ctx context.Context, dbSource DBSource, it StmtIterator, options ...interface{}) error {
+func (e *Executor) ExecuteStmts(ctx context.Context, dbSource DBSource, it StmtIterator, options ...DBOption) error {
 	if !it.HasAny() {
 		return nil
 	}
 
-	var log *logger.Adapter
-	for _, anOption := range options {
-		switch actual := anOption.(type) {
-		case *logger.Adapter:
-			log = actual
-		}
+	ops := &DBOptions{}
+	for _, apply := range options {
+		apply(ops)
 	}
 
 	canBeBatchedGlobally := dbSource.CanBatchGlobally()
@@ -104,8 +108,8 @@ func (e *Executor) ExecuteStmts(ctx context.Context, dbSource DBSource, it StmtI
 		return err
 	}
 
-	aTx := newLazyTx(db, canBeBatchedGlobally)
-	aDbSession := newDbIo(aTx, dialect, dbSource, canBeBatchedGlobally, log)
+	aTx := newLazyTx(db, canBeBatchedGlobally, ops.tx)
+	aDbSession := newDbIo(aTx, dialect, dbSource, canBeBatchedGlobally, ops.logger)
 
 	for it.HasNext() {
 		next := it.Next()
@@ -277,4 +281,16 @@ func (s *dbSession) collection(executable *expand.Executable) *batcher.Collectio
 
 func (s *dbSession) supportLocalBatch() bool {
 	return s.dialect != nil && s.dialect.Insert.MultiValues()
+}
+
+func WithTx(tx *sql.Tx) DBOption {
+	return func(options *DBOptions) {
+		options.tx = tx
+	}
+}
+
+func WithLogger(log *logger.Adapter) DBOption {
+	return func(options *DBOptions) {
+		options.logger = log
+	}
 }

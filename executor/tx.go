@@ -6,16 +6,36 @@ import (
 	"github.com/viant/sqlx/option"
 )
 
-type lazyTx struct {
-	db       *sql.DB
-	tx       *sql.Tx
-	isGlobal bool
+type (
+	lazyTx struct {
+		db            *sql.DB
+		tx            *sql.Tx
+		isGlobal      bool
+		isTransientTx bool
+	}
+
+	Tx interface {
+		Rollback() error
+		Commit() error
+	}
+
+	TxTransient struct{}
+)
+
+func (t *TxTransient) Rollback() error {
+	return nil
 }
 
-func newLazyTx(db *sql.DB, globally bool) *lazyTx {
+func (t *TxTransient) Commit() error {
+	return nil
+}
+
+func newLazyTx(db *sql.DB, globally bool, tx *sql.Tx) *lazyTx {
 	return &lazyTx{
-		db:       db,
-		isGlobal: globally,
+		db:            db,
+		isGlobal:      globally,
+		tx:            tx,
+		isTransientTx: tx != nil,
 	}
 }
 
@@ -24,7 +44,12 @@ func (l *lazyTx) RollbackIfNeeded() error {
 		return nil
 	}
 
-	return l.tx.Rollback()
+	closer, err := l.TxCloser()
+	if err != nil {
+		return err
+	}
+
+	return closer.Rollback()
 }
 
 func (l *lazyTx) CommitIfNeeded() error {
@@ -32,7 +57,20 @@ func (l *lazyTx) CommitIfNeeded() error {
 		return nil
 	}
 
-	return l.tx.Commit()
+	closer, err := l.TxCloser()
+	if err != nil {
+		return err
+	}
+
+	return closer.Commit()
+}
+
+func (l *lazyTx) TxCloser() (Tx, error) {
+	if l.isTransientTx {
+		return &TxTransient{}, nil
+	}
+
+	return l.Tx()
 }
 
 func (l *lazyTx) Tx() (*sql.Tx, error) {

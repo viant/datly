@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/xdatly/handler"
-	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
 	"sort"
@@ -168,12 +167,8 @@ func (h *Handler) newUpdater(ctx context.Context, dstType reflect.Type) (*stateU
 			return nil, err
 		}
 
-		if existingParam, err := h.resource.ParamByName(parameter.Name); err == nil {
-			parameter = existingParam.WithAccessors(types.NewAccessor([]*xunsafe.Field{xunsafe.NewField(field)}), nil)
-		} else {
-			if err = parameter.Init(ctx, nil, h.resource, nil); err != nil {
-				return nil, err
-			}
+		if err = parameter.Init(ctx, nil, h.resource, nil); err != nil {
+			return nil, err
 		}
 
 		params = append(params, parameter)

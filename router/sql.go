@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/datly/executor"
+	"github.com/viant/datly/executor/sequencer"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/config"
@@ -50,6 +51,11 @@ func (s *SqlxIterator) HasAny() bool {
 
 func (s *SqlxService) Flush(ctx context.Context, tableName string) error {
 	if len(s.toExecute) > 0 {
+		var options []interface{}
+		if s.options.WithTx != nil {
+			options = append(options, s.options.WithTx)
+		}
+
 		exec := executor.New()
 		if err := exec.ExecuteStmts(ctx, s, &SqlxIterator{toExecute: s.toExecute}); err != nil {
 			return err
@@ -201,8 +207,13 @@ func (s *SqlxService) CanBatch(table string) bool {
 }
 
 func (s *SqlxService) Allocate(ctx context.Context, tableName string, dest interface{}, selector string) error {
-	//TODO implement me
-	panic("implement me")
+	db, err := s.Db(ctx)
+	if err != nil {
+		return err
+	}
+
+	service := sequencer.New(context.Background(), db)
+	return service.Next(tableName, dest, selector)
 }
 
 func (s *SqlxService) CanBatchGlobally() bool {
