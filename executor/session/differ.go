@@ -42,6 +42,11 @@ func (d *Differ) Diff(ctx context.Context, from, to interface{}, opts ...differ.
 	return &result
 }
 
+//NewDiffer creates a differ
+func NewDiffer() *differ.Service {
+	return differ.New(&Differ{})
+}
+
 func asPath(from *godiff.Path) *differ.Path {
 	if from == nil {
 		return nil

@@ -14,7 +14,7 @@ type Manager struct {
 	dbProvider   func(ctx context.Context) (*sql.DB, error)
 }
 
-func (m *Manager) Validator() validator.Service {
+func (m *Manager) Validator() *validator.Service {
 	//TO resolve db, maybe change signature to service , error
-	return &SqlxValidator{db: m.db}
+	return validator.New(&SqlxValidator{db: m.db})
 }

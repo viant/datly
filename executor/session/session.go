@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"database/sql"
+	"github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/differ"
 	"github.com/viant/xdatly/handler/mbus"
 	"github.com/viant/xdatly/handler/sqlx"
@@ -12,41 +13,43 @@ import (
 )
 
 type Session struct {
-	validator   Validator
-	differ      Differ
+	validator   *validator.Service
+	differ      *differ.Service
+	mbus        *mbus.Service
 	dbProviders map[string]func(ctx context.Context) (*sql.DB, error)
 	db          map[string]*Manager
 	sync.RWMutex
-	mbus mbus.Service
 }
 
-func (s *Session) Validator() validator.Service {
-	return &s.validator
+func (s *Session) Validator() *validator.Service {
+	return s.validator
 }
 
-func (s *Session) Stater() state.Stater {
+func (s *Session) Stater() *state.Service {
 	return nil
 }
 
-func (s *Session) Differ() differ.Service {
-	return &s.differ
+func (s *Session) Differ() *differ.Service {
+	return s.differ
 }
 
-func (s *Session) MessageBus() mbus.Service {
+func (s *Session) MessageBus() *mbus.Service {
 	return s.mbus
 }
 
-func (s *Session) Db(opts ...sqlx.Option) sqlx.Service {
+func (s *Session) Db(opts ...sqlx.Option) *sqlx.Service {
 	//TODO fix me
-	return &Manager{}
+	return nil
 }
 
-func NewSession(opts ...Option) *Session {
+func NewSession(opts ...Option) *handler.Session {
 	ret := &Session{
 		mbus:        NewMBus(nil), //TODO pass view message busses
+		validator:   NewValidator(),
+		differ:      NewDiffer(),
 		db:          map[string]*Manager{},
 		dbProviders: map[string]func(ctx context.Context) (*sql.DB, error){},
 	}
 	options(opts).Apply(ret)
-	return ret
+	return handler.NewSession(ret)
 }

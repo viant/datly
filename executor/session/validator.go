@@ -114,6 +114,6 @@ func (v Violations) MergeSqlViolation(violations []*sqlxvalidator.Violation) []*
 	return v
 }
 
-func NewValidator() validator.Service {
-	return &Validator{}
+func NewValidator() *validator.Service {
+	return validator.New(&Validator{})
 }

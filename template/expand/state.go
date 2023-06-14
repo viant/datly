@@ -17,15 +17,15 @@ type (
 	}
 
 	Context struct {
-		Printer         *Printer          `velty:"names=logger|fmt"`
-		DataUnit        *DataUnit         `velty:"names=sql|sqlx|sequencer|criteria"`
-		Http            *Http             `velty:"names=http"`
-		ResponseBuilder *ResponseBuilder  `velty:"names=response"`
-		ViewParam       *MetaParam        `velty:"names=View"`
-		ParentParam     *MetaParam        `velty:"names=ParentView"`
-		Session         handler.Session   `velty:"names=session"`
-		Validator       validator.Service `velty:"names=validator"`
-		MessageBus      mbus.Service      `velty:"names=messageBus"`
+		Printer         *Printer           `velty:"names=logger|fmt"`
+		DataUnit        *DataUnit          `velty:"names=sql|sqlx|sequencer|criteria"`
+		Http            *Http              `velty:"names=http"`
+		ResponseBuilder *ResponseBuilder   `velty:"names=response"`
+		ViewParam       *MetaParam         `velty:"names=View"`
+		ParentParam     *MetaParam         `velty:"names=ParentView"`
+		Session         *handler.Session   `velty:"names=session"`
+		Validator       *validator.Service `velty:"names=validator"`
+		MessageBus      *mbus.Service      `velty:"names=messageBus"`
 	}
 )
 

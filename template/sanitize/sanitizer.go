@@ -17,11 +17,11 @@ func Sanitize(SQL string, hints map[string]*ParameterHint, consts map[string]int
 	modifiable := []byte(SQL)
 	var paramsBuffer []*ParamMeta
 	for {
+
 		next, ok := popNextParamMeta(&paramsBuffer, iterator)
 		if !ok {
 			break
 		}
-
 		modifiable, offset = sanitize(iterator, &paramsBuffer, next, modifiable, offset, 0)
 	}
 
@@ -61,16 +61,19 @@ func sanitize(iterator *ParamMetaIterator, paramsBuffer *[]*ParamMeta, paramMeta
 	}
 
 	start := paramMeta.Start - cursorOffset
-	dst = append(dst[:accumulatedOffset+start], bytes.Replace(dst[start+accumulatedOffset:], []byte(paramMeta.FullName), []byte(sanitized), 1)...)
-	accumulatedOffset += len(sanitized) - len(paramMeta.FullName)
+	dataPrefix := dst[:accumulatedOffset+start]
+	unsanitizedFragment := dst[start+accumulatedOffset:]
+	sanitizedFragment := bytes.Replace(unsanitizedFragment, []byte(paramMeta.FullName), []byte(sanitized), 1)
+	dst = append(dataPrefix, sanitizedFragment...)
+	accumulatedOffset += (len(sanitized) - len(paramMeta.FullName))
 	return dst, accumulatedOffset
 }
 
 func sanitizeContent(iterator *ParamMetaIterator, buffer *[]*ParamMeta, meta *ParamMeta, expression string) string {
 	var argsParams []*ParamMeta
 
-	for iterator.Has() {
-		next := iterator.Next()
+	for has(iterator, buffer) {
+		next := next(iterator, buffer)
 		if next.Start < meta.End {
 			argsParams = append(argsParams, next)
 		} else {
@@ -90,6 +93,20 @@ func sanitizeContent(iterator *ParamMetaIterator, buffer *[]*ParamMeta, meta *Pa
 	}
 
 	return string(asBytes)
+}
+
+func next(iterator *ParamMetaIterator, buffer *[]*ParamMeta) *ParamMeta {
+	if len(*buffer) > 0 {
+		item := (*buffer)[0]
+		*buffer = (*buffer)[1:]
+		return item
+	}
+
+	return iterator.Next()
+}
+
+func has(iterator *ParamMetaIterator, buffer *[]*ParamMeta) bool {
+	return len(*buffer) > 0 || iterator.Has()
 }
 
 func unwrapBrackets(name string) (string, bool) {

@@ -60,9 +60,10 @@ func isEncoded(encoded string) bool {
 	return isEncoded
 }
 
-func NewMBus(messageBusses map[string]*mbus.Resource) *MBus {
+func NewMBus(messageBusses map[string]*mbus.Resource) *xmbus.Service {
 	if len(messageBusses) == 0 {
 		messageBusses = map[string]*mbus.Resource{}
 	}
-	return &MBus{MessageBuses: messageBusses}
+	ret := &MBus{MessageBuses: messageBusses}
+	return xmbus.New(ret)
 }
