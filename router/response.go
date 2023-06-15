@@ -26,6 +26,22 @@ type (
 	}
 )
 
+type RequestDataReaderOption func(r *RequestDataReader)
+
+func WithHeader(name, value string) RequestDataReaderOption {
+	return func(r *RequestDataReader) {
+		r.headers.Add(name, value)
+	}
+}
+
+func WithHeaders(header http.Header) RequestDataReaderOption {
+	return func(r *RequestDataReader) {
+		for key, values := range header {
+			header.Set(key, values[0])
+		}
+	}
+}
+
 func (b *RequestDataReader) Read(p []byte) (n int, err error) {
 	return b.buffer.Read(p)
 }
@@ -58,13 +74,19 @@ func (b *RequestDataReader) AddOnClose(f func()) {
 	b.onClose = append(b.onClose, f)
 }
 
-func NewBytesReader(data []byte, compression string) *RequestDataReader {
-	return &RequestDataReader{
+func NewBytesReader(data []byte, compression string, options ...RequestDataReaderOption) *RequestDataReader {
+	r := &RequestDataReader{
 		buffer:      bytes.NewBuffer(data),
 		compression: compression,
 		size:        len(data),
 		headers:     map[string][]string{},
 	}
+
+	for _, option := range options {
+		option(r)
+	}
+
+	return r
 }
 
 func AsBytesReader(buffer *bytes.Buffer, compression string, size int) *RequestDataReader {

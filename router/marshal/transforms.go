@@ -59,7 +59,7 @@ func (t *Transform) Init(ctx context.Context, fs afs.Service, lookup xreflect.Ty
 			return err
 		}
 
-		value := expand.NewValue(rType)
+		value := types.NewValue(rType)
 
 		unmarshaler, ok := value.(json.UnmarshalerInto)
 		if ok {

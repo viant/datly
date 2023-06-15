@@ -56,13 +56,17 @@ func (e *Errors) AddError(view, param string, err error) {
 	}
 
 	e.mutex.Lock()
-	e.Errors = append(e.Errors, &Error{
+	e.Errors = append(e.Errors, NewParamError(view, param, err))
+	e.Message = err.Error()
+	e.mutex.Unlock()
+}
+
+func NewParamError(view string, param string, err error) *Error {
+	return &Error{
 		View:  view,
 		Param: param,
 		Err:   err,
-	})
-	e.Message = err.Error()
-	e.mutex.Unlock()
+	}
 }
 
 func (e *Errors) Error() string {

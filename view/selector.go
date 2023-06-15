@@ -1,7 +1,7 @@
 package view
 
 import (
-	"github.com/viant/datly/template/expand"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/toolbox/format"
 	"strings"
@@ -125,8 +125,8 @@ func NewSelectors() *Selectors {
 
 func (s *ParamState) Init(view *View) {
 	if s.Values == nil {
-		s.Values = expand.NewValue(view.Template.Schema.Type())
-		s.Has = expand.NewValue(view.Template.PresenceSchema.Type())
+		s.Values = types.NewValue(view.Template.Schema.Type())
+		s.Has = types.NewValue(view.Template.PresenceSchema.Type())
 	}
 }
 

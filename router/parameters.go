@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/datly/converter"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox"
 	"github.com/viant/xunsafe"
@@ -38,6 +39,7 @@ type (
 		bodyPathParam      map[string]interface{}
 		requestBodyErr     error
 		readRequestBody    bool
+		accessors          *types.Accessors
 	}
 
 	PresenceMapFn func([]byte) (map[string]interface{}, error)
@@ -55,6 +57,7 @@ func NewRequestParameters(request *http.Request, route *Route) (*RequestParams, 
 		cookies:       request.Cookies(),
 		request:       request,
 		route:         route,
+		accessors:     route._accessors,
 		bodyPathParam: map[string]interface{}{},
 		cookiesIndex:  map[string]*http.Cookie{},
 	}
@@ -123,9 +126,6 @@ func (p *RequestParams) parseRequestBody(body []byte, route *Route) (interface{}
 	}
 
 	converted, _, err := converter.Convert(string(body), unmarshaller.rType, route.CustomValidation, "", unmarshaller.unmarshal)
-	if err != nil {
-		return nil, err
-	}
 	if err != nil {
 		return nil, wrapJSONSyntaxErrorIfNeeded(err, body)
 	}
@@ -198,7 +198,7 @@ func (p *RequestParams) jsonPresenceMap() PresenceMapFn {
 	}
 }
 
-func (p *RequestParams) BodyParameter(param *view.Parameter) (interface{}, error) {
+func (p *RequestParams) paramRequestBody(ctx context.Context, param *view.Parameter, options ...interface{}) (interface{}, error) {
 	p.Mutex.Lock()
 	defer p.Mutex.Unlock()
 	err := p.readBody()
@@ -221,6 +221,11 @@ func (p *RequestParams) BodyParameter(param *view.Parameter) (interface{}, error
 		value = aQuery.field.Value(ptr)
 		p.bodyPathParam[param.In.Name] = value
 	}
+
+	if param.Output != nil {
+		return param.Output.Transform(ctx, value, options...)
+	}
+
 	return value, err
 }
 
@@ -284,8 +289,7 @@ func (p *RequestParams) ExtractHttpParam(ctx context.Context, param *view.Parame
 	case view.KindQuery:
 		return p.convertAndTransform(ctx, p.queryParam(param.In.Name, ""), param, options...)
 	case view.KindRequestBody:
-		return p.BodyParameter(param)
-
+		return p.paramRequestBody(ctx, param, options...)
 	case view.KindHeader:
 		return p.convertAndTransform(ctx, p.header(param.In.Name), param, options...)
 	case view.KindCookie:
@@ -301,4 +305,8 @@ func (p *RequestParams) Header() http.Header {
 
 func (p *RequestParams) BodyContent() ([]byte, error) {
 	return p.requestBodyContent, p.readBody()
+}
+
+func (p *RequestParams) RequestBody() (interface{}, error) {
+	return p.bodyParam, p.readBody()
 }

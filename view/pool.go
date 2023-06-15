@@ -128,7 +128,7 @@ func (c *aerospikeClient) keepProbingIfNeeded(host string, port int) {
 	}
 }
 
-var aDbPool = newPool()
+var aDbPool = newDbRegistry()
 var aClientPool = newClientPool()
 
 func newClientPool() *aerospikeClientRegistry {
@@ -302,7 +302,7 @@ func ResetDBPool() {
 		}
 	}
 
-	aDbPool = newPool()
+	aDbPool = newDbRegistry()
 }
 
 func ResetAerospikePool() {
@@ -314,7 +314,7 @@ func ResetAerospikePool() {
 	aClientPool = newClientPool()
 }
 
-func newPool() *dbRegistry {
+func newDbRegistry() *dbRegistry {
 	return &dbRegistry{index: map[string]*db{}}
 }
 

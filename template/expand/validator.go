@@ -9,6 +9,10 @@ import (
 
 var goValidator = NewValidator()
 
+func CommonValidator() *Validator {
+	return goValidator
+}
+
 type Validator struct {
 	Service *govalidator.Service
 }

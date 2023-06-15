@@ -10,6 +10,8 @@ import (
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/config"
+	"github.com/viant/datly/executor"
+	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/httputils"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/async"
@@ -19,6 +21,9 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/govalidator"
 	svalidator "github.com/viant/sqlx/io/validator"
+	"github.com/viant/xdatly/handler"
+	"github.com/viant/xdatly/handler/response"
+	"github.com/viant/xdatly/handler/validator"
 	"github.com/viant/xunsafe"
 	"io"
 	"net/http"
@@ -185,18 +190,8 @@ func (r *Router) HandleAsyncRoute(response http.ResponseWriter, request *http.Re
 		return nil
 	}
 
-	switch route.Service {
-	case ReaderServiceType:
-		r.prepareViewHandler(response, request, route)
-		r.viewHandler(route)(response, request, record)
-		return nil
-	case ExecutorServiceType:
-		r.prepareViewHandler(response, request, route)
-		r.executorHandler(route)(response, request, record)
-		return nil
-	}
-
-	return fmt.Errorf("unsupported service operation %v", request.Method)
+	r.viewHandler(route)(response, request, record)
+	return nil
 }
 
 func (r *Router) AuthorizeRequest(request *http.Request, route *Route) error {
@@ -329,31 +324,34 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 		}
 
 		ctx := context.Background()
-		session, httpErrStatus, err := r.buildSession(ctx, response, request, route)
-		if httpErrStatus >= http.StatusBadRequest {
-			r.writeErr(response, route, err, httpErrStatus)
-			return
-		}
-
-		if err != nil {
-			status := http.StatusBadRequest
-			if route.ParamStatusError != nil && (*route.ParamStatusError%100 >= 4) {
-				status = *route.ParamStatusError
-			}
-
-			r.writeErr(session.Response, session.Route, err, status)
-			return
-		}
-
-		payloadReader, err := r.payloadReader(ctx, session, route, record)
+		payloadReader, err := r.payloadReader(ctx, request, response, route, record)
 		if err != nil {
 			code, _ := httputils.BuildErrorResponse(err)
 			r.writeErr(response, route, err, code)
 			return
 		}
 
-		r.writeResponse(ctx, session, payloadReader)
+		if payloadReader != nil {
+			r.writeResponse(ctx, request, response, route, payloadReader)
+		}
 	}
+}
+
+func (r *Router) prepareReaderSession(ctx context.Context, response http.ResponseWriter, request *http.Request, route *Route) (*ReaderSession, error) {
+	session, httpErrStatus, err := r.buildSession(ctx, response, request, route)
+	if httpErrStatus >= http.StatusBadRequest {
+		return nil, httputils.NewHttpMessageError(httpErrStatus, err)
+	}
+
+	if err != nil {
+		status := http.StatusBadRequest
+		if route.ParamStatusError != nil && (*route.ParamStatusError%100 >= 4) {
+			status = *route.ParamStatusError
+		}
+
+		return nil, httputils.NewHttpMessageError(status, err)
+	}
+	return session, nil
 }
 
 func (r *Router) buildSession(ctx context.Context, response http.ResponseWriter, request *http.Request, route *Route) (*ReaderSession, int, error) {
@@ -847,35 +845,34 @@ func (r *Router) Routes(route string) []*Route {
 	return routes
 }
 
-func (r *Router) writeResponse(ctx context.Context, session *ReaderSession, payloadReader PayloadReader) {
+func (r *Router) writeResponse(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route, payloadReader PayloadReader) {
 	defer payloadReader.Close()
 
-	redirected, err := r.redirectIfNeeded(ctx, session, payloadReader)
+	redirected, err := r.redirectIfNeeded(ctx, request, response, route, payloadReader)
 	if redirected {
 		return
 	}
 
 	if err != nil {
-		r.writeErr(session.Response, session.Route, err, http.StatusInternalServerError)
+		r.writeErr(response, route, err, http.StatusInternalServerError)
 		return
 	}
 
-	session.Response.Header().Add(content.Type, session.RequestParams.OutputFormat+"; "+CharsetUTF8)
-	session.Response.Header().Add(ContentLength, strconv.Itoa(payloadReader.Size()))
+	response.Header().Add(ContentLength, strconv.Itoa(payloadReader.Size()))
 	for key, value := range payloadReader.Headers() {
-		session.Response.Header().Add(key, value[0])
+		response.Header().Add(key, value[0])
 	}
 
 	compressionType := payloadReader.CompressionType()
 	if compressionType != "" {
-		session.Response.Header().Set(content.Encoding, compressionType)
+		response.Header().Set(content.Encoding, compressionType)
 	}
 
-	session.Response.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(session.Response, payloadReader)
+	response.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(response, payloadReader)
 }
 
-func (r *Router) redirectIfNeeded(ctx context.Context, session *ReaderSession, payloadReader PayloadReader) (redirected bool, err error) {
+func (r *Router) redirectIfNeeded(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route, payloadReader PayloadReader) (redirected bool, err error) {
 	redirect := r._resource.Redirect
 	if redirect == nil {
 		return false, nil
@@ -885,12 +882,12 @@ func (r *Router) redirectIfNeeded(ctx context.Context, session *ReaderSession, p
 		return false, nil
 	}
 
-	preSign, err := redirect.Apply(ctx, session.Route.View.Name, payloadReader)
+	preSign, err := redirect.Apply(ctx, route.View.Name, payloadReader)
 	if err != nil {
 		return false, err
 	}
 
-	http.Redirect(session.Response, session.Request, preSign.URL, http.StatusMovedPermanently)
+	http.Redirect(response, request, preSign.URL, http.StatusMovedPermanently)
 	return true, nil
 }
 
@@ -1016,7 +1013,72 @@ func (r *Router) Resource() *Resource {
 	return r._resource
 }
 
-func (r *Router) payloadReader(ctx context.Context, session *ReaderSession, route *Route, record *async.Record) (PayloadReader, error) {
+func (r *Router) payloadReader(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route, record *async.Record) (PayloadReader, error) {
+	switch route.Service {
+	case ServiceTypeHandler:
+		return r.handlerPayloadReader(ctx, request, response, route)
+	case ServiceTypeExecutor:
+		return r.executorPayloadReader(ctx, request, response, route)
+	case ServiceTypeReader:
+		session, err := r.prepareReaderSession(ctx, response, request, route)
+		if err != nil {
+			return nil, err
+		}
+
+		payloadReader, err := r.readerPayloadReader(ctx, route, session, record)
+		if payloadReader != nil {
+			payloadReader.Headers().Add(content.Type, session.RequestParams.OutputFormat+"; "+CharsetUTF8)
+		}
+
+		return payloadReader, err
+	}
+
+	return nil, httputils.NewHttpMessageError(500, fmt.Errorf("unsupported ServiceType %v", route.Service))
+}
+
+func (r *Router) handlerPayloadReader(ctx context.Context, request *http.Request, responseWriter http.ResponseWriter, route *Route) (PayloadReader, error) {
+	session, err := r.newHandlerSession(ctx, request, responseWriter, route)
+	if err != nil {
+		return nil, err
+	}
+
+	output, err := route.Handler.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(session)})
+	if err != nil {
+		return nil, err
+	}
+
+	switch actual := output.(type) {
+	case response.Response:
+		responseContent, err := r.extractValueFromResponse(route, actual)
+		if err != nil {
+			return nil, err
+		}
+
+		return NewBytesReader(responseContent, "", WithHeaders(actual.Headers())), nil
+
+	case []byte:
+		return NewBytesReader(actual, ""), nil
+	default:
+		marshal, err := route._marshaller.Marshal(output)
+		if err != nil {
+			return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
+		}
+
+		return NewBytesReader(marshal, "", WithHeader(HeaderContentType, applicationJson)), nil
+	}
+}
+
+func (r *Router) extractValueFromResponse(route *Route, actual response.Response) ([]byte, error) {
+	value := actual.Value()
+	switch responseValue := value.(type) {
+	case []byte:
+		return responseValue, nil
+	default:
+		return route._marshaller.Marshal(route, responseValue)
+	}
+}
+
+func (r *Router) readerPayloadReader(ctx context.Context, route *Route, session *ReaderSession, record *async.Record) (PayloadReader, error) {
 	if route.Async != nil {
 		return r.readAsyncResponse(ctx, session, record)
 	}
@@ -1315,6 +1377,90 @@ func (r *Router) PrepareJobs(ctx context.Context, request *http.Request) (map[*s
 	return jobs.Index(), nil
 }
 
+func (r *Router) executorPayloadReader(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route) (PayloadReader, error) {
+	parameters, session, err := r.prepareExecutorSession(ctx, request, route)
+	if err != nil {
+		return nil, err
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	anExecutor := executor.New()
+	err = anExecutor.Exec(ctx, session)
+	if err != nil {
+		return nil, err
+	}
+
+	if route.ResponseBody == nil {
+		return NewBytesReader(nil, ""), nil
+	}
+
+	body, err := route.execResponseBody(parameters, session)
+	if err != nil {
+		return nil, err
+	}
+
+	responseBody := r.wrapWithResponseIfNeeded(body, route, nil, nil, session.State)
+	marshal, err := route._marshaller.Marshal(responseBody)
+	if err != nil {
+		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
+	}
+
+	return NewBytesReader(marshal, ""), nil
+}
+
+func (r *Router) prepareExecutorSession(ctx context.Context, request *http.Request, route *Route) (*RequestParams, *executor.Session, error) {
+	parameters, err := NewRequestParameters(request, route)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	session, err := r.prepareExecutorSessionWithParameters(ctx, request, route, parameters)
+	return parameters, session, err
+}
+
+func (r *Router) prepareExecutorSessionWithParameters(ctx context.Context, request *http.Request, route *Route, parameters *RequestParams) (*executor.Session, error) {
+	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, parameters, route.Index._viewDetails...)
+	if err != nil {
+		return nil, err
+	}
+
+	session, err := executor.NewSession(selectors, route.View)
+	return session, err
+}
+
+func (r *Router) newHandlerSession(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route) (handler.Session, error) {
+	dialect, err := route.View.Connector.Dialect(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	parameters, err := NewRequestParameters(request, route)
+	if err != nil {
+		return nil, err
+	}
+
+	return session.NewSession(
+		session.WithStater(route.Handler.NewStater(request, route, parameters)),
+		session.WithSql(&SqlxService{
+			toExecute:        nil,
+			executablesIndex: map[string]*expand.Executable{},
+			options:          nil,
+			validator:        r.newValidator(),
+			dialect:          dialect,
+			connectors:       r._resource.Resource.GetConnectors(),
+			params:           parameters,
+		}),
+	), nil
+}
+
+func (r *Router) newValidator() *validator.Service {
+	return validator.New(&Validator{
+		validator: expand.CommonValidator(),
+	})
+}
+
 func updateFieldPathsIfNeeded(filter *json.FilterEntry) {
 	if filter.Path == "" {
 		return
@@ -1346,4 +1492,12 @@ func appendCacheWarmupViews(aView *view.View, result *[]*view.View) {
 	for i := range aView.With {
 		appendCacheWarmupViews(&aView.With[i].Of.View, result)
 	}
+}
+
+func (r *Route) execResponseBody(parameters *RequestParams, session *executor.Session) (interface{}, error) {
+	if r.ResponseBody != nil {
+		return r.ResponseBody.getValue(session)
+	}
+
+	return parameters.RequestBody()
 }

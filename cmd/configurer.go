@@ -44,7 +44,7 @@ func (c *ViewConfigurer) ViewParams() []*ViewParamConfig {
 
 func (c *ViewConfigurer) DefaultHTTPMethod() string {
 	switch c.serviceType {
-	case router.ExecutorServiceType:
+	case router.ServiceTypeExecutor:
 		return http.MethodPost
 	}
 
@@ -143,7 +143,7 @@ func (c *ViewConfigurer) buildViewConfig(serviceType router.ServiceType, viewNam
 }
 
 func (c *ViewConfigurer) prepareViewConfig(serviceType router.ServiceType, viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*ViewConfig, []*ViewParamConfig, error) {
-	if serviceType == router.ReaderServiceType {
+	if serviceType == router.ServiceTypeReader {
 		return c.buildReaderViewConfig(viewName, SQL, opt, parent)
 	}
 
@@ -401,7 +401,7 @@ func (c *ViewConfigurer) buildViewConfigWithTable(join *query.Join, innerTable *
 		return newViewConfig(join.Alias, join.Alias, join, innerTable, nil, view.SQLQueryMode), nil, nil
 	}
 
-	aConfig, viewParams, err := c.buildViewConfig(router.ReaderServiceType, join.Alias, innerTable.SQL, opt, join)
+	aConfig, viewParams, err := c.buildViewConfig(router.ServiceTypeReader, join.Alias, innerTable.SQL, opt, join)
 	if aConfig != nil {
 		aConfig.unexpandedTable = innerTable
 	}
@@ -449,7 +449,7 @@ func (c *ViewConfigurer) preProcessHints(opt *option.RouteConfig) ([]*ViewParamC
 			continue
 		}
 
-		aViewConfig, childViewParams, err := c.buildViewConfig(router.ReaderServiceType, hint.Parameter, param.SQL, opt, nil)
+		aViewConfig, childViewParams, err := c.buildViewConfig(router.ServiceTypeReader, hint.Parameter, param.SQL, opt, nil)
 		if err != nil {
 			return nil, err
 		}

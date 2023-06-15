@@ -184,8 +184,8 @@ func (v *Codec) extractCodecFn(resource *Resource, paramType reflect.Type, view 
 	}
 }
 
-func (v *Codec) Transform(ctx context.Context, raw string, options ...interface{}) (interface{}, error) {
-	return v._codecFn(ctx, raw, options...)
+func (v *Codec) Transform(ctx context.Context, value interface{}, options ...interface{}) (interface{}, error) {
+	return v._codecFn(ctx, value, options...)
 }
 
 func (v *Codec) inherit(asCodec config.CodecDef, paramType reflect.Type) error {
@@ -452,6 +452,10 @@ func (p *Parameter) initSchemaFromType(structType reflect.Type) error {
 }
 
 func (p *Parameter) UpdatePresence(presencePtr unsafe.Pointer) {
+	if presencePtr == nil || p._presenceAccessor == nil {
+		return
+	}
+
 	p._presenceAccessor.SetBool(presencePtr, true)
 }
 
@@ -494,15 +498,20 @@ func (p *Parameter) ConvertAndSetCtx(ctx context.Context, selector *Selector, va
 
 func (p *Parameter) convertAndSet(ctx context.Context, selector *Selector, value interface{}, converted bool) (interface{}, error) {
 	p.ensureSelectorParamValue(selector)
+	return p.setOnState(ctx, &selector.Parameters, value, converted, selector)
+}
 
-	paramPtr, presencePtr := asValuesPtr(selector)
-
-	value, err := p.setValue(ctx, value, paramPtr, converted, selector)
+func (p *Parameter) setOnState(ctx context.Context, state *ParamState, value interface{}, converted bool, options ...interface{}) (interface{}, error) {
+	paramPtr, presencePtr := asValuesPtr(state)
+	value, err := p.setValue(ctx, value, paramPtr, converted, options...)
 	if err != nil {
 		return nil, err
 	}
 
-	p.UpdatePresence(presencePtr)
+	if presencePtr != nil {
+		p.UpdatePresence(presencePtr)
+	}
+
 	return value, nil
 }
 
@@ -530,7 +539,16 @@ func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr un
 }
 
 func (p *Parameter) Set(selector *Selector, value interface{}) error {
-	_, err := p.convertAndSet(context.Background(), selector, value, true)
+	return p.SetCtx(context.Background(), selector, value)
+}
+
+func (p *Parameter) SetCtx(ctx context.Context, selector *Selector, value interface{}) error {
+	_, err := p.convertAndSet(ctx, selector, value, true)
+	return err
+}
+
+func (p *Parameter) UpdateParamState(ctx context.Context, paramState *ParamState, value interface{}, options ...interface{}) error {
+	_, err := p.setOnState(ctx, paramState, value, true, options...)
 	return err
 }
 
@@ -538,9 +556,15 @@ func (p *Parameter) SetAndGet(selector *Selector, value interface{}) (interface{
 	return p.convertAndSet(context.Background(), selector, value, true)
 }
 
-func asValuesPtr(selector *Selector) (paramPtr unsafe.Pointer, presencePtr unsafe.Pointer) {
-	paramPtr = xunsafe.AsPointer(selector.Parameters.Values)
-	presencePtr = xunsafe.AsPointer(selector.Parameters.Has)
+func asValuesPtr(state *ParamState) (paramPtr unsafe.Pointer, presencePtr unsafe.Pointer) {
+	if state.Values != nil {
+		paramPtr = xunsafe.AsPointer(state.Values)
+	}
+
+	if state.Has != nil {
+		presencePtr = xunsafe.AsPointer(state.Has)
+	}
+
 	return paramPtr, presencePtr
 }
 
@@ -550,7 +574,7 @@ func (p *Parameter) SetPresenceField(structType reflect.Type) error {
 		return err
 	}
 
-	p._presenceAccessor = types.NewAccessor(fields, structType)
+	p._presenceAccessor = types.NewAccessor(fields)
 
 	return nil
 }
@@ -612,6 +636,13 @@ func (p *Parameter) initParamBasedParameter(ctx context.Context, view *View, res
 
 func (p *Parameter) Parent() *Parameter {
 	return p._dependsOn
+}
+
+func (p *Parameter) WithAccessors(value, presence *types.Accessor) *Parameter {
+	result := *p
+	result._valueAccessor = value
+	result._presenceAccessor = presence
+	return &result
 }
 
 //ParametersIndex represents Parameter map indexed by Parameter.Name

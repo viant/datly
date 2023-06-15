@@ -1,6 +1,7 @@
 package expand
 
 import (
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/structql"
 	"github.com/viant/velty/ast/expr"
 	"reflect"
@@ -38,7 +39,7 @@ func (q *queryFirstFunction) Handler() interface{} {
 
 		rValue := reflect.ValueOf(result)
 		if rValue.Len() == 0 {
-			return NewValue(rValue.Type().Elem()), nil
+			return types.NewValue(rValue.Type().Elem()), nil
 		}
 
 		result = rValue.Index(0).Interface()

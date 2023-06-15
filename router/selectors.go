@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/criteria"
-	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -24,17 +23,34 @@ type (
 		MainView *view.View
 	}
 
-	selectorsBuilder struct {
+	paramStateBuilder struct {
 		caser           format.Case
 		dateFormat      string
 		requestMetadata *RequestMetadata
 		params          *RequestParams
-		accessor        *types.Accessors
+		cache           *paramsValueCache
 	}
 
 	JSONError struct {
 		Message string
 		Object  interface{}
+	}
+
+	paramsValueCache struct {
+		index sync.Map
+	}
+
+	paramsValueKey struct {
+		name     string
+		target   string
+		location view.Kind
+	}
+
+	paramValue struct {
+		once   sync.Once
+		value  interface{}
+		err    error
+		valuer func() (interface{}, error)
 	}
 )
 
@@ -42,7 +58,7 @@ func (e *JSONError) Error() string {
 	return e.Message
 }
 
-func (b *selectorsBuilder) build(ctx context.Context, viewsDetails []*ViewDetails, selectors *view.Selectors) error {
+func (b *paramStateBuilder) Build(ctx context.Context, viewsDetails []*ViewDetails, selectors *view.Selectors) error {
 	wg := sync.WaitGroup{}
 	errors := NewErrors()
 	for _, details := range viewsDetails {
@@ -62,8 +78,7 @@ func (b *selectorsBuilder) build(ctx context.Context, viewsDetails []*ViewDetail
 				return
 			}
 
-			selector.Parameters.Init(details.View)
-			if param, err := b.buildSelectorParameters(ctx, selector, details, details.View.Template.Parameters); err != nil {
+			if param, err := b.buildSelectorParameters(ctx, &selector.Parameters, details, details.View.Template.Parameters); err != nil {
 				asErrors, ok := err.(*Errors)
 
 				if param.ErrorStatusCode != 0 {
@@ -113,7 +128,7 @@ func BuildRouteSelectors(ctx context.Context, selectors *view.Selectors, route *
 			return err
 		}
 	}
-	return CreateSelectors(ctx, route._accessors, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, route.Index._viewDetails...)
+	return CreateSelectors(ctx, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, route.Index._viewDetails...)
 }
 
 func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, requestParams *RequestParams, views ...*ViewDetails) (*view.Selectors, *RequestParams, error) {
@@ -128,7 +143,7 @@ func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.R
 	}
 
 	selectors := view.NewSelectors()
-	if err := CreateSelectors(ctx, route._accessors, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, views...); err != nil {
+	if err := CreateSelectors(ctx, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, views...); err != nil {
 		return nil, nil, err
 	}
 	return selectors, requestParams, nil
@@ -144,25 +159,26 @@ func NewRequestMetadata(route *Route) *RequestMetadata {
 	return requestMetadata
 }
 
-func CreateSelectors(ctx context.Context, accessor *types.Accessors, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, selectors *view.Selectors, views ...*ViewDetails) error {
-	sb := &selectorsBuilder{
+func CreateSelectors(ctx context.Context, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, selectors *view.Selectors, views ...*ViewDetails) error {
+	sb := newParamStateBuilder(inputFormat, dateFormat, requestMetadata, requestParams, newParamsValueCache())
+	return sb.Build(ctx, views, selectors)
+}
+
+func newParamStateBuilder(inputFormat format.Case, dateFormat string, requestMetadata *RequestMetadata, requestParams *RequestParams, cache *paramsValueCache) *paramStateBuilder {
+	sb := &paramStateBuilder{
 		caser:           inputFormat,
 		dateFormat:      dateFormat,
 		requestMetadata: requestMetadata,
 		params:          requestParams,
-		accessor:        accessor,
+		cache:           cache,
 	}
-	return sb.build(ctx, views, selectors)
+	return sb
 }
 
-func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.Selector, details *ViewDetails) (string, error) {
+func (b *paramStateBuilder) populateSelector(ctx context.Context, selector *view.Selector, details *ViewDetails) (string, error) {
 	if details.View.Selector.FieldsParam != nil {
 		if err := b.populateFields(ctx, selector, details); err != nil {
 			return view.FieldsQuery, err
-		}
-	} else {
-		if b.isParamPresent(details, view.FieldsQuery) {
-			return view.FieldsQuery, fmt.Errorf("can't use fields on view %v", details.View.Name)
 		}
 	}
 
@@ -170,19 +186,11 @@ func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.
 		if err := b.populateLimit(ctx, selector, details); err != nil {
 			return view.LimitQuery, err
 		}
-	} else {
-		if b.isParamPresent(details, view.LimitQuery) {
-			return view.LimitQuery, fmt.Errorf("can't use limit on view %v", details.View.Name)
-		}
 	}
 
 	if details.View.Selector.OffsetParam != nil {
 		if err := b.populateOffset(ctx, selector, details); err != nil {
 			return view.OffsetQuery, err
-		}
-	} else {
-		if b.isParamPresent(details, view.OffsetQuery) {
-			return view.OffsetQuery, fmt.Errorf("can't use offset on view %v", details.View.Name)
 		}
 	}
 
@@ -190,29 +198,17 @@ func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.
 		if err := b.populateOrderBy(ctx, selector, details); err != nil {
 			return view.OrderByQuery, err
 		}
-	} else {
-		if b.isParamPresent(details, view.OrderByQuery) {
-			return view.OrderByQuery, fmt.Errorf("can't use order by on view %v", details.View.Name)
-		}
 	}
 
 	if details.View.Selector.CriteriaParam != nil {
 		if err := b.populateCriteria(ctx, selector, details); err != nil {
 			return view.CriteriaQuery, err
 		}
-	} else {
-		if b.isParamPresent(details, view.CriteriaQuery) {
-			return view.CriteriaQuery, fmt.Errorf("can't use criteria on view %v", details.View.Name)
-		}
 	}
 
 	if details.View.Selector.PageParam != nil {
 		if err := b.populatePage(ctx, selector, details); err != nil {
 			return view.PageQuery, err
-		}
-	} else {
-		if b.isParamPresent(details, view.PageQuery) {
-			return view.PageQuery, fmt.Errorf("can't use page on view %v", details.View.Name)
 		}
 	}
 
@@ -240,15 +236,7 @@ func (b *selectorsBuilder) populateSelector(ctx context.Context, selector *view.
 	return "", nil
 }
 
-func (b *selectorsBuilder) isParamPresent(details *ViewDetails, defaultParamName string) bool {
-	if len(details.Prefixes) == 0 {
-		return false
-	}
-
-	return b.params.queryParam(details.Prefixes[0]+defaultParamName, "") != ""
-}
-
-func (b *selectorsBuilder) populateCriteria(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+func (b *paramStateBuilder) populateCriteria(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
 	criteriaExpression, err := b.criteriaValue(ctx, details, selector)
 	if err != nil || criteriaExpression == "" {
 		return err
@@ -268,7 +256,7 @@ func (b *selectorsBuilder) populateCriteria(ctx context.Context, selector *view.
 	return nil
 }
 
-func (b *selectorsBuilder) criteriaValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, error) {
+func (b *paramStateBuilder) criteriaValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, error) {
 	param := details.View.Selector.CriteriaParam
 	paramValue, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil || paramValue == nil {
@@ -282,7 +270,7 @@ func (b *selectorsBuilder) criteriaValue(ctx context.Context, details *ViewDetai
 	return "", typeMismatchError(param, paramValue)
 }
 
-func (b *selectorsBuilder) populateLimit(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+func (b *paramStateBuilder) populateLimit(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
 	limit, err := b.limitValue(ctx, details, selector)
 	if err != nil || limit == 0 {
 		return err
@@ -299,7 +287,7 @@ func (b *selectorsBuilder) populateLimit(ctx context.Context, selector *view.Sel
 	return nil
 }
 
-func (b *selectorsBuilder) limitValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (int, error) {
+func (b *paramStateBuilder) limitValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (int, error) {
 	param := details.View.Selector.LimitParam
 	paramValue, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil {
@@ -309,7 +297,7 @@ func (b *selectorsBuilder) limitValue(ctx context.Context, details *ViewDetails,
 	return asInt(paramValue, param)
 }
 
-func (b *selectorsBuilder) populateOrderBy(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+func (b *paramStateBuilder) populateOrderBy(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
 	orderBy, err := b.orderByValue(ctx, details, selector)
 	if err != nil {
 		return err
@@ -332,7 +320,7 @@ func (b *selectorsBuilder) populateOrderBy(ctx context.Context, selector *view.S
 	return nil
 }
 
-func (b *selectorsBuilder) orderByValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, error) {
+func (b *paramStateBuilder) orderByValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, error) {
 	param := details.View.Selector.OrderByParam
 	value, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil {
@@ -345,7 +333,7 @@ func (b *selectorsBuilder) orderByValue(ctx context.Context, details *ViewDetail
 	return "", typeMismatchError(param, value)
 }
 
-func (b *selectorsBuilder) populateOffset(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+func (b *paramStateBuilder) populateOffset(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
 	offset, err := b.offsetValue(ctx, details, selector)
 	if err != nil || offset == 0 {
 		return err
@@ -359,7 +347,7 @@ func (b *selectorsBuilder) populateOffset(ctx context.Context, selector *view.Se
 	return nil
 }
 
-func (b *selectorsBuilder) offsetValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (int, error) {
+func (b *paramStateBuilder) offsetValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (int, error) {
 	param := details.View.Selector.OffsetParam
 	value, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil {
@@ -377,7 +365,7 @@ func asInt(value interface{}, param *view.Parameter) (int, error) {
 	return 0, typeMismatchError(param, value)
 }
 
-func (b *selectorsBuilder) populateFields(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+func (b *paramStateBuilder) populateFields(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
 	fieldValue, separator, err := b.fieldRawValue(ctx, details, selector)
 	if err != nil {
 		return err
@@ -398,7 +386,7 @@ func (b *selectorsBuilder) populateFields(ctx context.Context, selector *view.Se
 	return nil
 }
 
-func (b *selectorsBuilder) fieldRawValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, int32, error) {
+func (b *paramStateBuilder) fieldRawValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, int32, error) {
 	param := details.View.Selector.FieldsParam
 	paramValue, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil {
@@ -413,24 +401,43 @@ func (b *selectorsBuilder) fieldRawValue(ctx context.Context, details *ViewDetai
 	return "", ValuesSeparator, typeMismatchError(param, paramValue)
 }
 
-func (b *selectorsBuilder) extractParamValue(ctx context.Context, param *view.Parameter, details *ViewDetails, selector *view.Selector) (interface{}, error) {
-	return b.extractParamValueWithOptions(ctx, param, details, selector)
+func (b *paramStateBuilder) extractParamValue(ctx context.Context, param *view.Parameter, details *ViewDetails, selector *view.Selector) (interface{}, error) {
+	return b.extractParamValueWithOptions(ctx, param, details.View, selector)
 }
 
-func (b *selectorsBuilder) extractParamValueWithOptions(ctx context.Context, param *view.Parameter, details *ViewDetails, options ...interface{}) (interface{}, error) {
-	switch param.In.Kind {
-	case view.KindDataView:
-		return b.viewParamValue(ctx, details, param)
-	case view.KindEnvironment:
-		return b.params.convertAndTransform(ctx, os.Getenv(param.In.Name), param, options...)
-	case view.KindParam:
-		return b.paramBasedParamValue(ctx, details, param, options...)
-	}
+func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, param *view.Parameter, parentView *view.View, options ...interface{}) (interface{}, error) {
+	return b.cache.paramValue(param, func() (interface{}, error) {
+		switch param.In.Kind {
+		case view.KindDataView:
+			value, err := b.viewParamValue(ctx, param, parentView)
+			if err != nil {
+				return nil, err
+			}
 
-	return b.params.ExtractHttpParam(ctx, param, options...)
+			return b.transformIfNeeded(ctx, param, value, options...)
+		case view.KindEnvironment:
+			return b.params.convertAndTransform(ctx, os.Getenv(param.In.Name), param, options...)
+		case view.KindParam:
+			value, err := b.paramBasedParamValue(ctx, parentView, param, options...)
+			if err != nil {
+				return nil, err
+			}
+
+			return b.transformIfNeeded(ctx, param, value, options...)
+
+		case view.KindLiteral:
+			return b.transformIfNeeded(ctx, param, param.Const, options...)
+		}
+
+		return b.params.ExtractHttpParam(ctx, param, options...)
+	})
 }
 
 func (p *RequestParams) convertAndTransform(ctx context.Context, raw string, param *view.Parameter, options ...interface{}) (interface{}, error) {
+	if raw == "" && param.IsRequired() {
+		return nil, requiredParamErr(param)
+	}
+
 	dateFormat := p.route.DateFormat
 	if param.DateFormat != "" {
 		dateFormat = param.DateFormat
@@ -444,22 +451,20 @@ func (p *RequestParams) convertAndTransform(ctx context.Context, raw string, par
 	return param.Output.Transform(ctx, raw, options...)
 }
 
-func (b *selectorsBuilder) buildSelectorParameters(ctx context.Context, selector *view.Selector, parent *ViewDetails, parameters []*view.Parameter) (*view.Parameter, error) {
+func (b *paramStateBuilder) buildSelectorParameters(ctx context.Context, state *view.ParamState, parent *ViewDetails, parameters []*view.Parameter, options ...interface{}) (*view.Parameter, error) {
 	var viewParams []*view.Parameter
-
-	var err error
 	for _, parameter := range parameters {
 		if parameter.In.Kind == view.KindDataView && parameter.ErrorStatusCode <= 400 {
 			viewParams = append(viewParams, parameter)
 			continue
 		}
 
-		err = b.handleParam(ctx, selector, parent, parameter)
+		err := b.handleParam(ctx, state, parent, parameter, options...)
 		if err != nil {
 			return parameter, err
 		}
 
-		value, err := parameter.Value(selector.Parameters.Values)
+		value, err := parameter.Value(state.Values)
 		if err != nil {
 			return parameter, err
 		}
@@ -480,7 +485,7 @@ func (b *selectorsBuilder) buildSelectorParameters(ctx context.Context, selector
 			wg.Add(1)
 			go func(param *view.Parameter, wg *sync.WaitGroup) {
 				defer wg.Done()
-				err := b.handleParam(ctx, selector, parent, param)
+				err := b.handleParam(ctx, state, parent, param, options...)
 				if err != nil {
 					mux.Lock()
 					defer mux.Unlock()
@@ -505,106 +510,28 @@ func isNull(value interface{}) bool {
 	return xunsafe.AsPointer(value) == nil
 }
 
-func (b *selectorsBuilder) handleParam(ctx context.Context, selector *view.Selector, parent *ViewDetails, parameter *view.Parameter) error {
-	switch parameter.In.Kind {
-	case view.KindParam:
-		if err := b.addParamBasedParam(ctx, parent, selector, parameter); err != nil {
-			return err
-		}
-
-	case view.KindQuery:
-		if err := b.addQueryParam(ctx, selector, parameter); err != nil {
-			return err
-		}
-
-	case view.KindPath:
-		if err := b.addPathParam(ctx, selector, parameter); err != nil {
-			return err
-		}
-
-	case view.KindHeader:
-		if err := b.addHeaderParam(ctx, selector, parameter); err != nil {
-			return err
-		}
-
-	case view.KindCookie:
-		if err := b.addCookieParam(ctx, selector, parameter); err != nil {
-			return err
-		}
-
-	case view.KindDataView:
-		if err := b.addViewParam(ctx, selector, parent, parameter); err != nil {
-			return err
-		}
-
-	case view.KindRequestBody:
-		if err := b.addRequestBodyParam(ctx, selector, parameter); err != nil {
-			return err
-		}
-
-	case view.KindEnvironment:
-		if err := b.addEnvVariableParam(ctx, selector, parameter); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (b *selectorsBuilder) addEnvVariableParam(ctx context.Context, selector *view.Selector, parameter *view.Parameter) error {
-	return convertAndSet(ctx, selector, parameter, os.Getenv(parameter.In.Name))
-}
-
-func (b *selectorsBuilder) addRequestBodyParam(ctx context.Context, selector *view.Selector, param *view.Parameter) error {
-	paramValue, err := b.params.BodyParameter(param)
+func (b *paramStateBuilder) handleParam(ctx context.Context, state *view.ParamState, parent *ViewDetails, parameter *view.Parameter, options ...interface{}) error {
+	value, err := b.extractParamValueWithOptions(ctx, parameter, parent.View, options...)
 	if err != nil {
 		return err
 	}
 
-	if param.Required != nil && *param.Required && paramValue == nil {
-		return requiredParamErr(param)
+	if parameter.IsRequired() && value == nil {
+		return requiredParamErr(parameter)
 	}
-	return param.ConvertAndSetCtx(ctx, selector, paramValue)
+
+	if value != nil {
+		return parameter.UpdateParamState(ctx, state, value, options...)
+	}
+
+	return nil
 }
 
 func requiredParamErr(param *view.Parameter) error {
 	return fmt.Errorf("parameter %v is required", param.Name)
 }
 
-func (b *selectorsBuilder) addCookieParam(ctx context.Context, selector *view.Selector, parameter *view.Parameter) error {
-	return convertAndSet(ctx, selector, parameter, b.params.cookie(parameter.In.Name))
-}
-
-func (b *selectorsBuilder) addHeaderParam(ctx context.Context, selector *view.Selector, parameter *view.Parameter) error {
-	return convertAndSet(ctx, selector, parameter, b.params.header(parameter.In.Name))
-}
-
-func (b *selectorsBuilder) addQueryParam(ctx context.Context, selector *view.Selector, parameter *view.Parameter) error {
-	return convertAndSet(ctx, selector, parameter, b.params.queryParam(parameter.In.Name, ""))
-}
-
-func (b *selectorsBuilder) addPathParam(ctx context.Context, selector *view.Selector, parameter *view.Parameter) error {
-	return convertAndSet(ctx, selector, parameter, b.params.pathVariable(parameter.In.Name, ""))
-}
-
-func (b *selectorsBuilder) addViewParam(ctx context.Context, selector *view.Selector, viewDetails *ViewDetails, param *view.Parameter) error {
-	paramValue, err := b.viewParamValue(ctx, viewDetails, param)
-	if err != nil {
-		return err
-	}
-
-	if paramValue == nil {
-		return nil
-	}
-
-	if err = param.Set(selector, paramValue); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *ViewDetails, param *view.Parameter) (interface{}, error) {
+func (b *paramStateBuilder) viewParamValue(ctx context.Context, param *view.Parameter, parentView *view.View) (interface{}, error) {
 	aView := param.View()
 
 	sliceType := aView.Schema.SliceType()
@@ -631,11 +558,11 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 	}
 	selectors := view.NewSelectors()
 
-	if err := CreateSelectors(ctx, b.accessor, b.dateFormat, b.caser, newRequestMetadata, b.params, selectors, &ViewDetails{View: aView}); err != nil {
+	if err := CreateSelectors(ctx, b.dateFormat, b.caser, newRequestMetadata, b.params, selectors, &ViewDetails{View: aView}); err != nil {
 		return nil, err
 	}
 
-	session := reader.NewSession(destSlicePtr, aView, viewDetails.View)
+	session := reader.NewSession(destSlicePtr, aView, parentView)
 	session.Selectors = selectors
 	if err := reader.New().Read(ctx, session); err != nil {
 		return nil, err
@@ -672,23 +599,7 @@ func (b *selectorsBuilder) viewParamValue(ctx context.Context, viewDetails *View
 	return b.paramViewValue(param, sliceValue, returnMulti, paramLen, slice, ptr)
 }
 
-func convertAndSet(ctx context.Context, selector *view.Selector, parameter *view.Parameter, rawValue string) error {
-	if parameter.IsRequired() && rawValue == "" {
-		return requiredParamErr(parameter)
-	}
-
-	if rawValue == "" {
-		return nil
-	}
-
-	if err := parameter.ConvertAndSetCtx(ctx, selector, rawValue); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (b *selectorsBuilder) buildFields(aView *view.View, selector *view.Selector, fieldsQuery string, separator int32) error {
+func (b *paramStateBuilder) buildFields(aView *view.View, selector *view.Selector, fieldsQuery string, separator int32) error {
 	fieldIt := NewParamIt(fieldsQuery, separator)
 	for fieldIt.Has() {
 		param, err := fieldIt.Next()
@@ -707,7 +618,7 @@ func (b *selectorsBuilder) buildFields(aView *view.View, selector *view.Selector
 	return nil
 }
 
-func (b *selectorsBuilder) paramViewValue(param *view.Parameter, value reflect.Value, multi bool, paramLen int, aSlice *xunsafe.Slice, ptr unsafe.Pointer) (interface{}, error) {
+func (b *paramStateBuilder) paramViewValue(param *view.Parameter, value reflect.Value, multi bool, paramLen int, aSlice *xunsafe.Slice, ptr unsafe.Pointer) (interface{}, error) {
 	if multi {
 		return value.Elem().Interface(), nil
 	}
@@ -722,7 +633,25 @@ func (b *selectorsBuilder) paramViewValue(param *view.Parameter, value reflect.V
 	}
 }
 
-func (b *selectorsBuilder) populatePage(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+func (p *RequestParams) extractBody(body interface{}, path string) (interface{}, bool) {
+	if path == "" {
+		return body, true
+	}
+
+	accessor, err := p.accessors.AccessorByName(path)
+	if err != nil {
+		return nil, false
+	}
+
+	value, err := accessor.Value(body)
+	if err != nil {
+		return nil, false
+	}
+
+	return value, true
+}
+
+func (b *paramStateBuilder) populatePage(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
 	pageParam := details.View.Selector.PageParam
 	value, err := b.extractParamValue(ctx, pageParam, details, selector)
 	if err != nil {
@@ -745,21 +674,29 @@ func (b *selectorsBuilder) populatePage(ctx context.Context, selector *view.Sele
 	return nil
 }
 
-func (b *selectorsBuilder) paramBasedParamValue(ctx context.Context, details *ViewDetails, param *view.Parameter, options ...interface{}) (interface{}, error) {
+func (b *paramStateBuilder) paramBasedParamValue(ctx context.Context, parentView *view.View, param *view.Parameter, options ...interface{}) (interface{}, error) {
 	parent := param.Parent()
-	value, err := b.extractParamValueWithOptions(ctx, parent, details, options...)
+	value, err := b.extractParamValueWithOptions(ctx, parent, parentView, options...)
 	if err != nil {
 		return nil, err
 	}
 	return value, nil
 }
 
-func (b *selectorsBuilder) addParamBasedParam(ctx context.Context, parent *ViewDetails, selector *view.Selector, parameter *view.Parameter) error {
+func (b *paramStateBuilder) addParamBasedParam(ctx context.Context, parent *ViewDetails, selector *view.Selector, parameter *view.Parameter) error {
 	value, err := b.extractParamValue(ctx, parameter, parent, selector)
 	if err != nil {
 		return err
 	}
 	return parameter.ConvertAndSetCtx(ctx, selector, value)
+}
+
+func (b *paramStateBuilder) transformIfNeeded(ctx context.Context, param *view.Parameter, value interface{}, options ...interface{}) (interface{}, error) {
+	if param.Output == nil {
+		return value, nil
+	}
+
+	return param.Output.Transform(ctx, value, options...)
 }
 
 func canUseColumn(aView *view.View, columnName string) error {
@@ -772,4 +709,33 @@ func canUseColumn(aView *view.View, columnName string) error {
 
 func typeMismatchError(param *view.Parameter, value interface{}) error {
 	return fmt.Errorf("parameter %v value type missmatch, wanted %v but got %T", param.Name, param.Schema.Type().String(), value)
+}
+
+func newParamsValueCache() *paramsValueCache {
+	return &paramsValueCache{
+		index: sync.Map{},
+	}
+}
+
+func (p *paramsValueCache) paramValue(param *view.Parameter, valuer func() (interface{}, error)) (interface{}, error) {
+	actual, _ := p.index.LoadOrStore(paramsValueKey{
+		name:     param.Name,
+		target:   param.In.Name,
+		location: param.In.Kind,
+	}, &paramValue{
+		valuer: valuer,
+		once:   sync.Once{},
+	})
+
+	value := actual.(*paramValue)
+	return value.get()
+}
+
+func (v *paramValue) get() (interface{}, error) {
+	v.once.Do(v.init)
+	return v.value, v.err
+}
+
+func (v *paramValue) init() {
+	v.value, v.err = v.valuer()
 }
