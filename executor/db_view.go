@@ -12,7 +12,9 @@ type ViewDBSource struct {
 }
 
 func NewViewDBSource(view *view.View) *ViewDBSource {
-	return &ViewDBSource{view: view}
+	return &ViewDBSource{
+		view: view,
+	}
 }
 
 func (v *ViewDBSource) Db(_ context.Context) (*sql.DB, error) {

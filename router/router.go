@@ -22,6 +22,8 @@ import (
 	"github.com/viant/govalidator"
 	svalidator "github.com/viant/sqlx/io/validator"
 	"github.com/viant/xdatly/handler"
+	"github.com/viant/xdatly/handler/sqlx"
+	"github.com/viant/xdatly/handler/validator"
 	"github.com/viant/xunsafe"
 	"io"
 	"net/http"
@@ -1358,17 +1360,10 @@ func (r *Router) PrepareJobs(ctx context.Context, request *http.Request) (map[*s
 }
 
 func (r *Router) executorPayloadReader(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route) (PayloadReader, error) {
-	parameters, err := NewRequestParameters(request, route)
+	parameters, session, err := r.prepareExecutorSession(ctx, request, route)
 	if err != nil {
 		return nil, err
 	}
-
-	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, parameters, route.Index._viewDetails...)
-	if err != nil {
-		return nil, err
-	}
-
-	session, err := executor.NewSession(selectors, route.View)
 	if err != nil {
 		return nil, err
 	}
@@ -1397,11 +1392,55 @@ func (r *Router) executorPayloadReader(ctx context.Context, request *http.Reques
 	return NewBytesReader(marshal, ""), nil
 }
 
-func (r *Router) newHandlerSession(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route) (handler.Session, error) {
+func (r *Router) prepareExecutorSession(ctx context.Context, request *http.Request, route *Route) (*RequestParams, *executor.Session, error) {
+	parameters, err := NewRequestParameters(request, route)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	session, err := r.prepareExecutorSessionWithParameters(ctx, request, route, parameters)
+	return parameters, session, err
+}
+
+func (r *Router) prepareExecutorSessionWithParameters(ctx context.Context, request *http.Request, route *Route, parameters *RequestParams) (*executor.Session, error) {
+	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, parameters, route.Index._viewDetails...)
+	if err != nil {
+		return nil, err
+	}
+
+	session, err := executor.NewSession(selectors, route.View)
+	return session, err
+}
+
+func (r *Router) newHandlerSession(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route) (handler.ISession, error) {
+	dialect, err := route.View.Connector.Dialect(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	parameters, err := NewRequestParameters(request, route)
+	if err != nil {
+		return nil, err
+	}
+
 	return session.NewSession(
-		&SqlxService{},
-		route.Handler.NewStater(request, route),
+		sqlx.New(&SqlxService{
+			toExecute:        nil,
+			executablesIndex: map[string]*expand.Executable{},
+			options:          nil,
+			validator:        r.newValidator(),
+			dialect:          dialect,
+			connectors:       r._resource.Resource.GetConnectors(),
+			params:           parameters,
+		}),
+		route.Handler.NewStater(request, route, parameters),
 	), nil
+}
+
+func (r *Router) newValidator() *validator.Service {
+	return validator.New(&Validator{
+		validator: expand.CommonValidator(),
+	})
 }
 
 func updateFieldPathsIfNeeded(filter *json.FilterEntry) {

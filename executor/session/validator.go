@@ -46,7 +46,3 @@ func (v Violations) Merge(violations []*govalidator.Violation) Violations {
 	}
 	return v
 }
-
-func New() validator.Service {
-	return &Validator{}
-}

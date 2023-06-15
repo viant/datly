@@ -69,7 +69,7 @@ func (e *Executor) Execute(ctx context.Context, aView *view.View, options ...Opt
 
 //TODO: remove reflection
 //TODO: customize global batch collector
-func (e *Executor) Exec(ctx context.Context, sess *Session) error {
+func (e *Executor) Exec(ctx context.Context, sess *Session, options ...DBOption) error {
 	state, data, err := e.sqlBuilder.Build(sess.View, sess.Lookup(sess.View))
 	if state != nil {
 		sess.State = state
@@ -80,7 +80,11 @@ func (e *Executor) Exec(ctx context.Context, sess *Session) error {
 		return err
 	}
 
-	if err = e.ExecuteStmts(ctx, NewViewDBSource(sess.View), NewTemplateStmtIterator(state.DataUnit, data), WithLogger(sess.View.Logger)); err != nil {
+	source := NewViewDBSource(sess.View)
+	iterator := NewTemplateStmtIterator(state.DataUnit, data)
+
+	options = append(options, WithLogger(sess.View.Logger))
+	if err = e.ExecuteStmts(ctx, source, iterator, options...); err != nil {
 		return err
 	}
 

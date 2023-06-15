@@ -12,17 +12,17 @@ import (
 )
 
 type Session struct {
-	sqlService sqlx.Service
+	sqlService sqlx.Sqlx
 	stater     state.Stater
 
-	validator   Validator
+	validator   validator.Validator
 	differ      Differ
 	dbProviders map[string]func(ctx context.Context) (*sql.DB, error)
 	db          map[string]*Manager
 	sync.RWMutex
 }
 
-func NewSession(sqlService sqlx.Service, stater state.Stater, opts ...Option) *Session {
+func NewSession(sqlService sqlx.Sqlx, stater state.Stater, opts ...Option) *Session {
 	ret := &Session{
 		sqlService:  sqlService,
 		stater:      stater,
@@ -34,22 +34,22 @@ func NewSession(sqlService sqlx.Service, stater state.Stater, opts ...Option) *S
 	return ret
 }
 
-func (s *Session) Validator() validator.Service {
-	return &s.validator
+func (s *Session) Validator() *validator.Service {
+	return validator.New(s.validator)
 }
 
-func (s *Session) Differ() differ.Service {
-	return &s.differ
+func (s *Session) Differ() *differ.Service {
+	return differ.New(&s.differ)
 }
 
-func (s *Session) MessageBus() mbus.Service {
+func (s *Session) MessageBus() *mbus.Service {
 	return nil
 }
 
-func (s *Session) Db(opts ...sqlx.Option) sqlx.Service {
-	return s.sqlService
+func (s *Session) Db(opts ...sqlx.Option) *sqlx.Service {
+	return sqlx.New(s.sqlService)
 }
 
-func (s *Session) Stater() state.Stater {
-	return s.stater
+func (s *Session) Stater() *state.Service {
+	return state.New(s.stater)
 }

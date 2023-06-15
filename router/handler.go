@@ -42,9 +42,10 @@ type (
 	}
 
 	Stater struct {
-		handler *Handler
-		route   *Route
-		request *http.Request
+		handler    *Handler
+		route      *Route
+		request    *http.Request
+		parameters *RequestParams
 	}
 )
 
@@ -83,17 +84,12 @@ func (h *Handler) Init(ctx context.Context, resource *view.Resource) error {
 	return nil
 }
 
-func (u *stateUpdater) update(ctx context.Context, request *http.Request, route *Route, dest interface{}) error {
-	parameters, err := NewRequestParameters(request, route)
-	if err != nil {
-		return err
-	}
-
+func (u *stateUpdater) update(ctx context.Context, request *http.Request, route *Route, dest interface{}, params *RequestParams) error {
 	paramBuilder := newParamStateBuilder(
 		*route._caser,
 		route.DateFormat,
 		NewRequestMetadata(route),
-		parameters,
+		params,
 		newParamsValueCache(),
 	)
 
@@ -125,14 +121,14 @@ func (c *handlerCache) get(rType reflect.Type, newer func() (*stateUpdater, erro
 	return actual.(*handlerCacheValue)
 }
 
-func (h *Handler) UpdateState(ctx context.Context, request *http.Request, route *Route, dest interface{}) error {
+func (h *Handler) UpdateState(ctx context.Context, request *http.Request, route *Route, dest interface{}, params *RequestParams) error {
 	dstType := reflect.TypeOf(dest)
 	updater, err := h.getUpdater(ctx, dstType)
 	if err != nil {
 		return err
 	}
 
-	return updater.update(ctx, request, route, dest)
+	return updater.update(ctx, request, route, dest, params)
 }
 
 func (h *Handler) getUpdater(ctx context.Context, dstType reflect.Type) (*stateUpdater, error) {
@@ -180,11 +176,12 @@ func (h *Handler) newUpdater(ctx context.Context, dstType reflect.Type) (*stateU
 	}, nil
 }
 
-func (h *Handler) NewStater(request *http.Request, route *Route) *Stater {
+func (h *Handler) NewStater(request *http.Request, route *Route, parameters *RequestParams) *Stater {
 	return &Stater{
-		handler: h,
-		route:   route,
-		request: request,
+		handler:    h,
+		route:      route,
+		request:    request,
+		parameters: parameters,
 	}
 }
 
@@ -200,5 +197,5 @@ func (h *Handler) Call(values []reflect.Value) (interface{}, error) {
 }
 
 func (s *Stater) Into(ctx context.Context, into interface{}) error {
-	return s.handler.UpdateState(ctx, s.request, s.route, into)
+	return s.handler.UpdateState(ctx, s.request, s.route, into, s.parameters)
 }

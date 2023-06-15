@@ -14,6 +14,7 @@ import (
 	"github.com/viant/xdatly/handler/sqlx"
 	"github.com/viant/xdatly/handler/validator"
 	"github.com/viant/xunsafe"
+	"net/http"
 	"reflect"
 )
 
@@ -23,10 +24,15 @@ type (
 		executablesIndex expand.ExecutablesIndex
 		options          *sqlx.Options
 
-		validator  validator.Service
+		validator  *validator.Service
 		db         *sql.DB
 		dialect    *info.Dialect
 		connectors view.Connectors
+
+		request *http.Request
+		route   *Route
+		router  *Router
+		params  *RequestParams
 	}
 
 	SqlxIterator struct {
@@ -34,6 +40,10 @@ type (
 		index     int
 	}
 )
+
+func (s *SqlxService) Load(tableName string, data interface{}) error {
+	panic("function not yet implemented")
+}
 
 func (s *SqlxIterator) HasNext() bool {
 	return s.index < len(s.toExecute)
@@ -49,20 +59,30 @@ func (s *SqlxIterator) HasAny() bool {
 	return len(s.toExecute) > 0
 }
 
-func (s *SqlxService) Flush(ctx context.Context, tableName string) error {
-	if len(s.toExecute) > 0 {
-		var options []interface{}
-		if s.options.WithTx != nil {
-			options = append(options, s.options.WithTx)
-		}
-
-		exec := executor.New()
-		if err := exec.ExecuteStmts(ctx, s, &SqlxIterator{toExecute: s.toExecute}); err != nil {
+func (s *SqlxService) Flush(ctx context.Context, _ string) error {
+	var options []interface{}
+	tx := s.options.WithTx
+	if tx == nil {
+		var err error
+		tx, err = s.Tx(ctx)
+		if err != nil {
 			return err
 		}
 	}
 
-	return nil
+	options = append(options, tx)
+
+	exec := executor.New()
+	if err := exec.ExecuteStmts(ctx, s, &SqlxIterator{toExecute: s.toExecute}); err != nil {
+		return err
+	}
+
+	session, err := s.router.prepareExecutorSessionWithParameters(ctx, s.request, s.route, s.params)
+	if err != nil {
+		return err
+	}
+
+	return exec.Exec(ctx, session, executor.WithTx(tx))
 }
 
 func (s *SqlxService) Insert(tableName string, data interface{}) error {
@@ -178,7 +198,7 @@ func (s *SqlxService) Tx(ctx context.Context) (*sql.Tx, error) {
 	return db.BeginTx(ctx, nil)
 }
 
-func (s *SqlxService) Validator() validator.Service {
+func (s *SqlxService) Validator() *validator.Service {
 	return s.validator
 }
 
