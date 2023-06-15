@@ -41,7 +41,7 @@ type (
 	}
 )
 
-func (s *SqlxService) Load(tableName string, data interface{}) error {
+func (s *SqlxService) Load(ctx context.Context, tableName string, data interface{}) error {
 	panic("function not yet implemented")
 }
 

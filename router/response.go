@@ -34,6 +34,14 @@ func WithHeader(name, value string) RequestDataReaderOption {
 	}
 }
 
+func WithHeaders(header http.Header) RequestDataReaderOption {
+	return func(r *RequestDataReader) {
+		for key, values := range header {
+			header.Set(key, values[0])
+		}
+	}
+}
+
 func (b *RequestDataReader) Read(p []byte) (n int, err error) {
 	return b.buffer.Read(p)
 }

@@ -1,17 +1,19 @@
 package httputils
 
-import "github.com/viant/xdatly/handler/http"
+import (
+	"github.com/viant/xdatly/handler/response"
+)
 
 func BuildErrorResponse(err error) (statusCode int, errorMessage string) {
 	statusCode = 400
 	errorMessage = ""
 
-	messager, ok := err.(http.ErrorMessager)
+	messager, ok := err.(response.ErrorMessager)
 	if ok {
 		errorMessage = messager.ErrorMessage()
 	}
 
-	coder, ok := err.(http.ErrorStatusCoder)
+	coder, ok := err.(response.ErrorStatusCoder)
 	if ok {
 		statusCode = coder.ErrorStatusCode()
 	}

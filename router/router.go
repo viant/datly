@@ -22,6 +22,7 @@ import (
 	"github.com/viant/govalidator"
 	svalidator "github.com/viant/sqlx/io/validator"
 	"github.com/viant/xdatly/handler"
+	"github.com/viant/xdatly/handler/response"
 	"github.com/viant/xdatly/handler/sqlx"
 	"github.com/viant/xdatly/handler/validator"
 	"github.com/viant/xunsafe"
@@ -1036,8 +1037,8 @@ func (r *Router) payloadReader(ctx context.Context, request *http.Request, respo
 	return nil, httputils.NewHttpMessageError(500, fmt.Errorf("unsupported ServiceType %v", route.Service))
 }
 
-func (r *Router) handlerPayloadReader(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route) (PayloadReader, error) {
-	session, err := r.newHandlerSession(ctx, request, response, route)
+func (r *Router) handlerPayloadReader(ctx context.Context, request *http.Request, responseWriter http.ResponseWriter, route *Route) (PayloadReader, error) {
+	session, err := r.newHandlerSession(ctx, request, responseWriter, route)
 	if err != nil {
 		return nil, err
 	}
@@ -1048,6 +1049,14 @@ func (r *Router) handlerPayloadReader(ctx context.Context, request *http.Request
 	}
 
 	switch actual := output.(type) {
+	case response.Response:
+		responseContent, err := r.extractValueFromResponse(route, actual)
+		if err != nil {
+			return nil, err
+		}
+
+		return NewBytesReader(responseContent, "", WithHeaders(actual.Headers())), nil
+
 	case []byte:
 		return NewBytesReader(actual, ""), nil
 	default:
@@ -1057,6 +1066,16 @@ func (r *Router) handlerPayloadReader(ctx context.Context, request *http.Request
 		}
 
 		return NewBytesReader(marshal, "", WithHeader(HeaderContentType, applicationJson)), nil
+	}
+}
+
+func (r *Router) extractValueFromResponse(route *Route, actual response.Response) ([]byte, error) {
+	value := actual.Value()
+	switch responseValue := value.(type) {
+	case []byte:
+		return responseValue, nil
+	default:
+		return route._marshaller.Marshal(route, responseValue)
 	}
 }
 
@@ -1412,7 +1431,7 @@ func (r *Router) prepareExecutorSessionWithParameters(ctx context.Context, reque
 	return session, err
 }
 
-func (r *Router) newHandlerSession(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route) (handler.ISession, error) {
+func (r *Router) newHandlerSession(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route) (handler.Session, error) {
 	dialect, err := route.View.Connector.Dialect(ctx)
 	if err != nil {
 		return nil, err

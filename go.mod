@@ -60,7 +60,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.33.1
 	github.com/viant/structology v0.1.0
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
-	github.com/viant/xdatly/handler v0.0.0-20230615004931-3cd69a063099
+	github.com/viant/xdatly/handler v0.0.0-20230615201419-f5e46b6b011f
 	github.com/viant/xdatly/types/core v0.0.0-20230518142915-e849977dfa52
 )
 

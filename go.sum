@@ -330,10 +330,8 @@ github.com/viant/velty v0.1.1-0.20230509001836-0709296ae922 h1:tfJb+hRNjMBaFg9Z+
 github.com/viant/velty v0.1.1-0.20230509001836-0709296ae922/go.mod h1:C9LNTFXg7DR8B9+tcY2STVqiRQasDr8AZxMhy/lIpOU=
 github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6 h1:smo1mQEneoMzqnC0ThQpGZmx0gDywu7GFUmjab9rVYM=
 github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6/go.mod h1:fb8YgbVadk8X5ZLz49LWGzWmQlZd7Y/I5wE0ru44bIo=
-github.com/viant/xdatly/handler v0.0.0-20230615003822-41b071d63759 h1:nrBlm2cjswHCWkATo0B7dIXsjj38S0mnDm9jvXvyr5o=
-github.com/viant/xdatly/handler v0.0.0-20230615003822-41b071d63759/go.mod h1:MDc7aXZ4gkUIgqpjemRUBHwFJfe6cb3k2fekd1Mf6t0=
-github.com/viant/xdatly/handler v0.0.0-20230615004931-3cd69a063099 h1:bGfDvrS2Pco4wLU8nGcDXtevvvTZ2fcCZB/e44NwOzA=
-github.com/viant/xdatly/handler v0.0.0-20230615004931-3cd69a063099/go.mod h1:MDc7aXZ4gkUIgqpjemRUBHwFJfe6cb3k2fekd1Mf6t0=
+github.com/viant/xdatly/handler v0.0.0-20230615201419-f5e46b6b011f h1:r+TeQpk/bS2sYyxxORSA35aj0r8RT+nOD8gND2OIH0o=
+github.com/viant/xdatly/handler v0.0.0-20230615201419-f5e46b6b011f/go.mod h1:MDc7aXZ4gkUIgqpjemRUBHwFJfe6cb3k2fekd1Mf6t0=
 github.com/viant/xdatly/types/core v0.0.0-20230518142915-e849977dfa52 h1:+e/l/IhlQRKqUfdTphGrB2k7ZeKLG3Y6bg5pip8Tqss=
 github.com/viant/xdatly/types/core v0.0.0-20230518142915-e849977dfa52/go.mod h1:LJN2m8xJjtYNCvyvNrVanJwvzj8+hYCuPswL8H4qRG0=
 github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7 h1:lQZR77wD4CTMZgnk/6+YirrPHQJYicYCK/TVP8Ic6VU=
