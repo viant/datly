@@ -17,7 +17,7 @@ type SqlxValidator struct {
 	db        *sql.DB
 }
 
-func (v *SqlxValidator) Validate(ctx context.Context, any interface{}, opts ...validator.Option) *validator.Validation {
+func (v *SqlxValidator) Validate(ctx context.Context, any interface{}, opts ...validator.Option) (*validator.Validation, error) {
 	options := &validator.Options{}
 	options.Apply(opts)
 	validation := getOrCreateValidation(options)
@@ -25,12 +25,12 @@ func (v *SqlxValidator) Validate(ctx context.Context, any interface{}, opts ...v
 	if err != nil {
 		validation.Append("/", "", "", "error", err.Error())
 	}
-	return validation
+	return validation, nil
 }
 
 type Validator struct{}
 
-func (v *Validator) Validate(ctx context.Context, any interface{}, opts ...validator.Option) *validator.Validation {
+func (v *Validator) Validate(ctx context.Context, any interface{}, opts ...validator.Option) (*validator.Validation, error) {
 	options := &validator.Options{}
 	options.Apply(opts)
 	validation := getOrCreateValidation(options)
@@ -41,7 +41,7 @@ func (v *Validator) Validate(ctx context.Context, any interface{}, opts ...valid
 	if err = v.validateWithSqlx(ctx, any, validation, options); err != nil {
 		validation.Append("/", "", "", "error", err.Error())
 	}
-	return validation
+	return validation, nil
 }
 
 func getOrCreateValidation(options *validator.Options) *validator.Validation {
