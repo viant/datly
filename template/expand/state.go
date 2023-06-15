@@ -3,7 +3,6 @@ package expand
 import (
 	"github.com/viant/datly/executor/session"
 	"github.com/viant/velty/est"
-	"github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/mbus"
 	"github.com/viant/xdatly/handler/validator"
 )
@@ -23,7 +22,7 @@ type (
 		ResponseBuilder *ResponseBuilder   `velty:"names=response"`
 		ViewParam       *MetaParam         `velty:"names=View"`
 		ParentParam     *MetaParam         `velty:"names=ParentView"`
-		Session         *handler.Session   `velty:"names=session"`
+		Session         *session.Session   `velty:"names=session"`
 		Validator       *validator.Service `velty:"names=validator"`
 		MessageBus      *mbus.Service      `velty:"names=messageBus"`
 	}

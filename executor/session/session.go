@@ -3,7 +3,6 @@ package session
 import (
 	"context"
 	"database/sql"
-	"github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/differ"
 	"github.com/viant/xdatly/handler/mbus"
 	"github.com/viant/xdatly/handler/sqlx"
@@ -42,7 +41,7 @@ func (s *Session) Db(opts ...sqlx.Option) *sqlx.Service {
 	return nil
 }
 
-func NewSession(opts ...Option) *handler.Session {
+func NewSession(opts ...Option) *Session {
 	ret := &Session{
 		mbus:        NewMBus(nil), //TODO pass view message busses
 		validator:   NewValidator(),
@@ -51,5 +50,5 @@ func NewSession(opts ...Option) *handler.Session {
 		dbProviders: map[string]func(ctx context.Context) (*sql.DB, error){},
 	}
 	options(opts).Apply(ret)
-	return handler.NewSession(ret)
+	return ret
 }
