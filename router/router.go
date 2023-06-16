@@ -338,39 +338,30 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 }
 
 func (r *Router) prepareReaderSession(ctx context.Context, response http.ResponseWriter, request *http.Request, route *Route) (*ReaderSession, error) {
-	session, httpErrStatus, err := r.buildSession(ctx, response, request, route)
-	if httpErrStatus >= http.StatusBadRequest {
-		return nil, httputils.NewHttpMessageError(httpErrStatus, err)
-	}
-
-	if err != nil {
-		status := http.StatusBadRequest
-		if route.ParamStatusError != nil && (*route.ParamStatusError%100 >= 4) {
-			status = *route.ParamStatusError
-		}
-
-		return nil, httputils.NewHttpMessageError(status, err)
-	}
-	return session, nil
+	return r.buildSession(ctx, response, request, route)
 }
 
-func (r *Router) buildSession(ctx context.Context, response http.ResponseWriter, request *http.Request, route *Route) (*ReaderSession, int, error) {
+func (r *Router) buildSession(ctx context.Context, response http.ResponseWriter, request *http.Request, route *Route) (*ReaderSession, error) {
 	requestParams, err := NewRequestParameters(request, route)
 	if err != nil {
-		return nil, http.StatusBadRequest, err
+		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, err)
 	}
 
 	if route.CSV == nil && requestParams.OutputFormat == CSVFormat {
-		return nil, http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output CSV config?)", CSVFormat))
+		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output CSV config?)", CSVFormat)))
 	}
 
 	if route.TabularJSON == nil && route.DateFormat == TabularJSONQueryFormat {
-		return nil, http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", TabularJSONFormat))
+		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", TabularJSONFormat)))
 	}
 
 	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, requestParams, route.Index._viewDetails...)
 	if err != nil {
-		return nil, http.StatusBadRequest, err
+		defaultCode := http.StatusBadRequest
+		if route.ParamStatusError != nil {
+			defaultCode = *route.ParamStatusError
+		}
+		return nil, httputils.ErrorOf(defaultCode, err)
 	}
 
 	return &ReaderSession{
@@ -379,7 +370,7 @@ func (r *Router) buildSession(ctx context.Context, response http.ResponseWriter,
 		Request:       request,
 		Response:      response,
 		Selectors:     selectors,
-	}, http.StatusOK, nil
+	}, nil
 }
 
 func UnsupportedFormatErr(format string) error {
@@ -662,6 +653,10 @@ func (r *Router) buildJsonFilters(route *Route, selectors *view.Selectors) ([]*j
 
 func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, statusCode int) {
 	statusCode, message, anObjectErr := normalizeErr(err, statusCode)
+	if statusCode < http.StatusBadRequest {
+		statusCode = http.StatusBadRequest
+	}
+
 	responseStatus := r.responseStatusError(message, anObjectErr)
 	if route._responseSetter == nil {
 		errAsBytes, marshalErr := goJson.Marshal(responseStatus)
@@ -1379,9 +1374,6 @@ func (r *Router) PrepareJobs(ctx context.Context, request *http.Request) (map[*s
 
 func (r *Router) executorPayloadReader(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route) (PayloadReader, error) {
 	parameters, session, err := r.prepareExecutorSession(ctx, request, route)
-	if err != nil {
-		return nil, err
-	}
 	if err != nil {
 		return nil, err
 	}

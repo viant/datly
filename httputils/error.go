@@ -36,6 +36,17 @@ func NewHttpMessageError(statusCode int, err error) *HttpMessageError {
 	}
 }
 
+func ErrorOf(defaultStatusCode int, err error) *HttpMessageError {
+	if err != nil {
+		coder, ok := err.(response.ErrorStatusCoder)
+		if ok {
+			defaultStatusCode = coder.ErrorStatusCode()
+		}
+	}
+
+	return NewHttpMessageError(defaultStatusCode, err)
+}
+
 func (h *HttpMessageError) ErrorMessage() string {
 	if h.err == nil {
 		return ""

@@ -61,6 +61,7 @@ func (e *JSONError) Error() string {
 func (b *paramStateBuilder) Build(ctx context.Context, viewsDetails []*ViewDetails, selectors *view.Selectors) error {
 	wg := sync.WaitGroup{}
 	errors := NewErrors()
+
 	for _, details := range viewsDetails {
 		selector := selectors.Lookup(details.View)
 		selector.OutputFormat = b.caser
@@ -414,7 +415,7 @@ func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, pa
 				return nil, err
 			}
 
-			return b.transformIfNeeded(ctx, param, value, options...)
+			return transformIfNeeded(ctx, param, value, options...)
 		case view.KindEnvironment:
 			return b.params.convertAndTransform(ctx, os.Getenv(param.In.Name), param, options...)
 		case view.KindParam:
@@ -423,10 +424,10 @@ func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, pa
 				return nil, err
 			}
 
-			return b.transformIfNeeded(ctx, param, value, options...)
+			return transformIfNeeded(ctx, param, value, options...)
 
 		case view.KindLiteral:
-			return b.transformIfNeeded(ctx, param, param.Const, options...)
+			return transformIfNeeded(ctx, param, param.Const, options...)
 		}
 
 		return b.params.ExtractHttpParam(ctx, param, options...)
@@ -691,7 +692,7 @@ func (b *paramStateBuilder) addParamBasedParam(ctx context.Context, parent *View
 	return parameter.ConvertAndSetCtx(ctx, selector, value)
 }
 
-func (b *paramStateBuilder) transformIfNeeded(ctx context.Context, param *view.Parameter, value interface{}, options ...interface{}) (interface{}, error) {
+func transformIfNeeded(ctx context.Context, param *view.Parameter, value interface{}, options ...interface{}) (interface{}, error) {
 	if param.Output == nil {
 		return value, nil
 	}

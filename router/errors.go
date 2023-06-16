@@ -39,6 +39,10 @@ type (
 	}
 )
 
+func (e *Errors) ErrorStatusCode() int {
+	return e.status
+}
+
 func (e *Error) Error() string {
 	if e.Message != "" {
 		return e.Message

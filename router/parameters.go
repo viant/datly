@@ -127,7 +127,7 @@ func (p *RequestParams) parseRequestBody(body []byte, route *Route) (interface{}
 
 	converted, _, err := converter.Convert(string(body), unmarshaller.rType, route.CustomValidation, "", unmarshaller.unmarshal)
 	if err != nil {
-		return nil, wrapJSONSyntaxErrorIfNeeded(err, body)
+		return nil, err
 	}
 
 	if unmarshaller.unwrapper != nil {
@@ -289,7 +289,12 @@ func (p *RequestParams) ExtractHttpParam(ctx context.Context, param *view.Parame
 	case view.KindQuery:
 		return p.convertAndTransform(ctx, p.queryParam(param.In.Name, ""), param, options...)
 	case view.KindRequestBody:
-		return p.paramRequestBody(ctx, param, options...)
+		body, err := p.paramRequestBody(ctx, param, options...)
+		if err != nil {
+			return nil, err
+		}
+
+		return transformIfNeeded(ctx, param, body, options...)
 	case view.KindHeader:
 		return p.convertAndTransform(ctx, p.header(param.In.Name), param, options...)
 	case view.KindCookie:
