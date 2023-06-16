@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/cmd/gen"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/view"
@@ -27,7 +28,7 @@ type (
 		table           string
 		config          *ViewConfig
 		sql             string
-		prevNamePrefix  string
+		namePrefix      string
 		indexNamePrefix string
 		isPtr           bool
 		path            string
@@ -57,6 +58,63 @@ type (
 	}
 )
 
+func (i *inputMetadata) ParamName() string {
+	return i.paramName
+}
+
+func (i *inputMetadata) BodyHolder() string {
+	return i.bodyHolder
+}
+
+func (i *inputMetadata) Relations() []VeltyParamDefinition {
+	relations := make([]VeltyParamDefinition, 0, len(i.relations))
+	for _, relation := range i.relations {
+		relations = append(relations, relation)
+	}
+
+	return relations
+
+}
+
+func (i *inputMetadata) Name() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *inputMetadata) IsToMany() bool {
+	return m.typeDef != nil && (m.config.IsToMany() || m.typeDef.Cardinality == view.Many)
+}
+
+func (m *inputMetadata) asParams() []*gen.Parameter {
+	var result []*gen.Parameter
+	for _, item := range m.idParams {
+		result = append(result, item.asParameter(m))
+	}
+	result = append(result, m.asDataViewParameter())
+	return result
+}
+
+func (m inputMetadata) asDataViewParameter() *gen.Parameter {
+	param := &gen.Parameter{}
+	param.Name = m.namePrefix
+	param.Schema = &view.Schema{DataType: m.paramName, Cardinality: view.One}
+	if m.IsToMany() {
+		param.Schema.Cardinality = view.Many
+	}
+	param.SQL = m.sql
+	param.In = &view.Location{Kind: view.KindDataView, Name: m.namePrefix}
+
+	return param
+}
+
+func (m *inputMetadata) AsParam() *gen.Parameter {
+	param := &gen.Parameter{}
+	param.Name = m.paramName
+	param.Schema = &view.Schema{DataType: m.paramName}
+	param.In = &view.Location{Kind: view.KindRequestBody, Name: m.bodyHolder}
+	return param
+}
+
 func (s *Builder) preparePostRule(ctx context.Context, builder *routeBuilder, sourceSQL []byte) (string, error) {
 	routeOption, aConfig, paramType, err := s.buildInputMetadata(ctx, builder, sourceSQL, http.MethodPost)
 	if err != nil {
@@ -82,7 +140,7 @@ func (s *Builder) buildInsertSQL(aRouteBuilder *routeBuilder, typeDef *inputMeta
 	}
 
 	builder := newInsertStmtBuilder(sb, typeDef)
-	if err := builder.appendHints(typeDef); err != nil {
+	if err := builder.appendInputParameterDecl(typeDef); err != nil {
 		return "", err
 	}
 

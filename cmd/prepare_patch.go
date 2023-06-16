@@ -66,7 +66,7 @@ func (s *Builder) buildPatchSQL(builder *routeBuilder, routeOption *option.Route
 }
 
 func (b *patchStmtBuilder) buildWithMeta(opt Prepare, preSQL string) (string, error) {
-	if err := b.stmtBuilder.appendHints(b.typeDef); err != nil {
+	if err := b.stmtBuilder.appendInputParameterDecl(b.typeDef); err != nil {
 		return "", err
 	}
 
@@ -79,7 +79,6 @@ func (b *patchStmtBuilder) buildWithMeta(opt Prepare, preSQL string) (string, er
 	if err != nil {
 		return "", nil
 	}
-
 	return b.build("", true, indexes)
 }
 

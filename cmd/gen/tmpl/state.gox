@@ -1,0 +1,5 @@
+package $Package
+
+type State struct {
+    $Fields
+}

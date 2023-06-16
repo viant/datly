@@ -27,6 +27,8 @@ type (
 		Router           *RouterConfig             `json:",omitempty" yaml:",omitempty"`
 		DataFormat       string                    `json:",omitempty"`
 		TabularJSON      *router.TabularJSONConfig `json:",omitempty"`
+		HandlerType      string                    `json:",omitempty"`
+		StateType        string                    `json:",omitempty"`
 	}
 
 	TypeSrcConfig struct {

@@ -61,7 +61,6 @@ type (
 		AssetsURL string `short:"a" long:"assetsURL" description:"assets destination"`
 		ConstURL  string `long:"constURL" description:"path where const files are stored"`
 		Legacy    bool   `short:"l"`
-		ModuleURL string
 		cache     *view.Cache
 		EnvURL    string `long:"envURL" description:"environment url, expands template before processing"`
 	}
@@ -511,7 +510,7 @@ func (o *Options) MergeFromDSql(dsql *options.DSql) {
 		o.PartialConfigURL = dsql.ConfigURL
 		o.RouteURL = url.Join(dsql.Repo, "Datly/routes")
 	}
-	o.ModuleURL = dsql.Module
+	o.GoModulePkg = dsql.Module
 }
 
 func (o *Options) MergeFromInit(init *options.Init) {

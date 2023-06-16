@@ -9,6 +9,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/cmd/gen"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/runtime/standalone"
@@ -400,6 +401,10 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 	if err := s.loadSQL(ctx, builder, builder.session.sourceURL); err != nil {
 		return err
 	}
+
+	genService := gen.Service{}
+	state, err := genService.LoadParameters(s.options.GoModulePkg, builder.option.StateType, config.Config.LookupType)
+	fmt.Printf("%v %v\n", state, err)
 
 	if strings.TrimSpace(builder.sqlStmt) == "" {
 		return nil
@@ -1379,7 +1384,7 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 	}
 	s.normalizeURL(typeSrc)
 
-	dirTypes, err := xreflect.ParseTypes(typeSrc.URL, xreflect.TypeLookupFn(config.Config.LookupType))
+	dirTypes, err := xreflect.ParseTypes(typeSrc.URL, xreflect.WithTypeLookupFn(config.Config.LookupType))
 	if err != nil {
 		return err
 	}
@@ -2024,6 +2029,14 @@ func (s *Builder) detectSinkColumn(ctx context.Context, db *sql.DB, SQL string) 
 		}
 	}
 	return result, nil
+}
+
+func (s *Builder) uploadGoState(state gen.State, builder *routeBuilder, packageNBame string) error {
+	goURL := builder.session.GoFileURL("state") + ".go"
+	if _, err := s.upload(builder, goURL, state.GenerateGoCode(packageNBame)); err != nil {
+		return err
+	}
+	return nil
 }
 
 func combineURLs(basePath string, segments ...string) string {
