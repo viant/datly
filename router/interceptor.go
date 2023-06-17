@@ -123,7 +123,7 @@ func (i *RouteInterceptor) Evaluate(request *http.Request) (*IntereceptorState, 
 		},
 	}
 
-	state, err := i.evaluator.Evaluate(nil, nil, nil, nil, nil, i.newContext(*ctx))
+	state, err := i.evaluator.Evaluate(nil, nil, nil, nil, nil, nil, i.newContext(*ctx))
 	return &IntereceptorState{
 		ExpandState: state,
 		Context:     ctx,

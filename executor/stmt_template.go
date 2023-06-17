@@ -4,11 +4,11 @@ import "github.com/viant/datly/template/expand"
 
 type TemplateStmtIterator struct {
 	DataUnit *expand.DataUnit
-	Data     []*SQLStatment
+	Data     []*expand.SQLStatment
 	index    int
 }
 
-func NewTemplateStmtIterator(dataUnit *expand.DataUnit, data []*SQLStatment) *TemplateStmtIterator {
+func NewTemplateStmtIterator(dataUnit *expand.DataUnit, data []*expand.SQLStatment) *TemplateStmtIterator {
 	return &TemplateStmtIterator{
 		DataUnit: dataUnit,
 		Data:     data,
@@ -35,7 +35,7 @@ func (t *TemplateStmtIterator) HasAny() bool {
 	return len(t.Data) > 0
 }
 
-func (t *TemplateStmtIterator) canBeBatchedGlobally(criteria *expand.DataUnit, data []*SQLStatment) bool {
+func (t *TemplateStmtIterator) canBeBatchedGlobally(criteria *expand.DataUnit, data []*expand.SQLStatment) bool {
 	executables := criteria.FilterExecutables(extractStatements(data), true)
 	if len(executables) != len(data) {
 		return false

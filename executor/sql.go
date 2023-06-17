@@ -2,6 +2,7 @@ package executor
 
 import (
 	"github.com/viant/datly/executor/parser"
+	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"strings"
@@ -9,19 +10,14 @@ import (
 
 type (
 	SqlBuilder struct{}
-
-	SQLStatment struct {
-		SQL  string
-		Args []interface{}
-	}
 )
 
 func NewBuilder() *SqlBuilder {
 	return &SqlBuilder{}
 }
 
-func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) (*expand.State, []*SQLStatment, error) {
-	state, err := aView.Template.EvaluateState(paramState.Values, paramState.Has, nil, nil)
+func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState, session *session.Session) (*expand.State, []*expand.SQLStatment, error) {
+	state, err := aView.Template.EvaluateStateWithSession(paramState.Values, paramState.Has, nil, nil, session)
 	if err != nil {
 		return state, nil, err
 	}
@@ -39,13 +35,13 @@ func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState) (*expa
 
 	statements := parser.ParseWithReader(strings.NewReader(SQL))
 
-	result := make([]*SQLStatment, len(statements))
+	result := make([]*expand.SQLStatment, len(statements))
 	if len(statements) == 0 && strings.TrimSpace(SQL) != "" {
-		result = append(result, &SQLStatment{SQL: SQL, Args: state.DataUnit.At(0)})
+		result = append(result, &expand.SQLStatment{SQL: SQL, Args: state.DataUnit.At(0)})
 	}
 
 	for i := range statements {
-		result[i] = &SQLStatment{
+		result[i] = &expand.SQLStatment{
 			SQL:  statements[i],
 			Args: state.DataUnit.At(i),
 		}

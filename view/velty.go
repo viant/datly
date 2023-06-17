@@ -38,7 +38,7 @@ func (v *VeltyCodec) Value(ctx context.Context, raw interface{}, options ...inte
 		Context: expand.Context{
 			DataUnit: aCriteria,
 		},
-	})
+	}, nil)
 
 	if err != nil {
 		return nil, err

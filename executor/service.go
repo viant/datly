@@ -70,7 +70,7 @@ func (e *Executor) Execute(ctx context.Context, aView *view.View, options ...Opt
 //TODO: remove reflection
 //TODO: customize global batch collector
 func (e *Executor) Exec(ctx context.Context, sess *Session, options ...DBOption) error {
-	state, data, err := e.sqlBuilder.Build(sess.View, sess.Lookup(sess.View))
+	state, data, err := e.sqlBuilder.Build(sess.View, sess.Lookup(sess.View), sess.SessionHandler)
 	if state != nil {
 		sess.State = state
 		defer sess.State.Flush(expand.StatusFailure)
@@ -126,7 +126,7 @@ func (e *Executor) ExecuteStmts(ctx context.Context, dbSource DBSource, it StmtI
 	return aTx.CommitIfNeeded()
 }
 
-func extractStatements(data []*SQLStatment) []string {
+func extractStatements(data []*expand.SQLStatment) []string {
 	result := make([]string, 0, len(data))
 	for _, datum := range data {
 		result = append(result, datum.SQL)
@@ -138,6 +138,11 @@ func extractStatements(data []*SQLStatment) []string {
 func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface{}, db *sql.DB) error {
 	switch actual := data.(type) {
 	case *expand.Executable:
+		if actual.Executed() {
+			return nil
+		}
+
+		defer actual.MarkAsExecuted()
 		switch actual.ExecType {
 		case expand.ExecTypeInsert:
 			return e.handleInsert(ctx, sess, actual, db)
@@ -147,7 +152,7 @@ func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface
 			return fmt.Errorf("unsupported exec type: %v\n", actual.ExecType)
 		}
 
-	case *SQLStatment:
+	case *expand.SQLStatment:
 		if len(actual.SQL) == 0 {
 			return nil
 		}
@@ -260,7 +265,7 @@ func (e *Executor) dialectSupportsBatching(ctx context.Context, aView *view.View
 	return err == nil && dialect.Insert.MultiValues()
 }
 
-func (e *Executor) executeStatement(ctx context.Context, tx *sql.Tx, stmt *SQLStatment, sess *dbSession) error {
+func (e *Executor) executeStatement(ctx context.Context, tx *sql.Tx, stmt *expand.SQLStatment, sess *dbSession) error {
 	_, err := tx.ExecContext(ctx, stmt.SQL, stmt.Args...)
 	if err != nil {
 		if sess.logger != nil {

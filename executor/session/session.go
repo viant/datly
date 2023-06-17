@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"github.com/viant/xdatly/handler/differ"
 	"github.com/viant/xdatly/handler/mbus"
 	"github.com/viant/xdatly/handler/sqlx"
@@ -9,14 +10,20 @@ import (
 	"sync"
 )
 
-type Session struct {
-	sqlService sqlx.Sqlx
-	stater     state.Stater
-	validator  *validator.Service
-	differ     *differ.Service
-	mbus       *mbus.Service
-	sync.RWMutex
-}
+type (
+	Session struct {
+		sqlService SqlServiceFn
+		stater     state.Stater
+		validator  *validator.Service
+		differ     *differ.Service
+		mbus       *mbus.Service
+		sync.RWMutex
+		templateFlusher TemplateFlushFn
+	}
+
+	SqlServiceFn    func(options *sqlx.Options) sqlx.Sqlx
+	TemplateFlushFn func(ctx context.Context) error
+)
 
 func NewSession(opts ...Option) *Session {
 	ret := &Session{
@@ -42,11 +49,22 @@ func (s *Session) MessageBus() *mbus.Service {
 }
 
 func (s *Session) Db(opts ...sqlx.Option) *sqlx.Service {
-	return sqlx.New(s.sqlService)
+	sqlxOptions := &sqlx.Options{}
+	for _, opt := range opts {
+		opt(sqlxOptions)
+	}
+	return sqlx.New(s.sqlService(sqlxOptions))
 }
 
 func (s *Session) Stater() *state.Service {
 	return state.New(s.stater)
+}
+
+func (s *Session) FlushTemplate(ctx context.Context) error {
+	if s.templateFlusher != nil {
+		return s.templateFlusher(ctx)
+	}
+	return nil
 }
 
 func WithStater(stater state.Stater) Option {
@@ -55,8 +73,14 @@ func WithStater(stater state.Stater) Option {
 	}
 }
 
-func WithSql(sql sqlx.Sqlx) Option {
+func WithSql(sql SqlServiceFn) Option {
 	return func(s *Session) {
 		s.sqlService = sql
+	}
+}
+
+func WithTemplateFlush(fn TemplateFlushFn) Option {
+	return func(s *Session) {
+		s.templateFlusher = fn
 	}
 }
