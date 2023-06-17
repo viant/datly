@@ -20,9 +20,8 @@ import (
 
 type (
 	SqlxService struct {
-		toExecute        []interface{}
-		executablesIndex expand.ExecutablesIndex
-		options          *sqlx.Options
+		stmts   *expand.Statements
+		options *sqlx.Options
 
 		validator  *validator.Service
 		db         *sql.DB
@@ -59,7 +58,7 @@ func (s *SqlxIterator) HasAny() bool {
 	return len(s.toExecute) > 0
 }
 
-func (s *SqlxService) Flush(ctx context.Context, _ string) error {
+func (s *SqlxService) Flush(ctx context.Context, tableName string) error {
 	var options []interface{}
 	tx := s.options.WithTx
 	if tx == nil {
@@ -73,7 +72,19 @@ func (s *SqlxService) Flush(ctx context.Context, _ string) error {
 	options = append(options, tx)
 
 	exec := executor.New()
-	if err := exec.ExecuteStmts(ctx, s, &SqlxIterator{toExecute: s.toExecute}); err != nil {
+	if err := exec.ExecuteStmts(ctx, s, &SqlxIterator{
+		toExecute: s.stmts.FilterByTableName(tableName),
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *SqlxService) FlushAll(ctx context.Context) error {
+	exec := executor.New()
+	tx, err := s.Tx(ctx)
+	if err != nil {
 		return err
 	}
 
@@ -82,33 +93,34 @@ func (s *SqlxService) Flush(ctx context.Context, _ string) error {
 		return err
 	}
 
-	return exec.Exec(ctx, session, executor.WithTx(tx))
+	err = exec.Exec(ctx, session, executor.WithTx(tx))
+	if s.options.WithTx == nil {
+		if err != nil {
+			if txErr := tx.Rollback(); txErr != nil {
+				fmt.Printf("[ERROR] couldn't rollback transaciton due to %v\n", txErr.Error())
+			}
+		} else {
+			if txErr := tx.Commit(); txErr != nil {
+				fmt.Printf("[ERROR] couldn't commit transaciton due to %v\n", txErr.Error())
+			}
+		}
+	}
+
+	return err
 }
 
 func (s *SqlxService) Insert(tableName string, data interface{}) error {
-	s.appendExecutable(expand.ExecTypeInsert, tableName, data)
+	s.stmts.Insert(tableName, data)
 	return nil
 }
 
-func (s *SqlxService) appendExecutable(execType expand.ExecType, tableName string, data interface{}) {
-	executable := &expand.Executable{
-		Table:    tableName,
-		ExecType: expand.ExecTypeInsert,
-		Data:     data,
-		IsLast:   true,
-	}
-
-	s.executablesIndex.UpdateLastExecutable(execType, tableName, executable)
-	s.toExecute = append(s.toExecute, executable)
-}
-
 func (s *SqlxService) Update(tableName string, data interface{}) error {
-	s.appendExecutable(expand.ExecTypeUpdate, tableName, data)
+	s.stmts.Update(tableName, data)
 	return nil
 }
 
 func (s *SqlxService) Delete(tableName string, data interface{}) error {
-	s.appendExecutable(expand.ExecTypeDelete, tableName, data)
+	s.stmts.Delete(tableName, data)
 	return nil
 }
 
@@ -118,7 +130,7 @@ func (s *SqlxService) Execute(DML string, options ...sqlx.ExecutorOption) error 
 		option(opts)
 	}
 
-	s.toExecute = append(s.toExecute, &executor.SQLStatment{
+	s.stmts.Execute(&expand.SQLStatment{
 		SQL:  DML,
 		Args: opts.Args,
 	})

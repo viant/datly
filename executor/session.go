@@ -2,21 +2,27 @@ package executor
 
 import (
 	"fmt"
+	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"sync"
 )
 
 type Session struct {
-	Parameters *Parameters
-	View       *view.View
-	State      *expand.State
+	Parameters     *Parameters
+	View           *view.View
+	State          *expand.State
+	SessionHandler *session.Session
 
 	mux       sync.Mutex
 	selectors *view.Selectors
 }
 
 func NewSession(selectors *view.Selectors, aView *view.View) (*Session, error) {
+	return NewSessionWithCustomHandler(selectors, aView, nil)
+}
+
+func NewSessionWithCustomHandler(selectors *view.Selectors, aView *view.View, handler *session.Session) (*Session, error) {
 	if aView == nil {
 		return nil, fmt.Errorf("view was empty")
 	}
@@ -26,10 +32,11 @@ func NewSession(selectors *view.Selectors, aView *view.View) (*Session, error) {
 	}
 
 	return &Session{
-		Parameters: parameters,
-		selectors:  selectors,
-		View:       aView,
-		mux:        sync.Mutex{},
+		Parameters:     parameters,
+		selectors:      selectors,
+		View:           aView,
+		SessionHandler: handler,
+		mux:            sync.Mutex{},
 	}, nil
 }
 

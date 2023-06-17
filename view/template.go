@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/utils/types"
@@ -244,6 +245,10 @@ func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, paren
 }
 
 func (t *Template) EvaluateState(externalParams interface{}, presenceMap interface{}, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (*expand.State, error) {
+	return t.EvaluateStateWithSession(externalParams, presenceMap, parentParam, batchData, nil, options...)
+}
+
+func (t *Template) EvaluateStateWithSession(externalParams interface{}, presenceMap interface{}, parentParam *expand.MetaParam, batchData *BatchData, sess *session.Session, options ...interface{}) (*expand.State, error) {
 	var expander expand.Expander
 	for _, option := range options {
 		switch actual := option.(type) {
@@ -252,7 +257,7 @@ func (t *Template) EvaluateState(externalParams interface{}, presenceMap interfa
 		}
 	}
 
-	return Evaluate(t.sqlEvaluator, externalParams, presenceMap, AsViewParam(t._view, nil, batchData, expander), parentParam)
+	return EvaluateWithSession(t.sqlEvaluator, externalParams, presenceMap, AsViewParam(t._view, nil, batchData, expander), parentParam, sess)
 }
 
 //WithTemplateParameter return parameter template options
@@ -272,7 +277,11 @@ func NewTemplate(source string, opts ...TemplateOption) *Template {
 }
 
 func Evaluate(evaluator *expand.Evaluator, externalParams, presenceMap interface{}, viewParam, parentParam *expand.MetaParam) (*expand.State, error) {
-	return evaluator.Evaluate(externalParams, presenceMap, viewParam, parentParam, nil)
+	return EvaluateWithSession(evaluator, externalParams, presenceMap, viewParam, parentParam, nil)
+}
+
+func EvaluateWithSession(evaluator *expand.Evaluator, externalParams interface{}, presenceMap interface{}, viewParam *expand.MetaParam, parentParam *expand.MetaParam, sess *session.Session) (*expand.State, error) {
+	return evaluator.Evaluate(externalParams, presenceMap, viewParam, parentParam, nil, sess)
 }
 
 func AsViewParam(aView *View, aSelector *Selector, batchData *BatchData, options ...interface{}) *expand.MetaParam {

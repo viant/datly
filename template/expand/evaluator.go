@@ -2,6 +2,7 @@ package expand
 
 import (
 	"fmt"
+	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/godiff"
 	"github.com/viant/velty"
@@ -125,7 +126,7 @@ func createConfig(options []interface{}) *config {
 	return instance
 }
 
-func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam *MetaParam, parentParam *MetaParam, state *State, options ...interface{}) (*State, error) {
+func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam *MetaParam, parentParam *MetaParam, state *State, sess *session.Session, options ...interface{}) (*State, error) {
 	if externalParams != nil {
 		externalType := reflect.TypeOf(externalParams)
 		if e.paramSchema != externalType {
@@ -133,7 +134,7 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 		}
 	}
 
-	state = e.ensureState(state, viewParam, parentParam, goValidator)
+	state = e.ensureState(state, viewParam, parentParam, goValidator, sess)
 
 	externalParams, presenceMap = e.updateConsts(externalParams, presenceMap)
 
@@ -177,12 +178,12 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 	return state, nil
 }
 
-func (e *Evaluator) ensureState(state *State, param *MetaParam, parentParam *MetaParam, validator *Validator) *State {
+func (e *Evaluator) ensureState(state *State, param *MetaParam, parentParam *MetaParam, validator *Validator, sess *session.Session) *State {
 	if state == nil {
 		state = &State{}
 	}
 
-	state.Init(e.stateProvider(), param, parentParam, validator)
+	state.Init(e.stateProvider(), param, parentParam, validator, sess)
 	return state
 }
 

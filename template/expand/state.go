@@ -28,15 +28,25 @@ type (
 	}
 )
 
-func (s *State) Init(templateState *est.State, param *MetaParam, parent *MetaParam, validator *Validator) {
+func (s *State) Init(templateState *est.State, param *MetaParam, parent *MetaParam, validator *Validator, sess *session.Session) {
 	if s.Printer == nil {
 		s.Printer = &Printer{}
 	}
-	s.Session = session.NewSession()
+
+	if sess == nil {
+		sess = session.NewSession()
+	}
+
+	if s.Session == nil {
+		s.Session = sess
+	}
+
 	if param != nil && param.dataUnit != nil {
 		s.DataUnit = param.dataUnit
 	} else if s.DataUnit == nil {
-		s.DataUnit = &DataUnit{}
+		s.DataUnit = &DataUnit{
+			stmts: NewStmtHolder(),
+		}
 	}
 
 	if s.Http == nil {
@@ -62,6 +72,7 @@ func (s *State) Init(templateState *est.State, param *MetaParam, parent *MetaPar
 	if s.MessageBus == nil {
 		s.MessageBus = s.Session.MessageBus()
 	}
+
 	s.State = templateState
 }
 
@@ -87,6 +98,6 @@ func StateWithSQL(SQL string) *State {
 		Expanded: SQL,
 	}
 
-	aState.Init(nil, nil, nil, nil)
+	aState.Init(nil, nil, nil, nil, nil)
 	return aState
 }

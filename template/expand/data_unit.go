@@ -24,13 +24,10 @@ type (
 		TemplateSQL string
 		MetaSource  MetaSource
 
-		placeholderCounter   int                             `velty:"-"`
-		sqlxValidator        *validator.Service              `velty:"-"`
-		sliceIndex           map[reflect.Type]*xunsafe.Slice `velty:"-"`
-		executables          []*Executable                   `velty:"-"`
-		lastTableExecutables ExecutablesIndex                `velty:"-"`
-		markerIndex          int                             `velty:"-"`
-		markers              []string                        `velty:"-"`
+		placeholderCounter int                             `velty:"-"`
+		sqlxValidator      *validator.Service              `velty:"-"`
+		sliceIndex         map[reflect.Type]*xunsafe.Slice `velty:"-"`
+		stmts              *Statements                     `velty:"-"`
 	}
 
 	ExecutablesIndex map[string]*Executable
@@ -214,32 +211,23 @@ func (c *DataUnit) addAll(args ...interface{}) {
 }
 
 func (c *DataUnit) IsServiceExec(SQL string) (*Executable, bool) {
-	if len(c.executables) <= c.markerIndex {
-		return nil, false
-	}
-
-	if strings.TrimSpace(SQL) == c.markers[c.markerIndex] {
-		executable := c.executables[c.markerIndex]
-		c.markerIndex++
-		return executable, true
-	}
-
-	return nil, false
+	return c.stmts.LookupExecutable(SQL)
 }
 
 func (c *DataUnit) FilterExecutables(statements []string, stopOnNonExec bool) []*Executable {
 	result := make([]*Executable, 0)
 
 	for i := 0; i < len(statements); i++ {
-		if len(c.executables) <= i {
+		if len(c.stmts.Executable) <= i {
 			break
 		}
 
-		if strings.TrimSpace(statements[i]) != c.markers[i] && stopOnNonExec {
+		executable, ok := c.stmts.LookupExecutable(statements[i])
+		if !ok && stopOnNonExec {
 			return result
 		}
 
-		result = append(result, c.executables[i])
+		result = append(result, executable)
 	}
 
 	return result

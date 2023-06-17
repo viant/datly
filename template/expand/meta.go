@@ -2,7 +2,6 @@ package expand
 
 import (
 	"database/sql"
-	"github.com/google/uuid"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -63,11 +62,20 @@ type (
 		ExecType ExecType
 		Data     interface{}
 		IsLast   bool
+		executed bool
 	}
 
 	ExecType     int
 	MockExpander struct{}
 )
+
+func (e *Executable) Executed() bool {
+	return e.executed
+}
+
+func (e *Executable) MarkAsExecuted() {
+	e.executed = true
+}
 
 func (e *MockExpander) ParentJoinOn(column string, prepend ...string) (string, error) {
 	return "", nil
@@ -201,13 +209,18 @@ func NewMetaParam(metaSource MetaSource, aSelector MetaExtras, batchData MetaBat
 		Offset:       offset,
 		Args:         args,
 		NonWindowSQL: SQLExec,
-		dataUnit: &DataUnit{
-			MetaSource: metaSource,
-		},
+		dataUnit:     NewDataUnit(metaSource),
 		ParentValues: colInArgs,
 	}
 
 	return viewParam
+}
+
+func NewDataUnit(metaSource MetaSource) *DataUnit {
+	return &DataUnit{
+		MetaSource: metaSource,
+		stmts:      NewStmtHolder(),
+	}
 }
 
 func NotZeroOf(values ...int) int {
@@ -222,38 +235,18 @@ func NotZeroOf(values ...int) int {
 
 func MockMetaParam() *MetaParam {
 	return &MetaParam{
-		dataUnit: &DataUnit{},
+		dataUnit: &DataUnit{
+			stmts: NewStmtHolder(),
+		},
 	}
 }
 
 func (c *DataUnit) Insert(data interface{}, tableName string) (string, error) {
-	return c.appendExecutable(data, tableName, ExecTypeInsert), nil
+	return c.stmts.InsertWithMarker(tableName, data), nil
 }
 
 func (c *DataUnit) Update(data interface{}, tableName string) (string, error) {
-	return c.appendExecutable(data, tableName, ExecTypeUpdate), nil
-}
-
-func (c *DataUnit) appendExecutable(data interface{}, tableName string, execType ExecType) string {
-	value := copyValue(data)
-
-	if c.lastTableExecutables == nil {
-		c.lastTableExecutables = map[string]*Executable{}
-	}
-
-	newExecutable := &Executable{
-		Table:    tableName,
-		ExecType: execType,
-		Data:     value,
-		IsLast:   true,
-	}
-
-	c.executables = append(c.executables, newExecutable)
-	marker := uuid.New().String()
-	c.markers = append(c.markers, marker)
-	c.lastTableExecutables.UpdateLastExecutable(execType, tableName, newExecutable)
-
-	return marker
+	return c.stmts.UpdateWithMarker(tableName, data), nil
 }
 
 func (i ExecutablesIndex) UpdateLastExecutable(execType ExecType, tableName string, newExecutable *Executable) {
