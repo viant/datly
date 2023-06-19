@@ -20,18 +20,20 @@ import (
 
 type (
 	SqlxService struct {
-		stmts   *expand.Statements
-		options *sqlx.Options
+		dataUnit *expand.DataUnit
+		options  *sqlx.Options
 
 		validator  *validator.Service
 		db         *sql.DB
 		dialect    *info.Dialect
 		connectors view.Connectors
 
-		request *http.Request
-		route   *Route
-		router  *Router
-		params  *RequestParams
+		request    *http.Request
+		route      *Route
+		router     *Router
+		params     *RequestParams
+		txNotifier func(tx *sql.Tx)
+		tx         *sql.Tx
 	}
 
 	SqlxIterator struct {
@@ -59,7 +61,7 @@ func (s *SqlxIterator) HasAny() bool {
 }
 
 func (s *SqlxService) Flush(ctx context.Context, tableName string) error {
-	var options []interface{}
+	var options []executor.DBOption
 	tx := s.options.WithTx
 	if tx == nil {
 		var err error
@@ -69,59 +71,31 @@ func (s *SqlxService) Flush(ctx context.Context, tableName string) error {
 		}
 	}
 
-	options = append(options, tx)
+	options = append(options, executor.WithTx(tx))
 
 	exec := executor.New()
 	if err := exec.ExecuteStmts(ctx, s, &SqlxIterator{
-		toExecute: s.stmts.FilterByTableName(tableName),
-	}); err != nil {
+		toExecute: s.dataUnit.Statements.FilterByTableName(tableName),
+	}, options...); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func (s *SqlxService) FlushAll(ctx context.Context) error {
-	exec := executor.New()
-	tx, err := s.Tx(ctx)
-	if err != nil {
-		return err
-	}
-
-	session, err := s.router.prepareExecutorSessionWithParameters(ctx, s.request, s.route, s.params)
-	if err != nil {
-		return err
-	}
-
-	err = exec.Exec(ctx, session, executor.WithTx(tx))
-	if s.options.WithTx == nil {
-		if err != nil {
-			if txErr := tx.Rollback(); txErr != nil {
-				fmt.Printf("[ERROR] couldn't rollback transaciton due to %v\n", txErr.Error())
-			}
-		} else {
-			if txErr := tx.Commit(); txErr != nil {
-				fmt.Printf("[ERROR] couldn't commit transaciton due to %v\n", txErr.Error())
-			}
-		}
-	}
-
-	return err
 }
 
 func (s *SqlxService) Insert(tableName string, data interface{}) error {
-	s.stmts.Insert(tableName, data)
-	return nil
+	_, err := s.dataUnit.Insert(data, tableName)
+	return err
 }
 
 func (s *SqlxService) Update(tableName string, data interface{}) error {
-	s.stmts.Update(tableName, data)
-	return nil
+	_, err := s.dataUnit.Update(data, tableName)
+	return err
 }
 
 func (s *SqlxService) Delete(tableName string, data interface{}) error {
-	s.stmts.Delete(tableName, data)
-	return nil
+	_, err := s.dataUnit.Delete(data, tableName)
+	return err
 }
 
 func (s *SqlxService) Execute(DML string, options ...sqlx.ExecutorOption) error {
@@ -130,7 +104,7 @@ func (s *SqlxService) Execute(DML string, options ...sqlx.ExecutorOption) error 
 		option(opts)
 	}
 
-	s.stmts.Execute(&expand.SQLStatment{
+	s.dataUnit.Statements.Execute(&expand.SQLStatment{
 		SQL:  DML,
 		Args: opts.Args,
 	})
@@ -202,12 +176,23 @@ func (s *SqlxService) openDBConnection() (*sql.DB, error) {
 }
 
 func (s *SqlxService) Tx(ctx context.Context) (*sql.Tx, error) {
+	if s.tx != nil {
+		return s.tx, nil
+	}
+
 	db, err := s.Db(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return db.BeginTx(ctx, nil)
+	tx, err := db.BeginTx(ctx, nil)
+	s.tx = tx
+
+	if tx != nil && s.txNotifier != nil {
+		s.txNotifier(tx)
+	}
+
+	return tx, err
 }
 
 func (s *SqlxService) Validator() *validator.Service {

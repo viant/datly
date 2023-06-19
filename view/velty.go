@@ -34,11 +34,7 @@ func (v *VeltyCodec) Value(ctx context.Context, raw interface{}, options ...inte
 	}
 
 	aCriteria := NewCriteria(v.columns)
-	evaluated, err := v.evaluator.Evaluate(aValue, nil, nil, nil, &expand.State{
-		Context: expand.Context{
-			DataUnit: aCriteria,
-		},
-	}, nil)
+	evaluated, err := v.evaluator.Evaluate(nil, expand.WithParameters(aValue, nil), expand.WithDataUnit(aCriteria))
 
 	if err != nil {
 		return nil, err

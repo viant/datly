@@ -22,12 +22,12 @@ type (
 		ParamsGroup []interface{}
 		Mock        bool
 		TemplateSQL string
-		MetaSource  MetaSource
+		MetaSource  Dber
+		Statements  *Statements `velty:"-"`
 
 		placeholderCounter int                             `velty:"-"`
 		sqlxValidator      *validator.Service              `velty:"-"`
 		sliceIndex         map[reflect.Type]*xunsafe.Slice `velty:"-"`
-		stmts              *Statements                     `velty:"-"`
 	}
 
 	ExecutablesIndex map[string]*Executable
@@ -211,18 +211,18 @@ func (c *DataUnit) addAll(args ...interface{}) {
 }
 
 func (c *DataUnit) IsServiceExec(SQL string) (*Executable, bool) {
-	return c.stmts.LookupExecutable(SQL)
+	return c.Statements.LookupExecutable(SQL)
 }
 
 func (c *DataUnit) FilterExecutables(statements []string, stopOnNonExec bool) []*Executable {
 	result := make([]*Executable, 0)
 
 	for i := 0; i < len(statements); i++ {
-		if len(c.stmts.Executable) <= i {
+		if len(c.Statements.Executable) <= i {
 			break
 		}
 
-		executable, ok := c.stmts.LookupExecutable(statements[i])
+		executable, ok := c.Statements.LookupExecutable(statements[i])
 		if !ok && stopOnNonExec {
 			return result
 		}
@@ -248,4 +248,8 @@ func (c *DataUnit) In(columnName string, args interface{}) (string, error) {
 	sb.WriteString(c.AppendBinding(args))
 	sb.WriteString(")")
 	return sb.String(), nil
+}
+
+func (c *DataUnit) Delete(data interface{}, name string) (string, error) {
+	return c.Statements.DeleteWithMarker(name, data), nil
 }

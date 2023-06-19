@@ -2,7 +2,6 @@ package expand
 
 import (
 	"fmt"
-	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/godiff"
 	"github.com/viant/velty"
@@ -126,17 +125,16 @@ func createConfig(options []interface{}) *config {
 	return instance
 }
 
-func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam *MetaParam, parentParam *MetaParam, state *State, sess *session.Session, options ...interface{}) (*State, error) {
+func (e *Evaluator) Evaluate(state *State, options ...StateOption) (*State, error) {
+	state = e.ensureState(state, options...)
+	externalParams, presenceMap := e.updateConsts(state.Parameters, state.ParametersHas)
+
 	if externalParams != nil {
 		externalType := reflect.TypeOf(externalParams)
 		if e.paramSchema != externalType {
 			return nil, fmt.Errorf("inompactible types, wanted %v got %T", e.paramSchema.String(), externalParams)
 		}
 	}
-
-	state = e.ensureState(state, viewParam, parentParam, goValidator, sess)
-
-	externalParams, presenceMap = e.updateConsts(externalParams, presenceMap)
 
 	if externalParams != nil && e.supportsParams {
 		if err := state.SetValue(keywords.ParamsKey, externalParams); err != nil {
@@ -154,18 +152,15 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 		return nil, err
 	}
 
-	for _, option := range options {
-		switch actual := option.(type) {
-		case *CustomContext:
-			actualType := reflect.TypeOf(actual.Value)
-			if actualType != actual.Type {
-				return nil, fmt.Errorf("type missmatch, wanted %v got %v", actualType.String(), actual.Type.String())
-			}
+	for _, customContext := range state.CustomContext {
+		actualType := reflect.TypeOf(customContext.Value)
+		if actualType != customContext.Type {
+			return nil, fmt.Errorf("type missmatch, wanted %v got %v", actualType.String(), customContext.Type.String())
+		}
 
-			if actual.Value != nil {
-				if err := state.State.EmbedValue(actual.Value); err != nil {
-					return nil, err
-				}
+		if customContext.Value != nil {
+			if err := state.State.EmbedValue(customContext.Value); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -178,12 +173,12 @@ func (e *Evaluator) Evaluate(externalParams, presenceMap interface{}, viewParam 
 	return state, nil
 }
 
-func (e *Evaluator) ensureState(state *State, param *MetaParam, parentParam *MetaParam, validator *Validator, sess *session.Session) *State {
+func (e *Evaluator) ensureState(state *State, options ...StateOption) *State {
 	if state == nil {
 		state = &State{}
 	}
 
-	state.Init(e.stateProvider(), param, parentParam, validator, sess)
+	state.Init(e.stateProvider(), options...)
 	return state
 }
 

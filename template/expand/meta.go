@@ -23,10 +23,14 @@ type (
 	}
 
 	MetaSource interface {
+		Dber
 		ViewName() string
 		TableAlias() string
 		TableName() string
 		ResultLimit() int
+	}
+
+	Dber interface {
 		Db() (*sql.DB, error)
 	}
 
@@ -216,10 +220,10 @@ func NewMetaParam(metaSource MetaSource, aSelector MetaExtras, batchData MetaBat
 	return viewParam
 }
 
-func NewDataUnit(metaSource MetaSource) *DataUnit {
+func NewDataUnit(metaSource Dber) *DataUnit {
 	return &DataUnit{
 		MetaSource: metaSource,
-		stmts:      NewStmtHolder(),
+		Statements: NewStmtHolder(),
 	}
 }
 
@@ -236,17 +240,17 @@ func NotZeroOf(values ...int) int {
 func MockMetaParam() *MetaParam {
 	return &MetaParam{
 		dataUnit: &DataUnit{
-			stmts: NewStmtHolder(),
+			Statements: NewStmtHolder(),
 		},
 	}
 }
 
 func (c *DataUnit) Insert(data interface{}, tableName string) (string, error) {
-	return c.stmts.InsertWithMarker(tableName, data), nil
+	return c.Statements.InsertWithMarker(tableName, data), nil
 }
 
 func (c *DataUnit) Update(data interface{}, tableName string) (string, error) {
-	return c.stmts.UpdateWithMarker(tableName, data), nil
+	return c.Statements.UpdateWithMarker(tableName, data), nil
 }
 
 func (i ExecutablesIndex) UpdateLastExecutable(execType ExecType, tableName string, newExecutable *Executable) {

@@ -161,7 +161,7 @@ func (m *TemplateMeta) prepareSQL(owner *Template) (string, []interface{}, error
 	selectorPresence := types.NewValue(owner.PresenceSchema.Type())
 	viewParam := AsViewParam(owner._view, nil, nil)
 
-	state, err := Evaluate(owner.sqlEvaluator, selectorValues, selectorPresence, viewParam, nil)
+	state, err := Evaluate(owner.sqlEvaluator, expand.WithParameters(selectorValues, selectorPresence), expand.WithViewParam(viewParam))
 	if err != nil {
 		return "", nil, err
 	}
@@ -172,7 +172,7 @@ func (m *TemplateMeta) prepareSQL(owner *Template) (string, []interface{}, error
 }
 
 func (m *TemplateMeta) Evaluate(selectorValues interface{}, selectorPresence interface{}, viewParam *expand.MetaParam) (string, []interface{}, error) {
-	state, err := Evaluate(m.sqlEvaluator, selectorValues, selectorPresence, viewParam, nil)
+	state, err := Evaluate(m.sqlEvaluator, expand.WithParameters(selectorValues, selectorPresence), expand.WithViewParam(viewParam))
 	if err != nil {
 		return "", nil, err
 	}

@@ -84,7 +84,7 @@ func (t *Transform) Evaluate(cookies map[string]*http.Cookie, pathVariables map[
 		Request: request,
 	}
 
-	evaluate, err := t._evaluator.Evaluate(nil, nil, nil, nil, nil, nil, t.newCtx(ctx))
+	evaluate, err := t._evaluator.Evaluate(nil, expand.WithCustomContext(t.newCtx(ctx)))
 	return &State{
 		Ctx:         ctx,
 		ExpandState: evaluate,
