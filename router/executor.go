@@ -165,7 +165,7 @@ func (e *Executor) Execute(ctx context.Context) error {
 		dbOptions = append(dbOptions, executor.WithTx(e.tx))
 	}
 
-	return service.Exec(ctx, sess)
+	return service.Exec(ctx, sess, dbOptions...)
 }
 
 func (e *Executor) txStarted(tx *sql.Tx) {
