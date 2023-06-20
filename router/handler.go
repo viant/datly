@@ -28,7 +28,7 @@ func (h *Handler) Init(ctx context.Context, resource *view.Resource) error {
 
 	handlerType, err := types.GetOrParseType(h.resource.LookupType, h.HandlerType)
 	if err != nil {
-		return fmt.Errorf("couldn't parse Handler type due to %w, err")
+		return fmt.Errorf("couldn't parse Handler type due to %w", err)
 	}
 
 	h._handlerType = handlerType
