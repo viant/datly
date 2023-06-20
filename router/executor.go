@@ -14,13 +14,14 @@ import (
 
 type (
 	Executor struct {
-		executed bool
-		session  *executor.Session
-		route    *Route
-		request  *http.Request
-		params   *RequestParams
-		dataUnit *expand.DataUnit
-		tx       *sql.Tx
+		executed       bool
+		session        *executor.Session
+		route          *Route
+		request        *http.Request
+		params         *RequestParams
+		dataUnit       *expand.DataUnit
+		tx             *sql.Tx
+		sessionHandler handler.Session
 	}
 
 	DBProvider struct {
@@ -61,23 +62,36 @@ func (e *Executor) Session(ctx context.Context) (*executor.Session, error) {
 		sess.DataUnit = e.dataUnit
 	}
 
+	sessionHandler, err := e.SessionHandler(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	e.session = sess
+	e.sessionHandler = sessionHandler
 	return e.session, err
 }
 
 func (e *Executor) SessionHandler(ctx context.Context) (handler.Session, error) {
+	if e.sessionHandler != nil {
+		return e.sessionHandler, nil
+	}
+
 	params, err := e.RequestParams(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return session.NewSession(
+	sess := session.NewSession(
 		session.WithTemplateFlush(func(ctx context.Context) error {
 			return e.Execute(ctx)
 		}),
 		session.WithStater(e.route.NewStater(e.request, params)),
 		session.WithSql(e.newSqlService),
-	), nil
+	)
+
+	e.sessionHandler = sess
+	return sess, nil
 }
 
 func (e *Executor) newValidator() *validator.Service {
