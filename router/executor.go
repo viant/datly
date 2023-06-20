@@ -21,7 +21,7 @@ type (
 		params         *RequestParams
 		dataUnit       *expand.DataUnit
 		tx             *sql.Tx
-		sessionHandler handler.Session
+		sessionHandler *session.Session
 	}
 
 	DBProvider struct {
@@ -62,17 +62,30 @@ func (e *Executor) Session(ctx context.Context) (*executor.Session, error) {
 		sess.DataUnit = e.dataUnit
 	}
 
-	sessionHandler, err := e.SessionHandler(ctx)
+	sessionHandler, err := e.SessionHandlerService(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	e.session = sess
-	e.sessionHandler = sessionHandler
+	sess.SessionHandler = sessionHandler
 	return e.session, err
 }
 
 func (e *Executor) SessionHandler(ctx context.Context) (handler.Session, error) {
+	service, err := e.SessionHandlerService(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if service == nil {
+		return nil, err
+	}
+
+	return service, err
+}
+
+func (e *Executor) SessionHandlerService(ctx context.Context) (*session.Session, error) {
 	if e.sessionHandler != nil {
 		return e.sessionHandler, nil
 	}
@@ -165,8 +178,8 @@ func (e *Executor) Execute(ctx context.Context) error {
 	if e.executed {
 		return nil
 	}
-	e.executed = true
 
+	e.executed = true
 	sess, err := e.Session(ctx)
 	if err != nil {
 		return err
