@@ -32,7 +32,7 @@ func (i *Imports) TypeImports() string {
 		return ""
 	}
 	builder := strings.Builder{}
-	builder.WriteString("\bimport (")
+	builder.WriteString("\nimport (")
 	for _, item := range i.Types {
 		builder.WriteString("\t\"")
 		builder.WriteString(item)
@@ -42,8 +42,23 @@ func (i *Imports) TypeImports() string {
 	return builder.String()
 }
 
-func NewImports() *Imports {
-	return &Imports{
+func (i *Imports) PackageImports() string {
+	if len(i.Packages) == 0 {
+		return ""
+	}
+	builder := strings.Builder{}
+	builder.WriteString("\nimport (")
+	for _, item := range i.Packages {
+		builder.WriteString("\t\"")
+		builder.WriteString(item)
+		builder.WriteString("\"\n")
+	}
+	builder.WriteByte(')')
+	return builder.String()
+}
+
+func NewImports() Imports {
+	return Imports{
 		Types:        nil,
 		typeIndex:    map[string]bool{},
 		Packages:     nil,

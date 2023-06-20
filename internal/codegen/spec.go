@@ -38,8 +38,8 @@ type (
 	Selector []string
 )
 
-func (s *Spec) BuildType(name string, cardinality view.Cardinality, whitelist, blacklist map[string]bool) error {
-	var aType = &Type{Name: name, Cardinality: cardinality}
+func (s *Spec) BuildType(pkg, name string, cardinality view.Cardinality, whitelist, blacklist map[string]bool) error {
+	var aType = &Type{Package: pkg, Name: name, Cardinality: cardinality}
 	for i, column := range s.Columns {
 		if s.shouldSkipColumn(whitelist, blacklist, &column) {
 			continue
@@ -60,6 +60,31 @@ func (s *Spec) BuildType(name string, cardinality view.Cardinality, whitelist, b
 	}
 	s.Type = aType
 	return nil
+}
+
+func (s *Spec) TypeDefinition(wrapper string) *view.TypeDefinition {
+	typeDef := &view.TypeDefinition{
+		Package:     s.Type.Package,
+		Name:        s.Type.Name,
+		Cardinality: s.Type.Cardinality,
+		Fields:      s.Fields(),
+	}
+	if wrapper != "" {
+		return &view.TypeDefinition{
+			Name:    wrapper,
+			Package: s.Type.Package,
+			Fields: []*view.Field{
+				{
+					Name:        wrapper,
+					Fields:      typeDef.Fields,
+					Cardinality: typeDef.Cardinality,
+					Tag:         fmt.Sprintf(`typeName:"%v"`, typeDef.Name),
+					Ptr:         true,
+				},
+			},
+		}
+	}
+	return typeDef
 }
 
 func (s *Spec) shouldSkipColumn(whitelist, blacklist map[string]bool, column *sink.Column) bool {

@@ -24,11 +24,20 @@ type Field struct {
 }
 
 type Type struct {
+	Package       string
 	Name          string
 	Cardinality   view.Cardinality
 	pkFields      []*Field
 	columnFields  []*Field
 	relationField []*Field
+}
+
+func (t *Type) TypeName() string {
+	pkg := t.Package
+	if pkg == "" {
+		pkg = "autogen"
+	}
+	return pkg + "." + t.Name
 }
 
 func (t *Type) AppendColumnField(column *sink.Column) (*Field, error) {
@@ -52,18 +61,25 @@ func (t *Type) AppendColumnField(column *sink.Column) (*Field, error) {
 	return field, nil
 }
 
-func (t *Type) Fields() []*view.Field {
-	result := t.ColumnFields()
-	for i := range t.relationField {
-		result = append(result, &t.relationField[i].Field)
-	}
+func (s *Spec) Fields() []*view.Field {
+	specType := s.Type
+	result := specType.ColumnFields()
 	hasFieldName := "Has"
 	hasField := &view.Field{
 		Name: hasFieldName,
-		Tag:  fmt.Sprintf(`setMarker:"true" typeName:"%t" json:"-"  sqlx:"-" `, t.Name+"Has"),
+		Tag:  fmt.Sprintf(`setMarker:"true" typeName:"%v" json:"-"  sqlx:"-" `, specType.Name+"Has"),
 		Ptr:  true,
 	}
-	for _, field := range t.columnFields {
+
+	for i, rel := range s.Relations {
+		relField := specType.relationField[i].Field
+		relField.Fields = rel.Fields()
+		result = append(result, &relField)
+	}
+	for _, field := range specType.columnFields {
+		hasField.Fields = append(hasField.Fields, &view.Field{Name: field.Name, Schema: &view.Schema{DataType: "bool"}})
+	}
+	for _, field := range specType.relationField {
 		hasField.Fields = append(hasField.Fields, &view.Field{Name: field.Name, Schema: &view.Schema{DataType: "bool"}})
 	}
 	result = append(result, hasField)

@@ -35,6 +35,8 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 		p.addedValidationModifierIfNeeded(&builder, SQL)
 		builder.WriteString("\n*/\n")
 	}
+	builder.WriteByte(')')
+
 	return builder.String()
 }
 
@@ -96,4 +98,5 @@ func (p *Parameter) addedValidationModifierIfNeeded(builder *strings.Builder, SQ
 			builder.WriteString("? ")
 		}
 	}
+	builder.WriteString(SQL)
 }

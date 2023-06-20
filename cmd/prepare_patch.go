@@ -36,6 +36,17 @@ func newPatchStmtBuilder(sb *strings.Builder, metadata *inputMetadata) *patchStm
 }
 
 func (s *Builder) preparePatchRule(ctx context.Context, builder *routeBuilder, sourceSQL []byte) (string, error) {
+
+	template, err := s.buildCodeTemplate(ctx, builder, sourceSQL, http.MethodPatch)
+
+	dsql, err := template.GenerateDSQL()
+	fmt.Printf("dsql: %v %v\n", dsql, err)
+	state := template.GenerateState("")
+	fmt.Printf("state %v\n", state)
+
+	entity, err := template.GenerateEntity(ctx, "", false)
+	fmt.Printf("entity %s %v\n", entity, err)
+
 	routeOption, config, paramType, err := s.buildInputMetadata(ctx, builder, sourceSQL, http.MethodPatch)
 	if err != nil {
 		return "", err

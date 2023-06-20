@@ -9,8 +9,8 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/option"
-	codegen "github.com/viant/datly/codegen"
 	dConfig "github.com/viant/datly/config"
+	codegen "github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/utils/formatter"
@@ -264,7 +264,6 @@ func (b *stmtBuilder) appendIndex(def *inputMetadata, aMeta *fieldMeta, inputPat
 		} else {
 			actualPath = "/" + actualPath + "/"
 		}
-
 		src = fmt.Sprintf("%v.Query(\"SELECT * FROM `%v`\")", inputPath[0].namePrefix, actualPath)
 	}
 
@@ -273,7 +272,43 @@ func (b *stmtBuilder) appendIndex(def *inputMetadata, aMeta *fieldMeta, inputPat
 	return indexName, aFieldName
 }
 
+func (s *Builder) buildCodeTemplate(ctx context.Context, builder *routeBuilder, sourceSQL []byte, httpMethod string) (*codegen.Template, error) {
+	hint, SQL := s.extractRouteSettings(sourceSQL)
+	routeConfig := &option.RouteConfig{Method: httpMethod}
+	if err := tryUnmarshalHint(hint, routeConfig); err != nil {
+		return nil, err
+	}
+	paramIndex := NewParametersIndex(routeConfig, map[string]*sanitize.ParameterHint{})
+	configurer, err := NewConfigProviderReader("", SQL, routeConfig, router.ServiceTypeReader, paramIndex, &s.options.Prepare, &s.options.Connector, builder)
+	if err != nil {
+		return nil, err
+	}
+	aConfig := configurer.ViewConfig()
+	connectorRef, err := s.ConnectorRef(view.FirstNotEmpty(aConfig.expandedTable.Connector, s.options.Connector.DbName))
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := s.DB(connectorRef)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = aConfig.buildSpec(ctx, db, s.options.GoModulePkg); err != nil {
+		return nil, err
+	}
+	template := codegen.NewTemplate(routeConfig)
+	template.BuildTypeDef(aConfig.Spec, aConfig.outputConfig.GetField())
+	template.BuildState(aConfig.Spec, aConfig.outputConfig.GetField())
+	template.BuildLogic(aConfig.Spec, codegen.WithHTTPMethod(httpMethod))
+	return template, nil
+}
+
 func (s *Builder) buildInputMetadata(ctx context.Context, builder *routeBuilder, sourceSQL []byte, httpMethod string) (*option.RouteConfig, *ViewConfig, *inputMetadata, error) {
+
+	tmpl, err := s.buildCodeTemplate(ctx, builder, sourceSQL, httpMethod)
+	fmt.Printf("%v %v\n", tmpl, err)
+
 	hint, SQL := s.extractRouteSettings(sourceSQL)
 
 	routeOption := &option.RouteConfig{Method: httpMethod}
@@ -299,14 +334,6 @@ func (s *Builder) buildInputMetadata(ctx context.Context, builder *routeBuilder,
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
-	if err = aConfig.buildSpec(ctx, db); err != nil {
-		return nil, nil, nil, err
-	}
-
-	template := codegen.NewTemplate()
-	template.BuildState(aConfig.Spec, aConfig.outputConfig.GetField())
-	template.BuildLogic(aConfig.Spec, codegen.WithPatch())
 
 	joinSQL := ""
 	if join := aConfig.queryJoin; join != nil {
@@ -1104,16 +1131,16 @@ func (s *Builder) prepareStringBuilder(routeBuilder *routeBuilder, typeDef *inpu
 		return nil, err
 	}
 
-	state := codegen.State{}
-	state.Append(typeDef.AsParam())
+	tmpl := codegen.NewTemplate(routeOption)
+	tmpl.State.Append(typeDef.AsParam())
 	if err = typeDef.IterateOverHints(func(metadata *inputMetadata, i2 []*inputMetadata) error {
-		state.Append(metadata.asParams()...)
+		tmpl.State.Append(metadata.asParams()...)
 		return nil
 	}); err != nil {
 		return nil, err
 	}
 
-	if err = s.uploadGoState(state, routeBuilder, packageName); err != nil {
+	if err = s.uploadGoState(tmpl, routeBuilder, packageName); err != nil {
 		return nil, err
 	}
 
@@ -1356,7 +1383,10 @@ func init() {
 	}
 
 	sb := &bytes.Buffer{}
-	generatedStruct := xreflect.GenerateStruct(name, rType, imports, xreflect.AppendBeforeType(sbBefore.String()), xreflect.PackageName(packageName))
+	generatedStruct := xreflect.GenerateStruct(name, rType,
+		xreflect.WithPackage(packageName),
+		xreflect.WithImports(imports),
+		xreflect.WithSnippetBefore(sbBefore.String()))
 	sb.WriteString(generatedStruct)
 	sb.WriteString("\n")
 	source, err := goFormat.Source(sb.Bytes())

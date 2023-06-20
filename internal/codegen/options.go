@@ -1,12 +1,12 @@
 package codegen
 
+import "strings"
+
 type (
 	Options struct {
-		pkg        string
 		withInsert bool
 		withUpdate bool
-		withPatch  bool
-		withDML    bool
+		withDML    bool //TODO implement DML
 	}
 
 	Option func(o *Options)
@@ -18,12 +18,6 @@ func (o *Options) apply(opts []Option) {
 	}
 	for _, opt := range opts {
 		opt(o)
-	}
-}
-
-func WithPackage(pkg string) Option {
-	return func(o *Options) {
-		o.pkg = pkg
 	}
 }
 
@@ -45,10 +39,23 @@ func WithUpdate() Option {
 	}
 }
 
+func WithHTTPMethod(method string) Option {
+	return func(o *Options) {
+		switch strings.ToLower(method) {
+		case "patch":
+			o.withUpdate = true
+			o.withInsert = true
+		case "put":
+			o.withUpdate = true
+		case "post":
+			o.withInsert = true
+		}
+	}
+}
+
 func WithPatch() Option {
 	return func(o *Options) {
 		o.withInsert = true
 		o.withUpdate = true
-		o.withPatch = true
 	}
 }

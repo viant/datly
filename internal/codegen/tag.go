@@ -95,7 +95,7 @@ func (t *Tags) buildRelation(info *Spec, join *query.Join) {
 	datlyTag.Append(fmt.Sprintf("ralName=%s", join.Alias))
 	datlyTag.Append(fmt.Sprintf("relColumn=%s", relColumn))
 	if info.Table != "" {
-		datlyTag.Append(fmt.Sprintf("refTable=%t", info.Table))
+		datlyTag.Append(fmt.Sprintf("refTable=%v", info.Table))
 	}
 	datlyTag.Append(fmt.Sprintf("refColumn=%s", refColumn))
 	sqlTag := TagValue{}
@@ -112,7 +112,7 @@ func (t *Tags) Stringify() string {
 		return ""
 	}
 	builder := strings.Builder{}
-	builder.WriteByte('`')
+	//builder.WriteByte('`')
 	for i, key := range t.order {
 		value := t.tags[key]
 		if i > 0 {
@@ -123,6 +123,6 @@ func (t *Tags) Stringify() string {
 		tagValue := strconv.Quote(strings.Join(value, ","))
 		builder.WriteString(tagValue)
 	}
-	builder.WriteByte('`')
+	//builder.WriteByte('`')
 	return builder.String()
 }

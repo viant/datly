@@ -10,9 +10,9 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/option"
-	"github.com/viant/datly/codegen"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/runtime/standalone"
+	codegen2 "github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
@@ -92,7 +92,7 @@ type (
 		fileName       string
 		viewType       view.Mode
 		batchEnabled   map[string]bool
-		Spec           *codegen.Spec
+		Spec           *codegen2.Spec
 	}
 
 	templateMetaConfig struct {
@@ -370,9 +370,9 @@ func (c *ViewConfig) metaConfigByName(holder string) (*templateMetaConfig, bool)
 	return nil, false
 }
 
-func (c *ViewConfig) buildSpec(ctx context.Context, db *sql.DB) (err error) {
+func (c *ViewConfig) buildSpec(ctx context.Context, db *sql.DB, pkg string) (err error) {
 	name := c.ActualHolderName()
-	if c.Spec, err = codegen.NewSpec(ctx, db, c.TableName(), c.SQL()); err != nil {
+	if c.Spec, err = codegen2.NewSpec(ctx, db, c.TableName(), c.SQL()); err != nil {
 		return err
 	}
 	if len(c.Spec.Columns) == 0 {
@@ -384,11 +384,11 @@ func (c *ViewConfig) buildSpec(ctx context.Context, db *sql.DB) (err error) {
 	if c.IsToMany() {
 		cardinality = view.Many
 	}
-	if err = c.Spec.BuildType(name, cardinality, listedColumns, excludedColumns); err != nil {
+	if err = c.Spec.BuildType(pkg, name, cardinality, listedColumns, excludedColumns); err != nil {
 		return err
 	}
 	for _, relation := range c.relations {
-		if err = relation.buildSpec(ctx, db); err != nil {
+		if err = relation.buildSpec(ctx, db, pkg); err != nil {
 			return err
 		}
 		relation.Spec.Parent = c.Spec
@@ -487,7 +487,7 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 		return err
 	}
 
-	state, err := codegen.NewState(s.options.GoModulePkg, builder.option.StateType, config.Config.LookupType)
+	state, err := codegen2.NewState(s.options.GoModulePkg, builder.option.StateType, config.Config.LookupType)
 	fmt.Printf("%v %v\n", state, err)
 
 	if strings.TrimSpace(builder.sqlStmt) == "" {
@@ -2115,9 +2115,9 @@ func (s *Builder) detectSinkColumn(ctx context.Context, db *sql.DB, SQL string) 
 	return result, nil
 }
 
-func (s *Builder) uploadGoState(state codegen.State, builder *routeBuilder, packageNBame string) error {
+func (s *Builder) uploadGoState(tmpl *codegen2.Template, builder *routeBuilder, packageNBame string) error {
 	goURL := builder.session.GoFileURL("state") + ".go"
-	if _, err := s.upload(builder, goURL, state.GenerateGoCode(packageNBame)); err != nil {
+	if _, err := s.upload(builder, goURL, tmpl.GenerateState(packageNBame)); err != nil {
 		return err
 	}
 	return nil
