@@ -20,7 +20,7 @@ func TestBlock_Stringify(t *testing.T) {
 			options:     Options{Lang: "dsql"},
 			indent:      "  ",
 			block: Block{
-				&Assign{Holder: &Ident{"inited"}, Expression: &CallExpr{Holder: Ident{Name: "Campaign.Init"}, Args: []Expression{
+				&Assign{Holder: &Ident{"inited"}, Expression: &CallExpr{Holder: Ident{Name: "Campaign"}, Name: "Init", Args: []Expression{
 					Ident{Name: "CurCampaign"},
 				}}},
 			},
@@ -33,8 +33,8 @@ func TestBlock_Stringify(t *testing.T) {
 			block: Block{
 				&Foreach{Set: &Ident{"Sets"},
 					Value: &Ident{"Item"},
-					Body: &Block{
-						&Assign{Holder: &Ident{"tested"}, Expression: &CallExpr{Holder: Ident{Name: "Campaign.Test"}, Args: []Expression{
+					Body: Block{
+						&Assign{Holder: &Ident{"tested"}, Expression: &CallExpr{Holder: Ident{Name: "Campaign"}, Name: "Test", Args: []Expression{
 							Ident{Name: "Item"},
 						}}}}}},
 			expect: `#foreach($Item in $Sets)
@@ -50,14 +50,14 @@ func TestBlock_Stringify(t *testing.T) {
 				&Condition{
 					If: &BinaryExpr{X: &Ident{"Campaign.Id"}, Op: ">", Y: &LiteralExpr{Literal: "1"}},
 					IFBlock: Block{
-						&Assign{Holder: &Ident{"inited"}, Expression: &CallExpr{Holder: Ident{Name: "Campaign.Init"}, Args: []Expression{
+						&Assign{Holder: &Ident{"inited"}, Expression: &CallExpr{Holder: Ident{Name: "Campaign"}, Name: "Init", Args: []Expression{
 							Ident{Name: "CurCampaign"},
 						}}},
 					},
 					ElseIfBlocks: []*ConditionalBlock{{
 						If: &BinaryExpr{X: &Ident{"Campaign.Name"}, Op: "==", Y: &LiteralExpr{Literal: `"Foo"`}},
 						Block: Block{
-							&Assign{Holder: &Ident{"fooed"}, Expression: &CallExpr{Holder: Ident{Name: "Campaign.Foo"}, Args: []Expression{
+							&Assign{Holder: &Ident{"fooed"}, Expression: &CallExpr{Holder: Ident{Name: "Campaign"}, Name: "Foo", Args: []Expression{
 								Ident{Name: "CurCampaign"},
 							}}},
 						},

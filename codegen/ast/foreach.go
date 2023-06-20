@@ -33,3 +33,11 @@ func (s *Foreach) Generate(builder *Builder) (err error) {
 
 	return fmt.Errorf("unsupported option %T %v\n", s, builder.Lang)
 }
+
+func NewForEach(value, set *Ident, body Block) *Foreach {
+	return &Foreach{
+		Value: value,
+		Set:   set,
+		Body:  body,
+	}
+}

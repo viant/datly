@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/cmd/gen"
 	"github.com/viant/datly/cmd/option"
+	codegen "github.com/viant/datly/codegen"
 	dConfig "github.com/viant/datly/config"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/template/sanitize"
@@ -74,8 +74,8 @@ type (
 	}
 )
 
-func (p idParam) asParameter(i *inputMetadata) *gen.Parameter {
-	param := &gen.Parameter{}
+func (p idParam) asParameter(i *inputMetadata) *codegen.Parameter {
+	param := &codegen.Parameter{}
 	param.Name = p.name
 	param.SQL = p.query
 	param.In = &view.Location{Kind: view.KindParam, Name: i.paramName}
@@ -299,6 +299,15 @@ func (s *Builder) buildInputMetadata(ctx context.Context, builder *routeBuilder,
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
+	if err = aConfig.buildSpec(ctx, db); err != nil {
+		return nil, nil, nil, err
+	}
+
+	template := codegen.NewTemplate()
+	template.BuildState(aConfig.Spec, aConfig.outputConfig.GetField())
+	template.BuildLogic(aConfig.Spec, codegen.WithPatch())
+
 	joinSQL := ""
 	if join := aConfig.queryJoin; join != nil {
 		joinSQL = sqlparser.Stringify(aConfig.queryJoin.With)
@@ -707,7 +716,7 @@ func (s *Builder) buildExecRelations(config *ViewConfig, db *sql.DB, path string
 	var relations []*inputMetadata
 	for _, relation := range config.relations {
 		SQL := sqlparser.Stringify(relation.queryJoin.With)
-		relation.isVirtual = isVirtualQuery(SQL)
+		relation.isAuxiliary = isAuxiliary(SQL)
 		tableName := relation.expandedTable.Name
 		relationConfig, err := s.detectInputType(context.TODO(), db, tableName, SQL, relation, config.expandedTable.Name, path, holder)
 		if err != nil {
@@ -719,8 +728,11 @@ func (s *Builder) buildExecRelations(config *ViewConfig, db *sql.DB, path string
 	return relations, nil
 }
 
-func isVirtualQuery(SQL string) bool {
+func isAuxiliary(SQL string) bool {
 	SQL = strings.Trim(strings.TrimSpace(SQL), "()")
+	if SQL == "" {
+		return false
+	}
 	query, _ := sqlparser.ParseQuery(SQL)
 	if query == nil {
 		return true
@@ -978,14 +990,6 @@ func (b *stmtBuilder) withIndent() *stmtBuilder {
 }
 
 func (b *stmtBuilder) paramSQLHint(def *inputMetadata) (string, error) {
-	//paramOption := &option.ParameterConfig{
-	//	Required: boolPtr(false),
-	//}
-
-	//marshal, err := json.Marshal(paramOption)
-	//if err != nil {
-	//	return "", err
-	//}
 	marshal := "?"
 	return fmt.Sprintf("/* %v %v \n*/", string(marshal), def.sql), nil
 }
@@ -1048,6 +1052,7 @@ func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, ta
 func (s *Builder) getStructSQLParam(aFieldMeta *fieldMeta, path string) string {
 	qlQuery := fmt.Sprintf("? SELECT ARRAY_AGG(%v) AS Values FROM  `%v` LIMIT 1", aFieldMeta.fieldName, path)
 	return qlQuery
+
 }
 
 func (s *Builder) getStructQLName(aFieldMeta *fieldMeta, paramName string) string {
@@ -1099,7 +1104,7 @@ func (s *Builder) prepareStringBuilder(routeBuilder *routeBuilder, typeDef *inpu
 		return nil, err
 	}
 
-	state := gen.State{}
+	state := codegen.State{}
 	state.Append(typeDef.AsParam())
 	if err = typeDef.IterateOverHints(func(metadata *inputMetadata, i2 []*inputMetadata) error {
 		state.Append(metadata.asParams()...)

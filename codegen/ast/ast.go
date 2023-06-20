@@ -1,9 +1,5 @@
 package ast
 
-import (
-	"fmt"
-)
-
 type (
 	Node interface {
 		Generate(builder *Builder) error
@@ -24,7 +20,7 @@ type (
 	Foreach struct {
 		Value *Ident
 		Set   *Ident
-		Body  *Block
+		Body  Block
 	}
 
 	Assign struct {
@@ -33,11 +29,12 @@ type (
 	}
 
 	CallExpr struct {
-		Holder Ident
+		Holder Expression
+		Name   string
 		Args   []Expression
 	}
 
-	VoidExpression struct {
+	StatementExpression struct {
 		Expression
 	}
 
@@ -73,28 +70,12 @@ type (
 	}
 )
 
-func (s *Assign) Generate(builder *Builder) (err error) {
-	switch builder.Lang {
-	case "dsql":
-		if err = builder.WriteIndentedString("\n#set("); err != nil {
-			return err
-		}
-		if err = s.Holder.Generate(builder); err != nil {
-			return err
-		}
-		if err = builder.WriteString(" = "); err != nil {
-			return err
-		}
-		if err = s.Expression.Generate(builder); err != nil {
-			return err
-		}
-		if err = builder.WriteString(")"); err != nil {
-			return err
-		}
-		return nil
-	}
-	return fmt.Errorf("unsupported option %T %v\n", s, builder.Lang)
+func (b *Block) Append(statement Statement) {
+	*b = append(*b, statement)
+}
 
+func (b *Block) AppendEmptyLine() {
+	b.Append(NewStatementExpression(NewLiteral("")))
 }
 
 func (b Block) Generate(builder *Builder) error {

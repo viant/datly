@@ -16,7 +16,7 @@ func BuildParameter(field reflect.StructField) (*view.Parameter, error) {
 	for _, paramPart := range split {
 		keyValue := strings.Split(paramPart, "=")
 		if len(keyValue) != 2 {
-			return nil, fmt.Errorf("unsupported Key=Value format: %v", paramPart)
+			return nil, fmt.Errorf("unsupported Column=Value format: %v", paramPart)
 		}
 		key := keyValue[0]
 		value := keyValue[1]

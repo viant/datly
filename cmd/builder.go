@@ -9,8 +9,8 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/cmd/gen"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/codegen"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/router"
@@ -77,10 +77,12 @@ type (
 		parent          *ViewConfig
 		mainHolder      string
 		viewName        string
-		isVirtual       bool
+		isAuxiliary     bool
 		queryJoin       *query.Join
 		unexpandedTable *Table
-		outputConfig    option.OutputConfig
+		expandedTable   *Table
+
+		outputConfig option.OutputConfig
 
 		relations      []*ViewConfig
 		relationsIndex map[string]int
@@ -89,8 +91,8 @@ type (
 		aKey           *relationKey
 		fileName       string
 		viewType       view.Mode
-		expandedTable  *Table
 		batchEnabled   map[string]bool
+		Spec           *codegen.Spec
 	}
 
 	templateMetaConfig struct {
@@ -132,6 +134,44 @@ type (
 		option.TransformOption
 	}
 )
+
+func (c *ViewConfig) ActualHolderName() string {
+	name := c.expandedTable.HolderName
+	detectCase, err := format.NewCase(formatter.DetectCase(name))
+	if err != nil {
+		return name
+	}
+	if detectCase != format.CaseUpperCamel {
+		name = detectCase.Format(name, format.CaseUpperCamel)
+	}
+	return name
+}
+
+func (c *ViewConfig) excludedColumns() map[string]bool {
+	exceptIndex := map[string]bool{}
+	for _, column := range c.expandedTable.Columns {
+		for _, except := range column.Except {
+			exceptIndex[strings.ToLower(except)] = true
+		}
+	}
+	return exceptIndex
+}
+
+func (c *ViewConfig) listedColumns() map[string]bool {
+	includeIndex := map[string]bool{}
+	for _, column := range c.expandedTable.Inner {
+		if column.Name == "*" {
+			return includeIndex
+		}
+	}
+	for _, column := range c.expandedTable.Inner {
+		if column.Alias != "" {
+			includeIndex[strings.ToLower(column.Alias)] = true
+		}
+		includeIndex[strings.ToLower(column.Name)] = true
+	}
+	return includeIndex
+}
 
 func (c *constFileContent) MergeFrom(params ...*view.Parameter) {
 	if len(params) == 0 {
@@ -330,6 +370,51 @@ func (c *ViewConfig) metaConfigByName(holder string) (*templateMetaConfig, bool)
 	return nil, false
 }
 
+func (c *ViewConfig) buildSpec(ctx context.Context, db *sql.DB) (err error) {
+	name := c.ActualHolderName()
+	if c.Spec, err = codegen.NewSpec(ctx, db, c.TableName(), c.SQL()); err != nil {
+		return err
+	}
+	if len(c.Spec.Columns) == 0 {
+		return fmt.Errorf("not found table %v(%v) columns", c.TableName(), c.SQL())
+	}
+	excludedColumns := c.excludedColumns()
+	listedColumns := c.listedColumns()
+	cardinality := view.One
+	if c.IsToMany() {
+		cardinality = view.Many
+	}
+	if err = c.Spec.BuildType(name, cardinality, listedColumns, excludedColumns); err != nil {
+		return err
+	}
+	for _, relation := range c.relations {
+		if err = relation.buildSpec(ctx, db); err != nil {
+			return err
+		}
+		relation.Spec.Parent = c.Spec
+		c.Spec.AppendRelation(relation.ActualHolderName(), relation.queryJoin, relation.Spec)
+	}
+	return nil
+}
+
+func (c *ViewConfig) SQL() string {
+	SQL := ""
+	if join := c.queryJoin; join != nil {
+		SQL = sqlparser.Stringify(c.queryJoin.With)
+	}
+	return SQL
+}
+
+func (s *ViewConfig) TableName() string {
+	if s.expandedTable != nil {
+		return s.expandedTable.Name
+	}
+	if s.unexpandedTable != nil {
+		return s.unexpandedTable.Name
+	}
+	return ""
+}
+
 func (s *Builder) Build(ctx context.Context) error {
 	if err := s.loadAndInitConfig(ctx); err != nil {
 		return err
@@ -402,8 +487,7 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 		return err
 	}
 
-	genService := gen.Service{}
-	state, err := genService.LoadParameters(s.options.GoModulePkg, builder.option.StateType, config.Config.LookupType)
+	state, err := codegen.NewState(s.options.GoModulePkg, builder.option.StateType, config.Config.LookupType)
 	fmt.Printf("%v %v\n", state, err)
 
 	if strings.TrimSpace(builder.sqlStmt) == "" {
@@ -2031,7 +2115,7 @@ func (s *Builder) detectSinkColumn(ctx context.Context, db *sql.DB, SQL string) 
 	return result, nil
 }
 
-func (s *Builder) uploadGoState(state gen.State, builder *routeBuilder, packageNBame string) error {
+func (s *Builder) uploadGoState(state codegen.State, builder *routeBuilder, packageNBame string) error {
 	goURL := builder.session.GoFileURL("state") + ".go"
 	if _, err := s.upload(builder, goURL, state.GenerateGoCode(packageNBame)); err != nil {
 		return err

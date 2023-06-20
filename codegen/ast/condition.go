@@ -49,3 +49,7 @@ func (s *Condition) Generate(builder *Builder) (err error) {
 
 	return fmt.Errorf("unsupported option %T %v\n", s, builder.Lang)
 }
+
+func NewCondition(ifExpr Expression, ifBlock, elseBlock Block) *Condition {
+	return &Condition{If: ifExpr, IFBlock: ifBlock, ElseBlock: elseBlock}
+}

@@ -99,7 +99,7 @@ func (b *patchStmtBuilder) build(parentRecord string, withUnsafe bool, indexes [
 	}
 
 	for _, relation := range contentBuilder.typeDef.relations {
-		if relation.config.isVirtual {
+		if relation.config.isAuxiliary {
 			continue
 		}
 		if _, err := contentBuilder.newRelation(relation).build(accessor.record, withUnsafe, indexes); err != nil {

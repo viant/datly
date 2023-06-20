@@ -45,10 +45,20 @@ func main() {
 
 	os.Args = []string{
 		"",
-		"dsql",
-		"-p=/Users/awitas/go/src/github.com/viant/datly/poc",
-		"-s=/Users/awitas/go/src/github.com/viant/datly/poc/dsql/campaign/campaign_patch.sql",
+		"gen",
+		"-o=patch",
+		"-p=/Users/awitas/go/src/github.com/viant/datly/poc2",
+		"-s=/Users/awitas/go/src/github.com/viant/datly/poc/dsql/campaign/init/campaign_patch.sql",
 		"-c=ci_ads|mysql|root:dev@tcp(127.0.0.1:3306)/ci_ads?parseTime=true",
+
+		/*
+			"",
+			"dsql",
+			"-p=/Users/awitas/go/src/github.com/viant/datly/poc",
+			"-s=/Users/awitas/go/src/github.com/viant/datly/poc/dsql/campaign/campaign_patch.sql",
+			"-c=ci_ads|mysql|root:dev@tcp(127.0.0.1:3306)/ci_ads?parseTime=true",
+		*/
+
 	}
 	server, err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {

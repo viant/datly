@@ -80,7 +80,7 @@ func (s *Builder) build() (*standalone.Server, error) {
 		return nil, err
 	}
 	if s.options.OpenApiURL != "" {
-		//TODO: add opeanpi3.Info to Config
+		//TODO: add opeanpi3.Spec to Config
 		openapiSpec, _ := router.GenerateOpenAPI3Spec(openapi3.Info{}, srv.Routes()...)
 		openApiMarshal, _ := yaml.Marshal(openapiSpec)
 		_ = os.WriteFile(s.options.OpenApiURL, openApiMarshal, file.DefaultFileOsMode)

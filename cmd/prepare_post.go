@@ -3,8 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/cmd/gen"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/codegen"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
@@ -85,8 +85,8 @@ func (m *inputMetadata) IsToMany() bool {
 	return m.typeDef != nil && (m.config.IsToMany() || m.typeDef.Cardinality == view.Many)
 }
 
-func (m *inputMetadata) asParams() []*gen.Parameter {
-	var result []*gen.Parameter
+func (m *inputMetadata) asParams() []*codegen.Parameter {
+	var result []*codegen.Parameter
 	for _, item := range m.idParams {
 		result = append(result, item.asParameter(m))
 	}
@@ -94,8 +94,8 @@ func (m *inputMetadata) asParams() []*gen.Parameter {
 	return result
 }
 
-func (m inputMetadata) asDataViewParameter() *gen.Parameter {
-	param := &gen.Parameter{}
+func (m inputMetadata) asDataViewParameter() *codegen.Parameter {
+	param := &codegen.Parameter{}
 	param.Name = m.namePrefix
 	param.Schema = &view.Schema{DataType: m.paramName, Cardinality: view.One}
 	if m.IsToMany() {
@@ -107,8 +107,8 @@ func (m inputMetadata) asDataViewParameter() *gen.Parameter {
 	return param
 }
 
-func (m *inputMetadata) AsParam() *gen.Parameter {
-	param := &gen.Parameter{}
+func (m *inputMetadata) AsParam() *codegen.Parameter {
+	param := &codegen.Parameter{}
 	param.Name = m.paramName
 	param.Schema = &view.Schema{DataType: m.paramName}
 	param.In = &view.Location{Kind: view.KindRequestBody, Name: m.bodyHolder}
