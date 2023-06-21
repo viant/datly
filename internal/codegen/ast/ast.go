@@ -14,7 +14,8 @@ type (
 
 	Block []Statement
 	Ident struct {
-		Name string
+		WithState bool
+		Name      string
 	}
 
 	Foreach struct {
@@ -29,9 +30,14 @@ type (
 	}
 
 	CallExpr struct {
-		Holder Expression
-		Name   string
-		Args   []Expression
+		Receiver Expression
+		Name     string
+		Args     []Expression
+	}
+
+	MapExpr struct {
+		Map Expression
+		Key Expression
 	}
 
 	StatementExpression struct {
@@ -52,23 +58,27 @@ type (
 	LiteralExpr struct {
 		Literal string
 	}
-
-	ConditionalBlock struct {
-		If    Expression
-		Block Block
-	}
-
-	Condition struct {
-		If           Expression
-		IFBlock      Block
-		ElseIfBlocks []*ConditionalBlock
-		ElseBlock    Block
-	}
-
-	Options struct {
-		Lang string
-	}
 )
+
+func (m *MapExpr) Generate(builder *Builder) error {
+	if err := m.Map.Generate(builder); err != nil {
+		return err
+	}
+
+	if err := builder.WriteString("["); err != nil {
+		return err
+	}
+
+	if err := m.Key.Generate(builder); err != nil {
+		return err
+	}
+
+	if err := builder.WriteString("]"); err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func (b *Block) Append(statement Statement) {
 	*b = append(*b, statement)
@@ -88,8 +98,15 @@ func (b Block) Generate(builder *Builder) error {
 }
 
 func (e Ident) Generate(builder *Builder) (err error) {
-	if builder.Lang == "dsql" {
-		return builder.WriteString("$" + e.Name)
+	identName := e.Name
+	if e.WithState && builder.StateName != "" {
+		identName = identName + "." + builder.StateName
 	}
-	return builder.WriteString(e.Name)
+
+	builder.State.DeclareVariable(identName)
+
+	if builder.Lang == LangDSQL {
+		return builder.WriteString("$" + identName)
+	}
+	return builder.WriteString(identName)
 }

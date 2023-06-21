@@ -4,9 +4,9 @@ import "fmt"
 
 func NewCallExpr(holder Expression, name string, args ...Expression) *CallExpr {
 	return &CallExpr{
-		Holder: holder,
-		Name:   name,
-		Args:   args,
+		Receiver: holder,
+		Name:     name,
+		Args:     args,
 	}
 }
 
@@ -22,10 +22,16 @@ func NewStatementExpression(expr Expression) *StatementExpression {
 	return &StatementExpression{Expression: expr}
 }
 func (e *CallExpr) Generate(builder *Builder) (err error) {
-	if err = e.Holder.Generate(builder); err != nil {
+	caller, err := e.actualCaller(builder)
+	if err != nil {
 		return err
 	}
-	if e.Holder != nil {
+
+	if caller.Receiver != nil {
+		if err = caller.Receiver.Generate(builder); err != nil {
+			return err
+		}
+
 		if err = builder.WriteString("."); err != nil {
 			return err
 		}
@@ -37,7 +43,7 @@ func (e *CallExpr) Generate(builder *Builder) (err error) {
 	if err = builder.WriteString("("); err != nil {
 		return err
 	}
-	for i, arg := range e.Args {
+	for i, arg := range caller.Args {
 		if i > 0 {
 			if err = builder.WriteString(", "); err != nil {
 				return err
@@ -51,6 +57,19 @@ func (e *CallExpr) Generate(builder *Builder) (err error) {
 		return err
 	}
 	return nil
+}
+
+func (e *CallExpr) actualCaller(builder *Builder) (*CallExpr, error) {
+	if builder.CallNotifier == nil {
+		return e, nil
+	}
+
+	notifier, err := builder.CallNotifier(e)
+	if err != nil || notifier != nil {
+		return notifier, err
+	}
+
+	return e, nil
 }
 
 func (s *SelectorExpr) Generate(builder *Builder) error {
