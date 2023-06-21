@@ -22,8 +22,8 @@ const (
 )
 
 type Service struct {
-	fs         afs.Service
-	goLocation string
+	fs            afs.Service
+	goBinLocation string
 }
 
 func (s *Service) Run(ctx context.Context, opts *options.Options) (bool, error) {

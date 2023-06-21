@@ -38,9 +38,9 @@ require (
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.2.0
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
-	github.com/viant/xreflect v0.3.0
+	github.com/viant/xreflect v0.3.1
 	github.com/viant/xunsafe v0.8.4
-	golang.org/x/mod v0.9.0
+	golang.org/x/mod v0.11.0
 	golang.org/x/oauth2 v0.7.0
 	google.golang.org/api v0.114.0
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
@@ -50,7 +50,7 @@ require (
 require (
 	github.com/viant/govalidator v0.2.1
 	github.com/viant/sqlparser v0.3.1-0.20230320162628-96274e82953f
-	golang.org/x/crypto v0.7.0 // indirect
+	golang.org/x/crypto v0.10.0 // indirect
 )
 
 require (
@@ -61,6 +61,7 @@ require (
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
 	github.com/viant/xdatly/handler v0.0.0-20230615201419-f5e46b6b011f
 	github.com/viant/xdatly/types/core v0.0.0-20230518142915-e849977dfa52
+	golang.org/x/tools v0.10.0
 )
 
 require (
@@ -115,11 +116,11 @@ require (
 	github.com/viant/igo v0.1.0 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/net v0.9.0 // indirect
-	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.7.0 // indirect
-	golang.org/x/term v0.7.0 // indirect
-	golang.org/x/text v0.9.0 // indirect
+	golang.org/x/net v0.11.0 // indirect
+	golang.org/x/sync v0.3.0 // indirect
+	golang.org/x/sys v0.9.0 // indirect
+	golang.org/x/term v0.9.0 // indirect
+	golang.org/x/text v0.10.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect

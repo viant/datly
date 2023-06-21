@@ -34,7 +34,6 @@ func (n *identity) Match(cursor *parsly.Cursor) (matched int) {
 			return matched
 		}
 	}
-
 	return matched
 }
 

@@ -9,6 +9,18 @@ type Imports struct {
 	packageIndex map[string]bool
 }
 
+func (i *Imports) Clone() *Imports {
+	var result = NewImports()
+	result.Types = i.Types
+	result.Packages = i.Packages
+	for k := range i.typeIndex {
+		result.typeIndex[k] = true
+	}
+	for k := range i.packageIndex {
+		result.packageIndex[k] = true
+	}
+	return &result
+}
 func (i *Imports) AddType(typeName string) {
 	_, ok := i.typeIndex[typeName]
 	if ok {
@@ -50,6 +62,21 @@ func (i *Imports) PackageImports() string {
 	builder.WriteString("\nimport (")
 	for _, item := range i.Packages {
 		builder.WriteString("\t\"")
+		builder.WriteString(item)
+		builder.WriteString("\"\n")
+	}
+	builder.WriteByte(')')
+	return builder.String()
+}
+
+func (i *Imports) DefaultPackageImports() string {
+	if len(i.Packages) == 0 {
+		return ""
+	}
+	builder := strings.Builder{}
+	builder.WriteString("\nimport (")
+	for _, item := range i.Packages {
+		builder.WriteString("\t_\t\"")
 		builder.WriteString(item)
 		builder.WriteString("\"\n")
 	}

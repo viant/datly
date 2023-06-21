@@ -2,33 +2,46 @@ package codegen
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"github.com/viant/datly/config"
+	"github.com/viant/datly/internal/plugin"
+	"github.com/viant/datly/view"
 	"github.com/viant/xreflect"
 	"go/format"
+	"strings"
 )
 
+const (
+	registerTypeTemplate     = `	core.RegisterType(PackageName, "%v", reflect.TypeOf(%v{}), checksum.GeneratedTime)`
+	registerMapEntryTemplate = `	"%v": reflect.TypeOf(%v{}),`
+)
+
+//go:embed tmpl/entity.gox
+var entityTemplate string
+
 //GenerateEntity generate golang entity
-func (t *Template) GenerateEntity(ctx context.Context, pkg string, extensionMode bool) (string, error) {
-	pkg = t.getPakcage(pkg)
+func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.Info) (string, error) {
+	pkg = info.Package(pkg)
 	if err := t.TypeDef.Init(context.Background(), config.Config.LookupType); err != nil {
 		return "", err
 	}
 	rType := t.TypeDef.Schema.Type()
-
-	/*
-		TODO
-		core.RegisterType(PackageName, "Campaign", reflect.TypeOf(Campaign{}), checksum.GeneratedTime)
-		vs
-		Types (standalone plugin no dep)
-
-	*/
+	imps := t.Imports.Clone()
+	initCode := ""
+	imps.AddPackage("reflect")
+	if !info.IsStandalone() {
+		imps.AddPackage(info.TypeCorePkg())
+		imps.AddPackage(info.ChecksumPkg())
+		initCode = t.generateRegisterType()
+	} else {
+		initCode = t.generateMapTypeBody()
+	}
+	initSnippet := strings.Replace(entityTemplate, "$Init", initCode, 1)
 	generatedStruct := xreflect.GenerateStruct(t.TypeDef.Name, rType,
 		xreflect.WithPackage(pkg),
-		xreflect.WithImports(t.Imports.Packages),
-		xreflect.WithSnippetBefore(""))
-
-	fmt.Printf("SOURCE: %v\n", generatedStruct)
+		xreflect.WithImports(imps.Packages),
+		xreflect.WithSnippetBefore(initSnippet))
 	formatted, err := format.Source([]byte(generatedStruct))
 	if err != nil {
 		return "", err
@@ -36,67 +49,28 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, extensionMode
 	return string(formatted), nil
 }
 
-/*
-packageName := s.PackageName(aConfig.fileName)
-
-	var extraTypes = map[string]reflect.Type{}
-
-	for i := 0; i < rType.NumField(); i++ {
-		field := rType.Field(i)
-		if fieldType := extractStruct(field.Type); fieldType != nil && fieldType.PkgPath() == rType.PkgPath() {
-			key := field.Type.Name()
-			if typeName, ok := field.Tag.Lookup("typeName"); ok && typeName != "" {
-				key = typeName
-			}
-			if key != "" {
-				extraTypes[key] = fieldType
-			}
+func (t *Template) generateRegisterType() string {
+	var initElements []string
+	for _, param := range t.State {
+		if param.In.Kind != view.KindDataView {
+			continue
 		}
+		initElements = append(initElements, fmt.Sprintf(registerTypeTemplate, param.Schema.DataType, param.Schema.DataType))
 	}
 
-	sbBefore := &bytes.Buffer{}
-	sbBefore.WriteString(fmt.Sprintf("var PackageName = \"%v\"\n", packageName))
-
-	var imports xreflect.Imports
-	if xDatlyModURL == nil {
-		sbBefore.WriteString(fmt.Sprintf(`
-var %v = map[string]reflect.Type{
-		"%v": reflect.TypeOf(%v{}),
+	initCode := strings.Join(initElements, "\n")
+	return initCode
 }
-`, dConfig.TypesName, name, name))
 
-		imports = append(imports, "reflect")
-		packageName = "main"
-	} else {
-
-		imports = append(imports,
-			moduleCoreTypes,
-			path.Join(xDatlyModURL.moduleName, checksumDirectory),
-			"reflect",
-		)
-		var items = []string{
-			expandRegisterType(name, name, checksumDirectory),
+func (t *Template) generateMapTypeBody() string {
+	var initElements []string
+	for _, param := range t.State {
+		if param.In.Kind != view.KindDataView {
+			continue
 		}
-		for k := range extraTypes {
-			items = append(items, expandRegisterType(k, k, checksumDirectory))
-		}
+		initElements = append(initElements, fmt.Sprintf(registerMapEntryTemplate, param.Schema.DataType, param.Schema.DataType))
+	}
 
-		sbBefore.WriteString(fmt.Sprintf(`
-func init() {
-	%s
+	initCode := strings.Join(initElements, "\n")
+	return initCode
 }
-`, strings.Join(items, "\n")))
-
-	}
-
-	sb := &bytes.Buffer{}
-	generatedStruct := xreflect.GenerateStruct(name, rType, imports, xreflect.AppendBeforeType(sbBefore.String()), xreflect.PackageName(packageName))
-	sb.WriteString(generatedStruct)
-	sb.WriteString("\n")
-	source, err := goFormat.Source(sb.Bytes())
-	if err != nil {
-		return "", nil, fmt.Errorf("faield to generate go code: %w, %s", err, sb.Bytes())
-	}
-
-	return packageName, source, nil
-*/
