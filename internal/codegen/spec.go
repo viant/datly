@@ -20,6 +20,8 @@ type (
 	Relation struct {
 		Name        string
 		Join        *query.Join
+		ParentField *Field
+		KeyField    *Field
 		Cardinality view.Cardinality
 		*Spec
 	}
@@ -100,8 +102,16 @@ func (s *Spec) shouldSkipColumn(whitelist, blacklist map[string]bool, column *si
 }
 
 func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec) {
-	s.Relations = append(s.Relations, &Relation{Spec: spec, Name: name, Join: join, Cardinality: joinCardinality(join)})
-	s.Type.AddRelation(name, spec, join)
+
+	relColumn, refColumn := extractRelationColumns(join)
+	rel := &Relation{Spec: spec,
+		KeyField:    spec.Type.ByColumn(refColumn),
+		ParentField: s.Type.ByColumn(relColumn),
+		Name:        name,
+		Join:        join,
+		Cardinality: joinCardinality(join)}
+	s.Relations = append(s.Relations, rel)
+	s.Type.AddRelation(name, spec, rel)
 }
 
 func readSinkColumns(ctx context.Context, db *sql.DB, table string) ([]sink.Column, error) {

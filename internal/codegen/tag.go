@@ -3,7 +3,6 @@ package codegen
 import (
 	"fmt"
 	"github.com/viant/sqlparser"
-	"github.com/viant/sqlparser/query"
 	"strconv"
 	"strings"
 )
@@ -89,18 +88,18 @@ func (t *Tags) buildValidateTag(field *Field) {
 	t.Set("validate", tagValue)
 }
 
-func (t *Tags) buildRelation(info *Spec, join *query.Join) {
+func (t *Tags) buildRelation(info *Spec, relation *Relation) {
+	join := relation.Join
 	if join == nil {
 		return
 	}
 	datlyTag := TagValue{}
-	relColumn, refColumn := extractRelationColumns(join)
 	datlyTag.Append(fmt.Sprintf("ralName=%s", join.Alias))
-	datlyTag.Append(fmt.Sprintf("relColumn=%s", relColumn))
+	datlyTag.Append(fmt.Sprintf("relColumn=%s", relation.KeyField.Column.Name))
 	if info.Table != "" {
 		datlyTag.Append(fmt.Sprintf("refTable=%v", info.Table))
 	}
-	datlyTag.Append(fmt.Sprintf("refColumn=%s", refColumn))
+	datlyTag.Append(fmt.Sprintf("refColumn=%s", relation.ParentField.Column.Name))
 	sqlTag := TagValue{}
 	if rawSQL := strings.Trim(sqlparser.Stringify(join.With), " )("); rawSQL != "" {
 		sqlTag.Append(strings.ReplaceAll(rawSQL, "\n", " "))

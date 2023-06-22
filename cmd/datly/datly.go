@@ -45,7 +45,7 @@ func main() {
 	//os.Args = []string{
 	//	"",
 	//	"-N=run_tests_generate_post_basic_one",
-	//	"-X=/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/cases/018_generate_post_basic_many/post_basic_many.sql",
+	//	"-X=/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/cases/022_generate_post_one_one/post_one_one.sql",
 	//	"-w=autogen",
 	//	"-C=dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
 	//	"-C=dyndb|dynamodb|dynamodb://localhost:8000/us-west-1?key=dummy&secret=dummy",

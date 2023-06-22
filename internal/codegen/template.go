@@ -86,7 +86,7 @@ func (t *Template) BuildLogic(spec *Spec, opts ...Option) {
 	if options.withUpdate {
 		t.indexRecords(options, spec, spec.Type.Cardinality, &block)
 	}
-	t.modifyRecords(options, "Unsafe", spec, spec.Type.Cardinality, &block)
+	t.modifyRecords(options, "Unsafe", spec, spec.Type.Cardinality, &block, nil)
 	t.BusinessLogic = &block
 }
 
@@ -127,7 +127,7 @@ func (t *Template) indexRecords(options *Options, spec *Spec, cardinality view.C
 	}
 }
 
-func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec *Spec, cardinality view.Cardinality, parentBlock *ast.Block) {
+func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec *Spec, cardinality view.Cardinality, parentBlock *ast.Block, syncKey *ast.Assign) {
 	if spec.isAuxiliary {
 		return
 	}
@@ -140,18 +140,32 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 	case view.One:
 		structSelector := ast.NewIdent(structPath)
 		checkValid := ast.NewCondition(structSelector, ast.Block{}, nil)
+		if syncKey != nil {
+			checkValid.IFBlock.Append(syncKey)
+		}
 		t.modifyRecord(options, structPath, spec, &checkValid.IFBlock)
 		for _, rel := range spec.Relations {
-			t.modifyRecords(options, structPath, rel.Spec, rel.Cardinality, &checkValid.IFBlock)
+			parentSelector := structPath + "." + rel.ParentField.Name
+			holder := structPath + "." + rel.Name + "." + rel.KeyField.Name
+			assignKey := ast.NewAssign(ast.NewIdent(holder), ast.NewIdent(parentSelector))
+			t.modifyRecords(options, structPath, rel.Spec, rel.Cardinality, &checkValid.IFBlock, assignKey)
 		}
 		parentBlock.AppendEmptyLine()
 		parentBlock.Append(checkValid)
 	case view.Many:
 		recordPath := t.RecordName(spec.Type.Name)
 		forEach := ast.NewForEach(ast.NewIdent(recordPath), ast.NewIdent(structPath), ast.Block{})
+
+		if syncKey != nil {
+			forEach.Body.Append(syncKey)
+		}
+
 		t.modifyRecord(options, recordPath, spec, &forEach.Body)
 		for _, rel := range spec.Relations {
-			t.modifyRecords(options, recordPath, rel.Spec, rel.Cardinality, &forEach.Body)
+			parentSelector := structPath + "." + rel.ParentField.Name
+			holder := recordPath + "." + rel.KeyField.Name
+			assignKey := ast.NewAssign(ast.NewIdent(holder), ast.NewIdent(parentSelector))
+			t.modifyRecords(options, recordPath, rel.Spec, rel.Cardinality, &forEach.Body, assignKey)
 		}
 		parentBlock.AppendEmptyLine()
 		parentBlock.Append(forEach)

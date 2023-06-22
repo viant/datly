@@ -33,6 +33,15 @@ type Type struct {
 	relationField []*Field
 }
 
+func (t *Type) ByColumn(columnName string) *Field {
+	for _, candidate := range t.columnFields {
+		if column := candidate.Column; column != nil && column.Name == columnName {
+			return candidate
+		}
+	}
+	return nil
+}
+
 func (t *Type) TypeName() string {
 	pkg := t.Package
 	if pkg == "" {
@@ -96,16 +105,16 @@ func (t *Type) ColumnFields() []*view.Field {
 	return result
 }
 
-func (t *Type) AddRelation(name string, graph *Spec, join *query.Join) *Field {
-	card := cardinality(join)
+func (t *Type) AddRelation(name string, spec *Spec, relation *Relation) *Field {
+	card := cardinality(relation.Join)
 	var field = &Field{Field: view.Field{
 		Name:        name,
 		Cardinality: card,
 		Ptr:         card == view.One,
 	}}
-	field.Tags.Set("typeName", TagValue{graph.Type.Name})
+	field.Tags.Set("typeName", TagValue{spec.Type.Name})
 	field.Tags.Set("sqlx", TagValue{"-"})
-	field.Tags.buildRelation(graph, join)
+	field.Tags.buildRelation(spec, relation)
 	field.Tag = field.Tags.Stringify()
 	t.relationField = append(t.relationField, field)
 	return field
