@@ -3,6 +3,8 @@
 
 var PackageName ="$Package"
 
+$GlobalDeclaration
+
 func init() {
   $Init
 }

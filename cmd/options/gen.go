@@ -14,6 +14,7 @@ type Gen struct {
 	Dest      string `short:"d" long:"dest" description:"dsql location" default:"dsql"`
 	Operation string `short:"o" long:"op" description:"operation" choice:"post" choice:"patch" choice:"put"`
 	Kind      string `short:"k" long:"kind" description:"execution kind" choice:"dml" choice:"service"`
+	Lang      string `short:"l" long:"lang" description:"lang" choice:"go" choice:"velty"`
 }
 
 func (g *Gen) GoModuleLocation() string {

@@ -62,7 +62,9 @@ func (p *Package) scanPackage(ctx context.Context, location string, visitor func
 		if url.Equals(location, candidate.URL()) {
 			continue
 		}
-		p.scanPackage(ctx, candidate.URL(), visitor)
+		if err := p.scanPackage(ctx, candidate.URL(), visitor); err != nil {
+			return err
+		}
 	}
 	return nil
 }

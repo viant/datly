@@ -29,16 +29,23 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.
 	rType := t.TypeDef.Schema.Type()
 	imps := t.Imports.Clone()
 	initCode := ""
+	globalDeclaration := ""
 	imps.AddPackage("reflect")
 	if !info.IsStandalone() {
 		imps.AddPackage(info.TypeCorePkg())
 		imps.AddPackage(info.ChecksumPkg())
 		initCode = t.generateRegisterType()
 	} else {
-		initCode = t.generateMapTypeBody()
+		globalDeclaration = "var Types map[string]reflect.Type"
+		initCode = fmt.Sprintf(`	Types = map[string]reflect.Type{
+	%v
+	}
+`, t.generateMapTypeBody())
 	}
 	initSnippet := strings.Replace(entityTemplate, "$Init", initCode, 1)
 	initSnippet = strings.Replace(initSnippet, "$Package", pkg, 1)
+	initSnippet = strings.Replace(initSnippet, "$GlobalDeclaration", globalDeclaration, 1)
+
 	generatedStruct := xreflect.GenerateStruct(t.TypeDef.Name, rType,
 		xreflect.WithPackage(pkg),
 		xreflect.WithImports(imps.Packages),

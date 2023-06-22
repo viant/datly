@@ -294,6 +294,15 @@ func (s *Builder) buildCodeTemplate(ctx context.Context, builder *routeBuilder, 
 		return nil, err
 	}
 
+	if pkg := s.options.GoModulePkg; pkg == "" {
+		var parent string
+		destPath := url.Path(s.Options.Generate.Dest)
+		parent, s.options.GoModulePkg = path.Split(destPath)
+		if s.options.RelativePath == "" {
+			s.options.RelativePath = parent
+		}
+	}
+
 	if err = aConfig.buildSpec(ctx, db, s.options.GoModulePkg); err != nil {
 		return nil, err
 	}

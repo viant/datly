@@ -99,6 +99,10 @@ func normalizeMetaTemplateSQL(SQL string, holderViewName string) string {
 }
 
 func NewBuilder(options *Options, opts *soptions.Options, logger io.Writer) (*Builder, error) {
+	if opts == nil {
+		opts = options.BuildOption()
+	}
+
 	builder := &Builder{
 		Options:    opts,
 		options:    options,

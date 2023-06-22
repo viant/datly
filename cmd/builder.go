@@ -14,7 +14,7 @@ import (
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/runtime/standalone"
-	codegen2 "github.com/viant/datly/internal/codegen"
+	codegen "github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
@@ -95,7 +95,7 @@ type (
 		fileName       string
 		viewType       view.Mode
 		batchEnabled   map[string]bool
-		Spec           *codegen2.Spec
+		Spec           *codegen.Spec
 	}
 
 	templateMetaConfig struct {
@@ -375,7 +375,7 @@ func (c *ViewConfig) metaConfigByName(holder string) (*templateMetaConfig, bool)
 
 func (c *ViewConfig) buildSpec(ctx context.Context, db *sql.DB, pkg string) (err error) {
 	name := c.ActualHolderName()
-	if c.Spec, err = codegen2.NewSpec(ctx, db, c.TableName(), c.SQL()); err != nil {
+	if c.Spec, err = codegen.NewSpec(ctx, db, c.TableName(), c.SQL()); err != nil {
 		return err
 	}
 	if len(c.Spec.Columns) == 0 {
@@ -404,7 +404,9 @@ func (c *ViewConfig) SQL() string {
 	SQL := ""
 	if join := c.queryJoin; join != nil {
 		SQL = sqlparser.Stringify(c.queryJoin.With)
+		SQL = strings.Trim(strings.TrimSpace(SQL), "()")
 	}
+
 	return SQL
 }
 
@@ -489,8 +491,14 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 	if err := s.loadSQL(ctx, builder, builder.session.sourceURL); err != nil {
 		return err
 	}
+	statePath := s.options.RelativePath
+	if statePath != "" {
+		statePath = path.Join(statePath, s.options.GoModulePkg)
+	} else {
+		statePath = s.options.DSQLOutput
+	}
 
-	state, err := codegen2.NewState(s.options.GoModulePkg, builder.option.StateType, config.Config.LookupType)
+	state, err := codegen.NewState(statePath, builder.option.StateType, config.Config.LookupType)
 	fmt.Printf("%v %v\n", state, err)
 
 	if strings.TrimSpace(builder.sqlStmt) == "" {
@@ -1461,7 +1469,9 @@ func (s *Builder) prepareRuleIfNeeded(ctx context.Context, SQL []byte) (string, 
 	if err = cmd.Generate(ctx, s.Options.Generate, template); err != nil {
 		return "", err
 	}
-	return string(SQL), nil
+	SQL, err = s.fs.DownloadWithURL(ctx, s.Options.Generate.DSQLLocation())
+
+	return string(SQL), err
 	//
 	//
 	//dsql, err := template.GenerateDSQL()
@@ -2137,7 +2147,7 @@ func (s *Builder) detectSinkColumn(ctx context.Context, db *sql.DB, SQL string) 
 	return result, nil
 }
 
-func (s *Builder) uploadGoState(tmpl *codegen2.Template, builder *routeBuilder, packageNBame string) error {
+func (s *Builder) uploadGoState(tmpl *codegen.Template, builder *routeBuilder, packageNBame string) error {
 	goURL := builder.session.GoFileURL("state") + ".go"
 	if _, err := s.upload(builder, goURL, tmpl.GenerateState(packageNBame)); err != nil {
 		return err

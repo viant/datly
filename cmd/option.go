@@ -90,7 +90,7 @@ type (
 	}
 
 	Prepare struct {
-		PrepareRule  string `short:"G" long:"generate" description:"prepare rule for patch|post|put|delete"`
+		PrepareRule  string `short:"G" long:"generate" description:"prepare rule for patch|post|put"`
 		ExecKind     string `long:"execKind" description:"allows to switch between service / dml"`
 		DSQLOutput   string `long:"dsqlOutput" description:"output path"`
 		GoFileOutput string `long:"goFileOut" description:"destination of go file"`
@@ -532,6 +532,29 @@ func (o *Options) MergeFromInit(init *options.Init) {
 			TimeToLiveMs: init.TimeToLiveMs,
 		}
 	}
+}
+
+func (o *Options) BuildOption() *options.Options {
+	var result = &options.Options{}
+	prep := o.Prepare
+	if prep.PrepareRule != "" {
+		result.Generate = &options.Gen{
+			Connector: options.Connector{
+				Connectors: o.Connects,
+			},
+			Generate: options.Generate{
+				Module: o.RelativePath,
+				Source: o.Location,
+			},
+			Package:   o.GoModulePkg,
+			Dest:      prep.DSQLOutput,
+			Operation: prep.PrepareRule,
+			Kind:      prep.ExecKind,
+		}
+
+	}
+
+	return result
 }
 
 func namespace(name string) string {

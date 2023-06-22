@@ -23,6 +23,8 @@ const (
 type Mode string //Extension|CustomModule
 
 const (
+	ModeUndefined = Mode("")
+
 	ModeStandalone       = Mode("standalone")
 	ModeExtension        = Mode("extension")
 	ModeCustomTypeModule = Mode("custom")
