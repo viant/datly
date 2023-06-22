@@ -605,7 +605,160 @@ func (a *Actor) Init(cur *Actor) bool {
 - [Generate plugin](#generate-plugin)
 - [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
 
-### 1.18 Add struct's validation with tags
+### 1.18 Default struct's validation with tags
++ Datly allows validating entities using tags.  
+Available tags:  
+  - ~~sqlx~~ (temporarily under reconstruction) // TODO
+  - validate
+
+
++ Add validate tags in Actor struct in file ~/myproject/pkg/actor/entity.go
+  ```go
+  type Actor struct {
+      ActorId    int       `sqlx:"name=actor_id,autoincrement,primaryKey,required"`
+      FirstName  string    `sqlx:"name=first_name,required" validate:"ge(2),le(15)"`
+      LastName   string    `sqlx:"name=last_name,unique,table=actor,required"  validate:"ge(2),le(15)"`
+      LastUpdate time.Time `sqlx:"name=last_update,required"`
+      Has        *ActorHas `setMarker:"true" typeName:"ActorHas" json:"-"  sqlx:"-" `
+  }
+  ```
+  - validate:"ge(2),le(15)" allows for strings with length between 2 and 15.
+  - ~~sqlx~~:"required" allows not nil value
+  - ~~sqlx~~:"unique,table=actor" checks in table actor if a value is unique
+  - 
+- Check more about validation tags
+  - [~~sqlx~~](https://github.com/viant/sqlx#validator-service)
+  - [govalidator](https://github.com/viant/govalidator#usage)
+  
++ Check if default validation works
+```http request
+PATCH /v1/api/dev/actor HTTP/1.1
+Host: 127.0.0.1:8080
+Content-Type: application/json
+```
+```json
+{
+    "Entity": [
+        {
+            "firstName": "M",
+            "lastName": "Wazalsky0123456789"
+        }
+    ]
+}
+```
+The response should be like:
+```json
+{
+    "Status": "error",
+    "Message": "Failed validation for Entity[0].FirstName(ge),Entity[0].LastName(le)",
+    "Errors": [
+        {
+            "View": "Actor",
+            "Param": "ActorActorId",
+            "Message": "Failed validation for Entity[0].FirstName(ge),Entity[0].LastName(le)",
+            "Object": [
+                {
+                    "Location": "Entity[0].FirstName",
+                    "Field": "FirstName",
+                    "Value": "M",
+                    "Message": "check 'ge' failed on field FirstName",
+                    "Check": "ge"
+                },
+                {
+                    "Location": "Entity[0].LastName",
+                    "Field": "LastName",
+                    "Value": "Wazalsky0123456789",
+                    "Message": "check 'le' failed on field LastName",
+                    "Check": "le"
+                }
+            ]
+        }
+    ]
+}
+```
+
+////////////
+### 1.19 Add custom validation
++ **modify file ~/myproject/pkg/actor/validate.go**
+```go
+package actor
+
+import (
+	"fmt"
+	"github.com/michael/mymodule/shared"
+	"github.com/viant/govalidator"
+	"strings"
+)
+
+func (a *Actor) Validate(cur *Actor) *shared.Validation {
+	info := shared.NewValidationInfo()
+	info.Validate(a, govalidator.WithShallow(true), govalidator.WithSetMarker())
+	defer info.UpdateStatus()
+
+	isInsert := cur == nil
+	if isInsert {
+		a.validateForInsert(info)
+	} else {
+		a.validateForUpdate(info, cur)
+	}
+	return info
+}
+
+func (a *Actor) validateForInsert(info *shared.Validation) {
+	if a.Has.FirstName && a.Has.LastName {
+		a.validateNames(info, a.FirstName, a.LastName)
+	}
+}
+
+func (a *Actor) validateForUpdate(info *shared.Validation, cur *Actor) {
+	firstName := cur.FirstName
+	lastName := cur.LastName
+
+	if a.Has.FirstName {
+		firstName = cur.FirstName
+	}
+
+	if a.Has.LastName {
+		lastName = a.LastName
+	}
+
+	a.validateNames(info, firstName, lastName)
+}
+
+func (a *Actor) validateNames(info *shared.Validation, firstName string, lastName string) {
+	if len(firstName) > 0 && len(a.LastName) > 0 {
+		if strings.ToUpper(string([]rune(firstName)[0])) == strings.ToUpper(string([]rune(lastName)[0])) {
+			info.Validation.AddViolation("[FirstName, LastName]", fmt.Sprintf("%s %s", firstName, lastName), "theSameFirstLetter",
+				fmt.Sprintf("First name and last name can't start with the same letter %s %s", firstName, lastName))
+		}
+	}
+}
+```
+
++ check if exists Validate invocation inside file ~/myproject/dsql/actor/Actor.sql
+```code
+#foreach($recActor in $Unsafe.Actor)
+    #if($recActor)
+        #set($inited = $recActor.Init($curActorByActorId[$recActor.ActorId]))
+
+        #set($info = $recActor.Validate($curActorByActorId[$recActor.ActorId]))
+        #if($info.HasError ==  true)
+            $response.StatusCode(401)
+            $response.Failf("%v",$info.Error)
+        #end
+
+        #if(($curActorByActorId.HasKey($recActor.ActorId) == true))
+          $sql.Update($recActor, "actor");
+        #else
+          $sql.Insert($recActor, "actor");
+        #end
+    #end
+#end
+```
+
+- [Generate plugin](#generate-plugin)
+- [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
+////////////
 + create folder ~/myproject/pkg/shared
 + create file ~/myproject/pkg/shared/message.go
 ```go
@@ -749,14 +902,14 @@ func (a *Actor) Validate(cur *Actor) *shared.Validation {
 ```go
 type Actor struct {
 	ActorId    int       `sqlx:"name=actor_id,autoincrement,primaryKey,required"`
-	FirstName  string    `sqlx:"name=first_name,required" validate:"gt(2),lt(15)"`
-	LastName   string    `sqlx:"name=last_name,unique,table=actor,required"  validate:"gt(2),lt(15)"`
+	FirstName  string    `sqlx:"name=first_name,required" validate:"ge(2),le(15)"`
+	LastName   string    `sqlx:"name=last_name,unique,table=actor,required"  validate:"ge(2),le(15)"`
 	LastUpdate time.Time `sqlx:"name=last_update,required"`
 	Has        *ActorHas `setMarker:"true" typeName:"ActorHas" json:"-"  sqlx:"-" `
 }
 ```
 - We can use tags for struct validation from sqlx and govalidator package
-  - Tag: validate:"gt(2),lt(15)" allows for strings with length between 3 and 14.
+  - Tag: validate:"ge(2),le(15)" allows for strings with length between 2 and 15.
   - Tag: sqlx:"required" allows not nil value
   - Tag: sqlx:"unique,table=actor" checks in table actor if a value is unique
 
@@ -987,6 +1140,26 @@ datly initExt -p=~/myproject -n=mymodule
 ```
 Now you should be able to load the plugin.
 
+### Troubleshooting starting compiled project - unterminated statements on the stack
+command:
+```shell
+~/myproject/bin/datly run -c=~/myproject/repo/dev/Datly/config.json
+```
+
+error:
+```
+2023/06/22 20:30:38 failed to load routers due to the: unterminated statements on the stack: [0xc0002a89c0 0xc000ba82a0]
+```
+
+reason:  
+Missing bracket in variable definition, in entity rule file (in this current case ~/myproject/dsql/actor/Actor.sql)
+```
+#set($result = $recActor.Validate($curActorByActorId[$recActor.ActorId], $session)
+```
+solution:
+```
+#set($result = $recActor.Validate($curActorByActorId[$recActor.ActorId], $session))
+```
 
 ## 8 Debugging
 ### 8.1 More debug information on runtime
