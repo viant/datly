@@ -9,7 +9,9 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/cmd/command"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	codegen2 "github.com/viant/datly/internal/codegen"
@@ -43,6 +45,7 @@ import (
 
 type (
 	Builder struct {
+		Options          *options.Options
 		pluginTypes      map[string]bool
 		constFileContent constFileContent
 		constIndex       ParametersIndex
@@ -392,7 +395,7 @@ func (c *ViewConfig) buildSpec(ctx context.Context, db *sql.DB, pkg string) (err
 			return err
 		}
 		relation.Spec.Parent = c.Spec
-		c.Spec.AppendRelation(relation.ActualHolderName(), relation.queryJoin, relation.Spec)
+		c.Spec.AddRelation(relation.ActualHolderName(), relation.queryJoin, relation.Spec)
 	}
 	return nil
 }
@@ -845,7 +848,7 @@ func (s *Builder) loadSQL(ctx context.Context, builder *routeBuilder, location s
 		SQLbytes = []byte(templateContent)
 	}
 
-	SQL, err := s.prepareRuleIfNeeded(SQLbytes)
+	SQL, err := s.prepareRuleIfNeeded(ctx, SQLbytes)
 	if err != nil {
 		return err
 	}
@@ -1425,7 +1428,7 @@ func (s *Builder) inheritRouteServiceType(builder *routeBuilder, aView *view.Vie
 	}
 }
 
-func (s *Builder) prepareRuleIfNeeded(SQL []byte) (string, error) {
+func (s *Builder) prepareRuleIfNeeded(ctx context.Context, SQL []byte) (string, error) {
 	if s.options.PrepareRule == "" {
 		return string(SQL), nil
 	}
@@ -1444,19 +1447,38 @@ func (s *Builder) prepareRuleIfNeeded(SQL []byte) (string, error) {
 		dsqlOutput = path.Join(dsqlOutput, s.options.GoModulePkg)
 	}
 
-	preparedRouteBuilder := s.newRouteBuilder(
+	routeBuilder := s.newRouteBuilder(
 		&router.Resource{Resource: view.EmptyResource()},
 		NewParametersIndex(nil, nil),
 		newSession(path.Dir(s.options.Location), s.options.Location, s.options.PluginDst, dsqlOutput, dsqlOutput, goFileOutput),
 	)
 
+	cmd := command.New()
+	template, err := s.buildCodeTemplate(ctx, routeBuilder, SQL, s.options.PrepareRule)
+	if err != nil {
+		return "", err
+	}
+	if err = cmd.Generate(ctx, s.Options.Generate, template); err != nil {
+		return "", err
+	}
+	return string(SQL), nil
+	//
+	//
+	//dsql, err := template.GenerateDSQL()
+	//fmt.Printf("dsql: %v %v\n", dsql, err)
+	//state := template.GenerateState("")
+	//fmt.Printf("state %v\n", state)
+	//
+	//entity, err := template.GenerateEntity(ctx, "", nil)
+	//fmt.Printf("entity %s %v\n", entity, err)
+
 	switch strings.ToLower(s.options.PrepareRule) {
 	case PreparePost:
-		return s.preparePostRule(context.Background(), preparedRouteBuilder, SQL)
+		return s.preparePostRule(context.Background(), routeBuilder, SQL)
 	case PreparePatch:
-		return s.preparePatchRule(context.Background(), preparedRouteBuilder, SQL)
+		return s.preparePatchRule(context.Background(), routeBuilder, SQL)
 	case PreparePut:
-		return s.preparePutRule(context.Background(), preparedRouteBuilder, SQL)
+		return s.preparePutRule(context.Background(), routeBuilder, SQL)
 	default:
 		return "", fmt.Errorf("unsupported prepare rule type")
 	}

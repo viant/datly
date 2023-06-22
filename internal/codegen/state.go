@@ -149,14 +149,17 @@ func (t *Template) getPakcage(pkg string) string {
 	return pkg
 }
 
-func (t *Template) buildState(spec *Spec, state *State) {
+func (t *Template) buildState(spec *Spec, state *State, card view.Cardinality) {
 	t.Imports.AddType(spec.Type.TypeName())
 	if param := t.buildPathParameterIfNeeded(spec); param != nil {
 		state.Append(param)
 	}
-	state.Append(t.buildDataViewParameter(spec))
+	if spec.Type.Cardinality == view.Many {
+		card = view.Many
+	}
+	state.Append(t.buildDataViewParameter(spec, card))
 	for _, rel := range spec.Relations {
-		t.buildState(rel.Spec, state)
+		t.buildState(rel.Spec, state, rel.Cardinality)
 	}
 }
 
@@ -176,11 +179,10 @@ func (t *Template) buildPathParameterIfNeeded(spec *Spec) *Parameter {
 	return param
 }
 
-func (t *Template) buildDataViewParameter(spec *Spec) *Parameter {
+func (t *Template) buildDataViewParameter(spec *Spec, cardinality view.Cardinality) *Parameter {
 	param := &Parameter{}
 	param.Name = t.ParamName(spec.Type.Name)
-	param.Schema = &view.Schema{DataType: spec.Type.Name, Cardinality: view.One}
-	param.Schema.Cardinality = spec.Type.Cardinality
+	param.Schema = &view.Schema{DataType: spec.Type.Name, Cardinality: cardinality}
 	param.In = &view.Location{Kind: view.KindDataView, Name: param.Name}
 	param.SQL = spec.viewSQL(t.ColumnParameterNamer(spec.Selector()))
 	return param

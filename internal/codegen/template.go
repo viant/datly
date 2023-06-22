@@ -58,7 +58,7 @@ func (t *Template) ColumnParameterNamer(selector Selector) ColumnParameterNamer 
 func (t *Template) BuildState(spec *Spec, bodyHolder string) {
 	state := State{}
 	state.Append(t.buildBodyParameter(spec, bodyHolder))
-	t.buildState(spec, &state)
+	t.buildState(spec, &state, spec.Type.Cardinality)
 	t.State = state
 }
 

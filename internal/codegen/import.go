@@ -31,6 +31,9 @@ func (i *Imports) AddType(typeName string) {
 }
 
 func (i *Imports) AddPackage(pkg string) {
+	if pkg == "" {
+		return
+	}
 	_, ok := i.packageIndex[pkg]
 	if ok {
 		return

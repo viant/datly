@@ -305,10 +305,6 @@ func (s *Builder) buildCodeTemplate(ctx context.Context, builder *routeBuilder, 
 }
 
 func (s *Builder) buildInputMetadata(ctx context.Context, builder *routeBuilder, sourceSQL []byte, httpMethod string) (*option.RouteConfig, *ViewConfig, *inputMetadata, error) {
-
-	tmpl, err := s.buildCodeTemplate(ctx, builder, sourceSQL, httpMethod)
-	fmt.Printf("%v %v\n", tmpl, err)
-
 	hint, SQL := s.extractRouteSettings(sourceSQL)
 
 	routeOption := &option.RouteConfig{Method: httpMethod}

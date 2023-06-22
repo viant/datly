@@ -45,6 +45,9 @@ func (i *Info) Package(pkg string) string {
 	if i.Mod == nil {
 		return "main"
 	}
+	if pkg == "" {
+		pkg = "autogen"
+	}
 	return pkg
 }
 

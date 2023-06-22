@@ -38,6 +38,7 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.
 		initCode = t.generateMapTypeBody()
 	}
 	initSnippet := strings.Replace(entityTemplate, "$Init", initCode, 1)
+	initSnippet = strings.Replace(initSnippet, "$Package", pkg, 1)
 	generatedStruct := xreflect.GenerateStruct(t.TypeDef.Name, rType,
 		xreflect.WithPackage(pkg),
 		xreflect.WithImports(imps.Packages),

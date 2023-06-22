@@ -98,7 +98,7 @@ func (s *Spec) shouldSkipColumn(whitelist, blacklist map[string]bool, column *si
 	return false
 }
 
-func (s *Spec) AppendRelation(name string, join *query.Join, spec *Spec) {
+func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec) {
 	s.Relations = append(s.Relations, &Relation{Spec: spec, Name: name, Join: join, Cardinality: joinCardinality(join)})
 	s.Type.AddRelation(name, spec, join)
 }

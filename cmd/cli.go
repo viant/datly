@@ -98,8 +98,9 @@ func normalizeMetaTemplateSQL(SQL string, holderViewName string) string {
 	return strings.Replace(SQL, "$View."+holderViewName+".SQL", "$View.NonWindowSQL", 1)
 }
 
-func NewBuilder(options *Options, logger io.Writer) (*Builder, error) {
+func NewBuilder(options *Options, opts *soptions.Options, logger io.Writer) (*Builder, error) {
 	builder := &Builder{
+		Options:    opts,
 		options:    options,
 		tablesMeta: NewTableMetaRegistry(),
 		logger:     logger,
@@ -116,8 +117,9 @@ func NewBuilder(options *Options, logger io.Writer) (*Builder, error) {
 func New(version string, args soptions.Arguments, logger io.Writer) (*standalone.Server, error) {
 	os.Setenv("AWS_SDK_LOAD_CONFIG", "true")
 	var options *Options
+	var opts *soptions.Options
 	if (args.SubMode() || args.IsHelp()) && !args.IsLegacy() {
-		opts := soptions.NewOptions(args)
+		opts = soptions.NewOptions(args)
 		if _, err := flags.ParseArgs(opts, args); err != nil {
 			return nil, err
 		}
@@ -171,10 +173,10 @@ func New(version string, args soptions.Arguments, logger io.Writer) (*standalone
 	if isOption("-h", args) {
 		return nil, nil
 	}
-	return runInLegacyMode(options, logger)
+	return runInLegacyMode(options, opts, logger)
 }
 
-func runInLegacyMode(options *Options, logger io.Writer) (*standalone.Server, error) {
+func runInLegacyMode(options *Options, opts *soptions.Options, logger io.Writer) (*standalone.Server, error) {
 	var err error
 	if options.Package.RuleSourceURL != "" {
 		return nil, packageConfig(options)
@@ -188,7 +190,7 @@ func runInLegacyMode(options *Options, logger io.Writer) (*standalone.Server, er
 		return nil, err
 	}
 
-	builder, err := NewBuilder(options, logger)
+	builder, err := NewBuilder(options, opts, logger)
 	if err != nil {
 		return nil, err
 	}

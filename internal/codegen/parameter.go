@@ -21,6 +21,10 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 	case view.KindParam:
 		builder.WriteString("?")
 	default:
+		if p.Schema.Cardinality == view.Many {
+			builder.WriteString("[]")
+		}
+		builder.WriteString("*")
 		builder.WriteString(p.Schema.DataType)
 	}
 	builder.WriteString(">(")
@@ -33,6 +37,7 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 		builder.WriteString(" /*\n")
 		SQL := strings.TrimSpace(p.SQL)
 		p.addedValidationModifierIfNeeded(&builder, SQL)
+		builder.WriteString(SQL)
 		builder.WriteString("\n*/\n")
 	}
 	builder.WriteByte(')')
@@ -98,5 +103,4 @@ func (p *Parameter) addedValidationModifierIfNeeded(builder *strings.Builder, SQ
 			builder.WriteString("? ")
 		}
 	}
-	builder.WriteString(SQL)
 }
