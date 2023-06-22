@@ -6,15 +6,16 @@ import (
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/internal/plugin"
+	"github.com/viant/datly/utils/formatter"
+	"github.com/viant/toolbox/format"
 	"strings"
 )
 
 func (s *Service) Generate(ctx context.Context, gen *options.Gen, template *codegen.Template) error {
 	if err := s.ensureDest(ctx, gen.Dest); err != nil {
-		return nil
+		return err
 	}
 	//TODO adjust if handler option is used
-
 	if err := s.generateDSQL(ctx, gen.DSQLLocation(), template); err != nil {
 		return err
 	}
@@ -37,7 +38,17 @@ func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.G
 	if err != nil {
 		return err
 	}
-	return s.fs.Upload(ctx, gen.EntityLocation(), file.DefaultFileOsMode, strings.NewReader(code))
+	entityName := ensureGoFileCaseFormat(template)
+
+	return s.fs.Upload(ctx, gen.EntityLocation(entityName), file.DefaultFileOsMode, strings.NewReader(code))
+}
+
+func ensureGoFileCaseFormat(template *codegen.Template) string {
+	entityName := template.Spec.Type.Name
+	if columnCase, err := format.NewCase(formatter.DetectCase(entityName)); err == nil {
+		entityName = columnCase.Format(entityName, format.CaseLowerUnderscore)
+	}
+	return entityName
 }
 
 func (s *Service) generateState(ctx context.Context, pkg string, gen *options.Gen, template *codegen.Template) error {

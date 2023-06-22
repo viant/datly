@@ -147,7 +147,7 @@ func (i *Info) detectCustomTypes(ctx context.Context, URL string) error {
 		}
 		if len(pkgs[0].Imports) > 0 {
 			if _, ok := pkgs[0].Imports[typesCorePkg]; ok {
-				i.CustomTypesPackages = append(i.CustomTypesPackages, pkgs[0])
+				i.CustomTypesPackages.Append(pkgs[0])
 			}
 		}
 		return true, nil

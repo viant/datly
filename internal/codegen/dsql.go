@@ -11,7 +11,7 @@ import (
 var dsqlTemplate string
 
 func (t *Template) GenerateDSQL() (string, error) {
-	return t.generateContent(ast.Options{Lang: ast.LangDSQL})
+	return t.generateContent(ast.Options{Lang: ast.LangVelty})
 }
 
 func (t *Template) GenerateGo() (string, error) {

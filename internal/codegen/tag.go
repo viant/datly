@@ -18,6 +18,9 @@ type (
 
 //Append appends tag value element
 func (e *TagValue) Append(element string) {
+	if element == "" {
+		return
+	}
 	*e = append(*e, element)
 }
 
@@ -69,7 +72,7 @@ func (t *Tags) buildValidateTag(field *Field) {
 
 	if field.Column.IsNullable() {
 		tagValue.Append("omitempty")
-	} else {
+	} else if !field.Column.Autoincrement() {
 		tagValue.Append("required")
 	}
 
@@ -81,7 +84,7 @@ func (t *Tags) buildValidateTag(field *Field) {
 	}
 	column := field.Column
 	if column.Length != nil && *column.Length > 0 {
-		tagValue.Append(fmt.Sprintf(",le(%d)", *column.Length))
+		tagValue.Append(fmt.Sprintf("le(%d)", *column.Length))
 	}
 	t.Set("validate", tagValue)
 }

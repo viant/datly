@@ -18,6 +18,7 @@ import (
 type Field struct {
 	view.Field
 	Column     *sink.Column
+	Pk         *sink.Key
 	Tags       Tags
 	Ptr        bool
 	ColumnCase format.Case

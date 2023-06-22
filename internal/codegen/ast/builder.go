@@ -2,8 +2,10 @@ package ast
 
 import "strings"
 
-const LangDSQL = "dsql"
-const LangGO = "go"
+const (
+	LangVelty = "velty"
+	LangGO    = "go"
+)
 
 type (
 	Builder struct {

@@ -49,11 +49,11 @@ func (i *Imports) TypeImports() string {
 	builder := strings.Builder{}
 	builder.WriteString("\nimport (")
 	for _, item := range i.Types {
-		builder.WriteString("\t\"")
+		builder.WriteString("\n\t\"")
 		builder.WriteString(item)
-		builder.WriteString("\"\n")
+		builder.WriteString("\"")
 	}
-	builder.WriteByte(')')
+	builder.WriteString("\n\t)\n")
 	return builder.String()
 }
 

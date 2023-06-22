@@ -16,7 +16,7 @@ func TestBlock_Stringify(t *testing.T) {
 	}{
 		{
 			description: "assign",
-			options:     Options{Lang: LangDSQL},
+			options:     Options{Lang: LangVelty},
 			block: Block{
 				&Assign{Holder: &Ident{Name: "inited"}, Expression: &CallExpr{Receiver: Ident{Name: "Campaign"}, Name: "Init", Args: []Expression{
 					Ident{Name: "CurCampaign"},
@@ -26,7 +26,7 @@ func TestBlock_Stringify(t *testing.T) {
 		},
 		{
 			description: "for each ",
-			options:     Options{Lang: LangDSQL},
+			options:     Options{Lang: LangVelty},
 			block: Block{
 				&Foreach{Set: &Ident{Name: "Sets"},
 					Value: &Ident{Name: "Item"},
@@ -40,7 +40,7 @@ func TestBlock_Stringify(t *testing.T) {
 		},
 		{
 			description: "if condition",
-			options:     Options{Lang: LangDSQL},
+			options:     Options{Lang: LangVelty},
 			block: Block{
 				&Condition{
 					If: &BinaryExpr{X: &Ident{Name: "Campaign.Id"}, Op: ">", Y: &LiteralExpr{Literal: "1"}},

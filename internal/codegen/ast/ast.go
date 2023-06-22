@@ -30,9 +30,10 @@ type (
 	}
 
 	CallExpr struct {
-		Receiver Expression
-		Name     string
-		Args     []Expression
+		Terminator bool
+		Receiver   Expression
+		Name       string
+		Args       []Expression
 	}
 
 	MapExpr struct {
@@ -42,6 +43,10 @@ type (
 
 	StatementExpression struct {
 		Expression
+	}
+
+	TerminatorExpression struct {
+		X Expression
 	}
 
 	SelectorExpr struct {
@@ -105,8 +110,22 @@ func (e Ident) Generate(builder *Builder) (err error) {
 
 	builder.State.DeclareVariable(identName)
 
-	if builder.Lang == LangDSQL {
+	if builder.Lang == LangVelty {
 		return builder.WriteString("$" + identName)
 	}
 	return builder.WriteString(identName)
+}
+
+func (b TerminatorExpression) Generate(builder *Builder) error {
+	if err := b.X.Generate(builder); err != nil {
+		return err
+	}
+	if builder.Lang == LangVelty {
+		return builder.WriteByte(';')
+	}
+	return nil
+}
+
+func NewTerminatorExpression(x Expression) *TerminatorExpression {
+	return &TerminatorExpression{X: x}
 }

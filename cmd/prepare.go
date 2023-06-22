@@ -306,10 +306,11 @@ func (s *Builder) buildCodeTemplate(ctx context.Context, builder *routeBuilder, 
 	if err = aConfig.buildSpec(ctx, db, s.options.GoModulePkg); err != nil {
 		return nil, err
 	}
-	template := codegen.NewTemplate(routeConfig)
+	template := codegen.NewTemplate(routeConfig, aConfig.Spec)
 	template.BuildTypeDef(aConfig.Spec, aConfig.outputConfig.GetField())
-	template.BuildState(aConfig.Spec, aConfig.outputConfig.GetField())
-	template.BuildLogic(aConfig.Spec, codegen.WithHTTPMethod(httpMethod))
+	var opts = []codegen.Option{codegen.WithHTTPMethod(httpMethod)}
+	template.BuildState(aConfig.Spec, aConfig.outputConfig.GetField(), opts...)
+	template.BuildLogic(aConfig.Spec, opts...)
 	return template, nil
 }
 
@@ -1136,7 +1137,7 @@ func (s *Builder) prepareStringBuilder(routeBuilder *routeBuilder, typeDef *inpu
 		return nil, err
 	}
 
-	tmpl := codegen.NewTemplate(routeOption)
+	tmpl := codegen.NewTemplate(routeOption, nil)
 	tmpl.State.Append(typeDef.AsParam())
 	if err = typeDef.IterateOverHints(func(metadata *inputMetadata, i2 []*inputMetadata) error {
 		tmpl.State.Append(metadata.asParams()...)

@@ -5,6 +5,7 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"path"
+	"strings"
 )
 
 type Gen struct {
@@ -32,9 +33,11 @@ func (g *Gen) GoCodeLocation() string {
 	return url.Join(module, g.Package)
 }
 
-func (g *Gen) EntityLocation() string {
+func (g *Gen) EntityLocation(entityName string) string {
 	codeLocation := g.GoCodeLocation()
-	return url.Join(codeLocation, "entity.go")
+
+	entityName = strings.ToLower(entityName)
+	return url.Join(codeLocation, entityName+".go")
 }
 
 func (g *Gen) StateLocation() string {

@@ -13,7 +13,7 @@ type OutputConfig struct {
 }
 
 func (o *OutputConfig) IsMany() bool {
-	return o.Cardinality == view.Many
+	return o.Cardinality == "" || o.Cardinality == view.Many
 }
 
 func (o *OutputConfig) IsBasic() bool {

@@ -53,7 +53,8 @@ func (s *Spec) BuildType(pkg, name string, cardinality view.Cardinality, whiteli
 		field.Tags.buildValidateTag(field)
 		field.Tag = field.Tags.Stringify()
 		key := strings.ToLower(field.Column.Name)
-		if _, ok := s.pk[key]; ok {
+		if pk, ok := s.pk[key]; ok {
+			field.Pk = &pk
 			aType.pkFields = append(aType.pkFields, field)
 		}
 

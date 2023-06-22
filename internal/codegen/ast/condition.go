@@ -18,7 +18,7 @@ type (
 
 func (s *Condition) Generate(builder *Builder) (err error) {
 	switch builder.Lang {
-	case LangDSQL:
+	case LangVelty:
 		if err = builder.WriteIndentedString("\n#if("); err != nil {
 			return err
 		}

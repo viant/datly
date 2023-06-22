@@ -12,6 +12,10 @@ type (
 	Option func(o *Options)
 )
 
+func (o *Options) isInsertOnly() bool {
+	return o.withInsert && !o.withUpdate
+}
+
 func (o *Options) apply(opts []Option) {
 	if len(opts) == 0 {
 		return

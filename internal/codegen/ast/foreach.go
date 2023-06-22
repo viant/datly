@@ -4,7 +4,7 @@ import "fmt"
 
 func (s *Foreach) Generate(builder *Builder) (err error) {
 	switch builder.Lang {
-	case LangDSQL:
+	case LangVelty:
 		if err = builder.WriteIndentedString("\n#foreach("); err != nil {
 			return err
 		}
