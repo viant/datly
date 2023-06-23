@@ -2,10 +2,13 @@ package codegen
 
 import (
 	_ "embed"
+	"fmt"
 	"github.com/viant/datly/cmd/option"
 	ast "github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlparser"
+	"github.com/viant/xreflect"
+	"reflect"
 	"strings"
 )
 
@@ -19,6 +22,7 @@ type (
 		BusinessLogic *ast.Block
 		paramPrefix   string
 		recordPrefix  string
+		StateType     reflect.Type
 	}
 
 	ColumnParameterNamer func(column *sqlparser.Column) string
@@ -60,11 +64,23 @@ func (t *Template) BuildState(spec *Spec, bodyHolder string, opts ...Option) {
 	t.State = State{}
 	options := &Options{}
 	options.apply(opts)
-	t.State.Append(t.buildBodyParameter(spec, bodyHolder))
+	bodyParam := t.buildBodyParameter(spec, bodyHolder)
+	t.State.Append(bodyParam)
 	if options.isInsertOnly() {
 		return
 	}
-	t.buildState(spec, &t.State, spec.Type.Cardinality)
+
+	bodyParam.Schema.SetType(t.buildState(spec, &t.State, spec.Type.Cardinality))
+	var structFields []reflect.StructField
+	for _, parameter := range t.State {
+		structFields = append(structFields, reflect.StructField{
+			Name: parameter.Name,
+			Type: parameter.Schema.Type(),
+			Tag:  reflect.StructTag(fmt.Sprintf(`%v:"%v"`, xreflect.TagTypeName, parameter.Schema.DataType)),
+		})
+	}
+
+	t.StateType = reflect.StructOf(structFields)
 }
 
 func (t *Template) buildBodyParameter(spec *Spec, bodyHolder string) *Parameter {

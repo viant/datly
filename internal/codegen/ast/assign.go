@@ -24,11 +24,10 @@ func (s *Assign) Generate(builder *Builder) (err error) {
 
 	case LangGO:
 		asIdent, ok := s.Holder.(*Ident)
-		if !ok {
-			return fmt.Errorf("can't assign to Holder %T", s.Holder)
+		wasDeclared := true
+		if ok {
+			wasDeclared = builder.State.IsDeclared(asIdent.Name)
 		}
-
-		wasDeclared := builder.State.IsDeclared(asIdent.Name)
 
 		if err = s.Holder.Generate(builder); err != nil {
 			return err
@@ -42,7 +41,9 @@ func (s *Assign) Generate(builder *Builder) (err error) {
 			return err
 		}
 
-		builder.State.DeclareVariable(asIdent.Name)
+		if !wasDeclared {
+			builder.State.DeclareVariable(asIdent.Name)
+		}
 
 		return nil
 	}

@@ -13,16 +13,15 @@ var dsqlTemplate string
 func (t *Template) GenerateDSQL(opts ...Option) (string, error) {
 	options := Options{}
 	options.apply(opts)
-	return t.generateContent(options.astOption())
+
+	return t.generateContent(ast.Options{Lang: ast.LangVelty})
 }
 
 func (t *Template) GenerateGo() (string, error) {
-	stateName := t.TypeDef.Name
-	notifier := NewMethodNotifier(stateName, t.TypeDef.Type())
+	notifier := NewMethodNotifier(t.StateType)
 
 	return t.generateContent(ast.Options{
 		Lang:         ast.LangGO,
-		StateName:    stateName,
 		CallNotifier: notifier.OnCallExpr,
 	})
 }

@@ -190,18 +190,36 @@ func (t *Template) getPakcage(pkg string) string {
 	return pkg
 }
 
-func (t *Template) buildState(spec *Spec, state *State, card view.Cardinality) {
+func (t *Template) buildState(spec *Spec, state *State, card view.Cardinality) reflect.Type {
 	t.Imports.AddType(spec.Type.TypeName())
+
 	if param := t.buildPathParameterIfNeeded(spec); param != nil {
 		state.Append(param)
 	}
+
 	if spec.Type.Cardinality == view.Many {
 		card = view.Many
 	}
-	state.Append(t.buildDataViewParameter(spec, card))
+
+	var relationFields []reflect.StructField
 	for _, rel := range spec.Relations {
-		t.buildState(rel.Spec, state, rel.Cardinality)
+		var tag string
+		for _, field := range spec.Type.relationFields {
+			if field.Name == rel.Name {
+				tag = field.Tag
+			}
+		}
+
+		relationFields = append(relationFields, reflect.StructField{
+			Name: rel.Name,
+			Type: t.buildState(rel.Spec, state, rel.Cardinality),
+			Tag:  reflect.StructTag(tag),
+		})
 	}
+
+	parameter := t.buildDataViewParameter(spec, card, relationFields)
+	state.Append(parameter)
+	return parameter.Schema.Type()
 }
 
 func (t *Template) buildPathParameterIfNeeded(spec *Spec) *Parameter {
@@ -220,11 +238,16 @@ func (t *Template) buildPathParameterIfNeeded(spec *Spec) *Parameter {
 	return param
 }
 
-func (t *Template) buildDataViewParameter(spec *Spec, cardinality view.Cardinality) *Parameter {
+func (t *Template) buildDataViewParameter(spec *Spec, cardinality view.Cardinality, fields []reflect.StructField) *Parameter {
 	param := &Parameter{}
 	param.Name = t.ParamName(spec.Type.Name)
 	param.Schema = &view.Schema{DataType: spec.Type.Name, Cardinality: cardinality}
 	param.In = &view.Location{Kind: view.KindDataView, Name: param.Name}
 	param.SQL = spec.viewSQL(t.ColumnParameterNamer(spec.Selector()))
+
+	columnFields := spec.Type.Fields()
+	columnFields = append(columnFields, fields...)
+
+	param.Schema.SetType(reflect.StructOf(columnFields))
 	return param
 }
