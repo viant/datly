@@ -12,6 +12,7 @@ import (
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/toolbox/format"
+	"reflect"
 	"strings"
 )
 
@@ -22,6 +23,14 @@ type Field struct {
 	Tags       Tags
 	Ptr        bool
 	ColumnCase format.Case
+}
+
+func (f *Field) StructField() reflect.StructField {
+	return reflect.StructField{
+		Name: f.Name,
+		Tag:  reflect.StructTag(f.Tag),
+		Type: f.Field.Schema.Type(),
+	}
 }
 
 type Type struct {
@@ -117,6 +126,15 @@ func (t *Type) AddRelation(name string, spec *Spec, relation *Relation) *Field {
 	field.Tag = field.Tags.Stringify()
 	t.relationField = append(t.relationField, field)
 	return field
+}
+
+func (t *Type) Fields() []reflect.StructField {
+	var fields []reflect.StructField
+	for _, field := range t.pkFields {
+		fields = append(fields, field.StructField())
+	}
+
+	return fields
 }
 
 func cardinality(join *query.Join) view.Cardinality {

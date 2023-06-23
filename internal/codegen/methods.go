@@ -14,21 +14,19 @@ var functionSchema string
 
 type (
 	MethodNotifier struct {
-		state     reflect.Type
-		stateName string
-		builder   *strings.Builder
-		index     receiverIndex
+		state   reflect.Type
+		builder *strings.Builder
+		index   receiverIndex
 	}
 
 	receiverIndex map[string]*ast.CallExpr
 )
 
-func NewMethodNotifier(stateName string, stateType reflect.Type) *MethodNotifier {
+func NewMethodNotifier(stateType reflect.Type) *MethodNotifier {
 	return &MethodNotifier{
-		state:     stateType,
-		stateName: stateName,
-		builder:   &strings.Builder{},
-		index:     receiverIndex{},
+		state:   stateType,
+		builder: &strings.Builder{},
+		index:   receiverIndex{},
 	}
 }
 func (n *MethodNotifier) OnCallExpr(expr *ast.CallExpr) (*ast.CallExpr, error) {
@@ -51,13 +49,10 @@ func (n *MethodNotifier) OnCallExpr(expr *ast.CallExpr) (*ast.CallExpr, error) {
 	}
 
 	segments := strings.Split(ident.Name, ".")
-	if n.stateName != segments[0] {
-		return expr, nil
-	}
 
 	receiverType := n.state
 	var structField reflect.StructField
-	for i := 1; i < len(segments); i++ {
+	for i := 0; i < len(segments); i++ {
 		elem := n.deref(receiverType)
 		if elem.Kind() != reflect.Struct {
 			return nil, fmt.Errorf("unsupported receiver type %v", receiverType.String())
@@ -65,10 +60,15 @@ func (n *MethodNotifier) OnCallExpr(expr *ast.CallExpr) (*ast.CallExpr, error) {
 
 		field, ok := elem.FieldByName(segments[i])
 		if !ok {
+			if i == 0 {
+				return nil, nil
+			}
+
 			return nil, n.fieldNotFoundError(segments[i], receiverType)
 		}
 
 		receiverType = field.Type
+		structField = field
 	}
 
 	receiverElem := n.deref(receiverType)
@@ -77,24 +77,30 @@ func (n *MethodNotifier) OnCallExpr(expr *ast.CallExpr) (*ast.CallExpr, error) {
 	}
 
 	receiverElem = n.deref(receiverElem.Elem())
-	if receiverType.Kind() != reflect.Struct {
+	if receiverElem.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("can't IndexBy slice of non structs %v", receiverType.String())
 	}
 
-	indexByField, ok := receiverElem.FieldByName(literalExpr.Literal)
+	fieldName := strings.Trim(literalExpr.Literal, `"`)
+	indexByField, ok := receiverElem.FieldByName(fieldName)
 	if !ok {
 		return nil, n.fieldNotFoundError(literalExpr.Literal, receiverType)
 	}
 
 	receiverName := string(ident.Name[0])
-	typeName := structField.Tag.Get(xreflect.TagTypeName)
+	if structField.Type.Kind() == reflect.Ptr {
+		receiverName = "*" + receiverName
+	}
+
+	rawTypeName := structField.Tag.Get(xreflect.TagTypeName)
+	typeName := rawTypeName
 	if typeName == "" {
 		typeName = segments[len(segments)-1]
 	}
 
 	newTypeName := typeName + "Slice"
 	fnName := expr.Name + literalExpr.Literal
-	resultType := fmt.Sprintf("map[%v]%v{}", indexByField.Type.String(), n.itemType(receiverType))
+	resultType := fmt.Sprintf("map[%v]%v{}", indexByField.Type.String(), structField.Tag.Get(xreflect.TagTypeName))
 	fnContent := ast.Block{
 		&ast.Assign{
 			Holder:     &ast.Ident{Name: "index"},
@@ -107,7 +113,7 @@ func (n *MethodNotifier) OnCallExpr(expr *ast.CallExpr) (*ast.CallExpr, error) {
 				&ast.Assign{
 					Holder: &ast.MapExpr{
 						Map: &ast.Ident{Name: "index"},
-						Key: &ast.Ident{Name: "item." + literalExpr.Literal},
+						Key: &ast.Ident{Name: "item." + fieldName},
 					},
 					Expression: &ast.Ident{Name: "item"},
 				},

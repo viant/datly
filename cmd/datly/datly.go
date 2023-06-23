@@ -48,9 +48,9 @@ func main() {
 		"gen",
 		"-o=patch",
 		"-g=campaign",
-		"-p=/Users/awitas/go/src/github.com/viant/datly/poc",
-		"-s=/Users/awitas/go/src/github.com/viant/datly/poc/dsql/campaign/init/campaign_patch.sql",
-		"-c=ci_ads|mysql|root:dev@tcp(127.0.0.1:3306)/ci_ads?parseTime=true",
+		"-p=/Users/klarysz/Documents/github_viant/datly/e2e/local/regression/cases/033_generate_patch_many_many/dsql",
+		"-s=/Users/klarysz/Documents/github_viant/datly/e2e/local/regression/cases/033_generate_patch_many_many/patch_basic_many_many.sql",
+		"-c=dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
 
 		/*
 			"",

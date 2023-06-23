@@ -3,6 +3,7 @@ package codegen
 import (
 	_ "embed"
 	"encoding/json"
+	"fmt"
 	ast "github.com/viant/datly/internal/codegen/ast"
 	"strings"
 )
@@ -11,16 +12,19 @@ import (
 var dsqlTemplate string
 
 func (t *Template) GenerateDSQL() (string, error) {
-	return t.generateContent(ast.Options{Lang: ast.LangVelty})
+	generateContent, err2 := t.GenerateGo()
+	fmt.Println(generateContent, err2)
+
+	content, err := t.generateContent(ast.Options{Lang: ast.LangVelty})
+	return content, err
 }
 
 func (t *Template) GenerateGo() (string, error) {
-	stateName := t.TypeDef.Name
-	notifier := NewMethodNotifier(stateName, t.TypeDef.Type())
+	fmt.Println(t.StateType.String())
+	notifier := NewMethodNotifier(t.StateType)
 
 	return t.generateContent(ast.Options{
 		Lang:         ast.LangGO,
-		StateName:    stateName,
 		CallNotifier: notifier.OnCallExpr,
 	})
 }
