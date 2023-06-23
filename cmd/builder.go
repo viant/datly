@@ -410,7 +410,7 @@ func (c *ViewConfig) SQL() string {
 	SQL := ""
 	if join := c.queryJoin; join != nil {
 		SQL = sqlparser.Stringify(c.queryJoin.With)
-		SQL = strings.Trim(strings.TrimSpace(SQL), "()")
+		SQL = trimParenthasis(SQL)
 	}
 
 	return SQL
@@ -497,22 +497,22 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 	if err := s.loadSQL(ctx, builder, builder.session.sourceURL); err != nil {
 		return err
 	}
-	statePath := s.options.RelativePath
-	if statePath != "" {
-		statePath = path.Join(statePath, s.options.GoModulePkg)
-	} else {
-		statePath = s.options.DSQLOutput
-	}
 
-	state, err := codegen.NewState(statePath, builder.option.StateType, config.Config.LookupType)
-	fmt.Printf("%v %v\n", state, err)
-
-	if strings.TrimSpace(builder.sqlStmt) == "" {
-		return nil
+	if dSQL, err := s.convertHandlerIfNeeded(builder); dSQL != "" {
+		if err != nil {
+			return err
+		}
+		if err = s.parseDSQL(ctx, builder, []byte(dSQL)); err != nil {
+			return err
+		}
 	}
 
 	if err := s.readRouteSettings(builder); err != nil {
 		return err
+	}
+
+	if strings.TrimSpace(builder.sqlStmt) == "" {
+		return nil
 	}
 
 	if consts.URL == "" {
@@ -547,6 +547,41 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 	}
 
 	return nil
+}
+
+func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) {
+	if builder.option.StateType == "" || builder.option.HandlerType == "" {
+		return "", nil
+	}
+	statePath := s.options.RelativePath
+	if statePath != "" {
+		statePath = path.Join(statePath, s.options.GoModulePkg)
+	} else {
+		statePath = s.options.DSQLOutput
+	}
+
+	statePackage := builder.option.StatePackage()
+	state, err := codegen.NewState(statePath, builder.option.StateType, config.Config.LookupType)
+	if err != nil {
+		return "", err
+	}
+	entityParam := state[0]
+	entityType := entityParam.Schema.Type()
+	if entityType == nil {
+		return "", fmt.Errorf("entity type was empty")
+	}
+	aType, err := codegen.NewType(statePackage, "Entity", entityType)
+	if err != nil {
+		return "", err
+	}
+	tmpl := codegen.NewTemplate(builder.option, &codegen.Spec{Type: aType})
+	tmpl.EnsureImports(aType)
+	tmpl.State = state
+
+	dSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
+	fmt.Printf("%v %v\n", dSQL, err)
+
+	return dSQL, err
 }
 
 func (s *Builder) buildViews(ctx context.Context, builder *routeBuilder) error {
@@ -843,7 +878,10 @@ func (s *Builder) loadSQL(ctx context.Context, builder *routeBuilder, location s
 	if err != nil {
 		return err
 	}
+	return s.parseDSQL(ctx, builder, SQLbytes)
+}
 
+func (s *Builder) parseDSQL(ctx context.Context, builder *routeBuilder, SQLbytes []byte) (err error) {
 	if envURL := s.options.EnvURL; envURL != "" {
 		envContent, err := s.fs.DownloadWithURL(ctx, envURL)
 		if err != nil {
@@ -862,7 +900,7 @@ func (s *Builder) loadSQL(ctx context.Context, builder *routeBuilder, location s
 		SQLbytes = []byte(templateContent)
 	}
 
-	SQL, err := s.prepareRuleIfNeeded(ctx, SQLbytes)
+	SQL, err := s.generateRuleIfNeeded(ctx, SQLbytes)
 	if err != nil {
 		return err
 	}
@@ -1442,7 +1480,7 @@ func (s *Builder) inheritRouteServiceType(builder *routeBuilder, aView *view.Vie
 	}
 }
 
-func (s *Builder) prepareRuleIfNeeded(ctx context.Context, SQL []byte) (string, error) {
+func (s *Builder) generateRuleIfNeeded(ctx context.Context, SQL []byte) (string, error) {
 	if s.options.PrepareRule == "" {
 		return string(SQL), nil
 	}
@@ -2092,7 +2130,8 @@ func (s *Builder) ensureChecksum(bundle *bundleMetadata) error {
 }
 
 func (s *Builder) detectSinkColumn(ctx context.Context, db *sql.DB, SQL string) ([]sink.Column, error) {
-	SQL = strings.Trim(strings.TrimSpace(SQL), "()")
+	SQL = trimParenthasis(SQL)
+
 	query, err := sqlparser.ParseQuery(SQL)
 	if query != nil {
 		from := sqlparser.Stringify(query.From.X)
@@ -2132,12 +2171,18 @@ func (s *Builder) detectSinkColumn(ctx context.Context, db *sql.DB, SQL string) 
 	return result, nil
 }
 
-func (s *Builder) uploadGoState(tmpl *codegen.Template, builder *routeBuilder, packageNBame string) error {
-	goURL := builder.session.GoFileURL("state") + ".go"
-	if _, err := s.upload(builder, goURL, tmpl.GenerateState(packageNBame)); err != nil {
-		return err
+func trimParenthasis(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return text
 	}
-	return nil
+	if text[0] == '(' {
+		text = text[1:]
+	}
+	if text[len(text)-1] == ')' {
+		text = text[:len(text)-2]
+	}
+	return text
 }
 
 func combineURLs(basePath string, segments ...string) string {

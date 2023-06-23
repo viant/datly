@@ -3,6 +3,7 @@ package option
 import (
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/view"
+	"strings"
 )
 
 type (
@@ -45,3 +46,14 @@ type (
 		From string
 	}
 )
+
+func (r *RouteConfig) StatePackage() string {
+	if r.StateType == "" {
+		return ""
+	}
+	index := strings.LastIndex(r.StateType, ".")
+	if index == -1 {
+		return ""
+	}
+	return r.StateType[:index]
+}

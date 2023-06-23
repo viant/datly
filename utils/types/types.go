@@ -37,3 +37,15 @@ func Elem(rType reflect.Type) reflect.Type {
 
 	return rType
 }
+
+func EnsureStruct(fType reflect.Type) reflect.Type {
+	switch fType.Kind() {
+	case reflect.Ptr:
+		return EnsureStruct(fType.Elem())
+	case reflect.Slice:
+		return EnsureStruct(fType.Elem())
+	case reflect.Struct:
+		return fType
+	}
+	return nil
+}

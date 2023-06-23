@@ -1,16 +1,30 @@
 package codegen
 
-import "strings"
+import (
+	"github.com/viant/datly/internal/codegen/ast"
+	"strings"
+)
 
 type (
 	Options struct {
-		withInsert bool
-		withUpdate bool
-		withDML    bool //TODO implement DML
+		withInsert           bool
+		withUpdate           bool
+		withDML              bool //TODO implement DML
+		withoutBusinessLogic bool
+		lang                 string
 	}
 
 	Option func(o *Options)
 )
+
+func (o *Options) astOption() ast.Options {
+	astOptions := ast.Options{Lang: ast.LangVelty}
+	astOptions.WithoutBusinessLogic = o.withoutBusinessLogic
+	if o.lang != "" {
+		astOptions.Lang = o.lang
+	}
+	return astOptions
+}
 
 func (o *Options) isInsertOnly() bool {
 	return o.withInsert && !o.withUpdate
@@ -57,9 +71,21 @@ func WithHTTPMethod(method string) Option {
 	}
 }
 
+func WithoutBusinessLogic() Option {
+	return func(o *Options) {
+		o.withoutBusinessLogic = true
+	}
+}
+
 func WithPatch() Option {
 	return func(o *Options) {
 		o.withInsert = true
 		o.withUpdate = true
+	}
+}
+
+func WithLang(lang string) Option {
+	return func(o *Options) {
+		o.lang = lang
 	}
 }

@@ -46,12 +46,12 @@ func isSlice(fType reflect.Type) bool {
 	return fType.Kind() == reflect.Slice
 }
 
-func getStruct(fType reflect.Type) reflect.Type {
+func ensureStruct(fType reflect.Type) reflect.Type {
 	switch fType.Kind() {
 	case reflect.Ptr:
-		return getStruct(fType.Elem())
+		return ensureStruct(fType.Elem())
 	case reflect.Slice:
-		return getStruct(fType.Elem())
+		return ensureStruct(fType.Elem())
 	case reflect.Struct:
 		return fType
 	}

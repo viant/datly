@@ -10,6 +10,7 @@ import (
 	"go/parser"
 	"path"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -17,6 +18,15 @@ type State []*Parameter
 
 func (s *State) Append(param ...*Parameter) {
 	*s = append(*s, param...)
+}
+
+func (s State) BodyParameter() *Parameter {
+	for _, param := range s {
+		if param.In.Kind == view.KindRequestBody {
+			return param
+		}
+	}
+	return nil
 }
 
 func (s State) dsqlParameterDeclaration() string {
@@ -57,7 +67,15 @@ func NewState(modulePath, dataType string, lookup xreflect.TypeLookupFn) (State,
 		xreflect.WithParserMode(parser.ParseComments),
 		xreflect.WithTypeLookupFn(lookup),
 		xreflect.WithOnField(func(typeName string, field *ast.Field) error {
-			if typeName != dataType {
+			if field.Tag == nil {
+				return nil
+			}
+			datlyTag, _ := reflect.StructTag(strings.Trim(field.Tag.Value, "`")).Lookup(view.DatlyTag)
+			if datlyTag == "" {
+				return nil
+			}
+			tag := view.ParseTag(datlyTag)
+			if tag.Kind == "" {
 				return nil
 			}
 			param, err := buildParameter(field, lookup)
@@ -71,10 +89,13 @@ func NewState(modulePath, dataType string, lookup xreflect.TypeLookupFn) (State,
 	if err != nil {
 		return nil, err
 	}
-	_, _ = dirTypes.Type(dataType)
+	if _, err = dirTypes.Type(dataType); err != nil {
+		return nil, err
+	}
 	if err = state.ensureSchema(dirTypes); err != nil {
 		return nil, err
 	}
+
 	return state, nil
 }
 
@@ -90,8 +111,13 @@ func buildParameter(field *ast.Field, lookup xreflect.TypeLookupFn) (*Parameter,
 	}
 	tag := view.ParseTag(datlyTag)
 	param := &Parameter{SQL: SQL}
+	//	updateSQLTag(field, SQL)
 	param.Name = field.Names[0].Name
 	param.In = &view.Location{Name: tag.In, Kind: view.Kind(tag.Kind)}
+	if ptr, ok := field.Type.(*ast.StarExpr); ok {
+		field.Type = ptr.X
+	}
+
 	fieldTypeName, err := xreflect.Node{Node: field.Type}.Stringify()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create param: %v due to %w", param.Name, err)
@@ -105,7 +131,18 @@ func buildParameter(field *ast.Field, lookup xreflect.TypeLookupFn) (*Parameter,
 	} else {
 		param.Schema = &view.Schema{DataType: fieldTypeName}
 	}
+
 	return param, nil
+}
+
+func updateSQLTag(field *ast.Field, SQL string) {
+	if SQL == "" {
+		return
+	}
+
+	SQL = strings.ReplaceAll(SQL, "\n", "   ")
+	field.Tag.Value = "`" + strings.Trim(field.Tag.Value, "`") + fmt.Sprintf(` sql:%v`, strconv.Quote(SQL)) + "`"
+
 }
 
 func extractSQL(field *ast.Field) string {

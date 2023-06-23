@@ -14,12 +14,6 @@ type (
 		Indent string
 		State  *Scope
 	}
-
-	Options struct {
-		Lang         string
-		StateName    string
-		CallNotifier func(callExpr *CallExpr) (*CallExpr, error)
-	}
 )
 
 func (b *Builder) WriteIndentedString(s string) error {

@@ -252,6 +252,17 @@ func (t *Template) ensureTypeImport(simpleTypeName string) {
 	t.Imports.AddType(typeName)
 }
 
+func (t *Template) EnsureImports(aType *Type) {
+	t.Imports.AddType(aType.TypeName())
+	if len(aType.relationFields) == 0 {
+		return
+	}
+
+	for _, field := range aType.relationFields {
+		t.Imports.AddType(aType.expandType(field.Schema.DataType))
+	}
+}
+
 func (t *Template) ensurePackageImports(defaultPkg string, fields []*view.Field) {
 	for _, field := range fields {
 		if len(field.Fields) > 0 {

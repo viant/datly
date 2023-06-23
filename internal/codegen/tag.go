@@ -2,7 +2,10 @@ package codegen
 
 import (
 	"fmt"
+	"github.com/viant/datly/view"
 	"github.com/viant/sqlparser"
+	"github.com/viant/sqlx/io"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -130,4 +133,20 @@ func (t *Tags) Stringify() string {
 	}
 	//builder.WriteByte('`')
 	return builder.String()
+}
+
+func DatlyTag(tag reflect.StructTag) *view.Tag {
+	datlyTagString, _ := tag.Lookup("datly")
+	if datlyTagString == "" {
+		return nil
+	}
+	return view.ParseTag(datlyTagString)
+}
+
+func SqlxTag(tag reflect.StructTag) *io.Tag {
+	datlyTagString, _ := tag.Lookup("sqlx")
+	if datlyTagString == "" {
+		return nil
+	}
+	return io.ParseTag(datlyTagString)
 }

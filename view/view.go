@@ -256,7 +256,7 @@ func (v *View) inheritRelationsFromTag(schema *Schema, resource *Resource) error
 			return nil
 		}
 	}
-	recType := getStruct(sType)
+	recType := ensureStruct(sType)
 	if recType == nil {
 		return nil
 	}

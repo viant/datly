@@ -125,7 +125,7 @@ func readSinkColumns(ctx context.Context, db *sql.DB, table string) ([]sink.Colu
 }
 
 func detectSinkColumn(ctx context.Context, db *sql.DB, SQL string) ([]sink.Column, error) {
-	SQL = strings.Trim(strings.TrimSpace(SQL), "()")
+	SQL = trimParenthesis(SQL)
 	query, err := sqlparser.ParseQuery(SQL)
 	var table string
 	if query != nil {
@@ -228,7 +228,7 @@ func NewSpec(ctx context.Context, db *sql.DB, table, SQL string) (*Spec, error) 
 	var result = &Spec{Table: table, SQL: SQL, isAuxiliary: isAuxiliary(SQL)}
 	var columns []sink.Column
 	var err error
-	table = strings.Trim(strings.TrimSpace(table), "()")
+	table = trimParenthesis(table)
 	SQL = strings.Replace(SQL, "("+table+")", table, 1)
 	if SQL != "" {
 		if columns, err = detectSinkColumn(ctx, db, SQL); err != nil {
@@ -257,22 +257,12 @@ func NewSpec(ctx context.Context, db *sql.DB, table, SQL string) (*Spec, error) 
 }
 
 func isAuxiliary(SQL string) bool {
-	SQL = strings.TrimSpace(SQL)
-
-	if SQL == "" {
-		return false
-	}
-	if SQL[0] == '(' {
-		SQL = SQL[1:]
-	}
-	if SQL[len(SQL)-1] == '(' {
-		SQL = SQL[:len(SQL)-2]
-	}
-	query, _ := sqlparser.ParseQuery(SQL)
-	if query == nil {
+	SQL = trimParenthesis(SQL)
+	aQuery, _ := sqlparser.ParseQuery(SQL)
+	if aQuery == nil {
 		return true
 	}
-	from := sqlparser.Stringify(query.From.X)
+	from := sqlparser.Stringify(aQuery.From.X)
 	return strings.Contains(from, "(")
 }
 

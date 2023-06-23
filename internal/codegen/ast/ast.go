@@ -94,6 +94,9 @@ func (b *Block) AppendEmptyLine() {
 }
 
 func (b Block) Generate(builder *Builder) error {
+	if builder.WithoutBusinessLogic {
+		return nil
+	}
 	for _, stmt := range b {
 		if err := stmt.Generate(builder); err != nil {
 			return err

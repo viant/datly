@@ -510,7 +510,6 @@ func (o *Options) MergeFromDSql(dsql *options.DSql) {
 		o.PartialConfigURL = dsql.ConfigURL
 		o.RouteURL = url.Join(dsql.Repo, "Datly/routes")
 	}
-	o.GoModulePkg = dsql.Module
 }
 
 func (o *Options) MergeFromInit(init *options.Init) {

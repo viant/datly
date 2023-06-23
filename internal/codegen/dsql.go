@@ -10,8 +10,10 @@ import (
 //go:embed tmpl/dsql.sqlx
 var dsqlTemplate string
 
-func (t *Template) GenerateDSQL() (string, error) {
-	return t.generateContent(ast.Options{Lang: ast.LangVelty})
+func (t *Template) GenerateDSQL(opts ...Option) (string, error) {
+	options := Options{}
+	options.apply(opts)
+	return t.generateContent(options.astOption())
 }
 
 func (t *Template) GenerateGo() (string, error) {
@@ -35,9 +37,11 @@ func (t *Template) generateContent(options ast.Options) (string, error) {
 	code = strings.Replace(code, "$Declaration", t.dsqlParameterDeclaration(), 1)
 
 	builder := ast.NewBuilder(options)
-	err = t.BusinessLogic.Generate(builder)
-	if err != nil {
-		return "", err
+	if t.BusinessLogic != nil {
+		err = t.BusinessLogic.Generate(builder)
+		if err != nil {
+			return "", err
+		}
 	}
 	code = strings.Replace(code, "$BusinessLogic", builder.String(), 1)
 	return code, nil

@@ -43,6 +43,15 @@ func main() {
 		}
 	}()
 
+	os.Args = []string{
+		"",
+		"dsql",
+		"-p=/Users/awitas/go/src/github.com/viant/datly/poc",
+		"-s=dsql/handler.sql",
+		"-c=ci_ads|mysql|root:dev@tcp(127.0.0.1:3306)/ci_ads?parseTime=true",
+		"-r=autogen",
+	}
+
 	server, err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {
 		log.Fatal(err)
