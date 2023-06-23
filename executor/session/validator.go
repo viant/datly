@@ -67,6 +67,7 @@ func (v *Validator) validateWithGoValidator(ctx context.Context, any interface{}
 	ret, err := goValidator.Validate(ctx, any, gOptions...)
 	if ret != nil && len(ret.Violations) > 0 {
 		validation.Violations = Violations(validation.Violations).MergeGoViolation(ret.Violations)
+		validation.Failed = true
 	}
 	return err
 }
@@ -84,6 +85,7 @@ func (v *Validator) validateWithSqlx(ctx context.Context, any interface{}, valid
 		ret, err := sqlxValidator.Validate(ctx, db, any, sqlxOptions...)
 		if ret != nil && len(ret.Violations) > 0 {
 			validation.Violations = Violations(validation.Violations).MergeSqlViolation(ret.Violations)
+			validation.Failed = true
 		}
 		return err
 	}
