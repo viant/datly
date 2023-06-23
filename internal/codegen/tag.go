@@ -93,6 +93,9 @@ func (t *Tags) buildRelation(info *Spec, relation *Relation) {
 	if join == nil {
 		return
 	}
+	if relation.KeyField == nil {
+		return
+	}
 	datlyTag := TagValue{}
 	datlyTag.Append(fmt.Sprintf("ralName=%s", join.Alias))
 	datlyTag.Append(fmt.Sprintf("relColumn=%s", relation.ParentField.Column.Name))
