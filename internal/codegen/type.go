@@ -35,10 +35,10 @@ func (t *Type) ByColumn(columnName string) *Field {
 }
 
 func (t *Type) TypeName() string {
-	return t.expandType(t.Name)
+	return t.ExpandType(t.Name)
 }
 
-func (t *Type) expandType(simpleName string) string {
+func (t *Type) ExpandType(simpleName string) string {
 	pkg := t.Package
 	if pkg == "" {
 		pkg = "autogen"

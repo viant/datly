@@ -17,7 +17,7 @@ type State struct {
 	/*
 	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Advertiser/` LIMIT 1
 	*/
-	AdvertiserId *struct{ Values []int } `datly:"kind=param,in=Advertiser"`
+	AdvertiserId *struct{ Values []int } `datly:"kind=param,in=Campaign"`
 
 	/*
 	    ? SELECT av.ID,
@@ -33,7 +33,7 @@ type State struct {
 	/*
 	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Flights/` LIMIT 1
 	*/
-	FlightsId *struct{ Values []int } `datly:"kind=param,in=Flights"`
+	FlightsId *struct{ Values []int } `datly:"kind=param,in=Campaign"`
 
 	/*
 	    ? SELECT * FROM CI_CAMPAIGN_FLIGHT
@@ -44,7 +44,7 @@ type State struct {
 	/*
 	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/CampaignCreative/` LIMIT 1
 	*/
-	CampaignCreativeId *struct{ Values []int } `datly:"kind=param,in=CampaignCreative"`
+	CampaignCreativeId *struct{ Values []int } `datly:"kind=param,in=Campaign"`
 
 	/*
 	    ? SELECT * FROM CI_CAMPAIGN_CREATIVE
@@ -55,7 +55,7 @@ type State struct {
 	/*
 	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Creative/` LIMIT 1
 	*/
-	CreativeId *struct{ Values []int } `datly:"kind=param,in=Creative"`
+	CreativeId *struct{ Values []int } `datly:"kind=param,in=Campaign"`
 
 	/*
 	    ? SELECT ID, ADVERTISER_ID, CAMPAIGN_ID FROM CI_CREATIVE
@@ -66,7 +66,7 @@ type State struct {
 	/*
 	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Audience/` LIMIT 1
 	*/
-	AudienceId *struct{ Values []int } `datly:"kind=param,in=Audience"`
+	AudienceId *struct{ Values []int } `datly:"kind=param,in=Campaign"`
 
 	/*
 	    ? SELECT au.ID, au.TARGET, au.EXCLUSION, ad.CAMPAIGN_ID  FROM CI_AUDIENCE au
@@ -78,7 +78,7 @@ type State struct {
 	/*
 	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/BidOverride/` LIMIT 1
 	*/
-	BidOverrideId *struct{ Values []int } `datly:"kind=param,in=BidOverride"`
+	BidOverrideId *struct{ Values []int } `datly:"kind=param,in=Campaign"`
 
 	/*
 	    ? SELECT * FROM CI_CAMPAIGN_BID_MULTIPLIER
@@ -89,7 +89,7 @@ type State struct {
 	/*
 	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Event/` LIMIT 1
 	*/
-	EventId *struct{ Values []int } `datly:"kind=param,in=Event"`
+	EventId *struct{ Values []int } `datly:"kind=param,in=Campaign"`
 
 	/*
 	    ? SELECT * FROM CI_EVENT

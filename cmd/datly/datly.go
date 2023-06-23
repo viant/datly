@@ -46,7 +46,7 @@ func main() {
 	os.Args = []string{
 		"",
 		"dsql",
-		"-p=/Users/awitas/go/src/github.com/viant/datly/poc",
+		"-p=/Users/klarysz/Documents/github_viant/datly/poc",
 		"-s=dsql/handler.sql",
 		"-c=ci_ads|mysql|root:dev@tcp(127.0.0.1:3306)/ci_ads?parseTime=true",
 		"-r=autogen",

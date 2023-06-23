@@ -259,7 +259,7 @@ func (t *Template) EnsureImports(aType *Type) {
 	}
 
 	for _, field := range aType.relationFields {
-		t.Imports.AddType(aType.expandType(field.Schema.DataType))
+		t.Imports.AddType(aType.ExpandType(field.Schema.DataType))
 	}
 }
 

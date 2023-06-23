@@ -498,17 +498,22 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 		return err
 	}
 
-	if dSQL, err := s.convertHandlerIfNeeded(builder); dSQL != "" {
-		if err != nil {
-			return err
-		}
-		if err = s.parseDSQL(ctx, builder, []byte(dSQL)); err != nil {
-			return err
-		}
+	SQL, err := s.prepareDSQLIfNeeded(ctx, builder)
+	if err != nil {
+		return err
+	}
+	builder.sqlStmt = SQL
+
+	if err = s.parseDSQL(ctx, builder, []byte(builder.sqlStmt)); err != nil {
+		return err
 	}
 
 	if err := s.readRouteSettings(builder); err != nil {
 		return err
+	}
+
+	if builder.sqlStmt == "" && builder.option.HandlerType != "" {
+		builder.sqlStmt = "$Campaign"
 	}
 
 	if strings.TrimSpace(builder.sqlStmt) == "" {
@@ -521,11 +526,15 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 		return fmt.Errorf("missmatch const destination, %v - %v", consts.URL, builder.option.ConstFileURL)
 	}
 
+	if err := s.initRoute(builder); err != nil {
+		return err
+	}
+
 	if err := s.initConfigProvider(builder); err != nil {
 		return err
 	}
 
-	if err := s.initRoute(builder); err != nil {
+	if err := s.buildRouterOutput(builder); err != nil {
 		return err
 	}
 
@@ -570,11 +579,16 @@ func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) 
 	if entityType == nil {
 		return "", fmt.Errorf("entity type was empty")
 	}
-	aType, err := codegen.NewType(statePackage, "Entity", entityType)
+	aType, err := codegen.NewType(statePackage, entityParam.Name, entityType)
 	if err != nil {
 		return "", err
 	}
 	tmpl := codegen.NewTemplate(builder.option, &codegen.Spec{Type: aType})
+	if entityParam.In.Kind == view.KindRequestBody {
+		if entityParam.In.Name != "" {
+			tmpl.Imports.AddType(aType.ExpandType(entityParam.In.Name))
+		}
+	}
 	tmpl.EnsureImports(aType)
 	tmpl.State = state
 
@@ -735,13 +749,8 @@ func extractURIParams(URI string) map[string]bool {
 }
 
 func (s *Builder) initRoute(builder *routeBuilder) error {
-	method := builder.configProvider.DefaultHTTPMethod()
-	if builder.option.Method != "" {
-		method = builder.option.Method
-	}
-
 	builder.route = &router.Route{
-		Method:           method,
+		Method:           builder.option.Method,
 		EnableAudit:      true,
 		Transforms:       builder.transforms,
 		CustomValidation: builder.option.CustomValidation,
@@ -757,6 +766,15 @@ func (s *Builder) initRoute(builder *routeBuilder) error {
 		Output: router.Output{
 			CaseFormat: "lc",
 		},
+	}
+
+	if builder.option.HandlerType != "" {
+		builder.route.Handler = &router.Handler{
+			HandlerType: builder.option.HandlerType,
+			StateType:   builder.option.StateType,
+		}
+
+		builder.route.Service = router.ServiceTypeExecutor
 	}
 
 	builder.paramsIndex.AddUriParams(extractURIParams(builder.route.URI))
@@ -776,7 +794,7 @@ func (s *Builder) initRoute(builder *routeBuilder) error {
 		}
 	}
 
-	return s.buildRouterOutput(builder)
+	return nil
 }
 
 func (s *Builder) buildRouterOutput(builder *routeBuilder) error {
@@ -861,7 +879,7 @@ func (s *Builder) initConfigProvider(builder *routeBuilder) error {
 func (s *Builder) buildConfigProvider(SQL string, builder *routeBuilder) (*ViewConfigurer, error) {
 	serviceType := router.ServiceTypeReader
 
-	if IsSQLExecMode(SQL) {
+	if IsSQLExecMode(SQL) || builder.route.Handler != nil {
 		serviceType = router.ServiceTypeExecutor
 	}
 
@@ -878,10 +896,12 @@ func (s *Builder) loadSQL(ctx context.Context, builder *routeBuilder, location s
 	if err != nil {
 		return err
 	}
-	return s.parseDSQL(ctx, builder, SQLbytes)
+
+	builder.sqlStmt = string(SQLbytes)
+	return nil
 }
 
-func (s *Builder) parseDSQL(ctx context.Context, builder *routeBuilder, SQLbytes []byte) (err error) {
+func (s *Builder) parseDSQL(ctx context.Context, builder *routeBuilder, SQL []byte) (err error) {
 	if envURL := s.options.EnvURL; envURL != "" {
 		envContent, err := s.fs.DownloadWithURL(ctx, envURL)
 		if err != nil {
@@ -896,23 +916,18 @@ func (s *Builder) parseDSQL(ctx context.Context, builder *routeBuilder, SQLbytes
 		env := rdata.NewMap()
 		env.SetValue("env", aMap)
 
-		templateContent := env.ExpandWithoutUDF(string(SQLbytes))
-		SQLbytes = []byte(templateContent)
+		templateContent := env.ExpandWithoutUDF(string(SQL))
+		SQL = []byte(templateContent)
 	}
 
-	SQL, err := s.generateRuleIfNeeded(ctx, SQLbytes)
-	if err != nil {
+	hint, SQLs := s.extractRouteSettings(SQL)
+
+	if SQLs, err = s.readArtificialParamHints(builder, SQLs); err != nil {
 		return err
 	}
 
-	hint, SQL := s.extractRouteSettings([]byte(SQL))
-
-	if SQL, err = s.readArtificialParamHints(builder, SQL); err != nil {
-		return err
-	}
-
-	hints := sanitize.ExtractParameterHints(SQL)
-	SQL = sanitize.RemoveParameterHints(SQL, hints)
+	hints := sanitize.ExtractParameterHints(SQLs)
+	SQLs = sanitize.RemoveParameterHints(SQLs, hints)
 
 	tryUnmrashalHintWithWarn(hint, builder.option)
 
@@ -925,7 +940,7 @@ func (s *Builder) parseDSQL(ctx context.Context, builder *routeBuilder, SQLbytes
 		builder.option.Declare[paramName] = actualName
 	}
 
-	builder.sqlStmt = SQL
+	builder.sqlStmt = SQLs
 	builder.paramsIndex.AddHints(hints.Index())
 	return nil
 }
@@ -2169,6 +2184,24 @@ func (s *Builder) detectSinkColumn(ctx context.Context, db *sql.DB, SQL string) 
 		}
 	}
 	return result, nil
+}
+
+func (s *Builder) prepareDSQLIfNeeded(ctx context.Context, builder *routeBuilder) (string, error) {
+	if s.options.PrepareRule != "" {
+		return s.generateRuleIfNeeded(ctx, []byte(builder.sqlStmt))
+	}
+
+	hint, _ := sanitize.SplitHint(builder.sqlStmt)
+
+	if err := tryUnmarshalHint(hint, builder.option); err != nil {
+		return "", err
+	}
+
+	if builder.option.HandlerType == "" {
+		return builder.sqlStmt, nil
+	}
+
+	return s.convertHandlerIfNeeded(builder)
 }
 
 func trimParenthasis(text string) string {

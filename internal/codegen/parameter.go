@@ -24,6 +24,7 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 		if p.Schema.Cardinality == view.Many {
 			builder.WriteString("[]")
 		}
+
 		builder.WriteString("*")
 		builder.WriteString(p.Schema.DataType)
 	}

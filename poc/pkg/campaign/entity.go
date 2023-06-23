@@ -1,9 +1,9 @@
 package campaign
 
 import (
-	"github.com/viant/datly/poc/pkg/checksum"
 	"github.com/viant/sqlx/types"
 	"github.com/viant/xdatly/types/core"
+	"github.com/viant/xdatly/types/custom/checksum"
 	"reflect"
 	"time"
 )
@@ -21,6 +21,8 @@ func init() {
 	core.RegisterType(PackageName, "Event", reflect.TypeOf(Event{}), checksum.GeneratedTime)
 	core.RegisterType(PackageName, "Acl", reflect.TypeOf(Acl{}), checksum.GeneratedTime)
 	core.RegisterType(PackageName, "Features", reflect.TypeOf(Features{}), checksum.GeneratedTime)
+	core.RegisterType(PackageName, "Handler", reflect.TypeOf(Handler{}), checksum.GeneratedTime)
+	core.RegisterType(PackageName, "State", reflect.TypeOf(State{}), checksum.GeneratedTime)
 }
 
 type Entity struct {

@@ -9,5 +9,5 @@ type Handler struct {
 }
 
 func (h *Handler) Exec(ctx context.Context, session handler.Session) (interface{}, error) {
-	return nil, nil
+	return &Campaign{Id: 12343}, nil
 }

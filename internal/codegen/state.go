@@ -49,8 +49,14 @@ func (s State) ensureSchema(dirTypes *xreflect.DirTypes) error {
 		if err != nil {
 			return fmt.Errorf("invalid parameter '%v' schema: '%v'  %w", param.Name, param.Schema.DataType, err)
 		}
+
+		oldSchema := param.Schema
 		param.Schema = view.NewSchema(paramType)
 		param.Schema.DataType = paramDataType
+
+		if oldSchema != nil {
+			param.Schema.Cardinality = oldSchema.Cardinality
+		}
 	}
 	return nil
 }
@@ -114,6 +120,13 @@ func buildParameter(field *ast.Field, lookup xreflect.TypeLookupFn) (*Parameter,
 	//	updateSQLTag(field, SQL)
 	param.Name = field.Names[0].Name
 	param.In = &view.Location{Name: tag.In, Kind: view.Kind(tag.Kind)}
+
+	cardinality := view.One
+	if sliceExpr, ok := field.Type.(*ast.ArrayType); ok {
+		field.Type = sliceExpr.Elt
+		cardinality = view.Many
+	}
+
 	if ptr, ok := field.Type.(*ast.StarExpr); ok {
 		field.Type = ptr.X
 	}
@@ -132,6 +145,7 @@ func buildParameter(field *ast.Field, lookup xreflect.TypeLookupFn) (*Parameter,
 		param.Schema = &view.Schema{DataType: fieldTypeName}
 	}
 
+	param.Schema.Cardinality = cardinality
 	return param, nil
 }
 
