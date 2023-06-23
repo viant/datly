@@ -135,7 +135,7 @@ func (m *MetaParam) In(prefix string) (string, error) {
 	return m.ColIn(prefix, "")
 }
 
-//Expand appends SQL and adds binding arguments
+//AddRelation appends SQL and adds binding arguments
 //Deprecated: For the backward compatibility
 func (m *MetaParam) Expand(_ *DataUnit) string {
 	m.dataUnit.addAll(m.Args...)

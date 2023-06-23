@@ -36,6 +36,7 @@ func newPatchStmtBuilder(sb *strings.Builder, metadata *inputMetadata) *patchStm
 }
 
 func (s *Builder) preparePatchRule(ctx context.Context, builder *routeBuilder, sourceSQL []byte) (string, error) {
+
 	routeOption, config, paramType, err := s.buildInputMetadata(ctx, builder, sourceSQL, http.MethodPatch)
 	if err != nil {
 		return "", err
@@ -66,7 +67,7 @@ func (s *Builder) buildPatchSQL(builder *routeBuilder, routeOption *option.Route
 }
 
 func (b *patchStmtBuilder) buildWithMeta(opt Prepare, preSQL string) (string, error) {
-	if err := b.stmtBuilder.appendHints(b.typeDef); err != nil {
+	if err := b.stmtBuilder.appendInputParameterDecl(b.typeDef); err != nil {
 		return "", err
 	}
 
@@ -79,7 +80,6 @@ func (b *patchStmtBuilder) buildWithMeta(opt Prepare, preSQL string) (string, er
 	if err != nil {
 		return "", nil
 	}
-
 	return b.build("", true, indexes)
 }
 
@@ -100,7 +100,7 @@ func (b *patchStmtBuilder) build(parentRecord string, withUnsafe bool, indexes [
 	}
 
 	for _, relation := range contentBuilder.typeDef.relations {
-		if relation.config.isVirtual {
+		if relation.config.isAuxiliary {
 			continue
 		}
 		if _, err := contentBuilder.newRelation(relation).build(accessor.record, withUnsafe, indexes); err != nil {

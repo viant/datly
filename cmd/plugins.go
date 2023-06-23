@@ -88,8 +88,8 @@ func (s *Builder) uploadPlugins() error {
 func (s *Builder) detectMod(pluginMeta *pluginGenDeta, modules map[string]string) error {
 	dir := pluginMeta.URL
 	location := s.dsqlDir()
-	if s.options.ModuleURL != "" {
-		location = s.options.ModuleURL
+	if s.options.GoModulePkg != "" {
+		location = s.options.GoModulePkg
 	}
 	upFolders := map[string]bool{}
 	for len(location) > 1 {

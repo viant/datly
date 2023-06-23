@@ -9,9 +9,12 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/cmd/command"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/runtime/standalone"
+	codegen "github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
@@ -42,6 +45,7 @@ import (
 
 type (
 	Builder struct {
+		Options          *options.Options
 		pluginTypes      map[string]bool
 		constFileContent constFileContent
 		constIndex       ParametersIndex
@@ -76,10 +80,12 @@ type (
 		parent          *ViewConfig
 		mainHolder      string
 		viewName        string
-		isVirtual       bool
+		isAuxiliary     bool
 		queryJoin       *query.Join
 		unexpandedTable *Table
-		outputConfig    option.OutputConfig
+		expandedTable   *Table
+
+		outputConfig option.OutputConfig
 
 		relations      []*ViewConfig
 		relationsIndex map[string]int
@@ -88,8 +94,8 @@ type (
 		aKey           *relationKey
 		fileName       string
 		viewType       view.Mode
-		expandedTable  *Table
 		batchEnabled   map[string]bool
+		Spec           *codegen.Spec
 	}
 
 	templateMetaConfig struct {
@@ -131,6 +137,44 @@ type (
 		option.TransformOption
 	}
 )
+
+func (c *ViewConfig) ActualHolderName() string {
+	name := c.expandedTable.HolderName
+	detectCase, err := format.NewCase(formatter.DetectCase(name))
+	if err != nil {
+		return name
+	}
+	if detectCase != format.CaseUpperCamel {
+		name = detectCase.Format(name, format.CaseUpperCamel)
+	}
+	return name
+}
+
+func (c *ViewConfig) excludedColumns() map[string]bool {
+	exceptIndex := map[string]bool{}
+	for _, column := range c.expandedTable.Columns {
+		for _, except := range column.Except {
+			exceptIndex[strings.ToLower(except)] = true
+		}
+	}
+	return exceptIndex
+}
+
+func (c *ViewConfig) listedColumns() map[string]bool {
+	includeIndex := map[string]bool{}
+	for _, column := range c.expandedTable.Inner {
+		if column.Name == "*" {
+			return includeIndex
+		}
+	}
+	for _, column := range c.expandedTable.Inner {
+		if column.Alias != "" {
+			includeIndex[strings.ToLower(column.Alias)] = true
+		}
+		includeIndex[strings.ToLower(column.Name)] = true
+	}
+	return includeIndex
+}
 
 func (c *constFileContent) MergeFrom(params ...*view.Parameter) {
 	if len(params) == 0 {
@@ -329,6 +373,57 @@ func (c *ViewConfig) metaConfigByName(holder string) (*templateMetaConfig, bool)
 	return nil, false
 }
 
+func (c *ViewConfig) buildSpec(ctx context.Context, db *sql.DB, pkg string) (err error) {
+	name := c.ActualHolderName()
+	if c.Spec, err = codegen.NewSpec(ctx, db, c.TableName(), c.SQL()); err != nil {
+		return err
+	}
+	if len(c.Spec.Columns) == 0 {
+		return fmt.Errorf("not found table %v(%v) columns", c.TableName(), c.SQL())
+	}
+	excludedColumns := c.excludedColumns()
+	listedColumns := c.listedColumns()
+	cardinality := view.One
+	if c.IsToMany() {
+		cardinality = view.Many
+	}
+	if err = c.Spec.BuildType(pkg, name, cardinality, listedColumns, excludedColumns); err != nil {
+		return err
+	}
+	for _, relation := range c.relations {
+		if err = relation.buildSpec(ctx, db, pkg); err != nil {
+			return err
+		}
+		relation.Spec.Parent = c.Spec
+		cardinality := view.One
+		if relation.outputConfig.IsMany() {
+			cardinality = view.Many
+		}
+		c.Spec.AddRelation(relation.ActualHolderName(), relation.queryJoin, relation.Spec, cardinality)
+	}
+	return nil
+}
+
+func (c *ViewConfig) SQL() string {
+	SQL := ""
+	if join := c.queryJoin; join != nil {
+		SQL = sqlparser.Stringify(c.queryJoin.With)
+		SQL = strings.Trim(strings.TrimSpace(SQL), "()")
+	}
+
+	return SQL
+}
+
+func (s *ViewConfig) TableName() string {
+	if s.expandedTable != nil {
+		return s.expandedTable.Name
+	}
+	if s.unexpandedTable != nil {
+		return s.unexpandedTable.Name
+	}
+	return ""
+}
+
 func (s *Builder) Build(ctx context.Context) error {
 	if err := s.loadAndInitConfig(ctx); err != nil {
 		return err
@@ -400,6 +495,15 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 	if err := s.loadSQL(ctx, builder, builder.session.sourceURL); err != nil {
 		return err
 	}
+	statePath := s.options.RelativePath
+	if statePath != "" {
+		statePath = path.Join(statePath, s.options.GoModulePkg)
+	} else {
+		statePath = s.options.DSQLOutput
+	}
+
+	state, err := codegen.NewState(statePath, builder.option.StateType, config.Config.LookupType)
+	fmt.Printf("%v %v\n", state, err)
 
 	if strings.TrimSpace(builder.sqlStmt) == "" {
 		return nil
@@ -756,7 +860,7 @@ func (s *Builder) loadSQL(ctx context.Context, builder *routeBuilder, location s
 		SQLbytes = []byte(templateContent)
 	}
 
-	SQL, err := s.prepareRuleIfNeeded(SQLbytes)
+	SQL, err := s.prepareRuleIfNeeded(ctx, SQLbytes)
 	if err != nil {
 		return err
 	}
@@ -1336,7 +1440,7 @@ func (s *Builder) inheritRouteServiceType(builder *routeBuilder, aView *view.Vie
 	}
 }
 
-func (s *Builder) prepareRuleIfNeeded(SQL []byte) (string, error) {
+func (s *Builder) prepareRuleIfNeeded(ctx context.Context, SQL []byte) (string, error) {
 	if s.options.PrepareRule == "" {
 		return string(SQL), nil
 	}
@@ -1355,19 +1459,40 @@ func (s *Builder) prepareRuleIfNeeded(SQL []byte) (string, error) {
 		dsqlOutput = path.Join(dsqlOutput, s.options.GoModulePkg)
 	}
 
-	preparedRouteBuilder := s.newRouteBuilder(
+	routeBuilder := s.newRouteBuilder(
 		&router.Resource{Resource: view.EmptyResource()},
 		NewParametersIndex(nil, nil),
 		newSession(path.Dir(s.options.Location), s.options.Location, s.options.PluginDst, dsqlOutput, dsqlOutput, goFileOutput),
 	)
 
+	cmd := command.New()
+	template, err := s.buildCodeTemplate(ctx, routeBuilder, SQL, s.options.PrepareRule)
+	if err != nil {
+		return "", err
+	}
+	if err = cmd.Generate(ctx, s.Options.Generate, template); err != nil {
+		return "", err
+	}
+	SQL, err = s.fs.DownloadWithURL(ctx, s.Options.Generate.DSQLLocation())
+
+	return string(SQL), err
+	//
+	//
+	//dsql, err := template.GenerateDSQL()
+	//fmt.Printf("dsql: %v %v\n", dsql, err)
+	//state := template.GenerateState("")
+	//fmt.Printf("state %v\n", state)
+	//
+	//entity, err := template.GenerateEntity(ctx, "", nil)
+	//fmt.Printf("entity %s %v\n", entity, err)
+
 	switch strings.ToLower(s.options.PrepareRule) {
 	case PreparePost:
-		return s.preparePostRule(context.Background(), preparedRouteBuilder, SQL)
+		return s.preparePostRule(context.Background(), routeBuilder, SQL)
 	case PreparePatch:
-		return s.preparePatchRule(context.Background(), preparedRouteBuilder, SQL)
+		return s.preparePatchRule(context.Background(), routeBuilder, SQL)
 	case PreparePut:
-		return s.preparePutRule(context.Background(), preparedRouteBuilder, SQL)
+		return s.preparePutRule(context.Background(), routeBuilder, SQL)
 	default:
 		return "", fmt.Errorf("unsupported prepare rule type")
 	}
@@ -1379,7 +1504,7 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 	}
 	s.normalizeURL(typeSrc)
 
-	dirTypes, err := xreflect.ParseTypes(typeSrc.URL, xreflect.TypeLookupFn(config.Config.LookupType))
+	dirTypes, err := xreflect.ParseTypes(typeSrc.URL, xreflect.WithTypeLookupFn(config.Config.LookupType))
 	if err != nil {
 		return err
 	}
@@ -2024,6 +2149,14 @@ func (s *Builder) detectSinkColumn(ctx context.Context, db *sql.DB, SQL string) 
 		}
 	}
 	return result, nil
+}
+
+func (s *Builder) uploadGoState(tmpl *codegen.Template, builder *routeBuilder, packageNBame string) error {
+	goURL := builder.session.GoFileURL("state") + ".go"
+	if _, err := s.upload(builder, goURL, tmpl.GenerateState(packageNBame)); err != nil {
+		return err
+	}
+	return nil
 }
 
 func combineURLs(basePath string, segments ...string) string {

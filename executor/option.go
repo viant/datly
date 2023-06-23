@@ -6,7 +6,7 @@ type Option func(session *Session) error
 //Options represents options
 type Options []Option
 
-//Apply applies session option
+//apply applies session option
 func (o Options) Apply(session *Session) error {
 	if len(o) == 0 {
 		return nil

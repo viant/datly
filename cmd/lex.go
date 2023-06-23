@@ -50,6 +50,4 @@ var execStmtMatcher = parsly.NewToken(execStmtToken, "Exec statement", matcher.N
 var readStmtMatcher = parsly.NewToken(readStmtToken, "Select statement", matcher.NewFragmentsFold([]byte("select")))
 var exprMatcher = parsly.NewToken(exprToken, "Expression", matcher.NewFragments([]byte("#set"), []byte("#foreach"), []byte("#if")))
 var anyMatcher = parsly.NewToken(anyToken, "Any", matchers.NewAny())
-var packageNameMatcher = parsly.NewToken(packageNameToken, "Package name", matchers.NewPackageNameMatcher())
 var exprEndMatcher = parsly.NewToken(exprEndToken, "#end", matcher.NewFragmentsFold([]byte("#end")))
-var semicolonMatcher = parsly.NewToken(semicolonToken, "Expression end", matcher.NewByte(';'))

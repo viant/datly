@@ -10,16 +10,29 @@ const (
 	DatlyTag = "datly"
 )
 
-//Tag datly tag
-type Tag struct {
-	RelColumn    string
-	RefColumn    string
-	RefField     string
-	RefTable     string
-	RefName      string
-	RefConnector string
-	RefSQL       string
-}
+type (
+	//StateTag state tag
+	StateTag struct {
+		Kind string //parameter location kind
+		In   string //parameter location name
+	}
+
+	RelationTag struct {
+		RelColumn    string
+		RefColumn    string
+		RefField     string
+		RefTable     string
+		RefName      string
+		RefConnector string
+		RefSQL       string
+	}
+
+	//Tag datly tag
+	Tag struct {
+		StateTag
+		RelationTag
+	}
+)
 
 //HasRelationSpec returns true if tag has relation
 func (t *Tag) HasRelationSpec() bool {
@@ -71,8 +84,8 @@ func (t *Tag) Init(field reflect.StructField) {
 }
 
 //ParseTag parses datly tag
-func ParseTag(tagString, sqlTag string) *Tag {
-	tag := &Tag{RefSQL: sqlTag}
+func ParseTag(tagString string) *Tag {
+	tag := &Tag{}
 	elements := strings.Split(tagString, ",")
 	if len(elements) == 0 {
 		return tag
@@ -82,6 +95,10 @@ func ParseTag(tagString, sqlTag string) *Tag {
 		switch len(nv) {
 		case 2:
 			switch strings.ToLower(strings.TrimSpace(nv[0])) {
+			case "in":
+				tag.In = strings.TrimSpace(nv[1])
+			case "kind":
+				tag.Kind = strings.TrimSpace(nv[1])
 			case "relcolumn":
 				tag.RelColumn = strings.TrimSpace(nv[1])
 			case "refcolumn":

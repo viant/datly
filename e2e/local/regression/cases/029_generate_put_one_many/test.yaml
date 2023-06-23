@@ -30,8 +30,8 @@ pipeline:
           ID: 2
           FoosPerformance:
             - ID: 1
-              PerfName: "tried to change"
-              PerfQuantity: -1000
+              PerfName: "changed perf - x"
+              PerfQuantity: 999
               FooID: 1
             - ID: 3
               PerfName: "changed perf - 3"

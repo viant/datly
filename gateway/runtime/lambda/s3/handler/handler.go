@@ -43,7 +43,7 @@ func HandleRequest(ctx context.Context, event *events.S3Event) error {
 	//for _, record := range responseBuilder.succeeded {
 	//	if _, err := s3Client.DeleteObject(ctx, &s3.DeleteObjectInput{
 	//		Bucket: &record.S3.Bucket.Name,
-	//		Key:    &record.S3.Object.URLDecodedKey,
+	//		Column:    &record.S3.Object.URLDecodedKey,
 	//	}); err != nil {
 	//		fmt.Printf("[ERROR] error occurred when tried to delete S3 file %v under bucket %v\n", record.S3.Object.URLDecodedKey, record.S3.Bucket.Name)
 	//	}

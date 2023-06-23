@@ -266,8 +266,8 @@ func (v *View) inheritRelationsFromTag(schema *Schema, resource *Resource) error
 		if !ok {
 			continue
 		}
-		sqlTag, _ := field.Tag.Lookup("sql")
-		tag := ParseTag(rawTag, sqlTag)
+		tag := ParseTag(rawTag)
+		tag.RefSQL, _ = field.Tag.Lookup("sql")
 		if !tag.HasRelationSpec() {
 			continue
 		}

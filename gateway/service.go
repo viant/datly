@@ -334,11 +334,11 @@ func (r *Service) rebuildRouters(ctx context.Context, fs afs.Service, resources 
 		for fn := range routersChan {
 			routerResource, URL, err := fn()
 			if err != nil {
-				errors = append(errors, err)
+				errors = append(errors, fmt.Errorf("invalid %v,%w ", URL, err))
 			} else {
 				routers[URL], err = router.New(routerResource, router.ApiPrefix(r.Config.APIPrefix))
 				if err != nil {
-					errors = append(errors, err)
+					errors = append(errors, fmt.Errorf("invalid %v,%w ", URL, err))
 				}
 			}
 

@@ -11,7 +11,7 @@ type Option func(session *Session, aView *view.View) error
 //Options represents option slice
 type Options []Option
 
-//Apply applies options
+//apply applies options
 func (o Options) Apply(session *Session, aView *view.View) error {
 	if len(o) == 0 {
 		return nil

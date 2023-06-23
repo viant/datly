@@ -61,7 +61,6 @@ type (
 		AssetsURL string `short:"a" long:"assetsURL" description:"assets destination"`
 		ConstURL  string `long:"constURL" description:"path where const files are stored"`
 		Legacy    bool   `short:"l"`
-		ModuleURL string
 		cache     *view.Cache
 		EnvURL    string `long:"envURL" description:"environment url, expands template before processing"`
 	}
@@ -91,7 +90,7 @@ type (
 	}
 
 	Prepare struct {
-		PrepareRule  string `short:"G" long:"generate" description:"prepare rule for patch|post|put|delete"`
+		PrepareRule  string `short:"G" long:"generate" description:"prepare rule for patch|post|put"`
 		ExecKind     string `long:"execKind" description:"allows to switch between service / dml"`
 		DSQLOutput   string `long:"dsqlOutput" description:"output path"`
 		GoFileOutput string `long:"goFileOut" description:"destination of go file"`
@@ -511,7 +510,7 @@ func (o *Options) MergeFromDSql(dsql *options.DSql) {
 		o.PartialConfigURL = dsql.ConfigURL
 		o.RouteURL = url.Join(dsql.Repo, "Datly/routes")
 	}
-	o.ModuleURL = dsql.Module
+	o.GoModulePkg = dsql.Module
 }
 
 func (o *Options) MergeFromInit(init *options.Init) {
@@ -533,6 +532,29 @@ func (o *Options) MergeFromInit(init *options.Init) {
 			TimeToLiveMs: init.TimeToLiveMs,
 		}
 	}
+}
+
+func (o *Options) BuildOption() *options.Options {
+	var result = &options.Options{}
+	prep := o.Prepare
+	if prep.PrepareRule != "" {
+		result.Generate = &options.Gen{
+			Connector: options.Connector{
+				Connectors: o.Connects,
+			},
+			Generate: options.Generate{
+				Module: o.RelativePath,
+				Source: o.Location,
+			},
+			Package:   o.GoModulePkg,
+			Dest:      prep.DSQLOutput,
+			Operation: prep.PrepareRule,
+			Kind:      prep.ExecKind,
+		}
+
+	}
+
+	return result
 }
 
 func namespace(name string) string {

@@ -164,8 +164,8 @@ func (s *Service) syncSourceDependencies(ctx context.Context, pkgLocation string
 }
 
 func (s *Service) getGoBinLocation(ctx context.Context) (string, error) {
-	if s.goLocation != "" {
-		return s.goLocation, nil
+	if s.goBinLocation != "" {
+		return s.goBinLocation, nil
 	}
 	goBinLocation, err := s.locateBinary(ctx, "go", "/usr/local/go/bin")
 	if err != nil {

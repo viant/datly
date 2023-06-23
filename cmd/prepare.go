@@ -10,6 +10,7 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/option"
 	dConfig "github.com/viant/datly/config"
+	codegen "github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/utils/formatter"
@@ -33,7 +34,7 @@ import (
 )
 
 const defaultIndent = "  "
-const cur = "cur"
+const cur = "Cur"
 
 type (
 	stmtBuilder struct {
@@ -45,7 +46,6 @@ type (
 		isMulti   bool
 		paramKind string
 		paramSQLs map[string]string
-		withSQL   bool
 	}
 
 	paramAccessor struct {
@@ -60,11 +60,29 @@ type (
 	idParam struct {
 		name  string
 		query string
+		field *view.Field
 	}
 
 	withSQL    bool
 	viewFields []*view.Field
+	//TODO: Rename it
+	VeltyParamDefinition interface {
+		ParamName() string
+		BodyHolder() string
+		Relations() []VeltyParamDefinition
+		Name() string
+	}
 )
+
+func (p idParam) asParameter(i *inputMetadata) *codegen.Parameter {
+	param := &codegen.Parameter{}
+	param.Name = p.name
+	param.SQL = p.query
+	param.In = &view.Location{Kind: view.KindParam, Name: i.paramName}
+	var paramType = reflect.StructOf([]reflect.StructField{{Name: "Values", Type: reflect.SliceOf(p.field.Schema.Type())}})
+	param.Schema = view.NewSchema(paramType)
+	return param
+}
 
 func (f viewFields) Len() int {
 	return len(f)
@@ -80,14 +98,11 @@ func (f viewFields) Swap(i, j int) {
 
 func newStmtBuilder(sb *strings.Builder, def *inputMetadata, options ...interface{}) *stmtBuilder {
 	paramKind := string(view.KindRequestBody)
-	var hintSQL bool
 
 	for _, anOption := range options {
 		switch actual := anOption.(type) {
 		case view.Kind:
 			paramKind = string(actual)
-		case withSQL:
-			hintSQL = bool(actual)
 		}
 	}
 	b := &stmtBuilder{
@@ -97,7 +112,6 @@ func newStmtBuilder(sb *strings.Builder, def *inputMetadata, options ...interfac
 		isMulti:   def.config.outputConfig.IsMany(),
 		paramKind: paramKind,
 		paramSQLs: map[string]string{},
-		withSQL:   hintSQL,
 	}
 
 	return b
@@ -235,14 +249,14 @@ func (b *stmtBuilder) newRelation(rel *inputMetadata) *stmtBuilder {
 	if builder.isMulti {
 		builder.indent += defaultIndent
 	}
-
+	//	b.inputs = append(b.inputs, builder.inputs...)
 	return builder
 }
 
 func (b *stmtBuilder) appendIndex(def *inputMetadata, aMeta *fieldMeta, inputPath []*inputMetadata, previous bool) (string, string) {
 	aFieldName := aMeta.fieldName
 	indexName := fmt.Sprintf("%vBy%v", def.indexNamePrefix, strings.Title(aFieldName))
-	src := def.prevNamePrefix
+	src := def.namePrefix
 	if previous && len(inputPath) > 0 {
 		actualPath := strings.Trim(def.path, "/")
 		if actualPath == "" {
@@ -250,13 +264,54 @@ func (b *stmtBuilder) appendIndex(def *inputMetadata, aMeta *fieldMeta, inputPat
 		} else {
 			actualPath = "/" + actualPath + "/"
 		}
-
-		src = fmt.Sprintf("%v.Query(\"SELECT * FROM `%v`\")", inputPath[0].prevNamePrefix, actualPath)
+		src = fmt.Sprintf("%v.Query(\"SELECT * FROM `%v`\")", inputPath[0].namePrefix, actualPath)
 	}
 
 	b.sb.WriteString("\n")
 	b.writeString(fmt.Sprintf("#set($%v = $%v.IndexBy(\"%v\"))", indexName, src, aFieldName))
 	return indexName, aFieldName
+}
+
+func (s *Builder) buildCodeTemplate(ctx context.Context, builder *routeBuilder, sourceSQL []byte, httpMethod string) (*codegen.Template, error) {
+	hint, SQL := s.extractRouteSettings(sourceSQL)
+	routeConfig := &option.RouteConfig{Method: httpMethod}
+	if err := tryUnmarshalHint(hint, routeConfig); err != nil {
+		return nil, err
+	}
+	paramIndex := NewParametersIndex(routeConfig, map[string]*sanitize.ParameterHint{})
+	configurer, err := NewConfigProviderReader("", SQL, routeConfig, router.ServiceTypeReader, paramIndex, &s.options.Prepare, &s.options.Connector, builder)
+	if err != nil {
+		return nil, err
+	}
+	aConfig := configurer.ViewConfig()
+	connectorRef, err := s.ConnectorRef(view.FirstNotEmpty(aConfig.expandedTable.Connector, s.options.Connector.DbName))
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := s.DB(connectorRef)
+	if err != nil {
+		return nil, err
+	}
+
+	if pkg := s.options.GoModulePkg; pkg == "" {
+		var parent string
+		destPath := url.Path(s.Options.Generate.Dest)
+		parent, s.options.GoModulePkg = path.Split(destPath)
+		if s.options.RelativePath == "" {
+			s.options.RelativePath = parent
+		}
+	}
+
+	if err = aConfig.buildSpec(ctx, db, s.options.GoModulePkg); err != nil {
+		return nil, err
+	}
+	template := codegen.NewTemplate(routeConfig, aConfig.Spec)
+	template.BuildTypeDef(aConfig.Spec, aConfig.outputConfig.GetField())
+	var opts = []codegen.Option{codegen.WithHTTPMethod(httpMethod)}
+	template.BuildState(aConfig.Spec, aConfig.outputConfig.GetField(), opts...)
+	template.BuildLogic(aConfig.Spec, opts...)
+	return template, nil
 }
 
 func (s *Builder) buildInputMetadata(ctx context.Context, builder *routeBuilder, sourceSQL []byte, httpMethod string) (*option.RouteConfig, *ViewConfig, *inputMetadata, error) {
@@ -285,6 +340,7 @@ func (s *Builder) buildInputMetadata(ctx context.Context, builder *routeBuilder,
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
 	joinSQL := ""
 	if join := aConfig.queryJoin; join != nil {
 		joinSQL = sqlparser.Stringify(aConfig.queryJoin.With)
@@ -570,7 +626,7 @@ func (s *Builder) buildPostInputParameterType(columns []sink.Column, foreignKeys
 		table:           table,
 		config:          aConfig,
 		sql:             SQL,
-		prevNamePrefix:  cur + strings.Title(paramName),
+		namePrefix:      cur + strings.Title(paramName),
 		indexNamePrefix: cur + strings.ToUpper(paramName[0:1]) + paramName[1:],
 		isPtr:           true,
 		path:            strings.TrimRight(actualPath, "/"),
@@ -693,7 +749,7 @@ func (s *Builder) buildExecRelations(config *ViewConfig, db *sql.DB, path string
 	var relations []*inputMetadata
 	for _, relation := range config.relations {
 		SQL := sqlparser.Stringify(relation.queryJoin.With)
-		relation.isVirtual = isVirtualQuery(SQL)
+		relation.isAuxiliary = isAuxiliary(SQL)
 		tableName := relation.expandedTable.Name
 		relationConfig, err := s.detectInputType(context.TODO(), db, tableName, SQL, relation, config.expandedTable.Name, path, holder)
 		if err != nil {
@@ -705,8 +761,11 @@ func (s *Builder) buildExecRelations(config *ViewConfig, db *sql.DB, path string
 	return relations, nil
 }
 
-func isVirtualQuery(SQL string) bool {
+func isAuxiliary(SQL string) bool {
 	SQL = strings.Trim(strings.TrimSpace(SQL), "()")
+	if SQL == "" {
+		return false
+	}
 	query, _ := sqlparser.ParseQuery(SQL)
 	if query == nil {
 		return true
@@ -822,7 +881,7 @@ func (s *Builder) indexKeys(primaryKeys []sink.Key) map[string]sink.Key {
 }
 
 func (b *stmtBuilder) appendHintsWithRelations() error {
-	return b.appendHints(b.typeDef)
+	return b.appendInputParameterDecl(b.typeDef)
 }
 
 func (b *stmtBuilder) appendSQLWithRelations(loadPrevious bool, preSQL string) error {
@@ -847,7 +906,7 @@ func (b *stmtBuilder) appendSQLWithRelations(loadPrevious bool, preSQL string) e
 			viewHint = string(marshal)
 		}
 
-		b.appendParamHint(b.typeDef.prevNamePrefix, fmt.Sprintf("/* %v %v */", viewHint, preSQL), "", "", "")
+		b.appendParamHint(b.typeDef.namePrefix, fmt.Sprintf("/* %v %v */", viewHint, preSQL), "", "", "")
 		return nil
 	}
 
@@ -872,13 +931,14 @@ func (b *stmtBuilder) appendSQLHint(main, metadata *inputMetadata) error {
 	}
 	resultType := multi + "*" + metadata.paramName
 	in := "data_view"
-	target := metadata.prevNamePrefix
-	b.appendParamHint(metadata.prevNamePrefix, sqlHint, resultType, in, target)
+	target := metadata.namePrefix
+	b.appendParamHint(metadata.namePrefix, sqlHint, resultType, in, target)
 
 	return nil
 }
 
 func (b *stmtBuilder) appendParamHint(paramName string, hint string, resultType string, in string, target string) {
+
 	artificialParam := fmt.Sprintf("\n#set($_ = $%v", paramName)
 	if resultType == "" && in != "" {
 		resultType = "?"
@@ -898,15 +958,37 @@ func (b *stmtBuilder) appendParamHint(paramName string, hint string, resultType 
 	b.writeString("\n)")
 }
 
-func (b *stmtBuilder) appendHints(typeDef *inputMetadata) error {
+func (b *stmtBuilder) appendInputParameterDecl(typeDef *inputMetadata) error {
 	hint, err := b.paramHint(typeDef)
 	if err != nil {
 		return err
 	}
-
 	paramDeclaration := fmt.Sprintf("\n#set($_ = $%v%v)", typeDef.paramName, hint)
 	b.writeString(paramDeclaration)
 	return nil
+}
+
+func (i *inputMetadata) IterateOverHints(iterator func(*inputMetadata, []*inputMetadata) error) error {
+	return i.iterateOverHints(iterator)
+}
+
+func (i *inputMetadata) iterateOverHints(iterator func(curr *inputMetadata, path []*inputMetadata) error, path ...*inputMetadata) error {
+
+	if err := iterator(i, path); err != nil {
+		return err
+	}
+
+	aPath := append([]*inputMetadata{}, path...)
+	aPath = append(aPath, i)
+
+	for _, relation := range i.relations {
+		if err := relation.iterateOverHints(iterator, aPath...); err != nil {
+			return err
+		}
+	}
+
+	return nil
+
 }
 
 func (b *stmtBuilder) IterateOverHints(metadata *inputMetadata, iterator func(*inputMetadata, []*inputMetadata) error) error {
@@ -941,14 +1023,6 @@ func (b *stmtBuilder) withIndent() *stmtBuilder {
 }
 
 func (b *stmtBuilder) paramSQLHint(def *inputMetadata) (string, error) {
-	//paramOption := &option.ParameterConfig{
-	//	Required: boolPtr(false),
-	//}
-
-	//marshal, err := json.Marshal(paramOption)
-	//if err != nil {
-	//	return "", err
-	//}
 	marshal := "?"
 	return fmt.Sprintf("/* %v %v \n*/", string(marshal), def.sql), nil
 }
@@ -998,6 +1072,7 @@ func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, ta
 		idParams = append(idParams, &idParam{
 			name:  recName,
 			query: s.getStructSQLParam(aFieldMeta, aPath),
+			field: field,
 		})
 	}
 
@@ -1010,6 +1085,7 @@ func (s *Builder) buildInputMetadataSQL(fields []*view.Field, meta *typeMeta, ta
 func (s *Builder) getStructSQLParam(aFieldMeta *fieldMeta, path string) string {
 	qlQuery := fmt.Sprintf("? SELECT ARRAY_AGG(%v) AS Values FROM  `%v` LIMIT 1", aFieldMeta.fieldName, path)
 	return qlQuery
+
 }
 
 func (s *Builder) getStructQLName(aFieldMeta *fieldMeta, paramName string) string {
@@ -1047,24 +1123,37 @@ func (b *stmtBuilder) generateIndexes(loadPrevious bool, ensureIndexes bool) ([]
 func (s *Builder) prepareStringBuilder(routeBuilder *routeBuilder, typeDef *inputMetadata, config *ViewConfig, routeOption *option.RouteConfig) (*strings.Builder, error) {
 	sb := &strings.Builder{}
 	typeName := typeDef.typeDef.Name
+	if err := s.appendMetadata(routeBuilder, typeDef.paramName, routeOption, typeDef, sb); err != nil {
+		return nil, err
+	}
 
 	paramType, err := s.buildRequestBodyPostParam(typeDef)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = s.uploadGoType(routeBuilder, typeName, paramType, routeOption, config); err != nil {
+	packageName, err := s.uploadGoType(routeBuilder, typeName, paramType, config)
+	if err != nil {
 		return nil, err
 	}
 
-	if err = s.appendMetadata(routeBuilder, typeDef.paramName, routeOption, typeName, typeDef, sb); err != nil {
+	tmpl := codegen.NewTemplate(routeOption, nil)
+	tmpl.State.Append(typeDef.AsParam())
+	if err = typeDef.IterateOverHints(func(metadata *inputMetadata, i2 []*inputMetadata) error {
+		tmpl.State.Append(metadata.asParams()...)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	if err = s.uploadGoState(tmpl, routeBuilder, packageName); err != nil {
 		return nil, err
 	}
 
 	return sb, nil
 }
 
-func (s *Builder) appendMetadata(builder *routeBuilder, paramName string, routeOption *option.RouteConfig, typeName string, typeDef *inputMetadata, sb *strings.Builder) error {
+func (s *Builder) appendMetadata(builder *routeBuilder, paramName string, routeOption *option.RouteConfig, typeDef VeltyParamDefinition, sb *strings.Builder) error {
 	routeOption.ResponseBody = &option.ResponseBodyConfig{
 		From: paramName,
 	}
@@ -1078,14 +1167,14 @@ func (s *Builder) appendMetadata(builder *routeBuilder, paramName string, routeO
 		sb.WriteString(fmt.Sprintf("/* %v */\n", routeJSON))
 	}
 
-	requiredTypes := []string{typeDef.paramName}
-	if typeDef.bodyHolder != "" {
-		requiredTypes = append(requiredTypes, typeDef.bodyHolder)
+	requiredTypes := []string{typeDef.ParamName()}
+	if typeDef.BodyHolder() != "" {
+		requiredTypes = append(requiredTypes, typeDef.BodyHolder())
 	}
 
-	for _, r := range typeDef.relations {
-		if r.typeDef.Name != "" {
-			requiredTypes = append(requiredTypes, r.typeDef.Name)
+	for _, r := range typeDef.Relations() {
+		if name := r.Name(); name != "" {
+			requiredTypes = append(requiredTypes, name)
 		}
 	}
 
@@ -1123,23 +1212,22 @@ func (s *Builder) extractRouteSettings(sourceSQL []byte) (string, string) {
 	return hint, SQL
 }
 
-func (s *Builder) uploadGoType(builder *routeBuilder, name string, rType reflect.Type, routeOption *option.RouteConfig, config *ViewConfig) error {
+func (s *Builder) uploadGoType(builder *routeBuilder, name string, rType reflect.Type, config *ViewConfig) (string, error) {
 	goURL := builder.session.GoFileURL(s.fileNames.unique(name)) + ".go"
 
 	modBundle, isXDatly := s.isPluginBundle(goURL)
-	modulePackage := s.options.Prepare.GoModulePkg
-	content, err := s.generateGoFileContent(name, rType, routeOption, config, modBundle, modulePackage)
+	packageName, content, err := s.generateGoFileContent(name, rType, config, modBundle)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if _, err = s.upload(builder, goURL, string(content)); err != nil {
-		return err
+		return "", err
 	}
 
 	if isXDatly {
 		if err = s.registerXDatlyGoFile(modBundle, goURL); err != nil {
-			return err
+			return "", err
 		}
 	}
 
@@ -1149,7 +1237,7 @@ func (s *Builder) uploadGoType(builder *routeBuilder, name string, rType reflect
 		_, _ = s.upload(builder, builder.session.SampleFileURL(name+"Post")+".json", string(data))
 	}
 
-	return nil
+	return packageName, nil
 }
 
 func (s *Builder) registerXDatlyGoFile(moduleBundle *bundleMetadata, outputURL string) error {
@@ -1160,9 +1248,9 @@ func (s *Builder) registerXDatlyGoFile(moduleBundle *bundleMetadata, outputURL s
 		goModulePath = moduleBundle.url
 	}
 
-	types, err := xreflect.ParseTypes(path.Join(goModulePath, importsDirectory), xreflect.TypeLookupFn(dConfig.Config.LookupType))
+	dirTypes, err := xreflect.ParseTypes(path.Join(goModulePath, importsDirectory), xreflect.WithTypeLookupFn(dConfig.Config.LookupType))
 	if err == nil {
-		imports = types.Imports("*" + importsFile)
+		imports = dirTypes.Imports("*" + importsFile)
 	}
 
 	location := s.relativeOf(moduleBundle.url, outputURL, moduleBundle.moduleName)
@@ -1237,12 +1325,18 @@ func (s *Builder) relativeOf(modulePath string, outputURL string, moduleName str
 	return URL
 }
 
-func (s *Builder) generateGoFileContent(name string, rType reflect.Type, routeOption *option.RouteConfig, aConfig *ViewConfig, xDatlyModURL *bundleMetadata, packageName string) ([]byte, error) {
-	if packageName == "" {
-		base := path.Base(aConfig.fileName)
+func (s *Builder) PackageName(defaultPackage string) string {
+	ret := s.options.GoModulePkg
+	if ret == "" {
+		base := path.Base(defaultPackage)
 		ext := path.Ext(base)
-		packageName = strings.Replace(base, ext, "", 1)
+		ret = strings.Replace(base, ext, "", 1)
 	}
+	return ret
+}
+
+func (s *Builder) generateGoFileContent(name string, rType reflect.Type, aConfig *ViewConfig, xDatlyModURL *bundleMetadata) (string, []byte, error) {
+	packageName := s.PackageName(aConfig.fileName)
 
 	var extraTypes = map[string]reflect.Type{}
 
@@ -1295,15 +1389,18 @@ func init() {
 	}
 
 	sb := &bytes.Buffer{}
-	generatedStruct := xreflect.GenerateStruct(name, rType, imports, xreflect.AppendBeforeType(sbBefore.String()), xreflect.PackageName(packageName))
+	generatedStruct := xreflect.GenerateStruct(name, rType,
+		xreflect.WithPackage(packageName),
+		xreflect.WithImports(imports),
+		xreflect.WithSnippetBefore(sbBefore.String()))
 	sb.WriteString(generatedStruct)
 	sb.WriteString("\n")
 	source, err := goFormat.Source(sb.Bytes())
 	if err != nil {
-		return nil, fmt.Errorf("faield to generate go code: %w, %s", err, sb.Bytes())
+		return "", nil, fmt.Errorf("faield to generate go code: %w, %s", err, sb.Bytes())
 	}
 
-	return source, nil
+	return packageName, source, nil
 }
 
 func expandRegisterType(name, typeName, checksumHolder string) string {
