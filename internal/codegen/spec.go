@@ -101,15 +101,17 @@ func (s *Spec) shouldSkipColumn(whitelist, blacklist map[string]bool, column *si
 	return false
 }
 
-func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec) {
-
+func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinality view.Cardinality) {
+	if isToOne(join) {
+		cardinality = view.One
+	}
 	relColumn, refColumn := extractRelationColumns(join)
 	rel := &Relation{Spec: spec,
 		KeyField:    spec.Type.ByColumn(refColumn),
 		ParentField: s.Type.ByColumn(relColumn),
 		Name:        name,
 		Join:        join,
-		Cardinality: joinCardinality(join)}
+		Cardinality: cardinality}
 	s.Relations = append(s.Relations, rel)
 	s.Type.AddRelation(name, spec, rel)
 }
@@ -267,12 +269,6 @@ func isAuxiliary(SQL string) bool {
 	return strings.Contains(from, "(")
 }
 
-func joinCardinality(join *query.Join) view.Cardinality {
-	if join == nil {
-		return view.Many
-	}
-	if strings.Contains(sqlparser.Stringify(join.On), "1 = 1") {
-		return view.One
-	}
-	return view.Many
+func isToOne(join *query.Join) bool {
+	return strings.Contains(sqlparser.Stringify(join.On), "1 = 1")
 }

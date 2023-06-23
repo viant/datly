@@ -84,7 +84,7 @@ func (t *Template) BuildLogic(spec *Spec, opts ...Option) {
 	}
 	block.AppendEmptyLine()
 	if options.withUpdate {
-		t.indexRecords(options, spec, spec.Type.Cardinality, &block)
+		t.indexRecords(options, spec, &block)
 	}
 	t.modifyRecords(options, "Unsafe", spec, spec.Type.Cardinality, &block, nil)
 	t.BusinessLogic = &block
@@ -109,25 +109,22 @@ func (t *Template) allocateSequence(options *Options, spec *Spec, block *ast.Blo
 
 }
 
-func (t *Template) indexRecords(options *Options, spec *Spec, cardinality view.Cardinality, block *ast.Block) {
+func (t *Template) indexRecords(options *Options, spec *Spec, block *ast.Block) {
 	if spec.isAuxiliary {
 		return
 	}
 
-	if cardinality == view.Many {
-		field := spec.Type.pkFields[0]
-		holder := t.ParamIndexName(spec.Type.Name, field.Name)
-		source := t.ParamName(spec.Type.Name)
-		indexBy := ast.NewCallExpr(ast.NewIdent(source), "IndexBy", ast.NewQuotedLiteral(source))
-		block.Append(ast.NewAssign(ast.NewIdent(holder), indexBy))
-	}
-
+	field := spec.Type.pkFields[0]
+	holder := t.ParamIndexName(spec.Type.Name, field.Name)
+	source := t.ParamName(spec.Type.Name)
+	indexBy := ast.NewCallExpr(ast.NewIdent(source), "IndexBy", ast.NewQuotedLiteral(field.Name))
+	block.Append(ast.NewAssign(ast.NewIdent(holder), indexBy))
 	for _, rel := range spec.Relations {
-		t.indexRecords(options, rel.Spec, rel.Cardinality, block)
+		t.indexRecords(options, rel.Spec, block)
 	}
 }
 
-func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec *Spec, cardinality view.Cardinality, parentBlock *ast.Block, syncKey *ast.Assign) {
+func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec *Spec, cardinality view.Cardinality, parentBlock *ast.Block, rel *Relation) {
 	if spec.isAuxiliary {
 		return
 	}
@@ -140,15 +137,17 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 	case view.One:
 		structSelector := ast.NewIdent(structPath)
 		checkValid := ast.NewCondition(structSelector, ast.Block{}, nil)
-		if syncKey != nil {
-			checkValid.IFBlock.Append(syncKey)
+
+		if rel != nil {
+			parentSelector := structPathPrefix + "." + rel.ParentField.Name
+			holder := structPathPrefix + "." + rel.Name + "." + rel.KeyField.Name
+			assignKey := ast.NewAssign(ast.NewIdent(holder), ast.NewIdent(parentSelector))
+			checkValid.IFBlock.Append(assignKey)
 		}
+
 		t.modifyRecord(options, structPath, spec, &checkValid.IFBlock)
 		for _, rel := range spec.Relations {
-			parentSelector := structPath + "." + rel.ParentField.Name
-			holder := structPath + "." + rel.Name + "." + rel.KeyField.Name
-			assignKey := ast.NewAssign(ast.NewIdent(holder), ast.NewIdent(parentSelector))
-			t.modifyRecords(options, structPath, rel.Spec, rel.Cardinality, &checkValid.IFBlock, assignKey)
+			t.modifyRecords(options, structPath, rel.Spec, rel.Cardinality, &checkValid.IFBlock, rel)
 		}
 		parentBlock.AppendEmptyLine()
 		parentBlock.Append(checkValid)
@@ -156,16 +155,16 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 		recordPath := t.RecordName(spec.Type.Name)
 		forEach := ast.NewForEach(ast.NewIdent(recordPath), ast.NewIdent(structPath), ast.Block{})
 
-		if syncKey != nil {
-			forEach.Body.Append(syncKey)
+		if rel != nil {
+			parentSelector := structPathPrefix + "." + rel.ParentField.Name
+			holder := recordPath + "." + rel.KeyField.Name
+			assignKey := ast.NewAssign(ast.NewIdent(holder), ast.NewIdent(parentSelector))
+			forEach.Body.Append(assignKey)
 		}
 
 		t.modifyRecord(options, recordPath, spec, &forEach.Body)
 		for _, rel := range spec.Relations {
-			parentSelector := structPath + "." + rel.ParentField.Name
-			holder := recordPath + "." + rel.KeyField.Name
-			assignKey := ast.NewAssign(ast.NewIdent(holder), ast.NewIdent(parentSelector))
-			t.modifyRecords(options, recordPath, rel.Spec, rel.Cardinality, &forEach.Body, assignKey)
+			t.modifyRecords(options, recordPath, rel.Spec, rel.Cardinality, &forEach.Body, rel)
 		}
 		parentBlock.AppendEmptyLine()
 		parentBlock.Append(forEach)

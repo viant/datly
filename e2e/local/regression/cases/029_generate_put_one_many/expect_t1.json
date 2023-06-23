@@ -5,9 +5,9 @@
     {"@indexBy@":  "id"},
     {
       "id": 1,
-      "perfName": "tried to change",
-      "perfQuantity": -1000,
-      "fooId": 1
+      "perfName": "changed perf - x",
+      "perfQuantity": 999,
+      "fooId": 2
     },
     {
       "id": 3,

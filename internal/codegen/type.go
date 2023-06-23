@@ -106,11 +106,10 @@ func (t *Type) ColumnFields() []*view.Field {
 }
 
 func (t *Type) AddRelation(name string, spec *Spec, relation *Relation) *Field {
-	card := cardinality(relation.Join)
 	var field = &Field{Field: view.Field{
 		Name:        name,
-		Cardinality: card,
-		Ptr:         card == view.One,
+		Cardinality: relation.Cardinality,
+		Ptr:         true,
 	}}
 	field.Tags.Set("typeName", TagValue{spec.Type.Name})
 	field.Tags.Set("sqlx", TagValue{"-"})

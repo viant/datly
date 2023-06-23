@@ -568,7 +568,6 @@ func (b *paramStateBuilder) viewParamValue(ctx context.Context, param *view.Para
 	if err := reader.New().Read(ctx, session); err != nil {
 		return nil, err
 	}
-
 	ptr := xunsafe.AsPointer(destSlicePtr)
 	paramLen := slice.Len(ptr)
 

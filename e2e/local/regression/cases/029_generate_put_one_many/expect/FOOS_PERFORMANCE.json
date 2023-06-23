@@ -1,9 +1,9 @@
 [
   {
     "ID": 1,
-    "PERF_NAME": "changed perf - 1",
+    "PERF_NAME": "changed perf - x",
     "PERF_QUANTITY": 999,
-    "FOO_ID": 1
+    "FOO_ID": 2
   },
   {
     "ID": 2,

@@ -395,7 +395,11 @@ func (c *ViewConfig) buildSpec(ctx context.Context, db *sql.DB, pkg string) (err
 			return err
 		}
 		relation.Spec.Parent = c.Spec
-		c.Spec.AddRelation(relation.ActualHolderName(), relation.queryJoin, relation.Spec)
+		cardinality := view.One
+		if relation.outputConfig.IsMany() {
+			cardinality = view.Many
+		}
+		c.Spec.AddRelation(relation.ActualHolderName(), relation.queryJoin, relation.Spec, cardinality)
 	}
 	return nil
 }

@@ -95,11 +95,11 @@ func (t *Tags) buildRelation(info *Spec, relation *Relation) {
 	}
 	datlyTag := TagValue{}
 	datlyTag.Append(fmt.Sprintf("ralName=%s", join.Alias))
-	datlyTag.Append(fmt.Sprintf("relColumn=%s", relation.KeyField.Column.Name))
+	datlyTag.Append(fmt.Sprintf("relColumn=%s", relation.ParentField.Column.Name))
 	if info.Table != "" {
 		datlyTag.Append(fmt.Sprintf("refTable=%v", info.Table))
 	}
-	datlyTag.Append(fmt.Sprintf("refColumn=%s", relation.ParentField.Column.Name))
+	datlyTag.Append(fmt.Sprintf("refColumn=%s", relation.KeyField.Column.Name))
 	sqlTag := TagValue{}
 	if rawSQL := strings.Trim(sqlparser.Stringify(join.With), " )("); rawSQL != "" {
 		sqlTag.Append(strings.ReplaceAll(rawSQL, "\n", " "))

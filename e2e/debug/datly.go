@@ -14,6 +14,9 @@ import (
 	"github.com/viant/datly/cmd/env"
 	_ "github.com/viant/dyndb"
 	_ "github.com/viant/scy/kms/blowfish"
+	"github.com/viant/sqlx/io/insert"
+	"github.com/viant/sqlx/io/read"
+	"github.com/viant/sqlx/io/update"
 	_ "github.com/viant/sqlx/metadata/product/bigquery"
 	_ "github.com/viant/sqlx/metadata/product/mysql"
 	_ "github.com/viant/sqlx/metadata/product/pg"
@@ -32,6 +35,11 @@ var (
 )
 
 func init() {
+
+	read.ShowSQL(true)
+	update.ShowSQL(true)
+	insert.ShowSQL(true)
+
 	if BuildTimeInS != "" {
 		seconds, err := strconv.Atoi(BuildTimeInS)
 		if err != nil {

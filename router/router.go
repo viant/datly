@@ -1378,7 +1378,7 @@ func (r *Router) executorPayloadReader(ctx context.Context, request *http.Reques
 	if err != nil {
 		return nil, err
 	}
-
+	fmt.Printf("%T %+v\n", parameters.bodyParam, parameters.bodyParam)
 	anExecutor := executor.New()
 	err = anExecutor.Exec(ctx, session)
 	if err != nil {
