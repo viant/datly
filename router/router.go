@@ -11,7 +11,6 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/executor"
-	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/httputils"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/async"
@@ -21,10 +20,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/govalidator"
 	svalidator "github.com/viant/sqlx/io/validator"
-	"github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/handler/response"
-	"github.com/viant/xdatly/handler/sqlx"
-	"github.com/viant/xdatly/handler/validator"
 	"github.com/viant/xunsafe"
 	"io"
 	"net/http"
@@ -1011,8 +1007,6 @@ func (r *Router) Resource() *Resource {
 
 func (r *Router) payloadReader(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route, record *async.Record) (PayloadReader, error) {
 	switch route.Service {
-	case ServiceTypeHandler:
-		return r.handlerPayloadReader(ctx, request, response, route)
 	case ServiceTypeExecutor:
 		return r.executorPayloadReader(ctx, request, response, route)
 	case ServiceTypeReader:
@@ -1032,17 +1026,7 @@ func (r *Router) payloadReader(ctx context.Context, request *http.Request, respo
 	return nil, httputils.NewHttpMessageError(500, fmt.Errorf("unsupported ServiceType %v", route.Service))
 }
 
-func (r *Router) handlerPayloadReader(ctx context.Context, request *http.Request, responseWriter http.ResponseWriter, route *Route) (PayloadReader, error) {
-	aSession, err := r.newHandlerSession(ctx, request, responseWriter, route)
-	if err != nil {
-		return nil, err
-	}
-
-	output, err := route.Handler.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(aSession)})
-	if err != nil {
-		return nil, err
-	}
-
+func (r *Router) marshalCustomOutput(output interface{}, route *Route) (PayloadReader, error) {
 	switch actual := output.(type) {
 	case response.Response:
 		responseContent, err := r.extractValueFromResponse(route, actual)
@@ -1164,7 +1148,7 @@ func (r *Router) readAsync(ctx context.Context, session *ReaderSession, record *
 }
 
 func (r *Router) executeAsync(ctx context.Context, session *ReaderSession, record *async.Record, forceInMemory bool) error {
-	if handler := session.Route.Async._asyncHandler; handler != nil && !forceInMemory {
+	if aHandler := session.Route.Async._asyncHandler; aHandler != nil && !forceInMemory {
 		bodyContent, err := session.RequestParams.BodyContent()
 		if err != nil {
 			r.handleReadAsyncError(ctx, session, record, err)
@@ -1176,7 +1160,7 @@ func (r *Router) executeAsync(ctx context.Context, session *ReaderSession, recor
 			body = string(bodyContent)
 		}
 
-		return handler.Handle(ctx, &async.RecordWithHttp{
+		return aHandler.Handle(ctx, &async.RecordWithHttp{
 			Record:  record,
 			Body:    body,
 			Method:  session.Request.Method,
@@ -1374,14 +1358,26 @@ func (r *Router) PrepareJobs(ctx context.Context, request *http.Request) (map[*s
 }
 
 func (r *Router) executorPayloadReader(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route) (PayloadReader, error) {
-	parameters, session, err := r.prepareExecutorSession(ctx, request, route)
-	if err != nil {
-		return nil, err
+	anExecutor := NewExecutor(route, request, nil)
+	if route.Handler != nil {
+		sessionHandler, err := anExecutor.SessionHandler(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		res, err := route.Handler.Call(ctx, sessionHandler)
+		if err != nil {
+			return nil, err
+		}
+
+		if err = anExecutor.Execute(ctx); err != nil {
+			return nil, err
+		}
+
+		return r.marshalCustomOutput(res, route)
 	}
-	fmt.Printf("%T %+v\n", parameters.bodyParam, parameters.bodyParam)
-	anExecutor := executor.New()
-	err = anExecutor.Exec(ctx, session)
-	if err != nil {
+
+	if err := anExecutor.Execute(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1389,12 +1385,15 @@ func (r *Router) executorPayloadReader(ctx context.Context, request *http.Reques
 		return NewBytesReader(nil, ""), nil
 	}
 
-	body, err := route.execResponseBody(parameters, session)
+	params, _ := anExecutor.RequestParams(ctx)
+	sess, _ := anExecutor.Session(ctx)
+
+	body, err := route.execResponseBody(params, sess)
 	if err != nil {
 		return nil, err
 	}
 
-	responseBody := r.wrapWithResponseIfNeeded(body, route, nil, nil, session.State)
+	responseBody := r.wrapWithResponseIfNeeded(body, route, nil, nil, sess.State)
 	marshal, err := route._marshaller.Marshal(responseBody)
 	if err != nil {
 		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
@@ -1403,55 +1402,23 @@ func (r *Router) executorPayloadReader(ctx context.Context, request *http.Reques
 	return NewBytesReader(marshal, ""), nil
 }
 
-func (r *Router) prepareExecutorSession(ctx context.Context, request *http.Request, route *Route) (*RequestParams, *executor.Session, error) {
-	parameters, err := NewRequestParameters(request, route)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	session, err := r.prepareExecutorSessionWithParameters(ctx, request, route, parameters)
-	return parameters, session, err
-}
-
 func (r *Router) prepareExecutorSessionWithParameters(ctx context.Context, request *http.Request, route *Route, parameters *RequestParams) (*executor.Session, error) {
 	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, parameters, route.Index._viewDetails...)
 	if err != nil {
 		return nil, err
 	}
 
-	session, err := executor.NewSession(selectors, route.View)
-	return session, err
+	sess, err := executor.NewSession(selectors, route.View)
+	return sess, err
 }
 
-func (r *Router) newHandlerSession(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route) (handler.Session, error) {
-	dialect, err := route.View.Connector.Dialect(ctx)
-	if err != nil {
-		return nil, err
+func (r *Route) NewStater(request *http.Request, parameters *RequestParams) *Stater {
+	return &Stater{
+		route:      r,
+		request:    request,
+		parameters: parameters,
+		cache:      r._stateCache,
 	}
-
-	parameters, err := NewRequestParameters(request, route)
-	if err != nil {
-		return nil, err
-	}
-
-	return session.NewSession(
-		session.WithTemplateFlush(func(ctx context.Context) error {
-			return r.prepareAndExecuteExecutor(ctx, request, route, parameters)
-		}),
-		session.WithStater(route.Handler.NewStater(request, route, parameters)),
-		session.WithSql(
-			func(options *sqlx.Options) sqlx.Sqlx {
-				return &SqlxService{
-					stmts:      expand.NewStmtHolder(),
-					options:    options,
-					validator:  r.newValidator(),
-					dialect:    dialect,
-					connectors: r._resource.Resource.GetConnectors(),
-					params:     parameters,
-				}
-			},
-		),
-	), nil
 }
 
 func (r *Router) prepareAndExecuteExecutor(ctx context.Context, request *http.Request, route *Route, parameters *RequestParams) error {
@@ -1467,12 +1434,6 @@ func (r *Router) prepareAndExecuteExecutor(ctx context.Context, request *http.Re
 	}
 
 	return nil
-}
-
-func (r *Router) newValidator() *validator.Service {
-	return validator.New(&Validator{
-		validator: expand.CommonValidator(),
-	})
 }
 
 func updateFieldPathsIfNeeded(filter *json.FilterEntry) {

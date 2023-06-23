@@ -351,9 +351,13 @@ package actor
 
 import "strings"
 
-func (a *Actor) InitialiseForInsert() bool {
-  a.FirstName = strings.ToUpper(a.FirstName)
-  return true
+func (a *Actor) initialiseForInsert() bool {
+	a.FirstName = strings.ToUpper(a.FirstName)
+	if !a.Has.LastUpdate {
+		a.LastUpdate = time.Now()
+		a.Has.LastUpdate = true
+	}
+	return true
 }
 ```
 #### Generate plugin  
@@ -441,10 +445,10 @@ You can also see on app console that the plugin and routes were reloaded:
 ### 1.14 Add InitialiseForUpdate method that will set lastUpdate and lastName fields
 + add method into ~/myproject/pkg/actor/init.go file:
 ```go
-func (a *Actor) InitialiseForUpdate(cur *Actor) bool {
+func (a *Actor) initialiseForUpdate(cur *Actor) bool {
 	firstNameUpper := false
 
-	if a.Has.LastName {
+	if a.Has.LastName { //set last name uppercase if a first name in uppercase
 		if a.Has.FirstName {
 			firstNameUpper = a.FirstName == strings.ToUpper(a.FirstName)
 		} else {
@@ -534,11 +538,214 @@ func (a *Actor) Init(cur *Actor) bool {
 }
 ```
 
-+ adjust file ~/myproject/dsql/actor/Actor.sql
++ adjust file ~/myproject/dsql/actor/Actor.sql (two cases):  
+
+  + **mysql and sequencer case (our case) when the db table has required fields (more than id field)**  
+    This case requires running initialization before using a sequencer.
+  ```code
+  /* {"URI":"actor","Method":"PATCH","ResponseBody":{"From":"Actor"}} */
+  
+  import (
+      "actor.Actor"
+      "actor.Entity"
+  )
+  
+  #set($_ = $Actor<[]*Actor>(body/Entity))
+  #set($_ = $ActorActorId<?>(param/Actor) /*
+     ? SELECT ARRAY_AGG(ActorId) AS Values FROM  `/` LIMIT 1
+     */
+  )
+  
+  #set($_ = $curActor<[]*Actor>(data_view/curActor) /* ?
+    select * from actor
+    WHERE $criteria.In("actor_id", $ActorActorId.Values)
+    */
+  )
+  
+  #set($curActorByActorId = $curActor.IndexBy("ActorId"))
+  
+  #foreach($recActor in $Unsafe.Actor)
+      #if($recActor)
+          #set($inited = $recActor.Init($curActorByActorId[$recActor.ActorId]))
+          #if($inited ==  false)
+              #set($initError = "init error")
+              $response.StatusCode(401)
+              $response.Failf("%v",$initError)
+          #end
+      #end
+  #end
+  
+  $sequencer.Allocate("actor", $Actor, "ActorId")
+  
+  #foreach($recActor in $Unsafe.Actor)
+      #if($recActor)
+          #if(($curActorByActorId.HasKey($recActor.ActorId) == true))
+            $sql.Update($recActor, "actor");
+          #else
+            $sql.Insert($recActor, "actor");
+          #end
+      #end
+  #end
+  ```
+  + general case
+  ```code
+  ...
+  #foreach($recActor in $Unsafe.Actor)
+      #if($recActor)
+          #set($inited = $recActor.Init($curActorByActorId[$recActor.ActorId]))
+  
+          #if(($curActorByActorId.HasKey($recActor.ActorId) == true))
+            $sql.Update($recActor, "actor");
+          #else
+            $sql.Insert($recActor, "actor");
+          #end
+      #end
+  #end
+  ```
+- [Generate plugin](#generate-plugin)
+- [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
+
+### 1.18 Default struct's validation with tags
++ Datly allows validating entities using tags.  
+Available tags:  
+  - ~~sqlx~~ (temporarily under reconstruction) // TODO
+  - validate
+
+
++ Add validate tags in Actor struct in file ~/myproject/pkg/actor/entity.go
+  ```go
+  type Actor struct {
+      ActorId    int       `sqlx:"name=actor_id,autoincrement,primaryKey,required"`
+      FirstName  string    `sqlx:"name=first_name,required" validate:"ge(2),le(15)"`
+      LastName   string    `sqlx:"name=last_name,unique,table=actor,required"  validate:"ge(2),le(15)"`
+      LastUpdate time.Time `sqlx:"name=last_update,required"`
+      Has        *ActorHas `setMarker:"true" typeName:"ActorHas" json:"-"  sqlx:"-" `
+  }
+  ```
+  - validate:"ge(2),le(15)" allows for strings with length between 2 and 15.
+  - ~~sqlx~~:"required" allows not nil value
+  - ~~sqlx~~:"unique,table=actor" checks in table actor if a value is unique
+  - 
+- Check more about validation tags
+  - [~~sqlx~~](https://github.com/viant/sqlx#validator-service)
+  - [govalidator](https://github.com/viant/govalidator#usage)
+  
++ Check if default validation works
+```http request
+PATCH /v1/api/dev/actor HTTP/1.1
+Host: 127.0.0.1:8080
+Content-Type: application/json
+```
+```json
+{
+    "Entity": [
+        {
+            "firstName": "M",
+            "lastName": "Wazalsky0123456789"
+        }
+    ]
+}
+```
+The response should be like:
+```json
+{
+    "Status": "error",
+    "Message": "Failed validation for Entity[0].FirstName(ge),Entity[0].LastName(le)",
+    "Errors": [
+        {
+            "View": "Actor",
+            "Param": "ActorActorId",
+            "Message": "Failed validation for Entity[0].FirstName(ge),Entity[0].LastName(le)",
+            "Object": [
+                {
+                    "Location": "Entity[0].FirstName",
+                    "Field": "FirstName",
+                    "Value": "M",
+                    "Message": "check 'ge' failed on field FirstName",
+                    "Check": "ge"
+                },
+                {
+                    "Location": "Entity[0].LastName",
+                    "Field": "LastName",
+                    "Value": "Wazalsky0123456789",
+                    "Message": "check 'le' failed on field LastName",
+                    "Check": "le"
+                }
+            ]
+        }
+    ]
+}
+```
+
+////////////
+### 1.19 Add custom validation
++ **modify file ~/myproject/pkg/actor/validate.go**
+```go
+package actor
+
+import (
+	"fmt"
+	"github.com/michael/mymodule/shared"
+	"github.com/viant/govalidator"
+	"strings"
+)
+
+func (a *Actor) Validate(cur *Actor) *shared.Validation {
+	info := shared.NewValidationInfo()
+	info.Validate(a, govalidator.WithShallow(true), govalidator.WithSetMarker())
+	defer info.UpdateStatus()
+
+	isInsert := cur == nil
+	if isInsert {
+		a.validateForInsert(info)
+	} else {
+		a.validateForUpdate(info, cur)
+	}
+	return info
+}
+
+func (a *Actor) validateForInsert(info *shared.Validation) {
+	if a.Has.FirstName && a.Has.LastName {
+		a.validateNames(info, a.FirstName, a.LastName)
+	}
+}
+
+func (a *Actor) validateForUpdate(info *shared.Validation, cur *Actor) {
+	firstName := cur.FirstName
+	lastName := cur.LastName
+
+	if a.Has.FirstName {
+		firstName = cur.FirstName
+	}
+
+	if a.Has.LastName {
+		lastName = a.LastName
+	}
+
+	a.validateNames(info, firstName, lastName)
+}
+
+func (a *Actor) validateNames(info *shared.Validation, firstName string, lastName string) {
+	if len(firstName) > 0 && len(a.LastName) > 0 {
+		if strings.ToUpper(string([]rune(firstName)[0])) == strings.ToUpper(string([]rune(lastName)[0])) {
+			info.Validation.AddViolation("[FirstName, LastName]", fmt.Sprintf("%s %s", firstName, lastName), "theSameFirstLetter",
+				fmt.Sprintf("First name and last name can't start with the same letter %s %s", firstName, lastName))
+		}
+	}
+}
+```
+
++ check if exists Validate invocation inside file ~/myproject/dsql/actor/Actor.sql
 ```code
 #foreach($recActor in $Unsafe.Actor)
     #if($recActor)
         #set($inited = $recActor.Init($curActorByActorId[$recActor.ActorId]))
+
+        #set($info = $recActor.Validate($curActorByActorId[$recActor.ActorId]))
+        #if($info.HasError ==  true)
+            $response.StatusCode(401)
+            $response.Failf("%v",$info.Error)
+        #end
 
         #if(($curActorByActorId.HasKey($recActor.ActorId) == true))
           $sql.Update($recActor, "actor");
@@ -548,10 +755,10 @@ func (a *Actor) Init(cur *Actor) bool {
     #end
 #end
 ```
+
 - [Generate plugin](#generate-plugin)
 - [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
-
-### 1.19 Add struct's validation with tags
+////////////
 + create folder ~/myproject/pkg/shared
 + create file ~/myproject/pkg/shared/message.go
 ```go
@@ -695,14 +902,14 @@ func (a *Actor) Validate(cur *Actor) *shared.Validation {
 ```go
 type Actor struct {
 	ActorId    int       `sqlx:"name=actor_id,autoincrement,primaryKey,required"`
-	FirstName  string    `sqlx:"name=first_name,required" validate:"gt(2),lt(15)"`
-	LastName   string    `sqlx:"name=last_name,unique,table=actor,required"  validate:"gt(2),lt(15)"`
+	FirstName  string    `sqlx:"name=first_name,required" validate:"ge(2),le(15)"`
+	LastName   string    `sqlx:"name=last_name,unique,table=actor,required"  validate:"ge(2),le(15)"`
 	LastUpdate time.Time `sqlx:"name=last_update,required"`
 	Has        *ActorHas `setMarker:"true" typeName:"ActorHas" json:"-"  sqlx:"-" `
 }
 ```
 - We can use tags for struct validation from sqlx and govalidator package
-  - Tag: validate:"gt(2),lt(15)" allows for strings with length between 3 and 14.
+  - Tag: validate:"ge(2),le(15)" allows for strings with length between 2 and 15.
   - Tag: sqlx:"required" allows not nil value
   - Tag: sqlx:"unique,table=actor" checks in table actor if a value is unique
 
@@ -814,7 +1021,13 @@ then you get a validation error like this:**
 }
 ```
 
-
+```sql
+CREATE TABLE `DIFF_JN` (
+  `ID` int(11) NOT NULL AUTO_INCREMENT,
+  `DIFF` longtext,
+  PRIMARY KEY (`ID`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+```
 
 ## Troubleshooting
 
@@ -853,7 +1066,7 @@ package github.com/viant/datly/cmd/datly
 ,
         env: [GOROOT=/var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/go/go1.17.1/go HOME=/var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/home PATH=/usr/bin:/usr/local/bin:/bin:/sbin:/usr/sbin GOPRIVATE=github.com/michael/mymodule/*]
 ```
-
+### Step 1
 First, try to find in your log fragment like this:
 ```shell
 env: [GOROOT=/var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/go/go1.17.1/go HOME=/var/folder[...]
@@ -869,8 +1082,8 @@ Next, try to delete subfolders from
 
 like figured below:
 ```shell
-rm -rf /var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/go
-rm -rf /var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/home
+sudo rm -rf /var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/go
+sudo rm -rf /var/folders/6z/v17fqdzs273b2qrf9jdkdq1m0000gn/T/home
 ```
 
 Now you can try to build datly again.
@@ -879,7 +1092,16 @@ Now you can try to build datly again.
 datly plugin -p=~/myproject -r=repo/dev -o=darwin -a=amd64
 ```
 
+### Step 2
+- Check if **myproject/pkg/go.mod** uses modules with the same version like **myproject/.build/datly/go.mod**
+- Check if you can run command **go build** without errors in folders
+  - ~/myproject2/pkg
+  - ~/myproject2/.build/datly/cmd/datly
 
+Now you can try to build datly again.
+```shell
+datly plugin -p=~/myproject -r=repo/dev -o=darwin -a=amd64
+```
 
 ### Troubleshooting datly load plugin
 If you build a plugin that uses a module with a different version than datly inside your_project_dir/.build 
@@ -917,3 +1139,322 @@ After deleting whole .build dir run command to recreate it:
 datly initExt -p=~/myproject -n=mymodule   
 ```
 Now you should be able to load the plugin.
+
+### Troubleshooting starting compiled project - unterminated statements on the stack
+command:
+```shell
+~/myproject/bin/datly run -c=~/myproject/repo/dev/Datly/config.json
+```
+
+error:
+```
+2023/06/22 20:30:38 failed to load routers due to the: unterminated statements on the stack: [0xc0002a89c0 0xc000ba82a0]
+```
+
+reason:  
+Missing bracket in variable definition, in entity rule file (in this current case ~/myproject/dsql/actor/Actor.sql)
+```
+#set($result = $recActor.Validate($curActorByActorId[$recActor.ActorId], $session)
+```
+solution:
+```
+#set($result = $recActor.Validate($curActorByActorId[$recActor.ActorId], $session))
+```
+
+## 8 Debugging
+### 8.1 More debug information on runtime
+Set environment variable before running app to get more debug informations.
+```text
+export DATLY_NOPANIC="1"
+```
+### 8.2 Create unit test file on project level
++ add file ~/myproject/service_test.go
+```go
+package myproject2
+
+import (
+	"context"
+	"fmt"
+	"github.com/viant/datly"
+	"github.com/viant/datly/template/expand"
+	"github.com/viant/datly/view"
+	"github.com/viant/scy/auth/jwt"
+	"github.com/viant/sqlx/io/insert"
+	"github.com/viant/sqlx/io/read"
+	"github.com/viant/sqlx/io/update"
+	_ "github.com/viant/sqlx/metadata/product/mysql"
+	"github.com/viant/xdatly/types/custom/actor"
+
+	"io"
+	"log"
+	"net/http"
+	surl "net/url"
+	"os"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestService_Patch(t *testing.T) {
+	testCases := []struct {
+		description string
+		Email       string
+		UserID      int
+		method      string
+		service     string
+		viewName    string
+		ruleURL     string
+		rawURL      string
+		pkg         string
+		name        string
+		rType       reflect.Type
+		body        string
+	}{
+		{
+			description: "actor",
+			Email:       "dev@viantinc.com",
+			UserID:      56453,
+			method:      "patch",
+			viewName:    "Actor",
+			ruleURL:     "/Users/michael/myproject2/repo/dev/Datly/routes/dev/Actor.yaml",
+			rawURL:      "http://127.0.0.1:8080/v1/api", // "http://127.0.0.1:8080/v1/api/dev",
+			pkg:         "actor",
+			name:        "Actor",
+			rType:       reflect.TypeOf(actor.Actor{}),
+			body: `{
+    "Entity": [
+        {
+            "actorId": 0,
+            "firstName":"AZ0123",
+            "lastName": "Z12345"
+        }
+    ]
+}`,
+		},
+	}
+
+	for _, testCase := range testCases[0:1] {
+		//	option.PresenceProvider
+		os.Setenv("DATLY_DEBUG", "true")
+
+		//Uncomment various additional debugging option and debugging and troubleshooting
+		expand.SetPanicOnError(false)
+		read.ShowSQL(true)
+		update.ShowSQL(true)
+		insert.ShowSQL(true)
+		ctx := context.Background()
+		service := datly.New(datly.NewConfig())
+		viewName := testCase.viewName
+		err := service.LoadRoute(ctx, testCase.ruleURL,
+			view.NewPackagedType(testCase.pkg, testCase.name, testCase.rType),
+		)
+		//	p := velty.Planner{}
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = service.Init(ctx)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		URL, _ := surl.Parse(testCase.rawURL)
+		httpRequest := &http.Request{
+			URL:    URL,
+			Method: testCase.method,
+			Body:   io.NopCloser(strings.NewReader(testCase.body)),
+			Header: http.Header{},
+		}
+
+		token, err := service.JwtSigner.Create(time.Hour, &jwt.Claims{
+			Email:  testCase.Email,
+			UserID: testCase.UserID,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+		httpRequest.Header.Set("Authorization", "Bearer "+token)
+
+		routeRes, _ := service.Routes()
+		route := routeRes.Routes[0] //make sure you are using correct route
+		err = service.Exec(ctx, viewName, datly.WithExecHttpRequest(ctx, route, httpRequest))
+		//route.ResponseBody
+		fmt.Println(route.ResponseBody.Query)
+		//route.ResponseBody.Query
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+```
+
++ add file ~/myproject/go.mod with equivalent content:
+```mod
+module github.com/viant/datly
+
+go 1.17
+
+require (
+	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
+	github.com/aws/aws-lambda-go v1.31.0
+	github.com/francoispqt/gojay v1.2.13
+	github.com/go-playground/universal-translator v0.18.0 // indirect
+	github.com/go-playground/validator v9.31.0+incompatible
+	github.com/go-sql-driver/mysql v1.7.0
+	github.com/goccy/go-json v0.9.11
+	github.com/golang-jwt/jwt/v4 v4.4.1
+	github.com/google/gops v0.3.23
+	github.com/google/uuid v1.3.0
+	github.com/jessevdk/go-flags v1.5.0
+	github.com/leodido/go-urn v1.2.1 // indirect
+	github.com/lib/pq v1.10.6
+	github.com/mattn/go-sqlite3 v1.14.16
+	github.com/onsi/gomega v1.20.2 // indirect
+	github.com/pkg/errors v0.9.1
+	github.com/stretchr/testify v1.8.4
+	github.com/viant/afs v1.24.2
+	github.com/viant/afsc v1.9.0
+	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
+	github.com/viant/bigquery v0.2.1
+	github.com/viant/cloudless v1.8.1
+	github.com/viant/dsc v0.16.2 // indirect
+	github.com/viant/dsunit v0.10.8
+	github.com/viant/dyndb v0.1.4-0.20221214043424-27654ab6ed9c
+	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
+	github.com/viant/godiff v0.4.1
+	github.com/viant/parsly v0.2.0
+	github.com/viant/pgo v0.10.3
+	github.com/viant/scy v0.6.0
+	github.com/viant/sqlx v0.8.0
+	github.com/viant/structql v0.2.2
+	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
+	github.com/viant/velty v0.2.0
+	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
+	github.com/viant/xreflect v0.0.0-20230303201326-f50afb0feb0d
+	github.com/viant/xunsafe v0.8.4
+	golang.org/x/mod v0.9.0
+	golang.org/x/oauth2 v0.7.0
+	google.golang.org/api v0.114.0
+	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
+	gopkg.in/yaml.v3 v3.0.1
+)
+
+require (
+	github.com/viant/govalidator v0.2.1
+	github.com/viant/sqlparser v0.3.1-0.20230320162628-96274e82953f
+	golang.org/x/crypto v0.7.0 // indirect
+)
+
+require (
+	github.com/aws/aws-sdk-go v1.44.12
+	github.com/aws/aws-sdk-go-v2/config v1.18.3
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.33.1
+	github.com/viant/structology v0.2.0
+	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
+	github.com/viant/xdatly/handler v0.0.0-20230619231115-e622dd6aff79
+	github.com/viant/xdatly/types/core v0.0.0-20230615201419-f5e46b6b011f
+)
+
+require (
+	cloud.google.com/go v0.110.0 // indirect
+	cloud.google.com/go/compute v1.19.0 // indirect
+	cloud.google.com/go/compute/metadata v0.2.3 // indirect
+	cloud.google.com/go/iam v0.13.0 // indirect
+	cloud.google.com/go/secretmanager v1.10.0 // indirect
+	cloud.google.com/go/storage v1.29.0 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.18.0 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.10 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.13.3 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.10.7 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.12.19 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.33 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.27 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.26 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.0.25 // indirect
+	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.17.8 // indirect
+	github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.13.27 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.9.11 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.1.28 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.7.20 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.27 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.14.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sns v1.20.11 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sqs v1.22.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.11.25 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.13.8 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.17.5 // indirect
+	github.com/aws/smithy-go v1.13.5 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.0-20210816181553-5444fa50b93d // indirect
+	github.com/go-errors/errors v1.4.2 // indirect
+	github.com/go-playground/locales v0.14.0 // indirect
+	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/google/go-cmp v0.5.9 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect
+	github.com/googleapis/gax-go/v2 v2.8.0 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/kr/pretty v0.3.0 // indirect
+	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
+	github.com/lestrrat-go/blackmagic v1.0.0 // indirect
+	github.com/lestrrat-go/httpcc v1.0.1 // indirect
+	github.com/lestrrat-go/iter v1.0.1 // indirect
+	github.com/lestrrat-go/jwx v1.2.25 // indirect
+	github.com/lestrrat-go/option v1.0.0 // indirect
+	github.com/michael/mymodule2 v0.0.0-00010101000000-000000000000 // indirect
+	github.com/nxadm/tail v1.4.8 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/rogpeppe/go-internal v1.9.0 // indirect
+	github.com/viant/igo v0.1.0 // indirect
+	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
+	go.opencensus.io v0.24.0 // indirect
+	golang.org/x/net v0.9.0 // indirect
+	golang.org/x/sync v0.1.0 // indirect
+	golang.org/x/sys v0.7.0 // indirect
+	golang.org/x/term v0.7.0 // indirect
+	golang.org/x/text v0.9.0 // indirect
+	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
+	google.golang.org/appengine v1.6.7 // indirect
+	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
+	google.golang.org/grpc v1.54.0 // indirect
+	google.golang.org/protobuf v1.30.0 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
+)
+
+replace github.com/michael/mymodule2 => /Users/michael/myproject2/pkg
+
+replace github.com/viant/xdatly/extension => /Users/michael/myproject2/.build/ext
+```
+
+- Check if **myproject/go.mod**:
+  - uses modules with the same version like **myproject/.build/datly/go.mod**
+  - uses the same version of datly you used for **~/myproject/.build** creation
+
+
+## 9 Update datly in existing project
+
+- [Ensure new version of datly](#datly)
+
+- Delete folder ~/myproject/.build
+```shell
+rm -rf ~/myproject/.build
+```
+
+- Recreate ~/myproject/.build
+```shell
+datly initExt -p=~/myproject -n=mymodule
+```
+
+- Delete plugins if exist
+```shell
+rm ~/myproject/repo/dev/Datly/plugins/*
+```
+
+- Check if **myproject/pkg/go.mod** uses modules with the same version like **myproject/.build/datly/go.mod**
+
+- Check if **myproject/go.mod** (when exists):
+  - uses modules with the same version like **myproject/.build/datly/go.mod**
+  - uses the same version of datly you used for **~/myproject/.build** creation  
+  
+**Tip:** Use command **go get example.com/pkg@v1.2.3** to install package with current version
+

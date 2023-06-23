@@ -11,6 +11,10 @@ type (
 	State struct {
 		*est.State
 		Context
+		Parameters    interface{}
+		ParametersHas interface{}
+		CustomContext []*CustomContext
+
 		Expanded string
 		flushed  bool
 	}
@@ -26,27 +30,66 @@ type (
 		Validator       *validator.Service `velty:"names=validator"`
 		MessageBus      *mbus.Service      `velty:"names=messageBus"`
 	}
+
+	StateOption func(state *State)
 )
 
-func (s *State) Init(templateState *est.State, param *MetaParam, parent *MetaParam, validator *Validator, sess *session.Session) {
+func WithViewParam(viewParam *MetaParam) StateOption {
+	return func(state *State) {
+		state.ViewParam = viewParam
+	}
+}
+
+func WithParentViewParam(viewParam *MetaParam) StateOption {
+	return func(state *State) {
+		state.ParentParam = viewParam
+	}
+}
+
+func WithSession(session *session.Session) StateOption {
+	return func(state *State) {
+		state.Session = session
+	}
+}
+
+func WithParameters(params, has interface{}) StateOption {
+	return func(state *State) {
+		state.Parameters = params
+		state.ParametersHas = has
+	}
+}
+
+func WithDataUnit(dataUnit *DataUnit) StateOption {
+	return func(state *State) {
+		state.DataUnit = dataUnit
+	}
+}
+
+func WithCustomContext(customContext *CustomContext) StateOption {
+	return func(state *State) {
+		state.CustomContext = append(state.CustomContext, customContext)
+	}
+}
+
+func (s *State) Init(templateState *est.State, options ...StateOption) {
+	for _, option := range options {
+		option(s)
+	}
+
 	if s.Printer == nil {
 		s.Printer = &Printer{}
 	}
 
-	if sess == nil {
-		sess = session.NewSession()
-	}
-
 	if s.Session == nil {
-		s.Session = sess
+		s.Session = session.NewSession()
 	}
 
-	if param != nil && param.dataUnit != nil {
-		s.DataUnit = param.dataUnit
-	} else if s.DataUnit == nil {
-		s.DataUnit = &DataUnit{
-			stmts: NewStmtHolder(),
-		}
+	if s.DataUnit == nil && s.ViewParam != nil {
+		s.DataUnit = s.ViewParam.dataUnit
+	}
+
+	if s.DataUnit == nil {
+		s.DataUnit = NewDataUnit(nil)
 	}
 
 	if s.Http == nil {
@@ -55,14 +98,6 @@ func (s *State) Init(templateState *est.State, param *MetaParam, parent *MetaPar
 
 	if s.ResponseBuilder == nil {
 		s.ResponseBuilder = &ResponseBuilder{Content: map[string]interface{}{}}
-	}
-
-	if s.ViewParam == nil {
-		s.ViewParam = param
-	}
-
-	if s.ParentParam == nil {
-		s.ParentParam = parent
 	}
 
 	if s.Validator == nil {
@@ -98,6 +133,6 @@ func StateWithSQL(SQL string) *State {
 		Expanded: SQL,
 	}
 
-	aState.Init(nil, nil, nil, nil, nil)
+	aState.Init(nil)
 	return aState
 }

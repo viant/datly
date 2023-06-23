@@ -23,6 +23,7 @@ import (
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
+	"sync"
 )
 
 type Style string
@@ -84,6 +85,7 @@ type (
 		_requestBodyType          reflect.Type
 		_requestBodySlice         *xunsafe.Slice
 		_apiKeys                  []*APIKey
+		_stateCache               *staterCache
 	}
 
 	query struct {
@@ -308,6 +310,12 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 
 	if err := r.initAsyncIfNeeded(ctx); err != nil {
 		return err
+	}
+
+	if r._stateCache == nil {
+		r._stateCache = &staterCache{
+			index: sync.Map{},
+		}
 	}
 
 	return nil

@@ -257,7 +257,13 @@ func (t *Template) EvaluateStateWithSession(externalParams interface{}, presence
 		}
 	}
 
-	return EvaluateWithSession(t.sqlEvaluator, externalParams, presenceMap, AsViewParam(t._view, nil, batchData, expander), parentParam, sess)
+	return Evaluate(
+		t.sqlEvaluator,
+		expand.WithParameters(externalParams, presenceMap),
+		expand.WithViewParam(AsViewParam(t._view, nil, batchData, expander)),
+		expand.WithParentViewParam(parentParam),
+		expand.WithSession(sess),
+	)
 }
 
 //WithTemplateParameter return parameter template options
@@ -276,12 +282,11 @@ func NewTemplate(source string, opts ...TemplateOption) *Template {
 	return ret
 }
 
-func Evaluate(evaluator *expand.Evaluator, externalParams, presenceMap interface{}, viewParam, parentParam *expand.MetaParam) (*expand.State, error) {
-	return EvaluateWithSession(evaluator, externalParams, presenceMap, viewParam, parentParam, nil)
-}
+func Evaluate(evaluator *expand.Evaluator, options ...expand.StateOption) (*expand.State, error) {
+	return evaluator.Evaluate(nil,
+		options...,
+	)
 
-func EvaluateWithSession(evaluator *expand.Evaluator, externalParams interface{}, presenceMap interface{}, viewParam *expand.MetaParam, parentParam *expand.MetaParam, sess *session.Session) (*expand.State, error) {
-	return evaluator.Evaluate(externalParams, presenceMap, viewParam, parentParam, nil, sess)
 }
 
 func AsViewParam(aView *View, aSelector *Selector, batchData *BatchData, options ...interface{}) *expand.MetaParam {

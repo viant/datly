@@ -232,7 +232,16 @@ func (t *Template) BuildTypeDef(spec *Spec, wrapperField string) {
 	if wrapperField != "" {
 		t.ensureTypeImport(wrapperField)
 	}
+	t.setResponseBody()
+}
 
+func (t *Template) setResponseBody() {
+	if t.Config.ResponseBody == nil {
+		t.Config.ResponseBody = &option.ResponseBodyConfig{}
+	}
+	if t.Config.ResponseBody.From == "" {
+		t.Config.ResponseBody.From = t.TypeDef.Name
+	}
 }
 
 func (t *Template) ensureTypeImport(simpleTypeName string) {

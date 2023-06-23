@@ -13,6 +13,7 @@ type Session struct {
 	View           *view.View
 	State          *expand.State
 	SessionHandler *session.Session
+	DataUnit       *expand.DataUnit
 
 	mux       sync.Mutex
 	selectors *view.Selectors

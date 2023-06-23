@@ -21,7 +21,7 @@ type (
 		templateFlusher TemplateFlushFn
 	}
 
-	SqlServiceFn    func(options *sqlx.Options) sqlx.Sqlx
+	SqlServiceFn    func(options *sqlx.Options) (sqlx.Sqlx, error)
 	TemplateFlushFn func(ctx context.Context) error
 )
 
@@ -48,12 +48,16 @@ func (s *Session) MessageBus() *mbus.Service {
 	return s.mbus
 }
 
-func (s *Session) Db(opts ...sqlx.Option) *sqlx.Service {
+func (s *Session) Db(opts ...sqlx.Option) (*sqlx.Service, error) {
 	sqlxOptions := &sqlx.Options{}
 	for _, opt := range opts {
 		opt(sqlxOptions)
 	}
-	return sqlx.New(s.sqlService(sqlxOptions))
+	service, err := s.sqlService(sqlxOptions)
+	if err != nil {
+		return nil, err
+	}
+	return sqlx.New(service), nil
 }
 
 func (s *Session) Stater() *state.Service {
@@ -64,6 +68,7 @@ func (s *Session) FlushTemplate(ctx context.Context) error {
 	if s.templateFlusher != nil {
 		return s.templateFlusher(ctx)
 	}
+
 	return nil
 }
 
