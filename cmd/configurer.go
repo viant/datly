@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/config"
@@ -15,6 +16,9 @@ import (
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
+	"github.com/viant/sqlx/metadata"
+	"github.com/viant/sqlx/metadata/info"
+	"github.com/viant/sqlx/metadata/sink"
 	rdata "github.com/viant/toolbox/data"
 	expr2 "github.com/viant/velty/ast/expr"
 	"net/http"
@@ -594,4 +598,27 @@ outer:
 		}
 	}
 	return builder.String()
+}
+
+func readForeignKeys(ctx context.Context, db *sql.DB, tableName string) ([]sink.Key, error) {
+	if tableName == "" {
+		return nil, nil
+	}
+	meta := metadata.New()
+	var keys []sink.Key
+	if err := meta.Info(ctx, db, info.KindForeignKeys, &keys); err != nil {
+		return nil, err
+	}
+
+	return filterKeys(keys, tableName), nil
+}
+
+func filterKeys(keys []sink.Key, tableName string) []sink.Key {
+	var tableKeys []sink.Key
+	for i, aKey := range keys {
+		if aKey.Table == tableName {
+			tableKeys = append(tableKeys, keys[i])
+		}
+	}
+	return tableKeys
 }

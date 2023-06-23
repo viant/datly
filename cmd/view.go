@@ -10,7 +10,11 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/query"
+	"github.com/viant/sqlx/io/config"
+	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/toolbox/format"
+	"strings"
 )
 
 func (s *Builder) buildAndAddViewWithLog(ctx context.Context, builder *routeBuilder, viewConfig *ViewConfig, selector *view.Config, indexNamespace bool, parameters ...*view.Parameter) (*view.View, error) {
@@ -331,4 +335,24 @@ func (s *Builder) buildCache(viewConfig *ViewConfig) (*view.Cache, error) {
 	}
 
 	return meta.Cache, nil
+}
+
+func (s *Builder) readSinkColumns(ctx context.Context, db *sql.DB, tableName string) ([]sink.Column, error) {
+	session, err := config.Session(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	sinkColumns, err := config.Columns(ctx, session, db, tableName)
+	if err != nil {
+		return nil, err
+	}
+	return sinkColumns, nil
+}
+
+func (s *Builder) isToOne(join *query.Join) bool {
+	if join == nil {
+		return false
+	}
+	return strings.Contains(sqlparser.Stringify(join.On), "1 = 1")
 }

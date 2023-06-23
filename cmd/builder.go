@@ -23,6 +23,8 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
+	qexpr "github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
 	sio "github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/metadata/sink"
@@ -1474,28 +1476,7 @@ func (s *Builder) prepareRuleIfNeeded(ctx context.Context, SQL []byte) (string, 
 		return "", err
 	}
 	SQL, err = s.fs.DownloadWithURL(ctx, s.Options.Generate.DSQLLocation())
-
 	return string(SQL), err
-	//
-	//
-	//dsql, err := template.GenerateDSQL()
-	//fmt.Printf("dsql: %v %v\n", dsql, err)
-	//state := template.GenerateState("")
-	//fmt.Printf("state %v\n", state)
-	//
-	//entity, err := template.GenerateEntity(ctx, "", nil)
-	//fmt.Printf("entity %s %v\n", entity, err)
-
-	switch strings.ToLower(s.options.PrepareRule) {
-	case PreparePost:
-		return s.preparePostRule(context.Background(), routeBuilder, SQL)
-	case PreparePatch:
-		return s.preparePatchRule(context.Background(), routeBuilder, SQL)
-	case PreparePut:
-		return s.preparePutRule(context.Background(), routeBuilder, SQL)
-	default:
-		return "", fmt.Errorf("unsupported prepare rule type")
-	}
 }
 
 func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcConfig) error {
@@ -2249,4 +2230,43 @@ func stringifyAst(expr ast.Expr, builder *strings.Builder) error {
 		return fmt.Errorf("unsupported node: %T", actual)
 	}
 	return nil
+}
+
+func extractRelationAliases(join *query.Join) (string, string) {
+	relAlias := ""
+	refAlias := ""
+	sqlparser.Traverse(join.On, func(n node.Node) bool {
+		switch actual := n.(type) {
+		case *qexpr.Binary:
+			if xSel, ok := actual.X.(*qexpr.Selector); ok {
+
+				if xSel.Name == join.Alias {
+
+					refAlias = xSel.Name
+				} else if relAlias == "" {
+					relAlias = xSel.Name
+				}
+			}
+			if ySel, ok := actual.Y.(*qexpr.Selector); ok {
+				if ySel.Name == join.Alias {
+					refAlias = ySel.Name
+				} else if relAlias == "" {
+					relAlias = ySel.Name
+				}
+			}
+			return true
+		}
+		return true
+	})
+	return relAlias, refAlias
+}
+
+func (c *ViewConfig) IsToMany() bool {
+	if c.parent == nil {
+		return c.outputConfig.IsMany()
+	}
+	if c.parent.IsToMany() {
+		return true
+	}
+	return false
 }
