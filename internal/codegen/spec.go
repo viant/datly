@@ -257,9 +257,16 @@ func NewSpec(ctx context.Context, db *sql.DB, table, SQL string) (*Spec, error) 
 }
 
 func isAuxiliary(SQL string) bool {
-	SQL = strings.Trim(strings.TrimSpace(SQL), "()")
+	SQL = strings.TrimSpace(SQL)
+
 	if SQL == "" {
 		return false
+	}
+	if SQL[0] == '(' {
+		SQL = SQL[1:]
+	}
+	if SQL[len(SQL)-1] == '(' {
+		SQL = SQL[:len(SQL)-2]
 	}
 	query, _ := sqlparser.ParseQuery(SQL)
 	if query == nil {

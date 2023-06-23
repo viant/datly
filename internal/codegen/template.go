@@ -155,7 +155,7 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 		recordPath := t.RecordName(spec.Type.Name)
 		forEach := ast.NewForEach(ast.NewIdent(recordPath), ast.NewIdent(structPath), ast.Block{})
 
-		if rel != nil {
+		if rel != nil && rel.KeyField != nil {
 			parentSelector := structPathPrefix + "." + rel.ParentField.Name
 			holder := recordPath + "." + rel.KeyField.Name
 			assignKey := ast.NewAssign(ast.NewIdent(holder), ast.NewIdent(parentSelector))
