@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/view/parameter"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty"
+	handler2 "github.com/viant/xdatly/handler"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -257,9 +258,14 @@ func (t *Template) EvaluateStateWithSession(externalParams interface{}, presence
 		}
 	}
 
+	if t._view.Handler != nil {
+		aHandler := t._view.Handler.(handler2.Handler)
+	}
+
 	return Evaluate(
 		t.sqlEvaluator,
 		expand.WithParameters(externalParams, presenceMap),
+
 		expand.WithViewParam(AsViewParam(t._view, nil, batchData, expander)),
 		expand.WithParentViewParam(parentParam),
 		expand.WithSession(sess),

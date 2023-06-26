@@ -77,8 +77,12 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 			return nil, err
 		}
 
-		if err = parameter.Init(ctx, nil, s.resource, nil); err != nil {
-			return nil, err
+		if currParam, err := s.resource.ParamByName(parameter.Name); err == nil {
+			parameter = currParam
+		} else {
+			if err = parameter.Init(ctx, nil, s.resource, nil); err != nil {
+				return nil, err
+			}
 		}
 
 		params = append(params, parameter)

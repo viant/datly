@@ -1419,6 +1419,7 @@ func (r *Route) NewStater(request *http.Request, parameters *RequestParams) *Sta
 		request:    request,
 		parameters: parameters,
 		cache:      r._stateCache,
+		resource:   r._resource,
 	}
 }
 

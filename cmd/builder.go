@@ -600,8 +600,8 @@ func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) 
 		builder.option.Declare = map[string]string{}
 	}
 
-	builder.option.Declare["Handler"] = simpledName(builder.option.HandlerType)
-	builder.option.Declare["State"] = simpledName(builder.option.StateType)
+	//builder.option.Declare["Handler"] = simpledName(builder.option.HandlerType)
+	//builder.option.Declare["State"] = simpledName(builder.option.StateType)
 
 	//builder.option.TypeSrc = &option.TypeSrcConfig{}
 	//builder.option.TypeSrc.URL = path.Join(statePath, statePackage)
@@ -610,7 +610,7 @@ func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) 
 	dSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
 	fmt.Printf("%v %v\n", dSQL, err)
 
-	return dSQL + " $" + entityParam.Name, err
+	return dSQL + "$" + entityParam.Name + "", err
 }
 
 func simpledName(typeName string) string {

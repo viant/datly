@@ -411,7 +411,7 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 		return err
 	}
 
-	if v.Mode != ModeHandler {
+	if v.Mode == ModeQuery {
 		if err = v.ensureColumns(ctx, resource); err != nil {
 			return err
 		}
