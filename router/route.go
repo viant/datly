@@ -227,7 +227,11 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if r.Style == BasicStyle {
 		r.Field = ""
 	}
-
+	if r.Handler != nil {
+		if err := r.Handler.Init(ctx, resource.Resource); err != nil {
+			return err
+		}
+	}
 	if err := r.initCardinality(); err != nil {
 		return err
 	}

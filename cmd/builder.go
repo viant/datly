@@ -48,7 +48,7 @@ import (
 type (
 	Builder struct {
 		Options          *options.Options
-		pluginTypes      map[string]bool
+		extensionTypes   map[string]bool
 		constFileContent constFileContent
 		constIndex       ParametersIndex
 		tablesMeta       *TableMetaRegistry
@@ -512,9 +512,9 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 		return err
 	}
 
-	if builder.sqlStmt == "" && builder.option.HandlerType != "" {
-		builder.sqlStmt = "$Campaign"
-	}
+	//if builder.sqlStmt == "" && builder.option.HandlerType != "" {
+	//	builder.sqlStmt = "$Campaign"
+	//}
 
 	if strings.TrimSpace(builder.sqlStmt) == "" {
 		return nil
@@ -580,6 +580,7 @@ func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) 
 		return "", fmt.Errorf("entity type was empty")
 	}
 	aType, err := codegen.NewType(statePackage, entityParam.Name, entityType)
+
 	if err != nil {
 		return "", err
 	}
@@ -589,13 +590,32 @@ func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) 
 			tmpl.Imports.AddType(aType.ExpandType(entityParam.In.Name))
 		}
 	}
+	tmpl.Imports.AddType(builder.option.StateType)
+	tmpl.Imports.AddType(builder.option.HandlerType)
+
 	tmpl.EnsureImports(aType)
 	tmpl.State = state
+
+	if builder.option.Declare == nil {
+		builder.option.Declare = map[string]string{}
+	}
+
+	builder.option.Declare["Handler"] = simpledName(builder.option.HandlerType)
+	builder.option.Declare["State"] = simpledName(builder.option.StateType)
+
+	//builder.option.TypeSrc = &option.TypeSrcConfig{}
+	//builder.option.TypeSrc.URL = path.Join(statePath, statePackage)
+	//builder.option.TypeSrc.Types = append(builder.option.TypeSrc.Types, builder.option.HandlerType, builder.option.StateType)
 
 	dSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
 	fmt.Printf("%v %v\n", dSQL, err)
 
-	return dSQL, err
+	return dSQL + " $" + entityParam.Name, err
+}
+
+func simpledName(typeName string) string {
+	fragments := strings.Split(typeName, ".")
+	return fragments[len(fragments)-1]
 }
 
 func (s *Builder) buildViews(ctx context.Context, builder *routeBuilder) error {
@@ -879,10 +899,12 @@ func (s *Builder) initConfigProvider(builder *routeBuilder) error {
 func (s *Builder) buildConfigProvider(SQL string, builder *routeBuilder) (*ViewConfigurer, error) {
 	serviceType := router.ServiceTypeReader
 
-	if IsSQLExecMode(SQL) || builder.route.Handler != nil {
+	if IsSQLExecMode(SQL) {
 		serviceType = router.ServiceTypeExecutor
 	}
-
+	if builder.route.Handler != nil {
+		serviceType = router.ServiceTypeHandler
+	}
 	return NewConfigProviderReader(view.FirstNotEmpty(s.options.Generate.Name, s.fileName(builder.session.sourceURL)), SQL, builder.option, serviceType, builder.paramsIndex, nil, &s.options.Connector, builder)
 }
 
@@ -922,7 +944,7 @@ func (s *Builder) parseDSQL(ctx context.Context, builder *routeBuilder, SQL []by
 
 	hint, SQLs := s.extractRouteSettings(SQL)
 
-	if SQLs, err = s.readArtificialParamHints(builder, SQLs); err != nil {
+	if SQLs, err = s.extractParameterDeclaration(builder, SQLs); err != nil {
 		return err
 	}
 
@@ -1488,9 +1510,9 @@ func (s *Builder) isUtilParam(builder *routeBuilder, param *view.Parameter) bool
 
 func (s *Builder) inheritRouteServiceType(builder *routeBuilder, aView *view.View) {
 	switch aView.Mode {
-	case "", view.SQLQueryMode:
+	case "", view.ModeQuery:
 		builder.route.Service = router.ServiceTypeReader
-	case view.SQLExecMode:
+	case view.ModeExec:
 		builder.route.Service = router.ServiceTypeExecutor
 	}
 }
@@ -1548,8 +1570,8 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 		filesMeta: dirTypes,
 	}
 
-	if len(s.pluginTypes) == 0 {
-		s.pluginTypes = map[string]bool{}
+	if len(s.extensionTypes) == 0 {
+		s.extensionTypes = map[string]bool{}
 	}
 	for _, typeName := range typeSrc.Types {
 		if strings.HasPrefix(typeName, "*") {
@@ -1559,9 +1581,10 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 			return err
 		}
 		if shouldGenPlugin := s.shouldGenPlugin(typeName, dirTypes); shouldGenPlugin {
-			s.pluginTypes[typeName] = true
+			s.extensionTypes[typeName] = true
 		}
-		expandDependentTypes(s.pluginTypes, dirTypes.Methods(typeName))
+		///---------------- TODO fix me
+		expandDependentTypes(s.extensionTypes, dirTypes.Methods(typeName))
 	}
 
 	for _, typeName := range typeSrc.Types {
@@ -1587,7 +1610,7 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 
 		var dataType string
 		var ref string
-		shouldGenPlugin := s.pluginTypes[actualName]
+		shouldGenPlugin := s.extensionTypes[actualName]
 		if !shouldGenPlugin {
 			dataType = rType.String()
 		} else {
@@ -1777,7 +1800,7 @@ func (s *Builder) parseTypeSrc(imported string, cursor *parsly.Cursor) (*option.
 	}, nil
 }
 
-func (s *Builder) readArtificialParamHints(builder *routeBuilder, SQL string) (string, error) {
+func (s *Builder) extractParameterDeclaration(builder *routeBuilder, SQL string) (string, error) {
 	SQLBytes := []byte(SQL)
 	cursor := parsly.NewCursor("", SQLBytes, 0)
 	for {
@@ -1797,8 +1820,8 @@ func (s *Builder) readArtificialParamHints(builder *routeBuilder, SQL string) (s
 			content = content[1 : len(content)-1]
 			contentCursor := parsly.NewCursor("", []byte(content), 0)
 
-			matched = contentCursor.MatchAfterOptional(whitespaceMatcher, artificialMatcher)
-			if matched.Code != artificialToken {
+			matched = contentCursor.MatchAfterOptional(whitespaceMatcher, parameterDeclarationMatcher)
+			if matched.Code != parameterDeclarationToken {
 				continue
 			}
 
@@ -2162,11 +2185,16 @@ func (s *Builder) detectSinkColumn(ctx context.Context, db *sql.DB, SQL string) 
 	}
 	stmt, err := db.PrepareContext(ctx, SQL)
 	if err != nil {
+		panic(1)
+	}
+	if err != nil {
 		return nil, err
 	}
 	defer stmt.Close()
 	rows, err := stmt.QueryContext(ctx)
+
 	if err != nil {
+		panic(err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -2213,7 +2241,7 @@ func trimParenthasis(text string) string {
 		text = text[1:]
 	}
 	if text[len(text)-1] == ')' {
-		text = text[:len(text)-2]
+		text = text[:len(text)-1]
 	}
 	return text
 }

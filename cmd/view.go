@@ -60,7 +60,7 @@ func (s *Builder) buildAndAddView(ctx context.Context, builder *routeBuilder, vi
 		return nil, err
 	}
 
-	if viewConfig.viewType == view.SQLExecMode {
+	if viewConfig.viewType == view.ModeExec {
 		selector = nil
 	} else if table.ViewConfig.Selector != nil {
 		selector = table.ViewConfig.Selector

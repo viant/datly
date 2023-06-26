@@ -91,7 +91,7 @@ func (t *Tags) buildValidateTag(field *Field) {
 	t.Set("validate", tagValue)
 }
 
-func (t *Tags) buildRelation(info *Spec, relation *Relation) {
+func (t *Tags) buildRelation(spec *Spec, relation *Relation) {
 	join := relation.Join
 	if join == nil {
 		return
@@ -102,12 +102,13 @@ func (t *Tags) buildRelation(info *Spec, relation *Relation) {
 	datlyTag := TagValue{}
 	datlyTag.Append(fmt.Sprintf("ralName=%s", join.Alias))
 	datlyTag.Append(fmt.Sprintf("relColumn=%s", relation.ParentField.Column.Name))
-	if info.Table != "" {
-		datlyTag.Append(fmt.Sprintf("refTable=%v", info.Table))
+	if spec.Table != "" {
+		datlyTag.Append(fmt.Sprintf("refTable=%v", spec.Table))
 	}
 	datlyTag.Append(fmt.Sprintf("refColumn=%s", relation.KeyField.Column.Name))
 	sqlTag := TagValue{}
 	if rawSQL := strings.Trim(sqlparser.Stringify(join.With), " )("); rawSQL != "" {
+		rawSQL = strings.Replace(rawSQL, "("+spec.Table+")", spec.Table, 1)
 		sqlTag.Append(strings.ReplaceAll(rawSQL, "\n", " "))
 	}
 	t.Set("datly", datlyTag)

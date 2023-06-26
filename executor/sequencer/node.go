@@ -60,7 +60,7 @@ func newNode(value interface{}, selectors ...string) (*node, error) {
 		}
 
 	default:
-		return nil, fmt.Errorf("unsupported type:%T", value)
+		return nil, fmt.Errorf("!unsupported type:%T", value)
 	}
 	return aNode, nil
 }

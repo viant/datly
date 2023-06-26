@@ -159,8 +159,15 @@ func (c *ViewConfigurer) buildExecViewConfig(viewName string, templateSQL string
 	table := &Table{
 		SQL: templateSQL,
 	}
+	viewMode := view.ModeExec
+	if c.serviceType == router.ServiceTypeHandler {
+		viewMode = view.ModeHandler
+		//	templateSQL = ""
+		//		table.SQL = ""
+		//	c.paramIndex.parameters = append(c.viewParams, ViewParamConfig{}
+	}
 
-	aConfig := newViewConfig(viewName, viewName, nil, table, nil, view.SQLExecMode)
+	aConfig := newViewConfig(viewName, viewName, nil, table, nil, viewMode)
 	statements := GetStatements(templateSQL)
 	batchInsertEnabled := map[string]bool{}
 	batchInsertDisabled := map[string]bool{}
@@ -224,9 +231,10 @@ func (c *ViewConfigurer) updateConfigWithExecStmt(statement *Statement, aConfig 
 		}
 
 		return asStringLiteral.Value, nil
-	} else {
+	} else if templateSQL != "" {
 		return updateExecViewConfig(templateSQL[statement.Start], templateSQL[statement.Start:statement.End], aConfig)
 	}
+	return "", nil
 }
 
 func (c *ViewConfigurer) buildReaderViewConfig(viewName string, SQL string, opt *option.RouteConfig, parent *query.Join) (*ViewConfig, []*ViewParamConfig, error) {
@@ -299,12 +307,11 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 	if err != nil {
 		fmt.Printf("[WARN] couldn't parse properly SQL for %v\n", viewName)
 	}
-
 	joins, ok := sqlxJoins(aQuery, opt)
 	if !ok {
 		aTable := c.buildTableFromQueryWithWarning(aQuery, expr.NewRaw(parsableSQL), opt, aQuery.From.Comments)
 		aTable.SQL = SQL
-		result := newViewConfig(viewName, viewName, parent, aTable, nil, view.SQLQueryMode)
+		result := newViewConfig(viewName, viewName, parent, aTable, nil, view.ModeQuery)
 		var namespaceSource string
 		if columns.CanBeTableName(aTable.Name) {
 			namespaceSource = aTable.Name
@@ -324,7 +331,7 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 		aTable.NamespaceSource = aTable.Name //for the relations, it will be adjusted later
 	}
 
-	result := newViewConfig(viewName, view.FirstNotEmpty(aQuery.From.Alias, viewName), parent, aTable, nil, view.SQLQueryMode)
+	result := newViewConfig(viewName, view.FirstNotEmpty(aQuery.From.Alias, viewName), parent, aTable, nil, view.ModeQuery)
 
 	var dataViewParams []*ViewParamConfig
 	tables := map[string]*Table{}
@@ -402,7 +409,7 @@ func (c *ViewConfigurer) getAlias(asStarExpr *expr.Star) string {
 
 func (c *ViewConfigurer) buildViewConfigWithTable(join *query.Join, innerTable *Table, opt *option.RouteConfig, comments string) (*ViewConfig, []*ViewParamConfig, error) {
 	if strings.TrimSpace(innerTable.SQL) == "" {
-		return newViewConfig(join.Alias, join.Alias, join, innerTable, nil, view.SQLQueryMode), nil, nil
+		return newViewConfig(join.Alias, join.Alias, join, innerTable, nil, view.ModeQuery), nil, nil
 	}
 
 	aConfig, viewParams, err := c.buildViewConfig(router.ServiceTypeReader, join.Alias, innerTable.SQL, opt, join)

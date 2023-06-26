@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	SQLExecMode  = "SQLExec"
-	SQLQueryMode = "SQLQuery"
+	ModeExec    = Mode("SQLExec")
+	ModeQuery   = Mode("SQLQuery")
+	ModeHandler = Mode("SQLHandler")
 
 	AsyncJobsTable = "DATLY_JOBS"
 	AsyncTagName   = "sqlxAsync"
@@ -410,8 +411,10 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 		return err
 	}
 
-	if err = v.ensureColumns(ctx, resource); err != nil {
-		return err
+	if v.Mode != ModeHandler {
+		if err = v.ensureColumns(ctx, resource); err != nil {
+			return err
+		}
 	}
 
 	if err = v.ensureCaseFormat(); err != nil {
@@ -1348,7 +1351,7 @@ func NewExecView(name, table string, template string, parameters []*Parameter, o
 	for i := range parameters {
 		templateParameters = append(templateParameters, WithTemplateParameter(parameters[i]))
 	}
-	opts = append(opts, WithViewKind(SQLExecMode),
+	opts = append(opts, WithViewKind(ModeExec),
 		WithTemplate(NewTemplate(template, templateParameters...)))
 	return NewView(name, table, opts...)
 }

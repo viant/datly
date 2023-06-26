@@ -20,15 +20,6 @@ func (s *State) Append(param ...*Parameter) {
 	*s = append(*s, param...)
 }
 
-func (s State) BodyParameter() *Parameter {
-	for _, param := range s {
-		if param.In.Kind == view.KindRequestBody {
-			return param
-		}
-	}
-	return nil
-}
-
 func (s State) dsqlParameterDeclaration() string {
 	var result []string
 	for _, param := range s {
@@ -101,7 +92,6 @@ func NewState(modulePath, dataType string, lookup xreflect.TypeLookupFn) (State,
 	if err = state.ensureSchema(dirTypes); err != nil {
 		return nil, err
 	}
-
 	return state, nil
 }
 

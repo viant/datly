@@ -11,7 +11,7 @@ func trimParenthesis(text string) string {
 		text = text[1:]
 	}
 	if text[len(text)-1] == ')' {
-		text = text[:len(text)-2]
+		text = text[:len(text)-1]
 	}
 	return text
 }

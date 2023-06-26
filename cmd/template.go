@@ -79,7 +79,7 @@ func (s *Builder) Parse(ctx context.Context, builder *routeBuilder, aViewConfig 
 	SQL = iterator.SQL
 
 	defaultParamType := view.KindQuery
-	if builder.option.Method == http.MethodPost {
+	if builder.option.Method != http.MethodGet {
 		defaultParamType = view.KindRequestBody
 	}
 

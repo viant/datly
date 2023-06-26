@@ -8,7 +8,8 @@ import (
 )
 
 func GetOrParseType(typeLookup xreflect.TypeLookupFn, dataType string) (reflect.Type, error) {
-	lookup, lookupErr := typeLookup("", "", dataType)
+	pkg := ""
+	lookup, lookupErr := typeLookup("", pkg, dataType)
 	if lookupErr == nil {
 		return lookup, nil
 	}

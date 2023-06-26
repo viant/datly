@@ -130,3 +130,5 @@ require (
 )
 
 replace github.com/viant/xdatly/types/custom => ./poc/pkg
+
+replace github.com/viant/govalidator => /Users/awitas/go/src/github.com/viant/govalidator

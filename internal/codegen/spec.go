@@ -235,6 +235,8 @@ func NewSpec(ctx context.Context, db *sql.DB, table, SQL string) (*Spec, error) 
 			return nil, err
 		}
 	}
+	result.Table = table
+	result.SQL = SQL
 	if len(columns) == 0 { //TODO mere column types
 		if columns, err = readSinkColumns(ctx, db, table); err != nil {
 			return nil, err
@@ -257,9 +259,15 @@ func NewSpec(ctx context.Context, db *sql.DB, table, SQL string) (*Spec, error) 
 }
 
 func isAuxiliary(SQL string) bool {
+	if SQL == "" {
+		return false
+	}
 	SQL = trimParenthesis(SQL)
 	aQuery, _ := sqlparser.ParseQuery(SQL)
 	if aQuery == nil {
+		return false
+	}
+	if aQuery.From.X == nil {
 		return true
 	}
 	from := sqlparser.Stringify(aQuery.From.X)

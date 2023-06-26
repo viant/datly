@@ -16,7 +16,7 @@ const (
 	quotedToken
 	setTerminatedToken
 	setToken
-	artificialToken
+	parameterDeclarationToken
 	commentToken
 	typeToken
 	dotToken
@@ -40,7 +40,7 @@ var packageMatcher = parsly.NewToken(packageKeywordToken, "package", matcher.New
 var quotedMatcher = parsly.NewToken(quotedToken, "quoted block", matcher.NewQuote('"', '\\'))
 var setTerminatedMatcher = parsly.NewToken(setTerminatedToken, "#set", matchers.NewStringTerminator("#set"))
 var setMatcher = parsly.NewToken(setToken, "#set", matcher.NewFragments([]byte("#set")))
-var artificialMatcher = parsly.NewToken(artificialToken, "$_", matcher.NewSpacedSet([]string{"$_ = $"}))
+var parameterDeclarationMatcher = parsly.NewToken(parameterDeclarationToken, "$_", matcher.NewSpacedSet([]string{"$_ = $"}))
 var commentMatcher = parsly.NewToken(commentToken, "/**/", matcher.NewSeqBlock("/*", "*/"))
 var typeMatcher = parsly.NewToken(typeToken, "<T>", matcher.NewSeqBlock("<", ">"))
 var dotMatcher = parsly.NewToken(dotToken, "call", matcher.NewByte('.'))

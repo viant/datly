@@ -13,7 +13,6 @@ import (
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/toolbox/format"
 	"reflect"
-	"strings"
 )
 
 type Type struct {
@@ -113,16 +112,6 @@ func (t *Type) AddRelation(name string, spec *Spec, relation *Relation) *Field {
 	field.Tag = field.Tags.Stringify()
 	t.relationFields = append(t.relationFields, field)
 	return field
-}
-
-func cardinality(join *query.Join) view.Cardinality {
-	if join == nil {
-		return view.Many
-	}
-	if strings.Contains(sqlparser.Stringify(join.On), "1 = 1") {
-		return view.One
-	}
-	return view.Many
 }
 
 func extractRelationColumns(join *query.Join) (string, string) {

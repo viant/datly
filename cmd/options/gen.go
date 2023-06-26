@@ -55,6 +55,9 @@ func (g *Gen) Init() error {
 	if g.Dest == "" {
 		g.Dest = "dsql"
 	}
+	if g.Lang == "" {
+		g.Lang = "velty"
+	}
 	if url.IsRelative(g.Dest) {
 		g.Dest = url.Join(g.Project, g.Dest)
 	}

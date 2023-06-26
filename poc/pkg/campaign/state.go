@@ -6,18 +6,18 @@ type State struct {
 	/*
 	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/` LIMIT 1
 	*/
-	CampaignId *struct{ Values []int } `datly:"kind=param,in=Campaign"`
+	CurCampaignID *struct{ Values []int } `datly:"kind=param,in=Campaign"`
 
 	/*
 	    ? SELECT * FROM CI_CAMPAIGN
-	   WHERE $criteria.In("ID", $CampaignId.Values)
+	   WHERE $criteria.In("ID", $CurCampaignID.Values)
 	*/
 	CurCampaign *Campaign `datly:"kind=data_view,in=CurCampaign"`
 
 	/*
-	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Advertiser/` LIMIT 1
+	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Advertiser` LIMIT 1
 	*/
-	AdvertiserId *struct{ Values []int } `datly:"kind=param,in=Campaign"`
+	CurCampaignAdvertiserID *struct{ Values []int } `datly:"kind=param,in=Campaign"`
 
 	/*
 	    ? SELECT av.ID,
@@ -26,74 +26,75 @@ type State struct {
 	                              AGENCY_ID,
 	                              (SELECT ctz.IANA_TIMEZONE_STR FROM CI_TIME_ZONE ctz WHERE av.TIME_ZONE_ID = ctz.ID) AS IANA_TIMEZONE
 	                       FROM CI_ADVERTISER av
-	   WHERE $criteria.In("ID", $AdvertiserId.Values)
+
+	   WHERE $criteria.In("ID", $CurCampaignAdvertiserID.Values)
 	*/
 	CurAdvertiser *Advertiser `datly:"kind=data_view,in=CurAdvertiser"`
 
 	/*
-	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Flights/` LIMIT 1
+	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Flights` LIMIT 1
 	*/
-	FlightsId *struct{ Values []int } `datly:"kind=param,in=Campaign"`
+	CurCampaignFlightsID *struct{ Values []int } `datly:"kind=param,in=Campaign"`
 
 	/*
 	    ? SELECT * FROM CI_CAMPAIGN_FLIGHT
-	   WHERE $criteria.In("ID", $FlightsId.Values)
+	   WHERE $criteria.In("ID", $CurCampaignFlightsID.Values)
 	*/
 	CurFlights []*Flights `datly:"kind=data_view,in=CurFlights"`
 
 	/*
-	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/CampaignCreative/` LIMIT 1
+	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/CampaignCreative` LIMIT 1
 	*/
-	CampaignCreativeId *struct{ Values []int } `datly:"kind=param,in=Campaign"`
+	CurCampaignCampaignCreativeID *struct{ Values []int } `datly:"kind=param,in=Campaign"`
 
 	/*
 	    ? SELECT * FROM CI_CAMPAIGN_CREATIVE
-	   WHERE $criteria.In("ID", $CampaignCreativeId.Values)
+	   WHERE $criteria.In("ID", $CurCampaignCampaignCreativeID.Values)
 	*/
 	CurCampaignCreative []*CampaignCreative `datly:"kind=data_view,in=CurCampaignCreative"`
 
 	/*
-	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Creative/` LIMIT 1
+	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Creative` LIMIT 1
 	*/
-	CreativeId *struct{ Values []int } `datly:"kind=param,in=Campaign"`
+	CurCampaignCreativeID *struct{ Values []int } `datly:"kind=param,in=Campaign"`
 
 	/*
-	    ? SELECT ID, ADVERTISER_ID, CAMPAIGN_ID FROM CI_CREATIVE
-	   WHERE $criteria.In("ID", $CreativeId.Values)
+	    ? SELECT ID, ADVERTISER_ID, CAMPAIGN_ID FROM CI_CREATIVE c
+	   WHERE $criteria.In("ID", $CurCampaignCreativeID.Values)
 	*/
 	CurCreative []*Creative `datly:"kind=data_view,in=CurCreative"`
 
 	/*
-	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Audience/` LIMIT 1
+	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Audience` LIMIT 1
 	*/
-	AudienceId *struct{ Values []int } `datly:"kind=param,in=Campaign"`
+	CurCampaignAudienceID *struct{ Values []int } `datly:"kind=param,in=Campaign"`
 
 	/*
 	    ? SELECT au.ID, au.TARGET, au.EXCLUSION, ad.CAMPAIGN_ID  FROM CI_AUDIENCE au
 	             JOIN CI_AD_ORDER ad ON au.AD_ORDER_ID = ad.ID
-	   WHERE $criteria.In("ID", $AudienceId.Values)
+	   WHERE $criteria.In("ID", $CurCampaignAudienceID.Values)
 	*/
 	CurAudience []*Audience `datly:"kind=data_view,in=CurAudience"`
 
 	/*
-	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/BidOverride/` LIMIT 1
+	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/BidOverride` LIMIT 1
 	*/
-	BidOverrideId *struct{ Values []int } `datly:"kind=param,in=Campaign"`
+	CurCampaignBidOverrideID *struct{ Values []int } `datly:"kind=param,in=Campaign"`
 
 	/*
 	    ? SELECT * FROM CI_CAMPAIGN_BID_MULTIPLIER
-	   WHERE $criteria.In("ID", $BidOverrideId.Values)
+	   WHERE $criteria.In("ID", $CurCampaignBidOverrideID.Values)
 	*/
 	CurBidOverride []*BidOverride `datly:"kind=data_view,in=CurBidOverride"`
 
 	/*
-	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Event/` LIMIT 1
+	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Event` LIMIT 1
 	*/
-	EventId *struct{ Values []int } `datly:"kind=param,in=Campaign"`
+	CurCampaignEventID *struct{ Values []int } `datly:"kind=param,in=Campaign"`
 
 	/*
-	    ? SELECT * FROM CI_EVENT
-	   WHERE $criteria.In("ID", $EventId.Values)
+	    ? SELECT * FROM CI_EVENT t
+	   WHERE $criteria.In("ID", $CurCampaignEventID.Values)
 	*/
 	CurEvent *Event `datly:"kind=data_view,in=CurEvent"`
 
@@ -110,7 +111,7 @@ type State struct {
 	             HasAgencyRole(1, ID,  'AGENCY_CAMPAIGN_MEMBER') IS_AGENCY_CAMPAIGN_MEMBER,
 	             HasAdvertiserRole(1, ID,'ADVERTISER_OWNER') IS_ADVERTISER_OWNER,
 	             HasAdvertiserRole(1, ID,'CAMPAIGN_MEMBER') IS_CAMPAIGN_MEMBER
-	      FROM (CI_CONTACTS)
+	      FROM CI_CONTACTS
 	*/
 	CurAcl *Acl `datly:"kind=data_view,in=CurAcl"`
 
@@ -122,7 +123,7 @@ type State struct {
 	                          HasAccountFeatureEnabled(ACCOUNT_ID, 'EXPOSE_CAMPAIGN_FLIGHTING') AS CAMPAIGN_FLIGHTING,
 	                          HasAccountFeatureEnabled(ACCOUNT_ID, 'EXPOSE_CHANNELS_V2') AS EXPOSE_CHANNELS_V2,
 	                          HasAccountFeatureEnabled(ACCOUNT_ID, 'EXPOSE_XDEVICE_FREQUENCY_CAPPING') AS XDEVICE_FREQUENCY_CAPPING
-	                      FROM (CI_CONTACTS)
+	                      FROM CI_CONTACTS
 	*/
 	CurFeatures *Features `datly:"kind=data_view,in=CurFeatures"`
 }
