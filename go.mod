@@ -34,7 +34,7 @@ require (
 	github.com/viant/pgo v0.10.3
 	github.com/viant/scy v0.6.0
 	github.com/viant/sqlx v0.9.0
-	github.com/viant/structql v0.2.2
+	github.com/viant/structql v0.3.0
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.2.0
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
@@ -130,5 +130,3 @@ require (
 )
 
 replace github.com/viant/xdatly/types/custom => ./poc/pkg
-
-replace github.com/viant/govalidator => /Users/awitas/go/src/github.com/viant/govalidator
