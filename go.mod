@@ -129,4 +129,4 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace github.com/viant/xdatly/types/custom => ./poc/pkg
+replace github.com/viant/xdatly/types/custom => ./poc2/pkg
