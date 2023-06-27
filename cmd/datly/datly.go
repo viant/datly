@@ -42,25 +42,25 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-	os.Args = []string{
-		"",
-		"gen",
-		"-o=patch",
-		"-g=campaign",
-		"-p=/Users/awitas/go/src/github.com/viant/datly/poc",
-		"-s=/Users/awitas/go/src/github.com/viant/datly/poc/dsql/campaign/init/campaign_patch.sql",
-		"-c=ci_ads|mysql|root:dev@tcp(127.0.0.1:3306)/ci_ads?parseTime=true",
-	}
 	//os.Args = []string{
 	//	"",
-	//	"dsql",
-	//	//"-o=patch",
-	//	//"-g=campaign",
-	//	"-p=/Users/klarysz/Documents/github_viant/datly/poc2",
-	//	"-s=/Users/klarysz/Documents/github_viant/datly/poc2/dsql2/handler.sql",
+	//	"gen",
+	//	"-o=patch",
+	//	"-g=campaign",
+	//	"-p=/Users/awitas/go/src/github.com/viant/datly/poc",
+	//	"-s=/Users/awitas/go/src/github.com/viant/datly/poc/dsql/campaign/init/campaign_patch.sql",
 	//	"-c=ci_ads|mysql|root:dev@tcp(127.0.0.1:3306)/ci_ads?parseTime=true",
-	//	"-r=/Users/klarysz/Documents/github_viant/datly/e2e/local/autogen",
 	//}
+	os.Args = []string{
+		"",
+		"dsql",
+		//"-o=patch",
+		//"-g=campaign",
+		"-p=/Users/klarysz/Documents/github_viant/datly/poc2",
+		"-s=/Users/klarysz/Documents/github_viant/datly/poc2/dsql2/handler.sql",
+		"-c=ci_ads|mysql|root:dev@tcp(127.0.0.1:3306)/ci_ads?parseTime=true",
+		"-r=/Users/klarysz/Documents/github_viant/datly/e2e/local/autogen",
+	}
 
 	server, err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {

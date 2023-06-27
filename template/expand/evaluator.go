@@ -95,12 +95,19 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	}
 
 	aNewer := &newer{lookup: typeLookup}
-	if err := evaluator.planner.RegisterStandaloneFunction(fnNew, &op.Function{
+	if err = evaluator.planner.RegisterStandaloneFunction(fnNew, &op.Function{
 		Handler:     aNewer.New,
 		ResultTyper: aNewer.NewResultType,
 	}); err != nil {
 		return nil, err
 	}
+
+	if err = evaluator.planner.RegisterStandaloneFunction(fnNop, &op.Function{
+		Handler: noper{}.Nop,
+	}); err != nil {
+		return nil, err
+	}
+
 	evaluator.executor, evaluator.stateProvider, err = evaluator.planner.Compile([]byte(template))
 	if err != nil {
 		return nil, err
