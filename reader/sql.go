@@ -270,8 +270,8 @@ func (b *Builder) updateColumnsIn(params *view.CriteriaParam, view *view.View, r
 
 	alias := b.viewAlias(view)
 	if hasCriteria || columnsIn {
-		if relation.ColumnAlias != "" {
-			alias = relation.ColumnAlias + "."
+		if relation.ColumnNamespace != "" {
+			alias = relation.ColumnNamespace + "."
 		} else {
 			alias = ""
 		}

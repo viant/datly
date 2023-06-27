@@ -1457,7 +1457,7 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 	if config.Cardinality == view.Many {
 		param.Schema.Cardinality = view.Many
 		//if !strings.HasPrefix(paramType, "[]") {
-		//	param.Schema.DataType = "[]" + paramType
+		//	param.Schema.Type = "[]" + paramType
 		//}
 	}
 

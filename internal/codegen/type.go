@@ -10,7 +10,6 @@ import (
 	qexpr "github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
-	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
 	"reflect"
@@ -25,9 +24,14 @@ type Type struct {
 	relationFields []*Field
 }
 
-func (t *Type) ByColumn(columnName string) *Field {
+func (t *Type) ByColumn(name string) *Field {
 	for _, candidate := range t.columnFields {
-		if column := candidate.Column; column != nil && column.Name == columnName {
+		if column := candidate.Column; column != nil && column.Alias != "" && column.Alias == name {
+			return candidate
+		}
+	}
+	for _, candidate := range t.columnFields {
+		if column := candidate.Column; column != nil && column.Name != "" && column.Name == name {
 			return candidate
 		}
 	}
@@ -46,16 +50,24 @@ func (t *Type) ExpandType(simpleName string) string {
 	return pkg + "." + simpleName
 }
 
-func (t *Type) AppendColumnField(column *sink.Column) (*Field, error) {
+func (t *Type) AppendColumnField(column *sqlparser.Column) (*Field, error) {
 	columnCase, err := format.NewCase(formatter.DetectCase(column.Name))
 	if err != nil {
 		return nil, err
 	}
+
+	fieldName := column.Alias
+	if fieldName == "" {
+		fieldName = column.Name
+	}
 	field := &Field{Column: column,
 		ColumnCase: columnCase,
-		Field:      view.Field{Name: columnCase.Format(column.Name, format.CaseUpperCamel)},
-		Ptr:        column.IsNullable(),
+		Field:      view.Field{Name: columnCase.Format(fieldName, format.CaseUpperCamel)},
+		Ptr:        column.IsNullable,
 		Tags:       Tags{},
+	}
+	if column.Type == "" {
+		return nil, fmt.Errorf("failed to match type: %v %v %v\n", column.Alias, column.Name, column.Expression)
 	}
 	aType, err := types.GetOrParseType(dConfig.Config.LookupType, column.Type)
 	if err != nil {
@@ -96,7 +108,7 @@ func (t *Type) ColumnFields() []*view.Field {
 	var result = make([]*view.Field, 0, 1+len(t.columnFields)+len(t.relationFields))
 	for i := range t.columnFields {
 		field := t.columnFields[i].Field
-		if t.columnFields[i].Column.IsNullable() {
+		if t.columnFields[i].Column.IsNullable {
 			field.Ptr = true
 		}
 		result = append(result, &field)

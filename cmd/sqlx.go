@@ -21,9 +21,9 @@ var whiteSpaces = []byte{' ', '\n', '\t', '\r', '\v', '\f', 0x85, 0xA0}
 
 type (
 	key struct {
-		Column string
-		Field  string
-		Alias  string
+		Column    string
+		Field     string
+		Namespace string
 	}
 
 	relationKey struct {
@@ -276,9 +276,9 @@ func newKey(s *expr.Selector, table *Table) (*key, error) {
 	}
 
 	return &key{
-		Column: colName,
-		Field:  field,
-		Alias:  alias,
+		Column:    colName,
+		Field:     field,
+		Namespace: alias,
 	}, nil
 }
 

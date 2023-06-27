@@ -15,3 +15,12 @@ func trimParenthesis(text string) string {
 	}
 	return text
 }
+func normalizeSQL(SQL string, table string) string {
+	SQL = strings.Replace(SQL, "("+table+")", table, 1)
+	return SQL
+}
+
+func normalizeTable(table string) string {
+	table = trimParenthesis(table)
+	return table
+}

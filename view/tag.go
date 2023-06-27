@@ -18,13 +18,16 @@ type (
 	}
 
 	RelationTag struct {
-		RelColumn    string
-		RefColumn    string
-		RefField     string
-		RefTable     string
-		RefName      string
-		RefConnector string
-		RefSQL       string
+		RelColumn        string
+		RelField         string
+		RelIncludeColumn bool
+		RefNamespace     string
+		RefColumn        string
+		RefField         string
+		RefTable         string
+		RefName          string
+		RefConnector     string
+		RefSQL           string
 	}
 
 	//Tag datly tag
@@ -49,15 +52,25 @@ func (t *Tag) RelationOption(field reflect.StructField, refViewOptions ...ViewOp
 	if t.RefSQL != "" {
 		refViewOptions = append(refViewOptions, WithTemplate(NewTemplate(t.RefSQL)))
 	}
+	var relOptions []RelationOption
+	if t.RefNamespace != "" {
+		relOptions = append(relOptions, WithRelationColumnNamespace(t.RefNamespace))
+	}
+	if t.RelField != "" {
+		relOptions = append(relOptions, WithRelationField(t.RelField))
+	}
+	if t.RelIncludeColumn {
+		relOptions = append(relOptions, WithRelationIncludeColumn(true))
+	}
 	if isSlice(field.Type) {
 		result = append(result, WithOneToMany(field.Name, t.RelColumn,
 			NwReferenceView(t.RefField, t.RefColumn,
-				NewView(t.RefName, t.RefTable, refViewOptions...))))
+				NewView(t.RefName, t.RefTable, refViewOptions...)), relOptions...))
 		return result
 	}
 	result = append(result, WithOneToOne(field.Name, t.RelColumn,
 		NwReferenceView(t.RefField, t.RefColumn,
-			NewView(t.RefName, t.RefTable, refViewOptions...))))
+			NewView(t.RefName, t.RefTable, refViewOptions...)), relOptions...))
 	return result
 }
 
@@ -101,8 +114,12 @@ func ParseTag(tagString string) *Tag {
 				tag.Kind = strings.TrimSpace(nv[1])
 			case "relcolumn":
 				tag.RelColumn = strings.TrimSpace(nv[1])
+			case "relfield":
+				tag.RelField = strings.TrimSpace(nv[1])
 			case "refcolumn":
 				tag.RefColumn = strings.TrimSpace(nv[1])
+			case "refns", "refnamespace":
+				tag.RefNamespace = strings.TrimSpace(nv[1])
 			case "reffield":
 				tag.RefField = strings.TrimSpace(nv[1])
 			case "reftable":

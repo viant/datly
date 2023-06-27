@@ -38,11 +38,50 @@ func (t *Tags) Set(tag string, value TagValue) {
 	t.tags[tag] = value
 }
 
+func (t *Tags) Init(tag string) {
+	for tag != "" {
+		i := 0
+		for i < len(tag) && tag[i] == ' ' {
+			i++
+		}
+		tag = tag[i:]
+		if tag == "" {
+			break
+		}
+		i = 0
+		for i < len(tag) && tag[i] > ' ' && tag[i] != ':' && tag[i] != '"' && tag[i] != 0x7f {
+			i++
+		}
+		if i == 0 || i+1 >= len(tag) || tag[i] != ':' || tag[i+1] != '"' {
+			break
+		}
+		name := tag[:i]
+		tag = tag[i+1:]
+		i = 1
+		for i < len(tag) && tag[i] != '"' {
+			if tag[i] == '\\' {
+				i++
+			}
+			i++
+		}
+		if i >= len(tag) {
+			break
+		}
+		quotedValue := tag[:i+1]
+		tag = tag[i+1:]
+		value, err := strconv.Unquote(quotedValue)
+		if err != nil {
+			break
+		}
+		t.Set(name, strings.Split(value, ","))
+	}
+}
+
 func (t *Tags) buildSqlxTag(source *Spec, field *Field) {
 	column := field.Column
 	tagValue := TagValue{}
 	tagValue.Append("name=" + column.Name)
-	if column.Autoincrement() {
+	if column.IsAutoincrement {
 		tagValue.Append("autoincrement")
 	}
 	key := strings.ToLower(column.Name)
@@ -51,7 +90,7 @@ func (t *Tags) buildSqlxTag(source *Spec, field *Field) {
 	} else if fk, ok := source.Fk[key]; ok {
 		tagValue.Append("refTable=" + fk.ReferenceTable)
 		tagValue.Append("refColumn=" + fk.ReferenceColumn)
-	} else if column.IsUnique() {
+	} else if column.IsUnique {
 		tagValue.Append("unique")
 		tagValue.Append("table=" + source.Table)
 	}
@@ -60,7 +99,7 @@ func (t *Tags) buildSqlxTag(source *Spec, field *Field) {
 
 func (t *Tags) buildJSONTag(field *Field) {
 	tagValue := TagValue{}
-	if field.Column.IsNullable() {
+	if field.Column.IsNullable {
 		tagValue.Append(",omitempty")
 	}
 	t.Set("json", tagValue)
@@ -72,9 +111,9 @@ func (t *Tags) buildValidateTag(field *Field) {
 	tagValue := TagValue{}
 	name := strings.ToLower(field.Name)
 
-	if field.Column.IsNullable() {
+	if field.Column.IsNullable {
 		tagValue.Append("omitempty")
-	} else if !field.Column.Autoincrement() {
+	} else if !field.Column.IsAutoincrement {
 		tagValue.Append("required")
 	}
 
@@ -93,19 +132,21 @@ func (t *Tags) buildValidateTag(field *Field) {
 
 func (t *Tags) buildRelation(spec *Spec, relation *Relation) {
 	join := relation.Join
-	if join == nil {
-		return
-	}
-	if relation.KeyField == nil {
+	if join == nil || relation.KeyField == nil || relation.ParentField == nil {
 		return
 	}
 	datlyTag := TagValue{}
-	datlyTag.Append(fmt.Sprintf("ralName=%s", join.Alias))
+	datlyTag.Append(fmt.Sprintf("relName=%s", join.Alias))
 	datlyTag.Append(fmt.Sprintf("relColumn=%s", relation.ParentField.Column.Name))
+	datlyTag.Append(fmt.Sprintf("relField=%s", relation.ParentField.Name))
 	if spec.Table != "" {
 		datlyTag.Append(fmt.Sprintf("refTable=%v", spec.Table))
 	}
 	datlyTag.Append(fmt.Sprintf("refColumn=%s", relation.KeyField.Column.Name))
+	datlyTag.Append(fmt.Sprintf("refField=%s", relation.KeyField.Name))
+	if relation.KeyField.Column.Namespace != "" {
+		datlyTag.Append(fmt.Sprintf("refns=%s", relation.KeyField.Column.Namespace))
+	}
 	sqlTag := TagValue{}
 	if rawSQL := strings.Trim(sqlparser.Stringify(join.With), " )("); rawSQL != "" {
 		rawSQL = strings.Replace(rawSQL, "("+spec.Table+")", spec.Table, 1)

@@ -242,7 +242,7 @@ func TestBuilder_Build(t *testing.T) {
 			description:  `select statement with $AND_COLUMN_IN`,
 			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ?  AND ( ev.user_id IN (?, ?, ?, ?))   ) AS t`,
 			placeholders: []interface{}{10, 4, 5, 9, 2},
-			relation:     &view.Relation{ColumnAlias: "ev", Of: &view.ReferenceView{Column: "ID"}},
+			relation:     &view.Relation{ColumnNamespace: "ev", Of: &view.ReferenceView{Column: "ID"}},
 			view: &view.View{
 				Columns: []*view.Column{
 					{
@@ -289,7 +289,7 @@ func TestBuilder_Build(t *testing.T) {
 			description:  `select statement without $COLUMN_IN`,
 			output:       `SELECT  t.ID,  t.Price FROM (SELECT * FROM EVENTS ev WHERE ev.ID = ?  AND ( ev.user_id IN (?, ?, ?, ?))  ) AS t`,
 			placeholders: []interface{}{10, 4, 5, 9, 2},
-			relation:     &view.Relation{ColumnAlias: "ev", Of: &view.ReferenceView{Column: "ID"}},
+			relation:     &view.Relation{ColumnNamespace: "ev", Of: &view.ReferenceView{Column: "ID"}},
 			view: &view.View{
 				Columns: []*view.Column{
 					{

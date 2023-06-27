@@ -414,7 +414,7 @@ func (p *Parameter) initSchema(resource *Resource, structType reflect.Type) erro
 	}
 
 	if p.Schema.DataType == "" && p.Schema.Name == "" {
-		return fmt.Errorf("parameter %v either schema DataType or Name has to be specified", p.Name)
+		return fmt.Errorf("parameter %v either schema Type or Name has to be specified", p.Name)
 	}
 
 	schemaType := FirstNotEmpty(p.Schema.Name, p.Schema.DataType)

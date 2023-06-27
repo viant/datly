@@ -297,7 +297,7 @@ func (c *Schema) copy() *Schema {
 	//newSchema := &Schema{
 	//	Name:     c.Name,
 	//	autoGen:  c.autoGen,
-	//	DataType: c.DataType,
+	//	Type: c.Type,
 	//}
 
 	schema := *c

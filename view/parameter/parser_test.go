@@ -21,11 +21,11 @@ func TestParse(t *testing.T) {
                                                  'adCloudName', 'Apex Mobile',
                                                  'shortcutIconFile', 'css/wl-apex.css'
                                              )),
-                                 NULL)) AS branding /* {"DataType": "json.RawMessage"} */,
+                                 NULL)) AS branding /* {"Type": "json.RawMessage"} */,
                       (SELECT IF(CI_SYSTEM_CONFIG.VALUE LIKE LOWER('%%'), 1, 0)
                        FROM CI_SYSTEM_CONFIG
                        where 'KEY' = 'sandboxDnsList'
-                                           LIMIT 1)         AS sandbox /* {"DataType": "bool"}  */ ,
+                                           LIMIT 1)         AS sandbox /* {"Type": "bool"}  */ ,
     'UA-136108240-1'       AS gaSiteId,
     'http://ad.ipredictive.com/d/render/fasttrack?zid=shanghai_1_0_1&creativeId={0}' AS creativeFetchUrlPattern
 FROM CI_SYSTEM_CONFIG 

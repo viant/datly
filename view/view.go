@@ -1288,17 +1288,23 @@ func WithTemplate(template *Template) ViewOption {
 }
 
 //WithOneToMany creates to many relation view option
-func WithOneToMany(holder, column string, ref *ReferenceView) ViewOption {
+func WithOneToMany(holder, column string, ref *ReferenceView, opts ...RelationOption) ViewOption {
 	return func(v *View) {
 		relation := &Relation{Cardinality: Many, Column: column, Holder: holder, Of: ref}
+		for _, opt := range opts {
+			opt(relation)
+		}
 		v.With = append(v.With, relation)
 	}
 }
 
 //WithOneToOne creates to one relation view option
-func WithOneToOne(holder, column string, ref *ReferenceView) ViewOption {
+func WithOneToOne(holder, column string, ref *ReferenceView, opts ...RelationOption) ViewOption {
 	return func(v *View) {
 		relation := &Relation{Cardinality: One, Column: column, Holder: holder, Of: ref}
+		for _, opt := range opts {
+			opt(relation)
+		}
 		v.With = append(v.With, relation)
 	}
 }
@@ -1355,4 +1361,24 @@ func NewExecView(name, table string, template string, parameters []*Parameter, o
 	opts = append(opts, WithViewKind(ModeExec),
 		WithTemplate(NewTemplate(template, templateParameters...)))
 	return NewView(name, table, opts...)
+}
+
+type RelationOption func(r *Relation)
+
+func WithRelationColumnNamespace(ns string) RelationOption {
+	return func(r *Relation) {
+		r.ColumnNamespace = ns
+	}
+}
+
+func WithRelationField(name string) RelationOption {
+	return func(r *Relation) {
+		r.Field = name
+	}
+}
+
+func WithRelationIncludeColumn(flag bool) RelationOption {
+	return func(r *Relation) {
+		r.IncludeColumn = flag
+	}
 }

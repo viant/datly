@@ -2,14 +2,16 @@ package codegen
 
 import (
 	"github.com/viant/datly/view"
+	"github.com/viant/sqlparser"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/toolbox/format"
 	"reflect"
+	"strings"
 )
 
 type Field struct {
 	view.Field
-	Column     *sink.Column
+	Column     *sqlparser.Column
 	Pk         *sink.Key
 	Tags       Tags
 	Ptr        bool
@@ -37,14 +39,13 @@ func NewField(rField *reflect.StructField) *Field {
 
 	sqlxTag := SqlxTag(rField.Tag)
 	if sqlxTag != nil && sqlxTag.Column != "" {
-		column := sink.Column{Name: sqlxTag.Column}
+		column := sqlparser.Column{Name: sqlxTag.Column}
 		if sqlxTag.Autoincrement {
-			column.IsAutoincrement = &sqlxTag.Autoincrement
+			column.IsAutoincrement = sqlxTag.Autoincrement
 		}
-		if !sqlxTag.Required {
-			column.Nullable = "y"
-		}
+		column.IsNullable = !sqlxTag.Required
 		column.Type = field.Schema.DataType
+		column.Tag = strings.Trim(string(rField.Tag), "`")
 		field.Column = &column
 	}
 	return field
