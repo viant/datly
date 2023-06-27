@@ -23,9 +23,10 @@ import (
 )
 
 const (
-	ModeExec    = Mode("SQLExec")
-	ModeQuery   = Mode("SQLQuery")
-	ModeHandler = Mode("SQLHandler")
+	ModeExec        = Mode("SQLExec")
+	ModeQuery       = Mode("SQLQuery")
+	ModeUnspecified = Mode("")
+	ModeHandler     = Mode("SQLHandler")
 
 	AsyncJobsTable = "DATLY_JOBS"
 	AsyncTagName   = "sqlxAsync"
@@ -411,7 +412,7 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 		return err
 	}
 
-	if v.Mode == ModeQuery {
+	if v.Mode == ModeQuery || v.Mode == ModeUnspecified {
 		if err = v.ensureColumns(ctx, resource); err != nil {
 			return err
 		}

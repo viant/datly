@@ -3,7 +3,9 @@ package router
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
+	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
 	"sort"
@@ -78,7 +80,7 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 		}
 
 		if currParam, err := s.resource.ParamByName(parameter.Name); err == nil {
-			parameter = currParam
+			parameter = currParam.WithAccessors(types.NewAccessor([]*xunsafe.Field{xunsafe.NewField(field)}), nil)
 		} else {
 			if err = parameter.Init(ctx, nil, s.resource, nil); err != nil {
 				return nil, err
@@ -107,7 +109,7 @@ func (u *stateUpdater) update(ctx context.Context, request *http.Request, route 
 		Values: dest,
 	}
 
-	param, err := paramBuilder.buildSelectorParameters(ctx, state, nil, u.params)
+	param, err := paramBuilder.buildSelectorParameters(ctx, state, nil, u.params, route.CustomValidation)
 	if err != nil {
 		return NewParamError("", param.Name, err)
 	}

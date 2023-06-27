@@ -29,7 +29,7 @@ type State struct {
 
 	   WHERE $criteria.In("ID", $CurCampaignAdvertiserID.Values)
 	*/
-	CurAdvertiser *Advertiser `datly:"kind=data_view,in=CurAdvertiser"`
+	CurAdvertiser []*Advertiser `datly:"kind=data_view,in=CurAdvertiser"`
 
 	/*
 	   ? SELECT ARRAY_AGG(Id) AS Values FROM  `/Flights` LIMIT 1
@@ -96,7 +96,7 @@ type State struct {
 	    ? SELECT * FROM CI_EVENT t
 	   WHERE $criteria.In("ID", $CurCampaignEventID.Values)
 	*/
-	CurEvent *Event `datly:"kind=data_view,in=CurEvent"`
+	CurEvent []*Event `datly:"kind=data_view,in=CurEvent"`
 
 	/*
 	   ? SELECT ID USER_ID,
@@ -113,7 +113,7 @@ type State struct {
 	             HasAdvertiserRole(1, ID,'CAMPAIGN_MEMBER') IS_CAMPAIGN_MEMBER
 	      FROM CI_CONTACTS
 	*/
-	CurAcl *Acl `datly:"kind=data_view,in=CurAcl"`
+	CurAcl []*Acl `datly:"kind=data_view,in=CurAcl"`
 
 	/*
 	   ? SELECT
@@ -125,5 +125,5 @@ type State struct {
 	                          HasAccountFeatureEnabled(ACCOUNT_ID, 'EXPOSE_XDEVICE_FREQUENCY_CAPPING') AS XDEVICE_FREQUENCY_CAPPING
 	                      FROM CI_CONTACTS
 	*/
-	CurFeatures *Features `datly:"kind=data_view,in=CurFeatures"`
+	CurFeatures []*Features `datly:"kind=data_view,in=CurFeatures"`
 }

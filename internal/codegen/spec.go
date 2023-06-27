@@ -26,15 +26,16 @@ type (
 		*Spec
 	}
 	Spec struct {
-		Parent      *Spec
-		isAuxiliary bool
-		Table       string
-		SQL         string
-		Columns     []sink.Column
-		pk          map[string]sink.Key
-		Fk          map[string]sink.Key
-		Type        *Type
-		Relations   []*Relation
+		Parent       *Spec
+		InnserColumn []string
+		isAuxiliary  bool
+		Table        string
+		SQL          string
+		Columns      []sink.Column
+		pk           map[string]sink.Key
+		Fk           map[string]sink.Key
+		Type         *Type
+		Relations    []*Relation
 	}
 
 	Selector []string
@@ -42,6 +43,7 @@ type (
 
 func (s *Spec) BuildType(pkg, name string, cardinality view.Cardinality, whitelist, blacklist map[string]bool) error {
 	var aType = &Type{Package: pkg, Name: name, Cardinality: cardinality}
+
 	for i, column := range s.Columns {
 		if s.shouldSkipColumn(whitelist, blacklist, &column) {
 			continue

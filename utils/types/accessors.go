@@ -43,6 +43,7 @@ func NewAccessor(fields []*xunsafe.Field) *Accessor {
 		isPtr:   isPtr,
 		xType:   xType,
 		xFields: fields,
+		xSlices: []*xunsafe.Slice{nil},
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx/metadata/sink"
+	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
 	"reflect"
 )
@@ -95,6 +96,9 @@ func (t *Type) ColumnFields() []*view.Field {
 	var result = make([]*view.Field, 0, 1+len(t.columnFields)+len(t.relationFields))
 	for i := range t.columnFields {
 		field := t.columnFields[i].Field
+		if t.columnFields[i].Column.IsNullable() {
+			field.Ptr = true
+		}
 		result = append(result, &field)
 	}
 	return result
@@ -163,6 +167,10 @@ func NewType(packageName string, name string, rType reflect.Type) (*Type, error)
 			}
 			switch rType.Kind() {
 			case reflect.Slice, reflect.Struct:
+				if structology.IsSetMarker(rField.Tag) {
+					continue
+				}
+
 				if typeName, _ := rField.Tag.Lookup("typeName"); typeName != "" {
 
 					result.relationFields = append(result.relationFields, field)

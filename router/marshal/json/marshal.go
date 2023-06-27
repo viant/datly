@@ -15,7 +15,6 @@ const null = `null`
 var nullBytes = []byte(`null`)
 
 const defaultCaser = format.CaseUpperCamel
-const IndexKey = "setMarker"
 
 type (
 	Marshaller struct {

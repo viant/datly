@@ -508,13 +508,13 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 		return err
 	}
 
-	if err := s.readRouteSettings(builder); err != nil {
+	if err := s.initRoute(builder); err != nil {
 		return err
 	}
 
-	//if builder.sqlStmt == "" && builder.option.HandlerType != "" {
-	//	builder.sqlStmt = "$Campaign"
-	//}
+	if err := s.loadParameters(builder); err != nil {
+		return err
+	}
 
 	if strings.TrimSpace(builder.sqlStmt) == "" {
 		return nil
@@ -524,10 +524,6 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 		consts.URL = builder.option.ConstFileURL
 	} else if consts.URL != builder.option.ConstFileURL && builder.option.ConstFileURL != "" {
 		return fmt.Errorf("missmatch const destination, %v - %v", consts.URL, builder.option.ConstFileURL)
-	}
-
-	if err := s.initRoute(builder); err != nil {
-		return err
 	}
 
 	if err := s.initConfigProvider(builder); err != nil {
@@ -585,11 +581,11 @@ func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) 
 		return "", err
 	}
 	tmpl := codegen.NewTemplate(builder.option, &codegen.Spec{Type: aType})
-	if entityParam.In.Kind == view.KindRequestBody {
-		if entityParam.In.Name != "" {
-			tmpl.Imports.AddType(aType.ExpandType(entityParam.In.Name))
-		}
-	}
+	//if entityParam.In.Kind == view.KindRequestBody {
+	//	if entityParam.In.Name != "" {
+	//		tmpl.Imports.AddType(aType.Name)
+	//	}
+	//}
 	tmpl.Imports.AddType(builder.option.StateType)
 	tmpl.Imports.AddType(builder.option.HandlerType)
 
@@ -709,7 +705,7 @@ func (s *Builder) loadAndInitConfig(ctx context.Context) error {
 	return nil
 }
 
-func (s *Builder) readRouteSettings(builder *routeBuilder) error {
+func (s *Builder) loadParameters(builder *routeBuilder) error {
 	if builder.option.Declare != nil {
 		builder.paramsIndex.AddParamTypes(builder.option.Declare)
 	}
@@ -773,7 +769,7 @@ func (s *Builder) initRoute(builder *routeBuilder) error {
 		Method:           builder.option.Method,
 		EnableAudit:      true,
 		Transforms:       builder.transforms,
-		CustomValidation: builder.option.CustomValidation,
+		CustomValidation: builder.option.CustomValidation || builder.option.HandlerType != "",
 		Cors: &router.Cors{
 			AllowCredentials: boolPtr(true),
 			AllowHeaders:     stringsPtr("*"),
@@ -1610,7 +1606,7 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 
 		var dataType string
 		var ref string
-		shouldGenPlugin := s.extensionTypes[actualName]
+		shouldGenPlugin := s.extensionTypes[actualName] || typeSrc.ForceGoTypeUse
 		if !shouldGenPlugin {
 			dataType = rType.String()
 		} else {
@@ -1742,7 +1738,7 @@ func (s *Builder) loadGoTypes(builder *routeBuilder) error {
 	switch matched.Code {
 	case quotedToken:
 		text := matched.Text(cursor)
-		typeSrc, err := s.parseTypeSrc(text[1:len(text)-1], cursor)
+		typeSrc, err := s.parseTypeSrc(text[1:len(text)-1], cursor, builder)
 		if err != nil {
 			return err
 		}
@@ -1758,7 +1754,7 @@ func (s *Builder) loadGoTypes(builder *routeBuilder) error {
 			switch matched.Code {
 			case quotedToken:
 				text := matched.Text(exprGroupCursor)
-				typeSrc, err := s.parseTypeSrc(text[1:len(text)-1], exprGroupCursor)
+				typeSrc, err := s.parseTypeSrc(text[1:len(text)-1], exprGroupCursor, builder)
 				if err != nil {
 					return err
 				}
@@ -1776,7 +1772,7 @@ func (s *Builder) loadGoTypes(builder *routeBuilder) error {
 	return nil
 }
 
-func (s *Builder) parseTypeSrc(imported string, cursor *parsly.Cursor) (*option.TypeSrcConfig, error) {
+func (s *Builder) parseTypeSrc(imported string, cursor *parsly.Cursor, builder *routeBuilder) (*option.TypeSrcConfig, error) {
 	var alias string
 	matched := cursor.MatchAfterOptional(whitespaceMatcher, aliasKeywordMatcher)
 	if matched.Code == aliasKeywordToken {
@@ -1794,9 +1790,10 @@ func (s *Builder) parseTypeSrc(imported string, cursor *parsly.Cursor) (*option.
 	}
 
 	return &option.TypeSrcConfig{
-		URL:   imported[:index],
-		Types: []string{imported[index+1:]},
-		Alias: alias,
+		URL:            imported[:index],
+		Types:          []string{imported[index+1:]},
+		Alias:          alias,
+		ForceGoTypeUse: builder.route.Handler != nil,
 	}, nil
 }
 

@@ -23,7 +23,6 @@ func init() {
 	core.RegisterType(PackageName, "Features", reflect.TypeOf(Features{}), checksum.GeneratedTime)
 	core.RegisterType(PackageName, "Handler", reflect.TypeOf(Handler{}), checksum.GeneratedTime)
 	core.RegisterType(PackageName, "State", reflect.TypeOf(State{}), checksum.GeneratedTime)
-
 }
 
 type Entity struct {
@@ -32,59 +31,59 @@ type Entity struct {
 
 type Campaign struct {
 	Id                       int                 `sqlx:"name=ID,autoincrement,primaryKey"`
-	StrId                    string              `sqlx:"name=STR_ID,unique,table=CI_CAMPAIGN" json:",omitempty" validate:"omitempty,le(32)"`
-	Name                     string              `sqlx:"name=NAME" json:",omitempty" validate:"omitempty,le(256)"`
+	StrId                    *string             `sqlx:"name=STR_ID,unique,table=CI_CAMPAIGN" json:",omitempty" validate:"omitempty,le(32)"`
+	Name                     *string             `sqlx:"name=NAME" json:",omitempty" validate:"omitempty,le(256)"`
 	AdvertiserId             int                 `sqlx:"name=ADVERTISER_ID,refTable=CI_ADVERTISER,refColumn=ID" validate:"required"`
-	IoNumber                 string              `sqlx:"name=IO_NUMBER" json:",omitempty" validate:"omitempty,le(128)"`
-	IabRating                string              `sqlx:"name=IAB_RATING" json:",omitempty" validate:"omitempty,le(64)"`
-	IabCat                   string              `sqlx:"name=IAB_CAT" json:",omitempty" validate:"omitempty,le(256)"`
-	Domain                   string              `sqlx:"name=DOMAIN" json:",omitempty" validate:"omitempty,domain,le(256)"`
-	PacingType               string              `sqlx:"name=PACING_TYPE" json:",omitempty" validate:"omitempty,le(64)"`
-	Startdate                time.Time           `sqlx:"name=STARTDATE" json:",omitempty" validate:"omitempty"`
-	Enddate                  time.Time           `sqlx:"name=ENDDATE" json:",omitempty" validate:"omitempty"`
-	LandingPageUrl           string              `sqlx:"name=LANDING_PAGE_URL" json:",omitempty" validate:"omitempty,le(225)"`
-	CampaignRules            string              `sqlx:"name=CAMPAIGN_RULES" json:",omitempty" validate:"omitempty,le(225)"`
-	Target                   string              `sqlx:"name=TARGET" json:",omitempty" validate:"omitempty,le(2048)"`
-	Exclusion                string              `sqlx:"name=EXCLUSION" json:",omitempty" validate:"omitempty,le(2048)"`
-	FreqCapping              float64             `sqlx:"name=FREQ_CAPPING" json:",omitempty" validate:"omitempty"`
-	CappingType              string              `sqlx:"name=CAPPING_TYPE" json:",omitempty" validate:"omitempty,le(32)"`
-	Brand                    string              `sqlx:"name=BRAND" json:",omitempty" validate:"omitempty,le(256)"`
-	CampaignGoal             int                 `sqlx:"name=CAMPAIGN_GOAL" json:",omitempty" validate:"omitempty"`
-	Status                   int                 `sqlx:"name=STATUS" json:",omitempty" validate:"omitempty"`
-	ContactName              string              `sqlx:"name=CONTACT_NAME" json:",omitempty" validate:"omitempty,le(255)"`
-	Phone                    string              `sqlx:"name=PHONE" json:",omitempty" validate:"omitempty,phone,le(256)"`
-	Email                    string              `sqlx:"name=EMAIL" json:",omitempty" validate:"omitempty,email,le(256)"`
-	Created                  time.Time           `sqlx:"name=CREATED" json:",omitempty" validate:"omitempty"`
-	Updatetimed              time.Time           `sqlx:"name=UPDATETIMED" json:",omitempty" validate:"omitempty"`
-	CreatedUser              int                 `sqlx:"name=CREATED_USER,refTable=CI_CONTACTS,refColumn=ID" json:",omitempty" validate:"omitempty"`
-	UpdatedUser              int                 `sqlx:"name=UPDATED_USER,refTable=CI_CONTACTS,refColumn=ID" json:",omitempty" validate:"omitempty"`
-	MaxBudget                float64             `sqlx:"name=MAX_BUDGET" json:",omitempty" validate:"omitempty"`
-	DailyBudget              float64             `sqlx:"name=DAILY_BUDGET" json:",omitempty" validate:"omitempty"`
-	MaxBidMultiplier         float64             `sqlx:"name=MAX_BID_MULTIPLIER" json:",omitempty" validate:"omitempty"`
-	MinBidMultiplier         float64             `sqlx:"name=MIN_BID_MULTIPLIER" json:",omitempty" validate:"omitempty"`
-	AgencyCommissionRate     float64             `sqlx:"name=AGENCY_COMMISSION_RATE" json:",omitempty" validate:"omitempty"`
-	LifetimeFreqCap          float64             `sqlx:"name=LIFETIME_FREQ_CAP" json:",omitempty" validate:"omitempty"`
-	CommissionRate           float64             `sqlx:"name=COMMISSION_RATE" json:",omitempty" validate:"omitempty"`
-	DataCommissionRate       float64             `sqlx:"name=DATA_COMMISSION_RATE" json:",omitempty" validate:"omitempty"`
+	IoNumber                 *string             `sqlx:"name=IO_NUMBER" json:",omitempty" validate:"omitempty,le(128)"`
+	IabRating                *string             `sqlx:"name=IAB_RATING" json:",omitempty" validate:"omitempty,le(64)"`
+	IabCat                   *string             `sqlx:"name=IAB_CAT" json:",omitempty" validate:"omitempty,le(256)"`
+	Domain                   *string             `sqlx:"name=DOMAIN" json:",omitempty" validate:"omitempty,domain,le(256)"`
+	PacingType               *string             `sqlx:"name=PACING_TYPE" json:",omitempty" validate:"omitempty,le(64)"`
+	Startdate                *time.Time          `sqlx:"name=STARTDATE" json:",omitempty" validate:"omitempty"`
+	Enddate                  *time.Time          `sqlx:"name=ENDDATE" json:",omitempty" validate:"omitempty"`
+	LandingPageUrl           *string             `sqlx:"name=LANDING_PAGE_URL" json:",omitempty" validate:"omitempty,le(225)"`
+	CampaignRules            *string             `sqlx:"name=CAMPAIGN_RULES" json:",omitempty" validate:"omitempty,le(225)"`
+	Target                   *string             `sqlx:"name=TARGET" json:",omitempty" validate:"omitempty,le(2048)"`
+	Exclusion                *string             `sqlx:"name=EXCLUSION" json:",omitempty" validate:"omitempty,le(2048)"`
+	FreqCapping              *float64            `sqlx:"name=FREQ_CAPPING" json:",omitempty" validate:"omitempty"`
+	CappingType              *string             `sqlx:"name=CAPPING_TYPE" json:",omitempty" validate:"omitempty,le(32)"`
+	Brand                    *string             `sqlx:"name=BRAND" json:",omitempty" validate:"omitempty,le(256)"`
+	CampaignGoal             *int                `sqlx:"name=CAMPAIGN_GOAL" json:",omitempty" validate:"omitempty"`
+	Status                   *int                `sqlx:"name=STATUS" json:",omitempty" validate:"omitempty"`
+	ContactName              *string             `sqlx:"name=CONTACT_NAME" json:",omitempty" validate:"omitempty,le(255)"`
+	Phone                    *string             `sqlx:"name=PHONE" json:",omitempty" validate:"omitempty,phone,le(256)"`
+	Email                    *string             `sqlx:"name=EMAIL" json:",omitempty" validate:"omitempty,email,le(256)"`
+	Created                  *time.Time          `sqlx:"name=CREATED" json:",omitempty" validate:"omitempty"`
+	Updatetimed              *time.Time          `sqlx:"name=UPDATETIMED" json:",omitempty" validate:"omitempty"`
+	CreatedUser              *int                `sqlx:"name=CREATED_USER,refTable=CI_CONTACTS,refColumn=ID" json:",omitempty" validate:"omitempty"`
+	UpdatedUser              *int                `sqlx:"name=UPDATED_USER,refTable=CI_CONTACTS,refColumn=ID" json:",omitempty" validate:"omitempty"`
+	MaxBudget                *float64            `sqlx:"name=MAX_BUDGET" json:",omitempty" validate:"omitempty"`
+	DailyBudget              *float64            `sqlx:"name=DAILY_BUDGET" json:",omitempty" validate:"omitempty"`
+	MaxBidMultiplier         *float64            `sqlx:"name=MAX_BID_MULTIPLIER" json:",omitempty" validate:"omitempty"`
+	MinBidMultiplier         *float64            `sqlx:"name=MIN_BID_MULTIPLIER" json:",omitempty" validate:"omitempty"`
+	AgencyCommissionRate     *float64            `sqlx:"name=AGENCY_COMMISSION_RATE" json:",omitempty" validate:"omitempty"`
+	LifetimeFreqCap          *float64            `sqlx:"name=LIFETIME_FREQ_CAP" json:",omitempty" validate:"omitempty"`
+	CommissionRate           *float64            `sqlx:"name=COMMISSION_RATE" json:",omitempty" validate:"omitempty"`
+	DataCommissionRate       *float64            `sqlx:"name=DATA_COMMISSION_RATE" json:",omitempty" validate:"omitempty"`
 	Archived                 types.BitBool       `sqlx:"name=ARCHIVED" validate:"required"`
-	LifetimeImpCap           int                 `sqlx:"name=LIFETIME_IMP_CAP" json:",omitempty" validate:"omitempty"`
-	DailyImpCap              int                 `sqlx:"name=DAILY_IMP_CAP" json:",omitempty" validate:"omitempty"`
-	LifetimeClickCap         int                 `sqlx:"name=LIFETIME_CLICK_CAP" json:",omitempty" validate:"omitempty"`
-	DailyClickCap            int                 `sqlx:"name=DAILY_CLICK_CAP" json:",omitempty" validate:"omitempty"`
+	LifetimeImpCap           *int                `sqlx:"name=LIFETIME_IMP_CAP" json:",omitempty" validate:"omitempty"`
+	DailyImpCap              *int                `sqlx:"name=DAILY_IMP_CAP" json:",omitempty" validate:"omitempty"`
+	LifetimeClickCap         *int                `sqlx:"name=LIFETIME_CLICK_CAP" json:",omitempty" validate:"omitempty"`
+	DailyClickCap            *int                `sqlx:"name=DAILY_CLICK_CAP" json:",omitempty" validate:"omitempty"`
 	EnablePAid               types.BitBool       `sqlx:"name=ENABLE_P_AID" validate:"required"`
-	BudgetCompletionStrategy int                 `sqlx:"name=BUDGET_COMPLETION_STRATEGY" json:",omitempty" validate:"omitempty"`
-	FreqCapDuration          int                 `sqlx:"name=FREQ_CAP_DURATION" json:",omitempty" validate:"omitempty"`
-	FreqCapTimePeriod        int                 `sqlx:"name=FREQ_CAP_TIME_PERIOD,refTable=CI_FREQUENCY_CAP_TIME_PERIOD,refColumn=ID" json:",omitempty" validate:"omitempty"`
-	FcapVersion              int                 `sqlx:"name=FCAP_VERSION" json:",omitempty" validate:"omitempty"`
-	FrequencyCapTypeId       int                 `sqlx:"name=FREQUENCY_CAP_TYPE_ID,refTable=CI_FREQUENCY_CAP_TYPE,refColumn=ID" json:",omitempty" validate:"omitempty"`
+	BudgetCompletionStrategy *int                `sqlx:"name=BUDGET_COMPLETION_STRATEGY" json:",omitempty" validate:"omitempty"`
+	FreqCapDuration          *int                `sqlx:"name=FREQ_CAP_DURATION" json:",omitempty" validate:"omitempty"`
+	FreqCapTimePeriod        *int                `sqlx:"name=FREQ_CAP_TIME_PERIOD,refTable=CI_FREQUENCY_CAP_TIME_PERIOD,refColumn=ID" json:",omitempty" validate:"omitempty"`
+	FcapVersion              *int                `sqlx:"name=FCAP_VERSION" json:",omitempty" validate:"omitempty"`
+	FrequencyCapTypeId       *int                `sqlx:"name=FREQUENCY_CAP_TYPE_ID,refTable=CI_FREQUENCY_CAP_TYPE,refColumn=ID" json:",omitempty" validate:"omitempty"`
 	ChannelGroupId           int                 `sqlx:"name=CHANNEL_GROUP_ID,refTable=CI_CHANNEL_GROUP,refColumn=ID" validate:"required"`
-	BillableMaxBudget        float64             `sqlx:"name=BILLABLE_MAX_BUDGET" json:",omitempty" validate:"omitempty"`
+	BillableMaxBudget        *float64            `sqlx:"name=BILLABLE_MAX_BUDGET" json:",omitempty" validate:"omitempty"`
 	UserIdentifierType       int                 `sqlx:"name=USER_IDENTIFIER_TYPE,refTable=CI_USER_IDENTIFIER_TYPE,refColumn=ID" validate:"required"`
 	PacingMode               int                 `sqlx:"name=PACING_MODE" validate:"required"`
 	IntradayFrontloadPct     float64             `sqlx:"name=INTRADAY_FRONTLOAD_PCT" validate:"required"`
-	ClientPgRate             float64             `sqlx:"name=CLIENT_PG_RATE" json:",omitempty" validate:"omitempty"`
-	ClientNonPgRate          float64             `sqlx:"name=CLIENT_NON_PG_RATE" json:",omitempty" validate:"omitempty"`
-	ManagedRate              float64             `sqlx:"name=MANAGED_RATE" json:",omitempty" validate:"omitempty"`
+	ClientPgRate             *float64            `sqlx:"name=CLIENT_PG_RATE" json:",omitempty" validate:"omitempty"`
+	ClientNonPgRate          *float64            `sqlx:"name=CLIENT_NON_PG_RATE" json:",omitempty" validate:"omitempty"`
+	ManagedRate              *float64            `sqlx:"name=MANAGED_RATE" json:",omitempty" validate:"omitempty"`
 	CoManagedFeeType         int                 `sqlx:"name=CO_MANAGED_FEE_TYPE,refTable=CI_CO_MANAGED_FEE_TYPE,refColumn=ID" validate:"required"`
 	Advertiser               *Advertiser         `typeName:"Advertiser" sqlx:"-" datly:"ralName=Advertiser,relColumn=ADVERTISER_ID,refTable=CI_ADVERTISER,refColumn=ID" sql:"SELECT av.ID,                            av.CURRENCY_ID,                            DEFAULT_CHANNELS,                            AGENCY_ID,                            (SELECT ctz.IANA_TIMEZONE_STR FROM CI_TIME_ZONE ctz WHERE av.TIME_ZONE_ID = ctz.ID) AS IANA_TIMEZONE                     FROM CI_ADVERTISER av "`
 	Flights                  []*Flights          `typeName:"Flights" sqlx:"-" datly:"ralName=Flights,relColumn=ID,refTable=CI_CAMPAIGN_FLIGHT,refColumn=CAMPAIGN_ID" sql:"SELECT * FROM CI_CAMPAIGN_FLIGHT"`
@@ -101,9 +100,9 @@ type Campaign struct {
 type Advertiser struct {
 	Id              int            `sqlx:"name=ID,autoincrement,primaryKey"`
 	CurrencyId      int            `sqlx:"name=CURRENCY_ID,refTable=CI_CURRENCY,refColumn=ID" validate:"required"`
-	DefaultChannels int            `sqlx:"name=DEFAULT_CHANNELS" json:",omitempty" validate:"omitempty"`
-	AgencyId        int            `sqlx:"name=AGENCY_ID,refTable=CI_AGENCY,refColumn=ID" json:",omitempty" validate:"omitempty"`
-	IanaTimezone    string         `sqlx:"name=IANA_TIMEZONE" json:",omitempty" validate:"omitempty"`
+	DefaultChannels *int           `sqlx:"name=DEFAULT_CHANNELS" json:",omitempty" validate:"omitempty"`
+	AgencyId        *int           `sqlx:"name=AGENCY_ID,refTable=CI_AGENCY,refColumn=ID" json:",omitempty" validate:"omitempty"`
+	IanaTimezone    *string        `sqlx:"name=IANA_TIMEZONE" json:",omitempty" validate:"omitempty"`
 	Has             *AdvertiserHas `setMarker:"true" typeName:"AdvertiserHas" json:"-"  sqlx:"-" `
 }
 
@@ -121,16 +120,16 @@ type Flights struct {
 	StartDate            time.Time   `sqlx:"name=START_DATE" validate:"required"`
 	EndDate              time.Time   `sqlx:"name=END_DATE" validate:"required"`
 	DailyBudgetType      int         `sqlx:"name=DAILY_BUDGET_TYPE,refTable=CI_DAILY_BUDGET_TYPE,refColumn=ID" validate:"required"`
-	DailyBudget          float64     `sqlx:"name=DAILY_BUDGET" json:",omitempty" validate:"omitempty"`
+	DailyBudget          *float64    `sqlx:"name=DAILY_BUDGET" json:",omitempty" validate:"omitempty"`
 	LifetimeFrontloadPct float64     `sqlx:"name=LIFETIME_FRONTLOAD_PCT" validate:"required"`
-	DailyImpCap          int         `sqlx:"name=DAILY_IMP_CAP" json:",omitempty" validate:"omitempty"`
-	LifetimeImpCap       int         `sqlx:"name=LIFETIME_IMP_CAP" json:",omitempty" validate:"omitempty"`
+	DailyImpCap          *int        `sqlx:"name=DAILY_IMP_CAP" json:",omitempty" validate:"omitempty"`
+	LifetimeImpCap       *int        `sqlx:"name=LIFETIME_IMP_CAP" json:",omitempty" validate:"omitempty"`
 	MaxBudget            float64     `sqlx:"name=MAX_BUDGET" validate:"required"`
-	BillableMaxBudget    float64     `sqlx:"name=BILLABLE_MAX_BUDGET" json:",omitempty" validate:"omitempty"`
+	BillableMaxBudget    *float64    `sqlx:"name=BILLABLE_MAX_BUDGET" json:",omitempty" validate:"omitempty"`
 	CreatedUser          int         `sqlx:"name=CREATED_USER,refTable=CI_CONTACTS,refColumn=ID" validate:"required"`
-	Created              time.Time   `sqlx:"name=CREATED" json:",omitempty" validate:"omitempty"`
+	Created              *time.Time  `sqlx:"name=CREATED" json:",omitempty" validate:"omitempty"`
 	UpdatedUser          int         `sqlx:"name=UPDATED_USER,refTable=CI_CONTACTS,refColumn=ID" validate:"required"`
-	Updated              time.Time   `sqlx:"name=UPDATED" json:",omitempty" validate:"omitempty"`
+	Updated              *time.Time  `sqlx:"name=UPDATED" json:",omitempty" validate:"omitempty"`
 	Has                  *FlightsHas `setMarker:"true" typeName:"FlightsHas" json:"-"  sqlx:"-" `
 }
 
@@ -156,8 +155,8 @@ type CampaignCreative struct {
 	Id         int                  `sqlx:"name=ID,autoincrement,primaryKey"`
 	CreativeId int                  `sqlx:"name=CREATIVE_ID,refTable=CI_CREATIVE,refColumn=ID" validate:"required"`
 	CampaignId int                  `sqlx:"name=CAMPAIGN_ID,refTable=CI_CAMPAIGN,refColumn=ID" validate:"required"`
-	Created    time.Time            `sqlx:"name=CREATED" json:",omitempty" validate:"omitempty"`
-	Updated    time.Time            `sqlx:"name=UPDATED" json:",omitempty" validate:"omitempty"`
+	Created    *time.Time           `sqlx:"name=CREATED" json:",omitempty" validate:"omitempty"`
+	Updated    *time.Time           `sqlx:"name=UPDATED" json:",omitempty" validate:"omitempty"`
 	Has        *CampaignCreativeHas `setMarker:"true" typeName:"CampaignCreativeHas" json:"-"  sqlx:"-" `
 }
 
@@ -171,7 +170,7 @@ type CampaignCreativeHas struct {
 
 type Creative struct {
 	Id           int          `sqlx:"name=ID,autoincrement,primaryKey"`
-	CampaignId   int          `sqlx:"name=CAMPAIGN_ID,refTable=CI_CAMPAIGN,refColumn=ID" json:",omitempty" validate:"omitempty"`
+	CampaignId   *int         `sqlx:"name=CAMPAIGN_ID,refTable=CI_CAMPAIGN,refColumn=ID" json:",omitempty" validate:"omitempty"`
 	AdvertiserId int          `sqlx:"name=ADVERTISER_ID,refTable=CI_ADVERTISER,refColumn=ID" validate:"required"`
 	Has          *CreativeHas `setMarker:"true" typeName:"CreativeHas" json:"-"  sqlx:"-" `
 }
@@ -184,8 +183,8 @@ type CreativeHas struct {
 
 type Audience struct {
 	Id        int          `sqlx:"name=ID,autoincrement,primaryKey"`
-	Target    string       `sqlx:"name=TARGET" json:",omitempty" validate:"omitempty,le(65535)"`
-	Exclusion string       `sqlx:"name=EXCLUSION" json:",omitempty" validate:"omitempty,le(65535)"`
+	Target    *string      `sqlx:"name=TARGET" json:",omitempty" validate:"omitempty,le(65535)"`
+	Exclusion *string      `sqlx:"name=EXCLUSION" json:",omitempty" validate:"omitempty,le(65535)"`
 	Has       *AudienceHas `setMarker:"true" typeName:"AudienceHas" json:"-"  sqlx:"-" `
 }
 
@@ -224,15 +223,15 @@ type Event struct {
 	Id           int           `sqlx:"name=ID,autoincrement,primaryKey"`
 	EventName    string        `sqlx:"name=EVENT_NAME" validate:"required,le(64)"`
 	AccountId    int           `sqlx:"name=ACCOUNT_ID,refTable=CI_ACCOUNT,refColumn=ID" validate:"required"`
-	AgencyId     int           `sqlx:"name=AGENCY_ID,refTable=CI_AGENCY,refColumn=ID" json:",omitempty" validate:"omitempty"`
-	AdvertiserId int           `sqlx:"name=ADVERTISER_ID,refTable=CI_ADVERTISER,refColumn=ID" json:",omitempty" validate:"omitempty"`
-	CampaignId   int           `sqlx:"name=CAMPAIGN_ID,refTable=CI_CAMPAIGN,refColumn=ID" json:",omitempty" validate:"omitempty"`
-	CreativeId   int           `sqlx:"name=CREATIVE_ID,refTable=CI_CREATIVE,refColumn=ID" json:",omitempty" validate:"omitempty"`
-	AdOrderId    int           `sqlx:"name=AD_ORDER_ID,refTable=CI_AD_ORDER,refColumn=ID" json:",omitempty" validate:"omitempty"`
-	CreatedUser  int           `sqlx:"name=CREATED_USER,refTable=CI_CONTACTS,refColumn=ID" json:",omitempty" validate:"omitempty"`
-	Created      time.Time     `sqlx:"name=CREATED" json:",omitempty" validate:"omitempty"`
-	Log          string        `sqlx:"name=LOG" json:",omitempty" validate:"omitempty,le(4294967295)"`
-	InternalMsg  string        `sqlx:"name=INTERNAL_MSG" json:",omitempty" validate:"omitempty,le(8192)"`
+	AgencyId     *int          `sqlx:"name=AGENCY_ID,refTable=CI_AGENCY,refColumn=ID" json:",omitempty" validate:"omitempty"`
+	AdvertiserId *int          `sqlx:"name=ADVERTISER_ID,refTable=CI_ADVERTISER,refColumn=ID" json:",omitempty" validate:"omitempty"`
+	CampaignId   *int          `sqlx:"name=CAMPAIGN_ID,refTable=CI_CAMPAIGN,refColumn=ID" json:",omitempty" validate:"omitempty"`
+	CreativeId   *int          `sqlx:"name=CREATIVE_ID,refTable=CI_CREATIVE,refColumn=ID" json:",omitempty" validate:"omitempty"`
+	AdOrderId    *int          `sqlx:"name=AD_ORDER_ID,refTable=CI_AD_ORDER,refColumn=ID" json:",omitempty" validate:"omitempty"`
+	CreatedUser  *int          `sqlx:"name=CREATED_USER,refTable=CI_CONTACTS,refColumn=ID" json:",omitempty" validate:"omitempty"`
+	Created      *time.Time    `sqlx:"name=CREATED" json:",omitempty" validate:"omitempty"`
+	Log          *string       `sqlx:"name=LOG" json:",omitempty" validate:"omitempty,le(4294967295)"`
+	InternalMsg  *string       `sqlx:"name=INTERNAL_MSG" json:",omitempty" validate:"omitempty,le(8192)"`
 	Processed    types.BitBool `sqlx:"name=PROCESSED" validate:"required"`
 	Has          *EventHas     `setMarker:"true" typeName:"EventHas" json:"-"  sqlx:"-" `
 }
@@ -256,16 +255,16 @@ type EventHas struct {
 type Acl struct {
 	UserId                 int     `sqlx:"name=USER_ID" validate:"required"`
 	AccountId              int     `sqlx:"name=ACCOUNT_ID,refTable=CI_ACCOUNT,refColumn=ID" validate:"required"`
-	IsReadOnly             int     `sqlx:"name=IS_READ_ONLY" json:",omitempty" validate:"omitempty"`
-	IsBusinessOwner        int     `sqlx:"name=IS_BUSINESS_OWNER" json:",omitempty" validate:"omitempty"`
-	IsAdminCreation        int     `sqlx:"name=IS_ADMIN_CREATION" json:",omitempty" validate:"omitempty"`
-	IsRolesManagement      int     `sqlx:"name=IS_ROLES_MANAGEMENT" json:",omitempty" validate:"omitempty"`
-	CanExposeCommission    int     `sqlx:"name=CAN_EXPOSE_COMMISSION" json:",omitempty" validate:"omitempty"`
-	RoleAdelphicInternal   int     `sqlx:"name=ROLE_ADELPHIC_INTERNAL" json:",omitempty" validate:"omitempty"`
-	IsAgencyOwner          int     `sqlx:"name=IS_AGENCY_OWNER" json:",omitempty" validate:"omitempty"`
-	IsAgencyCampaignMember int     `sqlx:"name=IS_AGENCY_CAMPAIGN_MEMBER" json:",omitempty" validate:"omitempty"`
-	IsAdvertiserOwner      int     `sqlx:"name=IS_ADVERTISER_OWNER" json:",omitempty" validate:"omitempty"`
-	IsCampaignMember       int     `sqlx:"name=IS_CAMPAIGN_MEMBER" json:",omitempty" validate:"omitempty"`
+	IsReadOnly             *int    `sqlx:"name=IS_READ_ONLY" json:",omitempty" validate:"omitempty"`
+	IsBusinessOwner        *int    `sqlx:"name=IS_BUSINESS_OWNER" json:",omitempty" validate:"omitempty"`
+	IsAdminCreation        *int    `sqlx:"name=IS_ADMIN_CREATION" json:",omitempty" validate:"omitempty"`
+	IsRolesManagement      *int    `sqlx:"name=IS_ROLES_MANAGEMENT" json:",omitempty" validate:"omitempty"`
+	CanExposeCommission    *int    `sqlx:"name=CAN_EXPOSE_COMMISSION" json:",omitempty" validate:"omitempty"`
+	RoleAdelphicInternal   *int    `sqlx:"name=ROLE_ADELPHIC_INTERNAL" json:",omitempty" validate:"omitempty"`
+	IsAgencyOwner          *int    `sqlx:"name=IS_AGENCY_OWNER" json:",omitempty" validate:"omitempty"`
+	IsAgencyCampaignMember *int    `sqlx:"name=IS_AGENCY_CAMPAIGN_MEMBER" json:",omitempty" validate:"omitempty"`
+	IsAdvertiserOwner      *int    `sqlx:"name=IS_ADVERTISER_OWNER" json:",omitempty" validate:"omitempty"`
+	IsCampaignMember       *int    `sqlx:"name=IS_CAMPAIGN_MEMBER" json:",omitempty" validate:"omitempty"`
 	Has                    *AclHas `setMarker:"true" typeName:"AclHas" json:"-"  sqlx:"-" `
 }
 
@@ -286,11 +285,11 @@ type AclHas struct {
 
 type Features struct {
 	UserId                  int          `sqlx:"name=USER_ID" validate:"required"`
-	DualStatus              int          `sqlx:"name=DUAL_STATUS" json:",omitempty" validate:"omitempty"`
-	HouseholdIdentifier     int          `sqlx:"name=HOUSEHOLD_IDENTIFIER" json:",omitempty" validate:"omitempty"`
-	CampaignFlighting       int          `sqlx:"name=CAMPAIGN_FLIGHTING" json:",omitempty" validate:"omitempty"`
-	ExposeChannelsV2        int          `sqlx:"name=EXPOSE_CHANNELS_V2" json:",omitempty" validate:"omitempty"`
-	XdeviceFrequencyCapping int          `sqlx:"name=XDEVICE_FREQUENCY_CAPPING" json:",omitempty" validate:"omitempty"`
+	DualStatus              *int         `sqlx:"name=DUAL_STATUS" json:",omitempty" validate:"omitempty"`
+	HouseholdIdentifier     *int         `sqlx:"name=HOUSEHOLD_IDENTIFIER" json:",omitempty" validate:"omitempty"`
+	CampaignFlighting       *int         `sqlx:"name=CAMPAIGN_FLIGHTING" json:",omitempty" validate:"omitempty"`
+	ExposeChannelsV2        *int         `sqlx:"name=EXPOSE_CHANNELS_V2" json:",omitempty" validate:"omitempty"`
+	XdeviceFrequencyCapping *int         `sqlx:"name=XDEVICE_FREQUENCY_CAPPING" json:",omitempty" validate:"omitempty"`
 	Has                     *FeaturesHas `setMarker:"true" typeName:"FeaturesHas" json:"-"  sqlx:"-" `
 }
 

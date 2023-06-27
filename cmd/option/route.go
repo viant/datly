@@ -33,9 +33,10 @@ type (
 	}
 
 	TypeSrcConfig struct {
-		URL   string
-		Types []string
-		Alias string
+		URL            string
+		Types          []string
+		Alias          string
+		ForceGoTypeUse bool
 	}
 
 	BodyConfig struct {

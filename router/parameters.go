@@ -294,7 +294,7 @@ func (p *RequestParams) ExtractHttpParam(ctx context.Context, param *view.Parame
 			return nil, err
 		}
 
-		return transformIfNeeded(ctx, param, body, options...)
+		return body, nil
 	case view.KindHeader:
 		return p.convertAndTransform(ctx, p.header(param.In.Name), param, options...)
 	case view.KindCookie:

@@ -13,5 +13,5 @@ func (h *Handler) Exec(ctx context.Context, session handler.Session) (interface{
 	state := &State{}
 	err := session.Stater().Into(ctx, state)
 	fmt.Printf("%v %T %+v\n", err, state, state)
-	return &Campaign{Id: 12343}, nil
+	return &Campaign{Id: 12343}, err
 }

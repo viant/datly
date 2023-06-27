@@ -29,6 +29,7 @@ type (
 		requestMetadata *RequestMetadata
 		params          *RequestParams
 		cache           *paramsValueCache
+		skipValidation  bool
 	}
 
 	JSONError struct {
@@ -512,7 +513,11 @@ func isNull(value interface{}) bool {
 }
 
 func (b *paramStateBuilder) handleParam(ctx context.Context, state *view.ParamState, parent *ViewDetails, parameter *view.Parameter, options ...interface{}) error {
-	value, err := b.extractParamValueWithOptions(ctx, parameter, parent.View, options...)
+	var parentView *view.View
+	if parent != nil {
+		parentView = parent.View
+	}
+	value, err := b.extractParamValueWithOptions(ctx, parameter, parentView, options...)
 	if err != nil {
 		return err
 	}

@@ -53,12 +53,11 @@ func (h *Handler) Init(ctx context.Context, resource *view.Resource) error {
 }
 
 func (h *Handler) Call(ctx context.Context, session handler.Session) (interface{}, error) {
-	handlerV := types.NewRValue(h._handlerType)
-	values := []reflect.Value{handlerV, reflect.ValueOf(ctx), reflect.ValueOf(session)}
-	output := h.caller.Func.Call(values)
-	result := output[0].Interface()
-	resultErr := output[1].Interface()
+	aHandler := types.NewValue(h._handlerType)
+	asHandler, ok := aHandler.(handler.Handler)
+	if !ok {
+		return nil, fmt.Errorf("expected handler to implement %T", asHandler)
+	}
 
-	asErr, _ := resultErr.(error)
-	return result, asErr
+	return asHandler.Exec(ctx, session)
 }
