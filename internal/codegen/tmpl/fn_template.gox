@@ -1,3 +1,0 @@
-func ($receiver) $fnName($in) $out {
-    $body
-}

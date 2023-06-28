@@ -140,7 +140,7 @@ func (t *Type) AddRelation(name string, spec *Spec, relation *Relation) *Field {
 
 func (t *Type) Fields() []reflect.StructField {
 	var fields []reflect.StructField
-	for _, field := range t.pkFields {
+	for _, field := range t.columnFields {
 		fields = append(fields, field.StructField())
 	}
 

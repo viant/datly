@@ -9,37 +9,69 @@ import (
 	"strings"
 )
 
-//go:embed tmpl/fn_template.gox
-var functionSchema string
-
 type (
-	MethodNotifier struct {
-		state   reflect.Type
-		builder *strings.Builder
-		index   receiverIndex
+	MethodHandler struct {
+		state     reflect.Type
+		builder   *strings.Builder
+		index     receiverIndex
+		stateName string
+
+		exprToType           map[string]string
+		variableToExpression map[string]string
+		variableToType       map[string]reflect.Type
 	}
 
 	receiverIndex map[string]*ast.CallExpr
+
+	CustomSlice struct {
+		Name         string
+		ReceiverName string
+		ItemType     reflect.Type
+		Item         string
+	}
 )
 
-func NewMethodNotifier(stateType reflect.Type) *MethodNotifier {
-	return &MethodNotifier{
-		state:   stateType,
-		builder: &strings.Builder{},
-		index:   receiverIndex{},
+func NewMethodHandler(stateType reflect.Type) *MethodHandler {
+	return &MethodHandler{
+		state:                stateType,
+		builder:              &strings.Builder{},
+		index:                receiverIndex{},
+		stateName:            "state",
+		exprToType:           map[string]string{},
+		variableToExpression: map[string]string{},
+		variableToType:       map[string]reflect.Type{},
 	}
 }
-func (n *MethodNotifier) OnCallExpr(expr *ast.CallExpr) (*ast.CallExpr, error) {
-	if expr.Name != "IndexBy" {
-		return expr, nil
-	}
 
-	ident, ok := expr.Receiver.(*ast.Ident)
+func (n *MethodHandler) OnAssign(assign *ast.Assign) (ast.Expression, error) {
+	ident, ok := assign.Holder.(*ast.Ident)
 	if !ok {
-		return expr, nil
+		return assign, nil
 	}
 
-	if len(expr.Args) != 1 {
+	stringify, err := n.stringify(assign.Expression)
+	if err != nil {
+		return nil, err
+	}
+
+	n.variableToExpression[ident.Name] = stringify
+	return assign, nil
+}
+func (n *MethodHandler) OnCallExpr(expr *ast.CallExpr) (ast.Expression, error) {
+	switch expr.Name {
+	case "IndexBy":
+		return n.handleIndexBy(expr)
+	case "HasKey":
+		return n.handleHasKey(expr)
+	default:
+		return expr, nil
+	}
+}
+
+func (n *MethodHandler) handleIndexBy(expr *ast.CallExpr) (*ast.CallExpr, error) {
+	receiver := expr.Receiver
+	ident, ok := expr.Receiver.(*ast.Ident)
+	if !ok || len(expr.Args) != 1 {
 		return expr, nil
 	}
 
@@ -49,47 +81,13 @@ func (n *MethodNotifier) OnCallExpr(expr *ast.CallExpr) (*ast.CallExpr, error) {
 	}
 
 	segments := strings.Split(ident.Name, ".")
-
-	receiverType := n.state
-	var structField reflect.StructField
-	for i := 0; i < len(segments); i++ {
-		elem := n.deref(receiverType)
-		if elem.Kind() != reflect.Struct {
-			return nil, fmt.Errorf("unsupported receiver type %v", receiverType.String())
-		}
-
-		field, ok := elem.FieldByName(segments[i])
-		if !ok {
-			if i == 0 {
-				return nil, nil
-			}
-
-			return nil, n.fieldNotFoundError(segments[i], receiverType)
-		}
-
-		receiverType = field.Type
-		structField = field
+	if !n.isStateParam(segments) {
+		return expr, nil
 	}
 
-	receiverElem := n.deref(receiverType)
-	if receiverElem.Kind() != reflect.Slice {
-		return nil, fmt.Errorf("can't IndexBy non-slice type %v", receiverType.String())
-	}
-
-	receiverElem = n.deref(receiverElem.Elem())
-	if receiverElem.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("can't IndexBy slice of non structs %v", receiverType.String())
-	}
-
-	fieldName := strings.Trim(literalExpr.Literal, `"`)
-	indexByField, ok := receiverElem.FieldByName(fieldName)
-	if !ok {
-		return nil, n.fieldNotFoundError(literalExpr.Literal, receiverType)
-	}
-
-	receiverName := string(ident.Name[0])
-	if structField.Type.Kind() == reflect.Ptr {
-		receiverName = "*" + receiverName
+	structField, err := n.fieldByPath(segments)
+	if err != nil {
+		return nil, err
 	}
 
 	rawTypeName := structField.Tag.Get(xreflect.TagTypeName)
@@ -98,62 +96,260 @@ func (n *MethodNotifier) OnCallExpr(expr *ast.CallExpr) (*ast.CallExpr, error) {
 		typeName = segments[len(segments)-1]
 	}
 
-	newTypeName := typeName + "Slice"
-	fnName := expr.Name + literalExpr.Literal
-	resultType := fmt.Sprintf("map[%v]%v{}", indexByField.Type.String(), structField.Tag.Get(xreflect.TagTypeName))
-	fnContent := ast.Block{
-		&ast.Assign{
-			Holder:     &ast.Ident{Name: "index"},
-			Expression: &ast.LiteralExpr{Literal: resultType},
-		},
-		&ast.Foreach{
-			Value: &ast.Ident{Name: "item"},
-			Set:   &ast.Ident{Name: receiverName},
-			Body: ast.Block{
-				&ast.Assign{
-					Holder: &ast.MapExpr{
-						Map: &ast.Ident{Name: "index"},
-						Key: &ast.Ident{Name: "item." + fieldName},
-					},
-					Expression: &ast.Ident{Name: "item"},
-				},
-			},
-		},
+	receiverType := structField.Type
+	receiverElem := n.deref(receiverType)
+	var itemType reflect.Type
+	if receiverElem.Kind() != reflect.Slice {
+		receiver = n.slicifyHolder(ident, structField)
+		itemType = receiverType
+	} else {
+		receiverElem = receiverElem.Elem()
+		itemType = receiverElem
 	}
 
+	receiverElem = n.deref(receiverElem)
+	if receiverElem.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("can't IndexBy slice of non structs %v", receiverType.String())
+	}
+
+	fieldName := strings.Trim(literalExpr.Literal, `"`)
+	indexByField, ok := receiverElem.FieldByName(fieldName)
+	if !ok {
+		return nil, n.fieldNotFoundError(fieldName, receiverType)
+	}
+
+	fnContent, resultType := n.buildIndexByAst(fieldName, receiverType, indexByField, segments[len(segments)-1], xreflect.Stringify(itemType, structField.Tag))
 	builder := ast.NewBuilder(ast.Options{Lang: ast.LangGO})
 	if err := fnContent.Generate(builder); err != nil {
 		return nil, err
 	}
 
-	result := strings.Replace(functionSchema, "$receiver", fmt.Sprintf("(%v %)", receiverName, typeName), 1)
-	result = strings.Replace(result, "$fnName", fnName, 1)
-	result = strings.Replace(result, "$in", "", 1)
-	result = strings.Replace(result, "$out", resultType, 1)
-	result = strings.Replace(result, "$body", builder.String(), 1)
-
-	n.builder.WriteString(fmt.Sprintf("\ntype %v []%v", newTypeName, typeName))
-	n.builder.WriteString("\n")
-	n.builder.WriteString(result)
+	n.appendFunction(builder.String())
 
 	newExpr := *expr
 	newExpr.Name = typeName
-	newExpr.Receiver = ast.NewCallExpr(nil, newTypeName, expr.Receiver)
+	newExpr.Receiver = ast.NewCallExpr(nil, fnContent.Name, receiver)
+
+	stringify, err := n.stringify(expr)
+	if err != nil {
+		return nil, err
+	}
+
+	n.exprToType[stringify] = resultType
+
 	return &newExpr, nil
 }
 
-func (n *MethodNotifier) itemType(receiverType reflect.Type) reflect.Type {
+func (n *MethodHandler) buildIndexByAst(fieldName string, receiverType reflect.Type, indexByField reflect.StructField, receiverName string, itemType string) (*ast.Function, string) {
+	resultType := fmt.Sprintf("map[%v]%v", indexByField.Type.String(), itemType)
+
+	index := &ast.Ident{Name: "index"}
+	appendToMap := ast.Expression(&ast.Assign{
+		Holder: &ast.MapExpr{
+			Map: index,
+			Key: &ast.Ident{Name: "item." + fieldName},
+		},
+		Expression: &ast.Ident{Name: "item"},
+	})
+
+	if receiverType.Kind() == reflect.Ptr {
+		appendToMap = ast.NewCondition(
+			ast.NewBinary(ast.NewIdent("item"), "!=", ast.NewLiteral("nil")),
+			ast.Block{appendToMap},
+			ast.Block{},
+		)
+	}
+
+	fnContent := ast.Block{
+		&ast.Assign{
+			Holder:     index,
+			Expression: &ast.LiteralExpr{Literal: resultType + "{}"},
+		},
+		&ast.Foreach{
+			Value: &ast.Ident{Name: "item"},
+			Set:   &ast.Ident{Name: receiverName},
+			Body: ast.Block{
+				appendToMap,
+			},
+		},
+	}
+	return &ast.Function{
+		Name: fmt.Sprintf("Index%vBy%v", receiverName, fieldName),
+		ArgsIn: []*ast.FuncArg{
+			{
+				Name:  receiverName,
+				Ident: &ast.Ident{Name: "[]" + itemType},
+			},
+		},
+		ArgsOut: []string{resultType},
+		Body:    fnContent,
+		Return:  &ast.ReturnExpr{X: index},
+	}, resultType
+}
+
+func (n *MethodHandler) fieldByPath(segments []string) (reflect.StructField, error) {
+	return n.pathInType(segments, n.state)
+}
+
+func (n *MethodHandler) pathInType(segments []string, receiverType reflect.Type) (reflect.StructField, error) {
+	var structField reflect.StructField
+	for i := 0; i < len(segments); i++ {
+		elem := n.deref(receiverType)
+		if elem.Kind() != reflect.Struct {
+			return reflect.StructField{}, fmt.Errorf("unsupported receiver type %v", receiverType.String())
+		}
+
+		field, ok := elem.FieldByName(segments[i])
+		if !ok {
+			return reflect.StructField{}, n.fieldNotFoundError(segments[i], receiverType)
+		}
+
+		receiverType = field.Type
+		structField = field
+	}
+	return structField, nil
+}
+
+func (n *MethodHandler) itemType(receiverType reflect.Type) reflect.Type {
 	return n.deref(receiverType).Elem()
 }
 
-func (n *MethodNotifier) fieldNotFoundError(fieldName string, receiverType reflect.Type) error {
+func (n *MethodHandler) fieldNotFoundError(fieldName string, receiverType reflect.Type) error {
 	return fmt.Errorf("not found field %v at struct %v", fieldName, receiverType.String())
 }
 
-func (n *MethodNotifier) deref(receiverType reflect.Type) reflect.Type {
+func (n *MethodHandler) deref(receiverType reflect.Type) reflect.Type {
 	elem := receiverType
 	for elem.Kind() == reflect.Ptr {
 		elem = elem.Elem()
 	}
 	return elem
+}
+
+func (n *MethodHandler) slicifyHolder(ident *ast.Ident, field reflect.StructField) ast.Expression {
+	selector := ident.Name
+	if ident.WithState {
+		selector = n.stateName + "." + selector
+	}
+
+	return ast.NewLiteral(
+		fmt.Sprintf("[]%v{ %v }", xreflect.Stringify(field.Type, field.Tag), selector),
+	)
+}
+
+func (n *MethodHandler) handleHasKey(expr *ast.CallExpr) (ast.Expression, error) {
+	ident, ok := expr.Receiver.(*ast.Ident)
+	if !ok || len(expr.Args) != 1 {
+		return expr, nil
+	}
+
+	expression, ok := expr.Args[0].(*ast.Ident)
+	if !ok {
+		return expr, nil
+	}
+
+	rType, err := n.findVariableType(expression)
+	if rType == nil || err != nil {
+		return expr, err
+	}
+
+	variableToExpr := n.variableToExpression[ident.Name]
+	variableType, ok := n.exprToType[variableToExpr]
+	if !ok {
+		return expr, nil
+	}
+
+	fn := &ast.Function{
+		Name: "Has" + ident.Name,
+		ArgsIn: []*ast.FuncArg{
+			{
+				Name:  "index",
+				Ident: &ast.Ident{Name: variableType},
+			},
+			{
+				Name:  "value",
+				Ident: &ast.Ident{Name: rType.String()},
+			},
+		},
+		ArgsOut: []string{"bool"},
+		Body: ast.Block{
+			&ast.Assign{
+				Holder:       &ast.Ident{Name: "_"},
+				ExtraHolders: []ast.Expression{&ast.Ident{Name: "ok"}},
+				Expression: &ast.LiteralExpr{
+					Literal: "index[value]",
+				},
+			},
+		},
+		Return: &ast.ReturnExpr{X: &ast.Ident{Name: "ok"}},
+	}
+
+	builder := ast.NewBuilder(ast.Options{Lang: ast.LangGO})
+	err = fn.Generate(builder)
+	if err != nil {
+		return nil, err
+	}
+
+	n.appendFunction(builder.String())
+
+	newArgs := []ast.Expression{expr.Receiver}
+	newArgs = append(newArgs, expr.Args...)
+	return ast.NewCallExpr(
+		nil,
+		fn.Name,
+		newArgs...,
+	), nil
+}
+
+func (n *MethodHandler) findVariableType(expression *ast.Ident) (reflect.Type, error) {
+	split := strings.Split(expression.Name, ".")
+	if !n.isStateParam(split) {
+		rType, ok := n.variableToType[split[0]]
+		if !ok {
+			return nil, nil
+		}
+
+		inType, err := n.pathInType(split[1:], rType.Elem())
+		if err != nil {
+			return nil, err
+		}
+
+		return inType.Type, err
+	}
+
+	structField, err := n.fieldByPath(split)
+	if err != nil {
+		return nil, err
+	}
+
+	return structField.Type, nil
+}
+
+func (n *MethodHandler) stringify(expression ast.Expression) (string, error) {
+	builder := ast.NewBuilder(ast.Options{Lang: ast.LangGO})
+	err := expression.Generate(builder)
+	return builder.String(), err
+}
+
+func (n *MethodHandler) isStateParam(split []string) bool {
+	if _, ok := n.deref(n.state).FieldByName(split[0]); !ok {
+		return false
+	}
+
+	return true
+}
+
+func (n *MethodHandler) appendFunction(fnContent string) {
+	n.builder.WriteString("\n")
+	n.builder.WriteString(fnContent)
+}
+
+func (n *MethodHandler) OnSliceItem(value *ast.Ident, set *ast.Ident) error {
+	rType, err := n.findVariableType(set)
+	if rType == nil || err != nil {
+		return err
+	}
+
+	n.variableToType[value.Name] = rType
+	return nil
 }

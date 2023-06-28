@@ -2,3 +2,12 @@ package $Package
 
 $Imports
 
+$SnippetBefore
+
+type Handler struct {
+}
+
+func (h *Handler) Exec(ctx context.Context, sess session.Session) (interface{}, error) {
+    $MethodContent
+}
+

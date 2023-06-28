@@ -1,5 +1,7 @@
 package ast
 
+import "fmt"
+
 type (
 	Node interface {
 		Generate(builder *Builder) error
@@ -25,8 +27,9 @@ type (
 	}
 
 	Assign struct {
-		Holder     Expression
-		Expression Expression
+		Holder       Expression
+		ExtraHolders []Expression
+		Expression   Expression
 	}
 
 	CallExpr struct {
@@ -63,7 +66,27 @@ type (
 	LiteralExpr struct {
 		Literal string
 	}
+
+	ReturnExpr struct {
+		X Expression
+	}
 )
+
+func NewReturnExpr(expr Expression) *ReturnExpr {
+	return &ReturnExpr{X: expr}
+}
+func (r *ReturnExpr) Generate(builder *Builder) error {
+	switch builder.Lang {
+	case LangGO:
+		if err := builder.WriteIndentedString("\nreturn "); err != nil {
+			return err
+		}
+
+		return r.X.Generate(builder)
+	}
+
+	return fmt.Errorf("unsupported %T with lang %v", r, builder.Lang)
+}
 
 func (m *MapExpr) Generate(builder *Builder) error {
 	if err := m.Map.Generate(builder); err != nil {

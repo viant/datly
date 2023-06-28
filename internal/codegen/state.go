@@ -248,6 +248,6 @@ func (t *Template) buildDataViewParameter(spec *Spec, cardinality view.Cardinali
 	columnFields := spec.Type.Fields()
 	columnFields = append(columnFields, fields...)
 
-	param.Schema.SetType(reflect.StructOf(columnFields))
+	param.Schema.SetType(reflect.PtrTo(reflect.StructOf(columnFields)))
 	return param
 }

@@ -73,10 +73,15 @@ func (t *Template) BuildState(spec *Spec, bodyHolder string, opts ...Option) {
 	bodyParam.Schema.SetType(t.buildState(spec, &t.State, spec.Type.Cardinality))
 	var structFields []reflect.StructField
 	for _, parameter := range t.State {
+		var structTag reflect.StructTag
+		if parameter.Schema.DataType != "" {
+			structTag = reflect.StructTag(fmt.Sprintf(`%v:"%v"`, xreflect.TagTypeName, parameter.Schema.DataType))
+		}
+
 		structFields = append(structFields, reflect.StructField{
 			Name: parameter.Name,
 			Type: parameter.Schema.Type(),
-			Tag:  reflect.StructTag(fmt.Sprintf(`%v:"%v"`, xreflect.TagTypeName, parameter.Schema.DataType)),
+			Tag:  structTag,
 		})
 	}
 
@@ -102,7 +107,7 @@ func (t *Template) BuildLogic(spec *Spec, opts ...Option) {
 	if options.withUpdate {
 		t.indexRecords(options, spec, &block)
 	}
-	t.modifyRecords(options, "Unsafe", spec, spec.Type.Cardinality, &block, nil)
+	t.modifyRecords(options, "", spec, spec.Type.Cardinality, &block, nil)
 	t.BusinessLogic = &block
 }
 
@@ -147,7 +152,11 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 	if len(spec.Type.pkFields) != 1 {
 		return
 	}
-	structPath := structPathPrefix + "." + spec.Type.Name
+
+	structPath := spec.Type.Name
+	if structPathPrefix != "" {
+		structPath = structPathPrefix + "." + structPath
+	}
 
 	switch cardinality {
 	case view.One:

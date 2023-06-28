@@ -5,6 +5,7 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/codegen"
+	"github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/toolbox/format"
@@ -16,9 +17,10 @@ func (s *Service) Generate(ctx context.Context, gen *options.Gen, template *code
 		return err
 	}
 	//TODO adjust if handler option is used
-	if err := s.generateDSQL(ctx, gen.DSQLLocation(), template); err != nil {
+	if err := s.generateTemplate(ctx, gen, template); err != nil {
 		return err
 	}
+
 	info, err := plugin.NewInfo(ctx, gen.GoModuleLocation())
 	if err != nil {
 		return err
@@ -31,6 +33,28 @@ func (s *Service) Generate(ctx context.Context, gen *options.Gen, template *code
 		return err
 	}
 	return nil
+}
+
+func (s *Service) generateTemplate(ctx context.Context, gen *options.Gen, template *codegen.Template) error {
+	URL := gen.DSQLLocation()
+	templateContent, err := s.generateTemplateContent(ctx, gen, template, URL)
+	if err != nil {
+		return err
+	}
+
+	_ = s.fs.Delete(ctx, URL)
+	err = s.fs.Upload(ctx, URL, file.DefaultFileOsMode, strings.NewReader(templateContent))
+
+	return nil
+}
+
+func (s *Service) generateTemplateContent(ctx context.Context, gen *options.Gen, template *codegen.Template, URL string) (string, error) {
+	switch gen.Lang {
+	case ast.LangGO:
+		return template.GenerateGo(gen)
+	default:
+		return s.generateDSQL(ctx, URL, template)
+	}
 }
 
 func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.Gen, info *plugin.Info, template *codegen.Template) error {
@@ -56,14 +80,9 @@ func (s *Service) generateState(ctx context.Context, pkg string, gen *options.Ge
 	return s.fs.Upload(ctx, gen.StateLocation(), file.DefaultFileOsMode, strings.NewReader(code))
 }
 
-func (s *Service) generateDSQL(ctx context.Context, URL string, template *codegen.Template) error {
+func (s *Service) generateDSQL(ctx context.Context, URL string, template *codegen.Template) (string, error) {
 	DSQL, err := template.GenerateDSQL()
-	if err != nil {
-		return err
-	}
-	_ = s.fs.Delete(ctx, URL)
-	err = s.fs.Upload(ctx, URL, file.DefaultFileOsMode, strings.NewReader(DSQL))
-	return err
+	return DSQL, err
 }
 
 func (s *Service) ensureDest(ctx context.Context, URL string) error {
