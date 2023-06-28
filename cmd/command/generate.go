@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/toolbox/format"
+	goFormat "go/format"
 	"strings"
 )
 
@@ -37,17 +38,24 @@ func (s *Service) Generate(ctx context.Context, gen *options.Gen, template *code
 
 func (s *Service) generateTemplate(ctx context.Context, gen *options.Gen, template *codegen.Template) error {
 	//needed for both go and velty
-	options := s.dsqlGenerationOptions(gen)
-	dSQLContent, err := template.GenerateDSQL(options...)
+	opts := s.dsqlGenerationOptions(gen)
+	files, err := s.generateTemplateFiles(gen, template, opts...)
 	if err != nil {
 		return err
 	}
-	if err = s.uploadContent(ctx, gen.DSQLLocation(), dSQLContent); err != nil {
-		return err
+
+	for _, f := range files {
+		content := f.Content
+		source, err := goFormat.Source([]byte(content))
+		if err == nil {
+			content = string(source)
+		}
+
+		if err = s.uploadContent(ctx, f.URL, content); err != nil {
+			return err
+		}
 	}
-	if gen.Lang != ast.LangGO {
-		return nil
-	}
+
 	//TODO generate index codee
 	//Generate
 

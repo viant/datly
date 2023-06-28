@@ -9,7 +9,8 @@ import (
 
 type Parameter struct {
 	view.Parameter
-	SQL string
+	SQL      string
+	FieldTag string
 }
 
 func (p *Parameter) DsqlParameterDeclaration() string {
@@ -61,10 +62,10 @@ func (p *Parameter) FieldDeclaration() string {
 	builder.WriteString("*")
 
 	paramType := p.Schema.Type()
-	if paramType != nil {
-		builder.WriteString(paramType.String())
-	} else {
+	if p.Schema.DataType != "" {
 		builder.WriteString(p.Schema.DataType)
+	} else if paramType != nil {
+		builder.WriteString(paramType.String())
 	}
 
 	tag := fmt.Sprintf(`datly:"kind=%v,in=%v"`, p.In.Kind, p.In.Name)

@@ -9,6 +9,12 @@ import (
 	"strings"
 )
 
+//go:embed tmpl/handler/index_by.gox
+var indexTemplate string
+
+//go:embed tmpl/handler/has_key.gox
+var hasKeyTemplate string
+
 type (
 	IndexGenerator struct {
 		state     reflect.Type
@@ -28,6 +34,12 @@ type (
 		ReceiverName string
 		ItemType     reflect.Type
 		Item         string
+	}
+
+	IndexBy struct {
+		FnName    string
+		SliceType string
+		IndexType string
 	}
 )
 
@@ -118,73 +130,21 @@ func (n *IndexGenerator) handleIndexBy(expr *ast.CallExpr) (*ast.CallExpr, error
 		return nil, n.fieldNotFoundError(fieldName, receiverType)
 	}
 
-	fnContent, resultType := n.buildIndexByAst(fieldName, receiverType, indexByField, segments[len(segments)-1], xreflect.Stringify(itemType, structField.Tag))
-	builder := ast.NewBuilder(ast.Options{Lang: ast.LangGO})
-	if err := fnContent.Generate(builder); err != nil {
-		return nil, err
-	}
-
-	n.appendFunction(builder.String())
-
-	newExpr := *expr
-	newExpr.Name = typeName
-	newExpr.Receiver = ast.NewCallExpr(nil, fnContent.Name, receiver)
+	indexed, template := n.expandIndexByTemplate(xreflect.Stringify(n.deref(itemType), structField.Tag), indexByField.Type.String(), fieldName)
+	n.appendFunction(template)
 
 	stringify, err := n.stringify(expr)
 	if err != nil {
 		return nil, err
 	}
 
-	n.exprToType[stringify] = resultType
+	n.exprToType[stringify] = indexed.IndexType
 
+	newExpr := *expr
+	newExpr.Name = typeName
+	newExpr.Receiver = ast.NewCallExpr(ast.NewCallExpr(nil, indexed.SliceType, receiver), indexed.FnName)
+	newExpr.Args = nil
 	return &newExpr, nil
-}
-
-func (n *IndexGenerator) buildIndexByAst(fieldName string, receiverType reflect.Type, indexByField reflect.StructField, receiverName string, itemType string) (*ast.Function, string) {
-	resultType := fmt.Sprintf("map[%v]%v", indexByField.Type.String(), itemType)
-
-	index := &ast.Ident{Name: "index"}
-	appendToMap := ast.Expression(&ast.Assign{
-		Holder: &ast.MapExpr{
-			Map: index,
-			Key: &ast.Ident{Name: "item." + fieldName},
-		},
-		Expression: &ast.Ident{Name: "item"},
-	})
-
-	if receiverType.Kind() == reflect.Ptr {
-		appendToMap = ast.NewCondition(
-			ast.NewBinary(ast.NewIdent("item"), "!=", ast.NewLiteral("nil")),
-			ast.Block{appendToMap},
-			ast.Block{},
-		)
-	}
-
-	fnContent := ast.Block{
-		&ast.Assign{
-			Holder:     index,
-			Expression: &ast.LiteralExpr{Literal: resultType + "{}"},
-		},
-		&ast.Foreach{
-			Value: &ast.Ident{Name: "item"},
-			Set:   &ast.Ident{Name: receiverName},
-			Body: ast.Block{
-				appendToMap,
-			},
-		},
-	}
-	return &ast.Function{
-		Name: fmt.Sprintf("Index%vBy%v", receiverName, fieldName),
-		ArgsIn: []*ast.FuncArg{
-			{
-				Name:  receiverName,
-				Ident: &ast.Ident{Name: "[]" + itemType},
-			},
-		},
-		ArgsOut: []string{resultType},
-		Body:    fnContent,
-		Return:  &ast.ReturnExpr{X: index},
-	}, resultType
 }
 
 func (n *IndexGenerator) fieldByPath(segments []string) (reflect.StructField, error) {
@@ -254,51 +214,14 @@ func (n *IndexGenerator) handleHasKey(expr *ast.CallExpr) (ast.Expression, error
 	}
 
 	variableToExpr := n.variableToExpression[ident.Name]
-	variableType, ok := n.exprToType[variableToExpr]
+	receiverType, ok := n.exprToType[variableToExpr]
 	if !ok {
 		return expr, nil
 	}
 
-	fn := &ast.Function{
-		Name: "Has" + ident.Name,
-		ArgsIn: []*ast.FuncArg{
-			{
-				Name:  "index",
-				Ident: &ast.Ident{Name: variableType},
-			},
-			{
-				Name:  "value",
-				Ident: &ast.Ident{Name: rType.String()},
-			},
-		},
-		ArgsOut: []string{"bool"},
-		Body: ast.Block{
-			&ast.Assign{
-				Holder:       &ast.Ident{Name: "_"},
-				ExtraHolders: []ast.Expression{&ast.Ident{Name: "ok"}},
-				Expression: &ast.LiteralExpr{
-					Literal: "index[value]",
-				},
-			},
-		},
-		Return: &ast.ReturnExpr{X: &ast.Ident{Name: "ok"}},
-	}
-
-	builder := ast.NewBuilder(ast.Options{Lang: ast.LangGO})
-	err = fn.Generate(builder)
-	if err != nil {
-		return nil, err
-	}
-
-	n.appendFunction(builder.String())
-
-	newArgs := []ast.Expression{expr.Receiver}
-	newArgs = append(newArgs, expr.Args...)
-	return ast.NewCallExpr(
-		nil,
-		fn.Name,
-		newArgs...,
-	), nil
+	template := n.expandHasKeyTemplate(receiverType, rType.String())
+	n.appendFunction(template)
+	return expr, nil
 }
 
 func (n *IndexGenerator) findVariableType(expression *ast.Ident) (reflect.Type, error) {
@@ -352,4 +275,21 @@ func (n *IndexGenerator) OnSliceItem(value *ast.Ident, set *ast.Ident) error {
 
 	n.variableToType[value.Name] = rType
 	return nil
+}
+
+func (n *IndexGenerator) expandIndexByTemplate(itemType string, keyType string, fieldName string) (*IndexBy, string) {
+	result := strings.ReplaceAll(indexTemplate, "$ValueType", itemType)
+	result = strings.ReplaceAll(result, "$KeyType", keyType)
+	result = strings.ReplaceAll(result, "$IndexName", fieldName)
+	return &IndexBy{
+		FnName:    "IndexBy" + fieldName,
+		SliceType: itemType + "Slice",
+		IndexType: "Indexed" + itemType,
+	}, result
+}
+
+func (n *IndexGenerator) expandHasKeyTemplate(receiver string, field string) string {
+	result := strings.ReplaceAll(hasKeyTemplate, "$IndexType", receiver)
+	result = strings.ReplaceAll(result, "$KeyType", field)
+	return result
 }

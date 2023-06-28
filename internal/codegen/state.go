@@ -106,7 +106,10 @@ func buildParameter(field *ast.Field, lookup xreflect.TypeLookupFn) (*Parameter,
 		return nil, nil
 	}
 	tag := view.ParseTag(datlyTag)
-	param := &Parameter{SQL: SQL}
+	param := &Parameter{
+		SQL:      SQL,
+		FieldTag: field.Tag.Value,
+	}
 	//	updateSQLTag(field, SQL)
 	param.Name = field.Names[0].Name
 	param.In = &view.Location{Name: tag.In, Kind: view.Kind(tag.Kind)}
