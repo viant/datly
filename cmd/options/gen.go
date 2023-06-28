@@ -75,3 +75,21 @@ func (g *Gen) DSQLLocation() string {
 	}
 	return url.Join(baseURL, name+".sql")
 }
+
+func (g *Gen) HandlerLocation() string {
+	_, name := url.Split(g.Source, file.Scheme)
+	if ext := path.Ext(name); ext != "" {
+		name = name[:len(name)-len(ext)]
+	}
+	baseURL := g.GoCodeLocation()
+	return url.Join(baseURL, "handler.go")
+}
+
+func (g *Gen) IndexLocation() string {
+	_, name := url.Split(g.Source, file.Scheme)
+	if ext := path.Ext(name); ext != "" {
+		name = name[:len(name)-len(ext)]
+	}
+	baseURL := g.GoCodeLocation()
+	return url.Join(baseURL, "index.go")
+}

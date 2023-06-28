@@ -36,25 +36,35 @@ func (s *Service) Generate(ctx context.Context, gen *options.Gen, template *code
 }
 
 func (s *Service) generateTemplate(ctx context.Context, gen *options.Gen, template *codegen.Template) error {
-	URL := gen.DSQLLocation()
-	templateContent, err := s.generateTemplateContent(ctx, gen, template, URL)
+	//needed for both go and velty
+	options := s.dsqlGenerationOptions(gen)
+	dSQLContent, err := template.GenerateDSQL(options...)
 	if err != nil {
 		return err
 	}
-
-	_ = s.fs.Delete(ctx, URL)
-	err = s.fs.Upload(ctx, URL, file.DefaultFileOsMode, strings.NewReader(templateContent))
+	if err = s.uploadContent(ctx, gen.DSQLLocation(), dSQLContent); err != nil {
+		return err
+	}
+	if gen.Lang != ast.LangGO {
+		return nil
+	}
+	//TODO generate index codee
+	//Generate
 
 	return nil
 }
 
-func (s *Service) generateTemplateContent(ctx context.Context, gen *options.Gen, template *codegen.Template, URL string) (string, error) {
-	switch gen.Lang {
-	case ast.LangGO:
-		return template.GenerateGo(gen)
-	default:
-		return s.generateDSQL(ctx, URL, template)
+func (s *Service) uploadContent(ctx context.Context, URL string, content string) error {
+	_ = s.fs.Delete(ctx, URL)
+	return s.fs.Upload(ctx, URL, file.DefaultFileOsMode, strings.NewReader(content))
+}
+
+func (s *Service) dsqlGenerationOptions(gen *options.Gen) []codegen.Option {
+	var options []codegen.Option
+	if gen.Lang == ast.LangGO {
+		options = append(options, codegen.WithoutBusinessLogic())
 	}
+	return options
 }
 
 func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.Gen, info *plugin.Info, template *codegen.Template) error {
@@ -78,11 +88,6 @@ func ensureGoFileCaseFormat(template *codegen.Template) string {
 func (s *Service) generateState(ctx context.Context, pkg string, gen *options.Gen, template *codegen.Template) error {
 	code := template.GenerateState(pkg)
 	return s.fs.Upload(ctx, gen.StateLocation(), file.DefaultFileOsMode, strings.NewReader(code))
-}
-
-func (s *Service) generateDSQL(ctx context.Context, URL string, template *codegen.Template) (string, error) {
-	DSQL, err := template.GenerateDSQL()
-	return DSQL, err
 }
 
 func (s *Service) ensureDest(ctx context.Context, URL string) error {

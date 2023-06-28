@@ -10,7 +10,7 @@ import (
 )
 
 type (
-	MethodHandler struct {
+	IndexGenerator struct {
 		state     reflect.Type
 		builder   *strings.Builder
 		index     receiverIndex
@@ -31,8 +31,8 @@ type (
 	}
 )
 
-func NewMethodHandler(stateType reflect.Type) *MethodHandler {
-	return &MethodHandler{
+func NewIndexGenerator(stateType reflect.Type) *IndexGenerator {
+	return &IndexGenerator{
 		state:                stateType,
 		builder:              &strings.Builder{},
 		index:                receiverIndex{},
@@ -43,7 +43,7 @@ func NewMethodHandler(stateType reflect.Type) *MethodHandler {
 	}
 }
 
-func (n *MethodHandler) OnAssign(assign *ast.Assign) (ast.Expression, error) {
+func (n *IndexGenerator) OnAssign(assign *ast.Assign) (ast.Expression, error) {
 	ident, ok := assign.Holder.(*ast.Ident)
 	if !ok {
 		return assign, nil
@@ -57,7 +57,7 @@ func (n *MethodHandler) OnAssign(assign *ast.Assign) (ast.Expression, error) {
 	n.variableToExpression[ident.Name] = stringify
 	return assign, nil
 }
-func (n *MethodHandler) OnCallExpr(expr *ast.CallExpr) (ast.Expression, error) {
+func (n *IndexGenerator) OnCallExpr(expr *ast.CallExpr) (ast.Expression, error) {
 	switch expr.Name {
 	case "IndexBy":
 		return n.handleIndexBy(expr)
@@ -68,7 +68,7 @@ func (n *MethodHandler) OnCallExpr(expr *ast.CallExpr) (ast.Expression, error) {
 	}
 }
 
-func (n *MethodHandler) handleIndexBy(expr *ast.CallExpr) (*ast.CallExpr, error) {
+func (n *IndexGenerator) handleIndexBy(expr *ast.CallExpr) (*ast.CallExpr, error) {
 	receiver := expr.Receiver
 	ident, ok := expr.Receiver.(*ast.Ident)
 	if !ok || len(expr.Args) != 1 {
@@ -140,7 +140,7 @@ func (n *MethodHandler) handleIndexBy(expr *ast.CallExpr) (*ast.CallExpr, error)
 	return &newExpr, nil
 }
 
-func (n *MethodHandler) buildIndexByAst(fieldName string, receiverType reflect.Type, indexByField reflect.StructField, receiverName string, itemType string) (*ast.Function, string) {
+func (n *IndexGenerator) buildIndexByAst(fieldName string, receiverType reflect.Type, indexByField reflect.StructField, receiverName string, itemType string) (*ast.Function, string) {
 	resultType := fmt.Sprintf("map[%v]%v", indexByField.Type.String(), itemType)
 
 	index := &ast.Ident{Name: "index"}
@@ -187,11 +187,11 @@ func (n *MethodHandler) buildIndexByAst(fieldName string, receiverType reflect.T
 	}, resultType
 }
 
-func (n *MethodHandler) fieldByPath(segments []string) (reflect.StructField, error) {
+func (n *IndexGenerator) fieldByPath(segments []string) (reflect.StructField, error) {
 	return n.pathInType(segments, n.state)
 }
 
-func (n *MethodHandler) pathInType(segments []string, receiverType reflect.Type) (reflect.StructField, error) {
+func (n *IndexGenerator) pathInType(segments []string, receiverType reflect.Type) (reflect.StructField, error) {
 	var structField reflect.StructField
 	for i := 0; i < len(segments); i++ {
 		elem := n.deref(receiverType)
@@ -210,15 +210,15 @@ func (n *MethodHandler) pathInType(segments []string, receiverType reflect.Type)
 	return structField, nil
 }
 
-func (n *MethodHandler) itemType(receiverType reflect.Type) reflect.Type {
+func (n *IndexGenerator) itemType(receiverType reflect.Type) reflect.Type {
 	return n.deref(receiverType).Elem()
 }
 
-func (n *MethodHandler) fieldNotFoundError(fieldName string, receiverType reflect.Type) error {
+func (n *IndexGenerator) fieldNotFoundError(fieldName string, receiverType reflect.Type) error {
 	return fmt.Errorf("not found field %v at struct %v", fieldName, receiverType.String())
 }
 
-func (n *MethodHandler) deref(receiverType reflect.Type) reflect.Type {
+func (n *IndexGenerator) deref(receiverType reflect.Type) reflect.Type {
 	elem := receiverType
 	for elem.Kind() == reflect.Ptr {
 		elem = elem.Elem()
@@ -226,7 +226,7 @@ func (n *MethodHandler) deref(receiverType reflect.Type) reflect.Type {
 	return elem
 }
 
-func (n *MethodHandler) slicifyHolder(ident *ast.Ident, field reflect.StructField) ast.Expression {
+func (n *IndexGenerator) slicifyHolder(ident *ast.Ident, field reflect.StructField) ast.Expression {
 	selector := ident.Name
 	if ident.WithState {
 		selector = n.stateName + "." + selector
@@ -237,7 +237,7 @@ func (n *MethodHandler) slicifyHolder(ident *ast.Ident, field reflect.StructFiel
 	)
 }
 
-func (n *MethodHandler) handleHasKey(expr *ast.CallExpr) (ast.Expression, error) {
+func (n *IndexGenerator) handleHasKey(expr *ast.CallExpr) (ast.Expression, error) {
 	ident, ok := expr.Receiver.(*ast.Ident)
 	if !ok || len(expr.Args) != 1 {
 		return expr, nil
@@ -301,7 +301,7 @@ func (n *MethodHandler) handleHasKey(expr *ast.CallExpr) (ast.Expression, error)
 	), nil
 }
 
-func (n *MethodHandler) findVariableType(expression *ast.Ident) (reflect.Type, error) {
+func (n *IndexGenerator) findVariableType(expression *ast.Ident) (reflect.Type, error) {
 	split := strings.Split(expression.Name, ".")
 	if !n.isStateParam(split) {
 		rType, ok := n.variableToType[split[0]]
@@ -325,13 +325,13 @@ func (n *MethodHandler) findVariableType(expression *ast.Ident) (reflect.Type, e
 	return structField.Type, nil
 }
 
-func (n *MethodHandler) stringify(expression ast.Expression) (string, error) {
+func (n *IndexGenerator) stringify(expression ast.Expression) (string, error) {
 	builder := ast.NewBuilder(ast.Options{Lang: ast.LangGO})
 	err := expression.Generate(builder)
 	return builder.String(), err
 }
 
-func (n *MethodHandler) isStateParam(split []string) bool {
+func (n *IndexGenerator) isStateParam(split []string) bool {
 	if _, ok := n.deref(n.state).FieldByName(split[0]); !ok {
 		return false
 	}
@@ -339,12 +339,12 @@ func (n *MethodHandler) isStateParam(split []string) bool {
 	return true
 }
 
-func (n *MethodHandler) appendFunction(fnContent string) {
+func (n *IndexGenerator) appendFunction(fnContent string) {
 	n.builder.WriteString("\n")
 	n.builder.WriteString(fnContent)
 }
 
-func (n *MethodHandler) OnSliceItem(value *ast.Ident, set *ast.Ident) error {
+func (n *IndexGenerator) OnSliceItem(value *ast.Ident, set *ast.Ident) error {
 	rType, err := n.findVariableType(set)
 	if rType == nil || err != nil {
 		return err

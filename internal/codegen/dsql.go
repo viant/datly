@@ -13,52 +13,69 @@ import (
 var dsqlTemplate string
 
 //go:embed tmpl/handler.gox
-var goTemplate string
+var handlerTemplate string
+
+//go:embed tmpl/index.gox
+var indexTemplate string
 
 func (t *Template) GenerateDSQL(opts ...Option) (string, error) {
 	options := Options{}
 	options.apply(opts)
-
-	return t.generateContent(ast.Options{Lang: ast.LangVelty})
+	astOptions := options.astOption()
+	return t.generateDSQL(astOptions)
 }
 
-func (t *Template) GenerateGo(opts *options.Gen) (string, error) {
-	methodHandler := NewMethodHandler(t.StateType)
-	content, err := t.generateContent(ast.Options{
+func (t *Template) GenerateHandler(opts *options.Gen) (string, string, error) {
+	index := NewIndexGenerator(t.StateType)
+	content, err := t.generateDSQL(ast.Options{
 		Lang:              ast.LangGO,
-		CallNotifier:      methodHandler.OnCallExpr,
-		AssignNotifier:    methodHandler.OnAssign,
-		SliceItemNotifier: methodHandler.OnSliceItem,
+		CallNotifier:      index.OnCallExpr,
+		AssignNotifier:    index.OnAssign,
+		SliceItemNotifier: index.OnSliceItem,
 	})
 
 	fmt.Println(t.StateType.String())
-
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	result := strings.Replace(goTemplate, "$Package", opts.Package, 1)
-	result = strings.Replace(result, "$SnippetBefore", methodHandler.builder.String(), 1)
-	result = strings.Replace(result, "$MethodContent", content, 1)
-	return result, nil
+	indexContent := strings.Replace(indexTemplate, "$Package", opts.Package, 1)
+	indexLogic := index.builder.String()
+	indexContent = strings.Replace(indexContent, "$TypeDeclaration", "", 1)
+	indexContent = strings.Replace(indexContent, "$IndexLogic", indexContent, 1)
+
+	localVariableDeclaration := ""
+	indexing := ""
+	fmt.Print("%v\n", indexLogic)
+
+	handlerContent := strings.Replace(handlerTemplate, "$Package", opts.Package, 1)
+	handlerContent = strings.Replace(handlerContent, "$LocalVariable", localVariableDeclaration, 1)
+	handlerContent = strings.Replace(handlerContent, "$Indexing", localVariableDeclaration, 1)
+	handlerContent = strings.Replace(handlerContent, "$BusinessLogic", content, 1)
+	return handlerContent, indexContent, nil
 }
 
-func (t *Template) generateContent(options ast.Options) (string, error) {
+func (t *Template) generateDSQL(options ast.Options) (string, error) {
 	config, err := json.Marshal(t.Config)
 	if err != nil {
 		return "", err
 	}
 	code := strings.Replace(dsqlTemplate, "$RouteOption", string(config), 1)
-	code = strings.Replace(code, "$Imports", t.Imports.TypeImports(), 1)
-	code = strings.Replace(code, "$Declaration", t.dsqlParameterDeclaration(), 1)
-
-	builder := ast.NewBuilder(options)
-	if t.BusinessLogic != nil {
-		err = t.BusinessLogic.Generate(builder)
-		if err != nil {
-			return "", err
+	var imports, declaration, businessLogic string
+	if options.Lang == ast.LangVelty {
+		imports = t.Imports.TypeImports()
+		declaration = t.dsqlParameterDeclaration()
+		builder := ast.NewBuilder(options)
+		if t.BusinessLogic != nil {
+			err = t.BusinessLogic.Generate(builder)
+			if err != nil {
+				return "", err
+			}
 		}
+		businessLogic = builder.String()
 	}
-	code = strings.Replace(code, "$BusinessLogic", builder.String(), 1)
+	code = strings.Replace(code, "$Imports", imports, 1)
+	code = strings.Replace(code, "$Declaration", declaration, 1)
+	code = strings.Replace(code, "$BusinessLogic", businessLogic, 1)
 	return code, nil
 }

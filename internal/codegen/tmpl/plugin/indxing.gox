@@ -1,0 +1,17 @@
+
+type Indexed$ValueType map[$KeyType]*$ValueType
+type $ValueTypeSlice []*$ValueType
+
+
+func (c $ValueTypeSlice) IndexBy$IndexName() Indexed$ValueType {
+	var result = Indexed$ValueType{}
+	for i, item := range c {
+		result[item.Id] = c[i]
+	} 
+	return result
+}
+
+func (c Indexed$ValueType) Has(key $KeyType) bool {
+	_, ok := c[key]	
+	return ok
+}

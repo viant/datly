@@ -2,12 +2,21 @@ package $Package
 
 $Imports
 
-$SnippetBefore
 
-type Handler struct {
-}
+type Handler struct {}
 
 func (h *Handler) Exec(ctx context.Context, sess session.Session) (interface{}, error) {
-    $MethodContent
+    state := &State{}
+    state := &State{}
+    if err := session.Stater().Into(ctx, state);err != nil {
+        return nil, err
+    }
+    db, err := sess.Db(ctx)
+    if err != nil {
+        return nil, err
+    }
+
+    $LocalVariable
+    $BusinessLogic
 }
 
