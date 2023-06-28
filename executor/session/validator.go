@@ -21,7 +21,16 @@ func (v *SqlxValidator) Validate(ctx context.Context, any interface{}, opts ...v
 	options := &validator.Options{}
 	options.Apply(opts)
 	validation := getOrCreateValidation(options)
-	err := v.validator.validateWithSqlx(ctx, any, validation, options)
+	var err error
+	if options.WithDB == nil {
+		options.WithDB = v.db
+	}
+	if options.WithDB == nil {
+		err = fmt.Errorf("db was empty")
+	}
+	if err == nil {
+		err = v.validator.validateWithSqlx(ctx, any, validation, options)
+	}
 	if err != nil {
 		validation.Append("/", "", "", "error", err.Error())
 	}
@@ -89,7 +98,7 @@ func (v *Validator) validateWithSqlx(ctx context.Context, any interface{}, valid
 		}
 		return err
 	}
-	return fmt.Errorf("%T was nil", db)
+	return nil
 }
 
 type Violations []*validator.Violation

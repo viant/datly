@@ -146,12 +146,25 @@ func (i *Info) detectCustomTypes(ctx context.Context, URL string) error {
 			return true, nil
 		}
 		if len(pkgs[0].Imports) > 0 {
-			if _, ok := pkgs[0].Imports[typesCorePkg]; ok {
-				i.CustomTypesPackages.Append(pkgs[0])
-			}
+			i.addTypesCorePackage(pkgs[0])
 		}
 		return true, nil
 	})
+}
+
+func (i *Info) UpdateTypesCorePackage(URL string) {
+	dir := url.Path(URL)
+	pkgs, _ := packages.Load(&packages.Config{Mode: packages.NeedModule | packages.NeedImports, Dir: dir}, "")
+	if len(pkgs) == 0 {
+		return
+	}
+	i.addTypesCorePackage(pkgs[0])
+}
+
+func (i *Info) addTypesCorePackage(pkg *packages.Package) {
+	if _, ok := pkg.Imports[typesCorePkg]; ok {
+		i.CustomTypesPackages.Append(pkg)
+	}
 }
 
 func (i *Info) detectLocalMethods(ctx context.Context) {

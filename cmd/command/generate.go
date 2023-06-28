@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"github.com/viant/afs/file"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/internal/codegen/ast"
@@ -33,7 +34,8 @@ func (s *Service) Generate(ctx context.Context, gen *options.Gen, template *code
 	if err = s.generateEntity(ctx, pkg, gen, info, template); err != nil {
 		return err
 	}
-	return nil
+	info.UpdateTypesCorePackage(url.Join(gen.GoModuleLocation(), gen.Package))
+	return s.EnsurePluginArtifacts(ctx, info)
 }
 
 func (s *Service) generateTemplate(ctx context.Context, gen *options.Gen, template *codegen.Template) error {
