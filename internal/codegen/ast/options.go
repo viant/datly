@@ -7,4 +7,5 @@ type Options struct {
 	AssignNotifier       func(assign *Assign) (Expression, error)
 	SliceItemNotifier    func(value, set *Ident) error
 	WithoutBusinessLogic bool
+	WithLowerCaseIdent   bool
 }

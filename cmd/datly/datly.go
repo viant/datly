@@ -47,8 +47,8 @@ func main() {
 		"gen",
 		"-o=patch",
 		"-g=campaign",
-		"-p=/Users/klarysz/Documents/github_viant/datly/poc2",
-		"-s=/Users/klarysz/Documents/github_viant/datly/poc2/dsql/campaign/init/campaign_patch.sql",
+		"-p=/Users/awitas/go/src/github.com/viant/datly/poc2",
+		"-s=/Users/awitas/go/src/github.com/viant/datly/poc2/dsql/campaign/init/campaign_patch.sql",
 		"-c=ci_ads|mysql|root:dev@tcp(127.0.0.1:3306)/ci_ads?parseTime=true",
 		"-l=go",
 	}

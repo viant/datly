@@ -17,6 +17,7 @@ func (h *Handler) Exec(ctx context.Context, sess handler.Session) (interface{}, 
     if err != nil {
         return nil, err
     }
+    sequencer := db
 
     $LocalVariable
     $BusinessLogic

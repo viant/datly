@@ -1,6 +1,10 @@
 package ast
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/viant/datly/utils/formatter"
+	"github.com/viant/toolbox/format"
+)
 
 type (
 	Node interface {
@@ -130,6 +134,10 @@ func (b Block) Generate(builder *Builder) error {
 
 func (e Ident) Generate(builder *Builder) (err error) {
 	identName := e.Name
+	if builder.WithLowerCaseIdent {
+		upperCamel, _ := formatter.UpperCamel.Caser()
+		identName = upperCamel.Format(identName, format.CaseLowerCamel)
+	}
 	if e.WithState && builder.StateName != "" {
 		identName = identName + "." + builder.StateName
 	}

@@ -11,6 +11,7 @@ type (
 		withUpdate           bool
 		withDML              bool //TODO implement DML
 		withoutBusinessLogic bool
+		withLowerCaseIdent   bool
 		lang                 string
 	}
 
@@ -20,6 +21,8 @@ type (
 func (o *Options) astOption() ast.Options {
 	astOptions := ast.Options{Lang: ast.LangVelty}
 	astOptions.WithoutBusinessLogic = o.withoutBusinessLogic
+	astOptions.WithLowerCaseIdent = o.withLowerCaseIdent
+
 	if o.lang != "" {
 		astOptions.Lang = o.lang
 	}
@@ -51,6 +54,11 @@ func WithInsert() Option {
 	}
 }
 
+func WithLowerCamelIdent() Option {
+	return func(o *Options) {
+		o.withLowerCaseIdent = true
+	}
+}
 func WithUpdate() Option {
 	return func(o *Options) {
 		o.withUpdate = true

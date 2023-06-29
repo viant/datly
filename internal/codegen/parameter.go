@@ -2,7 +2,9 @@ package codegen
 
 import (
 	"fmt"
+	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
+	"github.com/viant/toolbox/format"
 	"strconv"
 	"strings"
 )
@@ -105,4 +107,9 @@ func (p *Parameter) addedValidationModifierIfNeeded(builder *strings.Builder, SQ
 			builder.WriteString("? ")
 		}
 	}
+}
+
+func (p *Parameter) localVariableDefinition() string {
+	upperCamel, _ := formatter.UpperCamel.Caser()
+	return fmt.Sprintf("%v := state.%v", upperCamel.Format(p.Name, format.CaseLowerCamel), p.Name)
 }

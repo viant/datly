@@ -52,6 +52,14 @@ func (s State) ensureSchema(dirTypes *xreflect.DirTypes) error {
 	return nil
 }
 
+func (s State) localStateBasedVariableDefinition() string {
+	var vars []string
+	for _, p := range s {
+		vars = append(vars, "\t"+p.localVariableDefinition())
+	}
+	return strings.Join(vars, "\n")
+}
+
 func NewState(modulePath, dataType string, lookup xreflect.TypeLookupFn) (State, error) {
 	baseDir := modulePath
 	if pair := strings.Split(dataType, "."); len(pair) > 1 {
