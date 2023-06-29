@@ -10,7 +10,6 @@ import (
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/toolbox/format"
-	goFormat "go/format"
 	"strings"
 )
 
@@ -45,22 +44,18 @@ func (s *Service) generateTemplate(ctx context.Context, gen *options.Gen, templa
 	if err != nil {
 		return err
 	}
+	return s.uploadFiles(ctx, files...)
+}
 
+func (s *Service) uploadFiles(ctx context.Context, files ...*File) error {
 	for _, f := range files {
-		content := f.Content
-		source, err := goFormat.Source([]byte(content))
-		if err == nil {
-			content = string(source)
+		if err := f.validate(); err != nil {
+			return err
 		}
-
-		if err = s.uploadContent(ctx, f.URL, content); err != nil {
+		if err := s.uploadContent(ctx, f.URL, f.Content); err != nil {
 			return err
 		}
 	}
-
-	//TODO generate index codee
-	//Generate
-
 	return nil
 }
 

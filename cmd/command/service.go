@@ -28,11 +28,6 @@ type (
 		fs            afs.Service
 		goBinLocation string
 	}
-
-	File struct {
-		Content string
-		URL     string
-	}
 )
 
 func (s *Service) Run(ctx context.Context, opts *options.Options) (bool, error) {
