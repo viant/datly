@@ -141,8 +141,8 @@ func (n *IndexGenerator) handleIndexBy(expr *ast.CallExpr) (*ast.CallExpr, error
 	n.exprToType[stringify] = indexed.IndexType
 
 	newExpr := *expr
-	newExpr.Name = typeName
-	newExpr.Receiver = ast.NewCallExpr(ast.NewCallExpr(nil, indexed.SliceType, receiver), indexed.FnName)
+	newExpr.Name = indexed.FnName
+	newExpr.Receiver = ast.NewCallExpr(nil, indexed.SliceType, receiver)
 	newExpr.Args = nil
 	return &newExpr, nil
 }
@@ -292,4 +292,23 @@ func (n *IndexGenerator) expandHasKeyTemplate(receiver string, field string) str
 	result := strings.ReplaceAll(hasKeyTemplate, "$IndexType", receiver)
 	result = strings.ReplaceAll(result, "$KeyType", field)
 	return result
+}
+
+func (n *IndexGenerator) OnConditionStmt(value *ast.Condition) (ast.Expression, error) {
+	ident, ok := value.If.(*ast.Ident)
+	if !ok {
+		return value, nil
+	}
+
+	variableType, err := n.findVariableType(ident)
+	if err != nil || variableType == nil {
+		return value, err
+	}
+
+	if variableType.Kind() == reflect.Ptr {
+		newCondition := *value
+		newCondition.If = ast.NewBinary(ident, "!=", &ast.LiteralExpr{Literal: "nil"})
+		return &newCondition, nil
+	}
+	return value, nil
 }

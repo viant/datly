@@ -17,6 +17,14 @@ type (
 )
 
 func (s *Condition) Generate(builder *Builder) (err error) {
+	if builder.OnIfNotifier != nil {
+		if expr, err := builder.OnIfNotifier(s); err != nil {
+			return err
+		} else if expr != nil && expr != s {
+			return expr.Generate(builder)
+		}
+	}
+
 	switch builder.Lang {
 	case LangVelty:
 		if err = builder.WriteIndentedString("\n#if("); err != nil {

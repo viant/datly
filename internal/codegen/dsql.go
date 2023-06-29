@@ -32,6 +32,7 @@ func (t *Template) GenerateHandler(opts *options.Gen) (string, string, error) {
 		AssignNotifier:     index.OnAssign,
 		SliceItemNotifier:  index.OnSliceItem,
 		WithLowerCaseIdent: true,
+		OnIfNotifier:      index.OnConditionStmt,
 	})
 
 	if err := t.BusinessLogic.Generate(builder); err != nil {
