@@ -14,6 +14,7 @@ type Parameter struct {
 	SQL           string
 	FieldTag      string
 	IndexVariable string
+	IndexField    *Field
 }
 
 func (p *Parameter) LocalVariable() string {

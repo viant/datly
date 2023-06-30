@@ -36,7 +36,6 @@ func (s State) FilterByKind(kind view.Kind) State {
 			result.Append(parameter)
 		}
 	}
-
 	return result
 }
 
@@ -270,6 +269,7 @@ func (t *Template) buildPathParameterIfNeeded(spec *Spec) *Parameter {
 	var paramType = reflect.StructOf([]reflect.StructField{{Name: "Values", Type: reflect.SliceOf(indexField.Schema.Type())}})
 	param.Schema = view.NewSchema(paramType)
 	param.IndexVariable = t.ParamPrefix() + param.Name + "By" + indexField.Name
+	param.IndexField = indexField
 	return param
 }
 

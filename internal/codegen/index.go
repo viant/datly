@@ -4,9 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"github.com/viant/datly/internal/codegen/ast"
-	"github.com/viant/datly/utils/formatter"
-	"github.com/viant/toolbox/format"
-	"github.com/viant/xreflect"
+	"github.com/viant/datly/view"
 	"reflect"
 	"strings"
 )
@@ -19,10 +17,11 @@ var hasKeyTemplate string
 
 type (
 	IndexGenerator struct {
-		state     State
-		builder   *strings.Builder
-		index     receiverIndex
-		stateName string
+		state        State
+		paramsByName map[string]*Parameter
+		builder      *strings.Builder
+		index        receiverIndex
+		stateName    string
 
 		exprToType           map[string]string
 		variableToExpression map[string]string
@@ -45,9 +44,10 @@ type (
 	}
 )
 
-func NewIndexGenerator(stateType State) *IndexGenerator {
+func NewIndexGenerator(specState State) *IndexGenerator {
 	return &IndexGenerator{
-		state:                stateType,
+		state:                specState,
+		paramsByName:         specState.IndexByName(),
 		builder:              &strings.Builder{},
 		index:                receiverIndex{},
 		stateName:            "state",
@@ -88,51 +88,30 @@ func (n *IndexGenerator) handleIndexBy(expr *ast.CallExpr) (ast.Expression, erro
 	if !ok || len(expr.Args) != 1 {
 		return expr, nil
 	}
-
-	literalExpr, ok := expr.Args[0].(*ast.LiteralExpr)
-	if !ok {
-		return expr, nil
-	}
-
 	segments := strings.Split(ident.Name, ".")
-	if !n.isStateParam(segments) {
+	if !n.isStateParam(segments[0]) {
 		return expr, nil
 	}
 
-	structField, err := n.fieldByPath(segments)
+	stateParam, err := n.lookupParam(segments[0])
 	if err != nil {
 		return nil, err
 	}
 
-	rawTypeName := structField.Tag.Get(xreflect.TagTypeName)
-	typeName := rawTypeName
-	if typeName == "" {
-		typeName = segments[len(segments)-1]
+	if stateParam.In.Kind != view.KindParam {
+		return expr, nil
 	}
 
-	receiverType := structField.Type
+	receiverType := stateParam.Schema.Type()
 	receiverElem := n.deref(receiverType)
-	var itemType reflect.Type
-	if receiverElem.Kind() != reflect.Slice {
-		receiver = n.slicifyHolder(ident, structField)
-		itemType = receiverType
+	fmt.Printf("cardinality  :%v\n", stateParam.Schema.Cardinality)
+	if receiverElem.Kind() != reflect.Slice { //Cardinality
+		receiver = n.slicifyHolder(stateParam)
 	} else {
 		receiverElem = receiverElem.Elem()
-		itemType = receiverElem
 	}
 
-	receiverElem = n.deref(receiverElem)
-	if receiverElem.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("can't IndexBy slice of non structs %v", receiverType.String())
-	}
-
-	fieldName := strings.Trim(literalExpr.Literal, `"`)
-	indexByField, ok := receiverElem.FieldByName(fieldName)
-	if !ok {
-		return nil, n.fieldNotFoundError(fieldName, receiverType)
-	}
-
-	indexed, template := n.expandIndexByTemplate(xreflect.Stringify(n.deref(itemType), structField.Tag), indexByField.Type.String(), fieldName)
+	indexed, template := n.expandIndexByTemplate(stateParam)
 	n.appendFunction(template)
 
 	stringify, err := n.stringify(expr)
@@ -149,10 +128,12 @@ func (n *IndexGenerator) handleIndexBy(expr *ast.CallExpr) (ast.Expression, erro
 	return &newExpr, nil
 }
 
-func (n *IndexGenerator) fieldByPath(segments []string) (reflect.StructField, error) {
-	state := n.state
-
-	return n.pathInType(segments, state)
+func (n *IndexGenerator) lookupParam(name string) (*Parameter, error) {
+	param, ok := n.paramsByName[name]
+	if !ok {
+		return nil, fmt.Errorf("failed to lookup state param: %v", name)
+	}
+	return param, nil
 }
 
 func (n *IndexGenerator) pathInType(segments []string, receiverType reflect.Type) (reflect.StructField, error) {
@@ -190,16 +171,9 @@ func (n *IndexGenerator) deref(receiverType reflect.Type) reflect.Type {
 	return elem
 }
 
-func (n *IndexGenerator) slicifyHolder(ident *ast.Ident, field reflect.StructField) ast.Expression {
-	selector := ident.Name
-	upperCamel, _ := formatter.UpperCamel.Caser()
-	selector = upperCamel.Format(selector, format.CaseLowerCamel)
-	if ident.WithState {
-		selector = n.stateName + "." + selector
-	}
-
+func (n *IndexGenerator) slicifyHolder(param *Parameter) ast.Expression {
 	return ast.NewLiteral(
-		fmt.Sprintf("[]%v{ %v }", xreflect.Stringify(field.Type, field.Tag), selector),
+		fmt.Sprintf("[]%v{ %v }", param.Schema.DataType, param.LocalVariable()),
 	)
 }
 
@@ -232,7 +206,8 @@ func (n *IndexGenerator) handleHasKey(expr *ast.CallExpr) (ast.Expression, error
 
 func (n *IndexGenerator) findVariableType(expression *ast.Ident) (reflect.Type, error) {
 	split := strings.Split(expression.Name, ".")
-	if !n.isStateParam(split) {
+	if !n.isStateParam(split[0]) {
+
 		rType, ok := n.variableToType[split[0]]
 		if !ok {
 			return nil, nil
@@ -246,12 +221,12 @@ func (n *IndexGenerator) findVariableType(expression *ast.Ident) (reflect.Type, 
 		return inType.Type, err
 	}
 
-	structField, err := n.fieldByPath(split)
+	param, err := n.lookupParam(split[0])
 	if err != nil {
 		return nil, err
 	}
 
-	return structField.Type, nil
+	return param.Schema.Type(), nil
 }
 
 func (n *IndexGenerator) stringify(expression ast.Expression) (string, error) {
@@ -260,12 +235,9 @@ func (n *IndexGenerator) stringify(expression ast.Expression) (string, error) {
 	return builder.String(), err
 }
 
-func (n *IndexGenerator) isStateParam(split []string) bool {
-	if _, ok := n.deref(n.state).FieldByName(split[0]); !ok {
-		return false
-	}
-
-	return true
+func (n *IndexGenerator) isStateParam(name string) bool {
+	_, ok := n.paramsByName[name]
+	return ok
 }
 
 func (n *IndexGenerator) appendFunction(fnContent string) {
@@ -283,14 +255,14 @@ func (n *IndexGenerator) OnSliceItem(value *ast.Ident, set *ast.Ident) error {
 	return nil
 }
 
-func (n *IndexGenerator) expandIndexByTemplate(itemType string, keyType string, fieldName string) (*IndexBy, string) {
-	result := strings.ReplaceAll(indexTemplate, "$ValueType", itemType)
-	result = strings.ReplaceAll(result, "$KeyType", keyType)
-	result = strings.ReplaceAll(result, "$IndexName", fieldName)
+func (n *IndexGenerator) expandIndexByTemplate(param *Parameter) (*IndexBy, string) {
+	result := strings.ReplaceAll(indexTemplate, "$ValueType", param.Schema.DataType)
+	result = strings.ReplaceAll(result, "$KeyType", param.IndexField.Schema.DataType)
+	result = strings.ReplaceAll(result, "$IndexName", param.IndexField.Name)
 	return &IndexBy{
-		FnName:    "IndexBy" + fieldName,
-		SliceType: itemType + "Slice",
-		IndexType: "Indexed" + itemType,
+		FnName:    "IndexBy" + param.IndexField.Name,
+		SliceType: param.Schema.DataType + "Slice",
+		IndexType: "Indexed" + param.Schema.DataType,
 	}, result
 }
 

@@ -38,6 +38,6 @@ func NewBuilder(option Options, declaredVariables ...string) *Builder {
 	return &Builder{
 		Builder: &strings.Builder{},
 		Options: option,
-		State:   NewScope(declaredVariables),
+		State:   NewScope(declaredVariables...),
 	}
 }

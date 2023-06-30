@@ -4,4 +4,4 @@ package checksum
 
 import "time"
 
-var GeneratedTime, _ = time.Parse(time.RFC3339, "2023-06-30T09:50:42-07:00")
+var GeneratedTime, _ = time.Parse(time.RFC3339, "2023-06-30T11:06:04-07:00")

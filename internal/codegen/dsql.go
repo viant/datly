@@ -25,7 +25,7 @@ func (t *Template) GenerateDSQL(opts ...Option) (string, error) {
 }
 
 func (t *Template) GenerateHandler(opts *options.Gen) (string, string, error) {
-	fieldNames, localVariableDeclaration := t.State.localStateBasedVariableDefinition()
+	_, localVariableDeclaration := t.State.localStateBasedVariableDefinition()
 
 	index := NewIndexGenerator(t.State)
 	builder := ast.NewBuilder(ast.Options{
