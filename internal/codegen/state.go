@@ -263,7 +263,7 @@ func (t *Template) buildPathParameterIfNeeded(spec *Spec) *Parameter {
 	}
 	param := &Parameter{}
 	parameterNamer := t.ColumnParameterNamer(selector)
-	param.Name = parameterNamer(indexField.Column)
+	param.Name = parameterNamer(indexField)
 	param.SQL = SQL
 	param.In = &view.Location{Kind: view.KindParam, Name: selector[0]}
 	var paramType = reflect.StructOf([]reflect.StructField{{Name: "Values", Type: reflect.SliceOf(indexField.Schema.Type())}})

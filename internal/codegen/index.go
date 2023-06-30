@@ -88,6 +88,12 @@ func (n *IndexGenerator) handleIndexBy(expr *ast.CallExpr) (ast.Expression, erro
 	if !ok || len(expr.Args) != 1 {
 		return expr, nil
 	}
+
+	literal, ok := expr.Args[0].(*ast.LiteralExpr)
+	if !ok {
+		return expr, nil
+	}
+
 	segments := strings.Split(ident.Name, ".")
 	if !n.isStateParam(segments[0]) {
 		return expr, nil
@@ -98,7 +104,15 @@ func (n *IndexGenerator) handleIndexBy(expr *ast.CallExpr) (ast.Expression, erro
 		return nil, err
 	}
 
-	if stateParam.In.Kind != view.KindParam {
+	literalValue := strings.Trim(literal.Literal, `"`)
+	structQLParamName := ident.Name + literalValue
+
+	structQLParam, err := n.lookupParam(structQLParamName)
+	if err != nil {
+		return expr, nil
+	}
+
+	if structQLParam.In.Kind != view.KindParam {
 		return expr, nil
 	}
 
@@ -111,7 +125,7 @@ func (n *IndexGenerator) handleIndexBy(expr *ast.CallExpr) (ast.Expression, erro
 		receiverElem = receiverElem.Elem()
 	}
 
-	indexed, template := n.expandIndexByTemplate(stateParam)
+	indexed, template := n.expandIndexByTemplate(stateParam, structQLParam)
 	n.appendFunction(template)
 
 	stringify, err := n.stringify(expr)
@@ -255,12 +269,12 @@ func (n *IndexGenerator) OnSliceItem(value *ast.Ident, set *ast.Ident) error {
 	return nil
 }
 
-func (n *IndexGenerator) expandIndexByTemplate(param *Parameter) (*IndexBy, string) {
+func (n *IndexGenerator) expandIndexByTemplate(param *Parameter, qlParam *Parameter) (*IndexBy, string) {
 	result := strings.ReplaceAll(indexTemplate, "$ValueType", param.Schema.DataType)
-	result = strings.ReplaceAll(result, "$KeyType", param.IndexField.Schema.DataType)
-	result = strings.ReplaceAll(result, "$IndexName", param.IndexField.Name)
+	result = strings.ReplaceAll(result, "$KeyType", qlParam.IndexField.Schema.DataType)
+	result = strings.ReplaceAll(result, "$IndexName", qlParam.IndexField.Name)
 	return &IndexBy{
-		FnName:    "IndexBy" + param.IndexField.Name,
+		FnName:    "IndexBy" + qlParam.IndexField.Name,
 		SliceType: param.Schema.DataType + "Slice",
 		IndexType: "Indexed" + param.Schema.DataType,
 	}, result

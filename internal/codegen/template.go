@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/cmd/option"
 	ast "github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/view"
-	"github.com/viant/sqlparser"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
@@ -25,7 +24,7 @@ type (
 		StateType     reflect.Type
 	}
 
-	ColumnParameterNamer func(column *sqlparser.Column) string
+	ColumnParameterNamer func(column *Field) string
 )
 
 const (
@@ -55,8 +54,8 @@ func (t *Template) ParamIndexName(name, by string) string {
 
 func (t *Template) ColumnParameterNamer(selector Selector) ColumnParameterNamer {
 	prefix := t.ParamPrefix() + selector.Name()
-	return func(column *sqlparser.Column) string {
-		return prefix + column.Name
+	return func(field *Field) string {
+		return prefix + field.Name
 	}
 }
 

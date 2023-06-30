@@ -153,7 +153,7 @@ func (s *Spec) viewSQL(columnParameter ColumnParameterNamer) string {
 			builder.WriteString("\nAND ")
 		}
 		i++
-		structQLParam := columnParameter(field.Column)
+		structQLParam := columnParameter(field)
 		builder.WriteString(fmt.Sprintf(`$criteria.In("%v", $%v.Values)`, field.Column.Name, structQLParam))
 	}
 	return builder.String()
