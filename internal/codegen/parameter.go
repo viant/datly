@@ -11,10 +11,10 @@ import (
 
 type Parameter struct {
 	view.Parameter
-	SQL           string
-	FieldTag      string
-	IndexVariable string
-	IndexField    *Field
+	SQL        string
+	FieldTag   string
+	IndexField *Field
+	PathParam  *Parameter
 }
 
 func (p *Parameter) LocalVariable() string {
@@ -120,4 +120,8 @@ func (p *Parameter) localVariableDefinition() (string, string) {
 	upperCamel, _ := formatter.UpperCamel.Caser()
 	fieldName := upperCamel.Format(p.Name, format.CaseLowerCamel)
 	return fieldName, fmt.Sprintf("%v := state.%v", fieldName, p.Name)
+}
+
+func (p *Parameter) IndexVariable() string {
+	return p.Name + "By" + p.PathParam.IndexField.Name
 }

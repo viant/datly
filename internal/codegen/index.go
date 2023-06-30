@@ -4,7 +4,6 @@ import (
 	_ "embed"
 	"fmt"
 	"github.com/viant/datly/internal/codegen/ast"
-	"github.com/viant/datly/view"
 	"reflect"
 	"strings"
 )
@@ -17,11 +16,12 @@ var hasKeyTemplate string
 
 type (
 	IndexGenerator struct {
-		state        State
-		paramsByName map[string]*Parameter
-		builder      *strings.Builder
-		index        receiverIndex
-		stateName    string
+		state            State
+		paramByName      map[string]*Parameter
+		paramByIndexName map[string]*Parameter
+		builder          *strings.Builder
+		index            receiverIndex
+		stateName        string
 
 		exprToType           map[string]string
 		variableToExpression map[string]string
@@ -47,7 +47,8 @@ type (
 func NewIndexGenerator(specState State) *IndexGenerator {
 	return &IndexGenerator{
 		state:                specState,
-		paramsByName:         specState.IndexByName(),
+		paramByName:          specState.IndexByName(),
+		paramByIndexName:     specState.IndexByPathIndex(),
 		builder:              &strings.Builder{},
 		index:                receiverIndex{},
 		stateName:            "state",
@@ -75,7 +76,7 @@ func (n *IndexGenerator) OnCallExpr(expr *ast.CallExpr) (ast.Expression, error) 
 	switch expr.Name {
 	case "IndexBy":
 		return n.handleIndexBy(expr)
-	case "HasKey":
+	case "HasKey", "Has":
 		return n.handleHasKey(expr)
 	default:
 		return expr, nil
@@ -89,43 +90,27 @@ func (n *IndexGenerator) handleIndexBy(expr *ast.CallExpr) (ast.Expression, erro
 		return expr, nil
 	}
 
-	literal, ok := expr.Args[0].(*ast.LiteralExpr)
-	if !ok {
-		return expr, nil
-	}
-
 	segments := strings.Split(ident.Name, ".")
 	if !n.isStateParam(segments[0]) {
 		return expr, nil
 	}
-
 	stateParam, err := n.lookupParam(segments[0])
 	if err != nil {
 		return nil, err
 	}
 
-	literalValue := strings.Trim(literal.Literal, `"`)
-	structQLParamName := ident.Name + literalValue
-
-	structQLParam, err := n.lookupParam(structQLParamName)
-	if err != nil {
+	if structQLParam := stateParam.PathParam; structQLParam == nil {
 		return expr, nil
 	}
-
-	if structQLParam.In.Kind != view.KindParam {
-		return expr, nil
-	}
-
 	receiverType := stateParam.Schema.Type()
 	receiverElem := n.deref(receiverType)
-	fmt.Printf("cardinality  :%v\n", stateParam.Schema.Cardinality)
 	if receiverElem.Kind() != reflect.Slice { //Cardinality
 		receiver = n.slicifyHolder(stateParam)
 	} else {
 		receiverElem = receiverElem.Elem()
 	}
 
-	indexed, template := n.expandIndexByTemplate(stateParam, structQLParam)
+	indexed, template := n.expandIndexByTemplate(stateParam)
 	n.appendFunction(template)
 
 	stringify, err := n.stringify(expr)
@@ -143,7 +128,7 @@ func (n *IndexGenerator) handleIndexBy(expr *ast.CallExpr) (ast.Expression, erro
 }
 
 func (n *IndexGenerator) lookupParam(name string) (*Parameter, error) {
-	param, ok := n.paramsByName[name]
+	param, ok := n.paramByName[name]
 	if !ok {
 		return nil, fmt.Errorf("failed to lookup state param: %v", name)
 	}
@@ -187,7 +172,7 @@ func (n *IndexGenerator) deref(receiverType reflect.Type) reflect.Type {
 
 func (n *IndexGenerator) slicifyHolder(param *Parameter) ast.Expression {
 	return ast.NewLiteral(
-		fmt.Sprintf("[]%v{ %v }", param.Schema.DataType, param.LocalVariable()),
+		fmt.Sprintf("[]*%v{ %v }", param.Schema.DataType, param.LocalVariable()),
 	)
 }
 
@@ -197,15 +182,30 @@ func (n *IndexGenerator) handleHasKey(expr *ast.CallExpr) (ast.Expression, error
 		return expr, nil
 	}
 
-	expression, ok := expr.Args[0].(*ast.Ident)
+	//expression, ok := expr.Args[0].(*ast.Ident)
+	//if !ok {
+	//	return expr, nil
+	//}
+
+	stateParam, ok := n.paramByIndexName[ident.Name]
 	if !ok {
+		return nil, fmt.Errorf("failed to lookup  %v\n", ident.Name)
+	}
+
+	if structQLParam := stateParam.PathParam; structQLParam == nil {
 		return expr, nil
 	}
 
-	rType, err := n.findVariableType(expression)
-	if rType == nil || err != nil {
-		return expr, err
-	}
+	//rType, err := n.findVariableType(expression)
+	//if rType == nil || err != nil {
+	//	return expr, err
+	//}
+	//
+	//variableToExpr := n.variableToExpression[ident.Name]
+	//receiverType, ok := n.exprToType[variableToExpr]
+	//if !ok {
+	//	return expr, nil
+	//}
 
 	variableToExpr := n.variableToExpression[ident.Name]
 	receiverType, ok := n.exprToType[variableToExpr]
@@ -213,7 +213,7 @@ func (n *IndexGenerator) handleHasKey(expr *ast.CallExpr) (ast.Expression, error
 		return expr, nil
 	}
 
-	template := n.expandHasKeyTemplate(receiverType, rType.String())
+	template := n.expandHasKeyTemplate(receiverType, stateParam)
 	n.appendFunction(template)
 	return expr, nil
 }
@@ -250,7 +250,7 @@ func (n *IndexGenerator) stringify(expression ast.Expression) (string, error) {
 }
 
 func (n *IndexGenerator) isStateParam(name string) bool {
-	_, ok := n.paramsByName[name]
+	_, ok := n.paramByName[name]
 	return ok
 }
 
@@ -269,20 +269,21 @@ func (n *IndexGenerator) OnSliceItem(value *ast.Ident, set *ast.Ident) error {
 	return nil
 }
 
-func (n *IndexGenerator) expandIndexByTemplate(param *Parameter, qlParam *Parameter) (*IndexBy, string) {
+func (n *IndexGenerator) expandIndexByTemplate(param *Parameter) (*IndexBy, string) {
+	pathParam := param.PathParam
 	result := strings.ReplaceAll(indexTemplate, "$ValueType", param.Schema.DataType)
-	result = strings.ReplaceAll(result, "$KeyType", qlParam.IndexField.Schema.DataType)
-	result = strings.ReplaceAll(result, "$IndexName", qlParam.IndexField.Name)
+	result = strings.ReplaceAll(result, "$KeyType", pathParam.IndexField.Schema.DataType)
+	result = strings.ReplaceAll(result, "$IndexName", pathParam.IndexField.Name)
 	return &IndexBy{
-		FnName:    "IndexBy" + qlParam.IndexField.Name,
+		FnName:    "IndexBy" + pathParam.IndexField.Name,
 		SliceType: param.Schema.DataType + "Slice",
 		IndexType: "Indexed" + param.Schema.DataType,
 	}, result
 }
 
-func (n *IndexGenerator) expandHasKeyTemplate(receiver string, field string) string {
-	result := strings.ReplaceAll(hasKeyTemplate, "$IndexType", receiver)
-	result = strings.ReplaceAll(result, "$KeyType", field)
+func (n *IndexGenerator) expandHasKeyTemplate(receiverType string, parameter *Parameter) string {
+	result := strings.ReplaceAll(hasKeyTemplate, "$IndexType", receiverType)
+	result = strings.ReplaceAll(result, "$KeyType", parameter.PathParam.IndexField.Schema.DataType)
 	return result
 }
 

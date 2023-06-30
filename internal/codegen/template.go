@@ -211,7 +211,12 @@ func (t *Template) modifyRecord(options *Options, recordPath string, spec *Spec,
 
 	if options.withUpdate {
 		xSelector := ast.NewIdent(t.ParamIndexName(spec.Type.Name, field.Name))
-		x := ast.NewCallExpr(xSelector, "HasKey", fieldSelector)
+
+		hasFn := "HasKey"
+		if options.IsGoLang() {
+			hasFn = "Has"
+		}
+		x := ast.NewCallExpr(xSelector, hasFn, fieldSelector)
 		expr := ast.NewBinary(x, "==", ast.NewLiteral("true"))
 		matchCond = ast.NewCondition(expr, ast.Block{}, nil)
 		t.update(options, recordSelector, spec, &matchCond.IFBlock)

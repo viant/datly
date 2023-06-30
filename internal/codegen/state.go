@@ -29,6 +29,18 @@ func (s State) IndexByName() map[string]*Parameter {
 	return result
 }
 
+func (s State) IndexByPathIndex() map[string]*Parameter {
+	result := map[string]*Parameter{}
+	for _, parameter := range s {
+		if parameter.PathParam == nil {
+			continue
+		}
+		result[parameter.IndexVariable()] = parameter
+	}
+
+	return result
+}
+
 func (s State) FilterByKind(kind view.Kind) State {
 	result := State{}
 	for _, parameter := range s {
@@ -226,8 +238,9 @@ func (t *Template) getPakcage(pkg string) string {
 func (t *Template) buildState(spec *Spec, state *State, card view.Cardinality) reflect.Type {
 	t.Imports.AddType(spec.Type.TypeName())
 
-	if param := t.buildPathParameterIfNeeded(spec); param != nil {
-		state.Append(param)
+	pathParameter := t.buildPathParameterIfNeeded(spec)
+	if pathParameter != nil {
+		state.Append(pathParameter)
 	}
 
 	if spec.Type.Cardinality == view.Many {
@@ -251,6 +264,7 @@ func (t *Template) buildState(spec *Spec, state *State, card view.Cardinality) r
 	}
 
 	parameter := t.buildDataViewParameter(spec, card, relationFields)
+	parameter.PathParam = pathParameter
 	state.Append(parameter)
 	return parameter.Schema.Type()
 }
@@ -268,7 +282,6 @@ func (t *Template) buildPathParameterIfNeeded(spec *Spec) *Parameter {
 	param.In = &view.Location{Kind: view.KindParam, Name: selector[0]}
 	var paramType = reflect.StructOf([]reflect.StructField{{Name: "Values", Type: reflect.SliceOf(indexField.Schema.Type())}})
 	param.Schema = view.NewSchema(paramType)
-	param.IndexVariable = t.ParamPrefix() + param.Name + "By" + indexField.Name
 	param.IndexField = indexField
 	return param
 }

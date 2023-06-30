@@ -13,11 +13,11 @@ func (h *Handler) Exec(ctx context.Context, sess handler.Session) (interface{}, 
         return nil, err
     }
 
-    db, err := sess.Db()
+    sql, err := sess.Db()
     if err != nil {
         return nil, err
     }
-    sequencer := db
+    sequencer := sql
 
     $LocalVariable
     $BusinessLogic
