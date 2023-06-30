@@ -45,6 +45,11 @@ func (s *Scope) DeclareVariable(variable string) {
 }
 
 func (s *Scope) IsDeclared(variable string) bool {
+	dotIndex := strings.Index(variable, ".")
+	if dotIndex >= 0 {
+		return true
+	}
+
 	tmp := s
 	for tmp != nil {
 		if _, ok := tmp.Variables[variable]; ok {

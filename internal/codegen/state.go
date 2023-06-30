@@ -87,9 +87,12 @@ func (s State) localStateBasedVariableDefinition() ([]string, string) {
 	var vars []string
 	var names []string
 	for _, p := range s {
+		if p.Parameter.In.Kind == view.KindParam {
+			continue
+		}
 		fieldName, definition := p.localVariableDefinition()
-		vars = append(vars, "\t"+definition)
 		names = append(names, fieldName)
+		vars = append(vars, "\t"+definition)
 	}
 	return names, strings.Join(vars, "\n")
 }

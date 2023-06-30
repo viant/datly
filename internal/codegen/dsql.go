@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/viant/datly/cmd/options"
 	ast "github.com/viant/datly/internal/codegen/ast"
+	"github.com/viant/datly/view"
 	"strings"
 )
 
@@ -25,7 +26,7 @@ func (t *Template) GenerateDSQL(opts ...Option) (string, error) {
 }
 
 func (t *Template) GenerateHandler(opts *options.Gen) (string, string, error) {
-	_, localVariableDeclaration := t.State.localStateBasedVariableDefinition()
+	fields, localVariableDeclaration := t.State.localStateBasedVariableDefinition()
 
 	index := NewIndexGenerator(t.State)
 	builder := ast.NewBuilder(ast.Options{
@@ -35,7 +36,7 @@ func (t *Template) GenerateHandler(opts *options.Gen) (string, string, error) {
 		SliceItemNotifier:  index.OnSliceItem,
 		WithLowerCaseIdent: true,
 		OnIfNotifier:       index.OnConditionStmt,
-	})
+	}, fields...)
 
 	if err := t.BusinessLogic.Generate(builder); err != nil {
 		return "", "", err
@@ -49,6 +50,8 @@ func (t *Template) GenerateHandler(opts *options.Gen) (string, string, error) {
 
 	logic := builder.String()
 	handlerContent = strings.Replace(handlerContent, "$BusinessLogic", logic, 1)
+	bodyParam := t.State.FilterByKind(view.KindRequestBody)[0]
+	handlerContent = strings.Replace(handlerContent, "$Response", "state."+bodyParam.Name, 1)
 	return handlerContent, indexContent, nil
 }
 

@@ -172,8 +172,7 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 		if rel != nil {
 			parentSelector := structPathPrefix + "." + rel.ParentField.Name
 			holder := structPathPrefix + "." + rel.Name + "." + rel.KeyField.Name
-			assignKey := ast.NewAssign(ast.NewIdent(holder), ast.NewIdent(parentSelector))
-			checkValid.IFBlock.Append(assignKey)
+			t.synchronizeRefKeys(holder, parentSelector, rel, &checkValid.IFBlock)
 		}
 
 		t.modifyRecord(options, structPath, spec, &checkValid.IFBlock)
@@ -189,8 +188,7 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 		if rel != nil && rel.KeyField != nil {
 			parentSelector := structPathPrefix + "." + rel.ParentField.Name
 			holder := recordPath + "." + rel.KeyField.Name
-			assignKey := ast.NewAssign(ast.NewIdent(holder), ast.NewIdent(parentSelector))
-			forEach.Body.Append(assignKey)
+			t.synchronizeRefKeys(holder, parentSelector, rel, &forEach.Body)
 		}
 
 		t.modifyRecord(options, recordPath, spec, &forEach.Body)
@@ -200,6 +198,18 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 		parentBlock.AppendEmptyLine()
 		parentBlock.Append(forEach)
 	}
+}
+
+func (t *Template) synchronizeRefKeys(x, y string, rel *Relation, block *ast.Block) {
+	src := ast.Expression(ast.NewIdent(y))
+	if !rel.ParentField.Ptr && rel.KeyField.Ptr {
+		src = ast.NewRefExpression(src)
+	} else if rel.ParentField.Ptr != rel.KeyField.Ptr {
+		src = ast.NewDerefExpression(src)
+	}
+
+	assignKey := ast.NewAssign(ast.NewIdent(x), src)
+	block.Append(assignKey)
 }
 
 func (t *Template) modifyRecord(options *Options, recordPath string, spec *Spec, block *ast.Block) {
@@ -240,9 +250,19 @@ func (t *Template) insert(options *Options, selector *ast.Ident, spec *Spec, blo
 		return
 	}
 	holder := ast.NewIdent("sql")
-	callExpr := ast.NewCallExpr(holder, "Insert", selector, ast.NewQuotedLiteral(spec.Table))
+
+	args := []ast.Expression{selector, ast.NewQuotedLiteral(spec.Table)}
+	if options.IsGoLang() {
+		t.swapArgs(args)
+	}
+
+	callExpr := ast.NewCallExpr(holder, "Insert", args...)
 	block.Append(ast.NewStatementExpression(ast.NewTerminatorExpression(callExpr)))
 
+}
+
+func (t *Template) swapArgs(args []ast.Expression) {
+	args[0], args[1] = args[1], args[0]
 }
 
 func (t *Template) update(options *Options, selector *ast.Ident, spec *Spec, block *ast.Block) {
@@ -250,7 +270,12 @@ func (t *Template) update(options *Options, selector *ast.Ident, spec *Spec, blo
 		return
 	}
 	holder := ast.NewIdent("sql")
-	callExpr := ast.NewCallExpr(holder, "Update", selector, ast.NewQuotedLiteral(spec.Table))
+	args := []ast.Expression{selector, ast.NewQuotedLiteral(spec.Table)}
+	if options.IsGoLang() {
+		t.swapArgs(args)
+	}
+
+	callExpr := ast.NewCallExpr(holder, "Update", args...)
 	block.Append(ast.NewStatementExpression(ast.NewTerminatorExpression(callExpr)))
 }
 
