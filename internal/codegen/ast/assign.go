@@ -34,6 +34,9 @@ func (s *Assign) Generate(builder *Builder) (err error) {
 		return nil
 
 	case LangGO:
+		if err = builder.WriteString("\n"); err != nil {
+			return err
+		}
 		asIdent, ok := s.Holder.(*Ident)
 		wasDeclared := true
 		if ok {
@@ -65,7 +68,6 @@ func (s *Assign) Generate(builder *Builder) (err error) {
 		if !wasDeclared {
 			builder.State.DeclareVariable(asIdent.Name)
 		}
-
 		return nil
 	}
 	return fmt.Errorf("unsupported option %T %v\n", s, builder.Lang)

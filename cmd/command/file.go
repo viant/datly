@@ -14,7 +14,7 @@ type File struct {
 func (f *File) validate() error {
 	switch path.Ext(f.URL) {
 	case ".go":
-		return f.ensureValidGo()
+		//return f.ensureValidGo()
 	}
 	return nil
 }

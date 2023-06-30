@@ -4,6 +4,8 @@ import (
 	_ "embed"
 	"fmt"
 	"github.com/viant/datly/internal/codegen/ast"
+	"github.com/viant/datly/utils/formatter"
+	"github.com/viant/toolbox/format"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
@@ -72,7 +74,11 @@ func (n *IndexGenerator) OnAssign(assign *ast.Assign) (ast.Expression, error) {
 func (n *IndexGenerator) OnCallExpr(expr *ast.CallExpr) (ast.Expression, error) {
 	switch expr.Name {
 	case "IndexBy":
-		return n.handleIndexBy(expr)
+		call, err := n.handleIndexBy(expr)
+		if err != nil {
+			return nil, err
+		}
+		return ast.NewStatementExpression(call), nil
 	case "HasKey":
 		return n.handleHasKey(expr)
 	default:
@@ -80,7 +86,7 @@ func (n *IndexGenerator) OnCallExpr(expr *ast.CallExpr) (ast.Expression, error) 
 	}
 }
 
-func (n *IndexGenerator) handleIndexBy(expr *ast.CallExpr) (*ast.CallExpr, error) {
+func (n *IndexGenerator) handleIndexBy(expr *ast.CallExpr) (ast.Expression, error) {
 	receiver := expr.Receiver
 	ident, ok := expr.Receiver.(*ast.Ident)
 	if !ok || len(expr.Args) != 1 {
@@ -188,6 +194,8 @@ func (n *IndexGenerator) deref(receiverType reflect.Type) reflect.Type {
 
 func (n *IndexGenerator) slicifyHolder(ident *ast.Ident, field reflect.StructField) ast.Expression {
 	selector := ident.Name
+	upperCamel, _ := formatter.UpperCamel.Caser()
+	selector = upperCamel.Format(selector, format.CaseLowerCamel)
 	if ident.WithState {
 		selector = n.stateName + "." + selector
 	}

@@ -120,7 +120,14 @@ func (t *Template) allocateSequence(options *Options, spec *Spec, block *ast.Blo
 	}
 	if field := spec.Type.pkFields[0]; strings.Contains(field.Schema.DataType, "int") {
 		selector := spec.Selector()
-		call := ast.NewCallExpr(ast.NewIdent("sequencer"), "Allocate", ast.NewQuotedLiteral(spec.Table), ast.NewIdent(selector[0]), ast.NewQuotedLiteral(strings.TrimLeft(selector.Path(field.Name), "/")))
+
+		var args = []ast.Expression{ast.NewQuotedLiteral(spec.Table), ast.NewIdent(selector[0]),
+			ast.NewQuotedLiteral(strings.TrimLeft(selector.Path(field.Name), "/")),
+		}
+		if options.IsGoLang() {
+			args = append([]ast.Expression{ast.Expression(ast.NewIdent("ctx"))}, args...)
+		}
+		call := ast.NewCallExpr(ast.NewIdent("sequencer"), "Allocate", args...)
 		block.Append(ast.NewStatementExpression(call))
 	}
 

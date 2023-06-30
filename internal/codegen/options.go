@@ -33,6 +33,10 @@ func (o *Options) isInsertOnly() bool {
 	return o.withInsert && !o.withUpdate
 }
 
+func (o *Options) IsGoLang() bool {
+	return o.lang == ast.LangGO
+}
+
 func (o *Options) apply(opts []Option) {
 	if len(opts) == 0 {
 		return
