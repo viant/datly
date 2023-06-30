@@ -20,6 +20,26 @@ func (s *State) Append(param ...*Parameter) {
 	*s = append(*s, param...)
 }
 
+func (s State) IndexByName() map[string]*Parameter {
+	result := map[string]*Parameter{}
+	for _, parameter := range s {
+		result[parameter.Name] = parameter
+	}
+
+	return result
+}
+
+func (s State) FilterByKind(kind view.Kind) State {
+	result := State{}
+	for _, parameter := range s {
+		if parameter.In.Kind == kind {
+			result.Append(parameter)
+		}
+	}
+
+	return result
+}
+
 func (s State) dsqlParameterDeclaration() string {
 	var result []string
 	for _, param := range s {
@@ -52,12 +72,15 @@ func (s State) ensureSchema(dirTypes *xreflect.DirTypes) error {
 	return nil
 }
 
-func (s State) localStateBasedVariableDefinition() string {
+func (s State) localStateBasedVariableDefinition() ([]string, string) {
 	var vars []string
+	var names []string
 	for _, p := range s {
-		vars = append(vars, "\t"+p.localVariableDefinition())
+		fieldName, definition := p.localVariableDefinition()
+		vars = append(vars, "\t"+definition)
+		names = append(names, fieldName)
 	}
-	return strings.Join(vars, "\n")
+	return names, strings.Join(vars, "\n")
 }
 
 func NewState(modulePath, dataType string, lookup xreflect.TypeLookupFn) (State, error) {
@@ -235,17 +258,18 @@ func (t *Template) buildState(spec *Spec, state *State, card view.Cardinality) r
 
 func (t *Template) buildPathParameterIfNeeded(spec *Spec) *Parameter {
 	selector := spec.Selector()
-	field, SQL := spec.pkStructQL(selector)
+	indexField, SQL := spec.pkStructQL(selector)
 	if SQL == "" {
 		return nil
 	}
 	param := &Parameter{}
 	parameterNamer := t.ColumnParameterNamer(selector)
-	param.Name = parameterNamer(field.Column)
+	param.Name = parameterNamer(indexField.Column)
 	param.SQL = SQL
 	param.In = &view.Location{Kind: view.KindParam, Name: selector[0]}
-	var paramType = reflect.StructOf([]reflect.StructField{{Name: "Values", Type: reflect.SliceOf(field.Schema.Type())}})
+	var paramType = reflect.StructOf([]reflect.StructField{{Name: "Values", Type: reflect.SliceOf(indexField.Schema.Type())}})
 	param.Schema = view.NewSchema(paramType)
+	param.IndexVariable = t.ParamPrefix() + param.Name + "By" + indexField.Name
 	return param
 }
 

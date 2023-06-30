@@ -11,8 +11,14 @@ import (
 
 type Parameter struct {
 	view.Parameter
-	SQL      string
-	FieldTag string
+	SQL           string
+	FieldTag      string
+	IndexVariable string
+}
+
+func (p *Parameter) LocalVariable() string {
+	upperCamel, _ := formatter.UpperCamel.Caser()
+	return upperCamel.Format(p.Name, format.CaseLowerCamel)
 }
 
 func (p *Parameter) DsqlParameterDeclaration() string {
@@ -109,7 +115,8 @@ func (p *Parameter) addedValidationModifierIfNeeded(builder *strings.Builder, SQ
 	}
 }
 
-func (p *Parameter) localVariableDefinition() string {
+func (p *Parameter) localVariableDefinition() (string, string) {
 	upperCamel, _ := formatter.UpperCamel.Caser()
-	return fmt.Sprintf("%v := state.%v", upperCamel.Format(p.Name, format.CaseLowerCamel), p.Name)
+	fieldName := upperCamel.Format(p.Name, format.CaseLowerCamel)
+	return fieldName, fmt.Sprintf("%v := state.%v", fieldName, p.Name)
 }

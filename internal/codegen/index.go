@@ -19,7 +19,7 @@ var hasKeyTemplate string
 
 type (
 	IndexGenerator struct {
-		state     reflect.Type
+		state     State
 		builder   *strings.Builder
 		index     receiverIndex
 		stateName string
@@ -45,7 +45,7 @@ type (
 	}
 )
 
-func NewIndexGenerator(stateType reflect.Type) *IndexGenerator {
+func NewIndexGenerator(stateType State) *IndexGenerator {
 	return &IndexGenerator{
 		state:                stateType,
 		builder:              &strings.Builder{},
@@ -74,11 +74,7 @@ func (n *IndexGenerator) OnAssign(assign *ast.Assign) (ast.Expression, error) {
 func (n *IndexGenerator) OnCallExpr(expr *ast.CallExpr) (ast.Expression, error) {
 	switch expr.Name {
 	case "IndexBy":
-		call, err := n.handleIndexBy(expr)
-		if err != nil {
-			return nil, err
-		}
-		return ast.NewStatementExpression(call), nil
+		return n.handleIndexBy(expr)
 	case "HasKey":
 		return n.handleHasKey(expr)
 	default:
@@ -154,7 +150,9 @@ func (n *IndexGenerator) handleIndexBy(expr *ast.CallExpr) (ast.Expression, erro
 }
 
 func (n *IndexGenerator) fieldByPath(segments []string) (reflect.StructField, error) {
-	return n.pathInType(segments, n.state)
+	state := n.state
+
+	return n.pathInType(segments, state)
 }
 
 func (n *IndexGenerator) pathInType(segments []string, receiverType reflect.Type) (reflect.StructField, error) {

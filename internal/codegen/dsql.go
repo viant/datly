@@ -25,14 +25,16 @@ func (t *Template) GenerateDSQL(opts ...Option) (string, error) {
 }
 
 func (t *Template) GenerateHandler(opts *options.Gen) (string, string, error) {
-	index := NewIndexGenerator(t.StateType)
+	fieldNames, localVariableDeclaration := t.State.localStateBasedVariableDefinition()
+
+	index := NewIndexGenerator(t.State)
 	builder := ast.NewBuilder(ast.Options{
 		Lang:               ast.LangGO,
 		CallNotifier:       index.OnCallExpr,
 		AssignNotifier:     index.OnAssign,
 		SliceItemNotifier:  index.OnSliceItem,
 		WithLowerCaseIdent: true,
-		OnIfNotifier:      index.OnConditionStmt,
+		OnIfNotifier:       index.OnConditionStmt,
 	})
 
 	if err := t.BusinessLogic.Generate(builder); err != nil {
@@ -41,8 +43,6 @@ func (t *Template) GenerateHandler(opts *options.Gen) (string, string, error) {
 
 	indexContent := strings.Replace(goIndexTmpl, "$PackageName", opts.Package, 1)
 	indexContent = strings.ReplaceAll(indexContent, "$Content", index.builder.String())
-
-	localVariableDeclaration := t.State.localStateBasedVariableDefinition()
 
 	handlerContent := strings.Replace(handlerTemplate, "$Package", opts.Package, 1)
 	handlerContent = strings.Replace(handlerContent, "$LocalVariable", localVariableDeclaration, 1)
