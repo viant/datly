@@ -73,38 +73,29 @@ func (s *Service) prepareBuild(ctx context.Context, build *options.Build) error 
 }
 
 func (s *Service) generateTemplateFiles(gen *options.Gen, template *codegen.Template, opts ...codegen.Option) ([]*File, error) {
+
+	var files []*File
 	switch gen.Lang {
 	case ast.LangGO:
+
 		handler, index, err := template.GenerateHandler(gen)
 		if err != nil {
 			return nil, err
 		}
-
-		return []*File{
-			{
-				URL:     gen.HandlerLocation(),
-				Content: handler,
-			},
-			{
-				URL:     gen.IndexLocation(),
-				Content: index,
-			},
-		}, nil
-
+		files = append(files, NewFile(gen.HandlerLocation(), handler))
+		files = append(files, NewFile(gen.IndexLocation(), index))
+		fallthrough
 	case ast.LangVelty:
 		dSQLContent, err := template.GenerateDSQL(opts...)
 		if err != nil {
 			return nil, err
 		}
-
-		return []*File{{
-			Content: dSQLContent,
-			URL:     gen.DSQLLocation(),
-		}}, nil
+		files = append(files, NewFile(gen.DSQLLocation(), dSQLContent))
 
 	default:
 		return nil, fmt.Errorf("unsupported lang type %v", gen.Lang)
 	}
+	return files, nil
 }
 
 func New() *Service {

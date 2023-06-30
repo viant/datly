@@ -68,6 +68,7 @@ func (s *Service) dsqlGenerationOptions(gen *options.Gen) []codegen.Option {
 	var options []codegen.Option
 	if gen.Lang == ast.LangGO {
 		options = append(options, codegen.WithoutBusinessLogic())
+		options = append(options, codegen.WithLang(gen.Lang))
 	}
 	return options
 }

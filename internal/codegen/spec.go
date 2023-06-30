@@ -161,12 +161,13 @@ func (s *Spec) viewSQL(columnParameter ColumnParameterNamer) string {
 
 //NewSpec discover column derived type for supplied SQL/table
 func NewSpec(ctx context.Context, db *sql.DB, table, SQL string) (*Spec, error) {
+	isAuxiliary := isAuxiliary(SQL)
 	table = normalizeTable(table)
 	SQL = normalizeSQL(SQL, table)
 	if table == "" && SQL == "" {
 		return nil, fmt.Errorf("both table/SQL were empty")
 	}
-	var result = &Spec{Table: table, SQL: SQL, isAuxiliary: isAuxiliary(SQL)}
+	var result = &Spec{Table: table, SQL: SQL, isAuxiliary: isAuxiliary}
 	var columns sqlparser.Columns
 	var err error
 	if SQL != "" {

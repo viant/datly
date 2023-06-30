@@ -87,7 +87,7 @@ func (s State) localStateBasedVariableDefinition() ([]string, string) {
 	var vars []string
 	var names []string
 	for _, p := range s {
-		if p.Parameter.In.Kind == view.KindParam {
+		if p.Parameter.In.Kind == view.KindParam || p.IsAuxiliary {
 			continue
 		}
 		fieldName, definition := p.localVariableDefinition()
@@ -290,7 +290,7 @@ func (t *Template) buildPathParameterIfNeeded(spec *Spec) *Parameter {
 }
 
 func (t *Template) buildDataViewParameter(spec *Spec, cardinality view.Cardinality, fields []reflect.StructField) *Parameter {
-	param := &Parameter{}
+	param := &Parameter{IsAuxiliary: spec.isAuxiliary}
 	param.Name = t.ParamName(spec.Type.Name)
 	param.Schema = &view.Schema{DataType: spec.Type.Name, Cardinality: cardinality}
 	param.In = &view.Location{Kind: view.KindDataView, Name: param.Name}

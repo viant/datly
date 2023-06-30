@@ -11,10 +11,11 @@ import (
 
 type Parameter struct {
 	view.Parameter
-	SQL        string
-	FieldTag   string
-	IndexField *Field
-	PathParam  *Parameter
+	SQL         string
+	FieldTag    string
+	IndexField  *Field
+	PathParam   *Parameter
+	IsAuxiliary bool
 }
 
 func (p *Parameter) LocalVariable() string {

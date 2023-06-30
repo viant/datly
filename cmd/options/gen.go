@@ -85,6 +85,22 @@ func (g *Gen) HandlerLocation() string {
 	return url.Join(baseURL, "handler.go")
 }
 
+func (g *Gen) HandlerType() string {
+	result := "Handler"
+	if g.Package == "" {
+		return result
+	}
+	return g.Package + "." + result
+}
+
+func (g *Gen) StateType() string {
+	result := "State"
+	if g.Package == "" {
+		return result
+	}
+	return g.Package + "." + result
+}
+
 func (g *Gen) IndexLocation() string {
 	_, name := url.Split(g.Source, file.Scheme)
 	if ext := path.Ext(name); ext != "" {

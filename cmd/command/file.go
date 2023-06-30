@@ -27,3 +27,7 @@ func (f *File) ensureValidGo() error {
 	f.Content = string(source)
 	return nil
 }
+
+func NewFile(URL string, content string) *File {
+	return &File{URL: URL, Content: content}
+}

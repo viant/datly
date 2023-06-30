@@ -126,7 +126,7 @@ func (t *Template) allocateSequence(options *Options, spec *Spec, block *ast.Blo
 		if options.IsGoLang() {
 			args = append([]ast.Expression{ast.Expression(ast.NewIdent("ctx"))}, args...)
 		}
-		call := ast.NewCallExpr(ast.NewIdent("sequencer"), "Allocate", args...)
+		call := ast.NewErrorCheck(ast.NewCallExpr(ast.NewIdent("sequencer"), "Allocate", args...))
 		block.Append(ast.NewStatementExpression(call))
 	}
 
@@ -256,8 +256,8 @@ func (t *Template) insert(options *Options, selector *ast.Ident, spec *Spec, blo
 		t.swapArgs(args)
 	}
 
-	callExpr := ast.NewCallExpr(holder, "Insert", args...)
-	block.Append(ast.NewStatementExpression(ast.NewTerminatorExpression(callExpr)))
+	callExpr := ast.NewErrorCheck(ast.NewCallExpr(holder, "Insert", args...))
+	block.Append(ast.NewTerminatorExpression(callExpr))
 
 }
 
@@ -275,8 +275,8 @@ func (t *Template) update(options *Options, selector *ast.Ident, spec *Spec, blo
 		t.swapArgs(args)
 	}
 
-	callExpr := ast.NewCallExpr(holder, "Update", args...)
-	block.Append(ast.NewStatementExpression(ast.NewTerminatorExpression(callExpr)))
+	callExpr := ast.NewErrorCheck(ast.NewCallExpr(holder, "Update", args...))
+	block.Append(ast.NewTerminatorExpression(callExpr))
 }
 
 func (t *Template) RecordPrefix() string {
