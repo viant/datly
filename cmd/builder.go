@@ -481,7 +481,7 @@ func (s *Builder) Build(ctx context.Context) error {
 }
 
 func (s *Builder) newRouteBuilder(routerResource *router.Resource, paramIndex *ParametersIndex, aFile *session) *routeBuilder {
-	return &routeBuilder{
+	ret := &routeBuilder{
 		session:        aFile,
 		views:          map[string]*view.View{},
 		routerResource: routerResource,
@@ -491,6 +491,9 @@ func (s *Builder) newRouteBuilder(routerResource *router.Resource, paramIndex *P
 			Const:   map[string]interface{}{},
 		},
 	}
+	ret.option.Method = "GET"
+
+	return ret
 }
 
 func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts *constFileContent, viewCaches *[]*view.Cache) error {
@@ -765,8 +768,9 @@ func extractURIParams(URI string) map[string]bool {
 }
 
 func (s *Builder) initRoute(builder *routeBuilder) error {
+	method := builder.option.Method
 	builder.route = &router.Route{
-		Method:           builder.option.Method,
+		Method:           method,
 		EnableAudit:      true,
 		Transforms:       builder.transforms,
 		CustomValidation: builder.option.CustomValidation || builder.option.HandlerType != "",

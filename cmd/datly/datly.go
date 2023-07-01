@@ -42,16 +42,16 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-	os.Args = []string{
-		"",
-		"gen",
-		"-o=patch",
-		"-g=campaign",
-		"-p=/Users/awitas/go/src/github.com/viant/datly/poc2",
-		"-s=/Users/awitas/go/src/github.com/viant/datly/poc2/dsql/campaign/init/campaign_patch.sql",
-		"-c=ci_ads|mysql|root:dev@tcp(127.0.0.1:3306)/ci_ads?parseTime=true",
-		"-l=go",
-	}
+	//os.Args = []string{
+	//	"",
+	//	"gen",
+	//	"-o=patch",
+	//	"-g=campaign",
+	//	"-p=/Users/awitas/go/src/github.com/viant/datly/poc2",
+	//	"-s=/Users/awitas/go/src/github.com/viant/datly/poc2/dsql/campaign/init/campaign_patch.sql",
+	//	"-c=ci_ads|mysql|root:dev@tcp(127.0.0.1:3306)/ci_ads?parseTime=true",
+	//	"-l=go",
+	//}
 	//os.Args = []string{
 	//	"",
 	//	"dsql",
