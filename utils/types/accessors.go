@@ -246,6 +246,7 @@ func (a *Accessor) adjustAndSet(ptr unsafe.Pointer, value interface{}, format st
 		return value, nil
 	}
 
+	fmt.Printf("%T %+v\n")
 	marshal, err := json.Marshal(value)
 	if err != nil {
 		return nil, err
