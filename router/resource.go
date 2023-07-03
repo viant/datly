@@ -290,7 +290,7 @@ func readOptions(options []interface{}) (config.CodecsRegistry, *xreflect.Types,
 		visitors = map[string]interface{}{}
 	}
 	if types == nil {
-		types = config.Config.Types
+		types = xreflect.NewTypes(xreflect.WithRegistry(config.Config.Types))
 	}
 	return visitors, types, resources, metrics
 }

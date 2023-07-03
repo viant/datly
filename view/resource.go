@@ -57,6 +57,10 @@ func (r *Resource) TypeRegistry() *xreflect.Types {
 	return r._types
 }
 
+func (r *Resource) LookupType() xreflect.LookupType {
+	return r._types.Lookup
+}
+
 func (r *Resource) SetFs(fs afs.Service) {
 	r.fs = fs
 }
@@ -430,8 +434,8 @@ func EmptyResource() *Resource {
 }
 
 //NewResource creates a Resource and register provided Types
-func NewResource(root *xreflect.Types) *Resource {
-	return &Resource{_types: xreflect.NewTypes(xreflect.WithRegistry(root))}
+func NewResource(parent *xreflect.Types) *Resource {
+	return &Resource{_types: xreflect.NewTypes(xreflect.WithRegistry(parent))}
 }
 
 //AddViews register views in the resource
@@ -574,10 +578,6 @@ func (r *Resource) MessageBus(name string) (*mbus.Resource, error) {
 		r._messageBuses = MessageBusSlice(r.MessageBuses).Index()
 	}
 	return r._messageBuses.Lookup(name)
-}
-
-func (r *Resource) LookupType() xreflect.LookupType {
-	return r._types.Lookup
 }
 
 func (r *Resource) typeNotFound(packageName string, typeName string) error {

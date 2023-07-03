@@ -319,7 +319,7 @@ func (c *Schema) setType(lookupType xreflect.LookupType, ptr bool) error {
 	if name == "" {
 		name = c.DataType
 	}
-	if name != c.DataType && strings.Contains(c.DataType, " ") {
+	if name != c.DataType && strings.Contains(c.DataType, " ") { //TODO replace with xreflect check if definition
 		options = append(options, xreflect.WithTypeDefinition(c.DataType))
 	}
 	rType, err := types.LookupType(lookupType, name, options...)
