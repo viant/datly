@@ -123,7 +123,7 @@ func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type)
 
 	factory, ok := visitor.(config.CodecFactory)
 	if ok {
-		aCodec, err := factory.New(&v.CodecConfig, paramType, resource.LookupType)
+		aCodec, err := factory.New(&v.CodecConfig, paramType, resource.LookupType())
 		if err != nil {
 			return err
 		}

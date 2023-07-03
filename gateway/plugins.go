@@ -95,8 +95,8 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 
 			//case *map[string]reflect.Type:
 			//	registry.OverridePackageTypes(pluginChanges.packageName, *actual)
-			//case *[]reflect.Type:
-			//	registry.AddTypes(pluginChanges.packageName, *actual)
+			case *[]reflect.Type:
+				registry.AddTypes(pluginChanges.packageName, *actual)
 			//case *map[string][]reflect.Type:
 			//	registry.OverridePackageTypes(*actual)
 			//case *map[string]map[string]reflect.Type:

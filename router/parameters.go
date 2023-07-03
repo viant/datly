@@ -304,7 +304,7 @@ func wrapJSONSyntaxErrorIfNeeded(err error, buff []byte) error {
 
 func (p *RequestParams) ExtractHttpParam(ctx context.Context, param *view.Parameter, options ...interface{}) (interface{}, error) {
 	value, err := p.extractHttpParam(ctx, param, options)
-	if err != nil || value != nil {
+	if err != nil || value == nil {
 		return nil, err
 	}
 
