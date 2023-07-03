@@ -77,7 +77,7 @@ func (t *Type) AppendColumnField(column *sqlparser.Column) (*Field, error) {
 	if column.Type == "" {
 		return nil, fmt.Errorf("failed to match type: %v %v %v\n", column.Alias, column.Name, column.Expression)
 	}
-	aType, err := types.GetOrParseType(dConfig.Config.LookupType, column.Type)
+	aType, err := types.LookupType(dConfig.Config.Types.Lookup, column.Type)
 	if err != nil {
 		return nil, err
 	}

@@ -7,7 +7,6 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/toolbox/format"
-	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -114,11 +113,9 @@ func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type)
 	if v.Ref == "" {
 		return nil
 	}
-
 	if err := v.initSchemaIfNeeded(resource); err != nil {
 		return err
 	}
-
 	visitor, ok := resource.CodecByName(v.Ref)
 	if !ok {
 		return fmt.Errorf("not found codec with name %v", v.Ref)
@@ -126,7 +123,7 @@ func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type)
 
 	factory, ok := visitor.(config.CodecFactory)
 	if ok {
-		aCodec, err := factory.New(&v.CodecConfig, paramType, xreflect.TypeLookupFn(resource.LookupType))
+		aCodec, err := factory.New(&v.CodecConfig, paramType, resource.LookupType)
 		if err != nil {
 			return err
 		}
@@ -205,8 +202,7 @@ func (v *Codec) initSchemaIfNeeded(resource *Resource) error {
 	if v.Schema == nil || v.Schema.Type() != nil {
 		return nil
 	}
-
-	return v.Schema.parseType(resource._types)
+	return v.Schema.setType(resource.LookupType(), false)
 }
 
 //Init initializes Parameter
@@ -423,7 +419,7 @@ func (p *Parameter) initSchema(resource *Resource, structType reflect.Type) erro
 	}
 
 	if schemaType != "" {
-		lookup, err := types.GetOrParseType(resource.LookupType, schemaType)
+		lookup, err := types.LookupType(resource.LookupType(), schemaType)
 		if err != nil {
 			return err
 		}

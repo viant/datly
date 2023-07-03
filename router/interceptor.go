@@ -19,7 +19,7 @@ type (
 		SourceURL   string
 		Template    string
 		evaluator   *expand.Evaluator
-		typeLookup  xreflect.TypeLookupFn
+		lookupType  xreflect.LookupType
 		contextType *expand.CustomContext
 		_url        string
 	}
@@ -75,7 +75,7 @@ func (i RouterInterceptors) Copy() RouterInterceptors {
 	return result
 }
 
-func NewInterceptorFromURL(ctx context.Context, fs afs.Service, URL string, fn xreflect.TypeLookupFn) (*RouteInterceptor, error) {
+func NewInterceptorFromURL(ctx context.Context, fs afs.Service, URL string, fn xreflect.LookupType) (*RouteInterceptor, error) {
 	veltyContent, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func NewInterceptorFromURL(ctx context.Context, fs afs.Service, URL string, fn x
 	result := &RouteInterceptor{
 		SourceURL:  URL,
 		Template:   tt,
-		typeLookup: fn,
+		lookupType: fn,
 	}
 	return result, result.init("")
 }
@@ -93,7 +93,7 @@ func (i *RouteInterceptor) init(URL string) error {
 	i._url = URL
 	i.contextType = i.newContext(InterceptorContext{})
 
-	evaluator, err := expand.NewEvaluator(nil, nil, nil, i.Template, i.typeLookup, i.contextType)
+	evaluator, err := expand.NewEvaluator(nil, nil, nil, i.Template, i.lookupType, i.contextType)
 	if err != nil {
 		return err
 	}

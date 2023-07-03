@@ -283,6 +283,9 @@ func (it *ParamMetaIterator) addVariable(selector *expr.Select) {
 	if keywords.Has(holderName) {
 		return
 	}
+	if selector.X != nil {
+		return //has
+	}
 
 	it.assignedVars[holderName] = true
 }

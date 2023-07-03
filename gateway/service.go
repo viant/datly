@@ -372,8 +372,12 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (*router
 	outer:
 		for URL, viewResource := range r.dataResourcesIndex {
 			for _, definition := range viewResource.Types {
-				_, ok := pluginsChanges.PackageRegistry(definition.Package)[definition.Name]
-				if ok {
+				pkg := pluginsChanges.Types.Package(definition.Package)
+				if pkg == nil {
+					continue
+				}
+				rType, _ := pkg.Lookup(definition.Name)
+				if rType != nil {
 					changes.OnChange(resource.Modified, URL)
 					continue outer
 				}
@@ -468,7 +472,8 @@ func deepCopyResources(index map[string]*view.Resource) (map[string]*view.Resour
 	}
 
 	result := map[string]*view.Resource{}
-	return result, json.Unmarshal(marshal, &result)
+	err = json.Unmarshal(marshal, &result)
+	return result, err
 }
 
 func (r *Service) populateResourceChan(ctx context.Context, resourceChan chan func() (*view.Resource, string, error), fs afs.Service, updatedResources map[string]bool) int {
@@ -842,7 +847,7 @@ func (r *Service) buildInterceptors(ctx context.Context, index *ExtIndex) (route
 	for _, URL := range index.updated {
 		go func(ctx context.Context, URL string, collector chan func() (*router.RouteInterceptor, error)) {
 			resultChan <- func() (*router.RouteInterceptor, error) {
-				return router.NewInterceptorFromURL(ctx, r.fs, URL, r.configRegistry.LookupType)
+				return router.NewInterceptorFromURL(ctx, r.fs, URL, r.configRegistry.Types.Lookup)
 			}
 		}(ctx, URL, resultChan)
 	}

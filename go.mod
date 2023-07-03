@@ -130,3 +130,7 @@ require (
 )
 
 replace github.com/viant/xdatly/types/custom => ./poc2/pkg
+
+replace github.com/viant/xreflect => /Users/awitas/go/src/github.com/viant/xreflect
+
+replace github.com/viant/velty => /Users/awitas/go/src/github.com/viant/velty

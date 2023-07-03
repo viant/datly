@@ -15,6 +15,9 @@ func (e *ErrorCheck) Generate(builder *Builder) error {
 		}
 		return builder.WriteString(";err != nil {\nreturn nil, err\n}")
 	case LangVelty:
+		if err := builder.WriteString("\n"); err != nil {
+			return err
+		}
 		return e.X.Generate(builder)
 	}
 

@@ -73,7 +73,7 @@ func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, co
 	}
 
 	if nonPtrType == nil || c.DataType != "" {
-		rType, err := types.GetOrParseType(resource._types.LookupType, c.DataType)
+		rType, err := types.LookupType(resource.LookupType(), c.DataType)
 		if err != nil && c.rType == nil {
 			return err
 		}

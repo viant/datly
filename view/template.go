@@ -219,7 +219,7 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 	return nil
 }
 
-func NewEvaluator(parameters []*Parameter, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.TypeLookupFn) (*expand.Evaluator, error) {
+func NewEvaluator(parameters []*Parameter, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.LookupType) (*expand.Evaluator, error) {
 	return expand.NewEvaluator(FilterConstParameters(parameters), paramSchema, presenceSchema, template, typeLookup)
 }
 
@@ -317,7 +317,7 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 		return nil
 	}
 
-	evaluator, err := NewEvaluator(t.Parameters, t.Schema.Type(), t.PresenceSchema.Type(), t.Source, resource.LookupType)
+	evaluator, err := NewEvaluator(t.Parameters, t.Schema.Type(), t.PresenceSchema.Type(), t.Source, resource.LookupType())
 	if err != nil {
 		return err
 	}

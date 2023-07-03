@@ -18,7 +18,7 @@ type (
 
 	JSONParsers struct {
 		aMap          sync.Map // key: reflectType, value *JSONParser
-		lookup        xreflect.TypeLookupFn
+		lookup        xreflect.LookupType
 		aType         string
 		resultType    reflect.Type
 		isGenericType bool
@@ -28,7 +28,7 @@ type (
 	JSONParser struct {
 		mux         sync.Mutex
 		types       map[string]reflect.Type
-		typesLookup xreflect.TypeLookupFn
+		typesLookup xreflect.LookupType
 		accessor    *types.Accessor
 	}
 
@@ -118,10 +118,10 @@ func (j *JSONFactory) New(codecConfig *CodecConfig, rType reflect.Type, options 
 		return nil, fmt.Errorf("JSON output type can't be empty")
 	}
 
-	var lookup xreflect.TypeLookupFn
+	var lookup xreflect.LookupType
 	for _, option := range options {
 		switch actual := option.(type) {
-		case xreflect.TypeLookupFn:
+		case xreflect.LookupType:
 			lookup = actual
 		}
 	}
@@ -135,7 +135,7 @@ func (j *JSONFactory) New(codecConfig *CodecConfig, rType reflect.Type, options 
 		resultType = xreflect.InterfaceType
 		genericPath = strings.Replace(typeName, recordPrefix, "", 1)
 	} else {
-		parsed, err := types.GetOrParseType(lookup, typeName)
+		parsed, err := types.LookupType(lookup, typeName)
 		if err != nil {
 			return nil, err
 		}
@@ -208,7 +208,7 @@ func (p *JSONParser) ParseType(typeName string) (reflect.Type, error) {
 		return rType, nil
 	}
 
-	rType, err := types.GetOrParseType(p.typesLookup, typeName)
+	rType, err := types.LookupType(p.typesLookup, typeName)
 	if err != nil {
 		return nil, err
 	}

@@ -1,34 +1,17 @@
 package types
 
 import (
-	"fmt"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/xreflect"
 	"reflect"
 )
 
-func GetOrParseType(typeLookup xreflect.TypeLookupFn, dataType string) (reflect.Type, error) {
-	pkg := ""
-	lookup, lookupErr := typeLookup("", pkg, dataType)
-	if lookupErr == nil {
-		return lookup, nil
-	}
-
-	parseType, parseErr := ParseType(dataType, typeLookup)
-	if parseErr == nil {
-		return parseType, nil
-	}
-
-	return nil, fmt.Errorf("couldn't determine struct type: %v, due to the: %w, %v", dataType, lookupErr, parseErr)
-}
-
-func ParseType(dataType string, typeLookup xreflect.TypeLookupFn) (reflect.Type, error) {
-	rType, ok := io.ParseType(dataType)
+func LookupType(lookup xreflect.LookupType, typeName string, opts ...xreflect.Option) (reflect.Type, error) {
+	rType, ok := io.ParseType(typeName)
 	if ok {
 		return rType, nil
 	}
-
-	return xreflect.ParseWithLookup(dataType, true, typeLookup)
+	return lookup(typeName, opts...)
 }
 
 func Elem(rType reflect.Type) reflect.Type {

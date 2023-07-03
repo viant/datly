@@ -20,14 +20,14 @@ type (
 	}
 
 	Decoder struct {
-		Decoded    interface{}           `velty:"-"`
-		typeLookup xreflect.TypeLookupFn `velty:"-"`
-		decoder    *gojay.Decoder        `velty:"-"`
+		Decoded    interface{}         `velty:"-"`
+		typeLookup xreflect.LookupType `velty:"-"`
+		decoder    *gojay.Decoder      `velty:"-"`
 	}
 )
 
 func (d *Decoder) UnmarshalInto(typeName string, unescape bool) (string, error) {
-	resultType, err := d.typeLookup("", "", typeName)
+	resultType, err := d.typeLookup(typeName)
 	if err != nil {
 		return "", err
 	}

@@ -24,6 +24,9 @@ func (s *Builder) loadConfig(ctx context.Context) (cfg *standalone.Config, err e
 
 	s.options.ConfigURL = normalizeURL(s.options.ConfigURL)
 	cfg, err = standalone.NewConfigFromURL(ctx, s.options.ConfigURL)
+	if err != nil {
+		return nil, err
+	}
 	if cfg.DependencyURL != "" {
 		s.options.DependencyURL = cfg.DependencyURL
 	}

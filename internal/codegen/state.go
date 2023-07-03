@@ -3,7 +3,6 @@ package codegen
 import (
 	_ "embed"
 	"fmt"
-	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/xreflect"
 	"go/ast"
@@ -65,9 +64,9 @@ func (s State) ensureSchema(dirTypes *xreflect.DirTypes) error {
 			continue
 		}
 		paramDataType := param.Schema.DataType
-		paramType, err := xreflect.ParseWithLookup(paramDataType, false, func(packagePath, packageIdentifier, typeName string) (reflect.Type, error) {
-			return dirTypes.Type(typeName)
-		})
+		paramType, err := xreflect.Parse(paramDataType, xreflect.WithTypeLookup(func(name string, option ...xreflect.Option) (reflect.Type, error) {
+			return dirTypes.Type(name)
+		}))
 		if err != nil {
 			return fmt.Errorf("invalid parameter '%v' schema: '%v'  %w", param.Name, param.Schema.DataType, err)
 		}
@@ -97,7 +96,7 @@ func (s State) localStateBasedVariableDefinition() ([]string, string) {
 	return names, strings.Join(vars, "\n")
 }
 
-func NewState(modulePath, dataType string, lookup xreflect.TypeLookupFn) (State, error) {
+func NewState(modulePath, dataType string, types *xreflect.Types) (State, error) {
 	baseDir := modulePath
 	if pair := strings.Split(dataType, "."); len(pair) > 1 {
 		baseDir = path.Join(baseDir, pair[0])
@@ -107,7 +106,7 @@ func NewState(modulePath, dataType string, lookup xreflect.TypeLookupFn) (State,
 	var state = State{}
 	dirTypes, err := xreflect.ParseTypes(baseDir,
 		xreflect.WithParserMode(parser.ParseComments),
-		xreflect.WithTypeLookupFn(lookup),
+		xreflect.WithRegistry(types),
 		xreflect.WithOnField(func(typeName string, field *ast.Field) error {
 			if field.Tag == nil {
 				return nil
@@ -120,7 +119,7 @@ func NewState(modulePath, dataType string, lookup xreflect.TypeLookupFn) (State,
 			if tag.Kind == "" {
 				return nil
 			}
-			param, err := buildParameter(field, lookup)
+			param, err := buildParameter(field, types)
 			if param == nil {
 				return err
 			}
@@ -140,7 +139,7 @@ func NewState(modulePath, dataType string, lookup xreflect.TypeLookupFn) (State,
 	return state, nil
 }
 
-func buildParameter(field *ast.Field, lookup xreflect.TypeLookupFn) (*Parameter, error) {
+func buildParameter(field *ast.Field, types *xreflect.Types) (*Parameter, error) {
 	SQL := extractSQL(field)
 	if field.Tag == nil {
 		return nil, nil
@@ -169,18 +168,24 @@ func buildParameter(field *ast.Field, lookup xreflect.TypeLookupFn) (*Parameter,
 		field.Type = ptr.X
 	}
 
-	fieldTypeName, err := xreflect.Node{Node: field.Type}.Stringify()
+	fieldType, err := xreflect.Node{Node: field.Type}.Stringify()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create param: %v due to %w", param.Name, err)
 	}
-	if strings.Contains(fieldTypeName, "struct{") {
-		rType, err := types.ParseType(fieldTypeName, lookup)
+	if strings.Contains(fieldType, "struct{") {
+		typeName := ""
+		if field.Tag != nil {
+			if typeName, _ = reflect.StructTag(strings.Trim(field.Tag.Value, "`")).Lookup("typeName"); typeName == "" {
+				typeName = field.Names[0].Name
+			}
+		}
+		rType, err := types.Lookup(typeName, xreflect.WithTypeDefinition(fieldType))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create param: %v due reflect.Type %w", param.Name, err)
 		}
 		param.Schema = view.NewSchema(rType)
 	} else {
-		param.Schema = &view.Schema{DataType: fieldTypeName}
+		param.Schema = &view.Schema{DataType: fieldType}
 	}
 
 	param.Schema.Cardinality = cardinality

@@ -432,7 +432,7 @@ func (s *Builder) Build(ctx context.Context) error {
 	}
 
 	routerResource := &router.Resource{
-		Resource: view.NewResource(config.Config.FlattenTypes()),
+		Resource: view.NewResource(config.Config.Types),
 	}
 	routerResource.Resource.SetFs(s.fs)
 	paramIndex := NewParametersIndex(nil, nil)
@@ -569,7 +569,7 @@ func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) 
 	}
 
 	statePackage := builder.option.StatePackage()
-	state, err := codegen.NewState(statePath, builder.option.StateType, config.Config.LookupType)
+	state, err := codegen.NewState(statePath, builder.option.StateType, config.Config.Types)
 	if err != nil {
 		return "", err
 	}
@@ -1551,6 +1551,7 @@ func (s *Builder) generateRuleIfNeeded(ctx context.Context, SQL []byte) (string,
 		return "", err
 	}
 	SQL, err = s.fs.DownloadWithURL(ctx, s.Options.Generate.DSQLLocation())
+	fmt.Printf("DSQL: %s\n", SQL)
 	return string(SQL), err
 }
 
@@ -1560,7 +1561,7 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 	}
 	s.normalizeURL(typeSrc)
 
-	dirTypes, err := xreflect.ParseTypes(typeSrc.URL, xreflect.WithTypeLookupFn(config.Config.LookupType))
+	dirTypes, err := xreflect.ParseTypes(typeSrc.URL, xreflect.WithTypeLookup(config.Config.Types.Lookup))
 	if err != nil {
 		return err
 	}
@@ -1635,6 +1636,9 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 			return err
 		}
 
+		if strings.Contains(dataType, " ") && packageName == "main" {
+			packageName = ""
+		}
 		s.addTypeDef(resource, &view.TypeDefinition{
 			Reference: shared.Reference{
 				Ref: ref,

@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/sqlx/io/read/cache/ast"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xreflect"
 	xunsafe "github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 //Schema represents View as Go type.
 type Schema struct {
+	Package     string `json:",omitempty" yaml:"package,omitempty"`
 	Name        string `json:",omitempty" yaml:"name,omitempty"`
 	DataType    string `json:",omitempty" yaml:"dataType,omitempty"`
 	Cardinality Cardinality
@@ -25,6 +27,13 @@ type Schema struct {
 	initialized bool
 }
 
+func (s *Schema) TypeName() string {
+	name := FirstNotEmpty(s.Name, s.DataType)
+	if s.Package == "" {
+		return name
+	}
+	return s.Package + "." + name
+}
 func NewSchema(compType reflect.Type) *Schema {
 	result := &Schema{
 		Name:        "",
@@ -98,7 +107,7 @@ func (c *Schema) Init(resource *Resource, viewCaseFormat format.Case, options ..
 	}
 
 	if c.DataType != "" {
-		rType, err := types.GetOrParseType(resource.LookupType, c.DataType)
+		rType, err := types.LookupType(resource.LookupType(), c.DataType)
 		if err != nil {
 			return err
 		}
@@ -304,12 +313,22 @@ func (c *Schema) copy() *Schema {
 	return &schema
 }
 
-func (c *Schema) parseType(typesIndex Types) error {
-	parseType, err := types.GetOrParseType(typesIndex.LookupType, FirstNotEmpty(c.DataType, c.Name))
+func (c *Schema) setType(lookupType xreflect.LookupType, ptr bool) error {
+	name := c.Name
+	var options []xreflect.Option
+	if name == "" {
+		name = c.DataType
+	}
+	if name != c.DataType && strings.Contains(c.DataType, " ") {
+		options = append(options, xreflect.WithTypeDefinition(c.DataType))
+	}
+	rType, err := types.LookupType(lookupType, name, options...)
 	if err != nil {
 		return err
 	}
-
-	c.SetType(parseType)
+	if ptr && rType.Kind() != reflect.Ptr {
+		rType = reflect.PtrTo(rType)
+	}
+	c.SetType(rType)
 	return nil
 }

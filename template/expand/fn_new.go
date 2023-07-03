@@ -16,11 +16,11 @@ var fnNew = keywords.AddAndGet("New", &functions.Entry{
 })
 
 type newer struct {
-	lookup xreflect.TypeLookupFn
+	lookup xreflect.LookupType
 }
 
 func (n *newer) New(aType string) (interface{}, error) {
-	parseType, err := types.GetOrParseType(n.lookup, aType)
+	parseType, err := types.LookupType(n.lookup, aType)
 	if err != nil {
 		return nil, err
 	}
@@ -44,5 +44,5 @@ func (n *newer) NewResultType(call *expr.Call) (reflect.Type, error) {
 		return nil, fmt.Errorf("expected arg to be type of %T but was %T", expression, call.Args[1])
 	}
 
-	return types.GetOrParseType(n.lookup, expression.Value)
+	return types.LookupType(n.lookup, expression.Value)
 }

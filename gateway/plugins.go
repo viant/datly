@@ -7,6 +7,7 @@ import (
 	pgoBuild "github.com/viant/pgo/build"
 	"github.com/viant/pgo/manager"
 	"github.com/viant/xdatly/types/core"
+	"github.com/viant/xreflect"
 	"plugin"
 	"reflect"
 	"sort"
@@ -55,7 +56,7 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	registry := config.NewRegistry()
 	var types []string
 	_, cancelFn := core.Types(func(packageName, typeName string, rType reflect.Type, _ time.Time) {
-		registry.AddType(packageName, typeName, rType)
+		_ = registry.Types.Register(typeName, xreflect.WithReflectType(rType), xreflect.WithPackage(packageName))
 	})
 
 	defer cancelFn()
@@ -91,16 +92,20 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	for _, pluginChanges := range pluginsData {
 		for _, change := range pluginChanges.changes {
 			switch actual := change.(type) {
-			case *map[string]reflect.Type:
-				registry.OverrideTypes(pluginChanges.packageName, *actual)
-			case *[]reflect.Type:
-				registry.AddTypes(pluginChanges.packageName, *actual)
-			case *map[string][]reflect.Type:
-				registry.OverridePackageTypes(*actual)
-			case *map[string]map[string]reflect.Type:
-				registry.OverridePackageNamedTypes(*actual)
+
+			//case *map[string]reflect.Type:
+			//	registry.OverridePackageTypes(pluginChanges.packageName, *actual)
+			//case *[]reflect.Type:
+			//	registry.AddTypes(pluginChanges.packageName, *actual)
+			//case *map[string][]reflect.Type:
+			//	registry.OverridePackageTypes(*actual)
+			//case *map[string]map[string]reflect.Type:
+			//	registry.OverridePackageNamedTypes(*actual)
+			//
 			case **config.Registry:
-				registry.Override(*actual)
+				registry.MergeFrom(*actual)
+			default:
+				panic(fmt.Sprintf("unnupported sync type registry type: %T", change))
 			}
 		}
 	}
@@ -108,7 +113,7 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	if len(types) > 0 {
 		fmt.Printf("[INFO] detected plugin changes, overriding types %s\n", types)
 	}
-	config.Config.Override(registry)
+	config.Config.MergeFrom(registry)
 	return registry, nil
 }
 

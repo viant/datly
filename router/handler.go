@@ -7,7 +7,6 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/xdatly/handler"
 	"reflect"
-	"strings"
 )
 
 var HandlerType = reflect.TypeOf((*handler.Handler)(nil)).Elem()
@@ -26,14 +25,7 @@ type (
 
 func (h *Handler) Init(ctx context.Context, resource *view.Resource) error {
 	h.resource = resource
-	handlerTypeName := h.HandlerType
-	pkg := ""
-	if index := strings.LastIndex(handlerTypeName, "."); index != -1 {
-		pkg = handlerTypeName[:index]
-		handlerTypeName = handlerTypeName[index+1:]
-	}
-	handlerType, err := h.resource.LookupType("", pkg, handlerTypeName)
-	//	handlerType, err := types.GetOrParseType(h.resource.LookupType, h.HandlerType)
+	handlerType, err := h.resource.TypeRegistry().Lookup(h.HandlerType)
 	if err != nil {
 		return fmt.Errorf("couldn't parse Handler type due to %w", err)
 	}

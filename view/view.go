@@ -253,7 +253,7 @@ func (v *View) Init(ctx context.Context, resource *Resource, options ...interfac
 func (v *View) inheritRelationsFromTag(schema *Schema, resource *Resource) error {
 	sType := schema.Type()
 	if sType == nil {
-		sType, _ = types.GetOrParseType(resource.LookupType, schema.DataType)
+		sType, _ = types.LookupType(resource.LookupType(), schema.DataType)
 		if sType == nil {
 			return nil
 		}
@@ -638,11 +638,10 @@ func (v *View) Source() string {
 func (v *View) ensureSchema(resource *Resource) error {
 	v.initSchemaIfNeeded()
 	if v.Schema.Name != "" {
-		componentType, err := resource.LookupType("", "", v.Schema.Name)
+		componentType, err := resource.TypeRegistry().Lookup(v.Schema.TypeName())
 		if err != nil {
 			return err
 		}
-
 		if componentType != nil {
 			v.Schema.SetType(componentType)
 		}

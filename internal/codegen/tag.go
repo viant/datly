@@ -127,6 +127,9 @@ func (t *Tags) buildValidateTag(field *Field) {
 	if column.Length != nil && *column.Length > 0 {
 		tagValue.Append(fmt.Sprintf("le(%d)", *column.Length))
 	}
+	if len(tagValue) == 1 && tagValue[0] == "omitempty" {
+		return
+	}
 	t.Set("validate", tagValue)
 }
 

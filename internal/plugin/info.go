@@ -171,7 +171,7 @@ func (i *Info) detectLocalMethods(ctx context.Context) {
 	if !i.IsStandalone() {
 		return
 	}
-	dirTypes, err := xreflect.ParseTypes(i.URL, xreflect.WithTypeLookupFn(config.Config.LookupType))
+	dirTypes, err := xreflect.ParseTypes(i.URL, xreflect.WithTypeLookup(config.Config.Types.Lookup))
 	if err != nil {
 		return
 	}

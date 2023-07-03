@@ -28,7 +28,7 @@ type (
 	}
 )
 
-func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.TypeLookupFn, options ...interface{}) (*Evaluator, error) {
+func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.LookupType, options ...interface{}) (*Evaluator, error) {
 	evaluator := &Evaluator{
 		constParams:      consts,
 		paramSchema:      paramSchema,
@@ -41,7 +41,8 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 
 	var err error
 	evaluator.planner = velty.New(velty.BufferSize(len(template)), aCofnig.panicOnError, velty.TypeParser(func(typeRepresentation string) (reflect.Type, error) {
-		return typeLookup("", "", typeRepresentation)
+		fmt.Printf("1111\n")
+		return typeLookup(typeRepresentation)
 	}))
 
 	if evaluator.supportsParams {

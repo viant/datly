@@ -23,7 +23,7 @@ var entityTemplate string
 //GenerateEntity generate golang entity
 func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.Info) (string, error) {
 	pkg = info.Package(pkg)
-	if err := t.TypeDef.Init(context.Background(), config.Config.LookupType); err != nil {
+	if err := t.TypeDef.Init(context.Background(), config.Config.Types.Lookup); err != nil {
 		return "", err
 	}
 	rType := t.TypeDef.Schema.Type()

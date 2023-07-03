@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"fmt"
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 	"github.com/viant/afs"
@@ -97,7 +98,7 @@ func (c *Cache) Put(ctx context.Context, entry *Entry, response []byte, compress
 
 	metaBytes, err := json.Marshal(entry.meta)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed put to cache: %v,  %w", entry.key, err)
 	}
 
 	writeCloser, err := c.afs.NewWriter(ctx, entry.meta.url, file.DefaultFileOsMode)
@@ -167,7 +168,7 @@ func (c *Cache) read(ctx context.Context, entry *Entry) error {
 func (c *Cache) validateMeta(ctx context.Context, entry *Entry, line []byte) (bool, error) {
 	cachedMeta := &Meta{}
 	if err := json.Unmarshal(line, cachedMeta); err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to validate meta cache: %w, %s", err, line)
 	}
 
 	now := Now()
