@@ -23,8 +23,10 @@ import (
 )
 
 const (
-	SQLExecMode  = "SQLExec"
-	SQLQueryMode = "SQLQuery"
+	ModeExec        = Mode("SQLExec")
+	ModeQuery       = Mode("SQLQuery")
+	ModeUnspecified = Mode("")
+	ModeHandler     = Mode("SQLHandler")
 
 	AsyncJobsTable = "DATLY_JOBS"
 	AsyncTagName   = "sqlxAsync"
@@ -251,12 +253,12 @@ func (v *View) Init(ctx context.Context, resource *Resource, options ...interfac
 func (v *View) inheritRelationsFromTag(schema *Schema, resource *Resource) error {
 	sType := schema.Type()
 	if sType == nil {
-		sType, _ = types.GetOrParseType(resource.LookupType, schema.DataType)
+		sType, _ = types.LookupType(resource.LookupType(), schema.DataType)
 		if sType == nil {
 			return nil
 		}
 	}
-	recType := getStruct(sType)
+	recType := ensureStruct(sType)
 	if recType == nil {
 		return nil
 	}
@@ -410,8 +412,10 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 		return err
 	}
 
-	if err = v.ensureColumns(ctx, resource); err != nil {
-		return err
+	if v.Mode == ModeQuery || v.Mode == ModeUnspecified {
+		if err = v.ensureColumns(ctx, resource); err != nil {
+			return err
+		}
 	}
 
 	if err = v.ensureCaseFormat(); err != nil {
@@ -634,11 +638,10 @@ func (v *View) Source() string {
 func (v *View) ensureSchema(resource *Resource) error {
 	v.initSchemaIfNeeded()
 	if v.Schema.Name != "" {
-		componentType, err := resource.LookupType("", "", v.Schema.Name)
+		componentType, err := resource.TypeRegistry().Lookup(v.Schema.TypeName())
 		if err != nil {
 			return err
 		}
-
 		if componentType != nil {
 			v.Schema.SetType(componentType)
 		}
@@ -1284,17 +1287,23 @@ func WithTemplate(template *Template) ViewOption {
 }
 
 //WithOneToMany creates to many relation view option
-func WithOneToMany(holder, column string, ref *ReferenceView) ViewOption {
+func WithOneToMany(holder, column string, ref *ReferenceView, opts ...RelationOption) ViewOption {
 	return func(v *View) {
 		relation := &Relation{Cardinality: Many, Column: column, Holder: holder, Of: ref}
+		for _, opt := range opts {
+			opt(relation)
+		}
 		v.With = append(v.With, relation)
 	}
 }
 
 //WithOneToOne creates to one relation view option
-func WithOneToOne(holder, column string, ref *ReferenceView) ViewOption {
+func WithOneToOne(holder, column string, ref *ReferenceView, opts ...RelationOption) ViewOption {
 	return func(v *View) {
 		relation := &Relation{Cardinality: One, Column: column, Holder: holder, Of: ref}
+		for _, opt := range opts {
+			opt(relation)
+		}
 		v.With = append(v.With, relation)
 	}
 }
@@ -1348,7 +1357,27 @@ func NewExecView(name, table string, template string, parameters []*Parameter, o
 	for i := range parameters {
 		templateParameters = append(templateParameters, WithTemplateParameter(parameters[i]))
 	}
-	opts = append(opts, WithViewKind(SQLExecMode),
+	opts = append(opts, WithViewKind(ModeExec),
 		WithTemplate(NewTemplate(template, templateParameters...)))
 	return NewView(name, table, opts...)
+}
+
+type RelationOption func(r *Relation)
+
+func WithRelationColumnNamespace(ns string) RelationOption {
+	return func(r *Relation) {
+		r.ColumnNamespace = ns
+	}
+}
+
+func WithRelationField(name string) RelationOption {
+	return func(r *Relation) {
+		r.Field = name
+	}
+}
+
+func WithRelationIncludeColumn(flag bool) RelationOption {
+	return func(r *Relation) {
+		r.IncludeColumn = flag
+	}
 }

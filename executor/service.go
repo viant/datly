@@ -198,6 +198,7 @@ func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable
 		}
 
 		options = append(options, tx)
+		fmt.Printf("DATA: %+v %T\n", executable.Data, executable.Data)
 		_, _, err = service.Exec(ctx, executable.Data, options...)
 		return err
 	}

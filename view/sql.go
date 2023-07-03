@@ -63,7 +63,7 @@ func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *Vi
 		Expander: aView.Expand,
 	}
 
-	if aView.Mode == "Write" || aView.Mode == SQLExecMode {
+	if aView.Mode == "Write" || aView.Mode == ModeExec {
 		result.SQL = aView.Table
 		result.Expander = nil
 		return result, nil

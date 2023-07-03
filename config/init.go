@@ -5,19 +5,10 @@ import (
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/sqlx/types"
 	_ "github.com/viant/xdatly/extension" //go mod level placeholder replacement
-	"github.com/viant/xdatly/types/core"
 	_ "github.com/viant/xdatly/types/custom"
+	"github.com/viant/xreflect"
 	"reflect"
-	"time"
 )
-
-func init() {
-	types, _ := core.Types(func(packageName, typeName string, rType reflect.Type, insertedAt time.Time) {
-		Config.AddType(packageName, typeName, rType)
-	})
-
-	Config.OverridePackageNamedTypes(types)
-}
 
 const (
 	TypeJwtTokenInfo = "JwtTokenInfo"
@@ -32,11 +23,14 @@ const (
 )
 
 var Config = &Registry{
-	Types: map[string]reflect.Type{
-		TypeJwtTokenInfo: reflect.TypeOf(&jwt.Claims{}),
-		TypeJwtClaims:    reflect.TypeOf(jwt.Claims{}),
-		"RawMessage":     reflect.TypeOf(json.RawMessage{}),
-	},
+	Types: xreflect.NewTypes(xreflect.WithTypes(
+		xreflect.NewType(TypeJwtTokenInfo, xreflect.WithReflectType(reflect.TypeOf(&jwt.Claims{}))),
+		xreflect.NewType(TypeJwtClaims, xreflect.WithReflectType(reflect.TypeOf(jwt.Claims{}))),
+		xreflect.NewType("RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
+		xreflect.NewType("json.RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
+		xreflect.NewType("json.RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
+		xreflect.NewType("types.BitBool", xreflect.WithReflectType(reflect.TypeOf(types.BitBool(true)))),
+	)),
 	Codecs: NewCodecs(
 		NewCodec(CodecKeyJwtClaim, &GCPJwtClaim{}, reflect.TypeOf(&jwt.Claims{})),
 		NewCodec(CodecCognitoKeyJwtClaim, &GCPJwtClaim{}, reflect.TypeOf(&jwt.Claims{})),
@@ -46,13 +40,4 @@ var Config = &Registry{
 		StructQLFactory(""),
 		&JSONFactory{},
 	),
-	Packages: map[string]map[string]reflect.Type{
-		"types": {
-			"BitBool":    reflect.TypeOf(types.BitBool(true)),
-			"RawMessage": reflect.TypeOf(json.RawMessage{}),
-		},
-		"json": {
-			"RawMessage": reflect.TypeOf(json.RawMessage{}),
-		},
-	},
 }

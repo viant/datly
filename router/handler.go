@@ -25,15 +25,17 @@ type (
 
 func (h *Handler) Init(ctx context.Context, resource *view.Resource) error {
 	h.resource = resource
-
-	handlerType, err := types.GetOrParseType(h.resource.LookupType, h.HandlerType)
+	handlerType, err := h.resource.TypeRegistry().Lookup(h.HandlerType)
 	if err != nil {
 		return fmt.Errorf("couldn't parse Handler type due to %w", err)
 	}
 
+	if _, ok := handlerType.MethodByName("Exec"); !ok {
+		handlerType = reflect.PtrTo(handlerType)
+	}
 	h._handlerType = handlerType
 	if !h._handlerType.Implements(HandlerType) {
-		return fmt.Errorf("handler has to implement %v", HandlerType.String())
+		return fmt.Errorf("handler %v has to implement %v", h._handlerType.String(), HandlerType.String())
 	}
 
 	method, _ := h._handlerType.MethodByName("Exec")
@@ -43,12 +45,11 @@ func (h *Handler) Init(ctx context.Context, resource *view.Resource) error {
 }
 
 func (h *Handler) Call(ctx context.Context, session handler.Session) (interface{}, error) {
-	handlerV := types.NewRValue(h._handlerType)
-	values := []reflect.Value{handlerV, reflect.ValueOf(ctx), reflect.ValueOf(session)}
-	output := h.caller.Func.Call(values)
-	result := output[0].Interface()
-	resultErr := output[1].Interface()
+	aHandler := types.NewValue(h._handlerType)
+	asHandler, ok := aHandler.(handler.Handler)
+	if !ok {
+		return nil, fmt.Errorf("expected handler to implement %T", asHandler)
+	}
 
-	asErr, _ := resultErr.(error)
-	return result, asErr
+	return asHandler.Exec(ctx, session)
 }

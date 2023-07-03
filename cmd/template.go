@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/afs/file"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
@@ -48,6 +49,9 @@ func (s *Builder) buildTemplate(ctx context.Context, builder *routeBuilder, aVie
 
 func (s *Builder) uploadTemplateSQL(builder *routeBuilder, template string, aViewConfig *ViewConfig) (SQL string, URI string, err error) {
 	SQL, err = sanitize.Sanitize(template, builder.paramsIndex.hints, builder.paramsIndex.consts)
+	fmt.Printf("AFTER SANI: %s\n", SQL)
+	fmt.Printf("hints: %+v\n", builder.paramsIndex.hints)
+
 	if err != nil {
 		return "", "", err
 	}
@@ -79,7 +83,7 @@ func (s *Builder) Parse(ctx context.Context, builder *routeBuilder, aViewConfig 
 	SQL = iterator.SQL
 
 	defaultParamType := view.KindQuery
-	if builder.option.Method == http.MethodPost {
+	if builder.option.Method != http.MethodGet {
 		defaultParamType = view.KindRequestBody
 	}
 

@@ -19,9 +19,8 @@ func (s *Builder) extractRouteSettings(sourceSQL []byte) (string, string) {
 }
 
 func (s *Builder) buildCodeTemplate(ctx context.Context, builder *routeBuilder, sourceSQL []byte, httpMethod string) (*codegen.Template, error) {
-	hint, SQL := s.extractRouteSettings(sourceSQL)
-	routeConfig := &option.RouteConfig{Method: httpMethod}
-	if err := tryUnmarshalHint(hint, routeConfig); err != nil {
+	SQL, routeConfig, err := s.loadRouteConfig(sourceSQL, httpMethod)
+	if err != nil {
 		return nil, err
 	}
 	paramIndex := NewParametersIndex(routeConfig, map[string]*sanitize.ParameterHint{})
@@ -52,10 +51,20 @@ func (s *Builder) buildCodeTemplate(ctx context.Context, builder *routeBuilder, 
 	if err = aConfig.buildSpec(ctx, db, s.options.GoModulePkg); err != nil {
 		return nil, err
 	}
+
 	template := codegen.NewTemplate(routeConfig, aConfig.Spec)
 	template.BuildTypeDef(aConfig.Spec, aConfig.outputConfig.GetField())
-	var opts = []codegen.Option{codegen.WithHTTPMethod(httpMethod)}
+	var opts = []codegen.Option{codegen.WithHTTPMethod(httpMethod), codegen.WithLang(s.Options.Generate.Lang)}
 	template.BuildState(aConfig.Spec, aConfig.outputConfig.GetField(), opts...)
 	template.BuildLogic(aConfig.Spec, opts...)
 	return template, nil
+}
+
+func (s *Builder) loadRouteConfig(sourceSQL []byte, httpMethod string) (string, *option.RouteConfig, error) {
+	hint, SQL := s.extractRouteSettings(sourceSQL)
+	routeConfig := &option.RouteConfig{Method: httpMethod}
+	if err := tryUnmarshalHint(hint, routeConfig); err != nil {
+		return "", nil, err
+	}
+	return SQL, routeConfig, nil
 }

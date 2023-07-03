@@ -1,6 +1,8 @@
 package ast
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type (
 	Condition struct {
@@ -17,6 +19,14 @@ type (
 )
 
 func (s *Condition) Generate(builder *Builder) (err error) {
+	if builder.OnIfNotifier != nil {
+		if expr, err := builder.OnIfNotifier(s); err != nil {
+			return err
+		} else if expr != nil && expr != s {
+			return expr.Generate(builder)
+		}
+	}
+
 	switch builder.Lang {
 	case LangVelty:
 		if err = builder.WriteIndentedString("\n#if("); err != nil {
@@ -103,6 +113,28 @@ func (s *Condition) Generate(builder *Builder) (err error) {
 			}
 
 			if err = block.Block.Generate(bodyBlockBuilder); err != nil {
+				return err
+			}
+
+			if err = builder.WriteIndentedString("\n} "); err != nil {
+				return err
+			}
+		}
+
+		if len(s.ElseBlock) > 0 {
+			if err = builder.WriteString(" else  "); err != nil {
+				return err
+			}
+
+			if err = builder.WriteString(" { "); err != nil {
+				return err
+			}
+
+			if err = bodyBlockBuilder.WriteIndentedString("\n"); err != nil {
+				return err
+			}
+
+			if err = s.ElseBlock.Generate(bodyBlockBuilder); err != nil {
 				return err
 			}
 

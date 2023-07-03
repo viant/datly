@@ -60,7 +60,7 @@ func (s *Builder) buildAndAddView(ctx context.Context, builder *routeBuilder, vi
 		return nil, err
 	}
 
-	if viewConfig.viewType == view.SQLExecMode {
+	if viewConfig.viewType == view.ModeExec {
 		selector = nil
 	} else if table.ViewConfig.Selector != nil {
 		selector = table.ViewConfig.Selector
@@ -275,12 +275,12 @@ func (s *Builder) buildRelations(ctx context.Context, builder *routeBuilder, con
 					Field:  relation.aKey.child.Field,
 					Column: relation.aKey.child.Column,
 				},
-				Column:        relation.aKey.owner.Field,
-				Field:         relation.aKey.owner.Field,
-				ColumnAlias:   relation.aKey.child.Alias,
-				Holder:        holderFormat.Format(relationName, format.CaseUpperCamel),
-				IncludeColumn: true,
-				Cardinality:   cardinality,
+				Column:          relation.aKey.owner.Field,
+				Field:           relation.aKey.owner.Field,
+				ColumnNamespace: relation.aKey.child.Namespace,
+				Holder:          holderFormat.Format(relationName, format.CaseUpperCamel),
+				IncludeColumn:   true,
+				Cardinality:     cardinality,
 			})
 			continue
 		}
@@ -295,12 +295,12 @@ func (s *Builder) buildRelations(ctx context.Context, builder *routeBuilder, con
 				Field:  relation.aKey.child.Field,
 				Column: relation.aKey.child.Column,
 			},
-			Column:        relation.aKey.owner.Field,
-			Field:         relation.aKey.owner.Field,
-			ColumnAlias:   relation.aKey.child.Alias,
-			Holder:        holderFormat.Format(relationName, format.CaseUpperCamel),
-			IncludeColumn: true,
-			Cardinality:   cardinality,
+			Column:          relation.aKey.owner.Field,
+			Field:           relation.aKey.owner.Field,
+			ColumnNamespace: relation.aKey.child.Namespace,
+			Holder:          holderFormat.Format(relationName, format.CaseUpperCamel),
+			IncludeColumn:   true,
+			Cardinality:     cardinality,
 		})
 	}
 

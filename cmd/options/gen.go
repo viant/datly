@@ -15,7 +15,7 @@ type Gen struct {
 	Dest      string `short:"d" long:"dest" description:"dsql location" default:"dsql"`
 	Operation string `short:"o" long:"op" description:"operation" choice:"post" choice:"patch" choice:"put"`
 	Kind      string `short:"k" long:"kind" description:"execution kind" choice:"dml" choice:"service"`
-	Lang      string `short:"l" long:"lang" description:"lang" choice:"go" choice:"velty"`
+	Lang      string `short:"l" long:"lang" description:"lang" choice:"go" choice:"velty" choice:"go"`
 }
 
 func (g *Gen) GoModuleLocation() string {
@@ -55,6 +55,9 @@ func (g *Gen) Init() error {
 	if g.Dest == "" {
 		g.Dest = "dsql"
 	}
+	if g.Lang == "" {
+		g.Lang = "velty"
+	}
 	if url.IsRelative(g.Dest) {
 		g.Dest = url.Join(g.Project, g.Dest)
 	}
@@ -71,4 +74,38 @@ func (g *Gen) DSQLLocation() string {
 		baseURL = url.Join(baseURL, g.Package)
 	}
 	return url.Join(baseURL, name+".sql")
+}
+
+func (g *Gen) HandlerLocation() string {
+	_, name := url.Split(g.Source, file.Scheme)
+	if ext := path.Ext(name); ext != "" {
+		name = name[:len(name)-len(ext)]
+	}
+	baseURL := g.GoCodeLocation()
+	return url.Join(baseURL, "handler.go")
+}
+
+func (g *Gen) HandlerType() string {
+	result := "Handler"
+	if g.Package == "" {
+		return result
+	}
+	return g.Package + "." + result
+}
+
+func (g *Gen) StateType() string {
+	result := "State"
+	if g.Package == "" {
+		return result
+	}
+	return g.Package + "." + result
+}
+
+func (g *Gen) IndexLocation() string {
+	_, name := url.Split(g.Source, file.Scheme)
+	if ext := path.Ext(name); ext != "" {
+		name = name[:len(name)-len(ext)]
+	}
+	baseURL := g.GoCodeLocation()
+	return url.Join(baseURL, "index.go")
 }

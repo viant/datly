@@ -1,5 +1,6 @@
 {
   "Name": "$tagId",
   "URL": "$path/plugins.sql",
-  "Args": ""
+  "Args": "",
+  "ArgsDebug": "--pluginArgs='-gcflags \"all=-N -l\"' "
 }

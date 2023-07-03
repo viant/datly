@@ -17,6 +17,7 @@ import (
 	sjwt "github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
+	"github.com/viant/xreflect"
 	"io"
 	"net/http"
 	surl "net/url"
@@ -38,7 +39,7 @@ type (
 		JwtSigner      *signer.Service
 		config         *Config
 		connector      *view.Connector
-		types          view.Types
+		types          *xreflect.Types
 		registry       *config.Registry
 		fs             afs.Service
 	}
@@ -94,7 +95,7 @@ func (s *Service) Connector(name string) (*view.Connector, error) {
 	return s.reader.Resource.Connector(name)
 }
 
-func (s *Service) MergeResource(resource *view.Resource, types view.Types) error {
+func (s *Service) MergeResource(resource *view.Resource, types *xreflect.Types) error {
 	if err := s.ensureNotInitialised(); err != nil {
 		return err
 	}
@@ -218,12 +219,11 @@ func (s *Service) LoadRoute(ctx context.Context, URL string, types ...*view.Pack
 	return nil
 }
 
-func (s *Service) initTypes(types []*view.PackagedType) (view.Types, *config.Registry) {
-	viewTypes := view.Types{}
+func (s *Service) initTypes(types []*view.PackagedType) (*xreflect.Types, *config.Registry) {
+	viewTypes := xreflect.NewTypes(xreflect.WithRegistry(config.Config.Types))
 	aConfig := config.Config
 	for _, pType := range types {
-		viewTypes.Register(pType.Name, pType.Type)
-		aConfig.AddType(pType.Package, pType.Name, pType.Type)
+		_ = viewTypes.Register(pType.Name, xreflect.WithPackage(pType.Package), xreflect.WithReflectType(pType.Type))
 	}
 	return viewTypes, aConfig
 }
@@ -236,7 +236,7 @@ func (s *Service) datlyRootURL(URL string) string {
 	return baseURL
 }
 
-func (s *Service) loadDependencies(ctx context.Context, datlyRootURL string, viewTypes view.Types) (map[string]*view.Resource, error) {
+func (s *Service) loadDependencies(ctx context.Context, datlyRootURL string, types *xreflect.Types) (map[string]*view.Resource, error) {
 	dependencies := map[string]*view.Resource{}
 	if candidates, err := s.fs.List(ctx, url.Join(datlyRootURL, "dependencies")); err == nil {
 		for _, candidate := range candidates {
@@ -250,7 +250,7 @@ func (s *Service) loadDependencies(ctx context.Context, datlyRootURL string, vie
 				continue
 			}
 			URL := candidate.URL()
-			dependency, err := view.NewResourceFromURL(ctx, URL, viewTypes, nil)
+			dependency, err := view.NewResourceFromURL(ctx, URL, types, nil)
 			if err != nil {
 				return nil, err
 			}

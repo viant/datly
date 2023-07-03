@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
@@ -469,8 +470,10 @@ func (s *Service) NewStats(session *Session, index *cache.ParmetrizedQuery, cach
 
 // New creates Service instance
 func New() *Service {
-	return &Service{
+	ret := &Service{
 		sqlBuilder: NewBuilder(),
 		Resource:   view.EmptyResource(),
 	}
+	ret.Resource.TypeRegistry().SetParent(config.Config.Types)
+	return ret
 }

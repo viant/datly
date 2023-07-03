@@ -3,6 +3,17 @@ package ast
 import "fmt"
 
 func (s *Assign) Generate(builder *Builder) (err error) {
+	if builder.AssignNotifier != nil {
+		newExpr, err := builder.AssignNotifier(s)
+		if err != nil {
+			return err
+		}
+
+		if newExpr != nil && newExpr != s {
+			return newExpr.Generate(builder)
+		}
+	}
+
 	switch builder.Lang {
 	case LangVelty:
 		if err = builder.WriteIndentedString("\n#set("); err != nil {
@@ -23,15 +34,27 @@ func (s *Assign) Generate(builder *Builder) (err error) {
 		return nil
 
 	case LangGO:
-		asIdent, ok := s.Holder.(*Ident)
-		if !ok {
-			return fmt.Errorf("can't assign to Holder %T", s.Holder)
+		if err = builder.WriteString("\n"); err != nil {
+			return err
 		}
-
-		wasDeclared := builder.State.IsDeclared(asIdent.Name)
+		asIdent, ok := s.Holder.(*Ident)
+		wasDeclared := true
+		if ok {
+			wasDeclared = builder.State.IsDeclared(asIdent.Name)
+		}
 
 		if err = s.Holder.Generate(builder); err != nil {
 			return err
+		}
+
+		for _, holder := range s.ExtraHolders {
+			if err = builder.WriteString(", "); err != nil {
+				return err
+			}
+
+			if err = holder.Generate(builder); err != nil {
+				return err
+			}
 		}
 
 		if err = s.appendGoAssignToken(builder, wasDeclared); err != nil {
@@ -42,8 +65,9 @@ func (s *Assign) Generate(builder *Builder) (err error) {
 			return err
 		}
 
-		builder.State.DeclareVariable(asIdent.Name)
-
+		if !wasDeclared {
+			builder.State.DeclareVariable(asIdent.Name)
+		}
 		return nil
 	}
 	return fmt.Errorf("unsupported option %T %v\n", s, builder.Lang)

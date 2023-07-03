@@ -227,7 +227,11 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if r.Style == BasicStyle {
 		r.Field = ""
 	}
-
+	if r.Handler != nil {
+		if err := r.Handler.Init(ctx, resource.Resource); err != nil {
+			return err
+		}
+	}
 	if err := r.initCardinality(); err != nil {
 		return err
 	}
@@ -931,7 +935,7 @@ func (r *Route) transformFn(params *RequestParams, transform *marshal.Transform)
 	}
 
 	return func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
-		evaluate, err := transform.Evaluate(params.cookiesIndex, params.pathIndex, params.queryIndex, params.request.Header, decoder, r._resource.LookupType)
+		evaluate, err := transform.Evaluate(params.cookiesIndex, params.pathIndex, params.queryIndex, params.request.Header, decoder, r._resource.LookupType())
 		if err != nil {
 			return err
 		}
@@ -946,7 +950,7 @@ func (r *Route) transformFn(params *RequestParams, transform *marshal.Transform)
 
 func (r *Route) initTransforms(ctx context.Context) error {
 	for _, transform := range r.Transforms {
-		if err := transform.Init(ctx, afs.New(), r._resource.LookupType); err != nil {
+		if err := transform.Init(ctx, afs.New(), r._resource.LookupType()); err != nil {
 			return err
 		}
 	}

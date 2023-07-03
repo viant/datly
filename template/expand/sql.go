@@ -55,7 +55,7 @@ func (s *Statements) appendExecutable(tableName string, data interface{}, execTy
 	executable := &Executable{
 		Table:    tableName,
 		ExecType: execType,
-		Data:     data,
+		Data:     copyValue(data),
 		IsLast:   true,
 	}
 

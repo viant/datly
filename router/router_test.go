@@ -19,6 +19,7 @@ import (
 	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/view"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
+	"github.com/viant/xreflect"
 	"google.golang.org/api/oauth2/v2"
 	"gopkg.in/yaml.v3"
 	"io"
@@ -47,7 +48,7 @@ type testcase struct {
 	useAssertPkg        bool
 	expected            string
 	visitors            config.CodecsRegistry
-	types               view.Types
+	types               *xreflect.Types
 	headers             http.Header
 	requestBody         string
 	shouldDecompress    bool
@@ -257,9 +258,9 @@ func TestRouter(t *testing.T) {
 			visitors: config.NewCodecs(
 				config.NewVisitor("event_visitor", &eventAfterFetcher{}),
 			),
-			types: map[string]reflect.Type{
-				"event": reflect.TypeOf(&event{}),
-			},
+			types: xreflect.NewTypes(xreflect.WithTypes(
+				xreflect.NewType("event", xreflect.WithReflectType(reflect.TypeOf(&event{}))),
+			)),
 			expected: `[{"Id":1,"Quantity":33,"Timestamp":"2019-03-11T02:20:33Z"},{"Id":10,"Quantity":22,"Timestamp":"2019-03-15T12:07:33Z"},{"Id":100,"Quantity":5,"Timestamp":"2019-04-10T05:15:33Z"}]`,
 			method:   http.MethodGet,
 		},
@@ -270,9 +271,9 @@ func TestRouter(t *testing.T) {
 			visitors: config.NewCodecs(
 				config.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
-			types: map[string]reflect.Type{
-				"event": reflect.TypeOf(&event{}),
-			},
+			types: xreflect.NewTypes(xreflect.WithTypes(
+				xreflect.NewType("event", xreflect.WithReflectType(reflect.TypeOf(&event{}))),
+			)),
 			expected: `[]`,
 			method:   http.MethodGet,
 		},
@@ -280,9 +281,9 @@ func TestRouter(t *testing.T) {
 			description: "templates | all values set",
 			resourceURI: "004_visitors",
 			uri:         "/api/events",
-			types: map[string]reflect.Type{
-				"event": reflect.TypeOf(&event{}),
-			},
+			types: xreflect.NewTypes(xreflect.WithTypes(
+				xreflect.NewType("event", xreflect.WithReflectType(reflect.TypeOf(&event{}))),
+			)),
 			visitors: config.NewCodecs(
 				config.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
@@ -296,9 +297,9 @@ func TestRouter(t *testing.T) {
 			visitors: config.NewCodecs(
 				config.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
-			types: map[string]reflect.Type{
-				"event": reflect.TypeOf(&event{}),
-			},
+			types: xreflect.NewTypes(xreflect.WithTypes(
+				xreflect.NewType("event", xreflect.WithReflectType(reflect.TypeOf(&event{}))),
+			)),
 			expected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			method:   http.MethodGet,
 		},
@@ -309,9 +310,9 @@ func TestRouter(t *testing.T) {
 			visitors: config.NewCodecs(
 				config.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
-			types: map[string]reflect.Type{
-				"event": reflect.TypeOf(&event{}),
-			},
+			types: xreflect.NewTypes(xreflect.WithTypes(
+				xreflect.NewType("event", xreflect.WithReflectType(reflect.TypeOf(&event{}))),
+			)),
 			expected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}]`,
 			method:   http.MethodGet,
 		},
@@ -322,9 +323,9 @@ func TestRouter(t *testing.T) {
 			visitors: config.NewCodecs(
 				config.NewVisitor("event_visitor", &eventBeforeFetcher{}),
 			),
-			types: map[string]reflect.Type{
-				"event": reflect.TypeOf(&event{}),
-			},
+			types: xreflect.NewTypes(xreflect.WithTypes(
+				xreflect.NewType("event", xreflect.WithReflectType(reflect.TypeOf(&event{}))),
+			)),
 			expected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2}]`,
 			method:   http.MethodGet,
 		},
@@ -332,9 +333,9 @@ func TestRouter(t *testing.T) {
 			description: "param path | all set",
 			resourceURI: "006_param_path",
 			uri:         "/api/events?quantity=10&event_type_id=2&user_id=1",
-			types: map[string]reflect.Type{
-				"event": reflect.TypeOf(&event{}),
-			},
+			types: xreflect.NewTypes(xreflect.WithTypes(
+				xreflect.NewType("event", xreflect.WithReflectType(reflect.TypeOf(&event{}))),
+			)),
 			expected: `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1}]`,
 			method:   http.MethodGet,
 		},
@@ -342,9 +343,9 @@ func TestRouter(t *testing.T) {
 			description: "param path | user_id",
 			resourceURI: "006_param_path",
 			uri:         "/api/events?user_id=3",
-			types: map[string]reflect.Type{
-				"event": reflect.TypeOf(&event{}),
-			},
+			types: xreflect.NewTypes(xreflect.WithTypes(
+				xreflect.NewType("event", xreflect.WithReflectType(reflect.TypeOf(&event{}))),
+			)),
 			expected: `[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			method:   http.MethodGet,
 		},
@@ -352,11 +353,11 @@ func TestRouter(t *testing.T) {
 			description: "param path typed | user_id, non-pointers",
 			resourceURI: "007_param_path_typed",
 			uri:         "/api/events?user_id=3",
-			types: map[string]reflect.Type{
-				"event":           reflect.TypeOf(&event{}),
-				"params":          reflect.TypeOf(params{}),
-				"presence_params": reflect.TypeOf(presenceParams{}),
-			},
+			types: xreflect.NewTypes(xreflect.WithTypes(
+				xreflect.NewType("event", xreflect.WithReflectType(reflect.TypeOf(&event{}))),
+				xreflect.NewType("params", xreflect.WithReflectType(reflect.TypeOf(params{}))),
+				xreflect.NewType("presence_params", xreflect.WithReflectType(reflect.TypeOf(presenceParams{}))),
+			)),
 			expected: `[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			method:   http.MethodGet,
 		},
@@ -364,11 +365,11 @@ func TestRouter(t *testing.T) {
 			description: "param path typed | user_id, pointers",
 			resourceURI: "007_param_path_typed",
 			uri:         "/api/events?user_id=3",
-			types: map[string]reflect.Type{
-				"event":           reflect.TypeOf(&event{}),
-				"params":          reflect.TypeOf(&params{}),
-				"presence_params": reflect.TypeOf(&presenceParams{}),
-			},
+			types: xreflect.NewTypes(xreflect.WithTypes(
+				xreflect.NewType("event", xreflect.WithReflectType(reflect.TypeOf(&event{}))),
+				xreflect.NewType("params", xreflect.WithReflectType(reflect.TypeOf(params{}))),
+				xreflect.NewType("presence_params", xreflect.WithReflectType(reflect.TypeOf(presenceParams{}))),
+			)),
 			expected: `[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			method:   http.MethodGet,
 		},
@@ -385,9 +386,9 @@ func TestRouter(t *testing.T) {
 			visitors: config.NewCodecs(
 				config.NewCodec(config.CodecKeyJwtClaim, &gcpMockDecoder{}, reflect.TypeOf(&oauth2.Tokeninfo{})),
 			),
-			types: map[string]reflect.Type{
-				config.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
-			},
+			types: xreflect.NewTypes(xreflect.WithTypes(
+				xreflect.NewType(config.TypeJwtTokenInfo, xreflect.WithReflectType(reflect.TypeOf(&oauth2.Tokeninfo{}))),
+			)),
 		},
 		{
 			description: "view acl | role engineer",
@@ -402,9 +403,9 @@ func TestRouter(t *testing.T) {
 			visitors: config.NewCodecs(
 				config.NewCodec(config.CodecKeyJwtClaim, &gcpMockDecoder{}, reflect.TypeOf(&oauth2.Tokeninfo{})),
 			),
-			types: map[string]reflect.Type{
-				config.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
-			},
+			types: xreflect.NewTypes(xreflect.WithTypes(
+				xreflect.NewType(config.TypeJwtTokenInfo, xreflect.WithReflectType(reflect.TypeOf(&oauth2.Tokeninfo{}))),
+			)),
 		},
 		{
 			description: "view acl | user acl",
@@ -419,9 +420,9 @@ func TestRouter(t *testing.T) {
 			visitors: config.NewCodecs(
 				config.NewCodec(config.CodecKeyJwtClaim, &gcpMockDecoder{}, reflect.TypeOf(&oauth2.Tokeninfo{})),
 			),
-			types: map[string]reflect.Type{
-				config.TypeJwtTokenInfo: reflect.TypeOf(&oauth2.Tokeninfo{}),
-			},
+			types: xreflect.NewTypes(xreflect.WithTypes(
+				xreflect.NewType(config.TypeJwtTokenInfo, xreflect.WithReflectType(reflect.TypeOf(&oauth2.Tokeninfo{}))),
+			)),
 		},
 		{
 			description: "CORS",
@@ -1138,7 +1139,7 @@ func (c *testcase) readResource(t *testing.T, fs afs.Service, resourceUrl string
 	return resource, true
 }
 
-func (c *testcase) readViewResource(t *testing.T, resourceUrl string, types view.Types, visitors config.CodecsRegistry) (*view.Resource, bool) {
+func (c *testcase) readViewResource(t *testing.T, resourceUrl string, types *xreflect.Types, visitors config.CodecsRegistry) (*view.Resource, bool) {
 	resource, err := view.NewResourceFromURL(context.TODO(), resourceUrl, types, visitors)
 	if !assert.Nil(t, err, c.description) {
 		return nil, false

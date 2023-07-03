@@ -75,7 +75,7 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 
 	schemaDataType := FirstNotEmpty(m.Schema.DataType, m.Schema.Name)
 	if schemaDataType != "" {
-		dataType, err := types.GetOrParseType(resource.LookupType, schemaDataType)
+		dataType, err := types.LookupType(resource.LookupType(), schemaDataType)
 		if err != nil {
 			return err
 		}
@@ -181,7 +181,7 @@ func (m *TemplateMeta) Evaluate(selectorValues interface{}, selectorPresence int
 }
 
 func (m *TemplateMeta) initTemplateEvaluator(_ context.Context, owner *Template, resource *Resource) error {
-	evaluator, err := NewEvaluator(owner.Parameters, owner.Schema.Type(), owner.PresenceSchema.Type(), m.Source, resource.LookupType)
+	evaluator, err := NewEvaluator(owner.Parameters, owner.Schema.Type(), owner.PresenceSchema.Type(), m.Source, resource.LookupType())
 	if err != nil {
 		return err
 	}

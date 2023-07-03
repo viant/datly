@@ -21,12 +21,12 @@ type (
 		Name string         `json:",omitempty"`
 		Of   *ReferenceView `json:",omitempty"`
 
-		Cardinality   Cardinality `json:",omitempty"` //One, or Many
-		Column        string      `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
-		Field         string      `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
-		ColumnAlias   string      `json:",omitempty"` //Represents column alias, can be specified if $shared.Criteria / $shared.ColumnInPosition is inside the "from" statement
-		Holder        string      `json:",omitempty"` //Represents column created due to the merging. In our example it would be Employee#Account
-		IncludeColumn bool        `json:",omitempty"` //tells if Column _field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId _field
+		Cardinality     Cardinality `json:",omitempty"` //One, or Many
+		Column          string      `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
+		Field           string      `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
+		ColumnNamespace string      `json:",omitempty"` //Represents column namespace, can be specified if $shared.Criteria / $shared.ColumnInPosition is inside the "from" statement
+		Holder          string      `json:",omitempty"` //Represents column created due to the merging. In our example it would be Employee#Account
+		IncludeColumn   bool        `json:",omitempty"` //tells if Column _field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId _field
 
 		hasColumnField bool
 		holderField    *xunsafe.Field
@@ -170,7 +170,7 @@ func (r *Relation) ensureColumnAliasIfNeeded() error {
 	}
 
 	r.Column = columnSegments[1]
-	r.ColumnAlias = columnSegments[0]
+	r.ColumnNamespace = columnSegments[0]
 
 	return nil
 }

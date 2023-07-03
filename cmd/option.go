@@ -9,6 +9,7 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/cmd/options"
+	"github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/view"
 	"github.com/viant/scy"
 	"path"
@@ -510,7 +511,6 @@ func (o *Options) MergeFromDSql(dsql *options.DSql) {
 		o.PartialConfigURL = dsql.ConfigURL
 		o.RouteURL = url.Join(dsql.Repo, "Datly/routes")
 	}
-	o.GoModulePkg = dsql.Module
 }
 
 func (o *Options) MergeFromInit(init *options.Init) {
@@ -550,6 +550,7 @@ func (o *Options) BuildOption() *options.Options {
 			Dest:      prep.DSQLOutput,
 			Operation: prep.PrepareRule,
 			Kind:      prep.ExecKind,
+			Lang:      ast.LangVelty,
 		}
 
 	}

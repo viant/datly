@@ -2,6 +2,7 @@
     "Method": "PUT"
  } */
 
+#set($_ = $TeamIDs<string>(query/TeamIDs).WithCodec(AsInts))
 
 #set($teamStatsIndex = $Unsafe.TeamStats.IndexBy("ID") /*
     {"Required": false}
@@ -19,6 +20,7 @@
     WHERE t.ID IN ($TeamIDs)
     GROUP BY t.ID
 */)
+
 
 #foreach($teamID in $Unsafe.TeamIDs)
    #if($teamStatsIndex.HasKey($teamID) == false)

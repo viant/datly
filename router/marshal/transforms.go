@@ -35,7 +35,7 @@ type (
 type Transforms []*Transform
 type TransformIndex map[string]Transforms
 
-func (t *Transform) Init(ctx context.Context, fs afs.Service, lookup xreflect.TypeLookupFn) error {
+func (t *Transform) Init(ctx context.Context, fs afs.Service, lookupType xreflect.LookupType) error {
 	if t.SourceURL != "" {
 		source, err := fs.DownloadWithURL(ctx, t.SourceURL)
 		if err != nil {
@@ -47,18 +47,17 @@ func (t *Transform) Init(ctx context.Context, fs afs.Service, lookup xreflect.Ty
 
 	if t.Source != "" {
 		var err error
-		t._evaluator, err = expand.NewEvaluator(nil, nil, nil, t.Source, lookup, t.newCtx(CustomContext{}))
+		t._evaluator, err = expand.NewEvaluator(nil, nil, nil, t.Source, lookupType, t.newCtx(CustomContext{}))
 		if err != nil {
 			return err
 		}
 	}
 
 	if t.Transformer != "" {
-		rType, err := types.GetOrParseType(lookup, t.Transformer)
+		rType, err := types.LookupType(lookupType, t.Transformer)
 		if err != nil {
 			return err
 		}
-
 		value := types.NewValue(rType)
 
 		unmarshaler, ok := value.(json.UnmarshalerInto)
@@ -72,7 +71,7 @@ func (t *Transform) Init(ctx context.Context, fs afs.Service, lookup xreflect.Ty
 	return nil
 }
 
-func (t *Transform) Evaluate(cookies map[string]*http.Cookie, pathVariables map[string]string, queryParams url.Values, headers http.Header, decoder *gojay.Decoder, fn xreflect.TypeLookupFn) (*State, error) {
+func (t *Transform) Evaluate(cookies map[string]*http.Cookie, pathVariables map[string]string, queryParams url.Values, headers http.Header, decoder *gojay.Decoder, fn xreflect.LookupType) (*State, error) {
 	d := &Decoder{
 		typeLookup: fn,
 		decoder:    decoder,

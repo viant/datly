@@ -14,12 +14,6 @@ type (
 		Indent string
 		State  *Scope
 	}
-
-	Options struct {
-		Lang         string
-		StateName    string
-		CallNotifier func(callExpr *CallExpr) (*CallExpr, error)
-	}
 )
 
 func (b *Builder) WriteIndentedString(s string) error {
@@ -40,10 +34,10 @@ func (b *Builder) WriteString(s string) error {
 	return err
 }
 
-func NewBuilder(option Options) *Builder {
+func NewBuilder(option Options, declaredVariables ...string) *Builder {
 	return &Builder{
 		Builder: &strings.Builder{},
 		Options: option,
-		State:   NewScope(),
+		State:   NewScope(declaredVariables...),
 	}
 }

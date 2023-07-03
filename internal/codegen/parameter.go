@@ -2,14 +2,25 @@ package codegen
 
 import (
 	"fmt"
+	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
+	"github.com/viant/toolbox/format"
 	"strconv"
 	"strings"
 )
 
 type Parameter struct {
 	view.Parameter
-	SQL string
+	SQL         string
+	FieldTag    string
+	IndexField  *Field
+	PathParam   *Parameter
+	IsAuxiliary bool
+}
+
+func (p *Parameter) LocalVariable() string {
+	upperCamel, _ := formatter.UpperCamel.Caser()
+	return upperCamel.Format(p.Name, format.CaseLowerCamel)
 }
 
 func (p *Parameter) DsqlParameterDeclaration() string {
@@ -24,6 +35,7 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 		if p.Schema.Cardinality == view.Many {
 			builder.WriteString("[]")
 		}
+
 		builder.WriteString("*")
 		builder.WriteString(p.Schema.DataType)
 	}
@@ -60,10 +72,10 @@ func (p *Parameter) FieldDeclaration() string {
 	builder.WriteString("*")
 
 	paramType := p.Schema.Type()
-	if paramType != nil {
-		builder.WriteString(paramType.String())
-	} else {
+	if p.Schema.DataType != "" {
 		builder.WriteString(p.Schema.DataType)
+	} else if paramType != nil {
+		builder.WriteString(paramType.String())
 	}
 
 	tag := fmt.Sprintf(`datly:"kind=%v,in=%v"`, p.In.Kind, p.In.Name)
@@ -103,4 +115,14 @@ func (p *Parameter) addedValidationModifierIfNeeded(builder *strings.Builder, SQ
 			builder.WriteString("? ")
 		}
 	}
+}
+
+func (p *Parameter) localVariableDefinition() (string, string) {
+	upperCamel, _ := formatter.UpperCamel.Caser()
+	fieldName := upperCamel.Format(p.Name, format.CaseLowerCamel)
+	return fieldName, fmt.Sprintf("%v := state.%v", fieldName, p.Name)
+}
+
+func (p *Parameter) IndexVariable() string {
+	return p.Name + "By" + p.PathParam.IndexField.Name
 }

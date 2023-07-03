@@ -10,32 +10,36 @@ import (
 	qexpr "github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
-	"github.com/viant/sqlx/metadata/sink"
+	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
-	"strings"
+	"reflect"
 )
 
-type Field struct {
-	view.Field
-	Column     *sink.Column
-	Pk         *sink.Key
-	Tags       Tags
-	Ptr        bool
-	ColumnCase format.Case
+func (f *Field) StructField() reflect.StructField {
+	return reflect.StructField{
+		Name: f.Name,
+		Tag:  reflect.StructTag(f.Tag),
+		Type: f.Field.Schema.Type(),
+	}
 }
 
 type Type struct {
-	Package       string
-	Name          string
-	Cardinality   view.Cardinality
-	pkFields      []*Field
-	columnFields  []*Field
-	relationField []*Field
+	Package        string
+	Name           string
+	Cardinality    view.Cardinality
+	pkFields       []*Field
+	columnFields   []*Field
+	relationFields []*Field
 }
 
-func (t *Type) ByColumn(columnName string) *Field {
+func (t *Type) ByColumn(name string) *Field {
 	for _, candidate := range t.columnFields {
-		if column := candidate.Column; column != nil && column.Name == columnName {
+		if column := candidate.Column; column != nil && column.Alias != "" && column.Alias == name {
+			return candidate
+		}
+	}
+	for _, candidate := range t.columnFields {
+		if column := candidate.Column; column != nil && column.Name != "" && column.Name == name {
 			return candidate
 		}
 	}
@@ -43,25 +47,37 @@ func (t *Type) ByColumn(columnName string) *Field {
 }
 
 func (t *Type) TypeName() string {
+	return t.ExpandType(t.Name)
+}
+
+func (t *Type) ExpandType(simpleName string) string {
 	pkg := t.Package
 	if pkg == "" {
 		pkg = "autogen"
 	}
-	return pkg + "." + t.Name
+	return pkg + "." + simpleName
 }
 
-func (t *Type) AppendColumnField(column *sink.Column) (*Field, error) {
+func (t *Type) AppendColumnField(column *sqlparser.Column) (*Field, error) {
 	columnCase, err := format.NewCase(formatter.DetectCase(column.Name))
 	if err != nil {
 		return nil, err
 	}
+
+	fieldName := column.Alias
+	if fieldName == "" {
+		fieldName = column.Name
+	}
 	field := &Field{Column: column,
 		ColumnCase: columnCase,
-		Field:      view.Field{Name: columnCase.Format(column.Name, format.CaseUpperCamel)},
-		Ptr:        column.IsNullable(),
+		Field:      view.Field{Name: columnCase.Format(fieldName, format.CaseUpperCamel)},
+		Ptr:        column.IsNullable,
 		Tags:       Tags{},
 	}
-	aType, err := types.GetOrParseType(dConfig.Config.LookupType, column.Type)
+	if column.Type == "" {
+		return nil, fmt.Errorf("failed to match type: %v %v %v\n", column.Alias, column.Name, column.Expression)
+	}
+	aType, err := types.LookupType(dConfig.Config.Types.Lookup, column.Type)
 	if err != nil {
 		return nil, err
 	}
@@ -82,14 +98,14 @@ func (s *Spec) Fields() []*view.Field {
 	}
 
 	for i, rel := range s.Relations {
-		relField := specType.relationField[i].Field
+		relField := specType.relationFields[i].Field
 		relField.Fields = rel.Fields()
 		result = append(result, &relField)
 	}
 	for _, field := range specType.columnFields {
 		hasField.Fields = append(hasField.Fields, &view.Field{Name: field.Name, Schema: &view.Schema{DataType: "bool"}})
 	}
-	for _, field := range specType.relationField {
+	for _, field := range specType.relationFields {
 		hasField.Fields = append(hasField.Fields, &view.Field{Name: field.Name, Schema: &view.Schema{DataType: "bool"}})
 	}
 	result = append(result, hasField)
@@ -97,9 +113,12 @@ func (s *Spec) Fields() []*view.Field {
 }
 
 func (t *Type) ColumnFields() []*view.Field {
-	var result = make([]*view.Field, 0, 1+len(t.columnFields)+len(t.relationField))
+	var result = make([]*view.Field, 0, 1+len(t.columnFields)+len(t.relationFields))
 	for i := range t.columnFields {
 		field := t.columnFields[i].Field
+		if t.columnFields[i].Column.IsNullable {
+			field.Ptr = true
+		}
 		result = append(result, &field)
 	}
 	return result
@@ -115,18 +134,17 @@ func (t *Type) AddRelation(name string, spec *Spec, relation *Relation) *Field {
 	field.Tags.Set("sqlx", TagValue{"-"})
 	field.Tags.buildRelation(spec, relation)
 	field.Tag = field.Tags.Stringify()
-	t.relationField = append(t.relationField, field)
+	t.relationFields = append(t.relationFields, field)
 	return field
 }
 
-func cardinality(join *query.Join) view.Cardinality {
-	if join == nil {
-		return view.Many
+func (t *Type) Fields() []reflect.StructField {
+	var fields []reflect.StructField
+	for _, field := range t.columnFields {
+		fields = append(fields, field.StructField())
 	}
-	if strings.Contains(sqlparser.Stringify(join.On), "1 = 1") {
-		return view.One
-	}
-	return view.Many
+
+	return fields
 }
 
 func extractRelationColumns(join *query.Join) (string, string) {
@@ -154,4 +172,40 @@ func extractRelationColumns(join *query.Join) (string, string) {
 		return true
 	})
 	return relColumn, refColumn
+}
+
+func NewType(packageName string, name string, rType reflect.Type) (*Type, error) {
+	var result = &Type{Package: packageName, Name: name}
+	rType = types.EnsureStruct(rType)
+	if rType.NumField() == 1 {
+		wrapperField := rType.Field(0)
+		typeName, _ := wrapperField.Tag.Lookup("typeName")
+		structType := types.EnsureStruct(wrapperField.Type)
+		return NewType(packageName, typeName, structType)
+	}
+
+	for i := 0; i < rType.NumField(); i++ {
+		rField := rType.Field(i)
+		field := NewField(&rField)
+		if field.Column != nil {
+			result.columnFields = append(result.columnFields, field)
+		} else {
+			rType := field.Schema.Type()
+			if rType.Kind() == reflect.Ptr {
+				rType = rType.Elem()
+			}
+			switch rType.Kind() {
+			case reflect.Slice, reflect.Struct:
+				if structology.IsSetMarker(rField.Tag) {
+					continue
+				}
+
+				if typeName, _ := rField.Tag.Lookup("typeName"); typeName != "" {
+
+					result.relationFields = append(result.relationFields, field)
+				}
+			}
+		}
+	}
+	return result, nil
 }

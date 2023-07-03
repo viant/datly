@@ -1366,6 +1366,7 @@ func (r *Router) executorPayloadReader(ctx context.Context, request *http.Reques
 		}
 
 		res, err := route.Handler.Call(ctx, sessionHandler)
+		fmt.Printf("%T %v\n", res, res)
 		if err != nil {
 			return nil, err
 		}
@@ -1418,6 +1419,7 @@ func (r *Route) NewStater(request *http.Request, parameters *RequestParams) *Sta
 		request:    request,
 		parameters: parameters,
 		cache:      r._stateCache,
+		resource:   r._resource,
 	}
 }
 

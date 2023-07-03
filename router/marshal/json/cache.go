@@ -267,7 +267,7 @@ func (c *pathCache) getMarshaller(rType reflect.Type, config common.DefaultConfi
 		return newStringMarshaller(tag), nil
 
 	default:
-		return nil, fmt.Errorf("unsupported type %v", rType.String())
+		return nil, fmt.Errorf("#unsupported type %v", rType.String())
 	}
 }
 

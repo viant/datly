@@ -48,7 +48,7 @@ import (
 type (
 	Builder struct {
 		Options          *options.Options
-		pluginTypes      map[string]bool
+		extensionTypes   map[string]bool
 		constFileContent constFileContent
 		constIndex       ParametersIndex
 		tablesMeta       *TableMetaRegistry
@@ -410,7 +410,7 @@ func (c *ViewConfig) SQL() string {
 	SQL := ""
 	if join := c.queryJoin; join != nil {
 		SQL = sqlparser.Stringify(c.queryJoin.With)
-		SQL = strings.Trim(strings.TrimSpace(SQL), "()")
+		SQL = trimParenthasis(SQL)
 	}
 
 	return SQL
@@ -432,7 +432,7 @@ func (s *Builder) Build(ctx context.Context) error {
 	}
 
 	routerResource := &router.Resource{
-		Resource: view.NewResource(config.Config.FlattenTypes()),
+		Resource: view.NewResource(config.Config.Types),
 	}
 	routerResource.Resource.SetFs(s.fs)
 	paramIndex := NewParametersIndex(nil, nil)
@@ -481,7 +481,7 @@ func (s *Builder) Build(ctx context.Context) error {
 }
 
 func (s *Builder) newRouteBuilder(routerResource *router.Resource, paramIndex *ParametersIndex, aFile *session) *routeBuilder {
-	return &routeBuilder{
+	ret := &routeBuilder{
 		session:        aFile,
 		views:          map[string]*view.View{},
 		routerResource: routerResource,
@@ -491,28 +491,36 @@ func (s *Builder) newRouteBuilder(routerResource *router.Resource, paramIndex *P
 			Const:   map[string]interface{}{},
 		},
 	}
+	ret.option.Method = "GET"
+
+	return ret
 }
 
 func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts *constFileContent, viewCaches *[]*view.Cache) error {
 	if err := s.loadSQL(ctx, builder, builder.session.sourceURL); err != nil {
 		return err
 	}
-	statePath := s.options.RelativePath
-	if statePath != "" {
-		statePath = path.Join(statePath, s.options.GoModulePkg)
-	} else {
-		statePath = s.options.DSQLOutput
+
+	SQL, err := s.prepareDSQLIfNeeded(ctx, builder)
+	if err != nil {
+		return err
+	}
+	builder.sqlStmt = SQL
+
+	if err = s.parseDSQL(ctx, builder, []byte(builder.sqlStmt)); err != nil {
+		return err
 	}
 
-	state, err := codegen.NewState(statePath, builder.option.StateType, config.Config.LookupType)
-	fmt.Printf("%v %v\n", state, err)
+	if err := s.initRoute(builder); err != nil {
+		return err
+	}
+
+	if err := s.loadParameters(builder); err != nil {
+		return err
+	}
 
 	if strings.TrimSpace(builder.sqlStmt) == "" {
 		return nil
-	}
-
-	if err := s.readRouteSettings(builder); err != nil {
-		return err
 	}
 
 	if consts.URL == "" {
@@ -525,7 +533,7 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 		return err
 	}
 
-	if err := s.initRoute(builder); err != nil {
+	if err := s.buildRouterOutput(builder); err != nil {
 		return err
 	}
 
@@ -547,6 +555,66 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 	}
 
 	return nil
+}
+
+func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) {
+	if builder.option.StateType == "" || builder.option.HandlerType == "" {
+		return "", nil
+	}
+	statePath := s.options.RelativePath
+	if statePath != "" {
+		statePath = path.Join(statePath, s.options.GoModulePkg)
+	} else {
+		statePath = s.options.DSQLOutput
+	}
+
+	statePackage := builder.option.StatePackage()
+	state, err := codegen.NewState(statePath, builder.option.StateType, config.Config.Types)
+	if err != nil {
+		return "", err
+	}
+	entityParam := state[0]
+	entityType := entityParam.Schema.Type()
+	if entityType == nil {
+		return "", fmt.Errorf("entity type was empty")
+	}
+	aType, err := codegen.NewType(statePackage, entityParam.Name, entityType)
+
+	if err != nil {
+		return "", err
+	}
+	tmpl := codegen.NewTemplate(builder.option, &codegen.Spec{Type: aType})
+	//if entityParam.In.Kind == view.KindRequestBody {
+	//	if entityParam.In.Name != "" {
+	//		tmpl.Imports.AddType(aType.Name)
+	//	}
+	//}
+	tmpl.Imports.AddType(builder.option.StateType)
+	tmpl.Imports.AddType(builder.option.HandlerType)
+
+	tmpl.EnsureImports(aType)
+	tmpl.State = state
+
+	if builder.option.Declare == nil {
+		builder.option.Declare = map[string]string{}
+	}
+
+	//builder.option.Declare["Handler"] = simpledName(builder.option.HandlerType)
+	//builder.option.Declare["State"] = simpledName(builder.option.StateType)
+
+	//builder.option.TypeSrc = &option.TypeSrcConfig{}
+	//builder.option.TypeSrc.URL = path.Join(statePath, statePackage)
+	//builder.option.TypeSrc.Types = append(builder.option.TypeSrc.Types, builder.option.HandlerType, builder.option.StateType)
+
+	dSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
+	fmt.Printf("%v %v\n", dSQL, err)
+
+	return dSQL + "$" + entityParam.Name + "", err
+}
+
+func simpledName(typeName string) string {
+	fragments := strings.Split(typeName, ".")
+	return fragments[len(fragments)-1]
 }
 
 func (s *Builder) buildViews(ctx context.Context, builder *routeBuilder) error {
@@ -640,7 +708,7 @@ func (s *Builder) loadAndInitConfig(ctx context.Context) error {
 	return nil
 }
 
-func (s *Builder) readRouteSettings(builder *routeBuilder) error {
+func (s *Builder) loadParameters(builder *routeBuilder) error {
 	if builder.option.Declare != nil {
 		builder.paramsIndex.AddParamTypes(builder.option.Declare)
 	}
@@ -700,16 +768,12 @@ func extractURIParams(URI string) map[string]bool {
 }
 
 func (s *Builder) initRoute(builder *routeBuilder) error {
-	method := builder.configProvider.DefaultHTTPMethod()
-	if builder.option.Method != "" {
-		method = builder.option.Method
-	}
-
+	method := builder.option.Method
 	builder.route = &router.Route{
 		Method:           method,
 		EnableAudit:      true,
 		Transforms:       builder.transforms,
-		CustomValidation: builder.option.CustomValidation,
+		CustomValidation: builder.option.CustomValidation || builder.option.HandlerType != "",
 		Cors: &router.Cors{
 			AllowCredentials: boolPtr(true),
 			AllowHeaders:     stringsPtr("*"),
@@ -722,6 +786,15 @@ func (s *Builder) initRoute(builder *routeBuilder) error {
 		Output: router.Output{
 			CaseFormat: "lc",
 		},
+	}
+
+	if builder.option.HandlerType != "" {
+		builder.route.Handler = &router.Handler{
+			HandlerType: builder.option.HandlerType,
+			StateType:   builder.option.StateType,
+		}
+
+		builder.route.Service = router.ServiceTypeExecutor
 	}
 
 	builder.paramsIndex.AddUriParams(extractURIParams(builder.route.URI))
@@ -741,7 +814,7 @@ func (s *Builder) initRoute(builder *routeBuilder) error {
 		}
 	}
 
-	return s.buildRouterOutput(builder)
+	return nil
 }
 
 func (s *Builder) buildRouterOutput(builder *routeBuilder) error {
@@ -829,7 +902,9 @@ func (s *Builder) buildConfigProvider(SQL string, builder *routeBuilder) (*ViewC
 	if IsSQLExecMode(SQL) {
 		serviceType = router.ServiceTypeExecutor
 	}
-
+	if builder.route.Handler != nil {
+		serviceType = router.ServiceTypeHandler
+	}
 	return NewConfigProviderReader(view.FirstNotEmpty(s.options.Generate.Name, s.fileName(builder.session.sourceURL)), SQL, builder.option, serviceType, builder.paramsIndex, nil, &s.options.Connector, builder)
 }
 
@@ -844,6 +919,11 @@ func (s *Builder) loadSQL(ctx context.Context, builder *routeBuilder, location s
 		return err
 	}
 
+	builder.sqlStmt = string(SQLbytes)
+	return nil
+}
+
+func (s *Builder) parseDSQL(ctx context.Context, builder *routeBuilder, SQL []byte) (err error) {
 	if envURL := s.options.EnvURL; envURL != "" {
 		envContent, err := s.fs.DownloadWithURL(ctx, envURL)
 		if err != nil {
@@ -858,23 +938,18 @@ func (s *Builder) loadSQL(ctx context.Context, builder *routeBuilder, location s
 		env := rdata.NewMap()
 		env.SetValue("env", aMap)
 
-		templateContent := env.ExpandWithoutUDF(string(SQLbytes))
-		SQLbytes = []byte(templateContent)
+		templateContent := env.ExpandWithoutUDF(string(SQL))
+		SQL = []byte(templateContent)
 	}
 
-	SQL, err := s.prepareRuleIfNeeded(ctx, SQLbytes)
-	if err != nil {
+	hint, SQLs := s.extractRouteSettings(SQL)
+
+	if SQLs, err = s.extractParameterDeclaration(builder, SQLs); err != nil {
 		return err
 	}
 
-	hint, SQL := s.extractRouteSettings([]byte(SQL))
-
-	if SQL, err = s.readArtificialParamHints(builder, SQL); err != nil {
-		return err
-	}
-
-	hints := sanitize.ExtractParameterHints(SQL)
-	SQL = sanitize.RemoveParameterHints(SQL, hints)
+	hints := sanitize.ExtractParameterHints(SQLs)
+	SQLs = sanitize.RemoveParameterHints(SQLs, hints)
 
 	tryUnmrashalHintWithWarn(hint, builder.option)
 
@@ -887,7 +962,7 @@ func (s *Builder) loadSQL(ctx context.Context, builder *routeBuilder, location s
 		builder.option.Declare[paramName] = actualName
 	}
 
-	builder.sqlStmt = SQL
+	builder.sqlStmt = SQLs
 	builder.paramsIndex.AddHints(hints.Index())
 	return nil
 }
@@ -1386,7 +1461,7 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 	if config.Cardinality == view.Many {
 		param.Schema.Cardinality = view.Many
 		//if !strings.HasPrefix(paramType, "[]") {
-		//	param.Schema.DataType = "[]" + paramType
+		//	param.Schema.Type = "[]" + paramType
 		//}
 	}
 
@@ -1396,8 +1471,6 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 		}
 
 		param.Output.Ref = config.Codec
-		param.Output.OutputType = param.Schema.DataType
-
 	}
 
 	if config.MaxAllowedRecords != nil {
@@ -1435,14 +1508,14 @@ func (s *Builder) isUtilParam(builder *routeBuilder, param *view.Parameter) bool
 
 func (s *Builder) inheritRouteServiceType(builder *routeBuilder, aView *view.View) {
 	switch aView.Mode {
-	case "", view.SQLQueryMode:
+	case "", view.ModeQuery:
 		builder.route.Service = router.ServiceTypeReader
-	case view.SQLExecMode:
+	case view.ModeExec:
 		builder.route.Service = router.ServiceTypeExecutor
 	}
 }
 
-func (s *Builder) prepareRuleIfNeeded(ctx context.Context, SQL []byte) (string, error) {
+func (s *Builder) generateRuleIfNeeded(ctx context.Context, SQL []byte) (string, error) {
 	if s.options.PrepareRule == "" {
 		return string(SQL), nil
 	}
@@ -1476,6 +1549,7 @@ func (s *Builder) prepareRuleIfNeeded(ctx context.Context, SQL []byte) (string, 
 		return "", err
 	}
 	SQL, err = s.fs.DownloadWithURL(ctx, s.Options.Generate.DSQLLocation())
+	fmt.Printf("DSQL: %s\n", SQL)
 	return string(SQL), err
 }
 
@@ -1485,7 +1559,7 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 	}
 	s.normalizeURL(typeSrc)
 
-	dirTypes, err := xreflect.ParseTypes(typeSrc.URL, xreflect.WithTypeLookupFn(config.Config.LookupType))
+	dirTypes, err := xreflect.ParseTypes(typeSrc.URL, xreflect.WithTypeLookup(config.Config.Types.Lookup))
 	if err != nil {
 		return err
 	}
@@ -1495,8 +1569,8 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 		filesMeta: dirTypes,
 	}
 
-	if len(s.pluginTypes) == 0 {
-		s.pluginTypes = map[string]bool{}
+	if len(s.extensionTypes) == 0 {
+		s.extensionTypes = map[string]bool{}
 	}
 	for _, typeName := range typeSrc.Types {
 		if strings.HasPrefix(typeName, "*") {
@@ -1506,9 +1580,10 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 			return err
 		}
 		if shouldGenPlugin := s.shouldGenPlugin(typeName, dirTypes); shouldGenPlugin {
-			s.pluginTypes[typeName] = true
+			s.extensionTypes[typeName] = true
 		}
-		expandDependentTypes(s.pluginTypes, dirTypes.Methods(typeName))
+		///---------------- TODO fix me
+		expandDependentTypes(s.extensionTypes, dirTypes.Methods(typeName))
 	}
 
 	for _, typeName := range typeSrc.Types {
@@ -1534,7 +1609,7 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 
 		var dataType string
 		var ref string
-		shouldGenPlugin := s.pluginTypes[actualName]
+		shouldGenPlugin := s.extensionTypes[actualName] || typeSrc.ForceGoTypeUse
 		if !shouldGenPlugin {
 			dataType = rType.String()
 		} else {
@@ -1559,6 +1634,9 @@ func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcCon
 			return err
 		}
 
+		if strings.Contains(dataType, " ") && packageName == "main" {
+			packageName = ""
+		}
 		s.addTypeDef(resource, &view.TypeDefinition{
 			Reference: shared.Reference{
 				Ref: ref,
@@ -1666,7 +1744,7 @@ func (s *Builder) loadGoTypes(builder *routeBuilder) error {
 	switch matched.Code {
 	case quotedToken:
 		text := matched.Text(cursor)
-		typeSrc, err := s.parseTypeSrc(text[1:len(text)-1], cursor)
+		typeSrc, err := s.parseTypeSrc(text[1:len(text)-1], cursor, builder)
 		if err != nil {
 			return err
 		}
@@ -1682,7 +1760,7 @@ func (s *Builder) loadGoTypes(builder *routeBuilder) error {
 			switch matched.Code {
 			case quotedToken:
 				text := matched.Text(exprGroupCursor)
-				typeSrc, err := s.parseTypeSrc(text[1:len(text)-1], exprGroupCursor)
+				typeSrc, err := s.parseTypeSrc(text[1:len(text)-1], exprGroupCursor, builder)
 				if err != nil {
 					return err
 				}
@@ -1700,7 +1778,7 @@ func (s *Builder) loadGoTypes(builder *routeBuilder) error {
 	return nil
 }
 
-func (s *Builder) parseTypeSrc(imported string, cursor *parsly.Cursor) (*option.TypeSrcConfig, error) {
+func (s *Builder) parseTypeSrc(imported string, cursor *parsly.Cursor, builder *routeBuilder) (*option.TypeSrcConfig, error) {
 	var alias string
 	matched := cursor.MatchAfterOptional(whitespaceMatcher, aliasKeywordMatcher)
 	if matched.Code == aliasKeywordToken {
@@ -1718,13 +1796,14 @@ func (s *Builder) parseTypeSrc(imported string, cursor *parsly.Cursor) (*option.
 	}
 
 	return &option.TypeSrcConfig{
-		URL:   imported[:index],
-		Types: []string{imported[index+1:]},
-		Alias: alias,
+		URL:            imported[:index],
+		Types:          []string{imported[index+1:]},
+		Alias:          alias,
+		ForceGoTypeUse: builder.route.Handler != nil,
 	}, nil
 }
 
-func (s *Builder) readArtificialParamHints(builder *routeBuilder, SQL string) (string, error) {
+func (s *Builder) extractParameterDeclaration(builder *routeBuilder, SQL string) (string, error) {
 	SQLBytes := []byte(SQL)
 	cursor := parsly.NewCursor("", SQLBytes, 0)
 	for {
@@ -1744,8 +1823,8 @@ func (s *Builder) readArtificialParamHints(builder *routeBuilder, SQL string) (s
 			content = content[1 : len(content)-1]
 			contentCursor := parsly.NewCursor("", []byte(content), 0)
 
-			matched = contentCursor.MatchAfterOptional(whitespaceMatcher, artificialMatcher)
-			if matched.Code != artificialToken {
+			matched = contentCursor.MatchAfterOptional(whitespaceMatcher, parameterDeclarationMatcher)
+			if matched.Code != parameterDeclarationToken {
 				continue
 			}
 
@@ -2092,7 +2171,8 @@ func (s *Builder) ensureChecksum(bundle *bundleMetadata) error {
 }
 
 func (s *Builder) detectSinkColumn(ctx context.Context, db *sql.DB, SQL string) ([]sink.Column, error) {
-	SQL = strings.Trim(strings.TrimSpace(SQL), "()")
+	SQL = trimParenthasis(SQL)
+
 	query, err := sqlparser.ParseQuery(SQL)
 	if query != nil {
 		from := sqlparser.Stringify(query.From.X)
@@ -2108,11 +2188,16 @@ func (s *Builder) detectSinkColumn(ctx context.Context, db *sql.DB, SQL string) 
 	}
 	stmt, err := db.PrepareContext(ctx, SQL)
 	if err != nil {
+		panic(1)
+	}
+	if err != nil {
 		return nil, err
 	}
 	defer stmt.Close()
 	rows, err := stmt.QueryContext(ctx)
+
 	if err != nil {
+		panic(err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -2132,12 +2217,36 @@ func (s *Builder) detectSinkColumn(ctx context.Context, db *sql.DB, SQL string) 
 	return result, nil
 }
 
-func (s *Builder) uploadGoState(tmpl *codegen.Template, builder *routeBuilder, packageNBame string) error {
-	goURL := builder.session.GoFileURL("state") + ".go"
-	if _, err := s.upload(builder, goURL, tmpl.GenerateState(packageNBame)); err != nil {
-		return err
+func (s *Builder) prepareDSQLIfNeeded(ctx context.Context, builder *routeBuilder) (string, error) {
+	if s.options.PrepareRule != "" {
+		return s.generateRuleIfNeeded(ctx, []byte(builder.sqlStmt))
 	}
-	return nil
+
+	hint, _ := sanitize.SplitHint(builder.sqlStmt)
+
+	if err := tryUnmarshalHint(hint, builder.option); err != nil {
+		return "", err
+	}
+
+	if builder.option.HandlerType == "" {
+		return builder.sqlStmt, nil
+	}
+
+	return s.convertHandlerIfNeeded(builder)
+}
+
+func trimParenthasis(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return text
+	}
+	if text[0] == '(' {
+		text = text[1:]
+	}
+	if text[len(text)-1] == ')' {
+		text = text[:len(text)-1]
+	}
+	return text
 }
 
 func combineURLs(basePath string, segments ...string) string {

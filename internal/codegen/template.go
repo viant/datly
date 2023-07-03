@@ -2,10 +2,12 @@ package codegen
 
 import (
 	_ "embed"
+	"fmt"
 	"github.com/viant/datly/cmd/option"
 	ast "github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/view"
-	"github.com/viant/sqlx/metadata/sink"
+	"github.com/viant/xreflect"
+	"reflect"
 	"strings"
 )
 
@@ -19,9 +21,10 @@ type (
 		BusinessLogic *ast.Block
 		paramPrefix   string
 		recordPrefix  string
+		StateType     reflect.Type
 	}
 
-	ColumnParameterNamer func(column *sink.Column) string
+	ColumnParameterNamer func(column *Field) string
 )
 
 const (
@@ -51,8 +54,8 @@ func (t *Template) ParamIndexName(name, by string) string {
 
 func (t *Template) ColumnParameterNamer(selector Selector) ColumnParameterNamer {
 	prefix := t.ParamPrefix() + selector.Name()
-	return func(column *sink.Column) string {
-		return prefix + column.Name
+	return func(field *Field) string {
+		return prefix + field.Name
 	}
 }
 
@@ -60,11 +63,28 @@ func (t *Template) BuildState(spec *Spec, bodyHolder string, opts ...Option) {
 	t.State = State{}
 	options := &Options{}
 	options.apply(opts)
-	t.State.Append(t.buildBodyParameter(spec, bodyHolder))
+	bodyParam := t.buildBodyParameter(spec, bodyHolder)
+	t.State.Append(bodyParam)
 	if options.isInsertOnly() {
 		return
 	}
-	t.buildState(spec, &t.State, spec.Type.Cardinality)
+
+	bodyParam.Schema.SetType(t.buildState(spec, &t.State, spec.Type.Cardinality))
+	var structFields []reflect.StructField
+	for _, parameter := range t.State {
+		var structTag reflect.StructTag
+		if parameter.Schema.DataType != "" {
+			structTag = reflect.StructTag(fmt.Sprintf(`%v:"%v"`, xreflect.TagTypeName, parameter.Schema.DataType))
+		}
+
+		structFields = append(structFields, reflect.StructField{
+			Name: parameter.Name,
+			Type: parameter.Schema.Type(),
+			Tag:  structTag,
+		})
+	}
+
+	t.StateType = reflect.StructOf(structFields)
 }
 
 func (t *Template) buildBodyParameter(spec *Spec, bodyHolder string) *Parameter {
@@ -86,7 +106,7 @@ func (t *Template) BuildLogic(spec *Spec, opts ...Option) {
 	if options.withUpdate {
 		t.indexRecords(options, spec, &block)
 	}
-	t.modifyRecords(options, "Unsafe", spec, spec.Type.Cardinality, &block, nil)
+	t.modifyRecords(options, "", spec, spec.Type.Cardinality, &block, nil)
 	t.BusinessLogic = &block
 }
 
@@ -99,7 +119,14 @@ func (t *Template) allocateSequence(options *Options, spec *Spec, block *ast.Blo
 	}
 	if field := spec.Type.pkFields[0]; strings.Contains(field.Schema.DataType, "int") {
 		selector := spec.Selector()
-		call := ast.NewCallExpr(ast.NewIdent("sequencer"), "Allocate", ast.NewQuotedLiteral(spec.Table), ast.NewIdent(selector[0]), ast.NewQuotedLiteral(strings.TrimLeft(selector.Path(field.Name), "/")))
+
+		var args = []ast.Expression{ast.NewQuotedLiteral(spec.Table), ast.NewIdent(selector[0]),
+			ast.NewQuotedLiteral(strings.TrimLeft(selector.Path(field.Name), "/")),
+		}
+		if options.IsGoLang() {
+			args = append([]ast.Expression{ast.Expression(ast.NewIdent("ctx"))}, args...)
+		}
+		call := ast.NewErrorCheck(ast.NewCallExpr(ast.NewIdent("sequencer"), "Allocate", args...))
 		block.Append(ast.NewStatementExpression(call))
 	}
 
@@ -131,7 +158,11 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 	if len(spec.Type.pkFields) != 1 {
 		return
 	}
-	structPath := structPathPrefix + "." + spec.Type.Name
+
+	structPath := spec.Type.Name
+	if structPathPrefix != "" {
+		structPath = structPathPrefix + "." + structPath
+	}
 
 	switch cardinality {
 	case view.One:
@@ -141,8 +172,7 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 		if rel != nil {
 			parentSelector := structPathPrefix + "." + rel.ParentField.Name
 			holder := structPathPrefix + "." + rel.Name + "." + rel.KeyField.Name
-			assignKey := ast.NewAssign(ast.NewIdent(holder), ast.NewIdent(parentSelector))
-			checkValid.IFBlock.Append(assignKey)
+			t.synchronizeRefKeys(holder, parentSelector, rel, &checkValid.IFBlock)
 		}
 
 		t.modifyRecord(options, structPath, spec, &checkValid.IFBlock)
@@ -158,8 +188,7 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 		if rel != nil && rel.KeyField != nil {
 			parentSelector := structPathPrefix + "." + rel.ParentField.Name
 			holder := recordPath + "." + rel.KeyField.Name
-			assignKey := ast.NewAssign(ast.NewIdent(holder), ast.NewIdent(parentSelector))
-			forEach.Body.Append(assignKey)
+			t.synchronizeRefKeys(holder, parentSelector, rel, &forEach.Body)
 		}
 
 		t.modifyRecord(options, recordPath, spec, &forEach.Body)
@@ -171,6 +200,18 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 	}
 }
 
+func (t *Template) synchronizeRefKeys(x, y string, rel *Relation, block *ast.Block) {
+	src := ast.Expression(ast.NewIdent(y))
+	if !rel.ParentField.Ptr && rel.KeyField.Ptr {
+		src = ast.NewRefExpression(src)
+	} else if rel.ParentField.Ptr != rel.KeyField.Ptr {
+		src = ast.NewDerefExpression(src)
+	}
+
+	assignKey := ast.NewAssign(ast.NewIdent(x), src)
+	block.Append(assignKey)
+}
+
 func (t *Template) modifyRecord(options *Options, recordPath string, spec *Spec, block *ast.Block) {
 	field := spec.Type.pkFields[0]
 	fieldPath := recordPath + "." + field.Name
@@ -180,7 +221,12 @@ func (t *Template) modifyRecord(options *Options, recordPath string, spec *Spec,
 
 	if options.withUpdate {
 		xSelector := ast.NewIdent(t.ParamIndexName(spec.Type.Name, field.Name))
-		x := ast.NewCallExpr(xSelector, "HasKey", fieldSelector)
+
+		hasFn := "HasKey"
+		if options.IsGoLang() {
+			hasFn = "Has"
+		}
+		x := ast.NewCallExpr(xSelector, hasFn, fieldSelector)
 		expr := ast.NewBinary(x, "==", ast.NewLiteral("true"))
 		matchCond = ast.NewCondition(expr, ast.Block{}, nil)
 		t.update(options, recordSelector, spec, &matchCond.IFBlock)
@@ -204,9 +250,19 @@ func (t *Template) insert(options *Options, selector *ast.Ident, spec *Spec, blo
 		return
 	}
 	holder := ast.NewIdent("sql")
-	callExpr := ast.NewCallExpr(holder, "Insert", selector, ast.NewQuotedLiteral(spec.Table))
-	block.Append(ast.NewStatementExpression(ast.NewTerminatorExpression(callExpr)))
 
+	args := []ast.Expression{selector, ast.NewQuotedLiteral(spec.Table)}
+	if options.IsGoLang() {
+		t.swapArgs(args)
+	}
+
+	callExpr := ast.NewErrorCheck(ast.NewCallExpr(holder, "Insert", args...))
+	block.Append(ast.NewTerminatorExpression(callExpr))
+
+}
+
+func (t *Template) swapArgs(args []ast.Expression) {
+	args[0], args[1] = args[1], args[0]
 }
 
 func (t *Template) update(options *Options, selector *ast.Ident, spec *Spec, block *ast.Block) {
@@ -214,8 +270,13 @@ func (t *Template) update(options *Options, selector *ast.Ident, spec *Spec, blo
 		return
 	}
 	holder := ast.NewIdent("sql")
-	callExpr := ast.NewCallExpr(holder, "Update", selector, ast.NewQuotedLiteral(spec.Table))
-	block.Append(ast.NewStatementExpression(ast.NewTerminatorExpression(callExpr)))
+	args := []ast.Expression{selector, ast.NewQuotedLiteral(spec.Table)}
+	if options.IsGoLang() {
+		t.swapArgs(args)
+	}
+
+	callExpr := ast.NewErrorCheck(ast.NewCallExpr(holder, "Update", args...))
+	block.Append(ast.NewTerminatorExpression(callExpr))
 }
 
 func (t *Template) RecordPrefix() string {
@@ -250,6 +311,17 @@ func (t *Template) ensureTypeImport(simpleTypeName string) {
 		typeName = t.TypeDef.Package + "." + simpleTypeName
 	}
 	t.Imports.AddType(typeName)
+}
+
+func (t *Template) EnsureImports(aType *Type) {
+	t.Imports.AddType(aType.TypeName())
+	if len(aType.relationFields) == 0 {
+		return
+	}
+
+	for _, field := range aType.relationFields {
+		t.Imports.AddType(aType.ExpandType(field.Schema.DataType))
+	}
 }
 
 func (t *Template) ensurePackageImports(defaultPkg string, fields []*view.Field) {

@@ -67,7 +67,7 @@ func (m *TableMeta) AddSinkColumns(columns []sink.Column) error {
 	var errors []error
 
 	for _, column := range columns {
-		rType, err := types.GetOrParseType(config.Config.LookupType, column.Type)
+		rType, err := types.LookupType(config.Config.Types.Lookup, column.Type)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("couldn't convert %v column type %v due to the %w", column.Name, column.Type, err))
 			continue

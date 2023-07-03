@@ -1,7 +1,7 @@
 /* {"URI":"basic/foos-plugin","Method":"POST","ResponseBody":{"From":"Foos"}} */
 
 import (
-    "regression/cases/037_plugins.FooPlugin"
+    "regression/cases/037_plugins.FooPlugin" AS "FooPlugin"
 )
 
 #set($_ = $Foos<[]*FooPlugin>(body/))

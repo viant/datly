@@ -6,6 +6,7 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/codegen"
+	"github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/toolbox/format"
@@ -17,9 +18,10 @@ func (s *Service) Generate(ctx context.Context, gen *options.Gen, template *code
 		return err
 	}
 	//TODO adjust if handler option is used
-	if err := s.generateDSQL(ctx, gen.DSQLLocation(), template); err != nil {
+	if err := s.generateTemplate(ctx, gen, template); err != nil {
 		return err
 	}
+
 	info, err := plugin.NewInfo(ctx, gen.GoModuleLocation())
 	if err != nil {
 		return err
@@ -33,6 +35,42 @@ func (s *Service) Generate(ctx context.Context, gen *options.Gen, template *code
 	}
 	info.UpdateTypesCorePackage(url.Join(gen.GoModuleLocation(), gen.Package))
 	return s.EnsurePluginArtifacts(ctx, info)
+}
+
+func (s *Service) generateTemplate(ctx context.Context, gen *options.Gen, template *codegen.Template) error {
+	//needed for both go and velty
+	opts := s.dsqlGenerationOptions(gen)
+	files, err := s.generateTemplateFiles(gen, template, opts...)
+	if err != nil {
+		return err
+	}
+	return s.uploadFiles(ctx, files...)
+}
+
+func (s *Service) uploadFiles(ctx context.Context, files ...*File) error {
+	for _, f := range files {
+		if err := f.validate(); err != nil {
+			return err
+		}
+		if err := s.uploadContent(ctx, f.URL, f.Content); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) uploadContent(ctx context.Context, URL string, content string) error {
+	_ = s.fs.Delete(ctx, URL)
+	return s.fs.Upload(ctx, URL, file.DefaultFileOsMode, strings.NewReader(content))
+}
+
+func (s *Service) dsqlGenerationOptions(gen *options.Gen) []codegen.Option {
+	var options []codegen.Option
+	if gen.Lang == ast.LangGO {
+		options = append(options, codegen.WithoutBusinessLogic())
+		options = append(options, codegen.WithLang(gen.Lang))
+	}
+	return options
 }
 
 func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.Gen, info *plugin.Info, template *codegen.Template) error {
@@ -56,16 +94,6 @@ func ensureGoFileCaseFormat(template *codegen.Template) string {
 func (s *Service) generateState(ctx context.Context, pkg string, gen *options.Gen, template *codegen.Template) error {
 	code := template.GenerateState(pkg)
 	return s.fs.Upload(ctx, gen.StateLocation(), file.DefaultFileOsMode, strings.NewReader(code))
-}
-
-func (s *Service) generateDSQL(ctx context.Context, URL string, template *codegen.Template) error {
-	DSQL, err := template.GenerateDSQL()
-	if err != nil {
-		return err
-	}
-	_ = s.fs.Delete(ctx, URL)
-	err = s.fs.Upload(ctx, URL, file.DefaultFileOsMode, strings.NewReader(DSQL))
-	return err
 }
 
 func (s *Service) ensureDest(ctx context.Context, URL string) error {

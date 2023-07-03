@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/utils/types"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
@@ -50,48 +49,49 @@ func (d *TypeDefinition) AddField(field *Field) {
 	d._fields[field.Name] = true
 }
 
-func (d *TypeDefinition) Init(ctx context.Context, typeLookup xreflect.TypeLookupFn) error {
-	if err := d.initFields(ctx, typeLookup); err != nil {
+func (d *TypeDefinition) TypeName() string {
+	if d.Package == "" {
+		return d.Name
+	}
+	return d.Package + "." + d.Name
+}
+
+func (d *TypeDefinition) Init(ctx context.Context, lookupType xreflect.LookupType) error {
+	if err := d.initFields(ctx, lookupType); err != nil {
 		return err
 	}
-
 	d.createSchemaIfNeeded()
-	if d.Ref != "" && typeLookup != nil {
-		lookup, err := typeLookup("", d.Package, d.Ref)
+	if d.Ref != "" && lookupType != nil {
+		rType, err := lookupType(d.Ref, xreflect.WithPackage(d.Package))
 		if err != nil {
 			return err
 		}
-
-		d.Schema = NewSchema(lookup)
+		d.Schema = NewSchema(rType)
+		d.Schema.Package = d.Package
 		return nil
 	}
-
 	if d.Schema != nil {
-		parseType, err := types.GetOrParseType(typeLookup, d.Schema.DataType)
-		if err != nil {
+		if d.Schema.Package == "" {
+			d.Schema.Package = d.Package
+		}
+		if d.Schema.DataType != d.Name {
+			d.Schema.Name = d.Name
+		}
+		if err := d.Schema.setType(lookupType, d.Ptr); err != nil {
 			return err
 		}
-
-		if d.Ptr && parseType.Kind() != reflect.Ptr {
-			parseType = reflect.PtrTo(parseType)
-		}
-
-		d.Schema.SetType(parseType)
 	} else {
 		d.Schema = &Schema{}
-
 		schemaType := buildTypeFromFields(d.Fields)
 		if d.Ptr {
 			schemaType = reflect.PtrTo(schemaType)
 		}
-
 		d.Schema.SetType(schemaType)
 	}
-
 	return nil
 }
 
-func (d *TypeDefinition) initFields(ctx context.Context, typeLookup xreflect.TypeLookupFn) error {
+func (d *TypeDefinition) initFields(ctx context.Context, typeLookup xreflect.LookupType) error {
 	for _, field := range d.Fields {
 		if err := field.Init(ctx, typeLookup, d); err != nil {
 			return err
@@ -109,11 +109,10 @@ func (d *TypeDefinition) createSchemaIfNeeded() {
 	if d.DataType == "" {
 		return
 	}
-
 	d.Schema = &Schema{DataType: d.DataType, Cardinality: d.Cardinality}
 }
 
-func (f *Field) Init(ctx context.Context, typeLookup xreflect.TypeLookupFn, d *TypeDefinition) error {
+func (f *Field) Init(ctx context.Context, typeLookup xreflect.LookupType, d *TypeDefinition) error {
 	if err := f.initChildren(ctx, typeLookup, d); err != nil {
 		return err
 	}
@@ -123,7 +122,7 @@ func (f *Field) Init(ctx context.Context, typeLookup xreflect.TypeLookupFn, d *T
 	return nil
 }
 
-func (f *Field) initType(typeLookup xreflect.TypeLookupFn) error {
+func (f *Field) initType(typeLookup xreflect.LookupType) error {
 	if f.Schema == nil && len(f.Fields) == 0 {
 
 		return fmt.Errorf("_field definition has to have schema or defined other fields")
@@ -136,35 +135,20 @@ func (f *Field) initType(typeLookup xreflect.TypeLookupFn) error {
 	return f.buildSchemaFromFields()
 }
 
-func (f *Field) initChildren(ctx context.Context, types xreflect.TypeLookupFn, d *TypeDefinition) error {
+func (f *Field) initChildren(ctx context.Context, lookupType xreflect.LookupType, d *TypeDefinition) error {
 	for _, field := range f.Fields {
-		if err := field.Init(ctx, types, d); err != nil {
+		if err := field.Init(ctx, lookupType, d); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (f *Field) initSchemaType(typesLookup xreflect.TypeLookupFn) error {
-	if f.Schema.DataType != "" {
-		rType, err := types.GetOrParseType(typesLookup, f.Schema.DataType)
-		if err != nil {
-			return err
-		}
-
-		f.Schema.SetType(rType)
-		return nil
+func (f *Field) initSchemaType(lookupType xreflect.LookupType) error {
+	if f.Schema.DataType == "" && f.Schema.Name == "" {
+		return fmt.Errorf("_field %v schema can't be empty", f.Name)
 	}
-
-	if f.Schema.Name != "" {
-		rType, err := typesLookup("", "", f.Schema.Name)
-		if err != nil {
-			return err
-		}
-		f.Schema.SetType(rType)
-	}
-
-	return fmt.Errorf("_field %v schema can't be empty", f.Name)
+	return f.Schema.setType(lookupType, false)
 }
 
 func (f *Field) buildSchemaFromFields() error {

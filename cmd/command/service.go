@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/datly/cmd/options"
+	"github.com/viant/datly/internal/codegen"
+	"github.com/viant/datly/internal/codegen/ast"
 	"os"
 	"os/exec"
 )
@@ -21,10 +23,12 @@ const (
 	datlyTagURL  = "https:github.com/viant/datly/archive/refs/tags/%v.zip/zip://localhost/"
 )
 
-type Service struct {
-	fs            afs.Service
-	goBinLocation string
-}
+type (
+	Service struct {
+		fs            afs.Service
+		goBinLocation string
+	}
+)
 
 func (s *Service) Run(ctx context.Context, opts *options.Options) (bool, error) {
 	if opts.InitExt != nil {
@@ -66,6 +70,32 @@ func (s *Service) prepareBuild(ctx context.Context, build *options.Build) error 
 		return fmt.Errorf("failed to go mod customized datly %v, %s %w", build.Module, out, err)
 	}
 	return nil
+}
+
+func (s *Service) generateTemplateFiles(gen *options.Gen, template *codegen.Template, opts ...codegen.Option) ([]*File, error) {
+
+	var files []*File
+	switch gen.Lang {
+	case ast.LangGO:
+
+		handler, index, err := template.GenerateHandler(gen)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, NewFile(gen.HandlerLocation(), handler))
+		files = append(files, NewFile(gen.IndexLocation(), index))
+		fallthrough
+	case ast.LangVelty:
+		dSQLContent, err := template.GenerateDSQL(opts...)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, NewFile(gen.DSQLLocation(), dSQLContent))
+
+	default:
+		return nil, fmt.Errorf("unsupported lang type %v", gen.Lang)
+	}
+	return files, nil
 }
 
 func New() *Service {

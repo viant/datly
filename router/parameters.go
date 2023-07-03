@@ -205,31 +205,51 @@ func (p *RequestParams) paramRequestBody(ctx context.Context, param *view.Parame
 	if err != nil {
 		return nil, err
 	}
+
+	if param == nil {
+		return nil, err
+	}
+
 	if param == nil || param.In.Name == "" {
 		return p.bodyParam, nil
 	}
+
+	value, err := p.extractBodyByPath(param, err)
+	if value == nil || err != nil {
+		return nil, err
+	}
+
+	return value, err
+}
+
+func (p *RequestParams) extractBodyByPath(param *view.Parameter, err error) (interface{}, error) {
+	if param.In.Name == "" {
+		return p.bodyParam, nil
+	}
+
 	value, ok := p.bodyPathParam[param.In.Name]
 	if ok {
-		return value, nil
+		return nil, nil
 	}
+
 	aQuery, ok := p.route.bodyParamQuery[param.In.Name]
 	if !ok {
 		return nil, fmt.Errorf("unable to locate param aQuery: %s", param.Name)
 	}
+
 	if value, err = aQuery.First(p.bodyParam); err == nil {
 		ptr := xunsafe.AsPointer(value)
 		value = aQuery.field.Value(ptr)
 		p.bodyPathParam[param.In.Name] = value
 	}
 
-	if param.Output != nil {
-		return param.Output.Transform(ctx, value, options...)
-	}
-
 	return value, err
 }
 
 func (p *RequestParams) readBody() error {
+
+	fmt.Printf("BODY TYPE: %s\n", p.route._requestBodyType.String())
+
 	if p.request.Body == nil || p.readRequestBody {
 		return p.requestBodyErr
 	}
@@ -283,22 +303,31 @@ func wrapJSONSyntaxErrorIfNeeded(err error, buff []byte) error {
 }
 
 func (p *RequestParams) ExtractHttpParam(ctx context.Context, param *view.Parameter, options ...interface{}) (interface{}, error) {
+	value, err := p.extractHttpParam(ctx, param, options)
+	if err != nil || value == nil {
+		return nil, err
+	}
+
+	return transformIfNeeded(ctx, param, value, options...)
+}
+
+func (p *RequestParams) extractHttpParam(ctx context.Context, param *view.Parameter, options []interface{}) (interface{}, error) {
 	switch param.In.Kind {
 	case view.KindPath:
-		return p.convertAndTransform(ctx, p.pathVariable(param.In.Name, ""), param, options...)
+		return p.convert(ctx, p.pathVariable(param.In.Name, ""), param, options...)
 	case view.KindQuery:
-		return p.convertAndTransform(ctx, p.queryParam(param.In.Name, ""), param, options...)
+		return p.convert(ctx, p.queryParam(param.In.Name, ""), param, options...)
 	case view.KindRequestBody:
 		body, err := p.paramRequestBody(ctx, param, options...)
 		if err != nil {
 			return nil, err
 		}
 
-		return transformIfNeeded(ctx, param, body, options...)
+		return body, nil
 	case view.KindHeader:
-		return p.convertAndTransform(ctx, p.header(param.In.Name), param, options...)
+		return p.convert(ctx, p.header(param.In.Name), param, options...)
 	case view.KindCookie:
-		return p.convertAndTransform(ctx, p.cookie(param.In.Name), param, options...)
+		return p.convert(ctx, p.cookie(param.In.Name), param, options...)
 	}
 
 	return nil, fmt.Errorf("unsupported param kind %v", param.In.Kind)

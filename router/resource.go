@@ -19,7 +19,6 @@ import (
 	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
-	"reflect"
 	"strings"
 	"time"
 )
@@ -142,7 +141,7 @@ func (r *Resource) Init(ctx context.Context) error {
 		columnsCache = r.ColumnsCache.Items
 	}
 
-	if err := r.Resource.Init(ctx, r.Resource.GetTypes(), r._visitors, columnsCache, transforms); err != nil {
+	if err := r.Resource.Init(ctx, r.Resource.TypeRegistry(), r._visitors, columnsCache, transforms); err != nil {
 		return err
 	}
 
@@ -226,8 +225,7 @@ func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, useColu
 }
 
 func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCache bool, options ...interface{}) (*Resource, error) {
-	visitors, types, resources, metrics, typeLookup := readOptions(options)
-
+	visitors, types, resources, metrics := readOptions(options)
 	resourceData, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, err
@@ -248,6 +246,7 @@ func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCach
 	if resource.Resource == nil {
 		return nil, fmt.Errorf("resource was empty: %v", URL)
 	}
+
 	if err = mergeResources(resource, resources, types); err != nil {
 		return nil, err
 	}
@@ -256,40 +255,29 @@ func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCach
 	resource.Resource.Metrics = metrics
 	resource.Resource.SourceURL = URL
 	resource.Resource.SetTypes(types)
-	resource.Resource.SetTypeLookup(typeLookup)
 	resource.ColumnsDiscovery = useColumnCache
 	object, _ := fs.Object(ctx, URL)
 	resource.Resource.ModTime = object.ModTime()
 	return resource, nil
 }
 
-func readOptions(options []interface{}) (config.CodecsRegistry, view.Types, map[string]*view.Resource, *view.Metrics, xreflect.TypeLookupFn) {
+func readOptions(options []interface{}) (config.CodecsRegistry, *xreflect.Types, map[string]*view.Resource, *view.Metrics) {
 	var visitors config.CodecsRegistry
-	var types view.Types
 	var resources map[string]*view.Resource
 	var metrics *view.Metrics
-	var typeLookup xreflect.TypeLookupFn
+	var types *xreflect.Types
 	for _, anOption := range options {
 		switch actual := anOption.(type) {
 		case config.CodecsRegistry:
 			visitors = actual
-		case view.Types:
+		case *xreflect.Types:
 			types = actual
-			typeLookup = func(packagePath, packageIdentifier, typeName string) (reflect.Type, error) {
-				if packageIdentifier != "" {
-					return nil, fmt.Errorf("unsupported use package on %T", actual)
-				}
-
-				return types.Lookup(typeName)
-			}
-
 		case map[string]*view.Resource:
 			resources = actual
 		case *view.Metrics:
 			metrics = actual
 		case *config.Registry:
 			types = actual.Types
-			typeLookup = actual.LookupType
 			visitors = actual.Codecs
 		}
 	}
@@ -298,18 +286,16 @@ func readOptions(options []interface{}) (config.CodecsRegistry, view.Types, map[
 		resources = map[string]*view.Resource{}
 	}
 
-	if types == nil {
-		types = map[string]reflect.Type{}
-	}
-
 	if visitors == nil {
 		visitors = map[string]interface{}{}
 	}
-
-	return visitors, types, resources, metrics, typeLookup
+	if types == nil {
+		types = xreflect.NewTypes(xreflect.WithRegistry(config.Config.Types))
+	}
+	return visitors, types, resources, metrics
 }
 
-func mergeResources(resource *Resource, resources map[string]*view.Resource, types view.Types) error {
+func mergeResources(resource *Resource, resources map[string]*view.Resource, types *xreflect.Types) error {
 	if len(resource.With) > 0 {
 		for _, ref := range resource.With {
 			refResource, ok := resources[ref]

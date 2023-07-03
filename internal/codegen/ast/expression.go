@@ -22,13 +22,17 @@ func NewStatementExpression(expr Expression) *StatementExpression {
 	return &StatementExpression{Expression: expr}
 }
 func (e *CallExpr) Generate(builder *Builder) (err error) {
-	caller, err := e.actualCaller(builder)
+	expr, err := e.actualExpr(builder)
 	if err != nil {
 		return err
 	}
 
-	if caller.Receiver != nil {
-		if err = caller.Receiver.Generate(builder); err != nil {
+	if expr != e {
+		return expr.Generate(builder)
+	}
+
+	if e.Receiver != nil {
+		if err = e.Receiver.Generate(builder); err != nil {
 			return err
 		}
 
@@ -43,7 +47,7 @@ func (e *CallExpr) Generate(builder *Builder) (err error) {
 	if err = builder.WriteString("("); err != nil {
 		return err
 	}
-	for i, arg := range caller.Args {
+	for i, arg := range e.Args {
 		if i > 0 {
 			if err = builder.WriteString(", "); err != nil {
 				return err
@@ -56,10 +60,11 @@ func (e *CallExpr) Generate(builder *Builder) (err error) {
 	if err = builder.WriteString(")"); err != nil {
 		return err
 	}
+
 	return nil
 }
 
-func (e *CallExpr) actualCaller(builder *Builder) (*CallExpr, error) {
+func (e *CallExpr) actualExpr(builder *Builder) (Expression, error) {
 	if builder.CallNotifier == nil {
 		return e, nil
 	}
@@ -73,6 +78,10 @@ func (e *CallExpr) actualCaller(builder *Builder) (*CallExpr, error) {
 }
 
 func (s *SelectorExpr) Generate(builder *Builder) error {
+	return unsupportedOptionUse(builder, s)
+}
+
+func unsupportedOptionUse(builder *Builder, s Expression) error {
 	return fmt.Errorf("unsupported option %T %v\n", s, builder.Lang)
 }
 

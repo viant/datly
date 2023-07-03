@@ -1,0 +1,12 @@
+type $ValueTypeSlice []*$ValueType
+type Indexed$ValueType map[$KeyType]*$ValueType
+
+func (c $ValueTypeSlice) IndexBy$IndexName() Indexed$ValueType {
+	var result = Indexed$ValueType{}
+	for i, item := range c {
+	    if item != nil {
+		    result[item.$IndexName] = c[i]
+	    }
+	}
+	return result
+}

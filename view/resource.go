@@ -11,7 +11,6 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/marshal"
-	"github.com/viant/datly/utils/types"
 	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
@@ -41,10 +40,8 @@ type Resource struct {
 	Parameters  []*Parameter `json:",omitempty"`
 	_parameters ParametersIndex
 
-	Types         []*TypeDefinition
-	_types        Types
-	_packageTypes map[string]Types
-	_typesIndex   map[reflect.Type]string
+	Types  []*TypeDefinition
+	_types *xreflect.Types
 
 	Loggers  logger.Adapters `json:",omitempty"`
 	_loggers logger.AdapterIndex
@@ -53,9 +50,15 @@ type Resource struct {
 	ModTime   time.Time `json:",omitempty"`
 
 	_columnsCache map[string]Columns
-	_cache        *types.Cache
-	_typeLookup   xreflect.TypeLookupFn
 	fs            afs.Service
+}
+
+func (r *Resource) TypeRegistry() *xreflect.Types {
+	return r._types
+}
+
+func (r *Resource) LookupType() xreflect.LookupType {
+	return r._types.Lookup
 }
 
 func (r *Resource) SetFs(fs afs.Service) {
@@ -107,7 +110,7 @@ func (r *Resource) LoadObject(ctx context.Context, URL string) (storage.Object, 
 	return data, err
 }
 
-func (r *Resource) MergeFrom(resource *Resource, types Types) {
+func (r *Resource) MergeFrom(resource *Resource, types *xreflect.Types) {
 	r.mergeViews(resource)
 	r.mergeParameters(resource)
 	r.mergeTypes(resource, types)
@@ -155,16 +158,16 @@ func (r *Resource) mergeParameters(resource *Resource) {
 	}
 }
 
-func (r *Resource) mergeTypes(resource *Resource, types Types) {
+func (r *Resource) mergeTypes(resource *Resource, types *xreflect.Types) {
 	if len(resource.Types) == 0 {
 		return
 	}
 	views := r.typeByName()
+
 	for i, candidate := range resource.Types {
-		if _, ok := types[candidate.Name]; ok {
+		if types.Has(candidate.TypeName()) {
 			continue
 		}
-
 		if _, ok := views[candidate.Name]; !ok {
 			typeDef := *resource.Types[i]
 			r.Types = append(r.Types, &typeDef)
@@ -239,33 +242,23 @@ func (r *Resource) GetConnectors() Connectors {
 
 //Init initializes Resource
 func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
-	r._cache = types.NewCache(func(packagePath, packageIdentifier, typeName string) (reflect.Type, error) {
-		if r._typeLookup == nil {
-			return nil, fmt.Errorf("not found type %v", typeName)
-		}
 
-		return r._typeLookup(packagePath, packageIdentifier, typeName)
-	})
-
-	customTypes, visitors, cache, transforms := r.readOptions(options)
+	types, visitors, cache, transforms := r.readOptions(options)
 	r.indexProviders()
-	r._typesIndex = map[reflect.Type]string{}
-	r._types = customTypes.copy()
 	r._visitors = visitors
 	r._columnsCache = cache
-	r._packageTypes = map[string]Types{}
-
+	if types == nil {
+		types = r.TypeRegistry()
+	}
 	for _, definition := range r.Types {
-		if err := definition.Init(ctx, r.LookupType); err != nil {
+		if err := definition.Init(ctx, types.Lookup); err != nil {
 			return err
 		}
-
-		if err := r.registerType(definition.Package, definition.Name, definition.Type()); err != nil {
+		if err := r.TypeRegistry().Register(definition.Name, xreflect.WithPackage(definition.Package), xreflect.WithReflectType(definition.Type())); err != nil {
 			return err
 		}
-
 		if definition.Alias != "" {
-			if err := r.registerType("", definition.Alias, definition.Type()); err != nil {
+			if err := r.TypeRegistry().Register(definition.Alias, xreflect.WithReflectType(definition.Type())); err != nil {
 				return err
 			}
 		}
@@ -297,29 +290,8 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	return nil
 }
 
-func (r *Resource) registerType(packageName, typeName string, rType reflect.Type) error {
-	typesIndex := r._types
-	typeIndexName := typeName
-
-	if packageName != "" {
-		index, ok := r._packageTypes[packageName]
-		if !ok {
-			index = map[string]reflect.Type{}
-			r._packageTypes[packageName] = index
-		}
-
-		typesIndex = index
-		typeIndexName = packageName + "." + typeName
-	}
-
-	typesIndex.Register(typeName, rType)
-	r._typesIndex[rType] = typeIndexName
-
-	return nil
-}
-
-func (r *Resource) readOptions(options []interface{}) (Types, config.CodecsRegistry, map[string]Columns, marshal.TransformIndex) {
-	var types = Types{}
+func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, config.CodecsRegistry, map[string]Columns, marshal.TransformIndex) {
+	var types *xreflect.Types
 	var visitors = config.CodecsRegistry{}
 	var cache map[string]Columns
 	var transformsIndex marshal.TransformIndex
@@ -333,7 +305,7 @@ func (r *Resource) readOptions(options []interface{}) (Types, config.CodecsRegis
 			visitors = actual
 		case map[string]Columns:
 			cache = actual
-		case Types:
+		case *xreflect.Types:
 			types = actual
 		case marshal.TransformIndex:
 			transformsIndex = actual
@@ -349,7 +321,7 @@ func (r *Resource) View(name string) (*View, error) {
 }
 
 //NewResourceFromURL loads and initializes Resource from file .yaml
-func NewResourceFromURL(ctx context.Context, url string, types Types, visitors config.CodecsRegistry) (*Resource, error) {
+func NewResourceFromURL(ctx context.Context, url string, types *xreflect.Types, visitors config.CodecsRegistry) (*Resource, error) {
 	resource, err := LoadResourceFromURL(ctx, url, afs.New())
 	if err != nil {
 		return nil, err
@@ -457,14 +429,13 @@ func EmptyResource() *Resource {
 		_views:        Views{},
 		Parameters:    make([]*Parameter, 0),
 		_parameters:   ParametersIndex{},
-		_types:        Types{},
-		_typesIndex:   map[reflect.Type]string{},
+		_types:        xreflect.NewTypes(),
 	}
 }
 
 //NewResource creates a Resource and register provided Types
-func NewResource(types Types) *Resource {
-	return &Resource{_types: types}
+func NewResource(parent *xreflect.Types) *Resource {
+	return &Resource{_types: xreflect.NewTypes(xreflect.WithRegistry(parent))}
 }
 
 //AddViews register views in the resource
@@ -527,17 +498,16 @@ func (r *Resource) AddLoggers(loggers ...*logger.Adapter) {
 	r.Loggers = append(r.Loggers, loggers...)
 }
 
-func (r *Resource) SetTypes(types Types) {
-	r._types = types
+func (r *Resource) SetTypes(types *xreflect.Types) {
+	r._types = xreflect.NewTypes(xreflect.WithRegistry(types))
 }
 
-func (r *Resource) GetTypes() Types {
-	return r._types
-}
-
-func (r *Resource) TypeName(p reflect.Type) (string, bool) {
-	name, ok := r._typesIndex[p]
-	return name, ok
+func (r *Resource) TypeName(t reflect.Type) (string, bool) {
+	info := r._types.Info(t)
+	if info == nil {
+		return "", false
+	}
+	return info.TypeName(), true
 }
 
 func (r *Resource) CodecByName(name string) (config.BasicCodec, bool) {
@@ -608,65 +578,6 @@ func (r *Resource) MessageBus(name string) (*mbus.Resource, error) {
 		r._messageBuses = MessageBusSlice(r.MessageBuses).Index()
 	}
 	return r._messageBuses.Lookup(name)
-}
-
-func (r *Resource) SetTypeLookup(lookup xreflect.TypeLookupFn) {
-	r._typeLookup = lookup
-}
-
-func (r *Resource) LookupType(packageIdentifier, packageName, typeName string) (reflect.Type, error) {
-	loadType, err := r._cache.LoadType(packageIdentifier, packageName, typeName)
-	if err == nil {
-		return loadType, nil
-	}
-
-	if r._typeLookup != nil {
-		lookup, err := r._typeLookup(packageIdentifier, packageName, typeName)
-		if err == nil {
-			return lookup, nil
-		}
-	}
-
-	lookup, err := r._types.Lookup(typeName)
-	if err == nil {
-		return lookup, err
-	}
-
-	if packageName != "" {
-		registry, ok := r._packageTypes[packageName]
-		if !ok {
-			return nil, fmt.Errorf("didn't found package %v", packageName)
-		}
-
-		rType, ok := registry[typeName]
-		if ok {
-			return rType, nil
-		}
-
-		return nil, r.typeNotFound(packageName, typeName)
-	}
-
-	rType, _ := r._types.Lookup(typeName)
-	for _, registry := range r._packageTypes {
-		packageType := registry[typeName]
-		if packageType == nil {
-			continue
-		}
-
-		if rType != nil && packageType != nil && rType != packageType {
-			return nil, fmt.Errorf("ambigious type %v, please specify package name", typeName)
-		}
-
-		if rType == nil {
-			rType = packageType
-		}
-	}
-
-	if rType != nil {
-		return rType, nil
-	}
-
-	return nil, r.typeNotFound(packageName, typeName)
 }
 
 func (r *Resource) typeNotFound(packageName string, typeName string) error {

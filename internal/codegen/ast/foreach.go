@@ -3,6 +3,12 @@ package ast
 import "fmt"
 
 func (s *Foreach) Generate(builder *Builder) (err error) {
+	if builder.SliceItemNotifier != nil {
+		if err = builder.SliceItemNotifier(s.Value, s.Set); err != nil {
+			return err
+		}
+	}
+
 	switch builder.Lang {
 	case LangVelty:
 		if err = builder.WriteIndentedString("\n#foreach("); err != nil {

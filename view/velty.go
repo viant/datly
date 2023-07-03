@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/template/expand"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
 )
@@ -97,7 +98,7 @@ func NewVeltyCodec(template string, paramType reflect.Type, view *View) (*VeltyC
 
 func (v *VeltyCodec) init() error {
 	var err error
-	v.evaluator, err = expand.NewEvaluator(nil, v.codecType, nil, v.template, func(packagePath, packageIdentifier, typeName string) (reflect.Type, error) {
+	v.evaluator, err = expand.NewEvaluator(nil, v.codecType, nil, v.template, func(name string, option ...xreflect.Option) (reflect.Type, error) {
 		return nil, fmt.Errorf("unsupported type lookup at codec, yes")
 	})
 

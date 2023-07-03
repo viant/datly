@@ -28,7 +28,7 @@ type (
 	}
 )
 
-func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.TypeLookupFn, options ...interface{}) (*Evaluator, error) {
+func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.LookupType, options ...interface{}) (*Evaluator, error) {
 	evaluator := &Evaluator{
 		constParams:      consts,
 		paramSchema:      paramSchema,
@@ -41,7 +41,8 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 
 	var err error
 	evaluator.planner = velty.New(velty.BufferSize(len(template)), aCofnig.panicOnError, velty.TypeParser(func(typeRepresentation string) (reflect.Type, error) {
-		return typeLookup("", "", typeRepresentation)
+		fmt.Printf("1111\n")
+		return typeLookup(typeRepresentation)
 	}))
 
 	if evaluator.supportsParams {
@@ -95,12 +96,19 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	}
 
 	aNewer := &newer{lookup: typeLookup}
-	if err := evaluator.planner.RegisterStandaloneFunction(fnNew, &op.Function{
+	if err = evaluator.planner.RegisterStandaloneFunction(fnNew, &op.Function{
 		Handler:     aNewer.New,
 		ResultTyper: aNewer.NewResultType,
 	}); err != nil {
 		return nil, err
 	}
+
+	if err = evaluator.planner.RegisterStandaloneFunction(fnNop, &op.Function{
+		Handler: noper{}.Nop,
+	}); err != nil {
+		return nil, err
+	}
+
 	evaluator.executor, evaluator.stateProvider, err = evaluator.planner.Compile([]byte(template))
 	if err != nil {
 		return nil, err

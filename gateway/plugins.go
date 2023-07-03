@@ -7,6 +7,7 @@ import (
 	pgoBuild "github.com/viant/pgo/build"
 	"github.com/viant/pgo/manager"
 	"github.com/viant/xdatly/types/core"
+	"github.com/viant/xreflect"
 	"plugin"
 	"reflect"
 	"sort"
@@ -55,14 +56,17 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	registry := config.NewRegistry()
 	var types []string
 	_, cancelFn := core.Types(func(packageName, typeName string, rType reflect.Type, _ time.Time) {
-		registry.AddType(packageName, typeName, rType)
+		_ = registry.Types.Register(typeName, xreflect.WithReflectType(rType), xreflect.WithPackage(packageName))
 	})
 
 	defer cancelFn()
 
 	aChan := make(chan func() (*pluginData, error), updateSize)
 	for i := 0; i < updateSize; i++ {
-		go r.loadPlugin(ctx, changes.pluginsIndex.updated[i], aChan)
+		go func(i int) {
+			r.loadPlugin(ctx, changes.pluginsIndex.updated[i], aChan)
+			fmt.Printf("loading finished")
+		}(i)
 	}
 
 	var pluginsData pluginDataSlice
@@ -90,17 +94,22 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 
 	for _, pluginChanges := range pluginsData {
 		for _, change := range pluginChanges.changes {
+			fmt.Printf("ACTUAL: %T %v\n", change, change)
 			switch actual := change.(type) {
-			case *map[string]reflect.Type:
-				registry.OverrideTypes(pluginChanges.packageName, *actual)
+
+			//case *map[string]reflect.Type:
+			//	registry.OverridePackageTypes(pluginChanges.packageName, *actual)
 			case *[]reflect.Type:
 				registry.AddTypes(pluginChanges.packageName, *actual)
-			case *map[string][]reflect.Type:
-				registry.OverridePackageTypes(*actual)
-			case *map[string]map[string]reflect.Type:
-				registry.OverridePackageNamedTypes(*actual)
+			//case *map[string][]reflect.Type:
+			//	registry.OverridePackageTypes(*actual)
+			//case *map[string]map[string]reflect.Type:
+			//	registry.OverridePackageNamedTypes(*actual)
+			//
 			case **config.Registry:
-				registry.Override(*actual)
+				registry.MergeFrom(*actual)
+			default:
+				panic(fmt.Sprintf("unnupported sync type registry type: %T", change))
 			}
 		}
 	}
@@ -108,7 +117,7 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	if len(types) > 0 {
 		fmt.Printf("[INFO] detected plugin changes, overriding types %s\n", types)
 	}
-	config.Config.Override(registry)
+	config.Config.MergeFrom(registry)
 	return registry, nil
 }
 
@@ -146,6 +155,8 @@ func (r *Service) loadPlugin(ctx context.Context, URL string, aChan chan func() 
 	aChan <- func() (*pluginData, error) {
 		return aData, err
 	}
+
+	fmt.Printf("123\n")
 }
 
 func (r *Service) loadPluginData(ctx context.Context, URL string) (*pluginData, error) {

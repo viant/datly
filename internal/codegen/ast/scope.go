@@ -13,9 +13,13 @@ type (
 	}
 )
 
-func NewScope() *Scope {
+func NewScope(declaredVariables ...string) *Scope {
+	variables := map[string]*Variable{}
+	for _, variable := range declaredVariables {
+		variables[variable] = &Variable{Name: variable}
+	}
 	return &Scope{
-		Variables: map[string]*Variable{},
+		Variables: variables,
 	}
 }
 
@@ -41,6 +45,11 @@ func (s *Scope) DeclareVariable(variable string) {
 }
 
 func (s *Scope) IsDeclared(variable string) bool {
+	dotIndex := strings.Index(variable, ".")
+	if dotIndex >= 0 {
+		return true
+	}
+
 	tmp := s
 	for tmp != nil {
 		if _, ok := tmp.Variables[variable]; ok {
