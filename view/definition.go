@@ -67,9 +67,13 @@ func (d *TypeDefinition) Init(ctx context.Context, lookupType xreflect.LookupTyp
 			return err
 		}
 		d.Schema = NewSchema(rType)
+		d.Schema.Package = d.Package
 		return nil
 	}
 	if d.Schema != nil {
+		if d.Schema.Package == "" {
+			d.Schema.Package = d.Package
+		}
 		if d.Schema.DataType != d.Name {
 			d.Schema.Name = d.Name
 		}

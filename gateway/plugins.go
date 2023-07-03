@@ -63,7 +63,10 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 
 	aChan := make(chan func() (*pluginData, error), updateSize)
 	for i := 0; i < updateSize; i++ {
-		go r.loadPlugin(ctx, changes.pluginsIndex.updated[i], aChan)
+		go func(i int) {
+			r.loadPlugin(ctx, changes.pluginsIndex.updated[i], aChan)
+			fmt.Printf("loading finished")
+		}(i)
 	}
 
 	var pluginsData pluginDataSlice
@@ -91,6 +94,7 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 
 	for _, pluginChanges := range pluginsData {
 		for _, change := range pluginChanges.changes {
+			fmt.Printf("ACTUAL: %T %v\n", change, change)
 			switch actual := change.(type) {
 
 			//case *map[string]reflect.Type:
@@ -151,6 +155,8 @@ func (r *Service) loadPlugin(ctx context.Context, URL string, aChan chan func() 
 	aChan <- func() (*pluginData, error) {
 		return aData, err
 	}
+
+	fmt.Printf("123\n")
 }
 
 func (r *Service) loadPluginData(ctx context.Context, URL string) (*pluginData, error) {
