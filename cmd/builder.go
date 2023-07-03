@@ -1471,8 +1471,6 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 		}
 
 		param.Output.Ref = config.Codec
-		param.Output.OutputType = param.Schema.DataType
-
 	}
 
 	if config.MaxAllowedRecords != nil {

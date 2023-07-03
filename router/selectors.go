@@ -408,34 +408,28 @@ func (b *paramStateBuilder) extractParamValue(ctx context.Context, param *view.P
 }
 
 func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, param *view.Parameter, parentView *view.View, options ...interface{}) (interface{}, error) {
-	return b.cache.paramValue(param, func() (interface{}, error) {
+	value, err := b.cache.paramValue(param, func() (interface{}, error) {
 		switch param.In.Kind {
 		case view.KindDataView:
-			value, err := b.viewParamValue(ctx, param, parentView)
-			if err != nil {
-				return nil, err
-			}
-
-			return transformIfNeeded(ctx, param, value, options...)
+			return b.viewParamValue(ctx, param, parentView)
 		case view.KindEnvironment:
-			return b.params.convertAndTransform(ctx, os.Getenv(param.In.Name), param, options...)
+			return os.Getenv(param.In.Name), nil
 		case view.KindParam:
-			value, err := b.paramBasedParamValue(ctx, parentView, param, options...)
-			if err != nil {
-				return nil, err
-			}
-
-			return transformIfNeeded(ctx, param, value, options...)
-
+			return b.paramBasedParamValue(ctx, parentView, param, options...)
 		case view.KindLiteral:
-			return transformIfNeeded(ctx, param, param.Const, options...)
+			return param.Const, nil
 		}
 
-		return b.params.ExtractHttpParam(ctx, param, options...)
+		return b.params.extractHttpParam(ctx, param, options)
 	})
+	if value == nil || err != nil {
+		return nil, err
+	}
+
+	return transformIfNeeded(ctx, param, value, options...)
 }
 
-func (p *RequestParams) convertAndTransform(ctx context.Context, raw string, param *view.Parameter, options ...interface{}) (interface{}, error) {
+func (p *RequestParams) convert(ctx context.Context, raw string, param *view.Parameter, options ...interface{}) (interface{}, error) {
 	if raw == "" && param.IsRequired() {
 		return nil, requiredParamErr(param)
 	}
@@ -445,12 +439,8 @@ func (p *RequestParams) convertAndTransform(ctx context.Context, raw string, par
 		dateFormat = param.DateFormat
 	}
 
-	if param.Output == nil {
-		convert, _, err := converter.Convert(raw, param.ActualParamType(), true, dateFormat)
-		return convert, err
-	}
-
-	return param.Output.Transform(ctx, raw, options...)
+	convert, _, err := converter.Convert(raw, param.Schema.Type(), true, dateFormat)
+	return convert, err
 }
 
 func (b *paramStateBuilder) buildSelectorParameters(ctx context.Context, state *view.ParamState, parent *ViewDetails, parameters []*view.Parameter, options ...interface{}) (*view.Parameter, error) {
