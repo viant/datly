@@ -1,10 +1,17 @@
-package codegen
+package inference
 
 import (
 	"fmt"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
+	"github.com/viant/sqlparser"
+	qexpr "github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/node"
+	"github.com/viant/sqlparser/query"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xreflect"
+	"go/ast"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -125,4 +132,96 @@ func (p *Parameter) localVariableDefinition() (string, string) {
 
 func (p *Parameter) IndexVariable() string {
 	return p.Name + "By" + p.PathParam.IndexField.Name
+}
+
+func buildParameter(field *ast.Field, types *xreflect.Types) (*Parameter, error) {
+	SQL := extractSQL(field)
+	if field.Tag == nil {
+		return nil, nil
+	}
+	structTag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
+	datlyTag := structTag.Get(view.DatlyTag)
+	if datlyTag == "" {
+		return nil, nil
+	}
+	tag := view.ParseTag(datlyTag)
+	param := &Parameter{
+		SQL:      SQL,
+		FieldTag: field.Tag.Value,
+	}
+	//	updateSQLTag(field, SQL)
+	param.Name = field.Names[0].Name
+	param.In = &view.Location{Name: tag.In, Kind: view.Kind(tag.Kind)}
+
+	cardinality := view.One
+	if sliceExpr, ok := field.Type.(*ast.ArrayType); ok {
+		field.Type = sliceExpr.Elt
+		cardinality = view.Many
+	}
+
+	if ptr, ok := field.Type.(*ast.StarExpr); ok {
+		field.Type = ptr.X
+	}
+
+	fieldType, err := xreflect.Node{Node: field.Type}.Stringify()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create param: %v due to %w", param.Name, err)
+	}
+	if strings.Contains(fieldType, "struct{") {
+		typeName := ""
+		if field.Tag != nil {
+			if typeName, _ = reflect.StructTag(strings.Trim(field.Tag.Value, "`")).Lookup("typeName"); typeName == "" {
+				typeName = field.Names[0].Name
+			}
+		}
+		rType, err := types.Lookup(typeName, xreflect.WithTypeDefinition(fieldType))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create param: %v due reflect.Type %w", param.Name, err)
+		}
+		param.Schema = view.NewSchema(rType)
+	} else {
+		param.Schema = &view.Schema{DataType: fieldType}
+	}
+
+	param.Schema.Cardinality = cardinality
+	return param, nil
+}
+
+func extractRelationColumns(join *query.Join) (string, string) {
+	relColumn := ""
+	refColumn := ""
+	sqlparser.Traverse(join.On, func(n node.Node) bool {
+		switch actual := n.(type) {
+		case *qexpr.Binary:
+			if xSel, ok := actual.X.(*qexpr.Selector); ok {
+				if xSel.Name == join.Alias {
+					refColumn = sqlparser.Stringify(xSel.X)
+				} else if relColumn == "" {
+					relColumn = sqlparser.Stringify(xSel.X)
+				}
+			}
+			if ySel, ok := actual.Y.(*qexpr.Selector); ok {
+				if ySel.Name == join.Alias {
+					refColumn = sqlparser.Stringify(ySel.X)
+				} else if relColumn == "" {
+					relColumn = sqlparser.Stringify(ySel.X)
+				}
+			}
+			return true
+		}
+		return true
+	})
+	return relColumn, refColumn
+}
+
+func extractSQL(field *ast.Field) string {
+	SQL := ""
+	if field.Doc != nil {
+		comments := xreflect.CommentGroup(*field.Doc).Stringify()
+		comments = strings.Trim(comments, "\"/**/")
+		comments = strings.ReplaceAll(comments, "\t", "  ")
+		comments = strings.ReplaceAll(comments, "\n", " ")
+		SQL = strings.TrimSpace(comments)
+	}
+	return SQL
 }

@@ -26,7 +26,7 @@ func (t *Template) GenerateDSQL(opts ...Option) (string, error) {
 }
 
 func (t *Template) GenerateHandler(opts *options.Gen) (string, string, error) {
-	fields, localVariableDeclaration := t.State.localStateBasedVariableDefinition()
+	fields, localVariableDeclaration := t.State.HandlerLocalVariables()
 	t.Config.HandlerType = opts.HandlerType()
 	t.Config.StateType = opts.StateType()
 	t.Config.ResponseBody = nil
@@ -67,7 +67,7 @@ func (t *Template) generateDSQL(options ast.Options) (string, error) {
 	var imports, declaration, businessLogic string
 	if options.Lang == ast.LangVelty {
 		imports = t.Imports.TypeImports()
-		declaration = t.dsqlParameterDeclaration()
+		declaration = t.State.DsqlParameterDeclaration()
 		builder := ast.NewBuilder(options)
 		if t.BusinessLogic != nil {
 			err = t.BusinessLogic.Generate(builder)

@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	codegen "github.com/viant/datly/internal/codegen"
+	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
@@ -97,7 +98,7 @@ type (
 		fileName       string
 		viewType       view.Mode
 		batchEnabled   map[string]bool
-		Spec           *codegen.Spec
+		Spec           *inference.Spec
 	}
 
 	templateMetaConfig struct {
@@ -377,7 +378,7 @@ func (c *ViewConfig) metaConfigByName(holder string) (*templateMetaConfig, bool)
 
 func (c *ViewConfig) buildSpec(ctx context.Context, db *sql.DB, pkg string) (err error) {
 	name := c.ActualHolderName()
-	if c.Spec, err = codegen.NewSpec(ctx, db, c.TableName(), c.SQL()); err != nil {
+	if c.Spec, err = inference.NewSpec(ctx, db, c.TableName(), c.SQL()); err != nil {
 		return err
 	}
 	if len(c.Spec.Columns) == 0 {
@@ -569,7 +570,7 @@ func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) 
 	}
 
 	statePackage := builder.option.StatePackage()
-	state, err := codegen.NewState(statePath, builder.option.StateType, config.Config.Types)
+	state, err := inference.NewState(statePath, builder.option.StateType, config.Config.Types)
 	if err != nil {
 		return "", err
 	}
@@ -578,12 +579,12 @@ func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) 
 	if entityType == nil {
 		return "", fmt.Errorf("entity type was empty")
 	}
-	aType, err := codegen.NewType(statePackage, entityParam.Name, entityType)
+	aType, err := inference.NewType(statePackage, entityParam.Name, entityType)
 
 	if err != nil {
 		return "", err
 	}
-	tmpl := codegen.NewTemplate(builder.option, &codegen.Spec{Type: aType})
+	tmpl := codegen.NewTemplate(builder.option, &inference.Spec{Type: aType})
 	//if entityParam.In.Kind == view.KindRequestBody {
 	//	if entityParam.In.Name != "" {
 	//		tmpl.Imports.AddType(aType.Name)
@@ -1458,12 +1459,6 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 	}
 
 	param.Schema.DataType = paramType
-	if config.Cardinality == view.Many {
-		param.Schema.Cardinality = view.Many
-		//if !strings.HasPrefix(paramType, "[]") {
-		//	param.Schema.Type = "[]" + paramType
-		//}
-	}
 
 	if config.Codec != "" {
 		if param.Output == nil {

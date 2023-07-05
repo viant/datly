@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"github.com/viant/datly/internal/codegen/ast"
+	"github.com/viant/datly/internal/inference"
 	"reflect"
 	"strings"
 )
@@ -16,9 +17,9 @@ var hasKeyTemplate string
 
 type (
 	IndexGenerator struct {
-		state            State
-		paramByName      map[string]*Parameter
-		paramByIndexName map[string]*Parameter
+		state            inference.State
+		paramByName      map[string]*inference.Parameter
+		paramByIndexName map[string]*inference.Parameter
 		builder          *strings.Builder
 		index            receiverIndex
 		stateName        string
@@ -44,7 +45,7 @@ type (
 	}
 )
 
-func NewIndexGenerator(specState State) *IndexGenerator {
+func NewIndexGenerator(specState inference.State) *IndexGenerator {
 	return &IndexGenerator{
 		state:                specState,
 		paramByName:          specState.IndexByName(),
@@ -127,7 +128,7 @@ func (n *IndexGenerator) handleIndexBy(expr *ast.CallExpr) (ast.Expression, erro
 	return &newExpr, nil
 }
 
-func (n *IndexGenerator) lookupParam(name string) (*Parameter, error) {
+func (n *IndexGenerator) lookupParam(name string) (*inference.Parameter, error) {
 	param, ok := n.paramByName[name]
 	if !ok {
 		return nil, fmt.Errorf("failed to lookup state param: %v", name)
@@ -170,7 +171,7 @@ func (n *IndexGenerator) deref(receiverType reflect.Type) reflect.Type {
 	return elem
 }
 
-func (n *IndexGenerator) slicifyHolder(param *Parameter) ast.Expression {
+func (n *IndexGenerator) slicifyHolder(param *inference.Parameter) ast.Expression {
 	return ast.NewLiteral(
 		fmt.Sprintf("[]*%v{ %v }", param.Schema.DataType, param.LocalVariable()),
 	)
@@ -269,7 +270,7 @@ func (n *IndexGenerator) OnSliceItem(value *ast.Ident, set *ast.Ident) error {
 	return nil
 }
 
-func (n *IndexGenerator) expandIndexByTemplate(param *Parameter) (*IndexBy, string) {
+func (n *IndexGenerator) expandIndexByTemplate(param *inference.Parameter) (*IndexBy, string) {
 	pathParam := param.PathParam
 	result := strings.ReplaceAll(indexTemplate, "$ValueType", param.Schema.DataType)
 	result = strings.ReplaceAll(result, "$KeyType", pathParam.IndexField.Schema.DataType)
@@ -281,7 +282,7 @@ func (n *IndexGenerator) expandIndexByTemplate(param *Parameter) (*IndexBy, stri
 	}, result
 }
 
-func (n *IndexGenerator) expandHasKeyTemplate(receiverType string, parameter *Parameter) string {
+func (n *IndexGenerator) expandHasKeyTemplate(receiverType string, parameter *inference.Parameter) string {
 	result := strings.ReplaceAll(hasKeyTemplate, "$IndexType", receiverType)
 	result = strings.ReplaceAll(result, "$KeyType", parameter.PathParam.IndexField.Schema.DataType)
 	return result

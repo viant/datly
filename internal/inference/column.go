@@ -1,4 +1,4 @@
-package codegen
+package inference
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	"github.com/viant/sqlx/metadata/sink"
 	"strings"
 )
+
+type ColumnParameterNamer func(column *Field) string
 
 func detectColumns(ctx context.Context, db *sql.DB, SQL, table string) (sqlparser.Columns, error) {
 	SQL = trimParenthesis(SQL)
