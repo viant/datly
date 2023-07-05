@@ -5,6 +5,7 @@ import (
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/sqlx/types"
 	_ "github.com/viant/xdatly/extension" //go mod level placeholder replacement
+	"github.com/viant/xdatly/types/core"
 	_ "github.com/viant/xdatly/types/custom"
 	"github.com/viant/xreflect"
 	"reflect"
@@ -40,4 +41,13 @@ var Config = &Registry{
 		StructQLFactory(""),
 		&JSONFactory{},
 	),
+}
+
+func init() {
+	types, _ := core.Types(nil)
+	for packageName, typesRegsitry := range types {
+		for typeName, rType := range typesRegsitry {
+			Config.Types.Register(typeName, xreflect.WithPackage(packageName), xreflect.WithReflectType(rType))
+		}
+	}
 }
