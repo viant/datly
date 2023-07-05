@@ -498,6 +498,7 @@ func (s *Builder) newRouteBuilder(routerResource *router.Resource, paramIndex *P
 }
 
 func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts *constFileContent, viewCaches *[]*view.Cache) error {
+
 	if err := s.loadSQL(ctx, builder, builder.session.sourceURL); err != nil {
 		return err
 	}

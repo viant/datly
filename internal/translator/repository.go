@@ -7,10 +7,10 @@ import (
 )
 
 type Repository struct {
-	config       *standalone.Config
-	resource     *Resource
-	connections  view.Connectors
-	constants    []*view.Parameter
-	caches       view.Caches
-	messageBuses []*mbus.Resource
+	Config       *standalone.Config
+	Resource     []*Resource
+	Connections  view.Connectors
+	Constants    []*view.Parameter
+	Caches       view.Caches
+	MessageBuses []*mbus.Resource
 }
