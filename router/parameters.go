@@ -229,7 +229,7 @@ func (p *RequestParams) extractBodyByPath(param *view.Parameter, err error) (int
 
 	value, ok := p.bodyPathParam[param.In.Name]
 	if ok {
-		return nil, nil
+		return value, nil
 	}
 
 	aQuery, ok := p.route.bodyParamQuery[param.In.Name]
