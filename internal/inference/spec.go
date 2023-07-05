@@ -27,16 +27,15 @@ type (
 
 	//Spec defines table/sql base specification
 	Spec struct {
-		Parent       *Spec
-		InnserColumn []string
-		IsAuxiliary  bool
-		Table        string
-		SQL          string
-		Columns      sqlparser.Columns
-		pk           map[string]sink.Key
-		Fk           map[string]sink.Key
-		Type         *Type
-		Relations    []*Relation
+		Parent      *Spec
+		IsAuxiliary bool
+		Table       string
+		SQL         string
+		Columns     sqlparser.Columns
+		pk          map[string]sink.Key
+		Fk          map[string]sink.Key
+		Type        *Type
+		Relations   []*Relation
 	}
 
 	//Selector defines selector

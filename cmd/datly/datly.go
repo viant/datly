@@ -42,17 +42,17 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-	os.Args = []string{
-		"datly",
-		"-N=run_tests_uri_param",
-		"-X=/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/cases/002_uri_param/vendor_details.sql",
-		"-w=autogen",
-		"-C=dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
-		"-C=dyndb|dynamodb|dynamodb://localhost:8000/us-west-1?key=dummy&secret=dummy",
-		"-j=/Users/awitas/go/src/github.com/viant/datly/e2e/local/jwt/public.enc|blowfish://default",
-		"-m=/Users/awitas/go/src/github.com/viant/datly/e2e/local/jwt/hmac.enc|blowfish://default",
-		"--partialConfig=/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/partial_config.json",
-	}
+	//os.Args = []string{
+	//	"datly",
+	//	"-N=run_tests_uri_param",
+	//	"-X=/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/cases/002_uri_param/vendor_details.sql",
+	//	"-w=autogen",
+	//	"-C=dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
+	//	"-C=dyndb|dynamodb|dynamodb://localhost:8000/us-west-1?key=dummy&secret=dummy",
+	//	"-j=/Users/awitas/go/src/github.com/viant/datly/e2e/local/jwt/public.enc|blowfish://default",
+	//	"-m=/Users/awitas/go/src/github.com/viant/datly/e2e/local/jwt/hmac.enc|blowfish://default",
+	//	"--partialConfig=/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/partial_config.json",
+	//}
 	//os.Args = []string{
 	//	"",
 	//	"dsql",

@@ -57,6 +57,7 @@ require (
 	github.com/aws/aws-sdk-go v1.44.12
 	github.com/aws/aws-sdk-go-v2/config v1.18.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.33.1
+	github.com/envoyproxy/go-control-plane v0.10.3
 	github.com/viant/structology v0.2.0
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
 	github.com/viant/xdatly/handler v0.0.0-20230619231115-e622dd6aff79
@@ -93,8 +94,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.13.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.17.5 // indirect
 	github.com/aws/smithy-go v1.13.5 // indirect
+	github.com/cncf/xds/go v0.0.0-20230105202645-06c439db220b // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.0-20210816181553-5444fa50b93d // indirect
+	github.com/envoyproxy/protoc-gen-validate v0.9.1 // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
 	github.com/go-playground/locales v0.14.0 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect

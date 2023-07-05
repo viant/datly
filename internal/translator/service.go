@@ -5,6 +5,7 @@ import "context"
 type Translator struct {
 }
 
-func (t *Translator) Translate(ctx context.Context, dSQL string) {
+func (t *Translator) Translate(ctx context.Context, dSQL string) (*Repository, error) {
 
+	return nil, nil
 }
