@@ -946,7 +946,7 @@ func (s *Builder) parseDSQL(ctx context.Context, builder *routeBuilder, SQL []by
 
 	hint, SQLs := s.extractRouteSettings(SQL)
 
-	if SQLs, err = s.extractParameterDeclaration(builder, SQLs); err != nil {
+	if SQLs, err = s.extractParametersDeclaration(builder, SQLs); err != nil {
 		return err
 	}
 
@@ -1445,8 +1445,8 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 	}
 
 	param.Name = view.FirstNotEmpty(config.Name, param.Name)
-	if config.Target != nil {
-		param.In.Name = *config.Target
+	if config.Location != nil {
+		param.In.Name = *config.Location
 	}
 
 	if config.Required != nil {
@@ -1799,7 +1799,7 @@ func (s *Builder) parseTypeSrc(imported string, cursor *parsly.Cursor, builder *
 	}, nil
 }
 
-func (s *Builder) extractParameterDeclaration(builder *routeBuilder, SQL string) (string, error) {
+func (s *Builder) extractParametersDeclaration(builder *routeBuilder, SQL string) (string, error) {
 	SQLBytes := []byte(SQL)
 	cursor := parsly.NewCursor("", SQLBytes, 0)
 	for {
@@ -1883,10 +1883,10 @@ func (s *Builder) buildParamHint(builder *routeBuilder, selector *expr.Select, c
 			return err
 		}
 
-		if paramConfig.Kind == string(view.KindParam) && paramConfig.Target != nil {
+		if paramConfig.Kind == string(view.KindParam) && paramConfig.Location != nil {
 			qlQuery = &sanitize.StructQLQuery{
 				SQL:    sqlQuery,
-				Source: *paramConfig.Target,
+				Source: *paramConfig.Location,
 			}
 		}
 	}
@@ -1926,7 +1926,7 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 				target = strings.Join(segments[1:], ".")
 			}
 
-			aConfig.Target = &target
+			aConfig.Location = &target
 
 			if err := s.readParamConfigs(&aConfig.ParameterConfig, cursor); err != nil {
 				return "", err

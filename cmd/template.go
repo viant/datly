@@ -147,8 +147,8 @@ func convertMetaParameter(param *Parameter, values map[string]interface{}, hints
 	}
 
 	targetName := param.Name
-	if param.Target != nil {
-		targetName = *param.Target
+	if param.Location != nil {
+		targetName = *param.Location
 	}
 
 	cardinality := param.Cardinality

@@ -12,12 +12,14 @@ type Translator struct {
 
 func (t *Translator) Translate(ctx context.Context, dSQL string) error {
 	resource := NewResource()
-	if err := resource.ExtractRouterOptions(dSQL); err != nil {
+	if err := resource.ExtractRouterOptions(&dSQL); err != nil {
 		return err
 	}
-	if err := resource.ExtractExplicitParameter(dSQL); err != nil {
+
+	if err := resource.ExtractExplicitParameter(&dSQL); err != nil {
 		return err
 	}
+
 	statements := parser.NewStatements(dSQL)
 	if len(statements) == 0 {
 		return fmt.Errorf("invalid dSQL") //TODO what if handler

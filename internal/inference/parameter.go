@@ -23,6 +23,8 @@ type Parameter struct {
 	IndexField  *Field
 	PathParam   *Parameter
 	IsAuxiliary bool
+	Hint        string
+	Explicit    bool
 }
 
 func (p *Parameter) LocalVariable() string {
