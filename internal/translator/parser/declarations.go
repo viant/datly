@@ -2,7 +2,7 @@ package parser
 
 import (
 	"encoding/json"
-	"github.com/viant/datly/cmd/option"
+	"fmt"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/template/sanitize"
@@ -10,36 +10,20 @@ import (
 	"github.com/viant/parsly"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
+	"strconv"
 	"strings"
 )
 
 type (
-	ParametersDeclarations struct {
-		SQL               string
-		ParamDeclarations []*ParameterDeclaration
-		Transforms        []*marshal.Transform
-	}
-
-	ParameterDeclaration struct {
-		inference.Parameter
-	}
-
-	paramJSONHintConfig struct {
-		option.ParameterConfig
-		option.TransformOption
+	//Declarations defines state (parameters) declaration
+	Declarations struct {
+		SQL        string
+		State      inference.State
+		Transforms []*marshal.Transform
 	}
 )
 
-func NewParameterDeclarations(SQL string) (*ParametersDeclarations, error) {
-	result := &ParametersDeclarations{
-		SQL:               SQL,
-		ParamDeclarations: nil,
-	}
-
-	return result, result.Init()
-}
-
-func (d *ParametersDeclarations) Init() error {
+func (d *Declarations) Init() error {
 	SQLBytes := []byte(d.SQL)
 	cursor := parsly.NewCursor("", SQLBytes, 0)
 	for {
@@ -52,7 +36,6 @@ func (d *ParametersDeclarations) Init() error {
 			if matched.Code != exprGroupToken {
 				continue
 			}
-
 			content := matched.Text(cursor)
 			content = content[1 : len(content)-1]
 			contentCursor := parsly.NewCursor("", []byte(content), 0)
@@ -61,17 +44,14 @@ func (d *ParametersDeclarations) Init() error {
 			if matched.Code != parameterDeclarationToken {
 				continue
 			}
-
 			matched = contentCursor.MatchOne(whitespaceMatcher)
 			selector, err := parser.MatchSelector(contentCursor)
 			if err != nil {
 				continue
 			}
-
-			if err = d.buildParamHint(selector, contentCursor); err != nil {
+			if err = d.buildParameter(selector, contentCursor); err != nil {
 				return err
 			}
-
 			for i := setStart; i < cursor.Pos; i++ {
 				SQLBytes[i] = ' '
 			}
@@ -82,182 +62,130 @@ func (d *ParametersDeclarations) Init() error {
 	}
 }
 
-func (d *ParametersDeclarations) buildParamHint(selector *expr.Select, cursor *parsly.Cursor) error {
-	paramHint, err := d.parseParamHint(cursor)
-	if paramHint == "" || err != nil {
+func (d *Declarations) buildParameter(selector *expr.Select, cursor *parsly.Cursor) error {
+	declaration, err := d.parseExpression(cursor, selector)
+	if declaration == nil || err != nil {
 		return err
 	}
-
-	holderName := strings.Trim(view.FirstNotEmpty(selector.FullName, selector.ID), "${}")
-	hint, SQL := sanitize.SplitHint(paramHint)
-
-	if pathStartIndex := strings.Index(holderName, "."); pathStartIndex >= 0 {
-		aTransform := &option.TransformOption{}
-		if err = d.tryUnmarshalHint(hint, aTransform); err != nil {
-			return err
-		}
-
-		_, paramName := sanitize.GetHolderName(holderName)
-		d.Transforms = append(d.Transforms, &marshal.Transform{
-			ParamName:   paramName,
-			Kind:        aTransform.TransformKind,
-			Path:        holderName[pathStartIndex+1:],
-			Codec:       aTransform.Codec,
-			Source:      strings.TrimSpace(SQL),
-			Transformer: aTransform.Transformer,
-		})
-
+	if declaration.Transformer != "" {
+		d.Transforms = append(d.Transforms, declaration.Transform())
 		return nil
 	}
-
-	qlQuery, _ := sanitize.TryParseStructQLHint(paramHint)
-	if qlQuery == nil {
-		paramConfig := option.ParameterConfig{}
-		hint, sqlQuery := sanitize.SplitHint(paramHint)
-		if err = d.tryUnmarshalHint(hint, &paramConfig); err != nil {
-			return err
-		}
-
-		if paramConfig.Kind == string(view.KindParam) && paramConfig.Location != nil {
-			qlQuery = &sanitize.StructQLQuery{
-				SQL:    sqlQuery,
-				Source: *paramConfig.Location,
-			}
-		}
+	declaration.ExpandShorthands()
+	d.State.Append(&declaration.Parameter)
+	if authParameter := declaration.AuthParameter(); authParameter != nil {
+		d.State.Append(authParameter)
 	}
-
-	d.addParamHint(holderName, paramHint, qlQuery)
-
-	builder.paramsIndex.AddParamHint(holderName)
-
 	return nil
 }
 
-func (d *ParametersDeclarations) addParamHint(holderName string, paramHint string, qlQuery *sanitize.StructQLQuery) {
-	parameterDeclaration := d.ParamByName(holderName)
-	parameterDeclaration.Hint = paramHint
-	parameterDeclaration.In = &view.Location{
-		Name: holderName,
-		Kind: view.KindParam,
-	}
-}
-
-func (d *ParametersDeclarations) ParamByName(holderName string) *ParameterDeclaration {
-	var parameterDeclaration *ParameterDeclaration
-	for _, declaration := range d.ParamDeclarations {
-		if declaration.Name == holderName {
-			parameterDeclaration = declaration
-		}
-	}
-
-	if parameterDeclaration == nil {
-		parameterDeclaration = &ParameterDeclaration{}
-		d.ParamDeclarations = append(d.ParamDeclarations, parameterDeclaration)
-	}
-	return parameterDeclaration
-}
-
-func (d *ParametersDeclarations) parseParamHint(cursor *parsly.Cursor) (string, error) {
-	aConfig := &paramJSONHintConfig{}
+func (d *Declarations) parseExpression(cursor *parsly.Cursor, selector *expr.Select) (*Declaration, error) {
+	name := strings.Trim(view.FirstNotEmpty(selector.FullName, selector.ID), "${}")
+	declaration := &Declaration{}
+	declaration.Name = name
 	possibilities := []*parsly.Token{typeMatcher, exprGroupMatcher}
 	for len(possibilities) > 0 {
 		matched := cursor.MatchAfterOptional(whitespaceMatcher, possibilities...)
 		switch matched.Code {
-		case typeToken:
+		case typeToken: //< >
 			typeContent := matched.Text(cursor)
 			typeContent = strings.TrimSpace(typeContent[1 : len(typeContent)-1])
-			d.tryUpdateConfigType(typeContent, aConfig)
+			d.tryParseTypeExpression(typeContent, declaration)
 			possibilities = []*parsly.Token{exprGroupMatcher}
 
-		case exprGroupToken:
+		case exprGroupToken: //(...)
 			inContent := matched.Text(cursor)
 			inContent = strings.TrimSpace(inContent[1 : len(inContent)-1])
 			segments := strings.Split(inContent, "/")
-			aConfig.Kind = segments[0]
-
-			target := ""
+			declaration.Kind = segments[0]
+			location := ""
 			if len(segments) > 1 {
-				target = strings.Join(segments[1:], ".")
+				location = strings.Join(segments[1:], ".")
 			}
-
-			aConfig.Location = &target
-
-			if err := d.readParamConfigs(&aConfig.ParameterConfig, cursor); err != nil {
-				return "", err
+			declaration.Location = &location
+			if err := d.parseShorthands(declaration, cursor); err != nil {
+				return nil, err
 			}
 			possibilities = []*parsly.Token{}
 		default:
 			possibilities = []*parsly.Token{}
 		}
 	}
-
 	matched := cursor.MatchAfterOptional(whitespaceMatcher, commentMatcher)
-	actualHint := map[string]interface{}{}
-	var sql string
-	if matched.Code == commentToken {
+	if matched.Code == commentToken { // /* .. */
 		aComment := matched.Text(cursor)
 		aComment = aComment[2 : len(aComment)-2]
-
 		hint, SQL := sanitize.SplitHint(aComment)
+		declaration.SQL = SQL
 		if hint != "" {
-			if err := json.Unmarshal([]byte(hint), &actualHint); err != nil {
-				return "", err
+			hintDeclaration := &Declaration{}
+			if err := json.Unmarshal([]byte(hint), hintDeclaration); err != nil {
+				return nil, fmt.Errorf("invalid declaration %v, unable parse hint: %w", declaration.Name, err)
 			}
+			return declaration.Merge(hintDeclaration)
 		}
-
-		sql = SQL
 	}
-
-	configJson, err := mergeJsonStructs(aConfig.TransformOption, aConfig.ParameterConfig, actualHint)
-	if err != nil {
-		return "", err
-	}
-
-	result := string(configJson)
-	if sql != "" {
-		result += " " + sql
-	}
-
-	return result, nil
+	return declaration, nil
 }
 
-func (d *ParametersDeclarations) tryUpdateConfigType(typeContent string, aConfig *paramJSONHintConfig) {
+func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *Declaration) {
 	if typeContent == "?" {
 		return
 	}
-
 	types := strings.Split(typeContent, ",")
 	dataType := types[0]
 	if strings.HasPrefix(dataType, "[]") {
-		aConfig.Cardinality = view.Many
+		declaration.Cardinality = view.Many
 		dataType = dataType[2:]
 	} else {
-		aConfig.Cardinality = view.One
+		declaration.Cardinality = view.One
 	}
-
-	aConfig.DataType = dataType
+	declaration.DataType = dataType
 	if len(types) > 1 {
-		aConfig.CodecType = types[1]
+		declaration.OutputType = types[1]
 	}
 }
 
-func (d *ParametersDeclarations) mergeJsonStructs(args ...interface{}) ([]byte, error) {
-	result := map[string]interface{}{}
-
-	for _, arg := range args {
-		marshalled, err := json.Marshal(arg)
-		if err != nil {
-			return nil, err
+func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.Cursor) error {
+	for cursor.Pos < cursor.InputSize {
+		matched := cursor.MatchOne(dotMatcher)
+		if matched.Code != dotToken {
+			return nil
+		}
+		matched = cursor.MatchOne(selectMatcher)
+		if matched.Code != selectToken {
+			return cursor.NewError(selectMatcher)
 		}
 
-		if string(marshalled) == "null" || string(marshalled) == "" {
-			continue
+		text := matched.Text(cursor)
+		matched = cursor.MatchOne(exprGroupMatcher)
+		if matched.Code != exprGroupToken {
+			return cursor.NewError(exprGroupMatcher)
 		}
 
-		if err := json.Unmarshal(marshalled, &result); err != nil {
-			return nil, err
+		content := matched.Text(cursor)
+		content = content[1 : len(content)-1]
+		switch text {
+		case "WithCodec":
+			declaration.Codec = strings.Trim(content, "'")
+		case "WithStatusCode":
+			statusCode, err := strconv.Atoi(content)
+			if err != nil {
+				return err
+			}
+			declaration.StatusCode = &statusCode
+		case "UtilParam":
+
 		}
+		cursor.MatchOne(whitespaceMatcher)
 	}
+	return nil
+}
 
-	return json.Marshal(result)
+func NewDeclarations(SQL string) (*Declarations, error) {
+	result := &Declarations{
+		SQL:   SQL,
+		State: nil,
+	}
+	return result, result.Init()
 }

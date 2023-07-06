@@ -157,7 +157,7 @@ func convertMetaParameter(param *Parameter, values map[string]interface{}, hints
 	}
 
 	return &view.Parameter{
-		Name:         param.Id,
+		Name:         param.Name,
 		Output:       aCodec,
 		Const:        constValue,
 		PresenceName: param.Name,
@@ -480,10 +480,6 @@ func (t *Template) indexParameter(actual *expr.Select, required bool, rType refl
 		kind = string(paramKind)
 	}
 
-	if param.Id == "" {
-		param.Id = paramName
-	}
-
 	if param.Name == "" {
 		param.Name = paramName
 	}
@@ -528,9 +524,9 @@ func (t *Template) AddParameter(param *Parameter) {
 		return
 	}
 
-	if !t.added[param.Id] {
+	if !t.added[param.Name] {
 		t.Parameters = append(t.Parameters, param)
-		t.added[param.Id] = true
+		t.added[param.Name] = true
 	}
 }
 

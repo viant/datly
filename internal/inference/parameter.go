@@ -16,16 +16,22 @@ import (
 	"strings"
 )
 
-type Parameter struct {
-	view.Parameter
-	SQL         string
-	FieldTag    string
-	IndexField  *Field
-	PathParam   *Parameter
-	IsAuxiliary bool
-	Hint        string
-	Explicit    bool
-}
+type (
+	Parameter struct {
+		Explicit bool
+		view.Parameter
+		ModificationSetting
+		SQL        string
+		Qualifiers []*view.Qualifier `json:",omitempty"`
+		Hint       string
+	}
+
+	ModificationSetting struct {
+		IsAuxiliary bool
+		IndexField  *Field
+		PathParam   *Parameter
+	}
+)
 
 func (p *Parameter) LocalVariable() string {
 	upperCamel, _ := formatter.UpperCamel.Caser()
@@ -148,8 +154,7 @@ func buildParameter(field *ast.Field, types *xreflect.Types) (*Parameter, error)
 	}
 	tag := view.ParseTag(datlyTag)
 	param := &Parameter{
-		SQL:      SQL,
-		FieldTag: field.Tag.Value,
+		SQL: SQL,
 	}
 	//	updateSQLTag(field, SQL)
 	param.Name = field.Names[0].Name
@@ -214,6 +219,27 @@ func extractRelationColumns(join *query.Join) (string, string) {
 		return true
 	})
 	return relColumn, refColumn
+}
+
+func (d *Parameter) EnsureCodec() {
+	if d.Parameter.Codec != nil {
+		return
+	}
+	d.Parameter.Codec = &view.Codec{}
+}
+
+func (d *Parameter) EnsureLocation() {
+	if d.Parameter.In != nil {
+		return
+	}
+	d.Parameter.In = &view.Location{}
+}
+
+func (d *Parameter) EnsureSchema() {
+	if d.Parameter.Schema != nil {
+		return
+	}
+	d.Parameter.Schema = &view.Schema{}
 }
 
 func extractSQL(field *ast.Field) string {
