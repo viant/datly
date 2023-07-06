@@ -12,6 +12,8 @@ type (
 		Join *query.Join
 		OutputConfig
 		Exclude    []string
+		Casts      map[string]string
+		Tags       map[string]string
 		Transforms map[string]*Function
 		View       *View
 	}
@@ -29,13 +31,15 @@ type (
 	}
 )
 
-func NewNamespace(name, SQL string) *Namespace {
+func NewNamespace(name, SQL string, join *query.Join) *Namespace {
 	return &Namespace{
 		Name:       name,
 		SQL:        SQL,
-		Join:       nil,
+		Join:       join,
 		Exclude:    nil,
 		Transforms: map[string]*Function{},
+		Tags:       map[string]string{},
+		Casts:      map[string]string{},
 		View:       &View{},
 	}
 }

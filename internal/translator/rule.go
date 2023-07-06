@@ -14,6 +14,7 @@ type (
 
 	Route struct {
 		router.Route
+
 		Async        *AsyncConfig              `json:",omitempty"`
 		ConstFileURL string                    `json:",omitempty"`
 		Cache        *view.Cache               `json:",omitempty"`

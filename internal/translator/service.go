@@ -11,7 +11,7 @@ type Translator struct {
 
 func (t *Translator) Translate(ctx context.Context, dSQL string) error {
 	resource := NewResource()
-	if err := resource.InitRouter(&dSQL); err != nil {
+	if err := resource.InitRule(&dSQL); err != nil {
 		return err
 	}
 	if err := resource.ExtractDeclared(&dSQL); err != nil {
@@ -36,5 +36,6 @@ func (t *Translator) translateQuery(ctx context.Context, resource *Resource, dSQ
 	if err = resource.Rule.Namespaces.Init(query); err != nil {
 		return err
 	}
+	//TODO
 	return nil
 }

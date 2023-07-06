@@ -24,7 +24,7 @@ SELECT 1 FROM t WHERE ID IN($TeamIDs)
 			expectedSQL: `SELECT 1 FROM t WHERE ID IN($TeamIDs)`,
 			expectedState: inference.State{
 				&inference.Parameter{
-					Explicit: false,
+					Explicit: true,
 					Parameter: view.Parameter{
 						Name:     "TeamIDs",
 						DataType: "string",

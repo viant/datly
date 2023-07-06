@@ -35,7 +35,7 @@ func (v *Resource) appendPathVariableParams() {
 	}
 }
 
-func (v *Resource) InitRouter(dSQL *string) error {
+func (v *Resource) InitRule(dSQL *string) error {
 	if err := v.extractRuleSetting(dSQL); err != nil {
 		return err
 	}

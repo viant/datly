@@ -57,8 +57,12 @@ func (d *Declaration) Transform() *marshal.Transform {
 func (d *Declaration) ExpandShorthands() {
 	if d.OutputType != "" || d.Codec != "" {
 		d.Parameter.EnsureCodec()
-		d.Parameter.Codec.OutputType = d.OutputType
-		d.Parameter.Codec.Name = d.Codec
+		if d.Parameter.Codec.OutputType == "" {
+			d.Parameter.Codec.OutputType = d.OutputType
+		}
+		if d.Parameter.Codec.Name == "" {
+			d.Parameter.Codec.Name = d.Codec
+		}
 	}
 
 	if d.Kind != "" || d.Location != nil {

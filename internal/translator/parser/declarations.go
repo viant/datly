@@ -48,7 +48,7 @@ func (d *Declarations) Init() error {
 			if err != nil {
 				continue
 			}
-			if err = d.buildParameter(selector, contentCursor); err != nil {
+			if err = d.buildDeclaration(selector, contentCursor); err != nil {
 				return err
 			}
 			for i := setStart; i < cursor.Pos; i++ {
@@ -62,7 +62,7 @@ func (d *Declarations) Init() error {
 	}
 }
 
-func (d *Declarations) buildParameter(selector *expr.Select, cursor *parsly.Cursor) error {
+func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cursor) error {
 	declaration, err := d.parseExpression(cursor, selector)
 	if declaration == nil || err != nil {
 		return err
