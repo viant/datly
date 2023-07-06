@@ -1384,9 +1384,6 @@ func (s *Builder) prepareExternalParameters(builder *routeBuilder, paramViewConf
 
 			externalParams = append(externalParams, authParam)
 		}
-		if parameter.Connector != "" {
-			paramViewConfig.viewConfig.unexpandedTable.Connector = parameter.Connector
-		}
 	}
 
 	return externalParams, nil
@@ -1471,10 +1468,6 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 
 	if config.MaxAllowedRecords != nil {
 		param.MaxAllowedRecords = config.MaxAllowedRecords
-	}
-
-	if config.ExpectReturned != nil {
-		param.ExpectedReturned = config.ExpectReturned
 	}
 
 	if config.MinAllowedRecords != nil {
