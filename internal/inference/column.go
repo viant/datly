@@ -27,6 +27,7 @@ func detectColumns(ctx context.Context, db *sql.DB, SQL, table string) (sqlparse
 			byName = sink.Columns(sinkColumns).By(sink.ColumnName.Key)
 		}
 	}
+
 	stmt, err := db.PrepareContext(ctx, SQL)
 	if err != nil {
 		return nil, err

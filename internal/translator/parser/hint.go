@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func tryUnmarshalHint(hint string, any interface{}) error {
+func TryUnmarshalHint(hint string, any interface{}) error {
 	hint = strings.TrimSpace(hint)
 	if hint == "" {
 		return nil

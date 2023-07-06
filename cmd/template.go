@@ -409,7 +409,6 @@ func (t *Template) detectParameters(statements []ast.Statement, required bool, r
 			if xType == nil {
 				xType = actual.Y.Type()
 			}
-
 			t.detectParameters([]ast.Statement{actual.X, actual.Y}, false, xType, false)
 		case *expr.Parentheses:
 			t.detectParameters([]ast.Statement{actual.P}, false, actual.Type(), false)

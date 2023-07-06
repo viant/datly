@@ -21,6 +21,7 @@ func TestNewDeclarations(t *testing.T) {
 #set($_ = $TeamIDs<string>(query/tids).WithCodec(AsInts))
 SELECT 1 FROM t WHERE ID IN($TeamIDs)
 `,
+			expectedSQL: `SELECT 1 FROM t WHERE ID IN($TeamIDs)`,
 			expectedState: inference.State{
 				&inference.Parameter{
 					Explicit: false,

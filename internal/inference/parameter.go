@@ -18,7 +18,7 @@ import (
 
 type (
 	Parameter struct {
-		Explicit bool
+		Explicit bool //explicit parameter are added to the main view as dependency
 		view.Parameter
 		ModificationSetting
 		SQL        string
@@ -140,6 +140,15 @@ func (p *Parameter) localVariableDefinition() (string, string) {
 
 func (p *Parameter) IndexVariable() string {
 	return p.Name + "By" + p.PathParam.IndexField.Name
+}
+
+func NewPathParameter(name string) *Parameter {
+	return &Parameter{
+		Parameter: view.Parameter{
+			Name: name,
+			In:   view.NewPathLocation(name),
+		},
+	}
 }
 
 func buildParameter(field *ast.Field, types *xreflect.Types) (*Parameter, error) {

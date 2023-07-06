@@ -2,8 +2,7 @@ package translator
 
 import (
 	"context"
-	"fmt"
-	"github.com/viant/datly/internal/translator/parser"
+	"github.com/viant/sqlparser"
 )
 
 type Translator struct {
@@ -12,26 +11,30 @@ type Translator struct {
 
 func (t *Translator) Translate(ctx context.Context, dSQL string) error {
 	resource := NewResource()
-	if err := resource.ExtractRouterOptions(&dSQL); err != nil {
+	if err := resource.InitRouter(&dSQL); err != nil {
+		return err
+	}
+	if err := resource.ExtractDeclared(&dSQL); err != nil {
 		return err
 	}
 
-	if err := resource.ExtractExplicitParameter(&dSQL); err != nil {
+	if !resource.IsExec() {
+		if err := t.translateQuery(ctx, resource, dSQL); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (t *Translator) translateQuery(ctx context.Context, resource *Resource, dSQL string) error {
+	query, err := sqlparser.ParseQuery(dSQL)
+	if err != nil {
 		return err
 	}
-
-	statements := parser.NewStatements(dSQL)
-	if len(statements) == 0 {
-		return fmt.Errorf("invalid dSQL") //TODO what if handler
+	resource.Rule.Root = query.From.Alias
+	if err = resource.Rule.Namespaces.Init(query); err != nil {
+		return err
 	}
-	if statements.IsExec() {
-		//TODO process exec
-
-		return nil
-	}
-
-	querySQL := dSQL[statements[0].Start:]
-	namespaes, err := NewNamespaces(querySQL)
-	fmt.Printf("%v %v\n", namespaes, err)
-	return err
+	return nil
 }

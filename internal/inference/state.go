@@ -15,8 +15,29 @@ import (
 type State []*Parameter
 
 //Append append parameter
-func (s *State) Append(param ...*Parameter) {
-	*s = append(*s, param...)
+func (s *State) Append(params ...*Parameter) {
+	for i := range params {
+		if s.Has(params[i].Name) {
+			continue
+		}
+		*s = append(*s, params[i])
+	}
+}
+
+func (s State) Clone() State {
+	var result = make(State, len(s))
+	copy(result, s)
+	return result
+}
+
+//Has returns true if state already has a parameter
+func (s State) Has(name string) bool {
+	for _, candidate := range s {
+		if candidate.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 //IndexByName indexes parameter by name

@@ -18,6 +18,9 @@ type Statement struct {
 type Statements []*Statement
 
 func (s Statements) IsExec() bool {
+	if len(s) == 0 {
+		return true //handler does not have SQL
+	}
 	for _, item := range s {
 		if item.IsExec {
 			return true

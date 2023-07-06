@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/router/marshal"
@@ -57,6 +56,7 @@ func (d *Declarations) Init() error {
 			}
 
 		default:
+			d.SQL = strings.TrimSpace(string(SQLBytes))
 			return nil
 		}
 	}
@@ -83,6 +83,7 @@ func (d *Declarations) parseExpression(cursor *parsly.Cursor, selector *expr.Sel
 	name := strings.Trim(view.FirstNotEmpty(selector.FullName, selector.ID), "${}")
 	declaration := &Declaration{}
 	declaration.Name = name
+	declaration.Explicit = true
 	possibilities := []*parsly.Token{typeMatcher, exprGroupMatcher}
 	for len(possibilities) > 0 {
 		matched := cursor.MatchAfterOptional(whitespaceMatcher, possibilities...)
@@ -119,7 +120,7 @@ func (d *Declarations) parseExpression(cursor *parsly.Cursor, selector *expr.Sel
 		declaration.SQL = SQL
 		if hint != "" {
 			hintDeclaration := &Declaration{}
-			if err := json.Unmarshal([]byte(hint), hintDeclaration); err != nil {
+			if err := TryUnmarshalHint(hint, hintDeclaration); err != nil {
 				return nil, fmt.Errorf("invalid declaration %v, unable parse hint: %w", declaration.Name, err)
 			}
 			return declaration.Merge(hintDeclaration)

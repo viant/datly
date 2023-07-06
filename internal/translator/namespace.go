@@ -1,15 +1,16 @@
 package translator
 
 import (
-	"fmt"
-	"github.com/viant/sqlparser"
+	"github.com/viant/datly/view"
+	"github.com/viant/sqlparser/query"
 )
 
 type (
-	Namespaces map[string]Namespace
-
 	Namespace struct {
-		Name       string
+		Name string
+		SQL  string
+		Join *query.Join
+		OutputConfig
 		Exclude    []string
 		Transforms map[string]*Function
 		View       *View
@@ -19,15 +20,22 @@ type (
 		Name string
 		Args []string
 	}
+
+	OutputConfig struct {
+		Style       string
+		Field       string
+		Kind        string
+		Cardinality view.Cardinality
+	}
 )
 
-func NewNamespaces(SQL string) (Namespaces, error) {
-	query, err := sqlparser.ParseQuery(SQL)
-	if err != nil {
-
+func NewNamespace(name, SQL string) *Namespace {
+	return &Namespace{
+		Name:       name,
+		SQL:        SQL,
+		Join:       nil,
+		Exclude:    nil,
+		Transforms: map[string]*Function{},
+		View:       &View{},
 	}
-
-	fmt.Printf("%v\n", query)
-
-	return nil, nil
 }
