@@ -15,7 +15,7 @@ type Resource struct {
 	parser.Statements
 }
 
-//ExtractDeclared extract both parameter declaration and transform expression
+// ExtractDeclared extract both parameter declaration and transform expression
 func (v *Resource) ExtractDeclared(dSQL *string) error {
 	v.appendPathVariableParams()
 	declarations, err := parser.NewDeclarations(*dSQL)
@@ -43,6 +43,10 @@ func (v *Resource) InitRule(dSQL *string) error {
 	route := &v.Rule.Route
 	if route.Method == "" {
 		route.Method = "GET"
+	}
+
+	for paramName, paramValue := range route.Const {
+		v.State.Append(inference.NewConstParameter(paramName, paramValue))
 	}
 
 	//v.Rule.Route = &router.Route{

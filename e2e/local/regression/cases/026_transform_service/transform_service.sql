@@ -2,20 +2,16 @@
 {
    "URI":"basic/events-velty-transform",
    "Method":"POST",
-   "Declare":{"Events":"*Events"},
    "TypeSrc":{
         "URL":"regression/cases/026_transform_service",
         "Types":["PerformanceData", "Events"]
    },
-   "RequestBody":{
-        "DataType": "Events"
-   },
     "ResponseBody": { "From": "Events" }
 } */
+#set($_ = $Events<*Events>(body/))
 
 $sequencer.Allocate("EVENTS", $Events, "Id")
 $sequencer.Allocate("EVENTS_PERFORMANCE", $Events, "EventsPerformance/Id")
-
 #set($eTypes = $Events.TransformWithURL("http://localhost:8871/transform/events-perf", "[]*PerformanceData"))
 
 #set($validationResult = $http.Do("POST", "http://localhost:8871/dev/validate/event-perf", $eTypes))

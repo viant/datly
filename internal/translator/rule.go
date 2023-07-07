@@ -19,7 +19,6 @@ type (
 		ConstFileURL string                    `json:",omitempty"`
 		Cache        *view.Cache               `json:",omitempty"`
 		CSV          *router.CSVConfig         `json:",omitempty"`
-		Declare      map[string]string         `json:",omitempty"`
 		Const        map[string]interface{}    `json:",omitempty"`
 		ConstURL     string                    `json:",omitempty"`
 		Field        string                    `json:",omitempty"`
