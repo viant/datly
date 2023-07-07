@@ -141,16 +141,6 @@ func (p *Parameter) localVariableDefinition() (string, string) {
 func (p *Parameter) IndexVariable() string {
 	return p.Name + "By" + p.PathParam.IndexField.Name
 }
-
-func NewPathParameter(name string) *Parameter {
-	return &Parameter{
-		Parameter: view.Parameter{
-			Name: name,
-			In:   view.NewPathLocation(name),
-		},
-	}
-}
-
 func buildParameter(field *ast.Field, types *xreflect.Types) (*Parameter, error) {
 	SQL := extractSQL(field)
 	if field.Tag == nil {
@@ -271,4 +261,23 @@ func extractSQL(field *ast.Field) string {
 		SQL = strings.TrimSpace(comments)
 	}
 	return SQL
+}
+
+func NewConstParameter(paramName string, paramValue interface{}) *Parameter {
+	return &Parameter{
+		Parameter: view.Parameter{
+			Name:  paramName,
+			Const: paramValue,
+			In:    view.NewConstLocation(),
+		},
+	}
+}
+
+func NewPathParameter(name string) *Parameter {
+	return &Parameter{
+		Parameter: view.Parameter{
+			Name: name,
+			In:   view.NewPathLocation(name),
+		},
+	}
 }

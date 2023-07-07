@@ -2,13 +2,14 @@
 {
    "URI":"basic/events-velty-validator",
    "Method":"POST",
-   "Declare":{"Events":"*regression/cases/025_structql_velocity.Events"},
-   "RequestBody":{
-        "DataType": "Events"
-   },
-    "ResponseBody": {"From": "Events"}
+   "ResponseBody": {"From": "Events"}
 } */
 
+import(
+    "regression/cases/025_structql_velocity.Events"
+)
+
+#set($_ = $Events<*Events>(body/))
 $sequencer.Allocate("EVENTS", $Events, "Id")
 $sequencer.Allocate("EVENTS_PERFORMANCE", $Events, "EventsPerformance/Id")
 

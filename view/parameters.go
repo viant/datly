@@ -205,7 +205,7 @@ func (v *Codec) initSchemaIfNeeded(resource *Resource) error {
 	return v.Schema.setType(resource.LookupType(), false)
 }
 
-//Init initializes Parameter
+// Init initializes Parameter
 func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, structType reflect.Type) error {
 	if p._initialized == true {
 		return nil
@@ -340,7 +340,7 @@ func (p *Parameter) inherit(param *Parameter) {
 	}
 }
 
-//Validate checks if parameter is valid
+// Validate checks if parameter is valid
 func (p *Parameter) Validate() error {
 	if p.Name == "" {
 		return fmt.Errorf("parameter name can't be empty")
@@ -357,12 +357,12 @@ func (p *Parameter) Validate() error {
 	return nil
 }
 
-//View returns View related with Parameter if Location.Kind is set to data_view
+// View returns View related with Parameter if Location.Kind is set to data_view
 func (p *Parameter) View() *View {
 	return p._view
 }
 
-//Validate checks if Location is valid
+// Validate checks if Location is valid
 func (l *Location) Validate() error {
 	if err := l.Kind.Validate(); err != nil {
 		return err
@@ -641,10 +641,10 @@ func (p *Parameter) WithAccessors(value, presence *types.Accessor) *Parameter {
 	return &result
 }
 
-//ParametersIndex represents Parameter map indexed by Parameter.Name
+// ParametersIndex represents Parameter map indexed by Parameter.Name
 type ParametersIndex map[string]*Parameter
 
-//ParametersSlice represents slice of parameters
+// ParametersSlice represents slice of parameters
 type ParametersSlice []*Parameter
 
 func (p ParametersSlice) Len() int {
@@ -667,7 +667,7 @@ func (p ParametersSlice) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 
-//Index indexes parameters by Parameter.Name
+// Index indexes parameters by Parameter.Name
 func (p ParametersSlice) Index() (ParametersIndex, error) {
 	result := ParametersIndex(make(map[string]*Parameter))
 	for parameterIndex := range p {
@@ -679,7 +679,7 @@ func (p ParametersSlice) Index() (ParametersIndex, error) {
 	return result, nil
 }
 
-//Filter filters ParametersSlice with given Kind and creates Template
+// Filter filters ParametersSlice with given Kind and creates Template
 func (p ParametersSlice) Filter(kind Kind) ParametersIndex {
 	result := make(map[string]*Parameter)
 
@@ -700,7 +700,7 @@ func (p ParametersIndex) merge(with ParametersIndex) {
 	}
 }
 
-//Lookup returns Parameter with given name
+// Lookup returns Parameter with given name
 func (p ParametersIndex) Lookup(paramName string) (*Parameter, error) {
 	if param, ok := p[paramName]; ok {
 		return param, nil
@@ -708,7 +708,7 @@ func (p ParametersIndex) Lookup(paramName string) (*Parameter, error) {
 	return nil, fmt.Errorf("not found parameter %v", paramName)
 }
 
-//Register registers parameter
+// Register registers parameter
 func (p ParametersIndex) Register(parameter *Parameter) error {
 	if _, ok := p[parameter.Name]; ok {
 		fmt.Printf("[WARN] parameter with %v name already exists in given resource", parameter.Name)
@@ -718,27 +718,31 @@ func (p ParametersIndex) Register(parameter *Parameter) error {
 	return nil
 }
 
-//NewQueryLocation creates a query location
+// NewQueryLocation creates a query location
 func NewQueryLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindQuery}
 }
 
-//NewBodyLocation creates a body location
+// NewBodyLocation creates a body location
 func NewBodyLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindRequestBody}
 }
 
-//NewDataViewLocation creates a dataview location
+// NewDataViewLocation creates a dataview location
 func NewDataViewLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindDataView}
 }
 
-//NewPathLocation creates a structql
+func NewConstLocation() *Location {
+	return &Location{Kind: KindLiteral}
+}
+
+// NewPathLocation creates a structql
 func NewPathLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindParam}
 }
 
-//WithParameterType returns schema type parameter option
+// WithParameterType returns schema type parameter option
 func WithParameterType(t reflect.Type) ParameterOption {
 	return func(p *Parameter) {
 		switch t.Kind() {
@@ -750,7 +754,7 @@ func WithParameterType(t reflect.Type) ParameterOption {
 	}
 }
 
-//NewParameter creates a parameter
+// NewParameter creates a parameter
 func NewParameter(name string, in *Location, opts ...ParameterOption) *Parameter {
 	ret := &Parameter{Name: name, In: in}
 	for _, opt := range opts {

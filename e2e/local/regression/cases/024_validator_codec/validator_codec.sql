@@ -1,10 +1,15 @@
 /* {
    "URI":"basic/events-validator",
    "Method":"POST",
-   "Declare":{"Events":"*regression/cases/024_validator_codec.Events"},
    "ResponseBody": {"From": "Events" }
    } */
 
+import (
+    "regression/cases/024_validator_codec.Events"
+)
+
+
+#set($_ = $Events<*Events>(body/))
 $sequencer.Allocate("EVENTS", $Events, "Id")
 $sequencer.Allocate("EVENTS_PERFORMANCE", $Events, "EventsPerformance/Id")
 

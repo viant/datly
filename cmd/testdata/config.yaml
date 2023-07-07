@@ -1,7 +1,0 @@
-datastore: db
-config:
-  driverName: sqlite3
-  descriptor: /tmp/datly_tests/db.db
-recreate: true
-scripts:
-  - URL: testdata/schema.sql
