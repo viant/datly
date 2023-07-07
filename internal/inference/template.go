@@ -4,25 +4,36 @@ import (
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/sqlparser"
 	"github.com/viant/velty/ast"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/ast/stmt"
 	"github.com/viant/velty/parser"
 	"reflect"
+	"strings"
 )
+
+type Logf func(format string, a ...interface{}) (n int, err error)
 
 type Template struct {
 	SQL          string
+	Table        *Table
 	State        State
+	fragments    []string
 	implicitKind view.Kind
 	variables    map[string]bool
 }
 
-func NewTemplate(SQL string, state State, implicitKind view.Kind) {
-
+func NewTemplate(SQL string, state State, table *Table, implicitKind view.Kind) *Template {
+	return &Template{
+		Table:        table,
+		SQL:          SQL,
+		State:        state,
+		implicitKind: implicitKind,
+	}
 }
 
-func (t *Template) Init() error {
+func (t *Template) DetectParameters() error {
 	if err := t.tryDetectParameters(); err != nil {
 		return err
 	}
@@ -100,7 +111,10 @@ func (t *Template) detectParameters(statements []ast.Statement, required bool, r
 			if actual.Else != nil {
 				t.detectParameters([]ast.Statement{actual.Else}, false, actual.Else.Type(), view.One)
 			}
+		case *stmt.Append:
+			t.fragments = append(t.fragments, actual.Append)
 		}
+
 		switch actual := statement.(type) {
 		case ast.StatementContainer:
 			t.detectParameters(actual.Statements(), false, nil, cardinality)
@@ -136,20 +150,64 @@ func (t *Template) parseSelectAndAppend(actual *expr.Select, required bool, rTyp
 	if prefix != "" && t.State.Has(prefix) { //parameter already defined
 		return
 	}
-	if t.State.Has(paramName) { //parameter already defined
+	parameter := t.State.Lookup(paramName)
+	if parameter != nil && parameter.HasDataType() { //parameter already defined
 		return
 	}
 	selector, ok := getContextSelector(prefix, actual.X)
 	if ok && selector.ID == "IndexBy" {
 		cardinality = view.Many
 	}
-	parameter := &Parameter{Parameter: view.Parameter{Name: paramName, In: &view.Location{Kind: t.implicitKind, Name: paramName}}}
-	parameter.EnsureSchema()
-	parameter.Schema.Cardinality = cardinality
-	if rType != nil && prefix != keywords.ParamsMetadataKey {
-		parameter.DataType = rType.String()
+	if parameter == nil {
+		parameter = &Parameter{Parameter: view.Parameter{Name: paramName, In: &view.Location{Kind: t.implicitKind, Name: paramName}}}
+		parameter.EnsureSchema()
+		parameter.Schema.Cardinality = cardinality
+		if rType != nil && prefix != keywords.ParamsMetadataKey {
+			parameter.Schema.DataType = rType.String()
+		}
+		parameter.Required = &required
+	}
+	operator, column := t.detectExprContext()
+	if column != nil {
+		parameter.Schema.DataType = column.Type
+	}
+	if operator == "in" {
+		//TODO add condec asStrings, or asInts
 	}
 	t.State.Append(parameter)
+}
+
+func (t *Template) detectExprContext() (string, *sqlparser.Column) {
+	if len(t.fragments) == 0 {
+		return "", nil
+	}
+	last := t.fragments[len(t.fragments)-1]
+	elements := SplitByWhitespace(last)
+	if len(elements) <= 1 {
+		return "", nil
+	}
+	operator := ""
+	var column *sqlparser.Column
+	operatorIndex := -1
+	for i := len(elements) - 1; i >= 0; i-- {
+		candidate := strings.ToLower(elements[i])
+		switch candidate {
+		case "=", ">=", "<=", "!=", "in":
+			operator = candidate
+			operatorIndex = i
+			break
+		}
+	}
+	for i := operatorIndex - 1; i >= 0; i-- {
+		candidate := strings.ToLower(elements[i])
+		if column = t.Table.Lookup(candidate); column != nil {
+			break
+		}
+	}
+	if column == nil {
+		operator = ""
+	}
+	return operator, column
 }
 
 func getContextSelector(prefix string, x ast.Expression) (*expr.Select, bool) {

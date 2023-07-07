@@ -244,6 +244,16 @@ func (d *Parameter) EnsureLocation() {
 	d.Parameter.In = &view.Location{}
 }
 
+func (p *Parameter) HasDataType() bool {
+	if p.DataType != "" {
+		return true
+	}
+	if p.Schema == nil {
+		return false
+	}
+	return p.Schema.DataType != ""
+}
+
 func (d *Parameter) EnsureSchema() {
 	if d.Parameter.Schema != nil {
 		return

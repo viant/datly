@@ -3,6 +3,7 @@ package inference
 import (
 	"fmt"
 	"github.com/viant/datly/view"
+	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
 	"go/ast"
 	"go/parser"
@@ -40,6 +41,16 @@ func (s State) Has(name string) bool {
 	return false
 }
 
+//Lookup returns matched paramter
+func (s State) Lookup(name string) *Parameter {
+	for _, candidate := range s {
+		if candidate.Name == name {
+			return candidate
+		}
+	}
+	return nil
+}
+
 //IndexByName indexes parameter by name
 func (s State) IndexByName() map[string]*Parameter {
 	result := map[string]*Parameter{}
@@ -74,6 +85,38 @@ func (s State) FilterByKind(kind view.Kind) State {
 	return result
 }
 
+//Implicit filters implicit parameters
+func (s State) Implicit() State {
+	result := State{}
+	for _, parameter := range s {
+		if !parameter.Explicit {
+			result.Append(parameter)
+		}
+	}
+	return result
+}
+
+//Implicit filters implicit parameters
+func (s State) Explicit() State {
+	result := State{}
+	for _, parameter := range s {
+		if parameter.Explicit {
+			result.Append(parameter)
+		}
+	}
+	return result
+}
+
+func (s State) Expand(text string) string {
+	expander := data.Map{}
+	if parameters := s.FilterByKind(view.KindLiteral); len(parameters) > 0 {
+		for _, literal := range parameters {
+			expander[literal.Name] = literal.Const
+		}
+	}
+	return expander.ExpandAsText(text)
+}
+
 //DsqlParameterDeclaration returns dsql parameter declaration
 func (s State) DsqlParameterDeclaration() string {
 	var result []string
@@ -83,7 +126,8 @@ func (s State) DsqlParameterDeclaration() string {
 	return strings.Join(result, "\n\t")
 }
 
-func (s State) ensureSchema(dirTypes *xreflect.DirTypes) error {
+//EnsureSchema initialises reflect.Type for each state parameter
+func (s State) EnsureSchema(dirTypes *xreflect.DirTypes) error {
 	for _, param := range s {
 		if param.Schema.Type() != nil {
 			continue
@@ -160,7 +204,7 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 	if _, err = dirTypes.Type(dataType); err != nil {
 		return nil, err
 	}
-	if err = state.ensureSchema(dirTypes); err != nil {
+	if err = state.EnsureSchema(dirTypes); err != nil {
 		return nil, err
 	}
 	return state, nil

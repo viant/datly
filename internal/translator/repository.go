@@ -13,4 +13,5 @@ type Repository struct {
 	Constants    []*view.Parameter
 	Caches       view.Caches
 	MessageBuses []*mbus.Resource
+	Warnings     []*Warning
 }

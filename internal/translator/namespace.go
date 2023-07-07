@@ -11,7 +11,9 @@ type (
 		SQL  string
 		Join *query.Join
 		OutputConfig
-		Exclude    []string
+		Exclude     []string
+		Whitelisted []string
+
 		Casts      map[string]string
 		Tags       map[string]string
 		Transforms map[string]*Function
