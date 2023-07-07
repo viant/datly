@@ -34,7 +34,22 @@ func (s *Service) Generate(ctx context.Context, gen *options.Gen, template *code
 	if err = s.generateEntity(ctx, pkg, gen, info, template); err != nil {
 		return err
 	}
-	info.UpdateTypesCorePackage(url.Join(gen.GoModuleLocation(), gen.Package))
+	switch info.IntegrationMode {
+	case plugin.ModeExtension, plugin.ModeCustomTypeModule:
+		if len(info.CustomTypesPackages) == 0 {
+			if err := s.tidyModule(ctx, gen.GoModuleLocation()); err != nil {
+				return err
+			}
+		}
+		info.UpdateTypesCorePackage(url.Join(gen.GoModuleLocation(), gen.Package))
+	default:
+		if ok, _ := s.fs.Exists(ctx, url.Join(gen.GoModuleLocation(), "go.mod")); ok {
+			if err := s.tidyModule(ctx, gen.GoModuleLocation()); err != nil {
+				return err
+			}
+			info, _ = plugin.NewInfo(ctx, gen.GoModuleLocation())
+		}
+	}
 	return s.EnsurePluginArtifacts(ctx, info)
 }
 

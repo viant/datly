@@ -60,15 +60,22 @@ func (s *Service) runCommand(dir string, cmd string, args ...string) (string, er
 }
 
 func (s *Service) prepareBuild(ctx context.Context, build *options.Build) error {
+	if err := s.tidyModule(ctx, build.Module); err != nil {
+		return err
+	}
+	if err := s.tidyModule(ctx, build.Datly); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Service) tidyModule(ctx context.Context, goModule string) error {
 	goBinLoc, err := s.getGoBinLocation(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to preapre build, unable to find go %w", err)
 	}
-	if out, err := s.runCommand(build.Module, goBinLoc, "mod", "tidy", "-compat=1.17"); err != nil {
-		return fmt.Errorf("failed to go mod module '%v', %s %w", build.Module, out, err)
-	}
-	if out, err := s.runCommand(build.Datly, goBinLoc, "mod", "tidy", "-compat=1.17"); err != nil {
-		return fmt.Errorf("failed to go mod customized datly %v, %s %w", build.Module, out, err)
+	if out, err := s.runCommand(goModule, goBinLoc, "mod", "tidy", "-compat=1.17"); err != nil {
+		return fmt.Errorf("failed to go mod module '%v', %s %w", goModule, out, err)
 	}
 	return nil
 }

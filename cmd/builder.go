@@ -1549,7 +1549,6 @@ func (s *Builder) generateRuleIfNeeded(ctx context.Context, SQL []byte) (string,
 		return "", err
 	}
 	SQL, err = s.fs.DownloadWithURL(ctx, s.Options.Generate.DSQLLocation())
-	fmt.Printf("DSQL: %s\n", SQL)
 	return string(SQL), err
 }
 

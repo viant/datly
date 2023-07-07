@@ -81,6 +81,15 @@ func (i *Imports) rawImports(builder *strings.Builder) {
 	}
 }
 
+func NewImports() Imports {
+	return Imports{
+		Types:        nil,
+		typeIndex:    map[string]bool{},
+		Packages:     nil,
+		packageIndex: map[string]bool{},
+	}
+}
+
 func (i *Imports) DefaultPackageImports() string {
 	if len(i.Packages) == 0 {
 		return ""
@@ -94,13 +103,4 @@ func (i *Imports) DefaultPackageImports() string {
 	}
 	builder.WriteByte(')')
 	return builder.String()
-}
-
-func NewImports() Imports {
-	return Imports{
-		Types:        nil,
-		typeIndex:    map[string]bool{},
-		Packages:     nil,
-		packageIndex: map[string]bool{},
-	}
 }

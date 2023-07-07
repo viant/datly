@@ -13,7 +13,8 @@ type Plugin struct{}
 var dependencyGoTemplate string
 
 func (p *Plugin) GenerateDependency(info *plugin.Info) string {
-	return strings.Replace(dependencyGoTemplate, "$Imports", p.getImports(info), 1)
+	imports := p.getImports(info)
+	return strings.Replace(dependencyGoTemplate, "$Imports", imports, 1)
 }
 
 func (p *Plugin) getImports(info *plugin.Info) string {
@@ -22,7 +23,7 @@ func (p *Plugin) getImports(info *plugin.Info) string {
 		return ""
 	}
 	for _, pkg := range info.CustomTypesPackages {
-		imports.AddPackage(pkg.Name)
+		imports.AddPackage(pkg.ID)
 	}
 	return imports.DefaultPackageImports()
 }
