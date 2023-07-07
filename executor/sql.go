@@ -16,8 +16,8 @@ func NewBuilder() *SqlBuilder {
 	return &SqlBuilder{}
 }
 
-func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState, session *session.Session) (*expand.State, []*expand.SQLStatment, error) {
-	state, err := aView.Template.EvaluateStateWithSession(paramState.Values, paramState.Has, nil, nil, session)
+func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState, session *session.Session, dataUnit *expand.DataUnit) (*expand.State, []*expand.SQLStatment, error) {
+	state, err := aView.Template.EvaluateStateWithSession(paramState.Values, paramState.Has, nil, nil, session, dataUnit)
 	if err != nil {
 		return state, nil, err
 	}

@@ -70,7 +70,7 @@ func (e *Executor) Execute(ctx context.Context, aView *view.View, options ...Opt
 //TODO: remove reflection
 //TODO: customize global batch collector
 func (e *Executor) Exec(ctx context.Context, sess *Session, options ...DBOption) error {
-	state, data, err := e.sqlBuilder.Build(sess.View, sess.Lookup(sess.View), sess.SessionHandler)
+	state, data, err := e.sqlBuilder.Build(sess.View, sess.Lookup(sess.View), sess.SessionHandler, sess.DataUnit)
 	if state != nil {
 		sess.State = state
 		defer sess.State.Flush(expand.StatusFailure)
