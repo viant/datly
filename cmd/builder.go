@@ -611,7 +611,7 @@ func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) 
 	dSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
 	fmt.Printf("%v %v\n", dSQL, err)
 
-	return dSQL + "$" + entityParam.Name + "", err
+	return dSQL + fmt.Sprintf("$Nop($%v)", entityParam.Name), err
 }
 
 func simpledName(typeName string) string {
@@ -1383,6 +1383,9 @@ func (s *Builder) prepareExternalParameters(builder *routeBuilder, paramViewConf
 			}
 
 			externalParams = append(externalParams, authParam)
+			if parameter.Connector != "" {
+				paramViewConfig.viewConfig.unexpandedTable.Connector = parameter.Connector
+			}
 		}
 	}
 
@@ -1538,7 +1541,6 @@ func (s *Builder) generateRuleIfNeeded(ctx context.Context, SQL []byte) (string,
 		return "", err
 	}
 	SQL, err = s.fs.DownloadWithURL(ctx, s.Options.Generate.DSQLLocation())
-	fmt.Printf("DSQL: %s\n", SQL)
 	return string(SQL), err
 }
 

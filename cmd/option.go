@@ -123,6 +123,15 @@ type (
 	}
 )
 
+func (o *Options) GoModuleLocation() string {
+	if o.RelativePath != "" {
+		return o.RelativePath
+	}
+	if o.GoModulePkg != "" {
+		return o.GoModulePkg
+	}
+	return o.DSQLOutput
+}
 func (c *Connector) SetConnectors(connectors []*view.Connector) {
 	if len(connectors) == 0 {
 		return

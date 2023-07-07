@@ -63,13 +63,31 @@ func (i *Imports) PackageImports() string {
 	}
 	builder := strings.Builder{}
 	builder.WriteString("\nimport (")
+	i.rawImports(&builder)
+	builder.WriteByte(')')
+	return builder.String()
+}
+
+func (i *Imports) RawImports() string {
+	builder := strings.Builder{}
+	i.rawImports(&builder)
+	return builder.String()
+}
+func (i *Imports) rawImports(builder *strings.Builder) {
 	for _, item := range i.Packages {
 		builder.WriteString("\t\"")
 		builder.WriteString(item)
 		builder.WriteString("\"\n")
 	}
-	builder.WriteByte(')')
-	return builder.String()
+}
+
+func NewImports() Imports {
+	return Imports{
+		Types:        nil,
+		typeIndex:    map[string]bool{},
+		Packages:     nil,
+		packageIndex: map[string]bool{},
+	}
 }
 
 func (i *Imports) DefaultPackageImports() string {
@@ -85,13 +103,4 @@ func (i *Imports) DefaultPackageImports() string {
 	}
 	builder.WriteByte(')')
 	return builder.String()
-}
-
-func NewImports() Imports {
-	return Imports{
-		Types:        nil,
-		typeIndex:    map[string]bool{},
-		Packages:     nil,
-		packageIndex: map[string]bool{},
-	}
 }

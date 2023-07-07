@@ -2,29 +2,17 @@ package codegen
 
 import (
 	_ "embed"
-	"fmt"
 	"github.com/viant/datly/internal/inference"
+	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/view"
-	"go/ast"
 	"reflect"
-	"strconv"
 	"strings"
 )
-
-func updateSQLTag(field *ast.Field, SQL string) {
-	if SQL == "" {
-		return
-	}
-
-	SQL = strings.ReplaceAll(SQL, "\n", "   ")
-	field.Tag.Value = "`" + strings.Trim(field.Tag.Value, "`") + fmt.Sprintf(` sql:%v`, strconv.Quote(SQL)) + "`"
-
-}
 
 //go:embed tmpl/state.gox
 var stateGoTemplate string
 
-func (t *Template) GenerateState(pkg string) string {
+func (t *Template) GenerateState(pkg string, info *plugin.Info) string {
 	pkg = t.getPakcage(pkg)
 	if len(t.State) == 0 {
 		return ""
@@ -35,6 +23,21 @@ func (t *Template) GenerateState(pkg string) string {
 		fields = append(fields, input.FieldDeclaration())
 	}
 	output = strings.Replace(output, "$Fields", strings.Join(fields, "\n\n"), 1)
+
+	registerTypes := t.RegisterFragment("State")
+	importFragment := ""
+	imports := inference.NewImports()
+	imports.AddPackage(info.ChecksumPkg())
+	imports.AddPackage("reflect")
+	imports.AddPackage(info.TypeCorePkg())
+	switch info.IntegrationMode {
+	case plugin.ModeExtension, plugin.ModeCustomTypeModule:
+		importFragment = imports.PackageImports()
+	default:
+		registerTypes = ""
+	}
+	output = strings.Replace(output, "$Imports", importFragment, 1)
+	output = strings.Replace(output, "$RegisterTypes", registerTypes, 1)
 	return output
 }
 

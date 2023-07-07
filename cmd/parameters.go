@@ -167,7 +167,7 @@ func (p *ParametersIndex) AddParamHint(name string, aHint *sanitize.ParameterHin
 	actualHint, _ := sanitize.SplitHint(aHint.Hint)
 	actualHint = strings.TrimSpace(actualHint)
 
-	paramMeta := &option.ParameterConfig{}
+	paramMeta := &option.ParamMeta{}
 	tryUnmrashalHintWithWarn(actualHint, &paramMeta)
 	if paramMeta.Util {
 		p.utilsIndex[name] = true

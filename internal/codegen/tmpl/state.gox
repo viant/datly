@@ -1,5 +1,12 @@
 package $Package
 
+$Imports
+
+func init() {
+    $RegisterTypes
+}
+
+
 type State struct {
     $Fields
 }

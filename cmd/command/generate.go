@@ -18,29 +18,45 @@ func (s *Service) Generate(ctx context.Context, gen *options.Gen, template *code
 		return err
 	}
 	//TODO adjust if handler option is used
-	if err := s.generateTemplate(ctx, gen, template); err != nil {
-		return err
-	}
-
 	info, err := plugin.NewInfo(ctx, gen.GoModuleLocation())
 	if err != nil {
 		return err
 	}
+
+	if err := s.generateTemplate(ctx, gen, template, info); err != nil {
+		return err
+	}
+
 	pkg := info.Package(gen.Package)
-	if err = s.generateState(ctx, pkg, gen, template); err != nil {
+	if err = s.generateState(ctx, pkg, gen, template, info); err != nil {
 		return err
 	}
 	if err = s.generateEntity(ctx, pkg, gen, info, template); err != nil {
 		return err
 	}
-	info.UpdateTypesCorePackage(url.Join(gen.GoModuleLocation(), gen.Package))
+	switch info.IntegrationMode {
+	case plugin.ModeExtension, plugin.ModeCustomTypeModule:
+		if len(info.CustomTypesPackages) == 0 {
+			if err := s.tidyModule(ctx, gen.GoModuleLocation()); err != nil {
+				return err
+			}
+		}
+		info.UpdateTypesCorePackage(url.Join(gen.GoModuleLocation(), gen.Package))
+	default:
+		if ok, _ := s.fs.Exists(ctx, url.Join(gen.GoModuleLocation(), "go.mod")); ok {
+			if err := s.tidyModule(ctx, gen.GoModuleLocation()); err != nil {
+				return err
+			}
+			info, _ = plugin.NewInfo(ctx, gen.GoModuleLocation())
+		}
+	}
 	return s.EnsurePluginArtifacts(ctx, info)
 }
 
-func (s *Service) generateTemplate(ctx context.Context, gen *options.Gen, template *codegen.Template) error {
+func (s *Service) generateTemplate(ctx context.Context, gen *options.Gen, template *codegen.Template, info *plugin.Info) error {
 	//needed for both go and velty
 	opts := s.dsqlGenerationOptions(gen)
-	files, err := s.generateTemplateFiles(gen, template, opts...)
+	files, err := s.generateTemplateFiles(gen, template, info, opts...)
 	if err != nil {
 		return err
 	}
@@ -91,8 +107,8 @@ func ensureGoFileCaseFormat(template *codegen.Template) string {
 	return entityName
 }
 
-func (s *Service) generateState(ctx context.Context, pkg string, gen *options.Gen, template *codegen.Template) error {
-	code := template.GenerateState(pkg)
+func (s *Service) generateState(ctx context.Context, pkg string, gen *options.Gen, template *codegen.Template, info *plugin.Info) error {
+	code := template.GenerateState(pkg, info)
 	return s.fs.Upload(ctx, gen.StateLocation(), file.DefaultFileOsMode, strings.NewReader(code))
 }
 

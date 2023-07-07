@@ -139,12 +139,13 @@ func (e *Executor) newSqlService(options *sqlx.Options) (sqlx.Sqlx, error) {
 	}
 
 	return &SqlxService{
-		txNotifier: txStartedNotifier,
-		dataUnit:   unit,
-		options:    options,
-		validator:  e.newValidator(),
-		connectors: e.route._resource.GetConnectors(),
-		params:     e.params,
+		txNotifier:    txStartedNotifier,
+		dataUnit:      unit,
+		options:       options,
+		validator:     e.newValidator(),
+		connectors:    e.route._resource.GetConnectors(),
+		params:        e.params,
+		mainConnector: e.route.View.Connector,
 	}, nil
 }
 

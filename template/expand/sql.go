@@ -10,6 +10,7 @@ type (
 		Executable []interface{}
 		Index      ExecutablesIndex
 		Markers    map[string]int
+		currIndex  int
 	}
 
 	SQLStatment struct {
@@ -100,4 +101,20 @@ func (s *Statements) FilterByTableName(name string) []interface{} {
 	}
 
 	return result
+}
+
+func (s *Statements) NextNonExecuted() (*Executable, bool) {
+	if s.currIndex >= len(s.Executable) {
+		return nil, false
+	}
+
+	for index, value := range s.Executable[s.currIndex:] {
+		asExec, ok := value.(*Executable)
+		if ok && !asExec.Executed() {
+			s.currIndex += index + 1
+			return asExec, true
+		}
+	}
+
+	return nil, false
 }

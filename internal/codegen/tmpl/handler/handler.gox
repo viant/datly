@@ -3,7 +3,12 @@ package $Package
 import (
 	"context"
     "github.com/viant/xdatly/handler"
+    $RawImports
 )
+
+func init() {
+    $RegisterTypes
+}
 
 type Handler struct {}
 

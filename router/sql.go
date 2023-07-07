@@ -23,10 +23,12 @@ type (
 		dataUnit *expand.DataUnit
 		options  *sqlx.Options
 
-		validator  *validator.Service
-		db         *sql.DB
-		dialect    *info.Dialect
-		connectors view.Connectors
+		validator *validator.Service
+		db        *sql.DB
+		dialect   *info.Dialect
+
+		mainConnector *view.Connector
+		connectors    view.Connectors
 
 		request    *http.Request
 		route      *Route
@@ -170,6 +172,10 @@ func (s *SqlxService) openDBConnection() (*sql.DB, error) {
 
 	if s.options.WithDb != nil {
 		return s.options.WithDb, nil
+	}
+
+	if s.mainConnector != nil {
+		return s.mainConnector.DB()
 	}
 
 	return nil, fmt.Errorf("unspecified DB source")
