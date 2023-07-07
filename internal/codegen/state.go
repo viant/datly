@@ -219,16 +219,19 @@ func (t *Template) GenerateState(pkg string, info *plugin.Info) string {
 	}
 	output = strings.Replace(output, "$Fields", strings.Join(fields, "\n\n"), 1)
 
+	registerTypes := t.RegisterFragment("State")
+
 	importFragment := ""
 	imports := Imports{}
 	imports.AddPackage(info.ChecksumPkg())
 	switch info.IntegrationMode {
 	case plugin.ModeExtension, plugin.ModeCustomTypeModule:
 		importFragment = imports.PackageImports()
+	default:
+		registerTypes = ""
 	}
 	output = strings.Replace(output, "$Imports", importFragment, 1)
 
-	registerTypes := t.RegisterFragment("State")
 	output = strings.Replace(output, "$RegisterTypes", registerTypes, 1)
 	return output
 }
