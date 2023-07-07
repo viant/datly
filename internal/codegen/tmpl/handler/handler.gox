@@ -3,7 +3,12 @@ package $Package
 import (
 	"context"
     "github.com/viant/xdatly/handler"
+    $ChecksumImport
 )
+
+func init() {
+    $RegisterTypes
+}
 
 type Handler struct {}
 

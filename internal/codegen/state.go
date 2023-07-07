@@ -3,13 +3,13 @@ package codegen
 import (
 	_ "embed"
 	"fmt"
+	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/view"
 	"github.com/viant/xreflect"
 	"go/ast"
 	"go/parser"
 	"path"
 	"reflect"
-	"strconv"
 	"strings"
 )
 
@@ -192,16 +192,6 @@ func buildParameter(field *ast.Field, types *xreflect.Types) (*Parameter, error)
 	return param, nil
 }
 
-func updateSQLTag(field *ast.Field, SQL string) {
-	if SQL == "" {
-		return
-	}
-
-	SQL = strings.ReplaceAll(SQL, "\n", "   ")
-	field.Tag.Value = "`" + strings.Trim(field.Tag.Value, "`") + fmt.Sprintf(` sql:%v`, strconv.Quote(SQL)) + "`"
-
-}
-
 func extractSQL(field *ast.Field) string {
 	SQL := ""
 	if field.Doc != nil {
@@ -217,7 +207,7 @@ func extractSQL(field *ast.Field) string {
 //go:embed tmpl/state.gox
 var stateGoTemplate string
 
-func (t *Template) GenerateState(pkg string) string {
+func (t *Template) GenerateState(pkg string, info *plugin.Info) string {
 	pkg = t.getPakcage(pkg)
 	if len(t.State) == 0 {
 		return ""
@@ -228,6 +218,18 @@ func (t *Template) GenerateState(pkg string) string {
 		fields = append(fields, input.FieldDeclaration())
 	}
 	output = strings.Replace(output, "$Fields", strings.Join(fields, "\n\n"), 1)
+
+	importFragment := ""
+	imports := Imports{}
+	imports.AddPackage(info.ChecksumPkg())
+	switch info.IntegrationMode {
+	case plugin.ModeExtension, plugin.ModeCustomTypeModule:
+		importFragment = imports.PackageImports()
+	}
+	output = strings.Replace(output, "$Imports", importFragment, 1)
+
+	registerTypes := t.RegisterFragment("State")
+	output = strings.Replace(output, "$RegisterTypes", registerTypes, 1)
 	return output
 }
 

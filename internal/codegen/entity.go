@@ -63,11 +63,17 @@ func (t *Template) generateRegisterType() string {
 		if param.In.Kind != view.KindDataView {
 			continue
 		}
-		initElements = append(initElements, fmt.Sprintf(registerTypeTemplate, param.Schema.DataType, param.Schema.DataType))
+		registerFragment := t.RegisterFragment(param.Schema.DataType)
+		initElements = append(initElements, registerFragment)
 	}
 
 	initCode := strings.Join(initElements, "\n")
 	return initCode
+}
+
+func (t *Template) RegisterFragment(dataType string) string {
+	registerFragment := fmt.Sprintf(registerTypeTemplate, dataType, dataType)
+	return registerFragment
 }
 
 func (t *Template) generateMapTypeBody() string {

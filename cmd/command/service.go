@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/internal/codegen/ast"
+	"github.com/viant/datly/internal/plugin"
 	"os"
 	"os/exec"
 )
@@ -72,13 +73,13 @@ func (s *Service) prepareBuild(ctx context.Context, build *options.Build) error 
 	return nil
 }
 
-func (s *Service) generateTemplateFiles(gen *options.Gen, template *codegen.Template, opts ...codegen.Option) ([]*File, error) {
+func (s *Service) generateTemplateFiles(gen *options.Gen, template *codegen.Template, info *plugin.Info, opts ...codegen.Option) ([]*File, error) {
 
 	var files []*File
 	switch gen.Lang {
 	case ast.LangGO:
 
-		handler, index, err := template.GenerateHandler(gen)
+		handler, index, err := template.GenerateHandler(gen, info)
 		if err != nil {
 			return nil, err
 		}
