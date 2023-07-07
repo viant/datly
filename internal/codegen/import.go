@@ -63,17 +63,17 @@ func (i *Imports) PackageImports() string {
 	}
 	builder := strings.Builder{}
 	builder.WriteString("\nimport (")
-	i.rawImports(builder)
+	i.rawImports(&builder)
 	builder.WriteByte(')')
 	return builder.String()
 }
 
 func (i *Imports) RawImports() string {
 	builder := strings.Builder{}
-	i.rawImports(builder)
+	i.rawImports(&builder)
 	return builder.String()
 }
-func (i *Imports) rawImports(builder strings.Builder) {
+func (i *Imports) rawImports(builder *strings.Builder) {
 	for _, item := range i.Packages {
 		builder.WriteString("\t\"")
 		builder.WriteString(item)

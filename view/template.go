@@ -250,19 +250,29 @@ func (t *Template) EvaluateState(externalParams interface{}, presenceMap interfa
 
 func (t *Template) EvaluateStateWithSession(externalParams interface{}, presenceMap interface{}, parentParam *expand.MetaParam, batchData *BatchData, sess *session.Session, options ...interface{}) (*expand.State, error) {
 	var expander expand.Expander
+	var dataUnit *expand.DataUnit
 	for _, option := range options {
 		switch actual := option.(type) {
 		case expand.Expander:
 			expander = actual
+		case *expand.DataUnit:
+			dataUnit = actual
 		}
 	}
 
-	return Evaluate(
-		t.sqlEvaluator,
+	ops := []expand.StateOption{
 		expand.WithParameters(externalParams, presenceMap),
 		expand.WithViewParam(AsViewParam(t._view, nil, batchData, expander)),
 		expand.WithParentViewParam(parentParam),
 		expand.WithSession(sess),
+	}
+
+	if dataUnit != nil {
+		ops = append(ops, expand.WithDataUnit(dataUnit))
+	}
+	return Evaluate(
+		t.sqlEvaluator,
+		ops...,
 	)
 }
 

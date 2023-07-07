@@ -609,7 +609,7 @@ func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) 
 	dSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
 	fmt.Printf("%v %v\n", dSQL, err)
 
-	return dSQL + "$" + entityParam.Name + "", err
+	return dSQL + fmt.Sprintf("$Nop($%v)", entityParam.Name), err
 }
 
 func simpledName(typeName string) string {
