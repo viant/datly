@@ -222,7 +222,7 @@ func (t *Template) GenerateState(pkg string, info *plugin.Info) string {
 	registerTypes := t.RegisterFragment("State")
 
 	importFragment := ""
-	imports := Imports{}
+	imports := NewImports()
 	imports.AddPackage(info.ChecksumPkg())
 	switch info.IntegrationMode {
 	case plugin.ModeExtension, plugin.ModeCustomTypeModule:
