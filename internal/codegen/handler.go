@@ -39,7 +39,11 @@ func (t *Template) GenerateHandler(opts *options.Gen, info *plugin.Info) (string
 	handlerContent = strings.Replace(handlerContent, "$LocalVariable", localVariableDeclaration, 1)
 	registerTypes := t.RegisterFragment("Handler")
 	handlerContent = strings.Replace(handlerContent, "$RegisterTypes", registerTypes, 1)
-	handlerContent = strings.Replace(handlerContent, "$ChecksumImport", `"`+info.ChecksumPkg()+`"`, 1)
+	imports := NewImports()
+	imports.AddPackage(info.ChecksumPkg())
+	imports.AddPackage(info.TypeCorePkg())
+	imports.AddPackage("reflect")
+	handlerContent = strings.Replace(handlerContent, "$RawImports", imports.RawImports(), 1)
 
 	info.ChecksumPkg()
 	logic := builder.String()

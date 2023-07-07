@@ -223,6 +223,8 @@ func (t *Template) GenerateState(pkg string, info *plugin.Info) string {
 	importFragment := ""
 	imports := NewImports()
 	imports.AddPackage(info.ChecksumPkg())
+	imports.AddPackage("reflect")
+	imports.AddPackage(info.TypeCorePkg())
 	switch info.IntegrationMode {
 	case plugin.ModeExtension, plugin.ModeCustomTypeModule:
 		importFragment = imports.PackageImports()
