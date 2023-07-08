@@ -498,7 +498,6 @@ func (s *Builder) newRouteBuilder(routerResource *router.Resource, paramIndex *P
 }
 
 func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts *constFileContent, viewCaches *[]*view.Cache) error {
-
 	if err := s.loadSQL(ctx, builder, builder.session.sourceURL); err != nil {
 		return err
 	}
@@ -609,8 +608,6 @@ func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) 
 	//builder.option.TypeSrc.Types = append(builder.option.TypeSrc.Types, builder.option.HandlerType, builder.option.StateType)
 
 	dSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
-	fmt.Printf("%v %v\n", dSQL, err)
-
 	return dSQL + fmt.Sprintf("$Nop($%v)", entityParam.Name), err
 }
 
@@ -869,7 +866,6 @@ func (s *Builder) initRouteRequestBodySchemaIfNeeded(builder *routeBuilder) erro
 	if bodyType == "" {
 		return nil
 	}
-
 	builder.route.RequestBodySchema = &view.Schema{DataType: bodyType}
 	return nil
 }
@@ -1318,7 +1314,6 @@ func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
 			for _, candidate := range paramViewConfig.params {
 				if candidate.Name == childViewConfig.viewName && candidate.ParameterConfig.DataType != "" {
 					dataType := candidate.ParameterConfig.DataType
-
 					aView.Schema = &view.Schema{
 						DataType:    dataType,
 						Cardinality: candidate.ParameterConfig.Cardinality,
@@ -1383,9 +1378,9 @@ func (s *Builder) prepareExternalParameters(builder *routeBuilder, paramViewConf
 			}
 
 			externalParams = append(externalParams, authParam)
-			if parameter.Connector != "" {
-				paramViewConfig.viewConfig.unexpandedTable.Connector = parameter.Connector
-			}
+		}
+		if parameter.Connector != "" {
+			paramViewConfig.viewConfig.unexpandedTable.Connector = parameter.Connector
 		}
 	}
 
@@ -1416,7 +1411,6 @@ func (s *Builder) updateParamByHint(resource *view.Resource, paramIndex *Paramet
 	if !ok {
 		return nil
 	}
-
 	JSONHint, SQL := sanitize.SplitHint(hint.Hint)
 	JSONHint = strings.TrimSpace(JSONHint)
 	if JSONHint == "" {
@@ -1427,7 +1421,6 @@ func (s *Builder) updateParamByHint(resource *view.Resource, paramIndex *Paramet
 	if err := tryUnmarshalHint(JSONHint, paramConfig); err != nil {
 		return err
 	}
-
 	return s.updateViewParam(resource, param, paramConfig, SQL, paramIndex)
 }
 
@@ -1455,11 +1448,18 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 
 	param.In.Kind = view.Kind(view.FirstNotEmpty(config.Kind, string(param.In.Kind)))
 	paramType, err := s.Type(resource, view.FirstNotEmpty(config.DataType, param.Schema.DataType))
+
 	if err != nil {
 		return err
 	}
 
 	param.Schema.DataType = paramType
+	if config.Cardinality == view.Many {
+		param.Schema.Cardinality = view.Many
+		//if !strings.HasPrefix(paramType, "[]") {
+		//	param.Schema.Type = "[]" + paramType
+		//}
+	}
 
 	if config.Codec != "" {
 		if param.Output == nil {
@@ -1471,6 +1471,10 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 
 	if config.MaxAllowedRecords != nil {
 		param.MaxAllowedRecords = config.MaxAllowedRecords
+	}
+
+	if config.ExpectReturned != nil {
+		param.ExpectedReturned = config.ExpectReturned
 	}
 
 	if config.MinAllowedRecords != nil {
@@ -1849,7 +1853,6 @@ func (s *Builder) buildParamHint(builder *routeBuilder, selector *expr.Select, c
 
 	holderName := strings.Trim(view.FirstNotEmpty(selector.FullName, selector.ID), "${}")
 	hint, SQL := sanitize.SplitHint(paramHint)
-
 	if pathStartIndex := strings.Index(holderName, "."); pathStartIndex >= 0 {
 
 		aTransform := &option.TransformOption{}
@@ -1963,6 +1966,13 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 }
 
 func (s *Builder) tryUpdateConfigType(typeContent string, aConfig *paramJSONHintConfig) {
+
+	//aConfig.Cardinality = view.One
+	//if strings.HasPrefix(typeContent, "[]") {
+	//	aConfig.Cardinality = view.Many
+	//	typeContent = typeContent[2:]
+	//}
+
 	if typeContent == "?" {
 		return
 	}
@@ -1975,7 +1985,6 @@ func (s *Builder) tryUpdateConfigType(typeContent string, aConfig *paramJSONHint
 	} else {
 		aConfig.Cardinality = view.One
 	}
-
 	aConfig.DataType = dataType
 	if len(types) > 1 {
 		aConfig.CodecType = types[1]
@@ -1990,7 +1999,6 @@ func mergeJsonStructs(args ...interface{}) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-
 		if string(marshalled) == "null" || string(marshalled) == "" {
 			continue
 		}

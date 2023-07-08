@@ -15,14 +15,15 @@ import(
 
 #set($_ = $Jwt)
 #set($_ = $Events<*Events>(body/))
+#set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401).UtilParam())
+#set($_ = $Acl<?>(data_view/Acl)/*
+    {"Connector":"dyndb", "Cardinality":"One"}
+      SELECT USER_ID AS UserID,
+      ARRAY_EXISTS(ROLE, 'READ_ONLY') AS IsReadOnly,
+      ARRAY_EXISTS(FEATURE1, 'FEATURE1') AS Feature1
+      FROM USER_ACL WHERE USER_ID = $Jwt.UserID
+*/)
 
-#set($Acl = $Unsafe.UserAcl /*
-  { "Auth":"Jwt", "Connector":"dyndb" }
-                          SELECT USER_ID AS UserID,
-                          ARRAY_EXISTS(ROLE, 'READ_ONLY') AS IsReadOnly,
-                          ARRAY_EXISTS(FEATURE1, 'FEATURE1') AS Feature1
-                          FROM $DB["dyndb"].USER_ACL WHERE USER_ID = $Jwt.UserID
- */)
 
 $sequencer.Allocate("EVENTS", $Events, "Id")
 $sequencer.Allocate("EVENTS_PERFORMANCE", $Events, "EventsPerformance/Id")
@@ -36,6 +37,6 @@ INSERT INTO EVENTS (
     ID,
     QUANTITY
 ) VALUES (
-    $Events.Id /* {"DataType":"Events","Target":"","Cardinality":"One"} */ ,
+    $Events.Id,
     $Events.Quantity
 );

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"github.com/viant/afs/file"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
@@ -49,9 +48,6 @@ func (s *Builder) buildTemplate(ctx context.Context, builder *routeBuilder, aVie
 
 func (s *Builder) uploadTemplateSQL(builder *routeBuilder, template string, aViewConfig *ViewConfig) (SQL string, URI string, err error) {
 	SQL, err = sanitize.Sanitize(template, builder.paramsIndex.hints, builder.paramsIndex.consts)
-	fmt.Printf("AFTER SANI: %s\n", SQL)
-	fmt.Printf("hints: %+v\n", builder.paramsIndex.hints)
-
 	if err != nil {
 		return "", "", err
 	}
@@ -409,6 +405,7 @@ func (t *Template) detectParameters(statements []ast.Statement, required bool, r
 			if xType == nil {
 				xType = actual.Y.Type()
 			}
+
 			t.detectParameters([]ast.Statement{actual.X, actual.Y}, false, xType, false)
 		case *expr.Parentheses:
 			t.detectParameters([]ast.Statement{actual.P}, false, actual.Type(), false)
@@ -566,7 +563,6 @@ func (t *Template) updateParamIfNeeded(param *Parameter, meta *sanitize.ParamMet
 	if err != nil {
 		return err
 	}
-
 	param.Assumed = param.Assumed && oldType == param.DataType
 	param.Typer = meta.MetaType.Typer
 

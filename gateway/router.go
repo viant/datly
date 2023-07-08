@@ -113,7 +113,6 @@ func (r *Router) handle(writer http.ResponseWriter, request *http.Request, recor
 
 	errStatusCode, err := r.handleWithError(writer, request, r.routeMatcher, record)
 	if record != nil {
-		fmt.Println(5)
 		fmt.Printf("err: %v\n", err)
 	}
 

@@ -247,9 +247,6 @@ func (p *RequestParams) extractBodyByPath(param *view.Parameter, err error) (int
 }
 
 func (p *RequestParams) readBody() error {
-
-	fmt.Printf("BODY TYPE: %s\n", p.route._requestBodyType.String())
-
 	if p.request.Body == nil || p.readRequestBody {
 		return p.requestBodyErr
 	}

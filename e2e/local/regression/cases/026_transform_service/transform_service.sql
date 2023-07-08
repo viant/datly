@@ -23,7 +23,7 @@ INSERT INTO EVENTS (
     ID,
     QUANTITY
 ) VALUES (
-    $Events.Id /* {"DataType":"Events","Target":"","Cardinality":"One"} */ ,
+    $Events.Id ,
     $Events.Quantity
 );
 

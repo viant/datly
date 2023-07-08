@@ -51,14 +51,15 @@ func (c *Schema) Type() reflect.Type {
 }
 
 func (c *Schema) SetType(rType reflect.Type) {
+	if rType.Kind() == reflect.Slice { //i.e []int
+		c.Cardinality = Many
+	}
 	if c.Cardinality == "" {
 		c.Cardinality = One
 	}
-
-	if c.Cardinality == Many {
+	if c.Cardinality == Many && rType.Kind() != reflect.Slice {
 		rType = reflect.SliceOf(rType)
 	}
-
 	c.compType = rType
 	c.updateSliceType()
 }
@@ -97,6 +98,10 @@ func (c *Schema) Init(resource *Resource, viewCaseFormat format.Case, options ..
 	}
 
 	c.initialized = true
+
+	if strings.Contains(c.DataType, "[]") {
+		c.Cardinality = Many
+	}
 	if c.Cardinality != Many {
 		c.Cardinality = One
 	}
