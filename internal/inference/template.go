@@ -172,6 +172,7 @@ func (t *Template) parseSelectAndAppend(actual *expr.Select, required bool, rTyp
 		parameter.Schema.DataType = column.Type
 	}
 	if operator == "in" {
+		parameter.Schema.Cardinality = view.Many
 		//TODO add condec asStrings, or asInts
 	}
 	t.State.Append(parameter)

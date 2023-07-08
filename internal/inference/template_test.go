@@ -32,6 +32,7 @@ func TestTemplate_DetectParameters(t *testing.T) {
 				"Id": "int",
 			},
 		},
+		//				SQL: `SELECT 1 FROM bar b WHERE b.ID = $Entity.Id AND b.Name = $Entity.Name
 		{
 			description: "if statement",
 			template: &Template{
