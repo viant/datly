@@ -6,11 +6,11 @@ import (
 )
 
 #set($_ = $Preference<*Preference>(body/))
-#set($_ = $className<string>(query/className))
 #set($_ = $Preference.Object /*
         {"TransformKind": "Unmarshal"}
         $decoder.UnmarshalInto($request.QueryParam("className"), true)
     */)
+#set($_ = $className<string>(query/className))
 
 
 #if($Unsafe.Preference)

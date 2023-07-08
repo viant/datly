@@ -35,9 +35,6 @@ func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column,
 	}
 	columns, SQL, err := detectColumns(ctx, evaluation, v)
 	if err != nil {
-		panic(err)
-	}
-	if err != nil {
 		return nil, "", err
 	}
 

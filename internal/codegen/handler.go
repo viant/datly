@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/codegen/ast"
+	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/view"
 	"strings"
@@ -13,7 +14,7 @@ import (
 var handlerTemplate string
 
 func (t *Template) GenerateHandler(opts *options.Gen, info *plugin.Info) (string, string, error) {
-	fields, localVariableDeclaration := t.State.localStateBasedVariableDefinition()
+	fields, localVariableDeclaration := t.State.HandlerLocalVariables()
 	t.Config.HandlerType = opts.HandlerType()
 	t.Config.StateType = opts.StateType()
 	t.Config.ResponseBody = nil
@@ -42,7 +43,7 @@ func (t *Template) GenerateHandler(opts *options.Gen, info *plugin.Info) (string
 	registry.register("Handler")
 	registerTypes := registry.stringify()
 	handlerContent = strings.Replace(handlerContent, "$RegisterTypes", registerTypes, 1)
-	imports := NewImports()
+	imports := inference.NewImports()
 	imports.AddPackage(info.ChecksumPkg())
 	imports.AddPackage(info.TypeCorePkg())
 	imports.AddPackage("reflect")

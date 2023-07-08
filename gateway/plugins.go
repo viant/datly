@@ -94,7 +94,6 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 
 	for _, pluginChanges := range pluginsData {
 		for _, change := range pluginChanges.changes {
-			fmt.Printf("ACTUAL: %T %v\n", change, change)
 			switch actual := change.(type) {
 
 			//case *map[string]reflect.Type:
@@ -156,7 +155,6 @@ func (r *Service) loadPlugin(ctx context.Context, URL string, aChan chan func() 
 		return aData, err
 	}
 
-	fmt.Printf("123\n")
 }
 
 func (r *Service) loadPluginData(ctx context.Context, URL string) (*pluginData, error) {

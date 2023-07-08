@@ -10,6 +10,7 @@ type OutputConfig struct {
 	Field       string
 	Kind        string
 	Cardinality view.Cardinality
+	DataType    string
 }
 
 func (o *OutputConfig) IsMany() bool {

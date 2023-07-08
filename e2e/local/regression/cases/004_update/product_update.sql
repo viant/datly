@@ -1,4 +1,6 @@
-/* {"URI":"auth/products/", "Method":"POST" , "Declare":{"Ids":"[]int", "Authorized":"bool", "IS_AUTH": "bool"}} */
+/* {"URI":"auth/products/", "Method":"POST", "Authorized":"bool", "IS_AUTH": "bool"} */
+
+#set($_ = $Ids<[]int>(body/Ids))
 
 
 #foreach($rec in $Unsafe.Records /*

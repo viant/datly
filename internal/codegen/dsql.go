@@ -29,7 +29,7 @@ func (t *Template) generateDSQL(options ast.Options) (string, error) {
 	var imports, declaration, businessLogic string
 	if options.Lang == ast.LangVelty {
 		imports = t.Imports.TypeImports()
-		declaration = t.dsqlParameterDeclaration()
+		declaration = t.State.DsqlParameterDeclaration()
 		builder := ast.NewBuilder(options)
 		if t.BusinessLogic != nil {
 			err = t.BusinessLogic.Generate(builder)

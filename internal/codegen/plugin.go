@@ -2,6 +2,7 @@ package codegen
 
 import (
 	_ "embed"
+	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
 	"strings"
 	"time"
@@ -18,7 +19,7 @@ func (p *Plugin) GenerateDependency(info *plugin.Info) string {
 }
 
 func (p *Plugin) getImports(info *plugin.Info) string {
-	imports := NewImports()
+	imports := inference.NewImports()
 	if len(info.CustomTypesPackages) == 0 {
 		return ""
 	}
@@ -39,7 +40,7 @@ func (p *Plugin) GenerateChecksum(info *plugin.Info) string {
 var mainGoTemplate string
 
 func (p *Plugin) GeneratePlugin(info *plugin.Info) string {
-	imports := NewImports()
+	imports := inference.NewImports()
 	imports.AddPackage(info.DependencyPkg())
 	return strings.Replace(mainGoTemplate, "$Imports", imports.DefaultPackageImports(), 1)
 }

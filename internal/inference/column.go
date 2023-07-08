@@ -1,4 +1,4 @@
-package codegen
+package inference
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	"github.com/viant/sqlx/metadata/sink"
 	"strings"
 )
+
+type ColumnParameterNamer func(column *Field) string
 
 func detectColumns(ctx context.Context, db *sql.DB, SQL, table string) (sqlparser.Columns, error) {
 	SQL = trimParenthesis(SQL)
@@ -25,6 +27,7 @@ func detectColumns(ctx context.Context, db *sql.DB, SQL, table string) (sqlparse
 			byName = sink.Columns(sinkColumns).By(sink.ColumnName.Key)
 		}
 	}
+
 	stmt, err := db.PrepareContext(ctx, SQL)
 	if err != nil {
 		return nil, err

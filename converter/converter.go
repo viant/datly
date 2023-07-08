@@ -13,6 +13,31 @@ type Unmarshaller func([]byte, interface{}) error
 
 func Convert(raw string, toType reflect.Type, skipValidation bool, format string, options ...interface{}) (value interface{}, wasNil bool, err error) {
 	switch toType.Kind() {
+	case reflect.Slice:
+		switch toType.Elem().Kind() {
+		case reflect.Int:
+			v, err := NewRepeated(raw, true).AsInts()
+			return v, false, err
+		case reflect.Uint64:
+			v, err := NewRepeated(raw, true).AsUInt64s()
+			return v, false, err
+		case reflect.Int64:
+			v, err := NewRepeated(raw, true).AsInt64s()
+			return v, false, err
+		case reflect.Uint:
+			v, err := NewRepeated(raw, true).AsUInts()
+			return v, false, err
+		case reflect.String:
+			v := NewRepeated(raw, false)
+			return v, false, nil
+		case reflect.Float64:
+			v, err := NewRepeated(raw, true).AsFloats64()
+			return v, false, err
+		case reflect.Float32:
+			v, err := NewRepeated(raw, true).AsFloats32()
+			return v, false, err
+
+		}
 	case reflect.Bool:
 		parseBool, err := strconv.ParseBool(raw)
 		return parseBool, false, err
@@ -20,7 +45,6 @@ func Convert(raw string, toType reflect.Type, skipValidation bool, format string
 		if raw == "" {
 			return 0, false, nil
 		}
-
 		atoi, err := strconv.Atoi(raw)
 		return atoi, false, err
 	case reflect.Int8:

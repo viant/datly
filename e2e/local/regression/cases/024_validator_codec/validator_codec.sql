@@ -1,16 +1,25 @@
 /* {
    "URI":"basic/events-validator",
    "Method":"POST",
-   "Declare":{"Events":"*regression/cases/024_validator_codec.Events"},
    "ResponseBody": {"From": "Events" }
    } */
+
+import (
+    "regression/cases/024_validator_codec.Events"
+)
+
+
+#set($_ = $Events<*Events>(body/))
+#set($_  = $EventTypes<?>(param/Events) /*
+     SELECT Price, Timestamp FROM `/EventsPerformance`
+*/)
 
 $sequencer.Allocate("EVENTS", $Events, "Id")
 $sequencer.Allocate("EVENTS_PERFORMANCE", $Events, "EventsPerformance/Id")
 
-#set($eTypes = $Unsafe.EventTypes /* { "Codec": "structql", "DataType": "Events", "Target": "" }
-    SELECT Price, Timestamp FROM `EventsPerformance`
-*/)
+#set($eTypes = $Unsafe.EventTypes)
+
+$logger.Printf("eTypes: %v", $eTypes)
 
 #set($validationResult = $http.Do("POST", "http://localhost:8871/dev/validate/event-perf", $eTypes))
 #if($validationResult.Invalid)
@@ -21,7 +30,7 @@ INSERT INTO EVENTS (
     ID,
     QUANTITY
 ) VALUES (
-    $Events.Id /* {"DataType":"Events","Target":"","Cardinality":"One"} */ ,
+    $Events.Id,
     $Events.Quantity
 );
 

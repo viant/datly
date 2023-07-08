@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"github.com/viant/afs/file"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
@@ -49,9 +48,6 @@ func (s *Builder) buildTemplate(ctx context.Context, builder *routeBuilder, aVie
 
 func (s *Builder) uploadTemplateSQL(builder *routeBuilder, template string, aViewConfig *ViewConfig) (SQL string, URI string, err error) {
 	SQL, err = sanitize.Sanitize(template, builder.paramsIndex.hints, builder.paramsIndex.consts)
-	fmt.Printf("AFTER SANI: %s\n", SQL)
-	fmt.Printf("hints: %+v\n", builder.paramsIndex.hints)
-
 	if err != nil {
 		return "", "", err
 	}
@@ -147,8 +143,8 @@ func convertMetaParameter(param *Parameter, values map[string]interface{}, hints
 	}
 
 	targetName := param.Name
-	if param.Target != nil {
-		targetName = *param.Target
+	if param.Location != nil {
+		targetName = *param.Location
 	}
 
 	cardinality := param.Cardinality
@@ -217,7 +213,7 @@ func canInferAsIntsCodec(param *Parameter, dataTypeLower string) bool {
 		return false
 	}
 
-	return strings.HasPrefix(dataTypeLower, "int")
+	return strings.HasPrefix(dataTypeLower, "int") && param.Cardinality == view.One
 }
 
 func updateParamPrecedence(dest *view.Parameter, source *view.Parameter) {
@@ -567,7 +563,6 @@ func (t *Template) updateParamIfNeeded(param *Parameter, meta *sanitize.ParamMet
 	if err != nil {
 		return err
 	}
-
 	param.Assumed = param.Assumed && oldType == param.DataType
 	param.Typer = meta.MetaType.Typer
 

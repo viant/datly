@@ -1,4 +1,4 @@
-package codegen
+package inference
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 )
 
 type (
+	//Relation defines relation
 	Relation struct {
 		Name        string
 		Join        *query.Join
@@ -23,22 +24,25 @@ type (
 		Cardinality view.Cardinality
 		*Spec
 	}
+
+	//Spec defines table/sql base specification
 	Spec struct {
-		Parent       *Spec
-		InnserColumn []string
-		isAuxiliary  bool
-		Table        string
-		SQL          string
-		Columns      sqlparser.Columns
-		pk           map[string]sink.Key
-		Fk           map[string]sink.Key
-		Type         *Type
-		Relations    []*Relation
+		Parent      *Spec
+		IsAuxiliary bool
+		Table       string
+		SQL         string
+		Columns     sqlparser.Columns
+		pk          map[string]sink.Key
+		Fk          map[string]sink.Key
+		Type        *Type
+		Relations   []*Relation
 	}
 
+	//Selector defines selector
 	Selector []string
 )
 
+//BuildType build a type from infered table/SQL definition
 func (s *Spec) BuildType(pkg, name string, cardinality view.Cardinality, whitelist, blacklist map[string]bool) error {
 	var aType = &Type{Package: pkg, Name: name, Cardinality: cardinality}
 
@@ -59,14 +63,14 @@ func (s *Spec) BuildType(pkg, name string, cardinality view.Cardinality, whiteli
 		key := strings.ToLower(field.Column.Name)
 		if pk, ok := s.pk[key]; ok {
 			field.Pk = &pk
-			aType.pkFields = append(aType.pkFields, field)
+			aType.PkFields = append(aType.PkFields, field)
 		}
-
 	}
 	s.Type = aType
 	return nil
 }
 
+//TypeDefinition builds spec based tyep definition
 func (s *Spec) TypeDefinition(wrapper string) *view.TypeDefinition {
 	typeDef := &view.TypeDefinition{
 		Package:     s.Type.Package,
@@ -107,6 +111,7 @@ func (s *Spec) shouldSkipColumn(whitelist, blacklist map[string]bool, column *sq
 	return false
 }
 
+//AddRelation adds relations
 func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinality view.Cardinality) {
 	if isToOne(join) {
 		cardinality = view.One
@@ -122,6 +127,7 @@ func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinalit
 	s.Type.AddRelation(name, spec, rel)
 }
 
+//Selector returns current sepcifiction selector (path from root)
 func (s *Spec) Selector() Selector {
 	if s.Parent != nil {
 		return append(s.Parent.Selector(), s.Type.Name)
@@ -129,14 +135,16 @@ func (s *Spec) Selector() Selector {
 	return []string{s.Type.Name}
 }
 
-func (s *Spec) pkStructQL(selector Selector) (*Field, string) {
-	for _, field := range s.Type.pkFields { //TODO add  multi key support
+//PkStructQL crates a PK struct SQL
+func (s *Spec) PkStructQL(selector Selector) (*Field, string) {
+	for _, field := range s.Type.PkFields { //TODO add  multi key support
 		return field, fmt.Sprintf("? SELECT ARRAY_AGG(%v) AS Values FROM  `%v` LIMIT 1", field.Name, selector.Path())
 	}
 	return nil, ""
 }
 
-func (s *Spec) viewSQL(columnParameter ColumnParameterNamer) string {
+//ViewSQL return structQL SQL for relation
+func (s *Spec) ViewSQL(columnParameter ColumnParameterNamer) string {
 	builder := &strings.Builder{}
 	if s.SQL != "" {
 		builder.WriteString(s.SQL)
@@ -146,7 +154,7 @@ func (s *Spec) viewSQL(columnParameter ColumnParameterNamer) string {
 	}
 
 	var i int
-	for _, field := range s.Type.pkFields {
+	for _, field := range s.Type.PkFields {
 		if i == 0 {
 			builder.WriteString("\nWHERE ")
 		} else {
@@ -167,7 +175,7 @@ func NewSpec(ctx context.Context, db *sql.DB, table, SQL string) (*Spec, error) 
 	if table == "" && SQL == "" {
 		return nil, fmt.Errorf("both table/SQL were empty")
 	}
-	var result = &Spec{Table: table, SQL: SQL, isAuxiliary: isAuxiliary}
+	var result = &Spec{Table: table, SQL: SQL, IsAuxiliary: isAuxiliary}
 	var columns sqlparser.Columns
 	var err error
 	if SQL != "" {
@@ -216,4 +224,14 @@ func isAuxiliary(SQL string) bool {
 
 func isToOne(join *query.Join) bool {
 	return strings.Contains(sqlparser.Stringify(join.On), "1 = 1")
+}
+
+func normalizeSQL(SQL string, table string) string {
+	SQL = strings.Replace(SQL, "("+table+")", table, 1)
+	return SQL
+}
+
+func normalizeTable(table string) string {
+	table = trimParenthesis(table)
+	return table
 }

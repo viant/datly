@@ -1,6 +1,8 @@
-package codegen
+package inference
 
-import "strings"
+import (
+	"strings"
+)
 
 func (s Selector) Name() string {
 	return strings.Join(s, "")

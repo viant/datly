@@ -38,7 +38,6 @@ func SplitHint(hint string) (marshal string, SQL string) {
 	if strings.HasSuffix(hint, "*/") {
 		hint = hint[:len(hint)-2]
 	}
-
 	hint = strings.TrimSpace(hint)
 	hintCursor := parsly.NewCursor("", []byte(hint), 0)
 	matched := hintCursor.MatchOne(scopeBlockMatcher)

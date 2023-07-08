@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/cmd/option"
 	ast "github.com/viant/datly/internal/codegen/ast"
+	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/view"
 	"github.com/viant/xreflect"
 	"reflect"
@@ -13,18 +14,16 @@ import (
 
 type (
 	Template struct {
-		Spec    *Spec
+		Spec    *inference.Spec
 		Config  *option.RouteConfig
 		TypeDef *view.TypeDefinition
-		Imports
-		State
+		inference.Imports
+		inference.State
 		BusinessLogic *ast.Block
 		paramPrefix   string
 		recordPrefix  string
 		StateType     reflect.Type
 	}
-
-	ColumnParameterNamer func(column *Field) string
 )
 
 const (
@@ -52,15 +51,15 @@ func (t *Template) ParamIndexName(name, by string) string {
 	return t.ParamPrefix() + name + "By" + by
 }
 
-func (t *Template) ColumnParameterNamer(selector Selector) ColumnParameterNamer {
+func (t *Template) ColumnParameterNamer(selector inference.Selector) inference.ColumnParameterNamer {
 	prefix := t.ParamPrefix() + selector.Name()
-	return func(field *Field) string {
+	return func(field *inference.Field) string {
 		return prefix + field.Name
 	}
 }
 
-func (t *Template) BuildState(spec *Spec, bodyHolder string, opts ...Option) {
-	t.State = State{}
+func (t *Template) BuildState(spec *inference.Spec, bodyHolder string, opts ...Option) {
+	t.State = inference.State{}
 	options := &Options{}
 	options.apply(opts)
 	bodyParam := t.buildBodyParameter(spec, bodyHolder)
@@ -87,15 +86,15 @@ func (t *Template) BuildState(spec *Spec, bodyHolder string, opts ...Option) {
 	t.StateType = reflect.StructOf(structFields)
 }
 
-func (t *Template) buildBodyParameter(spec *Spec, bodyHolder string) *Parameter {
-	param := &Parameter{}
+func (t *Template) buildBodyParameter(spec *inference.Spec, bodyHolder string) *inference.Parameter {
+	param := &inference.Parameter{}
 	param.Name = spec.Type.Name
 	param.Schema = &view.Schema{DataType: spec.Type.Name, Cardinality: spec.Type.Cardinality}
 	param.In = &view.Location{Kind: view.KindRequestBody, Name: bodyHolder}
 	return param
 }
 
-func (t *Template) BuildLogic(spec *Spec, opts ...Option) {
+func (t *Template) BuildLogic(spec *inference.Spec, opts ...Option) {
 	block := ast.Block{}
 	options := &Options{}
 	options.apply(opts)
@@ -110,14 +109,14 @@ func (t *Template) BuildLogic(spec *Spec, opts ...Option) {
 	t.BusinessLogic = &block
 }
 
-func (t *Template) allocateSequence(options *Options, spec *Spec, block *ast.Block) {
-	if spec.isAuxiliary {
+func (t *Template) allocateSequence(options *Options, spec *inference.Spec, block *ast.Block) {
+	if spec.IsAuxiliary {
 		return
 	}
-	if len(spec.Type.pkFields) != 1 {
+	if len(spec.Type.PkFields) != 1 {
 		return
 	}
-	if field := spec.Type.pkFields[0]; strings.Contains(field.Schema.DataType, "int") {
+	if field := spec.Type.PkFields[0]; strings.Contains(field.Schema.DataType, "int") {
 		selector := spec.Selector()
 
 		var args = []ast.Expression{ast.NewQuotedLiteral(spec.Table), ast.NewIdent(selector[0]),
@@ -136,12 +135,12 @@ func (t *Template) allocateSequence(options *Options, spec *Spec, block *ast.Blo
 
 }
 
-func (t *Template) indexRecords(options *Options, spec *Spec, block *ast.Block) {
-	if spec.isAuxiliary {
+func (t *Template) indexRecords(options *Options, spec *inference.Spec, block *ast.Block) {
+	if spec.IsAuxiliary {
 		return
 	}
 
-	field := spec.Type.pkFields[0]
+	field := spec.Type.PkFields[0]
 	holder := t.ParamIndexName(spec.Type.Name, field.Name)
 	source := t.ParamName(spec.Type.Name)
 	indexBy := ast.NewCallExpr(ast.NewIdent(source), "IndexBy", ast.NewQuotedLiteral(field.Name))
@@ -151,11 +150,11 @@ func (t *Template) indexRecords(options *Options, spec *Spec, block *ast.Block) 
 	}
 }
 
-func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec *Spec, cardinality view.Cardinality, parentBlock *ast.Block, rel *Relation) {
-	if spec.isAuxiliary {
+func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec *inference.Spec, cardinality view.Cardinality, parentBlock *ast.Block, rel *inference.Relation) {
+	if spec.IsAuxiliary {
 		return
 	}
-	if len(spec.Type.pkFields) != 1 {
+	if len(spec.Type.PkFields) != 1 {
 		return
 	}
 
@@ -200,7 +199,7 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 	}
 }
 
-func (t *Template) synchronizeRefKeys(x, y string, rel *Relation, block *ast.Block) {
+func (t *Template) synchronizeRefKeys(x, y string, rel *inference.Relation, block *ast.Block) {
 	src := ast.Expression(ast.NewIdent(y))
 	if !rel.ParentField.Ptr && rel.KeyField.Ptr {
 		src = ast.NewRefExpression(src)
@@ -212,8 +211,8 @@ func (t *Template) synchronizeRefKeys(x, y string, rel *Relation, block *ast.Blo
 	block.Append(assignKey)
 }
 
-func (t *Template) modifyRecord(options *Options, recordPath string, spec *Spec, block *ast.Block) {
-	field := spec.Type.pkFields[0]
+func (t *Template) modifyRecord(options *Options, recordPath string, spec *inference.Spec, block *ast.Block) {
+	field := spec.Type.PkFields[0]
 	fieldPath := recordPath + "." + field.Name
 	recordSelector := ast.NewIdent(recordPath)
 	fieldSelector := ast.NewIdent(fieldPath)
@@ -245,7 +244,7 @@ func (t *Template) modifyRecord(options *Options, recordPath string, spec *Spec,
 	}
 }
 
-func (t *Template) insert(options *Options, selector *ast.Ident, spec *Spec, block *ast.Block) {
+func (t *Template) insert(options *Options, selector *ast.Ident, spec *inference.Spec, block *ast.Block) {
 	if options.withDML {
 		return
 	}
@@ -265,7 +264,7 @@ func (t *Template) swapArgs(args []ast.Expression) {
 	args[0], args[1] = args[1], args[0]
 }
 
-func (t *Template) update(options *Options, selector *ast.Ident, spec *Spec, block *ast.Block) {
+func (t *Template) update(options *Options, selector *ast.Ident, spec *inference.Spec, block *ast.Block) {
 	if options.withDML {
 		return
 	}
@@ -286,7 +285,7 @@ func (t *Template) RecordPrefix() string {
 	return recordPrefix
 }
 
-func (t *Template) BuildTypeDef(spec *Spec, wrapperField string) {
+func (t *Template) BuildTypeDef(spec *inference.Spec, wrapperField string) {
 	t.TypeDef = spec.TypeDefinition(wrapperField)
 	t.ensurePackageImports(t.TypeDef.Package, t.TypeDef.Fields)
 	t.ensureTypeImport(spec.Type.Name)
@@ -313,13 +312,13 @@ func (t *Template) ensureTypeImport(simpleTypeName string) {
 	t.Imports.AddType(typeName)
 }
 
-func (t *Template) EnsureImports(aType *Type) {
+func (t *Template) EnsureImports(aType *inference.Type) {
 	t.Imports.AddType(aType.TypeName())
-	if len(aType.relationFields) == 0 {
+	if len(aType.RelationFields) == 0 {
 		return
 	}
 
-	for _, field := range aType.relationFields {
+	for _, field := range aType.RelationFields {
 		t.Imports.AddType(aType.ExpandType(field.Schema.DataType))
 	}
 }
@@ -343,6 +342,6 @@ func (t *Template) ensurePackageImports(defaultPkg string, fields []*view.Field)
 	}
 }
 
-func NewTemplate(config *option.RouteConfig, spec *Spec) *Template {
-	return &Template{paramPrefix: paramPrefix, Config: config, Imports: NewImports(), Spec: spec}
+func NewTemplate(config *option.RouteConfig, spec *inference.Spec) *Template {
+	return &Template{paramPrefix: paramPrefix, Config: config, Imports: inference.NewImports(), Spec: spec}
 }
