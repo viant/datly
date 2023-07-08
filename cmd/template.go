@@ -217,7 +217,7 @@ func canInferAsIntsCodec(param *Parameter, dataTypeLower string) bool {
 		return false
 	}
 
-	return strings.HasPrefix(dataTypeLower, "int")
+	return strings.HasPrefix(dataTypeLower, "int") && param.Cardinality == view.One
 }
 
 func updateParamPrecedence(dest *view.Parameter, source *view.Parameter) {

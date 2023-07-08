@@ -1,7 +1,7 @@
-/* {"URI":"auth/products/", "Method":"POST", "Authorized":"bool", "IS_AUTH": "bool"}} */
-
+/* {"URI":"auth/products/", "Method":"POST", "Authorized":"bool", "IS_AUTH": "bool"} */
 
 #set($_ = $Ids<[]int>(body/Ids))
+
 
 #foreach($rec in $Unsafe.Records /*
   {"Auth":"Jwt"}   SELECT ID, STATUS, (IS_PRODUCT_AUTHORIZED($Jwt.UserID, ID)) AS IS_AUTH FROM PRODUCT WHERE ID IN ($Ids)
