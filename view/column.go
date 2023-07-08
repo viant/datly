@@ -7,15 +7,12 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xdatly/handler/parameter"
 	"reflect"
 	"strings"
 )
 
-type foo struct {
-	Interface interface{}
-}
-
-//Column represents view View column
+// Column represents view View column
 type Column struct {
 	Name                string `json:",omitempty"`
 	DataType            string `json:",omitempty"`
@@ -38,17 +35,17 @@ type Column struct {
 	_fieldName    string
 }
 
-//SqlExpression builds column sql expression if any expression specified in format: Expression AS Name
+// SqlExpression builds column sql expression if any expression specified in format: Expression AS Name
 func (c *Column) SqlExpression() string {
 	return c.sqlExpression
 }
 
-//ColumnName returns Column Name
+// ColumnName returns Column Name
 func (c *Column) ColumnName() string {
 	return c.Name
 }
 
-//Init initializes Column
+// Init initializes Column
 func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, config *ColumnConfig) error {
 	if c._initialized {
 		return nil
@@ -168,10 +165,10 @@ func (c *Column) inherit(config *ColumnConfig) {
 	}
 }
 
-//Columns wrap slice of Column
+// Columns wrap slice of Column
 type Columns []*Column
 
-//ColumnIndex represents *Column registry.
+// ColumnIndex represents *Column registry.
 type ColumnIndex map[string]*Column
 
 func (c ColumnIndex) ColumnName(key string) (string, error) {
@@ -183,7 +180,16 @@ func (c ColumnIndex) ColumnName(key string) (string, error) {
 	return lookup.Name, nil
 }
 
-//Index indexes columns by Column.Name
+func (c ColumnIndex) Column(name string) (parameter.Column, bool) {
+	lookup, err := c.Lookup(name)
+	if err != nil {
+		return nil, false
+	}
+
+	return lookup, true
+}
+
+// Index indexes columns by Column.Name
 func (c Columns) Index(caser format.Case) ColumnIndex {
 	result := ColumnIndex{}
 	for i, _ := range c {
@@ -192,7 +198,7 @@ func (c Columns) Index(caser format.Case) ColumnIndex {
 	return result
 }
 
-//Register registers *Column
+// Register registers *Column
 func (c ColumnIndex) Register(caser format.Case, column *Column) {
 	keys := shared.KeysOf(column.Name, true)
 	for _, key := range keys {
@@ -205,8 +211,8 @@ func (c ColumnIndex) Register(caser format.Case, column *Column) {
 	}
 }
 
-//RegisterHolder looks for the Column by Relation.Column name.
-//If it finds registers that Column with Relation.Holder key.
+// RegisterHolder looks for the Column by Relation.Column name.
+// If it finds registers that Column with Relation.Holder key.
 func (c ColumnIndex) RegisterHolder(relation *Relation) error {
 	column, err := c.Lookup(relation.Column)
 	if err != nil {
@@ -223,7 +229,7 @@ func (c ColumnIndex) RegisterHolder(relation *Relation) error {
 	return nil
 }
 
-//Lookup returns Column with given name.
+// Lookup returns Column with given name.
 func (c ColumnIndex) Lookup(name string) (*Column, error) {
 	column, ok := c[name]
 	if ok {
@@ -257,7 +263,7 @@ func (c ColumnIndex) RegisterWithName(name string, column *Column) {
 	}
 }
 
-//Init initializes each Column in the slice.
+// Init initializes each Column in the slice.
 func (c Columns) Init(resource *Resource, config map[string]*ColumnConfig, caser format.Case, allowNulls bool) error {
 	for i := range c {
 		columnConfig := config[c[i].Name]

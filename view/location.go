@@ -5,8 +5,8 @@ import (
 	"os"
 )
 
-//Kind represents parameter location
-//Parameter value can be retrieved from the i.e. HTTP Header, Path Variable or using other View
+// Kind represents parameter location
+// Parameter value can be retrieved from the i.e. HTTP Header, Path Variable or using other View
 type Kind string
 
 const (
@@ -19,12 +19,13 @@ const (
 	KindEnvironment Kind = "env"
 	KindLiteral     Kind = "literal"
 	KindParam       Kind = "param"
+	KindRequest     Kind = "http_request"
 )
 
-//Validate checks if Kind is valid.
+// Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindLiteral, KindParam:
+	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindLiteral, KindParam, KindRequest:
 		return nil
 	}
 
@@ -51,22 +52,27 @@ func (k Kind) Ordinal() int {
 		return 7
 	case KindParam:
 		return 8
+	case KindRequest:
+		return 9
 	}
 	return -1
 }
 
-//ParamName represents name of parameter in given Location.Kind
-//i.e. if you want to extract lang from query string: ?foo=bar&lang=eng
-//required Kind is KindQuery and ParamName `lang`
+// ParamName represents name of parameter in given Location.Kind
+// i.e. if you want to extract lang from query string: ?foo=bar&lang=eng
+// required Kind is KindQuery and ParamName `lang`
 type ParamName string
 
-//Validate checks if ParamName is valid
+// Validate checks if ParamName is valid
 func (p ParamName) Validate(kind Kind) error {
-	if p == "" && kind != KindRequestBody {
-		return fmt.Errorf("param name can't be empty")
-	}
 	switch kind {
-	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindLiteral, KindParam:
+	case KindRequest, KindLiteral, KindRequestBody:
+		return nil
+	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindParam:
+		if p == "" {
+			return fmt.Errorf("param name can't be empty")
+		}
+
 		return nil
 	case KindEnvironment:
 		if os.Getenv(string(p)) == "" {

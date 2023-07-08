@@ -53,6 +53,9 @@ var extGoModuleContent string
 //go:embed tmpl/ext/init.gox
 var extContent string
 
+//go:embed tmpl/pkg/plugin/init.gox
+var pluginContent string
+
 func (s *Service) generateExtensionModule(ctx context.Context, init *options.Extension) error {
 	extLocation := s.extLocation(init)
 	replacer := init.Replacer(&init.Module)
@@ -141,6 +144,11 @@ func (s *Service) generatePackage(ctx context.Context, pkgLocation string, init 
 		return err
 	}
 
+	pluginDst := url.Join(pkgLocation, "plugin/main.go")
+	if err := s.fs.Upload(ctx, pluginDst, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(pluginContent))); err != nil {
+		return err
+	}
+
 	if _, err = s.runCommand(pkgLocation, goBinLocation, init.GoModInitArgs(&init.Module)...); err != nil {
 		return err
 	}
@@ -156,7 +164,7 @@ func (s *Service) syncSourceDependencies(ctx context.Context, pkgLocation string
 	if err != nil {
 		return err
 	}
-	_, err = s.runCommand(pkgLocation, goBinLocation, "mod", "tidy", "-compat=1.17")
+	_, err = s.runCommand(pkgLocation, goBinLocation, "mod", "tidy")
 	if err != nil {
 		return err
 	}

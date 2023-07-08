@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/sqlx/types"
 	_ "github.com/viant/xdatly/extension" //go mod level placeholder replacement
@@ -40,6 +41,8 @@ var Config = &Registry{
 		CsvFactory(""),
 		StructQLFactory(""),
 		&JSONFactory{},
+		&VeltyCriteriaFactory{},
+		&CriteriaBuilderFactory{},
 	),
 }
 
@@ -47,7 +50,10 @@ func init() {
 	types, _ := core.Types(nil)
 	for packageName, typesRegsitry := range types {
 		for typeName, rType := range typesRegsitry {
-			Config.Types.Register(typeName, xreflect.WithPackage(packageName), xreflect.WithReflectType(rType))
+			err := Config.Types.Register(typeName, xreflect.WithPackage(packageName), xreflect.WithReflectType(rType))
+			if err != nil {
+				fmt.Printf("[ERROR] %v \n", err.Error())
+			}
 		}
 	}
 }

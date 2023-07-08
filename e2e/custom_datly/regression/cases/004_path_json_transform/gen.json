@@ -1,9 +1,4 @@
 {
-  "Method": "POST",
-  "Args": "",
-  "GoFile": "bars.go",
-  "Path": "004_path_json_transform",
-  "URL": "path_json_transform.sql",
-  "PregenURL": "pre_path_json_transform.sql",
-  "PluginGoFile": "changed/bars.go"
+  "Path": "bars_transform",
+  "GoFileName": "bars_transform"
 }

@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-//Selector allows customizing view fetched from Database
+// Selector allows customizing view fetched from Database
 type (
 	Selector struct {
 		DatabaseFormat format.Case
@@ -23,6 +23,7 @@ type (
 		Placeholders   []interface{} `json:",omitempty"`
 		Qualifier      []SelectorQualifier
 		Page           int
+		Ignore         bool
 
 		initialized  bool
 		_columnNames map[string]bool
@@ -52,7 +53,7 @@ func (s *Selector) CurrentPage() int {
 	return s.Page
 }
 
-//Init initializes Selector
+// Init initializes Selector
 func (s *Selector) Init() {
 	if s.initialized {
 		return
@@ -61,7 +62,7 @@ func (s *Selector) Init() {
 	s._columnNames = Names(s.Columns).Index()
 }
 
-//Has checks if Field is present in Selector.Columns
+// Has checks if Field is present in Selector.Columns
 func (s *Selector) Has(field string) bool {
 	_, ok := s._columnNames[field]
 	return ok
@@ -85,7 +86,12 @@ func (s *Selector) Add(fieldName string, isHolder bool) {
 	}
 }
 
-//NewSelector creates a selector
+func (s *Selector) SetCriteria(expanded string, group []interface{}) {
+	s.Criteria = expanded
+	s.Placeholders = group
+}
+
+// NewSelector creates a selector
 func NewSelector() *Selector {
 	return &Selector{
 		_columnNames: map[string]bool{},
@@ -93,13 +99,13 @@ func NewSelector() *Selector {
 	}
 }
 
-//Selectors represents Selector registry
+// Selectors represents Selector registry
 type Selectors struct {
 	Index map[string]*Selector
 	sync.RWMutex
 }
 
-//Lookup returns and initializes Selector attached to View. Creates new one if doesn't exist.
+// Lookup returns and initializes Selector attached to View. Creates new one if doesn't exist.
 func (s *Selectors) Lookup(view *View) *Selector {
 	s.RWMutex.Lock()
 	defer s.RWMutex.Unlock()
@@ -115,7 +121,7 @@ func (s *Selectors) Lookup(view *View) *Selector {
 	return selector
 }
 
-//NewSelectors creates a selector
+// NewSelectors creates a selector
 func NewSelectors() *Selectors {
 	return &Selectors{
 		Index:   map[string]*Selector{},
@@ -130,11 +136,15 @@ func (s *ParamState) Init(view *View) {
 	}
 }
 
-//Init initializes each Selector
+// Init initializes each Selector
 func (s *Selectors) Init() {
 	s.RWMutex.Lock()
 	s.RWMutex.Unlock()
 	for _, selector := range s.Index {
 		selector.Init()
 	}
+}
+
+func (s *Selector) IgnoreRead() {
+	s.Ignore = true
 }

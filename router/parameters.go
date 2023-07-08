@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/pkg/errors"
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
@@ -266,37 +265,6 @@ func (p *RequestParams) readBody() error {
 	}
 	p.bodyParam = requestData
 	return p.requestBodyErr
-}
-
-func wrapJSONSyntaxErrorIfNeeded(err error, buff []byte) error {
-
-	syntaxErr := new(json.SyntaxError)
-	if !errors.As(err, &syntaxErr) {
-		return err
-	}
-
-	var buffer bytes.Buffer
-	bodyLen := int64(len(buff))
-	minPos := syntaxErr.Offset - 50
-	maxPos := syntaxErr.Offset + 50
-	if minPos < 0 {
-		minPos = 0
-	}
-	if maxPos >= bodyLen {
-		maxPos = bodyLen
-	}
-
-	offset := syntaxErr.Offset
-	if offset == 0 {
-		buffer.Write([]byte("(*)"))
-		buffer.Write(buff[:maxPos+1])
-	} else {
-		buffer.Write(buff[minPos : offset-1])
-		buffer.Write([]byte("(*)"))
-		buffer.Write(buff[offset-1 : maxPos])
-	}
-
-	return fmt.Errorf("json syntax error at position %d: %w:\n%s", syntaxErr.Offset, err, buffer.String())
 }
 
 func (p *RequestParams) ExtractHttpParam(ctx context.Context, param *view.Parameter, options ...interface{}) (interface{}, error) {
