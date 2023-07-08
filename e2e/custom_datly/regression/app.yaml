@@ -1,3 +1,5 @@
+init:
+  appPath: $WorkingDir(../../)
 pipeline:
   datly:
     stop:
@@ -14,4 +16,4 @@ pipeline:
       immuneToHangups: true
       env:
         TEST: 1
-      command: ./custom_datly -c=$appPath/autogen/Datly/config.json > /tmp/custom_datly.out
+      command: $appPath/.extension/datly -c=$appPath/.extension/repo/dev/Datly/config.json > /tmp/custom_datly.out

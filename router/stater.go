@@ -33,7 +33,8 @@ type (
 	}
 
 	stateUpdater struct {
-		params []*view.Parameter
+		params      []*view.Parameter
+		paramsIndex view.ParametersIndex
 	}
 )
 
@@ -91,8 +92,14 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 	}
 
 	sort.Sort(view.ParametersSlice(params))
+	index, err := view.ParametersSlice(params).Index()
+	if err != nil {
+		return nil, err
+	}
+
 	return &stateUpdater{
-		params: params,
+		params:      params,
+		paramsIndex: index,
 	}, nil
 }
 
@@ -103,6 +110,7 @@ func (u *stateUpdater) update(ctx context.Context, request *http.Request, route 
 		NewRequestMetadata(route),
 		params,
 		newParamsValueCache(),
+		u.paramsIndex,
 	)
 
 	state := &view.ParamState{

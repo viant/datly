@@ -14,6 +14,6 @@ dsql
 *.iml
 *.so
 logs
-.xdatly
+.extension
 .datly
 *.zip

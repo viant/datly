@@ -585,11 +585,6 @@ func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) 
 		return "", err
 	}
 	tmpl := codegen.NewTemplate(builder.option, &inference.Spec{Type: aType})
-	//if entityParam.In.Kind == view.KindRequestBody {
-	//	if entityParam.In.Name != "" {
-	//		tmpl.Imports.AddType(aType.Name)
-	//	}
-	//}
 	tmpl.Imports.AddType(builder.option.StateType)
 	tmpl.Imports.AddType(builder.option.HandlerType)
 
@@ -600,20 +595,8 @@ func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) 
 		builder.option.Declare = map[string]string{}
 	}
 
-	//builder.option.Declare["Handler"] = simpledName(builder.option.HandlerType)
-	//builder.option.Declare["State"] = simpledName(builder.option.StateType)
-
-	//builder.option.TypeSrc = &option.TypeSrcConfig{}
-	//builder.option.TypeSrc.URL = path.Join(statePath, statePackage)
-	//builder.option.TypeSrc.Types = append(builder.option.TypeSrc.Types, builder.option.HandlerType, builder.option.StateType)
-
 	dSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
 	return dSQL + fmt.Sprintf("$Nop($%v)", entityParam.Name), err
-}
-
-func simpledName(typeName string) string {
-	fragments := strings.Split(typeName, ".")
-	return fragments[len(fragments)-1]
 }
 
 func (s *Builder) buildViews(ctx context.Context, builder *routeBuilder) error {
@@ -651,16 +634,19 @@ func (s *Builder) buildViews(ctx context.Context, builder *routeBuilder) error {
 
 outer:
 	for _, paramName := range utilParams {
-		for _, viewParameter := range aView.Template.Parameters {
+		viewParams := append([]*view.Parameter{}, aView.Template.Parameters...)
+		if aView.Selector != nil {
+			appendSelectorParams(&viewParams, aView.Selector)
+		}
+
+		for _, viewParameter := range viewParams {
 			if view.FirstNotEmpty(viewParameter.Ref, viewParameter.Name) == paramName {
 				continue outer
 			}
 		}
 
 		if _, ok := builder.paramsIndex.hints[paramName]; !ok {
-			if err = s.addParameters(builder, &view.Parameter{Name: paramName}); err != nil {
-				return err
-			}
+			s.addParameters(builder, &view.Parameter{Name: paramName})
 		}
 
 		aView.Template.Parameters = append(aView.Template.Parameters, &view.Parameter{Reference: shared.Reference{Ref: paramName}})
@@ -675,6 +661,20 @@ outer:
 	result, _ := json.MarshalIndent(aView, "", "  ")
 	s.logs = append(s.logs, fmt.Sprintf("---------- connections: -----------\n\t %s \n", string(result)))
 	return nil
+}
+
+func appendSelectorParams(dst *[]*view.Parameter, selector *view.Config) {
+	appendIfNotNil(dst, selector.CriteriaParam)
+	appendIfNotNil(dst, selector.FieldsParam)
+	appendIfNotNil(dst, selector.LimitParam)
+	appendIfNotNil(dst, selector.OffsetParam)
+	appendIfNotNil(dst, selector.OrderByParam)
+}
+
+func appendIfNotNil(dst *[]*view.Parameter, param *view.Parameter) {
+	if param != nil {
+		*dst = append(*dst, param)
+	}
 }
 
 func (s *Builder) loadAndInitConfig(ctx context.Context) error {
@@ -1159,7 +1159,7 @@ func copyWarmup(warmup map[string]interface{}) map[string]interface{} {
 
 }
 
-func (s *Builder) addParameters(builder *routeBuilder, params ...*view.Parameter) error {
+func (s *Builder) addParameters(builder *routeBuilder, params ...*view.Parameter) {
 	for i, aParam := range params {
 		if _, ok := builder.paramsIndex.parameters[aParam.Name]; ok {
 			continue
@@ -1168,8 +1168,6 @@ func (s *Builder) addParameters(builder *routeBuilder, params ...*view.Parameter
 		builder.routerResource.Resource.Parameters = append(builder.routerResource.Resource.Parameters, params[i])
 		builder.paramsIndex.AddParameter(params[i])
 	}
-
-	return nil
 }
 
 func (s *Builder) addTypeDef(resource *view.Resource, schema *view.TypeDefinition) {
@@ -1335,20 +1333,16 @@ func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
 		aParam := childViewConfig.unexpandedTable.ViewConfig.DataViewParameter
 
 		if aParam == nil {
-			aParam = &view.Parameter{
+			aParam = s.ParamHolder(builder, paramName)
+			aParam.In = &view.Location{
+				Kind: view.KindDataView,
 				Name: paramName,
-				In: &view.Location{
-					Kind: view.KindDataView,
-					Name: paramName,
-				},
-				Required: boolPtr(true),
 			}
+			aParam.Required = boolPtr(true)
 		}
 
 		updateAsAuthParamIfNeeded(childViewConfig.unexpandedTable.Auth, aParam)
-		if err = s.addParameters(builder, aParam); err != nil {
-			return nil, err
-		}
+		s.addParameters(builder, aParam)
 
 		if s.isUtilParam(builder, aParam) {
 			utilParams = append(utilParams, aParam.Name)
@@ -1373,10 +1367,7 @@ func (s *Builder) prepareExternalParameters(builder *routeBuilder, paramViewConf
 				Schema:          &view.Schema{DataType: "string"},
 			}
 
-			if err := s.addParameters(builder, authParam); err != nil {
-				return nil, err
-			}
-
+			s.addParameters(builder, authParam)
 			externalParams = append(externalParams, authParam)
 		}
 		if parameter.Connector != "" {
@@ -1456,9 +1447,6 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 	param.Schema.DataType = paramType
 	if config.Cardinality == view.Many {
 		param.Schema.Cardinality = view.Many
-		//if !strings.HasPrefix(paramType, "[]") {
-		//	param.Schema.Type = "[]" + paramType
-		//}
 	}
 
 	if config.Codec != "" {
@@ -1481,8 +1469,12 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 		param.MinAllowedRecords = config.MinAllowedRecords
 	}
 
-	if config.CodecType != "" && param.Output != nil {
-		param.Output.Schema = &view.Schema{DataType: config.CodecType}
+	if param.Output != nil {
+		if config.CodecType != "" {
+			param.Output.Schema = &view.Schema{DataType: config.CodecType}
+		}
+
+		param.Output.HandlerType = config.CodecHandler
 	}
 
 	if config.StatusCode != nil {
@@ -1895,6 +1887,10 @@ func (s *Builder) buildParamHint(builder *routeBuilder, selector *expr.Select, c
 		StructQLQuery: qlQuery,
 	})
 
+	s.addParameters(builder, &view.Parameter{
+		Name: holderName,
+	})
+
 	return nil
 }
 
@@ -1966,13 +1962,6 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 }
 
 func (s *Builder) tryUpdateConfigType(typeContent string, aConfig *paramJSONHintConfig) {
-
-	//aConfig.Cardinality = view.One
-	//if strings.HasPrefix(typeContent, "[]") {
-	//	aConfig.Cardinality = view.Many
-	//	typeContent = typeContent[2:]
-	//}
-
 	if typeContent == "?" {
 		return
 	}
@@ -2232,6 +2221,15 @@ func (s *Builder) prepareDSQLIfNeeded(ctx context.Context, builder *routeBuilder
 	}
 
 	return s.convertHandlerIfNeeded(builder)
+}
+
+func (s *Builder) ParamHolder(builder *routeBuilder, name string) *view.Parameter {
+	param, ok := builder.paramsIndex.Param(name)
+	if !ok {
+		builder.routerResource.Resource.Parameters = append(builder.routerResource.Resource.Parameters, param)
+	}
+
+	return param
 }
 
 func trimParenthasis(text string) string {

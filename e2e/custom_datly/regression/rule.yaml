@@ -5,57 +5,72 @@ init:
   aPathMatch: ${parent.pathMatch}
   anIndex: ${parent.index}
   appPath: $WorkingDirectory()
-  rule: $LoadJSON(${state.aPath}/gen.json)
+  relative: '${appPath}/.xdatly/types/custom'
+  stepURL: ${aPath}/${state.step}
+  stepRule: $LoadJSON('$stepURL/gen.json')
+  rule: $LoadJSON('$aPath/gen.json')
+  dbDSN: 'dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev${qMark}parseTime=true'
+  state.stepURL: $stepURL
 
 pipeline:
+  skip: $HasResource('$stepURL/skip.txt')
+  printCurrentStep:
+    action: print
+    message: '-------------- Current step: $stepURL --------------'
+
   set_sdk:
     action: sdk.set
     target: $target
     sdk: go:1.20
 
-  loop:
-    generate:
-      init:
-        ruleURL: '${appPath}/.xdatly/types/custom/rules/${rule.Path}/${rule.URL}'
-        pregenURL: '${appPath}/.xdatly/types/custom/rules/${rule.Path}/${rule.PregenURL}'
-        goFile: '$aPath/${rule.GoFile}'
-        outputGoFile: '${appPath}/.xdatly/types/custom/rules/${rule.Path}/dsql/${rule.GoFile}'
-        relative: '${appPath}/.xdatly/types/custom'
-        pluginGoFile: '$aPath/${rule.PluginGoFile}'
-        dbDSN: 'dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev${qMark}parseTime=true'
+  genRulesTemplate:
+    when: ${state.step}=step1_generate
+    genRule:
+      skip: $HasResource('$stepURL/skip.txt')
+      action: exec:run
+      description: build datly rule with SQL extension
+      target: '$target'
+      checkError: true
+      commands:
+        - mkdir -p ${appPath}/.extension/types/${rule.Path}/dsql
+        - cp $stepURL/${stepRule.URL} ${appPath}/.extension/dsql
+        - /tmp/datly gen -o=${stepRule.Method} -s='${appPath}/.extension/dsql/${stepRule.URL}' -c='${dbDSN}' -p='${appPath}/.extension' -g='${stepRule.PackageName}'
 
-      genRulesTemplate:
-        when: ${state.mode}=gen
-        genRule:
-          action: exec:run
-          description: build datly rule with SQL extension
-          target: '$target'
-          checkError: true
-          commands:
-            - export GO111MODULE=on
-            - mkdir -p ${appPath}/.xdatly/types/custom/rules/${rule.Path}/dsql
-            - cp $aPath/${rule.PregenURL} ${pregenURL}
-            - /tmp/datly --relative='${relative}' -X='${pregenURL}' -G='${rule.Method}' -C='${dbDSN}'
-            - cp $goFile $outputGoFile
-            - rm ${pregenURL}
-            - cp $aPath/${rule.URL} ${appPath}/.xdatly/types/custom/rules/${rule.Path}/${rule.URL}
-            - /tmp/datly --relative='${relative}' -X='${ruleURL}' -C='${dbDSN}' --pluginArgs='-trimpath' -w=${appPath}/autogen
+  addBusinessLogic:
+    when: ${state.step}=step2_before_replace
+    addLogic:
+      skip: $HasResource('$stepURL/skip.txt')
+      action: exec:run
+      description: build datly rule with SQL extension
+      target: '$target'
+      checkError: true
+      commands:
+        - echo 'stepRule -> $stepURL/${stepRule.URL}'
+        - cp $stepURL/${stepRule.URL} ${appPath}/.extension/dsql
+        - mkdir -p ${appPath}/.extension/pkg/${rule.Path}
+        - cp $stepURL/.${stepRule.GoFile} ${appPath}/.extension/pkg/${rule.Path}/${stepRule.GoFile}
+        - /tmp/datly dsql -p='${appPath}/.extension' -s='./dsql/${stepRule.URL}' -c='${dbDSN}'
 
-      generatePlugins:
-        when: ${state.mode}=copy_plugins
-        checkSkipEmptyPath:
-          when: ${rule.PluginGoFile}!=''
-          genRule:
-            action: exec:run
-            description: build datly rule with SQL extension
-            target: '$target'
-            checkError: true
-            commands:
-              - export GO111MODULE=on
-              - cp ${pluginGoFile} ${outputGoFile}
-              - /tmp/datly --relative='${relative}' -X='${ruleURL}' -C='${dbDSN}' --pluginArgs='-trimpath' -w=${appPath}/autogen
 
-      runTestsTemplate:
-        when: ${state.mode}=state_test
-        action: run
-        request: '@${state.aPath}/test.yaml'
+  generatePlugins:
+    when: ${state.step}=step3_plugin
+    checkSkipEmptyPath:
+      skip: $HasResource('$stepURL/skip.txt')
+      action: exec:run
+      description: build datly rule with SQL extension
+      target: '$target'
+      checkError: true
+      commands:
+        - export GO111MODULE=on
+        - cp $stepURL/${stepRule.URL} ${appPath}/.extension/dsql
+        - cp $stepURL/.${stepRule.GoFile} ${appPath}/.extension/pkg/${rule.Path}/${stepRule.GoFile}
+        - /tmp/datly dsql -p='${appPath}/.extension' -s='./dsql/${stepRule.URL}' -c='${dbDSN}'
+
+
+  runTestsTemplate:
+    when: ${state.step}=step4_run_test
+    action: run
+    init:
+      stepURL: $stepURL
+    request: '@tests'
+

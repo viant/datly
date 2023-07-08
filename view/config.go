@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/xdatly/handler/parameter"
 	"reflect"
 	"strings"
 )
@@ -20,7 +21,7 @@ const (
 var intType = reflect.TypeOf(0)
 var stringType = reflect.TypeOf("")
 
-//Config represent a view config selector
+// Config represent a view config selector
 type (
 	Config struct {
 		//TODO: Should order by be a slice?
@@ -157,47 +158,66 @@ func (c *Config) ensureConstraints(resource *Resource) error {
 }
 
 func (c *Config) initCustomParams(ctx context.Context, resource *Resource, parent *View) error {
-	if err := c.initParamIfNeeded(ctx, c.CriteriaParam, resource, stringType, parent); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.CriteriaParam, resource, parent, stringType, reflect.TypeOf(&parameter.Criteria{}), reflect.TypeOf(parameter.Criteria{})); err != nil {
 		return err
 	}
 
-	if err := c.initParamIfNeeded(ctx, c.LimitParam, resource, intType, parent); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.LimitParam, resource, parent, intType); err != nil {
 		return err
 	}
 
-	if err := c.initParamIfNeeded(ctx, c.OrderByParam, resource, stringType, parent); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.OrderByParam, resource, parent, stringType); err != nil {
 		return err
 	}
 
-	if err := c.initParamIfNeeded(ctx, c.OffsetParam, resource, intType, parent); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.OffsetParam, resource, parent, intType); err != nil {
 		return err
 	}
 
-	if err := c.initParamIfNeeded(ctx, c.FieldsParam, resource, stringType, parent); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.FieldsParam, resource, parent, stringType); err != nil {
 		return err
 	}
 
-	if err := c.initParamIfNeeded(ctx, c.PageParam, resource, intType, parent); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.PageParam, resource, parent, intType); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (c *Config) initParamIfNeeded(ctx context.Context, param *Parameter, resource *Resource, requiredType reflect.Type, view *View) error {
+func (c *Config) initParamIfNeeded(ctx context.Context, param *Parameter, resource *Resource, view *View, requiredTypes ...reflect.Type) error {
 	if param == nil {
 		return nil
+	}
+
+	if param.Name == "" {
+		param.Name = param.Ref
 	}
 
 	if err := param.Init(ctx, view, resource, nil); err != nil {
 		return err
 	}
 
-	if param.Schema.Type() != requiredType {
-		return fmt.Errorf("parameter %v type missmatch, required parameter to be type of %v but was %v", param.Name, requiredType.String(), param.Schema.Type().String())
+	if err := c.paramTypeMatches(param, requiredTypes); err != nil {
+		return err
 	}
 
 	return nil
+}
+
+func (c *Config) paramTypeMatches(param *Parameter, requiredTypes []reflect.Type) error {
+	paramType := param.ActualParamType()
+	for _, requiredType := range requiredTypes {
+		if paramType == requiredType {
+			return nil
+		}
+	}
+
+	supportedTypes := []string{}
+	for _, requiredType := range requiredTypes {
+		supportedTypes = append(supportedTypes, requiredType.String())
+	}
+	return fmt.Errorf("parameter %v type missmatch, required parameter to be type of %v but was %v", param.Name, strings.Join(supportedTypes, ", "), param.Schema.Type().String())
 }
 
 func (c *Config) CloneWithNs(ctx context.Context, resource *Resource, owner *View, ns string) (*Config, error) {

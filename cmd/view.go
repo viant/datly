@@ -66,6 +66,10 @@ func (s *Builder) buildAndAddView(ctx context.Context, builder *routeBuilder, vi
 		selector = table.ViewConfig.Selector
 	}
 
+	if table.ViewConfig.CriteriaParam != "" && selector != nil {
+		selector.CriteriaParam = &view.Parameter{Reference: shared.Reference{Ref: table.ViewConfig.CriteriaParam}}
+	}
+
 	tableName := view.FirstNotEmpty(table.Name, table.HolderName)
 
 	actualNamespaceSource := view.FirstNotEmpty(table.NamespaceSource, table.HolderName)

@@ -19,7 +19,7 @@ pipeline:
       commands:
         - cd ${appPath}/gateway/runtime/lambda/app/
         - export GOOS=linux
-        - go mod tidy -compat=1.17
+        - go mod tidy
         - go build datly.go
         - zip -j ${appArchive} datly
 

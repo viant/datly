@@ -28,7 +28,7 @@ pipeline:
       commands:
         - export GO111MODULE=on
         - cd ${appPath}/cmd/datly
-        - go mod tidy -compat=1.17
+        - go mod tidy
         - go mod download
         - go build -ldflags "-X main.BuildTimeInS=`date +%s`" --tags=debug
         - mv datly /tmp/datly

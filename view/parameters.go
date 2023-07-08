@@ -8,13 +8,10 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
+	"net/http"
 	"reflect"
 	"strings"
 	"unsafe"
-)
-
-const (
-	CodecVeltyCriteria = "VeltyCriteria"
 )
 
 type (
@@ -75,7 +72,7 @@ func (v *Codec) Init(resource *Resource, view *View, ownerType reflect.Type) err
 
 	v._initialized = true
 
-	if err := v.inheritCodecIfNeeded(resource, ownerType); err != nil {
+	if err := v.inheritCodecIfNeeded(resource, ownerType, view); err != nil {
 		return err
 	}
 
@@ -109,7 +106,7 @@ func (v *Codec) initFnIfNeeded(resource *Resource, view *View) error {
 	return nil
 }
 
-func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type) error {
+func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type, view *View) error {
 	if v.Ref == "" {
 		return nil
 	}
@@ -123,7 +120,12 @@ func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type)
 
 	factory, ok := visitor.(config.CodecFactory)
 	if ok {
-		aCodec, err := factory.New(&v.CodecConfig, paramType, resource.LookupType())
+		opts := []interface{}{resource.LookupType()}
+		if view != nil {
+			opts = append(opts, view.IndexedColumns())
+		}
+
+		aCodec, err := factory.New(&v.CodecConfig, paramType, opts...)
 		if err != nil {
 			return err
 		}
@@ -157,15 +159,6 @@ func (v *Codec) ensureSchema(paramType reflect.Type) {
 }
 
 func (v *Codec) extractCodecFn(resource *Resource, paramType reflect.Type, view *View) (config.CodecFn, error) {
-	switch strings.ToLower(v.Name) {
-	case strings.ToLower(CodecVeltyCriteria):
-		veltyCodec, err := NewVeltyCodec(v.Source, paramType, view)
-		if err != nil {
-			return nil, err
-		}
-		return veltyCodec.Value, nil
-	}
-
 	vVisitor, err := resource._visitors.Lookup(v.Name)
 	if err != nil {
 		return nil, err
@@ -380,9 +373,16 @@ func (p *Parameter) IsRequired() bool {
 }
 
 func (p *Parameter) initSchema(resource *Resource, structType reflect.Type) error {
+	if p.In.Kind == KindRequest {
+		p.Schema = NewSchema(reflect.TypeOf(&http.Request{}))
+		return nil
+	}
+
 	if p.Schema == nil {
 		if p.In.Kind == KindLiteral {
 			p.Schema = NewSchema(reflect.TypeOf(p.Const))
+		} else if p.In.Kind == KindRequest {
+			p.Schema = NewSchema(reflect.TypeOf(&http.Request{}))
 		} else {
 			return fmt.Errorf("parameter %v schema can't be empty", p.Name)
 		}

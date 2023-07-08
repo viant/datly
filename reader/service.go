@@ -25,7 +25,7 @@ type Service struct {
 	Resource   *view.Resource
 }
 
-//ReadInto reads data into provided destination, * dDest` is required. It has to be a pointer to `interface{}` or pointer to slice of `T` or `*T`
+// ReadInto reads data into provided destination, * dDest` is required. It has to be a pointer to `interface{}` or pointer to slice of `T` or `*T`
 func (s *Service) ReadInto(ctx context.Context, viewName string, dest interface{}, opts ...Option) error {
 	aView, err := s.Resource.View(viewName)
 	if err != nil {
@@ -95,6 +95,10 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 
 	aView := collector.View()
 	selector := session.Selectors.Lookup(aView)
+	if selector.Ignore {
+		return
+	}
+
 	collectorChildren, err := collector.Relations(selector)
 	if err != nil {
 		errorCollector.Append(err)
