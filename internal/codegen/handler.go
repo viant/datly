@@ -38,7 +38,10 @@ func (t *Template) GenerateHandler(opts *options.Gen, info *plugin.Info) (string
 
 	handlerContent := strings.Replace(handlerTemplate, "$Package", opts.Package, 1)
 	handlerContent = strings.Replace(handlerContent, "$LocalVariable", localVariableDeclaration, 1)
-	registerTypes := t.RegisterFragment("Handler")
+
+	registry := &customTypeRegistry{}
+	registry.register("Handler")
+	registerTypes := registry.stringify()
 	handlerContent = strings.Replace(handlerContent, "$RegisterTypes", registerTypes, 1)
 	imports := inference.NewImports()
 	imports.AddPackage(info.ChecksumPkg())

@@ -58,22 +58,17 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.
 }
 
 func (t *Template) generateRegisterType() string {
-	var initElements []string
+	registry := &customTypeRegistry{}
 	for _, param := range t.State {
 		if param.In.Kind != view.KindDataView {
 			continue
 		}
-		registerFragment := t.RegisterFragment(param.Schema.DataType)
-		initElements = append(initElements, registerFragment)
+		registry.register(param.Schema.DataType)
 	}
-
-	initCode := strings.Join(initElements, "\n")
-	return initCode
-}
-
-func (t *Template) RegisterFragment(dataType string) string {
-	registerFragment := fmt.Sprintf(registerTypeTemplate, dataType, dataType)
-	return registerFragment
+	for _, param := range t.State.FilterByKind(view.KindRequestBody) {
+		registry.register(param.Schema.DataType)
+	}
+	return registry.stringify()
 }
 
 func (t *Template) generateMapTypeBody() string {
