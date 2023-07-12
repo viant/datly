@@ -92,6 +92,7 @@ type (
 		*structql.Query
 		field *xunsafe.Field
 	}
+
 	Fetcher struct {
 		shared.Reference
 		_fetcher interface{}

@@ -2,6 +2,7 @@ package inference
 
 import (
 	"fmt"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
@@ -23,6 +24,29 @@ func (s *State) Append(params ...*Parameter) {
 		}
 		*s = append(*s, params[i])
 	}
+}
+
+func (s State) ViewParameters() []*view.Parameter {
+	var result = make([]*view.Parameter, 0, len(s))
+	for i := range s {
+		result = append(result, &s[i].Parameter)
+	}
+	return result
+}
+
+func (s *State) AppendViewParameters(params ...*view.Parameter) {
+	for i := range params {
+		if s.Has(params[i].Name) {
+			continue
+		}
+		*s = append(*s, &Parameter{Parameter: *params[i], Explicit: true})
+	}
+}
+func (s *State) AppendConstants(constants map[string]interface{}) {
+	for paramName, paramValue := range constants {
+		s.Append(NewConstParameter(paramName, paramValue))
+	}
+
 }
 
 func (s State) Clone() State {
@@ -70,7 +94,6 @@ func (s State) IndexByPathIndex() map[string]*Parameter {
 		}
 		result[parameter.IndexVariable()] = parameter
 	}
-
 	return result
 }
 
@@ -164,6 +187,33 @@ func (s State) HandlerLocalVariables() ([]string, string) {
 		vars = append(vars, "\t"+definition)
 	}
 	return names, strings.Join(vars, "\n")
+}
+
+func (s State) ReflectType(pkgPath string, lookupType xreflect.LookupType) (reflect.Type, error) {
+	var fields []reflect.StructField
+	var err error
+	for _, param := range s {
+		schema := param.Schema
+		if schema == nil {
+			return nil, fmt.Errorf("invalid parameter: %v schema was empty", param.Name)
+		}
+		rType := schema.Type()
+		if rType == nil {
+			if rType, err = types.LookupType(lookupType, schema.DataType); err != nil {
+				return nil, err
+			}
+		}
+		param.Schema.Cardinality = schema.Cardinality
+		if rType != nil {
+			fields = append(fields, reflect.StructField{Name: param.Name, Type: rType, PkgPath: PkgPath(param.Name, pkgPath)})
+		}
+	}
+
+	if len(fields) == 0 {
+		return nil, nil
+	}
+	baseType := reflect.StructOf(fields)
+	return baseType, nil
 }
 
 //NewState creates a state from state go struct

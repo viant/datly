@@ -193,6 +193,29 @@ func buildParameter(field *ast.Field, types *xreflect.Types) (*Parameter, error)
 	return param, nil
 }
 
+//ParentAlias returns join parent selector
+func ParentAlias(join *query.Join) string {
+	result := ""
+	sqlparser.Traverse(join.On, func(n node.Node) bool {
+		switch actual := n.(type) {
+		case *qexpr.Binary:
+			if xSel, ok := actual.X.(*qexpr.Selector); ok {
+				if xSel.Name != join.Alias {
+					result = xSel.Name
+				}
+			}
+			if ySel, ok := actual.Y.(*qexpr.Selector); ok {
+				if ySel.Name != join.Alias {
+					result = ySel.Name
+				}
+			}
+			return true
+		}
+		return true
+	})
+	return result
+}
+
 func extractRelationColumns(join *query.Join) (string, string) {
 	relColumn := ""
 	refColumn := ""
@@ -251,6 +274,19 @@ func (d *Parameter) EnsureSchema() {
 	d.Parameter.Schema = &view.Schema{}
 }
 
+func (p *Parameter) MergeFrom(info *Parameter) {
+	if p.Codec == nil {
+		p.Codec = info.Codec
+	}
+	if info.DataType != "" {
+		p.EnsureSchema()
+		p.Schema.DataType = info.DataType
+	}
+	if info.ErrorStatusCode != 0 {
+		p.ErrorStatusCode = info.ErrorStatusCode
+	}
+}
+
 func extractSQL(field *ast.Field) string {
 	SQL := ""
 	if field.Doc != nil {
@@ -264,13 +300,17 @@ func extractSQL(field *ast.Field) string {
 }
 
 func NewConstParameter(paramName string, paramValue interface{}) *Parameter {
-	return &Parameter{
+	rType := reflect.TypeOf(paramValue)
+	param := &Parameter{
 		Parameter: view.Parameter{
-			Name:  paramName,
-			Const: paramValue,
-			In:    view.NewConstLocation(),
+			Name:   paramName,
+			Const:  paramValue,
+			In:     view.NewConstLocation(),
+			Schema: view.NewSchema(reflect.TypeOf(paramValue)),
 		},
 	}
+	param.Schema.DataType = rType.Name()
+	return param
 }
 
 func NewPathParameter(name string) *Parameter {

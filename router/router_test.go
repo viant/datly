@@ -640,7 +640,7 @@ func TestRouter(t *testing.T) {
 			visitors:          map[string]interface{}{},
 			afterInsertUri:    "/api/events",
 			afterInsertMethod: http.MethodGet,
-			requestBody: `{"Items": [
+			requestBody: `{"items": [
 			{"Id": 1, "Quantity": 125.5, "Timestamp": "2022-08-09T23:10:17.720975+02:00"},
 			{"Id": 2, "Quantity": 250.5, "Timestamp": "2022-01-09T23:10:17.720975+02:00"},
 			{"Id": 3, "Quantity": 300, "Timestamp": "2020-01-09T23:10:17.720975+02:00"}
@@ -864,12 +864,12 @@ func TestRouter(t *testing.T) {
 			uri:         "/api/events",
 			method:      http.MethodPost,
 			visitors:    map[string]interface{}{},
-			requestBody: `{"Items": [
+			requestBody: `{"items": [
 			{"Id": 1, "Quantity": 125.5, "Timestamp": "2022-08-09T23:10:17.720975+02:00"},
 			{"Id": 2, "Quantity": 250.5, "Timestamp": "2022-01-09T23:10:17.720975+02:00"},
 			{"Id": 3, "Quantity": 300, "Timestamp": "2020-01-09T23:10:17.720975+02:00"}
 ]}`,
-			expected: `{"Items":[{"Id":1,"Quantity":125.5,"Timestamp":"2022-08-09T23:10:17+02:00"},{"Id":2,"Quantity":250.5,"Timestamp":"2022-01-09T23:10:17+02:00"},{"Id":3,"Quantity":300,"Timestamp":"2020-01-09T23:10:17+02:00"}]}`,
+			expected: `{"items":[{"Id":1,"Quantity":125.5,"Timestamp":"2022-08-09T23:10:17+02:00"},{"Id":2,"Quantity":250.5,"Timestamp":"2022-01-09T23:10:17+02:00"},{"Id":3,"Quantity":300,"Timestamp":"2020-01-09T23:10:17+02:00"}]}`,
 		},
 		{
 			description:  "tabular json output format with default config: float prec == -1",

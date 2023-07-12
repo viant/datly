@@ -27,10 +27,12 @@ type (
 
 	//Spec defines table/sql base specification
 	Spec struct {
+		Namespace   string
 		Parent      *Spec
 		IsAuxiliary bool
 		Table       string
 		SQL         string
+		SQLArgs     []interface{}
 		Columns     sqlparser.Columns
 		pk          map[string]sink.Key
 		Fk          map[string]sink.Key
@@ -45,12 +47,9 @@ type (
 //BuildType build a type from infered table/SQL definition
 func (s *Spec) BuildType(pkg, name string, cardinality view.Cardinality, whitelist, blacklist map[string]bool) error {
 	var aType = &Type{Package: pkg, Name: name, Cardinality: cardinality}
-
 	for i, column := range s.Columns {
-		if s.shouldSkipColumn(whitelist, blacklist, column) {
-			continue
-		}
-		field, err := aType.AppendColumnField(s.Columns[i])
+		skipped := s.shouldSkipColumn(whitelist, blacklist, column)
+		field, err := aType.AppendColumnField(s.Columns[i], skipped)
 		if err != nil {
 			return err
 		}
@@ -113,7 +112,7 @@ func (s *Spec) shouldSkipColumn(whitelist, blacklist map[string]bool, column *sq
 
 //AddRelation adds relations
 func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinality view.Cardinality) {
-	if isToOne(join) {
+	if IsToOne(join) {
 		cardinality = view.One
 	}
 	relColumn, refColumn := extractRelationColumns(join)
@@ -168,18 +167,18 @@ func (s *Spec) ViewSQL(columnParameter ColumnParameterNamer) string {
 }
 
 //NewSpec discover column derived type for supplied SQL/table
-func NewSpec(ctx context.Context, db *sql.DB, table, SQL string) (*Spec, error) {
+func NewSpec(ctx context.Context, db *sql.DB, table, SQL string, SQLArgs ...interface{}) (*Spec, error) {
 	isAuxiliary := isAuxiliary(SQL)
 	table = normalizeTable(table)
 	SQL = normalizeSQL(SQL, table)
 	if table == "" && SQL == "" {
 		return nil, fmt.Errorf("both table/SQL were empty")
 	}
-	var result = &Spec{Table: table, SQL: SQL, IsAuxiliary: isAuxiliary}
+	var result = &Spec{Table: table, SQL: SQL, SQLArgs: SQLArgs, IsAuxiliary: isAuxiliary}
 	var columns sqlparser.Columns
 	var err error
 	if SQL != "" {
-		if columns, err = detectColumns(ctx, db, SQL, table); err != nil {
+		if columns, err = detectColumns(ctx, db, SQL, table, SQLArgs...); err != nil {
 			return nil, err
 		}
 	}
@@ -210,7 +209,7 @@ func isAuxiliary(SQL string) bool {
 	if SQL == "" {
 		return false
 	}
-	SQL = trimParenthesis(SQL)
+	SQL = TrimParenthesis(SQL)
 	aQuery, _ := sqlparser.ParseQuery(SQL)
 	if aQuery == nil {
 		return false
@@ -222,7 +221,7 @@ func isAuxiliary(SQL string) bool {
 	return strings.Contains(from, "(")
 }
 
-func isToOne(join *query.Join) bool {
+func IsToOne(join *query.Join) bool {
 	return strings.Contains(sqlparser.Stringify(join.On), "1 = 1")
 }
 
@@ -232,6 +231,6 @@ func normalizeSQL(SQL string, table string) string {
 }
 
 func normalizeTable(table string) string {
-	table = trimParenthesis(table)
+	table = TrimParenthesis(table)
 	return table
 }

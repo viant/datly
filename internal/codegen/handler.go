@@ -13,7 +13,7 @@ import (
 //go:embed tmpl/handler/handler.gox
 var handlerTemplate string
 
-func (t *Template) GenerateHandler(opts *options.Gen, info *plugin.Info) (string, string, error) {
+func (t *Template) GenerateHandler(opts *options.Generate, info *plugin.Info) (string, string, error) {
 	fields, localVariableDeclaration := t.State.HandlerLocalVariables()
 	t.Config.HandlerType = opts.HandlerType()
 	t.Config.StateType = opts.StateType()

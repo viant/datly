@@ -38,7 +38,7 @@ type Resource struct {
 	_views Views
 
 	Parameters  []*Parameter `json:",omitempty"`
-	_parameters ParametersIndex
+	_parameters NamedParameters
 
 	Types  []*TypeDefinition
 	_types *xreflect.Types
@@ -275,7 +275,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 
 	r._connectors = ConnectorSlice(r.Connectors).Index()
 	r._messageBuses = MessageBusSlice(r.MessageBuses).Index()
-	r._parameters, err = ParametersSlice(r.Parameters).Index()
+	r._parameters, err = Parameters(r.Parameters).Index()
 	if err != nil {
 		return err
 	}
@@ -431,7 +431,7 @@ func EmptyResource() *Resource {
 		Views:         make([]*View, 0),
 		_views:        Views{},
 		Parameters:    make([]*Parameter, 0),
-		_parameters:   ParametersIndex{},
+		_parameters:   NamedParameters{},
 		_types:        xreflect.NewTypes(),
 	}
 }

@@ -9,11 +9,12 @@ import (
 
 type (
 	Table struct {
-		Name      string
-		Namespace string
-		Columns   sqlparser.Columns
-		index     map[string]*sqlparser.Column
-		tables    []*Table
+		Name         string
+		Namespace    string
+		Columns      sqlparser.Columns
+		QueryColumns sqlparser.Columns
+		index        map[string]*sqlparser.Column
+		tables       []*Table
 	}
 )
 
@@ -56,7 +57,7 @@ func (t *Table) Lookup(column string) *sqlparser.Column {
 
 func (t *Table) lookup(ns, column string) *sqlparser.Column {
 	if len(t.index) == 0 {
-		t.index = t.Columns.ByName()
+		t.index = t.Columns.ByLowerCasedName()
 	}
 	if ret, ok := t.index[strings.ToLower(column)]; ok && (ns == "" || strings.ToLower(ns) == t.Namespace) {
 		return ret
@@ -70,12 +71,24 @@ func (t *Table) lookup(ns, column string) *sqlparser.Column {
 }
 
 func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
+	SQL = TrimParenthesis(SQL)
 	query, err := sqlparser.ParseQuery(SQL)
+
 	if query == nil || query.From.X == nil {
+		if query != nil && len(query.List) > 0 {
+			t.Columns = sqlparser.NewColumns(query.List)
+		}
 		return err
+	}
+	if !query.List.IsStarExpr() {
+		t.QueryColumns = sqlparser.NewColumns(query.List)
 	}
 	t.Namespace = strings.ToLower(query.From.Alias)
 	from := sqlparser.Stringify(query.From.X)
+	if !HasWhitespace(from) {
+		t.Name = from
+	}
+
 	if err = t.extractColumns(ctx, db, from); err != nil {
 		return err
 	}
@@ -93,7 +106,7 @@ func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 }
 
 func (t *Table) extractColumns(ctx context.Context, db *sql.DB, expr string) error {
-	if !hasWhitespace(strings.TrimSpace(expr)) {
+	if !HasWhitespace(strings.TrimSpace(expr)) {
 		expr = strings.Trim(expr, "`'")
 		if index := strings.LastIndex(expr, "."); index != -1 {
 			expr = expr[index+1:]

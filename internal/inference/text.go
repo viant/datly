@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func trimParenthesis(text string) string {
+func TrimParenthesis(text string) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return text
@@ -51,7 +51,7 @@ func SplitByWhitespace(fragment string) []string {
 	}
 	return result
 }
-func hasWhitespace(text string) bool {
+func HasWhitespace(text string) bool {
 	for i := range text {
 		if matcher.IsWhiteSpace(text[i]) {
 			return true

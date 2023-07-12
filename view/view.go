@@ -1344,6 +1344,16 @@ func (o ViewOptions) Apply(view *View) {
 	}
 }
 
+func NewReferenceView(refView, name string, column, field string) *ReferenceView {
+	ret := &ReferenceView{View: *NewRefView(refView), Column: column, Field: field}
+	ret.View.Name = name
+	return ret
+}
+
+func NewRefView(ref string) *View {
+	return &View{Reference: shared.Reference{Ref: ref}}
+}
+
 //NewView creates a view
 func NewView(name, table string, opts ...ViewOption) *View {
 	ret := &View{Name: name, Table: table}

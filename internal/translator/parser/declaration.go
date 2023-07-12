@@ -87,17 +87,22 @@ func (d *Declaration) AuthParameter() *inference.Parameter {
 	if d.Auth == "" {
 		return nil
 	}
+	authParameter := DefaultOAuthParameter(d.Auth)
+	if d.ErrorStatusCode != 0 {
+		authParameter.ErrorStatusCode = d.ErrorStatusCode
+	}
+	return authParameter
+}
+
+//DefaultOAuthParameter creates a default oauht parameter
+func DefaultOAuthParameter(name string) *inference.Parameter {
 	required := true
-	authParameter := &inference.Parameter{Parameter: view.Parameter{
-		Name:            d.Auth,
+	return &inference.Parameter{Parameter: view.Parameter{
+		Name:            name,
 		In:              &view.Location{Name: "Authorization", Kind: view.KindHeader},
 		ErrorStatusCode: 401,
 		Required:        &required,
 		Output:          &view.Codec{Name: "JwtClaim", Schema: &view.Schema{DataType: "*JwtClaims"}},
 		Schema:          &view.Schema{DataType: "string"},
 	}}
-	if d.ErrorStatusCode != 0 {
-		authParameter.ErrorStatusCode = d.ErrorStatusCode
-	}
-	return authParameter
 }

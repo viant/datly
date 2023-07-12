@@ -477,7 +477,7 @@ func (o *Options) MergeFromPlugin(plugin *options.Plugin) {
 	o.PluginGoVersion = plugin.GoVersion
 }
 
-func (o *Options) MergeFromGenerate(generate *options.Gen) {
+func (o *Options) MergeFromGenerate(generate *options.Generate) {
 	o.Connects = generate.Connectors
 	o.PrepareRule = generate.Operation
 	o.ExecKind = generate.Kind
@@ -500,14 +500,14 @@ func (o *Options) MergeFromRun(run *options.Run) {
 	o.ConfigURL = run.ConfigURL
 }
 
-func (o *Options) MergeFromDSql(dsql *options.DSql) {
+func (o *Options) MergeFromDSql(dsql *options.Translate) {
 	o.WriteLocation = dsql.Repo
 	o.Name = dsql.Name
 	o.Location = dsql.Source
 	o.Connects = dsql.Connectors
 	o.JWTVerifierHMACKey = string(dsql.JwtVerifier.HMAC)
 	o.JWTVerifierRSAKey = string(dsql.JwtVerifier.RSA)
-	o.ConstURL = dsql.Const
+	o.ConstURL = dsql.ConstURL
 	if dsql.Port != nil {
 		o.Port = *dsql.Port
 		o.hasPort = true
@@ -530,7 +530,7 @@ func (o *Options) MergeFromInit(init *options.Init) {
 	if init.Port != nil {
 		o.Port = *init.Port
 	}
-	o.ConstURL = init.Const
+	o.ConstURL = init.ConstURL
 	o.WriteLocation = init.Repo
 	o.PartialConfigURL = init.ConfigURL
 	if init.CacheProvider.ProviderURL != "" {
@@ -547,23 +547,46 @@ func (o *Options) BuildOption() *options.Options {
 	var result = &options.Options{}
 	prep := o.Prepare
 	if prep.PrepareRule != "" {
-		result.Generate = &options.Gen{
-			Connector: options.Connector{
-				Connectors: o.Connects,
-			},
-			Generate: options.Generate{
-				Module: o.RelativePath,
-				Source: o.Location,
-			},
-			Package:   o.GoModulePkg,
-			Dest:      prep.DSQLOutput,
-			Operation: prep.PrepareRule,
-			Kind:      prep.ExecKind,
-			Lang:      ast.LangVelty,
+		result.Generate = &options.Generate{
+			Repository: options.Repository{},
+			Rule:       options.Rule{},
+			Package:    o.GoModulePkg,
+			Dest:       prep.DSQLOutput,
+			Operation:  prep.PrepareRule,
+			Kind:       prep.ExecKind,
+			Lang:       ast.LangVelty,
 		}
 
-	}
+	} else if o.Location != "" {
+		result.Translate = &options.Translate{
+			Repository: options.Repository{},
+			Rule:       options.Rule{},
+		}
 
+		if o.PartialConfigURL != "" {
+			fs := afs.New()
+			if ok, _ := fs.Exists(context.Background(), o.PartialConfigURL); ok {
+				if result.Translate != nil {
+					result.Translate.ConfigURL = o.PartialConfigURL
+				}
+				if result.Generate != nil {
+					result.Generate.ConfigURL = o.PartialConfigURL
+				}
+			}
+		}
+	}
+	repo := result.Repository()
+	repo.RSA = o.JWTVerifierRSAKey
+	repo.HMAC = o.JWTVerifierHMACKey
+	repo.Port = &o.Port
+	repo.Repo = o.WriteLocation
+	repo.ConstURL = o.ConstURL
+	repo.Connector.Connectors = o.Connects
+
+	rule := result.Rule()
+	rule.Module = o.RelativePath
+	rule.Source = o.Location
+	rule.Prefix = o.RoutePrefix
 	return result
 }
 

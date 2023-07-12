@@ -33,7 +33,7 @@ type (
 		accessors        *types.Accessors
 		_fields          []reflect.StructField
 		_fieldIndex      map[string]int
-		_parametersIndex ParametersIndex
+		_parametersIndex NamedParameters
 		initialized      bool
 		isTemplate       bool
 		wasEmpty         bool
@@ -92,12 +92,12 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 		return err
 	}
 
-	t._parametersIndex, err = ParametersSlice(t.Parameters).Index()
+	t._parametersIndex, err = Parameters(t.Parameters).Index()
 	if err != nil {
 		return err
 	}
 
-	sort.Sort(ParametersSlice(t.Parameters))
+	sort.Sort(Parameters(t.Parameters))
 	return t.initMetaIfNeeded(ctx, resource)
 }
 

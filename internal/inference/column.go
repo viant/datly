@@ -12,8 +12,8 @@ import (
 
 type ColumnParameterNamer func(column *Field) string
 
-func detectColumns(ctx context.Context, db *sql.DB, SQL, table string) (sqlparser.Columns, error) {
-	SQL = trimParenthesis(SQL)
+func detectColumns(ctx context.Context, db *sql.DB, SQL, table string, SQLArgs ...interface{}) (sqlparser.Columns, error) {
+	SQL = TrimParenthesis(SQL)
 	extractedTable, SQL, queryColumns := parseQuery(SQL)
 	if SQL == "" {
 		return nil, nil
@@ -27,13 +27,12 @@ func detectColumns(ctx context.Context, db *sql.DB, SQL, table string) (sqlparse
 			byName = sink.Columns(sinkColumns).By(sink.ColumnName.Key)
 		}
 	}
-
 	stmt, err := db.PrepareContext(ctx, SQL)
 	if err != nil {
 		return nil, err
 	}
 	defer stmt.Close()
-	rows, err := stmt.QueryContext(ctx)
+	rows, err := stmt.QueryContext(ctx, SQLArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -119,8 +118,6 @@ func parseQuery(SQL string) (string, string, sqlparser.Columns) {
 		if sqlQuery.List.IsStarExpr() && !strings.Contains(table, "SELECT") {
 			return table, "", nil //use table metadata
 		}
-		sqlQuery.Window = nil
-		sqlQuery.Qualify = nil
 		sqlQuery.Limit = nil
 		sqlQuery.Offset = nil
 		SQL = sqlparser.Stringify(sqlQuery)

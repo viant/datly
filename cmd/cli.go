@@ -11,6 +11,7 @@ import (
 	soption "github.com/viant/afs/option"
 	"github.com/viant/datly/cmd/command"
 	soptions "github.com/viant/datly/cmd/options"
+	"github.com/viant/datly/internal/translator"
 
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/modifier"
@@ -102,7 +103,7 @@ func NewBuilder(options *Options, opts *soptions.Options, logger io.Writer) (*Bu
 	if opts == nil {
 		opts = options.BuildOption()
 	}
-
+	var err error
 	builder := &Builder{
 		Options:    opts,
 		options:    options,
@@ -113,6 +114,25 @@ func NewBuilder(options *Options, opts *soptions.Options, logger io.Writer) (*Bu
 		viewNames:  newUniqueIndex(true),
 		types:      newUniqueIndex(true),
 		bundles:    map[string]*bundleMetadata{},
+	}
+
+	ctx := context.Background()
+	builder.translator = translator.New(translator.NewConfig(opts.Repository()))
+	err = builder.translator.Init(context.Background())
+	if err != nil {
+		fmt.Printf("translator err: %v\n", err)
+	}
+
+	dSQL, err := opts.Rule().LoadSource(ctx, builder.fs)
+	if err != nil {
+		return nil, err
+	}
+	if err = builder.translator.Translate(ctx, opts.Rule(), dSQL); err != nil {
+		fmt.Printf("translate err: %v\n", err)
+	}
+
+	if err := builder.translator.Repository.Upload(ctx); err != nil {
+		fmt.Printf("tranlator err :%v\n", err)
 	}
 
 	return builder, builder.Build(context.TODO())
@@ -130,7 +150,7 @@ func New(version string, args soptions.Arguments, logger io.Writer) (*standalone
 		if args.IsHelp() {
 			return nil, nil
 		}
-		if err := opts.Init(); err != nil {
+		if err := opts.Init(context.Background()); err != nil {
 			return nil, err
 		}
 		cmd := command.New()
@@ -154,8 +174,8 @@ func New(version string, args soptions.Arguments, logger io.Writer) (*standalone
 			options.MergeFromCache(opts.Cache)
 		} else if opts.Run != nil {
 			options.MergeFromRun(opts.Run)
-		} else if opts.DSql != nil {
-			options.MergeFromDSql(opts.DSql)
+		} else if opts.Translate != nil {
+			options.MergeFromDSql(opts.Translate)
 		} else if opts.InitCmd != nil {
 			options.MergeFromInit(opts.InitCmd)
 		} else {

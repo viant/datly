@@ -90,7 +90,7 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 		params = append(params, parameter)
 	}
 
-	sort.Sort(view.ParametersSlice(params))
+	sort.Sort(view.Parameters(params))
 	return &stateUpdater{
 		params: params,
 	}, nil

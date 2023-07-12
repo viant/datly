@@ -34,12 +34,12 @@ type (
 		ExpectedReturned  *int      `json:",omitempty"`
 		Schema            *Schema   `json:",omitempty"`
 		//Deprecated -> use Codec only to set Output
-		Codec           *Codec      `json:",omitempty"`
-		Output          *Codec      `json:",omitempty"`
-		Const           interface{} `json:",omitempty"`
-		DateFormat      string      `json:",omitempty"`
-		ErrorStatusCode int         `json:",omitempty"`
-
+		Codec             *Codec      `json:",omitempty"`
+		Output            *Codec      `json:",omitempty"`
+		Const             interface{} `json:",omitempty"`
+		DateFormat        string      `json:",omitempty"`
+		ErrorStatusCode   int         `json:",omitempty"`
+		Hint              string      `json:",omitempty"`
 		_valueAccessor    *types.Accessor
 		_presenceAccessor *types.Accessor
 		_initialized      bool
@@ -641,17 +641,17 @@ func (p *Parameter) WithAccessors(value, presence *types.Accessor) *Parameter {
 	return &result
 }
 
-// ParametersIndex represents Parameter map indexed by Parameter.Name
-type ParametersIndex map[string]*Parameter
+// NamedParameters represents Parameter map indexed by Parameter.Name
+type NamedParameters map[string]*Parameter
 
-// ParametersSlice represents slice of parameters
-type ParametersSlice []*Parameter
+// Parameters represents slice of parameters
+type Parameters []*Parameter
 
-func (p ParametersSlice) Len() int {
+func (p Parameters) Len() int {
 	return len(p)
 }
 
-func (p ParametersSlice) Less(i, j int) bool {
+func (p Parameters) Less(i, j int) bool {
 	if p[j].ErrorStatusCode == 401 {
 		return false
 	}
@@ -663,13 +663,33 @@ func (p ParametersSlice) Less(i, j int) bool {
 	return true
 }
 
-func (p ParametersSlice) Swap(i, j int) {
+func (p Parameters) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 
+//Append appends parameter
+func (p *Parameters) Append(parameter *Parameter) {
+	for _, param := range *p {
+		if param.Name == parameter.Name {
+			return
+		}
+	}
+	*p = append(*p, parameter)
+}
+
+//Lookup returns match parameter or nil
+func (p Parameters) Lookup(name string) *Parameter {
+	for _, param := range p {
+		if param.Name == name {
+			return param
+		}
+	}
+	return nil
+}
+
 // Index indexes parameters by Parameter.Name
-func (p ParametersSlice) Index() (ParametersIndex, error) {
-	result := ParametersIndex(make(map[string]*Parameter))
+func (p Parameters) Index() (NamedParameters, error) {
+	result := NamedParameters(make(map[string]*Parameter))
 	for parameterIndex := range p {
 		if err := result.Register(p[parameterIndex]); err != nil {
 			return nil, err
@@ -679,8 +699,8 @@ func (p ParametersSlice) Index() (ParametersIndex, error) {
 	return result, nil
 }
 
-// Filter filters ParametersSlice with given Kind and creates Template
-func (p ParametersSlice) Filter(kind Kind) ParametersIndex {
+// Filter filters Parameters with given Kind and creates Template
+func (p Parameters) Filter(kind Kind) NamedParameters {
 	result := make(map[string]*Parameter)
 
 	for parameterIndex := range p {
@@ -694,14 +714,14 @@ func (p ParametersSlice) Filter(kind Kind) ParametersIndex {
 	return result
 }
 
-func (p ParametersIndex) merge(with ParametersIndex) {
+func (p NamedParameters) Merge(with NamedParameters) {
 	for s := range with {
 		p[s] = with[s]
 	}
 }
 
 // Lookup returns Parameter with given name
-func (p ParametersIndex) Lookup(paramName string) (*Parameter, error) {
+func (p NamedParameters) Lookup(paramName string) (*Parameter, error) {
 	if param, ok := p[paramName]; ok {
 		return param, nil
 	}
@@ -709,11 +729,10 @@ func (p ParametersIndex) Lookup(paramName string) (*Parameter, error) {
 }
 
 // Register registers parameter
-func (p ParametersIndex) Register(parameter *Parameter) error {
+func (p NamedParameters) Register(parameter *Parameter) error {
 	if _, ok := p[parameter.Name]; ok {
 		fmt.Printf("[WARN] parameter with %v name already exists in given resource", parameter.Name)
 	}
-
 	p[parameter.Name] = parameter
 	return nil
 }
@@ -752,6 +771,11 @@ func WithParameterType(t reflect.Type) ParameterOption {
 		}
 		p.Schema = NewSchema(t)
 	}
+}
+
+//NewRefParameter creates a new ref parameter
+func NewRefParameter(name string) *Parameter {
+	return &Parameter{Reference: shared.Reference{Ref: name}}
 }
 
 // NewParameter creates a parameter

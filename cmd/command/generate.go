@@ -5,6 +5,7 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
+	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/internal/plugin"
@@ -13,7 +14,7 @@ import (
 	"strings"
 )
 
-func (s *Service) Generate(ctx context.Context, gen *options.Gen, template *codegen.Template) error {
+func (s *Service) Generate(ctx context.Context, gen *options.Generate, template *codegen.Template) error {
 	if err := s.ensureDest(ctx, gen.Dest); err != nil {
 		return err
 	}
@@ -53,7 +54,7 @@ func (s *Service) Generate(ctx context.Context, gen *options.Gen, template *code
 	return s.EnsurePluginArtifacts(ctx, info)
 }
 
-func (s *Service) generateTemplate(ctx context.Context, gen *options.Gen, template *codegen.Template, info *plugin.Info) error {
+func (s *Service) generateTemplate(ctx context.Context, gen *options.Generate, template *codegen.Template, info *plugin.Info) error {
 	//needed for both go and velty
 	opts := s.dsqlGenerationOptions(gen)
 	files, err := s.generateTemplateFiles(gen, template, info, opts...)
@@ -63,9 +64,9 @@ func (s *Service) generateTemplate(ctx context.Context, gen *options.Gen, templa
 	return s.uploadFiles(ctx, files...)
 }
 
-func (s *Service) uploadFiles(ctx context.Context, files ...*File) error {
+func (s *Service) uploadFiles(ctx context.Context, files ...*asset.File) error {
 	for _, f := range files {
-		if err := f.validate(); err != nil {
+		if err := f.Validate(); err != nil {
 			return err
 		}
 		if err := s.uploadContent(ctx, f.URL, f.Content); err != nil {
@@ -80,7 +81,7 @@ func (s *Service) uploadContent(ctx context.Context, URL string, content string)
 	return s.fs.Upload(ctx, URL, file.DefaultFileOsMode, strings.NewReader(content))
 }
 
-func (s *Service) dsqlGenerationOptions(gen *options.Gen) []codegen.Option {
+func (s *Service) dsqlGenerationOptions(gen *options.Generate) []codegen.Option {
 	var options []codegen.Option
 	if gen.Lang == ast.LangGO {
 		options = append(options, codegen.WithoutBusinessLogic())
@@ -89,7 +90,7 @@ func (s *Service) dsqlGenerationOptions(gen *options.Gen) []codegen.Option {
 	return options
 }
 
-func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.Gen, info *plugin.Info, template *codegen.Template) error {
+func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.Generate, info *plugin.Info, template *codegen.Template) error {
 	code, err := template.GenerateEntity(ctx, pkg, info)
 	if err != nil {
 		return err
@@ -107,7 +108,7 @@ func ensureGoFileCaseFormat(template *codegen.Template) string {
 	return entityName
 }
 
-func (s *Service) generateState(ctx context.Context, pkg string, gen *options.Gen, template *codegen.Template, info *plugin.Info) error {
+func (s *Service) generateState(ctx context.Context, pkg string, gen *options.Generate, template *codegen.Template, info *plugin.Info) error {
 	code := template.GenerateState(pkg, info)
 	return s.fs.Upload(ctx, gen.StateLocation(), file.DefaultFileOsMode, strings.NewReader(code))
 }

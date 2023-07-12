@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/router/marshal"
-	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
+
 	"strconv"
 	"strings"
 )
@@ -116,7 +116,7 @@ func (d *Declarations) parseExpression(cursor *parsly.Cursor, selector *expr.Sel
 	if matched.Code == commentToken { // /* .. */
 		aComment := matched.Text(cursor)
 		aComment = aComment[2 : len(aComment)-2]
-		hint, SQL := sanitize.SplitHint(aComment)
+		hint, SQL := SplitHint(aComment)
 		declaration.SQL = SQL
 		if hint != "" {
 			hintDeclaration := &Declaration{}

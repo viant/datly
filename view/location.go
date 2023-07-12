@@ -55,7 +55,7 @@ func (k Kind) Ordinal() int {
 	return -1
 }
 
-//ParamName represents name of parameter in given Location.Kind
+//Name represents name of parameter in given Location.Kind
 //i.e. if you want to extract lang from query string: ?foo=bar&lang=eng
 //required Kind is KindQuery and ParamName `lang`
 type ParamName string

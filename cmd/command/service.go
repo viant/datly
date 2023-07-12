@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/datly/cmd/options"
+	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/internal/plugin"
@@ -80,9 +81,9 @@ func (s *Service) tidyModule(ctx context.Context, goModule string) error {
 	return nil
 }
 
-func (s *Service) generateTemplateFiles(gen *options.Gen, template *codegen.Template, info *plugin.Info, opts ...codegen.Option) ([]*File, error) {
+func (s *Service) generateTemplateFiles(gen *options.Generate, template *codegen.Template, info *plugin.Info, opts ...codegen.Option) ([]*asset.File, error) {
 
-	var files []*File
+	var files []*asset.File
 	switch gen.Lang {
 	case ast.LangGO:
 
@@ -90,15 +91,15 @@ func (s *Service) generateTemplateFiles(gen *options.Gen, template *codegen.Temp
 		if err != nil {
 			return nil, err
 		}
-		files = append(files, NewFile(gen.HandlerLocation(), handler))
-		files = append(files, NewFile(gen.IndexLocation(), index))
+		files = append(files, asset.NewFile(gen.HandlerLocation(), handler))
+		files = append(files, asset.NewFile(gen.IndexLocation(), index))
 		fallthrough
 	case ast.LangVelty:
 		dSQLContent, err := template.GenerateDSQL(opts...)
 		if err != nil {
 			return nil, err
 		}
-		files = append(files, NewFile(gen.DSQLLocation(), dSQLContent))
+		files = append(files, asset.NewFile(gen.DSQLLocation(), dSQLContent))
 
 	default:
 		return nil, fmt.Errorf("unsupported lang type %v", gen.Lang)

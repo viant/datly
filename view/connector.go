@@ -8,6 +8,7 @@ import (
 	"github.com/viant/scy"
 	"github.com/viant/sqlx/io/config"
 	"github.com/viant/sqlx/metadata/info"
+	"strings"
 	"sync"
 	"time"
 )
@@ -206,10 +207,50 @@ func (c *Connector) Dialect(ctx context.Context) (*info.Dialect, error) {
 	return dialect, nil
 }
 
+//EncodedConnector represents encoded connector
+type EncodedConnector string
+
+func (c EncodedConnector) Decode() (*Connector, error) {
+	parts := strings.Split(string(c), "|")
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("invalid connector format, expected name|driver|dsn[|secretUrl|key]")
+	}
+	conn := &Connector{
+		Name:   parts[0],
+		Driver: parts[1],
+		DSN:    parts[2],
+	}
+	switch len(parts) {
+	case 4:
+		conn.Secret = &scy.Resource{URL: parts[3]}
+	case 5:
+		conn.Secret = &scy.Resource{URL: parts[3], Key: parts[4]}
+	}
+	return conn, nil
+}
+
+//DecodeConnectors decodes encoded connectors
+func DecodeConnectors(connectors []string) ([]*Connector, error) {
+	var result = make([]*Connector, 0)
+	for _, conn := range connectors {
+		connector, err := EncodedConnector(conn).Decode()
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, connector)
+	}
+	return result, nil
+}
+
 func WithSecret(secret *scy.Resource) ConnectorOption {
 	return func(c *Connector) {
 		c.Secret = secret
 	}
+}
+
+//NewRefConnector creates connection reference
+func NewRefConnector(name string) *Connector {
+	return &Connector{Reference: shared.Reference{Ref: name}}
 }
 
 //NewConnector creates a connector

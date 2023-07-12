@@ -53,7 +53,6 @@ func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, co
 	if c._initialized {
 		return nil
 	}
-
 	c._initialized = true
 	if config != nil {
 		c.inherit(config)

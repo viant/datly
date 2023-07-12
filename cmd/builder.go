@@ -16,6 +16,7 @@ import (
 	"github.com/viant/datly/gateway/runtime/standalone"
 	codegen "github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/internal/inference"
+	"github.com/viant/datly/internal/translator"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
@@ -64,6 +65,7 @@ type (
 		bundles          map[string]*bundleMetadata
 		logs             []string
 		caches           view.Caches
+		translator       *translator.Service
 	}
 
 	routeBuilder struct {
@@ -1265,7 +1267,6 @@ func (s *Builder) normalizeFieldName(except string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	actualFieldName := colFormat.Format(except, format.CaseUpperCamel)
 	return actualFieldName, nil
 }
