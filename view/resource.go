@@ -19,8 +19,8 @@ import (
 	"time"
 )
 
-//Resource represents grouped view needed to build the View
-//can be loaded from i.e. yaml file
+// Resource represents grouped view needed to build the View
+// can be loaded from i.e. yaml file
 type Resource struct {
 	Metrics   *Metrics
 	SourceURL string `json:",omitempty"`
@@ -38,7 +38,7 @@ type Resource struct {
 	_views Views
 
 	Parameters  []*Parameter `json:",omitempty"`
-	_parameters ParametersIndex
+	_parameters NamedParameters
 
 	Types  []*TypeDefinition
 	_types *xreflect.Types
@@ -221,7 +221,7 @@ func (r *Resource) typeByName() map[string]*TypeDefinition {
 	return index
 }
 
-//GetViews returns Views supplied with the Resource
+// GetViews returns Views supplied with the Resource
 func (r *Resource) GetViews() Views {
 	if len(r._views) == 0 {
 		r._views = Views{}
@@ -232,7 +232,7 @@ func (r *Resource) GetViews() Views {
 	return r._views
 }
 
-//GetConnectors returns Connectors supplied with the Resource
+// GetConnectors returns Connectors supplied with the Resource
 func (r *Resource) GetConnectors() Connectors {
 	if len(r.Connectors) > len(r._connectors) {
 		r._connectors = ConnectorSlice(r.Connectors).Index()
@@ -240,7 +240,7 @@ func (r *Resource) GetConnectors() Connectors {
 	return r._connectors
 }
 
-//Init initializes Resource
+// Init initializes Resource
 func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 
 	types, visitors, cache, transforms := r.readOptions(options)
@@ -275,7 +275,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 
 	r._connectors = ConnectorSlice(r.Connectors).Index()
 	r._messageBuses = MessageBusSlice(r.MessageBuses).Index()
-	r._parameters, err = ParametersSlice(r.Parameters).Index()
+	r._parameters, err = Parameters(r.Parameters).Index()
 	if err != nil {
 		return err
 	}
@@ -318,12 +318,12 @@ func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, config.C
 	return types, visitors, cache, transformsIndex
 }
 
-//View returns View with given name
+// View returns View with given name
 func (r *Resource) View(name string) (*View, error) {
 	return r._views.Lookup(name)
 }
 
-//NewResourceFromURL loads and initializes Resource from file .yaml
+// NewResourceFromURL loads and initializes Resource from file .yaml
 func NewResourceFromURL(ctx context.Context, url string, types *xreflect.Types, visitors config.CodecsRegistry) (*Resource, error) {
 	resource, err := LoadResourceFromURL(ctx, url, afs.New())
 	if err != nil {
@@ -333,7 +333,7 @@ func NewResourceFromURL(ctx context.Context, url string, types *xreflect.Types, 
 	return resource, err
 }
 
-//LoadResourceFromURL load resource from URL
+// LoadResourceFromURL load resource from URL
 func LoadResourceFromURL(ctx context.Context, URL string, fs afs.Service) (*Resource, error) {
 	data, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
@@ -431,17 +431,17 @@ func EmptyResource() *Resource {
 		Views:         make([]*View, 0),
 		_views:        Views{},
 		Parameters:    make([]*Parameter, 0),
-		_parameters:   ParametersIndex{},
+		_parameters:   NamedParameters{},
 		_types:        xreflect.NewTypes(),
 	}
 }
 
-//NewResource creates a Resource and register provided Types
+// NewResource creates a Resource and register provided Types
 func NewResource(parent *xreflect.Types) *Resource {
 	return &Resource{_types: xreflect.NewTypes(xreflect.WithRegistry(parent))}
 }
 
-//AddViews register views in the resource
+// AddViews register views in the resource
 func (r *Resource) AddViews(views ...*View) {
 	if r.Views == nil {
 		r.Views = make([]*View, 0)
@@ -450,14 +450,14 @@ func (r *Resource) AddViews(views ...*View) {
 	r.Views = append(r.Views, views...)
 }
 
-//AddConnector adds connector
+// AddConnector adds connector
 func (r *Resource) AddConnector(name string, driver string, dsn string, opts ...ConnectorOption) *Connector {
 	connector := NewConnector(name, driver, dsn, opts...)
 	r.AddConnectors(connector)
 	return connector
 }
 
-//AddConnectors register connectors in the resource
+// AddConnectors register connectors in the resource
 func (r *Resource) AddConnectors(connectors ...*Connector) {
 	if r.Connectors == nil {
 		r.Connectors = make([]*Connector, 0)
@@ -474,7 +474,7 @@ func (r *Resource) AddConnectors(connectors ...*Connector) {
 }
 
 func (r *Resource) AddMessageBus(messageBuses ...*mbus.Resource) {
-	if r.MessageBus == nil {
+	if len(r._messageBuses) == 0 {
 		r.MessageBuses = make([]*mbus.Resource, 0)
 		r._messageBuses = map[string]*mbus.Resource{}
 	}
@@ -487,7 +487,7 @@ func (r *Resource) AddMessageBus(messageBuses ...*mbus.Resource) {
 	}
 }
 
-//AddParameters register parameters in the resource
+// AddParameters register parameters in the resource
 func (r *Resource) AddParameters(parameters ...*Parameter) {
 	if r.Parameters == nil {
 		r.Parameters = make([]*Parameter, 0)
@@ -496,7 +496,7 @@ func (r *Resource) AddParameters(parameters ...*Parameter) {
 	r.Parameters = append(r.Parameters, parameters...)
 }
 
-//AddLoggers register loggers in the resource
+// AddLoggers register loggers in the resource
 func (r *Resource) AddLoggers(loggers ...*logger.Adapter) {
 	r.Loggers = append(r.Loggers, loggers...)
 }

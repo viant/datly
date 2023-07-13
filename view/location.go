@@ -19,7 +19,9 @@ const (
 	KindEnvironment Kind = "env"
 	KindLiteral     Kind = "literal"
 	KindParam       Kind = "param"
-	KindRequest     Kind = "http_request"
+
+	KindPredicate Kind = "predicate"
+	KindRequest   Kind = "http_request"
 )
 
 // Validate checks if Kind is valid.

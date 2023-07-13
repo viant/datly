@@ -154,7 +154,7 @@ func (d *db) initDatabase(driver string, dsn string, config *DBConfig) error {
 	started := time.Now()
 	d.actual, err = sql.Open(driver, dsn)
 	if elapsed := time.Since(started); elapsed > 100*time.Millisecond {
-		fmt.Printf("[WARN] %v connection took %s\n", elapsed)
+		fmt.Printf("[WARN] %v connection took %s\n", dsn, elapsed)
 	}
 	if d.actual != nil {
 		d.configureDB(config, d.actual)

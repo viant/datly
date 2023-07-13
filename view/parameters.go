@@ -18,6 +18,8 @@ type (
 	//Parameter describes parameters used by the Criteria to filter the view.
 	Parameter struct {
 		shared.Reference
+		Fields       Parameters
+		Predicate    *ParameterPredicate
 		Name         string `json:",omitempty"`
 		PresenceName string `json:",omitempty"`
 
@@ -641,17 +643,41 @@ func (p *Parameter) WithAccessors(value, presence *types.Accessor) *Parameter {
 	return &result
 }
 
-// ParametersIndex represents Parameter map indexed by Parameter.Name
-type ParametersIndex map[string]*Parameter
+// NamedParameters represents Parameter map indexed by Parameter.Name
+type NamedParameters map[string]*Parameter
 
-// ParametersSlice represents slice of parameters
-type ParametersSlice []*Parameter
+// Parameters represents slice of parameters
+type Parameters []*Parameter
 
-func (p ParametersSlice) Len() int {
+func (p *Parameter) PredicateType() reflect.Type {
+	var result []reflect.StructField
+	var hasStruct []reflect.StructField
+	boolType := reflect.TypeOf(true)
+	for _, param := range p.Fields {
+		fieldType := param.Schema.Type()
+		result = append(result, reflect.StructField{Name: param.Name, Type: fieldType})
+		hasStruct = append(hasStruct, reflect.StructField{Name: param.Name, Type: boolType})
+	}
+	result = append(result, reflect.StructField{Name: "Has", Type: reflect.StructOf(hasStruct)})
+	result = append(result, reflect.StructField{Name: "PredicateInstance", Anonymous: true, Type: reflect.TypeOf(PredicateInstance{})})
+	return reflect.StructOf(result)
+}
+
+func (p Parameters) FilterByKind(kind Kind) Parameters {
+	var result = Parameters{}
+	for i, candidate := range p {
+		if candidate.In.Kind == kind {
+			result = append(result, p[i])
+		}
+	}
+	return result
+}
+
+func (p Parameters) Len() int {
 	return len(p)
 }
 
-func (p ParametersSlice) Less(i, j int) bool {
+func (p Parameters) Less(i, j int) bool {
 	if p[j].ErrorStatusCode == 401 {
 		return false
 	}
@@ -663,13 +689,13 @@ func (p ParametersSlice) Less(i, j int) bool {
 	return true
 }
 
-func (p ParametersSlice) Swap(i, j int) {
+func (p Parameters) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 
 // Index indexes parameters by Parameter.Name
-func (p ParametersSlice) Index() (ParametersIndex, error) {
-	result := ParametersIndex(make(map[string]*Parameter))
+func (p Parameters) Index() (NamedParameters, error) {
+	result := NamedParameters(make(map[string]*Parameter))
 	for parameterIndex := range p {
 		if err := result.Register(p[parameterIndex]); err != nil {
 			return nil, err
@@ -679,8 +705,8 @@ func (p ParametersSlice) Index() (ParametersIndex, error) {
 	return result, nil
 }
 
-// Filter filters ParametersSlice with given Kind and creates Template
-func (p ParametersSlice) Filter(kind Kind) ParametersIndex {
+// Filter filters Parameters with given Kind and creates Template
+func (p Parameters) Filter(kind Kind) NamedParameters {
 	result := make(map[string]*Parameter)
 
 	for parameterIndex := range p {
@@ -694,14 +720,14 @@ func (p ParametersSlice) Filter(kind Kind) ParametersIndex {
 	return result
 }
 
-func (p ParametersIndex) merge(with ParametersIndex) {
+func (p NamedParameters) merge(with NamedParameters) {
 	for s := range with {
 		p[s] = with[s]
 	}
 }
 
 // Lookup returns Parameter with given name
-func (p ParametersIndex) Lookup(paramName string) (*Parameter, error) {
+func (p NamedParameters) Lookup(paramName string) (*Parameter, error) {
 	if param, ok := p[paramName]; ok {
 		return param, nil
 	}
@@ -709,7 +735,7 @@ func (p ParametersIndex) Lookup(paramName string) (*Parameter, error) {
 }
 
 // Register registers parameter
-func (p ParametersIndex) Register(parameter *Parameter) error {
+func (p NamedParameters) Register(parameter *Parameter) error {
 	if _, ok := p[parameter.Name]; ok {
 		fmt.Printf("[WARN] parameter with %v name already exists in given resource", parameter.Name)
 	}

@@ -33,7 +33,7 @@ type (
 		accessors        *types.Accessors
 		_fields          []reflect.StructField
 		_fieldIndex      map[string]int
-		_parametersIndex ParametersIndex
+		_parametersIndex NamedParameters
 		initialized      bool
 		isTemplate       bool
 		wasEmpty         bool
@@ -92,12 +92,12 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 		return err
 	}
 
-	t._parametersIndex, err = ParametersSlice(t.Parameters).Index()
+	t._parametersIndex, err = Parameters(t.Parameters).Index()
 	if err != nil {
 		return err
 	}
 
-	sort.Sort(ParametersSlice(t.Parameters))
+	sort.Sort(Parameters(t.Parameters))
 	return t.initMetaIfNeeded(ctx, resource)
 }
 
@@ -276,14 +276,14 @@ func (t *Template) EvaluateStateWithSession(externalParams interface{}, presence
 	)
 }
 
-//WithTemplateParameter return parameter template options
+// WithTemplateParameter return parameter template options
 func WithTemplateParameter(parameter *Parameter) TemplateOption {
 	return func(t *Template) {
 		t.Parameters = append(t.Parameters, parameter)
 	}
 }
 
-//NewTemplate creates a template
+// NewTemplate creates a template
 func NewTemplate(source string, opts ...TemplateOption) *Template {
 	ret := &Template{Source: source}
 	for _, opt := range opts {

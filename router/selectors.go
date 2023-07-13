@@ -30,7 +30,7 @@ type (
 		requestMetadata *RequestMetadata
 		params          *RequestParams
 		cache           *paramsValueCache
-		viewParams      view.ParametersIndex
+		viewParams      view.NamedParameters
 	}
 
 	JSONError struct {
@@ -131,7 +131,7 @@ func BuildRouteSelectors(ctx context.Context, selectors *view.Selectors, route *
 			return err
 		}
 	}
-	return CreateSelectors(ctx, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, view.ParametersIndex{}, route.Index._viewDetails...)
+	return CreateSelectors(ctx, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, view.NamedParameters{}, route.Index._viewDetails...)
 }
 
 func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, requestParams *RequestParams, views ...*ViewDetails) (*view.Selectors, *RequestParams, error) {
@@ -162,12 +162,12 @@ func NewRequestMetadata(route *Route) *RequestMetadata {
 	return requestMetadata
 }
 
-func CreateSelectors(ctx context.Context, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, selectors *view.Selectors, paramsIndex view.ParametersIndex, views ...*ViewDetails) error {
+func CreateSelectors(ctx context.Context, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, selectors *view.Selectors, paramsIndex view.NamedParameters, views ...*ViewDetails) error {
 	sb := newParamStateBuilder(inputFormat, dateFormat, requestMetadata, requestParams, newParamsValueCache(), paramsIndex)
 	return sb.Build(ctx, views, selectors)
 }
 
-func newParamStateBuilder(inputFormat format.Case, dateFormat string, requestMetadata *RequestMetadata, requestParams *RequestParams, cache *paramsValueCache, paramsIndex view.ParametersIndex) *paramStateBuilder {
+func newParamStateBuilder(inputFormat format.Case, dateFormat string, requestMetadata *RequestMetadata, requestParams *RequestParams, cache *paramsValueCache, paramsIndex view.NamedParameters) *paramStateBuilder {
 	sb := &paramStateBuilder{
 		caser:           inputFormat,
 		dateFormat:      dateFormat,
