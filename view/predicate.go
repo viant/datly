@@ -1,12 +1,23 @@
 package view
 
-import "reflect"
+import (
+	"github.com/viant/datly/config"
+	"github.com/viant/xunsafe"
+	"reflect"
+)
 
-type ParameterPredicate struct {
-	Name    string
-	Context int
-	Args    []string //actual instances
-}
+type (
+	PredicateRegistry map[string]*Predicate
+	Predicate         struct {
+		Parameters []*PredicateParameter
+		config.PredicateConfig
+	}
+
+	PredicateParameter struct {
+		Parameter *Parameter
+		Setter    *xunsafe.Field
+	}
+)
 
 type (
 	PredicateInstance struct {
@@ -20,16 +31,6 @@ type (
 		ExpandedCriteria string
 		Value            interface{}
 	}
-)
-
-type (
-	Predicate struct {
-		Name     string
-		Template string
-		Args     []string //named parametr for tempalte substitution
-	}
-
-	PredicateRegistry map[string]*Predicate
 )
 
 func (p *Predicate) Type() reflect.Type {
@@ -48,22 +49,4 @@ func (p *Predicate) Type() reflect.Type {
 
 func (r PredicateRegistry) Lookup(name string) *Predicate {
 	return r[name]
-}
-
-func ExistsPredicate() *Predicate {
-	return &Predicate{
-		Name:     "exists",
-		Template: ` EXISTS (SELECT 1 FROM $Table t WHERE $Column = $FilterValue AND $JoinColumn = $ParentColumn)`,
-		Args: []string{
-			"Column",
-			"Table",
-			"JoinColumn",
-			"ParentColumn",
-		},
-	}
-}
-
-func ComputePredicate(registry PredicateRegistry, predicateParameter *Parameter, paramState interface{}) error {
-	//TODO get PredicateInstance and populate based on the
-	return nil
 }

@@ -47,7 +47,7 @@ func (t *Transform) Init(ctx context.Context, fs afs.Service, lookupType xreflec
 
 	if t.Source != "" {
 		var err error
-		t._evaluator, err = expand.NewEvaluator(nil, nil, nil, t.Source, lookupType, t.newCtx(CustomContext{}))
+		t._evaluator, err = expand.NewEvaluator(nil, nil, nil, t.Source, lookupType, expand.WithCustomContexts(t.newCtx(CustomContext{})))
 		if err != nil {
 			return err
 		}

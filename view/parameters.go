@@ -19,7 +19,7 @@ type (
 	Parameter struct {
 		shared.Reference
 		Fields       Parameters
-		Predicate    *ParameterPredicate
+		Predicate    *Predicate
 		Name         string `json:",omitempty"`
 		PresenceName string `json:",omitempty"`
 
@@ -648,20 +648,6 @@ type NamedParameters map[string]*Parameter
 
 // Parameters represents slice of parameters
 type Parameters []*Parameter
-
-func (p *Parameter) PredicateType() reflect.Type {
-	var result []reflect.StructField
-	var hasStruct []reflect.StructField
-	boolType := reflect.TypeOf(true)
-	for _, param := range p.Fields {
-		fieldType := param.Schema.Type()
-		result = append(result, reflect.StructField{Name: param.Name, Type: fieldType})
-		hasStruct = append(hasStruct, reflect.StructField{Name: param.Name, Type: boolType})
-	}
-	result = append(result, reflect.StructField{Name: "Has", Type: reflect.StructOf(hasStruct)})
-	result = append(result, reflect.StructField{Name: "PredicateInstance", Anonymous: true, Type: reflect.TypeOf(PredicateInstance{})})
-	return reflect.StructOf(result)
-}
 
 func (p Parameters) FilterByKind(kind Kind) Parameters {
 	var result = Parameters{}

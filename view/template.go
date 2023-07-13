@@ -327,6 +327,20 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 		return nil
 	}
 
+	var predicates []*expand.PredicateConfig
+	for _, p := range t.Parameters {
+		if p.Predicate == nil {
+			continue
+		}
+
+		predicates = append(predicates, &expand.PredicateConfig{
+			Config:        &p.Predicate.PredicateConfig,
+			StateAccessor: p._valueAccessor,
+			HasAccessor:   p._presenceAccessor,
+			Expander:      nil,
+		})
+	}
+
 	evaluator, err := NewEvaluator(t.Parameters, t.Schema.Type(), t.PresenceSchema.Type(), t.Source, resource.LookupType())
 	if err != nil {
 		return err

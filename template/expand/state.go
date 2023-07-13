@@ -5,6 +5,7 @@ import (
 	"github.com/viant/velty/est"
 	"github.com/viant/xdatly/handler/mbus"
 	"github.com/viant/xdatly/handler/validator"
+	"github.com/viant/xunsafe"
 )
 
 type (
@@ -15,8 +16,9 @@ type (
 		ParametersHas interface{}
 		CustomContext []*CustomContext
 
-		Expanded string
-		flushed  bool
+		Expanded   string
+		flushed    bool
+		Predicates []*PredicateConfig
 	}
 
 	Context struct {
@@ -29,6 +31,7 @@ type (
 		Session         *session.Session   `velty:"names=session"`
 		Validator       *validator.Service `velty:"names=validator"`
 		MessageBus      *mbus.Service      `velty:"names=messageBus"`
+		Predicate       *Predicate         `velty:"names=predicate"`
 	}
 
 	StateOption func(state *State)
@@ -106,6 +109,17 @@ func (s *State) Init(templateState *est.State, options ...StateOption) {
 
 	if s.MessageBus == nil {
 		s.MessageBus = s.Session.MessageBus()
+	}
+
+	if len(s.Predicates) > 0 {
+		s.Predicate = &Predicate{
+			dataUnit: s.DataUnit,
+			config:   s.Predicates,
+			state:    s.Parameters,
+			statePtr: xunsafe.AsPointer(s.Parameters),
+			has:      s.ParametersHas,
+			hasPtr:   xunsafe.AsPointer(s.ParametersHas),
+		}
 	}
 
 	s.State = templateState
