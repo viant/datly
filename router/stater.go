@@ -81,7 +81,7 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 		}
 
 		if currParam, err := s.resource.ParamByName(parameter.Name); err == nil {
-			parameter = currParam.WithAccessors(types.NewAccessor([]*xunsafe.Field{xunsafe.NewField(field)}), nil)
+			parameter = currParam.WithAccessors(types.NewAccessor(xunsafe.NewField(field)), nil)
 		} else {
 			if err = parameter.Init(ctx, nil, s.resource, nil); err != nil {
 				return nil, err

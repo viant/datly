@@ -5,7 +5,6 @@ import (
 	"github.com/viant/velty/est"
 	"github.com/viant/xdatly/handler/mbus"
 	"github.com/viant/xdatly/handler/validator"
-	"github.com/viant/xunsafe"
 )
 
 type (
@@ -112,14 +111,7 @@ func (s *State) Init(templateState *est.State, options ...StateOption) {
 	}
 
 	if len(s.Predicates) > 0 {
-		s.Predicate = &Predicate{
-			dataUnit: s.DataUnit,
-			config:   s.Predicates,
-			state:    s.Parameters,
-			statePtr: xunsafe.AsPointer(s.Parameters),
-			has:      s.ParametersHas,
-			hasPtr:   xunsafe.AsPointer(s.ParametersHas),
-		}
+		s.Predicate = NewPredicate(s.Parameters, s.ParametersHas, s.Predicates, s.DataUnit)
 	}
 
 	s.State = templateState
