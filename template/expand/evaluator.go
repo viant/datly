@@ -17,6 +17,7 @@ type (
 		executor         *est.Execution
 		stateProvider    func() *est.State
 		constParams      []ConstUpdater
+		predicateConfigs []*PredicateConfig
 		paramSchema      reflect.Type
 		presenceSchema   reflect.Type
 		supportsPresence bool
@@ -26,9 +27,23 @@ type (
 	ConstUpdater interface {
 		UpdateValue(params interface{}, presenceMap interface{}) error
 	}
+
+	EvaluatorOption func(c *config)
 )
 
-func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.LookupType, options ...interface{}) (*Evaluator, error) {
+func WithCustomContexts(ctx ...*CustomContext) EvaluatorOption {
+	return func(c *config) {
+		c.valueTypes = append(c.valueTypes, ctx...)
+	}
+}
+
+func WithPanicOnError(b bool) EvaluatorOption {
+	return func(c *config) {
+		c.panicOnError = true
+	}
+}
+
+func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.LookupType, options ...EvaluatorOption) (*Evaluator, error) {
 	evaluator := &Evaluator{
 		constParams:      consts,
 		paramSchema:      paramSchema,
@@ -41,7 +56,6 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 
 	var err error
 	evaluator.planner = velty.New(velty.BufferSize(len(template)), aCofnig.panicOnError, velty.TypeParser(func(typeRepresentation string) (reflect.Type, error) {
-		fmt.Printf("1111\n")
 		return typeLookup(typeRepresentation)
 	}))
 
@@ -117,17 +131,10 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	return evaluator, nil
 }
 
-func createConfig(options []interface{}) *config {
+func createConfig(options []EvaluatorOption) *config {
 	instance := newConfig()
 	for _, option := range options {
-		switch actual := option.(type) {
-		case []*CustomContext:
-			instance.valueTypes = append(instance.valueTypes, actual...)
-		case *CustomContext:
-			instance.valueTypes = append(instance.valueTypes, actual)
-		case velty.PanicOnError:
-			instance.panicOnError = actual
-		}
+		option(instance)
 	}
 
 	return instance
@@ -186,8 +193,18 @@ func (e *Evaluator) ensureState(state *State, options ...StateOption) *State {
 		state = &State{}
 	}
 
+	if len(e.predicateConfigs) > 0 {
+		options = append(options, WithPredicates(e.predicateConfigs))
+	}
+
 	state.Init(e.stateProvider(), options...)
 	return state
+}
+
+func WithPredicates(configs []*PredicateConfig) StateOption {
+	return func(state *State) {
+		state.Predicates = configs
+	}
 }
 
 func (e *Evaluator) updateConsts(params interface{}, presenceMap interface{}) (interface{}, interface{}) {

@@ -44,7 +44,7 @@ pipeline:
       - cd ${appPath}/e2e/custom_datly/.extension/.build/ext
       - go mod tidy
       - cd ${appPath}/e2e/custom_datly/.extension/pkg
-      - go get github.com/viant/xdatly/handler@4e931fe
+      - go get github.com/viant/xdatly/handler@01ca1dc
       - go mod tidy
       - cd $appPath/e2e/custom_datly/.extension/.build/datly
       - go mod edit -replace github.com/viant/xdatly/extension=${appPath}/e2e/custom_datly/.extension/.build/ext
