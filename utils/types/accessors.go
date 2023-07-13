@@ -35,7 +35,7 @@ func NewAccessors(namer Namer) *Accessors {
 	}
 }
 
-func NewAccessor(fields []*xunsafe.Field) *Accessor {
+func NewAccessor(fields ...*xunsafe.Field) *Accessor {
 	var xType *xunsafe.Type
 	var isPtr bool
 
@@ -43,7 +43,7 @@ func NewAccessor(fields []*xunsafe.Field) *Accessor {
 		isPtr:   isPtr,
 		xType:   xType,
 		xFields: fields,
-		xSlices: []*xunsafe.Slice{nil},
+		xSlices: make([]*xunsafe.Slice, len(fields)),
 	}
 }
 
@@ -400,7 +400,7 @@ func (a *Accessors) indexAccessors(prefix string, parentType reflect.Type, field
 
 func (a *Accessors) indexAccessor(name string, fields []*xunsafe.Field, parentType reflect.Type) {
 
-	fieldAccessor := NewAccessor(fields)
+	fieldAccessor := NewAccessor(fields...)
 
 	fieldAccessor.xSlices = make([]*xunsafe.Slice, len(fields))
 

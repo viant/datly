@@ -1,9 +1,9 @@
 package expand
 
 import (
-	dConfig "github.com/viant/datly/config"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/xdatly/handler/parameter"
+	"github.com/viant/xunsafe"
 	"strings"
 	"unsafe"
 )
@@ -13,24 +13,42 @@ type (
 		dataUnit *DataUnit
 		config   []*PredicateConfig
 		state    interface{}
-		statePtr unsafe.Pointer
 		has      interface{}
+		statePtr unsafe.Pointer
 		hasPtr   unsafe.Pointer
 	}
 
 	PredicateConfig struct {
-		Config        *dConfig.PredicateConfig
+		Context       int
 		StateAccessor *types.Accessor
 		HasAccessor   *types.Accessor
 		Expander      func(interface{}) (*parameter.Criteria, error)
 	}
 )
 
+func NewPredicate(state, has interface{}, config []*PredicateConfig, dataUnit *DataUnit) *Predicate {
+	return &Predicate{
+		dataUnit: dataUnit,
+		config:   config,
+		state:    state,
+		statePtr: xunsafe.AsPointer(state),
+		has:      has,
+		hasPtr:   xunsafe.AsPointer(has),
+	}
+}
+
+func (p *Predicate) ExpandWith(ctx int, operator string) (string, error) {
+	return p.expand(ctx, operator)
+}
 func (p *Predicate) Expand(ctx int) (string, error) {
+	return p.expand(ctx, "AND")
+}
+
+func (p *Predicate) expand(ctx int, operator string) (string, error) {
 	result := &strings.Builder{}
 	var accArgs []interface{}
 	for _, predicateConfig := range p.config {
-		if predicateConfig.Config.Context != ctx {
+		if predicateConfig.Context != ctx {
 			continue
 		}
 
@@ -57,7 +75,9 @@ func (p *Predicate) Expand(ctx int) (string, error) {
 		}
 
 		if result.Len() != 0 {
-			result.WriteString(" AND ")
+			result.WriteString(" ")
+			result.WriteString(operator)
+			result.WriteString(" ")
 		}
 
 		result.WriteString(criteria.Query)

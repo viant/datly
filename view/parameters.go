@@ -572,7 +572,7 @@ func (p *Parameter) SetPresenceField(structType reflect.Type) error {
 		return err
 	}
 
-	p._presenceAccessor = types.NewAccessor(fields)
+	p._presenceAccessor = types.NewAccessor(fields...)
 
 	return nil
 }

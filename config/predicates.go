@@ -8,13 +8,10 @@ import (
 type (
 	PredicateRegistry map[string]parameter.PredicateFactory
 	PredicateConfig   struct {
+		Parent  string
 		Name    string
 		Context int
 		Args    []*NamedArg
-	}
-
-	PositionalPredicate interface {
-		MapPositionalArgs(position int, value string, config *PredicateConfig) error
 	}
 
 	NamedArg struct {
