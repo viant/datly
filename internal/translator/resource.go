@@ -44,8 +44,11 @@ func (r *Resource) ExtractDeclared(dSQL *string) error {
 
 func (r *Resource) appendPathVariableParams() {
 	params := extractURIParams(r.Rule.Route.URI)
+	required := true
 	for paramName := range params {
-		r.State.Append(inference.NewPathParameter(paramName))
+		parameter := inference.NewPathParameter(paramName)
+		parameter.Required = &required
+		r.State.Append(parameter)
 	}
 }
 
@@ -117,7 +120,9 @@ func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(
 			paramSchema := reflect.TypeOf(fields)
 			viewParameter.Schema.SetType(paramSchema)
 			viewParameter.Schema.DataType = viewParameter.Name
+			viewParameter.Schema.Cardinality = view.One
 		}
+		aViewNamespace.TypeDefinition = aViewNamespace.Spec.TypeDefinition("")
 	}
 	return nil
 }

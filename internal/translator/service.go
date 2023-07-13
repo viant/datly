@@ -57,6 +57,7 @@ func (s *Service) translateQuery(ctx context.Context, resource *Resource, dSQL s
 	}); err != nil {
 		return err
 	}
+
 	if err = s.persistRouterRule(resource); err != nil {
 		return err
 	}
@@ -90,7 +91,7 @@ func (s *Service) persistView(namespace *Namespace, resource *Resource) error {
 	return nil
 }
 
-//initNamespace detect SQL dependent Table columns with implicit parameters type to produce sanitized SQL
+// initNamespace detect SQL dependent Table columns with implicit parameters type to produce sanitized SQL
 func (s *Service) initNamespace(ctx context.Context, n *Namespace) error {
 	if n.Connector == "" {
 		n.Connector = s.Repository.Connectors[0].Name
@@ -113,7 +114,7 @@ func (s *Service) initNamespace(ctx context.Context, n *Namespace) error {
 	return nil
 }
 
-//buildNamespaceType build SQL/Table specification (field/column/keys) type
+// buildNamespaceType build SQL/Table specification (field/column/keys) type
 func (s *Service) buildNamespaceType(ctx context.Context, n *Namespace) error {
 	db, err := s.Repository.LookupDb(n.Connector)
 	if err != nil {

@@ -70,6 +70,12 @@ func (d *Declaration) ExpandShorthands() {
 			if d.Output.Schema == nil {
 				d.Output.Schema = &view.Schema{}
 			}
+			if d.Schema.DataType == "" {
+				d.Schema.DataType = "string"
+			}
+			if d.Schema.Cardinality == "" {
+				d.Schema.Cardinality = view.One
+			}
 			if d.Output.Schema.DataType == "" {
 				d.Output.Schema.DataType = "*JwtClaims"
 			}
@@ -110,7 +116,7 @@ func (d *Declaration) AuthParameter() *inference.Parameter {
 	return authParameter
 }
 
-//DefaultOAuthParameter creates a default oauht parameter
+// DefaultOAuthParameter creates a default oauht parameter
 func DefaultOAuthParameter(name string) *inference.Parameter {
 	required := true
 	return &inference.Parameter{Parameter: view.Parameter{

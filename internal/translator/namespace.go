@@ -41,6 +41,7 @@ type (
 		Transforms     map[string]*Function
 		ColumnConfig   []*view.ColumnConfig
 		View           *View
+		TypeDefinition *view.TypeDefinition
 		OutputConfig
 	}
 

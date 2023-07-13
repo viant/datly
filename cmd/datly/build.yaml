@@ -9,7 +9,7 @@ pipeline:
   set_sdk:
     action: sdk.set
     target: $target
-    sdk: go:1.17
+    sdk: go:1.20
   build:
     action: exec:run
     target: $target
@@ -18,7 +18,7 @@ pipeline:
       - export GO111MODULE=on
       - cd ${appPath}/cmd/datly
       - go mod download
-      - go mod tidy -compat=1.17
+      - go mod tidy
       - export GOOS=linux
       - export GOARCH=amd64
       - go build -ldflags="-X 'main.Version=${Ver}'" -trimpath
