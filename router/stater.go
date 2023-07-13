@@ -34,7 +34,7 @@ type (
 
 	stateUpdater struct {
 		params      []*view.Parameter
-		paramsIndex view.ParametersIndex
+		paramsIndex view.NamedParameters
 	}
 )
 
@@ -91,8 +91,8 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 		params = append(params, parameter)
 	}
 
-	sort.Sort(view.ParametersSlice(params))
-	index, err := view.ParametersSlice(params).Index()
+	sort.Sort(view.Parameters(params))
+	index, err := view.Parameters(params).Index()
 	if err != nil {
 		return nil, err
 	}
