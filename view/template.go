@@ -334,7 +334,7 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 		}
 
 		predicates = append(predicates, &expand.PredicateConfig{
-			Config:        &p.Predicate.PredicateConfig,
+			Config:        p.Predicate,
 			StateAccessor: p._valueAccessor,
 			HasAccessor:   p._presenceAccessor,
 			Expander:      nil,

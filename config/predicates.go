@@ -5,17 +5,23 @@ import (
 	"github.com/viant/xdatly/handler/parameter"
 )
 
-type PredicateRegistry map[string]parameter.PredicateFactory
+type (
+	PredicateRegistry map[string]parameter.PredicateFactory
+	PredicateConfig   struct {
+		Name    string
+		Context int
+		Args    []*NamedArg
+	}
 
-type PredicateConfig struct {
-	Name         string
-	Context      int
-	Column       string
-	Table        string
-	JoinColumn   string
-	ParentColumn string
-	Args         []string
-}
+	PositionalPredicate interface {
+		MapPositionalArgs(position int, value string, config *PredicateConfig) error
+	}
+
+	NamedArg struct {
+		Position int
+		Name     string
+	}
+)
 
 type (
 	ExistsPredicateFactory struct {

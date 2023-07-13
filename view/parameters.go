@@ -19,7 +19,7 @@ type (
 	Parameter struct {
 		shared.Reference
 		Fields       Parameters
-		Predicate    *Predicate
+		Predicate    *config.PredicateConfig
 		Name         string `json:",omitempty"`
 		PresenceName string `json:",omitempty"`
 
