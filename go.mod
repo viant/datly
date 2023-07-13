@@ -59,7 +59,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.33.1
 	github.com/viant/structology v0.2.0
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
-	github.com/viant/xdatly/handler v0.0.0-20230713205959-01ca1dc7494e
+	github.com/viant/xdatly/handler v0.0.0-20230713223438-282037388a67
 	github.com/viant/xdatly/types/core v0.0.0-20230619231115-e622dd6aff79
 	golang.org/x/tools v0.10.0
 )
@@ -114,6 +114,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/viant/igo v0.1.0 // indirect
+	github.com/viant/xdatly v0.3.1-0.20230713223438-282037388a67 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/net v0.11.0 // indirect
@@ -128,3 +129,5 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
+replace github.com/viant/xdatly/handler => /Users/awitas/go/src/github.com/viant/xdatly/handler
