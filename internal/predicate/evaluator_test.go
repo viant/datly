@@ -1,7 +1,6 @@
 package predicate
 
 import (
-	"context"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/xdatly/handler/parameter"
 	"github.com/viant/xdatly/predicate"
@@ -9,9 +8,6 @@ import (
 )
 
 func TestEvaluator_Expand(t *testing.T) {
-	var expander Expander = func(ctx context.Context, state interface{}) (*parameter.Criteria, error) {
-		return &parameter.Criteria{}, nil
-	}
 
 	var testCases = []struct {
 		description string
@@ -49,7 +45,7 @@ func TestEvaluator_Expand(t *testing.T) {
 			value: true,
 			expected: &parameter.Criteria{
 				Query: "active = ?",
-				Args:  []interface{}{"true"},
+				Args:  []interface{}{true},
 			},
 		},
 		{
@@ -57,19 +53,24 @@ func TestEvaluator_Expand(t *testing.T) {
 			template: &predicate.Template{
 				Name:   "dummy",
 				Source: "$Column IN($FilterValue)",
-				Args:   []*predicate.NamedArgument{},
+				Args: []*predicate.NamedArgument{
+					{
+						Name:     "Column",
+						Position: 0,
+					},
+				},
 			},
 			args:  []string{"id"},
 			value: []int{1, 10, 100},
 			expected: &parameter.Criteria{
-				Query: "id IN(?, ?, ?)",
+				Query: "id IN(?,?,?)",
 				Args:  []interface{}{1, 10, 100},
 			},
 		},
 	}
 
 	for _, testCase := range testCases {
-		evaluator := NewEvaluator(testCase.template, expander, testCase.args...)
+		evaluator := NewEvaluator(testCase.template, testCase.args...)
 		actual, err := evaluator.Expand(testCase.value)
 		if !assert.Nil(t, err, testCase.description) {
 			continue
