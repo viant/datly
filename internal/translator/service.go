@@ -18,7 +18,7 @@ type Service struct {
 }
 
 func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string) error {
-	resource := NewResource(rule)
+	resource := NewResource(rule, s.Repository.Config.repository)
 	resource.State.Append(s.Repository.State...)
 	if err := resource.InitRule(&dSQL); err != nil {
 		return err
@@ -31,7 +31,6 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 			return err
 		}
 	}
-	s.updateConfig()
 	s.Repository.Resource = append(s.Repository.Resource, resource)
 	return nil
 }
@@ -54,17 +53,17 @@ func (s *Service) translateQuery(ctx context.Context, resource *Resource, dSQL s
 		return err
 	}
 	if err = resource.Rule.Namespaces.Each(func(namespace *Namespace) error {
-		return s.buildView(namespace, resource)
+		return s.persistView(namespace, resource)
 	}); err != nil {
 		return err
 	}
-	if err = s.buildRouterRule(resource); err != nil {
+	if err = s.persistRouterRule(resource); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *Service) buildRouterRule(resource *Resource) error {
+func (s *Service) persistRouterRule(resource *Resource) error {
 	baseRuleURL := s.Repository.RuleBaseURL(resource.rule)
 	ruleName := s.Repository.RuleName(resource.rule)
 	resource.Rule.Route.Service = "Reader"
@@ -79,7 +78,7 @@ func (s *Service) buildRouterRule(resource *Resource) error {
 	return nil
 }
 
-func (s *Service) buildView(namespace *Namespace, resource *Resource) error {
+func (s *Service) persistView(namespace *Namespace, resource *Resource) error {
 	baseRuleURL := s.Repository.RuleBaseURL(resource.rule)
 	ruleName := s.Repository.RuleName(resource.rule)
 	if err := namespace.View.BuildView(resource.Rule); err != nil {
@@ -146,10 +145,6 @@ func (s *Service) buildRouterResource(resource *Resource) *router.Resource {
 	result.ColumnsDiscovery = true
 	result.Routes = append(result.Routes, &resource.Rule.Route)
 	return result
-}
-
-func (s *Service) updateConfig() {
-
 }
 
 func New(config *Config) *Service {

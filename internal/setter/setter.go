@@ -21,7 +21,7 @@ func SetBoolIfFalse(dest *bool, src bool) {
 }
 
 func SetIntIfZero(dest *int, src int) {
-	if dest != nil && *dest != 0 {
+	if dest != nil && *dest == 0 {
 		*dest = src
 	}
 }

@@ -163,6 +163,6 @@ func (r *Rule) updateExclude(n *Namespace) {
 
 func NewRule() *Rule {
 	return &Rule{Namespaces: Namespaces{registry: map[string]*Namespace{}}, With: []string{
-		"connections.yaml",
+		"connections",
 	}}
 }

@@ -122,6 +122,9 @@ func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinalit
 		Name:        name,
 		Join:        join,
 		Cardinality: cardinality}
+	if rel.ParentField == nil {
+		fmt.Printf("123")
+	}
 	s.Relations = append(s.Relations, rel)
 	s.Type.AddRelation(name, spec, rel)
 }

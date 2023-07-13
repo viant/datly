@@ -56,7 +56,51 @@ func (r *Repository) Init(ctx context.Context) error {
 	if err := r.ensureDependencies(ctx); err != nil {
 		return err
 	}
+	return nil
+}
 
+func (r *Repository) PersistConfig() error {
+	cfg := r.Config
+	cfg.NormalizeURL(cfg.repository.RepositoryURL)
+	config, err := asset.EncodeJSON(r.Config)
+	if err != nil {
+		return err
+	}
+	if err = r.persistConnections(cfg); err != nil {
+		return err
+	}
+	if err = r.persistConstants(); err != nil {
+		return err
+	}
+	r.Files.Append(asset.NewFile(cfg.URL, string(config)))
+	return nil
+}
+
+func (r *Repository) persistConstants() error {
+	cfg := r.Config.Config
+	literals := r.State.FilterByKind(view.KindLiteral)
+	if len(literals) == 0 {
+		return nil
+	}
+	resource := view.Resource{Parameters: literals.ViewParameters()}
+	content, err := asset.EncodeYAML(resource)
+	if err != nil {
+		return err
+	}
+	r.Files.Append(asset.NewFile(url.Join(cfg.DependencyURL, "constants.yaml"), string(content)))
+	return nil
+}
+
+func (r *Repository) persistConnections(cfg *Config) error {
+	if len(r.Connectors) == 0 {
+		return nil
+	}
+	resource := view.Resource{Connectors: r.Connectors}
+	connectors, err := asset.EncodeYAML(resource)
+	if err != nil {
+		return err
+	}
+	r.Files.Append(asset.NewFile(url.Join(cfg.DependencyURL, "connections.yaml"), string(connectors)))
 	return nil
 }
 
@@ -72,6 +116,9 @@ func (r *Repository) ensureDependencies(ctx context.Context) error {
 }
 
 func (r *Repository) Upload(ctx context.Context) error {
+	if len(r.Resource) == 0 {
+		return nil
+	}
 	return r.Files.Upload(ctx, r.fs)
 }
 

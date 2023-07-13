@@ -25,17 +25,15 @@ func (o *Options) Connectors() []string {
 	return []string{}
 }
 
-func (o *Options) ConfigURL() string {
-	if o.Translate != nil {
-		return o.Translate.ConfigURL
-	}
-	if o.Generate != nil {
-		return o.Generate.ConfigURL
+func (o *Options) ConfigURLs() []string {
+	repo := o.Repository()
+	if repo != nil {
+		return repo.Configs.URLs()
 	}
 	if o.Run != nil {
-		return o.Run.ConfigURL
+		return []string{o.Run.ConfigURL}
 	}
-	return ""
+	return []string{}
 }
 
 func (o *Options) Init(ctx context.Context) error {

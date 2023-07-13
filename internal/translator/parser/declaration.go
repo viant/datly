@@ -26,12 +26,13 @@ type (
 )
 
 func (d *Declaration) Merge(from *Declaration) (*Declaration, error) {
-	encoded, err := mergeJsonStructs(d, from)
+	encoded, err := MergeStructs(d, from)
 	if err != nil {
 		return nil, err
 	}
 	result := &Declaration{}
-	return result, json.Unmarshal(encoded, result)
+	err = json.Unmarshal(encoded, result)
+	return result, err
 }
 
 func (d *Declaration) PathWithName() (string, string) {
@@ -57,11 +58,21 @@ func (d *Declaration) Transform() *marshal.Transform {
 func (d *Declaration) ExpandShorthands() {
 	if d.OutputType != "" || d.Codec != "" {
 		d.Parameter.EnsureCodec()
-		if d.Parameter.Codec.OutputType == "" {
-			d.Parameter.Codec.OutputType = d.OutputType
+		if d.Parameter.Output.OutputType == "" {
+			d.Parameter.Output.OutputType = d.OutputType
 		}
-		if d.Parameter.Codec.Name == "" {
-			d.Parameter.Codec.Name = d.Codec
+		if d.Parameter.Output.Name == "" {
+			d.Parameter.Output.Name = d.Codec
+		}
+
+		switch d.Codec { //TODO get codec registry here
+		case "JwtClaim":
+			if d.Output.Schema == nil {
+				d.Output.Schema = &view.Schema{}
+			}
+			if d.Output.Schema.DataType == "" {
+				d.Output.Schema.DataType = "*JwtClaims"
+			}
 		}
 	}
 
@@ -71,6 +82,11 @@ func (d *Declaration) ExpandShorthands() {
 		if d.Location != nil {
 			d.Parameter.In.Name = *d.Location
 		}
+	}
+	if d.SQL != "" && d.In == nil {
+		d.EnsureLocation()
+		d.In.Kind = view.KindDataView
+		d.In.Name = d.Name
 	}
 
 	if d.StatusCode != nil {

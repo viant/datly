@@ -244,10 +244,10 @@ func extractRelationColumns(join *query.Join) (string, string) {
 }
 
 func (d *Parameter) EnsureCodec() {
-	if d.Parameter.Codec != nil {
+	if d.Parameter.Output != nil {
 		return
 	}
-	d.Parameter.Codec = &view.Codec{}
+	d.Parameter.Output = &view.Codec{}
 }
 
 func (d *Parameter) EnsureLocation() {
@@ -265,6 +265,23 @@ func (p *Parameter) HasDataType() bool {
 		return false
 	}
 	return p.Schema.DataType != ""
+}
+
+func (p *Parameter) IsUsedBy(text string) bool {
+	parameter := p.Name
+	if strings.Contains(text, "$"+parameter) {
+		return true
+	}
+	if strings.Contains(text, "${"+parameter) {
+		return true
+	}
+	if strings.Contains(text, "${"+parameter) {
+		return true
+	}
+	if strings.Contains(text, "Unsafe."+parameter) {
+		return true
+	}
+	return false
 }
 
 func (d *Parameter) EnsureSchema() {

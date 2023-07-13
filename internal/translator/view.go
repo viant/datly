@@ -10,7 +10,6 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox/format"
 	"path"
-	"strings"
 )
 
 type (
@@ -75,7 +74,7 @@ func (v *View) applyShorthands(namespace *Namespace) {
 	}
 }
 
-//buildView builds View
+//persistView builds View
 func (v *View) BuildView(rule *Rule) error {
 	if v.build {
 		return nil
@@ -85,7 +84,7 @@ func (v *View) BuildView(rule *Rule) error {
 	namespace := rule.Namespaces.Lookup(v.Namespace)
 	v.Table = namespace.Table.Name
 	v.Mode = view.ModeQuery
-	v.View.Connector = view.NewRefConnector(v.Connector)
+	v.View.Connector = view.NewRefConnector(namespace.Connector)
 	v.buildSelector(namespace, rule)
 	v.buildTemplate(namespace, rule)
 	v.buildColumnConfig(namespace)
@@ -144,16 +143,15 @@ func (v *View) buildTemplate(namespace *Namespace, rule *Rule) {
 	isRoot := rule.Root == v.Name
 	resource := namespace.Resource
 	v.Template = &view.Template{Source: namespace.SanitizedSQL}
-	v.matchParameters(namespace.SanitizedSQL, resource.State, isRoot)
+	v.Template.Parameters = v.matchParameters(namespace.SanitizedSQL, resource.State, isRoot)
 }
 
 //matchParameters matches parameter used by SQL, and add explicit parameter for root view
 func (v *View) matchParameters(SQL string, state inference.State, root bool) []*view.Parameter {
 	var result []*view.Parameter
-	for _, candidate := range state {
-		if (root && candidate.Explicit) || usesParameter(SQL, candidate.Name) {
-			result = append(result, view.NewRefParameter(candidate.Name))
-		}
+	SQLState := state.StateForSQL(SQL, root)
+	for _, candidate := range SQLState {
+		result = append(result, view.NewRefParameter(candidate.Name))
 	}
 	return result
 }
@@ -176,17 +174,21 @@ func (v *View) buildRelations(parentNamespace *Namespace, rule *Rule) error {
 			return fmt.Errorf("faild to add relation: %v, unknown reference", relation.Name)
 		}
 		viewRelation.Column = relation.ParentField.Column.Name
+		viewRelation.ColumnNamespace = relation.ParentField.Column.Namespace
 		viewRelation.Field = relation.ParentField.Name
 		holderFormat, err := format.NewCase(formatter.DetectCase(relNamespace.Name))
 		if err != nil {
 			return err
 		}
 		viewRelation.Holder = holderFormat.Format(relNamespace.Name, format.CaseUpperCamel)
+		viewRelation.IncludeColumn = true
 		relNamespace.Holder = viewRelation.Holder
 		refViewName := relNamespace.View.Name
 		refColumn := relation.KeyField.Column.Name
-		refField := relation.KeyField.Name
+		refField := ""
+		refField = relation.KeyField.Name
 		viewRelation.Of = view.NewReferenceView(refViewName, refViewName+"#", refColumn, refField)
+		viewRelation.Cardinality = relation.Cardinality
 		v.View.With = append(v.View.With, viewRelation)
 	}
 	return nil
@@ -199,20 +201,4 @@ func (v *View) GenerateFiles(baseURL string, ruleName string, files *asset.Files
 		v.View.Template.SourceURL = path.Join(ruleName, v.Namespace+".sql")
 		v.View.Template.Source = ""
 	}
-}
-
-func usesParameter(text string, name string) bool {
-	if strings.Contains(text, "$"+name) {
-		return true
-	}
-	if strings.Contains(text, "${"+name) {
-		return true
-	}
-	if strings.Contains(text, "${"+name) {
-		return true
-	}
-	if strings.Contains(text, "Unsafe."+name) {
-		return true
-	}
-	return false
 }

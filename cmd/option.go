@@ -501,7 +501,7 @@ func (o *Options) MergeFromRun(run *options.Run) {
 }
 
 func (o *Options) MergeFromDSql(dsql *options.Translate) {
-	o.WriteLocation = dsql.Repo
+	o.WriteLocation = dsql.RepositoryURL
 	o.Name = dsql.Name
 	o.Location = dsql.Source
 	o.Connects = dsql.Connectors
@@ -517,8 +517,8 @@ func (o *Options) MergeFromDSql(dsql *options.Translate) {
 		o.RelativePath = dsql.Module
 	}
 	if dsql.Port == nil {
-		o.PartialConfigURL = dsql.ConfigURL
-		o.RouteURL = url.Join(dsql.Repo, "Datly/routes")
+		o.PartialConfigURL = dsql.Configs.URL()
+		o.RouteURL = url.Join(dsql.RepositoryURL, "Datly/routes")
 	}
 }
 
@@ -531,8 +531,8 @@ func (o *Options) MergeFromInit(init *options.Init) {
 		o.Port = *init.Port
 	}
 	o.ConstURL = init.ConstURL
-	o.WriteLocation = init.Repo
-	o.PartialConfigURL = init.ConfigURL
+	o.WriteLocation = init.RepositoryURL
+	o.PartialConfigURL = init.Configs.URL()
 	if init.CacheProvider.ProviderURL != "" {
 		o.cache = &view.Cache{
 			Name:         init.Name,
@@ -566,27 +566,27 @@ func (o *Options) BuildOption() *options.Options {
 		if o.PartialConfigURL != "" {
 			fs := afs.New()
 			if ok, _ := fs.Exists(context.Background(), o.PartialConfigURL); ok {
-				if result.Translate != nil {
-					result.Translate.ConfigURL = o.PartialConfigURL
-				}
-				if result.Generate != nil {
-					result.Generate.ConfigURL = o.PartialConfigURL
+				repo := result.Repository()
+				if repo != nil {
+					repo.Configs.Append(o.PartialConfigURL)
 				}
 			}
 		}
 	}
-	repo := result.Repository()
-	repo.RSA = o.JWTVerifierRSAKey
-	repo.HMAC = o.JWTVerifierHMACKey
-	repo.Port = &o.Port
-	repo.Repo = o.WriteLocation
-	repo.ConstURL = o.ConstURL
-	repo.Connector.Connectors = o.Connects
-
-	rule := result.Rule()
-	rule.Module = o.RelativePath
-	rule.Source = o.Location
-	rule.Prefix = o.RoutePrefix
+	if repo := result.Repository(); repo != nil {
+		repo.RSA = o.JWTVerifierRSAKey
+		repo.HMAC = o.JWTVerifierHMACKey
+		repo.Port = &o.Port
+		repo.RepositoryURL = o.WriteLocation
+		repo.ConstURL = o.ConstURL
+		repo.Connector.Connectors = o.Connects
+		repo.APIPrefix = o.ApiURIPrefix
+	}
+	if rule := result.Rule(); rule != nil {
+		rule.Module = o.RelativePath
+		rule.Source = o.Location
+		rule.Prefix = o.RoutePrefix
+	}
 	return result
 }
 

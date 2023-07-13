@@ -68,6 +68,15 @@ type (
 	}
 )
 
+func (v *Parameter) OutputSchema() *Schema {
+	if v.Output != nil && v.Output.Schema != nil {
+		return v.Output.Schema
+	}
+	if v.Codec != nil && v.Codec.Schema != nil {
+		return v.Codec.Schema
+	}
+	return v.Schema
+}
 func (v *Codec) Init(resource *Resource, view *View, ownerType reflect.Type) error {
 	if v._initialized {
 		return nil
@@ -758,7 +767,7 @@ func NewConstLocation() *Location {
 
 // NewPathLocation creates a structql
 func NewPathLocation(name string) *Location {
-	return &Location{Name: name, Kind: KindParam}
+	return &Location{Name: name, Kind: KindPath}
 }
 
 // WithParameterType returns schema type parameter option

@@ -11,6 +11,7 @@ import (
 
 type Field struct {
 	view.Field
+	Skipped    bool
 	Column     *sqlparser.Column
 	Pk         *sink.Key
 	Tags       Tags

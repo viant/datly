@@ -46,7 +46,16 @@ func (s *State) AppendConstants(constants map[string]interface{}) {
 	for paramName, paramValue := range constants {
 		s.Append(NewConstParameter(paramName, paramValue))
 	}
+}
 
+func (s *State) StateForSQL(SQL string, isRoot bool) State {
+	var result = State{}
+	for _, candidate := range *s {
+		if (isRoot && candidate.Explicit) || candidate.IsUsedBy(SQL) {
+			result = append(result, candidate)
+		}
+	}
+	return result
 }
 
 func (s State) Clone() State {
@@ -100,6 +109,9 @@ func (s State) IndexByPathIndex() map[string]*Parameter {
 //FilterByKind filters state parameter by kind
 func (s State) FilterByKind(kind view.Kind) State {
 	result := State{}
+	if len(s) == 0 {
+		return result
+	}
 	for _, parameter := range s {
 		if parameter.In.Kind == kind {
 			result.Append(parameter)
@@ -193,14 +205,17 @@ func (s State) ReflectType(pkgPath string, lookupType xreflect.LookupType) (refl
 	var fields []reflect.StructField
 	var err error
 	for _, param := range s {
-		schema := param.Schema
+		schema := param.OutputSchema()
 		if schema == nil {
 			return nil, fmt.Errorf("invalid parameter: %v schema was empty", param.Name)
+		}
+		if schema.DataType == "" && param.DataType != "" {
+			schema.DataType = param.DataType
 		}
 		rType := schema.Type()
 		if rType == nil {
 			if rType, err = types.LookupType(lookupType, schema.DataType); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to detect parmater '%v' type for: %v %v, %w", param.Name, schema.DataType, err)
 			}
 		}
 		param.Schema.Cardinality = schema.Cardinality
@@ -210,7 +225,7 @@ func (s State) ReflectType(pkgPath string, lookupType xreflect.LookupType) (refl
 	}
 
 	if len(fields) == 0 {
-		return nil, nil
+		return reflect.TypeOf(struct{}{}), nil
 	}
 	baseType := reflect.StructOf(fields)
 	return baseType, nil

@@ -87,6 +87,7 @@ func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool) (*Field
 	field.Schema = view.NewSchema(aType)
 	field.Schema.DataType = aType.Name()
 	if skipped {
+		field.Skipped = skipped
 		t.skipped = append(t.skipped, field)
 	} else {
 		t.columnFields = append(t.columnFields, field)

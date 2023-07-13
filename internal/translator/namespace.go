@@ -59,6 +59,12 @@ type (
 
 func (n *Namespace) UpdateParameterType(state *inference.State, name string, expression *parser.ExpressionContext) {
 	parameter := state.Lookup(name)
+	if index := strings.Index(name, "."); index != -1 && parameter == nil {
+		if holder := state.Lookup(name[:index]); holder != nil {
+			return
+		}
+	}
+
 	if parameter == nil {
 		parameter = &inference.Parameter{}
 		parameter.Name = name
@@ -162,7 +168,11 @@ func (n *Namespace) discoverTables(ctx context.Context, db *sql.DB, SQL string) 
 	n.Table, err = inference.NewTable(ctx, db, SQL)
 	if n.Table != nil {
 		for _, column := range n.Table.QueryColumns {
-			n.Whitelisted = append(n.Whitelisted, column.Alias)
+			name := column.Alias
+			if name == "" {
+				name = column.Name
+			}
+			n.Whitelisted = append(n.Whitelisted, strings.ToLower(name))
 			if column.Comments != "" {
 				columnConfig := &view.ColumnConfig{}
 				if err := parser.TryUnmarshalHint(column.Comments, columnConfig); err != nil {

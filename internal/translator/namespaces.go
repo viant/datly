@@ -44,6 +44,12 @@ func (n *Namespaces) Init(ctx context.Context, query *query.Select, resource *Re
 		relNamespace.ViewJSONHint = join.Comments
 		n.Append(relNamespace)
 	}
+	for _, parameter := range resource.State.FilterByKind(view.KindDataView) {
+		namespace := NewNamespace(parameter.Name, parameter.SQL, nil, resource)
+		namespace.Cardinality = view.One
+		n.Append(namespace)
+	}
+
 	if err := n.applyTopLevelDSQLSetting(query, rootNamespace); err != nil {
 		return err
 	}
@@ -56,6 +62,9 @@ func (n *Namespaces) Init(ctx context.Context, query *query.Select, resource *Re
 		}
 		return nil
 	}); err != nil {
+		return err
+	}
+	if err := resource.ensureViewParametersSchema(ctx, setType); err != nil {
 		return err
 	}
 	if err := n.Each(func(namespace *Namespace) error {

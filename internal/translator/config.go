@@ -2,6 +2,7 @@ package translator
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
@@ -9,6 +10,8 @@ import (
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/gateway/runtime/standalone/endpoint"
+	"github.com/viant/datly/internal/setter"
+	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/router"
 	"os"
 	"path"
@@ -23,7 +26,7 @@ type Config struct {
 }
 
 func (c *Config) Init(ctx context.Context) error {
-	if c.repository.ConfigURL == "" {
+	if len(c.repository.Configs) == 0 {
 		c.Config = c.inMemoryConfig()
 	} else if err := c.loadConfig(ctx); err != nil {
 		return err
@@ -36,16 +39,22 @@ func (c *Config) Init(ctx context.Context) error {
 }
 
 func (c *Config) BaseURL() string {
-	if c.repository.Repo != "" {
-		return url.Join(c.repository.Repo, "Datly")
+
+	if c.repository.RepositoryURL == "" {
+		c.repository.RepositoryURL = c.repository.Configs.Repository()
 	}
-	if c.repository.ConfigURL != "" {
-		if index := strings.LastIndex(c.repository.ConfigURL, "/Datly/"); index != -1 {
-			return c.repository.ConfigURL[:index]
+	if url.IsRelative(c.repository.RepositoryURL) {
+		if c.repository.ProjectURL == "" {
+			c.repository.ProjectURL, _ = os.Getwd()
 		}
+		c.repository.RepositoryURL = url.Join(c.repository.ProjectURL, c.repository.RepositoryURL)
+	}
+
+	if c.repository.RepositoryURL != "" {
+		return url.Join(c.repository.RepositoryURL, "Datly")
 	}
 	dir, _ := os.Getwd()
-	return dir
+	return url.Join(dir, "Datly")
 }
 
 func (c *Config) updateURIs() error {
@@ -73,6 +82,7 @@ func (c *Config) updateURIs() error {
 	}
 
 	cfg.Meta.Init()
+	setter.SetStringIfEmpty(&cfg.APIPrefix, c.repository.APIPrefix)
 	if !strings.HasPrefix(cfg.Meta.MetricURI, c.repository.APIPrefix) {
 		cfg.Meta.MetricURI = strings.Replace(cfg.Meta.MetricURI, cfg.APIPrefix, c.repository.APIPrefix, 1)
 	}
@@ -98,12 +108,20 @@ func (c *Config) updateURIs() error {
 }
 
 func (c *Config) loadConfig(ctx context.Context) error {
-	config, err := standalone.NewConfigFromURL(ctx, c.repository.ConfigURL)
+	var configs []interface{}
+	for _, URL := range c.repository.Configs.URLs() {
+		config, err := standalone.NewConfigFromURL(ctx, URL)
+		if err != nil {
+			return err
+		}
+		configs = append(configs, config)
+	}
+	merged, err := parser.MergeStructs(configs...)
 	if err != nil {
 		return err
 	}
-	c.Config = config
-	return nil
+	c.Config = &standalone.Config{}
+	return json.Unmarshal(merged, c.Config)
 }
 
 func (c *Config) inMemoryConfig() *standalone.Config {
@@ -126,6 +144,25 @@ func (c *Config) inMemoryConfig() *standalone.Config {
 		},
 		Endpoint: endpoint.Config{Port: *c.repository.Port},
 	}
+}
+
+func (c *Config) NormalizeURL(repositoryURL string) {
+	baseURL := url.Join(repositoryURL, "Datly")
+	cfg := c.Config
+
+	if url.IsRelative(cfg.RouteURL) {
+		cfg.RouteURL = url.Join(baseURL, cfg.RouteURL)
+	}
+	if url.IsRelative(cfg.PluginsURL) {
+		cfg.RouteURL = url.Join(baseURL, cfg.PluginsURL)
+	}
+	if url.IsRelative(cfg.DependencyURL) {
+		cfg.RouteURL = url.Join(baseURL, cfg.DependencyURL)
+	}
+	if url.IsRelative(cfg.AssetsURL) {
+		cfg.RouteURL = url.Join(baseURL, cfg.AssetsURL)
+	}
+	cfg.URL = url.Join(baseURL, "config.json")
 }
 
 func NewConfig(repository *options.Repository) *Config {

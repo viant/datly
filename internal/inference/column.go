@@ -18,6 +18,7 @@ func detectColumns(ctx context.Context, db *sql.DB, SQL, table string, SQLArgs .
 	if SQL == "" {
 		return nil, nil
 	}
+
 	var byName = map[string]sink.Column{}
 	if extractedTable = strings.TrimSpace(extractedTable); extractedTable != "" {
 		table = extractedTable
@@ -70,15 +71,21 @@ func detectColumns(ctx context.Context, db *sql.DB, SQL, table string, SQLArgs .
 	if queryColumns.IsStarExpr() {
 		return asColumns(tableColumns), nil
 	}
-	updatedMatchedColumn(queryColumns, tableColumns)
+	updatedMatchedColumn(&queryColumns, tableColumns)
 	return queryColumns, nil
 }
 
-func updatedMatchedColumn(queryColumns sqlparser.Columns, tableColumns []sink.Column) {
+func updatedMatchedColumn(queryColumns *sqlparser.Columns, tableColumns []sink.Column) {
 	byName := sink.Columns(tableColumns).By(sink.ColumnName.Key)
-
-	for i, column := range queryColumns {
-		queryColumn := queryColumns[i]
+	var columns sqlparser.Columns
+	hasWildCard := false
+	for i, column := range *queryColumns {
+		if strings.Contains(column.Expression, "*") {
+			hasWildCard = true
+			continue
+		}
+		queryColumn := (*queryColumns)[i]
+		columns = append(columns, queryColumn)
 		if matched, ok := byName[strings.ToLower(column.Alias)]; ok && column.Alias != "" {
 			updateQueryColumn(queryColumn, matched)
 			continue
@@ -88,6 +95,17 @@ func updatedMatchedColumn(queryColumns sqlparser.Columns, tableColumns []sink.Co
 			continue
 		}
 		updateQueryColumn(queryColumn, tableColumns[i])
+	}
+
+	if hasWildCard {
+		namedColumn := columns.ByLowerCasedName()
+		for _, tableColumn := range tableColumns {
+			if _, ok := namedColumn[strings.ToLower(tableColumn.Name)]; ok {
+				continue
+			}
+			columns = append(columns, asColumn(tableColumn))
+		}
+		*queryColumns = columns
 	}
 }
 
