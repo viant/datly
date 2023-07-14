@@ -95,9 +95,10 @@ func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool) (*Field
 	return field, nil
 }
 
-func (s *Spec) Fields() []*view.Field {
+func (s *Spec) Fields(includeHas bool) []*view.Field {
 	specType := s.Type
 	result := specType.ColumnFields()
+
 	hasFieldName := "Has"
 	hasField := &view.Field{
 		Name: hasFieldName,
@@ -107,7 +108,7 @@ func (s *Spec) Fields() []*view.Field {
 
 	for i, rel := range s.Relations {
 		relField := specType.RelationFields[i].Field
-		relField.Fields = rel.Fields()
+		relField.Fields = rel.Fields(includeHas)
 		result = append(result, &relField)
 	}
 	for _, field := range specType.columnFields {
@@ -116,7 +117,9 @@ func (s *Spec) Fields() []*view.Field {
 	for _, field := range specType.RelationFields {
 		hasField.Fields = append(hasField.Fields, &view.Field{Name: field.Name, Schema: &view.Schema{DataType: "bool"}})
 	}
-	result = append(result, hasField)
+	if includeHas {
+		result = append(result, hasField)
+	}
 	return result
 }
 

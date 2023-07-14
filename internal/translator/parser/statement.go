@@ -3,7 +3,9 @@ package parser
 import (
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/parsly"
+	"github.com/viant/sqlparser"
 	"github.com/viant/velty/ast/expr"
+	"strings"
 )
 
 type Statement struct {
@@ -13,13 +15,14 @@ type Statement struct {
 	IsExec         bool
 	Selector       *expr.Select
 	SelectorMethod string
+	Table          string
 }
 
 type Statements []*Statement
 
 func (s Statements) IsExec() bool {
 	if len(s) == 0 {
-		return true //handler does not have SQL
+		return true //handle does not have SQL
 	}
 	for _, item := range s {
 		if item.IsExec {
@@ -27,6 +30,42 @@ func (s Statements) IsExec() bool {
 		}
 	}
 	return false
+}
+
+func (s Statements) DMLTables(rawSQL string) []string {
+	var tables = make(map[string]bool)
+	var result []string
+	for _, statement := range s {
+		SQL := rawSQL[statement.Start:statement.End]
+		lowerCasedDML := strings.ToLower(SQL)
+		if strings.Contains(lowerCasedDML, "insert") {
+			if stmt, _ := sqlparser.ParseInsert(SQL); stmt != nil {
+				if table := sqlparser.Stringify(stmt.Target.X); table != "" {
+					statement.Table = table
+				}
+			}
+		} else if strings.Contains(lowerCasedDML, "update") {
+			if stmt, _ := sqlparser.ParseUpdate(SQL); stmt != nil {
+				if table := sqlparser.Stringify(stmt.Target.X); table != "" {
+					statement.Table = table
+				}
+			}
+		} else if strings.Contains(lowerCasedDML, "delete") {
+			if stmt, _ := sqlparser.ParseDelete(SQL); stmt != nil {
+				if table := sqlparser.Stringify(stmt.Target.X); table != "" {
+					statement.Table = table
+				}
+			}
+		}
+		if statement.Table == "" {
+			continue
+		}
+		if _, ok := tables[statement.Table]; !ok {
+			result = append(result, statement.Table)
+		}
+		tables[statement.Table] = true
+	}
+	return result
 }
 
 func NewStatements(SQL string) Statements {

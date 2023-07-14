@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-//SplitHint split hint into json and optionally SQL
+// SplitHint split hint into json and optionally SQL
 func SplitHint(hint string) (marshal string, SQL string) {
 	if strings.HasPrefix(hint, "/*") {
 		hint = hint[2:]
@@ -95,14 +95,18 @@ func ExtractParameterHints(text string, state *inference.State) error {
 		}
 		parameter.Hint = matched.Text(cursor)
 		JSON, SQL := SplitHint(parameter.Hint)
-		info := inference.Parameter{}
+		info := Declaration{}
 		if err := hintToStruct(JSON, &info); err != nil {
 			return fmt.Errorf("failed to extract hint for %v %w, %s", holder, err, parameter.Hint)
 		}
-		parameter.MergeFrom(&info)
-		if parameter.SQL == "" {
-			parameter.SQL = SQL //TODO detect view vs structql
+		declaration := &Declaration{Parameter: *parameter}
+		declaration.SQL = SQL
+		declaration, _ = declaration.Merge(&info)
+		declaration.ExpandShorthands()
+		if authParam := declaration.AuthParameter(); authParam != nil {
+			state.Append(authParam)
 		}
+		*parameter = declaration.Parameter
 	}
 	return nil
 }

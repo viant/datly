@@ -13,25 +13,27 @@ import (
 var resetWords = []string{"AND", "OR", "WITH", "HAVING", "LIMIT", "OFFSET", "WHERE", "SELECT", "UNION", "ALL", "AS", "BETWEEN"}
 
 func (t *Template) DetectTypes(handler func(state *inference.State, parameter string, expression *ExpressionContext)) {
-	discoverer := &types{Template: t, handler: handler}
+	discoverer := &types{Template: t, _handler: handler}
 	discoverer.discover(t.SQL)
 }
 
 type types struct {
 	*Template
-	handler func(state *inference.State, parameter string, exprs *ExpressionContext)
+	_handler func(state *inference.State, parameter string, exprs *ExpressionContext)
+}
+
+func (t *types) handle(state *inference.State, parameter string, exprs *ExpressionContext) {
+	if t.isParameterPath(parameter) {
+		return
+	}
+	t._handler(state, parameter, exprs)
 }
 
 func (t *types) discover(SQL string) []string {
 	var expr *ExpressionContext
 	var untyped []string
 	previouslyMatched := -1
-	for _, param := range t.Template.Context {
-		name := param.Name[1:]
-		if t.isParameter(name) {
-			t.handler(t.State, name, param)
-		}
-	}
+	t.discoverWithContext()
 	cursor := parsly.NewCursor("", []byte(SQL), 0)
 	for cursor.Pos < cursor.InputSize {
 		matched := cursor.MatchAfterOptional(whitespaceMatcher, insertMatcher, forEachMatcher, ifMatcher, assignMatcher, elseIfMatcher, elseMatcher, endMatcher, commentBlockMatcher, doubleQuoteStringMatcher, singleQuoteStringMatcher, boolTokenMatcher, boolMatcher, numberMatcher, parenthesesBlockMatcher, selectorMatcher, fullWordMatcher, anyMatcher)
@@ -76,7 +78,7 @@ func (t *types) discover(SQL string) []string {
 
 		if expr != nil {
 			for _, param := range untyped {
-				t.handler(t.State, param, expr)
+				t.handle(t.State, param, expr)
 			}
 			untyped = nil
 		}
@@ -86,6 +88,35 @@ func (t *types) discover(SQL string) []string {
 		}
 	}
 	return untyped
+}
+
+func (t *types) discoverWithContext() {
+	for _, param := range t.Template.Context {
+		name := param.Name
+		if strings.HasPrefix(name, "$") {
+			name = name[1:]
+		}
+		if index := strings.Index(name, "Unsafe."); index != -1 {
+			name = name[:index]
+		}
+
+		if t.isParameter(name) {
+			t.handle(t.State, name, param)
+		}
+	}
+}
+
+func (t *types) isParameterPath(name string) bool {
+	if index := strings.Index(name, "."); index != -1 {
+		holder := name[:index]
+		if t.Template.Declared[holder] { //locally defined variable
+			return true
+		}
+		if t.State.Lookup(holder) != nil { //locally defined variable
+			return true
+		}
+	}
+	return false
 }
 
 func newColumnTyper(text string, previous *ExpressionContext) *ExpressionContext {
@@ -138,7 +169,7 @@ func (t *types) updateParamMetaType(paramName string) (wasParam bool) {
 }
 
 func (t *types) isParameter(paramName string) bool {
-	if paramName == "" {
+	if paramName == "" || strings.Contains(paramName, "(") {
 		return false
 	}
 	if isVariable := t.Declared[paramName]; isVariable {
@@ -204,7 +235,7 @@ func (t *types) updateInsertedParameterTypes(columns []string, values []string) 
 		if !t.canBeParam(value) {
 			continue
 		}
-		t.handler(t.State, value[1:], &ExpressionContext{Column: strings.ToLower(columns[i])})
+		t.handle(t.State, value[1:], &ExpressionContext{Column: strings.ToLower(columns[i])})
 	}
 }
 

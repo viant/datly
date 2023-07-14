@@ -21,7 +21,7 @@ var arithmeticOperator = map[string]bool{
 }
 
 type (
-	Namespace struct {
+	Viewlet struct {
 		Name           string
 		Holder         string
 		Connector      string
@@ -58,28 +58,42 @@ type (
 	}
 )
 
-func (n *Namespace) UpdateParameterType(state *inference.State, name string, expression *parser.ExpressionContext) {
+func (v *Viewlet) UpdateParameterType(state *inference.State, name string, expression *parser.ExpressionContext) {
+	if strings.HasPrefix(name, "Unsafe.") {
+		name = name[7:]
+	}
+
 	parameter := state.Lookup(name)
 	if index := strings.Index(name, "."); index != -1 && parameter == nil {
 		if holder := state.Lookup(name[:index]); holder != nil {
 			return
 		}
 	}
-
 	if parameter == nil {
 		parameter = &inference.Parameter{}
 		parameter.Name = name
 		//TODO add default kind and location
 		state.Append(parameter)
 	}
+
+	parameter.EnsureLocation()
+	if parameter.In.Kind == "" {
+		parameter.In.Kind = v.Resource.ImpliedKind()
+		parameter.In.Name = name
+	}
+
+	switch parameter.In.Kind {
+	case view.KindParam, view.KindDataView:
+		return
+	}
 	parameter.EnsureSchema()
 	if expression.Column != "" {
-		if column := n.Table.Lookup(expression.Column); column != nil && column.Type != "" {
+		if column := v.Table.Lookup(expression.Column); column != nil && column.Type != "" {
 			parameter.Schema.DataType = column.Type
 		}
 	}
 	if elements := expression.BeforeElements(); len(elements) > 0 {
-		operator, column := n.extractUsageInfo(elements, name)
+		operator, column := v.extractUsageInfo(elements, name)
 		if column != nil && column.Type != "" {
 			parameter.Schema.DataType = column.Type
 		}
@@ -96,61 +110,62 @@ func (n *Namespace) UpdateParameterType(state *inference.State, name string, exp
 	}
 }
 
-func (n *Namespace) excludeMap() map[string]bool {
-	if len(n.Exclude) == 0 {
+func (v *Viewlet) excludeMap() map[string]bool {
+	if len(v.Exclude) == 0 {
 		return map[string]bool{}
 	}
 	var result = make(map[string]bool)
-	for _, item := range n.Exclude {
+	for _, item := range v.Exclude {
 		result[item] = true
 	}
 	return result
 }
 
-func (n *Namespace) whitelistMap() map[string]bool {
-	if len(n.Whitelisted) == 0 {
+func (v *Viewlet) whitelistMap() map[string]bool {
+	if len(v.Whitelisted) == 0 {
 		return map[string]bool{}
 	}
 	var result = make(map[string]bool)
-	for _, item := range n.Whitelisted {
+	for _, item := range v.Whitelisted {
 		result[item] = true
 	}
 	return result
 }
 
-func (n *Namespace) extractUsageInfo(elements []string, name string) (string, *sqlparser.Column) {
+func (v *Viewlet) extractUsageInfo(elements []string, name string) (string, *sqlparser.Column) {
 	operator := ""
 	var column *sqlparser.Column
 	operatorIndex := -1
+outer:
 	for i := len(elements) - 1; i >= 0; i-- {
 		candidate := strings.ToLower(elements[i])
 		switch candidate {
 		case "=", ">", "<", "/", "*", "+", "-", ">=", "<=", "!=", "in":
 			operator = candidate
 			operatorIndex = i
-			break
+			break outer
 		case "cast":
-			return operator, n.Table.Lookup(name)
+			return operator, v.Table.Lookup(name)
 		}
 	}
 
 	if arithmeticOperator[operator] {
-		if column = n.Table.Lookup(elements[operatorIndex-1]); column != nil {
+		if column = v.Table.Lookup(elements[operatorIndex-1]); column != nil {
 			return operator, column
 		}
 	}
 	for i := operatorIndex - 1; i >= 0; i-- {
-		if column = n.Table.Lookup(elements[i]); column != nil {
+		if column = v.Table.Lookup(elements[i]); column != nil {
 			return operator, column
 		}
 	}
 	return operator, nil
 }
 
-func NewNamespace(name, SQL string, join *query.Join, resource *Resource) *Namespace {
+func NewViewlet(name, SQL string, join *query.Join, resource *Resource) *Viewlet {
 	SQL = inference.TrimParenthesis(SQL)
 	connector := ExtractConnectorRef(&SQL)
-	ret := &Namespace{
+	ret := &Viewlet{
 		Name:       name,
 		SQL:        SQL,
 		Join:       join,
@@ -165,29 +180,29 @@ func NewNamespace(name, SQL string, join *query.Join, resource *Resource) *Names
 	return ret
 }
 
-func (n *Namespace) discoverTables(ctx context.Context, db *sql.DB, SQL string) (err error) {
-	n.Table, err = inference.NewTable(ctx, db, SQL)
-	if n.Table != nil {
-		for _, column := range n.Table.QueryColumns {
+func (v *Viewlet) discoverTables(ctx context.Context, db *sql.DB, SQL string) (err error) {
+	v.Table, err = inference.NewTable(ctx, db, SQL)
+	if v.Table != nil {
+		for _, column := range v.Table.QueryColumns {
 			name := column.Alias
 			if name == "" {
 				name = column.Name
 			}
-			n.Whitelisted = append(n.Whitelisted, strings.ToLower(name))
+			v.Whitelisted = append(v.Whitelisted, strings.ToLower(name))
 			if column.Comments != "" {
 				columnConfig := &view.ColumnConfig{}
 				if err := parser.TryUnmarshalHint(column.Comments, columnConfig); err != nil {
 					return fmt.Errorf("invalid column %v settings: %w, %s", column.Name, err, column.Comments)
 				}
 				columnConfig.Name = column.Name
-				n.ColumnConfig = append(n.ColumnConfig, columnConfig)
+				v.ColumnConfig = append(v.ColumnConfig, columnConfig)
 			}
 		}
 	}
 
 	//Whitelisted
-	for name, dataType := range n.Casts {
-		if column := n.Table.Lookup(name); column != nil {
+	for name, dataType := range v.Casts {
+		if column := v.Table.Lookup(name); column != nil {
 			column.Type = dataType
 		}
 	}

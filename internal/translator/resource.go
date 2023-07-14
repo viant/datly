@@ -24,7 +24,9 @@ type (
 		Resource   view.Resource
 		State      inference.State
 		Rule       *Rule
+
 		parser.Statements
+		RawSQL string
 		indexNamespaces
 	}
 )
@@ -38,6 +40,12 @@ func (r *Resource) ExtractDeclared(dSQL *string) error {
 	}
 	r.State.Append(declarations.State...)
 	r.Rule.Route.Transforms = declarations.Transforms
+
+	if err := parser.ExtractParameterHints(declarations.SQL, &r.State); err != nil {
+		return err
+	}
+	declarations.SQL = parser.RemoveParameterHints(declarations.SQL, r.State)
+
 	*dSQL = declarations.SQL
 	return nil
 }
@@ -65,8 +73,8 @@ func (r *Resource) InitRule(dSQL *string) error {
 		return err
 	}
 	r.Statements = parser.NewStatements(*dSQL)
+	r.RawSQL = *dSQL
 	r.initRule()
-
 	return nil
 }
 
@@ -81,7 +89,7 @@ func (r *Resource) extractRuleSetting(dSQL *string) error {
 	return nil
 }
 
-func (r *Resource) expandSQL(n *Namespace) (*sqlx.SQL, error) {
+func (r *Resource) expandSQL(n *Viewlet) (*sqlx.SQL, error) {
 	types := n.Resource.Resource.TypeRegistry()
 
 	sqlState := n.Resource.State.StateForSQL(n.SQL, r.Rule.Root == n.Name)
@@ -104,25 +112,26 @@ func (r *Resource) expandSQL(n *Namespace) (*sqlx.SQL, error) {
 	return &sqlx.SQL{Query: result.Expanded, Args: result.Context.DataUnit.ParamsGroup}, nil
 }
 
-func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(ctx context.Context, setType *Namespace) error) error {
+func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(ctx context.Context, setType *Viewlet) error) error {
 	viewParameters := r.State.FilterByKind(view.KindDataView)
 	for _, viewParameter := range viewParameters {
 		if viewParameter.Schema != nil && viewParameter.Schema.Type() != nil {
 			continue
 		}
 		viewParameter.EnsureSchema()
-		aViewNamespace := r.Rule.Namespaces.Lookup(viewParameter.Name)
+		aViewNamespace := r.Rule.Viewlets.Lookup(viewParameter.Name)
 		if err := setType(ctx, aViewNamespace); err != nil {
 			return err
 		}
 		fields := aViewNamespace.Spec.Type.Fields()
 		if len(fields) > 0 {
-			paramSchema := reflect.TypeOf(fields)
+			paramSchema := reflect.StructOf(fields)
 			viewParameter.Schema.SetType(paramSchema)
 			viewParameter.Schema.DataType = viewParameter.Name
 			viewParameter.Schema.Cardinality = view.One
 		}
-		aViewNamespace.TypeDefinition = aViewNamespace.Spec.TypeDefinition("")
+		aViewNamespace.TypeDefinition = aViewNamespace.Spec.TypeDefinition("", false)
+		aViewNamespace.TypeDefinition.Cardinality = view.One
 	}
 	return nil
 }
@@ -131,7 +140,7 @@ func (r *Resource) ensureViewParameterSchema(parameter *inference.Parameter) err
 	if parameter.Schema != nil && parameter.Schema.Type() != nil {
 		return nil
 	}
-	aView := r.Rule.Namespaces.Lookup(parameter.Name)
+	aView := r.Rule.Viewlets.Lookup(parameter.Name)
 	aView.Spec.Type.Fields()
 	fmt.Printf("11\n")
 	return nil

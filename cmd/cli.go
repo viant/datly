@@ -7,18 +7,17 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/viant/afs"
 	"github.com/viant/afs/cache"
+	"github.com/viant/afs/file"
 	"github.com/viant/afs/matcher"
+	"github.com/viant/afs/modifier"
 	soption "github.com/viant/afs/option"
+	"github.com/viant/datly/auth/jwt"
 	"github.com/viant/datly/cmd/command"
 	soptions "github.com/viant/datly/cmd/options"
-	"github.com/viant/datly/internal/translator"
-
-	"github.com/viant/afs/file"
-	"github.com/viant/afs/modifier"
-	"github.com/viant/datly/auth/jwt"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/gateway/warmup"
+	"github.com/viant/datly/internal/translator"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/openapi3"
 	"gopkg.in/yaml.v3"
@@ -103,7 +102,7 @@ func NewBuilder(options *Options, opts *soptions.Options, logger io.Writer) (*Bu
 	if opts == nil {
 		opts = options.BuildOption()
 	}
-	var err error
+	//var err error
 	builder := &Builder{
 		Options:    opts,
 		options:    options,
@@ -116,6 +115,7 @@ func NewBuilder(options *Options, opts *soptions.Options, logger io.Writer) (*Bu
 		bundles:    map[string]*bundleMetadata{},
 	}
 
+	var err error
 	ctx := context.Background()
 	if repo := opts.Repository(); repo != nil {
 		builder.translator = translator.New(translator.NewConfig(repo))
@@ -132,15 +132,15 @@ func NewBuilder(options *Options, opts *soptions.Options, logger io.Writer) (*Bu
 			fmt.Printf("translate err: %v\n", err)
 		}
 
-		if repository := builder.translator.Repository; repository != nil {
-			repository.PersistConfig()
-			if err := repository.Upload(ctx); err != nil {
-				fmt.Printf("tranlator err :%v\n", err)
-			}
-			if len(repository.Resource) > 0 {
-				return nil, nil
-			}
-		}
+		//if repository := builder.translator.Repository; repository != nil {
+		//	repository.PersistConfig()
+		//	if err := repository.Upload(ctx); err != nil {
+		//		fmt.Printf("tranlator err :%v\n", err)
+		//	}
+		//	if len(repository.Resource) > 0 {
+		//		return nil, nil
+		//	}
+		//}
 	}
 
 	return builder, builder.Build(context.TODO())

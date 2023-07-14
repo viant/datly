@@ -26,8 +26,12 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	if err := resource.ExtractDeclared(&dSQL); err != nil {
 		return err
 	}
-	if !resource.IsExec() {
-		if err := s.translateQuery(ctx, resource, dSQL); err != nil {
+	if resource.IsExec() {
+		if err := s.translateExecutorDSQL(ctx, resource, dSQL); err != nil {
+			return err
+		}
+	} else {
+		if err := s.translateReaderDSQL(ctx, resource, dSQL); err != nil {
 			return err
 		}
 	}
@@ -35,36 +39,49 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	return nil
 }
 
-func (s *Service) translateQuery(ctx context.Context, resource *Resource, dSQL string) error {
-	if err := parser.ExtractParameterHints(dSQL, &resource.State); err != nil {
+func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource, DSQL string) error {
+	table, err := s.extractDMLTables(ctx, resource)
+	if err != nil {
 		return err
 	}
-	dSQL = parser.RemoveParameterHints(dSQL, resource.State)
+	viewlet := &Viewlet{Table: table, SQL: DSQL, Resource: resource}
+	SQL := viewlet.Resource.State.Expand(viewlet.SQL)
+	aTemplate, err := parser.NewTemplate(viewlet.SQL, &viewlet.Resource.State)
+	if err != nil {
+		return fmt.Errorf("invalid DSQL: %w, %s", err, SQL)
+	}
+	aTemplate.DetectTypes(viewlet.UpdateParameterType)
+	viewlet.SanitizedSQL = aTemplate.Sanitize()
+
+	return nil
+}
+
+func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, dSQL string) error {
 	query, err := sqlparser.ParseQuery(dSQL)
 	if err != nil {
 		return err
 	}
 	resource.Rule.Root = query.From.Alias
-	if err = resource.Rule.Namespaces.Init(ctx, query, resource, s.initNamespace, s.buildNamespaceType); err != nil {
+	if err = resource.Rule.Viewlets.Init(ctx, query, resource, s.initReaderViewlet, s.buildViewletType); err != nil {
 		return err
 	}
 	root := resource.Rule.RootView()
 	if err := root.BuildView(resource.Rule); err != nil {
 		return err
 	}
-	if err = resource.Rule.Namespaces.Each(func(namespace *Namespace) error {
-		return s.persistView(namespace, resource)
+	if err = resource.Rule.Viewlets.Each(func(viewlet *Viewlet) error {
+		return s.persistView(viewlet, resource)
 	}); err != nil {
 		return err
 	}
 
-	if err = s.persistRouterRule(resource); err != nil {
+	if err = s.persistReaderRouterRule(resource); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *Service) persistRouterRule(resource *Resource) error {
+func (s *Service) persistReaderRouterRule(resource *Resource) error {
 	baseRuleURL := s.Repository.RuleBaseURL(resource.rule)
 	ruleName := s.Repository.RuleName(resource.rule)
 	resource.Rule.Route.Service = "Reader"
@@ -79,43 +96,50 @@ func (s *Service) persistRouterRule(resource *Resource) error {
 	return nil
 }
 
-func (s *Service) persistView(namespace *Namespace, resource *Resource) error {
+func (s *Service) persistView(viewlet *Viewlet, resource *Resource) error {
 	baseRuleURL := s.Repository.RuleBaseURL(resource.rule)
 	ruleName := s.Repository.RuleName(resource.rule)
-	if err := namespace.View.BuildView(resource.Rule); err != nil {
+	if err := viewlet.View.BuildView(resource.Rule); err != nil {
 		return err
 	}
-	resource.Rule.updateExclude(namespace)
-	resource.Resource.Views = append(resource.Resource.Views, &namespace.View.View)
-	namespace.View.GenerateFiles(baseRuleURL, ruleName, &s.Repository.Files)
+	resource.Rule.updateExclude(viewlet)
+	resource.Resource.Views = append(resource.Resource.Views, &viewlet.View.View)
+	viewlet.View.GenerateFiles(baseRuleURL, ruleName, &s.Repository.Files)
+	if viewlet.TypeDefinition != nil {
+		resource.Resource.Types = append(resource.Resource.Types, viewlet.TypeDefinition)
+	}
 	return nil
 }
 
-// initNamespace detect SQL dependent Table columns with implicit parameters type to produce sanitized SQL
-func (s *Service) initNamespace(ctx context.Context, n *Namespace) error {
-	if n.Connector == "" {
-		n.Connector = s.Repository.Connectors[0].Name
+// initReaderViewlet detect SQL dependent Table columns with implicit parameters type to produce sanitized SQL
+func (s *Service) initReaderViewlet(ctx context.Context, viewlet *Viewlet) error {
+	if viewlet.Connector == "" {
+		viewlet.Connector = s.DefaultConnector()
 	}
-	db, err := s.Repository.LookupDb(n.Connector)
+	db, err := s.Repository.LookupDb(viewlet.Connector)
 	if err != nil {
 		return err
 	}
-	SQL := n.Resource.State.Expand(n.SQL)
-	if err = n.discoverTables(ctx, db, SQL); err != nil {
+	SQL := viewlet.Resource.State.Expand(viewlet.SQL)
+	if err = viewlet.discoverTables(ctx, db, SQL); err != nil {
 		return err
 	}
-	aTemplate, err := parser.NewTemplate(n.SQL, &n.Resource.State)
+	aTemplate, err := parser.NewTemplate(viewlet.SQL, &viewlet.Resource.State)
 	if err != nil {
 		return fmt.Errorf("invalid DSQL: %w, %s", err, SQL)
 	}
-	aTemplate.DetectTypes(n.UpdateParameterType)
-	n.SanitizedSQL = aTemplate.Sanitize()
-	n.View.Name = n.Name
+	aTemplate.DetectTypes(viewlet.UpdateParameterType)
+	viewlet.SanitizedSQL = aTemplate.Sanitize()
+	viewlet.View.Name = viewlet.Name
 	return nil
 }
 
-// buildNamespaceType build SQL/Table specification (field/column/keys) type
-func (s *Service) buildNamespaceType(ctx context.Context, n *Namespace) error {
+func (s *Service) DefaultConnector() string {
+	return s.Repository.Connectors[0].Name
+}
+
+// buildViewletType build SQL/Table specification (field/column/keys) type
+func (s *Service) buildViewletType(ctx context.Context, n *Viewlet) error {
 	db, err := s.Repository.LookupDb(n.Connector)
 	if err != nil {
 		return err

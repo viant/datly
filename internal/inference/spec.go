@@ -44,7 +44,7 @@ type (
 	Selector []string
 )
 
-//BuildType build a type from infered table/SQL definition
+// BuildType build a type from infered table/SQL definition
 func (s *Spec) BuildType(pkg, name string, cardinality view.Cardinality, whitelist, blacklist map[string]bool) error {
 	var aType = &Type{Package: pkg, Name: name, Cardinality: cardinality}
 	for i, column := range s.Columns {
@@ -69,13 +69,13 @@ func (s *Spec) BuildType(pkg, name string, cardinality view.Cardinality, whiteli
 	return nil
 }
 
-//TypeDefinition builds spec based tyep definition
-func (s *Spec) TypeDefinition(wrapper string) *view.TypeDefinition {
+// TypeDefinition builds spec based tyep definition
+func (s *Spec) TypeDefinition(wrapper string, includeHas bool) *view.TypeDefinition {
 	typeDef := &view.TypeDefinition{
 		Package:     s.Type.Package,
 		Name:        s.Type.Name,
 		Cardinality: s.Type.Cardinality,
-		Fields:      s.Fields(),
+		Fields:      s.Fields(includeHas),
 	}
 	if wrapper != "" {
 		return &view.TypeDefinition{
@@ -110,7 +110,7 @@ func (s *Spec) shouldSkipColumn(whitelist, blacklist map[string]bool, column *sq
 	return false
 }
 
-//AddRelation adds relations
+// AddRelation adds relations
 func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinality view.Cardinality) {
 	if IsToOne(join) {
 		cardinality = view.One
@@ -129,7 +129,7 @@ func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinalit
 	s.Type.AddRelation(name, spec, rel)
 }
 
-//Selector returns current sepcifiction selector (path from root)
+// Selector returns current sepcifiction selector (path from root)
 func (s *Spec) Selector() Selector {
 	if s.Parent != nil {
 		return append(s.Parent.Selector(), s.Type.Name)
@@ -137,7 +137,7 @@ func (s *Spec) Selector() Selector {
 	return []string{s.Type.Name}
 }
 
-//PkStructQL crates a PK struct SQL
+// PkStructQL crates a PK struct SQL
 func (s *Spec) PkStructQL(selector Selector) (*Field, string) {
 	for _, field := range s.Type.PkFields { //TODO add  multi key support
 		return field, fmt.Sprintf("? SELECT ARRAY_AGG(%v) AS Values FROM  `%v` LIMIT 1", field.Name, selector.Path())
@@ -145,7 +145,7 @@ func (s *Spec) PkStructQL(selector Selector) (*Field, string) {
 	return nil, ""
 }
 
-//ViewSQL return structQL SQL for relation
+// ViewSQL return structQL SQL for relation
 func (s *Spec) ViewSQL(columnParameter ColumnParameterNamer) string {
 	builder := &strings.Builder{}
 	if s.SQL != "" {
@@ -169,7 +169,7 @@ func (s *Spec) ViewSQL(columnParameter ColumnParameterNamer) string {
 	return builder.String()
 }
 
-//NewSpec discover column derived type for supplied SQL/table
+// NewSpec discover column derived type for supplied SQL/table
 func NewSpec(ctx context.Context, db *sql.DB, table, SQL string, SQLArgs ...interface{}) (*Spec, error) {
 	isAuxiliary := isAuxiliary(SQL)
 	table = normalizeTable(table)

@@ -12,14 +12,14 @@ type (
 	Declaration struct {
 		inference.Parameter
 		//Parameters shorthands
-		Auth        string           `json:",omitempty" yaml:",omitempty"`
-		Kind        string           `json:",omitempty" yaml:",omitempty"`
-		Location    *string          `json:",omitempty" yaml:",omitempty"`
-		Codec       string           `json:",omitempty" yaml:",omitempty"`
-		OutputType  string           `json:",omitempty" yaml:",omitempty"`
-		Cardinality view.Cardinality `json:",omitempty" yaml:",omitempty"`
-		StatusCode  *int             `json:",omitempty" yaml:",omitempty"`
-
+		Auth          string           `json:",omitempty" yaml:",omitempty"`
+		Kind          string           `json:",omitempty" yaml:",omitempty"`
+		Location      *string          `json:",omitempty" yaml:",omitempty"`
+		Codec         string           `json:",omitempty" yaml:",omitempty"`
+		OutputType    string           `json:",omitempty" yaml:",omitempty"`
+		Cardinality   view.Cardinality `json:",omitempty" yaml:",omitempty"`
+		StatusCode    *int             `json:",omitempty" yaml:",omitempty"`
+		Required      *bool
 		TransformKind string `json:",omitempty" yaml:",omitempty"`
 		Transformer   string `json:",omitempty" yaml:",omitempty"`
 	}
@@ -56,6 +56,11 @@ func (d *Declaration) Transform() *marshal.Transform {
 }
 
 func (d *Declaration) ExpandShorthands() {
+	d.Parameter.EnsureSchema()
+	d.Parameter.EnsureLocation()
+	if d.Required != nil {
+		d.Parameter.Parameter.Required = d.Required
+	}
 	if d.OutputType != "" || d.Codec != "" {
 		d.Parameter.EnsureCodec()
 		if d.Parameter.Output.OutputType == "" {
@@ -67,6 +72,9 @@ func (d *Declaration) ExpandShorthands() {
 
 		switch d.Codec { //TODO get codec registry here
 		case "JwtClaim":
+			if d.Output == nil {
+				d.Output = &view.Codec{}
+			}
 			if d.Output.Schema == nil {
 				d.Output.Schema = &view.Schema{}
 			}
@@ -83,14 +91,12 @@ func (d *Declaration) ExpandShorthands() {
 	}
 
 	if d.Kind != "" || d.Location != nil {
-		d.EnsureLocation()
 		d.Parameter.In.Kind = view.Kind(d.Kind)
 		if d.Location != nil {
 			d.Parameter.In.Name = *d.Location
 		}
 	}
-	if d.SQL != "" && d.In == nil {
-		d.EnsureLocation()
+	if d.SQL != "" && d.In.Kind == "" {
 		d.In.Kind = view.KindDataView
 		d.In.Name = d.Name
 	}
@@ -100,7 +106,6 @@ func (d *Declaration) ExpandShorthands() {
 	}
 
 	if d.Cardinality != "" {
-		d.Parameter.EnsureSchema()
 		d.Parameter.Schema.Cardinality = d.Cardinality
 	}
 }

@@ -28,6 +28,19 @@ func detectColumns(ctx context.Context, db *sql.DB, SQL, table string, SQLArgs .
 			byName = sink.Columns(sinkColumns).By(sink.ColumnName.Key)
 		}
 	}
+
+	tableColumns, err := inferColumnWithSQL(ctx, db, SQL, SQLArgs, byName)
+	if err != nil {
+		return nil, err
+	}
+	if queryColumns.IsStarExpr() {
+		return asColumns(tableColumns), nil
+	}
+	updatedMatchedColumn(&queryColumns, tableColumns)
+	return queryColumns, nil
+}
+
+func inferColumnWithSQL(ctx context.Context, db *sql.DB, SQL string, SQLArgs []interface{}, byName map[string]sink.Column) ([]sink.Column, error) {
 	stmt, err := db.PrepareContext(ctx, SQL)
 	if err != nil {
 		return nil, err
@@ -67,12 +80,7 @@ func detectColumns(ctx context.Context, db *sql.DB, SQL, table string, SQLArgs .
 			}
 		}
 	}
-
-	if queryColumns.IsStarExpr() {
-		return asColumns(tableColumns), nil
-	}
-	updatedMatchedColumn(&queryColumns, tableColumns)
-	return queryColumns, nil
+	return tableColumns, nil
 }
 
 func updatedMatchedColumn(queryColumns *sqlparser.Columns, tableColumns []sink.Column) {

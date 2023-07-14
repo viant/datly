@@ -28,7 +28,7 @@ type (
 	}
 )
 
-func (v *View) applyHintSettings(namespace *Namespace) error {
+func (v *View) applyHintSettings(namespace *Viewlet) error {
 	viewJSONHint := namespace.ViewJSONHint
 	if viewJSONHint == "" {
 		return nil
@@ -42,7 +42,7 @@ func (v *View) applyHintSettings(namespace *Namespace) error {
 	return nil
 }
 
-func (v *View) applyShorthands(namespace *Namespace) {
+func (v *View) applyShorthands(namespace *Viewlet) {
 
 	if v.Self != nil {
 		v.SelfReference = v.Self
@@ -74,14 +74,14 @@ func (v *View) applyShorthands(namespace *Namespace) {
 	}
 }
 
-//persistView builds View
+// persistView builds View
 func (v *View) BuildView(rule *Rule) error {
 	if v.build {
 		return nil
 	}
 	v.build = true
 
-	namespace := rule.Namespaces.Lookup(v.Namespace)
+	namespace := rule.Viewlets.Lookup(v.Namespace)
 	v.Table = namespace.Table.Name
 	v.Mode = view.ModeQuery
 	v.View.Connector = view.NewRefConnector(namespace.Connector)
@@ -101,7 +101,7 @@ func (v *View) defaultLimit(isRoot bool) int {
 	return 40
 }
 
-func (v *View) buildSelector(namespace *Namespace, rule *Rule) {
+func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 	isRoot := rule.Root == v.Name
 	if v.Selector == nil {
 		v.Selector = &view.Config{}
@@ -122,7 +122,7 @@ func (v *View) buildSelector(namespace *Namespace, rule *Rule) {
 
 }
 
-func (v *View) buildColumnConfig(namespace *Namespace) {
+func (v *View) buildColumnConfig(namespace *Viewlet) {
 	v.Exclude = namespace.Exclude
 	//TODO add tags, formats, etc ...
 	v.ColumnsConfig = map[string]*view.ColumnConfig{}
@@ -139,14 +139,14 @@ func (v *View) buildColumnConfig(namespace *Namespace) {
 	}
 }
 
-func (v *View) buildTemplate(namespace *Namespace, rule *Rule) {
+func (v *View) buildTemplate(namespace *Viewlet, rule *Rule) {
 	isRoot := rule.Root == v.Name
 	resource := namespace.Resource
 	v.Template = &view.Template{Source: namespace.SanitizedSQL}
 	v.Template.Parameters = v.matchParameters(namespace.SanitizedSQL, resource.State, isRoot)
 }
 
-//matchParameters matches parameter used by SQL, and add explicit parameter for root view
+// matchParameters matches parameter used by SQL, and add explicit parameter for root view
 func (v *View) matchParameters(SQL string, state inference.State, root bool) []*view.Parameter {
 	var result []*view.Parameter
 	SQLState := state.StateForSQL(SQL, root)
@@ -156,12 +156,12 @@ func (v *View) matchParameters(SQL string, state inference.State, root bool) []*
 	return result
 }
 
-func (v *View) buildRelations(parentNamespace *Namespace, rule *Rule) error {
+func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 	if parentNamespace.Spec.Relations == nil {
 		return nil
 	}
 	for _, relation := range parentNamespace.Spec.Relations {
-		relNamespace := rule.Namespaces.Lookup(relation.Namespace)
+		relNamespace := rule.Viewlets.Lookup(relation.Namespace)
 		if err := relNamespace.View.BuildView(rule); err != nil {
 			return err
 		}

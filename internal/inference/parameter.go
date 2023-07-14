@@ -193,7 +193,7 @@ func buildParameter(field *ast.Field, types *xreflect.Types) (*Parameter, error)
 	return param, nil
 }
 
-//ParentAlias returns join parent selector
+// ParentAlias returns join parent selector
 func ParentAlias(join *query.Join) string {
 	result := ""
 	sqlparser.Traverse(join.On, func(n node.Node) bool {
@@ -244,17 +244,18 @@ func extractRelationColumns(join *query.Join) (string, string) {
 }
 
 func (d *Parameter) EnsureCodec() {
-	if d.Parameter.Output != nil {
-		return
+	if d.Parameter.Codec == nil {
+		d.Parameter.Codec = &view.Codec{}
 	}
-	d.Parameter.Output = &view.Codec{}
+	if d.Parameter.Output == nil {
+		d.Parameter.Output = &view.Codec{}
+	}
 }
 
 func (d *Parameter) EnsureLocation() {
-	if d.Parameter.In != nil {
-		return
+	if d.Parameter.In == nil {
+		d.Parameter.In = &view.Location{}
 	}
-	d.Parameter.In = &view.Location{}
 }
 
 func (p *Parameter) HasDataType() bool {

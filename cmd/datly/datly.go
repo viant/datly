@@ -42,11 +42,11 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-	//
+
 	//os.Args = []string{
 	//	"datly",
 	//	"-N=run_tests_uri_param",
-	//	"-X=/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/cases/003_oauth/vendor_auth.sql",
+	//	"-X=/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/cases/004_update/product_update.sql",
 	//	"-w=autogen1",
 	//	"-C=dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
 	//	"-C=dyndb|dynamodb|dynamodb://localhost:8000/us-west-1?key=dummy&secret=dummy",

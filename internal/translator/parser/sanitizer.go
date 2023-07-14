@@ -76,10 +76,10 @@ func unwrapBrackets(name string) (string, bool) {
 	return "$" + name[2:len(name)-1], true
 }
 
-func sanitizeParameter(paramMeta *Expression, raw string, iterator *iterables, dst []byte, offset int) string {
-	context := paramMeta.Context
-	prefix := paramMeta.Prefix
-	paramName := paramMeta.Holder
+func sanitizeParameter(expression *Expression, raw string, iterator *iterables, dst []byte, offset int) string {
+	context := expression.Context
+	prefix := expression.Prefix
+	paramName := expression.Holder
 	variables := iterator.Declared
 
 	if fn, ok := keywords.Get(paramName); ok {
@@ -92,20 +92,21 @@ func sanitizeParameter(paramMeta *Expression, raw string, iterator *iterables, d
 	if prefix == keywords.ParamsMetadataKey {
 		return raw
 	}
-
-	if paramMeta.Entry != nil {
-		_, ok := paramMeta.Entry.Metadata.(*keywords.Namespace)
+	if expression.Entry != nil {
+		_, ok := expression.Entry.Metadata.(*keywords.Namespace)
 		if ok {
 			return raw
 		}
 	}
 
-	if param := iterator.State.Lookup(paramName); param != nil && param.In.Kind == view.KindLiteral {
-		return strings.Replace(raw, "$", fmt.Sprintf("$%v.", keywords.ParamsKey), 1)
+	if param := iterator.State.Lookup(paramName); param != nil {
+		if param.In != nil && param.In.Kind == view.KindLiteral {
+			return strings.Replace(raw, "$", fmt.Sprintf("$%v.", keywords.ParamsKey), 1)
+		}
 	}
 
 	if context == FuncContext || context == ForEachContext || context == IfContext || context == SetContext {
-		if paramMeta.Entry != nil {
+		if expression.Entry != nil {
 			return raw
 		}
 
@@ -136,8 +137,8 @@ func sanitizeParameter(paramMeta *Expression, raw string, iterator *iterables, d
 		return raw
 	}
 
-	if paramMeta.Entry != nil {
-		metadata, ok := paramMeta.Entry.Metadata.(*keywords.ContextMetadata)
+	if expression.Entry != nil {
+		metadata, ok := expression.Entry.Metadata.(*keywords.ContextMetadata)
 		if ok {
 			if metadata.UnexpandRaw {
 				return raw

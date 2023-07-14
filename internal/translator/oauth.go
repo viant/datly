@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/gateway"
 	"github.com/viant/scy"
 	"github.com/viant/scy/auth/jwt/verifier"
 	"strings"
@@ -12,12 +13,18 @@ import (
 func (c *Config) updateOauth(ctx context.Context) {
 	cfg := c.Config.Config
 	if res := c.repository.RSA; res != "" {
-		cfg.JWTValidator = &verifier.Config{}
+		c.ensureJWTValidator(cfg)
 		cfg.JWTValidator.RSA = getScyResource(res)
 	}
 	if res := c.repository.HMAC; res != "" {
-		cfg.JWTValidator = &verifier.Config{}
+		c.ensureJWTValidator(cfg)
 		cfg.JWTValidator.HMAC = getScyResource(res)
+	}
+}
+
+func (c *Config) ensureJWTValidator(cfg *gateway.Config) {
+	if cfg.JWTValidator == nil {
+		cfg.JWTValidator = &verifier.Config{}
 	}
 }
 

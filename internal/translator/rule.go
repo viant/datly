@@ -9,7 +9,7 @@ import (
 
 type (
 	Rule struct {
-		Namespaces
+		Viewlets
 		orderNamespaces []string
 		Root            string
 		router.Route
@@ -143,10 +143,10 @@ func (r *Rule) applyDefaults() {
 }
 
 func (r *Rule) RootView() *View {
-	return r.Namespaces.Lookup(r.Root).View
+	return r.Viewlets.Lookup(r.Root).View
 }
 
-func (r *Rule) updateExclude(n *Namespace) {
+func (r *Rule) updateExclude(n *Viewlet) {
 	if len(n.Exclude) == 0 {
 		return
 	}
@@ -162,7 +162,7 @@ func (r *Rule) updateExclude(n *Namespace) {
 }
 
 func NewRule() *Rule {
-	return &Rule{Namespaces: Namespaces{registry: map[string]*Namespace{}}, With: []string{
+	return &Rule{Viewlets: Viewlets{registry: map[string]*Viewlet{}}, With: []string{
 		"connections",
 	}}
 }

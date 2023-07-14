@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"github.com/viant/sqlparser"
+	"github.com/viant/sqlx/metadata/sink"
 	"strings"
 )
 
@@ -105,6 +106,22 @@ func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 	return nil
 }
 
+func (t *Table) Detect(ctx context.Context, db *sql.DB) (err error) {
+	sinkColumn, _ := readSinkColumns(ctx, db, t.Name)
+	if len(sinkColumn) == 0 {
+		SQL := "SELECT * FROM " + t.Name + " WHERE 1 = 1"
+		sinkColumn, err = inferColumnWithSQL(ctx, db, SQL, []interface{}{}, map[string]sink.Column{})
+	}
+	if len(sinkColumn) > 0 {
+		t.Columns = asColumns(sinkColumn)
+	}
+	return err
+}
+
+func (t *Table) AppendTable(table *Table) {
+	t.tables = append(t.tables, table)
+}
+
 func (t *Table) extractColumns(ctx context.Context, db *sql.DB, expr string) error {
 	if !HasWhitespace(strings.TrimSpace(expr)) {
 		expr = strings.Trim(expr, "`'")
@@ -125,6 +142,9 @@ func (t *Table) extractColumns(ctx context.Context, db *sql.DB, expr string) err
 func (t *Table) detectColumns(ctx context.Context, db *sql.DB, table string) {
 	if sinkColumns, _ := readSinkColumns(ctx, db, table); len(sinkColumns) > 0 {
 		t.Columns = asColumns(sinkColumns)
+	}
+	if len(t.Columns) == 0 {
+		t.Columns, _ = detectColumns(ctx, db, "SELECT * FROM "+table+" WHERE 1 = 0", "")
 	}
 }
 

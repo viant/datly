@@ -11,15 +11,15 @@ import (
 	"strings"
 )
 
-type Namespaces struct {
-	registry map[string]*Namespace
+type Viewlets struct {
+	registry map[string]*Viewlet
 	keys     []string
 }
 
-func (n *Namespaces) Lookup(name string) *Namespace {
+func (n *Viewlets) Lookup(name string) *Viewlet {
 	return n.registry[name]
 }
-func (n *Namespaces) Each(fn func(namespace *Namespace) error) error {
+func (n *Viewlets) Each(fn func(viewlet *Viewlet) error) error {
 	for _, key := range n.keys {
 		ns := n.registry[key]
 		if err := fn(ns); err != nil {
@@ -29,36 +29,36 @@ func (n *Namespaces) Each(fn func(namespace *Namespace) error) error {
 	return nil
 }
 
-func (n *Namespaces) Append(namespace *Namespace) {
-	n.registry[namespace.Name] = namespace
-	n.keys = append(n.keys, namespace.Name)
+func (n *Viewlets) Append(viewlet *Viewlet) {
+	n.registry[viewlet.Name] = viewlet
+	n.keys = append(n.keys, viewlet.Name)
 }
-func (n *Namespaces) Init(ctx context.Context, query *query.Select, resource *Resource, initFn, setType func(ctx context.Context, n *Namespace) error) error {
-	rootNamespace := NewNamespace(query.From.Alias, sqlparser.Stringify(query.From.X), nil, resource)
-	rootNamespace.ViewJSONHint = query.From.Comments
+func (n *Viewlets) Init(ctx context.Context, query *query.Select, resource *Resource, initFn, setType func(ctx context.Context, n *Viewlet) error) error {
+	root := NewViewlet(query.From.Alias, sqlparser.Stringify(query.From.X), nil, resource)
+	root.ViewJSONHint = query.From.Comments
 
-	n.Append(rootNamespace)
+	n.Append(root)
 	for i := range query.Joins {
 		join := query.Joins[i]
-		relNamespace := NewNamespace(join.Alias, sqlparser.Stringify(join.With), join, resource)
-		relNamespace.ViewJSONHint = join.Comments
-		n.Append(relNamespace)
+		relViewlet := NewViewlet(join.Alias, sqlparser.Stringify(join.With), join, resource)
+		relViewlet.ViewJSONHint = join.Comments
+		n.Append(relViewlet)
 	}
 	for _, parameter := range resource.State.FilterByKind(view.KindDataView) {
-		namespace := NewNamespace(parameter.Name, parameter.SQL, nil, resource)
-		namespace.Cardinality = view.One
-		n.Append(namespace)
+		viewlet := NewViewlet(parameter.Name, parameter.SQL, nil, resource)
+		viewlet.Cardinality = view.One
+		n.Append(viewlet)
 	}
 
-	if err := n.applyTopLevelDSQLSetting(query, rootNamespace); err != nil {
+	if err := n.applyTopLevelDSQLSetting(query, root); err != nil {
 		return err
 	}
 	if err := n.applyViewHintSettings(); err != nil {
 		return err
 	}
-	if err := n.Each(func(namespace *Namespace) error {
-		if err := initFn(ctx, namespace); err != nil {
-			return fmt.Errorf("failed to init namespace: %ns, %w", namespace.Name, err)
+	if err := n.Each(func(viewlet *Viewlet) error {
+		if err := initFn(ctx, viewlet); err != nil {
+			return fmt.Errorf("failed to init viewlet: %ns, %w", viewlet.Name, err)
 		}
 		return nil
 	}); err != nil {
@@ -67,9 +67,9 @@ func (n *Namespaces) Init(ctx context.Context, query *query.Select, resource *Re
 	if err := resource.ensureViewParametersSchema(ctx, setType); err != nil {
 		return err
 	}
-	if err := n.Each(func(namespace *Namespace) error {
-		if err := setType(ctx, namespace); err != nil {
-			return fmt.Errorf("failed to init namespace: %v, %w", namespace.Name, err)
+	if err := n.Each(func(viewlet *Viewlet) error {
+		if err := setType(ctx, viewlet); err != nil {
+			return fmt.Errorf("failed to init viewlet: %v, %w", viewlet.Name, err)
 		}
 		return nil
 	}); err != nil {
@@ -79,13 +79,13 @@ func (n *Namespaces) Init(ctx context.Context, query *query.Select, resource *Re
 	return nil
 }
 
-func (n *Namespaces) applyViewHintSettings() error {
-	return n.Each(func(namespace *Namespace) error {
+func (n *Viewlets) applyViewHintSettings() error {
+	return n.Each(func(namespace *Viewlet) error {
 		return namespace.View.applyHintSettings(namespace)
 	})
 }
 
-func (n Namespaces) addRelations(query *query.Select) {
+func (n Viewlets) addRelations(query *query.Select) {
 	for _, join := range query.Joins {
 		parentNs := inference.ParentAlias(join)
 		parent := n.Lookup(parentNs)
@@ -100,7 +100,7 @@ func (n Namespaces) addRelations(query *query.Select) {
 	}
 }
 
-func (n Namespaces) applyTopLevelDSQLSetting(query *query.Select, namespace *Namespace) error {
+func (n Viewlets) applyTopLevelDSQLSetting(query *query.Select, namespace *Viewlet) error {
 	columns := sqlparser.NewColumns(query.List)
 	for i := range columns {
 		if err := n.updateTopQuerySetting(columns[i], namespace); err != nil {
@@ -110,7 +110,7 @@ func (n Namespaces) applyTopLevelDSQLSetting(query *query.Select, namespace *Nam
 	return nil
 }
 
-func (n Namespaces) updateTopQuerySetting(column *sqlparser.Column, namespace *Namespace) error {
+func (n Viewlets) updateTopQuerySetting(column *sqlparser.Column, namespace *Viewlet) error {
 	if column.Namespace == "" {
 		column.Namespace = namespace.Name
 	}

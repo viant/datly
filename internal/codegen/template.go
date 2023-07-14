@@ -286,7 +286,7 @@ func (t *Template) RecordPrefix() string {
 }
 
 func (t *Template) BuildTypeDef(spec *inference.Spec, wrapperField string) {
-	t.TypeDef = spec.TypeDefinition(wrapperField)
+	t.TypeDef = spec.TypeDefinition(wrapperField, true)
 	t.ensurePackageImports(t.TypeDef.Package, t.TypeDef.Fields)
 	t.ensureTypeImport(spec.Type.Name)
 	if wrapperField != "" {
