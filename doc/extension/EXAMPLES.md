@@ -107,15 +107,15 @@ The following folders and files get generated or updated
   |      
   | - pkg 
   |    | - actor
-  |    |    | - entity.go 
+  |    |    | - actor.go 
   |    |
   |    | - dependency
   |         | - init.go
   ...
 ```
 + Actor.sql - patch logic written in dsql
-+ EntityPost.json - request body template just with required fields
-+ entity.go - all needed go structs
++ ~~EntityPost.json - request body template just with required fields`~~
++ actor.go - all needed go structs
 + init.go - updated imports
 
 ### 1.6 Initialise datly rule repository
@@ -612,7 +612,7 @@ Available tags:
   - validate
 
 
-+ Add validate tags in Actor struct in file ~/myproject/pkg/actor/entity.go
++ Add validate tags in Actor struct in file ~/myproject/pkg/actor/actor.go
   ```go
   type Actor struct {
       ActorId    int       `sqlx:"name=actor_id,autoincrement,primaryKey,required"`
@@ -898,7 +898,7 @@ func (a *Actor) Validate(cur *Actor) *shared.Validation {
 #end
 ```
 
-+ **add validate tags in Actor struct in file ~/myproject/pkg/actor/entity.go**
++ **add validate tags in Actor struct in file ~/myproject/pkg/actor/actor.go**
 ```go
 type Actor struct {
 	ActorId    int       `sqlx:"name=actor_id,autoincrement,primaryKey,required"`
@@ -1163,11 +1163,58 @@ solution:
 
 ## 8 Debugging
 ### 8.1 More debug information on runtime
-Set environment variable before running app to get more debug informations.
+Set environment variable before running app to get more debug information.
 ```text
 export DATLY_NOPANIC="1"
 ```
-### 8.2 Create unit test file on project level
+### 8.2 Using datly.go for debugging
++ Adjust main function in file ~/myproject/.build/datly/e2e/debug/datly.go
+```go
+func main() {
+	os.Setenv("DATLY_NOPANIC", "0")
+
+	// Adjust debug options
+	os.Setenv("DATLY_DEBUG", "true")
+	read.ShowSQL(true)
+	update.ShowSQL(true)
+	insert.ShowSQL(true)
+
+	// Set path to your repo config
+	configURL := filepath.Join("~/myproject/repo/dev/Datly/config.json")
+	os.Args = []string{"", "-c=" + configURL}
+	fmt.Printf("[INFO] Build time: %v\n", env.BuildTime.String())
+
+	go func() {
+		if err := agent.Listen(agent.Options{}); err != nil {
+			log.Fatal(err)
+		}
+	}()
+	server, err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if server != nil {
+		if err := server.ListenAndServe(); err != nil {
+			log.Fatal(err.Error())
+		}
+	}
+}
+```
+
++ Add breakpoint in handler.go file
+
+```go
+func (h *Handler) Exec(ctx context.Context, sess handler.Session) (interface{}, error) {
+state := &State{} // set breakpoint at this line
+...
+}
+```
+
++ Run debugger
+
+
+### 8.3 Create unit test file on project level
 + add file ~/myproject/service_test.go
 ```go
 package myproject2
