@@ -95,6 +95,31 @@ func (s *Spec) TypeDefinition(wrapper string, includeHas bool) *view.TypeDefinit
 	return typeDef
 }
 
+func (s *Spec) SchemaTypeDefinition(wrapper string, includeHas bool) *view.TypeDefinition {
+	typeDef := &view.TypeDefinition{
+		Package:     s.Type.Package,
+		Name:        s.Type.Name,
+		Cardinality: s.Type.Cardinality,
+		Fields:      s.Fields(includeHas),
+	}
+	if wrapper != "" {
+		return &view.TypeDefinition{
+			Name:    wrapper,
+			Package: s.Type.Package,
+			Fields: []*view.Field{
+				{
+					Name:        wrapper,
+					Fields:      typeDef.Fields,
+					Cardinality: typeDef.Cardinality,
+					Tag:         fmt.Sprintf(`typeName:"%v"`, typeDef.Name),
+					Ptr:         true,
+				},
+			},
+		}
+	}
+	return typeDef
+}
+
 func (s *Spec) shouldSkipColumn(whitelist, blacklist map[string]bool, column *sqlparser.Column) bool {
 	name := column.Alias
 	if name == "" {
@@ -115,7 +140,7 @@ func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinalit
 	if IsToOne(join) {
 		cardinality = view.One
 	}
-	relColumn, refColumn := extractRelationColumns(join)
+	relColumn, refColumn := ExtractRelationColumns(join)
 	rel := &Relation{Spec: spec,
 		KeyField:    spec.Type.ByColumn(refColumn),
 		ParentField: s.Type.ByColumn(relColumn),

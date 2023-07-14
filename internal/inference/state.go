@@ -2,8 +2,10 @@ package inference
 
 import (
 	"fmt"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/keywords"
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
 	"go/ast"
@@ -13,17 +15,29 @@ import (
 	"strings"
 )
 
-//State defines datly view/resource parameters
+// State defines datly view/resource parameters
 type State []*Parameter
 
-//Append append parameter
+// Append append parameter
 func (s *State) Append(params ...*Parameter) {
 	for i := range params {
 		if s.Has(params[i].Name) {
 			continue
 		}
+		params[i].adjustMetaViewIfNeeded()
 		*s = append(*s, params[i])
 	}
+}
+
+func (s State) RemoveReserved() State {
+	var result State
+	for _, parameter := range s {
+		if keywords.Has(parameter.Name) {
+			continue
+		}
+		result = append(result, parameter)
+	}
+	return result
 }
 
 func (s State) ViewParameters() []*view.Parameter {
@@ -32,6 +46,37 @@ func (s State) ViewParameters() []*view.Parameter {
 		result = append(result, &s[i].Parameter)
 	}
 	return result
+}
+
+func (s State) Compact(modulePath string) (State, error) {
+	if err := s.EnsureReflectTypes(modulePath); err != nil {
+		return nil, err
+	}
+	var result = State{}
+	var structs = make(map[string]*parameterStruct)
+	for _, parameter := range s {
+		if !strings.Contains(parameter.Name, ".") {
+			result = append(result, parameter)
+			continue
+		}
+		index := strings.Index(parameter.Name, ".")
+		holder := parameter.Name[:index]
+		child := parameter.Name[index+1:]
+		if _, ok := structs[holder]; !ok {
+			structs[holder] = newParameterStruct("")
+		}
+		structs[holder].Add(child, parameter)
+	}
+
+	for holder, pStruct := range structs {
+		param := &Parameter{}
+		param.Name = holder
+		param.In = view.NewBodyLocation("")
+		param.Schema = view.NewSchema(pStruct.reflectType())
+		result = append(result, param)
+	}
+	return result, nil
+
 }
 
 func (s *State) AppendViewParameters(params ...*view.Parameter) {
@@ -64,7 +109,7 @@ func (s State) Clone() State {
 	return result
 }
 
-//Has returns true if state already has a parameter
+// Has returns true if state already has a parameter
 func (s State) Has(name string) bool {
 	for _, candidate := range s {
 		if candidate.Name == name {
@@ -74,7 +119,7 @@ func (s State) Has(name string) bool {
 	return false
 }
 
-//Lookup returns matched paramter
+// Lookup returns matched paramter
 func (s State) Lookup(name string) *Parameter {
 	for _, candidate := range s {
 		if candidate.Name == name {
@@ -84,7 +129,7 @@ func (s State) Lookup(name string) *Parameter {
 	return nil
 }
 
-//IndexByName indexes parameter by name
+// IndexByName indexes parameter by name
 func (s State) IndexByName() map[string]*Parameter {
 	result := map[string]*Parameter{}
 	for _, parameter := range s {
@@ -94,7 +139,7 @@ func (s State) IndexByName() map[string]*Parameter {
 	return result
 }
 
-//IndexByPathIndex indexes parameter by index variable
+// IndexByPathIndex indexes parameter by index variable
 func (s State) IndexByPathIndex() map[string]*Parameter {
 	result := map[string]*Parameter{}
 	for _, parameter := range s {
@@ -106,7 +151,7 @@ func (s State) IndexByPathIndex() map[string]*Parameter {
 	return result
 }
 
-//FilterByKind filters state parameter by kind
+// FilterByKind filters state parameter by kind
 func (s State) FilterByKind(kind view.Kind) State {
 	result := State{}
 	if len(s) == 0 {
@@ -120,7 +165,7 @@ func (s State) FilterByKind(kind view.Kind) State {
 	return result
 }
 
-//Implicit filters implicit parameters
+// Implicit filters implicit parameters
 func (s State) Implicit() State {
 	result := State{}
 	for _, parameter := range s {
@@ -131,7 +176,7 @@ func (s State) Implicit() State {
 	return result
 }
 
-//Implicit filters implicit parameters
+// Implicit filters implicit parameters
 func (s State) Explicit() State {
 	result := State{}
 	for _, parameter := range s {
@@ -152,7 +197,7 @@ func (s State) Expand(text string) string {
 	return expander.ExpandAsText(text)
 }
 
-//DsqlParameterDeclaration returns dsql parameter declaration
+// DsqlParameterDeclaration returns dsql parameter declaration
 func (s State) DsqlParameterDeclaration() string {
 	var result []string
 	for _, param := range s {
@@ -161,8 +206,8 @@ func (s State) DsqlParameterDeclaration() string {
 	return strings.Join(result, "\n\t")
 }
 
-//EnsureSchema initialises reflect.Type for each state parameter
-func (s State) EnsureSchema(dirTypes *xreflect.DirTypes) error {
+// ensureSchema initialises reflect.Type for each state parameter
+func (s State) ensureSchema(dirTypes *xreflect.DirTypes) error {
 	for _, param := range s {
 		if param.Schema.Type() != nil {
 			continue
@@ -186,7 +231,7 @@ func (s State) EnsureSchema(dirTypes *xreflect.DirTypes) error {
 	return nil
 }
 
-//HandlerLocalVariables returns golang handler local variables reassigned from state
+// HandlerLocalVariables returns golang handler local variables reassigned from state
 func (s State) HandlerLocalVariables() ([]string, string) {
 	var vars []string
 	var names []string
@@ -215,7 +260,7 @@ func (s State) ReflectType(pkgPath string, lookupType xreflect.LookupType) (refl
 		rType := schema.Type()
 		if rType == nil {
 			if rType, err = types.LookupType(lookupType, schema.DataType); err != nil {
-				return nil, fmt.Errorf("failed to detect parmater '%v' type for: %v %v, %w", param.Name, schema.DataType, err)
+				return nil, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", param.Name, schema.DataType, err)
 			}
 		}
 		param.Schema.Cardinality = schema.Cardinality
@@ -231,7 +276,41 @@ func (s State) ReflectType(pkgPath string, lookupType xreflect.LookupType) (refl
 	return baseType, nil
 }
 
-//NewState creates a state from state go struct
+func (s State) EnsureReflectTypes(modulePath string) error {
+	typeRegistry := xreflect.NewTypes(xreflect.WithPackagePath(modulePath), xreflect.WithRegistry(config.Config.Types))
+	for _, param := range s {
+		if param.Schema == nil {
+			continue
+		}
+		if param.Schema.Type() != nil {
+			continue
+		}
+		dataType := param.Schema.Name
+		if dataType == "" {
+			dataType = param.Schema.DataType
+		}
+		rType, err := types.LookupType(typeRegistry.Lookup, dataType)
+		if err != nil {
+			return err
+		}
+		orig := param.Schema
+		param.Schema = view.NewSchema(rType)
+		param.Schema.Cardinality = orig.Cardinality
+		param.Schema.DataType = orig.DataType
+	}
+	return nil
+}
+
+func (s State) MetaViewSQL() *Parameter {
+	for _, candidate := range s {
+		if strings.HasPrefix(candidate.Name, "View.") && strings.HasSuffix(candidate.Name, ".SQL") {
+			return candidate
+		}
+	}
+	return nil
+}
+
+// NewState creates a state from state go struct
 func NewState(modulePath, dataType string, types *xreflect.Types) (State, error) {
 	baseDir := modulePath
 	if pair := strings.Split(dataType, "."); len(pair) > 1 {
@@ -269,7 +348,7 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 	if _, err = dirTypes.Type(dataType); err != nil {
 		return nil, err
 	}
-	if err = state.EnsureSchema(dirTypes); err != nil {
+	if err = state.ensureSchema(dirTypes); err != nil {
 		return nil, err
 	}
 	return state, nil

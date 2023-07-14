@@ -22,9 +22,10 @@ type Repository struct {
 	Connectors      []*view.Connector
 	NamedConnectors view.Connectors
 	Caches          view.Caches
-	MessageBuses    []*mbus.Resource
-	Messages        Messages
-	Files           asset.Files
+
+	MessageBuses []*mbus.Resource
+	Messages     Messages
+	Files        asset.Files
 }
 
 func (r *Repository) RuleName(rule *options.Rule) string {
@@ -48,7 +49,7 @@ func (r *Repository) LookupDb(name string) (*sql.DB, error) {
 	return r.Connectors[0].DB()
 }
 
-//Init Initialises translator repository
+// Init Initialises translator repository
 func (r *Repository) Init(ctx context.Context) error {
 	if err := r.Config.Init(ctx); err != nil {
 		return err
@@ -70,6 +71,9 @@ func (r *Repository) PersistConfig() error {
 		return err
 	}
 	if err = r.persistConstants(); err != nil {
+		return err
+	}
+	if err = r.persistCache(); err != nil {
 		return err
 	}
 	r.Files.Append(asset.NewFile(cfg.URL, string(config)))
@@ -111,6 +115,9 @@ func (r *Repository) ensureDependencies(ctx context.Context) error {
 	if err := r.ensureConstants(ctx); err != nil {
 		return err
 	}
+	if err := r.ensureCache(ctx); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -120,6 +127,21 @@ func (r *Repository) Upload(ctx context.Context) error {
 		return nil
 	}
 	return r.Files.Upload(ctx, r.fs)
+}
+
+func (r *Repository) persistCache() error {
+	if len(r.Caches) == 0 {
+		return nil
+	}
+	cfg := r.Config
+	resource := view.Resource{CacheProviders: r.Caches}
+	content, err := asset.EncodeYAML(resource)
+	if err != nil {
+		return err
+	}
+	r.Files.Append(asset.NewFile(url.Join(cfg.DependencyURL, "cache.yaml"), string(content)))
+	return nil
+
 }
 
 func NewRepository(config *Config) *Repository {

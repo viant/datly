@@ -12,12 +12,31 @@ import (
 	"reflect"
 )
 
-func (f *Field) StructField() reflect.StructField {
-	return reflect.StructField{
+type reflectOptions struct {
+	withTag bool
+}
+
+type ReflectOption func(r *reflectOptions)
+
+func WithStructTag() ReflectOption {
+	return func(r *reflectOptions) {
+		r.withTag = true
+	}
+}
+
+func (f *Field) StructField(opts ...ReflectOption) reflect.StructField {
+	ret := reflect.StructField{
 		Name: f.Name,
-		Tag:  reflect.StructTag(f.Tag),
 		Type: f.Field.Schema.Type(),
 	}
+	options := &reflectOptions{}
+	for _, apply := range opts {
+		apply(options)
+	}
+	if options.withTag {
+		ret.Tag = reflect.StructTag(f.Tag)
+	}
+	return ret
 }
 
 type Type struct {
@@ -149,10 +168,13 @@ func (t *Type) AddRelation(name string, spec *Spec, relation *Relation) *Field {
 	return field
 }
 
-func (t *Type) Fields() []reflect.StructField {
+func (t *Type) Fields(opts ...ReflectOption) []reflect.StructField {
 	var fields []reflect.StructField
 	for _, field := range t.columnFields {
-		fields = append(fields, field.StructField())
+		fields = append(fields, field.StructField(opts...))
+	}
+	for _, field := range t.RelationFields {
+		fields = append(fields, field.StructField(opts...))
 	}
 	return fields
 }
@@ -192,7 +214,10 @@ func NewType(packageName string, name string, rType reflect.Type) (*Type, error)
 	return result, nil
 }
 
+var defaultPackageName = "autogen"
+
 func PkgPath(fieldName string, pkgPath string) (fieldPath string) {
+
 	if fieldName[0] > 'Z' || fieldName[0] < 'A' {
 		fieldPath = pkgPath
 	}

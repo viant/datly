@@ -24,7 +24,6 @@ func (s *Service) extractDMLTables(ctx context.Context, resource *Resource) (*in
 			}
 			table.AppendTable(extraTable)
 		}
-
 	}
 	return table, nil
 }

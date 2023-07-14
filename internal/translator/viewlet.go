@@ -41,8 +41,10 @@ type (
 		Transforms     map[string]*Function
 		ColumnConfig   []*view.ColumnConfig
 		View           *View
+
 		TypeDefinition *view.TypeDefinition
 		OutputConfig
+		sourceViewlet *Viewlet
 	}
 
 	Function struct {
@@ -58,17 +60,21 @@ type (
 	}
 )
 
-func (v *Viewlet) UpdateParameterType(state *inference.State, name string, expression *parser.ExpressionContext) {
-	if strings.HasPrefix(name, "Unsafe.") {
-		name = name[7:]
-	}
+func (v *Viewlet) IsMetaView() bool {
+	return v.sourceViewlet != nil
+}
 
+func (v *Viewlet) UpdateParameterType(state *inference.State, name string, expression *parser.ExpressionContext) {
 	parameter := state.Lookup(name)
 	if index := strings.Index(name, "."); index != -1 && parameter == nil {
 		if holder := state.Lookup(name[:index]); holder != nil {
 			return
 		}
 	}
+	if parameter != nil && !parameter.AssumedType && parameter.HasSchema() { //already derived schema from column
+		return
+	}
+
 	if parameter == nil {
 		parameter = &inference.Parameter{}
 		parameter.Name = name
@@ -107,7 +113,9 @@ func (v *Viewlet) UpdateParameterType(state *inference.State, name string, expre
 	if expression.Type != nil {
 		parameter.Schema = view.NewSchema(expression.Type)
 		parameter.Schema.DataType = expression.Type.String()
+		parameter.AssumedType = true
 	}
+
 }
 
 func (v *Viewlet) excludeMap() map[string]bool {
@@ -174,7 +182,7 @@ func NewViewlet(name, SQL string, join *query.Join, resource *Resource) *Viewlet
 		Transforms: map[string]*Function{},
 		Tags:       map[string]string{},
 		Casts:      map[string]string{},
-		View:       &View{Namespace: name},
+		View:       &View{Namespace: name, View: view.View{Name: name}},
 		Connector:  connector,
 	}
 	return ret

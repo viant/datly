@@ -142,8 +142,12 @@ func (r *Rule) applyDefaults() {
 	}
 }
 
+func (r *Rule) RootViewlet() *Viewlet {
+	return r.Viewlets.Lookup(r.Root)
+}
+
 func (r *Rule) RootView() *View {
-	return r.Viewlets.Lookup(r.Root).View
+	return r.RootViewlet().View
 }
 
 func (r *Rule) updateExclude(n *Viewlet) {
@@ -159,6 +163,17 @@ func (r *Rule) updateExclude(n *Viewlet) {
 		r.Route.Exclude = append(r.Route.Exclude, prefix+field.Name)
 	}
 	n.View.Exclude = nil //TODO do we have to remove it
+}
+
+func (r *Rule) applyRootViewOutputShorthands() {
+	root := r.RootViewlet()
+	setter.SetStringIfEmpty(&r.Route.Field, root.Field)
+	if r.Route.Style == "" {
+		r.Route.Style = router.Style(root.Style)
+	}
+	if r.Route.Cardinality == "" {
+		r.Route.Cardinality = root.Cardinality
+	}
 }
 
 func NewRule() *Rule {

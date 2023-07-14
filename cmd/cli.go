@@ -115,32 +115,35 @@ func NewBuilder(options *Options, opts *soptions.Options, logger io.Writer) (*Bu
 		bundles:    map[string]*bundleMetadata{},
 	}
 
-	var err error
-	ctx := context.Background()
-	if repo := opts.Repository(); repo != nil {
-		builder.translator = translator.New(translator.NewConfig(repo))
-		err = builder.translator.Init(context.Background())
-		if err != nil {
-			fmt.Printf("translator err: %v\n", err)
-		}
+	var tryNewTranslator = true
+	if tryNewTranslator {
+		var err error
+		ctx := context.Background()
+		if repo := opts.Repository(); repo != nil {
+			builder.translator = translator.New(translator.NewConfig(repo))
+			err = builder.translator.Init(context.Background())
+			if err != nil {
+				fmt.Printf("translator err: %v\n", err)
+			}
 
-		dSQL, err := opts.Rule().LoadSource(ctx, builder.fs)
-		if err != nil {
-			return nil, err
-		}
-		if err = builder.translator.Translate(ctx, opts.Rule(), dSQL); err != nil {
-			fmt.Printf("translate err: %v\n", err)
-		}
+			dSQL, err := opts.Rule().LoadSource(ctx, builder.fs)
+			if err != nil {
+				return nil, err
+			}
+			if err = builder.translator.Translate(ctx, opts.Rule(), dSQL); err != nil {
+				fmt.Printf("translate err: %v\n", err)
+			}
 
-		//if repository := builder.translator.Repository; repository != nil {
-		//	repository.PersistConfig()
-		//	if err := repository.Upload(ctx); err != nil {
-		//		fmt.Printf("tranlator err :%v\n", err)
-		//	}
-		//	if len(repository.Resource) > 0 {
-		//		return nil, nil
-		//	}
-		//}
+			if repository := builder.translator.Repository; repository != nil {
+				repository.PersistConfig()
+				if err := repository.Upload(ctx); err != nil {
+					fmt.Printf("tranlator err :%v\n", err)
+				}
+				if len(repository.Resource) > 0 {
+					return nil, nil
+				}
+			}
+		}
 	}
 
 	return builder, builder.Build(context.TODO())

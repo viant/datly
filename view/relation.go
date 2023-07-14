@@ -18,15 +18,15 @@ type (
 	//Parent View represents Employee{AccountId: int}, Relation represents Account{Id: int}
 	//We want to create result like:  Employee{Account{Id:int}}
 	Relation struct {
-		Name string         `json:",omitempty"`
-		Of   *ReferenceView `json:",omitempty"`
-
-		Cardinality     Cardinality `json:",omitempty"` //One, or Many
-		Column          string      `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
-		Field           string      `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
-		ColumnNamespace string      `json:",omitempty"` //Represents column namespace, can be specified if $shared.Criteria / $shared.ColumnInPosition is inside the "from" statement
-		Holder          string      `json:",omitempty"` //Represents column created due to the merging. In our example it would be Employee#Account
-		IncludeColumn   bool        `json:",omitempty"` //tells if Column _field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId _field
+		Name            string         `json:",omitempty"`
+		Of              *ReferenceView `json:",omitempty"`
+		Caser           format.Case    `json:",omitempty"`
+		Cardinality     Cardinality    `json:",omitempty"` //One, or Many
+		Column          string         `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
+		Field           string         `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
+		ColumnNamespace string         `json:",omitempty"` //Represents column namespace, can be specified if $shared.Criteria / $shared.ColumnInPosition is inside the "from" statement
+		Holder          string         `json:",omitempty"` //Represents column created due to the merging. In our example it would be Employee#Account
+		IncludeColumn   bool           `json:",omitempty"` //tells if Column _field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId _field
 
 		hasColumnField bool
 		holderField    *xunsafe.Field
@@ -48,7 +48,7 @@ const (
 	Many Cardinality = "Many"
 )
 
-//Init initializes ReferenceView
+// Init initializes ReferenceView
 func (r *ReferenceView) Init(_ context.Context, _ *Resource) error {
 	r.initializeField()
 	return r.Validate()
@@ -70,7 +70,7 @@ func (r *ReferenceView) initializeField() {
 	r._field = shared.MatchField(r.Schema.Type(), r.Field, r.Caser)
 }
 
-//Validate checks if ReferenceView is valid
+// Validate checks if ReferenceView is valid
 func (r *ReferenceView) Validate() error {
 	if r.Column == "" {
 		return fmt.Errorf("reference column can't be empty")
@@ -78,7 +78,7 @@ func (r *ReferenceView) Validate() error {
 	return nil
 }
 
-//Init initializes Relation
+// Init initializes Relation
 func (r *Relation) Init(ctx context.Context, resource *Resource, parent *View) error {
 	if r.Field == "" {
 		r.Field = r.Column
@@ -132,7 +132,7 @@ func (r *Relation) initHolder(v *View) error {
 	return nil
 }
 
-//Validate checks if Relation is valid
+// Validate checks if Relation is valid
 func (r *Relation) Validate() error {
 	if r.Cardinality != Many && r.Cardinality != One {
 		return fmt.Errorf("cardinality has to be Many or One")
@@ -175,7 +175,7 @@ func (r *Relation) ensureColumnAliasIfNeeded() error {
 	return nil
 }
 
-//ViewReference creates a view reference
+// ViewReference creates a view reference
 func ViewReference(name, ref string, options ...Option) *View {
 	viewRef := &View{
 		Name:      name,
@@ -198,10 +198,10 @@ func (v *View) applyOptions(options []Option) {
 	}
 }
 
-//RelationsSlice represents slice of Relation
+// RelationsSlice represents slice of Relation
 type RelationsSlice []*Relation
 
-//Index indexes Relations by Relation.Holder
+// Index indexes Relations by Relation.Holder
 func (r RelationsSlice) Index() map[string]*Relation {
 	result := make(map[string]*Relation)
 	for i, rel := range r {
@@ -215,8 +215,8 @@ func (r RelationsSlice) Index() map[string]*Relation {
 	return result
 }
 
-//PopulateWithResolve filters RelationsSlice by the columns that won't be present in Database
-//due to the removing StructField after assembling nested StructType.
+// PopulateWithResolve filters RelationsSlice by the columns that won't be present in Database
+// due to the removing StructField after assembling nested StructType.
 func (r RelationsSlice) PopulateWithResolve() []*Relation {
 	result := make([]*Relation, 0)
 	for i, rel := range r {
@@ -228,7 +228,7 @@ func (r RelationsSlice) PopulateWithResolve() []*Relation {
 	return result
 }
 
-//Columns extract Relation.Column from RelationsSlice
+// Columns extract Relation.Column from RelationsSlice
 func (r RelationsSlice) Columns() []string {
 	resolverColumns := make([]string, 0)
 	for i := range r {
@@ -237,8 +237,8 @@ func (r RelationsSlice) Columns() []string {
 	return resolverColumns
 }
 
-//PopulateWithVisitor filters RelationsSlice by the columns that will be present in Database, and because of that
-//they wouldn't be resolved as unmapped columns.
+// PopulateWithVisitor filters RelationsSlice by the columns that will be present in Database, and because of that
+// they wouldn't be resolved as unmapped columns.
 func (r RelationsSlice) PopulateWithVisitor() []*Relation {
 	result := make([]*Relation, 0)
 	for i, rel := range r {
@@ -250,7 +250,7 @@ func (r RelationsSlice) PopulateWithVisitor() []*Relation {
 	return result
 }
 
-//NwReferenceView creates a reference view
+// NwReferenceView creates a reference view
 func NwReferenceView(field, column string, view *View) *ReferenceView {
 	return &ReferenceView{View: *view, Column: column, Field: field}
 }

@@ -44,11 +44,7 @@ func (n *Viewlets) Init(ctx context.Context, query *query.Select, resource *Reso
 		relViewlet.ViewJSONHint = join.Comments
 		n.Append(relViewlet)
 	}
-	for _, parameter := range resource.State.FilterByKind(view.KindDataView) {
-		viewlet := NewViewlet(parameter.Name, parameter.SQL, nil, resource)
-		viewlet.Cardinality = view.One
-		n.Append(viewlet)
-	}
+	resource.buildParameterViews()
 
 	if err := n.applyTopLevelDSQLSetting(query, root); err != nil {
 		return err
@@ -75,6 +71,7 @@ func (n *Viewlets) Init(ctx context.Context, query *query.Select, resource *Reso
 	}); err != nil {
 		return err
 	}
+
 	n.addRelations(query)
 	return nil
 }
@@ -87,9 +84,13 @@ func (n *Viewlets) applyViewHintSettings() error {
 
 func (n Viewlets) addRelations(query *query.Select) {
 	for _, join := range query.Joins {
+		relation := n.Lookup(join.Alias)
+		if relation.IsMetaView() {
+			continue
+		}
 		parentNs := inference.ParentAlias(join)
 		parent := n.Lookup(parentNs)
-		relation := n.Lookup(join.Alias)
+
 		relation.Spec.Parent = parent.Spec
 		cardinality := view.Many
 		if inference.IsToOne(join) {
@@ -121,7 +122,7 @@ func (n Viewlets) updateTopQuerySetting(column *sqlparser.Column, namespace *Vie
 	if len(column.Except) > 0 {
 		namespaceForColumn.Exclude = column.Except
 	}
-	if column.Comments != "" && strings.Contains(column.Name, "*") {
+	if column.Comments != "" && strings.Contains(column.Expression, "*") {
 		namespaceForColumn.OutputJSONHint = column.Comments
 		if err := parser.TryUnmarshalHint(namespaceForColumn.OutputJSONHint, &namespaceForColumn.OutputConfig); err != nil {
 			return err

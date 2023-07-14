@@ -16,15 +16,16 @@ type (
 	View struct {
 		Namespace string
 		view.View
-		build          bool
-		ExecKind       string                 `json:",omitempty"`
-		FetchRecords   bool                   `json:",omitempty"`
-		Connector      string                 `json:",omitempty"`
-		Self           *view.SelfReference    `json:",omitempty"`
-		Warmup         map[string]interface{} `json:",omitempty"`
-		Auth           string                 `json:",omitempty"`
-		DataType       string                 `json:",omitempty"`
-		AsyncTableName string                 `json:",omitempty"`
+		build            bool
+		ExecKind         string                 `json:",omitempty"`
+		FetchRecords     bool                   `json:",omitempty"`
+		Connector        string                 `json:",omitempty"`
+		Self             *view.SelfReference    `json:",omitempty"`
+		Warmup           map[string]interface{} `json:",omitempty"`
+		Auth             string                 `json:",omitempty"`
+		DataType         string                 `json:",omitempty"`
+		AsyncTableName   string                 `json:",omitempty"`
+		ParameterDerived bool
 	}
 )
 
@@ -42,7 +43,7 @@ func (v *View) applyHintSettings(namespace *Viewlet) error {
 	return nil
 }
 
-func (v *View) applyShorthands(namespace *Viewlet) {
+func (v *View) applyShorthands(viewlet *Viewlet) {
 
 	if v.Self != nil {
 		v.SelfReference = v.Self
@@ -55,10 +56,10 @@ func (v *View) applyShorthands(namespace *Viewlet) {
 
 	}
 	if v.Connector != "" {
-		namespace.Connector = v.Connector
+		viewlet.Connector = v.Connector
 	}
 	if v.Auth != "" {
-		namespace.Resource.State.Append(parser.DefaultOAuthParameter(v.Auth))
+		viewlet.Resource.State.Append(parser.DefaultOAuthParameter(v.Auth))
 	}
 
 	if v.DataType != "" {
@@ -70,31 +71,76 @@ func (v *View) applyShorthands(namespace *Viewlet) {
 	}
 
 	if len(v.Warmup) > 0 {
-
+		v.View.Cache.Warmup = v.buildCacheWarmup(v.Warmup, viewlet)
 	}
 }
 
-// persistView builds View
-func (v *View) BuildView(rule *Rule) error {
+func (v *View) buildCacheWarmup(warmup map[string]interface{}, viewlet *Viewlet) *view.Warmup {
+	if warmup == nil || viewlet.Join == nil {
+		return nil
+	}
+	warmup = copyWarmup(warmup)
+
+	_, refColumn := inference.ExtractRelationColumns(viewlet.Join)
+	result := &view.Warmup{
+		IndexColumn: refColumn,
+	}
+
+	multiSet := &view.CacheParameters{}
+	for k, v := range warmup {
+		switch actual := v.(type) {
+		case []interface{}:
+			multiSet.Set = append(multiSet.Set, &view.ParamValue{Name: k, Values: actual})
+		default:
+			multiSet.Set = append(multiSet.Set, &view.ParamValue{Name: k, Values: []interface{}{actual}})
+		}
+	}
+
+	result.Cases = append(result.Cases, multiSet)
+	return result
+}
+
+func copyWarmup(warmup map[string]interface{}) map[string]interface{} {
+	result := map[string]interface{}{}
+	for aKey := range warmup {
+		if aKey == "" {
+			continue
+		}
+
+		result[aKey] = warmup[aKey]
+	}
+	return result
+
+}
+
+// buildView builds View
+func (v *View) buildView(rule *Rule, mode view.Mode) error {
 	if v.build {
 		return nil
 	}
 	v.build = true
-
 	namespace := rule.Viewlets.Lookup(v.Namespace)
 	v.Table = namespace.Table.Name
-	v.Mode = view.ModeQuery
-	v.View.Connector = view.NewRefConnector(namespace.Connector)
-	v.buildSelector(namespace, rule)
-	v.buildTemplate(namespace, rule)
-	v.buildColumnConfig(namespace)
-	if err := v.buildRelations(namespace, rule); err != nil {
-		return err
+	if v.Mode == "" {
+		v.Mode = mode
 	}
+	v.View.Connector = view.NewRefConnector(namespace.Connector)
+	v.buildTemplate(namespace, rule)
+	if v.Mode == view.ModeQuery {
+		v.buildSelector(namespace, rule)
+		v.buildColumnConfig(namespace)
+		if err := v.buildRelations(namespace, rule); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 func (v *View) defaultLimit(isRoot bool) int {
+	if v.ParameterDerived {
+		return 1000 //data view base viewx
+	}
 	if isRoot {
 		return 25
 	}
@@ -112,11 +158,13 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 	setter.SetIntIfZero(&selector.Limit, v.defaultLimit(isRoot))
 	if selector.Constraints == nil {
 		selector.Constraints = &view.Constraints{
-			Filterable: []string{"*"},
 			Criteria:   true,
 			Limit:      true,
 			Offset:     true,
 			Projection: true,
+		}
+		if !v.ParameterDerived {
+			selector.Constraints.Filterable = []string{"*"}
 		}
 	}
 
@@ -142,7 +190,8 @@ func (v *View) buildColumnConfig(namespace *Viewlet) {
 func (v *View) buildTemplate(namespace *Viewlet, rule *Rule) {
 	isRoot := rule.Root == v.Name
 	resource := namespace.Resource
-	v.Template = &view.Template{Source: namespace.SanitizedSQL}
+	v.EnsureTemplate()
+	v.Template.Source = namespace.SanitizedSQL
 	v.Template.Parameters = v.matchParameters(namespace.SanitizedSQL, resource.State, isRoot)
 }
 
@@ -162,7 +211,7 @@ func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 	}
 	for _, relation := range parentNamespace.Spec.Relations {
 		relNamespace := rule.Viewlets.Lookup(relation.Namespace)
-		if err := relNamespace.View.BuildView(rule); err != nil {
+		if err := relNamespace.View.buildView(rule, view.ModeQuery); err != nil {
 			return err
 		}
 		//TODO double check rel name uniqness

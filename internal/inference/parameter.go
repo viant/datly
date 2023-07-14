@@ -21,9 +21,10 @@ type (
 		Explicit bool //explicit parameter are added to the main view as dependency
 		view.Parameter
 		ModificationSetting
-		SQL        string
-		Qualifiers []*view.Qualifier `json:",omitempty"`
-		Hint       string
+		SQL         string
+		Qualifiers  []*view.Qualifier `json:",omitempty"`
+		Hint        string
+		AssumedType bool
 	}
 
 	ModificationSetting struct {
@@ -32,6 +33,16 @@ type (
 		PathParam   *Parameter
 	}
 )
+
+func (p *Parameter) HasSchema() bool {
+	if p.Schema == nil {
+		return false
+	}
+	if p.Schema.DataType == "" && p.Schema.Type() == nil {
+		return false
+	}
+	return true
+}
 
 func (p *Parameter) LocalVariable() string {
 	upperCamel, _ := formatter.UpperCamel.Caser()
@@ -216,7 +227,7 @@ func ParentAlias(join *query.Join) string {
 	return result
 }
 
-func extractRelationColumns(join *query.Join) (string, string) {
+func ExtractRelationColumns(join *query.Join) (string, string) {
 	relColumn := ""
 	refColumn := ""
 	sqlparser.Traverse(join.On, func(n node.Node) bool {
@@ -302,6 +313,20 @@ func (p *Parameter) MergeFrom(info *Parameter) {
 	}
 	if info.ErrorStatusCode != 0 {
 		p.ErrorStatusCode = info.ErrorStatusCode
+	}
+}
+
+func (s *Parameter) adjustMetaViewIfNeeded() {
+	if !strings.HasPrefix(s.Name, "View.") {
+		return
+	}
+	if strings.HasSuffix(s.Name, ".SQL") {
+		s.Schema = view.NewSchema(reflect.TypeOf(""))
+		s.Schema.DataType = "string"
+	}
+	if strings.HasSuffix(s.Name, ".Limit") {
+		s.Schema = view.NewSchema(reflect.TypeOf(0))
+		s.Schema.DataType = "int"
 	}
 }
 

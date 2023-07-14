@@ -13,9 +13,9 @@ func TrimParenthesis(text string) string {
 	}
 	if text[0] == '(' {
 		text = text[1:]
-	}
-	if text[len(text)-1] == ')' {
-		text = text[:len(text)-1]
+		if text[len(text)-1] == ')' {
+			text = text[:len(text)-1]
+		}
 	}
 	return text
 }

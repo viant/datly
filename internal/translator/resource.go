@@ -40,7 +40,6 @@ func (r *Resource) ExtractDeclared(dSQL *string) error {
 	}
 	r.State.Append(declarations.State...)
 	r.Rule.Route.Transforms = declarations.Transforms
-
 	if err := parser.ExtractParameterHints(declarations.SQL, &r.State); err != nil {
 		return err
 	}
@@ -57,6 +56,16 @@ func (r *Resource) appendPathVariableParams() {
 		parameter := inference.NewPathParameter(paramName)
 		parameter.Required = &required
 		r.State.Append(parameter)
+	}
+}
+
+func (r *Resource) buildParameterViews() {
+	for _, parameter := range r.State.FilterByKind(view.KindDataView) {
+		viewlet := NewViewlet(parameter.Name, parameter.SQL, nil, r)
+
+		viewlet.View.Mode = view.ModeQuery
+		viewlet.View.ParameterDerived = true
+		r.Rule.Viewlets.Append(viewlet)
 	}
 }
 
@@ -80,7 +89,7 @@ func (r *Resource) InitRule(dSQL *string) error {
 
 func (r *Resource) extractRuleSetting(dSQL *string) error {
 	if index := strings.Index(*dSQL, "*/"); index != -1 {
-		if err := parser.TryUnmarshalHint((*dSQL)[:index+2], &r.Rule.Route); err != nil {
+		if err := parser.TryUnmarshalHint((*dSQL)[:index+2], &r.Rule); err != nil {
 			return err
 		}
 		*dSQL = (*dSQL)[index+2:]
@@ -89,27 +98,56 @@ func (r *Resource) extractRuleSetting(dSQL *string) error {
 	return nil
 }
 
-func (r *Resource) expandSQL(n *Viewlet) (*sqlx.SQL, error) {
-	types := n.Resource.Resource.TypeRegistry()
+func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
+	types := viewlet.Resource.Resource.TypeRegistry()
 
-	sqlState := n.Resource.State.StateForSQL(n.SQL, r.Rule.Root == n.Name)
+	sqlState := viewlet.Resource.State.StateForSQL(viewlet.SQL, r.Rule.Root == viewlet.Name)
+	metaViewSQL := sqlState.MetaViewSQL()
+	compacted, err := sqlState.Compact(r.rule.Module)
+	if err == nil && len(compacted) > 0 {
+		sqlState = compacted
+	}
+	sqlState = sqlState.RemoveReserved()
 	reflectType, err := sqlState.ReflectType("autogen", types.Lookup)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create state %v type: %w", n.Name, err)
+		return nil, fmt.Errorf("failed to create state %v type: %w", viewlet.Name, err)
 	}
 	state := reflect.New(reflectType).Elem().Interface()
-	fmt.Printf("STA %T %+v %s\n", state, state, n.SanitizedSQL)
 
-	parameters := n.Resource.State.ViewParameters()
-	evaluator, err := view.NewEvaluator(parameters, reflectType, nil, n.SanitizedSQL, types.Lookup)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create evaluator %v: %w", n.Name, err)
+	var bindingArgs []interface{}
+
+	var options []expand.StateOption
+
+	epxandingSQL := viewlet.SanitizedSQL
+	options = append(options, expand.WithParameters(state, nil))
+	if metaViewSQL != nil {
+		sourceViewName := metaViewSQL.Name[5 : len(metaViewSQL.Name)-4]
+		epxandingSQL = strings.Replace(epxandingSQL, "$"+metaViewSQL.Name, "$View.NonWindowSQL", 1)
+		sourceView := r.Rule.Viewlets.Lookup(sourceViewName)
+		options = append(options, expand.WithViewParam(&expand.MetaParam{NonWindowSQL: sourceView.Expanded.Query, Args: sourceView.Expanded.Args, Limit: 1}))
+		bindingArgs = sourceView.Expanded.Args
+		viewlet.sourceViewlet = sourceView
+		sourceView.View.EnsureTemplate()
+		sourceView.View.Template.Meta = &view.TemplateMeta{ //TODO go for detail existing impl
+			Source: epxandingSQL,
+			Name:   viewlet.Name,
+			Kind:   "record",
+		}
 	}
-	result, err := evaluator.Evaluate(nil, expand.WithParameters(state, nil))
+
+	fmt.Printf("STA %T %+v %s\n", state, state, epxandingSQL)
+
+	parameters := viewlet.Resource.State.ViewParameters()
+	evaluator, err := view.NewEvaluator(parameters, reflectType, nil, epxandingSQL, types.Lookup)
 	if err != nil {
-		return nil, fmt.Errorf("failed to evaluate %v: %w", n.Name, err)
+		return nil, fmt.Errorf("failed to create evaluator %v: %w", viewlet.Name, err)
 	}
-	return &sqlx.SQL{Query: result.Expanded, Args: result.Context.DataUnit.ParamsGroup}, nil
+	result, err := evaluator.Evaluate(nil, options...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate %v: %w", viewlet.Name, err)
+	}
+	bindingArgs = append(bindingArgs, result.Context.DataUnit.ParamsGroup...)
+	return &sqlx.SQL{Query: result.Expanded, Args: bindingArgs}, nil
 }
 
 func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(ctx context.Context, setType *Viewlet) error) error {
@@ -128,10 +166,9 @@ func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(
 			paramSchema := reflect.StructOf(fields)
 			viewParameter.Schema.SetType(paramSchema)
 			viewParameter.Schema.DataType = viewParameter.Name
-			viewParameter.Schema.Cardinality = view.One
 		}
 		aViewNamespace.TypeDefinition = aViewNamespace.Spec.TypeDefinition("", false)
-		aViewNamespace.TypeDefinition.Cardinality = view.One
+		aViewNamespace.TypeDefinition.Cardinality = viewParameter.Schema.Cardinality
 	}
 	return nil
 }
@@ -142,7 +179,6 @@ func (r *Resource) ensureViewParameterSchema(parameter *inference.Parameter) err
 	}
 	aView := r.Rule.Viewlets.Lookup(parameter.Name)
 	aView.Spec.Type.Fields()
-	fmt.Printf("11\n")
 	return nil
 }
 

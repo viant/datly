@@ -81,9 +81,6 @@ func (d *Declaration) ExpandShorthands() {
 			if d.Schema.DataType == "" {
 				d.Schema.DataType = "string"
 			}
-			if d.Schema.Cardinality == "" {
-				d.Schema.Cardinality = view.One
-			}
 			if d.Output.Schema.DataType == "" {
 				d.Output.Schema.DataType = "*JwtClaims"
 			}
@@ -96,10 +93,6 @@ func (d *Declaration) ExpandShorthands() {
 			d.Parameter.In.Name = *d.Location
 		}
 	}
-	if d.SQL != "" && d.In.Kind == "" {
-		d.In.Kind = view.KindDataView
-		d.In.Name = d.Name
-	}
 
 	if d.StatusCode != nil {
 		d.Parameter.ErrorStatusCode = *d.StatusCode
@@ -108,6 +101,16 @@ func (d *Declaration) ExpandShorthands() {
 	if d.Cardinality != "" {
 		d.Parameter.Schema.Cardinality = d.Cardinality
 	}
+
+	if d.SQL != "" && d.In.Kind == "" {
+		if d.Parameter.Schema.Cardinality == "" {
+			d.Parameter.Schema.Cardinality = view.Many
+		}
+		d.In.Kind = view.KindDataView
+		d.In.Name = d.Name
+
+	}
+
 }
 
 func (d *Declaration) AuthParameter() *inference.Parameter {
@@ -124,12 +127,13 @@ func (d *Declaration) AuthParameter() *inference.Parameter {
 // DefaultOAuthParameter creates a default oauht parameter
 func DefaultOAuthParameter(name string) *inference.Parameter {
 	required := true
-	return &inference.Parameter{Parameter: view.Parameter{
-		Name:            name,
-		In:              &view.Location{Name: "Authorization", Kind: view.KindHeader},
-		ErrorStatusCode: 401,
-		Required:        &required,
-		Output:          &view.Codec{Name: "JwtClaim", Schema: &view.Schema{DataType: "*JwtClaims"}},
-		Schema:          &view.Schema{DataType: "string"},
-	}}
+	return &inference.Parameter{
+		Parameter: view.Parameter{
+			Name:            name,
+			In:              &view.Location{Name: "Authorization", Kind: view.KindHeader},
+			ErrorStatusCode: 401,
+			Required:        &required,
+			Output:          &view.Codec{Name: "JwtClaim", Schema: &view.Schema{DataType: "*JwtClaims"}},
+			Schema:          &view.Schema{DataType: "string"},
+		}}
 }
