@@ -105,9 +105,11 @@ func (v *VeltyCodec) selector(options []interface{}) parameter.Selector {
 
 func (v *VeltyCodec) init() error {
 	var err error
-	v.evaluator, err = expand.NewEvaluator(nil, v.codecType, nil, v.template, func(name string, option ...xreflect.Option) (reflect.Type, error) {
-		return nil, fmt.Errorf("unsupported type lookup at codec, yes")
-	})
+	v.evaluator, err = expand.NewEvaluator(v.template, expand.WithParamSchema(v.codecType, nil), expand.WithTypeLookup(v.lookupType))
 
 	return err
+}
+
+func (v *VeltyCodec) lookupType(name string, option ...xreflect.Option) (reflect.Type, error) {
+	return nil, fmt.Errorf("unsupported type lookup at codec")
 }

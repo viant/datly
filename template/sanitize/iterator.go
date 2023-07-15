@@ -135,6 +135,12 @@ outer:
 					it.buildContexts(context, fnName, asSlice.X, asSlice.Y)
 				}
 
+				xSelect, ok = asFunc.X.(*expr.Select)
+				if ok {
+					actual = xSelect
+					continue
+				}
+
 				continue outer
 			}
 

@@ -2,11 +2,14 @@ package config
 
 import (
 	"fmt"
-	"github.com/viant/xdatly/handler/parameter"
+	"github.com/viant/xdatly/predicate"
 )
 
+const PredicateEqual = "equal"
+const PredicateNotEqual = "not_equal"
+
 type (
-	PredicateRegistry map[string]parameter.PredicateFactory
+	PredicateRegistry map[string]*predicate.Template
 	PredicateConfig   struct {
 		Parent  string
 		Name    string
@@ -20,31 +23,41 @@ type (
 	}
 )
 
-type (
-	ExistsPredicateFactory struct {
+func (r PredicateRegistry) Lookup(name string) (*predicate.Template, error) {
+	result, ok := r[name]
+	if !ok {
+		return nil, fmt.Errorf("not found template %v", name)
 	}
 
-	ExistsPredicate struct {
-		config *PredicateConfig
-	}
-)
-
-func (e *ExistsPredicate) Expand(value interface{}) (*parameter.Criteria, error) {
-	return &parameter.Criteria{
-		Query: "EXISTS (SELECT 1 FROM $Table t WHERE $Column = $FilterValue AND $JoinColumn = $ParentColumn)",
-		Args:  []interface{}{value},
-	}, nil
+	return result, nil
 }
 
-func (e ExistsPredicateFactory) NewPredicate(args []interface{}, options ...interface{}) (parameter.Predicate, error) {
-	for _, option := range options {
-		asConfig, ok := option.(*PredicateConfig)
-		if ok {
-			return &ExistsPredicate{
-				config: asConfig,
-			}, nil
-		}
+func NewEqualPredicate() *predicate.Template {
+	return equalityCheckPredicate(PredicateEqual, true)
+}
+
+func equalityCheckPredicate(name string, equal bool) *predicate.Template {
+	var negation string
+	if !equal {
+		negation = "!"
 	}
 
-	return nil, fmt.Errorf("not provided ExistsPredicate config")
+	return &predicate.Template{
+		Name:   name,
+		Source: " $Alias.$ColumnName " + negation + "= $criteria.AppendBinding($FilterValue)",
+		Args: []*predicate.NamedArgument{
+			{
+				Name:     "Alias",
+				Position: 0,
+			},
+			{
+				Name:     "ColumnName",
+				Position: 1,
+			},
+		},
+	}
+}
+
+func NewNotEqualPredicate() *predicate.Template {
+	return equalityCheckPredicate(PredicateNotEqual, false)
 }

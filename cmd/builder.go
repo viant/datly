@@ -1487,6 +1487,10 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 		}
 	}
 
+	if config.Predicate != nil {
+		param.Predicate = config.Predicate
+	}
+
 	return nil
 }
 
@@ -1729,7 +1733,7 @@ func (s *Builder) loadGoTypes(builder *routeBuilder) error {
 
 	matched = cursor.MatchAfterOptional(whitespaceMatcher, exprGroupMatcher, quotedMatcher)
 	switch matched.Code {
-	case quotedToken:
+	case doubleQuotedToken:
 		text := matched.Text(cursor)
 		typeSrc, err := s.parseTypeSrc(text[1:len(text)-1], cursor, builder)
 		if err != nil {
@@ -1745,7 +1749,7 @@ func (s *Builder) loadGoTypes(builder *routeBuilder) error {
 
 			matched = exprGroupCursor.MatchAfterOptional(whitespaceMatcher, quotedMatcher)
 			switch matched.Code {
-			case quotedToken:
+			case doubleQuotedToken:
 				text := matched.Text(exprGroupCursor)
 				typeSrc, err := s.parseTypeSrc(text[1:len(text)-1], exprGroupCursor, builder)
 				if err != nil {
@@ -1770,7 +1774,7 @@ func (s *Builder) parseTypeSrc(imported string, cursor *parsly.Cursor, builder *
 	matched := cursor.MatchAfterOptional(whitespaceMatcher, aliasKeywordMatcher)
 	if matched.Code == aliasKeywordToken {
 		matched = cursor.MatchAfterOptional(whitespaceMatcher, quotedMatcher)
-		if matched.Code != quotedToken {
+		if matched.Code != doubleQuotedToken {
 			return nil, cursor.NewError(quotedMatcher)
 		}
 
@@ -2000,7 +2004,7 @@ func mergeJsonStructs(args ...interface{}) ([]byte, error) {
 	return json.Marshal(result)
 }
 
-func (s *Builder) readParamConfigs(config *option.ParameterConfig, cursor *parsly.Cursor) error {
+func (s *Builder) readParamConfigs(cfg *option.ParameterConfig, cursor *parsly.Cursor) error {
 	for cursor.Pos < cursor.InputSize {
 		matched := cursor.MatchOne(dotMatcher)
 		if matched.Code != dotToken {
@@ -2021,18 +2025,60 @@ func (s *Builder) readParamConfigs(config *option.ParameterConfig, cursor *parsl
 		content := matched.Text(cursor)
 		content = content[1 : len(content)-1]
 
+		args := s.extractArgs(content)
 		switch text {
 		case "WithCodec":
-			config.Codec = strings.Trim(content, "'")
+			if len(args) != 1 {
+				return fmt.Errorf("expected WithCodec to have one arg, but got %v", len(args))
+			}
+
+			cfg.Codec = args[0]
 		case "WithStatusCode":
-			statusCode, err := strconv.Atoi(content)
+			if len(args) != 1 {
+				return fmt.Errorf("expected WithStatusCode to have one arg, but got %v", len(args))
+			}
+
+			statusCode, err := strconv.Atoi(args[0])
 			if err != nil {
 				return err
 			}
 
-			config.StatusCode = &statusCode
+			cfg.StatusCode = &statusCode
+		case "Optional":
+			if len(args) != 0 {
+				return fmt.Errorf("expected Optional to have zero args, but got %v", len(args))
+			}
+
+			cfg.Required = boolPtr(false)
+		case "WithPredicate":
+			if len(args) < 2 {
+				return fmt.Errorf("expected WithPredicate to have at least 2 args, but got %v", len(args))
+			}
+
+			ctx, err := strconv.Atoi(args[0])
+			if err != nil {
+				return err
+			}
+
+			var namedArgs []*config.NamedArg
+			for pos, argName := range args[2:] {
+				namedArgs = append(namedArgs, &config.NamedArg{
+					Position: pos,
+					Name:     argName,
+				})
+			}
+
+			cfg.Predicate = &config.PredicateConfig{
+				Name:    args[1],
+				Context: ctx,
+				Args:    namedArgs,
+			}
 		case "UtilParam":
-			config.Util = true
+			if len(args) != 0 {
+				return fmt.Errorf("expected UtilParam to have zero arg, but got %v", len(args))
+			}
+
+			cfg.Util = true
 		}
 
 		cursor.MatchOne(whitespaceMatcher)
@@ -2230,6 +2276,33 @@ func (s *Builder) ParamHolder(builder *routeBuilder, name string) *view.Paramete
 	}
 
 	return param
+}
+
+func (s *Builder) extractArgs(content string) []string {
+	result := make([]string, 0)
+	cursor := parsly.NewCursor("", []byte(strings.Trim(content, `"`)), 0)
+	for {
+		matched := cursor.MatchAfterOptional(whitespaceMatcher, singleQuotedMatcher, quotedMatcher, comaTerminatedMatcher)
+		switch matched.Code {
+		case singleQuotedToken, doubleQuotedToken:
+			arg := matched.Text(cursor)
+			arg = arg[1 : len(arg)-1]
+			result = append(result, arg)
+			cursor.MatchOne(comaTerminatedMatcher)
+		case comaTerminatedToken:
+			arg := matched.Text(cursor)
+			arg = arg[:len(arg)-1]
+			result = append(result, strings.TrimSpace(arg))
+		default:
+			if cursor.Pos < len(cursor.Input) {
+				arg := strings.TrimSpace(string(cursor.Input[cursor.Pos:]))
+				if len(arg) != 0 {
+					result = append(result, arg)
+				}
+			}
+			return result
+		}
+	}
 }
 
 func trimParenthasis(text string) string {

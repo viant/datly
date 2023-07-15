@@ -1,6 +1,9 @@
 package option
 
-import "github.com/viant/datly/view"
+import (
+	"github.com/viant/datly/config"
+	"github.com/viant/datly/view"
+)
 
 type (
 	ParameterConfig struct {
@@ -22,6 +25,7 @@ type (
 		Cardinality view.Cardinality `json:",omitempty" yaml:",omitempty"`
 		StatusCode  *int             `json:",omitempty" yaml:",omitempty"`
 		Qualifiers  []*Qualifier     `json:",omitempty"`
+		Predicate   *config.PredicateConfig
 	}
 
 	Qualifier struct {

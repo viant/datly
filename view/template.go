@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
@@ -11,6 +12,7 @@ import (
 	"github.com/viant/datly/view/parameter"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty"
+	parameter2 "github.com/viant/xdatly/handler/parameter"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -219,8 +221,14 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 	return nil
 }
 
-func NewEvaluator(parameters []*Parameter, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.LookupType) (*expand.Evaluator, error) {
-	return expand.NewEvaluator(FilterConstParameters(parameters), paramSchema, presenceSchema, template, typeLookup)
+func NewEvaluator(parameters []*Parameter, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.LookupType, predicates []*expand.PredicateConfig) (*expand.Evaluator, error) {
+	return expand.NewEvaluator(
+		template,
+		expand.WithConstUpdaters(FilterConstParameters(parameters)),
+		expand.WithTypeLookup(typeLookup),
+		expand.WithParamSchema(paramSchema, presenceSchema),
+		expand.WithPredicates(predicates),
+	)
 }
 
 func FilterConstParameters(parameters []*Parameter) []expand.ConstUpdater {
@@ -333,15 +341,32 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 			continue
 		}
 
+		lookup, err := config.Config.Predicates.Lookup(p.Predicate.Name)
+		if err != nil {
+			return err
+		}
+
+		evaluator, err := expand.NewEvaluator(lookup.Source, expand.WithParamSchema(p.ActualParamType(), nil), expand.WithStateName("FilterValue"))
+		if err != nil {
+			return err
+		}
+
 		predicates = append(predicates, &expand.PredicateConfig{
 			Context:       p.Predicate.Context,
-			StateAccessor: p._valueAccessor,
-			HasAccessor:   p._presenceAccessor,
-			Expander:      nil,
+			StateAccessor: p.ValueAccessor,
+			HasAccessor:   p.PresenceAccessor,
+			Expander: func(c *expand.Context, i interface{}) (*parameter2.Criteria, error) {
+				evaluate, err := evaluator.Evaluate(c, expand.WithParameters(i, nil))
+				if err != nil {
+					return nil, err
+				}
+
+				return &parameter2.Criteria{Query: evaluate.Buffer.String()}, nil
+			},
 		})
 	}
 
-	evaluator, err := NewEvaluator(t.Parameters, t.Schema.Type(), t.PresenceSchema.Type(), t.Source, resource.LookupType())
+	evaluator, err := NewEvaluator(t.Parameters, t.Schema.Type(), t.PresenceSchema.Type(), t.Source, resource.LookupType(), predicates)
 	if err != nil {
 		return err
 	}

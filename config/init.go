@@ -44,6 +44,10 @@ var Config = &Registry{
 		&VeltyCriteriaFactory{},
 		&CriteriaBuilderFactory{},
 	),
+	Predicates: PredicateRegistry{
+		PredicateEqual:    NewEqualPredicate(),
+		PredicateNotEqual: NewNotEqualPredicate(),
+	},
 }
 
 func init() {
