@@ -96,6 +96,9 @@ func (t *types) discoverWithContext() {
 		if strings.HasPrefix(name, "$") {
 			name = name[1:]
 		}
+		if name[0] == '{' && name[len(name)-1] == '}' {
+			name = name[1 : len(name)-1]
+		}
 		if index := strings.Index(name, "Unsafe."); index != -1 {
 			name = name[:index]
 		}

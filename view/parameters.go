@@ -521,6 +521,9 @@ func (p *Parameter) setOnState(ctx context.Context, state *ParamState, value int
 }
 
 func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr unsafe.Pointer, converted bool, options ...interface{}) (interface{}, error) {
+	if p._valueAccessor == nil {
+		return value, nil
+	}
 	aCodec := p.Output
 	if converted {
 		aCodec = nil
@@ -539,7 +542,6 @@ func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr un
 		p._valueAccessor.SetValue(paramPtr, convertedValue)
 		return convertedValue, nil
 	}
-
 	return p._valueAccessor.SetConvertedAndGet(paramPtr, value, p.DateFormat)
 }
 
@@ -676,7 +678,7 @@ func (p Parameters) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 
-//Append appends parameter
+// Append appends parameter
 func (p *Parameters) Append(parameter *Parameter) {
 	for _, param := range *p {
 		if param.Name == parameter.Name {
@@ -686,7 +688,7 @@ func (p *Parameters) Append(parameter *Parameter) {
 	*p = append(*p, parameter)
 }
 
-//Lookup returns match parameter or nil
+// Lookup returns match parameter or nil
 func (p Parameters) Lookup(name string) *Parameter {
 	for _, param := range p {
 		if param.Name == name {
@@ -761,8 +763,8 @@ func NewDataViewLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindDataView}
 }
 
-func NewConstLocation() *Location {
-	return &Location{Kind: KindLiteral}
+func NewConstLocation(name string) *Location {
+	return &Location{Kind: KindLiteral, Name: name}
 }
 
 // NewPathLocation creates a structql
@@ -782,7 +784,7 @@ func WithParameterType(t reflect.Type) ParameterOption {
 	}
 }
 
-//NewRefParameter creates a new ref parameter
+// NewRefParameter creates a new ref parameter
 func NewRefParameter(name string) *Parameter {
 	return &Parameter{Reference: shared.Reference{Ref: name}}
 }

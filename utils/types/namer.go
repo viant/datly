@@ -17,7 +17,13 @@ type (
 	}
 	VeltyNamer struct {
 	}
+	FieldNamer struct {
+	}
 )
+
+func (s *FieldNamer) Names(rField reflect.StructField) []string {
+	return []string{rField.Name}
+}
 
 func (s *SqlxNamer) Names(rField reflect.StructField) []string {
 	sqlxTag := io.ParseTag(rField.Tag.Get(option.TagSqlx))

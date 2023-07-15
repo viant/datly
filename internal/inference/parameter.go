@@ -348,7 +348,7 @@ func NewConstParameter(paramName string, paramValue interface{}) *Parameter {
 		Parameter: view.Parameter{
 			Name:   paramName,
 			Const:  paramValue,
-			In:     view.NewConstLocation(),
+			In:     view.NewConstLocation(paramName),
 			Schema: view.NewSchema(reflect.TypeOf(paramValue)),
 		},
 	}

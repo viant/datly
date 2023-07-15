@@ -13,6 +13,7 @@ import (
 	"github.com/viant/sqlx"
 	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
+	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
 )
@@ -135,13 +136,15 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 		}
 	}
 
-	fmt.Printf("STA %T %+v %s\n", state, state, epxandingSQL)
+	ptr := xunsafe.AsPointer(sqlState)
+	fmt.Printf("STA %T %v %+v %s\n", state, ptr, state)
 
 	parameters := viewlet.Resource.State.ViewParameters()
 	evaluator, err := view.NewEvaluator(parameters, reflectType, nil, epxandingSQL, types.Lookup)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create evaluator %v: %w", viewlet.Name, err)
 	}
+
 	result, err := evaluator.Evaluate(nil, options...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to evaluate %v: %w", viewlet.Name, err)
