@@ -333,6 +333,10 @@ func (p *Parameter) inherit(param *Parameter) {
 	if p.ErrorStatusCode == 0 {
 		p.ErrorStatusCode = param.ErrorStatusCode
 	}
+
+	if p.Predicate == nil {
+		p.Predicate = param.Predicate
+	}
 }
 
 // Validate checks if parameter is valid
@@ -641,6 +645,14 @@ func (p *Parameter) WithAccessors(value, presence *types.Accessor) *Parameter {
 	result._valueAccessor = value
 	result._presenceAccessor = presence
 	return &result
+}
+
+func (p *Parameter) ValueAccessor() *types.Accessor {
+	return p._valueAccessor
+}
+
+func (p *Parameter) PresenceAccessor() *types.Accessor {
+	return p._presenceAccessor
 }
 
 // NamedParameters represents Parameter map indexed by Parameter.Name

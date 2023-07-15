@@ -42,7 +42,7 @@ func TestPredicate(t *testing.T) {
 					Context:       0,
 					StateAccessor: types.NewAccessor(xunsafe.FieldByName(reflect.TypeOf(Foo{}), "ID")),
 					HasAccessor:   types.NewAccessor(xunsafe.FieldByName(reflect.TypeOf(FooHas{}), "ID")),
-					Expander: func(value interface{}) (*parameter.Criteria, error) {
+					Expander: func(ctx *expand.Context, value interface{}) (*parameter.Criteria, error) {
 						return &parameter.Criteria{
 							Query: "ID = ?",
 							Args:  []interface{}{value},
@@ -54,7 +54,7 @@ func TestPredicate(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		predicate := expand.NewPredicate(testCase.state, testCase.has, testCase.config, expand.NewDataUnit(nil))
+		predicate := expand.NewPredicate(nil, testCase.state, testCase.has, testCase.config)
 
 		result, err := predicate.Expand(0)
 		fmt.Print(result, err)

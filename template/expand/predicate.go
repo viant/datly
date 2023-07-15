@@ -10,25 +10,29 @@ import (
 
 type (
 	Predicate struct {
-		dataUnit *DataUnit
 		config   []*PredicateConfig
 		state    interface{}
 		has      interface{}
 		statePtr unsafe.Pointer
 		hasPtr   unsafe.Pointer
+		ctx      *Context
 	}
 
 	PredicateConfig struct {
 		Context       int
-		StateAccessor *types.Accessor
-		HasAccessor   *types.Accessor
-		Expander      func(interface{}) (*parameter.Criteria, error)
+		StateAccessor func() *types.Accessor
+		HasAccessor   func() *types.Accessor
+		Expander      func(*Context, interface{}) (*parameter.Criteria, error)
+	}
+
+	PredicateBuilder struct {
+		output *strings.Builder
 	}
 )
 
-func NewPredicate(state, has interface{}, config []*PredicateConfig, dataUnit *DataUnit) *Predicate {
+func NewPredicate(ctx *Context, state, has interface{}, config []*PredicateConfig) *Predicate {
 	return &Predicate{
-		dataUnit: dataUnit,
+		ctx:      ctx,
 		config:   config,
 		state:    state,
 		statePtr: xunsafe.AsPointer(state),
@@ -44,6 +48,51 @@ func (p *Predicate) Expand(ctx int) (string, error) {
 	return p.expand(ctx, "AND")
 }
 
+func (p *Predicate) Builder() *PredicateBuilder {
+	return &PredicateBuilder{
+		output: &strings.Builder{},
+	}
+}
+
+func (p *Predicate) Ctx(ctx int, keyword string) (string, error) {
+	return p.expand(ctx, keyword)
+}
+
+func (b *PredicateBuilder) Or(fragments ...string) *PredicateBuilder {
+	builder := &strings.Builder{}
+	for _, fragment := range fragments {
+		if strings.TrimSpace(fragment) == "" {
+			continue
+		}
+
+		if builder.Len() > 0 {
+			builder.WriteString(" OR ")
+		}
+
+		builder.WriteString(fragment)
+	}
+
+	if builder.Len() > 0 {
+		if b.output.Len() != 0 {
+			b.output.WriteString(" AND ")
+		}
+
+		b.output.WriteString(" ( ")
+		b.output.WriteString(builder.String())
+		b.output.WriteString(" ) ")
+	}
+
+	return b
+}
+
+func (b *PredicateBuilder) Build(keyword string) string {
+	if b.output.Len() == 0 {
+		return ""
+	}
+
+	return " " + keyword + " " + b.output.String()
+}
+
 func (p *Predicate) expand(ctx int, operator string) (string, error) {
 	result := &strings.Builder{}
 	var accArgs []interface{}
@@ -53,7 +102,7 @@ func (p *Predicate) expand(ctx int, operator string) (string, error) {
 		}
 
 		if p.hasPtr != nil {
-			value, err := predicateConfig.HasAccessor.Value(p.hasPtr)
+			value, err := predicateConfig.HasAccessor().Value(p.hasPtr)
 			if err != nil {
 				return "", err
 			}
@@ -64,12 +113,12 @@ func (p *Predicate) expand(ctx int, operator string) (string, error) {
 			}
 		}
 
-		value, err := predicateConfig.StateAccessor.Value(p.hasPtr)
+		value, err := predicateConfig.StateAccessor().Value(p.hasPtr)
 		if err != nil {
 			return "", err
 		}
 
-		criteria, err := predicateConfig.Expander(value)
+		criteria, err := predicateConfig.Expander(p.ctx, value)
 		if err != nil {
 			return "", err
 		}
@@ -84,6 +133,5 @@ func (p *Predicate) expand(ctx int, operator string) (string, error) {
 		accArgs = append(accArgs, criteria.Args...)
 	}
 
-	p.dataUnit.Add(0, accArgs)
 	return result.String(), nil
 }

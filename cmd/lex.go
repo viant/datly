@@ -13,7 +13,9 @@ const (
 	importKeywordToken
 	aliasKeywordToken
 	packageKeywordToken
-	quotedToken
+	doubleQuotedToken
+	singleQuotedToken
+	comaTerminatedToken
 	setTerminatedToken
 	setToken
 	parameterDeclarationToken
@@ -37,7 +39,9 @@ var exprGroupMatcher = parsly.NewToken(exprGroupToken, "( .... )", matcher.NewBl
 var importKeywordMatcher = parsly.NewToken(importKeywordToken, "import", matcher.NewFragmentsFold([]byte("import")))
 var aliasKeywordMatcher = parsly.NewToken(aliasKeywordToken, "as", matcher.NewFragmentsFold([]byte("as")))
 var packageMatcher = parsly.NewToken(packageKeywordToken, "package", matcher.NewFragmentsFold([]byte("package")))
-var quotedMatcher = parsly.NewToken(quotedToken, "quoted block", matcher.NewQuote('"', '\\'))
+var quotedMatcher = parsly.NewToken(doubleQuotedToken, "quoted block", matcher.NewQuote('"', '\\'))
+var singleQuotedMatcher = parsly.NewToken(singleQuotedToken, "single quoted block", matcher.NewQuote('\'', '\''))
+var comaTerminatedMatcher = parsly.NewToken(comaTerminatedToken, "arg", matcher.NewTerminator(',', true))
 var setTerminatedMatcher = parsly.NewToken(setTerminatedToken, "#set", matchers.NewStringTerminator("#set"))
 var setMatcher = parsly.NewToken(setToken, "#set", matcher.NewFragments([]byte("#set")))
 var parameterDeclarationMatcher = parsly.NewToken(parameterDeclarationToken, "$_", matcher.NewSpacedSet([]string{"$_ = $"}))

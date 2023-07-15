@@ -10,14 +10,13 @@ import (
 type (
 	State struct {
 		*est.State
-		Context
+		*Context
 		Parameters    interface{}
 		ParametersHas interface{}
 		CustomContext []*CustomContext
 
-		Expanded   string
-		flushed    bool
-		Predicates []*PredicateConfig
+		Expanded string
+		flushed  bool
 	}
 
 	Context struct {
@@ -73,7 +72,7 @@ func WithCustomContext(customContext *CustomContext) StateOption {
 	}
 }
 
-func (s *State) Init(templateState *est.State, options ...StateOption) {
+func (s *State) Init(templateState *est.State, predicates []*PredicateConfig, options ...StateOption) {
 	for _, option := range options {
 		option(s)
 	}
@@ -110,8 +109,8 @@ func (s *State) Init(templateState *est.State, options ...StateOption) {
 		s.MessageBus = s.Session.MessageBus()
 	}
 
-	if len(s.Predicates) > 0 {
-		s.Predicate = NewPredicate(s.Parameters, s.ParametersHas, s.Predicates, s.DataUnit)
+	if len(predicates) > 0 {
+		s.Predicate = NewPredicate(s.Context, s.Parameters, s.ParametersHas, predicates)
 	}
 
 	s.State = templateState
@@ -139,6 +138,6 @@ func StateWithSQL(SQL string) *State {
 		Expanded: SQL,
 	}
 
-	aState.Init(nil)
+	aState.Init(nil, nil)
 	return aState
 }

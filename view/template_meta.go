@@ -151,7 +151,7 @@ func (m *TemplateMeta) newMetaColumnsCacheKey() string {
 	return "view: " + m._owner._view.Name + "template_meta:" + m.Name
 }
 
-//Deprecated: oldMetaColumnsCacheKey is deprecated.
+// Deprecated: oldMetaColumnsCacheKey is deprecated.
 func (m *TemplateMeta) oldMetaColumnsCacheKey() string {
 	return "template_meta:" + m.Name
 }
@@ -181,7 +181,7 @@ func (m *TemplateMeta) Evaluate(selectorValues interface{}, selectorPresence int
 }
 
 func (m *TemplateMeta) initTemplateEvaluator(_ context.Context, owner *Template, resource *Resource) error {
-	evaluator, err := NewEvaluator(owner.Parameters, owner.Schema.Type(), owner.PresenceSchema.Type(), m.Source, resource.LookupType())
+	evaluator, err := NewEvaluator(owner.Parameters, owner.Schema.Type(), owner.PresenceSchema.Type(), m.Source, resource.LookupType(), nil)
 	if err != nil {
 		return err
 	}
