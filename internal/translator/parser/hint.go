@@ -86,7 +86,7 @@ func ExtractParameterHints(text string, state *inference.State) error {
 		if matched.Code != commentBlockToken {
 			continue
 		}
-		_, holder := SplitSelector(paramSelector)
+		_, holder := splitSelector(paramSelector)
 		parameter := state.Lookup(holder)
 		if parameter == nil {
 			parameter = &inference.Parameter{}

@@ -54,7 +54,7 @@ func (t *types) discover(SQL string) []string {
 		case insertToken:
 			t.detectInsertedTypers(cursor)
 		case parsly.EOF, anyToken:
-			//Do nothing
+			//Exec nothing
 		default:
 			text := matched.Text(cursor)
 			shouldReset := t.isResetKeyword(text)
@@ -172,7 +172,7 @@ func (t *types) updateParamMetaType(paramName string) (wasParam bool) {
 }
 
 func (t *types) isParameter(paramName string) bool {
-	if paramName == "" || strings.Contains(paramName, "(") {
+	if paramName == "" || strings.Contains(paramName, "(") || strings.Contains(paramName, "[") {
 		return false
 	}
 	if isVariable := t.Declared[paramName]; isVariable {

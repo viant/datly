@@ -14,27 +14,115 @@ import (
 	"strings"
 )
 
-func (s *Service) Generate(ctx context.Context, gen *options.Generate, template *codegen.Template) error {
+func (s *Service) Generate(ctx context.Context, options *options.Options) error {
+	if err := s.generate(ctx, options); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Service) generate(ctx context.Context, options *options.Options) error {
+	if err := s.translate(ctx, options); err != nil {
+		return err
+	}
+	rule := options.Rule()
+	gen := options.Generate
 	if err := s.ensureDest(ctx, gen.Dest); err != nil {
 		return err
 	}
-	//TODO adjust if handler option is used
 	info, err := plugin.NewInfo(ctx, gen.GoModuleLocation())
 	if err != nil {
 		return err
 	}
+	for i, resource := range s.translator.Repository.Resource {
+		rule.Index = i
+		root := resource.Rule.RootViewlet()
+		spec := root.Spec
 
-	if err := s.generateTemplate(ctx, gen, template, info); err != nil {
+		if resource.Rule.ShallGenerateHandler() {
+
+			/*
+
+				statePackage := builder.option.StatePackage()
+				state, err := inference.NewState(statePath, builder.option.StateType, config.Config.Types)
+				if err != nil {
+					return "", err
+				}
+				entityParam := state[0]
+				entityType := entityParam.Schema.Type()
+				if entityType == nil {
+					return "", fmt.Errorf("entity type was empty")
+				}
+				aType, err := inference.NewType(statePackage, entityParam.Name, entityType)
+
+				if err != nil {
+					return "", err
+				}
+				tmpl := codegen.NewTemplate(builder.option, &inference.Spec{Type: aType})
+				//if entityParam.In.Kind == view.KindRequestBody {
+				//	if entityParam.In.Name != "" {
+				//		tmpl.Imports.AddType(aType.Name)
+				//	}
+				//}
+				tmpl.Imports.AddType(builder.option.StateType)
+				tmpl.Imports.AddType(builder.option.HandlerType)
+
+				tmpl.EnsureImports(aType)
+				tmpl.State = state
+
+				if builder.option.Declare == nil {
+					builder.option.Declare = map[string]string{}
+				}
+
+				//builder.option.Declare["Handler"] = simpledName(builder.option.HandlerType)
+				//builder.option.Declare["State"] = simpledName(builder.option.StateType)
+
+				//builder.option.TypeSrc = &option.TypeSrcConfig{}
+				//builder.option.TypeSrc.URL = path.Join(statePath, statePackage)
+				//builder.option.TypeSrc.Types = append(builder.option.TypeSrc.Types, builder.option.HandlerType, builder.option.StateType)
+
+				dSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
+
+			*/
+		}
+
+		template := codegen.NewTemplate(resource.Rule, root.Spec)
+		template.BuildTypeDef(root.Spec, resource.Rule.GetField())
+
+		template.Imports.AddType(resource.Rule.HandlerType)
+		template.Imports.AddType(resource.Rule.StateType)
+
+		var opts = []codegen.Option{codegen.WithHTTPMethod(gen.HttpMethod()), codegen.WithLang(gen.Lang)}
+		template.BuildState(spec, resource.Rule.GetField(), opts...)
+		template.BuildLogic(spec, opts...)
+		if err := s.generateCode(ctx, options.Generate, template, info); err != nil {
+			return err
+		}
+	}
+	if err := s.Files.Upload(ctx, s.fs); err != nil {
 		return err
 	}
 
-	pkg := info.Package(gen.Package)
-	if err = s.generateState(ctx, pkg, gen, template, info); err != nil {
+	info, err = plugin.NewInfo(ctx, gen.GoModuleLocation())
+	if err != nil {
 		return err
 	}
-	if err = s.generateEntity(ctx, pkg, gen, info, template); err != nil {
+	return s.updateModule(ctx, gen, info)
+}
+
+func (s *Service) generateCode(ctx context.Context, gen *options.Generate, template *codegen.Template, info *plugin.Info) error {
+
+	//TODO adjust if handler option is used
+	if err := s.generateTemplate(gen, template, info); err != nil {
 		return err
 	}
+	pkg := info.Package(gen.Package())
+	code := template.GenerateState(pkg, info)
+	s.Files.Append(asset.NewFile(gen.StateLocation(), code))
+	return s.generateEntity(ctx, pkg, gen, info, template)
+}
+
+func (s *Service) updateModule(ctx context.Context, gen *options.Generate, info *plugin.Info) error {
 	switch info.IntegrationMode {
 	case plugin.ModeExtension, plugin.ModeCustomTypeModule:
 		if len(info.CustomTypesPackages) == 0 {
@@ -42,7 +130,7 @@ func (s *Service) Generate(ctx context.Context, gen *options.Generate, template 
 				return err
 			}
 		}
-		info.UpdateTypesCorePackage(url.Join(gen.GoModuleLocation(), gen.Package))
+		info.UpdateTypesCorePackage(url.Join(gen.GoModuleLocation(), gen.Package()))
 	default:
 		if ok, _ := s.fs.Exists(ctx, url.Join(gen.GoModuleLocation(), "go.mod")); ok {
 			if err := s.tidyModule(ctx, gen.GoModuleLocation()); err != nil {
@@ -54,14 +142,10 @@ func (s *Service) Generate(ctx context.Context, gen *options.Generate, template 
 	return s.EnsurePluginArtifacts(ctx, info)
 }
 
-func (s *Service) generateTemplate(ctx context.Context, gen *options.Generate, template *codegen.Template, info *plugin.Info) error {
+func (s *Service) generateTemplate(gen *options.Generate, template *codegen.Template, info *plugin.Info) error {
 	//needed for both go and velty
 	opts := s.dsqlGenerationOptions(gen)
-	files, err := s.generateTemplateFiles(gen, template, info, opts...)
-	if err != nil {
-		return err
-	}
-	return s.uploadFiles(ctx, files...)
+	return s.generateTemplateFiles(gen, template, info, opts...)
 }
 
 func (s *Service) uploadFiles(ctx context.Context, files ...*asset.File) error {
@@ -96,8 +180,8 @@ func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.G
 		return err
 	}
 	entityName := ensureGoFileCaseFormat(template)
-
-	return s.fs.Upload(ctx, gen.EntityLocation(entityName), file.DefaultFileOsMode, strings.NewReader(code))
+	s.Files.Append(asset.NewFile(gen.EntityLocation(entityName), code))
+	return nil
 }
 
 func ensureGoFileCaseFormat(template *codegen.Template) string {
@@ -106,11 +190,6 @@ func ensureGoFileCaseFormat(template *codegen.Template) string {
 		entityName = columnCase.Format(entityName, format.CaseLowerUnderscore)
 	}
 	return entityName
-}
-
-func (s *Service) generateState(ctx context.Context, pkg string, gen *options.Generate, template *codegen.Template, info *plugin.Info) error {
-	code := template.GenerateState(pkg, info)
-	return s.fs.Upload(ctx, gen.StateLocation(), file.DefaultFileOsMode, strings.NewReader(code))
 }
 
 func (s *Service) ensureDest(ctx context.Context, URL string) error {

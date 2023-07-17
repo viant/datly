@@ -33,10 +33,10 @@ func (t *Template) GenerateHandler(opts *options.Generate, info *plugin.Info) (s
 		return "", "", err
 	}
 
-	indexContent := strings.Replace(goIndexTmpl, "$PackageName", opts.Package, 1)
+	indexContent := strings.Replace(goIndexTmpl, "$PackageName", opts.Package(), 1)
 	indexContent = strings.ReplaceAll(indexContent, "$Content", index.builder.String())
 
-	handlerContent := strings.Replace(handlerTemplate, "$Package", opts.Package, 1)
+	handlerContent := strings.Replace(handlerTemplate, "$Package", opts.Package(), 1)
 	handlerContent = strings.Replace(handlerContent, "$LocalVariable", localVariableDeclaration, 1)
 
 	registry := &customTypeRegistry{}

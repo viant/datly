@@ -102,7 +102,7 @@ func (f *Function) Generate(builder *Builder) error {
 
 		switch len(f.ArgsOut) {
 		case 0:
-			//Do nothing
+			//Exec nothing
 		case 1:
 			if err := builder.WriteString(f.ArgsOut[0]); err != nil {
 				return err

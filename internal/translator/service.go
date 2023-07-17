@@ -113,10 +113,8 @@ func (s *Service) persistRouterRule(resource *Resource, service router.ServiceTy
 	if err != nil {
 		return fmt.Errorf("failed to compact state: %w", err)
 	}
-
 	resource.Resource.Parameters = state.RemoveReserved().ViewParameters()
 	routerResource := s.buildRouterResource(resource)
-
 	data, err := asset.EncodeYAML(routerResource)
 	if err != nil {
 		return fmt.Errorf("failed to encode: %+v, %w", routerResource, err)

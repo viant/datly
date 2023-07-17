@@ -271,7 +271,7 @@ func (s State) ReflectType(pkgPath string, lookupType xreflect.LookupType) (refl
 	}
 
 	if len(fields) == 0 {
-		return reflect.TypeOf(struct{}{}), nil
+		return reflect.StructOf([]reflect.StructField{{Name: "Dummy", Type: reflect.TypeOf(true)}}), nil
 	}
 	baseType := reflect.StructOf(fields)
 	return baseType, nil
@@ -289,6 +289,9 @@ func (s State) EnsureReflectTypes(modulePath string) error {
 		dataType := param.Schema.Name
 		if dataType == "" {
 			dataType = param.Schema.DataType
+		}
+		if dataType == "" {
+			return fmt.Errorf("data type was emtpy for %v", param.Name)
 		}
 		rType, err := types.LookupType(typeRegistry.Lookup, dataType)
 		if err != nil {

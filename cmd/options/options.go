@@ -95,21 +95,25 @@ func NewOptions(args Arguments) *Options {
 }
 
 func (o *Options) Repository() *Repository {
-	if o.Translate != nil {
-		return &o.Translate.Repository
-	}
 	if o.Generate != nil {
 		return &o.Generate.Repository
+	}
+	if o.Translate != nil {
+		return &o.Translate.Repository
 	}
 	return nil
 }
 
+func (o *Options) ShallTranslate() bool {
+	return o.Translate != nil || o.Generate != nil
+}
+
 func (o *Options) Rule() *Rule {
-	if o.Translate != nil {
-		return &o.Translate.Rule
-	}
 	if o.Generate != nil {
 		return &o.Generate.Rule
+	}
+	if o.Translate != nil {
+		return &o.Translate.Rule
 	}
 	return nil
 }

@@ -91,7 +91,7 @@ func (m *expressionMatcher) matchExpression() bool {
 			m.cursor.Pos = afterMatchedWhitespace + len(method) + 1
 			continue
 		}
-		_, holderName := SplitSelector(param)
+		_, holderName := GetHolderNameFromSelector(param)
 		m.cursor.Pos = afterMatchedWhitespace + len(holderName) + 1
 		return true
 	}

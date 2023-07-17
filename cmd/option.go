@@ -482,12 +482,12 @@ func (o *Options) MergeFromGenerate(generate *options.Generate) {
 	o.PrepareRule = generate.Operation
 	o.ExecKind = generate.Kind
 	o.Name = generate.Name
-	o.Generate.Location = generate.Source
+	o.Generate.Location = generate.SourceURL()
 	if generate.Module != "" {
 		o.GoFileOutput = generate.Module
 		o.RelativePath = generate.Module
 	}
-	o.GoModulePkg = generate.Package
+	o.GoModulePkg = generate.Package()
 	o.DSQLOutput = generate.Dest
 }
 
@@ -503,7 +503,7 @@ func (o *Options) MergeFromRun(run *options.Run) {
 func (o *Options) MergeFromDSql(dsql *options.Translate) {
 	o.WriteLocation = dsql.RepositoryURL
 	o.Name = dsql.Name
-	o.Location = dsql.Source
+	o.Location = dsql.SourceURL()
 	o.Connects = dsql.Connectors
 	o.JWTVerifierHMACKey = string(dsql.JwtVerifier.HMAC)
 	o.JWTVerifierRSAKey = string(dsql.JwtVerifier.RSA)
@@ -546,34 +546,30 @@ func (o *Options) MergeFromInit(init *options.Init) {
 func (o *Options) BuildOption() *options.Options {
 	var result = &options.Options{}
 	prep := o.Prepare
+
 	if prep.PrepareRule != "" {
 		result.Generate = &options.Generate{
 			Repository: options.Repository{},
 			Rule:       options.Rule{},
-			Package:    o.GoModulePkg,
 			Dest:       prep.DSQLOutput,
 			Operation:  prep.PrepareRule,
 			Kind:       prep.ExecKind,
 			Lang:       ast.LangVelty,
 		}
 
-	} else if o.Location != "" {
+	}
+	if o.Location != "" {
 		result.Translate = &options.Translate{
 			Repository: options.Repository{},
 			Rule:       options.Rule{},
 		}
-
-		if o.PartialConfigURL != "" {
-			fs := afs.New()
-			if ok, _ := fs.Exists(context.Background(), o.PartialConfigURL); ok {
-				repo := result.Repository()
-				if repo != nil {
-					repo.Configs.Append(o.PartialConfigURL)
-				}
-			}
+		if prep.PrepareRule != "" {
+			result.Generate.Translate = true
 		}
 	}
-	if repo := result.Repository(); repo != nil {
+
+	repo := result.Repository()
+	if repo != nil {
 		repo.RSA = o.JWTVerifierRSAKey
 		repo.HMAC = o.JWTVerifierHMACKey
 		repo.Port = &o.Port
@@ -581,11 +577,27 @@ func (o *Options) BuildOption() *options.Options {
 		repo.ConstURL = o.ConstURL
 		repo.Connector.Connectors = o.Connects
 		repo.APIPrefix = o.ApiURIPrefix
+
+		if o.PartialConfigURL != "" {
+			fs := afs.New()
+			if ok, _ := fs.Exists(context.Background(), o.PartialConfigURL); ok {
+				repo.Configs.Append(o.PartialConfigURL)
+			}
+		}
+
 	}
+
 	if rule := result.Rule(); rule != nil {
 		rule.Module = o.RelativePath
-		rule.Source = o.Location
+		rule.Source = []string{o.Location}
 		rule.Prefix = o.RoutePrefix
+		if o.GoModulePkg != "" {
+			rule.Packages = []string{o.GoModulePkg}
+		}
+	}
+
+	if o.ConfigURL != "" && repo == nil {
+		result.Run = &options.Run{ConfigURL: o.ConfigURL}
 	}
 	return result
 }

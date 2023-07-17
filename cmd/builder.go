@@ -9,12 +9,10 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/cmd/command"
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/runtime/standalone"
-	codegen "github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/translator"
 	"github.com/viant/datly/router"
@@ -561,56 +559,60 @@ func (s *Builder) buildRoute(ctx context.Context, builder *routeBuilder, consts 
 }
 
 func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) {
-	if builder.option.StateType == "" || builder.option.HandlerType == "" {
-		return "", nil
-	}
-	statePath := s.options.RelativePath
-	if statePath != "" {
-		statePath = path.Join(statePath, s.options.GoModulePkg)
-	} else {
-		statePath = s.options.DSQLOutput
-	}
+	return "", nil
+	/*
+		if builder.option.StateType == "" || builder.option.HandlerType == "" {
+			return "", nil
+		}
+		statePath := s.options.RelativePath
+		if statePath != "" {
+			statePath = path.Join(statePath, s.options.GoModulePkg)
+		} else {
+			statePath = s.options.DSQLOutput
+		}
 
-	statePackage := builder.option.StatePackage()
-	state, err := inference.NewState(statePath, builder.option.StateType, config.Config.Types)
-	if err != nil {
-		return "", err
-	}
-	entityParam := state[0]
-	entityType := entityParam.Schema.Type()
-	if entityType == nil {
-		return "", fmt.Errorf("entity type was empty")
-	}
-	aType, err := inference.NewType(statePackage, entityParam.Name, entityType)
+		statePackage := builder.option.StatePackage()
+		state, err := inference.NewState(statePath, builder.option.StateType, config.Config.Types)
+		if err != nil {
+			return "", err
+		}
+		entityParam := state[0]
+		entityType := entityParam.Schema.Type()
+		if entityType == nil {
+			return "", fmt.Errorf("entity type was empty")
+		}
+		aType, err := inference.NewType(statePackage, entityParam.Name, entityType)
 
-	if err != nil {
-		return "", err
-	}
-	tmpl := codegen.NewTemplate(builder.option, &inference.Spec{Type: aType})
-	//if entityParam.In.Kind == view.KindRequestBody {
-	//	if entityParam.In.Name != "" {
-	//		tmpl.Imports.AddType(aType.Name)
-	//	}
-	//}
-	tmpl.Imports.AddType(builder.option.StateType)
-	tmpl.Imports.AddType(builder.option.HandlerType)
+		if err != nil {
+			return "", err
+		}
+		tmpl := codegen.NewTemplate(builder.option, &inference.Spec{Type: aType})
+		//if entityParam.In.Kind == view.KindRequestBody {
+		//	if entityParam.In.Name != "" {
+		//		tmpl.Imports.AddType(aType.Name)
+		//	}
+		//}
+		tmpl.Imports.AddType(builder.option.StateType)
+		tmpl.Imports.AddType(builder.option.HandlerType)
 
-	tmpl.EnsureImports(aType)
-	tmpl.State = state
+		tmpl.EnsureImports(aType)
+		tmpl.State = state
 
-	if builder.option.Declare == nil {
-		builder.option.Declare = map[string]string{}
-	}
+		if builder.option.Declare == nil {
+			builder.option.Declare = map[string]string{}
+		}
 
-	//builder.option.Declare["Handler"] = simpledName(builder.option.HandlerType)
-	//builder.option.Declare["State"] = simpledName(builder.option.StateType)
+		//builder.option.Declare["Handler"] = simpledName(builder.option.HandlerType)
+		//builder.option.Declare["State"] = simpledName(builder.option.StateType)
 
-	//builder.option.TypeSrc = &option.TypeSrcConfig{}
-	//builder.option.TypeSrc.URL = path.Join(statePath, statePackage)
-	//builder.option.TypeSrc.Types = append(builder.option.TypeSrc.Types, builder.option.HandlerType, builder.option.StateType)
+		//builder.option.TypeSrc = &option.TypeSrcConfig{}
+		//builder.option.TypeSrc.URL = path.Join(statePath, statePackage)
+		//builder.option.TypeSrc.Types = append(builder.option.TypeSrc.Types, builder.option.HandlerType, builder.option.StateType)
 
-	dSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
-	return dSQL + fmt.Sprintf("$Nop($%v)", entityParam.Name), err
+		dSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
+		return dSQL + fmt.Sprintf("$Nop($%v)", entityParam.Name), err
+
+	*/
 }
 
 func simpledName(typeName string) string {
@@ -1513,40 +1515,43 @@ func (s *Builder) inheritRouteServiceType(builder *routeBuilder, aView *view.Vie
 }
 
 func (s *Builder) generateRuleIfNeeded(ctx context.Context, SQL []byte) (string, error) {
-	if s.options.PrepareRule == "" {
-		return string(SQL), nil
-	}
-
-	goFileOutput := s.options.DSQLOutput
-	if output := s.options.GoFileOutput; output != "" {
-		if strings.HasPrefix(output, "/") {
-			goFileOutput = output
-		} else {
-			goFileOutput = path.Join(goFileOutput, output)
+	/*
+		if s.options.PrepareRule == "" {
+			return string(SQL), nil
 		}
-	}
-	dsqlOutput := s.options.DSQLOutput
-	if s.options.GoModulePkg != "" {
-		goFileOutput = path.Join(goFileOutput, s.options.GoModulePkg)
-		dsqlOutput = path.Join(dsqlOutput, s.options.GoModulePkg)
-	}
 
-	routeBuilder := s.newRouteBuilder(
-		&router.Resource{Resource: view.EmptyResource()},
-		NewParametersIndex(nil, nil),
-		newSession(path.Dir(s.options.Location), s.options.Location, s.options.PluginDst, dsqlOutput, dsqlOutput, goFileOutput),
-	)
+		goFileOutput := s.options.DSQLOutput
+		if output := s.options.GoFileOutput; output != "" {
+			if strings.HasPrefix(output, "/") {
+				goFileOutput = output
+			} else {
+				goFileOutput = path.Join(goFileOutput, output)
+			}
+		}
+		dsqlOutput := s.options.DSQLOutput
+		if s.options.GoModulePkg != "" {
+			goFileOutput = path.Join(goFileOutput, s.options.GoModulePkg)
+			dsqlOutput = path.Join(dsqlOutput, s.options.GoModulePkg)
+		}
 
-	cmd := command.New()
-	template, err := s.buildCodeTemplate(ctx, routeBuilder, SQL, s.options.PrepareRule)
-	if err != nil {
-		return "", err
-	}
-	if err = cmd.Generate(ctx, s.Options.Generate, template); err != nil {
-		return "", err
-	}
-	SQL, err = s.fs.DownloadWithURL(ctx, s.Options.Generate.DSQLLocation())
-	return string(SQL), err
+		routeBuilder := s.newRouteBuilder(
+			&router.Resource{Resource: view.EmptyResource()},
+			NewParametersIndex(nil, nil),
+			newSession(path.Dir(s.options.Location), s.options.Location, s.options.PluginDst, dsqlOutput, dsqlOutput, goFileOutput),
+		)
+
+		cmd := command.New()
+		template, err := s.buildCodeTemplate(ctx, routeBuilder, SQL, s.options.PrepareRule)
+		if err != nil {
+			return "", err
+		}
+		if err = cmd.Generate(ctx, s.Options.Generate, template); err != nil {
+			return "", err
+		}
+		SQL, err = s.fs.DownloadWithURL(ctx, s.Options.Generate.DSQLLocation())
+		return string(SQL), err
+	*/
+	return string(SQL), nil
 }
 
 func (s *Builder) loadGoType(resource *view.Resource, typeSrc *option.TypeSrcConfig) error {

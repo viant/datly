@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/datly/cmd/options"
+	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/internal/plugin"
+	"github.com/viant/datly/internal/translator"
 	"os"
 	"os/exec"
 )
@@ -28,24 +30,40 @@ const (
 type (
 	Service struct {
 		fs            afs.Service
+		config        *standalone.Config
+		translator    *translator.Service
 		goBinLocation string
+		Files         asset.Files
 	}
 )
 
-func (s *Service) Run(ctx context.Context, opts *options.Options) (bool, error) {
+func (s *Service) Exec(ctx context.Context, opts *options.Options) (bool, error) {
 	if opts.InitExt != nil {
-		return true, s.runInitExtension(ctx, opts.InitExt)
+		return true, s.RunInitExtension(ctx, opts.InitExt)
 	}
 	if opts.Bundle != nil {
-		return true, s.bundleRules(ctx, opts.Bundle)
+		return true, s.BundleRules(ctx, opts.Bundle)
 	}
 	if opts.Touch != nil {
 		s.Touch(ctx, opts.Touch)
 		return true, nil
 	}
 	if opts.Build != nil {
-		return false, s.prepareBuild(ctx, opts.Build)
+		return true, s.PrepareBuild(ctx, opts.Build)
 	}
+	if opts.Generate != nil {
+		return true, s.Generate(ctx, opts)
+	}
+	if opts.Translate != nil {
+		return true, s.Translate(ctx, opts)
+	}
+	if opts.Run != nil {
+		return true, s.Run(ctx, opts.Run)
+	}
+	if opts.Cache != nil {
+		return true, s.WarmupCache(ctx, opts.Cache)
+	}
+
 	return false, nil
 }
 
@@ -60,7 +78,7 @@ func (s *Service) runCommand(dir string, cmd string, args ...string) (string, er
 	return string(output), nil
 }
 
-func (s *Service) prepareBuild(ctx context.Context, build *options.Build) error {
+func (s *Service) PrepareBuild(ctx context.Context, build *options.Build) error {
 	if err := s.tidyModule(ctx, build.Module); err != nil {
 		return err
 	}
@@ -81,30 +99,26 @@ func (s *Service) tidyModule(ctx context.Context, goModule string) error {
 	return nil
 }
 
-func (s *Service) generateTemplateFiles(gen *options.Generate, template *codegen.Template, info *plugin.Info, opts ...codegen.Option) ([]*asset.File, error) {
-
-	var files []*asset.File
+func (s *Service) generateTemplateFiles(gen *options.Generate, template *codegen.Template, info *plugin.Info, opts ...codegen.Option) error {
 	switch gen.Lang {
 	case ast.LangGO:
-
 		handler, index, err := template.GenerateHandler(gen, info)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		files = append(files, asset.NewFile(gen.HandlerLocation(), handler))
-		files = append(files, asset.NewFile(gen.IndexLocation(), index))
+		s.Files.Append(asset.NewFile(gen.HandlerLocation(), handler))
+		s.Files.Append(asset.NewFile(gen.IndexLocation(), index))
 		fallthrough
 	case ast.LangVelty:
 		dSQLContent, err := template.GenerateDSQL(opts...)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		files = append(files, asset.NewFile(gen.DSQLLocation(), dSQLContent))
-
+		s.Files.Append(asset.NewFile(gen.DSQLLocation(), dSQLContent))
 	default:
-		return nil, fmt.Errorf("unsupported lang type %v", gen.Lang)
+		return fmt.Errorf("unsupported lang type %v", gen.Lang)
 	}
-	return files, nil
+	return nil
 }
 
 func New() *Service {

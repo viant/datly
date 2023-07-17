@@ -18,13 +18,15 @@ func (t *Template) Sanitize() string {
 		if !ok {
 			break
 		}
+		nextText := string(SQL[next.Start:next.End])
+		fmt.Printf("next %s\n", nextText)
 		modifiable, offset = sanitize(iterable, next, modifiable, offset, 0)
 	}
 	return strings.TrimSpace(string(modifiable))
 }
 
 func sanitize(iterable *iterables, expression *Expression, dst []byte, accumulatedOffset int, cursorOffset int) ([]byte, int) {
-	if expression.IsVariable && (expression.OccurrenceIndex == 0 && expression.Context == SetContext) {
+	if expression.FnName != "" || (expression.IsVariable && (expression.OccurrenceIndex == 0 && expression.Context == SetContext)) {
 		return dst, accumulatedOffset
 	}
 	paramExpression, hadBrackets := unwrapBrackets(expression.FullName)

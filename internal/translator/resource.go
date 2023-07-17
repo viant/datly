@@ -13,7 +13,6 @@ import (
 	"github.com/viant/sqlx"
 	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
-	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
 )
@@ -118,8 +117,11 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	var bindingArgs []interface{}
 
 	var options []expand.StateOption
-
 	epxandingSQL := viewlet.SanitizedSQL
+	if strings.Contains(epxandingSQL, "$View.ParentJoinOn") {
+		//TODO adjust parameter value type
+		options = append(options, expand.WithViewParam(&expand.MetaParam{ParentValues: []interface{}{0}, DataUnit: &expand.DataUnit{}}))
+	}
 	options = append(options, expand.WithParameters(state, nil))
 	if metaViewSQL != nil {
 		sourceViewName := metaViewSQL.Name[5 : len(metaViewSQL.Name)-4]
@@ -136,15 +138,11 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 		}
 	}
 
-	ptr := xunsafe.AsPointer(sqlState)
-	fmt.Printf("STA %T %v %+v %s\n", state, ptr, state)
-
 	parameters := viewlet.Resource.State.ViewParameters()
 	evaluator, err := view.NewEvaluator(parameters, reflectType, nil, epxandingSQL, types.Lookup)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create evaluator %v: %w", viewlet.Name, err)
 	}
-
 	result, err := evaluator.Evaluate(nil, options...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to evaluate %v: %w", viewlet.Name, err)

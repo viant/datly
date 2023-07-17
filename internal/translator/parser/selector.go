@@ -10,6 +10,13 @@ import (
 
 var auxiliaryPrefixes = []string{keywords.ParamsKey + ".", keywords.ParamsMetadataKey + "."}
 
+func GetHolderName(identifier string) (string, string) {
+	paramName := paramId(identifier)
+	prefix, paramName := removePrefixIfNeeded(paramName)
+	paramName = withoutPath(paramName)
+	return prefix, paramName
+}
+
 func SplitSelector(selector *expr.Select) (string, string) {
 	if selector.X != nil {
 		_, ok := selector.X.(*expr.Call)
@@ -19,12 +26,23 @@ func SplitSelector(selector *expr.Select) (string, string) {
 	}
 	identifier := view.FirstNotEmpty(selector.FullName, selector.ID)
 	identifier = strings.Trim(identifier, "${}")
+	if strings.HasPrefix(identifier, "Unsafe.") {
+		identifier = identifier[7:]
+	}
 	var holder, name string
 	name = identifier
+	//
 	if index := strings.LastIndex(identifier, "."); index != -1 {
-		holder = identifier[:index]
-		name = identifier[index+1:]
+		nameCandidate := identifier[index+1:]
+		if !strings.Contains(nameCandidate, "(") { //method call
+			holder = identifier[:index]
+			name = nameCandidate
+		} else {
+			holder = ""
+			name = identifier[:index]
+		}
 	}
+
 	for _, candidate := range auxiliaryPrefixes {
 		if strings.HasPrefix(holder, candidate) {
 			holder = holder[len(candidate):]
@@ -33,11 +51,38 @@ func SplitSelector(selector *expr.Select) (string, string) {
 	return holder, name
 }
 
-func GetHolderName(identifier string) (string, string) {
-	paramName := paramId(identifier)
-	prefix, paramName := removePrefixIfNeeded(paramName)
-	paramName = withoutPath(paramName)
-	return prefix, paramName
+func splitSelector(selector *expr.Select) (string, string) {
+	if selector.X != nil {
+		_, ok := selector.X.(*expr.Call)
+		if ok {
+			return "", selector.ID
+		}
+	}
+	identifier := view.FirstNotEmpty(selector.FullName, selector.ID)
+	identifier = strings.Trim(identifier, "${}")
+	if strings.HasPrefix(identifier, "Unsafe.") {
+		identifier = identifier[7:]
+	}
+	var holder, name string
+	name = identifier
+	//
+	if index := strings.LastIndex(identifier, "."); index != -1 {
+		nameCandidate := identifier[index+1:]
+		if !strings.Contains(nameCandidate, "(") { //method call
+			holder = identifier[:index]
+			name = nameCandidate
+		} else {
+			holder = ""
+			name = identifier[:index]
+		}
+	}
+
+	for _, candidate := range auxiliaryPrefixes {
+		if strings.HasPrefix(holder, candidate) {
+			holder = holder[len(candidate):]
+		}
+	}
+	return holder, name
 }
 
 func paramId(identifier string) string {
@@ -50,6 +95,21 @@ func paramId(identifier string) string {
 	}
 
 	return identifier
+}
+
+func GetHolderNameFromSelector(selector *expr.Select) (string, string) {
+	if selector.X != nil {
+		_, ok := selector.X.(*expr.Call)
+		if ok {
+			return "", selector.ID
+		}
+	}
+
+	identifier := view.FirstNotEmpty(selector.FullName, selector.ID)
+	paramName := paramId(identifier)
+	prefix, paramName := removePrefixIfNeeded(paramName)
+	paramName = withoutPath(paramName)
+	return prefix, paramName
 }
 
 func removePrefixIfNeeded(name string) (prefix string, actual string) {
@@ -83,19 +143,4 @@ func withoutPath(name string) string {
 	}
 
 	return name
-}
-
-func GetHolderNameFromSelector(selector *expr.Select) (string, string) {
-	if selector.X != nil {
-		_, ok := selector.X.(*expr.Call)
-		if ok {
-			return "", selector.ID
-		}
-	}
-
-	identifier := view.FirstNotEmpty(selector.FullName, selector.ID)
-	paramName := paramId(identifier)
-	prefix, paramName := removePrefixIfNeeded(paramName)
-	paramName = withoutPath(paramName)
-	return prefix, paramName
 }

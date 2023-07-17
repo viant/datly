@@ -22,6 +22,9 @@ func (i *Imports) Clone() *Imports {
 	return &result
 }
 func (i *Imports) AddType(typeName string) {
+	if typeName == "" {
+		return
+	}
 	_, ok := i.typeIndex[typeName]
 	if ok {
 		return

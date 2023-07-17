@@ -75,6 +75,30 @@ type (
 	}
 )
 
+func (o *Rule) ShallGenerateHandler() bool {
+	return o.HandlerType != ""
+}
+
+func (o *Rule) IsMany() bool {
+	return o.Cardinality == "" || o.Cardinality == view.Many
+}
+
+func (o *Rule) IsBasic() bool {
+	return o.Style != router.ComprehensiveStyle && o.Field == ""
+}
+
+func (o *Rule) GetField() string {
+	if o.IsBasic() {
+		return ""
+	}
+
+	if o.Field == "" {
+		return "Data"
+	}
+
+	return o.Field
+}
+
 func (r *Resource) initRule() {
 	rule := r.Rule
 	r.State.AppendConstants(rule.Const)

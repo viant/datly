@@ -38,7 +38,7 @@ func (it *ParamMetaIterator) initMetaTypes(SQL string) []string {
 		case insertToken:
 			it.detectInsertedTypers(cursor)
 		case parsly.EOF, anyToken:
-			//Do nothing
+			//Exec nothing
 		default:
 			text := matched.Text(cursor)
 			shouldReset := it.isResetKeyword(text)

@@ -91,7 +91,7 @@ func (r *Repository) Init(ctx context.Context, project string) error {
 	return nil
 }
 
-//validateConfigURLs validates if config URL that is no part of repository URL have actual file
+// validateConfigURLs validates if config URL that is no part of repository URL have actual file
 func (r *Repository) validateConfigURLs() error {
 	if len(r.Configs) > 0 {
 		var qualified ConfigURLs

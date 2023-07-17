@@ -22,14 +22,13 @@ type Repository struct {
 	Connectors      []*view.Connector
 	NamedConnectors view.Connectors
 	Caches          view.Caches
-
-	MessageBuses []*mbus.Resource
-	Messages     Messages
-	Files        asset.Files
+	MessageBuses    []*mbus.Resource
+	Messages        Messages
+	Files           asset.Files
 }
 
 func (r *Repository) RuleName(rule *options.Rule) string {
-	_, name := url.Split(rule.Source, file.Scheme)
+	_, name := url.Split(rule.SourceURL(), file.Scheme)
 	if ext := path.Ext(name); ext != "" {
 		name = name[:len(name)-len(ext)]
 	}

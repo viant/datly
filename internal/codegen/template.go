@@ -3,9 +3,9 @@ package codegen
 import (
 	_ "embed"
 	"fmt"
-	"github.com/viant/datly/cmd/option"
 	ast "github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/internal/inference"
+	"github.com/viant/datly/internal/translator"
 	"github.com/viant/datly/view"
 	"github.com/viant/xreflect"
 	"reflect"
@@ -15,7 +15,7 @@ import (
 type (
 	Template struct {
 		Spec    *inference.Spec
-		Config  *option.RouteConfig
+		Config  *translator.Rule
 		TypeDef *view.TypeDefinition
 		inference.Imports
 		inference.State
@@ -297,7 +297,7 @@ func (t *Template) BuildTypeDef(spec *inference.Spec, wrapperField string) {
 
 func (t *Template) setResponseBody() {
 	if t.Config.ResponseBody == nil {
-		t.Config.ResponseBody = &option.ResponseBodyConfig{}
+		t.Config.ResponseBody = &translator.ResponseBodyConfig{}
 	}
 	if t.Config.ResponseBody.From == "" {
 		t.Config.ResponseBody.From = t.TypeDef.Name
@@ -342,6 +342,6 @@ func (t *Template) ensurePackageImports(defaultPkg string, fields []*view.Field)
 	}
 }
 
-func NewTemplate(config *option.RouteConfig, spec *inference.Spec) *Template {
-	return &Template{paramPrefix: paramPrefix, Config: config, Imports: inference.NewImports(), Spec: spec}
+func NewTemplate(rule *translator.Rule, spec *inference.Spec) *Template {
+	return &Template{paramPrefix: paramPrefix, Config: rule, Imports: inference.NewImports(), Spec: spec}
 }

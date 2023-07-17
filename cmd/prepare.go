@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/option"
 	codegen "github.com/viant/datly/internal/codegen"
+	"github.com/viant/datly/internal/translator"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
@@ -52,7 +54,10 @@ func (s *Builder) buildCodeTemplate(ctx context.Context, builder *routeBuilder, 
 		return nil, err
 	}
 
-	template := codegen.NewTemplate(routeConfig, aConfig.Spec)
+	rule := &translator.Rule{}
+	data, _ := json.Marshal(routeConfig)
+	_ = json.Unmarshal(data, rule)
+	template := codegen.NewTemplate(rule, aConfig.Spec)
 	template.BuildTypeDef(aConfig.Spec, aConfig.outputConfig.GetField())
 	var opts = []codegen.Option{codegen.WithHTTPMethod(httpMethod), codegen.WithLang(s.Options.Generate.Lang)}
 	template.BuildState(aConfig.Spec, aConfig.outputConfig.GetField(), opts...)

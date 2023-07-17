@@ -1,7 +1,6 @@
 package expand
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/godiff"
@@ -160,7 +159,6 @@ func (e *Evaluator) Evaluate(state *State, options ...StateOption) (*State, erro
 	if err := state.EmbedValue(state.Context); err != nil {
 		return nil, err
 	}
-
 	for _, customContext := range state.CustomContext {
 		actualType := reflect.TypeOf(customContext.Value)
 		if actualType != customContext.Type {
@@ -173,14 +171,9 @@ func (e *Evaluator) Evaluate(state *State, options ...StateOption) (*State, erro
 			}
 		}
 	}
-
-	d, _ := json.Marshal(state.State)
-	fmt.Printf("sess %T %+v \n%s\n", state.State, state.State, d)
-
 	if err := e.executor.Exec(state.State); err != nil {
 		return state, err
 	}
-
 	state.Expanded = state.Buffer.String()
 	return state, nil
 }
