@@ -65,7 +65,7 @@ func (g *Gen) Init() error {
 }
 
 func (g *Gen) DSQLLocation() string {
-	_, name := url.Split(g.Source, file.Scheme)
+	name := strings.Title(g.Package) + "_" + strings.ToLower(g.Operation)
 	if ext := path.Ext(name); ext != "" {
 		name = name[:len(name)-len(ext)]
 	}

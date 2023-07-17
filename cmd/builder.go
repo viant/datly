@@ -1537,7 +1537,7 @@ func (s *Builder) generateRuleIfNeeded(ctx context.Context, SQL []byte) (string,
 	)
 
 	cmd := command.New()
-	template, err := s.buildCodeTemplate(ctx, routeBuilder, SQL, s.options.PrepareRule)
+	template, err := s.buildCodeTemplate(ctx, routeBuilder, SQL, strings.ToUpper(s.options.PrepareRule))
 	if err != nil {
 		return "", err
 	}
