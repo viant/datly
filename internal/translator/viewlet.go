@@ -60,6 +60,10 @@ type (
 	}
 )
 
+func (o *OutputConfig) IsToOne() bool {
+	return o.ViewCardinality() == view.One
+}
+
 func (o *OutputConfig) ViewCardinality() view.Cardinality {
 	if o.Cardinality == "" {
 		o.Cardinality = view.Many

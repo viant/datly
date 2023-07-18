@@ -89,15 +89,16 @@ func (n Viewlets) addRelations(query *query.Select) {
 			continue
 		}
 		parentNs := inference.ParentAlias(join)
-		parent := n.Lookup(parentNs)
+		parentViewlet := n.Lookup(parentNs)
 
-		relation.Spec.Parent = parent.Spec
+		relation.Spec.Parent = parentViewlet.Spec
 		cardinality := view.Many
-		if inference.IsToOne(join) {
+		if inference.IsToOne(join) || relation.OutputConfig.IsToOne() {
 			cardinality = view.One
 		}
-		relName := parentNs + "_" + join.Alias //TODO check uniqness with heler resolver
-		parent.Spec.AddRelation(relName, join, relation.Spec, cardinality)
+
+		relName := join.Alias
+		parentViewlet.Spec.AddRelation(relName, join, relation.Spec, cardinality)
 	}
 }
 

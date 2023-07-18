@@ -6,22 +6,20 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/internal/setter"
-	"github.com/viant/sqlparser"
 	"os"
 	"strings"
 )
 
 type Rule struct {
-	Project        string   `short:"p" long:"proj" description:"project location"`
-	Name           string   `short:"n" long:"name" description:"rule name"`
-	Prefix         string   `short:"u" long:"uri" description:"rule uri"  default:"dev" `
-	Source         []string `short:"s" long:"src" description:"source"`
-	Output         []string
-	Packages       []string `short:"g" long:"pkg" description:"entity package"`
-	Index          int
-	Module         string `short:"m" long:"module" description:"go module package root" default:"pkg"`
-	UpperNamespace bool
-	Generated      bool
+	Project   string   `short:"p" long:"proj" description:"project location"`
+	Name      string   `short:"n" long:"name" description:"rule name"`
+	Prefix    string   `short:"u" long:"uri" description:"rule uri"  default:"dev" `
+	Source    []string `short:"s" long:"src" description:"source"`
+	Output    []string
+	Packages  []string `short:"g" long:"pkg" description:"entity package"`
+	Index     int
+	Module    string `short:"m" long:"module" description:"go module package root" default:"pkg"`
+	Generated bool
 }
 
 func (g *Rule) GoModuleLocation() string {
@@ -96,31 +94,4 @@ func (g *Rule) LoadSource(ctx context.Context, fs afs.Service) (string, error) {
 		return "", err
 	}
 	return string(data), nil
-}
-
-func (g *Rule) NormalizeSQL(SQL string) string {
-	if !g.UpperNamespace {
-		return SQL
-	}
-	query, err := sqlparser.ParseQuery(SQL)
-	if err != nil {
-		return SQL
-	}
-	ns := map[string]bool{}
-	if query.From.Alias != "" {
-		ns[query.From.Alias] = true
-	}
-	for _, join := range query.Joins {
-		ns[join.Alias] = true
-	}
-	var pairs []string
-	for k := range ns {
-		if k == strings.ToTitle(k) {
-			continue
-		}
-		title := strings.ToUpper(k[0:1]) + k[1:]
-		pairs = append(pairs, k, title)
-	}
-	result := strings.NewReplacer(pairs...).Replace(SQL)
-	return result
 }

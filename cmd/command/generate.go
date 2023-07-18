@@ -23,7 +23,6 @@ func (s *Service) Generate(ctx context.Context, options *options.Options) error 
 
 func (s *Service) generate(ctx context.Context, options *options.Options) error {
 	rule := options.Rule()
-	rule.UpperNamespace = true
 	rule.Generated = true
 	if err := s.translate(ctx, options); err != nil {
 		return err
