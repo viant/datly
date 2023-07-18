@@ -101,6 +101,18 @@ func (d *Declaration) ExpandShorthands() {
 		d.Parameter.Schema.Cardinality = d.Cardinality
 	}
 
+	if d.SQL != "" {
+		if d.In.Kind == "" && IsStructQL(d.SQL) {
+			d.In.Kind = view.KindParam
+			d.In.Name = d.Name
+		}
+		if d.In.Kind == view.KindParam {
+			d.Parameter.EnsureCodec()
+			d.Parameter.Output.Query = d.SQL
+			d.Parameter.Output.Ref = "structql"
+		}
+	}
+
 	if d.SQL != "" && d.In.Kind == "" {
 		if d.Parameter.Schema.Cardinality == "" {
 			d.Parameter.Schema.Cardinality = view.Many

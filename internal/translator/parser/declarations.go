@@ -80,18 +80,7 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 	if declaration == nil || err != nil {
 		return err
 	}
-	if declaration.SQL != "" {
-		declaration.EnsureLocation()
-		if IsStructQL(declaration.SQL) {
-			declaration.In.Kind = view.KindParam
-			declaration.In.Name = declaration.Name
-		}
-		if declaration.In.Kind == view.KindParam {
-			declaration.Parameter.EnsureCodec()
-			declaration.Parameter.Output.Query = declaration.SQL
-			declaration.Parameter.Output.Ref = "structql"
-		}
-	}
+
 	if declaration.Transformer != "" {
 		d.Transforms = append(d.Transforms, declaration.Transform())
 		return nil

@@ -18,8 +18,6 @@ func (t *Template) Sanitize() string {
 		if !ok {
 			break
 		}
-		nextText := string(SQL[next.Start:next.End])
-		fmt.Printf("next %s\n", nextText)
 		modifiable, offset = sanitize(iterable, next, modifiable, offset, 0)
 	}
 	return strings.TrimSpace(string(modifiable))
