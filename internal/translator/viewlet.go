@@ -60,6 +60,13 @@ type (
 	}
 )
 
+func (o *OutputConfig) ViewCardinality() view.Cardinality {
+	if o.Cardinality == "" {
+		o.Cardinality = view.Many
+	}
+	return o.Cardinality
+}
+
 func (v *Viewlet) IsMetaView() bool {
 	return v.sourceViewlet != nil
 }

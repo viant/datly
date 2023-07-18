@@ -77,18 +77,36 @@ type (
 	}
 )
 
+func (r *Rule) ApplyOutputConfig() {
+
+	outputConfig := r.RootViewlet().OutputConfig
+
+	setter.SetStringIfEmpty(&r.Route.Field, outputConfig.Field)
+
+	if r.Route.Style == "" && r.Route.Field != "" {
+		r.Route.Style = router.ComprehensiveStyle
+	}
+
+	if r.Route.Style == "" {
+		r.Route.Style = router.Style(outputConfig.Style)
+	}
+
+	if r.Route.Cardinality == "" {
+		r.Route.Cardinality = outputConfig.ViewCardinality()
+	}
+
+}
 func (r *Rule) DSQLSetting() interface{} {
+
 	return struct {
 		URI          string
 		Method       string
-		Cardinality  string              `json:",omitempty"`
 		ResponseBody *ResponseBodyConfig `json:",omitempty"`
 		HandlerType  string              `json:",omitempty"`
 		StateType    string              `json:",omitempty"`
 	}{
 		URI:          r.URI,
 		Method:       r.Method,
-		Cardinality:  string(r.Cardinality),
 		ResponseBody: r.ResponseBody,
 		HandlerType:  r.HandlerType,
 		StateType:    r.StateType,

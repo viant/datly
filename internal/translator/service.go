@@ -131,7 +131,9 @@ func (s *Service) persistRouterRule(resource *Resource, service router.ServiceTy
 	resource.Rule.Route.Service = service
 	resource.Rule.Route.View = view.NewRefView(resource.Rule.Root)
 
-	if !resource.rule.Generated {
+	if resource.rule.Generated {
+		resource.Rule.ApplyOutputConfig()
+	} else {
 		resource.Rule.Route.URI = path.Join(resource.repository.APIPrefix, resource.rule.Prefix, resource.Rule.Route.URI)
 	}
 	state, err := resource.State.Compact(resource.rule.Module)
@@ -140,7 +142,7 @@ func (s *Service) persistRouterRule(resource *Resource, service router.ServiceTy
 	}
 	resource.Resource.Parameters = state.RemoveReserved().ViewParameters()
 	if service == router.ServiceTypeExecutor {
-		resource.Rule.Route.Cardinality = view.Many
+		resource.Rule.Route.Field = state.BodyField()
 	}
 	routerResource := s.buildRouterResource(resource)
 
@@ -231,7 +233,6 @@ func (s *Service) buildQueryViewletType(ctx context.Context, viewlet *Viewlet) e
 			return err
 		}
 	}
-
 	if viewlet.Expanded, err = viewlet.Resource.expandSQL(viewlet); err != nil {
 		return err
 	}

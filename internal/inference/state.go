@@ -166,6 +166,14 @@ func (s State) FilterByKind(kind view.Kind) State {
 	return result
 }
 
+func (s State) BodyField() string {
+	body := s.FilterByKind(view.KindRequestBody)
+	if len(body) == 0 {
+		return ""
+	}
+	return body[0].In.Name
+}
+
 // Implicit filters implicit parameters
 func (s State) Implicit() State {
 	result := State{}
