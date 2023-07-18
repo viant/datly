@@ -43,8 +43,9 @@ func (s State) RemoveReserved() State {
 
 func (s State) ViewParameters() []*view.Parameter {
 	var result = make([]*view.Parameter, 0, len(s))
-	for i := range s {
-		result = append(result, &s[i].Parameter)
+	for i, _ := range s {
+		parameter := &s[i].Parameter
+		result = append(result, parameter)
 	}
 	return result
 }
@@ -292,6 +293,9 @@ func (s State) EnsureReflectTypes(modulePath string) error {
 			continue
 		}
 		if param.Schema.Type() != nil {
+			continue
+		}
+		if param.In.Kind == view.KindParam {
 			continue
 		}
 		dataType := param.Schema.Name

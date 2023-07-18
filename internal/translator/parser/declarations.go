@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
+	"github.com/viant/sqlparser"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
 	"github.com/viant/xreflect"
@@ -79,6 +80,18 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 	if declaration == nil || err != nil {
 		return err
 	}
+	if declaration.SQL != "" {
+		declaration.EnsureLocation()
+		if IsStructQL(declaration.SQL) {
+			declaration.In.Kind = view.KindParam
+			declaration.In.Name = declaration.Name
+		}
+		if declaration.In.Kind == view.KindParam {
+			declaration.Parameter.EnsureCodec()
+			declaration.Parameter.Output.Query = declaration.SQL
+			declaration.Parameter.Output.Ref = "structql"
+		}
+	}
 	if declaration.Transformer != "" {
 		d.Transforms = append(d.Transforms, declaration.Transform())
 		return nil
@@ -89,6 +102,15 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 		d.State.Append(authParameter)
 	}
 	return nil
+}
+
+func IsStructQL(SQL string) bool {
+	query, _ := sqlparser.ParseQuery(SQL)
+	if query == nil || query.From.X == nil {
+		return false
+	}
+	from := sqlparser.Stringify(query.From.X)
+	return strings.Contains(from, "/")
 }
 
 func (d *Declarations) parseExpression(cursor *parsly.Cursor, selector *expr.Select) (*Declaration, error) {
@@ -135,7 +157,11 @@ func (d *Declarations) parseExpression(cursor *parsly.Cursor, selector *expr.Sel
 			if err := TryUnmarshalHint(hint, hintDeclaration); err != nil {
 				return nil, fmt.Errorf("invalid declaration %v, unable parse hint: %w", declaration.Name, err)
 			}
-			return declaration.Merge(hintDeclaration)
+			merged, err := declaration.Merge(hintDeclaration)
+			if err != nil {
+				return nil, err
+			}
+			return merged, nil
 		}
 	}
 	return declaration, nil

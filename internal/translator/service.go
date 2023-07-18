@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlparser"
+	"os"
 	"path"
 	"reflect"
 )
@@ -29,7 +30,12 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 
 	if err := parser.ParseImports(&dSQL, func(spec *parser.TypeImport) error {
 		if url.IsRelative(spec.URL) {
-			spec.URL = url.Join(rule.GoModuleLocation(), spec.URL)
+			currentDir, _ := os.Getwd()
+			if ok, _ := fs.Exists(ctx, path.Join(currentDir, spec.URL)); ok {
+				spec.URL = url.Join(currentDir, spec.URL)
+			} else {
+				spec.URL = url.Join(rule.GoModuleLocation(), spec.URL)
+			}
 		}
 		resource.Rule.TypeImports.Append(spec)
 		return nil
@@ -69,6 +75,7 @@ func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource,
 	}); err != nil {
 		return err
 	}
+
 	if err = s.persistRouterRule(resource, router.ServiceTypeExecutor); err != nil {
 		return err
 	}
