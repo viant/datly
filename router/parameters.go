@@ -83,13 +83,13 @@ func (p *RequestParams) init(request *http.Request, route *Route) (string, error
 	return "", nil
 }
 
-func (p *RequestParams) queryParam(name string, defaultValue string) string {
+func (p *RequestParams) queryParam(name string) (string, bool) {
 	values, ok := p.queryIndex[name]
 	if !ok {
-		return defaultValue
+		return "", ok
 	}
 
-	return values[0]
+	return values[0], true
 }
 
 func (p *RequestParams) pathVariable(name string, defaultValue string) string {
@@ -154,7 +154,8 @@ func (p *RequestParams) outputFormat(route *Route) string {
 }
 
 func (p *RequestParams) outputQueryFormat(route *Route) string {
-	format := strings.ToLower(p.queryParam(FormatQuery, ""))
+	param, _ := p.queryParam(FormatQuery)
+	format := strings.ToLower(param)
 	if format == "" {
 		format = route.Output.DataFormat
 	}
@@ -279,9 +280,10 @@ func (p *RequestParams) ExtractHttpParam(ctx context.Context, param *view.Parame
 func (p *RequestParams) extractHttpParam(ctx context.Context, param *view.Parameter, options []interface{}) (interface{}, error) {
 	switch param.In.Kind {
 	case view.KindPath:
-		return p.convert(ctx, p.pathVariable(param.In.Name, ""), param, options...)
+		return p.convert(true, p.pathVariable(param.In.Name, ""), param, options...)
 	case view.KindQuery:
-		return p.convert(ctx, p.queryParam(param.In.Name, ""), param, options...)
+		pValue, ok := p.queryParam(param.In.Name)
+		return p.convert(ok, pValue, param, options...)
 	case view.KindRequestBody:
 		body, err := p.paramRequestBody(ctx, param, options...)
 		if err != nil {
@@ -290,9 +292,9 @@ func (p *RequestParams) extractHttpParam(ctx context.Context, param *view.Parame
 
 		return body, nil
 	case view.KindHeader:
-		return p.convert(ctx, p.header(param.In.Name), param, options...)
+		return p.convert(true, p.header(param.In.Name), param, options...)
 	case view.KindCookie:
-		return p.convert(ctx, p.cookie(param.In.Name), param, options...)
+		return p.convert(true, p.cookie(param.In.Name), param, options...)
 	}
 
 	return nil, fmt.Errorf("unsupported param kind %v", param.In.Kind)

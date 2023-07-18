@@ -1,32 +1,6 @@
 [
   {
-    "@indexBy@": "id"
-  },
-  {
     "id": 1,
-    "name": "Vendor 1",
-    "products": [
-      {
-        "@indexBy@": "id"
-      },
-      {
-        "id": 1,
-        "name": "V1 Product 1",
-        "userCreated": 1
-      },
-      {
-        "id": 2,
-        "name": "V1 Product 2",
-        "userCreated": 1
-      }
-    ]
-  },
-  {
-    "id": 2,
-    "name": "Vendor 2"
-  },
-  {
-    "id": 3,
-    "name": "Vendor 3"
+    "name": "Vendor 1"
   }
 ]

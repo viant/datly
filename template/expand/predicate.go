@@ -26,7 +26,8 @@ type (
 	}
 
 	PredicateBuilder struct {
-		output *strings.Builder
+		lastKeyword string
+		output      *strings.Builder
 	}
 )
 
@@ -58,7 +59,19 @@ func (p *Predicate) Ctx(ctx int, keyword string) (string, error) {
 	return p.expand(ctx, keyword)
 }
 
-func (b *PredicateBuilder) Or(fragments ...string) *PredicateBuilder {
+func (b *PredicateBuilder) Combine(fragments ...string) *PredicateBuilder {
+	return b.combine("AND", fragments)
+}
+
+func (b *PredicateBuilder) CombineOr(fragments ...string) *PredicateBuilder {
+	return b.combine("OR", fragments)
+}
+
+func (b *PredicateBuilder) CombineAnd(fragments ...string) *PredicateBuilder {
+	return b.combine("AND", fragments)
+}
+
+func (b *PredicateBuilder) combine(keyword string, fragments []string) *PredicateBuilder {
 	builder := &strings.Builder{}
 	for _, fragment := range fragments {
 		if strings.TrimSpace(fragment) == "" {
@@ -66,15 +79,25 @@ func (b *PredicateBuilder) Or(fragments ...string) *PredicateBuilder {
 		}
 
 		if builder.Len() > 0 {
-			builder.WriteString(" OR ")
+			builder.WriteString(" ")
+			builder.WriteString(keyword)
+			builder.WriteString(" ")
 		}
 
+		builder.WriteString(" ( ")
 		builder.WriteString(fragment)
+		builder.WriteString(" ) ")
 	}
 
 	if builder.Len() > 0 {
 		if b.output.Len() != 0 {
-			b.output.WriteString(" AND ")
+			lastK := b.lastKeyword
+			if lastK == "" {
+				lastK = "AND"
+			}
+			b.output.WriteString(" ")
+			b.output.WriteString(lastK)
+			b.output.WriteString(" ")
 		}
 
 		b.output.WriteString(" ( ")
@@ -113,7 +136,7 @@ func (p *Predicate) expand(ctx int, operator string) (string, error) {
 			}
 		}
 
-		value, err := predicateConfig.StateAccessor().Value(p.hasPtr)
+		value, err := predicateConfig.StateAccessor().Value(p.statePtr)
 		if err != nil {
 			return "", err
 		}
@@ -134,4 +157,14 @@ func (p *Predicate) expand(ctx int, operator string) (string, error) {
 	}
 
 	return result.String(), nil
+}
+
+func (b *PredicateBuilder) And() *PredicateBuilder {
+	b.lastKeyword = "AND"
+	return b
+}
+
+func (b *PredicateBuilder) Or() *PredicateBuilder {
+	b.lastKeyword = "OR"
+	return b
 }

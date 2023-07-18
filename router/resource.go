@@ -141,7 +141,7 @@ func (r *Resource) Init(ctx context.Context) error {
 		columnsCache = r.ColumnsCache.Items
 	}
 
-	if err := r.Resource.Init(ctx, r.Resource.TypeRegistry(), r._visitors, columnsCache, transforms); err != nil {
+	if err := r.Resource.Init(ctx, r.Resource.TypeRegistry(), r._visitors, columnsCache, transforms, config.Config.Predicates); err != nil {
 		return err
 	}
 

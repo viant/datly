@@ -34,6 +34,7 @@ import (
 	"github.com/viant/toolbox/format"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
+	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"go/ast"
 	goFormat "go/format"
@@ -2060,9 +2061,9 @@ func (s *Builder) readParamConfigs(cfg *option.ParameterConfig, cursor *parsly.C
 				return err
 			}
 
-			var namedArgs []*config.NamedArg
+			var namedArgs []*predicate.NamedArgument
 			for pos, argName := range args[2:] {
-				namedArgs = append(namedArgs, &config.NamedArg{
+				namedArgs = append(namedArgs, &predicate.NamedArgument{
 					Position: pos,
 					Name:     argName,
 				})
@@ -2295,7 +2296,7 @@ func (s *Builder) extractArgs(content string) []string {
 			result = append(result, strings.TrimSpace(arg))
 		default:
 			if cursor.Pos < len(cursor.Input) {
-				arg := strings.TrimSpace(string(cursor.Input[cursor.Pos:]))
+				arg := strings.Trim(strings.TrimSpace(string(cursor.Input[cursor.Pos:])), `"'`)
 				if len(arg) != 0 {
 					result = append(result, arg)
 				}

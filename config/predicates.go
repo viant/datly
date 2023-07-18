@@ -14,7 +14,7 @@ type (
 		Parent  string
 		Name    string
 		Context int
-		Args    []*NamedArg
+		Args    []*predicate.NamedArgument
 	}
 
 	NamedArg struct {
@@ -32,6 +32,15 @@ func (r PredicateRegistry) Lookup(name string) (*predicate.Template, error) {
 	return result, nil
 }
 
+func (r PredicateRegistry) Clone() PredicateRegistry {
+	result := PredicateRegistry{}
+	for key, template := range r {
+		result[key] = template
+	}
+
+	return result
+}
+
 func NewEqualPredicate() *predicate.Template {
 	return equalityCheckPredicate(PredicateEqual, true)
 }
@@ -44,7 +53,7 @@ func equalityCheckPredicate(name string, equal bool) *predicate.Template {
 
 	return &predicate.Template{
 		Name:   name,
-		Source: " $Alias.$ColumnName " + negation + "= $criteria.AppendBinding($FilterValue)",
+		Source: " ${Alias}.${ColumnName} " + negation + "= $criteria.AppendBinding($FilterValue)",
 		Args: []*predicate.NamedArgument{
 			{
 				Name:     "Alias",
