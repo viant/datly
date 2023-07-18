@@ -338,7 +338,7 @@ func (b *paramStateBuilder) populateOrderBy(ctx context.Context, selector *view.
 func (b *paramStateBuilder) orderByValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, error) {
 	param := details.View.Selector.OrderByParam
 	value, err := b.extractParamValue(ctx, param, details, selector)
-	if err != nil {
+	if err != nil || value == nil {
 		return "", err
 	}
 
@@ -373,6 +373,10 @@ func (b *paramStateBuilder) offsetValue(ctx context.Context, details *ViewDetail
 }
 
 func asInt(value interface{}, param *view.Parameter) (int, error) {
+	if value == nil {
+		return 0, nil
+	}
+
 	if actual, ok := value.(int); ok {
 		return actual, nil
 	}
@@ -404,7 +408,7 @@ func (b *paramStateBuilder) populateFields(ctx context.Context, selector *view.S
 func (b *paramStateBuilder) fieldRawValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, int32, error) {
 	param := details.View.Selector.FieldsParam
 	paramValue, err := b.extractParamValue(ctx, param, details, selector)
-	if err != nil {
+	if err != nil || paramValue == nil {
 		return "", ValuesSeparator, err
 	}
 
@@ -456,9 +460,13 @@ func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, pa
 	return transformIfNeeded(ctx, param, value, options...)
 }
 
-func (p *RequestParams) convert(ctx context.Context, raw string, param *view.Parameter, options ...interface{}) (interface{}, error) {
+func (p *RequestParams) convert(isSpecified bool, raw string, param *view.Parameter, options ...interface{}) (interface{}, error) {
 	if raw == "" && param.IsRequired() {
 		return nil, requiredParamErr(param)
+	}
+
+	if !isSpecified {
+		return nil, nil
 	}
 
 	dateFormat := p.route.DateFormat

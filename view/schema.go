@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-//Schema represents View as Go type.
+// Schema represents View as Go type.
 type Schema struct {
 	Package     string `json:",omitempty" yaml:"package,omitempty"`
 	Name        string `json:",omitempty" yaml:"name,omitempty"`
@@ -45,7 +45,7 @@ func NewSchema(compType reflect.Type) *Schema {
 	return result
 }
 
-//Type returns struct type
+// Type returns struct type
 func (c *Schema) Type() reflect.Type {
 	return c.compType
 }
@@ -69,7 +69,7 @@ func (c *Schema) updateSliceType() {
 	c.sliceType = c.slice.Type
 }
 
-//Init build struct type
+// Init build struct type
 func (c *Schema) Init(resource *Resource, viewCaseFormat format.Case, options ...interface{}) error {
 	var columns []*Column
 	var relations []*Relation
@@ -178,7 +178,7 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 			aTag += fmt.Sprintf(` velty:"names=%v"`, names)
 		}
 
-		aField := c.newField(aTag, columnName, viewCaseFormat, rType)
+		aField := newCasedField(aTag, columnName, viewCaseFormat, rType)
 		structFields = append(structFields, aField)
 	}
 
@@ -221,20 +221,24 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 			}
 
 			tag := `json:",omitempty" yaml:",omitempty" sqlx:"-"`
-			structFields = append(structFields, c.newField(tag, meta.Name, format.CaseUpperCamel, metaType))
+			structFields = append(structFields, newCasedField(tag, meta.Name, format.CaseUpperCamel, metaType))
 		}
 	}
 
 	if selfRef != nil {
-		structFields = append(structFields, c.newField("", selfRef.Holder, format.CaseUpperCamel, reflect.SliceOf(ast.InterfaceType)))
+		structFields = append(structFields, newCasedField("", selfRef.Holder, format.CaseUpperCamel, reflect.SliceOf(ast.InterfaceType)))
 	}
 	structType := reflect.PtrTo(reflect.StructOf(structFields))
 	c.SetType(structType)
 }
 
-func (c *Schema) newField(aTag string, columnName string, sourceCaseFormat format.Case, rType reflect.Type) reflect.StructField {
+func newCasedField(aTag string, columnName string, sourceCaseFormat format.Case, rType reflect.Type) reflect.StructField {
 	structFieldName := StructFieldName(sourceCaseFormat, columnName)
 
+	return newField(aTag, structFieldName, rType)
+}
+
+func newField(aTag string, structFieldName string, rType reflect.Type) reflect.StructField {
 	var fieldPkgPath string
 	if structFieldName[0] < 'A' || structFieldName[0] > 'Z' {
 		fieldPkgPath = pkgPath
@@ -282,17 +286,17 @@ func createDefaultTagIfNeeded(column *Column) string {
 	return json.DefaultTagName + `:"` + strings.Join(attributes, ",") + `"`
 }
 
-//AutoGen indicates whether Schema was generated using ColumnTypes fetched from DB or was passed programmatically.
+// AutoGen indicates whether Schema was generated using ColumnTypes fetched from DB or was passed programmatically.
 func (c *Schema) AutoGen() bool {
 	return c.autoGen
 }
 
-//Slice returns slice as xunsafe.Slice
+// Slice returns slice as xunsafe.Slice
 func (c *Schema) Slice() *xunsafe.Slice {
 	return c.slice
 }
 
-//SliceType returns reflect.SliceOf() Schema type
+// SliceType returns reflect.SliceOf() Schema type
 func (c *Schema) SliceType() reflect.Type {
 	return c.sliceType
 }
@@ -302,7 +306,7 @@ func (c *Schema) inheritType(rType reflect.Type) {
 	c.autoGen = false
 }
 
-//XType returns structType as *xunsafe.Type
+// XType returns structType as *xunsafe.Type
 func (c *Schema) XType() *xunsafe.Type {
 	return c.xType
 }

@@ -5,15 +5,27 @@ pipeline:
   test:
     action: http/runner:send
     requests:
+#      - Method: GET
+#        URL: http://127.0.0.1:8080/v1/api/dev/vendors-predicate?ID=1
+#        Expect:
+#          Code: 200
+#          JSONBody: $LoadJSON('${parentPath}/expect.json')
+#
+#      - Method: GET
+#        URL: http://127.0.0.1:8080/v1/api/dev/vendors-predicate?ID=1&UserCreated=19273
+#        Expect:
+#          Code: 200
+#          JSONBody: $LoadJSON('${parentPath}/expect2.json')
+#
+#
+#      - Method: GET
+#        URL: http://127.0.0.1:8080/v1/api/dev/vendors-predicate?ID=1&UserCreated=19273&Name=Vendor%202
+#        Expect:
+#          Code: 200
+#          JSONBody: $LoadJSON('${parentPath}/expect3.json')
+
       - Method: GET
-        URL: http://127.0.0.1:8080/v1/api/dev/vendors/
+        URL: http://127.0.0.1:8080/v1/api/dev/vendors-predicate?ID=1&UserCreated=19273&Name=Vendor%202&AccountID=100
         Expect:
           Code: 200
-          JSONBody: $LoadJSON('${parentPath}/expect.json')
-
-
-      - Method: GET
-        URL: http://127.0.0.1:8080/v1/api/meta/struct/dev/vendors/
-        Expect:
-          Code: 200
-          Body: $Cat('${parentPath}/expect_2.txt')
+          JSONBody: $LoadJSON('${parentPath}/expect4.json')

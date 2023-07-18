@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/toolbox"
+	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
 	"reflect"
@@ -48,6 +49,9 @@ type Resource struct {
 
 	_visitors config.CodecsRegistry
 	ModTime   time.Time `json:",omitempty"`
+
+	Templates  []*predicate.Template
+	_templates map[string]*predicate.Template
 
 	_columnsCache map[string]Columns
 	fs            afs.Service
@@ -242,8 +246,7 @@ func (r *Resource) GetConnectors() Connectors {
 
 // Init initializes Resource
 func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
-
-	types, visitors, cache, transforms := r.readOptions(options)
+	types, visitors, cache, transforms, predicates := r.readOptions(options)
 	r.indexProviders()
 	r._visitors = visitors
 	r._columnsCache = cache
@@ -265,6 +268,9 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 				return err
 			}
 		}
+	}
+
+	if err := r.initTemplates(predicates); err != nil {
 	}
 
 	var err error
@@ -293,11 +299,12 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	return nil
 }
 
-func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, config.CodecsRegistry, map[string]Columns, marshal.TransformIndex) {
+func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, config.CodecsRegistry, map[string]Columns, marshal.TransformIndex, config.PredicateRegistry) {
 	var types *xreflect.Types
 	var visitors = config.CodecsRegistry{}
 	var cache map[string]Columns
 	var transformsIndex marshal.TransformIndex
+	var predicatesRegistry config.PredicateRegistry
 
 	for _, option := range options {
 		if option == nil {
@@ -312,10 +319,12 @@ func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, config.C
 			types = actual
 		case marshal.TransformIndex:
 			transformsIndex = actual
+		case config.PredicateRegistry:
+			predicatesRegistry = actual
 		}
 	}
 
-	return types, visitors, cache, transformsIndex
+	return types, visitors, cache, transformsIndex, predicatesRegistry
 }
 
 // View returns View with given name
@@ -606,4 +615,20 @@ func (r *Resource) mergeMessageBuses(resource *Resource) {
 			r.MessageBuses = append(r.MessageBuses, &messageBus)
 		}
 	}
+}
+
+func (r *Resource) initTemplates(registry config.PredicateRegistry) error {
+	if registry != nil {
+		r._templates = registry.Clone()
+	}
+
+	if r._templates == nil {
+		r._templates = map[string]*predicate.Template{}
+	}
+
+	for _, template := range r.Templates {
+		r._templates[template.Name] = template
+	}
+
+	return nil
 }

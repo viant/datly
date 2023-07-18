@@ -3,7 +3,6 @@ package view
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
@@ -18,6 +17,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 )
 
 var boolType = reflect.TypeOf(true)
@@ -304,7 +304,6 @@ func Evaluate(evaluator *expand.Evaluator, options ...expand.StateOption) (*expa
 	return evaluator.Evaluate(nil,
 		options...,
 	)
-
 }
 
 func AsViewParam(aView *View, aSelector *Selector, batchData *BatchData, options ...interface{}) *expand.MetaParam {
@@ -335,18 +334,14 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 		return nil
 	}
 
+	cache := &predicateCache{Map: sync.Map{}}
 	var predicates []*expand.PredicateConfig
 	for _, p := range t.Parameters {
 		if p.Predicate == nil {
 			continue
 		}
 
-		lookup, err := config.Config.Predicates.Lookup(p.Predicate.Name)
-		if err != nil {
-			return err
-		}
-
-		evaluator, err := expand.NewEvaluator(lookup.Source, expand.WithParamSchema(p.ActualParamType(), nil), expand.WithStateName("FilterValue"))
+		evaluator, err := cache.get(p.Predicate, p.ActualParamType(), resource._templates)
 		if err != nil {
 			return err
 		}
@@ -356,7 +351,7 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 			StateAccessor: p.ValueAccessor,
 			HasAccessor:   p.PresenceAccessor,
 			Expander: func(c *expand.Context, i interface{}) (*parameter2.Criteria, error) {
-				evaluate, err := evaluator.Evaluate(c, expand.WithParameters(i, nil))
+				evaluate, err := evaluator.Evaluate(c, i)
 				if err != nil {
 					return nil, err
 				}

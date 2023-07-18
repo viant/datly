@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "name": "Vendor 1",
+    "accountId": 100
+  },
+  {
+    "id": 2,
+    "name": "Vendor 2",
+    "accountId": 101
+  },
+  {
+    "id": 3,
+    "name": "Vendor 3",
+    "accountId": 100
+  }
+]
