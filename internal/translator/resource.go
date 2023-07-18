@@ -3,7 +3,6 @@ package translator
 import (
 	"context"
 	"fmt"
-	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/inference"
@@ -19,6 +18,7 @@ import (
 
 type (
 	Resource struct {
+		Generated  bool
 		repository *options.Repository
 		rule       *options.Rule
 		Resource   view.Resource
@@ -32,9 +32,9 @@ type (
 )
 
 // ExtractDeclared extract both parameter declaration and transform expression
-func (r *Resource) ExtractDeclared(dSQL *string) error {
+func (r *Resource) ExtractDeclared(dSQL *string, imports parser.TypeImports) error {
 	r.appendPathVariableParams()
-	declarations, err := parser.NewDeclarations(*dSQL)
+	var declarations, err = parser.NewDeclarations(*dSQL, imports)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (r *Resource) extractRuleSetting(dSQL *string) error {
 		}
 		*dSQL = (*dSQL)[index+2:]
 	}
-	r.Rule.Route.URI = url.Join(r.repository.APIPrefix, r.rule.Prefix, r.Rule.Route.URI)
+	r.Rule.applyShortHands()
 	return nil
 }
 

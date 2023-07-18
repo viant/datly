@@ -114,6 +114,7 @@ func (s *Service) generateTemplateFiles(gen *options.Generate, template *codegen
 		if err != nil {
 			return err
 		}
+		gen.Rule.Output = append(gen.Rule.Output, gen.DSQLLocation())
 		s.Files.Append(asset.NewFile(gen.DSQLLocation(), dSQLContent))
 	default:
 		return fmt.Errorf("unsupported lang type %v", gen.Lang)

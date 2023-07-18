@@ -576,6 +576,9 @@ func (o *Options) BuildOption() *options.Options {
 		repo.RepositoryURL = o.WriteLocation
 		repo.ConstURL = o.ConstURL
 		repo.Connector.Connectors = o.Connects
+		if o.ApiURIPrefix == "" {
+			o.ApiURIPrefix = "/v1/api"
+		}
 		repo.APIPrefix = o.ApiURIPrefix
 
 		if o.PartialConfigURL != "" {
@@ -589,6 +592,9 @@ func (o *Options) BuildOption() *options.Options {
 
 	if rule := result.Rule(); rule != nil {
 		rule.Module = o.RelativePath
+		if rule.Module == "" {
+			rule.Module = "pkg"
+		}
 		rule.Source = []string{o.Location}
 		rule.Prefix = o.RoutePrefix
 		if o.GoModulePkg != "" {

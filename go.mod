@@ -35,7 +35,7 @@ require (
 	github.com/viant/scy v0.6.0
 	github.com/viant/sqlx v0.9.0
 	github.com/viant/structql v0.4.1
-	github.com/viant/toolbox v0.34.6-0.20230714200936-4a0d4dc6f193
+	github.com/viant/toolbox v0.34.6-0.20230717203311-70dd2fbed04e
 	github.com/viant/velty v0.2.0
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
 	github.com/viant/xreflect v0.3.2-0.20230703205132-5d95452045da
@@ -128,3 +128,7 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
+replace github.com/viant/xreflect => /Users/awitas/go/src/github.com/viant/xreflect
+
+replace github.com/viant/velty => /Users/awitas/go/src/github.com/viant/velty

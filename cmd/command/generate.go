@@ -22,15 +22,16 @@ func (s *Service) Generate(ctx context.Context, options *options.Options) error 
 }
 
 func (s *Service) generate(ctx context.Context, options *options.Options) error {
+	rule := options.Rule()
+	rule.UpperNamespace = true
+	rule.Generated = true
 	if err := s.translate(ctx, options); err != nil {
 		return err
 	}
-	rule := options.Rule()
+	s.translator.Repository.Files.Reset()
 	gen := options.Generate
-	if err := s.ensureDest(ctx, gen.Dest); err != nil {
-		return err
-	}
-	info, err := plugin.NewInfo(ctx, gen.GoModuleLocation())
+	goModule := gen.GoModuleLocation()
+	info, err := plugin.NewInfo(ctx, goModule)
 	if err != nil {
 		return err
 	}
@@ -38,7 +39,8 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		rule.Index = i
 		root := resource.Rule.RootViewlet()
 		spec := root.Spec
-
+		//		bodyParams := resource.State.FilterByKind(view.KindRequestBody)
+		root.Spec.Type.Cardinality = resource.Rule.Cardinality
 		if resource.Rule.ShallGenerateHandler() {
 
 			/*
@@ -87,8 +89,8 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		}
 
 		template := codegen.NewTemplate(resource.Rule, root.Spec)
+		root.Spec.Type.Package = rule.Package()
 		template.BuildTypeDef(root.Spec, resource.Rule.GetField())
-
 		template.Imports.AddType(resource.Rule.HandlerType)
 		template.Imports.AddType(resource.Rule.StateType)
 
@@ -99,24 +101,29 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 			return err
 		}
 	}
+
 	if err := s.Files.Upload(ctx, s.fs); err != nil {
 		return err
 	}
-
 	info, err = plugin.NewInfo(ctx, gen.GoModuleLocation())
 	if err != nil {
 		return err
 	}
-	return s.updateModule(ctx, gen, info)
+	if err = s.updateModule(ctx, gen, info); err != nil {
+		return err
+	}
+	s.translator.Repository.Resource = nil
+	options.UpdateTranslate()
+	return s.Translate(ctx, options)
 }
 
 func (s *Service) generateCode(ctx context.Context, gen *options.Generate, template *codegen.Template, info *plugin.Info) error {
+	pkg := info.Package(gen.Package())
 
 	//TODO adjust if handler option is used
 	if err := s.generateTemplate(gen, template, info); err != nil {
 		return err
 	}
-	pkg := info.Package(gen.Package())
 	code := template.GenerateState(pkg, info)
 	s.Files.Append(asset.NewFile(gen.StateLocation(), code))
 	return s.generateEntity(ctx, pkg, gen, info, template)
@@ -144,7 +151,7 @@ func (s *Service) updateModule(ctx context.Context, gen *options.Generate, info 
 
 func (s *Service) generateTemplate(gen *options.Generate, template *codegen.Template, info *plugin.Info) error {
 	//needed for both go and velty
-	opts := s.dsqlGenerationOptions(gen)
+	opts := s.dsqlGenerationOptions(gen, info)
 	return s.generateTemplateFiles(gen, template, info, opts...)
 }
 
@@ -165,12 +172,13 @@ func (s *Service) uploadContent(ctx context.Context, URL string, content string)
 	return s.fs.Upload(ctx, URL, file.DefaultFileOsMode, strings.NewReader(content))
 }
 
-func (s *Service) dsqlGenerationOptions(gen *options.Generate) []codegen.Option {
+func (s *Service) dsqlGenerationOptions(gen *options.Generate, info *plugin.Info) []codegen.Option {
 	var options []codegen.Option
 	if gen.Lang == ast.LangGO {
 		options = append(options, codegen.WithoutBusinessLogic())
 		options = append(options, codegen.WithLang(gen.Lang))
 	}
+
 	return options
 }
 

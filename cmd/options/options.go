@@ -1,6 +1,9 @@
 package options
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 type Options struct {
 	InitExt   *Extension   `command:"initExt" description:"initialises datly extension project" `
@@ -14,6 +17,23 @@ type Options struct {
 	InitCmd   *Init        `command:"init" description:"init datly rule repository"`
 	Touch     *Touch       `command:"touch" description:"forces route rule sync"`
 	Legacy    bool         `short:"l" long:"legacy" description:"show legacy datly option"`
+}
+
+func (o *Options) UpdateTranslate() {
+	o.Translate = &Translate{
+		Rule:       o.Generate.Rule,
+		Repository: o.Generate.Repository,
+	}
+	var source []string
+	for i, _ := range o.Generate.Source {
+		o.Generate.Index = i
+		source = append(source, o.Generate.Rule.Output[i])
+		o.Translate.Packages = append(o.Translate.Packages, o.Generate.Package())
+	}
+	o.Translate.Source = source
+	o.Translate.Generated = false
+	o.Generate = nil
+	fmt.Printf("%+v\n", o.Translate)
 }
 
 func (o *Options) Connectors() []string {

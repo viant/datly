@@ -48,7 +48,7 @@ SELECT 1 FROM t WHERE ID IN($TeamIDs)
 	}
 
 	for _, testCase := range testCases {
-		declarations, err := NewDeclarations(testCase.DSQL)
+		declarations, err := NewDeclarations(testCase.DSQL, nil)
 		if testCase.hasError {
 			assert.NotNil(t, err, testCase.description)
 			continue

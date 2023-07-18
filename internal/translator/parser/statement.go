@@ -36,8 +36,28 @@ func (s Statements) DMLTables(rawSQL string) []string {
 	var tables = make(map[string]bool)
 	var result []string
 	for _, statement := range s {
+
 		SQL := rawSQL[statement.Start:statement.End]
+		usesService := strings.Contains(SQL, "$sql.")
 		lowerCasedDML := strings.ToLower(SQL)
+
+		quoted := ""
+
+		if index := strings.Index(SQL, `"`); index != -1 {
+			quoted = SQL[index+1:]
+			if index = strings.Index(quoted, `"`); index != -1 {
+				quoted = quoted[:index]
+			}
+		}
+		if usesService && quoted != "" {
+			statement.Table = quoted
+			if _, ok := tables[statement.Table]; ok {
+				continue
+			}
+			result = append(result, statement.Table)
+			tables[statement.Table] = true
+			continue
+		}
 		if strings.Contains(lowerCasedDML, "insert") {
 			if stmt, _ := sqlparser.ParseInsert(SQL); stmt != nil {
 				if table := sqlparser.Stringify(stmt.Target.X); table != "" {

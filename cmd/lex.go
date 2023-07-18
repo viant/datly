@@ -36,7 +36,6 @@ var condBlockMatcher = parsly.NewToken(condBlockToken, "#if .... #end", matcher.
 var exprGroupMatcher = parsly.NewToken(exprGroupToken, "( .... )", matcher.NewBlock('(', ')', '\\'))
 var importKeywordMatcher = parsly.NewToken(importKeywordToken, "import", matcher.NewFragmentsFold([]byte("import")))
 var aliasKeywordMatcher = parsly.NewToken(aliasKeywordToken, "as", matcher.NewFragmentsFold([]byte("as")))
-var packageMatcher = parsly.NewToken(packageKeywordToken, "package", matcher.NewFragmentsFold([]byte("package")))
 var quotedMatcher = parsly.NewToken(quotedToken, "quoted block", matcher.NewQuote('"', '\\'))
 var setTerminatedMatcher = parsly.NewToken(setTerminatedToken, "#set", matchers.NewStringTerminator("#set"))
 var setMatcher = parsly.NewToken(setToken, "#set", matcher.NewFragments([]byte("#set")))

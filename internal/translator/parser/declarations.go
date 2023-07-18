@@ -2,12 +2,14 @@ package parser
 
 import (
 	"fmt"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
+	"github.com/viant/xreflect"
 
 	"strconv"
 	"strings"
@@ -16,14 +18,24 @@ import (
 type (
 	//Declarations defines state (parameters) declaration
 	Declarations struct {
-		SQL        string
-		State      inference.State
-		Transforms []*marshal.Transform
+		SQL          string
+		State        inference.State
+		Transforms   []*marshal.Transform
+		imports      TypeImports
+		typeRegistry *xreflect.Types
 	}
 )
 
+func (d *Declarations) ensureRegistry() *xreflect.Types {
+	if d.typeRegistry != nil {
+		return d.typeRegistry
+	}
+	d.typeRegistry = xreflect.NewTypes(xreflect.WithRegistry(config.Config.Types))
+	return d.typeRegistry
+}
+
 func (d *Declarations) Init() error {
-	SQLBytes := []byte(d.SQL)
+	SQLBytes := []byte(" " + d.SQL)
 	cursor := parsly.NewCursor("", SQLBytes, 0)
 	for {
 		matched := cursor.MatchOne(setTerminatedMatcher)
@@ -135,16 +147,49 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 	}
 	types := strings.Split(typeContent, ",")
 	dataType := types[0]
+
 	if strings.HasPrefix(dataType, "[]") {
 		declaration.Cardinality = view.Many
 		dataType = dataType[2:]
 	} else {
 		declaration.Cardinality = view.One
 	}
-	declaration.DataType = dataType
+
+	if dataType != "" {
+		if schema, _ := d.getSchema(dataType); schema != nil {
+			schema.Cardinality = declaration.Cardinality
+			declaration.Schema = schema
+		}
+	}
+	declaration.EnsureSchema()
+	declaration.Schema.DataType = dataType
+
 	if len(types) > 1 {
 		declaration.OutputType = types[1]
+
 	}
+}
+
+func (d *Declarations) getSchema(dataType string) (*view.Schema, error) {
+	if importsSpec := d.imports.Lookup(dataType); importsSpec != nil {
+		rType, err := d.ensureRegistry().Lookup(dataType, xreflect.WithPackagePath(importsSpec.URL))
+		if err != nil {
+			return nil, err
+		}
+		schema := view.NewSchema(rType)
+		if strings.HasPrefix(dataType, "*") {
+			dataType = dataType[1:]
+		}
+		schema.DataType = dataType
+		typeDef := &view.TypeDefinition{Name: dataType, DataType: rType.String()}
+		if importsSpec.ForceGoTypeUse {
+			typeDef.DataType = ""
+			typeDef.Schema = &view.Schema{DataType: dataType}
+		}
+		importsSpec.AppendTypeDefinition(typeDef)
+		return schema, nil
+	}
+	return &view.Schema{DataType: dataType}, nil
 }
 
 func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.Cursor) error {
@@ -183,10 +228,11 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 	return nil
 }
 
-func NewDeclarations(SQL string) (*Declarations, error) {
+func NewDeclarations(SQL string, imports TypeImports) (*Declarations, error) {
 	result := &Declarations{
-		SQL:   SQL,
-		State: nil,
+		SQL:     SQL,
+		State:   nil,
+		imports: imports,
 	}
 	return result, result.Init()
 }

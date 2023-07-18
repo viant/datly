@@ -19,9 +19,8 @@ type (
 		OutputType    string           `json:",omitempty" yaml:",omitempty"`
 		Cardinality   view.Cardinality `json:",omitempty" yaml:",omitempty"`
 		StatusCode    *int             `json:",omitempty" yaml:",omitempty"`
-		Required      *bool
-		TransformKind string `json:",omitempty" yaml:",omitempty"`
-		Transformer   string `json:",omitempty" yaml:",omitempty"`
+		TransformKind string           `json:",omitempty" yaml:",omitempty"`
+		Transformer   string           `json:",omitempty" yaml:",omitempty"`
 	}
 )
 
@@ -110,7 +109,10 @@ func (d *Declaration) ExpandShorthands() {
 		d.In.Name = d.Name
 
 	}
-
+	if d.In != nil && d.In.Kind == view.KindRequestBody {
+		required := true
+		d.Parameter.Required = &required
+	}
 }
 
 func (d *Declaration) AuthParameter() *inference.Parameter {

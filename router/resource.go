@@ -25,25 +25,25 @@ import (
 
 type (
 	Resource struct {
-		URL          string `json:",omitempty" yaml:",omitempty"`
-		MetaCacheURI string
-		SourceURL    string
-		With         []string //list of resource to inherit from
+		URL          string   `json:",omitempty" yaml:",omitempty"`
+		MetaCacheURI string   `json:",omitempty"`
+		SourceURL    string   `json:",omitempty"`
+		With         []string //list of resource to inherit from  `json:",omitempty"`
 		Routes       Routes
-		Compression  *Compression
-		Redirect     *Redirect
-		Cache        *cache.Cache
-		Logger       *Logger //connect, dataview, time, SQL with params if exceeded time
-		Cors         *Cors
+		Compression  *Compression `json:",omitempty"`
+		Redirect     *Redirect    `json:",omitempty"`
+		Cache        *cache.Cache `json:",omitempty"`
+		Logger       *Logger      `json:",omitempty"` //connect, dataview, time, SQL with params if exceeded time  `json:",omitempty"`
+		Cors         *Cors        `json:",omitempty"`
 
-		ColumnsCache     *discover.Cache
-		RevealMetric     *bool
-		ParamStatusError *int
+		ColumnsCache     *discover.Cache `json:",omitempty"`
+		RevealMetric     *bool           `json:",omitempty"`
+		ParamStatusError *int            `json:",omitempty"`
 
-		Info             openapi3.Info
-		ColumnsDiscovery bool
-		EnableDebug      *bool
-		Interceptor      *RouteInterceptor
+		Info             openapi3.Info     `json:",omitempty"`
+		ColumnsDiscovery bool              `json:",omitempty"`
+		EnableDebug      *bool             `json:",omitempty"`
+		Interceptor      *RouteInterceptor `json:",omitempty"`
 
 		_visitors    config.CodecsRegistry
 		_initialised bool

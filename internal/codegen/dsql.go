@@ -21,11 +21,12 @@ func (t *Template) GenerateDSQL(opts ...Option) (string, error) {
 }
 
 func (t *Template) generateDSQL(options ast.Options) (string, error) {
-	config, err := json.Marshal(t.Config)
+	config := t.Config.DSQLSetting()
+	configContent, err := json.Marshal(config)
 	if err != nil {
-		return "", err
+		return "", nil
 	}
-	code := strings.Replace(dsqlTemplate, "$RouteOption", string(config), 1)
+	code := strings.Replace(dsqlTemplate, "$RouteOption", string(configContent), 1)
 	var imports, declaration, businessLogic string
 	if options.Lang == ast.LangVelty {
 		imports = t.Imports.TypeImports()

@@ -133,7 +133,6 @@ func (v *View) buildView(rule *Rule, mode view.Mode) error {
 			return err
 		}
 	}
-
 	return nil
 }
 

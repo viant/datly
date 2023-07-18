@@ -17,40 +17,6 @@ func GetHolderName(identifier string) (string, string) {
 	return prefix, paramName
 }
 
-func SplitSelector(selector *expr.Select) (string, string) {
-	if selector.X != nil {
-		_, ok := selector.X.(*expr.Call)
-		if ok {
-			return "", selector.ID
-		}
-	}
-	identifier := view.FirstNotEmpty(selector.FullName, selector.ID)
-	identifier = strings.Trim(identifier, "${}")
-	if strings.HasPrefix(identifier, "Unsafe.") {
-		identifier = identifier[7:]
-	}
-	var holder, name string
-	name = identifier
-	//
-	if index := strings.LastIndex(identifier, "."); index != -1 {
-		nameCandidate := identifier[index+1:]
-		if !strings.Contains(nameCandidate, "(") { //method call
-			holder = identifier[:index]
-			name = nameCandidate
-		} else {
-			holder = ""
-			name = identifier[:index]
-		}
-	}
-
-	for _, candidate := range auxiliaryPrefixes {
-		if strings.HasPrefix(holder, candidate) {
-			holder = holder[len(candidate):]
-		}
-	}
-	return holder, name
-}
-
 func splitSelector(selector *expr.Select) (string, string) {
 	if selector.X != nil {
 		_, ok := selector.X.(*expr.Call)

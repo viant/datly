@@ -22,21 +22,6 @@ func (g *Generate) HttpMethod() string {
 	return strings.ToUpper(g.Operation)
 }
 
-func (g *Generate) GoModuleLocation() string {
-	if g.Module != "" {
-		return g.Module
-	}
-	return g.Dest
-}
-
-func (g *Generate) GoCodeLocation() string {
-	module := g.GoModuleLocation()
-	if g.Package() == "" {
-		return module
-	}
-	return url.Join(module, g.Package())
-}
-
 func (g *Generate) EntityLocation(entityName string) string {
 	codeLocation := g.GoCodeLocation()
 

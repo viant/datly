@@ -2,6 +2,7 @@ package translator
 
 import (
 	"github.com/viant/datly/internal/setter"
+	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/view"
 	"strings"
@@ -10,10 +11,10 @@ import (
 type (
 	Rule struct {
 		Viewlets
+
 		orderNamespaces []string
 		Root            string
 		router.Route
-
 		Async        *AsyncConfig              `json:",omitempty"`
 		ConstFileURL string                    `json:",omitempty"`
 		Cache        *view.Cache               `json:",omitempty"`
@@ -30,6 +31,7 @@ type (
 		TabularJSON  *router.TabularJSONConfig `json:",omitempty"`
 		HandlerType  string                    `json:",omitempty"`
 		StateType    string                    `json:",omitempty"`
+		TypeImports  parser.TypeImports        `json:",omitempty"`
 		indexNamespaces
 		With []string
 	}
@@ -75,28 +77,46 @@ type (
 	}
 )
 
-func (o *Rule) ShallGenerateHandler() bool {
-	return o.HandlerType != ""
+func (r *Rule) DSQLSetting() interface{} {
+	return struct {
+		URI          string
+		Method       string
+		Cardinality  string              `json:",omitempty"`
+		ResponseBody *ResponseBodyConfig `json:",omitempty"`
+		HandlerType  string              `json:",omitempty"`
+		StateType    string              `json:",omitempty"`
+	}{
+		URI:          r.URI,
+		Method:       r.Method,
+		Cardinality:  string(r.Cardinality),
+		ResponseBody: r.ResponseBody,
+		HandlerType:  r.HandlerType,
+		StateType:    r.StateType,
+	}
 }
 
-func (o *Rule) IsMany() bool {
-	return o.Cardinality == "" || o.Cardinality == view.Many
+func (r *Rule) ShallGenerateHandler() bool {
+	return r.HandlerType != ""
 }
 
-func (o *Rule) IsBasic() bool {
-	return o.Style != router.ComprehensiveStyle && o.Field == ""
+func (r *Rule) IsMany() bool {
+	return r.Cardinality == "" || r.Cardinality == view.Many
 }
 
-func (o *Rule) GetField() string {
-	if o.IsBasic() {
+func (r *Rule) IsBasic() bool {
+	return r.Style != router.ComprehensiveStyle && r.Field == ""
+}
+
+func (r *Rule) GetField() string {
+	if r.IsBasic() {
 		return ""
 	}
 
-	if o.Field == "" {
+	if r.Field == "" {
 		return "Data"
 	}
 
-	return o.Field
+	return r.Field
 }
 
 func (r *Resource) initRule() {
@@ -197,6 +217,13 @@ func (r *Rule) applyRootViewOutputShorthands() {
 	}
 	if r.Route.Cardinality == "" {
 		r.Route.Cardinality = root.Cardinality
+	}
+}
+
+func (r *Rule) applyShortHands() {
+	if r.ResponseBody != nil {
+		r.Route.ResponseBody = &router.BodySelector{}
+		r.Route.ResponseBody.StateValue = r.ResponseBody.From
 	}
 }
 

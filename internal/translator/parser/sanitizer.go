@@ -26,7 +26,7 @@ func (t *Template) Sanitize() string {
 }
 
 func sanitize(iterable *iterables, expression *Expression, dst []byte, accumulatedOffset int, cursorOffset int) ([]byte, int) {
-	if expression.FnName != "" || (expression.IsVariable && (expression.OccurrenceIndex == 0 && expression.Context == SetContext)) {
+	if expression.IsVariable && (expression.OccurrenceIndex == 0 && expression.Context == SetContext) {
 		return dst, accumulatedOffset
 	}
 	paramExpression, hadBrackets := unwrapBrackets(expression.FullName)
