@@ -1,9 +1,14 @@
 package parser
 
 import (
+	"context"
 	"fmt"
+	"github.com/viant/afs"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
+	"os"
+	"path"
 	"strings"
 )
 
@@ -17,6 +22,18 @@ type TypeImport struct {
 
 type TypeImports []*TypeImport
 
+func (t *TypeImport) EnsureLocation(ctx context.Context, fs afs.Service, goModuleLocation string) {
+	if !url.IsRelative(t.URL) {
+		return
+	}
+	currentDir, _ := os.Getwd()
+	if ok, _ := fs.Exists(ctx, path.Join(currentDir, t.URL)); ok {
+		t.URL = url.Join(currentDir, t.URL)
+	} else {
+		t.URL = url.Join(goModuleLocation, t.URL)
+	}
+}
+
 func (t *TypeImport) AppendTypeDefinition(definition *view.TypeDefinition) {
 	t.Definition = append(t.Definition, definition)
 }
@@ -29,7 +46,7 @@ func (t TypeImports) Lookup(typeName string) *TypeImport {
 	}
 	for _, item := range t {
 		for _, candidate := range item.Types {
-			if candidate == typeName {
+			if candidate == typeName || typeName == item.Alias {
 				return item
 			}
 		}

@@ -171,7 +171,7 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 	}
 
 	if dataType != "" {
-		if schema, _ := d.getSchema(dataType); schema != nil {
+		if schema, _ := d.GetSchema(dataType); schema != nil {
 			schema.Cardinality = declaration.Cardinality
 			declaration.Schema = schema
 		}
@@ -185,7 +185,7 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 	}
 }
 
-func (d *Declarations) getSchema(dataType string) (*view.Schema, error) {
+func (d *Declarations) GetSchema(dataType string) (*view.Schema, error) {
 	if importsSpec := d.imports.Lookup(dataType); importsSpec != nil {
 		rType, err := d.ensureRegistry().Lookup(dataType, xreflect.WithPackagePath(importsSpec.URL))
 		if err != nil {

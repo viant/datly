@@ -29,6 +29,7 @@ func (s Statements) IsExec() bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -94,6 +95,7 @@ func NewStatements(SQL string) Statements {
 
 	var stmt *Statement
 
+	hasRead := false
 	for cursor.Pos < cursor.InputSize {
 		_ = cursor.MatchOne(whitespaceMatcher)
 		beforeMatch := cursor.Pos
@@ -104,7 +106,9 @@ func NewStatements(SQL string) Statements {
 			_ = cursor.MatchAfterOptional(whitespaceMatcher, exprGroupMatcher)
 		case execStmtToken, readStmtToken:
 			isExec := matched.Code == execStmtToken
-
+			if !hasRead {
+				hasRead = matched.Code == readStmtToken
+			}
 			if nextWhitespace(cursor) {
 				if stmt != nil {
 					stmt.End = beforeMatch
@@ -147,6 +151,9 @@ func NewStatements(SQL string) Statements {
 			Start: 0,
 			End:   len(SQL),
 		})
+	}
+	if len(statements) == 1 && !hasRead {
+		statements[0].IsExec = true
 	}
 
 	return statements

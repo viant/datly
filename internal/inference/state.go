@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/structql"
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
@@ -296,6 +297,16 @@ func (s State) EnsureReflectTypes(modulePath string) error {
 			continue
 		}
 		if param.In.Kind == view.KindParam {
+			sourceParam := s.Lookup(param.In.Name)
+			if sourceParam == nil {
+				return fmt.Errorf("failed to lookup queryql parameter: %v", param.In.Name)
+			}
+			query, err := structql.NewQuery(param.SQL, sourceParam.Schema.Type(), nil)
+			if err != nil {
+				return fmt.Errorf("failed to queryql param %v from %s(%s) due to: %w", param.Name, param.In.Name, sourceParam.Schema.Type().String(), err)
+			}
+			param.Schema = view.NewSchema(query.StructType())
+			param.Schema.DataType = param.Name
 			continue
 		}
 		dataType := param.Schema.Name

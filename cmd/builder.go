@@ -605,7 +605,7 @@ func (s *Builder) convertHandlerIfNeeded(builder *routeBuilder) (string, error) 
 		//builder.option.Declare["Handler"] = simpledName(builder.option.HandlerType)
 		//builder.option.Declare["State"] = simpledName(builder.option.StateType)
 
-		//builder.option.TypeSrc = &option.TypeSrcConfig{}
+		//builder.option.TypeSrc = &option.TypeImport{}
 		//builder.option.TypeSrc.URL = path.Join(statePath, statePackage)
 		//builder.option.TypeSrc.Types = append(builder.option.TypeSrc.Types, builder.option.HandlerType, builder.option.StateType)
 
@@ -1973,7 +1973,7 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 
 func (s *Builder) tryUpdateConfigType(typeContent string, aConfig *paramJSONHintConfig) {
 
-	//aConfig.Cardinality = view.One
+	//aConfig.Cardinality = view.IsToOne
 	//if strings.HasPrefix(typeContent, "[]") {
 	//	aConfig.Cardinality = view.Many
 	//	typeContent = typeContent[2:]

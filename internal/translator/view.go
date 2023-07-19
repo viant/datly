@@ -120,6 +120,9 @@ func (v *View) buildView(rule *Rule, mode view.Mode) error {
 	}
 	v.build = true
 	namespace := rule.Viewlets.Lookup(v.Namespace)
+	if namespace.Table == nil {
+		return nil
+	}
 	v.Table = namespace.Table.Name
 	if v.Mode == "" {
 		v.Mode = mode

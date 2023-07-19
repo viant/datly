@@ -21,7 +21,7 @@ type (
 		Name            string         `json:",omitempty"`
 		Of              *ReferenceView `json:",omitempty"`
 		Caser           format.Case    `json:",omitempty"`
-		Cardinality     Cardinality    `json:",omitempty"` //One, or Many
+		Cardinality     Cardinality    `json:",omitempty"` //IsToOne, or Many
 		Column          string         `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
 		Field           string         `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
 		ColumnNamespace string         `json:",omitempty"` //Represents column namespace, can be specified if $shared.Criteria / $shared.ColumnInPosition is inside the "from" statement
@@ -135,7 +135,7 @@ func (r *Relation) initHolder(v *View) error {
 // Validate checks if Relation is valid
 func (r *Relation) Validate() error {
 	if r.Cardinality != Many && r.Cardinality != One {
-		return fmt.Errorf("cardinality has to be Many or One")
+		return fmt.Errorf("cardinality has to be Many or IsToOne")
 	}
 
 	if r.Column == "" {

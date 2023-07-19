@@ -8,11 +8,11 @@ import (
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/inference"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlparser"
-	"os"
 	"path"
 	"reflect"
 )
@@ -21,43 +21,72 @@ type Service struct {
 	Repository *Repository //TODO init repo with basic config and dependencies
 }
 
-func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string) error {
+func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string) (err error) {
 	resource := NewResource(rule, s.Repository.Config.repository)
 	resource.State.Append(s.Repository.State...)
-	if err := resource.InitRule(&dSQL); err != nil {
+	if err = resource.InitRule(ctx, s.Repository.fs, &dSQL); err != nil {
 		return err
 	}
-
-	if err := parser.ParseImports(&dSQL, func(spec *parser.TypeImport) error {
-		if url.IsRelative(spec.URL) {
-			currentDir, _ := os.Getwd()
-			if ok, _ := fs.Exists(ctx, path.Join(currentDir, spec.URL)); ok {
-				spec.URL = url.Join(currentDir, spec.URL)
-			} else {
-				spec.URL = url.Join(rule.GoModuleLocation(), spec.URL)
-			}
-		}
-		resource.Rule.TypeImports.Append(spec)
-		return nil
-	}); err != nil {
-		return fmt.Errorf("failed to parse import statement: %w", err)
-	}
-
-	if err := resource.ExtractDeclared(&dSQL, resource.Rule.TypeImports); err != nil {
+	if err = s.loadImports(ctx, rule, &dSQL, resource); err != nil {
 		return err
 	}
-
+	if err = resource.ExtractDeclared(&dSQL, resource.Rule.TypeImports); err != nil {
+		return err
+	}
+	if err = s.includeTypeImports(resource); err != nil {
+		return err
+	}
 	dSQL = rule.NormalizeSQL(dSQL)
+
+	fmt.Printf("data: %s\n", dSQL)
 	if resource.IsExec() {
 		if err := s.translateExecutorDSQL(ctx, resource, dSQL); err != nil {
 			return err
 		}
 	} else {
-		if err := s.translateReaderDSQL(ctx, resource, dSQL); err != nil {
+		if err = s.translateReaderDSQL(ctx, resource, dSQL); err != nil {
 			return err
 		}
 	}
+
 	s.Repository.Resource = append(s.Repository.Resource, resource)
+	return nil
+}
+
+func (s *Service) includeTypeImports(resource *Resource) error {
+	for _, typeImport := range resource.Rule.TypeImports {
+		alias := typeImport.Alias
+		for i, name := range typeImport.Types {
+			if typeDef := resource.TypeDefinition(name); typeDef != nil {
+				return nil
+			}
+			schema, err := resource.Declarations.GetSchema(name)
+			if err != nil {
+				return fmt.Errorf("unable to include import type: %v,  %w", name, err)
+			}
+			dataType := schema.DataType
+			if rType := schema.Type(); rType != nil {
+				dataType = rType.String()
+			}
+			typeDef := &view.TypeDefinition{Name: name, DataType: dataType}
+			if i > 0 {
+				alias = ""
+			}
+			setter.SetStringIfEmpty(&typeDef.Alias, alias)
+			resource.AppendType(typeDef)
+		}
+	}
+	return nil
+}
+
+func (s *Service) loadImports(ctx context.Context, rule *options.Rule, dSQL *string, resource *Resource) error {
+	if err := parser.ParseImports(dSQL, func(spec *parser.TypeImport) error {
+		spec.EnsureLocation(ctx, fs, rule.GoModuleLocation())
+		resource.Rule.TypeImports.Append(spec)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to parse import statement: %w", err)
+	}
 	return nil
 }
 
@@ -69,7 +98,9 @@ func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource,
 	if err := resource.ensureViewParametersSchema(ctx, s.buildQueryViewletType); err != nil {
 		return err
 	}
-
+	if err := resource.ensurePathParametersSchema(ctx); err != nil {
+		return err
+	}
 	if err = resource.Rule.Viewlets.Each(func(viewlet *Viewlet) error {
 		return s.persistView(viewlet, resource, view.ModeExec)
 	}); err != nil {
@@ -112,6 +143,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	if err != nil {
 		return err
 	}
+	fmt.Printf("DD: %v\n", dSQL)
 	resource.Rule.Root = query.From.Alias
 	if err = resource.Rule.Viewlets.Init(ctx, query, resource, s.initReaderViewlet, s.buildQueryViewletType); err != nil {
 		return err
@@ -188,13 +220,13 @@ func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mo
 		viewType := reflect.StructOf(viewlet.Spec.Type.Fields())
 		viewlet.TypeDefinition.DataType = viewType.String()
 		viewlet.TypeDefinition.Fields = nil
-		resource.Resource.Types = append(resource.Resource.Types, viewlet.TypeDefinition)
+		resource.AppendType(viewlet.TypeDefinition)
 	}
 
 	if isRoot {
 		for _, typeImport := range resource.Rule.TypeImports {
 			for _, definition := range typeImport.Definition {
-				resource.Resource.Types = append(resource.Resource.Types, definition)
+				resource.AppendType(definition)
 			}
 		}
 	}

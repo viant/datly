@@ -63,6 +63,10 @@ func (n *Viewlets) Init(ctx context.Context, query *query.Select, resource *Reso
 	if err := resource.ensureViewParametersSchema(ctx, setType); err != nil {
 		return err
 	}
+	if err := resource.ensurePathParametersSchema(ctx); err != nil {
+		return err
+	}
+
 	if err := n.Each(func(viewlet *Viewlet) error {
 		if err := setType(ctx, viewlet); err != nil {
 			return fmt.Errorf("failed to init viewlet: %v, %w", viewlet.Name, err)
@@ -96,7 +100,6 @@ func (n Viewlets) addRelations(query *query.Select) {
 		if inference.IsToOne(join) || relation.OutputConfig.IsToOne() {
 			cardinality = view.One
 		}
-
 		relName := join.Alias
 		parentViewlet.Spec.AddRelation(relName, join, relation.Spec, cardinality)
 	}

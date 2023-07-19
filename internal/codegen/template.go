@@ -70,7 +70,11 @@ func (t *Template) BuildState(spec *inference.Spec, bodyHolder string, opts ...O
 
 	bodyParam.Schema.SetType(t.buildState(spec, &t.State, spec.Type.Cardinality))
 	var structFields []reflect.StructField
+
 	for _, parameter := range t.State {
+		if parameter.In.Kind == view.KindDataView && !parameter.IsAuxiliary {
+			parameter.Schema.Cardinality = view.Many
+		}
 		var structTag reflect.StructTag
 		if parameter.Schema.DataType != "" {
 			structTag = reflect.StructTag(fmt.Sprintf(`%v:"%v"`, xreflect.TagTypeName, parameter.Schema.DataType))

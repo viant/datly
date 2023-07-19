@@ -3,6 +3,7 @@ package translator
 import (
 	"context"
 	"fmt"
+	"github.com/viant/afs"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/inference"
@@ -22,30 +23,49 @@ type (
 		repository *options.Repository
 		rule       *options.Rule
 		Resource   view.Resource
-		State      inference.State
-		Rule       *Rule
 
+		State        inference.State
+		Rule         *Rule
+		Declarations *parser.Declarations
 		parser.Statements
 		RawSQL string
 		indexNamespaces
 	}
 )
 
+func (r *Resource) TypeDefinition(name string) *view.TypeDefinition {
+	if len(r.Resource.Types) == 0 {
+		return nil
+	}
+	for _, candidate := range r.Resource.Types {
+		if candidate.Name == name {
+			return candidate
+		}
+	}
+	return nil
+}
+
+func (r *Resource) AppendType(typeDef *view.TypeDefinition) {
+	if r.TypeDefinition(typeDef.Name) != nil {
+		return
+	}
+	r.Resource.Types = append(r.Resource.Types, typeDef)
+}
+
 // ExtractDeclared extract both parameter declaration and transform expression
-func (r *Resource) ExtractDeclared(dSQL *string, imports parser.TypeImports) error {
+func (r *Resource) ExtractDeclared(dSQL *string, imports parser.TypeImports) (err error) {
 	r.appendPathVariableParams()
-	var declarations, err = parser.NewDeclarations(*dSQL, imports)
+	r.Declarations, err = parser.NewDeclarations(*dSQL, imports)
 	if err != nil {
 		return err
 	}
-	r.State.Append(declarations.State...)
-	r.Rule.Route.Transforms = declarations.Transforms
-	if err := parser.ExtractParameterHints(declarations.SQL, &r.State); err != nil {
+	r.State.Append(r.Declarations.State...)
+	r.Rule.Route.Transforms = r.Declarations.Transforms
+	if err := parser.ExtractParameterHints(r.Declarations.SQL, &r.State); err != nil {
 		return err
 	}
-	declarations.SQL = parser.RemoveParameterHints(declarations.SQL, r.State)
-
-	*dSQL = declarations.SQL
+	r.Declarations.SQL = parser.RemoveParameterHints(r.Declarations.SQL, r.State)
+	*dSQL = r.Declarations.SQL
 	return nil
 }
 
@@ -77,13 +97,13 @@ func (r *Resource) ImpliedKind() view.Kind {
 	return view.KindRequestBody
 }
 
-func (r *Resource) InitRule(dSQL *string) error {
+func (r *Resource) InitRule(ctx context.Context, fs afs.Service, dSQL *string) error {
 	if err := r.extractRuleSetting(dSQL); err != nil {
 		return err
 	}
 	r.Statements = parser.NewStatements(*dSQL)
 	r.RawSQL = *dSQL
-	r.initRule()
+	r.initRule(ctx, fs)
 	return nil
 }
 
@@ -101,12 +121,15 @@ func (r *Resource) extractRuleSetting(dSQL *string) error {
 func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	types := viewlet.Resource.Resource.TypeRegistry()
 
+	resourceState := viewlet.Resource.State
+	_ = resourceState.EnsureReflectTypes(r.rule.GoModuleLocation())
 	sqlState := viewlet.Resource.State.StateForSQL(viewlet.SQL, r.Rule.Root == viewlet.Name)
 	metaViewSQL := sqlState.MetaViewSQL()
 	compacted, err := sqlState.Compact(r.rule.Module)
 	if err == nil && len(compacted) > 0 {
 		sqlState = compacted
 	}
+
 	sqlState = sqlState.RemoveReserved()
 	reflectType, err := sqlState.ReflectType("autogen", types.Lookup)
 	if err != nil {
@@ -180,6 +203,22 @@ func (r *Resource) ensureViewParameterSchema(parameter *inference.Parameter) err
 	}
 	aView := r.Rule.Viewlets.Lookup(parameter.Name)
 	aView.Spec.Type.Fields()
+	return nil
+}
+
+func (r *Resource) ensurePathParametersSchema(ctx context.Context) error {
+	parameters := r.State.FilterByKind(view.KindParam)
+	if len(parameters) == 0 {
+		return nil
+	}
+	for _, parameter := range parameters {
+		schema := parameter.Schema
+		rType := schema.Type()
+		if rType == nil {
+			continue
+		}
+		r.AppendType(&view.TypeDefinition{Name: schema.DataType, DataType: rType.String()})
+	}
 	return nil
 }
 

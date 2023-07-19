@@ -281,16 +281,33 @@ func (p *Parameter) HasDataType() bool {
 
 func (p *Parameter) IsUsedBy(text string) bool {
 	parameter := p.Name
-	if strings.Contains(text, "$"+parameter) {
-		return true
+	text = strings.ReplaceAll(text, "Unsafe.", "")
+	if index := strings.Index(text, "${"+parameter); index != -1 {
+		match := text[index+2:]
+		if index := strings.Index(match, "}"); index != -1 {
+			match = match[:index]
+		}
+		if p.Name == match {
+			return true
+		}
 	}
-	if strings.Contains(text, "${"+parameter) {
-		return true
-	}
-	if strings.Contains(text, "${"+parameter) {
-		return true
-	}
-	if strings.Contains(text, "Unsafe."+parameter) {
+	for i := 0; i < len(text); i++ {
+		index := strings.Index(text, "$"+parameter)
+		if index == -1 {
+			break
+		}
+		text = text[index+1:]
+		if len(parameter) == len(text) {
+			return true
+		}
+		terminator := text[len(parameter)]
+		if terminator >= 65 && terminator <= 132 {
+			continue
+		}
+		switch terminator {
+		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+			continue
+		}
 		return true
 	}
 	return false
