@@ -21,14 +21,17 @@ import (
 type State []*Parameter
 
 // Append append parameter
-func (s *State) Append(params ...*Parameter) {
+func (s *State) Append(params ...*Parameter) bool {
+	appended := false
 	for i := range params {
 		if s.Has(params[i].Name) {
 			continue
 		}
 		params[i].adjustMetaViewIfNeeded()
 		*s = append(*s, params[i])
+		appended = true
 	}
+	return appended
 }
 
 func (s State) RemoveReserved() State {

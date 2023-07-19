@@ -60,28 +60,14 @@ func (t *Template) buildState(spec *inference.Spec, state *inference.State, card
 	if pathParameter != nil {
 		state.Append(pathParameter)
 	}
-
 	if spec.Type.Cardinality == view.Many {
 		card = view.Many
 	}
-
-	var relationFields []reflect.StructField
-	for _, rel := range spec.Relations {
-		var tag string
-		for _, field := range spec.Type.RelationFields {
-			if field.Name == rel.Name {
-				tag = field.Tag
-			}
-		}
-
-		relationFields = append(relationFields, reflect.StructField{
-			Name: rel.Name,
-			Type: t.buildState(rel.Spec, state, rel.Cardinality),
-			Tag:  reflect.StructTag(tag),
-		})
+	spec.EnsureRelationType()
+	for _, relation := range spec.Relations {
+		t.buildState(relation.Spec, state, card)
 	}
-
-	parameter := t.buildDataViewParameter(spec, card, relationFields)
+	parameter := t.buildDataViewParameter(spec, card)
 	parameter.PathParam = pathParameter
 	state.Append(parameter)
 	return parameter.Schema.Type()
@@ -104,15 +90,13 @@ func (t *Template) buildPathParameterIfNeeded(spec *inference.Spec) *inference.P
 	return param
 }
 
-func (t *Template) buildDataViewParameter(spec *inference.Spec, cardinality view.Cardinality, fields []reflect.StructField) *inference.Parameter {
+func (t *Template) buildDataViewParameter(spec *inference.Spec, cardinality view.Cardinality) *inference.Parameter {
 	param := &inference.Parameter{ModificationSetting: inference.ModificationSetting{IsAuxiliary: spec.IsAuxiliary}}
 	param.Name = t.ParamName(spec.Type.Name)
 	param.Schema = &view.Schema{DataType: spec.Type.Name, Cardinality: cardinality}
 	param.In = &view.Location{Kind: view.KindDataView, Name: param.Name}
 	param.SQL = spec.ViewSQL(t.ColumnParameterNamer(spec.Selector()))
 	columnFields := spec.Type.Fields(inference.WithStructTag())
-	columnFields = append(columnFields, fields...)
-
 	param.Schema.SetType(reflect.PtrTo(reflect.StructOf(columnFields)))
 	return param
 }

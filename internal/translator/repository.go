@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/inference"
+	"github.com/viant/datly/internal/msg"
 	"github.com/viant/datly/view"
 	"path"
 )
@@ -23,7 +24,7 @@ type Repository struct {
 	NamedConnectors view.Connectors
 	Caches          view.Caches
 	MessageBuses    []*mbus.Resource
-	Messages        Messages
+	Messages        msg.Messages
 	Files           asset.Files
 }
 

@@ -279,7 +279,7 @@ func (s *Service) buildQueryViewletType(ctx context.Context, viewlet *Viewlet) e
 }
 
 func (s *Service) buildViewletType(ctx context.Context, db *sql.DB, viewlet *Viewlet) (err error) {
-	if viewlet.Spec, err = inference.NewSpec(ctx, db, viewlet.Table.Name, viewlet.Expanded.Query, viewlet.Expanded.Args...); err != nil {
+	if viewlet.Spec, err = inference.NewSpec(ctx, db, &s.Repository.Messages, viewlet.Table.Name, viewlet.Expanded.Query, viewlet.Expanded.Args...); err != nil {
 		return fmt.Errorf("failed to create spec for %v, %w", viewlet.Name, err)
 	}
 	viewlet.Spec.Namespace = viewlet.Name

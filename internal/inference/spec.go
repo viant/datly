@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/datly/internal/msg"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
@@ -11,6 +12,7 @@ import (
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/sqlx/option"
+	"reflect"
 	"strings"
 )
 
@@ -29,6 +31,7 @@ type (
 	Spec struct {
 		Namespace   string
 		Parent      *Spec
+		Package     string
 		IsAuxiliary bool
 		Table       string
 		SQL         string
@@ -43,6 +46,36 @@ type (
 	//Selector defines selector
 	Selector []string
 )
+
+func (s *Spec) EnsureRelationType() {
+	if len(s.Relations) == 0 {
+		return
+	}
+	for i, field := range s.Type.RelationFields {
+		if schema := field.EnsureSchema(); schema.Type() != nil {
+			continue
+		}
+		rel := s.Relations[i]
+		if rel.Type != nil {
+			field.Schema = view.NewSchema(reflect.StructOf(rel.Type.Fields()))
+		}
+		field.Schema.Cardinality = rel.Cardinality
+	}
+	if len(s.Type.RelationFields) > 0 {
+		return
+	}
+	//checking case we had relation but not relation fields
+	for _, rel := range s.Relations {
+		field := &Field{}
+		field.EnsureSchema()
+		field.Name = rel.Name
+		if rel.Type != nil {
+			field.Schema = view.NewSchema(reflect.StructOf(rel.Type.Fields()))
+		}
+		field.Schema.Cardinality = rel.Cardinality
+		s.Type.RelationFields = append(s.Type.RelationFields, field)
+	}
+}
 
 // BuildType build a type from infered table/SQL definition
 func (s *Spec) BuildType(pkg, name string, cardinality view.Cardinality, whitelist, blacklist map[string]bool) error {
@@ -65,6 +98,7 @@ func (s *Spec) BuildType(pkg, name string, cardinality view.Cardinality, whiteli
 			aType.PkFields = append(aType.PkFields, field)
 		}
 	}
+
 	s.Type = aType
 	return nil
 }
@@ -147,9 +181,6 @@ func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinalit
 		Name:        name,
 		Join:        join,
 		Cardinality: cardinality}
-	if rel.ParentField == nil {
-		fmt.Printf("123")
-	}
 	s.Relations = append(s.Relations, rel)
 	s.Type.AddRelation(name, spec, rel)
 }
@@ -195,7 +226,7 @@ func (s *Spec) ViewSQL(columnParameter ColumnParameterNamer) string {
 }
 
 // NewSpec discover column derived type for supplied SQL/table
-func NewSpec(ctx context.Context, db *sql.DB, table, SQL string, SQLArgs ...interface{}) (*Spec, error) {
+func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table, SQL string, SQLArgs ...interface{}) (*Spec, error) {
 	isAuxiliary := isAuxiliary(SQL)
 	table = normalizeTable(table)
 	SQL = normalizeSQL(SQL, table)
@@ -222,14 +253,16 @@ func NewSpec(ctx context.Context, db *sql.DB, table, SQL string, SQLArgs ...inte
 	meta := metadata.New()
 	args := option.NewArgs("", "", table)
 	var fkKeys, keys []sink.Key
+
 	if err := meta.Info(ctx, db, info.KindForeignKeys, &fkKeys, args); err != nil {
-		return nil, err
+		messages.AddWarning(result.Table, "detection", "unable to detect foreign key: %v, %w")
 	}
 	if err := meta.Info(ctx, db, info.KindPrimaryKeys, &keys, args); err != nil {
-		return nil, err
+		messages.AddWarning(result.Table, "detection", "unable to detect primary key: %v, %w")
 	}
 	result.pk = sink.Keys(keys).By(sink.KeyName.Column)
 	result.Fk = sink.Keys(fkKeys).By(sink.KeyName.Column)
+
 	return result, nil
 }
 

@@ -88,7 +88,9 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 	declaration.ExpandShorthands()
 	d.State.Append(&declaration.Parameter)
 	if authParameter := declaration.AuthParameter(); authParameter != nil {
-		d.State.Append(authParameter)
+		if !d.State.Append(authParameter) {
+			return fmt.Errorf("parameter %v redeclared", authParameter.Name)
+		}
 	}
 	return nil
 }

@@ -25,6 +25,7 @@ type (
 		Qualifiers  []*view.Qualifier `json:",omitempty"`
 		Hint        string
 		AssumedType bool
+		Connector   string
 	}
 
 	ModificationSetting struct {

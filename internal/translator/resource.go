@@ -82,7 +82,9 @@ func (r *Resource) appendPathVariableParams() {
 func (r *Resource) buildParameterViews() {
 	for _, parameter := range r.State.FilterByKind(view.KindDataView) {
 		viewlet := NewViewlet(parameter.Name, parameter.SQL, nil, r)
-
+		if parameter.Connector != "" {
+			viewlet.Connector = parameter.Connector
+		}
 		viewlet.View.Mode = view.ModeQuery
 		viewlet.View.ParameterDerived = true
 		r.Rule.Viewlets.Append(viewlet)

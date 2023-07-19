@@ -51,3 +51,11 @@ func NewField(rField *reflect.StructField) *Field {
 	}
 	return field
 }
+
+func (f *Field) EnsureSchema() *view.Schema {
+	if f.Schema != nil {
+		return f.Schema
+	}
+	f.Schema = &view.Schema{}
+	return f.Schema
+}

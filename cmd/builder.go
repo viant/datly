@@ -378,7 +378,7 @@ func (c *ViewConfig) metaConfigByName(holder string) (*templateMetaConfig, bool)
 
 func (c *ViewConfig) buildSpec(ctx context.Context, db *sql.DB, pkg string) (err error) {
 	name := c.ActualHolderName()
-	if c.Spec, err = inference.NewSpec(ctx, db, c.TableName(), c.SQL()); err != nil {
+	if c.Spec, err = inference.NewSpec(ctx, db, nil, c.TableName(), c.SQL()); err != nil {
 		return err
 	}
 	if len(c.Spec.Columns) == 0 {

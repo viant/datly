@@ -155,7 +155,6 @@ func (t *Type) ColumnFields() []*view.Field {
 }
 
 func (t *Type) AddRelation(name string, spec *Spec, relation *Relation) *Field {
-
 	var field = &Field{Field: view.Field{
 		Name:        name,
 		Cardinality: relation.Cardinality,
