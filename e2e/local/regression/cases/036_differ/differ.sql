@@ -6,11 +6,21 @@ import (
 
 
 #set($_ = $Foos<[]*Foos>(body/))
-#set($_ = $FoosDBRecords /* {"Required":false}
-  #set($FoosId = $Foos.QueryFirst("SELECT ARRAY_AGG(Id) AS Values FROM  `/`"))
-  SELECT * FROM FOOS/* {"Selector":{}} */
-  WHERE  #if($FoosId.Values.Length() > 0 ) ID IN ( $FoosId.Values ) #else 1 = 0 #end */
-)
+#set($_ = $FooIds<?>(param/Foos) /*
+    ? SELECT ARRAY_AGG(Id) AS Values FROM  `/` LIMIT 1
+*/)
+
+    #set($_ = $Foos<*Foos>(body/))
+	#set($_ = $CurFoosId<?>(param/Foos) /*
+    ? SELECT ARRAY_AGG(Id) AS Values FROM  `/` LIMIT 1
+    */)
+
+
+    #set($_ = $FoosDBRecords /*
+    ? SELECT * FROM FOOS
+    WHERE $criteria.In("ID", $CurFoosId.Values)
+    */)
+
 
 #set($FoosDBRecordsIndex = $FoosDBRecords.IndexBy("Id"))
 #foreach($recFoos in $Unsafe.Foos)
