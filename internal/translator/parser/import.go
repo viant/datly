@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
 	"os"
 	"path"
@@ -17,7 +16,6 @@ type TypeImport struct {
 	URL            string
 	Types          []string
 	Alias          string
-	Definition     []*view.TypeDefinition
 	Methods        []reflect.Method
 	ForceGoTypeUse bool
 }
@@ -34,10 +32,6 @@ func (t *TypeImport) EnsureLocation(ctx context.Context, fs afs.Service, goModul
 	} else {
 		t.URL = url.Join(goModuleLocation, t.URL)
 	}
-}
-
-func (t *TypeImport) AppendTypeDefinition(definition *view.TypeDefinition) {
-	t.Definition = append(t.Definition, definition)
 }
 
 func (t TypeImports) CustomTypeURL() string {
@@ -71,7 +65,7 @@ func (t *TypeImports) Append(spec *TypeImport) {
 }
 
 // ParseImports parse go types import statement
-func ParseImports(expr *string, handler func(spec *TypeImport) error) error {
+func ParseImports(ctx context.Context, expr *string, handler func(ctx context.Context, spec *TypeImport) error) error {
 	cursor := parsly.NewCursor("", []byte(*expr), 0)
 	defer func() {
 		*expr = strings.TrimSpace((*expr)[cursor.Pos:])
@@ -90,7 +84,7 @@ func ParseImports(expr *string, handler func(spec *TypeImport) error) error {
 		if err != nil {
 			return err
 		}
-		return handler(importSpec)
+		return handler(ctx, importSpec)
 	case exprGroupToken:
 		exprContent := matched.Text(cursor)
 		exprGroupCursor := parsly.NewCursor("", []byte(exprContent[1:len(exprContent)-1]), 0)
@@ -105,7 +99,7 @@ func ParseImports(expr *string, handler func(spec *TypeImport) error) error {
 				if err != nil {
 					return err
 				}
-				if err = handler(importSpec); err != nil {
+				if err = handler(ctx, importSpec); err != nil {
 					return err
 				}
 			case parsly.EOF:

@@ -9,7 +9,6 @@ import (
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
-	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/view"
@@ -26,16 +25,13 @@ type Service struct {
 func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string) (err error) {
 	resource := NewResource(rule, s.Repository.Config.repository)
 	resource.State.Append(s.Repository.State...)
-	if err = resource.InitRule(ctx, s.Repository.fs, &dSQL); err != nil {
+	if err = resource.InitRule(&dSQL); err != nil {
 		return err
 	}
-	if err = s.loadImports(ctx, rule, &dSQL, resource); err != nil {
+	if err = resource.parseImports(ctx, &dSQL); err != nil {
 		return err
 	}
-	if err = resource.ExtractDeclared(&dSQL, resource.Rule.TypeImports); err != nil {
-		return err
-	}
-	if err = s.includeTypeImports(resource); err != nil {
+	if err = resource.ExtractDeclared(&dSQL); err != nil {
 		return err
 	}
 	dSQL = rule.NormalizeSQL(dSQL)
@@ -52,8 +48,8 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	return nil
 }
 
-func (s *Service) includeTypeImports(resource *Resource) error {
-	for _, typeImport := range resource.Rule.TypeImports {
+/*
+for _, typeImport := range resource.Rule.TypeImports {
 		alias := typeImport.Alias
 		for i, name := range typeImport.Types {
 			if typeDef := resource.TypeDefinition(name); typeDef != nil {
@@ -75,22 +71,10 @@ func (s *Service) includeTypeImports(resource *Resource) error {
 				alias = ""
 			}
 			setter.SetStringIfEmpty(&typeDef.Alias, alias)
-			resource.AppendType(typeDef)
+			resource.AppendTypeDefinition(typeDef)
 		}
 	}
-	return nil
-}
-
-func (s *Service) loadImports(ctx context.Context, rule *options.Rule, dSQL *string, resource *Resource) error {
-	if err := parser.ParseImports(dSQL, func(spec *parser.TypeImport) error {
-		spec.EnsureLocation(ctx, fs, rule.GoModuleLocation())
-		resource.Rule.TypeImports.Append(spec)
-		return nil
-	}); err != nil {
-		return fmt.Errorf("failed to parse import statement: %w", err)
-	}
-	return nil
-}
+*/
 
 func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource, DSQL string) (err error) {
 	if err = s.buildExecutorView(ctx, resource, DSQL); err != nil {
@@ -210,7 +194,6 @@ func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mo
 		return err
 	}
 
-	isRoot := resource.Rule.Root == viewlet.Name
 	//TODO move cache to dependency but allow local different TTL override
 	//	aView := &viewlet.View.View
 	//if aView.Cache != nil {
@@ -223,17 +206,8 @@ func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mo
 		viewType := reflect.StructOf(viewlet.Spec.Type.Fields())
 		viewlet.TypeDefinition.DataType = viewType.String()
 		viewlet.TypeDefinition.Fields = nil
-		resource.AppendType(viewlet.TypeDefinition)
+		resource.AppendTypeDefinition(viewlet.TypeDefinition)
 	}
-
-	if isRoot {
-		for _, typeImport := range resource.Rule.TypeImports {
-			for _, definition := range typeImport.Definition {
-				resource.AppendType(definition)
-			}
-		}
-	}
-
 	return nil
 }
 
@@ -329,7 +303,7 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 }
 
 func (s *Service) handleCustomTypes(ctx context.Context, resource *Resource) error {
-	if URL := resource.Rule.TypeImports.CustomTypeURL(); URL != "" {
+	for _, URL := range resource.CustomTypeURLs {
 		info, err := plugin.NewInfo(ctx, URL)
 		if err != nil {
 			return fmt.Errorf("failed to detect custom type: %v %w", URL, err)
@@ -347,7 +321,6 @@ func (s *Service) handleCustomTypes(ctx context.Context, resource *Resource) err
 			//pluginCmd.BuildArgs = []string{"'-gcflags \"all=-N -l\"'"}
 			s.Plugins = append(s.Plugins, pluginCmd)
 		}
-
 	}
 	return nil
 }

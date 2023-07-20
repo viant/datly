@@ -3,11 +3,11 @@ package translator
 import (
 	"context"
 	"fmt"
-	"github.com/viant/afs"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
@@ -25,15 +25,98 @@ type (
 		rule       *options.Rule
 		Resource   view.Resource
 
-		State        inference.State
-		Rule         *Rule
-		Declarations *parser.Declarations
+		State inference.State
+		Rule  *Rule
 		parser.Statements
 		RawSQL string
 		indexNamespaces
 		UseCustomTypes bool
+		Declarations   *parser.Declarations
+		CustomTypeURLs []string
+		typeRegistry   *xreflect.Types
 	}
 )
+
+func (r *Resource) AddCustomTypeURL(URL string) {
+	for _, candidate := range r.CustomTypeURLs {
+		if candidate == URL {
+			return
+		}
+	}
+	r.CustomTypeURLs = append(r.CustomTypeURLs, URL)
+}
+
+func (r *Resource) GetSchema(dataType string, opts ...xreflect.Option) (*view.Schema, error) {
+	registry := r.ensureRegistry()
+	rType, err := registry.Lookup(dataType, opts...)
+	if err != nil {
+		return nil, err
+	}
+	schema := view.NewSchema(rType)
+	if pkgSymbol, err := r.typeRegistry.Symbol("PackageName"); err == nil {
+		if text, ok := pkgSymbol.(string); ok {
+			schema.Package = text
+		}
+	}
+	if methods, _ := r.typeRegistry.Methods(dataType); len(methods) > 0 {
+		schema.Methods = methods
+	}
+	if strings.HasPrefix(dataType, "*") {
+		dataType = dataType[1:]
+	}
+	schema.DataType = dataType
+	return schema, nil
+}
+
+func (r *Resource) ensureRegistry() *xreflect.Types {
+	if r.typeRegistry != nil {
+		return r.typeRegistry
+	}
+	r.typeRegistry = xreflect.NewTypes(xreflect.WithRegistry(config.Config.Types))
+	return r.typeRegistry
+}
+
+func (r *Resource) parseImports(ctx context.Context, dSQL *string) (err error) {
+	if r.Rule.TypeSrc != nil {
+		if err = r.loadImportTypes(ctx, r.Rule.TypeSrc); err != nil {
+			return err
+		}
+	}
+	if err = parser.ParseImports(ctx, dSQL, r.loadImportTypes); err != nil {
+		return fmt.Errorf("failed to parse import statement: %w", err)
+	}
+	return nil
+}
+
+func (r *Resource) loadImportTypes(ctx context.Context, typesImport *parser.TypeImport) error {
+	typesImport.EnsureLocation(ctx, fs, r.rule.GoModuleLocation())
+	alias := typesImport.Alias
+	for i, name := range typesImport.Types {
+		if typeDef := r.TypeDefinition(name); typeDef != nil {
+			return nil
+		}
+		schema, err := r.GetSchema(name, xreflect.WithPackagePath(typesImport.URL))
+		if err != nil {
+			return fmt.Errorf("unable to include import type: %v,  %w", name, err)
+		}
+		if len(schema.Methods) > 0 {
+			r.AddCustomTypeURL(typesImport.URL)
+		}
+		dataType := schema.DataType
+		pkg := schema.Package
+		schema.Package = ""
+		if rType := schema.Type(); rType != nil {
+			dataType = rType.String()
+		}
+		typeDef := &view.TypeDefinition{Name: name, Package: pkg, DataType: dataType, CustomType: len(schema.Methods) > 0}
+		if i > 0 {
+			alias = ""
+		}
+		setter.SetStringIfEmpty(&typeDef.Alias, alias)
+		r.AppendTypeDefinition(typeDef)
+	}
+	return nil
+}
 
 func (r *Resource) TypeDefinition(name string) *view.TypeDefinition {
 	if len(r.Resource.Types) == 0 {
@@ -47,7 +130,7 @@ func (r *Resource) TypeDefinition(name string) *view.TypeDefinition {
 	return nil
 }
 
-func (r *Resource) AppendType(typeDef *view.TypeDefinition) {
+func (r *Resource) AppendTypeDefinition(typeDef *view.TypeDefinition) {
 	if r.TypeDefinition(typeDef.Name) != nil {
 		return
 	}
@@ -67,9 +150,9 @@ func (r *Resource) AdjustCustomType(info *plugin.Info) {
 }
 
 // ExtractDeclared extract both parameter declaration and transform expression
-func (r *Resource) ExtractDeclared(dSQL *string, imports parser.TypeImports) (err error) {
+func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 	r.appendPathVariableParams()
-	r.Declarations, err = parser.NewDeclarations(*dSQL, imports)
+	r.Declarations, err = parser.NewDeclarations(*dSQL, r.GetSchema)
 	if err != nil {
 		return err
 	}
@@ -113,13 +196,13 @@ func (r *Resource) ImpliedKind() view.Kind {
 	return view.KindRequestBody
 }
 
-func (r *Resource) InitRule(ctx context.Context, fs afs.Service, dSQL *string) error {
+func (r *Resource) InitRule(dSQL *string) error {
 	if err := r.extractRuleSetting(dSQL); err != nil {
 		return err
 	}
 	r.Statements = parser.NewStatements(*dSQL)
 	r.RawSQL = *dSQL
-	r.initRule(ctx, fs)
+	r.initRule()
 	return nil
 }
 
@@ -232,7 +315,7 @@ func (r *Resource) ensurePathParametersSchema(ctx context.Context) error {
 		if rType == nil {
 			continue
 		}
-		r.AppendType(&view.TypeDefinition{Name: schema.DataType, DataType: rType.String()})
+		r.AppendTypeDefinition(&view.TypeDefinition{Name: schema.DataType, DataType: rType.String()})
 	}
 	return nil
 }

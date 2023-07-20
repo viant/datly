@@ -1,8 +1,6 @@
 package translator
 
 import (
-	"context"
-	"github.com/viant/afs"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/router"
@@ -33,9 +31,9 @@ type (
 		TabularJSON  *router.TabularJSONConfig `json:",omitempty"`
 		HandlerType  string                    `json:",omitempty"`
 		StateType    string                    `json:",omitempty"`
-		TypeImports  parser.TypeImports        `json:",omitempty"`
-		indexNamespaces
+
 		With []string
+		indexNamespaces
 	}
 
 	indexNamespaces []*indexNamespace
@@ -135,15 +133,10 @@ func (r *Rule) GetField() string {
 	return r.Field
 }
 
-func (r *Resource) initRule(ctx context.Context, fs afs.Service) {
+func (r *Resource) initRule() {
 	rule := r.Rule
 	r.State.AppendConstants(rule.Const)
 	rule.Index = router.Index{Namespace: map[string]string{}}
-
-	if typeSrc := rule.TypeSrc; typeSrc != nil {
-		typeSrc.EnsureLocation(ctx, fs, r.rule.GoModuleLocation())
-		rule.TypeImports.Append(typeSrc)
-	}
 	rule.applyDefaults()
 }
 
