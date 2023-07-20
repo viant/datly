@@ -71,6 +71,8 @@ func (d *Declaration) ExpandShorthands() {
 
 		switch d.Codec { //TODO get codec registry here
 		case "JwtClaim":
+			required := true
+			d.Required = &required
 			if d.Output == nil {
 				d.Output = &view.Codec{}
 			}
@@ -84,6 +86,7 @@ func (d *Declaration) ExpandShorthands() {
 				d.Output.Schema.DataType = "*JwtClaims"
 			}
 		}
+
 	}
 
 	if d.Kind != "" || d.Location != nil {

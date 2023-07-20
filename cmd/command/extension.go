@@ -156,7 +156,7 @@ func (s *Service) syncSourceDependencies(ctx context.Context, pkgLocation string
 	if err != nil {
 		return err
 	}
-	_, err = s.runCommand(pkgLocation, goBinLocation, "mod", "tidy", "-compat=1.17")
+	_, err = s.runCommand(pkgLocation, goBinLocation, "mod", "tidy")
 	if err != nil {
 		return err
 	}

@@ -93,7 +93,7 @@ func (s *Service) tidyModule(ctx context.Context, goModule string) error {
 	if err != nil {
 		return fmt.Errorf("failed to preapre build, unable to find go %w", err)
 	}
-	if out, err := s.runCommand(goModule, goBinLoc, "mod", "tidy", "-compat=1.17"); err != nil {
+	if out, err := s.runCommand(goModule, goBinLoc, "mod", "tidy"); err != nil {
 		return fmt.Errorf("failed to go mod module '%v', %s %w", goModule, out, err)
 	}
 	return nil

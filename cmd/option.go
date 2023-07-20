@@ -459,7 +459,7 @@ func (o *Options) MergeFromBuild(build *options.Build) {
 		o.ModuleMain = "cmd/datly/"
 	}
 	o.ModuleSrc = build.Source
-	o.ModuleDst = build.Dest
+	o.ModuleDst = build.DestURL
 	o.ModuleLdFlags = *build.LdFlags
 	o.ModuleArgs = build.BuildArgs
 	o.ModuleOS = build.GoOs
@@ -470,7 +470,7 @@ func (o *Options) MergeFromBuild(build *options.Build) {
 func (o *Options) MergeFromPlugin(plugin *options.Plugin) {
 	o.BuildMode = "plugin"
 	o.PluginSrc = plugin.Source
-	o.PluginDst = plugin.Dest
+	o.PluginDst = plugin.DestURL
 	o.PluginArgs = plugin.BuildArgs
 	o.PluginOS = plugin.GoOs
 	o.PluginArch = plugin.GoArch

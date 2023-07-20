@@ -79,20 +79,16 @@ type (
 	}
 )
 
-func (r *Rule) ApplyOutputConfig() {
-
-	outputConfig := r.RootViewlet().OutputConfig
-
+func (r *Rule) applyGeneratorOutputSetting() {
+	root := r.RootViewlet()
+	outputConfig := root.OutputSettings
 	setter.SetStringIfEmpty(&r.Route.Field, outputConfig.Field)
-
 	if r.Route.Style == "" && r.Route.Field != "" {
 		r.Route.Style = router.ComprehensiveStyle
 	}
-
 	if r.Route.Style == "" {
 		r.Route.Style = router.Style(outputConfig.Style)
 	}
-
 	if r.Route.Cardinality == "" {
 		r.Route.Cardinality = outputConfig.ViewCardinality()
 	}
@@ -234,15 +230,16 @@ func (r *Rule) updateExclude(n *Viewlet) {
 	n.View.Exclude = nil //TODO do we have to remove it
 }
 
-func (r *Rule) applyRootViewOutputShorthands() {
+func (r *Rule) applyRootViewRouteShorthands() {
 	root := r.RootViewlet()
 	setter.SetStringIfEmpty(&r.Route.Field, root.Field)
 	if r.Route.Style == "" {
 		r.Route.Style = router.Style(root.Style)
 	}
 	if r.Route.Cardinality == "" {
-		r.Route.Cardinality = root.Cardinality
+		r.Route.Cardinality = root.ViewCardinality()
 	}
+
 }
 
 func (r *Rule) applyShortHands() {

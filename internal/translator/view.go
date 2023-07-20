@@ -63,7 +63,10 @@ func (v *View) applyShorthands(viewlet *Viewlet) {
 	}
 
 	if v.DataType != "" {
-
+		if v.Schema == nil {
+			v.Schema = &view.Schema{}
+		}
+		setter.SetStringIfEmpty(&v.Schema.DataType, v.DataType)
 	}
 
 	if v.AsyncTableName != "" {

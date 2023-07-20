@@ -31,14 +31,14 @@ require (
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.2.0
-	github.com/viant/pgo v0.10.3
+	github.com/viant/pgo v0.10.4-0.20230720010955-0d0835aefe41
 	github.com/viant/scy v0.6.0
 	github.com/viant/sqlx v0.9.0
 	github.com/viant/structql v0.4.1
 	github.com/viant/toolbox v0.34.6-0.20230717203311-70dd2fbed04e
 	github.com/viant/velty v0.2.0
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
-	github.com/viant/xreflect v0.3.2-0.20230703205132-5d95452045da
+	github.com/viant/xreflect v0.3.2-0.20230720010941-9d6ad5380405
 	github.com/viant/xunsafe v0.8.4
 	golang.org/x/mod v0.11.0
 	golang.org/x/oauth2 v0.7.0
@@ -49,7 +49,7 @@ require (
 
 require (
 	github.com/viant/govalidator v0.2.1
-	github.com/viant/sqlparser v0.5.0
+	github.com/viant/sqlparser v0.5.1-0.20230720152716-0feed39d13f2
 	golang.org/x/crypto v0.10.0 // indirect
 )
 
@@ -128,7 +128,3 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-
-replace github.com/viant/xreflect => /Users/awitas/go/src/github.com/viant/xreflect
-
-replace github.com/viant/velty => /Users/awitas/go/src/github.com/viant/velty

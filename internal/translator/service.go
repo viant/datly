@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/inference"
+	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/router"
@@ -19,6 +20,7 @@ import (
 
 type Service struct {
 	Repository *Repository //TODO init repo with basic config and dependencies
+	Plugins    []*options.Plugin
 }
 
 func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string) (err error) {
@@ -37,8 +39,6 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 		return err
 	}
 	dSQL = rule.NormalizeSQL(dSQL)
-
-	fmt.Printf("data: %s\n", dSQL)
 	if resource.IsExec() {
 		if err := s.translateExecutorDSQL(ctx, resource, dSQL); err != nil {
 			return err
@@ -48,7 +48,6 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 			return err
 		}
 	}
-
 	s.Repository.Resource = append(s.Repository.Resource, resource)
 	return nil
 }
@@ -65,10 +64,13 @@ func (s *Service) includeTypeImports(resource *Resource) error {
 				return fmt.Errorf("unable to include import type: %v,  %w", name, err)
 			}
 			dataType := schema.DataType
+			pkg := schema.Package
+			schema.Package = ""
 			if rType := schema.Type(); rType != nil {
 				dataType = rType.String()
 			}
-			typeDef := &view.TypeDefinition{Name: name, DataType: dataType}
+
+			typeDef := &view.TypeDefinition{Name: name, Package: pkg, DataType: dataType, CustomType: len(schema.Methods) > 0}
 			if i > 0 {
 				alias = ""
 			}
@@ -107,7 +109,7 @@ func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource,
 		return err
 	}
 
-	if err = s.persistRouterRule(resource, router.ServiceTypeExecutor); err != nil {
+	if err = s.persistRouterRule(ctx, resource, router.ServiceTypeExecutor); err != nil {
 		return err
 	}
 	return nil
@@ -143,7 +145,6 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	if err != nil {
 		return err
 	}
-	fmt.Printf("DD: %v\n", dSQL)
 	resource.Rule.Root = query.From.Alias
 	if err = resource.Rule.Viewlets.Init(ctx, query, resource, s.initReaderViewlet, s.buildQueryViewletType); err != nil {
 		return err
@@ -157,21 +158,21 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	}); err != nil {
 		return err
 	}
-	if err = s.persistRouterRule(resource, router.ServiceTypeReader); err != nil {
+	if err = s.persistRouterRule(ctx, resource, router.ServiceTypeReader); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *Service) persistRouterRule(resource *Resource, service router.ServiceType) error {
+func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, service router.ServiceType) error {
 	baseRuleURL := s.Repository.RuleBaseURL(resource.rule)
 
 	ruleName := s.Repository.RuleName(resource.rule)
 	resource.Rule.Route.Service = service
 	resource.Rule.Route.View = view.NewRefView(resource.Rule.Root)
 
-	if resource.rule.Generated {
-		resource.Rule.ApplyOutputConfig()
+	if resource.rule.Generated { //translation from generator
+		resource.Rule.applyGeneratorOutputSetting()
 	} else {
 		resource.Rule.Route.URI = path.Join(resource.repository.APIPrefix, resource.rule.Prefix, resource.Rule.Route.URI)
 	}
@@ -183,8 +184,10 @@ func (s *Service) persistRouterRule(resource *Resource, service router.ServiceTy
 	if service == router.ServiceTypeExecutor {
 		resource.Rule.Route.Field = state.BodyField()
 	}
-	routerResource := s.buildRouterResource(resource)
-
+	routerResource, err := s.buildRouterResource(ctx, resource)
+	if err != nil {
+		return fmt.Errorf("failed to build router resource: %+v, %w", routerResource, err)
+	}
 	data, err := asset.EncodeYAML(routerResource)
 	if err != nil {
 		return fmt.Errorf("failed to encode: %+v, %w", routerResource, err)
@@ -197,7 +200,7 @@ func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mo
 	if mode == view.ModeQuery {
 		resource.Rule.updateExclude(viewlet)
 	}
-
+	viewlet.applyOutputShorthands()
 	if viewlet.IsMetaView() {
 		return nil
 	}
@@ -247,6 +250,13 @@ func (s *Service) initReaderViewlet(ctx context.Context, viewlet *Viewlet) error
 	if err = viewlet.discoverTables(ctx, db, SQL); err != nil {
 		return err
 	}
+
+	if viewlet.Table != nil && viewlet.Table.OutputJSONHint != "" {
+		if viewlet.mergeTableJSONHint(viewlet.Table.OutputJSONHint); err != nil {
+			return err
+		}
+	}
+
 	aTemplate, err := parser.NewTemplate(viewlet.SQL, &viewlet.Resource.State)
 	if err != nil {
 		return fmt.Errorf("invalid DSQL: %w, %s", err, SQL)
@@ -295,7 +305,7 @@ func (s *Service) Init(ctx context.Context) error {
 	return s.Repository.Init(ctx)
 }
 
-func (s *Service) buildRouterResource(resource *Resource) *router.Resource {
+func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (*router.Resource, error) {
 	result := &router.Resource{}
 	if resource.Rule.Cache != nil {
 		s.Repository.Caches.Append(resource.Rule.Cache)
@@ -305,14 +315,41 @@ func (s *Service) buildRouterResource(resource *Resource) *router.Resource {
 	}
 
 	result.With = resource.Rule.With
+	//
+	if err := s.handleCustomTypes(ctx, resource); err != nil {
+		return nil, err
+	}
+
 	result.Resource = &resource.Resource
 	result.ColumnsDiscovery = true
-	resource.Rule.applyRootViewOutputShorthands()
-
+	resource.Rule.applyRootViewRouteShorthands()
 	route := &resource.Rule.Route
-
 	result.Routes = append(result.Routes, route)
-	return result
+	return result, nil
+}
+
+func (s *Service) handleCustomTypes(ctx context.Context, resource *Resource) error {
+	if URL := resource.Rule.TypeImports.CustomTypeURL(); URL != "" {
+		info, err := plugin.NewInfo(ctx, URL)
+		if err != nil {
+			return fmt.Errorf("failed to detect custom type: %v %w", URL, err)
+		}
+		resource.AdjustCustomType(info)
+		if info.IntegrationMode == plugin.ModeStandalone {
+			pluginCmd := &options.Plugin{}
+			pluginCmd.Name = resource.rule.RuleName()
+			pluginCmd.Source = append(pluginCmd.Source, URL)
+			pluginCmd.Repository = s.Repository.Config.repository.RepositoryURL
+			if err := pluginCmd.Init(); err != nil {
+				return fmt.Errorf("failed to create standalone plugin for %v, %w", URL, err)
+			}
+			pluginCmd.BuildArgs = nil
+			//pluginCmd.BuildArgs = []string{"'-gcflags \"all=-N -l\"'"}
+			s.Plugins = append(s.Plugins, pluginCmd)
+		}
+
+	}
+	return nil
 }
 
 func New(config *Config) *Service {

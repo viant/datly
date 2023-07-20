@@ -3,6 +3,7 @@ package inference
 import (
 	"context"
 	"database/sql"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlx/metadata/sink"
 	"strings"
@@ -10,12 +11,13 @@ import (
 
 type (
 	Table struct {
-		Name         string
-		Namespace    string
-		Columns      sqlparser.Columns
-		QueryColumns sqlparser.Columns
-		index        map[string]*sqlparser.Column
-		tables       []*Table
+		Name           string
+		Namespace      string
+		Columns        sqlparser.Columns
+		QueryColumns   sqlparser.Columns
+		index          map[string]*sqlparser.Column
+		tables         []*Table
+		OutputJSONHint string
 	}
 )
 
@@ -89,11 +91,9 @@ func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 	if !HasWhitespace(from) {
 		t.Name = from
 	}
-
 	if err = t.extractColumns(ctx, db, from); err != nil {
 		return err
 	}
-
 	for _, join := range query.Joins {
 		joinTable, err := NewTable(ctx, db, sqlparser.Stringify(join.With))
 		if joinTable == nil {
@@ -101,8 +101,8 @@ func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 		}
 		joinTable.Namespace = strings.ToLower(join.Alias)
 		t.tables = append(t.tables, joinTable)
-
 	}
+	setter.SetStringIfEmpty(&t.OutputJSONHint, query.From.Comments)
 	return nil
 }
 

@@ -15,18 +15,20 @@ import (
 	"path"
 )
 
-type Repository struct {
-	fs              afs.Service
-	Config          *Config
-	Resource        []*Resource
-	State           inference.State
-	Connectors      []*view.Connector
-	NamedConnectors view.Connectors
-	Caches          view.Caches
-	MessageBuses    []*mbus.Resource
-	Messages        msg.Messages
-	Files           asset.Files
-}
+type (
+	Repository struct {
+		fs              afs.Service
+		Config          *Config
+		Resource        []*Resource
+		State           inference.State
+		Connectors      []*view.Connector
+		NamedConnectors view.Connectors
+		Caches          view.Caches
+		MessageBuses    []*mbus.Resource
+		Messages        msg.Messages
+		Files           asset.Files
+	}
+)
 
 func (r *Repository) RuleName(rule *options.Rule) string {
 	_, name := url.Split(rule.SourceURL(), file.Scheme)

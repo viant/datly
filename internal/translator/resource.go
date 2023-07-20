@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/inference"
+	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
@@ -30,6 +31,7 @@ type (
 		parser.Statements
 		RawSQL string
 		indexNamespaces
+		UseCustomTypes bool
 	}
 )
 
@@ -49,7 +51,19 @@ func (r *Resource) AppendType(typeDef *view.TypeDefinition) {
 	if r.TypeDefinition(typeDef.Name) != nil {
 		return
 	}
-	r.Resource.Types = append(r.Resource.Types, typeDef)
+	definition := *typeDef
+	r.Resource.Types = append(r.Resource.Types, &definition)
+}
+
+func (r *Resource) AdjustCustomType(info *plugin.Info) {
+	//TODO work in progress
+	for i := range r.Resource.Types {
+		aType := r.Resource.Types[i]
+		if aType.CustomType {
+			aType.DataType = aType.Name
+			aType.CustomType = false
+		}
+	}
 }
 
 // ExtractDeclared extract both parameter declaration and transform expression
@@ -122,7 +136,6 @@ func (r *Resource) extractRuleSetting(dSQL *string) error {
 
 func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	types := viewlet.Resource.Resource.TypeRegistry()
-
 	resourceState := viewlet.Resource.State
 	_ = resourceState.EnsureReflectTypes(r.rule.GoModuleLocation())
 	sqlState := viewlet.Resource.State.StateForSQL(viewlet.SQL, r.Rule.Root == viewlet.Name)

@@ -19,8 +19,8 @@ func (m mapper) Map(name string) string {
 	return name
 }
 
-func (g *Rule) NormalizeSQL(SQL string) string {
-	if !g.Generated {
+func (r *Rule) NormalizeSQL(SQL string) string {
+	if !r.Generated {
 		return SQL
 	}
 	sqlQuery, err := sqlparser.ParseQuery(SQL)

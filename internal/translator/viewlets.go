@@ -97,7 +97,7 @@ func (n Viewlets) addRelations(query *query.Select) {
 
 		relation.Spec.Parent = parentViewlet.Spec
 		cardinality := view.Many
-		if inference.IsToOne(join) || relation.OutputConfig.IsToOne() {
+		if inference.IsToOne(join) || relation.OutputSettings.IsToOne() {
 			cardinality = view.One
 		}
 		relName := join.Alias
@@ -108,14 +108,14 @@ func (n Viewlets) addRelations(query *query.Select) {
 func (n Viewlets) applyTopLevelDSQLSetting(query *query.Select, namespace *Viewlet) error {
 	columns := sqlparser.NewColumns(query.List)
 	for i := range columns {
-		if err := n.updateTopQuerySetting(columns[i], namespace); err != nil {
+		if err := n.updateTopQuery(columns[i], namespace); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (n Viewlets) updateTopQuerySetting(column *sqlparser.Column, namespace *Viewlet) error {
+func (n Viewlets) updateTopQuery(column *sqlparser.Column, namespace *Viewlet) error {
 	if column.Namespace == "" {
 		column.Namespace = namespace.Name
 	}
@@ -128,7 +128,7 @@ func (n Viewlets) updateTopQuerySetting(column *sqlparser.Column, namespace *Vie
 	}
 	if column.Comments != "" && strings.Contains(column.Expression, "*") {
 		namespaceForColumn.OutputJSONHint = column.Comments
-		if err := parser.TryUnmarshalHint(namespaceForColumn.OutputJSONHint, &namespaceForColumn.OutputConfig); err != nil {
+		if err := parser.TryUnmarshalHint(namespaceForColumn.OutputJSONHint, &namespaceForColumn.OutputSettings); err != nil {
 			return err
 		}
 	}

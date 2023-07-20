@@ -316,8 +316,10 @@ func (s State) EnsureReflectTypes(modulePath string) error {
 		if dataType == "" {
 			dataType = param.Schema.DataType
 		}
+
 		if dataType == "" {
-			return fmt.Errorf("data type was emtpy for %v", param.Name)
+			dataType = "string"
+			//			return fmt.Errorf("data type was emtpy for %v", param.Name)
 		}
 		rType, err := types.LookupType(typeRegistry.Lookup, dataType)
 		if err != nil {

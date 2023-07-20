@@ -7,6 +7,7 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/internal/setter"
 	"os"
+	"path"
 	"strings"
 )
 
@@ -15,33 +16,33 @@ type Rule struct {
 	Name      string   `short:"n" long:"name" description:"rule name"`
 	Prefix    string   `short:"u" long:"uri" description:"rule uri"  default:"dev" `
 	Source    []string `short:"s" long:"src" description:"source"`
-	Output    []string
 	Packages  []string `short:"g" long:"pkg" description:"entity package"`
+	Output    []string
 	Index     int
 	Module    string `short:"m" long:"module" description:"go module package root" default:"pkg"`
 	Generated bool
 }
 
-func (g *Rule) GoModuleLocation() string {
-	if g.Module != "" {
-		return g.Module
+func (r *Rule) GoModuleLocation() string {
+	if r.Module != "" {
+		return r.Module
 	}
 	return "pkg"
 }
 
-func (g *Rule) GoCodeLocation() string {
-	module := g.GoModuleLocation()
-	if g.Package() == "" {
+func (r *Rule) GoCodeLocation() string {
+	module := r.GoModuleLocation()
+	if r.Package() == "" {
 		return module
 	}
-	return url.Join(module, g.Package())
+	return url.Join(module, r.Package())
 }
 
-func (g *Rule) Package() string {
-	if g.Index < len(g.Packages) {
-		return g.Packages[g.Index]
+func (r *Rule) Package() string {
+	if r.Index < len(r.Packages) {
+		return r.Packages[r.Index]
 	}
-	pkg := extractPackageFromSource(g.SourceURL())
+	pkg := extractPackageFromSource(r.SourceURL())
 	if pkg != "dsql" {
 		return pkg
 	}
@@ -68,28 +69,37 @@ func extractPackageFromSource(sourceURL string) string {
 	return builder.String()
 }
 
-func (g *Rule) Init() error {
-	if g.Project == "" {
-		g.Project, _ = os.Getwd()
+func (r *Rule) RuleName() string {
+	URL := r.SourceURL()
+	_, name := url.Split(URL, file.Scheme)
+	if ext := path.Ext(name); ext != "" {
+		name = name[:len(name)-len(ext)]
 	}
-	setter.SetStringIfEmpty(&g.Prefix, "dev")
-	g.Project = ensureAbsPath(g.Project)
-	if url.IsRelative(g.Module) {
-		g.Module = url.Join(g.Project, g.Module)
+	return name
+}
+
+func (r *Rule) Init() error {
+	if r.Project == "" {
+		r.Project, _ = os.Getwd()
 	}
-	expandRelativeIfNeeded(&g.Source[g.Index], g.Project)
+	setter.SetStringIfEmpty(&r.Prefix, "dev")
+	r.Project = ensureAbsPath(r.Project)
+	if url.IsRelative(r.Module) {
+		r.Module = url.Join(r.Project, r.Module)
+	}
+	expandRelativeIfNeeded(&r.Source[r.Index], r.Project)
 	return nil
 }
 
-func (g *Rule) SourceURL() string {
-	if len(g.Source) == 0 {
+func (r *Rule) SourceURL() string {
+	if len(r.Source) == 0 {
 		return ""
 	}
-	return g.Source[g.Index]
+	return r.Source[r.Index]
 }
 
-func (g *Rule) LoadSource(ctx context.Context, fs afs.Service) (string, error) {
-	data, err := fs.DownloadWithURL(ctx, g.SourceURL())
+func (r *Rule) LoadSource(ctx context.Context, fs afs.Service) (string, error) {
+	data, err := fs.DownloadWithURL(ctx, r.SourceURL())
 	if err != nil {
 		return "", err
 	}

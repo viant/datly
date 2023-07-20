@@ -9,6 +9,7 @@ import (
 	"github.com/viant/velty/ast/stmt"
 	"github.com/viant/velty/parser"
 	"reflect"
+	"strings"
 )
 
 type (
@@ -36,6 +37,14 @@ func (c *ExpressionContext) BeforeElements() []string {
 	}
 	last := c.Fragments[len(c.Fragments)-1]
 	return SplitByWhitespace(last)
+}
+
+func (c *ExpressionContext) IsJSONCodec() bool {
+	if len(c.Fragments) == 0 {
+		return false
+	}
+	last := c.Fragments[len(c.Fragments)-1]
+	return strings.Contains(last, `"Codec"`) && strings.Contains(last, `"JSON"`)
 }
 
 func (t *Template) init(context Context, fnName string, statements ...ast.Statement) {

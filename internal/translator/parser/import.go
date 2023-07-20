@@ -9,6 +9,7 @@ import (
 	"github.com/viant/parsly"
 	"os"
 	"path"
+	"reflect"
 	"strings"
 )
 
@@ -17,6 +18,7 @@ type TypeImport struct {
 	Types          []string
 	Alias          string
 	Definition     []*view.TypeDefinition
+	Methods        []reflect.Method
 	ForceGoTypeUse bool
 }
 
@@ -37,6 +39,16 @@ func (t *TypeImport) EnsureLocation(ctx context.Context, fs afs.Service, goModul
 func (t *TypeImport) AppendTypeDefinition(definition *view.TypeDefinition) {
 	t.Definition = append(t.Definition, definition)
 }
+
+func (t TypeImports) CustomTypeURL() string {
+	for _, candidate := range t {
+		if len(candidate.Methods) > 0 {
+			return candidate.URL
+		}
+	}
+	return ""
+}
+
 func (t TypeImports) Lookup(typeName string) *TypeImport {
 	if strings.HasPrefix(typeName, "[]") {
 		typeName = typeName[2:]
@@ -93,7 +105,9 @@ func ParseImports(expr *string, handler func(spec *TypeImport) error) error {
 				if err != nil {
 					return err
 				}
-				return handler(importSpec)
+				if err = handler(importSpec); err != nil {
+					return err
+				}
 			case parsly.EOF:
 				return nil
 			default:

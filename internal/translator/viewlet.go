@@ -3,8 +3,10 @@ package translator
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/internal/inference"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlparser"
@@ -34,6 +36,7 @@ type (
 		Spec           *inference.Spec
 		OutputJSONHint string
 		ViewJSONHint   string
+		TableJSONHint  string
 		Exclude        []string
 		Whitelisted    []string
 		Casts          map[string]string
@@ -43,7 +46,7 @@ type (
 		View           *View
 
 		TypeDefinition *view.TypeDefinition
-		OutputConfig
+		OutputSettings
 		sourceViewlet *Viewlet
 	}
 
@@ -52,19 +55,20 @@ type (
 		Args []string
 	}
 
-	OutputConfig struct {
+	OutputSettings struct {
 		Style       string
 		Field       string
 		Kind        string
 		Cardinality view.Cardinality
+		DataType    string
 	}
 )
 
-func (o *OutputConfig) IsToOne() bool {
+func (o *OutputSettings) IsToOne() bool {
 	return o.ViewCardinality() == view.One
 }
 
-func (o *OutputConfig) ViewCardinality() view.Cardinality {
+func (o *OutputSettings) ViewCardinality() view.Cardinality {
 	if o.Cardinality == "" {
 		o.Cardinality = view.Many
 	}
@@ -77,6 +81,9 @@ func (v *Viewlet) IsMetaView() bool {
 
 func (v *Viewlet) UpdateParameterType(state *inference.State, name string, expression *parser.ExpressionContext) {
 	parameter := state.Lookup(name)
+	if expression.IsJSONCodec() {
+		return
+	}
 	if index := strings.Index(name, "."); index != -1 && parameter == nil {
 		if holder := state.Lookup(name[:index]); holder != nil {
 			return
@@ -213,7 +220,7 @@ func (v *Viewlet) discoverTables(ctx context.Context, db *sql.DB, SQL string) (e
 				if err := parser.TryUnmarshalHint(column.Comments, columnConfig); err != nil {
 					return fmt.Errorf("invalid column %v settings: %w, %s", column.Name, err, column.Comments)
 				}
-				columnConfig.Name = column.Name
+				columnConfig.Name = column.Identity()
 				v.ColumnConfig = append(v.ColumnConfig, columnConfig)
 			}
 		}
@@ -226,4 +233,23 @@ func (v *Viewlet) discoverTables(ctx context.Context, db *sql.DB, SQL string) (e
 		}
 	}
 	return err
+}
+
+func (v *Viewlet) applyOutputShorthands() {
+	if v.DataType != "" {
+		if v.View.Schema == nil {
+			v.View.Schema = &view.Schema{}
+		}
+		setter.SetStringIfEmpty(&v.View.Schema.DataType, v.DataType)
+	}
+}
+
+func (v *Viewlet) mergeTableJSONHint(hint string) error {
+	v.TableJSONHint = hint
+	var output OutputSettings
+	if err := parser.TryUnmarshalHint(v.TableJSONHint, &output); err != nil {
+		return fmt.Errorf("invalid table %v hint: %s,  %w", v.Table.Name, v.TableJSONHint, err)
+	}
+	data, _ := parser.MergeStructs(&output, &v.OutputSettings)
+	return json.Unmarshal(data, &v.OutputSettings)
 }

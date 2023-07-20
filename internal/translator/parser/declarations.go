@@ -189,9 +189,22 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 
 func (d *Declarations) GetSchema(dataType string) (*view.Schema, error) {
 	if importsSpec := d.imports.Lookup(dataType); importsSpec != nil {
-		rType, err := d.ensureRegistry().Lookup(dataType, xreflect.WithPackagePath(importsSpec.URL))
+		registry := d.ensureRegistry()
+		rType, err := registry.Lookup(dataType, xreflect.WithPackagePath(importsSpec.URL))
 		if err != nil {
 			return nil, err
+		}
+
+		pkg := ""
+
+		if pkgSymbol, err := registry.Symbol("PackageName"); err == nil {
+			if text, ok := pkgSymbol.(string); ok {
+				pkg = text
+			}
+		}
+
+		if methods, _ := registry.Methods(dataType); len(methods) > 0 {
+			importsSpec.Methods = methods
 		}
 		schema := view.NewSchema(rType)
 		if strings.HasPrefix(dataType, "*") {
@@ -199,10 +212,15 @@ func (d *Declarations) GetSchema(dataType string) (*view.Schema, error) {
 		}
 		schema.DataType = dataType
 		typeDef := &view.TypeDefinition{Name: dataType, DataType: rType.String()}
-		if importsSpec.ForceGoTypeUse {
-			typeDef.DataType = ""
-			typeDef.Schema = &view.Schema{DataType: dataType}
-		}
+		typeDef.Package = pkg
+		schema.Package = pkg
+		schema.Methods = importsSpec.Methods
+		/*
+			if importsSpec.ForceGoTypeUse {
+				typeDef.DataType = ""
+				typeDef.Schema = &view.Schema{DataType: dataType}
+			}
+		*/
 		importsSpec.AppendTypeDefinition(typeDef)
 		return schema, nil
 	}

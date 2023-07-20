@@ -12,13 +12,13 @@ import (
 	"strings"
 )
 
-//Schema represents View as Go type.
+// Schema represents View as Go type.
 type Schema struct {
 	Package     string `json:",omitempty" yaml:"package,omitempty"`
 	Name        string `json:",omitempty" yaml:"name,omitempty"`
 	DataType    string `json:",omitempty" yaml:"dataType,omitempty"`
 	Cardinality Cardinality
-
+	Methods     []reflect.Method
 	compType    reflect.Type
 	sliceType   reflect.Type
 	slice       *xunsafe.Slice
@@ -45,7 +45,7 @@ func NewSchema(compType reflect.Type) *Schema {
 	return result
 }
 
-//Type returns struct type
+// Type returns struct type
 func (c *Schema) Type() reflect.Type {
 	return c.compType
 }
@@ -69,7 +69,7 @@ func (c *Schema) updateSliceType() {
 	c.sliceType = c.slice.Type
 }
 
-//Init build struct type
+// Init build struct type
 func (c *Schema) Init(resource *Resource, viewCaseFormat format.Case, options ...interface{}) error {
 	var columns []*Column
 	var relations []*Relation
@@ -282,17 +282,17 @@ func createDefaultTagIfNeeded(column *Column) string {
 	return json.DefaultTagName + `:"` + strings.Join(attributes, ",") + `"`
 }
 
-//AutoGen indicates whether Schema was generated using ColumnTypes fetched from DB or was passed programmatically.
+// AutoGen indicates whether Schema was generated using ColumnTypes fetched from DB or was passed programmatically.
 func (c *Schema) AutoGen() bool {
 	return c.autoGen
 }
 
-//Slice returns slice as xunsafe.Slice
+// Slice returns slice as xunsafe.Slice
 func (c *Schema) Slice() *xunsafe.Slice {
 	return c.slice
 }
 
-//SliceType returns reflect.SliceOf() Schema type
+// SliceType returns reflect.SliceOf() Schema type
 func (c *Schema) SliceType() reflect.Type {
 	return c.sliceType
 }
@@ -302,7 +302,7 @@ func (c *Schema) inheritType(rType reflect.Type) {
 	c.autoGen = false
 }
 
-//XType returns structType as *xunsafe.Type
+// XType returns structType as *xunsafe.Type
 func (c *Schema) XType() *xunsafe.Type {
 	return c.xType
 }
@@ -326,6 +326,9 @@ func (c *Schema) setType(lookupType xreflect.LookupType, ptr bool) error {
 	}
 	if name != c.DataType && strings.Contains(c.DataType, " ") { //TODO replace with xreflect check if definition
 		options = append(options, xreflect.WithTypeDefinition(c.DataType))
+	}
+	if c.Package != "" {
+		options = append(options, xreflect.WithPackage(c.Package))
 	}
 	rType, err := types.LookupType(lookupType, name, options...)
 	if err != nil {

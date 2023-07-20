@@ -25,10 +25,18 @@ func (s *Service) Translate(ctx context.Context, opts *options.Options) error {
 		return err
 	}
 	repository := s.translator.Repository
-	if err := repository.PersistConfig(); err != nil {
+	if err = repository.PersistConfig(); err != nil {
 		return err
 	}
-	return repository.Upload(ctx)
+	if err = repository.Upload(ctx); err != nil {
+		return err
+	}
+	for _, cmd := range s.translator.Plugins {
+		if err = s.BuildPlugin(ctx, cmd); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) translate(ctx context.Context, opts *options.Options) error {
