@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/internal/inference"
-	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
@@ -128,7 +127,7 @@ func (n Viewlets) updateTopQuery(column *sqlparser.Column, namespace *Viewlet) e
 	}
 	if column.Comments != "" && strings.Contains(column.Expression, "*") {
 		namespaceForColumn.OutputJSONHint = column.Comments
-		if err := parser.TryUnmarshalHint(namespaceForColumn.OutputJSONHint, &namespaceForColumn.OutputSettings); err != nil {
+		if err := inference.TryUnmarshalHint(namespaceForColumn.OutputJSONHint, &namespaceForColumn.OutputSettings); err != nil {
 			return err
 		}
 	}

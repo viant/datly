@@ -34,7 +34,7 @@ func (v *View) applyHintSettings(namespace *Viewlet) error {
 	if viewJSONHint == "" {
 		return nil
 	}
-	err := parser.TryUnmarshalHint(viewJSONHint, &v)
+	err := inference.TryUnmarshalHint(viewJSONHint, &v)
 	v.Namespace = namespace.Name
 	if err != nil {
 		return fmt.Errorf("invalid view %v hint, %w, %s", v, err, viewJSONHint)

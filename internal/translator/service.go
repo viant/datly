@@ -48,34 +48,6 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	return nil
 }
 
-/*
-for _, typeImport := range resource.Rule.TypeImports {
-		alias := typeImport.Alias
-		for i, name := range typeImport.Types {
-			if typeDef := resource.TypeDefinition(name); typeDef != nil {
-				return nil
-			}
-			schema, err := resource.Declarations.GetSchema(name)
-			if err != nil {
-				return fmt.Errorf("unable to include import type: %v,  %w", name, err)
-			}
-			dataType := schema.DataType
-			pkg := schema.Package
-			schema.Package = ""
-			if rType := schema.Type(); rType != nil {
-				dataType = rType.String()
-			}
-
-			typeDef := &view.TypeDefinition{Name: name, Package: pkg, DataType: dataType, CustomType: len(schema.Methods) > 0}
-			if i > 0 {
-				alias = ""
-			}
-			setter.SetStringIfEmpty(&typeDef.Alias, alias)
-			resource.AppendTypeDefinition(typeDef)
-		}
-	}
-*/
-
 func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource, DSQL string) (err error) {
 	if err = s.buildExecutorView(ctx, resource, DSQL); err != nil {
 		return err
@@ -226,7 +198,7 @@ func (s *Service) initReaderViewlet(ctx context.Context, viewlet *Viewlet) error
 	}
 
 	if viewlet.Table != nil && viewlet.Table.OutputJSONHint != "" {
-		if viewlet.mergeTableJSONHint(viewlet.Table.OutputJSONHint); err != nil {
+		if err = viewlet.mergeTableJSONHint(viewlet.Table.OutputJSONHint); err != nil {
 			return err
 		}
 	}

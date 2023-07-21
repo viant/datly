@@ -2,8 +2,7 @@
 
 #set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
 #set($_ = $Authorization  /*
-    {"Type": "Authorizer", "StatusCode": 403}
-    SELECT Authorized /* {"DataType":"bool"} */
+   !!403 SELECT Authorized /* {"DataType":"bool"} */
     FROM (SELECT IS_VENDOR_AUTHORIZED($Jwt.UserID, $vendorID) AS Authorized) t
     WHERE Authorized
 */)

@@ -70,8 +70,7 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 	if declaration == nil || err != nil {
 		return err
 	}
-
-	if declaration.Transformer != "" {
+	if declaration.Transformer != "" || declaration.TransformKind != "" {
 		d.Transforms = append(d.Transforms, declaration.Transform())
 		return nil
 	}
@@ -135,7 +134,7 @@ func (d *Declarations) parseExpression(cursor *parsly.Cursor, selector *expr.Sel
 		declaration.SQL = SQL
 		if hint != "" {
 			hintDeclaration := &Declaration{}
-			if err := TryUnmarshalHint(hint, hintDeclaration); err != nil {
+			if err := inference.TryUnmarshalHint(hint, hintDeclaration); err != nil {
 				return nil, fmt.Errorf("invalid declaration %v, unable parse hint: %w", declaration.Name, err)
 			}
 			merged, err := declaration.Merge(hintDeclaration)

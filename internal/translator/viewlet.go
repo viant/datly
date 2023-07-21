@@ -215,12 +215,11 @@ func (v *Viewlet) discoverTables(ctx context.Context, db *sql.DB, SQL string) (e
 				name = column.Name
 			}
 			v.Whitelisted = append(v.Whitelisted, strings.ToLower(name))
-			if column.Comments != "" {
-				columnConfig := &view.ColumnConfig{}
-				if err := parser.TryUnmarshalHint(column.Comments, columnConfig); err != nil {
-					return fmt.Errorf("invalid column %v settings: %w, %s", column.Name, err, column.Comments)
-				}
-				columnConfig.Name = column.Identity()
+			columnConfig, err := inference.ExtractColumnConfig(column)
+			if err != nil {
+				return err
+			}
+			if columnConfig != nil {
 				v.ColumnConfig = append(v.ColumnConfig, columnConfig)
 			}
 		}
@@ -247,7 +246,7 @@ func (v *Viewlet) applyOutputShorthands() {
 func (v *Viewlet) mergeTableJSONHint(hint string) error {
 	v.TableJSONHint = hint
 	var output OutputSettings
-	if err := parser.TryUnmarshalHint(v.TableJSONHint, &output); err != nil {
+	if err := inference.TryUnmarshalHint(v.TableJSONHint, &output); err != nil {
 		return fmt.Errorf("invalid table %v hint: %s,  %w", v.Table.Name, v.TableJSONHint, err)
 	}
 	data, _ := parser.MergeStructs(&output, &v.OutputSettings)

@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/parsly"
@@ -57,22 +56,6 @@ func SplitHint(hint string) (marshal string, SQL string) {
 	return jsonHint, SQL
 }
 
-func TryUnmarshalHint(hint string, any interface{}) error {
-	hint = strings.TrimSpace(hint)
-	if hint == "" {
-		return nil
-	}
-
-	return hintToStruct(hint, any)
-}
-
-func hintToStruct(encoded string, aStructPtr interface{}) error {
-	encoded = strings.ReplaceAll(encoded, "/*", "")
-	encoded = strings.ReplaceAll(encoded, "*/", "")
-	encoded = strings.TrimSpace(encoded)
-	return json.Unmarshal([]byte(encoded), aStructPtr)
-}
-
 func ExtractParameterHints(text string, state *inference.State) error {
 	cursor := parsly.NewCursor("", []byte(text), 0)
 	var matcher parameterMatcher
@@ -96,7 +79,7 @@ func ExtractParameterHints(text string, state *inference.State) error {
 		parameter.Hint = matched.Text(cursor)
 		JSON, SQL := SplitHint(parameter.Hint)
 		info := Declaration{}
-		if err := hintToStruct(JSON, &info); err != nil {
+		if err := inference.HintToStruct(JSON, &info); err != nil {
 			return fmt.Errorf("failed to extract hint for %v %w, %s", holder, err, parameter.Hint)
 		}
 		declaration := &Declaration{Parameter: *parameter}

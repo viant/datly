@@ -6,6 +6,7 @@ import (
 )
 
 #set($_ = $Preference<*Preference>(body/))
+
 #set($_ = $Preference.Object /*
         {"TransformKind": "Unmarshal"}
         $decoder.UnmarshalInto($request.QueryParam("className"), true)

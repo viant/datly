@@ -3,6 +3,8 @@ package inference
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"github.com/viant/datly/view"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
@@ -37,7 +39,27 @@ func detectColumns(ctx context.Context, db *sql.DB, SQL, table string, SQLArgs .
 		return asColumns(tableColumns), nil
 	}
 	updatedMatchedColumn(&queryColumns, tableColumns)
+	for _, column := range queryColumns {
+		if _, err := ExtractColumnConfig(column); err != nil {
+			return nil, err
+		}
+	}
 	return queryColumns, nil
+}
+
+func ExtractColumnConfig(column *sqlparser.Column) (*view.ColumnConfig, error) {
+	if column.Comments == "" {
+		return nil, nil
+	}
+	columnConfig := &view.ColumnConfig{}
+	if err := TryUnmarshalHint(column.Comments, columnConfig); err != nil {
+		return nil, fmt.Errorf("invalid column %v settings: %w, %s", column.Name, err, column.Comments)
+	}
+	if columnConfig.DataType != nil {
+		column.Type = *columnConfig.DataType
+	}
+	columnConfig.Name = column.Identity()
+	return columnConfig, nil
 }
 
 func inferColumnWithSQL(ctx context.Context, db *sql.DB, SQL string, SQLArgs []interface{}, byName map[string]sink.Column) ([]sink.Column, error) {

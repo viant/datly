@@ -208,7 +208,7 @@ func (r *Resource) InitRule(dSQL *string) error {
 
 func (r *Resource) extractRuleSetting(dSQL *string) error {
 	if index := strings.Index(*dSQL, "*/"); index != -1 {
-		if err := parser.TryUnmarshalHint((*dSQL)[:index+2], &r.Rule); err != nil {
+		if err := inference.TryUnmarshalHint((*dSQL)[:index+2], &r.Rule); err != nil {
 			return err
 		}
 		*dSQL = (*dSQL)[index+2:]

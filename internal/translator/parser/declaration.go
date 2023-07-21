@@ -43,7 +43,7 @@ func (d *Declaration) PathWithName() (string, string) {
 }
 
 func (d *Declaration) Transform() *marshal.Transform {
-	aPath, name := d.PathWithName()
+	name, aPath := d.PathWithName()
 	return &marshal.Transform{
 		ParamName:   name,
 		Kind:        d.TransformKind,
