@@ -46,11 +46,11 @@ func sanitize(iterable *iterables, expression *Expression, dst []byte, accumulat
 	return dst, accumulatedOffset
 }
 
-func sanitizeContent(iterator *iterables, meta *Expression, expression string) string {
+func sanitizeContent(iterator *iterables, expr *Expression, expression string) string {
 	var argsParams []*Expression
 	for iterator.Has() {
 		next := iterator.Next()
-		if next.Start < meta.End {
+		if next.Start < expr.End {
 			argsParams = append(argsParams, next)
 		} else {
 			iterator.Push(next)
@@ -63,7 +63,7 @@ func sanitizeContent(iterator *iterables, meta *Expression, expression string) s
 	asBytes := []byte(expression)
 	offset := 0
 	for _, argParam := range argsParams {
-		asBytes, offset = sanitize(iterator, argParam, asBytes, offset, meta.Start)
+		asBytes, offset = sanitize(iterator, argParam, asBytes, offset, expr.Start)
 	}
 	return string(asBytes)
 }

@@ -12,15 +12,16 @@ import (
 )
 
 type Rule struct {
-	Project   string   `short:"p" long:"proj" description:"project location"`
-	Name      string   `short:"n" long:"name" description:"rule name"`
-	Prefix    string   `short:"u" long:"uri" description:"rule uri"  default:"dev" `
-	Source    []string `short:"s" long:"src" description:"source"`
-	Packages  []string `short:"g" long:"pkg" description:"entity package"`
-	Output    []string
-	Index     int
-	Module    string `short:"m" long:"module" description:"go module package root" default:"pkg"`
-	Generated bool
+	Project      string   `short:"p" long:"proj" description:"project location"`
+	Name         string   `short:"n" long:"name" description:"rule name"`
+	Prefix       string   `short:"u" long:"uri" description:"rule uri"  default:"dev" `
+	Source       []string `short:"s" long:"src" description:"source"`
+	Packages     []string `short:"g" long:"pkg" description:"entity package"`
+	Output       []string
+	Index        int
+	CustomRouter string `short:"R" long:"router" description:"custom router location"`
+	Module       string `short:"m" long:"module" description:"go module package root" default:"pkg"`
+	Generated    bool
 }
 
 func (r *Rule) GoModuleLocation() string {
@@ -28,6 +29,10 @@ func (r *Rule) GoModuleLocation() string {
 		return r.Module
 	}
 	return "pkg"
+}
+
+func (r *Rule) BaseRuleURL() string {
+	return url.Path(url.Join(r.Project, "dsql"))
 }
 
 func (r *Rule) GoCodeLocation() string {
@@ -76,6 +81,12 @@ func (r *Rule) RuleName() string {
 		name = name[:len(name)-len(ext)]
 	}
 	return name
+}
+
+func (r *Rule) SourceDirectory() string {
+	URL := r.SourceURL()
+	baseURL, _ := url.Split(URL, file.Scheme)
+	return url.Path(baseURL)
 }
 
 func (r *Rule) Init() error {

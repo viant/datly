@@ -104,10 +104,10 @@ func (m *expressionMatcher) tryBuildExpression(SQLKeyword string, param *expr.Se
 	_, name := GetHolderNameFromSelector(param)
 	occurrenceIndex := m.occurrences[name]
 	m.occurrences[name] = occurrenceIndex + 1
-	entry, ok := keywords.Get(name)
-	if ok {
-		return name, false
-	}
+	entry, _ := keywords.Get(name)
+	//if ok !m.indexPredefined { //not used for sanitized
+	//	return name, false
+	//}
 	m.buildExpression(index, occurrenceIndex, pos, param, SQLKeyword, entry)
 	return "", true
 }

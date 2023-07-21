@@ -1,4 +1,4 @@
-/* { "URI": "vendors" } */
+/* { "URI": "red_vendors" } */
 SELECT vendor.*,
        products.* EXCEPT VENDOR_ID
 FROM (SELECT * FROM VENDOR t ) vendor

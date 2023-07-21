@@ -26,6 +26,9 @@ func (t *types) handle(state *inference.State, parameter string, exprs *Expressi
 	if t.isParameterPath(parameter) {
 		return
 	}
+	if strings.Count(parameter, "$") > 1 {
+		return
+	}
 	t._handler(state, parameter, exprs)
 }
 
@@ -102,7 +105,9 @@ func (t *types) discoverWithContext() {
 		if index := strings.Index(name, "Unsafe."); index != -1 {
 			name = name[:index]
 		}
-
+		if strings.Count(name, "$") > 0 {
+			continue
+		}
 		if t.isParameter(name) {
 			t.handle(t.State, name, param)
 		}

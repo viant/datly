@@ -3,9 +3,11 @@ package translator
 import (
 	"context"
 	"fmt"
+	"github.com/viant/afs"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/inference"
+	"github.com/viant/datly/internal/msg"
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
@@ -34,6 +36,7 @@ type (
 		Declarations   *parser.Declarations
 		CustomTypeURLs []string
 		typeRegistry   *xreflect.Types
+		messages       *msg.Messages
 	}
 )
 
@@ -53,13 +56,15 @@ func (r *Resource) GetSchema(dataType string, opts ...xreflect.Option) (*view.Sc
 		return nil, err
 	}
 	schema := view.NewSchema(rType)
+
+	if methods, _ := r.typeRegistry.Methods(dataType); len(methods) > 0 {
+		schema.Methods = methods
+
+	}
 	if pkgSymbol, err := r.typeRegistry.Symbol("PackageName"); err == nil {
 		if text, ok := pkgSymbol.(string); ok {
 			schema.Package = text
 		}
-	}
-	if methods, _ := r.typeRegistry.Methods(dataType); len(methods) > 0 {
-		schema.Methods = methods
 	}
 	if strings.HasPrefix(dataType, "*") {
 		dataType = dataType[1:]
@@ -103,12 +108,10 @@ func (r *Resource) loadImportTypes(ctx context.Context, typesImport *parser.Type
 			r.AddCustomTypeURL(typesImport.URL)
 		}
 		dataType := schema.DataType
-		pkg := schema.Package
-		schema.Package = ""
 		if rType := schema.Type(); rType != nil {
 			dataType = rType.String()
 		}
-		typeDef := &view.TypeDefinition{Name: name, Package: pkg, DataType: dataType, CustomType: len(schema.Methods) > 0}
+		typeDef := &view.TypeDefinition{Name: name, Package: schema.Package, DataType: dataType, CustomType: len(schema.Methods) > 0}
 		if i > 0 {
 			alias = ""
 		}
@@ -196,14 +199,13 @@ func (r *Resource) ImpliedKind() view.Kind {
 	return view.KindRequestBody
 }
 
-func (r *Resource) InitRule(dSQL *string) error {
+func (r *Resource) InitRule(dSQL *string, ctx context.Context, fs afs.Service) error {
 	if err := r.extractRuleSetting(dSQL); err != nil {
 		return err
 	}
 	r.Statements = parser.NewStatements(*dSQL)
 	r.RawSQL = *dSQL
-	r.initRule()
-	return nil
+	return r.initRule(ctx, fs)
 }
 
 func (r *Resource) extractRuleSetting(dSQL *string) error {
@@ -233,8 +235,8 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create state %v type: %w", viewlet.Name, err)
 	}
-	state := reflect.New(reflectType).Elem().Interface()
-
+	templateState := reflect.New(reflectType).Elem().Interface()
+	r.State.SetLiterals(templateState)
 	var bindingArgs []interface{}
 
 	var options []expand.StateOption
@@ -243,7 +245,7 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 		//TODO adjust parameter value type
 		options = append(options, expand.WithViewParam(&expand.MetaParam{ParentValues: []interface{}{0}, DataUnit: &expand.DataUnit{}}))
 	}
-	options = append(options, expand.WithParameters(state, nil))
+	options = append(options, expand.WithParameters(templateState, nil))
 	if metaViewSQL != nil {
 		sourceViewName := metaViewSQL.Name[5 : len(metaViewSQL.Name)-4]
 		epxandingSQL = strings.Replace(epxandingSQL, "$"+metaViewSQL.Name, "$View.NonWindowSQL", 1)
@@ -320,8 +322,8 @@ func (r *Resource) ensurePathParametersSchema(ctx context.Context) error {
 	return nil
 }
 
-func NewResource(rule *options.Rule, repository *options.Repository) *Resource {
-	ret := &Resource{Rule: NewRule(), rule: rule, repository: repository}
+func NewResource(rule *options.Rule, repository *options.Repository, messages *msg.Messages) *Resource {
+	ret := &Resource{Rule: NewRule(), rule: rule, repository: repository, messages: messages}
 	ret.Resource.SetTypes(xreflect.NewTypes(
 		xreflect.WithRegistry(config.Config.Types),
 		xreflect.WithPackagePath(rule.Module)))

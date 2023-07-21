@@ -34,15 +34,6 @@ func (t *TypeImport) EnsureLocation(ctx context.Context, fs afs.Service, goModul
 	}
 }
 
-func (t TypeImports) CustomTypeURL() string {
-	for _, candidate := range t {
-		if len(candidate.Methods) > 0 {
-			return candidate.URL
-		}
-	}
-	return ""
-}
-
 func (t TypeImports) Lookup(typeName string) *TypeImport {
 	if strings.HasPrefix(typeName, "[]") {
 		typeName = typeName[2:]

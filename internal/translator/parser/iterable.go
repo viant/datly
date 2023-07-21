@@ -48,6 +48,5 @@ func (m *iterables) pop() (*Expression, bool) {
 func (t *Template) iterable() *iterables {
 	result := &expressionMatcher{Template: t, occurrences: map[string]int{}}
 	result.init()
-	result.matchExpressions()
 	return &iterables{expressionMatcher: result}
 }

@@ -6,7 +6,7 @@ import (
 
 
 #set($_ = $Foos<[]*Foos>(body/))
-#set($_ = $prevFoos /* {"Qualifiers":[{"Column":"ID","Value":"Foos.Id"}]} 
+#set($_ = $prevFoos /* {"Qualifiers":[{"Column":"ID","Value":"Foos.Id"}]}
   
   SELECT foos.*,
          foosPerformance.*

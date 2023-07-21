@@ -19,9 +19,11 @@ func (s *Service) ensureTranslator(opts *options.Options) error {
 	return err
 }
 
-func (s *Service) Translate(ctx context.Context, opts *options.Options) error {
-	err := s.translate(ctx, opts)
-	if err != nil {
+func (s *Service) Translate(ctx context.Context, opts *options.Options) (err error) {
+	if err = s.configureRouter(opts); err != nil {
+		return err
+	}
+	if err = s.translate(ctx, opts); err != nil {
 		return err
 	}
 	repository := s.translator.Repository

@@ -600,6 +600,9 @@ func (o *Options) BuildOption() *options.Options {
 		if o.GoModulePkg != "" {
 			rule.Packages = []string{o.GoModulePkg}
 		}
+		if o.CustomRouterURL != "" {
+			rule.CustomRouter = o.CustomRouterURL
+		}
 	}
 
 	if o.ConfigURL != "" && repo == nil {

@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/view"
@@ -23,9 +24,9 @@ type Service struct {
 }
 
 func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string) (err error) {
-	resource := NewResource(rule, s.Repository.Config.repository)
+	resource := NewResource(rule, s.Repository.Config.repository, &s.Repository.Messages)
 	resource.State.Append(s.Repository.State...)
-	if err = resource.InitRule(&dSQL); err != nil {
+	if err = resource.InitRule(&dSQL, ctx, s.Repository.fs); err != nil {
 		return err
 	}
 	if err = resource.parseImports(ctx, &dSQL); err != nil {
@@ -123,15 +124,22 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, service router.ServiceType) error {
 	baseRuleURL := s.Repository.RuleBaseURL(resource.rule)
 
+	route := &resource.Rule.Route
 	ruleName := s.Repository.RuleName(resource.rule)
-	resource.Rule.Route.Service = service
-	resource.Rule.Route.View = view.NewRefView(resource.Rule.Root)
+	route.Service = service
+	route.View = view.NewRefView(resource.Rule.Root)
+	route.Output.CSV = resource.Rule.CSV
+	route.Output.TabularJSON = resource.Rule.TabularJSON
+	route.Output.DataFormat = resource.Rule.DataFormat
+
+	s.applyAsyncption(resource, route)
 
 	if resource.rule.Generated { //translation from generator
 		resource.Rule.applyGeneratorOutputSetting()
 	} else {
 		resource.Rule.Route.URI = path.Join(resource.repository.APIPrefix, resource.rule.Prefix, resource.Rule.Route.URI)
 	}
+
 	state, err := resource.State.Compact(resource.rule.Module)
 	if err != nil {
 		return fmt.Errorf("failed to compact state: %w", err)
@@ -152,6 +160,22 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	return nil
 }
 
+func (s *Service) applyAsyncption(resource *Resource, route *router.Route) {
+	async := resource.Rule.Async
+	if async == nil {
+		return
+	}
+	setter.SetStringIfEmpty(&async.Connector, s.DefaultConnector())
+	route.Async = &router.Async{
+		EnsureDBTable:    async.EnsureTable == nil || *async.EnsureTable,
+		Connector:        view.NewRefConnector(async.Connector),
+		PrincipalSubject: async.PrincipalSubject,
+		ExpiryTimeInS:    async.ExpiryTimeInS,
+		Dataset:          async.Dataset,
+		BucketURL:        async.BucketURL,
+	}
+}
+
 func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mode) error {
 	if mode == view.ModeQuery {
 		resource.Rule.updateExclude(viewlet)
@@ -159,6 +183,12 @@ func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mo
 	viewlet.applyOutputShorthands()
 	if viewlet.IsMetaView() {
 		return nil
+	}
+	if resource.Rule.Async != nil {
+		viewlet.View.View.Async = &view.Async{
+			MarshalRelations: true,
+			Table:            "",
+		}
 	}
 	baseRuleURL := s.Repository.RuleBaseURL(resource.rule)
 	ruleName := s.Repository.RuleName(resource.rule)
@@ -193,7 +223,8 @@ func (s *Service) initReaderViewlet(ctx context.Context, viewlet *Viewlet) error
 		return err
 	}
 	SQL := viewlet.Resource.State.Expand(viewlet.SQL)
-	if err = viewlet.discoverTables(ctx, db, SQL); err != nil {
+	discoverySQL := viewlet.Resource.State.Expand(SQL)
+	if err = viewlet.discoverTables(ctx, db, discoverySQL); err != nil {
 		return err
 	}
 

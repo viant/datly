@@ -112,7 +112,7 @@ func (c *Schema) Init(resource *Resource, viewCaseFormat format.Case, options ..
 	}
 
 	if c.DataType != "" {
-		rType, err := types.LookupType(resource.LookupType(), c.DataType)
+		rType, err := types.LookupType(resource.LookupType(), c.TypeName())
 		if err != nil {
 			return err
 		}
