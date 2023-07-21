@@ -33,6 +33,7 @@ import (
 	"github.com/viant/toolbox/format"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
+	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"go/ast"
 	goFormat "go/format"
@@ -655,16 +656,19 @@ func (s *Builder) buildViews(ctx context.Context, builder *routeBuilder) error {
 
 outer:
 	for _, paramName := range utilParams {
-		for _, viewParameter := range aView.Template.Parameters {
+		viewParams := append([]*view.Parameter{}, aView.Template.Parameters...)
+		if aView.Selector != nil {
+			appendSelectorParams(&viewParams, aView.Selector)
+		}
+
+		for _, viewParameter := range viewParams {
 			if view.FirstNotEmpty(viewParameter.Ref, viewParameter.Name) == paramName {
 				continue outer
 			}
 		}
 
 		if _, ok := builder.paramsIndex.hints[paramName]; !ok {
-			if err = s.addParameters(builder, &view.Parameter{Name: paramName}); err != nil {
-				return err
-			}
+			s.addParameters(builder, &view.Parameter{Name: paramName})
 		}
 
 		aView.Template.Parameters = append(aView.Template.Parameters, &view.Parameter{Reference: shared.Reference{Ref: paramName}})
@@ -679,6 +683,20 @@ outer:
 	result, _ := json.MarshalIndent(aView, "", "  ")
 	s.logs = append(s.logs, fmt.Sprintf("---------- connections: -----------\n\t %s \n", string(result)))
 	return nil
+}
+
+func appendSelectorParams(dst *[]*view.Parameter, selector *view.Config) {
+	appendIfNotNil(dst, selector.CriteriaParam)
+	appendIfNotNil(dst, selector.FieldsParam)
+	appendIfNotNil(dst, selector.LimitParam)
+	appendIfNotNil(dst, selector.OffsetParam)
+	appendIfNotNil(dst, selector.OrderByParam)
+}
+
+func appendIfNotNil(dst *[]*view.Parameter, param *view.Parameter) {
+	if param != nil {
+		*dst = append(*dst, param)
+	}
 }
 
 func (s *Builder) loadAndInitConfig(ctx context.Context) error {
@@ -1163,7 +1181,7 @@ func copyWarmup(warmup map[string]interface{}) map[string]interface{} {
 
 }
 
-func (s *Builder) addParameters(builder *routeBuilder, params ...*view.Parameter) error {
+func (s *Builder) addParameters(builder *routeBuilder, params ...*view.Parameter) {
 	for i, aParam := range params {
 		if _, ok := builder.paramsIndex.parameters[aParam.Name]; ok {
 			continue
@@ -1172,8 +1190,6 @@ func (s *Builder) addParameters(builder *routeBuilder, params ...*view.Parameter
 		builder.routerResource.Resource.Parameters = append(builder.routerResource.Resource.Parameters, params[i])
 		builder.paramsIndex.AddParameter(params[i])
 	}
-
-	return nil
 }
 
 func (s *Builder) addTypeDef(resource *view.Resource, schema *view.TypeDefinition) {
@@ -1269,6 +1285,7 @@ func (s *Builder) normalizeFieldName(except string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	actualFieldName := colFormat.Format(except, format.CaseUpperCamel)
 	return actualFieldName, nil
 }
@@ -1338,20 +1355,16 @@ func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
 		aParam := childViewConfig.unexpandedTable.ViewConfig.DataViewParameter
 
 		if aParam == nil {
-			aParam = &view.Parameter{
+			aParam = s.ParamHolder(builder, paramName)
+			aParam.In = &view.Location{
+				Kind: view.KindDataView,
 				Name: paramName,
-				In: &view.Location{
-					Kind: view.KindDataView,
-					Name: paramName,
-				},
-				Required: boolPtr(true),
 			}
+			aParam.Required = boolPtr(true)
 		}
 
 		updateAsAuthParamIfNeeded(childViewConfig.unexpandedTable.Auth, aParam)
-		if err = s.addParameters(builder, aParam); err != nil {
-			return nil, err
-		}
+		s.addParameters(builder, aParam)
 
 		if s.isUtilParam(builder, aParam) {
 			utilParams = append(utilParams, aParam.Name)
@@ -1376,10 +1389,7 @@ func (s *Builder) prepareExternalParameters(builder *routeBuilder, paramViewConf
 				Schema:          &view.Schema{DataType: "string"},
 			}
 
-			if err := s.addParameters(builder, authParam); err != nil {
-				return nil, err
-			}
-
+			s.addParameters(builder, authParam)
 			externalParams = append(externalParams, authParam)
 		}
 		if parameter.Connector != "" {
@@ -1459,9 +1469,6 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 	param.Schema.DataType = paramType
 	if config.Cardinality == view.Many {
 		param.Schema.Cardinality = view.Many
-		//if !strings.HasPrefix(paramType, "[]") {
-		//	param.Schema.Type = "[]" + paramType
-		//}
 	}
 
 	if config.Codec != "" {
@@ -1484,8 +1491,12 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 		param.MinAllowedRecords = config.MinAllowedRecords
 	}
 
-	if config.CodecType != "" && param.Output != nil {
-		param.Output.Schema = &view.Schema{DataType: config.CodecType}
+	if param.Output != nil {
+		if config.CodecType != "" {
+			param.Output.Schema = &view.Schema{DataType: config.CodecType}
+		}
+
+		param.Output.HandlerType = config.CodecHandler
 	}
 
 	if config.StatusCode != nil {
@@ -1496,6 +1507,10 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 		if param.Output == nil {
 			param.Output = &view.Codec{Reference: shared.Reference{Ref: config.Codec}}
 		}
+	}
+
+	if config.Predicate != nil {
+		param.Predicate = config.Predicate
 	}
 
 	return nil
@@ -1540,16 +1555,16 @@ func (s *Builder) generateRuleIfNeeded(ctx context.Context, SQL []byte) (string,
 			newSession(path.Dir(s.options.Location), s.options.Location, s.options.PluginDst, dsqlOutput, dsqlOutput, goFileOutput),
 		)
 
-		cmd := command.New()
-		template, err := s.buildCodeTemplate(ctx, routeBuilder, SQL, s.options.PrepareRule)
-		if err != nil {
-			return "", err
-		}
-		if err = cmd.Generate(ctx, s.Options.Generate, template); err != nil {
-			return "", err
-		}
-		SQL, err = s.fs.DownloadWithURL(ctx, s.Options.Generate.DSQLLocation())
-		return string(SQL), err
+			cmd := command.New()
+			template, err := s.buildCodeTemplate(ctx, routeBuilder, SQL, s.options.PrepareRule)
+			if err != nil {
+				return "", err
+			}
+			if err = cmd.Generate(ctx, s.Options.Generate, template); err != nil {
+				return "", err
+			}
+			SQL, err = s.fs.DownloadWithURL(ctx, s.Options.Generate.DSQLLocation())
+			return string(SQL), err
 	*/
 	return string(SQL), nil
 }
@@ -1743,7 +1758,7 @@ func (s *Builder) loadGoTypes(builder *routeBuilder) error {
 
 	matched = cursor.MatchAfterOptional(whitespaceMatcher, exprGroupMatcher, quotedMatcher)
 	switch matched.Code {
-	case quotedToken:
+	case doubleQuotedToken:
 		text := matched.Text(cursor)
 		typeSrc, err := s.parseTypeSrc(text[1:len(text)-1], cursor, builder)
 		if err != nil {
@@ -1759,7 +1774,7 @@ func (s *Builder) loadGoTypes(builder *routeBuilder) error {
 
 			matched = exprGroupCursor.MatchAfterOptional(whitespaceMatcher, quotedMatcher)
 			switch matched.Code {
-			case quotedToken:
+			case doubleQuotedToken:
 				text := matched.Text(exprGroupCursor)
 				typeSrc, err := s.parseTypeSrc(text[1:len(text)-1], exprGroupCursor, builder)
 				if err != nil {
@@ -1784,7 +1799,7 @@ func (s *Builder) parseTypeSrc(imported string, cursor *parsly.Cursor, builder *
 	matched := cursor.MatchAfterOptional(whitespaceMatcher, aliasKeywordMatcher)
 	if matched.Code == aliasKeywordToken {
 		matched = cursor.MatchAfterOptional(whitespaceMatcher, quotedMatcher)
-		if matched.Code != quotedToken {
+		if matched.Code != doubleQuotedToken {
 			return nil, cursor.NewError(quotedMatcher)
 		}
 
@@ -1901,6 +1916,10 @@ func (s *Builder) buildParamHint(builder *routeBuilder, selector *expr.Select, c
 		StructQLQuery: qlQuery,
 	})
 
+	s.addParameters(builder, &view.Parameter{
+		Name: holderName,
+	})
+
 	return nil
 }
 
@@ -1973,7 +1992,7 @@ func (s *Builder) parseParamHint(cursor *parsly.Cursor) (string, error) {
 
 func (s *Builder) tryUpdateConfigType(typeContent string, aConfig *paramJSONHintConfig) {
 
-	//aConfig.Cardinality = view.IsToOne
+	//aConfig.Cardinality = view.One
 	//if strings.HasPrefix(typeContent, "[]") {
 	//	aConfig.Cardinality = view.Many
 	//	typeContent = typeContent[2:]
@@ -2017,7 +2036,7 @@ func mergeJsonStructs(args ...interface{}) ([]byte, error) {
 	return json.Marshal(result)
 }
 
-func (s *Builder) readParamConfigs(config *option.ParameterConfig, cursor *parsly.Cursor) error {
+func (s *Builder) readParamConfigs(cfg *option.ParameterConfig, cursor *parsly.Cursor) error {
 	for cursor.Pos < cursor.InputSize {
 		matched := cursor.MatchOne(dotMatcher)
 		if matched.Code != dotToken {
@@ -2038,18 +2057,60 @@ func (s *Builder) readParamConfigs(config *option.ParameterConfig, cursor *parsl
 		content := matched.Text(cursor)
 		content = content[1 : len(content)-1]
 
+		args := s.extractArgs(content)
 		switch text {
 		case "WithCodec":
-			config.Codec = strings.Trim(content, "'")
+			if len(args) != 1 {
+				return fmt.Errorf("expected WithCodec to have one arg, but got %v", len(args))
+			}
+
+			cfg.Codec = args[0]
 		case "WithStatusCode":
-			statusCode, err := strconv.Atoi(content)
+			if len(args) != 1 {
+				return fmt.Errorf("expected WithStatusCode to have one arg, but got %v", len(args))
+			}
+
+			statusCode, err := strconv.Atoi(args[0])
 			if err != nil {
 				return err
 			}
 
-			config.StatusCode = &statusCode
+			cfg.StatusCode = &statusCode
+		case "Optional":
+			if len(args) != 0 {
+				return fmt.Errorf("expected Optional to have zero args, but got %v", len(args))
+			}
+
+			cfg.Required = boolPtr(false)
+		case "WithPredicate":
+			if len(args) < 2 {
+				return fmt.Errorf("expected WithPredicate to have at least 2 args, but got %v", len(args))
+			}
+
+			ctx, err := strconv.Atoi(args[0])
+			if err != nil {
+				return err
+			}
+
+			var namedArgs []*predicate.NamedArgument
+			for pos, argName := range args[2:] {
+				namedArgs = append(namedArgs, &predicate.NamedArgument{
+					Position: pos,
+					Name:     argName,
+				})
+			}
+
+			cfg.Predicate = &config.PredicateConfig{
+				Name:    args[1],
+				Context: ctx,
+				Args:    namedArgs,
+			}
 		case "UtilParam":
-			config.Util = true
+			if len(args) != 0 {
+				return fmt.Errorf("expected UtilParam to have zero arg, but got %v", len(args))
+			}
+
+			cfg.Util = true
 		}
 
 		cursor.MatchOne(whitespaceMatcher)
@@ -2238,6 +2299,42 @@ func (s *Builder) prepareDSQLIfNeeded(ctx context.Context, builder *routeBuilder
 	}
 
 	return s.convertHandlerIfNeeded(builder)
+}
+
+func (s *Builder) ParamHolder(builder *routeBuilder, name string) *view.Parameter {
+	param, ok := builder.paramsIndex.Param(name)
+	if !ok {
+		builder.routerResource.Resource.Parameters = append(builder.routerResource.Resource.Parameters, param)
+	}
+
+	return param
+}
+
+func (s *Builder) extractArgs(content string) []string {
+	result := make([]string, 0)
+	cursor := parsly.NewCursor("", []byte(strings.Trim(content, `"`)), 0)
+	for {
+		matched := cursor.MatchAfterOptional(whitespaceMatcher, singleQuotedMatcher, quotedMatcher, comaTerminatedMatcher)
+		switch matched.Code {
+		case singleQuotedToken, doubleQuotedToken:
+			arg := matched.Text(cursor)
+			arg = arg[1 : len(arg)-1]
+			result = append(result, arg)
+			cursor.MatchOne(comaTerminatedMatcher)
+		case comaTerminatedToken:
+			arg := matched.Text(cursor)
+			arg = arg[:len(arg)-1]
+			result = append(result, strings.TrimSpace(arg))
+		default:
+			if cursor.Pos < len(cursor.Input) {
+				arg := strings.Trim(strings.TrimSpace(string(cursor.Input[cursor.Pos:])), `"'`)
+				if len(arg) != 0 {
+					result = append(result, arg)
+				}
+			}
+			return result
+		}
+	}
 }
 
 func trimParenthasis(text string) string {

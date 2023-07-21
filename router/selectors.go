@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/router/criteria"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xdatly/handler/parameter"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"os"
@@ -29,7 +30,7 @@ type (
 		requestMetadata *RequestMetadata
 		params          *RequestParams
 		cache           *paramsValueCache
-		skipValidation  bool
+		viewParams      view.NamedParameters
 	}
 
 	JSONError struct {
@@ -130,7 +131,7 @@ func BuildRouteSelectors(ctx context.Context, selectors *view.Selectors, route *
 			return err
 		}
 	}
-	return CreateSelectors(ctx, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, route.Index._viewDetails...)
+	return CreateSelectors(ctx, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, view.NamedParameters{}, route.Index._viewDetails...)
 }
 
 func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, requestParams *RequestParams, views ...*ViewDetails) (*view.Selectors, *RequestParams, error) {
@@ -145,7 +146,7 @@ func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.R
 	}
 
 	selectors := view.NewSelectors()
-	if err := CreateSelectors(ctx, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, views...); err != nil {
+	if err := CreateSelectors(ctx, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, nil, views...); err != nil {
 		return nil, nil, err
 	}
 	return selectors, requestParams, nil
@@ -161,18 +162,19 @@ func NewRequestMetadata(route *Route) *RequestMetadata {
 	return requestMetadata
 }
 
-func CreateSelectors(ctx context.Context, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, selectors *view.Selectors, views ...*ViewDetails) error {
-	sb := newParamStateBuilder(inputFormat, dateFormat, requestMetadata, requestParams, newParamsValueCache())
+func CreateSelectors(ctx context.Context, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, selectors *view.Selectors, paramsIndex view.NamedParameters, views ...*ViewDetails) error {
+	sb := newParamStateBuilder(inputFormat, dateFormat, requestMetadata, requestParams, newParamsValueCache(), paramsIndex)
 	return sb.Build(ctx, views, selectors)
 }
 
-func newParamStateBuilder(inputFormat format.Case, dateFormat string, requestMetadata *RequestMetadata, requestParams *RequestParams, cache *paramsValueCache) *paramStateBuilder {
+func newParamStateBuilder(inputFormat format.Case, dateFormat string, requestMetadata *RequestMetadata, requestParams *RequestParams, cache *paramsValueCache, paramsIndex view.NamedParameters) *paramStateBuilder {
 	sb := &paramStateBuilder{
 		caser:           inputFormat,
 		dateFormat:      dateFormat,
 		requestMetadata: requestMetadata,
 		params:          requestParams,
 		cache:           cache,
+		viewParams:      paramsIndex,
 	}
 	return sb
 }
@@ -240,36 +242,47 @@ func (b *paramStateBuilder) populateSelector(ctx context.Context, selector *view
 
 func (b *paramStateBuilder) populateCriteria(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
 	criteriaExpression, err := b.criteriaValue(ctx, details, selector)
-	if err != nil || criteriaExpression == "" {
+	if err != nil || criteriaExpression == nil {
 		return err
 	}
 
-	if !details.View.Selector.Constraints.Criteria {
-		return fmt.Errorf("can't use criteria on view %v", details.View.Name)
+	switch actual := criteriaExpression.(type) {
+	case string:
+		if err != nil || criteriaExpression == "" {
+			return err
+		}
+
+		if !details.View.Selector.Constraints.Criteria {
+			return fmt.Errorf("can't use criteria on view %v", details.View.Name)
+		}
+
+		sanitizedCriteria, err := criteria.Parse(actual, details.View.IndexedColumns(), details.View.Selector.Constraints.SqlMethodsIndexed())
+		if err != nil {
+			return err
+		}
+
+		selector.Criteria = sanitizedCriteria.Expression
+		selector.Placeholders = sanitizedCriteria.Placeholders
+		return nil
+
+	case *parameter.Criteria:
+		if actual == nil {
+			return nil
+		}
+
+		selector.SetCriteria(actual.Query, actual.Args)
+		return nil
+	case parameter.Criteria:
+		selector.SetCriteria(actual.Query, actual.Args)
+		return nil
 	}
 
-	sanitizedCriteria, err := criteria.Parse(criteriaExpression, details.View.IndexedColumns(), details.View.Selector.Constraints.SqlMethodsIndexed())
-	if err != nil {
-		return err
-	}
-
-	selector.Criteria = sanitizedCriteria.Expression
-	selector.Placeholders = sanitizedCriteria.Placeholders
-	return nil
+	return typeMismatchError(details.View.Selector.CriteriaParam, criteriaExpression)
 }
 
-func (b *paramStateBuilder) criteriaValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, error) {
+func (b *paramStateBuilder) criteriaValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (interface{}, error) {
 	param := details.View.Selector.CriteriaParam
-	paramValue, err := b.extractParamValue(ctx, param, details, selector)
-	if err != nil || paramValue == nil {
-		return "", err
-	}
-
-	if actual, ok := paramValue.(string); ok {
-		return actual, nil
-	}
-
-	return "", typeMismatchError(param, paramValue)
+	return b.extractParamValue(ctx, param, details, selector)
 }
 
 func (b *paramStateBuilder) populateLimit(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
@@ -325,7 +338,7 @@ func (b *paramStateBuilder) populateOrderBy(ctx context.Context, selector *view.
 func (b *paramStateBuilder) orderByValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, error) {
 	param := details.View.Selector.OrderByParam
 	value, err := b.extractParamValue(ctx, param, details, selector)
-	if err != nil {
+	if err != nil || value == nil {
 		return "", err
 	}
 
@@ -360,6 +373,10 @@ func (b *paramStateBuilder) offsetValue(ctx context.Context, details *ViewDetail
 }
 
 func asInt(value interface{}, param *view.Parameter) (int, error) {
+	if value == nil {
+		return 0, nil
+	}
+
 	if actual, ok := value.(int); ok {
 		return actual, nil
 	}
@@ -391,7 +408,7 @@ func (b *paramStateBuilder) populateFields(ctx context.Context, selector *view.S
 func (b *paramStateBuilder) fieldRawValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, int32, error) {
 	param := details.View.Selector.FieldsParam
 	paramValue, err := b.extractParamValue(ctx, param, details, selector)
-	if err != nil {
+	if err != nil || paramValue == nil {
 		return "", ValuesSeparator, err
 	}
 
@@ -404,7 +421,18 @@ func (b *paramStateBuilder) fieldRawValue(ctx context.Context, details *ViewDeta
 }
 
 func (b *paramStateBuilder) extractParamValue(ctx context.Context, param *view.Parameter, details *ViewDetails, selector *view.Selector) (interface{}, error) {
-	return b.extractParamValueWithOptions(ctx, param, details.View, selector)
+	var options []interface{}
+	if selector != nil {
+		options = append(options, parameter.Selector(selector))
+	}
+
+	if details != nil && details.View != nil {
+		options = append(options, parameter.ColumnsSource(details.View.IndexedColumns()))
+	}
+
+	options = append(options, parameter.ValueGetter(b))
+
+	return b.extractParamValueWithOptions(ctx, param, details.View, options...)
 }
 
 func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, param *view.Parameter, parentView *view.View, options ...interface{}) (interface{}, error) {
@@ -418,10 +446,13 @@ func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, pa
 			return b.paramBasedParamValue(ctx, parentView, param, options...)
 		case view.KindLiteral:
 			return param.Const, nil
+		case view.KindRequest:
+			return b.params.request, nil
 		}
 
 		return b.params.extractHttpParam(ctx, param, options)
 	})
+
 	if value == nil || err != nil {
 		return nil, err
 	}
@@ -429,9 +460,13 @@ func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, pa
 	return transformIfNeeded(ctx, param, value, options...)
 }
 
-func (p *RequestParams) convert(ctx context.Context, raw string, param *view.Parameter, options ...interface{}) (interface{}, error) {
+func (p *RequestParams) convert(isSpecified bool, raw string, param *view.Parameter, options ...interface{}) (interface{}, error) {
 	if raw == "" && param.IsRequired() {
 		return nil, requiredParamErr(param)
+	}
+
+	if !isSpecified {
+		return nil, nil
 	}
 
 	dateFormat := p.route.DateFormat
@@ -554,7 +589,7 @@ func (b *paramStateBuilder) viewParamValue(ctx context.Context, param *view.Para
 	}
 	selectors := view.NewSelectors()
 
-	if err := CreateSelectors(ctx, b.dateFormat, b.caser, newRequestMetadata, b.params, selectors, &ViewDetails{View: aView}); err != nil {
+	if err := CreateSelectors(ctx, b.dateFormat, b.caser, newRequestMetadata, b.params, selectors, b.viewParams, &ViewDetails{View: aView}); err != nil {
 		return nil, err
 	}
 
@@ -684,6 +719,15 @@ func (b *paramStateBuilder) addParamBasedParam(ctx context.Context, parent *View
 		return err
 	}
 	return parameter.ConvertAndSetCtx(ctx, selector, value)
+}
+
+func (b *paramStateBuilder) Value(ctx context.Context, paramName string) (interface{}, error) {
+	lookup, err := b.viewParams.Lookup(paramName)
+	if err != nil {
+		return nil, err
+	}
+
+	return b.extractParamValueWithOptions(ctx, lookup, nil)
 }
 
 func transformIfNeeded(ctx context.Context, param *view.Parameter, value interface{}, options ...interface{}) (interface{}, error) {

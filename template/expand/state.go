@@ -10,7 +10,7 @@ import (
 type (
 	State struct {
 		*est.State
-		Context
+		*Context
 		Parameters    interface{}
 		ParametersHas interface{}
 		CustomContext []*CustomContext
@@ -29,6 +29,7 @@ type (
 		Session         *session.Session   `velty:"names=session"`
 		Validator       *validator.Service `velty:"names=validator"`
 		MessageBus      *mbus.Service      `velty:"names=messageBus"`
+		Predicate       *Predicate         `velty:"names=predicate"`
 	}
 
 	StateOption func(state *State)
@@ -71,7 +72,7 @@ func WithCustomContext(customContext *CustomContext) StateOption {
 	}
 }
 
-func (s *State) Init(templateState *est.State, options ...StateOption) {
+func (s *State) Init(templateState *est.State, predicates []*PredicateConfig, options ...StateOption) {
 	for _, option := range options {
 		option(s)
 	}
@@ -108,6 +109,10 @@ func (s *State) Init(templateState *est.State, options ...StateOption) {
 		s.MessageBus = s.Session.MessageBus()
 	}
 
+	if len(predicates) > 0 {
+		s.Predicate = NewPredicate(s.Context, s.Parameters, s.ParametersHas, predicates)
+	}
+
 	s.State = templateState
 }
 
@@ -133,6 +138,6 @@ func StateWithSQL(SQL string) *State {
 		Expanded: SQL,
 	}
 
-	aState.Init(nil)
+	aState.Init(nil, nil)
 	return aState
 }

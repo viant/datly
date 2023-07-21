@@ -8,19 +8,18 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
+	"net/http"
 	"reflect"
 	"strings"
 	"unsafe"
-)
-
-const (
-	CodecVeltyCriteria = "VeltyCriteria"
 )
 
 type (
 	//Parameter describes parameters used by the Criteria to filter the view.
 	Parameter struct {
 		shared.Reference
+		Fields       Parameters
+		Predicate    *config.PredicateConfig
 		Name         string `json:",omitempty"`
 		PresenceName string `json:",omitempty"`
 
@@ -34,12 +33,12 @@ type (
 		ExpectedReturned  *int      `json:",omitempty"`
 		Schema            *Schema   `json:",omitempty"`
 		//Deprecated -> use Codec only to set Output
-		Codec             *Codec      `json:",omitempty"`
-		Output            *Codec      `json:",omitempty"`
-		Const             interface{} `json:",omitempty"`
-		DateFormat        string      `json:",omitempty"`
-		ErrorStatusCode   int         `json:",omitempty"`
-		Hint              string      `json:",omitempty"`
+		Codec           *Codec      `json:",omitempty"`
+		Output          *Codec      `json:",omitempty"`
+		Const           interface{} `json:",omitempty"`
+		DateFormat      string      `json:",omitempty"`
+		ErrorStatusCode int         `json:",omitempty"`
+
 		_valueAccessor    *types.Accessor
 		_presenceAccessor *types.Accessor
 		_initialized      bool
@@ -84,7 +83,7 @@ func (v *Codec) Init(resource *Resource, view *View, ownerType reflect.Type) err
 
 	v._initialized = true
 
-	if err := v.inheritCodecIfNeeded(resource, ownerType); err != nil {
+	if err := v.inheritCodecIfNeeded(resource, ownerType, view); err != nil {
 		return err
 	}
 
@@ -118,7 +117,7 @@ func (v *Codec) initFnIfNeeded(resource *Resource, view *View) error {
 	return nil
 }
 
-func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type) error {
+func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type, view *View) error {
 	if v.Ref == "" {
 		return nil
 	}
@@ -132,7 +131,12 @@ func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type)
 
 	factory, ok := visitor.(config.CodecFactory)
 	if ok {
-		aCodec, err := factory.New(&v.CodecConfig, paramType, resource.LookupType())
+		opts := []interface{}{resource.LookupType()}
+		if view != nil {
+			opts = append(opts, view.IndexedColumns())
+		}
+
+		aCodec, err := factory.New(&v.CodecConfig, paramType, opts...)
 		if err != nil {
 			return err
 		}
@@ -166,15 +170,6 @@ func (v *Codec) ensureSchema(paramType reflect.Type) {
 }
 
 func (v *Codec) extractCodecFn(resource *Resource, paramType reflect.Type, view *View) (config.CodecFn, error) {
-	switch strings.ToLower(v.Name) {
-	case strings.ToLower(CodecVeltyCriteria):
-		veltyCodec, err := NewVeltyCodec(v.Source, paramType, view)
-		if err != nil {
-			return nil, err
-		}
-		return veltyCodec.Value, nil
-	}
-
 	vVisitor, err := resource._visitors.Lookup(v.Name)
 	if err != nil {
 		return nil, err
@@ -347,6 +342,10 @@ func (p *Parameter) inherit(param *Parameter) {
 	if p.ErrorStatusCode == 0 {
 		p.ErrorStatusCode = param.ErrorStatusCode
 	}
+
+	if p.Predicate == nil {
+		p.Predicate = param.Predicate
+	}
 }
 
 // Validate checks if parameter is valid
@@ -389,9 +388,16 @@ func (p *Parameter) IsRequired() bool {
 }
 
 func (p *Parameter) initSchema(resource *Resource, structType reflect.Type) error {
+	if p.In.Kind == KindRequest {
+		p.Schema = NewSchema(reflect.TypeOf(&http.Request{}))
+		return nil
+	}
+
 	if p.Schema == nil {
 		if p.In.Kind == KindLiteral {
 			p.Schema = NewSchema(reflect.TypeOf(p.Const))
+		} else if p.In.Kind == KindRequest {
+			p.Schema = NewSchema(reflect.TypeOf(&http.Request{}))
 		} else {
 			return fmt.Errorf("parameter %v schema can't be empty", p.Name)
 		}
@@ -522,6 +528,7 @@ func (p *Parameter) setOnState(ctx context.Context, state *ParamState, value int
 
 func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr unsafe.Pointer, converted bool, options ...interface{}) (interface{}, error) {
 	if p._valueAccessor == nil {
+		fmt.Printf("[WARN] setValue(): parameter  %v _valueAccessor was nil", p.Name)
 		return value, nil
 	}
 	aCodec := p.Output
@@ -542,6 +549,7 @@ func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr un
 		p._valueAccessor.SetValue(paramPtr, convertedValue)
 		return convertedValue, nil
 	}
+
 	return p._valueAccessor.SetConvertedAndGet(paramPtr, value, p.DateFormat)
 }
 
@@ -581,7 +589,7 @@ func (p *Parameter) SetPresenceField(structType reflect.Type) error {
 		return err
 	}
 
-	p._presenceAccessor = types.NewAccessor(fields)
+	p._presenceAccessor = types.NewAccessor(fields...)
 
 	return nil
 }
@@ -652,11 +660,29 @@ func (p *Parameter) WithAccessors(value, presence *types.Accessor) *Parameter {
 	return &result
 }
 
+func (p *Parameter) ValueAccessor() *types.Accessor {
+	return p._valueAccessor
+}
+
+func (p *Parameter) PresenceAccessor() *types.Accessor {
+	return p._presenceAccessor
+}
+
 // NamedParameters represents Parameter map indexed by Parameter.Name
 type NamedParameters map[string]*Parameter
 
 // Parameters represents slice of parameters
 type Parameters []*Parameter
+
+func (p Parameters) FilterByKind(kind Kind) Parameters {
+	var result = Parameters{}
+	for i, candidate := range p {
+		if candidate.In.Kind == kind {
+			result = append(result, p[i])
+		}
+	}
+	return result
+}
 
 func (p Parameters) Len() int {
 	return len(p)
@@ -744,6 +770,7 @@ func (p NamedParameters) Register(parameter *Parameter) error {
 	if _, ok := p[parameter.Name]; ok {
 		fmt.Printf("[WARN] parameter with %v name already exists in given resource", parameter.Name)
 	}
+
 	p[parameter.Name] = parameter
 	return nil
 }

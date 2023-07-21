@@ -17,42 +17,84 @@ type (
 		executor         *est.Execution
 		stateProvider    func() *est.State
 		constParams      []ConstUpdater
+		predicateConfigs []*PredicateConfig
 		paramSchema      reflect.Type
 		presenceSchema   reflect.Type
 		supportsPresence bool
 		supportsParams   bool
+		stateName        string
 	}
 
 	ConstUpdater interface {
 		UpdateValue(params interface{}, presenceMap interface{}) error
 	}
+
+	EvaluatorOption func(c *config)
 )
 
-func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.LookupType, options ...interface{}) (*Evaluator, error) {
-	evaluator := &Evaluator{
-		constParams:      consts,
-		paramSchema:      paramSchema,
-		presenceSchema:   presenceSchema,
-		supportsPresence: presenceSchema != nil,
-		supportsParams:   paramSchema != nil,
+func WithCustomContexts(ctx ...*CustomContext) EvaluatorOption {
+	return func(c *config) {
+		c.valueTypes = append(c.valueTypes, ctx...)
 	}
+}
 
+func WithPanicOnError(b bool) EvaluatorOption {
+	return func(c *config) {
+		c.panicOnError = true
+	}
+}
+
+func WithConstUpdaters(updaters []ConstUpdater) EvaluatorOption {
+	return func(c *config) {
+		c.constUpdaters = updaters
+	}
+}
+
+func WithTypeLookup(lookup xreflect.LookupType) EvaluatorOption {
+	return func(c *config) {
+		c.typeLookup = lookup
+	}
+}
+
+func WithParamSchema(pSchema, hasSchema reflect.Type) EvaluatorOption {
+	return func(c *config) {
+		c.pSchema = pSchema
+		c.hasSchema = hasSchema
+	}
+}
+
+func WithStateName(name string) EvaluatorOption {
+	return func(c *config) {
+		c.stateName = name
+	}
+}
+
+func NewEvaluator(template string, options ...EvaluatorOption) (*Evaluator, error) {
 	aCofnig := createConfig(options)
+
+	evaluator := &Evaluator{
+		constParams:      aCofnig.constUpdaters,
+		paramSchema:      aCofnig.pSchema,
+		presenceSchema:   aCofnig.hasSchema,
+		supportsPresence: aCofnig.hasSchema != nil,
+		supportsParams:   aCofnig.pSchema != nil,
+		stateName:        aCofnig.stateName,
+		predicateConfigs: aCofnig.predicates,
+	}
 
 	var err error
 	evaluator.planner = velty.New(velty.BufferSize(len(template)), aCofnig.panicOnError, velty.TypeParser(func(typeRepresentation string) (reflect.Type, error) {
-		fmt.Printf("1111\n")
-		return typeLookup(typeRepresentation)
+		return aCofnig.typeLookup(typeRepresentation)
 	}))
 
 	if evaluator.supportsParams {
-		if err = evaluator.planner.DefineVariable(keywords.ParamsKey, paramSchema); err != nil {
+		if err = evaluator.planner.DefineVariable(aCofnig.stateName, aCofnig.pSchema); err != nil {
 			return nil, err
 		}
 	}
 
 	if evaluator.supportsPresence {
-		if err = evaluator.planner.DefineVariable(keywords.ParamsMetadataKey, presenceSchema); err != nil {
+		if err = evaluator.planner.DefineVariable(keywords.ParamsMetadataKey, aCofnig.hasSchema); err != nil {
 			return nil, err
 		}
 	}
@@ -65,7 +107,7 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
-	if err = evaluator.planner.RegisterFunctionKind(fnTransform, newTransform(typeLookup)); err != nil {
+	if err = evaluator.planner.RegisterFunctionKind(fnTransform, newTransform(aCofnig.typeLookup)); err != nil {
 		return nil, err
 	}
 
@@ -95,7 +137,7 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 		return nil, err
 	}
 
-	aNewer := &newer{lookup: typeLookup}
+	aNewer := &newer{lookup: aCofnig.typeLookup}
 	if err = evaluator.planner.RegisterStandaloneFunction(fnNew, &op.Function{
 		Handler:     aNewer.New,
 		ResultTyper: aNewer.NewResultType,
@@ -117,24 +159,17 @@ func NewEvaluator(consts []ConstUpdater, paramSchema, presenceSchema reflect.Typ
 	return evaluator, nil
 }
 
-func createConfig(options []interface{}) *config {
+func createConfig(options []EvaluatorOption) *config {
 	instance := newConfig()
 	for _, option := range options {
-		switch actual := option.(type) {
-		case []*CustomContext:
-			instance.valueTypes = append(instance.valueTypes, actual...)
-		case *CustomContext:
-			instance.valueTypes = append(instance.valueTypes, actual)
-		case velty.PanicOnError:
-			instance.panicOnError = actual
-		}
+		option(instance)
 	}
 
 	return instance
 }
 
-func (e *Evaluator) Evaluate(state *State, options ...StateOption) (*State, error) {
-	state = e.ensureState(state, options...)
+func (e *Evaluator) Evaluate(ctx *Context, options ...StateOption) (*State, error) {
+	state := e.ensureState(ctx, options...)
 	externalParams, presenceMap := e.updateConsts(state.Parameters, state.ParametersHas)
 
 	if externalParams != nil {
@@ -145,7 +180,7 @@ func (e *Evaluator) Evaluate(state *State, options ...StateOption) (*State, erro
 	}
 
 	if externalParams != nil && e.supportsParams {
-		if err := state.SetValue(keywords.ParamsKey, externalParams); err != nil {
+		if err := state.SetValue(e.stateName, externalParams); err != nil {
 			return nil, err
 		}
 	}
@@ -156,9 +191,10 @@ func (e *Evaluator) Evaluate(state *State, options ...StateOption) (*State, erro
 		}
 	}
 
-	if err := state.EmbedValue(state.Context); err != nil {
+	if err := state.EmbedValue(*state.Context); err != nil {
 		return nil, err
 	}
+
 	for _, customContext := range state.CustomContext {
 		actualType := reflect.TypeOf(customContext.Value)
 		if actualType != customContext.Type {
@@ -171,20 +207,32 @@ func (e *Evaluator) Evaluate(state *State, options ...StateOption) (*State, erro
 			}
 		}
 	}
+
 	if err := e.executor.Exec(state.State); err != nil {
 		return state, err
 	}
+
 	state.Expanded = state.Buffer.String()
 	return state, nil
 }
 
-func (e *Evaluator) ensureState(state *State, options ...StateOption) *State {
-	if state == nil {
-		state = &State{}
+func (e *Evaluator) ensureState(ctx *Context, options ...StateOption) *State {
+	state := &State{
+		Context: &Context{},
 	}
 
-	state.Init(e.stateProvider(), options...)
+	if ctx != nil {
+		state.Context = ctx
+	}
+
+	state.Init(e.stateProvider(), e.predicateConfigs, options...)
 	return state
+}
+
+func WithPredicates(configs []*PredicateConfig) EvaluatorOption {
+	return func(cfg *config) {
+		cfg.predicates = configs
+	}
 }
 
 func (e *Evaluator) updateConsts(params interface{}, presenceMap interface{}) (interface{}, interface{}) {

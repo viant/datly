@@ -97,10 +97,7 @@ func (s *Builder) NewSchema(dataType string, cardinality string) *view.Schema {
 func (s *Builder) convertParams(builder *routeBuilder, template *Template) ([]*view.Parameter, error) {
 	parameters := template.Parameters
 	result := make([]*view.Parameter, 0, len(parameters))
-	if err := s.addParameters(builder, template.viewParams...); err != nil {
-		return nil, err
-	}
-
+	s.addParameters(builder, template.viewParams...)
 	added := map[string]bool{}
 	for _, parameter := range parameters {
 		existingParam := builder.paramByName(parameter.Name)

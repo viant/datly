@@ -8,15 +8,17 @@ import (
 
 type Registry struct {
 	sync.Mutex
-	Types  *xreflect.Types
-	Codecs CodecsRegistry
+	Types      *xreflect.Types
+	Codecs     CodecsRegistry
+	Predicates PredicateRegistry
 }
 
 func NewRegistry() *Registry {
 	return &Registry{
-		Mutex:  sync.Mutex{},
-		Types:  xreflect.NewTypes(xreflect.WithRegistry(Config.Types)),
-		Codecs: CodecsRegistry{},
+		Mutex:      sync.Mutex{},
+		Types:      xreflect.NewTypes(xreflect.WithRegistry(Config.Types)),
+		Codecs:     CodecsRegistry{},
+		Predicates: PredicateRegistry{},
 	}
 }
 

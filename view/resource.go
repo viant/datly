@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/toolbox"
+	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
 	"reflect"
@@ -19,8 +20,8 @@ import (
 	"time"
 )
 
-//Resource represents grouped view needed to build the View
-//can be loaded from i.e. yaml file
+// Resource represents grouped view needed to build the View
+// can be loaded from i.e. yaml file
 type Resource struct {
 	Metrics   *Metrics
 	SourceURL string `json:",omitempty"`
@@ -48,6 +49,9 @@ type Resource struct {
 
 	_visitors config.CodecsRegistry
 	ModTime   time.Time `json:",omitempty"`
+
+	Templates  []*predicate.Template
+	_templates map[string]*predicate.Template
 
 	_columnsCache map[string]Columns
 	fs            afs.Service
@@ -221,7 +225,7 @@ func (r *Resource) typeByName() map[string]*TypeDefinition {
 	return index
 }
 
-//GetViews returns Views supplied with the Resource
+// GetViews returns Views supplied with the Resource
 func (r *Resource) GetViews() Views {
 	if len(r._views) == 0 {
 		r._views = Views{}
@@ -232,7 +236,7 @@ func (r *Resource) GetViews() Views {
 	return r._views
 }
 
-//GetConnectors returns Connectors supplied with the Resource
+// GetConnectors returns Connectors supplied with the Resource
 func (r *Resource) GetConnectors() Connectors {
 	if len(r.Connectors) > len(r._connectors) {
 		r._connectors = ConnectorSlice(r.Connectors).Index()
@@ -240,10 +244,9 @@ func (r *Resource) GetConnectors() Connectors {
 	return r._connectors
 }
 
-//Init initializes Resource
+// Init initializes Resource
 func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
-
-	types, visitors, cache, transforms := r.readOptions(options)
+	types, visitors, cache, transforms, predicates := r.readOptions(options)
 	r.indexProviders()
 	r._visitors = visitors
 	r._columnsCache = cache
@@ -265,6 +268,9 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 				return err
 			}
 		}
+	}
+
+	if err := r.initTemplates(predicates); err != nil {
 	}
 
 	var err error
@@ -293,11 +299,12 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	return nil
 }
 
-func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, config.CodecsRegistry, map[string]Columns, marshal.TransformIndex) {
+func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, config.CodecsRegistry, map[string]Columns, marshal.TransformIndex, config.PredicateRegistry) {
 	var types *xreflect.Types
 	var visitors = config.CodecsRegistry{}
 	var cache map[string]Columns
 	var transformsIndex marshal.TransformIndex
+	var predicatesRegistry config.PredicateRegistry
 
 	for _, option := range options {
 		if option == nil {
@@ -312,18 +319,20 @@ func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, config.C
 			types = actual
 		case marshal.TransformIndex:
 			transformsIndex = actual
+		case config.PredicateRegistry:
+			predicatesRegistry = actual
 		}
 	}
 
-	return types, visitors, cache, transformsIndex
+	return types, visitors, cache, transformsIndex, predicatesRegistry
 }
 
-//View returns View with given name
+// View returns View with given name
 func (r *Resource) View(name string) (*View, error) {
 	return r._views.Lookup(name)
 }
 
-//NewResourceFromURL loads and initializes Resource from file .yaml
+// NewResourceFromURL loads and initializes Resource from file .yaml
 func NewResourceFromURL(ctx context.Context, url string, types *xreflect.Types, visitors config.CodecsRegistry) (*Resource, error) {
 	resource, err := LoadResourceFromURL(ctx, url, afs.New())
 	if err != nil {
@@ -333,7 +342,7 @@ func NewResourceFromURL(ctx context.Context, url string, types *xreflect.Types, 
 	return resource, err
 }
 
-//LoadResourceFromURL load resource from URL
+// LoadResourceFromURL load resource from URL
 func LoadResourceFromURL(ctx context.Context, URL string, fs afs.Service) (*Resource, error) {
 	data, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
@@ -436,12 +445,12 @@ func EmptyResource() *Resource {
 	}
 }
 
-//NewResource creates a Resource and register provided Types
+// NewResource creates a Resource and register provided Types
 func NewResource(parent *xreflect.Types) *Resource {
 	return &Resource{_types: xreflect.NewTypes(xreflect.WithRegistry(parent))}
 }
 
-//AddViews register views in the resource
+// AddViews register views in the resource
 func (r *Resource) AddViews(views ...*View) {
 	if r.Views == nil {
 		r.Views = make([]*View, 0)
@@ -450,14 +459,14 @@ func (r *Resource) AddViews(views ...*View) {
 	r.Views = append(r.Views, views...)
 }
 
-//AddConnector adds connector
+// AddConnector adds connector
 func (r *Resource) AddConnector(name string, driver string, dsn string, opts ...ConnectorOption) *Connector {
 	connector := NewConnector(name, driver, dsn, opts...)
 	r.AddConnectors(connector)
 	return connector
 }
 
-//AddConnectors register connectors in the resource
+// AddConnectors register connectors in the resource
 func (r *Resource) AddConnectors(connectors ...*Connector) {
 	if r.Connectors == nil {
 		r.Connectors = make([]*Connector, 0)
@@ -474,7 +483,7 @@ func (r *Resource) AddConnectors(connectors ...*Connector) {
 }
 
 func (r *Resource) AddMessageBus(messageBuses ...*mbus.Resource) {
-	if r.MessageBus == nil {
+	if len(r._messageBuses) == 0 {
 		r.MessageBuses = make([]*mbus.Resource, 0)
 		r._messageBuses = map[string]*mbus.Resource{}
 	}
@@ -487,7 +496,7 @@ func (r *Resource) AddMessageBus(messageBuses ...*mbus.Resource) {
 	}
 }
 
-//AddParameters register parameters in the resource
+// AddParameters register parameters in the resource
 func (r *Resource) AddParameters(parameters ...*Parameter) {
 	if r.Parameters == nil {
 		r.Parameters = make([]*Parameter, 0)
@@ -496,7 +505,7 @@ func (r *Resource) AddParameters(parameters ...*Parameter) {
 	r.Parameters = append(r.Parameters, parameters...)
 }
 
-//AddLoggers register loggers in the resource
+// AddLoggers register loggers in the resource
 func (r *Resource) AddLoggers(loggers ...*logger.Adapter) {
 	r.Loggers = append(r.Loggers, loggers...)
 }
@@ -606,4 +615,20 @@ func (r *Resource) mergeMessageBuses(resource *Resource) {
 			r.MessageBuses = append(r.MessageBuses, &messageBus)
 		}
 	}
+}
+
+func (r *Resource) initTemplates(registry config.PredicateRegistry) error {
+	if registry != nil {
+		r._templates = registry.Clone()
+	}
+
+	if r._templates == nil {
+		r._templates = map[string]*predicate.Template{}
+	}
+
+	for _, template := range r.Templates {
+		r._templates[template.Name] = template
+	}
+
+	return nil
 }

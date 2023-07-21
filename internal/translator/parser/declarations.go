@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/view"
@@ -9,6 +10,7 @@ import (
 	"github.com/viant/sqlparser"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
+	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 
 	"strconv"
@@ -193,21 +195,83 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 
 		content := matched.Text(cursor)
 		content = content[1 : len(content)-1]
+		args := extractArgs(content)
 		switch text {
 		case "WithCodec":
-			declaration.Codec = strings.Trim(content, "'")
+			if len(args) != 1 {
+				return fmt.Errorf("expected WithCodec to have one arg, but got %v", len(args))
+			}
+
+			declaration.Codec = args[0]
 		case "WithStatusCode":
-			statusCode, err := strconv.Atoi(content)
+			if len(args) != 1 {
+				return fmt.Errorf("expected WithStatusCode to have one arg, but got %v", len(args))
+			}
+			statusCode, err := strconv.Atoi(args[0])
 			if err != nil {
 				return err
 			}
-			declaration.StatusCode = &statusCode
-		case "UtilParam":
 
+			declaration.StatusCode = &statusCode
+		case "Optional":
+			if len(args) != 0 {
+				return fmt.Errorf("expected Optional to have zero args, but got %v", len(args))
+			}
+			required := false
+			declaration.Required = &required
+		case "WithPredicate":
+			if len(args) < 2 {
+				return fmt.Errorf("expected WithPredicate to have at least 2 args, but got %v", len(args))
+			}
+			ctx, err := strconv.Atoi(args[0])
+			if err != nil {
+				return err
+			}
+			var namedArgs []*predicate.NamedArgument
+			for pos, argName := range args[2:] {
+				namedArgs = append(namedArgs, &predicate.NamedArgument{
+					Position: pos,
+					Name:     argName,
+				})
+			}
+			declaration.Predicate = &config.PredicateConfig{
+				Name:    args[1],
+				Context: ctx,
+				Args:    namedArgs,
+			}
+		case "UtilParam":
+			//deprecated
 		}
 		cursor.MatchOne(whitespaceMatcher)
 	}
 	return nil
+}
+
+func extractArgs(content string) []string {
+	result := make([]string, 0)
+	cursor := parsly.NewCursor("", []byte(strings.Trim(content, `"`)), 0)
+	for {
+		matched := cursor.MatchAfterOptional(whitespaceMatcher, singleQuotedMatcher, quotedMatcher, comaTerminatedMatcher)
+		switch matched.Code {
+		case singleQuotedToken, doubleQuotedToken:
+			arg := matched.Text(cursor)
+			arg = arg[1 : len(arg)-1]
+			result = append(result, arg)
+			cursor.MatchOne(comaTerminatedMatcher)
+		case comaTerminatedToken:
+			arg := matched.Text(cursor)
+			arg = arg[:len(arg)-1]
+			result = append(result, strings.TrimSpace(arg))
+		default:
+			if cursor.Pos < len(cursor.Input) {
+				arg := strings.Trim(strings.TrimSpace(string(cursor.Input[cursor.Pos:])), `"'`)
+				if len(arg) != 0 {
+					result = append(result, arg)
+				}
+			}
+			return result
+		}
+	}
 }
 
 func NewDeclarations(SQL string, lookup func(dataType string, opts ...xreflect.Option) (*view.Schema, error)) (*Declarations, error) {

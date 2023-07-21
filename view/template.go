@@ -11,11 +11,13 @@ import (
 	"github.com/viant/datly/view/parameter"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty"
+	parameter2 "github.com/viant/xdatly/handler/parameter"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 )
 
 var boolType = reflect.TypeOf(true)
@@ -219,8 +221,14 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 	return nil
 }
 
-func NewEvaluator(parameters []*Parameter, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.LookupType) (*expand.Evaluator, error) {
-	return expand.NewEvaluator(FilterConstParameters(parameters), paramSchema, presenceSchema, template, typeLookup)
+func NewEvaluator(parameters []*Parameter, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.LookupType, predicates []*expand.PredicateConfig) (*expand.Evaluator, error) {
+	return expand.NewEvaluator(
+		template,
+		expand.WithConstUpdaters(FilterConstParameters(parameters)),
+		expand.WithTypeLookup(typeLookup),
+		expand.WithParamSchema(paramSchema, presenceSchema),
+		expand.WithPredicates(predicates),
+	)
 }
 
 func FilterConstParameters(parameters []*Parameter) []expand.ConstUpdater {
@@ -276,14 +284,14 @@ func (t *Template) EvaluateStateWithSession(externalParams interface{}, presence
 	)
 }
 
-//WithTemplateParameter return parameter template options
+// WithTemplateParameter return parameter template options
 func WithTemplateParameter(parameter *Parameter) TemplateOption {
 	return func(t *Template) {
 		t.Parameters = append(t.Parameters, parameter)
 	}
 }
 
-//NewTemplate creates a template
+// NewTemplate creates a template
 func NewTemplate(source string, opts ...TemplateOption) *Template {
 	ret := &Template{Source: source}
 	for _, opt := range opts {
@@ -296,7 +304,6 @@ func Evaluate(evaluator *expand.Evaluator, options ...expand.StateOption) (*expa
 	return evaluator.Evaluate(nil,
 		options...,
 	)
-
 }
 
 func AsViewParam(aView *View, aSelector *Selector, batchData *BatchData, options ...interface{}) *expand.MetaParam {
@@ -327,7 +334,34 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 		return nil
 	}
 
-	evaluator, err := NewEvaluator(t.Parameters, t.Schema.Type(), t.PresenceSchema.Type(), t.Source, resource.LookupType())
+	cache := &predicateCache{Map: sync.Map{}}
+	var predicates []*expand.PredicateConfig
+	for _, p := range t.Parameters {
+		if p.Predicate == nil {
+			continue
+		}
+
+		evaluator, err := cache.get(p.Predicate, p.ActualParamType(), resource._templates)
+		if err != nil {
+			return err
+		}
+
+		predicates = append(predicates, &expand.PredicateConfig{
+			Context:       p.Predicate.Context,
+			StateAccessor: p.ValueAccessor,
+			HasAccessor:   p.PresenceAccessor,
+			Expander: func(c *expand.Context, i interface{}) (*parameter2.Criteria, error) {
+				evaluate, err := evaluator.Evaluate(c, i)
+				if err != nil {
+					return nil, err
+				}
+
+				return &parameter2.Criteria{Query: evaluate.Buffer.String()}, nil
+			},
+		})
+	}
+
+	evaluator, err := NewEvaluator(t.Parameters, t.Schema.Type(), t.PresenceSchema.Type(), t.Source, resource.LookupType(), predicates)
 	if err != nil {
 		return err
 	}

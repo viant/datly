@@ -33,7 +33,8 @@ type (
 	}
 
 	stateUpdater struct {
-		params []*view.Parameter
+		params      []*view.Parameter
+		paramsIndex view.NamedParameters
 	}
 )
 
@@ -80,7 +81,7 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 		}
 
 		if currParam, err := s.resource.ParamByName(parameter.Name); err == nil {
-			parameter = currParam.WithAccessors(types.NewAccessor([]*xunsafe.Field{xunsafe.NewField(field)}), nil)
+			parameter = currParam.WithAccessors(types.NewAccessor(xunsafe.NewField(field)), nil)
 		} else {
 			if err = parameter.Init(ctx, nil, s.resource, nil); err != nil {
 				return nil, err
@@ -91,8 +92,14 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 	}
 
 	sort.Sort(view.Parameters(params))
+	index, err := view.Parameters(params).Index()
+	if err != nil {
+		return nil, err
+	}
+
 	return &stateUpdater{
-		params: params,
+		params:      params,
+		paramsIndex: index,
 	}, nil
 }
 
@@ -103,6 +110,7 @@ func (u *stateUpdater) update(ctx context.Context, request *http.Request, route 
 		NewRequestMetadata(route),
 		params,
 		newParamsValueCache(),
+		u.paramsIndex,
 	)
 
 	state := &view.ParamState{

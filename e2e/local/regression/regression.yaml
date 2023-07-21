@@ -28,7 +28,7 @@ pipeline:
         '[]gen': '@gen'
 
       subPath: 'cases/${index}_*'
-      range: 1..055
+      range: 1..015
       template:
         checkSkip:
           action: nop

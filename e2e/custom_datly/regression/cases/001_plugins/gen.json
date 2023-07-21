@@ -1,9 +1,4 @@
 {
-  "Method": "POST",
-  "Args": "",
-  "GoFile": "foos.go",
-  "Path": "001_plugins",
-  "URL": "plugins.sql",
-  "PregenURL": "pre_plugins.sql",
-  "PluginGoFile": ""
+  "Path": "foos",
+  "GoFileName": "foos"
 }

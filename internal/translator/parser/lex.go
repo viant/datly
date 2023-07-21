@@ -17,10 +17,14 @@ const (
 	aliasKeywordToken
 	packageKeywordToken
 	quotedToken
+	singleQuotedToken
+	doubleQuotedToken
 	setTerminatedToken
 	setToken
 	parameterDeclarationToken
 	commentToken
+	comaTerminatedToken
+
 	typeToken
 	dotToken
 	selectToken
@@ -29,8 +33,6 @@ const (
 	readStmtToken
 	exprToken
 	exprEndToken
-	packageNameToken
-	semicolonToken
 	anyToken
 	wordToken
 	scopeBlockToken
@@ -107,8 +109,13 @@ var insertMatcher = parsly.NewToken(insertToken, "insert", matcher.NewFragmentsF
 var intoMatcher = parsly.NewToken(intoToken, "into", matcher.NewFragmentsFold([]byte("into")))
 var valuesMatcher = parsly.NewToken(valuesToken, "values", matcher.NewFragmentsFold([]byte("values")))
 var importKeywordMatcher = parsly.NewToken(importKeywordToken, "import", matcher.NewFragmentsFold([]byte("import")))
-var quotedMatcher = parsly.NewToken(quotedToken, "quoted block", matcher.NewQuote('"', '\\'))
+var quotedMatcher = parsly.NewToken(doubleQuotedToken, "quoted block", matcher.NewQuote('"', '\\'))
+
 var aliasKeywordMatcher = parsly.NewToken(aliasKeywordToken, "as", matcher.NewFragmentsFold([]byte("as")))
+
+var singleQuotedMatcher = parsly.NewToken(singleQuotedToken, "single quoted block", matcher.NewQuote('\'', '\''))
+
+var comaTerminatedMatcher = parsly.NewToken(comaTerminatedToken, "arg", matcher.NewTerminator(',', true))
 
 func nextWhitespace(cursor *parsly.Cursor) bool {
 	beforeMatch := cursor.Pos

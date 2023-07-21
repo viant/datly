@@ -1,0 +1,23 @@
+init:
+  currPath: $state.stepURL
+pipeline:
+  test:
+    action: http/runner:send
+    requests:
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/boos
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON($currPath/case1.json)
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/boos?INCLUDE_ID=3
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON($currPath/case2.json)
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/boos?INCLUDE_ABC=3
+        Expect:
+          Code: 400
+          JSONBody: $LoadJSON($currPath/case3.json)

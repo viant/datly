@@ -178,7 +178,7 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 			aTag += fmt.Sprintf(` velty:"names=%v"`, names)
 		}
 
-		aField := c.newField(aTag, columnName, viewCaseFormat, rType)
+		aField := newCasedField(aTag, columnName, viewCaseFormat, rType)
 		structFields = append(structFields, aField)
 	}
 
@@ -221,20 +221,24 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 			}
 
 			tag := `json:",omitempty" yaml:",omitempty" sqlx:"-"`
-			structFields = append(structFields, c.newField(tag, meta.Name, format.CaseUpperCamel, metaType))
+			structFields = append(structFields, newCasedField(tag, meta.Name, format.CaseUpperCamel, metaType))
 		}
 	}
 
 	if selfRef != nil {
-		structFields = append(structFields, c.newField("", selfRef.Holder, format.CaseUpperCamel, reflect.SliceOf(ast.InterfaceType)))
+		structFields = append(structFields, newCasedField("", selfRef.Holder, format.CaseUpperCamel, reflect.SliceOf(ast.InterfaceType)))
 	}
 	structType := reflect.PtrTo(reflect.StructOf(structFields))
 	c.SetType(structType)
 }
 
-func (c *Schema) newField(aTag string, columnName string, sourceCaseFormat format.Case, rType reflect.Type) reflect.StructField {
+func newCasedField(aTag string, columnName string, sourceCaseFormat format.Case, rType reflect.Type) reflect.StructField {
 	structFieldName := StructFieldName(sourceCaseFormat, columnName)
 
+	return newField(aTag, structFieldName, rType)
+}
+
+func newField(aTag string, structFieldName string, rType reflect.Type) reflect.StructField {
 	var fieldPkgPath string
 	if structFieldName[0] < 'A' || structFieldName[0] > 'Z' {
 		fieldPkgPath = pkgPath

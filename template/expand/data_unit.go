@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/viant/datly/executor/sequencer"
 	"github.com/viant/sqlx/io/validator"
+	"github.com/viant/xdatly/handler/parameter"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -13,12 +14,8 @@ import (
 )
 
 type (
-	ColumnsSource interface {
-		ColumnName(key string) (string, error)
-	}
-
 	DataUnit struct {
-		Columns     ColumnsSource
+		Columns     parameter.ColumnsSource
 		ParamsGroup []interface{}
 		Mock        bool
 		TemplateSQL string

@@ -4,28 +4,22 @@ pipeline:
     commands:
       - echo 'over_cases -> ${mode} | ${datlyPath}'
 
+
+  printStep:
+    action: print
+    message: $AsJSON($state)
+
   prepare_custom_datly:
     tag: $pathMatch
     description: '@info'
-
     subPath: 'cases/${index}_*'
-    data:
-      '[]gen': '@gen'
 
-
-    range: 1..004
+    range: 1..005
     template:
       checkSkip:
         action: nop
         comments: use case init
         skip: $HasResource(${path}/skip.txt)
-
-      setMode:
-        action: nop
-        init:
-          mode: ${parent.mode}
-          datlyPath: ${parent.datlyPath}
-          'state.aPath': ${path}
 
       rule:
         description: generate datly rule with SQLx (SQL extension)

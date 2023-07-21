@@ -135,6 +135,14 @@ outer:
 					it.buildContexts(context, fnName, asSlice.X, asSlice.Y)
 				}
 
+				if asFunc != nil && asFunc.X != nil {
+					xSelect, ok = asFunc.X.(*expr.Select)
+					if ok {
+						actual = xSelect
+						continue
+					}
+				}
+
 				continue outer
 			}
 

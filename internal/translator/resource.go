@@ -262,7 +262,7 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	}
 
 	parameters := viewlet.Resource.State.ViewParameters()
-	evaluator, err := view.NewEvaluator(parameters, reflectType, nil, epxandingSQL, types.Lookup)
+	evaluator, err := view.NewEvaluator(parameters, reflectType, nil, epxandingSQL, types.Lookup, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create evaluator %v: %w", viewlet.Name, err)
 	}

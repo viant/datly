@@ -1,0 +1,5 @@
+{
+  "Name": "$tagId",
+  "URL": "$path/vendors_predicate.sql",
+  "Args": ""
+}

@@ -53,6 +53,9 @@ var extGoModuleContent string
 //go:embed tmpl/ext/init.gox
 var extContent string
 
+//go:embed tmpl/pkg/plugin/init.gox
+var pluginContent string
+
 func (s *Service) generateExtensionModule(ctx context.Context, init *options.Extension) error {
 	extLocation := s.extLocation(init)
 	replacer := init.Replacer(&init.Module)
@@ -138,6 +141,11 @@ func (s *Service) generatePackage(ctx context.Context, pkgLocation string, init 
 	}
 	initDest := url.Join(pkgLocation, "xinit.go")
 	if err := s.fs.Upload(ctx, initDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(initContent))); err != nil {
+		return err
+	}
+
+	pluginDst := url.Join(pkgLocation, "plugin/main.go")
+	if err := s.fs.Upload(ctx, pluginDst, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(pluginContent))); err != nil {
 		return err
 	}
 

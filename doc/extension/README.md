@@ -33,13 +33,13 @@ The following project structure get generated
 
 where
  - go.mod holds name of you go project with xdatly dependencies 
- - '.build' folder holds daty project binary with go mod replace github.com/viant/xdatly/extension => ${projectPath}/pkg
- - 'pkg/depenency/init.go' contains defaule imports with customized go struct xdatly registration
+ - '.build' folder holds datly project files and go.mod with replacement: github.com/viant/xdatly/extension => ${projectPath}/pkg
+ - 'pkg/depenency/init.go' contains default imports with customized go struct xdatly registration
 
 
 #### Generating dsql for patch,put or post operation
 
-To add prepare/generate executor(put/patch/post) rule run the following command
+To add prepare/generate executor (put/patch/post) rule run the following command
 ```bash
  gen -o=patch -c='ci_ads|mysql|root:dev@tcp(127.0.0.1:3306)/mydb?parseTime=true' \
  -s=entity_patch.sql \
@@ -73,7 +73,7 @@ datly build -h
 #### Building datly plugin
 
 ```bash
-dayly plugin -p='$ProjectPath' -d='$ProjectPath/plugins/'
+datly plugin -p='$ProjectPath' -d='$ProjectPath/plugins/'
 ```
 
 

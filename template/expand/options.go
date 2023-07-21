@@ -1,7 +1,9 @@
 package expand
 
 import (
+	"github.com/viant/datly/view/keywords"
 	"github.com/viant/velty"
+	"github.com/viant/xreflect"
 	"os"
 	"reflect"
 )
@@ -18,12 +20,19 @@ type CustomContext struct {
 }
 
 type config struct {
-	valueTypes   []*CustomContext
-	panicOnError velty.PanicOnError
+	valueTypes    []*CustomContext
+	panicOnError  velty.PanicOnError
+	constUpdaters []ConstUpdater
+	typeLookup    xreflect.LookupType
+	pSchema       reflect.Type
+	hasSchema     reflect.Type
+	stateName     string
+	predicates    []*PredicateConfig
 }
 
 func newConfig() *config {
 	return &config{
 		panicOnError: velty.PanicOnError(isDebugEnabled),
+		stateName:    keywords.ParamsKey,
 	}
 }

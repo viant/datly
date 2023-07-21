@@ -8,32 +8,24 @@ pipeline:
       target: $target
       sdk: go:1.20
 
-
-    pullXDatly:
+    cleanupXDatly:
       action: exec:run
-      skip: $HasResource(${appPath}/e2e/custom_datly/.xdatly/.gitignore)
-      comments: copy datly project
+      description: clean previous tests
+      target: '$target'
+      checkError: true
+      commands:
+        - mkdir -p ${appPath}/e2e/custom_datly/.extension
+        - rm -rf ${appPath}/e2e/custom_datly/.extension
+
+    initExtensionModule:
+      action: exec:run
+      comments: init xdatly extension module
       target: $target
       checkError: true
       commands:
         - cd ${appPath}/e2e/custom_datly
-        - git clone https://github.com/viant/xdatly.git .xdatly
-
-    updateXDatly:
-      action: exec:run
-      comments: copy datly project
-      target: $target
-      checkError: true
-      commands:
-        - cd ${appPath}/e2e/custom_datly/.xdatly/
-        - echo 'Current directory \/'
-        - pwd
-        - git stash
-        - git pull --rebase
-        - cd ${appPath}/e2e/custom_datly/.xdatly/types/custom
-        - go get github.com/francoispqt/gojay@1398296
-        - cp ${appPath}/e2e/custom_datly/imports.go ${appPath}/e2e/custom_datly/.xdatly/types/custom/dependency
-        - go mod tidy -compat=1.17
+        - rm -f -rf .extension
+        - /tmp/datly initExt -p='${appPath}/e2e/custom_datly/.extension' -n=datly_ext -r=github.com/viant
 
     copyDatly:
       action: exec:run
@@ -44,8 +36,8 @@ pipeline:
         - export GLOBIGNORE='e2e*'
         - echo 'THE APP PATH IS -> $appPath'
         - cd ${appPath}/e2e/custom_datly
-        - rm -rf .datly
-        - rsync -av --progress ../../ .datly/ --exclude e2e
+        - rm -rf ${appPath}/e2e/custom_datly/.extension/.build/datly
+        - rsync -av --progress ../../ .extension/.build/datly --exclude e2e
 
     package:
       action: exec:run

@@ -16,14 +16,19 @@ type (
 		Warmup            map[string]interface{} `json:",omitempty"`
 		DataViewParameter *view.Parameter        `json:"-"`
 		Auth              string                 `json:",omitempty"`
-		Selector          *view.Config           `json:",omitempty"`
 		AllowNulls        *bool                  `json:",omitempty"`
 		DataType          string                 `json:",omitempty"`
 		AsyncTableName    string                 `json:",omitempty"`
+		SelectorConfig
 	}
 
 	ViewPregenConfig struct {
 		ExecKind     string `json:",omitempty"`
 		FetchRecords bool   `json:",omitempty"`
+	}
+
+	SelectorConfig struct {
+		Selector      *view.Config `json:",omitempty"`
+		CriteriaParam string       `json:",omitempty"`
 	}
 )
