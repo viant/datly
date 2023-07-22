@@ -11,12 +11,9 @@ import (
 
 const (
 	whitespaceToken int = iota
-	condBlockToken
 	exprGroupToken
 	importKeywordToken
 	aliasKeywordToken
-	packageKeywordToken
-	quotedToken
 	singleQuotedToken
 	doubleQuotedToken
 	setTerminatedToken
@@ -109,6 +106,7 @@ var insertMatcher = parsly.NewToken(insertToken, "insert", matcher.NewFragmentsF
 var intoMatcher = parsly.NewToken(intoToken, "into", matcher.NewFragmentsFold([]byte("into")))
 var valuesMatcher = parsly.NewToken(valuesToken, "values", matcher.NewFragmentsFold([]byte("values")))
 var importKeywordMatcher = parsly.NewToken(importKeywordToken, "import", matcher.NewFragmentsFold([]byte("import")))
+
 var quotedMatcher = parsly.NewToken(doubleQuotedToken, "quoted block", matcher.NewQuote('"', '\\'))
 
 var aliasKeywordMatcher = parsly.NewToken(aliasKeywordToken, "as", matcher.NewFragmentsFold([]byte("as")))

@@ -25,3 +25,9 @@ func SetIntIfZero(dest *int, src int) {
 		*dest = src
 	}
 }
+
+func SetIntIfNil(dest **int, src int) {
+	if dest != nil && *dest == nil {
+		*dest = &src
+	}
+}

@@ -17,7 +17,7 @@ type (
 		JwtVerifier
 		ProjectURL           string
 		RepositoryURL        string     `short:"r" long:"repo" description:"datly rule repository location"  default:"repo/dev" `
-		ConstURL             string     `short:"o" long:"const" description:"const location" `
+		ConstURL             string     `short:"O" long:"const" description:"const location" `
 		Port                 *int       `short:"P" long:"port" description:"endpoint port" `
 		APIPrefix            string     `short:"a" long:"api" description:"api prefix"  default:"v1/api" `
 		Configs              ConfigURLs `short:"C" long:"config" description:"config url" `

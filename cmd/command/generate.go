@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
@@ -38,6 +39,9 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		rule.Index = i
 		root := resource.Rule.RootViewlet()
 		spec := root.Spec
+		if spec == nil {
+			return fmt.Errorf("view %v tranlsation spec was empty", root.Name)
+		}
 		//		bodyParams := resource.State.FilterByKind(view.KindRequestBody)
 		root.Spec.Type.Cardinality = resource.Rule.Cardinality
 		if resource.Rule.ShallGenerateHandler() {

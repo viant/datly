@@ -69,7 +69,7 @@ func ParseImports(ctx context.Context, expr *string, handler func(ctx context.Co
 
 	matched = cursor.MatchAfterOptional(whitespaceMatcher, exprGroupMatcher, quotedMatcher)
 	switch matched.Code {
-	case quotedToken:
+	case doubleQuotedToken:
 		text := matched.Text(cursor)
 		importSpec, err := parseTypeSrc(text[1:len(text)-1], cursor)
 		if err != nil {
@@ -84,7 +84,7 @@ func ParseImports(ctx context.Context, expr *string, handler func(ctx context.Co
 
 			matched = exprGroupCursor.MatchAfterOptional(whitespaceMatcher, quotedMatcher)
 			switch matched.Code {
-			case quotedToken:
+			case doubleQuotedToken:
 				text := matched.Text(exprGroupCursor)
 				importSpec, err := parseTypeSrc(text[1:len(text)-1], exprGroupCursor)
 				if err != nil {
@@ -108,7 +108,7 @@ func parseTypeSrc(imported string, cursor *parsly.Cursor) (*TypeImport, error) {
 	matched := cursor.MatchAfterOptional(whitespaceMatcher, aliasKeywordMatcher)
 	if matched.Code == aliasKeywordToken {
 		matched = cursor.MatchAfterOptional(whitespaceMatcher, quotedMatcher)
-		if matched.Code != quotedToken {
+		if matched.Code != doubleQuotedToken {
 			return nil, cursor.NewError(quotedMatcher)
 		}
 		alias = strings.Trim(matched.Text(cursor), "\"")
