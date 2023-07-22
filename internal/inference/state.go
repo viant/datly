@@ -221,7 +221,7 @@ func expandPredicateExpr(query string) string {
 	match := query[indexStart:]
 	indexEnd := strings.Index(match, "}")
 	match = match[:indexEnd+1]
-	return strings.Replace(query, match, " 1 = 1 ", 1)
+	return strings.Replace(query, match, "  ", 1)
 }
 
 // DsqlParameterDeclaration returns dsql parameter declaration
