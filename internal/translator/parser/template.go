@@ -47,7 +47,7 @@ func (c *ExpressionContext) IsJSONCodec() bool {
 	return strings.Contains(last, `"Codec"`) && strings.Contains(last, `"JSON"`)
 }
 
-func (t *Template) init(context Context, fnName string, statements ...ast.Statement) {
+func (t *Template) initContext(context Context, fnName string, statements ...ast.Statement) {
 outer:
 	for _, statement := range statements {
 		if statement == nil {
@@ -71,32 +71,39 @@ outer:
 				asFunc, ok := actual.X.(*expr.Call)
 				if ok {
 					for _, arg := range asFunc.Args {
-						t.init(FuncContext, currentSelector.ID+"."+actual.ID, arg)
+						t.initContext(FuncContext, currentSelector.ID+"."+actual.ID, arg)
 					}
 				}
 				asSlice, ok := actual.X.(*expr.SliceIndex)
 				if ok {
-					t.init(context, fnName, asSlice.X, asSlice.Y)
+					t.initContext(context, fnName, asSlice.X, asSlice.Y)
 				}
 
+				if asFunc != nil && asFunc.X != nil {
+					xSelect, ok = asFunc.X.(*expr.Select)
+					if ok {
+						actual = xSelect
+						continue
+					}
+				}
 				continue outer
 			}
 
 		case *expr.Parentheses:
-			t.init(context, fnName, actual.P)
+			t.initContext(context, fnName, actual.P)
 		case *expr.Unary:
-			t.init(context, fnName, actual.X)
+			t.initContext(context, fnName, actual.X)
 		case *expr.Binary:
-			t.init(context, fnName, actual.X, actual.Y)
+			t.initContext(context, fnName, actual.X, actual.Y)
 		case *stmt.ForEach:
 			t.addVariable(actual.Item)
-			t.init(ForEachContext, "", actual.Item, actual.Set)
-			t.init(AppendContext, "", actual.Body.Stmt...)
+			t.initContext(ForEachContext, "", actual.Item, actual.Set)
+			t.initContext(AppendContext, "", actual.Body.Stmt...)
 		case *stmt.If:
-			t.init(IfContext, "", actual.Condition)
-			t.init(AppendContext, "", actual.Body.Stmt...)
+			t.initContext(IfContext, "", actual.Condition)
+			t.initContext(AppendContext, "", actual.Body.Stmt...)
 			if actual.Else != nil {
-				t.init(IfContext, "", actual.Else)
+				t.initContext(IfContext, "", actual.Else)
 			}
 		case *stmt.Statement:
 			selector, ok := actual.X.(*expr.Select)
@@ -104,7 +111,7 @@ outer:
 				t.addVariable(selector)
 			}
 			t.addVariable(selector)
-			t.init(SetContext, "", actual.X, actual.Y)
+			t.initContext(SetContext, "", actual.X, actual.Y)
 		case *stmt.Append:
 			t.fragments = append(t.fragments, actual.Append)
 		}
@@ -128,7 +135,7 @@ func NewTemplate(SQL string, state *inference.State) (*Template, error) {
 		return nil, err
 	}
 	ret := &Template{SQL: SQL, Declared: map[string]bool{}, State: state}
-	ret.init(AppendContext, "", block.Statements()...)
+	ret.initContext(AppendContext, "", block.Statements()...)
 	return ret, nil
 }
 

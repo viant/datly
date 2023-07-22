@@ -208,7 +208,20 @@ func (s State) Expand(text string) string {
 			expander[literal.Name] = literal.Const
 		}
 	}
+	text = expandPredicateExpr(text)
 	return expander.ExpandAsText(text)
+}
+
+func expandPredicateExpr(query string) string {
+	//TODO make it more generics
+	indexStart := strings.Index(query, "${predicate.")
+	if indexStart == -1 {
+		return query
+	}
+	match := query[indexStart:]
+	indexEnd := strings.Index(match, "}")
+	match = match[:indexEnd+1]
+	return strings.Replace(query, match, " 1 = 1 ", 1)
 }
 
 // DsqlParameterDeclaration returns dsql parameter declaration

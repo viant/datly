@@ -261,6 +261,8 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 		}
 	}
 
+	epxandingSQL = viewlet.Resource.State.Expand(epxandingSQL)
+
 	parameters := viewlet.Resource.State.ViewParameters()
 	evaluator, err := view.NewEvaluator(parameters, reflectType, nil, epxandingSQL, types.Lookup, nil)
 	if err != nil {

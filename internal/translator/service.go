@@ -223,8 +223,7 @@ func (s *Service) initReaderViewlet(ctx context.Context, viewlet *Viewlet) error
 		return err
 	}
 	SQL := viewlet.Resource.State.Expand(viewlet.SQL)
-	discoverySQL := viewlet.Resource.State.Expand(SQL)
-	if err = viewlet.discoverTables(ctx, db, discoverySQL); err != nil {
+	if err = viewlet.discoverTables(ctx, db, SQL); err != nil {
 		return err
 	}
 
