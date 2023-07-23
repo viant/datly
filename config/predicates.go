@@ -7,6 +7,8 @@ import (
 
 const PredicateEqual = "equal"
 const PredicateNotEqual = "not_equal"
+const PredicateIn = "in"
+const PredicateNotIn = "not_in"
 
 type (
 	PredicateRegistry map[string]*predicate.Template
@@ -53,7 +55,7 @@ func equalityCheckPredicate(name string, equal bool) *predicate.Template {
 
 	return &predicate.Template{
 		Name:   name,
-		Source: " ${Alias}.${ColumnName} " + negation + "= $criteria.AppendBinding($FilterValue)",
+		Source: " ${Alias}.${ColumnName} " + negation + "=  $criteria.AppendBinding($FilterValue)",
 		Args: []*predicate.NamedArgument{
 			{
 				Name:     "Alias",
@@ -69,4 +71,36 @@ func equalityCheckPredicate(name string, equal bool) *predicate.Template {
 
 func NewNotEqualPredicate() *predicate.Template {
 	return equalityCheckPredicate(PredicateNotEqual, false)
+}
+
+func NewInPredicate() *predicate.Template {
+	return newInPredicate(PredicateIn, true)
+}
+
+func NewNotInPredicate() *predicate.Template {
+	return newInPredicate(PredicateNotIn, false)
+}
+
+func newInPredicate(name string, equal bool) *predicate.Template {
+	column := "${Alias}.${ColumnName}"
+	in := fmt.Sprintf("$criteria.In(%v, $FilterValue)", column)
+
+	if !equal {
+		in = fmt.Sprintf("$criteria.NotIn(%v, $FilterValue)", column)
+	}
+
+	return &predicate.Template{
+		Name:   name,
+		Source: " " + in,
+		Args: []*predicate.NamedArgument{
+			{
+				Name:     "Alias",
+				Position: 0,
+			},
+			{
+				Name:     "ColumnName",
+				Position: 1,
+			},
+		},
+	}
 }

@@ -247,6 +247,23 @@ func (c *DataUnit) In(columnName string, args interface{}) (string, error) {
 	return sb.String(), nil
 }
 
+func (c *DataUnit) NotIn(columnName string, args interface{}) (string, error) {
+	of := reflect.ValueOf(args)
+	switch of.Kind() {
+	case reflect.Slice:
+		if of.Len() == 0 {
+			return "0=0", nil
+		}
+	}
+
+	sb := &strings.Builder{}
+	sb.WriteString(columnName)
+	sb.WriteString(" NOT IN (")
+	sb.WriteString(c.AppendBinding(args))
+	sb.WriteString(")")
+	return sb.String(), nil
+}
+
 func (c *DataUnit) Delete(data interface{}, name string) (string, error) {
 	return c.Statements.DeleteWithMarker(name, data), nil
 }
