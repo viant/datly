@@ -11,10 +11,13 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox"
+	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
+	"path"
 	"reflect"
 	"strings"
 	"time"
@@ -54,7 +57,10 @@ type Resource struct {
 	_templates map[string]*predicate.Template
 
 	_columnsCache map[string]Columns
-	fs            afs.Service
+
+	ExpandSourceURL string
+	_expandMap      rdata.Map
+	fs              afs.Service
 }
 
 func (r *Resource) TypeRegistry() *xreflect.Types {
@@ -69,6 +75,10 @@ func (r *Resource) SetFs(fs afs.Service) {
 	r.fs = fs
 }
 func (r *Resource) LoadText(ctx context.Context, URL string) (string, error) {
+	return r.loadText(ctx, URL, true)
+}
+
+func (r *Resource) loadText(ctx context.Context, URL string, expand bool) (string, error) {
 	if url.Scheme(URL, "") == "" && r.SourceURL != "" {
 		parent, _ := url.Split(r.SourceURL, file.Scheme)
 		URL = url.Join(parent, URL)
@@ -81,6 +91,10 @@ func (r *Resource) LoadText(ctx context.Context, URL string) (string, error) {
 
 	if err = r.updateTime(ctx, URL, err); err != nil {
 		return "", err
+	}
+
+	if expand && len(r._expandMap) > 0 {
+		return r._expandMap.ExpandWithoutUDF(string(data)), nil
 	}
 
 	return string(data), err
@@ -121,6 +135,7 @@ func (r *Resource) MergeFrom(resource *Resource, types *xreflect.Types) {
 	r.mergeConnectors(resource)
 	r.mergeMessageBuses(resource)
 	r.mergeProviders(resource)
+	r.mergeTemplates(resource)
 }
 
 func (r *Resource) mergeViews(resource *Resource) {
@@ -246,6 +261,22 @@ func (r *Resource) GetConnectors() Connectors {
 
 // Init initializes Resource
 func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
+	if r.ExpandSourceURL != "" {
+		text, err := r.loadText(ctx, r.ExpandSourceURL, false)
+		if err != nil {
+			return err
+		}
+
+		r._expandMap = rdata.NewMap()
+		if err = shared.UnmarshalWithExt([]byte(strings.TrimSpace(text)), r._expandMap, path.Ext(r.ExpandSourceURL)); err != nil {
+			return err
+		}
+
+		if err = Traverse(r, r.expandStringField); err != nil {
+			return err
+		}
+	}
+
 	types, visitors, cache, transforms, predicates := r.readOptions(options)
 	r.indexProviders()
 	r._visitors = visitors
@@ -271,6 +302,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	}
 
 	if err := r.initTemplates(predicates); err != nil {
+		return err
 	}
 
 	var err error
@@ -294,6 +326,59 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 
 	if err = ViewSlice(r.Views).Init(ctx, r, transforms); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func Traverse(any interface{}, visitor func(value reflect.Value) error) error {
+	of := reflect.ValueOf(any)
+	return traverse(of, visitor)
+}
+
+func traverse(of reflect.Value, visitor func(value reflect.Value) error) error {
+	if err := visitor(of); err != nil {
+		return err
+	}
+
+	switch of.Kind() {
+	case reflect.Ptr:
+		if of.IsNil() {
+			return nil
+		}
+
+		return traverse(of.Elem(), visitor)
+
+	case reflect.Slice, reflect.Array:
+		size := of.Len()
+		for i := 0; i < size; i++ {
+			if err := traverse(of.Index(i), visitor); err != nil {
+				return err
+			}
+		}
+
+	case reflect.Map:
+		iter := of.MapRange()
+		for iter.Next() {
+			iterValue := iter.Value()
+			if err := traverse(iterValue, visitor); err != nil {
+				return err
+			}
+		}
+
+	case reflect.Struct:
+		numFields := of.NumField()
+		ofType := of.Type()
+		for i := 0; i < numFields; i++ {
+			aField := ofType.Field(i)
+			if aField.PkgPath != "" {
+				continue
+			}
+
+			if err := traverse(of.Field(i), visitor); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -622,13 +707,40 @@ func (r *Resource) initTemplates(registry config.PredicateRegistry) error {
 		r._templates = registry.Clone()
 	}
 
-	if r._templates == nil {
-		r._templates = map[string]*predicate.Template{}
-	}
+	r.ensureTemplatesIndex()
 
 	for _, template := range r.Templates {
 		r._templates[template.Name] = template
 	}
 
+	return nil
+}
+
+func (r *Resource) ensureTemplatesIndex() {
+	if r._templates == nil {
+		r._templates = map[string]*predicate.Template{}
+	}
+}
+
+func (r *Resource) mergeTemplates(resource *Resource) {
+	r.ensureTemplatesIndex()
+	for _, template := range resource.Templates {
+		r.addTemplate(template)
+	}
+}
+
+func (r *Resource) addTemplate(template *predicate.Template) {
+	r.Templates = append(r.Templates, template)
+	r._templates[template.Name] = template
+}
+
+func (r *Resource) expandStringField(value reflect.Value) error {
+	if value.Kind() != reflect.String {
+		return nil
+	}
+
+	strValue := value.String()
+	expanded := r._expandMap.ExpandWithoutUDF(strValue)
+	value.Set(reflect.ValueOf(expanded))
 	return nil
 }

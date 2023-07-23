@@ -767,10 +767,10 @@ func (s *Builder) loadConstants(sourceURL string, dest *map[string]interface{}) 
 	if err != nil {
 		return err
 	}
-	if err = json.Unmarshal(bytes.TrimSpace(content), dest); err != nil {
-		return err
-	}
-	return nil
+
+	content = bytes.TrimSpace(content)
+	ext := path.Ext(sourceURL)
+	return shared.UnmarshalWithExt(content, dest, ext)
 }
 
 func extractURIParams(URI string) map[string]bool {
