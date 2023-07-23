@@ -106,6 +106,9 @@ func (r *Rule) SourceURL() string {
 	if len(r.Source) == 0 {
 		return ""
 	}
+	if r.Index >= len(r.Source) {
+		return r.Source[0]
+	}
 	return r.Source[r.Index]
 }
 
