@@ -38,7 +38,7 @@ require (
 	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
 	github.com/viant/velty v0.2.1-0.20230718013203-d4e43dfe0ea9
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
-	github.com/viant/xreflect v0.3.2-0.20230703205132-5d95452045da
+	github.com/viant/xreflect v0.3.2-0.20230720010941-9d6ad5380405
 	github.com/viant/xunsafe v0.8.4
 	golang.org/x/mod v0.11.0
 	golang.org/x/oauth2 v0.7.0
