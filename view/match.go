@@ -3,7 +3,7 @@ package view
 import "fmt"
 
 //MatchStrategy in some cases it might be better to fetch parent View view and all Relation view in the same time
-//and merge it on the backend side in those cases ReadAll strategy will do that.
+//and Merge it on the backend side in those cases ReadAll strategy will do that.
 //in other cases it might be better to filter Relation view and fetch only those records that matches with View view
 //in those cases ReadMatched will do that.
 type MatchStrategy string

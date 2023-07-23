@@ -86,7 +86,7 @@ func (s *State) Init(templateState *est.State, predicates []*PredicateConfig, op
 	}
 
 	if s.DataUnit == nil && s.ViewParam != nil {
-		s.DataUnit = s.ViewParam.dataUnit
+		s.DataUnit = s.ViewParam.DataUnit
 	}
 
 	if s.DataUnit == nil {

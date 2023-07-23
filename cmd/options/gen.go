@@ -8,45 +8,34 @@ import (
 	"strings"
 )
 
-type Gen struct {
-	Connector
-	Generate
-	Package   string `short:"g" long:"pkg" description:"entity package"`
+type Generate struct {
+	Repository
+	Rule
 	Dest      string `short:"d" long:"dest" description:"dsql location" default:"dsql"`
 	Operation string `short:"o" long:"op" description:"operation" choice:"post" choice:"patch" choice:"put"`
 	Kind      string `short:"k" long:"kind" description:"execution kind" choice:"dml" choice:"service"`
-	Lang      string `short:"l" long:"lang" description:"lang" choice:"go" choice:"velty" choice:"go"`
+	Lang      string `short:"l" long:"lang" description:"lang" choice:"velty" choice:"go"`
+	Translate bool   `short:"t" long:"translate" description:"translate generated DSQL"`
 }
 
-func (g *Gen) GoModuleLocation() string {
-	if g.Module != "" {
-		return g.Module
-	}
-	return g.Dest
+func (g *Generate) HttpMethod() string {
+	return strings.ToUpper(g.Operation)
 }
 
-func (g *Gen) GoCodeLocation() string {
-	module := g.GoModuleLocation()
-	if g.Package == "" {
-		return module
-	}
-	return url.Join(module, g.Package)
-}
-
-func (g *Gen) EntityLocation(entityName string) string {
+func (g *Generate) EntityLocation(entityName string) string {
 	codeLocation := g.GoCodeLocation()
 
 	entityName = strings.ToLower(entityName)
 	return url.Join(codeLocation, entityName+".go")
 }
 
-func (g *Gen) StateLocation() string {
+func (g *Generate) StateLocation() string {
 	codeLocation := g.GoCodeLocation()
 	return url.Join(codeLocation, "state.go")
 }
 
-func (g *Gen) Init() error {
-	if err := g.Generate.Init(); err != nil {
+func (g *Generate) Init() error {
+	if err := g.Rule.Init(); err != nil {
 		return err
 	}
 	if g.Operation == "" {
@@ -64,20 +53,20 @@ func (g *Gen) Init() error {
 	return nil
 }
 
-func (g *Gen) DSQLLocation() string {
-	name := strings.Title(g.Package) + "_" + strings.ToLower(g.Operation)
+func (g *Generate) DSQLLocation() string {
+	_, name := url.Split(g.SourceURL(), file.Scheme)
 	if ext := path.Ext(name); ext != "" {
 		name = name[:len(name)-len(ext)]
 	}
 	baseURL := g.Dest
-	if g.Package != "" {
-		baseURL = url.Join(baseURL, g.Package)
+	if g.Package() != "" {
+		baseURL = url.Join(baseURL, g.Package())
 	}
 	return url.Join(baseURL, name+".sql")
 }
 
-func (g *Gen) HandlerLocation() string {
-	_, name := url.Split(g.Source, file.Scheme)
+func (g *Generate) HandlerLocation() string {
+	_, name := url.Split(g.SourceURL(), file.Scheme)
 	if ext := path.Ext(name); ext != "" {
 		name = name[:len(name)-len(ext)]
 	}
@@ -85,24 +74,24 @@ func (g *Gen) HandlerLocation() string {
 	return url.Join(baseURL, "handler.go")
 }
 
-func (g *Gen) HandlerType() string {
+func (g *Generate) HandlerType() string {
 	result := "Handler"
-	if g.Package == "" {
+	if g.Package() == "" {
 		return result
 	}
-	return g.Package + "." + result
+	return g.Package() + "." + result
 }
 
-func (g *Gen) StateType() string {
+func (g *Generate) StateType() string {
 	result := "State"
-	if g.Package == "" {
+	if g.Package() == "" {
 		return result
 	}
-	return g.Package + "." + result
+	return g.Package() + "." + result
 }
 
-func (g *Gen) IndexLocation() string {
-	_, name := url.Split(g.Source, file.Scheme)
+func (g *Generate) IndexLocation() string {
+	_, name := url.Split(g.SourceURL(), file.Scheme)
 	if ext := path.Ext(name); ext != "" {
 		name = name[:len(name)-len(ext)]
 	}

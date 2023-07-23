@@ -459,7 +459,7 @@ func (o *Options) MergeFromBuild(build *options.Build) {
 		o.ModuleMain = "cmd/datly/"
 	}
 	o.ModuleSrc = build.Source
-	o.ModuleDst = build.Dest
+	o.ModuleDst = build.DestURL
 	o.ModuleLdFlags = *build.LdFlags
 	o.ModuleArgs = build.BuildArgs
 	o.ModuleOS = build.GoOs
@@ -470,24 +470,24 @@ func (o *Options) MergeFromBuild(build *options.Build) {
 func (o *Options) MergeFromPlugin(plugin *options.Plugin) {
 	o.BuildMode = "plugin"
 	o.PluginSrc = plugin.Source
-	o.PluginDst = plugin.Dest
+	o.PluginDst = plugin.DestURL
 	o.PluginArgs = plugin.BuildArgs
 	o.PluginOS = plugin.GoOs
 	o.PluginArch = plugin.GoArch
 	o.PluginGoVersion = plugin.GoVersion
 }
 
-func (o *Options) MergeFromGenerate(generate *options.Gen) {
+func (o *Options) MergeFromGenerate(generate *options.Generate) {
 	o.Connects = generate.Connectors
 	o.PrepareRule = generate.Operation
 	o.ExecKind = generate.Kind
 	o.Name = generate.Name
-	o.Generate.Location = generate.Source
+	o.Generate.Location = generate.SourceURL()
 	if generate.Module != "" {
 		o.GoFileOutput = generate.Module
 		o.RelativePath = generate.Module
 	}
-	o.GoModulePkg = generate.Package
+	o.GoModulePkg = generate.Package()
 	o.DSQLOutput = generate.Dest
 }
 
@@ -500,14 +500,14 @@ func (o *Options) MergeFromRun(run *options.Run) {
 	o.ConfigURL = run.ConfigURL
 }
 
-func (o *Options) MergeFromDSql(dsql *options.DSql) {
-	o.WriteLocation = dsql.Repo
+func (o *Options) MergeFromDSql(dsql *options.Translate) {
+	o.WriteLocation = dsql.RepositoryURL
 	o.Name = dsql.Name
-	o.Location = dsql.Source
+	o.Location = dsql.SourceURL()
 	o.Connects = dsql.Connectors
 	o.JWTVerifierHMACKey = string(dsql.JwtVerifier.HMAC)
 	o.JWTVerifierRSAKey = string(dsql.JwtVerifier.RSA)
-	o.ConstURL = dsql.Const
+	o.ConstURL = dsql.ConstURL
 	if dsql.Port != nil {
 		o.Port = *dsql.Port
 		o.hasPort = true
@@ -517,8 +517,8 @@ func (o *Options) MergeFromDSql(dsql *options.DSql) {
 		o.RelativePath = dsql.Module
 	}
 	if dsql.Port == nil {
-		o.PartialConfigURL = dsql.ConfigURL
-		o.RouteURL = url.Join(dsql.Repo, "Datly/routes")
+		o.PartialConfigURL = dsql.Configs.URL()
+		o.RouteURL = url.Join(dsql.RepositoryURL, "Datly/routes")
 	}
 }
 
@@ -530,9 +530,9 @@ func (o *Options) MergeFromInit(init *options.Init) {
 	if init.Port != nil {
 		o.Port = *init.Port
 	}
-	o.ConstURL = init.Const
-	o.WriteLocation = init.Repo
-	o.PartialConfigURL = init.ConfigURL
+	o.ConstURL = init.ConstURL
+	o.WriteLocation = init.RepositoryURL
+	o.PartialConfigURL = init.Configs.URL()
 	if init.CacheProvider.ProviderURL != "" {
 		o.cache = &view.Cache{
 			Name:         init.Name,
@@ -546,24 +546,68 @@ func (o *Options) MergeFromInit(init *options.Init) {
 func (o *Options) BuildOption() *options.Options {
 	var result = &options.Options{}
 	prep := o.Prepare
+
 	if prep.PrepareRule != "" {
-		result.Generate = &options.Gen{
-			Connector: options.Connector{
-				Connectors: o.Connects,
-			},
-			Generate: options.Generate{
-				Module: o.RelativePath,
-				Source: o.Location,
-			},
-			Package:   o.GoModulePkg,
-			Dest:      prep.DSQLOutput,
-			Operation: prep.PrepareRule,
-			Kind:      prep.ExecKind,
-			Lang:      ast.LangVelty,
+		result.Generate = &options.Generate{
+			Repository: options.Repository{},
+			Rule:       options.Rule{},
+			Dest:       prep.DSQLOutput,
+			Operation:  prep.PrepareRule,
+			Kind:       prep.ExecKind,
+			Lang:       ast.LangVelty,
+		}
+
+	}
+	if o.Location != "" {
+		result.Translate = &options.Translate{
+			Repository: options.Repository{},
+			Rule:       options.Rule{},
+		}
+		if prep.PrepareRule != "" {
+			result.Generate.Translate = true
+		}
+	}
+
+	repo := result.Repository()
+	if repo != nil {
+		repo.RSA = o.JWTVerifierRSAKey
+		repo.HMAC = o.JWTVerifierHMACKey
+		repo.Port = &o.Port
+		repo.RepositoryURL = o.WriteLocation
+		repo.ConstURL = o.ConstURL
+		repo.Connector.Connectors = o.Connects
+		if o.ApiURIPrefix == "" {
+			o.ApiURIPrefix = "/v1/api"
+		}
+		repo.APIPrefix = o.ApiURIPrefix
+
+		if o.PartialConfigURL != "" {
+			fs := afs.New()
+			if ok, _ := fs.Exists(context.Background(), o.PartialConfigURL); ok {
+				repo.Configs.Append(o.PartialConfigURL)
+			}
 		}
 
 	}
 
+	if rule := result.Rule(); rule != nil {
+		rule.Module = o.RelativePath
+		if rule.Module == "" {
+			rule.Module = "pkg"
+		}
+		rule.Source = []string{o.Location}
+		rule.Prefix = o.RoutePrefix
+		if o.GoModulePkg != "" {
+			rule.Packages = []string{o.GoModulePkg}
+		}
+		if o.CustomRouterURL != "" {
+			rule.CustomRouter = o.CustomRouterURL
+		}
+	}
+
+	if o.ConfigURL != "" && repo == nil {
+		result.Run = &options.Run{ConfigURL: o.ConfigURL}
+	}
 	return result
 }
 

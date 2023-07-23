@@ -11,16 +11,17 @@ import (
 
 const (
 	whitespaceToken int = iota
-	condBlockToken
 	exprGroupToken
 	importKeywordToken
 	aliasKeywordToken
-	packageKeywordToken
-	quotedToken
+	singleQuotedToken
+	doubleQuotedToken
 	setTerminatedToken
 	setToken
 	parameterDeclarationToken
 	commentToken
+	comaTerminatedToken
+
 	typeToken
 	dotToken
 	selectToken
@@ -29,18 +30,33 @@ const (
 	readStmtToken
 	exprToken
 	exprEndToken
-	packageNameToken
-	semicolonToken
 	anyToken
+	wordToken
+	scopeBlockToken
+	commentBlockToken
+	selectorStartToken
+	comaTerminatorToken
+	parenthesesBlockToken
+	endToken
+	elseToken
+	assignToken
+	forEachToken
+	ifToken
+	numberToken
+	boolToken
+	stringToken
+
+	selectorToken
+
+	insertToken
+
+	intoToken
+
+	valuesToken
 )
 
 var whitespaceMatcher = parsly.NewToken(whitespaceToken, "Whitespace", matcher.NewWhiteSpace())
-var condBlockMatcher = parsly.NewToken(condBlockToken, "#if .... #end", matcher.NewSeqBlock("#if", "#end"))
 var exprGroupMatcher = parsly.NewToken(exprGroupToken, "( .... )", matcher.NewBlock('(', ')', '\\'))
-var importKeywordMatcher = parsly.NewToken(importKeywordToken, "import", matcher.NewFragmentsFold([]byte("import")))
-var aliasKeywordMatcher = parsly.NewToken(aliasKeywordToken, "as", matcher.NewFragmentsFold([]byte("as")))
-var packageMatcher = parsly.NewToken(packageKeywordToken, "package", matcher.NewFragmentsFold([]byte("package")))
-var quotedMatcher = parsly.NewToken(quotedToken, "quoted block", matcher.NewQuote('"', '\\'))
 var setTerminatedMatcher = parsly.NewToken(setTerminatedToken, "#set", matchers.NewStringTerminator("#set"))
 var setMatcher = parsly.NewToken(setToken, "#set", matcher.NewFragments([]byte("#set")))
 var parameterDeclarationMatcher = parsly.NewToken(parameterDeclarationToken, "$_", matcher.NewSpacedSet([]string{"$_ = $"}))
@@ -54,6 +70,50 @@ var readStmtMatcher = parsly.NewToken(readStmtToken, "Select statement", matcher
 var exprMatcher = parsly.NewToken(exprToken, "Expression", matcher.NewFragments([]byte("#set"), []byte("#foreach"), []byte("#if")))
 var anyMatcher = parsly.NewToken(anyToken, "Any", matchers.NewAny())
 var exprEndMatcher = parsly.NewToken(exprEndToken, "#end", matcher.NewFragmentsFold([]byte("#end")))
+
+var selectorStartMatcher = parsly.NewToken(selectorStartToken, "Selector start", matcher.NewByte('$'))
+
+var fullWordMatcher = parsly.NewToken(wordToken, "Word", matchers.NewWordMatcher(true))
+
+var commentBlockMatcher = parsly.NewToken(commentBlockToken, "Comment", matcher.NewSeqBlock("/*", "*/"))
+
+var scopeBlockMatcher = parsly.NewToken(scopeBlockToken, "{ .... }", matcher.NewBlock('{', '}', '\\'))
+
+var comaTerminatorMatcher = parsly.NewToken(comaTerminatorToken, "coma", matcher.NewTerminator(',', true))
+
+var parenthesesBlockMatcher = parsly.NewToken(parenthesesBlockToken, "Parentheses", matcher.NewBlock('(', ')', '\\'))
+
+var endMatcher = parsly.NewToken(endToken, "End", matcher.NewFragment("#end"))
+var elseMatcher = parsly.NewToken(elseToken, "Else", matcher.NewFragment("#else"))
+var elseIfMatcher = parsly.NewToken(elseToken, "ElseIf", matcher.NewFragment("#elseif"))
+var assignMatcher = parsly.NewToken(assignToken, "Set", matcher.NewFragment("#set"))
+var forEachMatcher = parsly.NewToken(forEachToken, "ForEach", matcher.NewFragment("#foreach"))
+var ifMatcher = parsly.NewToken(ifToken, "If", matcher.NewFragment("#if"))
+
+var numberMatcher = parsly.NewToken(numberToken, "Number", matcher.NewNumber())
+var boolMatcher = parsly.NewToken(boolToken, "Boolean", matcher.NewFragmentsFold([]byte("true"), []byte("false")))
+var boolTokenMatcher = parsly.NewToken(boolToken, "Boolean", matcher.NewFragments(
+	[]byte("&&"), []byte("||"),
+))
+
+var singleQuoteStringMatcher = parsly.NewToken(stringToken, "String", matcher.NewBlock('\'', '\'', '\\'))
+var doubleQuoteStringMatcher = parsly.NewToken(stringToken, "String", matcher.NewBlock('"', '"', '\\'))
+var backtickQuoteStringMatcher = parsly.NewToken(stringToken, "String", matcher.NewBlock('`', '`', '\\'))
+
+var selectorMatcher = parsly.NewToken(selectorToken, "selector", matchers.NewSelector())
+
+var insertMatcher = parsly.NewToken(insertToken, "insert", matcher.NewFragmentsFold([]byte("insert")))
+var intoMatcher = parsly.NewToken(intoToken, "into", matcher.NewFragmentsFold([]byte("into")))
+var valuesMatcher = parsly.NewToken(valuesToken, "values", matcher.NewFragmentsFold([]byte("values")))
+var importKeywordMatcher = parsly.NewToken(importKeywordToken, "import", matcher.NewFragmentsFold([]byte("import")))
+
+var quotedMatcher = parsly.NewToken(doubleQuotedToken, "quoted block", matcher.NewQuote('"', '\\'))
+
+var aliasKeywordMatcher = parsly.NewToken(aliasKeywordToken, "as", matcher.NewFragmentsFold([]byte("as")))
+
+var singleQuotedMatcher = parsly.NewToken(singleQuotedToken, "single quoted block", matcher.NewQuote('\'', '\''))
+
+var comaTerminatedMatcher = parsly.NewToken(comaTerminatedToken, "arg", matcher.NewTerminator(',', true))
 
 func nextWhitespace(cursor *parsly.Cursor) bool {
 	beforeMatch := cursor.Pos

@@ -2,7 +2,7 @@
     "Method": "PUT"
  } */
 
-#set($_ = $TeamIDs<string>(query/TeamIDs).WithCodec(AsInts))
+#set($_ = $TeamIDs<[]int>(query/TeamIDs))
 
 #set($teamStatsIndex = $Unsafe.TeamStats.IndexBy("ID") /*
     {"Required": false}

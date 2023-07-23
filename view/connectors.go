@@ -35,11 +35,14 @@ type ConnectorSlice []*Connector
 //Index indexes Connectors by Connector.Name.
 func (c ConnectorSlice) Index() Connectors {
 	result := Connectors(map[string]*Connector{})
+	c.IndexInto(&result)
+	return result
+}
 
+func (c ConnectorSlice) IndexInto(result *Connectors) {
 	for i := range c {
 		result.Register(c[i])
 	}
-	return result
 }
 
 //Init initializes each connector

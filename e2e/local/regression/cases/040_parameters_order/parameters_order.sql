@@ -10,9 +10,9 @@ import (
 )
 
 #set($_ = $Events<*Events>(body/Data))
-#set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401).UtilParam())
+#set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
 #set($_ = $Authorization  /*
-    {"Type": "Authorizer", "StatusCode": 403}
+   !!403
 
     SELECT Authorized /* {"DataType":"bool"} */
     FROM (

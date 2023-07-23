@@ -1,4 +1,4 @@
-/* {"URI":"auth/products/", "Method":"POST", "Authorized":"bool", "IS_AUTH": "bool"} */
+/* {"URI":"auth/products/", "Method":"POST"} */
 
 #set($_ = $Ids<[]int>(body/Ids))
 

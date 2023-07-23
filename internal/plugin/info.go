@@ -45,6 +45,9 @@ type (
 
 func (i *Info) Package(pkg string) string {
 	if i.Mod == nil {
+		if pkg != "" {
+			return pkg
+		}
 		return "main"
 	}
 	if pkg == "" {
@@ -54,7 +57,7 @@ func (i *Info) Package(pkg string) string {
 }
 
 func (i *Info) IsStandalone() bool {
-	return i.IntegrationMode == ModeStandalone
+	return i.IntegrationMode == ModeStandalone || i.IntegrationMode == ModeUndefined
 }
 
 func (i *Info) init(ctx context.Context) error {
@@ -119,6 +122,7 @@ func (i *Info) detectDependencies(ctx context.Context) error {
 		return nil
 	}
 	i.IntegrationMode = ModeStandalone
+
 	if len(i.NonStandardPackages) > 0 {
 		return fmt.Errorf("detected non go standard package in standalone mode: %v, please run go mod init", i.NonStandardPackages)
 	}
@@ -186,6 +190,9 @@ func (i *Info) detectLocalMethods(ctx context.Context) {
 
 func NewInfo(ctx context.Context, URL string) (*Info, error) {
 	var fs = afs.New()
+	if ok, _ := fs.Exists(ctx, URL); !ok {
+		return &Info{URL: URL, IntegrationMode: ModeUndefined}, nil
+	}
 	if err := ensureValidDirectory(ctx, fs, URL); err != nil {
 		return nil, err
 	}

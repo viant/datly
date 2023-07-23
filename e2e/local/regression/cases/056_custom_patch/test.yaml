@@ -21,6 +21,6 @@ pipeline:
     action: 'dsunit:query'
     dataStore: dev
     SQL: |
-      SELECT (CASE  WHEN COUNT(*) = 0 THEN FALSE ELSE TRUE END) AS UPDATED_FOOS FROM ( SELECT * FROM FOOS_CHANGES WHERE PREVIOUS = '{"Id":10,"Name":"FOO - 10","Quantity":3500,"FoosPerformance":null}') T;
+      SELECT (CASE  WHEN COUNT(*) = 0 THEN FALSE ELSE TRUE END) AS UPDATED_FOOS FROM ( SELECT * FROM FOOS_CHANGES WHERE PREVIOUS = '{"Id":10,"Name":"FOO - 10","Quantity":3500}') T;
     expect:
       - UPDATED_FOOS: true

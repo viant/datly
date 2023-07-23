@@ -18,7 +18,7 @@ type Schema struct {
 	Name        string `json:",omitempty" yaml:"name,omitempty"`
 	DataType    string `json:",omitempty" yaml:"dataType,omitempty"`
 	Cardinality Cardinality
-
+	Methods     []reflect.Method
 	compType    reflect.Type
 	sliceType   reflect.Type
 	slice       *xunsafe.Slice
@@ -112,7 +112,7 @@ func (c *Schema) Init(resource *Resource, viewCaseFormat format.Case, options ..
 	}
 
 	if c.DataType != "" {
-		rType, err := types.LookupType(resource.LookupType(), c.DataType)
+		rType, err := types.LookupType(resource.LookupType(), c.TypeName())
 		if err != nil {
 			return err
 		}
@@ -330,6 +330,9 @@ func (c *Schema) setType(lookupType xreflect.LookupType, ptr bool) error {
 	}
 	if name != c.DataType && strings.Contains(c.DataType, " ") { //TODO replace with xreflect check if definition
 		options = append(options, xreflect.WithTypeDefinition(c.DataType))
+	}
+	if c.Package != "" {
+		options = append(options, xreflect.WithPackage(c.Package))
 	}
 	rType, err := types.LookupType(lookupType, name, options...)
 	if err != nil {

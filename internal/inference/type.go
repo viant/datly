@@ -12,12 +12,31 @@ import (
 	"reflect"
 )
 
-func (f *Field) StructField() reflect.StructField {
-	return reflect.StructField{
+type reflectOptions struct {
+	withTag bool
+}
+
+type ReflectOption func(r *reflectOptions)
+
+func WithStructTag() ReflectOption {
+	return func(r *reflectOptions) {
+		r.withTag = true
+	}
+}
+
+func (f *Field) StructField(opts ...ReflectOption) reflect.StructField {
+	ret := reflect.StructField{
 		Name: f.Name,
-		Tag:  reflect.StructTag(f.Tag),
 		Type: f.Field.Schema.Type(),
 	}
+	options := &reflectOptions{}
+	for _, apply := range opts {
+		apply(options)
+	}
+	if options.withTag {
+		ret.Tag = reflect.StructTag(f.Tag)
+	}
+	return ret
 }
 
 type Type struct {
@@ -27,6 +46,7 @@ type Type struct {
 	PkFields       []*Field
 	columnFields   []*Field
 	RelationFields []*Field
+	skipped        []*Field
 }
 
 func (t *Type) ByColumn(name string) *Field {
@@ -36,6 +56,11 @@ func (t *Type) ByColumn(name string) *Field {
 		}
 	}
 	for _, candidate := range t.columnFields {
+		if column := candidate.Column; column != nil && column.Name != "" && column.Name == name {
+			return candidate
+		}
+	}
+	for _, candidate := range t.skipped {
 		if column := candidate.Column; column != nil && column.Name != "" && column.Name == name {
 			return candidate
 		}
@@ -55,7 +80,7 @@ func (t *Type) ExpandType(simpleName string) string {
 	return pkg + "." + simpleName
 }
 
-func (t *Type) AppendColumnField(column *sqlparser.Column) (*Field, error) {
+func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool) (*Field, error) {
 	columnCase, err := format.NewCase(formatter.DetectCase(column.Name))
 	if err != nil {
 		return nil, err
@@ -80,13 +105,19 @@ func (t *Type) AppendColumnField(column *sqlparser.Column) (*Field, error) {
 	}
 	field.Schema = view.NewSchema(aType)
 	field.Schema.DataType = aType.Name()
-	t.columnFields = append(t.columnFields, field)
+	if skipped {
+		field.Skipped = skipped
+		t.skipped = append(t.skipped, field)
+	} else {
+		t.columnFields = append(t.columnFields, field)
+	}
 	return field, nil
 }
 
-func (s *Spec) Fields() []*view.Field {
+func (s *Spec) Fields(includeHas bool) []*view.Field {
 	specType := s.Type
 	result := specType.ColumnFields()
+
 	hasFieldName := "Has"
 	hasField := &view.Field{
 		Name: hasFieldName,
@@ -96,7 +127,7 @@ func (s *Spec) Fields() []*view.Field {
 
 	for i, rel := range s.Relations {
 		relField := specType.RelationFields[i].Field
-		relField.Fields = rel.Fields()
+		relField.Fields = rel.Fields(includeHas)
 		result = append(result, &relField)
 	}
 	for _, field := range specType.columnFields {
@@ -105,7 +136,9 @@ func (s *Spec) Fields() []*view.Field {
 	for _, field := range specType.RelationFields {
 		hasField.Fields = append(hasField.Fields, &view.Field{Name: field.Name, Schema: &view.Schema{DataType: "bool"}})
 	}
-	result = append(result, hasField)
+	if includeHas {
+		result = append(result, hasField)
+	}
 	return result
 }
 
@@ -135,10 +168,13 @@ func (t *Type) AddRelation(name string, spec *Spec, relation *Relation) *Field {
 	return field
 }
 
-func (t *Type) Fields() []reflect.StructField {
+func (t *Type) Fields(opts ...ReflectOption) []reflect.StructField {
 	var fields []reflect.StructField
 	for _, field := range t.columnFields {
-		fields = append(fields, field.StructField())
+		fields = append(fields, field.StructField(opts...))
+	}
+	for _, field := range t.RelationFields {
+		fields = append(fields, field.StructField(opts...))
 	}
 	return fields
 }
@@ -168,7 +204,6 @@ func NewType(packageName string, name string, rType reflect.Type) (*Type, error)
 				if structology.IsSetMarker(rField.Tag) {
 					continue
 				}
-
 				if typeName, _ := rField.Tag.Lookup("typeName"); typeName != "" {
 
 					result.RelationFields = append(result.RelationFields, field)
@@ -177,4 +212,14 @@ func NewType(packageName string, name string, rType reflect.Type) (*Type, error)
 		}
 	}
 	return result, nil
+}
+
+var defaultPackageName = "autogen"
+
+func PkgPath(fieldName string, pkgPath string) (fieldPath string) {
+
+	if fieldName[0] > 'Z' || fieldName[0] < 'A' {
+		fieldPath = pkgPath
+	}
+	return fieldPath
 }

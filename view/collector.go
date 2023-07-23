@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -11,12 +12,12 @@ import (
 	"unsafe"
 )
 
-//VisitorFn represents visitor function
+// VisitorFn represents visitor function
 type VisitorFn func(value interface{}) error
 
-//Collector collects and build result from view fetched from Database
-//If View or any of the View.With MatchStrategy support Parallel fetching, it is important to call MergeData
-//when all needed view was fetched
+// Collector collects and build result from view fetched from Database
+// If View or any of the View.With MatchStrategy support Parallel fetching, it is important to call MergeData
+// when all needed view was fetched
 type Collector struct {
 	mutex  sync.Mutex
 	parent *Collector
@@ -53,7 +54,7 @@ func (r *Collector) Lock() *sync.Mutex {
 	return &r.parent.mutex
 }
 
-//Resolve resolved unmapped column
+// Resolve resolved unmapped column
 func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface{} {
 	buffer, ok := r.values[column.Name()]
 	if !ok {
@@ -93,8 +94,8 @@ func (r *Collector) Resolve(column io.Column) func(ptr unsafe.Pointer) interface
 	}
 }
 
-//parentValuesPositions returns positions in the parent main slice by given column name
-//After first use, it is not possible to index new resolved column indexes by Resolve method
+// parentValuesPositions returns positions in the parent main slice by given column name
+// After first use, it is not possible to index new resolved column indexes by Resolve method
 func (r *Collector) parentValuesPositions(columnName string) map[interface{}][]int {
 	result, ok := r.parent.valuePosition[columnName]
 	if !ok {
@@ -105,7 +106,7 @@ func (r *Collector) parentValuesPositions(columnName string) map[interface{}][]i
 	return result
 }
 
-//NewCollector creates a collector
+// NewCollector creates a collector
 func NewCollector(slice *xunsafe.Slice, view *View, dest interface{}, viewMetaHandler viewMetaHandlerFn, supportParallel bool) *Collector {
 	ensuredDest := ensureDest(dest, view)
 	wg := sync.WaitGroup{}
@@ -138,7 +139,7 @@ func ensureDest(dest interface{}, view *View) interface{} {
 	return dest
 }
 
-//VisitorFn creates visitor function
+// VisitorFn creates visitor function
 func (r *Collector) Visitor(ctx context.Context) VisitorFn {
 	relation := r.relation
 	visitorRelations := RelationsSlice(r.view.With).PopulateWithVisitor()
@@ -303,7 +304,7 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 	}
 }
 
-//NewItem creates and return item provider
+// NewItem creates and return item provider
 func (r *Collector) NewItem() func() interface{} {
 	if r.view._codec == nil {
 		return func() interface{} {
@@ -355,7 +356,7 @@ func (r *Collector) indexPositions(name string) {
 	}
 }
 
-//Relations creates and register new Collector for each Relation present in the Selector.Columns if View allows use Selector.Columns
+// Relations creates and register new Collector for each Relation present in the Selector.Columns if View allows use Selector.Columns
 func (r *Collector) Relations(selector *Selector) ([]*Collector, error) {
 	result := make([]*Collector, len(r.view.With))
 
@@ -409,8 +410,9 @@ func (r *Collector) ViewMetaHandler(rel *Relation) (func(viewMeta interface{}) e
 			return nil
 		}, nil
 	}
-
-	childMetaFieldName := rel.Of.View.Caser.Format(rel.Of.Field, format.CaseUpperCamel)
+	detectCase := formatter.DetectCase(rel.Of.Field)
+	caser, _ := format.NewCase(detectCase)
+	childMetaFieldName := caser.Format(rel.Of.Field, format.CaseUpperCamel)
 	metaChildKeyField := xunsafe.FieldByName(templateMeta.Schema.Type(), childMetaFieldName)
 	if metaChildKeyField == nil {
 		return nil, fmt.Errorf("not found field %v at %v", childMetaFieldName, templateMeta.Schema.Type().String())
@@ -448,24 +450,24 @@ func (r *Collector) ViewMetaHandler(rel *Relation) (func(viewMeta interface{}) e
 	}, nil
 }
 
-//View returns View assigned to the Collector
+// View returns View assigned to the Collector
 func (r *Collector) View() *View {
 	return r.view
 }
 
-//Project returns collector slice
+// Project returns collector slice
 func (r *Collector) Dest() interface{} {
 	return r.dest
 }
 
-//SupportsParallel if Collector supports parallelism, it means that his Relations can fetch view in the same time
-//Later on it will be merged with the parent Collector
+// SupportsParallel if Collector supports parallelism, it means that his Relations can fetch view in the same time
+// Later on it will be merged with the parent Collector
 func (r *Collector) SupportsParallel() bool {
 	return r.supportParallel
 }
 
-//MergeData merges view with Collectors produced via Relations
-//It is sufficient to call it on the most Parent Collector to produce result
+// MergeData merges view with Collectors produced via Relations
+// It is sufficient to call it on the most Parent Collector to produce result
 func (r *Collector) MergeData() {
 	for i := range r.relations {
 		r.relations[i].MergeData()
@@ -510,10 +512,10 @@ func (r *Collector) mergeToParent() {
 	}
 }
 
-//ParentPlaceholders if Collector doesn't support parallel fetching and has a Parent, it will return a parent _field values and column name
-//that the relation was created from, otherwise empty slice and empty string
-//i.e. if Parent Collector collects Employee{AccountId: int}, Column.Name is account_id and Collector collects Account
-//it will extract and return all the AccountId that were accumulated and account_id
+// ParentPlaceholders if Collector doesn't support parallel fetching and has a Parent, it will return a parent _field values and column name
+// that the relation was created from, otherwise empty slice and empty string
+// i.e. if Parent Collector collects Employee{AccountId: int}, Column.Name is account_id and Collector collects Account
+// it will extract and return all the AccountId that were accumulated and account_id
 func (r *Collector) ParentPlaceholders() ([]interface{}, string) {
 	if r.parent == nil || r.parent.SupportsParallel() {
 		return []interface{}{}, ""

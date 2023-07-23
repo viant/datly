@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/datly/internal/msg"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
@@ -11,6 +12,7 @@ import (
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/sqlx/option"
+	"reflect"
 	"strings"
 )
 
@@ -27,10 +29,13 @@ type (
 
 	//Spec defines table/sql base specification
 	Spec struct {
+		Namespace   string
 		Parent      *Spec
+		Package     string
 		IsAuxiliary bool
 		Table       string
 		SQL         string
+		SQLArgs     []interface{}
 		Columns     sqlparser.Columns
 		pk          map[string]sink.Key
 		Fk          map[string]sink.Key
@@ -42,15 +47,42 @@ type (
 	Selector []string
 )
 
-//BuildType build a type from infered table/SQL definition
-func (s *Spec) BuildType(pkg, name string, cardinality view.Cardinality, whitelist, blacklist map[string]bool) error {
-	var aType = &Type{Package: pkg, Name: name, Cardinality: cardinality}
-
-	for i, column := range s.Columns {
-		if s.shouldSkipColumn(whitelist, blacklist, column) {
+func (s *Spec) EnsureRelationType() {
+	if len(s.Relations) == 0 {
+		return
+	}
+	for i, field := range s.Type.RelationFields {
+		if schema := field.EnsureSchema(); schema.Type() != nil {
 			continue
 		}
-		field, err := aType.AppendColumnField(s.Columns[i])
+		rel := s.Relations[i]
+		if rel.Type != nil {
+			field.Schema = view.NewSchema(reflect.StructOf(rel.Type.Fields()))
+		}
+		field.Schema.Cardinality = rel.Cardinality
+	}
+	if len(s.Type.RelationFields) > 0 {
+		return
+	}
+	//checking case we had relation but not relation fields
+	for _, rel := range s.Relations {
+		field := &Field{}
+		field.EnsureSchema()
+		field.Name = rel.Name
+		if rel.Type != nil {
+			field.Schema = view.NewSchema(reflect.StructOf(rel.Type.Fields()))
+		}
+		field.Schema.Cardinality = rel.Cardinality
+		s.Type.RelationFields = append(s.Type.RelationFields, field)
+	}
+}
+
+// BuildType build a type from infered table/SQL definition
+func (s *Spec) BuildType(pkg, name string, cardinality view.Cardinality, whitelist, blacklist map[string]bool) error {
+	var aType = &Type{Package: pkg, Name: name, Cardinality: cardinality}
+	for i, column := range s.Columns {
+		skipped := s.shouldSkipColumn(whitelist, blacklist, column)
+		field, err := aType.AppendColumnField(s.Columns[i], skipped)
 		if err != nil {
 			return err
 		}
@@ -66,17 +98,43 @@ func (s *Spec) BuildType(pkg, name string, cardinality view.Cardinality, whiteli
 			aType.PkFields = append(aType.PkFields, field)
 		}
 	}
+
 	s.Type = aType
 	return nil
 }
 
-//TypeDefinition builds spec based tyep definition
-func (s *Spec) TypeDefinition(wrapper string) *view.TypeDefinition {
+// TypeDefinition builds spec based tyep definition
+func (s *Spec) TypeDefinition(wrapper string, includeHas bool) *view.TypeDefinition {
 	typeDef := &view.TypeDefinition{
 		Package:     s.Type.Package,
 		Name:        s.Type.Name,
 		Cardinality: s.Type.Cardinality,
-		Fields:      s.Fields(),
+		Fields:      s.Fields(includeHas),
+	}
+	if wrapper != "" {
+		return &view.TypeDefinition{
+			Name:    wrapper,
+			Package: s.Type.Package,
+			Fields: []*view.Field{
+				{
+					Name:        wrapper,
+					Fields:      typeDef.Fields,
+					Cardinality: typeDef.Cardinality,
+					Tag:         fmt.Sprintf(`typeName:"%v"`, typeDef.Name),
+					Ptr:         true,
+				},
+			},
+		}
+	}
+	return typeDef
+}
+
+func (s *Spec) SchemaTypeDefinition(wrapper string, includeHas bool) *view.TypeDefinition {
+	typeDef := &view.TypeDefinition{
+		Package:     s.Type.Package,
+		Name:        s.Type.Name,
+		Cardinality: s.Type.Cardinality,
+		Fields:      s.Fields(includeHas),
 	}
 	if wrapper != "" {
 		return &view.TypeDefinition{
@@ -111,12 +169,12 @@ func (s *Spec) shouldSkipColumn(whitelist, blacklist map[string]bool, column *sq
 	return false
 }
 
-//AddRelation adds relations
+// AddRelation adds relations
 func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinality view.Cardinality) {
-	if isToOne(join) {
+	if IsToOne(join) {
 		cardinality = view.One
 	}
-	relColumn, refColumn := extractRelationColumns(join)
+	relColumn, refColumn := ExtractRelationColumns(join)
 	rel := &Relation{Spec: spec,
 		KeyField:    spec.Type.ByColumn(refColumn),
 		ParentField: s.Type.ByColumn(relColumn),
@@ -127,7 +185,7 @@ func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinalit
 	s.Type.AddRelation(name, spec, rel)
 }
 
-//Selector returns current sepcifiction selector (path from root)
+// Selector returns current sepcifiction selector (path from root)
 func (s *Spec) Selector() Selector {
 	if s.Parent != nil {
 		return append(s.Parent.Selector(), s.Type.Name)
@@ -135,7 +193,7 @@ func (s *Spec) Selector() Selector {
 	return []string{s.Type.Name}
 }
 
-//PkStructQL crates a PK struct SQL
+// PkStructQL crates a PK struct SQL
 func (s *Spec) PkStructQL(selector Selector) (*Field, string) {
 	for _, field := range s.Type.PkFields { //TODO add  multi key support
 		return field, fmt.Sprintf("? SELECT ARRAY_AGG(%v) AS Values FROM  `%v` LIMIT 1", field.Name, selector.Path())
@@ -143,7 +201,7 @@ func (s *Spec) PkStructQL(selector Selector) (*Field, string) {
 	return nil, ""
 }
 
-//ViewSQL return structQL SQL for relation
+// ViewSQL return structQL SQL for relation
 func (s *Spec) ViewSQL(columnParameter ColumnParameterNamer) string {
 	builder := &strings.Builder{}
 	if s.SQL != "" {
@@ -167,19 +225,19 @@ func (s *Spec) ViewSQL(columnParameter ColumnParameterNamer) string {
 	return builder.String()
 }
 
-//NewSpec discover column derived type for supplied SQL/table
-func NewSpec(ctx context.Context, db *sql.DB, table, SQL string) (*Spec, error) {
+// NewSpec discover column derived type for supplied SQL/table
+func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table, SQL string, SQLArgs ...interface{}) (*Spec, error) {
 	isAuxiliary := isAuxiliary(SQL)
 	table = normalizeTable(table)
 	SQL = normalizeSQL(SQL, table)
 	if table == "" && SQL == "" {
 		return nil, fmt.Errorf("both table/SQL were empty")
 	}
-	var result = &Spec{Table: table, SQL: SQL, IsAuxiliary: isAuxiliary}
+	var result = &Spec{Table: table, SQL: SQL, SQLArgs: SQLArgs, IsAuxiliary: isAuxiliary}
 	var columns sqlparser.Columns
 	var err error
 	if SQL != "" {
-		if columns, err = detectColumns(ctx, db, SQL, table); err != nil {
+		if columns, err = detectColumns(ctx, db, SQL, table, SQLArgs...); err != nil {
 			return nil, err
 		}
 	}
@@ -195,14 +253,16 @@ func NewSpec(ctx context.Context, db *sql.DB, table, SQL string) (*Spec, error) 
 	meta := metadata.New()
 	args := option.NewArgs("", "", table)
 	var fkKeys, keys []sink.Key
+
 	if err := meta.Info(ctx, db, info.KindForeignKeys, &fkKeys, args); err != nil {
-		return nil, err
+		messages.AddWarning(result.Table, "detection", "unable to detect foreign key: %v, %w")
 	}
 	if err := meta.Info(ctx, db, info.KindPrimaryKeys, &keys, args); err != nil {
-		return nil, err
+		messages.AddWarning(result.Table, "detection", "unable to detect primary key: %v, %w")
 	}
 	result.pk = sink.Keys(keys).By(sink.KeyName.Column)
 	result.Fk = sink.Keys(fkKeys).By(sink.KeyName.Column)
+
 	return result, nil
 }
 
@@ -210,7 +270,7 @@ func isAuxiliary(SQL string) bool {
 	if SQL == "" {
 		return false
 	}
-	SQL = trimParenthesis(SQL)
+	SQL = TrimParenthesis(SQL)
 	aQuery, _ := sqlparser.ParseQuery(SQL)
 	if aQuery == nil {
 		return false
@@ -222,7 +282,7 @@ func isAuxiliary(SQL string) bool {
 	return strings.Contains(from, "(")
 }
 
-func isToOne(join *query.Join) bool {
+func IsToOne(join *query.Join) bool {
 	return strings.Contains(sqlparser.Stringify(join.On), "1 = 1")
 }
 
@@ -232,6 +292,6 @@ func normalizeSQL(SQL string, table string) string {
 }
 
 func normalizeTable(table string) string {
-	table = trimParenthesis(table)
+	table = TrimParenthesis(table)
 	return table
 }

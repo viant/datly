@@ -1,2 +1,2 @@
-// Package gcr defines Google Cloud Run entry point
+// Package gcr defines Google Cloud Exec entry point
 package gcr

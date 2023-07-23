@@ -2,38 +2,98 @@ package command
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
+	"github.com/viant/datly/config"
+	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/internal/codegen/ast"
+	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
+	"github.com/viant/datly/internal/translator"
+	"github.com/viant/datly/router"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/toolbox/format"
 	"strings"
 )
 
-func (s *Service) Generate(ctx context.Context, gen *options.Gen, template *codegen.Template) error {
-	if err := s.ensureDest(ctx, gen.Dest); err != nil {
+func (s *Service) Generate(ctx context.Context, options *options.Options) error {
+	if err := s.generate(ctx, options); err != nil {
 		return err
 	}
-	//TODO adjust if handler option is used
-	info, err := plugin.NewInfo(ctx, gen.GoModuleLocation())
+	return nil
+}
+
+func (s *Service) generate(ctx context.Context, options *options.Options) error {
+	ruleOption := options.Rule()
+	ruleOption.Generated = true
+	if err := s.translate(ctx, options); err != nil {
+		return err
+	}
+	s.translator.Repository.Files.Reset()
+	gen := options.Generate
+	goModule := gen.GoModuleLocation()
+	info, err := plugin.NewInfo(ctx, goModule)
+	if err != nil {
+		return err
+	}
+	for i, resource := range s.translator.Repository.Resource {
+		ruleOption.Index = i
+		rule := resource.Rule
+		root := rule.RootViewlet()
+		spec := root.Spec
+		if spec == nil {
+			return fmt.Errorf("view %v tranlsation spec was empty", root.Name)
+		}
+		root.Spec.Type.Cardinality = resource.Rule.Cardinality
+		template := codegen.NewTemplate(resource.Rule, root.Spec)
+		root.Spec.Type.Package = ruleOption.Package()
+		template.BuildTypeDef(root.Spec, resource.Rule.GetField())
+		template.Imports.AddType(resource.Rule.HandlerType)
+		template.Imports.AddType(resource.Rule.StateType)
+
+		var opts = []codegen.Option{codegen.WithHTTPMethod(gen.HttpMethod()), codegen.WithLang(gen.Lang)}
+		template.BuildState(spec, resource.Rule.GetField(), opts...)
+		template.BuildLogic(spec, opts...)
+
+		if err := s.generateCode(ctx, options.Generate, template, info); err != nil {
+			return err
+		}
+	}
+
+	if err := s.Files.Upload(ctx, s.fs); err != nil {
+		return err
+	}
+
+	fmt.Printf("GO MODULE :%v\n", gen.GoModuleLocation())
+	info, err = plugin.NewInfo(ctx, gen.GoModuleLocation())
 	if err != nil {
 		return err
 	}
 
-	if err := s.generateTemplate(ctx, gen, template, info); err != nil {
+	if err = s.updateModule(ctx, gen, info); err != nil {
 		return err
 	}
+	s.translator.Repository.Resource = nil
+	options.UpdateTranslate()
+	return s.Translate(ctx, options)
+}
 
-	pkg := info.Package(gen.Package)
-	if err = s.generateState(ctx, pkg, gen, template, info); err != nil {
+func (s *Service) generateCode(ctx context.Context, gen *options.Generate, template *codegen.Template, info *plugin.Info) error {
+	pkg := info.Package(gen.Package())
+
+	//TODO adjust if handler option is used
+	if err := s.generateTemplate(gen, template, info); err != nil {
 		return err
 	}
-	if err = s.generateEntity(ctx, pkg, gen, info, template); err != nil {
-		return err
-	}
+	code := template.GenerateState(pkg, info)
+	s.Files.Append(asset.NewFile(gen.StateLocation(), code))
+	return s.generateEntity(ctx, pkg, gen, info, template)
+}
+
+func (s *Service) updateModule(ctx context.Context, gen *options.Generate, info *plugin.Info) error {
 	switch info.IntegrationMode {
 	case plugin.ModeExtension, plugin.ModeCustomTypeModule:
 		if len(info.CustomTypesPackages) == 0 {
@@ -41,7 +101,7 @@ func (s *Service) Generate(ctx context.Context, gen *options.Gen, template *code
 				return err
 			}
 		}
-		info.UpdateTypesCorePackage(url.Join(gen.GoModuleLocation(), gen.Package))
+		info.UpdateTypesCorePackage(url.Join(gen.GoModuleLocation(), gen.Package()))
 	default:
 		if ok, _ := s.fs.Exists(ctx, url.Join(gen.GoModuleLocation(), "go.mod")); ok {
 			if err := s.tidyModule(ctx, gen.GoModuleLocation()); err != nil {
@@ -53,19 +113,56 @@ func (s *Service) Generate(ctx context.Context, gen *options.Gen, template *code
 	return s.EnsurePluginArtifacts(ctx, info)
 }
 
-func (s *Service) generateTemplate(ctx context.Context, gen *options.Gen, template *codegen.Template, info *plugin.Info) error {
-	//needed for both go and velty
-	opts := s.dsqlGenerationOptions(gen)
-	files, err := s.generateTemplateFiles(gen, template, info, opts...)
+func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) error {
+	rule := &translator.Rule{}
+	origin := *dSQL
+	if err := rule.ExtractSettings(dSQL); err != nil {
+		return err
+	}
+	if rule.Handler == nil {
+		*dSQL = origin
+		return nil
+	}
+	state, err := inference.NewState(ruleOptions.GoModuleLocation(), rule.StateType, config.Config.Types)
 	if err != nil {
 		return err
 	}
-	return s.uploadFiles(ctx, files...)
+	rule.Handler = &router.Handler{
+		HandlerType: rule.HandlerType,
+		StateType:   rule.StateType,
+	}
+	entityParam := state[0]
+	entityType := entityParam.Schema.Type()
+	if entityType == nil {
+		return fmt.Errorf("entity type was empty")
+	}
+	aType, err := inference.NewType(rule.StateTypePackage(), entityParam.Name, entityType)
+	if err != nil {
+		return err
+	}
+	tmpl := codegen.NewTemplate(rule, &inference.Spec{Type: aType})
+	tmpl.Imports.AddType(rule.StateType)
+	tmpl.Imports.AddType(rule.HandlerType)
+	tmpl.EnsureImports(aType)
+	tmpl.State = state
+	handlerDSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
+	if err != nil {
+		return err
+	}
+	handlerDSQL += fmt.Sprintf("$Nop($%v)", entityParam.Name)
+	*dSQL = handlerDSQL
+	return nil
 }
 
-func (s *Service) uploadFiles(ctx context.Context, files ...*File) error {
+func (s *Service) generateTemplate(gen *options.Generate, template *codegen.Template, info *plugin.Info) error {
+	//needed for both go and velty
+	opts := s.dsqlGenerationOptions(gen, info)
+	return s.generateTemplateFiles(gen, template, info, opts...)
+}
+
+func (s *Service) uploadFiles(ctx context.Context, files ...*asset.File) error {
 	for _, f := range files {
-		if err := f.validate(); err != nil {
+		if err := f.Validate(); err != nil {
 			return err
 		}
 		if err := s.uploadContent(ctx, f.URL, f.Content); err != nil {
@@ -80,23 +177,24 @@ func (s *Service) uploadContent(ctx context.Context, URL string, content string)
 	return s.fs.Upload(ctx, URL, file.DefaultFileOsMode, strings.NewReader(content))
 }
 
-func (s *Service) dsqlGenerationOptions(gen *options.Gen) []codegen.Option {
+func (s *Service) dsqlGenerationOptions(gen *options.Generate, info *plugin.Info) []codegen.Option {
 	var options []codegen.Option
 	if gen.Lang == ast.LangGO {
 		options = append(options, codegen.WithoutBusinessLogic())
 		options = append(options, codegen.WithLang(gen.Lang))
 	}
+
 	return options
 }
 
-func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.Gen, info *plugin.Info, template *codegen.Template) error {
+func (s *Service) generateEntity(ctx context.Context, pkg string, gen *options.Generate, info *plugin.Info, template *codegen.Template) error {
 	code, err := template.GenerateEntity(ctx, pkg, info)
 	if err != nil {
 		return err
 	}
 	entityName := ensureGoFileCaseFormat(template)
-
-	return s.fs.Upload(ctx, gen.EntityLocation(entityName), file.DefaultFileOsMode, strings.NewReader(code))
+	s.Files.Append(asset.NewFile(gen.EntityLocation(entityName), code))
+	return nil
 }
 
 func ensureGoFileCaseFormat(template *codegen.Template) string {
@@ -105,11 +203,6 @@ func ensureGoFileCaseFormat(template *codegen.Template) string {
 		entityName = columnCase.Format(entityName, format.CaseLowerUnderscore)
 	}
 	return entityName
-}
-
-func (s *Service) generateState(ctx context.Context, pkg string, gen *options.Gen, template *codegen.Template, info *plugin.Info) error {
-	code := template.GenerateState(pkg, info)
-	return s.fs.Upload(ctx, gen.StateLocation(), file.DefaultFileOsMode, strings.NewReader(code))
 }
 
 func (s *Service) ensureDest(ctx context.Context, URL string) error {

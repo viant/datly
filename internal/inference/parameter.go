@@ -21,9 +21,11 @@ type (
 		Explicit bool //explicit parameter are added to the main view as dependency
 		view.Parameter
 		ModificationSetting
-		SQL        string
-		Qualifiers []*view.Qualifier `json:",omitempty"`
-		Hint       string
+		SQL         string
+		Qualifiers  []*view.Qualifier `json:",omitempty"`
+		Hint        string
+		AssumedType bool
+		Connector   string
 	}
 
 	ModificationSetting struct {
@@ -32,6 +34,16 @@ type (
 		PathParam   *Parameter
 	}
 )
+
+func (p *Parameter) HasSchema() bool {
+	if p.Schema == nil {
+		return false
+	}
+	if p.Schema.DataType == "" && p.Schema.Type() == nil {
+		return false
+	}
+	return true
+}
 
 func (p *Parameter) LocalVariable() string {
 	upperCamel, _ := formatter.UpperCamel.Caser()
@@ -193,7 +205,30 @@ func buildParameter(field *ast.Field, types *xreflect.Types) (*Parameter, error)
 	return param, nil
 }
 
-func extractRelationColumns(join *query.Join) (string, string) {
+// ParentAlias returns join parent selector
+func ParentAlias(join *query.Join) string {
+	result := ""
+	sqlparser.Traverse(join.On, func(n node.Node) bool {
+		switch actual := n.(type) {
+		case *qexpr.Binary:
+			if xSel, ok := actual.X.(*qexpr.Selector); ok {
+				if xSel.Name != join.Alias {
+					result = xSel.Name
+				}
+			}
+			if ySel, ok := actual.Y.(*qexpr.Selector); ok {
+				if ySel.Name != join.Alias {
+					result = ySel.Name
+				}
+			}
+			return true
+		}
+		return true
+	})
+	return result
+}
+
+func ExtractRelationColumns(join *query.Join) (string, string) {
 	relColumn := ""
 	refColumn := ""
 	sqlparser.Traverse(join.On, func(n node.Node) bool {
@@ -221,17 +256,18 @@ func extractRelationColumns(join *query.Join) (string, string) {
 }
 
 func (d *Parameter) EnsureCodec() {
-	if d.Parameter.Codec != nil {
-		return
+	if d.Parameter.Codec == nil {
+		d.Parameter.Codec = &view.Codec{}
 	}
-	d.Parameter.Codec = &view.Codec{}
+	if d.Parameter.Output == nil {
+		d.Parameter.Output = &view.Codec{}
+	}
 }
 
 func (d *Parameter) EnsureLocation() {
-	if d.Parameter.In != nil {
-		return
+	if d.Parameter.In == nil {
+		d.Parameter.In = &view.Location{}
 	}
-	d.Parameter.In = &view.Location{}
 }
 
 func (p *Parameter) HasDataType() bool {
@@ -244,11 +280,72 @@ func (p *Parameter) HasDataType() bool {
 	return p.Schema.DataType != ""
 }
 
+func (p *Parameter) IsUsedBy(text string) bool {
+	parameter := p.Name
+	text = strings.ReplaceAll(text, "Unsafe.", "")
+	if index := strings.Index(text, "${"+parameter); index != -1 {
+		match := text[index+2:]
+		if index := strings.Index(match, "}"); index != -1 {
+			match = match[:index]
+		}
+		if p.Name == match {
+			return true
+		}
+	}
+	for i := 0; i < len(text); i++ {
+		index := strings.Index(text, "$"+parameter)
+		if index == -1 {
+			break
+		}
+		text = text[index+1:]
+		if len(parameter) == len(text) {
+			return true
+		}
+		terminator := text[len(parameter)]
+		if terminator >= 65 && terminator <= 132 {
+			continue
+		}
+		switch terminator {
+		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 func (d *Parameter) EnsureSchema() {
 	if d.Parameter.Schema != nil {
 		return
 	}
 	d.Parameter.Schema = &view.Schema{}
+}
+
+func (p *Parameter) MergeFrom(info *Parameter) {
+	if p.Codec == nil {
+		p.Codec = info.Codec
+	}
+	if info.DataType != "" {
+		p.EnsureSchema()
+		p.Schema.DataType = info.DataType
+	}
+	if info.ErrorStatusCode != 0 {
+		p.ErrorStatusCode = info.ErrorStatusCode
+	}
+}
+
+func (s *Parameter) adjustMetaViewIfNeeded() {
+	if !strings.HasPrefix(s.Name, "View.") {
+		return
+	}
+	if strings.HasSuffix(s.Name, ".SQL") {
+		s.Schema = view.NewSchema(reflect.TypeOf(""))
+		s.Schema.DataType = "string"
+	}
+	if strings.HasSuffix(s.Name, ".Limit") {
+		s.Schema = view.NewSchema(reflect.TypeOf(0))
+		s.Schema.DataType = "int"
+	}
 }
 
 func extractSQL(field *ast.Field) string {
@@ -264,13 +361,17 @@ func extractSQL(field *ast.Field) string {
 }
 
 func NewConstParameter(paramName string, paramValue interface{}) *Parameter {
-	return &Parameter{
+	rType := reflect.TypeOf(paramValue)
+	param := &Parameter{
 		Parameter: view.Parameter{
-			Name:  paramName,
-			Const: paramValue,
-			In:    view.NewConstLocation(),
+			Name:   paramName,
+			Const:  paramValue,
+			In:     view.NewConstLocation(paramName),
+			Schema: view.NewSchema(reflect.TypeOf(paramValue)),
 		},
 	}
+	param.Schema.DataType = rType.Name()
+	return param
 }
 
 func NewPathParameter(name string) *Parameter {

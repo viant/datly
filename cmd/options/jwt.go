@@ -2,8 +2,8 @@ package options
 
 type (
 	JwtVerifier struct {
-		HMAC string `short:"a" long:"jwtHMAC" description:"HMACKeyPath|EncKey" `
-		RSA  string `short:"j" long:"jwtRSA" description:"PublicKeyPath|EncKey" `
+		HMAC string `short:"A" long:"jwtHMAC" description:"HMACKeyPath|EncKey" `
+		RSA  string `short:"J" long:"jwtRSA" description:"PublicKeyPath|EncKey" `
 	}
 )
 
