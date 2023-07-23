@@ -10,7 +10,6 @@ import (
 	"github.com/viant/sqlparser"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
-	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 
 	"strconv"
@@ -227,17 +226,10 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			if err != nil {
 				return err
 			}
-			var namedArgs []*predicate.NamedArgument
-			for pos, argName := range args[2:] {
-				namedArgs = append(namedArgs, &predicate.NamedArgument{
-					Position: pos,
-					Name:     argName,
-				})
-			}
 			declaration.Predicate = &config.PredicateConfig{
 				Name:    args[1],
 				Context: ctx,
-				Args:    namedArgs,
+				Args:    args[2:],
 			}
 		case "UtilParam":
 			//deprecated

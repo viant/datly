@@ -16,7 +16,7 @@ type (
 		Parent  string
 		Name    string
 		Context int
-		Args    []*predicate.NamedArgument
+		Args    []string
 	}
 
 	NamedArg struct {

@@ -25,7 +25,7 @@ type (
 	predicateEvaluatorProvider struct {
 		evaluator *expand.Evaluator
 		ctxType   reflect.Type
-		argsIndex map[int]*predicate.NamedArgument
+		signature map[int]*predicate.NamedArgument
 		stateName string
 	}
 
@@ -69,12 +69,12 @@ func (c *predicateCache) getEvaluatorProvider(predicateConfig *config.PredicateC
 func (p *predicateEvaluatorProvider) new(predicateConfig *config.PredicateConfig) (*predicateEvaluator, error) {
 	dst := types.NewValue(p.ctxType)
 	dstPtr := xunsafe.AsPointer(dst)
-	for _, field := range predicateConfig.Args {
-		argument, ok := p.argsIndex[field.Position]
+	for i, arg := range predicateConfig.Args {
+		argument, ok := p.signature[i]
 		if !ok {
-			return nil, fmt.Errorf("not found predicate arg %v", field.Position)
+			return nil, fmt.Errorf("not found predicate arg %v", i)
 		}
-		xunsafe.FieldByName(p.ctxType, argument.Name).SetString(dstPtr, field.Name)
+		xunsafe.FieldByName(p.ctxType, argument.Name).SetString(dstPtr, arg)
 	}
 
 	customCtx := &expand.CustomContext{
@@ -111,7 +111,7 @@ func (p *predicateEvaluatorProvider) init(predicateConfig *config.PredicateConfi
 
 	p.ctxType = ctxType
 	p.evaluator = evaluator
-	p.argsIndex = argsIndexed
+	p.signature = argsIndexed
 	p.stateName = stateName
 	return nil
 }
