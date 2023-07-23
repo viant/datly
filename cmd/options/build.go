@@ -9,13 +9,14 @@ import (
 )
 
 type GoBuild struct {
-	Project   string `short:"p" long:"proj" description:"project"`
-	Module    string `short:"m" long:"module" description:"custom go module location" default:"pkg" `
-	Extension string `short:"e" long:"ext" description:"extension replace project" default:".build/ext"`
-	Datly     string `short:"l" long:"xdatly" description:"custom extended datly location" default:".build/datly"`
-
+	Project   string   `short:"p" long:"proj" description:"project"`
+	Module    string   `short:"m" long:"module" description:"custom go module location" default:"pkg" `
+	Extension string   `short:"e" long:"ext" description:"extension replace project" default:".build/ext"`
+	Datly     string   `short:"l" long:"xdatly" description:"custom extended datly location" default:".build/datly"`
+	MainPath  string   `short:"M" long:"main" description:"main path"`
+	Name      string   `short:"n" long:"name" description:"git module name" `
 	Source    []string `short:"s" long:"source" description:"source locations"`
-	Dest      string   `short:"d" long:"dest" description:"dest location"`
+	DestURL   string   `short:"d" long:"dest" description:"dest location"`
 	BuildArgs []string `short:"b" long:"buildArgs" description:"build args"`
 	GoVersion string   `short:"v"  long:"goVer" description:"build go Version"`
 	GoOs      string   `short:"o" long:"goOs" description:"plugin OS"`
@@ -69,7 +70,7 @@ func (b *GoBuild) Init() {
 		b.GoVersion = strings.Replace(runtime.Version(), "go", "", 1)
 	}
 
-	b.Dest = ensureAbsPath(b.Dest)
+	b.DestURL = ensureAbsPath(b.DestURL)
 }
 
 func (b *Build) Init() error {

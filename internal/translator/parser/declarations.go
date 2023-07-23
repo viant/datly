@@ -2,13 +2,17 @@ package parser
 
 import (
 	"fmt"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/router/marshal"
-	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
+	"github.com/viant/sqlparser"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/parser"
+	"github.com/viant/xdatly/predicate"
+	"github.com/viant/xreflect"
+
 	"strconv"
 	"strings"
 )
@@ -19,11 +23,12 @@ type (
 		SQL        string
 		State      inference.State
 		Transforms []*marshal.Transform
+		lookup     func(dataType string, opts ...xreflect.Option) (*view.Schema, error)
 	}
 )
 
 func (d *Declarations) Init() error {
-	SQLBytes := []byte(d.SQL)
+	SQLBytes := []byte(" " + d.SQL)
 	cursor := parsly.NewCursor("", SQLBytes, 0)
 	for {
 		matched := cursor.MatchOne(setTerminatedMatcher)
@@ -67,16 +72,27 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 	if declaration == nil || err != nil {
 		return err
 	}
-	if declaration.Transformer != "" {
+	if declaration.Transformer != "" || declaration.TransformKind != "" {
 		d.Transforms = append(d.Transforms, declaration.Transform())
 		return nil
 	}
 	declaration.ExpandShorthands()
 	d.State.Append(&declaration.Parameter)
 	if authParameter := declaration.AuthParameter(); authParameter != nil {
-		d.State.Append(authParameter)
+		if !d.State.Append(authParameter) {
+			return fmt.Errorf("parameter %v redeclared", authParameter.Name)
+		}
 	}
 	return nil
+}
+
+func IsStructQL(SQL string) bool {
+	query, _ := sqlparser.ParseQuery(SQL)
+	if query == nil || query.From.X == nil {
+		return false
+	}
+	from := sqlparser.Stringify(query.From.X)
+	return strings.Contains(from, "/")
 }
 
 func (d *Declarations) parseExpression(cursor *parsly.Cursor, selector *expr.Select) (*Declaration, error) {
@@ -116,14 +132,18 @@ func (d *Declarations) parseExpression(cursor *parsly.Cursor, selector *expr.Sel
 	if matched.Code == commentToken { // /* .. */
 		aComment := matched.Text(cursor)
 		aComment = aComment[2 : len(aComment)-2]
-		hint, SQL := sanitize.SplitHint(aComment)
+		hint, SQL := SplitHint(aComment)
 		declaration.SQL = SQL
 		if hint != "" {
 			hintDeclaration := &Declaration{}
-			if err := TryUnmarshalHint(hint, hintDeclaration); err != nil {
+			if err := inference.TryUnmarshalHint(hint, hintDeclaration); err != nil {
 				return nil, fmt.Errorf("invalid declaration %v, unable parse hint: %w", declaration.Name, err)
 			}
-			return declaration.Merge(hintDeclaration)
+			merged, err := declaration.Merge(hintDeclaration)
+			if err != nil {
+				return nil, err
+			}
+			return merged, nil
 		}
 	}
 	return declaration, nil
@@ -135,13 +155,22 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 	}
 	types := strings.Split(typeContent, ",")
 	dataType := types[0]
+
 	if strings.HasPrefix(dataType, "[]") {
 		declaration.Cardinality = view.Many
 		dataType = dataType[2:]
 	} else {
 		declaration.Cardinality = view.One
 	}
-	declaration.DataType = dataType
+
+	if dataType != "" {
+		if schema, _ := d.lookup(dataType); schema != nil {
+			schema.Cardinality = declaration.Cardinality
+			declaration.Schema = schema
+		}
+	}
+	declaration.EnsureSchema()
+	declaration.Schema.DataType = dataType
 	if len(types) > 1 {
 		declaration.OutputType = types[1]
 	}
@@ -166,27 +195,90 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 
 		content := matched.Text(cursor)
 		content = content[1 : len(content)-1]
+		args := extractArgs(content)
 		switch text {
 		case "WithCodec":
-			declaration.Codec = strings.Trim(content, "'")
+			if len(args) != 1 {
+				return fmt.Errorf("expected WithCodec to have one arg, but got %v", len(args))
+			}
+
+			declaration.Codec = args[0]
 		case "WithStatusCode":
-			statusCode, err := strconv.Atoi(content)
+			if len(args) != 1 {
+				return fmt.Errorf("expected WithStatusCode to have one arg, but got %v", len(args))
+			}
+			statusCode, err := strconv.Atoi(args[0])
 			if err != nil {
 				return err
 			}
-			declaration.StatusCode = &statusCode
-		case "UtilParam":
 
+			declaration.StatusCode = &statusCode
+		case "Optional":
+			if len(args) != 0 {
+				return fmt.Errorf("expected Optional to have zero args, but got %v", len(args))
+			}
+			required := false
+			declaration.Required = &required
+		case "WithPredicate":
+			if len(args) < 2 {
+				return fmt.Errorf("expected WithPredicate to have at least 2 args, but got %v", len(args))
+			}
+			ctx, err := strconv.Atoi(args[0])
+			if err != nil {
+				return err
+			}
+			var namedArgs []*predicate.NamedArgument
+			for pos, argName := range args[2:] {
+				namedArgs = append(namedArgs, &predicate.NamedArgument{
+					Position: pos,
+					Name:     argName,
+				})
+			}
+			declaration.Predicate = &config.PredicateConfig{
+				Name:    args[1],
+				Context: ctx,
+				Args:    namedArgs,
+			}
+		case "UtilParam":
+			//deprecated
 		}
 		cursor.MatchOne(whitespaceMatcher)
 	}
 	return nil
 }
 
-func NewDeclarations(SQL string) (*Declarations, error) {
+func extractArgs(content string) []string {
+	result := make([]string, 0)
+	cursor := parsly.NewCursor("", []byte(strings.Trim(content, `"`)), 0)
+	for {
+		matched := cursor.MatchAfterOptional(whitespaceMatcher, singleQuotedMatcher, quotedMatcher, comaTerminatedMatcher)
+		switch matched.Code {
+		case singleQuotedToken, doubleQuotedToken:
+			arg := matched.Text(cursor)
+			arg = arg[1 : len(arg)-1]
+			result = append(result, arg)
+			cursor.MatchOne(comaTerminatedMatcher)
+		case comaTerminatedToken:
+			arg := matched.Text(cursor)
+			arg = arg[:len(arg)-1]
+			result = append(result, strings.TrimSpace(arg))
+		default:
+			if cursor.Pos < len(cursor.Input) {
+				arg := strings.Trim(strings.TrimSpace(string(cursor.Input[cursor.Pos:])), `"'`)
+				if len(arg) != 0 {
+					result = append(result, arg)
+				}
+			}
+			return result
+		}
+	}
+}
+
+func NewDeclarations(SQL string, lookup func(dataType string, opts ...xreflect.Option) (*view.Schema, error)) (*Declarations, error) {
 	result := &Declarations{
-		SQL:   SQL,
-		State: nil,
+		SQL:    SQL,
+		State:  nil,
+		lookup: lookup,
 	}
 	return result, result.Init()
 }

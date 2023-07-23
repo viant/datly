@@ -31,7 +31,7 @@ require (
 	github.com/viant/gmetric v0.2.7-0.20220508155136-c2e3c95db446
 	github.com/viant/godiff v0.4.1
 	github.com/viant/parsly v0.2.0
-	github.com/viant/pgo v0.10.4-0.20230720010955-0d0835aefe41
+	github.com/viant/pgo v0.10.3
 	github.com/viant/scy v0.6.0
 	github.com/viant/sqlx v0.9.0
 	github.com/viant/structql v0.4.1
@@ -49,7 +49,7 @@ require (
 
 require (
 	github.com/viant/govalidator v0.2.1
-	github.com/viant/sqlparser v0.5.1-0.20230722142201-917df90501d3
+	github.com/viant/sqlparser v0.4.0
 	golang.org/x/crypto v0.10.0 // indirect
 )
 

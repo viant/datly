@@ -16,7 +16,7 @@ const (
 	goInitVersion = "v0.0.0-00010101000000-000000000000"
 )
 
-func (s *Service) runInitExtension(ctx context.Context, init *options.Extension) error {
+func (s *Service) RunInitExtension(ctx context.Context, init *options.Extension) error {
 
 	customDatlySrc := url.Join(init.Datly.Location, datlyFolder)
 	ok, _ := s.fs.Exists(ctx, customDatlySrc)

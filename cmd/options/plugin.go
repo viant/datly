@@ -7,7 +7,7 @@ import (
 
 type Plugin struct {
 	GoBuild
-	Repo string `short:"r" long:"repo" description:"rule repository location"`
+	Repository string `short:"r" long:"repo" description:"rule repository location"`
 }
 
 func (p *Plugin) Init() error {
@@ -15,20 +15,20 @@ func (p *Plugin) Init() error {
 	if len(p.Source) == 0 {
 		p.Source = append(p.Source, p.Module)
 	}
-	expandRelativeIfNeeded(&p.Repo, p.Project)
-	if p.Dest == "" && p.Repo != "" {
-		p.Dest = url.Join(p.Repo, "Datly/plugins")
+	expandRelativeIfNeeded(&p.Repository, p.Project)
+	if p.DestURL == "" && p.Repository != "" {
+		p.DestURL = url.Join(p.Repository, "Datly/plugins")
 	}
 	return nil
 }
 
 func (p *Plugin) RouteURL() string {
-	return url.Join(p.Repo, "Datly/routes")
+	return url.Join(p.Repository, "Datly/routes")
 }
 
 func (p *Plugin) Touch() *Touch {
-	return &Touch{RoutesURL: p.RouteURL(), Repo: p.Repo}
+	return &Touch{RoutesURL: p.RouteURL(), Repo: p.Repository}
 }
 func (p *Plugin) IsRepositoryPlugin() bool {
-	return p.Repo != "" && strings.HasPrefix(p.Dest, p.Repo)
+	return p.Repository != "" && strings.HasPrefix(p.DestURL, p.Repository)
 }

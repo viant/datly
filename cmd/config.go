@@ -176,6 +176,7 @@ func (s *Builder) initJWTVerifier(cfg *standalone.Config) {
 		return
 	}
 	cfg.JWTValidator = &verifier.Config{}
+
 	if s.options.JWTVerifierRSAKey != "" {
 		cfg.JWTValidator.RSA = getScyResource(s.options.JWTVerifierRSAKey)
 	}

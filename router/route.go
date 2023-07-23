@@ -56,27 +56,27 @@ const (
 type (
 	Routes []*Route
 	Route  struct {
-		Async            *Async `json:",omitempty" yaml:",omitempty"`
-		Visitor          *Fetcher
-		URI              string
-		APIKey           *APIKey
-		Method           string
-		CustomValidation bool
-		Service          ServiceType
-		View             *view.View
-		Cors             *Cors
-		EnableAudit      bool
-		EnableDebug      *bool
-		Transforms       marshal.Transforms
+		Async            *Async             `json:",omitempty" yaml:",omitempty"`
+		Visitor          *Fetcher           `json:",omitempty"`
+		URI              string             `json:",omitempty"`
+		APIKey           *APIKey            `json:",omitempty"`
+		Method           string             `json:",omitempty"`
+		CustomValidation bool               `json:",omitempty"`
+		Service          ServiceType        `json:",omitempty"`
+		View             *view.View         `json:",omitempty"`
+		Cors             *Cors              `json:",omitempty"`
+		EnableAudit      bool               `json:",omitempty"`
+		EnableDebug      *bool              `json:",omitempty"`
+		Transforms       marshal.Transforms `json:",omitempty"`
 
 		JSON
 		Output
 		Index
 		bodyParamQuery   map[string]*query
-		ParamStatusError *int
-		Cache            *cache.Cache
-		Compression      *Compression
-		Handler          *Handler
+		ParamStatusError *int         `json:",omitempty"`
+		Cache            *cache.Cache `json:",omitempty"`
+		Compression      *Compression `json:",omitempty"`
+		Handler          *Handler     `json:",omitempty"`
 
 		_resource  *view.Resource
 		_accessors *types.Accessors
@@ -92,6 +92,7 @@ type (
 		*structql.Query
 		field *xunsafe.Field
 	}
+
 	Fetcher struct {
 		shared.Reference
 		_fetcher interface{}

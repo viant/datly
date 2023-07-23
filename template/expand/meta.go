@@ -58,7 +58,7 @@ type (
 
 		lastTablExecutables map[string]*Executable `velty:"-"`
 		expander            Expander               `velty:"-"`
-		dataUnit            *DataUnit              `velty:"-"`
+		DataUnit            *DataUnit              `velty:"-"`
 	}
 
 	Executable struct {
@@ -127,7 +127,7 @@ func (m *MetaParam) ColIn(prefix, column string) (string, error) {
 
 func (m *MetaParam) addBindings(args []interface{}) string {
 	_, bindings := AsBindings("", args)
-	m.dataUnit.addAll(args...)
+	m.DataUnit.addAll(args...)
 	return bindings
 }
 
@@ -135,10 +135,10 @@ func (m *MetaParam) In(prefix string) (string, error) {
 	return m.ColIn(prefix, "")
 }
 
-//AddRelation appends SQL and adds binding arguments
-//Deprecated: For the backward compatibility
+// AddRelation appends SQL and adds binding arguments
+// Deprecated: For the backward compatibility
 func (m *MetaParam) Expand(_ *DataUnit) string {
-	m.dataUnit.addAll(m.Args...)
+	m.DataUnit.addAll(m.Args...)
 	return m.NonWindowSQL
 }
 
@@ -213,7 +213,7 @@ func NewMetaParam(metaSource MetaSource, aSelector MetaExtras, batchData MetaBat
 		Offset:       offset,
 		Args:         args,
 		NonWindowSQL: SQLExec,
-		dataUnit:     NewDataUnit(metaSource),
+		DataUnit:     NewDataUnit(metaSource),
 		ParentValues: colInArgs,
 	}
 
@@ -239,7 +239,7 @@ func NotZeroOf(values ...int) int {
 
 func MockMetaParam() *MetaParam {
 	return &MetaParam{
-		dataUnit: &DataUnit{
+		DataUnit: &DataUnit{
 			Statements: NewStmtHolder(),
 		},
 	}

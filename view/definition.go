@@ -23,6 +23,7 @@ type (
 		Cardinality      Cardinality `json:",omitempty"`
 		Package          string      `json:",omitempty"`
 		Ptr              bool        `json:",omitempty"`
+		CustomType       bool        `json:",omitempty"`
 	}
 
 	Field struct {

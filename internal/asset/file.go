@@ -1,4 +1,4 @@
-package command
+package asset
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ type File struct {
 	URL     string
 }
 
-func (f *File) validate() error {
+func (f *File) Validate() error {
 	switch path.Ext(f.URL) {
 	case ".go":
 		return f.ensureValidGo()

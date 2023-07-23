@@ -6,16 +6,16 @@ import (
 	"strings"
 )
 
-func trimParenthesis(text string) string {
+func TrimParenthesis(text string) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return text
 	}
 	if text[0] == '(' {
 		text = text[1:]
-	}
-	if text[len(text)-1] == ')' {
-		text = text[:len(text)-1]
+		if text[len(text)-1] == ')' {
+			text = text[:len(text)-1]
+		}
 	}
 	return text
 }
@@ -51,7 +51,7 @@ func SplitByWhitespace(fragment string) []string {
 	}
 	return result
 }
-func hasWhitespace(text string) bool {
+func HasWhitespace(text string) bool {
 	for i := range text {
 		if matcher.IsWhiteSpace(text[i]) {
 			return true

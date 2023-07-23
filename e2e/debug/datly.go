@@ -36,6 +36,7 @@ var (
 
 func init() {
 
+	os.Setenv("DATLY_NOPANIC", "0")
 	read.ShowSQL(true)
 	update.ShowSQL(true)
 	insert.ShowSQL(true)

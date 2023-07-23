@@ -81,6 +81,22 @@ const (
 	aerospikeType = "aerospike"
 )
 
+func (c Caches) Has(name string) bool {
+	for _, candidate := range c {
+		if candidate.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Caches) Append(cache *Cache) {
+	if r.Has(cache.Name) {
+		return
+	}
+	*r = append(*r, cache)
+}
+
 func (c *Cache) init(ctx context.Context, resource *Resource, aView *View) error {
 	if c._initialized {
 		return nil

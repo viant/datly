@@ -11,6 +11,7 @@ import (
 
 type Field struct {
 	view.Field
+	Skipped    bool
 	Column     *sqlparser.Column
 	Pk         *sink.Key
 	Tags       Tags
@@ -49,4 +50,12 @@ func NewField(rField *reflect.StructField) *Field {
 		field.Column = &column
 	}
 	return field
+}
+
+func (f *Field) EnsureSchema() *view.Schema {
+	if f.Schema != nil {
+		return f.Schema
+	}
+	f.Schema = &view.Schema{}
+	return f.Schema
 }

@@ -44,7 +44,7 @@ func ExampleService_ReadInto() {
 		view.WithConnector(conn),
 		view.WithCriteria("id"),
 		view.WithViewType(reflect.TypeOf(&Invoice{})),
-		view.WithOneToMany("Items", "id",
+		view.WithOneToMany("items", "id",
 			view.NwReferenceView("", "invoice_id",
 				view.NewView("items", "invoice_list_item", view.WithConnector(conn)))),
 	)

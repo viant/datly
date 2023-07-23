@@ -3,9 +3,9 @@ package codegen
 import (
 	_ "embed"
 	"fmt"
-	"github.com/viant/datly/cmd/option"
 	ast "github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/internal/inference"
+	"github.com/viant/datly/internal/translator"
 	"github.com/viant/datly/view"
 	"github.com/viant/xreflect"
 	"reflect"
@@ -15,7 +15,7 @@ import (
 type (
 	Template struct {
 		Spec    *inference.Spec
-		Config  *option.RouteConfig
+		Config  *translator.Rule
 		TypeDef *view.TypeDefinition
 		inference.Imports
 		inference.State
@@ -70,7 +70,11 @@ func (t *Template) BuildState(spec *inference.Spec, bodyHolder string, opts ...O
 
 	bodyParam.Schema.SetType(t.buildState(spec, &t.State, spec.Type.Cardinality))
 	var structFields []reflect.StructField
+
 	for _, parameter := range t.State {
+		if parameter.In.Kind == view.KindDataView && !parameter.IsAuxiliary {
+			parameter.Schema.Cardinality = view.Many
+		}
 		var structTag reflect.StructTag
 		if parameter.Schema.DataType != "" {
 			structTag = reflect.StructTag(fmt.Sprintf(`%v:"%v"`, xreflect.TagTypeName, parameter.Schema.DataType))
@@ -286,7 +290,7 @@ func (t *Template) RecordPrefix() string {
 }
 
 func (t *Template) BuildTypeDef(spec *inference.Spec, wrapperField string) {
-	t.TypeDef = spec.TypeDefinition(wrapperField)
+	t.TypeDef = spec.TypeDefinition(wrapperField, true)
 	t.ensurePackageImports(t.TypeDef.Package, t.TypeDef.Fields)
 	t.ensureTypeImport(spec.Type.Name)
 	if wrapperField != "" {
@@ -297,7 +301,7 @@ func (t *Template) BuildTypeDef(spec *inference.Spec, wrapperField string) {
 
 func (t *Template) setResponseBody() {
 	if t.Config.ResponseBody == nil {
-		t.Config.ResponseBody = &option.ResponseBodyConfig{}
+		t.Config.ResponseBody = &translator.ResponseBodyConfig{}
 	}
 	if t.Config.ResponseBody.From == "" {
 		t.Config.ResponseBody.From = t.TypeDef.Name
@@ -342,6 +346,6 @@ func (t *Template) ensurePackageImports(defaultPkg string, fields []*view.Field)
 	}
 }
 
-func NewTemplate(config *option.RouteConfig, spec *inference.Spec) *Template {
-	return &Template{paramPrefix: paramPrefix, Config: config, Imports: inference.NewImports(), Spec: spec}
+func NewTemplate(rule *translator.Rule, spec *inference.Spec) *Template {
+	return &Template{paramPrefix: paramPrefix, Config: rule, Imports: inference.NewImports(), Spec: spec}
 }

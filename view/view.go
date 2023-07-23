@@ -140,6 +140,12 @@ func (v *View) ViewName() string {
 	return v.Name
 }
 
+func (v *View) EnsureTemplate() {
+	if v.Template == nil {
+		v.Template = &Template{}
+	}
+}
+
 func (v *View) TableAlias() string {
 	return v.Alias
 }
@@ -1053,10 +1059,7 @@ func (v *View) ensureBatch() {
 }
 
 func (v *View) initTemplate(ctx context.Context, res *Resource) error {
-	if v.Template == nil {
-		v.Template = &Template{}
-	}
-
+	v.EnsureTemplate()
 	return v.Template.Init(ctx, res, v)
 }
 
@@ -1200,7 +1203,7 @@ func (v *View) findSchemaColumn(fieldName string) (*Column, bool) {
 	return lookup, err == nil
 }
 
-//SetParameter sets a view or relation parameter, for relation name has to be prefixed relName:paramName
+// SetParameter sets a view or relation parameter, for relation name has to be prefixed relName:paramName
 func (v *View) SetParameter(name string, selectors *Selectors, value interface{}) error {
 	aView := v
 	if strings.Contains(name, ":") {
@@ -1261,32 +1264,29 @@ func isInRange(aByte int32, lowerBound int32, upperBound int32) bool {
 	return aByte >= lowerBound && aByte <= upperBound
 }
 
-//WithSQL creates SQL FROM view option
+// WithSQL creates SQL FROM view option
 func WithSQL(SQL string) ViewOption {
 	return func(v *View) {
-		if v.Template == nil {
-			v.Template = &Template{}
-		}
+		v.EnsureTemplate()
 		v.Template.Source = SQL
 	}
 }
 
-//WithConnector creates connector view option
+// WithConnector creates connector view option
 func WithConnector(connector *Connector) ViewOption {
 	return func(v *View) {
 		v.Connector = connector
 	}
 }
 
-//WithTemplate creates connector view option
+// WithTemplate creates connector view option
 func WithTemplate(template *Template) ViewOption {
 	return func(v *View) {
-
 		v.Template = template
 	}
 }
 
-//WithOneToMany creates to many relation view option
+// WithOneToMany creates to many relation view option
 func WithOneToMany(holder, column string, ref *ReferenceView, opts ...RelationOption) ViewOption {
 	return func(v *View) {
 		relation := &Relation{Cardinality: Many, Column: column, Holder: holder, Of: ref}
@@ -1297,7 +1297,7 @@ func WithOneToMany(holder, column string, ref *ReferenceView, opts ...RelationOp
 	}
 }
 
-//WithOneToOne creates to one relation view option
+// WithOneToOne creates to one relation view option
 func WithOneToOne(holder, column string, ref *ReferenceView, opts ...RelationOption) ViewOption {
 	return func(v *View) {
 		relation := &Relation{Cardinality: One, Column: column, Holder: holder, Of: ref}
@@ -1308,7 +1308,7 @@ func WithOneToOne(holder, column string, ref *ReferenceView, opts ...RelationOpt
 	}
 }
 
-//WithCriteria creates criteria constraints view option
+// WithCriteria creates criteria constraints view option
 func WithCriteria(columns ...string) ViewOption {
 	return func(v *View) {
 		if v.Selector == nil {
@@ -1322,7 +1322,7 @@ func WithCriteria(columns ...string) ViewOption {
 	}
 }
 
-//WithViewType creates schema type view option
+// WithViewType creates schema type view option
 func WithViewType(t reflect.Type) ViewOption {
 	return func(v *View) {
 		v.Schema = NewSchema(t)
@@ -1344,14 +1344,24 @@ func (o ViewOptions) Apply(view *View) {
 	}
 }
 
-//NewView creates a view
+func NewReferenceView(refView, name string, column, field string) *ReferenceView {
+	ret := &ReferenceView{View: *NewRefView(refView), Column: column, Field: field}
+	ret.View.Name = name
+	return ret
+}
+
+func NewRefView(ref string) *View {
+	return &View{Reference: shared.Reference{Ref: ref}}
+}
+
+// NewView creates a view
 func NewView(name, table string, opts ...ViewOption) *View {
 	ret := &View{Name: name, Table: table}
 	ViewOptions(opts).Apply(ret)
 	return ret
 }
 
-//NewExecView creates an execution view
+// NewExecView creates an execution view
 func NewExecView(name, table string, template string, parameters []*Parameter, opts ...ViewOption) *View {
 	var templateParameters []TemplateOption
 	for i := range parameters {

@@ -13,7 +13,7 @@ import (
 //go:embed tmpl/handler/handler.gox
 var handlerTemplate string
 
-func (t *Template) GenerateHandler(opts *options.Gen, info *plugin.Info) (string, string, error) {
+func (t *Template) GenerateHandler(opts *options.Generate, info *plugin.Info) (string, string, error) {
 	fields, localVariableDeclaration := t.State.HandlerLocalVariables()
 	t.Config.HandlerType = opts.HandlerType()
 	t.Config.StateType = opts.StateType()
@@ -33,10 +33,10 @@ func (t *Template) GenerateHandler(opts *options.Gen, info *plugin.Info) (string
 		return "", "", err
 	}
 
-	indexContent := strings.Replace(goIndexTmpl, "$PackageName", opts.Package, 1)
+	indexContent := strings.Replace(goIndexTmpl, "$PackageName", opts.Package(), 1)
 	indexContent = strings.ReplaceAll(indexContent, "$Content", index.builder.String())
 
-	handlerContent := strings.Replace(handlerTemplate, "$Package", opts.Package, 1)
+	handlerContent := strings.Replace(handlerTemplate, "$Package", opts.Package(), 1)
 	handlerContent = strings.Replace(handlerContent, "$LocalVariable", localVariableDeclaration, 1)
 
 	registry := &customTypeRegistry{}

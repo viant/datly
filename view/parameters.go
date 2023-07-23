@@ -67,6 +67,15 @@ type (
 	}
 )
 
+func (v *Parameter) OutputSchema() *Schema {
+	if v.Output != nil && v.Output.Schema != nil {
+		return v.Output.Schema
+	}
+	if v.Codec != nil && v.Codec.Schema != nil {
+		return v.Codec.Schema
+	}
+	return v.Schema
+}
 func (v *Codec) Init(resource *Resource, view *View, ownerType reflect.Type) error {
 	if v._initialized {
 		return nil
@@ -518,6 +527,10 @@ func (p *Parameter) setOnState(ctx context.Context, state *ParamState, value int
 }
 
 func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr unsafe.Pointer, converted bool, options ...interface{}) (interface{}, error) {
+	if p._valueAccessor == nil {
+		fmt.Printf("[WARN] setValue(): parameter  %v _valueAccessor was nil", p.Name)
+		return value, nil
+	}
 	aCodec := p.Output
 	if converted {
 		aCodec = nil
@@ -691,6 +704,26 @@ func (p Parameters) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 
+// Append appends parameter
+func (p *Parameters) Append(parameter *Parameter) {
+	for _, param := range *p {
+		if param.Name == parameter.Name {
+			return
+		}
+	}
+	*p = append(*p, parameter)
+}
+
+// Lookup returns match parameter or nil
+func (p Parameters) Lookup(name string) *Parameter {
+	for _, param := range p {
+		if param.Name == name {
+			return param
+		}
+	}
+	return nil
+}
+
 // Index indexes parameters by Parameter.Name
 func (p Parameters) Index() (NamedParameters, error) {
 	result := NamedParameters(make(map[string]*Parameter))
@@ -718,7 +751,7 @@ func (p Parameters) Filter(kind Kind) NamedParameters {
 	return result
 }
 
-func (p NamedParameters) merge(with NamedParameters) {
+func (p NamedParameters) Merge(with NamedParameters) {
 	for s := range with {
 		p[s] = with[s]
 	}
@@ -757,13 +790,13 @@ func NewDataViewLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindDataView}
 }
 
-func NewConstLocation() *Location {
-	return &Location{Kind: KindLiteral}
+func NewConstLocation(name string) *Location {
+	return &Location{Kind: KindLiteral, Name: name}
 }
 
 // NewPathLocation creates a structql
 func NewPathLocation(name string) *Location {
-	return &Location{Name: name, Kind: KindParam}
+	return &Location{Name: name, Kind: KindPath}
 }
 
 // WithParameterType returns schema type parameter option
@@ -776,6 +809,11 @@ func WithParameterType(t reflect.Type) ParameterOption {
 		}
 		p.Schema = NewSchema(t)
 	}
+}
+
+// NewRefParameter creates a new ref parameter
+func NewRefParameter(name string) *Parameter {
+	return &Parameter{Reference: shared.Reference{Ref: name}}
 }
 
 // NewParameter creates a parameter

@@ -47,6 +47,8 @@ var Config = &Registry{
 	Predicates: PredicateRegistry{
 		PredicateEqual:    NewEqualPredicate(),
 		PredicateNotEqual: NewNotEqualPredicate(),
+		PredicateNotIn:    NewNotInPredicate(),
+		PredicateIn:       NewInPredicate(),
 	},
 }
 

@@ -19,7 +19,7 @@ func (p *Packages) Append(pkg *packages.Package) {
 func (p Packages) Index() map[string]*packages.Package {
 	var result = make(map[string]*packages.Package, len(p))
 	for i := range p {
-		result[p[i].Name] = p[i]
+		result[p[i].ID] = p[i]
 	}
 	return result
 }

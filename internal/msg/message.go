@@ -1,4 +1,4 @@
-package translator
+package msg
 
 type Message struct {
 	Level   string

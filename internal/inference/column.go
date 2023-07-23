@@ -3,6 +3,8 @@ package inference
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"github.com/viant/datly/view"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
@@ -12,12 +14,13 @@ import (
 
 type ColumnParameterNamer func(column *Field) string
 
-func detectColumns(ctx context.Context, db *sql.DB, SQL, table string) (sqlparser.Columns, error) {
-	SQL = trimParenthesis(SQL)
+func detectColumns(ctx context.Context, db *sql.DB, SQL, table string, SQLArgs ...interface{}) (sqlparser.Columns, error) {
+	SQL = TrimParenthesis(SQL)
 	extractedTable, SQL, queryColumns := parseQuery(SQL)
 	if SQL == "" {
 		return nil, nil
 	}
+
 	var byName = map[string]sink.Column{}
 	if extractedTable = strings.TrimSpace(extractedTable); extractedTable != "" {
 		table = extractedTable
@@ -28,12 +31,44 @@ func detectColumns(ctx context.Context, db *sql.DB, SQL, table string) (sqlparse
 		}
 	}
 
+	tableColumns, err := inferColumnWithSQL(ctx, db, SQL, SQLArgs, byName)
+	if err != nil {
+		return nil, err
+	}
+	if queryColumns.IsStarExpr() {
+		return asColumns(tableColumns), nil
+	}
+	updatedMatchedColumn(&queryColumns, tableColumns)
+	for _, column := range queryColumns {
+		if _, err := ExtractColumnConfig(column); err != nil {
+			return nil, err
+		}
+	}
+	return queryColumns, nil
+}
+
+func ExtractColumnConfig(column *sqlparser.Column) (*view.ColumnConfig, error) {
+	if column.Comments == "" {
+		return nil, nil
+	}
+	columnConfig := &view.ColumnConfig{}
+	if err := TryUnmarshalHint(column.Comments, columnConfig); err != nil {
+		return nil, fmt.Errorf("invalid column %v settings: %w, %s", column.Name, err, column.Comments)
+	}
+	if columnConfig.DataType != nil {
+		column.Type = *columnConfig.DataType
+	}
+	columnConfig.Name = column.Identity()
+	return columnConfig, nil
+}
+
+func inferColumnWithSQL(ctx context.Context, db *sql.DB, SQL string, SQLArgs []interface{}, byName map[string]sink.Column) ([]sink.Column, error) {
 	stmt, err := db.PrepareContext(ctx, SQL)
 	if err != nil {
 		return nil, err
 	}
 	defer stmt.Close()
-	rows, err := stmt.QueryContext(ctx)
+	rows, err := stmt.QueryContext(ctx, SQLArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -67,19 +102,20 @@ func detectColumns(ctx context.Context, db *sql.DB, SQL, table string) (sqlparse
 			}
 		}
 	}
-
-	if queryColumns.IsStarExpr() {
-		return asColumns(tableColumns), nil
-	}
-	updatedMatchedColumn(queryColumns, tableColumns)
-	return queryColumns, nil
+	return tableColumns, nil
 }
 
-func updatedMatchedColumn(queryColumns sqlparser.Columns, tableColumns []sink.Column) {
+func updatedMatchedColumn(queryColumns *sqlparser.Columns, tableColumns []sink.Column) {
 	byName := sink.Columns(tableColumns).By(sink.ColumnName.Key)
-
-	for i, column := range queryColumns {
-		queryColumn := queryColumns[i]
+	var columns sqlparser.Columns
+	hasWildCard := false
+	for i, column := range *queryColumns {
+		if strings.Contains(column.Expression, "*") {
+			hasWildCard = true
+			continue
+		}
+		queryColumn := (*queryColumns)[i]
+		columns = append(columns, queryColumn)
 		if matched, ok := byName[strings.ToLower(column.Alias)]; ok && column.Alias != "" {
 			updateQueryColumn(queryColumn, matched)
 			continue
@@ -89,6 +125,17 @@ func updatedMatchedColumn(queryColumns sqlparser.Columns, tableColumns []sink.Co
 			continue
 		}
 		updateQueryColumn(queryColumn, tableColumns[i])
+	}
+
+	if hasWildCard {
+		namedColumn := columns.ByLowerCasedName()
+		for _, tableColumn := range tableColumns {
+			if _, ok := namedColumn[strings.ToLower(tableColumn.Name)]; ok {
+				continue
+			}
+			columns = append(columns, asColumn(tableColumn))
+		}
+		*queryColumns = columns
 	}
 }
 
@@ -119,8 +166,6 @@ func parseQuery(SQL string) (string, string, sqlparser.Columns) {
 		if sqlQuery.List.IsStarExpr() && !strings.Contains(table, "SELECT") {
 			return table, "", nil //use table metadata
 		}
-		sqlQuery.Window = nil
-		sqlQuery.Qualify = nil
 		sqlQuery.Limit = nil
 		sqlQuery.Offset = nil
 		SQL = sqlparser.Stringify(sqlQuery)

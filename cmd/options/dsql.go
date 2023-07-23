@@ -1,14 +1,16 @@
 package options
 
-type DSql struct {
-	Generate
+import "context"
+
+type Translate struct {
+	Rule
 	Repository
 	RoutePrefix string `short:"f" long:"routePrefix" description:"routePrefix default: dev/"`
 }
 
-func (d *DSql) Init() error {
-	if err := d.Generate.Init(); err != nil {
+func (d *Translate) Init(ctx context.Context) error {
+	if err := d.Rule.Init(); err != nil {
 		return err
 	}
-	return d.Repository.Init(d.Project)
+	return d.Repository.Init(ctx, d.Project)
 }

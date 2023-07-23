@@ -2,43 +2,57 @@
 
 import (
 	"regression/cases/056_custom_patch.Foos"
+	"regression/cases/056_custom_patch.FoosPerformance"
 )
 
 
 #set($_ = $Foos<[]*Foos>(body/))
-#set($_ = $prevFoos /* {"Qualifiers":[{"Column":"ID","Value":"Foos.Id"}]} 
-  
-  SELECT foos.*,
-         foosPerformance.*
-  FROM (SELECT * FROM FOOS) foos
-  JOIN (SELECT * FROM FOOS_PERFORMANCE) foosPerformance on foos.ID = foosPerformance.FOO_ID
-   */
+	#set($_ = $CurFoosId<?>(param/Foos) /*
+? SELECT ARRAY_AGG(Id) AS Values FROM  `/` LIMIT 1
+*/
 )
+	#set($_ = $CurFoosFoosPerformanceId<?>(param/Foos) /*
+? SELECT ARRAY_AGG(Id) AS Values FROM  `/FoosPerformance` LIMIT 1
+*/
+)
+	#set($_ = $CurFoosPerformance<[]*FoosPerformance>(data_view/CurFoosPerformance) /*
+? SELECT * FROM FOOS_PERFORMANCE
+WHERE $criteria.In("ID", $CurFoosFoosPerformanceId.Values)
+*/
+)
+	#set($_ = $CurFoos<[]*Foos>(data_view/CurFoos) /*
+? SELECT * FROM FOOS
+WHERE $criteria.In("ID", $CurFoosId.Values)
+*/
+)
+
+
+
 $sequencer.Allocate("FOOS", $Foos, "Id")
+
 $sequencer.Allocate("FOOS_PERFORMANCE", $Foos, "FoosPerformance/Id")
-#set($prevFoosById = $prevFoos.IndexBy("Id"))
-#set($prevFoosPerformanceById = $prevFoos.Query("SELECT * FROM `/FoosPerformance/`").IndexBy("Id"))
-#foreach($recFoos in $Unsafe.Foos)
-#if($recFoos)
-    #if($prevFoosById.HasKey($recFoos.Id))
-        INSERT INTO FOOS_CHANGES (PREVIOUS) VALUES ($json.Marshal($prevFoosById[$recFoos.Id]));
+
+#set($CurFoosById = $CurFoos.IndexBy("Id"))
+#set($CurFoosPerformanceById = $CurFoosPerformance.IndexBy("Id"))
+
+#foreach($RecFoos in $Foos)
+
+    #if($CurFoosById.HasKey($RecFoos.Id))
+        INSERT INTO FOOS_CHANGES (PREVIOUS) VALUES ($json.Marshal($CurFoosById[$RecFoos.Id]));
     #end
 
-    #if(($prevFoosById.HasKey($recFoos.Id) == true))
-      $sql.Update($recFoos, "FOOS");
-    #else
-      $sql.Insert($recFoos, "FOOS");
+    #if($CurFoosById.HasKey($RecFoos.Id) == true)
+            $sql.Update($RecFoos, "FOOS");
+      #else
+            $sql.Insert($RecFoos, "FOOS");
     #end
-      #foreach($recFoosPerformance in $recFoos.FoosPerformance)
-      #if($recFoosPerformance)
-          #if(($prevFoosPerformanceById.HasKey($recFoosPerformance.Id) == true))
-            #if(($recFoos.Id == $recFoosPerformance.FooId))
-            $sql.Update($recFoosPerformance, "FOOS_PERFORMANCE");
-            #end
-          #else
-            $sql.Insert($recFoosPerformance, "FOOS_PERFORMANCE");
-          #end
-      #end
-      #end
-#end
+
+    #foreach($RecFoosPerformance in $RecFoos.FoosPerformance)
+        #set($RecFoosPerformance.FooId = $RecFoos.Id)
+        #if($CurFoosPerformanceById.HasKey($RecFoosPerformance.Id) == true)
+            $sql.Update($RecFoosPerformance, "FOOS_PERFORMANCE");
+        #else
+            $sql.Insert($RecFoosPerformance, "FOOS_PERFORMANCE");
+        #end
+    #end
 #end
