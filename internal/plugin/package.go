@@ -5,6 +5,8 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
 	"golang.org/x/tools/go/packages"
+	"path"
+	"runtime"
 	"sync"
 )
 
@@ -88,8 +90,34 @@ func (p *Package) nonStandardPackages(src *packages.Package, result *Packages) {
 	}
 }
 
-//NewPackage returns package informer
+func getStandardPackages() Packages {
+	fs := afs.New()
+	var result Packages
+	parentURL := path.Join(runtime.GOROOT(), "src")
+	discoverPackage(fs, parentURL, "", func(URL string, id string) {
+		result = append(result, &packages.Package{ID: id, Name: id})
+	})
+	return result
+}
+
+func discoverPackage(fs afs.Service, parentURL, prefix string, fn func(URL string, id string)) {
+	objects, _ := fs.List(context.Background(), parentURL)
+	for _, object := range objects {
+		if url.Equals(object.URL(), parentURL) {
+			continue
+		}
+		if object.IsDir() {
+			id := object.Name()
+			if prefix != "" {
+				id = prefix + "/" + id
+			}
+			fn(object.URL(), id)
+			discoverPackage(fs, object.URL(), id, fn)
+		}
+	}
+}
+
+// NewPackage returns package informer
 func NewPackage() *Package {
-	stdPackage, _ := packages.Load(nil, "std")
-	return &Package{standardPkg: Packages(stdPackage).Index()}
+	return &Package{standardPkg: getStandardPackages().Index()}
 }

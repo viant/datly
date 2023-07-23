@@ -35,7 +35,7 @@ func (s *Service) Translate(ctx context.Context, opts *options.Options) (err err
 	}
 	for _, cmd := range s.translator.Plugins {
 		if err = s.BuildPlugin(ctx, cmd); err != nil {
-			return err
+			return fmt.Errorf("failed to build plugin: %w", err)
 		}
 	}
 	return nil
@@ -59,6 +59,9 @@ func (s *Service) translate(ctx context.Context, opts *options.Options) error {
 }
 
 func (s *Service) translateDSQL(ctx context.Context, rule *options.Rule, dSQL string) error {
+	if err := s.buildHandlerIfNeeded(rule, &dSQL); err != nil {
+		return err
+	}
 	if err := s.translator.Translate(ctx, rule, dSQL); err != nil {
 		fmt.Printf("failed to translate: %v: %w", err)
 	}

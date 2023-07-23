@@ -122,6 +122,7 @@ func (i *Info) detectDependencies(ctx context.Context) error {
 		return nil
 	}
 	i.IntegrationMode = ModeStandalone
+
 	if len(i.NonStandardPackages) > 0 {
 		return fmt.Errorf("detected non go standard package in standalone mode: %v, please run go mod init", i.NonStandardPackages)
 	}

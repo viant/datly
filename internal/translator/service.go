@@ -16,6 +16,7 @@ import (
 	"github.com/viant/sqlparser"
 	"path"
 	"reflect"
+	"strings"
 )
 
 type Service struct {
@@ -29,14 +30,16 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	if err = resource.InitRule(&dSQL, ctx, s.Repository.fs); err != nil {
 		return err
 	}
+
 	if err = resource.parseImports(ctx, &dSQL); err != nil {
 		return err
 	}
 	if err = resource.ExtractDeclared(&dSQL); err != nil {
 		return err
 	}
+
 	dSQL = rule.NormalizeSQL(dSQL)
-	if resource.IsExec() {
+	if resource.IsExec() || resource.Rule.Handler != nil {
 		if err := s.translateExecutorDSQL(ctx, resource, dSQL); err != nil {
 			return err
 		}
@@ -304,26 +307,36 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 	return result, nil
 }
 
-func (s *Service) handleCustomTypes(ctx context.Context, resource *Resource) error {
-	for _, URL := range resource.CustomTypeURLs {
-		info, err := plugin.NewInfo(ctx, URL)
-		if err != nil {
-			return fmt.Errorf("failed to detect custom type: %v %w", URL, err)
-		}
-		resource.AdjustCustomType(info)
-		if info.IntegrationMode == plugin.ModeStandalone {
-			pluginCmd := &options.Plugin{}
-			pluginCmd.Name = resource.rule.RuleName()
-			pluginCmd.Source = append(pluginCmd.Source, URL)
-			pluginCmd.Repository = s.Repository.Config.repository.RepositoryURL
-			if err := pluginCmd.Init(); err != nil {
-				return fmt.Errorf("failed to create standalone plugin for %v, %w", URL, err)
-			}
-			pluginCmd.BuildArgs = nil
-			//pluginCmd.BuildArgs = []string{"'-gcflags \"all=-N -l\"'"}
-			s.Plugins = append(s.Plugins, pluginCmd)
-		}
+func (s *Service) handleCustomTypes(ctx context.Context, resource *Resource) (err error) {
+	if len(resource.CustomTypeURLs) == 0 {
+		return nil
 	}
+	modLocation := resource.rule.GoModuleLocation()
+	var info *plugin.Info
+	URL := resource.CustomTypeURLs[0]
+	customTypeLocation := url.Path(URL)
+	if strings.Contains(customTypeLocation, modLocation) {
+		info, err = plugin.NewInfo(ctx, modLocation)
+	} else {
+		info, err = plugin.NewInfo(ctx, URL)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to detect custom type: %v %w", URL, err)
+	}
+
+	if info.IntegrationMode == plugin.ModeStandalone {
+		pluginCmd := &options.Plugin{}
+		pluginCmd.Name = resource.rule.RuleName()
+		pluginCmd.Source = append(pluginCmd.Source, URL)
+		pluginCmd.Repository = s.Repository.Config.repository.RepositoryURL
+		if err := pluginCmd.Init(); err != nil {
+			return fmt.Errorf("failed to create standalone plugin for %v, %w", URL, err)
+		}
+		pluginCmd.BuildArgs = nil
+		//pluginCmd.BuildArgs = []string{"'-gcflags \"all=-N -l\"'"}
+		s.Plugins = append(s.Plugins, pluginCmd)
+	}
+	resource.AdjustCustomType(info)
 	return nil
 }
 

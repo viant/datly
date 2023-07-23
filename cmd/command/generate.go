@@ -6,10 +6,14 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/internal/codegen/ast"
+	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
+	"github.com/viant/datly/internal/translator"
+	"github.com/viant/datly/router"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/toolbox/format"
 	"strings"
@@ -23,8 +27,8 @@ func (s *Service) Generate(ctx context.Context, options *options.Options) error 
 }
 
 func (s *Service) generate(ctx context.Context, options *options.Options) error {
-	rule := options.Rule()
-	rule.Generated = true
+	ruleOption := options.Rule()
+	ruleOption.Generated = true
 	if err := s.translate(ctx, options); err != nil {
 		return err
 	}
@@ -36,63 +40,16 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		return err
 	}
 	for i, resource := range s.translator.Repository.Resource {
-		rule.Index = i
-		root := resource.Rule.RootViewlet()
+		ruleOption.Index = i
+		rule := resource.Rule
+		root := rule.RootViewlet()
 		spec := root.Spec
 		if spec == nil {
 			return fmt.Errorf("view %v tranlsation spec was empty", root.Name)
 		}
-		//		bodyParams := resource.State.FilterByKind(view.KindRequestBody)
 		root.Spec.Type.Cardinality = resource.Rule.Cardinality
-		if resource.Rule.ShallGenerateHandler() {
-
-			/*
-
-				statePackage := builder.option.StatePackage()
-				state, err := inference.NewState(statePath, builder.option.StateType, config.Config.Types)
-				if err != nil {
-					return "", err
-				}
-				entityParam := state[0]
-				entityType := entityParam.Schema.Type()
-				if entityType == nil {
-					return "", fmt.Errorf("entity type was empty")
-				}
-				aType, err := inference.NewType(statePackage, entityParam.Name, entityType)
-
-				if err != nil {
-					return "", err
-				}
-				tmpl := codegen.NewTemplate(builder.option, &inference.Spec{Type: aType})
-				//if entityParam.In.Kind == view.KindRequestBody {
-				//	if entityParam.In.Name != "" {
-				//		tmpl.Imports.AddType(aType.Name)
-				//	}
-				//}
-				tmpl.Imports.AddType(builder.option.StateType)
-				tmpl.Imports.AddType(builder.option.HandlerType)
-
-				tmpl.EnsureImports(aType)
-				tmpl.State = state
-
-				if builder.option.Declare == nil {
-					builder.option.Declare = map[string]string{}
-				}
-
-				//builder.option.Declare["Handler"] = simpledName(builder.option.HandlerType)
-				//builder.option.Declare["State"] = simpledName(builder.option.StateType)
-
-				//builder.option.TypeSrc = &option.TypeSrcConfig{}
-				//builder.option.TypeSrc.URL = path.Join(statePath, statePackage)
-				//builder.option.TypeSrc.Types = append(builder.option.TypeSrc.Types, builder.option.HandlerType, builder.option.StateType)
-
-				dSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
-
-			*/
-		}
-
 		template := codegen.NewTemplate(resource.Rule, root.Spec)
-		root.Spec.Type.Package = rule.Package()
+		root.Spec.Type.Package = ruleOption.Package()
 		template.BuildTypeDef(root.Spec, resource.Rule.GetField())
 		template.Imports.AddType(resource.Rule.HandlerType)
 		template.Imports.AddType(resource.Rule.StateType)
@@ -100,6 +57,7 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		var opts = []codegen.Option{codegen.WithHTTPMethod(gen.HttpMethod()), codegen.WithLang(gen.Lang)}
 		template.BuildState(spec, resource.Rule.GetField(), opts...)
 		template.BuildLogic(spec, opts...)
+
 		if err := s.generateCode(ctx, options.Generate, template, info); err != nil {
 			return err
 		}
@@ -108,10 +66,13 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 	if err := s.Files.Upload(ctx, s.fs); err != nil {
 		return err
 	}
+
+	fmt.Printf("GO MODULE :%v\n", gen.GoModuleLocation())
 	info, err = plugin.NewInfo(ctx, gen.GoModuleLocation())
 	if err != nil {
 		return err
 	}
+
 	if err = s.updateModule(ctx, gen, info); err != nil {
 		return err
 	}
@@ -150,6 +111,47 @@ func (s *Service) updateModule(ctx context.Context, gen *options.Generate, info 
 		}
 	}
 	return s.EnsurePluginArtifacts(ctx, info)
+}
+
+func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) error {
+	rule := &translator.Rule{}
+	origin := *dSQL
+	if err := rule.ExtractSettings(dSQL); err != nil {
+		return err
+	}
+	if rule.Handler == nil {
+		*dSQL = origin
+		return nil
+	}
+	state, err := inference.NewState(ruleOptions.GoModuleLocation(), rule.StateType, config.Config.Types)
+	if err != nil {
+		return err
+	}
+	rule.Handler = &router.Handler{
+		HandlerType: rule.HandlerType,
+		StateType:   rule.StateType,
+	}
+	entityParam := state[0]
+	entityType := entityParam.Schema.Type()
+	if entityType == nil {
+		return fmt.Errorf("entity type was empty")
+	}
+	aType, err := inference.NewType(rule.StateTypePackage(), entityParam.Name, entityType)
+	if err != nil {
+		return err
+	}
+	tmpl := codegen.NewTemplate(rule, &inference.Spec{Type: aType})
+	tmpl.Imports.AddType(rule.StateType)
+	tmpl.Imports.AddType(rule.HandlerType)
+	tmpl.EnsureImports(aType)
+	tmpl.State = state
+	handlerDSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
+	if err != nil {
+		return err
+	}
+	handlerDSQL += fmt.Sprintf("$Nop($%v)", entityParam.Name)
+	*dSQL = handlerDSQL
+	return nil
 }
 
 func (s *Service) generateTemplate(gen *options.Generate, template *codegen.Template, info *plugin.Info) error {

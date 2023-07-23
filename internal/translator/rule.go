@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/router"
@@ -84,6 +85,17 @@ type (
 	}
 )
 
+func (r *Rule) StateTypePackage() string {
+	if r.StateType == "" {
+		return ""
+	}
+	index := strings.LastIndex(r.StateType, ".")
+	if index == -1 {
+		return ""
+	}
+	return r.StateType[:index]
+}
+
 func (r *Rule) applyGeneratorOutputSetting() {
 	root := r.RootViewlet()
 	outputConfig := root.OutputSettings
@@ -126,6 +138,17 @@ func (r *Rule) IsMany() bool {
 
 func (r *Rule) IsBasic() bool {
 	return r.Style != router.ComprehensiveStyle && r.Field == ""
+}
+
+func (r *Rule) ExtractSettings(dSQL *string) error {
+	if index := strings.Index(*dSQL, "*/"); index != -1 {
+		if err := inference.TryUnmarshalHint((*dSQL)[:index+2], &r); err != nil {
+			return err
+		}
+		*dSQL = (*dSQL)[index+2:]
+	}
+	r.applyShortHands()
+	return nil
 }
 
 func (r *Rule) GetField() string {
@@ -289,6 +312,12 @@ func (r *Rule) applyShortHands() {
 	if r.ResponseBody != nil {
 		r.Route.ResponseBody = &router.BodySelector{}
 		r.Route.ResponseBody.StateValue = r.ResponseBody.From
+	}
+	if r.HandlerType != "" {
+		r.Handler = &router.Handler{
+			HandlerType: r.HandlerType,
+			StateType:   r.StateType,
+		}
 	}
 }
 
