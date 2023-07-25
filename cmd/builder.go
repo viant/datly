@@ -943,8 +943,8 @@ func (s *Builder) loadSQL(ctx context.Context, builder *routeBuilder, location s
 }
 
 func (s *Builder) parseDSQL(ctx context.Context, builder *routeBuilder, SQL []byte) (err error) {
-	if envURL := s.options.EnvURL; envURL != "" {
-		envContent, err := s.fs.DownloadWithURL(ctx, envURL)
+	if embedURL := s.options.EmbedURL; embedURL != "" {
+		envContent, err := s.fs.DownloadWithURL(ctx, embedURL)
 		if err != nil {
 			return err
 		}
@@ -955,7 +955,7 @@ func (s *Builder) parseDSQL(ctx context.Context, builder *routeBuilder, SQL []by
 		}
 
 		env := rdata.NewMap()
-		env.SetValue("env", aMap)
+		env.SetValue("Embed", aMap)
 
 		templateContent := env.ExpandWithoutUDF(string(SQL))
 		SQL = []byte(templateContent)

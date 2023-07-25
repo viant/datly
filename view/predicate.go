@@ -40,7 +40,7 @@ func (e *predicateEvaluator) Evaluate(ctx *expand.Context, paramValue interface{
 	return e.evaluator.Evaluate(ctx, expand.WithParameters(paramValue, nil), expand.WithCustomContext(e.ctx))
 }
 
-func (c *predicateCache) get(predicateConfig *config.PredicateConfig, paramType reflect.Type, registry config.PredicateRegistry) (*predicateEvaluator, error) {
+func (c *predicateCache) get(predicateConfig *config.PredicateConfig, paramType reflect.Type, registry *config.PredicateRegistry) (*predicateEvaluator, error) {
 	aKey := predicateKey{name: predicateConfig.Name, paramType: paramType}
 	provider, err := c.getEvaluatorProvider(predicateConfig, paramType, registry, aKey)
 	if err != nil {
@@ -50,7 +50,7 @@ func (c *predicateCache) get(predicateConfig *config.PredicateConfig, paramType 
 	return provider.new(predicateConfig)
 }
 
-func (c *predicateCache) getEvaluatorProvider(predicateConfig *config.PredicateConfig, paramType reflect.Type, registry config.PredicateRegistry, aKey predicateKey) (*predicateEvaluatorProvider, error) {
+func (c *predicateCache) getEvaluatorProvider(predicateConfig *config.PredicateConfig, paramType reflect.Type, registry *config.PredicateRegistry, aKey predicateKey) (*predicateEvaluatorProvider, error) {
 	value, ok := c.Map.Load(aKey)
 	if ok {
 		return value.(*predicateEvaluatorProvider), nil
@@ -89,7 +89,7 @@ func (p *predicateEvaluatorProvider) new(predicateConfig *config.PredicateConfig
 	}, nil
 }
 
-func (p *predicateEvaluatorProvider) init(predicateConfig *config.PredicateConfig, paramType reflect.Type, registry config.PredicateRegistry) error {
+func (p *predicateEvaluatorProvider) init(predicateConfig *config.PredicateConfig, paramType reflect.Type, registry *config.PredicateRegistry) error {
 	lookup, err := registry.Lookup(predicateConfig.Name)
 	if err != nil {
 		return err

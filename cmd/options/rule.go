@@ -112,8 +112,8 @@ func (r *Rule) SourceURL() string {
 	return r.Source[r.Index]
 }
 
-func (r *Rule) LoadSource(ctx context.Context, fs afs.Service) (string, error) {
-	data, err := fs.DownloadWithURL(ctx, r.SourceURL())
+func (r *Rule) LoadSource(ctx context.Context, fs afs.Service, URL string) (string, error) {
+	data, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return "", err
 	}

@@ -11,8 +11,11 @@ const PredicateIn = "in"
 const PredicateNotIn = "not_in"
 
 type (
-	PredicateRegistry map[string]*predicate.Template
-	PredicateConfig   struct {
+	PredicateRegistry struct {
+		parent   *PredicateRegistry
+		registry map[string]*predicate.Template
+	}
+	PredicateConfig struct {
 		Parent  string
 		Name    string
 		Context int
@@ -25,22 +28,34 @@ type (
 	}
 )
 
-func (r PredicateRegistry) Lookup(name string) (*predicate.Template, error) {
-	result, ok := r[name]
-	if !ok {
-		return nil, fmt.Errorf("not found template %v", name)
+func (r *PredicateRegistry) Lookup(name string) (*predicate.Template, error) {
+	result, ok := r.registry[name]
+	if ok {
+		return result, nil
 	}
 
-	return result, nil
+	if r.parent != nil {
+		return r.parent.Lookup(name)
+	}
+
+	return nil, fmt.Errorf("not found template %v", name)
 }
 
-func (r PredicateRegistry) Clone() PredicateRegistry {
-	result := PredicateRegistry{}
-	for key, template := range r {
-		result[key] = template
-	}
+func (r *PredicateRegistry) Scope() *PredicateRegistry {
+	registry := NewPredicates()
+	registry.parent = r
+	return registry
+}
 
-	return result
+func (r *PredicateRegistry) Add(template *predicate.Template) {
+	r.registry[template.Name] = template
+}
+
+func NewPredicates() *PredicateRegistry {
+	return &PredicateRegistry{
+		parent:   nil,
+		registry: map[string]*predicate.Template{},
+	}
 }
 
 func NewEqualPredicate() *predicate.Template {

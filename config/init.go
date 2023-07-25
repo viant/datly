@@ -6,6 +6,7 @@ import (
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/sqlx/types"
 	_ "github.com/viant/xdatly/extension" //go mod level placeholder replacement
+	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xdatly/types/core"
 	_ "github.com/viant/xdatly/types/custom"
 	"github.com/viant/xreflect"
@@ -44,11 +45,13 @@ var Config = &Registry{
 		&VeltyCriteriaFactory{},
 		&CriteriaBuilderFactory{},
 	),
-	Predicates: PredicateRegistry{
-		PredicateEqual:    NewEqualPredicate(),
-		PredicateNotEqual: NewNotEqualPredicate(),
-		PredicateNotIn:    NewNotInPredicate(),
-		PredicateIn:       NewInPredicate(),
+	Predicates: &PredicateRegistry{
+		registry: map[string]*predicate.Template{
+			PredicateEqual:    NewEqualPredicate(),
+			PredicateNotEqual: NewNotEqualPredicate(),
+			PredicateNotIn:    NewNotInPredicate(),
+			PredicateIn:       NewInPredicate(),
+		},
 	},
 }
 

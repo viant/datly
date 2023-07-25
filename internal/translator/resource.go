@@ -11,11 +11,13 @@ import (
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx"
 	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
+	"path"
 	"reflect"
 	"strings"
 )
@@ -322,6 +324,42 @@ func (r *Resource) ensurePathParametersSchema(ctx context.Context) error {
 		r.AppendTypeDefinition(&view.TypeDefinition{Name: schema.DataType, DataType: rType.String()})
 	}
 	return nil
+}
+
+func (r *Resource) ExtractExternalParameters(ctx context.Context, fs afs.Service, dSQL *string) error {
+	for _, URL := range r.Rule.Include {
+		assetURL, err := r.IncludeURL(ctx, URL, fs)
+		if err != nil {
+			return err
+		}
+
+		content, err := fs.DownloadWithURL(ctx, assetURL)
+		if err != nil {
+			return err
+		}
+
+		ext := path.Ext(assetURL)
+		switch ext {
+		case ".sql", ".sqlx":
+			contentStr := string(content)
+			*dSQL = contentStr + "\n" + *dSQL
+
+		case ".yaml", ".yml":
+			resource := &view.Resource{}
+			if err := shared.UnmarshalWithExt(content, resource, ext); err != nil {
+				return err
+			}
+
+			(&r.Resource).MergeFrom(resource, nil)
+		}
+
+	}
+
+	return nil
+}
+
+func (r *Resource) IncludeURL(ctx context.Context, URL string, fs afs.Service) (string, error) {
+	return r.assetURL(ctx, URL, fs)
 }
 
 func NewResource(rule *options.Rule, repository *options.Repository, messages *msg.Messages) *Resource {

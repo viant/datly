@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"gopkg.in/yaml.v3"
 	"os"
@@ -41,6 +41,7 @@ type (
 		HandlerType  string                    `json:",omitempty"`
 		StateType    string                    `json:",omitempty"`
 		With         []string                  `json:",omitempty"`
+		Include      []string                  `json:",omitempty"`
 		indexNamespaces
 	}
 
@@ -142,8 +143,8 @@ func (r *Rule) IsBasic() bool {
 
 func (r *Rule) ExtractSettings(dSQL *string) error {
 	if index := strings.Index(*dSQL, "*/"); index != -1 {
-		if err := inference.TryUnmarshalHint((*dSQL)[:index+2], &r); err != nil {
-			return err
+		if err := shared.UnmarshalWithExt([]byte((*dSQL)[:index+2]), &r, ".json"); err != nil {
+			return fmt.Errorf("failed to extract rule setting %w", err)
 		}
 		*dSQL = (*dSQL)[index+2:]
 	}
@@ -198,19 +199,27 @@ func (r *Resource) getConstantURL(ctx context.Context, rule *Rule, fs afs.Servic
 	if rule.ConstURL == "" {
 		return "", nil
 	}
-	if !url.IsRelative(rule.ConstURL) {
-		return rule.ConstURL, nil
+
+	return r.assetURL(ctx, rule.ConstURL, fs)
+}
+
+func (r *Resource) assetURL(ctx context.Context, ruleURL string, fs afs.Service) (string, error) {
+	if !url.IsRelative(ruleURL) {
+		return ruleURL, nil
 	}
+
 	wd, _ := os.Getwd()
-	constFileURL := filepath.Join(wd, rule.ConstURL)
+	constFileURL := filepath.Join(wd, ruleURL)
 	if ok, _ := fs.Exists(ctx, constFileURL); ok {
-		return filepath.Join(wd, rule.ConstURL), nil
+		return filepath.Join(wd, ruleURL), nil
 	}
-	constFileURL = filepath.Join(r.rule.SourceDirectory(), rule.ConstURL)
+
+	constFileURL = filepath.Join(r.rule.SourceDirectory(), ruleURL)
 	if ok, _ := fs.Exists(ctx, constFileURL); ok {
 		return constFileURL, nil
 	}
-	return filepath.Join(r.rule.BaseRuleURL(), rule.ConstURL), nil
+
+	return filepath.Join(r.rule.BaseRuleURL(), ruleURL), nil
 }
 
 func (n indexNamespaces) Lookup(viewName string) *indexNamespace {

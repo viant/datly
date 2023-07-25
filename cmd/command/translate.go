@@ -11,7 +11,7 @@ func (s *Service) ensureTranslator(opts *options.Options) error {
 	if s.translator != nil {
 		return nil
 	}
-	aTranslator := translator.New(translator.NewConfig(opts.Repository()))
+	aTranslator := translator.New(translator.NewConfig(opts.Repository()), s.fs)
 	err := aTranslator.Init(context.Background())
 	if err == nil {
 		s.translator = aTranslator
@@ -47,10 +47,14 @@ func (s *Service) translate(ctx context.Context, opts *options.Options) error {
 	}
 	rule := opts.Rule()
 	for rule.Index = 0; rule.Index < len(rule.Source); rule.Index++ {
-		dSQL, err := opts.Rule().LoadSource(ctx, s.fs)
+		currRule := opts.Rule()
+		sourceURL := currRule.SourceURL()
+
+		dSQL, err := currRule.LoadSource(ctx, s.fs, sourceURL)
 		if err != nil {
 			return err
 		}
+
 		if err = s.translateDSQL(ctx, rule, dSQL); err != nil {
 			return err
 		}
@@ -63,7 +67,7 @@ func (s *Service) translateDSQL(ctx context.Context, rule *options.Rule, dSQL st
 		return err
 	}
 	if err := s.translator.Translate(ctx, rule, dSQL); err != nil {
-		fmt.Printf("failed to translate: %v: %w", err)
+		fmt.Printf("failed to translate: %v", err)
 	}
 	return nil
 }

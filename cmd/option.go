@@ -63,7 +63,7 @@ type (
 		ConstURL  string `long:"constURL" description:"path where const files are stored"`
 		Legacy    bool   `short:"l"`
 		cache     *view.Cache
-		EnvURL    string `long:"envURL" description:"environment url, expands template before processing"`
+		EmbedURL  string `long:"embedURL" description:"embed url, expands template before processing"`
 	}
 
 	Package struct {

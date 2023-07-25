@@ -54,7 +54,7 @@ type Resource struct {
 	ModTime   time.Time `json:",omitempty"`
 
 	Templates  []*predicate.Template
-	_templates map[string]*predicate.Template
+	_templates *config.PredicateRegistry
 
 	_columnsCache map[string]Columns
 
@@ -384,12 +384,12 @@ func traverse(of reflect.Value, visitor func(value reflect.Value) error) error {
 	return nil
 }
 
-func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, config.CodecsRegistry, map[string]Columns, marshal.TransformIndex, config.PredicateRegistry) {
+func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, config.CodecsRegistry, map[string]Columns, marshal.TransformIndex, *config.PredicateRegistry) {
 	var types *xreflect.Types
 	var visitors = config.CodecsRegistry{}
 	var cache map[string]Columns
 	var transformsIndex marshal.TransformIndex
-	var predicatesRegistry config.PredicateRegistry
+	var predicatesRegistry *config.PredicateRegistry
 
 	for _, option := range options {
 		if option == nil {
@@ -404,8 +404,10 @@ func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, config.C
 			types = actual
 		case marshal.TransformIndex:
 			transformsIndex = actual
-		case config.PredicateRegistry:
+		case *config.PredicateRegistry:
 			predicatesRegistry = actual
+		case config.PredicateRegistry:
+			predicatesRegistry = &actual
 		}
 	}
 
@@ -702,15 +704,15 @@ func (r *Resource) mergeMessageBuses(resource *Resource) {
 	}
 }
 
-func (r *Resource) initTemplates(registry config.PredicateRegistry) error {
+func (r *Resource) initTemplates(registry *config.PredicateRegistry) error {
 	if registry != nil {
-		r._templates = registry.Clone()
+		r._templates = registry.Scope()
 	}
 
 	r.ensureTemplatesIndex()
 
 	for _, template := range r.Templates {
-		r._templates[template.Name] = template
+		r._templates.Add(template)
 	}
 
 	return nil
@@ -718,7 +720,7 @@ func (r *Resource) initTemplates(registry config.PredicateRegistry) error {
 
 func (r *Resource) ensureTemplatesIndex() {
 	if r._templates == nil {
-		r._templates = map[string]*predicate.Template{}
+		r._templates = config.NewPredicates()
 	}
 }
 
@@ -731,7 +733,7 @@ func (r *Resource) mergeTemplates(resource *Resource) {
 
 func (r *Resource) addTemplate(template *predicate.Template) {
 	r.Templates = append(r.Templates, template)
-	r._templates[template.Name] = template
+	r._templates.Add(template)
 }
 
 func (r *Resource) expandStringField(value reflect.Value) error {
@@ -741,6 +743,12 @@ func (r *Resource) expandStringField(value reflect.Value) error {
 
 	strValue := value.String()
 	expanded := r._expandMap.ExpandWithoutUDF(strValue)
-	value.Set(reflect.ValueOf(expanded))
+	expandedValue := reflect.ValueOf(expanded)
+	if value.Type() == xreflect.StringType {
+		value.Set(expandedValue)
+	} else {
+		value.Set(expandedValue.Convert(value.Type()))
+	}
+
 	return nil
 }

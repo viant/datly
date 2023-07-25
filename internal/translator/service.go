@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/afs"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/asset"
@@ -22,6 +23,7 @@ import (
 type Service struct {
 	Repository *Repository //TODO init repo with basic config and dependencies
 	Plugins    []*options.Plugin
+	fs         afs.Service
 }
 
 func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string) (err error) {
@@ -34,6 +36,11 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	if err = resource.parseImports(ctx, &dSQL); err != nil {
 		return err
 	}
+
+	if err = resource.ExtractExternalParameters(ctx, s.fs, &dSQL); err != nil {
+		return err
+	}
+
 	if err = resource.ExtractDeclared(&dSQL); err != nil {
 		return err
 	}
@@ -340,7 +347,7 @@ func (s *Service) handleCustomTypes(ctx context.Context, resource *Resource) (er
 	return nil
 }
 
-func New(config *Config) *Service {
-	ret := &Service{Repository: NewRepository(config)}
+func New(config *Config, service afs.Service) *Service {
+	ret := &Service{Repository: NewRepository(config), fs: service}
 	return ret
 }

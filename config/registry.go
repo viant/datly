@@ -10,7 +10,7 @@ type Registry struct {
 	sync.Mutex
 	Types      *xreflect.Types
 	Codecs     CodecsRegistry
-	Predicates PredicateRegistry
+	Predicates *PredicateRegistry
 }
 
 func NewRegistry() *Registry {
@@ -18,7 +18,7 @@ func NewRegistry() *Registry {
 		Mutex:      sync.Mutex{},
 		Types:      xreflect.NewTypes(xreflect.WithRegistry(Config.Types)),
 		Codecs:     CodecsRegistry{},
-		Predicates: PredicateRegistry{},
+		Predicates: NewPredicates(),
 	}
 }
 
