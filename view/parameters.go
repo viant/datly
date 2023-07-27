@@ -725,6 +725,10 @@ func (p Parameters) Len() int {
 }
 
 func (p Parameters) Less(i, j int) bool {
+	if p[j].ErrorStatusCode == p[i].ErrorStatusCode {
+		return p[j].IsRequired()
+	}
+
 	if p[j].ErrorStatusCode == 401 {
 		return false
 	}
