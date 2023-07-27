@@ -19,7 +19,7 @@ type (
 	Parameter struct {
 		shared.Reference
 		Fields       Parameters
-		Predicate    *config.PredicateConfig
+		Predicates   []*config.PredicateConfig
 		Name         string `json:",omitempty"`
 		PresenceName string `json:",omitempty"`
 
@@ -38,14 +38,16 @@ type (
 		Const           interface{} `json:",omitempty"`
 		DateFormat      string      `json:",omitempty"`
 		ErrorStatusCode int         `json:",omitempty"`
+		Tag             string      `json:",omitempty"`
 
-		_valueAccessor    *types.Accessor
-		_presenceAccessor *types.Accessor
-		_initialized      bool
-		_view             *View
-		_owner            *View
-		_literalValue     interface{}
-		_dependsOn        *Parameter
+		_valueAccessor     *types.Accessor
+		_presenceAccessor  *types.Accessor
+		_initialized       bool
+		_view              *View
+		_owner             *View
+		_literalValue      interface{}
+		_dependsOn         *Parameter
+		_isStateBasedParam bool
 	}
 
 	ParameterOption func(p *Parameter)
@@ -67,15 +69,16 @@ type (
 	}
 )
 
-func (v *Parameter) OutputSchema() *Schema {
-	if v.Output != nil && v.Output.Schema != nil {
-		return v.Output.Schema
+func (p *Parameter) OutputSchema() *Schema {
+	if p.Output != nil && p.Output.Schema != nil {
+		return p.Output.Schema
 	}
-	if v.Codec != nil && v.Codec.Schema != nil {
-		return v.Codec.Schema
+	if p.Codec != nil && p.Codec.Schema != nil {
+		return p.Codec.Schema
 	}
-	return v.Schema
+	return p.Schema
 }
+
 func (v *Codec) Init(resource *Resource, view *View, ownerType reflect.Type) error {
 	if v._initialized {
 		return nil
@@ -256,7 +259,7 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 		return err
 	}
 
-	if err := p.initCodec(resource, view, p.Schema.Type()); err != nil {
+	if err := p.initCodec(resource, view); err != nil {
 		return err
 	}
 
@@ -315,6 +318,7 @@ func (p *Parameter) inherit(param *Parameter) {
 	p.Description = FirstNotEmpty(p.Description, param.Description)
 	p.Style = FirstNotEmpty(p.Style, param.Style)
 	p.PresenceName = FirstNotEmpty(p.PresenceName, param.PresenceName)
+	p.Tag = FirstNotEmpty(p.Tag, param.Tag)
 	if p.Const == nil {
 		p.Const = param.Const
 	}
@@ -327,7 +331,7 @@ func (p *Parameter) inherit(param *Parameter) {
 		p.Required = param.Required
 	}
 
-	if p.Schema == nil {
+	if p.Schema == nil && param.Schema != nil {
 		p.Schema = param.Schema.copy()
 	}
 
@@ -343,8 +347,8 @@ func (p *Parameter) inherit(param *Parameter) {
 		p.ErrorStatusCode = param.ErrorStatusCode
 	}
 
-	if p.Predicate == nil {
-		p.Predicate = param.Predicate
+	if p.Predicates == nil {
+		p.Predicates = param.Predicates
 	}
 }
 
@@ -388,6 +392,10 @@ func (p *Parameter) IsRequired() bool {
 }
 
 func (p *Parameter) initSchema(resource *Resource, structType reflect.Type) error {
+	if p.In.Kind == KindState {
+		return nil
+	}
+
 	if p.In.Kind == KindRequest {
 		p.Schema = NewSchema(reflect.TypeOf(&http.Request{}))
 		return nil
@@ -594,12 +602,12 @@ func (p *Parameter) SetPresenceField(structType reflect.Type) error {
 	return nil
 }
 
-func (p *Parameter) initCodec(resource *Resource, view *View, paramType reflect.Type) error {
+func (p *Parameter) initCodec(resource *Resource, view *View) error {
 	if p.Output == nil {
 		return nil
 	}
 
-	if err := p.Output.Init(resource, view, paramType); err != nil {
+	if err := p.Output.Init(resource, view, p.Schema.Type()); err != nil {
 		return err
 	}
 
@@ -646,6 +654,7 @@ func (p *Parameter) initParamBasedParameter(ctx context.Context, view *View, res
 
 	p.Schema = param.Schema.copy()
 	p._dependsOn = param
+	p._isStateBasedParam = param._isStateBasedParam || param.In.Kind == KindState
 	return nil
 }
 
@@ -666,6 +675,33 @@ func (p *Parameter) ValueAccessor() *types.Accessor {
 
 func (p *Parameter) PresenceAccessor() *types.Accessor {
 	return p._presenceAccessor
+}
+
+func (p *Parameter) IsStateBased() bool {
+	return p._isStateBasedParam
+}
+
+func (p *Parameter) accessValue(state interface{}, ptr unsafe.Pointer) (interface{}, error) {
+	if p.In.Kind == KindState {
+		return state, nil
+	}
+
+	return p._valueAccessor.Value(ptr)
+}
+
+func (p *Parameter) accessHas(has interface{}, ptr unsafe.Pointer) (bool, error) {
+	if p.In.Kind == KindState {
+		return true, nil
+	}
+
+	value, err := p._presenceAccessor.Value(ptr)
+	if err != nil {
+		return false, err
+	}
+
+	asBool, ok := value.(bool)
+
+	return asBool && ok, nil
 }
 
 // NamedParameters represents Parameter map indexed by Parameter.Name

@@ -1509,8 +1509,10 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 	}
 
 	if config.Predicate != nil {
-		param.Predicate = config.Predicate
+		param.Predicates = config.Predicate
 	}
+
+	param.Tag = config.Tag
 
 	return nil
 }
@@ -2064,6 +2066,12 @@ func (s *Builder) readParamConfigs(cfg *option.ParameterConfig, cursor *parsly.C
 			}
 
 			cfg.Codec = args[0]
+		case "WithTag":
+			if len(args) != 1 {
+				return fmt.Errorf("expected WithTag to have one args, but got %v", len(args))
+			}
+
+			cfg.Tag = args[0]
 		case "WithStatusCode":
 			if len(args) != 1 {
 				return fmt.Errorf("expected WithStatusCode to have one arg, but got %v", len(args))
@@ -2090,11 +2098,12 @@ func (s *Builder) readParamConfigs(cfg *option.ParameterConfig, cursor *parsly.C
 			if err != nil {
 				return err
 			}
-			cfg.Predicate = &config.PredicateConfig{
+
+			cfg.Predicate = append(cfg.Predicate, &config.PredicateConfig{
 				Name:    args[1],
 				Context: ctx,
 				Args:    args[2:],
-			}
+			})
 		case "UtilParam":
 			if len(args) != 0 {
 				return fmt.Errorf("expected UtilParam to have zero arg, but got %v", len(args))

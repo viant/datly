@@ -597,7 +597,7 @@ func (r *Route) initRequestBodyType(bodyParam *view.Parameter, params []*view.Pa
 	for _, param := range params {
 		name := param.In.Name
 		schemaType := param.Schema.Type()
-		if err := typeBuilder.AddType(name, schemaType); err != nil {
+		if err := typeBuilder.AddType(name, schemaType, reflect.StructTag(param.Tag)); err != nil {
 			return nil, err
 		}
 	}

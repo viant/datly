@@ -1,0 +1,30 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/custom-predicates
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect1.json')
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/custom-predicates?priceMin=3
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect2.json')
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/custom-predicates?priceMax=2
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect3.json')
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/custom-predicates?priceMin=2&priceMax=3
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect3.json')

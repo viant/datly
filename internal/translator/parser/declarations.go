@@ -196,6 +196,12 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 		content = content[1 : len(content)-1]
 		args := extractArgs(content)
 		switch text {
+		case "WithTag":
+			if len(args) != 1 {
+				return fmt.Errorf("expected WithTag to have one args, but got %v", len(args))
+			}
+
+			declaration.Tag = args[0]
 		case "WithCodec":
 			if len(args) != 1 {
 				return fmt.Errorf("expected WithCodec to have one arg, but got %v", len(args))
@@ -226,11 +232,11 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			if err != nil {
 				return err
 			}
-			declaration.Predicate = &config.PredicateConfig{
+			declaration.Predicates = append(declaration.Predicates, &config.PredicateConfig{
 				Name:    args[1],
 				Context: ctx,
 				Args:    args[2:],
-			}
+			})
 		case "UtilParam":
 			//deprecated
 		}

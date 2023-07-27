@@ -1,7 +1,6 @@
 package expand
 
 import (
-	"github.com/viant/datly/utils/types"
 	"github.com/viant/xdatly/handler/parameter"
 	"github.com/viant/xunsafe"
 	"strings"
@@ -20,8 +19,8 @@ type (
 
 	PredicateConfig struct {
 		Context       int
-		StateAccessor func() *types.Accessor
-		HasAccessor   func() *types.Accessor
+		StateAccessor func(state interface{}, statePtr unsafe.Pointer) (interface{}, error)
+		HasAccessor   func(has interface{}, hasPtr unsafe.Pointer) (bool, error)
 		Expander      func(*Context, interface{}) (*parameter.Criteria, error)
 	}
 
@@ -125,18 +124,17 @@ func (p *Predicate) expand(ctx int, operator string) (string, error) {
 		}
 
 		if p.hasPtr != nil {
-			value, err := predicateConfig.HasAccessor().Value(p.hasPtr)
+			value, err := predicateConfig.HasAccessor(p.has, p.hasPtr)
 			if err != nil {
 				return "", err
 			}
 
-			asBool, ok := value.(bool)
-			if !asBool && ok {
+			if !value {
 				continue
 			}
 		}
 
-		value, err := predicateConfig.StateAccessor().Value(p.statePtr)
+		value, err := predicateConfig.StateAccessor(p.state, p.statePtr)
 		if err != nil {
 			return "", err
 		}
@@ -144,6 +142,10 @@ func (p *Predicate) expand(ctx int, operator string) (string, error) {
 		criteria, err := predicateConfig.Expander(p.ctx, value)
 		if err != nil {
 			return "", err
+		}
+
+		if strings.TrimSpace(criteria.Query) == "" {
+			continue
 		}
 
 		if result.Len() != 0 {

@@ -1,5 +1,5 @@
 {
   "Name": "$tagId",
-  "URL": "$path/custom_predicate.sql",
+  "URL": "$path/external_parameters.sql",
   "Args": ""
 }

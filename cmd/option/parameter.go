@@ -25,7 +25,8 @@ type (
 		Cardinality view.Cardinality `json:",omitempty" yaml:",omitempty"`
 		StatusCode  *int             `json:",omitempty" yaml:",omitempty"`
 		Qualifiers  []*Qualifier     `json:",omitempty"`
-		Predicate   *config.PredicateConfig
+		Predicate   []*config.PredicateConfig
+		Tag         string `json:",omitempty" yaml:",omitempty"`
 	}
 
 	Qualifier struct {

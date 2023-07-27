@@ -84,6 +84,8 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 		return err
 	}
 
+	t.updateStateParams()
+
 	if err = t.initSqlEvaluator(resource); err != nil {
 		return err
 	}
@@ -136,7 +138,7 @@ func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resourc
 		}
 	}
 
-	rType, err := BuildType(t.Parameters)
+	rType, err := BuildType(nonStateParameters(t.Parameters))
 	if err != nil {
 		return err
 	}
@@ -147,9 +149,18 @@ func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resourc
 }
 
 func BuildType(parameters []*Parameter) (reflect.Type, error) {
+	return buildType(parameters, nil)
+}
+
+func buildType(parameters []*Parameter, paramType reflect.Type) (reflect.Type, error) {
 	builder := parameter.NewBuilder("")
 	for _, param := range parameters {
-		if err := builder.AddType(param.Name, param.ActualParamType()); err != nil {
+		pType := param.ActualParamType()
+		if paramType != nil {
+			pType = paramType
+		}
+		paramTag := reflect.StructTag(param.Tag)
+		if err := builder.AddType(param.Name, pType, paramTag); err != nil {
 			return nil, err
 		}
 	}
@@ -158,14 +169,7 @@ func BuildType(parameters []*Parameter) (reflect.Type, error) {
 }
 
 func BuildPresenceType(parameters []*Parameter) (reflect.Type, error) {
-	builder := parameter.NewBuilder("")
-	for _, param := range parameters {
-		if err := builder.AddType(param.PresenceName, boolType); err != nil {
-			return nil, err
-		}
-	}
-
-	return builder.Build(), nil
+	return buildType(parameters, xreflect.BoolType)
 }
 
 func (t *Template) addField(name string, rType reflect.Type) error {
@@ -337,28 +341,26 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 	cache := &predicateCache{Map: sync.Map{}}
 	var predicates []*expand.PredicateConfig
 	for _, p := range t.Parameters {
-		if p.Predicate == nil {
-			continue
+		for _, predicate := range p.Predicates {
+			evaluator, err := cache.get(predicate, p, resource._templates, t.PresenceSchema.Type())
+			if err != nil {
+				return err
+			}
+
+			predicates = append(predicates, &expand.PredicateConfig{
+				Context:       predicate.Context,
+				StateAccessor: p.accessValue,
+				HasAccessor:   p.accessHas,
+				Expander: func(c *expand.Context, i interface{}) (*parameter2.Criteria, error) {
+					evaluate, err := evaluator.Evaluate(c, i)
+					if err != nil {
+						return nil, err
+					}
+
+					return &parameter2.Criteria{Query: evaluate.Buffer.String()}, nil
+				},
+			})
 		}
-
-		evaluator, err := cache.get(p.Predicate, p.ActualParamType(), resource._templates)
-		if err != nil {
-			return err
-		}
-
-		predicates = append(predicates, &expand.PredicateConfig{
-			Context:       p.Predicate.Context,
-			StateAccessor: p.ValueAccessor,
-			HasAccessor:   p.PresenceAccessor,
-			Expander: func(c *expand.Context, i interface{}) (*parameter2.Criteria, error) {
-				evaluate, err := evaluator.Evaluate(c, i)
-				if err != nil {
-					return nil, err
-				}
-
-				return &parameter2.Criteria{Query: evaluate.Buffer.String()}, nil
-			},
-		})
 	}
 
 	evaluator, err := NewEvaluator(t.Parameters, t.Schema.Type(), t.PresenceSchema.Type(), t.Source, resource.LookupType(), predicates)
@@ -389,7 +391,7 @@ func (t *Template) initPresenceType(resource *Resource) error {
 }
 
 func (t *Template) initPresenceSchemaFromParams() error {
-	rType, err := BuildPresenceType(t.Parameters)
+	rType, err := BuildPresenceType(nonStateParameters(t.Parameters))
 	if err != nil {
 		return err
 	}
@@ -400,8 +402,24 @@ func (t *Template) initPresenceSchemaFromParams() error {
 	return nil
 }
 
+func nonStateParameters(parameters []*Parameter) []*Parameter {
+	params := make([]*Parameter, 0, len(parameters))
+	for _, p := range parameters {
+		if p.In.Kind == KindState {
+			continue
+		}
+
+		params = append(params, p)
+	}
+	return params
+}
+
 func (t *Template) updateParametersFields() error {
 	for _, param := range t.Parameters {
+		if param.In.Kind == KindState {
+			continue
+		}
+
 		if err := param.SetPresenceField(t.PresenceSchema.Type()); err != nil {
 			return err
 		}
@@ -444,7 +462,7 @@ func fieldByTemplateName(structType reflect.Type, name string) (*xunsafe.Field, 
 			}
 		}
 
-		return nil, fmt.Errorf("not found _field %v at type %v", name, structType.String())
+		return nil, fmt.Errorf("not found field %v at type %v", name, structType.String())
 	}
 
 	return xunsafe.NewField(field), nil
@@ -591,4 +609,14 @@ func (t *Template) initMetaIfNeeded(ctx context.Context, r *Resource) error {
 
 func (t *Template) StateType() reflect.Type {
 	return t.sqlEvaluator.Type()
+}
+
+func (t *Template) updateStateParams() {
+	for _, p := range t.Parameters {
+		if p.In.Kind != KindState {
+			continue
+		}
+
+		p.Schema = NewSchema(t.Schema.Type())
+	}
 }

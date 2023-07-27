@@ -1,5 +1,5 @@
 /* {
-    "URI":"vendors-custom-predicate",
+    "URI":"external-parameters",
     "Method": "GET",
     "Include": ["./parameters.sql"]
    } */
