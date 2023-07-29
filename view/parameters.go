@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"net/http"
@@ -19,6 +20,7 @@ type (
 	Parameter struct {
 		shared.Reference
 		Fields       Parameters
+		Group        []*Parameter `json:",omitempty"`
 		Predicates   []*config.PredicateConfig
 		Name         string `json:",omitempty"`
 		PresenceName string `json:",omitempty"`
@@ -47,6 +49,7 @@ type (
 		_owner             *View
 		_literalValue      interface{}
 		_dependsOn         *Parameter
+		_state             *structology.StateType
 		_isStateBasedParam bool
 	}
 
@@ -229,6 +232,10 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 		return err
 	}
 
+	if err := p.initGroupParams(ctx, view, resource, structType); err != nil {
+		return err
+	}
+
 	if p.PresenceName == "" {
 		p.PresenceName = p.Name
 	}
@@ -350,6 +357,10 @@ func (p *Parameter) inherit(param *Parameter) {
 	if p.Predicates == nil {
 		p.Predicates = param.Predicates
 	}
+
+	if len(p.Group) == 0 {
+		p.Group = param.Group
+	}
 }
 
 // Validate checks if parameter is valid
@@ -392,6 +403,17 @@ func (p *Parameter) IsRequired() bool {
 }
 
 func (p *Parameter) initSchema(resource *Resource, structType reflect.Type) error {
+	if p.In.Kind == KindGroup {
+		rType, err := BuildTypeWithPresence(p.Group)
+		if err != nil {
+			return err
+		}
+
+		p.Schema = NewSchema(rType)
+		p._state = structology.NewStateType(p.Schema.Type())
+		p._state.NewState()
+		return nil
+	}
 	if p.In.Kind == KindState {
 		return nil
 	}
@@ -702,6 +724,30 @@ func (p *Parameter) accessHas(has interface{}, ptr unsafe.Pointer) (bool, error)
 	asBool, ok := value.(bool)
 
 	return asBool && ok, nil
+}
+
+func (p *Parameter) initGroupParams(ctx context.Context, view *View, resource *Resource, structType reflect.Type) error {
+	for _, parameter := range p.Group {
+		var pType reflect.Type
+		if structType != nil {
+			field := xunsafe.FieldByName(structType, parameter.Name)
+			if field == nil {
+				return fmt.Errorf("not found field %v at %v", parameter.Name, structType.String())
+			}
+
+			pType = field.Type
+		}
+
+		if err := parameter.Init(ctx, view, resource, pType); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (p *Parameter) NewState(value interface{}) *structology.State {
+	return p._state.WithValue(value)
 }
 
 // NamedParameters represents Parameter map indexed by Parameter.Name

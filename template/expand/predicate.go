@@ -22,6 +22,7 @@ type (
 		StateAccessor func(state interface{}, statePtr unsafe.Pointer) (interface{}, error)
 		HasAccessor   func(has interface{}, hasPtr unsafe.Pointer) (bool, error)
 		Expander      func(*Context, interface{}) (*parameter.Criteria, error)
+		Ensure        bool
 	}
 
 	PredicateBuilder struct {
@@ -123,7 +124,7 @@ func (p *Predicate) expand(ctx int, operator string) (string, error) {
 			continue
 		}
 
-		if p.hasPtr != nil {
+		if p.hasPtr != nil && !predicateConfig.Ensure {
 			value, err := predicateConfig.HasAccessor(p.has, p.hasPtr)
 			if err != nil {
 				return "", err
@@ -154,7 +155,9 @@ func (p *Predicate) expand(ctx int, operator string) (string, error) {
 			result.WriteString(" ")
 		}
 
+		result.WriteByte('(')
 		result.WriteString(criteria.Query)
+		result.WriteByte(')')
 		accArgs = append(accArgs, criteria.Args...)
 	}
 

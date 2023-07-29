@@ -3,6 +3,7 @@ package view
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 // Kind represents parameter location
@@ -23,12 +24,13 @@ const (
 	KindPredicate Kind = "predicate"
 	KindRequest   Kind = "http_request"
 	KindState     Kind = "state"
+	KindGroup     Kind = "group"
 )
 
 // Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindLiteral, KindParam, KindRequest, KindState:
+	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindLiteral, KindParam, KindRequest, KindState, KindGroup:
 		return nil
 	}
 
@@ -71,6 +73,17 @@ type ParamName string
 // Validate checks if ParamName is valid
 func (p ParamName) Validate(kind Kind) error {
 	switch kind {
+	case KindGroup:
+		split := strings.Split(string(p), ",")
+		if len(split) == 0 {
+			return fmt.Errorf("param name can't be empty")
+		}
+
+		if len(split) == 1 {
+			return fmt.Errorf("param Group must contain at least 2 params")
+		}
+
+		return nil
 	case KindRequest, KindLiteral, KindRequestBody, KindState:
 		return nil
 	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindParam:

@@ -367,6 +367,32 @@ func (s *State) SetLiterals(target interface{}) *types.Accessors {
 	return accessors
 }
 
+func (s *State) Group() State {
+	newState := make(State, 0, len(*s))
+	groupIndex := map[string][]*Parameter{}
+	groupParams := s.FilterByKind(view.KindGroup)
+	for _, param := range groupParams {
+		baseParams := strings.Split(param.In.Name, ",")
+		for _, baseParam := range baseParams {
+			groupIndex[baseParam] = append(groupIndex[baseParam], param)
+		}
+	}
+
+	for _, parameter := range *s {
+		parameters, ok := groupIndex[parameter.Name]
+		if !ok {
+			newState.Append(parameter)
+			continue
+		}
+
+		for _, parent := range parameters {
+			parent.Group = append(parent.Group, &parameter.Parameter)
+		}
+	}
+
+	return newState
+}
+
 // NewState creates a state from state go struct
 func NewState(modulePath, dataType string, types *xreflect.Types) (State, error) {
 	baseDir := modulePath

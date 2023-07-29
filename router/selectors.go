@@ -6,7 +6,9 @@ import (
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/criteria"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
+	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xdatly/handler/parameter"
 	"github.com/viant/xunsafe"
@@ -448,6 +450,8 @@ func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, pa
 			return param.Const, nil
 		case view.KindRequest:
 			return b.params.request, nil
+		case view.KindGroup:
+			return b.groupParam(ctx, param, parentView)
 		}
 
 		return b.params.extractHttpParam(ctx, param, options)
@@ -732,6 +736,31 @@ func (b *paramStateBuilder) Value(ctx context.Context, paramName string) (interf
 	}
 
 	return b.extractParamValueWithOptions(ctx, lookup, nil)
+}
+
+func (b *paramStateBuilder) groupParam(ctx context.Context, param *view.Parameter, parentView *view.View) (interface{}, error) {
+	var state *structology.State
+	var value interface{}
+
+	for _, p := range param.Group {
+		pValue, err := b.extractParamValueWithOptions(ctx, p, parentView)
+		if err != nil {
+			return nil, err
+		}
+
+		if pValue != nil {
+			if value == nil {
+				value = types.NewValue(param.Schema.Type())
+				state = param.NewState(value)
+			}
+
+			if err := state.SetValue(p.Name, pValue); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return value, nil
 }
 
 func transformIfNeeded(ctx context.Context, param *view.Parameter, value interface{}, options ...interface{}) (interface{}, error) {

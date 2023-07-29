@@ -1,0 +1,22 @@
+Templates:
+  - Name: "custom_range"
+    Args:
+      - Name:  "Alias"
+        Position: 0
+      - Name:  "ColumnName"
+        Position: 1
+    Source: |
+      ${Alias}.${ColumnName} BETWEEN
+      #if($FilterValue.Has.ValueMin)
+          $criteria.AppendBinding($FilterValue.ValueMin)
+      #else
+          0
+      #end
+     
+      AND
+      
+      #if($FilterValue.Has.ValueMax)
+          $criteria.AppendBinding($FilterValue.ValueMax)
+      #else
+          10000
+      #end

@@ -1,0 +1,24 @@
+init:
+  parentPath: $parent.path
+pipeline:
+
+  test:
+    action: http/runner:send
+    requests:
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/params-group
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect1.json')
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/params-group?priceMin=3&priceMax=4
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect2.json')
+
+      - Method: GET
+        URL: http://127.0.0.1:8080/v1/api/dev/params-group?priceMin=3&priceMax=4&idMin=4&idMax=5
+        Expect:
+          Code: 200
+          JSONBody: $LoadJSON('${parentPath}/expect3.json')

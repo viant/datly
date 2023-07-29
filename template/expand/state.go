@@ -109,10 +109,7 @@ func (s *State) Init(templateState *est.State, predicates []*PredicateConfig, op
 		s.MessageBus = s.Session.MessageBus()
 	}
 
-	if len(predicates) > 0 {
-		s.Predicate = NewPredicate(s.Context, s.Parameters, s.ParametersHas, predicates)
-	}
-
+	s.Predicate = NewPredicate(s.Context, s.Parameters, s.ParametersHas, predicates)
 	s.State = templateState
 }
 

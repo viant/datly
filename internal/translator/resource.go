@@ -162,6 +162,10 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 		return err
 	}
 	r.State.Append(r.Declarations.State...)
+	if len(r.State.FilterByKind(view.KindGroup)) > 0 {
+		r.State = r.State.Group()
+	}
+
 	r.Rule.Route.Transforms = r.Declarations.Transforms
 	if err := parser.ExtractParameterHints(r.Declarations.SQL, &r.State); err != nil {
 		return err

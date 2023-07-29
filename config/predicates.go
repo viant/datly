@@ -19,6 +19,7 @@ type (
 		Parent  string
 		Name    string
 		Context int
+		Ensure  bool
 		Args    []string
 	}
 

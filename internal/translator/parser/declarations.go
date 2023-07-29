@@ -225,23 +225,36 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			required := false
 			declaration.Required = &required
 		case "WithPredicate":
-			if len(args) < 2 {
-				return fmt.Errorf("expected WithPredicate to have at least 2 args, but got %v", len(args))
-			}
-			ctx, err := strconv.Atoi(args[0])
-			if err != nil {
+			if err := s.appendPredicate(declaration, args, false); err != nil {
 				return err
 			}
-			declaration.Predicates = append(declaration.Predicates, &config.PredicateConfig{
-				Name:    args[1],
-				Context: ctx,
-				Args:    args[2:],
-			})
+		case "EnsurePredicate":
+			if err := s.appendPredicate(declaration, args, true); err != nil {
+				return err
+			}
 		case "UtilParam":
 			//deprecated
 		}
 		cursor.MatchOne(whitespaceMatcher)
 	}
+	return nil
+}
+
+func (s *Declarations) appendPredicate(declaration *Declaration, args []string, ensure bool) error {
+	if len(args) < 2 {
+		return fmt.Errorf("expected WithPredicate to have at least 2 args, but got %v", len(args))
+	}
+
+	ctx, err := strconv.Atoi(args[0])
+	if err != nil {
+		return err
+	}
+	declaration.Predicates = append(declaration.Predicates, &config.PredicateConfig{
+		Name:    args[1],
+		Context: ctx,
+		Args:    args[2:],
+		Ensure:  ensure,
+	})
 	return nil
 }
 

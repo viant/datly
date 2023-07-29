@@ -152,15 +152,35 @@ func BuildType(parameters []*Parameter) (reflect.Type, error) {
 	return buildType(parameters, nil)
 }
 
-func buildType(parameters []*Parameter, paramType reflect.Type) (reflect.Type, error) {
+func BuildTypeWithPresence(parameters []*Parameter) (reflect.Type, error) {
+	presenceType, err := BuildPresenceType(parameters)
+	if err != nil {
+		return nil, err
+	}
+
+	return buildType(parameters, nil, reflect.StructField{
+		Name: "Has",
+		Type: reflect.PtrTo(presenceType),
+		Tag:  `sqlx:"-" setMarker:"true"`,
+	})
+}
+
+func buildType(parameters []*Parameter, paramType reflect.Type, fields ...reflect.StructField) (reflect.Type, error) {
 	builder := parameter.NewBuilder("")
 	for _, param := range parameters {
 		pType := param.ActualParamType()
 		if paramType != nil {
 			pType = paramType
 		}
+
 		paramTag := reflect.StructTag(param.Tag)
 		if err := builder.AddType(param.Name, pType, paramTag); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, field := range fields {
+		if err := builder.AddType(field.Name, field.Type, field.Tag); err != nil {
 			return nil, err
 		}
 	}
@@ -348,6 +368,7 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 			}
 
 			predicates = append(predicates, &expand.PredicateConfig{
+				Ensure:        predicate.Ensure,
 				Context:       predicate.Context,
 				StateAccessor: p.accessValue,
 				HasAccessor:   p.accessHas,
