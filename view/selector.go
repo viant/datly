@@ -3,6 +3,7 @@ package view
 import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/sqlx/io/read/cache"
+	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
 	"strings"
 	"sync"
@@ -13,17 +14,20 @@ type (
 	Selector struct {
 		DatabaseFormat format.Case
 		OutputFormat   format.Case
-		Columns        []string      `json:",omitempty"`
-		Fields         []string      `json:",omitempty"`
-		OrderBy        string        `json:",omitempty"`
-		Offset         int           `json:",omitempty"`
-		Limit          int           `json:",omitempty"`
-		Parameters     ParamState    `json:",omitempty"`
-		Criteria       string        `json:",omitempty"`
-		Placeholders   []interface{} `json:",omitempty"`
-		Qualifier      []SelectorQualifier
-		Page           int
-		Ignore         bool
+		Columns        []string `json:",omitempty"`
+		Fields         []string `json:",omitempty"`
+		OrderBy        string   `json:",omitempty"`
+		Offset         int      `json:",omitempty"`
+		Limit          int      `json:",omitempty"`
+
+		Parameters ParamState `json:",omitempty"`
+		State      *structology.State
+
+		Criteria     string        `json:",omitempty"`
+		Placeholders []interface{} `json:",omitempty"`
+		Qualifier    []SelectorQualifier
+		Page         int
+		Ignore       bool
 
 		initialized  bool
 		_columnNames map[string]bool
