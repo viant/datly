@@ -79,7 +79,7 @@ func (r *ReferenceView) Validate() error {
 }
 
 // Init initializes Relation
-func (r *Relation) Init(ctx context.Context, resource *Resource, parent *View) error {
+func (r *Relation) Init(ctx context.Context, parent *View) error {
 	if r.Field == "" {
 		r.Field = r.Column
 	}
@@ -104,14 +104,6 @@ func (r *Relation) Init(ctx context.Context, resource *Resource, parent *View) e
 	view.indexColumns()
 
 	return r.Validate()
-}
-
-func (r *Relation) BeforeViewInit(ctx context.Context) error {
-	if err := r.ensureColumnAliasIfNeeded(); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (r *Relation) initHolder(v *View) error {

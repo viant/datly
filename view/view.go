@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/datly/config"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
@@ -83,7 +84,7 @@ type (
 		_initialized  bool
 		_newCollector newCollectorFn
 		_codec        *columnsCodec
-		_columns      ColumnIndex
+		_columns      NamedColumns
 		_excluded     map[string]bool
 	}
 
@@ -230,33 +231,33 @@ func (v *View) setResource(resource *Resource) {
 // i.e. If View, Connector etc. should inherit from others - it has te bo included in Resource.
 // It is important to call Init for every View because it also initializes due to the optimization reasons.
 func (v *View) Init(ctx context.Context, resource *Resource, opts ...ViewOption) error {
-
 	if v._initialized {
 		return nil
 	}
 	ViewOptions(opts).Apply(v)
 	v._initialized = true
 	v.setResource(resource)
+	return v.init(ctx)
+}
 
+func (v *View) init(ctx context.Context) error {
 	nameTaken := map[string]bool{
 		v.Name: true,
 	}
-
 	if schema := v.Schema; schema != nil && len(v.With) == 0 {
 		if err := v.inheritRelationsFromTag(schema); err != nil {
 			return err
 		}
 	}
 
-	if err := v.initViews(ctx, v.With, nameTaken); err != nil {
+	if err := v.initViewRelations(ctx, v.With, nameTaken); err != nil {
 		return err
 	}
-
 	if err := v.initView(ctx); err != nil {
 		return err
 	}
 
-	if err := v.updateRelations(ctx, resource, v.With); err != nil {
+	if err := v.updateViewAndRelations(ctx, v.With); err != nil {
 		return err
 	}
 	return nil
@@ -322,7 +323,7 @@ func (v *View) loadFromWithURL(ctx context.Context) error {
 	return err
 }
 
-func (v *View) initViews(ctx context.Context, relations []*Relation, notUnique map[string]bool) error {
+func (v *View) initViewRelations(ctx context.Context, relations []*Relation, notUnique map[string]bool) error {
 	for _, rel := range relations {
 		refView := &rel.Of.View
 		v.generateNameIfNeeded(refView, rel)
@@ -335,7 +336,6 @@ func (v *View) initViews(ctx context.Context, relations []*Relation, notUnique m
 			pathPrefix := rel.Holder + "."
 			if strings.HasPrefix(transform.Path, pathPrefix) {
 				relTransform := *transform
-
 				relTransform.Path = relTransform.Path[len(pathPrefix):]
 				refView._transforms = append(refView._transforms, &relTransform)
 			}
@@ -345,11 +345,11 @@ func (v *View) initViews(ctx context.Context, relations []*Relation, notUnique m
 			return err
 		}
 
-		if err := rel.BeforeViewInit(ctx); err != nil {
+		if err := rel.ensureColumnAliasIfNeeded(); err != nil {
 			return err
 		}
 
-		if err := refView.initViews(ctx, refView.With, notUnique); err != nil {
+		if err := refView.initViewRelations(ctx, refView.With, notUnique); err != nil {
 			return err
 		}
 
@@ -388,9 +388,9 @@ func (v *View) initView(ctx context.Context) error {
 
 	v.ensureCounter()
 
-	v.Alias = FirstNotEmpty(v.Alias, "t")
+	setter.SetStringIfEmpty(&v.Alias, "t")
 	if v.From == "" {
-		v.Table = FirstNotEmpty(v.Table, v.Name)
+		setter.SetStringIfEmpty(&v.Table, v.Name)
 	} else {
 		if strings.Contains(v.From, keywords.WhereCriteria) {
 			flag := false
@@ -486,6 +486,22 @@ func (v *View) initView(ctx context.Context) error {
 	return nil
 }
 
+func (v *View) GetSchema(ctx context.Context) (*Schema, error) {
+	if v.Schema != nil {
+		if v.Schema.Type() != nil {
+			return v.Schema, nil
+		}
+		if v.Schema.DataType != "" {
+			err := v.Schema.setType(v._resource.LookupType(), false)
+			return v.Schema, err
+		}
+	}
+	if err := v.init(ctx); err != nil {
+		return nil, err
+	}
+	return v.Schema, nil
+}
+
 func (v *View) ensureConnector(ctx context.Context) error {
 	if v.Connector != nil && v.Connector._initialized {
 		return nil
@@ -544,33 +560,27 @@ func (v *View) updateColumnTypes() {
 	}
 }
 
-func (v *View) updateRelations(ctx context.Context, resource *Resource, relations []*Relation) error {
+func (v *View) updateViewAndRelations(ctx context.Context, relations []*Relation) error {
 	v.indexColumns()
 	if err := v.indexSqlxColumnsByFieldName(); err != nil {
 		return err
 	}
-
 	v.ensureCollector()
-
 	if err := v.deriveColumnsFromSchema(nil); err != nil {
 		return err
 	}
-
 	for _, rel := range relations {
-		if err := rel.Init(ctx, resource, v); err != nil {
+		if err := rel.Init(ctx, v); err != nil {
 			return err
 		}
-
 		refView := rel.Of.View
-		if err := refView.updateRelations(ctx, resource, refView.With); err != nil {
+		if err := refView.updateViewAndRelations(ctx, refView.With); err != nil {
 			return err
 		}
 	}
-
 	if err := v.registerHolders(); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -682,10 +692,10 @@ func (v *View) inherit(view *View) error {
 		v.Connector = view.Connector
 	}
 
-	v.Alias = FirstNotEmpty(v.Alias, view.Alias)
-	v.Table = FirstNotEmpty(v.Table, view.Table)
-	v.From = FirstNotEmpty(v.From, view.From)
-	v.FromURL = FirstNotEmpty(v.FromURL, view.FromURL)
+	setter.SetStringIfEmpty(&v.Alias, view.Alias)
+	setter.SetStringIfEmpty(&v.Table, view.Table)
+	setter.SetStringIfEmpty(&v.From, view.From)
+	setter.SetStringIfEmpty(&v.FromURL, view.FromURL)
 	v.Mode = Mode(FirstNotEmpty(string(v.Mode), string(view.Mode)))
 
 	if stringsSliceEqual(v.Exclude, view.Exclude) {
@@ -863,7 +873,7 @@ func (v *View) CanUseSelectorProjection() bool {
 }
 
 // IndexedColumns returns Columns
-func (v *View) IndexedColumns() ColumnIndex {
+func (v *View) IndexedColumns() NamedColumns {
 	return v._columns
 }
 
@@ -927,7 +937,7 @@ func (v *View) deriveColumnsFromSchema(relation *Relation) error {
 	return nil
 }
 
-func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, relation *Relation, columnsIndex ColumnIndex) error {
+func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, relation *Relation, columnsIndex NamedColumns) error {
 	for i := 0; i < rType.NumField(); i++ {
 		field := rType.Field(i)
 		isExported := field.PkgPath == ""
