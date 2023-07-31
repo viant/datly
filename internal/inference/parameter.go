@@ -22,7 +22,6 @@ type (
 		view.Parameter
 		ModificationSetting
 		SQL         string
-		Qualifiers  []*view.Qualifier `json:",omitempty"`
 		Hint        string
 		AssumedType bool
 		Connector   string

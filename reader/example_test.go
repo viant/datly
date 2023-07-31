@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
@@ -175,9 +176,9 @@ func ExampleService_ReadWithTemplate() {
 			view.NwReferenceView("ProductId", "product_id",
 				view.NewView("performance", "product_performance",
 					view.WithTemplate(view.NewTemplate("performance",
-						view.WithTemplateParameter(view.NewParameter("period",
-							view.NewQueryLocation("period"),
-							view.WithParameterType(reflect.TypeOf("")),
+						view.WithTemplateParameter(state.NewParameter("period",
+							state.NewQueryLocation("period"),
+							state.WithParameterType(reflect.TypeOf("")),
 						)))),
 					view.WithConnector(aclConn)))),
 	)

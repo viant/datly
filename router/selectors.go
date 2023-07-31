@@ -221,24 +221,6 @@ func (b *paramStateBuilder) populateSelector(ctx context.Context, selector *view
 	if selector.Limit == 0 && selector.Offset != 0 {
 		return "", fmt.Errorf("can't use offset without limit")
 	}
-
-	for _, qualifier := range details.View.Qualifiers {
-		value, err := b.extractParamValue(ctx, qualifier.Parameter, details, selector)
-		if err != nil {
-			return "", err
-		}
-
-		values, err := qualifier.ExtractValues(value)
-		if err != nil {
-			return view.QualifierParam, nil
-		}
-
-		selector.Qualifier = append(selector.Qualifier, view.SelectorQualifier{
-			Column: qualifier.Column,
-			Values: values,
-		})
-	}
-
 	return "", nil
 }
 

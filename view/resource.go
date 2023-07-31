@@ -40,7 +40,7 @@ type Resource struct {
 	_messageBuses MessageBuses
 
 	Views  []*View `json:",omitempty"`
-	_views Views
+	_views NamedViews
 
 	Parameters  []*Parameter `json:",omitempty"`
 	_parameters NamedParameters
@@ -241,10 +241,10 @@ func (r *Resource) typeByName() map[string]*TypeDefinition {
 	return index
 }
 
-// GetViews returns Views supplied with the Resource
-func (r *Resource) GetViews() Views {
+// GetViews returns NamedViews supplied with the Resource
+func (r *Resource) GetViews() NamedViews {
 	if len(r._views) == 0 {
-		r._views = Views{}
+		r._views = NamedViews{}
 		for i, view := range r.Views {
 			r._views[view.Name] = r.Views[i]
 		}
@@ -307,7 +307,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	}
 
 	var err error
-	r._views, err = ViewSlice(r.Views).Index()
+	r._views, err = Views(r.Views).Index()
 	if err != nil {
 		return err
 	}
@@ -325,7 +325,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 		return err
 	}
 
-	if err = ViewSlice(r.Views).Init(ctx, r, transforms); err != nil {
+	if err = Views(r.Views).Init(ctx, r, transforms); err != nil {
 		return err
 	}
 
@@ -473,7 +473,7 @@ func EmptyResource() *Resource {
 		MessageBuses:  make([]*mbus.Resource, 0),
 		_messageBuses: MessageBuses{},
 		Views:         make([]*View, 0),
-		_views:        Views{},
+		_views:        NamedViews{},
 		Parameters:    make([]*Parameter, 0),
 		_parameters:   NamedParameters{},
 		_types:        xreflect.NewTypes(),

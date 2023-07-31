@@ -78,8 +78,8 @@ type (
 		SelfReference *SelfReference           `json:",omitempty"`
 		Namespaces    []*Namespace             `json:",omitempty"`
 		TableBatches  map[string]bool          `json:",omitempty"`
-		Qualifiers    []*Qualifier             `json:",omitempty"`
-
+		_transforms   marshal.Transforms
+		_resource     *Resource
 		_initialized  bool
 		_newCollector newCollectorFn
 		_codec        *columnsCodec
@@ -213,40 +213,46 @@ func (v *View) DataType() reflect.Type {
 	return v.Schema.Type()
 }
 
+func (v *View) setResource(resource *Resource) {
+	if resource == nil {
+		resource = EmptyResource()
+	}
+	v._resource = resource
+	if len(v.With) == 0 {
+		return
+	}
+	for _, rel := range v.With {
+		rel.Of.View.setResource(resource)
+	}
+}
+
 // Init initializes View using view provided in Resource.
 // i.e. If View, Connector etc. should inherit from others - it has te bo included in Resource.
 // It is important to call Init for every View because it also initializes due to the optimization reasons.
-func (v *View) Init(ctx context.Context, resource *Resource, options ...interface{}) error {
+func (v *View) Init(ctx context.Context, resource *Resource, opts ...ViewOption) error {
+
 	if v._initialized {
 		return nil
 	}
+	ViewOptions(opts).Apply(v)
 	v._initialized = true
-
-	var transforms marshal.Transforms
-	for _, anOption := range options {
-		switch actual := anOption.(type) {
-		case marshal.Transforms:
-			transforms = actual
-		}
-	}
+	v.setResource(resource)
 
 	nameTaken := map[string]bool{
 		v.Name: true,
 	}
 
 	if schema := v.Schema; schema != nil && len(v.With) == 0 {
-
-		if err := v.inheritRelationsFromTag(schema, resource); err != nil {
+		if err := v.inheritRelationsFromTag(schema); err != nil {
 			return err
 		}
-
 	}
 
-	if err := v.initViews(ctx, resource, v.With, nameTaken, transforms); err != nil {
+	if err := v.initViews(ctx, v.With, nameTaken); err != nil {
 		return err
 	}
 
-	if err := v.initView(ctx, resource, transforms); err != nil {
+	if err := v.initView(ctx); err != nil {
 		return err
 	}
 
@@ -256,10 +262,10 @@ func (v *View) Init(ctx context.Context, resource *Resource, options ...interfac
 	return nil
 }
 
-func (v *View) inheritRelationsFromTag(schema *Schema, resource *Resource) error {
+func (v *View) inheritRelationsFromTag(schema *Schema) error {
 	sType := schema.Type()
 	if sType == nil {
-		sType, _ = types.LookupType(resource.LookupType(), schema.DataType)
+		sType, _ = types.LookupType(v._resource.LookupType(), schema.DataType)
 		if sType == nil {
 			return nil
 		}
@@ -279,7 +285,7 @@ func (v *View) inheritRelationsFromTag(schema *Schema, resource *Resource) error
 		if !tag.HasRelationSpec() {
 			continue
 		}
-		refViewOptions, err := v.buildRefViewOptions(tag, resource)
+		refViewOptions, err := v.buildRefViewOptions(tag)
 		if err != nil {
 			return err
 		}
@@ -290,12 +296,12 @@ func (v *View) inheritRelationsFromTag(schema *Schema, resource *Resource) error
 	return nil
 }
 
-func (v *View) buildRefViewOptions(tag *Tag, resource *Resource) ([]ViewOption, error) {
+func (v *View) buildRefViewOptions(tag *Tag) ([]ViewOption, error) {
 	var refViewOptions []ViewOption
 	var err error
 	var connector *Connector
 	if tag.RefConnector != "" {
-		if connector, err = resource.Connector(tag.RefConnector); err != nil {
+		if connector, err = v._resource.Connector(tag.RefConnector); err != nil {
 			return nil, fmt.Errorf("%w, ref view '%v' connector: '%v'", err, tag.RefName, tag.RefConnector)
 		}
 	} else if v.Connector != nil {
@@ -307,16 +313,16 @@ func (v *View) buildRefViewOptions(tag *Tag, resource *Resource) ([]ViewOption, 
 	return refViewOptions, nil
 }
 
-func (v *View) loadFromWithURL(ctx context.Context, resource *Resource) error {
+func (v *View) loadFromWithURL(ctx context.Context) error {
 	if v.FromURL == "" || v.From != "" {
 		return nil
 	}
 	var err error
-	v.From, err = resource.LoadText(ctx, v.FromURL)
+	v.From, err = v._resource.LoadText(ctx, v.FromURL)
 	return err
 }
 
-func (v *View) initViews(ctx context.Context, resource *Resource, relations []*Relation, notUnique map[string]bool, transforms marshal.Transforms) error {
+func (v *View) initViews(ctx context.Context, relations []*Relation, notUnique map[string]bool) error {
 	for _, rel := range relations {
 		refView := &rel.Of.View
 		v.generateNameIfNeeded(refView, rel)
@@ -325,18 +331,17 @@ func (v *View) initViews(ctx context.Context, resource *Resource, relations []*R
 			return fmt.Errorf("not unique view name: %v", rel.Of.View.Name)
 		}
 		notUnique[rel.Of.View.Name] = true
-		relTransforms := marshal.Transforms{}
-		for _, transform := range transforms {
+		for _, transform := range v._transforms {
 			pathPrefix := rel.Holder + "."
 			if strings.HasPrefix(transform.Path, pathPrefix) {
 				relTransform := *transform
 
 				relTransform.Path = relTransform.Path[len(pathPrefix):]
-				relTransforms = append(relTransforms, &relTransform)
+				refView._transforms = append(refView._transforms, &relTransform)
 			}
 		}
 
-		if err := refView.inheritFromViewIfNeeded(ctx, resource, relTransforms); err != nil {
+		if err := refView.inheritFromViewIfNeeded(ctx); err != nil {
 			return err
 		}
 
@@ -344,11 +349,11 @@ func (v *View) initViews(ctx context.Context, resource *Resource, relations []*R
 			return err
 		}
 
-		if err := refView.initViews(ctx, resource, refView.With, notUnique, relTransforms); err != nil {
+		if err := refView.initViews(ctx, refView.With, notUnique); err != nil {
 			return err
 		}
 
-		if err := refView.initView(ctx, resource, relTransforms); err != nil {
+		if err := refView.initView(ctx); err != nil {
 			return err
 		}
 
@@ -362,13 +367,12 @@ func (v *View) generateNameIfNeeded(refView *View, rel *Relation) {
 	}
 }
 
-func (v *View) initView(ctx context.Context, resource *Resource, transforms marshal.Transforms) error {
+func (v *View) initView(ctx context.Context) error {
 	var err error
-	if err = v.loadFromWithURL(ctx, resource); err != nil {
+	if err = v.loadFromWithURL(ctx); err != nil {
 		return err
 	}
-
-	if err = v.inheritFromViewIfNeeded(ctx, resource, transforms); err != nil {
+	if err = v.inheritFromViewIfNeeded(ctx); err != nil {
 		return err
 	}
 	if v.ColumnsConfig == nil {
@@ -378,11 +382,11 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 	v.ensureIndexExcluded()
 	v.ensureBatch()
 
-	if err = v.ensureLogger(resource); err != nil {
+	if err = v.ensureLogger(); err != nil {
 		return err
 	}
 
-	v.ensureCounter(resource)
+	v.ensureCounter()
 
 	v.Alias = FirstNotEmpty(v.Alias, "t")
 	if v.From == "" {
@@ -414,12 +418,12 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 		return fmt.Errorf("view name was empty")
 	}
 
-	if err = v.ensureConnector(ctx, resource); err != nil {
+	if err = v.ensureConnector(ctx); err != nil {
 		return err
 	}
 
 	if v.Mode == ModeQuery || v.Mode == ModeUnspecified {
-		if err = v.ensureColumns(ctx, resource); err != nil {
+		if err = v.ensureColumns(ctx, v._resource); err != nil {
 			return err
 		}
 	}
@@ -428,11 +432,11 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 		return err
 	}
 
-	if err = v.indexTransforms(resource, transforms); err != nil {
+	if err = v.indexTransforms(); err != nil {
 		return err
 	}
 
-	if err = Columns(v.Columns).Init(resource, v.ColumnsConfig, v.Caser, v.AreNullValuesAllowed()); err != nil {
+	if err = Columns(v.Columns).Init(v._resource, v.ColumnsConfig, v.Caser, v.AreNullValuesAllowed()); err != nil {
 		return err
 	}
 
@@ -442,11 +446,11 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 		return err
 	}
 
-	if err = v.ensureSchema(resource); err != nil {
+	if err = v.ensureSchema(v._resource); err != nil {
 		return err
 	}
 
-	if err = v.Selector.Init(ctx, resource, v); err != nil {
+	if err = v.Selector.Init(ctx, v._resource, v); err != nil {
 		return err
 	}
 
@@ -456,12 +460,12 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 
 	v.updateColumnTypes()
 
-	if err = v.initTemplate(ctx, resource); err != nil {
+	if err = v.initTemplate(ctx, v._resource); err != nil {
 		return err
 	}
 
 	if v.Cache != nil {
-		if err = v.Cache.init(ctx, resource, v); err != nil {
+		if err = v.Cache.init(ctx, v._resource, v); err != nil {
 			return err
 		}
 	}
@@ -475,10 +479,6 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 		v.TableBatches = map[string]bool{}
 	}
 
-	if err = v.initQualifiersIfNeeded(ctx, resource); err != nil {
-		return err
-	}
-
 	if err = v.ensureAsyncTableNameIfNeeded(); err != nil {
 		return err
 	}
@@ -486,17 +486,17 @@ func (v *View) initView(ctx context.Context, resource *Resource, transforms mars
 	return nil
 }
 
-func (v *View) ensureConnector(ctx context.Context, resource *Resource) error {
+func (v *View) ensureConnector(ctx context.Context) error {
 	if v.Connector != nil && v.Connector._initialized {
 		return nil
 	}
 
 	var err error
-	if v.Connector, err = resource.FindConnector(v); err != nil {
+	if v.Connector, err = v._resource.FindConnector(v); err != nil {
 		return err
 	}
 
-	if err = v.Connector.Init(ctx, resource._connectors); err != nil {
+	if err = v.Connector.Init(ctx, v._resource._connectors); err != nil {
 		return err
 	}
 
@@ -506,12 +506,12 @@ func (v *View) ensureConnector(ctx context.Context, resource *Resource) error {
 	return nil
 }
 
-func (v *View) ensureCounter(resource *Resource) {
+func (v *View) ensureCounter() {
 	if v.Counter != nil {
 		return
 	}
 	var counter logger.Counter
-	if metric := resource.Metrics; metric != nil {
+	if metric := v._resource.Metrics; metric != nil {
 		name := v.Name
 		if metric.URIPart != "" {
 			name = metric.URIPart + name
@@ -756,10 +756,6 @@ func (v *View) inherit(view *View) error {
 
 	if v.TableBatches == nil {
 		v.TableBatches = view.TableBatches
-	}
-
-	if len(v.Qualifiers) == 0 {
-		v.Qualifiers = view.Qualifiers
 	}
 
 	if v.Async == nil {
@@ -1008,14 +1004,14 @@ func (v *View) initSchemaIfNeeded() {
 	}
 }
 
-func (v *View) inheritFromViewIfNeeded(ctx context.Context, resource *Resource, transforms marshal.Transforms) error {
+func (v *View) inheritFromViewIfNeeded(ctx context.Context) error {
 	if v.Ref != "" {
-		view, err := resource._views.Lookup(v.Ref)
+		view, err := v._resource._views.Lookup(v.Ref)
 		if err != nil {
 			return err
 		}
 
-		if err = view.Init(ctx, resource, transforms); err != nil {
+		if err = view.Init(ctx, v._resource); err != nil {
 			return err
 		}
 
@@ -1030,14 +1026,14 @@ func (v *View) indexColumns() {
 	v._columns = Columns(v.Columns).Index(v.Caser)
 }
 
-func (v *View) ensureLogger(resource *Resource) error {
+func (v *View) ensureLogger() error {
 	if v.Logger == nil {
 		v.Logger = logger.Default()
 		return nil
 	}
 
 	if v.Logger.Ref != "" {
-		adapter, ok := resource._loggers.Lookup(v.Logger.Ref)
+		adapter, ok := v._resource._loggers.Lookup(v.Logger.Ref)
 		if !ok {
 			return fmt.Errorf("not found Logger %v in Resource", v.Logger.Ref)
 		}
@@ -1100,8 +1096,11 @@ func (v *View) UnwrapDatabaseType(ctx context.Context, value interface{}) (inter
 	return value, nil
 }
 
-func (v *View) indexTransforms(resource *Resource, transforms marshal.Transforms) error {
-	for _, transform := range transforms {
+func (v *View) indexTransforms() error {
+	if len(v._transforms) == 0 {
+		return nil
+	}
+	for _, transform := range v._transforms {
 		if strings.Contains(transform.Path, ".") {
 			continue
 		}
@@ -1113,7 +1112,7 @@ func (v *View) indexTransforms(resource *Resource, transforms marshal.Transforms
 			v.ColumnsConfig[columnName] = aConfig
 		}
 
-		visitor, ok := resource.CodecByName(transform.Codec)
+		visitor, ok := v._resource.CodecByName(transform.Codec)
 		if !ok {
 			return fmt.Errorf("not found codec %v", transform.Codec)
 		}
@@ -1224,16 +1223,6 @@ func (v *View) SetParameter(name string, selectors *Selectors, value interface{}
 		return fmt.Errorf("failed to lookup selector: %v", aView.Name)
 	}
 	return param.Set(selector, value)
-}
-
-func (v *View) initQualifiersIfNeeded(ctx context.Context, resource *Resource) error {
-	for _, qualifier := range v.Qualifiers {
-		if err := qualifier.Init(ctx, resource, v, v._columns); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (v *View) ensureAsyncTableNameIfNeeded() error {
@@ -1389,5 +1378,11 @@ func WithRelationField(name string) RelationOption {
 func WithRelationIncludeColumn(flag bool) RelationOption {
 	return func(r *Relation) {
 		r.IncludeColumn = flag
+	}
+}
+
+func WithTransforms(transforms marshal.Transforms) ViewOption {
+	return func(v *View) {
+		v._transforms = transforms
 	}
 }

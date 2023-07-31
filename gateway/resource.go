@@ -62,7 +62,6 @@ func (c *ResourcesChange) ExtIndex(ext string) (*ExtIndex, bool) {
 	case ".rt":
 		return c.routersIndex, true
 	}
-
 	return nil, false
 }
 

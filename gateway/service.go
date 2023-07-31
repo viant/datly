@@ -40,13 +40,13 @@ var unindexedFolders = []string{pluginsFolder, metaFolder}
 
 type (
 	Service struct {
-		Config                *Config
-		routersIndex          map[string]*router.Router
-		fs                    afs.Service
-		routeResourceTracker  *Tracker
-		dataResourceTracker   *Tracker
-		pluginResourceTracker *Tracker
-		assetsResourceTracker *Tracker
+		Config            *Config
+		routersIndex      map[string]*router.Router
+		fs                afs.Service
+		routeTracker      *Tracker
+		dependencyTracker *Tracker
+		pluginTracker     *Tracker
+		assetsTracker     *Tracker
 
 		dataResourcesIndex map[string]*view.Resource
 		metrics            *gmetric.Service
@@ -109,7 +109,7 @@ func (r *Service) Close() error {
 	return nil
 }
 
-//New creates gateway Service. It is important to call Service.Close before Service got Garbage collected.
+// New creates gateway Service. It is important to call Service.Close before Service got Garbage collected.
 func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, authorizer Authorizer, registry *config.Registry, metrics *gmetric.Service) (*Service, error) {
 	start := time.Now()
 	if err := aConfig.Init(); err != nil {
@@ -134,22 +134,22 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 		fs:                 fs,
 		pluginManager:      manager.New(pbuild.NewSequenceChangeNumber(env.BuildTime)),
 		dataResourcesIndex: map[string]*view.Resource{},
-		routeResourceTracker: NewNotifier(
+		routeTracker: NewNotifier(
 			aConfig.RouteURL,
 			fs,
 			syncTime,
 		),
-		dataResourceTracker: NewNotifier(
+		dependencyTracker: NewNotifier(
 			aConfig.DependencyURL,
 			fs,
 			syncTime,
 		),
-		pluginResourceTracker: NewNotifier(
+		pluginTracker: NewNotifier(
 			aConfig.PluginsURL,
 			fs,
 			syncTime,
 		),
-		assetsResourceTracker: NewNotifier(
+		assetsTracker: NewNotifier(
 			aConfig.AssetsURL,
 			fs,
 			syncTime,
@@ -504,27 +504,25 @@ func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*R
 	changes := NewResourcesChange()
 	errors := shared.NewErrors(0)
 
-	err := r.dataResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
+	err := r.dependencyTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
 		changes.OnChange(operation, URL)
 	})
 
 	if err != nil {
-		errors.Append(fmt.Errorf("[ERROR] failed to load resources: %v", err))
+		errors.Append(fmt.Errorf("[ERROR] failed to dependency: %v", err))
 	}
 
-	plugErr := r.pluginResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
+	plugErr := r.pluginTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
 		if path.Ext(URL) != ".pinf" {
 			return
 		}
-
 		changes.OnChange(operation, URL)
 	})
 
-	err = r.assetsResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
+	err = r.assetsTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
 		if path.Ext(URL) != ".rt" {
 			return
 		}
-
 		changes.OnChange(operation, URL)
 	})
 
@@ -546,7 +544,7 @@ func (r *Service) detectRoutersChanges(ctx context.Context, fs afs.Service) (map
 	var deleted []string
 	var metaUpdated []string
 	var updatedSQLs []string
-	err := r.routeResourceTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
+	err := r.routeTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
 		if strings.Contains(URL, ".meta/") {
 			metaUpdated = append(metaUpdated, URL[strings.LastIndexByte(URL, '/')+1:])
 			return

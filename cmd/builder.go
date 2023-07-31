@@ -1341,15 +1341,6 @@ func (s *Builder) buildViewParams(builder *routeBuilder) ([]string, error) {
 			}
 		}
 
-		for _, param := range paramViewConfig.params {
-			for _, qualifier := range param.Qualifiers {
-				aView.Qualifiers = append(aView.Qualifiers, &view.Qualifier{
-					Value:  qualifier.Value,
-					Column: qualifier.Column,
-				})
-			}
-		}
-
 		paramName := aView.Name
 		aParam := childViewConfig.unexpandedTable.ViewConfig.DataViewParameter
 

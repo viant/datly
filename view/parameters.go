@@ -844,11 +844,11 @@ func (p NamedParameters) Merge(with NamedParameters) {
 }
 
 // Lookup returns Parameter with given name
-func (p NamedParameters) Lookup(paramName string) (*Parameter, error) {
-	if param, ok := p[paramName]; ok {
+func (p NamedParameters) Lookup(name string) (*Parameter, error) {
+	if param, ok := p[name]; ok {
 		return param, nil
 	}
-	return nil, fmt.Errorf("not found parameter %v", paramName)
+	return nil, fmt.Errorf("not found parameter %v", name)
 }
 
 // Register registers parameter

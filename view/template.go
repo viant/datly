@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/parameter"
+	"github.com/viant/structology"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty"
 	parameter2 "github.com/viant/xdatly/handler/parameter"
@@ -24,14 +25,17 @@ var boolType = reflect.TypeOf(true)
 
 type (
 	Template struct {
-		Source         string        `json:",omitempty" yaml:"source,omitempty"`
-		SourceURL      string        `json:",omitempty" yaml:"sourceURL,omitempty"`
-		Schema         *Schema       `json:",omitempty" yaml:"schema,omitempty"`
+		Source    string  `json:",omitempty" yaml:"source,omitempty"`
+		SourceURL string  `json:",omitempty" yaml:"sourceURL,omitempty"`
+		Schema    *Schema `json:",omitempty" yaml:"schema,omitempty"`
+		stateType *structology.StateType
+
 		PresenceSchema *Schema       `json:",omitempty" yaml:"presenceSchema,omitempty"`
 		Parameters     []*Parameter  `json:",omitempty" yaml:"parameters,omitempty"`
 		Meta           *TemplateMeta `json:",omitempty" yaml:",omitempty"`
 
-		sqlEvaluator     *expand.Evaluator
+		sqlEvaluator *expand.Evaluator
+
 		accessors        *types.Accessors
 		_fields          []reflect.StructField
 		_fieldIndex      map[string]int
@@ -190,37 +194,6 @@ func buildType(parameters []*Parameter, paramType reflect.Type, fields ...reflec
 
 func BuildPresenceType(parameters []*Parameter) (reflect.Type, error) {
 	return buildType(parameters, xreflect.BoolType)
-}
-
-func (t *Template) addField(name string, rType reflect.Type) error {
-	_, ok := t._fieldIndex[name]
-	if ok {
-		return fmt.Errorf("_field with %v name already exists", name)
-	}
-
-	field, err := TemplateField(name, rType)
-	if err != nil {
-		return err
-	}
-
-	t._fieldIndex[name] = len(t._fields)
-	t._fields = append(t._fields, field)
-
-	return nil
-}
-
-func TemplateField(name string, rType reflect.Type) (reflect.StructField, error) {
-	if len(name) == 0 {
-		return reflect.StructField{}, fmt.Errorf("template field name can't be empty")
-	}
-
-	pkgPath := ""
-	if name[0] < 'A' || name[0] > 'Z' {
-		pkgPath = "github.com/viant/datly/router"
-	}
-
-	field := reflect.StructField{Name: name, Type: rType, PkgPath: pkgPath}
-	return field, nil
 }
 
 func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Resource) error {

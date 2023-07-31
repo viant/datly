@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	sjwt "github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
@@ -52,12 +53,12 @@ type (
 	}
 )
 
-//Read reads data
+// Read reads data
 func (s *Service) Read(ctx context.Context, viewId string, dest interface{}, option ...reader.Option) error {
 	return s.reader.ReadInto(ctx, viewId, dest, option...)
 }
 
-//Exec executes
+// Exec executes
 func (s *Service) Exec(ctx context.Context, viewId string, options ...executor.Option) error {
 	execView, err := s.reader.Resource.View(viewId)
 	if err != nil {
@@ -73,7 +74,7 @@ func (s *Service) VerifyClaims(ctx context.Context, tokenString string) (*sjwt.C
 	return s.jwtVerifier.VerifyClaims(ctx, tokenString)
 }
 
-//AddViews adds view
+// AddViews adds view
 func (s *Service) AddViews(views ...*view.View) error {
 	if err := s.ensureNotInitialised(); err != nil {
 		return err
@@ -82,12 +83,12 @@ func (s *Service) AddViews(views ...*view.View) error {
 	return nil
 }
 
-//View returns registered view
+// View returns registered view
 func (s *Service) View(name string) (*view.View, error) {
 	return s.reader.Resource.View(name)
 }
 
-//Connector returns registered connector or default connector
+// Connector returns registered connector or default connector
 func (s *Service) Connector(name string) (*view.Connector, error) {
 	if name == "" && s.connector != nil {
 		return s.connector, nil
@@ -103,8 +104,8 @@ func (s *Service) MergeResource(resource *view.Resource, types *xreflect.Types) 
 	return nil
 }
 
-//AddParameter add global parameters
-func (s *Service) AddParameter(parameters ...*view.Parameter) error {
+// AddParameter add global parameters
+func (s *Service) AddParameter(parameters ...*state.Parameter) error {
 	if err := s.ensureNotInitialised(); err != nil {
 		return err
 	}
@@ -112,7 +113,7 @@ func (s *Service) AddParameter(parameters ...*view.Parameter) error {
 	return nil
 }
 
-//AddConnectors adds connectors
+// AddConnectors adds connectors
 func (s *Service) AddConnectors(connectors ...*view.Connector) error {
 	if err := s.ensureNotInitialised(); err != nil {
 		return err
@@ -121,7 +122,7 @@ func (s *Service) AddConnectors(connectors ...*view.Connector) error {
 	return nil
 }
 
-//AddConnector adds connector
+// AddConnector adds connector
 func (s *Service) AddConnector(name, driver, dsn string, opts ...view.ConnectorOption) (*view.Connector, error) {
 	connector := view.NewConnector(name, driver, dsn, opts...)
 	err := s.AddConnectors(connector)
@@ -142,7 +143,7 @@ func (s *Service) ensureInitialised() error {
 	return nil
 }
 
-//Init initialises service
+// Init initialises service
 func (s *Service) Init(ctx context.Context, options ...interface{}) error {
 	if !atomic.CompareAndSwapInt32(&s.initialized, 0, 1) {
 		return fmt.Errorf("already initialised")
@@ -173,7 +174,7 @@ func (s *Service) Routes() (*router.Resource, error) {
 	return s.routerResource, nil
 }
 
-//NewHttpRequest creates http request with auth header
+// NewHttpRequest creates http request with auth header
 func (s *Service) NewHttpRequest(method, URL string, jwtClaim *sjwt.Claims, body []byte) (*http.Request, error) {
 	reqURL, err := surl.Parse(URL)
 	if err != nil {
@@ -261,7 +262,7 @@ func (s *Service) loadDependencies(ctx context.Context, datlyRootURL string, typ
 	return dependencies, nil
 }
 
-//New creates a datly service
+// New creates a datly service
 func New(cfg *Config) *Service {
 	ret := &Service{
 		config:    cfg,
@@ -289,7 +290,7 @@ func New(cfg *Config) *Service {
 	return ret
 }
 
-//NewConfig creates default config
+// NewConfig creates default config
 func NewConfig() *Config {
 	return &Config{
 		JWTSigner:    mock.HmacJwtSigner(),
@@ -297,7 +298,7 @@ func NewConfig() *Config {
 	}
 }
 
-//WithExecHttpRequest create http based parameters set execution option
+// WithExecHttpRequest create http based parameters set execution option
 func WithExecHttpRequest(ctx context.Context, route *router.Route, request *http.Request) executor.Option {
 	return func(session *executor.Session) error {
 		selectors := session.Selectors()
@@ -309,7 +310,7 @@ func WithExecHttpRequest(ctx context.Context, route *router.Route, request *http
 	}
 }
 
-//WithReadHttpRequest create http based parameters set execution option
+// WithReadHttpRequest create http based parameters set execution option
 func WithReadHttpRequest(ctx context.Context, route *router.Route, request *http.Request) reader.Option {
 	return func(session *reader.Session, view *view.View) error {
 		selectors := session.Selectors
