@@ -211,7 +211,7 @@ func (r *Resource) InitRule(dSQL *string, ctx context.Context, fs afs.Service) e
 	}
 	r.Statements = parser.NewStatements(*dSQL)
 	r.RawSQL = *dSQL
-	return r.initRule(ctx, fs)
+	return r.initRule(ctx, fs, dSQL)
 }
 
 func (r *Resource) extractRuleSetting(dSQL *string) error {

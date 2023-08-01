@@ -2,7 +2,6 @@ package translator
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
@@ -11,7 +10,7 @@ import (
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
-	"gopkg.in/yaml.v3"
+	"github.com/viant/toolbox/data"
 	"os"
 	"path"
 	"path/filepath"
@@ -25,11 +24,14 @@ type (
 		orderNamespaces []string
 		Root            string
 		router.Route
-		Async        *AsyncConfig              `json:",omitempty"`
-		Cache        *view.Cache               `json:",omitempty"`
-		CSV          *router.CSVConfig         `json:",omitempty"`
-		Const        map[string]interface{}    `json:",omitempty"`
-		ConstURL     string                    `json:",omitempty"`
+		Async    *AsyncConfig           `json:",omitempty"`
+		Cache    *view.Cache            `json:",omitempty"`
+		CSV      *router.CSVConfig      `json:",omitempty"`
+		Const    map[string]interface{} `json:",omitempty"`
+		ConstURL string                 `json:",omitempty"`
+		EmbedURL string                 `json:",omitempty"`
+		Embeds   data.Map               `json:",omitempty"`
+
 		Field        string                    `json:",omitempty"`
 		RequestBody  *BodyConfig               `json:",omitempty"`
 		TypeSrc      *parser.TypeImport        `json:",omitempty"`
@@ -164,35 +166,38 @@ func (r *Rule) GetField() string {
 	return r.Field
 }
 
-func (r *Resource) initRule(ctx context.Context, fs afs.Service) error {
+func (r *Resource) initRule(ctx context.Context, fs afs.Service, dSQL *string) error {
 	rule := r.Rule
 	rule.Index = router.Index{Namespace: map[string]string{}}
 	rule.applyDefaults()
-	if err := r.loadConstants(ctx, fs, rule); err != nil {
+	if err := r.loadData(ctx, fs, rule.EmbedURL, &rule.Embeds); err != nil {
+		r.messages.AddWarning(r.rule.RuleName(), "embeds", fmt.Sprintf("failed to load embeds : %v %w", rule.EmbedURL, err))
+	}
+	if len(rule.Embeds) > 0 {
+		*dSQL = rule.Embeds.ExpandAsText(*dSQL)
+	}
+	if err := r.loadData(ctx, fs, rule.ConstURL, &rule.Const); err != nil {
 		r.messages.AddWarning(r.rule.RuleName(), "const", fmt.Sprintf("failed to load constant : %v %w", rule.ConstURL, err))
 	}
 	r.State.AppendConstants(rule.Const)
 	return nil
 }
 
-func (r *Resource) loadConstants(ctx context.Context, fs afs.Service, rule *Rule) error {
-	constFileURL, err := r.getConstantURL(ctx, rule, fs)
-	if err != nil || constFileURL == "" {
+func (r *Resource) loadData(ctx context.Context, fs afs.Service, URL string, dest interface{}) error {
+	if URL == "" {
+		return nil
+	}
+
+	dataURL, err := r.assetURL(ctx, URL, fs)
+	if err != nil || dataURL == "" {
 		return err
 	}
-	data, err := fs.DownloadWithURL(ctx, constFileURL)
-	ext := path.Ext(constFileURL)
-	switch ext {
-	case ".yaml":
-		if err = yaml.Unmarshal(data, &rule.Const); err != nil {
-			return err
-		}
-	default:
-		if err = json.Unmarshal(data, &rule.Const); err != nil {
-			return err
-		}
+	data, err := fs.DownloadWithURL(ctx, dataURL)
+	if err != nil {
+		return err
 	}
-	return nil
+
+	return shared.UnmarshalWithExt(data, dest, path.Ext(dataURL))
 }
 
 func (r *Resource) getConstantURL(ctx context.Context, rule *Rule, fs afs.Service) (string, error) {
