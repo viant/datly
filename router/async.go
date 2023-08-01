@@ -98,7 +98,7 @@ func (a *Async) initAccessor(resource *view.Resource) error {
 		paramName = a.PrincipalSubject
 	}
 
-	param, err := resource.ParamByName(paramName)
+	param, err := resource.LookupParameter(paramName)
 	if err != nil {
 		return err
 	}

@@ -108,7 +108,8 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 		return err
 	}
 
-	return m.Schema.Init(resource, newCase, columns)
+	aResource := &resourcelet{Resource: resource}
+	return m.Schema.Init(aResource, newCase, columns)
 }
 
 func (m *TemplateMeta) getColumns(ctx context.Context, resource *Resource, owner *Template) ([]*Column, error) {
@@ -148,7 +149,7 @@ func (m *TemplateMeta) getColumns(ctx context.Context, resource *Resource, owner
 }
 
 func (m *TemplateMeta) newMetaColumnsCacheKey() string {
-	return "view: " + m._owner._view.Name + "template_meta:" + m.Name
+	return "View: " + m._owner._view.Name + "template_meta:" + m.Name
 }
 
 // Deprecated: oldMetaColumnsCacheKey is deprecated.

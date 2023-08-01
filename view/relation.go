@@ -167,7 +167,7 @@ func (r *Relation) ensureColumnAliasIfNeeded() error {
 	return nil
 }
 
-// ViewReference creates a view reference
+// ViewReference creates a View reference
 func ViewReference(name, ref string, options ...Option) *View {
 	viewRef := &View{
 		Name:      name,
@@ -242,7 +242,7 @@ func (r RelationsSlice) PopulateWithVisitor() []*Relation {
 	return result
 }
 
-// NwReferenceView creates a reference view
+// NwReferenceView creates a reference View
 func NwReferenceView(field, column string, view *View) *ReferenceView {
 	return &ReferenceView{View: *view, Column: column, Field: field}
 }

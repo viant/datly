@@ -15,9 +15,9 @@ import (
 // VisitorFn represents visitor function
 type VisitorFn func(value interface{}) error
 
-// Collector collects and build result from view fetched from Database
+// Collector collects and build result from View fetched from Database
 // If View or any of the View.With MatchStrategy support Parallel fetching, it is important to call MergeData
-// when all needed view was fetched
+// when all needed View was fetched
 type Collector struct {
 	mutex  sync.Mutex
 	parent *Collector
@@ -460,13 +460,13 @@ func (r *Collector) Dest() interface{} {
 	return r.dest
 }
 
-// SupportsParallel if Collector supports parallelism, it means that his Relations can fetch view in the same time
+// SupportsParallel if Collector supports parallelism, it means that his Relations can fetch View in the same time
 // Later on it will be merged with the parent Collector
 func (r *Collector) SupportsParallel() bool {
 	return r.supportParallel
 }
 
-// MergeData merges view with Collectors produced via Relations
+// MergeData merges View with Collectors produced via Relations
 // It is sufficient to call it on the most Parent Collector to produce result
 func (r *Collector) MergeData() {
 	for i := range r.relations {

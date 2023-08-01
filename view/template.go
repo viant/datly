@@ -100,11 +100,7 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 		return err
 	}
 
-	t._parametersIndex, err = Parameters(t.Parameters).Index()
-	if err != nil {
-		return err
-	}
-
+	t._parametersIndex = Parameters(t.Parameters).Index()
 	sort.Sort(Parameters(t.Parameters))
 	return t.initMetaIfNeeded(ctx, resource)
 }
@@ -210,7 +206,8 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 			return err
 		}
 
-		if err := param.Init(ctx, t._view, resource, t.Schema.Type()); err != nil {
+		aResource := &resourcelet{View: t._view, Resource: resource}
+		if err := param.Init(ctx, aResource); err != nil {
 			return err
 		}
 	}
@@ -275,6 +272,7 @@ func (t *Template) EvaluateStateWithSession(externalParams interface{}, presence
 	if dataUnit != nil {
 		ops = append(ops, expand.WithDataUnit(dataUnit))
 	}
+
 	return Evaluate(
 		t.sqlEvaluator,
 		ops...,
@@ -323,7 +321,8 @@ func AsViewParam(aView *View, aSelector *Selector, batchData *BatchData, options
 }
 
 func (t *Template) inheritAndInitParam(ctx context.Context, resource *Resource, param *Parameter) error {
-	return param.Init(ctx, t._view, resource, nil)
+	aResource := &resourcelet{View: t._view, Resource: resource}
+	return param.Init(ctx, aResource)
 }
 
 func (t *Template) initSqlEvaluator(resource *Resource) error {

@@ -12,6 +12,7 @@ import (
 	_ "github.com/viant/bigquery"
 	"github.com/viant/datly/cmd"
 	"github.com/viant/datly/cmd/env"
+	"github.com/viant/datly/template/expand"
 	_ "github.com/viant/dyndb"
 	_ "github.com/viant/scy/kms/blowfish"
 	"github.com/viant/sqlx/io/insert"
@@ -36,10 +37,11 @@ var (
 
 func init() {
 
-	os.Setenv("DATLY_NOPANIC", "0")
+	os.Setenv("DATLY_NOPANIC", "true")
 	read.ShowSQL(true)
 	update.ShowSQL(true)
 	insert.ShowSQL(true)
+	expand.SetPanicOnError(false)
 
 	if BuildTimeInS != "" {
 		seconds, err := strconv.Atoi(BuildTimeInS)
@@ -63,8 +65,11 @@ func main() {
 	os.Setenv("DATLY_NOPANIC", "0")
 	baseDir := toolbox.CallerDirectory(3)
 	configURL := filepath.Join(baseDir, "../local/autogen/Datly/config.json")
-	os.Args = []string{"",
-		"-c=" + configURL}
+	os.Args = []string{
+		"",
+		"-c=" + configURL,
+	}
+
 	fmt.Printf("[INFO] Build time: %v\n", env.BuildTime.String())
 
 	go func() {

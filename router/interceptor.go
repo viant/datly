@@ -93,7 +93,9 @@ func (i *RouteInterceptor) init(URL string) error {
 	i._url = URL
 	i.contextType = i.newContext(InterceptorContext{})
 
-	evaluator, err := expand.NewEvaluator(i.Template, expand.WithTypeLookup(i.lookupType), expand.WithCustomContexts(i.contextType))
+	evaluator, err := expand.NewEvaluator(i.Template, expand.WithTypeLookup(i.lookupType),
+		expand.WithPanicOnError(true),
+		expand.WithCustomContexts(i.contextType))
 	if err != nil {
 		return err
 	}

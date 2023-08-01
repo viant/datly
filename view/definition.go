@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const pkgPath = "github.com/viant/datly/view"
+const pkgPath = "github.com/viant/datly/View"
 
 type (
 	TypeDefinition struct {

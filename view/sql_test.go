@@ -58,7 +58,7 @@ GROUP BY 1`,
 	}
 
 	for _ = range testcases {
-		//sql, err := DetectColumns(testcase.view.Source(), testcase.view)
+		//sql, err := DetectColumns(testcase.View.Source(), testcase.View)
 		//if !assert.Nil(t, err, testcase.description) {
 		//	continue
 		//}

@@ -27,6 +27,7 @@ type (
 	}
 
 	paramStateBuilder struct {
+		resource        *view.Resource
 		caser           format.Case
 		dateFormat      string
 		requestMetadata *RequestMetadata
@@ -133,7 +134,7 @@ func BuildRouteSelectors(ctx context.Context, selectors *view.Selectors, route *
 			return err
 		}
 	}
-	return CreateSelectors(ctx, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, view.NamedParameters{}, route.Index._viewDetails...)
+	return CreateSelectors(ctx, route._resource, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, view.NamedParameters{}, route.Index._viewDetails...)
 }
 
 func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, requestParams *RequestParams, views ...*ViewDetails) (*view.Selectors, *RequestParams, error) {
@@ -148,7 +149,7 @@ func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.R
 	}
 
 	selectors := view.NewSelectors()
-	if err := CreateSelectors(ctx, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, nil, views...); err != nil {
+	if err := CreateSelectors(ctx, route._resource, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, nil, views...); err != nil {
 		return nil, nil, err
 	}
 	return selectors, requestParams, nil
@@ -164,13 +165,14 @@ func NewRequestMetadata(route *Route) *RequestMetadata {
 	return requestMetadata
 }
 
-func CreateSelectors(ctx context.Context, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, selectors *view.Selectors, paramsIndex view.NamedParameters, views ...*ViewDetails) error {
-	sb := newParamStateBuilder(inputFormat, dateFormat, requestMetadata, requestParams, newParamsValueCache(), paramsIndex)
+func CreateSelectors(ctx context.Context, resource *view.Resource, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, selectors *view.Selectors, paramsIndex view.NamedParameters, views ...*ViewDetails) error {
+	sb := newParamStateBuilder(resource, inputFormat, dateFormat, requestMetadata, requestParams, newParamsValueCache(), paramsIndex)
 	return sb.Build(ctx, views, selectors)
 }
 
-func newParamStateBuilder(inputFormat format.Case, dateFormat string, requestMetadata *RequestMetadata, requestParams *RequestParams, cache *paramsValueCache, paramsIndex view.NamedParameters) *paramStateBuilder {
+func newParamStateBuilder(resource *view.Resource, inputFormat format.Case, dateFormat string, requestMetadata *RequestMetadata, requestParams *RequestParams, cache *paramsValueCache, paramsIndex view.NamedParameters) *paramStateBuilder {
 	sb := &paramStateBuilder{
+		resource:        resource,
 		caser:           inputFormat,
 		dateFormat:      dateFormat,
 		requestMetadata: requestMetadata,
@@ -553,7 +555,8 @@ func requiredParamErr(param *view.Parameter) error {
 }
 
 func (b *paramStateBuilder) viewParamValue(ctx context.Context, param *view.Parameter, parentView *view.View) (interface{}, error) {
-	aView := param.View()
+
+	aView, _ := b.resource.View(param.In.Name)
 
 	sliceType := aView.Schema.SliceType()
 	slice := aView.Schema.Slice()
@@ -579,7 +582,7 @@ func (b *paramStateBuilder) viewParamValue(ctx context.Context, param *view.Para
 	}
 	selectors := view.NewSelectors()
 
-	if err := CreateSelectors(ctx, b.dateFormat, b.caser, newRequestMetadata, b.params, selectors, b.viewParams, &ViewDetails{View: aView}); err != nil {
+	if err := CreateSelectors(ctx, nil, b.dateFormat, b.caser, newRequestMetadata, b.params, selectors, b.viewParams, &ViewDetails{View: aView}); err != nil {
 		return nil, err
 	}
 

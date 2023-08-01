@@ -16,7 +16,7 @@ import (
 )
 
 type (
-	//Parameter describes parameters used by the Criteria to filter the view.
+	//Parameter describes parameters used by the Criteria to filter the View.
 	Parameter struct {
 		shared.Reference
 		Fields       Parameters
@@ -45,8 +45,6 @@ type (
 		_valueAccessor     *types.Accessor
 		_presenceAccessor  *types.Accessor
 		_initialized       bool
-		_view              *View
-		_owner             *View
 		_literalValue      interface{}
 		_dependsOn         *Parameter
 		_state             *structology.StateType
@@ -82,18 +80,18 @@ func (p *Parameter) OutputSchema() *Schema {
 	return p.Schema
 }
 
-func (v *Codec) Init(resource *Resource, view *View, ownerType reflect.Type) error {
+func (v *Codec) Init(resource Resourcelet, inputType reflect.Type) error {
 	if v._initialized {
 		return nil
 	}
 
 	v._initialized = true
 
-	if err := v.inheritCodecIfNeeded(resource, ownerType, view); err != nil {
+	if err := v.inheritCodecIfNeeded(resource, inputType); err != nil {
 		return err
 	}
 
-	v.ensureSchema(ownerType)
+	v.ensureSchema(inputType)
 	if v.SourceURL != "" && v.Source == "" {
 		data, err := resource.LoadText(context.Background(), v.SourceURL)
 		if err != nil {
@@ -106,15 +104,15 @@ func (v *Codec) Init(resource *Resource, view *View, ownerType reflect.Type) err
 		return err
 	}
 
-	return v.initFnIfNeeded(resource, view)
+	return v.initFnIfNeeded(resource)
 }
 
-func (v *Codec) initFnIfNeeded(resource *Resource, view *View) error {
+func (v *Codec) initFnIfNeeded(resource Resourcelet) error {
 	if v._codecFn != nil {
 		return nil
 	}
 
-	fn, err := v.extractCodecFn(resource, v.Schema.Type(), view)
+	fn, err := v.extractCodecFn(resource)
 	if err != nil {
 		return err
 	}
@@ -123,33 +121,33 @@ func (v *Codec) initFnIfNeeded(resource *Resource, view *View) error {
 	return nil
 }
 
-func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type, view *View) error {
+func (v *Codec) inheritCodecIfNeeded(resource Resourcelet, inputType reflect.Type) error {
 	if v.Ref == "" {
 		return nil
 	}
 	if err := v.initSchemaIfNeeded(resource); err != nil {
 		return err
 	}
-	visitor, ok := resource.CodecByName(v.Ref)
-	if !ok {
+	visitor, err := resource.NamedCodecs().LookupCodec(v.Ref)
+	if err != nil {
 		return fmt.Errorf("not found codec with name %v", v.Ref)
 	}
 
 	factory, ok := visitor.(config.CodecFactory)
 	if ok {
 		opts := []interface{}{resource.LookupType()}
-		if view != nil {
-			opts = append(opts, view.IndexedColumns())
+		if columns := resource.IndexedColumns(); len(columns) > 0 {
+			opts = append(opts, columns)
 		}
 
-		aCodec, err := factory.New(&v.CodecConfig, paramType, opts...)
+		aCodec, err := factory.New(&v.CodecConfig, inputType, opts...)
 		if err != nil {
 			return err
 		}
 
 		v._codecFn = aCodec.Value
 		if typeProvider, ok := aCodec.(config.Typer); ok {
-			rType, err := typeProvider.ResultType(paramType)
+			rType, err := typeProvider.ResultType(inputType)
 			if err != nil {
 				return err
 			}
@@ -165,7 +163,7 @@ func (v *Codec) inheritCodecIfNeeded(resource *Resource, paramType reflect.Type,
 		return fmt.Errorf("expected visitor to be type of %T but was %T", asCodec, visitor)
 	}
 
-	return v.inherit(asCodec, paramType)
+	return v.inherit(asCodec, inputType)
 }
 
 func (v *Codec) ensureSchema(paramType reflect.Type) {
@@ -175,8 +173,8 @@ func (v *Codec) ensureSchema(paramType reflect.Type) {
 	}
 }
 
-func (v *Codec) extractCodecFn(resource *Resource, paramType reflect.Type, view *View) (config.CodecFn, error) {
-	vVisitor, err := resource._visitors.Lookup(v.Name)
+func (v *Codec) extractCodecFn(resource Resourcelet) (config.CodecFn, error) {
+	vVisitor, err := resource.NamedCodecs().Lookup(v.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +206,7 @@ func (v *Codec) inherit(asCodec config.CodecDef, paramType reflect.Type) error {
 	return nil
 }
 
-func (v *Codec) initSchemaIfNeeded(resource *Resource) error {
+func (v *Codec) initSchemaIfNeeded(resource Resourcelet) error {
 	if v.Schema == nil || v.Schema.Type() != nil {
 		return nil
 	}
@@ -216,7 +214,7 @@ func (v *Codec) initSchemaIfNeeded(resource *Resource) error {
 }
 
 // Init initializes Parameter
-func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, structType reflect.Type) error {
+func (p *Parameter) Init(ctx context.Context, resource Resourcelet) error {
 	if p._initialized == true {
 		return nil
 	}
@@ -225,14 +223,11 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 		p.Output = p.Codec
 		p.Codec = nil
 	}
-
-	p._owner = view
-
-	if err := p.inheritParamIfNeeded(ctx, view, resource, structType); err != nil {
+	if err := p.inheritParamIfNeeded(ctx, resource); err != nil {
 		return err
 	}
 
-	if err := p.initGroupParams(ctx, view, resource, structType); err != nil {
+	if err := p.initGroupParams(ctx, resource); err != nil {
 		return err
 	}
 
@@ -257,62 +252,57 @@ func (p *Parameter) Init(ctx context.Context, view *View, resource *Resource, st
 	}
 
 	if p.In.Kind == KindParam {
-		if err := p.initParamBasedParameter(ctx, view, resource); err != nil {
+		if err := p.initParamBasedParameter(ctx, resource); err != nil {
 			return err
 		}
 	}
 
-	if err := p.initSchema(resource, structType); err != nil {
+	if err := p.initSchema(resource); err != nil {
 		return err
 	}
 
-	if err := p.initCodec(resource, view); err != nil {
+	if err := p.initCodec(resource); err != nil {
 		return err
 	}
 
 	return p.Validate()
 }
 
-func (p *Parameter) initDataViewParameter(ctx context.Context, resource *Resource) error {
-	aView, err := resource.View(p.In.Name)
+func (p *Parameter) initDataViewParameter(ctx context.Context, resource Resourcelet) error {
+	if p.Schema != nil && p.Schema.Type() != nil {
+		return nil
+	}
+	schema, err := resource.ViewSchema(ctx, p.In.Name)
 	if err != nil {
-		return fmt.Errorf("failed to lookup parameter %v view %w", p.Name, err)
+		return fmt.Errorf("failed to init view parameter %v, %w", p.Name, err)
 	}
 
-	if err = aView.Init(ctx, resource); err != nil {
-		return err
+	cardinality := Cardinality("")
+	if p.Schema != nil {
+		cardinality = p.Schema.Cardinality
 	}
+	p.Schema = schema.copy()
 
-	p._view = aView
-	if p.Schema == nil {
-		p.Schema = NewSchema(aView.Schema.SliceType())
-	} else {
-		p.Schema.DataType = aView.Schema.DataType
-		p.Schema.Name = aView.Schema.Name
+	fmt.Printf("view schema: %v\n", p.Schema.Cardinality)
+	if cardinality != "" {
+		p.Schema.Cardinality = cardinality
 
-		if FirstNotEmpty(p.Schema.DataType, p.Schema.Name) == "" {
-			elemType := aView.Schema.Type()
-			if elemType.Kind() == reflect.Slice {
-				elemType = elemType.Elem()
-			}
-
-			p.Schema.SetType(elemType)
-		}
 	}
+	p.Schema.SetType(schema.Type())
 	return nil
 }
 
-func (p *Parameter) inheritParamIfNeeded(ctx context.Context, view *View, resource *Resource, structType reflect.Type) error {
+func (p *Parameter) inheritParamIfNeeded(ctx context.Context, resource Resourcelet) error {
 	if p.Ref == "" {
 		return nil
 	}
 
-	param, err := resource._parameters.Lookup(p.Ref)
+	param, err := resource.LookupParameter(p.Ref)
 	if err != nil {
 		return err
 	}
 
-	if err = param.Init(ctx, view, resource, structType); err != nil {
+	if err = param.Init(ctx, resource); err != nil {
 		return err
 	}
 
@@ -346,10 +336,6 @@ func (p *Parameter) inherit(param *Parameter) {
 		p.Output = param.Output
 	}
 
-	if p._view == nil {
-		p._view = param._view
-	}
-
 	if p.ErrorStatusCode == 0 {
 		p.ErrorStatusCode = param.ErrorStatusCode
 	}
@@ -380,11 +366,6 @@ func (p *Parameter) Validate() error {
 	return nil
 }
 
-// View returns View related with Parameter if Location.Kind is set to data_view
-func (p *Parameter) View() *View {
-	return p._view
-}
-
 // Validate checks if Location is valid
 func (l *Location) Validate() error {
 	if err := l.Kind.Validate(); err != nil {
@@ -402,7 +383,7 @@ func (p *Parameter) IsRequired() bool {
 	return p.Required != nil && *p.Required == true
 }
 
-func (p *Parameter) initSchema(resource *Resource, structType reflect.Type) error {
+func (p *Parameter) initSchema(resource Resourcelet) error {
 	if p.In.Kind == KindGroup {
 		rType, err := BuildTypeWithPresence(p.Group)
 		if err != nil {
@@ -435,10 +416,6 @@ func (p *Parameter) initSchema(resource *Resource, structType reflect.Type) erro
 
 	if p.Schema.Type() != nil {
 		return nil
-	}
-
-	if structType != nil {
-		return p.initSchemaFromType(structType)
 	}
 
 	if p.In.Kind == KindLiteral {
@@ -538,7 +515,6 @@ func (p *Parameter) ConvertAndSetCtx(ctx context.Context, selector *Selector, va
 }
 
 func (p *Parameter) convertAndSet(ctx context.Context, selector *Selector, value interface{}, converted bool) (interface{}, error) {
-	p.ensureSelectorParamValue(selector)
 	return p.setOnState(ctx, &selector.Parameters, value, converted, selector)
 }
 
@@ -624,12 +600,12 @@ func (p *Parameter) SetPresenceField(structType reflect.Type) error {
 	return nil
 }
 
-func (p *Parameter) initCodec(resource *Resource, view *View) error {
+func (p *Parameter) initCodec(resource Resourcelet) error {
 	if p.Output == nil {
 		return nil
 	}
 
-	if err := p.Output.Init(resource, view, p.Schema.Type()); err != nil {
+	if err := p.Output.Init(resource, p.Schema.Type()); err != nil {
 		return err
 	}
 
@@ -642,10 +618,6 @@ func (p *Parameter) ActualParamType() reflect.Type {
 	}
 
 	return p.Schema.Type()
-}
-
-func (p *Parameter) ensureSelectorParamValue(selector *Selector) {
-	selector.Parameters.Init(p._owner)
 }
 
 func (p *Parameter) UpdateValue(params interface{}, presenceMap interface{}) error {
@@ -664,16 +636,15 @@ func (p *Parameter) UpdateValue(params interface{}, presenceMap interface{}) err
 	return nil
 }
 
-func (p *Parameter) initParamBasedParameter(ctx context.Context, view *View, resource *Resource) error {
-	param, err := resource.ParamByName(p.In.Name)
+func (p *Parameter) initParamBasedParameter(ctx context.Context, resource Resourcelet) error {
+	param, err := resource.LookupParameter(p.In.Name)
 	if err != nil {
 		return err
 	}
 
-	if err = param.Init(ctx, view, resource, nil); err != nil {
+	if err = param.Init(ctx, resource); err != nil {
 		return err
 	}
-
 	p.Schema = param.Schema.copy()
 	p._dependsOn = param
 	p._isStateBasedParam = param._isStateBasedParam || param.In.Kind == KindState
@@ -726,19 +697,9 @@ func (p *Parameter) accessHas(has interface{}, ptr unsafe.Pointer) (bool, error)
 	return asBool && ok, nil
 }
 
-func (p *Parameter) initGroupParams(ctx context.Context, view *View, resource *Resource, structType reflect.Type) error {
+func (p *Parameter) initGroupParams(ctx context.Context, resource Resourcelet) error {
 	for _, parameter := range p.Group {
-		var pType reflect.Type
-		if structType != nil {
-			field := xunsafe.FieldByName(structType, parameter.Name)
-			if field == nil {
-				return fmt.Errorf("not found field %v at %v", parameter.Name, structType.String())
-			}
-
-			pType = field.Type
-		}
-
-		if err := parameter.Init(ctx, view, resource, pType); err != nil {
+		if err := parameter.Init(ctx, resource); err != nil {
 			return err
 		}
 	}
@@ -811,15 +772,15 @@ func (p Parameters) Lookup(name string) *Parameter {
 }
 
 // Index indexes parameters by Parameter.Name
-func (p Parameters) Index() (NamedParameters, error) {
+func (p Parameters) Index() NamedParameters {
 	result := NamedParameters(make(map[string]*Parameter))
-	for parameterIndex := range p {
-		if err := result.Register(p[parameterIndex]); err != nil {
-			return nil, err
+	for i, parameter := range p {
+		if _, ok := result[parameter.Name]; ok {
+			continue
 		}
+		result[parameter.Name] = p[i]
 	}
-
-	return result, nil
+	return result
 }
 
 // Filter filters Parameters with given Kind and creates Template

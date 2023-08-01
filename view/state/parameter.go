@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/shared"
 	"github.com/viant/structology"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
 )
@@ -38,6 +39,8 @@ type (
 
 	LookupParameter func(name string) (*Parameter, error)
 
+	LookupSchema func(ctx context.Context, schema string) (*Schema, error)
+
 	Codec struct {
 		shared.Reference
 		Name      string           `json:",omitempty"`
@@ -62,7 +65,7 @@ func (v *Parameter) OutputSchema() *Schema {
 }
 
 // Init initializes Parameter
-func (p *Parameter) Init(ctx context.Context, lookup LookupParameter) error {
+func (p *Parameter) Init(ctx context.Context, parameters LookupParameter, viewSchema LookupSchema, typeLookup xreflect.LookupType) error {
 	if p._initialized == true {
 		return nil
 	}
@@ -72,7 +75,7 @@ func (p *Parameter) Init(ctx context.Context, lookup LookupParameter) error {
 		return fmt.Errorf("parameter %v In can't be empty", p.Name)
 	}
 	if p.Ref != "" {
-		ref, err := lookup(p.Ref)
+		ref, err := parameters(p.Ref)
 		if err != nil {
 			return fmt.Errorf("invalid parameter ref: %v, %w", p.Ref, err)
 		}

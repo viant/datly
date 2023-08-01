@@ -32,7 +32,7 @@ import (
 	"unsafe"
 )
 
-//TODO: Add to meta response size
+// TODO: Add to meta response size
 type viewHandler func(response http.ResponseWriter, request *http.Request, record *async.Record)
 
 const (

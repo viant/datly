@@ -21,7 +21,7 @@ const (
 var intType = reflect.TypeOf(0)
 var stringType = reflect.TypeOf("")
 
-// Config represent a view config selector
+// Config represent a View config selector
 type (
 	Config struct {
 		//TODO: Should order by be a slice?
@@ -193,8 +193,8 @@ func (c *Config) initParamIfNeeded(ctx context.Context, param *Parameter, resour
 	if param.Name == "" {
 		param.Name = param.Ref
 	}
-
-	if err := param.Init(ctx, view, resource, nil); err != nil {
+	aResource := &resourcelet{View: view, Resource: resource}
+	if err := param.Init(ctx, aResource); err != nil {
 		return err
 	}
 
@@ -239,15 +239,15 @@ func ParamType(name string) reflect.Type {
 func Description(paramName, viewName string) string {
 	switch paramName {
 	case LimitQuery:
-		return fmt.Sprintf("allows to limit %v view data returned from db", viewName)
+		return fmt.Sprintf("allows to limit %v View data returned from db", viewName)
 	case OffsetQuery:
-		return fmt.Sprintf("allows to skip first n  view %v records, it has to be used alongside the limit", viewName)
+		return fmt.Sprintf("allows to skip first n  View %v records, it has to be used alongside the limit", viewName)
 	case CriteriaQuery:
-		return fmt.Sprintf("allows to filter view %v data that matches given criteria", viewName)
+		return fmt.Sprintf("allows to filter View %v data that matches given criteria", viewName)
 	case FieldsQuery:
-		return fmt.Sprintf("allows to control view %v fields present in response", viewName)
+		return fmt.Sprintf("allows to control View %v fields present in response", viewName)
 	case OrderByQuery:
-		return fmt.Sprintf("allows to sort view %v results", viewName)
+		return fmt.Sprintf("allows to sort View %v results", viewName)
 	case PageQuery:
 		return fmt.Sprintf("allows to skip first page * limit values, starting from 1 page. Has precedence over offset")
 	}

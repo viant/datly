@@ -176,9 +176,11 @@ func (m *Method) init(resource *Resource) error {
 		return fmt.Errorf("method name can't be empty")
 	}
 
+	aResource := &resourcelet{Resource: resource}
 	for _, arg := range m.Args {
 		//TODO: Check format
-		if err := arg.Init(resource, format.CaseUpperCamel); err != nil {
+
+		if err := arg.Init(aResource, format.CaseUpperCamel); err != nil {
 			return err
 		}
 	}
@@ -227,7 +229,7 @@ func (v *View) setResource(resource *Resource) {
 	}
 }
 
-// Init initializes View using view provided in Resource.
+// Init initializes View using View provided in Resource.
 // i.e. If View, Connector etc. should inherit from others - it has te bo included in Resource.
 // It is important to call Init for every View because it also initializes due to the optimization reasons.
 func (v *View) Init(ctx context.Context, resource *Resource, opts ...ViewOption) error {
@@ -303,7 +305,7 @@ func (v *View) buildRefViewOptions(tag *Tag) ([]ViewOption, error) {
 	var connector *Connector
 	if tag.RefConnector != "" {
 		if connector, err = v._resource.Connector(tag.RefConnector); err != nil {
-			return nil, fmt.Errorf("%w, ref view '%v' connector: '%v'", err, tag.RefName, tag.RefConnector)
+			return nil, fmt.Errorf("%w, ref View '%v' connector: '%v'", err, tag.RefName, tag.RefConnector)
 		}
 	} else if v.Connector != nil {
 		connector = v.Connector
@@ -329,7 +331,7 @@ func (v *View) initViewRelations(ctx context.Context, relations []*Relation, not
 		v.generateNameIfNeeded(refView, rel)
 		isNotUnique := notUnique[rel.Of.View.Name]
 		if isNotUnique {
-			return fmt.Errorf("not unique view name: %v", rel.Of.View.Name)
+			return fmt.Errorf("not unique View name: %v", rel.Of.View.Name)
 		}
 		notUnique[rel.Of.View.Name] = true
 		for _, transform := range v._transforms {
@@ -411,11 +413,11 @@ func (v *View) initView(ctx context.Context) error {
 	}
 
 	if v.Name == v.Ref && !v.Standalone {
-		return fmt.Errorf("view name and ref cannot be the same")
+		return fmt.Errorf("View name and ref cannot be the same")
 	}
 
 	if v.Name == "" {
-		return fmt.Errorf("view name was empty")
+		return fmt.Errorf("View name was empty")
 	}
 
 	if err = v.ensureConnector(ctx); err != nil {
@@ -635,7 +637,7 @@ func (v *View) ColumnByName(name string) (*Column, bool) {
 	return nil, false
 }
 
-// Source returns database view source. It prioritizes From, Table then View.Name
+// Source returns database View source. It prioritizes From, Table then View.Name
 func (v *View) Source() string {
 	if v.From != "" {
 		if v.From[0] == '(' {
@@ -662,8 +664,8 @@ func (v *View) ensureSchema(resource *Resource) error {
 			v.Schema.SetType(componentType)
 		}
 	}
-
-	return v.Schema.Init(resource, v.Caser, v.Columns, v.With, v.SelfReference, v.Async)
+	aResource := &resourcelet{Resource: resource}
+	return v.Schema.Init(aResource, v.Caser, v.Columns, v.With, v.SelfReference, v.Async)
 }
 
 // Db returns database connection that View was assigned to.
@@ -889,7 +891,7 @@ func (v *View) markColumnsAsFilterable() error {
 	for _, colName := range v.Selector.Constraints.Filterable {
 		column, err := v._columns.Lookup(colName)
 		if err != nil {
-			return fmt.Errorf("invalid view: %v %w", v.Name, err)
+			return fmt.Errorf("invalid View: %v %w", v.Name, err)
 		}
 		column.Filterable = true
 	}
@@ -1184,11 +1186,11 @@ func (v *View) validateSelfRef() error {
 	}
 
 	if v.SelfReference.Holder == "" {
-		return fmt.Errorf("view %v SelfReference Holder can't be empty", v.Name)
+		return fmt.Errorf("View %v SelfReference Holder can't be empty", v.Name)
 	}
 
 	if v.SelfReference.Child == "" {
-		return fmt.Errorf("view %v SelfReference Child can't be empty", v.Name)
+		return fmt.Errorf("View %v SelfReference Child can't be empty", v.Name)
 	}
 
 	if _, err := v._columns.Lookup(v.SelfReference.Child); err != nil {
@@ -1196,7 +1198,7 @@ func (v *View) validateSelfRef() error {
 	}
 
 	if v.SelfReference.Parent == "" {
-		return fmt.Errorf("view %v SelfReference Parent can't be empty", v.Name)
+		return fmt.Errorf("View %v SelfReference Parent can't be empty", v.Name)
 	}
 
 	if _, err := v._columns.Lookup(v.SelfReference.Parent); err != nil {
@@ -1212,7 +1214,7 @@ func (v *View) findSchemaColumn(fieldName string) (*Column, bool) {
 	return lookup, err == nil
 }
 
-// SetParameter sets a view or relation parameter, for relation name has to be prefixed relName:paramName
+// SetParameter sets a View or relation parameter, for relation name has to be prefixed relName:paramName
 func (v *View) SetParameter(name string, selectors *Selectors, value interface{}) error {
 	aView := v
 	if strings.Contains(name, ":") {
@@ -1263,7 +1265,7 @@ func isInRange(aByte int32, lowerBound int32, upperBound int32) bool {
 	return aByte >= lowerBound && aByte <= upperBound
 }
 
-// WithSQL creates SQL FROM view option
+// WithSQL creates SQL FROM View option
 func WithSQL(SQL string) ViewOption {
 	return func(v *View) {
 		v.EnsureTemplate()
@@ -1271,21 +1273,21 @@ func WithSQL(SQL string) ViewOption {
 	}
 }
 
-// WithConnector creates connector view option
+// WithConnector creates connector View option
 func WithConnector(connector *Connector) ViewOption {
 	return func(v *View) {
 		v.Connector = connector
 	}
 }
 
-// WithTemplate creates connector view option
+// WithTemplate creates connector View option
 func WithTemplate(template *Template) ViewOption {
 	return func(v *View) {
 		v.Template = template
 	}
 }
 
-// WithOneToMany creates to many relation view option
+// WithOneToMany creates to many relation View option
 func WithOneToMany(holder, column string, ref *ReferenceView, opts ...RelationOption) ViewOption {
 	return func(v *View) {
 		relation := &Relation{Cardinality: Many, Column: column, Holder: holder, Of: ref}
@@ -1296,7 +1298,7 @@ func WithOneToMany(holder, column string, ref *ReferenceView, opts ...RelationOp
 	}
 }
 
-// WithOneToOne creates to one relation view option
+// WithOneToOne creates to one relation View option
 func WithOneToOne(holder, column string, ref *ReferenceView, opts ...RelationOption) ViewOption {
 	return func(v *View) {
 		relation := &Relation{Cardinality: One, Column: column, Holder: holder, Of: ref}
@@ -1307,7 +1309,7 @@ func WithOneToOne(holder, column string, ref *ReferenceView, opts ...RelationOpt
 	}
 }
 
-// WithCriteria creates criteria constraints view option
+// WithCriteria creates criteria constraints View option
 func WithCriteria(columns ...string) ViewOption {
 	return func(v *View) {
 		if v.Selector == nil {
@@ -1321,7 +1323,7 @@ func WithCriteria(columns ...string) ViewOption {
 	}
 }
 
-// WithViewType creates schema type view option
+// WithViewType creates schema type View option
 func WithViewType(t reflect.Type) ViewOption {
 	return func(v *View) {
 		v.Schema = NewSchema(t)
@@ -1353,14 +1355,14 @@ func NewRefView(ref string) *View {
 	return &View{Reference: shared.Reference{Ref: ref}}
 }
 
-// NewView creates a view
+// NewView creates a View
 func NewView(name, table string, opts ...ViewOption) *View {
 	ret := &View{Name: name, Table: table}
 	ViewOptions(opts).Apply(ret)
 	return ret
 }
 
-// NewExecView creates an execution view
+// NewExecView creates an execution View
 func NewExecView(name, table string, template string, parameters []*Parameter, opts ...ViewOption) *View {
 	var templateParameters []TemplateOption
 	for i := range parameters {

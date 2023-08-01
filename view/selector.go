@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-// Selector allows customizing view fetched from Database
+// Selector allows customizing View fetched from Database
 type (
 	Selector struct {
 		DatabaseFormat format.Case

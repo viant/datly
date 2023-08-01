@@ -70,7 +70,7 @@ func (c *Schema) updateSliceType() {
 }
 
 // Init build struct type
-func (c *Schema) Init(resource *Resource, viewCaseFormat format.Case, options ...interface{}) error {
+func (c *Schema) Init(resource Resourcelet, viewCaseFormat format.Case, options ...interface{}) error {
 	var columns []*Column
 	var relations []*Relation
 	var selfRef *SelfReference

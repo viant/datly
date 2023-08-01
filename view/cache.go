@@ -114,11 +114,11 @@ func (c *Cache) init(ctx context.Context, resource *Resource, aView *View) error
 	}
 
 	if c.Location == "" {
-		return fmt.Errorf("view %v cache Location can't be empty", viewName)
+		return fmt.Errorf("View %v cache Location can't be empty", viewName)
 	}
 
 	if c.TimeToLiveMs == 0 {
-		return fmt.Errorf("view %v cache TimeToLiveMs can't be empty", viewName)
+		return fmt.Errorf("View %v cache TimeToLiveMs can't be empty", viewName)
 	}
 
 	if err := c.ensureCacheClient(aView, viewName); err != nil {
@@ -230,7 +230,7 @@ func (c *Cache) expandLocation(aView *View) (string, error) {
 		return "", err
 	}
 
-	locationMap.Put("view", viewMap)
+	locationMap.Put("View", viewMap)
 	expanded := locationMap.ExpandAsText(c.Location)
 	return expanded, nil
 }
@@ -404,7 +404,7 @@ func (c *Cache) initWarmup(ctx context.Context, resource *Resource) error {
 
 	_, ok := c.owner.ColumnByName(c.Warmup.IndexColumn)
 	if !ok && c.Warmup.IndexColumn != "" {
-		return fmt.Errorf("not found warmup column %v at view %v", c.Warmup, c.owner.Name)
+		return fmt.Errorf("not found warmup column %v at View %v", c.Warmup, c.owner.Name)
 	}
 
 	for _, dataset := range c.Warmup.Cases {

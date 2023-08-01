@@ -540,6 +540,8 @@ func (r *Route) initRequestBody() error {
 func (r *Route) initRequestBodyFromParams() error {
 
 	params := make([]*view.Parameter, 0)
+
+	//TODO why do we need this ?
 	setMarker := map[string]bool{}
 	r.findRequestBodyParams(r.View, &params, setMarker)
 
@@ -586,7 +588,8 @@ func (r *Route) initRequestBodyType(bodyParam *view.Parameter, params []*view.Pa
 	}
 
 	if r.RequestBodySchema != nil {
-		if err := r.RequestBodySchema.Init(r._resource, *r.Output._caser); err != nil {
+
+		if err := r.RequestBodySchema.Init(view.NewResourcelet(r._resource, nil), *r.Output._caser); err != nil {
 			return nil, err
 		}
 
@@ -612,9 +615,7 @@ func (r *Route) findRequestBodyParams(aView *view.View, params *[]*view.Paramete
 			*params = append(*params, aView.Template.Parameters[i])
 		}
 
-		if param.View() != nil {
-			r.findRequestBodyParams(param.View(), params, setMarker)
-		}
+		//r.findRequestBodyParams(aView, params, setMarker)
 	}
 
 	for _, relation := range aView.With {

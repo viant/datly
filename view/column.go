@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// Column represents view View column
+// Column represents View View column
 type Column struct {
 	Name                string `json:",omitempty"`
 	DataType            string `json:",omitempty"`
@@ -86,7 +86,8 @@ func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, co
 	c._fieldName = caser.Format(c.Name, format.CaseUpperCamel)
 
 	if c.Codec != nil {
-		if err := c.Codec.Init(resource, nil, c.rType); err != nil {
+		aResourcelet := &resourcelet{Resource: resource}
+		if err := c.Codec.Init(aResourcelet, c.rType); err != nil {
 			return err
 		}
 	}

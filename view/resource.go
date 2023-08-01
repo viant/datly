@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-// Resource represents grouped view needed to build the View
+// Resource represents grouped View needed to build the View
 // can be loaded from i.e. yaml file
 type Resource struct {
 	Metrics   *Metrics
@@ -62,6 +62,10 @@ type Resource struct {
 	ExpandSourceURL string
 	_expandMap      rdata.Map
 	fs              afs.Service
+}
+
+func (r *Resource) LookupParameter(name string) (*Parameter, error) {
+	return r._parameters.Lookup(name)
 }
 
 func (r *Resource) TypeRegistry() *xreflect.Types {
@@ -314,7 +318,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 
 	r._connectors = ConnectorSlice(r.Connectors).Index()
 	r._messageBuses = MessageBusSlice(r.MessageBuses).Index()
-	r._parameters, err = Parameters(r.Parameters).Index()
+	r._parameters = Parameters(r.Parameters).Index()
 	if err != nil {
 		return err
 	}
@@ -324,6 +328,8 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	if err = ConnectorSlice(r.Connectors).Init(ctx, r._connectors); err != nil {
 		return err
 	}
+
+	Views(r.Views).EnsureResource(r)
 
 	if err = Views(r.Views).Init(ctx, r, transforms); err != nil {
 		return err
@@ -365,6 +371,14 @@ func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, config.C
 // View returns View with given name
 func (r *Resource) View(name string) (*View, error) {
 	return r._views.Lookup(name)
+}
+
+func (r *Resource) ViewSchema(ctx context.Context, name string) (*Schema, error) {
+	aView, err := r.View(name)
+	if err != nil {
+		return nil, err
+	}
+	return aView.GetSchema(ctx)
 }
 
 // NewResourceFromURL loads and initializes Resource from file .yaml
@@ -449,7 +463,7 @@ func (r *Resource) FindConnector(view *View) (*Connector, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("couldn't inherit connector for view %v from any other parent views", view.Name)
+	return nil, fmt.Errorf("couldn't inherit connector for View %v from any other parent views", view.Name)
 }
 
 func isChildOfAny(view *View, with []*Relation) bool {

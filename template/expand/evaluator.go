@@ -1,6 +1,7 @@
 package expand
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/godiff"
@@ -207,6 +208,10 @@ func (e *Evaluator) Evaluate(ctx *Context, options ...StateOption) (*State, erro
 			}
 		}
 	}
+
+	fmt.Printf("%T %v\n", state.State.Mem, state.State.Mem)
+	data, _ := json.Marshal(state.State.Mem)
+	fmt.Printf("%T %s\n", state.State.Mem, data)
 
 	if err := e.executor.Exec(state.State); err != nil {
 		return state, err

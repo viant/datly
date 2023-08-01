@@ -80,10 +80,11 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 			return nil, err
 		}
 
-		if currParam, err := s.resource.ParamByName(parameter.Name); err == nil {
+		if currParam, err := s.resource.LookupParameter(parameter.Name); err == nil {
 			parameter = currParam.WithAccessors(types.NewAccessor(xunsafe.NewField(field)), nil)
 		} else {
-			if err = parameter.Init(ctx, nil, s.resource, nil); err != nil {
+			aResource := view.NewResourcelet(s.resource, nil)
+			if err = parameter.Init(ctx, aResource); err != nil {
 				return nil, err
 			}
 		}
@@ -92,26 +93,15 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 	}
 
 	sort.Sort(view.Parameters(params))
-	index, err := view.Parameters(params).Index()
-	if err != nil {
-		return nil, err
-	}
 
 	return &stateUpdater{
 		params:      params,
-		paramsIndex: index,
+		paramsIndex: view.Parameters(params).Index(),
 	}, nil
 }
 
 func (u *stateUpdater) update(ctx context.Context, request *http.Request, route *Route, dest interface{}, params *RequestParams) error {
-	paramBuilder := newParamStateBuilder(
-		*route._caser,
-		route.DateFormat,
-		NewRequestMetadata(route),
-		params,
-		newParamsValueCache(),
-		u.paramsIndex,
-	)
+	paramBuilder := newParamStateBuilder(nil, *route._caser, route.DateFormat, NewRequestMetadata(route), params, newParamsValueCache(), u.paramsIndex)
 
 	state := &view.ParamState{
 		Values: dest,
