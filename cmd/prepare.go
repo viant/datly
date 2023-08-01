@@ -8,8 +8,8 @@ import (
 	codegen "github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/internal/translator"
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/sanitize"
-	"github.com/viant/datly/view"
 	"path"
 	"strings"
 )
@@ -31,7 +31,7 @@ func (s *Builder) buildCodeTemplate(ctx context.Context, builder *routeBuilder, 
 		return nil, err
 	}
 	aConfig := configurer.ViewConfig()
-	connectorRef, err := s.ConnectorRef(view.FirstNotEmpty(aConfig.expandedTable.Connector, s.options.Connector.DbName))
+	connectorRef, err := s.ConnectorRef(shared.FirstNotEmpty(aConfig.expandedTable.Connector, s.options.Connector.DbName))
 	if err != nil {
 		return nil, err
 	}

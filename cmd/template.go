@@ -296,7 +296,7 @@ func (s *Builder) buildTemplateMeta(aConfig *ViewConfig) (*view.TemplateMeta, er
 	tmplMeta := &view.TemplateMeta{
 		Source: SQL,
 		Name:   table.HolderName,
-		Kind:   view.MetaKind(view.FirstNotEmpty(aConfig.outputConfig.Kind, string(view.MetaTypeRecord))),
+		Kind:   view.MetaKind(shared.FirstNotEmpty(aConfig.outputConfig.Kind, string(view.MetaTypeRecord))),
 	}
 
 	return tmplMeta, tryUnmarshalHint(table.ViewHintJSON, tmplMeta)
@@ -384,7 +384,7 @@ func (t *Template) detectParameters(statements []ast.Statement, required bool, r
 		case *stmt.Statement:
 			selector, ok := asSelector(actual.X)
 			if ok {
-				t.variables[view.FirstNotEmpty(selector.FullName, selector.ID)] = true
+				t.variables[shared.FirstNotEmpty(selector.FullName, selector.ID)] = true
 			}
 
 			t.indexStmt(actual, required, rType, multi)

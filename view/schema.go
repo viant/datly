@@ -3,6 +3,7 @@ package view
 import (
 	"fmt"
 	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/sqlx/io/read/cache/ast"
 	"github.com/viant/toolbox/format"
@@ -28,7 +29,7 @@ type Schema struct {
 }
 
 func (s *Schema) TypeName() string {
-	name := FirstNotEmpty(s.Name, s.DataType)
+	name := shared.FirstNotEmpty(s.Name, s.DataType)
 	if s.Package == "" {
 		return name
 	}

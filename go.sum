@@ -321,8 +321,8 @@ github.com/viant/pgo v0.10.4-0.20230720010955-0d0835aefe41 h1:Ttto7u/jgHbncuFOep
 github.com/viant/pgo v0.10.4-0.20230720010955-0d0835aefe41/go.mod h1:MFzHmkRFZlciugEgUvpl/3grK789PBSH4dUVSLOSo+Q=
 github.com/viant/scy v0.6.0 h1:QQgq2jKaarDKfJgt9Q2bJlg0Jon/jjL1FfIRyDFzb7E=
 github.com/viant/scy v0.6.0/go.mod h1:8DdAWhNVjY6OGOT9+2O7FEAPGDRqy2e+fG6cwIY6jNo=
-github.com/viant/sqlparser v0.5.1-0.20230722142201-917df90501d3 h1:V7MKp8G6DuoincR0jHgRhzoru2ZPy8QZpAG+OPhAst4=
-github.com/viant/sqlparser v0.5.1-0.20230722142201-917df90501d3/go.mod h1:DqBBJRmfeVVycmCl10uVPzewKVHNLw0sZoPTM2WnRxY=
+github.com/viant/sqlparser v0.5.1-0.20230801212309-5219d240912b h1:yD5CSFLDaVkuES2pMI2ekBanlk+t84iLjWk+MPVgX0c=
+github.com/viant/sqlparser v0.5.1-0.20230801212309-5219d240912b/go.mod h1:zP9pdkb3SPV3DIwLpL1csQVHQy7VepjgoLOpXt86lwg=
 github.com/viant/sqlx v0.9.0 h1:o/QmTwSkhq63HEyEo9EaVKgVtWhfkW7VScKc0MYOl8s=
 github.com/viant/sqlx v0.9.0/go.mod h1:MY0J244wdIMXAkHiDnkCUrihLOKxG6Zeia0ajqJKbbY=
 github.com/viant/structology v0.3.0 h1:IOqhk9udrnIakUyFciw8M4lOP1U8UFMfpTwbcs7thfM=

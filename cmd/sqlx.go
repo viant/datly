@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
@@ -214,12 +215,12 @@ func relationKeyOf(parentTable *Table, relTable *Table, join *query.Join, tables
 	x := extractSelector(join.On.X, true)
 	y := extractSelector(join.On.X, false)
 
-	if x.Name == view.FirstNotEmpty(relTable.HolderName, relTable.Name) {
+	if x.Name == shared.FirstNotEmpty(relTable.HolderName, relTable.Name) {
 		parentTable = tables[y.Name]
 	} else {
 		parentTable = tables[x.Name]
 	}
-	actualTableName := view.FirstNotEmpty(parentTable.HolderName, parentTable.Name)
+	actualTableName := shared.FirstNotEmpty(parentTable.HolderName, parentTable.Name)
 
 	//if actualTableName != y.Name && actualTableName != x.Name {
 	//	return nil, fmt.Errorf("unknow view alias: %v %v", actualTableName, parentTable.Name)
@@ -271,7 +272,7 @@ func newKey(s *expr.Selector, table *Table) (*key, error) {
 		}
 
 		if ok {
-			colName = view.FirstNotEmpty(actualColumn, colName)
+			colName = shared.FirstNotEmpty(actualColumn, colName)
 		}
 	}
 

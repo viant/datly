@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
@@ -73,7 +74,7 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 		m.Schema = &Schema{}
 	}
 
-	schemaDataType := FirstNotEmpty(m.Schema.DataType, m.Schema.Name)
+	schemaDataType := shared.FirstNotEmpty(m.Schema.DataType, m.Schema.Name)
 	if schemaDataType != "" {
 		dataType, err := types.LookupType(resource.LookupType(), schemaDataType)
 		if err != nil {

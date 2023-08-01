@@ -2,7 +2,7 @@ package parser
 
 import (
 	"github.com/viant/datly/internal/inference"
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/velty/ast"
 	"github.com/viant/velty/ast/expr"
@@ -55,7 +55,7 @@ outer:
 		}
 		switch actual := statement.(type) {
 		case *expr.Select:
-			paramContext := NewParamContext(view.FirstNotEmpty(actual.FullName, actual.ID), fnName, context)
+			paramContext := NewParamContext(shared.FirstNotEmpty(actual.FullName, actual.ID), fnName, context)
 			if len(t.fragments) > 0 {
 				paramContext.Fragments = t.fragments
 				t.fragments = []string{}
@@ -119,7 +119,7 @@ outer:
 }
 
 func (t *Template) addVariable(selector *expr.Select) {
-	_, holderName := GetHolderName(view.FirstNotEmpty(selector.FullName, selector.ID))
+	_, holderName := GetHolderName(shared.FirstNotEmpty(selector.FullName, selector.ID))
 	if keywords.Has(holderName) {
 		return
 	}

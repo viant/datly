@@ -1,7 +1,7 @@
 package sanitize
 
 import (
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/velty/ast/expr"
 	"sort"
@@ -23,7 +23,7 @@ func GetHolderNameFromSelector(selector *expr.Select) (string, string) {
 		}
 	}
 
-	identifier := view.FirstNotEmpty(selector.FullName, selector.ID)
+	identifier := shared.FirstNotEmpty(selector.FullName, selector.ID)
 	paramName := paramId(identifier)
 	prefix, paramName := removePrefixIfNeeded(paramName)
 	paramName = withoutPath(paramName)

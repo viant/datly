@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/router/openapi3"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox/format"
 	"net/http"
@@ -428,7 +429,7 @@ func (g *generator) convertParam(route *Route, param *view.Parameter, descriptio
 		return nil, false, nil
 	}
 
-	cachedParam, ok := g._parametersIndex[view.FirstNotEmpty(param.In.Name, param.Name)]
+	cachedParam, ok := g._parametersIndex[shared.FirstNotEmpty(param.In.Name, param.Name)]
 	if ok {
 		if cachedParam != nil {
 			original := *cachedParam
@@ -454,7 +455,7 @@ func (g *generator) convertParam(route *Route, param *view.Parameter, descriptio
 	}
 
 	convertedParam := &openapi3.Parameter{
-		Name:        view.FirstNotEmpty(param.In.Name, param.Name),
+		Name:        shared.FirstNotEmpty(param.In.Name, param.Name),
 		In:          string(param.In.Kind),
 		Description: description,
 		Style:       param.Style,

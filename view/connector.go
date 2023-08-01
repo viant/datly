@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-//Connector represents database/sql named connection config
+// Connector represents database/sql named connection config
 type (
 	Connector struct {
 		shared.Reference
@@ -42,18 +42,18 @@ type (
 	}
 )
 
-//ConnMaxIdleTime return connector max iddle time
+// ConnMaxIdleTime return connector max iddle time
 func (c *DBConfig) ConnMaxIdleTime() time.Duration {
 	return time.Duration(c.ConnMaxIdleTimeMs) * time.Millisecond
 }
 
-//ConnMaxLifetime returns connector max lifetime
+// ConnMaxLifetime returns connector max lifetime
 func (c *DBConfig) ConnMaxLifetime() time.Duration {
 	return time.Duration(c.ConnMaxLifetimeMs) * time.Millisecond
 }
 
-//Init initializes connector.
-//If Ref is specified, then Connector with the name has to be registered in Connectors
+// Init initializes connector.
+// If Ref is specified, then Connector with the name has to be registered in Connectors
 func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 	if c._initialized {
 		return nil
@@ -89,8 +89,8 @@ func (c *Connector) Init(ctx context.Context, connectors Connectors) error {
 	return nil
 }
 
-//DB creates connection to the DB.
-//It is important to not close the DB since the connection is shared.
+// DB creates connection to the DB.
+// It is important to not close the DB since the connection is shared.
 func (c *Connector) DB() (*sql.DB, error) {
 	if c._db != nil {
 		return c._db()
@@ -133,8 +133,8 @@ func (c *Connector) lock() {
 	c._mux.Lock()
 }
 
-//Validate check if connector was configured properly.
-//Name, Driver and DSN are required.
+// Validate check if connector was configured properly.
+// Name, Driver and DSN are required.
 func (c *Connector) Validate() error {
 	if c._initialized {
 		return nil
@@ -148,14 +148,14 @@ func (c *Connector) Validate() error {
 		return fmt.Errorf("connector driver was empty")
 	}
 
-	if FirstNotEmpty(c._dsn, c.DSN) == "" {
+	if shared.FirstNotEmpty(c._dsn, c.DSN) == "" {
 		return fmt.Errorf("connector dsn was empty")
 	}
 	return nil
 }
 
 func (c *Connector) inherit(connector *Connector) {
-	c._dsn = FirstNotEmpty(c._dsn, c.DSN, connector._dsn, connector.DSN)
+	c._dsn = shared.FirstNotEmpty(c._dsn, c.DSN, connector._dsn, connector.DSN)
 
 	if c.Driver == "" {
 		c.Driver = connector.Driver
@@ -185,7 +185,7 @@ func (c *Connector) setDriverOptions(secret *scy.Secret) {
 }
 
 func (c *Connector) getDSN() string {
-	return FirstNotEmpty(c._dsn, c.DSN)
+	return shared.FirstNotEmpty(c._dsn, c.DSN)
 }
 
 func (c *Connector) Dialect(ctx context.Context) (*info.Dialect, error) {
@@ -207,7 +207,7 @@ func (c *Connector) Dialect(ctx context.Context) (*info.Dialect, error) {
 	return dialect, nil
 }
 
-//EncodedConnector represents encoded connector
+// EncodedConnector represents encoded connector
 type EncodedConnector string
 
 func (c EncodedConnector) Decode() (*Connector, error) {
@@ -229,7 +229,7 @@ func (c EncodedConnector) Decode() (*Connector, error) {
 	return conn, nil
 }
 
-//DecodeConnectors decodes encoded connectors
+// DecodeConnectors decodes encoded connectors
 func DecodeConnectors(connectors []string) ([]*Connector, error) {
 	var result = make([]*Connector, 0)
 	for _, conn := range connectors {
@@ -248,12 +248,12 @@ func WithSecret(secret *scy.Resource) ConnectorOption {
 	}
 }
 
-//NewRefConnector creates connection reference
+// NewRefConnector creates connection reference
 func NewRefConnector(name string) *Connector {
 	return &Connector{Reference: shared.Reference{Ref: name}}
 }
 
-//NewConnector creates a connector
+// NewConnector creates a connector
 func NewConnector(name, driver, dsn string, opts ...ConnectorOption) *Connector {
 	ret := &Connector{Name: name, Driver: driver, DSN: dsn}
 	for _, opt := range opts {

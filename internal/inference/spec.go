@@ -238,7 +238,7 @@ func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table, SQL
 	var err error
 	if SQL != "" {
 		if columns, err = detectColumns(ctx, db, SQL, table, SQLArgs...); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to detect columns due to: %w, SQL: %s", err, SQL)
 		}
 	}
 	if len(columns) == 0 { //TODO mere column types

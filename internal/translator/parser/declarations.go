@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
@@ -95,7 +96,7 @@ func IsStructQL(SQL string) bool {
 }
 
 func (d *Declarations) parseExpression(cursor *parsly.Cursor, selector *expr.Select) (*Declaration, error) {
-	name := strings.Trim(view.FirstNotEmpty(selector.FullName, selector.ID), "${}")
+	name := strings.Trim(shared.FirstNotEmpty(selector.FullName, selector.ID), "${}")
 	declaration := &Declaration{}
 	declaration.Name = name
 	declaration.Explicit = true

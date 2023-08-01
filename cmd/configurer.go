@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/columns"
 	"github.com/viant/datly/template/sanitize"
 	"github.com/viant/datly/view"
@@ -324,14 +325,14 @@ func (c *ViewConfigurer) prepareUnexpanded(viewName string, SQL string, opt *opt
 	}
 
 	aTable := c.buildTableFromQueryWithWarning(aQuery, aQuery.From.X, opt, aQuery.From.Comments)
-	aTable.HolderName = view.FirstNotEmpty(aQuery.From.Alias, aTable.HolderName)
+	aTable.HolderName = shared.FirstNotEmpty(aQuery.From.Alias, aTable.HolderName)
 	aTable.NamespaceSource = aTable.HolderName
 
 	if columns.CanBeTableName(aTable.Name) {
 		aTable.NamespaceSource = aTable.Name //for the relations, it will be adjusted later
 	}
 
-	result := newViewConfig(viewName, view.FirstNotEmpty(aQuery.From.Alias, viewName), parent, aTable, nil, view.ModeQuery)
+	result := newViewConfig(viewName, shared.FirstNotEmpty(aQuery.From.Alias, viewName), parent, aTable, nil, view.ModeQuery)
 
 	var dataViewParams []*ViewParamConfig
 	tables := map[string]*Table{}

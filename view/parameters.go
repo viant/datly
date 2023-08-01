@@ -311,11 +311,11 @@ func (p *Parameter) inheritParamIfNeeded(ctx context.Context, resource Resourcel
 }
 
 func (p *Parameter) inherit(param *Parameter) {
-	p.Name = FirstNotEmpty(p.Name, param.Name)
-	p.Description = FirstNotEmpty(p.Description, param.Description)
-	p.Style = FirstNotEmpty(p.Style, param.Style)
-	p.PresenceName = FirstNotEmpty(p.PresenceName, param.PresenceName)
-	p.Tag = FirstNotEmpty(p.Tag, param.Tag)
+	p.Name = shared.FirstNotEmpty(p.Name, param.Name)
+	p.Description = shared.FirstNotEmpty(p.Description, param.Description)
+	p.Style = shared.FirstNotEmpty(p.Style, param.Style)
+	p.PresenceName = shared.FirstNotEmpty(p.PresenceName, param.PresenceName)
+	p.Tag = shared.FirstNotEmpty(p.Tag, param.Tag)
 	if p.Const == nil {
 		p.Const = param.Const
 	}
@@ -435,7 +435,7 @@ func (p *Parameter) initSchema(resource Resourcelet) error {
 		return fmt.Errorf("parameter %v either schema Type or Name has to be specified", p.Name)
 	}
 
-	schemaType := FirstNotEmpty(p.Schema.Name, p.Schema.DataType)
+	schemaType := shared.FirstNotEmpty(p.Schema.Name, p.Schema.DataType)
 	if p.MaxAllowedRecords != nil && *p.MaxAllowedRecords > 1 {
 		p.Schema.Cardinality = Many
 	}

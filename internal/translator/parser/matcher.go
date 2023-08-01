@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/parsly"
 	"github.com/viant/velty/ast/expr"
@@ -124,7 +124,7 @@ func (m *expressionMatcher) buildExpression(index, occurrence, pos int, selector
 		context = m.Context[index].Context
 		fnName = m.Context[index].Function
 	}
-	raw := view.FirstNotEmpty(selector.FullName, selector.ID)
+	raw := shared.FirstNotEmpty(selector.FullName, selector.ID)
 	prefix, holder := GetHolderNameFromSelector(selector)
 	m.expressions = append(m.expressions, &Expression{
 		Context:         context,

@@ -32,7 +32,7 @@ func (s *Builder) buildAndAddViewWithLog(ctx context.Context, builder *routeBuil
 func (s *Builder) buildAndAddView(ctx context.Context, builder *routeBuilder, viewConfig *ViewConfig, selector *view.Config, indexNamespace bool, parameters []*view.Parameter) (*view.View, error) {
 	table := viewConfig.unexpandedTable
 	viewName := s.viewNames.unique(viewConfig.viewName)
-	connector, err := s.ConnectorRef(view.FirstNotEmpty(table.Connector, s.options.Connector.DbName))
+	connector, err := s.ConnectorRef(shared.FirstNotEmpty(table.Connector, s.options.Connector.DbName))
 	if err != nil {
 		return nil, err
 	}
@@ -70,9 +70,9 @@ func (s *Builder) buildAndAddView(ctx context.Context, builder *routeBuilder, vi
 		selector.CriteriaParam = &view.Parameter{Reference: shared.Reference{Ref: table.ViewConfig.CriteriaParam}}
 	}
 
-	tableName := view.FirstNotEmpty(table.Name, table.HolderName)
+	tableName := shared.FirstNotEmpty(table.Name, table.HolderName)
 
-	actualNamespaceSource := view.FirstNotEmpty(table.NamespaceSource, table.HolderName)
+	actualNamespaceSource := shared.FirstNotEmpty(table.NamespaceSource, table.HolderName)
 	if selector != nil && selector.Namespace == "" && indexNamespace && actualNamespaceSource != "" {
 		selector.Namespace = namespace(actualNamespaceSource)
 	}
@@ -142,7 +142,7 @@ func (s *Builder) readColumnTypes(ctx context.Context, db *sql.DB, table *Table)
 }
 
 func (s *Builder) DB(connector *view.Connector) (*sql.DB, error) {
-	connectorName := view.FirstNotEmpty(connector.Name, connector.Ref)
+	connectorName := shared.FirstNotEmpty(connector.Name, connector.Ref)
 	connector, ok := s.options.Lookup(connectorName)
 	if !ok {
 		return nil, connectorNotFoundError(connectorName)
@@ -323,7 +323,7 @@ func (s *Builder) buildColumnsConfig(ctx context.Context, config *ViewConfig) (m
 			return nil, err
 		}
 
-		result[view.FirstNotEmpty(column.Alias, column.Name)] = columnConfig
+		result[shared.FirstNotEmpty(column.Alias, column.Name)] = columnConfig
 	}
 	return result, nil
 }

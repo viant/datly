@@ -661,7 +661,7 @@ outer:
 		}
 
 		for _, viewParameter := range viewParams {
-			if view.FirstNotEmpty(viewParameter.Ref, viewParameter.Name) == paramName {
+			if shared.FirstNotEmpty(viewParameter.Ref, viewParameter.Name) == paramName {
 				continue outer
 			}
 		}
@@ -858,7 +858,7 @@ func (s *Builder) buildRouterOutput(builder *routeBuilder) error {
 		builder.route.Output.Cardinality = view.Many
 	}
 
-	builder.route.Output.CaseFormat = formatter.CaseFormat(view.FirstNotEmpty(builder.option.CaseFormat, "lc"))
+	builder.route.Output.CaseFormat = formatter.CaseFormat(shared.FirstNotEmpty(builder.option.CaseFormat, "lc"))
 	if builder.option.Field != "" {
 		builder.route.Style = router.ComprehensiveStyle
 		builder.route.Field = builder.option.Field
@@ -924,7 +924,7 @@ func (s *Builder) buildConfigProvider(SQL string, builder *routeBuilder) (*ViewC
 	if builder.route.Handler != nil {
 		serviceType = router.ServiceTypeHandler
 	}
-	return NewConfigProviderReader(view.FirstNotEmpty(s.options.Generate.Name, s.fileName(builder.session.sourceURL)), SQL, builder.option, serviceType, builder.paramsIndex, nil, &s.options.Connector, builder)
+	return NewConfigProviderReader(shared.FirstNotEmpty(s.options.Generate.Name, s.fileName(builder.session.sourceURL)), SQL, builder.option, serviceType, builder.paramsIndex, nil, &s.options.Connector, builder)
 }
 
 func (s *Builder) loadSQL(ctx context.Context, builder *routeBuilder, location string) error {
@@ -1131,7 +1131,7 @@ func (b *routeBuilder) paramByName(name string) *view.Parameter {
 }
 
 func (s *Builder) columnTypes(table *Table) ColumnIndex {
-	meta := s.tablesMeta.TableMeta(view.FirstNotEmpty(table.HolderName, table.Name))
+	meta := s.tablesMeta.TableMeta(shared.FirstNotEmpty(table.HolderName, table.Name))
 	columns := meta.IndexColumns(table.InnerAlias).Merge(meta.IndexColumns(""))
 
 	for alias, tableName := range table.Deps {
@@ -1150,7 +1150,7 @@ func (s *Builder) buildCacheWarmup(warmup map[string]interface{}, on *relationKe
 	warmup = copyWarmup(warmup)
 
 	result := &view.Warmup{
-		IndexColumn: view.FirstNotEmpty(on.child.Field, on.child.Column),
+		IndexColumn: shared.FirstNotEmpty(on.child.Field, on.child.Column),
 	}
 
 	multiSet := &view.CacheParameters{}
@@ -1196,8 +1196,8 @@ func (s *Builder) addTypeDef(resource *view.Resource, schema *view.TypeDefinitio
 }
 
 func (s *Builder) inheritRouteFromMainConfig(builder *routeBuilder, config option.OutputConfig) {
-	builder.route.Field = view.FirstNotEmpty(config.Field, builder.route.Field)
-	builder.route.Style = router.Style(view.FirstNotEmpty(config.Style, string(builder.route.Style)))
+	builder.route.Field = shared.FirstNotEmpty(config.Field, builder.route.Field)
+	builder.route.Style = router.Style(shared.FirstNotEmpty(config.Style, string(builder.route.Style)))
 }
 
 func (s *Builder) indexExcludedColumns(builder *routeBuilder, config *ViewConfig) error {
@@ -1440,7 +1440,7 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 		param.Const = config.Const
 	}
 
-	param.Name = view.FirstNotEmpty(config.Name, param.Name)
+	param.Name = shared.FirstNotEmpty(config.Name, param.Name)
 	if config.Location != nil {
 		param.In.Name = *config.Location
 	}
@@ -1449,8 +1449,8 @@ func (s *Builder) updateViewParam(resource *view.Resource, param *view.Parameter
 		param.Required = config.Required
 	}
 
-	param.In.Kind = view.Kind(view.FirstNotEmpty(config.Kind, string(param.In.Kind)))
-	paramType, err := s.Type(resource, view.FirstNotEmpty(config.DataType, param.Schema.DataType))
+	param.In.Kind = view.Kind(shared.FirstNotEmpty(config.Kind, string(param.In.Kind)))
+	paramType, err := s.Type(resource, shared.FirstNotEmpty(config.DataType, param.Schema.DataType))
 
 	if err != nil {
 		return err
@@ -1864,7 +1864,7 @@ func (s *Builder) buildParamHint(builder *routeBuilder, selector *expr.Select, c
 		return err
 	}
 
-	holderName := strings.Trim(view.FirstNotEmpty(selector.FullName, selector.ID), "${}")
+	holderName := strings.Trim(shared.FirstNotEmpty(selector.FullName, selector.ID), "${}")
 	hint, SQL := sanitize.SplitHint(paramHint)
 	if pathStartIndex := strings.Index(holderName, "."); pathStartIndex >= 0 {
 
@@ -2123,7 +2123,7 @@ func (s *Builder) readRouterOptionIfNeeded(resource *router.Resource) (string, [
 	basePath := url.Join(s.options.RouteURL, s.options.RoutePrefix)
 	routerURL := s.options.CustomRouterURL
 	if routerURL == "" {
-		return view.FirstNotEmpty(s.options.Generate.Name, s.fileName(s.options.Location)), []*session{newSession(basePath, s.options.Location, s.options.PluginDst, "", "", s.options.GoFileOutput)}, nil
+		return shared.FirstNotEmpty(s.options.Generate.Name, s.fileName(s.options.Location)), []*session{newSession(basePath, s.options.Location, s.options.PluginDst, "", "", s.options.GoFileOutput)}, nil
 	}
 
 	routerContent, err := afs.New().DownloadWithURL(context.Background(), routerURL)
@@ -2150,7 +2150,7 @@ func (s *Builder) readRouterOptionIfNeeded(resource *router.Resource) (string, [
 	}
 
 	routes := make([]*session, 0, len(routerConfig.Routes))
-	routerFileName := view.FirstNotEmpty(s.options.Generate.Name, s.fileName(routerURL))
+	routerFileName := shared.FirstNotEmpty(s.options.Generate.Name, s.fileName(routerURL))
 	basePath = url.Join(basePath, routerFileName)
 	for _, route := range routerConfig.Routes {
 		var actualSourceURL string

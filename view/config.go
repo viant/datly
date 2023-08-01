@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/shared"
 	"github.com/viant/xdatly/handler/parameter"
 	"reflect"
 	"strings"
@@ -133,8 +134,8 @@ func (c *Config) Init(ctx context.Context, resource *Resource, parent *View) err
 
 func (c *Config) newSelectorParam(name, paramKind string, parent *View) *Parameter {
 	return &Parameter{
-		Name:        FirstNotEmpty(name, paramKind),
-		In:          NewQueryLocation(FirstNotEmpty(name, c.Namespace+paramKind)),
+		Name:        shared.FirstNotEmpty(name, paramKind),
+		In:          NewQueryLocation(shared.FirstNotEmpty(name, c.Namespace+paramKind)),
 		Schema:      NewSchema(ParamType(paramKind)),
 		Description: Description(paramKind, parent.Name),
 	}

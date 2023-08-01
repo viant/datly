@@ -3,6 +3,7 @@ package reader
 import (
 	"fmt"
 	"github.com/viant/datly/reader/metadata"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
@@ -36,12 +37,12 @@ type (
 	//BatchData groups view needed to use various view.MatchStrategy
 )
 
-//NewBuilder creates Builder instance
+// NewBuilder creates Builder instance
 func NewBuilder() *Builder {
 	return &Builder{}
 }
 
-//Build builds SQL Select statement
+// Build builds SQL Select statement
 func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *expand.MetaParam, expander expand.Expander) (*cache.ParmetrizedQuery, error) {
 	if exclude == nil {
 		exclude = &Exclude{}
@@ -126,7 +127,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 	}
 
 	if exclude.ColumnsIn && relation != nil {
-		matcher.By = view.FirstNotEmpty(relation.Of.Field, relation.Of.Column)
+		matcher.By = shared.FirstNotEmpty(relation.Of.Field, relation.Of.Column)
 		matcher.In = batchData.ValuesBatch
 	}
 

@@ -1,7 +1,7 @@
 package sanitize
 
 import (
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/parsly"
 	"github.com/viant/velty/ast"
@@ -113,7 +113,7 @@ outer:
 
 		switch actual := statement.(type) {
 		case *expr.Select:
-			it.contexts = append(it.contexts, NewParamContext(view.FirstNotEmpty(actual.FullName, actual.ID), fnName, context))
+			it.contexts = append(it.contexts, NewParamContext(shared.FirstNotEmpty(actual.FullName, actual.ID), fnName, context))
 			currentSelector := actual
 
 			for actual.X != nil {
@@ -262,7 +262,7 @@ func (it *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, selector
 		fnName = it.contexts[index].FnName
 	}
 
-	raw := view.FirstNotEmpty(selector.FullName, selector.ID)
+	raw := shared.FirstNotEmpty(selector.FullName, selector.ID)
 	prefix, holder := GetHolderNameFromSelector(selector)
 
 	var paramMetaType *ParamMetaType
@@ -287,7 +287,7 @@ func (it *ParamMetaIterator) buildMetaParam(index, occurrence, pos int, selector
 }
 
 func (it *ParamMetaIterator) addVariable(selector *expr.Select) {
-	_, holderName := GetHolderName(view.FirstNotEmpty(selector.FullName, selector.ID))
+	_, holderName := GetHolderName(shared.FirstNotEmpty(selector.FullName, selector.ID))
 	if keywords.Has(holderName) {
 		return
 	}

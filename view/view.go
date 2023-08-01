@@ -698,7 +698,7 @@ func (v *View) inherit(view *View) error {
 	setter.SetStringIfEmpty(&v.Table, view.Table)
 	setter.SetStringIfEmpty(&v.From, view.From)
 	setter.SetStringIfEmpty(&v.FromURL, view.FromURL)
-	v.Mode = Mode(FirstNotEmpty(string(v.Mode), string(view.Mode)))
+	v.Mode = Mode(shared.FirstNotEmpty(string(v.Mode), string(view.Mode)))
 
 	if stringsSliceEqual(v.Exclude, view.Exclude) {
 		if len(v.Columns) == 0 {
@@ -827,16 +827,6 @@ func (v *View) ensureCollector() {
 // Collector creates new Collector for View.DataType
 func (v *View) Collector(dest interface{}, handleMeta viewMetaHandlerFn, supportParallel bool) *Collector {
 	return v._newCollector(dest, handleMeta, supportParallel)
-}
-
-func FirstNotEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-
-	return ""
 }
 
 func (v *View) registerHolders() error {

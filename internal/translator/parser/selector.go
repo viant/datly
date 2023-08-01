@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/velty/ast/expr"
 	"sort"
@@ -24,7 +24,7 @@ func splitSelector(selector *expr.Select) (string, string) {
 			return "", selector.ID
 		}
 	}
-	identifier := view.FirstNotEmpty(selector.FullName, selector.ID)
+	identifier := shared.FirstNotEmpty(selector.FullName, selector.ID)
 	identifier = strings.Trim(identifier, "${}")
 	if strings.HasPrefix(identifier, "Unsafe.") {
 		identifier = identifier[7:]
@@ -71,7 +71,7 @@ func GetHolderNameFromSelector(selector *expr.Select) (string, string) {
 		}
 	}
 
-	identifier := view.FirstNotEmpty(selector.FullName, selector.ID)
+	identifier := shared.FirstNotEmpty(selector.FullName, selector.ID)
 	paramName := paramId(identifier)
 	prefix, paramName := removePrefixIfNeeded(paramName)
 	paramName = withoutPath(paramName)

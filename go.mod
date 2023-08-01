@@ -49,7 +49,7 @@ require (
 
 require (
 	github.com/viant/govalidator v0.2.1
-	github.com/viant/sqlparser v0.5.1-0.20230722142201-917df90501d3
+	github.com/viant/sqlparser v0.5.1-0.20230801212309-5219d240912b
 	golang.org/x/crypto v0.10.0 // indirect
 )
 
