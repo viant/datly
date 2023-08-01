@@ -38,14 +38,19 @@ func expandRelativeIfNeeded(location *string, projectRoot string) {
 	}
 	*location = expandHomeDir(*location)
 
+	if projectRoot != "" {
+		*location = url.Join(projectRoot, *location)
+		return
+	}
+
 	//check relative first
 	if wd, _ := os.Getwd(); wd != "" {
 		candidate := url.Join(wd, *location)
-		if ok, _ := fs.Exists(context.Background(), candidate); ok || projectRoot == "" {
+		if ok, _ := fs.Exists(context.Background(), candidate); ok {
 			*location = candidate
 			return
 		}
 	}
-	loc := url.Join(projectRoot, *location)
-	*location = loc
+
+	return
 }
