@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/translator"
+	"github.com/viant/pgo"
 	"os"
 	"os/exec"
 )
@@ -85,7 +86,25 @@ func (s *Service) PrepareBuild(ctx context.Context, build *options.Build) error 
 	if err := s.tidyModule(ctx, build.Datly); err != nil {
 		return err
 	}
-	return nil
+
+	flags := ""
+	if build.LdFlags != nil {
+		flags = *build.LdFlags
+	}
+	return pgo.Build(&pgo.Options{
+		Name:        build.Name,
+		SourceURL:   build.Source,
+		DestURL:     build.DestURL,
+		Arch:        build.GoArch,
+		Os:          build.GoOs,
+		Version:     build.GoVersion,
+		MainPath:    build.MainPath,
+		BuildArgs:   build.BuildArgs,
+		BuildMode:   "exec",
+		Compression: "gzip",
+		WithLogger:  true,
+		LdFlags:     flags,
+	})
 }
 
 func (s *Service) tidyModule(ctx context.Context, goModule string) error {
