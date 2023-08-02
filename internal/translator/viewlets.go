@@ -114,13 +114,13 @@ func (n Viewlets) applyTopLevelDSQLSetting(query *query.Select, namespace *Viewl
 	return nil
 }
 
-func (n Viewlets) updateTopQuery(column *sqlparser.Column, namespace *Viewlet) error {
+func (n Viewlets) updateTopQuery(column *sqlparser.Column, viewlet *Viewlet) error {
 	if column.Namespace == "" {
-		column.Namespace = namespace.Name
+		column.Namespace = viewlet.Name
 	}
 	namespaceForColumn := n.Lookup(column.Namespace)
 	if namespaceForColumn == nil {
-		return fmt.Errorf("unknown query namespace: %v", column.Namespace)
+		return fmt.Errorf("unknown query viewlet: %v", column.Namespace)
 	}
 	if len(column.Except) > 0 {
 		namespaceForColumn.Exclude = column.Except
@@ -130,12 +130,15 @@ func (n Viewlets) updateTopQuery(column *sqlparser.Column, namespace *Viewlet) e
 		if err := inference.TryUnmarshalHint(namespaceForColumn.OutputJSONHint, &namespaceForColumn.OutputSettings); err != nil {
 			return err
 		}
+		if namespaceForColumn.OutputSettings.Field != "" {
+			viewlet.Field = namespaceForColumn.OutputSettings.Field
+		}
 	}
 	if column.Tag != "" {
-		namespace.Tags[column.Name] = column.Tag
+		viewlet.Tags[column.Name] = column.Tag
 	}
 	if column.Type != "" {
-		namespace.Casts[column.Name] = column.Type
+		viewlet.Casts[column.Name] = column.Type
 	}
 	return nil
 }
