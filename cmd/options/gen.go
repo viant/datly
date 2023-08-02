@@ -55,6 +55,13 @@ func (g *Generate) Init() error {
 
 func (g *Generate) DSQLLocation() string {
 	_, name := url.Split(g.SourceURL(), file.Scheme)
+
+	pkg := ""
+	if len(g.Packages) > 0 {
+		pkg = g.Packages[0]
+		name = strings.Title(pkg) + "_" + strings.ToLower(g.Operation)
+	}
+
 	if ext := path.Ext(name); ext != "" {
 		name = name[:len(name)-len(ext)]
 	}
