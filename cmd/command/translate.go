@@ -55,19 +55,21 @@ func (s *Service) translate(ctx context.Context, opts *options.Options) error {
 			return err
 		}
 
-		if err = s.translateDSQL(ctx, rule, dSQL); err != nil {
+		if err = s.translateDSQL(ctx, rule, dSQL, opts); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *Service) translateDSQL(ctx context.Context, rule *options.Rule, dSQL string) error {
+func (s *Service) translateDSQL(ctx context.Context, rule *options.Rule, dSQL string, opts *options.Options) error {
 	if err := s.buildHandlerIfNeeded(rule, &dSQL); err != nil {
 		return err
 	}
-	if err := s.translator.Translate(ctx, rule, dSQL); err != nil {
-		fmt.Printf("failed to translate: %v", err)
+	if err := s.translator.Translate(ctx, rule, dSQL, opts); err != nil {
+		err := fmt.Errorf("failed to translate: %v", err)
+		fmt.Printf("%v\n", err)
+		return err
 	}
 	return nil
 }

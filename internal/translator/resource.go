@@ -205,10 +205,15 @@ func (r *Resource) ImpliedKind() view.Kind {
 	return view.KindRequestBody
 }
 
-func (r *Resource) InitRule(dSQL *string, ctx context.Context, fs afs.Service) error {
+func (r *Resource) InitRule(dSQL *string, ctx context.Context, fs afs.Service, opts *options.Options) error {
 	if err := r.extractRuleSetting(dSQL); err != nil {
 		return err
 	}
+
+	if opts != nil && opts.Generate != nil && opts.Generate.Operation != "" {
+		r.Rule.Method = strings.ToUpper(opts.Generate.Operation)
+	}
+
 	r.Statements = parser.NewStatements(*dSQL)
 	r.RawSQL = *dSQL
 	return r.initRule(ctx, fs, dSQL)
