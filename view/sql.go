@@ -3,16 +3,13 @@ package view
 import (
 	"context"
 	"database/sql"
-	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader/metadata"
 	"github.com/viant/datly/template/expand"
-	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
 	rdata "github.com/viant/toolbox/data"
-	"os"
 	"reflect"
 	"strings"
 )
@@ -27,107 +24,6 @@ type (
 
 	ExpanderFn func(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error)
 )
-
-func DetectColumns(ctx context.Context, resource *Resource, v *View) ([]*Column, string, error) {
-	evaluation, err := evaluateTemplateIfNeeded(ctx, resource, v)
-	if err != nil {
-		return nil, "", err
-	}
-	columns, SQL, err := detectColumns(ctx, evaluation, v)
-	if err != nil {
-		return nil, "", err
-	}
-
-	if v.From != "" && v.Table != "" {
-		tableColumns, tableSQL, errr := detectColumns(ctx, &TemplateEvaluation{SQL: v.Table}, v)
-		if errr != nil {
-			return nil, tableSQL, errr
-		}
-
-		v.Logger.ColumnsDetection(tableSQL, v.Table)
-		if err != nil {
-			return nil, tableSQL, err
-		}
-
-		Columns(columns).updateTypes(tableColumns, v.Caser)
-	}
-
-	return columns, SQL, nil
-}
-
-func evaluateTemplateIfNeeded(ctx context.Context, resource *Resource, aView *View) (evaluation *TemplateEvaluation, err error) {
-	result := &TemplateEvaluation{
-		Expander: aView.Expand,
-	}
-
-	if aView.Mode == "Write" || aView.Mode == ModeExec {
-		result.SQL = aView.Table
-		result.Expander = nil
-		return result, nil
-	}
-
-	if aView.Template == nil {
-		result.SQL = aView.Source()
-		return result, nil
-	}
-
-	if err := aView.Template.Init(ctx, resource, aView); err != nil {
-		return nil, err
-	}
-
-	params := types.NewValue(aView.Template.Schema.Type())
-	presence := types.NewValue(aView.Template.PresenceSchema.Type())
-
-	selector := &Selector{
-		Parameters: ParamState{
-			Values: params,
-			Has:    presence,
-		},
-	}
-
-	for _, parameter := range aView.Template.Parameters {
-		if parameter.In.Kind != KindEnvironment {
-			continue
-		}
-
-		paramValue := os.Getenv(parameter.In.Name)
-		convert, wasNil, err := converter.Convert(paramValue, parameter.ActualParamType(), false, parameter.DataType)
-		if err != nil {
-			return nil, err
-		}
-
-		if !wasNil {
-			if err = parameter.Set(selector, convert); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	for _, parameter := range aView.Template.Parameters {
-		if parameter.ActualParamType().Kind() != reflect.Slice {
-			continue
-		}
-
-		aSlice := reflect.MakeSlice(parameter.ActualParamType(), 1, 1)
-		if err = parameter.Set(selector, aSlice.Interface()); err != nil {
-			return nil, err
-		}
-	}
-
-	state, err := aView.Template.EvaluateSource(params, presence, nil, &BatchData{})
-	if err != nil {
-		return nil, err
-	}
-
-	source, err := expandWithZeroValues(state.Expanded, aView.Template)
-	if err != nil {
-		return nil, err
-	}
-
-	result.SQL = source
-	result.Args = state.DataUnit.At(0)
-	return result, nil
-}
 
 func detectColumns(ctx context.Context, evaluation *TemplateEvaluation, v *View) ([]*Column, string, error) {
 	SQL, args, err := detectColumnsSQL(evaluation, v)
