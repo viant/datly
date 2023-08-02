@@ -86,8 +86,8 @@ func (l *Adapter) Inherit(adapter *Adapter) {
 	l.log = adapter.log
 }
 
-func (l *Adapter) LogDatabaseErr(SQL string, err error) {
-	fmt.Printf(fmt.Sprintf("error occured while executing SQL: %v, SQL: %v\n", err, strings.ReplaceAll(SQL, "\n", "\\n")))
+func (l *Adapter) LogDatabaseErr(SQL string, err error, args ...interface{}) {
+	fmt.Printf(fmt.Sprintf("error occured while executing SQL: %v, SQL: %v, params: %v\n", err, strings.ReplaceAll(SQL, "\n", "\\n"), args))
 }
 
 func NewLogger(name string, logger Logger) *Adapter {

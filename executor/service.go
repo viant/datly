@@ -55,7 +55,7 @@ func New() *Executor {
 	}
 }
 
-//Execute executes view dsql
+// Execute executes view dsql
 func (e *Executor) Execute(ctx context.Context, aView *view.View, options ...Option) error {
 	session, err := NewSession(view.NewSelectors(), aView)
 	if err != nil {
@@ -67,8 +67,8 @@ func (e *Executor) Execute(ctx context.Context, aView *view.View, options ...Opt
 	return e.Exec(ctx, session)
 }
 
-//TODO: remove reflection
-//TODO: customize global batch collector
+// TODO: remove reflection
+// TODO: customize global batch collector
 func (e *Executor) Exec(ctx context.Context, sess *Session, options ...DBOption) error {
 	state, data, err := e.sqlBuilder.Build(sess.View, sess.Lookup(sess.View), sess.SessionHandler, sess.DataUnit)
 	if state != nil {
@@ -269,7 +269,7 @@ func (e *Executor) executeStatement(ctx context.Context, tx *sql.Tx, stmt *expan
 	_, err := tx.ExecContext(ctx, stmt.SQL, stmt.Args...)
 	if err != nil {
 		if sess.logger != nil {
-			sess.logger.LogDatabaseErr(stmt.SQL, err)
+			sess.logger.LogDatabaseErr(stmt.SQL, err, stmt.Args...)
 		}
 
 		err = fmt.Errorf("error occured while connecting to database")

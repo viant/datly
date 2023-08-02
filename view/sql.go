@@ -39,7 +39,7 @@ func detectColumns(ctx context.Context, evaluation *TemplateEvaluation, v *View)
 
 	query, err := aDb.QueryContext(ctx, SQL, args...)
 	if err != nil {
-		v.Logger.LogDatabaseErr(SQL, err)
+		v.Logger.LogDatabaseErr(SQL, err, args...)
 		return nil, SQL, err
 	}
 

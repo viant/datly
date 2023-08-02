@@ -446,7 +446,7 @@ func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, 
 		return nil, err
 	}
 
-	aView.Logger.LogDatabaseErr(matcher.SQL, err)
+	aView.Logger.LogDatabaseErr(matcher.SQL, err, matcher.Args...)
 	stats.Error = err.Error()
 	return nil, fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
 }
