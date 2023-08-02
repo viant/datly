@@ -101,7 +101,7 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 }
 
 func (u *stateUpdater) update(ctx context.Context, request *http.Request, route *Route, dest interface{}, params *RequestParams) error {
-	paramBuilder := newParamStateBuilder(nil, *route._caser, route.DateFormat, NewRequestMetadata(route), params, newParamsValueCache(), u.paramsIndex)
+	paramBuilder := newParamStateBuilder(route._resource, *route._caser, route.DateFormat, NewRequestMetadata(route), params, newParamsValueCache(), u.paramsIndex)
 
 	state := &view.ParamState{
 		Values: dest,
