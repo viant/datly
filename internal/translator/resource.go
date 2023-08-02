@@ -237,21 +237,10 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	}
 
 	sqlState = sqlState.RemoveReserved()
-	reflectType, err := sqlState.ReflectType("autogen", types.Lookup)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create state %v type: %w", viewlet.Name, err)
-	}
-	templateState := reflect.New(reflectType).Elem().Interface()
-	r.State.SetLiterals(templateState)
 	var bindingArgs []interface{}
-
 	var options []expand.StateOption
 	epxandingSQL := viewlet.SanitizedSQL
-	if strings.Contains(epxandingSQL, "$View.ParentJoinOn") {
-		//TODO adjust parameter value type
-		options = append(options, expand.WithViewParam(&expand.MetaParam{ParentValues: []interface{}{0}, DataUnit: &expand.DataUnit{}}))
-	}
-	options = append(options, expand.WithParameters(templateState, nil))
+
 	if metaViewSQL != nil {
 		sourceViewName := metaViewSQL.Name[5 : len(metaViewSQL.Name)-4]
 		epxandingSQL = strings.Replace(epxandingSQL, "$"+metaViewSQL.Name, "$View.NonWindowSQL", 1)
@@ -268,18 +257,12 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	}
 
 	epxandingSQL = viewlet.Resource.State.Expand(epxandingSQL)
-
-	parameters := viewlet.Resource.State.ViewParameters()
-	evaluator, err := view.NewEvaluator(parameters, reflectType, nil, epxandingSQL, types.Lookup, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create evaluator %v: %w", viewlet.Name, err)
+	templateParameters := sqlState.ViewParameters()
+	if strings.Contains(epxandingSQL, "$View.ParentJoinOn") {
+		//TODO adjust parameter value type
+		options = append(options, expand.WithViewParam(&expand.MetaParam{ParentValues: []interface{}{0}, DataUnit: &expand.DataUnit{}}))
 	}
-	result, err := evaluator.Evaluate(nil, options...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to evaluate %v: %w", viewlet.Name, err)
-	}
-	bindingArgs = append(bindingArgs, result.Context.DataUnit.ParamsGroup...)
-	return &sqlx.SQL{Query: result.Expanded, Args: bindingArgs}, nil
+	return viewlet.View.BuildParametrizedSQL(templateParameters, types, epxandingSQL, bindingArgs, options...)
 }
 
 func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(ctx context.Context, setType *Viewlet) error) error {

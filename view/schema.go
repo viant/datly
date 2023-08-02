@@ -121,7 +121,6 @@ func (c *Schema) Init(resource Resourcelet, viewCaseFormat format.Case, options 
 		c.SetType(rType)
 		return nil
 	}
-
 	c.initByColumns(columns, relations, selfRef, viewCaseFormat, async)
 	c.autoGen = true
 

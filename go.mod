@@ -49,7 +49,7 @@ require (
 
 require (
 	github.com/viant/govalidator v0.2.1
-	github.com/viant/sqlparser v0.5.1-0.20230801212309-5219d240912b
+	github.com/viant/sqlparser v0.5.1-0.20230802023432-9d7400ae861a
 	golang.org/x/crypto v0.10.0 // indirect
 )
 
@@ -57,7 +57,7 @@ require (
 	github.com/aws/aws-sdk-go v1.44.12
 	github.com/aws/aws-sdk-go-v2/config v1.18.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.33.1
-	github.com/viant/structology v0.3.0
+	github.com/viant/structology v0.3.1-0.20230802025751-c12efbce8745
 	github.com/viant/xdatly v0.3.1-0.20230713223438-282037388a67
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
 	github.com/viant/xdatly/handler v0.0.0-20230713223438-282037388a67

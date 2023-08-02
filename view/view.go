@@ -12,11 +12,15 @@ import (
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/datly/view/column"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/gmetric/provider"
+	"github.com/viant/sqlx"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
+	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -596,18 +600,51 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 	if len(v.Columns) != 0 {
 		return nil
 	}
-
-	columns, SQL, err := DetectColumns(ctx, resource, v)
-	v.Logger.ColumnsDetection(SQL, v.Source())
-
-	if err != nil {
-		return fmt.Errorf("failed to run query: %v due to %w", SQL, err)
+	if v.Mode == "Write" || v.Mode == ModeExec {
+		return nil
 	}
 
-	v.Columns = columns
+	err := v.detectColumns(ctx, resource)
+	if err != nil {
+		return err
+	}
 	if resource._columnsCache != nil {
 		resource._columnsCache[v.Name] = v.Columns
 	}
+	return nil
+}
+
+func (v *View) detectColumns(ctx context.Context, resource *Resource) error {
+	SQL := v.Source()
+	var state Parameters
+	if v.Template != nil {
+		if err := v.Template.Init(ctx, resource, v); err != nil {
+			return err
+		}
+		SQL = v.Template.Source
+		state = v.Template.Parameters
+	}
+	var options []expand.StateOption
+	var bindingArguments []interface{}
+
+	if strings.Contains(SQL, "$View.ParentJoinOn") {
+		//TODO adjust parameter value type
+		options = append(options, expand.WithViewParam(&expand.MetaParam{ParentValues: []interface{}{0}, DataUnit: &expand.DataUnit{}}))
+	}
+	query, err := v.BuildParametrizedSQL(state, resource.TypeRegistry(), SQL, bindingArguments, options...)
+	v.Logger.ColumnsDetection(query.Query, v.Source())
+	if err != nil {
+		return fmt.Errorf("failed to build parameterized query: %v due to %w", SQL, err)
+	}
+	db, err := v.Db()
+	if err != nil {
+		return err
+	}
+	sqlColumns, err := column.Discover(ctx, db, v.Table, query.Query, query.Args...)
+	if err != nil {
+		return fmt.Errorf("failed to detect column with: %v due to %w", query.Query, err)
+	}
+	v.Columns = NewColumns(sqlColumns)
 	return nil
 }
 
@@ -1238,6 +1275,29 @@ func (v *View) ensureAsyncTableNameIfNeeded() error {
 	}
 
 	return nil
+}
+
+func (v *View) BuildParametrizedSQL(state Parameters, types *xreflect.Types, SQL string, bindingArgs []interface{}, options ...expand.StateOption) (*sqlx.SQL, error) {
+	reflectType, err := state.ReflectType("autogen", types.Lookup)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create state %v type: %w", v.Name, err)
+	}
+	stateType := structology.NewStateType(reflectType)
+	inputState := stateType.NewState()
+
+	state.SetLiterals(inputState)
+	state.InitRepeated(inputState)
+	options = append(options, expand.WithParameters(inputState.State(), nil))
+	evaluator, err := NewEvaluator(state, reflectType, nil, SQL, types.Lookup, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create evaluator %v: %w", v.Name, err)
+	}
+	result, err := evaluator.Evaluate(nil, options...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate %v: %w", v.Name, err)
+	}
+	bindingArgs = append(bindingArgs, result.Context.DataUnit.ParamsGroup...)
+	return &sqlx.SQL{Query: result.Expanded, Args: bindingArgs}, nil
 }
 
 func removeNonAlphaNumeric(name string) string {

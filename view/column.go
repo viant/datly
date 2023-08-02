@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/sqlparser"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
@@ -289,6 +290,27 @@ func (c Columns) updateTypes(columns []*Column, caser format.Case) {
 			column.rType = newCol.rType
 		}
 	}
+}
+
+func NewColumns(columns sqlparser.Columns) Columns {
+	var result = make(Columns, 0, len(columns))
+	for _, item := range columns {
+		name := item.Identity()
+		column := &Column{
+			Name:                name,
+			DataType:            item.Type,
+			Tag:                 item.Tag,
+			IgnoreCaseFormatter: false,
+			Filterable:          false,
+			Nullable:            item.IsNullable,
+			rType:               item.RawType,
+		}
+		if item.Default != nil {
+			column.Default = *item.Default
+		}
+		result = append(result, column)
+	}
+	return result
 }
 
 type ColumnConfig struct {

@@ -31,7 +31,7 @@ type (
 		stateType *structology.StateType
 
 		PresenceSchema *Schema       `json:",omitempty" yaml:"presenceSchema,omitempty"`
-		Parameters     []*Parameter  `json:",omitempty" yaml:"parameters,omitempty"`
+		Parameters     Parameters    `json:",omitempty" yaml:"parameters,omitempty"`
 		Meta           *TemplateMeta `json:",omitempty" yaml:",omitempty"`
 
 		sqlEvaluator *expand.Evaluator

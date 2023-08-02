@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/internal/msg"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/column"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx/metadata"
@@ -234,26 +235,14 @@ func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table, SQL
 		return nil, fmt.Errorf("both table/SQL were empty")
 	}
 	var result = &Spec{Table: table, SQL: SQL, SQLArgs: SQLArgs, IsAuxiliary: isAuxiliary}
-	var columns sqlparser.Columns
-	var err error
-	if SQL != "" {
-		if columns, err = detectColumns(ctx, db, SQL, table, SQLArgs...); err != nil {
-			return nil, fmt.Errorf("failed to detect columns due to: %w, SQL: %s", err, SQL)
-		}
-	}
-	if len(columns) == 0 { //TODO mere column types
-		sinkColumns, err := readSinkColumns(ctx, db, table)
-		if err != nil {
-			return nil, err
-		}
-		columns = asColumns(sinkColumns)
+	columns, err := column.Discover(ctx, db, table, SQL, SQLArgs...)
+	if err != nil {
+		return nil, err
 	}
 	result.Columns = columns
-
 	meta := metadata.New()
 	args := option.NewArgs("", "", table)
 	var fkKeys, keys []sink.Key
-
 	if err := meta.Info(ctx, db, info.KindForeignKeys, &fkKeys, args); err != nil {
 		messages.AddWarning(result.Table, "detection", "unable to detect foreign key: %v, %w")
 	}

@@ -45,7 +45,7 @@ func (s State) RemoveReserved() State {
 	return result
 }
 
-func (s State) ViewParameters() []*view.Parameter {
+func (s State) ViewParameters() view.Parameters {
 	var result = make([]*view.Parameter, 0, len(s))
 	for i, _ := range s {
 		parameter := &s[i].Parameter

@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
@@ -727,6 +728,59 @@ func (p Parameters) FilterByKind(kind Kind) Parameters {
 	return result
 }
 
+func (s Parameters) SetLiterals(state *structology.State) (err error) {
+	for _, parameter := range s.FilterByKind(KindLiteral) {
+		if err = state.Set(parameter.Name, parameter.Const); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p Parameters) InitRepeated(state *structology.State) (err error) {
+	for _, parameter := range p {
+		parameterType := parameter.ActualParamType()
+		if parameterType == nil || parameterType.Kind() != reflect.Slice {
+			continue
+		}
+		aSlice := reflect.MakeSlice(parameter.ActualParamType(), 1, 1).Interface()
+		if err = state.SetValue(parameter.Name, aSlice); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType) (reflect.Type, error) {
+	var fields []reflect.StructField
+	var err error
+	for _, param := range s {
+		schema := param.OutputSchema()
+		if schema == nil {
+			return nil, fmt.Errorf("invalid parameter: %v schema was empty", param.Name)
+		}
+		if schema.DataType == "" && param.DataType != "" {
+			schema.DataType = param.DataType
+		}
+		rType := schema.Type()
+		if rType == nil {
+			if rType, err = types.LookupType(lookupType, schema.DataType); err != nil {
+				return nil, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", param.Name, schema.DataType, err)
+			}
+		}
+		param.Schema.Cardinality = schema.Cardinality
+		if rType != nil {
+			fields = append(fields, reflect.StructField{Name: param.Name, Type: rType, PkgPath: PkgPath(param.Name, pkgPath)})
+		}
+	}
+
+	if len(fields) == 0 {
+		return reflect.StructOf([]reflect.StructField{{Name: "Dummy", Type: reflect.TypeOf(true)}}), nil
+	}
+	baseType := reflect.StructOf(fields)
+	return baseType, nil
+}
+
 func (p Parameters) Len() int {
 	return len(p)
 }
@@ -870,4 +924,12 @@ func NewParameter(name string, in *Location, opts ...ParameterOption) *Parameter
 		opt(ret)
 	}
 	return ret
+}
+
+func PkgPath(fieldName string, pkgPath string) (fieldPath string) {
+
+	if fieldName[0] > 'Z' || fieldName[0] < 'A' {
+		fieldPath = pkgPath
+	}
+	return fieldPath
 }

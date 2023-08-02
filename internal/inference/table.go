@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"github.com/viant/datly/internal/setter"
+	"github.com/viant/datly/view/column"
 	"github.com/viant/sqlparser"
-	"github.com/viant/sqlx/metadata/sink"
 	"strings"
 )
 
@@ -60,7 +60,7 @@ func (t *Table) Lookup(column string) *sqlparser.Column {
 
 func (t *Table) lookup(ns, column string) *sqlparser.Column {
 	if len(t.index) == 0 {
-		t.index = t.Columns.ByLowerCasedName()
+		t.index = t.Columns.ByLowerCase()
 	}
 	if ret, ok := t.index[strings.ToLower(column)]; ok && (ns == "" || strings.ToLower(ns) == t.Namespace) {
 		return ret
@@ -85,6 +85,7 @@ func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 	}
 	if !query.List.IsStarExpr() {
 		t.QueryColumns = sqlparser.NewColumns(query.List)
+		t.Columns = t.QueryColumns
 	}
 	t.Namespace = strings.ToLower(query.From.Alias)
 	from := sqlparser.Stringify(query.From.X)
@@ -92,7 +93,9 @@ func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 		t.Name = from
 	}
 	if err = t.extractColumns(ctx, db, from); err != nil {
-		return err
+		if len(t.Columns) == 0 { //no extracted column with db driver error
+			return err
+		}
 	}
 	for _, join := range query.Joins {
 		joinTable, err := NewTable(ctx, db, sqlparser.Stringify(join.With))
@@ -107,14 +110,8 @@ func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 }
 
 func (t *Table) Detect(ctx context.Context, db *sql.DB) (err error) {
-	sinkColumn, _ := readSinkColumns(ctx, db, t.Name)
-	if len(sinkColumn) == 0 {
-		SQL := "SELECT * FROM " + t.Name + " WHERE 1 = 1"
-		sinkColumn, err = inferColumnWithSQL(ctx, db, SQL, []interface{}{}, map[string]sink.Column{})
-	}
-	if len(sinkColumn) > 0 {
-		t.Columns = asColumns(sinkColumn)
-	}
+	SQL := "SELECT * FROM " + t.Name + " WHERE 1 = 1"
+	t.Columns, err = column.Discover(ctx, db, t.Name, SQL)
 	return err
 }
 
@@ -122,30 +119,22 @@ func (t *Table) AppendTable(table *Table) {
 	t.tables = append(t.tables, table)
 }
 
-func (t *Table) extractColumns(ctx context.Context, db *sql.DB, expr string) error {
+func (t *Table) extractColumns(ctx context.Context, db *sql.DB, expr string) (err error) {
 	if !HasWhitespace(strings.TrimSpace(expr)) {
 		expr = strings.Trim(expr, "`'")
 		if index := strings.LastIndex(expr, "."); index != -1 {
 			expr = expr[index+1:]
 		}
-		if sinkColumns, _ := readSinkColumns(ctx, db, expr); len(sinkColumns) > 0 {
-			t.Columns = asColumns(sinkColumns)
-		}
+		t.Columns, err = column.Discover(ctx, db, expr, "SELECT * FROM "+expr+" WHERE 1 = 0")
+
 	} else if strings.Contains(strings.ToLower(expr), "select") {
-		if err := t.detect(ctx, db, expr); err != nil {
-			return err
-		}
+		t.Columns, err = column.Discover(ctx, db, "", expr)
 	}
-	return nil
+	return err
 }
 
 func (t *Table) detectColumns(ctx context.Context, db *sql.DB, table string) {
-	if sinkColumns, _ := readSinkColumns(ctx, db, table); len(sinkColumns) > 0 {
-		t.Columns = asColumns(sinkColumns)
-	}
-	if len(t.Columns) == 0 {
-		t.Columns, _ = detectColumns(ctx, db, "SELECT * FROM "+table+" WHERE 1 = 0", "")
-	}
+	t.Columns, _ = column.Discover(ctx, db, table, "SELECT * FROM "+table+" WHERE 1 = 0")
 }
 
 func NewTable(ctx context.Context, db *sql.DB, SQL string) (*Table, error) {
