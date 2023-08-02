@@ -251,7 +251,8 @@ func (a *Accessor) adjustAndSet(ptr unsafe.Pointer, value interface{}, format st
 		return nil, err
 	}
 
-	converted, _, err := converter.Convert(string(marshal), xField.Type, false, format)
+	raw := string(marshal)
+	converted, _, err := converter.Convert(raw, xField.Type, false, format)
 	if err != nil {
 		return nil, err
 	}

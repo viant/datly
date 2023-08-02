@@ -3,6 +3,7 @@ package converter
 import (
 	"context"
 	"encoding/json"
+	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strconv"
@@ -174,8 +175,12 @@ func Convert(raw string, toType reflect.Type, skipValidation bool, format string
 				format = time.RFC3339
 			}
 
-			asTime, err := time.Parse(format, raw)
-			return asTime, false, err
+			asTime, err := toolbox.ToTime(raw, format)
+			if err != nil {
+				return nil, false, err
+			}
+
+			return *asTime, false, nil
 		}
 	}
 

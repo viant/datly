@@ -1,4 +1,4 @@
-Templates:
+Predicates:
   - Name: "custom_range"
     Args:
       - Name:  "Alias"

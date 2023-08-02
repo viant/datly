@@ -1,4 +1,4 @@
-Templates:
+Predicates:
   - Name: "price_range"
     Args:
       - Name:  "Alias"

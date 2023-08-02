@@ -54,8 +54,8 @@ type Resource struct {
 	_visitors config.CodecsRegistry
 	ModTime   time.Time `json:",omitempty"`
 
-	Templates  []*predicate.Template
-	_templates *config.PredicateRegistry
+	Predicates  []*predicate.Template
+	_predicates *config.PredicateRegistry
 
 	_columnsCache map[string]Columns
 
@@ -668,34 +668,34 @@ func (r *Resource) mergeMessageBuses(resource *Resource) {
 
 func (r *Resource) initTemplates(registry *config.PredicateRegistry) error {
 	if registry != nil {
-		r._templates = registry.Scope()
+		r._predicates = registry.Scope()
 	}
 
 	r.ensureTemplatesIndex()
 
-	for _, template := range r.Templates {
-		r._templates.Add(template)
+	for _, template := range r.Predicates {
+		r._predicates.Add(template)
 	}
 
 	return nil
 }
 
 func (r *Resource) ensureTemplatesIndex() {
-	if r._templates == nil {
-		r._templates = config.NewPredicates()
+	if r._predicates == nil {
+		r._predicates = config.NewPredicates()
 	}
 }
 
 func (r *Resource) mergeTemplates(resource *Resource) {
 	r.ensureTemplatesIndex()
-	for _, template := range resource.Templates {
+	for _, template := range resource.Predicates {
 		r.addTemplate(template)
 	}
 }
 
 func (r *Resource) addTemplate(template *predicate.Template) {
-	r.Templates = append(r.Templates, template)
-	r._templates.Add(template)
+	r.Predicates = append(r.Predicates, template)
+	r._predicates.Add(template)
 }
 
 func (r *Resource) expandStringField(value reflect.Value) error {

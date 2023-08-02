@@ -334,7 +334,7 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 	var predicates []*expand.PredicateConfig
 	for _, p := range t.Parameters {
 		for _, predicate := range p.Predicates {
-			evaluator, err := cache.get(predicate, p, resource._templates, t.PresenceSchema.Type())
+			evaluator, err := cache.get(predicate, p, resource._predicates, t.PresenceSchema.Type())
 			if err != nil {
 				return err
 			}

@@ -98,11 +98,11 @@ func NewNotInPredicate() *predicate.Template {
 }
 
 func newInPredicate(name string, equal bool) *predicate.Template {
-	column := "${Alias}.${ColumnName}"
-	in := fmt.Sprintf("$criteria.In(%v, $FilterValue)", column)
+	column := `${Alias} + "." + ${ColumnName}`
+	in := fmt.Sprintf(`$criteria.In(%v, $FilterValue)`, column)
 
 	if !equal {
-		in = fmt.Sprintf("$criteria.NotIn(%v, $FilterValue)", column)
+		in = fmt.Sprintf(`$criteria.NotIn(%v, $FilterValue)`, column)
 	}
 
 	return &predicate.Template{
