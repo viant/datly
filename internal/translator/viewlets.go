@@ -131,7 +131,7 @@ func (n Viewlets) updateTopQuery(column *sqlparser.Column, viewlet *Viewlet) err
 			return err
 		}
 		if namespaceForColumn.OutputSettings.Field != "" {
-			viewlet.Field = namespaceForColumn.OutputSettings.Field
+			viewlet.Resource.Rule.Field = namespaceForColumn.OutputSettings.Field
 		}
 	}
 	if column.Tag != "" {
