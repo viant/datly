@@ -24,7 +24,7 @@ docker run -p 3306:3306 --name sakiladb -d sakiladb/mysql:latest
     + users: root, sakila
     + password: p_ssW0rd
 
-## 1 Basic patch service for actor table - standalone app in custom mode 
+## 1 Basic patch service for actor table - standalone app in custom mode (using datly handler)
 
 ### 1.1 Generate project
    ```shell
@@ -33,25 +33,18 @@ docker run -p 3306:3306 --name sakiladb -d sakiladb/mysql:latest
 The following project structure get generated
 
 ```bash
- myproject
-  | - .build
-  |    | - datly
-  |    | - ext
-  |
-  | - dsql
-  | 
-  | - pkg 
-  |    | - bootstrap
-  |    |    | - bootstrap.go
-  |    |
-  |    | - checksum
-  |    |    | - init.go
-  |    |
-  |    | - dependency
-  |    |    | - init.go
-  |    |
-  |    | - go.mod
-  |    | - xinit.go
+myproject
+├── .build
+│   ├── datly
+│   └── ext
+├── dsql
+└── pkg
+    ├── bootstrap
+    ├── checksum
+    ├── dependency
+    ├── go.mod
+    ├── go.sum
+    └── xinit.go
 ```
 
 ### 1.2 Create folder for actor's resources
@@ -61,23 +54,23 @@ The following project structure get generated
 
 ### 1.3 Create actor's init sql file
    ```shell
-   touch ~/myproject/dsql/actor/init/actor_init.sql
+   touch ~/myproject/dsql/actor/init/actor_patch_init.sql
    ```
 ```shell
- myproject
-  ...
-  | - dsql 
-  |    | - actor
-  |         | - init
-  |              | - actor_init.sql
-  ...
+myproject
+...
+├── dsql
+│   └── actor
+│       └── init
+│           └── actor_patch_init.sql
+...
 ```
 
-### 1.4 Add content to actor_init.sql
+### 1.4 Add content to actor_patch_init.sql
 
 e.g. for vi users
 ```shell
-vi ~/myproject/dsql/actor/init/actor_init.sql
+vi ~/myproject/dsql/actor/init/actor_patch_init.sql
 ```
 
 ```sql
@@ -86,37 +79,38 @@ SELECT  Actor.* /* {"Cardinality":"Many", "Field":"Entity" } */
 FROM (select * from actor) Actor
 ```
 
-### 1.5 Generate go files and dsql file for patch operations and JSON entity
+### 1.5 Generate go files and dsql file for patch operations ~~and JSON entity~~
 ```shell
 datly gen \
 -o=patch \
 -c='sakiladb|mysql|root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila?parseTime=true' \
--s=dsql/actor/init/actor_init.sql \
+-s=dsql/actor/init/actor_patch_init.sql \
 -g=actor \
--p=~/myproject
+-p=~/myproject \
+-l=go
 ```
 
 The following folders and files get generated or updated
 ```shell
- myproject
-  ...
-  | - dsql 
-  |    | - actor
-  |         | - Actor.sql
-  |         | - EntityPost.json
-  |      
-  | - pkg 
-  |    | - actor
-  |    |    | - actor.go 
-  |    |
-  |    | - dependency
-  |         | - init.go
-  ...
+myproject
+...
+├── dsql
+│   └── actor
+│       └── Actor_patch.sql
+└── pkg
+    ├── actor
+    │   ├── actor.go
+    │   ├── handler.go
+    │   ├── index.go
+    │   └── state.go
+    ├── checksum
+    │   └── init.go
+    ├── dependency
+    │   └── init.go
+    ├── plugin
+    │   └── main.go
+...
 ```
-+ Actor.sql - patch logic written in dsql
-+ ~~EntityPost.json - request body template just with required fields`~~
-+ actor.go - all needed go structs
-+ init.go - updated imports
 
 ### 1.6 Initialise datly rule repository
 ```shell
@@ -126,18 +120,18 @@ datly init -p=~/myproject \
 ```
 The following folders and files get generated
 ```shell
- myproject
-  ...
-  | - repo
-  |    | - dev
-  |         | - Datly 
-  |              | - assets
-  |              | - dependencies
-  |              |    | - connections.yaml
-  |              |
-  |              | - routes
-  |              | - config.json 
-  ...
+myproject
+...
+└── repo
+    └── dev
+        └── Datly
+            ├── assets
+            ├── config.json
+            ├── dependencies
+            │   └── connections.yaml
+            └── routes
+
+...
 ```
 
 + connections.yaml - contains defined connectors:
@@ -185,36 +179,36 @@ FROM (select * from $DB[sakiladb02].actor) actor
 
 ### 1.7 Generate repo rules from dsql
 ```shell
-datly dsql -s=dsql/actor/Actor.sql \
+datly dsql -s=dsql/actor/Actor_patch.sql \
 -p=~/myproject \
+-c='sakiladb|mysql|root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila?parseTime=true' \
 -r=repo/dev
 ```
 The following folders and files get generated
 ```shell
  myproject
   ...
-  | - repo
-  |    | - dev
-  |         | - Datly 
-  |              | - routes
-  |                   | - dev
-  |                        | - Actor
-  |                        |    | - Actor.sql
-  |                        |    | - curActor.sql
-  |                        |
-  |                        | - Actor.yaml
+  └── repo
+    └── dev
+        └── Datly
+            └── routes
+                └── dev
+                    ├── Actor_patch
+                    │   ├── Actor_patch.sql
+                    │   └── CurActor.sql
+                    └── Actor_patch.yaml
   ...
 ```
 
 ### 1.8 Build standalone app
 linux
 ```shell
-datly build -p=~/myproject -r=standalone -d=~/myproject/bin -o=linux -a=amd64
+datly build -p=~/myproject -r=standalone -d=~/myproject/bin -o=linux -a=amd64 &&\
 chmod u+x ~/myproject/bin/datly
 ```
 macos
 ```shell
-datly build -p=~/myproject -r=standalone -d=~/myproject/bin -o=darwin -a=amd64
+datly build -p=~/myproject -r=standalone -d=~/myproject/bin -o=darwin -a=amd64 &&\
 chmod u+x ~/myproject/bin/datly
 ```
 
@@ -279,7 +273,7 @@ Result of starting datly:
         }
 }
 
-[INFO] initialised datly: 17.969712ms
+[INFO] initialised datly: 11.200609ms
 starting endpoint: 8080
 ```
 
@@ -329,6 +323,853 @@ Content-Type: application/json
   ]
 }
 ```
+- **Tip**: We have to pass 4 fields (so far) in the request body because they are all required by db.
+- ~~You can simple use~~ ~~/myproject/dsql/actor/EntityPost.json file as a template. It contains just required fields.~~
+
+The response should be like:
+```json
+[
+    {
+        "actorId": 201,
+        "firstName": "Mike",
+        "lastName": "Wazowski",
+        "lastUpdate": "2023-06-08T21:13:38+02:00"
+    }
+]
+```
+
+### 1.12 Add initialiseForInsert method, which will uppercase actor's name
++ add ~/myproject/pkg/actor/init.go file with content:
+```shell
+vi ~/myproject/pkg/actor/init.go
+```
+```go
+package actor
+
+import (
+	"strings"
+	"time"
+)
+
+func (a *Actor) initialiseForInsert() {
+	a.FirstName = strings.ToUpper(a.FirstName)
+	if !a.Has.LastUpdate {
+		a.LastUpdate = time.Now()
+		a.Has.LastUpdate = true
+	}
+}
+```
+
++ add method invocation in handler.go file
+```go
+if curActorByActorId.Has(recActor.ActorId) == true {
+    if err = sql.Update("actor", recActor); err != nil {
+        return nil, err
+    }
+} else {
+    recActor.initialiseForInsert()
+    if err = sql.Insert("actor", recActor); err != nil {
+        return nil, err
+    }
+}
+```
+
+
+#### Rebuild and restart
+- press Ctrl + C in terminal you run datly (kill datly server)
+- build and run datly
+
+linux
+```shell
+datly build -p=~/myproject -r=standalone -d=~/myproject/bin -o=linux -a=amd64 &&\
+chmod u+x ~/myproject/bin/datly &&\
+~/myproject/bin/datly run -c=~/myproject/repo/dev/Datly/config.json
+```
+macos
+```shell
+datly build -p=~/myproject -r=standalone -d=~/myproject/bin -o=darwin -a=amd64 &&\
+chmod u+x ~/myproject/bin/datly &&\
+~/myproject/bin/datly run -c=~/myproject/repo/dev/Datly/config.json
+```
+
+- or [Generate plugin](#generate-plugin)
+
+
+
++ Check if initialiseForInsert works
+
+```http request
+PATCH /v1/api/dev/actor HTTP/1.1
+Host: 127.0.0.1:8080
+Content-Type: application/json
+```
+```json
+{
+  "Entity": [
+    {
+      "actorId":0,
+      "firstName": "John",
+      "lastName": "Wazowski",
+      "lastUpdate": "2023-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+The response should be like:
+```json
+[
+    {
+        "actorId": 202,
+        "firstName": "JOHN",
+        "lastName": "Wazowski",
+        "lastUpdate": "2023-01-01T00:00:00Z"
+    }
+]
+```
+
+### 1.13 Add initialiseForUpdate method that will set lastUpdate and lastName fields
++ add method into ~/myproject/pkg/actor/init.go file:
+```go
+func (a *Actor) initialiseForUpdate(cur *Actor) {
+	firstNameUpper := false
+
+	if a.Has.LastName { //set last name uppercase if a first name in uppercase
+		if a.Has.FirstName {
+			firstNameUpper = a.FirstName == strings.ToUpper(a.FirstName)
+		} else {
+			firstNameUpper = cur.FirstName == strings.ToUpper(cur.FirstName)
+		}
+
+		if firstNameUpper {
+			a.LastName = strings.ToUpper(a.LastName)
+		}
+	}
+
+	if !a.Has.LastUpdate {
+		a.LastUpdate = time.Now()
+		a.Has.LastUpdate = true
+	}
+}
+```
+
++ add initialiseForUpdate invocation inside file ~/myproject/dsql/actor/Actor_patch.sql
+
+```go
+if curActorByActorId.Has(recActor.ActorId) == true {
+    recActor.initialiseForUpdate(curActorByActorId[recActor.ActorId])
+    if err = sql.Update("actor", recActor); err != nil {
+        return nil, err
+    }
+} else {
+    recActor.initialiseForInsert()
+    if err = sql.Insert("actor", recActor); err != nil {
+        return nil, err
+    }
+}
+```
+- [Rebuild and restart](#rebuild-and-restart) or [Generate plugin](#generate-plugin)
+
++ Check if initialiseForUpdate works
+
+```http request
+PATCH /v1/api/dev/actor HTTP/1.1
+Host: 127.0.0.1:8080
+Content-Type: application/json
+```
+```json
+{
+  "Entity": [
+    {
+      "actorId":202,
+      "lastName": "Biden"
+    }
+  ]
+}
+```
+The response should be like:
+```json
+[
+    {
+        "actorId": 202,
+        "firstName": "JOHN",
+        "lastName": "BIDEN",
+        "lastUpdate": "2023-01-01T00:00:00Z"
+    }
+]
+```
+
+### 1.14 Refactor init functions
+
+- Change ~/myproject/pkg/actor/init.go file:
+  - Wrap initialiseForInsert and initialiseForUpdate methods into new Init method.
+```go
+func (a *Actor) Init(cur *Actor) {
+	isInsert := cur == nil
+	if isInsert {
+		a.initialiseForInsert()
+	} else {
+		a.initialiseForUpdate(cur)
+	}
+}
+```
++ adjust file ~/myproject/pkg/actor/handler.go (two cases):
+
+  + **mysql and sequencer case (our case) when the db table has required fields (more than id field)**  
+    This case requires running initialization before using a sequencer.
+```go
+func (h *Handler) Exec(ctx context.Context, sess handler.Session) (interface{}, error) {
+	state := &State{}
+	if err := sess.Stater().Into(ctx, state); err != nil {
+		return nil, err
+	}
+
+	sql, err := sess.Db()
+	if err != nil {
+		return nil, err
+	}
+	sequencer := sql
+
+	actor := state.Actor
+	curActor := state.CurActor
+
+	curActorByActorId := ActorSlice(curActor).IndexByActorId()
+
+	for _, recActor := range actor {
+		recActor.Init(curActorByActorId[recActor.ActorId])
+	}
+
+	if err = sequencer.Allocate(ctx, "actor", actor, "ActorId"); err != nil {
+		return nil, err
+	}
+
+	for _, recActor := range actor {
+		if curActorByActorId.Has(recActor.ActorId) == true {
+			if err = sql.Update("actor", recActor); err != nil {
+				return nil, err
+			}
+		} else {
+			if err = sql.Insert("actor", recActor); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return state.Actor, nil
+}
+```
+  + general case
+```go
+...
+for _, recActor := range actor {
+    recActor.Init(curActorByActorId[recActor.ActorId])
+    
+    if curActorByActorId.Has(recActor.ActorId) == true {
+        if err = sql.Update("actor", recActor); err != nil {
+            return nil, err
+        }
+    } else {
+        if err = sql.Insert("actor", recActor); err != nil {
+            return nil, err
+        }
+    }
+}
+...
+```
+
+- [Rebuild and restart](#rebuild-and-restart) or [Generate plugin](#generate-plugin)
+
+### 1.15 Validation using tags, custom validation function and custom result handling
++ Datly allows validating entities using tags.  
+  Available tags:
+  - sqlx
+  - validate
+
+
++ Add validate tags in Actor struct in file ~/myproject/pkg/actor/actor.go
+```go
+type Actor struct {
+	ActorId    int       `sqlx:"name=actor_id,autoincrement,primaryKey"`
+	FirstName  string    `sqlx:"name=first_name" validate:"required,le(45)"`
+	LastName   string    `sqlx:"name=last_name,unique,table=actor" validate:"required,le(45)"`
+	LastUpdate time.Time `sqlx:"name=last_update" validate:"required"`
+	Has        *ActorHas `setMarker:"true" typeName:"ActorHas" json:"-"  sqlx:"-" `
+}
+```
+  - validate: "le(45)" allows for strings with lengths shorter or equal to 45
+  - validate: "required" doesn't allow for nil value
+  - sqlx: "unique,table=actor" checks in table actor if a value is unique
+  -
+- Read more about validation tags
+  - [sqlx](https://github.com/viant/sqlx#validator-service)
+  - [govalidator](https://github.com/viant/govalidator#usage)
+
+
++ create folder ~/myproject/pkg/shared
++ create file ~/myproject/pkg/shared/vresult.go
+```go
+package shared
+
+import (
+	"bytes"
+	"fmt"
+	hvalidator "github.com/viant/xdatly/handler/validator"
+	"strings"
+)
+
+type ValidationResult struct {
+	Validations []*hvalidator.Validation
+	Failed      bool
+}
+
+func NewValidationResult(size int) *ValidationResult {
+	r := &ValidationResult{}
+	r.Validations = make([]*hvalidator.Validation, size)
+	return r
+}
+
+func (r *ValidationResult) validationToString(position int, validation *hvalidator.Validation) string {
+
+	if validation == nil || len(validation.Violations) == 0 {
+		return ""
+	}
+	msg := strings.Builder{}
+	msg.WriteString(fmt.Sprintf("Failed validation for Entity[%d]: ", position))
+	for i, v := range validation.Violations {
+		if i > 0 {
+			msg.WriteString(",\n")
+		}
+		msg.WriteString(v.Location)
+		msg.WriteString(" (")
+		msg.WriteString(v.Check)
+		msg.WriteString(")")
+		msg.WriteString(" - ")
+		msg.WriteString(v.Message)
+	}
+	return msg.String()
+}
+
+func (r *ValidationResult) Error() string {
+	var buffer bytes.Buffer
+	if r.Failed {
+		for i, v := range r.Validations {
+			if i > 0 {
+				buffer.WriteString(",\n")
+			}
+			buffer.WriteString(r.validationToString(i, v))
+		}
+	}
+	return buffer.String()
+}
+
+func (r *ValidationResult) ErrorStatusCode() int {
+	return 422 //Unprocessable Entity
+}
+
+func (r *ValidationResult) ErrorMessage() string {
+	return r.Error()
+}
+```
+
++ create file ~/myproject/pkg/actor/validate.go
+```go
+package actor
+
+import (
+	"context"
+	"fmt"
+	"github.com/michael/mymodule/shared"
+	"github.com/viant/xdatly/handler"
+	"github.com/viant/xdatly/handler/sqlx"
+	hvalidator "github.com/viant/xdatly/handler/validator"
+	"strings"
+)
+
+type ValidationResult struct {
+	Validations []*hvalidator.Validation
+	Failed      bool
+}
+
+func (r *ValidationResult) Init(size int) {
+	r.Validations = make([]*hvalidator.Validation, size)
+}
+
+func validateAll(actor []*Actor, session handler.Session) *shared.ValidationResult {
+	validationRes := shared.NewValidationResult(len(actor))
+	var err error
+	for i, recActor := range actor {
+		validationRes.Validations[i], err = recActor.validate(recActor, session)
+		if validationRes.Validations[i].Failed {
+			validationRes.Failed = true
+		}
+		if err != nil {
+			return validationRes
+		}
+	}
+	return validationRes
+}
+
+func (a *Actor) validate(cur *Actor, session handler.Session) (*hvalidator.Validation, error) {
+
+	aValidation, err := a.validateWithTags(session)
+	if err != nil {
+		return aValidation, err
+	}
+
+	isInsert := cur == nil
+	if isInsert {
+		a.validateForInsert(aValidation)
+	} else {
+		a.validateForUpdate(aValidation, cur)
+	}
+	return aValidation, nil
+}
+
+func (a *Actor) validateWithTags(session handler.Session) (*hvalidator.Validation, error) {
+	aValidation := &hvalidator.Validation{}
+	service, err := session.Db(sqlx.WithConnector("sakiladb"))
+	if err != nil {
+		aValidation.AddViolation("/", "", "", "error", fmt.Sprintf("VALIDATION_ERROR: %s", err.Error()))
+		return aValidation, err
+	}
+
+	db, err := service.Db(context.TODO())
+	if err != nil {
+		aValidation.AddViolation("/", "", "", "error", fmt.Sprintf("VALIDATION_ERROR: %s", err.Error()))
+		return aValidation, err
+	}
+
+	sValidator := session.Validator()
+	if sValidator == nil {
+		aValidation.AddViolation("/", "", "", "error", fmt.Sprintf("VALIDATION_ERROR: %s", "session.Validator() returned nil"))
+		return aValidation, err
+	}
+
+	aValidation, err = sValidator.Validate(context.Background(), a,
+		hvalidator.WithShallow(true),
+		hvalidator.WithSetMarker(true), // TODO add hvalidator.WithUnique()
+		hvalidator.WithDB(db),
+	)
+	if err != nil {
+		aValidation.AddViolation("/", "", "", "error", fmt.Sprintf("VALIDATION_ERROR: %s", err.Error()))
+		return aValidation, err
+	}
+
+	return aValidation, nil
+}
+
+func (a *Actor) validateForInsert(validation *hvalidator.Validation) {
+	if a.Has.FirstName && a.Has.LastName {
+		a.validateNames(validation, a.FirstName, a.LastName)
+	}
+}
+
+func (a *Actor) validateForUpdate(validation *hvalidator.Validation, cur *Actor) {
+	firstName := cur.FirstName
+	lastName := cur.LastName
+
+	if a.Has.FirstName {
+		firstName = a.FirstName
+	}
+
+	if a.Has.LastName {
+		lastName = a.LastName
+	}
+
+	a.validateNames(validation, firstName, lastName)
+}
+
+func (a *Actor) validateNames(validation *hvalidator.Validation, firstName string, lastName string) {
+	if len(firstName) > 0 && len(a.LastName) > 0 {
+		if strings.ToUpper(string([]rune(firstName)[0])) == strings.ToUpper(string([]rune(lastName)[0])) {
+			validation.AddViolation("[FirstName, LastName]",
+				"[FirstName, LastName]",
+				fmt.Sprintf("%s %s", firstName, lastName),
+				"theSameFirstLetter",
+				fmt.Sprintf("First name and last name can't start with the same letter %s %s", firstName, lastName))
+		}
+	}
+}
+```
+
++ add Validate invocation inside file ~/myproject/pkg/actor/actor.go
+```go
+...
+	for _, recActor := range actor {
+		recActor.Init(curActorByActorId[recActor.ActorId])
+	}
+
+	validationRes := validateAll(actor, sess)
+	if validationRes.Failed {
+		return nil, validationRes
+	}
+
+	if err = sequencer.Allocate(ctx, "actor", actor, "ActorId"); err != nil {
+		return nil, err
+	}
+...
+```
+- [Rebuild and restart](#rebuild-and-restart) or [Generate plugin](#generate-plugin)
+
++ Check if validation works
+```http request
+PATCH /v1/api/dev/actor HTTP/1.1
+Host: 127.0.0.1:8080
+Content-Type: application/json
+```
+```json
+{
+  "Entity": [
+    {
+      "firstName": "Mike",
+      "lastName": "Wazalsky0123456789012345678901234567890123456789"
+    },
+    {
+      "firstName": null,
+      "lastName": "Wazalsky"
+    },
+    {
+      "firstName": "Willy",
+      "lastName": "Wazalsky"
+    }
+  ]
+}
+```
+The response should be like:
+```code
+{
+  "Status":"error",
+  "Message":"Failed validation for Entity[0]: 
+                LastName (le) - check 'le' failed on field LastName,
+             Failed validation for Entity[1]: 
+                FirstName (required) - check 'required' failed on field FirstName,
+                LastName (unique) - value 'Wazalsky' is not unique"
+             Failed validation for Entity[2]: 
+                LastName (unique) - value 'Wazalsky' is not unique,
+                [FirstName, LastName] (theSameFirstLetter) - First name and last name can't start with the same letter WILLY Wazalsky"
+}
+```
+
+- [Generate plugin](#generate-plugin)
+- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dsql)
+
+
+
+
+
+```sql
+CREATE TABLE `DIFF_JN` (
+  `ID` int(11) NOT NULL AUTO_INCREMENT,
+  `DIFF` longtext,
+  PRIMARY KEY (`ID`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+```
+
+## 2 Basic patch service for actor table - standalone app in custom mode (with velty template)
+
+### 2.1 Generate project
+   ```shell
+   datly initExt -p=~/myproject -n=mymodule
+   ```
+The following project structure get generated
+
+```bash
+ myproject
+  | - .build
+  |    | - datly
+  |    | - ext
+  |
+  | - dsql
+  | 
+  | - pkg 
+  |    | - bootstrap
+  |    |    | - bootstrap.go
+  |    |
+  |    | - checksum
+  |    |    | - init.go
+  |    |
+  |    | - dependency
+  |    |    | - init.go
+  |    |
+  |    | - go.mod
+  |    | - go.sum
+  |    | - xinit.go
+```
+
+### 2.2 Create folder for actor's resources
+   ```shell
+   mkdir -p ~/myproject/dsql/actor/init
+   ```
+
+### 2.3 Create actor's init sql file
+   ```shell
+   touch ~/myproject/dsql/actor/init/actor_patch_init.sql
+   ```
+```shell
+ myproject
+  ...
+  | - dsql 
+  |    | - actor
+  |         | - init
+  |              | - actor_patch_init.sql
+  ...
+```
+
+### 2.4 Add content to actor_patch_init.sql
+
+e.g. for vi users
+```shell
+vi ~/myproject/dsql/actor/init/actor_patch_init.sql
+```
+
+```sql
+/* { "URI":"actor"} */
+SELECT  Actor.* /* {"Cardinality":"Many", "Field":"Entity" } */
+FROM (select * from actor) Actor
+```
+
+### 2.5 Generate go files and dsql file for patch operations and JSON entity
+```shell
+datly gen \
+-o=patch \
+-c='sakiladb|mysql|root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila?parseTime=true' \
+-s=dsql/actor/init/actor_patch_init.sql \
+-g=actor \
+-p=~/myproject
+```
+
+The following folders and files get generated or updated
+```shell
+ myproject
+  ...
+  | - dsql 
+  |    | - actor
+  |         | - Actor_patch.sql
+  |         | - EntityPost.json
+  |      
+  | - pkg 
+  |    | - actor
+  |    |    | - actor.go 
+  |    |
+  |    | - dependency
+  |         | - init.go
+  ...
+```
++ Actor_patch.sql - patch logic written in dsql
++ ~~EntityPost.json - request body template just with required fields`~~
++ actor.go - all needed go structs
++ init.go - updated imports
+
+### 2.6 Initialise datly rule repository
+```shell
+datly init -p=~/myproject \
+-c='sakiladb|mysql|root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila?parseTime=true' \
+-r=repo/dev
+```
+The following folders and files get generated
+```shell
+ myproject
+  ...
+  | - repo
+  |    | - dev
+  |         | - Datly 
+  |              | - assets
+  |              | - dependencies
+  |              |    | - connections.yaml
+  |              |
+  |              | - routes
+  |              | - config.json 
+  ...
+```
+
++ connections.yaml - contains defined connectors:
+```yaml
+Connectors:
+    - DSN: root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila?parseTime=true
+      Driver: mysql
+      Name: sakiladb
+ModTime: "2023-06-02T20:16:54.658521+02:00"
+```
+
++ **Tip**: You can init repository with more than 1 connector i.e.:
+```shell
+datly init -p=~/myproject \
+-c='sakiladb01|mysql|root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila01?parseTime=true' \
+-c='sakiladb02|mysql|root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila02?parseTime=true' \
+-r=repo/dev
+```
+so connections.yaml has content:
+```yaml
+Connectors:
+  - DSN: root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila01?parseTime=true
+    Driver: mysql
+    Name: sakiladb01
+  - DSN: root:p_ssW0rd@tcp(127.0.0.1:3306)/sakila02?parseTime=true
+    Driver: mysql
+    Name: sakiladb02
+ModTime: "2023-06-02T20:16:54.658521+02:00"
+```
+
+First connector in connections.yaml is a default connector for all dsql files.
+You can use connector different from default.
+
+**Warning!**  
+***Choosing connector option is currently implemented only for reader service.***  
+***You can't use it for insert/update/delete operations because they use executor service.***
+
+
+Add $DB[<connector_name>] param prefix before db source inside dsql file i.e. in ActorReader.sql:
+```sql
+/* { "URI":"reader/actor"} */
+SELECT  actor.*
+FROM (select * from $DB[sakiladb02].actor) actor
+```
+
+### 2.7 Generate repo rules from dsql
+```shell
+datly dsql -s=dsql/actor/Actor_patch.sql \
+-p=~/myproject \
+-r=repo/dev
+```
+The following folders and files get generated
+```shell
+ myproject
+  ...
+  | - repo
+  |    | - dev
+  |         | - Datly 
+  |              | - routes
+  |                   | - dev
+  |                        | - Actor
+  |                        |    | - Actor_patch.sql
+  |                        |    | - curActor_patch.sql
+  |                        |
+  |                        | - Actor.yaml
+  ...
+```
+
+### 2.8 Build standalone app
+linux
+```shell
+datly build -p=~/myproject -r=standalone -d=~/myproject/bin -o=linux -a=amd64
+chmod u+x ~/myproject/bin/datly
+```
+macos
+```shell
+datly build -p=~/myproject -r=standalone -d=~/myproject/bin -o=darwin -a=amd64
+chmod u+x ~/myproject/bin/datly
+```
+
+### 2.9 Run app
+```shell
+~/myproject/bin/datly run -c=~/myproject/repo/dev/Datly/config.json
+```
+Result of starting datly:
+```shell
+[INFO] Build time: 0001-01-01 00:00:00 +0000 UTC
+------------ config ------------
+         /Users/<USER>/myproject/repo/dev/Datly/config.json {
+        "URL": "/Users/<USER>/myproject/repo/dev/Datly/config.json",
+        "Version": "",
+        "APIPrefix": "/v1/api/",
+        "RouteURL": "/Users/<USER>/myproject/repo/dev/Datly/routes",
+        "PluginsURL": "/Users/<USER>/myproject/repo/dev/Datly/plugins",
+        "DependencyURL": "/Users/<USER>/myproject/repo/dev/Datly/dependencies",
+        "AssetsURL": "/Users/<USER>/myproject/repo/dev/Datly/assets",
+        "UseCacheFS": false,
+        "SyncFrequencyMs": 2000,
+        "Secrets": null,
+        "JWTValidator": null,
+        "JwtSigner": null,
+        "Cognito": null,
+        "Meta": {
+                "AllowedSubnet": null,
+                "Version": "",
+                "MetricURI": "/v1/api/meta/metric",
+                "ConfigURI": "/v1/api/meta/config",
+                "StatusURI": "/v1/api/meta/status",
+                "ViewURI": "/v1/api/meta/view",
+                "OpenApiURI": "/v1/api/meta/openapi",
+                "CacheWarmURI": "/v1/api/cache/warmup",
+                "StructURI": "/v1/api/meta/struct"
+        },
+        "AutoDiscovery": true,
+        "ChangeDetection": {
+                "NumOfRetries": 15,
+                "RetryIntervalInS": 60
+        },
+        "DisableCors": false,
+        "RevealMetric": true,
+        "CacheConnectorPrefix": "",
+        "APIKeys": [
+                {
+                        "URI": "/v1/api/dev/secured",
+                        "Value": "changeme",
+                        "Header": "App-Secret-Id",
+                        "Secret": null
+                }
+        ],
+        "Endpoint": {
+                "Port": 8080,
+                "ReadTimeoutMs": 0,
+                "WriteTimeoutMs": 0,
+                "MaxHeaderBytes": 0
+        },
+        "Info": {
+                "title": "",
+                "version": ""
+        }
+}
+
+[INFO] initialised datly: 11.200609ms
+starting endpoint: 8080
+```
+
+### 2.10 Add new actor by sending request using e.g. Postman
+```http request
+PATCH /v1/api/dev/actor HTTP/1.1
+Host: 127.0.0.1:8080
+Content-Type: application/json
+```
+```json
+{
+  "Entity": [
+    {
+      "actorId":0,
+      "firstName": "John",
+      "lastName": "Wazowski",
+      "lastUpdate": "2023-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+The response should be like:
+```json
+[
+    {
+        "actorId": 201,
+        "firstName": "John",
+        "lastName": "Wazowski",
+        "lastUpdate": "2023-01-01T00:00:00Z"
+    }
+]
+```
+
+### 2.11 Update actor's name inserted before
+```http request
+PATCH /v1/api/dev/actor HTTP/1.1
+Host: 127.0.0.1:8080
+Content-Type: application/json
+```
+```json
+{
+  "Entity": [
+    {
+      "actorId": 201,
+      "firstName": "Mike"
+    }
+  ]
+}
+```
 + **Tip**: We have to pass 4 fields (so far) in the request body because they are all required by db.  
 You can simple use ~/myproject/dsql/actor/EntityPost.json file as a template. It contains just required fields.
 
@@ -344,7 +1185,7 @@ The response should be like:
 ]
 ```
 
-### 1.12 Add InitialiseForInsert method, which will uppercase actor's name
+### 2.12 Add InitialiseForInsert method, which will uppercase actor's name
 + add ~/myproject/pkg/actor/init.go file with content:
 ```go
 package actor
@@ -382,7 +1223,7 @@ The following folders and files get generated
   |                   | - main_1_17_1_darwin_amd64.so.gz
   ...
 ```
-+ add InitialiseForInsert invocation inside file ~/myproject/dsql/actor/Actor.sql
++ add InitialiseForInsert invocation inside file ~/myproject/dsql/actor/Actor_patch.sql
 
 ```code
 #if(($curActorByActorId.HasKey($recActor.ActorId) == true))
@@ -393,18 +1234,18 @@ The following folders and files get generated
 #end
 ```
 
-- [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dsql)
 
 **Tip:**  
 You don't have to build and deploy app after changing rules or code in go.
 Generated plugins and rules are automatically reloaded by the app on runtime.  
 
 **Warning:**
-- You can use only public method's invocations inside DSQL files (in this case Actor.sql)
+- You can use only public method's invocations inside DSQL files (in this case Actor_patch.sql)
 - Method has to return value.
 - Can't use nil as function argument value without variable (inside DSQL file) 
 
-### 1.13 Check if InitialiseForInsert works
+### 2.13 Check if InitialiseForInsert works
 
 ```http request
 PATCH /v1/api/dev/actor HTTP/1.1
@@ -442,7 +1283,7 @@ You can also see on app console that the plugin and routes were reloaded:
 [INFO] routers rebuild completed after: 441.979753ms
 ```
 
-### 1.14 Add InitialiseForUpdate method that will set lastUpdate and lastName fields
+### 2.14 Add InitialiseForUpdate method that will set lastUpdate and lastName fields
 + add method into ~/myproject/pkg/actor/init.go file:
 ```go
 func (a *Actor) initialiseForUpdate(cur *Actor) bool {
@@ -470,7 +1311,7 @@ func (a *Actor) initialiseForUpdate(cur *Actor) bool {
 ```
 - [Generate plugin](#generate-plugin)
 
-+ add InitialiseForUpdate invocation inside file ~/myproject/dsql/actor/Actor.sql
++ add InitialiseForUpdate invocation inside file ~/myproject/dsql/actor/Actor_patch.sql
 
 ```code
 #if(($curActorByActorId.HasKey($recActor.ActorId) == true))
@@ -482,10 +1323,10 @@ func (a *Actor) initialiseForUpdate(cur *Actor) bool {
 #end
 ```
 
-- [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dsql)
 
 
-### 1.15 Check if InitialiseForUpdate works
+### 2.15 Check if InitialiseForUpdate works
 
 ```http request
 PATCH /v1/api/dev/actor HTTP/1.1
@@ -522,7 +1363,7 @@ You can also see on app console that the plugin and routes were reloaded:
 ```
 
 
-### 1.17 Refactor init functions
+### 2.17 Refactor init functions
 
 - Change ~/myproject/pkg/actor/init.go file:
   - Change InitialiseForInsert and InitialiseForUpdate methods to private ones.
@@ -538,7 +1379,7 @@ func (a *Actor) Init(cur *Actor) bool {
 }
 ```
 
-+ adjust file ~/myproject/dsql/actor/Actor.sql (two cases):  
++ adjust file ~/myproject/dsql/actor/Actor_patch.sql (two cases):  
 
   + **mysql and sequencer case (our case) when the db table has required fields (more than id field)**  
     This case requires running initialization before using a sequencer.
@@ -603,9 +1444,9 @@ func (a *Actor) Init(cur *Actor) bool {
   #end
   ```
 - [Generate plugin](#generate-plugin)
-- [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dsql)
 
-### 1.18 Default struct's validation with tags
+### 2.18 Default struct's validation with tags
 + Datly allows validating entities using tags.  
 Available tags:  
   - ~~sqlx~~ (temporarily under reconstruction) // TODO
@@ -678,7 +1519,7 @@ The response should be like:
 ```
 
 ////////////
-### 1.19 Add custom validation
+### 2.19 Add custom validation
 + **modify file ~/myproject/pkg/actor/validate.go**
 ```go
 package actor
@@ -735,7 +1576,7 @@ func (a *Actor) validateNames(info *shared.Validation, firstName string, lastNam
 }
 ```
 
-+ check if exists Validate invocation inside file ~/myproject/dsql/actor/Actor.sql
++ check if exists Validate invocation inside file ~/myproject/dsql/actor/Actor_patch.sql
 ```code
 #foreach($recActor in $Unsafe.Actor)
     #if($recActor)
@@ -757,7 +1598,7 @@ func (a *Actor) validateNames(info *shared.Validation, firstName string, lastNam
 ```
 
 - [Generate plugin](#generate-plugin)
-- [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dsql)
 ////////////
 + create folder ~/myproject/pkg/shared
 + create file ~/myproject/pkg/shared/message.go
@@ -876,7 +1717,7 @@ func (a *Actor) Validate(cur *Actor) *shared.Validation {
 	return info
 }
 ```
-+ add Validate invocation inside file ~/myproject/dsql/actor/Actor.sql
++ add Validate invocation inside file ~/myproject/dsql/actor/Actor_patch.sql
 
 ```code
 #foreach($recActor in $Unsafe.Actor)
@@ -920,7 +1761,7 @@ type Actor struct {
 
 
 - [Generate plugin](#generate-plugin)
-- [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dsql)
 
 + **If you insert/update (patch) an actor with a first name which length is less than 3 
 then you get a validation error like this**
@@ -931,7 +1772,7 @@ then you get a validation error like this**
 }
 ```
 
-### 1.19 Add custom validation
+### 2.19 Add custom validation
 + **modify file ~/myproject/pkg/actor/validate.go**
 ```go
 package actor
@@ -988,7 +1829,7 @@ func (a *Actor) validateNames(info *shared.Validation, firstName string, lastNam
 }
 ```
 
-+ check if exists Validate invocation inside file ~/myproject/dsql/actor/Actor.sql
++ check if exists Validate invocation inside file ~/myproject/dsql/actor/Actor_patch.sql
 ```code
 #foreach($recActor in $Unsafe.Actor)
     #if($recActor)
@@ -1010,7 +1851,7 @@ func (a *Actor) validateNames(info *shared.Validation, firstName string, lastNam
 ```
 
 - [Generate plugin](#generate-plugin)
-- [Generate repo rules for Actor.sql](#17-generate-repo-rules-from-dsql)
+- [Generate repo rules for Actor_patch.sql](#17-generate-repo-rules-from-dsql)
 
 + **If you insert/update (patch) actor with a first name and last name beginning with the same char 
 then you get a validation error like this:**
@@ -1151,8 +1992,8 @@ error:
 2023/06/22 20:30:38 failed to load routers due to the: unterminated statements on the stack: [0xc0002a89c0 0xc000ba82a0]
 ```
 
-reason:  
-Missing bracket in variable definition, in entity rule file (in this current case ~/myproject/dsql/actor/Actor.sql)
+reason 1:  
+Missing bracket in variable definition, in entity rule file (in this current case ~/myproject/dsql/actor/Actor_patch.sql)
 ```
 #set($result = $recActor.Validate($curActorByActorId[$recActor.ActorId], $session)
 ```
@@ -1160,6 +2001,20 @@ solution:
 ```
 #set($result = $recActor.Validate($curActorByActorId[$recActor.ActorId], $session))
 ```
+
+reason 2:
+Wrong project/module names inside files (check if they have proper values): 
+**.build/ext/init.go:**
+import _ "github.com/<USER>/mymodule"
+
+**.build/ext/go.mod:**
+require github.com/<USER>/mymodule v0.0.0-00010101000000-000000000000
+replace github.com/<USER>/mymodule => /Users/<USER>/myproject/pkg
+
+**.build/datly/go.mod:**
+github.com/<USER>/mymodule v0.0.0-00010101000000-000000000000 // indirect
+replace github.com/<USER>/mymodule => /Users/<USER>/myproject/pkg
+replace github.com/viant/xdatly/extension => /Users/<USER>/myproject/.build/ext
 
 ## 8 Debugging
 ### 8.1 More debug information on runtime
@@ -1339,7 +2194,7 @@ func TestService_Patch(t *testing.T) {
 ```mod
 module github.com/viant/datly
 
-go 1.17
+go 1.20
 
 require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
