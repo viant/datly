@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/cmd/env"
 	"log"
 	"os"
+	"path"
 	"strconv"
 	"time"
 )
@@ -43,15 +44,12 @@ func main() {
 		}
 	}()
 
-	/*
-		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", path.Join(os.Getenv("HOME"), ".secret/viant-e2e.json"))
+	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", path.Join(os.Getenv("HOME"), ".secret/viant-e2e.json"))
 
-		os.Args = []string{
-			"datly",
-			"-c=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/repo/dev/Datly/config.json",
-		}
-
-	*/
+	os.Args = []string{
+		"datly",
+		"-c=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/repo/dev/Datly/config.json",
+	}
 	err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {
 		log.Fatal(err)

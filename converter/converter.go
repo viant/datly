@@ -30,7 +30,7 @@ func Convert(raw string, toType reflect.Type, skipValidation bool, format string
 			return v, false, err
 		case reflect.String:
 			v := NewRepeated(raw, false)
-			return v, false, nil
+			return []string(v), false, nil
 		case reflect.Float64:
 			v, err := NewRepeated(raw, true).AsFloats64()
 			return v, false, err

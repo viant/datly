@@ -73,8 +73,8 @@ func (a *Accessor) adjustAndSet(ptr unsafe.Pointer, value interface{}, format st
 	if value == nil {
 		return nil, nil
 	}
-
 	xField, ptr := a.actualPtr(ptr)
+
 	switch xField.Type.Kind() {
 	case reflect.String:
 		switch actual := value.(type) {
@@ -241,7 +241,7 @@ func (a *Accessor) adjustAndSet(ptr unsafe.Pointer, value interface{}, format st
 		}
 	}
 
-	if reflect.TypeOf(value) == xField.Type {
+	if reflect.TypeOf(value).AssignableTo(xField.Type) {
 		xField.SetValue(ptr, value)
 		return value, nil
 	}
