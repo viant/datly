@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/jessevdk/go-flags"
-	"github.com/viant/afs"
 	"github.com/viant/datly/cmd/command"
 	soptions "github.com/viant/datly/cmd/options"
 	"io"
@@ -47,5 +46,3 @@ func buildOptions(args soptions.Arguments) (*soptions.Options, error) {
 	}
 	return opts, nil
 }
-
-var fs = afs.New()
