@@ -73,6 +73,7 @@ func (b *GoBuild) Init() {
 	}
 
 	b.DestURL = ensureAbsPath(b.DestURL)
+
 }
 
 func (b *Build) Init() error {
@@ -88,6 +89,18 @@ func (b *Build) Init() error {
 	flags := "-X main.BuildTimeInS=" + strconv.Itoa(int(unixTs))
 	if b.LdFlags == nil {
 		b.LdFlags = &flags
+	}
+	if b.Runtime == "" {
+		b.Runtime = "standalone"
+	}
+
+	switch b.Runtime {
+	case "lambda/url":
+		b.MainPath = "gateway/runtime/lambda/app/"
+	case "lambda/apigw":
+		b.MainPath = "gateway/runtime/apigw/app/"
+	case "standalone":
+		b.MainPath = "cmd/datly/"
 	}
 	return nil
 }
