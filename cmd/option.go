@@ -12,17 +12,14 @@ import (
 	"github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/view"
 	"github.com/viant/scy"
+	"os"
 	"path"
 	"runtime"
 	"strings"
 )
 
 const (
-	PreparePost   = "post"
-	PreparePut    = "put"
-	PreparePatch  = "patch"
-	PrepareDelete = "delete"
-	APIPrefix     = "/v1/api/"
+	APIPrefix = "/v1/api/"
 
 	//folderDev = "dev"
 	folderSQL = "dsql"
@@ -610,12 +607,41 @@ func (o *Options) BuildOption() *options.Options {
 	}
 	return result
 }
-
-func namespace(name string) string {
-	parts := strings.Split(strings.ToLower(name), "_")
-	if len(parts) > 2 {
-		return parts[len(parts)-2][0:1] + parts[len(parts)-1][0:1]
+func normalizeURL(loc string) string {
+	loc = strings.Replace(loc, "~", os.Getenv("HOME"), 1)
+	if strings.HasPrefix(loc, "/") {
+		return loc
 	}
 
-	return parts[len(parts)-1][0:2]
+	if scheme := url.Scheme(loc, "e"); scheme == "e" {
+		baseDir, _ := os.Getwd()
+		return path.Join(baseDir, loc)
+	}
+
+	return loc
+}
+
+func combineURLs(basePath string, segments ...string) string {
+	basePath = strings.TrimRight(basePath, "/")
+	var actualSegments []string
+	for _, segment := range segments {
+		if segment == "" {
+			continue
+		}
+
+		actualSegments = append(actualSegments, strings.TrimLeft(segment, "/"))
+	}
+
+	if basePath == "" {
+		switch len(actualSegments) {
+		case 0:
+			return ""
+		case 1:
+			return actualSegments[0]
+		default:
+			return url.Join(actualSegments[0], actualSegments[1:]...)
+		}
+	}
+
+	return url.Join(basePath, actualSegments...)
 }

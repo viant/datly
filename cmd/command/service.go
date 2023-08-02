@@ -37,34 +37,34 @@ type (
 	}
 )
 
-func (s *Service) Exec(ctx context.Context, opts *options.Options) (bool, error) {
+func (s *Service) Exec(ctx context.Context, opts *options.Options) error {
 	if opts.InitExt != nil {
-		return true, s.RunInitExtension(ctx, opts.InitExt)
+		return s.RunInitExtension(ctx, opts.InitExt)
 	}
 	if opts.Bundle != nil {
-		return true, s.BundleRules(ctx, opts.Bundle)
+		return s.BundleRules(ctx, opts.Bundle)
 	}
 	if opts.Touch != nil {
 		s.Touch(ctx, opts.Touch)
-		return true, nil
+		return nil
 	}
 	if opts.Build != nil {
-		return true, s.PrepareBuild(ctx, opts.Build)
+		return s.PrepareBuild(ctx, opts.Build)
 	}
 	if opts.Generate != nil {
-		return true, s.Generate(ctx, opts)
+		return s.Generate(ctx, opts)
 	}
 	if opts.Translate != nil {
-		return true, s.Translate(ctx, opts)
+		return s.Translate(ctx, opts)
 	}
 	if opts.Run != nil {
-		return true, s.Run(ctx, opts.Run)
+		return s.Run(ctx, opts.Run)
 	}
 	if opts.Cache != nil {
-		return true, s.WarmupCache(ctx, opts.Cache)
+		return s.WarmupCache(ctx, opts.Cache)
 	}
 
-	return false, nil
+	return nil
 }
 
 func (s *Service) runCommand(dir string, cmd string, args ...string) (string, error) {

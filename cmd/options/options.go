@@ -16,7 +16,7 @@ type Options struct {
 	Bundle    *Bundle      `command:"bundle" description:"bundles rules for cloud deployment (speed/cost optimization)"`
 	InitCmd   *Init        `command:"init" description:"init datly rule repository"`
 	Touch     *Touch       `command:"touch" description:"forces route rule sync"`
-	Legacy    bool         `short:"l" long:"legacy" description:"show legacy datly option"`
+	Version   bool         `short:"v" long:"version" description:"datly version" `
 }
 
 func (o *Options) UpdateTranslate() {
