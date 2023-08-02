@@ -5,7 +5,9 @@ import (
 	"github.com/viant/afs/url"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type GoBuild struct {
@@ -82,7 +84,8 @@ func (b *Build) Init() error {
 		}
 
 	}
-	flags := "-X main.BuildTimeInS=`date +%s`"
+	unixTs := time.Now().Unix()
+	flags := "-X main.BuildTimeInS=" + strconv.Itoa(int(unixTs))
 	if b.LdFlags == nil {
 		b.LdFlags = &flags
 	}
