@@ -48,10 +48,11 @@ var Config = &Registry{
 	),
 	Predicates: &PredicateRegistry{
 		registry: map[string]*predicate.Template{
-			PredicateEqual:    NewEqualPredicate(),
-			PredicateNotEqual: NewNotEqualPredicate(),
-			PredicateNotIn:    NewNotInPredicate(),
-			PredicateIn:       NewInPredicate(),
+			PredicateEqual:       NewEqualPredicate(),
+			PredicateNotEqual:    NewNotEqualPredicate(),
+			PredicateNotIn:       NewNotInPredicate(),
+			PredicateIn:          NewInPredicate(),
+			PredicateLessOrEqual: NewLessOrEqualPredicate(),
 		},
 	},
 }

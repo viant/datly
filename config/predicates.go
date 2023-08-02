@@ -9,6 +9,7 @@ const PredicateEqual = "equal"
 const PredicateNotEqual = "not_equal"
 const PredicateIn = "in"
 const PredicateNotIn = "not_in"
+const PredicateLessOrEqual = "less_or_equal"
 
 type (
 	PredicateRegistry struct {
@@ -60,33 +61,15 @@ func NewPredicates() *PredicateRegistry {
 }
 
 func NewEqualPredicate() *predicate.Template {
-	return equalityCheckPredicate(PredicateEqual, true)
+	return binaryPredicate(PredicateEqual, "=")
 }
 
-func equalityCheckPredicate(name string, equal bool) *predicate.Template {
-	var negation string
-	if !equal {
-		negation = "!"
-	}
-
-	return &predicate.Template{
-		Name:   name,
-		Source: " ${Alias}.${ColumnName} " + negation + "=  $criteria.AppendBinding($FilterValue)",
-		Args: []*predicate.NamedArgument{
-			{
-				Name:     "Alias",
-				Position: 0,
-			},
-			{
-				Name:     "ColumnName",
-				Position: 1,
-			},
-		},
-	}
+func NewLessOrEqualPredicate() *predicate.Template {
+	return binaryPredicate(PredicateLessOrEqual, "<=")
 }
 
 func NewNotEqualPredicate() *predicate.Template {
-	return equalityCheckPredicate(PredicateNotEqual, false)
+	return binaryPredicate(PredicateNotEqual, "!=")
 }
 
 func NewInPredicate() *predicate.Template {
@@ -108,6 +91,23 @@ func newInPredicate(name string, equal bool) *predicate.Template {
 	return &predicate.Template{
 		Name:   name,
 		Source: " " + in,
+		Args: []*predicate.NamedArgument{
+			{
+				Name:     "Alias",
+				Position: 0,
+			},
+			{
+				Name:     "ColumnName",
+				Position: 1,
+			},
+		},
+	}
+}
+
+func binaryPredicate(name, operator string) *predicate.Template {
+	return &predicate.Template{
+		Name:   name,
+		Source: " ${Alias}.${ColumnName} " + operator + " $criteria.AppendBinding($FilterValue)",
 		Args: []*predicate.NamedArgument{
 			{
 				Name:     "Alias",
