@@ -52,6 +52,9 @@ func (s *Service) Exec(ctx context.Context, opts *options.Options) error {
 	if opts.Build != nil {
 		return s.PrepareBuild(ctx, opts.Build)
 	}
+	if opts.Plugin != nil {
+		return s.BuildPlugin(ctx, opts.Plugin)
+	}
 	if opts.Generate != nil {
 		return s.Generate(ctx, opts)
 	}
