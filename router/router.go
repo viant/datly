@@ -55,6 +55,7 @@ const (
 )
 
 var debugEnabled = os.Getenv("DATLY_DEBUG") != ""
+
 var strErrType = reflect.TypeOf(fmt.Errorf(""))
 
 type (

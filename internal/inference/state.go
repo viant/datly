@@ -208,6 +208,7 @@ func (s State) Expand(text string) string {
 			expander[literal.Name] = literal.Const
 		}
 	}
+
 	text = expandPredicateExpr(text)
 	return expander.ExpandAsText(text)
 }

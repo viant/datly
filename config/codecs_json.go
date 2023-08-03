@@ -3,7 +3,6 @@ package config
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/xreflect"
@@ -112,10 +111,14 @@ func (j *JSONFactory) Name() string {
 	return CodecJSON
 }
 
-func (j *JSONFactory) New(codecConfig *CodecConfig, rType reflect.Type, options ...interface{}) (Valuer, error) {
+func (j *JSONFactory) New(codecConfig *CodecConfig, options ...interface{}) (Valuer, error) {
 	typeName := codecConfig.OutputType
 	if typeName == "" {
-		return nil, fmt.Errorf("JSON output type can't be empty")
+		if err := ValidateArgs(codecConfig, 1, j.Name()); err != nil {
+			return nil, err
+		}
+
+		typeName = codecConfig.Args[0]
 	}
 
 	var lookup xreflect.LookupType
@@ -143,7 +146,7 @@ func (j *JSONFactory) New(codecConfig *CodecConfig, rType reflect.Type, options 
 	}
 
 	result := &JSONParsers{
-		aType:         codecConfig.OutputType,
+		aType:         typeName,
 		lookup:        lookup,
 		aMap:          sync.Map{},
 		resultType:    resultType,

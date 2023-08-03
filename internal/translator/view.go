@@ -26,6 +26,7 @@ type (
 		DataType         string                 `json:",omitempty"`
 		AsyncTableName   string                 `json:",omitempty"`
 		ParameterDerived bool
+		CriteriaParam    string `json:",omitempty"`
 	}
 )
 
@@ -39,6 +40,7 @@ func (v *View) applyHintSettings(namespace *Viewlet) error {
 	if err != nil {
 		return fmt.Errorf("invalid view %v hint, %w, %s", v, err, viewJSONHint)
 	}
+
 	v.applyShorthands(namespace)
 	return nil
 }
@@ -171,6 +173,10 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 		if !v.ParameterDerived {
 			selector.Constraints.Filterable = []string{"*"}
 		}
+	}
+
+	if v.CriteriaParam != "" {
+		selector.CriteriaParam = view.NewRefParameter(v.CriteriaParam)
 	}
 
 }

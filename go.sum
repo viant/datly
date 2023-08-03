@@ -332,8 +332,8 @@ github.com/viant/structql v0.4.1/go.mod h1:gHebhXqfhtTpehk9VyeDq6D1rO87hv62AgG4p
 github.com/viant/toolbox v0.24.0/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888 h1:iQ9ehV+Qev9s/L4eXFFaw3zvZVid+xTT5fW3G3ldEdk=
 github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
-github.com/viant/velty v0.2.1-0.20230718013203-d4e43dfe0ea9 h1:WCLcScl46C9JKngS63xiLcUWQmjfpC6Wc4zMAvxDYT4=
-github.com/viant/velty v0.2.1-0.20230718013203-d4e43dfe0ea9/go.mod h1:C9LNTFXg7DR8B9+tcY2STVqiRQasDr8AZxMhy/lIpOU=
+github.com/viant/velty v0.2.1-0.20230803192842-d7c215d7aaac h1:vxlS2x/d8iVzlGMwp6FENMxEEkr+AAb+ES/bFm1LUfg=
+github.com/viant/velty v0.2.1-0.20230803192842-d7c215d7aaac/go.mod h1:C9LNTFXg7DR8B9+tcY2STVqiRQasDr8AZxMhy/lIpOU=
 github.com/viant/xdatly v0.3.1-0.20230713223438-282037388a67 h1:0T2BRrpDt2t1SqDNZBzUNMll0v66ZQAHtzNL3EnZnPY=
 github.com/viant/xdatly v0.3.1-0.20230713223438-282037388a67/go.mod h1:VElB75XaMgWXTSAqbwpDSlZQeavN8yvqWBnAPTyCfzI=
 github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6 h1:smo1mQEneoMzqnC0ThQpGZmx0gDywu7GFUmjab9rVYM=

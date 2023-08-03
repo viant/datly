@@ -40,7 +40,6 @@ SELECT 1 FROM t WHERE ID IN($TeamIDs)
 
 					ModificationSetting: inference.ModificationSetting{},
 					SQL:                 "",
-					Qualifiers:          nil,
 					Hint:                "",
 				},
 			},

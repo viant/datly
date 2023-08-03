@@ -6,7 +6,7 @@ import (
     "boos.BoosQueryBuilder"
 )
 
-#set($_ = $CriteriaBuilder<?>(http_request/) /* { "Codec": "CriteriaBuilder", "CodecHandler": "*BoosQueryBuilder" } */)
+#set($_ = $Criteria<?>(http_request/).WithCodec("CriteriaBuilder", "*BoosQueryBuilder").Implicit())
 
 SELECT boos.*
-FROM (SELECT * FROM BOOS) boos /* { "CriteriaParam": "CriteriaBuilder" } */
+FROM (SELECT * FROM BOOS) boos /* { "CriteriaParam": "Criteria" } */

@@ -26,8 +26,38 @@ type (
 		xFields []*xunsafe.Field
 		xSlices []*xunsafe.Slice
 	}
+
+	CycleDetector struct {
+		parent  *CycleDetector
+		indexed map[reflect.Type]bool
+	}
 )
 
+func (c *CycleDetector) Indexed(p reflect.Type) bool {
+	curr := c
+	for curr != nil {
+		b, ok := curr.indexed[p]
+		if ok && b {
+			return true
+		}
+		curr = curr.parent
+	}
+
+	return false
+}
+
+func (c *CycleDetector) Next(rType reflect.Type) *CycleDetector {
+	detector := NewCycleDetector(rType)
+	c.indexed[rType] = true
+	detector.parent = c
+	return detector
+}
+
+func NewCycleDetector(rType reflect.Type) *CycleDetector {
+	return &CycleDetector{
+		indexed: map[reflect.Type]bool{},
+	}
+}
 func NewAccessors(namer Namer) *Accessors {
 	return &Accessors{
 		namer: namer,
@@ -370,13 +400,18 @@ func (a *Accessor) String(ptr unsafe.Pointer) string {
 	return xField.String(ptr)
 }
 
-func (a *Accessors) indexAccessors(prefix string, parentType reflect.Type, fields []*xunsafe.Field, path string) {
+func (a *Accessors) indexAccessors(prefix string, parentType reflect.Type, fields []*xunsafe.Field, path string, detector *CycleDetector) {
 	actualParentType := parentType
 
 	parentType = Elem(parentType)
 	if parentType.Kind() != reflect.Struct {
 		return
 	}
+
+	if detector.Indexed(parentType) {
+		return
+	}
+	detector = detector.Next(parentType)
 
 	numField := parentType.NumField()
 	for i := 0; i < numField; i++ {
@@ -394,15 +429,13 @@ func (a *Accessors) indexAccessors(prefix string, parentType reflect.Type, field
 			}
 
 			a.indexAccessor(accessorName, accessorFields, actualParentType)
-			a.indexAccessors(accessorName+".", field.Type, accessorFields, path)
+			a.indexAccessors(accessorName+".", field.Type, accessorFields, path, detector)
 		}
 	}
 }
 
 func (a *Accessors) indexAccessor(name string, fields []*xunsafe.Field, parentType reflect.Type) {
-
 	fieldAccessor := NewAccessor(fields...)
-
 	fieldAccessor.xSlices = make([]*xunsafe.Slice, len(fields))
 
 	for i, field := range fields {
@@ -418,7 +451,8 @@ func (a *Accessors) Init(rType reflect.Type) {
 	if a.init() {
 		return
 	}
-	a.indexAccessors("", rType, []*xunsafe.Field{}, "")
+
+	a.indexAccessors("", rType, []*xunsafe.Field{}, "", NewCycleDetector(rType))
 }
 
 func (a *Accessors) InitPath(rType reflect.Type, path string) {
@@ -426,7 +460,7 @@ func (a *Accessors) InitPath(rType reflect.Type, path string) {
 		return
 	}
 
-	a.indexAccessors("", rType, []*xunsafe.Field{}, path)
+	a.indexAccessors("", rType, []*xunsafe.Field{}, path, NewCycleDetector(rType))
 }
 
 func (a *Accessors) init() bool {

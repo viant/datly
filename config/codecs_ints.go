@@ -3,11 +3,16 @@ package config
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 )
 
 type AsInts struct {
+}
+
+func (i *AsInts) ResultType(paramType reflect.Type) (reflect.Type, error) {
+	return reflect.TypeOf([]int{}), nil
 }
 
 func (i *AsInts) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {

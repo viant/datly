@@ -71,6 +71,14 @@ type (
 	asStrings          struct{}
 )
 
+func (a *asStrings) ResultType(paramType reflect.Type) (reflect.Type, error) {
+	return reflect.TypeOf([]string{}), nil
+}
+
+func (g *gcpMockDecoder) ResultType(paramType reflect.Type) (reflect.Type, error) {
+	return reflect.TypeOf(&oauth2.Tokeninfo{}), nil
+}
+
 func (a *asStrings) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
 	rawString, ok := asString(raw)
 	if !ok {
@@ -164,7 +172,7 @@ type event struct {
 	Timestamp time.Time
 }
 
-//TODO: add testcases against sql injection
+// TODO: add testcases against sql injection
 func TestRouter(t *testing.T) {
 	view.PingTimeInS = 1000
 	reader.Dif = func(t1, t2 time.Time) time.Duration {

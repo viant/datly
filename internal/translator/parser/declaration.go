@@ -21,6 +21,7 @@ type (
 		StatusCode    *int             `json:",omitempty" yaml:",omitempty"`
 		TransformKind string           `json:",omitempty" yaml:",omitempty"`
 		Transformer   string           `json:",omitempty" yaml:",omitempty"`
+		CodecArgs     []string         `json:",omitempty" yaml:",omitempty"`
 	}
 )
 
@@ -62,11 +63,12 @@ func (d *Declaration) ExpandShorthands() {
 	}
 	if d.OutputType != "" || d.Codec != "" {
 		d.Parameter.EnsureCodec()
-		if d.Parameter.Output.OutputType == "" {
-			d.Parameter.Output.OutputType = d.OutputType
-		}
 		if d.Parameter.Output.Name == "" {
 			d.Parameter.Output.Name = d.Codec
+		}
+
+		if len(d.Parameter.Output.Args) == 0 {
+			d.Parameter.Output.Args = d.CodecArgs
 		}
 
 		switch d.Codec { //TODO get codec registry here
@@ -111,7 +113,7 @@ func (d *Declaration) ExpandShorthands() {
 		}
 		if d.In.Kind == view.KindParam {
 			d.Parameter.EnsureCodec()
-			d.Parameter.Output.Query = d.SQL
+			d.Parameter.Output.Body = d.SQL
 			d.Parameter.Output.Ref = "structql"
 		}
 	}

@@ -88,8 +88,6 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 		return err
 	}
 
-	t.updateStateParams()
-
 	if err = t.initSqlEvaluator(resource); err != nil {
 		return err
 	}
@@ -100,8 +98,8 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 		return err
 	}
 
-	t._parametersIndex = Parameters(t.Parameters).Index()
-	sort.Sort(Parameters(t.Parameters))
+	t._parametersIndex = t.Parameters.Index()
+	sort.Sort(t.Parameters)
 	return t.initMetaIfNeeded(ctx, resource)
 }
 
@@ -138,7 +136,7 @@ func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resourc
 		}
 	}
 
-	rType, err := BuildType(nonStateParameters(t.Parameters))
+	rType, err := BuildType(t.Parameters)
 	if err != nil {
 		return err
 	}
@@ -398,10 +396,6 @@ func (t *Template) initPresenceSchemaFromParams() error {
 func nonStateParameters(parameters []*Parameter) []*Parameter {
 	params := make([]*Parameter, 0, len(parameters))
 	for _, p := range parameters {
-		if p.In.Kind == KindState {
-			continue
-		}
-
 		params = append(params, p)
 	}
 	return params
@@ -409,10 +403,6 @@ func nonStateParameters(parameters []*Parameter) []*Parameter {
 
 func (t *Template) updateParametersFields() error {
 	for _, param := range t.Parameters {
-		if param.In.Kind == KindState {
-			continue
-		}
-
 		if err := param.SetPresenceField(t.PresenceSchema.Type()); err != nil {
 			return err
 		}
@@ -602,14 +592,4 @@ func (t *Template) initMetaIfNeeded(ctx context.Context, r *Resource) error {
 
 func (t *Template) StateType() reflect.Type {
 	return t.sqlEvaluator.Type()
-}
-
-func (t *Template) updateStateParams() {
-	for _, p := range t.Parameters {
-		if p.In.Kind != KindState {
-			continue
-		}
-
-		p.Schema = NewSchema(t.Schema.Type())
-	}
 }

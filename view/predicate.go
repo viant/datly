@@ -42,10 +42,6 @@ func (e *predicateEvaluator) Evaluate(ctx *expand.Context, paramValue interface{
 
 func (c *predicateCache) get(predicateConfig *config.PredicateConfig, param *Parameter, registry *config.PredicateRegistry, presenceType reflect.Type) (*predicateEvaluator, error) {
 	aKey := predicateKey{name: predicateConfig.Name, paramType: param.ActualParamType()}
-	if param.In.Kind != KindState {
-		presenceType = xreflect.BoolType
-	}
-
 	var provider, err = c.getEvaluatorProvider(predicateConfig, param.ActualParamType(), registry, aKey, presenceType)
 	if err != nil {
 		return nil, err

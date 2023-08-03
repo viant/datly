@@ -21,16 +21,14 @@ const (
 	KindLiteral     Kind = "literal"
 	KindParam       Kind = "param"
 
-	KindPredicate Kind = "predicate"
-	KindRequest   Kind = "http_request"
-	KindState     Kind = "state"
-	KindGroup     Kind = "group"
+	KindRequest Kind = "http_request"
+	KindGroup   Kind = "group"
 )
 
 // Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindLiteral, KindParam, KindRequest, KindState, KindGroup:
+	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindLiteral, KindParam, KindRequest, KindGroup:
 		return nil
 	}
 
@@ -59,8 +57,6 @@ func (k Kind) Ordinal() int {
 		return 8
 	case KindRequest:
 		return 9
-	case KindState:
-		return 10
 	}
 	return -1
 }
@@ -84,7 +80,7 @@ func (p ParamName) Validate(kind Kind) error {
 		}
 
 		return nil
-	case KindRequest, KindLiteral, KindRequestBody, KindState:
+	case KindRequest, KindLiteral, KindRequestBody:
 		return nil
 	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindParam:
 		if p == "" {

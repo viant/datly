@@ -44,13 +44,14 @@ pipeline:
       - cd ${appPath}/e2e/custom_datly/.extension/.build/ext
       - go mod tidy
       - cd ${appPath}/e2e/custom_datly/.extension/pkg
-      - go get github.com/viant/xdatly/handler@01ca1dc
+      - go get github.com/viant/xdatly/handler@2820373
       - go mod tidy
       - cd $appPath/e2e/custom_datly/.extension/.build/datly
       - go mod edit -replace github.com/viant/xdatly/extension=${appPath}/e2e/custom_datly/.extension/.build/ext
       - go mod edit -replace github.com/viant/datly_ext=${appPath}/e2e/custom_datly/.extension/pkg
       - go mod tidy
       - /tmp/datly build -p='${appPath}/e2e/custom_datly/.extension' -d='${appPath}/e2e/custom_datly/.extension'  -r=standalone -o=darwin -a=amd64 -v=1.20.5 -f='' -b='-trimpath'
+      - mv ${appPath}/e2e/custom_datly/.extension/main ${appPath}/e2e/custom_datly/.extension/datly
       - chmod u+x ${appPath}/e2e/custom_datly/.extension/datly
 
 
@@ -66,8 +67,6 @@ pipeline:
     action: run
     request: '@over_cases'
 
-
-
   buildPlugin:
     action: exec:run
     target: '$target'
@@ -75,7 +74,7 @@ pipeline:
     commands:
       - cd ${appPath}/e2e/custom_datly/.extension/pkg
       - go mod tidy
-      - $appPath/e2e/custom_datly/.extension/datly plugin -s=${appPath}/e2e/custom_datly/.extension/ -d=${appPath}/e2e/custom_datly/.extension/repo/dev/Datly/plugins -v=1.20.5 -a=amd64 -b='-trimpath'
+      - $appPath/e2e/custom_datly/.extension/datly plugin -s=${appPath}/e2e/custom_datly/.extension/pkg -d=${appPath}/e2e/custom_datly/.extension/repo/dev/Datly/plugins -v=1.20.5 -a=amd64 -b='-trimpath'
 
   app:
     description: start datly app with rule generted from SQLs

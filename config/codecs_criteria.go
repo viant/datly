@@ -37,9 +37,9 @@ func (c *CriteriaBuilderFactory) Name() string {
 	return CodecCriteriaBuilder
 }
 
-func (c *CriteriaBuilderFactory) New(codecConfig *CodecConfig, _ reflect.Type, options ...interface{}) (Valuer, error) {
-	if codecConfig.HandlerType == "" {
-		panic("HandlerType can't be empty")
+func (c *CriteriaBuilderFactory) New(codecConfig *CodecConfig, options ...interface{}) (Valuer, error) {
+	if err := ValidateArgs(codecConfig, 1, c.Name()); err != nil {
+		return nil, err
 	}
 
 	var typesLookup xreflect.LookupType
@@ -53,20 +53,29 @@ func (c *CriteriaBuilderFactory) New(codecConfig *CodecConfig, _ reflect.Type, o
 		}
 	}
 
-	lookupType, err := types.LookupType(typesLookup, codecConfig.HandlerType)
+	handlerType := codecConfig.Args[0]
+	lookupType, err := types.LookupType(typesLookup, handlerType)
 	if err != nil {
 		panic(err)
 	}
 
 	_, ok := types.NewValue(lookupType).(parameter.CriteriaBuilder)
 	if !ok {
-		panic(fmt.Sprintf("expected %v to implement parameter.Criteria builder", codecConfig.HandlerType))
+		panic(fmt.Sprintf("expected %v to implement parameter.Criteria builder", handlerType))
 	}
 
 	return &CriteriaBuilder{
 		receiverType:  lookupType,
 		columnsSource: columnsSource,
 	}, nil
+}
+
+func ValidateArgs(codecConfig *CodecConfig, expectedLen int, codecName string) error {
+	if len(codecConfig.Args) != expectedLen {
+		return fmt.Errorf("expected %v to receive %v argument(s) but got %v", codecConfig, expectedLen, len(codecConfig.Args))
+	}
+
+	return nil
 }
 
 func (c *CriteriaBuilder) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {

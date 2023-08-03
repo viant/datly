@@ -93,7 +93,7 @@ func (c *columnsCodec) updateValue(ctx context.Context, value interface{}, recor
 	asPtr := xunsafe.AsPointer(value)
 	for i, column := range c.columns {
 		fieldValue := c.fields[i].Value(asPtr)
-		decoded, err := column.Codec._codecFn(ctx, fieldValue, record)
+		decoded, err := column.Codec._codec.Value(ctx, fieldValue, record)
 		if err != nil {
 			return err
 		}

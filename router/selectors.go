@@ -247,8 +247,7 @@ func (b *paramStateBuilder) populateCriteria(ctx context.Context, selector *view
 			return err
 		}
 
-		selector.Criteria = sanitizedCriteria.Expression
-		selector.Placeholders = sanitizedCriteria.Placeholders
+		selector.SetCriteria(sanitizedCriteria.Expression, sanitizedCriteria.Placeholders)
 		return nil
 
 	case *parameter.Criteria:
@@ -469,10 +468,6 @@ func (p *RequestParams) convert(isSpecified bool, raw string, param *view.Parame
 func (b *paramStateBuilder) buildSelectorParameters(ctx context.Context, state *view.ParamState, parent *ViewDetails, parameters []*view.Parameter, options ...interface{}) (*view.Parameter, error) {
 	var viewParams []*view.Parameter
 	for _, parameter := range parameters {
-		if parameter.In.Kind == view.KindState {
-			continue
-		}
-
 		if parameter.In.Kind == view.KindDataView && parameter.ErrorStatusCode <= 400 {
 			viewParams = append(viewParams, parameter)
 			continue

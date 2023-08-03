@@ -204,11 +204,12 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 
 			declaration.Tag = args[0]
 		case "WithCodec":
-			if len(args) != 1 {
-				return fmt.Errorf("expected WithCodec to have one arg, but got %v", len(args))
+			if len(args) < 1 {
+				return fmt.Errorf("expected WithCodec to have at least one arg, but got %v", len(args))
 			}
 
 			declaration.Codec = args[0]
+			declaration.CodecArgs = args[1:]
 		case "WithStatusCode":
 			if len(args) != 1 {
 				return fmt.Errorf("expected WithStatusCode to have one arg, but got %v", len(args))
@@ -234,7 +235,9 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 				return err
 			}
 		case "UtilParam":
-			//deprecated
+		//deprecated
+		case "Selector":
+			declaration.Explicit = false
 		}
 		cursor.MatchOne(whitespaceMatcher)
 	}
@@ -261,19 +264,20 @@ func (s *Declarations) appendPredicate(declaration *Declaration, args []string, 
 
 func extractArgs(content string) []string {
 	result := make([]string, 0)
-	cursor := parsly.NewCursor("", []byte(strings.Trim(content, `"`)), 0)
+	cursor := parsly.NewCursor("", []byte(content), 0)
 	for {
 		matched := cursor.MatchAfterOptional(whitespaceMatcher, singleQuotedMatcher, quotedMatcher, comaTerminatedMatcher)
 		switch matched.Code {
 		case singleQuotedToken, doubleQuotedToken:
-			arg := matched.Text(cursor)
-			arg = arg[1 : len(arg)-1]
+			text := matched.Text(cursor)
+			arg := extractArg(text)
 			result = append(result, arg)
 			cursor.MatchOne(comaTerminatedMatcher)
 		case comaTerminatedToken:
-			arg := matched.Text(cursor)
-			arg = arg[:len(arg)-1]
-			result = append(result, strings.TrimSpace(arg))
+			text := matched.Text(cursor)
+			text = text[:len(text)-1]
+			arg := extractArg(text)
+			result = append(result, arg)
 		default:
 			if cursor.Pos < len(cursor.Input) {
 				arg := strings.Trim(strings.TrimSpace(string(cursor.Input[cursor.Pos:])), `"'`)
@@ -284,6 +288,22 @@ func extractArgs(content string) []string {
 			return result
 		}
 	}
+}
+
+func extractArg(cursorContent string) string {
+	text := cursorContent
+	text = strings.TrimSpace(text)
+	if strings.HasSuffix(text, ",") {
+		text = text[:len(text)-1]
+	}
+
+	theQuote := text[0]
+	switch theQuote {
+	case '\'', '"':
+		text = strings.Trim(text, string(theQuote))
+	}
+
+	return strings.TrimSpace(text)
 }
 
 func NewDeclarations(SQL string, lookup func(dataType string, opts ...xreflect.Option) (*view.Schema, error)) (*Declarations, error) {

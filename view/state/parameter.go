@@ -45,8 +45,6 @@ type (
 		shared.Reference
 		Name      string           `json:",omitempty"`
 		Signature []*NamedArgument //inherited from registry
-		Args      []string
-
 		config.CodecConfig
 		Schema *Schema `json:",omitempty"`
 	}

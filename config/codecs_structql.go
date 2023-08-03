@@ -37,12 +37,12 @@ func (s StructQLFactory) Name() string {
 	return CodecStructql
 }
 
-func (s StructQLFactory) New(codec *CodecConfig, paramType reflect.Type, options ...interface{}) (Valuer, error) {
-	if codec.Query == "" {
+func (s StructQLFactory) New(codec *CodecConfig, _ ...interface{}) (Valuer, error) {
+	if codec.Body == "" {
 		return nil, fmt.Errorf("codec query can't be empty")
 	}
 
-	structQLCodec, err := NewStructQLCodec(codec.Query, paramType)
+	structQLCodec, err := NewStructQLCodec(codec.Body, codec.ParamType)
 	if err != nil {
 		return nil, err
 	}

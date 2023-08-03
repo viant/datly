@@ -5,13 +5,19 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/viant/scy/auth/gcp"
+	"github.com/viant/scy/auth/jwt"
+	"reflect"
 	"strings"
 )
 
-//GCPJwtClaim represents IDJWT visitor
+// GCPJwtClaim represents IDJWT visitor
 type (
 	GCPJwtClaim struct{}
 )
+
+func (j *GCPJwtClaim) ResultType(paramType reflect.Type) (reflect.Type, error) {
+	return reflect.TypeOf(&jwt.Claims{}), nil
+}
 
 func (j *GCPJwtClaim) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
 	rawString, ok := raw.(string)

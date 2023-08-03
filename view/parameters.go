@@ -43,13 +43,12 @@ type (
 		ErrorStatusCode int         `json:",omitempty"`
 		Tag             string      `json:",omitempty"`
 
-		_valueAccessor     *types.Accessor
-		_presenceAccessor  *types.Accessor
-		_initialized       bool
-		_literalValue      interface{}
-		_dependsOn         *Parameter
-		_state             *structology.StateType
-		_isStateBasedParam bool
+		_valueAccessor    *types.Accessor
+		_presenceAccessor *types.Accessor
+		_initialized      bool
+		_literalValue     interface{}
+		_dependsOn        *Parameter
+		_state            *structology.StateType
 	}
 
 	ParameterOption func(p *Parameter)
@@ -62,12 +61,14 @@ type (
 
 	Codec struct {
 		shared.Reference
-		Name string `json:",omitempty"`
-		config.CodecConfig
-		Schema *Schema `json:",omitempty"`
+		Name   string   `json:",omitempty"`
+		Body   string   `json:",omitempty"`
+		Args   []string `json:",omitempty"`
+		Schema *Schema  `json:",omitempty"`
 
 		_initialized bool
-		_codecFn     config.CodecFn
+		_codec       config.Valuer
+		OutputType   string `json:",omitempty"`
 	}
 )
 
@@ -93,32 +94,31 @@ func (v *Codec) Init(resource Resourcelet, inputType reflect.Type) error {
 	}
 
 	v.ensureSchema(inputType)
-	if v.SourceURL != "" && v.Source == "" {
-		data, err := resource.LoadText(context.Background(), v.SourceURL)
-		if err != nil {
-			return err
-		}
-		v.Source = data
-	}
 
 	if err := v.Schema.Init(resource, format.CaseUpperCamel); err != nil {
 		return err
 	}
 
-	return v.initFnIfNeeded(resource)
+	return v.initFnIfNeeded(resource, inputType)
 }
 
-func (v *Codec) initFnIfNeeded(resource Resourcelet) error {
-	if v._codecFn != nil {
+func (v *Codec) initFnIfNeeded(resource Resourcelet, inputType reflect.Type) error {
+	if v._codec != nil {
 		return nil
 	}
 
-	fn, err := v.extractCodecFn(resource)
+	fn, err := v.extractCodecFn(resource, inputType)
 	if err != nil {
 		return err
 	}
 
-	v._codecFn = fn
+	v._codec = fn
+	resultType, err := fn.ResultType(inputType)
+	if err != nil {
+		return err
+	}
+
+	v.Schema = NewSchema(resultType)
 	return nil
 }
 
@@ -126,9 +126,11 @@ func (v *Codec) inheritCodecIfNeeded(resource Resourcelet, inputType reflect.Typ
 	if v.Ref == "" {
 		return nil
 	}
+
 	if err := v.initSchemaIfNeeded(resource); err != nil {
 		return err
 	}
+
 	visitor, err := resource.NamedCodecs().LookupCodec(v.Ref)
 	if err != nil {
 		return fmt.Errorf("not found codec with name %v", v.Ref)
@@ -136,26 +138,18 @@ func (v *Codec) inheritCodecIfNeeded(resource Resourcelet, inputType reflect.Typ
 
 	factory, ok := visitor.(config.CodecFactory)
 	if ok {
-		opts := []interface{}{resource.LookupType()}
-		if columns := resource.IndexedColumns(); len(columns) > 0 {
-			opts = append(opts, columns)
-		}
-
-		aCodec, err := factory.New(&v.CodecConfig, inputType, opts...)
+		aCodec, err := v.codecInstance(resource, inputType, factory)
 		if err != nil {
 			return err
 		}
 
-		v._codecFn = aCodec.Value
-		if typeProvider, ok := aCodec.(config.Typer); ok {
-			rType, err := typeProvider.ResultType(inputType)
-			if err != nil {
-				return err
-			}
-
-			v.Schema = NewSchema(rType)
+		v._codec = aCodec
+		rType, err := aCodec.ResultType(inputType)
+		if err != nil {
+			return err
 		}
 
+		v.Schema = NewSchema(rType)
 		return nil
 	}
 
@@ -167,6 +161,26 @@ func (v *Codec) inheritCodecIfNeeded(resource Resourcelet, inputType reflect.Typ
 	return v.inherit(asCodec, inputType)
 }
 
+func (v *Codec) codecInstance(resource Resourcelet, inputType reflect.Type, factory config.CodecFactory) (config.Valuer, error) {
+	opts := []interface{}{resource.LookupType()}
+	if columns := resource.IndexedColumns(); len(columns) > 0 {
+		opts = append(opts, columns)
+	}
+
+	aCodec, err := factory.New(&config.CodecConfig{
+		Body:       v.Body,
+		ParamType:  inputType,
+		Args:       v.Args,
+		OutputType: v.OutputType,
+	}, opts...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return aCodec, nil
+}
+
 func (v *Codec) ensureSchema(paramType reflect.Type) {
 	if v.Schema == nil {
 		v.Schema = &Schema{}
@@ -174,24 +188,26 @@ func (v *Codec) ensureSchema(paramType reflect.Type) {
 	}
 }
 
-func (v *Codec) extractCodecFn(resource Resourcelet) (config.CodecFn, error) {
+func (v *Codec) extractCodecFn(resource Resourcelet, inputType reflect.Type) (config.Valuer, error) {
 	vVisitor, err := resource.NamedCodecs().Lookup(v.Name)
 	if err != nil {
 		return nil, err
 	}
 
+	if asFactory, ok := vVisitor.(config.CodecFactory); ok {
+		return v.codecInstance(resource, inputType, asFactory)
+	}
+
 	switch actual := vVisitor.(type) {
 	case config.BasicCodec:
-		return actual.Valuer().Value, nil
-	case config.CodecDef:
-		return actual.Valuer().Value, nil
+		return actual.Valuer(), nil
 	default:
 		return nil, fmt.Errorf("expected %T to implement Codec", actual)
 	}
 }
 
 func (v *Codec) Transform(ctx context.Context, value interface{}, options ...interface{}) (interface{}, error) {
-	return v._codecFn(ctx, value, options...)
+	return v._codec.Value(ctx, value, options...)
 }
 
 func (v *Codec) inherit(asCodec config.CodecDef, paramType reflect.Type) error {
@@ -203,7 +219,7 @@ func (v *Codec) inherit(asCodec config.CodecDef, paramType reflect.Type) error {
 
 	v.Schema = NewSchema(resultType)
 	v.Schema.DataType = resultType.String()
-	v._codecFn = asCodec.Valuer().Value
+	v._codec = asCodec.Valuer()
 	return nil
 }
 
@@ -284,7 +300,6 @@ func (p *Parameter) initDataViewParameter(ctx context.Context, resource Resource
 	}
 	p.Schema = schema.copy()
 
-	fmt.Printf("view schema: %v\n", p.Schema.Cardinality)
 	if cardinality != "" {
 		p.Schema.Cardinality = cardinality
 
@@ -394,9 +409,6 @@ func (p *Parameter) initSchema(resource Resourcelet) error {
 		p.Schema = NewSchema(rType)
 		p._state = structology.NewStateType(p.Schema.Type())
 		p._state.NewState()
-		return nil
-	}
-	if p.In.Kind == KindState {
 		return nil
 	}
 
@@ -543,13 +555,13 @@ func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr un
 		aCodec = nil
 	}
 
-	var codecFn config.CodecFn
+	var codecFn config.Valuer
 	if aCodec != nil {
-		codecFn = aCodec._codecFn
+		codecFn = aCodec._codec
 	}
 
 	if codecFn != nil {
-		convertedValue, err := codecFn(ctx, value, options...)
+		convertedValue, err := codecFn.Value(ctx, value, options...)
 		if err != nil {
 			return nil, err
 		}
@@ -648,7 +660,6 @@ func (p *Parameter) initParamBasedParameter(ctx context.Context, resource Resour
 	}
 	p.Schema = param.Schema.copy()
 	p._dependsOn = param
-	p._isStateBasedParam = param._isStateBasedParam || param.In.Kind == KindState
 	return nil
 }
 
@@ -671,23 +682,11 @@ func (p *Parameter) PresenceAccessor() *types.Accessor {
 	return p._presenceAccessor
 }
 
-func (p *Parameter) IsStateBased() bool {
-	return p._isStateBasedParam
-}
-
 func (p *Parameter) accessValue(state interface{}, ptr unsafe.Pointer) (interface{}, error) {
-	if p.In.Kind == KindState {
-		return state, nil
-	}
-
 	return p._valueAccessor.Value(ptr)
 }
 
 func (p *Parameter) accessHas(has interface{}, ptr unsafe.Pointer) (bool, error) {
-	if p.In.Kind == KindState {
-		return true, nil
-	}
-
 	value, err := p._presenceAccessor.Value(ptr)
 	if err != nil {
 		return false, err

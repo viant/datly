@@ -1166,9 +1166,9 @@ func (v *View) indexTransforms() error {
 			return err
 		}
 		aConfig.Codec = &Codec{
-			Name:     transform.Codec,
-			Schema:   NewSchema(resultType),
-			_codecFn: actualCodec.Valuer().Value,
+			Name:   transform.Codec,
+			Schema: NewSchema(resultType),
+			_codec: actualCodec.Valuer(),
 		}
 	}
 

@@ -20,6 +20,10 @@ type (
 	}
 )
 
+func (c *CSV) ResultType(paramType reflect.Type) (reflect.Type, error) {
+	return c.sliceType.Type, nil
+}
+
 func (c CsvFactory) Valuer() Valuer {
 	panic(UnexpectedUseError("Valuer", c))
 }
@@ -33,14 +37,14 @@ func (c CsvFactory) Value(ctx context.Context, raw interface{}, options ...inter
 }
 
 func (c *CSV) Valuer() Valuer {
-	panic(UnexpectedUseError("Valuer", c))
+	return c
 }
 
-func (c CsvFactory) New(codec *CodecConfig, paramType reflect.Type, options ...interface{}) (Valuer, error) {
+func (c CsvFactory) New(codec *CodecConfig, _ ...interface{}) (Valuer, error) {
 	aCsv := &CSV{
 		codec:     codec,
-		paramType: paramType,
-		sliceType: xunsafe.NewSlice(reflect.SliceOf(paramType)),
+		paramType: codec.ParamType,
+		sliceType: xunsafe.NewSlice(reflect.SliceOf(codec.ParamType)),
 	}
 
 	if err := aCsv.init(); err != nil {

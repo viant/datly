@@ -33,7 +33,7 @@ func (v *VeltyCriteriaFactory) Name() string {
 	return CodecVeltyCriteria
 }
 
-func (v *VeltyCriteriaFactory) New(codecConfig *CodecConfig, rType reflect.Type, options ...interface{}) (Valuer, error) {
+func (v *VeltyCriteriaFactory) New(codecConfig *CodecConfig, options ...interface{}) (Valuer, error) {
 	var columnsIndex parameter.ColumnsSource
 	for _, option := range options {
 		switch actual := option.(type) {
@@ -43,8 +43,8 @@ func (v *VeltyCriteriaFactory) New(codecConfig *CodecConfig, rType reflect.Type,
 	}
 
 	codec := &VeltyCodec{
-		template:  codecConfig.Source,
-		codecType: rType,
+		template:  codecConfig.Body,
+		codecType: codecConfig.ParamType,
 		columns:   columnsIndex,
 	}
 

@@ -8,6 +8,7 @@ import (
 
 type (
 	Valuer interface {
+		Typer
 		Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error)
 	}
 
@@ -22,7 +23,6 @@ type (
 
 	BasicCodec interface {
 		Namer
-		Typer
 		Valuer() Valuer
 	}
 
@@ -31,7 +31,7 @@ type (
 	}
 
 	CodecFactory interface {
-		New(codecConfig *CodecConfig, rType reflect.Type, options ...interface{}) (Valuer, error)
+		New(codecConfig *CodecConfig, options ...interface{}) (Valuer, error)
 	}
 
 	BeforeFetcher interface {
