@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlparser"
+	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
 	"github.com/viant/sqlx/metadata/sink"
@@ -172,8 +173,10 @@ func readSinkColumns(ctx context.Context, db *sql.DB, table string) ([]sink.Colu
 		return nil, err
 	}
 	columns, err := config.Columns(ctx, session, db, table)
-	if len(columns) == 0 {
-		return inferColumnWithSQL(ctx, db, "SELECT * FROM "+table+" WHERE 1 = 0", []interface{}{}, map[string]sink.Column{})
+	if len(columns) == 0 && table != "" {
+		if columns, e := inferColumnWithSQL(ctx, db, "SELECT * FROM "+table+" WHERE 1 = 0", []interface{}{}, map[string]sink.Column{}); e == nil {
+			return columns, err
+		}
 	}
 	return columns, err
 }
@@ -191,6 +194,18 @@ func parseQuery(SQL string) (string, string, sqlparser.Columns) {
 			return table, "", nil //use table metadata
 		}
 		sqlQuery.Limit = nil
+		if table != "" {
+			if sqlQuery.Qualify == nil || sqlQuery.Qualify.X == nil {
+				sqlQuery.Qualify = &expr.Qualify{X: falsePredicate()}
+			} else {
+				sqlQuery.Qualify = &expr.Qualify{
+					X: &expr.Binary{
+						X:  falsePredicate(),
+						Op: "AND",
+						Y:  sqlQuery.Qualify.X,
+					}}
+			}
+		}
 		sqlQuery.Offset = nil
 		SQL = sqlparser.Stringify(sqlQuery)
 		if table != "" {
@@ -198,6 +213,10 @@ func parseQuery(SQL string) (string, string, sqlparser.Columns) {
 		}
 	}
 	return table, SQL, queryColumn
+}
+
+func falsePredicate() *expr.Binary {
+	return &expr.Binary{X: &expr.Literal{Value: "1"}, Op: "=", Y: &expr.Literal{Value: "0"}}
 }
 
 func asColumns(sinkColumns []sink.Column) sqlparser.Columns {
