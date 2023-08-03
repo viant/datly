@@ -244,10 +244,10 @@ func NewSpec(ctx context.Context, db *sql.DB, messages *msg.Messages, table, SQL
 	args := option.NewArgs("", "", table)
 	var fkKeys, keys []sink.Key
 	if err := meta.Info(ctx, db, info.KindForeignKeys, &fkKeys, args); err != nil {
-		messages.AddWarning(result.Table, "detection", "unable to detect foreign key: %v, %w")
+		messages.AddWarning(result.Table, "detection", fmt.Sprintf("unable to detect foreign key: %v, %v", table, err))
 	}
 	if err := meta.Info(ctx, db, info.KindPrimaryKeys, &keys, args); err != nil {
-		messages.AddWarning(result.Table, "detection", "unable to detect primary key: %v, %w")
+		messages.AddWarning(result.Table, "detection", fmt.Sprintf("unable to detect primary key: %v, %v", table, err))
 	}
 	result.pk = sink.Keys(keys).By(sink.KeyName.Column)
 	result.Fk = sink.Keys(fkKeys).By(sink.KeyName.Column)
