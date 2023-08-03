@@ -1297,6 +1297,7 @@ func (v *View) BuildParametrizedSQL(state Parameters, types *xreflect.Types, SQL
 		return nil, fmt.Errorf("failed to evaluate %v: %w", v.Name, err)
 	}
 	bindingArgs = append(bindingArgs, result.Context.DataUnit.ParamsGroup...)
+	result.Expanded = shared.TrimPair(result.Expanded, '(', ')')
 	return &sqlx.SQL{Query: result.Expanded, Args: bindingArgs}, nil
 }
 
