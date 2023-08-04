@@ -2,7 +2,7 @@ package view
 
 import (
 	"context"
-	"github.com/viant/datly/config"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
 )
 
@@ -12,7 +12,7 @@ type (
 		ViewSchema(ctx context.Context, schema string) (*Schema, error)
 		LookupType() xreflect.LookupType
 		LoadText(ctx context.Context, URL string) (string, error)
-		NamedCodecs() config.CodecsRegistry
+		NamedCodecs() *codec.Registry
 		IndexedColumns() NamedColumns
 	}
 )
@@ -44,7 +44,7 @@ func (r *resourcelet) lookupParameter(name string) (*Parameter, error) {
 	return ret, err
 }
 
-func (r *resourcelet) NamedCodecs() config.CodecsRegistry {
+func (r *resourcelet) NamedCodecs() *codec.Registry {
 	return r._visitors
 }
 

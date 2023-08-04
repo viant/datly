@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/sqlx/io/load/reader/csv"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
@@ -16,7 +17,7 @@ type (
 		sliceType  *xunsafe.Slice
 		marshaller *csv.Marshaller
 		config     *csv.Config
-		codec      *CodecConfig
+		codec      *codec.Config
 	}
 )
 
@@ -24,23 +25,7 @@ func (c *CSV) ResultType(paramType reflect.Type) (reflect.Type, error) {
 	return c.sliceType.Type, nil
 }
 
-func (c CsvFactory) Valuer() Valuer {
-	panic(UnexpectedUseError("Valuer", c))
-}
-
-func (c CsvFactory) Name() string {
-	return CodecKeyCSV
-}
-
-func (c CsvFactory) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
-	panic(UnexpectedUseError("Value", c))
-}
-
-func (c *CSV) Valuer() Valuer {
-	return c
-}
-
-func (c CsvFactory) New(codec *CodecConfig, _ ...interface{}) (Valuer, error) {
+func (c CsvFactory) New(codec *codec.Config, _ ...interface{}) (codec.Instance, error) {
 	aCsv := &CSV{
 		codec:     codec,
 		paramType: codec.ParamType,

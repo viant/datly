@@ -1151,24 +1151,20 @@ func (v *View) indexTransforms() error {
 			v.ColumnsConfig[columnName] = aConfig
 		}
 
-		visitor, ok := v._resource.CodecByName(transform.Codec)
+		aCodec, ok := v._resource.CodecByName(transform.Codec)
 		if !ok {
 			return fmt.Errorf("not found codec %v", transform.Codec)
 		}
 
-		actualCodec, ok := visitor.(config.CodecDef)
-		if !ok {
-			return fmt.Errorf("expected %v codec to be type of %T but was %T", transform.Codec, actualCodec, visitor)
-		}
-
-		resultType, err := actualCodec.ResultType(nil)
+		codecInstance := aCodec.Instance
+		resultType, err := codecInstance.ResultType(nil)
 		if err != nil {
 			return err
 		}
 		aConfig.Codec = &Codec{
 			Name:   transform.Codec,
 			Schema: NewSchema(resultType),
-			_codec: actualCodec.Valuer(),
+			_codec: codecInstance,
 		}
 	}
 

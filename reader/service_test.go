@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/assertly"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/reader"
@@ -15,6 +14,8 @@ import (
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/gmetric/counter/base"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xdatly/codec"
+	"github.com/viant/xreflect"
 	"path"
 	"reflect"
 	"strconv"
@@ -77,10 +78,14 @@ type usecase struct {
 	resource    *view.Resource
 	dataset     string
 	provider    *base.Provider
-	visitors    config.CodecsRegistry
+	visitors    *codec.Registry
 }
 
 type StringsCodec struct {
+}
+
+func (s *StringsCodec) ResultType(paramType reflect.Type) (reflect.Type, error) {
+	return reflect.TypeOf([]string{}), nil
 }
 
 func (s *StringsCodec) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
@@ -466,14 +471,13 @@ func TestRead(t *testing.T) {
 			dataURI:     "case023_columns_codec/",
 			dest:        new(interface{}),
 			view:        "events",
-			visitors: config.CodecsRegistry{
-				"Strings": config.NewVisitor("Strings", &StringsCodec{}),
-			},
-			expect: `[{"Name":["John","David","Anna"]}]`,
+			visitors:    codec.NewRegistry(codec.WithCodec("Strings", &StringsCodec{}, time.Time{})),
+			expect:      `[{"Name":["John","David","Anna"]}]`,
 		},
 		nestedStruct(),
 	}
 
+outer:
 	//for index, testCase := range useCases[len(useCases)-1:] {
 	for index, testCase := range useCases {
 		tests.LogHeader(fmt.Sprintf("Running testcase nr: %v\n", index))
@@ -491,10 +495,12 @@ func TestRead(t *testing.T) {
 			continue
 		}
 
-		types := view.Types{}
+		types := xreflect.NewTypes()
 
 		for key, rType := range testCase.compTypes {
-			types.Register(key, rType)
+			if !assert.Nil(t, types.Register(key, xreflect.WithReflectType(rType)), testCase.description) {
+				continue outer
+			}
 		}
 
 		var resource *view.Resource

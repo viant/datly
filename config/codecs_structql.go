@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/structql"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xunsafe"
 	"reflect"
 )
@@ -21,23 +22,7 @@ type (
 	}
 )
 
-func (s StructQLFactory) ResultType(paramType reflect.Type) (reflect.Type, error) {
-	panic(UnexpectedUseError("ResultType", s))
-}
-
-func (s StructQLFactory) Valuer() Valuer {
-	panic(UnexpectedUseError("Valuer", s))
-}
-
-func (s StructQLFactory) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
-	panic(UnexpectedUseError("Value", s))
-}
-
-func (s StructQLFactory) Name() string {
-	return CodecStructql
-}
-
-func (s StructQLFactory) New(codec *CodecConfig, _ ...interface{}) (Valuer, error) {
+func (s StructQLFactory) New(codec *codec.Config, _ ...interface{}) (codec.Instance, error) {
 	if codec.Body == "" {
 		return nil, fmt.Errorf("codec query can't be empty")
 	}
@@ -47,15 +32,7 @@ func (s StructQLFactory) New(codec *CodecConfig, _ ...interface{}) (Valuer, erro
 		return nil, err
 	}
 
-	return structQLCodec.Valuer(), nil
-}
-
-func (s *StructQLCodec) Valuer() Valuer {
-	return s
-}
-
-func (s *StructQLCodec) Name() string {
-	return CodecStructql
+	return structQLCodec, nil
 }
 
 func (s *StructQLCodec) ResultType(_ reflect.Type) (reflect.Type, error) {

@@ -1,39 +1,10 @@
 package config
 
 import (
-	"context"
 	"net/http"
-	"reflect"
 )
 
 type (
-	Valuer interface {
-		Typer
-		Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error)
-	}
-
-	CodecDef interface {
-		BasicCodec
-		Typer
-	}
-
-	Typer interface {
-		ResultType(paramType reflect.Type) (reflect.Type, error)
-	}
-
-	BasicCodec interface {
-		Namer
-		Valuer() Valuer
-	}
-
-	Namer interface {
-		Name() string
-	}
-
-	CodecFactory interface {
-		New(codecConfig *CodecConfig, options ...interface{}) (Valuer, error)
-	}
-
 	BeforeFetcher interface {
 		BeforeFetch(response http.ResponseWriter, request *http.Request) error
 	}

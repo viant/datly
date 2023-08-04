@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/toolbox"
 	rdata "github.com/viant/toolbox/data"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
@@ -51,7 +52,7 @@ type Resource struct {
 	Loggers  logger.Adapters `json:",omitempty"`
 	_loggers logger.AdapterIndex
 
-	_visitors config.CodecsRegistry
+	_visitors *codec.Registry
 	ModTime   time.Time `json:",omitempty"`
 
 	Predicates  []*predicate.Template
@@ -338,9 +339,9 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	return nil
 }
 
-func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, config.CodecsRegistry, map[string]Columns, marshal.TransformIndex, *config.PredicateRegistry) {
+func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, *codec.Registry, map[string]Columns, marshal.TransformIndex, *config.PredicateRegistry) {
 	var types *xreflect.Types
-	var visitors = config.CodecsRegistry{}
+	var visitors = codec.NewRegistry()
 	var cache map[string]Columns
 	var transformsIndex marshal.TransformIndex
 	var predicatesRegistry *config.PredicateRegistry
@@ -350,7 +351,7 @@ func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, config.C
 			continue
 		}
 		switch actual := option.(type) {
-		case config.CodecsRegistry:
+		case *codec.Registry:
 			visitors = actual
 		case map[string]Columns:
 			cache = actual
@@ -382,7 +383,7 @@ func (r *Resource) ViewSchema(ctx context.Context, name string) (*Schema, error)
 }
 
 // NewResourceFromURL loads and initializes Resource from file .yaml
-func NewResourceFromURL(ctx context.Context, url string, types *xreflect.Types, visitors config.CodecsRegistry) (*Resource, error) {
+func NewResourceFromURL(ctx context.Context, url string, types *xreflect.Types, visitors *codec.Registry) (*Resource, error) {
 	resource, err := LoadResourceFromURL(ctx, url, afs.New())
 	if err != nil {
 		return nil, err
@@ -571,8 +572,8 @@ func (r *Resource) TypeName(t reflect.Type) (string, bool) {
 	return info.TypeName(), true
 }
 
-func (r *Resource) CodecByName(name string) (config.BasicCodec, bool) {
-	codec, err := r._visitors.LookupCodec(name)
+func (r *Resource) CodecByName(name string) (*codec.Codec, bool) {
+	codec, err := r._visitors.Lookup(name)
 	return codec, err == nil
 }
 

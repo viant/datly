@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"github.com/viant/xdatly/predicate"
+	"sync"
 )
 
 const PredicateEqual = "equal"
@@ -13,6 +14,7 @@ const PredicateLessOrEqual = "less_or_equal"
 
 type (
 	PredicateRegistry struct {
+		sync.Mutex
 		parent   *PredicateRegistry
 		registry map[string]*predicate.Template
 	}

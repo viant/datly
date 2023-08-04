@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -99,22 +100,10 @@ func (j *JSONParsers) unmarshalIfNotEmpty(aString string, result reflect.Value) 
 	return nil
 }
 
-func (j *JSONFactory) ResultType(paramType reflect.Type) (reflect.Type, error) {
-	panic(UnexpectedUseError("ResultType", j))
-}
-
-func (j *JSONFactory) Valuer() Valuer {
-	panic(UnexpectedUseError("Valuer", j))
-}
-
-func (j *JSONFactory) Name() string {
-	return CodecJSON
-}
-
-func (j *JSONFactory) New(codecConfig *CodecConfig, options ...interface{}) (Valuer, error) {
+func (j *JSONFactory) New(codecConfig *codec.Config, options ...interface{}) (codec.Instance, error) {
 	typeName := codecConfig.OutputType
 	if typeName == "" {
-		if err := ValidateArgs(codecConfig, 1, j.Name()); err != nil {
+		if err := ValidateArgs(codecConfig, 1, CodecJSON); err != nil {
 			return nil, err
 		}
 

@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/gateway"
 	"github.com/viant/scy/auth/jwt/verifier"
 	"sync"
+	"time"
 )
 
 var cognitoService *cognito.Service
@@ -24,15 +25,16 @@ func Init(gwayConfig *gateway.Config, embedFs *embed.FS) (gateway.Authorizer, er
 				embedFs = &cognito.EmbedFs
 			}
 			if cognitoService, err = cognito.New(gwayConfig.Cognito, fs, embedFs); err == nil {
-				config.Config.RegisterCodec(New(config.CodecKeyJwtClaim, cognitoService.VerifyIdentity))
-				config.Config.RegisterCodec(New(config.CodecCognitoKeyJwtClaim, cognitoService.VerifyIdentity))
+				config.Config.RegisterCodec(config.CodecKeyJwtClaim, New(cognitoService.VerifyIdentity), time.Time{})
+				config.Config.RegisterCodec(config.CodecCognitoKeyJwtClaim, New(cognitoService.VerifyIdentity), time.Time{})
 			}
 		}
 		if gwayConfig.JWTValidator != nil {
 			jwtVerifier = verifier.New(gwayConfig.JWTValidator)
 			if err = jwtVerifier.Init(context.Background()); err == nil {
 				config.Config.RegisterCodec(
-					New(config.CodecKeyJwtClaim, jwtVerifier.VerifyClaims))
+					config.CodecKeyJwtClaim, New(jwtVerifier.VerifyClaims), time.Time{},
+				)
 			}
 		}
 	})

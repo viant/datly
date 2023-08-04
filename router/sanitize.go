@@ -26,7 +26,7 @@ func Sanitize(request *http.Request, route *Route, headers http.Header, response
 func obfuscateAuthorization(request *http.Request, response http.ResponseWriter, authorization string, headers http.Header, route *Route) {
 	if response != nil {
 		if jwtCodec, _ := config.Config.LookupCodec(config.CodecKeyJwtClaim); jwtCodec != nil {
-			if claim, _ := jwtCodec.Valuer().Value(context.TODO(), authorization); claim != nil {
+			if claim, _ := jwtCodec.Instance.Value(context.TODO(), authorization); claim != nil {
 				if jwtClaim, ok := claim.(*jwt.Claims); ok && jwtClaim != nil {
 					headers.Set("User-ID", strconv.Itoa(jwtClaim.UserID))
 					headers.Set("User-Email", jwtClaim.Email)

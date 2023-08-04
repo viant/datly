@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/handler/parameter"
 	"github.com/viant/xreflect"
 	"reflect"
@@ -21,24 +22,8 @@ type (
 	}
 )
 
-func (c *CriteriaBuilderFactory) ResultType(paramType reflect.Type) (reflect.Type, error) {
-	panic(UnexpectedUseError("ResultType", c))
-}
-
-func (c *CriteriaBuilderFactory) Valuer() Valuer {
-	panic(UnexpectedUseError("Valuer", c))
-}
-
-func (c *CriteriaBuilder) ResultType(paramType reflect.Type) (reflect.Type, error) {
-	return reflect.TypeOf(&parameter.Criteria{}), nil
-}
-
-func (c *CriteriaBuilderFactory) Name() string {
-	return CodecCriteriaBuilder
-}
-
-func (c *CriteriaBuilderFactory) New(codecConfig *CodecConfig, options ...interface{}) (Valuer, error) {
-	if err := ValidateArgs(codecConfig, 1, c.Name()); err != nil {
+func (c *CriteriaBuilderFactory) New(codecConfig *codec.Config, options ...interface{}) (codec.Instance, error) {
+	if err := ValidateArgs(codecConfig, 1, CodecCriteriaBuilder); err != nil {
 		return nil, err
 	}
 
@@ -70,7 +55,11 @@ func (c *CriteriaBuilderFactory) New(codecConfig *CodecConfig, options ...interf
 	}, nil
 }
 
-func ValidateArgs(codecConfig *CodecConfig, expectedLen int, codecName string) error {
+func (c *CriteriaBuilder) ResultType(paramType reflect.Type) (reflect.Type, error) {
+	return reflect.TypeOf(&parameter.Criteria{}), nil
+}
+
+func ValidateArgs(codecConfig *codec.Config, expectedLen int, codecName string) error {
 	if len(codecConfig.Args) != expectedLen {
 		return fmt.Errorf("expected %v to receive %v argument(s) but got %v", codecConfig, expectedLen, len(codecConfig.Args))
 	}

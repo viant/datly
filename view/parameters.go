@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"net/http"
@@ -61,14 +62,14 @@ type (
 
 	Codec struct {
 		shared.Reference
-		Name   string   `json:",omitempty"`
-		Body   string   `json:",omitempty"`
-		Args   []string `json:",omitempty"`
-		Schema *Schema  `json:",omitempty"`
+		Name       string   `json:",omitempty"`
+		Body       string   `json:",omitempty"`
+		Args       []string `json:",omitempty"`
+		Schema     *Schema  `json:",omitempty"`
+		OutputType string   `json:",omitempty"`
 
 		_initialized bool
-		_codec       config.Valuer
-		OutputType   string `json:",omitempty"`
+		_codec       codec.Instance
 	}
 )
 
@@ -131,43 +132,33 @@ func (v *Codec) inheritCodecIfNeeded(resource Resourcelet, inputType reflect.Typ
 		return err
 	}
 
-	visitor, err := resource.NamedCodecs().LookupCodec(v.Ref)
+	aCodec, err := resource.NamedCodecs().Lookup(v.Ref)
 	if err != nil {
 		return fmt.Errorf("not found codec with name %v", v.Ref)
 	}
 
-	factory, ok := visitor.(config.CodecFactory)
-	if ok {
-		aCodec, err := v.codecInstance(resource, inputType, factory)
-		if err != nil {
-			return err
-		}
-
-		v._codec = aCodec
-		rType, err := aCodec.ResultType(inputType)
-		if err != nil {
-			return err
-		}
-
-		v.Schema = NewSchema(rType)
-		return nil
+	instance, err := v.codecInstance(resource, inputType, aCodec)
+	if err != nil {
+		return err
 	}
 
-	asCodec, ok := visitor.(config.CodecDef)
-	if !ok {
-		return fmt.Errorf("expected visitor to be type of %T but was %T", asCodec, visitor)
+	codecType, err := instance.ResultType(inputType)
+	if err != nil {
+		return err
 	}
 
-	return v.inherit(asCodec, inputType)
+	v._codec = instance
+	v.Schema = NewSchema(codecType)
+	return nil
 }
 
-func (v *Codec) codecInstance(resource Resourcelet, inputType reflect.Type, factory config.CodecFactory) (config.Valuer, error) {
+func (v *Codec) newCodecInstance(resource Resourcelet, inputType reflect.Type, factory codec.Factory) (codec.Instance, error) {
 	opts := []interface{}{resource.LookupType()}
 	if columns := resource.IndexedColumns(); len(columns) > 0 {
 		opts = append(opts, columns)
 	}
 
-	aCodec, err := factory.New(&config.CodecConfig{
+	aCodec, err := factory.New(&codec.Config{
 		Body:       v.Body,
 		ParamType:  inputType,
 		Args:       v.Args,
@@ -188,39 +179,25 @@ func (v *Codec) ensureSchema(paramType reflect.Type) {
 	}
 }
 
-func (v *Codec) extractCodecFn(resource Resourcelet, inputType reflect.Type) (config.Valuer, error) {
-	vVisitor, err := resource.NamedCodecs().Lookup(v.Name)
+func (v *Codec) extractCodecFn(resource Resourcelet, inputType reflect.Type) (codec.Instance, error) {
+	foundCodec, err := resource.NamedCodecs().Lookup(v.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	if asFactory, ok := vVisitor.(config.CodecFactory); ok {
-		return v.codecInstance(resource, inputType, asFactory)
+	return v.codecInstance(resource, inputType, foundCodec)
+}
+
+func (v *Codec) codecInstance(resource Resourcelet, inputType reflect.Type, foundCodec *codec.Codec) (codec.Instance, error) {
+	if foundCodec.Factory != nil {
+		return v.newCodecInstance(resource, inputType, foundCodec.Factory)
 	}
 
-	switch actual := vVisitor.(type) {
-	case config.BasicCodec:
-		return actual.Valuer(), nil
-	default:
-		return nil, fmt.Errorf("expected %T to implement Codec", actual)
-	}
+	return foundCodec.Instance, nil
 }
 
 func (v *Codec) Transform(ctx context.Context, value interface{}, options ...interface{}) (interface{}, error) {
 	return v._codec.Value(ctx, value, options...)
-}
-
-func (v *Codec) inherit(asCodec config.CodecDef, paramType reflect.Type) error {
-	v.Name = asCodec.Name()
-	resultType, err := asCodec.ResultType(paramType)
-	if err != nil {
-		return err
-	}
-
-	v.Schema = NewSchema(resultType)
-	v.Schema.DataType = resultType.String()
-	v._codec = asCodec.Valuer()
-	return nil
 }
 
 func (v *Codec) initSchemaIfNeeded(resource Resourcelet) error {
@@ -555,7 +532,7 @@ func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr un
 		aCodec = nil
 	}
 
-	var codecFn config.Valuer
+	var codecFn codec.Instance
 	if aCodec != nil {
 		codecFn = aCodec._codec
 	}

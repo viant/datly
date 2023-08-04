@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/shared"
 	"github.com/viant/structology"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
@@ -45,7 +46,7 @@ type (
 		shared.Reference
 		Name      string           `json:",omitempty"`
 		Signature []*NamedArgument //inherited from registry
-		config.CodecConfig
+		codec.Config
 		Schema *Schema `json:",omitempty"`
 	}
 

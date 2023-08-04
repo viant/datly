@@ -17,6 +17,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
 	"github.com/viant/toolbox"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
 	"strings"
@@ -45,7 +46,7 @@ type (
 		EnableDebug      *bool             `json:",omitempty"`
 		Interceptor      *RouteInterceptor `json:",omitempty"`
 
-		_visitors    config.CodecsRegistry
+		_visitors    *codec.Registry
 		_initialised bool
 
 		fs       afs.Service
@@ -261,14 +262,14 @@ func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCach
 	return resource, nil
 }
 
-func readOptions(options []interface{}) (config.CodecsRegistry, *xreflect.Types, map[string]*view.Resource, *view.Metrics) {
-	var visitors config.CodecsRegistry
+func readOptions(options []interface{}) (*codec.Registry, *xreflect.Types, map[string]*view.Resource, *view.Metrics) {
+	var visitors *codec.Registry
 	var resources map[string]*view.Resource
 	var metrics *view.Metrics
 	var types *xreflect.Types
 	for _, anOption := range options {
 		switch actual := anOption.(type) {
-		case config.CodecsRegistry:
+		case *codec.Registry:
 			visitors = actual
 		case *xreflect.Types:
 			types = actual
@@ -287,7 +288,7 @@ func readOptions(options []interface{}) (config.CodecsRegistry, *xreflect.Types,
 	}
 
 	if visitors == nil {
-		visitors = map[string]interface{}{}
+		visitors = codec.NewRegistry()
 	}
 	if types == nil {
 		types = xreflect.NewTypes(xreflect.WithRegistry(config.Config.Types))

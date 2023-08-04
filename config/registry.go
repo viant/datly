@@ -1,15 +1,17 @@
 package config
 
 import (
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
 	"reflect"
 	"sync"
+	"time"
 )
 
 type Registry struct {
 	sync.Mutex
 	Types      *xreflect.Types
-	Codecs     CodecsRegistry
+	Codecs     *codec.Registry
 	Predicates *PredicateRegistry
 }
 
@@ -17,30 +19,32 @@ func NewRegistry() *Registry {
 	return &Registry{
 		Mutex:      sync.Mutex{},
 		Types:      xreflect.NewTypes(xreflect.WithRegistry(Config.Types)),
-		Codecs:     CodecsRegistry{},
+		Codecs:     codec.NewRegistry(),
 		Predicates: NewPredicates(),
 	}
 }
 
-func (r *Registry) LookupCodec(name string) (BasicCodec, error) {
+func (r *Registry) LookupCodec(name string) (*codec.Codec, error) {
 	r.Lock()
 	defer r.Unlock()
-	return r.Codecs.LookupCodec(name)
+	return r.Codecs.Lookup(name)
 }
 
-func (r *Registry) RegisterCodec(visitor BasicCodec) {
+func (r *Registry) RegisterCodec(name string, codecInstance codec.Instance, at time.Time) {
 	r.Lock()
 	defer r.Unlock()
 
-	r.Codecs.Register(visitor)
+	r.Codecs.RegisterInstance(name, codecInstance, at)
 }
 
 func (r *Registry) MergeFrom(toOverride *Registry) {
 	r.Lock()
 	defer r.Unlock()
 	_ = r.Types.MergeFrom(toOverride.Types)
-	for name, codec := range toOverride.Codecs {
-		r.Codecs.RegisterWithName(name, codec)
+
+	codecs, _ := toOverride.Codecs.Codecs(nil)
+	for key, value := range codecs {
+		r.Codecs.RegisterCodec(key, value)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/template/expand"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/handler/parameter"
 	"github.com/viant/xreflect"
 	"reflect"
@@ -29,11 +30,7 @@ func (v *VeltyCodec) ResultType(paramType reflect.Type) (reflect.Type, error) {
 	return reflect.TypeOf(&parameter.Criteria{}), nil
 }
 
-func (v *VeltyCriteriaFactory) Name() string {
-	return CodecVeltyCriteria
-}
-
-func (v *VeltyCriteriaFactory) New(codecConfig *CodecConfig, options ...interface{}) (Valuer, error) {
+func (v *VeltyCriteriaFactory) New(codecConfig *codec.Config, options ...interface{}) (codec.Instance, error) {
 	var columnsIndex parameter.ColumnsSource
 	for _, option := range options {
 		switch actual := option.(type) {
