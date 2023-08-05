@@ -9,7 +9,9 @@ import (
 const PredicateEqual = "equal"
 const PredicateNotEqual = "not_equal"
 const PredicateIn = "in"
+const PredicateMultiIn = "multi_in"
 const PredicateNotIn = "not_in"
+const PredicateMultiNotIn = "multi_not_in"
 const PredicateLessOrEqual = "less_or_equal"
 
 type (
@@ -75,15 +77,38 @@ func NewNotEqualPredicate() *predicate.Template {
 }
 
 func NewInPredicate() *predicate.Template {
-	return newInPredicate(PredicateIn, true)
+	return newInPredicate(PredicateIn, true, false)
+}
+
+func NewMultiInPredicate() *predicate.Template {
+	return newInPredicate(PredicateIn, true, true)
+}
+
+func NewMultiNotInPredicate() *predicate.Template {
+	return newInPredicate(PredicateIn, false, true)
 }
 
 func NewNotInPredicate() *predicate.Template {
-	return newInPredicate(PredicateNotIn, false)
+	return newInPredicate(PredicateNotIn, false, false)
 }
 
-func newInPredicate(name string, equal bool) *predicate.Template {
-	column := `${Alias} + "." + ${ColumnName}`
+func newInPredicate(name string, equal bool, multi bool) *predicate.Template {
+	args := []*predicate.NamedArgument{
+		{
+			Name:     "Alias",
+			Position: 0,
+		},
+	}
+
+	column := `${Alias}`
+	if !multi {
+		column += `+ "." + ${ColumnName}`
+		args = append(args, &predicate.NamedArgument{
+			Name:     "ColumnName",
+			Position: 1,
+		})
+	}
+
 	in := fmt.Sprintf(`$criteria.In(%v, $FilterValue)`, column)
 
 	if !equal {
@@ -93,16 +118,7 @@ func newInPredicate(name string, equal bool) *predicate.Template {
 	return &predicate.Template{
 		Name:   name,
 		Source: " " + in,
-		Args: []*predicate.NamedArgument{
-			{
-				Name:     "Alias",
-				Position: 0,
-			},
-			{
-				Name:     "ColumnName",
-				Position: 1,
-			},
-		},
+		Args:   args,
 	}
 }
 

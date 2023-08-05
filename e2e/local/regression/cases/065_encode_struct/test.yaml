@@ -1,0 +1,11 @@
+init:
+  parentPath: $parent.path
+pipeline:
+  runTests:
+    action: http/runner:send
+    requests:
+      - Method: GET
+        URL: 'http://127.0.0.1:8080/v1/api/dev/vendors-check?ids=[2/101/2]'
+        Expect:
+          JSONBody: $LoadJSON('${parentPath}/expect.json')
+

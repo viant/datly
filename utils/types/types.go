@@ -15,7 +15,7 @@ func LookupType(lookup xreflect.LookupType, typeName string, opts ...xreflect.Op
 }
 
 func Elem(rType reflect.Type) reflect.Type {
-	for rType.Kind() == reflect.Ptr || rType.Kind() == reflect.Slice {
+	for rType.Kind() == reflect.Ptr || rType.Kind() == reflect.Slice || rType.Kind() == reflect.Array {
 		rType = rType.Elem()
 	}
 

@@ -10,7 +10,6 @@ import (
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
-	"unsafe"
 )
 
 type (
@@ -19,7 +18,7 @@ type (
 		ParamsGroup []interface{}
 		Mock        bool
 		TemplateSQL string
-		MetaSource  Dber
+		MetaSource  Dber        `velty:"-"`
 		Statements  *Statements `velty:"-"`
 
 		placeholderCounter int                             `velty:"-"`
@@ -69,11 +68,11 @@ func (c *DataUnit) Allocate(tableName string, dest interface{}, selector string)
 	return "", service.Next(tableName, dest, selector)
 }
 
-func (c *DataUnit) AsBinding(value interface{}) string {
+func (c *DataUnit) AsBinding(value interface{}) (string, error) {
 	return c.Add(0, value)
 }
 
-func (c *DataUnit) AppendBinding(value interface{}) string {
+func (c *DataUnit) AppendBinding(value interface{}) (string, error) {
 	return c.Add(0, value)
 }
 
@@ -87,84 +86,23 @@ func (c *DataUnit) AsColumn(columnName string) (string, error) {
 	return c.Columns.ColumnName(columnName)
 }
 
-func (c *DataUnit) Add(_ int, value interface{}) string {
+func (c *DataUnit) Add(_ int, value interface{}) (string, error) {
 	if value == nil {
-		return ""
-	}
-	valueCopy, expanded := c.expandCopy(value)
-	if valueCopy == nil {
-		return ""
-	}
-	c.ParamsGroup = append(c.ParamsGroup, valueCopy...)
-	return expanded
-}
-
-func (c *DataUnit) expandCopy(value interface{}) ([]interface{}, string) {
-	switch actual := value.(type) {
-	case *string:
-		return []interface{}{actual}, "?"
-	case *int:
-		return []interface{}{actual}, "?"
-	case *int64:
-		return []interface{}{actual}, "?"
-	case *uint64:
-		return []interface{}{actual}, "?"
-	case *float32:
-		return []interface{}{actual}, "?"
-	case *float64:
-		return []interface{}{actual}, "?"
-	case *uint:
-		return []interface{}{actual}, "?"
-	case *bool:
-		return []interface{}{actual}, "?"
-	case *int8:
-		return []interface{}{actual}, "?"
-	case *uint8:
-		return []interface{}{actual}, "?"
-	case *int32:
-		return []interface{}{actual}, "?"
-	case *uint32:
-		return []interface{}{actual}, "?"
-	case *int16:
-		return []interface{}{actual}, "?"
-	case *uint16:
-		return []interface{}{actual}, "?"
-	}
-	srcValue := reflect.ValueOf(value)
-	valuePtr := xunsafe.AsPointer(value)
-	if srcValue.Kind() == reflect.Slice {
-		return c.copyAndExpandSlice(srcValue.Type(), valuePtr)
+		return "", nil
 	}
 
-	dstValue := reflect.New(srcValue.Type())
-	dstValue.Elem().Set(srcValue)
-	valueCopy := dstValue.Elem().Interface()
-
-	return []interface{}{valueCopy}, "?"
-}
-
-func (c *DataUnit) copyAndExpandSlice(sliceType reflect.Type, valuePtr unsafe.Pointer) ([]interface{}, string) {
-	c.ensureSliceIndex()
-	xslice := c.xunsafeSlice(sliceType.Elem())
-	sliceLen := xslice.Len(valuePtr)
-	switch sliceLen {
-	case 0:
-		return nil, ""
-	case 1:
-		return []interface{}{xslice.ValueAt(valuePtr, 0)}, "?"
-	default:
-		builder := strings.Builder{}
-		builder.WriteByte('?')
-		placeholders := make([]interface{}, sliceLen)
-		placeholders[0] = xslice.ValueAt(valuePtr, 0)
-
-		for i := 1; i < sliceLen; i++ {
-			builder.WriteString(", ?")
-			placeholders[i] = xslice.ValueAt(valuePtr, i)
-		}
-
-		return placeholders, builder.String()
+	lookup, err := bindingsCache.Lookup(value)
+	if err != nil {
+		return "", err
 	}
+
+	expanded, args, err := lookup.Expand("", value)
+	if err != nil {
+		return "", err
+	}
+
+	c.addAll(args...)
+	return expanded, nil
 }
 
 func (c *DataUnit) At(_ int) []interface{} {
@@ -231,37 +169,45 @@ func (c *DataUnit) FilterExecutables(statements []string, stopOnNonExec bool) []
 }
 
 func (c *DataUnit) In(columnName string, args interface{}) (string, error) {
-	of := reflect.ValueOf(args)
-	switch of.Kind() {
-	case reflect.Slice:
-		if of.Len() == 0 {
-			return "1=0", nil
+	return c.in(columnName, args, true)
+}
+
+func (c *DataUnit) in(columnName string, args interface{}, valueIn bool) (string, error) {
+	expander, err := bindingsCache.Lookup(args)
+	if err != nil {
+		return "", err
+	}
+
+	if !expander.HasAny(args) {
+		if !valueIn {
+			return "0 = 0", err
 		}
+
+		return "1 = 0", nil
 	}
 
 	sb := &strings.Builder{}
-	sb.WriteString(columnName)
-	sb.WriteString(" IN (")
-	sb.WriteString(c.AppendBinding(args))
+	sb.WriteString(expander.ColumnExpression(columnName))
+	if !valueIn {
+		sb.WriteString(" NOT")
+	}
+
+	sb.WriteString(" IN ( ")
+
+	expanded, values, err := expander.Expand(columnName, args)
+	if err != nil {
+		return "", err
+	}
+
+	sb.WriteString(expanded)
 	sb.WriteString(")")
+
+	c.addAll(values...)
 	return sb.String(), nil
 }
 
 func (c *DataUnit) NotIn(columnName string, args interface{}) (string, error) {
-	of := reflect.ValueOf(args)
-	switch of.Kind() {
-	case reflect.Slice:
-		if of.Len() == 0 {
-			return "0=0", nil
-		}
-	}
-
-	sb := &strings.Builder{}
-	sb.WriteString(columnName)
-	sb.WriteString(" NOT IN (")
-	sb.WriteString(c.AppendBinding(args))
-	sb.WriteString(")")
-	return sb.String(), nil
+	return c.in(columnName, args, false)
 }
 
 func (c *DataUnit) Delete(data interface{}, name string) (string, error) {

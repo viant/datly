@@ -46,6 +46,7 @@ var Config = &Registry{
 		codec.WithFactory(CodecJSON, &JSONFactory{}, time.Time{}),
 		codec.WithFactory(CodecVeltyCriteria, &VeltyCriteriaFactory{}, time.Time{}),
 		codec.WithFactory(CodecCriteriaBuilder, &CriteriaBuilderFactory{}, time.Time{}),
+		codec.WithFactory(CodecEncode, &EncodeFactory{}, time.Time{}),
 	),
 	Predicates: &PredicateRegistry{
 		registry: map[string]*predicate.Template{
@@ -53,6 +54,8 @@ var Config = &Registry{
 			PredicateNotEqual:    NewNotEqualPredicate(),
 			PredicateNotIn:       NewNotInPredicate(),
 			PredicateIn:          NewInPredicate(),
+			PredicateMultiNotIn:  NewMultiNotInPredicate(),
+			PredicateMultiIn:     NewMultiInPredicate(),
 			PredicateLessOrEqual: NewLessOrEqualPredicate(),
 		},
 	},

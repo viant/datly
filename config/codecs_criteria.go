@@ -61,7 +61,15 @@ func (c *CriteriaBuilder) ResultType(paramType reflect.Type) (reflect.Type, erro
 
 func ValidateArgs(codecConfig *codec.Config, expectedLen int, codecName string) error {
 	if len(codecConfig.Args) != expectedLen {
-		return fmt.Errorf("expected %v to receive %v argument(s) but got %v", codecConfig, expectedLen, len(codecConfig.Args))
+		return fmt.Errorf("expected %v to receive %v argument(s) but got %v", codecName, expectedLen, len(codecConfig.Args))
+	}
+
+	return nil
+}
+
+func ValidateMinArgs(config *codec.Config, name string, minLen int) error {
+	if len(config.Args) < minLen {
+		return fmt.Errorf("expected %v to receive %v argument(s) but got %v", name, minLen, len(config.Args))
 	}
 
 	return nil
