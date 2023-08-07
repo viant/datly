@@ -98,7 +98,7 @@ func (b *BindingsCache) extractCriteriaColumns(elem reflect.Type) ([]*CriteriaCo
 	numField := elem.NumField()
 	for i := 0; i < numField; i++ {
 		field := elem.Field(i)
-		aColumn, err := ParseCriteriaTag(field)
+		aColumn, err := ParseDatlyTag(field)
 		if err != nil {
 			return nil, err
 		}
@@ -111,8 +111,8 @@ func (b *BindingsCache) extractCriteriaColumns(elem reflect.Type) ([]*CriteriaCo
 	return columns, nil
 }
 
-func ParseCriteriaTag(field reflect.StructField) (*CriteriaColumn, error) {
-	tagContent := field.Tag.Get("criteria")
+func ParseDatlyTag(field reflect.StructField) (*CriteriaColumn, error) {
+	tagContent := field.Tag.Get("sqlx")
 	if tagContent == "" {
 		return nil, nil
 	}

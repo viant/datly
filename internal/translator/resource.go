@@ -318,7 +318,7 @@ func (r *Resource) ensurePathParametersSchema(ctx context.Context) error {
 	return nil
 }
 
-func (r *Resource) ExtractExternalParameters(ctx context.Context, fs afs.Service, dSQL *string) error {
+func (r *Resource) IncludeSnippets(ctx context.Context, fs afs.Service, dSQL *string) error {
 	for _, URL := range r.Rule.Include {
 		assetURL, err := r.IncludeURL(ctx, URL, fs)
 		if err != nil {

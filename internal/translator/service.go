@@ -32,12 +32,10 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	if err = resource.InitRule(&dSQL, ctx, s.Repository.fs, opts); err != nil {
 		return err
 	}
-
-	if err = resource.parseImports(ctx, &dSQL); err != nil {
+	if err = resource.IncludeSnippets(ctx, s.fs, &dSQL); err != nil {
 		return err
 	}
-
-	if err = resource.ExtractExternalParameters(ctx, s.fs, &dSQL); err != nil {
+	if err = resource.parseImports(ctx, &dSQL); err != nil {
 		return err
 	}
 
