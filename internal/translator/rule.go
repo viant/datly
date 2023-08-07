@@ -24,15 +24,13 @@ type (
 		orderNamespaces []string
 		Root            string
 		router.Route
-		Async    *AsyncConfig           `json:",omitempty"`
-		Cache    *view.Cache            `json:",omitempty"`
-		CSV      *router.CSVConfig      `json:",omitempty"`
-		Const    map[string]interface{} `json:",omitempty"`
-		ConstURL string                 `json:",omitempty"`
-		EmbedURL string                 `json:",omitempty"`
-		Embeds   data.Map               `json:",omitempty"`
-
-		Field        string                    `json:",omitempty"`
+		Async        *AsyncConfig              `json:",omitempty"`
+		Cache        *view.Cache               `json:",omitempty"`
+		CSV          *router.CSVConfig         `json:",omitempty"`
+		Const        map[string]interface{}    `json:",omitempty"`
+		ConstURL     string                    `json:",omitempty"`
+		EmbedURL     string                    `json:",omitempty"`
+		Embeds       data.Map                  `json:",omitempty"`
 		RequestBody  *BodyConfig               `json:",omitempty"`
 		TypeSrc      *parser.TypeImport        `json:",omitempty"`
 		ResponseBody *ResponseBodyConfig       `json:",omitempty"`
@@ -332,6 +330,9 @@ func (r *Rule) applyShortHands() {
 			HandlerType: r.HandlerType,
 			StateType:   r.StateType,
 		}
+	}
+	if r.Route.Output.Field != "" {
+		r.Route.Output.Style = router.ComprehensiveStyle
 	}
 }
 
