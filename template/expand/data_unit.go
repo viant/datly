@@ -215,7 +215,7 @@ func (c *DataUnit) Like(columnName string, args interface{}) (string, error) {
 	return c.like(columnName, args, true)
 }
 
-func (c *DataUnit) notLike(columnName string, args interface{}) (string, error) {
+func (c *DataUnit) NotLike(columnName string, args interface{}) (string, error) {
 	return c.like(columnName, args, false)
 }
 
@@ -243,6 +243,7 @@ func (c *DataUnit) like(columnName string, args interface{}, inclusive bool) (st
 	if len(values) > 1 {
 		sb.WriteString("(")
 	}
+	var likeValues []interface{}
 	for i, value := range values {
 		if i > 0 {
 			sb.WriteString(conjunction)
@@ -251,13 +252,15 @@ func (c *DataUnit) like(columnName string, args interface{}, inclusive bool) (st
 		if !inclusive {
 			sb.WriteString(" NOT")
 		}
-		sb.WriteString(" LIKE ")
+		sb.WriteString(" LIKE ? ")
 		textValue, ok := value.(string)
 		if !ok {
 			textValue = toolbox.AsString(value)
 		}
-		c.addAll(textValue + "%")
+		likeValues = append(likeValues, "%"+textValue+"%")
 	}
+	c.addAll(likeValues...)
+
 	if len(values) > 1 {
 		sb.WriteString(")")
 	}

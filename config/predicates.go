@@ -140,8 +140,12 @@ func newLikePredicate(name string, inclusive bool) *predicate.Template {
 			Name:     "Alias",
 			Position: 0,
 		},
+		{
+			Name:     "ColumnName",
+			Position: 1,
+		},
 	}
-	column := `${Alias}`
+	column := `${Alias}` + `+ "." + ${ColumnName}`
 	criteria := fmt.Sprintf(`$criteria.Like(%v, $FilterValue)`, column)
 	if !inclusive {
 		criteria = fmt.Sprintf(`$criteria.NotLike(%v, $FilterValue)`, column)
