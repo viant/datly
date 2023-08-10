@@ -37,8 +37,6 @@ type (
 		sqlEvaluator *expand.Evaluator
 
 		accessors        *types.Accessors
-		_fields          []reflect.StructField
-		_fieldIndex      map[string]int
 		_parametersIndex NamedParameters
 		initialized      bool
 		isTemplate       bool
@@ -75,7 +73,6 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 	}
 
 	t._view = view
-	t._fieldIndex = map[string]int{}
 	t.updateSource(view)
 
 	t.isTemplate = t.Source != view.Name && t.Source != view.Table
@@ -112,6 +109,18 @@ func (t *Template) updateSource(view *View) {
 	t.Source = view.Source()
 }
 
+const defaultParameterPackage = "github.com/viant/datly/view/parameter"
+
+func (t *Template) Package() string {
+	if t.Schema != nil && t.Schema.Package != "" {
+		return t.Schema.Package
+	}
+	if t._view != nil && t._view.Schema != nil && t._view.Schema.Package != "" {
+		return t._view.Schema.Package
+	}
+	return defaultParameterPackage
+}
+
 func (t *Template) loadSourceFromURL(ctx context.Context, resource *Resource) error {
 	if t.SourceURL == "" {
 		return nil
@@ -136,13 +145,14 @@ func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resourc
 		}
 	}
 
-	rType, err := BuildType(t.Parameters)
+	rType, err := t.Parameters.ReflectType(t.Package(), t._view._resource.LookupType(), true)
+	//rType, err := BuildType(t.Parameters)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to build template %s reflect type: %w", t._view.Name, err)
 	}
-
 	t.Schema = &Schema{}
 	t.Schema.SetType(reflect.PtrTo(rType))
+	t.stateType = structology.NewStateType(rType)
 	return nil
 }
 

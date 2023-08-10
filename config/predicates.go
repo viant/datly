@@ -6,13 +6,17 @@ import (
 	"sync"
 )
 
-const PredicateEqual = "equal"
-const PredicateNotEqual = "not_equal"
-const PredicateIn = "in"
-const PredicateMultiIn = "multi_in"
-const PredicateNotIn = "not_in"
-const PredicateMultiNotIn = "multi_not_in"
-const PredicateLessOrEqual = "less_or_equal"
+const (
+	PredicateEqual       = "equal"
+	PredicateNotEqual    = "not_equal"
+	PredicateIn          = "in"
+	PredicateMultiIn     = "multi_in"
+	PredicateNotIn       = "not_in"
+	PredicateMultiNotIn  = "multi_not_in"
+	PredicateLessOrEqual = "less_or_equal"
+	PredicateLike        = "like"
+	PredicateNotLike     = "not_like"
+)
 
 type (
 	PredicateRegistry struct {
@@ -118,6 +122,33 @@ func newInPredicate(name string, equal bool, multi bool) *predicate.Template {
 	return &predicate.Template{
 		Name:   name,
 		Source: " " + in,
+		Args:   args,
+	}
+}
+
+func NewLikePredicate() *predicate.Template {
+	return newLikePredicate(PredicateLike, true)
+}
+
+func NewNotLikePredicate() *predicate.Template {
+	return newLikePredicate(PredicateNotLike, false)
+}
+
+func newLikePredicate(name string, inclusive bool) *predicate.Template {
+	args := []*predicate.NamedArgument{
+		{
+			Name:     "Alias",
+			Position: 0,
+		},
+	}
+	column := `${Alias}`
+	criteria := fmt.Sprintf(`$criteria.Like(%v, $FilterValue)`, column)
+	if !inclusive {
+		criteria = fmt.Sprintf(`$criteria.NotLike(%v, $FilterValue)`, column)
+	}
+	return &predicate.Template{
+		Name:   name,
+		Source: " " + criteria,
 		Args:   args,
 	}
 }

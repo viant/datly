@@ -1274,7 +1274,7 @@ func (v *View) ensureAsyncTableNameIfNeeded() error {
 }
 
 func (v *View) BuildParametrizedSQL(state Parameters, types *xreflect.Types, SQL string, bindingArgs []interface{}, options ...expand.StateOption) (*sqlx.SQL, error) {
-	reflectType, err := state.ReflectType("autogen", types.Lookup)
+	reflectType, err := state.ReflectType("autogen", types.Lookup, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create state %v type: %w", v.Name, err)
 	}

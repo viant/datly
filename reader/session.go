@@ -10,7 +10,7 @@ import (
 	"sync"
 )
 
-//Session groups view required to Read view
+// Session groups view required to Read view
 type (
 	Session struct {
 		mux           sync.Mutex
@@ -57,7 +57,7 @@ func (s *Info) Name() string {
 	return strings.Title(strings.ReplaceAll(s.View, "#", ""))
 }
 
-//Init initializes session
+// Init initializes session
 func (s *Session) Init() error {
 	s.Selectors.Init()
 	if _, ok := s.Dest.(*interface{}); !ok {
@@ -75,7 +75,7 @@ func (s *Session) Init() error {
 	return nil
 }
 
-//AddCriteria adds the supplied view criteria
+// AddCriteria adds the supplied view criteria
 func (s *Session) AddCriteria(aView *view.View, criteria string, placeholders ...interface{}) {
 	sel := s.Selectors.Lookup(aView)
 	sel.Criteria = criteria
@@ -88,7 +88,7 @@ func (s *Session) AddMetric(m *Metric) {
 	s.mux.Unlock()
 }
 
-//NewSession creates a session
+// NewSession creates a session
 func NewSession(dest interface{}, aView *view.View, options ...interface{}) *Session {
 	var parent *view.View
 	for _, option := range options {
@@ -148,3 +148,8 @@ func (s *Session) Lookup(v *view.View) *view.ParamState {
 	state.Init(v)
 	return &state
 }
+
+//func (s *Session) Filter(inclSuffix string, aView *view.View) state.Filter {
+//	state := s.Lookup(aView)
+//
+//}

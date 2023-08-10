@@ -57,6 +57,8 @@ var Config = &Registry{
 			PredicateMultiNotIn:  NewMultiNotInPredicate(),
 			PredicateMultiIn:     NewMultiInPredicate(),
 			PredicateLessOrEqual: NewLessOrEqualPredicate(),
+			PredicateLike:        NewLikePredicate(),
+			PredicateNotLike:     NewNotLikePredicate(),
 		},
 	},
 }

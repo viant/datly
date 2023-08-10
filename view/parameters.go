@@ -21,11 +21,10 @@ type (
 	//Parameter describes parameters used by the Criteria to filter the View.
 	Parameter struct {
 		shared.Reference
-		Fields       Parameters
-		Group        []*Parameter `json:",omitempty"`
-		Predicates   []*config.PredicateConfig
-		Name         string `json:",omitempty"`
-		PresenceName string `json:",omitempty"`
+		Fields     Parameters
+		Group      []*Parameter `json:",omitempty"`
+		Predicates []*config.PredicateConfig
+		Name       string `json:",omitempty"`
 
 		In                *Location `json:",omitempty"`
 		Required          *bool     `json:",omitempty"`
@@ -225,10 +224,6 @@ func (p *Parameter) Init(ctx context.Context, resource Resourcelet) error {
 		return err
 	}
 
-	if p.PresenceName == "" {
-		p.PresenceName = p.Name
-	}
-
 	if p.In == nil {
 		return fmt.Errorf("parameter %v In can't be empty", p.Name)
 	}
@@ -307,7 +302,6 @@ func (p *Parameter) inherit(param *Parameter) {
 	p.Name = shared.FirstNotEmpty(p.Name, param.Name)
 	p.Description = shared.FirstNotEmpty(p.Description, param.Description)
 	p.Style = shared.FirstNotEmpty(p.Style, param.Style)
-	p.PresenceName = shared.FirstNotEmpty(p.PresenceName, param.PresenceName)
 	p.Tag = shared.FirstNotEmpty(p.Tag, param.Tag)
 	if p.Const == nil {
 		p.Const = param.Const
@@ -580,7 +574,7 @@ func asValuesPtr(state *ParamState) (paramPtr unsafe.Pointer, presencePtr unsafe
 }
 
 func (p *Parameter) SetPresenceField(structType reflect.Type) error {
-	fields, err := p.pathFields(p.PresenceName, structType)
+	fields, err := p.pathFields(p.Name, structType)
 	if err != nil {
 		return err
 	}
@@ -727,8 +721,10 @@ func (p Parameters) InitRepeated(state *structology.State) (err error) {
 	return nil
 }
 
-func (s Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType) (reflect.Type, error) {
+func (s Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, withSetMarker bool) (reflect.Type, error) {
 	var fields []reflect.StructField
+	var setMarkerFields []reflect.StructField
+
 	var err error
 	for _, param := range s {
 		schema := param.OutputSchema()
@@ -746,10 +742,14 @@ func (s Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType) 
 		}
 		param.Schema.Cardinality = schema.Cardinality
 		if rType != nil {
-			fields = append(fields, reflect.StructField{Name: param.Name, Type: rType, PkgPath: PkgPath(param.Name, pkgPath)})
+			fields = append(fields, reflect.StructField{Name: param.Name, Type: rType, PkgPath: PkgPath(param.Name, pkgPath), Tag: reflect.StructTag(param.Tag)})
+			setMarkerFields = append(setMarkerFields, reflect.StructField{Name: param.Name, Type: boolType, PkgPath: PkgPath(param.Name, pkgPath)})
 		}
 	}
-
+	if withSetMarker && len(fields) > 0 {
+		setMarkerType := reflect.StructOf(setMarkerFields)
+		fields = append(fields, reflect.StructField{Name: "Has", Type: setMarkerType, PkgPath: PkgPath("Has", pkgPath), Tag: `setMarker:"true" sqlx:"-" diff:"-"  `})
+	}
 	if len(fields) == 0 {
 		return reflect.StructOf([]reflect.StructField{{Name: "Dummy", Type: reflect.TypeOf(true)}}), nil
 	}

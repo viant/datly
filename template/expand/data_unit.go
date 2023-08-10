@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/viant/datly/executor/sequencer"
 	"github.com/viant/sqlx/io/validator"
+	"github.com/viant/toolbox"
 	"github.com/viant/xdatly/handler/parameter"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -172,14 +173,14 @@ func (c *DataUnit) In(columnName string, args interface{}) (string, error) {
 	return c.in(columnName, args, true)
 }
 
-func (c *DataUnit) in(columnName string, args interface{}, valueIn bool) (string, error) {
+func (c *DataUnit) in(columnName string, args interface{}, inclusive bool) (string, error) {
 	expander, err := bindingsCache.Lookup(args)
 	if err != nil {
 		return "", err
 	}
 
 	if !expander.HasAny(args) {
-		if !valueIn {
+		if !inclusive {
 			return "0 = 0", err
 		}
 
@@ -188,7 +189,7 @@ func (c *DataUnit) in(columnName string, args interface{}, valueIn bool) (string
 
 	sb := &strings.Builder{}
 	sb.WriteString(expander.ColumnExpression(columnName))
-	if !valueIn {
+	if !inclusive {
 		sb.WriteString(" NOT")
 	}
 
@@ -208,6 +209,59 @@ func (c *DataUnit) in(columnName string, args interface{}, valueIn bool) (string
 
 func (c *DataUnit) NotIn(columnName string, args interface{}) (string, error) {
 	return c.in(columnName, args, false)
+}
+
+func (c *DataUnit) Like(columnName string, args interface{}) (string, error) {
+	return c.like(columnName, args, true)
+}
+
+func (c *DataUnit) notLike(columnName string, args interface{}) (string, error) {
+	return c.like(columnName, args, false)
+}
+
+func (c *DataUnit) like(columnName string, args interface{}, inclusive bool) (string, error) {
+	expander, err := bindingsCache.Lookup(args)
+	if err != nil {
+		return "", err
+	}
+	if !expander.HasAny(args) {
+		if !inclusive {
+			return "0 = 0", err
+		}
+
+		return "1 = 0", nil
+	}
+	sb := &strings.Builder{}
+	_, values, err := expander.Expand(columnName, args)
+	if err != nil {
+		return "", err
+	}
+	conjunction := " OR "
+	if !inclusive {
+		conjunction = " AND "
+	}
+	if len(values) > 1 {
+		sb.WriteString("(")
+	}
+	for i, value := range values {
+		if i > 0 {
+			sb.WriteString(conjunction)
+		}
+		sb.WriteString(expander.ColumnExpression(columnName))
+		if !inclusive {
+			sb.WriteString(" NOT")
+		}
+		sb.WriteString(" LIKE ")
+		textValue, ok := value.(string)
+		if !ok {
+			textValue = toolbox.AsString(value)
+		}
+		c.addAll(textValue + "%")
+	}
+	if len(values) > 1 {
+		sb.WriteString(")")
+	}
+	return sb.String(), nil
 }
 
 func (c *DataUnit) Delete(data interface{}, name string) (string, error) {
