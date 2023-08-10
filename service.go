@@ -278,7 +278,7 @@ func New(cfg *Config) *Service {
 		if ret.jwtVerifier != nil {
 			if err := ret.jwtVerifier.Init(context.Background()); err == nil {
 				config.Config.RegisterCodec(
-					jwt.New(config.CodecKeyJwtClaim, ret.jwtVerifier.VerifyClaims))
+					config.CodecKeyJwtClaim, jwt.New(ret.jwtVerifier.VerifyClaims), time.Time{})
 			}
 		}
 	}
