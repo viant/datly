@@ -785,7 +785,7 @@ func TestRouter(t *testing.T) {
 				"Content-Type": {"application/json; charset=utf-8"},
 			},
 			headers: map[string][]string{
-				"Content-Type": {router.CSVFormat},
+				"Content-Type": {router.CSVContentType},
 			},
 			visitors: map[string]interface{}{
 				config.CodecKeyCSV: config.CsvFactory(""),

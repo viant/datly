@@ -40,7 +40,7 @@ require (
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
 	github.com/viant/xreflect v0.3.2-0.20230723180303-1f248c397c5c
 	github.com/viant/xunsafe v0.9.0
-	golang.org/x/mod v0.11.0
+	golang.org/x/mod v0.12.0
 	golang.org/x/oauth2 v0.7.0 // indirect
 	google.golang.org/api v0.114.0
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
@@ -50,7 +50,7 @@ require (
 require (
 	github.com/viant/govalidator v0.2.2-0.20230629211659-f2a3f0659b0b
 	github.com/viant/sqlparser v0.5.1-0.20230802023432-9d7400ae861a
-	golang.org/x/crypto v0.10.0 // indirect
+	golang.org/x/crypto v0.12.0 // indirect
 )
 
 require (
@@ -62,7 +62,8 @@ require (
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
 	github.com/viant/xdatly/handler v0.0.0-20230713223438-282037388a67
 	github.com/viant/xdatly/types/core v0.0.0-20230619231115-e622dd6aff79
-	golang.org/x/tools v0.10.0
+	github.com/viant/xlsy v0.0.0-20230815144023-375b8398bc7d
+	golang.org/x/tools v0.12.0
 )
 
 require (
@@ -111,17 +112,24 @@ require (
 	github.com/lestrrat-go/iter v1.0.1 // indirect
 	github.com/lestrrat-go/jwx v1.2.25 // indirect
 	github.com/lestrrat-go/option v1.0.0 // indirect
+	github.com/mazznoer/csscolorparser v0.1.3 // indirect
+	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/richardlehane/mscfb v1.0.4 // indirect
+	github.com/richardlehane/msoleps v1.0.3 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/viant/igo v0.1.0 // indirect
+	github.com/xuri/efp v0.0.0-20220603152613-6918739fd470 // indirect
+	github.com/xuri/excelize/v2 v2.7.1 // indirect
+	github.com/xuri/nfp v0.0.0-20220409054826-5e722a1d9e22 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20221210110428-332342483e3f // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/net v0.11.0 // indirect
+	golang.org/x/net v0.14.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/sys v0.9.0 // indirect
-	golang.org/x/term v0.9.0 // indirect
-	golang.org/x/text v0.10.0 // indirect
+	golang.org/x/sys v0.11.0 // indirect
+	golang.org/x/term v0.11.0 // indirect
+	golang.org/x/text v0.12.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect

@@ -20,6 +20,7 @@ import (
 	"github.com/viant/sqlx/io/load/reader/csv"
 	"github.com/viant/structql"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xlsy"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
@@ -44,13 +45,23 @@ const (
 
 	FormatQuery = "_format"
 
-	CSVQueryFormat = "csv"
-	CSVFormat      = "text/csv"
+	XLSContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-	JSONFormat = "application/json"
+	JSONFormat = "json"
 
-	TabularJSONQueryFormat = "tabular"
-	TabularJSONFormat      = "application/json"
+	XMLFormat = "xml"
+
+	XLSFormat = "xls"
+
+	CSVFormat      = "csv"
+	CSVContentType = "text/csv"
+
+	JSONContentType = "application/json"
+
+	JSONDataFormatTabular = "tabular"
+	TabularJSONFormat     = "application/json"
+
+	XMLContentType = "application/xml"
 )
 
 type (
@@ -70,6 +81,7 @@ type (
 		Transforms       marshal.Transforms `json:",omitempty"`
 
 		JSON
+		XLS
 		Output
 		Index
 		bodyParamQuery   map[string]*query
@@ -99,10 +111,13 @@ type (
 	}
 
 	JSON struct {
-		_marshaller               *json.Marshaller
+		_jsonMarshaller           *json.Marshaller
 		_unmarshallerInterceptors []*jsonUnmarshallerInterceptors
 	}
 
+	XLS struct {
+		_xlsMarshaller *xlsy.Marshaller
+	}
 	jsonUnmarshallerInterceptors struct {
 		transform *marshal.Transform
 	}
@@ -117,6 +132,7 @@ type (
 		NormalizeExclude  *bool
 		DateFormat        string             `json:",omitempty"`
 		CSV               *CSVConfig         `json:",omitempty"`
+		XLS               *XLSConfig         `json:",omitempty"`
 		TabularJSON       *TabularJSONConfig `json:",omitempty"`
 		RevealMetric      *bool
 		DebugKind         view.MetaKind
@@ -136,6 +152,12 @@ type (
 		_requestBodyMarshaller *csv.Marshaller
 		_outputMarshaller      *csv.Marshaller
 		_unwrapperSlice        *xunsafe.Slice
+	}
+
+	XLSConfig struct {
+		DefaultStyle string
+		SheetName    string
+		Styles       map[string]string //name of style, values
 	}
 
 	TabularJSONConfig struct {
@@ -214,6 +236,28 @@ func (r *Route) HttpURI() string {
 	if x == nil {
 	} // TODO DELETE ABOVE
 	return r.URI
+}
+
+func (x *XLSConfig) Options() []xlsy.Option {
+
+	var options []xlsy.Option
+	if x == nil {
+		return options
+	}
+	if x.DefaultStyle != "" {
+		options = append(options, xlsy.WithDefaultStyle(x.DefaultStyle))
+	}
+	if x.SheetName != "" {
+		options = append(options, xlsy.WithTag(&xlsy.Tag{Name: x.SheetName}))
+	}
+	if len(x.Styles) > 0 {
+		var pairs []string
+		for k, v := range x.Styles {
+			pairs = append(pairs, k, v)
+		}
+		options = append(options, xlsy.WithNamedStyles(pairs...))
+	}
+	return options
 }
 
 func (r *Route) HttpMethod() string {
@@ -784,7 +828,7 @@ func (r *Route) initCSVIfNeeded() error {
 
 func (r *Route) initTabJSONIfNeeded() error {
 
-	if r.Output.DataFormat != TabularJSONQueryFormat {
+	if r.Output.DataFormat != JSONDataFormatTabular {
 		return nil
 	}
 
@@ -897,7 +941,8 @@ func (r *Route) AddApiKeys(keys ...*APIKey) {
 }
 
 func (r *Route) initMarshaller() error {
-	r._marshaller = json.New(r.jsonConfig())
+	r._jsonMarshaller = json.New(r.jsonConfig())
+	r._xlsMarshaller = xlsy.NewMarshaller(r.Output.XLS.Options()...)
 	return nil
 }
 

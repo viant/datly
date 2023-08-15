@@ -345,17 +345,17 @@ func (r *Router) buildSession(ctx context.Context, response http.ResponseWriter,
 		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, err)
 	}
 
-	if route.CSV == nil && requestParams.OutputFormat == CSVFormat {
-		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output CSV config?)", CSVFormat)))
+	if route.CSV == nil && requestParams.OutputContentType == CSVContentType {
+		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output CSV config?)", CSVContentType)))
 	}
-
-	if route.TabularJSON == nil && route.DateFormat == TabularJSONQueryFormat {
-		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", TabularJSONFormat)))
+	if route.TabularJSON == nil && route.DataFormat == JSONDataFormatTabular {
+		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", JSONContentType)))
 	}
 
 	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, requestParams, route.Index._viewDetails...)
 	if err != nil {
-		defaultCode := http.StatusBadRequest
+		defaultCode :=
+			http.StatusBadRequest
 		if route.ParamStatusError != nil {
 			defaultCode = *route.ParamStatusError
 		}
@@ -553,20 +553,25 @@ func (r *Router) marshalResult(session *ReaderSession, response *preparedRespons
 		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, err)
 	}
 
-	format := session.RequestParams.outputQueryFormat(session.Route)
+	format := session.RequestParams.dataFormat(session.Route)
 
 	switch strings.ToLower(format) {
-	case CSVQueryFormat:
+	case XLSFormat:
+		return r.marshalAsXLS(session, response, filters)
+	case CSVFormat:
 		return r.marshalAsCSV(session, response, filters)
-	case TabularJSONQueryFormat:
+	case JSONDataFormatTabular:
 		if session.Route.Style == ComprehensiveStyle {
 			tabJSONInterceptors := r.tabJSONInterceptors(session, response.objects, filters)
 			return r.marshalAsJSON(session, response, filters, tabJSONInterceptors)
 		}
 		return r.marshalAsTabularJSON(session, response.objects, filters)
+	case JSONFormat:
+		return r.marshalAsJSON(session, response, json.NewFilters(filters...))
+	default:
+		return nil, fmt.Errorf("unsupproted data format: %w", err)
 	}
 
-	return r.marshalAsJSON(session, response, json.NewFilters(filters...))
 }
 
 func (r *Router) tabJSONInterceptors(session *ReaderSession, destValue interface{}, filters []*json.FilterEntry) json.MarshalerInterceptors {
@@ -582,7 +587,7 @@ func (r *Router) tabJSONInterceptors(session *ReaderSession, destValue interface
 }
 
 func (r *Router) marshalAsJSON(session *ReaderSession, response *preparedResponse, options ...interface{}) ([]byte, error) {
-	marshal, err := session.Route._marshaller.Marshal(response.result, options...)
+	marshal, err := session.Route._jsonMarshaller.Marshal(response.result, options...)
 
 	if err != nil {
 		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
@@ -674,7 +679,7 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 	//TODO extend to unified response
 	r.setResponseStatus(route, response, responseStatus, nil)
 
-	asBytes, marErr := route._marshaller.Marshal(response.Elem().Interface())
+	asBytes, marErr := route._jsonMarshaller.Marshal(response.Elem().Interface())
 	if marErr != nil {
 		w.Write(asBytes)
 		w.WriteHeader(statusCode)
@@ -886,6 +891,7 @@ func (r *Router) redirectIfNeeded(ctx context.Context, request *http.Request, re
 
 func (r *Router) compressIfNeeded(marshalled []byte, route *Route) (*RequestDataReader, error) {
 	compression := route.Compression
+
 	if compression == nil || (compression.MinSizeKb > 0 && len(marshalled) <= compression.MinSizeKb*1024) {
 		return NewBytesReader(marshalled, ""), nil
 	}
@@ -1015,11 +1021,11 @@ func (r *Router) payloadReader(ctx context.Context, request *http.Request, respo
 		if err != nil {
 			return nil, err
 		}
-
 		payloadReader, err := r.readerPayloadReader(ctx, route, session, record)
-		if payloadReader != nil {
-			payloadReader.Headers().Add(content.Type, session.RequestParams.OutputFormat+"; "+CharsetUTF8)
+		if payloadReader != nil && payloadReader.Headers().Get(content.Type) == "" {
+			payloadReader.Headers().Add(content.Type, session.RequestParams.OutputContentType+"; "+CharsetUTF8)
 		}
+		//TODO Add support for Content-Disposition: attachment; filename="document.doc"
 
 		return payloadReader, err
 	}
@@ -1040,7 +1046,7 @@ func (r *Router) marshalCustomOutput(output interface{}, route *Route) (PayloadR
 	case []byte:
 		return NewBytesReader(actual, ""), nil
 	default:
-		marshal, err := route._marshaller.Marshal(output)
+		marshal, err := route._jsonMarshaller.Marshal(output)
 		if err != nil {
 			return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
 		}
@@ -1055,7 +1061,7 @@ func (r *Router) extractValueFromResponse(route *Route, actual response.Response
 	case []byte:
 		return responseValue, nil
 	default:
-		return route._marshaller.Marshal(route, responseValue)
+		return route._jsonMarshaller.Marshal(route, responseValue)
 	}
 }
 
@@ -1128,7 +1134,7 @@ func (r *Router) readAsyncResponse(ctx context.Context, session *ReaderSession, 
 }
 
 func (r *Router) marshalAsyncRecord(session *ReaderSession, record *async.Record) (PayloadReader, error) {
-	marshal, err := session.Route.JSON._marshaller.Marshal(record)
+	marshal, err := session.Route.JSON._jsonMarshaller.Marshal(record)
 	if err != nil {
 		return nil, err
 	}
@@ -1211,7 +1217,7 @@ func (r *Router) handleReadAsyncError(ctx context.Context, session *ReaderSessio
 	record.State = async.StateDone
 	_, message, object := normalizeErr(err, 400)
 	if object != nil {
-		marshal, _ := session.Route.JSON._marshaller.Marshal(object)
+		marshal, _ := session.Route.JSON._jsonMarshaller.Marshal(object)
 		asString := string(marshal)
 		record.Error = &asString
 	} else {
@@ -1395,7 +1401,8 @@ func (r *Router) executorPayloadReader(ctx context.Context, request *http.Reques
 	}
 
 	responseBody := r.wrapWithResponseIfNeeded(body, route, nil, nil, sess.State)
-	marshal, err := route._marshaller.Marshal(responseBody)
+
+	marshal, err := route._jsonMarshaller.Marshal(responseBody)
 	if err != nil {
 		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
 	}
@@ -1436,6 +1443,10 @@ func (r *Router) prepareAndExecuteExecutor(ctx context.Context, request *http.Re
 	}
 
 	return nil
+}
+
+func (r *Router) marshalAsXLS(session *ReaderSession, readerSession *preparedResponse, filters []*json.FilterEntry) ([]byte, error) {
+	return session.Route.XLS._xlsMarshaller.Marshal(readerSession.objects)
 }
 
 func updateFieldPathsIfNeeded(filter *json.FilterEntry) {

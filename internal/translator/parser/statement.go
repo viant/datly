@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"github.com/viant/datly/cmd/option"
+	"github.com/viant/datly/shared"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
 	"github.com/viant/velty/ast/expr"
@@ -133,7 +133,7 @@ func NewStatements(SQL string) Statements {
 					Start:          beforeMatch,
 					End:            -1,
 					IsExec:         true,
-					Kind:           option.ExecKindService,
+					Kind:           shared.ExecKindService,
 					Selector:       selector,
 					SelectorMethod: method,
 				}

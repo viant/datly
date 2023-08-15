@@ -7,9 +7,9 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/cmd/option"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/codegen/ast"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/scy"
 	"os"
@@ -181,7 +181,7 @@ func (o *Options) Init() error {
 	}
 
 	if o.ExecKind == "" {
-		o.ExecKind = option.ExecKindService
+		o.ExecKind = shared.ExecKindService
 	}
 
 	if o.DSQLOutput == "" {

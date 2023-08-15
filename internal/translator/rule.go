@@ -334,6 +334,10 @@ func (r *Rule) applyShortHands() {
 	if r.Route.Output.Field != "" {
 		r.Route.Output.Style = router.ComprehensiveStyle
 	}
+
+	if r.Route.TabularJSON != nil && r.Route.Output.DataFormat == "" {
+		r.Route.Output.DataFormat = router.JSONDataFormatTabular
+	}
 }
 
 func NewRule() *Rule {

@@ -1,4 +1,4 @@
-/* {"URI":"tabular/basic/vendors/", "DataFormat":"tabular", "TabularJSON":{"FloatPrecision":"20"}} */
+/* {"URI":"tabular/basic/vendors/",  "TabularJSON":{"FloatPrecision":"20"}} */
 SELECT vendor.* EXCEPT CREATED,UPDATED,
        products.* EXCEPT VENDOR_ID,CREATED,UPDATED
 FROM (SELECT * FROM VENDOR t ) vendor

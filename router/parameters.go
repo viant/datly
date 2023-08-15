@@ -21,8 +21,8 @@ import (
 type (
 	RequestParams struct {
 		sync.Mutex
-		OutputFormat string
-		InputFormat  string
+		OutputContentType string
+		InputDataFormat   string
 
 		cookiesIndex map[string]*http.Cookie
 		cookies      []*http.Cookie
@@ -73,9 +73,8 @@ func NewRequestParameters(request *http.Request, route *Route) (*RequestParams, 
 func (p *RequestParams) init(request *http.Request, route *Route) (string, error) {
 	p.pathIndex, _ = toolbox.ExtractURIParameters(route.URI, request.URL.Path)
 	p.queryIndex = request.URL.Query()
-	p.OutputFormat = p.outputFormat(route)
-	p.InputFormat = p.header(HeaderContentType)
-
+	p.OutputContentType = p.outputContentType(route)
+	p.InputDataFormat = p.header(HeaderContentType)
 	for i := range p.cookies {
 		p.cookiesIndex[p.cookies[i].Name] = p.cookies[i]
 	}
@@ -139,34 +138,39 @@ func (p *RequestParams) parseRequestBody(body []byte, route *Route) (interface{}
 	return converted, nil
 }
 
-func (p *RequestParams) outputFormat(route *Route) string {
+func (p *RequestParams) outputContentType(route *Route) string {
 
-	format := p.outputQueryFormat(route)
-
+	format := p.dataFormat(route)
 	switch format {
-	case CSVQueryFormat:
-		return CSVFormat
-	case TabularJSONQueryFormat:
+	case XLSFormat, XLSContentType:
+		return XLSContentType
+	case CSVFormat, CSVContentType:
+		return CSVContentType
+	case XMLFormat, XMLContentType:
+		return XMLContentType
+	case JSONDataFormatTabular:
 		return TabularJSONFormat
 	}
-
-	return JSONFormat
+	return JSONContentType
 }
 
-func (p *RequestParams) outputQueryFormat(route *Route) string {
+func (p *RequestParams) dataFormat(route *Route) string {
 	param, _ := p.queryParam(FormatQuery)
 	format := strings.ToLower(param)
 	if format == "" {
 		format = route.Output.DataFormat
 	}
+	if format == "" {
+		format = JSONFormat
+	}
 	return format
 }
 
 func (p *RequestParams) unmarshaller(route *Route) (*Marshaller, error) {
-	switch p.InputFormat {
-	case CSVFormat:
+	switch p.InputDataFormat {
+	case CSVContentType:
 		if route.CSV == nil {
-			return nil, UnsupportedFormatErr(CSVFormat)
+			return nil, UnsupportedFormatErr(CSVContentType)
 		}
 
 		return &Marshaller{
@@ -176,10 +180,9 @@ func (p *RequestParams) unmarshaller(route *Route) (*Marshaller, error) {
 			rType:     route._requestBodySlice.Type,
 		}, nil
 	}
-
 	return &Marshaller{
 		unmarshal: func(bytes []byte, i interface{}) error {
-			return route._marshaller.Unmarshal(bytes, i, route.unmarshallerInterceptors(p), p.request)
+			return route._jsonMarshaller.Unmarshal(bytes, i, route.unmarshallerInterceptors(p), p.request)
 		},
 		presence: p.jsonPresenceMap(),
 		rType:    route._requestBodyType,
