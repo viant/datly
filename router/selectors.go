@@ -423,15 +423,33 @@ func (b *paramStateBuilder) extractParamValue(ctx context.Context, param *view.P
 }
 
 func (b *paramStateBuilder) lookupValue(ctx context.Context, name string) (interface{}, error) {
-	aParameter, ok := b.viewParams[name]
-	if !ok {
-		return nil, fmt.Errorf("failed to lookup parameter: %s", name)
+	aParameter, i, err2 := b.getParameter(name)
+	if err2 != nil {
+		return i, err2
 	}
+
 	value, err := b.params.extractHttpParam(context.Background(), aParameter, []interface{}{})
 	if aParameter.Output == nil || err != nil {
 		return value, err
 	}
 	return aParameter.Output.Transform(context.Background(), value)
+}
+
+func (b *paramStateBuilder) getParameter(name string) (*view.Parameter, error) {
+	var aParameter *view.Parameter
+	if b.resource != nil {
+		var err error
+		if aParameter, err = b.resource.LookupParameter(name); err != nil {
+			return nil, err
+		}
+	}
+	if aParameter == nil {
+		aParameter, _ = b.viewParams[name]
+		if aParameter == nil {
+			return nil, fmt.Errorf("failed to lookup parameter: %s", name)
+		}
+	}
+	return aParameter, nil
 }
 
 func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, param *view.Parameter, parentView *view.View, options ...interface{}) (interface{}, error) {
