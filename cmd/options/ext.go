@@ -19,7 +19,7 @@ type (
 	}
 	Module struct {
 		GitRepository *string `short:"g" long:"gitrepo" description:"git module repo"`
-		Name          string  `short:"n" long:"name" description:"module name" default:"myapp"`
+		Name          string  `short:"n" long:"name" description:"module name" `
 	}
 	Datly struct {
 		Location string `short:"x" long:"dsrc" description:"datly location" default:".build"`
