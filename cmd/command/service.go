@@ -76,7 +76,7 @@ func (s *Service) runCommand(dir string, cmd string, args ...string) (string, er
 	command.Dir = dir
 	output, err := command.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to run command:%v, %w, %v", command.Args, err, output)
+		return "", fmt.Errorf("failed to run command:%v, %w, %s", command.Args, err, output)
 	}
 	return string(output), nil
 }
