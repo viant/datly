@@ -543,7 +543,7 @@ func (b *paramStateBuilder) handleParam(ctx context.Context, state *view.ParamSt
 	}
 
 	if value != nil {
-		return parameter.UpdateParamState(ctx, state, value, options...)
+		return parameter.UpdateParamState(state, value)
 	}
 
 	return nil
@@ -703,14 +703,6 @@ func (b *paramStateBuilder) paramBasedParamValue(ctx context.Context, parentView
 		return nil, err
 	}
 	return value, nil
-}
-
-func (b *paramStateBuilder) addParamBasedParam(ctx context.Context, parent *ViewDetails, selector *view.Selector, parameter *view.Parameter) error {
-	value, err := b.extractParamValue(ctx, parameter, parent, selector)
-	if err != nil {
-		return err
-	}
-	return parameter.ConvertAndSetCtx(ctx, selector, value)
 }
 
 func (b *paramStateBuilder) Value(ctx context.Context, paramName string) (interface{}, error) {

@@ -490,22 +490,12 @@ func (p *Parameter) Value(values interface{}) (interface{}, error) {
 	return p._valueAccessor.Value(values)
 }
 
-func (p *Parameter) ConvertAndSetCtx(ctx context.Context, selector *Selector, value interface{}) error {
-	_, err := p.convertAndSet(ctx, selector, value, false)
-	return err
-}
-
-func (p *Parameter) convertAndSet(ctx context.Context, selector *Selector, value interface{}, converted bool) (interface{}, error) {
-	return p.setOnState(ctx, &selector.Parameters, value, converted, selector)
-}
-
-func (p *Parameter) setOnState(ctx context.Context, state *ParamState, value interface{}, converted bool, options ...interface{}) (interface{}, error) {
+func (p *Parameter) setOnState(state *ParamState, value interface{}) (interface{}, error) {
 	paramPtr, presencePtr := asValuesPtr(state)
-	value, err := p.setValue(ctx, value, paramPtr, converted, options...)
+	value, err := p.setValue(value, paramPtr)
 	if err != nil {
 		return nil, err
 	}
-
 	if presencePtr != nil {
 		p.UpdatePresence(presencePtr)
 	}
@@ -513,30 +503,11 @@ func (p *Parameter) setOnState(ctx context.Context, state *ParamState, value int
 	return value, nil
 }
 
-func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr unsafe.Pointer, converted bool, options ...interface{}) (interface{}, error) {
+func (p *Parameter) setValue(value interface{}, paramPtr unsafe.Pointer) (interface{}, error) {
 	if p._valueAccessor == nil {
 		fmt.Printf("[WARN] setValue(): parameter  %v _valueAccessor was nil", p.Name)
 		return value, nil
 	}
-	aCodec := p.Output
-	if converted {
-		aCodec = nil
-	}
-
-	var codecFn codec.Instance
-	if aCodec != nil {
-		codecFn = aCodec._codec
-	}
-
-	if codecFn != nil {
-		convertedValue, err := codecFn.Value(ctx, value, AsCodecOptions(options)...)
-		if err != nil {
-			return nil, err
-		}
-		p._valueAccessor.SetValue(paramPtr, convertedValue)
-		return convertedValue, nil
-	}
-
 	return p._valueAccessor.SetConvertedAndGet(paramPtr, value, p.DateFormat)
 }
 
@@ -548,21 +519,13 @@ func AsCodecOptions(options []interface{}) []codec.Option {
 }
 
 func (p *Parameter) Set(selector *Selector, value interface{}) error {
-	return p.SetCtx(context.Background(), selector, value)
-}
-
-func (p *Parameter) SetCtx(ctx context.Context, selector *Selector, value interface{}) error {
-	_, err := p.convertAndSet(ctx, selector, value, true)
+	_, err := p.setOnState(&selector.Parameters, value)
 	return err
 }
 
-func (p *Parameter) UpdateParamState(ctx context.Context, paramState *ParamState, value interface{}, options ...interface{}) error {
-	_, err := p.setOnState(ctx, paramState, value, true, options...)
+func (p *Parameter) UpdateParamState(paramState *ParamState, value interface{}, options ...interface{}) error {
+	_, err := p.setOnState(paramState, value)
 	return err
-}
-
-func (p *Parameter) SetAndGet(selector *Selector, value interface{}) (interface{}, error) {
-	return p.convertAndSet(context.Background(), selector, value, true)
 }
 
 func asValuesPtr(state *ParamState) (paramPtr unsafe.Pointer, presencePtr unsafe.Pointer) {
@@ -615,11 +578,9 @@ func (p *Parameter) UpdateValue(params interface{}, presenceMap interface{}) err
 
 	paramsPtr := xunsafe.AsPointer(params)
 	presenceMapPtr := xunsafe.AsPointer(presenceMap)
-
-	if _, err := p.setValue(context.Background(), p.Const, paramsPtr, true); err != nil {
+	if _, err := p.setValue(p.Const, paramsPtr); err != nil {
 		return err
 	}
-
 	p.UpdatePresence(presenceMapPtr)
 	return nil
 }
