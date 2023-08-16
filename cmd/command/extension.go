@@ -35,7 +35,7 @@ func (s *Service) RunInitExtension(ctx context.Context, init *options.Extension)
 	pkgDest := init.PackageLocation()
 	hasPackage, _ := s.fs.Exists(ctx, pkgDest)
 	if hasPackage {
-		fmt.Printf("updating %v...\n", pkgDest)
+		fmt.Printf("updating %v ...\n", pkgDest)
 		if err = s.updatePackage(ctx, pkgDest, init); err != nil {
 			return fmt.Errorf("failed to update package: %w", err)
 		}
@@ -45,18 +45,18 @@ func (s *Service) RunInitExtension(ctx context.Context, init *options.Extension)
 			}
 		}
 	} else {
-		fmt.Printf("generating %v...\n", pkgDest)
+		fmt.Printf("generating %v ...\n", pkgDest)
 		if err = s.generatePackage(ctx, pkgDest, init); err == nil {
 			return fmt.Errorf("failed to generate package: %w", err)
 		}
 	}
 
-	fmt.Printf("generating ext %v...\n", s.extLocation(init))
+	fmt.Printf("generating ext %v ...\n", s.extLocation(init))
 	if err = s.generateExtensionModule(ctx, init); err != nil {
 		return err
 	}
 	datlyLocation := url.Join(init.Datly.Location, "datly")
-	fmt.Printf("extending custom datly: %v...\n", datlyLocation)
+	fmt.Printf("extending custom datly: %v ...\n", datlyLocation)
 	if err = s.extendDatly(ctx, init); err != nil {
 		return nil
 	}
