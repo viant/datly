@@ -87,10 +87,6 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 		return nil, err
 	}
 
-	if err = b.addSelectorQualifier(&commonParams, aView, selector); err != nil {
-		return nil, err
-	}
-
 	if !hasCriteria {
 		sb.WriteString(" ")
 		if strings.TrimSpace(commonParams.WhereClause) != "" {
@@ -420,35 +416,4 @@ func (b *Builder) metaSQL(aView *view.View, selector *view.Selector, batchData *
 	}
 
 	return matcher, nil
-}
-
-func (b *Builder) addSelectorQualifier(param *view.CriteriaParam, aView *view.View, selector *view.Selector) error {
-	sb := &strings.Builder{}
-	alias := b.viewAlias(aView)
-	for i, qualifier := range selector.Qualifier {
-		if i != 0 {
-			sb.WriteString(" AND ")
-		}
-
-		sb.WriteString(alias)
-		sb.WriteString(qualifier.Column)
-		if len(qualifier.Values) > 0 {
-			sb.WriteString(" IN (")
-
-			for valueIndex, value := range qualifier.Values {
-				if valueIndex > 0 {
-					sb.WriteString(", ")
-				}
-				sb.WriteString(placeholderFragment)
-				param.Qualifier.Args = append(param.Qualifier.Args, value)
-			}
-
-			sb.WriteString(")")
-		} else {
-			sb.WriteString(" 1 = 2 ")
-		}
-	}
-
-	param.Qualifier.SQL = sb.String()
-	return nil
 }

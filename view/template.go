@@ -50,7 +50,6 @@ type (
 		ColumnsIn   string `velty:"COLUMN_IN"`
 		WhereClause string `velty:"CRITERIA"`
 		Pagination  string `velty:"PAGINATION"`
-		Qualifier   ParamQualifier
 	}
 
 	ParamQualifier struct {
@@ -525,16 +524,6 @@ func (t *Template) replacementEntry(key string, params CriteriaParam, selector *
 	case keywords.SelectorCriteria[1:]:
 		*placeholders = append(*placeholders, selector.Placeholders...)
 		criteria := selector.Criteria
-
-		if len(params.Qualifier.SQL) > 0 {
-			*placeholders = append(*placeholders, params.Qualifier.Args...)
-			if len(criteria) > 0 {
-				criteria = criteria + " AND "
-			}
-
-			criteria = criteria + params.Qualifier.SQL
-		}
-
 		return key, criteria, nil
 	default:
 		if strings.HasPrefix(key, keywords.WherePrefix) {

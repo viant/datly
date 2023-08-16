@@ -2,7 +2,6 @@ package router
 
 import (
 	"bytes"
-	"github.com/go-playground/validator"
 	"github.com/viant/toolbox"
 	"sync"
 )
@@ -105,19 +104,6 @@ func statusCodePriority(status int) int {
 	default:
 		return priorityDefault
 	}
-}
-
-func NewParamErrors(validationErrors validator.ValidationErrors) ParamErrors {
-	paramErrors := make([]*ParamError, len(validationErrors))
-	for i, validationError := range validationErrors {
-		paramErrors[i] = &ParamError{
-			Value: validationError.Value(),
-			Field: validationError.StructNamespace(),
-			Tag:   validationError.Tag(),
-		}
-	}
-
-	return paramErrors
 }
 
 func (p ParamErrors) Error() string {

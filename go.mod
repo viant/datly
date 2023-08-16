@@ -6,15 +6,12 @@ require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
 	github.com/francoispqt/gojay v1.2.13
-	github.com/go-playground/universal-translator v0.18.0 // indirect
-	github.com/go-playground/validator v9.31.0+incompatible
 	github.com/go-sql-driver/mysql v1.7.0
 	github.com/goccy/go-json v0.9.11
 	github.com/golang-jwt/jwt/v4 v4.4.1
 	github.com/google/gops v0.3.23
 	github.com/google/uuid v1.3.0
 	github.com/jessevdk/go-flags v1.5.0
-	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/lib/pq v1.10.6
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/onsi/gomega v1.20.2 // indirect
@@ -43,7 +40,6 @@ require (
 	golang.org/x/mod v0.12.0
 	golang.org/x/oauth2 v0.7.0 // indirect
 	google.golang.org/api v0.114.0
-	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -98,7 +94,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.0-20210816181553-5444fa50b93d // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
-	github.com/go-playground/locales v0.14.0 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
