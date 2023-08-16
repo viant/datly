@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/handler/parameter"
 	"github.com/viant/xunsafe"
 	"net/http"
@@ -421,7 +422,20 @@ func (b *paramStateBuilder) extractParamValue(ctx context.Context, param *view.P
 	return b.extractParamValueWithOptions(ctx, param, details.View, options...)
 }
 
+func (b *paramStateBuilder) lookupValue(ctx context.Context, name string) (interface{}, error) {
+	aParameter, ok := b.viewParams[name]
+	if !ok {
+		return nil, fmt.Errorf("failed to lookup parameter: %s", name)
+	}
+	value, err := b.params.extractHttpParam(context.Background(), aParameter, []interface{}{})
+	if aParameter.Output == nil || err != nil {
+		return value, err
+	}
+	return aParameter.Output.Transform(context.Background(), value)
+}
+
 func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, param *view.Parameter, parentView *view.View, options ...interface{}) (interface{}, error) {
+
 	value, err := b.cache.paramValue(param, func() (interface{}, error) {
 		switch param.In.Kind {
 		case view.KindDataView:
@@ -437,7 +451,6 @@ func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, pa
 		case view.KindGroup:
 			return b.groupParam(ctx, param, parentView)
 		}
-
 		return b.params.extractHttpParam(ctx, param, options)
 	})
 
@@ -448,7 +461,9 @@ func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, pa
 	if param.Output == nil {
 		return value, nil
 	}
-	return param.Output.Transform(ctx, value, view.AsCodecOptions(options)...)
+	codecOptions := view.AsCodecOptions(options)
+	codecOptions = append(codecOptions, codec.WithValueLookup(b.lookupValue))
+	return param.Output.Transform(ctx, value, codecOptions...)
 }
 
 func (p *RequestParams) convert(isSpecified bool, raw string, param *view.Parameter) (interface{}, error) {
