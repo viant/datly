@@ -221,7 +221,7 @@ func (s *Service) syncSourceDependencies(ctx context.Context, pkgLocation string
 	}
 	_, err = s.runCommand(pkgLocation, goBinLocation, "mod", "tidy")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to run go mod tidy: ", err)
 	}
 	return nil
 }
