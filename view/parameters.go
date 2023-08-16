@@ -26,22 +26,20 @@ type (
 		Predicates []*config.PredicateConfig
 		Name       string `json:",omitempty"`
 
-		In                *Location `json:",omitempty"`
-		Required          *bool     `json:",omitempty"`
-		Description       string    `json:",omitempty"`
-		DataType          string    `json:",omitempty"`
-		Style             string    `json:",omitempty"`
-		MaxAllowedRecords *int      `json:",omitempty"`
-		MinAllowedRecords *int      `json:",omitempty"`
-		ExpectedReturned  *int      `json:",omitempty"`
-		Schema            *Schema   `json:",omitempty"`
-		//Deprecated -> use Codec only to set Output
-		Codec           *Codec      `json:",omitempty"`
-		Output          *Codec      `json:",omitempty"`
-		Const           interface{} `json:",omitempty"`
-		DateFormat      string      `json:",omitempty"`
-		ErrorStatusCode int         `json:",omitempty"`
-		Tag             string      `json:",omitempty"`
+		In                *Location   `json:",omitempty"`
+		Required          *bool       `json:",omitempty"`
+		Description       string      `json:",omitempty"`
+		DataType          string      `json:",omitempty"`
+		Style             string      `json:",omitempty"`
+		MaxAllowedRecords *int        `json:",omitempty"`
+		MinAllowedRecords *int        `json:",omitempty"`
+		ExpectedReturned  *int        `json:",omitempty"`
+		Schema            *Schema     `json:",omitempty"`
+		Output            *Codec      `json:",omitempty"`
+		Const             interface{} `json:",omitempty"`
+		DateFormat        string      `json:",omitempty"`
+		ErrorStatusCode   int         `json:",omitempty"`
+		Tag               string      `json:",omitempty"`
 
 		_valueAccessor    *types.Accessor
 		_presenceAccessor *types.Accessor
@@ -75,9 +73,6 @@ type (
 func (p *Parameter) OutputSchema() *Schema {
 	if p.Output != nil && p.Output.Schema != nil {
 		return p.Output.Schema
-	}
-	if p.Codec != nil && p.Codec.Schema != nil {
-		return p.Codec.Schema
 	}
 	return p.Schema
 }
@@ -212,10 +207,10 @@ func (p *Parameter) Init(ctx context.Context, resource Resourcelet) error {
 		return nil
 	}
 	p._initialized = true
-	if p.Codec != nil {
-		p.Output = p.Codec
-		p.Codec = nil
-	}
+	//if p.Codec != nil {
+	//	p.Output = p.Codec
+	//	p.Codec = nil
+	//}
 	if err := p.inheritParamIfNeeded(ctx, resource); err != nil {
 		return err
 	}

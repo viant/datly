@@ -255,9 +255,9 @@ func ExtractRelationColumns(join *query.Join) (string, string) {
 }
 
 func (d *Parameter) EnsureCodec() {
-	if d.Parameter.Codec == nil {
-		d.Parameter.Codec = &view.Codec{}
-	}
+	//if d.Parameter.Codec == nil {
+	//	d.Parameter.Codec = &view.Codec{}
+	//}
 	if d.Parameter.Output == nil {
 		d.Parameter.Output = &view.Codec{}
 	}
@@ -321,8 +321,8 @@ func (d *Parameter) EnsureSchema() {
 }
 
 func (p *Parameter) MergeFrom(info *Parameter) {
-	if p.Codec == nil {
-		p.Codec = info.Codec
+	if p.Output == nil {
+		p.Output = info.Output
 	}
 	if info.DataType != "" {
 		p.EnsureSchema()
