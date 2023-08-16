@@ -140,16 +140,16 @@ var initContent string
 func (s *Service) updatePackage(ctx context.Context, pkgLocation string, init *options.Extension) (err error) {
 	replacer := init.Replacer(&init.Module)
 	if err = s.ensureChecksum(ctx, pkgLocation, replacer); err != nil {
-		return err
+		return fmt.Errorf("failed to ensure checksum %s", err)
 	}
 	if err = s.ensureDefaultImportInit(ctx, pkgLocation, replacer); err != nil {
-		return err
+		return fmt.Errorf("failed to ensure default imports %s", err)
 	}
-	if err = s.ensurePluginMain(ctx, pkgLocation, replacer); err != nil {
-		return err
+	if err = s.ensurePluginEntrypoint(ctx, pkgLocation, replacer); err != nil {
+		return fmt.Errorf("failed to ensure plugin entrypoint %s", err)
 	}
 	if err = s.syncSourceDependencies(ctx, pkgLocation); err != nil {
-		return err
+		return fmt.Errorf("failed to sync source dependencies %s", err)
 	}
 	return nil
 }
@@ -181,7 +181,7 @@ func (s *Service) generatePackage(ctx context.Context, pkgLocation string, init 
 	return nil
 }
 
-func (s *Service) ensurePluginMain(ctx context.Context, pkgLocation string, replacer rdata.Map) error {
+func (s *Service) ensurePluginEntrypoint(ctx context.Context, pkgLocation string, replacer rdata.Map) error {
 	pluginDst := url.Join(pkgLocation, "plugin/main.go")
 	if ok, _ := s.fs.Exists(ctx, pluginDst); ok {
 		return nil
