@@ -15,8 +15,8 @@ type (
 		Datly
 	}
 	Module struct {
-		Repository *string `short:"r" long:"module repo" description:"module repo"`
-		Name       string  `short:"n" long:"name" description:"module name" default:"myapp"`
+		GitRepository *string `short:"g" long:"gitrepo" description:"git module repo"`
+		Name          string  `short:"n" long:"name" description:"module name" default:"myapp"`
 	}
 	Datly struct {
 		Location string `short:"x" long:"dsrc" description:"datly location" default:".build"`
@@ -37,9 +37,9 @@ func (e *Extension) Init() error {
 	if url.IsRelative(e.Datly.Location) {
 		e.Datly.Location = url.Join(e.Project, e.Datly.Location)
 	}
-	if e.Repository == nil {
+	if e.GitRepository == nil {
 		repo := "github.com/" + os.Getenv("USER")
-		e.Repository = &repo
+		e.GitRepository = &repo
 	}
 	if e.Name == "" {
 		e.Name = "myapp"
@@ -48,10 +48,10 @@ func (e *Extension) Init() error {
 }
 
 func (e *Module) Module() string {
-	if e.Repository == nil {
+	if e.GitRepository == nil {
 		return e.Name
 	}
-	return *e.Repository + "/" + e.Name
+	return *e.GitRepository + "/" + e.Name
 }
 
 func (e *Extension) Replacer(shared *Module) data.Map {

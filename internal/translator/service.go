@@ -207,7 +207,7 @@ func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mo
 	//TODO move cache to dependency but allow local different TTL override
 	//	aView := &viewlet.View.View
 	//if aView.Cache != nil {
-	//	s.Repository.AppendCache(aView.Cache)
+	//	s.GitRepository.AppendCache(aView.Cache)
 	//}
 
 	resource.Resource.Views = append(resource.Resource.Views, &viewlet.View.View)
