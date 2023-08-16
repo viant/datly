@@ -22,7 +22,7 @@ func (s *Service) RunInitExtension(ctx context.Context, init *options.Extension)
 	customDatlySrc := url.Join(init.Datly.Location, datlyFolder)
 	hasDatlyBinary, _ := s.fs.Exists(ctx, customDatlySrc)
 	if !hasDatlyBinary {
-		if err := s.ensureDatly(ctx, init); err != nil {
+		if err = s.ensureDatly(ctx, init); err != nil {
 			return err
 		}
 	}
@@ -35,25 +35,31 @@ func (s *Service) RunInitExtension(ctx context.Context, init *options.Extension)
 	pkgDest := init.PackageLocation()
 	hasPackage, _ := s.fs.Exists(ctx, pkgDest)
 	if hasPackage {
-		err = s.updatePackage(ctx, pkgDest, init)
-	} else {
-		if err = s.generatePackage(ctx, pkgDest, init); err == nil {
-			if info, _ := plugin.NewInfo(context.Background(), pkgDest); info != nil {
-				err = s.EnsurePluginArtifacts(context.Background(), info)
+		fmt.Printf("updating %v...\n", pkgDest)
+		if err = s.updatePackage(ctx, pkgDest, init); err != nil {
+			return fmt.Errorf("failed to update package: %w", err)
+		}
+		if info, _ := plugin.NewInfo(context.Background(), pkgDest); info != nil && err == nil {
+			if err = s.EnsurePluginArtifacts(context.Background(), info); err != nil {
+				return fmt.Errorf("failed to update plugin artifacts: %w", err)
 			}
 		}
-	}
-	if err != nil {
-		return err
+	} else {
+		fmt.Printf("generating %v...\n", pkgDest)
+		if err = s.generatePackage(ctx, pkgDest, init); err == nil {
+			return fmt.Errorf("failed to generate package: %w", err)
+		}
 	}
 
+	fmt.Printf("generating ext %v...\n", s.extLocation(init))
 	if err = s.generateExtensionModule(ctx, init); err != nil {
 		return err
 	}
+	datlyLocation := url.Join(init.Datly.Location, "datly")
+	fmt.Printf("extending custom datly: %v...\n", datlyLocation)
 	if err = s.extendDatly(ctx, init); err != nil {
 		return nil
 	}
-
 	return nil
 }
 
