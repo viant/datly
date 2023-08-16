@@ -19,7 +19,6 @@ import (
 
 const (
 	datlyFolder = "datly"
-	pkgFolder   = "pkg"
 	extFolder   = ".build/ext"
 
 	dsqlFolder = "dsql"

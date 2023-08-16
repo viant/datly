@@ -47,7 +47,10 @@ func main() {
 	//
 	//os.Args = []string{
 	//	"datly",
-	//	"-c=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/repo/dev/Datly/config.json",
+	//	//"-c=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/repo/dev/Datly/config.json",
+	//	"plugin",
+	//	"-p=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/",
+	//	"-r=repo/dev", "-o=darwin", "-a=arm64",
 	//}
 
 	err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})

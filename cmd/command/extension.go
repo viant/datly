@@ -7,6 +7,8 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
+	"github.com/viant/datly/internal/plugin"
+	rdata "github.com/viant/toolbox/data"
 	"os"
 	"path"
 	"strings"
@@ -16,34 +18,42 @@ const (
 	goInitVersion = "v0.0.0-00010101000000-000000000000"
 )
 
-func (s *Service) RunInitExtension(ctx context.Context, init *options.Extension) error {
-
+func (s *Service) RunInitExtension(ctx context.Context, init *options.Extension) (err error) {
 	customDatlySrc := url.Join(init.Datly.Location, datlyFolder)
-	ok, _ := s.fs.Exists(ctx, customDatlySrc)
-	if !ok {
+	hasDatlyBinary, _ := s.fs.Exists(ctx, customDatlySrc)
+	if !hasDatlyBinary {
 		if err := s.ensureDatly(ctx, init); err != nil {
 			return err
 		}
 	}
 	dSQLLoc := url.Join(init.Project, dsqlFolder)
 	if ok, _ := s.fs.Exists(ctx, dSQLLoc); !ok {
-		if err := s.fs.Create(ctx, dSQLLoc, file.DefaultDirOsMode, true); err != nil {
+		if err = s.fs.Create(ctx, dSQLLoc, file.DefaultDirOsMode, true); err != nil {
 			return err
 		}
 	}
-	pkgDest := url.Join(init.Project, pkgFolder)
-	if ok, _ := s.fs.Exists(ctx, pkgDest); !ok {
-		if err := s.generatePackage(ctx, pkgDest, init); err != nil {
-			return err
+	pkgDest := init.PackageLocation()
+	hasPackage, _ := s.fs.Exists(ctx, pkgDest)
+	if hasPackage {
+		err = s.updatePackage(ctx, pkgDest, init)
+	} else {
+		if err = s.generatePackage(ctx, pkgDest, init); err == nil {
+			if info, _ := plugin.NewInfo(context.Background(), pkgDest); info != nil {
+				err = s.EnsurePluginArtifacts(context.Background(), info)
+			}
 		}
 	}
-	if err := s.generateExtensionModule(ctx, init); err != nil {
+	if err != nil {
 		return err
 	}
 
-	if err := s.extendDatly(ctx, init); err != nil {
+	if err = s.generateExtensionModule(ctx, init); err != nil {
+		return err
+	}
+	if err = s.extendDatly(ctx, init); err != nil {
 		return nil
 	}
+
 	return nil
 }
 
@@ -121,6 +131,23 @@ var dependecnyContent string
 //go:embed tmpl/pkg/init.gox
 var initContent string
 
+func (s *Service) updatePackage(ctx context.Context, pkgLocation string, init *options.Extension) (err error) {
+	replacer := init.Replacer(&init.Module)
+	if err = s.ensureChecksum(ctx, pkgLocation, replacer); err != nil {
+		return err
+	}
+	if err = s.ensureDefaultImportInit(ctx, pkgLocation, replacer); err != nil {
+		return err
+	}
+	if err = s.ensurePluginMain(ctx, pkgLocation, replacer); err != nil {
+		return err
+	}
+	if err = s.syncSourceDependencies(ctx, pkgLocation); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *Service) generatePackage(ctx context.Context, pkgLocation string, init *options.Extension) error {
 	goBinLocation, err := s.getGoBinLocation(ctx)
 	if err != nil {
@@ -131,29 +158,51 @@ func (s *Service) generatePackage(ctx context.Context, pkgLocation string, init 
 	if err := s.fs.Upload(ctx, boostrapDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(bootstrapContent))); err != nil {
 		return err
 	}
-	checksumDest := url.Join(pkgLocation, "checksum/init.go")
-	if err := s.fs.Upload(ctx, checksumDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(checksumContent))); err != nil {
-		return err
-	}
 	dependencyDest := url.Join(pkgLocation, "dependency/init.go")
 	if err := s.fs.Upload(ctx, dependencyDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(dependecnyContent))); err != nil {
 		return err
 	}
-	initDest := url.Join(pkgLocation, "xinit.go")
-	if err := s.fs.Upload(ctx, initDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(initContent))); err != nil {
-		return err
-	}
-
-	pluginDst := url.Join(pkgLocation, "plugin/main.go")
-	if err := s.fs.Upload(ctx, pluginDst, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(pluginContent))); err != nil {
+	if err = s.updatePackage(ctx, pkgLocation, init); err != nil {
 		return err
 	}
 
 	if _, err = s.runCommand(pkgLocation, goBinLocation, init.GoModInitArgs(&init.Module)...); err != nil {
 		return err
 	}
-
 	if err := s.syncSourceDependencies(ctx, pkgLocation); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Service) ensurePluginMain(ctx context.Context, pkgLocation string, replacer rdata.Map) error {
+	pluginDst := url.Join(pkgLocation, "plugin/main.go")
+	if ok, _ := s.fs.Exists(ctx, pluginDst); ok {
+		return nil
+	}
+	if err := s.fs.Upload(ctx, pluginDst, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(pluginContent))); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Service) ensureDefaultImportInit(ctx context.Context, pkgLocation string, replacer rdata.Map) error {
+	initDest := url.Join(pkgLocation, "init.go")
+	if ok, _ := s.fs.Exists(ctx, initDest); ok {
+		return nil
+	}
+	if err := s.fs.Upload(ctx, initDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(initContent))); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Service) ensureChecksum(ctx context.Context, pkgLocation string, replacer rdata.Map) error {
+	checksumDest := url.Join(pkgLocation, "checksum/init.go")
+	if ok, _ := s.fs.Exists(ctx, checksumDest); ok {
+		return nil
+	}
+	if err := s.fs.Upload(ctx, checksumDest, file.DefaultFileOsMode, strings.NewReader(replacer.ExpandAsText(checksumContent))); err != nil {
 		return err
 	}
 	return nil
