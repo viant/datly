@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/translator"
 	"github.com/viant/pgo"
+	"github.com/viant/pgo/build"
 	"os"
 	"os/exec"
 )
@@ -81,32 +82,32 @@ func (s *Service) runCommand(dir string, cmd string, args ...string) (string, er
 	return string(output), nil
 }
 
-func (s *Service) PrepareBuild(ctx context.Context, build *options.Build) error {
-	if err := s.tidyModule(ctx, build.Module); err != nil {
+func (s *Service) PrepareBuild(ctx context.Context, aBuild *options.Build) error {
+	if err := s.tidyModule(ctx, aBuild.Module); err != nil {
 		return err
 	}
-	if err := s.tidyModule(ctx, build.Datly); err != nil {
+	if err := s.tidyModule(ctx, aBuild.Datly); err != nil {
 		return err
 	}
 
 	flags := ""
-	if build.LdFlags != nil {
-		flags = *build.LdFlags
+	if aBuild.LdFlags != nil {
+		flags = *aBuild.LdFlags
 	}
 	return pgo.Build(&pgo.Options{
-		Name:        build.Name,
-		SourceURL:   build.Source,
-		DestURL:     build.DestURL,
-		Arch:        build.GoArch,
-		Os:          build.GoOs,
-		Version:     build.GoVersion,
-		MainPath:    build.MainPath,
-		BuildArgs:   build.BuildArgs,
+		Name:        aBuild.Name,
+		SourceURL:   aBuild.Source,
+		DestURL:     aBuild.DestURL,
+		Arch:        aBuild.GoArch,
+		Os:          aBuild.GoOs,
+		Version:     aBuild.GoVersion,
+		MainPath:    aBuild.MainPath,
+		BuildArgs:   aBuild.BuildArgs,
 		BuildMode:   "exec",
 		Compression: "gzip",
 		WithLogger:  true,
 		LdFlags:     flags,
-	})
+	}, build.WithLogger(nil))
 }
 
 func (s *Service) tidyModule(ctx context.Context, goModule string) error {
