@@ -22,12 +22,12 @@ type (
 	}
 )
 
-func (s StructQLFactory) New(codec *codec.Config, _ ...interface{}) (codec.Instance, error) {
+func (s StructQLFactory) New(codec *codec.Config, _ ...codec.Option) (codec.Instance, error) {
 	if codec.Body == "" {
 		return nil, fmt.Errorf("codec query can't be empty")
 	}
 
-	structQLCodec, err := NewStructQLCodec(codec.Body, codec.ParamType)
+	structQLCodec, err := NewStructQLCodec(codec.Body, codec.InputType)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (s *StructQLCodec) evaluateQuery() (*structql.Query, error) {
 	return query, nil
 }
 
-func (s *StructQLCodec) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+func (s *StructQLCodec) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
 	query, err := s.evaluateQuery()
 	if err != nil {
 		return nil, err

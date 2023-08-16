@@ -56,22 +56,14 @@ func (p *JSONParser) Value(parent interface{}) (string, error) {
 	return aString, nil
 }
 
-func (j *JSONParsers) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+func (j *JSONParsers) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
 	aString, ok := asString(raw)
 	if !ok {
 		return nil, UnexpectedValueType(aString, raw)
 	}
 
-	var parent *ParentValue
-	for _, option := range options {
-		switch actual := option.(type) {
-		case *ParentValue:
-			parent = actual
-		case ParentValue:
-			parent = &actual
-		}
-	}
-
+	opts := NewOptions(codec.NewOptions(options))
+	parent := opts.ParentValue
 	rType, err := j.getActualType(parent)
 	if err != nil {
 		return nil, err
@@ -100,7 +92,7 @@ func (j *JSONParsers) unmarshalIfNotEmpty(aString string, result reflect.Value) 
 	return nil
 }
 
-func (j *JSONFactory) New(codecConfig *codec.Config, options ...interface{}) (codec.Instance, error) {
+func (j *JSONFactory) New(codecConfig *codec.Config, options ...codec.Option) (codec.Instance, error) {
 	typeName := codecConfig.OutputType
 	if typeName == "" {
 		if err := ValidateArgs(codecConfig, 1, CodecJSON); err != nil {
@@ -109,15 +101,8 @@ func (j *JSONFactory) New(codecConfig *codec.Config, options ...interface{}) (co
 
 		typeName = codecConfig.Args[0]
 	}
-
-	var lookup xreflect.LookupType
-	for _, option := range options {
-		switch actual := option.(type) {
-		case xreflect.LookupType:
-			lookup = actual
-		}
-	}
-
+	opts := NewOptions(codec.NewOptions(options))
+	lookup := opts.LookupType
 	recordPrefix := keywords.Rec + "."
 	isGenericType := strings.HasPrefix(typeName, recordPrefix)
 	var genericPath string
@@ -133,7 +118,6 @@ func (j *JSONFactory) New(codecConfig *codec.Config, options ...interface{}) (co
 		}
 		resultType = parsed
 	}
-
 	result := &JSONParsers{
 		aType:         typeName,
 		lookup:        lookup,

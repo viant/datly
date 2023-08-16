@@ -67,6 +67,8 @@ func (b *paramStateBuilder) Build(ctx context.Context, viewsDetails []*ViewDetai
 	wg := sync.WaitGroup{}
 	errors := NewErrors()
 
+	var options []interface{}
+
 	for _, details := range viewsDetails {
 		selector := selectors.Lookup(details.View)
 		selector.OutputFormat = b.caser
@@ -83,8 +85,7 @@ func (b *paramStateBuilder) Build(ctx context.Context, viewsDetails []*ViewDetai
 			if details.View.Template == nil || len(details.View.Template.Parameters) == 0 {
 				return
 			}
-
-			if param, err := b.buildSelectorParameters(ctx, &selector.Parameters, details, details.View.Template.Parameters); err != nil {
+			if param, err := b.buildSelectorParameters(ctx, &selector.Parameters, details, details.View.Template.Parameters, options...); err != nil {
 				asErrors, ok := err.(*Errors)
 
 				if param.ErrorStatusCode != 0 {
@@ -444,10 +445,13 @@ func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, pa
 		return nil, err
 	}
 
-	return transformIfNeeded(ctx, param, value, options...)
+	if param.Output == nil {
+		return value, nil
+	}
+	return param.Output.Transform(ctx, value, view.AsCodecOptions(options)...)
 }
 
-func (p *RequestParams) convert(isSpecified bool, raw string, param *view.Parameter, options ...interface{}) (interface{}, error) {
+func (p *RequestParams) convert(isSpecified bool, raw string, param *view.Parameter) (interface{}, error) {
 	if raw == "" && param.IsRequired() {
 		return nil, requiredParamErr(param)
 	}
@@ -741,14 +745,6 @@ func (b *paramStateBuilder) groupParam(ctx context.Context, param *view.Paramete
 	}
 
 	return value, nil
-}
-
-func transformIfNeeded(ctx context.Context, param *view.Parameter, value interface{}, options ...interface{}) (interface{}, error) {
-	if param.Output == nil {
-		return value, nil
-	}
-
-	return param.Output.Transform(ctx, value, options...)
 }
 
 func canUseColumn(aView *view.View, columnName string) error {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strconv"
@@ -93,7 +94,8 @@ func (c *columnsCodec) updateValue(ctx context.Context, value interface{}, recor
 	asPtr := xunsafe.AsPointer(value)
 	for i, column := range c.columns {
 		fieldValue := c.fields[i].Value(asPtr)
-		decoded, err := column.Codec._codec.Value(ctx, fieldValue, record)
+		//TODO pass type lookup fn
+		decoded, err := column.Codec._codec.Value(ctx, fieldValue, codec.WithOptions(record))
 		if err != nil {
 			return err
 		}

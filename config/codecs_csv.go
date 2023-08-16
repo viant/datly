@@ -22,14 +22,15 @@ type (
 )
 
 func (c *CSV) ResultType(paramType reflect.Type) (reflect.Type, error) {
+
 	return c.sliceType.Type, nil
 }
 
-func (c CsvFactory) New(codec *codec.Config, _ ...interface{}) (codec.Instance, error) {
+func (c CsvFactory) New(codec *codec.Config, _ ...codec.Option) (codec.Instance, error) {
 	aCsv := &CSV{
 		codec:     codec,
-		paramType: codec.ParamType,
-		sliceType: xunsafe.NewSlice(reflect.SliceOf(codec.ParamType)),
+		paramType: codec.InputType,
+		sliceType: xunsafe.NewSlice(reflect.SliceOf(codec.InputType)),
 	}
 
 	if err := aCsv.init(); err != nil {
@@ -39,7 +40,7 @@ func (c CsvFactory) New(codec *codec.Config, _ ...interface{}) (codec.Instance, 
 	return aCsv, nil
 }
 
-func (c *CSV) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+func (c *CSV) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
 	rawString, ok := raw.(string)
 	if !ok {
 		return nil, fmt.Errorf("unexpected value type, expected %T got %T", rawString, raw)

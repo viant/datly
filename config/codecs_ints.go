@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"github.com/viant/xdatly/codec"
 	"reflect"
 	"strconv"
 	"strings"
@@ -15,7 +16,7 @@ func (i *AsInts) ResultType(paramType reflect.Type) (reflect.Type, error) {
 	return reflect.TypeOf([]int{}), nil
 }
 
-func (i *AsInts) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+func (i *AsInts) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
 	aString, ok := raw.(string)
 	if !ok {
 		return nil, UnexpectedValueType(aString, raw)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/scy/auth/gcp"
 	"github.com/viant/scy/auth/jwt"
+	"github.com/viant/xdatly/codec"
 	"reflect"
 	"strings"
 )
@@ -19,7 +20,7 @@ func (j *GCPJwtClaim) ResultType(paramType reflect.Type) (reflect.Type, error) {
 	return reflect.TypeOf(&jwt.Claims{}), nil
 }
 
-func (j *GCPJwtClaim) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+func (j *GCPJwtClaim) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
 	rawString, ok := raw.(string)
 	if !ok {
 		return nil, fmt.Errorf("expected to get string but got %T", raw)

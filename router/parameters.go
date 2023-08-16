@@ -276,17 +276,19 @@ func (p *RequestParams) ExtractHttpParam(ctx context.Context, param *view.Parame
 	if err != nil || value == nil {
 		return nil, err
 	}
-
-	return transformIfNeeded(ctx, param, value, options...)
+	if param.Output == nil {
+		return value, nil
+	}
+	return param.Output.Transform(ctx, value, view.AsCodecOptions(options)...)
 }
 
 func (p *RequestParams) extractHttpParam(ctx context.Context, param *view.Parameter, options []interface{}) (interface{}, error) {
 	switch param.In.Kind {
 	case view.KindPath:
-		return p.convert(true, p.pathVariable(param.In.Name, ""), param, options...)
+		return p.convert(true, p.pathVariable(param.In.Name, ""), param)
 	case view.KindQuery:
 		pValue, ok := p.queryParam(param.In.Name)
-		return p.convert(ok, pValue, param, options...)
+		return p.convert(ok, pValue, param)
 	case view.KindRequestBody:
 		body, err := p.paramRequestBody(ctx, param, options...)
 		if err != nil {
@@ -295,9 +297,9 @@ func (p *RequestParams) extractHttpParam(ctx context.Context, param *view.Parame
 
 		return body, nil
 	case view.KindHeader:
-		return p.convert(true, p.header(param.In.Name), param, options...)
+		return p.convert(true, p.header(param.In.Name), param)
 	case view.KindCookie:
-		return p.convert(true, p.cookie(param.In.Name), param, options...)
+		return p.convert(true, p.cookie(param.In.Name), param)
 	}
 
 	return nil, fmt.Errorf("unsupported param kind %v", param.In.Kind)

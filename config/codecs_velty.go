@@ -30,21 +30,14 @@ func (v *VeltyCodec) ResultType(paramType reflect.Type) (reflect.Type, error) {
 	return reflect.TypeOf(&parameter.Criteria{}), nil
 }
 
-func (v *VeltyCriteriaFactory) New(codecConfig *codec.Config, options ...interface{}) (codec.Instance, error) {
-	var columnsIndex parameter.ColumnsSource
-	for _, option := range options {
-		switch actual := option.(type) {
-		case parameter.ColumnsSource:
-			columnsIndex = actual
-		}
-	}
-
+func (v *VeltyCriteriaFactory) New(codecConfig *codec.Config, options ...codec.Option) (codec.Instance, error) {
+	opts := NewOptions(codec.NewOptions(options))
+	columnsIndex := opts.ColumnsSource
 	codec := &VeltyCodec{
 		template:  codecConfig.Body,
-		codecType: codecConfig.ParamType,
+		codecType: codecConfig.InputType,
 		columns:   columnsIndex,
 	}
-
 	if err := codec.init(); err != nil {
 		return nil, err
 	}
@@ -52,14 +45,15 @@ func (v *VeltyCriteriaFactory) New(codecConfig *codec.Config, options ...interfa
 	return codec, nil
 }
 
-func (v *VeltyCodec) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+func (v *VeltyCodec) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
 	rawString, ok := raw.(string)
 	if !ok {
 		return nil, fmt.Errorf("expected to get string but got %T", raw)
 	}
 
+	opts := NewOptions(codec.NewOptions(options))
 	rawString = strings.TrimSpace(rawString)
-	selector := v.selector(options)
+	selector := opts.Selector
 	if selector == nil {
 		return nil, fmt.Errorf("expected selector not to be nil")
 	}

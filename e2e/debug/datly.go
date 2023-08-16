@@ -77,14 +77,8 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-	server, err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
+	err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	if server != nil {
-		if err := server.ListenAndServe(); err != nil {
-			log.Fatal(err.Error())
-		}
 	}
 }

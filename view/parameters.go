@@ -152,12 +152,14 @@ func (v *Codec) newCodecInstance(resource Resourcelet, inputType reflect.Type, f
 		opts = append(opts, columns)
 	}
 
+	var options []codec.Option
+	options = append(options, codec.WithOptions(opts...))
 	aCodec, err := factory.New(&codec.Config{
 		Body:       v.Body,
-		ParamType:  inputType,
+		InputType:  inputType,
 		Args:       v.Args,
 		OutputType: v.OutputType,
-	}, opts...)
+	}, options...)
 
 	if err != nil {
 		return nil, err
@@ -190,7 +192,7 @@ func (v *Codec) codecInstance(resource Resourcelet, inputType reflect.Type, foun
 	return foundCodec.Instance, nil
 }
 
-func (v *Codec) Transform(ctx context.Context, value interface{}, options ...interface{}) (interface{}, error) {
+func (v *Codec) Transform(ctx context.Context, value interface{}, options ...codec.Option) (interface{}, error) {
 	return v._codec.Value(ctx, value, options...)
 }
 
@@ -527,7 +529,7 @@ func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr un
 	}
 
 	if codecFn != nil {
-		convertedValue, err := codecFn.Value(ctx, value, options...)
+		convertedValue, err := codecFn.Value(ctx, value, AsCodecOptions(options)...)
 		if err != nil {
 			return nil, err
 		}
@@ -536,6 +538,13 @@ func (p *Parameter) setValue(ctx context.Context, value interface{}, paramPtr un
 	}
 
 	return p._valueAccessor.SetConvertedAndGet(paramPtr, value, p.DateFormat)
+}
+
+// AsCodecOptions creates codec options
+func AsCodecOptions(options []interface{}) []codec.Option {
+	var codecOptions []codec.Option
+	codecOptions = append(codecOptions, codec.WithOptions(options...))
+	return codecOptions
 }
 
 func (p *Parameter) Set(selector *Selector, value interface{}) error {

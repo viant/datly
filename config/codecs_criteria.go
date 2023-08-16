@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/handler/parameter"
-	"github.com/viant/xreflect"
 	"reflect"
 )
 
@@ -22,28 +21,18 @@ type (
 	}
 )
 
-func (c *CriteriaBuilderFactory) New(codecConfig *codec.Config, options ...interface{}) (codec.Instance, error) {
+func (c *CriteriaBuilderFactory) New(codecConfig *codec.Config, options ...codec.Option) (codec.Instance, error) {
 	if err := ValidateArgs(codecConfig, 1, CodecCriteriaBuilder); err != nil {
 		return nil, err
 	}
 
-	var typesLookup xreflect.LookupType
-	var columnsSource parameter.ColumnsSource
-	for _, option := range options {
-		switch actual := option.(type) {
-		case xreflect.LookupType:
-			typesLookup = actual
-		case parameter.ColumnsSource:
-			columnsSource = actual
-		}
-	}
-
+	opts := NewOptions(codec.NewOptions(options))
+	columnsSource := opts.ColumnsSource
 	handlerType := codecConfig.Args[0]
-	lookupType, err := types.LookupType(typesLookup, handlerType)
+	lookupType, err := types.LookupType(opts.LookupType, handlerType)
 	if err != nil {
 		panic(err)
 	}
-
 	_, ok := types.NewValue(lookupType).(parameter.CriteriaBuilder)
 	if !ok {
 		panic(fmt.Sprintf("expected %v to implement parameter.Criteria builder", handlerType))
@@ -75,11 +64,14 @@ func ValidateMinArgs(config *codec.Config, name string, minLen int) error {
 	return nil
 }
 
-func (c *CriteriaBuilder) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+func (c *CriteriaBuilder) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
 	var valueGetter parameter.ValueGetter
 	var selector parameter.Selector
 	columnsSource := c.columnsSource
-	for _, option := range options {
+
+	opts := codec.NewOptions(options)
+
+	for _, option := range opts.Options {
 		switch actual := option.(type) {
 		case parameter.ValueGetter:
 			valueGetter = actual

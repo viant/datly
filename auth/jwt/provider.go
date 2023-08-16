@@ -18,7 +18,7 @@ func (s *Provider) ResultType(paramType reflect.Type) (reflect.Type, error) {
 	return s.resultType, nil
 }
 
-func (s *Provider) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+func (s *Provider) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
 	rawString, ok := raw.(string)
 	if !ok {
 		return nil, fmt.Errorf("expected to got string but got %T", raw)

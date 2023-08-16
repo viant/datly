@@ -7,7 +7,6 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/toolbox"
 	"github.com/viant/xdatly/codec"
-	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -29,25 +28,17 @@ type (
 	}
 )
 
-func (e *EncodeFactory) New(codecConfig *codec.Config, options ...interface{}) (codec.Instance, error) {
+func (e *EncodeFactory) New(codecConfig *codec.Config, options ...codec.Option) (codec.Instance, error) {
 	if err := ValidateMinArgs(codecConfig, CodecEncode, 3); err != nil {
 		return nil, err
 	}
-
-	var typeLookup xreflect.LookupType
-	for _, option := range options {
-		switch actual := option.(type) {
-		case xreflect.LookupType:
-			typeLookup = actual
-		}
-	}
-
-	destType, err := types.LookupType(typeLookup, codecConfig.Args[0])
+	opts := NewOptions(codec.NewOptions(options))
+	destType, err := types.LookupType(opts.LookupType, codecConfig.Args[0])
 	if err != nil {
 		return nil, err
 	}
 
-	if isMulti(codecConfig.ParamType) && !isMulti(destType) {
+	if isMulti(codecConfig.InputType) && !isMulti(destType) {
 		destType = reflect.SliceOf(destType)
 	}
 
@@ -108,15 +99,19 @@ func (e *Encoder) ResultType(paramType reflect.Type) (reflect.Type, error) {
 	return e.dstType, nil
 }
 
-func (e *Encoder) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+func (e *Encoder) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
+
+	opts := codec.Options{}
+	opts.Apply(options)
+
 	if e.aSlice != nil {
-		return e.encodeSlice(ctx, raw, options)
+		return e.encodeSlice(ctx, raw, opts)
 	}
 
-	return e.encodeStruct(ctx, raw, options)
+	return e.encodeStruct(ctx, raw, opts)
 }
 
-func (e *Encoder) encodeSlice(ctx context.Context, raw interface{}, options []interface{}) (interface{}, error) {
+func (e *Encoder) encodeSlice(ctx context.Context, raw interface{}, options codec.Options) (interface{}, error) {
 	strSlice, ok := raw.([]string)
 	if !ok {
 		return nil, UnexpectedValueType(strSlice, raw)
@@ -141,7 +136,7 @@ func (e *Encoder) encodeSlice(ctx context.Context, raw interface{}, options []in
 	return value, nil
 }
 
-func (e *Encoder) encodeStruct(ctx context.Context, raw interface{}, options []interface{}) (interface{}, error) {
+func (e *Encoder) encodeStruct(ctx context.Context, raw interface{}, options codec.Options) (interface{}, error) {
 	strValue, ok := asString(raw)
 	if !ok {
 		return nil, UnexpectedValueType(strValue, raw)
