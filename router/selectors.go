@@ -423,11 +423,10 @@ func (b *paramStateBuilder) extractParamValue(ctx context.Context, param *view.P
 }
 
 func (b *paramStateBuilder) lookupValue(ctx context.Context, name string) (interface{}, error) {
-	aParameter, i, err2 := b.getParameter(name)
-	if err2 != nil {
-		return i, err2
+	aParameter, err := b.getParameter(name)
+	if err != nil {
+		return nil, err
 	}
-
 	value, err := b.params.extractHttpParam(context.Background(), aParameter, []interface{}{})
 	if aParameter.Output == nil || err != nil {
 		return value, err
