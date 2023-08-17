@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<root>
+<row>
+<Id>1</Id>
+<Name>Vendor 1</Name>
+<AccountId>100</AccountId>
+<UserCreated>1</UserCreated>
+<UserUpdated>0</UserUpdated>
+<Products>
+<Id>1</Id>
+<Name>V1 Product 1</Name>
+<Status>2</Status>
+<UserCreated>1</UserCreated>
+<UserUpdated>0</UserUpdated>
+</Products>
+<Products>
+<Id>2</Id>
+<Name>V1 Product 2</Name>
+<Status>1</Status>
+<UserCreated>1</UserCreated>
+<UserUpdated>0</UserUpdated>
+</Products>
+</row>
+<row>
+<Id>2</Id>
+<Name>Vendor 2</Name>
+<AccountId>101</AccountId>
+<UserCreated>2</UserCreated>
+<UserUpdated>0</UserUpdated>
+<Products>
+<Id>3</Id>
+<Name>V2 Product 1</Name>
+<Status>1</Status>
+<UserCreated>2</UserCreated>
+<UserUpdated>0</UserUpdated>
+</Products>
+<Products>
+<Id>4</Id>
+<Name>V2 Product 2</Name>
+<Status>1</Status>
+<UserCreated>2</UserCreated>
+<UserUpdated>0</UserUpdated>
+</Products>
+<Products>
+<Id>5</Id>
+<Name>V2 Product 3</Name>
+<Status>1</Status>
+<UserCreated>2</UserCreated>
+<UserUpdated>0</UserUpdated>
+</Products>
+</row>
+<row>
+<Id>3</Id>
+<Name>Vendor 3</Name>
+<AccountId>100</AccountId>
+<UserCreated>1</UserCreated>
+<UserUpdated>0</UserUpdated>
+</row>
+</root>

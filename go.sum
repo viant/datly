@@ -347,6 +347,8 @@ github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7 h1:lQZR7
 github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7/go.mod h1:NVeS+s/uf2dj/M2QlLdY5KXoci0KPMbD9n02Y0m5hBw=
 github.com/viant/xlsy v0.0.0-20230815144023-375b8398bc7d h1:1a8xdR5/Q0P8NfaL8EtPR2IurWIBZnkCoj9WN1YCfoA=
 github.com/viant/xlsy v0.0.0-20230815144023-375b8398bc7d/go.mod h1:nasGZnDzlQ0dlvuBk0zCsOZ2GMGu3v0p270xoA1mBUk=
+github.com/viant/xmlify v0.0.0-20230817111008-f6db800a77f4 h1:v86YJqvfwp9ufPQDYKF+imDGBYiISwrbiyGp9PU1E3g=
+github.com/viant/xmlify v0.0.0-20230817111008-f6db800a77f4/go.mod h1:/JKJnEoJyyYNiV6cIY7qDjX2rws5bMh2JFbtLIZZ7Es=
 github.com/viant/xreflect v0.3.2-0.20230723180303-1f248c397c5c h1:bGZZ4b+My5t5A095/OPKUzd7aVq7hDWa/KrQ4SE3jAc=
 github.com/viant/xreflect v0.3.2-0.20230723180303-1f248c397c5c/go.mod h1:uflXFHcw4TQXgYJvTQ7Akf4SAzXYPCVi8NGZgsVlwmA=
 github.com/viant/xunsafe v0.9.0 h1:pyvHiGjYqwVNwbIfUTvO8W960S6zvM/gxP4iRyAl6BE=

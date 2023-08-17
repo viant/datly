@@ -38,6 +38,7 @@ type (
 		Router       *RouterConfig             `json:",omitempty" yaml:",omitempty"`
 		DataFormat   string                    `json:",omitempty"`
 		TabularJSON  *router.TabularJSONConfig `json:",omitempty"`
+		XML          *router.XMLConfig         `json:",omitempty"`
 		HandlerType  string                    `json:",omitempty"`
 		StateType    string                    `json:",omitempty"`
 		With         []string                  `json:",omitempty"`
@@ -337,6 +338,10 @@ func (r *Rule) applyShortHands() {
 
 	if r.Route.TabularJSON != nil && r.Route.Output.DataFormat == "" {
 		r.Route.Output.DataFormat = router.JSONDataFormatTabular
+	}
+
+	if r.Route.XML != nil && r.Route.Output.DataFormat == "" {
+		r.Route.Output.DataFormat = router.XMLFormat
 	}
 }
 

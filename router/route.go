@@ -16,11 +16,11 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/parameter"
-	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/load/reader/csv"
 	"github.com/viant/structql"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xlsy"
+	"github.com/viant/xmlify"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
@@ -133,6 +133,7 @@ type (
 		DateFormat        string             `json:",omitempty"`
 		CSV               *CSVConfig         `json:",omitempty"`
 		XLS               *XLSConfig         `json:",omitempty"`
+		XML               *XMLConfig         `json:",omitempty"`
 		TabularJSON       *TabularJSONConfig `json:",omitempty"`
 		RevealMetric      *bool
 		DebugKind         view.MetaKind
@@ -161,12 +162,18 @@ type (
 	}
 
 	TabularJSONConfig struct {
-		//Separator              string
-		//NullValue              string
 		FloatPrecision         string
 		_config                *tabjson.Config
 		_requestBodyMarshaller *tabjson.Marshaller
 		_outputMarshaller      *tabjson.Marshaller
+		_unwrapperSlice        *xunsafe.Slice
+	}
+
+	XMLConfig struct {
+		FloatPrecision         string
+		_config                *xmlify.Config
+		_requestBodyMarshaller *xmlify.Marshaller
+		_outputMarshaller      *xmlify.Marshaller
 		_unwrapperSlice        *xunsafe.Slice
 	}
 
@@ -207,34 +214,8 @@ func (r *Route) IsRevealMetric() bool {
 	}
 	return *r.RevealMetric
 }
+
 func (r *Route) HttpURI() string {
-	x := &tabjson.Config{
-		FieldSeparator:  "",
-		ObjectSeparator: "",
-		EncloseBy:       "",
-		EscapeBy:        "",
-		NullValue:       "",
-		Stringify: tabjson.StringifyConfig{
-			IgnoreFieldSeparator:  false,
-			IgnoreObjectSeparator: false,
-			IgnoreEncloseBy:       false,
-		},
-		UniqueFields:  nil,
-		References:    nil,
-		ExcludedPaths: nil,
-		StringifierConfig: io.StringifierConfig{
-			Fields:     nil,
-			CaseFormat: 0,
-			StringifierFloat32Config: io.StringifierFloat32Config{
-				Precision: "",
-			},
-			StringifierFloat64Config: io.StringifierFloat64Config{
-				Precision: "",
-			},
-		},
-	}
-	if x == nil {
-	} // TODO DELETE ABOVE
 	return r.URI
 }
 
@@ -348,6 +329,10 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	}
 
 	if err := r.initTabJSONIfNeeded(); err != nil {
+		return err
+	}
+
+	if err := r.initXMLIfNeeded(); err != nil {
 		return err
 	}
 
@@ -881,6 +866,61 @@ func (r *Route) initTabJSONIfNeeded() error {
 	return err
 }
 
+func (r *Route) initXMLIfNeeded() error {
+
+	if r.Output.DataFormat != XMLFormat {
+		return nil
+	}
+
+	if r.XML == nil {
+		r.XML = &XMLConfig{}
+	}
+
+	if r.XML._config == nil {
+		r.XML._config = getDefaultConfig()
+	}
+
+	if r.XML._config.FieldSeparator == "" {
+		r.XML._config.FieldSeparator = ","
+	}
+
+	if len(r.XML._config.FieldSeparator) != 1 {
+		return fmt.Errorf("separator has to be a single char, but was %v", r.XML._config.FieldSeparator)
+	}
+
+	if r.XML._config.NullValue == "" {
+		r.XML._config.NullValue = "\u0000"
+	}
+
+	if r.XML.FloatPrecision != "" {
+		r.XML._config.StringifierConfig.StringifierFloat32Config.Precision = r.XML.FloatPrecision
+		r.XML._config.StringifierConfig.StringifierFloat64Config.Precision = r.XML.FloatPrecision
+	}
+
+	if len(r.Exclude) > 0 {
+		r.XML._config.ExcludedPaths = r.Exclude
+	}
+
+	schemaType := r.View.Schema.Type()
+	if schemaType.Kind() == reflect.Ptr {
+		schemaType = schemaType.Elem()
+	}
+
+	var err error
+	r.XML._outputMarshaller, err = xmlify.NewMarshaller(schemaType, r.XML._config)
+	if err != nil {
+		return err
+	}
+
+	if r._requestBodyType == nil {
+		return nil
+	}
+
+	r.XML._unwrapperSlice = r._requestBodySlice
+	r.XML._requestBodyMarshaller, err = xmlify.NewMarshaller(r._requestBodyType, nil)
+	return err
+}
+
 func (r *Route) initDebugStyleIfNeeded() {
 	if r.RevealMetric == nil || !*r.RevealMetric {
 		return
@@ -1011,4 +1051,87 @@ func (r *Route) initAsyncIfNeeded(ctx context.Context) error {
 	}
 
 	return r.Async.Init(ctx, r._resource, r.View)
+}
+
+// TODO MFI
+func getDefaultConfig() *xmlify.Config {
+	return &xmlify.Config{
+		Style:                  "regularStyle", // style
+		RootTag:                "result",
+		HeaderTag:              "columns",
+		HeaderRowTag:           "column",
+		HeaderRowFieldAttr:     "id",
+		HeaderRowFieldTypeAttr: "type",
+		DataTag:                "rows",
+		DataRowTag:             "r",
+		DataRowFieldTag:        "c",
+		NewLine:                "\n",
+		DataRowFieldTypes: map[string]string{
+			"uint":    "lg",
+			"uint8":   "lg",
+			"uint16":  "lg",
+			"uint32":  "lg",
+			"uint64":  "lg",
+			"int":     "lg",
+			"int8":    "lg",
+			"int16":   "lg",
+			"int32":   "lg",
+			"int64":   "lg",
+			"*uint":   "lg",
+			"*uint8":  "lg",
+			"*uint16": "lg",
+			"*uint32": "lg",
+			"*uint64": "lg",
+			"*int":    "lg",
+			"*int8":   "lg",
+			"*int16":  "lg",
+			"*int32":  "lg",
+			"*int64":  "lg",
+			/////
+			"float32": "db",
+			"float64": "db",
+			/////
+			"string":  "string",
+			"*string": "string",
+			//////
+			"time.Time":  "dt",
+			"*time.Time": "dt",
+		},
+		HeaderRowFieldType: map[string]string{
+			"uint":    "long",
+			"uint8":   "long",
+			"uint16":  "long",
+			"uint32":  "long",
+			"uint64":  "long",
+			"int":     "long",
+			"int8":    "long",
+			"int16":   "long",
+			"int32":   "long",
+			"int64":   "long",
+			"*uint":   "long",
+			"*uint8":  "long",
+			"*uint16": "long",
+			"*uint32": "long",
+			"*uint64": "long",
+			"*int":    "long",
+			"*int8":   "long",
+			"*int16":  "long",
+			"*int32":  "long",
+			"*int64":  "long",
+			/////
+			"float32": "double",
+			"float64": "double",
+			/////
+			"string":  "string",
+			"*string": "string",
+			//////
+			"time.Time":  "date",
+			"*time.Time": "date",
+		},
+		TabularNullValue: "nil=\"true\"",
+		RegularRootTag:   "root",
+		RegularRowTag:    "row",
+		RegularNullValue: "",
+		NullValue:        "\u0000",
+	}
 }
