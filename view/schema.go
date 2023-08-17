@@ -137,6 +137,7 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 
 	fieldsLen := len(columns)
 	structFields := make([]reflect.StructField, 0)
+	unique := map[string]bool{}
 	for i := 0; i < fieldsLen; i++ {
 		columnName := columns[i].Name
 		if _, ok := excluded[columnName]; ok {
@@ -179,6 +180,10 @@ func (c *Schema) initByColumns(columns []*Column, relations []*Relation, selfRef
 		}
 
 		aField := newCasedField(aTag, columnName, viewCaseFormat, rType)
+		if unique[aField.Name] {
+			continue
+		}
+		unique[aField.Name] = true
 		structFields = append(structFields, aField)
 	}
 
