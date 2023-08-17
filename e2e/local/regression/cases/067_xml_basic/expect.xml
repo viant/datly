@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<root>
+<row>
+<Id>1</Id>
+<Name>BAR - 1</Name>
+<Price>1.12345678</Price>
+<Tax>0.01123457</Tax>
+</row>
+<row>
+<Id>2</Id>
+<Name>BAR - 2</Name>
+<Price>2.23456780</Price>
+<Tax>0.02234568</Tax>
+</row>
+<row>
+<Id>3</Id>
+<Name>BAR - 3</Name>
+<Price>3.34567801</Price>
+<Tax>0.03345678</Tax>
+</row>
+</root>

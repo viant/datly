@@ -352,6 +352,10 @@ func (r *Router) buildSession(ctx context.Context, response http.ResponseWriter,
 		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", JSONContentType)))
 	}
 
+	if route.XML == nil && route.DataFormat == XMLFormat {
+		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", XMLContentType)))
+	}
+
 	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, requestParams, route.Index._viewDetails...)
 	if err != nil {
 		defaultCode :=
@@ -560,6 +564,8 @@ func (r *Router) marshalResult(session *ReaderSession, response *preparedRespons
 		return r.marshalAsXLS(session, response, filters)
 	case CSVFormat:
 		return r.marshalAsCSV(session, response, filters)
+	case XMLFormat:
+		return r.marshalAsXML(session, response.objects, filters)
 	case JSONDataFormatTabular:
 		if session.Route.Style == ComprehensiveStyle {
 			tabJSONInterceptors := r.tabJSONInterceptors(session, response.objects, filters)
@@ -569,7 +575,7 @@ func (r *Router) marshalResult(session *ReaderSession, response *preparedRespons
 	case JSONFormat:
 		return r.marshalAsJSON(session, response, json.NewFilters(filters...))
 	default:
-		return nil, fmt.Errorf("unsupproted data format: %w", err)
+		return nil, fmt.Errorf("unsupproted data format: %s", format)
 	}
 
 }
@@ -987,6 +993,32 @@ func (r *Router) marshalAsTabularJSON(session *ReaderSession, items interface{},
 	}
 
 	data, err := session.Route.TabularJSON._outputMarshaller.Marshal(items)
+
+	if err != nil {
+		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
+	}
+
+	return data, nil
+}
+
+func (r *Router) marshalAsXML(session *ReaderSession, items interface{}, filters []*json.FilterEntry) ([]byte, error) {
+	if session.Route.View.Schema.Slice().Len(xunsafe.AsPointer(items)) == 0 {
+		return nil, nil
+	}
+
+	fieldsLen := 0
+	for _, filter := range filters {
+		fieldsLen += len(filter.Fields)
+	}
+
+	fields := make([]string, 0, fieldsLen)
+	offset := 0
+	for _, filter := range filters {
+		updateFieldPathsIfNeeded(filter)
+		offset = copy(fields[offset:], filter.Fields)
+	}
+
+	data, err := session.Route.XML._outputMarshaller.Marshal(items)
 
 	if err != nil {
 		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
