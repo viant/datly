@@ -2,7 +2,10 @@ package session
 
 import (
 	"context"
+	"github.com/viant/xdatly/handler"
+	async2 "github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/differ"
+	"github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/mbus"
 	"github.com/viant/xdatly/handler/sqlx"
 	"github.com/viant/xdatly/handler/state"
@@ -19,11 +22,30 @@ type (
 		mbus       *mbus.Service
 		sync.RWMutex
 		templateFlusher TemplateFlushFn
+		redirect        RedirectFn
+		async           AsyncFn
+		http            HttpFn
 	}
 
 	SqlServiceFn    func(options *sqlx.Options) (sqlx.Sqlx, error)
 	TemplateFlushFn func(ctx context.Context) error
+	RedirectFn      func(ctx context.Context, route *http.Route) (handler.Session, error)
+	RouterFn        func(ctx context.Context, route *http.Route) (handler.Session, error)
+	HttpFn          func() http.Http
+	AsyncFn         func() async2.Async
 )
+
+func (s *Session) Route(ctx context.Context, route *http.Route) (handler.Session, error) {
+	return s.redirect(ctx, route)
+}
+
+func (s *Session) Http() http.Http {
+	return s.http()
+}
+
+func (s *Session) Async() async2.Async {
+	return s.async()
+}
 
 func NewSession(opts ...Option) *Session {
 	ret := &Session{
@@ -38,6 +60,10 @@ func NewSession(opts ...Option) *Session {
 
 func (s *Session) Validator() *validator.Service {
 	return validator.New(s.validator)
+}
+
+func (s *Session) Redirect(ctx context.Context, route *http.Route) (handler.Session, error) {
+	return s.redirect(ctx, route)
 }
 
 func (s *Session) Differ() *differ.Service {
@@ -84,8 +110,26 @@ func WithSql(sql SqlServiceFn) Option {
 	}
 }
 
+func WithRedirect(fn RedirectFn) Option {
+	return func(s *Session) {
+		s.redirect = fn
+	}
+}
+
 func WithTemplateFlush(fn TemplateFlushFn) Option {
 	return func(s *Session) {
 		s.templateFlusher = fn
+	}
+}
+
+func WithAsync(async AsyncFn) Option {
+	return func(s *Session) {
+		s.async = async
+	}
+}
+
+func WithHttp(aHttp HttpFn) Option {
+	return func(s *Session) {
+		s.http = aHttp
 	}
 }

@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/xunsafe"
@@ -109,7 +110,7 @@ func (u *stateUpdater) update(ctx context.Context, request *http.Request, route 
 
 	param, err := paramBuilder.buildSelectorParameters(ctx, state, nil, u.params, route.CustomValidation)
 	if err != nil {
-		return NewParamError("", param.Name, err)
+		return httputils.NewParamError("", param.Name, err)
 	}
 
 	return nil

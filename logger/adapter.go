@@ -3,8 +3,8 @@ package logger
 import (
 	"fmt"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/utils/debug"
 	"github.com/viant/toolbox"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -138,7 +138,7 @@ func NewLogger(name string, logger Logger) *Adapter {
 }
 
 func Default() *Adapter {
-	if os.Getenv("DATLY_DEBUG") == "" {
+	if !debug.Enabled {
 		return NewLogger("", nil)
 	}
 	return NewLogger("", &defaultLogger{})

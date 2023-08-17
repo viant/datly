@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/converter"
+	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox"
@@ -62,7 +63,7 @@ func NewRequestParameters(request *http.Request, route *Route) (*RequestParams, 
 	}
 
 	if paramName, err := parameters.init(request, route); err != nil {
-		errors := NewErrors()
+		errors := httputils.NewErrors()
 		errors.AddError("", paramName, err)
 		return nil, errors
 	}
@@ -315,4 +316,13 @@ func (p *RequestParams) BodyContent() ([]byte, error) {
 
 func (p *RequestParams) RequestBody() (interface{}, error) {
 	return p.bodyParam, p.readBody()
+}
+
+func BuildParameter(field reflect.StructField) (*view.Parameter, error) {
+	result := &view.Parameter{}
+	paramTag := view.ParseTag("datly")
+	result.Name = field.Name
+	result.In = &view.Location{Kind: view.Kind(paramTag.Kind), Name: paramTag.In}
+	result.Schema = view.NewSchema(field.Type)
+	return result, nil
 }

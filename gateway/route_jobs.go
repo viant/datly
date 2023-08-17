@@ -3,11 +3,13 @@ package gateway
 import (
 	"context"
 	"database/sql"
-	"github.com/viant/datly/httputils"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/async"
+	"github.com/viant/datly/router/async/handler"
 	cusJson "github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/utils/httputils"
+	async2 "github.com/viant/xdatly/handler/async"
 	"net/http"
 	"sync"
 )
@@ -19,7 +21,7 @@ func NewJobsRoute(URL string, routers []*router.Router, apiKeys []*router.APIKey
 			Method: http.MethodGet,
 		},
 		ApiKeys: apiKeys,
-		Handler: func(response http.ResponseWriter, req *http.Request, _ *async.Record) {
+		Handler: func(response http.ResponseWriter, req *http.Request, _ *async2.Job) {
 			records, err := handleJobsRoute(context.Background(), req, routers, nil)
 			if err != nil {
 				httputils.WriteError(response, err)
@@ -32,7 +34,7 @@ func NewJobsRoute(URL string, routers []*router.Router, apiKeys []*router.APIKey
 	}
 }
 
-func handleJobsRoute(ctx context.Context, req *http.Request, routers []*router.Router, jobID *string) ([]*async.Record, error) {
+func handleJobsRoute(ctx context.Context, req *http.Request, routers []*router.Router, jobID *string) ([]*async2.Job, error) {
 	allJobs := async.NewJobs()
 	for _, aRouter := range routers {
 		jobs, err := aRouter.PrepareJobs(ctx, req)
@@ -59,7 +61,7 @@ func handleJobsRoute(ctx context.Context, req *http.Request, routers []*router.R
 	}
 
 	errors := shared.NewErrors(0)
-	records := async.NewRecords()
+	records := handler.NewRecords()
 
 	wg := &sync.WaitGroup{}
 	for db, qualifiers := range index {
@@ -71,7 +73,7 @@ func handleJobsRoute(ctx context.Context, req *http.Request, routers []*router.R
 	return records.Result(), errors.Error()
 }
 
-func queryJobs(ctx context.Context, wg *sync.WaitGroup, db *sql.DB, qualifiers []*async.JobQualifier, errors *shared.Errors, records *async.Records) {
+func queryJobs(ctx context.Context, wg *sync.WaitGroup, db *sql.DB, qualifiers []*async.JobQualifier, errors *shared.Errors, records *handler.Records) {
 	defer wg.Done()
 	jobs, err := async.QueryJobs(ctx, db, qualifiers...)
 	if err != nil {

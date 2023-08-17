@@ -6,6 +6,7 @@ import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/afs"
 	"github.com/viant/datly/reader"
+	"github.com/viant/datly/router/async"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/common"
@@ -19,6 +20,8 @@ import (
 	"github.com/viant/sqlx/io/load/reader/csv"
 	"github.com/viant/structql"
 	"github.com/viant/toolbox/format"
+	async2 "github.com/viant/xdatly/handler/async"
+	http2 "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xlsy"
 	"github.com/viant/xmlify"
 	"github.com/viant/xunsafe"
@@ -68,6 +71,7 @@ type (
 	Routes []*Route
 	Route  struct {
 		Async            *Async             `json:",omitempty" yaml:",omitempty"`
+		Name             string             `json:",omitempty" yaml:",omitempty"`
 		Visitor          *Fetcher           `json:",omitempty"`
 		URI              string             `json:",omitempty"`
 		APIKey           *APIKey            `json:",omitempty"`
@@ -98,6 +102,9 @@ type (
 		_requestBodySlice         *xunsafe.Slice
 		_apiKeys                  []*APIKey
 		_stateCache               *staterCache
+		_routeMatcher             func(route *http2.Route) (*Route, error)
+		_async                    *async.Async
+		_router                   *Router
 	}
 
 	query struct {
@@ -694,11 +701,11 @@ func (r *Route) normalizePaths() error {
 	r.NormalizeExclude = &aBool
 
 	for i, excluded := range r.Exclude {
-		r.Exclude[i] = NormalizePath(excluded)
+		r.Exclude[i] = formatter.NormalizePath(excluded)
 	}
 
 	for i, transform := range r.Transforms {
-		r.Transforms[i].Path = NormalizePath(transform.Path)
+		r.Transforms[i].Path = formatter.NormalizePath(transform.Path)
 	}
 
 	return nil
@@ -1046,11 +1053,39 @@ func (r *Route) initTransforms(ctx context.Context) error {
 }
 
 func (r *Route) initAsyncIfNeeded(ctx context.Context) error {
-	if r.Async == nil {
-		return nil
+	r._async = async.NewChecker()
+	if r.Async != nil {
+		if err := r.Async.Init(ctx, r._resource, r.View); err != nil {
+			return err
+		}
+
+		return r.ensureJobTable(ctx)
 	}
 
-	return r.Async.Init(ctx, r._resource, r.View)
+	return nil
+}
+
+func (r *Route) ensureJobTable(ctx context.Context) error {
+	_, err := r._async.EnsureTable(ctx, r.Async.Connector, &async.TableConfig{
+		RecordType:     reflect.TypeOf(async2.Job{}),
+		TableName:      view.AsyncJobsTable,
+		Dataset:        r.Async.Dataset,
+		CreateIfNeeded: true,
+		GenerateAutoPk: false,
+	})
+	return err
+}
+
+func (r *Route) match(ctx context.Context, route *http2.Route) (*Route, error) {
+	if r._routeMatcher == nil {
+		return nil, fmt.Errorf("route matcher was empty")
+	}
+
+	return r._routeMatcher(route)
+}
+
+func (r *Route) SetRouteLookup(lookup func(route *http2.Route) (*Route, error)) {
+	r._routeMatcher = lookup
 }
 
 // TODO MFI

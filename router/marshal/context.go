@@ -3,7 +3,7 @@ package marshal
 import (
 	"encoding/json"
 	"github.com/francoispqt/gojay"
-	"github.com/viant/datly/httputils"
+	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strconv"

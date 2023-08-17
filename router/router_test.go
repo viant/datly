@@ -17,6 +17,7 @@ import (
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/openapi3"
+	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
 	"github.com/viant/xreflect"
@@ -439,12 +440,12 @@ func TestRouter(t *testing.T) {
 			method:      http.MethodGet,
 			expected:    `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			corsHeaders: map[string]string{
-				router.AllowCredentialsHeader: "true",
-				router.AllowHeadersHeader:     "Header-1, Header-2",
-				router.AllowOriginHeader:      "*",
-				router.ExposeHeadersHeader:    "Header-Exposed-1, Header-Exposed-2",
-				router.MaxAgeHeader:           "10500",
-				router.AllowMethodsHeader:     "OPTIONS",
+				httputils.AllowCredentialsHeader: "true",
+				httputils.AllowHeadersHeader:     "Header-1, Header-2",
+				httputils.AllowOriginHeader:      "*",
+				httputils.ExposeHeadersHeader:    "Header-Exposed-1, Header-Exposed-2",
+				httputils.MaxAgeHeader:           "10500",
+				httputils.AllowMethodsHeader:     "OPTIONS",
 			},
 		},
 		{
@@ -809,7 +810,7 @@ func TestRouter(t *testing.T) {
 			method:      http.MethodGet,
 			preWarmup:   true,
 			headers: map[string][]string{
-				router.DatlyRequestDisableCacheHeader: {"true"},
+				httputils.DatlyRequestDisableCacheHeader: {"true"},
 			},
 			closeAfterPreWarmup: map[string]bool{
 				"events": true,
@@ -823,7 +824,7 @@ func TestRouter(t *testing.T) {
 			method:      http.MethodGet,
 			preWarmup:   true,
 			headers: map[string][]string{
-				router.DatlyRequestMetricsHeader: {router.DatlyDebugHeaderValue},
+				httputils.DatlyRequestMetricsHeader: {httputils.DatlyDebugHeaderValue},
 			},
 			closeAfterPreWarmup: map[string]bool{
 				"events": true,
@@ -852,7 +853,7 @@ func TestRouter(t *testing.T) {
 			method:      http.MethodGet,
 			preWarmup:   true,
 			headers: map[string][]string{
-				router.DatlyRequestMetricsHeader: {router.DatlyDebugHeaderValue},
+				httputils.DatlyRequestMetricsHeader: {httputils.DatlyDebugHeaderValue},
 			},
 			closeAfterPreWarmup: map[string]bool{
 				"events": true,
@@ -1183,7 +1184,7 @@ func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router, shouldD
 	}
 
 	if shouldDecompress {
-		assert.Equal(t, router.EncodingGzip, responseWriter.Header().Get(content.Encoding), c.description)
+		assert.Equal(t, httputils.EncodingGzip, responseWriter.Header().Get(content.Encoding), c.description)
 		reader, err := gzip.NewReader(bytes.NewReader(response))
 		if assert.Nil(t, err, c.description) {
 			decompressed, err := ioutil.ReadAll(reader)

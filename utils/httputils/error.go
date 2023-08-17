@@ -1,19 +1,19 @@
 package httputils
 
 import (
-	"github.com/viant/xdatly/handler/response"
+	"github.com/viant/xdatly/handler/http"
 )
 
 func BuildErrorResponse(err error) (statusCode int, errorMessage string) {
 	statusCode = 400
 	errorMessage = ""
 
-	messager, ok := err.(response.ErrorMessager)
+	messager, ok := err.(http.ErrorMessager)
 	if ok {
 		errorMessage = messager.ErrorMessage()
 	}
 
-	coder, ok := err.(response.ErrorStatusCoder)
+	coder, ok := err.(http.ErrorStatusCoder)
 	if ok {
 		statusCode = coder.ErrorStatusCode()
 	}
@@ -38,7 +38,7 @@ func NewHttpMessageError(statusCode int, err error) *HttpMessageError {
 
 func ErrorOf(defaultStatusCode int, err error) *HttpMessageError {
 	if err != nil {
-		coder, ok := err.(response.ErrorStatusCoder)
+		coder, ok := err.(http.ErrorStatusCoder)
 		if ok {
 			defaultStatusCode = coder.ErrorStatusCode()
 		}

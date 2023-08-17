@@ -9,58 +9,44 @@ import (
 	"fmt"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
+	"github.com/viant/cloudless/gateway/matcher"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/executor"
-	"github.com/viant/datly/httputils"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/async"
+	"github.com/viant/datly/router/async/handler"
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/template/expand"
+	"github.com/viant/datly/utils/debug"
+	"github.com/viant/datly/utils/httputils"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/govalidator"
 	svalidator "github.com/viant/sqlx/io/validator"
-	"github.com/viant/xdatly/handler/response"
+	async2 "github.com/viant/xdatly/handler/async"
+	haHttp "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xunsafe"
 	"io"
 	"net/http"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 )
 
 // TODO: Add to meta response size
-type viewHandler func(response http.ResponseWriter, request *http.Request, record *async.Record)
+type viewHandler func(response http.ResponseWriter, request *http.Request, record *async2.Job)
 
 const (
-	AllowOriginHeader      = "Access-Control-Allow-Origin"
-	AllowHeadersHeader     = "Access-Control-Allow-Headers"
-	AllowMethodsHeader     = "Access-Control-Allow-Methods"
-	AllowCredentialsHeader = "Access-Control-Allow-Credentials"
-	ExposeHeadersHeader    = "Access-Control-Expose-Headers"
-	MaxAgeHeader           = "Access-Control-Max-Age"
-	Separator              = ", "
-
-	DatlyRequestMetricsHeader      = "Datly-Show-Metrics"
-	DatlyInfoHeaderValue           = "info"
-	DatlyDebugHeaderValue          = "debug"
-	DatlyRequestDisableCacheHeader = "Datly-Disable-Cache"
-	DatlyResponseHeaderMetrics     = "Datly-Metrics"
-
-	DatlyServiceTimeHeader = "Datly-Service-Time"
-	DatlyServiceInitHeader = "Datly-Service-Init"
+	Separator = ", "
 )
-
-var debugEnabled = os.Getenv("DATLY_DEBUG") != ""
-
-var strErrType = reflect.TypeOf(fmt.Errorf(""))
 
 type (
 	Router struct {
-		Matcher   *Matcher
+		Matcher   *matcher.Matcher
 		_mux      sync.Mutex
 		_resource *Resource
 		_index    map[string][]int
@@ -70,6 +56,10 @@ type (
 
 	BytesReadCloser struct {
 		bytes *bytes.Buffer
+	}
+
+	MatchableRoute struct {
+		Route *Route
 	}
 
 	ApiPrefix string
@@ -91,6 +81,19 @@ type (
 	}
 )
 
+func (m *MatchableRoute) URI() string {
+	return m.Route.URI
+}
+
+func (m *MatchableRoute) Namespaces() []string {
+	methods := []string{m.Route.Method}
+	if m.Route.CorsEnabled() {
+		methods = append(methods, http.MethodOptions)
+	}
+
+	return methods
+}
+
 func (s *ReaderSession) IsMetricsEnabled() bool {
 	return s.Route.DebugKind == view.MetaTypeHeader || (s.IsMetricInfo() || s.IsMetricDebug())
 }
@@ -103,22 +106,22 @@ func (r *Route) IsMetricInfo(req *http.Request) bool {
 	if !r.IsRevealMetric() {
 		return false
 	}
-	value := req.Header.Get(DatlyRequestMetricsHeader)
+	value := req.Header.Get(httputils.DatlyRequestMetricsHeader)
 	if value == "" {
-		value = req.Header.Get(strings.ToLower(DatlyRequestMetricsHeader))
+		value = req.Header.Get(strings.ToLower(httputils.DatlyRequestMetricsHeader))
 	}
-	return strings.ToLower(value) == DatlyInfoHeaderValue
+	return strings.ToLower(value) == httputils.DatlyInfoHeaderValue
 }
 
 func (r *Route) IsMetricDebug(req *http.Request) bool {
 	if !r.IsRevealMetric() {
 		return false
 	}
-	value := req.Header.Get(DatlyRequestMetricsHeader)
+	value := req.Header.Get(httputils.DatlyRequestMetricsHeader)
 	if value == "" {
-		value = req.Header.Get(strings.ToLower(DatlyRequestMetricsHeader))
+		value = req.Header.Get(strings.ToLower(httputils.DatlyRequestMetricsHeader))
 	}
-	return strings.ToLower(value) == DatlyDebugHeaderValue
+	return strings.ToLower(value) == httputils.DatlyDebugHeaderValue
 }
 
 func (s *ReaderSession) IsMetricDebug() bool {
@@ -134,7 +137,7 @@ func (s *ReaderSession) IsCacheDisabled() bool {
 		return false
 	}
 
-	return (*s.Route.EnableDebug) && (s.Request.Header.Get(DatlyRequestDisableCacheHeader) != "" || s.Request.Header.Get(strings.ToLower(DatlyRequestDisableCacheHeader)) != "")
+	return (*s.Route.EnableDebug) && (s.Request.Header.Get(httputils.DatlyRequestDisableCacheHeader) != "" || s.Request.Header.Get(strings.ToLower(httputils.DatlyRequestDisableCacheHeader)) != "")
 }
 
 func (b *BytesReadCloser) Read(p []byte) (int, error) {
@@ -153,7 +156,7 @@ func (r *Router) Handle(response http.ResponseWriter, request *http.Request) err
 	return r.HandleAsync(response, request, nil)
 }
 
-func (r *Router) HandleAsync(response http.ResponseWriter, request *http.Request, record *async.Record) error {
+func (r *Router) HandleAsync(response http.ResponseWriter, request *http.Request, record *async2.Job) error {
 	if r._resource.Interceptor != nil {
 		_, err := r._resource.Interceptor.Intercept(request)
 		if err != nil {
@@ -164,19 +167,19 @@ func (r *Router) HandleAsync(response http.ResponseWriter, request *http.Request
 		}
 	}
 
-	route, err := r.Matcher.MatchOneRoute(request.Method, request.URL.Path)
+	route, err := r.Matcher.MatchOne(request.Method, request.URL.Path)
 	if err != nil {
 		return err
 	}
 
-	return r.HandleAsyncRoute(response, request, route, record)
+	return r.HandleAsyncRoute(response, request, route.(*MatchableRoute).Route, record)
 }
 
 func (r *Router) HandleRoute(response http.ResponseWriter, request *http.Request, route *Route) error {
 	return r.HandleAsyncRoute(response, request, route, nil)
 }
 
-func (r *Router) HandleAsyncRoute(response http.ResponseWriter, request *http.Request, route *Route, record *async.Record) error {
+func (r *Router) HandleAsyncRoute(response http.ResponseWriter, request *http.Request, route *Route, record *async2.Job) error {
 	err := r.AuthorizeRequest(request, route)
 	if err != nil {
 		httputils.WriteError(response, err)
@@ -239,6 +242,7 @@ func (r *Router) Init(routes Routes, apiPrefix string) error {
 		route.URI = r.normalizeURI(apiPrefix, route.URI)
 
 		route._resource = r._resource.Resource
+		route._router = r
 	}
 
 	r.indexRoutes()
@@ -275,27 +279,27 @@ func enableCors(writer http.ResponseWriter, request *http.Request, cors *Cors, a
 		origin = origins[0]
 	}
 	if origin == "" {
-		writer.Header().Set(AllowOriginHeader, "*")
+		writer.Header().Set(httputils.AllowOriginHeader, "*")
 	} else {
-		writer.Header().Set(AllowOriginHeader, origin)
+		writer.Header().Set(httputils.AllowOriginHeader, origin)
 	}
 
 	if cors.AllowMethods != nil && allHeaders {
-		writer.Header().Set(AllowMethodsHeader, request.Method)
+		writer.Header().Set(httputils.AllowMethodsHeader, request.Method)
 	}
 
 	if cors.AllowHeaders != nil && allHeaders {
-		writer.Header().Set(AllowHeadersHeader, strings.Join(*cors.AllowHeaders, Separator))
+		writer.Header().Set(httputils.AllowHeadersHeader, strings.Join(*cors.AllowHeaders, Separator))
 	}
 	if cors.AllowCredentials != nil && allHeaders {
-		writer.Header().Set(AllowCredentialsHeader, strconv.FormatBool(*cors.AllowCredentials))
+		writer.Header().Set(httputils.AllowCredentialsHeader, strconv.FormatBool(*cors.AllowCredentials))
 	}
 	if cors.MaxAge != nil && allHeaders {
-		writer.Header().Set(MaxAgeHeader, strconv.Itoa(int(*cors.MaxAge)))
+		writer.Header().Set(httputils.MaxAgeHeader, strconv.Itoa(int(*cors.MaxAge)))
 	}
 
 	if cors.ExposeHeaders != nil && allHeaders {
-		writer.Header().Set(ExposeHeadersHeader, strings.Join(*cors.ExposeHeaders, Separator))
+		writer.Header().Set(httputils.ExposeHeadersHeader, strings.Join(*cors.ExposeHeaders, Separator))
 	}
 }
 
@@ -304,19 +308,20 @@ func (r *Router) Serve(serverPath string) error {
 }
 
 func (r *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	route, err := r.Matcher.MatchOneRoute(request.Method, request.URL.Path)
+	route, err := r.Matcher.MatchOne(request.Method, request.URL.Path)
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
-	err = r.HandleRoute(writer, request, route)
+	err = r.HandleRoute(writer, request, route.(*MatchableRoute).Route)
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
 	}
 }
 
 func (r *Router) viewHandler(route *Route) viewHandler {
-	return func(response http.ResponseWriter, request *http.Request, record *async.Record) {
+	return func(response http.ResponseWriter, request *http.Request, record *async2.Job) {
 		if !r.runBeforeFetchIfNeeded(response, request, route) {
 			return
 		}
@@ -336,10 +341,6 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 }
 
 func (r *Router) prepareReaderSession(ctx context.Context, response http.ResponseWriter, request *http.Request, route *Route) (*ReaderSession, error) {
-	return r.buildSession(ctx, response, request, route)
-}
-
-func (r *Router) buildSession(ctx context.Context, response http.ResponseWriter, request *http.Request, route *Route) (*ReaderSession, error) {
 	requestParams, err := NewRequestParameters(request, route)
 	if err != nil {
 		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, err)
@@ -358,8 +359,7 @@ func (r *Router) buildSession(ctx context.Context, response http.ResponseWriter,
 
 	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, requestParams, route.Index._viewDetails...)
 	if err != nil {
-		defaultCode :=
-			http.StatusBadRequest
+		defaultCode := http.StatusBadRequest
 		if route.ParamStatusError != nil {
 			defaultCode = *route.ParamStatusError
 		}
@@ -380,7 +380,7 @@ func UnsupportedFormatErr(format string) error {
 }
 
 func (r *Router) readResponse(ctx context.Context, session *ReaderSession) (PayloadReader, error) {
-	response, ok, err := r.prepareResponse(session)
+	response, ok, err := r.prepareResponse(session, session.IsMetricDebug(), session.IsMetricsEnabled())
 	if !ok || err != nil {
 		return nil, err
 	}
@@ -411,14 +411,14 @@ func (r *Router) readResponse(ctx context.Context, session *ReaderSession) (Payl
 			continue
 		}
 
-		payloadReader.AddHeader(DatlyResponseHeaderMetrics+"-"+stat.Name(), string(marshal))
+		payloadReader.AddHeader(httputils.DatlyResponseHeaderMetrics+"-"+stat.Name(), string(marshal))
 	}
 
 	return payloadReader, nil
 }
 
-func (r *Router) prepareResponse(session *ReaderSession) (*preparedResponse, bool, error) {
-	readerSession, err := r.readValue(session)
+func (r *Router) prepareResponse(session *ReaderSession, includeSQL bool, metricEnabled bool) (*preparedResponse, bool, error) {
+	readerSession, err := r.readValue(session, includeSQL, metricEnabled)
 	if err != nil {
 		return nil, false, err
 	}
@@ -444,13 +444,13 @@ func (r *Router) prepareResponse(session *ReaderSession) (*preparedResponse, boo
 	}, true, nil
 }
 
-func (r *Router) readValue(readerSession *ReaderSession) (*reader.Session, error) {
+func (r *Router) readValue(readerSession *ReaderSession, includeSQL bool, metricEnabled bool) (*reader.Session, error) {
 	destValue := reflect.New(readerSession.Route.View.Schema.SliceType())
 	dest := destValue.Interface()
 
 	session := reader.NewSession(dest, readerSession.Route.View)
 	session.CacheDisabled = readerSession.IsCacheDisabled()
-	session.IncludeSQL = readerSession.IsMetricDebug()
+	session.IncludeSQL = includeSQL
 	session.Selectors = readerSession.Selectors
 	if err := reader.New().Read(context.TODO(), session); err != nil {
 		return nil, err
@@ -460,7 +460,7 @@ func (r *Router) readValue(readerSession *ReaderSession) (*reader.Session, error
 		r.logMetrics(readerSession.Route.URI, session.Metrics, session.Stats)
 	}
 
-	if !readerSession.IsMetricsEnabled() {
+	if !metricEnabled {
 		session.Stats = nil
 	}
 
@@ -468,7 +468,7 @@ func (r *Router) readValue(readerSession *ReaderSession) (*reader.Session, error
 }
 
 func (r *Router) updateCache(ctx context.Context, route *Route, cacheEntry *cache.Entry, response PayloadReader) {
-	if !debugEnabled {
+	if !debug.Enabled {
 		go r.putCache(ctx, route, cacheEntry, response)
 		return
 	}
@@ -785,10 +785,10 @@ func normalizeErr(err error, statusCode int) (int, string, interface{}) {
 		return statusCode, actual.Error(), items
 	case *JSONError:
 		return statusCode, "", actual.Object
-	case *Errors:
-		actual.setStatus(statusCode)
+	case *httputils.Errors:
+		actual.SetStatus(statusCode)
 		for _, anError := range actual.Errors {
-			isObj := isObject(anError.Err)
+			isObj := types.IsObject(anError.Err)
 			if isObj {
 				statusCode, anError.Message, anError.Object = normalizeErr(anError.Err, statusCode)
 			} else {
@@ -796,9 +796,9 @@ func normalizeErr(err error, statusCode int) (int, string, interface{}) {
 			}
 		}
 
-		actual.setStatus(statusCode)
+		actual.SetStatus(statusCode)
 
-		return actual.status, actual.Message, actual.Errors
+		return actual.ErrorStatusCode(), actual.Message, actual.Errors
 	case *expand.ErrorResponse:
 		if actual.StatusCode != 0 {
 			statusCode = actual.StatusCode
@@ -808,19 +808,6 @@ func normalizeErr(err error, statusCode int) (int, string, interface{}) {
 	default:
 		return statusCode, err.Error(), nil
 	}
-}
-
-func isObject(anError interface{}) bool {
-	rType := reflect.TypeOf(anError)
-	if rType == strErrType {
-		return false
-	}
-
-	for rType.Kind() == reflect.Ptr || rType.Kind() == reflect.Slice {
-		rType = rType.Elem()
-	}
-
-	return rType.Kind() == reflect.Struct
 }
 
 func (r *Router) indexRoutes() {
@@ -862,7 +849,7 @@ func (r *Router) writeResponse(ctx context.Context, request *http.Request, respo
 		return
 	}
 
-	response.Header().Add(ContentLength, strconv.Itoa(payloadReader.Size()))
+	response.Header().Add(httputils.ContentLength, strconv.Itoa(payloadReader.Size()))
 	for key, value := range payloadReader.Headers() {
 		response.Header().Add(key, value[0])
 	}
@@ -902,7 +889,7 @@ func (r *Router) compressIfNeeded(marshalled []byte, route *Route) (*RequestData
 		return NewBytesReader(marshalled, ""), nil
 	}
 
-	buffer, err := Compress(bytes.NewReader(marshalled))
+	buffer, err := httputils.Compress(bytes.NewReader(marshalled))
 	if err != nil {
 		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
 	}
@@ -912,7 +899,7 @@ func (r *Router) compressIfNeeded(marshalled []byte, route *Route) (*RequestData
 		payloadSize = base64.StdEncoding.EncodedLen(payloadSize)
 	}
 
-	return AsBytesReader(buffer, EncodingGzip, payloadSize), nil
+	return AsBytesReader(buffer, httputils.EncodingGzip, payloadSize), nil
 }
 
 func (r *Router) logAudit(request *http.Request, response http.ResponseWriter, route *Route) {
@@ -934,7 +921,15 @@ func (r *Router) logMetrics(URI string, metrics []*reader.Metric, stats []*reade
 }
 
 func (r *Router) initMatcher() {
-	r.Matcher = NewRouteMatcher(r._routes)
+	r.Matcher = matcher.NewMatcher(asMatchables(r._routes))
+}
+
+func asMatchables(routes Routes) []matcher.Matchable {
+	result := make([]matcher.Matchable, 0, len(routes))
+	for _, route := range routes {
+		result = append(result, &MatchableRoute{Route: route})
+	}
+	return result
 }
 
 func (r *Router) normalizeURI(prefix string, URI string) string {
@@ -1044,10 +1039,10 @@ func (r *Router) Resource() *Resource {
 	return r._resource
 }
 
-func (r *Router) payloadReader(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route, record *async.Record) (PayloadReader, error) {
+func (r *Router) payloadReader(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route, record *async2.Job) (PayloadReader, error) {
 	switch route.Service {
 	case ServiceTypeExecutor:
-		return r.executorPayloadReader(ctx, request, response, route)
+		return r.executorPayloadReader(ctx, response, request, route)
 	case ServiceTypeReader:
 		session, err := r.prepareReaderSession(ctx, response, request, route)
 		if err != nil {
@@ -1055,7 +1050,7 @@ func (r *Router) payloadReader(ctx context.Context, request *http.Request, respo
 		}
 		payloadReader, err := r.readerPayloadReader(ctx, route, session, record)
 		if payloadReader != nil && payloadReader.Headers().Get(content.Type) == "" {
-			payloadReader.Headers().Add(content.Type, session.RequestParams.OutputContentType+"; "+CharsetUTF8)
+			payloadReader.Headers().Add(content.Type, session.RequestParams.OutputContentType+"; "+httputils.CharsetUTF8)
 		}
 		//TODO Add support for Content-Disposition: attachment; filename="document.doc"
 
@@ -1067,7 +1062,7 @@ func (r *Router) payloadReader(ctx context.Context, request *http.Request, respo
 
 func (r *Router) marshalCustomOutput(output interface{}, route *Route) (PayloadReader, error) {
 	switch actual := output.(type) {
-	case response.Response:
+	case haHttp.Response:
 		responseContent, err := r.extractValueFromResponse(route, actual)
 		if err != nil {
 			return nil, err
@@ -1087,7 +1082,7 @@ func (r *Router) marshalCustomOutput(output interface{}, route *Route) (PayloadR
 	}
 }
 
-func (r *Router) extractValueFromResponse(route *Route, actual response.Response) ([]byte, error) {
+func (r *Router) extractValueFromResponse(route *Route, actual haHttp.Response) ([]byte, error) {
 	value := actual.Value()
 	switch responseValue := value.(type) {
 	case []byte:
@@ -1097,7 +1092,7 @@ func (r *Router) extractValueFromResponse(route *Route, actual response.Response
 	}
 }
 
-func (r *Router) readerPayloadReader(ctx context.Context, route *Route, session *ReaderSession, record *async.Record) (PayloadReader, error) {
+func (r *Router) readerPayloadReader(ctx context.Context, route *Route, session *ReaderSession, record *async2.Job) (PayloadReader, error) {
 	if route.Async != nil {
 		return r.readAsyncResponse(ctx, session, record)
 	}
@@ -1127,7 +1122,7 @@ func (r *Router) readSyncResponse(ctx context.Context, session *ReaderSession) (
 	return response, err
 }
 
-func (r *Router) readAsyncResponse(ctx context.Context, session *ReaderSession, record *async.Record) (PayloadReader, error) {
+func (r *Router) readAsyncResponse(ctx context.Context, session *ReaderSession, record *async2.Job) (PayloadReader, error) {
 	if record != nil {
 		err := r.executeAsync(context.Background(), session, record, true)
 		if err != nil {
@@ -1142,12 +1137,28 @@ func (r *Router) readAsyncResponse(ctx context.Context, session *ReaderSession, 
 		return nil, err
 	}
 
-	inserter, err := session.Route.Async.JobsInserter(ctx)
+	connector, err := r._resource.Resource.Connector(record.DestinationConnector)
+	if err != nil {
+		return nil, err
+	}
+	_, err = session.Route._async.EnsureTable(ctx, connector, &async.TableConfig{
+		RecordType:     session.Route.View.Schema.Type(),
+		TableName:      session.Route.View.Async.Table,
+		Dataset:        record.DestinationDataset,
+		CreateIfNeeded: true,
+		GenerateAutoPk: true,
+	})
+
 	if err != nil {
 		return nil, err
 	}
 
-	if _, _, err := inserter.Exec(ctx, record); err != nil {
+	DB, err := connector.DB()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err = r.insertAndExecuteJob(ctx, session, DB, record, session.Route.Async._asyncHandler, nil); err != nil {
 		return nil, err
 	}
 
@@ -1156,16 +1167,58 @@ func (r *Router) readAsyncResponse(ctx context.Context, session *ReaderSession, 
 		return nil, err
 	}
 
-	if payloadReader != nil {
-		payloadReader.AddOnClose(func() {
-			r.readAsync(context.Background(), session, record)
-		})
-	}
-
 	return payloadReader, nil
 }
 
-func (r *Router) marshalAsyncRecord(session *ReaderSession, record *async.Record) (PayloadReader, error) {
+func (r *Router) insertAndExecuteJob(ctx context.Context, session *ReaderSession, db *sql.DB, record *async2.Job, handler async.Handler, exist *async2.OnExist) (existingJob *async2.Job, err error) {
+	inserter, err := session.Route.JobsInserter(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, _, err := inserter.Exec(ctx, record); err != nil {
+		if exist == nil {
+			return nil, err
+		}
+
+		if exist.Return {
+			foundJob, selectErr := async.QueryJobByID(ctx, db, record.JobID)
+			if selectErr != nil {
+				return nil, err
+			}
+
+			if !(foundJob.State == async2.StateDone && foundJob.EndTime != nil && time.Now().After(*foundJob.EndTime)) { //Job doesn't expire yet
+				return foundJob, nil
+			}
+
+			affected, refreshErr := async.RefreshJobByID(ctx, db, record.JobID)
+			if err != nil || affected == 0 { //some other call is already calling async job
+				return foundJob, refreshErr
+			}
+
+			*record = *foundJob
+		}
+	}
+
+	httpRecord, err := NewAsyncHTTPRecord(session, record)
+	if err != nil {
+		return existingJob, err
+	}
+
+	if handler != nil {
+		return existingJob, handler.Handle(ctx, httpRecord, session.Request)
+	}
+
+	r.readAsync(context.Background(), session, copyJob(record))
+	return existingJob, nil
+}
+
+func copyJob(record *async2.Job) *async2.Job {
+	newJob := *record
+	return &newJob
+}
+
+func (r *Router) marshalAsyncRecord(session *ReaderSession, record *async2.Job) (PayloadReader, error) {
 	marshal, err := session.Route.JSON._jsonMarshaller.Marshal(record)
 	if err != nil {
 		return nil, err
@@ -1179,47 +1232,81 @@ func (r *Router) marshalAsyncRecord(session *ReaderSession, record *async.Record
 	return payloadReader, nil
 }
 
-func (r *Router) readAsync(ctx context.Context, session *ReaderSession, record *async.Record) {
-	err := r.executeAsync(ctx, session, record, false)
-	if err != nil {
-		fmt.Printf("[ERROR] %v\n", err.Error())
-	}
+func (r *Router) readAsync(ctx context.Context, session *ReaderSession, record *async2.Job) {
+	go func() {
+		err := r.executeAsync(ctx, session, record, true)
+		if err != nil {
+			connector, connErr := r.asyncConnector(session.Route, record)
+			if connErr == nil {
+				db, dbErr := connector.DB()
+				if dbErr == nil {
+					r.handleReadAsyncErrorWithDb(ctx, session, record, db, err)
+				} else {
+					fmt.Printf("[ERROR] coulnd't update Job %v with status error due to %v\n", record.JobID, dbErr)
+				}
+			}
+			fmt.Printf("[ERROR] %v\n", err.Error())
+		}
+	}()
 }
 
-func (r *Router) executeAsync(ctx context.Context, session *ReaderSession, record *async.Record, forceInMemory bool) error {
+func (r *Router) executeAsync(ctx context.Context, session *ReaderSession, record *async2.Job, forceInMemory bool) error {
+	connector, err := r.asyncConnector(session.Route, record)
+	if err != nil {
+		return err
+	}
+
+	db, err := connector.DB()
+	if err != nil {
+		return err
+	}
+
 	if aHandler := session.Route.Async._asyncHandler; aHandler != nil && !forceInMemory {
-		bodyContent, err := session.RequestParams.BodyContent()
+		asyncHttp, err := NewAsyncHTTPRecord(session, record)
 		if err != nil {
-			r.handleReadAsyncError(ctx, session, record, err)
+			r.handleReadAsyncErrorWithDb(ctx, session, record, db, err)
 			return nil
 		}
 
-		var body string
-		if len(bodyContent) > 0 {
-			body = string(bodyContent)
-		}
-
-		return aHandler.Handle(ctx, &async.RecordWithHttp{
-			Record:  record,
-			Body:    body,
-			Method:  session.Request.Method,
-			URL:     session.Request.URL.String(),
-			Headers: session.Request.Header,
-		}, session.Request)
+		return aHandler.Handle(ctx, asyncHttp, session.Request)
 	}
 
 	if err := r.populateAsyncRecord(ctx, session, record); err != nil {
 		fmt.Printf("[ERROR] error occurred when executing async view: %v\n", err.Error())
-		r.handleReadAsyncError(ctx, session, record, err)
+		r.handleReadAsyncErrorWithDb(ctx, session, record, db, err)
 		return nil
 	}
 
 	return nil
 }
 
-func (r *Router) populateAsyncRecord(ctx context.Context, session *ReaderSession, record *async.Record) error {
-	record.State = async.StateDone
-	response, _, err := r.prepareResponse(session)
+func NewAsyncHTTPRecord(session *ReaderSession, record *async2.Job) (*handler.RecordWithHttp, error) {
+	bodyContent, err := session.RequestParams.BodyContent()
+	if err != nil {
+		return nil, err
+	}
+
+	var body string
+	if len(bodyContent) > 0 {
+		body = string(bodyContent)
+	}
+
+	return &handler.RecordWithHttp{
+		Record:  record,
+		Body:    body,
+		Method:  session.Request.Method,
+		URL:     session.Request.URL.String(),
+		Headers: session.Request.Header,
+	}, nil
+}
+
+func (r *Router) populateAsyncRecord(ctx context.Context, session *ReaderSession, record *async2.Job) error {
+	record.State = async2.StateDone
+	now := time.Now()
+	response, _, err := r.prepareResponse(session, true, true)
+	elapsed := time.Now().Sub(now)
+	record.TimeTaken = &elapsed
+
 	if err != nil {
 		return err
 	}
@@ -1227,13 +1314,29 @@ func (r *Router) populateAsyncRecord(ctx context.Context, session *ReaderSession
 	metrics := NewMetrics(session.Request.RequestURI, response.session.Metrics, response.stats)
 	asBytes, _ := goJson.Marshal(metrics)
 	record.Metrics = string(asBytes)
+	connector, err := r.asyncConnector(session.Route, record)
+	if err != nil {
+		return err
+	}
 
-	err = r.prepareAndPutAsyncRecords(ctx, session, response, record)
+	for _, stat := range response.stats {
+		for _, templateStat := range stat.Template {
+			if templateStat.SQL != "" {
+				record.SQL = append(record.SQL, &async2.SQL{Query: templateStat.SQL, Args: templateStat.Args})
+			}
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+
+	err = r.prepareAndPutAsyncRecords(ctx, session, response, record, connector)
 	return err
 }
 
-func (r *Router) updateAsyncRecord(ctx context.Context, session *ReaderSession, record *async.Record) error {
-	updater, err := session.Route.Async.JobsUpdater(ctx)
+func (r *Router) updateAsyncRecord(ctx context.Context, session *ReaderSession, record *async2.Job, db *sql.DB) error {
+	updater, err := session.Route.Async.JobsUpdater(ctx, db)
 	if err != nil {
 		return fmt.Errorf("error when connecting with Async connector: %v\n", err.Error())
 	}
@@ -1245,8 +1348,8 @@ func (r *Router) updateAsyncRecord(ctx context.Context, session *ReaderSession, 
 	return nil
 }
 
-func (r *Router) handleReadAsyncError(ctx context.Context, session *ReaderSession, record *async.Record, err error) {
-	record.State = async.StateDone
+func (r *Router) handleReadAsyncErrorWithDb(ctx context.Context, session *ReaderSession, record *async2.Job, db *sql.DB, err error) {
+	record.State = async2.StateDone
 	_, message, object := normalizeErr(err, 400)
 	if object != nil {
 		marshal, _ := session.Route.JSON._jsonMarshaller.Marshal(object)
@@ -1256,14 +1359,20 @@ func (r *Router) handleReadAsyncError(ctx context.Context, session *ReaderSessio
 		record.Error = &message
 	}
 
-	err = r.updateAsyncRecord(ctx, session, record)
+	err = r.updateAsyncRecord(ctx, session, record, db)
 	if err != nil {
 		fmt.Printf("[ERROR] %v\n", err.Error())
 	}
 }
 
-func (r *Router) prepareAndPutAsyncRecords(ctx context.Context, session *ReaderSession, response *preparedResponse, record *async.Record) error {
-	if err := session.Route.Async.EnsureDestTableExists(ctx, record, response); err != nil {
+func (r *Router) prepareAndPutAsyncRecords(ctx context.Context, session *ReaderSession, response *preparedResponse, record *async2.Job, connector *view.Connector) error {
+	if _, err := session.Route._async.EnsureTable(ctx, connector, &async.TableConfig{
+		RecordType:     types.EnsureStruct(reflect.TypeOf(response.objects)),
+		TableName:      record.DestinationTable,
+		Dataset:        record.DestinationDataset,
+		CreateIfNeeded: record.DestinationCreateDisposition == async2.CreateDispositionIfNeeded,
+		GenerateAutoPk: true,
+	}); err != nil {
 		return err
 	}
 
@@ -1277,20 +1386,17 @@ func (r *Router) prepareAndPutAsyncRecords(ctx context.Context, session *ReaderS
 		return err
 	}
 
-	err = r.putAsyncRecord(ctx, session, response, record, tx)
+	err = r.putAsyncRecord(ctx, session, response, record, db, tx)
 	if err != nil {
-		if rolbackErr := tx.Rollback(); rolbackErr == nil {
-			r.handleReadAsyncError(ctx, session, record, err)
-		}
-
+		_ = tx.Rollback()
 		return err
 	}
 
 	return tx.Commit()
 }
 
-func (r *Router) putAsyncRecord(ctx context.Context, session *ReaderSession, response *preparedResponse, record *async.Record, tx *sql.Tx) error {
-	recordsInserter, err := session.Route.Async.RecordsInserter(ctx, session.Route)
+func (r *Router) putAsyncRecord(ctx context.Context, session *ReaderSession, response *preparedResponse, record *async2.Job, db *sql.DB, tx *sql.Tx) error {
+	recordsInserter, err := session.Route.RecordsInserter(ctx, session.Route, db)
 	if err != nil {
 		return err
 	}
@@ -1300,7 +1406,7 @@ func (r *Router) putAsyncRecord(ctx context.Context, session *ReaderSession, res
 		return err
 	}
 
-	updater, err := session.Route.Async.JobsUpdater(ctx)
+	updater, err := session.Route.Async.JobsUpdater(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -1340,13 +1446,13 @@ func (r *Router) normalizeAndWriteErr(writer http.ResponseWriter, err error) {
 	_, _ = writer.Write([]byte(message))
 }
 
-func (r *Router) FindAllJobs(ctx context.Context, request *http.Request) ([]*async.Record, error) {
+func (r *Router) FindAllJobs(ctx context.Context, request *http.Request) ([]*async2.Job, error) {
 	jobs, err := r.PrepareJobs(ctx, request)
 	if err != nil {
 		return nil, err
 	}
 
-	var allRecords []*async.Record
+	var allRecords []*async2.Job
 	for db, qualifiers := range jobs {
 		records, err := async.QueryJobs(ctx, db, qualifiers...)
 		if err != nil {
@@ -1396,8 +1502,8 @@ func (r *Router) PrepareJobs(ctx context.Context, request *http.Request) (map[*s
 	return jobs.Index(), nil
 }
 
-func (r *Router) executorPayloadReader(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route) (PayloadReader, error) {
-	anExecutor := NewExecutor(route, request, nil)
+func (r *Router) executorPayloadReader(ctx context.Context, response http.ResponseWriter, request *http.Request, route *Route) (PayloadReader, error) {
+	anExecutor := NewExecutor(route, request, nil, response)
 	if route.Handler != nil {
 		sessionHandler, err := anExecutor.SessionHandler(ctx)
 		if err != nil {
@@ -1416,7 +1522,8 @@ func (r *Router) executorPayloadReader(ctx context.Context, request *http.Reques
 		return r.marshalCustomOutput(res, route)
 	}
 
-	if err := anExecutor.Execute(ctx); err != nil {
+	sess, err := anExecutor.ExpandAndExecute(ctx)
+	if err != nil {
 		return nil, err
 	}
 
@@ -1425,8 +1532,6 @@ func (r *Router) executorPayloadReader(ctx context.Context, request *http.Reques
 	}
 
 	params, _ := anExecutor.RequestParams(ctx)
-	sess, _ := anExecutor.Session(ctx)
-
 	body, err := route.execResponseBody(params, sess)
 	if err != nil {
 		return nil, err
@@ -1450,6 +1555,18 @@ func (r *Router) prepareExecutorSessionWithParameters(ctx context.Context, reque
 
 	sess, err := executor.NewSession(selectors, route.View)
 	return sess, err
+}
+
+func (r *Router) asyncConnector(route *Route, record *async2.Job) (*view.Connector, error) {
+	if record.DestinationConnector != "" {
+		return r._resource.Resource.Connector(record.DestinationConnector)
+	}
+
+	if route.Async != nil && route.Async.Connector != nil {
+		return route.Async.Connector, nil
+	}
+
+	return nil, fmt.Errorf("unspecified job connector")
 }
 
 func (r *Route) NewStater(request *http.Request, parameters *RequestParams) *Stater {

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/viant/datly/router/async"
+	"github.com/viant/datly/router/async/handler"
 	"net/http"
 )
 
@@ -14,7 +14,7 @@ type Handler struct {
 	sqs      *sqs.SQS
 }
 
-func NewHandler(ctx context.Context, queueName string) (async.Handler, error) {
+func NewHandler(ctx context.Context, queueName string) (*Handler, error) {
 	if queueName == "" {
 		queueName = "DATLY_JOBS"
 	}
@@ -67,7 +67,7 @@ func ensureQueryURL(ctx context.Context, srv *sqs.SQS, name string) (*string, er
 	return nil, err
 }
 
-func (h *Handler) Handle(ctx context.Context, record *async.RecordWithHttp, request *http.Request) error {
+func (h *Handler) Handle(ctx context.Context, record *handler.RecordWithHttp, request *http.Request) error {
 	marshal, err := json.Marshal(record)
 	if err != nil {
 		return err

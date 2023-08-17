@@ -1,4 +1,4 @@
-package router
+package httputils
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-//Compress compresses input using gzip
+// Compress compresses input using gzip
 func Compress(reader io.Reader) (*bytes.Buffer, error) {
 	buffer := new(bytes.Buffer)
 	writer := gzip.NewWriter(buffer)

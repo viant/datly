@@ -38,12 +38,12 @@ func (e *EncodeFactory) New(codecConfig *codec.Config, options ...codec.Option) 
 		return nil, err
 	}
 
-	if isMulti(codecConfig.InputType) && !isMulti(destType) {
+	if types.IsMulti(codecConfig.InputType) && !isMulti(destType) {
 		destType = reflect.SliceOf(destType)
 	}
 
 	var aSlice *xunsafe.Slice
-	if isMulti(destType) {
+	if types.IsMulti(destType) {
 		aSlice = xunsafe.NewSlice(destType, xunsafe.UseItemAddrOpt(false))
 	}
 

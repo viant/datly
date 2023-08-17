@@ -29,10 +29,6 @@ type (
 	}
 )
 
-func (e *Entry) AddOnClose(func()) {
-
-}
-
 func (e *Entry) Headers() http.Header {
 	return e.meta.ExtraHeaders
 }

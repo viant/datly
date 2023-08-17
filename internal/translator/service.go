@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlparser"
+	async2 "github.com/viant/xdatly/handler/async"
 	"path"
 	"reflect"
 	"strings"
@@ -180,8 +181,10 @@ func (s *Service) applyAsyncption(resource *Resource, route *router.Route) {
 		Connector:        view.NewRefConnector(async.Connector),
 		PrincipalSubject: async.PrincipalSubject,
 		ExpiryTimeInS:    async.ExpiryTimeInS,
-		Dataset:          async.Dataset,
-		BucketURL:        async.BucketURL,
+		Config: async2.Config{
+			Dataset:   async.Dataset,
+			BucketURL: async.BucketURL,
+		},
 	}
 }
 

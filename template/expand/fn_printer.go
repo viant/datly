@@ -3,7 +3,7 @@ package expand
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/viant/datly/httputils"
+	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/velty/est"
 	"github.com/viant/velty/est/op"
 	"github.com/viant/xunsafe"
@@ -115,12 +115,12 @@ func (p *Printer) Fatal(any interface{}, args ...interface{}) (string, error) {
 	return "", fmt.Errorf(p.Sprintf("%+v", any))
 }
 
-//Fatalf fatal with formatting
+// Fatalf fatal with formatting
 func (p *Printer) Fatalf(any interface{}, args ...interface{}) (string, error) {
 	return p.Fatal(any, args...)
 }
 
-//FatalfWithCode logs and terminate with status code
+// FatalfWithCode logs and terminate with status code
 func (p *Printer) FatalfWithCode(code int, any interface{}, args ...interface{}) (string, error) {
 	format, ok := any.(string)
 	if ok {

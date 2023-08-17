@@ -3,11 +3,11 @@ package gateway
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/httputils"
 	"github.com/viant/datly/router"
-	"github.com/viant/datly/router/async"
 	cusJson "github.com/viant/datly/router/marshal/json"
+	httputils2 "github.com/viant/datly/utils/httputils"
 	"github.com/viant/toolbox"
+	async2 "github.com/viant/xdatly/handler/async"
 	"net/http"
 )
 
@@ -18,10 +18,10 @@ func NewJobByIDRoute(URL string, jobIDParam string, routers []*router.Router, ap
 			Method: http.MethodGet,
 		},
 		ApiKeys: apiKeys,
-		Handler: func(response http.ResponseWriter, req *http.Request, _ *async.Record) {
+		Handler: func(response http.ResponseWriter, req *http.Request, _ *async2.Job) {
 			record, err := findJobByID(context.Background(), req, routers, URL, jobIDParam)
 			if err != nil {
-				httputils.WriteError(response, err)
+				httputils2.WriteError(response, err)
 				return
 			}
 
@@ -31,7 +31,7 @@ func NewJobByIDRoute(URL string, jobIDParam string, routers []*router.Router, ap
 	}
 }
 
-func findJobByID(ctx context.Context, req *http.Request, routers []*router.Router, URL string, idParam string) (*async.Record, error) {
+func findJobByID(ctx context.Context, req *http.Request, routers []*router.Router, URL string, idParam string) (*async2.Job, error) {
 	parameters, ok := toolbox.ExtractURIParameters(URL, req.URL.Path)
 	var jobID *string
 	if ok {
@@ -42,7 +42,7 @@ func findJobByID(ctx context.Context, req *http.Request, routers []*router.Route
 	}
 
 	if jobID == nil {
-		return nil, httputils.NewHttpMessageError(400, fmt.Errorf("parameter %v is required", idParam))
+		return nil, httputils2.NewHttpMessageError(400, fmt.Errorf("parameter %v is required", idParam))
 	}
 
 	jobs, err := handleJobsRoute(ctx, req, routers, jobID)
@@ -52,10 +52,10 @@ func findJobByID(ctx context.Context, req *http.Request, routers []*router.Route
 
 	switch len(jobs) {
 	case 0:
-		return nil, httputils.NewHttpMessageError(http.StatusNotFound, fmt.Errorf("not found job with ID %v for given subject", *jobID))
+		return nil, httputils2.NewHttpMessageError(http.StatusNotFound, fmt.Errorf("not found job with ID %v for given subject", *jobID))
 	case 1:
 		return jobs[0], nil
 	default:
-		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, fmt.Errorf("for ID %v found more than one job", *jobID))
+		return nil, httputils2.NewHttpMessageError(http.StatusInternalServerError, fmt.Errorf("for ID %v found more than one job", *jobID))
 	}
 }

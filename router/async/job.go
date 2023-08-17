@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/config"
+	"github.com/viant/xdatly/handler/async"
 	"strings"
 	"sync"
 )
@@ -41,10 +42,7 @@ func (j *Jobs) Index() map[*sql.DB][]*JobQualifier {
 	return j.index
 }
 func BuildSelectSQL(ctx context.Context, db *sql.DB, qualifiers ...*JobQualifier) (string, []interface{}, error) {
-	sb := &strings.Builder{}
-	sb.WriteString("SELECT * FROM ")
-	sb.WriteString(view.AsyncJobsTable)
-
+	sb := prepareQueryBuilder()
 	var args []interface{}
 
 	for i, jobQualifier := range qualifiers {
@@ -74,6 +72,28 @@ func BuildSelectSQL(ctx context.Context, db *sql.DB, qualifiers ...*JobQualifier
 	}
 
 	return sb.String(), args, nil
+}
+
+func BuildSelectByID(ctx context.Context, db *sql.DB, id string) (string, []interface{}, error) {
+	builder := prepareQueryBuilder()
+	builder.WriteString(" WHERE JobID = ? ")
+	return builder.String(), []interface{}{id}, nil
+}
+
+func BuildRefreshJobByID(ctx context.Context, db *sql.DB, id string) (string, []interface{}, error) {
+	sb := &strings.Builder{}
+	sb.WriteString("UPDATE ")
+	sb.WriteString(view.AsyncJobsTable)
+	sb.WriteString(" SET State = ? WHERE State = ? AND JobID = ?")
+	return sb.String(), []interface{}{async.StateRunning, id, async.StateDone}, nil
+}
+
+func prepareQueryBuilder() *strings.Builder {
+	sb := &strings.Builder{}
+	sb.WriteString("SELECT * FROM ")
+	sb.WriteString(view.AsyncJobsTable)
+	sb.WriteString(" ")
+	return sb
 }
 
 func detectEscapeQuoteRune(ctx context.Context, db *sql.DB) (byte, error) {

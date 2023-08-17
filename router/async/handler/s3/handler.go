@@ -9,7 +9,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/router/async"
+	"github.com/viant/datly/router/async/handler"
 	"net/http"
 	"strconv"
 	"strings"
@@ -20,7 +20,7 @@ type Handler struct {
 	bucketURL string
 }
 
-func (h *Handler) Handle(ctx context.Context, record *async.RecordWithHttp, request *http.Request) error {
+func (h *Handler) Handle(ctx context.Context, record *handler.RecordWithHttp, request *http.Request) error {
 	marshal, err := json.Marshal(record)
 	if err != nil {
 		return err
@@ -33,12 +33,11 @@ func (h *Handler) Handle(ctx context.Context, record *async.RecordWithHttp, requ
 
 	URL := url.Join(h.bucketURL, strings.ReplaceAll(newUUID.String(), "-", "")+strconv.Itoa(int(time.Now().UnixNano()))) + ".async"
 	err = afs.New().Upload(ctx, URL, file.DefaultFileOsMode, bytes.NewReader(marshal))
-	fmt.Printf("%v, %v\n", err, URL)
 
 	return err
 }
 
-func NewHandler(ctx context.Context, bucketURL string) (async.Handler, error) {
+func NewHandler(ctx context.Context, bucketURL string) (*Handler, error) {
 	if bucketURL == "" {
 		return nil, fmt.Errorf("BucketURL can't be empty")
 	}

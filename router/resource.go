@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/openapi3"
+	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
 	"github.com/viant/toolbox"
@@ -83,7 +84,7 @@ func (r *Redirect) Apply(ctx context.Context, viewName string, payload PayloadRe
 	UUID := uuid.New()
 	URL := url.Join(r.StorageURL, normalizeStorageURL(viewName), normalizeStorageURL(UUID.String())) + ".json"
 	preSign := option.NewPreSign(r.TimeToLive())
-	kv := []string{content.Type, ContentTypeJSON}
+	kv := []string{content.Type, httputils.ContentTypeJSON}
 	compressionType := payload.CompressionType()
 
 	if compressionType != "" {
@@ -152,7 +153,6 @@ func (r *Resource) Init(ctx context.Context) error {
 		}
 
 		if err := route.Init(ctx, r); err != nil {
-
 			return err
 		}
 	}

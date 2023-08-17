@@ -2,7 +2,7 @@ package gateway
 
 import (
 	"encoding/json"
-	"github.com/viant/datly/router/async"
+	async2 "github.com/viant/xdatly/handler/async"
 	"net/http"
 )
 
@@ -12,7 +12,7 @@ func (r *Router) NewConfigRoute() *Route {
 			Method: http.MethodGet,
 			URL:    r.config.Meta.ConfigURI,
 		},
-		Handler: func(response http.ResponseWriter, req *http.Request, _ *async.Record) {
+		Handler: func(response http.ResponseWriter, req *http.Request, _ *async2.Job) {
 			r.handleConfig(response)
 		},
 	}

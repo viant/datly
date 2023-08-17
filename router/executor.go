@@ -7,13 +7,15 @@ import (
 	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/xdatly/handler"
+	async2 "github.com/viant/xdatly/handler/async"
+	http2 "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/sqlx"
 	"github.com/viant/xdatly/handler/validator"
 	"net/http"
 )
 
 type (
-	Executor struct {
+	HandlerExecutor struct {
 		executed       bool
 		session        *executor.Session
 		route          *Route
@@ -22,6 +24,7 @@ type (
 		dataUnit       *expand.DataUnit
 		tx             *sql.Tx
 		sessionHandler *session.Session
+		response       http.ResponseWriter
 	}
 
 	DBProvider struct {
@@ -33,16 +36,17 @@ func (d *DBProvider) Db() (*sql.DB, error) {
 	return d.db, nil
 }
 
-func NewExecutor(route *Route, request *http.Request, params *RequestParams) *Executor {
-	return &Executor{
+func NewExecutor(route *Route, request *http.Request, params *RequestParams, response http.ResponseWriter) *HandlerExecutor {
+	return &HandlerExecutor{
 		route:    route,
 		request:  request,
 		params:   params,
 		dataUnit: expand.NewDataUnit(route.View),
+		response: response,
 	}
 }
 
-func (e *Executor) Session(ctx context.Context) (*executor.Session, error) {
+func (e *HandlerExecutor) Session(ctx context.Context) (*executor.Session, error) {
 	if e.session != nil {
 		return e.session, nil
 	}
@@ -72,7 +76,7 @@ func (e *Executor) Session(ctx context.Context) (*executor.Session, error) {
 	return e.session, err
 }
 
-func (e *Executor) SessionHandler(ctx context.Context) (handler.Session, error) {
+func (e *HandlerExecutor) SessionHandler(ctx context.Context) (handler.Session, error) {
 	service, err := e.SessionHandlerService(ctx)
 	if err != nil {
 		return nil, err
@@ -85,7 +89,7 @@ func (e *Executor) SessionHandler(ctx context.Context) (handler.Session, error) 
 	return service, err
 }
 
-func (e *Executor) SessionHandlerService(ctx context.Context) (*session.Session, error) {
+func (e *HandlerExecutor) SessionHandlerService(ctx context.Context) (*session.Session, error) {
 	if e.sessionHandler != nil {
 		return e.sessionHandler, nil
 	}
@@ -99,21 +103,24 @@ func (e *Executor) SessionHandlerService(ctx context.Context) (*session.Session,
 		session.WithTemplateFlush(func(ctx context.Context) error {
 			return e.Execute(ctx)
 		}),
+		session.WithRedirect(e.redirect),
 		session.WithStater(e.route.NewStater(e.request, params)),
 		session.WithSql(e.newSqlService),
+		session.WithAsync(e.newAsync),
+		session.WithHttp(e.newHttp),
 	)
 
 	e.sessionHandler = sess
 	return sess, nil
 }
 
-func (e *Executor) newValidator() *validator.Service {
+func (e *HandlerExecutor) newValidator() *validator.Service {
 	return validator.New(&Validator{
 		validator: expand.CommonValidator(),
 	})
 }
 
-func (e *Executor) RequestParams(ctx context.Context) (*RequestParams, error) {
+func (e *HandlerExecutor) RequestParams(ctx context.Context) (*RequestParams, error) {
 	if e.params != nil {
 		return e.params, nil
 	}
@@ -127,7 +134,7 @@ func (e *Executor) RequestParams(ctx context.Context) (*RequestParams, error) {
 	return e.params, nil
 }
 
-func (e *Executor) newSqlService(options *sqlx.Options) (sqlx.Sqlx, error) {
+func (e *HandlerExecutor) newSqlService(options *sqlx.Options) (sqlx.Sqlx, error) {
 	unit, err := e.getDataUnit(options)
 	if err != nil {
 		return nil, err
@@ -149,7 +156,7 @@ func (e *Executor) newSqlService(options *sqlx.Options) (sqlx.Sqlx, error) {
 	}, nil
 }
 
-func (e *Executor) getDataUnit(options *sqlx.Options) (*expand.DataUnit, error) {
+func (e *HandlerExecutor) getDataUnit(options *sqlx.Options) (*expand.DataUnit, error) {
 	if (options.WithDb == nil && options.WithTx == nil) || options.WithConnector == e.route.View.Connector.Name {
 		return e.dataUnit, nil
 	}
@@ -175,15 +182,26 @@ func (e *Executor) getDataUnit(options *sqlx.Options) (*expand.DataUnit, error) 
 	return e.dataUnit, nil
 }
 
-func (e *Executor) Execute(ctx context.Context) error {
+func (e *HandlerExecutor) Execute(ctx context.Context) error {
 	if e.executed {
 		return nil
 	}
 
 	e.executed = true
+	service := executor.New()
+
+	var dbOptions []executor.DBOption
+	if e.tx != nil {
+		dbOptions = append(dbOptions, executor.WithTx(e.tx))
+	}
+
+	return service.ExecuteStmts(ctx, executor.NewViewDBSource(e.route.View), &SqlxIterator{toExecute: e.dataUnit.Statements.Executable}, dbOptions...)
+}
+
+func (e *HandlerExecutor) ExpandAndExecute(ctx context.Context) (*executor.Session, error) {
 	sess, err := e.Session(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	service := executor.New()
@@ -193,9 +211,31 @@ func (e *Executor) Execute(ctx context.Context) error {
 		dbOptions = append(dbOptions, executor.WithTx(e.tx))
 	}
 
-	return service.Exec(ctx, sess, dbOptions...)
+	return sess, service.Exec(ctx, sess, dbOptions...)
 }
 
-func (e *Executor) txStarted(tx *sql.Tx) {
+func (e *HandlerExecutor) txStarted(tx *sql.Tx) {
 	e.tx = tx
+}
+
+func (e *HandlerExecutor) redirect(ctx context.Context, route *http2.Route) (handler.Session, error) {
+	match, err := e.route.match(ctx, route)
+	if err != nil {
+		return nil, err
+	}
+
+	newExecutor := NewExecutor(match, e.request, nil, e.response)
+	return newExecutor.SessionHandlerService(ctx)
+}
+
+func (e *HandlerExecutor) newAsync() async2.Async {
+	return &AsyncHandler{
+		executor: e,
+	}
+}
+
+func (e *HandlerExecutor) newHttp() http2.Http {
+	return &Httper{
+		executor: e,
+	}
 }

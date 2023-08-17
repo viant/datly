@@ -3,17 +3,12 @@ package gateway
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/httputils"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/async"
 	"github.com/viant/datly/router/marshal/json"
-	"github.com/viant/datly/view"
-	"github.com/viant/sqlx/io"
-	"github.com/viant/sqlx/io/read"
-	"github.com/viant/sqlx/option"
+	httputils2 "github.com/viant/datly/utils/httputils"
+	async2 "github.com/viant/xdatly/handler/async"
 	"net/http"
-	"reflect"
-	"unsafe"
 )
 
 func NewJobRecords(URL string, jobIDParam string, routers []*router.Router, apiKeys []*router.APIKey, marshaller *json.Marshaller, match func(method, URL string, req *http.Request) (*Route, error)) *Route {
@@ -23,17 +18,17 @@ func NewJobRecords(URL string, jobIDParam string, routers []*router.Router, apiK
 			Method: http.MethodGet,
 		},
 		ApiKeys: apiKeys,
-		Handler: func(response http.ResponseWriter, req *http.Request, record *async.Record) {
+		Handler: func(response http.ResponseWriter, req *http.Request, record *async2.Job) {
 			ctx := context.Background()
 			records, err := findAllJobRecords(ctx, req, routers, URL, jobIDParam, match)
 			if err != nil {
-				httputils.WriteError(response, err)
+				httputils2.WriteError(response, err)
 				return
 			}
 
 			marshal, err := marshaller.Marshal(records)
 			if err != nil {
-				httputils.WriteError(response, httputils.NewHttpStatusError(http.StatusInternalServerError))
+				httputils2.WriteError(response, httputils2.NewHttpStatusError(http.StatusInternalServerError))
 				return
 			}
 
@@ -55,12 +50,12 @@ func findAllJobRecords(ctx context.Context, req *http.Request, routers []*router
 
 	switch len(route.Routes) {
 	case 0:
-		return nil, httputils.NewHttpMessageError(http.StatusNotFound, fmt.Errorf("not found view with URL %v and method %v", req.URL.Path, req.Method))
+		return nil, httputils2.NewHttpMessageError(http.StatusNotFound, fmt.Errorf("not found view with URL %v and method %v", req.URL.Path, req.Method))
 
 	case 1:
 		aRoute := route.Routes[0]
 		if aRoute.Async == nil {
-			return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, fmt.Errorf("not found async view"))
+			return nil, httputils2.NewHttpMessageError(http.StatusInternalServerError, fmt.Errorf("not found async view"))
 		}
 
 		aView := aRoute.View
@@ -70,28 +65,9 @@ func findAllJobRecords(ctx context.Context, req *http.Request, routers []*router
 			return nil, err
 		}
 
-		sliceType := aView.Schema.Slice()
-		slice := reflect.New(sliceType.Type)
-		appender := sliceType.Appender(unsafe.Pointer(slice.Pointer()))
-
-		reader, err := read.New(ctx, db, "SELECT * FROM "+job.DestinationTable, func() interface{} {
-			return appender.Add()
-		}, io.Resolve(io.NewResolver().Resolve), option.Tag(view.AsyncTagName))
-
-		if err != nil {
-			return nil, err
-		}
-
-		if err = reader.QueryAll(ctx, func(row interface{}) error {
-			return nil
-		}); err != nil {
-			return nil, err
-		}
-
-		return slice.Elem().Interface(), nil
-
+		return async.QueryAll(ctx, db, job, aView.Schema.Slice())
 	default:
-		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, fmt.Errorf("found more than one view with URL %v and method %v", req.URL.Path, req.Method))
+		return nil, httputils2.NewHttpMessageError(http.StatusInternalServerError, fmt.Errorf("found more than one view with URL %v and method %v", req.URL.Path, req.Method))
 	}
 
 }

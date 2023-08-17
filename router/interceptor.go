@@ -3,8 +3,8 @@ package router
 import (
 	"context"
 	"github.com/viant/afs"
-	"github.com/viant/datly/httputils"
 	"github.com/viant/datly/template/expand"
+	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/xreflect"
 	"net/http"
 	"path"

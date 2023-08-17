@@ -3,7 +3,7 @@ package gateway
 import (
 	"encoding/json"
 	"github.com/viant/datly/router"
-	"github.com/viant/datly/router/async"
+	async2 "github.com/viant/xdatly/handler/async"
 	"net/http"
 	"path"
 	"strings"
@@ -22,7 +22,7 @@ type (
 		ApiKeys       []*router.APIKey
 		Routes        []*router.Route
 		NewMultiRoute func(routes []*router.Route) *Route
-		Handler       func(response http.ResponseWriter, req *http.Request, record *async.Record)
+		Handler       func(response http.ResponseWriter, req *http.Request, record *async2.Job)
 	}
 
 	RouteMeta struct {
@@ -31,7 +31,7 @@ type (
 	}
 )
 
-func (r *Route) Handle(res http.ResponseWriter, req *http.Request, record *async.Record) {
+func (r *Route) Handle(res http.ResponseWriter, req *http.Request, record *async2.Job) {
 	if !r.CanHandle(req) {
 		write(res, http.StatusForbidden, nil)
 		return
@@ -63,7 +63,7 @@ func (r *Router) NewRouteHandler(aRouter *router.Router, route *router.Route) *R
 			URL:    URI,
 		},
 		Routes: []*router.Route{route},
-		Handler: func(r http.ResponseWriter, req *http.Request, record *async.Record) {
+		Handler: func(r http.ResponseWriter, req *http.Request, record *async2.Job) {
 			err := aRouter.HandleAsyncRoute(r, req, route, record)
 			if err != nil {
 				r.WriteHeader(http.StatusNotFound)

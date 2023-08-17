@@ -1,4 +1,4 @@
-package router
+package httputils
 
 import (
 	"bytes"
@@ -76,7 +76,7 @@ func (e *Errors) Error() string {
 	return e.Message
 }
 
-func (e *Errors) setStatus(code int) {
+func (e *Errors) SetStatus(code int) {
 	if code == 0 {
 		return
 	}

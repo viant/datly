@@ -6,6 +6,8 @@ import (
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/criteria"
+	"github.com/viant/datly/router/state"
+	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/structology"
@@ -66,7 +68,7 @@ func (e *JSONError) Error() string {
 
 func (b *paramStateBuilder) Build(ctx context.Context, viewsDetails []*ViewDetails, selectors *view.Selectors) error {
 	wg := sync.WaitGroup{}
-	errors := NewErrors()
+	errors := httputils.NewErrors()
 
 	var options []interface{}
 
@@ -87,12 +89,11 @@ func (b *paramStateBuilder) Build(ctx context.Context, viewsDetails []*ViewDetai
 				return
 			}
 			if param, err := b.buildSelectorParameters(ctx, &selector.Parameters, details, details.View.Template.Parameters, options...); err != nil {
-				asErrors, ok := err.(*Errors)
-
+				asErrors, ok := err.(*httputils.Errors)
 				if param.ErrorStatusCode != 0 {
-					errors.setStatus(param.ErrorStatusCode)
-				} else if ok && asErrors.status != http.StatusBadRequest {
-					errors.setStatus(asErrors.status)
+					errors.SetStatus(param.ErrorStatusCode)
+				} else if ok && asErrors.ErrorStatusCode() != http.StatusBadRequest {
+					errors.SetStatus(asErrors.ErrorStatusCode())
 				}
 
 				errors.AddError(details.View.Name, param.Name, err)
@@ -396,15 +397,15 @@ func (b *paramStateBuilder) fieldRawValue(ctx context.Context, details *ViewDeta
 	param := details.View.Selector.FieldsParam
 	paramValue, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil || paramValue == nil {
-		return "", ValuesSeparator, err
+		return "", state.ValuesSeparator, err
 	}
 
 	if actual, ok := paramValue.(string); ok {
-		separator := ValuesSeparator
+		separator := state.ValuesSeparator
 		return actual, separator, nil
 	}
 
-	return "", ValuesSeparator, typeMismatchError(param, paramValue)
+	return "", state.ValuesSeparator, typeMismatchError(param, paramValue)
 }
 
 func (b *paramStateBuilder) extractParamValue(ctx context.Context, param *view.Parameter, details *ViewDetails, selector *view.Selector) (interface{}, error) {
@@ -654,7 +655,7 @@ func (b *paramStateBuilder) viewParamValue(ctx context.Context, param *view.Para
 }
 
 func (b *paramStateBuilder) buildFields(aView *view.View, selector *view.Selector, fieldsQuery string, separator int32) error {
-	fieldIt := NewParamIt(fieldsQuery, separator)
+	fieldIt := state.NewParamIt(fieldsQuery, separator)
 	for fieldIt.Has() {
 		param, err := fieldIt.Next()
 		if err != nil {

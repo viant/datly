@@ -13,8 +13,9 @@ import (
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/auth/secret"
 	"github.com/viant/datly/cmd/env"
-	"github.com/viant/datly/router/async"
+	"github.com/viant/datly/utils/httputils"
 	pbuild "github.com/viant/pgo/build"
+	async2 "github.com/viant/xdatly/handler/async"
 	"sync/atomic"
 
 	"github.com/viant/datly/config"
@@ -126,6 +127,11 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 		return nil, err
 	}
 	syncTime := time.Duration(aConfig.SyncFrequencyMs) * time.Millisecond
+	mainRouter, err := NewRouter(map[string]*router.Router{}, aConfig, metrics, statusHandler, authorizer, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	srv := &Service{
 		metrics:            metrics,
 		configRegistry:     registry,
@@ -155,7 +161,7 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 			syncTime,
 		),
 		routersIndex:  map[string]*router.Router{},
-		mainRouter:    NewRouter(map[string]*router.Router{}, aConfig, metrics, statusHandler, authorizer, nil),
+		mainRouter:    mainRouter,
 		changeSession: NewSession(aConfig.ChangeDetection),
 		statusHandler: statusHandler,
 		authorizer:    authorizer,
@@ -287,7 +293,11 @@ func (r *Service) syncChangesIfNeeded(ctx context.Context, metrics *gmetric.Serv
 		fmt.Printf("[INFO] routers rebuild completed after: %s\n", time.Since(started))
 	}
 
-	mainRouter := NewRouter(routers, r.Config, metrics, statusHandler, authorizer, aRouterConfig.interceptors.AsSlice())
+	mainRouter, err := NewRouter(routers, r.Config, metrics, statusHandler, authorizer, aRouterConfig.interceptors.AsSlice())
+	if err != nil {
+		return err
+	}
+
 	r.mux.Lock()
 	r.mainRouter = mainRouter
 	r.routersIndex = routers
@@ -827,7 +837,7 @@ func (r *Service) LogInitTimeIfNeeded(start time.Time, writer http.ResponseWrite
 		return
 	}
 
-	writer.Header().Set(router.DatlyServiceInitHeader, time.Since(start).String())
+	writer.Header().Set(httputils.DatlyServiceInitHeader, time.Since(start).String())
 }
 
 func (r *Service) buildInterceptors(ctx context.Context, index *ExtIndex) (router.RouterInterceptors, error) {
@@ -871,7 +881,7 @@ func (r *Service) buildInterceptors(ctx context.Context, index *ExtIndex) (route
 	return interceptors, resultErr
 }
 
-func (r *Service) ServeHTTPAsync(writer http.ResponseWriter, request *http.Request, record *async.Record) {
+func (r *Service) ServeHTTPAsync(writer http.ResponseWriter, request *http.Request, record *async2.Job) {
 	aRouter, writer, ok := r.router(writer)
 	if !ok {
 		return

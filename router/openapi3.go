@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/router/openapi3"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox/format"
 	"net/http"
@@ -33,7 +34,7 @@ const (
 
 var (
 	timeType  = reflect.TypeOf(time.Time{})
-	errorType = reflect.TypeOf(Error{})
+	errorType = reflect.TypeOf(httputils.Error{})
 )
 
 type (

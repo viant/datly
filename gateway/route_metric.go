@@ -1,8 +1,8 @@
 package gateway
 
 import (
-	"github.com/viant/datly/router/async"
 	"github.com/viant/gmetric"
+	async2 "github.com/viant/xdatly/handler/async"
 	"net/http"
 )
 
@@ -12,7 +12,7 @@ func (r *Router) NewMetricRoute() *Route {
 			Method: http.MethodGet,
 			URL:    r.config.Meta.MetricURI,
 		},
-		Handler: func(response http.ResponseWriter, req *http.Request, _ *async.Record) {
+		Handler: func(response http.ResponseWriter, req *http.Request, _ *async2.Job) {
 			r.handleMetrics(response, req)
 		},
 	}
