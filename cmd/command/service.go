@@ -13,7 +13,6 @@ import (
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/translator"
 	"github.com/viant/pgo"
-	"github.com/viant/pgo/build"
 	"os"
 	"os/exec"
 )
@@ -107,7 +106,7 @@ func (s *Service) PrepareBuild(ctx context.Context, aBuild *options.Build) error
 		Compression: "gzip",
 		WithLogger:  true,
 		LdFlags:     flags,
-	}, build.WithLogger(nil))
+	})
 }
 
 func (s *Service) tidyModule(ctx context.Context, goModule string) error {
