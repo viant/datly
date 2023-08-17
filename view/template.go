@@ -341,7 +341,7 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 	var predicates []*expand.PredicateConfig
 	for _, p := range t.Parameters {
 		for _, predicate := range p.Predicates {
-			evaluator, err := cache.get(predicate, p, resource._predicates, t.PresenceSchema.Type())
+			evaluator, err := cache.get(predicate, p, resource._predicates, t.Schema.Type(), t.PresenceSchema.Type())
 			if err != nil {
 				return err
 			}
@@ -351,8 +351,8 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 				Context:       predicate.Context,
 				StateAccessor: p.accessValue,
 				HasAccessor:   p.accessHas,
-				Expander: func(c *expand.Context, i interface{}) (*parameter2.Criteria, error) {
-					evaluate, err := evaluator.Evaluate(c, i)
+				Expander: func(c *expand.Context, state, has, param interface{}) (*parameter2.Criteria, error) {
+					evaluate, err := evaluator.Evaluate(c, state, has, param)
 					if err != nil {
 						return nil, err
 					}

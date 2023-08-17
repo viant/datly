@@ -32,9 +32,15 @@ type (
 	EvaluatorOption func(c *config)
 )
 
-func WithCustomContexts(ctx ...*CustomContext) EvaluatorOption {
+func WithCustomContexts(ctx ...*Variable) EvaluatorOption {
 	return func(c *config) {
-		c.valueTypes = append(c.valueTypes, ctx...)
+		c.embededTypes = append(c.embededTypes, ctx...)
+	}
+}
+
+func WithVariable(namedVariable ...*NamedVariable) EvaluatorOption {
+	return func(c *config) {
+		c.namedVariables = append(c.namedVariables, namedVariable...)
 	}
 }
 
@@ -127,8 +133,14 @@ func NewEvaluator(template string, options ...EvaluatorOption) (*Evaluator, erro
 		return nil, err
 	}
 
-	for _, valueType := range aCofnig.valueTypes {
+	for _, valueType := range aCofnig.embededTypes {
 		if err = evaluator.planner.EmbedVariable(valueType.Type); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, variable := range aCofnig.namedVariables {
+		if err = evaluator.planner.DefineVariable(variable.Name, variable.Type); err != nil {
 			return nil, err
 		}
 	}
@@ -195,14 +207,17 @@ func (e *Evaluator) Evaluate(ctx *Context, options ...StateOption) (*State, erro
 		return nil, err
 	}
 
-	for _, customContext := range state.CustomContext {
-		actualType := reflect.TypeOf(customContext.Value)
-		if actualType != customContext.Type {
-			return nil, fmt.Errorf("type missmatch, wanted %v got %v", actualType.String(), customContext.Type.String())
-		}
-
+	for _, customContext := range state.EmbededVariables {
 		if customContext.Value != nil {
 			if err := state.State.EmbedValue(customContext.Value); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	for _, variable := range state.NamedVariables {
+		if variable.Value != nil {
+			if err := state.State.SetValue(variable.Name, variable.Value); err != nil {
 				return nil, err
 			}
 		}

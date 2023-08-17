@@ -11,9 +11,10 @@ type (
 	State struct {
 		*est.State
 		*Context
-		Parameters    interface{}
-		ParametersHas interface{}
-		CustomContext []*CustomContext
+		Parameters       interface{}
+		ParametersHas    interface{}
+		EmbededVariables []*Variable
+		NamedVariables   []*NamedVariable
 
 		Expanded string
 		flushed  bool
@@ -38,6 +39,12 @@ type (
 func WithViewParam(viewParam *MetaParam) StateOption {
 	return func(state *State) {
 		state.ViewParam = viewParam
+	}
+}
+
+func WithNamedVariables(variables ...*NamedVariable) StateOption {
+	return func(state *State) {
+		state.NamedVariables = append(state.NamedVariables, variables...)
 	}
 }
 
@@ -66,9 +73,9 @@ func WithDataUnit(dataUnit *DataUnit) StateOption {
 	}
 }
 
-func WithCustomContext(customContext *CustomContext) StateOption {
+func WithCustomContext(customContext *Variable) StateOption {
 	return func(state *State) {
-		state.CustomContext = append(state.CustomContext, customContext)
+		state.EmbededVariables = append(state.EmbededVariables, customContext)
 	}
 }
 

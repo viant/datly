@@ -90,8 +90,8 @@ func (t *Transform) Evaluate(cookies map[string]*http.Cookie, pathVariables map[
 	}, err
 }
 
-func (t *Transform) newCtx(ctx CustomContext) *expand.CustomContext {
-	result := &expand.CustomContext{
+func (t *Transform) newCtx(ctx CustomContext) *expand.Variable {
+	result := &expand.Variable{
 		Type:  ctxType,
 		Value: ctx,
 	}

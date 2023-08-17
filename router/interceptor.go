@@ -20,7 +20,7 @@ type (
 		Template    string
 		evaluator   *expand.Evaluator
 		lookupType  xreflect.LookupType
-		contextType *expand.CustomContext
+		contextType *expand.Variable
 		_url        string
 	}
 
@@ -104,8 +104,8 @@ func (i *RouteInterceptor) init(URL string) error {
 	return nil
 }
 
-func (i *RouteInterceptor) newContext(ctx InterceptorContext) *expand.CustomContext {
-	return &expand.CustomContext{
+func (i *RouteInterceptor) newContext(ctx InterceptorContext) *expand.Variable {
+	return &expand.Variable{
 		Type:  ContextType,
 		Value: ctx,
 	}

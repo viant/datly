@@ -21,7 +21,7 @@ type (
 		Context       int
 		StateAccessor func(state interface{}, statePtr unsafe.Pointer) (interface{}, error)
 		HasAccessor   func(has interface{}, hasPtr unsafe.Pointer) (bool, error)
-		Expander      func(*Context, interface{}) (*parameter.Criteria, error)
+		Expander      func(ctx *Context, state, has, param interface{}) (*parameter.Criteria, error)
 		Ensure        bool
 	}
 
@@ -140,7 +140,7 @@ func (p *Predicate) expand(ctx int, operator string) (string, error) {
 			return "", err
 		}
 
-		criteria, err := predicateConfig.Expander(p.ctx, value)
+		criteria, err := predicateConfig.Expander(p.ctx, p.state, p.has, value)
 		if err != nil {
 			return "", err
 		}
