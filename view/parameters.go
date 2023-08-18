@@ -22,7 +22,7 @@ type (
 	Parameter struct {
 		shared.Reference
 		Fields     Parameters
-		Group      []*Parameter `json:",omitempty"`
+		Group      Parameters `json:",omitempty"`
 		Predicates []*config.PredicateConfig
 		Name       string `json:",omitempty"`
 
@@ -369,11 +369,10 @@ func (p *Parameter) IsRequired() bool {
 
 func (p *Parameter) initSchema(resource Resourcelet) error {
 	if p.In.Kind == KindGroup {
-		rType, err := BuildTypeWithPresence(p.Group)
+		rType, err := p.Group.ReflectType("autogen", resource.LookupType(), true)
 		if err != nil {
 			return err
 		}
-
 		p.Schema = NewSchema(rType)
 		p._state = structology.NewStateType(p.Schema.Type())
 		p._state.NewState()
@@ -708,12 +707,12 @@ func (s Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 		param.Schema.Cardinality = schema.Cardinality
 		if rType != nil {
 			fields = append(fields, reflect.StructField{Name: param.Name, Type: rType, PkgPath: PkgPath(param.Name, pkgPath), Tag: reflect.StructTag(param.Tag)})
-			setMarkerFields = append(setMarkerFields, reflect.StructField{Name: param.Name, Type: boolType, PkgPath: PkgPath(param.Name, pkgPath)})
+			setMarkerFields = append(setMarkerFields, reflect.StructField{Name: param.Name, Type: boolType, PkgPath: PkgPath(param.Name, pkgPath), Tag: reflect.StructTag(param.Tag)})
 		}
 	}
 	if withSetMarker && len(fields) > 0 {
 		setMarkerType := reflect.StructOf(setMarkerFields)
-		fields = append(fields, reflect.StructField{Name: "Has", Type: setMarkerType, PkgPath: PkgPath("Has", pkgPath), Tag: `setMarker:"true" sqlx:"-" diff:"-"  `})
+		fields = append(fields, reflect.StructField{Name: "Has", Type: reflect.PtrTo(setMarkerType), PkgPath: PkgPath("Has", pkgPath), Tag: `setMarker:"true" sqlx:"-" diff:"-"  `})
 	}
 	if len(fields) == 0 {
 		return reflect.StructOf([]reflect.StructField{{Name: "Dummy", Type: reflect.TypeOf(true)}}), nil

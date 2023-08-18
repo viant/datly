@@ -154,23 +154,6 @@ func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resourc
 	return nil
 }
 
-func BuildType(parameters []*Parameter) (reflect.Type, error) {
-	return buildType(parameters, nil)
-}
-
-func BuildTypeWithPresence(parameters []*Parameter) (reflect.Type, error) {
-	presenceType, err := BuildPresenceType(parameters)
-	if err != nil {
-		return nil, err
-	}
-
-	return buildType(parameters, nil, reflect.StructField{
-		Name: "Has",
-		Type: reflect.PtrTo(presenceType),
-		Tag:  `sqlx:"-" setMarker:"true"`,
-	})
-}
-
 func buildType(parameters []*Parameter, paramType reflect.Type, fields ...reflect.StructField) (reflect.Type, error) {
 	builder := parameter.NewBuilder("")
 	for _, param := range parameters {
