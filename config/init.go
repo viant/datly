@@ -49,7 +49,7 @@ var Config = &Registry{
 		codec.WithFactory(CodecEncode, &EncodeFactory{}, time.Time{}),
 	),
 	Predicates: &PredicateRegistry{
-		registry: map[string]*predicate.Template{
+		registry: map[string]*Predicate{
 			PredicateEqual:       NewEqualPredicate(),
 			PredicateNotEqual:    NewNotEqualPredicate(),
 			PredicateNotIn:       NewNotInPredicate(),

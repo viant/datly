@@ -1,10 +1,12 @@
 package view
 
 import (
+	"context"
 	"fmt"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
@@ -28,6 +30,7 @@ type (
 		signature    map[int]*predicate.NamedArgument
 		state        *expand.NamedVariable
 		hasStateName *expand.NamedVariable
+		handler      codec.PredicateHandler
 	}
 
 	predicateEvaluator struct {
@@ -37,6 +40,23 @@ type (
 		hasValueState *expand.NamedVariable
 	}
 )
+
+func (e *predicateEvaluator) Compute(ctx context.Context, value interface{}) (*codec.Criteria, error) {
+	cuxtomCtx, ok := ctx.Value(expand.PredicateCtx).(*expand.Context)
+	if !ok {
+		panic("not found custom ctx")
+	}
+
+	state := ctx.Value(expand.PredicateState)
+	has := ctx.Value(expand.PredicateHas)
+
+	evaluate, err := e.Evaluate(cuxtomCtx, state, has, value)
+	if err != nil {
+		return nil, err
+	}
+
+	return &codec.Criteria{Query: evaluate.Buffer.String()}, nil
+}
 
 func (e *predicateEvaluator) Evaluate(ctx *expand.Context, state, hasState, paramValue interface{}) (*expand.State, error) {
 	return e.evaluator.Evaluate(ctx,
@@ -49,9 +69,9 @@ func (e *predicateEvaluator) Evaluate(ctx *expand.Context, state, hasState, para
 	)
 }
 
-func (c *predicateCache) get(predicateConfig *config.PredicateConfig, param *Parameter, registry *config.PredicateRegistry, stateType, presenceType reflect.Type) (*predicateEvaluator, error) {
+func (c *predicateCache) get(resource *Resource, predicateConfig *config.PredicateConfig, param *Parameter, registry *config.PredicateRegistry, stateType, presenceType reflect.Type) (codec.PredicateHandler, error) {
 	aKey := predicateKey{name: predicateConfig.Name, paramType: param.ActualParamType()}
-	var provider, err = c.getEvaluatorProvider(predicateConfig, param.ActualParamType(), registry, aKey, stateType, presenceType)
+	var provider, err = c.getEvaluatorProvider(resource, predicateConfig, param.ActualParamType(), registry, aKey, stateType, presenceType)
 	if err != nil {
 		return nil, err
 	}
@@ -59,14 +79,14 @@ func (c *predicateCache) get(predicateConfig *config.PredicateConfig, param *Par
 	return provider.new(predicateConfig)
 }
 
-func (c *predicateCache) getEvaluatorProvider(predicateConfig *config.PredicateConfig, param reflect.Type, registry *config.PredicateRegistry, aKey predicateKey, stateType reflect.Type, presenceType reflect.Type) (*predicateEvaluatorProvider, error) {
+func (c *predicateCache) getEvaluatorProvider(resource *Resource, predicateConfig *config.PredicateConfig, param reflect.Type, registry *config.PredicateRegistry, aKey predicateKey, stateType reflect.Type, presenceType reflect.Type) (*predicateEvaluatorProvider, error) {
 	value, ok := c.Map.Load(aKey)
 	if ok {
 		return value.(*predicateEvaluatorProvider), nil
 	}
 
 	p := &predicateEvaluatorProvider{}
-	err := p.init(predicateConfig, param, registry, stateType, presenceType)
+	err := p.init(resource, predicateConfig, param, registry, stateType, presenceType)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +95,11 @@ func (c *predicateCache) getEvaluatorProvider(predicateConfig *config.PredicateC
 	return p, nil
 }
 
-func (p *predicateEvaluatorProvider) new(predicateConfig *config.PredicateConfig) (*predicateEvaluator, error) {
+func (p *predicateEvaluatorProvider) new(predicateConfig *config.PredicateConfig) (codec.PredicateHandler, error) {
+	if p.handler != nil {
+		return p.handler, nil
+	}
+
 	dst := types.NewValue(p.ctxType)
 	dstPtr := xunsafe.AsPointer(dst)
 	for i, arg := range predicateConfig.Args {
@@ -99,15 +123,25 @@ func (p *predicateEvaluatorProvider) new(predicateConfig *config.PredicateConfig
 	}, nil
 }
 
-func (p *predicateEvaluatorProvider) init(predicateConfig *config.PredicateConfig, paramType reflect.Type, registry *config.PredicateRegistry, stateType reflect.Type, presenceType reflect.Type) error {
+func (p *predicateEvaluatorProvider) init(resource *Resource, predicateConfig *config.PredicateConfig, paramType reflect.Type, registry *config.PredicateRegistry, stateType reflect.Type, presenceType reflect.Type) error {
 	lookup, err := registry.Lookup(predicateConfig.Name)
 	if err != nil {
 		return err
 	}
 
+	if lookup.Handler != nil {
+		handler, err := lookup.Handler.New(resource.LookupType(), predicateConfig.Args...)
+		if err != nil {
+			return err
+		}
+
+		p.handler = handler
+		return nil
+	}
+
 	var ctxFields []reflect.StructField
 	argsIndexed := map[int]*predicate.NamedArgument{}
-	for _, arg := range lookup.Args {
+	for _, arg := range lookup.Template.Args {
 		ctxFields = append(ctxFields, newField("", arg.Name, xreflect.StringType))
 		argsIndexed[arg.Position] = arg
 	}
@@ -126,7 +160,7 @@ func (p *predicateEvaluatorProvider) init(predicateConfig *config.PredicateConfi
 		Name: "HasFilterValue",
 	}
 
-	evaluator, err := expand.NewEvaluator(lookup.Source,
+	evaluator, err := expand.NewEvaluator(lookup.Template.Source,
 		expand.WithParamSchema(stateType, presenceType),
 		expand.WithCustomContexts(&expand.Variable{Type: ctxType}),
 		expand.WithVariable(

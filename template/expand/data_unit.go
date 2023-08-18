@@ -7,7 +7,7 @@ import (
 	"github.com/viant/datly/executor/sequencer"
 	"github.com/viant/sqlx/io/validator"
 	"github.com/viant/toolbox"
-	"github.com/viant/xdatly/handler/parameter"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strings"
@@ -15,7 +15,7 @@ import (
 
 type (
 	DataUnit struct {
-		Columns     parameter.ColumnsSource
+		Columns     codec.ColumnsSource
 		ParamsGroup []interface{}
 		Mock        bool
 		TemplateSQL string

@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/xdatly/codec"
-	"github.com/viant/xdatly/handler/parameter"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
@@ -22,27 +21,27 @@ type (
 		template  string
 		codecType reflect.Type
 		evaluator *expand.Evaluator
-		columns   parameter.ColumnsSource
+		columns   codec.ColumnsSource
 	}
 )
 
 func (v *VeltyCodec) ResultType(paramType reflect.Type) (reflect.Type, error) {
-	return reflect.TypeOf(&parameter.Criteria{}), nil
+	return reflect.TypeOf(&codec.Criteria{}), nil
 }
 
 func (v *VeltyCriteriaFactory) New(codecConfig *codec.Config, options ...codec.Option) (codec.Instance, error) {
 	opts := NewOptions(codec.NewOptions(options))
 	columnsIndex := opts.ColumnsSource
-	codec := &VeltyCodec{
+	vCodec := &VeltyCodec{
 		template:  codecConfig.Body,
 		codecType: codecConfig.InputType,
 		columns:   columnsIndex,
 	}
-	if err := codec.init(); err != nil {
+	if err := vCodec.init(); err != nil {
 		return nil, err
 	}
 
-	return codec, nil
+	return vCodec, nil
 }
 
 func (v *VeltyCodec) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
@@ -70,23 +69,23 @@ func (v *VeltyCodec) Value(ctx context.Context, raw interface{}, options ...code
 		return nil, err
 	}
 
-	return &parameter.Criteria{
+	return &codec.Criteria{
 		Query: evaluated.Expanded,
 		Args:  evaluated.DataUnit.ParamsGroup,
 	}, nil
 }
 
-func NewCriteria(columns parameter.ColumnsSource) *expand.DataUnit {
+func NewCriteria(columns codec.ColumnsSource) *expand.DataUnit {
 	return &expand.DataUnit{
 		Columns: columns,
 	}
 }
 
-func (v *VeltyCodec) selector(options []interface{}) parameter.Selector {
-	var selector parameter.Selector
+func (v *VeltyCodec) selector(options []interface{}) codec.Selector {
+	var selector codec.Selector
 	for _, option := range options {
 		switch actual := option.(type) {
-		case parameter.Selector:
+		case codec.Selector:
 			selector = actual
 		}
 	}

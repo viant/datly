@@ -13,7 +13,6 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xdatly/codec"
-	"github.com/viant/xdatly/handler/parameter"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"os"
@@ -253,14 +252,14 @@ func (b *paramStateBuilder) populateCriteria(ctx context.Context, selector *view
 		selector.SetCriteria(sanitizedCriteria.Expression, sanitizedCriteria.Placeholders)
 		return nil
 
-	case *parameter.Criteria:
+	case *codec.Criteria:
 		if actual == nil {
 			return nil
 		}
 
 		selector.SetCriteria(actual.Query, actual.Args)
 		return nil
-	case parameter.Criteria:
+	case codec.Criteria:
 		selector.SetCriteria(actual.Query, actual.Args)
 		return nil
 	}
@@ -411,14 +410,14 @@ func (b *paramStateBuilder) fieldRawValue(ctx context.Context, details *ViewDeta
 func (b *paramStateBuilder) extractParamValue(ctx context.Context, param *view.Parameter, details *ViewDetails, selector *view.Selector) (interface{}, error) {
 	var options []interface{}
 	if selector != nil {
-		options = append(options, parameter.Selector(selector))
+		options = append(options, codec.Selector(selector))
 	}
 
 	if details != nil && details.View != nil {
-		options = append(options, parameter.ColumnsSource(details.View.IndexedColumns()))
+		options = append(options, codec.ColumnsSource(details.View.IndexedColumns()))
 	}
 
-	options = append(options, parameter.ValueGetter(b))
+	options = append(options, codec.ValueGetter(b))
 
 	return b.extractParamValueWithOptions(ctx, param, details.View, options...)
 }

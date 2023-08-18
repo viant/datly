@@ -1,11 +1,20 @@
 package expand
 
 import (
-	"github.com/viant/xdatly/handler/parameter"
+	"context"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xunsafe"
 	"strings"
 	"unsafe"
 )
+
+var PredicateState predicateState = "state"
+var PredicateHas predicateHas = "has"
+var PredicateCtx predicateCtx = "ctx"
+
+type predicateCtx string
+type predicateHas string
+type predicateState string
 
 type (
 	Predicate struct {
@@ -21,7 +30,7 @@ type (
 		Context       int
 		StateAccessor func(state interface{}, statePtr unsafe.Pointer) (interface{}, error)
 		HasAccessor   func(has interface{}, hasPtr unsafe.Pointer) (bool, error)
-		Expander      func(ctx *Context, state, has, param interface{}) (*parameter.Criteria, error)
+		Expander      codec.PredicateHandler
 		Ensure        bool
 	}
 
@@ -116,11 +125,17 @@ func (b *PredicateBuilder) Build(keyword string) string {
 	return " " + keyword + " " + b.output.String()
 }
 
-func (p *Predicate) expand(ctx int, operator string) (string, error) {
+func (p *Predicate) expand(ctxNum int, operator string) (string, error) {
 	result := &strings.Builder{}
+
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, PredicateCtx, p.ctx)
+	ctx = context.WithValue(ctx, PredicateState, p.state)
+	ctx = context.WithValue(ctx, PredicateHas, p.has)
+
 	var accArgs []interface{}
 	for _, predicateConfig := range p.config {
-		if predicateConfig.Context != ctx {
+		if predicateConfig.Context != ctxNum {
 			continue
 		}
 
@@ -140,7 +155,7 @@ func (p *Predicate) expand(ctx int, operator string) (string, error) {
 			return "", err
 		}
 
-		criteria, err := predicateConfig.Expander(p.ctx, p.state, p.has, value)
+		criteria, err := predicateConfig.Expander.Compute(ctx, value)
 		if err != nil {
 			return "", err
 		}

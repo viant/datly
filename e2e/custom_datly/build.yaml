@@ -28,7 +28,7 @@ pipeline:
         - cd $appPath/cmd/datly
         - go build -tags debug
         - cp datly /tmp/datly
-        - /tmp/datly initExt -p='${appPath}/e2e/custom_datly/.extension' -n=datly_ext -r=github.com/viant
+        - /tmp/datly initExt -p='${appPath}/e2e/custom_datly/.extension' -n=datly_ext -g=github.com/viant
 
     copyDatly:
       action: exec:run

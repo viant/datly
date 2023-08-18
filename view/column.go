@@ -8,7 +8,7 @@ import (
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/toolbox/format"
-	"github.com/viant/xdatly/handler/parameter"
+	"github.com/viant/xdatly/codec"
 	"reflect"
 	"strings"
 )
@@ -181,7 +181,7 @@ func (c NamedColumns) ColumnName(key string) (string, error) {
 	return lookup.Name, nil
 }
 
-func (c NamedColumns) Column(name string) (parameter.Column, bool) {
+func (c NamedColumns) Column(name string) (codec.Column, bool) {
 	lookup, err := c.Lookup(name)
 	if err != nil {
 		return nil, false

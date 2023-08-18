@@ -2,7 +2,7 @@ package predicate
 
 import (
 	"github.com/viant/velty"
-	"github.com/viant/xdatly/handler/parameter"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -18,7 +18,7 @@ type (
 
 var stringType = reflect.TypeOf("")
 
-func (p *Evaluator) Expand(value interface{}) (*parameter.Criteria, error) {
+func (p *Evaluator) Expand(value interface{}) (*codec.Criteria, error) {
 	planner := velty.New()
 	if err := planner.DefineVariable("FilterValue", stringType); err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func (p *Evaluator) Expand(value interface{}) (*parameter.Criteria, error) {
 	if err := exec.Exec(state); err != nil {
 		return nil, err
 	}
-	return &parameter.Criteria{Query: state.Buffer.String(), Args: values}, nil
+	return &codec.Criteria{Query: state.Buffer.String(), Args: values}, nil
 }
 
 func NewEvaluator(template *predicate.Template, args ...string) *Evaluator {

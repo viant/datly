@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
-	"github.com/viant/xdatly/handler/parameter"
+	"github.com/viant/xdatly/codec"
 	"reflect"
 	"strings"
 )
@@ -159,7 +159,7 @@ func (c *Config) ensureConstraints(resource *Resource) error {
 }
 
 func (c *Config) initCustomParams(ctx context.Context, resource *Resource, parent *View) error {
-	if err := c.initParamIfNeeded(ctx, c.CriteriaParam, resource, parent, stringType, reflect.TypeOf(&parameter.Criteria{}), reflect.TypeOf(parameter.Criteria{})); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.CriteriaParam, resource, parent, stringType, reflect.TypeOf(&codec.Criteria{}), reflect.TypeOf(codec.Criteria{})); err != nil {
 		return err
 	}
 

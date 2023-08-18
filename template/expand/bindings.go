@@ -103,7 +103,7 @@ func (b *BindingsCache) extractCriteriaColumns(elem reflect.Type) ([]*CriteriaCo
 			return nil, err
 		}
 
-		if aColumn != nil {
+		if aColumn != nil && aColumn.Name != "" {
 			columns = append(columns, aColumn)
 		}
 	}

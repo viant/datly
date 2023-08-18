@@ -12,7 +12,6 @@ import (
 	"github.com/viant/structology"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty"
-	parameter2 "github.com/viant/xdatly/handler/parameter"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -341,7 +340,7 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 	var predicates []*expand.PredicateConfig
 	for _, p := range t.Parameters {
 		for _, predicate := range p.Predicates {
-			evaluator, err := cache.get(predicate, p, resource._predicates, t.Schema.Type(), t.PresenceSchema.Type())
+			evaluator, err := cache.get(resource, predicate, p, resource._predicates, t.Schema.Type(), t.PresenceSchema.Type())
 			if err != nil {
 				return err
 			}
@@ -351,14 +350,7 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 				Context:       predicate.Context,
 				StateAccessor: p.accessValue,
 				HasAccessor:   p.accessHas,
-				Expander: func(c *expand.Context, state, has, param interface{}) (*parameter2.Criteria, error) {
-					evaluate, err := evaluator.Evaluate(c, state, has, param)
-					if err != nil {
-						return nil, err
-					}
-
-					return &parameter2.Criteria{Query: evaluate.Buffer.String()}, nil
-				},
+				Expander:      evaluator,
 			})
 		}
 	}

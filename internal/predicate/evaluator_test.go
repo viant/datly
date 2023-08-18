@@ -2,7 +2,7 @@ package predicate
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/viant/xdatly/handler/parameter"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/predicate"
 	"testing"
 )
@@ -14,7 +14,7 @@ func TestEvaluator_Expand(t *testing.T) {
 		template    *predicate.Template
 		value       interface{}
 		args        []string
-		expected    *parameter.Criteria
+		expected    *codec.Criteria
 	}{
 		{
 			description: "single value expand - no args",
@@ -24,7 +24,7 @@ func TestEvaluator_Expand(t *testing.T) {
 				Args:   []*predicate.NamedArgument{},
 			},
 			value: "Adam",
-			expected: &parameter.Criteria{
+			expected: &codec.Criteria{
 				Query: "NAME = ?",
 				Args:  []interface{}{"Adam"},
 			},
@@ -43,7 +43,7 @@ func TestEvaluator_Expand(t *testing.T) {
 			},
 			args:  []string{"active"},
 			value: true,
-			expected: &parameter.Criteria{
+			expected: &codec.Criteria{
 				Query: "active = ?",
 				Args:  []interface{}{true},
 			},
@@ -62,7 +62,7 @@ func TestEvaluator_Expand(t *testing.T) {
 			},
 			args:  []string{"id"},
 			value: []int{1, 10, 100},
-			expected: &parameter.Criteria{
+			expected: &codec.Criteria{
 				Query: "id IN(?,?,?)",
 				Args:  []interface{}{1, 10, 100},
 			},

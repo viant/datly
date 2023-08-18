@@ -45,7 +45,7 @@ func (s *Service) RunInitExtension(ctx context.Context, init *options.Extension)
 		//	}
 	} else {
 		fmt.Printf("generating %v ...\n", pkgDest)
-		if err = s.generatePackage(ctx, pkgDest, init); err == nil {
+		if err = s.generatePackage(ctx, pkgDest, init); err != nil {
 			return fmt.Errorf("failed to generate package: %w", err)
 		}
 	}

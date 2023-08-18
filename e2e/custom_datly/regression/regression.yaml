@@ -41,10 +41,11 @@ pipeline:
     target: '$target'
     checkError: true
     commands:
-      - cd ${appPath}/e2e/custom_datly/.extension/.build/ext
-      - go mod tidy
       - cd ${appPath}/e2e/custom_datly/.extension/pkg
-      - go get github.com/viant/xdatly/handler@2820373
+      - go get github.com/viant/xdatly@f29cae0
+      - go get github.com/viant/xdatly/handler@f29cae0
+      - go mod tidy
+      - cd ${appPath}/e2e/custom_datly/.extension/.build/ext
       - go mod tidy
       - cd $appPath/e2e/custom_datly/.extension/.build/datly
       - go mod edit -replace github.com/viant/xdatly/extension=${appPath}/e2e/custom_datly/.extension/.build/ext
@@ -53,10 +54,6 @@ pipeline:
       - /tmp/datly build -p='${appPath}/e2e/custom_datly/.extension' -d='${appPath}/e2e/custom_datly/.extension'  -r=standalone -o=darwin -a=amd64 -v=1.20.5 -f='' -b='-trimpath'
       - mv ${appPath}/e2e/custom_datly/.extension/main ${appPath}/e2e/custom_datly/.extension/datly
       - chmod u+x ${appPath}/e2e/custom_datly/.extension/datly
-
-
-
-
 
   setGeneratePluginsState:
     action: nop

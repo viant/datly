@@ -3,7 +3,7 @@ package boos
 import (
 	"context"
 	"fmt"
-	"github.com/viant/xdatly/handler/parameter"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/types/core"
 	"github.com/viant/xdatly/types/custom/checksum"
 	"net/http"
@@ -20,7 +20,7 @@ func init() {
 type BoosQueryBuilder struct {
 }
 
-func (b *BoosQueryBuilder) BuildCriteria(ctx context.Context, value interface{}, options *parameter.Options) (*parameter.Criteria, error) {
+func (b *BoosQueryBuilder) BuildCriteria(ctx context.Context, value interface{}, options *codec.CriteriaBuilderOptions) (*codec.Criteria, error) {
 	asRequest, ok := value.(*http.Request)
 	if !ok {
 		return nil, fmt.Errorf("expected value to be type of %T but was %T", asRequest, value)
@@ -51,7 +51,7 @@ func (b *BoosQueryBuilder) BuildCriteria(ctx context.Context, value interface{},
 		args = append(args, paramValue[0])
 	}
 
-	return &parameter.Criteria{
+	return &codec.Criteria{
 		Query: query.String(),
 		Args:  args,
 	}, nil

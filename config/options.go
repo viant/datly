@@ -2,15 +2,14 @@ package config
 
 import (
 	"github.com/viant/xdatly/codec"
-	"github.com/viant/xdatly/handler/parameter"
 	"github.com/viant/xreflect"
 )
 
 // Options represents internal codec option
 type Options struct {
 	xreflect.LookupType
-	parameter.ColumnsSource
-	parameter.Selector
+	codec.ColumnsSource
+	codec.Selector
 	*ParentValue
 }
 
@@ -21,9 +20,9 @@ func NewOptions(opts *codec.Options) *Options {
 		switch actual := option.(type) {
 		case xreflect.LookupType:
 			ret.LookupType = actual
-		case parameter.ColumnsSource:
+		case codec.ColumnsSource:
 			ret.ColumnsSource = actual
-		case parameter.Selector:
+		case codec.Selector:
 			ret.Selector = actual
 		case *ParentValue:
 			ret.ParentValue = actual

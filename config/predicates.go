@@ -2,7 +2,10 @@ package config
 
 import (
 	"fmt"
+	"github.com/viant/datly/utils/types"
+	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/predicate"
+	"github.com/viant/xreflect"
 	"sync"
 )
 
@@ -16,14 +19,23 @@ const (
 	PredicateLessOrEqual = "less_or_equal"
 	PredicateLike        = "like"
 	PredicateNotLike     = "not_like"
+	PredicateHandler     = "handler"
 )
 
 type (
 	PredicateRegistry struct {
 		sync.Mutex
 		parent   *PredicateRegistry
-		registry map[string]*predicate.Template
+		registry map[string]*Predicate
 	}
+
+	Predicate struct {
+		Template *predicate.Template
+		Handler  *PredicateHandlerFactory
+	}
+
+	PredicateHandlerFactory struct{}
+
 	PredicateConfig struct {
 		Parent  string
 		Name    string
@@ -38,7 +50,7 @@ type (
 	}
 )
 
-func (r *PredicateRegistry) Lookup(name string) (*predicate.Template, error) {
+func (r *PredicateRegistry) Lookup(name string) (*Predicate, error) {
 	result, ok := r.registry[name]
 	if ok {
 		return result, nil
@@ -58,45 +70,47 @@ func (r *PredicateRegistry) Scope() *PredicateRegistry {
 }
 
 func (r *PredicateRegistry) Add(template *predicate.Template) {
-	r.registry[template.Name] = template
+	r.registry[template.Name] = &Predicate{
+		Template: template,
+	}
 }
 
 func NewPredicates() *PredicateRegistry {
 	return &PredicateRegistry{
 		parent:   nil,
-		registry: map[string]*predicate.Template{},
+		registry: map[string]*Predicate{},
 	}
 }
 
-func NewEqualPredicate() *predicate.Template {
+func NewEqualPredicate() *Predicate {
 	return binaryPredicate(PredicateEqual, "=")
 }
 
-func NewLessOrEqualPredicate() *predicate.Template {
+func NewLessOrEqualPredicate() *Predicate {
 	return binaryPredicate(PredicateLessOrEqual, "<=")
 }
 
-func NewNotEqualPredicate() *predicate.Template {
+func NewNotEqualPredicate() *Predicate {
 	return binaryPredicate(PredicateNotEqual, "!=")
 }
 
-func NewInPredicate() *predicate.Template {
+func NewInPredicate() *Predicate {
 	return newInPredicate(PredicateIn, true, false)
 }
 
-func NewMultiInPredicate() *predicate.Template {
+func NewMultiInPredicate() *Predicate {
 	return newInPredicate(PredicateIn, true, true)
 }
 
-func NewMultiNotInPredicate() *predicate.Template {
+func NewMultiNotInPredicate() *Predicate {
 	return newInPredicate(PredicateIn, false, true)
 }
 
-func NewNotInPredicate() *predicate.Template {
+func NewNotInPredicate() *Predicate {
 	return newInPredicate(PredicateNotIn, false, false)
 }
 
-func newInPredicate(name string, equal bool, multi bool) *predicate.Template {
+func newInPredicate(name string, equal bool, multi bool) *Predicate {
 	args := []*predicate.NamedArgument{
 		{
 			Name:     "Alias",
@@ -119,22 +133,24 @@ func newInPredicate(name string, equal bool, multi bool) *predicate.Template {
 		in = fmt.Sprintf(`$criteria.NotIn(%v, $FilterValue)`, column)
 	}
 
-	return &predicate.Template{
-		Name:   name,
-		Source: " " + in,
-		Args:   args,
+	return &Predicate{
+		Template: &predicate.Template{
+			Name:   name,
+			Source: " " + in,
+			Args:   args,
+		},
 	}
 }
 
-func NewLikePredicate() *predicate.Template {
+func NewLikePredicate() *Predicate {
 	return newLikePredicate(PredicateLike, true)
 }
 
-func NewNotLikePredicate() *predicate.Template {
+func NewNotLikePredicate() *Predicate {
 	return newLikePredicate(PredicateNotLike, false)
 }
 
-func newLikePredicate(name string, inclusive bool) *predicate.Template {
+func newLikePredicate(name string, inclusive bool) *Predicate {
 	args := []*predicate.NamedArgument{
 		{
 			Name:     "Alias",
@@ -150,26 +166,51 @@ func newLikePredicate(name string, inclusive bool) *predicate.Template {
 	if !inclusive {
 		criteria = fmt.Sprintf(`$criteria.NotLike(%v, $FilterValue)`, column)
 	}
-	return &predicate.Template{
-		Name:   name,
-		Source: " " + criteria,
-		Args:   args,
+	return &Predicate{
+		Template: &predicate.Template{
+			Name:   name,
+			Source: " " + criteria,
+			Args:   args,
+		},
 	}
 }
 
-func binaryPredicate(name, operator string) *predicate.Template {
-	return &predicate.Template{
-		Name:   name,
-		Source: " ${Alias}.${ColumnName} " + operator + " $criteria.AppendBinding($FilterValue)",
-		Args: []*predicate.NamedArgument{
-			{
-				Name:     "Alias",
-				Position: 0,
-			},
-			{
-				Name:     "ColumnName",
-				Position: 1,
+func binaryPredicate(name, operator string) *Predicate {
+	return &Predicate{
+		Template: &predicate.Template{
+			Name:   name,
+			Source: " ${Alias}.${ColumnName} " + operator + " $criteria.AppendBinding($FilterValue)",
+			Args: []*predicate.NamedArgument{
+				{
+					Name:     "Alias",
+					Position: 0,
+				},
+				{
+					Name:     "ColumnName",
+					Position: 1,
+				},
 			},
 		},
+		Handler: nil,
 	}
+}
+
+func (p *PredicateHandlerFactory) New(lookupType xreflect.LookupType, args ...string) (codec.PredicateHandler, error) {
+	if len(args) < 1 {
+		return nil, NotEnoughParametersError(args, PredicateHandler, 1)
+	}
+
+	predicateType := args[0]
+	handlerType, err := types.LookupType(lookupType, predicateType)
+	if err != nil {
+		return nil, err
+	}
+
+	value := types.NewValue(handlerType)
+	valueHandler, ok := value.(codec.PredicateHandler)
+	if !ok {
+		return nil, fmt.Errorf("%T doesn't implement PredicateHandler", value)
+	}
+
+	return valueHandler, nil
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/xdatly/codec"
-	"github.com/viant/xdatly/handler/parameter"
 	"reflect"
 )
 
@@ -17,7 +16,7 @@ type (
 
 	CriteriaBuilder struct {
 		receiverType  reflect.Type
-		columnsSource parameter.ColumnsSource
+		columnsSource codec.ColumnsSource
 	}
 )
 
@@ -33,7 +32,7 @@ func (c *CriteriaBuilderFactory) New(codecConfig *codec.Config, options ...codec
 	if err != nil {
 		panic(err)
 	}
-	_, ok := types.NewValue(lookupType).(parameter.CriteriaBuilder)
+	_, ok := types.NewValue(lookupType).(codec.CriteriaBuilder)
 	if !ok {
 		panic(fmt.Sprintf("expected %v to implement parameter.Criteria builder", handlerType))
 	}
@@ -45,39 +44,47 @@ func (c *CriteriaBuilderFactory) New(codecConfig *codec.Config, options ...codec
 }
 
 func (c *CriteriaBuilder) ResultType(paramType reflect.Type) (reflect.Type, error) {
-	return reflect.TypeOf(&parameter.Criteria{}), nil
+	return reflect.TypeOf(&codec.Criteria{}), nil
 }
 
 func ValidateArgs(codecConfig *codec.Config, expectedLen int, codecName string) error {
 	if len(codecConfig.Args) != expectedLen {
-		return fmt.Errorf("expected %v to receive %v argument(s) but got %v", codecName, expectedLen, len(codecConfig.Args))
+		return UnexpectedArgsLenError(codecConfig.Args, expectedLen, codecName)
 	}
 
 	return nil
+}
+
+func UnexpectedArgsLenError(got []string, expectedLen int, codecName string) error {
+	return fmt.Errorf("expected %v to receive %v argument(s) but got %v", codecName, expectedLen, len(got))
 }
 
 func ValidateMinArgs(config *codec.Config, name string, minLen int) error {
 	if len(config.Args) < minLen {
-		return fmt.Errorf("expected %v to receive %v argument(s) but got %v", name, minLen, len(config.Args))
+		return NotEnoughParametersError(config.Args, name, minLen)
 	}
 
 	return nil
 }
 
+func NotEnoughParametersError(got []string, name string, minLen int) error {
+	return fmt.Errorf("expected %v to receive at least %v argument(s) but got %v", name, minLen, len(got))
+}
+
 func (c *CriteriaBuilder) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
-	var valueGetter parameter.ValueGetter
-	var selector parameter.Selector
+	var valueGetter codec.ValueGetter
+	var selector codec.Selector
 	columnsSource := c.columnsSource
 
 	opts := codec.NewOptions(options)
 
 	for _, option := range opts.Options {
 		switch actual := option.(type) {
-		case parameter.ValueGetter:
+		case codec.ValueGetter:
 			valueGetter = actual
-		case parameter.Selector:
+		case codec.Selector:
 			selector = actual
-		case parameter.ColumnsSource:
+		case codec.ColumnsSource:
 			columnsSource = columnsSource
 		}
 	}
@@ -87,9 +94,9 @@ func (c *CriteriaBuilder) Value(ctx context.Context, raw interface{}, options ..
 	}
 
 	value := types.NewValue(c.receiverType)
-	builder := value.(parameter.CriteriaBuilder)
+	builder := value.(codec.CriteriaBuilder)
 
-	criteria, err := builder.BuildCriteria(ctx, raw, &parameter.Options{
+	criteria, err := builder.BuildCriteria(ctx, raw, &codec.CriteriaBuilderOptions{
 		Columns:    columnsSource,
 		Parameters: valueGetter,
 		Selector:   selector,
