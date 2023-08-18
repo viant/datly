@@ -101,7 +101,8 @@ func (s *Service) updateModule(ctx context.Context, gen *options.Generate, info 
 				return err
 			}
 		}
-		info.UpdateTypesCorePackage(url.Join(gen.GoModuleLocation(), gen.Package()))
+		info.UpdateDependencies(url.Join(gen.GoModuleLocation(), gen.Package()))
+
 	default:
 		if ok, _ := s.fs.Exists(ctx, url.Join(gen.GoModuleLocation(), "go.mod")); ok {
 			if err := s.tidyModule(ctx, gen.GoModuleLocation()); err != nil {

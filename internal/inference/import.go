@@ -98,7 +98,7 @@ func (i *Imports) DefaultPackageImports() string {
 		return ""
 	}
 	builder := strings.Builder{}
-	builder.WriteString("\nimport (")
+	builder.WriteString("\nimport (\n")
 	for _, item := range i.Packages {
 		builder.WriteString("\t_\t\"")
 		builder.WriteString(item)

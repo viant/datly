@@ -105,6 +105,9 @@ func (t *types) discoverWithContext() {
 		if index := strings.Index(name, "Unsafe."); index != -1 {
 			name = name[:index]
 		}
+		if index := strings.Index(name, "Has."); index != -1 {
+			name = name[:index]
+		}
 		if strings.Count(name, "$") > 0 {
 			continue
 		}

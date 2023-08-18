@@ -13,8 +13,10 @@ import (
 )
 
 const (
-	customModule        = "github.com/viant/xdatly/types/custom"
-	typesCorePkg        = "github.com/viant/xdatly/types/core"
+	customModule = "github.com/viant/xdatly/types/custom"
+	typesCorePkg = "github.com/viant/xdatly/types/core"
+	codecPkg     = "github.com/viant/xdatly/codec"
+
 	dependencyDirectory = "dependency"
 	checksumDirectory   = "checksum"
 	pluginDirectory     = "plugin"
@@ -38,6 +40,7 @@ type (
 		Mod                 *modfile.File
 		NonStandardPackages Packages
 		CustomTypesPackages Packages
+		CustomCodecPackages Packages
 		IntegrationMode     Mode
 		HasMethod           bool
 	}
@@ -64,6 +67,7 @@ func (i *Info) init(ctx context.Context) error {
 	if err := i.tryLoadModFile(); err != nil {
 		return err
 	}
+
 	if err := i.detectDependencies(ctx); err != nil {
 		return err
 	}
@@ -142,27 +146,26 @@ func (i *Info) detectGoModDependencies() {
 
 func (i *Info) detectCustomTypes(ctx context.Context, URL string) error {
 	location := url.Path(URL)
-	return getPackage().scanPackage(ctx, location, func(ctx context.Context, pkgs []*packages.Package) (bool, error) {
-		if len(pkgs) == 0 {
+	return getPackage().scanPackage(ctx, location, func(ctx context.Context, pkg *packages.Package) (bool, error) {
+		if pkg == nil || pkg.ID == "" {
 			return true, nil
 		}
-		if len(pkgs[0].Errors) > 0 {
-			return true, nil
-		}
-		if len(pkgs[0].Imports) > 0 {
-			i.addTypesCorePackage(pkgs[0])
+		if len(pkg.Imports) > 0 {
+			i.addTypesCorePackage(pkg)
+			i.addCodecPackage(pkg)
 		}
 		return true, nil
 	})
 }
 
-func (i *Info) UpdateTypesCorePackage(URL string) {
+func (i *Info) UpdateDependencies(URL string) {
 	dir := url.Path(URL)
 	pkgs, _ := packages.Load(&packages.Config{Mode: packages.NeedModule | packages.NeedImports, Dir: dir}, "")
 	if len(pkgs) == 0 {
 		return
 	}
 	i.addTypesCorePackage(pkgs[0])
+	i.addCodecPackage(pkgs[0])
 }
 
 func (i *Info) addTypesCorePackage(pkg *packages.Package) {
@@ -185,6 +188,12 @@ func (i *Info) detectLocalMethods(ctx context.Context) {
 			i.HasMethod = true
 			return
 		}
+	}
+}
+
+func (i *Info) addCodecPackage(pkg *packages.Package) {
+	if _, ok := pkg.Imports[codecPkg]; ok {
+		i.CustomCodecPackages.Append(pkg)
 	}
 }
 

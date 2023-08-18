@@ -1,7 +1,7 @@
 package parser
 
 import (
-	matchers2 "github.com/viant/datly/internal/translator/parser/matchers"
+	imatchers "github.com/viant/datly/internal/translator/parser/matchers"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/parsly"
 	"github.com/viant/parsly/matcher"
@@ -53,27 +53,28 @@ const (
 	intoToken
 
 	valuesToken
+	IfBlockToken
 )
 
 var whitespaceMatcher = parsly.NewToken(whitespaceToken, "Whitespace", matcher.NewWhiteSpace())
 var exprGroupMatcher = parsly.NewToken(exprGroupToken, "( .... )", matcher.NewBlock('(', ')', '\\'))
-var setTerminatedMatcher = parsly.NewToken(setTerminatedToken, "#set", matchers2.NewStringTerminator("#set"))
+var setTerminatedMatcher = parsly.NewToken(setTerminatedToken, "#set", imatchers.NewStringTerminator("#set"))
 var setMatcher = parsly.NewToken(setToken, "#set", matcher.NewFragments([]byte("#set")))
 var parameterDeclarationMatcher = parsly.NewToken(parameterDeclarationToken, "$_", matcher.NewSpacedSet([]string{"$_ = $"}))
 var commentMatcher = parsly.NewToken(commentToken, "/**/", matcher.NewSeqBlock("/*", "*/"))
 var typeMatcher = parsly.NewToken(typeToken, "<T>", matcher.NewSeqBlock("<", ">"))
 var dotMatcher = parsly.NewToken(dotToken, "call", matcher.NewByte('.'))
-var selectMatcher = parsly.NewToken(selectToken, "Function call", matchers2.NewIdentity())
+var selectMatcher = parsly.NewToken(selectToken, "Function call", imatchers.NewIdentity())
 
 var execStmtMatcher = parsly.NewToken(execStmtToken, "Exec statement", matcher.NewFragmentsFold([]byte("insert"), []byte("update"), []byte("delete"), []byte("call"), []byte("begin")))
 var readStmtMatcher = parsly.NewToken(readStmtToken, "Select statement", matcher.NewFragmentsFold([]byte("select")))
 var exprMatcher = parsly.NewToken(exprToken, "Expression", matcher.NewFragments([]byte("#set"), []byte("#foreach"), []byte("#if")))
-var anyMatcher = parsly.NewToken(anyToken, "Any", matchers2.NewAny())
+var anyMatcher = parsly.NewToken(anyToken, "Any", imatchers.NewAny())
 var exprEndMatcher = parsly.NewToken(exprEndToken, "#end", matcher.NewFragmentsFold([]byte("#end")))
 
 var selectorStartMatcher = parsly.NewToken(selectorStartToken, "Selector start", matcher.NewByte('$'))
 
-var fullWordMatcher = parsly.NewToken(wordToken, "Word", matchers2.NewWordMatcher(true))
+var fullWordMatcher = parsly.NewToken(wordToken, "Word", imatchers.NewWordMatcher(true))
 
 var commentBlockMatcher = parsly.NewToken(commentBlockToken, "Comment", matcher.NewSeqBlock("/*", "*/"))
 
@@ -100,7 +101,7 @@ var singleQuoteStringMatcher = parsly.NewToken(stringToken, "String", matcher.Ne
 var doubleQuoteStringMatcher = parsly.NewToken(stringToken, "String", matcher.NewBlock('"', '"', '\\'))
 var backtickQuoteStringMatcher = parsly.NewToken(stringToken, "String", matcher.NewBlock('`', '`', '\\'))
 
-var selectorMatcher = parsly.NewToken(selectorToken, "selector", matchers2.NewSelector())
+var selectorMatcher = parsly.NewToken(selectorToken, "selector", imatchers.NewSelector())
 
 var insertMatcher = parsly.NewToken(insertToken, "insert", matcher.NewFragmentsFold([]byte("insert")))
 var intoMatcher = parsly.NewToken(intoToken, "into", matcher.NewFragmentsFold([]byte("into")))
@@ -114,6 +115,8 @@ var aliasKeywordMatcher = parsly.NewToken(aliasKeywordToken, "as", matcher.NewFr
 var singleQuotedMatcher = parsly.NewToken(singleQuotedToken, "single quoted block", matcher.NewQuote('\'', '\''))
 
 var comaTerminatedMatcher = parsly.NewToken(comaTerminatedToken, "arg", matcher.NewTerminator(',', true))
+
+var IfBlockMatcher = parsly.NewToken(IfBlockToken, "if block", imatchers.NewIfBlock())
 
 func nextWhitespace(cursor *parsly.Cursor) bool {
 	beforeMatch := cursor.Pos

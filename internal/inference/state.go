@@ -222,7 +222,11 @@ func expandPredicateExpr(query string) string {
 	match := query[indexStart:]
 	indexEnd := strings.Index(match, "}")
 	match = match[:indexEnd+1]
-	return strings.Replace(query, match, "  ", 1)
+	query = strings.Replace(query, match, "  ", 1)
+	if !strings.Contains(query, "${predicate.") {
+		return query
+	}
+	return expandPredicateExpr(query)
 }
 
 // DsqlParameterDeclaration returns dsql parameter declaration

@@ -14,7 +14,9 @@ import (
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/view"
+	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
+	"github.com/viant/sqlparser/query"
 	async2 "github.com/viant/xdatly/handler/async"
 	"path"
 	"reflect"
@@ -44,7 +46,7 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 		return err
 	}
 
-	dSQL = rule.NormalizeSQL(dSQL)
+	dSQL = rule.NormalizeSQL(dSQL, handleVeltyExpression)
 	if resource.IsExec() || resource.Rule.Handler != nil {
 		if err := s.translateExecutorDSQL(ctx, resource, dSQL); err != nil {
 			return err
@@ -107,7 +109,7 @@ func (s *Service) buildExecutorView(ctx context.Context, resource *Resource, DSQ
 }
 
 func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, dSQL string) error {
-	query, err := sqlparser.ParseQuery(dSQL)
+	query, err := sqlparser.ParseQuery(dSQL, handleVeltyExpression())
 	if err != nil {
 		return err
 	}
@@ -130,6 +132,22 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	return nil
 }
 
+func handleVeltyExpression() sqlparser.Option {
+	return sqlparser.WithErrorHandler(func(err error, cur *parsly.Cursor, destNode interface{}) error {
+		fromNode, ok := destNode.(*query.From)
+		if !ok {
+			return err
+		}
+		match := cur.MatchOne(parser.IfBlockMatcher)
+		if match.Code == parser.IfBlockToken {
+			fromNode.Unparsed = match.Text(cur)
+			return nil
+		}
+
+		return err
+	})
+}
+
 func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, service router.ServiceType) error {
 	baseRuleURL := s.Repository.RuleBaseURL(resource.rule)
 
@@ -142,7 +160,7 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	route.Output.XML = resource.Rule.XML
 	route.Output.DataFormat = resource.Rule.DataFormat
 
-	s.applyAsyncption(resource, route)
+	s.applyAsyncOption(resource, route)
 
 	if resource.rule.Generated { //translation from generator
 		resource.Rule.applyGeneratorOutputSetting()
@@ -170,7 +188,7 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	return nil
 }
 
-func (s *Service) applyAsyncption(resource *Resource, route *router.Route) {
+func (s *Service) applyAsyncOption(resource *Resource, route *router.Route) {
 	async := resource.Rule.Async
 	if async == nil {
 		return

@@ -1274,7 +1274,7 @@ func (v *View) ensureAsyncTableNameIfNeeded() error {
 }
 
 func (v *View) BuildParametrizedSQL(state Parameters, types *xreflect.Types, SQL string, bindingArgs []interface{}, options ...expand.StateOption) (*sqlx.SQL, error) {
-	reflectType, err := state.ReflectType("autogen", types.Lookup, false)
+	reflectType, err := state.ReflectType("autogen", types.Lookup, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create state %v type: %w", v.Name, err)
 	}
@@ -1283,8 +1283,17 @@ func (v *View) BuildParametrizedSQL(state Parameters, types *xreflect.Types, SQL
 
 	state.SetLiterals(inputState)
 	state.InitRepeated(inputState)
-	options = append(options, expand.WithParameters(inputState.State(), nil))
-	evaluator, err := NewEvaluator(state, reflectType, nil, SQL, types.Lookup, nil)
+	var presenceSchema reflect.Type
+
+	hasValue, err := inputState.Value("Has")
+	if err == nil {
+		presenceSchema = reflect.TypeOf(hasValue)
+		if hasValue == nil {
+			hasValue = reflect.New(presenceSchema).Elem().Interface()
+		}
+	}
+	options = append(options, expand.WithParameters(inputState.State(), hasValue))
+	evaluator, err := NewEvaluator(state, reflectType, presenceSchema, SQL, types.Lookup, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create evaluator %v: %w", v.Name, err)
 	}

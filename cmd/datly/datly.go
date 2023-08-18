@@ -42,15 +42,16 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-
+	////
 	//os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", path.Join(os.Getenv("HOME"), ".secret/viant-e2e.json"))
-	//
+	////
 	//os.Args = []string{
 	//	"datly",
-	//	//"-c=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/repo/dev/Datly/config.json",
-	//	"plugin",
+	//	"dsql",
+	//	"-s=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting//dsql/view/age.sql",
 	//	"-p=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/",
-	//	"-r=repo/dev", "-o=darwin", "-a=arm64",
+	//	"-c=ci_event|bigquery|bigquery://viant-e2e/ci_event",
+	//	"-r=repo/dev1",
 	//}
 
 	err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
