@@ -53,7 +53,7 @@ require (
 	github.com/aws/aws-sdk-go v1.44.12
 	github.com/aws/aws-sdk-go-v2/config v1.18.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.33.1
-	github.com/viant/structology v0.3.1-0.20230807231757-9c77ad06c186
+	github.com/viant/structology v0.4.1-0.20230807231757-9c77ad06c186
 	github.com/viant/xdatly v0.3.1-0.20230818003925-f29cae06483b
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
 	github.com/viant/xdatly/handler v0.0.0-20230818003925-f29cae06483b
@@ -134,6 +134,3 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace github.com/viant/structology => /Users/awitas/go/src/github.com/viant/structology
-
-replace github.com/viant/xunsafe => /Users/awitas/go/src/github.com/viant/xunsafe
