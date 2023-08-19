@@ -1274,7 +1274,9 @@ func (v *View) BuildParametrizedSQL(state Parameters, types *xreflect.Types, SQL
 	stateType := structology.NewStateType(reflectType)
 	inputState := stateType.NewState()
 
-	state.SetLiterals(inputState)
+	if err = state.SetLiterals(inputState); err != nil {
+		return nil, err
+	}
 	state.InitRepeated(inputState)
 	options = append(options, expand.WithParameterState(inputState))
 
