@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-var auxiliaryPrefixes = []string{keywords.ParamsKey + ".", keywords.ParamsMetadataKey + "."}
+var auxiliaryPrefixes = []string{keywords.ParamsKey + ".", keywords.SetMarkerKey + "."}
 
 func GetHolderName(identifier string) (string, string) {
 	paramName := paramId(identifier)
@@ -81,7 +81,7 @@ func GetHolderNameFromSelector(selector *expr.Select) (string, string) {
 func removePrefixIfNeeded(name string) (prefix string, actual string) {
 	prefixes := []string{
 		keywords.AndPrefix, keywords.WherePrefix, keywords.OrPrefix,
-		keywords.ParamsKey + ".", keywords.ParamsMetadataKey + ".",
+		keywords.ParamsKey + ".", keywords.SetMarkerKey + ".",
 	}
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(name, prefix) {

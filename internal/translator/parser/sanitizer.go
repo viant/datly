@@ -89,7 +89,7 @@ func sanitizeParameter(expression *Expression, raw string, iterator *iterables, 
 		}
 	}
 
-	if prefix == keywords.ParamsMetadataKey {
+	if prefix == keywords.SetMarkerKey {
 		return raw
 	}
 	if expression.Entry != nil {

@@ -1,7 +1,6 @@
 package view
 
 import (
-	"github.com/viant/datly/utils/types"
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
@@ -20,28 +19,17 @@ type (
 		Offset         int      `json:",omitempty"`
 		Limit          int      `json:",omitempty"`
 
-		Parameters ParamState `json:",omitempty"`
-		State      *structology.State
+		//ParametersState ParamState `json:",omitempty"`
+		State *structology.State
 
 		Criteria     string        `json:",omitempty"`
 		Placeholders []interface{} `json:",omitempty"`
-		Qualifier    []SelectorQualifier
 		Page         int
 		Ignore       bool
 
 		initialized  bool
 		_columnNames map[string]bool
 		result       *cache.ParmetrizedQuery
-	}
-
-	ParamState struct {
-		Values interface{} `json:",omitempty"`
-		Has    interface{} `json:",omitempty"`
-	}
-
-	SelectorQualifier struct {
-		Column string
-		Values []interface{}
 	}
 )
 
@@ -58,11 +46,13 @@ func (s *Selector) CurrentPage() int {
 }
 
 // Init initializes Selector
-func (s *Selector) Init() {
+func (s *Selector) Init(aView *View) {
+	if aView != nil && s.State == nil && aView.Template.stateType != nil {
+		s.State = aView.Template.stateType.NewState()
+	}
 	if s.initialized {
 		return
 	}
-
 	s._columnNames = Names(s.Columns).Index()
 }
 
@@ -121,7 +111,8 @@ func (s *Selectors) Lookup(view *View) *Selector {
 		selector = NewSelector()
 		s.Index[view.Name] = selector
 	}
-	selector.Parameters.Init(view)
+
+	selector.Init(view)
 	return selector
 }
 
@@ -133,19 +124,12 @@ func NewSelectors() *Selectors {
 	}
 }
 
-func (s *ParamState) Init(view *View) {
-	if s.Values == nil {
-		s.Values = types.NewValue(view.Template.Schema.Type())
-		s.Has = types.NewValue(view.Template.PresenceSchema.Type())
-	}
-}
-
 // Init initializes each Selector
-func (s *Selectors) Init() {
+func (s *Selectors) Init(aView *View) {
 	s.RWMutex.Lock()
 	s.RWMutex.Unlock()
 	for _, selector := range s.Index {
-		selector.Init()
+		selector.Init(aView)
 	}
 }
 

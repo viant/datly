@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
-	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/parameter"
 	"github.com/viant/structology"
@@ -29,13 +28,11 @@ type (
 		Schema    *Schema `json:",omitempty" yaml:"schema,omitempty"`
 		stateType *structology.StateType
 
-		PresenceSchema *Schema       `json:",omitempty" yaml:"presenceSchema,omitempty"`
-		Parameters     Parameters    `json:",omitempty" yaml:"parameters,omitempty"`
-		Meta           *TemplateMeta `json:",omitempty" yaml:",omitempty"`
+		Parameters Parameters    `json:",omitempty" yaml:"parameters,omitempty"`
+		Meta       *TemplateMeta `json:",omitempty" yaml:",omitempty"`
 
 		sqlEvaluator *expand.Evaluator
 
-		accessors        *types.Accessors
 		_parametersIndex NamedParameters
 		initialized      bool
 		isTemplate       bool
@@ -56,6 +53,10 @@ type (
 		Args []interface{}
 	}
 )
+
+func (t *Template) State() *structology.StateType {
+	return t.stateType
+}
 
 func (t *Template) Init(ctx context.Context, resource *Resource, view *View) error {
 	if t.initialized {
@@ -78,18 +79,14 @@ func (t *Template) Init(ctx context.Context, resource *Resource, view *View) err
 	if err = t.initTypes(ctx, resource); err != nil {
 		return err
 	}
-
-	if err = t.initPresenceType(resource); err != nil {
-		return err
+	if rType := t.Schema.Type(); rType != nil {
+		t.stateType = structology.NewStateType(rType)
 	}
-
-	if err = t.initSqlEvaluator(resource); err != nil {
-		return err
-	}
-
-	t.initAccessors()
 
 	if err = t.updateParametersFields(); err != nil {
+		return err
+	}
+	if err = t.initSqlEvaluator(resource); err != nil {
 		return err
 	}
 
@@ -142,15 +139,13 @@ func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resourc
 			return err
 		}
 	}
-
 	rType, err := t.Parameters.ReflectType(t.Package(), t._view._resource.LookupType(), true)
-	//rType, err := BuildType(t.Parameters)
+	//rType, err := BuildType(t.ParametersState)
 	if err != nil {
 		return fmt.Errorf("failed to build template %s reflect type: %w", t._view.Name, err)
 	}
 	t.Schema = &Schema{}
 	t.Schema.SetType(reflect.PtrTo(rType))
-	t.stateType = structology.NewStateType(rType)
 	return nil
 }
 
@@ -204,42 +199,28 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 	return nil
 }
 
-func NewEvaluator(parameters []*Parameter, paramSchema, presenceSchema reflect.Type, template string, typeLookup xreflect.LookupType, predicates []*expand.PredicateConfig) (*expand.Evaluator, error) {
+func NewEvaluator(parameters Parameters, stateType *structology.StateType, template string, typeLookup xreflect.LookupType, predicates []*expand.PredicateConfig) (*expand.Evaluator, error) {
 	return expand.NewEvaluator(
 		template,
-		expand.WithConstUpdaters(FilterConstParameters(parameters)),
+		expand.WithSetLiteral(parameters.SetLiterals),
 		expand.WithTypeLookup(typeLookup),
-		expand.WithParamSchema(paramSchema, presenceSchema),
+		expand.WithStateType(stateType),
 		expand.WithPredicates(predicates),
 	)
 }
 
-func FilterConstParameters(parameters []*Parameter) []expand.ConstUpdater {
-	params := make([]expand.ConstUpdater, 0)
-	for i := range parameters {
-		if parameters[i].In.Kind != KindLiteral {
-			continue
-		}
-
-		params = append(params, parameters[i])
-	}
-
-	return params
-}
-
-func (t *Template) EvaluateSource(externalParams, presenceMap interface{}, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (*expand.State, error) {
+func (t *Template) EvaluateSource(parameterState *structology.State, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (*expand.State, error) {
 	if t.wasEmpty {
 		return expand.StateWithSQL(t.Source), nil
 	}
-
-	return t.EvaluateState(externalParams, presenceMap, parentParam, batchData, options...)
+	return t.EvaluateState(parameterState, parentParam, batchData, options...)
 }
 
-func (t *Template) EvaluateState(externalParams interface{}, presenceMap interface{}, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (*expand.State, error) {
-	return t.EvaluateStateWithSession(externalParams, presenceMap, parentParam, batchData, nil, options...)
+func (t *Template) EvaluateState(parameterState *structology.State, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (*expand.State, error) {
+	return t.EvaluateStateWithSession(parameterState, parentParam, batchData, nil, options...)
 }
 
-func (t *Template) EvaluateStateWithSession(externalParams interface{}, presenceMap interface{}, parentParam *expand.MetaParam, batchData *BatchData, sess *session.Session, options ...interface{}) (*expand.State, error) {
+func (t *Template) EvaluateStateWithSession(parameterState *structology.State, parentParam *expand.MetaParam, batchData *BatchData, sess *session.Session, options ...interface{}) (*expand.State, error) {
 	var expander expand.Expander
 	var dataUnit *expand.DataUnit
 	for _, option := range options {
@@ -252,7 +233,7 @@ func (t *Template) EvaluateStateWithSession(externalParams interface{}, presence
 	}
 
 	ops := []expand.StateOption{
-		expand.WithParameters(externalParams, presenceMap),
+		expand.WithParameterState(parameterState),
 		expand.WithViewParam(AsViewParam(t._view, nil, batchData, expander)),
 		expand.WithParentViewParam(parentParam),
 		expand.WithSession(sess),
@@ -323,57 +304,30 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 	var predicates []*expand.PredicateConfig
 	for _, p := range t.Parameters {
 		for _, predicate := range p.Predicates {
-			evaluator, err := cache.get(resource, predicate, p, resource._predicates, t.Schema.Type(), t.PresenceSchema.Type())
+			evaluator, err := cache.get(resource, predicate, p, resource._predicates, t.stateType)
 			if err != nil {
 				return err
 			}
 
+			if p._selector == nil {
+				panic("selector should have been set")
+			}
+
 			predicates = append(predicates, &expand.PredicateConfig{
-				Ensure:        predicate.Ensure,
-				Context:       predicate.Context,
-				StateAccessor: p.accessValue,
-				HasAccessor:   p.accessHas,
-				Expander:      evaluator,
+				Ensure:   predicate.Ensure,
+				Context:  predicate.Context,
+				Selector: p._selector,
+				Expander: evaluator,
 			})
 		}
 	}
 
-	evaluator, err := NewEvaluator(t.Parameters, t.Schema.Type(), t.PresenceSchema.Type(), t.Source, resource.LookupType(), predicates)
+	evaluator, err := NewEvaluator(t.Parameters, t.stateType, t.Source, resource.LookupType(), predicates)
 	if err != nil {
 		return err
 	}
 
 	t.sqlEvaluator = evaluator
-	return nil
-}
-
-func (t *Template) initPresenceType(resource *Resource) error {
-	if t.PresenceSchema == nil {
-		return t.initPresenceSchemaFromParams()
-	}
-
-	if t.PresenceSchema.Type() != nil {
-		return nil
-	}
-
-	rType, err := resource._types.Lookup(t.PresenceSchema.Name)
-	if err != nil {
-		return err
-	}
-
-	t.PresenceSchema.SetType(rType)
-	return nil
-}
-
-func (t *Template) initPresenceSchemaFromParams() error {
-	rType, err := BuildPresenceType(nonStateParameters(t.Parameters))
-	if err != nil {
-		return err
-	}
-
-	t.PresenceSchema = &Schema{}
-	t.PresenceSchema.SetType(rType)
-
 	return nil
 }
 
@@ -387,31 +341,13 @@ func nonStateParameters(parameters []*Parameter) []*Parameter {
 
 func (t *Template) updateParametersFields() error {
 	for _, param := range t.Parameters {
-		if err := param.SetPresenceField(t.PresenceSchema.Type()); err != nil {
-			return err
+		param._selector = t.stateType.Lookup(param.Name)
+		if param._selector == nil {
+			return fmt.Errorf("parametr %v is missing in state", param.Name)
 		}
-
-		accessor, err := t.AccessorByName(param.Name)
-		if err != nil {
-			return err
-		}
-
-		param.SetAccessor(accessor)
 	}
 
 	return nil
-}
-
-func (t *Template) initAccessors() {
-	if t.accessors == nil {
-		t.accessors = types.NewAccessors(&types.VeltyNamer{})
-	}
-
-	t.accessors.Init(t.Schema.Type())
-}
-
-func (t *Template) AccessorByName(name string) (*types.Accessor, error) {
-	return t.accessors.AccessorByName(name)
 }
 
 func fieldByTemplateName(structType reflect.Type, name string) (*xunsafe.Field, error) {
@@ -527,13 +463,7 @@ func (t *Template) replacementEntry(key string, params CriteriaParam, selector *
 
 			return t.valueWithPrefix(key, aValue, " OR ", true)
 		}
-
-		accessor, err := t.AccessorByName(key)
-		if err != nil {
-			return "", "", err
-		}
-
-		values, err := accessor.Values(selector.Parameters.Values)
+		values, err := selector.State.Values(key)
 		if err != nil {
 			return "", "", err
 		}

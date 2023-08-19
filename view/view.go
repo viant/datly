@@ -1181,14 +1181,7 @@ func (v *View) ensureParameters(selector *Selector) {
 	if v.Template == nil {
 		return
 	}
-
-	if selector.Parameters.Values == nil {
-		selector.Parameters.Values = types.NewValue(v.Template.Schema.Type())
-	}
-
-	if selector.Parameters.Has == nil {
-		selector.Parameters.Has = types.NewValue(v.Template.PresenceSchema.Type())
-	}
+	selector.Init(v)
 }
 
 func (v *View) ParamByName(name string) (*Parameter, error) {
@@ -1283,17 +1276,9 @@ func (v *View) BuildParametrizedSQL(state Parameters, types *xreflect.Types, SQL
 
 	state.SetLiterals(inputState)
 	state.InitRepeated(inputState)
-	var presenceSchema reflect.Type
+	options = append(options, expand.WithParameterState(inputState))
 
-	hasValue, err := inputState.Value("Has")
-	if err == nil {
-		presenceSchema = reflect.TypeOf(hasValue)
-		if hasValue == nil {
-			hasValue = reflect.New(presenceSchema).Elem().Interface()
-		}
-	}
-	options = append(options, expand.WithParameters(inputState.State(), hasValue))
-	evaluator, err := NewEvaluator(state, reflectType, presenceSchema, SQL, types.Lookup, nil)
+	evaluator, err := NewEvaluator(state, stateType, SQL, types.Lookup, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create evaluator %v: %w", v.Name, err)
 	}

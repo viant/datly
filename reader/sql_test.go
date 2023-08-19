@@ -398,7 +398,7 @@ func TestBuilder_Build(t *testing.T) {
 
 		builder := NewBuilder()
 
-		useCase.selector.Init()
+		useCase.selector.Init(useCase.view)
 		matcher, err := builder.Build(useCase.view, useCase.selector, useCase.batchData, useCase.relation, nil, nil, nil)
 
 		assert.Nil(t, err, useCase.description)

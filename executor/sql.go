@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
+	"github.com/viant/structology"
 	"strings"
 )
 
@@ -16,8 +17,8 @@ func NewBuilder() *SqlBuilder {
 	return &SqlBuilder{}
 }
 
-func (s *SqlBuilder) Build(aView *view.View, paramState *view.ParamState, session *session.Session, dataUnit *expand.DataUnit) (*expand.State, []*expand.SQLStatment, error) {
-	state, err := aView.Template.EvaluateStateWithSession(paramState.Values, paramState.Has, nil, nil, session, dataUnit)
+func (s *SqlBuilder) Build(aView *view.View, paramState *structology.State, session *session.Session, dataUnit *expand.DataUnit) (*expand.State, []*expand.SQLStatment, error) {
+	state, err := aView.Template.EvaluateStateWithSession(paramState, nil, nil, session, dataUnit)
 	if err != nil {
 		return state, nil, err
 	}

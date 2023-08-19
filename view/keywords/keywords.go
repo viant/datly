@@ -3,7 +3,7 @@ package keywords
 import "github.com/viant/velty/functions"
 
 var (
-	ParamsMetadataKey = AddAndGet("Has",
+	SetMarkerKey = AddAndGet("Has",
 		functions.NewEntry(
 			nil,
 			NewNamespace(),

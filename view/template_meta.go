@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
 	"strings"
 )
@@ -159,22 +160,22 @@ func (m *TemplateMeta) oldMetaColumnsCacheKey() string {
 }
 
 func (m *TemplateMeta) prepareSQL(owner *Template) (string, []interface{}, error) {
-	selectorValues := types.NewValue(owner.Schema.Type())
-	selectorPresence := types.NewValue(owner.PresenceSchema.Type())
+	stateValue := owner.stateType.NewState()
+
 	viewParam := AsViewParam(owner._view, nil, nil)
 
-	state, err := Evaluate(owner.sqlEvaluator, expand.WithParameters(selectorValues, selectorPresence), expand.WithViewParam(viewParam))
+	state, err := Evaluate(owner.sqlEvaluator, expand.WithParameterState(stateValue), expand.WithViewParam(viewParam))
 	if err != nil {
 		return "", nil, err
 	}
 
 	viewParam.NonWindowSQL = ExpandWithFalseCondition(state.Buffer.String())
 	viewParam.Args = state.DataUnit.ParamsGroup
-	return m.Evaluate(selectorValues, selectorPresence, viewParam)
+	return m.Evaluate(stateValue, viewParam)
 }
 
-func (m *TemplateMeta) Evaluate(selectorValues interface{}, selectorPresence interface{}, viewParam *expand.MetaParam) (string, []interface{}, error) {
-	state, err := Evaluate(m.sqlEvaluator, expand.WithParameters(selectorValues, selectorPresence), expand.WithViewParam(viewParam))
+func (m *TemplateMeta) Evaluate(parameterState *structology.State, viewParam *expand.MetaParam) (string, []interface{}, error) {
+	state, err := Evaluate(m.sqlEvaluator, expand.WithParameterState(parameterState), expand.WithViewParam(viewParam))
 	if err != nil {
 		return "", nil, err
 	}
@@ -183,7 +184,7 @@ func (m *TemplateMeta) Evaluate(selectorValues interface{}, selectorPresence int
 }
 
 func (m *TemplateMeta) initTemplateEvaluator(_ context.Context, owner *Template, resource *Resource) error {
-	evaluator, err := NewEvaluator(owner.Parameters, owner.Schema.Type(), owner.PresenceSchema.Type(), m.Source, resource.LookupType(), nil)
+	evaluator, err := NewEvaluator(owner.Parameters, owner.stateType, m.Source, resource.LookupType(), nil)
 	if err != nil {
 		return err
 	}

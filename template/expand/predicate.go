@@ -2,14 +2,12 @@ package expand
 
 import (
 	"context"
+	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
-	"github.com/viant/xunsafe"
 	"strings"
-	"unsafe"
 )
 
 var PredicateState predicateState = "state"
-var PredicateHas predicateHas = "has"
 var PredicateCtx predicateCtx = "ctx"
 
 type predicateCtx string
@@ -18,20 +16,16 @@ type predicateState string
 
 type (
 	Predicate struct {
-		config   []*PredicateConfig
-		state    interface{}
-		has      interface{}
-		statePtr unsafe.Pointer
-		hasPtr   unsafe.Pointer
-		ctx      *Context
+		config []*PredicateConfig
+		state  *structology.State
+		ctx    *Context
 	}
 
 	PredicateConfig struct {
-		Context       int
-		StateAccessor func(state interface{}, statePtr unsafe.Pointer) (interface{}, error)
-		HasAccessor   func(has interface{}, hasPtr unsafe.Pointer) (bool, error)
-		Expander      codec.PredicateHandler
-		Ensure        bool
+		Context  int
+		Selector *structology.Selector `velty:"-"`
+		Expander codec.PredicateHandler
+		Ensure   bool
 	}
 
 	PredicateBuilder struct {
@@ -40,14 +34,11 @@ type (
 	}
 )
 
-func NewPredicate(ctx *Context, state, has interface{}, config []*PredicateConfig) *Predicate {
+func NewPredicate(ctx *Context, state *structology.State, config []*PredicateConfig) *Predicate {
 	return &Predicate{
-		ctx:      ctx,
-		config:   config,
-		state:    state,
-		statePtr: xunsafe.AsPointer(state),
-		has:      has,
-		hasPtr:   xunsafe.AsPointer(has),
+		ctx:    ctx,
+		config: config,
+		state:  state,
 	}
 }
 
@@ -131,7 +122,6 @@ func (p *Predicate) expand(ctxNum int, operator string) (string, error) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, PredicateCtx, p.ctx)
 	ctx = context.WithValue(ctx, PredicateState, p.state)
-	ctx = context.WithValue(ctx, PredicateHas, p.has)
 
 	var accArgs []interface{}
 	for _, predicateConfig := range p.config {
@@ -139,21 +129,13 @@ func (p *Predicate) expand(ctxNum int, operator string) (string, error) {
 			continue
 		}
 
-		if p.hasPtr != nil && !predicateConfig.Ensure {
-			value, err := predicateConfig.HasAccessor(p.has, p.hasPtr)
-			if err != nil {
-				return "", err
-			}
-
-			if !value {
+		if p.state != nil && !predicateConfig.Ensure {
+			if p.state.HasMarker() && !predicateConfig.Selector.Has(p.state.Pointer()) {
 				continue
 			}
 		}
 
-		value, err := predicateConfig.StateAccessor(p.state, p.statePtr)
-		if err != nil {
-			return "", err
-		}
+		value := predicateConfig.Selector.Value(p.state.Pointer())
 
 		criteria, err := predicateConfig.Expander.Compute(ctx, value)
 		if err != nil {

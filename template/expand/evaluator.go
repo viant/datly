@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/godiff"
+	"github.com/viant/structology"
 	"github.com/viant/velty"
 	"github.com/viant/velty/est"
 	"github.com/viant/velty/est/op"
@@ -16,12 +17,9 @@ type (
 		planner          *velty.Planner
 		executor         *est.Execution
 		stateProvider    func() *est.State
-		constParams      []ConstUpdater
+		setLiterals      func(state *structology.State) error
+		stateType        *structology.StateType
 		predicateConfigs []*PredicateConfig
-		paramSchema      reflect.Type
-		presenceSchema   reflect.Type
-		supportsPresence bool
-		supportsParams   bool
 		stateName        string
 	}
 
@@ -50,9 +48,9 @@ func WithPanicOnError(b bool) EvaluatorOption {
 	}
 }
 
-func WithConstUpdaters(updaters []ConstUpdater) EvaluatorOption {
+func WithSetLiteral(setLiterals func(state *structology.State) error) EvaluatorOption {
 	return func(c *config) {
-		c.constUpdaters = updaters
+		c.setLiterals = setLiterals
 	}
 }
 
@@ -62,10 +60,9 @@ func WithTypeLookup(lookup xreflect.LookupType) EvaluatorOption {
 	}
 }
 
-func WithParamSchema(pSchema, hasSchema reflect.Type) EvaluatorOption {
+func WithStateType(stateType *structology.StateType) EvaluatorOption {
 	return func(c *config) {
-		c.pSchema = pSchema
-		c.hasSchema = hasSchema
+		c.stateType = stateType
 	}
 }
 
@@ -76,32 +73,29 @@ func WithStateName(name string) EvaluatorOption {
 }
 
 func NewEvaluator(template string, options ...EvaluatorOption) (*Evaluator, error) {
-	aCofnig := createConfig(options)
+	aConfig := createConfig(options)
 
 	evaluator := &Evaluator{
-		constParams:      aCofnig.constUpdaters,
-		paramSchema:      aCofnig.pSchema,
-		presenceSchema:   aCofnig.hasSchema,
-		supportsPresence: aCofnig.hasSchema != nil,
-		supportsParams:   aCofnig.pSchema != nil,
-		stateName:        aCofnig.stateName,
-		predicateConfigs: aCofnig.predicates,
+		setLiterals:      aConfig.setLiterals,
+		stateType:        aConfig.stateType,
+		stateName:        aConfig.stateName,
+		predicateConfigs: aConfig.predicates,
 	}
 
 	var err error
-	evaluator.planner = velty.New(velty.BufferSize(len(template)), aCofnig.panicOnError, velty.TypeParser(func(typeRepresentation string) (reflect.Type, error) {
-		return aCofnig.typeLookup(typeRepresentation)
+	evaluator.planner = velty.New(velty.BufferSize(len(template)), aConfig.panicOnError, velty.TypeParser(func(typeRepresentation string) (reflect.Type, error) {
+		return aConfig.typeLookup(typeRepresentation)
 	}))
 
-	if evaluator.supportsParams {
-		if err = evaluator.planner.DefineVariable(aCofnig.stateName, aCofnig.pSchema); err != nil {
+	if evaluator.stateType != nil {
+		if err = evaluator.planner.DefineVariable(aConfig.stateName, evaluator.stateType.Type()); err != nil {
 			return nil, err
 		}
-	}
-
-	if evaluator.supportsPresence {
-		if err = evaluator.planner.DefineVariable(keywords.ParamsMetadataKey, aCofnig.hasSchema); err != nil {
-			return nil, err
+		if evaluator.stateType.HasMarker() {
+			marker := evaluator.stateType.Marker()
+			if err = evaluator.planner.DefineVariable(keywords.SetMarkerKey, marker.Type()); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -113,7 +107,7 @@ func NewEvaluator(template string, options ...EvaluatorOption) (*Evaluator, erro
 		return nil, err
 	}
 
-	if err = evaluator.planner.RegisterFunctionKind(fnTransform, newTransform(aCofnig.typeLookup)); err != nil {
+	if err = evaluator.planner.RegisterFunctionKind(fnTransform, newTransform(aConfig.typeLookup)); err != nil {
 		return nil, err
 	}
 
@@ -133,13 +127,13 @@ func NewEvaluator(template string, options ...EvaluatorOption) (*Evaluator, erro
 		return nil, err
 	}
 
-	for _, valueType := range aCofnig.embededTypes {
+	for _, valueType := range aConfig.embededTypes {
 		if err = evaluator.planner.EmbedVariable(valueType.Type); err != nil {
 			return nil, err
 		}
 	}
 
-	for _, variable := range aCofnig.namedVariables {
+	for _, variable := range aConfig.namedVariables {
 		if err = evaluator.planner.DefineVariable(variable.Name, variable.Type); err != nil {
 			return nil, err
 		}
@@ -149,7 +143,7 @@ func NewEvaluator(template string, options ...EvaluatorOption) (*Evaluator, erro
 		return nil, err
 	}
 
-	aNewer := &newer{lookup: aCofnig.typeLookup}
+	aNewer := &newer{lookup: aConfig.typeLookup}
 	if err = evaluator.planner.RegisterStandaloneFunction(fnNew, &op.Function{
 		Handler:     aNewer.New,
 		ResultTyper: aNewer.NewResultType,
@@ -182,42 +176,43 @@ func createConfig(options []EvaluatorOption) *config {
 
 func (e *Evaluator) Evaluate(ctx *Context, options ...StateOption) (*State, error) {
 	state := e.ensureState(ctx, options...)
-	externalParams, presenceMap := e.updateConsts(state.Parameters, state.ParametersHas)
 
-	if externalParams != nil {
-		externalType := reflect.TypeOf(externalParams)
-		if e.paramSchema != externalType {
-			return nil, fmt.Errorf("inompactible types, wanted %v got %T", e.paramSchema.String(), externalParams)
+	if state.ParametersState != nil && state.ParametersState.Type().IsDefined() {
+		if e.setLiterals != nil {
+			if err := e.setLiterals(state.ParametersState); err != nil {
+				return nil, err
+			}
 		}
-	}
-
-	if externalParams != nil && e.supportsParams {
-		if err := state.SetValue(e.stateName, externalParams); err != nil {
+		externalType := state.ParametersState.Type().Type()
+		if e.stateType.Type() != externalType {
+			return nil, fmt.Errorf("inompactible types, wanted %v got %T", e.stateType.Type().String(), externalType.String())
+		}
+		if err := state.SetValue(e.stateName, state.ParametersState.State()); err != nil {
 			return nil, err
 		}
-	}
-
-	if presenceMap != nil && e.supportsPresence {
-		if err := state.SetValue(keywords.ParamsMetadataKey, presenceMap); err != nil {
-			return nil, err
+		if state.ParametersState.HasMarker() {
+			if err := state.SetValue(keywords.SetMarkerKey, state.ParametersState.MarkerHolder()); err != nil {
+				return nil, err
+			}
 		}
+
 	}
 
 	if err := state.EmbedValue(*state.Context); err != nil {
 		return nil, err
 	}
 
-	for _, customContext := range state.EmbededVariables {
-		if customContext.Value != nil {
-			if err := state.State.EmbedValue(customContext.Value); err != nil {
+	for _, embededVariable := range state.EmbededVariables {
+		if embededVariable.Value != nil {
+			if err := state.State.EmbedValue(embededVariable.Value); err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	for _, variable := range state.NamedVariables {
-		if variable.Value != nil {
-			if err := state.State.SetValue(variable.Name, variable.Value); err != nil {
+	for _, namedVariable := range state.NamedVariables {
+		if namedVariable.Value != nil {
+			if err := state.State.SetValue(namedVariable.Name, namedVariable.Value); err != nil {
 				return nil, err
 			}
 		}
@@ -248,23 +243,6 @@ func WithPredicates(configs []*PredicateConfig) EvaluatorOption {
 	return func(cfg *config) {
 		cfg.predicates = configs
 	}
-}
-
-func (e *Evaluator) updateConsts(params interface{}, presenceMap interface{}) (interface{}, interface{}) {
-	if len(e.constParams) == 0 {
-		return params, presenceMap
-	}
-
-	if params == nil {
-		params = reflect.New(e.paramSchema).Elem().Interface()
-		presenceMap = reflect.New(e.presenceSchema).Elem().Interface()
-	}
-
-	for _, param := range e.constParams {
-		_ = param.UpdateValue(params, presenceMap)
-	}
-
-	return params, presenceMap
 }
 
 func (e *Evaluator) Type() reflect.Type {

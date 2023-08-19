@@ -67,7 +67,7 @@ func (t *types) discover(SQL string) []string {
 
 			if t.canBeParam(text) {
 				prefix, paramName := GetHolderName(text)
-				if prefix == keywords.ParamsMetadataKey {
+				if prefix == keywords.SetMarkerKey {
 					continue
 				}
 

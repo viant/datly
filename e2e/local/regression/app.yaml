@@ -24,6 +24,7 @@ pipeline:
       immuneToHangups: true
       env:
         TEST: 1
+        DATLY_NOPANIC: 1
       command: ulimit -Sn 10000 && ./datly -c=$appPath/e2e/local/autogen/Datly/config.json > /tmp/datly.out
 
   validator:
@@ -42,4 +43,5 @@ pipeline:
       env:
         TEST: 1
         VALIDATOR_PORT: 8871
+
       command: ./validator_24

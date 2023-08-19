@@ -11,7 +11,7 @@ import (
 type (
 	Declaration struct {
 		inference.Parameter
-		//Parameters shorthands
+		//ParametersState shorthands
 		Auth          string           `json:",omitempty" yaml:",omitempty"`
 		Kind          string           `json:",omitempty" yaml:",omitempty"`
 		Location      *string          `json:",omitempty" yaml:",omitempty"`
