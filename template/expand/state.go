@@ -2,6 +2,7 @@ package expand
 
 import (
 	"github.com/viant/datly/executor/session"
+	"github.com/viant/structology"
 	"github.com/viant/velty/est"
 	"github.com/viant/xdatly/handler/mbus"
 	"github.com/viant/xdatly/handler/validator"
@@ -11,8 +12,7 @@ type (
 	State struct {
 		*est.State
 		*Context
-		Parameters       interface{}
-		ParametersHas    interface{}
+		ParametersState  *structology.State
 		EmbededVariables []*Variable
 		NamedVariables   []*NamedVariable
 
@@ -60,10 +60,9 @@ func WithSession(session *session.Session) StateOption {
 	}
 }
 
-func WithParameters(params, has interface{}) StateOption {
+func WithParameterState(parametersState *structology.State) StateOption {
 	return func(state *State) {
-		state.Parameters = params
-		state.ParametersHas = has
+		state.ParametersState = parametersState
 	}
 }
 
@@ -116,7 +115,7 @@ func (s *State) Init(templateState *est.State, predicates []*PredicateConfig, op
 		s.MessageBus = s.Session.MessageBus()
 	}
 
-	s.Predicate = NewPredicate(s.Context, s.Parameters, s.ParametersHas, predicates)
+	s.Predicate = NewPredicate(s.Context, s.ParametersState, predicates)
 	s.State = templateState
 }
 

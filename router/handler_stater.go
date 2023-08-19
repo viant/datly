@@ -4,9 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/utils/httputils"
-	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
-	"github.com/viant/xunsafe"
+	"github.com/viant/structology"
 	"net/http"
 	"reflect"
 	"sort"
@@ -74,6 +73,8 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 
 	fieldLen := elemType.NumField()
 	params := make([]*view.Parameter, 0, fieldLen)
+	aResource := view.NewResourcelet(s.resource, nil)
+
 	for i := 0; i < fieldLen; i++ {
 		field := elemType.Field(i)
 		parameter, err := BuildParameter(field)
@@ -82,12 +83,10 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 		}
 
 		if currParam, err := s.resource.LookupParameter(parameter.Name); err == nil {
-			parameter = currParam.WithAccessors(types.NewAccessor(xunsafe.NewField(field)), nil)
-		} else {
-			aResource := view.NewResourcelet(s.resource, nil)
-			if err = parameter.Init(ctx, aResource); err != nil {
-				return nil, err
-			}
+			parameter = currParam.Clone()
+		}
+		if err = parameter.Init(ctx, aResource); err != nil {
+			return nil, err
 		}
 
 		params = append(params, parameter)
@@ -104,10 +103,8 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 func (u *stateUpdater) update(ctx context.Context, request *http.Request, route *Route, dest interface{}, params *RequestParams) error {
 	paramBuilder := newParamStateBuilder(route._resource, *route._caser, route.DateFormat, NewRequestMetadata(route), params, newParamsValueCache(), u.paramsIndex)
 
-	state := &view.ParamState{
-		Values: dest,
-	}
-
+	stateType := structology.NewStateType(reflect.TypeOf(dest))
+	state := stateType.WithValue(dest)
 	param, err := paramBuilder.buildSelectorParameters(ctx, state, nil, u.params, route.CustomValidation)
 	if err != nil {
 		return httputils.NewParamError("", param.Name, err)

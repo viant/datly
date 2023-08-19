@@ -477,7 +477,7 @@ func (c *Cache) appendSelectors(set *CacheParameters, paramValues [][]interface{
 outer:
 	for {
 		selector := &Selector{}
-		selector.Parameters.Init(c.owner)
+		selector.Init(c.owner)
 
 		for i, possibleValues := range paramValues {
 			actualValue := possibleValues[indexes[i]]

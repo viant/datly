@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
-	"unsafe"
 )
 
 type (
@@ -41,12 +40,11 @@ type (
 		ErrorStatusCode   int         `json:",omitempty"`
 		Tag               string      `json:",omitempty"`
 
-		_valueAccessor    *types.Accessor
-		_presenceAccessor *types.Accessor
-		_initialized      bool
-		_literalValue     interface{}
-		_dependsOn        *Parameter
-		_state            *structology.StateType
+		_selector     *structology.Selector
+		_initialized  bool
+		_literalValue interface{}
+		_dependsOn    *Parameter
+		_state        *structology.StateType
 	}
 
 	ParameterOption func(p *Parameter)
@@ -69,6 +67,11 @@ type (
 		_codec       codec.Instance
 	}
 )
+
+func (p *Parameter) Clone() *Parameter {
+	ret := *p
+	return &ret
+}
 
 func (p *Parameter) OutputSchema() *Schema {
 	if p.Output != nil && p.Output.Schema != nil {
@@ -209,10 +212,6 @@ func (p *Parameter) Init(ctx context.Context, resource Resourcelet) error {
 		return nil
 	}
 	p._initialized = true
-	//if p.Codec != nil {
-	//	p.Output = p.Codec
-	//	p.Codec = nil
-	//}
 	if err := p.inheritParamIfNeeded(ctx, resource); err != nil {
 		return err
 	}
@@ -449,18 +448,6 @@ func (p *Parameter) initSchemaFromType(structType reflect.Type) error {
 	return nil
 }
 
-func (p *Parameter) UpdatePresence(presencePtr unsafe.Pointer) {
-	if presencePtr == nil || p._presenceAccessor == nil {
-		return
-	}
-
-	p._presenceAccessor.SetBool(presencePtr, true)
-}
-
-func (p *Parameter) SetAccessor(accessor *types.Accessor) {
-	p._valueAccessor = accessor
-}
-
 func (p *Parameter) pathFields(path string, structType reflect.Type) ([]*xunsafe.Field, error) {
 	segments := strings.Split(path, ".")
 	if len(segments) == 0 {
@@ -485,29 +472,8 @@ func (p *Parameter) pathFields(path string, structType reflect.Type) ([]*xunsafe
 	return xFields, nil
 }
 
-func (p *Parameter) Value(values interface{}) (interface{}, error) {
-	return p._valueAccessor.Value(values)
-}
-
-func (p *Parameter) setOnState(state *ParamState, value interface{}) (interface{}, error) {
-	paramPtr, presencePtr := asValuesPtr(state)
-	value, err := p.setValue(value, paramPtr)
-	if err != nil {
-		return nil, err
-	}
-	if presencePtr != nil {
-		p.UpdatePresence(presencePtr)
-	}
-
-	return value, nil
-}
-
-func (p *Parameter) setValue(value interface{}, paramPtr unsafe.Pointer) (interface{}, error) {
-	if p._valueAccessor == nil {
-		fmt.Printf("[WARN] setValue(): parameter  %v _valueAccessor was nil", p.Name)
-		return value, nil
-	}
-	return p._valueAccessor.SetConvertedAndGet(paramPtr, value, p.DateFormat)
+func (p *Parameter) Value(state *structology.State) (interface{}, error) {
+	return p._selector.Value(state.Pointer()), nil
 }
 
 // AsCodecOptions creates codec options
@@ -518,36 +484,7 @@ func AsCodecOptions(options []interface{}) []codec.Option {
 }
 
 func (p *Parameter) Set(selector *Selector, value interface{}) error {
-	_, err := p.setOnState(&selector.Parameters, value)
-	return err
-}
-
-func (p *Parameter) UpdateParamState(paramState *ParamState, value interface{}, options ...interface{}) error {
-	_, err := p.setOnState(paramState, value)
-	return err
-}
-
-func asValuesPtr(state *ParamState) (paramPtr unsafe.Pointer, presencePtr unsafe.Pointer) {
-	if state.Values != nil {
-		paramPtr = xunsafe.AsPointer(state.Values)
-	}
-
-	if state.Has != nil {
-		presencePtr = xunsafe.AsPointer(state.Has)
-	}
-
-	return paramPtr, presencePtr
-}
-
-func (p *Parameter) SetPresenceField(structType reflect.Type) error {
-	fields, err := p.pathFields(p.Name, structType)
-	if err != nil {
-		return err
-	}
-
-	p._presenceAccessor = types.NewAccessor(fields...)
-
-	return nil
+	return p._selector.SetValue(selector.State.Pointer(), value)
 }
 
 func (p *Parameter) initCodec(resource Resourcelet) error {
@@ -570,20 +507,6 @@ func (p *Parameter) ActualParamType() reflect.Type {
 	return p.Schema.Type()
 }
 
-func (p *Parameter) UpdateValue(params interface{}, presenceMap interface{}) error {
-	if p.Const == nil {
-		return nil
-	}
-
-	paramsPtr := xunsafe.AsPointer(params)
-	presenceMapPtr := xunsafe.AsPointer(presenceMap)
-	if _, err := p.setValue(p.Const, paramsPtr); err != nil {
-		return err
-	}
-	p.UpdatePresence(presenceMapPtr)
-	return nil
-}
-
 func (p *Parameter) initParamBasedParameter(ctx context.Context, resource Resourcelet) error {
 	param, err := resource.LookupParameter(p.In.Name)
 	if err != nil {
@@ -602,34 +525,8 @@ func (p *Parameter) Parent() *Parameter {
 	return p._dependsOn
 }
 
-func (p *Parameter) WithAccessors(value, presence *types.Accessor) *Parameter {
-	result := *p
-	result._valueAccessor = value
-	result._presenceAccessor = presence
-	return &result
-}
-
-func (p *Parameter) ValueAccessor() *types.Accessor {
-	return p._valueAccessor
-}
-
-func (p *Parameter) PresenceAccessor() *types.Accessor {
-	return p._presenceAccessor
-}
-
-func (p *Parameter) accessValue(state interface{}, ptr unsafe.Pointer) (interface{}, error) {
-	return p._valueAccessor.Value(ptr)
-}
-
-func (p *Parameter) accessHas(has interface{}, ptr unsafe.Pointer) (bool, error) {
-	value, err := p._presenceAccessor.Value(ptr)
-	if err != nil {
-		return false, err
-	}
-
-	asBool, ok := value.(bool)
-
-	return asBool && ok, nil
+func (p *Parameter) Selector() *structology.Selector {
+	return p._selector
 }
 
 func (p *Parameter) initGroupParams(ctx context.Context, resource Resourcelet) error {
@@ -664,7 +561,10 @@ func (p Parameters) FilterByKind(kind Kind) Parameters {
 
 func (s Parameters) SetLiterals(state *structology.State) (err error) {
 	for _, parameter := range s.FilterByKind(KindLiteral) {
-		if err = state.Set(parameter.Name, parameter.Const); err != nil {
+		if parameter._selector == nil {
+			parameter._selector = state.Type().Lookup(parameter.Name)
+		}
+		if err = parameter._selector.SetValue(state.Pointer(), parameter.Const); err != nil {
 			return err
 		}
 	}
@@ -715,7 +615,8 @@ func (s Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 		fields = append(fields, reflect.StructField{Name: "Has", Type: reflect.PtrTo(setMarkerType), PkgPath: PkgPath("Has", pkgPath), Tag: `setMarker:"true" sqlx:"-" diff:"-"  `})
 	}
 	if len(fields) == 0 {
-		return reflect.StructOf([]reflect.StructField{{Name: "Dummy", Type: reflect.TypeOf(true)}}), nil
+		return reflect.TypeOf(struct{}{}), nil
+		//		return reflect.StructOf([]reflect.StructField{{Name: "Dummy", Type: reflect.TypeOf(true)}}), nil
 	}
 	baseType := reflect.StructOf(fields)
 	return baseType, nil

@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/read/cache"
+	"github.com/viant/structology"
 	"reflect"
 	"strings"
 	"sync"
@@ -59,7 +60,7 @@ func (s *Info) Name() string {
 
 // Init initializes session
 func (s *Session) Init() error {
-	s.Selectors.Init()
+	s.Selectors.Init(s.View)
 	if _, ok := s.Dest.(*interface{}); !ok {
 		viewType := reflect.PtrTo(s.View.Schema.SliceType())
 		destType := reflect.TypeOf(s.Dest)
@@ -140,16 +141,10 @@ func (s *Session) IsCacheEnabled(aView *view.View) bool {
 	return !s.CacheDisabled && aView.Cache != nil
 }
 
-func (s *Session) Lookup(v *view.View) *view.ParamState {
+func (s *Session) Lookup(v *view.View) *structology.State {
 	s.mux.Lock()
 	sel := s.Selectors.Lookup(v)
-	state := sel.Parameters
+	sel.Init(v)
 	s.mux.Unlock()
-	state.Init(v)
-	return &state
+	return sel.State
 }
-
-//func (s *Session) Filter(inclSuffix string, aView *view.View) state.Filter {
-//	state := s.Lookup(aView)
-//
-//}

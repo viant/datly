@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/template/expand"
+	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
 	"reflect"
@@ -61,9 +62,10 @@ func (v *VeltyCodec) Value(ctx context.Context, raw interface{}, options ...code
 	if err != nil {
 		return nil, err
 	}
-
+	stateType := structology.NewStateType(reflect.TypeOf(aValue))
+	state := stateType.WithValue(aValue)
 	aCriteria := NewCriteria(v.columns)
-	evaluated, err := v.evaluator.Evaluate(nil, expand.WithParameters(aValue, nil), expand.WithDataUnit(aCriteria))
+	evaluated, err := v.evaluator.Evaluate(nil, expand.WithParameterState(state), expand.WithDataUnit(aCriteria))
 
 	if err != nil {
 		return nil, err
@@ -95,7 +97,8 @@ func (v *VeltyCodec) selector(options []interface{}) codec.Selector {
 
 func (v *VeltyCodec) init() error {
 	var err error
-	v.evaluator, err = expand.NewEvaluator(v.template, expand.WithParamSchema(v.codecType, nil), expand.WithTypeLookup(v.lookupType))
+	stateType := structology.NewStateType(v.codecType)
+	v.evaluator, err = expand.NewEvaluator(v.template, expand.WithStateType(stateType), expand.WithTypeLookup(v.lookupType))
 
 	return err
 }

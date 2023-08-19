@@ -87,7 +87,7 @@ func (b *paramStateBuilder) Build(ctx context.Context, viewsDetails []*ViewDetai
 			if details.View.Template == nil || len(details.View.Template.Parameters) == 0 {
 				return
 			}
-			if param, err := b.buildSelectorParameters(ctx, &selector.Parameters, details, details.View.Template.Parameters, options...); err != nil {
+			if param, err := b.buildSelectorParameters(ctx, selector.State, details, details.View.Template.Parameters, options...); err != nil {
 				asErrors, ok := err.(*httputils.Errors)
 				if param.ErrorStatusCode != 0 {
 					errors.SetStatus(param.ErrorStatusCode)
@@ -501,7 +501,7 @@ func (p *RequestParams) convert(isSpecified bool, raw string, param *view.Parame
 	return convert, err
 }
 
-func (b *paramStateBuilder) buildSelectorParameters(ctx context.Context, state *view.ParamState, parent *ViewDetails, parameters []*view.Parameter, options ...interface{}) (*view.Parameter, error) {
+func (b *paramStateBuilder) buildSelectorParameters(ctx context.Context, state *structology.State, parent *ViewDetails, parameters []*view.Parameter, options ...interface{}) (*view.Parameter, error) {
 	var viewParams []*view.Parameter
 	for _, parameter := range parameters {
 		if parameter.In.Kind == view.KindDataView && parameter.ErrorStatusCode <= 400 {
@@ -514,11 +514,10 @@ func (b *paramStateBuilder) buildSelectorParameters(ctx context.Context, state *
 			return parameter, err
 		}
 
-		value, err := parameter.Value(state.Values)
+		value, err := parameter.Value(state)
 		if err != nil {
 			return parameter, err
 		}
-
 		if parameter.IsRequired() && isNull(value) {
 			return parameter, requiredParamErr(parameter)
 		}
@@ -560,7 +559,7 @@ func isNull(value interface{}) bool {
 	return xunsafe.AsPointer(value) == nil
 }
 
-func (b *paramStateBuilder) handleParam(ctx context.Context, state *view.ParamState, parent *ViewDetails, parameter *view.Parameter, options ...interface{}) error {
+func (b *paramStateBuilder) handleParam(ctx context.Context, state *structology.State, parent *ViewDetails, parameter *view.Parameter, options ...interface{}) error {
 	var parentView *view.View
 	if parent != nil {
 		parentView = parent.View
@@ -573,9 +572,10 @@ func (b *paramStateBuilder) handleParam(ctx context.Context, state *view.ParamSt
 	if parameter.IsRequired() && value == nil {
 		return requiredParamErr(parameter)
 	}
-
 	if value != nil {
-		return parameter.UpdateParamState(state, value)
+		if err = parameter.Selector().SetValue(state.Pointer(), value); err != nil {
+			return err
+		}
 	}
 
 	return nil

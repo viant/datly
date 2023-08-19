@@ -48,7 +48,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 		exclude = &Exclude{}
 	}
 
-	state, err := aView.Template.EvaluateSource(selector.Parameters.Values, selector.Parameters.Has, parent, batchData, expander)
+	state, err := aView.Template.EvaluateSource(selector.State, parent, batchData, expander)
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +397,7 @@ func (b *Builder) metaSQL(aView *view.View, selector *view.Selector, batchData *
 	viewParam.NonWindowSQL = matcher.SQL
 	viewParam.Args = matcher.Args
 
-	SQL, args, err := aView.Template.Meta.Evaluate(selector.Parameters.Values, selector.Parameters.Has, viewParam)
+	SQL, args, err := aView.Template.Meta.Evaluate(selector.State, viewParam)
 	if err != nil {
 		return nil, err
 	}

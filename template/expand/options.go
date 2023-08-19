@@ -3,6 +3,7 @@ package expand
 import (
 	"fmt"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/structology"
 	"github.com/viant/velty"
 	"github.com/viant/xreflect"
 	"os"
@@ -44,10 +45,9 @@ type config struct {
 	namedVariables []*NamedVariable
 	embededTypes   []*Variable
 	panicOnError   velty.PanicOnError
-	constUpdaters  []ConstUpdater
+	setLiterals    func(state *structology.State) error
+	stateType      *structology.StateType
 	typeLookup     xreflect.LookupType
-	pSchema        reflect.Type
-	hasSchema      reflect.Type
 	stateName      string
 	predicates     []*PredicateConfig
 }

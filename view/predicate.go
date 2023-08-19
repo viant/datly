@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
@@ -47,10 +48,9 @@ func (e *predicateEvaluator) Compute(ctx context.Context, value interface{}) (*c
 		panic("not found custom ctx")
 	}
 
-	state := ctx.Value(expand.PredicateState)
-	has := ctx.Value(expand.PredicateHas)
-
-	evaluate, err := e.Evaluate(cuxtomCtx, state, has, value)
+	val := ctx.Value(expand.PredicateState)
+	state := val.(*structology.State)
+	evaluate, err := e.Evaluate(cuxtomCtx, state, value)
 	if err != nil {
 		return nil, err
 	}
@@ -58,20 +58,20 @@ func (e *predicateEvaluator) Compute(ctx context.Context, value interface{}) (*c
 	return &codec.Criteria{Query: evaluate.Buffer.String()}, nil
 }
 
-func (e *predicateEvaluator) Evaluate(ctx *expand.Context, state, hasState, paramValue interface{}) (*expand.State, error) {
+func (e *predicateEvaluator) Evaluate(ctx *expand.Context, state *structology.State, value interface{}) (*expand.State, error) {
 	return e.evaluator.Evaluate(ctx,
-		expand.WithParameters(state, hasState),
+		expand.WithParameterState(state),
 		expand.WithNamedVariables(
-			e.valueState.New(paramValue),
-			e.hasValueState.New(paramValue != nil),
+			e.valueState.New(value),
+			e.hasValueState.New(value != nil),
 		),
 		expand.WithCustomContext(e.ctx),
 	)
 }
 
-func (c *predicateCache) get(resource *Resource, predicateConfig *config.PredicateConfig, param *Parameter, registry *config.PredicateRegistry, stateType, presenceType reflect.Type) (codec.PredicateHandler, error) {
+func (c *predicateCache) get(resource *Resource, predicateConfig *config.PredicateConfig, param *Parameter, registry *config.PredicateRegistry, stateType *structology.StateType) (codec.PredicateHandler, error) {
 	aKey := predicateKey{name: predicateConfig.Name, paramType: param.ActualParamType()}
-	var provider, err = c.getEvaluatorProvider(resource, predicateConfig, param.ActualParamType(), registry, aKey, stateType, presenceType)
+	var provider, err = c.getEvaluatorProvider(resource, predicateConfig, param.ActualParamType(), registry, aKey, stateType)
 	if err != nil {
 		return nil, err
 	}
@@ -79,14 +79,14 @@ func (c *predicateCache) get(resource *Resource, predicateConfig *config.Predica
 	return provider.new(predicateConfig)
 }
 
-func (c *predicateCache) getEvaluatorProvider(resource *Resource, predicateConfig *config.PredicateConfig, param reflect.Type, registry *config.PredicateRegistry, aKey predicateKey, stateType reflect.Type, presenceType reflect.Type) (*predicateEvaluatorProvider, error) {
+func (c *predicateCache) getEvaluatorProvider(resource *Resource, predicateConfig *config.PredicateConfig, param reflect.Type, registry *config.PredicateRegistry, aKey predicateKey, stateType *structology.StateType) (*predicateEvaluatorProvider, error) {
 	value, ok := c.Map.Load(aKey)
 	if ok {
 		return value.(*predicateEvaluatorProvider), nil
 	}
 
 	p := &predicateEvaluatorProvider{}
-	err := p.init(resource, predicateConfig, param, registry, stateType, presenceType)
+	err := p.init(resource, predicateConfig, param, registry, stateType)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func (p *predicateEvaluatorProvider) new(predicateConfig *config.PredicateConfig
 	}, nil
 }
 
-func (p *predicateEvaluatorProvider) init(resource *Resource, predicateConfig *config.PredicateConfig, paramType reflect.Type, registry *config.PredicateRegistry, stateType reflect.Type, presenceType reflect.Type) error {
+func (p *predicateEvaluatorProvider) init(resource *Resource, predicateConfig *config.PredicateConfig, paramType reflect.Type, registry *config.PredicateRegistry, stateType *structology.StateType) error {
 	lookup, err := registry.Lookup(predicateConfig.Name)
 	if err != nil {
 		return err
@@ -161,7 +161,7 @@ func (p *predicateEvaluatorProvider) init(resource *Resource, predicateConfig *c
 	}
 
 	evaluator, err := expand.NewEvaluator(lookup.Template.Source,
-		expand.WithParamSchema(stateType, presenceType),
+		expand.WithStateType(stateType),
 		expand.WithCustomContexts(&expand.Variable{Type: ctxType}),
 		expand.WithVariable(
 			stateVariable,
