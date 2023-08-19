@@ -40,11 +40,10 @@ type (
 		ErrorStatusCode   int         `json:",omitempty"`
 		Tag               string      `json:",omitempty"`
 
-		_selector     *structology.Selector
-		_initialized  bool
-		_literalValue interface{}
-		_dependsOn    *Parameter
-		_state        *structology.StateType
+		_selector    *structology.Selector
+		_initialized bool
+		_dependsOn   *Parameter
+		_state       *structology.StateType
 	}
 
 	ParameterOption func(p *Parameter)

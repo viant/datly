@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-// Column represents View View column
+// Column represents View column
 type Column struct {
 	Name                string `json:",omitempty"`
 	DataType            string `json:",omitempty"`
