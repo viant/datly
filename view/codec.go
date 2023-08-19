@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/config"
-	"github.com/viant/datly/utils/types"
+	"github.com/viant/sqlx/io"
+	"github.com/viant/sqlx/option"
+	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -18,9 +21,8 @@ const (
 
 type (
 	columnsCodec struct {
-		fields    []*xunsafe.Field
-		accessors []*types.Accessor
-
+		fields     []*xunsafe.Field
+		selectors  []*structology.Selector
 		unwrapper  *xunsafe.Field
 		actualType reflect.Type
 		columns    []*Column
@@ -79,14 +81,17 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 	}
 
 	c.unwrapper = xunsafe.FieldByIndex(c.actualType, 1)
-	accessors := types.NewAccessors(&types.SqlxNamer{})
-	accessors.Init(c.actualType)
+	stateType := structology.NewStateType(c.actualType, structology.WithCustomizedNames(func(name string, tag reflect.StructTag) []string {
+		sqlxTag := io.ParseTag(tag.Get(option.TagSqlx))
+		if sqlxTag.Column == "" {
+			return []string{name}
+		}
+		return strings.Split(sqlxTag.Column, "|")
+	}))
 
-	c.accessors = make([]*types.Accessor, len(columns))
-	for i, column := range columns {
-		c.accessors[i], _ = accessors.AccessorByName(actualFieldName + "." + column.Name)
+	for _, column := range columns {
+		c.selectors = append(c.selectors, stateType.Lookup(actualFieldName+"."+column.Name))
 	}
-
 	return nil
 }
 
@@ -94,13 +99,13 @@ func (c *columnsCodec) updateValue(ctx context.Context, value interface{}, recor
 	asPtr := xunsafe.AsPointer(value)
 	for i, column := range c.columns {
 		fieldValue := c.fields[i].Value(asPtr)
-		//TODO pass type lookup fn
 		decoded, err := column.Codec._codec.Value(ctx, fieldValue, codec.WithOptions(record))
 		if err != nil {
 			return err
 		}
-
-		c.accessors[i].SetValue(asPtr, decoded)
+		if err = c.selectors[i].SetValue(asPtr, decoded); err != nil {
+			return err
+		}
 	}
 
 	return nil

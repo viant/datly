@@ -9,7 +9,6 @@ import (
 	"github.com/viant/structql"
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
-	"github.com/viant/xunsafe"
 	"go/ast"
 	"go/parser"
 	"path"
@@ -358,18 +357,6 @@ func (s State) MetaViewSQL() *Parameter {
 		}
 	}
 	return nil
-}
-
-func (s *State) SetLiterals(target interface{}) *types.Accessors {
-	accessors := types.NewAccessors(&types.FieldNamer{})
-	accessors.InitPath(reflect.TypeOf(target), "")
-	ptr := xunsafe.AsPointer(target)
-	for _, parameter := range s.FilterByKind(view.KindLiteral) {
-		if accessor, _ := accessors.AccessorByName(parameter.Name); accessor != nil {
-			accessor.SetValue(ptr, parameter.Const)
-		}
-	}
-	return accessors
 }
 
 func (s *State) Group() State {
