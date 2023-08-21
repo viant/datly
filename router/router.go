@@ -22,6 +22,7 @@ import (
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/govalidator"
 	svalidator "github.com/viant/sqlx/io/validator"
 	async2 "github.com/viant/xdatly/handler/async"
@@ -608,7 +609,7 @@ func (r *Router) inAWS() bool {
 }
 
 func (r *Router) result(session *ReaderSession, destValue interface{}, meta interface{}, stats []*reader.Info) (interface{}, error) {
-	if session.Route.Cardinality == view.Many {
+	if session.Route.Cardinality == state.Many {
 		result := r.wrapWithResponseIfNeeded(destValue, session.Route, meta, stats, nil)
 		return result, nil
 	}

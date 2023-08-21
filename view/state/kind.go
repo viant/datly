@@ -1,9 +1,7 @@
-package view
+package state
 
 import (
 	"fmt"
-	"os"
-	"strings"
 )
 
 // Kind represents parameter location
@@ -59,40 +57,4 @@ func (k Kind) Ordinal() int {
 		return 9
 	}
 	return -1
-}
-
-// ParamName represents name of parameter in given Location.Kind
-// i.e. if you want to extract lang from query string: ?foo=bar&lang=eng
-// required Kind is KindQuery and ParamName `lang`
-type ParamName string
-
-// Validate checks if ParamName is valid
-func (p ParamName) Validate(kind Kind) error {
-	switch kind {
-	case KindGroup:
-		split := strings.Split(string(p), ",")
-		if len(split) == 0 {
-			return fmt.Errorf("param name can't be empty")
-		}
-
-		if len(split) == 1 {
-			return fmt.Errorf("param Group must contain at least 2 params")
-		}
-
-		return nil
-	case KindRequest, KindLiteral, KindRequestBody:
-		return nil
-	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindParam:
-		if p == "" {
-			return fmt.Errorf("param name can't be empty")
-		}
-
-		return nil
-	case KindEnvironment:
-		if os.Getenv(string(p)) == "" {
-			return fmt.Errorf("env variable %s not set", p)
-		}
-		return nil
-	}
-	return fmt.Errorf("unsupported param name %v for location kind %v", p, kind)
 }

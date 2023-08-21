@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/predicate"
@@ -69,7 +70,7 @@ func (e *predicateEvaluator) Evaluate(ctx *expand.Context, state *structology.St
 	)
 }
 
-func (c *predicateCache) get(resource *Resource, predicateConfig *config.PredicateConfig, param *Parameter, registry *config.PredicateRegistry, stateType *structology.StateType) (codec.PredicateHandler, error) {
+func (c *predicateCache) get(resource *Resource, predicateConfig *config.PredicateConfig, param *state.Parameter, registry *config.PredicateRegistry, stateType *structology.StateType) (codec.PredicateHandler, error) {
 	aKey := predicateKey{name: predicateConfig.Name, paramType: param.ActualParamType()}
 	var provider, err = c.getEvaluatorProvider(resource, predicateConfig, param.ActualParamType(), registry, aKey, stateType)
 	if err != nil {
@@ -142,7 +143,7 @@ func (p *predicateEvaluatorProvider) init(resource *Resource, predicateConfig *c
 	var ctxFields []reflect.StructField
 	argsIndexed := map[int]*predicate.NamedArgument{}
 	for _, arg := range lookup.Template.Args {
-		ctxFields = append(ctxFields, newField("", arg.Name, xreflect.StringType))
+		ctxFields = append(ctxFields, state.NewField("", arg.Name, xreflect.StringType))
 		argsIndexed[arg.Position] = arg
 	}
 

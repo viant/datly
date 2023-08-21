@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox"
 	"github.com/viant/xunsafe"
 	"io"
@@ -202,7 +203,7 @@ func (p *RequestParams) jsonPresenceMap() PresenceMapFn {
 	}
 }
 
-func (p *RequestParams) paramRequestBody(ctx context.Context, param *view.Parameter, options ...interface{}) (interface{}, error) {
+func (p *RequestParams) paramRequestBody(ctx context.Context, param *state.Parameter, options ...interface{}) (interface{}, error) {
 	p.Mutex.Lock()
 	defer p.Mutex.Unlock()
 	err := p.readBody()
@@ -226,7 +227,7 @@ func (p *RequestParams) paramRequestBody(ctx context.Context, param *view.Parame
 	return value, err
 }
 
-func (p *RequestParams) extractBodyByPath(param *view.Parameter, err error) (interface{}, error) {
+func (p *RequestParams) extractBodyByPath(param *state.Parameter, err error) (interface{}, error) {
 	if param.In.Name == "" {
 		return p.bodyParam, nil
 	}
@@ -272,7 +273,7 @@ func (p *RequestParams) readBody() error {
 	return p.requestBodyErr
 }
 
-func (p *RequestParams) ExtractHttpParam(ctx context.Context, param *view.Parameter, options ...interface{}) (interface{}, error) {
+func (p *RequestParams) ExtractHttpParam(ctx context.Context, param *state.Parameter, options ...interface{}) (interface{}, error) {
 	value, err := p.extractHttpParam(ctx, param, options)
 	if err != nil || value == nil {
 		return nil, err
@@ -280,26 +281,26 @@ func (p *RequestParams) ExtractHttpParam(ctx context.Context, param *view.Parame
 	if param.Output == nil {
 		return value, nil
 	}
-	return param.Output.Transform(ctx, value, view.AsCodecOptions(options)...)
+	return param.Output.Transform(ctx, value, state.AsCodecOptions(options)...)
 }
 
-func (p *RequestParams) extractHttpParam(ctx context.Context, param *view.Parameter, options []interface{}) (interface{}, error) {
+func (p *RequestParams) extractHttpParam(ctx context.Context, param *state.Parameter, options []interface{}) (interface{}, error) {
 	switch param.In.Kind {
-	case view.KindPath:
+	case state.KindPath:
 		return p.convert(true, p.pathVariable(param.In.Name, ""), param)
-	case view.KindQuery:
+	case state.KindQuery:
 		pValue, ok := p.queryParam(param.In.Name)
 		return p.convert(ok, pValue, param)
-	case view.KindRequestBody:
+	case state.KindRequestBody:
 		body, err := p.paramRequestBody(ctx, param, options...)
 		if err != nil {
 			return nil, err
 		}
 
 		return body, nil
-	case view.KindHeader:
+	case state.KindHeader:
 		return p.convert(true, p.header(param.In.Name), param)
-	case view.KindCookie:
+	case state.KindCookie:
 		return p.convert(true, p.cookie(param.In.Name), param)
 	}
 
@@ -318,11 +319,11 @@ func (p *RequestParams) RequestBody() (interface{}, error) {
 	return p.bodyParam, p.readBody()
 }
 
-func BuildParameter(field reflect.StructField) (*view.Parameter, error) {
-	result := &view.Parameter{}
+func BuildParameter(field reflect.StructField) (*state.Parameter, error) {
+	result := &state.Parameter{}
 	paramTag := view.ParseTag("datly")
 	result.Name = field.Name
-	result.In = &view.Location{Kind: view.Kind(paramTag.Kind), Name: paramTag.In}
-	result.Schema = view.NewSchema(field.Type)
+	result.In = &state.Location{Kind: state.Kind(paramTag.Kind), Name: paramTag.In}
+	result.Schema = state.NewSchema(field.Type)
 	return result, nil
 }

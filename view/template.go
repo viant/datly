@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/parameter"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty"
@@ -23,17 +24,17 @@ var boolType = reflect.TypeOf(true)
 
 type (
 	Template struct {
-		Source    string  `json:",omitempty" yaml:"source,omitempty"`
-		SourceURL string  `json:",omitempty" yaml:"sourceURL,omitempty"`
-		Schema    *Schema `json:",omitempty" yaml:"schema,omitempty"`
+		Source    string        `json:",omitempty" yaml:"source,omitempty"`
+		SourceURL string        `json:",omitempty" yaml:"sourceURL,omitempty"`
+		Schema    *state.Schema `json:",omitempty" yaml:"schema,omitempty"`
 		stateType *structology.StateType
 
-		Parameters Parameters    `json:",omitempty" yaml:"parameters,omitempty"`
-		Meta       *TemplateMeta `json:",omitempty" yaml:",omitempty"`
+		Parameters state.Parameters `json:",omitempty" yaml:"parameters,omitempty"`
+		Meta       *TemplateMeta    `json:",omitempty" yaml:",omitempty"`
 
 		sqlEvaluator *expand.Evaluator
 
-		_parametersIndex NamedParameters
+		_parametersIndex state.NamedParameters
 		initialized      bool
 		isTemplate       bool
 		wasEmpty         bool
@@ -144,12 +145,11 @@ func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resourc
 	if err != nil {
 		return fmt.Errorf("failed to build template %s reflect type: %w", t._view.Name, err)
 	}
-	t.Schema = &Schema{}
-	t.Schema.SetType(reflect.PtrTo(rType))
+	t.Schema = state.NewSchema(reflect.PtrTo(rType))
 	return nil
 }
 
-func buildType(parameters []*Parameter, paramType reflect.Type, fields ...reflect.StructField) (reflect.Type, error) {
+func buildType(parameters []*state.Parameter, paramType reflect.Type, fields ...reflect.StructField) (reflect.Type, error) {
 	builder := parameter.NewBuilder("")
 	for _, param := range parameters {
 		pType := param.ActualParamType()
@@ -172,7 +172,7 @@ func buildType(parameters []*Parameter, paramType reflect.Type, fields ...reflec
 	return builder.Build(), nil
 }
 
-func BuildPresenceType(parameters []*Parameter) (reflect.Type, error) {
+func BuildPresenceType(parameters []*state.Parameter) (reflect.Type, error) {
 	return buildType(parameters, xreflect.BoolType)
 }
 
@@ -190,7 +190,7 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 			return err
 		}
 
-		aResource := &resourcelet{View: t._view, Resource: resource}
+		aResource := &Resourcelet{View: t._view, Resource: resource}
 		if err := param.Init(ctx, aResource); err != nil {
 			return err
 		}
@@ -199,7 +199,7 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 	return nil
 }
 
-func NewEvaluator(parameters Parameters, stateType *structology.StateType, template string, typeLookup xreflect.LookupType, predicates []*expand.PredicateConfig) (*expand.Evaluator, error) {
+func NewEvaluator(parameters state.Parameters, stateType *structology.StateType, template string, typeLookup xreflect.LookupType, predicates []*expand.PredicateConfig) (*expand.Evaluator, error) {
 	return expand.NewEvaluator(
 		template,
 		expand.WithSetLiteral(parameters.SetLiterals),
@@ -250,7 +250,7 @@ func (t *Template) EvaluateStateWithSession(parameterState *structology.State, p
 }
 
 // WithTemplateParameter return parameter template options
-func WithTemplateParameter(parameter *Parameter) TemplateOption {
+func WithTemplateParameter(parameter *state.Parameter) TemplateOption {
 	return func(t *Template) {
 		t.Parameters = append(t.Parameters, parameter)
 	}
@@ -290,8 +290,8 @@ func AsViewParam(aView *View, aSelector *Selector, batchData *BatchData, options
 	return expand.NewMetaParam(metaSource, metaExtras, metaBatch, options...)
 }
 
-func (t *Template) inheritAndInitParam(ctx context.Context, resource *Resource, param *Parameter) error {
-	aResource := &resourcelet{View: t._view, Resource: resource}
+func (t *Template) inheritAndInitParam(ctx context.Context, resource *Resource, param *state.Parameter) error {
+	aResource := &Resourcelet{View: t._view, Resource: resource}
 	return param.Init(ctx, aResource)
 }
 
@@ -309,14 +309,14 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 				return err
 			}
 
-			if p._selector == nil {
+			if p.Selector() == nil {
 				panic("selector should have been set")
 			}
 
 			predicates = append(predicates, &expand.PredicateConfig{
 				Ensure:   predicate.Ensure,
 				Context:  predicate.Context,
-				Selector: p._selector,
+				Selector: p.Selector(),
 				Expander: evaluator,
 			})
 		}
@@ -331,8 +331,8 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 	return nil
 }
 
-func nonStateParameters(parameters []*Parameter) []*Parameter {
-	params := make([]*Parameter, 0, len(parameters))
+func nonStateParameters(parameters []*state.Parameter) []*state.Parameter {
+	params := make([]*state.Parameter, 0, len(parameters))
 	for _, p := range parameters {
 		params = append(params, p)
 	}
@@ -341,8 +341,8 @@ func nonStateParameters(parameters []*Parameter) []*Parameter {
 
 func (t *Template) updateParametersFields() error {
 	for _, param := range t.Parameters {
-		param._selector = t.stateType.Lookup(param.Name)
-		if param._selector == nil {
+		param.SetSelector(t.stateType.Lookup(param.Name))
+		if param.Selector() == nil {
 			return fmt.Errorf("parametr %v is missing in state", param.Name)
 		}
 	}

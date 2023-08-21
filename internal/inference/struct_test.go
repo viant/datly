@@ -2,7 +2,7 @@ package inference
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"reflect"
 	"testing"
 )
@@ -17,8 +17,8 @@ func TestState_Compact(t *testing.T) {
 			deccription: "basic compaction",
 			expectedLen: 1,
 			state: State{
-				{Parameter: view.Parameter{Name: "View.Limit", Schema: view.NewSchema(reflect.TypeOf(0))}},
-				{Parameter: view.Parameter{Name: "View.vendor.SQL", Schema: view.NewSchema(reflect.TypeOf(""))}},
+				{Parameter: state.Parameter{Name: "View.Limit", Schema: state.NewSchema(reflect.TypeOf(0))}},
+				{Parameter: state.Parameter{Name: "View.vendor.SQL", Schema: state.NewSchema(reflect.TypeOf(""))}},
 			},
 		},
 	}

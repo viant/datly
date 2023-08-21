@@ -6,7 +6,7 @@ import (
 	"github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"strings"
 )
 
@@ -52,7 +52,7 @@ func (t *Template) GenerateHandler(opts *options.Generate, info *plugin.Info) (s
 	info.ChecksumPkg()
 	logic := builder.String()
 	handlerContent = strings.Replace(handlerContent, "$BusinessLogic", logic, 1)
-	bodyParam := t.State.FilterByKind(view.KindRequestBody)[0]
+	bodyParam := t.State.FilterByKind(state.KindRequestBody)[0]
 	handlerContent = strings.Replace(handlerContent, "$Response", "state."+bodyParam.Name, 1)
 	return handlerContent, indexContent, nil
 }

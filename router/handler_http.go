@@ -5,6 +5,7 @@ import (
 	"context"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"io"
 	"net/http"
 	"net/url"
@@ -18,7 +19,7 @@ type (
 	}
 
 	paramKey struct {
-		kind view.Kind
+		kind state.Kind
 		in   string
 	}
 )
@@ -44,7 +45,7 @@ func (h *Httper) RequestOf(ctx context.Context, state interface{}) (*http.Reques
 }
 
 func (h *Httper) RouteRequest(ctx context.Context) (*http.Request, error) {
-	var params []*view.Parameter
+	var params []*state.Parameter
 	err := h.appendParams(h.executor.route.View, &params)
 	if err != nil {
 		return nil, err
@@ -57,7 +58,7 @@ func (h *Httper) FailWithCode(statusCode int, err error) error {
 	return httputils.NewHttpMessageError(statusCode, err)
 }
 
-func (h *Httper) buildRequest(ctx context.Context, params []*view.Parameter) (*http.Request, error) {
+func (h *Httper) buildRequest(ctx context.Context, params []*state.Parameter) (*http.Request, error) {
 	newRequest := *h.executor.request
 
 	queryParams := url.Values{}
@@ -84,13 +85,13 @@ func (h *Httper) buildRequest(ctx context.Context, params []*view.Parameter) (*h
 		indexed[aKey] = true
 
 		switch param.In.Kind {
-		case view.KindQuery:
+		case state.KindQuery:
 			queryParam, ok := requestParams.queryParam(src)
 			if ok {
 				queryParams.Add(src, queryParam)
 			}
 
-		case view.KindRequestBody:
+		case state.KindRequestBody:
 			content, err := requestParams.BodyContent()
 			if err != nil {
 				return nil, err
@@ -98,7 +99,7 @@ func (h *Httper) buildRequest(ctx context.Context, params []*view.Parameter) (*h
 
 			body = bytes.NewReader(content)
 
-		case view.KindHeader:
+		case state.KindHeader:
 			headers.Add(src, requestParams.header(src))
 		}
 	}
@@ -114,10 +115,10 @@ func (h *Httper) replaceQuery(request *http.Request, params url.Values) *url.URL
 	return &URL
 }
 
-func (h *Httper) appendParams(aView *view.View, dst *[]*view.Parameter) error {
+func (h *Httper) appendParams(aView *view.View, dst *[]*state.Parameter) error {
 	for _, parameter := range aView.Template.Parameters {
 		*dst = append(*dst, parameter)
-		if parameter.In.Kind == view.KindDataView {
+		if parameter.In.Kind == state.KindDataView {
 			paramView, err := h.resource.View(parameter.In.Name)
 			if err != nil {
 				return err

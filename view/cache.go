@@ -8,6 +8,7 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/sqlx/io/read/cache/aerospike"
 	"github.com/viant/sqlx/io/read/cache/afs"
@@ -62,7 +63,7 @@ type (
 		Name   string
 		Values []interface{}
 
-		_param *Parameter
+		_param *state.Parameter
 	}
 
 	CacheInput struct {
@@ -485,7 +486,7 @@ outer:
 				continue
 			}
 
-			if err := set.Set[i]._param.Set(selector, actualValue); err != nil {
+			if err := set.Set[i]._param.Set(selector.State, actualValue); err != nil {
 				return err
 			}
 		}

@@ -1,37 +1,25 @@
 package view
 
 import (
-	"context"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/xdatly/codec"
-	"github.com/viant/xreflect"
 )
 
-type (
-	Resourcelet interface {
-		LookupParameter(name string) (*Parameter, error)
-		ViewSchema(ctx context.Context, schema string) (*Schema, error)
-		LookupType() xreflect.LookupType
-		LoadText(ctx context.Context, URL string) (string, error)
-		NamedCodecs() *codec.Registry
-		IndexedColumns() NamedColumns
-	}
-)
-
-type resourcelet struct {
+type Resourcelet struct {
 	*View
 	*Resource
 }
 
-func (r *resourcelet) LookupParameter(name string) (*Parameter, error) {
+func (r *Resourcelet) LookupParameter(name string) (*state.Parameter, error) {
 	parameter, err := r.lookupParameter(name)
 	return parameter, err
 }
 
-func (r *resourcelet) lookupParameter(name string) (*Parameter, error) {
-	var viewParameter *Parameter
+func (r *Resourcelet) lookupParameter(name string) (*state.Parameter, error) {
+	var viewParameter *state.Parameter
 	if r.View != nil && r.View.Template != nil && len(r.View.Template.Parameters) > 0 {
 		if len(r.View.Template._parametersIndex) == 0 {
-			r.View.Template._parametersIndex = Parameters(r.View.Template.Parameters).Index()
+			r.View.Template._parametersIndex = state.Parameters(r.View.Template.Parameters).Index()
 		}
 		if viewParameter, _ = r.View.Template._parametersIndex[name]; viewParameter != nil && viewParameter.Ref == "" {
 			return viewParameter, nil
@@ -44,17 +32,25 @@ func (r *resourcelet) lookupParameter(name string) (*Parameter, error) {
 	return ret, err
 }
 
-func (r *resourcelet) NamedCodecs() *codec.Registry {
+func (r *Resourcelet) CodecOptions() *codec.Options {
+	indexColumns := r.IndexedColumns()
+	if indexColumns == nil {
+		return nil
+	}
+	return &codec.Options{Options: []interface{}{indexColumns}}
+}
+
+func (r *Resourcelet) NamedCodecs() *codec.Registry {
 	return r._visitors
 }
 
-func (r resourcelet) IndexedColumns() NamedColumns {
+func (r Resourcelet) IndexedColumns() NamedColumns {
 	if r.View == nil {
 		return nil
 	}
 	return r.View.IndexedColumns()
 }
 
-func NewResourcelet(resource *Resource, view *View) *resourcelet {
-	return &resourcelet{View: view, Resource: resource}
+func NewResourcelet(resource *Resource, view *View) *Resourcelet {
+	return &Resourcelet{View: view, Resource: resource}
 }

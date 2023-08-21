@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/router/criteria"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox/format"
 	"reflect"
 	"testing"
@@ -270,7 +271,7 @@ func TestParse(t *testing.T) {
 			methods: map[string]*view.Method{
 				"round": {
 					Name: "round",
-					Args: []*view.Schema{view.NewSchema(reflect.TypeOf(0.0)), view.NewSchema(reflect.TypeOf(0))},
+					Args: []*state.Schema{state.NewSchema(reflect.TypeOf(0.0)), state.NewSchema(reflect.TypeOf(0))},
 				},
 			},
 			placeholders: []interface{}{2},

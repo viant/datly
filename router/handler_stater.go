@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
 	"net/http"
 	"reflect"
@@ -33,8 +34,8 @@ type (
 	}
 
 	stateUpdater struct {
-		params      []*view.Parameter
-		paramsIndex view.NamedParameters
+		params      []*state.Parameter
+		paramsIndex state.NamedParameters
 	}
 )
 
@@ -72,7 +73,7 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 	}
 
 	fieldLen := elemType.NumField()
-	params := make([]*view.Parameter, 0, fieldLen)
+	params := make([]*state.Parameter, 0, fieldLen)
 	aResource := view.NewResourcelet(s.resource, nil)
 
 	for i := 0; i < fieldLen; i++ {
@@ -92,11 +93,11 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 		params = append(params, parameter)
 	}
 
-	sort.Sort(view.Parameters(params))
+	sort.Sort(state.Parameters(params))
 
 	return &stateUpdater{
 		params:      params,
-		paramsIndex: view.Parameters(params).Index(),
+		paramsIndex: state.Parameters(params).Index(),
 	}, nil
 }
 

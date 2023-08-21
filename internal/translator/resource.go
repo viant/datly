@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx"
 	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
@@ -51,13 +52,13 @@ func (r *Resource) AddCustomTypeURL(URL string) {
 	r.CustomTypeURLs = append(r.CustomTypeURLs, URL)
 }
 
-func (r *Resource) GetSchema(dataType string, opts ...xreflect.Option) (*view.Schema, error) {
+func (r *Resource) GetSchema(dataType string, opts ...xreflect.Option) (*state.Schema, error) {
 	registry := r.ensureRegistry()
 	rType, err := registry.Lookup(dataType, opts...)
 	if err != nil {
 		return nil, err
 	}
-	schema := view.NewSchema(rType)
+	schema := state.NewSchema(rType)
 
 	if methods, _ := r.typeRegistry.Methods(dataType); len(methods) > 0 {
 		schema.Methods = methods
@@ -162,7 +163,7 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 		return err
 	}
 	r.State.Append(r.Declarations.State...)
-	if len(r.State.FilterByKind(view.KindGroup)) > 0 {
+	if len(r.State.FilterByKind(state.KindGroup)) > 0 {
 		r.State = r.State.Group()
 	}
 
@@ -186,7 +187,7 @@ func (r *Resource) appendPathVariableParams() {
 }
 
 func (r *Resource) buildParameterViews() {
-	for _, parameter := range r.State.FilterByKind(view.KindDataView) {
+	for _, parameter := range r.State.FilterByKind(state.KindDataView) {
 		viewlet := NewViewlet(parameter.Name, parameter.SQL, nil, r)
 		if parameter.Connector != "" {
 			viewlet.Connector = parameter.Connector
@@ -197,12 +198,12 @@ func (r *Resource) buildParameterViews() {
 	}
 }
 
-func (r *Resource) ImpliedKind() view.Kind {
+func (r *Resource) ImpliedKind() state.Kind {
 	switch strings.ToLower(r.Rule.Method) {
 	case "get":
-		return view.KindQuery
+		return state.KindQuery
 	}
-	return view.KindRequestBody
+	return state.KindRequestBody
 }
 
 func (r *Resource) InitRule(dSQL *string, ctx context.Context, fs afs.Service, opts *options.Options) error {
@@ -271,7 +272,7 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 }
 
 func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(ctx context.Context, setType *Viewlet) error) error {
-	viewParameters := r.State.FilterByKind(view.KindDataView)
+	viewParameters := r.State.FilterByKind(state.KindDataView)
 	for _, viewParameter := range viewParameters {
 		if viewParameter.Schema != nil && viewParameter.Schema.Type() != nil {
 			continue
@@ -303,7 +304,7 @@ func (r *Resource) ensureViewParameterSchema(parameter *inference.Parameter) err
 }
 
 func (r *Resource) ensurePathParametersSchema(ctx context.Context) error {
-	parameters := r.State.FilterByKind(view.KindParam)
+	parameters := r.State.FilterByKind(state.KindParam)
 	if len(parameters) == 0 {
 		return nil
 	}

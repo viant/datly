@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/structql"
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
@@ -44,8 +45,8 @@ func (s State) RemoveReserved() State {
 	return result
 }
 
-func (s State) ViewParameters() view.Parameters {
-	var result = make([]*view.Parameter, 0, len(s))
+func (s State) ViewParameters() state.Parameters {
+	var result = make([]*state.Parameter, 0, len(s))
 	for i, _ := range s {
 		parameter := &s[i].Parameter
 		result = append(result, parameter)
@@ -76,15 +77,15 @@ func (s State) Compact(modulePath string) (State, error) {
 	for holder, pStruct := range structs {
 		param := &Parameter{}
 		param.Name = holder
-		param.In = view.NewBodyLocation("")
-		param.Schema = view.NewSchema(pStruct.reflectType())
+		param.In = state.NewBodyLocation("")
+		param.Schema = state.NewSchema(pStruct.reflectType())
 		result = append(result, param)
 	}
 	return result, nil
 
 }
 
-func (s *State) AppendViewParameters(params ...*view.Parameter) {
+func (s *State) AppendViewParameters(params ...*state.Parameter) {
 	for i := range params {
 		if s.Has(params[i].Name) {
 			continue
@@ -157,7 +158,7 @@ func (s State) IndexByPathIndex() map[string]*Parameter {
 }
 
 // FilterByKind filters state parameter by kind
-func (s State) FilterByKind(kind view.Kind) State {
+func (s State) FilterByKind(kind state.Kind) State {
 	result := State{}
 	if len(s) == 0 {
 		return result
@@ -171,7 +172,7 @@ func (s State) FilterByKind(kind view.Kind) State {
 }
 
 func (s State) BodyField() string {
-	body := s.FilterByKind(view.KindRequestBody)
+	body := s.FilterByKind(state.KindRequestBody)
 	if len(body) == 0 {
 		return ""
 	}
@@ -202,7 +203,7 @@ func (s State) Explicit() State {
 
 func (s State) Expand(text string) string {
 	expander := data.Map{}
-	if parameters := s.FilterByKind(view.KindLiteral); len(parameters) > 0 {
+	if parameters := s.FilterByKind(state.KindLiteral); len(parameters) > 0 {
 		for _, literal := range parameters {
 			expander[literal.Name] = literal.Const
 		}
@@ -252,7 +253,7 @@ func (s State) ensureSchema(dirTypes *xreflect.DirTypes) error {
 		}
 
 		oldSchema := param.Schema
-		param.Schema = view.NewSchema(paramType)
+		param.Schema = state.NewSchema(paramType)
 		param.Schema.DataType = paramDataType
 
 		if oldSchema != nil {
@@ -267,7 +268,7 @@ func (s State) HandlerLocalVariables() ([]string, string) {
 	var vars []string
 	var names []string
 	for _, p := range s {
-		if p.Parameter.In.Kind == view.KindParam || p.IsAuxiliary {
+		if p.Parameter.In.Kind == state.KindParam || p.IsAuxiliary {
 			continue
 		}
 		fieldName, definition := p.localVariableDefinition()
@@ -316,7 +317,7 @@ func (s State) EnsureReflectTypes(modulePath string) error {
 		if param.Schema.Type() != nil {
 			continue
 		}
-		if param.In.Kind == view.KindParam {
+		if param.In.Kind == state.KindParam {
 			sourceParam := s.Lookup(param.In.Name)
 			if sourceParam == nil {
 				return fmt.Errorf("failed to lookup queryql parameter: %v", param.In.Name)
@@ -325,7 +326,7 @@ func (s State) EnsureReflectTypes(modulePath string) error {
 			if err != nil {
 				return fmt.Errorf("failed to queryql param %v from %s(%s) due to: %w", param.Name, param.In.Name, sourceParam.Schema.Type().String(), err)
 			}
-			param.Schema = view.NewSchema(query.StructType())
+			param.Schema = state.NewSchema(query.StructType())
 			param.Schema.DataType = param.Name
 			continue
 		}
@@ -343,7 +344,7 @@ func (s State) EnsureReflectTypes(modulePath string) error {
 			return err
 		}
 		orig := param.Schema
-		param.Schema = view.NewSchema(rType)
+		param.Schema = state.NewSchema(rType)
 		param.Schema.Cardinality = orig.Cardinality
 		param.Schema.DataType = orig.DataType
 	}
@@ -362,7 +363,7 @@ func (s State) MetaViewSQL() *Parameter {
 func (s *State) Group() State {
 	newState := make(State, 0, len(*s))
 	groupIndex := map[string][]*Parameter{}
-	groupParams := s.FilterByKind(view.KindGroup)
+	groupParams := s.FilterByKind(state.KindGroup)
 	for _, param := range groupParams {
 		baseParams := strings.Split(param.In.Name, ",")
 		for _, baseParam := range baseParams {

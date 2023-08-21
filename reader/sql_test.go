@@ -7,6 +7,7 @@ import (
 	"github.com/viant/assertly"
 	"github.com/viant/datly/internal/tests"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/dsunit"
 	"github.com/viant/toolbox"
 	"path"
@@ -53,8 +54,8 @@ func TestBuilder_Build(t *testing.T) {
 				Name:  "events",
 				Table: "events",
 				Template: &view.Template{
-					Schema:         view.NewSchema(reflect.TypeOf(Params{})),
-					PresenceSchema: view.NewSchema(reflect.TypeOf(PresenceMap{})),
+					Schema:         state.NewSchema(reflect.TypeOf(Params{})),
+					PresenceSchema: state.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
 			batchData: &view.BatchData{},
@@ -84,8 +85,8 @@ func TestBuilder_Build(t *testing.T) {
 				},
 				Table: "events",
 				Template: &view.Template{
-					Schema:         view.NewSchema(reflect.TypeOf(Params{})),
-					PresenceSchema: view.NewSchema(reflect.TypeOf(PresenceMap{})),
+					Schema:         state.NewSchema(reflect.TypeOf(Params{})),
+					PresenceSchema: state.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
 			batchData: &view.BatchData{},
@@ -119,8 +120,8 @@ func TestBuilder_Build(t *testing.T) {
 				From:  "SELECT * FROM EVENTS $PAGINATION",
 				Table: "events",
 				Template: &view.Template{
-					Schema:         view.NewSchema(reflect.TypeOf(Params{})),
-					PresenceSchema: view.NewSchema(reflect.TypeOf(PresenceMap{})),
+					Schema:         state.NewSchema(reflect.TypeOf(Params{})),
+					PresenceSchema: state.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
 			batchData: &view.BatchData{},
@@ -151,8 +152,8 @@ func TestBuilder_Build(t *testing.T) {
 				From:  "SELECT * FROM EVENTS $PAGINATION",
 				Table: "Events",
 				Template: &view.Template{
-					Schema:         view.NewSchema(reflect.TypeOf(Params{})),
-					PresenceSchema: view.NewSchema(reflect.TypeOf(PresenceMap{})),
+					Schema:         state.NewSchema(reflect.TypeOf(Params{})),
+					PresenceSchema: state.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
 			batchData: &view.BatchData{},
@@ -182,8 +183,8 @@ func TestBuilder_Build(t *testing.T) {
 				From:  "SELECT * FROM EVENTS $WHERE_CRITERIA",
 				Table: "Events",
 				Template: &view.Template{
-					Schema:         view.NewSchema(reflect.TypeOf(Params{})),
-					PresenceSchema: view.NewSchema(reflect.TypeOf(PresenceMap{})),
+					Schema:         state.NewSchema(reflect.TypeOf(Params{})),
+					PresenceSchema: state.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
 			batchData: &view.BatchData{},
@@ -213,15 +214,15 @@ func TestBuilder_Build(t *testing.T) {
 				From:  "SELECT * FROM EVENTS WHERE ID = $EventId",
 				Table: "Events",
 				Template: &view.Template{
-					Schema: view.NewSchema(reflect.TypeOf(Params{})),
-					Parameters: []*view.Parameter{
+					Schema: state.NewSchema(reflect.TypeOf(Params{})),
+					Parameters: []*state.Parameter{
 						{
 							Name: "EventId",
-							In: &view.Location{
-								Kind: view.KindPath,
+							In: &state.Location{
+								Kind: state.KindPath,
 								Name: "eventId",
 							},
-							Schema: &view.Schema{
+							Schema: &state.Schema{
 								DataType: "int",
 							},
 						},
@@ -258,15 +259,15 @@ func TestBuilder_Build(t *testing.T) {
 				From:  "SELECT * FROM EVENTS ev WHERE ev.ID = $EventId $AND_COLUMN_IN",
 				Table: "Events",
 				Template: &view.Template{
-					Schema: view.NewSchema(reflect.TypeOf(Params{})),
-					Parameters: []*view.Parameter{
+					Schema: state.NewSchema(reflect.TypeOf(Params{})),
+					Parameters: []*state.Parameter{
 						{
 							Name: "EventId",
-							In: &view.Location{
-								Kind: view.KindPath,
+							In: &state.Location{
+								Kind: state.KindPath,
 								Name: "eventId",
 							},
-							Schema: &view.Schema{
+							Schema: &state.Schema{
 								DataType: "int",
 							},
 						},
@@ -305,15 +306,15 @@ func TestBuilder_Build(t *testing.T) {
 				From:  "SELECT * FROM EVENTS ev WHERE ev.ID = $EventId",
 				Table: "Events",
 				Template: &view.Template{
-					Schema: view.NewSchema(reflect.TypeOf(Params{})),
-					Parameters: []*view.Parameter{
+					Schema: state.NewSchema(reflect.TypeOf(Params{})),
+					Parameters: []*state.Parameter{
 						{
 							Name: "EventId",
-							In: &view.Location{
-								Kind: view.KindPath,
+							In: &state.Location{
+								Kind: state.KindPath,
 								Name: "eventId",
 							},
-							Schema: &view.Schema{
+							Schema: &state.Schema{
 								DataType: "int",
 							},
 						},
@@ -350,15 +351,15 @@ func TestBuilder_Build(t *testing.T) {
 				From:  "SELECT * FROM EVENTS",
 				Table: "Events",
 				Template: &view.Template{
-					Schema: view.NewSchema(reflect.TypeOf(Params{})),
-					Parameters: []*view.Parameter{
+					Schema: state.NewSchema(reflect.TypeOf(Params{})),
+					Parameters: []*state.Parameter{
 						{
 							Name: "EventId",
-							In: &view.Location{
-								Kind: view.KindPath,
+							In: &state.Location{
+								Kind: state.KindPath,
 								Name: "eventId",
 							},
-							Schema: &view.Schema{
+							Schema: &state.Schema{
 								DataType: "int",
 							},
 						},

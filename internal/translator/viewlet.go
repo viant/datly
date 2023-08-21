@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx"
@@ -59,18 +60,18 @@ type (
 		Style       string
 		Field       string
 		Kind        string
-		Cardinality view.Cardinality
+		Cardinality state.Cardinality
 		DataType    string
 	}
 )
 
 func (o *OutputSettings) IsToOne() bool {
-	return o.ViewCardinality() == view.One
+	return o.ViewCardinality() == state.One
 }
 
-func (o *OutputSettings) ViewCardinality() view.Cardinality {
+func (o *OutputSettings) ViewCardinality() state.Cardinality {
 	if o.Cardinality == "" {
-		o.Cardinality = view.Many
+		o.Cardinality = state.Many
 	}
 	return o.Cardinality
 }
@@ -79,13 +80,13 @@ func (v *Viewlet) IsMetaView() bool {
 	return v.sourceViewlet != nil
 }
 
-func (v *Viewlet) UpdateParameterType(state *inference.State, name string, expression *parser.ExpressionContext) {
-	parameter := state.Lookup(name)
+func (v *Viewlet) UpdateParameterType(aState *inference.State, name string, expression *parser.ExpressionContext) {
+	parameter := aState.Lookup(name)
 	if expression.IsJSONCodec() {
 		return
 	}
 	if index := strings.Index(name, "."); index != -1 && parameter == nil {
-		if holder := state.Lookup(name[:index]); holder != nil {
+		if holder := aState.Lookup(name[:index]); holder != nil {
 			return
 		}
 	}
@@ -97,7 +98,7 @@ func (v *Viewlet) UpdateParameterType(state *inference.State, name string, expre
 		parameter = &inference.Parameter{}
 		parameter.Name = name
 		//TODO add default kind and location
-		state.Append(parameter)
+		aState.Append(parameter)
 	}
 
 	parameter.EnsureLocation()
@@ -107,7 +108,7 @@ func (v *Viewlet) UpdateParameterType(state *inference.State, name string, expre
 	}
 
 	switch parameter.In.Kind {
-	case view.KindParam, view.KindDataView:
+	case state.KindParam, state.KindDataView:
 		return
 	}
 	parameter.EnsureSchema()
@@ -122,14 +123,14 @@ func (v *Viewlet) UpdateParameterType(state *inference.State, name string, expre
 			parameter.Schema.DataType = column.Type
 		}
 		if operator == "in" {
-			parameter.Schema.Cardinality = view.Many
+			parameter.Schema.Cardinality = state.Many
 		}
 	}
 	if parameter.Schema.DataType != "" {
 		return
 	}
 	if expression.Type != nil {
-		parameter.Schema = view.NewSchema(expression.Type)
+		parameter.Schema = state.NewSchema(expression.Type)
 		parameter.Schema.DataType = expression.Type.String()
 		parameter.AssumedType = true
 	}
@@ -237,7 +238,7 @@ func (v *Viewlet) discoverTables(ctx context.Context, db *sql.DB, SQL string) (e
 func (v *Viewlet) applyOutputShorthands() {
 	if v.DataType != "" {
 		if v.View.Schema == nil {
-			v.View.Schema = &view.Schema{}
+			v.View.Schema = &state.Schema{}
 		}
 		setter.SetStringIfEmpty(&v.View.Schema.DataType, v.DataType)
 	}

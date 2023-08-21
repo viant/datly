@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/msg"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"path"
 )
 
@@ -84,7 +85,7 @@ func (r *Repository) PersistConfig() error {
 
 func (r *Repository) persistConstants() error {
 	cfg := r.Config.Config
-	literals := r.State.FilterByKind(view.KindLiteral)
+	literals := r.State.FilterByKind(state.KindLiteral)
 	if len(literals) == 0 {
 		return nil
 	}

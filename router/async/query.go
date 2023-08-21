@@ -84,7 +84,7 @@ func QueryAll(ctx context.Context, db *sql.DB, job *async.Job, sliceType *xunsaf
 }
 
 func QueryInto(ctx context.Context, db *sql.DB, job *async.Job, appender *xunsafe.Appender) error {
-	reader, err := read.New(ctx, db, "SELECT * FROM "+job.DestinationTable+" WHERE JobID = ?", func() interface{} {
+	reader, err := read.New(ctx, db, "SELECT * FROM "+job.DestinationTable, func() interface{} {
 		return appender.Add()
 	}, io.Resolve(io.NewResolver().Resolve), option.Tag(view.AsyncTagName))
 
@@ -94,7 +94,7 @@ func QueryInto(ctx context.Context, db *sql.DB, job *async.Job, appender *xunsaf
 
 	if err = reader.QueryAll(ctx, func(row interface{}) error {
 		return nil
-	}, job.JobID); err != nil {
+	}); err != nil {
 		return err
 	}
 	return nil

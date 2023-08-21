@@ -7,8 +7,11 @@ import (
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/datly/view/state"
+	"github.com/viant/sqlx/io/read/cache/ast"
 	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
+	"reflect"
 	"strings"
 )
 
@@ -24,10 +27,10 @@ type (
 		Source      string
 		Name        string
 		Kind        MetaKind
-		Cardinality Cardinality
+		Cardinality state.Cardinality
 
 		sqlEvaluator *expand.Evaluator
-		Schema       *Schema
+		Schema       *state.Schema
 		_owner       *Template
 		initialized  bool
 	}
@@ -72,7 +75,7 @@ func (m *TemplateMeta) Init(ctx context.Context, owner *Template, resource *Reso
 
 func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, resource *Resource) error {
 	if m.Schema == nil {
-		m.Schema = &Schema{}
+		m.Schema = &state.Schema{}
 	}
 
 	schemaDataType := shared.FirstNotEmpty(m.Schema.DataType, m.Schema.Name)
@@ -91,8 +94,9 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 		return err
 	}
 
+	aResourcelet := NewResourcelet(resource, owner._view)
 	for _, column := range columns {
-		if err = column.Init(resource, owner._view.Caser, owner._view.AreNullValuesAllowed(), nil); err != nil {
+		if err = column.Init(aResourcelet, owner._view.Caser, owner._view.AreNullValuesAllowed(), nil); err != nil {
 			return err
 		}
 	}
@@ -104,14 +108,107 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 	for i, column := range columns {
 		columnNames[i] = column.Name
 	}
-
 	newCase, err := format.NewCase(formatter.DetectCase(columnNames...))
 	if err != nil {
 		return err
 	}
+	m.Schema = state.NewSchema(nil, state.WithAutoGenFunc(m._owner._view.generateSchemaTypeFromColumn(newCase, columns, nil)))
+	aResource := &Resourcelet{Resource: resource, View: owner._view}
+	err = m.Schema.Init(aResource)
 
-	aResource := &resourcelet{Resource: resource}
-	return m.Schema.Init(aResource, newCase, columns)
+	fmt.Printf("METE SCHEMA: %s\n", m.Schema.Type().String())
+	return err
+}
+
+func (v *View) generateSchemaTypeFromColumn(caser format.Case, columns []*Column, relations []*Relation) func() (reflect.Type, error) {
+	return func() (reflect.Type, error) {
+		excluded := make(map[string]bool)
+		for _, rel := range relations {
+			if !rel.IncludeColumn && rel.Cardinality == state.One {
+				excluded[rel.Column] = true
+			}
+		}
+
+		fieldsLen := len(columns)
+		structFields := make([]reflect.StructField, 0)
+		unique := map[string]bool{}
+		for i := 0; i < fieldsLen; i++ {
+			columnName := columns[i].Name
+			if _, ok := excluded[columnName]; ok {
+				continue
+			}
+
+			rType := columns[i].ColumnType()
+			if columns[i].Nullable && rType.Kind() != reflect.Ptr {
+				rType = reflect.PtrTo(rType)
+			}
+
+			if columns[i].Codec != nil {
+				rType = columns[i].Codec.Schema.Type()
+			}
+			aTag := generateFieldTag(columns[i], caser)
+			aField := newCasedField(aTag, columnName, caser, rType)
+			if unique[aField.Name] {
+				continue
+			}
+			unique[aField.Name] = true
+			structFields = append(structFields, aField)
+		}
+
+		holders := make(map[string]bool)
+		for _, rel := range relations {
+			if _, ok := holders[rel.Holder]; ok {
+				continue
+			}
+
+			rType := rel.Of.DataType()
+			if rType.Kind() == reflect.Struct {
+				rType = reflect.PtrTo(rType)
+				rel.Of.Schema.SetType(rType)
+			}
+
+			if rel.Cardinality == state.Many && rType.Kind() != reflect.Slice {
+				rType = reflect.SliceOf(rType)
+			}
+
+			var fieldTag string
+			if v.Async != nil {
+				if v.Async.MarshalRelations {
+					fieldTag = AsyncTagName + `:"enc=JSON" jsonx:"rawJSON"`
+				} else {
+					fieldTag = AsyncTagName + `:"table=` + v.Async.Table + `"`
+				}
+			}
+
+			holders[rel.Holder] = true
+			structFields = append(structFields, reflect.StructField{
+				Name: rel.Holder,
+				Type: rType,
+				Tag:  reflect.StructTag(fieldTag),
+			})
+
+			if meta := rel.Of.View.Template.Meta; meta != nil {
+				metaType := meta.Schema.Type()
+				if metaType.Kind() != reflect.Ptr {
+					metaType = reflect.PtrTo(metaType)
+				}
+
+				tag := `json:",omitempty" yaml:",omitempty" sqlx:"-"`
+				structFields = append(structFields, newCasedField(tag, meta.Name, format.CaseUpperCamel, metaType))
+			}
+		}
+
+		if v.SelfReference != nil {
+			structFields = append(structFields, newCasedField("", v.SelfReference.Holder, format.CaseUpperCamel, reflect.SliceOf(ast.InterfaceType)))
+		}
+
+		return reflect.PtrTo(reflect.StructOf(structFields)), nil
+	}
+}
+
+func newCasedField(aTag string, columnName string, sourceCaseFormat format.Case, rType reflect.Type) reflect.StructField {
+	structFieldName := state.StructFieldName(sourceCaseFormat, columnName)
+	return state.NewField(aTag, structFieldName, rType)
 }
 
 func (m *TemplateMeta) getColumns(ctx context.Context, resource *Resource, owner *Template) ([]*Column, error) {

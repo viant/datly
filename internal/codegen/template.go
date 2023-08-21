@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/translator"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
@@ -72,8 +73,8 @@ func (t *Template) BuildState(spec *inference.Spec, bodyHolder string, opts ...O
 	var structFields []reflect.StructField
 
 	for _, parameter := range t.State {
-		if parameter.In.Kind == view.KindDataView && !parameter.IsAuxiliary {
-			parameter.Schema.Cardinality = view.Many
+		if parameter.In.Kind == state.KindDataView && !parameter.IsAuxiliary {
+			parameter.Schema.Cardinality = state.Many
 		}
 		var structTag reflect.StructTag
 		if parameter.Schema.DataType != "" {
@@ -93,8 +94,8 @@ func (t *Template) BuildState(spec *inference.Spec, bodyHolder string, opts ...O
 func (t *Template) buildBodyParameter(spec *inference.Spec, bodyHolder string) *inference.Parameter {
 	param := &inference.Parameter{}
 	param.Name = spec.Type.Name
-	param.Schema = &view.Schema{DataType: spec.Type.Name, Cardinality: spec.Type.Cardinality}
-	param.In = &view.Location{Kind: view.KindRequestBody, Name: bodyHolder}
+	param.Schema = &state.Schema{DataType: spec.Type.Name, Cardinality: spec.Type.Cardinality}
+	param.In = &state.Location{Kind: state.KindRequestBody, Name: bodyHolder}
 	return param
 }
 
@@ -154,7 +155,7 @@ func (t *Template) indexRecords(options *Options, spec *inference.Spec, block *a
 	}
 }
 
-func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec *inference.Spec, cardinality view.Cardinality, parentBlock *ast.Block, rel *inference.Relation) {
+func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec *inference.Spec, cardinality state.Cardinality, parentBlock *ast.Block, rel *inference.Relation) {
 	if spec.IsAuxiliary {
 		return
 	}
@@ -168,7 +169,7 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 	}
 
 	switch cardinality {
-	case view.One:
+	case state.One:
 		structSelector := ast.NewIdent(structPath)
 		checkValid := ast.NewCondition(structSelector, ast.Block{}, nil)
 
@@ -184,7 +185,7 @@ func (t *Template) modifyRecords(options *Options, structPathPrefix string, spec
 		}
 		parentBlock.AppendEmptyLine()
 		parentBlock.Append(checkValid)
-	case view.Many:
+	case state.Many:
 		recordPath := t.RecordName(spec.Type.Name)
 		forEach := ast.NewForEach(ast.NewIdent(recordPath), ast.NewIdent(structPath), ast.Block{})
 

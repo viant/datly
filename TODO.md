@@ -1,17 +1,13 @@
 
 
-
-- Datly Go Handler
+- Unify default-datly tag
 - Route Parameters
-- Multi transaction support
 - Executor triggers/notification
 - Self documenting / Improve documentation
 - Batch spreadsheet ingestion
-- XML input / output
 - Enhance sqlx ns in order to avoid unnecessary one-one relations.
-- Parameter Criteria IN, EXISTS, etc
 - Distributed tracing integration
-- Improve documentation/examplesfrdesz
+- Improve documentation
 - Add support for composite keys
 - Management API
 - LLM integration (OpenAI/GoogleAI)

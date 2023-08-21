@@ -3,8 +3,8 @@ package parser
 import (
 	"bytes"
 	"fmt"
-	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/datly/view/state"
 	"strings"
 )
 
@@ -100,7 +100,7 @@ func sanitizeParameter(expression *Expression, raw string, iterator *iterables, 
 	}
 
 	if param := iterator.State.Lookup(paramName); param != nil {
-		if param.In != nil && param.In.Kind == view.KindLiteral {
+		if param.In != nil && param.In.Kind == state.KindLiteral {
 			return strings.Replace(raw, "$", fmt.Sprintf("$%v.", keywords.ParamsKey), 1)
 		}
 	}

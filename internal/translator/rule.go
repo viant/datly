@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox/data"
 	"os"
 	"path"
@@ -135,7 +136,7 @@ func (r *Rule) ShallGenerateHandler() bool {
 }
 
 func (r *Rule) IsMany() bool {
-	return r.Cardinality == "" || r.Cardinality == view.Many
+	return r.Cardinality == "" || r.Cardinality == state.Many
 }
 
 func (r *Rule) IsBasic() bool {

@@ -2,7 +2,7 @@ package inference
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"testing"
 )
 
@@ -22,7 +22,7 @@ func TestParameter_IsUsedBy(t *testing.T) {
 		ARRAY_EXISTS(FEATURE1, 'FEATURE1') AS Feature1
 		FROM USER_ACL WHERE USER_ID = $criteria.AppendBinding($Unsafe.Jwt.UserID)`,
 			parameter: &Parameter{
-				Parameter: view.Parameter{Name: "Jwt"},
+				Parameter: state.Parameter{Name: "Jwt"},
 			},
 			expect: true,
 		},
@@ -30,7 +30,7 @@ func TestParameter_IsUsedBy(t *testing.T) {
 			description: "curly match",
 			text:        ` SELECT * FROM FOOS WHERE $criteria.In("ID", ${CurFoos}.Values)`,
 			parameter: &Parameter{
-				Parameter: view.Parameter{Name: "CurFoos"},
+				Parameter: state.Parameter{Name: "CurFoos"},
 			},
 			expect: true,
 		},
@@ -39,7 +39,7 @@ func TestParameter_IsUsedBy(t *testing.T) {
 			description: "negative match",
 			text:        ` SELECT * FROM FOOS WHERE $criteria.In("ID", $CurFoosId.Values)`,
 			parameter: &Parameter{
-				Parameter: view.Parameter{Name: "CurFoos"},
+				Parameter: state.Parameter{Name: "CurFoos"},
 			},
 		},
 		{
@@ -47,7 +47,7 @@ func TestParameter_IsUsedBy(t *testing.T) {
 			text:        ` SELECT * FROM FOOS WHERE $criteria.In("ID", $CurFoosId.Values) AND $CurFoos=1 `,
 			expect:      true,
 			parameter: &Parameter{
-				Parameter: view.Parameter{Name: "CurFoos"},
+				Parameter: state.Parameter{Name: "CurFoos"},
 			},
 		},
 	}

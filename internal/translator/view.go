@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox/format"
 	"path"
 )
@@ -66,7 +67,7 @@ func (v *View) applyShorthands(viewlet *Viewlet) {
 
 	if v.DataType != "" {
 		if v.Schema == nil {
-			v.Schema = &view.Schema{}
+			v.Schema = &state.Schema{}
 		}
 		setter.SetStringIfEmpty(&v.Schema.DataType, v.DataType)
 	}
@@ -176,7 +177,7 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 	}
 
 	if v.CriteriaParam != "" {
-		selector.CriteriaParam = view.NewRefParameter(v.CriteriaParam)
+		selector.CriteriaParam = state.NewRefParameter(v.CriteriaParam)
 	}
 
 }
@@ -207,11 +208,11 @@ func (v *View) buildTemplate(namespace *Viewlet, rule *Rule) {
 }
 
 // matchParameters matches parameter used by SQL, and add explicit parameter for root view
-func (v *View) matchParameters(SQL string, state inference.State, root bool) []*view.Parameter {
-	var result []*view.Parameter
-	SQLState := state.StateForSQL(SQL, root)
+func (v *View) matchParameters(SQL string, aState inference.State, root bool) []*state.Parameter {
+	var result []*state.Parameter
+	SQLState := aState.StateForSQL(SQL, root)
 	for _, candidate := range SQLState {
-		result = append(result, view.NewRefParameter(candidate.Name))
+		result = append(result, state.NewRefParameter(candidate.Name))
 	}
 	return result
 }

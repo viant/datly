@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
@@ -300,7 +301,7 @@ func (s *Service) buildViewletType(ctx context.Context, db *sql.DB, viewlet *Vie
 	}
 	viewlet.Spec.Namespace = viewlet.Name
 	pkg := ""
-	cardinality := view.Many
+	cardinality := state.Many
 	if err = viewlet.Spec.BuildType(pkg, viewlet.Name, cardinality, viewlet.whitelistMap(), nil); err != nil {
 		return err
 	}

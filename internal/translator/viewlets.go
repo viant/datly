@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/internal/inference"
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
 	"strings"
@@ -95,9 +95,9 @@ func (n Viewlets) addRelations(query *query.Select) {
 		parentViewlet := n.Lookup(parentNs)
 
 		relation.Spec.Parent = parentViewlet.Spec
-		cardinality := view.Many
+		cardinality := state.Many
 		if inference.IsToOne(join) || relation.OutputSettings.IsToOne() {
-			cardinality = view.One
+			cardinality = state.One
 		}
 		relName := join.Alias
 		parentViewlet.Spec.AddRelation(relName, join, relation.Spec, cardinality)

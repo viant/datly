@@ -2,39 +2,37 @@ package view
 
 import (
 	"fmt"
-	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
-	"github.com/viant/sqlparser"
-	"github.com/viant/sqlx/io"
-	"github.com/viant/sqlx/option"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox/format"
-	"github.com/viant/xdatly/codec"
 	"reflect"
 	"strings"
 )
 
 // Column represents View column
-type Column struct {
-	Name                string `json:",omitempty"`
-	DataType            string `json:",omitempty"`
-	Tag                 string `json:",omitempty"`
-	IgnoreCaseFormatter bool   `json:",omitempty"`
-	Expression          string `json:",omitempty"`
-	Filterable          bool   `json:",omitempty"`
-	Nullable            bool   `json:",omitempty"`
-	Default             string `json:",omitempty"`
-	Format              string `json:",omitempty"`
-	Codec               *Codec `json:",omitempty"`
-	DatabaseColumn      string `json:",omitempty"`
-	IndexedBy           string `json:",omitempty"`
+type (
+	Column struct {
+		Name                string       `json:",omitempty"`
+		DataType            string       `json:",omitempty"`
+		Tag                 string       `json:",omitempty"`
+		IgnoreCaseFormatter bool         `json:",omitempty"`
+		Expression          string       `json:",omitempty"`
+		Filterable          bool         `json:",omitempty"`
+		Nullable            bool         `json:",omitempty"`
+		Default             string       `json:",omitempty"`
+		Format              string       `json:",omitempty"`
+		Codec               *state.Codec `json:",omitempty"`
+		DatabaseColumn      string       `json:",omitempty"`
+		IndexedBy           string       `json:",omitempty"`
 
-	rType         reflect.Type
-	tag           *io.Tag
-	sqlExpression string
-	field         *reflect.StructField
-	_initialized  bool
-	_fieldName    string
-}
+		rType         reflect.Type
+		sqlExpression string
+		field         *reflect.StructField
+		_initialized  bool
+		_fieldName    string
+	}
+	ColumnOption func(c *Column)
+)
 
 // SqlExpression builds column sql expression if any expression specified in format: Expression AS Name
 func (c *Column) SqlExpression() string {
@@ -47,7 +45,7 @@ func (c *Column) ColumnName() string {
 }
 
 // Init initializes Column
-func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, config *ColumnConfig) error {
+func (c *Column) Init(resourcelet state.Resourcelet, caser format.Case, allowNulls bool, config *ColumnConfig) error {
 	if c._initialized {
 		return nil
 	}
@@ -70,7 +68,7 @@ func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, co
 	}
 
 	if nonPtrType == nil || c.DataType != "" {
-		rType, err := types.LookupType(resource.LookupType(), c.DataType)
+		rType, err := types.LookupType(resourcelet.LookupType(), c.DataType)
 		if err != nil && c.rType == nil {
 			return err
 		}
@@ -87,8 +85,7 @@ func (c *Column) Init(resource *Resource, caser format.Case, allowNulls bool, co
 	c._fieldName = caser.Format(c.Name, format.CaseUpperCamel)
 
 	if c.Codec != nil {
-		aResourcelet := &resourcelet{Resource: resource}
-		if err := c.Codec.Init(aResourcelet, c.rType); err != nil {
+		if err := c.Codec.Init(resourcelet, c.rType); err != nil {
 			return err
 		}
 	}
@@ -112,9 +109,12 @@ func (c *Column) buildSQLExpression(allowNulls bool) error {
 	return nil
 }
 
-func (c *Column) setField(field reflect.StructField) {
+func (c *Column) SetField(field reflect.StructField) {
 	c.field = &field
-	c.tag = io.ParseTag(field.Tag.Get(option.TagSqlx))
+}
+
+func (c *Column) Field() *reflect.StructField {
+	return c.field
 }
 
 func (c *Column) defaultValue(rType reflect.Type) string {
@@ -145,6 +145,10 @@ func (c *Column) ColumnType() reflect.Type {
 	return c.rType
 }
 
+func (c *Column) SetColumnType(rType reflect.Type) {
+	c.rType = rType
+}
+
 func (c *Column) inherit(config *ColumnConfig) {
 	if config.Codec != nil {
 		c.Codec = config.Codec
@@ -166,159 +170,32 @@ func (c *Column) inherit(config *ColumnConfig) {
 	}
 }
 
-// Columns wrap slice of Column
-type Columns []*Column
-
-// NamedColumns represents *Column registry.
-type NamedColumns map[string]*Column
-
-func (c NamedColumns) ColumnName(key string) (string, error) {
-	lookup, err := c.Lookup(key)
-	if err != nil {
-		return "", err
-	}
-
-	return lookup.Name, nil
-}
-
-func (c NamedColumns) Column(name string) (codec.Column, bool) {
-	lookup, err := c.Lookup(name)
-	if err != nil {
-		return nil, false
-	}
-
-	return lookup, true
-}
-
-// Index indexes columns by Column.Name
-func (c Columns) Index(caser format.Case) NamedColumns {
-	result := NamedColumns{}
-	for i, _ := range c {
-		result.Register(caser, c[i])
-	}
-	return result
-}
-
-// Register registers *Column
-func (c NamedColumns) Register(caser format.Case, column *Column) {
-	keys := shared.KeysOf(column.Name, true)
-	for _, key := range keys {
-		c[key] = column
-	}
-	c[caser.Format(column.Name, format.CaseUpperCamel)] = column
-
-	if column.field != nil {
-		c[column.field.Name] = column
+func WithTag(tag string) ColumnOption {
+	return func(c *Column) {
+		c.Tag = tag
 	}
 }
 
-// RegisterHolder looks for the Column by Relation.Column name.
-// If it finds registers that Column with Relation.Holder key.
-func (c NamedColumns) RegisterHolder(relation *Relation) error {
-	column, err := c.Lookup(relation.Column)
-	if err != nil {
-		//TODO: evaluate later
-		return nil
+func NewColumn(name, dataTypeName string, rType reflect.Type, nullable bool, opts ...ColumnOption) *Column {
+	ret := &Column{
+		DatabaseColumn: name,
+		Name:           strings.Trim(name, "'"),
+		DataType:       dataTypeName,
+		rType:          rType,
+		Nullable:       nullable,
 	}
-
-	c[relation.Holder] = column
-	keys := shared.KeysOf(relation.Holder, false)
-	for _, key := range keys {
-		c[key] = column
+	for _, opt := range opts {
+		opt(ret)
 	}
-
-	return nil
-}
-
-// Lookup returns Column with given name.
-func (c NamedColumns) Lookup(name string) (*Column, error) {
-	column, ok := c[name]
-	if ok {
-		return column, nil
-	}
-
-	column, ok = c[strings.ToUpper(name)]
-	if ok {
-		return column, nil
-	}
-
-	column, ok = c[strings.ToLower(name)]
-	if ok {
-		return column, nil
-	}
-
-	keys := make([]string, len(c))
-	counter := 0
-	for k := range c {
-		keys[counter] = k
-		counter++
-	}
-
-	return nil, fmt.Errorf("undefined column name %v, avails: %+v", name, strings.Join(keys, ","))
-}
-
-func (c NamedColumns) RegisterWithName(name string, column *Column) {
-	keys := shared.KeysOf(name, true)
-	for _, key := range keys {
-		c[key] = column
-	}
-}
-
-// Init initializes each Column in the slice.
-func (c Columns) Init(resource *Resource, config map[string]*ColumnConfig, caser format.Case, allowNulls bool) error {
-	for i := range c {
-		columnConfig := config[c[i].Name]
-
-		if err := c[i].Init(resource, caser, allowNulls, columnConfig); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (c Columns) updateTypes(columns []*Column, caser format.Case) {
-	index := Columns(columns).Index(caser)
-
-	for _, column := range c {
-		if column.rType == nil || shared.Elem(column.rType).Kind() == reflect.Interface {
-			newCol, err := index.Lookup(column.Name)
-			if err != nil {
-				continue
-			}
-
-			column.rType = newCol.rType
-		}
-	}
-}
-
-func NewColumns(columns sqlparser.Columns) Columns {
-	var result = make(Columns, 0, len(columns))
-	for _, item := range columns {
-		name := item.Identity()
-		column := &Column{
-			Name:                name,
-			DataType:            item.Type,
-			Tag:                 item.Tag,
-			IgnoreCaseFormatter: false,
-			Filterable:          false,
-			Nullable:            item.IsNullable,
-			rType:               item.RawType,
-		}
-		if item.Default != nil {
-			column.Default = *item.Default
-		}
-		result = append(result, column)
-	}
-	return result
+	return ret
 }
 
 type ColumnConfig struct {
-	Name                string  `json:",omitempty"`
-	IgnoreCaseFormatter *bool   `json:",omitempty"`
-	Expression          *string `json:",omitempty"`
-	Codec               *Codec  `json:",omitempty"`
-	DataType            *string `json:",omitempty"`
-	Format              *string `json:",omitempty"`
-	Tag                 *string `json:",omitempty"`
+	Name                string       `json:",omitempty"`
+	IgnoreCaseFormatter *bool        `json:",omitempty"`
+	Expression          *string      `json:",omitempty"`
+	Codec               *state.Codec `json:",omitempty"`
+	DataType            *string      `json:",omitempty"`
+	Format              *string      `json:",omitempty"`
+	Tag                 *string      `json:",omitempty"`
 }

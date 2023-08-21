@@ -1,6 +1,10 @@
 package view
 
 import (
+	"fmt"
+	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/view/state"
+	"github.com/viant/toolbox/format"
 	"reflect"
 	"strings"
 )
@@ -37,12 +41,12 @@ type (
 	}
 )
 
-//HasRelationSpec returns true if tag has relation
+// HasRelationSpec returns true if tag has relation
 func (t *Tag) HasRelationSpec() bool {
 	return (t.RefTable != "" || t.RefSQL != "") && (t.RefField != "" || t.RefColumn != "")
 }
 
-//RelationOption return tag relation option
+// RelationOption return tag relation option
 func (t *Tag) RelationOption(field reflect.StructField, refViewOptions ...ViewOption) ViewOptions {
 	var result []ViewOption
 	if !t.HasRelationSpec() {
@@ -96,7 +100,7 @@ func (t *Tag) Init(field reflect.StructField) {
 	}
 }
 
-//ParseTag parses datly tag
+// ParseTag parses datly tag
 func ParseTag(tagString string) *Tag {
 	tag := &Tag{}
 	elements := strings.Split(tagString, ",")
@@ -135,4 +139,51 @@ func ParseTag(tagString string) *Tag {
 		}
 	}
 	return tag
+}
+
+func generateFieldTag(column *Column, viewCaseFormat format.Case) string {
+	columnName := column.Name
+	defaultTag := createDefaultTagIfNeeded(column)
+	sqlxTag := `sqlx:"name=` + columnName + `"`
+	var aTag string
+	if defaultTag == "" {
+		aTag = sqlxTag
+	} else {
+		aTag = sqlxTag + " " + defaultTag
+	}
+
+	if column.Tag != "" {
+		if aTag != "" {
+			aTag += " "
+		}
+		aTag += column.Tag
+	}
+	if !strings.Contains(aTag, "velty") {
+		names := columnName
+		if aFieldName := state.StructFieldName(viewCaseFormat, columnName); aFieldName != names {
+			names = names + "|" + aFieldName
+		}
+		aTag += fmt.Sprintf(` velty:"names=%v"`, names)
+	}
+	return aTag
+}
+
+func createDefaultTagIfNeeded(column *Column) string {
+	if column == nil {
+		return ""
+	}
+	attributes := make([]string, 0)
+	if column.Format != "" {
+		attributes = append(attributes, json.FormatAttribute+"="+column.Format)
+	}
+	if column.IgnoreCaseFormatter {
+		attributes = append(attributes, json.IgnoreCaseFormatter+"=true,name="+column.Name)
+	}
+	if column.Default != "" {
+		attributes = append(attributes, json.ValueAttribute+"="+column.Default)
+	}
+	if len(attributes) == 0 {
+		return ""
+	}
+	return json.DefaultTagName + `:"` + strings.Join(attributes, ",") + `"`
 }

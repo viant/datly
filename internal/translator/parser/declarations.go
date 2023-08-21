@@ -6,7 +6,7 @@ import (
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
 	"github.com/viant/velty/ast/expr"
@@ -23,7 +23,7 @@ type (
 		SQL        string
 		State      inference.State
 		Transforms []*marshal.Transform
-		lookup     func(dataType string, opts ...xreflect.Option) (*view.Schema, error)
+		lookup     func(dataType string, opts ...xreflect.Option) (*state.Schema, error)
 	}
 )
 
@@ -157,10 +157,10 @@ func (d *Declarations) tryParseTypeExpression(typeContent string, declaration *D
 	dataType := types[0]
 
 	if strings.HasPrefix(dataType, "[]") {
-		declaration.Cardinality = view.Many
+		declaration.Cardinality = state.Many
 		dataType = dataType[2:]
 	} else {
-		declaration.Cardinality = view.One
+		declaration.Cardinality = state.One
 	}
 
 	if dataType != "" {
@@ -306,7 +306,7 @@ func extractArg(cursorContent string) string {
 	return strings.TrimSpace(text)
 }
 
-func NewDeclarations(SQL string, lookup func(dataType string, opts ...xreflect.Option) (*view.Schema, error)) (*Declarations, error) {
+func NewDeclarations(SQL string, lookup func(dataType string, opts ...xreflect.Option) (*state.Schema, error)) (*Declarations, error) {
 	result := &Declarations{
 		SQL:    SQL,
 		State:  nil,

@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/router/async/handler/sqs"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/insert"
 	"github.com/viant/sqlx/io/update"
@@ -36,7 +37,7 @@ type (
 	}
 
 	qualifier struct {
-		parameter *view.Parameter
+		parameter *state.Parameter
 		accessor  *types.Accessor
 	}
 )

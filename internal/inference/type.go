@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
@@ -42,7 +43,7 @@ func (f *Field) StructField(opts ...ReflectOption) reflect.StructField {
 type Type struct {
 	Package        string
 	Name           string
-	Cardinality    view.Cardinality
+	Cardinality    state.Cardinality
 	PkFields       []*Field
 	columnFields   []*Field
 	RelationFields []*Field
@@ -103,7 +104,7 @@ func (t *Type) AppendColumnField(column *sqlparser.Column, skipped bool) (*Field
 	if err != nil {
 		return nil, err
 	}
-	field.Schema = view.NewSchema(aType)
+	field.Schema = state.NewSchema(aType)
 	field.Schema.DataType = aType.Name()
 	if skipped {
 		field.Skipped = skipped
@@ -131,10 +132,10 @@ func (s *Spec) Fields(includeHas bool) []*view.Field {
 		result = append(result, &relField)
 	}
 	for _, field := range specType.columnFields {
-		hasField.Fields = append(hasField.Fields, &view.Field{Name: field.Name, Schema: &view.Schema{DataType: "bool"}})
+		hasField.Fields = append(hasField.Fields, &view.Field{Name: field.Name, Schema: &state.Schema{DataType: "bool"}})
 	}
 	for _, field := range specType.RelationFields {
-		hasField.Fields = append(hasField.Fields, &view.Field{Name: field.Name, Schema: &view.Schema{DataType: "bool"}})
+		hasField.Fields = append(hasField.Fields, &view.Field{Name: field.Name, Schema: &state.Schema{DataType: "bool"}})
 	}
 	if includeHas {
 		result = append(result, hasField)

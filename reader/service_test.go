@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/gmetric/counter/base"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xdatly/codec"
@@ -544,7 +545,7 @@ func nestedStruct() usecase {
 	resource := view.EmptyResource()
 	resource.AddViews(&view.View{
 		Name:                 "events",
-		Schema:               view.NewSchema(reflect.TypeOf(ev{})),
+		Schema:               state.NewSchema(reflect.TypeOf(ev{})),
 		InheritSchemaColumns: true,
 		Connector: &view.Connector{
 			Name:   "db",
@@ -631,7 +632,7 @@ func autoCoalesce() usecase {
 		Connector:            connector,
 		Name:                 "events",
 		Table:                "events",
-		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
+		Schema:               state.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 		Caser:                format.CaseUpperUnderscore,
 	})
@@ -665,7 +666,7 @@ func wildcardAllowedFilterable() usecase {
 		Name:                 "events",
 		Alias:                "ev",
 		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
-		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
+		Schema:               state.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 		Caser:                format.CaseUpperUnderscore,
 		Selector: &view.Config{
@@ -717,7 +718,7 @@ func inheritLogger() usecase {
 		Name:                 "events",
 		Alias:                "ev",
 		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
-		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
+		Schema:               state.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 		Caser:                format.CaseUpperUnderscore,
 	})
@@ -751,7 +752,7 @@ func inheritCoalesceTypes() usecase {
 		Name:                 "events",
 		Alias:                "ev",
 		From:                 `SELECT COALESCE(e.id, 0) as ID, COALESCE(e.quantity, 0) as Quantity, COALESCE (e.event_type_id, 0) as EVENT_TYPE_ID FROM events as e `,
-		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
+		Schema:               state.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 		Caser:                format.CaseUpperUnderscore,
 	})
@@ -786,7 +787,7 @@ func criteriaWhere() usecase {
 		Alias:                "ev",
 		Table:                "events",
 		From:                 `SELECT * FROM events as e ` + string(keywords.WhereCriteria),
-		Schema:               view.NewSchema(reflect.TypeOf(&Event3{})),
+		Schema:               state.NewSchema(reflect.TypeOf(&Event3{})),
 		InheritSchemaColumns: true,
 	})
 
@@ -841,12 +842,12 @@ func eventsResource(batch *view.Batch) (*view.Resource, string) {
 					},
 					Column: "id",
 				},
-				Cardinality: view.One,
+				Cardinality: state.One,
 				Column:      "event_type_id",
 				Holder:      "EventType",
 			},
 		},
-		Schema: view.NewSchema(reflect.TypeOf(&event{})),
+		Schema: state.NewSchema(reflect.TypeOf(&event{})),
 	})
 	return resource, "events"
 }
@@ -901,13 +902,13 @@ func columnsInResource(column, alias string) (string, *view.Resource) {
 					},
 					Column: "id",
 				},
-				Cardinality:     view.One,
+				Cardinality:     state.One,
 				Column:          column,
 				ColumnNamespace: alias,
 				Holder:          "EventType",
 			},
 		},
-		Schema: view.NewSchema(reflect.TypeOf(&event{})),
+		Schema: state.NewSchema(reflect.TypeOf(&event{})),
 	})
 	return "events", resource
 }
@@ -952,12 +953,12 @@ func inheritTypeForReferencedView() usecase {
 					View:   *view.ViewReference("event-event_types", "event-types"),
 					Column: "id",
 				},
-				Cardinality: view.One,
+				Cardinality: state.One,
 				Column:      "event_type_id",
 				Holder:      "EventType",
 			},
 		},
-		Schema: view.NewSchema(reflect.TypeOf(&event{})),
+		Schema: state.NewSchema(reflect.TypeOf(&event{})),
 	})
 
 	return usecase{
@@ -983,7 +984,7 @@ func nestedRelation() usecase {
 		Name:                 "event-type_events",
 		Table:                "event_types",
 		InheritSchemaColumns: true,
-		Schema:               view.NewSchema(reflect.TypeOf(&eventType{})),
+		Schema:               state.NewSchema(reflect.TypeOf(&eventType{})),
 		With: []*view.Relation{
 			{
 				Name: "event-type_rel",
@@ -1005,7 +1006,7 @@ func nestedRelation() usecase {
 									},
 									Column: "id",
 								},
-								Cardinality: view.One,
+								Cardinality: state.One,
 								Column:      "event_type_id",
 								Holder:      "EventType",
 							},
@@ -1013,7 +1014,7 @@ func nestedRelation() usecase {
 					},
 					Column: "event_type_id",
 				},
-				Cardinality: view.Many,
+				Cardinality: state.Many,
 				Column:      "Id",
 				Holder:      "Events",
 			},
@@ -1048,7 +1049,7 @@ func sqlxColumnNames() usecase {
 		Connector:            connector,
 		Name:                 "events",
 		Table:                "events",
-		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
+		Schema:               state.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 	})
 
@@ -1081,7 +1082,7 @@ func inheritColumnsView() usecase {
 		Name:                 "events",
 		Table:                "events",
 		Alias:                "e",
-		Schema:               view.NewSchema(reflect.TypeOf(&Event{})),
+		Schema:               state.NewSchema(reflect.TypeOf(&Event{})),
 		InheritSchemaColumns: true,
 	})
 
@@ -1121,7 +1122,7 @@ func eventTypeViewWithEventTypeIdColumn() usecase {
 		Name:                 "event-type_events",
 		Table:                "event_types",
 		InheritSchemaColumns: true,
-		Schema:               view.NewSchema(reflect.TypeOf(&EventType2{})),
+		Schema:               state.NewSchema(reflect.TypeOf(&EventType2{})),
 		With: []*view.Relation{
 			{
 				Name: "event-type_rel",
@@ -1134,7 +1135,7 @@ func eventTypeViewWithEventTypeIdColumn() usecase {
 					},
 					Column: "event_type_id",
 				},
-				Cardinality: view.Many,
+				Cardinality: state.Many,
 				Column:      "Id",
 				Holder:      "Events",
 			},
@@ -1176,7 +1177,7 @@ func eventTypeViewWithoutEventTypeIdColumn() usecase {
 		Name:                 "event-type_events",
 		Table:                "event_types",
 		InheritSchemaColumns: true,
-		Schema:               view.NewSchema(reflect.TypeOf(&EventType{})),
+		Schema:               state.NewSchema(reflect.TypeOf(&EventType{})),
 		With: []*view.Relation{
 			{
 				Name: "event-type_rel",
@@ -1189,7 +1190,7 @@ func eventTypeViewWithoutEventTypeIdColumn() usecase {
 					},
 					Column: "event_type_id",
 				},
-				Cardinality: view.Many,
+				Cardinality: state.Many,
 				Column:      "Id",
 				Holder:      "Events",
 			},

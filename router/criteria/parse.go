@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/parsly"
 	"github.com/viant/xreflect"
 	"reflect"
@@ -223,7 +224,7 @@ func appendMethod(cursor *parsly.Cursor, methods map[string]*view.Method, method
 	return cursor.NewError(parenthesesMatcher)
 }
 
-func matchMethod(cursor *parsly.Cursor, methods map[string]*view.Method, args []*view.Schema, columns view.NamedColumns, buffer *bytes.Buffer, placeholders *[]interface{}) error {
+func matchMethod(cursor *parsly.Cursor, methods map[string]*view.Method, args []*state.Schema, columns view.NamedColumns, buffer *bytes.Buffer, placeholders *[]interface{}) error {
 	for i, arg := range args {
 		if i != 0 {
 			buffer.WriteString(", ")

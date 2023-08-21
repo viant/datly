@@ -11,7 +11,9 @@ import (
 )
 
 const (
-	DefaultTagName      = "default"
+	DefaultTagName = "default"
+	DatlyTagName   = "default"
+
 	FormatAttribute     = "format"
 	IgnoreCaseFormatter = "ignorecaseformatter"
 

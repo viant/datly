@@ -17,6 +17,7 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/parameter"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx/io/load/reader/csv"
 	"github.com/viant/structql"
 	"github.com/viant/toolbox/format"
@@ -130,7 +131,7 @@ type (
 	}
 
 	Output struct {
-		Cardinality       view.Cardinality     `json:",omitempty"`
+		Cardinality       state.Cardinality    `json:",omitempty"`
 		CaseFormat        formatter.CaseFormat `json:",omitempty"`
 		OmitEmpty         bool                 `json:",omitempty"`
 		Style             Style                `json:",omitempty"`
@@ -144,7 +145,7 @@ type (
 		TabularJSON       *TabularJSONConfig `json:",omitempty"`
 		RevealMetric      *bool
 		DebugKind         view.MetaKind
-		RequestBodySchema *view.Schema
+		RequestBodySchema *state.Schema
 		ResponseBody      *BodySelector
 		DataFormat        string `json:",omitempty"`
 
@@ -422,10 +423,10 @@ func (r *Route) initVisitor(resource *Resource) error {
 
 func (r *Route) initCardinality() error {
 	switch r.Cardinality {
-	case view.One, view.Many:
+	case state.One, state.Many:
 		return nil
 	case "":
-		r.Cardinality = view.Many
+		r.Cardinality = state.Many
 		return nil
 	default:
 		return fmt.Errorf("unsupported cardinality type %v\n", r.Cardinality)
@@ -528,7 +529,7 @@ func (r *Route) responseFieldType() reflect.Type {
 		return r.ResponseBody._bodyType
 	}
 
-	if r.Cardinality == view.Many {
+	if r.Cardinality == state.Many {
 		return r.View.Schema.SliceType()
 	}
 
@@ -575,7 +576,7 @@ func (r *Route) initRequestBody() error {
 
 func (r *Route) initRequestBodyFromParams() error {
 
-	params := make([]*view.Parameter, 0)
+	params := make([]*state.Parameter, 0)
 
 	//TODO why do we need this ?
 	setMarker := map[string]bool{}
@@ -616,7 +617,7 @@ func (r *Route) initRequestBodyFromParams() error {
 	return nil
 }
 
-func (r *Route) initRequestBodyType(bodyParam *view.Parameter, params []*view.Parameter) (reflect.Type, error) {
+func (r *Route) initRequestBodyType(bodyParam *state.Parameter, params []*state.Parameter) (reflect.Type, error) {
 	if bodyParam != nil {
 		bodyType := bodyParam.Schema.Type()
 		r._accessors.Init(bodyType)
@@ -625,7 +626,7 @@ func (r *Route) initRequestBodyType(bodyParam *view.Parameter, params []*view.Pa
 
 	if r.RequestBodySchema != nil {
 
-		if err := r.RequestBodySchema.Init(view.NewResourcelet(r._resource, nil), *r.Output._caser); err != nil {
+		if err := r.RequestBodySchema.Init(view.NewResourcelet(r._resource, nil)); err != nil {
 			return nil, err
 		}
 
@@ -644,9 +645,9 @@ func (r *Route) initRequestBodyType(bodyParam *view.Parameter, params []*view.Pa
 	return typeBuilder.Build(), nil
 }
 
-func (r *Route) findRequestBodyParams(aView *view.View, params *[]*view.Parameter, setMarker map[string]bool) {
+func (r *Route) findRequestBodyParams(aView *view.View, params *[]*state.Parameter, setMarker map[string]bool) {
 	for i, param := range aView.Template.Parameters {
-		if param.In.Kind == view.KindRequestBody && !setMarker[param.Name] {
+		if param.In.Kind == state.KindRequestBody && !setMarker[param.Name] {
 			setMarker[param.Name] = true
 			*params = append(*params, aView.Template.Parameters[i])
 		}
@@ -742,7 +743,7 @@ func (r *Route) initCaser() error {
 	return nil
 }
 
-func (r *Route) fullBodyParam(params []*view.Parameter) (*view.Parameter, bool) {
+func (r *Route) fullBodyParam(params []*state.Parameter) (*state.Parameter, bool) {
 	for _, param := range params {
 		if param.In.Name == "" {
 			return param, true
@@ -752,7 +753,7 @@ func (r *Route) fullBodyParam(params []*view.Parameter) (*view.Parameter, bool) 
 	return nil, false
 }
 
-func (r *Route) bodyParamMatches(rType reflect.Type, params []*view.Parameter) error {
+func (r *Route) bodyParamMatches(rType reflect.Type, params []*state.Parameter) error {
 	for _, param := range params {
 		name := param.In.Name
 		if name == "" {

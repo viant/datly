@@ -56,7 +56,7 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 	for i, column := range columns {
 		codecStructFields[i] = reflect.StructField{
 			Name: "Col" + strconv.Itoa(i),
-			Type: column.rType,
+			Type: column.ColumnType(),
 			Tag:  reflect.StructTag(fmt.Sprintf(`sqlx:"name=%v"`, column.Name)),
 		}
 	}
@@ -99,7 +99,7 @@ func (c *columnsCodec) updateValue(ctx context.Context, value interface{}, recor
 	asPtr := xunsafe.AsPointer(value)
 	for i, column := range c.columns {
 		fieldValue := c.fields[i].Value(asPtr)
-		decoded, err := column.Codec._codec.Value(ctx, fieldValue, codec.WithOptions(record))
+		decoded, err := column.Codec.Transform(ctx, fieldValue, codec.WithOptions(record))
 		if err != nil {
 			return err
 		}

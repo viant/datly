@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/xdatly/codec"
 	"reflect"
 	"strings"
@@ -31,12 +32,12 @@ type (
 		Limit         int                `json:",omitempty"`
 		Constraints   *Constraints       `json:",omitempty"`
 		Parameters    *SelectorParameter `json:",omitempty"`
-		LimitParam    *Parameter         `json:",omitempty"`
-		OffsetParam   *Parameter         `json:",omitempty"`
-		PageParam     *Parameter         `json:",omitempty"`
-		FieldsParam   *Parameter         `json:",omitempty"`
-		OrderByParam  *Parameter         `json:",omitempty"`
-		CriteriaParam *Parameter         `json:",omitempty"`
+		LimitParam    *state.Parameter   `json:",omitempty"`
+		OffsetParam   *state.Parameter   `json:",omitempty"`
+		PageParam     *state.Parameter   `json:",omitempty"`
+		FieldsParam   *state.Parameter   `json:",omitempty"`
+		OrderByParam  *state.Parameter   `json:",omitempty"`
+		CriteriaParam *state.Parameter   `json:",omitempty"`
 
 		limitDefault    *bool
 		offsetDefault   *bool
@@ -132,11 +133,11 @@ func (c *Config) Init(ctx context.Context, resource *Resource, parent *View) err
 	return nil
 }
 
-func (c *Config) newSelectorParam(name, paramKind string, parent *View) *Parameter {
-	return &Parameter{
+func (c *Config) newSelectorParam(name, paramKind string, parent *View) *state.Parameter {
+	return &state.Parameter{
 		Name:        shared.FirstNotEmpty(name, paramKind),
-		In:          NewQueryLocation(shared.FirstNotEmpty(name, c.Namespace+paramKind)),
-		Schema:      NewSchema(ParamType(paramKind)),
+		In:          state.NewQueryLocation(shared.FirstNotEmpty(name, c.Namespace+paramKind)),
+		Schema:      state.NewSchema(ParamType(paramKind)),
 		Description: Description(paramKind, parent.Name),
 	}
 }
@@ -186,7 +187,7 @@ func (c *Config) initCustomParams(ctx context.Context, resource *Resource, paren
 	return nil
 }
 
-func (c *Config) initParamIfNeeded(ctx context.Context, param *Parameter, resource *Resource, view *View, requiredTypes ...reflect.Type) error {
+func (c *Config) initParamIfNeeded(ctx context.Context, param *state.Parameter, resource *Resource, view *View, requiredTypes ...reflect.Type) error {
 	if param == nil {
 		return nil
 	}
@@ -194,7 +195,7 @@ func (c *Config) initParamIfNeeded(ctx context.Context, param *Parameter, resour
 	if param.Name == "" {
 		param.Name = param.Ref
 	}
-	aResource := &resourcelet{View: view, Resource: resource}
+	aResource := &Resourcelet{View: view, Resource: resource}
 	if err := param.Init(ctx, aResource); err != nil {
 		return err
 	}
@@ -206,7 +207,7 @@ func (c *Config) initParamIfNeeded(ctx context.Context, param *Parameter, resour
 	return nil
 }
 
-func (c *Config) paramTypeMatches(param *Parameter, requiredTypes []reflect.Type) error {
+func (c *Config) paramTypeMatches(param *state.Parameter, requiredTypes []reflect.Type) error {
 	paramType := param.ActualParamType()
 	for _, requiredType := range requiredTypes {
 		if paramType == requiredType {

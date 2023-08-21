@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	sjwt "github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/signer"
 	"github.com/viant/scy/auth/jwt/verifier"
@@ -104,7 +105,7 @@ func (s *Service) MergeResource(resource *view.Resource, types *xreflect.Types) 
 }
 
 // AddParameter add global parameters
-func (s *Service) AddParameter(parameters ...*view.Parameter) error {
+func (s *Service) AddParameter(parameters ...*state.Parameter) error {
 	if err := s.ensureNotInitialised(); err != nil {
 		return err
 	}

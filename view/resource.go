@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/xdatly/codec"
@@ -43,8 +44,8 @@ type Resource struct {
 	Views  []*View `json:",omitempty"`
 	_views NamedViews
 
-	Parameters  []*Parameter `json:",omitempty"`
-	_parameters NamedParameters
+	Parameters  []*state.Parameter `json:",omitempty"`
+	_parameters state.NamedParameters
 
 	Types  []*TypeDefinition
 	_types *xreflect.Types
@@ -65,7 +66,7 @@ type Resource struct {
 	fs              afs.Service
 }
 
-func (r *Resource) LookupParameter(name string) (*Parameter, error) {
+func (r *Resource) LookupParameter(name string) (*state.Parameter, error) {
 	return r._parameters.Lookup(name)
 }
 
@@ -224,8 +225,8 @@ func (r *Resource) ConnectorByName() Connectors {
 	return index
 }
 
-func (r *Resource) paramByName() map[string]*Parameter {
-	index := map[string]*Parameter{}
+func (r *Resource) paramByName() map[string]*state.Parameter {
+	index := map[string]*state.Parameter{}
 	if len(r.Parameters) == 0 {
 		return index
 	}
@@ -319,7 +320,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 
 	r._connectors = ConnectorSlice(r.Connectors).Index()
 	r._messageBuses = MessageBusSlice(r.MessageBuses).Index()
-	r._parameters = Parameters(r.Parameters).Index()
+	r._parameters = state.Parameters(r.Parameters).Index()
 	if err != nil {
 		return err
 	}
@@ -374,7 +375,7 @@ func (r *Resource) View(name string) (*View, error) {
 	return r._views.Lookup(name)
 }
 
-func (r *Resource) ViewSchema(ctx context.Context, name string) (*Schema, error) {
+func (r *Resource) ViewSchema(ctx context.Context, name string) (*state.Schema, error) {
 	aView, err := r.View(name)
 	if err != nil {
 		return nil, err
@@ -489,8 +490,8 @@ func EmptyResource() *Resource {
 		_messageBuses: MessageBuses{},
 		Views:         make([]*View, 0),
 		_views:        NamedViews{},
-		Parameters:    make([]*Parameter, 0),
-		_parameters:   NamedParameters{},
+		Parameters:    make([]*state.Parameter, 0),
+		_parameters:   state.NamedParameters{},
 		_types:        xreflect.NewTypes(),
 	}
 }
@@ -547,9 +548,9 @@ func (r *Resource) AddMessageBus(messageBuses ...*mbus.Resource) {
 }
 
 // AddParameters register parameters in the resource
-func (r *Resource) AddParameters(parameters ...*Parameter) {
+func (r *Resource) AddParameters(parameters ...*state.Parameter) {
 	if r.Parameters == nil {
-		r.Parameters = make([]*Parameter, 0)
+		r.Parameters = make([]*state.Parameter, 0)
 	}
 
 	r.Parameters = append(r.Parameters, parameters...)
@@ -650,7 +651,7 @@ func (r *Resource) typeNotFound(packageName string, typeName string) error {
 	return fmt.Errorf("not found type %v under %v package", typeName, packageName)
 }
 
-func (r *Resource) ParamByName(name string) (*Parameter, error) {
+func (r *Resource) ParamByName(name string) (*state.Parameter, error) {
 	return r._parameters.Lookup(name)
 }
 

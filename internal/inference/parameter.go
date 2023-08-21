@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	qexpr "github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
@@ -19,7 +20,7 @@ import (
 type (
 	Parameter struct {
 		Explicit bool //explicit parameter are added to the main view as dependency
-		view.Parameter
+		state.Parameter
 		ModificationSetting
 		SQL         string
 		Hint        string
@@ -55,10 +56,10 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 	builder.WriteString(p.Name)
 	builder.WriteString("<")
 	switch p.In.Kind {
-	case view.KindParam:
+	case state.KindParam:
 		builder.WriteString("?")
 	default:
-		if p.Schema.Cardinality == view.Many {
+		if p.Schema.Cardinality == state.Many {
 			builder.WriteString("[]")
 		}
 
@@ -92,7 +93,7 @@ func (p *Parameter) FieldDeclaration() string {
 	builder.WriteByte('\t')
 	builder.WriteString(p.Name)
 	builder.WriteString(" ")
-	if p.Schema.Cardinality == view.Many {
+	if p.Schema.Cardinality == state.Many {
 		builder.WriteString("[]")
 	}
 	builder.WriteString("*")
@@ -168,12 +169,12 @@ func buildParameter(field *ast.Field, types *xreflect.Types) (*Parameter, error)
 	}
 	//	updateSQLTag(field, SQL)
 	param.Name = field.Names[0].Name
-	param.In = &view.Location{Name: tag.In, Kind: view.Kind(tag.Kind)}
+	param.In = &state.Location{Name: tag.In, Kind: state.Kind(tag.Kind)}
 
-	cardinality := view.One
+	cardinality := state.One
 	if sliceExpr, ok := field.Type.(*ast.ArrayType); ok {
 		field.Type = sliceExpr.Elt
-		cardinality = view.Many
+		cardinality = state.Many
 	}
 
 	if ptr, ok := field.Type.(*ast.StarExpr); ok {
@@ -195,9 +196,9 @@ func buildParameter(field *ast.Field, types *xreflect.Types) (*Parameter, error)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create param: %v due reflect.Type %w", param.Name, err)
 		}
-		param.Schema = view.NewSchema(rType)
+		param.Schema = state.NewSchema(rType)
 	} else {
-		param.Schema = &view.Schema{DataType: fieldType}
+		param.Schema = &state.Schema{DataType: fieldType}
 	}
 
 	param.Schema.Cardinality = cardinality
@@ -259,13 +260,13 @@ func (d *Parameter) EnsureCodec() {
 	//	d.Parameter.Codec = &view.Codec{}
 	//}
 	if d.Parameter.Output == nil {
-		d.Parameter.Output = &view.Codec{}
+		d.Parameter.Output = &state.Codec{}
 	}
 }
 
 func (d *Parameter) EnsureLocation() {
 	if d.Parameter.In == nil {
-		d.Parameter.In = &view.Location{}
+		d.Parameter.In = &state.Location{}
 	}
 }
 
@@ -317,7 +318,7 @@ func (d *Parameter) EnsureSchema() {
 	if d.Parameter.Schema != nil {
 		return
 	}
-	d.Parameter.Schema = &view.Schema{}
+	d.Parameter.Schema = &state.Schema{}
 }
 
 func (p *Parameter) MergeFrom(info *Parameter) {
@@ -338,11 +339,11 @@ func (s *Parameter) adjustMetaViewIfNeeded() {
 		return
 	}
 	if strings.HasSuffix(s.Name, ".SQL") {
-		s.Schema = view.NewSchema(reflect.TypeOf(""))
+		s.Schema = state.NewSchema(reflect.TypeOf(""))
 		s.Schema.DataType = "string"
 	}
 	if strings.HasSuffix(s.Name, ".Limit") {
-		s.Schema = view.NewSchema(reflect.TypeOf(0))
+		s.Schema = state.NewSchema(reflect.TypeOf(0))
 		s.Schema.DataType = "int"
 	}
 }
@@ -362,11 +363,11 @@ func extractSQL(field *ast.Field) string {
 func NewConstParameter(paramName string, paramValue interface{}) *Parameter {
 	rType := reflect.TypeOf(paramValue)
 	param := &Parameter{
-		Parameter: view.Parameter{
+		Parameter: state.Parameter{
 			Name:   paramName,
 			Const:  paramValue,
-			In:     view.NewConstLocation(paramName),
-			Schema: view.NewSchema(reflect.TypeOf(paramValue)),
+			In:     state.NewConstLocation(paramName),
+			Schema: state.NewSchema(reflect.TypeOf(paramValue)),
 		},
 	}
 	param.Schema.DataType = rType.Name()
@@ -375,9 +376,9 @@ func NewConstParameter(paramName string, paramValue interface{}) *Parameter {
 
 func NewPathParameter(name string) *Parameter {
 	return &Parameter{
-		Parameter: view.Parameter{
+		Parameter: state.Parameter{
 			Name: name,
-			In:   view.NewPathLocation(name),
+			In:   state.NewPathLocation(name),
 		},
 	}
 }

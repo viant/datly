@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/column"
 	"github.com/viant/datly/view/keywords"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/gmetric/provider"
 	"github.com/viant/sqlx"
 	"github.com/viant/sqlx/io"
@@ -64,7 +65,7 @@ type (
 		Selector *Config   `json:",omitempty"`
 		Template *Template `json:",omitempty"`
 
-		Schema *Schema `json:",omitempty"`
+		Schema *state.Schema `json:",omitempty"`
 
 		With []*Relation `json:",omitempty"`
 
@@ -124,8 +125,8 @@ type (
 	}
 
 	Method struct {
-		Name string    `json:",omitempty"`
-		Args []*Schema `json:",omitempty"`
+		Name string          `json:",omitempty"`
+		Args []*state.Schema `json:",omitempty"`
 	}
 
 	Namespace struct {
@@ -180,11 +181,11 @@ func (m *Method) init(resource *Resource) error {
 		return fmt.Errorf("method name can't be empty")
 	}
 
-	aResource := &resourcelet{Resource: resource}
+	aResource := &Resourcelet{Resource: resource}
 	for _, arg := range m.Args {
 		//TODO: Check format
 
-		if err := arg.Init(aResource, format.CaseUpperCamel); err != nil {
+		if err := arg.Init(aResource); err != nil {
 			return err
 		}
 	}
@@ -269,7 +270,7 @@ func (v *View) init(ctx context.Context) error {
 	return nil
 }
 
-func (v *View) inheritRelationsFromTag(schema *Schema) error {
+func (v *View) inheritRelationsFromTag(schema *state.Schema) error {
 	sType := schema.Type()
 	if sType == nil {
 		sType, _ = types.LookupType(v._resource.LookupType(), schema.DataType)
@@ -442,7 +443,8 @@ func (v *View) initView(ctx context.Context) error {
 		return err
 	}
 
-	if err = Columns(v.Columns).Init(v._resource, v.ColumnsConfig, v.Caser, v.AreNullValuesAllowed()); err != nil {
+	resourcelet := NewResourcelet(v._resource, v)
+	if err = Columns(v.Columns).Init(resourcelet, v.ColumnsConfig, v.Caser, v.AreNullValuesAllowed()); err != nil {
 		return err
 	}
 
@@ -452,7 +454,7 @@ func (v *View) initView(ctx context.Context) error {
 		return err
 	}
 
-	if err = v.ensureSchema(v._resource); err != nil {
+	if err = v.ensureSchema(ctx, v._resource); err != nil {
 		return err
 	}
 
@@ -492,13 +494,13 @@ func (v *View) initView(ctx context.Context) error {
 	return nil
 }
 
-func (v *View) GetSchema(ctx context.Context) (*Schema, error) {
+func (v *View) GetSchema(ctx context.Context) (*state.Schema, error) {
 	if v.Schema != nil {
 		if v.Schema.Type() != nil {
 			return v.Schema, nil
 		}
 		if v.Schema.DataType != "" {
-			err := v.Schema.setType(v._resource.LookupType(), false)
+			err := v.Schema.InitType(v._resource.LookupType(), false)
 			return v.Schema, err
 		}
 	}
@@ -562,7 +564,7 @@ func (v *View) updateColumnTypes() {
 			continue
 		}
 
-		column.setField(field)
+		column.SetField(field)
 	}
 }
 
@@ -616,13 +618,13 @@ func (v *View) ensureColumns(ctx context.Context, resource *Resource) error {
 
 func (v *View) detectColumns(ctx context.Context, resource *Resource) error {
 	SQL := v.Source()
-	var state Parameters
+	var aState state.Parameters
 	if v.Template != nil {
 		if err := v.Template.Init(ctx, resource, v); err != nil {
 			return err
 		}
 		SQL = v.Template.Source
-		state = v.Template.Parameters
+		aState = v.Template.Parameters
 	}
 	var options []expand.StateOption
 	var bindingArguments []interface{}
@@ -631,7 +633,7 @@ func (v *View) detectColumns(ctx context.Context, resource *Resource) error {
 		//TODO adjust parameter value type
 		options = append(options, expand.WithViewParam(&expand.MetaParam{ParentValues: []interface{}{0}, DataUnit: &expand.DataUnit{}}))
 	}
-	query, err := v.BuildParametrizedSQL(state, resource.TypeRegistry(), SQL, bindingArguments, options...)
+	query, err := v.BuildParametrizedSQL(aState, resource.TypeRegistry(), SQL, bindingArguments, options...)
 	v.Logger.ColumnsDetection(query.Query, v.Source())
 	if err != nil {
 		return fmt.Errorf("failed to build parameterized query: %v due to %w", SQL, err)
@@ -654,13 +656,7 @@ func convertIoColumnsToColumns(ioColumns []io.Column, nullable map[string]bool) 
 		scanType := ioColumns[i].ScanType()
 		dataTypeName := ioColumns[i].DatabaseTypeName()
 		isNullable, _ := ioColumns[i].Nullable()
-		columns = append(columns, &Column{
-			DatabaseColumn: ioColumns[i].Name(),
-			Name:           strings.Trim(ioColumns[i].Name(), "'"),
-			DataType:       dataTypeName,
-			rType:          scanType,
-			Nullable:       nullable[ioColumns[i].Name()] || isNullable,
-		})
+		columns = append(columns, NewColumn(ioColumns[i].Name(), dataTypeName, scanType, nullable[ioColumns[i].Name()] || isNullable))
 	}
 	return columns
 }
@@ -690,9 +686,9 @@ func (v *View) Source() string {
 	return v.Name
 }
 
-func (v *View) ensureSchema(resource *Resource) error {
+func (v *View) ensureSchema(ctx context.Context, resource *Resource) error {
 	v.initSchemaIfNeeded()
-	if v.Schema.Name != "" {
+	if v.Schema.Name != "" || v.Schema.DataType != "" {
 		componentType, err := resource.TypeRegistry().Lookup(v.Schema.TypeName())
 		if err != nil {
 			return err
@@ -700,9 +696,16 @@ func (v *View) ensureSchema(resource *Resource) error {
 		if componentType != nil {
 			v.Schema.SetType(componentType)
 		}
+
 	}
-	aResource := &resourcelet{Resource: resource}
-	return v.Schema.Init(aResource, v.Caser, v.Columns, v.With, v.SelfReference, v.Async)
+
+	if v.Schema.Type() != nil {
+		return nil
+	}
+	v.Schema = state.NewSchema(nil, state.WithAutoGenFunc(v.generateSchemaTypeFromColumn(v.Caser, v.Columns, v.With)))
+	aResource := &Resourcelet{Resource: resource}
+	err := v.Schema.Init(aResource)
+	return err
 }
 
 // Db returns database connection that View was assigned to.
@@ -857,7 +860,7 @@ func (v *View) ensureCaseFormat() error {
 
 func (v *View) ensureCollector() {
 	v._newCollector = func(dest interface{}, viewMetaHandler viewMetaHandlerFn, supportParallel bool) *Collector {
-		return NewCollector(v.Schema.slice, v, dest, viewMetaHandler, supportParallel)
+		return NewCollector(v.Schema.Slice(), v, dest, viewMetaHandler, supportParallel)
 	}
 }
 
@@ -868,7 +871,7 @@ func (v *View) Collector(dest interface{}, handleMeta viewMetaHandlerFn, support
 
 func (v *View) registerHolders() error {
 	for i := range v.With {
-		if err := v._columns.RegisterHolder(v.With[i]); err != nil {
+		if err := v._columns.RegisterHolder(v.With[i].Column, v.With[i].Holder); err != nil {
 			return err
 		}
 	}
@@ -1037,9 +1040,7 @@ func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, r
 
 func (v *View) initSchemaIfNeeded() {
 	if v.Schema == nil {
-		v.Schema = &Schema{
-			autoGen: true,
-		}
+		v.Schema = state.NewSchema(nil, state.WithAutoGenFlag(true))
 	}
 }
 
@@ -1161,11 +1162,7 @@ func (v *View) indexTransforms() error {
 		if err != nil {
 			return err
 		}
-		aConfig.Codec = &Codec{
-			Name:   transform.Codec,
-			Schema: NewSchema(resultType),
-			_codec: codecInstance,
-		}
+		aConfig.Codec = state.NewCodec(transform.Codec, state.NewSchema(resultType), codecInstance)
 	}
 
 	return nil
@@ -1184,7 +1181,7 @@ func (v *View) ensureParameters(selector *Selector) {
 	selector.Init(v)
 }
 
-func (v *View) ParamByName(name string) (*Parameter, error) {
+func (v *View) ParamByName(name string) (*state.Parameter, error) {
 	return v.Template._parametersIndex.Lookup(name)
 }
 
@@ -1250,7 +1247,7 @@ func (v *View) SetParameter(name string, selectors *Selectors, value interface{}
 	if selector == nil {
 		return fmt.Errorf("failed to lookup selector: %v", aView.Name)
 	}
-	return param.Set(selector, value)
+	return param.Set(selector.State, value)
 }
 
 func (v *View) ensureAsyncTableNameIfNeeded() error {
@@ -1266,7 +1263,7 @@ func (v *View) ensureAsyncTableNameIfNeeded() error {
 	return nil
 }
 
-func (v *View) BuildParametrizedSQL(state Parameters, types *xreflect.Types, SQL string, bindingArgs []interface{}, options ...expand.StateOption) (*sqlx.SQL, error) {
+func (v *View) BuildParametrizedSQL(state state.Parameters, types *xreflect.Types, SQL string, bindingArgs []interface{}, options ...expand.StateOption) (*sqlx.SQL, error) {
 	reflectType, err := state.ReflectType("autogen", types.Lookup, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create state %v type: %w", v.Name, err)
@@ -1333,7 +1330,7 @@ func WithTemplate(template *Template) ViewOption {
 // WithOneToMany creates to many relation View option
 func WithOneToMany(holder, column string, ref *ReferenceView, opts ...RelationOption) ViewOption {
 	return func(v *View) {
-		relation := &Relation{Cardinality: Many, Column: column, Holder: holder, Of: ref}
+		relation := &Relation{Cardinality: state.Many, Column: column, Holder: holder, Of: ref}
 		for _, opt := range opts {
 			opt(relation)
 		}
@@ -1344,7 +1341,7 @@ func WithOneToMany(holder, column string, ref *ReferenceView, opts ...RelationOp
 // WithOneToOne creates to one relation View option
 func WithOneToOne(holder, column string, ref *ReferenceView, opts ...RelationOption) ViewOption {
 	return func(v *View) {
-		relation := &Relation{Cardinality: One, Column: column, Holder: holder, Of: ref}
+		relation := &Relation{Cardinality: state.One, Column: column, Holder: holder, Of: ref}
 		for _, opt := range opts {
 			opt(relation)
 		}
@@ -1369,7 +1366,7 @@ func WithCriteria(columns ...string) ViewOption {
 // WithViewType creates schema type View option
 func WithViewType(t reflect.Type) ViewOption {
 	return func(v *View) {
-		v.Schema = NewSchema(t)
+		v.Schema = state.NewSchema(t)
 	}
 }
 
@@ -1406,7 +1403,7 @@ func NewView(name, table string, opts ...ViewOption) *View {
 }
 
 // NewExecView creates an execution View
-func NewExecView(name, table string, template string, parameters []*Parameter, opts ...ViewOption) *View {
+func NewExecView(name, table string, template string, parameters []*state.Parameter, opts ...ViewOption) *View {
 	var templateParameters []TemplateOption
 	for i := range parameters {
 		templateParameters = append(templateParameters, WithTemplateParameter(parameters[i]))

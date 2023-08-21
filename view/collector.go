@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/utils/formatter"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
@@ -498,10 +499,10 @@ func (r *Collector) mergeToParent() {
 
 		for _, position := range positions {
 			parentValue := parentSlice.ValuePointerAt(parentDestPtr, position)
-			if r.relation.Cardinality == One {
+			if r.relation.Cardinality == state.One {
 				at := r.slice.ValuePointerAt(destPtr, i)
 				holderField.SetValue(xunsafe.AsPointer(parentValue), at)
-			} else if r.relation.Cardinality == Many {
+			} else if r.relation.Cardinality == state.Many {
 				r.Lock().Lock()
 				appender := r.slice.Appender(holderField.ValuePointer(xunsafe.AsPointer(parentValue)))
 				appender.Append(value)

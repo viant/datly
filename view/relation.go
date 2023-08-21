@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -12,21 +13,20 @@ import (
 )
 
 type (
-	Cardinality string
 	//Relation used to build more complex View that represents database tables with relations one-to-one or many-to-many
 	//In order to understand it better our example is:
 	//Parent View represents Employee{AccountId: int}, Relation represents Account{Id: int}
 	//We want to create result like:  Employee{Account{Id:int}}
 	Relation struct {
-		Name            string         `json:",omitempty"`
-		Of              *ReferenceView `json:",omitempty"`
-		Caser           format.Case    `json:",omitempty"`
-		Cardinality     Cardinality    `json:",omitempty"` //IsToOne, or Many
-		Column          string         `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
-		Field           string         `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
-		ColumnNamespace string         `json:",omitempty"` //Represents column namespace, can be specified if $shared.Criteria / $shared.ColumnInPosition is inside the "from" statement
-		Holder          string         `json:",omitempty"` //Represents column created due to the merging. In our example it would be Employee#Account
-		IncludeColumn   bool           `json:",omitempty"` //tells if Column _field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId _field
+		Name            string            `json:",omitempty"`
+		Of              *ReferenceView    `json:",omitempty"`
+		Caser           format.Case       `json:",omitempty"`
+		Cardinality     state.Cardinality `json:",omitempty"` //IsToOne, or Many
+		Column          string            `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
+		Field           string            `json:",omitempty"` //Represents parent column that would be used to assemble nested objects. In our example it would be Employee#AccountId
+		ColumnNamespace string            `json:",omitempty"` //Represents column namespace, can be specified if $shared.Criteria / $shared.ColumnInPosition is inside the "from" statement
+		Holder          string            `json:",omitempty"` //Represents column created due to the merging. In our example it would be Employee#Account
+		IncludeColumn   bool              `json:",omitempty"` //tells if Column _field should be kept in the struct type. In our example, if set false in produced Employee would be also AccountId _field
 
 		hasColumnField bool
 		holderField    *xunsafe.Field
@@ -43,11 +43,6 @@ type (
 	}
 )
 
-const (
-	One  Cardinality = "One"
-	Many Cardinality = "Many"
-)
-
 // Init initializes ReferenceView
 func (r *ReferenceView) Init(_ context.Context, _ *Resource) error {
 	r.initializeField()
@@ -55,7 +50,7 @@ func (r *ReferenceView) Init(_ context.Context, _ *Resource) error {
 }
 
 func (r *Relation) inheritType(rType reflect.Type) error {
-	r.Of.Schema.inheritType(rType)
+	r.Of.Schema.InheritType(rType)
 	r.Of.initializeField()
 	if err := r.Of.View.deriveColumnsFromSchema(r); err != nil {
 		return err
@@ -117,7 +112,7 @@ func (r *Relation) initHolder(v *View) error {
 	r.columnField = shared.MatchField(v.DataType(), columnName, v.Caser)
 
 	r.hasColumnField = r.columnField != nil
-	if r.Cardinality == Many && !r.hasColumnField {
+	if r.Cardinality == state.Many && !r.hasColumnField {
 		return fmt.Errorf("column %v doesn't have corresponding _field in the struct: %v", columnName, v.DataType().String())
 	}
 
@@ -126,7 +121,7 @@ func (r *Relation) initHolder(v *View) error {
 
 // Validate checks if Relation is valid
 func (r *Relation) Validate() error {
-	if r.Cardinality != Many && r.Cardinality != One {
+	if r.Cardinality != state.Many && r.Cardinality != state.One {
 		return fmt.Errorf("cardinality has to be Many or IsToOne")
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
@@ -18,23 +19,23 @@ type (
 		Alias            string   `json:",omitempty"`
 		Fields           []*Field `json:",omitempty"`
 		_fields          map[string]bool
-		Schema           *Schema     `json:",omitempty"`
-		DataType         string      `json:",omitempty"`
-		Cardinality      Cardinality `json:",omitempty"`
-		Package          string      `json:",omitempty"`
-		Ptr              bool        `json:",omitempty"`
-		CustomType       bool        `json:",omitempty"`
+		Schema           *state.Schema     `json:",omitempty"`
+		DataType         string            `json:",omitempty"`
+		Cardinality      state.Cardinality `json:",omitempty"`
+		Package          string            `json:",omitempty"`
+		Ptr              bool              `json:",omitempty"`
+		CustomType       bool              `json:",omitempty"`
 	}
 
 	Field struct {
-		Name        string      `json:",omitempty"`
-		Embed       bool        `json:",omitempty"`
-		Column      string      `json:",omitempty"`
-		FromName    string      `json:",omitempty"`
-		Cardinality Cardinality `json:",omitempty"`
-		Schema      *Schema     `json:",omitempty"`
-		Fields      []*Field    `json:",omitempty"`
-		Tag         string      `json:",omitempty"`
+		Name        string            `json:",omitempty"`
+		Embed       bool              `json:",omitempty"`
+		Column      string            `json:",omitempty"`
+		FromName    string            `json:",omitempty"`
+		Cardinality state.Cardinality `json:",omitempty"`
+		Schema      *state.Schema     `json:",omitempty"`
+		Fields      []*Field          `json:",omitempty"`
+		Tag         string            `json:",omitempty"`
 		Ptr         bool
 	}
 )
@@ -67,7 +68,7 @@ func (d *TypeDefinition) Init(ctx context.Context, lookupType xreflect.LookupTyp
 		if err != nil {
 			return err
 		}
-		d.Schema = NewSchema(rType)
+		d.Schema = state.NewSchema(rType)
 		d.Schema.Package = d.Package
 		return nil
 	}
@@ -78,16 +79,15 @@ func (d *TypeDefinition) Init(ctx context.Context, lookupType xreflect.LookupTyp
 		if d.Schema.DataType != d.Name {
 			d.Schema.Name = d.Name
 		}
-		if err := d.Schema.setType(lookupType, d.Ptr); err != nil {
+		if err := d.Schema.InitType(lookupType, d.Ptr); err != nil {
 			return err
 		}
 	} else {
-		d.Schema = &Schema{}
 		schemaType := buildTypeFromFields(d.Fields)
 		if d.Ptr {
 			schemaType = reflect.PtrTo(schemaType)
 		}
-		d.Schema.SetType(schemaType)
+		d.Schema = state.NewSchema(schemaType)
 	}
 	return nil
 }
@@ -110,7 +110,7 @@ func (d *TypeDefinition) createSchemaIfNeeded() {
 	if d.DataType == "" {
 		return
 	}
-	d.Schema = &Schema{DataType: d.DataType, Cardinality: d.Cardinality}
+	d.Schema = &state.Schema{DataType: d.DataType, Cardinality: d.Cardinality}
 }
 
 func (f *Field) Init(ctx context.Context, typeLookup xreflect.LookupType, d *TypeDefinition) error {
@@ -149,13 +149,11 @@ func (f *Field) initSchemaType(lookupType xreflect.LookupType) error {
 	if f.Schema.DataType == "" && f.Schema.Name == "" {
 		return fmt.Errorf("_field %v schema can't be empty", f.Name)
 	}
-	return f.Schema.setType(lookupType, false)
+	return f.Schema.InitType(lookupType, false)
 }
 
 func (f *Field) buildSchemaFromFields() error {
-	f.Schema = &Schema{}
-	f.Schema.SetType(buildTypeFromFields(f.Fields))
-
+	f.Schema = state.NewSchema(buildTypeFromFields(f.Fields))
 	return nil
 }
 
@@ -179,7 +177,7 @@ func buildTypeFromFields(fields []*Field) reflect.Type {
 			fieldType = reflect.PtrTo(fieldType)
 		}
 
-		if field.Cardinality == Many {
+		if field.Cardinality == state.Many && fieldType.Kind() != reflect.Slice {
 			fieldType = reflect.SliceOf(fieldType)
 		}
 

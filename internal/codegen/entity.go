@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/plugin"
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/xreflect"
 	"go/format"
 	"strings"
@@ -20,7 +20,7 @@ const (
 //go:embed tmpl/entity.gox
 var entityTemplate string
 
-//GenerateEntity generate golang entity
+// GenerateEntity generate golang entity
 func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.Info) (string, error) {
 	pkg = info.Package(pkg)
 	if err := t.TypeDef.Init(context.Background(), config.Config.Types.Lookup); err != nil {
@@ -60,12 +60,12 @@ func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.
 func (t *Template) generateRegisterType() string {
 	registry := &customTypeRegistry{}
 	for _, param := range t.State {
-		if param.In.Kind != view.KindDataView {
+		if param.In.Kind != state.KindDataView {
 			continue
 		}
 		registry.register(param.Schema.DataType)
 	}
-	for _, param := range t.State.FilterByKind(view.KindRequestBody) {
+	for _, param := range t.State.FilterByKind(state.KindRequestBody) {
 		registry.register(param.Schema.DataType)
 	}
 	return registry.stringify()
@@ -74,7 +74,7 @@ func (t *Template) generateRegisterType() string {
 func (t *Template) generateMapTypeBody() string {
 	var initElements []string
 	for _, param := range t.State {
-		if param.In.Kind != view.KindDataView {
+		if param.In.Kind != state.KindDataView {
 			continue
 		}
 		initElements = append(initElements, fmt.Sprintf(registerMapEntryTemplate, param.Schema.DataType, param.Schema.DataType))

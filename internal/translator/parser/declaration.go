@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/router/marshal"
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"strings"
 )
 
@@ -12,16 +12,16 @@ type (
 	Declaration struct {
 		inference.Parameter
 		//ParametersState shorthands
-		Auth          string           `json:",omitempty" yaml:",omitempty"`
-		Kind          string           `json:",omitempty" yaml:",omitempty"`
-		Location      *string          `json:",omitempty" yaml:",omitempty"`
-		Codec         string           `json:",omitempty" yaml:",omitempty"`
-		OutputType    string           `json:",omitempty" yaml:",omitempty"`
-		Cardinality   view.Cardinality `json:",omitempty" yaml:",omitempty"`
-		StatusCode    *int             `json:",omitempty" yaml:",omitempty"`
-		TransformKind string           `json:",omitempty" yaml:",omitempty"`
-		Transformer   string           `json:",omitempty" yaml:",omitempty"`
-		CodecArgs     []string         `json:",omitempty" yaml:",omitempty"`
+		Auth          string            `json:",omitempty" yaml:",omitempty"`
+		Kind          string            `json:",omitempty" yaml:",omitempty"`
+		Location      *string           `json:",omitempty" yaml:",omitempty"`
+		Codec         string            `json:",omitempty" yaml:",omitempty"`
+		OutputType    string            `json:",omitempty" yaml:",omitempty"`
+		Cardinality   state.Cardinality `json:",omitempty" yaml:",omitempty"`
+		StatusCode    *int              `json:",omitempty" yaml:",omitempty"`
+		TransformKind string            `json:",omitempty" yaml:",omitempty"`
+		Transformer   string            `json:",omitempty" yaml:",omitempty"`
+		CodecArgs     []string          `json:",omitempty" yaml:",omitempty"`
 	}
 )
 
@@ -76,10 +76,10 @@ func (d *Declaration) ExpandShorthands() {
 			required := true
 			d.Required = &required
 			if d.Output == nil {
-				d.Output = &view.Codec{}
+				d.Output = &state.Codec{}
 			}
 			if d.Output.Schema == nil {
-				d.Output.Schema = &view.Schema{}
+				d.Output.Schema = &state.Schema{}
 			}
 			if d.Schema.DataType == "" {
 				d.Schema.DataType = "string"
@@ -92,7 +92,7 @@ func (d *Declaration) ExpandShorthands() {
 	}
 
 	if d.Kind != "" || d.Location != nil {
-		d.Parameter.In.Kind = view.Kind(d.Kind)
+		d.Parameter.In.Kind = state.Kind(d.Kind)
 		if d.Location != nil {
 			d.Parameter.In.Name = *d.Location
 		}
@@ -108,10 +108,10 @@ func (d *Declaration) ExpandShorthands() {
 
 	if d.SQL != "" {
 		if d.In.Kind == "" && IsStructQL(d.SQL) {
-			d.In.Kind = view.KindParam
+			d.In.Kind = state.KindParam
 			d.In.Name = d.Name
 		}
-		if d.In.Kind == view.KindParam {
+		if d.In.Kind == state.KindParam {
 			d.Parameter.EnsureCodec()
 			d.Parameter.Output.Body = d.SQL
 			d.Parameter.Output.Ref = "structql"
@@ -120,13 +120,13 @@ func (d *Declaration) ExpandShorthands() {
 
 	if d.SQL != "" && d.In.Kind == "" {
 		if d.Parameter.Schema.Cardinality == "" {
-			d.Parameter.Schema.Cardinality = view.Many
+			d.Parameter.Schema.Cardinality = state.Many
 		}
-		d.In.Kind = view.KindDataView
+		d.In.Kind = state.KindDataView
 		d.In.Name = d.Name
 
 	}
-	if d.In != nil && d.In.Kind == view.KindRequestBody {
+	if d.In != nil && d.In.Kind == state.KindRequestBody {
 		required := true
 		d.Parameter.Required = &required
 	}
@@ -147,12 +147,12 @@ func (d *Declaration) AuthParameter() *inference.Parameter {
 func DefaultOAuthParameter(name string) *inference.Parameter {
 	required := true
 	return &inference.Parameter{
-		Parameter: view.Parameter{
+		Parameter: state.Parameter{
 			Name:            name,
-			In:              &view.Location{Name: "Authorization", Kind: view.KindHeader},
+			In:              &state.Location{Name: "Authorization", Kind: state.KindHeader},
 			ErrorStatusCode: 401,
 			Required:        &required,
-			Output:          &view.Codec{Name: "JwtClaim", Schema: &view.Schema{DataType: "*JwtClaims"}},
-			Schema:          &view.Schema{DataType: "string"},
+			Output:          &state.Codec{Name: "JwtClaim", Schema: &state.Schema{DataType: "*JwtClaims"}},
+			Schema:          &state.Schema{DataType: "string"},
 		}}
 }

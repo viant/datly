@@ -3,7 +3,7 @@ package parser
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/datly/internal/inference"
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"testing"
 )
 
@@ -25,16 +25,16 @@ SELECT 1 FROM t WHERE ID IN($TeamIDs)
 			expectedState: inference.State{
 				&inference.Parameter{
 					Explicit: true,
-					Parameter: view.Parameter{
+					Parameter: state.Parameter{
 						Name:     "TeamIDs",
 						DataType: "string",
-						In: &view.Location{
-							Kind: view.KindQuery,
+						In: &state.Location{
+							Kind: state.KindQuery,
 							Name: "tids",
 						},
-						Codec: &view.Codec{Name: "AsInts"},
-						Schema: &view.Schema{
-							Cardinality: view.One,
+						Codec: &state.Codec{Name: "AsInts"},
+						Schema: &state.Schema{
+							Cardinality: state.One,
 						},
 					},
 

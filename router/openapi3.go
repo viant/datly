@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox/format"
 	"net/http"
 	"reflect"
@@ -46,7 +47,7 @@ type (
 	}
 
 	schemaNamed struct {
-		schema       *view.Schema
+		schema       *state.Schema
 		defaultName  string
 		resultSchema bool
 	}
@@ -147,7 +148,7 @@ func (g *generator) getViewSchemas(aView *view.View) []*schemaNamed {
 	return schemas
 }
 
-func (g *generator) addSchemaParam(schemas *[]*schemaNamed, param *view.Parameter) {
+func (g *generator) addSchemaParam(schemas *[]*schemaNamed, param *state.Parameter) {
 	if param == nil {
 		return
 	}
@@ -409,7 +410,7 @@ func (g *generator) viewParameters(aView *view.View, route *Route) ([]*openapi3.
 	return parameters, nil
 }
 
-func (g *generator) appendBuiltInParam(params *[]*openapi3.Parameter, route *Route, param *view.Parameter) error {
+func (g *generator) appendBuiltInParam(params *[]*openapi3.Parameter, route *Route, param *state.Parameter) error {
 	if param == nil {
 		return nil
 	}
@@ -425,8 +426,8 @@ func (g *generator) appendBuiltInParam(params *[]*openapi3.Parameter, route *Rou
 	return nil
 }
 
-func (g *generator) convertParam(route *Route, param *view.Parameter, description string) (*openapi3.Parameter, bool, error) {
-	if param.In.Kind == view.KindDataView || param.In.Kind == view.KindRequestBody || param.In.Kind == view.KindEnvironment || param.In.Kind == view.KindLiteral {
+func (g *generator) convertParam(route *Route, param *state.Parameter, description string) (*openapi3.Parameter, bool, error) {
+	if param.In.Kind == state.KindDataView || param.In.Kind == state.KindRequestBody || param.In.Kind == state.KindEnvironment || param.In.Kind == state.KindLiteral {
 		return nil, false, nil
 	}
 

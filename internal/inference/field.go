@@ -2,6 +2,7 @@ package inference
 
 import (
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/toolbox/format"
@@ -23,15 +24,15 @@ func NewField(rField *reflect.StructField) *Field {
 	field := &Field{}
 	field.Name = rField.Name
 	rType := rField.Type
-	cardinality := view.One
+	cardinality := state.One
 	if rType.Kind() == reflect.Slice {
-		cardinality = view.Many
+		cardinality = state.Many
 		rType = rType.Elem()
 	}
 	if field.Ptr = rType.Kind() == reflect.Ptr; field.Ptr {
 		rType = rType.Elem()
 	}
-	field.Schema = view.NewSchema(rType)
+	field.Schema = state.NewSchema(rType)
 	field.Schema.Cardinality = cardinality
 	field.Schema.DataType = rType.Name()
 	if typeName, _ := rField.Tag.Lookup("typeName"); typeName != "" {
@@ -52,10 +53,10 @@ func NewField(rField *reflect.StructField) *Field {
 	return field
 }
 
-func (f *Field) EnsureSchema() *view.Schema {
+func (f *Field) EnsureSchema() *state.Schema {
 	if f.Schema != nil {
 		return f.Schema
 	}
-	f.Schema = &view.Schema{}
+	f.Schema = &state.Schema{}
 	return f.Schema
 }

@@ -4,7 +4,7 @@ import (
 	_ "embed"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
-	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"reflect"
 	"strings"
 )
@@ -53,23 +53,23 @@ func (t *Template) getPakcage(pkg string) string {
 	return pkg
 }
 
-func (t *Template) buildState(spec *inference.Spec, state *inference.State, card view.Cardinality) reflect.Type {
+func (t *Template) buildState(spec *inference.Spec, aState *inference.State, card state.Cardinality) reflect.Type {
 	t.Imports.AddType(spec.Type.TypeName())
 
 	pathParameter := t.buildPathParameterIfNeeded(spec)
 	if pathParameter != nil {
-		state.Append(pathParameter)
+		aState.Append(pathParameter)
 	}
-	if spec.Type.Cardinality == view.Many {
-		card = view.Many
+	if spec.Type.Cardinality == state.Many {
+		card = state.Many
 	}
 	spec.EnsureRelationType()
 	for _, relation := range spec.Relations {
-		t.buildState(relation.Spec, state, card)
+		t.buildState(relation.Spec, aState, card)
 	}
 	parameter := t.buildDataViewParameter(spec, card)
 	parameter.PathParam = pathParameter
-	state.Append(parameter)
+	aState.Append(parameter)
 	return parameter.Schema.Type()
 }
 
@@ -83,18 +83,18 @@ func (t *Template) buildPathParameterIfNeeded(spec *inference.Spec) *inference.P
 	parameterNamer := t.ColumnParameterNamer(selector)
 	param.Name = parameterNamer(indexField)
 	param.SQL = SQL
-	param.In = &view.Location{Kind: view.KindParam, Name: selector[0]}
+	param.In = &state.Location{Kind: state.KindParam, Name: selector[0]}
 	var paramType = reflect.StructOf([]reflect.StructField{{Name: "Values", Type: reflect.SliceOf(indexField.Schema.Type())}})
-	param.Schema = view.NewSchema(paramType)
+	param.Schema = state.NewSchema(paramType)
 	param.IndexField = indexField
 	return param
 }
 
-func (t *Template) buildDataViewParameter(spec *inference.Spec, cardinality view.Cardinality) *inference.Parameter {
+func (t *Template) buildDataViewParameter(spec *inference.Spec, cardinality state.Cardinality) *inference.Parameter {
 	param := &inference.Parameter{ModificationSetting: inference.ModificationSetting{IsAuxiliary: spec.IsAuxiliary}}
 	param.Name = t.ParamName(spec.Type.Name)
-	param.Schema = &view.Schema{DataType: spec.Type.Name, Cardinality: cardinality}
-	param.In = &view.Location{Kind: view.KindDataView, Name: param.Name}
+	param.Schema = &state.Schema{DataType: spec.Type.Name, Cardinality: cardinality}
+	param.In = &state.Location{Kind: state.KindDataView, Name: param.Name}
 	param.SQL = spec.ViewSQL(t.ColumnParameterNamer(spec.Selector()))
 	columnFields := spec.Type.Fields(inference.WithStructTag())
 	param.Schema.SetType(reflect.PtrTo(reflect.StructOf(columnFields)))

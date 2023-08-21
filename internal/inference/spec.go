@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/internal/msg"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/column"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx/metadata"
@@ -24,7 +25,7 @@ type (
 		Join        *query.Join
 		ParentField *Field
 		KeyField    *Field
-		Cardinality view.Cardinality
+		Cardinality state.Cardinality
 		*Spec
 	}
 
@@ -58,7 +59,7 @@ func (s *Spec) EnsureRelationType() {
 		}
 		rel := s.Relations[i]
 		if rel.Type != nil {
-			field.Schema = view.NewSchema(reflect.StructOf(rel.Type.Fields()))
+			field.Schema = state.NewSchema(reflect.StructOf(rel.Type.Fields()))
 		}
 		field.Schema.Cardinality = rel.Cardinality
 	}
@@ -71,7 +72,7 @@ func (s *Spec) EnsureRelationType() {
 		field.EnsureSchema()
 		field.Name = rel.Name
 		if rel.Type != nil {
-			field.Schema = view.NewSchema(reflect.StructOf(rel.Type.Fields()))
+			field.Schema = state.NewSchema(reflect.StructOf(rel.Type.Fields()))
 		}
 		field.Schema.Cardinality = rel.Cardinality
 		s.Type.RelationFields = append(s.Type.RelationFields, field)
@@ -79,7 +80,7 @@ func (s *Spec) EnsureRelationType() {
 }
 
 // BuildType build a type from infered table/SQL definition
-func (s *Spec) BuildType(pkg, name string, cardinality view.Cardinality, whitelist, blacklist map[string]bool) error {
+func (s *Spec) BuildType(pkg, name string, cardinality state.Cardinality, whitelist, blacklist map[string]bool) error {
 	var aType = &Type{Package: pkg, Name: name, Cardinality: cardinality}
 	for i, column := range s.Columns {
 		skipped := s.shouldSkipColumn(whitelist, blacklist, column)
@@ -171,9 +172,9 @@ func (s *Spec) shouldSkipColumn(whitelist, blacklist map[string]bool, column *sq
 }
 
 // AddRelation adds relations
-func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinality view.Cardinality) {
+func (s *Spec) AddRelation(name string, join *query.Join, spec *Spec, cardinality state.Cardinality) {
 	if IsToOne(join) {
-		cardinality = view.One
+		cardinality = state.One
 	}
 	relColumn, refColumn := ExtractRelationColumns(join)
 	rel := &Relation{Spec: spec,
