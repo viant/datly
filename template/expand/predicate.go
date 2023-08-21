@@ -158,6 +158,8 @@ func (p *Predicate) expand(ctxNum int, operator string) (string, error) {
 		accArgs = append(accArgs, criteria.Args...)
 	}
 
+	p.ctx.DataUnit.addAll(accArgs...)
+
 	return result.String(), nil
 }
 
