@@ -195,6 +195,10 @@ func binaryPredicate(name, operator string) *Predicate {
 	}
 }
 
+func NewPredicateHandler() *Predicate {
+	return &Predicate{Handler: &PredicateHandlerFactory{}}
+}
+
 func (p *PredicateHandlerFactory) New(lookupType xreflect.LookupType, args ...string) (codec.PredicateHandler, error) {
 	if len(args) < 1 {
 		return nil, NotEnoughParametersError(args, PredicateHandler, 1)

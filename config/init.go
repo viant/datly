@@ -59,6 +59,7 @@ var Config = &Registry{
 			PredicateLessOrEqual: NewLessOrEqualPredicate(),
 			PredicateLike:        NewLikePredicate(),
 			PredicateNotLike:     NewNotLikePredicate(),
+			PredicateHandler:     NewPredicateHandler(),
 		},
 	},
 }
