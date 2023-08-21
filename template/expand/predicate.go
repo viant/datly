@@ -122,8 +122,6 @@ func (p *Predicate) expand(ctxNum int, operator string) (string, error) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, PredicateCtx, p.ctx)
 	ctx = context.WithValue(ctx, PredicateState, p.state)
-
-	var accArgs []interface{}
 	for _, predicateConfig := range p.config {
 		if predicateConfig.Context != ctxNum {
 			continue
@@ -155,7 +153,9 @@ func (p *Predicate) expand(ctxNum int, operator string) (string, error) {
 		result.WriteByte('(')
 		result.WriteString(criteria.Query)
 		result.WriteByte(')')
-		accArgs = append(accArgs, criteria.Args...)
+		if len(criteria.Args) > 0 {
+			p.ctx.DataUnit.addAll(criteria.Args...)
+		}
 	}
 
 	p.ctx.DataUnit.addAll(accArgs...)
