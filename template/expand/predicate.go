@@ -142,7 +142,7 @@ func (p *Predicate) expand(ctxNum int, operator string) (string, error) {
 			return "", err
 		}
 
-		if strings.TrimSpace(criteria.Query) == "" {
+		if criteria == nil || strings.TrimSpace(criteria.Query) == "" {
 			continue
 		}
 
