@@ -57,35 +57,6 @@ type (
 	}
 )
 
-func (c *Config) ParameterName(ns, paramName string) string {
-	if c.Parameters == nil {
-		return ns + paramName
-	}
-
-	var result = ""
-	if ns != "" && strings.HasPrefix(paramName, ns) {
-		paramName = paramName[len(ns):]
-	}
-	switch strings.ToLower(paramName) {
-	case FieldsQuery:
-		result = c.Parameters.Fields
-	case OffsetQuery:
-		result = c.Parameters.Offset
-	case OrderByQuery:
-		result = c.Parameters.OrderBy
-	case LimitQuery:
-		result = c.Parameters.Limit
-	case CriteriaQuery:
-		result = c.Parameters.Criteria
-	case PageQuery:
-		result = c.Parameters.Page
-	}
-	if result == "" {
-		return ns + paramName
-	}
-	return result
-}
-
 func (c *Config) Init(ctx context.Context, resource *Resource, parent *View) error {
 	if err := c.ensureConstraints(resource); err != nil {
 		return err

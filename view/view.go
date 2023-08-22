@@ -82,8 +82,8 @@ type (
 
 		ColumnsConfig map[string]*ColumnConfig `json:",omitempty"`
 		SelfReference *SelfReference           `json:",omitempty"`
-		Namespaces    []*Namespace             `json:",omitempty"`
-		TableBatches  map[string]bool          `json:",omitempty"`
+
+		TableBatches  map[string]bool `json:",omitempty"`
 		_transforms   marshal.Transforms
 		_resource     *Resource
 		_initialized  bool
@@ -130,9 +130,8 @@ type (
 	}
 
 	Namespace struct {
-		Parent string
-		Prefix string
-		Holder string
+		Path     string
+		Prefixes []string
 	}
 
 	Async struct {
