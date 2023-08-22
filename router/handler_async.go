@@ -16,7 +16,7 @@ type AsyncHandler struct {
 	session  *ReaderSession
 }
 
-func (a *AsyncHandler) Read(ctx context.Context, config *async.Config, options ...async.ReadOption) (*async.JobWithMeta, error) {
+func (a *AsyncHandler) Read(ctx context.Context, options ...async.ReadOption) (*async.JobWithMeta, error) {
 	opts := &async.ReadOptions{}
 	for _, fn := range options {
 		fn(opts)
@@ -43,10 +43,6 @@ func (a *AsyncHandler) Read(ctx context.Context, config *async.Config, options .
 		return nil, err
 	}
 
-	if config == nil {
-		config = &async.Config{}
-	}
-
 	connector, err := a.executor.route._router.Resource().Resource.Connector(opts.Connector)
 	if err != nil {
 		return nil, err
@@ -55,7 +51,7 @@ func (a *AsyncHandler) Read(ctx context.Context, config *async.Config, options .
 	_, err = a.executor.route._async.EnsureTable(ctx, connector, &async2.TableConfig{
 		RecordType:     a.executor.route.View.Schema.Type(),
 		TableName:      opts.Job.DestinationTable,
-		Dataset:        config.Dataset,
+		Dataset:        opts.Job.DestinationDataset,
 		CreateIfNeeded: opts.Job.DestinationCreateDisposition == async.CreateDispositionIfNeeded,
 		GenerateAutoPk: true,
 	})
@@ -64,7 +60,12 @@ func (a *AsyncHandler) Read(ctx context.Context, config *async.Config, options .
 		return nil, err
 	}
 
-	handler, err := a.executor.route._async.Handler(ctx, config)
+	handler, err := a.executor.route._async.Handler(ctx, &async.Config{
+		BucketURL: opts.Job.DestinationBucketURL,
+		QueueName: opts.Job.DestinationQueueName,
+		Dataset:   opts.Job.DestinationDataset,
+	})
+
 	if err != nil {
 		return nil, err
 	}
