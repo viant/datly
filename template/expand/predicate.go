@@ -55,8 +55,12 @@ func (p *Predicate) Builder() *PredicateBuilder {
 	}
 }
 
-func (p *Predicate) Ctx(ctx int, keyword string) (string, error) {
-	return p.expand(ctx, keyword)
+func (p *Predicate) Ctx(group int, keyword string) (string, error) {
+	return p.expand(group, keyword)
+}
+
+func (p *Predicate) FilterGroup(group int, keyword string) (string, error) {
+	return p.expand(group, keyword)
 }
 
 func (b *PredicateBuilder) Combine(fragments ...string) *PredicateBuilder {
@@ -140,7 +144,7 @@ func (p *Predicate) expand(ctxNum int, operator string) (string, error) {
 			return "", err
 		}
 
-		if criteria == nil || strings.TrimSpace(criteria.Query) == "" {
+		if criteria == nil || strings.TrimSpace(criteria.Predicate) == "" {
 			continue
 		}
 
@@ -151,7 +155,7 @@ func (p *Predicate) expand(ctxNum int, operator string) (string, error) {
 		}
 
 		result.WriteByte('(')
-		result.WriteString(criteria.Query)
+		result.WriteString(criteria.Predicate)
 		result.WriteByte(')')
 		if len(criteria.Args) > 0 {
 			p.ctx.DataUnit.addAll(criteria.Args...)

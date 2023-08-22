@@ -335,8 +335,8 @@ github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888 h1:iQ9ehV+Qev9s/L
 github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/velty v0.2.1-0.20230803200403-bd59a7c855b3 h1:2+z5X2mn3VCmEdKAs9dcWcQyV4Ny1etl8zeuHvcLyZQ=
 github.com/viant/velty v0.2.1-0.20230803200403-bd59a7c855b3/go.mod h1:C9LNTFXg7DR8B9+tcY2STVqiRQasDr8AZxMhy/lIpOU=
-github.com/viant/xdatly v0.3.1-0.20230818003925-f29cae06483b h1:/2ObW/oAx3xBrr39t48urkHfhsnynBD74mTMNLxGx+Q=
-github.com/viant/xdatly v0.3.1-0.20230818003925-f29cae06483b/go.mod h1:7PvSJ8wDt1nESDFZSkVxPo5GKuPrJdCk5a5jRhPPub8=
+github.com/viant/xdatly v0.3.1-0.20230822044306-c49e373957fb h1:faLdu8pp1S+nhForcEIq4chav6tVYiIajvJBT4eZaj0=
+github.com/viant/xdatly v0.3.1-0.20230822044306-c49e373957fb/go.mod h1:7PvSJ8wDt1nESDFZSkVxPo5GKuPrJdCk5a5jRhPPub8=
 github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6 h1:smo1mQEneoMzqnC0ThQpGZmx0gDywu7GFUmjab9rVYM=
 github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6/go.mod h1:fb8YgbVadk8X5ZLz49LWGzWmQlZd7Y/I5wE0ru44bIo=
 github.com/viant/xdatly/handler v0.0.0-20230822000337-ea5fe43607cb h1:JDbf6LzGMK60Yz8F2oEuuLJEm9t4yOu/f0mc5yS8pms=

@@ -61,7 +61,7 @@ func (p *Evaluator) Expand(value interface{}) (*codec.Criteria, error) {
 	if err := exec.Exec(state); err != nil {
 		return nil, err
 	}
-	return &codec.Criteria{Query: state.Buffer.String(), Args: values}, nil
+	return &codec.Criteria{Predicate: state.Buffer.String(), Args: values}, nil
 }
 
 func NewEvaluator(template *predicate.Template, args ...string) *Evaluator {

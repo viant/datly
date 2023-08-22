@@ -116,7 +116,6 @@ func (s *Session) ParentData() (*ParentData, bool) {
 	if s.Parent == nil {
 		return nil, false
 	}
-
 	return &ParentData{
 		View:     s.Parent,
 		Selector: s.Selectors.Lookup(s.Parent),

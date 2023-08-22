@@ -254,10 +254,10 @@ func (s *Declarations) appendPredicate(declaration *Declaration, args []string, 
 		return err
 	}
 	declaration.Predicates = append(declaration.Predicates, &config.PredicateConfig{
-		Name:    args[1],
-		Context: ctx,
-		Args:    args[2:],
-		Ensure:  ensure,
+		Name:   args[1],
+		Group:  ctx,
+		Args:   args[2:],
+		Ensure: ensure,
 	})
 	return nil
 }

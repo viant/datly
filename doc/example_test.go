@@ -35,7 +35,7 @@ type Validation struct {
 	IsValid bool
 }
 
-//Example_RuleExecution show how to programmatically execute executor rule
+// Example_RuleExecution show how to programmatically execute executor rule
 func Example_ExecRuleDebugging() {
 	//Uncomment various additional debugging and troubleshuting
 	// expand.SetPanicOnError(false)
@@ -70,7 +70,7 @@ func Example_ExecRuleDebugging() {
 	}
 }
 
-//Example_ReadRuleExecution show how to programmatically execute read rule
+// Example_ReadRuleExecution show how to programmatically execute read rule
 func Example_ReadRuleDebugging() {
 	//Uncomment various additional debugging and troubleshuting
 	// expand.SetPanicOnError(false)
@@ -82,7 +82,7 @@ func Example_ReadRuleDebugging() {
 	err := service.LoadRoute(ctx, ruleURL,
 		view.NewPackagedType("domain", "Product", reflect.TypeOf(Product{})),
 	)
-	//note that product has to have OnFetch(ctx context.Context) error with breakpoint for go customization
+	//note that product has to have OnFetch(ctx context.Group) error with breakpoint for go customization
 	if err == nil {
 		err = service.Init(ctx)
 	}

@@ -258,10 +258,10 @@ func (b *paramStateBuilder) populateCriteria(ctx context.Context, selector *view
 			return nil
 		}
 
-		selector.SetCriteria(actual.Query, actual.Args)
+		selector.SetCriteria(actual.Predicate, actual.Args)
 		return nil
 	case codec.Criteria:
-		selector.SetCriteria(actual.Query, actual.Args)
+		selector.SetCriteria(actual.Predicate, actual.Args)
 		return nil
 	}
 

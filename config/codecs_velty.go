@@ -72,8 +72,8 @@ func (v *VeltyCodec) Value(ctx context.Context, raw interface{}, options ...code
 	}
 
 	return &codec.Criteria{
-		Query: evaluated.Expanded,
-		Args:  evaluated.DataUnit.ParamsGroup,
+		Predicate: evaluated.Expanded,
+		Args:      evaluated.DataUnit.ParamsGroup,
 	}, nil
 }
 

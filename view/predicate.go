@@ -56,7 +56,7 @@ func (e *predicateEvaluator) Compute(ctx context.Context, value interface{}) (*c
 		return nil, err
 	}
 
-	return &codec.Criteria{Query: evaluate.Buffer.String()}, nil
+	return &codec.Criteria{Predicate: evaluate.Buffer.String()}, nil
 }
 
 func (e *predicateEvaluator) Evaluate(ctx *expand.Context, state *structology.State, value interface{}) (*expand.State, error) {

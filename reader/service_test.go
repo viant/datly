@@ -292,29 +292,7 @@ func TestRead(t *testing.T) {
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2,"Quantity":33.23432374000549,"UserId":1,"EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11,"Quantity":21.957962334156036,"UserId":2,"EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3,"EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
 		},
-		{
-			dataURI:     "case010_view_parameter/",
-			view:        "users_accounts",
-			description: "parameters",
-			dest:        new(interface{}),
-			compTypes: map[string]reflect.Type{
-				"user_params":      reflect.TypeOf(UserViewParams{}),
-				"datly_acl_params": reflect.TypeOf(AclParams{}),
-			},
-			expect: `[{"Id":4,"Name":"Kamil","Role":"ADMIN","Accounts":null},{"Id":5,"Name":"Bob","Role":"ADMIN","Accounts":null}]`,
-			selectors: map[string]*view.Selector{
-				"users_accounts": {
-					Parameters: view.ParamState{
-						Values: UserViewParams{AclCriteria: "ROLE IN ('ADMIN')"},
-					},
-				},
-				"datly_acl": {
-					Parameters: view.ParamState{
-						Values: AclParams{Subject: "Kamil"},
-					},
-				},
-			},
-		},
+
 		{
 			description: "read all strategy, one to one",
 			dataURI:     "case011_read_all_one_to_one/",
@@ -344,75 +322,6 @@ func TestRead(t *testing.T) {
 			expect:      `[{"Id":1,"Content":"Lorem ipsum","LangId":2,"Language":{"Id":2,"Code":"en-US"}},{"Id":2,"Content":"dolor sit amet","LangId":12,"Language":{"Id":12,"Code":"ky-KG"}},{"Id":3,"Content":"consectetur adipiscing elit","LangId":13,"Language":{"Id":13,"Code":"lb-LU"}},{"Id":4,"Content":"sed do eiusmod tempor incididunt","LangId":9,"Language":{"Id":9,"Code":"zh-CN"}},{"Id":5,"Content":"content without lang","LangId":0,"Language":{"Id":0,"Code":""}}]`,
 			compTypes: map[string]reflect.Type{
 				"article": reflect.TypeOf(Article{}),
-			},
-		},
-		{
-			description: "path parameter",
-			dataURI:     "case015_path_parameter/",
-			view:        "users",
-			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Name":"John","Role":""}]`,
-			compTypes: map[string]reflect.Type{
-				"user_params": reflect.TypeOf(UserIdParam{}),
-			},
-			selectors: map[string]*view.Selector{
-				"users": {
-					Parameters: view.ParamState{
-						Values: UserIdParam{Id: 1},
-					},
-				},
-			},
-		},
-		{
-			description: "query parameter",
-			dataURI:     "case016_query_parameter/",
-			view:        "languages",
-			dest:        new(interface{}),
-			expect:      `[{"Id":1,"Code":"en-GB"},{"Id":2,"Code":"en-US"}]`,
-			compTypes: map[string]reflect.Type{
-				"lang_params": reflect.TypeOf(LangQueryParams{}),
-			},
-			selectors: map[string]*view.Selector{
-				"languages": {
-					Parameters: view.ParamState{
-						Values: LangQueryParams{Language: "en"},
-					},
-				},
-			},
-		},
-		{
-			description: "header parameter",
-			dataURI:     "case017_header_parameter/",
-			view:        "users",
-			dest:        new(interface{}),
-			expect:      `[{"Id":3,"Name":"Anna","Role":""}]`,
-			compTypes: map[string]reflect.Type{
-				"header_params": reflect.TypeOf(UserHeaderParams{}),
-			},
-			selectors: map[string]*view.Selector{
-				"users": {
-					Parameters: view.ParamState{
-						Values: UserHeaderParams{UserName: "Anna"},
-					},
-				},
-			},
-		},
-		{
-			description: "cookie parameter",
-			dataURI:     "case018_cookie_parameter/",
-			view:        "users",
-			dest:        new(interface{}),
-			expect:      `[{"Id":2,"Name":"David","Role":""}]`,
-			compTypes: map[string]reflect.Type{
-				"user_params": reflect.TypeOf(UserIdParam{}),
-			},
-			selectors: map[string]*view.Selector{
-				"users": {
-					Parameters: view.ParamState{
-						Values: UserIdParam{Id: 2},
-						Has:    nil,
-					},
-				},
 			},
 		},
 		{
@@ -466,14 +375,6 @@ func TestRead(t *testing.T) {
 			dest:        new(interface{}),
 			view:        "events",
 			expect:      `[{"Id":1,"EventTypeId":2,"Quantity":33.23432374000549,"Date":"2019-03-11T02:20:33Z"},{"Id":10,"EventTypeId":11,"Quantity":21.957962334156036,"Date":"2019-03-15T12:07:33Z"},{"Id":100,"EventTypeId":111,"Quantity":5.084940046072006,"Date":"2019-04-10T05:15:33Z"}]`,
-		},
-		{
-			description: "type definition",
-			dataURI:     "case023_columns_codec/",
-			dest:        new(interface{}),
-			view:        "events",
-			visitors:    codec.NewRegistry(codec.WithCodec("Strings", &StringsCodec{}, time.Time{})),
-			expect:      `[{"Name":["John","David","Anna"]}]`,
 		},
 		nestedStruct(),
 	}

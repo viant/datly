@@ -315,7 +315,7 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 
 			predicates = append(predicates, &expand.PredicateConfig{
 				Ensure:   predicate.Ensure,
-				Context:  predicate.Context,
+				Context:  predicate.Group,
 				Selector: p.Selector(),
 				Expander: evaluator,
 			})

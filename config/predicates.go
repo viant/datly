@@ -37,11 +37,11 @@ type (
 	PredicateHandlerFactory struct{}
 
 	PredicateConfig struct {
-		Parent  string
-		Name    string
-		Context int
-		Ensure  bool
-		Args    []string
+		Parent string
+		Name   string
+		Group  int
+		Ensure bool
+		Args   []string
 	}
 
 	NamedArg struct {
