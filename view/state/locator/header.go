@@ -1,6 +1,8 @@
-package kind
+package locator
 
 import (
+	"fmt"
+	"github.com/viant/datly/view/state"
 	"net/http"
 )
 
@@ -25,4 +27,14 @@ func (q *Header) Value(name string) (interface{}, bool, error) {
 		return value[0], true, nil
 	}
 	return "", true, nil
+}
+
+// NewHeader returns header locator
+func NewHeader(opts ...Option) (state.Locator, error) {
+	options := NewOptions(opts)
+	if options.Request == nil {
+		return nil, fmt.Errorf("request was empty")
+	}
+	ret := &Header{header: options.Request.Header}
+	return ret, nil
 }

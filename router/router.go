@@ -911,7 +911,6 @@ func (r *Router) logAudit(request *http.Request, response http.ResponseWriter, r
 		URL:     request.RequestURI,
 		Headers: headers,
 	})
-
 	fmt.Printf("%v\n", string(asBytes))
 }
 

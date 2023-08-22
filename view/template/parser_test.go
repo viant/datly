@@ -1,4 +1,4 @@
-package parameter
+package template
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -31,7 +31,7 @@ func TestParse(t *testing.T) {
 FROM CI_SYSTEM_CONFIG 
 WHERE 1=0  LIMIT 1 $PAGINATION `,
 
-			Expect: []*Value{{Key: "PAGINATION", TemplateFragment: "$PAGINATION"}},
+			Expect: []*Value{{Key: "PAGINATION", Fragment: "$PAGINATION"}},
 		},
 	}
 

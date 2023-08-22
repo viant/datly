@@ -10,7 +10,7 @@ import (
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
-	state2 "github.com/viant/datly/view/state"
+	vstate "github.com/viant/datly/view/state"
 	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xdatly/codec"
@@ -36,7 +36,7 @@ type (
 		requestMetadata *RequestMetadata
 		params          *RequestParams
 		cache           *paramsValueCache
-		viewParams      state2.NamedParameters
+		viewParams      vstate.NamedParameters
 	}
 
 	JSONError struct {
@@ -51,7 +51,7 @@ type (
 	paramsValueKey struct {
 		name     string
 		target   string
-		location state2.Kind
+		location vstate.Kind
 	}
 
 	paramValue struct {
@@ -137,7 +137,7 @@ func BuildRouteSelectors(ctx context.Context, selectors *view.Selectors, route *
 			return err
 		}
 	}
-	return CreateSelectors(ctx, route._resource, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, state2.NamedParameters{}, route.Index._viewDetails...)
+	return CreateSelectors(ctx, route._resource, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, vstate.NamedParameters{}, route.Index._viewDetails...)
 }
 
 func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, requestParams *RequestParams, views ...*ViewDetails) (*view.Selectors, *RequestParams, error) {
@@ -168,12 +168,12 @@ func NewRequestMetadata(route *Route) *RequestMetadata {
 	return requestMetadata
 }
 
-func CreateSelectors(ctx context.Context, resource *view.Resource, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, selectors *view.Selectors, paramsIndex state2.NamedParameters, views ...*ViewDetails) error {
+func CreateSelectors(ctx context.Context, resource *view.Resource, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, selectors *view.Selectors, paramsIndex vstate.NamedParameters, views ...*ViewDetails) error {
 	sb := newParamStateBuilder(resource, inputFormat, dateFormat, requestMetadata, requestParams, newParamsValueCache(), paramsIndex)
 	return sb.Build(ctx, views, selectors)
 }
 
-func newParamStateBuilder(resource *view.Resource, inputFormat format.Case, dateFormat string, requestMetadata *RequestMetadata, requestParams *RequestParams, cache *paramsValueCache, paramsIndex state2.NamedParameters) *paramStateBuilder {
+func newParamStateBuilder(resource *view.Resource, inputFormat format.Case, dateFormat string, requestMetadata *RequestMetadata, requestParams *RequestParams, cache *paramsValueCache, paramsIndex vstate.NamedParameters) *paramStateBuilder {
 	sb := &paramStateBuilder{
 		resource:        resource,
 		caser:           inputFormat,
@@ -360,7 +360,7 @@ func (b *paramStateBuilder) offsetValue(ctx context.Context, details *ViewDetail
 	return asInt(value, param)
 }
 
-func asInt(value interface{}, param *state2.Parameter) (int, error) {
+func asInt(value interface{}, param *vstate.Parameter) (int, error) {
 	if value == nil {
 		return 0, nil
 	}
@@ -408,7 +408,7 @@ func (b *paramStateBuilder) fieldRawValue(ctx context.Context, details *ViewDeta
 	return "", state.ValuesSeparator, typeMismatchError(param, paramValue)
 }
 
-func (b *paramStateBuilder) extractParamValue(ctx context.Context, param *state2.Parameter, details *ViewDetails, selector *view.Selector) (interface{}, error) {
+func (b *paramStateBuilder) extractParamValue(ctx context.Context, param *vstate.Parameter, details *ViewDetails, selector *view.Selector) (interface{}, error) {
 	var options []interface{}
 	if selector != nil {
 		options = append(options, codec.Selector(selector))
@@ -435,8 +435,8 @@ func (b *paramStateBuilder) lookupValue(ctx context.Context, name string) (inter
 	return aParameter.Output.Transform(context.Background(), value)
 }
 
-func (b *paramStateBuilder) getParameter(name string) (*state2.Parameter, error) {
-	var aParameter *state2.Parameter
+func (b *paramStateBuilder) getParameter(name string) (*vstate.Parameter, error) {
+	var aParameter *vstate.Parameter
 	if b.resource != nil {
 		var err error
 		if aParameter, err = b.resource.LookupParameter(name); err != nil {
@@ -452,21 +452,21 @@ func (b *paramStateBuilder) getParameter(name string) (*state2.Parameter, error)
 	return aParameter, nil
 }
 
-func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, param *state2.Parameter, parentView *view.View, options ...interface{}) (interface{}, error) {
+func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, param *vstate.Parameter, parentView *view.View, options ...interface{}) (interface{}, error) {
 
 	value, err := b.cache.paramValue(param, func() (interface{}, error) {
 		switch param.In.Kind {
-		case state2.KindDataView:
+		case vstate.KindDataView:
 			return b.viewParamValue(ctx, param, parentView)
-		case state2.KindEnvironment:
+		case vstate.KindEnvironment:
 			return os.Getenv(param.In.Name), nil
-		case state2.KindParam:
+		case vstate.KindParam:
 			return b.paramBasedParamValue(ctx, parentView, param, options...)
-		case state2.KindLiteral:
+		case vstate.KindLiteral:
 			return param.Const, nil
-		case state2.KindRequest:
+		case vstate.KindRequest:
 			return b.params.request, nil
-		case state2.KindGroup:
+		case vstate.KindGroup:
 			return b.groupParam(ctx, param, parentView)
 		}
 		return b.params.extractHttpParam(ctx, param, options)
@@ -479,12 +479,12 @@ func (b *paramStateBuilder) extractParamValueWithOptions(ctx context.Context, pa
 	if param.Output == nil {
 		return value, nil
 	}
-	codecOptions := state2.AsCodecOptions(options)
+	codecOptions := vstate.AsCodecOptions(options)
 	codecOptions = append(codecOptions, codec.WithValueLookup(b.lookupValue))
 	return param.Output.Transform(ctx, value, codecOptions...)
 }
 
-func (p *RequestParams) convert(isSpecified bool, raw string, param *state2.Parameter) (interface{}, error) {
+func (p *RequestParams) convert(isSpecified bool, raw string, param *vstate.Parameter) (interface{}, error) {
 	if raw == "" && param.IsRequired() {
 		return nil, requiredParamErr(param)
 	}
@@ -502,20 +502,20 @@ func (p *RequestParams) convert(isSpecified bool, raw string, param *state2.Para
 	return convert, err
 }
 
-func (b *paramStateBuilder) buildSelectorParameters(ctx context.Context, state *structology.State, parent *ViewDetails, parameters []*state2.Parameter, options ...interface{}) (*state2.Parameter, error) {
-	var viewParams []*state2.Parameter
+func (b *paramStateBuilder) buildSelectorParameters(ctx context.Context, aState *structology.State, parent *ViewDetails, parameters []*vstate.Parameter, options ...interface{}) (*vstate.Parameter, error) {
+	var viewParams []*vstate.Parameter
 	for _, parameter := range parameters {
-		if parameter.In.Kind == state2.KindDataView && parameter.ErrorStatusCode <= 400 {
+		if parameter.In.Kind == vstate.KindDataView && parameter.ErrorStatusCode <= 400 {
 			viewParams = append(viewParams, parameter)
 			continue
 		}
 
-		err := b.handleParam(ctx, state, parent, parameter, options...)
+		err := b.handleParam(ctx, aState, parent, parameter, options...)
 		if err != nil {
 			return parameter, err
 		}
 
-		value, err := parameter.Value(state)
+		value, err := parameter.Value(aState)
 		if err != nil {
 			return parameter, err
 		}
@@ -528,14 +528,14 @@ func (b *paramStateBuilder) buildSelectorParameters(ctx context.Context, state *
 		wg := &sync.WaitGroup{}
 		mux := &sync.Mutex{}
 
-		var invalidParam *state2.Parameter
+		var invalidParam *vstate.Parameter
 		var errParam error
 
 		for _, param := range viewParams {
 			wg.Add(1)
-			go func(param *state2.Parameter, wg *sync.WaitGroup) {
+			go func(param *vstate.Parameter, wg *sync.WaitGroup) {
 				defer wg.Done()
-				err := b.handleParam(ctx, state, parent, param, options...)
+				err := b.handleParam(ctx, aState, parent, param, options...)
 				if err != nil {
 					mux.Lock()
 					defer mux.Unlock()
@@ -560,7 +560,7 @@ func isNull(value interface{}) bool {
 	return xunsafe.AsPointer(value) == nil
 }
 
-func (b *paramStateBuilder) handleParam(ctx context.Context, state *structology.State, parent *ViewDetails, parameter *state2.Parameter, options ...interface{}) error {
+func (b *paramStateBuilder) handleParam(ctx context.Context, aState *structology.State, parent *ViewDetails, parameter *vstate.Parameter, options ...interface{}) error {
 	var parentView *view.View
 	if parent != nil {
 		parentView = parent.View
@@ -574,7 +574,7 @@ func (b *paramStateBuilder) handleParam(ctx context.Context, state *structology.
 		return requiredParamErr(parameter)
 	}
 	if value != nil {
-		if err = parameter.Selector().SetValue(state.Pointer(), value); err != nil {
+		if err = parameter.Selector().SetValue(aState.Pointer(), value); err != nil {
 			return err
 		}
 	}
@@ -582,11 +582,11 @@ func (b *paramStateBuilder) handleParam(ctx context.Context, state *structology.
 	return nil
 }
 
-func requiredParamErr(param *state2.Parameter) error {
+func requiredParamErr(param *vstate.Parameter) error {
 	return fmt.Errorf("parameter %v is required", param.Name)
 }
 
-func (b *paramStateBuilder) viewParamValue(ctx context.Context, param *state2.Parameter, parentView *view.View) (interface{}, error) {
+func (b *paramStateBuilder) viewParamValue(ctx context.Context, param *vstate.Parameter, parentView *view.View) (interface{}, error) {
 
 	aView, _ := b.resource.View(param.In.Name)
 
@@ -673,7 +673,7 @@ func (b *paramStateBuilder) buildFields(aView *view.View, selector *view.Selecto
 	return nil
 }
 
-func (b *paramStateBuilder) paramViewValue(param *state2.Parameter, value reflect.Value, multi bool, paramLen int, aSlice *xunsafe.Slice, ptr unsafe.Pointer) (interface{}, error) {
+func (b *paramStateBuilder) paramViewValue(param *vstate.Parameter, value reflect.Value, multi bool, paramLen int, aSlice *xunsafe.Slice, ptr unsafe.Pointer) (interface{}, error) {
 	if multi {
 		return value.Elem().Interface(), nil
 	}
@@ -686,24 +686,6 @@ func (b *paramStateBuilder) paramViewValue(param *state2.Parameter, value reflec
 	default:
 		return nil, fmt.Errorf("parameter %v return more than one value, len: %v rows ", param.Name, paramLen)
 	}
-}
-
-func (p *RequestParams) extractBody(body interface{}, path string) (interface{}, bool) {
-	if path == "" {
-		return body, true
-	}
-
-	accessor, err := p.accessors.AccessorByName(path)
-	if err != nil {
-		return nil, false
-	}
-
-	value, err := accessor.Value(body)
-	if err != nil {
-		return nil, false
-	}
-
-	return value, true
 }
 
 func (b *paramStateBuilder) populatePage(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
@@ -729,7 +711,7 @@ func (b *paramStateBuilder) populatePage(ctx context.Context, selector *view.Sel
 	return nil
 }
 
-func (b *paramStateBuilder) paramBasedParamValue(ctx context.Context, parentView *view.View, param *state2.Parameter, options ...interface{}) (interface{}, error) {
+func (b *paramStateBuilder) paramBasedParamValue(ctx context.Context, parentView *view.View, param *vstate.Parameter, options ...interface{}) (interface{}, error) {
 	parent := param.Parent()
 	value, err := b.extractParamValueWithOptions(ctx, parent, parentView, options...)
 	if err != nil {
@@ -747,8 +729,8 @@ func (b *paramStateBuilder) Value(ctx context.Context, paramName string) (interf
 	return b.extractParamValueWithOptions(ctx, lookup, nil)
 }
 
-func (b *paramStateBuilder) groupParam(ctx context.Context, param *state2.Parameter, parentView *view.View) (interface{}, error) {
-	var state *structology.State
+func (b *paramStateBuilder) groupParam(ctx context.Context, param *vstate.Parameter, parentView *view.View) (interface{}, error) {
+	var aState *structology.State
 	var value interface{}
 
 	for _, p := range param.Group {
@@ -760,10 +742,10 @@ func (b *paramStateBuilder) groupParam(ctx context.Context, param *state2.Parame
 		if pValue != nil {
 			if value == nil {
 				value = types.NewValue(param.Schema.Type())
-				state = param.NewState(value)
+				aState = param.NewState(value)
 			}
 
-			if err := state.SetValue(p.Name, pValue); err != nil {
+			if err := aState.SetValue(p.Name, pValue); err != nil {
 				return nil, err
 			}
 		}
@@ -780,7 +762,7 @@ func canUseColumn(aView *view.View, columnName string) error {
 	return nil
 }
 
-func typeMismatchError(param *state2.Parameter, value interface{}) error {
+func typeMismatchError(param *vstate.Parameter, value interface{}) error {
 	return fmt.Errorf("parameter %v value type missmatch, wanted %v but got %T", param.Name, param.Schema.Type().String(), value)
 }
 
@@ -790,7 +772,7 @@ func newParamsValueCache() *paramsValueCache {
 	}
 }
 
-func (p *paramsValueCache) paramValue(param *state2.Parameter, valuer func() (interface{}, error)) (interface{}, error) {
+func (p *paramsValueCache) paramValue(param *vstate.Parameter, valuer func() (interface{}, error)) (interface{}, error) {
 	actual, _ := p.index.LoadOrStore(paramsValueKey{
 		name:     param.Name,
 		target:   param.In.Name,

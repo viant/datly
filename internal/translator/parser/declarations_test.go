@@ -32,7 +32,7 @@ SELECT 1 FROM t WHERE ID IN($TeamIDs)
 							Kind: state.KindQuery,
 							Name: "tids",
 						},
-						Codec: &state.Codec{Name: "AsInts"},
+						Output: &state.Codec{Name: "AsInts"},
 						Schema: &state.Schema{
 							Cardinality: state.One,
 						},

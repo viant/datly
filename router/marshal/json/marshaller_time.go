@@ -15,7 +15,7 @@ type timeMarshaller struct {
 	tag        *DefaultTag
 }
 
-func newTimeMarshaller(tag *DefaultTag, config common.DefaultConfig) *timeMarshaller {
+func newTimeMarshaller(tag *DefaultTag, config common.IOConfig) *timeMarshaller {
 	timeFormat := time.RFC3339
 	if tag.Format != "" {
 		timeFormat = tag.Format

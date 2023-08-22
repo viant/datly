@@ -7,8 +7,8 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view/keywords"
-	"github.com/viant/datly/view/parameter"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/template"
 	"github.com/viant/structology"
 	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/velty"
@@ -150,7 +150,7 @@ func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resourc
 }
 
 func buildType(parameters []*state.Parameter, paramType reflect.Type, fields ...reflect.StructField) (reflect.Type, error) {
-	builder := parameter.NewBuilder("")
+	builder := template.NewBuilder("")
 	for _, param := range parameters {
 		pType := param.ActualParamType()
 		if paramType != nil {
@@ -376,7 +376,7 @@ func (t *Template) IsActualTemplate() bool {
 }
 
 func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error) {
-	values, err := parameter.Parse(SQL)
+	values, err := template.Parse(SQL)
 	if err != nil {
 		return "", err
 	}
@@ -409,7 +409,7 @@ func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Sel
 	return replacement.ExpandAsText(SQL), err
 }
 
-func (t *Template) prepareExpanded(value *parameter.Value, params CriteriaParam, selector *Selector, batchData *BatchData, placeholders *[]interface{}, sanitized *expand.DataUnit) (string, string, error) {
+func (t *Template) prepareExpanded(value *template.Value, params CriteriaParam, selector *Selector, batchData *BatchData, placeholders *[]interface{}, sanitized *expand.DataUnit) (string, string, error) {
 	key, val, err := t.replacementEntry(value.Key, params, selector, batchData, placeholders, sanitized)
 	if err != nil {
 		return "", "", err

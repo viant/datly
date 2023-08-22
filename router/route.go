@@ -14,10 +14,9 @@ import (
 	"github.com/viant/datly/router/marshal/tabjson"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
-	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/view/parameter"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/template"
 	"github.com/viant/sqlx/io/load/reader/csv"
 	"github.com/viant/structql"
 	"github.com/viant/toolbox/format"
@@ -88,15 +87,17 @@ type (
 		JSON
 		XLS
 		Output
+
 		Index
-		bodyParamQuery   map[string]*query
+
+		bodyParamQuery map[string]*query
+
 		ParamStatusError *int         `json:",omitempty"`
 		Cache            *cache.Cache `json:",omitempty"`
 		Compression      *Compression `json:",omitempty"`
 		Handler          *Handler     `json:",omitempty"`
 
-		_resource  *view.Resource
-		_accessors *types.Accessors
+		_resource *view.Resource
 
 		_requestBodyParamRequired bool
 		_requestBodyType          reflect.Type
@@ -120,14 +121,11 @@ type (
 
 	JSON struct {
 		_jsonMarshaller           *json.Marshaller
-		_unmarshallerInterceptors []*jsonUnmarshallerInterceptors
+		_unmarshallerInterceptors marshal.Transforms
 	}
 
 	XLS struct {
 		_xlsMarshaller *xlsy.Marshaller
-	}
-	jsonUnmarshallerInterceptors struct {
-		transform *marshal.Transform
 	}
 
 	Output struct {
@@ -316,10 +314,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return nil
 	}
 
-	if err := r.initMarshallerInterceptor(); err != nil {
-		return err
-	}
-
+	r._unmarshallerInterceptors = r.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
 	if err := r.initServiceType(); err != nil {
 		return err
 	}
@@ -433,8 +428,8 @@ func (r *Route) initCardinality() error {
 	}
 }
 
-func (r *Route) jsonConfig() common.DefaultConfig {
-	return common.DefaultConfig{
+func (r *Route) jsonConfig() common.IOConfig {
+	return common.IOConfig{
 		OmitEmpty:  r.OmitEmpty,
 		CaseFormat: *r._caser,
 		Exclude:    common.Exclude(r.Exclude).Index(),
@@ -586,8 +581,6 @@ func (r *Route) initRequestBodyFromParams() error {
 		return nil
 	}
 	r.bodyParamQuery = map[string]*query{}
-	accessors := types.NewAccessors(&types.VeltyNamer{})
-	r._accessors = accessors
 	bodyParam, _ := r.fullBodyParam(params)
 	rType, err := r.initRequestBodyType(bodyParam, params)
 	if err != nil {
@@ -596,7 +589,6 @@ func (r *Route) initRequestBodyFromParams() error {
 
 	r._requestBodyType = rType
 
-	r._accessors.Init(r._requestBodyType)
 	for _, param := range params {
 		if param.In.Name != "" {
 			aQuery := &query{}
@@ -620,7 +612,6 @@ func (r *Route) initRequestBodyFromParams() error {
 func (r *Route) initRequestBodyType(bodyParam *state.Parameter, params []*state.Parameter) (reflect.Type, error) {
 	if bodyParam != nil {
 		bodyType := bodyParam.Schema.Type()
-		r._accessors.Init(bodyType)
 		return bodyType, r.bodyParamMatches(bodyType, params)
 	}
 
@@ -633,7 +624,7 @@ func (r *Route) initRequestBodyType(bodyParam *state.Parameter, params []*state.
 		return r.RequestBodySchema.Type(), nil
 	}
 
-	typeBuilder := parameter.NewBuilder("")
+	typeBuilder := template.NewBuilder("")
 	for _, param := range params {
 		name := param.In.Name
 		schemaType := param.Schema.Type()
@@ -760,9 +751,6 @@ func (r *Route) bodyParamMatches(rType reflect.Type, params []*state.Parameter) 
 			continue
 		}
 
-		if _, err := r._accessors.AccessorByName(name); err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -947,22 +935,6 @@ func (r *Route) initResponseBodyIfNeeded() error {
 	return r.ResponseBody.Init(r.View)
 }
 
-func (c *CSVConfig) presenceMap() PresenceMapFn {
-	return func(bytes []byte) (map[string]interface{}, error) {
-		result := map[string]interface{}{}
-		fieldNames, err := c._requestBodyMarshaller.ReadHeaders(bytes)
-		if err != nil {
-			return result, err
-		}
-
-		for _, name := range fieldNames {
-			result[name] = true
-		}
-
-		return result, err
-	}
-}
-
 func (c *CSVConfig) Unmarshal(bytes []byte, i interface{}) error {
 	return c._requestBodyMarshaller.Unmarshal(bytes, i)
 }
@@ -995,29 +967,15 @@ func (r *Route) initMarshaller() error {
 }
 
 func (r *Route) initMarshallerInterceptor() error {
-	var outputTransforms []*marshal.Transform
-	for _, transform := range r.Transforms {
-		if transform.Kind != marshal.TransformKindUnmarshal {
-			continue
-		}
 
-		outputTransforms = append(outputTransforms, transform)
-	}
-
-	r._unmarshallerInterceptors = []*jsonUnmarshallerInterceptors{}
-	for _, transform := range outputTransforms {
-		r._unmarshallerInterceptors = append(r._unmarshallerInterceptors, &jsonUnmarshallerInterceptors{
-			transform: transform,
-		})
-	}
-
+	r._unmarshallerInterceptors = r.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
 	return nil
 }
 
 func (r *Route) unmarshallerInterceptors(params *RequestParams) json.UnmarshalerInterceptors {
 	result := json.UnmarshalerInterceptors{}
 	for i := range r._unmarshallerInterceptors {
-		transform := r._unmarshallerInterceptors[i].transform
+		transform := r._unmarshallerInterceptors[i]
 		result[transform.Path] = r.transformFn(params, transform)
 	}
 	return result

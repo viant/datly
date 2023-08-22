@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-type DefaultConfig struct {
+type IOConfig struct {
 	OmitEmpty  bool
 	CaseFormat format.Case
 	Exclude    map[string]bool

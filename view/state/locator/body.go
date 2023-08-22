@@ -1,0 +1,59 @@
+package locator
+
+import (
+	"bytes"
+	"fmt"
+	"github.com/viant/datly/view/state"
+	"github.com/viant/structology"
+	"io"
+)
+
+type Body struct {
+	body  []byte
+	state *structology.State
+	names []string
+}
+
+func (v *Body) Names() []string {
+	return v.names
+}
+
+func (v *Body) Value(name string) (interface{}, bool, error) {
+	if name == "" {
+		return v.state.State(), true, nil
+	}
+	sel, err := v.state.Selector(name)
+	if err != nil {
+		return nil, false, err
+	}
+	if !sel.Has(v.state.Pointer()) {
+		return nil, false, nil
+	}
+	return sel.Value(v.state.Pointer()), true, nil
+}
+
+// NewBody returns body locator
+func NewBody(opts ...Option) (state.Locator, error) {
+	options := NewOptions(opts)
+	if options.BodyType == nil {
+		return nil, fmt.Errorf("body type was empty")
+	}
+	if options.Request == nil {
+		return nil, fmt.Errorf("request was empty")
+	}
+	if options.Request.Body == nil {
+		return nil, fmt.Errorf("request.body was empty")
+	}
+	data, err := io.ReadAll(options.Request.Body)
+	if err != nil {
+		return nil, err
+	}
+	_ = options.Request.Body.Close()
+	options.Request.Body = io.NopCloser(bytes.NewReader(data))
+	var ret = &Body{body: data}
+	bodyType := structology.NewStateType(options.BodyType)
+	ret.state = bodyType.NewState()
+	unmarshal := options.UnmarshalFunc()
+	err = unmarshal(data, ret.state.State())
+	return ret, err
+}

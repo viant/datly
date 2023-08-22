@@ -19,7 +19,7 @@ type (
 		indexUpdater        *presenceUpdater
 		marshallersIndex    map[string]int
 		marshallers         []*marshallerWithField
-		config              common.DefaultConfig
+		config              common.IOConfig
 
 		path       string
 		outputPath string
@@ -56,7 +56,7 @@ type (
 	}
 )
 
-func newStructMarshaller(config common.DefaultConfig, rType reflect.Type, path string, outputPath string, dTag *DefaultTag, cache *marshallersCache) (*structMarshaller, error) {
+func newStructMarshaller(config common.IOConfig, rType reflect.Type, path string, outputPath string, dTag *DefaultTag, cache *marshallersCache) (*structMarshaller, error) {
 	result := &structMarshaller{
 		path:             path,
 		outputPath:       outputPath,
@@ -146,7 +146,7 @@ func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 	return nil
 }
 
-func isExcluded(filter Filter, name string, config common.DefaultConfig, path string) bool {
+func isExcluded(filter Filter, name string, config common.IOConfig, path string) bool {
 	if config.Exclude != nil {
 		if _, ok := config.Exclude[path]; ok {
 			return true
@@ -323,7 +323,7 @@ func addToPath(path, field string) string {
 	return path + "." + field
 }
 
-func (f *marshallerWithField) init(field reflect.StructField, config common.DefaultConfig, cache *marshallersCache) error {
+func (f *marshallerWithField) init(field reflect.StructField, config common.IOConfig, cache *marshallersCache) error {
 	defaultTag, err := NewDefaultTag(field)
 	if err != nil {
 		return err

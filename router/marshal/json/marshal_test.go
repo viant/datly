@@ -21,7 +21,7 @@ func TestJson_Marshal(t *testing.T) {
 		description   string
 		data          func() interface{}
 		expect        string
-		defaultConfig common.DefaultConfig
+		defaultConfig common.IOConfig
 		filters       *json.Filters
 	}{
 		{
@@ -58,7 +58,7 @@ func TestJson_Marshal(t *testing.T) {
 			description: "caser and json tags",
 			data:        caserAndJson,
 			expect:      `[{"id":1,"quantity":125.5,"EventName":"ev-1","time_ptr":"2012-07-12T00:00:00Z"},{"id":2,"quantity":250.5,"time":"2022-05-10T00:00:00Z"}]`,
-			defaultConfig: common.DefaultConfig{
+			defaultConfig: common.IOConfig{
 				OmitEmpty:  true,
 				CaseFormat: format.CaseLowerUnderscore,
 			},
@@ -123,7 +123,7 @@ func TestJson_Marshal(t *testing.T) {
 			description: "ID field",
 			data:        idStruct,
 			expect:      `[{"id":10,"name":"foo","price":125.5}]`,
-			defaultConfig: common.DefaultConfig{
+			defaultConfig: common.IOConfig{
 				CaseFormat: format.CaseLowerCamel,
 			},
 		},
@@ -131,7 +131,7 @@ func TestJson_Marshal(t *testing.T) {
 			description: "embedded",
 			data:        embeddable,
 			expect:      `{"id":10,"name":"foo","price":125.5}`,
-			defaultConfig: common.DefaultConfig{
+			defaultConfig: common.IOConfig{
 				CaseFormat: format.CaseLowerCamel,
 			},
 		},
@@ -139,7 +139,7 @@ func TestJson_Marshal(t *testing.T) {
 			description: "inlining",
 			data:        inlinable,
 			expect:      `{"id":12,"name":"Foo name","price":125.567}`,
-			defaultConfig: common.DefaultConfig{
+			defaultConfig: common.IOConfig{
 				CaseFormat: format.CaseLowerCamel,
 			},
 		},
@@ -147,7 +147,7 @@ func TestJson_Marshal(t *testing.T) {
 			description: "*json.RawMessage",
 			data:        jsonRawMessagePtr,
 			expect:      `{"id":12,"name":"Foo name","price":125.567}`,
-			defaultConfig: common.DefaultConfig{
+			defaultConfig: common.IOConfig{
 				CaseFormat: format.CaseLowerCamel,
 			},
 		},
@@ -155,7 +155,7 @@ func TestJson_Marshal(t *testing.T) {
 			description: "json.RawMessage",
 			data:        jsonRawMessage,
 			expect:      `{"id":12,"name":"Foo name","price":125.567}`,
-			defaultConfig: common.DefaultConfig{
+			defaultConfig: common.IOConfig{
 				CaseFormat: format.CaseLowerCamel,
 			},
 		},
@@ -788,7 +788,7 @@ func BenchmarkMarshal(b *testing.B) {
 		},
 	}
 
-	benchMarshaller = json.New(common.DefaultConfig{})
+	benchMarshaller = json.New(common.IOConfig{})
 
 	b.Run("SDK json", func(b *testing.B) {
 		var bytes []byte
@@ -1198,7 +1198,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 	for i, testCase := range testCases {
 		fmt.Printf("Running testcase nr#%v\n", i)
 		actual := testCase.into()
-		marshaller := json.New(common.DefaultConfig{})
+		marshaller := json.New(common.IOConfig{})
 
 		marshalErr := marshaller.Unmarshal([]byte(testCase.data), actual, testCase.options...)
 

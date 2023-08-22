@@ -19,7 +19,6 @@ type (
 		Offset         int      `json:",omitempty"`
 		Limit          int      `json:",omitempty"`
 
-		//ParametersState ParamState `json:",omitempty"`
 		State *structology.State
 
 		Criteria     string        `json:",omitempty"`

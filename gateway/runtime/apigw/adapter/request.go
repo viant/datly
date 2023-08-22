@@ -18,8 +18,8 @@ import (
 
 type Request events.APIGatewayProxyRequest
 
-//Request converts to http.Request
-//apigw doesn't include the function name in the URI segments
+// Request converts to http.Request
+// apigw doesn't include the function name in the URI segments
 func (r *Request) Request(jwtSigner *signer.Service) *http.Request {
 	path := r.Path
 	req := http.Request{

@@ -15,13 +15,13 @@ type mapMarshaller struct {
 	valueMarshaller      marshaler
 	isEmbedded           bool
 	cache                *marshallersCache
-	config               common.DefaultConfig
+	config               common.IOConfig
 	xType                *xunsafe.Type
 	valueType            reflect.Type
 	keyType              reflect.Type
 }
 
-func newMapMarshaller(rType reflect.Type, config common.DefaultConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (*mapMarshaller, error) {
+func newMapMarshaller(rType reflect.Type, config common.IOConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (*mapMarshaller, error) {
 	result := &mapMarshaller{
 		xType:      getXType(rType),
 		isEmbedded: tag.Embedded,

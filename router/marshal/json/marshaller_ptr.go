@@ -16,7 +16,7 @@ type ptrMarshaller struct {
 	isElemIface bool
 }
 
-func newPtrMarshaller(rType reflect.Type, config common.DefaultConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
+func newPtrMarshaller(rType reflect.Type, config common.IOConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
 	elem := rType.Elem()
 	marshaller, err := cache.loadMarshaller(elem, config, path, outputPath, tag)
 	if err != nil {

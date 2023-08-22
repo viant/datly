@@ -305,7 +305,7 @@ func WithExecHttpRequest(ctx context.Context, route *router.Route, request *http
 		err := router.BuildRouteSelectors(ctx, selectors, route, request)
 		sel := selectors.Lookup(route.View)
 		paramState := session.Lookup(session.View)
-		*paramState = sel.Parameters
+		*paramState = *sel.State
 		return err
 	}
 }
@@ -317,7 +317,7 @@ func WithReadHttpRequest(ctx context.Context, route *router.Route, request *http
 		err := router.BuildRouteSelectors(ctx, selectors, route, request)
 		sel := selectors.Lookup(view)
 		paramState := session.Lookup(session.View)
-		*paramState = sel.Parameters
+		*paramState = *sel.State
 		return err
 	}
 }

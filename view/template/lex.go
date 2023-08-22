@@ -1,4 +1,4 @@
-package parameter
+package template
 
 import (
 	"github.com/viant/datly/internal/translator/parser/matchers"

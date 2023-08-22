@@ -1,6 +1,10 @@
-package kind
+package locator
 
-import "net/url"
+import (
+	"fmt"
+	"github.com/viant/datly/view/state"
+	"net/url"
+)
 
 type Query struct {
 	query url.Values
@@ -23,4 +27,13 @@ func (q *Query) Value(name string) (interface{}, bool, error) {
 		return value[0], true, nil
 	}
 	return "", true, nil
+}
+
+// NewQuery returns query locator
+func NewQuery(opts ...Option) (state.Locator, error) {
+	options := NewOptions(opts)
+	if options.Request == nil {
+		return nil, fmt.Errorf("request was empty")
+	}
+	return &Query{query: options.Request.URL.Query()}, nil
 }

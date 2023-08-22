@@ -1211,7 +1211,7 @@ func (v *View) validateSelfRef() error {
 	}
 
 	if v.SelfReference.Parent == "" {
-		return fmt.Errorf("View %v SelfReference Parent can't be empty", v.Name)
+		return fmt.Errorf("View %v SelfReference Locators can't be empty", v.Name)
 	}
 
 	if _, err := v._columns.Lookup(v.SelfReference.Parent); err != nil {

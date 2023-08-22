@@ -15,7 +15,7 @@ import (
 type (
 	//Relation used to build more complex View that represents database tables with relations one-to-one or many-to-many
 	//In order to understand it better our example is:
-	//Parent View represents Employee{AccountId: int}, Relation represents Account{Id: int}
+	//Locators View represents Employee{AccountId: int}, Relation represents Account{Id: int}
 	//We want to create result like:  Employee{Account{Id:int}}
 	Relation struct {
 		Name            string            `json:",omitempty"`

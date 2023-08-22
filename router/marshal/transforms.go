@@ -35,6 +35,16 @@ type (
 type Transforms []*Transform
 type TransformIndex map[string]Transforms
 
+func (t Transforms) FilterByKind(kind string) Transforms {
+	var result = make(Transforms, 0, len(t))
+	for i, candidate := range t {
+		if candidate.Kind == kind {
+			result = append(result, t[i])
+		}
+	}
+	return result
+}
+
 func (t *Transform) Init(ctx context.Context, fs afs.Service, lookupType xreflect.LookupType) error {
 	if t.SourceURL != "" {
 		source, err := fs.DownloadWithURL(ctx, t.SourceURL)

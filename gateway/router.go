@@ -367,7 +367,7 @@ func (r *Router) newMatcher(routers []*router.Router) (*matcher.Matcher, []*Rout
 		r.NewConfigRoute(),
 	)
 
-	marshaller := cusJson.New(common.DefaultConfig{})
+	marshaller := cusJson.New(common.IOConfig{})
 	routes = append(
 		routes,
 		NewJobsRoute("/datly-jobs", routers, jobKeys, marshaller),

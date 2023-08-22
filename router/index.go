@@ -27,13 +27,10 @@ type (
 func (i *Index) Init(aView *view.View, path string) error {
 	i.ensureIndexes()
 	i.indexViews(aView, path, true)
-
-	if err := i.indexViewsByPrefix(aView); err != nil {
+	if err := i.indexViewsByPrefix(); err != nil {
 		return err
 	}
-
 	i.addMainViewPrefixIfNeeded()
-
 	return nil
 }
 
@@ -91,7 +88,7 @@ func (i *Index) ViewNamespace(aView *view.View) string {
 	return i._nameToNamespace[aView.Name]
 }
 
-func (i *Index) indexViewsByPrefix(mainView *view.View) error {
+func (i *Index) indexViewsByPrefix() error {
 	for prefix, viewName := range i.Namespace {
 		index, ok := i._viewsByName[viewName]
 		if !ok {

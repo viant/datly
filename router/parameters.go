@@ -1,13 +1,11 @@
 package router
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/converter"
+	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/utils/httputils"
-	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox"
@@ -40,16 +38,6 @@ type (
 		bodyPathParam      map[string]interface{}
 		requestBodyErr     error
 		readRequestBody    bool
-		accessors          *types.Accessors
-	}
-
-	PresenceMapFn func([]byte) (map[string]interface{}, error)
-	Unwrapper     func(interface{}) (interface{}, error)
-	Marshaller    struct {
-		unmarshal converter.Unmarshaller
-		presence  PresenceMapFn
-		unwrapper Unwrapper
-		rType     reflect.Type
 	}
 )
 
@@ -58,7 +46,6 @@ func NewRequestParameters(request *http.Request, route *Route) (*RequestParams, 
 		cookies:       request.Cookies(),
 		request:       request,
 		route:         route,
-		accessors:     route._accessors,
 		bodyPathParam: map[string]interface{}{},
 		cookiesIndex:  map[string]*http.Cookie{},
 	}
@@ -80,7 +67,6 @@ func (p *RequestParams) init(request *http.Request, route *Route) (string, error
 	for i := range p.cookies {
 		p.cookiesIndex[p.cookies[i].Name] = p.cookies[i]
 	}
-
 	return "", nil
 }
 
@@ -121,23 +107,11 @@ func (p *RequestParams) cookie(name string) string {
 
 func (p *RequestParams) parseRequestBody(body []byte, route *Route) (interface{}, error) {
 	unmarshaller, err := p.unmarshaller(route)
-	if err != nil || unmarshaller.rType == nil {
+	if err != nil || unmarshaller.Type == nil {
 		return nil, err
 	}
-
-	converted, _, err := converter.Convert(string(body), unmarshaller.rType, route.CustomValidation, "", unmarshaller.unmarshal)
-	if err != nil {
-		return nil, err
-	}
-
-	if unmarshaller.unwrapper != nil {
-		converted, err = unmarshaller.unwrapper(converted)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return converted, nil
+	converted, _, err := converter.Convert(string(body), unmarshaller.Type, route.CustomValidation, "", unmarshaller.Unmarshal)
+	return converted, err
 }
 
 func (p *RequestParams) outputContentType(route *Route) string {
@@ -168,39 +142,17 @@ func (p *RequestParams) dataFormat(route *Route) string {
 	return format
 }
 
-func (p *RequestParams) unmarshaller(route *Route) (*Marshaller, error) {
+func (p *RequestParams) unmarshaller(route *Route) (*marshal.Marshaller, error) {
 	switch p.InputDataFormat {
 	case CSVContentType:
 		if route.CSV == nil {
 			return nil, UnsupportedFormatErr(CSVContentType)
 		}
-
-		return &Marshaller{
-			unmarshal: route.CSV.Unmarshal,
-			presence:  route.CSV.presenceMap(),
-			unwrapper: route.CSV.unwrapIfNeeded,
-			rType:     route._requestBodySlice.Type,
-		}, nil
+		return marshal.NewMarshaller(route._requestBodySlice.Type, route.CSV.Unmarshal), nil
 	}
-	return &Marshaller{
-		unmarshal: func(bytes []byte, i interface{}) error {
-			return route._jsonMarshaller.Unmarshal(bytes, i, route.unmarshallerInterceptors(p), p.request)
-		},
-		presence: p.jsonPresenceMap(),
-		rType:    route._requestBodyType,
-	}, nil
-}
-
-func (p *RequestParams) jsonPresenceMap() PresenceMapFn {
-	return func(b []byte) (map[string]interface{}, error) {
-		b = bytes.TrimSpace(b)
-		bodyMap := map[string]interface{}{}
-		if len(b) > 0 && b[0] == '[' || len(b) == 0 {
-			return bodyMap, nil
-		}
-
-		return bodyMap, json.Unmarshal(b, &bodyMap)
-	}
+	return marshal.NewMarshaller(route._requestBodyType, func(bytes []byte, i interface{}) error {
+		return route._jsonMarshaller.Unmarshal(bytes, i, route.unmarshallerInterceptors(p), p.request)
+	}), nil
 }
 
 func (p *RequestParams) paramRequestBody(ctx context.Context, param *state.Parameter, options ...interface{}) (interface{}, error) {
@@ -214,11 +166,9 @@ func (p *RequestParams) paramRequestBody(ctx context.Context, param *state.Param
 	if param == nil {
 		return nil, err
 	}
-
 	if param == nil || param.In.Name == "" {
 		return p.bodyParam, nil
 	}
-
 	value, err := p.extractBodyByPath(param, err)
 	if value == nil || err != nil {
 		return nil, err

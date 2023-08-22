@@ -26,14 +26,14 @@ type (
 
 	sliceInterfaceMarshaller struct {
 		cache      *marshallersCache
-		config     common.DefaultConfig
+		config     common.IOConfig
 		outputPath string
 		path       string
 		tag        *DefaultTag
 	}
 )
 
-func newSliceMarshaller(rType reflect.Type, config common.DefaultConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
+func newSliceMarshaller(rType reflect.Type, config common.IOConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) (marshaler, error) {
 	elemType := rType.Elem()
 
 	marshaller, err := cache.loadMarshaller(elemType, config, path, outputPath, tag)
@@ -104,7 +104,7 @@ func (s *sliceDecoder) UnmarshalJSONArray(d *gojay.Decoder) error {
 	return s.unmarshaller.UnmarshallObject(xunsafe.AsPointer(add), d, nil, s.session)
 }
 
-func newSliceInterfaceMarshaller(config common.DefaultConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) marshaler {
+func newSliceInterfaceMarshaller(config common.IOConfig, path string, outputPath string, tag *DefaultTag, cache *marshallersCache) marshaler {
 	return &sliceInterfaceMarshaller{
 		cache:      cache,
 		config:     config,

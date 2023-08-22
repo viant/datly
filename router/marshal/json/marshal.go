@@ -19,11 +19,11 @@ const defaultCaser = format.CaseUpperCamel
 type (
 	Marshaller struct {
 		cache  *marshallersCache
-		config common.DefaultConfig
+		config common.IOConfig
 	}
 )
 
-func New(config common.DefaultConfig) *Marshaller {
+func New(config common.IOConfig) *Marshaller {
 	m := &Marshaller{
 		cache:  newCache(),
 		config: config,
