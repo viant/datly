@@ -254,16 +254,26 @@ func InitRecord(ctx context.Context, record *async2.Job, route *Route, request *
 		record.CreationTime = creationTime
 	}
 
-	if record.DestinationConnector == "" {
-		if route.Async != nil && route.Async.Connector != nil {
-			record.DestinationConnector = route.Async.Connector.Name
-		} else {
-			return fmt.Errorf("job DestinationConnector can't be empty")
+	if rAsync := route.Async; rAsync != nil {
+		if record.DestinationConnector == "" {
+			record.DestinationConnector = rAsync.Connector.Name
+		}
+
+		if record.DestinationDataset == "" {
+			record.DestinationDataset = rAsync.Dataset
+		}
+
+		if record.DestinationQueueName == "" {
+			record.DestinationQueueName = rAsync.QueueName
+		}
+
+		if record.DestinationBucketURL == "" {
+			record.DestinationBucketURL = rAsync.BucketURL
 		}
 	}
 
-	if record.DestinationDataset == "" && route.Async != nil {
-		record.DestinationDataset = route.Async.Dataset
+	if record.DestinationConnector == "" {
+		return fmt.Errorf("job DestinationConnector can't be empty")
 	}
 
 	return nil
