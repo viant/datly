@@ -25,20 +25,29 @@ func (s *Session) Populate(ctx context.Context, aView *view.View) error {
 
 func (s *Session) populateTemplateParameters(ctx context.Context, aView *view.View, selectors *view.Selector) error {
 	if template := aView.Template; template != nil {
-		aState := template.State()
+		stateType := template.State()
 		parameters := template.Parameters
-		if aState.IsDefined() {
-			for _, parameter := range parameters {
-				if err := s.populateWithParameter(ctx, parameter, selectors.State); err != nil {
-					return err
-				}
+		if stateType.IsDefined() {
+			aState := selectors.State
+			err := s.populateParameters(ctx, parameters, aState)
+			if err != nil {
+				return err
 			}
 		}
 	}
 	return nil
 }
 
-func (s *Session) populateWithParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State) error {
+func (s *Session) populateParameters(ctx context.Context, parameters state.Parameters, aState *structology.State) error {
+	for _, parameter := range parameters {
+		if err := s.populateParameter(ctx, parameter, aState); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Session) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State) error {
 	value, ok, err := s.parameterValue(ctx, parameter, aState)
 	if !ok {
 		return nil
