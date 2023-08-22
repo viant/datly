@@ -14,5 +14,5 @@ type Locator interface {
 
 // Locators defines state value kind locators
 type Locators interface {
-	Lookup(kind state.Kind) Locator
+	Lookup(kind state.Kind) (Locator, error)
 }

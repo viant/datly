@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
 	"github.com/viant/sqlx/metadata/sink"
@@ -18,7 +19,7 @@ func Discover(ctx context.Context, db *sql.DB, table, SQL string, SQLArgs ...int
 	var err error
 	if SQL != "" {
 		if columns, err = detectColumns(ctx, db, SQL, table, SQLArgs...); err != nil {
-			return columns, fmt.Errorf("failed to detect columns due to: %w, SQL: %s", err, SQL)
+			return columns, err
 		}
 	}
 	if len(columns) == 0 && table != "" { //TODO mere column types
@@ -33,24 +34,30 @@ func Discover(ctx context.Context, db *sql.DB, table, SQL string, SQLArgs ...int
 
 func detectColumns(ctx context.Context, db *sql.DB, SQL, table string, SQLArgs ...interface{}) (sqlparser.Columns, error) {
 	SQL = shared.TrimPair(SQL, '(', ')')
-	extractedTable, SQL, queryColumns := parseQuery(SQL)
-	if SQL == "" {
-		return nil, nil
-	}
+	isWith := "with" == strings.ToLower(SQL[:4])
 
+	var queryColumns sqlparser.Columns
+	var extractedTable string
 	var byName = map[string]sink.Column{}
-	if extractedTable = strings.TrimSpace(extractedTable); extractedTable != "" {
-		table = extractedTable
-	}
-	if table != "" && !strings.Contains(table, " ") {
-		if sinkColumns, _ := readSinkColumns(ctx, db, table); len(sinkColumns) > 0 {
-			byName = sink.Columns(sinkColumns).By(sink.ColumnName.Key)
+	if !isWith {
+		extractedTable, SQL, queryColumns = parseQuery(SQL)
+		if SQL == "" {
+			return nil, nil
+		}
+
+		if extractedTable = strings.TrimSpace(extractedTable); extractedTable != "" {
+			table = extractedTable
+		}
+		if table != "" && !strings.Contains(table, " ") {
+			if sinkColumns, _ := readSinkColumns(ctx, db, table); len(sinkColumns) > 0 {
+				byName = sink.Columns(sinkColumns).By(sink.ColumnName.Key)
+			}
 		}
 	}
 
 	tableColumns, err := inferColumnWithSQL(ctx, db, SQL, SQLArgs, byName)
 	if err != nil {
-		return queryColumns, err
+		return queryColumns, fmt.Errorf("failed to detect column: %w %s %v", err, SQL, SQLArgs)
 	}
 	if queryColumns.IsStarExpr() {
 		return asColumns(tableColumns), nil
@@ -182,7 +189,9 @@ func readSinkColumns(ctx context.Context, db *sql.DB, table string) ([]sink.Colu
 }
 
 func parseQuery(SQL string) (string, string, sqlparser.Columns) {
+
 	sqlQuery, _ := sqlparser.ParseQuery(SQL)
+
 	var table string
 	var queryColumn sqlparser.Columns
 	if sqlQuery != nil {
@@ -231,4 +240,13 @@ func asColumn(column sink.Column) *sqlparser.Column {
 	ret := &sqlparser.Column{Name: column.Name}
 	updateQueryColumn(ret, column)
 	return ret
+}
+
+func RewriteWithQueryIfNeeded(SQL string, query *query.Select) (*query.Select, error) {
+	var err error
+	if strings.HasPrefix(strings.ToLower(SQL[:5]), "with") {
+		SQL = sqlparser.Stringify(query)
+		query, err = sqlparser.ParseQuery(SQL)
+	}
+	return query, err
 }

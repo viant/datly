@@ -76,7 +76,7 @@ func (t *Table) lookup(ns, column string) *sqlparser.Column {
 func (t *Table) detect(ctx context.Context, db *sql.DB, SQL string) error {
 	SQL = TrimParenthesis(SQL)
 	query, err := sqlparser.ParseQuery(SQL)
-
+	query, err = column.RewriteWithQueryIfNeeded(SQL, query)
 	if query == nil || query.From.X == nil {
 		if query != nil && len(query.List) > 0 {
 			t.Columns = sqlparser.NewColumns(query.List)

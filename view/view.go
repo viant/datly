@@ -129,11 +129,6 @@ type (
 		Args []*state.Schema `json:",omitempty"`
 	}
 
-	Namespace struct {
-		Path     string
-		Prefixes []string
-	}
-
 	Async struct {
 		MarshalRelations bool   `json:",omitempty"`
 		Table            string `json:",omitempty"`
@@ -417,11 +412,11 @@ func (v *View) initView(ctx context.Context) error {
 	}
 
 	if v.Name == v.Ref && !v.Standalone {
-		return fmt.Errorf("View name and ref cannot be the same")
+		return fmt.Errorf("view name and ref cannot be the same")
 	}
 
 	if v.Name == "" {
-		return fmt.Errorf("View name was empty")
+		return fmt.Errorf("view name was empty")
 	}
 
 	if err = v.ensureConnector(ctx); err != nil {

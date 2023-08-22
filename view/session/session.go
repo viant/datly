@@ -6,24 +6,30 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
+	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/structology"
 )
 
-type Session struct {
-	Selectors *view.Selectors
-	MainView  *view.View
-	Locators  kind.Locators
-}
+type (
+	Session struct {
+		Selectors      *view.Selectors
+		View           *view.View
+		Locators       kind.Locators
+		locatorOptions []locator.Option
+	}
+
+	Option func(s *Session)
+)
 
 func (s *Session) Populate(ctx context.Context, aView *view.View) error {
-	selectors := s.Selectors.Lookup(aView)
-	if err := s.populateTemplateParameters(ctx, aView, selectors); err != nil {
+	if err := s.populateTemplateParameters(ctx, aView); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *Session) populateTemplateParameters(ctx context.Context, aView *view.View, selectors *view.Selector) error {
+func (s *Session) populateTemplateParameters(ctx context.Context, aView *view.View) error {
+	selectors := s.Selectors.Lookup(aView)
 	if template := aView.Template; template != nil {
 		stateType := template.State()
 		parameters := template.Parameters
@@ -63,9 +69,12 @@ func (s *Session) parameterValue(ctx context.Context, parameter *state.Parameter
 	case state.KindLiteral:
 		value, has = parameter.Const, true
 	default:
-		locator := s.Locators.Lookup(parameter.In.Kind)
-		if value, has, err = locator.Value(parameter.In.Name); err != nil {
-			return nil, false, fmt.Errorf("faiedl to locate parameter: %v, %w", parameter.Name, err)
+		parameterLocator, err := s.Locators.Lookup(parameter.In.Kind)
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to locate parameter: %v, %w", parameter.Name, err)
+		}
+		if value, has, err = parameterLocator.Value(parameter.In.Name); err != nil {
+			return nil, false, fmt.Errorf("failed to get  parameter value: %v, %w", parameter.Name, err)
 		}
 	}
 	if parameter.Output != nil {
@@ -76,4 +85,19 @@ func (s *Session) parameterValue(ctx context.Context, parameter *state.Parameter
 		value = transformed
 	}
 	return value, has, err
+}
+
+func (s *Session) init(options []Option) {
+	for _, opt := range options {
+		opt(s)
+	}
+	if s.Locators == nil {
+		s.Locators = locator.NewLocators(nil, s.locatorOptions...)
+	}
+}
+
+func New(view *view.View, opts ...Option) *Session {
+	ret := &Session{View: view}
+	ret.init(opts)
+	return ret
 }

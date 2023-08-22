@@ -6,6 +6,69 @@ import (
 	"github.com/viant/datly/router/marshal"
 )
 
+type (
+	IndexedViews struct {
+		Views       []*NamespaceView
+		byNamespace map[string]int
+		byName      map[string]int
+	}
+
+	NamespaceView struct {
+		View       *View
+		Path       string
+		Namespaces []string
+	}
+)
+
+func (n *IndexedViews) ByNamespace(ns string) *NamespaceView {
+	index, ok := n.byNamespace[ns]
+	if !ok {
+		return nil
+	}
+	return n.Views[index]
+}
+
+func (n *IndexedViews) ByName(ns string) *NamespaceView {
+	index, ok := n.byName[ns]
+	if !ok {
+		return nil
+	}
+	return n.Views[index]
+}
+
+func (n *IndexedViews) indexView(aView *View, aPath string) {
+	index := len(n.Views)
+	selector := aView.Selector
+	nsView := &NamespaceView{View: aView, Path: aPath}
+	if aPath == "" {
+		nsView.Namespaces = append(nsView.Namespaces, "")
+	}
+	if selector.Namespace != "" {
+		nsView.Namespaces = append(nsView.Namespaces, selector.Namespace)
+	}
+	n.Views = append(n.Views, nsView)
+	n.byName[aView.Name] = index
+	for _, ns := range nsView.Namespaces {
+		n.byNamespace[ns] = index
+	}
+	for _, aRelation := range aView.With {
+		relPath := aPath
+		if relPath == "" {
+			relPath = aRelation.Holder
+		} else {
+			relPath += "." + aRelation.Holder
+		}
+		n.indexView(&aRelation.Of.View, relPath)
+	}
+}
+
+// IndexViews indexes views
+func IndexViews(aView *View) *IndexedViews {
+	result := &IndexedViews{byNamespace: map[string]int{}, byName: map[string]int{}}
+	result.indexView(aView, "")
+	return result
+}
+
 // NamedViews represents views registry indexed by View name.
 type NamedViews map[string]*View
 

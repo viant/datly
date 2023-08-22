@@ -144,8 +144,9 @@ type (
 		RevealMetric      *bool
 		DebugKind         view.MetaKind
 		RequestBodySchema *state.Schema
-		ResponseBody      *BodySelector
-		DataFormat        string `json:",omitempty"`
+
+		ResponseBody *BodySelector
+		DataFormat   string `json:",omitempty"`
 
 		_caser          *format.Case
 		_excluded       map[string]bool
