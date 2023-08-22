@@ -197,9 +197,7 @@ func readSinkColumns(ctx context.Context, db *sql.DB, table string) ([]sink.Colu
 }
 
 func parseQuery(SQL string) (string, string, sqlparser.Columns) {
-
 	sqlQuery, _ := sqlparser.ParseQuery(SQL)
-
 	var table string
 	var queryColumn sqlparser.Columns
 	if sqlQuery != nil {
