@@ -13,12 +13,10 @@ import (
 type (
 	Session struct {
 		Selectors      *view.Selectors
-		View           *view.View
+		IndexedViews   *view.IndexedViews
 		Locators       kind.Locators
 		locatorOptions []locator.Option
 	}
-
-	Option func(s *Session)
 )
 
 func (s *Session) Populate(ctx context.Context, aView *view.View) error {
@@ -96,8 +94,8 @@ func (s *Session) init(options []Option) {
 	}
 }
 
-func New(view *view.View, opts ...Option) *Session {
-	ret := &Session{View: view}
+func New(aView *view.View, opts ...Option) *Session {
+	ret := &Session{IndexedViews: view.IndexViews(aView)}
 	ret.init(opts)
 	return ret
 }

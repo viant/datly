@@ -33,42 +33,50 @@ func Discover(ctx context.Context, db *sql.DB, table, SQL string, SQLArgs ...int
 }
 
 func detectColumns(ctx context.Context, db *sql.DB, SQL, table string, SQLArgs ...interface{}) (sqlparser.Columns, error) {
-	SQL = shared.TrimPair(SQL, '(', ')')
-	isWith := "with" == strings.ToLower(SQL[:4])
-
-	var queryColumns sqlparser.Columns
-	var extractedTable string
 	var byName = map[string]sink.Column{}
-	if !isWith {
-		extractedTable, SQL, queryColumns = parseQuery(SQL)
-		if SQL == "" {
-			return nil, nil
-		}
-
-		if extractedTable = strings.TrimSpace(extractedTable); extractedTable != "" {
-			table = extractedTable
-		}
-		if table != "" && !strings.Contains(table, " ") {
-			if sinkColumns, _ := readSinkColumns(ctx, db, table); len(sinkColumns) > 0 {
-				byName = sink.Columns(sinkColumns).By(sink.ColumnName.Key)
-			}
+	SQL = shared.TrimPair(SQL, '(', ')')
+	if isWithQuery(SQL) {
+		sqlColumns, err := inferColumnWithSQL(ctx, db, SQL, SQLArgs, byName)
+		if err == nil {
+			return asColumns(sqlColumns), nil
 		}
 	}
 
-	tableColumns, err := inferColumnWithSQL(ctx, db, SQL, SQLArgs, byName)
+	var queryColumns sqlparser.Columns
+	var extractedTable string
+
+	extractedTable, SQL, queryColumns = parseQuery(SQL)
+	if SQL == "" {
+		return nil, nil
+	}
+
+	if extractedTable = strings.TrimSpace(extractedTable); extractedTable != "" {
+		table = extractedTable
+	}
+	if table != "" && !strings.Contains(table, " ") {
+		if sinkColumns, _ := readSinkColumns(ctx, db, table); len(sinkColumns) > 0 {
+			byName = sink.Columns(sinkColumns).By(sink.ColumnName.Key)
+		}
+	}
+
+	sqlColumns, err := inferColumnWithSQL(ctx, db, SQL, SQLArgs, byName)
 	if err != nil {
 		return queryColumns, fmt.Errorf("failed to detect column: %w %s %v", err, SQL, SQLArgs)
 	}
 	if queryColumns.IsStarExpr() {
-		return asColumns(tableColumns), nil
+		return asColumns(sqlColumns), nil
 	}
-	updatedMatchedColumn(&queryColumns, tableColumns)
+	updatedMatchedColumn(&queryColumns, sqlColumns)
 	for _, column := range queryColumns {
 		if err := ExtractColumnConfig(column); err != nil {
 			return nil, err
 		}
 	}
 	return queryColumns, nil
+}
+
+func isWithQuery(SQL string) bool {
+	return "with" == strings.ToLower(SQL[:4])
 }
 
 type typeInfo struct {
