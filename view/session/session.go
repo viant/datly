@@ -5,18 +5,25 @@ import (
 	"fmt"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/structology"
 )
 
 type Session struct {
-	Parameters state.Parameters
-	Selectors  *view.Selectors
-	MainView   *view.View
-	Locators   state.Locators
+	Selectors *view.Selectors
+	MainView  *view.View
+	Locators  kind.Locators
 }
 
 func (s *Session) Populate(ctx context.Context, aView *view.View) error {
 	selectors := s.Selectors.Lookup(aView)
+	if err := s.populateTemplateParameters(ctx, aView, selectors); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Session) populateTemplateParameters(ctx context.Context, aView *view.View, selectors *view.Selector) error {
 	if template := aView.Template; template != nil {
 		aState := template.State()
 		parameters := template.Parameters
@@ -28,7 +35,6 @@ func (s *Session) Populate(ctx context.Context, aView *view.View) error {
 			}
 		}
 	}
-
 	return nil
 }
 

@@ -2,7 +2,7 @@ package locator
 
 import (
 	"fmt"
-	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind"
 	"net/http"
 )
 
@@ -30,7 +30,7 @@ func (q *Header) Value(name string) (interface{}, bool, error) {
 }
 
 // NewHeader returns header locator
-func NewHeader(opts ...Option) (state.Locator, error) {
+func NewHeader(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
 	if options.Request == nil {
 		return nil, fmt.Errorf("request was empty")

@@ -3,19 +3,20 @@ package locator
 import (
 	"fmt"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind"
 	"sync"
 )
 
 // Locators represents locators
 type Locators struct {
 	sync.RWMutex
-	byKind  map[state.Kind]state.Locator
+	byKind  map[state.Kind]kind.Locator
 	parent  *Locators
 	options []Option
 }
 
 // Lookup return locator for supplied kind or error
-func (r *Locators) Lookup(kind state.Kind) (state.Locator, error) {
+func (r *Locators) Lookup(kind state.Kind) (kind.Locator, error) {
 	r.RWMutex.RLock()
 	locator, ok := r.byKind[kind]
 	r.RWMutex.RUnlock()
@@ -43,7 +44,7 @@ func (r *Locators) Lookup(kind state.Kind) (state.Locator, error) {
 // NewLocators creates a locator
 func NewLocators(parent *Locators, options ...Option) *Locators {
 	ret := &Locators{
-		byKind:  make(map[state.Kind]state.Locator),
+		byKind:  make(map[state.Kind]kind.Locator),
 		parent:  parent,
 		options: options,
 	}

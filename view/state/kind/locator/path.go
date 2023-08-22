@@ -2,7 +2,7 @@ package locator
 
 import (
 	"fmt"
-	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/toolbox"
 )
 
@@ -24,7 +24,7 @@ func (v *Path) Value(name string) (interface{}, bool, error) {
 }
 
 // NewPath returns path locator
-func NewPath(opts ...Option) (state.Locator, error) {
+func NewPath(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
 	if options.Request == nil {
 		return nil, fmt.Errorf("request was empty")

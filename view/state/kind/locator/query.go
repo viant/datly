@@ -2,7 +2,7 @@ package locator
 
 import (
 	"fmt"
-	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind"
 	"net/url"
 )
 
@@ -30,7 +30,7 @@ func (q *Query) Value(name string) (interface{}, bool, error) {
 }
 
 // NewQuery returns query locator
-func NewQuery(opts ...Option) (state.Locator, error) {
+func NewQuery(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
 	if options.Request == nil {
 		return nil, fmt.Errorf("request was empty")

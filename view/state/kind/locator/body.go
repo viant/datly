@@ -3,7 +3,7 @@ package locator
 import (
 	"bytes"
 	"fmt"
-	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/structology"
 	"io"
 )
@@ -33,7 +33,7 @@ func (v *Body) Value(name string) (interface{}, bool, error) {
 }
 
 // NewBody returns body locator
-func NewBody(opts ...Option) (state.Locator, error) {
+func NewBody(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
 	if options.BodyType == nil {
 		return nil, fmt.Errorf("body type was empty")

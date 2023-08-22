@@ -1,7 +1,7 @@
 package locator
 
 import (
-	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind"
 	"os"
 )
 
@@ -19,7 +19,7 @@ func (v *Env) Value(name string) (interface{}, bool, error) {
 }
 
 // NewEnv returns env locator
-func NewEnv(_ ...Option) (state.Locator, error) {
+func NewEnv(_ ...Option) (kind.Locator, error) {
 	ret := &Env{env: make(map[string]string)}
 	for _, k := range os.Environ() {
 		ret.env[k] = os.Getenv(k)
