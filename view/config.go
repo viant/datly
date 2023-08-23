@@ -23,21 +23,32 @@ const (
 var intType = reflect.TypeOf(0)
 var stringType = reflect.TypeOf("")
 
+var stringsType = reflect.TypeOf([]string{})
+
+var RootSelectors = &Config{
+	LimitParameter:    &state.Parameter{Name: "Limit", In: state.NewQueryLocation(LimitQuery), Schema: state.NewSchema(intType)},
+	OffsetParameter:   &state.Parameter{Name: "Offset", In: state.NewQueryLocation(OffsetQuery), Schema: state.NewSchema(intType)},
+	PageParameter:     &state.Parameter{Name: "Page", In: state.NewQueryLocation(PageQuery), Schema: state.NewSchema(intType)},
+	FieldsParameter:   &state.Parameter{Name: "Fields", In: state.NewQueryLocation(FieldsQuery), Schema: state.NewSchema(stringsType)},
+	OrderByParameter:  &state.Parameter{Name: "OrderBy", In: state.NewQueryLocation(OrderByQuery), Schema: state.NewSchema(stringsType)},
+	CriteriaParameter: &state.Parameter{Name: "Criteria", In: state.NewQueryLocation(OrderByQuery), Schema: state.NewSchema(stringType)},
+}
+
 // Config represent a View config selector
 type (
 	Config struct {
 		//TODO: Should order by be a slice?
-		Namespace     string             `json:",omitempty"`
-		OrderBy       string             `json:",omitempty"`
-		Limit         int                `json:",omitempty"`
-		Constraints   *Constraints       `json:",omitempty"`
-		Parameters    *SelectorParameter `json:",omitempty"`
-		LimitParam    *state.Parameter   `json:",omitempty"`
-		OffsetParam   *state.Parameter   `json:",omitempty"`
-		PageParam     *state.Parameter   `json:",omitempty"`
-		FieldsParam   *state.Parameter   `json:",omitempty"`
-		OrderByParam  *state.Parameter   `json:",omitempty"`
-		CriteriaParam *state.Parameter   `json:",omitempty"`
+		Namespace         string             `json:",omitempty"`
+		OrderBy           string             `json:",omitempty"`
+		Limit             int                `json:",omitempty"`
+		Constraints       *Constraints       `json:",omitempty"`
+		Parameters        *SelectorParameter `json:",omitempty"`
+		LimitParameter    *state.Parameter   `json:",omitempty"`
+		OffsetParameter   *state.Parameter   `json:",omitempty"`
+		PageParameter     *state.Parameter   `json:",omitempty"`
+		FieldsParameter   *state.Parameter   `json:",omitempty"`
+		OrderByParameter  *state.Parameter   `json:",omitempty"`
+		CriteriaParameter *state.Parameter   `json:",omitempty"`
 
 		limitDefault    *bool
 		offsetDefault   *bool
@@ -67,34 +78,34 @@ func (c *Config) Init(ctx context.Context, resource *Resource, parent *View) err
 		parameters = &SelectorParameter{}
 	}
 
-	if name := parameters.Limit; (name != "" || c.Constraints.Limit) && derefBool(c.limitDefault, c.LimitParam == nil) {
+	if name := parameters.Limit; (name != "" || c.Constraints.Limit) && derefBool(c.limitDefault, c.LimitParameter == nil) {
 		c.limitDefault = boolPtr(name == "")
-		c.LimitParam = c.newSelectorParam(name, LimitQuery, parent)
+		c.LimitParameter = c.newSelectorParam(name, LimitQuery, parent)
 	}
 
-	if name := parameters.Offset; (name != "" || c.Constraints.Offset) && derefBool(c.offsetDefault, c.OffsetParam == nil) {
+	if name := parameters.Offset; (name != "" || c.Constraints.Offset) && derefBool(c.offsetDefault, c.OffsetParameter == nil) {
 		c.offsetDefault = boolPtr(name == "")
-		c.OffsetParam = c.newSelectorParam(name, OffsetQuery, parent)
+		c.OffsetParameter = c.newSelectorParam(name, OffsetQuery, parent)
 	}
 
-	if name := parameters.Page; (name != "" || c.Constraints.IsPageEnabled()) && derefBool(c.pageDefault, c.PageParam == nil) {
+	if name := parameters.Page; (name != "" || c.Constraints.IsPageEnabled()) && derefBool(c.pageDefault, c.PageParameter == nil) {
 		c.pageDefault = boolPtr(name == "")
-		c.PageParam = c.newSelectorParam(name, PageQuery, parent)
+		c.PageParameter = c.newSelectorParam(name, PageQuery, parent)
 	}
 
-	if name := parameters.Fields; (name != "" || c.Constraints.Projection) && derefBool(c.fieldsDefault, c.FieldsParam == nil) {
+	if name := parameters.Fields; (name != "" || c.Constraints.Projection) && derefBool(c.fieldsDefault, c.FieldsParameter == nil) {
 		c.fieldsDefault = boolPtr(name == "")
-		c.FieldsParam = c.newSelectorParam(name, FieldsQuery, parent)
+		c.FieldsParameter = c.newSelectorParam(name, FieldsQuery, parent)
 	}
 
-	if name := parameters.Criteria; (name != "" || c.Constraints.Criteria) && derefBool(c.criteriaDefault, c.CriteriaParam == nil) {
+	if name := parameters.Criteria; (name != "" || c.Constraints.Criteria) && derefBool(c.criteriaDefault, c.CriteriaParameter == nil) {
 		c.criteriaDefault = boolPtr(name == "")
-		c.CriteriaParam = c.newSelectorParam(name, CriteriaQuery, parent)
+		c.CriteriaParameter = c.newSelectorParam(name, CriteriaQuery, parent)
 	}
 
-	if name := parameters.OrderBy; (name != "" || c.Constraints.OrderBy) && derefBool(c.orderByDefault, c.OrderByParam == nil) {
+	if name := parameters.OrderBy; (name != "" || c.Constraints.OrderBy) && derefBool(c.orderByDefault, c.OrderByParameter == nil) {
 		c.orderByDefault = boolPtr(name == "")
-		c.OrderByParam = c.newSelectorParam(name, OrderByQuery, parent)
+		c.OrderByParameter = c.newSelectorParam(name, OrderByQuery, parent)
 	}
 
 	if err := c.initCustomParams(ctx, resource, parent); err != nil {
@@ -131,27 +142,25 @@ func (c *Config) ensureConstraints(resource *Resource) error {
 }
 
 func (c *Config) initCustomParams(ctx context.Context, resource *Resource, parent *View) error {
-	if err := c.initParamIfNeeded(ctx, c.CriteriaParam, resource, parent, stringType, reflect.TypeOf(&codec.Criteria{}), reflect.TypeOf(codec.Criteria{})); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.CriteriaParameter, resource, parent, stringType, reflect.TypeOf(&codec.Criteria{}), reflect.TypeOf(codec.Criteria{})); err != nil {
+		return err
+	}
+	if err := c.initParamIfNeeded(ctx, c.LimitParameter, resource, parent, intType); err != nil {
 		return err
 	}
 
-	if err := c.initParamIfNeeded(ctx, c.LimitParam, resource, parent, intType); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.OrderByParameter, resource, parent, stringsType); err != nil {
 		return err
 	}
 
-	if err := c.initParamIfNeeded(ctx, c.OrderByParam, resource, parent, stringType); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.OffsetParameter, resource, parent, intType); err != nil {
 		return err
 	}
 
-	if err := c.initParamIfNeeded(ctx, c.OffsetParam, resource, parent, intType); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.FieldsParameter, resource, parent, stringsType); err != nil {
 		return err
 	}
-
-	if err := c.initParamIfNeeded(ctx, c.FieldsParam, resource, parent, stringType); err != nil {
-		return err
-	}
-
-	if err := c.initParamIfNeeded(ctx, c.PageParam, resource, parent, intType); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.PageParameter, resource, parent, intType); err != nil {
 		return err
 	}
 
@@ -204,6 +213,8 @@ func ParamType(name string) reflect.Type {
 	switch name {
 	case LimitQuery, OffsetQuery, PageQuery:
 		return intType
+	case OrderByQuery, FieldsQuery:
+		return stringsType
 	default:
 		return stringType
 	}

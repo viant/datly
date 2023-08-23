@@ -177,7 +177,7 @@ func (v *View) buildSelector(namespace *Viewlet, rule *Rule) {
 	}
 
 	if v.CriteriaParam != "" {
-		selector.CriteriaParam = state.NewRefParameter(v.CriteriaParam)
+		selector.CriteriaParameter = state.NewRefParameter(v.CriteriaParam)
 	}
 
 }

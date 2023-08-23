@@ -1,23 +1,34 @@
 package locator
 
 import (
+	"context"
 	"github.com/viant/datly/router/marshal/common"
 	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind"
+	"github.com/viant/toolbox/format"
 	"net/http"
 	"reflect"
 )
 
 // Options represents locator options
-type Options struct {
-	Request          *http.Request
-	Locators         *Locators
-	URIPattern       string
-	BodyType         reflect.Type
-	Unmarshal        Unmarshal
-	CustomValidation bool
-	IOConfig         common.IOConfig
-	Custom           []interface{}
-}
+type (
+	Options struct {
+		Request         *http.Request
+		Parent          *Locators
+		URIPattern      string
+		BodyType        reflect.Type
+		Unmarshal       Unmarshal
+		IOConfig        common.IOConfig
+		Custom          []interface{}
+		ParameterLookup ParameterLookup
+		Parameters      state.NamedParameters
+		FormatCase      format.Case
+		DateFormat      string
+	}
+
+	ParameterLookup func(ctx context.Context, parameter *state.Parameter, locators kind.Locators) (interface{}, bool, error)
+)
 
 func (u Options) UnmarshalFunc() Unmarshal {
 	if u.Unmarshal != nil {
@@ -79,6 +90,32 @@ func WithUnmarshal(fn Unmarshal) Option {
 // WithParent creates with parent options
 func WithParent(locators *Locators) Option {
 	return func(o *Options) {
-		o.Locators = locators
+		o.Parent = locators
+	}
+}
+
+// WithParameterLookup creates with parameter options
+func WithParameterLookup(lookupFn ParameterLookup) Option {
+	return func(o *Options) {
+		o.ParameterLookup = lookupFn
+	}
+}
+
+func WithFormatCase(formatCase format.Case) Option {
+	return func(o *Options) {
+		o.FormatCase = formatCase
+	}
+}
+
+func DateFormat(dateFormat string) Option {
+	return func(o *Options) {
+		o.DateFormat = dateFormat
+	}
+}
+
+// WithParameters creates with parameter options
+func WithParameters(parameters state.NamedParameters) Option {
+	return func(o *Options) {
+		o.Parameters = parameters
 	}
 }

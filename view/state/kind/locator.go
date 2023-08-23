@@ -1,12 +1,15 @@
 package kind
 
-import "github.com/viant/datly/view/state"
+import (
+	"context"
+	"github.com/viant/datly/view/state"
+)
 
 // Locator defines state locator
 type Locator interface {
 
 	//Value returns parameter value
-	Value(name string) (interface{}, bool, error)
+	Value(ctx context.Context, name string) (interface{}, bool, error)
 
 	//Names returns names of supported parameters
 	Names() []string

@@ -1,11 +1,10 @@
 package locator
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/structology"
-	"io"
 )
 
 type Body struct {
@@ -18,7 +17,7 @@ func (v *Body) Names() []string {
 	return v.names
 }
 
-func (v *Body) Value(name string) (interface{}, bool, error) {
+func (v *Body) Value(ctx context.Context, name string) (interface{}, bool, error) {
 	if name == "" {
 		return v.state.State(), true, nil
 	}
@@ -44,12 +43,10 @@ func NewBody(opts ...Option) (kind.Locator, error) {
 	if options.Request.Body == nil {
 		return nil, fmt.Errorf("request.body was empty")
 	}
-	data, err := io.ReadAll(options.Request.Body)
+	data, err := readRequestBody(options.Request)
 	if err != nil {
 		return nil, err
 	}
-	_ = options.Request.Body.Close()
-	options.Request.Body = io.NopCloser(bytes.NewReader(data))
 	var ret = &Body{body: data}
 	bodyType := structology.NewStateType(options.BodyType)
 	ret.state = bodyType.NewState()

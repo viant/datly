@@ -138,10 +138,10 @@ func (g *generator) getViewSchemas(aView *view.View) []*schemaNamed {
 		},
 	}
 
-	g.addSchemaParam(&schemas, aView.Selector.CriteriaParam)
-	g.addSchemaParam(&schemas, aView.Selector.OrderByParam)
-	g.addSchemaParam(&schemas, aView.Selector.OffsetParam)
-	g.addSchemaParam(&schemas, aView.Selector.LimitParam)
+	g.addSchemaParam(&schemas, aView.Selector.CriteriaParameter)
+	g.addSchemaParam(&schemas, aView.Selector.OrderByParameter)
+	g.addSchemaParam(&schemas, aView.Selector.OffsetParameter)
+	g.addSchemaParam(&schemas, aView.Selector.LimitParameter)
 	for _, parameter := range aView.Template.Parameters {
 		g.addSchemaParam(&schemas, parameter)
 	}
@@ -383,27 +383,27 @@ func (g *generator) viewParameters(aView *view.View, route *Route) ([]*openapi3.
 		parameters = append(parameters, converted)
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.CriteriaParam); err != nil {
+	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.CriteriaParameter); err != nil {
 		return nil, err
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.LimitParam); err != nil {
+	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.LimitParameter); err != nil {
 		return nil, err
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.OffsetParam); err != nil {
+	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.OffsetParameter); err != nil {
 		return nil, err
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.PageParam); err != nil {
+	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.PageParameter); err != nil {
 		return nil, err
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.OrderByParam); err != nil {
+	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.OrderByParameter); err != nil {
 		return nil, err
 	}
 
-	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.FieldsParam); err != nil {
+	if err := g.appendBuiltInParam(&parameters, route, aView.Selector.FieldsParameter); err != nil {
 		return nil, err
 	}
 

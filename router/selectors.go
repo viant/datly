@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/converter"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/criteria"
-	"github.com/viant/datly/router/state"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
@@ -187,37 +186,37 @@ func newParamStateBuilder(resource *view.Resource, inputFormat format.Case, date
 }
 
 func (b *paramStateBuilder) populateSelector(ctx context.Context, selector *view.Selector, details *ViewDetails) (string, error) {
-	if details.View.Selector.FieldsParam != nil {
+	if details.View.Selector.FieldsParameter != nil {
 		if err := b.populateFields(ctx, selector, details); err != nil {
 			return view.FieldsQuery, err
 		}
 	}
 
-	if details.View.Selector.LimitParam != nil {
+	if details.View.Selector.LimitParameter != nil {
 		if err := b.populateLimit(ctx, selector, details); err != nil {
 			return view.LimitQuery, err
 		}
 	}
 
-	if details.View.Selector.OffsetParam != nil {
+	if details.View.Selector.OffsetParameter != nil {
 		if err := b.populateOffset(ctx, selector, details); err != nil {
 			return view.OffsetQuery, err
 		}
 	}
 
-	if details.View.Selector.OrderByParam != nil {
+	if details.View.Selector.OrderByParameter != nil {
 		if err := b.populateOrderBy(ctx, selector, details); err != nil {
 			return view.OrderByQuery, err
 		}
 	}
 
-	if details.View.Selector.CriteriaParam != nil {
+	if details.View.Selector.CriteriaParameter != nil {
 		if err := b.populateCriteria(ctx, selector, details); err != nil {
 			return view.CriteriaQuery, err
 		}
 	}
 
-	if details.View.Selector.PageParam != nil {
+	if details.View.Selector.PageParameter != nil {
 		if err := b.populatePage(ctx, selector, details); err != nil {
 			return view.PageQuery, err
 		}
@@ -265,11 +264,11 @@ func (b *paramStateBuilder) populateCriteria(ctx context.Context, selector *view
 		return nil
 	}
 
-	return typeMismatchError(details.View.Selector.CriteriaParam, criteriaExpression)
+	return typeMismatchError(details.View.Selector.CriteriaParameter, criteriaExpression)
 }
 
 func (b *paramStateBuilder) criteriaValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (interface{}, error) {
-	param := details.View.Selector.CriteriaParam
+	param := details.View.Selector.CriteriaParameter
 	return b.extractParamValue(ctx, param, details, selector)
 }
 
@@ -291,7 +290,7 @@ func (b *paramStateBuilder) populateLimit(ctx context.Context, selector *view.Se
 }
 
 func (b *paramStateBuilder) limitValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (int, error) {
-	param := details.View.Selector.LimitParam
+	param := details.View.Selector.LimitParameter
 	paramValue, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil {
 		return 0, err
@@ -324,7 +323,7 @@ func (b *paramStateBuilder) populateOrderBy(ctx context.Context, selector *view.
 }
 
 func (b *paramStateBuilder) orderByValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, error) {
-	param := details.View.Selector.OrderByParam
+	param := details.View.Selector.OrderByParameter
 	value, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil || value == nil {
 		return "", err
@@ -351,7 +350,7 @@ func (b *paramStateBuilder) populateOffset(ctx context.Context, selector *view.S
 }
 
 func (b *paramStateBuilder) offsetValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (int, error) {
-	param := details.View.Selector.OffsetParam
+	param := details.View.Selector.OffsetParameter
 	value, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil {
 		return 0, err
@@ -373,39 +372,34 @@ func asInt(value interface{}, param *vstate.Parameter) (int, error) {
 }
 
 func (b *paramStateBuilder) populateFields(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
-	fieldValue, separator, err := b.fieldRawValue(ctx, details, selector)
-	if err != nil {
+	fieldValue, err := b.fieldRawValue(ctx, details, selector)
+	if err != nil || len(fieldValue) == 0 {
 		return err
 	}
 
-	if fieldValue == "" {
-		return err
-	}
-
-	if fieldValue != "" && !details.View.Selector.Constraints.Projection {
+	if len(fieldValue) > 9 && !details.View.Selector.Constraints.Projection {
 		return fmt.Errorf("can't use projection on view %v", details.View.Name)
 	}
 
-	if err = b.buildFields(details.View, selector, fieldValue, separator); err != nil {
+	if err = b.buildFields(details.View, selector, fieldValue); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (b *paramStateBuilder) fieldRawValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, int32, error) {
-	param := details.View.Selector.FieldsParam
+func (b *paramStateBuilder) fieldRawValue(ctx context.Context, details *ViewDetails, selector *view.Selector) ([]string, error) {
+	param := details.View.Selector.FieldsParameter
 	paramValue, err := b.extractParamValue(ctx, param, details, selector)
+
 	if err != nil || paramValue == nil {
-		return "", state.ValuesSeparator, err
+		return []string{}, err
 	}
 
-	if actual, ok := paramValue.(string); ok {
-		separator := state.ValuesSeparator
-		return actual, separator, nil
+	if actual, ok := paramValue.([]string); ok {
+		return actual, nil
 	}
-
-	return "", state.ValuesSeparator, typeMismatchError(param, paramValue)
+	return nil, typeMismatchError(param, paramValue)
 }
 
 func (b *paramStateBuilder) extractParamValue(ctx context.Context, param *vstate.Parameter, details *ViewDetails, selector *view.Selector) (interface{}, error) {
@@ -654,19 +648,12 @@ func (b *paramStateBuilder) viewParamValue(ctx context.Context, param *vstate.Pa
 	return b.paramViewValue(param, sliceValue, returnMulti, paramLen, slice, ptr)
 }
 
-func (b *paramStateBuilder) buildFields(aView *view.View, selector *view.Selector, fieldsQuery string, separator int32) error {
-	fieldIt := state.NewParamIt(fieldsQuery, separator)
-	for fieldIt.Has() {
-		param, err := fieldIt.Next()
-		if err != nil {
+func (b *paramStateBuilder) buildFields(aView *view.View, selector *view.Selector, fieldsQuery []string) error {
+	for _, param := range fieldsQuery {
+		fieldName := b.caser.Format(param, format.CaseUpperCamel)
+		if err := canUseColumn(aView, fieldName); err != nil {
 			return err
 		}
-
-		fieldName := b.caser.Format(param.Value, format.CaseUpperCamel)
-		if err = canUseColumn(aView, fieldName); err != nil {
-			return err
-		}
-
 		selector.Add(fieldName, aView.IsHolder(fieldName))
 	}
 
@@ -689,7 +676,7 @@ func (b *paramStateBuilder) paramViewValue(param *vstate.Parameter, value reflec
 }
 
 func (b *paramStateBuilder) populatePage(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
-	pageParam := details.View.Selector.PageParam
+	pageParam := details.View.Selector.PageParameter
 	value, err := b.extractParamValue(ctx, pageParam, details, selector)
 	if err != nil {
 		return err

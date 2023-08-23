@@ -1,6 +1,7 @@
 package locator
 
 import (
+	"context"
 	"fmt"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/toolbox"
@@ -18,7 +19,7 @@ func (v *Path) Names() []string {
 	return result
 }
 
-func (v *Path) Value(name string) (interface{}, bool, error) {
+func (v *Path) Value(ctx context.Context, name string) (interface{}, bool, error) {
 	ret, ok := v.parameters[name]
 	return ret, ok, nil
 }

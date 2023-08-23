@@ -1,6 +1,7 @@
 package locator
 
 import (
+	"context"
 	"fmt"
 	"github.com/viant/datly/view/state/kind"
 	"net/http"
@@ -18,7 +19,7 @@ func (q *Header) Names() []string {
 	return result
 }
 
-func (q *Header) Value(name string) (interface{}, bool, error) {
+func (q *Header) Value(ctx context.Context, name string) (interface{}, bool, error) {
 	value, ok := q.header[name]
 	if !ok {
 		return nil, false, nil

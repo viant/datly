@@ -1,6 +1,7 @@
 package locator
 
 import (
+	"context"
 	"github.com/viant/datly/view/state/kind"
 	"os"
 )
@@ -13,7 +14,7 @@ func (v *Env) Names() []string {
 	return os.Environ()
 }
 
-func (v *Env) Value(name string) (interface{}, bool, error) {
+func (v *Env) Value(ctx context.Context, name string) (interface{}, bool, error) {
 	ret, ok := v.env[name]
 	return ret, ok, nil
 }

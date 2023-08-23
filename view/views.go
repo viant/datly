@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/view/state"
 )
 
 type (
-	IndexedViews struct {
+	NamespacedView struct {
 		Views       []*NamespaceView
 		byNamespace map[string]int
 		byName      map[string]int
@@ -16,11 +17,24 @@ type (
 	NamespaceView struct {
 		View       *View
 		Path       string
+		Root       bool
 		Namespaces []string
 	}
 )
 
-func (n *IndexedViews) ByNamespace(ns string) *NamespaceView {
+func (n *NamespaceView) SelectorParameters(parameter *state.Parameter, rootParameter *state.Parameter) []*state.Parameter {
+	var result []*state.Parameter
+	if parameter != nil {
+		result = append(result, parameter)
+	}
+	if !n.Root {
+		return result
+	}
+	result = append(result, rootParameter)
+	return result
+}
+
+func (n *NamespacedView) ByNamespace(ns string) *NamespaceView {
 	index, ok := n.byNamespace[ns]
 	if !ok {
 		return nil
@@ -28,7 +42,7 @@ func (n *IndexedViews) ByNamespace(ns string) *NamespaceView {
 	return n.Views[index]
 }
 
-func (n *IndexedViews) ByName(ns string) *NamespaceView {
+func (n *NamespacedView) ByName(ns string) *NamespaceView {
 	index, ok := n.byName[ns]
 	if !ok {
 		return nil
@@ -36,11 +50,26 @@ func (n *IndexedViews) ByName(ns string) *NamespaceView {
 	return n.Views[index]
 }
 
-func (n *IndexedViews) indexView(aView *View, aPath string) {
+func (n *NamespacedView) Parameters() state.NamedParameters {
+	ret := state.NamedParameters{}
+	for _, aView := range n.Views {
+		template := aView.View.Template
+		if template == nil {
+			continue
+		}
+		for i := range template.Parameters {
+			_ = ret.Register(template.Parameters[i])
+		}
+	}
+	return ret
+}
+
+func (n *NamespacedView) indexView(aView *View, aPath string) {
 	index := len(n.Views)
 	selector := aView.Selector
 	nsView := &NamespaceView{View: aView, Path: aPath}
 	if aPath == "" {
+		nsView.Root = true
 		nsView.Namespaces = append(nsView.Namespaces, "")
 	}
 	if selector.Namespace != "" {
@@ -63,8 +92,8 @@ func (n *IndexedViews) indexView(aView *View, aPath string) {
 }
 
 // IndexViews indexes views
-func IndexViews(aView *View) *IndexedViews {
-	result := &IndexedViews{byNamespace: map[string]int{}, byName: map[string]int{}}
+func IndexViews(aView *View) *NamespacedView {
+	result := &NamespacedView{byNamespace: map[string]int{}, byName: map[string]int{}}
 	result.indexView(aView, "")
 	return result
 }

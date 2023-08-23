@@ -1,6 +1,7 @@
 package locator
 
 import (
+	"context"
 	"fmt"
 	"github.com/viant/datly/view/state/kind"
 	"net/url"
@@ -18,7 +19,7 @@ func (q *Query) Names() []string {
 	return result
 }
 
-func (q *Query) Value(name string) (interface{}, bool, error) {
+func (q *Query) Value(ctx context.Context, name string) (interface{}, bool, error) {
 	value, ok := q.query[name]
 	if !ok {
 		return nil, false, nil
