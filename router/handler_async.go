@@ -16,6 +16,10 @@ type AsyncHandler struct {
 	session  *ReaderSession
 }
 
+func (a *AsyncHandler) Type() reflect.Type {
+	return a.executor.route.View.Schema.Type()
+}
+
 func (a *AsyncHandler) Read(ctx context.Context, options ...async.ReadOption) (*async.JobWithMeta, error) {
 	opts := &async.ReadOptions{}
 	for _, fn := range options {
@@ -89,7 +93,7 @@ func (a *AsyncHandler) Read(ctx context.Context, options ...async.ReadOption) (*
 		Metadata: &async.JobMetadata{
 			CacheHit: existingRecord != nil,
 		},
-		Record: firstNotNil(existingRecord, opts.Job),
+		Job: firstNotNil(existingRecord, opts.Job),
 	}, nil
 }
 
@@ -103,8 +107,12 @@ func firstNotNil(jobs ...*async.Job) *async.Job {
 	return nil
 }
 
-func (a *AsyncHandler) ReadInto(ctx context.Context, dst interface{}, job *async.Job, connectorName string) error {
-	connector, err := a.executor.route._router.Resource().Resource.Connector(connectorName)
+func (a *AsyncHandler) ReadInto(ctx context.Context, dst interface{}, job *async.Job) error {
+	if job.DestinationConnector == "" {
+		return fmt.Errorf("unspecified Async database connector")
+	}
+
+	connector, err := a.executor.route._router.Resource().Resource.Connector(job.DestinationConnector)
 	if err != nil {
 		return err
 	}
