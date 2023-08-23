@@ -16,7 +16,7 @@ type (
 
 	Expression interface {
 		Node
-	} //can be BinaryExpr or CallExpr or Selector Expr
+	} //can be BinaryExpr or CallExpr or QuerySelector Expr
 
 	Block []Statement
 	Ident struct {

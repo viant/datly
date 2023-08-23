@@ -71,8 +71,8 @@ func (e *predicateEvaluator) Evaluate(ctx *expand.Context, state *structology.St
 }
 
 func (c *predicateCache) get(resource *Resource, predicateConfig *config.PredicateConfig, param *state.Parameter, registry *config.PredicateRegistry, stateType *structology.StateType) (codec.PredicateHandler, error) {
-	aKey := predicateKey{name: predicateConfig.Name, paramType: param.ActualParamType()}
-	var provider, err = c.getEvaluatorProvider(resource, predicateConfig, param.ActualParamType(), registry, aKey, stateType)
+	aKey := predicateKey{name: predicateConfig.Name, paramType: param.OutputType()}
+	var provider, err = c.getEvaluatorProvider(resource, predicateConfig, param.OutputType(), registry, aKey, stateType)
 	if err != nil {
 		return nil, err
 	}

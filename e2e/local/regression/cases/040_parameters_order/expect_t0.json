@@ -3,7 +3,7 @@
   "errors": [
     {
       "view": "parameters_order",
-      "param": "Jwt",
+      "parameter": "Jwt",
       "message": "parameter Jwt is required"
     }
   ]

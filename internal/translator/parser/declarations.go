@@ -236,7 +236,7 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			}
 		case "UtilParam":
 		//deprecated
-		case "Selector":
+		case "QuerySelector":
 			declaration.Explicit = false
 		}
 		cursor.MatchOne(whitespaceMatcher)

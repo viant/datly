@@ -179,7 +179,7 @@ func (s *Service) batchData(collector *view.Collector) *view.BatchData {
 	return batchData
 }
 
-func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.Selector, batchData *view.BatchData, collector *view.Collector, session *Session) error {
+func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.State, batchData *view.BatchData, collector *view.Collector, session *Session) error {
 	info := &Info{
 		View: view.Name,
 	}
@@ -199,7 +199,7 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 	return nil
 }
 
-func (s *Service) readObjectsWithMeta(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.Selector, info *Info) error {
+func (s *Service) readObjectsWithMeta(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.State, info *Info) error {
 	batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
 	visitor := collector.Visitor(ctx)
 
@@ -221,7 +221,7 @@ func (s *Service) readObjectsWithMeta(ctx context.Context, session *Session, bat
 	return nil
 }
 
-func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.View, originalSelector *view.Selector, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *expand.MetaParam) (*Stats, error) {
+func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.View, originalSelector *view.State, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *expand.MetaParam) (*Stats, error) {
 	selectorDeref := *originalSelector
 	selectorDeref.Fields = []string{}
 	selectorDeref.Columns = []string{}
@@ -311,7 +311,7 @@ func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.V
 	return s.NewStats(session, indexed, cacheStats, cacheErr), nil
 }
 
-func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchData *view.BatchData, collector *view.Collector, session *Session) (fullMatch *cache.ParmetrizedQuery, columnInMatcher *cache.ParmetrizedQuery, err error) {
+func (s *Service) getMatchers(aView *view.View, selector *view.State, batchData *view.BatchData, collector *view.Collector, session *Session) (fullMatch *cache.ParmetrizedQuery, columnInMatcher *cache.ParmetrizedQuery, err error) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
@@ -340,7 +340,7 @@ func (s *Service) getMatchers(aView *view.View, selector *view.Selector, batchDa
 	return fullMatch, columnInMatcher, cacheErr
 }
 
-func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.VisitorFn, info *Info, batchData *view.BatchData, selector *view.Selector) error {
+func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.VisitorFn, info *Info, batchData *view.BatchData, selector *view.State) error {
 	wg := &sync.WaitGroup{}
 	db, err := aView.Db()
 	if err != nil {
@@ -374,7 +374,7 @@ func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aV
 	return metaErr
 }
 
-func (s *Service) queryObjects(ctx context.Context, session *Session, aView *view.View, selector *view.Selector, batchData *view.BatchData, db *sql.DB, collector *view.Collector, visitor view.VisitorFn) (*Stats, error) {
+func (s *Service) queryObjects(ctx context.Context, session *Session, aView *view.View, selector *view.State, batchData *view.BatchData, db *sql.DB, collector *view.Collector, visitor view.VisitorFn) (*Stats, error) {
 	fullMatcher, columnInMatcher, err := s.getMatchers(aView, selector, batchData, collector, session)
 	if err != nil {
 		return nil, err

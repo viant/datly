@@ -3,7 +3,7 @@
   "Errors": [
     {
       "View": "custom_unmarshall_velty",
-      "Param": "Preference",
+      "Parameter": "Preference",
       "Message": "json: cannot unmarshal array into Go value of type struct { Id int; Name string; Price float64 }"
     }
   ]

@@ -188,7 +188,7 @@ func (c *Config) initParamIfNeeded(ctx context.Context, param *state.Parameter, 
 }
 
 func (c *Config) paramTypeMatches(param *state.Parameter, requiredTypes []reflect.Type) error {
-	paramType := param.ActualParamType()
+	paramType := param.OutputType()
 	for _, requiredType := range requiredTypes {
 		if paramType == requiredType {
 			return nil

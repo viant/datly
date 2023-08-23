@@ -65,7 +65,7 @@ func (e *JSONError) Error() string {
 	return e.Message
 }
 
-func (b *paramStateBuilder) Build(ctx context.Context, viewsDetails []*ViewDetails, selectors *view.Selectors) error {
+func (b *paramStateBuilder) Build(ctx context.Context, viewsDetails []*ViewDetails, selectors *view.States) error {
 	wg := sync.WaitGroup{}
 	errors := httputils.NewErrors()
 
@@ -77,7 +77,7 @@ func (b *paramStateBuilder) Build(ctx context.Context, viewsDetails []*ViewDetai
 		selector.DatabaseFormat = details.View.Caser
 
 		wg.Add(1)
-		go func(ctx context.Context, details *ViewDetails, selector *view.Selector) {
+		go func(ctx context.Context, details *ViewDetails, selector *view.State) {
 			defer wg.Done()
 			if paramName, err := b.populateSelector(ctx, selector, details); err != nil {
 				errors.AddError(details.View.Name, paramName, err)
@@ -114,7 +114,7 @@ func (b *paramStateBuilder) Build(ctx context.Context, viewsDetails []*ViewDetai
 	return errors
 }
 
-func validateSelector(selector *view.Selector, aView *view.View) error {
+func validateSelector(selector *view.State, aView *view.View) error {
 	if selector.Offset != 0 && selector.Limit == 0 && aView.Selector.Limit == 0 {
 		return fmt.Errorf("can't use offset if limit was not specified")
 	}
@@ -122,7 +122,7 @@ func validateSelector(selector *view.Selector, aView *view.View) error {
 	return nil
 }
 
-func BuildRouteSelectors(ctx context.Context, selectors *view.Selectors, route *Route, request *http.Request) error {
+func BuildRouteSelectors(ctx context.Context, selectors *view.States, route *Route, request *http.Request) error {
 	requestMetadata := NewRequestMetadata(route)
 	requestParams, err := NewRequestParameters(request, route)
 	if err != nil {
@@ -139,7 +139,7 @@ func BuildRouteSelectors(ctx context.Context, selectors *view.Selectors, route *
 	return CreateSelectors(ctx, route._resource, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, vstate.NamedParameters{}, route.Index._viewDetails...)
 }
 
-func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, requestParams *RequestParams, views ...*ViewDetails) (*view.Selectors, *RequestParams, error) {
+func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, requestParams *RequestParams, views ...*ViewDetails) (*view.States, *RequestParams, error) {
 	requestMetadata := NewRequestMetadata(route)
 
 	if requestParams == nil {
@@ -150,7 +150,7 @@ func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.R
 		}
 	}
 
-	selectors := view.NewSelectors()
+	selectors := view.NewStates()
 	if err := CreateSelectors(ctx, route._resource, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, nil, views...); err != nil {
 		return nil, nil, err
 	}
@@ -167,7 +167,7 @@ func NewRequestMetadata(route *Route) *RequestMetadata {
 	return requestMetadata
 }
 
-func CreateSelectors(ctx context.Context, resource *view.Resource, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, selectors *view.Selectors, paramsIndex vstate.NamedParameters, views ...*ViewDetails) error {
+func CreateSelectors(ctx context.Context, resource *view.Resource, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, selectors *view.States, paramsIndex vstate.NamedParameters, views ...*ViewDetails) error {
 	sb := newParamStateBuilder(resource, inputFormat, dateFormat, requestMetadata, requestParams, newParamsValueCache(), paramsIndex)
 	return sb.Build(ctx, views, selectors)
 }
@@ -185,7 +185,7 @@ func newParamStateBuilder(resource *view.Resource, inputFormat format.Case, date
 	return sb
 }
 
-func (b *paramStateBuilder) populateSelector(ctx context.Context, selector *view.Selector, details *ViewDetails) (string, error) {
+func (b *paramStateBuilder) populateSelector(ctx context.Context, selector *view.State, details *ViewDetails) (string, error) {
 	if details.View.Selector.FieldsParameter != nil {
 		if err := b.populateFields(ctx, selector, details); err != nil {
 			return view.FieldsQuery, err
@@ -228,7 +228,7 @@ func (b *paramStateBuilder) populateSelector(ctx context.Context, selector *view
 	return "", nil
 }
 
-func (b *paramStateBuilder) populateCriteria(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+func (b *paramStateBuilder) populateCriteria(ctx context.Context, selector *view.State, details *ViewDetails) error {
 	criteriaExpression, err := b.criteriaValue(ctx, details, selector)
 	if err != nil || criteriaExpression == nil {
 		return err
@@ -267,12 +267,12 @@ func (b *paramStateBuilder) populateCriteria(ctx context.Context, selector *view
 	return typeMismatchError(details.View.Selector.CriteriaParameter, criteriaExpression)
 }
 
-func (b *paramStateBuilder) criteriaValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (interface{}, error) {
+func (b *paramStateBuilder) criteriaValue(ctx context.Context, details *ViewDetails, selector *view.State) (interface{}, error) {
 	param := details.View.Selector.CriteriaParameter
 	return b.extractParamValue(ctx, param, details, selector)
 }
 
-func (b *paramStateBuilder) populateLimit(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+func (b *paramStateBuilder) populateLimit(ctx context.Context, selector *view.State, details *ViewDetails) error {
 	limit, err := b.limitValue(ctx, details, selector)
 	if err != nil || limit == 0 {
 		return err
@@ -289,7 +289,7 @@ func (b *paramStateBuilder) populateLimit(ctx context.Context, selector *view.Se
 	return nil
 }
 
-func (b *paramStateBuilder) limitValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (int, error) {
+func (b *paramStateBuilder) limitValue(ctx context.Context, details *ViewDetails, selector *view.State) (int, error) {
 	param := details.View.Selector.LimitParameter
 	paramValue, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil {
@@ -299,7 +299,7 @@ func (b *paramStateBuilder) limitValue(ctx context.Context, details *ViewDetails
 	return asInt(paramValue, param)
 }
 
-func (b *paramStateBuilder) populateOrderBy(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+func (b *paramStateBuilder) populateOrderBy(ctx context.Context, selector *view.State, details *ViewDetails) error {
 	orderBy, err := b.orderByValue(ctx, details, selector)
 	if err != nil {
 		return err
@@ -322,7 +322,7 @@ func (b *paramStateBuilder) populateOrderBy(ctx context.Context, selector *view.
 	return nil
 }
 
-func (b *paramStateBuilder) orderByValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (string, error) {
+func (b *paramStateBuilder) orderByValue(ctx context.Context, details *ViewDetails, selector *view.State) (string, error) {
 	param := details.View.Selector.OrderByParameter
 	value, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil || value == nil {
@@ -335,7 +335,7 @@ func (b *paramStateBuilder) orderByValue(ctx context.Context, details *ViewDetai
 	return "", typeMismatchError(param, value)
 }
 
-func (b *paramStateBuilder) populateOffset(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+func (b *paramStateBuilder) populateOffset(ctx context.Context, selector *view.State, details *ViewDetails) error {
 	offset, err := b.offsetValue(ctx, details, selector)
 	if err != nil || offset == 0 {
 		return err
@@ -349,7 +349,7 @@ func (b *paramStateBuilder) populateOffset(ctx context.Context, selector *view.S
 	return nil
 }
 
-func (b *paramStateBuilder) offsetValue(ctx context.Context, details *ViewDetails, selector *view.Selector) (int, error) {
+func (b *paramStateBuilder) offsetValue(ctx context.Context, details *ViewDetails, selector *view.State) (int, error) {
 	param := details.View.Selector.OffsetParameter
 	value, err := b.extractParamValue(ctx, param, details, selector)
 	if err != nil {
@@ -371,13 +371,13 @@ func asInt(value interface{}, param *vstate.Parameter) (int, error) {
 	return 0, typeMismatchError(param, value)
 }
 
-func (b *paramStateBuilder) populateFields(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+func (b *paramStateBuilder) populateFields(ctx context.Context, selector *view.State, details *ViewDetails) error {
 	fieldValue, err := b.fieldRawValue(ctx, details, selector)
 	if err != nil || len(fieldValue) == 0 {
 		return err
 	}
 
-	if len(fieldValue) > 9 && !details.View.Selector.Constraints.Projection {
+	if len(fieldValue) > 0 && !details.View.Selector.Constraints.Projection {
 		return fmt.Errorf("can't use projection on view %v", details.View.Name)
 	}
 
@@ -388,7 +388,7 @@ func (b *paramStateBuilder) populateFields(ctx context.Context, selector *view.S
 	return nil
 }
 
-func (b *paramStateBuilder) fieldRawValue(ctx context.Context, details *ViewDetails, selector *view.Selector) ([]string, error) {
+func (b *paramStateBuilder) fieldRawValue(ctx context.Context, details *ViewDetails, selector *view.State) ([]string, error) {
 	param := details.View.Selector.FieldsParameter
 	paramValue, err := b.extractParamValue(ctx, param, details, selector)
 
@@ -402,7 +402,7 @@ func (b *paramStateBuilder) fieldRawValue(ctx context.Context, details *ViewDeta
 	return nil, typeMismatchError(param, paramValue)
 }
 
-func (b *paramStateBuilder) extractParamValue(ctx context.Context, param *vstate.Parameter, details *ViewDetails, selector *view.Selector) (interface{}, error) {
+func (b *paramStateBuilder) extractParamValue(ctx context.Context, param *vstate.Parameter, details *ViewDetails, selector *view.State) (interface{}, error) {
 	var options []interface{}
 	if selector != nil {
 		options = append(options, codec.Selector(selector))
@@ -587,7 +587,7 @@ func (b *paramStateBuilder) viewParamValue(ctx context.Context, param *vstate.Pa
 	sliceType := aView.Schema.SliceType()
 	slice := aView.Schema.Slice()
 	var returnMulti bool
-	if param.ActualParamType().Kind() == reflect.Slice {
+	if param.OutputType().Kind() == reflect.Slice {
 		sliceType = param.Schema.Type()
 		slice = param.Schema.Slice()
 		returnMulti = true
@@ -606,7 +606,7 @@ func (b *paramStateBuilder) viewParamValue(ctx context.Context, param *vstate.Pa
 		Index:    newIndex,
 		MainView: nil,
 	}
-	selectors := view.NewSelectors()
+	selectors := view.NewStates()
 
 	if err := CreateSelectors(ctx, nil, b.dateFormat, b.caser, newRequestMetadata, b.params, selectors, b.viewParams, &ViewDetails{View: aView}); err != nil {
 		return nil, err
@@ -648,7 +648,7 @@ func (b *paramStateBuilder) viewParamValue(ctx context.Context, param *vstate.Pa
 	return b.paramViewValue(param, sliceValue, returnMulti, paramLen, slice, ptr)
 }
 
-func (b *paramStateBuilder) buildFields(aView *view.View, selector *view.Selector, fieldsQuery []string) error {
+func (b *paramStateBuilder) buildFields(aView *view.View, selector *view.State, fieldsQuery []string) error {
 	for _, param := range fieldsQuery {
 		fieldName := b.caser.Format(param, format.CaseUpperCamel)
 		if err := canUseColumn(aView, fieldName); err != nil {
@@ -675,7 +675,7 @@ func (b *paramStateBuilder) paramViewValue(param *vstate.Parameter, value reflec
 	}
 }
 
-func (b *paramStateBuilder) populatePage(ctx context.Context, selector *view.Selector, details *ViewDetails) error {
+func (b *paramStateBuilder) populatePage(ctx context.Context, selector *view.State, details *ViewDetails) error {
 	pageParam := details.View.Selector.PageParameter
 	value, err := b.extractParamValue(ctx, pageParam, details, selector)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/viant/datly/router/marshal/common"
 	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox/format"
 	"net/http"
@@ -27,6 +28,7 @@ type (
 	}
 
 	ParameterLookup func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error)
+	ReadViewData    func(ctx context.Context, dest interface{}, aView *view.View, selectors *view.States) error
 )
 
 func (u Options) UnmarshalFunc() Unmarshal {

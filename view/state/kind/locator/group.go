@@ -11,7 +11,6 @@ import (
 type Group struct {
 	ParameterLookup
 	Parameters state.NamedParameters
-	Locators   *KindLocator
 }
 
 func (p *Group) Names() []string {
@@ -29,7 +28,7 @@ func (p *Group) Value(ctx context.Context, name string) (interface{}, bool, erro
 	aState := stateType.NewState()
 
 	for _, item := range parameter.Group {
-		value, has, err := p.ParameterLookup(ctx, item, p.Locators)
+		value, has, err := p.ParameterLookup(ctx, item)
 		if err != nil {
 			return nil, false, err
 		}
@@ -55,6 +54,5 @@ func NewGroup(opts ...Option) (kind.Locator, error) {
 	return &Group{
 		ParameterLookup: options.ParameterLookup,
 		Parameters:      options.Parameters,
-		Locators:        options.Parent,
 	}, nil
 }

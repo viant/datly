@@ -1,8 +1,6 @@
 package httputils
 
 import (
-	"bytes"
-	"github.com/viant/toolbox"
 	"sync"
 )
 
@@ -16,12 +14,15 @@ const (
 
 type (
 	Error struct {
-		View    string      `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
-		Param   string      `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
-		Err     error       `json:"-"`
-		Message string      `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
-		Object  interface{} `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
+		View       string      `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
+		Parameter  string      `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
+		StatusCode int         `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
+		Err        error       `json:"-"`
+		Message    string      `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
+		Object     interface{} `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
 	}
+
+	Option func(e *Error)
 
 	Errors struct {
 		Message string `json:",omitempty" default:"nullable=true,required=false,allowEmpty=true"`
@@ -29,14 +30,25 @@ type (
 		mutex   sync.Mutex
 		status  int
 	}
-
-	ParamErrors []*ParamError
-	ParamError  struct {
-		Value interface{}
-		Field string
-		Tag   string
-	}
 )
+
+func WithObject(object interface{}) Option {
+	return func(e *Error) {
+		e.Object = object
+	}
+}
+
+func WithMessage(msg string) Option {
+	return func(e *Error) {
+		e.Message = msg
+	}
+}
+
+func WithStatusCode(code int) Option {
+	return func(e *Error) {
+		e.StatusCode = code
+	}
+}
 
 func (e *Errors) ErrorStatusCode() int {
 	return e.status
@@ -53,23 +65,47 @@ func NewErrors() *Errors {
 	return &Errors{mutex: sync.Mutex{}}
 }
 
-func (e *Errors) AddError(view, param string, err error) {
+func (e *Errors) HasError() bool {
+	e.mutex.Lock()
+	ret := len(e.Errors)
+	e.mutex.Unlock()
+	return ret > 0
+}
+
+func (e *Errors) Append(err error) {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+	switch actual := err.(type) {
+	case *Error:
+		e.Errors = append(e.Errors, actual)
+	case *Errors:
+		e.Errors = append(e.Errors, actual.Errors...)
+	default:
+		e.Errors = append(e.Errors, &Error{Message: err.Error(), Err: err})
+	}
+}
+
+func (e *Errors) AddError(view, param string, err error, opts ...Option) {
 	if err == nil {
 		return
 	}
 
 	e.mutex.Lock()
-	e.Errors = append(e.Errors, NewParamError(view, param, err))
+	e.Errors = append(e.Errors, NewParamError(view, param, err, opts...))
 	e.Message = err.Error()
 	e.mutex.Unlock()
 }
 
-func NewParamError(view string, param string, err error) *Error {
-	return &Error{
-		View:  view,
-		Param: param,
-		Err:   err,
+func NewParamError(view string, param string, err error, opts ...Option) *Error {
+	ret := &Error{
+		View:      view,
+		Parameter: param,
+		Err:       err,
 	}
+	for _, opt := range opts {
+		opt(ret)
+	}
+	return ret
 }
 
 func (e *Errors) Error() string {
@@ -104,21 +140,4 @@ func statusCodePriority(status int) int {
 	default:
 		return priorityDefault
 	}
-}
-
-func (p ParamErrors) Error() string {
-	bufferString := bytes.NewBufferString("")
-	for i, paramError := range p {
-		if i != 0 {
-			bufferString.WriteByte(',')
-		}
-		bufferString.WriteString("invalid property ")
-		bufferString.WriteString(paramError.Field)
-		bufferString.WriteString(" value ")
-		bufferString.WriteString(toolbox.AsString(paramError.Value))
-		bufferString.WriteString(" due to tue ")
-		bufferString.WriteString(paramError.Tag)
-	}
-
-	return bufferString.String()
 }

@@ -18,7 +18,7 @@ type (
 		CacheDisabled bool
 		Dest          interface{} //slice
 		View          *view.View
-		Selectors     *view.Selectors
+		Selectors     *view.States
 		Parent        *view.View
 		Metrics       []*Metric
 		ViewMeta      interface{}
@@ -28,7 +28,7 @@ type (
 
 	ParentData struct {
 		View     *view.View
-		Selector *view.Selector
+		Selector *view.State
 	}
 
 	Metric struct {
@@ -102,7 +102,7 @@ func NewSession(dest interface{}, aView *view.View, options ...interface{}) *Ses
 	return &Session{
 		Dest:      dest,
 		View:      aView,
-		Selectors: view.NewSelectors(),
+		Selectors: view.NewStates(),
 		Parent:    parent,
 	}
 }

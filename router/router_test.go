@@ -473,7 +473,7 @@ func TestRouter(t *testing.T) {
 			description: "styles | error",
 			resourceURI: "011_style",
 			uri:         "/api/events?_criteria=(id%20=%201%20UNION%20ALL%20SELECT%209%20as%20id%2C%20To_Date%28%222019-03-11T02%3A20%3A33Z%22%29%20as%20timestamp%2C%2010%20as%20event_type_id%2C%2020%20as%20quantity%2C%206%20as%20user_id)",
-			expected:    `{"Status":"error","Errors":[{"View":"events","Param":"_criteria","Message":"can't use criteria on view events"}],"Result":[]}`,
+			expected:    `{"Status":"error","Errors":[{"View":"events","Parameter":"_criteria","Message":"can't use criteria on view events"}],"Result":[]}`,
 			method:      http.MethodGet,
 		},
 		{
@@ -579,7 +579,7 @@ func TestRouter(t *testing.T) {
 			uri:         "/api/events",
 			method:      http.MethodPost,
 			requestBody: `{"Id":0,"Quantity":0}`,
-			expected:    `{"Status":"error","Errors":[{"View":"events","Param":"EventFilter","Message":"required unsupported type: int"}]}`,
+			expected:    `{"Status":"error","Errors":[{"View":"events","Parameter":"EventFilter","Message":"required unsupported type: int"}]}`,
 		},
 		{
 			description: "exclude | remove columns",
@@ -703,7 +703,7 @@ func TestRouter(t *testing.T) {
 			method:      http.MethodPost,
 			codecs:      map[string]interface{}{},
 			requestBody: `{"ID": [1,10,103], "Quantity": 0}`,
-			expected:    `{"Errors":[{"View":"events","Param":"Data","Object":[{"Id":1,"Status":false},{"Id":10,"Status":false},{"Id":103,"Status":false}]}]}`,
+			expected:    `{"Errors":[{"View":"events","Parameter":"Data","Object":[{"Id":1,"Status":false},{"Id":10,"Status":false},{"Id":103,"Status":false}]}]}`,
 		},
 		{
 			description: "executor with param slice",
@@ -907,7 +907,7 @@ func TestRouter(t *testing.T) {
 			resourceURI:  "048_tabjson_style",
 			uri:          "/api/events?_criteria=(id%20=%201%20UNION%20ALL%20SELECT%209%20as%20id%2C%20To_Date%28%222019-03-11T02%3A20%3A33Z%22%29%20as%20timestamp%2C%2010%20as%20event_type_id%2C%2020%20as%20quantity%2C%206%20as%20user_id)",
 			useAssertPkg: true,
-			expected:     `{"Status":"error","Message":"can't use criteria on view events","Errors":[{"View":"events","Param":"_criteria","Message":"can't use criteria on view events"}],"Result":[]}`,
+			expected:     `{"Status":"error","Message":"can't use criteria on view events","Errors":[{"View":"events","Parameter":"_criteria","Message":"can't use criteria on view events"}],"Result":[]}`,
 			method:       http.MethodGet,
 		},
 		{

@@ -325,11 +325,10 @@ func (p *Parameter) initCodec(resource Resourcelet) error {
 	return nil
 }
 
-func (p *Parameter) ActualParamType() reflect.Type {
+func (p *Parameter) OutputType() reflect.Type {
 	if p.Output != nil && p.Output.Schema != nil {
 		return p.Output.Schema.Type()
 	}
-
 	return p.Schema.Type()
 }
 

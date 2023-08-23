@@ -67,7 +67,7 @@ type (
 	}
 
 	CacheInput struct {
-		Selector   *Selector
+		Selector   *State
 		Column     string
 		MetaColumn string
 		IndexMeta  bool
@@ -326,7 +326,7 @@ func (c *Cache) GenerateCacheInput(ctx context.Context) ([]*CacheInput, error) {
 	if chanSize == 0 {
 		close(selectorChan)
 		return []*CacheInput{
-			c.NewInput(NewSelector()),
+			c.NewInput(NewState()),
 		}, nil
 	}
 
@@ -477,7 +477,7 @@ func (c *Cache) appendSelectors(set *CacheParameters, paramValues [][]interface{
 
 outer:
 	for {
-		selector := &Selector{}
+		selector := &State{}
 		selector.Init(c.owner)
 
 		for i, possibleValues := range paramValues {
@@ -510,7 +510,7 @@ outer:
 	return nil
 }
 
-func (c *Cache) NewInput(selector *Selector) *CacheInput {
+func (c *Cache) NewInput(selector *State) *CacheInput {
 	return &CacheInput{
 		Selector:   selector,
 		Column:     c.Warmup.IndexColumn,

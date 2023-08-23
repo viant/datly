@@ -152,7 +152,7 @@ func (t *Template) createSchemaFromParams(ctx context.Context, resource *Resourc
 func buildType(parameters []*state.Parameter, paramType reflect.Type, fields ...reflect.StructField) (reflect.Type, error) {
 	builder := template.NewBuilder("")
 	for _, param := range parameters {
-		pType := param.ActualParamType()
+		pType := param.OutputType()
 		if paramType != nil {
 			pType = paramType
 		}
@@ -271,7 +271,7 @@ func Evaluate(evaluator *expand.Evaluator, options ...expand.StateOption) (*expa
 	)
 }
 
-func AsViewParam(aView *View, aSelector *Selector, batchData *BatchData, options ...interface{}) *expand.MetaParam {
+func AsViewParam(aView *View, aSelector *State, batchData *BatchData, options ...interface{}) *expand.MetaParam {
 	var metaSource expand.MetaSource
 	if aView != nil {
 		metaSource = aView
@@ -375,7 +375,7 @@ func (t *Template) IsActualTemplate() bool {
 	return t.isTemplate
 }
 
-func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error) {
+func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *State, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error) {
 	values, err := template.Parse(SQL)
 	if err != nil {
 		return "", err
@@ -409,7 +409,7 @@ func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Sel
 	return replacement.ExpandAsText(SQL), err
 }
 
-func (t *Template) prepareExpanded(value *template.Value, params CriteriaParam, selector *Selector, batchData *BatchData, placeholders *[]interface{}, sanitized *expand.DataUnit) (string, string, error) {
+func (t *Template) prepareExpanded(value *template.Value, params CriteriaParam, selector *State, batchData *BatchData, placeholders *[]interface{}, sanitized *expand.DataUnit) (string, string, error) {
 	key, val, err := t.replacementEntry(value.Key, params, selector, batchData, placeholders, sanitized)
 	if err != nil {
 		return "", "", err
@@ -418,7 +418,7 @@ func (t *Template) prepareExpanded(value *template.Value, params CriteriaParam, 
 	return key, val, err
 }
 
-func (t *Template) replacementEntry(key string, params CriteriaParam, selector *Selector, batchData *BatchData, placeholders *[]interface{}, sanitized *expand.DataUnit) (string, string, error) {
+func (t *Template) replacementEntry(key string, params CriteriaParam, selector *State, batchData *BatchData, placeholders *[]interface{}, sanitized *expand.DataUnit) (string, string, error) {
 	switch key {
 	case keywords.Pagination[1:]:
 		return key, params.Pagination, nil

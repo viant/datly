@@ -44,11 +44,11 @@ func (s Parameters) SetLiterals(state *structology.State) (err error) {
 
 func (p Parameters) InitRepeated(state *structology.State) (err error) {
 	for _, parameter := range p {
-		parameterType := parameter.ActualParamType()
+		parameterType := parameter.OutputType()
 		if parameterType == nil || parameterType.Kind() != reflect.Slice {
 			continue
 		}
-		aSlice := reflect.MakeSlice(parameter.ActualParamType(), 1, 1).Interface()
+		aSlice := reflect.MakeSlice(parameter.OutputType(), 1, 1).Interface()
 		if err = state.SetValue(parameter.Name, aSlice); err != nil {
 			return err
 		}

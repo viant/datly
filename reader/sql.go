@@ -43,7 +43,7 @@ func NewBuilder() *Builder {
 }
 
 // Build builds SQL Select statement
-func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *expand.MetaParam, expander expand.Expander) (*cache.ParmetrizedQuery, error) {
+func (b *Builder) Build(aView *view.View, selector *view.State, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *expand.MetaParam, expander expand.Expander) (*cache.ParmetrizedQuery, error) {
 	if exclude == nil {
 		exclude = &Exclude{}
 	}
@@ -135,7 +135,7 @@ func (b *Builder) Build(aView *view.View, selector *view.Selector, batchData *vi
 	return matcher, err
 }
 
-func (b *Builder) appendColumns(sb *strings.Builder, aView *view.View, selector *view.Selector) error {
+func (b *Builder) appendColumns(sb *strings.Builder, aView *view.View, selector *view.State) error {
 	if len(selector.Columns) == 0 {
 		b.appendViewColumns(sb, aView)
 		return nil
@@ -144,7 +144,7 @@ func (b *Builder) appendColumns(sb *strings.Builder, aView *view.View, selector 
 	return b.appendSelectorColumns(sb, aView, selector)
 }
 
-func (b *Builder) appendSelectorColumns(sb *strings.Builder, view *view.View, selector *view.Selector) error {
+func (b *Builder) appendSelectorColumns(sb *strings.Builder, view *view.View, selector *view.State) error {
 	for i, column := range selector.Columns {
 		viewColumn, ok := view.ColumnByName(column)
 		if !ok {
@@ -196,7 +196,7 @@ func (b *Builder) appendViewAlias(sb *strings.Builder, view *view.View) {
 	sb.WriteString(view.Alias)
 }
 
-func (b *Builder) updatePagination(params *view.CriteriaParam, view *view.View, selector *view.Selector, exclude *Exclude) error {
+func (b *Builder) updatePagination(params *view.CriteriaParam, view *view.View, selector *view.State, exclude *Exclude) error {
 	if exclude.Pagination {
 		return nil
 	}
@@ -211,7 +211,7 @@ func (b *Builder) updatePagination(params *view.CriteriaParam, view *view.View, 
 	return nil
 }
 
-func (b *Builder) appendLimit(sb *strings.Builder, aView *view.View, selector *view.Selector) {
+func (b *Builder) appendLimit(sb *strings.Builder, aView *view.View, selector *view.State) {
 	limit := actualLimit(aView, selector)
 	if limit == 0 {
 		return
@@ -221,7 +221,7 @@ func (b *Builder) appendLimit(sb *strings.Builder, aView *view.View, selector *v
 	sb.WriteString(strconv.Itoa(limit))
 }
 
-func (b *Builder) appendOffset(sb *strings.Builder, selector *view.Selector) {
+func (b *Builder) appendOffset(sb *strings.Builder, selector *view.State) {
 	if selector.Offset == 0 {
 		return
 	}
@@ -290,7 +290,7 @@ func (b *Builder) updateColumnsIn(params *view.CriteriaParam, view *view.View, r
 	params.ColumnsIn = sb.String()
 }
 
-func (b *Builder) appendOrderBy(sb *strings.Builder, view *view.View, selector *view.Selector) error {
+func (b *Builder) appendOrderBy(sb *strings.Builder, view *view.View, selector *view.State) error {
 	if selector.OrderBy != "" {
 		col, ok := view.ColumnByName(selector.OrderBy)
 		if !ok {
@@ -311,7 +311,7 @@ func (b *Builder) appendOrderBy(sb *strings.Builder, view *view.View, selector *
 	return nil
 }
 
-func (b *Builder) appendRelationColumn(sb *strings.Builder, aView *view.View, selector *view.Selector, relation *view.Relation) error {
+func (b *Builder) appendRelationColumn(sb *strings.Builder, aView *view.View, selector *view.State, relation *view.Relation) error {
 	if relation == nil {
 		return nil
 	}
@@ -341,7 +341,7 @@ func (b *Builder) checkViewAndAppendRelColumn(sb *strings.Builder, aView *view.V
 	return nil
 }
 
-func (b *Builder) checkSelectorAndAppendRelColumn(sb *strings.Builder, aView *view.View, selector *view.Selector, relation *view.Relation) error {
+func (b *Builder) checkSelectorAndAppendRelColumn(sb *strings.Builder, aView *view.View, selector *view.State, relation *view.Relation) error {
 	if relation == nil || selector.Has(relation.Of.Column) || aView.Template.IsActualTemplate() {
 		return nil
 	}
@@ -358,7 +358,7 @@ func (b *Builder) checkSelectorAndAppendRelColumn(sb *strings.Builder, aView *vi
 	return nil
 }
 
-func actualLimit(aView *view.View, selector *view.Selector) int {
+func actualLimit(aView *view.View, selector *view.State) int {
 	if selector.Limit != 0 {
 		return selector.Limit
 	}
@@ -366,28 +366,28 @@ func actualLimit(aView *view.View, selector *view.Selector) int {
 	return aView.Selector.Limit
 }
 
-func (b *Builder) ExactMetaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, parent *expand.MetaParam) (*cache.ParmetrizedQuery, error) {
+func (b *Builder) ExactMetaSQL(aView *view.View, selector *view.State, batchData *view.BatchData, relation *view.Relation, parent *expand.MetaParam) (*cache.ParmetrizedQuery, error) {
 	return b.metaSQL(aView, selector, batchData, relation, &Exclude{
 		Pagination: true,
 	}, parent, nil)
 }
 
-func (b *Builder) CacheMetaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, parent *expand.MetaParam) (*cache.ParmetrizedQuery, error) {
+func (b *Builder) CacheMetaSQL(aView *view.View, selector *view.State, batchData *view.BatchData, relation *view.Relation, parent *expand.MetaParam) (*cache.ParmetrizedQuery, error) {
 	return b.metaSQL(aView, selector, batchData, relation, &Exclude{Pagination: true, ColumnsIn: true}, parent, &expand.MockExpander{})
 }
 
-func (b *Builder) CacheSQL(aView *view.View, selector *view.Selector) (*cache.ParmetrizedQuery, error) {
+func (b *Builder) CacheSQL(aView *view.View, selector *view.State) (*cache.ParmetrizedQuery, error) {
 	return b.CacheSQLWithOptions(aView, selector, nil, nil, nil)
 }
 
-func (b *Builder) CacheSQLWithOptions(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, parent *expand.MetaParam) (*cache.ParmetrizedQuery, error) {
+func (b *Builder) CacheSQLWithOptions(aView *view.View, selector *view.State, batchData *view.BatchData, relation *view.Relation, parent *expand.MetaParam) (*cache.ParmetrizedQuery, error) {
 	return b.Build(aView, selector, batchData, relation, &Exclude{
 		ColumnsIn:  true,
 		Pagination: true,
 	}, parent, &expand.MockExpander{})
 }
 
-func (b *Builder) metaSQL(aView *view.View, selector *view.Selector, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *expand.MetaParam, expander expand.Expander) (*cache.ParmetrizedQuery, error) {
+func (b *Builder) metaSQL(aView *view.View, selector *view.State, batchData *view.BatchData, relation *view.Relation, exclude *Exclude, parent *expand.MetaParam, expander expand.Expander) (*cache.ParmetrizedQuery, error) {
 	matcher, err := b.Build(aView, selector, batchData, relation, exclude, parent, expander)
 	if err != nil {
 		return nil, err

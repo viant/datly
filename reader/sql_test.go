@@ -30,7 +30,7 @@ func TestBuilder_Build(t *testing.T) {
 		batchData    *view.BatchData
 		view         *view.View
 		relation     *view.Relation
-		selector     *view.Selector
+		selector     *view.State
 		placeholders []interface{}
 		description  string
 		output       string
@@ -59,7 +59,7 @@ func TestBuilder_Build(t *testing.T) {
 				},
 			},
 			batchData: &view.BatchData{},
-			selector: &view.Selector{Parameters: view.ParamState{
+			selector: &view.State{Parameters: view.ParamState{
 				Values: Params{},
 				Has:    PresenceMap{},
 			}},
@@ -90,7 +90,7 @@ func TestBuilder_Build(t *testing.T) {
 				},
 			},
 			batchData: &view.BatchData{},
-			selector: &view.Selector{
+			selector: &view.State{
 				Parameters: view.ParamState{
 					Values: Params{},
 					Has:    PresenceMap{},
@@ -125,7 +125,7 @@ func TestBuilder_Build(t *testing.T) {
 				},
 			},
 			batchData: &view.BatchData{},
-			selector: &view.Selector{
+			selector: &view.State{
 				Parameters: view.ParamState{
 					Values: Params{},
 					Has:    PresenceMap{},
@@ -157,7 +157,7 @@ func TestBuilder_Build(t *testing.T) {
 				},
 			},
 			batchData: &view.BatchData{},
-			selector: &view.Selector{
+			selector: &view.State{
 				Parameters: view.ParamState{
 					Values: Params{},
 					Has:    PresenceMap{},
@@ -188,7 +188,7 @@ func TestBuilder_Build(t *testing.T) {
 				},
 			},
 			batchData: &view.BatchData{},
-			selector: &view.Selector{
+			selector: &view.State{
 				Parameters: view.ParamState{
 					Values: Params{},
 					Has:    PresenceMap{},
@@ -231,7 +231,7 @@ func TestBuilder_Build(t *testing.T) {
 			},
 			placeholders: []interface{}{10},
 			batchData:    &view.BatchData{},
-			selector: &view.Selector{
+			selector: &view.State{
 				Parameters: view.ParamState{
 					Values: Params{EventId: 10},
 					Has:    PresenceMap{},
@@ -278,7 +278,7 @@ func TestBuilder_Build(t *testing.T) {
 				ColumnName:  "user_id",
 				ValuesBatch: []interface{}{4, 5, 9, 2},
 			},
-			selector: &view.Selector{
+			selector: &view.State{
 				Parameters: view.ParamState{
 					Values: Params{EventId: 10},
 					Has:    PresenceMap{},
@@ -325,7 +325,7 @@ func TestBuilder_Build(t *testing.T) {
 				ColumnName:  "user_id",
 				ValuesBatch: []interface{}{4, 5, 9, 2},
 			},
-			selector: &view.Selector{
+			selector: &view.State{
 				Parameters: view.ParamState{
 					Values: Params{EventId: 10},
 					Has:    PresenceMap{},
@@ -366,7 +366,7 @@ func TestBuilder_Build(t *testing.T) {
 					},
 				},
 			},
-			selector: &view.Selector{
+			selector: &view.State{
 				OrderBy:  "price",
 				Criteria: "price > 10",
 				Limit:    100,

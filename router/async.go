@@ -85,7 +85,7 @@ func (a *Async) initAccessor(resource *view.Resource) error {
 	var accessor *types.Accessor
 	if path != "" {
 		accessors := types.NewAccessors(&types.VeltyNamer{})
-		accessors.InitPath(param.ActualParamType(), path)
+		accessors.InitPath(param.OutputType(), path)
 		accessor, err = accessors.AccessorByName(path)
 
 		if err != nil {

@@ -106,7 +106,7 @@ type (
 	newCollectorFn    func(dest interface{}, viewMetaHandler viewMetaHandlerFn, supportParallel bool) *Collector
 	viewMetaHandlerFn func(viewMeta interface{}) error
 
-	//Constraints configure what can be selected by Selector
+	//Constraints configure what can be selected by State
 	//For each _field, default value is `false`
 	Constraints struct {
 		Criteria    bool
@@ -873,27 +873,27 @@ func (v *View) registerHolders() error {
 	return nil
 }
 
-// CanUseSelectorCriteria indicates if Selector.Criteria can be used
+// CanUseSelectorCriteria indicates if State.Criteria can be used
 func (v *View) CanUseSelectorCriteria() bool {
 	return v.Selector.Constraints.Criteria
 }
 
-// CanUseSelectorLimit indicates if Selector.Limit can be used
+// CanUseSelectorLimit indicates if State.Limit can be used
 func (v *View) CanUseSelectorLimit() bool {
 	return v.Selector.Constraints.Limit
 }
 
-// CanUseSelectorOrderBy indicates if Selector.OrderBy can be used
+// CanUseSelectorOrderBy indicates if State.OrderBy can be used
 func (v *View) CanUseSelectorOrderBy() bool {
 	return v.Selector.Constraints.OrderBy
 }
 
-// CanUseSelectorOffset indicates if Selector.Offset can be used
+// CanUseSelectorOffset indicates if State.Offset can be used
 func (v *View) CanUseSelectorOffset() bool {
 	return v.Selector.Constraints.Offset
 }
 
-// CanUseSelectorProjection indicates if Selector.Fields can be used
+// CanUseSelectorProjection indicates if State.Fields can be used
 func (v *View) CanUseSelectorProjection() bool {
 	return v.Selector.Constraints.Projection
 }
@@ -1162,13 +1162,13 @@ func (v *View) indexTransforms() error {
 	return nil
 }
 
-func (v *View) Expand(placeholders *[]interface{}, SQL string, selector *Selector, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error) {
+func (v *View) Expand(placeholders *[]interface{}, SQL string, selector *State, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error) {
 	v.ensureParameters(selector)
 
 	return v.Template.Expand(placeholders, SQL, selector, params, batchData, sanitized)
 }
 
-func (v *View) ensureParameters(selector *Selector) {
+func (v *View) ensureParameters(selector *State) {
 	if v.Template == nil {
 		return
 	}
@@ -1222,7 +1222,7 @@ func (v *View) findSchemaColumn(fieldName string) (*Column, bool) {
 }
 
 // SetParameter sets a View or relation parameter, for relation name has to be prefixed relName:paramName
-func (v *View) SetParameter(name string, selectors *Selectors, value interface{}) error {
+func (v *View) SetParameter(name string, selectors *States, value interface{}) error {
 	aView := v
 	if strings.Contains(name, ":") {
 		pair := strings.SplitN(name, ":", 2)

@@ -57,7 +57,7 @@ func New() *Executor {
 
 // Execute executes view dsql
 func (e *Executor) Execute(ctx context.Context, aView *view.View, options ...Option) error {
-	session, err := NewSession(view.NewSelectors(), aView)
+	session, err := NewSession(view.NewStates(), aView)
 	if err != nil {
 		return err
 	}

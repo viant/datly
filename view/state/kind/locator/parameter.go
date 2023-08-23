@@ -10,7 +10,6 @@ import (
 type Parameter struct {
 	ParameterLookup
 	Parameters state.NamedParameters
-	Locators   *KindLocator
 }
 
 func (p *Parameter) Names() []string {
@@ -21,7 +20,7 @@ func (p *Parameter) Value(ctx context.Context, name string) (interface{}, bool, 
 	if !ok {
 		return nil, false, fmt.Errorf("uknonw parameter: %s", name)
 	}
-	return p.ParameterLookup(ctx, parameter, p.Locators)
+	return p.ParameterLookup(ctx, parameter)
 }
 
 // NewParameter returns parameter locator
@@ -36,6 +35,5 @@ func NewParameter(opts ...Option) (kind.Locator, error) {
 	return &Parameter{
 		ParameterLookup: options.ParameterLookup,
 		Parameters:      options.Parameters,
-		Locators:        options.Parent,
 	}, nil
 }

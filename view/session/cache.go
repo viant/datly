@@ -7,6 +7,7 @@ import (
 
 type cache struct {
 	values map[string]interface{}
+	locks  map[string]sync.Locker
 	sync.RWMutex
 }
 
@@ -15,6 +16,17 @@ func (c *cache) lookup(parameter *state.Parameter) (interface{}, bool) {
 	ret, ok := c.values[c.key(parameter)]
 	c.RWMutex.RUnlock()
 	return ret, ok
+}
+
+func (c *cache) lock(parameter *state.Parameter) sync.Locker {
+	c.RWMutex.Lock()
+	ret, ok := c.locks[c.key(parameter)]
+	if !ok {
+		ret = &sync.Mutex{}
+		c.locks[c.key(parameter)] = ret
+	}
+	c.RWMutex.Unlock()
+	return ret
 }
 
 func (c *cache) put(parameter *state.Parameter, value interface{}) {

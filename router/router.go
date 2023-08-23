@@ -70,7 +70,7 @@ type (
 		Route         *Route
 		Request       *http.Request
 		Response      http.ResponseWriter
-		Selectors     *view.Selectors
+		Selectors     *view.States
 	}
 
 	preparedResponse struct {
@@ -628,7 +628,7 @@ func (r *Router) result(session *ReaderSession, destValue interface{}, meta inte
 	}
 }
 
-func (r *Router) buildJsonFilters(route *Route, selectors *view.Selectors) ([]*json.FilterEntry, error) {
+func (r *Router) buildJsonFilters(route *Route, selectors *view.States) ([]*json.FilterEntry, error) {
 	entries := make([]*json.FilterEntry, 0)
 
 	selectors.Lock()
@@ -743,7 +743,7 @@ func (r *Router) createCacheEntry(ctx context.Context, session *ReaderSession) (
 	session.Selectors.RWMutex.RLock()
 	defer session.Selectors.RWMutex.RUnlock()
 
-	selectorSlice := make([]*view.Selector, len(session.Selectors.Index))
+	selectorSlice := make([]*view.State, len(session.Selectors.Index))
 	for viewName := range session.Selectors.Index {
 		index, _ := session.Route.viewIndex(viewName)
 		selectorSlice[index] = session.Selectors.Index[viewName]

@@ -47,10 +47,13 @@ func (l *KindLocator) Lookup(kind state.Kind) (kind.Locator, error) {
 func (l *KindLocator) registerLocator(kind state.Kind, locator kind.Locator) (kind.Locator, error) {
 	var err error
 	if newLocator := Lookup(kind); newLocator != nil {
+		l.RWMutex.Lock()
+		if ret, ok := l.byKind[kind]; ok {
+			return ret, nil
+		}
 		if locator, err = newLocator(l.options...); err != nil {
 			return nil, err
 		}
-		l.RWMutex.Lock()
 		l.byKind[kind] = locator
 		l.RWMutex.Unlock()
 	}

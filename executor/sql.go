@@ -50,7 +50,7 @@ func (s *SqlBuilder) Build(aView *view.View, paramState *structology.State, sess
 
 	for _, data := range result {
 		var placeholders []interface{}
-		expanded, err := aView.Expand(&placeholders, data.SQL, &view.Selector{}, view.CriteriaParam{}, &view.BatchData{}, state.DataUnit)
+		expanded, err := aView.Expand(&placeholders, data.SQL, &view.State{}, view.CriteriaParam{}, &view.BatchData{}, state.DataUnit)
 		if err != nil {
 			return nil, nil, err
 		}

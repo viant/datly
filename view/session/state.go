@@ -3,12 +3,18 @@ package session
 import (
 	"context"
 	"fmt"
+	"github.com/pkg/errors"
+	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xunsafe"
+	"reflect"
+	"sync"
+	"unsafe"
 )
 
 type (
@@ -25,15 +31,51 @@ type (
 	LookupValueOption func(o *LookupValueOptions)
 )
 
-func (s *State) Populate(ctx context.Context, aView *view.View) error {
+func (s *State) Populate(ctx context.Context) error {
+	if len(s.namespacedView.Views) == 0 {
+		return nil
+	}
+	wg := sync.WaitGroup{}
+	errors := httputils.NewErrors()
+	for i := range s.namespacedView.Views {
+		wg.Add(1)
+		go s.setViewStateInBackground(ctx, s.namespacedView.Views[i].View, errors, &wg)
+	}
+	wg.Wait()
+	if !errors.HasError() {
+		return nil
+	}
+	return errors
+}
+
+func (s *State) setViewStateInBackground(ctx context.Context, aView *view.View, errors *httputils.Errors, wg *sync.WaitGroup) {
+	defer wg.Done()
+	if err := s.SetViewState(ctx, aView); err != nil {
+		errors.Append(err)
+	}
+}
+
+func (s *State) SetViewState(ctx context.Context, aView *view.View) error {
 	opts := s.viewOptions(aView)
 	if aView.Mode == view.ModeQuery {
 		ns := s.namespacedView.ByName(aView.Name)
+		if ns == nil {
+			ns = &view.NamespaceView{View: aView, Path: "", Namespaces: []string{aView.Selector.Namespace}}
+		}
 		if err := s.setQuerySelector(ctx, ns, opts); err != nil {
 			return err
 		}
 	}
+
 	if err := s.setTemplateState(ctx, aView, opts); err != nil {
+		switch actual := err.(type) {
+		case *httputils.Error:
+			actual.View = aView.Name
+		case *httputils.Errors:
+			for _, item := range actual.Errors {
+				item.View = aView.Name
+			}
+		}
 		return err
 	}
 	return nil
@@ -49,7 +91,7 @@ func (s *State) viewLookupOptions(parameters state.NamedParameters, opts *Option
 }
 
 func (s *State) viewOptions(aView *view.View) *Options {
-	selectors := s.selectors.Lookup(aView)
+	selectors := s.states.Lookup(aView)
 
 	viewOptions := s.Options.Clone()
 	var parameters state.NamedParameters
@@ -88,7 +130,7 @@ func (g *valueGetter) Value(ctx context.Context, paramName string) (interface{},
 }
 
 func (s *State) setTemplateState(ctx context.Context, aView *view.View, opts *Options) error {
-	selectors := s.selectors.Lookup(aView)
+	selectors := s.states.Lookup(aView)
 	if template := aView.Template; template != nil {
 		stateType := template.State()
 		if stateType.IsDefined() {
@@ -103,23 +145,95 @@ func (s *State) setTemplateState(ctx context.Context, aView *view.View, opts *Op
 }
 
 func (s *State) populateState(ctx context.Context, parameters state.Parameters, aState *structology.State, opts *Options) error {
-	for _, parameter := range parameters {
-		if err := s.populateParameter(ctx, parameter, aState, opts); err != nil {
-			return err
+	errors := httputils.NewErrors()
+	wg := sync.WaitGroup{}
+	for i, _ := range parameters { //populate non data view parameters first
+		wg.Add(1)
+		go s.populateParameterInBackground(ctx, parameters[i], aState, opts, errors, &wg)
+	}
+	wg.Wait()
+
+	return nil
+}
+
+func (s *State) populateParameterInBackground(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options, errors *httputils.Errors, wg *sync.WaitGroup) {
+	defer wg.Done()
+	if err := s.populateParameter(ctx, parameter, aState, options); err != nil {
+		if pErr, ok := err.(*httputils.Error); ok {
+			pErr.StatusCode = parameter.ErrorStatusCode
+			errors.Append(pErr)
+		} else {
+			errors.AddError("", parameter.Name, err, httputils.WithStatusCode(parameter.ErrorStatusCode))
 		}
 	}
-	return nil
 }
 
 func (s *State) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
 	value, ok, err := s.LookupValue(ctx, parameter, options)
 	if !ok {
+		if parameter.IsRequired() {
+			return fmt.Errorf("parameter %v is required", parameter.Name)
+		}
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("failed read parameter: %v %w", parameter.Name, err)
+		return err
+	}
+	if value, err = s.ensureValidValue(value, parameter); err != nil {
+		return err
 	}
 	return parameter.Selector().SetValue(aState.Pointer(), value)
+}
+
+func (s *State) ensureValidValue(value interface{}, parameter *state.Parameter) (interface{}, error) {
+	valueType := reflect.TypeOf(value)
+	switch valueType.Kind() {
+	case reflect.Ptr:
+		if parameter.IsRequired() && isNil(value) {
+			return nil, fmt.Errorf("parameter %v is required", parameter.Name)
+		}
+	case reflect.Slice:
+		ptr := xunsafe.AsPointer(value)
+		slice := parameter.Schema.Slice()
+		sliceLen := slice.Len(ptr)
+		if errorMessage := validateSliceParameter(parameter, sliceLen); errorMessage != "" {
+			return nil, httputils.NewParamError("", parameter.Name, errors.New(errorMessage), httputils.WithObject(value))
+		}
+		switch parameter.OutputType().Kind() {
+		case reflect.Slice:
+		default:
+			switch sliceLen {
+			case 0:
+				value = reflect.New(parameter.OutputType().Elem()).Elem().Interface()
+			case 1:
+				value = slice.ValuePointerAt(ptr, 0)
+			default:
+				return nil, fmt.Errorf("parameter %v return more than one value, len: %v rows ", parameter.Name, sliceLen)
+			}
+		}
+	}
+	return value, nil
+}
+
+func validateSliceParameter(parameter *state.Parameter, sliceLen int) string {
+	errorMessage := ""
+	if parameter.MinAllowedRecords != nil && *parameter.MinAllowedRecords > sliceLen {
+		errorMessage = fmt.Sprintf("expected at least %v records, but had %v", *parameter.MinAllowedRecords, sliceLen)
+	} else if parameter.ExpectedReturned != nil && *parameter.ExpectedReturned != sliceLen {
+		errorMessage = fmt.Sprintf("expected  %v records, but had %v", *parameter.ExpectedReturned, sliceLen)
+	} else if parameter.MaxAllowedRecords != nil && *parameter.MaxAllowedRecords < sliceLen {
+		errorMessage = fmt.Sprintf("expected to no more than %v records, but had %v", *parameter.MaxAllowedRecords, sliceLen)
+	} else if sliceLen == 0 && parameter.IsRequired() {
+		errorMessage = fmt.Sprintf("parameter %v value is required but no data was found", parameter.Name)
+	}
+	return errorMessage
+}
+
+func isNil(value interface{}) bool {
+	if ptr := xunsafe.AsPointer(value); *(*unsafe.Pointer)(ptr) == nil {
+		return true
+	}
+	return false
 }
 
 func (s *State) lookupFirstValue(ctx context.Context, parameters []*state.Parameter, opts *Options) (value interface{}, has bool, err error) {
@@ -136,6 +250,13 @@ func (s *State) LookupValue(ctx context.Context, parameter *state.Parameter, opt
 	if opts == nil {
 		opts = &s.Options
 	}
+	if value, has = s.cache.lookup(parameter); has {
+		return value, has, nil
+	}
+
+	lock := s.cache.lock(parameter) //lock is to ensure value for a parameter is computed only once
+	lock.Lock()
+	defer lock.Unlock()
 	if value, has = s.cache.lookup(parameter); has {
 		return value, has, nil
 	}
@@ -172,17 +293,17 @@ func (s *Options) apply(options []Option) {
 	if s.kindLocator == nil {
 		s.kindLocator = locator.NewKindsLocator(nil, s.locatorOptions...)
 	}
-	if s.selectors == nil {
-		s.selectors = view.NewSelectors()
+	if s.states == nil {
+		s.states = view.NewStates()
 	}
 }
 
 func New(aView *view.View, opts ...Option) *State {
 	ret := &State{
-		Options: Options{namespacedView: view.IndexViews(aView)},
+		Options: Options{namespacedView: *view.IndexViews(aView)},
 		cache:   newCache(),
 	}
-	ret.parameters = ret.namespacedView.Parameters()
+	ret.namedParameters = ret.namespacedView.Parameters()
 	ret.apply(opts)
 	return ret
 }

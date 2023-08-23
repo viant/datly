@@ -11,7 +11,7 @@ type Parameters struct {
 	mux   sync.Mutex
 }
 
-func (p *Parameters) Add(name string, selector *view.Selector) {
+func (p *Parameters) Add(name string, selector *view.State) {
 	p.mux.Lock()
 	_, ok := p.index[name]
 	if !ok {

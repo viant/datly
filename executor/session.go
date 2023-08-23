@@ -17,14 +17,14 @@ type Session struct {
 	DataUnit       *expand.DataUnit
 
 	mux       sync.Mutex
-	selectors *view.Selectors
+	selectors *view.States
 }
 
-func NewSession(selectors *view.Selectors, aView *view.View) (*Session, error) {
+func NewSession(selectors *view.States, aView *view.View) (*Session, error) {
 	return NewSessionWithCustomHandler(selectors, aView, nil)
 }
 
-func NewSessionWithCustomHandler(selectors *view.Selectors, aView *view.View, handler *session.Session) (*Session, error) {
+func NewSessionWithCustomHandler(selectors *view.States, aView *view.View, handler *session.Session) (*Session, error) {
 	if aView == nil {
 		return nil, fmt.Errorf("view was empty")
 	}
@@ -57,6 +57,6 @@ func (s *Session) Lookup(v *view.View) *structology.State {
 	return state
 }
 
-func (s *Session) Selectors() *view.Selectors {
+func (s *Session) Selectors() *view.States {
 	return s.selectors
 }

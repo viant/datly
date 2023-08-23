@@ -3,7 +3,7 @@
   "errors": [
     {
       "view": "parameters_order",
-      "param": "Authorization",
+      "parameter": "Authorization",
       "message": "parameter Authorization value is required but no data was found"
     }
   ]

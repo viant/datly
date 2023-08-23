@@ -72,7 +72,7 @@ var exprMatcher = parsly.NewToken(exprToken, "Expression", matcher.NewFragments(
 var anyMatcher = parsly.NewToken(anyToken, "Any", imatchers.NewAny())
 var exprEndMatcher = parsly.NewToken(exprEndToken, "#end", matcher.NewFragmentsFold([]byte("#end")))
 
-var selectorStartMatcher = parsly.NewToken(selectorStartToken, "Selector start", matcher.NewByte('$'))
+var selectorStartMatcher = parsly.NewToken(selectorStartToken, "QuerySelector start", matcher.NewByte('$'))
 
 var fullWordMatcher = parsly.NewToken(wordToken, "Word", imatchers.NewWordMatcher(true))
 

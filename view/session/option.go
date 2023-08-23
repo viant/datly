@@ -9,12 +9,12 @@ import (
 
 type (
 	Options struct {
-		selectors      *view.Selectors
-		namespacedView *view.NamespacedView
-		kindLocator    *locator.KindLocator
-		parameters     state.NamedParameters
-		locatorOptions []locator.Option //resousrce, route level options
-		codecOptions   []codec.Option
+		states          *view.States
+		namespacedView  view.NamespacedView
+		kindLocator     *locator.KindLocator
+		namedParameters state.NamedParameters
+		locatorOptions  []locator.Option //resousrce, route level options
+		codecOptions    []codec.Option
 	}
 	Option func(o *Options)
 )
