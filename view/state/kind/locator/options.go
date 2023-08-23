@@ -22,13 +22,15 @@ type (
 		IOConfig        common.IOConfig
 		Custom          []interface{}
 		ParameterLookup ParameterLookup
+		ReadViewData    ReadViewData
 		Parameters      state.NamedParameters
+		Views           view.NamedViews
 		FormatCase      format.Case
 		DateFormat      string
 	}
 
 	ParameterLookup func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error)
-	ReadViewData    func(ctx context.Context, dest interface{}, aView *view.View, selectors *view.States) error
+	ReadViewData    func(ctx context.Context, dest interface{}, aView *view.View) error
 )
 
 func (u Options) UnmarshalFunc() Unmarshal {

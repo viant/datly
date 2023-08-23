@@ -18,7 +18,7 @@ type (
 		CacheDisabled bool
 		Dest          interface{} //slice
 		View          *view.View
-		Selectors     *view.States
+		States        *view.States
 		Parent        *view.View
 		Metrics       []*Metric
 		ViewMeta      interface{}
@@ -60,7 +60,7 @@ func (s *Info) Name() string {
 
 // Init initializes session
 func (s *Session) Init() error {
-	s.Selectors.Init(s.View)
+	s.States.Init(s.View)
 	if _, ok := s.Dest.(*interface{}); !ok {
 		viewType := reflect.PtrTo(s.View.Schema.SliceType())
 		destType := reflect.TypeOf(s.Dest)
@@ -78,7 +78,7 @@ func (s *Session) Init() error {
 
 // AddCriteria adds the supplied view criteria
 func (s *Session) AddCriteria(aView *view.View, criteria string, placeholders ...interface{}) {
-	sel := s.Selectors.Lookup(aView)
+	sel := s.States.Lookup(aView)
 	sel.Criteria = criteria
 	sel.Placeholders = placeholders
 }
@@ -90,21 +90,13 @@ func (s *Session) AddMetric(m *Metric) {
 }
 
 // NewSession creates a session
-func NewSession(dest interface{}, aView *view.View, options ...interface{}) *Session {
-	var parent *view.View
-	for _, option := range options {
-		switch actual := option.(type) {
-		case *view.View:
-			parent = actual
-		}
+func NewSession(dest interface{}, aView *view.View, opts ...Option) (*Session, error) {
+	ret := &Session{
+		Dest: dest,
+		View: aView,
 	}
-
-	return &Session{
-		Dest:      dest,
-		View:      aView,
-		Selectors: view.NewStates(),
-		Parent:    parent,
-	}
+	err := options(opts).Apply(ret)
+	return ret, err
 }
 
 func (s *Session) HandleViewMeta(meta interface{}) error {
@@ -118,7 +110,7 @@ func (s *Session) ParentData() (*ParentData, bool) {
 	}
 	return &ParentData{
 		View:     s.Parent,
-		Selector: s.Selectors.Lookup(s.Parent),
+		Selector: s.States.Lookup(s.Parent),
 	}, true
 }
 
@@ -142,7 +134,7 @@ func (s *Session) IsCacheEnabled(aView *view.View) bool {
 
 func (s *Session) Lookup(v *view.View) *structology.State {
 	s.mux.Lock()
-	sel := s.Selectors.Lookup(v)
+	sel := s.States.Lookup(v)
 	sel.Init(v)
 	s.mux.Unlock()
 	return sel.State

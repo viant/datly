@@ -31,9 +31,9 @@ func (s *Service) ReadInto(ctx context.Context, viewName string, dest interface{
 	if err != nil {
 		return err
 	}
-	session := NewSession(dest, aView)
-	for _, opt := range opts {
-		opt(session, aView)
+	session, err := NewSession(dest, aView, opts...)
+	if err != nil {
+		return err
 	}
 	return s.Read(ctx, session)
 }
@@ -46,7 +46,6 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 	}
 
 	wg := sync.WaitGroup{}
-
 	collector := session.View.Collector(session.Dest, session.HandleViewMeta, session.View.MatchStrategy.SupportsParallel())
 	errors := shared.NewErrors(0)
 
@@ -94,7 +93,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 	defer s.afterReadAll(collectorFetchEmitted, collector)
 
 	aView := collector.View()
-	selector := session.Selectors.Lookup(aView)
+	selector := session.States.Lookup(aView)
 	if selector.Ignore {
 		return
 	}

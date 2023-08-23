@@ -612,8 +612,11 @@ func (b *paramStateBuilder) viewParamValue(ctx context.Context, param *vstate.Pa
 		return nil, err
 	}
 
-	session := reader.NewSession(destSlicePtr, aView, parentView)
-	session.Selectors = selectors
+	session, err := reader.NewSession(destSlicePtr, aView, reader.WithParent(parentView))
+	if err != nil {
+		return nil, err
+	}
+	session.States = selectors
 	if err := reader.New().Read(ctx, session); err != nil {
 		return nil, err
 	}

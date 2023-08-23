@@ -449,10 +449,13 @@ func (r *Router) readValue(readerSession *ReaderSession, includeSQL bool, metric
 	destValue := reflect.New(readerSession.Route.View.Schema.SliceType())
 	dest := destValue.Interface()
 
-	session := reader.NewSession(dest, readerSession.Route.View)
+	session, err := reader.NewSession(dest, readerSession.Route.View)
+	if err != nil {
+		return nil, err
+	}
 	session.CacheDisabled = readerSession.IsCacheDisabled()
 	session.IncludeSQL = includeSQL
-	session.Selectors = readerSession.Selectors
+	session.States = readerSession.Selectors
 	if err := reader.New().Read(context.TODO(), session); err != nil {
 		return nil, err
 	}

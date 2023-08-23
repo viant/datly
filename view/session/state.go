@@ -7,7 +7,6 @@ import (
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
@@ -22,13 +21,6 @@ type (
 		cache *cache
 		Options
 	}
-
-	LookupValueOptions struct {
-		locators     kind.KindLocator
-		codecOptions []codec.Options
-	}
-
-	LookupValueOption func(o *LookupValueOptions)
 )
 
 func (s *State) Populate(ctx context.Context) error {
@@ -56,6 +48,7 @@ func (s *State) setViewStateInBackground(ctx context.Context, aView *view.View, 
 }
 
 func (s *State) SetViewState(ctx context.Context, aView *view.View) error {
+
 	opts := s.viewOptions(aView)
 	if aView.Mode == view.ModeQuery {
 		ns := s.namespacedView.ByName(aView.Name)
@@ -254,7 +247,7 @@ func (s *State) LookupValue(ctx context.Context, parameter *state.Parameter, opt
 		return value, has, nil
 	}
 
-	lock := s.cache.lock(parameter) //lock is to ensure value for a parameter is computed only once
+	lock := s.cache.lockParameter(parameter) //lockParameter is to ensure value for a parameter is computed only once
 	lock.Lock()
 	defer lock.Unlock()
 	if value, has = s.cache.lookup(parameter); has {
