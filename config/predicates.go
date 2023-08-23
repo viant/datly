@@ -202,7 +202,7 @@ func newContainsPredicate(name string, inclusive bool) *Predicate {
 		},
 	}
 	column := `${Alias}` + `+ "." + ${ColumnName}`
-	criteria := fmt.Sprintf(`$criteria.Cointains(%v, $FilterValue)`, column)
+	criteria := fmt.Sprintf(`$criteria.Contains(%v, $FilterValue)`, column)
 	if !inclusive {
 		criteria = fmt.Sprintf(`$criteria.NotContains(%v, $FilterValue)`, column)
 	}
