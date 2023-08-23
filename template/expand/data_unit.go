@@ -257,7 +257,7 @@ func (c *DataUnit) like(columnName string, args interface{}, inclusive bool) (st
 		if !ok {
 			textValue = toolbox.AsString(value)
 		}
-		likeValues = append(likeValues, "%"+textValue+"%")
+		likeValues = append(likeValues, "% "+textValue+" %")
 	}
 	c.addAll(likeValues...)
 
