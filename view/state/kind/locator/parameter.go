@@ -10,7 +10,7 @@ import (
 type Parameter struct {
 	ParameterLookup
 	Parameters state.NamedParameters
-	Locators   *Locators
+	Locators   *KindLocator
 }
 
 func (p *Parameter) Names() []string {

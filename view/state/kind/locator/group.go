@@ -11,7 +11,7 @@ import (
 type Group struct {
 	ParameterLookup
 	Parameters state.NamedParameters
-	Locators   *Locators
+	Locators   *KindLocator
 }
 
 func (p *Group) Names() []string {

@@ -1,11 +1,44 @@
 package session
 
-import "github.com/viant/datly/view/state/kind/locator"
+import (
+	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind/locator"
+	"github.com/viant/xdatly/codec"
+)
 
-type Option func(s *State)
+type (
+	Options struct {
+		selectors      *view.Selectors
+		namespacedView *view.NamespacedView
+		kindLocator    *locator.KindLocator
+		parameters     state.NamedParameters
+		locatorOptions []locator.Option //resousrce, route level options
+		codecOptions   []codec.Option
+	}
+	Option func(o *Options)
+)
 
-// Options merges multi options
-func Options(opts ...[]Option) []Option {
+func (o *Options) AddLocator(option locator.Option) {
+	o.locatorOptions = append(o.locatorOptions, option)
+}
+func (o *Options) AddCodec(option codec.Option) {
+	o.codecOptions = append(o.codecOptions, option)
+}
+
+func (o *Options) Clone() *Options {
+	ret := *o
+	return &ret
+}
+
+func NewOptions(options ...Option) *Options {
+	ret := &Options{}
+	ret.apply(options)
+	return ret
+}
+
+// AsOptions merges multi options
+func AsOptions(opts ...[]Option) []Option {
 	var result []Option
 	for _, item := range opts {
 		if len(item) == 0 {
@@ -16,14 +49,20 @@ func Options(opts ...[]Option) []Option {
 	return result
 }
 
-func WithLocatorOptions(opts ...locator.Option) Option {
-	return func(s *State) {
-		s.locatorOptions = opts
+func WithLocators(locators *locator.KindLocator) Option {
+	return func(s *Options) {
+		s.kindLocator = locators
 	}
 }
 
-func WithLocators(locators *locator.Locators) Option {
-	return func(s *State) {
-		s.Locators = locators
+func WithLocatorOptions(options ...locator.Option) Option {
+	return func(s *Options) {
+		s.locatorOptions = options
+	}
+}
+
+func WithCodeOptions(options ...codec.Option) Option {
+	return func(s *Options) {
+		s.codecOptions = options
 	}
 }

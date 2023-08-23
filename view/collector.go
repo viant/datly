@@ -468,7 +468,7 @@ func (r *Collector) SupportsParallel() bool {
 }
 
 // MergeData merges View with Collectors produced via Relations
-// It is sufficient to call it on the most Locators Collector to produce result
+// It is sufficient to call it on the most locators Collector to produce result
 func (r *Collector) MergeData() {
 	for i := range r.relations {
 		r.relations[i].MergeData()
@@ -513,9 +513,9 @@ func (r *Collector) mergeToParent() {
 	}
 }
 
-// ParentPlaceholders if Collector doesn't support parallel fetching and has a Locators, it will return a parent _field values and column name
+// ParentPlaceholders if Collector doesn't support parallel fetching and has a locators, it will return a parent _field values and column name
 // that the relation was created from, otherwise empty slice and empty string
-// i.e. if Locators Collector collects Employee{AccountId: int}, Column.Name is account_id and Collector collects Account
+// i.e. if locators Collector collects Employee{AccountId: int}, Column.Name is account_id and Collector collects Account
 // it will extract and return all the AccountId that were accumulated and account_id
 func (r *Collector) ParentPlaceholders() ([]interface{}, string) {
 	if r.parent == nil || r.parent.SupportsParallel() {

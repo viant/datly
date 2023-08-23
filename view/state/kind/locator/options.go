@@ -5,7 +5,6 @@ import (
 	"github.com/viant/datly/router/marshal/common"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/toolbox/format"
 	"net/http"
 	"reflect"
@@ -15,7 +14,7 @@ import (
 type (
 	Options struct {
 		Request         *http.Request
-		Parent          *Locators
+		Parent          *KindLocator
 		URIPattern      string
 		BodyType        reflect.Type
 		Unmarshal       Unmarshal
@@ -27,7 +26,7 @@ type (
 		DateFormat      string
 	}
 
-	ParameterLookup func(ctx context.Context, parameter *state.Parameter, locators kind.Locators) (interface{}, bool, error)
+	ParameterLookup func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error)
 )
 
 func (u Options) UnmarshalFunc() Unmarshal {
@@ -88,7 +87,7 @@ func WithUnmarshal(fn Unmarshal) Option {
 }
 
 // WithParent creates with parent options
-func WithParent(locators *Locators) Option {
+func WithParent(locators *KindLocator) Option {
 	return func(o *Options) {
 		o.Parent = locators
 	}

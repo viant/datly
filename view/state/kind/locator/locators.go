@@ -7,22 +7,22 @@ import (
 	"sync"
 )
 
-// Locators represents locators
-type Locators struct {
+// KindLocator represents locators
+type KindLocator struct {
 	sync.RWMutex
 	byKind  map[state.Kind]kind.Locator
-	parent  *Locators
+	parent  *KindLocator
 	options []Option
 }
 
 // With creates sub locator with options
-func (l *Locators) With(options ...Option) *Locators {
+func (l *KindLocator) With(options ...Option) *KindLocator {
 	opts := ensureParentOptions(l, options)
-	return NewLocators(l, opts...)
+	return NewKindsLocator(l, opts...)
 }
 
 // Lookup return locator for supplied kind or error
-func (l *Locators) Lookup(kind state.Kind) (kind.Locator, error) {
+func (l *KindLocator) Lookup(kind state.Kind) (kind.Locator, error) {
 	l.RWMutex.RLock()
 	locator, ok := l.byKind[kind]
 	l.RWMutex.RUnlock()
@@ -44,7 +44,7 @@ func (l *Locators) Lookup(kind state.Kind) (kind.Locator, error) {
 	return locator, err
 }
 
-func (l *Locators) registerLocator(kind state.Kind, locator kind.Locator) (kind.Locator, error) {
+func (l *KindLocator) registerLocator(kind state.Kind, locator kind.Locator) (kind.Locator, error) {
 	var err error
 	if newLocator := Lookup(kind); newLocator != nil {
 		if locator, err = newLocator(l.options...); err != nil {
@@ -57,9 +57,9 @@ func (l *Locators) registerLocator(kind state.Kind, locator kind.Locator) (kind.
 	return locator, nil
 }
 
-// NewLocators creates a locator
-func NewLocators(parent *Locators, options ...Option) *Locators {
-	ret := &Locators{
+// NewKindsLocator creates a locator
+func NewKindsLocator(parent *KindLocator, options ...Option) *KindLocator {
+	ret := &KindLocator{
 		byKind: make(map[state.Kind]kind.Locator),
 		parent: parent,
 	}
@@ -67,7 +67,7 @@ func NewLocators(parent *Locators, options ...Option) *Locators {
 	return ret
 }
 
-func ensureParentOptions(parent *Locators, options []Option) []Option {
+func ensureParentOptions(parent *KindLocator, options []Option) []Option {
 	opts := append([]Option{}, WithParent(parent))
 	opts = append(opts, options...)
 	return opts

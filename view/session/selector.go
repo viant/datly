@@ -3,46 +3,48 @@ package session
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/router/criteria"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xdatly/codec"
 	"strconv"
 	"strings"
 )
 
-func (s *State) populateQuerySelector(ctx context.Context, ns *view.NamespaceView) (err error) {
+func (s *State) setQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) (err error) {
 	selectorParameters := ns.View.Selector
 	if selectorParameters == nil {
 		return nil
 	}
-	if err = s.populateFieldQuerySelector(ctx, ns, selectorParameters); err != nil {
+	if err = s.populateFieldQuerySelector(ctx, ns, opts); err != nil {
 		return err
 	}
-	if err = s.populateLimitQuerySelector(ctx, ns, selectorParameters); err != nil {
+	if err = s.populateLimitQuerySelector(ctx, ns, opts); err != nil {
 		return err
 	}
-	if err = s.populateOffsetQuerySelector(ctx, ns, selectorParameters); err != nil {
+	if err = s.populateOffsetQuerySelector(ctx, ns, opts); err != nil {
 		return err
 	}
-	if err = s.populateOrderByQuerySelector(ctx, ns, selectorParameters); err != nil {
+	if err = s.populateOrderByQuerySelector(ctx, ns, opts); err != nil {
 		return err
 	}
-
-	if err = s.populateCriteriaQuerySelector(ctx, ns, selectorParameters); err != nil {
+	if err = s.populateCriteriaQuerySelector(ctx, ns, opts); err != nil {
 		return err
 	}
-	if err = s.populatePageQuerySelector(ctx, ns, selectorParameters); err != nil {
+	if err = s.populatePageQuerySelector(ctx, ns, opts); err != nil {
 		return err
 	}
-	selector := s.Selectors.Lookup(ns.View)
+	selector := s.selectors.Lookup(ns.View)
 	if selector.Limit == 0 && selector.Offset != 0 {
 		return fmt.Errorf("can't use offset without limit - view: %v", ns.View.Name)
 	}
 	return nil
 }
 
-func (s *State) populatePageQuerySelector(ctx context.Context, ns *view.NamespaceView, selectorParameters *view.Config) error {
+func (s *State) populatePageQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
+	selectorParameters := ns.View.Selector
 	pageParameters := ns.SelectorParameters(selectorParameters.PageParameter, view.RootSelectors.PageParameter)
-	value, has, err := s.lookupFirstValue(ctx, pageParameters)
+	value, has, err := s.lookupFirstValue(ctx, pageParameters, opts)
 	if has && err == nil {
 		err = s.setPageQuerySelector(value, ns)
 	}
@@ -51,7 +53,7 @@ func (s *State) populatePageQuerySelector(ctx context.Context, ns *view.Namespac
 
 func (s *State) setPageQuerySelector(value interface{}, ns *view.NamespaceView) error {
 	page := value.(int)
-	selector := s.Selectors.Lookup(ns.View)
+	selector := s.selectors.Lookup(ns.View)
 	actualLimit := selector.Limit
 	if actualLimit == 0 {
 		actualLimit = ns.View.Selector.Limit
@@ -62,18 +64,20 @@ func (s *State) setPageQuerySelector(value interface{}, ns *view.NamespaceView) 
 	return nil
 }
 
-func (s *State) populateCriteriaQuerySelector(ctx context.Context, ns *view.NamespaceView, selectorParameters *view.Config) error {
+func (s *State) populateCriteriaQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
+	selectorParameters := ns.View.Selector
 	criteriaParameters := ns.SelectorParameters(selectorParameters.CriteriaParameter, view.RootSelectors.CriteriaParameter)
-	value, has, err := s.lookupFirstValue(ctx, criteriaParameters)
+	value, has, err := s.lookupFirstValue(ctx, criteriaParameters, opts)
 	if has && err == nil {
 		err = s.setCriteriaQuerySelector(value, ns)
 	}
 	return err
 }
 
-func (s *State) populateOrderByQuerySelector(ctx context.Context, ns *view.NamespaceView, selectorParameters *view.Config) error {
+func (s *State) populateOrderByQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
+	selectorParameters := ns.View.Selector
 	orderByParameters := ns.SelectorParameters(selectorParameters.OrderByParameter, view.RootSelectors.OrderByParameter)
-	value, has, err := s.lookupFirstValue(ctx, orderByParameters)
+	value, has, err := s.lookupFirstValue(ctx, orderByParameters, opts)
 	if has && err == nil {
 		err = s.setOrderByQuerySelector(value, ns)
 	}
@@ -94,14 +98,15 @@ func (s *State) setOrderByQuerySelector(value interface{}, ns *view.NamespaceVie
 			return fmt.Errorf("not found column %v at view %v", columns, ns.View.Name)
 		}
 	}
-	selector := s.Selectors.Lookup(ns.View)
+	selector := s.selectors.Lookup(ns.View)
 	selector.OrderBy = strings.Join(columns, ",")
 	return nil
 }
 
-func (s *State) populateOffsetQuerySelector(ctx context.Context, ns *view.NamespaceView, selectorParameters *view.Config) error {
+func (s *State) populateOffsetQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
+	selectorParameters := ns.View.Selector
 	offsetParameters := ns.SelectorParameters(selectorParameters.OffsetParameter, view.RootSelectors.OffsetParameter)
-	value, has, err := s.lookupFirstValue(ctx, offsetParameters)
+	value, has, err := s.lookupFirstValue(ctx, offsetParameters, opts)
 	if has && err == nil {
 		err = s.setOffsetQuerySelector(value, ns)
 	}
@@ -112,7 +117,7 @@ func (s *State) setOffsetQuerySelector(value interface{}, ns *view.NamespaceView
 	if !ns.View.Selector.Constraints.Offset {
 		return fmt.Errorf("can't use Offset on view %v", ns.View.Name)
 	}
-	selector := s.Selectors.Lookup(ns.View)
+	selector := s.selectors.Lookup(ns.View)
 	offset := value.(int)
 	if offset <= ns.View.Selector.Limit || ns.View.Selector.Limit == 0 {
 		selector.Offset = offset
@@ -120,9 +125,10 @@ func (s *State) setOffsetQuerySelector(value interface{}, ns *view.NamespaceView
 	return nil
 }
 
-func (s *State) populateLimitQuerySelector(ctx context.Context, ns *view.NamespaceView, selectorParameters *view.Config) error {
+func (s *State) populateLimitQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
+	selectorParameters := ns.View.Selector
 	limitParameters := ns.SelectorParameters(selectorParameters.LimitParameter, view.RootSelectors.LimitParameter)
-	value, has, err := s.lookupFirstValue(ctx, limitParameters)
+	value, has, err := s.lookupFirstValue(ctx, limitParameters, opts)
 	if has && err == nil {
 		err = s.setLimitQuerySelector(value, ns)
 	}
@@ -133,7 +139,7 @@ func (s *State) setLimitQuerySelector(value interface{}, ns *view.NamespaceView)
 	if !ns.View.Selector.Constraints.Limit {
 		return fmt.Errorf("can't use Limit on view %v", ns.View.Name)
 	}
-	selector := s.Selectors.Lookup(ns.View)
+	selector := s.selectors.Lookup(ns.View)
 	limit := value.(int)
 	if limit <= ns.View.Selector.Limit || ns.View.Selector.Limit == 0 {
 		selector.Limit = limit
@@ -141,9 +147,10 @@ func (s *State) setLimitQuerySelector(value interface{}, ns *view.NamespaceView)
 	return nil
 }
 
-func (s *State) populateFieldQuerySelector(ctx context.Context, ns *view.NamespaceView, selectorParameters *view.Config) error {
+func (s *State) populateFieldQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
+	selectorParameters := ns.View.Selector
 	fieldParameters := ns.SelectorParameters(selectorParameters.FieldsParameter, view.RootSelectors.FieldsParameter)
-	value, has, err := s.lookupFirstValue(ctx, fieldParameters)
+	value, has, err := s.lookupFirstValue(ctx, fieldParameters, opts)
 	if has && err == nil {
 		err = s.setFieldsQuerySelector(value, ns)
 	}
@@ -154,7 +161,7 @@ func (s *State) setFieldsQuerySelector(value interface{}, ns *view.NamespaceView
 	if !ns.View.Selector.Constraints.Projection {
 		return fmt.Errorf("can't use projection on view %v", ns.View.Name)
 	}
-	selector := s.Selectors.Lookup(ns.View)
+	selector := s.selectors.Lookup(ns.View)
 	fields := value.([]string)
 	for _, field := range fields {
 		fieldName := ns.View.Caser.Format(field, format.CaseUpperCamel)
@@ -167,8 +174,32 @@ func (s *State) setFieldsQuerySelector(value interface{}, ns *view.NamespaceView
 }
 
 func (s *State) setCriteriaQuerySelector(value interface{}, ns *view.NamespaceView) error {
-
-	return nil
+	selector := s.selectors.Lookup(ns.View)
+	switch actual := value.(type) {
+	case string:
+		if actual == "" {
+			return nil
+		}
+		if !ns.View.Selector.Constraints.Criteria {
+			return fmt.Errorf("can't use criteria on view %v", ns.View.Name)
+		}
+		sanitizedCriteria, err := criteria.Parse(actual, ns.View.IndexedColumns(), ns.View.Selector.Constraints.SqlMethodsIndexed())
+		if err != nil {
+			return err
+		}
+		selector.SetCriteria(sanitizedCriteria.Expression, sanitizedCriteria.Placeholders)
+		return nil
+	case *codec.Criteria:
+		if actual == nil {
+			return nil
+		}
+		selector.SetCriteria(actual.Predicate, actual.Args)
+		return nil
+	case codec.Criteria:
+		selector.SetCriteria(actual.Predicate, actual.Args)
+		return nil
+	}
+	return fmt.Errorf("unsupported ctieria type, %T", value)
 }
 
 func canUseColumn(aView *view.View, columnName string) error {

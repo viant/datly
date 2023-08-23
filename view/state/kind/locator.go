@@ -15,7 +15,7 @@ type Locator interface {
 	Names() []string
 }
 
-// Locators defines state value kind locators
-type Locators interface {
+// KindLocator defines state value kind locators
+type KindLocator interface {
 	Lookup(kind state.Kind) (Locator, error)
 }

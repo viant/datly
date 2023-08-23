@@ -88,6 +88,15 @@ func (c *CriteriaBuilder) Value(ctx context.Context, raw interface{}, options ..
 			columnsSource = columnsSource
 		}
 	}
+	if opts.ColumnsSource != nil {
+		columnsSource = opts.ColumnsSource
+	}
+	if opts.Selector != nil {
+		selector = opts.Selector
+	}
+	if opts.ValueGetter != nil {
+		valueGetter = opts.ValueGetter
+	}
 
 	if selector == nil {
 		panic(fmt.Errorf("expected selector to be not nil"))
