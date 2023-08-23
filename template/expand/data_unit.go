@@ -269,11 +269,11 @@ func (c *DataUnit) like(columnName string, args interface{}, inclusive bool) (st
 }
 
 func (c *DataUnit) Contains(columnName string, args interface{}) (string, error) {
-	return c.like(columnName, args, true)
+	return c.contains(columnName, args, true)
 }
 
 func (c *DataUnit) NotContains(columnName string, args interface{}) (string, error) {
-	return c.like(columnName, args, false)
+	return c.contains(columnName, args, false)
 }
 
 func (c *DataUnit) contains(columnName string, args interface{}, inclusive bool) (string, error) {
