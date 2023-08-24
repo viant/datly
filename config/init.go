@@ -60,6 +60,8 @@ var Config = &Registry{
 			PredicateLike:        NewLikePredicate(),
 			PredicateNotLike:     NewNotLikePredicate(),
 			PredicateHandler:     NewPredicateHandler(),
+			PredicateContains:    NewContainsPredicate(),
+			PredicateNotContains: NewNotContainsPredicate(),
 		},
 	},
 }

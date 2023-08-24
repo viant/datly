@@ -257,7 +257,65 @@ func (c *DataUnit) like(columnName string, args interface{}, inclusive bool) (st
 		if !ok {
 			textValue = toolbox.AsString(value)
 		}
-		likeValues = append(likeValues, "% "+textValue+" %")
+
+		likeValues = append(likeValues, textValue)
+	}
+	c.addAll(likeValues...)
+
+	if len(values) > 1 {
+		sb.WriteString(")")
+	}
+	return sb.String(), nil
+}
+
+func (c *DataUnit) Contains(columnName string, args interface{}) (string, error) {
+	return c.contains(columnName, args, true)
+}
+
+func (c *DataUnit) NotContains(columnName string, args interface{}) (string, error) {
+	return c.contains(columnName, args, false)
+}
+
+func (c *DataUnit) contains(columnName string, args interface{}, inclusive bool) (string, error) {
+	expander, err := bindingsCache.Lookup(args)
+	if err != nil {
+		return "", err
+	}
+	if !expander.HasAny(args) {
+		if !inclusive {
+			return "0 = 0", err
+		}
+
+		return "1 = 0", nil
+	}
+	sb := &strings.Builder{}
+	_, values, err := expander.Expand(columnName, args)
+	if err != nil {
+		return "", err
+	}
+	conjunction := " OR "
+	if !inclusive {
+		conjunction = " AND "
+	}
+	if len(values) > 1 {
+		sb.WriteString("(")
+	}
+	var likeValues []interface{}
+	for i, value := range values {
+		if i > 0 {
+			sb.WriteString(conjunction)
+		}
+		sb.WriteString(expander.ColumnExpression(columnName))
+		if !inclusive {
+			sb.WriteString(" NOT")
+		}
+		sb.WriteString(" LIKE ? ")
+		textValue, ok := value.(string)
+		if !ok {
+			textValue = toolbox.AsString(value)
+		}
+
+		likeValues = append(likeValues, "%"+textValue+"%")
 	}
 	c.addAll(likeValues...)
 

@@ -20,6 +20,13 @@ const (
 	PredicateLike        = "like"
 	PredicateNotLike     = "not_like"
 	PredicateHandler     = "handler"
+	PredicateContains    = "contains"
+	PredicateNotContains = "not_contains"
+	// TODO IF NEEDED
+	//PredicateContainsWord = "contains_word" // for backward compatibility: like "% value %", doesn't use regexp
+	//PredicateHasPrefix    = "has_prefix"
+	//PredicateHasSuffix    = "has_suffix"
+
 )
 
 type (
@@ -165,6 +172,39 @@ func newLikePredicate(name string, inclusive bool) *Predicate {
 	criteria := fmt.Sprintf(`$criteria.Like(%v, $FilterValue)`, column)
 	if !inclusive {
 		criteria = fmt.Sprintf(`$criteria.NotLike(%v, $FilterValue)`, column)
+	}
+	return &Predicate{
+		Template: &predicate.Template{
+			Name:   name,
+			Source: " " + criteria,
+			Args:   args,
+		},
+	}
+}
+
+func NewContainsPredicate() *Predicate {
+	return newContainsPredicate(PredicateContains, true)
+}
+
+func NewNotContainsPredicate() *Predicate {
+	return newContainsPredicate(PredicateNotContains, false)
+}
+
+func newContainsPredicate(name string, inclusive bool) *Predicate {
+	args := []*predicate.NamedArgument{
+		{
+			Name:     "Alias",
+			Position: 0,
+		},
+		{
+			Name:     "ColumnName",
+			Position: 1,
+		},
+	}
+	column := `${Alias}` + `+ "." + ${ColumnName}`
+	criteria := fmt.Sprintf(`$criteria.Contains(%v, $FilterValue)`, column)
+	if !inclusive {
+		criteria = fmt.Sprintf(`$criteria.NotContains(%v, $FilterValue)`, column)
 	}
 	return &Predicate{
 		Template: &predicate.Template{
