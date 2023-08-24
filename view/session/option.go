@@ -9,7 +9,7 @@ import (
 
 type (
 	Options struct {
-		states          *view.States
+		resourceState   *view.ResourceState
 		namespacedView  view.NamespacedView
 		kindLocator     *locator.KindLocator
 		namedParameters state.NamedParameters
@@ -19,8 +19,8 @@ type (
 	Option func(o *Options)
 )
 
-func (o *Options) States() *view.States {
-	return o.states
+func (o *Options) ResourceState() *view.ResourceState {
+	return o.resourceState
 }
 
 func (o *Options) AddLocator(option locator.Option) {

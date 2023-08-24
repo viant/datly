@@ -476,7 +476,7 @@ FROM events`,
 }
 
 func testView(t *testing.T, testCase usecase, dataView *view.View, err error, service *reader.Service) {
-	selectors := view.NewStates()
+	selectors := view.NewResourceState()
 
 	session := &reader.Session{
 		Dest:   testCase.dest,

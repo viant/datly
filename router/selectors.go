@@ -65,7 +65,7 @@ func (e *JSONError) Error() string {
 	return e.Message
 }
 
-func (b *paramStateBuilder) Build(ctx context.Context, viewsDetails []*ViewDetails, selectors *view.States) error {
+func (b *paramStateBuilder) Build(ctx context.Context, viewsDetails []*ViewDetails, selectors *view.ResourceState) error {
 	wg := sync.WaitGroup{}
 	errors := httputils.NewErrors()
 
@@ -122,7 +122,7 @@ func validateSelector(selector *view.State, aView *view.View) error {
 	return nil
 }
 
-func BuildRouteSelectors(ctx context.Context, selectors *view.States, route *Route, request *http.Request) error {
+func BuildRouteSelectors(ctx context.Context, selectors *view.ResourceState, route *Route, request *http.Request) error {
 	requestMetadata := NewRequestMetadata(route)
 	requestParams, err := NewRequestParameters(request, route)
 	if err != nil {
@@ -139,7 +139,7 @@ func BuildRouteSelectors(ctx context.Context, selectors *view.States, route *Rou
 	return CreateSelectors(ctx, route._resource, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, vstate.NamedParameters{}, route.Index._viewDetails...)
 }
 
-func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, requestParams *RequestParams, views ...*ViewDetails) (*view.States, *RequestParams, error) {
+func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.Request, requestParams *RequestParams, views ...*ViewDetails) (*view.ResourceState, *RequestParams, error) {
 	requestMetadata := NewRequestMetadata(route)
 
 	if requestParams == nil {
@@ -150,7 +150,7 @@ func CreateSelectorsFromRoute(ctx context.Context, route *Route, request *http.R
 		}
 	}
 
-	selectors := view.NewStates()
+	selectors := view.NewResourceState()
 	if err := CreateSelectors(ctx, route._resource, route.DateFormat, *route._caser, requestMetadata, requestParams, selectors, nil, views...); err != nil {
 		return nil, nil, err
 	}
@@ -167,7 +167,7 @@ func NewRequestMetadata(route *Route) *RequestMetadata {
 	return requestMetadata
 }
 
-func CreateSelectors(ctx context.Context, resource *view.Resource, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, selectors *view.States, paramsIndex vstate.NamedParameters, views ...*ViewDetails) error {
+func CreateSelectors(ctx context.Context, resource *view.Resource, dateFormat string, inputFormat format.Case, requestMetadata *RequestMetadata, requestParams *RequestParams, selectors *view.ResourceState, paramsIndex vstate.NamedParameters, views ...*ViewDetails) error {
 	sb := newParamStateBuilder(resource, inputFormat, dateFormat, requestMetadata, requestParams, newParamsValueCache(), paramsIndex)
 	return sb.Build(ctx, views, selectors)
 }
@@ -607,7 +607,7 @@ func (b *paramStateBuilder) viewParamValue(ctx context.Context, param *vstate.Pa
 		Index:    newIndex,
 		MainView: nil,
 	}
-	selectors := view.NewStates()
+	selectors := view.NewResourceState()
 
 	if err := CreateSelectors(ctx, nil, b.dateFormat, b.caser, newRequestMetadata, b.params, selectors, b.viewParams, &ViewDetails{View: aView}); err != nil {
 		return nil, err

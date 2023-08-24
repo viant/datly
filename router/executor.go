@@ -56,6 +56,20 @@ func (e *HandlerExecutor) Session(ctx context.Context) (*executor.Session, error
 		return nil, err
 	}
 
+	//marshaller, err := params.unmarshaller(e.route)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//locatorOptions := append(e.route.LocatorOptions(),
+	//	locator.WithUnmarshal((func([]byte, interface{}) error)(marshaller.Unmarshal)),
+	//	locator.WithRequest(params.request))
+	//
+	//sessionState := vsession.New(e.route.View, vsession.WithLocatorOptions(locatorOptions...))
+	//if err = sessionState.Populate(ctx); err != nil {
+	//	return nil, err
+	//}
+
 	selectors, _, err := CreateSelectorsFromRoute(ctx, e.route, e.request, params, e.route.Index._viewDetails...)
 	if err != nil {
 		return nil, err

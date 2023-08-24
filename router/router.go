@@ -73,7 +73,7 @@ type (
 		Route         *Route
 		Request       *http.Request
 		Response      http.ResponseWriter
-		Selectors     *view.States
+		Selectors     *view.ResourceState
 	}
 
 	preparedResponse struct {
@@ -374,7 +374,7 @@ func (r *Router) prepareReaderSession(ctx context.Context, response http.Respons
 
 	err = viewState.Populate(ctx)
 
-	//vv := viewState.States().Lookup(route.View)
+	//vv := viewState.ResourceState().Lookup(route.View)
 	//fmt.Printf("Input: %T %s\n", vv.Template.Template(), vv.Template.Template())
 
 	//selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, requestParams, route.Index._viewDetails...)
@@ -391,7 +391,7 @@ func (r *Router) prepareReaderSession(ctx context.Context, response http.Respons
 		Route:         route,
 		Request:       request,
 		Response:      response,
-		Selectors:     viewState.States(),
+		Selectors:     viewState.ResourceState(),
 	}, nil
 }
 
@@ -650,7 +650,7 @@ func (r *Router) result(session *ReaderSession, destValue interface{}, meta inte
 	}
 }
 
-func (r *Router) buildJsonFilters(route *Route, selectors *view.States) ([]*json.FilterEntry, error) {
+func (r *Router) buildJsonFilters(route *Route, selectors *view.ResourceState) ([]*json.FilterEntry, error) {
 	entries := make([]*json.FilterEntry, 0)
 
 	selectors.Lock()
@@ -1570,6 +1570,21 @@ func (r *Router) executorPayloadReader(ctx context.Context, response http.Respon
 }
 
 func (r *Router) prepareExecutorSessionWithParameters(ctx context.Context, request *http.Request, route *Route, parameters *RequestParams) (*executor.Session, error) {
+
+	//marshaller, err := parameters.unmarshaller(route)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//locatorOptions := append(route.LocatorOptions(),
+	//	locator.WithUnmarshal((func([]byte, interface{}) error)(marshaller.Unmarshal)),
+	//	locator.WithRequest(request))
+	//
+	//sessionState := session.New(route.View, session.WithLocatorOptions(locatorOptions...))
+	//if err = sessionState.Populate(ctx); err != nil {
+	//	return nil, err
+	//}
+
 	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, parameters, route.Index._viewDetails...)
 	if err != nil {
 		return nil, err

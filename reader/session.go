@@ -18,7 +18,7 @@ type (
 		CacheDisabled bool
 		Dest          interface{} //slice
 		View          *view.View
-		States        *view.States
+		States        *view.ResourceState
 		Parent        *view.View
 		Metrics       []*Metric
 		ViewMeta      interface{}
@@ -98,7 +98,7 @@ func NewSession(dest interface{}, aView *view.View, opts ...Option) (*Session, e
 
 	err := options(opts).Apply(ret)
 	if ret.States == nil {
-		ret.States = view.NewStates()
+		ret.States = view.NewResourceState()
 	}
 	return ret, err
 }

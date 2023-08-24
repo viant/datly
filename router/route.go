@@ -253,6 +253,11 @@ func (r *Route) LocatorOptions() []locator.Option {
 	var result []locator.Option
 	result = append(result, locator.WithURIPattern(r.URI))
 	result = append(result, locator.WithIOConfig(r.ioConfig()))
+	if r.RequestBodySchema != nil {
+		result = append(result, locator.WithBodyType(r.RequestBodySchema.Type()))
+	} else if r.View.Schema != nil {
+		result = append(result, locator.WithBodyType(r.View.Schema.Type()))
+	}
 	result = append(result, locator.WithParameters(r._resource.Parameters.Index()))
 
 	if r._resource != nil {
@@ -601,6 +606,7 @@ func (r *Route) initRequestBodyFromParams() error {
 		return err
 	}
 
+	r.RequestBodySchema = state.NewSchema(rType)
 	r._requestBodyType = rType
 
 	for _, param := range params {

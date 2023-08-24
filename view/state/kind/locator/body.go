@@ -51,6 +51,10 @@ func NewBody(opts ...Option) (kind.Locator, error) {
 	bodyType := structology.NewStateType(options.BodyType)
 	ret.state = bodyType.NewState()
 	unmarshal := options.UnmarshalFunc()
-	err = unmarshal(data, ret.state.State())
+	dest := ret.state.StatePtr()
+	if err = unmarshal(data, dest); err == nil {
+		ret.state.Sync()
+	}
+	fmt.Printf("%T %v\n", ret.state.State(), ret.state.State())
 	return ret, err
 }

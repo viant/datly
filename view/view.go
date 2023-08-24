@@ -1222,7 +1222,7 @@ func (v *View) findSchemaColumn(fieldName string) (*Column, bool) {
 }
 
 // SetParameter sets a View or relation parameter, for relation name has to be prefixed relName:paramName
-func (v *View) SetParameter(name string, selectors *States, value interface{}) error {
+func (v *View) SetParameter(name string, selectors *ResourceState, value interface{}) error {
 	aView := v
 	if strings.Contains(name, ":") {
 		pair := strings.SplitN(name, ":", 2)

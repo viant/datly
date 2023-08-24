@@ -59,7 +59,7 @@ func (s *State) SetViewState(ctx context.Context, aView *view.View) error {
 	return s.setViewState(ctx, aView)
 }
 
-// ResetViewState sets view states
+// ResetViewState sets view resourceState
 func (s *State) ResetViewState(ctx context.Context, aView *view.View) error {
 	return s.setViewState(ctx, aView)
 }
@@ -101,7 +101,7 @@ func (s *State) viewLookupOptions(parameters state.NamedParameters, opts *Option
 }
 
 func (s *State) viewOptions(aView *view.View) *Options {
-	selectors := s.states.Lookup(aView)
+	selectors := s.resourceState.Lookup(aView)
 
 	viewOptions := s.Options.Clone()
 	var parameters state.NamedParameters
@@ -140,7 +140,7 @@ func (g *valueGetter) Value(ctx context.Context, paramName string) (interface{},
 }
 
 func (s *State) setTemplateState(ctx context.Context, aView *view.View, opts *Options) error {
-	state := s.states.Lookup(aView)
+	state := s.resourceState.Lookup(aView)
 	if template := aView.Template; template != nil {
 		stateType := template.State()
 		if stateType.IsDefined() {
@@ -195,14 +195,14 @@ func (s *State) handleParameterError(parameter *state.Parameter, err error, erro
 
 func (s *State) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
 	value, has, err := s.LookupValue(ctx, parameter, options)
+	if err != nil {
+		return err
+	}
 	if !has {
 		if parameter.IsRequired() {
 			return fmt.Errorf("parameter %v is required", parameter.Name)
 		}
 		return nil
-	}
-	if err != nil {
-		return err
 	}
 	if value, err = s.ensureValidValue(value, parameter); err != nil {
 		return err
@@ -257,7 +257,7 @@ func validateSliceParameter(parameter *state.Parameter, sliceLen int) string {
 }
 
 func isNil(value interface{}) bool {
-	if ptr := xunsafe.AsPointer(value); *(*unsafe.Pointer)(ptr) == nil {
+	if ptr := xunsafe.AsPointer(value); (*unsafe.Pointer)(ptr) == nil {
 		return true
 	}
 	return false
@@ -301,6 +301,9 @@ func (s *State) LookupValue(ctx context.Context, parameter *state.Parameter, opt
 			return nil, false, fmt.Errorf("failed to get  parameter value: %v, %w", parameter.Name, err)
 		}
 	}
+	if !has {
+		return nil, has, nil
+	}
 
 	value, err = s.adjustValue(parameter, value)
 
@@ -334,8 +337,8 @@ func (s *Options) apply(options []Option) {
 	if s.kindLocator == nil {
 		s.kindLocator = locator.NewKindsLocator(nil, s.locatorOptions...)
 	}
-	if s.states == nil {
-		s.states = view.NewStates()
+	if s.resourceState == nil {
+		s.resourceState = view.NewResourceState()
 	}
 }
 

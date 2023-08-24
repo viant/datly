@@ -99,14 +99,14 @@ func NewState() *State {
 	}
 }
 
-// States represents State registry
-type States struct {
+// ResourceState represents State registry
+type ResourceState struct {
 	Index map[string]*State
 	sync.RWMutex
 }
 
 // Lookup returns and initializes State attached to View. Creates new one if doesn't exist.
-func (s *States) Lookup(view *View) *State {
+func (s *ResourceState) Lookup(view *View) *State {
 	s.RWMutex.Lock()
 	defer s.RWMutex.Unlock()
 	if len(s.Index) == 0 {
@@ -122,16 +122,16 @@ func (s *States) Lookup(view *View) *State {
 	return selector
 }
 
-// NewStates creates a selector
-func NewStates() *States {
-	return &States{
+// NewResourceState creates a selector
+func NewResourceState() *ResourceState {
+	return &ResourceState{
 		Index:   map[string]*State{},
 		RWMutex: sync.RWMutex{},
 	}
 }
 
 // Init initializes each State
-func (s *States) Init(aView *View) {
+func (s *ResourceState) Init(aView *View) {
 	s.RWMutex.Lock()
 	s.RWMutex.Unlock()
 	for _, selector := range s.Index {
