@@ -53,7 +53,7 @@ require (
 	github.com/aws/aws-sdk-go v1.44.12
 	github.com/aws/aws-sdk-go-v2/config v1.18.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.33.1
-	github.com/viant/structology v0.4.3-0.20230822143323-0d7e677aeecd
+	github.com/viant/structology v0.4.3-0.20230824142936-d6f683d612b3
 	github.com/viant/xdatly v0.3.1-0.20230823041819-f95cf72ec1d7
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
 	github.com/viant/xdatly/handler v0.0.0-20230823003543-a21dce622e3b
@@ -133,5 +133,3 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-
-
