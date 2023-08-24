@@ -1571,26 +1571,20 @@ func (r *Router) executorPayloadReader(ctx context.Context, response http.Respon
 
 func (r *Router) prepareExecutorSessionWithParameters(ctx context.Context, request *http.Request, route *Route, parameters *RequestParams) (*executor.Session, error) {
 
-	//marshaller, err := parameters.unmarshaller(route)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//locatorOptions := append(route.LocatorOptions(),
-	//	locator.WithUnmarshal((func([]byte, interface{}) error)(marshaller.Unmarshal)),
-	//	locator.WithRequest(request))
-	//
-	//sessionState := session.New(route.View, session.WithLocatorOptions(locatorOptions...))
-	//if err = sessionState.Populate(ctx); err != nil {
-	//	return nil, err
-	//}
-
-	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, parameters, route.Index._viewDetails...)
+	marshaller, err := parameters.unmarshaller(route)
 	if err != nil {
 		return nil, err
 	}
 
-	sess, err := executor.NewSession(selectors, route.View)
+	locatorOptions := append(route.LocatorOptions(),
+		locator.WithUnmarshal((func([]byte, interface{}) error)(marshaller.Unmarshal)),
+		locator.WithRequest(request))
+
+	sessionState := session.New(route.View, session.WithLocatorOptions(locatorOptions...))
+	if err = sessionState.Populate(ctx); err != nil {
+		return nil, err
+	}
+	sess, err := executor.NewSession(sessionState.ResourceState(), route.View)
 	return sess, err
 }
 
