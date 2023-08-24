@@ -37,6 +37,7 @@ type (
 		executor       *executor.Executor
 		jwtVerifier    *verifier.Service
 		routerResource *router.Resource
+		resource       *view.Resource
 		JwtSigner      *signer.Service
 		config         *Config
 		connector      *view.Connector
@@ -55,12 +56,16 @@ type (
 
 // Read reads data
 func (s *Service) Read(ctx context.Context, viewId string, dest interface{}, option ...reader.Option) error {
-	return s.reader.ReadInto(ctx, viewId, dest, option...)
+	aView, err := s.resource.View(viewId)
+	if err != nil {
+		return err
+	}
+	return s.reader.ReadInto(ctx, dest, aView, option...)
 }
 
 // Exec executes
 func (s *Service) Exec(ctx context.Context, viewId string, options ...executor.Option) error {
-	execView, err := s.reader.Resource.View(viewId)
+	execView, err := s.resource.View(viewId)
 	if err != nil {
 		return err
 	}
@@ -79,13 +84,13 @@ func (s *Service) AddViews(views ...*view.View) error {
 	if err := s.ensureNotInitialised(); err != nil {
 		return err
 	}
-	s.reader.Resource.AddViews(views...)
+	s.resource.AddViews(views...)
 	return nil
 }
 
 // View returns registered view
 func (s *Service) View(name string) (*view.View, error) {
-	return s.reader.Resource.View(name)
+	return s.resource.View(name)
 }
 
 // Connector returns registered connector or default connector
@@ -93,14 +98,14 @@ func (s *Service) Connector(name string) (*view.Connector, error) {
 	if name == "" && s.connector != nil {
 		return s.connector, nil
 	}
-	return s.reader.Resource.Connector(name)
+	return s.resource.Connector(name)
 }
 
 func (s *Service) MergeResource(resource *view.Resource, types *xreflect.Types) error {
 	if err := s.ensureNotInitialised(); err != nil {
 		return err
 	}
-	s.reader.Resource.MergeFrom(resource, types)
+	s.resource.MergeFrom(resource, types)
 	return nil
 }
 
@@ -109,7 +114,7 @@ func (s *Service) AddParameter(parameters ...*state.Parameter) error {
 	if err := s.ensureNotInitialised(); err != nil {
 		return err
 	}
-	s.reader.Resource.AddParameters(parameters...)
+	s.resource.AddParameters(parameters...)
 	return nil
 }
 
@@ -118,7 +123,7 @@ func (s *Service) AddConnectors(connectors ...*view.Connector) error {
 	if err := s.ensureNotInitialised(); err != nil {
 		return err
 	}
-	s.reader.Resource.AddConnectors(connectors...)
+	s.resource.AddConnectors(connectors...)
 	return nil
 }
 
@@ -161,7 +166,7 @@ func (s *Service) Init(ctx context.Context, options ...interface{}) error {
 	if s.types != nil {
 		options = append(options, s.types)
 	}
-	return s.reader.Resource.Init(ctx, options...)
+	return s.resource.Init(ctx, options...)
 }
 
 func (s *Service) Routes() (*router.Resource, error) {
@@ -216,7 +221,7 @@ func (s *Service) LoadRoute(ctx context.Context, URL string, types ...*view.Pack
 		return err
 	}
 	s.routerResource = routeResource
-	s.reader.Resource = routeResource.Resource
+	s.resource = routeResource.Resource
 	return nil
 }
 
@@ -305,19 +310,20 @@ func WithExecHttpRequest(ctx context.Context, route *router.Route, request *http
 		err := router.BuildRouteSelectors(ctx, selectors, route, request)
 		sel := selectors.Lookup(route.View)
 		paramState := session.Lookup(session.View)
-		*paramState = *sel.State
+		*paramState = *sel.Template
 		return err
 	}
 }
 
 // WithReadHttpRequest create http based parameters set execution option
 func WithReadHttpRequest(ctx context.Context, route *router.Route, request *http.Request) reader.Option {
-	return func(session *reader.Session, view *view.View) error {
+	return func(session *reader.Session) error {
 		selectors := session.States
+		aView := session.View
 		err := router.BuildRouteSelectors(ctx, selectors, route, request)
-		sel := selectors.Lookup(view)
+		sel := selectors.Lookup(aView)
 		paramState := session.Lookup(session.View)
-		*paramState = *sel.State
+		*paramState = *sel.Template
 		return err
 	}
 }

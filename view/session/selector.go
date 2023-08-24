@@ -18,7 +18,6 @@ func (s *State) setQuerySelector(ctx context.Context, ns *view.NamespaceView, op
 		return nil
 	}
 
-	//TODO paralelize it
 	if err = s.populateFieldQuerySelector(ctx, ns, opts); err != nil {
 		return httputils.NewParamError(ns.View.Name, selectorParameters.FieldsParameter.Name, err)
 	}

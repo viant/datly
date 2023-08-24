@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/pkg/errors"
+	"github.com/viant/datly/converter"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -11,6 +12,7 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xunsafe"
+	"net/http"
 	"reflect"
 	"sync"
 	"unsafe"
@@ -19,6 +21,7 @@ import (
 type (
 	State struct {
 		cache *cache
+		views *views
 		Options
 	}
 )
@@ -27,11 +30,12 @@ func (s *State) Populate(ctx context.Context) error {
 	if len(s.namespacedView.Views) == 0 {
 		return nil
 	}
-	wg := sync.WaitGroup{}
 	errors := httputils.NewErrors()
+	wg := sync.WaitGroup{}
 	for i := range s.namespacedView.Views {
 		wg.Add(1)
-		go s.setViewStateInBackground(ctx, s.namespacedView.Views[i].View, errors, &wg)
+		aView := s.namespacedView.Views[i].View
+		go s.setViewStateInBackground(ctx, aView, errors, &wg)
 	}
 	wg.Wait()
 	if !errors.HasError() {
@@ -47,8 +51,20 @@ func (s *State) setViewStateInBackground(ctx context.Context, aView *view.View, 
 	}
 }
 
+// SetViewState sets view state as long state has not been populated
 func (s *State) SetViewState(ctx context.Context, aView *view.View) error {
+	if !s.views.canPopulateView(aView.Name) { //already state populated
+		return nil
+	}
+	return s.setViewState(ctx, aView)
+}
 
+// ResetViewState sets view states
+func (s *State) ResetViewState(ctx context.Context, aView *view.View) error {
+	return s.setViewState(ctx, aView)
+}
+
+func (s *State) setViewState(ctx context.Context, aView *view.View) error {
 	opts := s.viewOptions(aView)
 	if aView.Mode == view.ModeQuery {
 		ns := s.namespacedView.ByName(aView.Name)
@@ -80,6 +96,7 @@ func (s *State) viewLookupOptions(parameters state.NamedParameters, opts *Option
 		return s.LookupValue(ctx, parameter, opts)
 	}))
 	result = append(result, locator.WithParameters(parameters))
+	result = append(result, locator.WithReadInto(s.ReadInto))
 	return result
 }
 
@@ -123,12 +140,12 @@ func (g *valueGetter) Value(ctx context.Context, paramName string) (interface{},
 }
 
 func (s *State) setTemplateState(ctx context.Context, aView *view.View, opts *Options) error {
-	selectors := s.states.Lookup(aView)
+	state := s.states.Lookup(aView)
 	if template := aView.Template; template != nil {
 		stateType := template.State()
 		if stateType.IsDefined() {
-			aState := selectors.State
-			err := s.populateState(ctx, template.Parameters, aState, opts)
+			aState := state.Template
+			err := s.PopulateState(ctx, template.Parameters, aState, opts)
 			if err != nil {
 				return err
 			}
@@ -137,33 +154,48 @@ func (s *State) setTemplateState(ctx context.Context, aView *view.View, opts *Op
 	return nil
 }
 
-func (s *State) populateState(ctx context.Context, parameters state.Parameters, aState *structology.State, opts *Options) error {
-	errors := httputils.NewErrors()
-	wg := sync.WaitGroup{}
-	for i, _ := range parameters { //populate non data view parameters first
-		wg.Add(1)
-		go s.populateParameterInBackground(ctx, parameters[i], aState, opts, errors, &wg)
+func (s *State) PopulateState(ctx context.Context, parameters state.Parameters, aState *structology.State, opts *Options) error {
+	err := httputils.NewErrors()
+	parametersGroup := parameters.GroupByStatusCode()
+	for _, group := range parametersGroup {
+		wg := sync.WaitGroup{}
+		for i, _ := range group { //populate non data view parameters first
+			wg.Add(1)
+			parameter := group[i]
+			go s.populateParameterInBackground(ctx, parameter, aState, opts, err, &wg)
+		}
+		wg.Wait()
+		if err.HasError() {
+			return err
+		}
 	}
-	wg.Wait()
-
 	return nil
 }
 
 func (s *State) populateParameterInBackground(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options, errors *httputils.Errors, wg *sync.WaitGroup) {
 	defer wg.Done()
 	if err := s.populateParameter(ctx, parameter, aState, options); err != nil {
-		if pErr, ok := err.(*httputils.Error); ok {
-			pErr.StatusCode = parameter.ErrorStatusCode
-			errors.Append(pErr)
-		} else {
-			errors.AddError("", parameter.Name, err, httputils.WithStatusCode(parameter.ErrorStatusCode))
-		}
+		s.handleParameterError(parameter, err, errors)
+	}
+}
+
+func (s *State) handleParameterError(parameter *state.Parameter, err error, errors *httputils.Errors) {
+	if pErr, ok := err.(*httputils.Error); ok {
+		pErr.StatusCode = parameter.ErrorStatusCode
+		errors.Append(pErr)
+	} else {
+		errors.AddError("", parameter.Name, err, httputils.WithStatusCode(parameter.ErrorStatusCode))
+	}
+	if parameter.ErrorStatusCode != 0 {
+		errors.SetStatus(parameter.ErrorStatusCode)
+	} else if asErrors, ok := err.(*httputils.Errors); ok && asErrors.ErrorStatusCode() != http.StatusBadRequest {
+		errors.SetStatus(asErrors.ErrorStatusCode())
 	}
 }
 
 func (s *State) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
-	value, ok, err := s.LookupValue(ctx, parameter, options)
-	if !ok {
+	value, has, err := s.LookupValue(ctx, parameter, options)
+	if !has {
 		if parameter.IsRequired() {
 			return fmt.Errorf("parameter %v is required", parameter.Name)
 		}
@@ -192,8 +224,10 @@ func (s *State) ensureValidValue(value interface{}, parameter *state.Parameter) 
 		if errorMessage := validateSliceParameter(parameter, sliceLen); errorMessage != "" {
 			return nil, httputils.NewParamError("", parameter.Name, errors.New(errorMessage), httputils.WithObject(value))
 		}
-		switch parameter.OutputType().Kind() {
+		outputType := parameter.OutputType()
+		switch outputType.Kind() {
 		case reflect.Slice:
+
 		default:
 			switch sliceLen {
 			case 0:
@@ -253,6 +287,7 @@ func (s *State) LookupValue(ctx context.Context, parameter *state.Parameter, opt
 	if value, has = s.cache.lookup(parameter); has {
 		return value, has, nil
 	}
+
 	locators := opts.kindLocator
 	switch parameter.In.Kind {
 	case state.KindLiteral:
@@ -266,6 +301,9 @@ func (s *State) LookupValue(ctx context.Context, parameter *state.Parameter, opt
 			return nil, false, fmt.Errorf("failed to get  parameter value: %v, %w", parameter.Name, err)
 		}
 	}
+
+	value, err = s.adjustValue(parameter, value)
+
 	if parameter.Output != nil {
 		transformed, err := parameter.Output.Transform(ctx, value, opts.codecOptions...)
 		if err != nil {
@@ -277,6 +315,16 @@ func (s *State) LookupValue(ctx context.Context, parameter *state.Parameter, opt
 		s.cache.put(parameter, value)
 	}
 	return value, has, err
+}
+
+func (s *State) adjustValue(parameter *state.Parameter, value interface{}) (interface{}, error) {
+	var err error
+	if parameter.Schema.Type().Kind() != reflect.String {
+		if textValue, ok := value.(string); ok {
+			value, _, err = converter.Convert(textValue, parameter.Schema.Type(), false, parameter.DateFormat)
+		}
+	}
+	return value, err
 }
 
 func (s *Options) apply(options []Option) {
@@ -295,6 +343,7 @@ func New(aView *view.View, opts ...Option) *State {
 	ret := &State{
 		Options: Options{namespacedView: *view.IndexViews(aView)},
 		cache:   newCache(),
+		views:   newViews(),
 	}
 	ret.namedParameters = ret.namespacedView.Parameters()
 	ret.apply(opts)

@@ -463,7 +463,7 @@ func (t *Template) replacementEntry(key string, params CriteriaParam, selector *
 
 			return t.valueWithPrefix(key, aValue, " OR ", true)
 		}
-		values, err := selector.State.Values(key)
+		values, err := selector.Template.Values(key)
 		if err != nil {
 			return "", "", err
 		}

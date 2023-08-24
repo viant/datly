@@ -357,7 +357,7 @@ func (r *Collector) indexPositions(name string) {
 	}
 }
 
-// Relations creates and register new Collector for each Relation present in the State.Columns if View allows use State.Columns
+// Relations creates and register new Collector for each Relation present in the Template.Columns if View allows use Template.Columns
 func (r *Collector) Relations(selector *State) ([]*Collector, error) {
 	result := make([]*Collector, len(r.view.With))
 

@@ -41,5 +41,5 @@ func (c *cache) key(parameter *state.Parameter) string {
 }
 
 func newCache() *cache {
-	return &cache{values: make(map[string]interface{})}
+	return &cache{values: make(map[string]interface{}), parameterLock: make(map[string]sync.Locker)}
 }

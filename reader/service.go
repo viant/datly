@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
@@ -22,15 +21,10 @@ import (
 // Service represents reader service
 type Service struct {
 	sqlBuilder *Builder
-	Resource   *view.Resource
 }
 
 // ReadInto reads data into provided destination, * dDest` is required. It has to be a pointer to `interface{}` or pointer to slice of `T` or `*T`
-func (s *Service) ReadInto(ctx context.Context, viewName string, dest interface{}, opts ...Option) error {
-	aView, err := s.Resource.View(viewName)
-	if err != nil {
-		return err
-	}
+func (s *Service) ReadInto(ctx context.Context, dest interface{}, aView *view.View, opts ...Option) error {
 	session, err := NewSession(dest, aView, opts...)
 	if err != nil {
 		return err
@@ -475,8 +469,6 @@ func (s *Service) NewStats(session *Session, index *cache.ParmetrizedQuery, cach
 func New() *Service {
 	ret := &Service{
 		sqlBuilder: NewBuilder(),
-		Resource:   view.EmptyResource(),
 	}
-	ret.Resource.TypeRegistry().SetParent(config.Config.Types)
 	return ret
 }

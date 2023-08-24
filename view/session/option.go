@@ -19,6 +19,10 @@ type (
 	Option func(o *Options)
 )
 
+func (o *Options) States() *view.States {
+	return o.states
+}
+
 func (o *Options) AddLocator(option locator.Option) {
 	o.locatorOptions = append(o.locatorOptions, option)
 }

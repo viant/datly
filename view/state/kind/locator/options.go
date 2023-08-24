@@ -6,7 +6,6 @@ import (
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/toolbox/format"
 	"net/http"
 	"reflect"
 )
@@ -22,15 +21,13 @@ type (
 		IOConfig        common.IOConfig
 		Custom          []interface{}
 		ParameterLookup ParameterLookup
-		ReadViewData    ReadViewData
+		ReadInto        ReadInto
 		Parameters      state.NamedParameters
 		Views           view.NamedViews
-		FormatCase      format.Case
-		DateFormat      string
 	}
 
 	ParameterLookup func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error)
-	ReadViewData    func(ctx context.Context, dest interface{}, aView *view.View) error
+	ReadInto        func(ctx context.Context, dest interface{}, aView *view.View) error
 )
 
 func (u Options) UnmarshalFunc() Unmarshal {
@@ -104,21 +101,33 @@ func WithParameterLookup(lookupFn ParameterLookup) Option {
 	}
 }
 
-func WithFormatCase(formatCase format.Case) Option {
+func WithIOConfig(config common.IOConfig) Option {
 	return func(o *Options) {
-		o.FormatCase = formatCase
-	}
-}
-
-func DateFormat(dateFormat string) Option {
-	return func(o *Options) {
-		o.DateFormat = dateFormat
+		o.IOConfig = config
 	}
 }
 
 // WithParameters creates with parameter options
 func WithParameters(parameters state.NamedParameters) Option {
 	return func(o *Options) {
-		o.Parameters = parameters
+		if len(o.Parameters) == 0 {
+			o.Parameters = make(state.NamedParameters)
+		}
+		for k, v := range parameters {
+			o.Parameters[k] = v
+		}
+	}
+}
+
+func WithReadInto(fn ReadInto) Option {
+	return func(o *Options) {
+		o.ReadInto = fn
+	}
+}
+
+// WithViews returns with views options
+func WithViews(views view.NamedViews) Option {
+	return func(o *Options) {
+		o.Views = views
 	}
 }

@@ -31,33 +31,39 @@ func (l *KindLocator) Lookup(kind state.Kind) (kind.Locator, error) {
 	}
 	var err error
 	if l.parent == nil {
-		if locator, err = l.registerLocator(kind, locator); err != nil {
-			return nil, fmt.Errorf("failed to lookup locator for kind: %v", kind)
+		if locator, err = l.registerLocator(kind); err != nil {
+			return nil, fmt.Errorf("failed to lookup locator for kind: %v, %w", kind, err)
 		}
+		return locator, nil
 	}
+
 	locator, err = l.parent.Lookup(kind)
 	if err != nil {
-		if locator, err = l.registerLocator(kind, locator); err != nil {
-			return nil, fmt.Errorf("failed to lookup locator for kind: %v", kind)
+		if locator, err = l.registerLocator(kind); err != nil {
+			return nil, fmt.Errorf("failed to lookup locator for kind: %v, %w", kind, err)
 		}
 	}
 	return locator, err
 }
 
-func (l *KindLocator) registerLocator(kind state.Kind, locator kind.Locator) (kind.Locator, error) {
-	var err error
+func (l *KindLocator) registerLocator(kind state.Kind) (kind.Locator, error) {
 	if newLocator := Lookup(kind); newLocator != nil {
-		l.RWMutex.Lock()
-		if ret, ok := l.byKind[kind]; ok {
+		l.RWMutex.RLock()
+		ret, ok := l.byKind[kind]
+		l.RWMutex.RUnlock()
+		if ok {
 			return ret, nil
 		}
-		if locator, err = newLocator(l.options...); err != nil {
+		locator, err := newLocator(l.options...)
+		if err != nil {
 			return nil, err
 		}
+		l.RWMutex.Lock()
 		l.byKind[kind] = locator
 		l.RWMutex.Unlock()
+		return locator, nil
 	}
-	return locator, nil
+	return nil, fmt.Errorf("unsupported kind: %v", kind)
 }
 
 // NewKindsLocator creates a locator
@@ -71,7 +77,7 @@ func NewKindsLocator(parent *KindLocator, options ...Option) *KindLocator {
 }
 
 func ensureParentOptions(parent *KindLocator, options []Option) []Option {
-	opts := append([]Option{}, WithParent(parent))
+	opts := append(parent.options, WithParent(parent))
 	opts = append(opts, options...)
 	return opts
 }

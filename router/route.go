@@ -16,6 +16,7 @@ import (
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/datly/view/template"
 	"github.com/viant/sqlx/io/load/reader/csv"
 	"github.com/viant/structql"
@@ -248,6 +249,18 @@ func (x *XLSConfig) Options() []xlsy.Option {
 	return options
 }
 
+func (r *Route) LocatorOptions() []locator.Option {
+	var result []locator.Option
+	result = append(result, locator.WithURIPattern(r.URI))
+	result = append(result, locator.WithIOConfig(r.ioConfig()))
+	result = append(result, locator.WithParameters(r._resource.Parameters.Index()))
+
+	if r._resource != nil {
+		result = append(result, locator.WithViews(r._resource.Views.Index()))
+	}
+	return result
+}
+
 func (r *Route) HttpMethod() string {
 	return r.Method
 }
@@ -429,7 +442,7 @@ func (r *Route) initCardinality() error {
 	}
 }
 
-func (r *Route) jsonConfig() common.IOConfig {
+func (r *Route) ioConfig() common.IOConfig {
 	return common.IOConfig{
 		OmitEmpty:  r.OmitEmpty,
 		CaseFormat: *r._caser,
@@ -962,7 +975,7 @@ func (r *Route) AddApiKeys(keys ...*APIKey) {
 }
 
 func (r *Route) initMarshaller() error {
-	r._jsonMarshaller = json.New(r.jsonConfig())
+	r._jsonMarshaller = json.New(r.ioConfig())
 	r._xlsMarshaller = xlsy.NewMarshaller(r.Output.XLS.Options()...)
 	return nil
 }

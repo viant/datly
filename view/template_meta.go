@@ -115,8 +115,6 @@ func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, 
 	m.Schema = state.NewSchema(nil, state.WithAutoGenFunc(m._owner._view.generateSchemaTypeFromColumn(newCase, columns, nil)))
 	aResource := &Resourcelet{Resource: resource, View: owner._view}
 	err = m.Schema.Init(aResource)
-
-	fmt.Printf("METE SCHEMA: %s\n", m.Schema.Type().String())
 	return err
 }
 

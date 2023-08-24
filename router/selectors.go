@@ -87,7 +87,7 @@ func (b *paramStateBuilder) Build(ctx context.Context, viewsDetails []*ViewDetai
 			if details.View.Template == nil || len(details.View.Template.Parameters) == 0 {
 				return
 			}
-			if param, err := b.buildSelectorParameters(ctx, selector.State, details, details.View.Template.Parameters, options...); err != nil {
+			if param, err := b.buildSelectorParameters(ctx, selector.Template, details, details.View.Template.Parameters, options...); err != nil {
 				asErrors, ok := err.(*httputils.Errors)
 				if param.ErrorStatusCode != 0 {
 					errors.SetStatus(param.ErrorStatusCode)
@@ -560,6 +560,7 @@ func (b *paramStateBuilder) handleParam(ctx context.Context, aState *structology
 		parentView = parent.View
 	}
 	value, err := b.extractParamValueWithOptions(ctx, parameter, parentView, options...)
+	fmt.Printf("%T %+v\n", value, value)
 	if err != nil {
 		return err
 	}

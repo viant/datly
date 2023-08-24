@@ -95,7 +95,11 @@ func NewSession(dest interface{}, aView *view.View, opts ...Option) (*Session, e
 		Dest: dest,
 		View: aView,
 	}
+
 	err := options(opts).Apply(ret)
+	if ret.States == nil {
+		ret.States = view.NewStates()
+	}
 	return ret, err
 }
 
@@ -137,5 +141,5 @@ func (s *Session) Lookup(v *view.View) *structology.State {
 	sel := s.States.Lookup(v)
 	sel.Init(v)
 	s.mux.Unlock()
-	return sel.State
+	return sel.Template
 }

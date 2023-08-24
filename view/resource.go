@@ -41,10 +41,10 @@ type Resource struct {
 	MessageBuses  []*mbus.Resource
 	_messageBuses MessageBuses
 
-	Views  []*View `json:",omitempty"`
+	Views  Views `json:",omitempty"`
 	_views NamedViews
 
-	Parameters  []*state.Parameter `json:",omitempty"`
+	Parameters  state.Parameters `json:",omitempty"`
 	_parameters state.NamedParameters
 
 	Types  []*TypeDefinition
@@ -313,11 +313,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	}
 
 	var err error
-	r._views, err = Views(r.Views).Index()
-	if err != nil {
-		return err
-	}
-
+	r._views = Views(r.Views).Index()
 	r._connectors = ConnectorSlice(r.Connectors).Index()
 	r._messageBuses = MessageBusSlice(r.MessageBuses).Index()
 	r._parameters = state.Parameters(r.Parameters).Index()

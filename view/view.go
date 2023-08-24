@@ -873,27 +873,27 @@ func (v *View) registerHolders() error {
 	return nil
 }
 
-// CanUseSelectorCriteria indicates if State.Criteria can be used
+// CanUseSelectorCriteria indicates if Template.Criteria can be used
 func (v *View) CanUseSelectorCriteria() bool {
 	return v.Selector.Constraints.Criteria
 }
 
-// CanUseSelectorLimit indicates if State.Limit can be used
+// CanUseSelectorLimit indicates if Template.Limit can be used
 func (v *View) CanUseSelectorLimit() bool {
 	return v.Selector.Constraints.Limit
 }
 
-// CanUseSelectorOrderBy indicates if State.OrderBy can be used
+// CanUseSelectorOrderBy indicates if Template.OrderBy can be used
 func (v *View) CanUseSelectorOrderBy() bool {
 	return v.Selector.Constraints.OrderBy
 }
 
-// CanUseSelectorOffset indicates if State.Offset can be used
+// CanUseSelectorOffset indicates if Template.Offset can be used
 func (v *View) CanUseSelectorOffset() bool {
 	return v.Selector.Constraints.Offset
 }
 
-// CanUseSelectorProjection indicates if State.Fields can be used
+// CanUseSelectorProjection indicates if Template.Fields can be used
 func (v *View) CanUseSelectorProjection() bool {
 	return v.Selector.Constraints.Projection
 }
@@ -1241,7 +1241,7 @@ func (v *View) SetParameter(name string, selectors *States, value interface{}) e
 	if selector == nil {
 		return fmt.Errorf("failed to lookup selector: %v", aView.Name)
 	}
-	return param.Set(selector.State, value)
+	return param.Set(selector.Template, value)
 }
 
 func (v *View) ensureAsyncTableNameIfNeeded() error {

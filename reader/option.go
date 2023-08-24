@@ -24,8 +24,8 @@ func (o options) Apply(session *Session) error {
 	return nil
 }
 
-// WithState returns states option
-func WithState(states *view.States) Option {
+// WithStates returns states option
+func WithStates(states *view.States) Option {
 	return func(session *Session) error {
 		session.States = states
 		return nil

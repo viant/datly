@@ -80,6 +80,10 @@ func (e *Errors) Append(err error) {
 		e.Errors = append(e.Errors, actual)
 	case *Errors:
 		e.Errors = append(e.Errors, actual.Errors...)
+		code := actual.ErrorStatusCode()
+		if statusCodePriority(code) > statusCodePriority(e.status) {
+			e.status = code
+		}
 	default:
 		e.Errors = append(e.Errors, &Error{Message: err.Error(), Err: err})
 	}

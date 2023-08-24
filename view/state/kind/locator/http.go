@@ -18,7 +18,8 @@ func (p *HttpRequest) Names() []string {
 }
 
 func (p *HttpRequest) Value(ctx context.Context, name string) (interface{}, bool, error) {
-	return CloneHTTPRequest(p.Request), true, nil
+	value, err := CloneHTTPRequest(p.Request)
+	return value, true, err
 }
 
 // NewHttpRequest returns http request locator

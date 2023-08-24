@@ -17,13 +17,11 @@ func (p *Group) Names() []string {
 	return nil
 }
 
-func (p *Group) Value(ctx context.Context, name string) (interface{}, bool, error) {
-
-	parameter, ok := p.Parameters[name]
-	if !ok {
-		return nil, false, fmt.Errorf("uknonw parameter: %s", name)
+func (p *Group) Value(ctx context.Context, names string) (interface{}, bool, error) {
+	parameter := p.matchByLocation(names)
+	if parameter == nil {
+		return nil, false, fmt.Errorf("failed to match parameter by location: %v", names)
 	}
-
 	stateType := structology.NewStateType(parameter.Schema.Type())
 	aState := stateType.NewState()
 
@@ -40,6 +38,16 @@ func (p *Group) Value(ctx context.Context, name string) (interface{}, bool, erro
 		}
 	}
 	return aState.State(), true, nil
+}
+
+func (p *Group) matchByLocation(names string) *state.Parameter {
+	var parameter *state.Parameter
+	for _, candidate := range p.Parameters {
+		if candidate.In.Kind == state.KindGroup && candidate.In.Name == names {
+			parameter = candidate
+		}
+	}
+	return parameter
 }
 
 // NewGroup returns parameter locator

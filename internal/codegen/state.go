@@ -33,7 +33,7 @@ func (t *Template) GenerateState(pkg string, info *plugin.Info) string {
 		imports.AddPackage(info.TypeCorePkg())
 		importFragment = imports.PackageImports()
 		registry := &customTypeRegistry{}
-		registry.register("State")
+		registry.register("Template")
 		registerTypes = registry.stringify()
 	}
 	output = strings.Replace(output, "$Imports", importFragment, 1)

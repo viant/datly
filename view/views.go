@@ -9,6 +9,7 @@ import (
 
 type (
 	NamespacedView struct {
+		View        *View
 		Views       []*NamespaceView
 		byNamespace map[string]int
 		byName      map[string]int
@@ -93,7 +94,7 @@ func (n *NamespacedView) indexView(aView *View, aPath string) {
 
 // IndexViews indexes views
 func IndexViews(aView *View) *NamespacedView {
-	result := &NamespacedView{byNamespace: map[string]int{}, byName: map[string]int{}}
+	result := &NamespacedView{View: aView, byNamespace: map[string]int{}, byName: map[string]int{}}
 	result.indexView(aView, "")
 	return result
 }
@@ -102,17 +103,14 @@ func IndexViews(aView *View) *NamespacedView {
 type NamedViews map[string]*View
 
 // Register registers View in registry using View name.
-func (v *NamedViews) Register(view *View) error {
+func (v *NamedViews) Register(view *View) {
 	if len(*v) == 0 {
 		*v = make(map[string]*View)
 	}
-
 	if _, ok := (*v)[view.Name]; ok {
 		fmt.Printf("[WARN] View with %v name already exists in given resource", view.Name)
 	}
-
 	(*v)[view.Name] = view
-	return nil
 }
 
 func (v *NamedViews) merge(views *NamedViews) {
@@ -137,14 +135,12 @@ func (v NamedViews) Lookup(viewName string) (*View, error) {
 type Views []*View
 
 // Index indexes Views by View.Name
-func (v Views) Index() (NamedViews, error) {
+func (v Views) Index() NamedViews {
 	result := NamedViews(make(map[string]*View))
 	for i := range v {
-		if err := result.Register(v[i]); err != nil {
-			return nil, err
-		}
+		result.Register(v[i])
 	}
-	return result, nil
+	return result
 }
 
 // Init initializes views.

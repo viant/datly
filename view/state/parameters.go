@@ -8,6 +8,7 @@ import (
 	"github.com/viant/velty"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
+	"net/http"
 	"reflect"
 )
 
@@ -26,6 +27,33 @@ func (p Parameters) FilterByKind(kind Kind) Parameters {
 		if candidate.In.Kind == kind {
 			result = append(result, p[i])
 		}
+	}
+	return result
+}
+
+func (p Parameters) GroupByStatusCode() []Parameters {
+	var result []Parameters
+	var unAuthorizedParameters Parameters
+	var forbiddenParameters Parameters
+	var others Parameters
+	for i, candidate := range p {
+		switch candidate.ErrorStatusCode {
+		case http.StatusUnauthorized, http.StatusProxyAuthRequired:
+			unAuthorizedParameters = append(unAuthorizedParameters, p[i])
+		case http.StatusForbidden, http.StatusNotAcceptable, http.StatusMethodNotAllowed:
+			forbiddenParameters = append(forbiddenParameters, p[i])
+		default:
+			others = append(others, p[i])
+		}
+	}
+	if len(unAuthorizedParameters) > 0 {
+		result = append(result, unAuthorizedParameters)
+	}
+	if len(forbiddenParameters) > 0 {
+		result = append(result, forbiddenParameters)
+	}
+	if len(others) > 0 {
+		result = append(result, others)
 	}
 	return result
 }

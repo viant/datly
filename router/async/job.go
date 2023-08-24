@@ -84,7 +84,7 @@ func BuildRefreshJobByID(ctx context.Context, db *sql.DB, id string) (string, []
 	sb := &strings.Builder{}
 	sb.WriteString("UPDATE ")
 	sb.WriteString(view.AsyncJobsTable)
-	sb.WriteString(" SET State = ? WHERE State = ? AND JobID = ?")
+	sb.WriteString(" SET Template = ? WHERE Template = ? AND JobID = ?")
 	return sb.String(), []interface{}{async.StateRunning, id, async.StateDone}, nil
 }
 

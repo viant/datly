@@ -10,7 +10,7 @@ import (
 
 type DataView struct {
 	Views view.NamedViews
-	ReadViewData
+	ReadInto
 }
 
 func (p *DataView) Names() []string {
@@ -24,7 +24,7 @@ func (p *DataView) Value(ctx context.Context, name string) (interface{}, bool, e
 	}
 	sliceValue := reflect.New(aView.Schema.SliceType())
 	destSlicePtr := sliceValue.Interface()
-	err := p.ReadViewData(ctx, destSlicePtr, aView)
+	err := p.ReadInto(ctx, destSlicePtr, aView)
 	if err != nil {
 		return nil, false, err
 	}
@@ -36,12 +36,12 @@ func NewDataView(opts ...Option) (kind.Locator, error) {
 	if options.Views == nil {
 		return nil, fmt.Errorf("views type was empty")
 	}
-	if options.ReadViewData == nil {
-		return nil, fmt.Errorf("ReadViewData func was empty")
+	if options.ReadInto == nil {
+		return nil, fmt.Errorf("ReadInto func was empty")
 	}
 	ret := &DataView{
-		Views:        options.Views,
-		ReadViewData: options.ReadViewData,
+		Views:    options.Views,
+		ReadInto: options.ReadInto,
 	}
 	return ret, nil
 }

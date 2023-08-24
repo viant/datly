@@ -90,7 +90,7 @@ func (g *Generate) HandlerType() string {
 }
 
 func (g *Generate) StateType() string {
-	result := "State"
+	result := "Template"
 	if g.Package() == "" {
 		return result
 	}

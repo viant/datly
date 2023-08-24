@@ -13,7 +13,7 @@ type (
 
 	//State represents view state
 	State struct {
-		State *structology.State
+		Template *structology.State
 		QuerySelector
 	}
 
@@ -51,8 +51,8 @@ func (s *QuerySelector) CurrentPage() int {
 
 // Init initializes State
 func (s *State) Init(aView *View) {
-	if aView != nil && s.State == nil && aView.Template.stateType != nil {
-		s.State = aView.Template.stateType.NewState()
+	if aView != nil && s.Template == nil && aView.Template.stateType != nil {
+		s.Template = aView.Template.stateType.NewState()
 	}
 	if s.initialized {
 		return
@@ -60,7 +60,7 @@ func (s *State) Init(aView *View) {
 	s._columnNames = Names(s.Columns).Index()
 }
 
-// Has checks if Field is present in State.Columns
+// Has checks if Field is present in Template.Columns
 func (s *QuerySelector) Has(field string) bool {
 	_, ok := s._columnNames[field]
 	return ok

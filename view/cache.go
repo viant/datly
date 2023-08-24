@@ -486,7 +486,7 @@ outer:
 				continue
 			}
 
-			if err := set.Set[i]._param.Set(selector.State, actualValue); err != nil {
+			if err := set.Set[i]._param.Set(selector.Template, actualValue); err != nil {
 				return err
 			}
 		}

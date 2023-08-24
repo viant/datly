@@ -12,6 +12,8 @@ import (
 	"github.com/viant/cloudless/gateway/matcher"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/executor"
+	"github.com/viant/datly/view/session"
+
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/async"
 	"github.com/viant/datly/router/async/handler"
@@ -23,6 +25,7 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/govalidator"
 	svalidator "github.com/viant/sqlx/io/validator"
 	async2 "github.com/viant/xdatly/handler/async"
@@ -342,11 +345,11 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 }
 
 func (r *Router) prepareReaderSession(ctx context.Context, response http.ResponseWriter, request *http.Request, route *Route) (*ReaderSession, error) {
+
 	requestParams, err := NewRequestParameters(request, route)
 	if err != nil {
 		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, err)
 	}
-
 	if route.CSV == nil && requestParams.OutputContentType == CSVContentType {
 		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output CSV config?)", CSVContentType)))
 	}
@@ -358,7 +361,23 @@ func (r *Router) prepareReaderSession(ctx context.Context, response http.Respons
 		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", XMLContentType)))
 	}
 
-	selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, requestParams, route.Index._viewDetails...)
+	marshaller, err := requestParams.unmarshaller(route)
+	if err != nil {
+		return nil, err
+	}
+
+	locatorOptions := append(route.LocatorOptions(),
+		locator.WithUnmarshal((func([]byte, interface{}) error)(marshaller.Unmarshal)),
+		locator.WithRequest(request))
+
+	viewState := session.New(route.View, session.WithLocatorOptions(locatorOptions...))
+
+	err = viewState.Populate(ctx)
+
+	//vv := viewState.States().Lookup(route.View)
+	//fmt.Printf("Input: %T %s\n", vv.Template.Template(), vv.Template.Template())
+
+	//selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, requestParams, route.Index._viewDetails...)
 	if err != nil {
 		defaultCode := http.StatusBadRequest
 		if route.ParamStatusError != nil {
@@ -372,7 +391,7 @@ func (r *Router) prepareReaderSession(ctx context.Context, response http.Respons
 		Route:         route,
 		Request:       request,
 		Response:      response,
-		Selectors:     selectors,
+		Selectors:     viewState.States(),
 	}, nil
 }
 
