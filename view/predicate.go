@@ -73,7 +73,7 @@ func (e *predicateEvaluator) Evaluate(ctx *expand.Context, state *structology.St
 
 func (c *predicateCache) get(resource *Resource, predicateConfig *config.PredicateConfig, param *state.Parameter, registry *config.PredicateRegistry, stateType *structology.StateType) (codec.PredicateHandler, error) {
 	keyName := predicateConfig.Name
-	if keyName == "handler" {
+	if isCustomPredicate(keyName) {
 		keyName += strings.Join(predicateConfig.Args, ",")
 	}
 	aKey := predicateKey{name: keyName, paramType: param.OutputType()}
@@ -83,6 +83,10 @@ func (c *predicateCache) get(resource *Resource, predicateConfig *config.Predica
 	}
 
 	return provider.new(predicateConfig)
+}
+
+func isCustomPredicate(keyName string) bool {
+	return keyName == "handler"
 }
 
 func (c *predicateCache) getEvaluatorProvider(resource *Resource, predicateConfig *config.PredicateConfig, param reflect.Type, registry *config.PredicateRegistry, aKey predicateKey, stateType *structology.StateType) (*predicateEvaluatorProvider, error) {
