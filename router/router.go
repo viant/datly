@@ -25,7 +25,6 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/govalidator"
 	svalidator "github.com/viant/sqlx/io/validator"
 	async2 "github.com/viant/xdatly/handler/async"
@@ -362,25 +361,8 @@ func (r *Router) prepareReaderSession(ctx context.Context, response http.Respons
 		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", XMLContentType)))
 	}
 
-	marshaller, err := requestParams.unmarshaller(route)
-	if err != nil {
-		return nil, err
-	}
-
-	locatorOptions := append(
-		route.LocatorOptions(),
-		locator.WithUnmarshal(marshaller.Unmarshal),
-		locator.WithRequest(request))
-
-	viewState := session.New(route.View, session.WithLocatorOptions(locatorOptions...))
-
-	err = viewState.Populate(ctx)
-
-	//vv := viewState.ResourceState().Lookup(route.View)
-	//fmt.Printf("Input: %T %s\n", vv.Template.Template(), vv.Template.Template())
-
-	//selectors, _, err := CreateSelectorsFromRoute(ctx, route, request, requestParams, route.Index._viewDetails...)
-	if err != nil {
+	sessionState := session.New(route.View, session.WithLocatorOptions(route.LocatorOptions(request)...))
+	if err := sessionState.Populate(ctx); err != nil {
 		defaultCode := http.StatusBadRequest
 		if route.ParamStatusError != nil {
 			defaultCode = *route.ParamStatusError
@@ -393,7 +375,7 @@ func (r *Router) prepareReaderSession(ctx context.Context, response http.Respons
 		Route:         route,
 		Request:       request,
 		Response:      response,
-		State:         viewState.ResourceState(),
+		State:         sessionState.ResourceState(),
 	}, nil
 }
 
@@ -1572,18 +1554,8 @@ func (r *Router) executorPayloadReader(ctx context.Context, response http.Respon
 }
 
 func (r *Router) prepareExecutorSessionWithParameters(ctx context.Context, request *http.Request, route *Route, parameters *RequestParams) (*executor.Session, error) {
-
-	marshaller, err := parameters.unmarshaller(route)
-	if err != nil {
-		return nil, err
-	}
-
-	locatorOptions := append(route.LocatorOptions(),
-		locator.WithUnmarshal((func([]byte, interface{}) error)(marshaller.Unmarshal)),
-		locator.WithRequest(request))
-
-	sessionState := session.New(route.View, session.WithLocatorOptions(locatorOptions...))
-	if err = sessionState.Populate(ctx); err != nil {
+	sessionState := session.New(route.View, session.WithLocatorOptions(route.LocatorOptions(request)...))
+	if err := sessionState.Populate(ctx); err != nil {
 		return nil, err
 	}
 	sess, err := executor.NewSession(sessionState.ResourceState(), route.View)

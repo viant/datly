@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/afs"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/async"
 	"github.com/viant/datly/router/cache"
@@ -28,6 +29,7 @@ import (
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -155,12 +157,12 @@ type (
 	}
 
 	CSVConfig struct {
-		Separator              string
-		NullValue              string
-		_config                *csv.Config
-		_requestBodyMarshaller *csv.Marshaller
-		_outputMarshaller      *csv.Marshaller
-		_unwrapperSlice        *xunsafe.Slice
+		Separator         string
+		NullValue         string
+		_config           *csv.Config
+		_inputMarshaller  *csv.Marshaller
+		_outputMarshaller *csv.Marshaller
+		_unwrapperSlice   *xunsafe.Slice
 	}
 
 	XLSConfig struct {
@@ -249,14 +251,41 @@ func (x *XLSConfig) Options() []xlsy.Option {
 	return options
 }
 
-func (r *Route) LocatorOptions() []locator.Option {
+func (r *Route) Marshaller(request *http.Request) *marshal.Marshaller {
+	contentType := request.Header.Get(HeaderContentType)
+	setter.SetStringIfEmpty(&contentType, request.Header.Get(strings.ToLower(HeaderContentType)))
+	switch contentType {
+	case CSVContentType:
+		if r.CSV == nil {
+			r.CSV = &CSVConfig{
+				Separator: ",",
+				NullValue: "",
+			}
+
+		}
+		return marshal.NewMarshaller(r._requestBodySlice.Type, r.CSV.Unmarshal)
+	}
+	jsonPathInterceptor := json.UnmarshalerInterceptors{}
+	for i := range r._unmarshallerInterceptors {
+		transform := r._unmarshallerInterceptors[i]
+		jsonPathInterceptor[transform.Path] = r.transformFn(request, transform)
+	}
+	return marshal.NewMarshaller(r._requestBodyType, func(bytes []byte, i interface{}) error {
+		return r._jsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
+	})
+}
+
+func (r *Route) LocatorOptions(request *http.Request) []locator.Option {
 	var result []locator.Option
+	marshaller := r.Marshaller(request)
+	result = append(result, locator.WithUnmarshal(marshaller.Unmarshal))
+	result = append(result, locator.WithRequest(request))
 	result = append(result, locator.WithURIPattern(r.URI))
 	result = append(result, locator.WithIOConfig(r.ioConfig()))
+	result = append(result, locator.WithParameters(r._resource.NamedParameters()))
 	if r.RequestBodySchema != nil {
 		result = append(result, locator.WithBodyType(r.RequestBodySchema.Type()))
 	}
-	result = append(result, locator.WithParameters(r._resource.Parameters.Index()))
 	if r._resource != nil {
 		result = append(result, locator.WithViews(r._resource.Views.Index()))
 	}
@@ -784,18 +813,13 @@ func (r *Route) addPrefixFieldIfNeeded() {
 }
 
 func (r *Route) initCSVIfNeeded() error {
-	if r.CSV == nil {
-		return nil
-	}
-
+	r.ensureCSV()
 	if len(r.CSV.Separator) != 1 {
 		return fmt.Errorf("separator has to be a single char, but was %v", r.CSV.Separator)
 	}
-
 	if r.CSV.NullValue == "" {
 		r.CSV.NullValue = "null"
 	}
-
 	r.CSV._config = &csv.Config{
 		FieldSeparator:  r.CSV.Separator,
 		ObjectSeparator: "\n",
@@ -803,25 +827,29 @@ func (r *Route) initCSVIfNeeded() error {
 		EscapeBy:        "\\",
 		NullValue:       r.CSV.NullValue,
 	}
-
 	schemaType := r.View.Schema.Type()
 	if schemaType.Kind() == reflect.Ptr {
 		schemaType = schemaType.Elem()
 	}
-
 	var err error
 	r.CSV._outputMarshaller, err = csv.NewMarshaller(schemaType, r.CSV._config)
 	if err != nil {
 		return err
 	}
-
 	if r._requestBodyType == nil {
 		return nil
 	}
 
 	r.CSV._unwrapperSlice = r._requestBodySlice
-	r.CSV._requestBodyMarshaller, err = csv.NewMarshaller(r._requestBodyType, nil)
+	r.CSV._inputMarshaller, err = csv.NewMarshaller(r._requestBodyType, nil)
 	return err
+}
+
+func (r *Route) ensureCSV() {
+	if r.CSV != nil {
+		return
+	}
+	r.CSV = &CSVConfig{Separator: ","}
 }
 
 func (r *Route) initTabJSONIfNeeded() error {
@@ -953,7 +981,7 @@ func (r *Route) initResponseBodyIfNeeded() error {
 }
 
 func (c *CSVConfig) Unmarshal(bytes []byte, i interface{}) error {
-	return c._requestBodyMarshaller.Unmarshal(bytes, i)
+	return c._inputMarshaller.Unmarshal(bytes, i)
 }
 
 func (c *CSVConfig) unwrapIfNeeded(value interface{}) (interface{}, error) {
@@ -984,36 +1012,23 @@ func (r *Route) initMarshaller() error {
 }
 
 func (r *Route) initMarshallerInterceptor() error {
-
 	r._unmarshallerInterceptors = r.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
 	return nil
 }
 
-func (r *Route) unmarshallerInterceptors(params *RequestParams) json.UnmarshalerInterceptors {
-	result := json.UnmarshalerInterceptors{}
-	for i := range r._unmarshallerInterceptors {
-		transform := r._unmarshallerInterceptors[i]
-		result[transform.Path] = r.transformFn(params, transform)
-	}
-	return result
-}
-
-func (r *Route) transformFn(params *RequestParams, transform *marshal.Transform) func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
+func (r *Route) transformFn(request *http.Request, transform *marshal.Transform) func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
 	unmarshaller := transform.UnmarshalerInto()
 	if unmarshaller != nil {
 		return unmarshaller.UnmarshalJSONWithOptions
 	}
-
 	return func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
-		evaluate, err := transform.Evaluate(params.cookiesIndex, params.pathIndex, params.queryIndex, params.request.Header, decoder, r._resource.LookupType())
+		evaluate, err := transform.Evaluate(request, decoder, r._resource.LookupType())
 		if err != nil {
 			return err
 		}
-
 		if evaluate.Ctx.Decoder.Decoded != nil {
 			reflect.ValueOf(dst).Elem().Set(reflect.ValueOf(evaluate.Ctx.Decoder.Decoded))
 		}
-
 		return nil
 	}
 }

@@ -66,6 +66,10 @@ type Resource struct {
 	fs              afs.Service
 }
 
+func (r *Resource) NamedParameters() state.NamedParameters {
+	return r._parameters
+}
+
 func (r *Resource) LookupParameter(name string) (*state.Parameter, error) {
 	return r._parameters.Lookup(name)
 }

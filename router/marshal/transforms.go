@@ -10,7 +10,6 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/xreflect"
 	"net/http"
-	"net/url"
 )
 
 const (
@@ -81,16 +80,14 @@ func (t *Transform) Init(ctx context.Context, fs afs.Service, lookupType xreflec
 	return nil
 }
 
-func (t *Transform) Evaluate(cookies map[string]*http.Cookie, pathVariables map[string]string, queryParams url.Values, headers http.Header, decoder *gojay.Decoder, fn xreflect.LookupType) (*State, error) {
+func (t *Transform) Evaluate(request *http.Request, decoder *gojay.Decoder, fn xreflect.LookupType) (*State, error) {
 	d := &Decoder{
 		typeLookup: fn,
 		decoder:    decoder,
 	}
-	request := httputils.NewRequest(cookies, pathVariables, queryParams, headers)
-
 	ctx := CustomContext{
 		Decoder: d,
-		Request: request,
+		Request: &httputils.Request{QueryParams: request.URL.Query(), Headers: request.Header},
 	}
 
 	evaluate, err := t._evaluator.Evaluate(nil, expand.WithCustomContext(t.newCtx(ctx)))

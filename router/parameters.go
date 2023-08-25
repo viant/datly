@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/converter"
-	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -106,9 +105,9 @@ func (p *RequestParams) cookie(name string) string {
 }
 
 func (p *RequestParams) parseRequestBody(body []byte, route *Route) (interface{}, error) {
-	unmarshaller, err := p.unmarshaller(route)
-	if err != nil || unmarshaller.Type == nil {
-		return nil, err
+	unmarshaller := route.Marshaller(p.request)
+	if unmarshaller.Type == nil {
+		return nil, nil
 	}
 	converted, _, err := converter.Convert(string(body), unmarshaller.Type, route.CustomValidation, "", unmarshaller.Unmarshal)
 	return converted, err
@@ -140,19 +139,6 @@ func (p *RequestParams) dataFormat(route *Route) string {
 		format = JSONFormat
 	}
 	return format
-}
-
-func (p *RequestParams) unmarshaller(route *Route) (*marshal.Marshaller, error) {
-	switch p.InputDataFormat {
-	case CSVContentType:
-		if route.CSV == nil {
-			return nil, UnsupportedFormatErr(CSVContentType)
-		}
-		return marshal.NewMarshaller(route._requestBodySlice.Type, route.CSV.Unmarshal), nil
-	}
-	return marshal.NewMarshaller(route._requestBodyType, func(bytes []byte, i interface{}) error {
-		return route._jsonMarshaller.Unmarshal(bytes, i, route.unmarshallerInterceptors(p), p.request)
-	}), nil
 }
 
 func (p *RequestParams) paramRequestBody(ctx context.Context, param *state.Parameter, options ...interface{}) (interface{}, error) {

@@ -7,7 +7,6 @@ import (
 	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/template/expand"
 	vsession "github.com/viant/datly/view/session"
-	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/handler"
 	async2 "github.com/viant/xdatly/handler/async"
 	http2 "github.com/viant/xdatly/handler/http"
@@ -52,23 +51,8 @@ func (e *HandlerExecutor) Session(ctx context.Context) (*executor.Session, error
 	if e.session != nil {
 		return e.session, nil
 	}
-
-	params, err := e.RequestParams(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	marshaller, err := params.unmarshaller(e.route)
-	if err != nil {
-		return nil, err
-	}
-
-	locatorOptions := append(e.route.LocatorOptions(),
-		locator.WithUnmarshal((func([]byte, interface{}) error)(marshaller.Unmarshal)),
-		locator.WithRequest(params.request))
-
-	sessionState := vsession.New(e.route.View, vsession.WithLocatorOptions(locatorOptions...))
-	if err = sessionState.Populate(ctx); err != nil {
+	sessionState := vsession.New(e.route.View, vsession.WithLocatorOptions(e.route.LocatorOptions(e.request)...))
+	if err := sessionState.Populate(ctx); err != nil {
 		return nil, err
 	}
 	sess, err := executor.NewSession(sessionState.ResourceState(), e.route.View)
