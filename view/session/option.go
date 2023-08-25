@@ -15,9 +15,16 @@ type (
 		namedParameters state.NamedParameters
 		locatorOptions  []locator.Option //resousrce, route level options
 		codecOptions    []codec.Option
+		indirectState   bool
 	}
 	Option func(o *Options)
 )
+
+func (o *Options) Indirect(flag bool) *Options {
+	ret := *o
+	ret.indirectState = flag
+	return &ret
+}
 
 func (o *Options) ResourceState() *view.ResourceState {
 	return o.resourceState

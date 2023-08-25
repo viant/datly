@@ -27,7 +27,7 @@ func (o options) Apply(session *Session) error {
 // WithStates returns states option
 func WithStates(states *view.ResourceState) Option {
 	return func(session *Session) error {
-		session.States = states
+		session.State = states
 		return nil
 	}
 }
@@ -57,6 +57,6 @@ func WithParameter(name string, value interface{}) Option {
 		if !strings.Contains(paramName, ":") {
 			paramName = aView.Name + ":" + name
 		}
-		return aView.SetParameter(paramName, session.States, value)
+		return aView.SetParameter(paramName, session.State, value)
 	}
 }

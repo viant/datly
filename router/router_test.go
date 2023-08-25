@@ -82,7 +82,7 @@ func (g *gcpMockDecoder) ResultType(paramType reflect.Type) (reflect.Type, error
 	return reflect.TypeOf(&oauth2.Tokeninfo{}), nil
 }
 
-func (a *asStrings) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+func (a *asStrings) Value(ctx context.Group, raw interface{}, options ...interface{}) (interface{}, error) {
 	rawString, ok := asString(raw)
 	if !ok {
 		return "", fmt.Errorf("expected to got string but got %T", raw)
@@ -108,15 +108,15 @@ func asString(raw interface{}) (string, bool) {
 	return "", false
 }
 
-func (e *eventBeforeFetcher) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+func (e *eventBeforeFetcher) Value(ctx context.Group, raw interface{}, options ...interface{}) (interface{}, error) {
 	return nil, nil
 }
 
-func (e *eventAfterFetcher) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+func (e *eventAfterFetcher) Value(ctx context.Group, raw interface{}, options ...interface{}) (interface{}, error) {
 	return nil, nil
 }
 
-func (g *gcpMockDecoder) Value(_ context.Context, raw interface{}, _ ...interface{}) (interface{}, error) {
+func (g *gcpMockDecoder) Value(_ context.Group, raw interface{}, _ ...interface{}) (interface{}, error) {
 	rawString, ok := raw.(string)
 	if !ok {
 		return nil, fmt.Errorf("expected to get string but got %T", raw)
@@ -475,14 +475,14 @@ func TestRouter(t *testing.T) {
 			description: "styles | error",
 			resourceURI: "011_style",
 			uri:         "/api/events?_criteria=(id%20=%201%20UNION%20ALL%20SELECT%209%20as%20id%2C%20To_Date%28%222019-03-11T02%3A20%3A33Z%22%29%20as%20timestamp%2C%2010%20as%20event_type_id%2C%2020%20as%20quantity%2C%206%20as%20user_id)",
-			expected:    `{"Status":"error","Errors":[{"View":"events","Parameter":"_criteria","Message":"can't use criteria on view events"}],"Result":[]}`,
+			expected:    `{"Status":"error","Errors":[{"View":"events","Parameter":"_criteria","Message":"can't use criteria on view events"}],"ResultPtr":[]}`,
 			method:      http.MethodGet,
 		},
 		{
 			description: "styles | response",
 			resourceURI: "011_style",
 			uri:         "/api/events?_fields=Id,Timestamp,EventTypeId",
-			expected:    `{"Status":"ok","Result":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111}]}`,
+			expected:    `{"Status":"ok","ResultPtr":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111}]}`,
 			method:      http.MethodGet,
 		},
 		{
@@ -909,7 +909,7 @@ func TestRouter(t *testing.T) {
 			resourceURI:  "048_tabjson_style",
 			uri:          "/api/events?_criteria=(id%20=%201%20UNION%20ALL%20SELECT%209%20as%20id%2C%20To_Date%28%222019-03-11T02%3A20%3A33Z%22%29%20as%20timestamp%2C%2010%20as%20event_type_id%2C%2020%20as%20quantity%2C%206%20as%20user_id)",
 			useAssertPkg: true,
-			expected:     `{"Status":"error","Message":"can't use criteria on view events","Errors":[{"View":"events","Parameter":"_criteria","Message":"can't use criteria on view events"}],"Result":[]}`,
+			expected:     `{"Status":"error","Message":"can't use criteria on view events","Errors":[{"View":"events","Parameter":"_criteria","Message":"can't use criteria on view events"}],"ResultPtr":[]}`,
 			method:       http.MethodGet,
 		},
 		{
@@ -1180,7 +1180,7 @@ func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router, shouldD
 		return false
 	}
 
-	response, err := ioutil.ReadAll(responseWriter.Result().Body)
+	response, err := ioutil.ReadAll(responseWriter.ResultPtr().Body)
 	if !assert.Nil(t, err, c.description) {
 		return false
 	}
@@ -1235,7 +1235,7 @@ func encodeToken(token string) string {
 	return base64.StdEncoding.EncodeToString([]byte(token))
 }
 
-func loadOpenApi(ctx context.Context, URL string, fs afs.Service) (map[string]interface{}, error) {
+func loadOpenApi(ctx context.Group, URL string, fs afs.Service) (map[string]interface{}, error) {
 	data, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, err

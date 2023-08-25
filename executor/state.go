@@ -6,16 +6,16 @@ import (
 	"sync"
 )
 
-type Parameters struct {
+type State struct {
 	index map[string]*structology.State
 	mux   sync.Mutex
 }
 
-func (p *Parameters) Add(name string, selector *view.State) {
+func (p *State) Add(name string, state *view.State) {
 	p.mux.Lock()
 	_, ok := p.index[name]
 	if !ok {
-		p.index[name] = selector.Template
+		p.index[name] = state.Template
 	}
 	p.mux.Unlock()
 }

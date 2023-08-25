@@ -16,7 +16,7 @@ SELECT bar.*
 FROM (SELECT *
       FROM BAR t
       WHERE 1 = 1 ${predicate.Builder().CombineOr(
-        $predicate.Ctx(0, "AND"),
-        $predicate.Ctx(1, "OR" )
+        $predicate.FilterGroup(0, "AND"),
+        $predicate.FilterGroup(1, "OR" )
       ).Build("AND")}
     ) bar

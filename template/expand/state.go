@@ -6,6 +6,7 @@ import (
 	"github.com/viant/velty/est"
 	"github.com/viant/xdatly/handler/mbus"
 	"github.com/viant/xdatly/handler/validator"
+	"github.com/viant/xdatly/predicate"
 )
 
 type (
@@ -31,6 +32,7 @@ type (
 		Validator       *validator.Service `velty:"names=validator"`
 		MessageBus      *mbus.Service      `velty:"names=messageBus"`
 		Predicate       *Predicate         `velty:"names=predicate"`
+		Filters         predicate.Filters  `velty:"names=filters"`
 	}
 
 	StateOption func(state *State)

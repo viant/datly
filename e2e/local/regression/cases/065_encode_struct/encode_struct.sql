@@ -9,6 +9,6 @@ SELECT vendor.*
 FROM (
         SELECT * FROM VENDOR t
              WHERE 1=1 ${predicate.Builder().CombineAnd(
-                  $predicate.Ctx(0, "AND")
+                  $predicate.FilterGroup(0, "AND")
                 ).Build("AND")}
     ) vendor

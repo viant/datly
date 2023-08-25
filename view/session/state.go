@@ -65,7 +65,7 @@ func (s *State) ResetViewState(ctx context.Context, aView *view.View) error {
 }
 
 func (s *State) setViewState(ctx context.Context, aView *view.View) (err error) {
-	opts := s.viewOptions(aView)
+	opts := s.ViewOptions(aView)
 	if aView.Mode == view.ModeQuery {
 		ns := s.namespacedView.ByName(aView.Name)
 		if ns == nil {
@@ -102,9 +102,8 @@ func (s *State) viewLookupOptions(parameters state.NamedParameters, opts *Option
 	return result
 }
 
-func (s *State) viewOptions(aView *view.View) *Options {
+func (s *State) ViewOptions(aView *view.View) *Options {
 	selectors := s.resourceState.Lookup(aView)
-
 	viewOptions := s.Options.Clone()
 	var parameters state.NamedParameters
 	if aView.Template != nil {
@@ -147,7 +146,7 @@ func (s *State) setTemplateState(ctx context.Context, aView *view.View, opts *Op
 		stateType := template.StateType()
 		if stateType.IsDefined() {
 			aState := state.Template
-			err := s.PopulateState(ctx, template.Parameters, aState, opts)
+			err := s.SetState(ctx, template.Parameters, aState, opts)
 			if err != nil {
 				return err
 			}
@@ -156,7 +155,7 @@ func (s *State) setTemplateState(ctx context.Context, aView *view.View, opts *Op
 	return nil
 }
 
-func (s *State) PopulateState(ctx context.Context, parameters state.Parameters, aState *structology.State, opts *Options) error {
+func (s *State) SetState(ctx context.Context, parameters state.Parameters, aState *structology.State, opts *Options) error {
 	err := httputils.NewErrors()
 	parametersGroup := parameters.GroupByStatusCode()
 	for _, group := range parametersGroup {
@@ -194,6 +193,9 @@ func (s *State) populateParameter(ctx context.Context, parameter *state.Paramete
 	}
 	if value, err = s.ensureValidValue(value, parameter); err != nil {
 		return err
+	}
+	if options.indirectState { //parameters.Selectors are not initialized from the tempalte state
+		return aState.SetValue(parameter.Name, value)
 	}
 	return parameter.Selector().SetValue(aState.Pointer(), value)
 }

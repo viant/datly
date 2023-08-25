@@ -100,22 +100,18 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 	}, nil
 }
 
-func (u *stateUpdater) update(ctx context.Context, request *http.Request, route *Route, templateState interface{}) error {
-	stateType := structology.NewStateType(reflect.TypeOf(templateState))
-	viewState := stateType.WithValue(templateState)
+func (u *stateUpdater) update(ctx context.Context, request *http.Request, route *Route, dest interface{}) error {
+	stateType := structology.NewStateType(reflect.TypeOf(dest))
+	viewState := stateType.WithValue(dest)
 	sessionState := vsession.New(route.View, vsession.WithLocatorOptions(route.LocatorOptions(request)...))
-	resourceState := sessionState.ResourceState()
-	resourceState.Init(route.View)
-	resourceState.Views[route.View.Name].Template = viewState
-
-	return sessionState.SetViewState(ctx, route.View)
+	options := sessionState.ViewOptions(route.View)
+	return sessionState.SetState(ctx, route.View.Template.Parameters, viewState, options.Indirect(true))
 }
 
 func (v *staterCacheValue) getUpdater() (*stateUpdater, error) {
 	v.once.Do(func() {
 		v.updater, v.err = v.newer()
 	})
-
 	return v.updater, v.err
 }
 

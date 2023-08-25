@@ -10,7 +10,7 @@ import (
 )
 
 type Session struct {
-	Parameters     *Parameters
+	Parameters     *State
 	View           *view.View
 	State          *expand.State
 	SessionHandler *session.Session
@@ -28,7 +28,7 @@ func NewSessionWithCustomHandler(selectors *view.ResourceState, aView *view.View
 	if aView == nil {
 		return nil, fmt.Errorf("view was empty")
 	}
-	parameters := NewParameters()
+	parameters := NewState()
 	for viewName := range selectors.Views {
 		parameters.Add(viewName, selectors.Views[viewName])
 	}
@@ -42,8 +42,9 @@ func NewSessionWithCustomHandler(selectors *view.ResourceState, aView *view.View
 	}, nil
 }
 
-func NewParameters() *Parameters {
-	return &Parameters{index: map[string]*structology.State{}}
+// NewState creates an executor state, TODO clerify why not use view resource state  (query selector can be done as *) ?
+func NewState() *State {
+	return &State{index: map[string]*structology.State{}}
 }
 
 func (s *Session) Lookup(v *view.View) *structology.State {

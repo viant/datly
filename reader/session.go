@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/structology"
+	"github.com/viant/xdatly/predicate"
 	"reflect"
 	"strings"
 	"sync"
@@ -16,14 +17,20 @@ type (
 	Session struct {
 		mux           sync.Mutex
 		CacheDisabled bool
-		Dest          interface{} //slice
 		View          *view.View
-		States        *view.ResourceState
+		State         *view.ResourceState
 		Parent        *view.View
-		Metrics       []*Metric
-		ViewMeta      interface{}
-		Stats         []*Info
 		IncludeSQL    bool
+		Response
+	}
+
+	Response struct {
+		result    interface{}
+		ResultPtr interface{} //slice pointer
+		ViewMeta  interface{}
+		Stats     []*Info
+		Metrics   []*Metric
+		Filters   predicate.Filters
 	}
 
 	ParentData struct {
@@ -54,16 +61,29 @@ type (
 	}
 )
 
+func (r *Response) Result() interface{} {
+	if r.ResultPtr == nil {
+		return nil
+	}
+	result := r.result
+	if result != nil {
+		return result
+	}
+	result = reflect.ValueOf(r.ResultPtr).Elem().Interface()
+	r.result = result
+	return result
+}
+
 func (s *Info) Name() string {
 	return strings.Title(strings.ReplaceAll(s.View, "#", ""))
 }
 
 // Init initializes session
 func (s *Session) Init() error {
-	s.States.Init(s.View)
-	if _, ok := s.Dest.(*interface{}); !ok {
+	s.State.Init(s.View)
+	if _, ok := s.ResultPtr.(*interface{}); !ok {
 		viewType := reflect.PtrTo(s.View.Schema.SliceType())
-		destType := reflect.TypeOf(s.Dest)
+		destType := reflect.TypeOf(s.ResultPtr)
 		if viewType.Kind() == reflect.Ptr && destType.Kind() == reflect.Ptr {
 			if !viewType.Elem().ConvertibleTo(destType.Elem()) {
 				return fmt.Errorf("type mismatch, view slice type is: %v while destination type is %v", viewType.String(), destType.String())
@@ -78,7 +98,7 @@ func (s *Session) Init() error {
 
 // AddCriteria adds the supplied view criteria
 func (s *Session) AddCriteria(aView *view.View, criteria string, placeholders ...interface{}) {
-	sel := s.States.Lookup(aView)
+	sel := s.State.Lookup(aView)
 	sel.Criteria = criteria
 	sel.Placeholders = placeholders
 }
@@ -92,13 +112,13 @@ func (s *Session) AddMetric(m *Metric) {
 // NewSession creates a session
 func NewSession(dest interface{}, aView *view.View, opts ...Option) (*Session, error) {
 	ret := &Session{
-		Dest: dest,
-		View: aView,
+		Response: Response{ResultPtr: dest},
+		View:     aView,
 	}
 
 	err := options(opts).Apply(ret)
-	if ret.States == nil {
-		ret.States = view.NewResourceState()
+	if ret.State == nil {
+		ret.State = view.NewResourceState()
 	}
 	return ret, err
 }
@@ -114,7 +134,7 @@ func (s *Session) ParentData() (*ParentData, bool) {
 	}
 	return &ParentData{
 		View:     s.Parent,
-		Selector: s.States.Lookup(s.Parent),
+		Selector: s.State.Lookup(s.Parent),
 	}, true
 }
 
@@ -138,7 +158,7 @@ func (s *Session) IsCacheEnabled(aView *view.View) bool {
 
 func (s *Session) Lookup(v *view.View) *structology.State {
 	s.mux.Lock()
-	sel := s.States.Lookup(v)
+	sel := s.State.Lookup(v)
 	sel.Init(v)
 	s.mux.Unlock()
 	return sel.Template

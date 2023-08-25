@@ -64,14 +64,6 @@ type (
 
 	ApiPrefix string
 
-	ReaderSession struct {
-		RequestParams *RequestParams
-		Route         *Route
-		Request       *http.Request
-		Response      http.ResponseWriter
-		State         *view.ResourceState
-	}
-
 	preparedResponse struct {
 		objects  interface{}
 		viewMeta interface{}
@@ -403,13 +395,13 @@ func (r *Router) prepareResponse(session *ReaderSession, includeSQL bool, metric
 		return nil, false, err
 	}
 
-	//if !r.runAfterFetchIfNeeded(session, readerSession.Dest) {
+	//if !r.runAfterFetchIfNeeded(session, readerSession.ResultPtr) {
 	//	return nil, false, nil
 	//}
 
 	viewMeta := readerSession.ViewMeta
 	readerStats := readerSession.Stats
-	value := reflect.ValueOf(readerSession.Dest).Elem().Interface()
+	value := reflect.ValueOf(readerSession.ResultPtr).Elem().Interface()
 	result, err := r.result(session, value, viewMeta, readerStats)
 	if err != nil {
 		return nil, false, err
@@ -434,7 +426,7 @@ func (r *Router) readValue(readerSession *ReaderSession, includeSQL bool, metric
 	}
 	session.CacheDisabled = readerSession.IsCacheDisabled()
 	session.IncludeSQL = includeSQL
-	session.States = readerSession.State
+	session.State = readerSession.State
 	if err := reader.New().Read(context.TODO(), session); err != nil {
 		return nil, err
 	}

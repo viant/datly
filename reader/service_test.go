@@ -479,9 +479,9 @@ func testView(t *testing.T, testCase usecase, dataView *view.View, err error, se
 	selectors := view.NewResourceState()
 
 	session := &reader.Session{
-		Dest:   testCase.dest,
-		View:   dataView,
-		States: selectors,
+		Dest:  testCase.dest,
+		View:  dataView,
+		State: selectors,
 	}
 
 	err = service.Read(context.TODO(), session)

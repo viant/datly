@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xdatly/predicate"
 	"strings"
 )
 
@@ -22,7 +23,7 @@ type (
 	}
 
 	PredicateConfig struct {
-		Context  int
+		Group    int
 		Selector *structology.Selector `velty:"-"`
 		Expander codec.PredicateHandler
 		Ensure   bool
@@ -53,10 +54,6 @@ func (p *Predicate) Builder() *PredicateBuilder {
 	return &PredicateBuilder{
 		output: &strings.Builder{},
 	}
-}
-
-func (p *Predicate) Ctx(group int, keyword string) (string, error) {
-	return p.expand(group, keyword)
 }
 
 func (p *Predicate) FilterGroup(group int, keyword string) (string, error) {
@@ -120,14 +117,14 @@ func (b *PredicateBuilder) Build(keyword string) string {
 	return " " + keyword + " " + b.output.String()
 }
 
-func (p *Predicate) expand(ctxNum int, operator string) (string, error) {
+func (p *Predicate) expand(group int, operator string) (string, error) {
 	result := &strings.Builder{}
 
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, PredicateCtx, p.ctx)
 	ctx = context.WithValue(ctx, PredicateState, p.state)
 	for _, predicateConfig := range p.config {
-		if predicateConfig.Context != ctxNum {
+		if predicateConfig.Group != group {
 			continue
 		}
 
@@ -136,6 +133,8 @@ func (p *Predicate) expand(ctxNum int, operator string) (string, error) {
 				continue
 			}
 		}
+
+		selector := predicateConfig.Selector
 
 		value := predicateConfig.Selector.Value(p.state.Pointer())
 
@@ -148,6 +147,7 @@ func (p *Predicate) expand(ctxNum int, operator string) (string, error) {
 			continue
 		}
 
+		p.appendFilter(selector, value)
 		if result.Len() != 0 {
 			result.WriteString(" ")
 			result.WriteString(operator)
@@ -163,6 +163,21 @@ func (p *Predicate) expand(ctxNum int, operator string) (string, error) {
 	}
 
 	return result.String(), nil
+}
+
+func (p *Predicate) appendFilter(selector *structology.Selector, value interface{}) {
+	tagText, _ := selector.Tag().Lookup("predicate")
+	predicateTag := predicate.ParseTag(tagText)
+	selectorName := selector.Name()
+	isExclusion := predicateTag.Exclusion && (strings.HasSuffix(strings.ToLower(selectorName), "excl") ||
+		strings.HasSuffix(strings.ToLower(selectorName), "exclusion"))
+	filter := p.ctx.Filters.LookupOrAdd(selector.Name())
+	filter.Tag = selector.Tag()
+	if isExclusion {
+		filter.Exclude = value
+	} else {
+		filter.Include = value
+	}
 }
 
 func (b *PredicateBuilder) And() *PredicateBuilder {

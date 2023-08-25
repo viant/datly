@@ -40,7 +40,7 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 	}
 
 	wg := sync.WaitGroup{}
-	collector := session.View.Collector(session.Dest, session.HandleViewMeta, session.View.MatchStrategy.SupportsParallel())
+	collector := session.View.Collector(session.ResultPtr, session.HandleViewMeta, session.View.MatchStrategy.SupportsParallel())
 	errors := shared.NewErrors(0)
 
 	s.readAll(ctx, session, collector, &wg, errors, session.Parent)
@@ -55,7 +55,7 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 		return err
 	}
 
-	if dest, ok := session.Dest.(*interface{}); ok {
+	if dest, ok := session.ResultPtr.(*interface{}); ok {
 		*dest = collector.Dest()
 	}
 
@@ -74,7 +74,6 @@ func (s *Service) afterRead(session *Session, collector *view.Collector, start *
 		session.View.Counter.IncrementValue(Success)
 	}
 	onFinish(end)
-
 	return elapsed
 }
 
@@ -87,7 +86,7 @@ func (s *Service) readAll(ctx context.Context, session *Session, collector *view
 	defer s.afterReadAll(collectorFetchEmitted, collector)
 
 	aView := collector.View()
-	selector := session.States.Lookup(aView)
+	selector := session.State.Lookup(aView)
 	if selector.Ignore {
 		return
 	}
@@ -180,16 +179,11 @@ func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *vi
 	start := Now()
 
 	onFinish := session.View.Counter.Begin(start)
-
 	err := s.readObjectsWithMeta(ctx, session, batchData, view, collector, selector, info)
 	info.Elapsed = s.afterRead(session, collector, &start, err, onFinish).String()
 
-	if err != nil {
-		return err
-	}
-
 	session.AddInfo(info)
-	return nil
+	return err
 }
 
 func (s *Service) readObjectsWithMeta(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.State, info *Info) error {
