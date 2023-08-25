@@ -87,11 +87,9 @@ type (
 		EnableDebug      *bool              `json:",omitempty"`
 		Transforms       marshal.Transforms `json:",omitempty"`
 
-		JSON
-		XLS
+		Input
+		Content
 		Output
-
-		//Index
 
 		bodyParamQuery map[string]*query
 
@@ -130,25 +128,41 @@ type (
 		_xlsMarshaller *xlsy.Marshaller
 	}
 
-	Output struct {
-		Cardinality       state.Cardinality    `json:",omitempty"`
-		CaseFormat        formatter.CaseFormat `json:",omitempty"`
-		OmitEmpty         bool                 `json:",omitempty"`
-		Style             Style                `json:",omitempty"`
-		Field             string               `json:",omitempty"`
-		Exclude           []string
-		NormalizeExclude  *bool
-		DateFormat        string             `json:",omitempty"`
-		CSV               *CSVConfig         `json:",omitempty"`
-		XLS               *XLSConfig         `json:",omitempty"`
-		XML               *XMLConfig         `json:",omitempty"`
-		TabularJSON       *TabularJSONConfig `json:",omitempty"`
-		RevealMetric      *bool
-		DebugKind         view.MetaKind
+	Input struct {
 		RequestBodySchema *state.Schema
+	}
+
+	Content struct {
+		Marshaller
+		DateFormat  string             `json:",omitempty"`
+		CSV         *CSVConfig         `json:",omitempty"`
+		XLS         *XLSConfig         `json:",omitempty"`
+		XML         *XMLConfig         `json:",omitempty"`
+		TabularJSON *TabularJSONConfig `json:",omitempty"`
+	}
+
+	Marshaller struct {
+		XLS
+		JSON
+	}
+
+	Output struct {
+		Cardinality      state.Cardinality    `json:",omitempty"`
+		CaseFormat       formatter.CaseFormat `json:",omitempty"`
+		OmitEmpty        bool                 `json:",omitempty"`
+		Style            Style                `json:",omitempty"`
+		Field            string               `json:",omitempty"`
+		Exclude          []string
+		NormalizeExclude *bool
+
+		RevealMetric *bool
+		DebugKind    view.MetaKind
+
+		DataFormat string `json:",omitempty"` //default data format
 
 		ResponseBody *BodySelector
-		DataFormat   string `json:",omitempty"` //default data format
+		Schema       *state.Schema
+		Parameters   state.Parameters
 
 		_caser          *format.Case
 		_excluded       map[string]bool
@@ -183,7 +197,6 @@ type (
 		_config                *xmlify.Config
 		_requestBodyMarshaller *xmlify.Marshaller
 		_outputMarshaller      *xmlify.Marshaller
-		_unwrapperSlice        *xunsafe.Slice
 	}
 
 	responseSetter struct {
@@ -497,6 +510,7 @@ func (r *Route) initCors(resource *Resource) {
 }
 
 func (r *Route) initStyle() error {
+
 	if (r.Style == "" || r.Style == BasicStyle) && r.Field == "" {
 		r.Style = BasicStyle
 		return nil
@@ -557,7 +571,6 @@ func FieldByName(responseType reflect.Type, name string) *xunsafe.Field {
 	if name == "" {
 		return nil
 	}
-
 	return xunsafe.FieldByName(responseType, name)
 }
 
@@ -891,15 +904,9 @@ func (r *Route) initTabJSONIfNeeded() error {
 }
 
 func (r *Route) initXMLIfNeeded() error {
-
-	if r.Output.DataFormat != XMLFormat {
-		return nil
-	}
-
 	if r.XML == nil {
 		r.XML = &XMLConfig{}
 	}
-
 	if r.XML._config == nil {
 		r.XML._config = getDefaultConfig()
 	}
@@ -939,8 +946,6 @@ func (r *Route) initXMLIfNeeded() error {
 	if r._requestBodyType == nil {
 		return nil
 	}
-
-	r.XML._unwrapperSlice = r._requestBodySlice
 	r.XML._requestBodyMarshaller, err = xmlify.NewMarshaller(r._requestBodyType, nil)
 	return err
 }
@@ -990,7 +995,7 @@ func (r *Route) AddApiKeys(keys ...*APIKey) {
 
 func (r *Route) initMarshaller() error {
 	r._jsonMarshaller = json.New(r.ioConfig())
-	r._xlsMarshaller = xlsy.NewMarshaller(r.Output.XLS.Options()...)
+	r._xlsMarshaller = xlsy.NewMarshaller(r.Content.XLS.Options()...)
 	return nil
 }
 

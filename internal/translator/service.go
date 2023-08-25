@@ -156,9 +156,9 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	ruleName := s.Repository.RuleName(resource.rule)
 	route.Service = service
 	route.View = view.NewRefView(resource.Rule.Root)
-	route.Output.CSV = resource.Rule.CSV
-	route.Output.TabularJSON = resource.Rule.TabularJSON
-	route.Output.XML = resource.Rule.XML
+	route.Content.CSV = resource.Rule.CSV
+	route.Content.TabularJSON = resource.Rule.TabularJSON
+	route.Content.XML = resource.Rule.XML
 	route.Output.DataFormat = resource.Rule.DataFormat
 
 	s.applyAsyncOption(resource, route)

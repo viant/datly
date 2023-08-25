@@ -52,7 +52,6 @@ type (
 		_resource *Resource
 		_index    map[string][]int
 		_routes   Routes
-		_queue    []func()
 	}
 
 	BytesReadCloser struct {
@@ -510,12 +509,9 @@ func (r *Router) marshalResult(session *ReaderSession, response *preparedRespons
 
 func (r *Router) tabJSONInterceptors(session *ReaderSession, destValue interface{}, filters []*json.FilterEntry) json.MarshalerInterceptors {
 	interceptors := make(map[string]json.MarshalInterceptor)
-
-	f := func() ([]byte, error) {
+	interceptors[session.Route.Field] = func() ([]byte, error) {
 		return r.marshalAsTabularJSON(session, destValue, filters)
 	}
-
-	interceptors[session.Route.Field] = json.MarshalInterceptor(f)
 	return interceptors
 
 }
@@ -1488,7 +1484,7 @@ func (r *Router) prepareAndExecuteExecutor(ctx context.Context, request *http.Re
 }
 
 func (r *Router) marshalAsXLS(session *ReaderSession, readerSession *preparedResponse, filters []*json.FilterEntry) ([]byte, error) {
-	return session.Route.XLS._xlsMarshaller.Marshal(readerSession.objects)
+	return session.Route.Content.Marshaller.XLS._xlsMarshaller.Marshal(readerSession.objects)
 }
 
 func updateFieldPathsIfNeeded(filter *json.FilterEntry) {
