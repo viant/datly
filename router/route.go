@@ -8,13 +8,13 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/async"
-	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/common"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/router/marshal/tabjson"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
+	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -91,12 +91,11 @@ type (
 		XLS
 		Output
 
-		Index
+		//Index
 
 		bodyParamQuery map[string]*query
 
 		ParamStatusError *int         `json:",omitempty"`
-		Cache            *cache.Cache `json:",omitempty"`
 		Compression      *Compression `json:",omitempty"`
 		Handler          *Handler     `json:",omitempty"`
 
@@ -256,13 +255,6 @@ func (r *Route) Marshaller(request *http.Request) *marshal.Marshaller {
 	setter.SetStringIfEmpty(&contentType, request.Header.Get(strings.ToLower(HeaderContentType)))
 	switch contentType {
 	case CSVContentType:
-		if r.CSV == nil {
-			r.CSV = &CSVConfig{
-				Separator: ",",
-				NullValue: "",
-			}
-
-		}
 		return marshal.NewMarshaller(r._requestBodySlice.Type, r.CSV.Unmarshal)
 	}
 	jsonPathInterceptor := json.UnmarshalerInterceptors{}
@@ -341,14 +333,13 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err := r.Index.Init(r.View, r.Field); err != nil {
-		return err
-	}
+	//if err := r.Index.Init(r.View, r.Field); err != nil {
+	//	return err
+	//}
 
 	if err := r.normalizePaths(); err != nil {
 		return err
 	}
-
 	r.addPrefixFieldIfNeeded()
 
 	if err := r.initMarshaller(); err != nil {
@@ -361,10 +352,6 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 
 	r._unmarshallerInterceptors = r.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
 	if err := r.initServiceType(); err != nil {
-		return err
-	}
-
-	if err := r.initCache(ctx); err != nil {
 		return err
 	}
 
@@ -408,30 +395,48 @@ func (r *Route) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	return updateViewConfig(ctx, resource.Resource, reverse(r.Namespace), r.View)
+	return updateViewConfig(ctx, resource.Resource, r.View)
 }
 
-func updateViewConfig(ctx context.Context, resource *view.Resource, nameToNs map[string]string, aView *view.View) error {
-	var err error
-
-	viewNs, ok := nameToNs[aView.Name]
-	if ok {
-		aViewCopy := *aView
-		aViewCopy.Selector, err = aViewCopy.Selector.CloneWithNs(ctx, resource, &aViewCopy, viewNs)
-		if err != nil {
-			return err
-		}
-
-		*aView = aViewCopy
-	}
-
-	for _, relation := range aView.With {
-		if err = updateViewConfig(ctx, resource, nameToNs, &relation.Of.View); err != nil {
-			return err
-		}
-	}
-
+func updateViewConfig(ctx context.Context, resource *view.Resource, aView *view.View) error {
+	//var err error
+	//
+	//viewNs, ok := nameToNs[aView.Name]
+	//if ok {
+	//	aViewCopy := *aView
+	//	aViewCopy.Selector, err = aViewCopy.Selector.CloneWithNs(ctx, resource, &aViewCopy, viewNs)
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	*aView = aViewCopy
+	//}
+	//
+	//for _, relation := range aView.With {
+	//	if err = updateViewConfig(ctx, resource, nameToNs, &relation.Of.View); err != nil {
+	//		return err
+	//	}
+	//}
+	//
 	return nil
+}
+
+func (r *Route) IsCacheDisabled(req *http.Request) bool {
+	if r.EnableDebug == nil {
+		return false
+	}
+	return (*r.EnableDebug) && (req.Header.Get(httputils.DatlyRequestDisableCacheHeader) != "" || req.Header.Get(strings.ToLower(httputils.DatlyRequestDisableCacheHeader)) != "")
+}
+
+func (r *Route) IsMetricDebug(req *http.Request) bool {
+	if !r.IsRevealMetric() {
+		return false
+	}
+	value := req.Header.Get(httputils.DatlyRequestMetricsHeader)
+	if value == "" {
+		value = req.Header.Get(strings.ToLower(httputils.DatlyRequestMetricsHeader))
+	}
+	return strings.ToLower(value) == httputils.DatlyDebugHeaderValue
 }
 
 func reverse(namespace map[string]string) map[string]string {
@@ -625,7 +630,6 @@ func (r *Route) initRequestBodyFromParams() error {
 	if len(params) == 0 {
 		return nil
 	}
-	r.bodyParamQuery = map[string]*query{}
 	bodyParam, _ := r.fullBodyParam(params)
 	rType, err := r.initRequestBodyType(bodyParam, params)
 	if err != nil {
@@ -634,19 +638,7 @@ func (r *Route) initRequestBodyFromParams() error {
 
 	r.RequestBodySchema = state.NewSchema(rType)
 	r._requestBodyType = rType
-
 	for _, param := range params {
-		if param.In.Name != "" {
-			aQuery := &query{}
-			QL := fmt.Sprintf("SELECT %v FROM `/`", param.In.Name)
-			if aQuery.Query, err = structql.NewQuery(QL, rType, nil); err != nil {
-				return fmt.Errorf("failed build query for param %v in requet type: %s due to: %w", param.In.Name, rType.String(), err)
-			}
-			if destType := aQuery.StructType(); destType != nil {
-				aQuery.field = xunsafe.NewField(destType.Field(0))
-			}
-			r.bodyParamQuery[param.In.Name] = aQuery
-		}
 		r._requestBodyParamRequired = r._requestBodyParamRequired || param.IsRequired()
 	}
 
@@ -697,14 +689,6 @@ func (r *Route) findRequestBodyParams(aView *view.View, params *[]*state.Paramet
 	}
 }
 
-func (r *Route) initCache(ctx context.Context) error {
-	if r.Cache == nil {
-		return nil
-	}
-
-	return r.Cache.Init(ctx)
-}
-
 func (r *Route) initCompression(resource *Resource) {
 	if r.Compression != nil {
 		return
@@ -713,14 +697,14 @@ func (r *Route) initCompression(resource *Resource) {
 	r.Compression = resource.Compression
 }
 
-func (i *Index) ViewByPrefix(prefix string) (*view.View, error) {
-	aView, ok := i.viewByPrefix(prefix)
-	if !ok {
-		return nil, fmt.Errorf("not found view with prefix %v", prefix)
-	}
-
-	return aView, nil
-}
+//func (i *Index) ViewByPrefix(prefix string) (*view.View, error) {
+//	aView, ok := i.viewByPrefix(prefix)
+//	if !ok {
+//		return nil, fmt.Errorf("not found view with prefix %v", prefix)
+//	}
+//
+//	return aView, nil
+//}
 
 func (r *Route) ShouldNormalizeExclude() bool {
 	return r.NormalizeExclude == nil || *r.NormalizeExclude
@@ -749,9 +733,9 @@ func (r *Route) normalizePaths() error {
 	return nil
 }
 
-func (r *Route) PrefixByView(aView *view.View) (string, bool) {
-	return r.Index.prefixByView(aView)
-}
+//func (r *Route) PrefixByView(aView *view.View) (string, bool) {
+//	return r.Index.prefixByView(aView)
+//}
 
 func (r *Route) indexExcluded() {
 	r._excluded = map[string]bool{}
@@ -806,7 +790,6 @@ func (r *Route) addPrefixFieldIfNeeded() {
 	if r.Field == "" {
 		return
 	}
-
 	for i, actual := range r.Exclude {
 		r.Exclude[i] = r.Field + "." + actual
 	}

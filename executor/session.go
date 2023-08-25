@@ -29,8 +29,8 @@ func NewSessionWithCustomHandler(selectors *view.ResourceState, aView *view.View
 		return nil, fmt.Errorf("view was empty")
 	}
 	parameters := NewParameters()
-	for viewName := range selectors.Index {
-		parameters.Add(viewName, selectors.Index[viewName])
+	for viewName := range selectors.Views {
+		parameters.Add(viewName, selectors.Views[viewName])
 	}
 
 	return &Session{
@@ -50,7 +50,7 @@ func (s *Session) Lookup(v *view.View) *structology.State {
 	s.mux.Lock()
 	state, ok := s.Parameters.index[v.Name]
 	if !ok {
-		state = v.Template.State().NewState()
+		state = v.Template.StateType().NewState()
 		s.Parameters.index[v.Name] = state
 	}
 	s.mux.Unlock()

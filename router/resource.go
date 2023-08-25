@@ -99,22 +99,17 @@ func (r *Resource) Init(ctx context.Context) error {
 	if r._initialised {
 		return nil
 	}
-
 	transforms := marshal.TransformIndex{}
 	for _, route := range r.Routes {
 		if err := route.normalizePaths(); err != nil {
 			return err
 		}
-
 		if route.View.Ref == "" {
 			continue
 		}
-
 		route.Transforms, transforms[route.View.Ref] = r.filterTransforms(route)
 	}
-
 	r._initialised = true
-
 	var columnCacheExists bool
 	if r.ColumnsDiscovery {
 		parent, name := url.Split(r.SourceURL, file.Scheme)
@@ -130,7 +125,6 @@ func (r *Resource) Init(ctx context.Context) error {
 
 	for _, route := range r.Routes {
 		route._resource = r.Resource
-
 		if route.RevealMetric == nil {
 			route.RevealMetric = r.RevealMetric
 		}

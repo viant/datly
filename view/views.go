@@ -9,7 +9,6 @@ import (
 
 type (
 	NamespacedView struct {
-		View        *View
 		Views       []*NamespaceView
 		byNamespace map[string]int
 		byName      map[string]int
@@ -94,7 +93,7 @@ func (n *NamespacedView) indexView(aView *View, aPath string) {
 
 // IndexViews indexes views
 func IndexViews(aView *View) *NamespacedView {
-	result := &NamespacedView{View: aView, byNamespace: map[string]int{}, byName: map[string]int{}}
+	result := &NamespacedView{byNamespace: map[string]int{}, byName: map[string]int{}}
 	result.indexView(aView, "")
 	return result
 }

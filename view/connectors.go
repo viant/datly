@@ -5,11 +5,11 @@ import (
 	"fmt"
 )
 
-//Connectors represents Connector registry
-//Value was produced based on Connector.Name
+// Connectors represents Connector registry
+// Value was produced based on Connector.Name
 type Connectors map[string]*Connector
 
-//Register registers connector
+// Register registers connector
 func (v *Connectors) Register(connector *Connector) {
 	if len(*v) == 0 {
 		*v = make(map[string]*Connector)
@@ -17,7 +17,7 @@ func (v *Connectors) Register(connector *Connector) {
 	(*v)[connector.Name] = connector
 }
 
-//Lookup returns Connector by Connector.Name
+// Lookup returns Connector by Connector.Name
 func (v Connectors) Lookup(name string) (*Connector, error) {
 	if len(v) == 0 {
 		return nil, fmt.Errorf("failed to lookup connector %v", name)
@@ -29,10 +29,10 @@ func (v Connectors) Lookup(name string) (*Connector, error) {
 	return ret, nil
 }
 
-//ConnectorSlice represents Slice of *Connector
+// ConnectorSlice represents Slice of *Connector
 type ConnectorSlice []*Connector
 
-//Index indexes Connectors by Connector.Name.
+// Views indexes Connectors by Connector.Name.
 func (c ConnectorSlice) Index() Connectors {
 	result := Connectors(map[string]*Connector{})
 	c.IndexInto(&result)
@@ -45,7 +45,7 @@ func (c ConnectorSlice) IndexInto(result *Connectors) {
 	}
 }
 
-//Init initializes each connector
+// Init initializes each connector
 func (c ConnectorSlice) Init(ctx context.Context, connectors Connectors) error {
 	for i := range c {
 		if err := c[i].Init(ctx, connectors); err != nil {

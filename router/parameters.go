@@ -8,7 +8,6 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox"
-	"github.com/viant/xunsafe"
 	"io"
 	"net/http"
 	"net/url"
@@ -22,19 +21,14 @@ type (
 		sync.Mutex
 		OutputContentType string
 		InputDataFormat   string
-
-		cookiesIndex map[string]*http.Cookie
-		cookies      []*http.Cookie
-
-		queryIndex url.Values
-		pathIndex  map[string]string
+		queryIndex        url.Values
+		pathIndex         map[string]string
 
 		request *http.Request
 		route   *Route
 
 		requestBodyContent []byte
 		bodyParam          interface{}
-		bodyPathParam      map[string]interface{}
 		requestBodyErr     error
 		readRequestBody    bool
 	}
@@ -42,11 +36,8 @@ type (
 
 func NewRequestParameters(request *http.Request, route *Route) (*RequestParams, error) {
 	parameters := &RequestParams{
-		cookies:       request.Cookies(),
-		request:       request,
-		route:         route,
-		bodyPathParam: map[string]interface{}{},
-		cookiesIndex:  map[string]*http.Cookie{},
+		request: request,
+		route:   route,
 	}
 
 	if paramName, err := parameters.init(request, route); err != nil {
@@ -63,9 +54,7 @@ func (p *RequestParams) init(request *http.Request, route *Route) (string, error
 	p.queryIndex = request.URL.Query()
 	p.OutputContentType = p.outputContentType(route)
 	p.InputDataFormat = p.header(HeaderContentType)
-	for i := range p.cookies {
-		p.cookiesIndex[p.cookies[i].Name] = p.cookies[i]
-	}
+
 	return "", nil
 }
 
@@ -93,15 +82,6 @@ func (p *RequestParams) header(name string) string {
 		result = p.request.Header.Get(strings.ToLower(name))
 	}
 	return result
-}
-
-func (p *RequestParams) cookie(name string) string {
-	cookie, ok := p.cookiesIndex[name]
-	if !ok {
-		return ""
-	}
-
-	return cookie.Value
 }
 
 func (p *RequestParams) parseRequestBody(body []byte, route *Route) (interface{}, error) {
@@ -168,23 +148,24 @@ func (p *RequestParams) extractBodyByPath(param *state.Parameter, err error) (in
 		return p.bodyParam, nil
 	}
 
-	value, ok := p.bodyPathParam[param.In.Name]
-	if ok {
-		return value, nil
-	}
+	//	value, ok := p.bodyPathParam[param.In.Name]
+	//	if ok {
+	//	return value, nil
+	//	}
 
-	aQuery, ok := p.route.bodyParamQuery[param.In.Name]
-	if !ok {
-		return nil, fmt.Errorf("unable to locate param aQuery: %s", param.Name)
-	}
+	//aQuery, ok := p.route.bodyParamQuery[param.In.Name]
+	//if !ok {
+	//	return nil, fmt.Errorf("unable to locate param aQuery: %s", param.Name)
+	//}
 
-	if value, err = aQuery.First(p.bodyParam); err == nil {
-		ptr := xunsafe.AsPointer(value)
-		value = aQuery.field.Value(ptr)
-		p.bodyPathParam[param.In.Name] = value
-	}
+	//if value, err = aQuery.First(p.bodyParam); err == nil {
+	//	ptr := xunsafe.AsPointer(value)
+	//	value = aQuery.field.Value(ptr)
+	//	p.bodyPathParam[param.In.Name] = value
+	//}
 
-	return value, err
+	//return value, err
+	return nil, err
 }
 
 func (p *RequestParams) readBody() error {
@@ -237,7 +218,6 @@ func (p *RequestParams) extractHttpParam(ctx context.Context, param *state.Param
 	case state.KindHeader:
 		return p.convert(true, p.header(param.In.Name), param)
 	case state.KindCookie:
-		return p.convert(true, p.cookie(param.In.Name), param)
 	}
 
 	return nil, fmt.Errorf("unsupported param kind %v", param.In.Kind)

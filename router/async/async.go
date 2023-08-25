@@ -54,7 +54,7 @@ type (
 		sync.Map
 	}
 
-	handler struct {
+	singletonHandler struct {
 		sync.Once
 		err     error
 		handler Handler
@@ -211,8 +211,8 @@ func (c *Async) Handler(ctx context.Context, cfg *async2.Config) (Handler, error
 }
 
 func (a *RecordHandler) loadHandler(ctx context.Context, cfg *async2.Config) (Handler, error) {
-	actual, _ := a.LoadOrStore(*cfg, &handler{})
-	aHandler := actual.(*handler)
+	actual, _ := a.LoadOrStore(*cfg, &singletonHandler{})
+	aHandler := actual.(*singletonHandler)
 	aHandler.Once.Do(func() {
 		aHandler.handler, aHandler.err = a.detectHandlerType(ctx, cfg)
 	})

@@ -144,7 +144,7 @@ func (g *valueGetter) Value(ctx context.Context, paramName string) (interface{},
 func (s *State) setTemplateState(ctx context.Context, aView *view.View, opts *Options) error {
 	state := s.resourceState.Lookup(aView)
 	if template := aView.Template; template != nil {
-		stateType := template.State()
+		stateType := template.StateType()
 		if stateType.IsDefined() {
 			aState := state.Template
 			err := s.PopulateState(ctx, template.Parameters, aState, opts)

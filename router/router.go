@@ -17,10 +17,8 @@ import (
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/async"
 	"github.com/viant/datly/router/async/handler"
-	"github.com/viant/datly/router/cache"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/template/expand"
-	"github.com/viant/datly/utils/debug"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
@@ -116,17 +114,6 @@ func (r *Route) IsMetricInfo(req *http.Request) bool {
 	return strings.ToLower(value) == httputils.DatlyInfoHeaderValue
 }
 
-func (r *Route) IsMetricDebug(req *http.Request) bool {
-	if !r.IsRevealMetric() {
-		return false
-	}
-	value := req.Header.Get(httputils.DatlyRequestMetricsHeader)
-	if value == "" {
-		value = req.Header.Get(strings.ToLower(httputils.DatlyRequestMetricsHeader))
-	}
-	return strings.ToLower(value) == httputils.DatlyDebugHeaderValue
-}
-
 func (s *ReaderSession) IsMetricDebug() bool {
 	return s.Route.IsMetricDebug(s.Request)
 }
@@ -210,16 +197,6 @@ func (r *Router) AuthorizeRequest(request *http.Request, route *Route) error {
 	}
 
 	return nil
-}
-
-func (r *Router) prepareViewHandler(response http.ResponseWriter, request *http.Request, route *Route) {
-	if route.Cors != nil {
-		enableCors(response, request, route.Cors, false)
-	}
-
-	if route.EnableAudit {
-		r.logAudit(request, response, route)
-	}
 }
 
 func New(resource *Resource, options ...interface{}) (*Router, error) {
@@ -399,15 +376,15 @@ func (r *Router) readResponse(ctx context.Context, session *ReaderSession) (Payl
 		return nil, err
 	}
 
-	templateMeta := session.Route.View.Template.Meta
-	if templateMeta != nil && templateMeta.Kind == view.MetaTypeHeader && response.viewMeta != nil {
-		data, err := goJson.Marshal(response.viewMeta)
-		if err != nil {
-			return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
-		}
-
-		payloadReader.AddHeader(templateMeta.Name, string(data))
-	}
+	//templateMeta := session.Route.View.Template.Meta
+	//if templateMeta != nil && templateMeta.Kind == view.MetaTypeHeader && response.viewMeta != nil {
+	//	data, err := goJson.Marshal(response.viewMeta)
+	//	if err != nil {
+	//		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
+	//	}
+	//
+	//	payloadReader.AddHeader(templateMeta.Name, string(data))
+	//}
 
 	for _, stat := range response.stats {
 		marshal, err := goJson.Marshal(stat)
@@ -427,9 +404,9 @@ func (r *Router) prepareResponse(session *ReaderSession, includeSQL bool, metric
 		return nil, false, err
 	}
 
-	if !r.runAfterFetchIfNeeded(session, readerSession.Dest) {
-		return nil, false, nil
-	}
+	//if !r.runAfterFetchIfNeeded(session, readerSession.Dest) {
+	//	return nil, false, nil
+	//}
 
 	viewMeta := readerSession.ViewMeta
 	readerStats := readerSession.Stats
@@ -474,35 +451,6 @@ func (r *Router) readValue(readerSession *ReaderSession, includeSQL bool, metric
 	return session, nil
 }
 
-func (r *Router) updateCache(ctx context.Context, route *Route, cacheEntry *cache.Entry, response PayloadReader) {
-	if !debug.Enabled {
-		go r.putCache(ctx, route, cacheEntry, response)
-		return
-	}
-
-	r.putCache(ctx, route, cacheEntry, response)
-}
-
-func (r *Router) cacheEntry(ctx context.Context, session *ReaderSession) (*cache.Entry, error) {
-	if session.Route.Cache == nil {
-		return nil, nil
-	}
-
-	cacheEntry, err := r.createCacheEntry(ctx, session)
-	if err != nil {
-		return nil, err
-	}
-
-	return cacheEntry, nil
-}
-
-func (r *Router) putCache(ctx context.Context, route *Route, cacheEntry *cache.Entry, payloadReader PayloadReader) {
-	data, err := io.ReadAll(payloadReader)
-	if err == nil {
-		_ = route.Cache.Put(ctx, cacheEntry, data, payloadReader.CompressionType(), payloadReader.Headers())
-	}
-}
-
 func (r *Router) runBeforeFetchIfNeeded(response http.ResponseWriter, request *http.Request, route *Route) (shouldContinue bool) {
 	if route.Visitor == nil || route.Visitor._fetcher == nil {
 		return true
@@ -528,33 +476,6 @@ func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Requ
 		return false
 	}
 
-	return true
-}
-
-func (r *Router) runAfterFetchIfNeeded(session *ReaderSession, dest interface{}) (shouldContinue bool) {
-	if session.Route.Visitor == nil || session.Route.Visitor._fetcher == nil {
-		return true
-	}
-
-	if actual, ok := session.Route.Visitor._fetcher.(config.AfterFetcher); ok {
-		return r.runAfterFetch(session, dest, actual.AfterFetch)
-	}
-
-	return true
-}
-
-func (r *Router) runAfterFetch(session *ReaderSession, dest interface{}, fn func(dest interface{}, response http.ResponseWriter, req *http.Request) error) bool {
-	respWrapper := httputils.NewClosableResponse(session.Response)
-	err := fn(dest, session.Response, session.Request)
-
-	if respWrapper.Closed {
-		return false
-	}
-
-	if err != nil {
-		r.writeErr(session.Response, session.Route, err, http.StatusBadRequest)
-		return false
-	}
 	return true
 }
 
@@ -639,17 +560,18 @@ func (r *Router) buildJsonFilters(route *Route, selectors *view.ResourceState) (
 
 	selectors.Lock()
 	defer selectors.Unlock()
-	for viewName, selector := range selectors.Index {
+
+	namespaceView := view.IndexViews(route.View)
+	for viewName, selector := range selectors.Views {
 		if len(selector.Columns) == 0 {
 			continue
 		}
-
 		var aPath string
-		viewByName, ok := route.Index.viewByName(viewName)
-		if !ok {
+		nsView := namespaceView.ByName(viewName)
+		if nsView == nil {
 			aPath = ""
 		} else {
-			aPath = viewByName.Path
+			aPath = nsView.Path
 		}
 
 		fields := make([]string, len(selector.Fields))
@@ -740,26 +662,8 @@ func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route, vi
 	if route._responseSetter.metaField != nil && viewMeta != nil {
 		route._responseSetter.metaField.SetValue(responseBodyPtr, viewMeta)
 	}
-
 	r.setResponseStatus(route, newResponse, r.responseStatusSuccess(state), stats)
 	return newResponse.Elem().Interface()
-}
-
-func (r *Router) createCacheEntry(ctx context.Context, session *ReaderSession) (*cache.Entry, error) {
-	session.State.RWMutex.RLock()
-	defer session.State.RWMutex.RUnlock()
-
-	selectorSlice := make([]*view.State, len(session.State.Index))
-	for viewName := range session.State.Index {
-		index, _ := session.Route.viewIndex(viewName)
-		selectorSlice[index] = session.State.Index[viewName]
-	}
-	marshalled, err := goJson.Marshal(selectorSlice)
-	if err != nil {
-		return nil, err
-	}
-
-	return session.Route.Cache.Get(ctx, marshalled, session.Route.View.Name)
 }
 
 func normalizeErr(err error, statusCode int) (int, string, interface{}) {
@@ -790,8 +694,6 @@ func normalizeErr(err error, statusCode int) (int, string, interface{}) {
 		}
 
 		return statusCode, actual.Error(), items
-	case *JSONError:
-		return statusCode, "", actual.Object
 	case *httputils.Errors:
 		actual.SetStatus(statusCode)
 		for _, anError := range actual.Errors {
@@ -1107,24 +1009,10 @@ func (r *Router) readerPayloadReader(ctx context.Context, route *Route, session 
 }
 
 func (r *Router) readSyncResponse(ctx context.Context, session *ReaderSession) (PayloadReader, error) {
-	cacheEntry, err := r.cacheEntry(ctx, session)
-	if err != nil {
-		r.writeErr(session.Response, session.Route, err, http.StatusInternalServerError)
-	}
-
-	if cacheEntry != nil && cacheEntry.Has() {
-		return cacheEntry, nil
-	}
-
 	response, err := r.readResponse(ctx, session)
 	if err != nil {
 		return nil, err
 	}
-
-	if cacheEntry != nil {
-		r.updateCache(ctx, session.Route, cacheEntry, response)
-	}
-
 	return response, err
 }
 

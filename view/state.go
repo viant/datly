@@ -11,7 +11,7 @@ import (
 // State allows customizing View fetched from Database
 type (
 
-	//State represents view state
+	//StateType represents view state
 	State struct {
 		Template *structology.State
 		QuerySelector
@@ -101,7 +101,7 @@ func NewState() *State {
 
 // ResourceState represents State registry
 type ResourceState struct {
-	Index map[string]*State
+	Views map[string]*State
 	sync.RWMutex
 }
 
@@ -109,13 +109,13 @@ type ResourceState struct {
 func (s *ResourceState) Lookup(view *View) *State {
 	s.RWMutex.Lock()
 	defer s.RWMutex.Unlock()
-	if len(s.Index) == 0 {
-		s.Index = map[string]*State{}
+	if len(s.Views) == 0 {
+		s.Views = map[string]*State{}
 	}
-	selector, ok := s.Index[view.Name]
+	selector, ok := s.Views[view.Name]
 	if !ok {
 		selector = NewState()
-		s.Index[view.Name] = selector
+		s.Views[view.Name] = selector
 	}
 
 	selector.Init(view)
@@ -125,7 +125,7 @@ func (s *ResourceState) Lookup(view *View) *State {
 // NewResourceState creates a selector
 func NewResourceState() *ResourceState {
 	return &ResourceState{
-		Index:   map[string]*State{},
+		Views:   map[string]*State{},
 		RWMutex: sync.RWMutex{},
 	}
 }
@@ -134,7 +134,7 @@ func NewResourceState() *ResourceState {
 func (s *ResourceState) Init(aView *View) {
 	s.RWMutex.Lock()
 	s.RWMutex.Unlock()
-	for _, selector := range s.Index {
+	for _, selector := range s.Views {
 		selector.Init(aView)
 	}
 }

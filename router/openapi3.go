@@ -471,9 +471,11 @@ func (g *generator) convertParam(route *Route, param *state.Parameter, descripti
 
 func (g *generator) getViewPrefixes(mainView bool, route *Route, aView *view.View) []string {
 	var prefixes []string
-	prefix, ok := route.PrefixByView(aView)
-	if ok || mainView {
-		prefixes = append(prefixes, prefix)
+	nsViews := view.IndexViews(route.View)
+	nsView := nsViews.ByName(aView.Name)
+
+	if nsView != nil || mainView {
+		prefixes = append(prefixes, nsView.Namespaces...)
 	}
 	return prefixes
 }

@@ -11,11 +11,9 @@ import (
 
 type (
 	BodySelector struct {
-		Query      string
 		StateValue string
-
-		_bodyType reflect.Type
-		_accessor *types.Accessor
+		_bodyType  reflect.Type
+		_accessor  *types.Accessor
 	}
 )
 
@@ -24,7 +22,7 @@ func (s *BodySelector) Init(aView *view.View) error {
 		return fmt.Errorf("param name was not specified")
 	}
 
-	stateType := aView.Template.StateType()
+	stateType := aView.Template.EvaluatorStateType()
 	accessors := types.NewAccessors(&types.VeltyNamer{})
 
 	actualName := s.stateValue(aView)

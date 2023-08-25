@@ -123,7 +123,7 @@ func (g *gcpMockDecoder) Value(_ context.Context, raw interface{}, _ ...interfac
 	}
 
 	tokenType := "Bearer "
-	if index := strings.Index(rawString, tokenType); index != -1 {
+	if index := strings.Views(rawString, tokenType); index != -1 {
 		rawString = rawString[index+len(tokenType):]
 		decoded, err := base64.URLEncoding.DecodeString(rawString)
 		if err != nil {

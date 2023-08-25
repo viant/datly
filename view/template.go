@@ -55,7 +55,7 @@ type (
 	}
 )
 
-func (t *Template) State() *structology.StateType {
+func (t *Template) StateType() *structology.StateType {
 	return t.stateType
 }
 
@@ -494,6 +494,6 @@ func (t *Template) initMetaIfNeeded(ctx context.Context, r *Resource) error {
 	return t.Meta.Init(ctx, t, r)
 }
 
-func (t *Template) StateType() reflect.Type {
+func (t *Template) EvaluatorStateType() reflect.Type {
 	return t.sqlEvaluator.Type()
 }

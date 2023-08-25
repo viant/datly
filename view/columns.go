@@ -43,7 +43,7 @@ func (c NamedColumns) Column(name string) (codec.Column, bool) {
 	return lookup, true
 }
 
-// Index indexes columns by Column.Name
+// Views indexes columns by Column.Name
 
 // Register registers *Column
 func (c NamedColumns) Register(caser format.Case, column *Column) {

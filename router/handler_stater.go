@@ -3,8 +3,8 @@ package router
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
+	vsession "github.com/viant/datly/view/session"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
 	"net/http"
@@ -45,8 +45,7 @@ func (s *Stater) Into(ctx context.Context, into interface{}) error {
 	if err != nil {
 		return err
 	}
-
-	return updater.update(ctx, s.request, s.route, into, s.parameters)
+	return updater.update(ctx, s.request, s.route, into)
 }
 
 func (s *Stater) getUpdater(ctx context.Context, dstType reflect.Type) (*stateUpdater, error) {
@@ -101,17 +100,15 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 	}, nil
 }
 
-func (u *stateUpdater) update(ctx context.Context, request *http.Request, route *Route, dest interface{}, params *RequestParams) error {
-	paramBuilder := newParamStateBuilder(route._resource, *route._caser, route.DateFormat, NewRequestMetadata(route), params, newParamsValueCache(), u.paramsIndex)
+func (u *stateUpdater) update(ctx context.Context, request *http.Request, route *Route, templateState interface{}) error {
+	stateType := structology.NewStateType(reflect.TypeOf(templateState))
+	viewState := stateType.WithValue(templateState)
+	sessionState := vsession.New(route.View, vsession.WithLocatorOptions(route.LocatorOptions(request)...))
+	resourceState := sessionState.ResourceState()
+	resourceState.Init(route.View)
+	resourceState.Views[route.View.Name].Template = viewState
 
-	stateType := structology.NewStateType(reflect.TypeOf(dest))
-	state := stateType.WithValue(dest)
-	param, err := paramBuilder.buildSelectorParameters(ctx, state, nil, u.params, route.CustomValidation)
-	if err != nil {
-		return httputils.NewParamError("", param.Name, err)
-	}
-
-	return nil
+	return sessionState.SetViewState(ctx, route.View)
 }
 
 func (v *staterCacheValue) getUpdater() (*stateUpdater, error) {

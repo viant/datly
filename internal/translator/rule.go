@@ -168,7 +168,6 @@ func (r *Rule) GetField() string {
 
 func (r *Resource) initRule(ctx context.Context, fs afs.Service, dSQL *string) error {
 	rule := r.Rule
-	rule.Index = router.Index{Namespace: map[string]string{}}
 	rule.applyDefaults()
 	if err := r.loadData(ctx, fs, rule.EmbedURL, &rule.Embeds); err != nil {
 		r.messages.AddWarning(r.rule.RuleName(), "embeds", fmt.Sprintf("failed to load embeds : %v %w", rule.EmbedURL, err))
