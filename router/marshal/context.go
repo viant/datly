@@ -47,7 +47,6 @@ func (d *Decoder) UnmarshalInto(typeName string, unescape bool) (string, error) 
 	if err = json.Unmarshal(jsonBody, rValue.Interface()); err != nil {
 		return "", err
 	}
-
 	d.Decoded = rValue.Elem().Interface()
 	return "", err
 }

@@ -147,7 +147,7 @@ type (
 		RequestBodySchema *state.Schema
 
 		ResponseBody *BodySelector
-		DataFormat   string `json:",omitempty"`
+		DataFormat   string `json:",omitempty"` //default data format
 
 		_caser          *format.Case
 		_excluded       map[string]bool
@@ -255,11 +255,8 @@ func (r *Route) LocatorOptions() []locator.Option {
 	result = append(result, locator.WithIOConfig(r.ioConfig()))
 	if r.RequestBodySchema != nil {
 		result = append(result, locator.WithBodyType(r.RequestBodySchema.Type()))
-	} else if r.View.Schema != nil {
-		result = append(result, locator.WithBodyType(r.View.Schema.Type()))
 	}
 	result = append(result, locator.WithParameters(r._resource.Parameters.Index()))
-
 	if r._resource != nil {
 		result = append(result, locator.WithViews(r._resource.Views.Index()))
 	}

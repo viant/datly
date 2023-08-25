@@ -193,7 +193,7 @@ func (r *Router) unexpectedType(asRoute *Route, expected interface{}) error {
 }
 
 func (r *Router) handleErrIfNeeded(writer http.ResponseWriter, errStatusCode int, err error) {
-	if errStatusCode < 400 {
+	if errStatusCode < http.StatusBadRequest {
 		return
 	}
 

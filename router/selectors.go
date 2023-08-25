@@ -499,7 +499,7 @@ func (p *RequestParams) convert(isSpecified bool, raw string, param *vstate.Para
 func (b *paramStateBuilder) buildSelectorParameters(ctx context.Context, aState *structology.State, parent *ViewDetails, parameters []*vstate.Parameter, options ...interface{}) (*vstate.Parameter, error) {
 	var viewParams []*vstate.Parameter
 	for _, parameter := range parameters {
-		if parameter.In.Kind == vstate.KindDataView && parameter.ErrorStatusCode <= 400 {
+		if parameter.In.Kind == vstate.KindDataView && parameter.ErrorStatusCode <= http.StatusBadRequest {
 			viewParams = append(viewParams, parameter)
 			continue
 		}

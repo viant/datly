@@ -30,18 +30,18 @@ func (s *State) Populate(ctx context.Context) error {
 	if len(s.namespacedView.Views) == 0 {
 		return nil
 	}
-	errors := httputils.NewErrors()
+	err := httputils.NewErrors()
 	wg := sync.WaitGroup{}
 	for i := range s.namespacedView.Views {
 		wg.Add(1)
 		aView := s.namespacedView.Views[i].View
-		go s.setViewStateInBackground(ctx, aView, errors, &wg)
+		go s.setViewStateInBackground(ctx, aView, err, &wg)
 	}
 	wg.Wait()
-	if !errors.HasError() {
+	if !err.HasError() {
 		return nil
 	}
-	return errors
+	return err
 }
 
 func (s *State) setViewStateInBackground(ctx context.Context, aView *view.View, errors *httputils.Errors, wg *sync.WaitGroup) {
@@ -64,30 +64,32 @@ func (s *State) ResetViewState(ctx context.Context, aView *view.View) error {
 	return s.setViewState(ctx, aView)
 }
 
-func (s *State) setViewState(ctx context.Context, aView *view.View) error {
+func (s *State) setViewState(ctx context.Context, aView *view.View) (err error) {
 	opts := s.viewOptions(aView)
 	if aView.Mode == view.ModeQuery {
 		ns := s.namespacedView.ByName(aView.Name)
 		if ns == nil {
 			ns = &view.NamespaceView{View: aView, Path: "", Namespaces: []string{aView.Selector.Namespace}}
 		}
-		if err := s.setQuerySelector(ctx, ns, opts); err != nil {
+		if err = s.setQuerySelector(ctx, ns, opts); err != nil {
 			return err
 		}
 	}
-
-	if err := s.setTemplateState(ctx, aView, opts); err != nil {
-		switch actual := err.(type) {
-		case *httputils.Error:
-			actual.View = aView.Name
-		case *httputils.Errors:
-			for _, item := range actual.Errors {
-				item.View = aView.Name
-			}
-		}
-		return err
+	if err = s.setTemplateState(ctx, aView, opts); err != nil {
+		s.adjustErrorSource(err, aView)
 	}
-	return nil
+	return err
+}
+
+func (s *State) adjustErrorSource(err error, aView *view.View) {
+	switch actual := err.(type) {
+	case *httputils.Error:
+		actual.View = aView.Name
+	case *httputils.Errors:
+		for _, item := range actual.Errors {
+			item.View = aView.Name
+		}
+	}
 }
 
 func (s *State) viewLookupOptions(parameters state.NamedParameters, opts *Options) []locator.Option {
@@ -179,20 +181,6 @@ func (s *State) populateParameterInBackground(ctx context.Context, parameter *st
 	}
 }
 
-func (s *State) handleParameterError(parameter *state.Parameter, err error, errors *httputils.Errors) {
-	if pErr, ok := err.(*httputils.Error); ok {
-		pErr.StatusCode = parameter.ErrorStatusCode
-		errors.Append(pErr)
-	} else {
-		errors.AddError("", parameter.Name, err, httputils.WithStatusCode(parameter.ErrorStatusCode))
-	}
-	if parameter.ErrorStatusCode != 0 {
-		errors.SetStatus(parameter.ErrorStatusCode)
-	} else if asErrors, ok := err.(*httputils.Errors); ok && asErrors.ErrorStatusCode() != http.StatusBadRequest {
-		errors.SetStatus(asErrors.ErrorStatusCode())
-	}
-}
-
 func (s *State) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
 	value, has, err := s.LookupValue(ctx, parameter, options)
 	if err != nil {
@@ -222,7 +210,7 @@ func (s *State) ensureValidValue(value interface{}, parameter *state.Parameter) 
 		slice := parameter.Schema.Slice()
 		sliceLen := slice.Len(ptr)
 		if errorMessage := validateSliceParameter(parameter, sliceLen); errorMessage != "" {
-			return nil, httputils.NewParamError("", parameter.Name, errors.New(errorMessage), httputils.WithObject(value))
+			return nil, errors.New(errorMessage)
 		}
 		outputType := parameter.OutputType()
 		switch outputType.Kind() {
@@ -274,13 +262,19 @@ func (s *State) lookupFirstValue(ctx context.Context, parameters []*state.Parame
 }
 
 func (s *State) LookupValue(ctx context.Context, parameter *state.Parameter, opts *Options) (value interface{}, has bool, err error) {
+	if value, has, err = s.lookupValue(ctx, parameter, opts); err != nil {
+		err = httputils.NewParamError("", parameter.Name, err, httputils.WithObject(value), httputils.WithStatusCode(parameter.ErrorStatusCode))
+	}
+	return value, has, err
+}
+
+func (s *State) lookupValue(ctx context.Context, parameter *state.Parameter, opts *Options) (value interface{}, has bool, err error) {
 	if opts == nil {
 		opts = &s.Options
 	}
 	if value, has = s.cache.lookup(parameter); has {
 		return value, has, nil
 	}
-
 	lock := s.cache.lockParameter(parameter) //lockParameter is to ensure value for a parameter is computed only once
 	lock.Lock()
 	defer lock.Unlock()
@@ -298,19 +292,19 @@ func (s *State) LookupValue(ctx context.Context, parameter *state.Parameter, opt
 			return nil, false, fmt.Errorf("failed to locate parameter: %v, %w", parameter.Name, err)
 		}
 		if value, has, err = parameterLocator.Value(ctx, parameter.In.Name); err != nil {
-			return nil, false, fmt.Errorf("failed to get  parameter value: %v, %w", parameter.Name, err)
+			return nil, false, err
 		}
 	}
 	if !has {
 		return nil, has, nil
 	}
-
-	value, err = s.adjustValue(parameter, value)
-
+	if value, err = s.adjustValue(parameter, value); err != nil {
+		return nil, false, err
+	}
 	if parameter.Output != nil {
 		transformed, err := parameter.Output.Transform(ctx, value, opts.codecOptions...)
 		if err != nil {
-			return nil, false, fmt.Errorf("failed to decode parameter %v, value: %v, %w", parameter.Name, value, err)
+			return nil, false, fmt.Errorf("failed to transform: %v, %w", value, err)
 		}
 		value = transformed
 	}
@@ -322,7 +316,7 @@ func (s *State) LookupValue(ctx context.Context, parameter *state.Parameter, opt
 
 func (s *State) adjustValue(parameter *state.Parameter, value interface{}) (interface{}, error) {
 	var err error
-	if parameter.Schema.Type().Kind() != reflect.String {
+	if parameter.Schema.Type().Kind() != reflect.String { //TODO add support for all incompatible types
 		if textValue, ok := value.(string); ok {
 			value, _, err = converter.Convert(textValue, parameter.Schema.Type(), false, parameter.DateFormat)
 		}
@@ -351,4 +345,18 @@ func New(aView *view.View, opts ...Option) *State {
 	ret.namedParameters = ret.namespacedView.Parameters()
 	ret.apply(opts)
 	return ret
+}
+
+func (s *State) handleParameterError(parameter *state.Parameter, err error, errors *httputils.Errors) {
+	if pErr, ok := err.(*httputils.Error); ok {
+		pErr.StatusCode = parameter.ErrorStatusCode
+		errors.Append(pErr)
+	} else {
+		errors.AddError("", parameter.Name, err, httputils.WithStatusCode(parameter.ErrorStatusCode))
+	}
+	if parameter.ErrorStatusCode != 0 {
+		errors.SetStatus(parameter.ErrorStatusCode)
+	} else if asErrors, ok := err.(*httputils.Errors); ok && asErrors.ErrorStatusCode() != http.StatusBadRequest {
+		errors.SetStatus(asErrors.ErrorStatusCode())
+	}
 }

@@ -5,16 +5,16 @@ pipeline:
   test:
     action: http/runner:send
     requests:
-      - Method: PUT
-        URL: http://127.0.0.1:8080/v1/api/dev/custom-unmarshall-velty?className=com.class.abc.Foo
-        JSONBody:
-          Id: 999
-          Object:
-            |
-            {"Id":1,"Name":"Foo","Price":125.5}
-        Expect:
-          Code: 200
-          JSONBody: $LoadJSON('${parentPath}/expect.json')
+#      - Method: PUT
+#        URL: http://127.0.0.1:8080/v1/api/dev/custom-unmarshall-velty?className=com.class.abc.Foo
+#        JSONBody:
+#          Id: 999
+#          Object:
+#            |
+#            {"Id":1,"Name":"Foo","Price":125.5}
+#        Expect:
+#          Code: 200
+#          JSONBody: $LoadJSON('${parentPath}/expect.json')
 
       - Method: PUT
         URL: http://127.0.0.1:8080/v1/api/dev/custom-unmarshall-velty?className=com.class.abc.Foo

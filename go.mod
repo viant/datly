@@ -8,7 +8,7 @@ require (
 	github.com/francoispqt/gojay v1.2.13
 	github.com/go-sql-driver/mysql v1.7.0
 	github.com/goccy/go-json v0.9.11
-	github.com/golang-jwt/jwt/v4 v4.4.1
+	github.com/golang-jwt/jwt/v4 v4.4.1 // indirect
 	github.com/google/gops v0.3.23
 	github.com/google/uuid v1.3.0
 	github.com/jessevdk/go-flags v1.5.0
@@ -39,7 +39,7 @@ require (
 	github.com/viant/xunsafe v0.9.0
 	golang.org/x/mod v0.12.0
 	golang.org/x/oauth2 v0.7.0 // indirect
-	google.golang.org/api v0.114.0
+	google.golang.org/api v0.114.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
 

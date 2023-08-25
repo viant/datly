@@ -6,6 +6,8 @@ import (
 	"github.com/viant/datly/executor"
 	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/template/expand"
+	vsession "github.com/viant/datly/view/session"
+	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/handler"
 	async2 "github.com/viant/xdatly/handler/async"
 	http2 "github.com/viant/xdatly/handler/http"
@@ -56,26 +58,23 @@ func (e *HandlerExecutor) Session(ctx context.Context) (*executor.Session, error
 		return nil, err
 	}
 
-	//marshaller, err := params.unmarshaller(e.route)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//locatorOptions := append(e.route.LocatorOptions(),
-	//	locator.WithUnmarshal((func([]byte, interface{}) error)(marshaller.Unmarshal)),
-	//	locator.WithRequest(params.request))
-	//
-	//sessionState := vsession.New(e.route.View, vsession.WithLocatorOptions(locatorOptions...))
-	//if err = sessionState.Populate(ctx); err != nil {
-	//	return nil, err
-	//}
-
-	selectors, _, err := CreateSelectorsFromRoute(ctx, e.route, e.request, params, e.route.Index._viewDetails...)
+	marshaller, err := params.unmarshaller(e.route)
 	if err != nil {
 		return nil, err
 	}
 
-	sess, err := executor.NewSession(selectors, e.route.View)
+	locatorOptions := append(e.route.LocatorOptions(),
+		locator.WithUnmarshal((func([]byte, interface{}) error)(marshaller.Unmarshal)),
+		locator.WithRequest(params.request))
+
+	sessionState := vsession.New(e.route.View, vsession.WithLocatorOptions(locatorOptions...))
+	if err = sessionState.Populate(ctx); err != nil {
+		return nil, err
+	}
+	sess, err := executor.NewSession(sessionState.ResourceState(), e.route.View)
+	if err != nil {
+		return nil, err
+	}
 	if sess != nil {
 		sess.DataUnit = e.dataUnit
 	}

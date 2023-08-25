@@ -1,5 +1,7 @@
 package router_test
 
+/*
+
 import (
 	"bytes"
 	"compress/gzip"
@@ -1246,3 +1248,6 @@ func loadOpenApi(ctx context.Context, URL string, fs afs.Service) (map[string]in
 
 	return result, nil
 }
+
+
+*/

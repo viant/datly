@@ -1,6 +1,8 @@
 package httputils
 
 import (
+	"net/http"
+	"reflect"
 	"sync"
 )
 
@@ -34,7 +36,17 @@ type (
 
 func WithObject(object interface{}) Option {
 	return func(e *Error) {
-		e.Object = object
+		if object == nil {
+			return
+		}
+		objectType := reflect.TypeOf(object)
+		if objectType.Kind() == reflect.Ptr {
+			objectType = objectType.Elem()
+		}
+		switch objectType.Kind() {
+		case reflect.Struct, reflect.Slice:
+			e.Object = object
+		}
 	}
 }
 
@@ -78,14 +90,19 @@ func (e *Errors) Append(err error) {
 	switch actual := err.(type) {
 	case *Error:
 		e.Errors = append(e.Errors, actual)
+		e.updateStatusCode(actual.StatusCode)
 	case *Errors:
 		e.Errors = append(e.Errors, actual.Errors...)
 		code := actual.ErrorStatusCode()
-		if statusCodePriority(code) > statusCodePriority(e.status) {
-			e.status = code
-		}
+		e.updateStatusCode(code)
 	default:
 		e.Errors = append(e.Errors, &Error{Message: err.Error(), Err: err})
+	}
+}
+
+func (e *Errors) updateStatusCode(code int) {
+	if statusCodePriority(code) > statusCodePriority(e.status) {
+		e.status = code
 	}
 }
 
@@ -131,13 +148,13 @@ func (e *Errors) SetStatus(code int) {
 
 func statusCodePriority(status int) int {
 	switch status {
-	case 401:
+	case http.StatusUnauthorized:
 		return priority401
-	case 403:
+	case http.StatusForbidden:
 		return priority403
-	case 404:
+	case http.StatusNotFound:
 		return priority404
-	case 400:
+	case http.StatusBadRequest:
 		return priority400
 	case 0:
 		return -1

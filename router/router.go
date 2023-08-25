@@ -73,7 +73,7 @@ type (
 		Route         *Route
 		Request       *http.Request
 		Response      http.ResponseWriter
-		Selectors     *view.ResourceState
+		State         *view.ResourceState
 	}
 
 	preparedResponse struct {
@@ -325,6 +325,7 @@ func (r *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (r *Router) viewHandler(route *Route) viewHandler {
+
 	return func(response http.ResponseWriter, request *http.Request, record *async2.Job) {
 		if !r.runBeforeFetchIfNeeded(response, request, route) {
 			return
@@ -366,8 +367,9 @@ func (r *Router) prepareReaderSession(ctx context.Context, response http.Respons
 		return nil, err
 	}
 
-	locatorOptions := append(route.LocatorOptions(),
-		locator.WithUnmarshal((func([]byte, interface{}) error)(marshaller.Unmarshal)),
+	locatorOptions := append(
+		route.LocatorOptions(),
+		locator.WithUnmarshal(marshaller.Unmarshal),
 		locator.WithRequest(request))
 
 	viewState := session.New(route.View, session.WithLocatorOptions(locatorOptions...))
@@ -391,7 +393,7 @@ func (r *Router) prepareReaderSession(ctx context.Context, response http.Respons
 		Route:         route,
 		Request:       request,
 		Response:      response,
-		Selectors:     viewState.ResourceState(),
+		State:         viewState.ResourceState(),
 	}, nil
 }
 
@@ -474,7 +476,7 @@ func (r *Router) readValue(readerSession *ReaderSession, includeSQL bool, metric
 	}
 	session.CacheDisabled = readerSession.IsCacheDisabled()
 	session.IncludeSQL = includeSQL
-	session.States = readerSession.Selectors
+	session.States = readerSession.State
 	if err := reader.New().Read(context.TODO(), session); err != nil {
 		return nil, err
 	}
@@ -575,7 +577,7 @@ func (r *Router) runAfterFetch(session *ReaderSession, dest interface{}, fn func
 }
 
 func (r *Router) marshalResult(session *ReaderSession, response *preparedResponse) (result []byte, err error) {
-	filters, err := r.buildJsonFilters(session.Route, session.Selectors)
+	filters, err := r.buildJsonFilters(session.Route, session.State)
 	if err != nil {
 		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, err)
 	}
@@ -762,13 +764,13 @@ func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route, vi
 }
 
 func (r *Router) createCacheEntry(ctx context.Context, session *ReaderSession) (*cache.Entry, error) {
-	session.Selectors.RWMutex.RLock()
-	defer session.Selectors.RWMutex.RUnlock()
+	session.State.RWMutex.RLock()
+	defer session.State.RWMutex.RUnlock()
 
-	selectorSlice := make([]*view.State, len(session.Selectors.Index))
-	for viewName := range session.Selectors.Index {
+	selectorSlice := make([]*view.State, len(session.State.Index))
+	for viewName := range session.State.Index {
 		index, _ := session.Route.viewIndex(viewName)
-		selectorSlice[index] = session.Selectors.Index[viewName]
+		selectorSlice[index] = session.State.Index[viewName]
 	}
 	marshalled, err := goJson.Marshal(selectorSlice)
 	if err != nil {
@@ -1372,7 +1374,7 @@ func (r *Router) updateAsyncRecord(ctx context.Context, session *ReaderSession, 
 
 func (r *Router) handleReadAsyncErrorWithDb(ctx context.Context, session *ReaderSession, record *async2.Job, db *sql.DB, err error) {
 	record.State = async2.StateDone
-	_, message, object := normalizeErr(err, 400)
+	_, message, object := normalizeErr(err, http.StatusBadRequest)
 	if object != nil {
 		marshal, _ := session.Route.JSON._jsonMarshaller.Marshal(object)
 		asString := string(marshal)
@@ -1456,7 +1458,7 @@ func (r *Router) QueryAllJobs(writer http.ResponseWriter, request *http.Request)
 }
 
 func (r *Router) normalizeAndWriteErr(writer http.ResponseWriter, err error) {
-	statusCode, message, errorObject := normalizeErr(err, 400)
+	statusCode, message, errorObject := normalizeErr(err, http.StatusBadRequest)
 	if errorObject != nil {
 		marshal, err := goJson.Marshal(errorObject)
 		if err == nil {

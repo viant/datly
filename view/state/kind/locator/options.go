@@ -81,7 +81,7 @@ func WithBodyType(rType reflect.Type) Option {
 }
 
 // WithUnmarshal creates with unmarshal options
-func WithUnmarshal(fn Unmarshal) Option {
+func WithUnmarshal(fn func([]byte, interface{}) error) Option {
 	return func(o *Options) {
 		o.Unmarshal = fn
 	}
