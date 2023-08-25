@@ -53,6 +53,9 @@ func (b *Builder) Build(aView *view.View, selector *view.State, batchData *view.
 		return nil, err
 	}
 
+	if len(state.Filters) > 0 {
+		selector.Filters = append(selector.Filters, state.Filters...)
+	}
 	if aView.Template.IsActualTemplate() && aView.ShouldTryDiscover() {
 		state.Expanded = metadata.EnrichWithDiscover(state.Expanded, true)
 	}

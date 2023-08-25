@@ -8,6 +8,7 @@ import (
 	"github.com/viant/velty"
 	"github.com/viant/velty/est"
 	"github.com/viant/velty/est/op"
+	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"reflect"
 )
@@ -99,7 +100,7 @@ func NewEvaluator(template string, options ...EvaluatorOption) (*Evaluator, erro
 		}
 	}
 
-	if err = evaluator.planner.EmbedVariable(Context{}); err != nil {
+	if err = evaluator.planner.EmbedVariable(Context{Filters: predicate.Filters{}}); err != nil {
 		return nil, err
 	}
 
@@ -228,7 +229,7 @@ func (e *Evaluator) Evaluate(ctx *Context, options ...StateOption) (*State, erro
 
 func (e *Evaluator) ensureState(ctx *Context, options ...StateOption) *State {
 	state := &State{
-		Context: &Context{},
+		Context: &Context{Filters: predicate.Filters{}},
 	}
 
 	if ctx != nil {

@@ -28,6 +28,7 @@ import (
 	"github.com/viant/xmlify"
 	"github.com/viant/xunsafe"
 	"net/http"
+	"net/url"
 	"reflect"
 	"strings"
 	"sync"
@@ -229,6 +230,33 @@ type (
 		Extras  map[string]interface{} `json:",omitempty" default:"embedded=true"`
 	}
 )
+
+// OutputFormat returns output foramt
+func (r *Route) OutputFormat(query url.Values) string {
+	outputFormat := query.Get(FormatQuery)
+	if outputFormat == "" {
+		outputFormat = r.Output.DataFormat
+	}
+	if outputFormat == "" {
+		outputFormat = JSONFormat
+	}
+	return outputFormat
+}
+
+// ContentType returns content type
+func (r *Route) ContentType(query url.Values) string {
+	switch strings.ToLower(r.OutputFormat(query)) {
+	case XLSFormat, XLSContentType:
+		return XLSContentType
+	case CSVFormat, CSVContentType:
+		return CSVContentType
+	case XMLFormat, XMLContentType:
+		return XMLContentType
+	case JSONDataFormatTabular:
+		return TabularJSONFormat
+	}
+	return JSONContentType
+}
 
 func (r *Route) IsRevealMetric() bool {
 	if r.RevealMetric == nil {

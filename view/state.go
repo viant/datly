@@ -4,6 +4,7 @@ import (
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xdatly/predicate"
 	"strings"
 	"sync"
 )
@@ -30,7 +31,7 @@ type (
 		Placeholders []interface{} `json:",omitempty"`
 		Page         int
 		Ignore       bool
-
+		predicate.Filters
 		initialized  bool
 		_columnNames map[string]bool
 		result       *cache.ParmetrizedQuery

@@ -324,7 +324,6 @@ func (r *Router) prepareReaderSession(ctx context.Context, response http.Respons
 	if route.TabularJSON == nil && route.DataFormat == JSONDataFormatTabular {
 		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", JSONContentType)))
 	}
-
 	if route.XML == nil && route.DataFormat == XMLFormat {
 		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", XMLContentType)))
 	}
