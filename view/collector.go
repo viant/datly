@@ -29,7 +29,7 @@ type Collector struct {
 	types         map[string]*xunsafe.Type
 	relation      *Relation
 
-	values map[string]*[]interface{} //acts like a buffer. Value resolved with Resolve method can't be put to the value position map
+	values map[string]*[]interface{} //acts like a buffer. Output resolved with Resolve method can't be put to the value position map
 	// because value fetched from database was not scanned into yet. Putting value to the map as a key, would create key as a pointer to the zero value.
 
 	slice     *xunsafe.Slice

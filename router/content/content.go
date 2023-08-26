@@ -76,43 +76,43 @@ func (x *XLSConfig) Options() []xlsy.Option {
 	return options
 }
 
-func (r *Content) InitMarshaller(config common.IOConfig, exclude []string, inputType, outputType reflect.Type) error {
-	r.JsonMarshaller = json.New(config)
-	r.XlsMarshaller = xlsy.NewMarshaller(r.XLS.Options()...)
+func (c *Content) InitMarshaller(config common.IOConfig, exclude []string, inputType, outputType reflect.Type) error {
+	c.JsonMarshaller = json.New(config)
+	c.XlsMarshaller = xlsy.NewMarshaller(c.XLS.Options()...)
 
-	if err := r.initCSVIfNeeded(inputType, outputType); err != nil {
+	if err := c.initCSVIfNeeded(inputType, outputType); err != nil {
 		return err
 	}
-	if err := r.initTabJSONIfNeeded(exclude, inputType, outputType); err != nil {
+	if err := c.initTabJSONIfNeeded(exclude, inputType, outputType); err != nil {
 		return err
 	}
-	if err := r.initXMLIfNeeded(exclude, inputType, outputType); err != nil {
+	if err := c.initXMLIfNeeded(exclude, inputType, outputType); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *Content) initCSVIfNeeded(inputType reflect.Type, outputType reflect.Type) error {
-	r.ensureCSV()
-	if len(r.CSV.Separator) != 1 {
-		return fmt.Errorf("separator has to be a single char, but was %v", r.CSV.Separator)
+func (c *Content) initCSVIfNeeded(inputType reflect.Type, outputType reflect.Type) error {
+	c.ensureCSV()
+	if len(c.CSV.Separator) != 1 {
+		return fmt.Errorf("separator has to be a single char, but was %v", c.CSV.Separator)
 	}
-	if r.CSV.NullValue == "" {
-		r.CSV.NullValue = "null"
+	if c.CSV.NullValue == "" {
+		c.CSV.NullValue = "null"
 	}
-	r.CSV._config = &csv.Config{
-		FieldSeparator:  r.CSV.Separator,
+	c.CSV._config = &csv.Config{
+		FieldSeparator:  c.CSV.Separator,
 		ObjectSeparator: "\n",
 		EncloseBy:       `"`,
 		EscapeBy:        "\\",
-		NullValue:       r.CSV.NullValue,
+		NullValue:       c.CSV.NullValue,
 	}
 	schemaType := inputType
 	if schemaType.Kind() == reflect.Ptr {
 		schemaType = schemaType.Elem()
 	}
 	var err error
-	r.CSV.OutputMarshaller, err = csv.NewMarshaller(schemaType, r.CSV._config)
+	c.CSV.OutputMarshaller, err = csv.NewMarshaller(schemaType, c.CSV._config)
 	if err != nil {
 		return err
 	}
@@ -120,53 +120,53 @@ func (r *Content) initCSVIfNeeded(inputType reflect.Type, outputType reflect.Typ
 		return nil
 	}
 
-	//r.CSV._unwrapperSlice = r._requestBodySlice
-	r.CSV.InputMarshaller, err = csv.NewMarshaller(outputType, nil)
+	//c.CSV._unwrapperSlice = c._requestBodySlice
+	c.CSV.InputMarshaller, err = csv.NewMarshaller(outputType, nil)
 	return err
 }
 
-func (r *Content) ensureCSV() {
-	if r.CSV != nil {
+func (c *Content) ensureCSV() {
+	if c.CSV != nil {
 		return
 	}
-	r.CSV = &CSVConfig{Separator: ","}
+	c.CSV = &CSVConfig{Separator: ","}
 }
 
-func (r *Content) initTabJSONIfNeeded(excludedPaths []string, inputType reflect.Type, outputType reflect.Type) error {
+func (c *Content) initTabJSONIfNeeded(excludedPaths []string, inputType reflect.Type, outputType reflect.Type) error {
 
-	if r.TabularJSON == nil {
-		r.TabularJSON = &TabularJSONConfig{}
+	if c.TabularJSON == nil {
+		c.TabularJSON = &TabularJSONConfig{}
 	}
 
-	if r.TabularJSON._config == nil {
-		r.TabularJSON._config = &tabjson.Config{}
+	if c.TabularJSON._config == nil {
+		c.TabularJSON._config = &tabjson.Config{}
 	}
 
-	if r.TabularJSON._config.FieldSeparator == "" {
-		r.TabularJSON._config.FieldSeparator = ","
+	if c.TabularJSON._config.FieldSeparator == "" {
+		c.TabularJSON._config.FieldSeparator = ","
 	}
 
-	if len(r.TabularJSON._config.FieldSeparator) != 1 {
-		return fmt.Errorf("separator has to be a single char, but was %v", r.TabularJSON._config.FieldSeparator)
+	if len(c.TabularJSON._config.FieldSeparator) != 1 {
+		return fmt.Errorf("separator has to be a single char, but was %v", c.TabularJSON._config.FieldSeparator)
 	}
 
-	if r.TabularJSON._config.NullValue == "" {
-		r.TabularJSON._config.NullValue = "null"
+	if c.TabularJSON._config.NullValue == "" {
+		c.TabularJSON._config.NullValue = "null"
 	}
 
-	if r.TabularJSON.FloatPrecision != "" {
-		r.TabularJSON._config.StringifierConfig.StringifierFloat32Config.Precision = r.TabularJSON.FloatPrecision
-		r.TabularJSON._config.StringifierConfig.StringifierFloat64Config.Precision = r.TabularJSON.FloatPrecision
+	if c.TabularJSON.FloatPrecision != "" {
+		c.TabularJSON._config.StringifierConfig.StringifierFloat32Config.Precision = c.TabularJSON.FloatPrecision
+		c.TabularJSON._config.StringifierConfig.StringifierFloat64Config.Precision = c.TabularJSON.FloatPrecision
 	}
 
-	r.TabularJSON._config.ExcludedPaths = excludedPaths
+	c.TabularJSON._config.ExcludedPaths = excludedPaths
 
 	if inputType.Kind() == reflect.Ptr {
 		inputType = inputType.Elem()
 	}
 
 	var err error
-	r.TabularJSON.OutputMarshaller, err = tabjson.NewMarshaller(inputType, r.TabularJSON._config)
+	c.TabularJSON.OutputMarshaller, err = tabjson.NewMarshaller(inputType, c.TabularJSON._config)
 	if err != nil {
 		return err
 	}
@@ -174,41 +174,41 @@ func (r *Content) initTabJSONIfNeeded(excludedPaths []string, inputType reflect.
 	if outputType == nil {
 		return nil
 	}
-	r.TabularJSON.InputMarhsaller, err = tabjson.NewMarshaller(outputType, nil)
+	c.TabularJSON.InputMarhsaller, err = tabjson.NewMarshaller(outputType, nil)
 	return err
 }
 
-func (r *Content) initXMLIfNeeded(excludedPaths []string, outputType reflect.Type, inputType reflect.Type) error {
-	if r.XML == nil {
-		r.XML = &XMLConfig{}
+func (c *Content) initXMLIfNeeded(excludedPaths []string, outputType reflect.Type, inputType reflect.Type) error {
+	if c.XML == nil {
+		c.XML = &XMLConfig{}
 	}
-	if r.XML.config == nil {
-		r.XML.config = getDefaultConfig()
-	}
-
-	if r.XML.config.FieldSeparator == "" {
-		r.XML.config.FieldSeparator = ","
+	if c.XML.config == nil {
+		c.XML.config = getDefaultConfig()
 	}
 
-	if len(r.XML.config.FieldSeparator) != 1 {
-		return fmt.Errorf("separator has to be a single char, but was %v", r.XML.config.FieldSeparator)
+	if c.XML.config.FieldSeparator == "" {
+		c.XML.config.FieldSeparator = ","
 	}
 
-	if r.XML.config.NullValue == "" {
-		r.XML.config.NullValue = "\u0000"
+	if len(c.XML.config.FieldSeparator) != 1 {
+		return fmt.Errorf("separator has to be a single char, but was %v", c.XML.config.FieldSeparator)
 	}
 
-	if r.XML.FloatPrecision != "" {
-		r.XML.config.StringifierConfig.StringifierFloat32Config.Precision = r.XML.FloatPrecision
-		r.XML.config.StringifierConfig.StringifierFloat64Config.Precision = r.XML.FloatPrecision
+	if c.XML.config.NullValue == "" {
+		c.XML.config.NullValue = "\u0000"
 	}
-	r.XML.config.ExcludedPaths = excludedPaths
+
+	if c.XML.FloatPrecision != "" {
+		c.XML.config.StringifierConfig.StringifierFloat32Config.Precision = c.XML.FloatPrecision
+		c.XML.config.StringifierConfig.StringifierFloat64Config.Precision = c.XML.FloatPrecision
+	}
+	c.XML.config.ExcludedPaths = excludedPaths
 	if outputType.Kind() == reflect.Ptr {
 		outputType = outputType.Elem()
 	}
 
 	var err error
-	r.XML.OutputMarshaller, err = xmlify.NewMarshaller(outputType, r.XML.config)
+	c.XML.OutputMarshaller, err = xmlify.NewMarshaller(outputType, c.XML.config)
 	if err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func (r *Content) initXMLIfNeeded(excludedPaths []string, outputType reflect.Typ
 	if inputType == nil {
 		return nil
 	}
-	r.XML.InputMarshaller, err = xmlify.NewMarshaller(inputType, nil)
+	c.XML.InputMarshaller, err = xmlify.NewMarshaller(inputType, nil)
 	return err
 }
 

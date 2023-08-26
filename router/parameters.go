@@ -161,7 +161,7 @@ func (p *RequestParams) extractBodyByPath(param *state.Parameter, err error) (in
 
 	//if value, err = aQuery.First(p.bodyParam); err == nil {
 	//	ptr := xunsafe.AsPointer(value)
-	//	value = aQuery.field.Value(ptr)
+	//	value = aQuery.field.Output(ptr)
 	//	p.bodyPathParam[param.In.Name] = value
 	//}
 

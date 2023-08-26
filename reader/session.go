@@ -26,6 +26,7 @@ type (
 
 	Output struct {
 		Data     interface{}
+		DataType reflect.Type
 		DataPtr  interface{} //slice pointer
 		ViewMeta interface{}
 		Stats    []*Info
@@ -84,6 +85,7 @@ func (s *Session) Init() error {
 	if _, ok := s.DataPtr.(*interface{}); !ok {
 		viewType := reflect.PtrTo(s.View.Schema.SliceType())
 		destType := reflect.TypeOf(s.DataPtr)
+
 		if viewType.Kind() == reflect.Ptr && destType.Kind() == reflect.Ptr {
 			if !viewType.Elem().ConvertibleTo(destType.Elem()) {
 				return fmt.Errorf("type mismatch, view slice type is: %v while destination type is %v", viewType.String(), destType.String())
@@ -91,8 +93,8 @@ func (s *Session) Init() error {
 		} else if !viewType.ConvertibleTo(destType) {
 			return fmt.Errorf("type mismatch, view slice type is: %v while destination type is %v", viewType.String(), destType.String())
 		}
+		s.DataType = s.View.Schema.SliceType()
 	}
-
 	return nil
 }
 

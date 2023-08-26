@@ -82,7 +82,7 @@ func (g *gcpMockDecoder) ResultType(paramType reflect.Type) (reflect.Type, error
 	return reflect.TypeOf(&oauth2.Tokeninfo{}), nil
 }
 
-func (a *asStrings) Value(ctx context.Group, raw interface{}, options ...interface{}) (interface{}, error) {
+func (a *asStrings) Output(ctx context.Group, raw interface{}, options ...interface{}) (interface{}, error) {
 	rawString, ok := asString(raw)
 	if !ok {
 		return "", fmt.Errorf("expected to got string but got %T", raw)
@@ -108,15 +108,15 @@ func asString(raw interface{}) (string, bool) {
 	return "", false
 }
 
-func (e *eventBeforeFetcher) Value(ctx context.Group, raw interface{}, options ...interface{}) (interface{}, error) {
+func (e *eventBeforeFetcher) Output(ctx context.Group, raw interface{}, options ...interface{}) (interface{}, error) {
 	return nil, nil
 }
 
-func (e *eventAfterFetcher) Value(ctx context.Group, raw interface{}, options ...interface{}) (interface{}, error) {
+func (e *eventAfterFetcher) Output(ctx context.Group, raw interface{}, options ...interface{}) (interface{}, error) {
 	return nil, nil
 }
 
-func (g *gcpMockDecoder) Value(_ context.Group, raw interface{}, _ ...interface{}) (interface{}, error) {
+func (g *gcpMockDecoder) Output(_ context.Group, raw interface{}, _ ...interface{}) (interface{}, error) {
 	rawString, ok := raw.(string)
 	if !ok {
 		return nil, fmt.Errorf("expected to get string but got %T", raw)

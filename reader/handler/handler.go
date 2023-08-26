@@ -22,8 +22,9 @@ type (
 
 	//Response reader handler response
 	Response struct {
-		Output     *reader.Output
-		Value      interface{}
+		Reader     *reader.Output
+		Output     interface{}
+		OutputType reflect.Type
 		StatusCode int
 		Error      error
 	}
@@ -40,14 +41,18 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, state *session.S
 	if h.output == nil {
 		return ret
 	}
-	ret.Value = ret.Output.SyncData()
+	ret.Output = ret.Reader.SyncData()
+	if h.output == nil || !h.output.IsDefined() {
+		return ret
+	}
 	resultState := h.output.NewState()
 	if err = state.SetState(ctx, h.parameters, resultState, state.Indirect(true, locator.WithCustomOption(ret.Output))); err != nil {
 		ret.StatusCode = http.StatusInternalServerError
 		ret.Error = err
 		return ret
 	}
-	ret.Value = resultState.State()
+	ret.OutputType = h.output.Type()
+	ret.Output = resultState.State()
 	return ret
 }
 
