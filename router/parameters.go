@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/converter"
+	"github.com/viant/datly/router/content"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -97,16 +98,16 @@ func (p *RequestParams) outputContentType(route *Route) string {
 
 	format := p.dataFormat(route)
 	switch format {
-	case XLSFormat, XLSContentType:
-		return XLSContentType
-	case CSVFormat, CSVContentType:
-		return CSVContentType
-	case XMLFormat, XMLContentType:
-		return XMLContentType
-	case JSONDataFormatTabular:
-		return TabularJSONFormat
+	case content.XLSFormat, content.XLSContentType:
+		return content.XLSContentType
+	case content.CSVFormat, content.CSVContentType:
+		return content.CSVContentType
+	case content.XMLFormat, content.XMLContentType:
+		return content.XMLContentType
+	case content.JSONDataFormatTabular:
+		return content.TabularJSONFormat
 	}
-	return JSONContentType
+	return content.JSONContentType
 }
 
 func (p *RequestParams) dataFormat(route *Route) string {
@@ -116,7 +117,7 @@ func (p *RequestParams) dataFormat(route *Route) string {
 		format = route.Output.DataFormat
 	}
 	if format == "" {
-		format = JSONFormat
+		format = content.JSONFormat
 	}
 	return format
 }

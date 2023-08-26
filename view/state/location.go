@@ -71,6 +71,11 @@ func NewBodyLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindRequestBody}
 }
 
+// NewOutputLocation creates an output location
+func NewOutputLocation(name string) *Location {
+	return &Location{Name: name, Kind: KindOutput}
+}
+
 // NewDataViewLocation creates a dataview location
 func NewDataViewLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindDataView}

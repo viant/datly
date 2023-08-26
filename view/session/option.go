@@ -20,9 +20,13 @@ type (
 	Option func(o *Options)
 )
 
-func (o *Options) Indirect(flag bool) *Options {
+func (o *Options) Indirect(flag bool, options ...locator.Option) *Options {
 	ret := *o
 	ret.indirectState = flag
+	if len(options) > 0 {
+		ret.locatorOptions = append(ret.locatorOptions, options...)
+		ret.kindLocator = locator.NewKindsLocator(ret.kindLocator, ret.locatorOptions...)
+	}
 	return &ret
 }
 

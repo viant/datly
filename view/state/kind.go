@@ -20,6 +20,8 @@ const (
 	KindParam       Kind = "param"
 	KindRequest     Kind = "http_request"
 	KindGroup       Kind = "group"
+	KindOutput      Kind = "output" //reader output
+
 )
 
 // Validate checks if Kind is valid.

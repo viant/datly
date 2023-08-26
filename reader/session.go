@@ -16,21 +16,21 @@ import (
 type (
 	Session struct {
 		mux           sync.Mutex
+		IncludeSQL    bool
 		CacheDisabled bool
 		View          *view.View
 		State         *view.ResourceState
 		Parent        *view.View
-		IncludeSQL    bool
-		Response
+		Output
 	}
 
-	Response struct {
-		result    interface{}
-		ResultPtr interface{} //slice pointer
-		ViewMeta  interface{}
-		Stats     []*Info
-		Metrics   []*Metric
-		Filters   predicate.Filters
+	Output struct {
+		Data     interface{}
+		DataPtr  interface{} //slice pointer
+		ViewMeta interface{}
+		Stats    []*Info
+		Metrics  []*Metric
+		Filters  predicate.Filters //filter used by request
 	}
 
 	ParentData struct {
@@ -61,16 +61,16 @@ type (
 	}
 )
 
-func (r *Response) Result() interface{} {
-	if r.ResultPtr == nil {
+func (r *Output) SyncData() interface{} {
+	if r.DataPtr == nil {
 		return nil
 	}
-	result := r.result
+	result := r.Data
 	if result != nil {
 		return result
 	}
-	result = reflect.ValueOf(r.ResultPtr).Elem().Interface()
-	r.result = result
+	result = reflect.ValueOf(r.DataPtr).Elem().Interface()
+	r.Data = result
 	return result
 }
 
@@ -81,9 +81,9 @@ func (s *Info) Name() string {
 // Init initializes session
 func (s *Session) Init() error {
 	s.State.Init(s.View)
-	if _, ok := s.ResultPtr.(*interface{}); !ok {
+	if _, ok := s.DataPtr.(*interface{}); !ok {
 		viewType := reflect.PtrTo(s.View.Schema.SliceType())
-		destType := reflect.TypeOf(s.ResultPtr)
+		destType := reflect.TypeOf(s.DataPtr)
 		if viewType.Kind() == reflect.Ptr && destType.Kind() == reflect.Ptr {
 			if !viewType.Elem().ConvertibleTo(destType.Elem()) {
 				return fmt.Errorf("type mismatch, view slice type is: %v while destination type is %v", viewType.String(), destType.String())
@@ -112,8 +112,8 @@ func (s *Session) AddMetric(m *Metric) {
 // NewSession creates a session
 func NewSession(dest interface{}, aView *view.View, opts ...Option) (*Session, error) {
 	ret := &Session{
-		Response: Response{ResultPtr: dest},
-		View:     aView,
+		Output: Output{DataPtr: dest},
+		View:   aView,
 	}
 
 	err := options(opts).Apply(ret)

@@ -24,8 +24,8 @@ func (o options) Apply(session *Session) error {
 	return nil
 }
 
-// WithStates returns states option
-func WithStates(states *view.ResourceState) Option {
+// WithResourceState returns states option
+func WithResourceState(states *view.ResourceState) Option {
 	return func(session *Session) error {
 		session.State = states
 		return nil
@@ -58,5 +58,21 @@ func WithParameter(name string, value interface{}) Option {
 			paramName = aView.Name + ":" + name
 		}
 		return aView.SetParameter(paramName, session.State, value)
+	}
+}
+
+// WithIncludeSQL with include SQL
+func WithIncludeSQL(flag bool) Option {
+	return func(session *Session) error {
+		session.IncludeSQL = flag
+		return nil
+	}
+}
+
+// WithCacheDisabled return
+func WithCacheDisabled(flag bool) Option {
+	return func(session *Session) error {
+		session.CacheDisabled = flag
+		return nil
 	}
 }

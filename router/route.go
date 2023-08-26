@@ -8,10 +8,10 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/async"
+	"github.com/viant/datly/router/content"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/common"
 	"github.com/viant/datly/router/marshal/json"
-	"github.com/viant/datly/router/marshal/tabjson"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/httputils"
@@ -19,13 +19,11 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/datly/view/template"
-	"github.com/viant/sqlx/io/load/reader/csv"
+	"github.com/viant/structology"
 	"github.com/viant/structql"
 	"github.com/viant/toolbox/format"
 	async2 "github.com/viant/xdatly/handler/async"
 	http2 "github.com/viant/xdatly/handler/http"
-	"github.com/viant/xlsy"
-	"github.com/viant/xmlify"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"net/url"
@@ -51,24 +49,6 @@ const (
 	HeaderContentType = "Content-Type"
 
 	FormatQuery = "_format"
-
-	XLSContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-	JSONFormat = "json"
-
-	XMLFormat = "xml"
-
-	XLSFormat = "xls"
-
-	CSVFormat      = "csv"
-	CSVContentType = "text/csv"
-
-	JSONContentType = "application/json"
-
-	JSONDataFormatTabular = "tabular"
-	TabularJSONFormat     = "application/json"
-
-	XMLContentType = "application/xml"
 )
 
 type (
@@ -76,7 +56,6 @@ type (
 	Route  struct {
 		Async            *Async             `json:",omitempty" yaml:",omitempty"`
 		Name             string             `json:",omitempty" yaml:",omitempty"`
-		Visitor          *Fetcher           `json:",omitempty"`
 		URI              string             `json:",omitempty"`
 		APIKey           *APIKey            `json:",omitempty"`
 		Method           string             `json:",omitempty"`
@@ -89,14 +68,17 @@ type (
 		Transforms       marshal.Transforms `json:",omitempty"`
 
 		Input
-		Content
+		content.Content
 		Output
 
+		*view.NamespacedView
 		bodyParamQuery map[string]*query
 
 		ParamStatusError *int         `json:",omitempty"`
 		Compression      *Compression `json:",omitempty"`
 		Handler          *Handler     `json:",omitempty"`
+
+		_unmarshallerInterceptors marshal.Transforms
 
 		_resource *view.Resource
 
@@ -120,31 +102,8 @@ type (
 		_fetcher interface{}
 	}
 
-	JSON struct {
-		_jsonMarshaller           *json.Marshaller
-		_unmarshallerInterceptors marshal.Transforms
-	}
-
-	XLS struct {
-		_xlsMarshaller *xlsy.Marshaller
-	}
-
 	Input struct {
 		RequestBodySchema *state.Schema
-	}
-
-	Content struct {
-		Marshaller
-		DateFormat  string             `json:",omitempty"`
-		CSV         *CSVConfig         `json:",omitempty"`
-		XLS         *XLSConfig         `json:",omitempty"`
-		XML         *XMLConfig         `json:",omitempty"`
-		TabularJSON *TabularJSONConfig `json:",omitempty"`
-	}
-
-	Marshaller struct {
-		XLS
-		JSON
 	}
 
 	Output struct {
@@ -162,42 +121,14 @@ type (
 		DataFormat string `json:",omitempty"` //default data format
 
 		ResponseBody *BodySelector
-		Schema       *state.Schema
-		Parameters   state.Parameters
+
+		Schema     *state.Schema
+		Parameters state.Parameters
+		Type       *structology.StateType
 
 		_caser          *format.Case
 		_excluded       map[string]bool
 		_responseSetter *responseSetter
-	}
-
-	CSVConfig struct {
-		Separator         string
-		NullValue         string
-		_config           *csv.Config
-		_inputMarshaller  *csv.Marshaller
-		_outputMarshaller *csv.Marshaller
-		_unwrapperSlice   *xunsafe.Slice
-	}
-
-	XLSConfig struct {
-		DefaultStyle string
-		SheetName    string
-		Styles       map[string]string //name of style, values
-	}
-
-	TabularJSONConfig struct {
-		FloatPrecision         string
-		_config                *tabjson.Config
-		_requestBodyMarshaller *tabjson.Marshaller
-		_outputMarshaller      *tabjson.Marshaller
-		_unwrapperSlice        *xunsafe.Slice
-	}
-
-	XMLConfig struct {
-		FloatPrecision         string
-		_config                *xmlify.Config
-		_requestBodyMarshaller *xmlify.Marshaller
-		_outputMarshaller      *xmlify.Marshaller
 	}
 
 	responseSetter struct {
@@ -231,6 +162,34 @@ type (
 	}
 )
 
+func (r *Route) Exclusion(state *view.ResourceState) []*json.FilterEntry {
+	result := make([]*json.FilterEntry, 0)
+	state.Lock()
+	defer state.Unlock()
+	for viewName, selector := range state.Views {
+		if len(selector.Columns) == 0 {
+			continue
+		}
+		var aPath string
+		nsView := r.NamespacedView.ByName(viewName)
+		if nsView == nil {
+			aPath = ""
+		} else {
+			aPath = nsView.Path
+		}
+		fields := make([]string, len(selector.Fields))
+		for i := range selector.Fields {
+			fields[i] = selector.Fields[i]
+		}
+		result = append(result, &json.FilterEntry{
+			Path:   aPath,
+			Fields: fields,
+		})
+
+	}
+	return result
+}
+
 // OutputFormat returns output foramt
 func (r *Route) OutputFormat(query url.Values) string {
 	outputFormat := query.Get(FormatQuery)
@@ -238,7 +197,7 @@ func (r *Route) OutputFormat(query url.Values) string {
 		outputFormat = r.Output.DataFormat
 	}
 	if outputFormat == "" {
-		outputFormat = JSONFormat
+		outputFormat = content.JSONFormat
 	}
 	return outputFormat
 }
@@ -246,16 +205,16 @@ func (r *Route) OutputFormat(query url.Values) string {
 // ContentType returns content type
 func (r *Route) ContentType(query url.Values) string {
 	switch strings.ToLower(r.OutputFormat(query)) {
-	case XLSFormat, XLSContentType:
-		return XLSContentType
-	case CSVFormat, CSVContentType:
-		return CSVContentType
-	case XMLFormat, XMLContentType:
-		return XMLContentType
-	case JSONDataFormatTabular:
-		return TabularJSONFormat
+	case content.XLSFormat, content.XLSContentType:
+		return content.XLSContentType
+	case content.CSVFormat, content.CSVContentType:
+		return content.CSVContentType
+	case content.XMLFormat, content.XMLContentType:
+		return content.XMLContentType
+	case content.JSONDataFormatTabular:
+		return content.TabularJSONFormat
 	}
-	return JSONContentType
+	return content.JSONContentType
 }
 
 func (r *Route) IsRevealMetric() bool {
@@ -269,33 +228,11 @@ func (r *Route) HttpURI() string {
 	return r.URI
 }
 
-func (x *XLSConfig) Options() []xlsy.Option {
-
-	var options []xlsy.Option
-	if x == nil {
-		return options
-	}
-	if x.DefaultStyle != "" {
-		options = append(options, xlsy.WithDefaultStyle(x.DefaultStyle))
-	}
-	if x.SheetName != "" {
-		options = append(options, xlsy.WithTag(&xlsy.Tag{Name: x.SheetName}))
-	}
-	if len(x.Styles) > 0 {
-		var pairs []string
-		for k, v := range x.Styles {
-			pairs = append(pairs, k, v)
-		}
-		options = append(options, xlsy.WithNamedStyles(pairs...))
-	}
-	return options
-}
-
 func (r *Route) Marshaller(request *http.Request) *marshal.Marshaller {
 	contentType := request.Header.Get(HeaderContentType)
 	setter.SetStringIfEmpty(&contentType, request.Header.Get(strings.ToLower(HeaderContentType)))
 	switch contentType {
-	case CSVContentType:
+	case content.CSVContentType:
 		return marshal.NewMarshaller(r._requestBodySlice.Type, r.CSV.Unmarshal)
 	}
 	jsonPathInterceptor := json.UnmarshalerInterceptors{}
@@ -304,7 +241,7 @@ func (r *Route) Marshaller(request *http.Request) *marshal.Marshaller {
 		jsonPathInterceptor[transform.Path] = r.transformFn(request, transform)
 	}
 	return marshal.NewMarshaller(r._requestBodyType, func(bytes []byte, i interface{}) error {
-		return r._jsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
+		return r.JsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
 	})
 }
 
@@ -354,10 +291,6 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err := r.initVisitor(resource); err != nil {
-		return err
-	}
-
 	if err := r.initCaser(); err != nil {
 		return err
 	}
@@ -370,64 +303,43 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	if err := r.initStyle(); err != nil {
+	if err := r.initResponseType(); err != nil {
 		return err
 	}
-
-	//if err := r.Index.Init(r.View, r.Field); err != nil {
-	//	return err
-	//}
 
 	if err := r.normalizePaths(); err != nil {
 		return err
 	}
-	r.addPrefixFieldIfNeeded()
-
-	if err := r.initMarshaller(); err != nil {
-		return err
-	}
-
-	if err := r.initTransforms(ctx); err != nil {
-		return nil
-	}
-
-	r._unmarshallerInterceptors = r.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
 	if err := r.initServiceType(); err != nil {
 		return err
 	}
 
 	r.initCors(resource)
 	r.initCompression(resource)
+	r.addPrefixFieldIfNeeded()
 	r.indexExcluded()
-
-	if err := r.initCSVIfNeeded(); err != nil {
-		return err
+	if err := r.initTransforms(ctx); err != nil {
+		return nil
 	}
 
-	if err := r.initTabJSONIfNeeded(); err != nil {
-		return err
-	}
+	r._unmarshallerInterceptors = r.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
 
-	if err := r.initXMLIfNeeded(); err != nil {
+	if err := r.InitMarshaller(r.ioConfig(), r.Exclude, r.View.Schema.Type(), r._requestBodyType); err != nil {
 		return err
 	}
 
 	r.initDebugStyleIfNeeded()
-
 	if r.APIKey != nil {
 		r._apiKeys = append(r._apiKeys, r.APIKey)
 	}
-
 	if err := r.initAsyncIfNeeded(ctx); err != nil {
 		return err
 	}
-
 	if r._stateCache == nil {
 		r._stateCache = &staterCache{
 			index: sync.Map{},
 		}
 	}
-
 	return nil
 }
 
@@ -436,29 +348,7 @@ func (r *Route) initView(ctx context.Context, resource *Resource) error {
 		return err
 	}
 
-	return updateViewConfig(ctx, resource.Resource, r.View)
-}
-
-func updateViewConfig(ctx context.Context, resource *view.Resource, aView *view.View) error {
-	//var err error
-	//
-	//viewNs, ok := nameToNs[aView.Name]
-	//if ok {
-	//	aViewCopy := *aView
-	//	aViewCopy.Selector, err = aViewCopy.Selector.CloneWithNs(ctx, resource, &aViewCopy, viewNs)
-	//	if err != nil {
-	//		return err
-	//	}
-	//
-	//	*aView = aViewCopy
-	//}
-	//
-	//for _, relation := range aView.With {
-	//	if err = updateViewConfig(ctx, resource, nameToNs, &relation.Of.View); err != nil {
-	//		return err
-	//	}
-	//}
-	//
+	r.NamespacedView = view.IndexViews(r.View)
 	return nil
 }
 
@@ -478,33 +368,6 @@ func (r *Route) IsMetricDebug(req *http.Request) bool {
 		value = req.Header.Get(strings.ToLower(httputils.DatlyRequestMetricsHeader))
 	}
 	return strings.ToLower(value) == httputils.DatlyDebugHeaderValue
-}
-
-func reverse(namespace map[string]string) map[string]string {
-	result := map[string]string{}
-
-	for key, value := range namespace {
-		result[value] = key
-	}
-
-	return result
-}
-
-func (r *Route) initVisitor(resource *Resource) error {
-	if r.Visitor == nil {
-		return nil
-	}
-
-	if r.Visitor.Ref != "" {
-		refVisitor, err := resource._visitors.Lookup(r.Visitor.Ref)
-		if err != nil {
-			return err
-		}
-
-		r.Visitor._fetcher = refVisitor
-	}
-
-	return nil
 }
 
 func (r *Route) initCardinality() error {
@@ -537,15 +400,62 @@ func (r *Route) initCors(resource *Resource) {
 	r.Cors.inherit(resource.Cors)
 }
 
-func (r *Route) initStyle() error {
-
+func (r *Route) initResponseType() (err error) {
 	if (r.Style == "" || r.Style == BasicStyle) && r.Field == "" {
 		r.Style = BasicStyle
 		return nil
 	}
 
 	if r.Field == "" {
-		r.Field = "ResponseBody"
+		switch r.Service {
+		case ServiceTypeReader:
+			r.Field = "Data"
+		default:
+			r.Field = "ResponseBody"
+		}
+	}
+	fieldType := r.OutputDataType()
+
+	if len(r.Output.Parameters) == 0 {
+		r.Output.Parameters.Append(
+			state.NewParameter(r.Field,
+				state.NewOutputLocation("Data"),
+				state.WithParameterType(fieldType)))
+
+		r.Output.Parameters.Append(
+			state.NewParameter("Status",
+				state.NewOutputLocation("Status"),
+				state.WithParameterType(reflect.TypeOf(ResponseStatus{}))))
+
+		if r.View.MetaTemplateEnabled() && r.View.Template.Meta.Kind == view.MetaTypeRecord {
+			r.Output.Parameters.Append(
+				state.NewParameter(r.View.Template.Meta.Name,
+					state.NewOutputLocation("ViewMeta"),
+					state.WithParameterType(r.View.Template.Meta.Schema.Type())))
+		}
+
+		if r.IsRevealMetric() && r.DebugKind == view.MetaTypeRecord {
+			r.Output.Parameters.Append(
+				state.NewParameter("Debug",
+					state.NewOutputLocation("Stats"),
+					state.WithParameterType(r.View.Template.Meta.Schema.Type())))
+		}
+
+	}
+
+	pkg := r.PgkPath(r.Field)
+
+	switch r.Service {
+	case ServiceTypeReader:
+		parameters := r.Output.Parameters
+		outputType, err := parameters.ReflectType(pkg, r._resource.LookupType(), false)
+		if err != nil {
+			return err
+		}
+		r.Output.Type = structology.NewStateType(outputType)
+	default:
+
+		//return nil
 	}
 
 	responseFields := make([]reflect.StructField, 2)
@@ -556,8 +466,6 @@ func (r *Route) initStyle() error {
 	}
 
 	responseFieldPgkPath := r.PgkPath(r.Field)
-
-	fieldType := r.responseFieldType()
 
 	responseFields[1] = reflect.StructField{
 		Name:    r.Field,
@@ -610,15 +518,13 @@ func (r *Route) PgkPath(fieldName string) string {
 	return responseFieldPgkPath
 }
 
-func (r *Route) responseFieldType() reflect.Type {
+func (r *Route) OutputDataType() reflect.Type {
 	if r.ResponseBody != nil && r.ResponseBody._bodyType != nil {
 		return r.ResponseBody._bodyType
 	}
-
 	if r.Cardinality == state.Many {
 		return r.View.Schema.SliceType()
 	}
-
 	return r.View.Schema.Type()
 }
 
@@ -738,15 +644,6 @@ func (r *Route) initCompression(resource *Resource) {
 	r.Compression = resource.Compression
 }
 
-//func (i *Index) ViewByPrefix(prefix string) (*view.View, error) {
-//	aView, ok := i.viewByPrefix(prefix)
-//	if !ok {
-//		return nil, fmt.Errorf("not found view with prefix %v", prefix)
-//	}
-//
-//	return aView, nil
-//}
-
 func (r *Route) ShouldNormalizeExclude() bool {
 	return r.NormalizeExclude == nil || *r.NormalizeExclude
 }
@@ -836,148 +733,6 @@ func (r *Route) addPrefixFieldIfNeeded() {
 	}
 }
 
-func (r *Route) initCSVIfNeeded() error {
-	r.ensureCSV()
-	if len(r.CSV.Separator) != 1 {
-		return fmt.Errorf("separator has to be a single char, but was %v", r.CSV.Separator)
-	}
-	if r.CSV.NullValue == "" {
-		r.CSV.NullValue = "null"
-	}
-	r.CSV._config = &csv.Config{
-		FieldSeparator:  r.CSV.Separator,
-		ObjectSeparator: "\n",
-		EncloseBy:       `"`,
-		EscapeBy:        "\\",
-		NullValue:       r.CSV.NullValue,
-	}
-	schemaType := r.View.Schema.Type()
-	if schemaType.Kind() == reflect.Ptr {
-		schemaType = schemaType.Elem()
-	}
-	var err error
-	r.CSV._outputMarshaller, err = csv.NewMarshaller(schemaType, r.CSV._config)
-	if err != nil {
-		return err
-	}
-	if r._requestBodyType == nil {
-		return nil
-	}
-
-	r.CSV._unwrapperSlice = r._requestBodySlice
-	r.CSV._inputMarshaller, err = csv.NewMarshaller(r._requestBodyType, nil)
-	return err
-}
-
-func (r *Route) ensureCSV() {
-	if r.CSV != nil {
-		return
-	}
-	r.CSV = &CSVConfig{Separator: ","}
-}
-
-func (r *Route) initTabJSONIfNeeded() error {
-
-	if r.Output.DataFormat != JSONDataFormatTabular {
-		return nil
-	}
-
-	if r.TabularJSON == nil {
-		r.TabularJSON = &TabularJSONConfig{}
-	}
-
-	if r.TabularJSON._config == nil {
-		r.TabularJSON._config = &tabjson.Config{}
-	}
-
-	if r.TabularJSON._config.FieldSeparator == "" {
-		r.TabularJSON._config.FieldSeparator = ","
-	}
-
-	if len(r.TabularJSON._config.FieldSeparator) != 1 {
-		return fmt.Errorf("separator has to be a single char, but was %v", r.TabularJSON._config.FieldSeparator)
-	}
-
-	if r.TabularJSON._config.NullValue == "" {
-		r.TabularJSON._config.NullValue = "null"
-	}
-
-	if r.TabularJSON.FloatPrecision != "" {
-		r.TabularJSON._config.StringifierConfig.StringifierFloat32Config.Precision = r.TabularJSON.FloatPrecision
-		r.TabularJSON._config.StringifierConfig.StringifierFloat64Config.Precision = r.TabularJSON.FloatPrecision
-	}
-
-	if len(r.Exclude) > 0 {
-		r.TabularJSON._config.ExcludedPaths = r.Exclude
-	}
-
-	schemaType := r.View.Schema.Type()
-	if schemaType.Kind() == reflect.Ptr {
-		schemaType = schemaType.Elem()
-	}
-
-	var err error
-	r.TabularJSON._outputMarshaller, err = tabjson.NewMarshaller(schemaType, r.TabularJSON._config)
-	if err != nil {
-		return err
-	}
-
-	if r._requestBodyType == nil {
-		return nil
-	}
-
-	r.TabularJSON._unwrapperSlice = r._requestBodySlice
-	r.TabularJSON._requestBodyMarshaller, err = tabjson.NewMarshaller(r._requestBodyType, nil)
-	return err
-}
-
-func (r *Route) initXMLIfNeeded() error {
-	if r.XML == nil {
-		r.XML = &XMLConfig{}
-	}
-	if r.XML._config == nil {
-		r.XML._config = getDefaultConfig()
-	}
-
-	if r.XML._config.FieldSeparator == "" {
-		r.XML._config.FieldSeparator = ","
-	}
-
-	if len(r.XML._config.FieldSeparator) != 1 {
-		return fmt.Errorf("separator has to be a single char, but was %v", r.XML._config.FieldSeparator)
-	}
-
-	if r.XML._config.NullValue == "" {
-		r.XML._config.NullValue = "\u0000"
-	}
-
-	if r.XML.FloatPrecision != "" {
-		r.XML._config.StringifierConfig.StringifierFloat32Config.Precision = r.XML.FloatPrecision
-		r.XML._config.StringifierConfig.StringifierFloat64Config.Precision = r.XML.FloatPrecision
-	}
-
-	if len(r.Exclude) > 0 {
-		r.XML._config.ExcludedPaths = r.Exclude
-	}
-
-	schemaType := r.View.Schema.Type()
-	if schemaType.Kind() == reflect.Ptr {
-		schemaType = schemaType.Elem()
-	}
-
-	var err error
-	r.XML._outputMarshaller, err = xmlify.NewMarshaller(schemaType, r.XML._config)
-	if err != nil {
-		return err
-	}
-
-	if r._requestBodyType == nil {
-		return nil
-	}
-	r.XML._requestBodyMarshaller, err = xmlify.NewMarshaller(r._requestBodyType, nil)
-	return err
-}
-
 func (r *Route) initDebugStyleIfNeeded() {
 	if r.RevealMetric == nil || !*r.RevealMetric {
 		return
@@ -996,35 +751,8 @@ func (r *Route) initResponseBodyIfNeeded() error {
 	return r.ResponseBody.Init(r.View)
 }
 
-func (c *CSVConfig) Unmarshal(bytes []byte, i interface{}) error {
-	return c._inputMarshaller.Unmarshal(bytes, i)
-}
-
-func (c *CSVConfig) unwrapIfNeeded(value interface{}) (interface{}, error) {
-	if c._unwrapperSlice == nil || value == nil {
-		return value, nil
-	}
-
-	ptr := xunsafe.AsPointer(value)
-	sliceLen := c._unwrapperSlice.Len(ptr)
-	switch sliceLen {
-	case 0:
-		return nil, nil
-	case 1:
-		return c._unwrapperSlice.ValuePointerAt(ptr, 0), nil
-	default:
-		return nil, fmt.Errorf("unexpected number of data, expected 0 or 1 but got %v", sliceLen)
-	}
-}
-
 func (r *Route) AddApiKeys(keys ...*APIKey) {
 	r._apiKeys = append(r._apiKeys, keys...)
-}
-
-func (r *Route) initMarshaller() error {
-	r._jsonMarshaller = json.New(r.ioConfig())
-	r._xlsMarshaller = xlsy.NewMarshaller(r.Content.XLS.Options()...)
-	return nil
 }
 
 func (r *Route) initMarshallerInterceptor() error {
@@ -1093,87 +821,4 @@ func (r *Route) match(ctx context.Context, route *http2.Route) (*Route, error) {
 
 func (r *Route) SetRouteLookup(lookup func(route *http2.Route) (*Route, error)) {
 	r._routeMatcher = lookup
-}
-
-// TODO MFI
-func getDefaultConfig() *xmlify.Config {
-	return &xmlify.Config{
-		Style:                  "regularStyle", // style
-		RootTag:                "result",
-		HeaderTag:              "columns",
-		HeaderRowTag:           "column",
-		HeaderRowFieldAttr:     "id",
-		HeaderRowFieldTypeAttr: "type",
-		DataTag:                "rows",
-		DataRowTag:             "r",
-		DataRowFieldTag:        "c",
-		NewLine:                "\n",
-		DataRowFieldTypes: map[string]string{
-			"uint":    "lg",
-			"uint8":   "lg",
-			"uint16":  "lg",
-			"uint32":  "lg",
-			"uint64":  "lg",
-			"int":     "lg",
-			"int8":    "lg",
-			"int16":   "lg",
-			"int32":   "lg",
-			"int64":   "lg",
-			"*uint":   "lg",
-			"*uint8":  "lg",
-			"*uint16": "lg",
-			"*uint32": "lg",
-			"*uint64": "lg",
-			"*int":    "lg",
-			"*int8":   "lg",
-			"*int16":  "lg",
-			"*int32":  "lg",
-			"*int64":  "lg",
-			/////
-			"float32": "db",
-			"float64": "db",
-			/////
-			"string":  "string",
-			"*string": "string",
-			//////
-			"time.Time":  "dt",
-			"*time.Time": "dt",
-		},
-		HeaderRowFieldType: map[string]string{
-			"uint":    "long",
-			"uint8":   "long",
-			"uint16":  "long",
-			"uint32":  "long",
-			"uint64":  "long",
-			"int":     "long",
-			"int8":    "long",
-			"int16":   "long",
-			"int32":   "long",
-			"int64":   "long",
-			"*uint":   "long",
-			"*uint8":  "long",
-			"*uint16": "long",
-			"*uint32": "long",
-			"*uint64": "long",
-			"*int":    "long",
-			"*int8":   "long",
-			"*int16":  "long",
-			"*int32":  "long",
-			"*int64":  "long",
-			/////
-			"float32": "double",
-			"float64": "double",
-			/////
-			"string":  "string",
-			"*string": "string",
-			//////
-			"time.Time":  "date",
-			"*time.Time": "date",
-		},
-		TabularNullValue: "nil=\"true\"",
-		RegularRootTag:   "root",
-		RegularRowTag:    "row",
-		RegularNullValue: "",
-		NullValue:        "\u0000",
-	}
 }

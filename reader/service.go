@@ -23,7 +23,7 @@ type Service struct {
 	sqlBuilder *Builder
 }
 
-// ReadInto reads data into provided destination, * dDest` is required. It has to be a pointer to `interface{}` or pointer to slice of `T` or `*T`
+// ReadInto reads Data into provided destination, * dDest` is required. It has to be a pointer to `interface{}` or pointer to slice of `T` or `*T`
 func (s *Service) ReadInto(ctx context.Context, dest interface{}, aView *view.View, opts ...Option) error {
 	session, err := NewSession(dest, aView, opts...)
 	if err != nil {
@@ -40,7 +40,7 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 	}
 
 	wg := sync.WaitGroup{}
-	collector := session.View.Collector(session.ResultPtr, session.HandleViewMeta, session.View.MatchStrategy.SupportsParallel())
+	collector := session.View.Collector(session.DataPtr, session.HandleViewMeta, session.View.MatchStrategy.SupportsParallel())
 	errors := shared.NewErrors(0)
 
 	s.readAll(ctx, session, collector, &wg, errors, session.Parent)
@@ -55,10 +55,11 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 		return err
 	}
 
-	if dest, ok := session.ResultPtr.(*interface{}); ok {
+	if dest, ok := session.DataPtr.(*interface{}); ok {
 		*dest = collector.Dest()
 	}
-
+	state := session.State.Lookup(session.View)
+	session.Filters = state.Filters
 	return nil
 }
 
@@ -435,7 +436,7 @@ func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, 
 
 	aView.Logger.LogDatabaseErr(matcher.SQL, err, matcher.Args...)
 	stats.Error = err.Error()
-	return nil, fmt.Errorf("database error occured while fetching data for view %v", aView.Name)
+	return nil, fmt.Errorf("database error occured while fetching Data for view %v", aView.Name)
 }
 
 func (s *Service) NewStats(session *Session, index *cache.ParmetrizedQuery, cacheStats *cache.Stats, cacheError error) *Stats {

@@ -475,14 +475,14 @@ func TestRouter(t *testing.T) {
 			description: "styles | error",
 			resourceURI: "011_style",
 			uri:         "/api/events?_criteria=(id%20=%201%20UNION%20ALL%20SELECT%209%20as%20id%2C%20To_Date%28%222019-03-11T02%3A20%3A33Z%22%29%20as%20timestamp%2C%2010%20as%20event_type_id%2C%2020%20as%20quantity%2C%206%20as%20user_id)",
-			expected:    `{"Status":"error","Errors":[{"View":"events","Parameter":"_criteria","Message":"can't use criteria on view events"}],"ResultPtr":[]}`,
+			expected:    `{"Status":"error","Errors":[{"View":"events","Parameter":"_criteria","Message":"can't use criteria on view events"}],"DataPtr":[]}`,
 			method:      http.MethodGet,
 		},
 		{
 			description: "styles | response",
 			resourceURI: "011_style",
 			uri:         "/api/events?_fields=Id,Timestamp,EventTypeId",
-			expected:    `{"Status":"ok","ResultPtr":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111}]}`,
+			expected:    `{"Status":"ok","DataPtr":[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventTypeId":2},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventTypeId":11},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111}]}`,
 			method:      http.MethodGet,
 		},
 		{
@@ -909,7 +909,7 @@ func TestRouter(t *testing.T) {
 			resourceURI:  "048_tabjson_style",
 			uri:          "/api/events?_criteria=(id%20=%201%20UNION%20ALL%20SELECT%209%20as%20id%2C%20To_Date%28%222019-03-11T02%3A20%3A33Z%22%29%20as%20timestamp%2C%2010%20as%20event_type_id%2C%2020%20as%20quantity%2C%206%20as%20user_id)",
 			useAssertPkg: true,
-			expected:     `{"Status":"error","Message":"can't use criteria on view events","Errors":[{"View":"events","Parameter":"_criteria","Message":"can't use criteria on view events"}],"ResultPtr":[]}`,
+			expected:     `{"Status":"error","Message":"can't use criteria on view events","Errors":[{"View":"events","Parameter":"_criteria","Message":"can't use criteria on view events"}],"DataPtr":[]}`,
 			method:       http.MethodGet,
 		},
 		{
@@ -1180,7 +1180,7 @@ func (c *testcase) sendHttpRequest(t *testing.T, handler *router.Router, shouldD
 		return false
 	}
 
-	response, err := ioutil.ReadAll(responseWriter.ResultPtr().Body)
+	response, err := ioutil.ReadAll(responseWriter.DataPtr().Body)
 	if !assert.Nil(t, err, c.description) {
 		return false
 	}

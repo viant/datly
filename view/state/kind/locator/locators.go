@@ -21,6 +21,16 @@ func (l *KindLocator) With(options ...Option) *KindLocator {
 	return NewKindsLocator(l, opts...)
 }
 
+func (l *KindLocator) Has(kind state.Kind) bool {
+	if l == nil {
+		return false
+	}
+	l.RWMutex.RLock()
+	_, ok := l.byKind[kind]
+	l.RWMutex.RUnlock()
+	return ok
+}
+
 // Lookup return locator for supplied kind or error
 func (l *KindLocator) Lookup(kind state.Kind) (kind.Locator, error) {
 	l.RWMutex.RLock()
@@ -30,20 +40,13 @@ func (l *KindLocator) Lookup(kind state.Kind) (kind.Locator, error) {
 		return locator, nil
 	}
 	var err error
-	if l.parent == nil {
+	if !l.parent.Has(kind) {
 		if locator, err = l.registerLocator(kind); err != nil {
 			return nil, fmt.Errorf("failed to lookup locator for kind: %v, %w", kind, err)
 		}
 		return locator, nil
 	}
-
-	locator, err = l.parent.Lookup(kind)
-	if err != nil {
-		if locator, err = l.registerLocator(kind); err != nil {
-			return nil, fmt.Errorf("failed to lookup locator for kind: %v, %w", kind, err)
-		}
-	}
-	return locator, err
+	return l.parent.Lookup(kind)
 }
 
 func (l *KindLocator) registerLocator(kind state.Kind) (kind.Locator, error) {

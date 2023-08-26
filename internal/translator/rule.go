@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/router/content"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -25,25 +26,25 @@ type (
 		orderNamespaces []string
 		Root            string
 		router.Route
-		Async        *AsyncConfig              `json:",omitempty"`
-		Cache        *view.Cache               `json:",omitempty"`
-		CSV          *router.CSVConfig         `json:",omitempty"`
-		Const        map[string]interface{}    `json:",omitempty"`
-		ConstURL     string                    `json:",omitempty"`
-		EmbedURL     string                    `json:",omitempty"`
-		Embeds       data.Map                  `json:",omitempty"`
-		RequestBody  *BodyConfig               `json:",omitempty"`
-		TypeSrc      *parser.TypeImport        `json:",omitempty"`
-		ResponseBody *ResponseBodyConfig       `json:",omitempty"`
-		Package      string                    `json:",omitempty"`
-		Router       *RouterConfig             `json:",omitempty" yaml:",omitempty"`
-		DataFormat   string                    `json:",omitempty"`
-		TabularJSON  *router.TabularJSONConfig `json:",omitempty"`
-		XML          *router.XMLConfig         `json:",omitempty"`
-		HandlerType  string                    `json:",omitempty"`
-		StateType    string                    `json:",omitempty"`
-		With         []string                  `json:",omitempty"`
-		Include      []string                  `json:",omitempty"`
+		Async        *AsyncConfig               `json:",omitempty"`
+		Cache        *view.Cache                `json:",omitempty"`
+		CSV          *content.CSVConfig         `json:",omitempty"`
+		Const        map[string]interface{}     `json:",omitempty"`
+		ConstURL     string                     `json:",omitempty"`
+		EmbedURL     string                     `json:",omitempty"`
+		Embeds       data.Map                   `json:",omitempty"`
+		RequestBody  *BodyConfig                `json:",omitempty"`
+		TypeSrc      *parser.TypeImport         `json:",omitempty"`
+		ResponseBody *ResponseBodyConfig        `json:",omitempty"`
+		Package      string                     `json:",omitempty"`
+		Router       *RouterConfig              `json:",omitempty" yaml:",omitempty"`
+		DataFormat   string                     `json:",omitempty"`
+		TabularJSON  *content.TabularJSONConfig `json:",omitempty"`
+		XML          *content.XMLConfig         `json:",omitempty"`
+		HandlerType  string                     `json:",omitempty"`
+		StateType    string                     `json:",omitempty"`
+		With         []string                   `json:",omitempty"`
+		Include      []string                   `json:",omitempty"`
 		indexNamespaces
 	}
 
@@ -336,10 +337,10 @@ func (r *Rule) applyShortHands() {
 		r.Route.Output.Style = router.ComprehensiveStyle
 	}
 	if r.Route.TabularJSON != nil && r.Route.Output.DataFormat == "" {
-		r.Route.Output.DataFormat = router.JSONDataFormatTabular
+		r.Route.Output.DataFormat = content.JSONDataFormatTabular
 	}
 	if r.Route.XML != nil && r.Route.Output.DataFormat == "" {
-		r.Route.Output.DataFormat = router.XMLFormat
+		r.Route.Output.DataFormat = content.XMLFormat
 	}
 }
 

@@ -16,9 +16,10 @@ type (
 	}
 
 	ReaderResponse struct {
-		*reader.Response
-
-		Session *reader.Session
-		Result  interface{}
+		Response       *reader.Output
+		StatusCode     int
+		ResponseHeader http.Header
+		ContentType    string
+		Value          interface{}
 	}
 )

@@ -124,22 +124,6 @@ func (s *State) ViewOptions(aView *view.View) *Options {
 	return viewOptions
 }
 
-// TODO deprecated this abstraction
-type valueGetter struct {
-	Parameters state.NamedParameters
-	*State
-	*Options
-}
-
-func (g *valueGetter) Value(ctx context.Context, paramName string) (interface{}, error) {
-	parameter, ok := g.Parameters[paramName]
-	if !ok {
-		return nil, fmt.Errorf("failed to lookup paramter: %v", paramName)
-	}
-	value, _, err := g.LookupValue(ctx, parameter, g.Options)
-	return value, err
-}
-
 func (s *State) setTemplateState(ctx context.Context, aView *view.View, opts *Options) error {
 	state := s.resourceState.Lookup(aView)
 	if template := aView.Template; template != nil {
@@ -361,4 +345,20 @@ func (s *State) handleParameterError(parameter *state.Parameter, err error, erro
 	} else if asErrors, ok := err.(*httputils.Errors); ok && asErrors.ErrorStatusCode() != http.StatusBadRequest {
 		errors.SetStatus(asErrors.ErrorStatusCode())
 	}
+}
+
+// TODO deprecated this abstraction
+type valueGetter struct {
+	Parameters state.NamedParameters
+	*State
+	*Options
+}
+
+func (g *valueGetter) Value(ctx context.Context, paramName string) (interface{}, error) {
+	parameter, ok := g.Parameters[paramName]
+	if !ok {
+		return nil, fmt.Errorf("failed to lookup paramter: %v", paramName)
+	}
+	value, _, err := g.LookupValue(ctx, parameter, g.Options)
+	return value, err
 }

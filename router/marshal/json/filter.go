@@ -16,7 +16,6 @@ type (
 func NewFilters(filterable ...*FilterEntry) *Filters {
 	filters := &Filters{}
 	filters.fields = map[string]Filter{}
-
 	for i := range filterable {
 		filters.fields[filterable[i].Path] = NewFilter(filterable[i].Fields...)
 	}
