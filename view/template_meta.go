@@ -21,7 +21,8 @@ const (
 )
 
 type (
-	MetaKind     string
+	MetaKind string
+	//TODO renamte TemplateMeta to better name like ResultSet Summary, Navigation,
 	TemplateMeta struct {
 		SourceURL   string
 		Source      string

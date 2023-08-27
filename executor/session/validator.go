@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/govalidator"
 	sqlxvalidator "github.com/viant/sqlx/io/validator"
 	"github.com/viant/xdatly/handler/validator"
@@ -75,7 +76,7 @@ func (v *Validator) validateWithGoValidator(ctx context.Context, any interface{}
 
 	ret, err := goValidator.Validate(ctx, any, gOptions...)
 	if ret != nil && len(ret.Violations) > 0 {
-		validation.Violations = Violations(validation.Violations).MergeGoViolation(ret.Violations)
+		validation.Violations = httputils.Violations(validation.Violations).MergeGoViolation(ret.Violations)
 		validation.Failed = true
 	}
 	return err
@@ -93,36 +94,12 @@ func (v *Validator) validateWithSqlx(ctx context.Context, any interface{}, valid
 		}
 		ret, err := sqlxValidator.Validate(ctx, db, any, sqlxOptions...)
 		if ret != nil && len(ret.Violations) > 0 {
-			validation.Violations = Violations(validation.Violations).MergeSqlViolation(ret.Violations)
+			validation.Violations = httputils.Violations(validation.Violations).MergeSqlViolation(ret.Violations)
 			validation.Failed = true
 		}
 		return err
 	}
 	return nil
-}
-
-type Violations []*validator.Violation
-
-func (v Violations) MergeGoViolation(violations []*govalidator.Violation) Violations {
-	if len(violations) == 0 {
-		return v
-	}
-	for _, violation := range violations {
-		aViolation := validator.Violation(*violation)
-		v = append(v, &aViolation)
-	}
-	return v
-}
-
-func (v Violations) MergeSqlViolation(violations []*sqlxvalidator.Violation) []*validator.Violation {
-	if len(violations) == 0 {
-		return v
-	}
-	for _, violation := range violations {
-		aViolation := validator.Violation(*violation)
-		v = append(v, &aViolation)
-	}
-	return v
 }
 
 func NewValidator() *validator.Service {

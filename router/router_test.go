@@ -705,7 +705,7 @@ func TestRouter(t *testing.T) {
 			method:      http.MethodPost,
 			codecs:      map[string]interface{}{},
 			requestBody: `{"ID": [1,10,103], "Quantity": 0}`,
-			expected:    `{"Errors":[{"View":"events","Parameter":"Data","Object":[{"Id":1,"Status":false},{"Id":10,"Status":false},{"Id":103,"Status":false}]}]}`,
+			expected:    `{"Errors":[{"View":"events","Parameter":"data","Object":[{"Id":1,"Status":false},{"Id":10,"Status":false},{"Id":103,"Status":false}]}]}`,
 		},
 		{
 			description: "executor with param slice",

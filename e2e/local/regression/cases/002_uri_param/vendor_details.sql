@@ -1,4 +1,4 @@
-/* {"URI":"vendors/{vendorID}", "Style":"Basic"} */
+/* {"URI":"vendors/{vendorID}"} */
 
 
 SELECT wrapper.* EXCEPT ID,

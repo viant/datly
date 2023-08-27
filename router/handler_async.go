@@ -103,7 +103,6 @@ func firstNotNil(jobs ...*async.Job) *async.Job {
 			return job
 		}
 	}
-
 	return nil
 }
 
@@ -149,6 +148,5 @@ func (a *AsyncHandler) getSession(ctx context.Context) (*ReaderSession, error) {
 	if a.session != nil {
 		return a.session, nil
 	}
-
 	return a.executor.route._router.prepareReaderSession(ctx, a.executor.response, a.executor.request, a.executor.route)
 }

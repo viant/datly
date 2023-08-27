@@ -11,22 +11,22 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/cloudless/gateway/matcher"
 	"github.com/viant/datly/executor"
-	content2 "github.com/viant/datly/router/content"
-	"github.com/viant/datly/view/session"
-
 	"github.com/viant/datly/reader"
+	rhandler "github.com/viant/datly/reader/handler"
 	"github.com/viant/datly/router/async"
 	"github.com/viant/datly/router/async/handler"
+	content2 "github.com/viant/datly/router/content"
 	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/router/status"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/session"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/govalidator"
-	svalidator "github.com/viant/sqlx/io/validator"
 	async2 "github.com/viant/xdatly/handler/async"
 	haHttp "github.com/viant/xdatly/handler/http"
+	"github.com/viant/xdatly/handler/response"
 	"github.com/viant/xunsafe"
 	"io"
 	"net/http"
@@ -352,16 +352,17 @@ func (r *Router) readResponse(ctx context.Context, session *ReaderSession) (Payl
 		return nil, err
 	}
 
+	fmt.Printf("PREPARE: %T %v\n", response.objects, response.objects)
 	route := session.Route
 	format := route.OutputFormat(session.Request.URL.Query())
 	filters := route.Exclusion(session.State)
 
-	resultMarshalled, err := route.Content.Marshal(format, route.Field, response.objects, response.result, filters)
+	data, err := route.Content.Marshal(format, route.Field, response.objects, response.result, filters)
 	if err != nil {
 		return nil, err
 	}
 
-	payloadReader, err := r.compressIfNeeded(resultMarshalled, session.Route)
+	payloadReader, err := r.compressIfNeeded(data, session.Route)
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +401,7 @@ func (r *Router) prepareResponse(session *ReaderSession, includeSQL bool, metric
 
 	viewMeta := readerSession.ViewMeta
 	readerStats := readerSession.Stats
-	value := readerSession.SyncData()
+	value := readerSession.Data
 	result, err := r.result(session, value, viewMeta, readerStats)
 	if err != nil {
 		return nil, false, err
@@ -482,42 +483,8 @@ func (r *Router) result(session *ReaderSession, destValue interface{}, meta inte
 	}
 }
 
-func (r *Router) buildJsonFilters(route *Route, selectors *view.ResourceState) ([]*json.FilterEntry, error) {
-	entries := make([]*json.FilterEntry, 0)
-
-	selectors.Lock()
-	defer selectors.Unlock()
-
-	namespaceView := view.IndexViews(route.View)
-	for viewName, selector := range selectors.Views {
-		if len(selector.Columns) == 0 {
-			continue
-		}
-		var aPath string
-		nsView := namespaceView.ByName(viewName)
-		if nsView == nil {
-			aPath = ""
-		} else {
-			aPath = nsView.Path
-		}
-
-		fields := make([]string, len(selector.Fields))
-		for i := range selector.Fields {
-			fields[i] = selector.Fields[i]
-		}
-
-		entries = append(entries, &json.FilterEntry{
-			Path:   aPath,
-			Fields: fields,
-		})
-
-	}
-
-	return entries, nil
-}
-
 func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, statusCode int) {
-	statusCode, message, anObjectErr := normalizeErr(err, statusCode)
+	statusCode, message, anObjectErr := status.NormalizeErr(err, statusCode)
 	if statusCode < http.StatusBadRequest {
 		statusCode = http.StatusBadRequest
 	}
@@ -552,8 +519,8 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 	w.Write(asBytes)
 }
 
-func (r *Router) responseStatusError(message string, anObject interface{}) ResponseStatus {
-	responseStatus := ResponseStatus{
+func (r *Router) responseStatusError(message string, anObject interface{}) response.Status {
+	responseStatus := response.Status{
 		Status:  "error",
 		Message: message,
 	}
@@ -568,7 +535,7 @@ func (r *Router) responseStatusError(message string, anObject interface{}) Respo
 	return responseStatus
 }
 
-func (r *Router) setResponseStatus(route *Route, response reflect.Value, responseStatus ResponseStatus, stats []*reader.Info) {
+func (r *Router) setResponseStatus(route *Route, response reflect.Value, responseStatus response.Status, stats []*reader.Info) {
 	if route._responseSetter.statusField != nil {
 		route._responseSetter.statusField.SetValue(unsafe.Pointer(response.Pointer()), responseStatus)
 	}
@@ -585,65 +552,13 @@ func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route, vi
 
 	newResponse := reflect.New(route._responseSetter.rType)
 	responseBodyPtr := unsafe.Pointer(newResponse.Pointer())
+
 	route._responseSetter.bodyField.SetValue(responseBodyPtr, response)
 	if route._responseSetter.metaField != nil && viewMeta != nil {
 		route._responseSetter.metaField.SetValue(responseBodyPtr, viewMeta)
 	}
 	r.setResponseStatus(route, newResponse, r.responseStatusSuccess(state), stats)
 	return newResponse.Elem().Interface()
-}
-
-func normalizeErr(err error, statusCode int) (int, string, interface{}) {
-	switch actual := err.(type) {
-	case *svalidator.Validation:
-		var errorItems []*ErrorItem
-		for _, item := range actual.Violations {
-			errorItems = append(errorItems, &ErrorItem{
-				Location: item.Location,
-				Field:    item.Field,
-				Value:    item.Value,
-				Message:  item.Message,
-				Check:    item.Check,
-			})
-		}
-
-		return statusCode, err.Error(), errorItems
-	case *govalidator.Validation:
-		var items []*ErrorItem
-		for _, item := range actual.Violations {
-			items = append(items, &ErrorItem{
-				Location: item.Location,
-				Field:    item.Field,
-				Value:    item.Value,
-				Message:  item.Message,
-				Check:    item.Check,
-			})
-		}
-
-		return statusCode, actual.Error(), items
-	case *httputils.Errors:
-		actual.SetStatus(statusCode)
-		for _, anError := range actual.Errors {
-			isObj := types.IsObject(anError.Err)
-			if isObj {
-				statusCode, anError.Message, anError.Object = normalizeErr(anError.Err, statusCode)
-			} else {
-				statusCode, anError.Message, anError.Object = normalizeErr(anError.Err, statusCode)
-			}
-		}
-
-		actual.SetStatus(statusCode)
-
-		return actual.ErrorStatusCode(), actual.Message, actual.Errors
-	case *expand.ErrorResponse:
-		if actual.StatusCode != 0 {
-			statusCode = actual.StatusCode
-		}
-
-		return statusCode, actual.Message, actual.Content
-	default:
-		return statusCode, err.Error(), nil
-	}
 }
 
 func (r *Router) indexRoutes() {
@@ -779,8 +694,8 @@ func (r *Router) normalizeURI(prefix string, URI string) string {
 	return url.Join(prefix, URI)
 }
 
-func (r *Router) responseStatusSuccess(state *expand.State) ResponseStatus {
-	status := ResponseStatus{Status: "ok"}
+func (r *Router) responseStatusSuccess(state *expand.State) response.Status {
+	status := response.Status{Status: "ok"}
 	if state != nil {
 		status.Extras = state.ResponseBuilder.Content
 	}
@@ -797,19 +712,28 @@ func (r *Router) Resource() *Resource {
 }
 
 func (r *Router) payloadReader(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route, record *async2.Job) (PayloadReader, error) {
+
 	switch route.Service {
 	case ServiceTypeExecutor:
 		return r.executorPayloadReader(ctx, response, request, route)
 	case ServiceTypeReader:
-
-		//if route.Type != nil {
-		//	state := session.New(route.View, session.WithLocatorOptions(route.LocatorOptions(request)...))
-		//	readerHandler := rhandler.New(route.Output.Type, route.Output.Parameters)
-		//	response := readerHandler.Handle(ctx, route.View, state,
-		//		reader.WithIncludeSQL(true),
-		//		reader.WithCacheDisabled(false))
-		//
-		//}
+		if route.Async == nil {
+			sessionState := session.New(route.View, session.WithLocatorOptions(route.LocatorOptions(request)...))
+			readerHandler := rhandler.New(route.Output.Type, route.Output.Parameters)
+			aResponse := readerHandler.Handle(ctx, route.View, sessionState,
+				reader.WithIncludeSQL(true),
+				reader.WithCacheDisabled(false))
+			if aResponse.Error != nil {
+				return nil, aResponse.Error
+			}
+			format := route.OutputFormat(request.URL.Query())
+			filters := route.Exclusion(sessionState.ResourceState())
+			data, err := route.Content.Marshal(format, route.Field, aResponse.Reader.Data, aResponse.Output, filters)
+			if err != nil {
+				return nil, err
+			}
+			return r.compressIfNeeded(data, route)
+		}
 
 		session, err := r.prepareReaderSession(ctx, response, request, route)
 		if err != nil {
@@ -1104,7 +1028,7 @@ func (r *Router) updateAsyncRecord(ctx context.Context, session *ReaderSession, 
 
 func (r *Router) handleReadAsyncErrorWithDb(ctx context.Context, session *ReaderSession, record *async2.Job, db *sql.DB, err error) {
 	record.State = async2.StateDone
-	_, message, object := normalizeErr(err, http.StatusBadRequest)
+	_, message, object := status.NormalizeErr(err, http.StatusBadRequest)
 	if object != nil {
 		marshal, _ := session.Route.JSON.JsonMarshaller.Marshal(object)
 		asString := string(marshal)
@@ -1188,7 +1112,7 @@ func (r *Router) QueryAllJobs(writer http.ResponseWriter, request *http.Request)
 }
 
 func (r *Router) normalizeAndWriteErr(writer http.ResponseWriter, err error) {
-	statusCode, message, errorObject := normalizeErr(err, http.StatusBadRequest)
+	statusCode, message, errorObject := status.NormalizeErr(err, http.StatusBadRequest)
 	if errorObject != nil {
 		marshal, err := goJson.Marshal(errorObject)
 		if err == nil {

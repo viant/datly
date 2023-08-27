@@ -72,6 +72,7 @@ func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource,
 	if err := resource.ensurePathParametersSchema(ctx); err != nil {
 		return err
 	}
+
 	if err = resource.Rule.Viewlets.Each(func(viewlet *Viewlet) error {
 		return s.persistView(viewlet, resource, view.ModeExec)
 	}); err != nil {
@@ -122,6 +123,8 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	if err := root.buildView(resource.Rule, view.ModeQuery); err != nil {
 		return err
 	}
+
+	resource.Rule.updateExclude(resource.Rule.RootViewlet())
 	if err = resource.Rule.Viewlets.Each(func(viewlet *Viewlet) error {
 		return s.persistView(viewlet, resource, view.ModeQuery)
 	}); err != nil {

@@ -161,7 +161,7 @@ func (r *Rule) GetField() string {
 	}
 
 	if r.Field == "" {
-		return "Data"
+		return "data"
 	}
 
 	return r.Field
@@ -300,12 +300,22 @@ func (r *Rule) updateExclude(n *Viewlet) {
 		return
 	}
 	prefix := ""
+	r.updateViewExclude(n, prefix)
+}
+
+func (r *Rule) updateViewExclude(n *Viewlet, prefix string) {
 	if n.Holder != "" {
-		prefix = n.Holder + "."
+		prefix += n.Holder + "."
 	}
 	for _, exclude := range n.View.Exclude { //Todo convert to field name
 		field := n.Spec.Type.ByColumn(exclude)
 		r.Route.Exclude = append(r.Route.Exclude, prefix+field.Name)
+	}
+
+	for _, rel := range n.View.With {
+		viewName := strings.Replace(rel.Of.View.Name, "#", "", 1)
+		relViewlet := r.Viewlets.Lookup(viewName)
+		r.updateViewExclude(relViewlet, prefix)
 	}
 	n.View.Exclude = nil //TODO do we have to remove it
 }

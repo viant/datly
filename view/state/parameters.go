@@ -10,6 +10,7 @@ import (
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
+	"strings"
 )
 
 type (
@@ -107,17 +108,22 @@ func (s Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 		}
 		param.Schema.Cardinality = schema.Cardinality
 		if rType != nil {
-			fields = append(fields, reflect.StructField{Name: param.Name, Type: rType, PkgPath: PkgPath(param.Name, pkgPath), Tag: reflect.StructTag(param.Tag)})
+
+			structField := reflect.StructField{Name: param.Name, Type: rType, PkgPath: PkgPath(param.Name, pkgPath), Tag: reflect.StructTag(param.Tag)}
+			if param.Name == rType.Name() || strings.Contains(param.Tag, "anonymous") {
+				structField.Anonymous = true
+			}
+			fields = append(fields, structField)
 			setMarkerFields = append(setMarkerFields, reflect.StructField{Name: param.Name, Type: boolType, PkgPath: PkgPath(param.Name, pkgPath), Tag: reflect.StructTag(param.Tag)})
 		}
 	}
+
 	if withSetMarker && len(fields) > 0 {
 		setMarkerType := reflect.StructOf(setMarkerFields)
 		fields = append(fields, reflect.StructField{Name: "Has", Type: reflect.PtrTo(setMarkerType), PkgPath: PkgPath("Has", pkgPath), Tag: `setMarker:"true" sqlx:"-" diff:"-"  `})
 	}
 	if len(fields) == 0 {
 		return reflect.TypeOf(struct{}{}), nil
-		//		return reflect.StructOf([]reflect.StructField{{Name: "Dummy", Type: reflect.TypeOf(true)}}), nil
 	}
 	baseType := reflect.StructOf(fields)
 	return baseType, nil
@@ -227,6 +233,12 @@ func WithParameterType(t reflect.Type) ParameterOption {
 			return
 		}
 		p.Schema = NewSchema(t)
+	}
+}
+
+func WithParameterTag(tag string) ParameterOption {
+	return func(p *Parameter) {
+		p.Tag = tag
 	}
 }
 

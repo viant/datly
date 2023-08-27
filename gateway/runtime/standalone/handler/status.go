@@ -16,13 +16,13 @@ type (
 		StartTime time.Time
 	}
 
-	Status struct {
+	StatusHandler struct {
 		info info
 		meta *meta2.Config
 	}
 )
 
-func (h *Status) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+func (h *StatusHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	if !meta2.IsAuthorized(request, h.meta.AllowedSubnet) {
 		writer.WriteHeader(http.StatusForbidden)
 		return
@@ -37,9 +37,9 @@ func (h *Status) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	writer.Write(JSON)
 }
 
-//NewStatus creates a status handler
-func NewStatus(version string, meta *meta2.Config) *Status {
-	handler := &Status{}
+// NewStatus creates a status handler
+func NewStatus(version string, meta *meta2.Config) *StatusHandler {
+	handler := &StatusHandler{}
 	handler.info.Version = version
 	handler.info.StartTime = time.Now()
 	handler.info.Status = "UP"

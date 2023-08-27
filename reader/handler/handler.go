@@ -2,13 +2,17 @@ package handler
 
 import (
 	"context"
+	goJson "encoding/json"
 	"github.com/viant/datly/reader"
 	_ "github.com/viant/datly/reader/locator"
+	"github.com/viant/datly/router/status"
+	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/session"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/structology"
+	"github.com/viant/xdatly/handler/response"
 	"net/http"
 	"reflect"
 )
@@ -25,28 +29,35 @@ type (
 		Reader     *reader.Output
 		Output     interface{}
 		OutputType reflect.Type
+		Status     *response.Status
 		StatusCode int
 		Error      error
+		http.Header
 	}
 )
 
+func (r *Response) SetError(err error, statusCode int) {
+	r.Error = err
+	r.StatusCode, r.Status.Message, r.Status.Errors = status.NormalizeErr(err, statusCode)
+	r.Status.Status = "error"
+
+}
 func (h *Handler) Handle(ctx context.Context, aView *view.View, state *session.State, opts ...reader.Option) *Response {
-	ret := &Response{}
+	ret := &Response{Header: http.Header{}, Status: &response.Status{Status: "ok"}}
 	err := h.readData(ctx, aView, state, ret, opts)
 	if err != nil {
-		ret.StatusCode = h.errorStatusCode()
-		ret.Error = err
+		ret.SetError(err, h.errorStatusCode())
 		return ret
 	}
 	if h.output == nil {
 		return ret
 	}
-	ret.Output = ret.Reader.SyncData()
 	if h.output == nil || !h.output.IsDefined() {
 		return ret
 	}
 	resultState := h.output.NewState()
-	if err = state.SetState(ctx, h.parameters, resultState, state.Indirect(true, locator.WithCustomOption(ret.Output))); err != nil {
+	if err = state.SetState(ctx, h.parameters, resultState, state.Indirect(true,
+		locator.WithCustomOption(ret.Reader, ret.Status))); err != nil {
 		ret.StatusCode = http.StatusInternalServerError
 		ret.Error = err
 		return ret
@@ -56,7 +67,7 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, state *session.S
 	return ret
 }
 
-func (h *Handler) readData(ctx context.Context, aView *view.View, state *session.State, ret *Response, opts []reader.Option) error {
+func (h *Handler) readData(ctx context.Context, aView *view.View, aState *session.State, ret *Response, opts []reader.Option) error {
 	destValue := reflect.New(aView.Schema.SliceType())
 	dest := destValue.Interface()
 	aSession, err := reader.NewSession(dest, aView)
@@ -68,16 +79,62 @@ func (h *Handler) readData(ctx context.Context, aView *view.View, state *session
 			return err
 		}
 	}
-	if err = state.Populate(ctx); err != nil {
+	if err = aState.Populate(ctx); err != nil {
 		return err
 	}
-	aSession.State = state.ResourceState()
+	aSession.State = aState.ResourceState()
 	if err = reader.New().Read(context.TODO(), aSession); err != nil {
 		return err //TODO add 501 for database errors ?
 	}
-	aSession.Output.SyncData()
-	ret.Output = &aSession.Output
+	ret.Reader = &aSession.Output
+
+	ret.Output = ret.Reader.Data
+	//if aSession.View.Schema.Cardinality == state.One && h.output == nil {
+	//	slice := reflect.ValueOf(ret.Output)
+	//	switch slice.Len() {
+	//	case 0:
+	//		ret.Output = nil
+	//	case 1:
+	//		ret.Output = reflect.ValueOf(ret.Output).Index(0).Interface()
+	//	}
+	//}
+
+	h.publishViewMetaIfNeeded(aView, ret)
+	h.publishMetricsIfNeeded(aSession, ret)
 	return nil
+}
+
+func (h *Handler) publishViewMetaIfNeeded(aView *view.View, ret *Response) {
+	templateMeta := aView.Template.Meta
+	if ret.Reader.ViewMeta == nil || templateMeta == nil {
+		return
+	}
+	if templateMeta.Kind != view.MetaTypeHeader {
+		return
+	}
+	data, err := goJson.Marshal(ret.Reader.ViewMeta)
+	if err != nil {
+		ret.StatusCode = http.StatusInternalServerError
+		ret.Status.Status = "error"
+		ret.Status.Message = err.Error()
+	}
+	ret.Header.Add(templateMeta.Name, string(data))
+}
+
+func (h *Handler) publishMetricsIfNeeded(aSession *reader.Session, ret *Response) {
+	if aSession.RevealMetric {
+		return
+	}
+	for _, info := range aSession.Stats {
+		if !aSession.IncludeSQL {
+			info = info.HideSQL()
+		}
+		data, err := goJson.Marshal(info)
+		if err != nil {
+			continue
+		}
+		ret.Header.Add(httputils.DatlyResponseHeaderMetrics+"-"+info.Name(), string(data))
+	}
 }
 
 func (h *Handler) errorStatusCode() int {

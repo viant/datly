@@ -12,7 +12,6 @@ import (
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/common"
 	"github.com/viant/datly/router/marshal/json"
-	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
@@ -20,10 +19,10 @@ import (
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/datly/view/template"
 	"github.com/viant/structology"
-	"github.com/viant/structql"
 	"github.com/viant/toolbox/format"
 	async2 "github.com/viant/xdatly/handler/async"
 	http2 "github.com/viant/xdatly/handler/http"
+	"github.com/viant/xdatly/handler/response"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"net/url"
@@ -72,7 +71,6 @@ type (
 		Output
 
 		*view.NamespacedView
-		bodyParamQuery map[string]*query
 
 		ParamStatusError *int         `json:",omitempty"`
 		Compression      *Compression `json:",omitempty"`
@@ -90,16 +88,6 @@ type (
 		_routeMatcher             func(route *http2.Route) (*Route, error)
 		_async                    *async.Async
 		_router                   *Router
-	}
-
-	query struct {
-		*structql.Query
-		field *xunsafe.Field
-	}
-
-	Fetcher struct {
-		shared.Reference
-		_fetcher interface{}
 	}
 
 	Input struct {
@@ -138,27 +126,6 @@ type (
 		infoField   *xunsafe.Field
 		debug       *xunsafe.Field
 		rType       reflect.Type
-	}
-
-	ErrorItem struct {
-		Location string
-		Field    string
-		Value    interface{}
-		Message  string
-		Check    string
-	}
-
-	WarningItem struct {
-		Message string
-		Reason  string
-	}
-
-	ResponseStatus struct {
-		Status  string                 `json:",omitempty"`
-		Message string                 `json:",omitempty"`
-		Errors  interface{}            `json:",omitempty"`
-		Warning []*WarningItem         `json:",omitempty"`
-		Extras  map[string]interface{} `json:",omitempty" default:"embedded=true"`
 	}
 )
 
@@ -200,21 +167,6 @@ func (r *Route) OutputFormat(query url.Values) string {
 		outputFormat = content.JSONFormat
 	}
 	return outputFormat
-}
-
-// ContentType returns content type
-func (r *Route) ContentType(query url.Values) string {
-	switch strings.ToLower(r.OutputFormat(query)) {
-	case content.XLSFormat, content.XLSContentType:
-		return content.XLSContentType
-	case content.CSVFormat, content.CSVContentType:
-		return content.CSVContentType
-	case content.XMLFormat, content.XMLContentType:
-		return content.XMLContentType
-	case content.JSONDataFormatTabular:
-		return content.TabularJSONFormat
-	}
-	return content.JSONContentType
 }
 
 func (r *Route) IsRevealMetric() bool {
@@ -414,9 +366,11 @@ func (r *Route) initResponseType() (err error) {
 			r.Field = "ResponseBody"
 		}
 	}
+
 	fieldType := r.OutputDataType()
 
 	if len(r.Output.Parameters) == 0 {
+
 		r.Output.Parameters.Append(
 			state.NewParameter(r.Field,
 				state.NewOutputLocation("Data"),
@@ -425,12 +379,12 @@ func (r *Route) initResponseType() (err error) {
 		r.Output.Parameters.Append(
 			state.NewParameter("Status",
 				state.NewOutputLocation("Status"),
-				state.WithParameterType(reflect.TypeOf(ResponseStatus{}))))
-
+				state.WithParameterTag(`anonymous:"true"`),
+				state.WithParameterType(reflect.TypeOf(response.Status{}))))
 		if r.View.MetaTemplateEnabled() && r.View.Template.Meta.Kind == view.MetaTypeRecord {
 			r.Output.Parameters.Append(
 				state.NewParameter(r.View.Template.Meta.Name,
-					state.NewOutputLocation("ViewMeta"),
+					state.NewOutputLocation("Summary"),
 					state.WithParameterType(r.View.Template.Meta.Schema.Type())))
 		}
 
@@ -460,8 +414,8 @@ func (r *Route) initResponseType() (err error) {
 
 	responseFields := make([]reflect.StructField, 2)
 	responseFields[0] = reflect.StructField{
-		Name:      "ResponseStatus",
-		Type:      reflect.TypeOf(ResponseStatus{}),
+		Name:      "Status",
+		Type:      reflect.TypeOf(response.Status{}),
 		Anonymous: true,
 	}
 
@@ -493,7 +447,7 @@ func (r *Route) initResponseType() (err error) {
 
 	responseType := reflect.StructOf(responseFields)
 	r._responseSetter = &responseSetter{
-		statusField: FieldByName(responseType, "ResponseStatus"),
+		statusField: FieldByName(responseType, "Status"),
 		bodyField:   FieldByName(responseType, r.Field),
 		metaField:   FieldByName(responseType, metaFieldName),
 		infoField:   FieldByName(responseType, "DatlyDebug"),

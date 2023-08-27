@@ -58,6 +58,7 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 	if dest, ok := session.DataPtr.(*interface{}); ok {
 		*dest = collector.Dest()
 	}
+	session.syncData(session.View.Schema.Cardinality)
 	state := session.State.Lookup(session.View)
 	session.Filters = state.Filters
 	return nil

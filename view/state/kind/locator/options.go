@@ -131,3 +131,5 @@ func WithViews(views view.NamedViews) Option {
 		o.Views = views
 	}
 }
+
+// WithStatus returns with status options

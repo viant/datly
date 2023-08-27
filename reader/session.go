@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/predicate"
@@ -18,6 +19,7 @@ type (
 		mux           sync.Mutex
 		IncludeSQL    bool
 		CacheDisabled bool
+		RevealMetric  bool
 		View          *view.View
 		State         *view.ResourceState
 		Parent        *view.View
@@ -62,17 +64,35 @@ type (
 	}
 )
 
-func (r *Output) SyncData() interface{} {
+func (i *Info) HideSQL() *Info {
+	ret := *i
+	for _, elem := range i.TemplateMeta {
+		elem.SQL = ""
+		elem.Args = nil
+	}
+	for _, elem := range i.Template {
+		elem.SQL = ""
+		elem.Args = nil
+	}
+	return &ret
+}
+
+func (r *Output) syncData(cardinality state.Cardinality) {
 	if r.DataPtr == nil {
-		return nil
+		return
 	}
-	result := r.Data
-	if result != nil {
-		return result
-	}
-	result = reflect.ValueOf(r.DataPtr).Elem().Interface()
-	r.Data = result
-	return result
+	slice := reflect.ValueOf(r.DataPtr).Elem()
+	//if cardinality == state.One {//TODO uncomment is here move to one cardinality handling here
+	//	switch slice.Len() {
+	//	case 0:
+	//		r.Data = nil
+	//		return
+	//	case 1:
+	//		r.Data = slice.Index(0).Interface()
+	//		return
+	//	}
+	//}
+	r.Data = slice.Interface()
 }
 
 func (s *Info) Name() string {

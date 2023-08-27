@@ -17,24 +17,21 @@
           "name": "V2 Product 1",
           "status": 1,
           "userCreated": 2,
-          "userUpdated": 0,
-          "vendorId": 2
+          "userUpdated": 0
         },
         {
           "id": 4,
           "name": "V2 Product 2",
           "status": 1,
           "userCreated": 2,
-          "userUpdated": 0,
-          "vendorId": 2
+          "userUpdated": 0
         },
         {
           "id": 5,
           "name": "V2 Product 3",
           "status": 1,
           "userCreated": 2,
-          "userUpdated": 0,
-          "vendorId": 2
+          "userUpdated": 0
         }
       ],
       "userCreated": 2,

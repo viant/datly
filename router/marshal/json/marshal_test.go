@@ -1127,7 +1127,7 @@ func TestMarshaller_Unmarshal(t *testing.T) {
 		{
 			description:  "broken case 17",
 			data:         `{"data":null}`,
-			expect:       `{"Data":null}`,
+			expect:       `{"data":null}`,
 			stringsEqual: true,
 			into: func() interface{} {
 

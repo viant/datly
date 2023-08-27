@@ -76,3 +76,10 @@ func WithCacheDisabled(flag bool) Option {
 		return nil
 	}
 }
+
+func WithRevealMetric(flag bool) Option {
+	return func(session *Session) error {
+		session.RevealMetric = flag
+		return nil
+	}
+}

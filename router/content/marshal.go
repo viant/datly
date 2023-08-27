@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// Marshal marshals response
 // TODO refactor it to take just a marshaller for format, marshaller should only deal with response
 // (requiring field, reader data seems code design issue)
 func (c *Content) Marshal(format string, field string, readerData, response interface{}, options ...interface{}) ([]byte, error) {
