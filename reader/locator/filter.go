@@ -1,7 +1,6 @@
 package locator
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
@@ -18,13 +17,19 @@ func (l *outputLocator) buildFilter(parameter *state.Parameter) (*structology.St
 	return filterState, nil
 }
 
+var (
+	stringFilterType = reflect.TypeOf(&predicate.StringsFilter{})
+	intFilterType    = reflect.TypeOf(&predicate.IntFilter{})
+	boolFilterType   = reflect.TypeOf(&predicate.BoolFilter{})
+)
+
 func (l *outputLocator) setFilterFields(filterState *structology.State) error {
 	var err error
 	for i := range l.Output.Filters {
 		filter := l.Output.Filters[i]
-		value, _ := filterState.Value(filter.Name)
-		switch value.(type) {
-		case *predicate.IntFilter:
+		value, _ := filterState.Selector(filter.Name)
+		switch value.Type() {
+		case intFilterType:
 			aFilter := &predicate.IntFilter{}
 			if aFilter.Include, err = asInts(filter.Include); err != nil {
 				return err
@@ -35,7 +40,7 @@ func (l *outputLocator) setFilterFields(filterState *structology.State) error {
 			if err = filterState.SetValue(filter.Name, aFilter); err != nil {
 				return err
 			}
-		case *predicate.StringsFilter:
+		case stringFilterType:
 			aFilter := &predicate.StringsFilter{}
 			if aFilter.Include, err = asStrings(filter.Include); err != nil {
 				return err
@@ -46,7 +51,7 @@ func (l *outputLocator) setFilterFields(filterState *structology.State) error {
 			if err = filterState.SetValue(filter.Name, aFilter); err != nil {
 				return err
 			}
-		case *predicate.BoolFilter:
+		case boolFilterType:
 			aFilter := &predicate.BoolFilter{}
 			if aFilter.Include, err = asBool(filter.Include); err != nil {
 				return err
@@ -58,82 +63,71 @@ func (l *outputLocator) setFilterFields(filterState *structology.State) error {
 				return err
 			}
 		default:
-			return fmt.Errorf("unuspported filter type: %T", value)
+			return fmt.Errorf("unuspported filter type: %s", value.Type().String())
 		}
 	}
+	fmt.Printf("%T %+v\n", filterState.State(), filterState.State())
+
 	return nil
 }
 
-func asStrings(input interface{}) ([]string, error) {
-	if input == nil {
+func asStrings(inputs []interface{}) ([]string, error) {
+	if len(inputs) == 0 {
 		return nil, nil
 	}
 	var output []string
-	switch actual := input.(type) {
-	case *string:
-		if actual != nil {
-			output = []string{*actual}
-		}
-	case string:
-		output = []string{actual}
-	case []string:
-		output = actual
-	default:
-		rType := reflect.TypeOf(input)
-		if rType.Kind() == reflect.Slice {
-			rType = rType.Elem()
-		}
-		if rType.Kind() == reflect.Ptr {
-			rType = rType.Elem()
-		}
-		if rType.Kind() == reflect.Struct {
-			if data, err := json.Marshal(input); err == nil {
-				output = []string{string(data)}
+	for _, input := range inputs {
+		switch actual := input.(type) {
+		case *string:
+			if actual != nil {
+				output = append(output, *actual)
 			}
-		}
-		if output == nil {
-			output = []string{fmt.Sprintf("%v", input)}
+		case string:
+			output = append(output, actual)
+		default:
+			return nil, fmt.Errorf("unable to case %T to []int", input)
 		}
 	}
 	return output, nil
 }
 
-func asBool(input interface{}) ([]bool, error) {
-	if input == nil {
+func asBool(inputs []interface{}) ([]bool, error) {
+	if len(inputs) == 0 {
 		return nil, nil
 	}
 	var output []bool
-	switch actual := input.(type) {
-	case *bool:
-		if actual != nil {
-			output = []bool{*actual}
+	for _, input := range inputs {
+		switch actual := input.(type) {
+		case *bool:
+			if actual != nil {
+				output = append(output, *actual)
+			}
+		case bool:
+			output = append(output, actual)
+		default:
+			return nil, fmt.Errorf("unable to case %T to []int", input)
 		}
-	case bool:
-		output = []bool{actual}
-	case []bool:
-		output = actual
-	default:
-		return nil, fmt.Errorf("unable to case %T to []bool", input)
 	}
 	return output, nil
 }
 
-func asInts(input interface{}) ([]int, error) {
-	if input == nil {
+func asInts(inputs []interface{}) ([]int, error) {
+	if len(inputs) == 0 {
 		return nil, nil
 	}
+	fmt.Printf("%T %v\n", inputs, inputs)
 	var output []int
-	switch actual := input.(type) {
-	case *int:
-		if actual != nil {
-			output = []int{*actual}
+	for _, input := range inputs {
+		switch actual := input.(type) {
+		case *int:
+			if actual != nil {
+				output = append(output, *actual)
+			}
+		case int:
+			output = append(output, actual)
+		default:
+			return nil, fmt.Errorf("unable to case %T to []int", input)
 		}
-	case int:
-		output = []int{actual}
-	case []int:
-		output = actual
-	default:
-		return nil, fmt.Errorf("unable to case %T to []int", input)
 	}
 	return output, nil
 }

@@ -25,6 +25,7 @@ func (p *Group) Value(ctx context.Context, names string) (interface{}, bool, err
 	stateType := structology.NewStateType(parameter.Schema.Type())
 	aState := stateType.NewState()
 
+	isAnyItemSet := false
 	for _, item := range parameter.Group {
 		value, has, err := p.ParameterLookup(ctx, item)
 		if err != nil {
@@ -33,11 +34,12 @@ func (p *Group) Value(ctx context.Context, names string) (interface{}, bool, err
 		if !has {
 			continue
 		}
+		isAnyItemSet = true
 		if err = aState.SetValue(item.Name, value); err != nil {
 			return nil, false, err
 		}
 	}
-	return aState.State(), true, nil
+	return aState.State(), isAnyItemSet, nil
 }
 
 func (p *Group) matchByLocation(names string) *state.Parameter {

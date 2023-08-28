@@ -3,8 +3,8 @@ package predicate
 // Filter represents predicate instance
 type Filter struct {
 	Name    string
-	Include interface{}
-	Exclude interface{}
+	Include []interface{}
+	Exclude []interface{}
 }
 
 // Filters represents a filter collection

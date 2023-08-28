@@ -123,6 +123,7 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, PredicateCtx, p.ctx)
 	ctx = context.WithValue(ctx, PredicateState, p.state)
+
 	for _, predicateConfig := range p.config {
 		if predicateConfig.Group != group {
 			continue
@@ -147,7 +148,7 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 			continue
 		}
 
-		p.appendFilter(selector, value)
+		p.appendFilter(selector, criteria.Args)
 		if result.Len() != 0 {
 			result.WriteString(" ")
 			result.WriteString(operator)
@@ -157,15 +158,12 @@ func (p *Predicate) expand(group int, operator string) (string, error) {
 		result.WriteByte('(')
 		result.WriteString(criteria.Predicate)
 		result.WriteByte(')')
-		if len(criteria.Args) > 0 {
-			p.ctx.DataUnit.addAll(criteria.Args...)
-		}
 	}
 
 	return result.String(), nil
 }
 
-func (p *Predicate) appendFilter(selector *structology.Selector, value interface{}) {
+func (p *Predicate) appendFilter(selector *structology.Selector, value []interface{}) {
 	tagText, _ := selector.Tag().Lookup(predicate.TagName)
 	predicateTag := predicate.ParseTag(tagText, selector.Name())
 	filter := p.ctx.Filters.LookupOrAdd(predicateTag.Name)

@@ -123,7 +123,10 @@ func (s Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 		param.Schema.Cardinality = schema.Cardinality
 		if rType != nil {
 
-			structField := reflect.StructField{Name: param.Name, Type: rType, PkgPath: PkgPath(param.Name, pkgPath), Tag: reflect.StructTag(param.Tag)}
+			structField := reflect.StructField{Name: param.Name,
+				Type:    rType,
+				PkgPath: PkgPath(param.Name, pkgPath),
+				Tag:     reflect.StructTag(param.Tag)}
 			if param.Name == rType.Name() || strings.Contains(param.Tag, "anonymous") {
 				structField.Anonymous = true
 			}
@@ -251,6 +254,7 @@ func (p Parameters) PredicateStructType() reflect.Type {
 	if len(structFields) == 0 {
 		return reflect.TypeOf(struct{}{})
 	}
+	fmt.Printf("Predicate type: %s\n", reflect.StructOf(structFields).String())
 	return reflect.StructOf(structFields)
 }
 

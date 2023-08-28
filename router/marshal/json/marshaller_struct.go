@@ -351,7 +351,7 @@ func isZeroValue(ptr unsafe.Pointer, stringifier *marshallerWithField, value int
 	valuePtr := stringifier.xField.Pointer(ptr)
 	switch t.Kind() {
 	case reflect.Ptr:
-		return valuePtr == nil
+		return (*unsafe.Pointer)(valuePtr) == nil || *(*unsafe.Pointer)(valuePtr) == nil
 	case reflect.Slice:
 		s := (*reflect.SliceHeader)(valuePtr)
 		return s != nil && s.Len == 0
