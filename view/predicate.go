@@ -51,13 +51,14 @@ func (e *predicateEvaluator) Compute(ctx context.Context, value interface{}) (*c
 	}
 
 	val := ctx.Value(expand.PredicateState)
-	state := val.(*structology.State)
-	evaluate, err := e.Evaluate(cuxtomCtx, state, value)
+	aState := val.(*structology.State)
+	offset := len(cuxtomCtx.DataUnit.ParamsGroup)
+	evaluate, err := e.Evaluate(cuxtomCtx, aState, value)
 	if err != nil {
 		return nil, err
 	}
 
-	return &codec.Criteria{Predicate: evaluate.Buffer.String(), Args: evaluate.DataUnit.ParamsGroup}, nil
+	return &codec.Criteria{Predicate: evaluate.Buffer.String(), Args: evaluate.DataUnit.ParamsGroup[offset:]}, nil
 }
 
 func (e *predicateEvaluator) Evaluate(ctx *expand.Context, state *structology.State, value interface{}) (*expand.State, error) {
