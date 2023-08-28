@@ -43,10 +43,6 @@ func main() {
 		}
 	}()
 
-	//datly -N=run_tests_one_to_many -X=/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/cases/001_one_to_many/vendor_list.sql -w=autogen -C='dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true' -C='dyndb|dynamodb|dynamodb://localhost:8000/us-west-1?key=dummy&secret=dummy'  -j='/Users/awitas/go/src/github.com/viant/datly/e2e/local/jwt/public.enc|blowfish://default' -m='/Users/awitas/go/src/github.com/viant/datly/e2e/local/jwt/hmac.enc|blowfish://default' --partialConfig='/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/partial_config.json'
-
-	////
-
 	err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {
 		fmt.Printf("ERROR: %v\n", err)

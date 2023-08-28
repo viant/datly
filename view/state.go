@@ -1,10 +1,10 @@
 package view
 
 import (
+	"github.com/viant/datly/view/state/predicate"
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
-	"github.com/viant/xdatly/predicate"
 	"strings"
 	"sync"
 )

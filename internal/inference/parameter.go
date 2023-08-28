@@ -26,6 +26,7 @@ type (
 		Hint        string
 		AssumedType bool
 		Connector   string
+		InOutput    bool
 	}
 
 	ModificationSetting struct {

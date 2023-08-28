@@ -2,12 +2,14 @@ package reader
 
 import (
 	"fmt"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/predicate"
+	"github.com/viant/sqlx"
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/structology"
-	"github.com/viant/xdatly/predicate"
 	"reflect"
 	"strings"
 	"sync"
@@ -31,8 +33,7 @@ type (
 		DataType reflect.Type
 		DataPtr  interface{} //slice pointer
 		ViewMeta interface{}
-		Stats    []*Info
-		Metrics  []*Metric
+		Metrics  Metrics
 		Filters  predicate.Filters //filter used by request
 	}
 
@@ -42,20 +43,22 @@ type (
 	}
 
 	Metric struct {
-		View      string
-		Elapsed   string
-		ElapsedMs int
-		Rows      int
+		View      string             `json:",omitempty"`
+		Elapsed   string             `json:",omitempty"`
+		ElapsedMs int                `json:",omitempty"`
+		Rows      int                `json:",omitempty"`
+		Execution *TemplateExecution `json:",omitempty"`
 	}
 
-	Info struct {
-		View         string
-		Template     []*Stats `json:",omitempty"`
-		TemplateMeta []*Stats `json:",omitempty"`
-		Elapsed      string   `json:",omitempty"`
+	Metrics []*Metric
+
+	TemplateExecution struct {
+		Template     []*SQLExecution `json:",omitempty"`
+		TemplateMeta []*SQLExecution `json:",omitempty"`
+		Elapsed      string          `json:",omitempty"`
 	}
 
-	Stats struct {
+	SQLExecution struct {
 		SQL        string        `json:",omitempty"`
 		Args       []interface{} `json:",omitempty"`
 		CacheStats *cache.Stats  `json:",omitempty"`
@@ -64,17 +67,86 @@ type (
 	}
 )
 
-func (i *Info) HideSQL() *Info {
+func (m Metrics) Basic() Metrics {
+	var result = make(Metrics, len(m))
+	copy(result, m)
+	for _, item := range m {
+		item.Execution = nil
+	}
+	return result
+}
+
+// SQL returns main view SQL
+func (m *Metrics) SQL() string {
+	if m == nil || len(*m) == 0 {
+		return ""
+	}
+	return (*m)[0].SQL()
+}
+
+// SQL returns view SQL
+func (m *Metric) SQL() string {
+	if m.Execution != nil && len(m.Execution.Template) > 0 {
+		tmpl := m.Execution.Template[0]
+		SQL := shared.ExpandSQL(tmpl.SQL, tmpl.Args)
+		SQL = strings.ReplaceAll(SQL, "\n", "\\n")
+		return SQL
+	}
+	return ""
+}
+
+func (e Metrics) Lookup(viewName string) *Metric {
+	for _, candidate := range e {
+		if candidate.View == viewName {
+			return candidate
+		}
+	}
+	return nil
+}
+
+func (i *Metric) HideSQL() *Metric {
 	ret := *i
-	for _, elem := range i.TemplateMeta {
+	if i.Execution == nil {
+		return &ret
+	}
+	ret.Execution = &TemplateExecution{
+		Template:     make([]*SQLExecution, len(i.Execution.Template)),
+		TemplateMeta: make([]*SQLExecution, len(i.Execution.TemplateMeta)),
+	}
+	copy(ret.Execution.Template, i.Execution.Template)
+	copy(ret.Execution.TemplateMeta, i.Execution.TemplateMeta)
+	for _, elem := range i.Execution.Template {
 		elem.SQL = ""
 		elem.Args = nil
 	}
-	for _, elem := range i.Template {
+	for _, elem := range i.Execution.TemplateMeta {
 		elem.SQL = ""
 		elem.Args = nil
 	}
 	return &ret
+}
+
+func (e Metrics) ParametrizedSQL() []*sqlx.SQL {
+	var result []*sqlx.SQL
+	for _, metric := range e {
+		result = append(result, metric.ParametrizedSQL()...)
+	}
+	return result
+}
+
+func (e *Metric) ParametrizedSQL() []*sqlx.SQL {
+	var result = make([]*sqlx.SQL, 0)
+	if e.Execution == nil {
+		return result
+	}
+	for _, tmpl := range e.Execution.Template {
+		result = append(result, &sqlx.SQL{Query: tmpl.SQL, Args: tmpl.Args})
+	}
+	return result
+}
+
+func (i *Metric) Name() string {
+	return strings.Title(i.View)
 }
 
 func (r *Output) syncData(cardinality state.Cardinality) {
@@ -93,10 +165,6 @@ func (r *Output) syncData(cardinality state.Cardinality) {
 	//	}
 	//}
 	r.Data = slice.Interface()
-}
-
-func (s *Info) Name() string {
-	return strings.Title(strings.ReplaceAll(s.View, "#", ""))
 }
 
 // Init initializes session
@@ -158,12 +226,6 @@ func (s *Session) ParentData() (*ParentData, bool) {
 		View:     s.Parent,
 		Selector: s.State.Lookup(s.Parent),
 	}, true
-}
-
-func (s *Session) AddInfo(info *Info) {
-	s.mux.Lock()
-	s.Stats = append(s.Stats, info)
-	s.mux.Unlock()
 }
 
 func (d *ParentData) AsParam() *expand.MetaParam {

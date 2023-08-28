@@ -120,12 +120,12 @@ type (
 	}
 
 	responseSetter struct {
-		statusField *xunsafe.Field
-		bodyField   *xunsafe.Field
-		metaField   *xunsafe.Field
-		infoField   *xunsafe.Field
-		debug       *xunsafe.Field
-		rType       reflect.Type
+		statusField  *xunsafe.Field
+		bodyField    *xunsafe.Field
+		metaField    *xunsafe.Field
+		metricsField *xunsafe.Field
+		debug        *xunsafe.Field
+		rType        reflect.Type
 	}
 )
 
@@ -205,6 +205,7 @@ func (r *Route) LocatorOptions(request *http.Request) []locator.Option {
 	result = append(result, locator.WithURIPattern(r.URI))
 	result = append(result, locator.WithIOConfig(r.ioConfig()))
 	result = append(result, locator.WithParameters(r._resource.NamedParameters()))
+	result = append(result, locator.WithOutputParameters(r.Output.Parameters))
 	if r.RequestBodySchema != nil {
 		result = append(result, locator.WithBodyType(r.RequestBodySchema.Type()))
 	}
@@ -353,6 +354,9 @@ func (r *Route) initCors(resource *Resource) {
 }
 
 func (r *Route) initResponseType() (err error) {
+
+	r.initializeOutputParameters()
+
 	if (r.Style == "" || r.Style == BasicStyle) && r.Field == "" {
 		r.Style = BasicStyle
 		return nil
@@ -370,7 +374,6 @@ func (r *Route) initResponseType() (err error) {
 	fieldType := r.OutputDataType()
 
 	if len(r.Output.Parameters) == 0 {
-
 		r.Output.Parameters.Append(
 			state.NewParameter(r.Field,
 				state.NewOutputLocation("Data"),
@@ -439,22 +442,49 @@ func (r *Route) initResponseType() (err error) {
 
 	if r.IsRevealMetric() && r.DebugKind == view.MetaTypeRecord {
 		responseFields = append(responseFields, reflect.StructField{
-			Name: "DatlyDebug",
-			Tag:  `json:"_datly_debug_,omitempty"`,
-			Type: reflect.TypeOf([]*reader.Info{}),
+			Name: "Metrics",
+			Tag:  `json:"_metrics,omitempty"`,
+			Type: reflect.TypeOf(reader.Metrics{}),
 		})
 	}
 
 	responseType := reflect.StructOf(responseFields)
 	r._responseSetter = &responseSetter{
-		statusField: FieldByName(responseType, "Status"),
-		bodyField:   FieldByName(responseType, r.Field),
-		metaField:   FieldByName(responseType, metaFieldName),
-		infoField:   FieldByName(responseType, "DatlyDebug"),
-		rType:       responseType,
+		statusField:  FieldByName(responseType, "Status"),
+		bodyField:    FieldByName(responseType, r.Field),
+		metaField:    FieldByName(responseType, metaFieldName),
+		metricsField: FieldByName(responseType, "Metrics"),
+		rType:        responseType,
 	}
 
 	return nil
+}
+
+func (r *Route) initializeOutputParameters() {
+	for _, parameter := range r.Output.Parameters {
+		r.initializeOutputParameter(parameter)
+	}
+	if dataParameter := r.Output.Parameters.LookupByLocation(state.KindOutput, "data"); dataParameter != nil {
+		r.Style = ComprehensiveStyle
+		r.Field = dataParameter.Name
+	}
+}
+
+func (r *Route) initializeOutputParameter(parameter *state.Parameter) {
+	switch parameter.In.Kind {
+	case state.KindOutput:
+		switch parameter.In.Name {
+		case "data":
+			parameter.Schema = state.NewSchema(r.View.Schema.SliceType())
+		case "sql":
+			parameter.Schema = state.NewSchema(reflect.TypeOf(""))
+		case "status":
+			parameter.Schema = state.NewSchema(reflect.TypeOf(response.Status{}))
+		case "filter":
+			predicateType := r.View.Template.Parameters.PredicateStructType()
+			parameter.Schema = state.NewSchema(predicateType)
+		}
+	}
 }
 
 func FieldByName(responseType reflect.Type, name string) *xunsafe.Field {

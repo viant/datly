@@ -74,6 +74,7 @@ func (h *Handler) readData(ctx context.Context, aView *view.View, aState *sessio
 	if err != nil {
 		return err
 	}
+	aSession.IncludeSQL = true
 	for _, opt := range opts {
 		if err = opt(aSession); err != nil {
 			return err
@@ -125,7 +126,10 @@ func (h *Handler) publishMetricsIfNeeded(aSession *reader.Session, ret *Response
 	if aSession.RevealMetric {
 		return
 	}
-	for _, info := range aSession.Stats {
+	for _, info := range aSession.Metrics {
+		if info.Execution == nil {
+			continue
+		}
 		if !aSession.IncludeSQL {
 			info = info.HideSQL()
 		}

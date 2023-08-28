@@ -9,7 +9,6 @@ import (
 	"github.com/viant/structology"
 	"net/http"
 	"reflect"
-	"sort"
 	"sync"
 )
 
@@ -91,9 +90,6 @@ func (s *Stater) newUpdater(ctx context.Context, dstType reflect.Type) (*stateUp
 
 		params = append(params, parameter)
 	}
-
-	sort.Sort(state.Parameters(params))
-
 	return &stateUpdater{
 		params:      params,
 		paramsIndex: state.Parameters(params).Index(),

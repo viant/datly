@@ -11,32 +11,48 @@ import (
 )
 
 type outputLocator struct {
-	Output *reader.Output
-	Status *response.Status
+	Output     *reader.Output
+	Status     *response.Status
+	Parameters state.Parameters
 }
 
-func (v *outputLocator) Names() []string {
+func (l *outputLocator) Names() []string {
 	return nil
 }
 
-func (v *outputLocator) Value(ctx context.Context, name string) (interface{}, bool, error) {
-
+func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bool, error) {
 	switch strings.ToLower(name) {
 	case "data":
-		if v.Output == nil {
+		if l.Output == nil {
 			return nil, false, nil
 		}
-		return v.Output.Data, true, nil
+		return l.Output.Data, true, nil
 	case "summary", "meta":
-		if v.Output == nil {
+		if l.Output == nil {
 			return nil, false, nil
 		}
-		return v.Output.ViewMeta, true, nil
+		return l.Output.ViewMeta, true, nil
 	case "status":
-		if v.Status == nil {
+		if l.Status == nil {
 			return nil, false, nil
 		}
-		return v.Status, true, nil
+		return l.Status, true, nil
+	case "sql":
+		if l.Output == nil {
+			return nil, false, nil
+		}
+		SQL := l.Output.Metrics.SQL()
+		return SQL, true, nil
+	case "filter":
+		parameter := l.Parameters.LookupByLocation(state.KindOutput, "filter")
+		if parameter == nil || l.Output == nil {
+			return nil, false, nil
+		}
+		filterState, err := l.buildFilter(parameter)
+		if err != nil {
+			return nil, false, err
+		}
+		return filterState.State(), true, nil
 	}
 	return nil, false, nil
 }
@@ -44,7 +60,7 @@ func (v *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 // newOutputLocator returns output locator
 func newOutputLocator(opts ...locator.Option) (kind.Locator, error) {
 	options := locator.NewOptions(opts)
-	ret := &outputLocator{}
+	ret := &outputLocator{Parameters: options.OutputParameters}
 	for _, candidate := range options.Custom {
 		if output, ok := candidate.(*reader.Output); ok {
 			ret.Output = output

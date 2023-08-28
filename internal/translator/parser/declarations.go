@@ -20,10 +20,11 @@ import (
 type (
 	//Declarations defines state (parameters) declaration
 	Declarations struct {
-		SQL        string
-		State      inference.State
-		Transforms []*marshal.Transform
-		lookup     func(dataType string, opts ...xreflect.Option) (*state.Schema, error)
+		SQL         string
+		State       inference.State
+		OutputState inference.State
+		Transforms  []*marshal.Transform
+		lookup      func(dataType string, opts ...xreflect.Option) (*state.Schema, error)
 	}
 )
 
@@ -77,6 +78,11 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 		return nil
 	}
 	declaration.ExpandShorthands()
+
+	if declaration.InOutput {
+		d.OutputState.Append(&declaration.Parameter)
+		return nil
+	}
 	d.State.Append(&declaration.Parameter)
 	if authParameter := declaration.AuthParameter(); authParameter != nil {
 		if !d.State.Append(authParameter) {
@@ -120,6 +126,7 @@ func (d *Declarations) parseExpression(cursor *parsly.Cursor, selector *expr.Sel
 				location = strings.Join(segments[1:], ".")
 			}
 			declaration.Location = &location
+			declaration.InOutput = declaration.Kind == string(state.KindOutput)
 			if err := d.parseShorthands(declaration, cursor); err != nil {
 				return nil, err
 			}
@@ -234,6 +241,8 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			if err := s.appendPredicate(declaration, args, true); err != nil {
 				return err
 			}
+		case "Output":
+			declaration.InOutput = true
 		case "UtilParam":
 		//deprecated
 		case "QuerySelector":

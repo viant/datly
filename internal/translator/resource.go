@@ -30,8 +30,9 @@ type (
 		rule       *options.Rule
 		Resource   view.Resource
 
-		State inference.State
-		Rule  *Rule
+		State       inference.State
+		OutputState inference.State
+		Rule        *Rule
 		parser.Statements
 		RawSQL string
 		indexNamespaces
@@ -163,6 +164,7 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 		return err
 	}
 	r.State.Append(r.Declarations.State...)
+	r.OutputState.Append(r.Declarations.OutputState...)
 	if len(r.State.FilterByKind(state.KindGroup)) > 0 {
 		r.State = r.State.Group()
 	}

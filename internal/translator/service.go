@@ -172,14 +172,23 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 		resource.Rule.Route.URI = path.Join(resource.repository.APIPrefix, resource.rule.Prefix, resource.Rule.Route.URI)
 	}
 
-	state, err := resource.State.Compact(resource.rule.Module)
+	aState, err := resource.State.Compact(resource.rule.Module)
 	if err != nil {
-		return fmt.Errorf("failed to compact state: %w", err)
+		return fmt.Errorf("failed to compact aState: %w", err)
 	}
-	resource.Resource.Parameters = state.RemoveReserved().ViewParameters()
+	resource.Resource.Parameters = aState.RemoveReserved().ViewParameters()
 	if service == router.ServiceTypeExecutor {
-		resource.Rule.Route.Field = state.BodyField()
+		resource.Rule.Route.Field = aState.BodyField()
 	}
+
+	if len(resource.OutputState) > 0 {
+		outputState, err := resource.OutputState.Compact(resource.rule.Module)
+		if err != nil {
+			return err
+		}
+		resource.Rule.Route.Output.Parameters = outputState.ViewParameters()
+	}
+
 	routerResource, err := s.buildRouterResource(ctx, resource)
 	if err != nil {
 		return fmt.Errorf("failed to build router resource: %+v, %w", routerResource, err)

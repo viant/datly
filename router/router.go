@@ -67,7 +67,6 @@ type (
 	preparedResponse struct {
 		objects  interface{}
 		viewMeta interface{}
-		stats    []*reader.Info
 		session  *reader.Session
 		result   interface{}
 	}
@@ -377,7 +376,7 @@ func (r *Router) readResponse(ctx context.Context, session *ReaderSession) (Payl
 	//	payloadReader.AddHeader(templateMeta.Name, string(data))
 	//}
 
-	for _, stat := range response.stats {
+	for _, stat := range response.session.Metrics {
 		marshal, err := goJson.Marshal(stat)
 		if err != nil {
 			continue
@@ -400,9 +399,8 @@ func (r *Router) prepareResponse(session *ReaderSession, includeSQL bool, metric
 	//}
 
 	viewMeta := readerSession.ViewMeta
-	readerStats := readerSession.Stats
 	value := readerSession.Data
-	result, err := r.result(session, value, viewMeta, readerStats)
+	result, err := r.result(session, value, viewMeta, readerSession.Metrics)
 	if err != nil {
 		return nil, false, err
 	}
@@ -411,7 +409,6 @@ func (r *Router) prepareResponse(session *ReaderSession, includeSQL bool, metric
 		result:   result,
 		objects:  value,
 		viewMeta: viewMeta,
-		stats:    readerStats,
 		session:  readerSession,
 	}, true, nil
 }
@@ -432,11 +429,11 @@ func (r *Router) readValue(readerSession *ReaderSession, includeSQL bool, metric
 	}
 
 	if readerSession.Route.EnableAudit {
-		r.logMetrics(readerSession.Route.URI, session.Metrics, session.Stats)
+		r.logMetrics(readerSession.Route.URI, session.Metrics)
 	}
 
 	if !metricEnabled {
-		session.Stats = nil
+		session.Metrics = session.Metrics.Basic()
 	}
 
 	return session, nil
@@ -463,7 +460,7 @@ func (r *Router) inAWS() bool {
 	return scheme == "s3"
 }
 
-func (r *Router) result(session *ReaderSession, destValue interface{}, meta interface{}, stats []*reader.Info) (interface{}, error) {
+func (r *Router) result(session *ReaderSession, destValue interface{}, meta interface{}, stats reader.Metrics) (interface{}, error) {
 	if session.Route.Cardinality == state.Many {
 		result := r.wrapWithResponseIfNeeded(destValue, session.Route, meta, stats, nil)
 		return result, nil
@@ -535,17 +532,16 @@ func (r *Router) responseStatusError(message string, anObject interface{}) respo
 	return responseStatus
 }
 
-func (r *Router) setResponseStatus(route *Route, response reflect.Value, responseStatus response.Status, stats []*reader.Info) {
+func (r *Router) setResponseStatus(route *Route, response reflect.Value, responseStatus response.Status, metrics reader.Metrics) {
 	if route._responseSetter.statusField != nil {
 		route._responseSetter.statusField.SetValue(unsafe.Pointer(response.Pointer()), responseStatus)
 	}
-
-	if route._responseSetter.infoField != nil {
-		route._responseSetter.infoField.SetValue(unsafe.Pointer(response.Pointer()), stats)
+	if route._responseSetter.metricsField != nil {
+		route._responseSetter.metricsField.SetValue(unsafe.Pointer(response.Pointer()), metrics)
 	}
 }
 
-func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route, viewMeta interface{}, stats []*reader.Info, state *expand.State) interface{} {
+func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route, viewMeta interface{}, metrics reader.Metrics, state *expand.State) interface{} {
 	if route._responseSetter == nil {
 		return response
 	}
@@ -557,7 +553,7 @@ func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route, vi
 	if route._responseSetter.metaField != nil && viewMeta != nil {
 		route._responseSetter.metaField.SetValue(responseBodyPtr, viewMeta)
 	}
-	r.setResponseStatus(route, newResponse, r.responseStatusSuccess(state), stats)
+	r.setResponseStatus(route, newResponse, r.responseStatusSuccess(state), metrics)
 	return newResponse.Elem().Interface()
 }
 
@@ -664,8 +660,8 @@ func (r *Router) logAudit(request *http.Request, response http.ResponseWriter, r
 	fmt.Printf("%v\n", string(asBytes))
 }
 
-func (r *Router) logMetrics(URI string, metrics []*reader.Metric, stats []*reader.Info) {
-	asBytes, _ := goJson.Marshal(NewMetrics(URI, metrics, stats))
+func (r *Router) logMetrics(URI string, metrics []*reader.Metric) {
+	asBytes, _ := goJson.Marshal(NewMetrics(URI, metrics))
 
 	fmt.Printf("%v\n", string(asBytes))
 }
@@ -735,14 +731,14 @@ func (r *Router) payloadReader(ctx context.Context, request *http.Request, respo
 			return r.compressIfNeeded(data, route)
 		}
 
-		session, err := r.prepareReaderSession(ctx, response, request, route)
+		aSession, err := r.prepareReaderSession(ctx, response, request, route)
 		if err != nil {
 			return nil, err
 		}
-		payloadReader, err := r.readerPayloadReader(ctx, route, session, record)
+		payloadReader, err := r.readerPayloadReader(ctx, route, aSession, record)
 
 		if payloadReader != nil && payloadReader.Headers().Get(content.Type) == "" {
-			payloadReader.Headers().Add(content.Type, session.RequestParams.OutputContentType+"; "+httputils.CharsetUTF8)
+			payloadReader.Headers().Add(content.Type, aSession.RequestParams.OutputContentType+"; "+httputils.CharsetUTF8)
 		}
 		//TODO Add support for Content-Disposition: attachment; filename="document.doc"
 
@@ -989,7 +985,8 @@ func (r *Router) populateAsyncRecord(ctx context.Context, session *ReaderSession
 		return err
 	}
 
-	metrics := NewMetrics(session.Request.RequestURI, response.session.Metrics, response.stats)
+	metrics := NewMetrics(session.Request.RequestURI, response.session.Metrics.Basic())
+
 	asBytes, _ := goJson.Marshal(metrics)
 	record.Metrics = string(asBytes)
 	connector, err := r.asyncConnector(session.Route, record)
@@ -997,12 +994,8 @@ func (r *Router) populateAsyncRecord(ctx context.Context, session *ReaderSession
 		return err
 	}
 
-	for _, stat := range response.stats {
-		for _, templateStat := range stat.Template {
-			if templateStat.SQL != "" {
-				record.SQL = append(record.SQL, &async2.SQL{Query: templateStat.SQL, Args: templateStat.Args})
-			}
-		}
+	for _, item := range response.session.Metrics.ParametrizedSQL() {
+		record.SQL = append(record.SQL, &async2.SQL{Query: item.Query, Args: item.Args})
 	}
 
 	if err != nil {

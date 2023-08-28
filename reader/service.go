@@ -64,19 +64,19 @@ func (s *Service) Read(ctx context.Context, session *Session) error {
 	return nil
 }
 
-func (s *Service) afterRead(session *Session, collector *view.Collector, start *time.Time, err error, onFinish counter.OnDone) time.Duration {
+func (s *Service) afterRead(session *Session, collector *view.Collector, start *time.Time, info *TemplateExecution, err error, onFinish counter.OnDone) {
 	end := Now()
 	viewName := collector.View().Name
 	session.View.Logger.ReadTime(viewName, start, &end, err)
 	elapsed := Dif(end, *start)
-	session.AddMetric(&Metric{View: viewName, ElapsedMs: int(elapsed.Milliseconds()), Elapsed: elapsed.String(), Rows: collector.Len()})
+	session.AddMetric(&Metric{View: viewName, Execution: info, ElapsedMs: int(elapsed.Milliseconds()), Elapsed: elapsed.String(), Rows: collector.Len()})
 	if err != nil {
 		session.View.Counter.IncrementValue(Error)
 	} else {
 		session.View.Counter.IncrementValue(Success)
 	}
 	onFinish(end)
-	return elapsed
+	info.Elapsed = elapsed.String()
 }
 
 func (s *Service) readAll(ctx context.Context, session *Session, collector *view.Collector, wg *sync.WaitGroup, errorCollector *shared.Errors, parent *view.View) {
@@ -174,21 +174,15 @@ func (s *Service) batchData(collector *view.Collector) *view.BatchData {
 }
 
 func (s *Service) exhaustRead(ctx context.Context, view *view.View, selector *view.State, batchData *view.BatchData, collector *view.Collector, session *Session) error {
-	info := &Info{
-		View: view.Name,
-	}
-
+	execution := &TemplateExecution{}
 	start := Now()
-
 	onFinish := session.View.Counter.Begin(start)
-	err := s.readObjectsWithMeta(ctx, session, batchData, view, collector, selector, info)
-	info.Elapsed = s.afterRead(session, collector, &start, err, onFinish).String()
-
-	session.AddInfo(info)
+	err := s.readObjectsWithMeta(ctx, session, batchData, view, collector, selector, execution)
+	s.afterRead(session, collector, &start, execution, err, onFinish)
 	return err
 }
 
-func (s *Service) readObjectsWithMeta(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.State, info *Info) error {
+func (s *Service) readObjectsWithMeta(ctx context.Context, session *Session, batchData *view.BatchData, view *view.View, collector *view.Collector, selector *view.State, info *TemplateExecution) error {
 	batchData.ValuesBatch, batchData.Parent = sliceWithLimit(batchData.Values, batchData.Parent, batchData.Parent+view.Batch.Parent)
 	visitor := collector.Visitor(ctx)
 
@@ -210,7 +204,7 @@ func (s *Service) readObjectsWithMeta(ctx context.Context, session *Session, bat
 	return nil
 }
 
-func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.View, originalSelector *view.State, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *expand.MetaParam) (*Stats, error) {
+func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.View, originalSelector *view.State, batchDataCopy *view.BatchData, collector *view.Collector, parentViewMetaParam *expand.MetaParam) (*SQLExecution, error) {
 	selectorDeref := *originalSelector
 	selectorDeref.Fields = []string{}
 	selectorDeref.Columns = []string{}
@@ -297,7 +291,7 @@ func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.V
 	finished := Now()
 	aView.Logger.Log("reading view %v meta took %v, SQL: %v , Args: %v\n", aView.Name, finished.Sub(now).String(), SQL, args)
 
-	return s.NewStats(session, indexed, cacheStats, cacheErr), nil
+	return s.NewExecutionInfo(session, indexed, cacheStats, cacheErr), nil
 }
 
 func (s *Service) getMatchers(aView *view.View, selector *view.State, batchData *view.BatchData, collector *view.Collector, session *Session) (fullMatch *cache.ParmetrizedQuery, columnInMatcher *cache.ParmetrizedQuery, err error) {
@@ -329,7 +323,7 @@ func (s *Service) getMatchers(aView *view.View, selector *view.State, batchData 
 	return fullMatch, columnInMatcher, cacheErr
 }
 
-func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.VisitorFn, info *Info, batchData *view.BatchData, selector *view.State) error {
+func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aView *view.View, collector *view.Collector, visitor view.VisitorFn, info *TemplateExecution, batchData *view.BatchData, selector *view.State) error {
 	wg := &sync.WaitGroup{}
 	db, err := aView.Db()
 	if err != nil {
@@ -341,7 +335,7 @@ func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aV
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			var templateMeta *Stats
+			var templateMeta *SQLExecution
 			parentMeta := view.AsViewParam(aView, selector, batchData)
 			templateMeta, metaErr = s.queryMeta(ctx, session, aView, selector, batchData, collector, parentMeta)
 			if templateMeta != nil {
@@ -363,7 +357,7 @@ func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aV
 	return metaErr
 }
 
-func (s *Service) queryObjects(ctx context.Context, session *Session, aView *view.View, selector *view.State, batchData *view.BatchData, db *sql.DB, collector *view.Collector, visitor view.VisitorFn) (*Stats, error) {
+func (s *Service) queryObjects(ctx context.Context, session *Session, aView *view.View, selector *view.State, batchData *view.BatchData, db *sql.DB, collector *view.Collector, visitor view.VisitorFn) (*SQLExecution, error) {
 	fullMatcher, columnInMatcher, err := s.getMatchers(aView, selector, batchData, collector, session)
 	if err != nil {
 		return nil, err
@@ -390,7 +384,7 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 		options = append(options, &columnInMatcher)
 	}
 
-	stats := s.NewStats(session, fullMatcher, cacheStats, err)
+	stats := s.NewExecutionInfo(session, fullMatcher, cacheStats, err)
 
 	reader, err := read.New(ctx, db, fullMatcher.SQL, collector.NewItem(), options...)
 	if err != nil {
@@ -430,7 +424,7 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 	return stats, nil
 }
 
-func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, matcher *cache.ParmetrizedQuery, stats *Stats) (*Stats, error) {
+func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, matcher *cache.ParmetrizedQuery, stats *SQLExecution) (*SQLExecution, error) {
 	if session.IncludeSQL {
 		return nil, err
 	}
@@ -440,7 +434,7 @@ func (s *Service) HandleSQLError(err error, session *Session, aView *view.View, 
 	return nil, fmt.Errorf("database error occured while fetching Data for view %v", aView.Name)
 }
 
-func (s *Service) NewStats(session *Session, index *cache.ParmetrizedQuery, cacheStats *cache.Stats, cacheError error) *Stats {
+func (s *Service) NewExecutionInfo(session *Session, index *cache.ParmetrizedQuery, cacheStats *cache.Stats, cacheError error) *SQLExecution {
 	var SQL string
 	var args []interface{}
 	if session.IncludeSQL {
@@ -453,7 +447,7 @@ func (s *Service) NewStats(session *Session, index *cache.ParmetrizedQuery, cach
 		cacheErrorMessage = cacheError.Error()
 	}
 
-	return &Stats{
+	return &SQLExecution{
 		SQL:        SQL,
 		Args:       args,
 		CacheStats: cacheStats,

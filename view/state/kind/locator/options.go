@@ -13,17 +13,18 @@ import (
 // Options represents locator options
 type (
 	Options struct {
-		Request         *http.Request
-		Parent          *KindLocator
-		URIPattern      string
-		BodyType        reflect.Type
-		Unmarshal       Unmarshal
-		IOConfig        common.IOConfig
-		Custom          []interface{}
-		ParameterLookup ParameterLookup
-		ReadInto        ReadInto
-		Parameters      state.NamedParameters
-		Views           view.NamedViews
+		Request          *http.Request
+		Parent           *KindLocator
+		URIPattern       string
+		BodyType         reflect.Type
+		Unmarshal        Unmarshal
+		IOConfig         common.IOConfig
+		Custom           []interface{}
+		ParameterLookup  ParameterLookup
+		ReadInto         ReadInto
+		Parameters       state.NamedParameters
+		OutputParameters state.Parameters
+		Views            view.NamedViews
 	}
 
 	ParameterLookup func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error)
@@ -129,6 +130,12 @@ func WithReadInto(fn ReadInto) Option {
 func WithViews(views view.NamedViews) Option {
 	return func(o *Options) {
 		o.Views = views
+	}
+}
+
+func WithOutputParameters(parameters state.Parameters) Option {
+	return func(o *Options) {
+		o.OutputParameters = parameters
 	}
 }
 

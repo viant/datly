@@ -2,11 +2,11 @@ package expand
 
 import (
 	"github.com/viant/datly/executor/session"
+	"github.com/viant/datly/view/state/predicate"
 	"github.com/viant/structology"
 	"github.com/viant/velty/est"
 	"github.com/viant/xdatly/handler/mbus"
 	"github.com/viant/xdatly/handler/validator"
-	"github.com/viant/xdatly/predicate"
 )
 
 type (

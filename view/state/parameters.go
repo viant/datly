@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/datly/view/state/predicate"
 	"github.com/viant/structology"
 	"github.com/viant/velty"
 	"github.com/viant/xreflect"
@@ -21,6 +22,19 @@ type (
 	// Parameters represents slice of parameters
 	Parameters []*Parameter
 )
+
+// LookupByLocation returns match parameter by location
+func (p Parameters) LookupByLocation(kind Kind, location string) *Parameter {
+	if len(p) == 0 {
+		return nil
+	}
+	for _, candidate := range p {
+		if candidate.In.Kind == kind && candidate.In.Name == location {
+			return candidate
+		}
+	}
+	return nil
+}
 
 func (p Parameters) FilterByKind(kind Kind) Parameters {
 	var result = Parameters{}
@@ -129,25 +143,25 @@ func (s Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 	return baseType, nil
 }
 
-func (p Parameters) Len() int {
-	return len(p)
-}
-
-func (p Parameters) Less(i, j int) bool {
-	if p[j].ErrorStatusCode == p[i].ErrorStatusCode {
-		return p[j].IsRequired()
-	}
-
-	if p[j].ErrorStatusCode == 401 {
-		return false
-	}
-
-	if p[j].ErrorStatusCode == 403 {
-		return p[i].ErrorStatusCode == 401
-	}
-
-	return true
-}
+//func (p Parameters) Len() int {
+//	return len(p)
+//}
+//
+//func (p Parameters) Less(i, j int) bool {
+//	if p[j].ErrorStatusCode == p[i].ErrorStatusCode {
+//		return p[j].IsRequired()
+//	}
+//
+//	if p[j].ErrorStatusCode == 401 {
+//		return false
+//	}
+//
+//	if p[j].ErrorStatusCode == 403 {
+//		return p[i].ErrorStatusCode == 401
+//	}
+//
+//	return true
+//}
 
 func (p Parameters) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
@@ -198,6 +212,46 @@ func (p Parameters) Filter(kind Kind) NamedParameters {
 	}
 
 	return result
+}
+
+func (p Parameters) PredicateStructType() reflect.Type {
+	var fields []*predicate.FilterType
+	fieldTypes := map[string]*predicate.FilterType{}
+	for _, candidate := range p {
+		if len(candidate.Predicates) == 0 {
+			continue
+		}
+		tagText, _ := reflect.StructTag(candidate.Tag).Lookup(predicate.TagName)
+		tag := predicate.ParseTag(tagText, candidate.Name)
+		filterType, ok := fieldTypes[tag.Name]
+		if !ok {
+			filterType = &predicate.FilterType{ParameterType: candidate.OutputType(), Tag: tag}
+			fieldTypes[tag.Name] = filterType
+			fields = append(fields, filterType)
+		}
+		if tag.Exclusion {
+			filterType.ExcludeTag = candidate.Tag
+		} else {
+			filterType.IncludeTag = candidate.Tag
+		}
+		if ok {
+			continue
+		}
+	}
+
+	var structFields []reflect.StructField
+	for _, field := range fields {
+		structFields = append(structFields, reflect.StructField{
+			Name: field.Name,
+			Type: field.Type(),
+			Tag:  reflect.StructTag(`json:",omitempty" ` + strings.Trim(string(field.StructTagTag()), "`")),
+		})
+	}
+
+	if len(structFields) == 0 {
+		return reflect.TypeOf(struct{}{})
+	}
+	return reflect.StructOf(structFields)
 }
 
 func (p NamedParameters) Merge(with NamedParameters) {
