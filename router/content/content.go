@@ -232,7 +232,7 @@ func getDefaultConfig() *xmlify.Config {
 		DataTag:                "rows",
 		DataRowTag:             "r",
 		DataRowFieldTag:        "c",
-		NewLine:                "\n",
+		NewLineSeparator:       "\n",
 		DataRowFieldTypes: map[string]string{
 			"uint":    "lg",
 			"uint8":   "lg",

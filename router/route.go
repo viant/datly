@@ -157,7 +157,7 @@ func (r *Route) Exclusion(state *view.ResourceState) []*json.FilterEntry {
 	return result
 }
 
-// OutputFormat returns output foramt
+// OutputFormat returns output format
 func (r *Route) OutputFormat(query url.Values) string {
 	outputFormat := query.Get(FormatQuery)
 	if outputFormat == "" {
