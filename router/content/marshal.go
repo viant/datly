@@ -3,6 +3,7 @@ package content
 import (
 	"fmt"
 	"github.com/viant/datly/router/marshal/json"
+	"reflect"
 	"strings"
 )
 
@@ -15,7 +16,15 @@ func (c *Content) Marshal(format string, field string, readerData, response inte
 		return c.Marshaller.XLS.XlsMarshaller.Marshal(response)
 	case CSVFormat:
 		return c.CSV.OutputMarshaller.Marshal(readerData)
-	case XMLFormat:
+	case XMLFormat: //TODO MFI refactor
+		if c.XML.OutputMarshaller == nil {
+			rType := reflect.TypeOf(response)
+			exclude := []string{}
+			var inputType reflect.Type
+			if err := c.initXMLIfNeeded(exclude, inputType, rType); err != nil {
+				return nil, err
+			}
+		}
 		return c.XML.OutputMarshaller.Marshal(response)
 	case JSONDataFormatTabular:
 		if field != "" {

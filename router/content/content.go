@@ -178,7 +178,8 @@ func (c *Content) initTabJSONIfNeeded(excludedPaths []string, inputType reflect.
 	return err
 }
 
-func (c *Content) initXMLIfNeeded(excludedPaths []string, outputType reflect.Type, inputType reflect.Type) error {
+// func (c *Content) initXMLIfNeeded(excludedPaths []string, outputType reflect.Type, inputType reflect.Type) error {
+func (c *Content) initXMLIfNeeded(excludedPaths []string, inputType reflect.Type, outputType reflect.Type) error {
 	if c.XML == nil {
 		c.XML = &XMLConfig{}
 	}
@@ -203,6 +204,11 @@ func (c *Content) initXMLIfNeeded(excludedPaths []string, outputType reflect.Typ
 		c.XML.config.StringifierConfig.StringifierFloat64Config.Precision = c.XML.FloatPrecision
 	}
 	c.XML.config.ExcludedPaths = excludedPaths
+
+	if outputType == nil {
+		return nil
+	}
+
 	if outputType.Kind() == reflect.Ptr {
 		outputType = outputType.Elem()
 	}
