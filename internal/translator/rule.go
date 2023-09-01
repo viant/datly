@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/router/component"
 	"github.com/viant/datly/router/content"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -26,7 +27,7 @@ type (
 		orderNamespaces []string
 		Root            string
 		router.Route
-		*router.Output
+		*component.Output
 		Async        *AsyncConfig               `json:",omitempty"`
 		Cache        *view.Cache                `json:",omitempty"`
 		CSV          *content.CSVConfig         `json:",omitempty"`
@@ -106,10 +107,10 @@ func (r *Rule) applyGeneratorOutputSetting() {
 	outputConfig := root.OutputSettings
 	setter.SetStringIfEmpty(&r.Route.Output.Field, outputConfig.Field)
 	if r.Route.Output.Style == "" && r.Route.Output.Field != "" {
-		r.Route.Output.Style = router.ComprehensiveStyle
+		r.Route.Output.Style = component.ComprehensiveStyle
 	}
 	if r.Route.Output.Style == "" {
-		r.Route.Output.Style = router.Style(outputConfig.Style)
+		r.Route.Output.Style = component.Style(outputConfig.Style)
 	}
 	if r.Route.Output.Cardinality == "" {
 		r.Route.Output.Cardinality = outputConfig.ViewCardinality()
@@ -142,7 +143,7 @@ func (r *Rule) IsMany() bool {
 }
 
 func (r *Rule) IsBasic() bool {
-	return r.Route.Output.Style != router.ComprehensiveStyle && r.Route.Output.Field == ""
+	return r.Route.Output.Style != component.ComprehensiveStyle && r.Route.Output.Field == ""
 }
 
 func (r *Rule) ExtractSettings(dSQL *string) error {
@@ -325,7 +326,7 @@ func (r *Rule) applyRootViewRouteShorthands() {
 	root := r.RootViewlet()
 	setter.SetStringIfEmpty(&r.Route.Output.Field, root.Field)
 	if r.Route.Output.Style == "" {
-		r.Route.Output.Style = router.Style(root.Style)
+		r.Route.Output.Style = component.Style(root.Style)
 	}
 	if r.Route.Output.Cardinality == "" {
 		r.Route.Output.Cardinality = root.ViewCardinality()
@@ -335,7 +336,7 @@ func (r *Rule) applyRootViewRouteShorthands() {
 
 func (r *Rule) applyShortHands() {
 	if r.ResponseBody != nil {
-		r.Route.Output.ResponseBody = &router.BodySelector{}
+		r.Route.Output.ResponseBody = &component.BodySelector{}
 		r.Route.Output.ResponseBody.StateValue = r.ResponseBody.From
 	}
 	if r.HandlerType != "" {
@@ -345,7 +346,7 @@ func (r *Rule) applyShortHands() {
 		}
 	}
 	if r.Route.Output.Field != "" {
-		r.Route.Output.Style = router.ComprehensiveStyle
+		r.Route.Output.Style = component.ComprehensiveStyle
 	}
 	if r.Route.TabularJSON != nil && r.Route.Output.DataFormat == "" {
 		r.Route.Output.DataFormat = content.JSONDataFormatTabular

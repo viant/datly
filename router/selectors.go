@@ -2,7 +2,7 @@ package router
 
 import (
 	"fmt"
-	"github.com/viant/datly/converter"
+	"github.com/viant/datly/internal/converter"
 	"github.com/viant/datly/view"
 	vstate "github.com/viant/datly/view/state"
 )

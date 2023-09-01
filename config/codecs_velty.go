@@ -3,7 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/converter"
+	"github.com/viant/datly/internal/converter"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"

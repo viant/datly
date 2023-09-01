@@ -166,7 +166,7 @@ func ExampleService_ReadDataView() {
 
 ```
 
-See [Reader Service](../reader/README.md) for more details
+See [Reader Service](../service/reader/README.md) for more details
 
 
 #### Autonomous mode

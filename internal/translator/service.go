@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/router"
+	"github.com/viant/datly/service"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/parsly"
@@ -79,7 +80,7 @@ func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource,
 		return err
 	}
 
-	if err = s.persistRouterRule(ctx, resource, router.ServiceTypeExecutor); err != nil {
+	if err = s.persistRouterRule(ctx, resource, service.TypeExecutor); err != nil {
 		return err
 	}
 	return nil
@@ -130,7 +131,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	}); err != nil {
 		return err
 	}
-	if err = s.persistRouterRule(ctx, resource, router.ServiceTypeReader); err != nil {
+	if err = s.persistRouterRule(ctx, resource, service.TypeReader); err != nil {
 		return err
 	}
 	return nil
@@ -152,12 +153,12 @@ func handleVeltyExpression() sqlparser.Option {
 	})
 }
 
-func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, service router.ServiceType) error {
+func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, serviceType service.Type) error {
 	baseRuleURL := s.Repository.RuleBaseURL(resource.rule)
 
 	route := &resource.Rule.Route
 	ruleName := s.Repository.RuleName(resource.rule)
-	route.Service = service
+	route.Service = serviceType
 	route.View = view.NewRefView(resource.Rule.Root)
 	route.Content.CSV = resource.Rule.CSV
 	route.Content.TabularJSON = resource.Rule.TabularJSON
@@ -177,7 +178,7 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 		return fmt.Errorf("failed to compact aState: %w", err)
 	}
 	resource.Resource.Parameters = aState.RemoveReserved().ViewParameters()
-	if service == router.ServiceTypeExecutor {
+	if serviceType == service.TypeExecutor {
 		resource.Rule.Route.Output.Field = aState.BodyField()
 	}
 

@@ -1,6 +1,8 @@
 package router
 
-import "github.com/viant/datly/reader"
+import (
+	"github.com/viant/datly/service/reader"
+)
 
 type Metrics struct {
 	URI     string

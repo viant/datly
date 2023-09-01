@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/viant/datly/executor"
-	"github.com/viant/datly/executor/session"
+	executor2 "github.com/viant/datly/service/executor"
+	"github.com/viant/datly/service/executor/session"
 	"github.com/viant/datly/template/expand"
 	vsession "github.com/viant/datly/view/session"
 	"github.com/viant/toolbox"
@@ -20,7 +20,7 @@ import (
 type (
 	HandlerExecutor struct {
 		executed       bool
-		session        *executor.Session
+		session        *executor2.Session
 		route          *Route
 		request        *http.Request
 		dataUnit       *expand.DataUnit
@@ -47,7 +47,7 @@ func NewExecutor(route *Route, request *http.Request, response http.ResponseWrit
 	}
 }
 
-func (e *HandlerExecutor) Session(ctx context.Context) (*executor.Session, error) {
+func (e *HandlerExecutor) Session(ctx context.Context) (*executor2.Session, error) {
 	if e.session != nil {
 		return e.session, nil
 	}
@@ -58,7 +58,7 @@ func (e *HandlerExecutor) Session(ctx context.Context) (*executor.Session, error
 		return nil, err
 	}
 	toolbox.Dump(sessionState.State().Lookup(e.route.View).Template.State())
-	sess, err := executor.NewSession(sessionState, e.route.View)
+	sess, err := executor2.NewSession(sessionState, e.route.View)
 	if err != nil {
 		return nil, err
 	}
@@ -167,27 +167,27 @@ func (e *HandlerExecutor) Execute(ctx context.Context) error {
 	}
 
 	e.executed = true
-	service := executor.New()
+	service := executor2.New()
 
-	var dbOptions []executor.DBOption
+	var dbOptions []executor2.DBOption
 	if e.tx != nil {
-		dbOptions = append(dbOptions, executor.WithTx(e.tx))
+		dbOptions = append(dbOptions, executor2.WithTx(e.tx))
 	}
 
-	return service.ExecuteStmts(ctx, executor.NewViewDBSource(e.route.View), &SqlxIterator{toExecute: e.dataUnit.Statements.Executable}, dbOptions...)
+	return service.ExecuteStmts(ctx, executor2.NewViewDBSource(e.route.View), &SqlxIterator{toExecute: e.dataUnit.Statements.Executable}, dbOptions...)
 }
 
-func (e *HandlerExecutor) ExpandAndExecute(ctx context.Context) (*executor.Session, error) {
+func (e *HandlerExecutor) ExpandAndExecute(ctx context.Context) (*executor2.Session, error) {
 	sess, err := e.Session(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	service := executor.New()
+	service := executor2.New()
 
-	var dbOptions []executor.DBOption
+	var dbOptions []executor2.DBOption
 	if e.tx != nil {
-		dbOptions = append(dbOptions, executor.WithTx(e.tx))
+		dbOptions = append(dbOptions, executor2.WithTx(e.tx))
 	}
 
 	return sess, service.Exec(ctx, sess, dbOptions...)

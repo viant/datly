@@ -1,7 +1,7 @@
 package marshal
 
 import (
-	"github.com/viant/datly/converter"
+	"github.com/viant/datly/internal/converter"
 	"reflect"
 )
 

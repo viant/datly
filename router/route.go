@@ -7,16 +7,17 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/router/async"
+	"github.com/viant/datly/router/component"
 	"github.com/viant/datly/router/content"
 	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/router/marshal/common"
 	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/service"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
-	"github.com/viant/toolbox/format"
 	async2 "github.com/viant/xdatly/handler/async"
 	http2 "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/response"
@@ -27,20 +28,9 @@ import (
 	"strings"
 )
 
-type Style string
-type ServiceType string
-
 const pkgPath = "github.com/viant/datly/router"
 
 const (
-	BasicStyle         Style = "Basic"
-	ComprehensiveStyle Style = "Comprehensive"
-
-	ServiceTypeReader   ServiceType = "Reader"
-	ServiceTypeExecutor ServiceType = "Executor"
-
-	ServiceTypeHandler ServiceType = "Handler"
-
 	HeaderContentType = "Content-Type"
 
 	FormatQuery = "_format"
@@ -49,28 +39,19 @@ const (
 type (
 	Routes []*Route
 	Route  struct {
-		Async            *Async             `json:",omitempty" yaml:",omitempty"`
-		Name             string             `json:",omitempty" yaml:",omitempty"`
-		URI              string             `json:",omitempty"`
-		APIKey           *APIKey            `json:",omitempty"`
-		Method           string             `json:",omitempty"`
-		CustomValidation bool               `json:",omitempty"`
-		Service          ServiceType        `json:",omitempty"`
-		View             *view.View         `json:",omitempty"`
-		Cors             *Cors              `json:",omitempty"`
-		EnableAudit      bool               `json:",omitempty"`
-		EnableDebug      *bool              `json:",omitempty"`
-		Transforms       marshal.Transforms `json:",omitempty"`
+		Async  *Async  `json:",omitempty" yaml:",omitempty"`
+		APIKey *APIKey `json:",omitempty"`
 
-		Input Input
-		content.Content
-		Output Output
+		Component
 
-		*view.NamespacedView
+		CustomValidation bool `json:",omitempty"`
 
-		ParamStatusError *int         `json:",omitempty"`
-		Compression      *Compression `json:",omitempty"`
-		Handler          *Handler     `json:",omitempty"`
+		Cors        *Cors              `json:",omitempty"`
+		EnableAudit bool               `json:",omitempty"`
+		EnableDebug *bool              `json:",omitempty"`
+		Transforms  marshal.Transforms `json:",omitempty"`
+
+		Compression *Compression `json:",omitempty"`
 
 		_unmarshallerInterceptors marshal.Transforms
 
@@ -80,43 +61,6 @@ type (
 		_routeMatcher func(route *http2.Route) (*Route, error)
 		_async        *async.Async
 		_router       *Router
-	}
-
-	Input struct {
-		Type state.Type
-		//TODO add explicit body type when applicable
-		//BodyType state.Type
-	}
-
-	Output struct {
-		Cardinality      state.Cardinality    `json:",omitempty"`
-		CaseFormat       formatter.CaseFormat `json:",omitempty"`
-		OmitEmpty        bool                 `json:",omitempty"`
-		Style            Style                `json:",omitempty"`
-		Field            string               `json:",omitempty"`
-		Exclude          []string
-		NormalizeExclude *bool
-
-		RevealMetric *bool
-		DebugKind    view.MetaKind
-
-		DataFormat string `json:",omitempty"` //default data format
-
-		ResponseBody *BodySelector
-
-		Type state.Type
-
-		_caser    *format.Case
-		_excluded map[string]bool
-	}
-
-	responseSetter struct {
-		statusField  *xunsafe.Field
-		bodyField    *xunsafe.Field
-		metaField    *xunsafe.Field
-		metricsField *xunsafe.Field
-		debug        *xunsafe.Field
-		rType        reflect.Type
 	}
 )
 
@@ -233,7 +177,7 @@ func (r *Route) CorsEnabled() bool {
 }
 
 func (r *Route) Init(ctx context.Context, resource *Resource) error {
-	if r.Output.Style == BasicStyle {
+	if r.Output.Style == component.BasicStyle {
 		r.Output.Field = ""
 	}
 	if r.Handler != nil {
@@ -252,10 +196,6 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return err
 	}
 	r._resourcelet = view.NewResourcelet(resource.Resource, r.View)
-
-	if err := r.initCaser(); err != nil {
-		return err
-	}
 
 	if err := r.initInput(); err != nil {
 		return err
@@ -277,7 +217,6 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	r.initCors(resource)
 	r.initCompression(resource)
 	r.addPrefixFieldIfNeeded()
-	r.indexExcluded()
 	if err := r.initTransforms(ctx); err != nil {
 		return nil
 	}
@@ -338,10 +277,9 @@ func (r *Route) initCardinality() error {
 }
 
 func (r *Route) ioConfig() common.IOConfig {
-	fmt.Printf("CASER :%v\n", r.Output._caser.String())
 	return common.IOConfig{
 		OmitEmpty:  r.Output.OmitEmpty,
-		CaseFormat: *r.Output._caser,
+		CaseFormat: *r.Output.FormatCase(),
 		Exclude:    common.Exclude(r.Output.Exclude).Index(),
 		DateLayout: r.DateFormat,
 	}
@@ -373,16 +311,16 @@ func (r *Route) PgkPath(fieldName string) string {
 
 func (r *Route) initServiceType() error {
 	switch r.Service {
-	case "", ServiceTypeReader:
-		r.Service = ServiceTypeReader
+	case "", service.TypeReader:
+		r.Service = service.TypeReader
 		return nil
-	case ServiceTypeExecutor:
+	case service.TypeExecutor:
 		return nil
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		r.Service = ServiceTypeReader
+		r.Service = service.TypeReader
 		return nil
 	default:
 		return fmt.Errorf("http method %v unsupported, no default service specified for given method", r.Method)
@@ -403,20 +341,24 @@ func (r *Route) initInput() error {
 }
 
 func (r *Route) initOutput() (err error) {
+	if err = r.Output.Init(); err != nil {
+		return err
+	}
+
 	if err = r.initializeOutputParameters(); err != nil {
 		return err
 	}
-	if (r.Output.Style == "" || r.Output.Style == BasicStyle) && r.Output.Field == "" {
-		r.Output.Style = BasicStyle
-		if r.Service == ServiceTypeReader {
+	if (r.Output.Style == "" || r.Output.Style == component.BasicStyle) && r.Output.Field == "" {
+		r.Output.Style = component.BasicStyle
+		if r.Service == service.TypeReader {
 			r.Output.Type.Schema = state.NewSchema(r.View.OutputType())
 			return nil
 		}
 	}
 
-	if r.Output.Field == "" && r.Output.Style != BasicStyle {
+	if r.Output.Field == "" && r.Output.Style != component.BasicStyle {
 		switch r.Service {
-		case ServiceTypeReader:
+		case service.TypeReader:
 			r.Output.Field = "Data"
 		default:
 			r.Output.Field = "ResponseBody"
@@ -430,7 +372,7 @@ func (r *Route) initOutput() (err error) {
 
 func (r *Route) initializeOutputParameters() (err error) {
 	if dataParameter := r.Output.Type.Parameters.LookupByLocation(state.KindOutput, "data"); dataParameter != nil {
-		r.Output.Style = ComprehensiveStyle
+		r.Output.Style = component.ComprehensiveStyle
 		r.Output.Field = dataParameter.Name
 	}
 	if len(r.Output.Type.Parameters) == 0 {
@@ -444,7 +386,7 @@ func (r *Route) initializeOutputParameters() (err error) {
 
 func (r *Route) defaultOutputParameters() (state.Parameters, error) {
 	var parameters state.Parameters
-	if r.Service == ServiceTypeReader && r.Output.Style == ComprehensiveStyle {
+	if r.Service == service.TypeReader && r.Output.Style == component.ComprehensiveStyle {
 		parameters = state.Parameters{
 			{Name: r.Output.Field, In: state.NewOutputLocation("data")},
 			{Name: "Status", In: state.NewOutputLocation("status"), Tag: `anonymous:"true"`},
@@ -513,26 +455,10 @@ func (r *Route) initCompression(resource *Resource) {
 	r.Compression = resource.Compression
 }
 
-func (r *Route) ShouldNormalizeExclude() bool {
-	return r.Output.NormalizeExclude == nil || *r.Output.NormalizeExclude
-}
-
 func (r *Route) normalizePaths() error {
-	if !r.ShouldNormalizeExclude() {
+	if !r.Output.ShouldNormalizeExclude() {
 		return nil
 	}
-
-	if err := r.initCaser(); err != nil {
-		return err
-	}
-
-	aBool := false
-	r.Output.NormalizeExclude = &aBool
-
-	for i, excluded := range r.Output.Exclude {
-		r.Output.Exclude[i] = formatter.NormalizePath(excluded)
-	}
-
 	for i, transform := range r.Transforms {
 		r.Transforms[i].Path = formatter.NormalizePath(transform.Path)
 	}
@@ -543,53 +469,6 @@ func (r *Route) normalizePaths() error {
 //func (r *Route) PrefixByView(aView *view.View) (string, bool) {
 //	return r.Index.prefixByView(aView)
 //}
-
-func (r *Route) indexExcluded() {
-	r.Output._excluded = map[string]bool{}
-	for _, excluded := range r.Output.Exclude {
-		r.Output._excluded[excluded] = true
-	}
-}
-
-func (r *Route) initCaser() error {
-	if r.Output._caser != nil {
-		return nil
-	}
-
-	if r.Output.CaseFormat == "" {
-		r.Output.CaseFormat = formatter.UpperCamel
-	}
-
-	var err error
-	caser, err := r.Output.CaseFormat.Caser()
-	if err != nil {
-		return err
-	}
-	r.Output._caser = &caser
-	return nil
-}
-
-func (r *Route) fullBodyParam(params []*state.Parameter) (*state.Parameter, bool) {
-	for _, param := range params {
-		if param.In.Name == "" {
-			return param, true
-		}
-	}
-
-	return nil, false
-}
-
-func (r *Route) bodyParamMatches(rType reflect.Type, params []*state.Parameter) error {
-	for _, param := range params {
-		name := param.In.Name
-		if name == "" {
-			continue
-		}
-
-	}
-
-	return nil
-}
 
 func (r *Route) addPrefixFieldIfNeeded() {
 	if r.Output.Field == "" {

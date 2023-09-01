@@ -2,9 +2,9 @@ package command
 
 import (
 	"context"
-	"github.com/viant/datly/auth/jwt"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/gateway/runtime/standalone"
+	"github.com/viant/datly/service/auth/jwt"
 )
 
 func (s *Service) Run(ctx context.Context, run *options.Run) (err error) {

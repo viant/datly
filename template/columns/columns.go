@@ -3,7 +3,7 @@ package columns
 import (
 	"context"
 	"database/sql"
-	"github.com/viant/datly/reader/metadata"
+	"github.com/viant/datly/service/reader/metadata"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/parsly/matcher"
 	"github.com/viant/sqlx/io"

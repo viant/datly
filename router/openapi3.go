@@ -237,7 +237,7 @@ func (g *generator) addToSchema(schema *openapi3.Schema, route *Route, rType ref
 				fieldPath = path + "." + fieldPath
 			}
 
-			if _, ok := route.Output._excluded[fieldPath]; ok {
+			if _, ok := route.Output.Excluded()[fieldPath]; ok {
 				continue
 			}
 
@@ -257,7 +257,7 @@ func (g *generator) addToSchema(schema *openapi3.Schema, route *Route, rType ref
 			if defaultTag.IgnoreCaseFormatter {
 				fieldName = aField.Name
 			} else if isOutputSchema {
-				fieldName = format.CaseUpperCamel.Format(aField.Name, *route.Output._caser)
+				fieldName = format.CaseUpperCamel.Format(aField.Name, *route.Output.FormatCase())
 			}
 
 			schema.Properties[fieldName], err = g.generateSchema(route, aField.Type, defaultTag.Format, isOutputSchema, "", defaultTag, fieldPath)

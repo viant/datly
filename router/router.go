@@ -9,12 +9,13 @@ import (
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
 	"github.com/viant/cloudless/gateway/matcher"
-	"github.com/viant/datly/executor"
-	"github.com/viant/datly/reader"
-	rhandler "github.com/viant/datly/reader/handler"
 	content2 "github.com/viant/datly/router/content"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/router/status"
+	"github.com/viant/datly/service"
+	executor2 "github.com/viant/datly/service/executor"
+	reader2 "github.com/viant/datly/service/reader"
+	rhandler "github.com/viant/datly/service/reader/handler"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
@@ -61,7 +62,7 @@ type (
 	preparedResponse struct {
 		objects  interface{}
 		viewMeta interface{}
-		session  *reader.Session
+		session  *reader2.Session
 		result   interface{}
 	}
 )
@@ -320,9 +321,6 @@ func (r *Router) prepareReaderSession(ctx context.Context, response http.Respons
 	sessionState := vsession.New(route.View, vsession.WithLocatorOptions(route.LocatorOptions(request)...))
 	if err := sessionState.Populate(ctx); err != nil {
 		defaultCode := http.StatusBadRequest
-		if route.ParamStatusError != nil {
-			defaultCode = *route.ParamStatusError
-		}
 		return nil, httputils.ErrorOf(defaultCode, err)
 	}
 
@@ -499,7 +497,7 @@ func (r *Router) logAudit(request *http.Request, response http.ResponseWriter, r
 	fmt.Printf("%v\n", string(asBytes))
 }
 
-func (r *Router) logMetrics(URI string, metrics []*reader.Metric) {
+func (r *Router) logMetrics(URI string, metrics []*reader2.Metric) {
 	asBytes, _ := goJson.Marshal(NewMetrics(URI, metrics))
 
 	fmt.Printf("%v\n", string(asBytes))
@@ -548,14 +546,14 @@ func (r *Router) Resource() *Resource {
 
 func (r *Router) payloadReader(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route, record *async2.Job) (PayloadReader, error) {
 	switch route.Service {
-	case ServiceTypeExecutor:
+	case service.TypeExecutor:
 		return r.executorPayloadReader(ctx, response, request, route)
-	case ServiceTypeReader:
+	case service.TypeReader:
 		sessionState := vsession.New(route.View, vsession.WithLocatorOptions(route.LocatorOptions(request)...))
 		readerHandler := rhandler.New(route.Output.Type.Type(), route.Output.Type.Parameters)
 		aResponse := readerHandler.Handle(ctx, route.View, sessionState,
-			reader.WithIncludeSQL(true),
-			reader.WithCacheDisabled(false))
+			reader2.WithIncludeSQL(true),
+			reader2.WithCacheDisabled(false))
 		if aResponse.Error != nil {
 			return nil, aResponse.Error
 		}
@@ -567,7 +565,7 @@ func (r *Router) payloadReader(ctx context.Context, request *http.Request, respo
 		}
 		return r.compressIfNeeded(data, route)
 	}
-	return nil, httputils.NewHttpMessageError(500, fmt.Errorf("unsupported ServiceType %v", route.Service))
+	return nil, httputils.NewHttpMessageError(500, fmt.Errorf("unsupported Type %v", route.Service))
 }
 
 func (r *Router) marshalCustomOutput(output interface{}, route *Route) (PayloadReader, error) {
@@ -661,12 +659,12 @@ func (r *Router) executorPayloadReader(ctx context.Context, writer http.Response
 	return NewBytesReader(data, ""), nil
 }
 
-func (r *Router) prepareExecutorSessionWithParameters(ctx context.Context, request *http.Request, route *Route, parameters *RequestParams) (*executor.Session, error) {
+func (r *Router) prepareExecutorSessionWithParameters(ctx context.Context, request *http.Request, route *Route, parameters *RequestParams) (*executor2.Session, error) {
 	sessionState := vsession.New(route.View, vsession.WithLocatorOptions(route.LocatorOptions(request)...))
 	if err := sessionState.Populate(ctx); err != nil {
 		return nil, err
 	}
-	sess, err := executor.NewSession(sessionState, route.View)
+	sess, err := executor2.NewSession(sessionState, route.View)
 	return sess, err
 }
 
@@ -688,7 +686,7 @@ func (r *Router) prepareAndExecuteExecutor(ctx context.Context, request *http.Re
 		return err
 	}
 
-	anExecutor := executor.New()
+	anExecutor := executor2.New()
 	err = anExecutor.Exec(ctx, execSession)
 	if err != nil {
 		return err

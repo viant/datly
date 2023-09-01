@@ -3,7 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/executor/session"
+	"github.com/viant/datly/service/executor/session"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view/keywords"

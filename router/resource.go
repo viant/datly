@@ -38,9 +38,8 @@ type (
 		Logger       *Logger      `json:",omitempty"` //connect, dataview, time, SQL with params if exceeded time  `json:",omitempty"`
 		Cors         *Cors        `json:",omitempty"`
 
-		ColumnsCache     *discover.Cache `json:",omitempty"`
-		RevealMetric     *bool           `json:",omitempty"`
-		ParamStatusError *int            `json:",omitempty"`
+		ColumnsCache *discover.Cache `json:",omitempty"`
+		RevealMetric *bool           `json:",omitempty"`
 
 		Info             openapi3.Info     `json:",omitempty"`
 		ColumnsDiscovery bool              `json:",omitempty"`
@@ -142,10 +141,6 @@ func (r *Resource) Init(ctx context.Context) error {
 	}
 
 	for _, route := range r.Routes {
-		if route.ParamStatusError == nil {
-			route.ParamStatusError = r.ParamStatusError
-		}
-
 		if err := route.Init(ctx, r); err != nil {
 			return err
 		}

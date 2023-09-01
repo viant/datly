@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/viant/datly/executor/sequencer"
+	"github.com/viant/datly/service/executor/sequencer"
 	"github.com/viant/sqlx/io/validator"
 	"github.com/viant/toolbox"
 	"github.com/viant/xdatly/codec"

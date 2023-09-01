@@ -3,7 +3,7 @@ package types
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/viant/datly/converter"
+	"github.com/viant/datly/internal/converter"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strconv"

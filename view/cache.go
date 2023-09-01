@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/afs/option"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/converter"
+	"github.com/viant/datly/internal/converter"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx/io/read/cache"

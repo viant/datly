@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/viant/datly/auth/jwt"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway"
+	"github.com/viant/datly/service/auth/jwt"
 	"net/http"
 	"time"
 

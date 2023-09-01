@@ -3,7 +3,7 @@ package criteria
 import (
 	"bytes"
 	"fmt"
-	"github.com/viant/datly/converter"
+	"github.com/viant/datly/internal/converter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/parsly"
