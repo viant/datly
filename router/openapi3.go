@@ -506,18 +506,18 @@ func (g *generator) indexParameters(parameters []*openapi3.Parameter) openapi3.P
 }
 
 func (g *generator) requestBody(route *Route, method string) (*openapi3.RequestBody, error) {
-	if method != http.MethodPost || route._requestBodyType == nil {
+	if method != http.MethodPost || route.InputType() == nil {
 		return nil, nil
 	}
 
-	typeName := g.typeName(route, route._requestBodyType, "RequestBody")
-	requestBodySchema, err := g.getOrGenerateSchema(route, route._requestBodyType, false, typeName, "Request body schema")
+	typeName := g.typeName(route, route.InputType(), "RequestBody")
+	requestBodySchema, err := g.getOrGenerateSchema(route, route.InputType(), false, typeName, "Request body schema")
 	if err != nil {
 		return nil, err
 	}
 
 	return &openapi3.RequestBody{
-		Required: route._requestBodyParamRequired,
+		Required: true,
 		Content: map[string]*openapi3.MediaType{
 			applicationJson: {
 				Schema: requestBodySchema,
@@ -531,7 +531,7 @@ func (g *generator) responses(route *Route, method string) (openapi3.Responses, 
 		return nil, nil
 	}
 
-	responseType := route.responseType()
+	responseType := route.OutputType()
 	schemaName := g.typeName(route, responseType, route.View.Name)
 	successSchema, err := g.getOrGenerateSchema(route, responseType, true, successSchemaDescription, schemaName)
 	if err != nil {

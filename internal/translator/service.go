@@ -186,7 +186,7 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 		if err != nil {
 			return err
 		}
-		resource.Rule.Route.Output.Parameters = outputState.ViewParameters()
+		resource.Rule.Route.Output.Type.Parameters = outputState.ViewParameters()
 	}
 
 	routerResource, err := s.buildRouterResource(ctx, resource)

@@ -116,7 +116,6 @@ func (j *Marshaller) prepareMarshallSession(options []interface{}) (*MarshallSes
 
 func (j *Marshaller) Unmarshal(data []byte, dest interface{}, options ...interface{}) error {
 	rType := reflect.TypeOf(dest)
-
 	aMarshaler, err := j.marshaller(rType)
 	if err != nil {
 		return err

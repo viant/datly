@@ -31,7 +31,7 @@ func (c *Content) Marshal(format string, field string, readerData, response inte
 			tabJSONInterceptors := c.tabJSONInterceptors(field, readerData)
 			return c.JsonMarshaller.Marshal(response, tabJSONInterceptors)
 		}
-		return c.TabularJSON.OutputMarshaller.Marshal(readerData)
+		return c.TabularJSON.OutputMarshaller.Marshal(response, options...)
 	case JSONFormat:
 		return c.JsonMarshaller.Marshal(response, options...)
 	default:

@@ -15,6 +15,7 @@ type Parameter struct {
 func (p *Parameter) Names() []string {
 	return nil
 }
+
 func (p *Parameter) Value(ctx context.Context, name string) (interface{}, bool, error) {
 	parameter, ok := p.Parameters[name]
 	if !ok {

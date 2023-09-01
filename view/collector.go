@@ -358,7 +358,7 @@ func (r *Collector) indexPositions(name string) {
 }
 
 // Relations creates and register new Collector for each Relation present in the Template.Columns if View allows use Template.Columns
-func (r *Collector) Relations(selector *State) ([]*Collector, error) {
+func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 	result := make([]*Collector, len(r.view.With))
 
 	counter := 0
@@ -419,7 +419,7 @@ func (r *Collector) ViewMetaHandler(rel *Relation) (func(viewMeta interface{}) e
 		return nil, fmt.Errorf("not found field %v at %v", childMetaFieldName, templateMeta.Schema.Type().String())
 	}
 
-	metaParentHolderField := xunsafe.FieldByName(r.view.Schema.Type(), templateMeta.Name)
+	metaParentHolderField := xunsafe.FieldByName(r.view.Schema.CompType(), templateMeta.Name)
 	if metaParentHolderField == nil {
 		return nil, fmt.Errorf("not found holder field %v at %v", templateMeta.Name, templateMeta.Schema.Type().String())
 	}

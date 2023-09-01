@@ -3,7 +3,6 @@ package router
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/base64"
 	goJson "encoding/json"
 	"fmt"
@@ -13,29 +12,24 @@ import (
 	"github.com/viant/datly/executor"
 	"github.com/viant/datly/reader"
 	rhandler "github.com/viant/datly/reader/handler"
-	"github.com/viant/datly/router/async"
-	"github.com/viant/datly/router/async/handler"
 	content2 "github.com/viant/datly/router/content"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/router/status"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/utils/httputils"
-	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/view/session"
+	vsession "github.com/viant/datly/view/session"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind/locator"
+	"github.com/viant/toolbox"
 	async2 "github.com/viant/xdatly/handler/async"
 	haHttp "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/response"
-	"github.com/viant/xunsafe"
 	"io"
 	"net/http"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
-	"unsafe"
 )
 
 // TODO: Add to meta response size
@@ -323,7 +317,7 @@ func (r *Router) prepareReaderSession(ctx context.Context, response http.Respons
 		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", content2.XMLContentType)))
 	}
 
-	sessionState := session.New(route.View, session.WithLocatorOptions(route.LocatorOptions(request)...))
+	sessionState := vsession.New(route.View, vsession.WithLocatorOptions(route.LocatorOptions(request)...))
 	if err := sessionState.Populate(ctx); err != nil {
 		defaultCode := http.StatusBadRequest
 		if route.ParamStatusError != nil {
@@ -337,7 +331,7 @@ func (r *Router) prepareReaderSession(ctx context.Context, response http.Respons
 		Route:         route,
 		Request:       request,
 		Response:      response,
-		State:         sessionState.ResourceState(),
+		State:         sessionState.State(),
 	}, nil
 }
 
@@ -345,139 +339,9 @@ func UnsupportedFormatErr(format string) error {
 	return fmt.Errorf("unsupported output format %v", format)
 }
 
-func (r *Router) readResponse(ctx context.Context, session *ReaderSession) (PayloadReader, error) {
-	response, ok, err := r.prepareResponse(session, session.IsMetricDebug(), session.IsMetricsEnabled())
-	if !ok || err != nil {
-		return nil, err
-	}
-
-	fmt.Printf("PREPARE: %T %v\n", response.objects, response.objects)
-	route := session.Route
-	format := route.OutputFormat(session.Request.URL.Query())
-	filters := route.Exclusion(session.State)
-
-	data, err := route.Content.Marshal(format, route.Field, response.objects, response.result, filters)
-	if err != nil {
-		return nil, err
-	}
-
-	payloadReader, err := r.compressIfNeeded(data, session.Route)
-	if err != nil {
-		return nil, err
-	}
-
-	//templateMeta := session.Route.View.Template.Meta
-	//if templateMeta != nil && templateMeta.Kind == view.MetaTypeHeader && response.viewMeta != nil {
-	//	data, err := goJson.Marshal(response.viewMeta)
-	//	if err != nil {
-	//		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
-	//	}
-	//
-	//	payloadReader.AddHeader(templateMeta.Name, string(data))
-	//}
-
-	for _, stat := range response.session.Metrics {
-		marshal, err := goJson.Marshal(stat)
-		if err != nil {
-			continue
-		}
-
-		payloadReader.AddHeader(httputils.DatlyResponseHeaderMetrics+"-"+stat.Name(), string(marshal))
-	}
-
-	return payloadReader, nil
-}
-
-func (r *Router) prepareResponse(session *ReaderSession, includeSQL bool, metricEnabled bool) (*preparedResponse, bool, error) {
-	readerSession, err := r.readValue(session, includeSQL, metricEnabled)
-	if err != nil {
-		return nil, false, err
-	}
-
-	//if !r.runAfterFetchIfNeeded(session, readerSession.DataPtr) {
-	//	return nil, false, nil
-	//}
-
-	viewMeta := readerSession.ViewMeta
-	value := readerSession.Data
-	result, err := r.result(session, value, viewMeta, readerSession.Metrics)
-	if err != nil {
-		return nil, false, err
-	}
-
-	return &preparedResponse{
-		result:   result,
-		objects:  value,
-		viewMeta: viewMeta,
-		session:  readerSession,
-	}, true, nil
-}
-
-func (r *Router) readValue(readerSession *ReaderSession, includeSQL bool, metricEnabled bool) (*reader.Session, error) {
-	destValue := reflect.New(readerSession.Route.View.Schema.SliceType())
-	dest := destValue.Interface()
-
-	session, err := reader.NewSession(dest, readerSession.Route.View)
-	if err != nil {
-		return nil, err
-	}
-	session.CacheDisabled = readerSession.IsCacheDisabled()
-	session.IncludeSQL = includeSQL
-	session.State = readerSession.State
-	if err := reader.New().Read(context.TODO(), session); err != nil {
-		return nil, err
-	}
-
-	if readerSession.Route.EnableAudit {
-		r.logMetrics(readerSession.Route.URI, session.Metrics)
-	}
-
-	if !metricEnabled {
-		session.Metrics = session.Metrics.Basic()
-	}
-
-	return session, nil
-}
-
-func (r *Router) runBeforeFetch(response http.ResponseWriter, request *http.Request, fn func(response http.ResponseWriter, request *http.Request) error) bool {
-	respWrapper := httputils.NewClosableResponse(response)
-	err := fn(respWrapper, request)
-	if respWrapper.Closed {
-		return false
-	}
-
-	if err != nil {
-		response.WriteHeader(http.StatusBadRequest)
-		response.Write([]byte(err.Error()))
-		return false
-	}
-
-	return true
-}
-
 func (r *Router) inAWS() bool {
 	scheme := url.Scheme(r._resource.SourceURL, "s3")
 	return scheme == "s3"
-}
-
-func (r *Router) result(session *ReaderSession, destValue interface{}, meta interface{}, stats reader.Metrics) (interface{}, error) {
-	if session.Route.Cardinality == state.Many {
-		result := r.wrapWithResponseIfNeeded(destValue, session.Route, meta, stats, nil)
-		return result, nil
-	}
-
-	slicePtr := xunsafe.AsPointer(destValue)
-	sliceSize := session.Route.View.Schema.Slice().Len(slicePtr)
-
-	switch sliceSize {
-	case 0:
-		return nil, httputils.NewHttpMessageError(http.StatusNotFound, nil)
-	case 1:
-		result := r.wrapWithResponseIfNeeded(session.Route.View.Schema.Slice().ValueAt(slicePtr, 0), session.Route, meta, stats, nil)
-		return result, nil
-	default:
-		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, fmt.Errorf("for route %v expected query to return zero or one result but returned %v", session.Request.RequestURI, sliceSize))
-	}
 }
 
 func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, statusCode int) {
@@ -487,7 +351,9 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 	}
 
 	responseStatus := r.responseStatusError(message, anObjectErr)
-	if route._responseSetter == nil {
+	statusParameter := route.Output.Type.Parameters.LookupByLocation(state.KindOutput, "status")
+
+	if statusParameter == nil {
 		errAsBytes, marshalErr := goJson.Marshal(responseStatus)
 		if marshalErr != nil {
 			w.Write([]byte("could not parse error message"))
@@ -500,12 +366,10 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 		return
 	}
 
-	response := reflect.New(route._responseSetter.rType)
+	response := route.Output.Type.Type().NewState()
+	response.SetValue(statusParameter.Name, responseStatus)
 
-	//TODO extend to unified response
-	r.setResponseStatus(route, response, responseStatus, nil)
-
-	asBytes, marErr := route.JsonMarshaller.Marshal(response.Elem().Interface())
+	asBytes, marErr := route.JsonMarshaller.Marshal(response.State())
 	if marErr != nil {
 		w.Write(asBytes)
 		w.WriteHeader(statusCode)
@@ -530,31 +394,6 @@ func (r *Router) responseStatusError(message string, anObject interface{}) respo
 	}
 
 	return responseStatus
-}
-
-func (r *Router) setResponseStatus(route *Route, response reflect.Value, responseStatus response.Status, metrics reader.Metrics) {
-	if route._responseSetter.statusField != nil {
-		route._responseSetter.statusField.SetValue(unsafe.Pointer(response.Pointer()), responseStatus)
-	}
-	if route._responseSetter.metricsField != nil {
-		route._responseSetter.metricsField.SetValue(unsafe.Pointer(response.Pointer()), metrics)
-	}
-}
-
-func (r *Router) wrapWithResponseIfNeeded(response interface{}, route *Route, viewMeta interface{}, metrics reader.Metrics, state *expand.State) interface{} {
-	if route._responseSetter == nil {
-		return response
-	}
-
-	newResponse := reflect.New(route._responseSetter.rType)
-	responseBodyPtr := unsafe.Pointer(newResponse.Pointer())
-
-	route._responseSetter.bodyField.SetValue(responseBodyPtr, response)
-	if route._responseSetter.metaField != nil && viewMeta != nil {
-		route._responseSetter.metaField.SetValue(responseBodyPtr, viewMeta)
-	}
-	r.setResponseStatus(route, newResponse, r.responseStatusSuccess(state), metrics)
-	return newResponse.Elem().Interface()
 }
 
 func (r *Router) indexRoutes() {
@@ -708,43 +547,26 @@ func (r *Router) Resource() *Resource {
 }
 
 func (r *Router) payloadReader(ctx context.Context, request *http.Request, response http.ResponseWriter, route *Route, record *async2.Job) (PayloadReader, error) {
-
 	switch route.Service {
 	case ServiceTypeExecutor:
 		return r.executorPayloadReader(ctx, response, request, route)
 	case ServiceTypeReader:
-		if route.Async == nil {
-			sessionState := session.New(route.View, session.WithLocatorOptions(route.LocatorOptions(request)...))
-			readerHandler := rhandler.New(route.Output.Type, route.Output.Parameters)
-			aResponse := readerHandler.Handle(ctx, route.View, sessionState,
-				reader.WithIncludeSQL(true),
-				reader.WithCacheDisabled(false))
-			if aResponse.Error != nil {
-				return nil, aResponse.Error
-			}
-			format := route.OutputFormat(request.URL.Query())
-			filters := route.Exclusion(sessionState.ResourceState())
-			data, err := route.Content.Marshal(format, route.Field, aResponse.Reader.Data, aResponse.Output, filters)
-			if err != nil {
-				return nil, err
-			}
-			return r.compressIfNeeded(data, route)
+		sessionState := vsession.New(route.View, vsession.WithLocatorOptions(route.LocatorOptions(request)...))
+		readerHandler := rhandler.New(route.Output.Type.Type(), route.Output.Type.Parameters)
+		aResponse := readerHandler.Handle(ctx, route.View, sessionState,
+			reader.WithIncludeSQL(true),
+			reader.WithCacheDisabled(false))
+		if aResponse.Error != nil {
+			return nil, aResponse.Error
 		}
-
-		aSession, err := r.prepareReaderSession(ctx, response, request, route)
+		format := route.OutputFormat(request.URL.Query())
+		filters := route.Exclusion(sessionState.State())
+		data, err := route.Content.Marshal(format, route.Field, aResponse.Reader.Data, aResponse.Output, filters)
 		if err != nil {
 			return nil, err
 		}
-		payloadReader, err := r.readerPayloadReader(ctx, route, aSession, record)
-
-		if payloadReader != nil && payloadReader.Headers().Get(content.Type) == "" {
-			payloadReader.Headers().Add(content.Type, aSession.RequestParams.OutputContentType+"; "+httputils.CharsetUTF8)
-		}
-		//TODO Add support for Content-Disposition: attachment; filename="document.doc"
-
-		return payloadReader, err
+		return r.compressIfNeeded(data, route)
 	}
-
 	return nil, httputils.NewHttpMessageError(500, fmt.Errorf("unsupported ServiceType %v", route.Service))
 }
 
@@ -780,407 +602,13 @@ func (r *Router) extractValueFromResponse(route *Route, actual haHttp.Response) 
 	}
 }
 
-func (r *Router) readerPayloadReader(ctx context.Context, route *Route, session *ReaderSession, record *async2.Job) (PayloadReader, error) {
-	if route.Async != nil {
-		return r.readAsyncResponse(ctx, session, record)
-	}
-
-	return r.readSyncResponse(ctx, session)
-}
-
-func (r *Router) readSyncResponse(ctx context.Context, session *ReaderSession) (PayloadReader, error) {
-	response, err := r.readResponse(ctx, session)
-	if err != nil {
-		return nil, err
-	}
-	return response, err
-}
-
-func (r *Router) readAsyncResponse(ctx context.Context, session *ReaderSession, record *async2.Job) (PayloadReader, error) {
-	if record != nil {
-		err := r.executeAsync(context.Background(), session, record, true)
-		if err != nil {
-			return nil, err
-		}
-
-		return NewBytesReader(nil, ""), nil
-	}
-
-	record, err := NewAsyncRecord(ctx, session.Route, session.RequestParams)
-	if err != nil {
-		return nil, err
-	}
-
-	connector, err := r._resource.Resource.Connector(record.DestinationConnector)
-	if err != nil {
-		return nil, err
-	}
-	_, err = session.Route._async.EnsureTable(ctx, connector, &async.TableConfig{
-		RecordType:     session.Route.View.Schema.Type(),
-		TableName:      session.Route.View.Async.Table,
-		Dataset:        record.DestinationDataset,
-		CreateIfNeeded: true,
-		GenerateAutoPk: true,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	DB, err := connector.DB()
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err = r.insertAndExecuteJob(ctx, session, DB, record, session.Route.Async._asyncHandler, nil); err != nil {
-		return nil, err
-	}
-
-	payloadReader, err := r.marshalAsyncRecord(session, record)
-	if err != nil {
-		return nil, err
-	}
-
-	return payloadReader, nil
-}
-
-func (r *Router) insertAndExecuteJob(ctx context.Context, session *ReaderSession, db *sql.DB, record *async2.Job, handler async.Handler, exist *async2.OnExist) (existingJob *async2.Job, err error) {
-	inserter, err := session.Route.JobsInserter(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-
-	if _, _, err := inserter.Exec(ctx, record); err != nil {
-		if exist == nil {
-			return nil, err
-		}
-
-		if exist.Return {
-			foundJob, selectErr := async.QueryJobByID(ctx, db, record.JobID)
-			if selectErr != nil {
-				return nil, err
-			}
-
-			if !(foundJob.State == async2.StateDone && foundJob.EndTime != nil && time.Now().After(*foundJob.EndTime)) { //Job doesn't expire yet
-				return foundJob, nil
-			}
-
-			affected, refreshErr := async.RefreshJobByID(ctx, db, record.JobID)
-			if err != nil || affected == 0 { //some other call is already calling async job
-				return foundJob, refreshErr
-			}
-
-			*record = *foundJob
-		}
-	}
-
-	httpRecord, err := NewAsyncHTTPRecord(session, record)
-	if err != nil {
-		return existingJob, err
-	}
-
-	if handler != nil {
-		return existingJob, handler.Handle(ctx, httpRecord, session.Request)
-	}
-
-	r.readAsync(context.Background(), session, copyJob(record))
-	return existingJob, nil
-}
-
-func copyJob(record *async2.Job) *async2.Job {
-	newJob := *record
-	return &newJob
-}
-
-func (r *Router) marshalAsyncRecord(session *ReaderSession, record *async2.Job) (PayloadReader, error) {
-	marshal, err := session.Route.JSON.JsonMarshaller.Marshal(record)
-	if err != nil {
-		return nil, err
-	}
-
-	payloadReader, err := r.compressIfNeeded(marshal, session.Route)
-	if err != nil {
-		return nil, err
-	}
-
-	return payloadReader, nil
-}
-
-func (r *Router) readAsync(ctx context.Context, session *ReaderSession, record *async2.Job) {
-	go func() {
-		err := r.executeAsync(ctx, session, record, true)
-		if err != nil {
-			connector, connErr := r.asyncConnector(session.Route, record)
-			if connErr == nil {
-				db, dbErr := connector.DB()
-				if dbErr == nil {
-					r.handleReadAsyncErrorWithDb(ctx, session, record, db, err)
-				} else {
-					fmt.Printf("[ERROR] coulnd't update Job %v with status error due to %v\n", record.JobID, dbErr)
-				}
-			}
-			fmt.Printf("[ERROR] %v\n", err.Error())
-		}
-	}()
-}
-
-func (r *Router) executeAsync(ctx context.Context, session *ReaderSession, record *async2.Job, forceInMemory bool) error {
-	connector, err := r.asyncConnector(session.Route, record)
-	if err != nil {
-		return err
-	}
-
-	db, err := connector.DB()
-	if err != nil {
-		return err
-	}
-
-	if aHandler := session.Route.Async._asyncHandler; aHandler != nil && !forceInMemory {
-		asyncHttp, err := NewAsyncHTTPRecord(session, record)
-		if err != nil {
-			r.handleReadAsyncErrorWithDb(ctx, session, record, db, err)
-			return nil
-		}
-
-		return aHandler.Handle(ctx, asyncHttp, session.Request)
-	}
-
-	if err := r.populateAsyncRecord(ctx, session, record); err != nil {
-		fmt.Printf("[ERROR] error occurred when executing async view: %v\n", err.Error())
-		r.handleReadAsyncErrorWithDb(ctx, session, record, db, err)
-		return nil
-	}
-
-	return nil
-}
-
-func NewAsyncHTTPRecord(session *ReaderSession, record *async2.Job) (*handler.RecordWithHttp, error) {
-	bodyContent, err := session.RequestParams.BodyContent()
-	if err != nil {
-		return nil, err
-	}
-
-	var body string
-	if len(bodyContent) > 0 {
-		body = string(bodyContent)
-	}
-
-	return &handler.RecordWithHttp{
-		Record:  record,
-		Body:    body,
-		Method:  session.Request.Method,
-		URL:     session.Request.URL.String(),
-		Headers: session.Request.Header,
-	}, nil
-}
-
-func (r *Router) populateAsyncRecord(ctx context.Context, session *ReaderSession, record *async2.Job) error {
-	record.State = async2.StateDone
-	now := time.Now()
-	response, _, err := r.prepareResponse(session, true, true)
-	elapsed := time.Now().Sub(now)
-	record.TimeTaken = &elapsed
-
-	if err != nil {
-		return err
-	}
-
-	metrics := NewMetrics(session.Request.RequestURI, response.session.Metrics.Basic())
-
-	asBytes, _ := goJson.Marshal(metrics)
-	record.Metrics = string(asBytes)
-	connector, err := r.asyncConnector(session.Route, record)
-	if err != nil {
-		return err
-	}
-
-	for _, item := range response.session.Metrics.ParametrizedSQL() {
-		record.SQL = append(record.SQL, &async2.SQL{Query: item.Query, Args: item.Args})
-	}
-
-	if err != nil {
-		return err
-	}
-
-	err = r.prepareAndPutAsyncRecords(ctx, session, response, record, connector)
-	return err
-}
-
-func (r *Router) updateAsyncRecord(ctx context.Context, session *ReaderSession, record *async2.Job, db *sql.DB) error {
-	updater, err := session.Route.Async.JobsUpdater(ctx, db)
-	if err != nil {
-		return fmt.Errorf("error when connecting with Async connector: %v\n", err.Error())
-	}
-
-	if _, err = updater.Exec(ctx, record); err != nil {
-		return fmt.Errorf("error when trying to update async record: %v\n", err.Error())
-	}
-
-	return nil
-}
-
-func (r *Router) handleReadAsyncErrorWithDb(ctx context.Context, session *ReaderSession, record *async2.Job, db *sql.DB, err error) {
-	record.State = async2.StateDone
-	_, message, object := status.NormalizeErr(err, http.StatusBadRequest)
-	if object != nil {
-		marshal, _ := session.Route.JSON.JsonMarshaller.Marshal(object)
-		asString := string(marshal)
-		record.Error = &asString
-	} else {
-		record.Error = &message
-	}
-
-	err = r.updateAsyncRecord(ctx, session, record, db)
-	if err != nil {
-		fmt.Printf("[ERROR] %v\n", err.Error())
-	}
-}
-
-func (r *Router) prepareAndPutAsyncRecords(ctx context.Context, session *ReaderSession, response *preparedResponse, record *async2.Job, connector *view.Connector) error {
-	if _, err := session.Route._async.EnsureTable(ctx, connector, &async.TableConfig{
-		RecordType:     types.EnsureStruct(reflect.TypeOf(response.objects)),
-		TableName:      record.DestinationTable,
-		Dataset:        record.DestinationDataset,
-		CreateIfNeeded: record.DestinationCreateDisposition == async2.CreateDispositionIfNeeded,
-		GenerateAutoPk: true,
-	}); err != nil {
-		return err
-	}
-
-	db, err := session.Route.Async.Connector.DB()
-	if err != nil {
-		return err
-	}
-
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-
-	err = r.putAsyncRecord(ctx, session, response, record, db, tx)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	return tx.Commit()
-}
-
-func (r *Router) putAsyncRecord(ctx context.Context, session *ReaderSession, response *preparedResponse, record *async2.Job, db *sql.DB, tx *sql.Tx) error {
-	recordsInserter, err := session.Route.RecordsInserter(ctx, session.Route, db)
-	if err != nil {
-		return err
-	}
-
-	_, _, err = recordsInserter.Exec(ctx, response.objects, tx)
-	if err != nil {
-		return err
-	}
-
-	updater, err := session.Route.Async.JobsUpdater(ctx, db)
-	if err != nil {
-		return err
-	}
-
-	_, err = updater.Exec(ctx, record, tx)
-	return err
-}
-
-func (r *Router) QueryAllJobs(writer http.ResponseWriter, request *http.Request) {
-	ctx := context.Background()
-	jobs, err := r.FindAllJobs(ctx, request)
-	if err != nil {
-		r.normalizeAndWriteErr(writer, err)
-		return
-	}
-
-	marshal, err := goJson.Marshal(jobs)
-	if err != nil {
-		r.normalizeAndWriteErr(writer, err)
-		return
-	}
-
-	writer.WriteHeader(http.StatusOK)
-	_, _ = writer.Write(marshal)
-}
-
-func (r *Router) normalizeAndWriteErr(writer http.ResponseWriter, err error) {
-	statusCode, message, errorObject := status.NormalizeErr(err, http.StatusBadRequest)
-	if errorObject != nil {
-		marshal, err := goJson.Marshal(errorObject)
-		if err == nil {
-			message = string(marshal)
-		}
-	}
-
-	writer.WriteHeader(statusCode)
-	_, _ = writer.Write([]byte(message))
-}
-
-func (r *Router) FindAllJobs(ctx context.Context, request *http.Request) ([]*async2.Job, error) {
-	jobs, err := r.PrepareJobs(ctx, request)
-	if err != nil {
-		return nil, err
-	}
-
-	var allRecords []*async2.Job
-	for db, qualifiers := range jobs {
-		records, err := async.QueryJobs(ctx, db, qualifiers...)
-		if err != nil {
-			return nil, err
-		}
-
-		allRecords = append(allRecords, records...)
-	}
-
-	return allRecords, nil
-}
-
-func (r *Router) PrepareJobs(ctx context.Context, request *http.Request) (map[*sql.DB][]*async.JobQualifier, error) {
-	jobs := async.NewJobs()
-
-	for _, route := range r._routes {
-		rAsync := route.Async
-		if rAsync == nil {
-			continue
-		}
-
-		if err := r.AuthorizeRequest(request, route); err != nil {
-			continue
-		}
-
-		db, err := rAsync.Connector.DB()
-		if err != nil {
-			return nil, err
-		}
-
-		parameters, err := NewRequestParameters(request, route)
-		if err != nil {
-			return nil, err
-		}
-
-		subject, err := PrincipalSubject(ctx, route, parameters)
-		if err != nil {
-			return nil, err
-		}
-
-		jobs.AddJobs(db, &async.JobQualifier{
-			ViewName:         route.View.Name,
-			PrincipalSubject: subject,
-		})
-	}
-
-	return jobs.Index(), nil
-}
-
-func (r *Router) executorPayloadReader(ctx context.Context, response http.ResponseWriter, request *http.Request, route *Route) (PayloadReader, error) {
-	anExecutor := NewExecutor(route, request, nil, response)
+func (r *Router) executorPayloadReader(ctx context.Context, writer http.ResponseWriter, request *http.Request, route *Route) (PayloadReader, error) {
+	anExecutor := NewExecutor(route, request, writer)
 	if route.Handler != nil {
 		sessionHandler, err := anExecutor.SessionHandler(ctx)
 		if err != nil {
 			return nil, err
 		}
-
 		res, err := route.Handler.Call(ctx, sessionHandler)
 		if err != nil {
 			return nil, err
@@ -1192,38 +620,53 @@ func (r *Router) executorPayloadReader(ctx context.Context, response http.Respon
 
 		return r.marshalCustomOutput(res, route)
 	}
+	aSession, err := anExecutor.ExpandAndExecute(ctx)
 
-	sess, err := anExecutor.ExpandAndExecute(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	if route.ResponseBody == nil {
 		return NewBytesReader(nil, ""), nil
 	}
 
-	params, _ := anExecutor.RequestParams(ctx)
-	body, err := route.execResponseBody(params, sess)
+	var responseValue interface{}
+	if stateType := route.Output.Type.Type(); stateType != nil && stateType.IsDefined() {
+		responseState := route.Output.Type.Type().NewState()
+		sessionState := aSession.SessionState
+		statelet := aSession.SessionState.State().Lookup(aSession.View)
+
+		status := r.responseStatusSuccess(aSession.TemplateState)
+		sessionState.SetState(ctx, route.Output.Type.Parameters, responseState, sessionState.Indirect(true,
+			locator.WithCustomOption(&status),
+			locator.WithState(statelet.Template)))
+
+		responseValue = responseState.State()
+
+		if parameter := route.Output.Type.AnonymousParameters(); parameter != nil {
+			if responseValue, err = responseState.Value(parameter.Name); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	toolbox.Dump(responseValue)
 	if err != nil {
 		return nil, err
 	}
-
-	responseBody := r.wrapWithResponseIfNeeded(body, route, nil, nil, sess.State)
-
-	marshal, err := route.JsonMarshaller.Marshal(responseBody)
+	data, err := route.JsonMarshaller.Marshal(responseValue)
 	if err != nil {
 		return nil, httputils.NewHttpMessageError(http.StatusInternalServerError, err)
 	}
 
-	return NewBytesReader(marshal, ""), nil
+	return NewBytesReader(data, ""), nil
 }
 
 func (r *Router) prepareExecutorSessionWithParameters(ctx context.Context, request *http.Request, route *Route, parameters *RequestParams) (*executor.Session, error) {
-	sessionState := session.New(route.View, session.WithLocatorOptions(route.LocatorOptions(request)...))
+	sessionState := vsession.New(route.View, vsession.WithLocatorOptions(route.LocatorOptions(request)...))
 	if err := sessionState.Populate(ctx); err != nil {
 		return nil, err
 	}
-	sess, err := executor.NewSession(sessionState.ResourceState(), route.View)
+	sess, err := executor.NewSession(sessionState, route.View)
 	return sess, err
 }
 
@@ -1237,16 +680,6 @@ func (r *Router) asyncConnector(route *Route, record *async2.Job) (*view.Connect
 	}
 
 	return nil, fmt.Errorf("unspecified job connector")
-}
-
-func (r *Route) NewStater(request *http.Request, parameters *RequestParams) *Stater {
-	return &Stater{
-		route:      r,
-		request:    request,
-		parameters: parameters,
-		cache:      r._stateCache,
-		resource:   r._resource,
-	}
 }
 
 func (r *Router) prepareAndExecuteExecutor(ctx context.Context, request *http.Request, route *Route, parameters *RequestParams) error {
@@ -1299,12 +732,4 @@ func appendCacheWarmupViews(aView *view.View, result *[]*view.View) {
 	for i := range aView.With {
 		appendCacheWarmupViews(&aView.With[i].Of.View, result)
 	}
-}
-
-func (r *Route) execResponseBody(parameters *RequestParams, session *executor.Session) (interface{}, error) {
-	if r.ResponseBody != nil {
-		return r.ResponseBody.getValue(session)
-	}
-
-	return parameters.RequestBody()
 }

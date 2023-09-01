@@ -22,7 +22,7 @@ type (
 		Args      []interface{}
 	}
 
-	ExpanderFn func(placeholders *[]interface{}, SQL string, selector *State, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error)
+	ExpanderFn func(placeholders *[]interface{}, SQL string, selector *Statelet, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error)
 )
 
 func detectColumns(ctx context.Context, evaluation *TemplateEvaluation, v *View) ([]*Column, string, error) {
@@ -98,7 +98,7 @@ func detectColumnsSQL(evaluation *TemplateEvaluation, v *View) (string, []interf
 	var err error
 
 	if evaluation.Expander != nil {
-		SQL, err = v.Expand(&placeholders, SQL, &State{}, CriteriaParam{}, &BatchData{}, NewMockSanitizer())
+		SQL, err = v.Expand(&placeholders, SQL, &Statelet{}, CriteriaParam{}, &BatchData{}, NewMockSanitizer())
 		if err != nil {
 			return SQL, nil, err
 		}

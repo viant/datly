@@ -35,6 +35,7 @@ type (
 		DateFormat        string      `json:",omitempty"`
 		ErrorStatusCode   int         `json:",omitempty"`
 		Tag               string      `json:",omitempty"`
+		Lazy              bool        `json:",omitempty"`
 
 		_selector    *structology.Selector
 		_initialized bool
@@ -86,7 +87,8 @@ func (p *Parameter) Init(ctx context.Context, resource Resourcelet) error {
 		}
 	}
 
-	if p.In.Kind == KindParam {
+	switch p.In.Kind {
+	case KindParam, KindState:
 		if err := p.initParamBasedParameter(ctx, resource); err != nil {
 			return err
 		}
@@ -109,7 +111,7 @@ func (p *Parameter) initDataViewParameter(ctx context.Context, resource Resource
 	}
 	schema, err := resource.ViewSchema(ctx, p.In.Name)
 	if err != nil {
-		return fmt.Errorf("failed to init view parameter %v, %w", p.Name, err)
+		return fmt.Errorf("failed to apply view parameter %v, %w", p.Name, err)
 	}
 
 	cardinality := Cardinality("")
@@ -117,12 +119,15 @@ func (p *Parameter) initDataViewParameter(ctx context.Context, resource Resource
 		cardinality = p.Schema.Cardinality
 	}
 	p.Schema = schema.copy()
-
+	parameterType := schema.Type()
 	if cardinality != "" {
 		p.Schema.Cardinality = cardinality
+		if cardinality == One && parameterType.Kind() == reflect.Slice {
+			parameterType = parameterType.Elem()
+		}
 
 	}
-	p.Schema.SetType(schema.Type())
+	p.Schema.SetType(parameterType)
 	return nil
 }
 
@@ -202,7 +207,7 @@ func (p *Parameter) IsRequired() bool {
 
 func (p *Parameter) initSchema(resource Resourcelet) error {
 	if p.In.Kind == KindGroup {
-		rType, err := p.Group.ReflectType("autogen", resource.LookupType(), true)
+		rType, err := p.Group.ReflectType(pkgPath, resource.LookupType(), true)
 		if err != nil {
 			return err
 		}

@@ -46,7 +46,7 @@ func (p ParamName) Validate(kind Kind) error {
 		return nil
 	case KindRequest, KindLiteral, KindRequestBody:
 		return nil
-	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindParam:
+	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindParam, KindState, KindOutput:
 		if p == "" {
 			return fmt.Errorf("param name can't be empty")
 		}
@@ -85,7 +85,17 @@ func NewConstLocation(name string) *Location {
 	return &Location{Kind: KindLiteral, Name: name}
 }
 
-// NewPathLocation creates a structql
+// NewPathLocation creates a path location
 func NewPathLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindPath}
+}
+
+// NewParameterLocation creates a parameter location
+func NewParameterLocation(name string) *Location {
+	return &Location{Name: name, Kind: KindParam}
+}
+
+// NewState creates a state location
+func NewState(name string) *Location {
+	return &Location{Name: name, Kind: KindState}
 }

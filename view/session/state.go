@@ -23,6 +23,7 @@ type (
 		cache *cache
 		views *views
 		Options
+		state.Types
 	}
 )
 
@@ -59,7 +60,7 @@ func (s *State) SetViewState(ctx context.Context, aView *view.View) error {
 	return s.setViewState(ctx, aView)
 }
 
-// ResetViewState sets view resourceState
+// ResetViewState sets view state
 func (s *State) ResetViewState(ctx context.Context, aView *view.View) error {
 	return s.setViewState(ctx, aView)
 }
@@ -92,24 +93,27 @@ func (s *State) adjustErrorSource(err error, aView *view.View) {
 	}
 }
 
-func (s *State) viewLookupOptions(parameters state.NamedParameters, opts *Options) []locator.Option {
+func (s *State) viewLookupOptions(aView *view.View, parameters state.NamedParameters, opts *Options) []locator.Option {
 	var result []locator.Option
 	result = append(result, locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
 		return s.LookupValue(ctx, parameter, opts)
 	}))
 	result = append(result, locator.WithParameters(parameters))
 	result = append(result, locator.WithReadInto(s.ReadInto))
+	viewState := s.state.Lookup(aView)
+	result = append(result, locator.WithState(viewState.Template))
+
 	return result
 }
 
 func (s *State) ViewOptions(aView *view.View) *Options {
-	selectors := s.resourceState.Lookup(aView)
+	selectors := s.state.Lookup(aView)
 	viewOptions := s.Options.Clone()
 	var parameters state.NamedParameters
 	if aView.Template != nil {
 		parameters = aView.Template.Parameters.Index()
 	}
-	viewOptions.kindLocator = s.kindLocator.With(s.viewLookupOptions(parameters, viewOptions)...)
+	viewOptions.kindLocator = s.kindLocator.With(s.viewLookupOptions(aView, parameters, viewOptions)...)
 
 	viewOptions.AddCodec(codec.WithSelector(codec.Selector(selectors)))
 	viewOptions.AddCodec(codec.WithColumnsSource(aView.IndexedColumns()))
@@ -125,7 +129,7 @@ func (s *State) ViewOptions(aView *view.View) *Options {
 }
 
 func (s *State) setTemplateState(ctx context.Context, aView *view.View, opts *Options) error {
-	state := s.resourceState.Lookup(aView)
+	state := s.state.Lookup(aView)
 	if template := aView.Template; template != nil {
 		stateType := template.StateType()
 		if stateType.IsDefined() {
@@ -178,10 +182,14 @@ func (s *State) populateParameter(ctx context.Context, parameter *state.Paramete
 	if value, err = s.ensureValidValue(value, parameter); err != nil {
 		return err
 	}
-	if options.indirectState { //parameters.Selectors are not initialized from the tempalte state
-		return aState.SetValue(parameter.Name, value)
+	if options.indirectState { //p
+		fmt.Printf("%T %+v %T\n", aState.State(), aState.State(), value) // arameters.Selectors are not initialized from the tempalte state
+		err = aState.SetValue(parameter.Name, value)
+		fmt.Printf("AFTER %T %+v %T %+v\n", aState.State(), aState.State(), value, value) // arameters.Selectors are not initialized from the tempalte state
+		return err
 	}
-	return parameter.Selector().SetValue(aState.Pointer(), value)
+	err = parameter.Selector().SetValue(aState.Pointer(), value)
+	return err
 }
 
 func (s *State) ensureValidValue(value interface{}, parameter *state.Parameter) (interface{}, error) {
@@ -258,13 +266,15 @@ func (s *State) lookupValue(ctx context.Context, parameter *state.Parameter, opt
 	if opts == nil {
 		opts = &s.Options
 	}
-	if value, has = s.cache.lookup(parameter); has {
+	cachable := parameter.In.Kind != state.KindState
+
+	if value, has = s.cache.lookup(parameter); has && cachable {
 		return value, has, nil
 	}
 	lock := s.cache.lockParameter(parameter) //lockParameter is to ensure value for a parameter is computed only once
 	lock.Lock()
 	defer lock.Unlock()
-	if value, has = s.cache.lookup(parameter); has {
+	if value, has = s.cache.lookup(parameter); has && cachable {
 		return value, has, nil
 	}
 
@@ -294,7 +304,7 @@ func (s *State) lookupValue(ctx context.Context, parameter *state.Parameter, opt
 		}
 		value = transformed
 	}
-	if has && err == nil {
+	if has && err == nil && cachable {
 		s.cache.put(parameter, value)
 	}
 	return value, has, err
@@ -317,8 +327,8 @@ func (s *Options) apply(options []Option) {
 	if s.kindLocator == nil {
 		s.kindLocator = locator.NewKindsLocator(nil, s.locatorOptions...)
 	}
-	if s.resourceState == nil {
-		s.resourceState = view.NewResourceState()
+	if s.state == nil {
+		s.state = view.NewState()
 	}
 }
 

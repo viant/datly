@@ -3,12 +3,14 @@ package router
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/viant/datly/executor"
 	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/template/expand"
 	vsession "github.com/viant/datly/view/session"
+	"github.com/viant/toolbox"
 	"github.com/viant/xdatly/handler"
-	async2 "github.com/viant/xdatly/handler/async"
+	"github.com/viant/xdatly/handler/async"
 	http2 "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/sqlx"
 	"github.com/viant/xdatly/handler/validator"
@@ -21,7 +23,6 @@ type (
 		session        *executor.Session
 		route          *Route
 		request        *http.Request
-		params         *RequestParams
 		dataUnit       *expand.DataUnit
 		tx             *sql.Tx
 		sessionHandler *session.Session
@@ -37,11 +38,10 @@ func (d *DBProvider) Db() (*sql.DB, error) {
 	return d.db, nil
 }
 
-func NewExecutor(route *Route, request *http.Request, params *RequestParams, response http.ResponseWriter) *HandlerExecutor {
+func NewExecutor(route *Route, request *http.Request, response http.ResponseWriter) *HandlerExecutor {
 	return &HandlerExecutor{
 		route:    route,
 		request:  request,
-		params:   params,
 		dataUnit: expand.NewDataUnit(route.View),
 		response: response,
 	}
@@ -51,18 +51,21 @@ func (e *HandlerExecutor) Session(ctx context.Context) (*executor.Session, error
 	if e.session != nil {
 		return e.session, nil
 	}
+
 	sessionState := vsession.New(e.route.View, vsession.WithLocatorOptions(e.route.LocatorOptions(e.request)...))
 	if err := sessionState.Populate(ctx); err != nil {
+		fmt.Printf("POPULATE ERR: %T %+v\n", err, err)
 		return nil, err
 	}
-	sess, err := executor.NewSession(sessionState.ResourceState(), e.route.View)
+	toolbox.Dump(sessionState.State().Lookup(e.route.View).Template.State())
+	sess, err := executor.NewSession(sessionState, e.route.View)
 	if err != nil {
 		return nil, err
 	}
 	if sess != nil {
 		sess.DataUnit = e.dataUnit
 	}
-
+	e.session = sess
 	sessionHandler, err := e.SessionHandlerService(ctx)
 	if err != nil {
 		return nil, err
@@ -91,17 +94,12 @@ func (e *HandlerExecutor) SessionHandlerService(ctx context.Context) (*session.S
 		return e.sessionHandler, nil
 	}
 
-	params, err := e.RequestParams(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	sess := session.NewSession(
 		session.WithTemplateFlush(func(ctx context.Context) error {
 			return e.Execute(ctx)
 		}),
 		session.WithRedirect(e.redirect),
-		session.WithStater(e.route.NewStater(e.request, params)),
+		session.WithStater(e.session.SessionState),
 		session.WithSql(e.newSqlService),
 		session.WithAsync(e.newAsync),
 		session.WithHttp(e.newHttp),
@@ -117,20 +115,6 @@ func (e *HandlerExecutor) newValidator() *validator.Service {
 	})
 }
 
-func (e *HandlerExecutor) RequestParams(ctx context.Context) (*RequestParams, error) {
-	if e.params != nil {
-		return e.params, nil
-	}
-
-	parameters, err := NewRequestParameters(e.request, e.route)
-	if err != nil {
-		return nil, err
-	}
-
-	e.params = parameters
-	return e.params, nil
-}
-
 func (e *HandlerExecutor) newSqlService(options *sqlx.Options) (sqlx.Sqlx, error) {
 	unit, err := e.getDataUnit(options)
 	if err != nil {
@@ -141,14 +125,12 @@ func (e *HandlerExecutor) newSqlService(options *sqlx.Options) (sqlx.Sqlx, error
 	if unit == e.dataUnit { //we are using View that can contain SQL Statements in Velty
 		txStartedNotifier = e.txStarted
 	}
-
 	return &SqlxService{
 		txNotifier:    txStartedNotifier,
 		dataUnit:      unit,
 		options:       options,
 		validator:     e.newValidator(),
 		connectors:    e.route._resource.GetConnectors(),
-		params:        e.params,
 		mainConnector: e.route.View.Connector,
 	}, nil
 }
@@ -221,11 +203,11 @@ func (e *HandlerExecutor) redirect(ctx context.Context, route *http2.Route) (han
 		return nil, err
 	}
 
-	newExecutor := NewExecutor(match, e.request, nil, e.response)
+	newExecutor := NewExecutor(match, e.request, e.response)
 	return newExecutor.SessionHandlerService(ctx)
 }
 
-func (e *HandlerExecutor) newAsync() async2.Async {
+func (e *HandlerExecutor) newAsync() async.Async {
 	return &AsyncHandler{
 		executor: e,
 	}

@@ -1,6 +1,9 @@
 package predicate
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 var TagName = "predicate"
 
@@ -13,6 +16,8 @@ type (
 		Exclusion   bool
 		IncludeName string
 		ExcludeName string
+		Group       int
+		Predicate   string
 		Args        []string
 		noTag       bool
 	}
@@ -77,6 +82,10 @@ func ParseTag(tag, name string) *Tag {
 			ret.ExcludeName = ""
 		case "inclusion_name":
 			ret.IncludeName = ""
+		case "group":
+			ret.Group, _ = strconv.Atoi(pair[1])
+		case "predicate":
+			ret.Predicate = pair[1]
 		case "args":
 			if len(pair) == 2 {
 				ret.Args = strings.Split(pair[1], ",")

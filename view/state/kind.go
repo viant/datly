@@ -21,13 +21,14 @@ const (
 	KindRequest     Kind = "http_request"
 	KindGroup       Kind = "group"
 	KindOutput      Kind = "output" //reader output
+	KindState       Kind = "state"  //input state
 
 )
 
 // Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindLiteral, KindParam, KindRequest, KindGroup:
+	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindLiteral, KindParam, KindRequest, KindGroup, KindOutput, KindState:
 		return nil
 	}
 
@@ -56,6 +57,10 @@ func (k Kind) Ordinal() int {
 		return 8
 	case KindRequest:
 		return 9
+	case KindOutput:
+		return 10
+	case KindState:
+		return 11
 	}
 	return -1
 }

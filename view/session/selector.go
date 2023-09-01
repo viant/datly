@@ -37,7 +37,7 @@ func (s *State) setQuerySelector(ctx context.Context, ns *view.NamespaceView, op
 		return httputils.NewParamError(ns.View.Name, selectorParameters.PageParameter.Name, err)
 	}
 
-	selector := s.resourceState.Lookup(ns.View)
+	selector := s.state.Lookup(ns.View)
 	if selector.Limit == 0 && selector.Offset != 0 {
 		return fmt.Errorf("can't use offset without limit - view: %v", ns.View.Name)
 	}
@@ -56,7 +56,7 @@ func (s *State) populatePageQuerySelector(ctx context.Context, ns *view.Namespac
 
 func (s *State) setPageQuerySelector(value interface{}, ns *view.NamespaceView) error {
 	page := value.(int)
-	selector := s.resourceState.Lookup(ns.View)
+	selector := s.state.Lookup(ns.View)
 	actualLimit := selector.Limit
 	if actualLimit == 0 {
 		actualLimit = ns.View.Selector.Limit
@@ -101,7 +101,7 @@ func (s *State) setOrderByQuerySelector(value interface{}, ns *view.NamespaceVie
 			return fmt.Errorf("not found column %v at view %v", columns, ns.View.Name)
 		}
 	}
-	selector := s.resourceState.Lookup(ns.View)
+	selector := s.state.Lookup(ns.View)
 	selector.OrderBy = strings.Join(columns, ",")
 	return nil
 }
@@ -120,7 +120,7 @@ func (s *State) setOffsetQuerySelector(value interface{}, ns *view.NamespaceView
 	if !ns.View.Selector.Constraints.Offset {
 		return fmt.Errorf("can't use Offset on view %v", ns.View.Name)
 	}
-	selector := s.resourceState.Lookup(ns.View)
+	selector := s.state.Lookup(ns.View)
 	offset := value.(int)
 	if offset <= ns.View.Selector.Limit || ns.View.Selector.Limit == 0 {
 		selector.Offset = offset
@@ -142,7 +142,7 @@ func (s *State) setLimitQuerySelector(value interface{}, ns *view.NamespaceView)
 	if !ns.View.Selector.Constraints.Limit {
 		return fmt.Errorf("can't use Limit on view %v", ns.View.Name)
 	}
-	selector := s.resourceState.Lookup(ns.View)
+	selector := s.state.Lookup(ns.View)
 	limit := value.(int)
 	if limit <= ns.View.Selector.Limit || ns.View.Selector.Limit == 0 {
 		selector.Limit = limit
@@ -164,7 +164,7 @@ func (s *State) setFieldsQuerySelector(value interface{}, ns *view.NamespaceView
 	if !ns.View.Selector.Constraints.Projection {
 		return fmt.Errorf("can't use projection on view %v", ns.View.Name)
 	}
-	selector := s.resourceState.Lookup(ns.View)
+	selector := s.state.Lookup(ns.View)
 	fields := value.([]string)
 	for _, field := range fields {
 		fieldName := ns.View.Caser.Format(field, format.CaseUpperCamel)
@@ -177,7 +177,7 @@ func (s *State) setFieldsQuerySelector(value interface{}, ns *view.NamespaceView
 }
 
 func (s *State) setCriteriaQuerySelector(value interface{}, ns *view.NamespaceView) error {
-	selector := s.resourceState.Lookup(ns.View)
+	selector := s.state.Lookup(ns.View)
 	switch actual := value.(type) {
 	case string:
 		if actual == "" {

@@ -24,11 +24,11 @@ type (
 )
 
 // LookupByLocation returns match parameter by location
-func (p Parameters) LookupByLocation(kind Kind, location string) *Parameter {
-	if len(p) == 0 {
+func (s Parameters) LookupByLocation(kind Kind, location string) *Parameter {
+	if len(s) == 0 {
 		return nil
 	}
-	for _, candidate := range p {
+	for _, candidate := range s {
 		if candidate.In.Kind == kind && candidate.In.Name == location {
 			return candidate
 		}
@@ -36,29 +36,29 @@ func (p Parameters) LookupByLocation(kind Kind, location string) *Parameter {
 	return nil
 }
 
-func (p Parameters) FilterByKind(kind Kind) Parameters {
+func (s Parameters) FilterByKind(kind Kind) Parameters {
 	var result = Parameters{}
-	for i, candidate := range p {
+	for i, candidate := range s {
 		if candidate.In.Kind == kind {
-			result = append(result, p[i])
+			result = append(result, s[i])
 		}
 	}
 	return result
 }
 
-func (p Parameters) GroupByStatusCode() []Parameters {
+func (s Parameters) GroupByStatusCode() []Parameters {
 	var result []Parameters
 	var unAuthorizedParameters Parameters
 	var forbiddenParameters Parameters
 	var others Parameters
-	for i, candidate := range p {
+	for i, candidate := range s {
 		switch candidate.ErrorStatusCode {
 		case http.StatusUnauthorized, http.StatusProxyAuthRequired:
-			unAuthorizedParameters = append(unAuthorizedParameters, p[i])
+			unAuthorizedParameters = append(unAuthorizedParameters, s[i])
 		case http.StatusForbidden, http.StatusNotAcceptable, http.StatusMethodNotAllowed:
-			forbiddenParameters = append(forbiddenParameters, p[i])
+			forbiddenParameters = append(forbiddenParameters, s[i])
 		default:
-			others = append(others, p[i])
+			others = append(others, s[i])
 		}
 	}
 	if len(unAuthorizedParameters) > 0 {
@@ -85,8 +85,8 @@ func (s Parameters) SetLiterals(state *structology.State) (err error) {
 	return nil
 }
 
-func (p Parameters) InitRepeated(state *structology.State) (err error) {
-	for _, parameter := range p {
+func (s Parameters) InitRepeated(state *structology.State) (err error) {
+	for _, parameter := range s {
 		parameterType := parameter.OutputType()
 		if parameterType == nil || parameterType.Kind() != reflect.Slice {
 			continue
@@ -104,7 +104,7 @@ var boolType = reflect.TypeOf(true)
 func (s Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, withSetMarker bool) (reflect.Type, error) {
 	var fields []reflect.StructField
 	var setMarkerFields []reflect.StructField
-
+	//TODO add compaction here
 	var err error
 	for _, param := range s {
 		schema := param.OutputSchema()
@@ -122,11 +122,12 @@ func (s Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 		}
 		param.Schema.Cardinality = schema.Cardinality
 		if rType != nil {
-
 			structField := reflect.StructField{Name: param.Name,
 				Type:    rType,
 				PkgPath: PkgPath(param.Name, pkgPath),
-				Tag:     reflect.StructTag(param.Tag)}
+				Tag:     reflect.StructTag(param.Tag),
+			}
+
 			if param.Name == rType.Name() || strings.Contains(param.Tag, "anonymous") {
 				structField.Anonymous = true
 			}
@@ -140,49 +141,86 @@ func (s Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 		fields = append(fields, reflect.StructField{Name: "Has", Type: reflect.PtrTo(setMarkerType), PkgPath: PkgPath("Has", pkgPath), Tag: `setMarker:"true" sqlx:"-" diff:"-"  `})
 	}
 	if len(fields) == 0 {
-		return reflect.TypeOf(struct{}{}), nil
+		return emptyStruct, nil
 	}
 	baseType := reflect.StructOf(fields)
 	return baseType, nil
 }
 
-//func (p Parameters) Len() int {
-//	return len(p)
-//}
-//
-//func (p Parameters) Less(i, j int) bool {
-//	if p[j].ErrorStatusCode == p[i].ErrorStatusCode {
-//		return p[j].IsRequired()
-//	}
-//
-//	if p[j].ErrorStatusCode == 401 {
-//		return false
-//	}
-//
-//	if p[j].ErrorStatusCode == 403 {
-//		return p[i].ErrorStatusCode == 401
-//	}
-//
-//	return true
-//}
+func (s Parameters) BuildBodyType(pkgPath string, lookupType xreflect.LookupType) (reflect.Type, error) {
+	candidates := s.FilterByKind(KindRequestBody)
+	bodyLeafParameters := make(Parameters, 0, len(candidates))
+	for i, candidate := range candidates {
+		if candidate.In.Name != "" {
+			bodyParameter := *candidates[i]
+			bodyParameter.Name = candidate.In.Name
+			bodyLeafParameters = append(bodyLeafParameters, &bodyParameter)
+			continue
+		}
+		return candidate.Schema.Type(), nil
+	}
+	return bodyLeafParameters.ReflectType(pkgPath, lookupType, true)
+}
 
-func (p Parameters) Swap(i, j int) {
-	p[i], p[j] = p[j], p[i]
+func (s Parameters) buildStateType(pkgPath string, lookupType xreflect.LookupType, withSetMarker bool) (reflect.Type, error) {
+	var fields []reflect.StructField
+	var setMarkerFields []reflect.StructField
+	var err error
+	for _, param := range s {
+		schema := param.OutputSchema()
+		if schema == nil {
+			return nil, fmt.Errorf("invalid parameter: %v schema was empty", param.Name)
+		}
+		if schema.DataType == "" && param.DataType != "" {
+			schema.DataType = param.DataType
+		}
+		rType := schema.Type()
+		if rType == nil {
+			if rType, err = types.LookupType(lookupType, schema.DataType); err != nil {
+				return nil, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", param.Name, schema.DataType, err)
+			}
+		}
+		param.Schema.Cardinality = schema.Cardinality
+		if rType != nil {
+			structField := reflect.StructField{Name: param.Name,
+				Type:    rType,
+				PkgPath: PkgPath(param.Name, pkgPath),
+				Tag:     reflect.StructTag(param.Tag),
+			}
+
+			if param.Name == rType.Name() || strings.Contains(param.Tag, "anonymous") {
+				structField.Anonymous = true
+			}
+			fields = append(fields, structField)
+			if withSetMarker {
+				setMarkerFields = append(setMarkerFields, reflect.StructField{Name: param.Name, Type: boolType, PkgPath: PkgPath(param.Name, pkgPath), Tag: reflect.StructTag(param.Tag)})
+			}
+		}
+	}
+	if withSetMarker && len(fields) > 0 {
+		setMarkerType := reflect.StructOf(setMarkerFields)
+		fields = append(fields, reflect.StructField{Name: "Has", Type: reflect.PtrTo(setMarkerType), PkgPath: PkgPath("Has", pkgPath), Tag: `setMarker:"true" sqlx:"-" diff:"-"  `})
+	}
+	if len(fields) == 0 {
+		return emptyStruct, nil
+	}
+	baseType := reflect.StructOf(fields)
+	return baseType, nil
 }
 
 // Append appends parameter
-func (p *Parameters) Append(parameter *Parameter) {
-	for _, param := range *p {
+func (s *Parameters) Append(parameter *Parameter) {
+	for _, param := range *s {
 		if param.Name == parameter.Name {
 			return
 		}
 	}
-	*p = append(*p, parameter)
+	*s = append(*s, parameter)
 }
 
 // Lookup returns match parameter or nil
-func (p Parameters) Lookup(name string) *Parameter {
-	for _, param := range p {
+func (s Parameters) Lookup(name string) *Parameter {
+	for _, param := range s {
 		if param.Name == name {
 			return param
 		}
@@ -191,36 +229,36 @@ func (p Parameters) Lookup(name string) *Parameter {
 }
 
 // Index indexes parameters by Parameter.Name
-func (p Parameters) Index() NamedParameters {
+func (s Parameters) Index() NamedParameters {
 	result := NamedParameters(make(map[string]*Parameter))
-	for i, parameter := range p {
+	for i, parameter := range s {
 		if _, ok := result[parameter.Name]; ok {
 			continue
 		}
-		result[parameter.Name] = p[i]
+		result[parameter.Name] = s[i]
 	}
 	return result
 }
 
 // Filter filters Parameters with given Kind and creates Template
-func (p Parameters) Filter(kind Kind) NamedParameters {
+func (s Parameters) Filter(kind Kind) NamedParameters {
 	result := make(map[string]*Parameter)
 
-	for parameterIndex := range p {
-		if p[parameterIndex].In.Kind != kind {
+	for parameterIndex := range s {
+		if s[parameterIndex].In.Kind != kind {
 			continue
 		}
-		result[p[parameterIndex].In.Name] = p[parameterIndex]
+		result[s[parameterIndex].In.Name] = s[parameterIndex]
 
 	}
 
 	return result
 }
 
-func (p Parameters) PredicateStructType() reflect.Type {
+func (s Parameters) PredicateStructType() reflect.Type {
 	var fields []*predicate.FilterType
 	fieldTypes := map[string]*predicate.FilterType{}
-	for _, candidate := range p {
+	for _, candidate := range s {
 		if len(candidate.Predicates) == 0 {
 			continue
 		}
@@ -252,7 +290,7 @@ func (p Parameters) PredicateStructType() reflect.Type {
 	}
 
 	if len(structFields) == 0 {
-		return reflect.TypeOf(struct{}{})
+		return emptyStruct
 	}
 	fmt.Printf("Predicate type: %s\n", reflect.StructOf(structFields).String())
 	return reflect.StructOf(structFields)

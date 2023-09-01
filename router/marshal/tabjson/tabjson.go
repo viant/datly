@@ -88,7 +88,9 @@ func NewMarshaller(rType reflect.Type, config *Config) (*Marshaller, error) {
 		excluded[path] = true
 	}
 
-	elemType := Elem(rType)
+	rType = ensureSlice(rType)
+	elemType := elem(rType)
+
 	//fmt.Printf("kind %v, name %v \n", elemType.Kind(), elemType.Name())
 
 	marshaller := &Marshaller{
@@ -108,6 +110,30 @@ func NewMarshaller(rType reflect.Type, config *Config) (*Marshaller, error) {
 	return marshaller, nil
 }
 
+func ensureSlice(rType reflect.Type) reflect.Type {
+	destType := rType
+	if destType.Kind() == reflect.Ptr {
+		destType = destType.Elem()
+	}
+	switch destType.Kind() {
+	case reflect.Struct:
+		for i := 0; i < destType.NumField(); i++ {
+			field := destType.Field(i)
+			fieldType := field.Type
+			if fieldType.Kind() == reflect.Ptr {
+				fieldType = fieldType.Elem()
+			}
+			if fieldType.Kind() == reflect.Slice {
+				candidate := fieldType.Elem()
+				if candidate.Kind() == reflect.Struct || (candidate.Kind() == reflect.Ptr && candidate.Elem().Kind() == reflect.Struct) {
+					return candidate
+				}
+			}
+		}
+	}
+	return rType
+}
+
 func (m *Marshaller) init(config *Config, excluded map[string]bool) error {
 	m.initConfig(config)
 
@@ -118,7 +144,7 @@ func (m *Marshaller) init(config *Config, excluded map[string]bool) error {
 }
 
 func (m *Marshaller) indexByPath(parentType reflect.Type, path string, excluded map[string]bool, holder string, parentAccessor *xunsafe.Field) {
-	elemParentType := Elem(parentType)
+	elemParentType := elem(parentType)
 	numField := elemParentType.NumField()
 	m.pathAccessors[path] = parentAccessor
 	for i := 0; i < numField; i++ {
@@ -132,7 +158,7 @@ func (m *Marshaller) indexByPath(parentType reflect.Type, path string, excluded 
 			continue
 		}
 
-		elemType := Elem(field.Type)
+		elemType := elem(field.Type)
 		if elemType.Kind() == reflect.Struct && elemType != timeType {
 			m.indexByPath(elemType, fieldPath, excluded, fieldName, xunsafe.NewField(field))
 			continue
@@ -275,7 +301,7 @@ func (m *Marshaller) ReadHeaders(b []byte) ([]string, error) {
 
 func (m *Marshaller) Marshal(val interface{}, options ...interface{}) ([]byte, error) {
 	valueType := reflect.TypeOf(val)
-	if Elem(valueType) != m.elemType {
+	if elem(valueType) != m.elemType {
 		return nil, fmt.Errorf("can't marshal %T with %v marshaller", val, m.elemType.String())
 	}
 
@@ -326,11 +352,12 @@ func (m *Marshaller) marshalData(fnValueAt io2.ValueAccessor, size int, object *
 	return buffer, nil
 }
 
-func Elem(rType reflect.Type) reflect.Type {
+func elem(rType reflect.Type) reflect.Type {
 	for {
 		switch rType.Kind() {
 		case reflect.Ptr, reflect.Slice:
 			rType = rType.Elem()
+
 		default:
 			return rType
 		}

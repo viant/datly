@@ -9,11 +9,11 @@ import (
 	"sync"
 )
 
-// State allows customizing View fetched from Database
+// Statelet allows customizing View fetched from Database
 type (
 
 	//StateType represents view state
-	State struct {
+	Statelet struct {
 		Template *structology.State
 		QuerySelector
 	}
@@ -50,8 +50,8 @@ func (s *QuerySelector) CurrentPage() int {
 	return s.Page
 }
 
-// Init initializes State
-func (s *State) Init(aView *View) {
+// Init initializes Statelet
+func (s *Statelet) Init(aView *View) {
 	if aView != nil && s.Template == nil && aView.Template.stateType != nil {
 		s.Template = aView.Template.stateType.NewState()
 	}
@@ -90,9 +90,9 @@ func (s *QuerySelector) SetCriteria(expanded string, group []interface{}) {
 	s.Placeholders = group
 }
 
-// NewState creates a selector
-func NewState() *State {
-	return &State{
+// NewStatelet creates a selector
+func NewStatelet() *Statelet {
+	return &Statelet{
 		QuerySelector: QuerySelector{
 			_columnNames: map[string]bool{},
 			initialized:  true,
@@ -100,22 +100,22 @@ func NewState() *State {
 	}
 }
 
-// ResourceState represents State registry
-type ResourceState struct {
-	Views map[string]*State
+// State represents view statelet registry
+type State struct {
+	Views map[string]*Statelet
 	sync.RWMutex
 }
 
-// Lookup returns and initializes State attached to View. Creates new one if doesn't exist.
-func (s *ResourceState) Lookup(view *View) *State {
+// Lookup returns and initializes Statelet attached to View. Creates new one if doesn't exist.
+func (s *State) Lookup(view *View) *Statelet {
 	s.RWMutex.Lock()
 	defer s.RWMutex.Unlock()
 	if len(s.Views) == 0 {
-		s.Views = map[string]*State{}
+		s.Views = map[string]*Statelet{}
 	}
 	selector, ok := s.Views[view.Name]
 	if !ok {
-		selector = NewState()
+		selector = NewStatelet()
 		s.Views[view.Name] = selector
 	}
 
@@ -123,16 +123,16 @@ func (s *ResourceState) Lookup(view *View) *State {
 	return selector
 }
 
-// NewResourceState creates a selector
-func NewResourceState() *ResourceState {
-	return &ResourceState{
-		Views:   map[string]*State{},
+// NewState creates a selector
+func NewState() *State {
+	return &State{
+		Views:   map[string]*Statelet{},
 		RWMutex: sync.RWMutex{},
 	}
 }
 
-// Init initializes each State
-func (s *ResourceState) Init(aView *View) {
+// Init initializes each Statelet
+func (s *State) Init(aView *View) {
 	s.RWMutex.Lock()
 	s.RWMutex.Unlock()
 	for _, selector := range s.Views {
@@ -140,6 +140,6 @@ func (s *ResourceState) Init(aView *View) {
 	}
 }
 
-func (s *State) IgnoreRead() {
+func (s *Statelet) IgnoreRead() {
 	s.Ignore = true
 }

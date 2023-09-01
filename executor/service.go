@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/logger"
 	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
+	vsession "github.com/viant/datly/view/session"
 	"github.com/viant/sqlx/io/insert/batcher"
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/option"
@@ -57,11 +58,12 @@ func New() *Executor {
 
 // Execute executes view dsql
 func (e *Executor) Execute(ctx context.Context, aView *view.View, options ...Option) error {
-	session, err := NewSession(view.NewResourceState(), aView)
+	sessionState := vsession.New(aView)
+	session, err := NewSession(sessionState, aView)
 	if err != nil {
 		return err
 	}
-	if err := Options(options).Apply(session); err != nil {
+	if err = Options(options).Apply(session); err != nil {
 		return err
 	}
 	return e.Exec(ctx, session)
@@ -72,8 +74,8 @@ func (e *Executor) Execute(ctx context.Context, aView *view.View, options ...Opt
 func (e *Executor) Exec(ctx context.Context, sess *Session, options ...DBOption) error {
 	state, data, err := e.sqlBuilder.Build(sess.View, sess.Lookup(sess.View), sess.SessionHandler, sess.DataUnit)
 	if state != nil {
-		sess.State = state
-		defer sess.State.Flush(expand.StatusFailure)
+		sess.TemplateState = state
+		defer sess.TemplateState.Flush(expand.StatusFailure)
 	}
 
 	if err != nil {

@@ -1,6 +1,7 @@
 package view
 
 import (
+	"embed"
 	"fmt"
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view/state"
@@ -15,10 +16,14 @@ const (
 )
 
 type (
-	//StateTag state tag
-	StateTag struct {
-		Kind string //parameter location kind
-		In   string //parameter location name
+	//Tag state tag
+	ParameterTag struct {
+		Kind      string //parameter location kind
+		In        string //parameter location name
+		Codec     string
+		CodecArgs []string
+		BodyURI   string
+		Body      string
 	}
 
 	RelationTag struct {
@@ -36,9 +41,12 @@ type (
 
 	//Tag datly tag
 	Tag struct {
-		StateTag
+		ParameterTag
 		RelationTag
+		*embed.FS
 	}
+
+	TagOption func(o *Tag)
 )
 
 // HasRelationSpec returns true if tag has relation
@@ -101,8 +109,11 @@ func (t *Tag) Init(field reflect.StructField) {
 }
 
 // ParseTag parses datly tag
-func ParseTag(tagString string) *Tag {
+func ParseTag(tagString string, options ...TagOption) *Tag {
 	tag := &Tag{}
+	for _, opt := range options {
+		opt(tag)
+	}
 	elements := strings.Split(tagString, ",")
 	if len(elements) == 0 {
 		return tag
@@ -131,6 +142,8 @@ func ParseTag(tagString string) *Tag {
 			case "refname":
 				tag.RefName = strings.TrimSpace(nv[1])
 			case "refsql":
+				tag.RefSQL = strings.TrimSpace(nv[1])
+			case "sqluri":
 				tag.RefSQL = strings.TrimSpace(nv[1])
 			case "refconnector":
 				tag.RefConnector = strings.TrimSpace(nv[1])

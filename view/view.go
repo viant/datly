@@ -83,14 +83,15 @@ type (
 		ColumnsConfig map[string]*ColumnConfig `json:",omitempty"`
 		SelfReference *SelfReference           `json:",omitempty"`
 
-		TableBatches  map[string]bool `json:",omitempty"`
-		_transforms   marshal.Transforms
-		_resource     *Resource
-		_initialized  bool
-		_newCollector newCollectorFn
-		_codec        *columnsCodec
-		_columns      NamedColumns
-		_excluded     map[string]bool
+		TableBatches     map[string]bool `json:",omitempty"`
+		_transforms      marshal.Transforms
+		_resource        *Resource
+		_initialized     bool
+		_newCollector    newCollectorFn
+		_codec           *columnsCodec
+		_columns         NamedColumns
+		_excluded        map[string]bool
+		_inputParameters state.Parameters
 	}
 
 	ViewOption func(v *View)
@@ -106,7 +107,7 @@ type (
 	newCollectorFn    func(dest interface{}, viewMetaHandler viewMetaHandlerFn, supportParallel bool) *Collector
 	viewMetaHandlerFn func(viewMeta interface{}) error
 
-	//Constraints configure what can be selected by State
+	//Constraints configure what can be selected by Statelet
 	//For each _field, default value is `false`
 	Constraints struct {
 		Criteria    bool
@@ -136,8 +137,36 @@ type (
 	}
 )
 
+// OutputType returns reader view output type
+func (v *View) OutputType() reflect.Type {
+	if v.Schema.Cardinality == state.Many {
+		return v.Schema.SliceType()
+	}
+	return v.Schema.Type()
+}
+
 func (v *View) ViewName() string {
 	return v.Name
+}
+
+func (v *View) InputParameters() state.Parameters {
+	if v._inputParameters != nil {
+		return v._inputParameters
+	}
+	v._inputParameters = state.Parameters{}
+	v.inputParameters(&v._inputParameters)
+	return v._inputParameters
+}
+
+func (v *View) inputParameters(parameters *state.Parameters) {
+	if v.Template != nil {
+		for i := range v.Template.Parameters {
+			parameters.Append(v.Template.Parameters[i])
+		}
+	}
+	for _, rel := range v.With {
+		rel.Of.inputParameters(parameters)
+	}
 }
 
 func (v *View) EnsureTemplate() {
@@ -212,7 +241,7 @@ func (c *Constraints) SqlMethodsIndexed() map[string]*Method {
 
 // DataType returns struct type.
 func (v *View) DataType() reflect.Type {
-	return v.Schema.Type()
+	return v.Schema.CompType()
 }
 
 func (v *View) setResource(resource *Resource) {
@@ -472,7 +501,7 @@ func (v *View) initView(ctx context.Context) error {
 		}
 	}
 
-	v._codec, err = newColumnsCodec(v.Schema.Type(), v.Columns)
+	v._codec, err = newColumnsCodec(v.Schema.CompType(), v.Columns)
 	if err != nil {
 		return err
 	}
@@ -696,7 +725,9 @@ func (v *View) ensureSchema(ctx context.Context, resource *Resource) error {
 	if v.Schema.Type() != nil {
 		return nil
 	}
-	v.Schema = state.NewSchema(nil, state.WithAutoGenFunc(v.generateSchemaTypeFromColumn(v.Caser, v.Columns, v.With)))
+	v.Schema = state.NewSchema(nil,
+		state.WithMany(),
+		state.WithAutoGenFunc(v.generateSchemaTypeFromColumn(v.Caser, v.Columns, v.With)))
 	aResource := &Resourcelet{Resource: resource}
 	err := v.Schema.Init(aResource)
 	return err
@@ -1034,7 +1065,7 @@ func (v *View) updateColumn(ns string, rType reflect.Type, columns *[]*Column, r
 
 func (v *View) initSchemaIfNeeded() {
 	if v.Schema == nil {
-		v.Schema = state.NewSchema(nil, state.WithAutoGenFlag(true))
+		v.Schema = state.NewSchema(nil, state.WithMany(), state.WithAutoGenFlag(true))
 	}
 }
 
@@ -1112,14 +1143,14 @@ func (v *View) DatabaseType() reflect.Type {
 		return v._codec.actualType
 	}
 
-	return v.Schema.Type()
+	return v.Schema.CompType()
 }
 
 func (v *View) UnwrapDatabaseType(ctx context.Context, value interface{}) (interface{}, error) {
 	if v._codec != nil {
 		actualRecord := v._codec.unwrapper.Value(xunsafe.AsPointer(value))
 
-		if err := v._codec.updateValue(ctx, value, &config.ParentValue{Value: actualRecord, RType: v.Schema.Type()}); err != nil {
+		if err := v._codec.updateValue(ctx, value, &config.ParentValue{Value: actualRecord, RType: v.Schema.CompType()}); err != nil {
 			return nil, err
 		}
 
@@ -1162,13 +1193,13 @@ func (v *View) indexTransforms() error {
 	return nil
 }
 
-func (v *View) Expand(placeholders *[]interface{}, SQL string, selector *State, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error) {
+func (v *View) Expand(placeholders *[]interface{}, SQL string, selector *Statelet, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error) {
 	v.ensureParameters(selector)
 
 	return v.Template.Expand(placeholders, SQL, selector, params, batchData, sanitized)
 }
 
-func (v *View) ensureParameters(selector *State) {
+func (v *View) ensureParameters(selector *Statelet) {
 	if v.Template == nil {
 		return
 	}
@@ -1222,7 +1253,7 @@ func (v *View) findSchemaColumn(fieldName string) (*Column, bool) {
 }
 
 // SetParameter sets a View or relation parameter, for relation name has to be prefixed relName:paramName
-func (v *View) SetParameter(name string, selectors *ResourceState, value interface{}) error {
+func (v *View) SetParameter(name string, selectors *State, value interface{}) error {
 	aView := v
 	if strings.Contains(name, ":") {
 		pair := strings.SplitN(name, ":", 2)
@@ -1258,7 +1289,7 @@ func (v *View) ensureAsyncTableNameIfNeeded() error {
 }
 
 func (v *View) BuildParametrizedSQL(state state.Parameters, types *xreflect.Types, SQL string, bindingArgs []interface{}, options ...expand.StateOption) (*sqlx.SQL, error) {
-	reflectType, err := state.ReflectType("autogen", types.Lookup, true)
+	reflectType, err := state.ReflectType(pkgPath, types.Lookup, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create state %v type: %w", v.Name, err)
 	}
@@ -1400,7 +1431,8 @@ func NewView(name, table string, opts ...ViewOption) *View {
 func NewExecView(name, table string, template string, parameters []*state.Parameter, opts ...ViewOption) *View {
 	var templateParameters []TemplateOption
 	for i := range parameters {
-		templateParameters = append(templateParameters, WithTemplateParameter(parameters[i]))
+		templateOption := WithTemplateParameter(parameters[i])
+		templateParameters = append(templateParameters, templateOption)
 	}
 	opts = append(opts, WithViewKind(ModeExec),
 		WithTemplate(NewTemplate(template, templateParameters...)))

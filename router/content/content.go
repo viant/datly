@@ -161,12 +161,14 @@ func (c *Content) initTabJSONIfNeeded(excludedPaths []string, inputType reflect.
 
 	c.TabularJSON._config.ExcludedPaths = excludedPaths
 
-	if inputType.Kind() == reflect.Ptr {
-		inputType = inputType.Elem()
+	if outputType.Kind() == reflect.Ptr {
+		outputType = outputType.Elem()
 	}
 
 	var err error
-	c.TabularJSON.OutputMarshaller, err = tabjson.NewMarshaller(inputType, c.TabularJSON._config)
+
+	fmt.Printf("OUTPUT TYPE: %s\n", outputType.String())
+	c.TabularJSON.OutputMarshaller, err = tabjson.NewMarshaller(outputType, c.TabularJSON._config)
 	if err != nil {
 		return err
 	}
@@ -174,7 +176,7 @@ func (c *Content) initTabJSONIfNeeded(excludedPaths []string, inputType reflect.
 	if outputType == nil {
 		return nil
 	}
-	c.TabularJSON.InputMarhsaller, err = tabjson.NewMarshaller(outputType, nil)
+	c.TabularJSON.InputMarhsaller, err = tabjson.NewMarshaller(inputType, nil)
 	return err
 }
 

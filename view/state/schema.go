@@ -18,7 +18,7 @@ type (
 		DataType    string `json:",omitempty" yaml:"dataType,omitempty"`
 		Cardinality Cardinality
 		Methods     []reflect.Method
-		compType    reflect.Type
+		rType       reflect.Type
 		sliceType   reflect.Type
 		slice       *xunsafe.Slice
 		autoGen     bool
@@ -39,18 +39,29 @@ func (s *Schema) TypeName() string {
 }
 
 // Type returns struct type
-func (c *Schema) Type() reflect.Type {
-	return c.compType
+func (s *Schema) Type() reflect.Type {
+	if s == nil {
+		return nil
+	}
+	return s.rType
 }
 
-func (c *Schema) SetType(rType reflect.Type) {
+// CompType returns component type
+func (s *Schema) CompType() reflect.Type {
+	return s.sliceType.Elem()
+}
+
+// SetType sets Types
+func (s *Schema) SetType(rType reflect.Type) {
 	if rType.Kind() == reflect.Slice { //i.e []int
-		c.Cardinality = Many
+		s.Cardinality = Many
 	}
-	if c.Cardinality == "" {
-		c.Cardinality = One
+
+	if s.Cardinality == "" {
+		s.Cardinality = One
 	}
-	if c.Cardinality == Many {
+
+	if s.Cardinality == Many {
 		if rType.Kind() != reflect.Slice {
 			rType = reflect.SliceOf(rType)
 		}
@@ -58,43 +69,43 @@ func (c *Schema) SetType(rType reflect.Type) {
 		rType = rType.Elem()
 	}
 
-	c.compType = rType
-	c.slice = xunsafe.NewSlice(rType)
-	c.sliceType = c.slice.Type
+	s.rType = rType
+	s.slice = xunsafe.NewSlice(rType)
+	s.sliceType = s.slice.Type
 }
 
 // Init build struct type
-func (c *Schema) Init(resource Resourcelet) error {
-	if c.initialized {
+func (s *Schema) Init(resource Resourcelet) error {
+	if s.initialized {
 		return nil
 	}
 
-	c.initialized = true
-	if strings.Contains(c.DataType, "[]") {
-		c.Cardinality = Many
+	s.initialized = true
+	if strings.Contains(s.DataType, "[]") {
+		s.Cardinality = Many
 	}
-	if c.Cardinality != Many {
-		c.Cardinality = One
+	if s.Cardinality != Many {
+		s.Cardinality = One
 	}
 
-	if c.DataType != "" {
-		rType, err := types.LookupType(resource.LookupType(), c.TypeName())
+	if s.DataType != "" {
+		rType, err := types.LookupType(resource.LookupType(), s.TypeName())
 		if err != nil {
 			return err
 		}
 
-		c.SetType(rType)
+		s.SetType(rType)
 		return nil
 	}
 
-	if c.autoGenFn != nil {
-		rType, err := c.autoGenFn()
+	if s.autoGenFn != nil {
+		rType, err := s.autoGenFn()
 		if err != nil {
 			return err
 		}
-		c.SetType(rType)
+		s.SetType(rType)
 	}
-	c.autoGen = true
+	s.autoGen = true
 	return nil
 }
 
@@ -126,41 +137,41 @@ func StructFieldName(sourceCaseFormat format.Case, columnName string) string {
 }
 
 // AutoGen indicates whether Schema was generated using ColumnTypes fetched from DB or was passed programmatically.
-func (c *Schema) AutoGen() bool {
-	return c.autoGen
+func (s *Schema) AutoGen() bool {
+	return s.autoGen
 }
 
 // Slice returns slice as xunsafe.Slice
-func (c *Schema) Slice() *xunsafe.Slice {
-	return c.slice
+func (s *Schema) Slice() *xunsafe.Slice {
+	return s.slice
 }
 
 // SliceType returns reflect.SliceOf() Schema type
-func (c *Schema) SliceType() reflect.Type {
-	return c.sliceType
+func (s *Schema) SliceType() reflect.Type {
+	return s.sliceType
 }
 
-func (c *Schema) InheritType(rType reflect.Type) {
-	c.SetType(rType)
-	c.autoGen = false
+func (s *Schema) InheritType(rType reflect.Type) {
+	s.SetType(rType)
+	s.autoGen = false
 }
 
-func (c *Schema) copy() *Schema {
-	schema := *c
+func (s *Schema) copy() *Schema {
+	schema := *s
 	return &schema
 }
 
-func (c *Schema) InitType(lookupType xreflect.LookupType, ptr bool) error {
-	name := c.Name
+func (s *Schema) InitType(lookupType xreflect.LookupType, ptr bool) error {
+	name := s.Name
 	var options []xreflect.Option
 	if name == "" {
-		name = c.DataType
+		name = s.DataType
 	}
-	if name != c.DataType && strings.Contains(c.DataType, " ") { //TODO replace with xreflect check if definition
-		options = append(options, xreflect.WithTypeDefinition(c.DataType))
+	if name != s.DataType && strings.Contains(s.DataType, " ") { //TODO replace with xreflect check if definition
+		options = append(options, xreflect.WithTypeDefinition(s.DataType))
 	}
-	if c.Package != "" {
-		options = append(options, xreflect.WithPackage(c.Package))
+	if s.Package != "" {
+		options = append(options, xreflect.WithPackage(s.Package))
 	}
 	rType, err := types.LookupType(lookupType, name, options...)
 	if err != nil {
@@ -169,7 +180,7 @@ func (c *Schema) InitType(lookupType xreflect.LookupType, ptr bool) error {
 	if ptr && rType.Kind() != reflect.Ptr {
 		rType = reflect.PtrTo(rType)
 	}
-	c.SetType(rType)
+	s.SetType(rType)
 	return nil
 }
 
@@ -183,6 +194,12 @@ func WithAutoGenFlag(flag bool) SchemaOption {
 func WithAutoGenFunc(fn func() (reflect.Type, error)) SchemaOption {
 	return func(s *Schema) {
 		s.autoGenFn = fn
+	}
+}
+
+func WithMany() SchemaOption {
+	return func(s *Schema) {
+		s.Cardinality = Many
 	}
 }
 
@@ -203,4 +220,11 @@ func NewSchema(compType reflect.Type, opts ...SchemaOption) *Schema {
 		result.initialized = true
 	}
 	return result
+}
+
+var emptyStruct = reflect.TypeOf(struct{}{})
+
+// EmptySchema returns empty struct schema
+func EmptySchema() *Schema {
+	return NewSchema(emptyStruct)
 }

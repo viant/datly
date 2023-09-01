@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/structology"
 	"net/http"
 	"reflect"
 )
@@ -25,6 +26,7 @@ type (
 		Parameters       state.NamedParameters
 		OutputParameters state.Parameters
 		Views            view.NamedViews
+		State            *structology.State
 	}
 
 	ParameterLookup func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error)
@@ -130,6 +132,13 @@ func WithReadInto(fn ReadInto) Option {
 func WithViews(views view.NamedViews) Option {
 	return func(o *Options) {
 		o.Views = views
+	}
+}
+
+// WithState returns with satte options
+func WithState(state *structology.State) Option {
+	return func(o *Options) {
+		o.State = state
 	}
 }
 

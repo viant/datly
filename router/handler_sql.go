@@ -33,7 +33,6 @@ type (
 		request    *http.Request
 		route      *Route
 		router     *Router
-		params     *RequestParams
 		txNotifier func(tx *sql.Tx)
 		tx         *sql.Tx
 	}

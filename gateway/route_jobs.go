@@ -35,42 +35,44 @@ func NewJobsRoute(URL string, routers []*router.Router, apiKeys []*router.APIKey
 }
 
 func handleJobsRoute(ctx context.Context, req *http.Request, routers []*router.Router, jobID *string) ([]*async2.Job, error) {
-	allJobs := async.NewJobs()
-	for _, aRouter := range routers {
-		jobs, err := aRouter.PrepareJobs(ctx, req)
-		if err != nil {
-			return nil, err
-		}
+	//allJobs := async.NewJobs()
+	//for _, aRouter := range routers {
+	//	jobs, err := aRouter.PrepareJobs(ctx, req)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	if len(jobs) == 0 {
+	//		continue
+	//	}
+	//
+	//	for db, qualifiers := range jobs {
+	//		allJobs.AddJobs(db, qualifiers...)
+	//	}
+	//}
+	//
+	//index := allJobs.Index()
+	//if jobID != nil {
+	//	for _, qualifiers := range index {
+	//		for _, qualifier := range qualifiers {
+	//			qualifier.JobID = jobID
+	//		}
+	//	}
+	//}
+	//
+	//errors := shared.NewErrors(0)
+	//records := handler.NewRecords()
+	//
+	//wg := &sync.WaitGroup{}
+	//for db, qualifiers := range index {
+	//	wg.Add(1)
+	//	go queryJobs(ctx, wg, db, qualifiers, errors, records)
+	//}
+	//
+	//wg.Wait()
+	//return records.Result(), errors.Error()
 
-		if len(jobs) == 0 {
-			continue
-		}
-
-		for db, qualifiers := range jobs {
-			allJobs.AddJobs(db, qualifiers...)
-		}
-	}
-
-	index := allJobs.Index()
-	if jobID != nil {
-		for _, qualifiers := range index {
-			for _, qualifier := range qualifiers {
-				qualifier.JobID = jobID
-			}
-		}
-	}
-
-	errors := shared.NewErrors(0)
-	records := handler.NewRecords()
-
-	wg := &sync.WaitGroup{}
-	for db, qualifiers := range index {
-		wg.Add(1)
-		go queryJobs(ctx, wg, db, qualifiers, errors, records)
-	}
-
-	wg.Wait()
-	return records.Result(), errors.Error()
+	return nil, nil
 }
 
 func queryJobs(ctx context.Context, wg *sync.WaitGroup, db *sql.DB, qualifiers []*async.JobQualifier, errors *shared.Errors, records *handler.Records) {

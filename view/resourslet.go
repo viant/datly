@@ -40,7 +40,7 @@ func (r *Resourcelet) CodecOptions() *codec.Options {
 	return &codec.Options{Options: []interface{}{indexColumns}}
 }
 
-func (r *Resourcelet) NamedCodecs() *codec.Registry {
+func (r *Resourcelet) Codecs() *codec.Registry {
 	return r._visitors
 }
 

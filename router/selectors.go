@@ -23,11 +23,7 @@ func (p *RequestParams) convert(isSpecified bool, raw string, param *vstate.Para
 		return nil, nil
 	}
 
-	dateFormat := p.route.DateFormat
-	if param.DateFormat != "" {
-		dateFormat = param.DateFormat
-	}
-
+	dateFormat := ""
 	convert, _, err := converter.Convert(raw, param.Schema.Type(), true, dateFormat)
 	return convert, err
 }

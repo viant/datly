@@ -32,7 +32,7 @@ require (
 	github.com/viant/scy v0.6.0
 	github.com/viant/sqlx v0.9.1-0.20230819034001-d95f29db181b
 	github.com/viant/structql v0.4.1
-	github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888
+	github.com/viant/toolbox v0.34.6-0.20230901020907-6da0397b78dc
 	github.com/viant/velty v0.2.1-0.20230803200403-bd59a7c855b3
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
 	github.com/viant/xreflect v0.3.2-0.20230723180303-1f248c397c5c

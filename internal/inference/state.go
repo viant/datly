@@ -394,7 +394,7 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 		dataType = pair[1]
 	}
 
-	var state = State{}
+	var aState = State{}
 	dirTypes, err := xreflect.ParseTypes(baseDir,
 		xreflect.WithParserMode(parser.ParseComments),
 		xreflect.WithRegistry(types),
@@ -402,7 +402,8 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 			if field.Tag == nil {
 				return nil
 			}
-			datlyTag, _ := reflect.StructTag(strings.Trim(field.Tag.Value, "`")).Lookup(view.DatlyTag)
+			fieldTag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
+			datlyTag, _ := fieldTag.Lookup(view.DatlyTag)
 			if datlyTag == "" {
 				return nil
 			}
@@ -414,7 +415,8 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 			if param == nil {
 				return err
 			}
-			state.Append(param)
+			state.BuildPredicate(fieldTag, &param.Parameter)
+			aState.Append(param)
 			return nil
 		}))
 
@@ -424,8 +426,8 @@ func NewState(modulePath, dataType string, types *xreflect.Types) (State, error)
 	if _, err = dirTypes.Type(dataType); err != nil {
 		return nil, err
 	}
-	if err = state.ensureSchema(dirTypes); err != nil {
+	if err = aState.ensureSchema(dirTypes); err != nil {
 		return nil, err
 	}
-	return state, nil
+	return aState, nil
 }

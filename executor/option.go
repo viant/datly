@@ -22,9 +22,8 @@ func (o Options) Apply(session *Session) error {
 // WithParameter return parameter option
 func WithParameter(name string, value interface{}) Option {
 	return func(session *Session) error {
-		viewName := session.View.Name
-		err := session.View.SetParameter(name, session.selectors, value)
-		session.Parameters.Add(session.View.Name, session.selectors.Views[viewName])
-		return err
+		state := session.SessionState.State()
+
+		return session.View.SetParameter(name, state, value)
 	}
 }

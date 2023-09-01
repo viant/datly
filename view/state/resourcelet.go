@@ -12,8 +12,7 @@ type (
 		ViewSchema(ctx context.Context, schema string) (*Schema, error)
 		LookupType() xreflect.LookupType
 		LoadText(ctx context.Context, URL string) (string, error)
-		NamedCodecs() *codec.Registry
-
+		Codecs() *codec.Registry
 		//CodecOptions returns base codec options
 		CodecOptions() *codec.Options
 	}

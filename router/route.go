@@ -6,7 +6,6 @@ import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/afs"
 	"github.com/viant/datly/internal/setter"
-	"github.com/viant/datly/reader"
 	"github.com/viant/datly/router/async"
 	"github.com/viant/datly/router/content"
 	"github.com/viant/datly/router/marshal"
@@ -17,8 +16,6 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
-	"github.com/viant/datly/view/template"
-	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
 	async2 "github.com/viant/xdatly/handler/async"
 	http2 "github.com/viant/xdatly/handler/http"
@@ -28,7 +25,6 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
-	"sync"
 )
 
 type Style string
@@ -66,7 +62,7 @@ type (
 		EnableDebug      *bool              `json:",omitempty"`
 		Transforms       marshal.Transforms `json:",omitempty"`
 
-		Input
+		Input Input
 		content.Content
 		Output
 
@@ -78,20 +74,16 @@ type (
 
 		_unmarshallerInterceptors marshal.Transforms
 
-		_resource *view.Resource
-
-		_requestBodyParamRequired bool
-		_requestBodyType          reflect.Type
-		_requestBodySlice         *xunsafe.Slice
-		_apiKeys                  []*APIKey
-		_stateCache               *staterCache
-		_routeMatcher             func(route *http2.Route) (*Route, error)
-		_async                    *async.Async
-		_router                   *Router
+		_resource     *view.Resource
+		_resourcelet  state.Resourcelet
+		_apiKeys      []*APIKey
+		_routeMatcher func(route *http2.Route) (*Route, error)
+		_async        *async.Async
+		_router       *Router
 	}
 
 	Input struct {
-		RequestBodySchema *state.Schema
+		Type state.Type
 	}
 
 	Output struct {
@@ -110,13 +102,10 @@ type (
 
 		ResponseBody *BodySelector
 
-		Schema     *state.Schema
-		Parameters state.Parameters
-		Type       *structology.StateType
+		Type state.Type
 
-		_caser          *format.Case
-		_excluded       map[string]bool
-		_responseSetter *responseSetter
+		_caser    *format.Case
+		_excluded map[string]bool
 	}
 
 	responseSetter struct {
@@ -129,7 +118,24 @@ type (
 	}
 )
 
-func (r *Route) Exclusion(state *view.ResourceState) []*json.FilterEntry {
+func (r *Route) OutputType() reflect.Type {
+	if r.Output.Type.Schema == nil {
+		return nil
+	}
+	if parameter := r.Output.Type.AnonymousParameters(); parameter != nil {
+		return parameter.OutputType()
+	}
+	return r.Output.Type.Schema.Type()
+}
+
+func (r *Route) InputType() reflect.Type {
+	if r.Input.Type.Schema == nil {
+		return nil
+	}
+	return r.Input.Type.Schema.Type()
+}
+
+func (r *Route) Exclusion(state *view.State) []*json.FilterEntry {
 	result := make([]*json.FilterEntry, 0)
 	state.Lock()
 	defer state.Unlock()
@@ -185,14 +191,15 @@ func (r *Route) Marshaller(request *http.Request) *marshal.Marshaller {
 	setter.SetStringIfEmpty(&contentType, request.Header.Get(strings.ToLower(HeaderContentType)))
 	switch contentType {
 	case content.CSVContentType:
-		return marshal.NewMarshaller(r._requestBodySlice.Type, r.CSV.Unmarshal)
+		return marshal.NewMarshaller(r.View.Schema.SliceType(), r.CSV.Unmarshal)
 	}
 	jsonPathInterceptor := json.UnmarshalerInterceptors{}
 	for i := range r._unmarshallerInterceptors {
 		transform := r._unmarshallerInterceptors[i]
 		jsonPathInterceptor[transform.Path] = r.transformFn(request, transform)
 	}
-	return marshal.NewMarshaller(r._requestBodyType, func(bytes []byte, i interface{}) error {
+
+	return marshal.NewMarshaller(r.OutputType(), func(bytes []byte, i interface{}) error {
 		return r.JsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
 	})
 }
@@ -205,9 +212,9 @@ func (r *Route) LocatorOptions(request *http.Request) []locator.Option {
 	result = append(result, locator.WithURIPattern(r.URI))
 	result = append(result, locator.WithIOConfig(r.ioConfig()))
 	result = append(result, locator.WithParameters(r._resource.NamedParameters()))
-	result = append(result, locator.WithOutputParameters(r.Output.Parameters))
-	if r.RequestBodySchema != nil {
-		result = append(result, locator.WithBodyType(r.RequestBodySchema.Type()))
+	result = append(result, locator.WithOutputParameters(r.Output.Type.Parameters))
+	if r.Input.Type.Schema != nil {
+		result = append(result, locator.WithBodyType(r.InputType()))
 	}
 	if r._resource != nil {
 		result = append(result, locator.WithViews(r._resource.Views.Index()))
@@ -239,26 +246,24 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if r.View.Name == "" {
 		r.View.Name = r.View.Ref
 	}
-
 	if err := r.initView(ctx, resource); err != nil {
 		return err
 	}
+	r._resourcelet = view.NewResourcelet(resource.Resource, r.View)
 
 	if err := r.initCaser(); err != nil {
 		return err
 	}
 
-	if err := r.initRequestBody(); err != nil {
+	if err := r.initInput(); err != nil {
 		return err
 	}
 
-	if err := r.initResponseBodyIfNeeded(); err != nil {
+	if err := r.initOutput(); err != nil {
 		return err
 	}
 
-	if err := r.initResponseType(); err != nil {
-		return err
-	}
+	fmt.Printf("OUTPUT: %s\n", r.OutputType().String())
 
 	if err := r.normalizePaths(); err != nil {
 		return err
@@ -277,7 +282,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 
 	r._unmarshallerInterceptors = r.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
 
-	if err := r.InitMarshaller(r.ioConfig(), r.Exclude, r.View.Schema.Type(), r._requestBodyType); err != nil {
+	if err := r.InitMarshaller(r.ioConfig(), r.Exclude, r.InputType(), r.OutputType()); err != nil {
 		return err
 	}
 
@@ -287,11 +292,6 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	}
 	if err := r.initAsyncIfNeeded(ctx); err != nil {
 		return err
-	}
-	if r._stateCache == nil {
-		r._stateCache = &staterCache{
-			index: sync.Map{},
-		}
 	}
 	return nil
 }
@@ -336,6 +336,7 @@ func (r *Route) initCardinality() error {
 }
 
 func (r *Route) ioConfig() common.IOConfig {
+	fmt.Printf("CASER :%v\n", r._caser.String())
 	return common.IOConfig{
 		OmitEmpty:  r.OmitEmpty,
 		CaseFormat: *r._caser,
@@ -353,140 +354,6 @@ func (r *Route) initCors(resource *Resource) {
 	r.Cors.inherit(resource.Cors)
 }
 
-func (r *Route) initResponseType() (err error) {
-
-	r.initializeOutputParameters()
-
-	if (r.Style == "" || r.Style == BasicStyle) && r.Field == "" {
-		r.Style = BasicStyle
-		return nil
-	}
-
-	if r.Field == "" {
-		switch r.Service {
-		case ServiceTypeReader:
-			r.Field = "Data"
-		default:
-			r.Field = "ResponseBody"
-		}
-	}
-
-	fieldType := r.OutputDataType()
-
-	if len(r.Output.Parameters) == 0 {
-		r.Output.Parameters.Append(
-			state.NewParameter(r.Field,
-				state.NewOutputLocation("Data"),
-				state.WithParameterType(fieldType)))
-
-		r.Output.Parameters.Append(
-			state.NewParameter("Status",
-				state.NewOutputLocation("Status"),
-				state.WithParameterTag(`anonymous:"true"`),
-				state.WithParameterType(reflect.TypeOf(response.Status{}))))
-		if r.View.MetaTemplateEnabled() && r.View.Template.Meta.Kind == view.MetaTypeRecord {
-			r.Output.Parameters.Append(
-				state.NewParameter(r.View.Template.Meta.Name,
-					state.NewOutputLocation("Summary"),
-					state.WithParameterType(r.View.Template.Meta.Schema.Type())))
-		}
-
-		if r.IsRevealMetric() && r.DebugKind == view.MetaTypeRecord {
-			r.Output.Parameters.Append(
-				state.NewParameter("Debug",
-					state.NewOutputLocation("Stats"),
-					state.WithParameterType(r.View.Template.Meta.Schema.Type())))
-		}
-
-	}
-
-	pkg := r.PgkPath(r.Field)
-
-	switch r.Service {
-	case ServiceTypeReader:
-		parameters := r.Output.Parameters
-		outputType, err := parameters.ReflectType(pkg, r._resource.LookupType(), false)
-		if err != nil {
-			return err
-		}
-		r.Output.Type = structology.NewStateType(outputType)
-	default:
-
-		//return nil
-	}
-
-	responseFields := make([]reflect.StructField, 2)
-	responseFields[0] = reflect.StructField{
-		Name:      "Status",
-		Type:      reflect.TypeOf(response.Status{}),
-		Anonymous: true,
-	}
-
-	responseFieldPgkPath := r.PgkPath(r.Field)
-
-	responseFields[1] = reflect.StructField{
-		Name:    r.Field,
-		PkgPath: responseFieldPgkPath,
-		Type:    fieldType,
-	}
-
-	var metaFieldName string
-	if r.View.MetaTemplateEnabled() && r.View.Template.Meta.Kind == view.MetaTypeRecord {
-		responseFields = append(responseFields, reflect.StructField{
-			Name:    r.View.Template.Meta.Name,
-			Type:    r.View.Template.Meta.Schema.Type(),
-			PkgPath: r.PgkPath(r.View.Template.Meta.Name),
-		})
-		metaFieldName = r.View.Template.Meta.Name
-	}
-
-	if r.IsRevealMetric() && r.DebugKind == view.MetaTypeRecord {
-		responseFields = append(responseFields, reflect.StructField{
-			Name: "Metrics",
-			Tag:  `json:"_metrics,omitempty"`,
-			Type: reflect.TypeOf(reader.Metrics{}),
-		})
-	}
-
-	responseType := reflect.StructOf(responseFields)
-	r._responseSetter = &responseSetter{
-		statusField:  FieldByName(responseType, "Status"),
-		bodyField:    FieldByName(responseType, r.Field),
-		metaField:    FieldByName(responseType, metaFieldName),
-		metricsField: FieldByName(responseType, "Metrics"),
-		rType:        responseType,
-	}
-
-	return nil
-}
-
-func (r *Route) initializeOutputParameters() {
-	for _, parameter := range r.Output.Parameters {
-		r.initializeOutputParameter(parameter)
-	}
-	if dataParameter := r.Output.Parameters.LookupByLocation(state.KindOutput, "data"); dataParameter != nil {
-		r.Style = ComprehensiveStyle
-		r.Field = dataParameter.Name
-	}
-}
-
-func (r *Route) initializeOutputParameter(parameter *state.Parameter) {
-	switch parameter.In.Kind {
-	case state.KindOutput:
-		switch parameter.In.Name {
-		case "data":
-			parameter.Schema = state.NewSchema(r.View.Schema.SliceType())
-		case "sql":
-			parameter.Schema = state.NewSchema(reflect.TypeOf(""))
-		case "status":
-			parameter.Schema = state.NewSchema(reflect.TypeOf(response.Status{}))
-		case "filter":
-			predicateType := r.View.Template.Parameters.PredicateStructType()
-			parameter.Schema = state.NewSchema(predicateType)
-		}
-	}
-}
-
 func FieldByName(responseType reflect.Type, name string) *xunsafe.Field {
 	if name == "" {
 		return nil
@@ -500,28 +367,6 @@ func (r *Route) PgkPath(fieldName string) string {
 		responseFieldPgkPath = pkgPath
 	}
 	return responseFieldPgkPath
-}
-
-func (r *Route) OutputDataType() reflect.Type {
-	if r.ResponseBody != nil && r.ResponseBody._bodyType != nil {
-		return r.ResponseBody._bodyType
-	}
-	if r.Cardinality == state.Many {
-		return r.View.Schema.SliceType()
-	}
-	return r.View.Schema.Type()
-}
-
-func (r *Route) responseType() reflect.Type {
-	if r._responseSetter != nil {
-		return r._responseSetter.rType
-	}
-
-	if r.ResponseBody != nil {
-		return r.ResponseBody._bodyType
-	}
-
-	return r.View.Schema.Type()
 }
 
 func (r *Route) initServiceType() error {
@@ -542,81 +387,122 @@ func (r *Route) initServiceType() error {
 	}
 }
 
-func (r *Route) initRequestBody() error {
-	if r.Method == http.MethodGet {
-		return nil
+func (r *Route) initInput() error {
+	if len(r.Input.Type.Parameters) == 0 {
+		r.Input.Type.Parameters = r.View.InputParameters()
 	}
 
-	return r.initRequestBodyFromParams()
-}
-
-func (r *Route) initRequestBodyFromParams() error {
-
-	params := make([]*state.Parameter, 0)
-
-	//TODO why do we need this ?
-	setMarker := map[string]bool{}
-	r.findRequestBodyParams(r.View, &params, setMarker)
-
-	if len(params) == 0 {
-		return nil
-	}
-	bodyParam, _ := r.fullBodyParam(params)
-	rType, err := r.initRequestBodyType(bodyParam, params)
-	if err != nil {
-		return err
+	if err := r.Input.Type.Init(state.WithResourcelet(r._resourcelet),
+		state.WithPackage(pkgPath),
+		state.WithMarker(true),
+		state.WithBodyType(true)); err != nil {
+		return fmt.Errorf("failed to initialise input: %w", err)
 	}
 
-	r.RequestBodySchema = state.NewSchema(rType)
-	r._requestBodyType = rType
-	for _, param := range params {
-		r._requestBodyParamRequired = r._requestBodyParamRequired || param.IsRequired()
-	}
-
-	r._requestBodySlice = xunsafe.NewSlice(reflect.SliceOf(r._requestBodyType))
-
+	fmt.Printf("input: %s\n", r.InputType().String())
 	return nil
 }
 
-func (r *Route) initRequestBodyType(bodyParam *state.Parameter, params []*state.Parameter) (reflect.Type, error) {
-	if bodyParam != nil {
-		bodyType := bodyParam.Schema.Type()
-		return bodyType, r.bodyParamMatches(bodyType, params)
+func (r *Route) initOutput() (err error) {
+	if err = r.initializeOutputParameters(); err != nil {
+		return err
 	}
-
-	if r.RequestBodySchema != nil {
-
-		if err := r.RequestBodySchema.Init(view.NewResourcelet(r._resource, nil)); err != nil {
-			return nil, err
-		}
-
-		return r.RequestBodySchema.Type(), nil
-	}
-
-	typeBuilder := template.NewBuilder("")
-	for _, param := range params {
-		name := param.In.Name
-		schemaType := param.Schema.Type()
-		if err := typeBuilder.AddType(name, schemaType, reflect.StructTag(param.Tag)); err != nil {
-			return nil, err
+	if (r.Style == "" || r.Style == BasicStyle) && r.Field == "" {
+		r.Style = BasicStyle
+		if r.Service == ServiceTypeReader {
+			r.Output.Type.Schema = state.NewSchema(r.View.OutputType())
+			return nil
 		}
 	}
 
-	return typeBuilder.Build(), nil
+	if r.Field == "" && r.Style != BasicStyle {
+		switch r.Service {
+		case ServiceTypeReader:
+			r.Field = "Data"
+		default:
+			r.Field = "ResponseBody"
+		}
+	}
+	if err = r.Output.Type.Init(state.WithResourcelet(r._resourcelet), state.WithPackage(pkgPath)); err != nil {
+		return fmt.Errorf("failed to initialise output: %w", err)
+	}
+	return nil
 }
 
-func (r *Route) findRequestBodyParams(aView *view.View, params *[]*state.Parameter, setMarker map[string]bool) {
-	for i, param := range aView.Template.Parameters {
-		if param.In.Kind == state.KindRequestBody && !setMarker[param.Name] {
-			setMarker[param.Name] = true
-			*params = append(*params, aView.Template.Parameters[i])
+func (r *Route) initializeOutputParameters() (err error) {
+	if dataParameter := r.Output.Type.Parameters.LookupByLocation(state.KindOutput, "data"); dataParameter != nil {
+		r.Style = ComprehensiveStyle
+		r.Field = dataParameter.Name
+	}
+	if len(r.Output.Type.Parameters) == 0 {
+		r.Output.Type.Parameters, err = r.defaultOutputParameters()
+	}
+	for _, parameter := range r.Output.Type.Parameters {
+		r.initializeOutputParameter(parameter)
+	}
+	return err
+}
+
+func (r *Route) defaultOutputParameters() (state.Parameters, error) {
+	var parameters state.Parameters
+	if r.Service == ServiceTypeReader && r.Style == ComprehensiveStyle {
+		parameters = state.Parameters{
+			{Name: r.Field, In: state.NewOutputLocation("data")},
+			{Name: "Status", In: state.NewOutputLocation("status"), Tag: `anonymous:"true"`},
+		}
+		if r.View.MetaTemplateEnabled() && r.View.Template.Meta.Kind == view.MetaTypeRecord {
+			parameters = append(parameters, state.NewParameter(r.View.Template.Meta.Name,
+				state.NewOutputLocation("Summary"),
+				state.WithParameterType(r.View.Template.Meta.Schema.Type())))
 		}
 
-		//r.findRequestBodyParams(aView, params, setMarker)
-	}
+		if r.IsRevealMetric() && r.DebugKind == view.MetaTypeRecord {
+			parameters = append(parameters,
+				state.NewParameter("Debug",
+					state.NewOutputLocation("Stats"),
+					state.WithParameterType(r.View.Template.Meta.Schema.Type())))
+		}
 
-	for _, relation := range aView.With {
-		r.findRequestBodyParams(&relation.Of.View, params, setMarker)
+	} else if r.Output.ResponseBody != nil && r.Output.ResponseBody.StateValue != "" {
+		inputParameter := r.Input.Type.Parameters.Lookup(r.Output.ResponseBody.StateValue)
+		if inputParameter == nil {
+			return nil, fmt.Errorf("failed to lookup state value: %s", r.Output.ResponseBody.StateValue)
+		}
+		name := inputParameter.In.Name
+		tag := ""
+		if name == "" { //embed
+			tag = `anonymous:"true"`
+			name = r.Output.ResponseBody.StateValue
+		}
+		parameters = state.Parameters{
+			{Name: name, In: state.NewState(r.Output.ResponseBody.StateValue), Schema: inputParameter.Schema, Tag: tag},
+		}
+		if inputParameter.In.Name != "" {
+			parameters = append(parameters, &state.Parameter{Name: "Status", In: state.NewOutputLocation("status"), Tag: `anonymous:"true"`})
+		}
+	}
+	return parameters, nil
+}
+
+func (r *Route) initializeOutputParameter(parameter *state.Parameter) {
+	switch parameter.In.Kind {
+	case state.KindOutput:
+		switch parameter.In.Name {
+		case "data":
+			parameter.Schema = state.NewSchema(r.View.OutputType())
+		case "sql":
+			parameter.Schema = state.NewSchema(reflect.TypeOf(""))
+		case "status":
+			parameter.Schema = state.NewSchema(reflect.TypeOf(response.Status{}))
+			if parameter.Tag == "" {
+				parameter.Tag = ` anonymous:"true"`
+			}
+		case "summary":
+			parameter.Schema = r.View.Template.Meta.Schema
+		case "filter":
+			predicateType := r.View.Template.Parameters.PredicateStructType()
+			parameter.Schema = state.NewSchema(predicateType)
+		}
 	}
 }
 
@@ -675,8 +561,10 @@ func (r *Route) initCaser() error {
 		r.CaseFormat = formatter.UpperCamel
 	}
 
+	fmt.Printf("CCC: %s\n", r.CaseFormat)
 	var err error
 	caser, err := r.CaseFormat.Caser()
+	fmt.Printf("INIT C: %v %v\n", caser, err)
 	if err != nil {
 		return err
 	}
@@ -727,21 +615,8 @@ func (r *Route) initDebugStyleIfNeeded() {
 	}
 }
 
-func (r *Route) initResponseBodyIfNeeded() error {
-	if r.ResponseBody == nil {
-		return nil
-	}
-
-	return r.ResponseBody.Init(r.View)
-}
-
 func (r *Route) AddApiKeys(keys ...*APIKey) {
 	r._apiKeys = append(r._apiKeys, keys...)
-}
-
-func (r *Route) initMarshallerInterceptor() error {
-	r._unmarshallerInterceptors = r.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
-	return nil
 }
 
 func (r *Route) transformFn(request *http.Request, transform *marshal.Transform) func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
@@ -774,11 +649,11 @@ func (r *Route) initTransforms(ctx context.Context) error {
 func (r *Route) initAsyncIfNeeded(ctx context.Context) error {
 	r._async = async.NewChecker()
 	if r.Async != nil {
-		if err := r.Async.Init(ctx, r._resource, r.View); err != nil {
-			return err
-		}
+		//if err := r.Async.Init(ctx, r._resource, r.View); err != nil {
+		//	return err
+		//}
 
-		return r.ensureJobTable(ctx)
+		//return r.ensureJobTable(ctx)
 	}
 
 	return nil

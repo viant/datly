@@ -69,6 +69,7 @@ func (s *Service) Exec(ctx context.Context, viewId string, options ...executor.O
 	if err != nil {
 		return err
 	}
+
 	return s.executor.Execute(ctx, execView, options...)
 }
 

@@ -1,26 +1,12 @@
 package router
 
 import (
-	"context"
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"github.com/google/uuid"
-	"github.com/viant/datly/cmd/env"
 	"github.com/viant/datly/router/async"
-	"github.com/viant/datly/router/async/handler/s3"
-	"github.com/viant/datly/router/async/handler/sqs"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/sqlx/io"
-	"github.com/viant/sqlx/io/insert"
-	"github.com/viant/sqlx/io/update"
-	"github.com/viant/sqlx/option"
 	async2 "github.com/viant/xdatly/handler/async"
-	"strings"
 	"sync"
-	"time"
 )
 
 type (
@@ -42,6 +28,7 @@ type (
 	}
 )
 
+/*
 func (a *Async) Init(ctx context.Context, resource *view.Resource, mainView *view.View) error {
 	if a.Connector == nil {
 		return fmt.Errorf("async connector can't be empty")
@@ -195,7 +182,7 @@ func InitRecord(ctx context.Context, record *async2.Job, route *Route, request *
 		record.JobID = recordID.String()
 	}
 
-	record.State = async2.StateRunning
+	record.TemplateState = async2.StateRunning
 	if record.PrincipalSubject == nil {
 		principalSubject, err := PrincipalSubject(ctx, route, request)
 		if err != nil {
@@ -305,3 +292,4 @@ func PrincipalSubject(ctx context.Context, route *Route, request *RequestParams)
 	subj := string(bytes)
 	return &subj, nil
 }
+*/

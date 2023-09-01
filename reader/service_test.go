@@ -68,7 +68,7 @@ func (a *audience) OnFetch(_ context.Context) error {
 }
 
 type usecase struct {
-	selectors   map[string]*view.State
+	selectors   map[string]*view.Statelet
 	description string
 	dataURI     string
 	expect      string
@@ -186,7 +186,7 @@ func TestRead(t *testing.T) {
 			dataURI:     "case002_from/",
 			dest:        new(interface{}),
 			view:        "events",
-			selectors: map[string]*view.State{
+			selectors: map[string]*view.Statelet{
 				"events": {
 					Criteria: "foo_column = 'abc'",
 				},
@@ -198,7 +198,7 @@ func TestRead(t *testing.T) {
 			dataURI:     "case002_from/",
 			dest:        new(interface{}),
 			view:        "events",
-			selectors: map[string]*view.State{
+			selectors: map[string]*view.Statelet{
 				"events": {
 					Criteria: "event_type_id = 11",
 				},
@@ -218,7 +218,7 @@ func TestRead(t *testing.T) {
 			view:        "events",
 			dest:        new(interface{}),
 			expect:      `[{"Timestamp":"2019-03-15T12:07:33Z","Quantity":21.957962334156036,"UserId":2},{"Timestamp":"2019-04-10T05:15:33Z","Quantity":5.084940046072006,"UserId":3}]`,
-			selectors: map[string]*view.State{
+			selectors: map[string]*view.Statelet{
 				"events": {
 					Offset: 1,
 				},
@@ -240,7 +240,7 @@ func TestRead(t *testing.T) {
 			view:        "events",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Timestamp":"","Quantity":33.23432374000549},{"Id":10,"Timestamp":"","Quantity":21.957962334156036},{"Id":100,"Timestamp":"","Quantity":5.084940046072006}]`,
-			selectors: map[string]*view.State{
+			selectors: map[string]*view.Statelet{
 				"events": {
 					Columns: []string{"id", "quantity"},
 					OrderBy: "id",
@@ -260,7 +260,7 @@ func TestRead(t *testing.T) {
 			view:        "event_event-types",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","EventType":{"Id":2,"Name":"type 6","AccountId":37}},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","EventType":{"Id":11,"Name":"type 2","AccountId":33}},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventType":{"Id":111,"Name":"type 3","AccountId":36}}]`,
-			selectors: map[string]*view.State{
+			selectors: map[string]*view.Statelet{
 				"event_event-types": {
 					Columns: []string{"Id", "Timestamp", "EventType"},
 				},
@@ -272,7 +272,7 @@ func TestRead(t *testing.T) {
 			view:        "event_event-types",
 			dest:        new(interface{}),
 			expect:      `[{"Id":1,"Timestamp":"2019-03-11T02:20:33Z","UserId":1,"EventType":null},{"Id":10,"Timestamp":"2019-03-15T12:07:33Z","UserId":2,"EventType":null},{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","UserId":3,"EventType":null}]`,
-			selectors: map[string]*view.State{
+			selectors: map[string]*view.Statelet{
 				"event_event-types": {
 					Columns: []string{"Id", "Timestamp", "UserId"},
 				},
@@ -476,7 +476,7 @@ FROM events`,
 }
 
 func testView(t *testing.T, testCase usecase, dataView *view.View, err error, service *reader.Service) {
-	selectors := view.NewResourceState()
+	selectors := view.NewState()
 
 	session := &reader.Session{
 		Dest:  testCase.dest,
@@ -581,7 +581,7 @@ func wildcardAllowedFilterable() usecase {
 		view:        "events",
 		dataset:     "dataset001_events/",
 		description: "inherit coalesce types | filtered columns",
-		selectors: map[string]*view.State{
+		selectors: map[string]*view.Statelet{
 			"events": {
 				Columns: []string{"ID", "QUANTITY"},
 			},

@@ -28,7 +28,7 @@ func (r *Router) handleGolangStruct(response http.ResponseWriter, route *router.
 }
 
 func (r *Router) generateGoStruct(route *router.Route) (int, []byte) {
-	schemaType := route.View.Schema.Type()
+	schemaType := route.View.Schema.CompType()
 	for schemaType.Kind() == reflect.Ptr {
 		schemaType = schemaType.Elem()
 	}

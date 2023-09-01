@@ -83,22 +83,22 @@ func (h *Handler) readData(ctx context.Context, aView *view.View, aState *sessio
 	if err = aState.Populate(ctx); err != nil {
 		return err
 	}
-	aSession.State = aState.ResourceState()
+	aSession.State = aState.State()
 	if err = reader.New().Read(context.TODO(), aSession); err != nil {
 		return err //TODO add 501 for database errors ?
 	}
 	ret.Reader = &aSession.Output
 
 	ret.Output = ret.Reader.Data
-	//if aSession.View.Schema.Cardinality == state.One && h.output == nil {
-	//	slice := reflect.ValueOf(ret.Output)
-	//	switch slice.Len() {
-	//	case 0:
-	//		ret.Output = nil
-	//	case 1:
-	//		ret.Output = reflect.ValueOf(ret.Output).Index(0).Interface()
-	//	}
-	//}
+	if aSession.View.Schema.Cardinality == state.One && h.output == nil {
+		slice := reflect.ValueOf(ret.Output)
+		switch slice.Len() {
+		case 0:
+			ret.Output = nil
+		case 1:
+			ret.Output = reflect.ValueOf(ret.Output).Index(0).Interface()
+		}
+	}
 
 	h.publishViewMetaIfNeeded(aView, ret)
 	h.publishMetricsIfNeeded(aSession, ret)

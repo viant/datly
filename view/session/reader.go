@@ -11,5 +11,5 @@ func (s *State) ReadInto(ctx context.Context, dest interface{}, aView *view.View
 		return err
 	}
 	aReader := reader.New()
-	return aReader.ReadInto(ctx, dest, aView, reader.WithResourceState(s.resourceState))
+	return aReader.ReadInto(ctx, dest, aView, reader.WithResourceState(s.state))
 }

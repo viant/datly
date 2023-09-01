@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"fmt"
 	"github.com/viant/datly/executor/parser"
 	"github.com/viant/datly/executor/session"
 	"github.com/viant/datly/template/expand"
@@ -17,8 +18,12 @@ func NewBuilder() *SqlBuilder {
 	return &SqlBuilder{}
 }
 
-func (s *SqlBuilder) Build(aView *view.View, paramState *structology.State, session *session.Session, dataUnit *expand.DataUnit) (*expand.State, []*expand.SQLStatment, error) {
-	state, err := aView.Template.EvaluateStateWithSession(paramState, nil, nil, session, dataUnit)
+func (s *SqlBuilder) Build(aView *view.View, templateState *structology.State, session *session.Session, dataUnit *expand.DataUnit) (*expand.State, []*expand.SQLStatment, error) {
+
+	fmt.Printf("SOURCE: %s\n", aView.Template.Source)
+	fmt.Printf("templateState: %T \n%+v\n", templateState.State(), templateState.State())
+
+	state, err := aView.Template.EvaluateStateWithSession(templateState, nil, nil, session, dataUnit)
 	if err != nil {
 		return state, nil, err
 	}
@@ -50,7 +55,7 @@ func (s *SqlBuilder) Build(aView *view.View, paramState *structology.State, sess
 
 	for _, data := range result {
 		var placeholders []interface{}
-		expanded, err := aView.Expand(&placeholders, data.SQL, &view.State{}, view.CriteriaParam{}, &view.BatchData{}, state.DataUnit)
+		expanded, err := aView.Expand(&placeholders, data.SQL, &view.Statelet{}, view.CriteriaParam{}, &view.BatchData{}, state.DataUnit)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -7,6 +7,7 @@
   {"Auth":"Jwt"}   SELECT ID, STATUS, (IS_PRODUCT_AUTHORIZED($Jwt.UserID, ID)) AS IS_AUTH FROM PRODUCT WHERE ID IN ($Ids)
  */)
 
+
 #if($rec.IS_AUTH == 0)
     $logger.Fatal("Unauthorized access to product: %v", $rec.ID)
 #end

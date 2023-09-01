@@ -23,7 +23,7 @@ type (
 		CacheDisabled bool
 		RevealMetric  bool
 		View          *view.View
-		State         *view.ResourceState
+		State         *view.State
 		Parent        *view.View
 		Output
 	}
@@ -39,7 +39,7 @@ type (
 
 	ParentData struct {
 		View     *view.View
-		Selector *view.State
+		Selector *view.Statelet
 	}
 
 	Metric struct {
@@ -208,7 +208,7 @@ func NewSession(dest interface{}, aView *view.View, opts ...Option) (*Session, e
 
 	err := options(opts).Apply(ret)
 	if ret.State == nil {
-		ret.State = view.NewResourceState()
+		ret.State = view.NewState()
 	}
 	return ret, err
 }

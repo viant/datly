@@ -3,7 +3,6 @@ package inference
 import (
 	"fmt"
 	"github.com/viant/datly/utils/formatter"
-	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	qexpr "github.com/viant/sqlparser/expr"
@@ -106,7 +105,7 @@ func (p *Parameter) FieldDeclaration() string {
 		builder.WriteString(paramType.String())
 	}
 
-	tag := fmt.Sprintf(`datly:"kind=%v,in=%v"`, p.In.Kind, p.In.Name)
+	tag := fmt.Sprintf(`parameter:"kind=%v,in=%v"`, p.In.Kind, p.In.Name)
 	builder.WriteString("`")
 	builder.WriteString(tag)
 	builder.WriteString("`")
@@ -160,11 +159,14 @@ func buildParameter(field *ast.Field, types *xreflect.Types) (*Parameter, error)
 		return nil, nil
 	}
 	structTag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
-	datlyTag := structTag.Get(view.DatlyTag)
-	if datlyTag == "" {
+	parameterTag := structTag.Get(state.TagName)
+	if parameterTag == "" {
 		return nil, nil
 	}
-	tag := view.ParseTag(datlyTag)
+	tag, err := state.ParseTag(parameterTag, nil)
+	if err != nil {
+		return nil, err
+	}
 	param := &Parameter{
 		SQL: SQL,
 	}

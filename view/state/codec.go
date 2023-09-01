@@ -68,7 +68,7 @@ func (v *Codec) inheritCodecIfNeeded(resource Resourcelet, inputType reflect.Typ
 		return err
 	}
 
-	aCodec, err := resource.NamedCodecs().Lookup(v.Ref)
+	aCodec, err := resource.Codecs().Lookup(v.Ref)
 	if err != nil {
 		return fmt.Errorf("not found codec with name %v", v.Ref)
 	}
@@ -118,7 +118,7 @@ func (v *Codec) ensureSchema(paramType reflect.Type) {
 }
 
 func (v *Codec) extractCodecFn(resource Resourcelet, inputType reflect.Type) (codec.Instance, error) {
-	foundCodec, err := resource.NamedCodecs().Lookup(v.Name)
+	foundCodec, err := resource.Codecs().Lookup(v.Name)
 	if err != nil {
 		return nil, err
 	}
