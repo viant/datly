@@ -80,7 +80,7 @@ func (m *MatchableRoute) Namespaces() []string {
 }
 
 func (s *ReaderSession) IsMetricsEnabled() bool {
-	return s.Route.DebugKind == view.MetaTypeHeader || (s.IsMetricInfo() || s.IsMetricDebug())
+	return s.Route.Output.DebugKind == view.MetaTypeHeader || (s.IsMetricInfo() || s.IsMetricDebug())
 }
 
 func (r *Route) IsMetricsEnabled(req *http.Request) bool {
@@ -310,10 +310,10 @@ func (r *Router) prepareReaderSession(ctx context.Context, response http.Respons
 	if route.CSV == nil && requestParams.OutputContentType == content2.CSVContentType {
 		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output CSV config?)", content2.CSVContentType)))
 	}
-	if route.TabularJSON == nil && route.DataFormat == content2.JSONDataFormatTabular {
+	if route.TabularJSON == nil && route.Output.DataFormat == content2.JSONDataFormatTabular {
 		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", content2.JSONContentType)))
 	}
-	if route.XML == nil && route.DataFormat == content2.XMLFormat {
+	if route.XML == nil && route.Output.DataFormat == content2.XMLFormat {
 		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", content2.XMLContentType)))
 	}
 
@@ -561,7 +561,7 @@ func (r *Router) payloadReader(ctx context.Context, request *http.Request, respo
 		}
 		format := route.OutputFormat(request.URL.Query())
 		filters := route.Exclusion(sessionState.State())
-		data, err := route.Content.Marshal(format, route.Field, aResponse.Reader.Data, aResponse.Output, filters)
+		data, err := route.Content.Marshal(format, route.Output.Field, aResponse.Reader.Data, aResponse.Output, filters)
 		if err != nil {
 			return nil, err
 		}
@@ -625,7 +625,7 @@ func (r *Router) executorPayloadReader(ctx context.Context, writer http.Response
 	if err != nil {
 		return nil, err
 	}
-	if route.ResponseBody == nil {
+	if route.Output.ResponseBody == nil {
 		return NewBytesReader(nil, ""), nil
 	}
 

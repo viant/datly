@@ -178,7 +178,7 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	}
 	resource.Resource.Parameters = aState.RemoveReserved().ViewParameters()
 	if service == router.ServiceTypeExecutor {
-		resource.Rule.Route.Field = aState.BodyField()
+		resource.Rule.Route.Output.Field = aState.BodyField()
 	}
 
 	if len(resource.OutputState) > 0 {
