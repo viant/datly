@@ -156,7 +156,7 @@ func (s *Schema) InheritType(rType reflect.Type) {
 	s.autoGen = false
 }
 
-func (s *Schema) copy() *Schema {
+func (s *Schema) Clone() *Schema {
 	schema := *s
 	return &schema
 }

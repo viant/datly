@@ -400,7 +400,7 @@ func (b *Builder) metaSQL(aView *view.View, selector *view.Statelet, batchData *
 	viewParam.NonWindowSQL = matcher.SQL
 	viewParam.Args = matcher.Args
 
-	SQL, args, err := aView.Template.Meta.Evaluate(selector.Template, viewParam)
+	SQL, args, err := aView.Template.Summary.Evaluate(selector.Template, viewParam)
 	if err != nil {
 		return nil, err
 	}

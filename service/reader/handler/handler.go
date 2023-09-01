@@ -5,7 +5,7 @@ import (
 	goJson "encoding/json"
 	"github.com/viant/datly/router/status"
 	_ "github.com/viant/datly/service/locator"
-	reader2 "github.com/viant/datly/service/reader"
+	reader "github.com/viant/datly/service/reader"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/session"
@@ -20,13 +20,13 @@ import (
 type (
 	Handler struct {
 		output          *structology.StateType
-		parameters      state.Parameters
+		outputType      *state.Type
 		ErrorStatusCode *int
 	}
 
 	//Response reader handler response
 	Response struct {
-		Reader     *reader2.Output
+		Reader     *reader.Output
 		Output     interface{}
 		OutputType reflect.Type
 		Status     *response.Status
@@ -42,7 +42,7 @@ func (r *Response) SetError(err error, statusCode int) {
 	r.Status.Status = "error"
 
 }
-func (h *Handler) Handle(ctx context.Context, aView *view.View, state *session.State, opts ...reader2.Option) *Response {
+func (h *Handler) Handle(ctx context.Context, aView *view.View, state *session.State, opts ...reader.Option) *Response {
 	ret := &Response{Header: http.Header{}, Status: &response.Status{Status: "ok"}}
 	err := h.readData(ctx, aView, state, ret, opts)
 	if err != nil {
@@ -52,11 +52,12 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, state *session.S
 	if h.output == nil {
 		return ret
 	}
-	if h.output == nil || !h.output.IsDefined() {
+	if h.output == nil || !h.output.IsDefined() || h.outputType.IsAnonymous() {
 		return ret
 	}
+
 	resultState := h.output.NewState()
-	if err = state.SetState(ctx, h.parameters, resultState, state.Indirect(true,
+	if err = state.SetState(ctx, h.outputType.Parameters, resultState, state.Indirect(true,
 		locator.WithCustomOption(ret.Reader, ret.Status))); err != nil {
 		ret.StatusCode = http.StatusInternalServerError
 		ret.Error = err
@@ -67,10 +68,10 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, state *session.S
 	return ret
 }
 
-func (h *Handler) readData(ctx context.Context, aView *view.View, aState *session.State, ret *Response, opts []reader2.Option) error {
+func (h *Handler) readData(ctx context.Context, aView *view.View, aState *session.State, ret *Response, opts []reader.Option) error {
 	destValue := reflect.New(aView.Schema.SliceType())
 	dest := destValue.Interface()
-	aSession, err := reader2.NewSession(dest, aView)
+	aSession, err := reader.NewSession(dest, aView)
 	if err != nil {
 		return err
 	}
@@ -84,7 +85,7 @@ func (h *Handler) readData(ctx context.Context, aView *view.View, aState *sessio
 		return err
 	}
 	aSession.State = aState.State()
-	if err = reader2.New().Read(context.TODO(), aSession); err != nil {
+	if err = reader.New().Read(context.TODO(), aSession); err != nil {
 		return err //TODO add 501 for database errors ?
 	}
 	ret.Reader = &aSession.Output
@@ -100,13 +101,13 @@ func (h *Handler) readData(ctx context.Context, aView *view.View, aState *sessio
 		}
 	}
 
-	h.publishViewMetaIfNeeded(aView, ret)
+	h.publishViewSummaryIfNeeded(aView, ret)
 	h.publishMetricsIfNeeded(aSession, ret)
 	return nil
 }
 
-func (h *Handler) publishViewMetaIfNeeded(aView *view.View, ret *Response) {
-	templateMeta := aView.Template.Meta
+func (h *Handler) publishViewSummaryIfNeeded(aView *view.View, ret *Response) {
+	templateMeta := aView.Template.Summary
 	if ret.Reader.ViewMeta == nil || templateMeta == nil {
 		return
 	}
@@ -122,7 +123,7 @@ func (h *Handler) publishViewMetaIfNeeded(aView *view.View, ret *Response) {
 	ret.Header.Add(templateMeta.Name, string(data))
 }
 
-func (h *Handler) publishMetricsIfNeeded(aSession *reader2.Session, ret *Response) {
+func (h *Handler) publishMetricsIfNeeded(aSession *reader.Session, ret *Response) {
 	if aSession.RevealMetric {
 		return
 	}
@@ -150,6 +151,6 @@ func (h *Handler) errorStatusCode() int {
 }
 
 // New creates a new reader handler
-func New(output *structology.StateType, parameters state.Parameters) *Handler {
-	return &Handler{output: output, parameters: parameters}
+func New(output *structology.StateType, outputType *state.Type) *Handler {
+	return &Handler{output: output, outputType: outputType}
 }

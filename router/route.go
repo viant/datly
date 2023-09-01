@@ -20,7 +20,6 @@ import (
 	"github.com/viant/datly/view/state/kind/locator"
 	async2 "github.com/viant/xdatly/handler/async"
 	http2 "github.com/viant/xdatly/handler/http"
-	"github.com/viant/xdatly/handler/response"
 	"github.com/viant/xunsafe"
 	"net/http"
 	"net/url"
@@ -205,9 +204,6 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if err := r.initOutput(); err != nil {
 		return err
 	}
-
-	fmt.Printf("OUTPUT: %s\n", r.OutputType().String())
-
 	if err := r.normalizePaths(); err != nil {
 		return err
 	}
@@ -372,80 +368,18 @@ func (r *Route) initOutput() (err error) {
 }
 
 func (r *Route) initializeOutputParameters() (err error) {
-	if dataParameter := r.Output.Type.Parameters.LookupByLocation(state.KindOutput, "data"); dataParameter != nil {
+	if r.Output.Type.IsAnonymous() {
+		r.Output.Style = component.BasicStyle
+	} else if dataParameter := r.Output.Type.Parameters.LookupByLocation(state.KindOutput, "data"); dataParameter != nil {
 		r.Output.Style = component.ComprehensiveStyle
 		r.Output.Field = dataParameter.Name
 	}
 	if len(r.Output.Type.Parameters) == 0 {
-		r.Output.Type.Parameters, err = r.defaultOutputParameters()
+		r.Output.Type.Parameters, err = r.Contract.DefaultOutputParameters(r.Service == service.TypeReader, r.View)
 	}
-	for _, parameter := range r.Output.Type.Parameters {
-		r.initializeOutputParameter(parameter)
-	}
+
+	component.EnsureOutputParameterTypes(r.Output.Type.Parameters, r.View)
 	return err
-}
-
-func (r *Route) defaultOutputParameters() (state.Parameters, error) {
-	var parameters state.Parameters
-	if r.Service == service.TypeReader && r.Output.Style == component.ComprehensiveStyle {
-		parameters = state.Parameters{
-			{Name: r.Output.Field, In: state.NewOutputLocation("data")},
-			{Name: "Status", In: state.NewOutputLocation("status"), Tag: `anonymous:"true"`},
-		}
-		if r.View.MetaTemplateEnabled() && r.View.Template.Meta.Kind == view.MetaTypeRecord {
-			parameters = append(parameters, state.NewParameter(r.View.Template.Meta.Name,
-				state.NewOutputLocation("Summary"),
-				state.WithParameterType(r.View.Template.Meta.Schema.Type())))
-		}
-
-		if r.IsRevealMetric() && r.Output.DebugKind == view.MetaTypeRecord {
-			parameters = append(parameters,
-				state.NewParameter("Debug",
-					state.NewOutputLocation("Stats"),
-					state.WithParameterType(r.View.Template.Meta.Schema.Type())))
-		}
-
-	} else if r.Output.ResponseBody != nil && r.Output.ResponseBody.StateValue != "" {
-		inputParameter := r.Input.Type.Parameters.Lookup(r.Output.ResponseBody.StateValue)
-		if inputParameter == nil {
-			return nil, fmt.Errorf("failed to lookup state value: %s", r.Output.ResponseBody.StateValue)
-		}
-		name := inputParameter.In.Name
-		tag := ""
-		if name == "" { //embed
-			tag = `anonymous:"true"`
-			name = r.Output.ResponseBody.StateValue
-		}
-		parameters = state.Parameters{
-			{Name: name, In: state.NewState(r.Output.ResponseBody.StateValue), Schema: inputParameter.Schema, Tag: tag},
-		}
-		if inputParameter.In.Name != "" {
-			parameters = append(parameters, &state.Parameter{Name: "Status", In: state.NewOutputLocation("status"), Tag: `anonymous:"true"`})
-		}
-	}
-	return parameters, nil
-}
-
-func (r *Route) initializeOutputParameter(parameter *state.Parameter) {
-	switch parameter.In.Kind {
-	case state.KindOutput:
-		switch parameter.In.Name {
-		case "data":
-			parameter.Schema = state.NewSchema(r.View.OutputType())
-		case "sql":
-			parameter.Schema = state.NewSchema(reflect.TypeOf(""))
-		case "status":
-			parameter.Schema = state.NewSchema(reflect.TypeOf(response.Status{}))
-			if parameter.Tag == "" {
-				parameter.Tag = ` anonymous:"true"`
-			}
-		case "summary":
-			parameter.Schema = r.View.Template.Meta.Schema
-		case "filter":
-			predicateType := r.View.Template.Parameters.PredicateStructType()
-			parameter.Schema = state.NewSchema(predicateType)
-		}
-	}
 }
 
 func (r *Route) initCompression(resource *Resource) {

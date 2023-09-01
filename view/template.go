@@ -29,7 +29,7 @@ type (
 		stateType *structology.StateType
 
 		Parameters state.Parameters `json:",omitempty" yaml:"parameters,omitempty"`
-		Meta       *TemplateMeta    `json:",omitempty" yaml:",omitempty"`
+		Summary    *TemplateSummary `json:",omitempty" yaml:",omitempty"`
 
 		sqlEvaluator *expand.Evaluator
 
@@ -484,11 +484,11 @@ func (t *Template) valueWithPrefix(key string, aValue, prefix string, wrapWithPa
 }
 
 func (t *Template) initMetaIfNeeded(ctx context.Context, r *Resource) error {
-	if t.Meta == nil {
+	if t.Summary == nil {
 		return nil
 	}
 
-	return t.Meta.Init(ctx, t, r)
+	return t.Summary.Init(ctx, t, r)
 }
 
 func (t *Template) EvaluatorStateType() reflect.Type {

@@ -550,7 +550,7 @@ func (r *Router) payloadReader(ctx context.Context, request *http.Request, respo
 		return r.executorPayloadReader(ctx, response, request, route)
 	case service.TypeReader:
 		sessionState := vsession.New(route.View, vsession.WithLocatorOptions(route.LocatorOptions(request)...))
-		readerHandler := rhandler.New(route.Output.Type.Type(), route.Output.Type.Parameters)
+		readerHandler := rhandler.New(route.Output.Type.Type(), &route.Output.Type)
 		aResponse := readerHandler.Handle(ctx, route.View, sessionState,
 			reader2.WithIncludeSQL(true),
 			reader2.WithCacheDisabled(false))

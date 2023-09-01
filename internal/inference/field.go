@@ -18,6 +18,7 @@ type Field struct {
 	Tags       Tags
 	Ptr        bool
 	ColumnCase format.Case
+	Relation   string
 }
 
 func NewField(rField *reflect.StructField) *Field {

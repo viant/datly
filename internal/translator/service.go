@@ -12,17 +12,21 @@ import (
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
+	"github.com/viant/datly/repository/component"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/discover"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
 	async2 "github.com/viant/xdatly/handler/async"
+	"gopkg.in/yaml.v3"
 	"path"
 	"reflect"
 	"strings"
+	"time"
 )
 
 type Service struct {
@@ -126,14 +130,101 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	}
 
 	resource.Rule.updateExclude(resource.Rule.RootViewlet())
+
+	cache := discover.Columns{Items: make(map[string]view.Columns)}
+	hasSummary := false
+
+	rootViewlet := resource.Rule.RootViewlet()
+	if err = s.updateComponentOutputType(resource, rootViewlet); err != nil {
+		return err
+	}
+
 	if err = resource.Rule.Viewlets.Each(func(viewlet *Viewlet) error {
+
+		if viewlet.View.Template != nil && viewlet.View.Template.Summary != nil {
+			hasSummary = true
+		}
+
+		if columns := viewlet.Spec.Columns; len(columns) > 0 {
+			cache.Items[viewlet.Name] = view.NewColumns(columns)
+			//TODO SUMMARY
+		}
+		s.updateViewOutputType(viewlet, true)
+
 		return s.persistView(viewlet, resource, view.ModeQuery)
 	}); err != nil {
 		return err
 	}
+
+	if !hasSummary && !resource.Rule.IsGeneratation { //TODO add support
+		err = s.persistViewMetaColumn(cache, resource)
+		if err != nil {
+			return err
+		}
+	}
+
 	if err = s.persistRouterRule(ctx, resource, service.TypeReader); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *Service) updateViewOutputType(viewlet *Viewlet, withTypeDef bool) {
+	if viewlet.Resource.Rule.IsGeneratation {
+		return
+	}
+	if schema := viewlet.View.Schema; schema != nil && (schema.Type() != nil || schema.DataType != "") {
+		return
+	}
+
+	for _, relField := range viewlet.Spec.Type.RelationFields {
+		relViewlet := viewlet.Resource.Rule.Viewlets.Lookup(relField.Relation)
+		s.updateViewOutputType(relViewlet, false)
+
+		relType := relViewlet.View.Schema.Type()
+		if relType.Kind() == reflect.Struct {
+			relType = reflect.PtrTo(relType)
+		}
+		if relField.Cardinality == state.Many {
+			relType = reflect.SliceOf(relType)
+		}
+		relField.Schema = state.NewSchema(relType)
+		relField.Schema.Cardinality = relField.Cardinality
+		relField.Name = relViewlet.Holder
+	}
+
+	fields := viewlet.Spec.Type.Fields()
+	if len(fields) > 0 {
+		viewlet.View.Schema = &state.Schema{}
+		paramSchema := reflect.StructOf(fields)
+		viewlet.View.Schema.SetType(paramSchema)
+	}
+	if !withTypeDef {
+		return
+	}
+	viewlet.TypeDefinition = viewlet.Spec.TypeDefinition("", false)
+	viewlet.TypeDefinition.Cardinality = ""
+	viewlet.TypeDefinition.Name = TypeDefinitionName(viewlet)
+
+}
+
+func TypeDefinitionName(viewlet *Viewlet) string {
+	return strings.Title(viewlet.Name) + "Output"
+}
+
+func (s *Service) persistViewMetaColumn(cache discover.Columns, resource *Resource) error {
+	if len(cache.Items) == 0 {
+		return nil
+	}
+	cache.ModTime = time.Now()
+	data, err := yaml.Marshal(cache)
+	if err != nil {
+		return fmt.Errorf("failed to encode: %T, %w", cache, err)
+	}
+	baseRuleURL := s.Repository.RuleBaseURL(resource.rule)
+	ruleName := s.Repository.RuleName(resource.rule)
+	cacheURL := url.Join(baseRuleURL, ".meta", ruleName+".yaml")
+	s.Repository.Files.Append(asset.NewFile(cacheURL, string(data)))
 	return nil
 }
 
@@ -155,7 +246,6 @@ func handleVeltyExpression() sqlparser.Option {
 
 func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, serviceType service.Type) error {
 	baseRuleURL := s.Repository.RuleBaseURL(resource.rule)
-
 	route := &resource.Rule.Route
 	ruleName := s.Repository.RuleName(resource.rule)
 	route.Service = serviceType
@@ -182,14 +272,6 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 		resource.Rule.Route.Output.Field = aState.BodyField()
 	}
 
-	if len(resource.OutputState) > 0 {
-		outputState, err := resource.OutputState.Compact(resource.rule.Module)
-		if err != nil {
-			return err
-		}
-		resource.Rule.Route.Output.Type.Parameters = outputState.ViewParameters()
-	}
-
 	routerResource, err := s.buildRouterResource(ctx, resource)
 	if err != nil {
 		return fmt.Errorf("failed to build router resource: %+v, %w", routerResource, err)
@@ -199,6 +281,41 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 		return fmt.Errorf("failed to encode: %+v, %w", routerResource, err)
 	}
 	s.Repository.Files.Append(asset.NewFile(url.Join(baseRuleURL, ruleName+".yaml"), string(data)))
+	return nil
+}
+
+func (s *Service) updateComponentOutputType(resource *Resource, rootViewlet *Viewlet) error {
+	if tmpl := rootViewlet.View.Template; tmpl != nil && tmpl.Summary != nil {
+		return nil //NOT YEY supported for summary
+	}
+	if resource.Rule.IsGeneratation {
+		return nil
+	}
+	outputState, err := resource.OutputState.Compact(resource.rule.Module)
+	if err != nil {
+		return err
+	}
+	outputParameters := outputState.ViewParameters()
+	if len(outputParameters) == 0 {
+		if field := resource.Rule.Route.Output.Field; field != "" {
+			outputParameters = append(outputParameters, component.DataOutputParameter(field))
+			outputParameters = append(outputParameters, component.DefaultStatusOutputParameter())
+
+		} else {
+			outputParameters = append(outputParameters, component.DefaultDataOutputParameter())
+		}
+	}
+
+	dataParameter := outputParameters.LookupByLocation(state.KindOutput, "data")
+	if dataParameter == nil {
+		outputParameters = append(outputParameters, component.DefaultDataOutputParameter())
+	}
+	dataParameter.Schema.Name = TypeDefinitionName(rootViewlet)
+	dataParameter.Schema.DataType = "*" + TypeDefinitionName(rootViewlet)
+	cardinality := string(state.Many)
+	setter.SetStringIfEmpty(&cardinality, string(rootViewlet.Cardinality))
+	dataParameter.Schema.Cardinality = state.Cardinality(cardinality)
+	resource.Rule.Route.Output.Type.Parameters = outputParameters
 	return nil
 }
 
@@ -242,8 +359,8 @@ func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mo
 
 	//TODO move cache to dependency but allow local different TTL override
 	//	aView := &viewlet.View.View
-	//if aView.Cache != nil {
-	//	s.GitRepository.AppendCache(aView.Cache)
+	//if aView.Columns != nil {
+	//	s.GitRepository.AppendCache(aView.Columns)
 	//}
 
 	resource.Resource.Views = append(resource.Resource.Views, &viewlet.View.View)

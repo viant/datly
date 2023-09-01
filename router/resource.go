@@ -38,8 +38,8 @@ type (
 		Logger       *Logger      `json:",omitempty"` //connect, dataview, time, SQL with params if exceeded time  `json:",omitempty"`
 		Cors         *Cors        `json:",omitempty"`
 
-		ColumnsCache *discover.Cache `json:",omitempty"`
-		RevealMetric *bool           `json:",omitempty"`
+		ColumnsCache *discover.Columns `json:",omitempty"`
+		RevealMetric *bool             `json:",omitempty"`
 
 		Info             openapi3.Info     `json:",omitempty"`
 		ColumnsDiscovery bool              `json:",omitempty"`

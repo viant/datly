@@ -1,7 +1,7 @@
 
+- Pre generate columns meta for template summary case
 - optimize 'WITH ' SQL type
 - Unify default-datly tag
-- Route Parameters
 - Executor triggers/notification
 - Self documenting / Improve documentation
 - Batch spreadsheet ingestion

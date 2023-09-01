@@ -212,8 +212,8 @@ func (r *Resource) InitRule(dSQL *string, ctx context.Context, fs afs.Service, o
 	if err := r.extractRuleSetting(dSQL); err != nil {
 		return err
 	}
-
-	if opts != nil && opts.Generate != nil && opts.Generate.Operation != "" {
+	r.Rule.IsGeneratation = opts.Generate != nil && opts.Generate.Operation != ""
+	if opts != nil && r.Rule.IsGeneratation {
 		r.Rule.Method = strings.ToUpper(opts.Generate.Operation)
 	}
 	if r.Rule.Output != nil {
@@ -260,7 +260,7 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 		bindingArgs = sourceView.Expanded.Args
 		viewlet.sourceViewlet = sourceView
 		sourceView.View.EnsureTemplate()
-		sourceView.View.Template.Meta = &view.TemplateMeta{ //TODO go for detail existing impl
+		sourceView.View.Template.Summary = &view.TemplateSummary{ //TODO go for detail existing impl
 			Source: epxandingSQL,
 			Name:   viewlet.Name,
 			Kind:   "record",
@@ -296,6 +296,7 @@ func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(
 		aViewNamespace.TypeDefinition = aViewNamespace.Spec.TypeDefinition("", false)
 		aViewNamespace.TypeDefinition.Cardinality = viewParameter.Schema.Cardinality
 	}
+
 	return nil
 }
 

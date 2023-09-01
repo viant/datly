@@ -11,12 +11,6 @@ type parameterStruct struct {
 	*Parameter
 }
 
-/*{
-	limit
-	vendor.sql
-
-}*/
-
 func (p *parameterStruct) Add(name string, parameter *Parameter) {
 	index := strings.Index(name, ".")
 	holder := name

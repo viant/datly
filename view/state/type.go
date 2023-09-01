@@ -31,6 +31,11 @@ func (t *Type) Type() *structology.StateType {
 	return t.stateType
 }
 
+// IsAnonymous returns flag for basic unwrapped style
+func (t *Type) IsAnonymous() bool {
+	return t.AnonymousParameters() != nil
+}
+
 func (t *Type) AnonymousParameters() *Parameter {
 	if len(t.Parameters) != 1 {
 		return nil

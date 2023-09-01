@@ -405,7 +405,7 @@ func (r *Collector) Relations(selector *Statelet) ([]*Collector, error) {
 }
 
 func (r *Collector) ViewMetaHandler(rel *Relation) (func(viewMeta interface{}) error, error) {
-	templateMeta := rel.Of.View.Template.Meta
+	templateMeta := rel.Of.View.Template.Summary
 	if templateMeta == nil {
 		return func(viewMeta interface{}) error {
 			return nil

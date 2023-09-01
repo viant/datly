@@ -1211,7 +1211,7 @@ func (v *View) ParamByName(name string) (*state.Parameter, error) {
 }
 
 func (v *View) MetaTemplateEnabled() bool {
-	return v.Template.Meta != nil
+	return v.Template.Summary != nil
 }
 
 func (v *View) AreNullValuesAllowed() bool {

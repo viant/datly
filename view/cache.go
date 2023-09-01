@@ -515,7 +515,7 @@ func (c *Cache) NewInput(selector *Statelet) *CacheInput {
 		Selector:   selector,
 		Column:     c.Warmup.IndexColumn,
 		MetaColumn: c.Warmup.IndexColumn,
-		IndexMeta:  (c.Warmup.IndexMeta || c.Warmup.IndexColumn != "") && c.owner.Template.Meta != nil,
+		IndexMeta:  (c.Warmup.IndexMeta || c.Warmup.IndexColumn != "") && c.owner.Template.Summary != nil,
 	}
 }
 

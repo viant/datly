@@ -735,7 +735,7 @@ func TestRouter(t *testing.T) {
 			codecs:      map[string]interface{}{},
 			expected:    `[{"Id":100,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3},{"Id":101,"Timestamp":"2019-04-10T05:15:33Z","EventTypeId":111,"Quantity":5.084940046072006,"UserId":3}]`,
 			expectedHeaders: map[string][]string{
-				"Events-Meta": {`{"TotalRecords":6,"CurrentPage":2,"PageSize":2}`},
+				"Events-Summary": {`{"TotalRecords":6,"CurrentPage":2,"PageSize":2}`},
 			},
 		},
 		{

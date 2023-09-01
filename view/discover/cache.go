@@ -11,7 +11,7 @@ import (
 )
 
 type (
-	Cache struct {
+	Columns struct {
 		fs        afs.Service
 		cfs       afs.Service
 		Items     map[string]view.Columns
@@ -20,7 +20,7 @@ type (
 	}
 )
 
-func (c *Cache) Load(ctx context.Context) error {
+func (c *Columns) Load(ctx context.Context) error {
 	data, err := c.cfs.DownloadWithURL(ctx, c.SourceURL)
 	if err == nil {
 		return yaml.Unmarshal(data, c)
@@ -32,7 +32,7 @@ func (c *Cache) Load(ctx context.Context) error {
 	return yaml.Unmarshal(data, c)
 }
 
-func (c *Cache) Exists(ctx context.Context) bool {
+func (c *Columns) Exists(ctx context.Context) bool {
 	exists, _ := c.cfs.Exists(ctx, c.SourceURL)
 	if exists {
 		return exists
@@ -41,7 +41,7 @@ func (c *Cache) Exists(ctx context.Context) bool {
 	return exists
 }
 
-func (c *Cache) Store(ctx context.Context) error {
+func (c *Columns) Store(ctx context.Context) error {
 	sourceURL := c.SourceURL
 	c.SourceURL = "" //avoid writing absolute location
 	asBytes, err := yaml.Marshal(c)
@@ -51,7 +51,7 @@ func (c *Cache) Store(ctx context.Context) error {
 	return c.fs.Upload(ctx, sourceURL, file.DefaultFileOsMode, bytes.NewReader(asBytes))
 }
 
-func (c *Cache) Lookup(viewName string) view.Columns {
+func (c *Columns) Lookup(viewName string) view.Columns {
 	if columns, ok := c.Items[viewName]; ok {
 		return columns
 	}
@@ -61,8 +61,8 @@ func (c *Cache) Lookup(viewName string) view.Columns {
 	return columns
 }
 
-func New(sourceURL string, cfs afs.Service) *Cache {
-	return &Cache{
+func New(sourceURL string, cfs afs.Service) *Columns {
+	return &Columns{
 		fs:        afs.New(),
 		cfs:       cfs,
 		Items:     map[string]view.Columns{},

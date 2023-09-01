@@ -254,9 +254,9 @@ func (s *Service) queryMeta(ctx context.Context, session *Session, aView *view.V
 		return nil, err
 	}
 
-	slice := reflect.New(aView.Template.Meta.Schema.SliceType())
+	slice := reflect.New(aView.Template.Summary.Schema.SliceType())
 	slicePtr := unsafe.Pointer(slice.Pointer())
-	appender := aView.Template.Meta.Schema.Slice().Appender(slicePtr)
+	appender := aView.Template.Summary.Schema.Slice().Appender(slicePtr)
 
 	SQL := indexed.SQL
 	args := indexed.Args
@@ -331,7 +331,7 @@ func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aV
 	}
 
 	var metaErr error
-	if aView.Template.Meta != nil {
+	if aView.Template.Summary != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

@@ -118,7 +118,7 @@ func (p *Parameter) initDataViewParameter(ctx context.Context, resource Resource
 	if p.Schema != nil {
 		cardinality = p.Schema.Cardinality
 	}
-	p.Schema = schema.copy()
+	p.Schema = schema.Clone()
 	parameterType := schema.Type()
 	if cardinality != "" {
 		p.Schema.Cardinality = cardinality
@@ -167,7 +167,7 @@ func (p *Parameter) inherit(param *Parameter) {
 	}
 
 	if p.Schema == nil && param.Schema != nil {
-		p.Schema = param.Schema.copy()
+		p.Schema = param.Schema.Clone()
 	}
 
 	if p.Output == nil {
@@ -346,7 +346,7 @@ func (p *Parameter) initParamBasedParameter(ctx context.Context, resource Resour
 	if err = param.Init(ctx, resource); err != nil {
 		return err
 	}
-	p.Schema = param.Schema.copy()
+	p.Schema = param.Schema.Clone()
 	p._dependsOn = param
 	return nil
 }

@@ -163,6 +163,7 @@ func (t *Type) AddRelation(name string, spec *Spec, relation *Relation) *Field {
 	}}
 	field.Tags.Set("typeName", TagValue{spec.Type.Name})
 	field.Tags.Set("sqlx", TagValue{"-"})
+	field.Relation = relation.Name
 	field.Tags.buildRelation(spec, relation)
 	field.Tag = field.Tags.Stringify()
 	t.RelationFields = append(t.RelationFields, field)

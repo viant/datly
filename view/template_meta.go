@@ -22,8 +22,8 @@ const (
 
 type (
 	MetaKind string
-	//TODO renamte TemplateMeta to better name like ResultSet Summary, Navigation,
-	TemplateMeta struct {
+	//TODO renamte TemplateSummary to better name like ResultSet Summary, Navigation,
+	TemplateSummary struct {
 		SourceURL   string
 		Source      string
 		Name        string
@@ -37,7 +37,7 @@ type (
 	}
 )
 
-func (m *TemplateMeta) Init(ctx context.Context, owner *Template, resource *Resource) error {
+func (m *TemplateSummary) Init(ctx context.Context, owner *Template, resource *Resource) error {
 	if m.initialized == true {
 		return nil
 	}
@@ -74,7 +74,7 @@ func (m *TemplateMeta) Init(ctx context.Context, owner *Template, resource *Reso
 	return nil
 }
 
-func (m *TemplateMeta) initSchemaIfNeeded(ctx context.Context, owner *Template, resource *Resource) error {
+func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Template, resource *Resource) error {
 	if m.Schema == nil {
 		m.Schema = &state.Schema{}
 	}
@@ -186,7 +186,7 @@ func (v *View) generateSchemaTypeFromColumn(caser format.Case, columns []*Column
 				Tag:  reflect.StructTag(fieldTag),
 			})
 
-			if meta := rel.Of.View.Template.Meta; meta != nil {
+			if meta := rel.Of.View.Template.Summary; meta != nil {
 				metaType := meta.Schema.Type()
 				if metaType.Kind() != reflect.Ptr {
 					metaType = reflect.PtrTo(metaType)
@@ -210,7 +210,7 @@ func newCasedField(aTag string, columnName string, sourceCaseFormat format.Case,
 	return state.NewField(aTag, structFieldName, rType)
 }
 
-func (m *TemplateMeta) getColumns(ctx context.Context, resource *Resource, owner *Template) ([]*Column, error) {
+func (m *TemplateSummary) getColumns(ctx context.Context, resource *Resource, owner *Template) ([]*Column, error) {
 	if resource._columnsCache != nil {
 		columns, ok := resource._columnsCache[m.newMetaColumnsCacheKey()]
 		if ok {
@@ -246,16 +246,16 @@ func (m *TemplateMeta) getColumns(ctx context.Context, resource *Resource, owner
 	return columns, nil
 }
 
-func (m *TemplateMeta) newMetaColumnsCacheKey() string {
+func (m *TemplateSummary) newMetaColumnsCacheKey() string {
 	return "View: " + m._owner._view.Name + "template_meta:" + m.Name
 }
 
 // Deprecated: oldMetaColumnsCacheKey is deprecated.
-func (m *TemplateMeta) oldMetaColumnsCacheKey() string {
+func (m *TemplateSummary) oldMetaColumnsCacheKey() string {
 	return "template_meta:" + m.Name
 }
 
-func (m *TemplateMeta) prepareSQL(owner *Template) (string, []interface{}, error) {
+func (m *TemplateSummary) prepareSQL(owner *Template) (string, []interface{}, error) {
 	stateValue := owner.stateType.NewState()
 
 	viewParam := AsViewParam(owner._view, nil, nil)
@@ -270,7 +270,7 @@ func (m *TemplateMeta) prepareSQL(owner *Template) (string, []interface{}, error
 	return m.Evaluate(stateValue, viewParam)
 }
 
-func (m *TemplateMeta) Evaluate(parameterState *structology.State, viewParam *expand.MetaParam) (string, []interface{}, error) {
+func (m *TemplateSummary) Evaluate(parameterState *structology.State, viewParam *expand.MetaParam) (string, []interface{}, error) {
 	state, err := Evaluate(m.sqlEvaluator, expand.WithParameterState(parameterState), expand.WithViewParam(viewParam))
 	if err != nil {
 		return "", nil, err
@@ -279,7 +279,7 @@ func (m *TemplateMeta) Evaluate(parameterState *structology.State, viewParam *ex
 	return state.Buffer.String(), state.DataUnit.ParamsGroup, nil
 }
 
-func (m *TemplateMeta) initTemplateEvaluator(_ context.Context, owner *Template, resource *Resource) error {
+func (m *TemplateSummary) initTemplateEvaluator(_ context.Context, owner *Template, resource *Resource) error {
 	evaluator, err := NewEvaluator(owner.Parameters, owner.stateType, m.Source, resource.LookupType(), nil)
 	if err != nil {
 		return err

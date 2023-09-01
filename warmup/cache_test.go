@@ -115,7 +115,7 @@ func checkIfCached(t *testing.T, cache *view.Cache, ctx context.Context, testCas
 			assert.Nil(t, service.Close(ctx, entry), testCase.description)
 		}
 
-		if cacheInput.IndexMeta && aView.Template.Meta != nil {
+		if cacheInput.IndexMeta && aView.Template.Summary != nil {
 			metaIndex, err := builder.CacheMetaSQL(aView, cacheInput.Selector, &view.BatchData{
 				ValuesBatch: testCase.metaIndexed,
 				Values:      testCase.metaIndexed,

@@ -48,6 +48,7 @@ type (
 		With         []string                   `json:",omitempty"`
 		Include      []string                   `json:",omitempty"`
 		indexNamespaces
+		IsGeneratation bool
 	}
 
 	indexNamespaces []*indexNamespace

@@ -45,7 +45,7 @@ type (
 		Transforms     map[string]*Function
 		ColumnConfig   []*view.ColumnConfig
 		View           *View
-
+		SummaryColumns sqlparser.Columns
 		TypeDefinition *view.TypeDefinition
 		OutputSettings
 		sourceViewlet *Viewlet
