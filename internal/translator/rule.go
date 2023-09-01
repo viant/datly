@@ -26,6 +26,7 @@ type (
 		orderNamespaces []string
 		Root            string
 		router.Route
+		*router.Output
 		Async        *AsyncConfig               `json:",omitempty"`
 		Cache        *view.Cache                `json:",omitempty"`
 		CSV          *content.CSVConfig         `json:",omitempty"`
@@ -103,15 +104,15 @@ func (r *Rule) StateTypePackage() string {
 func (r *Rule) applyGeneratorOutputSetting() {
 	root := r.RootViewlet()
 	outputConfig := root.OutputSettings
-	setter.SetStringIfEmpty(&r.Route.Field, outputConfig.Field)
-	if r.Route.Style == "" && r.Route.Field != "" {
-		r.Route.Style = router.ComprehensiveStyle
+	setter.SetStringIfEmpty(&r.Route.Output.Field, outputConfig.Field)
+	if r.Route.Output.Style == "" && r.Route.Output.Field != "" {
+		r.Route.Output.Style = router.ComprehensiveStyle
 	}
-	if r.Route.Style == "" {
-		r.Route.Style = router.Style(outputConfig.Style)
+	if r.Route.Output.Style == "" {
+		r.Route.Output.Style = router.Style(outputConfig.Style)
 	}
-	if r.Route.Cardinality == "" {
-		r.Route.Cardinality = outputConfig.ViewCardinality()
+	if r.Route.Output.Cardinality == "" {
+		r.Route.Output.Cardinality = outputConfig.ViewCardinality()
 	}
 
 }
@@ -137,11 +138,11 @@ func (r *Rule) ShallGenerateHandler() bool {
 }
 
 func (r *Rule) IsMany() bool {
-	return r.Cardinality == "" || r.Cardinality == state.Many
+	return r.Route.Output.Cardinality == "" || r.Route.Output.Cardinality == state.Many
 }
 
 func (r *Rule) IsBasic() bool {
-	return r.Style != router.ComprehensiveStyle && r.Field == ""
+	return r.Route.Output.Style != router.ComprehensiveStyle && r.Route.Output.Field == ""
 }
 
 func (r *Rule) ExtractSettings(dSQL *string) error {
@@ -273,7 +274,7 @@ func (r *Rule) selectorNamespace(viewName string) string {
 
 func (r *Rule) applyDefaults() {
 	setter.SetStringIfEmpty(&r.Method, "GET")
-	setter.SetCaseFormatIfEmpty(&r.Output.CaseFormat, "lc")
+	setter.SetCaseFormatIfEmpty(&r.Route.Output.CaseFormat, "lc")
 	setter.SetBoolIfFalse(&r.EnableAudit, true)
 	setter.SetBoolIfFalse(&r.CustomValidation, r.CustomValidation || r.HandlerType != "")
 	if r.Route.Cors == nil {
@@ -309,7 +310,7 @@ func (r *Rule) updateViewExclude(n *Viewlet, prefix string) {
 	}
 	for _, exclude := range n.View.Exclude { //Todo convert to field name
 		field := n.Spec.Type.ByColumn(exclude)
-		r.Route.Exclude = append(r.Route.Exclude, prefix+field.Name)
+		r.Route.Output.Exclude = append(r.Route.Output.Exclude, prefix+field.Name)
 	}
 
 	for _, rel := range n.View.With {
@@ -322,20 +323,20 @@ func (r *Rule) updateViewExclude(n *Viewlet, prefix string) {
 
 func (r *Rule) applyRootViewRouteShorthands() {
 	root := r.RootViewlet()
-	setter.SetStringIfEmpty(&r.Route.Field, root.Field)
-	if r.Route.Style == "" {
-		r.Route.Style = router.Style(root.Style)
+	setter.SetStringIfEmpty(&r.Route.Output.Field, root.Field)
+	if r.Route.Output.Style == "" {
+		r.Route.Output.Style = router.Style(root.Style)
 	}
-	if r.Route.Cardinality == "" {
-		r.Route.Cardinality = root.ViewCardinality()
+	if r.Route.Output.Cardinality == "" {
+		r.Route.Output.Cardinality = root.ViewCardinality()
 	}
 
 }
 
 func (r *Rule) applyShortHands() {
 	if r.ResponseBody != nil {
-		r.Route.ResponseBody = &router.BodySelector{}
-		r.Route.ResponseBody.StateValue = r.ResponseBody.From
+		r.Route.Output.ResponseBody = &router.BodySelector{}
+		r.Route.Output.ResponseBody.StateValue = r.ResponseBody.From
 	}
 	if r.HandlerType != "" {
 		r.Handler = &router.Handler{

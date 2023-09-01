@@ -47,7 +47,7 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 		if spec == nil {
 			return fmt.Errorf("view %v tranlsation spec was empty", root.Name)
 		}
-		root.Spec.Type.Cardinality = resource.Rule.Cardinality
+		root.Spec.Type.Cardinality = resource.Rule.Route.Output.Cardinality
 		template := codegen.NewTemplate(resource.Rule, root.Spec)
 		root.Spec.Type.Package = ruleOption.Package()
 		template.BuildTypeDef(root.Spec, resource.Rule.GetField())

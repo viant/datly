@@ -216,7 +216,10 @@ func (r *Resource) InitRule(dSQL *string, ctx context.Context, fs afs.Service, o
 	if opts != nil && opts.Generate != nil && opts.Generate.Operation != "" {
 		r.Rule.Method = strings.ToUpper(opts.Generate.Operation)
 	}
-
+	if r.Rule.Output != nil {
+		r.Rule.Route.Output = *r.Rule.Output
+		r.Rule.Output = &r.Rule.Route.Output
+	}
 	r.Statements = parser.NewStatements(*dSQL)
 	r.RawSQL = *dSQL
 	return r.initRule(ctx, fs, dSQL)
@@ -359,6 +362,7 @@ func (r *Resource) IncludeURL(ctx context.Context, URL string, fs afs.Service) (
 
 func NewResource(rule *options.Rule, repository *options.Repository, messages *msg.Messages) *Resource {
 	ret := &Resource{Rule: NewRule(), rule: rule, repository: repository, messages: messages}
+	ret.Rule.Output = &ret.Rule.Route.Output
 	ret.Resource.SetTypes(xreflect.NewTypes(
 		xreflect.WithRegistry(config.Config.Types),
 		xreflect.WithPackagePath(rule.Module)))

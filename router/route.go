@@ -64,7 +64,7 @@ type (
 
 		Input Input
 		content.Content
-		Output
+		Output Output
 
 		*view.NamespacedView
 
@@ -84,6 +84,8 @@ type (
 
 	Input struct {
 		Type state.Type
+		//TODO add explicit body type when applicable
+		//BodyType state.Type
 	}
 
 	Output struct {
@@ -176,10 +178,10 @@ func (r *Route) OutputFormat(query url.Values) string {
 }
 
 func (r *Route) IsRevealMetric() bool {
-	if r.RevealMetric == nil {
+	if r.Output.RevealMetric == nil {
 		return false
 	}
-	return *r.RevealMetric
+	return *r.Output.RevealMetric
 }
 
 func (r *Route) HttpURI() string {
@@ -231,8 +233,8 @@ func (r *Route) CorsEnabled() bool {
 }
 
 func (r *Route) Init(ctx context.Context, resource *Resource) error {
-	if r.Style == BasicStyle {
-		r.Field = ""
+	if r.Output.Style == BasicStyle {
+		r.Output.Field = ""
 	}
 	if r.Handler != nil {
 		if err := r.Handler.Init(ctx, resource.Resource); err != nil {
@@ -282,7 +284,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 
 	r._unmarshallerInterceptors = r.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
 
-	if err := r.InitMarshaller(r.ioConfig(), r.Exclude, r.InputType(), r.OutputType()); err != nil {
+	if err := r.InitMarshaller(r.ioConfig(), r.Output.Exclude, r.InputType(), r.OutputType()); err != nil {
 		return err
 	}
 
@@ -324,23 +326,23 @@ func (r *Route) IsMetricDebug(req *http.Request) bool {
 }
 
 func (r *Route) initCardinality() error {
-	switch r.Cardinality {
+	switch r.Output.Cardinality {
 	case state.One, state.Many:
 		return nil
 	case "":
-		r.Cardinality = state.Many
+		r.Output.Cardinality = state.Many
 		return nil
 	default:
-		return fmt.Errorf("unsupported cardinality type %v\n", r.Cardinality)
+		return fmt.Errorf("unsupported cardinality type %v\n", r.Output.Cardinality)
 	}
 }
 
 func (r *Route) ioConfig() common.IOConfig {
-	fmt.Printf("CASER :%v\n", r._caser.String())
+	fmt.Printf("CASER :%v\n", r.Output._caser.String())
 	return common.IOConfig{
-		OmitEmpty:  r.OmitEmpty,
-		CaseFormat: *r._caser,
-		Exclude:    common.Exclude(r.Exclude).Index(),
+		OmitEmpty:  r.Output.OmitEmpty,
+		CaseFormat: *r.Output._caser,
+		Exclude:    common.Exclude(r.Output.Exclude).Index(),
 		DateLayout: r.DateFormat,
 	}
 }
@@ -391,15 +393,12 @@ func (r *Route) initInput() error {
 	if len(r.Input.Type.Parameters) == 0 {
 		r.Input.Type.Parameters = r.View.InputParameters()
 	}
-
 	if err := r.Input.Type.Init(state.WithResourcelet(r._resourcelet),
 		state.WithPackage(pkgPath),
 		state.WithMarker(true),
 		state.WithBodyType(true)); err != nil {
 		return fmt.Errorf("failed to initialise input: %w", err)
 	}
-
-	fmt.Printf("input: %s\n", r.InputType().String())
 	return nil
 }
 
@@ -407,20 +406,20 @@ func (r *Route) initOutput() (err error) {
 	if err = r.initializeOutputParameters(); err != nil {
 		return err
 	}
-	if (r.Style == "" || r.Style == BasicStyle) && r.Field == "" {
-		r.Style = BasicStyle
+	if (r.Output.Style == "" || r.Output.Style == BasicStyle) && r.Output.Field == "" {
+		r.Output.Style = BasicStyle
 		if r.Service == ServiceTypeReader {
 			r.Output.Type.Schema = state.NewSchema(r.View.OutputType())
 			return nil
 		}
 	}
 
-	if r.Field == "" && r.Style != BasicStyle {
+	if r.Output.Field == "" && r.Output.Style != BasicStyle {
 		switch r.Service {
 		case ServiceTypeReader:
-			r.Field = "Data"
+			r.Output.Field = "Data"
 		default:
-			r.Field = "ResponseBody"
+			r.Output.Field = "ResponseBody"
 		}
 	}
 	if err = r.Output.Type.Init(state.WithResourcelet(r._resourcelet), state.WithPackage(pkgPath)); err != nil {
@@ -431,8 +430,8 @@ func (r *Route) initOutput() (err error) {
 
 func (r *Route) initializeOutputParameters() (err error) {
 	if dataParameter := r.Output.Type.Parameters.LookupByLocation(state.KindOutput, "data"); dataParameter != nil {
-		r.Style = ComprehensiveStyle
-		r.Field = dataParameter.Name
+		r.Output.Style = ComprehensiveStyle
+		r.Output.Field = dataParameter.Name
 	}
 	if len(r.Output.Type.Parameters) == 0 {
 		r.Output.Type.Parameters, err = r.defaultOutputParameters()
@@ -445,9 +444,9 @@ func (r *Route) initializeOutputParameters() (err error) {
 
 func (r *Route) defaultOutputParameters() (state.Parameters, error) {
 	var parameters state.Parameters
-	if r.Service == ServiceTypeReader && r.Style == ComprehensiveStyle {
+	if r.Service == ServiceTypeReader && r.Output.Style == ComprehensiveStyle {
 		parameters = state.Parameters{
-			{Name: r.Field, In: state.NewOutputLocation("data")},
+			{Name: r.Output.Field, In: state.NewOutputLocation("data")},
 			{Name: "Status", In: state.NewOutputLocation("status"), Tag: `anonymous:"true"`},
 		}
 		if r.View.MetaTemplateEnabled() && r.View.Template.Meta.Kind == view.MetaTypeRecord {
@@ -456,7 +455,7 @@ func (r *Route) defaultOutputParameters() (state.Parameters, error) {
 				state.WithParameterType(r.View.Template.Meta.Schema.Type())))
 		}
 
-		if r.IsRevealMetric() && r.DebugKind == view.MetaTypeRecord {
+		if r.IsRevealMetric() && r.Output.DebugKind == view.MetaTypeRecord {
 			parameters = append(parameters,
 				state.NewParameter("Debug",
 					state.NewOutputLocation("Stats"),
@@ -515,7 +514,7 @@ func (r *Route) initCompression(resource *Resource) {
 }
 
 func (r *Route) ShouldNormalizeExclude() bool {
-	return r.NormalizeExclude == nil || *r.NormalizeExclude
+	return r.Output.NormalizeExclude == nil || *r.Output.NormalizeExclude
 }
 
 func (r *Route) normalizePaths() error {
@@ -528,10 +527,10 @@ func (r *Route) normalizePaths() error {
 	}
 
 	aBool := false
-	r.NormalizeExclude = &aBool
+	r.Output.NormalizeExclude = &aBool
 
-	for i, excluded := range r.Exclude {
-		r.Exclude[i] = formatter.NormalizePath(excluded)
+	for i, excluded := range r.Output.Exclude {
+		r.Output.Exclude[i] = formatter.NormalizePath(excluded)
 	}
 
 	for i, transform := range r.Transforms {
@@ -546,31 +545,27 @@ func (r *Route) normalizePaths() error {
 //}
 
 func (r *Route) indexExcluded() {
-	r._excluded = map[string]bool{}
-	for _, excluded := range r.Exclude {
-		r._excluded[excluded] = true
+	r.Output._excluded = map[string]bool{}
+	for _, excluded := range r.Output.Exclude {
+		r.Output._excluded[excluded] = true
 	}
 }
 
 func (r *Route) initCaser() error {
-	if r._caser != nil {
+	if r.Output._caser != nil {
 		return nil
 	}
 
-	if r.CaseFormat == "" {
-		r.CaseFormat = formatter.UpperCamel
+	if r.Output.CaseFormat == "" {
+		r.Output.CaseFormat = formatter.UpperCamel
 	}
 
-	fmt.Printf("CCC: %s\n", r.CaseFormat)
 	var err error
-	caser, err := r.CaseFormat.Caser()
-	fmt.Printf("INIT C: %v %v\n", caser, err)
+	caser, err := r.Output.CaseFormat.Caser()
 	if err != nil {
 		return err
 	}
-
-	r._caser = &caser
-
+	r.Output._caser = &caser
 	return nil
 }
 
@@ -597,21 +592,21 @@ func (r *Route) bodyParamMatches(rType reflect.Type, params []*state.Parameter) 
 }
 
 func (r *Route) addPrefixFieldIfNeeded() {
-	if r.Field == "" {
+	if r.Output.Field == "" {
 		return
 	}
-	for i, actual := range r.Exclude {
-		r.Exclude[i] = r.Field + "." + actual
+	for i, actual := range r.Output.Exclude {
+		r.Output.Exclude[i] = r.Output.Field + "." + actual
 	}
 }
 
 func (r *Route) initDebugStyleIfNeeded() {
-	if r.RevealMetric == nil || !*r.RevealMetric {
+	if r.Output.RevealMetric == nil || !*r.Output.RevealMetric {
 		return
 	}
 
-	if r.DebugKind != view.MetaTypeRecord {
-		r.DebugKind = view.MetaTypeHeader
+	if r.Output.DebugKind != view.MetaTypeRecord {
+		r.Output.DebugKind = view.MetaTypeHeader
 	}
 }
 

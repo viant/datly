@@ -13,12 +13,13 @@ type (
 
 	//Type represents parameters/schema derived state type
 	Type struct {
-		Parameters
-		withMarker bool
-		stateType  *structology.StateType
 		*Schema
-		Resourcelet
-		*embed.FS
+		Parameters
+
+		withMarker   bool
+		stateType    *structology.StateType
+		resourcelet  Resourcelet
+		fs           *embed.FS
 		Pkg          string
 		withBodyType bool
 	}
@@ -75,7 +76,7 @@ func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {
 		if parameter.In.Kind == KindRequestBody {
 			hasBodyParam = true
 		}
-		if err = parameter.Init(ctx, t.Resourcelet); err != nil {
+		if err = parameter.Init(ctx, t.resourcelet); err != nil {
 			return err
 		}
 	}
@@ -84,9 +85,9 @@ func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {
 	}
 	var rType reflect.Type
 	if t.withBodyType {
-		rType, err = t.Parameters.BuildBodyType(pkgPath, t.Resourcelet.LookupType())
+		rType, err = t.Parameters.BuildBodyType(pkgPath, t.resourcelet.LookupType())
 	} else {
-		rType, err = t.Parameters.ReflectType(pkgPath, t.Resourcelet.LookupType(), withMarker)
+		rType, err = t.Parameters.ReflectType(pkgPath, t.resourcelet.LookupType(), withMarker)
 	}
 	if err != nil {
 		return err
@@ -100,7 +101,7 @@ func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {
 
 func (t *Type) buildParameter(field reflect.StructField) (*Parameter, error) {
 	result := &Parameter{}
-	paramTag, err := ParseTag(TagName, t.FS)
+	paramTag, err := ParseTag(TagName, t.fs)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +133,7 @@ func NewType(option ...Option) (*Type, error) {
 
 func WithResourcelet(resourcelet Resourcelet) Option {
 	return func(t *Type) {
-		t.Resourcelet = resourcelet
+		t.resourcelet = resourcelet
 	}
 }
 
@@ -156,7 +157,7 @@ func WithPackage(pkg string) Option {
 
 func WithFS(fs *embed.FS) Option {
 	return func(t *Type) {
-		t.FS = fs
+		t.fs = fs
 	}
 }
 
