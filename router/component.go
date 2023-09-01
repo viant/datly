@@ -1,7 +1,7 @@
 package router
 
 import (
-	"github.com/viant/datly/router/component"
+	"github.com/viant/datly/repository/component"
 	"github.com/viant/datly/router/content"
 	"github.com/viant/datly/view"
 )
