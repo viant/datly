@@ -14,7 +14,7 @@ type (
 	//Type represents parameters/schema derived state type
 	Type struct {
 		*Schema
-		Parameters
+		Parameters Parameters
 
 		withMarker   bool
 		stateType    *structology.StateType

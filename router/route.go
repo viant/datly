@@ -65,6 +65,7 @@ type (
 )
 
 func (r *Route) OutputType() reflect.Type {
+
 	if r.Output.Type.Schema == nil {
 		return nil
 	}
