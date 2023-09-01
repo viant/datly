@@ -13,7 +13,6 @@ import (
 
 type AsyncHandler struct {
 	executor *HandlerExecutor
-	session  *ReaderSession
 }
 
 func (a *AsyncHandler) Type() reflect.Type {
@@ -145,11 +144,4 @@ func (a *AsyncHandler) ReadInto(ctx context.Context, dst interface{}, job *async
 	}
 
 	return async2.QueryInto(ctx, db, job, appender)
-}
-
-func (a *AsyncHandler) getSession(ctx context.Context) (*ReaderSession, error) {
-	if a.session != nil {
-		return a.session, nil
-	}
-	return a.executor.route._router.prepareReaderSession(ctx, a.executor.response, a.executor.request, a.executor.route)
 }

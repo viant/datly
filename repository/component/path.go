@@ -1,4 +1,4 @@
-package router
+package component
 
 type Path struct {
 	URI    string `json:",omitempty"`

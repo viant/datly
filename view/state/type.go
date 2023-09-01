@@ -20,7 +20,7 @@ type (
 		stateType    *structology.StateType
 		resourcelet  Resourcelet
 		fs           *embed.FS
-		Pkg          string
+		Package      string
 		withBodyType bool
 	}
 	Option func(t *Type)
@@ -156,7 +156,7 @@ func WithParameters(parameters Parameters) Option {
 
 func WithPackage(pkg string) Option {
 	return func(t *Type) {
-		t.Pkg = pkg
+		t.Package = pkg
 	}
 }
 

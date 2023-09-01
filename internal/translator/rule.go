@@ -10,6 +10,7 @@ import (
 	component "github.com/viant/datly/repository/component"
 	"github.com/viant/datly/router"
 	"github.com/viant/datly/router/content"
+	"github.com/viant/datly/service/handler"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -341,7 +342,7 @@ func (r *Rule) applyShortHands() {
 		r.Route.Output.ResponseBody.StateValue = r.ResponseBody.From
 	}
 	if r.HandlerType != "" {
-		r.Handler = &router.Handler{
+		r.Handler = &handler.Handler{
 			HandlerType: r.HandlerType,
 			StateType:   r.StateType,
 		}

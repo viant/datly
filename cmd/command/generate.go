@@ -13,7 +13,7 @@ import (
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/translator"
-	"github.com/viant/datly/router"
+	"github.com/viant/datly/service/handler"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/toolbox/format"
 	"strings"
@@ -128,7 +128,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 	if err != nil {
 		return err
 	}
-	rule.Handler = &router.Handler{
+	rule.Handler = &handler.Handler{
 		HandlerType: rule.HandlerType,
 		StateType:   rule.StateType,
 	}

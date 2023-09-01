@@ -9,8 +9,6 @@ import (
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
 	"github.com/viant/cloudless/gateway/matcher"
-	content2 "github.com/viant/datly/router/content"
-	"github.com/viant/datly/router/marshal/json"
 	"github.com/viant/datly/router/status"
 	"github.com/viant/datly/service"
 	executor2 "github.com/viant/datly/service/executor"
@@ -80,10 +78,6 @@ func (m *MatchableRoute) Namespaces() []string {
 	return methods
 }
 
-func (s *ReaderSession) IsMetricsEnabled() bool {
-	return s.Route.Output.DebugKind == view.MetaTypeHeader || (s.IsMetricInfo() || s.IsMetricDebug())
-}
-
 func (r *Route) IsMetricsEnabled(req *http.Request) bool {
 	return r.IsMetricInfo(req) || r.IsMetricDebug(req)
 }
@@ -97,22 +91,6 @@ func (r *Route) IsMetricInfo(req *http.Request) bool {
 		value = req.Header.Get(strings.ToLower(httputils.DatlyRequestMetricsHeader))
 	}
 	return strings.ToLower(value) == httputils.DatlyInfoHeaderValue
-}
-
-func (s *ReaderSession) IsMetricDebug() bool {
-	return s.Route.IsMetricDebug(s.Request)
-}
-
-func (s *ReaderSession) IsMetricInfo() bool {
-	return s.Route.IsMetricInfo(s.Request)
-}
-
-func (s *ReaderSession) IsCacheDisabled() bool {
-	if s.Route.EnableDebug == nil {
-		return false
-	}
-
-	return (*s.Route.EnableDebug) && (s.Request.Header.Get(httputils.DatlyRequestDisableCacheHeader) != "" || s.Request.Header.Get(strings.ToLower(httputils.DatlyRequestDisableCacheHeader)) != "")
 }
 
 func (b *BytesReadCloser) Read(p []byte) (int, error) {
@@ -300,41 +278,6 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 			r.writeResponse(ctx, request, response, route, payloadReader)
 		}
 	}
-}
-
-func (r *Router) prepareReaderSession(ctx context.Context, response http.ResponseWriter, request *http.Request, route *Route) (*ReaderSession, error) {
-
-	requestParams, err := NewRequestParameters(request, route)
-	if err != nil {
-		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, err)
-	}
-	if route.CSV == nil && requestParams.OutputContentType == content2.CSVContentType {
-		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output CSV config?)", content2.CSVContentType)))
-	}
-	if route.TabularJSON == nil && route.Output.DataFormat == content2.JSONDataFormatTabular {
-		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", content2.JSONContentType)))
-	}
-	if route.XML == nil && route.Output.DataFormat == content2.XMLFormat {
-		return nil, httputils.NewHttpMessageError(http.StatusBadRequest, UnsupportedFormatErr(fmt.Sprintf("%s (forgotten output DataFormat config?)", content2.XMLContentType)))
-	}
-
-	sessionState := vsession.New(route.View, vsession.WithLocatorOptions(route.LocatorOptions(request)...))
-	if err := sessionState.Populate(ctx); err != nil {
-		defaultCode := http.StatusBadRequest
-		return nil, httputils.ErrorOf(defaultCode, err)
-	}
-
-	return &ReaderSession{
-		RequestParams: requestParams,
-		Route:         route,
-		Request:       request,
-		Response:      response,
-		State:         sessionState.State(),
-	}, nil
-}
-
-func UnsupportedFormatErr(format string) error {
-	return fmt.Errorf("unsupported output format %v", format)
 }
 
 func (r *Router) inAWS() bool {
@@ -659,7 +602,7 @@ func (r *Router) executorPayloadReader(ctx context.Context, writer http.Response
 	return NewBytesReader(data, ""), nil
 }
 
-func (r *Router) prepareExecutorSessionWithParameters(ctx context.Context, request *http.Request, route *Route, parameters *RequestParams) (*executor2.Session, error) {
+func (r *Router) prepareExecutorSessionWithParameters(ctx context.Context, request *http.Request, route *Route) (*executor2.Session, error) {
 	sessionState := vsession.New(route.View, vsession.WithLocatorOptions(route.LocatorOptions(request)...))
 	if err := sessionState.Populate(ctx); err != nil {
 		return nil, err
@@ -680,8 +623,8 @@ func (r *Router) asyncConnector(route *Route, record *async2.Job) (*view.Connect
 	return nil, fmt.Errorf("unspecified job connector")
 }
 
-func (r *Router) prepareAndExecuteExecutor(ctx context.Context, request *http.Request, route *Route, parameters *RequestParams) error {
-	execSession, err := r.prepareExecutorSessionWithParameters(ctx, request, route, parameters)
+func (r *Router) prepareAndExecuteExecutor(ctx context.Context, request *http.Request, route *Route) error {
+	execSession, err := r.prepareExecutorSessionWithParameters(ctx, request, route)
 	if err != nil {
 		return err
 	}
@@ -693,20 +636,6 @@ func (r *Router) prepareAndExecuteExecutor(ctx context.Context, request *http.Re
 	}
 
 	return nil
-}
-
-func (r *Router) marshalAsXLS(session *ReaderSession, readerSession *preparedResponse) ([]byte, error) {
-	return session.Route.Content.Marshaller.XLS.XlsMarshaller.Marshal(readerSession.objects)
-}
-
-func updateFieldPathsIfNeeded(filter *json.FilterEntry) {
-	if filter.Path == "" {
-		return
-	}
-
-	for i, field := range filter.Fields {
-		filter.Fields[i] = filter.Path + "." + field
-	}
 }
 
 func ExtractCacheableViews(routes ...*Route) []*view.View {
