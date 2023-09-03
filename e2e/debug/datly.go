@@ -12,7 +12,7 @@ import (
 	_ "github.com/viant/bigquery"
 	"github.com/viant/datly/cmd"
 	"github.com/viant/datly/cmd/env"
-	"github.com/viant/datly/template/expand"
+	"github.com/viant/datly/service/executor/expand"
 	_ "github.com/viant/dyndb"
 	_ "github.com/viant/scy/kms/blowfish"
 	"github.com/viant/sqlx/io/insert"

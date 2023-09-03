@@ -7,7 +7,7 @@ import (
 )
 
 type (
-	Resourcelet interface {
+	Resource interface {
 		LookupParameter(name string) (*Parameter, error)
 		ViewSchema(ctx context.Context, schema string) (*Schema, error)
 		LookupType() xreflect.LookupType

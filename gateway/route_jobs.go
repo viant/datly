@@ -3,10 +3,10 @@ package gateway
 import (
 	"context"
 	"database/sql"
-	"github.com/viant/datly/router"
-	"github.com/viant/datly/router/async"
-	"github.com/viant/datly/router/async/handler"
-	cusJson "github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/gateway/router"
+	"github.com/viant/datly/gateway/router/async"
+	"github.com/viant/datly/gateway/router/async/handler"
+	cusJson "github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/httputils"
 	async2 "github.com/viant/xdatly/handler/async"
@@ -21,7 +21,7 @@ func NewJobsRoute(URL string, routers []*router.Router, apiKeys []*router.APIKey
 			Method: http.MethodGet,
 		},
 		ApiKeys: apiKeys,
-		Handler: func(response http.ResponseWriter, req *http.Request, _ *async2.Job) {
+		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			records, err := handleJobsRoute(context.Background(), req, routers, nil)
 			if err != nil {
 				httputils.WriteError(response, err)

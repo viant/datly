@@ -1,7 +1,7 @@
 package gateway
 
 import (
-	async2 "github.com/viant/xdatly/handler/async"
+	"context"
 	"net/http"
 )
 
@@ -11,7 +11,7 @@ func (r *Router) NewStatusRoute() *Route {
 			Method: http.MethodGet,
 			URL:    r.config.Meta.StatusURI,
 		},
-		Handler: func(writer http.ResponseWriter, req *http.Request, _ *async2.Job) {
+		Handler: func(ctx context.Context, writer http.ResponseWriter, req *http.Request) {
 			r.statusHandler.ServeHTTP(writer, req)
 		},
 	}

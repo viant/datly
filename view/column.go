@@ -45,7 +45,7 @@ func (c *Column) ColumnName() string {
 }
 
 // Init initializes Column
-func (c *Column) Init(resourcelet state.Resourcelet, caser format.Case, allowNulls bool, config *ColumnConfig) error {
+func (c *Column) Init(resourcelet state.Resource, caser format.Case, allowNulls bool, config *ColumnConfig) error {
 	if c._initialized {
 		return nil
 	}
@@ -57,7 +57,6 @@ func (c *Column) Init(resourcelet state.Resourcelet, caser format.Case, allowNul
 	if c.DatabaseColumn == "" {
 		c.DatabaseColumn = c.Name
 	}
-
 	if c.Name == "" {
 		return fmt.Errorf("column name was empty")
 	}

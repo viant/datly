@@ -3,11 +3,10 @@ package gateway
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/router"
-	"github.com/viant/datly/router/async"
-	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/gateway/router"
+	"github.com/viant/datly/gateway/router/async"
+	"github.com/viant/datly/gateway/router/marshal/json"
 	httputils2 "github.com/viant/datly/utils/httputils"
-	async2 "github.com/viant/xdatly/handler/async"
 	"net/http"
 )
 
@@ -18,8 +17,7 @@ func NewJobRecords(URL string, jobIDParam string, routers []*router.Router, apiK
 			Method: http.MethodGet,
 		},
 		ApiKeys: apiKeys,
-		Handler: func(response http.ResponseWriter, req *http.Request, record *async2.Job) {
-			ctx := context.Background()
+		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			records, err := findAllJobRecords(ctx, req, routers, URL, jobIDParam, match)
 			if err != nil {
 				httputils2.WriteError(response, err)

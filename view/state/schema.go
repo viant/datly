@@ -75,7 +75,7 @@ func (s *Schema) SetType(rType reflect.Type) {
 }
 
 // Init build struct type
-func (s *Schema) Init(resource Resourcelet) error {
+func (s *Schema) Init(resource Resource) error {
 	if s.initialized {
 		return nil
 	}

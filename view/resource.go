@@ -9,8 +9,8 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/datly/config"
+	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/logger"
-	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
@@ -320,7 +320,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	r._views = Views(r.Views).Index()
 	r._connectors = ConnectorSlice(r.Connectors).Index()
 	r._messageBuses = MessageBusSlice(r.MessageBuses).Index()
-	r._parameters = state.Parameters(r.Parameters).Index()
+	r._parameters = r.Parameters.Index()
 	if err != nil {
 		return err
 	}
@@ -331,12 +331,10 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 		return err
 	}
 
-	Views(r.Views).EnsureResource(r)
-
-	if err = Views(r.Views).Init(ctx, r, transforms); err != nil {
+	r.Views.EnsureResource(r)
+	if err = r.Views.Init(ctx, r, transforms); err != nil {
 		return err
 	}
-
 	return nil
 }
 

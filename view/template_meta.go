@@ -3,8 +3,8 @@ package view
 import (
 	"context"
 	"fmt"
+	expand2 "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
@@ -30,7 +30,7 @@ type (
 		Kind        MetaKind
 		Cardinality state.Cardinality
 
-		sqlEvaluator *expand.Evaluator
+		sqlEvaluator *expand2.Evaluator
 		Schema       *state.Schema
 		_owner       *Template
 		initialized  bool
@@ -260,7 +260,7 @@ func (m *TemplateSummary) prepareSQL(owner *Template) (string, []interface{}, er
 
 	viewParam := AsViewParam(owner._view, nil, nil)
 
-	state, err := Evaluate(owner.sqlEvaluator, expand.WithParameterState(stateValue), expand.WithViewParam(viewParam))
+	state, err := Evaluate(owner.sqlEvaluator, expand2.WithParameterState(stateValue), expand2.WithViewParam(viewParam))
 	if err != nil {
 		return "", nil, err
 	}
@@ -270,8 +270,8 @@ func (m *TemplateSummary) prepareSQL(owner *Template) (string, []interface{}, er
 	return m.Evaluate(stateValue, viewParam)
 }
 
-func (m *TemplateSummary) Evaluate(parameterState *structology.State, viewParam *expand.MetaParam) (string, []interface{}, error) {
-	state, err := Evaluate(m.sqlEvaluator, expand.WithParameterState(parameterState), expand.WithViewParam(viewParam))
+func (m *TemplateSummary) Evaluate(parameterState *structology.State, viewParam *expand2.MetaParam) (string, []interface{}, error) {
+	state, err := Evaluate(m.sqlEvaluator, expand2.WithParameterState(parameterState), expand2.WithViewParam(viewParam))
 	if err != nil {
 		return "", nil, err
 	}

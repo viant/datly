@@ -3,7 +3,7 @@ package view
 import (
 	"embed"
 	"fmt"
-	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox/format"
 	"reflect"

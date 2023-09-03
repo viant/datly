@@ -2,8 +2,9 @@ package locator
 
 import (
 	"context"
-	"github.com/viant/datly/router/marshal/common"
-	"github.com/viant/datly/router/marshal/json"
+	"github.com/viant/datly/gateway/router/marshal/config"
+	"github.com/viant/datly/gateway/router/marshal/json"
+	"github.com/viant/datly/repository/resolver"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
@@ -19,14 +20,15 @@ type (
 		URIPattern       string
 		BodyType         reflect.Type
 		Unmarshal        Unmarshal
-		IOConfig         common.IOConfig
+		IOConfig         config.IOConfig
 		Custom           []interface{}
 		ParameterLookup  ParameterLookup
 		ReadInto         ReadInto
-		Parameters       state.NamedParameters
+		InputParameters  state.NamedParameters
 		OutputParameters state.Parameters
 		Views            view.NamedViews
 		State            *structology.State
+		Dispatcher       resolver.Dispatcher
 	}
 
 	ParameterLookup func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error)
@@ -104,20 +106,20 @@ func WithParameterLookup(lookupFn ParameterLookup) Option {
 	}
 }
 
-func WithIOConfig(config common.IOConfig) Option {
+func WithIOConfig(config config.IOConfig) Option {
 	return func(o *Options) {
 		o.IOConfig = config
 	}
 }
 
-// WithParameters creates with parameter options
-func WithParameters(parameters state.NamedParameters) Option {
+// WithInputParameters creates with parameter options
+func WithInputParameters(parameters state.NamedParameters) Option {
 	return func(o *Options) {
-		if len(o.Parameters) == 0 {
-			o.Parameters = make(state.NamedParameters)
+		if len(o.InputParameters) == 0 {
+			o.InputParameters = make(state.NamedParameters)
 		}
 		for k, v := range parameters {
-			o.Parameters[k] = v
+			o.InputParameters[k] = v
 		}
 	}
 }
@@ -148,4 +150,9 @@ func WithOutputParameters(parameters state.Parameters) Option {
 	}
 }
 
-// WithStatus returns with status options
+// WithDispatched returns options to set dispatcher
+func WithDispatcher(dispatcher resolver.Dispatcher) Option {
+	return func(o *Options) {
+		o.Dispatcher = dispatcher
+	}
+}

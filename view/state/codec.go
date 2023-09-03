@@ -19,7 +19,7 @@ type Codec struct {
 	_codec       codec.Instance
 }
 
-func (v *Codec) Init(resource Resourcelet, inputType reflect.Type) error {
+func (v *Codec) Init(resource Resource, inputType reflect.Type) error {
 	if v._initialized {
 		return nil
 	}
@@ -39,7 +39,7 @@ func (v *Codec) Init(resource Resourcelet, inputType reflect.Type) error {
 	return v.initFnIfNeeded(resource, inputType)
 }
 
-func (v *Codec) initFnIfNeeded(resource Resourcelet, inputType reflect.Type) error {
+func (v *Codec) initFnIfNeeded(resource Resource, inputType reflect.Type) error {
 	if v._codec != nil {
 		return nil
 	}
@@ -59,7 +59,7 @@ func (v *Codec) initFnIfNeeded(resource Resourcelet, inputType reflect.Type) err
 	return nil
 }
 
-func (v *Codec) inheritCodecIfNeeded(resource Resourcelet, inputType reflect.Type) error {
+func (v *Codec) inheritCodecIfNeeded(resource Resource, inputType reflect.Type) error {
 	if v.Ref == "" {
 		return nil
 	}
@@ -88,7 +88,7 @@ func (v *Codec) inheritCodecIfNeeded(resource Resourcelet, inputType reflect.Typ
 	return nil
 }
 
-func (v *Codec) newCodecInstance(resource Resourcelet, inputType reflect.Type, factory codec.Factory) (codec.Instance, error) {
+func (v *Codec) newCodecInstance(resource Resource, inputType reflect.Type, factory codec.Factory) (codec.Instance, error) {
 	var opts []interface{}
 	if codecOptions := resource.CodecOptions(); codecOptions != nil {
 		opts = codecOptions.Options
@@ -117,7 +117,7 @@ func (v *Codec) ensureSchema(paramType reflect.Type) {
 	}
 }
 
-func (v *Codec) extractCodecFn(resource Resourcelet, inputType reflect.Type) (codec.Instance, error) {
+func (v *Codec) extractCodecFn(resource Resource, inputType reflect.Type) (codec.Instance, error) {
 	foundCodec, err := resource.Codecs().Lookup(v.Name)
 	if err != nil {
 		return nil, err
@@ -126,7 +126,7 @@ func (v *Codec) extractCodecFn(resource Resourcelet, inputType reflect.Type) (co
 	return v.codecInstance(resource, inputType, foundCodec)
 }
 
-func (v *Codec) codecInstance(resource Resourcelet, inputType reflect.Type, foundCodec *codec.Codec) (codec.Instance, error) {
+func (v *Codec) codecInstance(resource Resource, inputType reflect.Type, foundCodec *codec.Codec) (codec.Instance, error) {
 	if foundCodec.Factory != nil {
 		return v.newCodecInstance(resource, inputType, foundCodec.Factory)
 	}
@@ -138,7 +138,7 @@ func (v *Codec) Transform(ctx context.Context, value interface{}, options ...cod
 	return v._codec.Value(ctx, value, options...)
 }
 
-func (v *Codec) initSchemaIfNeeded(resource Resourcelet) error {
+func (v *Codec) initSchemaIfNeeded(resource Resource) error {
 	if v.Schema == nil || v.Schema.Type() != nil {
 		return nil
 	}

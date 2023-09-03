@@ -19,7 +19,7 @@ import (
 	"sync/atomic"
 
 	"github.com/viant/datly/config"
-	"github.com/viant/datly/router"
+	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
@@ -882,10 +882,10 @@ func (r *Service) buildInterceptors(ctx context.Context, index *ExtIndex) (route
 }
 
 func (r *Service) ServeHTTPAsync(writer http.ResponseWriter, request *http.Request, record *async2.Job) {
-	aRouter, writer, ok := r.router(writer)
-	if !ok {
-		return
-	}
+	//aRouter, writer, ok := r.router(writer)
+	//if !ok {
+	//	return
+	//}
 
-	aRouter.HandleAsync(writer, request, record)
+	//	aRouter.HandleAsync(writer, request, record)
 }

@@ -3,12 +3,12 @@ package handler
 import (
 	"context"
 	goJson "encoding/json"
-	"github.com/viant/datly/router/status"
-	_ "github.com/viant/datly/service/locator"
+	"github.com/viant/datly/gateway/router/status"
+	_ "github.com/viant/datly/repository/locator/output"
 	reader "github.com/viant/datly/service/reader"
+	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
-	"github.com/viant/datly/view/session"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/structology"
@@ -42,7 +42,7 @@ func (r *Response) SetError(err error, statusCode int) {
 	r.Status.Status = "error"
 
 }
-func (h *Handler) Handle(ctx context.Context, aView *view.View, state *session.State, opts ...reader.Option) *Response {
+func (h *Handler) Handle(ctx context.Context, aView *view.View, state *session.Session, opts ...reader.Option) *Response {
 	ret := &Response{Header: http.Header{}, Status: &response.Status{Status: "ok"}}
 	err := h.readData(ctx, aView, state, ret, opts)
 	if err != nil {
@@ -68,7 +68,7 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, state *session.S
 	return ret
 }
 
-func (h *Handler) readData(ctx context.Context, aView *view.View, aState *session.State, ret *Response, opts []reader.Option) error {
+func (h *Handler) readData(ctx context.Context, aView *view.View, aState *session.Session, ret *Response, opts []reader.Option) error {
 	destValue := reflect.New(aView.Schema.SliceType())
 	dest := destValue.Interface()
 	aSession, err := reader.NewSession(dest, aView)

@@ -482,7 +482,7 @@ func testView(t *testing.T, testCase usecase, dataView *view.View, err error, se
 	session := &reader.Session{
 		Dest:  testCase.dest,
 		View:  dataView,
-		State: selectors,
+		Session: selectors,
 	}
 
 	err = service.Read(context.TODO(), session)

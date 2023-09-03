@@ -11,8 +11,8 @@ import (
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
+	expand2 "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlx"
@@ -249,14 +249,14 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 
 	sqlState = sqlState.RemoveReserved()
 	var bindingArgs []interface{}
-	var options []expand.StateOption
+	var options []expand2.StateOption
 	epxandingSQL := viewlet.SanitizedSQL
 
 	if metaViewSQL != nil {
 		sourceViewName := metaViewSQL.Name[5 : len(metaViewSQL.Name)-4]
 		epxandingSQL = strings.Replace(epxandingSQL, "$"+metaViewSQL.Name, "$View.NonWindowSQL", 1)
 		sourceView := r.Rule.Viewlets.Lookup(sourceViewName)
-		options = append(options, expand.WithViewParam(&expand.MetaParam{NonWindowSQL: sourceView.Expanded.Query, Args: sourceView.Expanded.Args, Limit: 1}))
+		options = append(options, expand2.WithViewParam(&expand2.MetaParam{NonWindowSQL: sourceView.Expanded.Query, Args: sourceView.Expanded.Args, Limit: 1}))
 		bindingArgs = sourceView.Expanded.Args
 		viewlet.sourceViewlet = sourceView
 		sourceView.View.EnsureTemplate()
@@ -271,7 +271,7 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	templateParameters := sqlState.ViewParameters()
 	if strings.Contains(epxandingSQL, "$View.ParentJoinOn") {
 		//TODO adjust parameter value type
-		options = append(options, expand.WithViewParam(&expand.MetaParam{ParentValues: []interface{}{0}, DataUnit: &expand.DataUnit{}}))
+		options = append(options, expand2.WithViewParam(&expand2.MetaParam{ParentValues: []interface{}{0}, DataUnit: &expand2.DataUnit{}}))
 	}
 	return viewlet.View.BuildParametrizedSQL(templateParameters, types, epxandingSQL, bindingArgs, options...)
 }

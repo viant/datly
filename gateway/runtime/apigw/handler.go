@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/viant/datly/gateway/router/proxy"
 	"github.com/viant/datly/gateway/runtime/apigw/adapter"
-	"github.com/viant/datly/router/proxy"
 	"os"
 	"sync"
 )

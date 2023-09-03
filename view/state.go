@@ -85,9 +85,9 @@ func (s *QuerySelector) Add(fieldName string, isHolder bool) {
 	}
 }
 
-func (s *QuerySelector) SetCriteria(expanded string, group []interface{}) {
+func (s *QuerySelector) SetCriteria(expanded string, placeholders []interface{}) {
 	s.Criteria = expanded
-	s.Placeholders = group
+	s.Placeholders = placeholders
 }
 
 // NewStatelet creates a selector

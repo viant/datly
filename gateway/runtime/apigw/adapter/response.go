@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/viant/afs/option/content"
-	"github.com/viant/datly/router/proxy"
+	"github.com/viant/datly/gateway/router/proxy"
 	"github.com/viant/datly/utils/httputils"
 	"strconv"
 	"strings"

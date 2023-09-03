@@ -3,14 +3,13 @@ package converter
 import (
 	"context"
 	"encoding/json"
+	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strconv"
 	"time"
 )
-
-type Unmarshaller func([]byte, interface{}) error
 
 func Convert(raw string, toType reflect.Type, skipValidation bool, format string, options ...interface{}) (value interface{}, wasNil bool, err error) {
 	switch toType.Kind() {
@@ -227,10 +226,10 @@ func Convert(raw string, toType reflect.Type, skipValidation bool, format string
 	return result, isNil, nil
 }
 
-func unmarshaller(options []interface{}) Unmarshaller {
+func unmarshaller(options []interface{}) shared.Unmarshal {
 	for _, option := range options {
 		switch actual := option.(type) {
-		case Unmarshaller:
+		case shared.Unmarshal:
 			return actual
 		}
 	}

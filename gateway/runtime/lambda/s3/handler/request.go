@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/viant/datly/router/async/handler"
+	"github.com/viant/datly/gateway/router/async/handler"
 	async2 "github.com/viant/xdatly/handler/async"
 	"io"
 	"net/http"

@@ -3,7 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/router/marshal"
+	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/view/state"
 )
 

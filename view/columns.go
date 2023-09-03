@@ -111,7 +111,7 @@ func (c NamedColumns) RegisterWithName(name string, column *Column) {
 }
 
 // Init initializes each Column in the slice.
-func (c Columns) Init(resourcelet state.Resourcelet, config map[string]*ColumnConfig, caser format.Case, allowNulls bool) error {
+func (c Columns) Init(resourcelet state.Resource, config map[string]*ColumnConfig, caser format.Case, allowNulls bool) error {
 	for i := range c {
 		columnConfig := config[c[i].Name]
 

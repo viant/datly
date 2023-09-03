@@ -2,7 +2,7 @@ package gateway
 
 import (
 	"fmt"
-	"github.com/viant/datly/router"
+	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/view"
 	"sync"
 )

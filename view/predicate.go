@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/config"
-	"github.com/viant/datly/template/expand"
+	expand2 "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
@@ -28,29 +28,29 @@ type (
 	}
 
 	predicateEvaluatorProvider struct {
-		evaluator    *expand.Evaluator
+		evaluator    *expand2.Evaluator
 		ctxType      reflect.Type
 		signature    map[int]*predicate.NamedArgument
-		state        *expand.NamedVariable
-		hasStateName *expand.NamedVariable
+		state        *expand2.NamedVariable
+		hasStateName *expand2.NamedVariable
 		handler      codec.PredicateHandler
 	}
 
 	predicateEvaluator struct {
-		ctx           *expand.Variable
-		evaluator     *expand.Evaluator
-		valueState    *expand.NamedVariable
-		hasValueState *expand.NamedVariable
+		ctx           *expand2.Variable
+		evaluator     *expand2.Evaluator
+		valueState    *expand2.NamedVariable
+		hasValueState *expand2.NamedVariable
 	}
 )
 
 func (e *predicateEvaluator) Compute(ctx context.Context, value interface{}) (*codec.Criteria, error) {
-	cuxtomCtx, ok := ctx.Value(expand.PredicateCtx).(*expand.Context)
+	cuxtomCtx, ok := ctx.Value(expand2.PredicateCtx).(*expand2.Context)
 	if !ok {
 		panic("not found custom ctx")
 	}
 
-	val := ctx.Value(expand.PredicateState)
+	val := ctx.Value(expand2.PredicateState)
 	aState := val.(*structology.State)
 	offset := len(cuxtomCtx.DataUnit.ParamsGroup)
 	evaluate, err := e.Evaluate(cuxtomCtx, aState, value)
@@ -58,17 +58,17 @@ func (e *predicateEvaluator) Compute(ctx context.Context, value interface{}) (*c
 		return nil, err
 	}
 
-	return &codec.Criteria{Predicate: evaluate.Buffer.String(), Args: evaluate.DataUnit.ParamsGroup[offset:]}, nil
+	return &codec.Criteria{Expression: evaluate.Buffer.String(), Placeholders: evaluate.DataUnit.ParamsGroup[offset:]}, nil
 }
 
-func (e *predicateEvaluator) Evaluate(ctx *expand.Context, state *structology.State, value interface{}) (*expand.State, error) {
+func (e *predicateEvaluator) Evaluate(ctx *expand2.Context, state *structology.State, value interface{}) (*expand2.State, error) {
 	return e.evaluator.Evaluate(ctx,
-		expand.WithParameterState(state),
-		expand.WithNamedVariables(
+		expand2.WithParameterState(state),
+		expand2.WithNamedVariables(
 			e.valueState.New(value),
 			e.hasValueState.New(value != nil),
 		),
-		expand.WithCustomContext(e.ctx),
+		expand2.WithCustomContext(e.ctx),
 	)
 }
 
@@ -121,7 +121,7 @@ func (p *predicateEvaluatorProvider) new(predicateConfig *config.PredicateConfig
 		xunsafe.FieldByName(p.ctxType, argument.Name).SetString(dstPtr, arg)
 	}
 
-	customCtx := &expand.Variable{
+	customCtx := &expand2.Variable{
 		Type:  p.ctxType,
 		Value: dst,
 	}
@@ -158,23 +158,23 @@ func (p *predicateEvaluatorProvider) init(resource *Resource, predicateConfig *c
 	}
 
 	ctxType := reflect.StructOf(ctxFields)
-	stateVariable := &expand.NamedVariable{
-		Variable: expand.Variable{
+	stateVariable := &expand2.NamedVariable{
+		Variable: expand2.Variable{
 			Type: paramType,
 		},
 		Name: "FilterValue",
 	}
-	hasVariable := &expand.NamedVariable{
-		Variable: expand.Variable{
+	hasVariable := &expand2.NamedVariable{
+		Variable: expand2.Variable{
 			Type: xreflect.BoolType,
 		},
 		Name: "HasFilterValue",
 	}
 
-	evaluator, err := expand.NewEvaluator(lookup.Template.Source,
-		expand.WithStateType(stateType),
-		expand.WithCustomContexts(&expand.Variable{Type: ctxType}),
-		expand.WithVariable(
+	evaluator, err := expand2.NewEvaluator(lookup.Template.Source,
+		expand2.WithStateType(stateType),
+		expand2.WithCustomContexts(&expand2.Variable{Type: ctxType}),
+		expand2.WithVariable(
 			stateVariable,
 			hasVariable,
 		),

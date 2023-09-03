@@ -1,17 +1,19 @@
 package executor
 
-import "github.com/viant/datly/template/expand"
+import (
+	expand2 "github.com/viant/datly/service/executor/expand"
+)
 
 type TemplateStmtIterator struct {
-	DataUnit *expand.DataUnit
-	Data     []*expand.SQLStatment
+	DataUnit *expand2.DataUnit
+	Data     []*expand2.SQLStatment
 
 	dataIndex      int
 	exhaustedData  bool
 	nextExecutable interface{}
 }
 
-func NewTemplateStmtIterator(dataUnit *expand.DataUnit, data []*expand.SQLStatment) *TemplateStmtIterator {
+func NewTemplateStmtIterator(dataUnit *expand2.DataUnit, data []*expand2.SQLStatment) *TemplateStmtIterator {
 	return &TemplateStmtIterator{
 		DataUnit: dataUnit,
 		Data:     data,
@@ -51,7 +53,7 @@ func (t *TemplateStmtIterator) HasAny() bool {
 	return len(t.Data) > 0 || len(t.DataUnit.Statements.Executable) > 0
 }
 
-func (t *TemplateStmtIterator) canBeBatchedGlobally(criteria *expand.DataUnit, data []*expand.SQLStatment) bool {
+func (t *TemplateStmtIterator) canBeBatchedGlobally(criteria *expand2.DataUnit, data []*expand2.SQLStatment) bool {
 	executables := criteria.FilterExecutables(extractStatements(data), true)
 	if len(executables) != len(data) {
 		return false
@@ -59,7 +61,7 @@ func (t *TemplateStmtIterator) canBeBatchedGlobally(criteria *expand.DataUnit, d
 
 	tableNamesIndex := map[string]bool{}
 	for _, executable := range executables {
-		if executable.ExecType == expand.ExecTypeUpdate {
+		if executable.ExecType == expand2.ExecTypeUpdate {
 			return false
 		}
 

@@ -8,11 +8,11 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/config"
-	"github.com/viant/datly/router"
+	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/service/auth/jwt"
 	"github.com/viant/datly/service/auth/mock"
-	executor2 "github.com/viant/datly/service/executor"
-	reader2 "github.com/viant/datly/service/reader"
+	executor "github.com/viant/datly/service/executor"
+	reader "github.com/viant/datly/service/reader"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	sjwt "github.com/viant/scy/auth/jwt"
@@ -33,8 +33,8 @@ import (
 type (
 	Service struct {
 		initialized    int32
-		reader         *reader2.Service
-		executor       *executor2.Executor
+		reader         *reader.Service
+		executor       *executor.Executor
 		jwtVerifier    *verifier.Service
 		routerResource *router.Resource
 		resource       *view.Resource
@@ -55,7 +55,7 @@ type (
 )
 
 // Read reads data
-func (s *Service) Read(ctx context.Context, viewId string, dest interface{}, option ...reader2.Option) error {
+func (s *Service) Read(ctx context.Context, viewId string, dest interface{}, option ...reader.Option) error {
 	aView, err := s.resource.View(viewId)
 	if err != nil {
 		return err
@@ -64,7 +64,7 @@ func (s *Service) Read(ctx context.Context, viewId string, dest interface{}, opt
 }
 
 // Exec executes
-func (s *Service) Exec(ctx context.Context, viewId string, options ...executor2.Option) error {
+func (s *Service) Exec(ctx context.Context, viewId string, options ...executor.Option) error {
 	execView, err := s.resource.View(viewId)
 	if err != nil {
 		return err
@@ -272,8 +272,8 @@ func (s *Service) loadDependencies(ctx context.Context, datlyRootURL string, typ
 func New(cfg *Config) *Service {
 	ret := &Service{
 		config:    cfg,
-		reader:    reader2.New(),
-		executor:  executor2.New(),
+		reader:    reader.New(),
+		executor:  executor.New(),
 		connector: cfg.Connector,
 		fs:        afs.New(),
 	}
@@ -305,8 +305,8 @@ func NewConfig() *Config {
 }
 
 // WithExecHttpRequest create http based parameters set execution option
-func WithExecHttpRequest(ctx context.Context, route *router.Route, request *http.Request) executor2.Option {
-	return func(session *executor2.Session) error {
+func WithExecHttpRequest(ctx context.Context, route *router.Route, request *http.Request) executor.Option {
+	return func(session *executor.Session) error {
 		selectors := session.Selectors()
 		err := router.BuildRouteSelectors(ctx, selectors, route, request)
 		sel := selectors.Lookup(route.View)
@@ -317,8 +317,8 @@ func WithExecHttpRequest(ctx context.Context, route *router.Route, request *http
 }
 
 // WithReadHttpRequest create http based parameters set execution option
-func WithReadHttpRequest(ctx context.Context, route *router.Route, request *http.Request) reader2.Option {
-	return func(session *reader2.Session) error {
+func WithReadHttpRequest(ctx context.Context, route *router.Route, request *http.Request) reader.Option {
+	return func(session *reader.Session) error {
 		selectors := session.State
 		aView := session.View
 		err := router.BuildRouteSelectors(ctx, selectors, route, request)

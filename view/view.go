@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/datly/config"
+	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/logger"
-	"github.com/viant/datly/router/marshal"
+	expand2 "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/column"
@@ -136,6 +136,10 @@ type (
 		_initialized     bool
 	}
 )
+
+func (v *View) Resource() state.Resource {
+	return NewResourcelet(v._resource, v)
+}
 
 // OutputType returns reader view output type
 func (v *View) OutputType() reflect.Type {
@@ -649,12 +653,12 @@ func (v *View) detectColumns(ctx context.Context, resource *Resource) error {
 		SQL = v.Template.Source
 		aState = v.Template.Parameters
 	}
-	var options []expand.StateOption
+	var options []expand2.StateOption
 	var bindingArguments []interface{}
 
 	if strings.Contains(SQL, "$View.ParentJoinOn") {
 		//TODO adjust parameter value type
-		options = append(options, expand.WithViewParam(&expand.MetaParam{ParentValues: []interface{}{0}, DataUnit: &expand.DataUnit{}}))
+		options = append(options, expand2.WithViewParam(&expand2.MetaParam{ParentValues: []interface{}{0}, DataUnit: &expand2.DataUnit{}}))
 	}
 	query, err := v.BuildParametrizedSQL(aState, resource.TypeRegistry(), SQL, bindingArguments, options...)
 	v.Logger.ColumnsDetection(query.Query, v.Source())
@@ -1193,7 +1197,7 @@ func (v *View) indexTransforms() error {
 	return nil
 }
 
-func (v *View) Expand(placeholders *[]interface{}, SQL string, selector *Statelet, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error) {
+func (v *View) Expand(placeholders *[]interface{}, SQL string, selector *Statelet, params CriteriaParam, batchData *BatchData, sanitized *expand2.DataUnit) (string, error) {
 	v.ensureParameters(selector)
 
 	return v.Template.Expand(placeholders, SQL, selector, params, batchData, sanitized)
@@ -1288,7 +1292,7 @@ func (v *View) ensureAsyncTableNameIfNeeded() error {
 	return nil
 }
 
-func (v *View) BuildParametrizedSQL(state state.Parameters, types *xreflect.Types, SQL string, bindingArgs []interface{}, options ...expand.StateOption) (*sqlx.SQL, error) {
+func (v *View) BuildParametrizedSQL(state state.Parameters, types *xreflect.Types, SQL string, bindingArgs []interface{}, options ...expand2.StateOption) (*sqlx.SQL, error) {
 	reflectType, err := state.ReflectType(pkgPath, types.Lookup, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create state %v type: %w", v.Name, err)
@@ -1300,7 +1304,7 @@ func (v *View) BuildParametrizedSQL(state state.Parameters, types *xreflect.Type
 		return nil, err
 	}
 	state.InitRepeated(inputState)
-	options = append(options, expand.WithParameterState(inputState))
+	options = append(options, expand2.WithParameterState(inputState))
 
 	evaluator, err := NewEvaluator(state, stateType, SQL, types.Lookup, nil)
 	if err != nil {

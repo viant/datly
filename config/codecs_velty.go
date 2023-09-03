@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/internal/converter"
-	"github.com/viant/datly/template/expand"
+	expand2 "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
@@ -21,7 +21,7 @@ type (
 	VeltyCodec struct {
 		template  string
 		codecType reflect.Type
-		evaluator *expand.Evaluator
+		evaluator *expand2.Evaluator
 		columns   codec.ColumnsSource
 	}
 )
@@ -65,20 +65,20 @@ func (v *VeltyCodec) Value(ctx context.Context, raw interface{}, options ...code
 	stateType := structology.NewStateType(reflect.TypeOf(aValue))
 	state := stateType.WithValue(aValue)
 	aCriteria := NewCriteria(v.columns)
-	evaluated, err := v.evaluator.Evaluate(nil, expand.WithParameterState(state), expand.WithDataUnit(aCriteria))
+	evaluated, err := v.evaluator.Evaluate(nil, expand2.WithParameterState(state), expand2.WithDataUnit(aCriteria))
 
 	if err != nil {
 		return nil, err
 	}
 
 	return &codec.Criteria{
-		Predicate: evaluated.Expanded,
-		Args:      evaluated.DataUnit.ParamsGroup,
+		Expression:   evaluated.Expanded,
+		Placeholders: evaluated.DataUnit.ParamsGroup,
 	}, nil
 }
 
-func NewCriteria(columns codec.ColumnsSource) *expand.DataUnit {
-	return &expand.DataUnit{
+func NewCriteria(columns codec.ColumnsSource) *expand2.DataUnit {
+	return &expand2.DataUnit{
 		Columns: columns,
 	}
 }
@@ -98,7 +98,7 @@ func (v *VeltyCodec) selector(options []interface{}) codec.Selector {
 func (v *VeltyCodec) init() error {
 	var err error
 	stateType := structology.NewStateType(v.codecType)
-	v.evaluator, err = expand.NewEvaluator(v.template, expand.WithStateType(stateType), expand.WithTypeLookup(v.lookupType))
+	v.evaluator, err = expand2.NewEvaluator(v.template, expand2.WithStateType(stateType), expand2.WithTypeLookup(v.lookupType))
 
 	return err
 }

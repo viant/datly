@@ -30,11 +30,11 @@ func NewParameter(opts ...Option) (kind.Locator, error) {
 	if options.ParameterLookup == nil {
 		return nil, fmt.Errorf("parameterLookup was empty")
 	}
-	if options.Parameters == nil {
+	if options.InputParameters == nil {
 		return nil, fmt.Errorf("parameters was empty")
 	}
 	return &Parameter{
 		ParameterLookup: options.ParameterLookup,
-		Parameters:      options.Parameters,
+		Parameters:      options.InputParameters,
 	}, nil
 }

@@ -3,8 +3,8 @@ package view
 import (
 	"context"
 	"database/sql"
+	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/reader/metadata"
-	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlx/io"

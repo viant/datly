@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
+	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	component "github.com/viant/datly/repository/component"
-	"github.com/viant/datly/router"
-	"github.com/viant/datly/router/content"
-	"github.com/viant/datly/service/handler"
+	content2 "github.com/viant/datly/repository/content"
+	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -25,29 +25,30 @@ type (
 	Rule struct {
 		Viewlets
 
-		orderNamespaces []string
-		Root            string
+		CustomValidation bool
+		orderNamespaces  []string
+		Root             string
 		router.Route
 		*component.Output
-		Async        *AsyncConfig               `json:",omitempty"`
-		Cache        *view.Cache                `json:",omitempty"`
-		CSV          *content.CSVConfig         `json:",omitempty"`
-		Const        map[string]interface{}     `json:",omitempty"`
-		ConstURL     string                     `json:",omitempty"`
-		EmbedURL     string                     `json:",omitempty"`
-		Embeds       data.Map                   `json:",omitempty"`
-		RequestBody  *BodyConfig                `json:",omitempty"`
-		TypeSrc      *parser.TypeImport         `json:",omitempty"`
-		ResponseBody *ResponseBodyConfig        `json:",omitempty"`
-		Package      string                     `json:",omitempty"`
-		Router       *RouterConfig              `json:",omitempty" yaml:",omitempty"`
-		DataFormat   string                     `json:",omitempty"`
-		TabularJSON  *content.TabularJSONConfig `json:",omitempty"`
-		XML          *content.XMLConfig         `json:",omitempty"`
-		HandlerType  string                     `json:",omitempty"`
-		StateType    string                     `json:",omitempty"`
-		With         []string                   `json:",omitempty"`
-		Include      []string                   `json:",omitempty"`
+		Async        *AsyncConfig                `json:",omitempty"`
+		Cache        *view.Cache                 `json:",omitempty"`
+		CSV          *content2.CSVConfig         `json:",omitempty"`
+		Const        map[string]interface{}      `json:",omitempty"`
+		ConstURL     string                      `json:",omitempty"`
+		EmbedURL     string                      `json:",omitempty"`
+		Embeds       data.Map                    `json:",omitempty"`
+		RequestBody  *BodyConfig                 `json:",omitempty"`
+		TypeSrc      *parser.TypeImport          `json:",omitempty"`
+		ResponseBody *ResponseBodyConfig         `json:",omitempty"`
+		Package      string                      `json:",omitempty"`
+		Router       *RouterConfig               `json:",omitempty" yaml:",omitempty"`
+		DataFormat   string                      `json:",omitempty"`
+		TabularJSON  *content2.TabularJSONConfig `json:",omitempty"`
+		XML          *content2.XMLConfig         `json:",omitempty"`
+		HandlerType  string                      `json:",omitempty"`
+		StateType    string                      `json:",omitempty"`
+		With         []string                    `json:",omitempty"`
+		Include      []string                    `json:",omitempty"`
 		indexNamespaces
 		IsGeneratation bool
 	}
@@ -279,7 +280,7 @@ func (r *Rule) applyDefaults() {
 	setter.SetStringIfEmpty(&r.Method, "GET")
 	setter.SetCaseFormatIfEmpty(&r.Route.Output.CaseFormat, "lc")
 	setter.SetBoolIfFalse(&r.EnableAudit, true)
-	setter.SetBoolIfFalse(&r.CustomValidation, r.CustomValidation || r.HandlerType != "")
+	setter.SetBoolIfFalse(&r.Input.CustomValidation, r.CustomValidation || r.HandlerType != "")
 	if r.Route.Cors == nil {
 		r.Route.Cors = &router.Cors{
 			AllowCredentials: setter.BoolPtr(true),
@@ -351,10 +352,10 @@ func (r *Rule) applyShortHands() {
 		r.Route.Output.Style = component.ComprehensiveStyle
 	}
 	if r.Route.TabularJSON != nil && r.Route.Output.DataFormat == "" {
-		r.Route.Output.DataFormat = content.JSONDataFormatTabular
+		r.Route.Output.DataFormat = content2.JSONDataFormatTabular
 	}
 	if r.Route.XML != nil && r.Route.Output.DataFormat == "" {
-		r.Route.Output.DataFormat = content.XMLFormat
+		r.Route.Output.DataFormat = content2.XMLFormat
 	}
 }
 

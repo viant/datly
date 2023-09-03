@@ -1,9 +1,9 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
-	"github.com/viant/datly/router"
-	async2 "github.com/viant/xdatly/handler/async"
+	"github.com/viant/datly/gateway/router"
 	"net/http"
 	"path"
 	"strings"
@@ -22,7 +22,7 @@ type (
 		ApiKeys       []*router.APIKey
 		Routes        []*router.Route
 		NewMultiRoute func(routes []*router.Route) *Route
-		Handler       func(response http.ResponseWriter, req *http.Request, record *async2.Job)
+		Handler       func(ctx context.Context, response http.ResponseWriter, req *http.Request)
 	}
 
 	RouteMeta struct {
@@ -31,13 +31,13 @@ type (
 	}
 )
 
-func (r *Route) Handle(res http.ResponseWriter, req *http.Request, record *async2.Job) {
+func (r *Route) Handle(res http.ResponseWriter, req *http.Request) {
 	if !r.CanHandle(req) {
 		write(res, http.StatusForbidden, nil)
 		return
 	}
 
-	r.Handler(res, req, record)
+	r.Handler(context.Background(), res, req)
 }
 
 func (r *Route) CanHandle(req *http.Request) bool {
@@ -63,8 +63,8 @@ func (r *Router) NewRouteHandler(aRouter *router.Router, route *router.Route) *R
 			URL:    URI,
 		},
 		Routes: []*router.Route{route},
-		Handler: func(r http.ResponseWriter, req *http.Request, record *async2.Job) {
-			err := aRouter.HandleAsyncRoute(r, req, route, record)
+		Handler: func(ctx context.Context, r http.ResponseWriter, req *http.Request) {
+			err := aRouter.HandleRequest(ctx, r, req, route)
 			if err != nil {
 				r.WriteHeader(http.StatusNotFound)
 			}

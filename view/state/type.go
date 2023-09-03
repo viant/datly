@@ -18,7 +18,7 @@ type (
 
 		withMarker   bool
 		stateType    *structology.StateType
-		resourcelet  Resourcelet
+		resource     Resource
 		fs           *embed.FS
 		Package      string
 		withBodyType bool
@@ -81,7 +81,7 @@ func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {
 		if parameter.In.Kind == KindRequestBody {
 			hasBodyParam = true
 		}
-		if err = parameter.Init(ctx, t.resourcelet); err != nil {
+		if err = parameter.Init(ctx, t.resource); err != nil {
 			return err
 		}
 	}
@@ -90,9 +90,9 @@ func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {
 	}
 	var rType reflect.Type
 	if t.withBodyType {
-		rType, err = t.Parameters.BuildBodyType(pkgPath, t.resourcelet.LookupType())
+		rType, err = t.Parameters.BuildBodyType(pkgPath, t.resource.LookupType())
 	} else {
-		rType, err = t.Parameters.ReflectType(pkgPath, t.resourcelet.LookupType(), withMarker)
+		rType, err = t.Parameters.ReflectType(pkgPath, t.resource.LookupType(), withMarker)
 	}
 	if err != nil {
 		return err
@@ -136,9 +136,9 @@ func NewType(option ...Option) (*Type, error) {
 	return ret, err
 }
 
-func WithResourcelet(resourcelet Resourcelet) Option {
+func WithResource(resource Resource) Option {
 	return func(t *Type) {
-		t.resourcelet = resourcelet
+		t.resource = resource
 	}
 }
 

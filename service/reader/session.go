@@ -2,8 +2,8 @@ package reader
 
 import (
 	"fmt"
+	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
-	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/predicate"

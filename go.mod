@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-lambda-go v1.31.0
 	github.com/francoispqt/gojay v1.2.13
 	github.com/go-sql-driver/mysql v1.7.0
-	github.com/goccy/go-json v0.9.11
+	github.com/goccy/go-json v0.9.11 // indirect
 	github.com/golang-jwt/jwt/v4 v4.4.1 // indirect
 	github.com/google/gops v0.3.23
 	github.com/google/uuid v1.3.0
@@ -54,7 +54,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.18.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.33.1
 	github.com/viant/structology v0.4.3-0.20230825145949-982090fc8c97
-	github.com/viant/xdatly v0.3.1-0.20230828213344-91acb0b441e5
+	github.com/viant/xdatly v0.3.1-0.20230902232905-10f2d9a5a9e9
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
 	github.com/viant/xdatly/handler v0.0.0-20230826222921-468312aa36c9
 	github.com/viant/xdatly/types/core v0.0.0-20230619231115-e622dd6aff79

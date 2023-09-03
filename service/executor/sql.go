@@ -2,9 +2,9 @@ package executor
 
 import (
 	"fmt"
+	expand2 "github.com/viant/datly/service/executor/expand"
+	"github.com/viant/datly/service/executor/extension"
 	"github.com/viant/datly/service/executor/parser"
-	"github.com/viant/datly/service/executor/session"
-	"github.com/viant/datly/template/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/structology"
 	"strings"
@@ -18,7 +18,7 @@ func NewBuilder() *SqlBuilder {
 	return &SqlBuilder{}
 }
 
-func (s *SqlBuilder) Build(aView *view.View, templateState *structology.State, session *session.Session, dataUnit *expand.DataUnit) (*expand.State, []*expand.SQLStatment, error) {
+func (s *SqlBuilder) Build(aView *view.View, templateState *structology.State, session *extension.Session, dataUnit *expand2.DataUnit) (*expand2.State, []*expand2.SQLStatment, error) {
 
 	fmt.Printf("SOURCE: %s\n", aView.Template.Source)
 	fmt.Printf("templateState: %T \n%+v\n", templateState.State(), templateState.State())
@@ -41,13 +41,13 @@ func (s *SqlBuilder) Build(aView *view.View, templateState *structology.State, s
 
 	statements := parser.ParseWithReader(strings.NewReader(SQL))
 
-	result := make([]*expand.SQLStatment, len(statements))
+	result := make([]*expand2.SQLStatment, len(statements))
 	if len(statements) == 0 && strings.TrimSpace(SQL) != "" {
-		result = append(result, &expand.SQLStatment{SQL: SQL, Args: state.DataUnit.At(0)})
+		result = append(result, &expand2.SQLStatment{SQL: SQL, Args: state.DataUnit.At(0)})
 	}
 
 	for i := range statements {
-		result[i] = &expand.SQLStatment{
+		result[i] = &expand2.SQLStatment{
 			SQL:  statements[i],
 			Args: state.DataUnit.At(i),
 		}

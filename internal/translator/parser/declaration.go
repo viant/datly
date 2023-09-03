@@ -2,8 +2,8 @@ package parser
 
 import (
 	"encoding/json"
+	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/internal/inference"
-	"github.com/viant/datly/router/marshal"
 	"github.com/viant/datly/view/state"
 	"strings"
 )

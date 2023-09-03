@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/datly/logger"
-	"github.com/viant/datly/template/expand"
+	expand2 "github.com/viant/datly/service/executor/expand"
+	vsession "github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
-	vsession "github.com/viant/datly/view/session"
 	"github.com/viant/sqlx/io/insert/batcher"
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/option"
@@ -75,7 +75,7 @@ func (e *Executor) Exec(ctx context.Context, sess *Session, options ...DBOption)
 	state, data, err := e.sqlBuilder.Build(sess.View, sess.Lookup(sess.View), sess.SessionHandler, sess.DataUnit)
 	if state != nil {
 		sess.TemplateState = state
-		defer sess.TemplateState.Flush(expand.StatusFailure)
+		defer sess.TemplateState.Flush(expand2.StatusFailure)
 	}
 
 	if err != nil {
@@ -90,7 +90,7 @@ func (e *Executor) Exec(ctx context.Context, sess *Session, options ...DBOption)
 		return err
 	}
 
-	return state.Flush(expand.StatusSuccess)
+	return state.Flush(expand2.StatusSuccess)
 }
 
 func (e *Executor) ExecuteStmts(ctx context.Context, dbSource DBSource, it StmtIterator, options ...DBOption) error {
@@ -128,7 +128,7 @@ func (e *Executor) ExecuteStmts(ctx context.Context, dbSource DBSource, it StmtI
 	return aTx.CommitIfNeeded()
 }
 
-func extractStatements(data []*expand.SQLStatment) []string {
+func extractStatements(data []*expand2.SQLStatment) []string {
 	result := make([]string, 0, len(data))
 	for _, datum := range data {
 		result = append(result, datum.SQL)
@@ -139,22 +139,22 @@ func extractStatements(data []*expand.SQLStatment) []string {
 
 func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface{}, db *sql.DB) error {
 	switch actual := data.(type) {
-	case *expand.Executable:
+	case *expand2.Executable:
 		if actual.Executed() {
 			return nil
 		}
 
 		defer actual.MarkAsExecuted()
 		switch actual.ExecType {
-		case expand.ExecTypeInsert:
+		case expand2.ExecTypeInsert:
 			return e.handleInsert(ctx, sess, actual, db)
-		case expand.ExecTypeUpdate:
+		case expand2.ExecTypeUpdate:
 			return e.handleUpdate(ctx, sess, db, actual)
 		default:
 			return fmt.Errorf("unsupported exec type: %v\n", actual.ExecType)
 		}
 
-	case *expand.SQLStatment:
+	case *expand2.SQLStatment:
 		if len(actual.SQL) == 0 {
 			return nil
 		}
@@ -170,7 +170,7 @@ func (e *Executor) execData(ctx context.Context, sess *dbSession, data interface
 	return fmt.Errorf("unsupported query type %T", data)
 }
 
-func (e *Executor) handleUpdate(ctx context.Context, sess *dbSession, db *sql.DB, executable *expand.Executable) error {
+func (e *Executor) handleUpdate(ctx context.Context, sess *dbSession, db *sql.DB, executable *expand2.Executable) error {
 	service, err := sess.Updater(ctx, db, executable.Table, e.dbOptions(db, sess))
 	if err != nil {
 		return err
@@ -185,7 +185,7 @@ func (e *Executor) handleUpdate(ctx context.Context, sess *dbSession, db *sql.DB
 	return err
 }
 
-func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable *expand.Executable, db *sql.DB) error {
+func (e *Executor) handleInsert(ctx context.Context, sess *dbSession, executable *expand2.Executable, db *sql.DB) error {
 	canBeBatched := sess.supportLocalBatch() && sess.dbSource.CanBatch(executable.Table)
 	options := e.dbOptions(db, sess)
 	service, err := sess.Inserter(ctx, db, executable.Table, options...)
@@ -267,7 +267,7 @@ func (e *Executor) dialectSupportsBatching(ctx context.Context, aView *view.View
 	return err == nil && dialect.Insert.MultiValues()
 }
 
-func (e *Executor) executeStatement(ctx context.Context, tx *sql.Tx, stmt *expand.SQLStatment, sess *dbSession) error {
+func (e *Executor) executeStatement(ctx context.Context, tx *sql.Tx, stmt *expand2.SQLStatment, sess *dbSession) error {
 	_, err := tx.ExecContext(ctx, stmt.SQL, stmt.Args...)
 	if err != nil {
 		if sess.logger != nil {
@@ -280,7 +280,7 @@ func (e *Executor) executeStatement(ctx context.Context, tx *sql.Tx, stmt *expan
 	return err
 }
 
-func (s *dbSession) collection(executable *expand.Executable) *batcher.Collection {
+func (s *dbSession) collection(executable *expand2.Executable) *batcher.Collection {
 	if collection, ok := s.collections[executable.Table]; ok {
 		return collection
 	}

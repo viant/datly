@@ -58,7 +58,7 @@ func (p *Parameter) OutputSchema() *Schema {
 }
 
 // Init initializes Parameter
-func (p *Parameter) Init(ctx context.Context, resource Resourcelet) error {
+func (p *Parameter) Init(ctx context.Context, resource Resource) error {
 	if p._initialized == true {
 		return nil
 	}
@@ -105,7 +105,7 @@ func (p *Parameter) Init(ctx context.Context, resource Resourcelet) error {
 	return p.Validate()
 }
 
-func (p *Parameter) initDataViewParameter(ctx context.Context, resource Resourcelet) error {
+func (p *Parameter) initDataViewParameter(ctx context.Context, resource Resource) error {
 	if p.Schema != nil && p.Schema.Type() != nil {
 		return nil
 	}
@@ -131,7 +131,7 @@ func (p *Parameter) initDataViewParameter(ctx context.Context, resource Resource
 	return nil
 }
 
-func (p *Parameter) inheritParamIfNeeded(ctx context.Context, resource Resourcelet) error {
+func (p *Parameter) inheritParamIfNeeded(ctx context.Context, resource Resource) error {
 	if p.Ref == "" {
 		return nil
 	}
@@ -205,7 +205,7 @@ func (p *Parameter) IsRequired() bool {
 	return p.Required != nil && *p.Required == true
 }
 
-func (p *Parameter) initSchema(resource Resourcelet) error {
+func (p *Parameter) initSchema(resource Resource) error {
 	if p.In.Kind == KindGroup {
 		rType, err := p.Group.ReflectType(pkgPath, resource.LookupType(), true)
 		if err != nil {
@@ -318,7 +318,7 @@ func (p *Parameter) Set(state *structology.State, value interface{}) error {
 	return p._selector.SetValue(state.Pointer(), value)
 }
 
-func (p *Parameter) initCodec(resource Resourcelet) error {
+func (p *Parameter) initCodec(resource Resource) error {
 	if p.Output == nil {
 		return nil
 	}
@@ -337,7 +337,7 @@ func (p *Parameter) OutputType() reflect.Type {
 	return p.Schema.Type()
 }
 
-func (p *Parameter) initParamBasedParameter(ctx context.Context, resource Resourcelet) error {
+func (p *Parameter) initParamBasedParameter(ctx context.Context, resource Resource) error {
 	param, err := resource.LookupParameter(p.In.Name)
 	if err != nil {
 		return err
@@ -363,7 +363,7 @@ func (p *Parameter) Selector() *structology.Selector {
 	return p._selector
 }
 
-func (p *Parameter) initGroupParams(ctx context.Context, resource Resourcelet) error {
+func (p *Parameter) initGroupParams(ctx context.Context, resource Resource) error {
 	for _, parameter := range p.Group {
 		if err := parameter.Init(ctx, resource); err != nil {
 			return err

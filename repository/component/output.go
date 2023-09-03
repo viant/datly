@@ -1,13 +1,20 @@
 package component
 
 import (
+	"context"
 	"fmt"
+	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xdatly/handler/response"
+	"net/url"
 	"reflect"
+)
+
+const (
+	FormatQuery = "_format"
 )
 
 type Output struct {
@@ -17,6 +24,7 @@ type Output struct {
 	Style       Style                `json:",omitempty"`
 
 	//Filed defines optional main view data holder
+	//deprecated
 	Field            string `json:",omitempty"`
 	Exclude          []string
 	NormalizeExclude *bool
@@ -34,33 +42,54 @@ type Output struct {
 	_excluded map[string]bool
 }
 
-func (o *Output) Init() (err error) {
+func (o *Output) Init(ctx context.Context, aView *view.View, inputParameters state.Parameters, isReader bool) (err error) {
 	if err = o.initCaser(); err != nil {
 		return err
 	}
 	o.initExclude()
+	o.addExcludePrefixesIfNeeded()
+	o.initDebugStyleIfNeeded()
+	if err = o.initParameters(aView, inputParameters, isReader); err != nil {
+		return err
+	}
+	if (o.Style == "" || o.Style == BasicStyle) && o.Field == "" {
+		o.Style = BasicStyle
+		if isReader {
+			o.Type.Schema = state.NewSchema(aView.OutputType())
+			return nil
+		}
+	}
+	if o.Field == "" && o.Style != BasicStyle {
+		if isReader {
+			o.Field = "Data"
+
+		} else {
+			o.Field = "ResponseBody"
+		}
+	}
+	if err = o.Type.Init(state.WithResource(aView.Resource()), state.WithPackage(pkgPath)); err != nil {
+		return fmt.Errorf("failed to initialise output: %w", err)
+	}
+
 	return nil
 }
 
-func (o *Output) ShouldNormalizeExclude() bool {
-	return o.NormalizeExclude == nil || *o.NormalizeExclude
+func (o *Output) Format(query url.Values) string {
+	outputFormat := query.Get(FormatQuery)
+	if outputFormat == "" {
+		outputFormat = o.DataFormat
+	}
+	if outputFormat == "" {
+		outputFormat = content.JSONFormat
+	}
+	return outputFormat
 }
 
-func (o *Output) initExclude() {
-	o._excluded = map[string]bool{}
-	for _, excluded := range o.Exclude {
-		o._excluded[excluded] = true
+func (o *Output) IsRevealMetric() bool {
+	if o.RevealMetric == nil {
+		return false
 	}
-
-	if !o.ShouldNormalizeExclude() {
-		return
-	}
-	aBool := false
-	o.NormalizeExclude = &aBool
-	for i, excluded := range o.Exclude {
-		o.Exclude[i] = formatter.NormalizePath(excluded)
-	}
-
+	return *o.RevealMetric
 }
 
 func (o *Output) initCaser() error {
@@ -89,11 +118,64 @@ func (o *Output) FormatCase() *format.Case {
 	return o._caser
 }
 
-func (c *Contract) DefaultOutputParameters(isReader bool, aView *view.View) (state.Parameters, error) {
+func (o *Output) ShouldNormalizeExclude() bool {
+	return o.NormalizeExclude == nil || *o.NormalizeExclude
+}
+
+func (o *Output) initExclude() {
+	o._excluded = map[string]bool{}
+	for _, excluded := range o.Exclude {
+		o._excluded[excluded] = true
+	}
+
+	if !o.ShouldNormalizeExclude() {
+		return
+	}
+	aBool := false
+	o.NormalizeExclude = &aBool
+	for i, excluded := range o.Exclude {
+		o.Exclude[i] = formatter.NormalizePath(excluded)
+	}
+
+}
+
+func (r *Output) addExcludePrefixesIfNeeded() {
+	if r.Field == "" {
+		return
+	}
+	for i, actual := range r.Exclude {
+		r.Exclude[i] = r.Field + "." + actual
+	}
+}
+
+func (o *Output) initDebugStyleIfNeeded() {
+	if o.RevealMetric == nil || !*o.RevealMetric {
+		return
+	}
+	if o.DebugKind != view.MetaTypeRecord {
+		o.DebugKind = view.MetaTypeHeader
+	}
+}
+
+func (o *Output) initParameters(aView *view.View, inputParameters state.Parameters, isReader bool) (err error) {
+	if o.Type.IsAnonymous() {
+		o.Style = BasicStyle
+	} else if dataParameter := o.Type.Parameters.LookupByLocation(state.KindOutput, "data"); dataParameter != nil {
+		o.Style = ComprehensiveStyle
+		o.Field = dataParameter.Name
+	}
+	if len(o.Type.Parameters) == 0 {
+		o.Type.Parameters, err = o.defaultParameters(aView, inputParameters, isReader)
+	}
+	EnsureOutputKindParameterTypes(o.Type.Parameters, aView)
+	return err
+}
+
+func (o *Output) defaultParameters(aView *view.View, inputParameters state.Parameters, isReader bool) (state.Parameters, error) {
 	var parameters state.Parameters
-	if isReader && c.Output.Style == ComprehensiveStyle {
+	if isReader && o.Style == ComprehensiveStyle {
 		parameters = state.Parameters{
-			DataOutputParameter(c.Output.Field),
+			DataOutputParameter(o.Field),
 			DefaultStatusOutputParameter(),
 		}
 		if aView != nil && aView.MetaTemplateEnabled() && aView.Template.Summary.Kind == view.MetaTypeRecord {
@@ -104,19 +186,19 @@ func (c *Contract) DefaultOutputParameters(isReader bool, aView *view.View) (sta
 		return parameters, nil
 	}
 
-	if c.Output.ResponseBody != nil && c.Output.ResponseBody.StateValue != "" {
-		inputParameter := c.Input.Type.Parameters.Lookup(c.Output.ResponseBody.StateValue)
+	if o.ResponseBody != nil && o.ResponseBody.StateValue != "" {
+		inputParameter := inputParameters.Lookup(o.ResponseBody.StateValue)
 		if inputParameter == nil {
-			return nil, fmt.Errorf("failed to lookup state value: %s", c.Output.ResponseBody.StateValue)
+			return nil, fmt.Errorf("failed to lookup state value: %s", o.ResponseBody.StateValue)
 		}
 		name := inputParameter.In.Name
 		tag := ""
 		if name == "" { //embed
 			tag = `anonymous:"true"`
-			name = c.Output.ResponseBody.StateValue
+			name = o.ResponseBody.StateValue
 		}
 		parameters = state.Parameters{
-			{Name: name, In: state.NewState(c.Output.ResponseBody.StateValue), Schema: inputParameter.Schema, Tag: tag},
+			{Name: name, In: state.NewState(o.ResponseBody.StateValue), Schema: inputParameter.Schema, Tag: tag},
 		}
 		if inputParameter.In.Name != "" {
 			parameters = append(parameters, &state.Parameter{Name: "Status", In: state.NewOutputLocation("status"), Tag: `anonymous:"true"`})
@@ -125,13 +207,14 @@ func (c *Contract) DefaultOutputParameters(isReader bool, aView *view.View) (sta
 	return parameters, nil
 }
 
-func EnsureOutputParameterTypes(parameters []*state.Parameter, aView *view.View) {
+// EnsureOutputKindParameterTypes update output kind parameter type
+func EnsureOutputKindParameterTypes(parameters []*state.Parameter, aView *view.View) {
 	for _, parameter := range parameters {
-		EnsureOutputParameterType(parameter, aView)
+		ensureOutputParameterType(parameter, aView)
 	}
 }
 
-func EnsureOutputParameterType(parameter *state.Parameter, aView *view.View) {
+func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 	rType := parameter.Schema.Type()
 	if rType != nil && rType.Kind() != reflect.String {
 		return

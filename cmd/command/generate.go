@@ -13,7 +13,7 @@ import (
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/translator"
-	"github.com/viant/datly/service/handler"
+	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/toolbox/format"
 	"strings"

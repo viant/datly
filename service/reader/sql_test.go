@@ -60,7 +60,7 @@ func TestBuilder_Build(t *testing.T) {
 				},
 			},
 			batchData: &view.BatchData{},
-			selector: &view.Statelet{Parameters: view.ParamState{
+			selector: &view.Statelet{InputParameters: view.ParamState{
 				Values: Params{},
 				Has:    PresenceMap{},
 			}},
@@ -92,7 +92,7 @@ func TestBuilder_Build(t *testing.T) {
 			},
 			batchData: &view.BatchData{},
 			selector: &view.Statelet{
-				Parameters: view.ParamState{
+				InputParameters: view.ParamState{
 					Values: Params{},
 					Has:    PresenceMap{},
 				},
@@ -127,7 +127,7 @@ func TestBuilder_Build(t *testing.T) {
 			},
 			batchData: &view.BatchData{},
 			selector: &view.Statelet{
-				Parameters: view.ParamState{
+				InputParameters: view.ParamState{
 					Values: Params{},
 					Has:    PresenceMap{},
 				},
@@ -159,7 +159,7 @@ func TestBuilder_Build(t *testing.T) {
 			},
 			batchData: &view.BatchData{},
 			selector: &view.Statelet{
-				Parameters: view.ParamState{
+				InputParameters: view.ParamState{
 					Values: Params{},
 					Has:    PresenceMap{},
 				},
@@ -190,7 +190,7 @@ func TestBuilder_Build(t *testing.T) {
 			},
 			batchData: &view.BatchData{},
 			selector: &view.Statelet{
-				Parameters: view.ParamState{
+				InputParameters: view.ParamState{
 					Values: Params{},
 					Has:    PresenceMap{},
 				},
@@ -216,7 +216,7 @@ func TestBuilder_Build(t *testing.T) {
 				Table: "Events",
 				Template: &view.Template{
 					Schema: state.NewSchema(reflect.TypeOf(Params{})),
-					Parameters: []*state.Parameter{
+					InputParameters: []*state.Parameter{
 						{
 							Name: "EventId",
 							In: &state.Location{
@@ -233,7 +233,7 @@ func TestBuilder_Build(t *testing.T) {
 			placeholders: []interface{}{10},
 			batchData:    &view.BatchData{},
 			selector: &view.Statelet{
-				Parameters: view.ParamState{
+				InputParameters: view.ParamState{
 					Values: Params{EventId: 10},
 					Has:    PresenceMap{},
 				},
@@ -261,7 +261,7 @@ func TestBuilder_Build(t *testing.T) {
 				Table: "Events",
 				Template: &view.Template{
 					Schema: state.NewSchema(reflect.TypeOf(Params{})),
-					Parameters: []*state.Parameter{
+					InputParameters: []*state.Parameter{
 						{
 							Name: "EventId",
 							In: &state.Location{
@@ -280,7 +280,7 @@ func TestBuilder_Build(t *testing.T) {
 				ValuesBatch: []interface{}{4, 5, 9, 2},
 			},
 			selector: &view.Statelet{
-				Parameters: view.ParamState{
+				InputParameters: view.ParamState{
 					Values: Params{EventId: 10},
 					Has:    PresenceMap{},
 				},
@@ -308,7 +308,7 @@ func TestBuilder_Build(t *testing.T) {
 				Table: "Events",
 				Template: &view.Template{
 					Schema: state.NewSchema(reflect.TypeOf(Params{})),
-					Parameters: []*state.Parameter{
+					InputParameters: []*state.Parameter{
 						{
 							Name: "EventId",
 							In: &state.Location{
@@ -327,7 +327,7 @@ func TestBuilder_Build(t *testing.T) {
 				ValuesBatch: []interface{}{4, 5, 9, 2},
 			},
 			selector: &view.Statelet{
-				Parameters: view.ParamState{
+				InputParameters: view.ParamState{
 					Values: Params{EventId: 10},
 					Has:    PresenceMap{},
 				},
@@ -353,7 +353,7 @@ func TestBuilder_Build(t *testing.T) {
 				Table: "Events",
 				Template: &view.Template{
 					Schema: state.NewSchema(reflect.TypeOf(Params{})),
-					Parameters: []*state.Parameter{
+					InputParameters: []*state.Parameter{
 						{
 							Name: "EventId",
 							In: &state.Location{
@@ -372,7 +372,7 @@ func TestBuilder_Build(t *testing.T) {
 				Criteria: "price > 10",
 				Limit:    100,
 				Offset:   10,
-				Parameters: view.ParamState{
+				InputParameters: view.ParamState{
 					Values: Params{},
 					Has:    PresenceMap{},
 				},
