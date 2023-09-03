@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"github.com/viant/cloudless/gateway/matcher"
 	"github.com/viant/datly/repository/component"
 	"sync"
@@ -31,8 +32,8 @@ func (e entries) matchables() []matcher.Matchable {
 	return result
 }
 
-func indexKey(component *Component) string {
-	return component.Path.Method + ":" + component.URI
+func indexKey(path *component.Path) string {
+	return path.Method + ":" + path.URI
 }
 
 func (r *entry) URI() string {
@@ -46,7 +47,21 @@ func (r *entry) Namespaces() []string {
 func (r *Registry) Lookup(path *component.Path) (*Component, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
-	return nil, nil
+
+	key := indexKey(path)
+	ret, ok := r.index[key]
+	if ok {
+		return ret.Component, nil
+	}
+	matchable, err := r.matcher.MatchOne(path.Method, path.URI)
+	if err != nil {
+		return nil, err
+	}
+	result, ok := matchable.(*entry)
+	if !ok {
+		return nil, fmt.Errorf("expected: %T, but had: %T", result, matchable)
+	}
+	return result.Component, nil
 }
 
 func (r *Registry) Register(components ...*Component) {
@@ -55,7 +70,7 @@ func (r *Registry) Register(components ...*Component) {
 	count := len(r.entries)
 	for i := range components {
 		aComponent := components[i]
-		key := indexKey(aComponent)
+		key := indexKey(&aComponent.Path)
 		if prev, ok := r.index[key]; ok {
 			prev.Component = aComponent
 			continue
@@ -73,6 +88,6 @@ func (r *Registry) Register(components ...*Component) {
 	}
 }
 
-func NewRegistry() *Registry {
-	return &Registry{index: map[string]*entry{}}
+func NewRegistry(apiPrefix string) *Registry {
+	return &Registry{index: map[string]*entry{}, apiPrefix: apiPrefix}
 }

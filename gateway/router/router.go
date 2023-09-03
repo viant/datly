@@ -467,6 +467,9 @@ func (r *Router) payloadReader(ctx context.Context, request *http.Request, write
 	unmarshal := route.UnmarshalFunc(request)
 	locatorOptions := append(route.LocatorOptions(request, unmarshal), locator.WithDispatcher(route.dispatcher))
 	aSession := session.New(route.View, session.WithLocatorOptions(locatorOptions...))
+	if err := aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindQuery, state.KindRequestBody); err != nil {
+		return nil, err
+	}
 	if err := aSession.Populate(ctx); err != nil {
 		return nil, err
 	}

@@ -33,8 +33,8 @@ func (q *Query) Value(ctx context.Context, name string) (interface{}, bool, erro
 // NewQuery returns query locator
 func NewQuery(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
-	if options.Request == nil {
+	if options.request == nil {
 		return nil, fmt.Errorf("request was empty")
 	}
-	return &Query{query: options.Request.URL.Query()}, nil
+	return &Query{query: options.request.URL.Query()}, nil
 }

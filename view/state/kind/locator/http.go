@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state/kind"
 	"io"
 	"net/http"
 )
 
 type HttpRequest struct {
-	Request *http.Request
+	getRequest func() (*http.Request, error)
 }
 
 func (p *HttpRequest) Names() []string {
@@ -19,22 +18,18 @@ func (p *HttpRequest) Names() []string {
 }
 
 func (p *HttpRequest) Value(ctx context.Context, name string) (interface{}, bool, error) {
-	value, err := shared.CloneHTTPRequest(p.Request)
+	value, err := p.getRequest()
 	return value, true, err
 }
 
 // NewHttpRequest returns http request locator
 func NewHttpRequest(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
-	if options.Request == nil {
+	if options.request == nil {
 		return nil, fmt.Errorf("request was empty")
 	}
-	ret, err := shared.CloneHTTPRequest(options.Request)
-	if err != nil {
-		return nil, err
-	}
 	return &HttpRequest{
-		Request: ret,
+		getRequest: options.GetRequest,
 	}, nil
 }
 

@@ -186,8 +186,6 @@ func (c *Content) initTabJSONIfNeeded(excludedPaths []string, inputType reflect.
 	}
 
 	var err error
-
-	fmt.Printf("OUTPUT TYPE: %s\n", outputType.String())
 	c.TabularJSON.OutputMarshaller, err = tabjson.NewMarshaller(outputType, c.TabularJSON._config)
 	if err != nil {
 		return err

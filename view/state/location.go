@@ -8,8 +8,8 @@ import (
 
 // Location represents parameter location
 type Location struct {
-	Kind Kind   `json:",omitempty"`
-	Name string `json:",omitempty"`
+	Kind Kind   `json:",omitempty" yaml:"Kind"`
+	Name string `json:",omitempty" yaml:"Name"`
 }
 
 // Validate checks if Location is valid

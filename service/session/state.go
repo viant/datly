@@ -357,6 +357,15 @@ func (s *Session) handleParameterError(parameter *state.Parameter, err error, er
 	}
 }
 
+func (s *Session) InitKinds(kinds ...state.Kind) error {
+	for _, kind := range kinds {
+		if _, err := s.kindLocator.Lookup(kind); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // TODO deprecated this abstraction
 type valueGetter struct {
 	Parameters state.NamedParameters

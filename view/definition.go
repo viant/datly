@@ -14,16 +14,16 @@ const pkgPath = "github.com/viant/datly/View"
 
 type (
 	TypeDefinition struct {
-		shared.Reference `json:",omitempty"`
-		Name             string   `json:",omitempty"`
+		shared.Reference `json:",omitempty" `
+		Name             string   `json:",omitempty" yaml:"Name" `
 		Alias            string   `json:",omitempty"`
 		Fields           []*Field `json:",omitempty"`
 		_fields          map[string]bool
 		Schema           *state.Schema     `json:",omitempty"`
-		DataType         string            `json:",omitempty"`
-		Cardinality      state.Cardinality `json:",omitempty"`
-		Package          string            `json:",omitempty"`
-		Ptr              bool              `json:",omitempty"`
+		DataType         string            `json:",omitempty"  yaml:"DataType" `
+		Cardinality      state.Cardinality `json:",omitempty"  yaml:"Cardinality" `
+		Package          string            `json:",omitempty"  yaml:"Package" `
+		Ptr              bool              `json:",omitempty" yaml:"Ptr" `
 		CustomType       bool              `json:",omitempty"`
 	}
 

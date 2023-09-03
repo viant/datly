@@ -7,6 +7,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/inference"
@@ -14,14 +15,18 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
+	"github.com/viant/toolbox/format"
 	async2 "github.com/viant/xdatly/handler/async"
+	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
 	"path"
 	"reflect"
@@ -33,6 +38,7 @@ type Service struct {
 	Repository *Repository //TODO init repo with basic config and dependencies
 	Plugins    []*options.Plugin
 	fs         afs.Service
+	signature  *contract.Service
 }
 
 func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string, opts *options.Options) (err error) {
@@ -52,6 +58,11 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 		return err
 	}
 
+	parameters := resource.Declarations.OutputState
+	if err = s.updateComponentType(ctx, resource, parameters.FilterByKind(state.KindComponent)); err != nil {
+		return err
+	}
+
 	dSQL = rule.NormalizeSQL(dSQL, handleVeltyExpression)
 	if resource.IsExec() || resource.Rule.Handler != nil {
 		if err := s.translateExecutorDSQL(ctx, resource, dSQL); err != nil {
@@ -64,6 +75,35 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	}
 	s.Repository.Resource = append(s.Repository.Resource, resource)
 	return nil
+}
+
+func (s *Service) discoverComponentContract(ctx context.Context, resource *Resource, location *state.Location) (*contract.Signature, error) {
+	var err error
+	if s.signature == nil {
+		prefix := path.Join(s.Repository.Config.APIPrefix, resource.rule.Prefix)
+		if s.signature, err = contract.New(ctx, prefix, s.Repository.Config.RouteURL); err != nil {
+			return nil, err
+		}
+	}
+
+	componentTypeName := strings.ReplaceAll(location.Name, ".", "_")
+	componentTypeName = format.CaseLowerUnderscore.Format(componentTypeName, format.CaseUpperCamel)
+
+	location.Name = strings.ReplaceAll(location.Name, ".", "/")
+
+	method, URI := shared.ExtractPath(location.Name)
+	ret, err := s.signature.Signature(method, URI)
+	if err != nil { //try reload signature service in case it has changed
+		prefix := path.Join(s.Repository.Config.APIPrefix, resource.rule.Prefix)
+		if s.signature, err = contract.New(ctx, prefix, s.Repository.Config.RouteURL); err != nil {
+			return nil, err
+		}
+		ret, err = s.signature.Signature(method, URI)
+	}
+	if ret != nil {
+		ret.AdjustOutputTypeName(componentTypeName)
+	}
+	return ret, err
 }
 
 func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource, DSQL string) (err error) {
@@ -116,12 +156,12 @@ func (s *Service) buildExecutorView(ctx context.Context, resource *Resource, DSQ
 }
 
 func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, dSQL string) error {
-	query, err := sqlparser.ParseQuery(dSQL, handleVeltyExpression())
+	aQuery, err := sqlparser.ParseQuery(dSQL, handleVeltyExpression())
 	if err != nil {
 		return err
 	}
-	resource.Rule.Root = query.From.Alias
-	if err = resource.Rule.Viewlets.Init(ctx, query, resource, s.initReaderViewlet, s.buildQueryViewletType); err != nil {
+	resource.Rule.Root = aQuery.From.Alias
+	if err = resource.Rule.Viewlets.Init(ctx, aQuery, resource, s.initReaderViewlet, s.buildQueryViewletType); err != nil {
 		return err
 	}
 	root := resource.Rule.RootView()
@@ -495,6 +535,27 @@ func (s *Service) handleCustomTypes(ctx context.Context, resource *Resource) (er
 		s.Plugins = append(s.Plugins, pluginCmd)
 	}
 	resource.AdjustCustomType(info)
+	return nil
+}
+
+func (s *Service) updateComponentType(ctx context.Context, resource *Resource, parameters inference.State) error {
+	if len(parameters) == 0 {
+		return nil
+	}
+	for _, parameter := range parameters {
+		signature, err := s.discoverComponentContract(ctx, resource, parameter.In)
+		if err != nil {
+			return fmt.Errorf("failed to discover component %v output type: %w", parameter.In.Name, err)
+		}
+		parameter.In.Name = signature.Method + ":" + signature.URI
+		parameter.Schema = signature.Output
+		for _, typeDef := range signature.Types {
+			if err = config.Config.Types.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType)); err != nil {
+				return err
+			}
+		}
+		resource.Resource.Types = append(resource.Resource.Types, signature.Types...)
+	}
 	return nil
 }
 

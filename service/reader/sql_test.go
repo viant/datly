@@ -55,7 +55,7 @@ func TestBuilder_Build(t *testing.T) {
 				Name:  "events",
 				Table: "events",
 				Template: &view.Template{
-					Schema:         state.NewSchema(reflect.TypeOf(Params{})),
+					Output:         state.NewSchema(reflect.TypeOf(Params{})),
 					PresenceSchema: state.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
@@ -86,7 +86,7 @@ func TestBuilder_Build(t *testing.T) {
 				},
 				Table: "events",
 				Template: &view.Template{
-					Schema:         state.NewSchema(reflect.TypeOf(Params{})),
+					Output:         state.NewSchema(reflect.TypeOf(Params{})),
 					PresenceSchema: state.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
@@ -121,7 +121,7 @@ func TestBuilder_Build(t *testing.T) {
 				From:  "SELECT * FROM EVENTS $PAGINATION",
 				Table: "events",
 				Template: &view.Template{
-					Schema:         state.NewSchema(reflect.TypeOf(Params{})),
+					Output:         state.NewSchema(reflect.TypeOf(Params{})),
 					PresenceSchema: state.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
@@ -153,7 +153,7 @@ func TestBuilder_Build(t *testing.T) {
 				From:  "SELECT * FROM EVENTS $PAGINATION",
 				Table: "Events",
 				Template: &view.Template{
-					Schema:         state.NewSchema(reflect.TypeOf(Params{})),
+					Output:         state.NewSchema(reflect.TypeOf(Params{})),
 					PresenceSchema: state.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
@@ -184,7 +184,7 @@ func TestBuilder_Build(t *testing.T) {
 				From:  "SELECT * FROM EVENTS $WHERE_CRITERIA",
 				Table: "Events",
 				Template: &view.Template{
-					Schema:         state.NewSchema(reflect.TypeOf(Params{})),
+					Output:         state.NewSchema(reflect.TypeOf(Params{})),
 					PresenceSchema: state.NewSchema(reflect.TypeOf(PresenceMap{})),
 				},
 			},
@@ -215,7 +215,7 @@ func TestBuilder_Build(t *testing.T) {
 				From:  "SELECT * FROM EVENTS WHERE ID = $EventId",
 				Table: "Events",
 				Template: &view.Template{
-					Schema: state.NewSchema(reflect.TypeOf(Params{})),
+					Output: state.NewSchema(reflect.TypeOf(Params{})),
 					InputParameters: []*state.Parameter{
 						{
 							Name: "EventId",
@@ -223,7 +223,7 @@ func TestBuilder_Build(t *testing.T) {
 								Kind: state.KindPath,
 								Name: "eventId",
 							},
-							Schema: &state.Schema{
+							Output: &state.Output{
 								DataType: "int",
 							},
 						},
@@ -260,7 +260,7 @@ func TestBuilder_Build(t *testing.T) {
 				From:  "SELECT * FROM EVENTS ev WHERE ev.ID = $EventId $AND_COLUMN_IN",
 				Table: "Events",
 				Template: &view.Template{
-					Schema: state.NewSchema(reflect.TypeOf(Params{})),
+					Output: state.NewSchema(reflect.TypeOf(Params{})),
 					InputParameters: []*state.Parameter{
 						{
 							Name: "EventId",
@@ -268,7 +268,7 @@ func TestBuilder_Build(t *testing.T) {
 								Kind: state.KindPath,
 								Name: "eventId",
 							},
-							Schema: &state.Schema{
+							Output: &state.Output{
 								DataType: "int",
 							},
 						},
@@ -307,7 +307,7 @@ func TestBuilder_Build(t *testing.T) {
 				From:  "SELECT * FROM EVENTS ev WHERE ev.ID = $EventId",
 				Table: "Events",
 				Template: &view.Template{
-					Schema: state.NewSchema(reflect.TypeOf(Params{})),
+					Output: state.NewSchema(reflect.TypeOf(Params{})),
 					InputParameters: []*state.Parameter{
 						{
 							Name: "EventId",
@@ -315,7 +315,7 @@ func TestBuilder_Build(t *testing.T) {
 								Kind: state.KindPath,
 								Name: "eventId",
 							},
-							Schema: &state.Schema{
+							Output: &state.Output{
 								DataType: "int",
 							},
 						},
@@ -352,7 +352,7 @@ func TestBuilder_Build(t *testing.T) {
 				From:  "SELECT * FROM EVENTS",
 				Table: "Events",
 				Template: &view.Template{
-					Schema: state.NewSchema(reflect.TypeOf(Params{})),
+					Output: state.NewSchema(reflect.TypeOf(Params{})),
 					InputParameters: []*state.Parameter{
 						{
 							Name: "EventId",
@@ -360,7 +360,7 @@ func TestBuilder_Build(t *testing.T) {
 								Kind: state.KindPath,
 								Name: "eventId",
 							},
-							Schema: &state.Schema{
+							Output: &state.Output{
 								DataType: "int",
 							},
 						},

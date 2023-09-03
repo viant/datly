@@ -4,7 +4,9 @@ import (
 	"context"
 	goJson "encoding/json"
 	"github.com/viant/datly/gateway/router/status"
+	_ "github.com/viant/datly/repository/locator/component"
 	_ "github.com/viant/datly/repository/locator/output"
+
 	reader "github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/utils/httputils"
@@ -42,9 +44,9 @@ func (r *Response) SetError(err error, statusCode int) {
 	r.Status.Status = "error"
 
 }
-func (h *Handler) Handle(ctx context.Context, aView *view.View, state *session.Session, opts ...reader.Option) *Response {
+func (h *Handler) Handle(ctx context.Context, aView *view.View, session *session.Session, opts ...reader.Option) *Response {
 	ret := &Response{Header: http.Header{}, Status: &response.Status{Status: "ok"}}
-	err := h.readData(ctx, aView, state, ret, opts)
+	err := h.readData(ctx, aView, session, ret, opts)
 	if err != nil {
 		ret.SetError(err, h.errorStatusCode())
 		return ret
@@ -57,8 +59,9 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, state *session.S
 	}
 
 	resultState := h.output.NewState()
-	if err = state.SetState(ctx, h.outputType.Parameters, resultState, state.Indirect(true,
-		locator.WithCustomOption(ret.Reader, ret.Status))); err != nil {
+	options := session.Indirect(true,
+		locator.WithCustomOption(ret.Reader, ret.Status))
+	if err = session.SetState(ctx, h.outputType.Parameters, resultState, options); err != nil {
 		ret.StatusCode = http.StatusInternalServerError
 		ret.Error = err
 		return ret

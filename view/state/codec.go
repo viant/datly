@@ -10,11 +10,11 @@ import (
 
 type Codec struct {
 	shared.Reference
-	Name         string   `json:",omitempty"`
-	Body         string   `json:",omitempty"`
-	Args         []string `json:",omitempty"`
-	Schema       *Schema  `json:",omitempty"`
-	OutputType   string   `json:",omitempty"`
+	Name         string   `json:",omitempty" yaml:"Name,omitempty" `
+	Body         string   `json:",omitempty" yaml:"Body,omitempty"`
+	Args         []string `json:",omitempty" yaml:"Args,omitempty"`
+	Schema       *Schema  `json:",omitempty" yaml:"Schema,omitempty"`
+	OutputType   string   `json:",omitempty" yaml:"OutputType,omitempty"`
 	_initialized bool
 	_codec       codec.Instance
 }

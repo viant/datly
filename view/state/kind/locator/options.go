@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/repository/resolver"
+	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
@@ -15,7 +16,7 @@ import (
 // Options represents locator options
 type (
 	Options struct {
-		Request          *http.Request
+		request          *http.Request
 		Parent           *KindLocator
 		URIPattern       string
 		BodyType         reflect.Type
@@ -34,6 +35,10 @@ type (
 	ParameterLookup func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error)
 	ReadInto        func(ctx context.Context, dest interface{}, aView *view.View) error
 )
+
+func (u Options) GetRequest() (*http.Request, error) {
+	return shared.CloneHTTPRequest(u.request)
+}
 
 func (u Options) UnmarshalFunc() Unmarshal {
 	if u.Unmarshal != nil {
@@ -60,7 +65,7 @@ type Option func(o *Options)
 // WithRequest create http request option
 func WithRequest(request *http.Request) Option {
 	return func(o *Options) {
-		o.Request = request
+		o.request = request
 	}
 }
 

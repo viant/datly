@@ -50,16 +50,20 @@ func NewBody(opts ...Option) (kind.Locator, error) {
 	if options.BodyType == nil {
 		return nil, fmt.Errorf("body type was empty")
 	}
-	if options.Request == nil {
+	if options.request == nil {
 		return nil, fmt.Errorf("request was empty")
 	}
-	if options.Request.Body == nil {
+	if options.request.Body == nil {
 		return nil, fmt.Errorf("request.body was empty")
 	}
 	if options.Unmarshal == nil {
 		return nil, fmt.Errorf("unmarshal was empty")
 	}
-	data, err := readRequestBody(options.Request)
+	request, err := options.GetRequest()
+	if err != nil {
+		return nil, err
+	}
+	data, err := readRequestBody(request)
 	if err != nil {
 		return nil, err
 	}

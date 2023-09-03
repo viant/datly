@@ -1,6 +1,7 @@
 /* {"URI":"vendors/{vendorID}"} */
 
 
+
 SELECT wrapper.* EXCEPT ID,
        vendor.*,
        products.* EXCEPT VENDOR_ID,

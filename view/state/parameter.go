@@ -21,20 +21,20 @@ type (
 		Predicates []*config.PredicateConfig
 		Name       string `json:",omitempty"`
 
-		In                *Location   `json:",omitempty"`
+		In                *Location   `json:",omitempty" yaml:"In" `
 		Required          *bool       `json:",omitempty"`
 		Description       string      `json:",omitempty"`
-		DataType          string      `json:",omitempty"`
+		DataType          string      `json:",omitempty" `
 		Style             string      `json:",omitempty"`
 		MaxAllowedRecords *int        `json:",omitempty"`
 		MinAllowedRecords *int        `json:",omitempty"`
 		ExpectedReturned  *int        `json:",omitempty"`
-		Schema            *Schema     `json:",omitempty"`
-		Output            *Codec      `json:",omitempty"`
+		Schema            *Schema     `json:",omitempty" yaml:"Schema"`
+		Output            *Codec      `json:",omitempty" yaml:"Output"`
 		Const             interface{} `json:",omitempty"`
 		DateFormat        string      `json:",omitempty"`
 		ErrorStatusCode   int         `json:",omitempty"`
-		Tag               string      `json:",omitempty"`
+		Tag               string      `json:",omitempty" yaml:"Tag"`
 		Lazy              bool        `json:",omitempty"`
 
 		_selector    *structology.Selector

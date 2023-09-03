@@ -272,7 +272,7 @@ func (r *Router) extractCacheableViews(routes ...*router.Route) warmup.PreCachab
 
 func (r *Router) init(routersIndex map[string]*router.Router) error {
 	routers := asRouterSlice(routersIndex)
-	r.registry = repository.NewRegistry()
+	r.registry = repository.NewRegistry(r.config.APIPrefix)
 	r.dispatcher = dispatcher.New(r.registry)
 	r.routeMatcher, r.routes = r.newMatcher(routers)
 	r.namedRoutes = map[string]*router.Route{}

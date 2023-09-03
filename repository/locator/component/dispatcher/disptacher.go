@@ -2,6 +2,7 @@ package dispatcher
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/component"
 	"github.com/viant/datly/service/dispatcher"
@@ -25,7 +26,10 @@ func (d *Dispatcher) Dispatch(ctx context.Context, path *component.Path, request
 	if err = aSession.Populate(ctx); err != nil {
 		return nil, err
 	}
-	return d.service.Dispatch(ctx, aComponent, aSession)
+	value, err := d.service.Dispatch(ctx, aComponent, aSession)
+
+	fmt.Printf("%T %+v %v\n ", value, value, err)
+	return value, err
 }
 
 // New creates a dispatcher

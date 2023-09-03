@@ -163,6 +163,7 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 	if err != nil {
 		return err
 	}
+
 	r.State.Append(r.Declarations.State...)
 	r.OutputState.Append(r.Declarations.OutputState...)
 	if len(r.State.FilterByKind(state.KindGroup)) > 0 {

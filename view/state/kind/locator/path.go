@@ -27,13 +27,13 @@ func (v *Path) Value(ctx context.Context, name string) (interface{}, bool, error
 // NewPath returns path locator
 func NewPath(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
-	if options.Request == nil {
+	if options.request == nil {
 		return nil, fmt.Errorf("request was empty")
 	}
 	if options.URIPattern == "" {
 		return nil, fmt.Errorf("uri pattern was empty")
 	}
-	parameters, _ := toolbox.ExtractURIParameters(options.URIPattern, options.Request.URL.Path)
+	parameters, _ := toolbox.ExtractURIParameters(options.URIPattern, options.request.URL.Path)
 	ret := &Path{parameters: parameters}
 	return ret, nil
 }

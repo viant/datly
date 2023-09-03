@@ -33,9 +33,9 @@ func (q *Header) Value(ctx context.Context, name string) (interface{}, bool, err
 // NewHeader returns header locator
 func NewHeader(opts ...Option) (kind.Locator, error) {
 	options := NewOptions(opts)
-	if options.Request == nil {
+	if options.request == nil {
 		return nil, fmt.Errorf("request was empty")
 	}
-	ret := &Header{header: options.Request.Header}
+	ret := &Header{header: options.request.Header}
 	return ret, nil
 }

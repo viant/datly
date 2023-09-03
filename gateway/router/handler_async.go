@@ -14,7 +14,7 @@ type AsyncHandler struct {
 
 func (a *AsyncHandler) Type() reflect.Type {
 	return nil
-	//	return a.executor.route.View.Schema.Type()
+	//	return a.executor.route.View.Output.Type()
 }
 
 func (a *AsyncHandler) Read(ctx context.Context, options ...async.ReadOption) (*async.JobWithMeta, error) {
@@ -52,7 +52,7 @@ func (a *AsyncHandler) Read(ctx context.Context, options ...async.ReadOption) (*
 			}
 
 			_, err = a.executor.route._async.EnsureTable(ctx, connector, &async2.TableConfig{
-				RecordType:     a.executor.route.View.Schema.Type(),
+				RecordType:     a.executor.route.View.Output.Type(),
 				TableName:      opts.Job.DestinationTable,
 				Dataset:        opts.Job.DestinationDataset,
 				CreateIfNeeded: opts.Job.DestinationCreateDisposition == async.CreateDispositionIfNeeded,
