@@ -229,7 +229,7 @@ func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 		case "sql":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(""))
 		case "status":
-			parameter.Schema = state.NewSchema(reflect.TypeOf(response.ResponseStatus{}))
+			parameter.Schema = state.NewSchema(reflect.TypeOf(response.Status{}))
 			parameter.Name = "ResponseStatus"
 			if parameter.Tag == "" {
 				parameter.Tag = ` anonymous:"true"`
@@ -256,5 +256,5 @@ func DataOutputParameter(name string) *state.Parameter {
 }
 
 func DefaultStatusOutputParameter() *state.Parameter {
-	return &state.Parameter{Name: "ResponseStatus", In: state.NewOutputLocation("status"), Tag: ` anonymous:"true"`, Schema: state.NewSchema(reflect.TypeOf(response.ResponseStatus{}))}
+	return &state.Parameter{Name: "ResponseStatus", In: state.NewOutputLocation("status"), Tag: ` anonymous:"true"`, Schema: state.NewSchema(reflect.TypeOf(response.Status{}))}
 }

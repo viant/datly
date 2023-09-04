@@ -6,8 +6,8 @@ import (
 )
 
 // TODO move it to some other package
-func StatusSuccess(state *expand.State) response.ResponseStatus {
-	status := response.ResponseStatus{Status: "ok"}
+func StatusSuccess(state *expand.State) response.Status {
+	status := response.Status{Status: "ok"}
 	if state != nil {
 		status.Extras = state.ResponseBuilder.Content
 	}

@@ -12,7 +12,7 @@ import (
 
 type outputLocator struct {
 	Output     *reader.Output
-	Status     *response.ResponseStatus
+	Status     *response.Status
 	Parameters state.Parameters
 }
 
@@ -65,7 +65,7 @@ func newOutputLocator(opts ...locator.Option) (kind.Locator, error) {
 		if output, ok := candidate.(*reader.Output); ok {
 			ret.Output = output
 		}
-		if status, ok := candidate.(*response.ResponseStatus); ok {
+		if status, ok := candidate.(*response.Status); ok {
 			ret.Status = status
 		}
 	}
