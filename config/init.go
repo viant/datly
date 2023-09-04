@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	xcodec "github.com/viant/datly/config/codec"
+	"github.com/viant/datly/config/codec/xmltab"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/sqlx/types"
 	"github.com/viant/xdatly/codec"
@@ -37,6 +38,7 @@ var Config = &Registry{
 		xreflect.NewType("predicate.StringsFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.StringsFilter{}))),
 		xreflect.NewType("predicate.IntFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.IntFilter{}))),
 		xreflect.NewType("predicate.BoolFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.BoolFilter{}))),
+		xreflect.NewType("xmltab.Result", xreflect.WithReflectType(reflect.TypeOf(xmltab.Result{}))),
 	)),
 	Codecs: codec.NewRegistry(
 		codec.WithCodec(xcodec.KeyJwtClaim, &xcodec.GCPJwtClaim{}, time.Time{}),
@@ -49,6 +51,7 @@ var Config = &Registry{
 		codec.WithFactory(xcodec.KeyCriteriaBuilder, &xcodec.CriteriaBuilderFactory{}, time.Time{}),
 		codec.WithFactory(xcodec.Encode, &xcodec.EncodeFactory{}, time.Time{}),
 		codec.WithFactory(xcodec.KeyTransfer, &xcodec.TransferFactory{}, time.Time{}),
+		codec.WithFactory(xcodec.KeyXmltab, &xcodec.XmltabFactory{}, time.Time{}),
 	),
 	Predicates: &PredicateRegistry{
 		registry: map[string]*Predicate{

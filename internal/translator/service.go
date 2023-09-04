@@ -531,7 +531,9 @@ func (s *Service) updateComponentType(ctx context.Context, resource *Resource, p
 				return err
 			}
 		}
-		resource.Resource.Types = append(resource.Resource.Types, signature.Types...)
+		for i := range signature.Types {
+			resource.AppendTypeDefinition(signature.Types[i])
+		}
 	}
 	return nil
 }

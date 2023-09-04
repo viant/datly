@@ -3,6 +3,7 @@ package codec
 import (
 	"context"
 	"github.com/viant/datly/config/codec/transfer"
+	"github.com/viant/datly/config/codec/xmltab"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
@@ -17,7 +18,7 @@ type (
 	TransferFactory struct{}
 
 	entry struct {
-		from     string
+		tag      *transfer.Tag
 		selector *structology.Selector
 	}
 
@@ -25,6 +26,7 @@ type (
 		destType  *structology.StateType
 		transfers []*entry
 		srcType   *structology.StateType
+		srv       *xmltab.Service
 	}
 )
 
@@ -37,7 +39,7 @@ func (e *TransferFactory) New(codecConfig *codec.Config, options ...codec.Option
 	if err != nil {
 		return nil, err
 	}
-	ret := &Transfer{}
+	ret := &Transfer{srv: xmltab.New()}
 	return ret, ret.init(destType)
 }
 
@@ -49,7 +51,7 @@ func (e *Transfer) init(destType reflect.Type) error {
 		if tag.From == "" {
 			continue
 		}
-		e.transfers = append(e.transfers, &entry{selector: aTransfer, from: tag.From})
+		e.transfers = append(e.transfers, &entry{selector: aTransfer, tag: tag})
 	}
 	return nil
 }
@@ -66,13 +68,19 @@ func (e *Transfer) Value(ctx context.Context, raw interface{}, options ...codec.
 	}
 	src := e.srcType.WithValue(raw)
 	dest := e.destType.NewState()
-	for _, transfer := range e.transfers {
-		value, err := src.Value(transfer.from)
+	for _, aTransfer := range e.transfers {
+		value, err := src.Value(aTransfer.tag.From)
 		if err != nil {
 			return nil, err
 		}
+		if aTransfer.tag.AsXmltab {
+			value, err = e.srv.Transfer(value)
+			if err != nil {
+				return nil, err
+			}
+		}
 		if value != nil {
-			if err = transfer.selector.SetValue(dest.Pointer(), value); err != nil {
+			if err = aTransfer.selector.SetValue(dest.Pointer(), value); err != nil {
 				return nil, err
 			}
 		}

@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/config/codec"
 	"github.com/viant/datly/config/codec/transfer"
+	"github.com/viant/datly/config/codec/xmltab"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository/component"
@@ -73,7 +74,7 @@ func (s *Service) adjustTransferOutputType(parameter *state.Parameter, types *xr
 			return err
 		}
 		parameter.Output.Schema = &state.Schema{Name: adjustedTypeName}
-		resource.Resource.Types = append(resource.Resource.Types, &view.TypeDefinition{
+		resource.AppendTypeDefinition(&view.TypeDefinition{
 			Name:     adjustedTypeName,
 			DataType: adjustedType.String(),
 		})
@@ -95,11 +96,15 @@ func (s *Service) adjustTransferType(parameter *state.Parameter, types *xreflect
 		if sourceSelector == nil {
 			return nil, fmt.Errorf("invalid transfer, field: %v does not have coresponding source field %v, %s ", selector.Name(), tag.From, source.String())
 		}
+		outputType := sourceSelector.Type()
+		if tag.AsXmltab {
+			outputType = reflect.TypeOf(&xmltab.Result{})
+		}
 		adjustedDest.Append(&inference.Parameter{
 			Parameter: state.Parameter{
 				Reference: shared.Reference{},
 				Name:      selector.Path(),
-				Schema:    state.NewSchema(sourceSelector.Type()),
+				Schema:    state.NewSchema(outputType),
 				Tag:       string(selector.Tag() + " " + sourceSelector.Tag()),
 				In:        state.NewQueryLocation(selector.Name()),
 			}})
