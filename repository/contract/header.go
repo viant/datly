@@ -32,24 +32,42 @@ type (
 		Method string  `yaml:"Method"`
 		URI    string  `yaml:"URI"`
 		Output *Output `yaml:"Output"`
+		Input  state.Parameters
 	}
 
 	Resource struct {
-		Types []*view.TypeDefinition `yaml:"Types"`
+		Types           []*view.TypeDefinition `yaml:"Types"`
+		InputParameters []*state.Parameter     `yaml:"Parameters"`
 	}
 )
 
-func (h *Header) Signature(contract *ContractPath) (*Signature, error) {
+func (h *Header) Signature(contract *ContractPath, registry *xreflect.Types) (*Signature, error) {
+
+	signature := &Signature{URI: contract.URI, Method: contract.Method}
+
+	h.buildFilterType(contract, registry, signature)
+	if err := h.buildOutputType(contract, signature, registry); err != nil {
+		return nil, err
+	}
+	return signature, nil
+}
+
+func (h *Header) buildFilterType(contract *ContractPath, registry *xreflect.Types, signature *Signature) {
+	predicateType := contract.Input.PredicateStructType()
+	if predicateType.NumField() > 0 {
+		signature.Filter = state.NewSchema(predicateType)
+		registry.Register("Filter", xreflect.WithTypeDefinition(signature.Filter.Type().String()))
+	}
+}
+
+func (h *Header) buildOutputType(contract *ContractPath, signature *Signature, registry *xreflect.Types) error {
 	if contract.Output == nil || contract.Output.Type == nil || len(contract.Output.Type.Parameters) == 0 {
-		return nil, nil
+		return nil
 	}
 	parameters := state.Parameters(contract.Output.Type.Parameters)
-
 	isAnonymous := len(parameters) == 1 && strings.Contains(parameters[0].Tag, "anonymous")
 
 	outputParameter := parameters.LookupByLocation(state.KindOutput, "data")
-	signature := &Signature{Output: outputParameter.Schema, URI: contract.URI, Method: contract.Method}
-	registry := xreflect.NewTypes()
 
 	var viewType *view.TypeDefinition
 	for _, candidate := range h.Resource.Types {
@@ -59,6 +77,7 @@ func (h *Header) Signature(contract *ContractPath) (*Signature, error) {
 			break
 		}
 	}
+
 	component.EnsureOutputKindParameterTypes(parameters, nil)
 	if !isAnonymous {
 		rType, _ := registry.Lookup(viewType.Name)
@@ -70,18 +89,18 @@ func (h *Header) Signature(contract *ContractPath) (*Signature, error) {
 		outputParameter.Schema.Cardinality = state.One
 		outputType, err := parameters.ReflectType("github.com/viant/datly/view/autogen", registry.Lookup, false)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get output type: %w", err)
+			return fmt.Errorf("failed to get output type: %w", err)
 		}
 		typeName := outputParameter.Schema.Name
 		outputParameter.Schema = state.NewSchema(outputType)
 		outputParameter.Schema.Name = typeName
 		outputParameter.Schema.Cardinality = state.One
-
+		viewType.DataType = outputType.String()
 	}
 	signature.Output = outputParameter.Schema
 	signature.Anonymous = isAnonymous
 	signature.Types = append(signature.Types, viewType)
-	return signature, nil
+	return nil
 }
 
 var fs = afs.New()

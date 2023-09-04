@@ -242,6 +242,9 @@ func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 			if aView != nil {
 				predicateType := aView.Template.Parameters.PredicateStructType()
 				parameter.Schema = state.NewSchema(predicateType)
+			} else {
+				parameter.Schema.Name = "Filter"
+				parameter.Schema.DataType = "Filter"
 			}
 		}
 	}

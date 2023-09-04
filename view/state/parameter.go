@@ -17,9 +17,9 @@ type (
 	Parameter struct {
 		shared.Reference
 		Fields     Parameters
-		Group      Parameters `json:",omitempty"`
-		Predicates []*config.PredicateConfig
-		Name       string `json:",omitempty" yaml:"Name"`
+		Group      Parameters                `json:",omitempty"`
+		Predicates []*config.PredicateConfig `yaml:"Predicates"`
+		Name       string                    `json:",omitempty" yaml:"Name"`
 
 		In                *Location   `json:",omitempty" yaml:"In" `
 		Required          *bool       `json:",omitempty"`

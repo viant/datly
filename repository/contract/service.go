@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/viant/afs/url"
 	"github.com/viant/cloudless/gateway/matcher"
+	"github.com/viant/datly/config"
+	"github.com/viant/xreflect"
 	"path"
 )
 
@@ -62,7 +64,20 @@ func (s *Service) Signature(method, URI string) (*Signature, error) {
 		return nil, fmt.Errorf("invalid contract match")
 	}
 	contract := aMatch.header.Contracts[aMatch.index]
-	return aMatch.header.Signature(contract)
+
+	typeRegistry := xreflect.NewTypes(xreflect.WithRegistry(config.Config.Types))
+	for _, typeDef := range aMatch.header.Resource.Types {
+		typeRegistry.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType))
+	}
+	contract.Input = aMatch.header.Resource.InputParameters
+	for _, parameter := range contract.Input {
+		if len(parameter.Predicates) == 0 {
+			continue
+		}
+		parameter.Schema.InitType(typeRegistry.Lookup, false)
+	}
+
+	return aMatch.header.Signature(contract, typeRegistry)
 }
 
 func (s *Service) loadSignatures(ctx context.Context, URL string) error {

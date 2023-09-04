@@ -85,8 +85,7 @@ func (s *Service) discoverComponentContract(ctx context.Context, resource *Resou
 		}
 	}
 
-	componentTypeName := strings.ReplaceAll(location.Name, ".", "_")
-	componentTypeName = format.CaseLowerUnderscore.Format(componentTypeName, format.CaseUpperCamel)
+	componentTypeName := normalizeComponentType(location)
 	location.Name = strings.ReplaceAll(location.Name, ".", "/")
 	method, URI := shared.ExtractPath(location.Name)
 	ret, err := s.signature.Signature(method, URI)
@@ -98,9 +97,16 @@ func (s *Service) discoverComponentContract(ctx context.Context, resource *Resou
 		ret, err = s.signature.Signature(method, URI)
 	}
 	if ret != nil {
-		ret.AdjustOutputTypeName(componentTypeName)
+		ret.AdjustedRegisteredType(componentTypeName)
 	}
 	return ret, err
+}
+
+func normalizeComponentType(location *state.Location) string {
+	componentTypeName := strings.ReplaceAll(location.Name, "-", "_")
+	componentTypeName = strings.ReplaceAll(componentTypeName, ".", "_")
+	componentTypeName = format.CaseLowerUnderscore.Format(componentTypeName, format.CaseUpperCamel)
+	return componentTypeName
 }
 
 func (s *Service) translateExecutorDSQL(ctx context.Context, resource *Resource, DSQL string) (err error) {
