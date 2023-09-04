@@ -63,19 +63,22 @@ func (h *Header) Signature(contract *ContractPath) (*Signature, error) {
 	if !isAnonymous {
 		rType, _ := registry.Lookup(viewType.Name)
 		cardinality := outputParameter.Schema.Cardinality
-		outputSchema := state.NewSchema(rType)
 		if cardinality == state.Many {
 			rType = reflect.PtrTo(rType)
 		}
 		outputParameter.Schema.SetType(rType)
-		outputSchema.Cardinality = cardinality
+		outputParameter.Schema.Cardinality = state.One
 		outputType, err := parameters.ReflectType("github.com/viant/datly/view/autogen", registry.Lookup, false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get output type: %w", err)
 		}
-		viewType.DataType = outputType.String()
-	}
+		typeName := outputParameter.Schema.Name
+		outputParameter.Schema = state.NewSchema(outputType)
+		outputParameter.Schema.Name = typeName
+		outputParameter.Schema.Cardinality = state.One
 
+	}
+	signature.Output = outputParameter.Schema
 	signature.Anonymous = isAnonymous
 	signature.Types = append(signature.Types, viewType)
 	return signature, nil

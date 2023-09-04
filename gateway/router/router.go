@@ -465,6 +465,7 @@ func (r *Router) Resource() *Resource {
 
 func (r *Router) payloadReader(ctx context.Context, request *http.Request, writer http.ResponseWriter, route *Route) (PayloadReader, error) {
 	unmarshal := route.UnmarshalFunc(request)
+
 	locatorOptions := append(route.LocatorOptions(request, unmarshal), locator.WithDispatcher(route.dispatcher))
 	aSession := session.New(route.View, session.WithLocatorOptions(locatorOptions...))
 	if err := aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindQuery, state.KindRequestBody); err != nil {

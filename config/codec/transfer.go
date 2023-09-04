@@ -2,16 +2,15 @@ package codec
 
 import (
 	"context"
+	"github.com/viant/datly/config/codec/transfer"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"reflect"
-	"strings"
 )
 
 const (
 	KeyTransfer = "Transfer"
-	TransferTag = "transfer"
 )
 
 type (
@@ -21,6 +20,7 @@ type (
 		from     string
 		selector *structology.Selector
 	}
+
 	Transfer struct {
 		destType  *structology.StateType
 		transfers []*entry
@@ -43,14 +43,13 @@ func (e *TransferFactory) New(codecConfig *codec.Config, options ...codec.Option
 
 func (e *Transfer) init(destType reflect.Type) error {
 	e.destType = structology.NewStateType(destType)
-	transfers := e.destType.MatchByTag(TransferTag)
-	for _, transfer := range transfers {
-		tag, _ := transfer.Tag().Lookup(TransferTag)
-		from := ""
-		if strings.HasPrefix(tag, "from=") {
-			from = tag[5:]
+	transfers := e.destType.MatchByTag(transfer.TagName)
+	for _, aTransfer := range transfers {
+		tag := transfer.ParseTag(aTransfer.Tag().Get(transfer.TagName))
+		if tag.From == "" {
+			continue
 		}
-		e.transfers = append(e.transfers, &entry{selector: transfer, from: from})
+		e.transfers = append(e.transfers, &entry{selector: aTransfer, from: tag.From})
 	}
 	return nil
 }

@@ -18,9 +18,9 @@ type Signature struct {
 
 func (s *Signature) AdjustOutputTypeName(componentType string) {
 	originalType := s.Output.Name
-	s.Output.DataType = strings.ReplaceAll(s.Output.DataType, originalType, componentType)
-	s.Output.Name = strings.ReplaceAll(s.Output.Name, originalType, componentType)
+	s.Output.DataType = strings.Replace(s.Output.DataType, originalType, componentType, 1)
+	s.Output.Name = strings.Replace(s.Output.Name, originalType, componentType, 1)
 	for _, typeDef := range s.Types {
-		typeDef.Name = strings.ReplaceAll(typeDef.Name, originalType, componentType)
+		typeDef.Name = strings.Replace(typeDef.Name, originalType, componentType, 1)
 	}
 }

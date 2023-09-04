@@ -53,7 +53,7 @@ require (
 	github.com/aws/aws-sdk-go v1.44.12
 	github.com/aws/aws-sdk-go-v2/config v1.18.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.33.1
-	github.com/viant/structology v0.4.3-0.20230903235142-05cca2c71d40
+	github.com/viant/structology v0.4.3-0.20230904164854-eb76e2958186
 	github.com/viant/xdatly v0.3.1-0.20230904141526-b53df80f4dd5
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
 	github.com/viant/xdatly/handler v0.0.0-20230904141526-b53df80f4dd5

@@ -37,7 +37,7 @@ func (p *parameterStruct) reflectType() reflect.Type {
 }
 func (p *parameterStruct) structField() reflect.StructField {
 	if p.Parameter != nil {
-		return reflect.StructField{Name: p.name, Type: p.Parameter.Schema.Type(), PkgPath: PkgPath(p.Name, defaultPackageName)}
+		return reflect.StructField{Name: p.name, Type: p.Parameter.Schema.Type(), Tag: reflect.StructTag(p.Parameter.Tag), PkgPath: PkgPath(p.Name, defaultPackageName)}
 	}
 	var fields []reflect.StructField
 	for _, f := range p.fields {
