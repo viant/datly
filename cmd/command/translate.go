@@ -3,6 +3,8 @@ package command
 import (
 	"context"
 	"fmt"
+	"github.com/viant/afs/file"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/internal/translator"
 )
@@ -49,7 +51,8 @@ func (s *Service) translate(ctx context.Context, opts *options.Options) error {
 	for rule.Index = 0; rule.Index < len(rule.Source); rule.Index++ {
 		currRule := opts.Rule()
 		sourceURL := currRule.SourceURL()
-
+		_, name := url.Split(sourceURL, file.Scheme)
+		fmt.Printf("translating %v\n", name)
 		dSQL, err := currRule.LoadSource(ctx, s.fs, sourceURL)
 		if err != nil {
 			return err
