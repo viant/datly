@@ -223,19 +223,26 @@ func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 	case state.KindOutput:
 		switch parameter.In.Name {
 		case "data":
-			parameter.Schema = state.NewSchema(aView.OutputType())
+			if aView != nil {
+				parameter.Schema = state.NewSchema(aView.OutputType())
+			}
 		case "sql":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(""))
 		case "status":
-			parameter.Schema = state.NewSchema(reflect.TypeOf(response.Status{}))
+			parameter.Schema = state.NewSchema(reflect.TypeOf(response.ResponseStatus{}))
+			parameter.Name = "ResponseStatus"
 			if parameter.Tag == "" {
 				parameter.Tag = ` anonymous:"true"`
 			}
 		case "summary":
-			parameter.Schema = aView.Template.Summary.Schema
+			if aView != nil {
+				parameter.Schema = aView.Template.Summary.Schema
+			}
 		case "filter":
-			predicateType := aView.Template.Parameters.PredicateStructType()
-			parameter.Schema = state.NewSchema(predicateType)
+			if aView != nil {
+				predicateType := aView.Template.Parameters.PredicateStructType()
+				parameter.Schema = state.NewSchema(predicateType)
+			}
 		}
 	}
 }
@@ -249,5 +256,5 @@ func DataOutputParameter(name string) *state.Parameter {
 }
 
 func DefaultStatusOutputParameter() *state.Parameter {
-	return &state.Parameter{Name: "Status", In: state.NewOutputLocation("status"), Tag: ` anonymous:"true"`, Schema: state.NewSchema(reflect.TypeOf(response.Status{}))}
+	return &state.Parameter{Name: "ResponseStatus", In: state.NewOutputLocation("status"), Tag: ` anonymous:"true"`, Schema: state.NewSchema(reflect.TypeOf(response.ResponseStatus{}))}
 }

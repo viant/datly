@@ -307,8 +307,8 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 	w.Write(asBytes)
 }
 
-func (r *Router) responseStatusError(message string, anObject interface{}) response.Status {
-	responseStatus := response.Status{
+func (r *Router) responseStatusError(message string, anObject interface{}) response.ResponseStatus {
+	responseStatus := response.ResponseStatus{
 		Status:  "error",
 		Message: message,
 	}

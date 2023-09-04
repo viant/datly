@@ -1,4 +1,4 @@
-package config
+package codec
 
 import (
 	"context"
@@ -8,6 +8,10 @@ import (
 	"github.com/viant/xunsafe"
 	"reflect"
 	"unsafe"
+)
+
+const (
+	KeyCSV = "CSV"
 )
 
 type (

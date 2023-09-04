@@ -66,8 +66,6 @@ func (l *outputLocator) setFilterFields(filterState *structology.State) error {
 			return fmt.Errorf("unuspported filter type: %s", value.Type().String())
 		}
 	}
-	fmt.Printf("%T %+v\n", filterState.State(), filterState.State())
-
 	return nil
 }
 
@@ -115,7 +113,6 @@ func asInts(inputs []interface{}) ([]int, error) {
 	if len(inputs) == 0 {
 		return nil, nil
 	}
-	fmt.Printf("%T %v\n", inputs, inputs)
 	var output []int
 	for _, input := range inputs {
 		switch actual := input.(type) {

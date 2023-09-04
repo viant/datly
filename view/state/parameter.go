@@ -19,7 +19,7 @@ type (
 		Fields     Parameters
 		Group      Parameters `json:",omitempty"`
 		Predicates []*config.PredicateConfig
-		Name       string `json:",omitempty"`
+		Name       string `json:",omitempty" yaml:"Name"`
 
 		In                *Location   `json:",omitempty" yaml:"In" `
 		Required          *bool       `json:",omitempty"`
@@ -35,12 +35,12 @@ type (
 		DateFormat        string      `json:",omitempty"`
 		ErrorStatusCode   int         `json:",omitempty"`
 		Tag               string      `json:",omitempty" yaml:"Tag"`
-		Lazy              bool        `json:",omitempty"`
-
-		_selector    *structology.Selector
-		_initialized bool
-		_dependsOn   *Parameter
-		_state       *structology.StateType
+		Lazy              bool        `json:",omitempty" yaml:"Lazy"`
+		When              string      `json:",omitempty" yaml:"When"`
+		_selector         *structology.Selector
+		_initialized      bool
+		_dependsOn        *Parameter
+		_state            *structology.StateType
 	}
 	ParameterOption func(p *Parameter)
 )

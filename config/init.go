@@ -3,10 +3,12 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	xcodec "github.com/viant/datly/config/codec"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/sqlx/types"
 	"github.com/viant/xdatly/codec"
 	_ "github.com/viant/xdatly/extension" //go mod level placeholder replacement
+	"github.com/viant/xdatly/handler/response"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xdatly/types/core"
 	_ "github.com/viant/xdatly/types/custom"
@@ -16,15 +18,10 @@ import (
 )
 
 const (
-	TypeJwtTokenInfo = "JwtTokenInfo"
-	TypeJwtClaims    = "JwtClaims"
-
+	TypeJwtTokenInfo        = "JwtTokenInfo"
+	TypeJwtClaims           = "JwtClaims"
 	CodecCognitoKeyJwtClaim = "CognitoJwtClaim"
 	CodecKeyJwtClaim        = "JwtClaim"
-	CodecKeyAsStrings       = "AsStrings"
-	CodecKeyAsInts          = "AsInts"
-	CodecKeyCSV             = "CSV"
-	CodecJSON               = "JSON"
 )
 
 var Config = &Registry{
@@ -36,17 +33,19 @@ var Config = &Registry{
 		xreflect.NewType("json.RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
 		xreflect.NewType("types.BitBool", xreflect.WithReflectType(reflect.TypeOf(types.BitBool(true)))),
 		xreflect.NewType("time.Time", xreflect.WithReflectType(xreflect.TimeType)),
+		xreflect.NewType("response.ResponseStatus", xreflect.WithReflectType(reflect.TypeOf(response.ResponseStatus{}))),
 	)),
 	Codecs: codec.NewRegistry(
-		codec.WithCodec(CodecKeyJwtClaim, &GCPJwtClaim{}, time.Time{}),
-		codec.WithCodec(CodecCognitoKeyJwtClaim, &GCPJwtClaim{}, time.Time{}),
-		codec.WithCodec(CodecKeyAsStrings, &AsStrings{}, time.Time{}),
-		codec.WithFactory(CodecKeyCSV, CsvFactory(""), time.Time{}),
-		codec.WithFactory(CodecStructql, StructQLFactory(""), time.Time{}),
-		codec.WithFactory(CodecJSON, &JSONFactory{}, time.Time{}),
-		codec.WithFactory(CodecVeltyCriteria, &VeltyCriteriaFactory{}, time.Time{}),
-		codec.WithFactory(CodecCriteriaBuilder, &CriteriaBuilderFactory{}, time.Time{}),
-		codec.WithFactory(CodecEncode, &EncodeFactory{}, time.Time{}),
+		codec.WithCodec(xcodec.KeyJwtClaim, &xcodec.GCPJwtClaim{}, time.Time{}),
+		codec.WithCodec(xcodec.CognitoKeyJwtClaim, &xcodec.GCPJwtClaim{}, time.Time{}),
+		codec.WithCodec(xcodec.KeyAsStrings, &xcodec.AsStrings{}, time.Time{}),
+		codec.WithFactory(xcodec.KeyCSV, xcodec.CsvFactory(""), time.Time{}),
+		codec.WithFactory(xcodec.Structql, xcodec.StructQLFactory(""), time.Time{}),
+		codec.WithFactory(xcodec.JSON, &xcodec.JSONFactory{}, time.Time{}),
+		codec.WithFactory(xcodec.VeltyCriteria, &xcodec.VeltyCriteriaFactory{}, time.Time{}),
+		codec.WithFactory(xcodec.KeyCriteriaBuilder, &xcodec.CriteriaBuilderFactory{}, time.Time{}),
+		codec.WithFactory(xcodec.Encode, &xcodec.EncodeFactory{}, time.Time{}),
+		codec.WithFactory(xcodec.KeyTransfer, &xcodec.TransferFactory{}, time.Time{}),
 	),
 	Predicates: &PredicateRegistry{
 		registry: map[string]*Predicate{

@@ -1,4 +1,4 @@
-package config
+package codec
 
 import (
 	"context"
@@ -11,6 +11,10 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+)
+
+const (
+	JSON = "JSON"
 )
 
 type (
@@ -95,7 +99,7 @@ func (j *JSONParsers) unmarshalIfNotEmpty(aString string, result reflect.Value) 
 func (j *JSONFactory) New(codecConfig *codec.Config, options ...codec.Option) (codec.Instance, error) {
 	typeName := codecConfig.OutputType
 	if typeName == "" {
-		if err := ValidateArgs(codecConfig, 1, CodecJSON); err != nil {
+		if err := ValidateArgs(codecConfig, 1, JSON); err != nil {
 			return nil, err
 		}
 

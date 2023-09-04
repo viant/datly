@@ -14,6 +14,7 @@ import (
 	"github.com/viant/xunsafe"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync"
 	"unsafe"
 )
@@ -169,6 +170,7 @@ func (s *Session) populateParameterInBackground(ctx context.Context, parameter *
 }
 
 func (s *Session) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
+
 	value, has, err := s.LookupValue(ctx, parameter, options)
 	if err != nil {
 		return err
@@ -183,13 +185,41 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 		return err
 	}
 	if options.indirectState { //p
-		fmt.Printf("%T %+v %T\n", aState.State(), aState.State(), value) // arameters.Selectors are not initialized from the tempalte state
 		err = aState.SetValue(parameter.Name, value)
-		fmt.Printf("AFTER %T %+v %T %+v\n", aState.State(), aState.State(), value, value) // arameters.Selectors are not initialized from the tempalte state
 		return err
 	}
 	err = parameter.Selector().SetValue(aState.Pointer(), value)
 	return err
+}
+
+func (s *Session) canRead(ctx context.Context, parameter *state.Parameter) (bool, error) {
+	if parameter.When == "" {
+		return true, nil
+	}
+	//TODO move template based or IGO based expressions, for now qucick impl for equal only based check
+	//move ast to build init time
+	index := strings.Index(parameter.When, "=")
+	if index == -1 {
+		return false, fmt.Errorf("currently only basic check with = is supported ")
+	}
+	parameterName := parameter.When[:index]
+	index = strings.LastIndex(parameter.When, "=")
+	value := strings.TrimSpace(parameter.When[index+1:])
+	if !strings.HasPrefix(parameterName, "$") {
+		return false, fmt.Errorf("invalid expr, expected $parametr=value, but had: %v", parameterName)
+	}
+	name := parameterName[1:]
+	parameterX := s.namedParameters[name]
+	if parameterX == nil {
+		return false, fmt.Errorf("failed to lookup parameter: %s", name)
+	}
+	x, has, err := s.lookupValue(ctx, parameterX, nil)
+	if !has || err != nil {
+		return false, err
+	}
+
+	shallPopulate, err := equals(x, value)
+	return shallPopulate, err
 }
 
 func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter) (interface{}, error) {
@@ -266,8 +296,11 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 	if opts == nil {
 		opts = &s.Options
 	}
+	canRead, err := s.canRead(ctx, parameter)
+	if !canRead || err != nil {
+		return nil, false, err
+	}
 	cachable := parameter.In.Kind != state.KindState
-
 	if value, has = s.cache.lookup(parameter); has && cachable {
 		return value, has, nil
 	}

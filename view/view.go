@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/viant/datly/config"
+	"github.com/viant/datly/config/codec"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/logger"
@@ -1154,7 +1154,7 @@ func (v *View) UnwrapDatabaseType(ctx context.Context, value interface{}) (inter
 	if v._codec != nil {
 		actualRecord := v._codec.unwrapper.Value(xunsafe.AsPointer(value))
 
-		if err := v._codec.updateValue(ctx, value, &config.ParentValue{Value: actualRecord, RType: v.Schema.CompType()}); err != nil {
+		if err := v._codec.updateValue(ctx, value, &codec.ParentValue{Value: actualRecord, RType: v.Schema.CompType()}); err != nil {
 			return nil, err
 		}
 

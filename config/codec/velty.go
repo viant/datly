@@ -1,4 +1,4 @@
-package config
+package codec
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-const CodecVeltyCriteria = "VeltyCriteria"
+const VeltyCriteria = "VeltyCriteria"
 
 type (
 	VeltyCriteriaFactory struct {

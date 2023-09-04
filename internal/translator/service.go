@@ -88,9 +88,7 @@ func (s *Service) discoverComponentContract(ctx context.Context, resource *Resou
 
 	componentTypeName := strings.ReplaceAll(location.Name, ".", "_")
 	componentTypeName = format.CaseLowerUnderscore.Format(componentTypeName, format.CaseUpperCamel)
-
 	location.Name = strings.ReplaceAll(location.Name, ".", "/")
-
 	method, URI := shared.ExtractPath(location.Name)
 	ret, err := s.signature.Signature(method, URI)
 	if err != nil { //try reload signature service in case it has changed
@@ -355,6 +353,19 @@ func (s *Service) updateComponentOutputType(resource *Resource, rootViewlet *Vie
 	cardinality := string(state.Many)
 	setter.SetStringIfEmpty(&cardinality, string(rootViewlet.Cardinality))
 	dataParameter.Schema.Cardinality = state.Cardinality(cardinality)
+
+	//for _, parameter := range outputParameters {
+	//	if output := parameter.Output; output != nil && output.Name == codec.KeyTransfer {
+	//		destType, err := config.Config.Types.Lookup(output.Args[0])
+	//		fmt.Printf("%v", err)
+	//		if destType != nil {
+	//			fmt.Printf("ARGS: %v %s\n", output.Args, destType)
+	//
+	//		}
+	//
+	//	}
+	//}
+
 	resource.Rule.Route.Output.Type.Parameters = outputParameters
 	return nil
 }
@@ -549,6 +560,9 @@ func (s *Service) updateComponentType(ctx context.Context, resource *Resource, p
 		}
 		parameter.In.Name = signature.Method + ":" + signature.URI
 		parameter.Schema = signature.Output
+		if !signature.Anonymous {
+			parameter.Schema.Cardinality = state.One
+		}
 		for _, typeDef := range signature.Types {
 			if err = config.Config.Types.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType)); err != nil {
 				return err

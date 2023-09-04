@@ -243,6 +243,8 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 			}
 		case "Output":
 			declaration.InOutput = true
+		case "When":
+			declaration.When = strings.Trim(content, "'\"")
 		case "UtilParam":
 		//deprecated
 		case "QuerySelector":

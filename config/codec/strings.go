@@ -1,4 +1,4 @@
-package config
+package codec
 
 import (
 	"context"
@@ -6,6 +6,10 @@ import (
 	"github.com/viant/xdatly/codec"
 	"reflect"
 	"strings"
+)
+
+const (
+	KeyAsStrings = "AsStrings"
 )
 
 type AsStrings struct {

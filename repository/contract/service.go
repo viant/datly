@@ -62,7 +62,7 @@ func (s *Service) Signature(method, URI string) (*Signature, error) {
 		return nil, fmt.Errorf("invalid contract match")
 	}
 	contract := aMatch.header.Contracts[aMatch.index]
-	return aMatch.header.Signature(contract), nil
+	return aMatch.header.Signature(contract)
 }
 
 func (s *Service) loadSignatures(ctx context.Context, URL string) error {

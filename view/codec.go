@@ -3,7 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/config"
+	codec2 "github.com/viant/datly/config/codec"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/structology"
@@ -95,7 +95,7 @@ func (c *columnsCodec) init(viewType reflect.Type, columns []*Column) error {
 	return nil
 }
 
-func (c *columnsCodec) updateValue(ctx context.Context, value interface{}, record *config.ParentValue) error {
+func (c *columnsCodec) updateValue(ctx context.Context, value interface{}, record *codec2.ParentValue) error {
 	asPtr := xunsafe.AsPointer(value)
 	for i, column := range c.columns {
 		fieldValue := c.fields[i].Value(asPtr)

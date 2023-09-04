@@ -1,4 +1,4 @@
-package config
+package codec
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"reflect"
 )
 
-const CodecCriteriaBuilder = "CriteriaBuilder"
+const KeyCriteriaBuilder = "CriteriaBuilder"
 
 type (
 	CriteriaBuilderFactory struct {
@@ -21,7 +21,7 @@ type (
 )
 
 func (c *CriteriaBuilderFactory) New(codecConfig *codec.Config, options ...codec.Option) (codec.Instance, error) {
-	if err := ValidateArgs(codecConfig, 1, CodecCriteriaBuilder); err != nil {
+	if err := ValidateArgs(codecConfig, 1, KeyCriteriaBuilder); err != nil {
 		return nil, err
 	}
 

@@ -119,6 +119,7 @@ func (r *Resource) loadImportTypes(ctx context.Context, typesImport *parser.Type
 		if i > 0 {
 			alias = ""
 		}
+		//_ = config.Config.Types.Register(name, xreflect.WithTypeDefinition(dataType))
 		setter.SetStringIfEmpty(&typeDef.Alias, alias)
 		r.AppendTypeDefinition(typeDef)
 	}

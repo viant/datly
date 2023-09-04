@@ -1,8 +1,9 @@
-package config
+package codec
 
 import (
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
+	"reflect"
 )
 
 // Options represents internal codec option
@@ -40,6 +41,11 @@ func NewOptions(opts *codec.Options) *Options {
 	}
 	if opts.ValueGetter != nil {
 		ret.ValueGetter = opts.ValueGetter
+	}
+	if opts.LookupType != nil && ret.LookupType == nil {
+		ret.LookupType = func(name string, option ...xreflect.Option) (reflect.Type, error) {
+			return opts.LookupType(name)
+		}
 	}
 
 	return ret

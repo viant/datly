@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	codec2 "github.com/viant/datly/config/codec"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/predicate"
@@ -241,7 +242,7 @@ func NewPredicateHandler() *Predicate {
 
 func (p *PredicateHandlerFactory) New(lookupType xreflect.LookupType, args ...string) (codec.PredicateHandler, error) {
 	if len(args) < 1 {
-		return nil, NotEnoughParametersError(args, PredicateHandler, 1)
+		return nil, codec2.NotEnoughParametersError(args, PredicateHandler, 1)
 	}
 
 	predicateType := args[0]

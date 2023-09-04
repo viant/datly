@@ -8,10 +8,11 @@ import (
 
 // Signature defines contract signature
 type Signature struct {
-	URI    string
-	Method string
-	Types  []*view.TypeDefinition
-	Output *state.Schema
+	URI       string
+	Method    string
+	Anonymous bool
+	Types     []*view.TypeDefinition
+	Output    *state.Schema
 	//TODO add input, body with types def if needed
 }
 

@@ -1,4 +1,4 @@
-package config
+package codec
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"unsafe"
 )
 
-const CodecEncode = "Encode"
+const Encode = "Encode"
 
 type (
 	EncodeFactory struct {
@@ -29,7 +29,7 @@ type (
 )
 
 func (e *EncodeFactory) New(codecConfig *codec.Config, options ...codec.Option) (codec.Instance, error) {
-	if err := ValidateMinArgs(codecConfig, CodecEncode, 3); err != nil {
+	if err := ValidateMinArgs(codecConfig, Encode, 3); err != nil {
 		return nil, err
 	}
 	opts := NewOptions(codec.NewOptions(options))

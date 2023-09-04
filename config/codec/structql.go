@@ -1,4 +1,4 @@
-package config
+package codec
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"reflect"
 )
 
-const CodecStructql = "structql"
+const Structql = "structql"
 
 type (
 	StructQLFactory string

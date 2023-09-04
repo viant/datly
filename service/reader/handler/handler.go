@@ -31,7 +31,7 @@ type (
 		Reader     *reader.Output
 		Output     interface{}
 		OutputType reflect.Type
-		Status     *response.Status
+		Status     *response.ResponseStatus
 		StatusCode int
 		Error      error
 		http.Header
@@ -45,7 +45,7 @@ func (r *Response) SetError(err error, statusCode int) {
 
 }
 func (h *Handler) Handle(ctx context.Context, aView *view.View, session *session.Session, opts ...reader.Option) *Response {
-	ret := &Response{Header: http.Header{}, Status: &response.Status{Status: "ok"}}
+	ret := &Response{Header: http.Header{}, Status: &response.ResponseStatus{Status: "ok"}}
 	err := h.readData(ctx, aView, session, ret, opts)
 	if err != nil {
 		ret.SetError(err, h.errorStatusCode())

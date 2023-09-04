@@ -1,4 +1,4 @@
-package config
+package codec
 
 import (
 	"context"
@@ -9,6 +9,11 @@ import (
 	"github.com/viant/xdatly/codec"
 	"reflect"
 	"strings"
+)
+
+const (
+	CognitoKeyJwtClaim = "CognitoJwtClaim"
+	KeyJwtClaim        = "JwtClaim"
 )
 
 // GCPJwtClaim represents IDJWT visitor
