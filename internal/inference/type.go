@@ -171,11 +171,20 @@ func (t *Type) AddRelation(name string, spec *Spec, relation *Relation) *Field {
 }
 
 func (t *Type) Fields(opts ...ReflectOption) []reflect.StructField {
+	var unique = map[string]bool{}
 	var fields []reflect.StructField
 	for _, field := range t.columnFields {
+		if unique[field.Name] {
+			continue
+		}
+		unique[field.Name] = true
 		fields = append(fields, field.StructField(opts...))
 	}
 	for _, field := range t.RelationFields {
+		if unique[field.Name] {
+			continue
+		}
+		unique[field.Name] = true
 		fields = append(fields, field.StructField(opts...))
 	}
 	return fields
