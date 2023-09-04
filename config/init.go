@@ -33,7 +33,7 @@ var Config = &Registry{
 		xreflect.NewType("json.RawMessage", xreflect.WithReflectType(reflect.TypeOf(json.RawMessage{}))),
 		xreflect.NewType("types.BitBool", xreflect.WithReflectType(reflect.TypeOf(types.BitBool(true)))),
 		xreflect.NewType("time.Time", xreflect.WithReflectType(xreflect.TimeType)),
-		xreflect.NewType(" response.Status", xreflect.WithReflectType(reflect.TypeOf(response.Status{}))),
+		xreflect.NewType("response.Status", xreflect.WithReflectType(reflect.TypeOf(response.Status{}))),
 	)),
 	Codecs: codec.NewRegistry(
 		codec.WithCodec(xcodec.KeyJwtClaim, &xcodec.GCPJwtClaim{}, time.Time{}),
