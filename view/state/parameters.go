@@ -29,8 +29,23 @@ func (s Parameters) LookupByLocation(kind Kind, location string) *Parameter {
 		return nil
 	}
 	for _, candidate := range s {
-		if candidate.In.Kind == kind && candidate.In.Name == location {
-			return candidate
+		switch candidate.In.Kind {
+		case kind:
+			if candidate.In.Name == location {
+				return candidate
+			}
+		case KindRepeated:
+			for _, parameter := range candidate.Repeated {
+				if parameter.In.Name == location {
+					return candidate
+				}
+			}
+		case KindGroup:
+			for _, parameter := range candidate.Group {
+				if parameter.In.Name == location {
+					return candidate
+				}
+			}
 		}
 	}
 	return nil
@@ -39,8 +54,21 @@ func (s Parameters) LookupByLocation(kind Kind, location string) *Parameter {
 func (s Parameters) FilterByKind(kind Kind) Parameters {
 	var result = Parameters{}
 	for i, candidate := range s {
-		if candidate.In.Kind == kind {
+		switch candidate.In.Kind {
+		case kind:
 			result = append(result, s[i])
+		case KindGroup:
+			for _, parameter := range candidate.Group {
+				if parameter.In.Kind == kind {
+					result = append(result, parameter)
+				}
+			}
+		case KindRepeated:
+			for _, parameter := range candidate.Repeated {
+				if parameter.In.Kind == kind {
+					result = append(result, parameter)
+				}
+			}
 		}
 	}
 	return result

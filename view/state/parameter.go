@@ -18,7 +18,8 @@ type (
 		shared.Reference
 		Fields     Parameters
 		Group      Parameters                `json:",omitempty"`
-		Predicates []*config.PredicateConfig `yaml:"Predicates"`
+		Repeated   Parameters                `json:",omitempty" yaml:"Repeated"`
+		Predicates []*config.PredicateConfig `json:",omitempty" yaml:"Predicates"`
 		Name       string                    `json:",omitempty" yaml:"Name"`
 
 		In                *Location   `json:",omitempty" yaml:"In" `
@@ -31,9 +32,9 @@ type (
 		ExpectedReturned  *int        `json:",omitempty"`
 		Schema            *Schema     `json:",omitempty" yaml:"Schema"`
 		Output            *Codec      `json:",omitempty" yaml:"Output"`
-		Const             interface{} `json:",omitempty"`
-		DateFormat        string      `json:",omitempty"`
-		ErrorStatusCode   int         `json:",omitempty"`
+		Const             interface{} `json:",omitempty" yaml:"Const"`
+		DateFormat        string      `json:",omitempty" yaml:"DateFormat"`
+		ErrorStatusCode   int         `json:",omitempty" yaml:"ErrorStatusCode"`
 		Tag               string      `json:",omitempty" yaml:"Tag"`
 		Lazy              bool        `json:",omitempty" yaml:"Lazy"`
 		When              string      `json:",omitempty" yaml:"When"`
@@ -215,6 +216,22 @@ func (p *Parameter) initSchema(resource Resource) error {
 		p._state = structology.NewStateType(p.Schema.Type())
 		p._state.NewState()
 		return nil
+	}
+
+	if p.In.Kind == KindRepeated {
+		if len(p.Repeated) > 0 {
+			for _, item := range p.Repeated {
+				if err := item.Schema.Init(resource); err != nil {
+					return err
+				}
+			}
+			componentSchema := p.Repeated[0].Schema.Type()
+			if componentSchema.Kind() == reflect.Struct {
+				componentSchema = reflect.PtrTo(componentSchema)
+			}
+			p.Schema = NewSchema(reflect.SliceOf(componentSchema))
+			return nil
+		}
 	}
 
 	if p.In.Kind == KindRequest {

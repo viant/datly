@@ -20,12 +20,15 @@ type (
 	Parameter struct {
 		Explicit bool //explicit parameter are added to the main view as dependency
 		state.Parameter
+		Repeated State
+		Group    State
 		ModificationSetting
 		SQL         string
 		Hint        string
 		AssumedType bool
 		Connector   string
 		InOutput    bool
+		Of          string
 	}
 
 	ModificationSetting struct {

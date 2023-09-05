@@ -13,5 +13,6 @@ func init() {
 	Register(state.KindEnvironment, NewEnv)
 	Register(state.KindParam, NewParameter)
 	Register(state.KindGroup, NewGroup)
+	Register(state.KindRepeated, NewRepeated)
 	Register(state.KindState, NewState)
 }

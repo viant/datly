@@ -170,7 +170,9 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 	if len(r.State.FilterByKind(state.KindGroup)) > 0 {
 		r.State = r.State.Group()
 	}
-
+	if r.State, err = r.State.Repeated(); err != nil {
+		return err
+	}
 	r.Rule.Route.Transforms = r.Declarations.Transforms
 	if err := parser.ExtractParameterHints(r.Declarations.SQL, &r.State); err != nil {
 		return err

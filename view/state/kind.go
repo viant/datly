@@ -20,16 +20,18 @@ const (
 	KindParam       Kind = "param"
 	KindRequest     Kind = "http_request"
 	KindGroup       Kind = "group"
-	KindOutput      Kind = "output"    //reader output
-	KindState       Kind = "state"     //input state
-	KindComponent   Kind = "component" //input state
+	KindRepeated    Kind = "repeated"
+
+	KindOutput    Kind = "output"    //reader output
+	KindState     Kind = "state"     //input state
+	KindComponent Kind = "component" //input state
 
 )
 
 // Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindLiteral, KindParam, KindRequest, KindGroup, KindOutput, KindState, KindComponent:
+	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindLiteral, KindParam, KindRequest, KindRepeated, KindGroup, KindOutput, KindState, KindComponent:
 		return nil
 	}
 

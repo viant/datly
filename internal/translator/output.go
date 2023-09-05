@@ -131,9 +131,6 @@ func (s *Service) ensureOutputParameters(resource *Resource, outputState inferen
 			outputParameters = append(outputParameters, component.DefaultDataOutputParameter())
 		}
 	}
-	if dataParameter := outputParameters.LookupByLocation(state.KindOutput, "data"); dataParameter == nil {
-		outputParameters = append(outputParameters, component.DefaultDataOutputParameter())
-	}
 	return outputParameters
 }
 

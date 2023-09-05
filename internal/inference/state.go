@@ -164,8 +164,21 @@ func (s State) FilterByKind(kind state.Kind) State {
 		return result
 	}
 	for _, parameter := range s {
-		if parameter.In.Kind == kind {
+		switch parameter.In.Kind {
+		case kind:
 			result.Append(parameter)
+		case state.KindRepeated:
+			for _, candidate := range parameter.Repeated {
+				if candidate.In.Kind == kind {
+					result.Append(candidate)
+				}
+			}
+		case state.KindGroup:
+			for _, candidate := range parameter.Group {
+				if candidate.In.Kind == kind {
+					result.Append(candidate)
+				}
+			}
 		}
 	}
 	return result
@@ -379,11 +392,50 @@ func (s *State) Group() State {
 		}
 
 		for _, parent := range parameters {
-			parent.Group = append(parent.Group, &parameter.Parameter)
+			parent.Parameter.Group = append(parent.Parameter.Group, &parameter.Parameter)
+			parent.Group = append(parent.Group, parameter)
 		}
 	}
 
 	return newState
+}
+
+func (s State) Repeated() (State, error) {
+	sliceParameters := s.FilterByKind(state.KindRepeated)
+	if len(sliceParameters) == 0 {
+		return s, nil
+	}
+	sliceParameter := map[string]state.Parameters{}
+	byName := s.IndexByName()
+	for _, param := range sliceParameters {
+		sliceParameter[param.Name] = state.Parameters{}
+		baseParameters := strings.Split(param.In.Name, ",")
+		for _, name := range baseParameters {
+			baseParameter, ok := byName[strings.TrimSpace(name)]
+			if !ok {
+				return nil, fmt.Errorf("unknwon slice base paramter: %s", name)
+			}
+			baseParameter.Of = param.Name
+		}
+	}
+
+	result := State{}
+	var repeatedName []string
+	for i, parameter := range s {
+		if parameter.Of == "" {
+			result = append(result, s[i])
+			continue
+		}
+		parent, ok := byName[parameter.Of]
+		if !ok {
+			return nil, fmt.Errorf("unkown parent parameter %v, base: %v", parameter.Of, parameter.Name)
+		}
+		repeatedName = append(repeatedName, parameter.Name)
+		parent.Parameter.Repeated = append(parent.Parameter.Repeated, &parameter.Parameter)
+		parent.Repeated = append(parent.Repeated, parameter)
+		parent.Parameter.In.Name = strings.Join(repeatedName, ",")
+	}
+	return result, nil
 }
 
 // NewState creates a state from state go struct

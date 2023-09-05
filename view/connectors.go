@@ -29,7 +29,7 @@ func (v Connectors) Lookup(name string) (*Connector, error) {
 	return ret, nil
 }
 
-// ConnectorSlice represents Slice of *Connector
+// ConnectorSlice represents Repeated of *Connector
 type ConnectorSlice []*Connector
 
 // Views indexes Connectors by Connector.Name.
