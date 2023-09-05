@@ -23,28 +23,44 @@ type (
 	Parameters []*Parameter
 )
 
+func (s NamedParameters) LookupByLocation(kind Kind, location string) *Parameter {
+	for _, candidate := range s {
+		if ret := candidate.matchByLocation(kind, location); ret != nil {
+			return ret
+		}
+	}
+	return nil
+}
+
 // LookupByLocation returns match parameter by location
 func (s Parameters) LookupByLocation(kind Kind, location string) *Parameter {
 	if len(s) == 0 {
 		return nil
 	}
 	for _, candidate := range s {
-		switch candidate.In.Kind {
-		case kind:
-			if candidate.In.Name == location {
-				return candidate
+		if ret := candidate.matchByLocation(kind, location); ret != nil {
+			return ret
+		}
+	}
+	return nil
+}
+
+func (p *Parameter) matchByLocation(kind Kind, location string) *Parameter {
+	switch p.In.Kind {
+	case kind:
+		if p.In.Name == location {
+			return p
+		}
+	case KindRepeated:
+		for _, parameter := range p.Repeated {
+			if parameter.In.Name == location {
+				return p
 			}
-		case KindRepeated:
-			for _, parameter := range candidate.Repeated {
-				if parameter.In.Name == location {
-					return candidate
-				}
-			}
-		case KindGroup:
-			for _, parameter := range candidate.Group {
-				if parameter.In.Name == location {
-					return candidate
-				}
+		}
+	case KindGroup:
+		for _, parameter := range p.Group {
+			if parameter.In.Name == location {
+				return p
 			}
 		}
 	}
@@ -53,25 +69,29 @@ func (s Parameters) LookupByLocation(kind Kind, location string) *Parameter {
 
 func (s Parameters) FilterByKind(kind Kind) Parameters {
 	var result = Parameters{}
-	for i, candidate := range s {
-		switch candidate.In.Kind {
-		case kind:
-			result = append(result, s[i])
-		case KindGroup:
-			for _, parameter := range candidate.Group {
-				if parameter.In.Kind == kind {
-					result = append(result, parameter)
-				}
+	for _, candidate := range s {
+		candidate.matchByKind(kind, &result)
+	}
+	return result
+}
+
+func (p *Parameter) matchByKind(kind Kind, result *Parameters) {
+	switch p.In.Kind {
+	case kind:
+		*result = append(*result, p)
+	case KindGroup:
+		for _, parameter := range p.Group {
+			if parameter.In.Kind == kind {
+				*result = append(*result, parameter)
 			}
-		case KindRepeated:
-			for _, parameter := range candidate.Repeated {
-				if parameter.In.Kind == kind {
-					result = append(result, parameter)
-				}
+		}
+	case KindRepeated:
+		for _, parameter := range p.Repeated {
+			if parameter.In.Kind == kind {
+				*result = append(*result, parameter)
 			}
 		}
 	}
-	return result
 }
 
 func (s Parameters) GroupByStatusCode() []Parameters {

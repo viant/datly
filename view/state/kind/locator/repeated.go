@@ -13,7 +13,8 @@ import (
 
 type Repeated struct {
 	ParameterLookup
-	Parameters state.NamedParameters
+	InputParameters  state.NamedParameters
+	OutputParameters state.NamedParameters
 }
 
 type entry struct {
@@ -75,13 +76,11 @@ func (p *Repeated) getRepeatedItems(ctx context.Context, parameter *state.Parame
 }
 
 func (p *Repeated) matchByLocation(names string) *state.Parameter {
-	var parameter *state.Parameter
-	for _, candidate := range p.Parameters {
-		if candidate.In.Kind == state.KindRepeated && candidate.In.Name == names {
-			parameter = candidate
-		}
+	matched := p.OutputParameters.LookupByLocation(state.KindRepeated, names)
+	if matched == nil {
+		matched = p.InputParameters.LookupByLocation(state.KindRepeated, names)
 	}
-	return parameter
+	return matched
 }
 
 // NewRepeated returns parameter locator
@@ -94,7 +93,8 @@ func NewRepeated(opts ...Option) (kind.Locator, error) {
 		return nil, fmt.Errorf("parameters was empty")
 	}
 	return &Repeated{
-		ParameterLookup: options.ParameterLookup,
-		Parameters:      options.InputParameters,
+		ParameterLookup:  options.ParameterLookup,
+		InputParameters:  options.InputParameters,
+		OutputParameters: options.OutputParameters,
 	}, nil
 }

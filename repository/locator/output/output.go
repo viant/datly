@@ -11,9 +11,9 @@ import (
 )
 
 type outputLocator struct {
-	Output     *reader.Output
-	Status     *response.Status
-	Parameters state.Parameters
+	Output           *reader.Output
+	Status           *response.Status
+	OutputParameters state.NamedParameters
 }
 
 func (l *outputLocator) Names() []string {
@@ -44,7 +44,7 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 		SQL := l.Output.Metrics.SQL()
 		return SQL, true, nil
 	case "filter":
-		parameter := l.Parameters.LookupByLocation(state.KindOutput, "filter")
+		parameter := l.OutputParameters.LookupByLocation(state.KindOutput, "filter")
 		if parameter == nil || l.Output == nil {
 			return nil, false, nil
 		}
@@ -60,7 +60,7 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 // newOutputLocator returns output locator
 func newOutputLocator(opts ...locator.Option) (kind.Locator, error) {
 	options := locator.NewOptions(opts)
-	ret := &outputLocator{Parameters: options.OutputParameters}
+	ret := &outputLocator{OutputParameters: options.OutputParameters}
 	for _, candidate := range options.Custom {
 		if output, ok := candidate.(*reader.Output); ok {
 			ret.Output = output

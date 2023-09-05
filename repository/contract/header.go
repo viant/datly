@@ -21,7 +21,7 @@ type (
 	}
 
 	Type struct {
-		Parameters []*state.Parameter `yaml:"Parameters"`
+		Parameters []*state.Parameter `yaml:"InputParameters"`
 	}
 
 	Output struct {
@@ -37,7 +37,7 @@ type (
 
 	Resource struct {
 		Types           []*view.TypeDefinition `yaml:"Types"`
-		InputParameters []*state.Parameter     `yaml:"Parameters"`
+		InputParameters []*state.Parameter     `yaml:"InputParameters"`
 	}
 )
 

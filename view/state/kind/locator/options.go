@@ -26,7 +26,7 @@ type (
 		ParameterLookup  ParameterLookup
 		ReadInto         ReadInto
 		InputParameters  state.NamedParameters
-		OutputParameters state.Parameters
+		OutputParameters state.NamedParameters
 		Views            view.NamedViews
 		State            *structology.State
 		Dispatcher       resolver.Dispatcher
@@ -151,7 +151,7 @@ func WithState(state *structology.State) Option {
 
 func WithOutputParameters(parameters state.Parameters) Option {
 	return func(o *Options) {
-		o.OutputParameters = parameters
+		o.OutputParameters = parameters.Index()
 	}
 }
 
