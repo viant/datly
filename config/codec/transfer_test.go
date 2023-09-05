@@ -13,16 +13,16 @@ import (
 func TestTransfer_Value(t *testing.T) {
 
 	var testCases = []struct {
-		description string
-		config      *codec.Config
-		source      func() interface{}
-		dest        func() interface{}
-		destName    string
-		expect      func() interface{}
+		description  string
+		config       *codec.Config
+		source       func() interface{}
+		dest         func() interface{}
+		destTypeName string
+		expect       func() interface{}
 	}{
 		{
-			destName:    "test1",
-			description: "basic transfer",
+			destTypeName: "test1",
+			description:  "basic transfer",
 			config: &codec.Config{
 				Body:       "",
 				InputType:  nil,
@@ -67,7 +67,7 @@ func TestTransfer_Value(t *testing.T) {
 	factory := &TransferFactory{}
 	for _, testCase := range testCases {
 		types := xreflect.NewTypes()
-		_ = types.Register(testCase.destName, xreflect.WithReflectType(reflect.TypeOf(testCase.dest())))
+		_ = types.Register(testCase.destTypeName, xreflect.WithReflectType(reflect.TypeOf(testCase.dest())))
 		aCodec, err := factory.New(testCase.config, codec.WithTypeLookup(func(name string) (reflect.Type, error) {
 			return types.Lookup(name)
 		}))

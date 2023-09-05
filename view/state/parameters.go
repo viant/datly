@@ -320,7 +320,6 @@ func (s Parameters) PredicateStructType() reflect.Type {
 	if len(structFields) == 0 {
 		return emptyStruct
 	}
-	fmt.Printf("Predicate type: %s\n", reflect.StructOf(structFields).String())
 	return reflect.StructOf(structFields)
 }
 

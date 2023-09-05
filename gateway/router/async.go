@@ -101,6 +101,8 @@ func (a *Async) JobsUpdater(ctx context.Context, db *sql.DB) (*update.Service, e
 	return a.updater(ctx, db, view.AsyncJobsTable)
 }
 
+
+
 func (r *Route) RecordsInserter(ctx context.Context, route *Route, db *sql.DB) (*insert.Service, error) {
 	return r.inserter(ctx, db, route.View.Async.Table, option.Tag(view.AsyncTagName))
 }

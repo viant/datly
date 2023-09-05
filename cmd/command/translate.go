@@ -61,6 +61,10 @@ func (s *Service) translate(ctx context.Context, opts *options.Options) error {
 		if err = s.translateDSQL(ctx, rule, dSQL, opts); err != nil {
 			return err
 		}
+		repository := s.translator.Repository
+		if err = repository.UploadPartialRules(ctx); err != nil {
+			return err
+		}
 	}
 	return nil
 }

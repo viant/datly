@@ -1,31 +1,23 @@
-package async
+package dbms
 
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/cmd/env"
-	"github.com/viant/datly/gateway/router/async/db"
-	"github.com/viant/datly/gateway/router/async/db/bigquery"
-	"github.com/viant/datly/gateway/router/async/db/mysql"
-	"github.com/viant/datly/gateway/router/async/handler/s3"
-	"github.com/viant/datly/gateway/router/async/handler/sqs"
+	"github.com/viant/datly/service/dbms/provider"
+	"github.com/viant/datly/service/dbms/provider/bigquery"
+	"github.com/viant/datly/service/dbms/provider/mysql"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
 	"github.com/viant/sqlx/metadata/sink"
-	async2 "github.com/viant/xdatly/handler/async"
 	"reflect"
 	"sync"
 	"unsafe"
 )
 
+// TODO shall this service to create/checks table move to sqlx as service ?
 type (
-	Async struct {
-		db       Db
-		handlers RecordHandler
-	}
-
-	Db struct {
+	Service struct {
 		sync.Mutex
 		schemaChecked map[dbKey]*schema
 		matchers      sync.Map
@@ -39,7 +31,7 @@ type (
 
 	schema struct {
 		err       error
-		sqlSource db.SqlSource
+		sqlSource provider.SqlSource
 	}
 
 	TableConfig struct {
@@ -49,38 +41,17 @@ type (
 		CreateIfNeeded bool
 		GenerateAutoPk bool
 	}
-
-	RecordHandler struct {
-		sync.Map
-	}
-
-	singletonHandler struct {
-		sync.Once
-		err     error
-		handler Handler
-	}
 )
 
-func NewChecker() *Async {
-	return &Async{
-		db: Db{
-			Mutex:         sync.Mutex{},
-			schemaChecked: map[dbKey]*schema{},
-			matchers:      sync.Map{},
-		},
-	}
-}
-
-func (c *Async) EnsureTable(ctx context.Context, connector *view.Connector, cfg *TableConfig) (db.SqlSource, error) {
-	schema, err := c.db.loadSchema(ctx, connector, cfg)
+func (c *Service) EnsureTable(ctx context.Context, connector *view.Connector, cfg *TableConfig) (provider.SqlSource, error) {
+	schema, err := c.loadSchema(ctx, connector, cfg)
 	if err != nil {
 		return nil, err
 	}
-
 	return schema.sqlSource, schema.err
 }
 
-func (c *Db) loadSchema(ctx context.Context, connector *view.Connector, cfg *TableConfig) (*schema, error) {
+func (c *Service) loadSchema(ctx context.Context, connector *view.Connector, cfg *TableConfig) (*schema, error) {
 	key := dbKey{
 		connectorName: connector.Name,
 		tableName:     cfg.TableName,
@@ -103,7 +74,7 @@ func (c *Db) loadSchema(ctx context.Context, connector *view.Connector, cfg *Tab
 	return schema, err
 }
 
-func (c *Db) getSchema(ctx context.Context, connector *view.Connector, cfg *TableConfig) (*schema, error) {
+func (c *Service) getSchema(ctx context.Context, connector *view.Connector, cfg *TableConfig) (*schema, error) {
 	aDb, err := connector.DB()
 	if err != nil {
 		return nil, err
@@ -127,12 +98,11 @@ func (c *Db) getSchema(ctx context.Context, connector *view.Connector, cfg *Tabl
 	if err != nil {
 		return nil, err
 	}
-
+	//TODO change tag name - this functionality is too generic for async use case
 	asyncTable, err := sqlSource.CreateTable(cfg.RecordType, cfg.TableName, view.AsyncTagName, cfg.GenerateAutoPk)
 	if err != nil {
 		return nil, err
 	}
-
 	tx, err := aDb.BeginTx(context.Background(), nil)
 	if err != nil {
 		return nil, err
@@ -155,7 +125,7 @@ func (c *Db) getSchema(ctx context.Context, connector *view.Connector, cfg *Tabl
 	}, nil
 }
 
-func (c *Db) checkTypeMatch(columns []sink.Column, recordType reflect.Type) error {
+func (c *Service) checkTypeMatch(columns []sink.Column, recordType reflect.Type) error {
 	for recordType.Kind() == reflect.Slice {
 		recordType = recordType.Elem()
 	}
@@ -174,7 +144,7 @@ func (c *Db) checkTypeMatch(columns []sink.Column, recordType reflect.Type) erro
 	return err
 }
 
-func (c *Db) getMatcher(recordType reflect.Type) (*io.Matcher, error) {
+func (c *Service) getMatcher(recordType reflect.Type) (*io.Matcher, error) {
 	actualType := recordType
 	value, ok := c.matchers.Load(actualType)
 	if ok {
@@ -190,12 +160,11 @@ func (c *Db) getMatcher(recordType reflect.Type) (*io.Matcher, error) {
 			return reflect.New(column.ScanType()).Elem().Interface()
 		}
 	})
-
 	c.matchers.Store(actualType, matcher)
 	return matcher, nil
 }
 
-func (c *Db) sqlSource(connector *view.Connector, cfg *TableConfig) (db.SqlSource, error) {
+func (c *Service) sqlSource(connector *view.Connector, cfg *TableConfig) (provider.SqlSource, error) {
 	switch connector.Driver {
 	case "mysql":
 		return mysql.NewSQLSource(), nil
@@ -205,37 +174,11 @@ func (c *Db) sqlSource(connector *view.Connector, cfg *TableConfig) (db.SqlSourc
 	return nil, fmt.Errorf("unsupported async database %v", connector.Driver)
 }
 
-func (c *Async) Handler(ctx context.Context, cfg *async2.Config) (Handler, error) {
-	return c.handlers.loadHandler(ctx, cfg)
-}
-
-func (a *RecordHandler) loadHandler(ctx context.Context, cfg *async2.Config) (Handler, error) {
-	actual, _ := a.LoadOrStore(*cfg, &singletonHandler{})
-	aHandler := actual.(*singletonHandler)
-	aHandler.Once.Do(func() {
-		aHandler.handler, aHandler.err = a.detectHandlerType(ctx, cfg)
-	})
-
-	return aHandler.handler, aHandler.err
-}
-
-func (a *RecordHandler) detectHandlerType(ctx context.Context, cfg *async2.Config) (Handler, error) {
-	switch cfg.HandlerType {
-	case async2.HandlerTypeS3:
-		return s3.NewHandler(ctx, cfg.BucketURL)
-	case async2.HandlerTypeSQS:
-		return sqs.NewHandler(ctx, "datly-jobs")
-
-	case async2.HandlerTypeUndefined:
-		switch env.BuildType {
-		case env.BuildTypeKindLambda:
-			return sqs.NewHandler(ctx, "datly-async")
-
-		default:
-			return nil, nil
-		}
-
-	default:
-		return nil, fmt.Errorf("unsupported async HandlerType %v", cfg.HandlerType)
+// New creates dbms service
+func New() *Service {
+	return &Service{
+		Mutex:         sync.Mutex{},
+		schemaChecked: nil,
+		matchers:      sync.Map{},
 	}
 }

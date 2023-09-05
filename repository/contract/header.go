@@ -77,7 +77,9 @@ func (h *Header) buildOutputType(contract *ContractPath, signature *Signature, r
 			break
 		}
 	}
-
+	if viewType == nil {
+		return fmt.Errorf("failed to match data component output type for path: %v:%v", contract.Method, contract.URI)
+	}
 	component.EnsureOutputKindParameterTypes(parameters, nil)
 	if !isAnonymous {
 		rType, _ := registry.Lookup(viewType.Name)

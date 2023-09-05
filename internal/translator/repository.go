@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"path"
+	"strings"
 )
 
 type (
@@ -123,6 +124,20 @@ func (r *Repository) ensureDependencies(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// UploadPartialRules uploads rule into dest, this is temporary to see signature for component parameters
+func (r *Repository) UploadPartialRules(ctx context.Context) error {
+	if len(r.Resource) == 0 {
+		return nil
+	}
+	var yamlFiles asset.Files
+	for i, candidate := range r.Files {
+		if strings.HasSuffix(candidate.URL, ".yaml") {
+			yamlFiles = append(yamlFiles, r.Files[i])
+		}
+	}
+	return yamlFiles.Upload(ctx, r.fs)
 }
 
 func (r *Repository) Upload(ctx context.Context) error {
