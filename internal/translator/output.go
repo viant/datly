@@ -36,9 +36,18 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 	s.updateOutputParameterType(dataParameter, rootViewlet)
 
 	for _, parameter := range outputParameters {
+		if len(parameter.Repeated) > 0 {
+			for _, repeated := range parameter.Repeated {
+				if err = s.adjustTransferOutputType(repeated, types, resource); err != nil {
+					return err
+				}
+			}
+			parameter.Schema = &state.Schema{Cardinality: state.Many, Name: parameter.Repeated[0].OutputSchema().Name}
+		}
 		if err = s.adjustTransferOutputType(parameter, types, resource); err != nil {
 			return err
 		}
+
 	}
 	resource.Rule.Route.Output.Type.Parameters = outputParameters
 	return nil

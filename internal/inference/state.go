@@ -409,6 +409,9 @@ func (s State) Repeated() (State, error) {
 	byName := s.IndexByName()
 	for _, param := range sliceParameters {
 		sliceParameter[param.Name] = state.Parameters{}
+		if param.In.Name == "" {
+			continue
+		}
 		baseParameters := strings.Split(param.In.Name, ",")
 		for _, name := range baseParameters {
 			baseParameter, ok := byName[strings.TrimSpace(name)]

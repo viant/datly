@@ -60,6 +60,9 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, session *session
 
 	resultState := h.output.NewState()
 	options := session.Indirect(true,
+		locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
+			return session.LookupValue(ctx, parameter, session.Indirect(true))
+		}),
 		locator.WithCustomOption(ret.Reader, ret.Status))
 	if err = session.SetState(ctx, h.outputType.Parameters, resultState, options); err != nil {
 		ret.StatusCode = http.StatusInternalServerError

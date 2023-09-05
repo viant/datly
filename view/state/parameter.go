@@ -72,6 +72,10 @@ func (p *Parameter) Init(ctx context.Context, resource Resource) error {
 		return err
 	}
 
+	if err := p.initRepeatedParams(ctx, resource); err != nil {
+		return err
+	}
+
 	if p.In == nil {
 		return fmt.Errorf("parameter %v In can't be empty", p.Name)
 	}
@@ -387,6 +391,15 @@ func (p *Parameter) initGroupParams(ctx context.Context, resource Resource) erro
 		}
 	}
 
+	return nil
+}
+
+func (p *Parameter) initRepeatedParams(ctx context.Context, resource Resource) error {
+	for _, parameter := range p.Repeated {
+		if err := parameter.Init(ctx, resource); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
