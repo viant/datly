@@ -229,12 +229,16 @@ func (p *Parameter) initSchema(resource Resource) error {
 					return err
 				}
 			}
-			componentSchema := p.Repeated[0].Schema.Type()
-			if componentSchema.Kind() == reflect.Struct {
-				componentSchema = reflect.PtrTo(componentSchema)
+		}
+	}
+
+	if p.In.Kind == KindRepeated {
+		if len(p.Repeated) > 0 {
+			for _, item := range p.Repeated {
+				if err := item.Schema.Init(resource); err != nil {
+					return err
+				}
 			}
-			p.Schema = NewSchema(reflect.SliceOf(componentSchema))
-			return nil
 		}
 	}
 
