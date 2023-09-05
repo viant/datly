@@ -12,15 +12,15 @@ import (
 
 type (
 	Column struct {
-		ID   string
-		Type string
+		ID   string `json:",omitempty"`
+		Type string `json:",omitempty"`
 	}
 
 	Value struct {
-		LongType   string
-		DoubleType string
-		DateType   string
-		Value      string
+		LongType   string `json:",omitempty"`
+		DoubleType string `json:",omitempty"`
+		DateType   string `json:",omitempty"`
+		Value      string `json:",omitempty"`
 	}
 
 	Record []*Value
@@ -30,8 +30,8 @@ type (
 	Columns []*Column
 
 	Result struct {
-		Columns Columns
-		Records Records
+		Columns Columns `json:",omitempty"`
+		Records Records `json:",omitempty"`
 	}
 )
 
