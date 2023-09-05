@@ -129,7 +129,11 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
 		column := &Column{ID: field.Name}
-		switch field.Kind() {
+		fieldKind := field.Kind()
+		if fieldKind == reflect.Ptr {
+			fieldKind = field.Type.Elem().Kind()
+		}
+		switch fieldKind {
 		case reflect.String:
 			column.Type = "string"
 		case reflect.Int:
@@ -137,7 +141,10 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 		case reflect.Float64, reflect.Float32:
 			column.Type = "double"
 		default:
-			//		if field.Type == //check time and *time.Time
+			switch field.Type {
+			case xreflect.TimeType, xreflect.TimePtrType:
+				column.Type = "date"
+			}
 		}
 		result.Columns = append(result.Columns, column)
 	}
