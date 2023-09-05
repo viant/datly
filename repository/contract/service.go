@@ -90,6 +90,9 @@ func (s *Service) loadSignatures(ctx context.Context, URL string) error {
 			continue
 		}
 		if object.IsDir() {
+			if object.Name() == ".meta" {
+				continue
+			}
 			if err := s.loadSignatures(ctx, object.URL()); err != nil {
 				return err
 			}

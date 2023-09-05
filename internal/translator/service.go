@@ -58,7 +58,8 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 	}
 
 	parameters := resource.Declarations.OutputState
-	if err = s.updateComponentType(ctx, resource, parameters.FilterByKind(state.KindComponent)); err != nil {
+	componentParameters := parameters.FilterByKind(state.KindComponent)
+	if err = s.updateComponentType(ctx, resource, componentParameters); err != nil {
 		return err
 	}
 
@@ -89,13 +90,6 @@ func (s *Service) discoverComponentContract(ctx context.Context, resource *Resou
 	location.Name = strings.ReplaceAll(location.Name, ".", "/")
 	method, URI := shared.ExtractPath(location.Name)
 	ret, err := s.signature.Signature(method, URI)
-	if err != nil { //try reload signature service in case it has changed
-		prefix := path.Join(s.Repository.Config.APIPrefix, resource.rule.Prefix)
-		if s.signature, err = contract.New(ctx, prefix, s.Repository.Config.RouteURL); err != nil {
-			return nil, err
-		}
-		ret, err = s.signature.Signature(method, URI)
-	}
 	if ret != nil {
 		ret.AdjustedRegisteredType(componentTypeName)
 	}
