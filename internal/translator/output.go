@@ -32,8 +32,9 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 		return err
 	}
 	outputParameters := s.ensureOutputParameters(resource, outputState)
-	dataParameter := outputParameters.LookupByLocation(state.KindOutput, "data")
-	s.updateOutputParameterType(dataParameter, rootViewlet)
+	if dataParameter := outputParameters.LookupByLocation(state.KindOutput, "data"); dataParameter != nil {
+		s.updateOutputParameterType(dataParameter, rootViewlet)
+	}
 
 	for _, parameter := range outputParameters {
 		if len(parameter.Repeated) > 0 {
