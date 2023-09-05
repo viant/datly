@@ -81,14 +81,35 @@ func TestService_Transfer(t *testing.T) {
 				return []Foo{}
 			},
 		},
+
+		{
+			description: "custom ptr types",
+			getData: func() interface{} {
+
+				type Data []*struct {
+					Avails         *int     "sqlx:\"name=avails\" velty:\"names=avails|Avails\""
+					Uniqs          *int     "sqlx:\"name=uniqs\" velty:\"names=uniqs|Uniqs\""
+					FinalHhUniqsV1 *int     "sqlx:\"name=final_hh_uniqs_v1\" velty:\"names=final_hh_uniqs_v1|FinalHhUniqsV1\""
+					ClearingPrice  *float64 "sqlx:\"name=clearing_price\" velty:\"names=clearing_price|ClearingPrice\""
+				}
+				data := Data{}
+				payload := `[{"Avails":70577901,"Uniqs":30706931,"FinalHhUniqsV1":7282500,"ClearingPrice":4.45}]`
+				err := json.Unmarshal([]byte(payload), &data)
+				if err != nil {
+					panic(err)
+				}
+				return data
+			},
+		},
 	}
 
 	srv := New()
-	for _, testCase := range testCases {
+	for _, testCase := range testCases[len(testCases)-1:] {
+		fmt.Printf("%s --- \n", testCase.description)
+
 		transfer, err := srv.Transfer(testCase.getData())
 		assert.Nil(t, err, testCase.description)
 		data, _ := json.Marshal(transfer)
-		fmt.Printf("%s --- \n", testCase.description)
 		fmt.Printf("%s\n", data)
 	}
 

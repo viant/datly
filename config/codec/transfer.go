@@ -35,7 +35,11 @@ func (e *TransferFactory) New(codecConfig *codec.Config, options ...codec.Option
 		return nil, err
 	}
 	opts := NewOptions(codec.NewOptions(options))
-	destType, err := types.LookupType(opts.LookupType, codecConfig.Args[0])
+	destTypeName := codecConfig.Args[0]
+	if len(codecConfig.Args) > 1 {
+		destTypeName = codecConfig.Args[1]
+	}
+	destType, err := types.LookupType(opts.LookupType, destTypeName)
 	if err != nil {
 		return nil, err
 	}
