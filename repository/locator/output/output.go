@@ -16,6 +16,7 @@ type outputLocator struct {
 	Status           *response.Status
 	OutputParameters state.NamedParameters
 	View             *view.View
+	Metrics          reader.Metrics
 }
 
 func (l *outputLocator) Names() []string {
@@ -74,6 +75,7 @@ func newOutputLocator(opts ...locator.Option) (kind.Locator, error) {
 		}
 	}
 	ret.View = options.View
+	ret.Metrics = options.Metrics
 	return ret, nil
 }
 
