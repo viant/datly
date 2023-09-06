@@ -44,7 +44,7 @@ func isBoolType(t reflect.Type) bool {
 	case reflect.Bool:
 		return true
 	case reflect.Slice, reflect.Ptr:
-		return isIntType(t.Elem())
+		return isBoolType(t.Elem())
 	}
 	return false
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/predicate"
 	"reflect"
+	"strconv"
 )
 
 func (l *outputLocator) buildFilter(parameter *state.Parameter) (*structology.State, error) {
@@ -82,8 +83,10 @@ func asStrings(inputs []interface{}) ([]string, error) {
 			}
 		case string:
 			output = append(output, actual)
+		case int: // required by predicate multi_in when pass int and string i.e. 30/CA and 30 has to be int
+			output = append(output, strconv.FormatInt(int64(actual), 10))
 		default:
-			return nil, fmt.Errorf("unable to case %T to []int", input)
+			return nil, fmt.Errorf("unable to case %T to []string", input)
 		}
 	}
 	return output, nil
@@ -103,7 +106,7 @@ func asBool(inputs []interface{}) ([]bool, error) {
 		case bool:
 			output = append(output, actual)
 		default:
-			return nil, fmt.Errorf("unable to case %T to []int", input)
+			return nil, fmt.Errorf("unable to case %T to []bool", input)
 		}
 	}
 	return output, nil
