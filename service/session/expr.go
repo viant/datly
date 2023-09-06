@@ -14,8 +14,8 @@ func equals(x interface{}, value string) (bool, error) {
 			if candidate == value {
 				return true, nil
 			}
-			return false, nil
 		}
+		return false, nil
 	case int:
 		intY, err := strconv.Atoi(value)
 		if err != nil {
