@@ -160,9 +160,13 @@ func (o *Output) initDebugStyleIfNeeded() {
 func (o *Output) initParameters(aView *view.View, inputParameters state.Parameters, isReader bool) (err error) {
 	if o.Type.IsAnonymous() {
 		o.Style = BasicStyle
-	} else if dataParameter := o.Type.Parameters.LookupByLocation(state.KindOutput, "data"); dataParameter != nil {
+	} else if outputParameters := o.Type.Parameters.Filter(state.KindOutput); outputParameters != nil {
 		o.Style = ComprehensiveStyle
-		o.Field = dataParameter.Name
+		for _, dataParameter := range outputParameters {
+			if dataParameter.In.Name == "data" {
+				o.Field = dataParameter.Name
+			}
+		}
 	}
 	if len(o.Type.Parameters) == 0 {
 		o.Type.Parameters, err = o.defaultParameters(aView, inputParameters, isReader)
