@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"github.com/viant/datly/view"
 	"github.com/viant/sqlx/io/config"
-	"github.com/viant/xdatly/handler/async"
 	"strings"
 	"sync"
 )
@@ -78,14 +77,6 @@ func BuildSelectByID(ctx context.Context, db *sql.DB, id string) (string, []inte
 	builder := prepareQueryBuilder()
 	builder.WriteString(" WHERE JobID = ? ")
 	return builder.String(), []interface{}{id}, nil
-}
-
-func BuildRefreshJobByID(ctx context.Context, db *sql.DB, id string) (string, []interface{}, error) {
-	sb := &strings.Builder{}
-	sb.WriteString("UPDATE ")
-	sb.WriteString(view.AsyncJobsTable)
-	sb.WriteString(" SET Template = ? WHERE Template = ? AND JobID = ?")
-	return sb.String(), []interface{}{async.StateRunning, id, async.StateDone}, nil
 }
 
 func prepareQueryBuilder() *strings.Builder {

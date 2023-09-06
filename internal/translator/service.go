@@ -12,7 +12,6 @@ import (
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
-	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service"
@@ -24,7 +23,6 @@ import (
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/toolbox/format"
-	async2 "github.com/viant/xdatly/handler/async"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
 	"path"
@@ -335,17 +333,14 @@ func (s *Service) applyAsyncOption(resource *Resource, route *router.Route) {
 	if async == nil {
 		return
 	}
-	setter.SetStringIfEmpty(&async.Connector, s.DefaultConnector())
-	route.Async = &router.Async{
-		EnsureDBTable:    async.EnsureTable == nil || *async.EnsureTable,
-		Connector:        view.NewRefConnector(async.Connector),
-		PrincipalSubject: async.PrincipalSubject,
-		ExpiryTimeInS:    async.ExpiryTimeInS,
-		Config: async2.Config{
-			Dataset:   async.Dataset,
-			BucketURL: async.BucketURL,
-		},
+
+	if async.Jobs.Connector == nil {
+		async.Jobs.Connector = view.NewRefConnector(s.DefaultConnector())
 	}
+	if async.JobID == nil {
+		async.JobID = &state.Parameter{Name: "JobID", In: state.NewQueryLocation("")}
+	}
+
 }
 
 func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mode) error {

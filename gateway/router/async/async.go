@@ -205,11 +205,11 @@ func (c *Db) sqlSource(connector *view.Connector, cfg *TableConfig) (db.SqlSourc
 	return nil, fmt.Errorf("unsupported async database %v", connector.Driver)
 }
 
-func (c *Async) Handler(ctx context.Context, cfg *async2.Config) (Handler, error) {
+func (c *Async) Handler(ctx context.Context, cfg *async2.Notification) (Handler, error) {
 	return c.handlers.loadHandler(ctx, cfg)
 }
 
-func (a *RecordHandler) loadHandler(ctx context.Context, cfg *async2.Config) (Handler, error) {
+func (a *RecordHandler) loadHandler(ctx context.Context, cfg *async2.Notification) (Handler, error) {
 	actual, _ := a.LoadOrStore(*cfg, &singletonHandler{})
 	aHandler := actual.(*singletonHandler)
 	aHandler.Once.Do(func() {
@@ -219,23 +219,22 @@ func (a *RecordHandler) loadHandler(ctx context.Context, cfg *async2.Config) (Ha
 	return aHandler.handler, aHandler.err
 }
 
-func (a *RecordHandler) detectHandlerType(ctx context.Context, cfg *async2.Config) (Handler, error) {
-	switch cfg.HandlerType {
-	case async2.HandlerTypeS3:
-		return s3.NewHandler(ctx, cfg.BucketURL)
-	case async2.HandlerTypeSQS:
+func (a *RecordHandler) detectHandlerType(ctx context.Context, cfg *async2.Notification) (Handler, error) {
+	switch cfg.Method {
+	case async2.NotificationMethodS3:
+		return s3.NewHandler(ctx, cfg.Destination)
+	case async2.NotificationMethodSQS:
 		return sqs.NewHandler(ctx, "datly-jobs")
 
-	case async2.HandlerTypeUndefined:
+	case async2.NotificationMethodUndefined:
 		switch env.BuildType {
 		case env.BuildTypeKindLambda:
 			return sqs.NewHandler(ctx, "datly-async")
-
 		default:
 			return nil, nil
 		}
 
 	default:
-		return nil, fmt.Errorf("unsupported async HandlerType %v", cfg.HandlerType)
+		return nil, fmt.Errorf("unsupported async HandlerType %v", cfg.Method)
 	}
 }

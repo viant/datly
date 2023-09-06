@@ -3,7 +3,6 @@ package extension
 import (
 	"context"
 	"github.com/viant/xdatly/handler"
-	async2 "github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/differ"
 	"github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/mbus"
@@ -23,7 +22,6 @@ type (
 		sync.RWMutex
 		templateFlusher TemplateFlushFn
 		redirect        RedirectFn
-		async           AsyncFn
 		http            HttpFn
 	}
 
@@ -32,7 +30,6 @@ type (
 	RedirectFn      func(ctx context.Context, route *http.Route) (handler.Session, error)
 	RouterFn        func(ctx context.Context, route *http.Route) (handler.Session, error)
 	HttpFn          func() http.Http
-	AsyncFn         func() async2.Async
 )
 
 func (s *Session) Route(ctx context.Context, route *http.Route) (handler.Session, error) {
@@ -41,10 +38,6 @@ func (s *Session) Route(ctx context.Context, route *http.Route) (handler.Session
 
 func (s *Session) Http() http.Http {
 	return s.http()
-}
-
-func (s *Session) Async() async2.Async {
-	return s.async()
 }
 
 func NewSession(opts ...Option) *Session {
@@ -113,12 +106,6 @@ func WithRedirect(fn RedirectFn) Option {
 func WithTemplateFlush(fn TemplateFlushFn) Option {
 	return func(s *Session) {
 		s.templateFlusher = fn
-	}
-}
-
-func WithAsync(async AsyncFn) Option {
-	return func(s *Session) {
-		s.async = async
 	}
 }
 

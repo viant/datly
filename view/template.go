@@ -3,7 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
-	expand2 "github.com/viant/datly/service/executor/expand"
+	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/service/executor/extension"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/keywords"
@@ -31,7 +31,7 @@ type (
 		Parameters state.Parameters `json:",omitempty" yaml:"parameters,omitempty"`
 		Summary    *TemplateSummary `json:",omitempty" yaml:",omitempty"`
 
-		sqlEvaluator *expand2.Evaluator
+		sqlEvaluator *expand.Evaluator
 
 		_parametersIndex state.NamedParameters
 		initialized      bool
@@ -196,48 +196,48 @@ func (t *Template) inheritParamTypesFromSchema(ctx context.Context, resource *Re
 	return nil
 }
 
-func NewEvaluator(parameters state.Parameters, stateType *structology.StateType, template string, typeLookup xreflect.LookupType, predicates []*expand2.PredicateConfig) (*expand2.Evaluator, error) {
-	return expand2.NewEvaluator(
+func NewEvaluator(parameters state.Parameters, stateType *structology.StateType, template string, typeLookup xreflect.LookupType, predicates []*expand.PredicateConfig) (*expand.Evaluator, error) {
+	return expand.NewEvaluator(
 		template,
-		expand2.WithSetLiteral(parameters.SetLiterals),
-		expand2.WithTypeLookup(typeLookup),
-		expand2.WithStateType(stateType),
-		expand2.WithPredicates(predicates),
+		expand.WithSetLiteral(parameters.SetLiterals),
+		expand.WithTypeLookup(typeLookup),
+		expand.WithStateType(stateType),
+		expand.WithPredicates(predicates),
 	)
 }
 
-func (t *Template) EvaluateSource(parameterState *structology.State, parentParam *expand2.MetaParam, batchData *BatchData, options ...interface{}) (*expand2.State, error) {
+func (t *Template) EvaluateSource(parameterState *structology.State, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (*expand.State, error) {
 	if t.wasEmpty {
-		return expand2.StateWithSQL(t.Source), nil
+		return expand.StateWithSQL(t.Source), nil
 	}
 	return t.EvaluateState(parameterState, parentParam, batchData, options...)
 }
 
-func (t *Template) EvaluateState(parameterState *structology.State, parentParam *expand2.MetaParam, batchData *BatchData, options ...interface{}) (*expand2.State, error) {
+func (t *Template) EvaluateState(parameterState *structology.State, parentParam *expand.MetaParam, batchData *BatchData, options ...interface{}) (*expand.State, error) {
 	return t.EvaluateStateWithSession(parameterState, parentParam, batchData, nil, options...)
 }
 
-func (t *Template) EvaluateStateWithSession(parameterState *structology.State, parentParam *expand2.MetaParam, batchData *BatchData, sess *extension.Session, options ...interface{}) (*expand2.State, error) {
-	var expander expand2.Expander
-	var dataUnit *expand2.DataUnit
+func (t *Template) EvaluateStateWithSession(parameterState *structology.State, parentParam *expand.MetaParam, batchData *BatchData, sess *extension.Session, options ...interface{}) (*expand.State, error) {
+	var expander expand.Expander
+	var dataUnit *expand.DataUnit
 	for _, option := range options {
 		switch actual := option.(type) {
-		case expand2.Expander:
+		case expand.Expander:
 			expander = actual
-		case *expand2.DataUnit:
+		case *expand.DataUnit:
 			dataUnit = actual
 		}
 	}
 
-	ops := []expand2.StateOption{
-		expand2.WithParameterState(parameterState),
-		expand2.WithViewParam(AsViewParam(t._view, nil, batchData, expander)),
-		expand2.WithParentViewParam(parentParam),
-		expand2.WithSession(sess),
+	ops := []expand.StateOption{
+		expand.WithParameterState(parameterState),
+		expand.WithViewParam(AsViewParam(t._view, nil, batchData, expander)),
+		expand.WithParentViewParam(parentParam),
+		expand.WithSession(sess),
 	}
 
 	if dataUnit != nil {
-		ops = append(ops, expand2.WithDataUnit(dataUnit))
+		ops = append(ops, expand.WithDataUnit(dataUnit))
 	}
 
 	return Evaluate(
@@ -262,29 +262,29 @@ func NewTemplate(source string, opts ...TemplateOption) *Template {
 	return ret
 }
 
-func Evaluate(evaluator *expand2.Evaluator, options ...expand2.StateOption) (*expand2.State, error) {
+func Evaluate(evaluator *expand.Evaluator, options ...expand.StateOption) (*expand.State, error) {
 	return evaluator.Evaluate(nil,
 		options...,
 	)
 }
 
-func AsViewParam(aView *View, aSelector *Statelet, batchData *BatchData, options ...interface{}) *expand2.MetaParam {
-	var metaSource expand2.MetaSource
+func AsViewParam(aView *View, aSelector *Statelet, batchData *BatchData, options ...interface{}) *expand.MetaParam {
+	var metaSource expand.MetaSource
 	if aView != nil {
 		metaSource = aView
 	}
 
-	var metaExtras expand2.MetaExtras
+	var metaExtras expand.MetaExtras
 	if aSelector != nil {
 		metaExtras = aSelector
 	}
 
-	var metaBatch expand2.MetaBatch
+	var metaBatch expand.MetaBatch
 	if batchData != nil {
 		metaBatch = batchData
 	}
 
-	return expand2.NewMetaParam(metaSource, metaExtras, metaBatch, options...)
+	return expand.NewMetaParam(metaSource, metaExtras, metaBatch, options...)
 }
 
 func (t *Template) inheritAndInitParam(ctx context.Context, resource *Resource, param *state.Parameter) error {
@@ -298,7 +298,7 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 	}
 
 	cache := &predicateCache{Map: sync.Map{}}
-	var predicates []*expand2.PredicateConfig
+	var predicates []*expand.PredicateConfig
 	for _, p := range t.Parameters {
 		for _, predicate := range p.Predicates {
 			evaluator, err := cache.get(resource, predicate, p, resource._predicates, t.stateType)
@@ -310,7 +310,7 @@ func (t *Template) initSqlEvaluator(resource *Resource) error {
 				panic("selector should have been set")
 			}
 
-			predicates = append(predicates, &expand2.PredicateConfig{
+			predicates = append(predicates, &expand.PredicateConfig{
 				Ensure:   predicate.Ensure,
 				Group:    predicate.Group,
 				Selector: p.Selector(),
@@ -372,7 +372,7 @@ func (t *Template) IsActualTemplate() bool {
 	return t.isTemplate
 }
 
-func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Statelet, params CriteriaParam, batchData *BatchData, sanitized *expand2.DataUnit) (string, error) {
+func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Statelet, params CriteriaParam, batchData *BatchData, sanitized *expand.DataUnit) (string, error) {
 	values, err := template.Parse(SQL)
 	if err != nil {
 		return "", err
@@ -406,7 +406,7 @@ func (t *Template) Expand(placeholders *[]interface{}, SQL string, selector *Sta
 	return replacement.ExpandAsText(SQL), err
 }
 
-func (t *Template) prepareExpanded(value *template.Value, params CriteriaParam, selector *Statelet, batchData *BatchData, placeholders *[]interface{}, sanitized *expand2.DataUnit) (string, string, error) {
+func (t *Template) prepareExpanded(value *template.Value, params CriteriaParam, selector *Statelet, batchData *BatchData, placeholders *[]interface{}, sanitized *expand.DataUnit) (string, string, error) {
 	key, val, err := t.replacementEntry(value.Key, params, selector, batchData, placeholders, sanitized)
 	if err != nil {
 		return "", "", err
@@ -415,7 +415,7 @@ func (t *Template) prepareExpanded(value *template.Value, params CriteriaParam, 
 	return key, val, err
 }
 
-func (t *Template) replacementEntry(key string, params CriteriaParam, selector *Statelet, batchData *BatchData, placeholders *[]interface{}, sanitized *expand2.DataUnit) (string, string, error) {
+func (t *Template) replacementEntry(key string, params CriteriaParam, selector *Statelet, batchData *BatchData, placeholders *[]interface{}, sanitized *expand.DataUnit) (string, string, error) {
 	switch key {
 	case keywords.Pagination[1:]:
 		return key, params.Pagination, nil
@@ -466,7 +466,7 @@ func (t *Template) replacementEntry(key string, params CriteriaParam, selector *
 		}
 
 		*placeholders = append(*placeholders, values...)
-		actualKey, bindings := expand2.AsBindings(key, values)
+		actualKey, bindings := expand.AsBindings(key, values)
 		return actualKey, bindings, nil
 	}
 }

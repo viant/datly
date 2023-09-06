@@ -219,7 +219,7 @@ func TestBuilder_Build(t *testing.T) {
 					InputParameters: []*state.Parameter{
 						{
 							Name: "EventId",
-							In: &state.Location{
+							In: &state.State{
 								Kind: state.KindPath,
 								Name: "eventId",
 							},
@@ -264,7 +264,7 @@ func TestBuilder_Build(t *testing.T) {
 					InputParameters: []*state.Parameter{
 						{
 							Name: "EventId",
-							In: &state.Location{
+							In: &state.State{
 								Kind: state.KindPath,
 								Name: "eventId",
 							},
@@ -311,7 +311,7 @@ func TestBuilder_Build(t *testing.T) {
 					InputParameters: []*state.Parameter{
 						{
 							Name: "EventId",
-							In: &state.Location{
+							In: &state.State{
 								Kind: state.KindPath,
 								Name: "eventId",
 							},
@@ -356,7 +356,7 @@ func TestBuilder_Build(t *testing.T) {
 					InputParameters: []*state.Parameter{
 						{
 							Name: "EventId",
-							In: &state.Location{
+							In: &state.State{
 								Kind: state.KindPath,
 								Name: "eventId",
 							},

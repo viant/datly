@@ -6,8 +6,6 @@ import (
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/gateway/matcher"
 	"github.com/viant/datly/gateway/router"
-	"github.com/viant/datly/gateway/router/marshal/config"
-	cusJson "github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/gateway/router/openapi3"
 	"github.com/viant/datly/gateway/runtime/meta"
 	"github.com/viant/datly/gateway/warmup"
@@ -313,8 +311,8 @@ func (r *Router) newMatcher(routers []*router.Router) (*matcher.Matcher, []*Rout
 
 	routes := make([]*Route, 0, routesSize)
 
-	var jobKeys []*router.APIKey
-	jobKeysMap := map[apiKeyMapKey]bool{}
+	//var jobKeys []*router.APIKey
+	//	jobKeysMap := map[apiKeyMapKey]bool{}
 
 	var components = make([]*repository.Component, 0, 3*len(routers))
 	for _, aRouter := range routers {
@@ -329,19 +327,19 @@ func (r *Router) newMatcher(routers []*router.Router) (*matcher.Matcher, []*Rout
 				apiKeys = append(apiKeys, matched)
 			}
 
-			if route.Async != nil {
-				for _, key := range apiKeys {
-					mapKey := apiKeyMapKey{
-						header: key.Header,
-						value:  key.Value,
-					}
-					ok := jobKeysMap[mapKey]
-					if !ok {
-						jobKeysMap[mapKey] = true
-						jobKeys = append(jobKeys, key)
-					}
-				}
-			}
+			//if route.Async != nil {
+			//	for _, key := range apiKeys {
+			//		mapKey := apiKeyMapKey{
+			//			header: key.Header,
+			//			value:  key.Value,
+			//		}
+			//		ok := jobKeysMap[mapKey]
+			//		if !ok {
+			//			jobKeysMap[mapKey] = true
+			//			jobKeys = append(jobKeys, key)
+			//		}
+			//	}
+			//}
 
 			routes = append(routes, r.NewRouteHandler(aRouter, route))
 
@@ -373,12 +371,11 @@ func (r *Router) newMatcher(routers []*router.Router) (*matcher.Matcher, []*Rout
 		r.NewConfigRoute(),
 	)
 
-	marshaller := cusJson.New(config.IOConfig{})
+	//marshaller := cusJson.New(config.IOConfig{})
 	routes = append(
 		routes,
-		NewJobsRoute("/datly-jobs", routers, jobKeys, marshaller),
-		NewJobByIDRoute("/datly-jobs/{jobID}", "jobID", routers, jobKeys, marshaller),
-		NewJobRecords("/datly-jobs/{jobID}/records", "jobID", routers, nil, marshaller, r.Match),
+		//NewJobsRoute("/datly-jobs", routers, jobKeys, marshaller),
+		//NewJobByIDRoute("/datly-jobs/{jobID}", "jobID", routers, jobKeys, marshaller),
 	)
 
 	matchables := make([]matcher.Matchable, 0, len(routes))

@@ -10,7 +10,6 @@ import (
 	session "github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
 	"github.com/viant/xdatly/handler"
-	"github.com/viant/xdatly/handler/async"
 	http2 "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/sqlx"
 	"github.com/viant/xdatly/handler/validator"
@@ -95,7 +94,6 @@ func (e *Executor) HandlerSession(ctx context.Context) (*extension.Session, erro
 		extension.WithStater(e.session),
 		extension.WithRedirect(e.redirect),
 		extension.WithSql(e.newSqlService),
-		extension.WithAsync(e.newAsync),
 		extension.WithHttp(e.newHttp),
 	)
 	e.handlerSession = sess
@@ -199,11 +197,6 @@ func (e *Executor) redirect(ctx context.Context, route *http2.Route) (handler.Se
 	//
 	//newExecutor := NewExecutor(match, e.request, e.response)
 	//return newExecutor.HandlerSession(ctx)
-}
-
-func (e *Executor) newAsync() async.Async {
-	//TODO reimplement it
-	return nil
 }
 
 func (e *Executor) newHttp() http2.Http {

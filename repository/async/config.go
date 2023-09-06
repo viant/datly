@@ -1,30 +1,29 @@
-package router
+package async
 
 import (
-	"github.com/viant/datly/gateway/router/async"
-	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
-	async2 "github.com/viant/xdatly/handler/async"
-	"sync"
+	async "github.com/viant/xdatly/handler/async"
 )
 
 type (
-	Async struct {
-		EnsureDBTable    bool
-		Connector        *view.Connector
-		PrincipalSubject string
-		ExpiryTimeInS    int
-		async2.Config
-
-		_asyncHandler async.Handler
-		_matchers     sync.Map
-		_qualifier    *qualifier
+	Jobs struct {
+		Connector *view.Connector
+		Dataset   string
 	}
 
-	qualifier struct {
-		parameter *state.Parameter
-		accessor  *types.Accessor
+	//State defines location for the followings
+	State struct {
+		Subject   *state.Parameter
+		UserEmail *state.Parameter
+		JobID     *state.Parameter
+	}
+
+	Config struct {
+		Jobs
+		State
+		ExpiryTimeInSec int
+		async.Notification
 	}
 )
 
@@ -129,12 +128,12 @@ func (a *Async) initHandlerIfNeeded(ctx context.Context) error {
 
 func (a *Async) detectHandlerType(ctx context.Context) (async.Handler, error) {
 	switch a.HandlerType {
-	case async2.HandlerTypeS3:
+	case async.HandlerTypeS3:
 		return s3.NewHandler(ctx, a.BucketURL)
-	case async2.HandlerTypeSQS:
+	case async.HandlerTypeSQS:
 		return sqs.NewHandler(ctx, "datly-jobs")
 
-	case async2.HandlerTypeUndefined:
+	case async.HandlerTypeUndefined:
 		switch env.BuildType {
 		case env.BuildTypeKindLambda:
 			return sqs.NewHandler(ctx, "datly-async")
@@ -165,8 +164,8 @@ func (a *Async) inheritHandlerTypeIfNeeded() {
 	}
 }
 
-func NewAsyncRecord(ctx context.Context, route *Route, request *RequestParams) (*async2.Job, error) {
-	newRecord := &async2.Job{}
+func NewAsyncRecord(ctx context.Context, route *Route, request *RequestParams) (*async.Job, error) {
+	newRecord := &async.Job{}
 	if err := InitRecord(ctx, newRecord, route, request); err != nil {
 		return nil, err
 	}
@@ -174,7 +173,7 @@ func NewAsyncRecord(ctx context.Context, route *Route, request *RequestParams) (
 	return newRecord, nil
 }
 
-func InitRecord(ctx context.Context, record *async2.Job, route *Route, request *RequestParams) error {
+func InitRecord(ctx context.Context, record *async.Job, route *Route, request *RequestParams) error {
 	if record.JobID == "" {
 		recordID, err := uuid.NewUUID()
 		if err != nil {
@@ -184,7 +183,7 @@ func InitRecord(ctx context.Context, record *async2.Job, route *Route, request *
 		record.JobID = recordID.String()
 	}
 
-	record.TemplateState = async2.StateRunning
+	record.TemplateState = async.StateRunning
 	if record.PrincipalSubject == nil {
 		principalSubject, err := PrincipalSubject(ctx, route, request)
 		if err != nil {
@@ -231,7 +230,7 @@ func InitRecord(ctx context.Context, record *async2.Job, route *Route, request *
 	}
 
 	if record.DestinationCreateDisposition == "" {
-		record.DestinationCreateDisposition = async2.CreateDispositionIfNeeded
+		record.DestinationCreateDisposition = async.CreateDispositionIfNeeded
 	}
 
 	if record.DestinationTable == "" {

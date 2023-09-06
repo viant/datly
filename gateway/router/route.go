@@ -17,7 +17,6 @@ import (
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
-	async2 "github.com/viant/xdatly/handler/async"
 	http2 "github.com/viant/xdatly/handler/http"
 	"net/http"
 	"reflect"
@@ -34,7 +33,6 @@ type (
 	Routes []*Route
 	Route  struct {
 		dispatcher resolver.Dispatcher
-		Async      *Async  `json:",omitempty" yaml:",omitempty"`
 		APIKey     *APIKey `json:",omitempty"`
 
 		repository.Component
@@ -111,9 +109,6 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	}
 	if r.APIKey != nil {
 		r._apiKeys = append(r._apiKeys, r.APIKey)
-	}
-	if err := r.initAsyncIfNeeded(ctx); err != nil {
-		return err
 	}
 	return nil
 }
@@ -202,30 +197,6 @@ func (r *Route) initTransforms(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func (r *Route) initAsyncIfNeeded(ctx context.Context) error {
-	r._async = async.NewChecker()
-	if r.Async != nil {
-		//if err := r.Async.Init(ctx, r._resource, r.View); err != nil {
-		//	return err
-		//}
-
-		//return r.ensureJobTable(ctx)
-	}
-
-	return nil
-}
-
-func (r *Route) ensureJobTable(ctx context.Context) error {
-	_, err := r._async.EnsureTable(ctx, r.Async.Connector, &async.TableConfig{
-		RecordType:     reflect.TypeOf(async2.Job{}),
-		TableName:      view.AsyncJobsTable,
-		Dataset:        r.Async.Dataset,
-		CreateIfNeeded: true,
-		GenerateAutoPk: false,
-	})
-	return err
 }
 
 func (r *Route) match(ctx context.Context, route *http2.Route) (*Route, error) {

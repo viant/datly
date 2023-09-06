@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/datly/gateway/router/marshal/json"
+	"github.com/viant/datly/repository/async"
 	"github.com/viant/datly/repository/component"
 	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/service/executor/handler"
@@ -19,7 +20,8 @@ type (
 		component.Path
 		component.Contract
 		content.Content
-		View           *view.View `json:",omitempty"`
+		Async          *async.Config `json:",omitempty"`
+		View           *view.View    `json:",omitempty"`
 		NamespacedView *view.NamespacedView
 		Handler        *handler.Handler `json:",omitempty"`
 		indexedView    view.NamedViews
@@ -109,4 +111,17 @@ func (c *Component) IOConfig() config.IOConfig {
 		Exclude:    config.Exclude(c.Output.Exclude).Index(),
 		DateLayout: c.DateFormat,
 	}
+}
+
+func (r *Component) initAsyncIfNeeded(ctx context.Context) error {
+	//r._async = async.NewChecker()
+	//if r.Async != nil {
+	//	//if err := r.Async.Init(ctx, r._resource, r.View); err != nil {
+	//	//	return err
+	//	//}
+	//
+	//	//return r.ensureJobTable(ctx)
+	//}
+
+	return nil
 }

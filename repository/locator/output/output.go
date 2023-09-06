@@ -3,6 +3,7 @@ package output
 import (
 	"context"
 	"github.com/viant/datly/service/reader"
+	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -14,6 +15,7 @@ type outputLocator struct {
 	Output           *reader.Output
 	Status           *response.Status
 	OutputParameters state.NamedParameters
+	View             *view.View
 }
 
 func (l *outputLocator) Names() []string {
@@ -43,6 +45,8 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 		}
 		SQL := l.Output.Metrics.SQL()
 		return SQL, true, nil
+	case "view.name":
+		return l.View.Name, true, nil
 	case "filter":
 		parameter := l.OutputParameters.LookupByLocation(state.KindOutput, "filter")
 		if parameter == nil || l.Output == nil {
@@ -69,6 +73,7 @@ func newOutputLocator(opts ...locator.Option) (kind.Locator, error) {
 			ret.Status = status
 		}
 	}
+	ret.View = options.View
 	return ret, nil
 }
 

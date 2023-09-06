@@ -58,20 +58,6 @@ func QueryJobByID(ctx context.Context, db *sql.DB, id string) (*async.Job, error
 	return nil, nil
 }
 
-func RefreshJobByID(ctx context.Context, db *sql.DB, id string) (int64, error) {
-	byID, args, err := BuildRefreshJobByID(ctx, db, id)
-	if err != nil {
-		return 0, err
-	}
-
-	result, err := db.ExecContext(ctx, byID, args...)
-	if err != nil {
-		return 0, err
-	}
-
-	return result.RowsAffected()
-}
-
 func QueryAll(ctx context.Context, db *sql.DB, job *async.Job, sliceType *xunsafe.Slice) (interface{}, error) {
 	slice := reflect.New(sliceType.Type)
 	appender := sliceType.Appender(unsafe.Pointer(slice.Pointer()))
@@ -84,7 +70,7 @@ func QueryAll(ctx context.Context, db *sql.DB, job *async.Job, sliceType *xunsaf
 }
 
 func QueryInto(ctx context.Context, db *sql.DB, job *async.Job, appender *xunsafe.Appender) error {
-	reader, err := read.New(ctx, db, "SELECT * FROM "+job.DestinationTable, func() interface{} {
+	reader, err := read.New(ctx, db, "SELECT * FROM "+*job.TableName, func() interface{} {
 		return appender.Add()
 	}, io.Resolve(io.NewResolver().Resolve), option.Tag(view.AsyncTagName))
 

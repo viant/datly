@@ -20,7 +20,6 @@ func (p *State) Value(ctx context.Context, name string) (interface{}, bool, erro
 		return nil, false, nil
 	}
 	value, err := p.State.Value(name)
-	fmt.Printf("%v %v %v\n", name, value, err)
 	return value, err == nil, err
 }
 

@@ -1,3 +1,4 @@
 package async
 
-type Service struct{}
+type Service struct {
+}

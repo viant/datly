@@ -32,6 +32,7 @@ type (
 		Output     interface{}
 		OutputType reflect.Type
 		Status     *response.Status
+		Metrics    reader.Metrics
 		StatusCode int
 		Error      error
 		http.Header
@@ -59,11 +60,16 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, session *session
 	}
 
 	resultState := h.output.NewState()
-	options := session.Indirect(true,
-		locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
-			return session.LookupValue(ctx, parameter, session.Indirect(true))
-		}),
-		locator.WithCustomOption(ret.Reader, ret.Status))
+	var (
+		options = session.Indirect(true,
+			locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
+				return session.LookupValue(ctx, parameter, session.Indirect(true))
+			}),
+			locator.WithMetrics(ret.Metrics),
+			locator.WithView(aView),
+
+			locator.WithCustomOption(ret.Reader, ret.Status))
+	)
 	if err = session.SetState(ctx, h.outputType.Parameters, resultState, options); err != nil {
 		ret.StatusCode = http.StatusInternalServerError
 		ret.Error = err
@@ -130,6 +136,7 @@ func (h *Handler) publishViewSummaryIfNeeded(aView *view.View, ret *Response) {
 }
 
 func (h *Handler) publishMetricsIfNeeded(aSession *reader.Session, ret *Response) {
+	ret.Metrics = aSession.Metrics
 	if aSession.RevealMetric {
 		return
 	}

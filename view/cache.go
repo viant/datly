@@ -115,7 +115,7 @@ func (c *Cache) init(ctx context.Context, resource *Resource, aView *View) error
 	}
 
 	if c.Location == "" {
-		return fmt.Errorf("View %v cache Location can't be empty", viewName)
+		return fmt.Errorf("View %v cache State can't be empty", viewName)
 	}
 
 	if c.TimeToLiveMs == 0 {

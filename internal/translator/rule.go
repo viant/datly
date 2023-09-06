@@ -8,8 +8,9 @@ import (
 	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
-	component "github.com/viant/datly/repository/component"
-	content2 "github.com/viant/datly/repository/content"
+	"github.com/viant/datly/repository/async"
+	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -30,25 +31,25 @@ type (
 		Root             string
 		router.Route
 		*component.Output
-		Async        *AsyncConfig                `json:",omitempty"`
-		Cache        *view.Cache                 `json:",omitempty"`
-		CSV          *content2.CSVConfig         `json:",omitempty"`
-		Const        map[string]interface{}      `json:",omitempty"`
-		ConstURL     string                      `json:",omitempty"`
-		EmbedURL     string                      `json:",omitempty"`
-		Embeds       data.Map                    `json:",omitempty"`
-		RequestBody  *BodyConfig                 `json:",omitempty"`
-		TypeSrc      *parser.TypeImport          `json:",omitempty"`
-		ResponseBody *ResponseBodyConfig         `json:",omitempty"`
-		Package      string                      `json:",omitempty"`
-		Router       *RouterConfig               `json:",omitempty" yaml:",omitempty"`
-		DataFormat   string                      `json:",omitempty"`
-		TabularJSON  *content2.TabularJSONConfig `json:",omitempty"`
-		XML          *content2.XMLConfig         `json:",omitempty"`
-		HandlerType  string                      `json:",omitempty"`
-		StateType    string                      `json:",omitempty"`
-		With         []string                    `json:",omitempty"`
-		Include      []string                    `json:",omitempty"`
+		Async        *async.Config              `json:",omitempty"`
+		Cache        *view.Cache                `json:",omitempty"`
+		CSV          *content.CSVConfig         `json:",omitempty"`
+		Const        map[string]interface{}     `json:",omitempty"`
+		ConstURL     string                     `json:",omitempty"`
+		EmbedURL     string                     `json:",omitempty"`
+		Embeds       data.Map                   `json:",omitempty"`
+		RequestBody  *BodyConfig                `json:",omitempty"`
+		TypeSrc      *parser.TypeImport         `json:",omitempty"`
+		ResponseBody *ResponseBodyConfig        `json:",omitempty"`
+		Package      string                     `json:",omitempty"`
+		Router       *RouterConfig              `json:",omitempty" yaml:",omitempty"`
+		DataFormat   string                     `json:",omitempty"`
+		TabularJSON  *content.TabularJSONConfig `json:",omitempty"`
+		XML          *content.XMLConfig         `json:",omitempty"`
+		HandlerType  string                     `json:",omitempty"`
+		StateType    string                     `json:",omitempty"`
+		With         []string                   `json:",omitempty"`
+		Include      []string                   `json:",omitempty"`
 		indexNamespaces
 		IsGeneratation bool
 	}
@@ -81,16 +82,6 @@ type (
 
 	ResponseBodyConfig struct {
 		From string
-	}
-
-	AsyncConfig struct {
-		PrincipalSubject string `json:",omitempty" yaml:",omitempty"`
-		Connector        string `json:",omitempty" yaml:",omitempty"`
-		EnsureTable      *bool  `json:",omitempty" yaml:",omitempty"`
-		ExpiryTimeInS    int    `json:",omitempty" yaml:",omitempty"`
-		MarshalRelations *bool  `json:",omitempty" yaml:",omitempty"`
-		Dataset          string `json:",omitempty" yaml:",omitempty"`
-		BucketURL        string `json:",omitempty" yaml:",omitempty"`
 	}
 )
 
@@ -352,10 +343,10 @@ func (r *Rule) applyShortHands() {
 		r.Route.Output.Style = component.ComprehensiveStyle
 	}
 	if r.Route.TabularJSON != nil && r.Route.Output.DataFormat == "" {
-		r.Route.Output.DataFormat = content2.JSONDataFormatTabular
+		r.Route.Output.DataFormat = content.JSONDataFormatTabular
 	}
 	if r.Route.XML != nil && r.Route.Output.DataFormat == "" {
-		r.Route.Output.DataFormat = content2.XMLFormat
+		r.Route.Output.DataFormat = content.XMLFormat
 	}
 }
 

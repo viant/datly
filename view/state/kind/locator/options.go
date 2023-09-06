@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/repository/resolver"
+	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -28,6 +29,8 @@ type (
 		InputParameters  state.NamedParameters
 		OutputParameters state.NamedParameters
 		Views            view.NamedViews
+		View             *view.View
+		Metrics          reader.Metrics
 		State            *structology.State
 		Dispatcher       resolver.Dispatcher
 	}
@@ -155,9 +158,23 @@ func WithOutputParameters(parameters state.Parameters) Option {
 	}
 }
 
-// WithDispatched returns options to set dispatcher
+// WithDispatcher returns options to set dispatcher
 func WithDispatcher(dispatcher resolver.Dispatcher) Option {
 	return func(o *Options) {
 		o.Dispatcher = dispatcher
+	}
+}
+
+// WithDispatched returns options to set dispatcher
+func WithView(aView *view.View) Option {
+	return func(o *Options) {
+		o.View = aView
+	}
+}
+
+// WithMetrics return metrics option
+func WithMetrics(metrics reader.Metrics) Option {
+	return func(o *Options) {
+		o.Metrics = metrics
 	}
 }
