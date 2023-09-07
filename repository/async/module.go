@@ -1,93 +1,80 @@
 package async
 
 import (
+	"context"
+	"fmt"
+	"github.com/viant/datly/service/jobs"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
-	async "github.com/viant/xdatly/handler/async"
+	async2 "github.com/viant/xdatly/handler/async"
 )
 
 type (
 	Jobs struct {
 		Connector *view.Connector
 		Dataset   string
+		service   *jobs.Service
 	}
 
 	//State defines location for the followings
 	State struct {
-		Subject   *state.Parameter
-		UserEmail *state.Parameter
-		JobID     *state.Parameter
+		PrincialSubject *state.Parameter
+		UserEmail       *state.Parameter
+		JobID           *state.Parameter
 	}
 
-	Config struct {
+	Module struct {
 		Jobs
 		State
+		WithCache       bool
 		ExpiryTimeInSec int
-		async.Notification
+		async2.Notification
 	}
 )
 
-/*
-func (a *Async) Init(ctx context.Context, resource *view.Resource, mainView *view.View) error {
+func (s *State) Init(ctx context.Context, res *view.Resource, mainView *view.View) error {
+
+	resource := view.NewResourcelet(res, mainView)
+	if s.PrincialSubject != nil {
+		if err := s.PrincialSubject.Init(ctx, resource); err != nil {
+			return err
+		}
+	}
+	if s.JobID != nil {
+		if err := s.JobID.Init(ctx, resource); err != nil {
+			return err
+		}
+	}
+	if s.UserEmail != nil {
+		if err := s.UserEmail.Init(ctx, resource); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *Module) Init(ctx context.Context, resource *view.Resource, mainView *view.View) error {
+	if mainView != nil && mainView.Cache == nil && a.WithCache {
+		return fmt.Errorf("asyn required cache, but not cache has been configured for %v", mainView.Name)
+	}
 	if a.Connector == nil {
-		return fmt.Errorf("async connector can't be empty")
+		return fmt.Errorf("async2 connector can't be empty")
 	}
 
 	if err := a.Connector.Init(ctx, resource.GetConnectors()); err != nil {
 		return err
 	}
-
-	if err := a.initAccessor(resource); err != nil {
-		return err
-	}
-
-	a.inheritHandlerTypeIfNeeded()
-
-	if err := a.initHandlerIfNeeded(ctx); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (a *Async) initAccessor(resource *view.Resource) error {
-	if a.PrincipalSubject == "" {
+	if err := a.State.Init(ctx, resource, mainView); err != nil {
 		return nil
 	}
-
-	dotIndex := strings.Index(a.PrincipalSubject, ".")
-	var paramName, path string
-	if dotIndex != -1 {
-		paramName, path = a.PrincipalSubject[:dotIndex], a.PrincipalSubject[dotIndex+1:]
-	} else {
-		paramName = a.PrincipalSubject
-	}
-
-	param, err := resource.LookupParameter(paramName)
-	if err != nil {
-		return err
-	}
-
-	var accessor *types.Accessor
-	if path != "" {
-		accessors := types.NewAccessors(&types.VeltyNamer{})
-		accessors.InitPath(param.OutputType(), path)
-		accessor, err = accessors.AccessorByName(path)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	a._qualifier = &qualifier{
-		parameter: param,
-		accessor:  accessor,
-	}
-
-	return nil
+	a.service = jobs.New(a.Connector)
+	err := a.service.EnsureJobTables(ctx)
+	return err
 }
 
-func (r *Route) JobsInserter(ctx context.Context, db *sql.DB) (*insert.Service, error) {
+/*
+
+	func (r *Route) JobsInserter(ctx context.Context, db *sql.DB) (*insert.Service, error) {
 	return r.inserter(ctx, db, view.AsyncJobsTable)
 }
 
@@ -126,24 +113,24 @@ func (a *Async) initHandlerIfNeeded(ctx context.Context) error {
 	return nil
 }
 
-func (a *Async) detectHandlerType(ctx context.Context) (async.Handler, error) {
+func (a *Async) detectHandlerType(ctx context.Context) (async2.Handler, error) {
 	switch a.HandlerType {
-	case async.HandlerTypeS3:
+	case async2.HandlerTypeS3:
 		return s3.NewHandler(ctx, a.BucketURL)
-	case async.HandlerTypeSQS:
+	case async2.HandlerTypeSQS:
 		return sqs.NewHandler(ctx, "datly-jobs")
 
-	case async.HandlerTypeUndefined:
+	case async2.HandlerTypeUndefined:
 		switch env.BuildType {
 		case env.BuildTypeKindLambda:
-			return sqs.NewHandler(ctx, "datly-async")
+			return sqs.NewHandler(ctx, "datly-async2")
 
 		default:
 			return nil, nil
 		}
 
 	default:
-		return nil, fmt.Errorf("unsupported async HandlerType %v", a.HandlerType)
+		return nil, fmt.Errorf("unsupported async2 HandlerType %v", a.HandlerType)
 	}
 }
 
@@ -164,8 +151,8 @@ func (a *Async) inheritHandlerTypeIfNeeded() {
 	}
 }
 
-func NewAsyncRecord(ctx context.Context, route *Route, request *RequestParams) (*async.Job, error) {
-	newRecord := &async.Job{}
+func NewAsyncRecord(ctx context.Context, route *Route, request *RequestParams) (*async2.Job, error) {
+	newRecord := &async2.Job{}
 	if err := InitRecord(ctx, newRecord, route, request); err != nil {
 		return nil, err
 	}
@@ -173,7 +160,7 @@ func NewAsyncRecord(ctx context.Context, route *Route, request *RequestParams) (
 	return newRecord, nil
 }
 
-func InitRecord(ctx context.Context, record *async.Job, route *Route, request *RequestParams) error {
+func InitRecord(ctx context.Context, record *async2.Job, route *Route, request *RequestParams) error {
 	if record.JobID == "" {
 		recordID, err := uuid.NewUUID()
 		if err != nil {
@@ -183,7 +170,7 @@ func InitRecord(ctx context.Context, record *async.Job, route *Route, request *R
 		record.JobID = recordID.String()
 	}
 
-	record.TemplateState = async.StateRunning
+	record.TemplateState = async2.StateRunning
 	if record.PrincipalSubject == nil {
 		principalSubject, err := PrincipalSubject(ctx, route, request)
 		if err != nil {
@@ -230,7 +217,7 @@ func InitRecord(ctx context.Context, record *async.Job, route *Route, request *R
 	}
 
 	if record.DestinationCreateDisposition == "" {
-		record.DestinationCreateDisposition = async.CreateDispositionIfNeeded
+		record.DestinationCreateDisposition = async2.CreateDispositionIfNeeded
 	}
 
 	if record.DestinationTable == "" {

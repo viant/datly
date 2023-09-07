@@ -20,7 +20,7 @@ type (
 		component.Path
 		component.Contract
 		content.Content
-		Async          *async.Config `json:",omitempty"`
+		Async          *async.Module `json:",omitempty"`
 		View           *view.View    `json:",omitempty"`
 		NamespacedView *view.NamespacedView
 		Handler        *handler.Handler `json:",omitempty"`

@@ -138,7 +138,7 @@ func TestRead(t *testing.T) {
 
 	type AclRecord struct {
 		DatlyCriteria string `sqlx:"name=criteria"`
-		Subject       string
+		PrincialSubject       string
 	}
 
 	type UserViewParams struct {
@@ -158,7 +158,7 @@ func TestRead(t *testing.T) {
 	}
 
 	type AclParams struct {
-		Subject string
+		PrincialSubject string
 	}
 
 	//testLocation := toolbox.CallerDirectory(3)
@@ -333,7 +333,7 @@ func TestRead(t *testing.T) {
 			compTypes: map[string]reflect.Type{
 				"datly_acl": reflect.TypeOf(AclRecord{}),
 			},
-			expect: `[{"DatlyCriteria":"ROLE IN ('ADMIN')","Subject":"Kamil"}]`,
+			expect: `[{"DatlyCriteria":"ROLE IN ('ADMIN')","PrincialSubject":"Kamil"}]`,
 		},
 		{
 			description: "derive columns from schema type with relation",
