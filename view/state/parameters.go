@@ -33,16 +33,27 @@ func (s NamedParameters) LookupByLocation(kind Kind, location string) *Parameter
 }
 
 // LookupByLocation returns match parameter by location
-func (s Parameters) LookupByLocation(kind Kind, location string) *Parameter {
-	if len(s) == 0 {
+func (p Parameters) LookupByLocation(kind Kind, location string) *Parameter {
+	if len(p) == 0 {
 		return nil
 	}
-	for _, candidate := range s {
+	for _, candidate := range p {
 		if ret := candidate.matchByLocation(kind, location); ret != nil {
 			return ret
 		}
 	}
 	return nil
+}
+
+func (p Parameters) External() Parameters {
+	var result Parameters
+	for i, parameter := range p {
+		switch parameter.In.Kind {
+		case KindHeader, KindQuery, KindRequestBody, KindCookie, KindRequest:
+			result = append(result, p[i])
+		}
+	}
+	return result
 }
 
 func (p *Parameter) matchByLocation(kind Kind, location string) *Parameter {
@@ -67,9 +78,9 @@ func (p *Parameter) matchByLocation(kind Kind, location string) *Parameter {
 	return nil
 }
 
-func (s Parameters) FilterByKind(kind Kind) Parameters {
+func (p Parameters) FilterByKind(kind Kind) Parameters {
 	var result = Parameters{}
-	for _, candidate := range s {
+	for _, candidate := range p {
 		candidate.matchByKind(kind, &result)
 	}
 	return result
@@ -94,19 +105,19 @@ func (p *Parameter) matchByKind(kind Kind, result *Parameters) {
 	}
 }
 
-func (s Parameters) GroupByStatusCode() []Parameters {
+func (p Parameters) GroupByStatusCode() []Parameters {
 	var result []Parameters
 	var unAuthorizedParameters Parameters
 	var forbiddenParameters Parameters
 	var others Parameters
-	for i, candidate := range s {
+	for i, candidate := range p {
 		switch candidate.ErrorStatusCode {
 		case http.StatusUnauthorized, http.StatusProxyAuthRequired:
-			unAuthorizedParameters = append(unAuthorizedParameters, s[i])
+			unAuthorizedParameters = append(unAuthorizedParameters, p[i])
 		case http.StatusForbidden, http.StatusNotAcceptable, http.StatusMethodNotAllowed:
-			forbiddenParameters = append(forbiddenParameters, s[i])
+			forbiddenParameters = append(forbiddenParameters, p[i])
 		default:
-			others = append(others, s[i])
+			others = append(others, p[i])
 		}
 	}
 	if len(unAuthorizedParameters) > 0 {
@@ -121,8 +132,8 @@ func (s Parameters) GroupByStatusCode() []Parameters {
 	return result
 }
 
-func (s Parameters) SetLiterals(state *structology.State) (err error) {
-	for _, parameter := range s.FilterByKind(KindLiteral) {
+func (p Parameters) SetLiterals(state *structology.State) (err error) {
+	for _, parameter := range p.FilterByKind(KindLiteral) {
 		if parameter._selector == nil {
 			parameter._selector = state.Type().Lookup(parameter.Name)
 		}
@@ -133,8 +144,8 @@ func (s Parameters) SetLiterals(state *structology.State) (err error) {
 	return nil
 }
 
-func (s Parameters) InitRepeated(state *structology.State) (err error) {
-	for _, parameter := range s {
+func (p Parameters) InitRepeated(state *structology.State) (err error) {
+	for _, parameter := range p {
 		parameterType := parameter.OutputType()
 		if parameterType == nil || parameterType.Kind() != reflect.Slice {
 			continue
@@ -149,12 +160,12 @@ func (s Parameters) InitRepeated(state *structology.State) (err error) {
 
 var boolType = reflect.TypeOf(true)
 
-func (s Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, withSetMarker bool) (reflect.Type, error) {
+func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, withSetMarker bool) (reflect.Type, error) {
 	var fields []reflect.StructField
 	var setMarkerFields []reflect.StructField
 	//TODO add compaction here
 	var err error
-	for _, param := range s {
+	for _, param := range p {
 		schema := param.OutputSchema()
 		if schema == nil {
 			return nil, fmt.Errorf("invalid parameter: %v schema was empty", param.Name)
@@ -195,8 +206,8 @@ func (s Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 	return baseType, nil
 }
 
-func (s Parameters) BuildBodyType(pkgPath string, lookupType xreflect.LookupType) (reflect.Type, error) {
-	candidates := s.FilterByKind(KindRequestBody)
+func (p Parameters) BuildBodyType(pkgPath string, lookupType xreflect.LookupType) (reflect.Type, error) {
+	candidates := p.FilterByKind(KindRequestBody)
 	bodyLeafParameters := make(Parameters, 0, len(candidates))
 	for i, candidate := range candidates {
 		if candidate.In.Name != "" {
@@ -210,11 +221,11 @@ func (s Parameters) BuildBodyType(pkgPath string, lookupType xreflect.LookupType
 	return bodyLeafParameters.ReflectType(pkgPath, lookupType, true)
 }
 
-func (s Parameters) buildStateType(pkgPath string, lookupType xreflect.LookupType, withSetMarker bool) (reflect.Type, error) {
+func (p Parameters) buildStateType(pkgPath string, lookupType xreflect.LookupType, withSetMarker bool) (reflect.Type, error) {
 	var fields []reflect.StructField
 	var setMarkerFields []reflect.StructField
 	var err error
-	for _, param := range s {
+	for _, param := range p {
 		schema := param.OutputSchema()
 		if schema == nil {
 			return nil, fmt.Errorf("invalid parameter: %v schema was empty", param.Name)
@@ -257,18 +268,18 @@ func (s Parameters) buildStateType(pkgPath string, lookupType xreflect.LookupTyp
 }
 
 // Append appends parameter
-func (s *Parameters) Append(parameter *Parameter) {
-	for _, param := range *s {
+func (p *Parameters) Append(parameter *Parameter) {
+	for _, param := range *p {
 		if param.Name == parameter.Name {
 			return
 		}
 	}
-	*s = append(*s, parameter)
+	*p = append(*p, parameter)
 }
 
 // Lookup returns match parameter or nil
-func (s Parameters) Lookup(name string) *Parameter {
-	for _, param := range s {
+func (p Parameters) Lookup(name string) *Parameter {
+	for _, param := range p {
 		if param.Name == name {
 			return param
 		}
@@ -277,36 +288,36 @@ func (s Parameters) Lookup(name string) *Parameter {
 }
 
 // Index indexes parameters by Parameter.Name
-func (s Parameters) Index() NamedParameters {
+func (p Parameters) Index() NamedParameters {
 	result := NamedParameters(make(map[string]*Parameter))
-	for i, parameter := range s {
+	for i, parameter := range p {
 		if _, ok := result[parameter.Name]; ok {
 			continue
 		}
-		result[parameter.Name] = s[i]
+		result[parameter.Name] = p[i]
 	}
 	return result
 }
 
 // Filter filters Parameters with given Kind and creates Template
-func (s Parameters) Filter(kind Kind) NamedParameters {
+func (p Parameters) Filter(kind Kind) NamedParameters {
 	result := make(map[string]*Parameter)
 
-	for parameterIndex := range s {
-		if s[parameterIndex].In.Kind != kind {
+	for parameterIndex := range p {
+		if p[parameterIndex].In.Kind != kind {
 			continue
 		}
-		result[s[parameterIndex].In.Name] = s[parameterIndex]
+		result[p[parameterIndex].In.Name] = p[parameterIndex]
 
 	}
 
 	return result
 }
 
-func (s Parameters) PredicateStructType() reflect.Type {
+func (p Parameters) PredicateStructType() reflect.Type {
 	var fields []*predicate.FilterType
 	fieldTypes := map[string]*predicate.FilterType{}
-	for _, candidate := range s {
+	for _, candidate := range p {
 		if len(candidate.Predicates) == 0 {
 			continue
 		}

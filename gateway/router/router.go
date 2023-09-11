@@ -468,13 +468,14 @@ func (r *Router) payloadReader(ctx context.Context, request *http.Request, write
 
 	locatorOptions := append(route.LocatorOptions(request, unmarshal), locator.WithDispatcher(route.dispatcher))
 	aSession := session.New(route.View, session.WithLocatorOptions(locatorOptions...))
-	if err := aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindQuery, state.KindRequestBody); err != nil {
-		return nil, err
-	}
-	if err := aSession.Populate(ctx); err != nil {
+	err := aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindQuery, state.KindRequestBody)
+	if err != nil {
 		return nil, err
 	}
 
+	if err := aSession.Populate(ctx); err != nil {
+		return nil, err
+	}
 	aResponse, err := r.dispatcher.Dispatch(ctx, &route.Component, aSession)
 	if err != nil {
 		return nil, err

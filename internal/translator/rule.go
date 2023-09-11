@@ -31,7 +31,7 @@ type (
 		Root             string
 		router.Route
 		*component.Output
-		Async        *async.Module              `json:",omitempty"`
+		Async        *async.Config              `json:",omitempty"`
 		Cache        *view.Cache                `json:",omitempty"`
 		CSV          *content.CSVConfig         `json:",omitempty"`
 		Const        map[string]interface{}     `json:",omitempty"`

@@ -221,9 +221,9 @@ func (a *RecordHandler) loadHandler(ctx context.Context, cfg *async2.Notificatio
 
 func (a *RecordHandler) detectHandlerType(ctx context.Context, cfg *async2.Notification) (Handler, error) {
 	switch cfg.Method {
-	case async2.NotificationMethodS3:
+	case async2.NotificationMethodStorage:
 		return s3.NewHandler(ctx, cfg.Destination)
-	case async2.NotificationMethodSQS:
+	case async2.NotificationMethodMessageBus:
 		return sqs.NewHandler(ctx, "datly-jobs")
 
 	case async2.NotificationMethodUndefined:

@@ -8,7 +8,8 @@ import (
 )
 
 type Query struct {
-	query url.Values
+	query    url.Values
+	rawQuery string
 }
 
 func (q *Query) Names() []string {
@@ -20,6 +21,9 @@ func (q *Query) Names() []string {
 }
 
 func (q *Query) Value(ctx context.Context, name string) (interface{}, bool, error) {
+	if name == "" {
+		return q.rawQuery, true, nil
+	}
 	value, ok := q.query[name]
 	if !ok {
 		return nil, false, nil
@@ -36,5 +40,6 @@ func NewQuery(opts ...Option) (kind.Locator, error) {
 	if options.request == nil {
 		return nil, fmt.Errorf("request was empty")
 	}
-	return &Query{query: options.request.URL.Query()}, nil
+
+	return &Query{query: options.request.URL.Query(), rawQuery: options.request.URL.RawQuery}, nil
 }

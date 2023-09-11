@@ -93,7 +93,6 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if err := r.Component.Init(ctx, resource.Resource); err != nil {
 		return err
 	}
-
 	r.initCors(resource)
 	r.initCompression(resource)
 

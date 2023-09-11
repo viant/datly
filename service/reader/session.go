@@ -22,6 +22,7 @@ type (
 		IncludeSQL    bool
 		CacheDisabled bool
 		RevealMetric  bool
+		DryRun        bool
 		View          *view.View
 		State         *view.State
 		Parent        *view.View
@@ -197,6 +198,14 @@ func (s *Session) AddMetric(m *Metric) {
 	s.mux.Lock()
 	s.Metrics = append(s.Metrics, m)
 	s.mux.Unlock()
+}
+
+// WithDryRun returns with dry run option
+func WithDryRun() Option {
+	return func(session *Session) error {
+		session.DryRun = true
+		return nil
+	}
 }
 
 // NewSession creates a session

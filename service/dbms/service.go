@@ -178,7 +178,7 @@ func (c *Service) sqlSource(connector *view.Connector, cfg *TableConfig) (provid
 func New() *Service {
 	return &Service{
 		Mutex:         sync.Mutex{},
-		schemaChecked: nil,
+		schemaChecked: map[dbKey]*schema{},
 		matchers:      sync.Map{},
 	}
 }

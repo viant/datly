@@ -6,7 +6,8 @@ import (
 	"github.com/viant/datly/service/jobs"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
-	async2 "github.com/viant/xdatly/handler/async"
+	async "github.com/viant/xdatly/handler/async"
+	"sync"
 )
 
 type (
@@ -18,58 +19,63 @@ type (
 
 	//State defines location for the followings
 	State struct {
-		PrincialSubject *state.Parameter
-		UserEmail       *state.Parameter
-		JobID           *state.Parameter
+		UserID    *state.Parameter
+		UserEmail *state.Parameter
+		JobID     *state.Parameter
 	}
 
-	Module struct {
+	Config struct {
 		Jobs
 		State
 		WithCache       bool
 		ExpiryTimeInSec int
-		async2.Notification
+		async.Notification
+		mux sync.Mutex
 	}
 )
 
-func (s *State) Init(ctx context.Context, res *view.Resource, mainView *view.View) error {
+func (c *Config) Lock() {
+	c.mux.Lock()
+}
 
-	resource := view.NewResourcelet(res, mainView)
-	if s.PrincialSubject != nil {
-		if err := s.PrincialSubject.Init(ctx, resource); err != nil {
-			return err
-		}
+func (c *Config) Unlock() {
+	c.mux.Unlock()
+}
+
+func (c *Config) Init(ctx context.Context, resource *view.Resource, mainView *view.View) error {
+	if c == nil {
+		return nil
 	}
-	if s.JobID != nil {
-		if err := s.JobID.Init(ctx, resource); err != nil {
-			return err
-		}
+	if mainView != nil && mainView.Cache == nil && c.WithCache {
+		return fmt.Errorf("asyn required cache, but not cache has been configured for %v", mainView.Name)
 	}
-	if s.UserEmail != nil {
-		if err := s.UserEmail.Init(ctx, resource); err != nil {
-			return err
-		}
+	if c.Connector == nil {
+		return fmt.Errorf("async connector can't be empty")
+	}
+
+	if err := c.Connector.Init(ctx, resource.GetConnectors()); err != nil {
+		return err
+	}
+	if err := c.State.Init(ctx, resource, mainView); err != nil {
+		return err
+	}
+	c.service = jobs.New(c.Connector)
+	if err := c.service.Init(ctx); err != nil {
+		return err
 	}
 	return nil
 }
 
-func (a *Module) Init(ctx context.Context, resource *view.Resource, mainView *view.View) error {
-	if mainView != nil && mainView.Cache == nil && a.WithCache {
-		return fmt.Errorf("asyn required cache, but not cache has been configured for %v", mainView.Name)
-	}
-	if a.Connector == nil {
-		return fmt.Errorf("async2 connector can't be empty")
-	}
+func (c *Config) JobByID(ctx context.Context, jobID string) (*async.Job, error) {
+	return c.service.JobById(ctx, jobID)
+}
 
-	if err := a.Connector.Init(ctx, resource.GetConnectors()); err != nil {
-		return err
-	}
-	if err := a.State.Init(ctx, resource, mainView); err != nil {
-		return nil
-	}
-	a.service = jobs.New(a.Connector)
-	err := a.service.EnsureJobTables(ctx)
-	return err
+func (c *Config) CreateJob(ctx context.Context, job *async.Job, notification *async.Notification) error {
+	return c.service.CreateJob(ctx, job)
+}
+
+func (c *Config) UpdateJob(ctx context.Context, job *async.Job) error {
+	return c.service.UpdateJob(ctx, job)
 }
 
 /*
@@ -113,24 +119,24 @@ func (a *Async) initHandlerIfNeeded(ctx context.Context) error {
 	return nil
 }
 
-func (a *Async) detectHandlerType(ctx context.Context) (async2.Handler, error) {
+func (a *Async) detectHandlerType(ctx context.Context) (async.Handler, error) {
 	switch a.HandlerType {
-	case async2.HandlerTypeS3:
+	case async.HandlerTypeS3:
 		return s3.NewHandler(ctx, a.BucketURL)
-	case async2.HandlerTypeSQS:
+	case async.HandlerTypeSQS:
 		return sqs.NewHandler(ctx, "datly-jobs")
 
-	case async2.HandlerTypeUndefined:
+	case async.HandlerTypeUndefined:
 		switch env.BuildType {
 		case env.BuildTypeKindLambda:
-			return sqs.NewHandler(ctx, "datly-async2")
+			return sqs.NewHandler(ctx, "datly-async")
 
 		default:
 			return nil, nil
 		}
 
 	default:
-		return nil, fmt.Errorf("unsupported async2 HandlerType %v", a.HandlerType)
+		return nil, fmt.Errorf("unsupported async HandlerType %v", a.HandlerType)
 	}
 }
 
@@ -151,8 +157,8 @@ func (a *Async) inheritHandlerTypeIfNeeded() {
 	}
 }
 
-func NewAsyncRecord(ctx context.Context, route *Route, request *RequestParams) (*async2.Job, error) {
-	newRecord := &async2.Job{}
+func NewAsyncRecord(ctx context.Context, route *Route, request *RequestParams) (*async.Job, error) {
+	newRecord := &async.Job{}
 	if err := InitRecord(ctx, newRecord, route, request); err != nil {
 		return nil, err
 	}
@@ -160,7 +166,7 @@ func NewAsyncRecord(ctx context.Context, route *Route, request *RequestParams) (
 	return newRecord, nil
 }
 
-func InitRecord(ctx context.Context, record *async2.Job, route *Route, request *RequestParams) error {
+func InitRecord(ctx context.Context, record *async.Job, route *Route, request *RequestParams) error {
 	if record.JobID == "" {
 		recordID, err := uuid.NewUUID()
 		if err != nil {
@@ -170,7 +176,7 @@ func InitRecord(ctx context.Context, record *async2.Job, route *Route, request *
 		record.JobID = recordID.String()
 	}
 
-	record.TemplateState = async2.StateRunning
+	record.TemplateState = async.StateRunning
 	if record.PrincipalSubject == nil {
 		principalSubject, err := PrincipalSubject(ctx, route, request)
 		if err != nil {
@@ -217,7 +223,7 @@ func InitRecord(ctx context.Context, record *async2.Job, route *Route, request *
 	}
 
 	if record.DestinationCreateDisposition == "" {
-		record.DestinationCreateDisposition = async2.CreateDispositionIfNeeded
+		record.DestinationCreateDisposition = async.CreateDispositionIfNeeded
 	}
 
 	if record.DestinationTable == "" {

@@ -17,6 +17,9 @@ import (
 func Discover(ctx context.Context, db *sql.DB, table, SQL string, SQLArgs ...interface{}) (sqlparser.Columns, error) {
 	var columns sqlparser.Columns
 	var err error
+	if table == SQL && !strings.Contains(strings.ToLower(SQL), "select") {
+		SQL = "SELECT * FROM " + table + " WHERE 1 = 0"
+	}
 	if SQL != "" {
 		if columns, err = detectColumns(ctx, db, SQL, table, SQLArgs...); err != nil {
 			return columns, err
