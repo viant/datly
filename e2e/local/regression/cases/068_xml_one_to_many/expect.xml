@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<root>
+<forecast-response>
 <row>
 <Id>1</Id>
 <Name>Vendor 1</Name>
@@ -56,4 +56,4 @@
 <UserCreated>1</UserCreated>
 <UserUpdated>0</UserUpdated>
 </row>
-</root>
+</forecast-response>

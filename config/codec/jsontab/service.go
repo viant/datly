@@ -1,4 +1,4 @@
-package xmltab
+package jsontab
 
 import (
 	"fmt"
@@ -10,37 +10,28 @@ import (
 	"unsafe"
 )
 
-type ( // 03
-
-	ColumnHeader struct {
-		ID   string `json:",omitempty" xmlify:"path=@id"`
-		Type string `json:",omitempty" xmlify:"path=@type"`
+type (
+	Column struct {
+		ID   string `json:",omitempty"`
+		Type string `json:",omitempty"`
 	}
 
-	ColumnsWrapper struct {
-		Columns []*ColumnHeader `xmlify:"name=column"`
+	Value struct {
+		LongType   string `json:",omitempty"`
+		DoubleType string `json:",omitempty"`
+		DateType   string `json:",omitempty"`
+		Value      string `json:",omitempty"`
 	}
 
-	// TODO add ptr *
-	ColumnValue struct {
-		LongType   string `json:",omitempty" xmlify:"omitempty,path=@lg"`
-		IntType    int    `json:",omitempty" xmlify:"omitempty,path=@long"`
-		DoubleType string `json:",omitempty" xmlify:"omitempty,path=@double"`
-		DateType   string `json:",omitempty" xmlify:"omitempty"`
-		Value      string `json:",omitempty" xmlify:"omitempty,omittagname"` //TODO change to *string
-	}
+	Record []*Value
 
-	Row struct {
-		ColumnValues []*ColumnValue `xmlify:"name=c"`
-	}
+	Records []Record
 
-	RowsWrapper struct {
-		Rows []*Row `xmlify:"name=r"`
-	}
+	Columns []*Column
 
 	Result struct {
-		ColumnsWrapper ColumnsWrapper `xmlify:"name=columns"`
-		RowsWrapper    RowsWrapper    `xmlify:"name=rows"`
+		Columns Columns `json:",omitempty"`
+		Records Records `json:",omitempty"`
 	}
 )
 
@@ -76,16 +67,16 @@ func (t *Service) transferRecords(sliceLen int, xSlice *xunsafe.Slice, ptr unsaf
 		if err != nil {
 			return err
 		}
-		result.RowsWrapper.Rows = append(result.RowsWrapper.Rows, record)
+		result.Records = append(result.Records, record)
 	}
 	return nil
 }
 
-func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Pointer) (*Row, error) {
-	var row Row
+func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Pointer) (Record, error) {
+	var record Record
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
-		value := &ColumnValue{}
+		value := &Value{}
 		switch field.Type.Kind() {
 		case reflect.String:
 			value.Value = field.String(sourcePtr)
@@ -129,15 +120,15 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 				return nil, fmt.Errorf("xmltab: usnupported type: %T", v)
 			}
 		}
-		row.ColumnValues = append(row.ColumnValues, value)
+		record = append(record, value)
 	}
-	return &row, nil
+	return record, nil
 }
 
 func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
-		column := &ColumnHeader{ID: field.Name}
+		column := &Column{ID: field.Name}
 		fieldKind := field.Kind()
 		if fieldKind == reflect.Ptr {
 			fieldKind = field.Type.Elem().Kind()
@@ -155,9 +146,7 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 				column.Type = "date"
 			}
 		}
-
-		// TODO columns Wrapper?
-		result.ColumnsWrapper.Columns = append(result.ColumnsWrapper.Columns, column)
+		result.Columns = append(result.Columns, column)
 	}
 }
 

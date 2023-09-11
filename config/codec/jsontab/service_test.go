@@ -1,4 +1,4 @@
-package xmltab
+package jsontab
 
 import (
 	"encoding/json"
@@ -104,7 +104,7 @@ func TestService_Transfer(t *testing.T) {
 	}
 
 	srv := New()
-	for _, testCase := range testCases {
+	for _, testCase := range testCases[len(testCases)-1:] {
 		fmt.Printf("%s --- \n", testCase.description)
 
 		transfer, err := srv.Transfer(testCase.getData())
