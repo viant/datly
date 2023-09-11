@@ -45,9 +45,9 @@ func (p ParamName) Validate(kind Kind) error {
 
 		return nil
 
-	case KindRequest, KindLiteral, KindRequestBody:
+	case KindRequest, KindLiteral, KindRequestBody, KindQuery:
 		return nil
-	case KindDataView, KindPath, KindQuery, KindHeader, KindRepeated, KindCookie, KindParam, KindState, KindOutput, KindComponent:
+	case KindDataView, KindPath, KindHeader, KindRepeated, KindCookie, KindParam, KindState, KindOutput, KindComponent:
 		if p == "" {
 			return fmt.Errorf("param name can't be empty")
 		}
@@ -70,6 +70,11 @@ func NewQueryLocation(name string) *Location {
 // NewBodyLocation creates a body location
 func NewBodyLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindRequestBody}
+}
+
+// NewRequestLocation creates a body location
+func NewRequestLocation() *Location {
+	return &Location{Name: "", Kind: KindRequest}
 }
 
 // NewOutputLocation creates an output location

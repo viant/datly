@@ -141,6 +141,7 @@ func (s *State) Flush(status HTTPStatus) error {
 func StateWithSQL(SQL string) *State {
 	aState := &State{
 		Expanded: SQL,
+		Context:  &Context{},
 	}
 
 	aState.Init(nil, nil)

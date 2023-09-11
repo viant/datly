@@ -12,7 +12,9 @@ import (
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
+	"github.com/viant/datly/repository/async"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/shared"
@@ -299,7 +301,9 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	route.Content.XML = resource.Rule.XML
 	route.Output.DataFormat = resource.Rule.DataFormat
 
-	s.applyAsyncOption(resource, route)
+	if err := s.applyAsyncOption(resource, route); err != nil {
+		return err
+	}
 
 	if resource.rule.Generated { //translation from generator
 		resource.Rule.applyGeneratorOutputSetting()
@@ -316,9 +320,14 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 		resource.Rule.Route.Output.Field = aState.BodyField()
 	}
 
+	rootViewName := ""
+	if rootView := resource.Rule.RootView(); rootView != nil {
+		rootViewName = rootView.Name
+	}
+
 	routerResource, err := s.buildRouterResource(ctx, resource)
 	if err != nil {
-		return fmt.Errorf("failed to build router resource: %+v, %w", routerResource, err)
+		return fmt.Errorf("failed to build component : %s, %w", rootViewName, err)
 	}
 	data, err := asset.EncodeYAML(routerResource)
 	if err != nil {
@@ -328,19 +337,36 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	return nil
 }
 
-func (s *Service) applyAsyncOption(resource *Resource, route *router.Route) {
-	async := resource.Rule.Async
-	if async == nil {
-		return
-	}
+func (s *Service) applyAsyncOption(resource *Resource, route *router.Route) error {
+	asyncModule := resource.Rule.Async
 
-	if async.Jobs.Connector == nil {
-		async.Jobs.Connector = view.NewRefConnector(s.DefaultConnector())
-	}
-	if async.JobID == nil {
-		async.JobID = &state.Parameter{Name: "JobID", In: state.NewQueryLocation("")}
-	}
+	if len(resource.AsyncState) > 0 {
+		if asyncModule == nil {
+			asyncModule = &async.Config{}
+			resource.Rule.Async = asyncModule
+		}
 
+		for i, parameter := range resource.AsyncState {
+			switch strings.ToLower(parameter.Name) {
+			case "userid":
+				asyncModule.State.UserID = &resource.AsyncState[i].Parameter
+			case "useremail":
+				asyncModule.State.UserEmail = &resource.AsyncState[i].Parameter
+			case "jobid":
+				asyncModule.State.JobID = &resource.AsyncState[i].Parameter
+			}
+		}
+	}
+	if asyncModule == nil {
+		return nil
+	}
+	if asyncModule.Jobs.Connector == nil {
+		asyncModule.Jobs.Connector = view.NewRefConnector(s.DefaultConnector())
+	}
+	if asyncModule.State.JobID == nil {
+		return fmt.Errorf("async job id state parameter is not defined")
+	}
+	return nil
 }
 
 func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mode) error {
@@ -453,6 +479,7 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 	if resource.Rule.Cache != nil {
 		s.Repository.Caches.Append(resource.Rule.Cache)
 	}
+
 	if len(s.Repository.Caches) > 0 {
 		resource.Rule.With = append(resource.Rule.With, "cache")
 	}
@@ -467,6 +494,17 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 	result.ColumnsDiscovery = true
 	resource.Rule.applyRootViewRouteShorthands()
 	route := &resource.Rule.Route
+	if resource.Rule.Async != nil {
+		rootView := resource.Rule.RootView()
+		if rootView.Cache == nil { //also allow table dest in the future
+			return nil, fmt.Errorf("cache setting is required with async")
+		}
+		resource.Rule.Async.WithCache = true
+		setter.SetIntIfZero(&resource.Rule.Async.ExpiryTimeInSec, rootView.Cache.TimeToLiveMs)
+		route.Async = resource.Rule.Async
+
+	}
+
 	result.Routes = append(result.Routes, route)
 	return result, nil
 }

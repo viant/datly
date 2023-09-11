@@ -29,6 +29,7 @@ type (
 		Connector   string
 		InOutput    bool
 		Of          string
+		IsAsync     bool
 	}
 
 	ModificationSetting struct {

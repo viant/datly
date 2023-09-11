@@ -42,6 +42,14 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
+	//
+	//os.Chdir("/Users/awitas/go/src/github.com/viant/datly/e2e/local")
+	//os.Args = []string{"",
+	//	"-N=run_tests_read_async",
+	//	"-X=/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/cases/061_read_async/vendor_auth_async.sql",
+	//	"-w=autogen",
+	//	"-C=dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
+	//}
 
 	err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {

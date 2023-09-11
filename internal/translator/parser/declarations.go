@@ -23,6 +23,7 @@ type (
 		SQL         string
 		State       inference.State
 		OutputState inference.State
+		AsyncState  inference.State
 		Transforms  []*marshal.Transform
 		lookup      func(dataType string, opts ...xreflect.Option) (*state.Schema, error)
 	}
@@ -81,6 +82,10 @@ func (d *Declarations) buildDeclaration(selector *expr.Select, cursor *parsly.Cu
 
 	if declaration.InOutput {
 		d.OutputState.Append(&declaration.Parameter)
+		return nil
+	}
+	if declaration.IsAsync {
+		d.AsyncState.Append(&declaration.Parameter)
 		return nil
 	}
 	d.State.Append(&declaration.Parameter)
@@ -251,6 +256,8 @@ func (s *Declarations) parseShorthands(declaration *Declaration, cursor *parsly.
 		//deprecated
 		case "QuerySelector":
 			declaration.Explicit = false
+		case "Async":
+			declaration.IsAsync = true
 		}
 		cursor.MatchOne(whitespaceMatcher)
 	}

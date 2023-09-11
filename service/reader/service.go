@@ -385,6 +385,9 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 	}
 
 	stats := s.NewExecutionInfo(session, fullMatcher, cacheStats, err)
+	if session.DryRun {
+		return stats, nil
+	}
 
 	reader, err := read.New(ctx, db, fullMatcher.SQL, collector.NewItem(), options...)
 	if err != nil {
@@ -416,6 +419,7 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 		return visitor(row)
 	}, fullMatcher.Args...)
 	end := time.Now()
+
 	aView.Logger.ReadingData(end.Sub(begin), fullMatcher.SQL, readData, fullMatcher.Args, err)
 	if err != nil {
 		return s.HandleSQLError(err, session, aView, fullMatcher, stats)

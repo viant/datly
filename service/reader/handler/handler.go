@@ -70,6 +70,7 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, session *session
 
 			locator.WithCustomOption(ret.Reader, ret.Status))
 	)
+
 	if err = session.SetState(ctx, h.outputType.Parameters, resultState, options); err != nil {
 		ret.StatusCode = http.StatusInternalServerError
 		ret.Error = err
@@ -112,7 +113,6 @@ func (h *Handler) readData(ctx context.Context, aView *view.View, aState *sessio
 			ret.Output = reflect.ValueOf(ret.Output).Index(0).Interface()
 		}
 	}
-
 	h.publishViewSummaryIfNeeded(aView, ret)
 	h.publishMetricsIfNeeded(aSession, ret)
 	return nil

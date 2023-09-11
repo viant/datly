@@ -8,6 +8,7 @@ import (
 )
 
 type Path struct {
+	path       string
 	parameters map[string]string
 }
 
@@ -20,6 +21,9 @@ func (v *Path) Names() []string {
 }
 
 func (v *Path) Value(ctx context.Context, name string) (interface{}, bool, error) {
+	if name == "" {
+		return v.path, true, nil
+	}
 	ret, ok := v.parameters[name]
 	return ret, ok, nil
 }
@@ -34,6 +38,6 @@ func NewPath(opts ...Option) (kind.Locator, error) {
 		return nil, fmt.Errorf("uri pattern was empty")
 	}
 	parameters, _ := toolbox.ExtractURIParameters(options.URIPattern, options.request.URL.Path)
-	ret := &Path{parameters: parameters}
+	ret := &Path{parameters: parameters, path: options.request.URL.Path}
 	return ret, nil
 }

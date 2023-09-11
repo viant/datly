@@ -20,7 +20,7 @@ type (
 		component.Path
 		component.Contract
 		content.Content
-		Async          *async.Module `json:",omitempty"`
+		Async          *async.Config `json:",omitempty"`
 		View           *view.View    `json:",omitempty"`
 		NamespacedView *view.NamespacedView
 		Handler        *handler.Handler `json:",omitempty"`
@@ -39,10 +39,34 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 	if err != nil {
 		return err
 	}
+	if err := c.initInputParameters(ctx, resource); err != nil {
+		return err
+	}
 	if err = c.Contract.Init(ctx, &c.Path, c.View); err != nil {
 		return err
 	}
-	c.Contract.Input.Parameters = resource.NamedParameters()
+
+	if err = c.Async.Init(ctx, resource, c.View); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Component) initInputParameters(ctx context.Context, resource *view.Resource) error {
+	inputParameters := resource.Parameters
+	for _, parameter := range c.View.InputParameters() {
+		inputParameters.Append(parameter)
+	}
+	if c.Async != nil {
+		inputParameters.Append(c.Async.JobID)
+		if c.Async.UserID != nil {
+			inputParameters.Append(c.Async.UserID)
+		}
+		if c.Async.UserEmail != nil {
+			inputParameters.Append(c.Async.UserEmail)
+		}
+	}
+	c.Contract.Input.Type.Parameters = inputParameters
 	return nil
 }
 
@@ -93,7 +117,7 @@ func (c *Component) LocatorOptions(request *http.Request, unmarshal shared.Unmar
 	result = append(result, locator.WithRequest(request))
 	result = append(result, locator.WithURIPattern(c.URI))
 	result = append(result, locator.WithIOConfig(c.IOConfig()))
-	result = append(result, locator.WithInputParameters(c.Input.Parameters))
+	result = append(result, locator.WithInputParameters(c.Input.Type.Parameters.Index()))
 	result = append(result, locator.WithOutputParameters(c.Output.Type.Parameters))
 	if c.Input.Body.Schema != nil {
 		result = append(result, locator.WithBodyType(c.BodyType()))
@@ -111,17 +135,4 @@ func (c *Component) IOConfig() config.IOConfig {
 		Exclude:    config.Exclude(c.Output.Exclude).Index(),
 		DateLayout: c.DateFormat,
 	}
-}
-
-func (r *Component) initAsyncIfNeeded(ctx context.Context) error {
-	//r._async = async.NewChecker()
-	//if r.Async != nil {
-	//	//if err := r.Async.Init(ctx, r._resource, r.View); err != nil {
-	//	//	return err
-	//	//}
-	//
-	//	//return r.ensureJobTable(ctx)
-	//}
-
-	return nil
 }

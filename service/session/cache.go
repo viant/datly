@@ -1,6 +1,7 @@
 package session
 
 import (
+	"encoding/json"
 	"github.com/viant/datly/view/state"
 	"sync"
 )
@@ -16,6 +17,14 @@ func (c *cache) lookup(parameter *state.Parameter) (interface{}, bool) {
 	ret, ok := c.values[c.key(parameter)]
 	c.RWMutex.RUnlock()
 	return ret, ok
+}
+
+func (s *Session) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.cache.values)
+}
+
+func (s *Session) Unmarshal(data []byte) error {
+	return json.Unmarshal(data, &s.cache.values)
 }
 
 func (c *cache) lockParameter(parameter *state.Parameter) sync.Locker {

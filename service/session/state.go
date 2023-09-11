@@ -170,7 +170,6 @@ func (s *Session) populateParameterInBackground(ctx context.Context, parameter *
 }
 
 func (s *Session) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
-
 	value, has, err := s.LookupValue(ctx, parameter, options)
 	if err != nil {
 		return err
@@ -290,6 +289,23 @@ func (s *Session) LookupValue(ctx context.Context, parameter *state.Parameter, o
 		err = httputils.NewParamError("", parameter.Name, err, httputils.WithObject(value), httputils.WithStatusCode(parameter.ErrorStatusCode))
 	}
 	return value, has, err
+}
+
+var requestParameter = &state.Parameter{Name: "request", In: state.NewRequestLocation(), Schema: state.NewSchema(reflect.TypeOf(&http.Request{}))}
+
+func (s *Session) HttpRequest(ctx context.Context, options *Options) (*http.Request, error) {
+	value, has, err := s.LookupValue(ctx, requestParameter, options)
+	if err != nil {
+		return nil, err
+	}
+	if !has {
+		return nil, nil
+	}
+	request, ok := value.(*http.Request)
+	if !ok {
+		return nil, fmt.Errorf("expected %T, but had %T", request, value)
+	}
+	return request, nil
 }
 
 func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, opts *Options) (value interface{}, has bool, err error) {

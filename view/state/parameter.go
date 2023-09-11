@@ -98,15 +98,12 @@ func (p *Parameter) Init(ctx context.Context, resource Resource) error {
 			return err
 		}
 	}
-
 	if err := p.initSchema(resource); err != nil {
 		return err
 	}
-
 	if err := p.initCodec(resource); err != nil {
 		return err
 	}
-
 	return p.Validate()
 }
 
@@ -363,7 +360,14 @@ func (p *Parameter) OutputType() reflect.Type {
 }
 
 func (p *Parameter) initParamBasedParameter(ctx context.Context, resource Resource) error {
-	param, err := resource.LookupParameter(p.In.Name)
+	parameterName := p.In.Name
+	var parameterSelectr string
+	if index := strings.Index(parameterName, "."); index != -1 {
+		parameterName = p.In.Name[:index]
+		parameterSelectr = p.In.Name[index+1:]
+	}
+
+	param, err := resource.LookupParameter(parameterName)
 	if err != nil {
 		return err
 	}
@@ -371,7 +375,19 @@ func (p *Parameter) initParamBasedParameter(ctx context.Context, resource Resour
 	if err = param.Init(ctx, resource); err != nil {
 		return err
 	}
-	p.Schema = param.Schema.Clone()
+
+	baseSchema := param.Schema.Clone()
+
+	if parameterSelectr != "" {
+		stateType := structology.NewStateType(param.OutputType())
+		selector := stateType.Lookup(parameterSelectr)
+		if selector == nil {
+			return fmt.Errorf("invalid parameter %v path %v", p.Name, parameterSelectr)
+		}
+		baseSchema = NewSchema(selector.Type())
+	}
+
+	p.Schema = baseSchema
 	p._dependsOn = param
 	return nil
 }
