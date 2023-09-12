@@ -4,7 +4,7 @@
    "Cache":{
          "Name": "aerospike",
          "Provider": "aerospike://127.0.0.1:3000/test",
-         "Location": "${view.Name}",
+         "Location": "forecasting_${view.Name}",
          "TimeToLiveMs": 3600000
     },
     "Async":{

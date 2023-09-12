@@ -24,11 +24,12 @@ func (s *Service) runQuery(ctx context.Context, component *repository.Component,
 	return response.Output, response.Error
 }
 
+// adjustAsyncOptions function adjust reading option to dryRun when asyb job is scheduled but not yet completed
 func (s *Service) adjustAsyncOptions(ctx context.Context, options *[]reader.Option) {
-	if job := s.Job(ctx); job != nil && async.Status(job.Status) != async.StatusDone && !s.IsEventInvocation(ctx) {
-		if !s.IsEventInvocation(ctx) {
-			*options = append(*options, reader.WithDryRun())
-		}
+	if job := s.Job(ctx); job != nil &&
+		async.Status(job.Status) != async.StatusDone &&
+		!s.IsEventInvocation(ctx) {
+		*options = append(*options, reader.WithDryRun())
 	}
 }
 
