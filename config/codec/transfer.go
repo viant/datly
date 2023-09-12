@@ -2,8 +2,8 @@ package codec
 
 import (
 	"context"
-	"github.com/viant/datly/config/codec/jsontab"
 	"github.com/viant/datly/config/codec/transfer"
+	"github.com/viant/datly/config/codec/xmltab"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
@@ -26,7 +26,7 @@ type (
 		destType  *structology.StateType
 		transfers []*entry
 		srcType   *structology.StateType
-		srv       *jsontab.Service
+		srv       *xmltab.Service
 	}
 )
 
@@ -43,7 +43,7 @@ func (e *TransferFactory) New(codecConfig *codec.Config, options ...codec.Option
 	if err != nil {
 		return nil, err
 	}
-	ret := &Transfer{srv: jsontab.New()}
+	ret := &Transfer{srv: xmltab.New()}
 	return ret, ret.init(destType)
 }
 

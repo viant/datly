@@ -9,7 +9,7 @@
 <Products>
 <Id>1</Id>
 <Name>V1 Product 1</Name>
-<Status>2</Status>
+<Status>1</Status>
 <UserCreated>1</UserCreated>
 <UserUpdated>0</UserUpdated>
 </Products>
