@@ -83,3 +83,10 @@ func WithRevealMetric(flag bool) Option {
 		return nil
 	}
 }
+
+func WithCacheRefresh() Option {
+	return func(session *Session) error {
+		session.CacheRefresh = true
+		return nil
+	}
+}

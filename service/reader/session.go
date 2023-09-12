@@ -22,6 +22,7 @@ type (
 		IncludeSQL    bool
 		CacheDisabled bool
 		RevealMetric  bool
+		CacheRefresh  cache.Refresh
 		DryRun        bool
 		View          *view.View
 		State         *view.State

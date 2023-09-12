@@ -363,7 +363,6 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 	}
 
 	begin := time.Now()
-
 	var cacheStats *cache.Stats
 	var options = []option.Option{io.Resolve(collector.Resolve)}
 	if session.IsCacheEnabled(aView) {
@@ -381,6 +380,9 @@ func (s *Service) queryObjects(ctx context.Context, session *Session, aView *vie
 	if columnInMatcher != nil {
 		columnInMatcher.OnSkip = collector.OnSkip
 		options = append(options, &columnInMatcher)
+	}
+	if session.CacheRefresh {
+		options = append(options, session.CacheRefresh)
 	}
 
 	stats := s.NewExecutionInfo(session, fullMatcher, cacheStats, err)
