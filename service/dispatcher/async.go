@@ -93,12 +93,7 @@ func (s *Service) buildJob(ctx context.Context, aSession *session.Session, aComp
 		userEmail := value.(string)
 		job.UserEmail = &userEmail
 	}
-
-	aRequest, err := aSession.HttpRequest(ctx, options)
-	if err != nil {
-		return nil, err
-	}
-	job.Method = aRequest.Method
-	job.URI = aRequest.URL.Path
+	job.Method = aComponent.Path.Method
+	job.URI = aComponent.Path.URI
 	return job, nil
 }
