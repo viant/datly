@@ -235,6 +235,13 @@ func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 			parameter.Schema = state.NewSchema(reflect.TypeOf(""))
 		case "job":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(&async.Job{}))
+		case "jobstatus":
+			parameter.Schema = state.NewSchema(reflect.TypeOf(&response.JobStatus{}))
+			if parameter.Name == "JobStatus" {
+				if parameter.Tag == "" {
+					parameter.Tag = ` anonymous:"true"`
+				}
+			}
 		case "status":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(response.Status{}))
 			parameter.Name = "Status"

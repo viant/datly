@@ -213,6 +213,7 @@ CREATE TABLE `DATLY_JOBS` (
                               `Error` text,
                               `CreationTime` datetime NOT NULL,
                               `StartTime` datetime DEFAULT NULL,
+                              `ExpiryTime` datetime DEFAULT NULL,
                               `EndTime` datetime DEFAULT NULL,
                               `WaitTimeMcs` int(11) NOT NULL,
                               `RuntimeMcs` int(11) NOT NULL,

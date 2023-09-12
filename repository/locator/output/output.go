@@ -10,6 +10,7 @@ import (
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/response"
 	"strings"
+	"time"
 )
 
 type outputLocator struct {
@@ -32,6 +33,38 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 			if ok {
 				return ret, true, nil
 			}
+		}
+		return nil, false, nil
+	case "jobstatus":
+		if value := ctx.Value(async.JobKey); value != nil {
+			aJob, ok := value.(*async.Job)
+			if ok {
+				return aJob, true, nil
+			}
+			expiryInSec := 0
+			if expiryTime := aJob.ExpiryTimeMcs; expiryTime != nil {
+				expiry := expiryTime.Sub(time.Now())
+				expiryInSec = int(expiry.Seconds())
+			}
+
+			cacheKey := ""
+			cacheHit := false
+			if aJob.CacheKey != nil {
+				cacheKey = *aJob.CacheKey
+				cacheHit = true
+			}
+
+			jobStats := response.JobStatus{
+				RequestTime: time.Now(),
+				JobStatus:   aJob.Status,
+				CreateTime:  aJob.CreationTime,
+				WaitTimeMcs: aJob.WaitTimeMcs,
+				RunTimeMcs:  aJob.RunTimeMcs,
+				ExpiryInSec: expiryInSec,
+				CacheKey:    cacheKey,
+				CacheHit:    cacheHit,
+			}
+			return jobStats, true, nil
 		}
 		return nil, false, nil
 
