@@ -10,6 +10,7 @@ import (
 	"github.com/viant/sqlx/types"
 	"github.com/viant/xdatly/codec"
 	_ "github.com/viant/xdatly/extension" //go mod level placeholder replacement
+	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/response"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xdatly/types/core"
@@ -41,6 +42,7 @@ var Config = &Registry{
 		xreflect.NewType("predicate.BoolFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.BoolFilter{}))),
 		xreflect.NewType("xmltab.Result", xreflect.WithReflectType(reflect.TypeOf(xmltab.Result{}))),
 		xreflect.NewType("jsontab.Result", xreflect.WithReflectType(reflect.TypeOf(jsontab.Result{}))),
+		xreflect.NewType("async.Job", xreflect.WithReflectType(reflect.TypeOf(async.Job{}))),
 	)),
 	Codecs: codec.NewRegistry(
 		codec.WithCodec(xcodec.KeyJwtClaim, &xcodec.GCPJwtClaim{}, time.Time{}),
