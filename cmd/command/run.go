@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/service/auth/jwt"
 	"github.com/viant/xdatly/handler/async"
 	"log"
+	"sync"
 	"time"
 )
 
@@ -33,17 +34,23 @@ func (s *Service) dispatchEventsIfNeeded(ctx context.Context, run *options.Run, 
 			time.Sleep(time.Second)
 			continue
 		}
-
-		for _, object := range objects {
+		wg := sync.WaitGroup{}
+		for i, object := range objects {
 			if object.IsDir() {
 				continue
 			}
-			err := s.dispatchEvent(context.Background(), object, srv)
-			if err != nil {
-				log.Println(err)
-			}
-			_ = s.fs.Delete(ctx, object.URL())
+			wg.Add(1)
+			go func(object storage.Object) {
+				defer wg.Done()
+				err := s.dispatchEvent(context.Background(), object, srv)
+				if err != nil {
+					log.Println(err)
+				}
+				_ = s.fs.Delete(ctx, object.URL())
+
+			}(objects[i])
 		}
+		wg.Wait()
 	}
 }
 
