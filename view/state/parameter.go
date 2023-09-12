@@ -226,16 +226,8 @@ func (p *Parameter) initSchema(resource Resource) error {
 					return err
 				}
 			}
-		}
-	}
-
-	if p.In.Kind == KindRepeated {
-		if len(p.Repeated) > 0 {
-			for _, item := range p.Repeated {
-				if err := item.Schema.Init(resource); err != nil {
-					return err
-				}
-			}
+			itemType := p.Repeated[0].OutputSchema()
+			p.Schema = NewSchema(reflect.TypeOf(itemType.rType))
 		}
 	}
 
