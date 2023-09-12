@@ -38,8 +38,8 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 	case "jobstatus":
 		if value := ctx.Value(async.JobKey); value != nil {
 			aJob, ok := value.(*async.Job)
-			if ok {
-				return aJob, true, nil
+			if !ok {
+				return nil, true, nil
 			}
 			expiryInSec := 0
 			if expiryTime := aJob.ExpiryTime; expiryTime != nil {
