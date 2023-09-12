@@ -23,11 +23,11 @@ type ( // 03
 
 	// TODO add ptr *
 	ColumnValue struct {
-		LongType   string `json:",omitempty" xmlify:"omitempty,path=@lg"`
-		IntType    int    `json:",omitempty" xmlify:"omitempty,path=@long"`
-		DoubleType string `json:",omitempty" xmlify:"omitempty,path=@double"`
-		DateType   string `json:",omitempty" xmlify:"omitempty"`
-		Value      string `json:",omitempty" xmlify:"omitempty,omittagname"` //TODO change to *string
+		LongType   string  `json:",omitempty" xmlify:"omitempty,path=@lg"`
+		IntType    int     `json:",omitempty" xmlify:"omitempty,path=@long"`
+		DoubleType string  `json:",omitempty" xmlify:"omitempty,path=@double"`
+		DateType   string  `json:",omitempty" xmlify:"omitempty"`
+		Value      *string `json:",omitempty" xmlify:"omitempty,omittagname"` //TODO change to *string
 	}
 
 	Row struct {
@@ -88,7 +88,8 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 		value := &ColumnValue{}
 		switch field.Type.Kind() {
 		case reflect.String:
-			value.Value = field.String(sourcePtr)
+			s := field.String(sourcePtr) //TODO check
+			value.Value = &s
 		case reflect.Int:
 			value.LongType = strconv.Itoa(field.Int(sourcePtr))
 		case reflect.Float64:
@@ -99,7 +100,7 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 			switch field.Type.Elem().Kind() {
 			case reflect.String:
 				if v := field.StringPtr(sourcePtr); v != nil {
-					value.Value = *v
+					value.Value = v
 				}
 			case reflect.Int:
 				if v := field.IntPtr(sourcePtr); v != nil {
