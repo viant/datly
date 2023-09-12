@@ -34,6 +34,7 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 			}
 		}
 		return nil, false, nil
+
 	case "data":
 		if l.Output == nil {
 			return nil, false, nil
