@@ -42,7 +42,7 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 				return aJob, true, nil
 			}
 			expiryInSec := 0
-			if expiryTime := aJob.ExpiryTimeMcs; expiryTime != nil {
+			if expiryTime := aJob.ExpiryTime; expiryTime != nil {
 				expiry := expiryTime.Sub(time.Now())
 				expiryInSec = int(expiry.Seconds())
 			}

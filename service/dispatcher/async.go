@@ -40,7 +40,7 @@ func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repositor
 	elapsed := endedAt.Sub(*job.StartTime)
 	job.RunTimeMcs = int(elapsed.Microseconds())
 	expiryTime := endedAt.Add(aComponent.Async.TTL())
-	job.ExpiryTimeMcs = &expiryTime
+	job.ExpiryTime = &expiryTime
 	metrics, _ := json.Marshal(response.Metrics)
 	job.Metrics = string(metrics)
 	if len(response.Metrics) > 0 && len(response.Metrics[0].Execution.Template) > 0 {
