@@ -1,6 +1,8 @@
 init:
   parentPath: $parent.path
-  expect: $LoadJSON('${parentPath}/expect.json')
+  expect1: $LoadJSON('${parentPath}/expect_1.json')
+  expect2: $LoadJSON('${parentPath}/expect_2.json')
+
 pipeline:
 
 
@@ -20,8 +22,9 @@ pipeline:
 
 
   test:
-    testAuthenticatedAndAuthorized:
+    scheduleJob:
       action: http/runner:send
+      SleepTimeMs: 2000
       requests:
       - Method: GET
         URL: http://127.0.0.1:8080/v1/api/dev/async/vendor/2?jobid=123
@@ -29,4 +32,15 @@ pipeline:
           Authorization: Bearer ${signJWT.TokenString}
         Expect:
           Code: 200
-          JSONBody: $expect
+          JSONBody: $expect1
+
+    fetchData:
+      action: http/runner:send
+      requests:
+        - Method: GET
+          URL: http://127.0.0.1:8080/v1/api/dev/async/vendor/2?jobid=123
+          Header:
+            Authorization: Bearer ${signJWT.TokenString}
+          Expect:
+            Code: 200
+            JSONBody: $expect2

@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/response"
 	"net/url"
 	"reflect"
@@ -232,6 +233,8 @@ func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 			}
 		case "sql":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(""))
+		case "job":
+			parameter.Schema = state.NewSchema(reflect.TypeOf(&async.Job{}))
 		case "status":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(response.Status{}))
 			parameter.Name = "Status"

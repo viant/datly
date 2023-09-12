@@ -1,9 +1,28 @@
-/* {
-   "URI":"vendors-async/{vendorID}",
-   "Async": {
-            "PrincipalSubject": "Jwt.UserID"
-        }
-   } */
+/*
+{
+   "URI":"async/vendor/{vendorID}",
+   "Cache":{
+         "Name": "aerospike",
+         "Provider": "aerospike://127.0.0.1:3000/test",
+         "Location": "${View.Name}",
+         "TimeToLiveMs": 3600000
+    },
+    "Async":{
+        "Destination": "file:///tmp/jobs/datly"
+   }
+}
+*/
+
+
+
+#set($_ = $UserID<string>(state/Jwt/UserID).Async())
+#set($_ = $UserEmail<string>(state/Jwt/Email).Async())
+#set($_ = $JobRef<string>(query/).Async())
+
+
+#set($_ = $Job<?>(output/job))
+#set($_ = $Result<?>(output/data))
+#set($_ = $Status<?>(output/status))
 
 #set($_ = $Jwt<string>(Header/Authorization).WithCodec(JwtClaim).WithStatusCode(401))
 #set($_ = $Authorization  /*
@@ -15,5 +34,5 @@
 
 SELECT vendor.*,
        products.* EXCEPT VENDOR_ID
-FROM (SELECT CAST($Jwt.FirstName AS CHAR) AS FIRST_NAME, t.* FROM VENDOR t /* {"AsyncTableName": "vendors-async" } */ WHERE t.ID = $vendorID ) vendor
-    JOIN (SELECT * FROM PRODUCT t) products ON products.VENDOR_ID = vendor.ID
+FROM (SELECT CAST($Jwt.FirstName AS CHAR) AS FIRST_NAME, t.* FROM VENDOR t /* {"AsyncTableName": "vendors-async" } */ WHERE t.ID = $vendorID ) vendor /* {"Cache":{"Ref":"aerospike"}} */
+    JOIN (SELECT * FROM PRODUCT t) products /* {"Cache":{"Ref":"aerospike"}} */  ON products.VENDOR_ID = vendor.ID

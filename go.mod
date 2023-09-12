@@ -30,7 +30,7 @@ require (
 	github.com/viant/parsly v0.3.0
 	github.com/viant/pgo v0.10.4-0.20230801151735-5700d39f8114
 	github.com/viant/scy v0.6.0
-	github.com/viant/sqlx v0.9.1-0.20230819034001-d95f29db181b
+	github.com/viant/sqlx v0.9.1-0.20230912044236-079d1b9c4739
 	github.com/viant/structql v0.4.1
 	github.com/viant/toolbox v0.34.6-0.20230901020907-6da0397b78dc
 	github.com/viant/velty v0.2.1-0.20230803200403-bd59a7c855b3
@@ -54,9 +54,9 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.18.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.33.1
 	github.com/viant/structology v0.4.3-0.20230904164854-eb76e2958186
-	github.com/viant/xdatly v0.3.1-0.20230910152314-1d2d88da8c70
+	github.com/viant/xdatly v0.3.1-0.20230911173404-190e1ee39dfc
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
-	github.com/viant/xdatly/handler v0.0.0-20230911125915-3375230ab39e
+	github.com/viant/xdatly/handler v0.0.0-20230912051152-52598507de04
 	github.com/viant/xdatly/types/core v0.0.0-20230619231115-e622dd6aff79
 	github.com/viant/xlsy v0.0.0-20230826014723-a2947db28c76
 	github.com/viant/xmlify v0.0.0-20230901141059-f6dde2094e29

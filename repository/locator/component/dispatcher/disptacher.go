@@ -33,6 +33,6 @@ func (d *Dispatcher) Dispatch(ctx context.Context, path *component.Path, request
 func New(registry *repository.Registry) *Dispatcher {
 	return &Dispatcher{
 		registry: registry,
-		service:  &dispatcher.Service{},
+		service:  dispatcher.New(),
 	}
 }

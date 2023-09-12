@@ -55,7 +55,7 @@ func handleJobsRoute(ctx context.Context, req *http.Request, routers []*router.R
 	//if jobID != nil {
 	//	for _, qualifiers := range index {
 	//		for _, qualifier := range qualifiers {
-	//			qualifier.JobID = jobID
+	//			qualifier.JobRef = jobID
 	//		}
 	//	}
 	//}

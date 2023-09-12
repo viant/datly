@@ -61,6 +61,7 @@ type (
 		Legacy    bool   `short:"l"`
 		cache     *view.Cache
 		EmbedURL  string `long:"embedURL" description:"embed url, expands template before processing"`
+		JobURL    string `short:"z" long:"joburl" description:"job url"`
 	}
 
 	Package struct {
@@ -603,7 +604,7 @@ func (o *Options) BuildOption() *options.Options {
 	}
 
 	if o.ConfigURL != "" && repo == nil {
-		result.Run = &options.Run{ConfigURL: o.ConfigURL}
+		result.Run = &options.Run{ConfigURL: o.ConfigURL, JobURL: o.JobURL}
 	}
 	return result
 }

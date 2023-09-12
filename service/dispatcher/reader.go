@@ -25,8 +25,8 @@ func (s *Service) runQuery(ctx context.Context, component *repository.Component,
 }
 
 func (s *Service) adjustAsyncOptions(ctx context.Context, options *[]reader.Option) {
-	if job := s.Job(ctx); job != nil && async.Status(job.Status) != async.StatusDone {
-		if s.InvocationType(ctx) != async.InvocationTypeEvent {
+	if job := s.Job(ctx); job != nil && async.Status(job.Status) != async.StatusDone && !s.IsEventInvocation(ctx) {
+		if !s.IsEventInvocation(ctx) {
 			*options = append(*options, reader.WithDryRun())
 		}
 	}

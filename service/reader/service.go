@@ -352,7 +352,6 @@ func (s *Service) queryObjectsWithMeta(ctx context.Context, session *Session, aV
 	if objectStats != nil {
 		info.Template = append(info.Template, objectStats)
 	}
-
 	wg.Wait()
 	return metaErr
 }

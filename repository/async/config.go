@@ -3,11 +3,16 @@ package async
 import (
 	"context"
 	"fmt"
+	"github.com/viant/afs/url"
 	"github.com/viant/datly/service/jobs"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	async "github.com/viant/xdatly/handler/async"
+	"math/rand"
+	"strconv"
+	"strings"
 	"sync"
+	"time"
 )
 
 type (
@@ -21,7 +26,7 @@ type (
 	State struct {
 		UserID    *state.Parameter
 		UserEmail *state.Parameter
-		JobID     *state.Parameter
+		JobRef    *state.Parameter
 	}
 
 	Config struct {
@@ -34,12 +39,44 @@ type (
 	}
 )
 
+func (c *Config) TTL() time.Duration {
+	ttl := time.Second * time.Duration(c.ExpiryTimeInSec)
+	if ttl != 0 {
+		return ttl
+	}
+	return time.Hour
+}
+
 func (c *Config) Lock() {
 	c.mux.Lock()
 }
 
 func (c *Config) Unlock() {
 	c.mux.Unlock()
+}
+
+func (n *Config) DestinationURL(job *async.Job) string {
+	destination := n.Destination
+	now := time.Now()
+	hasMarker := strings.Contains(destination, "$")
+	if !hasMarker {
+		unixMirco := strconv.Itoa(int(now.UnixMicro()))
+		randValue := strconv.Itoa(int(rand.Int31()))
+		return url.Join(n.Destination, job.MainView, unixMirco+"_"+randValue+".job")
+	}
+	if strings.Index(destination, "${unixUs}") != -1 {
+		destination = strings.ReplaceAll(destination, "${unixUs}", strconv.Itoa(int(now.UnixMicro())))
+	}
+	if strings.Index(destination, "${unixMs}") != -1 {
+		destination = strings.ReplaceAll(destination, "${unixMs}", strconv.Itoa(int(now.UnixMilli())))
+	}
+	if strings.Index(destination, "${viewName}") != -1 {
+		destination = strings.ReplaceAll(destination, "${viewName}", job.MainView)
+	}
+	if strings.Index(destination, "${jobHash}") != -1 {
+		destination = strings.ReplaceAll(destination, "${jobHash}", strconv.Itoa(int(now.UnixMilli())))
+	}
+	return destination
 }
 
 func (c *Config) Init(ctx context.Context, resource *view.Resource, mainView *view.View) error {
@@ -68,6 +105,10 @@ func (c *Config) Init(ctx context.Context, resource *view.Resource, mainView *vi
 
 func (c *Config) JobByID(ctx context.Context, jobID string) (*async.Job, error) {
 	return c.service.JobById(ctx, jobID)
+}
+
+func (c *Config) JobByRef(ctx context.Context, jobID string) (*async.Job, error) {
+	return c.service.JobByRef(ctx, jobID, c.TTL())
 }
 
 func (c *Config) CreateJob(ctx context.Context, job *async.Job, notification *async.Notification) error {
@@ -167,13 +208,13 @@ func NewAsyncRecord(ctx context.Context, route *Route, request *RequestParams) (
 }
 
 func InitRecord(ctx context.Context, record *async.Job, route *Route, request *RequestParams) error {
-	if record.JobID == "" {
+	if record.JobRef == "" {
 		recordID, err := uuid.NewUUID()
 		if err != nil {
 			return err
 		}
 
-		record.JobID = recordID.String()
+		record.JobRef = recordID.String()
 	}
 
 	record.TemplateState = async.StateRunning

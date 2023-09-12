@@ -56,7 +56,7 @@ func (s *Service) Init(ctx context.Context) error {
 	}
 	aView := view.NewView(viewID, s.config.TableName,
 		view.WithConnector(s.connector),
-		view.WithCriteria("JobID"),
+		view.WithCriteria("ID", "Ref", "CreationTime"),
 		view.WithViewType(s.config.RecordType),
 	)
 	s.resource.AddViews(aView)

@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/utils/httputils"
+	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/handler/async"
 )
 
@@ -58,20 +59,22 @@ func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Comp
 
 	aState := aComponent.Input.Type.Type().NewState()
 	external := aComponent.Input.Type.Parameters.External()
-	options := aSession.Indirect(true)
+	options := aSession.Indirect(true, locator.WithState(aState))
 	if err := aSession.SetState(ctx, external, aState, options); err != nil {
 		return nil, err
 	}
 
-	jobId, err := aState.String(asyncModule.JobID.Name)
-	job, err := aComponent.Async.JobByID(ctx, jobId)
+	jobRef, err := aState.String(asyncModule.JobRef.Name)
+	job, err := aComponent.Async.JobByRef(ctx, jobRef)
 	if err != nil {
 		return nil, err
 	}
 	if job == nil {
-		if job, err = s.buildJob(ctx, aSession, aComponent, jobId, aState, options); err != nil {
+		if job, err = s.buildJob(ctx, aSession, aComponent, jobRef, options); err != nil {
 			return nil, err
 		}
+		destURL := asyncModule.DestinationURL(job)
+		job.EventURL = destURL
 		if err = asyncModule.CreateJob(ctx, job, &asyncModule.Notification); err != nil {
 			return nil, err
 		}
@@ -89,7 +92,7 @@ func (s *Service) publishEvent(ctx context.Context, asyncModule *rasync.Config, 
 		if err != nil {
 			return err
 		}
-		if err = s.fs.Upload(ctx, asyncModule.Destination, file.DefaultFileOsMode, bytes.NewReader(payload)); err != nil {
+		if err = s.fs.Upload(ctx, job.EventURL, file.DefaultFileOsMode, bytes.NewReader(payload)); err != nil {
 			return err
 		}
 	//case async.NotificationMethodMessageBus:

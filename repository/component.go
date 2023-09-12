@@ -58,7 +58,7 @@ func (c *Component) initInputParameters(ctx context.Context, resource *view.Reso
 		inputParameters.Append(parameter)
 	}
 	if c.Async != nil {
-		inputParameters.Append(c.Async.JobID)
+		inputParameters.Append(c.Async.JobRef)
 		if c.Async.UserID != nil {
 			inputParameters.Append(c.Async.UserID)
 		}

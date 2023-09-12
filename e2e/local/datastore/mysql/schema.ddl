@@ -183,3 +183,42 @@ CREATE TABLE BAR (
                       PRICE DOUBLE PRECISION,
                       TAX FLOAT
 );
+
+DROP TABLE IF EXISTS DATLY_JOBS;
+
+CREATE TABLE `DATLY_JOBS` (
+                              `Ref` varchar(1024) NOT NULL,
+                              `Status` varchar(40) NOT NULL,
+                              `Metrics` text NOT NULL,
+                              `Connector` varchar(256),
+                              `TableName` varchar(256),
+                              `TableDataset` varchar(256),
+                              `TableSchema` varchar(256),
+                              `CreateDisposition` varchar(256),
+                              `Template` varchar(256),
+                              `WriteDisposition` varchar(256),
+                              `Cache` text,
+                              `CacheKey` varchar(256),
+                              `CacheSet` varchar(256),
+                              `CacheNamespace` varchar(256),
+                              `Method` varchar(256) NOT NULL,
+                              `URI`  varchar(256) NOT NULL,
+                              `State` text NOT NULL,
+                              `UserEmail` varchar(256),
+                              `UserID` varchar(256),
+                              `MainView` varchar(256) NOT NULL,
+                              `Labels` varchar(256) NOT NULL,
+                              `JobType` varchar(256) NOT NULL,
+                              `EventURL` varchar(256) NOT NULL,
+                              `Error` text,
+                              `CreationTime` datetime NOT NULL,
+                              `StartTime` datetime DEFAULT NULL,
+                              `EndTime` datetime DEFAULT NULL,
+                              `WaitTimeMcs` int(11) NOT NULL,
+                              `RuntimeMcs` int(11) NOT NULL,
+                              `SQLQuery` text NOT NULL,
+                              `ID` varchar(40) NOT NULL,
+                              PRIMARY KEY (`ID`)
+);
+
+CREATE INDEX DATLY_JOBS_REF ON DATLY_JOBS(Ref, CreationTime);

@@ -161,9 +161,10 @@ func New(resource *Resource, options ...interface{}) (*Router, error) {
 	}
 
 	router := &Router{
-		_resource: resource,
-		_index:    map[string][]int{},
-		_routes:   resource.Routes,
+		_resource:  resource,
+		dispatcher: dispatcher.New(),
+		_index:     map[string][]int{},
+		_routes:    resource.Routes,
 	}
 
 	return router, router.Init(resource.Routes, apiPrefix)

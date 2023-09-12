@@ -2,7 +2,10 @@ package session
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/xunsafe"
+	"reflect"
 	"sync"
 )
 
@@ -23,8 +26,81 @@ func (s *Session) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.cache.values)
 }
 
-func (s *Session) Unmarshal(data []byte) error {
-	return json.Unmarshal(data, &s.cache.values)
+func (s *Session) Unmarshal(parameters state.Parameters, data []byte) error {
+	err := json.Unmarshal(data, &s.cache.values)
+	if err != nil {
+		return err
+	}
+	for _, parameter := range parameters {
+		value, ok := s.cache.values[parameter.Name]
+		if !ok {
+			continue
+		}
+		parameterType := parameter.OutputType()
+		switch parameterType.Kind() {
+		case reflect.Slice:
+			switch parameterType.Elem().Kind() {
+			case reflect.Struct:
+				if s.cache.values[parameter.Name], err = s.unmarshalSliceParameter(value, parameter, parameterType); err != nil {
+					return fmt.Errorf("failed to umarshal slice parameter: %s, %w", parameter.Name, err)
+				}
+			}
+			continue
+		case reflect.Ptr:
+			switch parameterType.Elem().Kind() {
+			case reflect.Struct:
+				if s.cache.values[parameter.Name], err = s.umarshalStructParameter(parameter.Name, parameter.OutputType(), value); err != nil {
+					return fmt.Errorf("failed to umarshal struct parameter: %s, %w", parameter.Name, err)
+				}
+			}
+		case reflect.Struct:
+			if s.cache.values[parameter.Name], err = s.umarshalStructParameter(parameter.Name, parameter.OutputType(), value); err != nil {
+				return fmt.Errorf("failed to umarshal struct parameter: %s, %w", parameter.Name, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *Session) unmarshalSliceParameter(value interface{}, parameter *state.Parameter, parameterType reflect.Type) (interface{}, error) {
+	var err error
+	values, ok := value.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("expected: %T, but had: %T", values, value)
+	}
+	xSlice := xunsafe.NewSlice(parameterType.Elem())
+	slicePtrValue := reflect.New(xSlice.Type)
+	slicePtr := xunsafe.ValuePointer(&slicePtrValue)
+	for i, item := range values {
+		if values[i], err = s.umarshalStructParameter(parameter.Name, parameterType, item); err != nil {
+			return nil, err
+		}
+	}
+	appender := xSlice.Appender(slicePtr)
+	appender.Append(values...)
+	return slicePtrValue.Elem().Interface(), nil
+}
+
+func (s *Session) umarshalStructParameter(name string, parameterType reflect.Type, value interface{}) (interface{}, error) {
+	isPtr := false
+	if parameterType.Kind() == reflect.Ptr {
+		parameterType = parameterType.Elem()
+		isPtr = true
+	}
+	sValue := reflect.New(parameterType)
+	parameterValue := sValue.Interface()
+	fieldData, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("failed unmarsha: %w", err)
+	}
+	if err = json.Unmarshal(fieldData, parameterValue); err != nil {
+		return nil, fmt.Errorf("failed to transfer %w", err)
+	}
+	if isPtr {
+		return parameterValue, nil
+	}
+	return sValue.Elem().Interface(), nil
 }
 
 func (c *cache) lockParameter(parameter *state.Parameter) sync.Locker {

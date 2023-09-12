@@ -13,8 +13,8 @@ func (s *State) Init(ctx context.Context, res *view.Resource, mainView *view.Vie
 			return err
 		}
 	}
-	if s.JobID != nil {
-		if err := s.JobID.Init(ctx, resource); err != nil {
+	if s.JobRef != nil {
+		if err := s.JobRef.Init(ctx, resource); err != nil {
 			return err
 		}
 	}

@@ -47,7 +47,7 @@ type (
 		TableName      string
 		Dataset        string
 		CreateIfNeeded bool
-		GenerateAutoPk bool
+		GeneratePK     bool
 	}
 
 	RecordHandler struct {
@@ -128,7 +128,7 @@ func (c *Db) getSchema(ctx context.Context, connector *view.Connector, cfg *Tabl
 		return nil, err
 	}
 
-	asyncTable, err := sqlSource.CreateTable(cfg.RecordType, cfg.TableName, view.AsyncTagName, cfg.GenerateAutoPk)
+	asyncTable, err := sqlSource.CreateTable(cfg.RecordType, cfg.TableName, view.AsyncTagName, cfg.GeneratePK)
 	if err != nil {
 		return nil, err
 	}

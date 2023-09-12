@@ -14,7 +14,7 @@ import (
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
-	"github.com/viant/datly/repository/async"
+	rasync "github.com/viant/datly/repository/async"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/shared"
@@ -25,6 +25,7 @@ import (
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
 	"path"
@@ -342,7 +343,7 @@ func (s *Service) applyAsyncOption(resource *Resource, route *router.Route) erro
 
 	if len(resource.AsyncState) > 0 {
 		if asyncModule == nil {
-			asyncModule = &async.Config{}
+			asyncModule = &rasync.Config{}
 			resource.Rule.Async = asyncModule
 		}
 
@@ -352,19 +353,27 @@ func (s *Service) applyAsyncOption(resource *Resource, route *router.Route) erro
 				asyncModule.State.UserID = &resource.AsyncState[i].Parameter
 			case "useremail":
 				asyncModule.State.UserEmail = &resource.AsyncState[i].Parameter
-			case "jobid":
-				asyncModule.State.JobID = &resource.AsyncState[i].Parameter
+			case "jobref":
+				asyncModule.State.JobRef = &resource.AsyncState[i].Parameter
 			}
 		}
 	}
 	if asyncModule == nil {
 		return nil
 	}
+
+	if asyncModule.Method == "" {
+		schema := url.Scheme(asyncModule.Destination, "err")
+		switch schema {
+		case "file", "s3", "gs":
+			asyncModule.Method = async.NotificationMethodStorage
+		}
+	}
 	if asyncModule.Jobs.Connector == nil {
 		asyncModule.Jobs.Connector = view.NewRefConnector(s.DefaultConnector())
 	}
-	if asyncModule.State.JobID == nil {
-		return fmt.Errorf("async job id state parameter is not defined")
+	if asyncModule.State.JobRef == nil {
+		return fmt.Errorf("rasync jobRef parameter is not defined")
 	}
 	return nil
 }
@@ -497,7 +506,7 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 	if resource.Rule.Async != nil {
 		rootView := resource.Rule.RootView()
 		if rootView.Cache == nil { //also allow table dest in the future
-			return nil, fmt.Errorf("cache setting is required with async")
+			return nil, fmt.Errorf("cache setting is required with rasync")
 		}
 		resource.Rule.Async.WithCache = true
 		setter.SetIntIfZero(&resource.Rule.Async.ExpiryTimeInSec, rootView.Cache.TimeToLiveMs)

@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	furl "github.com/viant/afs/url"
@@ -10,11 +11,15 @@ import (
 	"github.com/viant/datly/gateway/runtime/meta"
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/repository"
+	"github.com/viant/datly/repository/component"
 	"github.com/viant/datly/repository/locator/component/dispatcher"
 	"github.com/viant/datly/repository/resolver"
+	sdispatcher "github.com/viant/datly/service/dispatcher"
+	"github.com/viant/datly/service/session"
 	httputils2 "github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
+	"github.com/viant/xdatly/handler/async"
 	http2 "github.com/viant/xdatly/handler/http"
 	"net/http"
 	"net/url"
@@ -37,6 +42,7 @@ type (
 		namedRoutes             map[string]*router.Route
 		registry                *repository.Registry
 		dispatcher              resolver.Dispatcher
+		dispatcherService       *sdispatcher.Service
 	}
 
 	AvailableRoutesError struct {
@@ -131,6 +137,37 @@ func (r *Router) handleWithError(writer http.ResponseWriter, request *http.Reque
 	aRoute.Handle(writer, request)
 
 	return http.StatusOK, nil
+}
+
+func (r *Router) HandleJob(ctx context.Context, job *async.Job) error {
+	path := &component.Path{
+		URI:    job.URI,
+		Method: job.Method,
+	}
+	aComponent, err := r.registry.Lookup(path)
+	if err != nil {
+		return err
+	}
+	URL, err := url.Parse("http://localhost/" + path.URI)
+	if err != nil {
+		return err
+	}
+	ctx = context.WithValue(ctx, async.JobKey, job)
+	ctx = context.WithValue(ctx, async.InvocationTypeKey, async.InvocationTypeEvent)
+	request := &http.Request{Method: job.Method, URL: URL, RequestURI: path.URI}
+	unmarshal := aComponent.UnmarshalFunc(request)
+	locatorOptions := append(aComponent.LocatorOptions(request, unmarshal))
+	aSession := session.New(aComponent.View, session.WithLocatorOptions(locatorOptions...))
+	if err != nil {
+		return err
+	}
+	if err = aSession.Unmarshal(aComponent.Input.Type.Parameters, []byte(job.State)); err != nil {
+		return err
+	}
+	if _, err = r.dispatcherService.Dispatch(ctx, aComponent, aSession); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *Router) Match(method, URL string, req *http.Request) (*Route, error) {
@@ -271,6 +308,7 @@ func (r *Router) extractCacheableViews(routes ...*router.Route) warmup.PreCachab
 func (r *Router) init(routersIndex map[string]*router.Router) error {
 	routers := asRouterSlice(routersIndex)
 	r.registry = repository.NewRegistry(r.config.APIPrefix)
+	r.dispatcherService = sdispatcher.New()
 	r.dispatcher = dispatcher.New(r.registry)
 	r.routeMatcher, r.routes = r.newMatcher(routers)
 	r.namedRoutes = map[string]*router.Route{}

@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/datly/view/state/kind/locator"
+	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/response"
 	"strings"
 )
@@ -25,6 +26,14 @@ func (l *outputLocator) Names() []string {
 
 func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bool, error) {
 	switch strings.ToLower(name) {
+	case "job":
+		if value := ctx.Value(async.JobKey); value != nil {
+			ret, ok := value.(*async.Job)
+			if ok {
+				return ret, true, nil
+			}
+		}
+		return nil, false, nil
 	case "data":
 		if l.Output == nil {
 			return nil, false, nil
