@@ -227,7 +227,7 @@ func (p *Parameter) initSchema(resource Resource) error {
 				}
 			}
 			itemType := p.Repeated[0].OutputSchema()
-			p.Schema = NewSchema(reflect.TypeOf(itemType.rType))
+			p.Schema = NewSchema(reflect.SliceOf(itemType.rType))
 		}
 	}
 
