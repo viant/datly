@@ -69,7 +69,7 @@ func main() {
 	os.Args = []string{
 		"",
 		"-c=" + configURL,
-		"-z=/tmp/datly/jobs",
+		"-z=/tmp/jobs/datly",
 	}
 
 	fmt.Printf("[INFO] Build time: %v\n", env.BuildTime.String())
