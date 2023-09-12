@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<root>
+<forecast-response>
 <row>
 <Id>1</Id>
 <Name>BAR - 1</Name>
@@ -18,4 +18,4 @@
 <Price>3.34567801</Price>
 <Tax>0.03345678</Tax>
 </row>
-</root>
+</forecast-response>

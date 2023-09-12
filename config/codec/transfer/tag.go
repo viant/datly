@@ -9,8 +9,9 @@ const (
 )
 
 type Tag struct {
-	From     string
-	AsXmltab bool
+	From      string
+	AsXmlTab  bool
+	AsJsonTab bool
 }
 
 // ParseTag parses datly tag
@@ -26,8 +27,10 @@ func ParseTag(tagString string) *Tag {
 			switch strings.ToLower(strings.TrimSpace(nv[0])) {
 			case "from":
 				ret.From = strings.TrimSpace(nv[1])
+			case "jsontab":
+				ret.AsJsonTab = strings.TrimSpace(nv[1]) == "true"
 			case "xmltab":
-				ret.AsXmltab = strings.TrimSpace(nv[1]) == "true"
+				ret.AsXmlTab = strings.TrimSpace(nv[1]) == "true"
 			}
 		}
 	}

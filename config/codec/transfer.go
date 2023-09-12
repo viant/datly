@@ -77,7 +77,7 @@ func (e *Transfer) Value(ctx context.Context, raw interface{}, options ...codec.
 		if err != nil {
 			return nil, err
 		}
-		if aTransfer.tag.AsXmltab {
+		if aTransfer.tag.AsXmlTab {
 			value, err = e.srv.Transfer(value)
 			if err != nil {
 				return nil, err

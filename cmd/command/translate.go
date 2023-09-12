@@ -74,8 +74,7 @@ func (s *Service) translateDSQL(ctx context.Context, rule *options.Rule, dSQL st
 		return err
 	}
 	if err := s.translator.Translate(ctx, rule, dSQL, opts); err != nil {
-		err := fmt.Errorf("failed to translate: %v", err)
-		fmt.Printf("%v\n", err)
+		err := fmt.Errorf("\nfailed to translate: %v\n", err)
 		return err
 	}
 	return nil
