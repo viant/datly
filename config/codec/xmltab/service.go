@@ -23,10 +23,10 @@ type ( // 03
 
 	// TODO add ptr *
 	ColumnValue struct {
-		LongType   string  `json:",omitempty" xmlify:"omitempty,path=@lg"`
-		IntType    int     `json:",omitempty" xmlify:"omitempty,path=@long"`
-		DoubleType string  `json:",omitempty" xmlify:"omitempty,path=@double"`
-		DateType   string  `json:",omitempty" xmlify:"omitempty"`
+		LongType   *string `json:",omitempty" xmlify:"omitempty,path=@lg"`
+		IntType    *string `json:",omitempty" xmlify:"omitempty,path=@long"` //TODO is it required?
+		DoubleType *string `json:",omitempty" xmlify:"omitempty,path=@double"`
+		DateType   *string `json:",omitempty" xmlify:"omitempty"`
 		Value      *string `json:",omitempty" xmlify:"omitempty,omittagname"` //TODO change to *string
 	}
 
@@ -91,11 +91,14 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 			s := field.String(sourcePtr) //TODO check
 			value.Value = &s
 		case reflect.Int:
-			value.LongType = strconv.Itoa(field.Int(sourcePtr))
+			s := strconv.Itoa(field.Int(sourcePtr))
+			value.LongType = &s
 		case reflect.Float64:
-			value.DoubleType = strconv.FormatFloat(field.Float64(sourcePtr), 'f', 10, 64)
+			s := strconv.FormatFloat(field.Float64(sourcePtr), 'f', 10, 64)
+			value.DoubleType = &s
 		case reflect.Float32:
-			value.DoubleType = strconv.FormatFloat(float64(field.Float32(sourcePtr)), 'f', 10, 64)
+			s := strconv.FormatFloat(float64(field.Float32(sourcePtr)), 'f', 10, 64)
+			value.DoubleType = &s
 		case reflect.Ptr:
 			switch field.Type.Elem().Kind() {
 			case reflect.String:
@@ -104,15 +107,18 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 				}
 			case reflect.Int:
 				if v := field.IntPtr(sourcePtr); v != nil {
-					value.LongType = strconv.Itoa(*v)
+					s := strconv.Itoa(*v)
+					value.LongType = &s
 				}
 			case reflect.Float64:
 				if v := field.Float64Ptr(sourcePtr); v != nil {
-					value.DoubleType = strconv.FormatFloat(*v, 'f', -1, 64)
+					s := strconv.FormatFloat(*v, 'f', -1, 64)
+					value.DoubleType = &s
 				}
 			case reflect.Float32:
 				if v := field.Float32Ptr(sourcePtr); v != nil {
-					value.DoubleType = strconv.FormatFloat(float64(*v), 'f', -1, 32)
+					s := strconv.FormatFloat(float64(*v), 'f', -1, 32)
+					value.DoubleType = &s
 				}
 			}
 		default:
@@ -120,11 +126,13 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 			switch field.Type {
 			case xreflect.TimePtrType:
 				if ts, ok := v.(*time.Time); ok && ts != nil {
-					value.DateType = ts.Format(time.RFC3339)
+					s := ts.Format(time.RFC3339)
+					value.DateType = &s
 				}
 			case xreflect.TimeType:
 				if ts, ok := v.(time.Time); ok {
-					value.DateType = ts.Format(time.RFC3339)
+					s := ts.Format(time.RFC3339)
+					value.DateType = &s
 				}
 			default:
 				return nil, fmt.Errorf("xmltab: usnupported type: %T", v)
