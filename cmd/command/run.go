@@ -30,8 +30,15 @@ func (s *Service) Run(ctx context.Context, run *options.Run) (err error) {
 func (s *Service) dispatchEventsIfNeeded(ctx context.Context, run *options.Run, srv *standalone.Server) {
 	for {
 		objects, _ := s.fs.List(ctx, run.JobURL, option.NewRecursive(true))
-		if len(objects) == 0 {
-			time.Sleep(time.Second)
+		objectCount := 0
+		for _, object := range objects {
+			if object.IsDir() {
+				continue
+			}
+			objectCount++
+		}
+		if objectCount == 0 {
+			time.Sleep(300 * time.Millisecond)
 			continue
 		}
 		wg := sync.WaitGroup{}
