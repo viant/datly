@@ -43,6 +43,7 @@ var Config = &Registry{
 		xreflect.NewType("predicate.IntFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.IntFilter{}))),
 		xreflect.NewType("predicate.BoolFilter", xreflect.WithReflectType(reflect.TypeOf(predicate.BoolFilter{}))),
 		xreflect.NewType("xmltab.Result", xreflect.WithReflectType(reflect.TypeOf(xmltab.Result{}))),
+		xreflect.NewType("xmlfilter.Result", xreflect.WithReflectType(reflect.TypeOf(xmltab.Result{}))),
 		xreflect.NewType("jsontab.Result", xreflect.WithReflectType(reflect.TypeOf(jsontab.Result{}))),
 		xreflect.NewType("async.Job", xreflect.WithReflectType(reflect.TypeOf(async.Job{}))),
 	)),
@@ -58,6 +59,7 @@ var Config = &Registry{
 		codec.WithFactory(xcodec.Encode, &xcodec.EncodeFactory{}, time.Time{}),
 		codec.WithFactory(xcodec.KeyTransfer, &xcodec.TransferFactory{}, time.Time{}),
 		codec.WithFactory(xcodec.KeyXmlTab, &xcodec.XmlTabFactory{}, time.Time{}),
+		codec.WithFactory(xcodec.KeyXmlFilter, &xcodec.XmlFilterFactory{}, time.Time{}),
 		codec.WithFactory(xcodec.KeyJsonTab, &xcodec.JsonTabFactory{}, time.Time{}),
 	),
 	Predicates: &PredicateRegistry{
