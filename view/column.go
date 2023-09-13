@@ -169,7 +169,7 @@ func (c *Column) inherit(config *ColumnConfig) {
 	}
 }
 
-func WithTag(tag string) ColumnOption {
+func WithColumnTag(tag string) ColumnOption {
 	return func(c *Column) {
 		c.Tag = tag
 	}

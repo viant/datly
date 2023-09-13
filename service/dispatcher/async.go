@@ -7,8 +7,11 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/service/reader/handler"
 	"github.com/viant/datly/service/session"
+	"github.com/viant/datly/view/state"
+	"github.com/viant/structology"
 	"github.com/viant/toolbox"
 	"github.com/viant/xdatly/handler/async"
+	"strings"
 	"time"
 )
 
@@ -58,7 +61,7 @@ func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repositor
 	return aComponent.Async.UpdateJob(ctx, job)
 }
 
-func (s *Service) buildJob(ctx context.Context, aSession *session.Session, aComponent *repository.Component, jobRef string, options *session.Options) (*async.Job, error) {
+func (s *Service) buildJob(ctx context.Context, aSession *session.Session, aState *structology.State, aComponent *repository.Component, jobRef string, options *session.Options) (*async.Job, error) {
 	asyncModule := aComponent.Async
 	encodedState, err := aSession.MarshalJSON()
 	if err != nil {
@@ -93,7 +96,28 @@ func (s *Service) buildJob(ctx context.Context, aSession *session.Session, aComp
 		userEmail := value.(string)
 		job.UserEmail = &userEmail
 	}
+
 	job.Method = aComponent.Path.Method
-	job.URI = aComponent.Path.URI
+	job.URI = s.expandURI(ctx, aSession, aComponent, options)
 	return job, nil
+}
+
+func (s *Service) expandURI(ctx context.Context, aSession *session.Session, aComponent *repository.Component, options *session.Options) string {
+	URI := aComponent.URI
+	for i := 0; i < strings.Count(URI, "{"); i++ {
+		index := strings.Index(URI, "{")
+		if index == -1 {
+			break
+		}
+		end := strings.Index(URI, "}")
+		key := URI[index+1 : end]
+		uriParameter := aComponent.Input.Type.Parameters.LookupByLocation(state.KindPath, key)
+		if uriParameter != nil {
+			value, _, err := aSession.LookupValue(ctx, uriParameter, options)
+			if err == nil {
+				URI = strings.Replace(URI, "{"+key+"}", toolbox.AsString(value), 1)
+			}
+		}
+	}
+	return URI
 }

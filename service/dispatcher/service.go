@@ -70,7 +70,7 @@ func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Comp
 		return nil, err
 	}
 	if job == nil {
-		if job, err = s.buildJob(ctx, aSession, aComponent, jobRef, options); err != nil {
+		if job, err = s.buildJob(ctx, aSession, aState, aComponent, jobRef, options); err != nil {
 			return nil, err
 		}
 		destURL := asyncModule.DestinationURL(job)

@@ -141,7 +141,7 @@ func NewColumns(columns sqlparser.Columns) Columns {
 	var result = make(Columns, 0, len(columns))
 	for _, item := range columns {
 		name := item.Identity()
-		column := NewColumn(name, item.Type, item.RawType, item.IsNullable, WithTag(item.Tag))
+		column := NewColumn(name, item.Type, item.RawType, item.IsNullable, WithColumnTag(item.Tag))
 
 		if item.Default != nil {
 			column.Default = *item.Default

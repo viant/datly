@@ -1468,3 +1468,9 @@ func WithTransforms(transforms marshal.Transforms) ViewOption {
 		v._transforms = transforms
 	}
 }
+
+func WithColumns(columns Columns) ViewOption {
+	return func(v *View) {
+		v.Columns = columns
+	}
+}
