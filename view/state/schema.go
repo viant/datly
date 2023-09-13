@@ -30,11 +30,19 @@ type (
 	SchemaOption func(s *Schema)
 )
 
-func (s *Schema) EnsurePointerDataType() {
-	if s.DataType == "" || s.DataType[0] == '*' {
+func (s *Schema) EnsurePointer() {
+
+	hasDataType := s.DataType != ""
+	if hasDataType {
+		if s.DataType == "" || s.DataType[0] == '*' {
+			return
+		}
+		s.DataType = "*" + s.DataType
+	}
+	if s.Name == "" || s.Name[0] == '*' {
 		return
 	}
-	s.DataType = "*" + s.DataType
+	s.Name = "*" + s.Name
 }
 
 func (s *Schema) TypeName() string {

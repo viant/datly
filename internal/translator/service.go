@@ -562,7 +562,7 @@ func (s *Service) updateComponentType(ctx context.Context, resource *Resource, p
 		}
 		parameter.In.Name = signature.Method + ":" + signature.URI
 		parameter.Schema = signature.Output.Clone()
-		parameter.Schema.EnsurePointerDataType()
+		parameter.Schema.EnsurePointer()
 		for _, typeDef := range signature.Types {
 			if err = config.Config.Types.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType)); err != nil {
 				return err
