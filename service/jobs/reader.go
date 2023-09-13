@@ -17,7 +17,6 @@ func (s *Service) JobById(ctx context.Context, jobId string) (*async.Job, error)
 	if err != nil {
 		return nil, err
 	}
-	jobId = s.normalizeJobID(jobId)
 	state := session.State.Lookup(s.readerView)
 	state.SetCriteria(" JobRef = ? ", []interface{}{jobId})
 	if err = s.reader.Read(ctx, session); err != nil {

@@ -10,7 +10,6 @@ import (
 	"github.com/viant/sqlx/io/update"
 	"github.com/viant/xdatly/handler/async"
 	"reflect"
-	"strings"
 )
 
 type Service struct {
@@ -27,13 +26,6 @@ type Service struct {
 func (s *Service) EnsureJobTables(ctx context.Context) error {
 	_, err := s.service.EnsureTable(ctx, s.connector, s.config)
 	return err
-}
-
-func (s *Service) normalizeJobID(jobID string) string {
-	if strings.HasPrefix(s.readerView.Name, jobID) {
-		return jobID
-	}
-	return s.readerView.Name + "_" + jobID
 }
 
 func (s *Service) Init(ctx context.Context) error {
