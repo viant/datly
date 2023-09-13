@@ -218,6 +218,7 @@ CREATE TABLE `DATLY_JOBS` (
                               `WaitTimeMcs` int(11) NOT NULL,
                               `RuntimeMcs` int(11) NOT NULL,
                               `SQLQuery` text NOT NULL,
+                              `Invalidated` tinyint(1),
                               `ID` varchar(40) NOT NULL,
                               PRIMARY KEY (`ID`)
 );
