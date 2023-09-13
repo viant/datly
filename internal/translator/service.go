@@ -561,7 +561,8 @@ func (s *Service) updateComponentType(ctx context.Context, resource *Resource, p
 			return fmt.Errorf("failed to discover component %v output type: %w", parameter.In.Name, err)
 		}
 		parameter.In.Name = signature.Method + ":" + signature.URI
-		parameter.Schema = signature.Output
+		parameter.Schema = signature.Output.Clone()
+		parameter.Schema.EnsurePointerDataType()
 		for _, typeDef := range signature.Types {
 			if err = config.Config.Types.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType)); err != nil {
 				return err

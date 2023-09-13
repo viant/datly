@@ -30,6 +30,13 @@ type (
 	SchemaOption func(s *Schema)
 )
 
+func (s *Schema) EnsurePointerDataType() {
+	if s.DataType == "" || s.DataType[0] == '*' {
+		return
+	}
+	s.DataType = "*" + s.DataType
+}
+
 func (s *Schema) TypeName() string {
 	name := shared.FirstNotEmpty(s.Name, s.DataType)
 	if s.Package == "" {
