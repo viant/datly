@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/repository/component"
-	"github.com/viant/datly/repository/resolver"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
@@ -14,7 +13,7 @@ import (
 
 type componentLocator struct {
 	custom     []interface{}
-	dispatch   resolver.Dispatcher
+	dispatch   component.Dispatcher
 	getRequest func() (*http.Request, error)
 }
 
@@ -33,7 +32,7 @@ func (l *componentLocator) Value(ctx context.Context, name string) (interface{},
 }
 
 // TODO passed locator options to dispatcher so that this wil not be nil
-var dispatcher resolver.Dispatcher
+var dispatcher component.Dispatcher
 
 // newComponentLocator returns component locator
 func newComponentLocator(opts ...locator.Option) (kind.Locator, error) {

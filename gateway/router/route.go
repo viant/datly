@@ -12,7 +12,6 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/component"
 	"github.com/viant/datly/repository/content"
-	"github.com/viant/datly/repository/resolver"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/httputils"
@@ -32,7 +31,7 @@ const (
 type (
 	Routes []*Route
 	Route  struct {
-		dispatcher resolver.Dispatcher
+		dispatcher component.Dispatcher
 		APIKey     *APIKey `json:",omitempty"`
 
 		repository.Component
@@ -55,7 +54,7 @@ type (
 	}
 )
 
-func (r *Route) SetDispatcher(dispatcher resolver.Dispatcher) {
+func (r *Route) SetDispatcher(dispatcher component.Dispatcher) {
 	r.dispatcher = dispatcher
 }
 func (r *Route) HttpURI() string {

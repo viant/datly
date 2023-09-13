@@ -13,7 +13,6 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/component"
 	"github.com/viant/datly/repository/locator/component/dispatcher"
-	"github.com/viant/datly/repository/resolver"
 	sdispatcher "github.com/viant/datly/service/dispatcher"
 	"github.com/viant/datly/service/session"
 	httputils2 "github.com/viant/datly/utils/httputils"
@@ -41,7 +40,7 @@ type (
 		routes                  []*RouteMeta
 		namedRoutes             map[string]*router.Route
 		registry                *repository.Registry
-		dispatcher              resolver.Dispatcher
+		dispatcher              component.Dispatcher
 		dispatcherService       *sdispatcher.Service
 	}
 
