@@ -228,8 +228,8 @@ func (p *Parameter) initSchema(resource Resource) error {
 			}
 			itemType := p.Repeated[0].OutputSchema()
 			for _, item := range p.Repeated {
-				if itemType.Type().AssignableTo(item.OutputType()) {
-					return fmt.Errorf("incompatible repeated type: %s", item.Name)
+				if !itemType.Type().AssignableTo(item.OutputType()) {
+					return fmt.Errorf("incompatible repeated type: %s, expected: %s, but had: %s", item.Name, itemType.Type().String(), item.OutputType().String())
 				}
 			}
 			p.Schema = NewSchema(reflect.SliceOf(itemType.rType))
