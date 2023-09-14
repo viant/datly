@@ -38,7 +38,7 @@ type ( // 03
 		Rows []*Row `xmlify:"name=r"`
 	}
 
-	Result struct {
+	Job struct {
 		ColumnsWrapper ColumnsWrapper `xmlify:"name=columns"`
 		RowsWrapper    RowsWrapper    `xmlify:"name=rows"`
 	}
@@ -46,7 +46,7 @@ type ( // 03
 
 type Service struct{}
 
-func (t *Service) Transfer(aSlice interface{}) (*Result, error) {
+func (t *Service) Transfer(aSlice interface{}) (*Job, error) {
 	sliceType := reflect.TypeOf(aSlice)
 	if sliceType.Kind() != reflect.Slice {
 		return nil, fmt.Errorf("expected slice but had: %T", aSlice)
@@ -62,13 +62,13 @@ func (t *Service) Transfer(aSlice interface{}) (*Result, error) {
 		return nil, nil
 	}
 	xStruct := xunsafe.NewStruct(componentType)
-	var result = &Result{}
+	var result = &Job{}
 	t.transferColumns(xStruct, result)
 	err := t.transferRecords(sliceLen, xSlice, ptr, xStruct, result)
 	return result, err
 }
 
-func (t *Service) transferRecords(sliceLen int, xSlice *xunsafe.Slice, ptr unsafe.Pointer, xStruct *xunsafe.Struct, result *Result) error {
+func (t *Service) transferRecords(sliceLen int, xSlice *xunsafe.Slice, ptr unsafe.Pointer, xStruct *xunsafe.Struct, result *Job) error {
 	for i := 0; i < sliceLen; i++ {
 		source := xSlice.ValuePointerAt(ptr, i)
 		sourcePtr := xunsafe.AsPointer(source)
@@ -143,7 +143,7 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 	return &row, nil
 }
 
-func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
+func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Job) {
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
 		column := &ColumnHeader{ID: field.Name}

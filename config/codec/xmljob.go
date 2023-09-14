@@ -25,7 +25,7 @@ func (e *XmlJobFactory) New(codecConfig *codec.Config, options ...codec.Option) 
 }
 
 func (e *XmlJob) ResultType(paramType reflect.Type) (reflect.Type, error) {
-	return reflect.TypeOf(&xmljob.Result{}), nil
+	return reflect.TypeOf(&xmljob.Job{}), nil
 }
 
 func (e *XmlJob) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
