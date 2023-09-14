@@ -6,6 +6,8 @@ import (
 	"github.com/viant/datly/config/codec"
 	"github.com/viant/datly/config/codec/jsontab"
 	"github.com/viant/datly/config/codec/transfer"
+	"github.com/viant/datly/config/codec/xmlfilter"
+	"github.com/viant/datly/config/codec/xmljob"
 	"github.com/viant/datly/config/codec/xmltab"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
@@ -108,11 +110,17 @@ func (s *Service) adjustTransferType(parameter *state.Parameter, types *xreflect
 			return nil, fmt.Errorf("invalid transfer, field: %v does not have coresponding source field %v, %s ", selector.Name(), tag.From, source.String())
 		}
 		outputType := sourceSelector.Type()
+		if tag.AsJsonTab {
+			outputType = reflect.TypeOf(&jsontab.Result{})
+		}
 		if tag.AsXmlTab {
 			outputType = reflect.TypeOf(&xmltab.Result{})
 		}
-		if tag.AsJsonTab {
-			outputType = reflect.TypeOf(&jsontab.Result{})
+		if tag.AsXmlJob {
+			outputType = reflect.TypeOf(&xmljob.Job{})
+		}
+		if tag.AsXmlFilter {
+			outputType = reflect.TypeOf(&xmlfilter.Result{})
 		}
 		adjustedDest.Append(&inference.Parameter{
 			Parameter: state.Parameter{
