@@ -117,7 +117,7 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 					value.DateType = ts.Format(time.RFC3339)
 				}
 			default:
-				return nil, fmt.Errorf("xmltab: usnupported type: %T", v)
+				return nil, fmt.Errorf("jsontab: usnupported type: %T", v)
 			}
 		}
 		record = append(record, value)
