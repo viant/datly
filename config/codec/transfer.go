@@ -26,7 +26,7 @@ type (
 		destType  *structology.StateType
 		transfers []*entry
 		srcType   *structology.StateType
-		srv       *xmltab.Service
+		srvXmlTab *xmltab.Service
 	}
 )
 
@@ -43,7 +43,7 @@ func (e *TransferFactory) New(codecConfig *codec.Config, options ...codec.Option
 	if err != nil {
 		return nil, err
 	}
-	ret := &Transfer{srv: xmltab.New()}
+	ret := &Transfer{srvXmlTab: xmltab.New()}
 	return ret, ret.init(destType)
 }
 
@@ -78,7 +78,7 @@ func (e *Transfer) Value(ctx context.Context, raw interface{}, options ...codec.
 			return nil, err
 		}
 		if aTransfer.tag.AsXmlTab {
-			value, err = e.srv.Transfer(value)
+			value, err = e.srvXmlTab.Transfer(value)
 			if err != nil {
 				return nil, err
 			}

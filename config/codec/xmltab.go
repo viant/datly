@@ -2,7 +2,7 @@ package codec
 
 import (
 	"context"
-	"github.com/viant/datly/config/codec/jsontab"
+	"github.com/viant/datly/config/codec/xmltab"
 	"github.com/viant/xdatly/codec"
 	"reflect"
 )
@@ -15,17 +15,17 @@ type (
 	XmlTabFactory struct{}
 
 	XmlTab struct {
-		service *jsontab.Service
+		service *xmltab.Service
 	}
 )
 
 func (e *XmlTabFactory) New(codecConfig *codec.Config, options ...codec.Option) (codec.Instance, error) {
-	ret := &XmlTab{service: jsontab.New()}
+	ret := &XmlTab{service: xmltab.New()}
 	return ret, nil
 }
 
 func (e *XmlTab) ResultType(paramType reflect.Type) (reflect.Type, error) {
-	return reflect.TypeOf(&jsontab.Result{}), nil
+	return reflect.TypeOf(&xmltab.Result{}), nil
 }
 
 func (e *XmlTab) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
