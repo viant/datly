@@ -67,7 +67,7 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 			return jobStats, true, nil
 		}
 		return nil, false, nil
-	case "jobstatus.waittimemcs":
+	case "blabla":
 		if value := ctx.Value(async.JobKey); value != nil {
 			aJob, ok := value.(*async.Job)
 			if !ok {
@@ -96,7 +96,7 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 				CacheKey:    cacheKey,
 				CacheHit:    cacheHit,
 			}
-			return jobStats.WaitTimeMcs, true, nil
+			return jobStats, true, nil
 		}
 		return nil, false, nil
 	case "data":
