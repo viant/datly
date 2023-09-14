@@ -2,9 +2,7 @@ package codec
 
 import (
 	"context"
-	"github.com/viant/datly/config/codec/jsontab"
 	"github.com/viant/datly/config/codec/transfer"
-	"github.com/viant/datly/config/codec/xmlfilter"
 	"github.com/viant/datly/config/codec/xmltab"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/structology"
@@ -25,12 +23,10 @@ type (
 	}
 
 	Transfer struct {
-		destType     *structology.StateType
-		transfers    []*entry
-		srcType      *structology.StateType
-		srvJsonTab   *jsontab.Service
-		srvXmlTab    *xmltab.Service
-		srvXmlFilter *xmlfilter.Service
+		destType  *structology.StateType
+		transfers []*entry
+		srcType   *structology.StateType
+		srv       *xmltab.Service
 	}
 )
 
@@ -47,11 +43,7 @@ func (e *TransferFactory) New(codecConfig *codec.Config, options ...codec.Option
 	if err != nil {
 		return nil, err
 	}
-	ret := &Transfer{
-		srvJsonTab:   jsontab.New(),
-		srvXmlTab:    xmltab.New(),
-		srvXmlFilter: xmlfilter.New(),
-	}
+	ret := &Transfer{srv: xmltab.New()}
 	return ret, ret.init(destType)
 }
 
@@ -85,20 +77,8 @@ func (e *Transfer) Value(ctx context.Context, raw interface{}, options ...codec.
 		if err != nil {
 			return nil, err
 		}
-		if aTransfer.tag.AsJsonTab {
-			value, err = e.srvJsonTab.Transfer(value)
-			if err != nil {
-				return nil, err
-			}
-		}
 		if aTransfer.tag.AsXmlTab {
-			value, err = e.srvXmlTab.Transfer(value)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if aTransfer.tag.AsXmlFilter {
-			value, err = e.srvXmlFilter.Transfer(value)
+			value, err = e.srv.Transfer(value)
 			if err != nil {
 				return nil, err
 			}
