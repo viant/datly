@@ -122,6 +122,8 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 		return SQL, true, nil
 	case "view.name":
 		return l.View.Name, true, nil
+	case "view.id":
+		return l.View.Name, true, nil
 	case "filter":
 		parameter := l.OutputParameters.LookupByLocation(state.KindOutput, "filter")
 		if parameter == nil || l.Output == nil {
