@@ -117,7 +117,7 @@ func (s *Service) adjustTransferType(parameter *state.Parameter, types *xreflect
 			outputType = reflect.TypeOf(&xmltab.Result{})
 		}
 		if tag.AsXmlJob {
-			outputType = reflect.TypeOf(&xmljob.Result{})
+			outputType = reflect.TypeOf(&xmljob.Job{})
 		}
 		if tag.AsXmlFilter {
 			outputType = reflect.TypeOf(&xmlfilter.Result{})
