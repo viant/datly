@@ -231,7 +231,7 @@ func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 			if aView != nil {
 				parameter.Schema = state.NewSchema(aView.OutputType())
 			}
-		case "sql":
+		case "sql", "jobstatus.execstatus", "jobstatus.cachekey":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(""))
 		case "job":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(&async.Job{}))

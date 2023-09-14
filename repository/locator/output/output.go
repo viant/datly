@@ -99,7 +99,9 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 			return jobStats, true, nil
 		}
 		return nil, false, nil
-	case "jobstatus.waittimemcs", "jobstatus.runtimemcs", "jobstatus.expiryinsec":
+	case "jobstatus.execstatus", "jobstatus.cachekey",
+		"jobstatus.waittimemcs", "jobstatus.runtimemcs", "jobstatus.expiryinsec":
+
 		//return l.View.Name, true, nil
 		if value := ctx.Value(async.JobKey); value != nil {
 			aJob, ok := value.(*async.Job)
@@ -130,14 +132,16 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 				CacheHit:    cacheHit,
 			}
 			switch aName {
+			case "jobstatus.execstatus":
+				return jobStats.JobStatus, true, nil
+			case "jobstatus.cachekey":
+				return jobStats.CacheKey, true, nil
 			case "jobstatus.waittimemcs":
 				return jobStats.WaitTimeMcs, true, nil
 			case "jobstatus.runtimemcs":
 				return jobStats.RunTimeMcs, true, nil
 			case "jobstatus.expiryinsec":
 				return jobStats.ExpiryInSec, true, nil
-			case "jobstatus.cachekey":
-				return jobStats.CacheKey, true, nil
 			}
 
 		}
