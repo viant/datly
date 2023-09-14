@@ -99,7 +99,7 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 			return jobStats, true, nil
 		}
 		return nil, false, nil
-	case "zzz":
+	case "jobstatus.waittimemcs":
 		//return l.View.Name, true, nil
 		if value := ctx.Value(async.JobKey); value != nil {
 			aJob, ok := value.(*async.Job)

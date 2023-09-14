@@ -249,7 +249,7 @@ func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 					parameter.Tag = ` anonymous:"true"`
 				}
 			}
-		case "zzz":
+		case "jobstatus.waittimemcs":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(0))
 		case "status":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(response.Status{}))
