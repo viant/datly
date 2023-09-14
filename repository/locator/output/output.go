@@ -100,37 +100,38 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 		}
 		return nil, false, nil
 	case "zzz":
-		if value := ctx.Value(async.JobKey); value != nil {
-			aJob, ok := value.(*async.Job)
-			if !ok {
-				return nil, true, nil
-			}
-			expiryInSec := 0
-			if expiryTime := aJob.ExpiryTime; expiryTime != nil {
-				expiry := expiryTime.Sub(time.Now())
-				expiryInSec = int(expiry.Seconds())
-			}
-
-			cacheKey := ""
-			cacheHit := false
-			if aJob.CacheKey != nil {
-				cacheKey = *aJob.CacheKey
-				cacheHit = true
-			}
-
-			jobStats := response.JobStatus{
-				RequestTime: time.Now(),
-				JobStatus:   aJob.Status,
-				CreateTime:  aJob.CreationTime,
-				WaitTimeMcs: aJob.WaitTimeMcs,
-				RunTimeMcs:  aJob.RunTimeMcs,
-				ExpiryInSec: expiryInSec,
-				CacheKey:    cacheKey,
-				CacheHit:    cacheHit,
-			}
-			return jobStats.JobStatus, true, nil
-		}
-		return nil, false, nil
+		return l.View.Name, true, nil
+		//if value := ctx.Value(async.JobKey); value != nil {
+		//	aJob, ok := value.(*async.Job)
+		//	if !ok {
+		//		return nil, true, nil
+		//	}
+		//	expiryInSec := 0
+		//	if expiryTime := aJob.ExpiryTime; expiryTime != nil {
+		//		expiry := expiryTime.Sub(time.Now())
+		//		expiryInSec = int(expiry.Seconds())
+		//	}
+		//
+		//	cacheKey := ""
+		//	cacheHit := false
+		//	if aJob.CacheKey != nil {
+		//		cacheKey = *aJob.CacheKey
+		//		cacheHit = true
+		//	}
+		//
+		//	jobStats := response.JobStatus{
+		//		RequestTime: time.Now(),
+		//		JobStatus:   aJob.Status,
+		//		CreateTime:  aJob.CreationTime,
+		//		WaitTimeMcs: aJob.WaitTimeMcs,
+		//		RunTimeMcs:  aJob.RunTimeMcs,
+		//		ExpiryInSec: expiryInSec,
+		//		CacheKey:    cacheKey,
+		//		CacheHit:    cacheHit,
+		//	}
+		//	return jobStats.JobStatus, true, nil
+		//}
+		//return nil, false, nil
 	case "data":
 		if l.Output == nil {
 			return nil, false, nil
