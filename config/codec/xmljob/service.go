@@ -1,4 +1,4 @@
-package xmlfilter
+package xmljob
 
 import (
 	"fmt"
@@ -46,33 +46,17 @@ type ( // 03
 
 type Service struct{}
 
-func (t *Service) Transfer(aStruct interface{}) (*Result, error) {
-	structType := reflect.TypeOf(aStruct)
-	if structType.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("xmlfilter: expected struct but had: %T", aStruct)
+func (t *Service) Transfer(aSlice interface{}) (*Result, error) {
+	sliceType := reflect.TypeOf(aSlice)
+	if sliceType.Kind() != reflect.Slice {
+		return nil, fmt.Errorf("expected slice but had: %T", aSlice)
 	}
-
-	for i := 0; i < structType.NumField(); i++ {
-		curField := structType.Field(i)
-		fmt.Println("CUR", curField.Name, curField.Type.Name(),
-			curField.Tag.Get("myTag"))
-
-		if curField.Type.Kind() != reflect.Struct {
-			return nil, fmt.Errorf("xmlfilter: expected field as a struct but had: %T", curField.Type)
-		}
-		for j := 0; j < curField.Type.NumField(); j++ {
-			subField := structType.Field(i)
-			fmt.Println("SUB", subField.Name, subField.Type.Name(),
-				subField.Tag.Get("myTag"))
-		}
-	}
-
-	xSlice := xunsafe.NewSlice(structType)
+	xSlice := xunsafe.NewSlice(sliceType)
 	componentType := xSlice.Type.Elem()
 	if componentType.Kind() == reflect.Ptr {
 		componentType = componentType.Elem()
 	}
-	ptr := xunsafe.AsPointer(aStruct)
+	ptr := xunsafe.AsPointer(aSlice)
 	sliceLen := xSlice.Len(ptr)
 	if sliceLen == 0 {
 		return nil, nil
@@ -151,7 +135,7 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 					value.DateType = &s
 				}
 			default:
-				return nil, fmt.Errorf("xmlfilter: usnupported type: %T", v)
+				return nil, fmt.Errorf("xmljob: usnupported type: %T", v)
 			}
 		}
 		row.ColumnValues = append(row.ColumnValues, value)
