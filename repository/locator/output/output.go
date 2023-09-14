@@ -129,7 +129,7 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 				CacheKey:    cacheKey,
 				CacheHit:    cacheHit,
 			}
-			return jobStats.JobStatus, true, nil
+			return jobStats.WaitTimeMcs, true, nil
 		}
 		return nil, false, nil
 	case "data":

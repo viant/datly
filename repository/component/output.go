@@ -250,7 +250,7 @@ func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 				}
 			}
 		case "zzz":
-			parameter.Schema = state.NewSchema(reflect.TypeOf(""))
+			parameter.Schema = state.NewSchema(reflect.TypeOf(0))
 		case "status":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(response.Status{}))
 			parameter.Name = "Status"
