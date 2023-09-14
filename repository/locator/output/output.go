@@ -26,7 +26,7 @@ func (l *outputLocator) Names() []string {
 }
 
 func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bool, error) {
-	switch strings.ToLower(name) {
+	switch aName := strings.ToLower(name); aName {
 	case "job":
 		if value := ctx.Value(async.JobKey); value != nil {
 			ret, ok := value.(*async.Job)
@@ -99,7 +99,7 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 			return jobStats, true, nil
 		}
 		return nil, false, nil
-	case "jobstatus.waittimemcs":
+	case "jobstatus.waittimemcs", "jobstatus.runtimemcs", "jobstatus.expiryinsec":
 		//return l.View.Name, true, nil
 		if value := ctx.Value(async.JobKey); value != nil {
 			aJob, ok := value.(*async.Job)
@@ -129,7 +129,17 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 				CacheKey:    cacheKey,
 				CacheHit:    cacheHit,
 			}
-			return jobStats.WaitTimeMcs, true, nil
+			switch aName {
+			case "jobstatus.waittimemcs":
+				return jobStats.WaitTimeMcs, true, nil
+			case "jobstatus.runtimemcs":
+				return jobStats.RunTimeMcs, true, nil
+			case "jobstatus.expiryinsec":
+				return jobStats.ExpiryInSec, true, nil
+			case "jobstatus.cachekey":
+				return jobStats.CacheKey, true, nil
+			}
+
 		}
 		return nil, false, nil
 	case "data":
