@@ -249,6 +249,8 @@ func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 					parameter.Tag = ` anonymous:"true"`
 				}
 			}
+		case "zzz":
+			parameter.Schema = state.NewSchema(reflect.TypeOf(""))
 		case "status":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(response.Status{}))
 			parameter.Name = "Status"
