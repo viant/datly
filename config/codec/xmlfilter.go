@@ -2,7 +2,7 @@ package codec
 
 import (
 	"context"
-	"github.com/viant/datly/config/codec/xmltab"
+	"github.com/viant/datly/config/codec/xmlfilter"
 	"github.com/viant/xdatly/codec"
 	"reflect"
 )
@@ -15,17 +15,17 @@ type (
 	XmlFilterFactory struct{}
 
 	XmlFilter struct {
-		service *xmltab.Service
+		service *xmlfilter.Service
 	}
 )
 
 func (e *XmlFilterFactory) New(codecConfig *codec.Config, options ...codec.Option) (codec.Instance, error) {
-	ret := &XmlFilter{service: xmltab.New()}
+	ret := &XmlFilter{service: xmlfilter.New()}
 	return ret, nil
 }
 
 func (e *XmlFilter) ResultType(paramType reflect.Type) (reflect.Type, error) {
-	return reflect.TypeOf(&xmltab.Result{}), nil
+	return reflect.TypeOf(&xmlfilter.Result{}), nil
 }
 
 func (e *XmlFilter) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
