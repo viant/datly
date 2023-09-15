@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/config/codec"
 	"github.com/viant/datly/config/codec/jsontab"
 	"github.com/viant/datly/config/codec/transfer"
+	"github.com/viant/datly/config/codec/xmlfilter"
 	"github.com/viant/datly/config/codec/xmltab"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
@@ -110,6 +111,9 @@ func (s *Service) adjustTransferType(parameter *state.Parameter, types *xreflect
 		outputType := sourceSelector.Type()
 		if tag.AsXmlTab {
 			outputType = reflect.TypeOf(&xmltab.Result{})
+		}
+		if tag.AsXmlFilter {
+			outputType = reflect.TypeOf(&xmlfilter.Result{})
 		}
 		if tag.AsJsonTab {
 			outputType = reflect.TypeOf(&jsontab.Result{})
