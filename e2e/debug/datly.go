@@ -22,10 +22,8 @@ import (
 	_ "github.com/viant/sqlx/metadata/product/mysql"
 	_ "github.com/viant/sqlx/metadata/product/pg"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
-	"github.com/viant/toolbox"
 	"log"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 )
@@ -64,8 +62,10 @@ func (c *ConsoleWriter) Write(data []byte) (n int, err error) {
 func main() {
 	os.Setenv("DATLY_NOPANIC", "0")
 
-	baseDir := toolbox.CallerDirectory(3)
-	configURL := filepath.Join(baseDir, "../local/autogen/Datly/config.json")
+	//baseDir := toolbox.CallerDirectory(3)
+	//configURL := filepath.Join(baseDir, "../local/autogen/Datly/config.json")
+	configURL := `/Users/michael/Go/src/github.vianttech.com/adelphic/datly-forecasting/repo/dev/Datly/config.json`
+
 	os.Args = []string{
 		"",
 		"-c=" + configURL,
