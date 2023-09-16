@@ -223,4 +223,4 @@ CREATE TABLE `DATLY_JOBS` (
                               PRIMARY KEY (`ID`)
 );
 
-CREATE INDEX DATLY_JOBS_REF ON DATLY_JOBS(Ref, CreationTime);
+CREATE INDEX DATLY_JOBS_REF ON DATLY_JOBS(Ref, CreationTime, Invalidated);
