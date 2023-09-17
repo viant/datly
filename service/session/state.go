@@ -316,7 +316,7 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 	if !canRead || err != nil {
 		return nil, false, err
 	}
-	cachable := parameter.In.Kind != state.KindState
+	cachable := isCachable(parameter)
 	if value, has = s.cache.lookup(parameter); has && cachable {
 		return value, has, nil
 	}
@@ -357,6 +357,20 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 		s.cache.put(parameter, value)
 	}
 	return value, has, err
+}
+
+func isCachable(parameter *state.Parameter) bool {
+	switch parameter.In.Kind {
+	case state.KindState:
+		return false
+	case state.KindOutput:
+		if strings.HasPrefix(strings.ToLower(parameter.In.Name), "job") {
+			return false
+		}
+		fallthrough
+	default:
+		return true
+	}
 }
 
 func (s *Session) adjustValue(parameter *state.Parameter, value interface{}) (interface{}, error) {
