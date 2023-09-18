@@ -361,13 +361,8 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 
 func isCachable(parameter *state.Parameter) bool {
 	switch parameter.In.Kind {
-	case state.KindState:
+	case state.KindState, state.KindOutput:
 		return false
-	case state.KindOutput:
-		if strings.HasPrefix(strings.ToLower(parameter.In.Name), "job") {
-			return false
-		}
-		fallthrough
 	default:
 		return true
 	}
