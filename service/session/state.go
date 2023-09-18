@@ -361,7 +361,7 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 
 func isCachable(parameter *state.Parameter) bool {
 	switch parameter.In.Kind {
-	case state.KindState, state.KindOutput:
+	case state.KindState:
 		return false
 	default:
 		return true

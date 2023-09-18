@@ -11,14 +11,14 @@ const (
 	viewID = "datly_jobs"
 )
 
-func (s *Service) JobById(ctx context.Context, jobId string) (*async.Job, error) {
+func (s *Service) JobById(ctx context.Context, jobID string) (*async.Job, error) {
 	var result = []*async.Job{}
 	session, err := reader.NewSession(&result, s.readerView, reader.WithDryRun())
 	if err != nil {
 		return nil, err
 	}
 	state := session.State.Lookup(s.readerView)
-	state.SetCriteria(" JobRef = ? ", []interface{}{jobId})
+	state.SetCriteria(" ID = ? ", []interface{}{jobID})
 	if err = s.reader.Read(ctx, session); err != nil {
 		return nil, err
 	}

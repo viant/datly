@@ -65,6 +65,10 @@ func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Comp
 	}
 
 	jobRef, err := aState.String(asyncModule.JobRef.Name)
+	if err != nil {
+		return nil, err
+	}
+	jobRef = aComponent.View.Name + ":" + jobRef
 	job, err := aComponent.Async.JobByRef(ctx, jobRef)
 	if err != nil {
 		return nil, err
