@@ -231,16 +231,14 @@ func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 			if aView != nil {
 				parameter.Schema = state.NewSchema(aView.OutputType())
 			}
-		case "sql", "jobstatus.execstatus", "jobstatus.cachekey":
+		case "sql", "jobstatus.execstatus", "jobstatus.cachekey", "async.status":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(""))
 		case "job":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(&async.Job{}))
 		case "jobstatus":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(response.JobStatus{}))
-			if parameter.Name == "JobStatus" {
-				if parameter.Tag == "" {
-					parameter.Tag = ` anonymous:"true"`
-				}
+			if parameter.Name == "JobStatus" && parameter.Tag == "" {
+				parameter.Tag = ` anonymous:"true"`
 			}
 		case "jobstatus.waittimemcs", "jobstatus.runtimemcs", "jobstatus.expiryinsec":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(0))

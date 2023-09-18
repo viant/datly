@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"github.com/viant/datly/service/dispatcher/exec"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -67,6 +68,13 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 			return jobStats, true, nil
 		}
 		return nil, false, nil
+	case "async.status":
+		infoValue := ctx.Value(exec.InfoKey)
+		if infoValue == nil {
+			return nil, false, nil
+		}
+		info := infoValue.(*exec.Info)
+		return info.AsyncStatus(), true, nil
 	case "jobstatus.execstatus", "jobstatus.cachekey",
 		"jobstatus.waittimemcs", "jobstatus.runtimemcs", "jobstatus.expiryinsec":
 		//TODO refactor this as a function
