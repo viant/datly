@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/repository"
 	rasync "github.com/viant/datly/repository/async"
 	"github.com/viant/datly/service"
+	"github.com/viant/datly/service/dispatcher/exec"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -47,10 +48,19 @@ func (s *Service) dispatch(ctx context.Context, aComponent *repository.Component
 }
 
 func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (context.Context, error) {
+	var info *exec.Info
+	if ctx.Value(exec.InfoKey) == nil {
+		ctx = context.WithValue(ctx, exec.InfoKey, &exec.Info{})
+	}
+	if infoValue := ctx.Value(exec.InfoKey); infoValue != nil {
+		info = infoValue.(*exec.Info)
+	}
+
 	asyncModule := aComponent.Async
 	if asyncModule == nil {
 		return ctx, nil
 	}
+
 	if job := ctx.Value(async.JobKey); job != nil {
 		return ctx, nil
 	}
@@ -82,10 +92,11 @@ func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Comp
 		if err = asyncModule.CreateJob(ctx, job, &asyncModule.Notification); err != nil {
 			return nil, err
 		}
-		if err := s.publishEvent(ctx, asyncModule, job); err != nil {
+		if err = s.publishEvent(ctx, asyncModule, job); err != nil {
 			return nil, err
 		}
 	}
+	info.AppendJob(job)
 	return context.WithValue(ctx, async.JobKey, job), nil
 }
 
