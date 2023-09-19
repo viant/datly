@@ -484,42 +484,42 @@ func (s *State) AdjustOutput() error {
 			continue
 		}
 		unique[name] = true
-		if prev := predefined[name]; prev != nil {
-			adjusted = append(adjusted, prev)
-			continue
-		}
-
 		if index := strings.LastIndex(name, "."); index != -1 {
 			parentName := name[:index]
 			parent = predefined[parentName]
 			if parent == nil {
 				parentField := sType.Lookup(parentName)
-				if parent, err = s.selectorParameter(parentField); err != nil {
+				if parent, err = s.selectorParameter(predefined, parentField); err != nil {
 					return fmt.Errorf("failed to expand output type: %w", err)
 				}
-				parent.In = state.NewGroupLocation("")
-				predefined[parentName] = parent
-				if parentField.IsAnonymous() {
-					parent.Tag += ` anonymous:"true"`
+				if parent.In.Kind == "" {
+					parent.In = state.NewGroupLocation("")
+					predefined[parentName] = parent
+					if parentField.IsAnonymous() {
+						parent.Tag += ` anonymous:"true"`
+					}
+					parent.Schema = state.NewSchema(xreflect.InterfaceType)
 				}
-				parent.Schema = state.NewSchema(xreflect.InterfaceType)
 				adjusted = append(adjusted, parent)
 			}
 
-			itemParameter, err := s.selectorParameter(parameterField)
+			itemParameter, err := s.selectorParameter(predefined, parameterField)
 			if err != nil {
 				return fmt.Errorf("failed to expand output group type: %w", err)
 			}
-			parent.Group = append(parent.Group, itemParameter)
-			var items []string
-			for _, item := range parent.Group {
-				items = append(items, item.Name)
+
+			if parent.In.Kind == state.KindGroup {
+				parent.Group = append(parent.Group, itemParameter)
+				var items []string
+				for _, item := range parent.Group {
+					items = append(items, item.Name)
+				}
+				parent.In.Name = strings.Join(items, ",`")
 			}
-			parent.In.Name = strings.Join(items, ",`")
 			continue
 		}
 
-		stateParameter, err := s.selectorParameter(parameterField)
+		stateParameter, err := s.selectorParameter(predefined, parameterField)
 		if err != nil {
 			return fmt.Errorf("failed to expand output group type: %w", err)
 		}
@@ -530,7 +530,11 @@ func (s *State) AdjustOutput() error {
 	return nil
 }
 
-func (s *State) selectorParameter(parameterField *structology.Selector) (*Parameter, error) {
+func (s *State) selectorParameter(predefined map[string]*Parameter, parameterField *structology.Selector) (*Parameter, error) {
+	ret, ok := predefined[parameterField.Name()]
+	if ok {
+		return ret, nil
+	}
 	tag := string(parameterField.Tag())
 	structField := &reflect.StructField{Name: parameterField.Name(), Tag: reflect.StructTag(tag), Type: parameterField.Type()}
 	stateParameter, err := state.BuildParameter(structField, nil)

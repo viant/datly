@@ -144,6 +144,8 @@ func (s *Service) adjustOutputParameter(resource *Resource, parameter *state.Par
 				return err
 			}
 		}
+		rType, _ := parameter.Group.ReflectType(resource.rule.Module, types.Lookup, false)
+		parameter.Schema = state.NewSchema(rType)
 		return nil
 	}
 	if err = s.adjustTransferOutputType(parameter, types, resource); err != nil {

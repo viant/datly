@@ -53,8 +53,8 @@ type Resource struct {
 	Loggers  logger.Adapters `json:",omitempty"`
 	_loggers logger.AdapterIndex
 
-	_visitors *codec.Registry
-	ModTime   time.Time `json:",omitempty"`
+	codecs  *codec.Registry
+	ModTime time.Time `json:",omitempty"`
 
 	Predicates  []*predicate.Template
 	_predicates *config.PredicateRegistry
@@ -288,9 +288,12 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 		}
 	}
 
-	types, visitors, cache, transforms, predicates := r.readOptions(options)
+	types, codecs, cache, transforms, predicates := r.readOptions(options)
 	r.indexProviders()
-	r._visitors = visitors
+	if codecs == nil {
+		codecs = config.Config.Codecs
+	}
+	r.codecs = codecs
 	r._columnsCache = cache
 	if types == nil {
 		types = r.TypeRegistry()
@@ -574,7 +577,7 @@ func (r *Resource) TypeName(t reflect.Type) (string, bool) {
 }
 
 func (r *Resource) CodecByName(name string) (*codec.Codec, bool) {
-	codec, err := r._visitors.Lookup(name)
+	codec, err := r.codecs.Lookup(name)
 	return codec, err == nil
 }
 

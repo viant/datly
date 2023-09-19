@@ -1,6 +1,7 @@
 package view
 
 import (
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/xdatly/codec"
 )
@@ -41,7 +42,11 @@ func (r *Resourcelet) CodecOptions() *codec.Options {
 }
 
 func (r *Resourcelet) Codecs() *codec.Registry {
-	return r._visitors
+	ret := r.codecs
+	if ret == nil {
+		ret = config.Config.Codecs
+	}
+	return ret
 }
 
 func (r Resourcelet) IndexedColumns() NamedColumns {
