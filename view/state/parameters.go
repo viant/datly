@@ -312,6 +312,12 @@ func (p Parameters) Index() NamedParameters {
 			continue
 		}
 		result[parameter.Name] = p[i]
+		for _, item := range parameter.Group {
+			result[item.Name] = item
+		}
+		for _, item := range parameter.Repeated {
+			result[item.Name] = item
+		}
 	}
 	return result
 }
