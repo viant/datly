@@ -324,17 +324,17 @@ func (p Parameters) Index() NamedParameters {
 
 // Filter filters Parameters with given Kind and creates Template
 func (p Parameters) Filter(kind Kind) NamedParameters {
-	result := make(map[string]*Parameter)
+	index := make(map[string]*Parameter)
 
 	for parameterIndex := range p {
 		if p[parameterIndex].In.Kind != kind {
 			continue
 		}
-		result[p[parameterIndex].In.Name] = p[parameterIndex]
+		index[p[parameterIndex].In.Name] = p[parameterIndex]
 
 	}
 
-	return result
+	return index
 }
 
 func (p Parameters) PredicateStructType() reflect.Type {

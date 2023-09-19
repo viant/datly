@@ -78,7 +78,11 @@ func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *View
 	}
 
 	for _, parameter := range outputParameters.FilterByKind(state.KindGroup) {
-		parameter.Init(context.Background(), resourcelet)
+		if err := parameter.Init(context.Background(), resourcelet); err != nil {
+			return err
+		}
+		parameter.Schema.Name = parameter.Name + "Group"
+		resource.AppendTypeDefinition(&view.TypeDefinition{Name: parameter.Schema.Name, DataType: parameter.Schema.Type().String()})
 	}
 
 	outputType, err := compactedParameters.ReflectType(resource.rule.Module, typesRegistry.Lookup, false)

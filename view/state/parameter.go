@@ -215,31 +215,18 @@ func (p *Parameter) IsRequired() bool {
 
 func (p *Parameter) initSchema(resource Resource) error {
 	if p.In.Kind == KindGroup {
-		rType, err := p.Group.ReflectType(pkgPath, resource.LookupType(), !p.isOutputType)
-		if err != nil {
+		if err := p.initGroupSchema(resource); err != nil {
 			return err
 		}
-		p.Schema = NewSchema(rType)
 		p._state = structology.NewStateType(p.Schema.Type())
 		p._state.NewState()
 		return nil
 	}
 
 	if p.In.Kind == KindRepeated {
-		if len(p.Repeated) > 0 {
-			for _, item := range p.Repeated {
-				if err := item.Schema.Init(resource); err != nil {
-					return err
-				}
-			}
-			itemType := p.Repeated[0].OutputSchema()
-			for _, item := range p.Repeated {
-				if !itemType.Type().AssignableTo(item.OutputType()) {
-					return fmt.Errorf("incompatible repeated type: %s, expected: %s, but had: %s", item.Name, itemType.Type().String(), item.OutputType().String())
-				}
-			}
-			p.Schema = NewSchema(reflect.SliceOf(itemType.rType))
-
+		err := p.initRepeatedSchema(resource)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -294,6 +281,59 @@ func (p *Parameter) initSchema(resource Resource) error {
 
 	}
 	return p.Schema.Init(resource)
+}
+
+func (p *Parameter) initRepeatedSchema(resource Resource) (err error) {
+	for _, item := range p.Repeated {
+		if err := item.Schema.Init(resource); err != nil {
+			return err
+		}
+	}
+
+	var rType reflect.Type
+	if typeName := p.Schema.TypeName(); typeName != "" {
+		rType, err = resource.LookupType()(typeName)
+		if err != nil {
+			return err
+		}
+		if rType.Kind() != reflect.Slice {
+			return fmt.Errorf("invald repeated: %v expected slice, but had: %s ", p.Name, rType.String())
+		}
+	}
+
+	itemType := p.Repeated[0].OutputSchema().Type()
+	if rType != nil {
+		itemType = rType.Elem()
+	} else {
+		rType = reflect.SliceOf(itemType)
+	}
+	for _, item := range p.Repeated {
+		if !itemType.AssignableTo(item.OutputType()) {
+			return fmt.Errorf("incompatible repeated type: %s, expected: %s, but had: %s -> %s", item.Name, itemType.String(), item.Name, item.OutputType().String())
+		}
+	}
+	p.Schema = NewSchema(rType)
+	return nil
+}
+
+func (p *Parameter) initGroupSchema(resource Resource) (err error) {
+	var rType reflect.Type
+	if p.Schema == nil {
+		p.Schema = &Schema{}
+	}
+	if typeName := p.Schema.TypeName(); typeName != "" {
+		rType, err = resource.LookupType()(typeName)
+		if err != nil {
+			return err
+		}
+	}
+	if rType == nil {
+		if rType, err = p.Group.ReflectType(pkgPath, resource.LookupType(), !p.isOutputType); err != nil {
+			return err
+		}
+	}
+	p.Schema.SetType(rType)
+	return nil
 }
 
 func (p *Parameter) initSchemaFromType(structType reflect.Type) error {
