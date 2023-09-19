@@ -55,15 +55,15 @@ func main() {
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", path.Join(os.Getenv("HONE"), "./secret/viant-e2e.json"))
 	os.Chdir("/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting")
 
-	os.Args = []string{"",
-		"dsql",
-		//"-s=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/dsql/view/total.sql -s=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/dsql/view/ad_order_total.sql",
-		"-s=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/dsql/view/multitab_v1.sql",
-		"-p=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting",
-		"-c=ci_event|bigquery|bigquery://viant-e2e/ci_event",
-		"-c=dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
-		"-r=repo/dev",
-	}
+	//os.Args = []string{"",
+	//	"dsql",
+	//	//"-s=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/dsql/view/total.sql -s=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/dsql/view/ad_order_total.sql",
+	//	"-s=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/dsql/view/multitab_v1.sql",
+	//	"-p=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting",
+	//	"-c=ci_event|bigquery|bigquery://viant-e2e/ci_event",
+	//	"-c=dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
+	//	"-r=repo/dev",
+	//}
 
 	err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {
