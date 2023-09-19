@@ -60,17 +60,15 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, session *session
 	}
 
 	resultState := h.output.NewState()
-	var (
-		options = session.Indirect(true,
-			locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
-				return session.LookupValue(ctx, parameter, session.Indirect(true))
-			}),
-			locator.WithMetrics(ret.Metrics),
-			locator.WithView(aView),
+	var locatorOptions []locator.Option
+	locatorOptions = append(locatorOptions, locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
+		return session.LookupValue(ctx, parameter, session.Indirect(true, locatorOptions...))
+	}),
+		locator.WithMetrics(ret.Metrics),
+		locator.WithView(aView),
+		locator.WithCustomOption(ret.Reader, ret.Status))
 
-			locator.WithCustomOption(ret.Reader, ret.Status))
-	)
-
+	var options = session.Indirect(true, locatorOptions...)
 	if err = session.SetState(ctx, h.outputType.Parameters, resultState, options); err != nil {
 		ret.StatusCode = http.StatusInternalServerError
 		ret.Error = err

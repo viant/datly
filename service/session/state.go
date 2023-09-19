@@ -258,13 +258,9 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		}
 	}
 
+	//TODO add sanity check
 	if !(valueType == selector.Type() || valueType.ConvertibleTo(selector.Type()) || valueType.AssignableTo(selector.Type())) {
-		//data, _ := json.Marshal(value)
-		//ptr := reflect.New(selector.Type())
-		//dest := ptr.Interface()
-		//json.Unmarshal(data, dest)
-		//value = ptr.Elem().Interface()
-		fmt.Printf("not assianble \nsrc:%s \ndst:%s", valueType.String(), selector.Type().String())
+		//	fmt.Printf("not assianble \nsrc:%s \ndst:%s", valueType.String(), selector.Type().String())
 	}
 	return value, nil
 }
