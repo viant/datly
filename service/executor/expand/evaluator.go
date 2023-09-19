@@ -133,15 +133,12 @@ func NewEvaluator(template string, options ...EvaluatorOption) (*Evaluator, erro
 	}
 
 	for _, valueType := range aConfig.embededTypes {
-		fmt.Printf("embedde: %s\n", valueType.Type.String())
 		if err = evaluator.planner.EmbedVariable(valueType.Type); err != nil {
 			return nil, err
 		}
 	}
 
 	for _, variable := range aConfig.namedVariables {
-		fmt.Printf("var %s: %s\n", variable.Name, variable.Type.String())
-
 		if err = evaluator.planner.DefineVariable(variable.Name, variable.Type); err != nil {
 			return nil, err
 		}
