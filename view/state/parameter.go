@@ -297,7 +297,7 @@ func (p *Parameter) initRepeatedSchema(resource Resource) (err error) {
 			return err
 		}
 		if rType.Kind() != reflect.Slice {
-			return fmt.Errorf("invald repeated: %v expected slice, but had: %s ", p.Name, rType.String())
+			rType = reflect.SliceOf(rType)
 		}
 	}
 
