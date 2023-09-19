@@ -386,6 +386,12 @@ func (s State) MetaViewSQL() *Parameter {
 	return nil
 }
 
+// Normalize normalizes state
+func (s State) Normalize() (State, error) {
+	ret := s.Group()
+	return ret.Repeated()
+}
+
 func (s *State) Group() State {
 	newState := make(State, 0, len(*s))
 	groupIndex := map[string][]*Parameter{}
@@ -459,7 +465,8 @@ func (s *State) AdjustOutput() error {
 	if outputParameter == nil {
 		return nil
 	}
-	byName := s.IndexByName()
+	predefined := s.IndexByName()
+	unique := map[string]bool{}
 	outputType := outputParameter.Schema.Type()
 	if outputType == nil {
 		return fmt.Errorf("invalid output type - missing schema type")
@@ -469,23 +476,29 @@ func (s *State) AdjustOutput() error {
 
 	var adjusted State
 	var err error
+
 	for _, parameterField := range outputParameters {
 		var parent *Parameter
 		name := parameterField.Path()
-		if byName[name] != nil || byName[parameterField.Name()] != nil {
+		if unique[name] {
+			continue
+		}
+		unique[name] = true
+		if prev := predefined[name]; prev != nil {
+			adjusted = append(adjusted, prev)
 			continue
 		}
 
 		if index := strings.LastIndex(name, "."); index != -1 {
 			parentName := name[:index]
-			parent = byName[parentName]
+			parent = predefined[parentName]
 			if parent == nil {
 				parentField := sType.Lookup(parentName)
 				if parent, err = s.selectorParameter(parentField); err != nil {
 					return fmt.Errorf("failed to expand output type: %w", err)
 				}
 				parent.In = state.NewGroupLocation("")
-				byName[parentName] = parent
+				predefined[parentName] = parent
 				if parentField.IsAnonymous() {
 					parent.Tag += ` anonymous:"true"`
 				}
@@ -510,7 +523,7 @@ func (s *State) AdjustOutput() error {
 		if err != nil {
 			return fmt.Errorf("failed to expand output group type: %w", err)
 		}
-		byName[name] = stateParameter
+		predefined[name] = stateParameter
 		adjusted = append(adjusted, stateParameter)
 	}
 	*s = adjusted

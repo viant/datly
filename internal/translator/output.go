@@ -19,6 +19,7 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/xreflect"
 	"reflect"
+	"strings"
 )
 
 func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewlet) error {
@@ -52,11 +53,13 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 	return nil
 }
 
-func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *Viewlet, outputParameters state.Parameters, typesRegistry *xreflect.Types) error {
+func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *Viewlet, outputParameters state.Parameters) error {
 	outputTypeDef := outputTypeDefinition(resource)
 	if outputTypeDef == nil {
 		return nil
 	}
+	typesRegistry := s.newTypeRegistry(resource, rootViewlet)
+
 	if rootViewlet.TypeDefinition != nil {
 		typesRegistry.Register(rootViewlet.TypeDefinition.Name, xreflect.WithTypeDefinition(rootViewlet.TypeDefinition.DataType))
 	}
@@ -78,7 +81,7 @@ func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *View
 		parameter.Init(context.Background(), resourcelet)
 	}
 
-	outputType, err := compactedParameters.ReflectType(resource.rule.Module, resource.typeRegistry.Lookup, false)
+	outputType, err := compactedParameters.ReflectType(resource.rule.Module, typesRegistry.Lookup, false)
 	if err != nil {
 		return fmt.Errorf("failed to build outputType: %w", err)
 	}
@@ -123,12 +126,17 @@ func (s *Service) updateOutputParameterSchema(parameter *state.Parameter, typesR
 func (s *Service) adjustOutputParameter(resource *Resource, parameter *state.Parameter, types *xreflect.Types) (err error) {
 	if len(parameter.Repeated) > 0 {
 		for _, repeated := range parameter.Repeated {
-			if err = s.adjustTransferOutputType(repeated, types, resource); err != nil {
+			if err = s.adjustOutputParameter(resource, repeated, types); err != nil {
 				return err
 			}
 		}
-		parameter.Schema = &state.Schema{Cardinality: state.Many, Name: parameter.Repeated[0].OutputSchema().Name}
-		return nil
+		err = s.adjustTransferOutputType(parameter, types, resource)
+		itemTypeName := parameter.Repeated[0].OutputSchema().Name
+		if !strings.HasPrefix(itemTypeName, "*") {
+			itemTypeName = "*" + itemTypeName
+		}
+		parameter.Schema = &state.Schema{Cardinality: state.Many, Name: itemTypeName}
+		return err
 	}
 	if len(parameter.Group) > 0 {
 		for _, group := range parameter.Group {
@@ -157,6 +165,10 @@ func outputTypeDefinition(resource *Resource) *view.TypeDefinition {
 }
 
 func (s *Service) newTypeRegistry(resource *Resource, rootViewlet *Viewlet) *xreflect.Types {
+	if rootViewlet.typeRegistry != nil {
+		return rootViewlet.typeRegistry
+	}
+
 	types := xreflect.NewTypes(xreflect.WithRegistry(config.Config.Types))
 	for _, aType := range resource.Resource.Types {
 		_ = types.Register(aType.Name, xreflect.WithTypeDefinition(aType.DataType))
@@ -165,6 +177,7 @@ func (s *Service) newTypeRegistry(resource *Resource, rootViewlet *Viewlet) *xre
 		_ = types.Register(aType.Name, xreflect.WithTypeDefinition(aType.DataType))
 
 	}
+	rootViewlet.typeRegistry = types
 	return types
 }
 
@@ -190,6 +203,7 @@ func (s *Service) adjustTransferOutputType(parameter *state.Parameter, types *xr
 			Name:     adjustedTypeName,
 			DataType: adjustedType.String(),
 		})
+		_ = types.Register(adjustedTypeName, xreflect.WithReflectType(adjustedType))
 	}
 
 	return nil

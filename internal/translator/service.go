@@ -188,7 +188,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 		return err
 	}
 
-	if err := s.updateExplicitOutputType(resource, resource.Rule.RootViewlet(), resource.OutputState.ViewParameters(), resource.typeRegistry); err != nil {
+	if err := s.updateExplicitOutputType(resource, resource.Rule.RootViewlet(), resource.OutputState.ViewParameters()); err != nil {
 		return err
 	}
 

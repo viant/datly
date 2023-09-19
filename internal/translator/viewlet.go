@@ -13,6 +13,7 @@ import (
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx"
+	"github.com/viant/xreflect"
 	"strings"
 )
 
@@ -50,6 +51,7 @@ type (
 		OutputSettings
 		sourceViewlet *Viewlet
 		Columns       view.Columns
+		typeRegistry  *xreflect.Types
 	}
 
 	Function struct {

@@ -179,19 +179,18 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 	r.State.Append(r.Declarations.State...)
 	r.OutputState.Append(r.Declarations.OutputState...)
 	r.Rule.OutputParameter = r.OutputState.GetOutputParameter()
+
+	if r.State, err = r.State.Normalize(); err != nil {
+		return fmt.Errorf("failed to normalize input state: %w", err)
+	}
+	if r.OutputState, err = r.OutputState.Normalize(); err != nil {
+		return fmt.Errorf("failed to normalize output state: %w", err)
+	}
+
 	if err = r.OutputState.AdjustOutput(); err != nil {
 		return err
 	}
-	if len(r.State.FilterByKind(state.KindGroup)) > 0 {
-		r.State = r.State.Group()
-	}
 	r.AsyncState = r.Declarations.AsyncState
-	if r.State, err = r.State.Repeated(); err != nil {
-		return err
-	}
-	if r.OutputState, err = r.OutputState.Repeated(); err != nil {
-		return err
-	}
 	r.Rule.Route.Transforms = r.Declarations.Transforms
 	if err := parser.ExtractParameterHints(r.Declarations.SQL, &r.State); err != nil {
 		return err

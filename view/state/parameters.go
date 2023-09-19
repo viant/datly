@@ -180,15 +180,21 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 			dt = schema.Name
 		}
 		if rType == nil {
-			rType, err = types.LookupType(lookupType, schema.DataType)
+
+			rType, err = types.LookupType(lookupType, schema.TypeName())
 			if err != nil {
-				return nil, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", param.Name, schema.DataType, err)
+				return nil, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", param.Name, schema.TypeName(), err)
 			}
 		}
+
 		fieldName := param.Name
 		param.Schema.Cardinality = schema.Cardinality
-		if rType != nil {
 
+		if param.Schema.Cardinality == Many && rType.Kind() != reflect.Slice {
+			rType = reflect.SliceOf(rType)
+		}
+
+		if rType != nil {
 			if index := strings.LastIndex(fieldName, "."); index != -1 {
 				fieldName = fieldName[index+1:]
 			}
