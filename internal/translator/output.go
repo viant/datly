@@ -1,6 +1,7 @@
 package translator
 
 import (
+	"context"
 	"fmt"
 	"github.com/viant/datly/config"
 	"github.com/viant/datly/config/codec"
@@ -12,6 +13,7 @@ import (
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository/component"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
@@ -27,33 +29,131 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 		return nil
 	}
 
-	types := s.newTypeRegistry(resource, rootViewlet)
+	typesRegistry := s.newTypeRegistry(resource, rootViewlet)
 
-	outputState, err := resource.OutputState.Compact(resource.rule.Module)
-	if err != nil {
+	var err error
+
+	if err := resource.OutputState.EnsureReflectTypes(resource.rule.Module); err != nil {
 		return err
 	}
-	outputParameters := s.ensureOutputParameters(resource, outputState)
+
+	outputParameters := s.ensureOutputParameters(resource, resource.OutputState)
 	if dataParameter := outputParameters.LookupByLocation(state.KindOutput, "data"); dataParameter != nil {
-		s.updateOutputParameterType(dataParameter, rootViewlet)
+		s.updateParameterWithComponentOutputType(dataParameter, rootViewlet)
 	}
 
+	component.EnsureOutputKindParameterTypes(outputParameters, nil)
 	for _, parameter := range outputParameters {
-		if len(parameter.Repeated) > 0 {
-			for _, repeated := range parameter.Repeated {
-				if err = s.adjustTransferOutputType(repeated, types, resource); err != nil {
-					return err
-				}
-			}
-			parameter.Schema = &state.Schema{Cardinality: state.Many, Name: parameter.Repeated[0].OutputSchema().Name}
-		}
-		if err = s.adjustTransferOutputType(parameter, types, resource); err != nil {
+		if err = s.adjustOutputParameter(resource, parameter, typesRegistry); err != nil {
 			return err
 		}
-
 	}
 	resource.Rule.Route.Output.Type.Parameters = outputParameters
 	return nil
+}
+
+func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *Viewlet, outputParameters state.Parameters, typesRegistry *xreflect.Types) error {
+	outputTypeDef := outputTypeDefinition(resource)
+	if outputTypeDef == nil {
+		return nil
+	}
+	if rootViewlet.TypeDefinition != nil {
+		typesRegistry.Register(rootViewlet.TypeDefinition.Name, xreflect.WithTypeDefinition(rootViewlet.TypeDefinition.DataType))
+	}
+
+	outputResource := resource.Resource
+	outputResource.SetTypes(typesRegistry)
+	resourcelet := view.NewResourcelet(&outputResource, &rootViewlet.View.View)
+	compactedParameters := resource.OutputState.ViewParameters()
+	compactedParameters.FlagOutput()
+
+	for _, parameter := range outputParameters {
+		err := s.updateOutputParameterSchema(parameter, typesRegistry)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, parameter := range outputParameters.FilterByKind(state.KindGroup) {
+		parameter.Init(context.Background(), resourcelet)
+	}
+
+	outputType, err := compactedParameters.ReflectType(resource.rule.Module, resource.typeRegistry.Lookup, false)
+	if err != nil {
+		return fmt.Errorf("failed to build outputType: %w", err)
+	}
+	resource.Rule.Route.Output.Type.Parameters = compactedParameters
+	outputTypeDef.DataType = outputType.String()
+	resource.Rule.Route.Output.Type.Schema = &state.Schema{Name: outputTypeDef.Name}
+	return nil
+}
+
+func (s *Service) updateOutputParameterSchema(parameter *state.Parameter, typesRegistry *xreflect.Types) error {
+	if len(parameter.Group) > 0 {
+		for _, item := range parameter.Group {
+			if err := s.updateOutputParameterSchema(item, typesRegistry); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if len(parameter.Repeated) > 0 {
+		for _, item := range parameter.Repeated {
+			if err := s.updateOutputParameterSchema(item, typesRegistry); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if parameter.Schema.Type() != nil && parameter.Schema.Type().Kind() != reflect.Interface {
+		return nil
+	}
+	typeName := parameter.Schema.DataType
+	if typeName == "" {
+		typeName = parameter.Schema.Name
+	}
+	rType, err := types.LookupType(typesRegistry.Lookup, typeName)
+	if err != nil {
+		return fmt.Errorf("failed to build output, %s %w", parameter.Name, err)
+	}
+	parameter.Schema.SetType(rType)
+	return nil
+}
+
+func (s *Service) adjustOutputParameter(resource *Resource, parameter *state.Parameter, types *xreflect.Types) (err error) {
+	if len(parameter.Repeated) > 0 {
+		for _, repeated := range parameter.Repeated {
+			if err = s.adjustTransferOutputType(repeated, types, resource); err != nil {
+				return err
+			}
+		}
+		parameter.Schema = &state.Schema{Cardinality: state.Many, Name: parameter.Repeated[0].OutputSchema().Name}
+		return nil
+	}
+	if len(parameter.Group) > 0 {
+		for _, group := range parameter.Group {
+			if err = s.adjustOutputParameter(resource, group, types); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err = s.adjustTransferOutputType(parameter, types, resource); err != nil {
+		return err
+	}
+	return nil
+}
+
+func outputTypeDefinition(resource *Resource) *view.TypeDefinition {
+	var outputTypeDef *view.TypeDefinition
+	if param := resource.Rule.OutputParameter; param != nil {
+		paramSchema := param.Schema.DataType
+		if paramSchema == "" {
+			paramSchema = param.Schema.Name
+		}
+		return resource.LookupTypeDef(paramSchema)
+	}
+	return outputTypeDef
 }
 
 func (s *Service) newTypeRegistry(resource *Resource, rootViewlet *Viewlet) *xreflect.Types {
@@ -81,7 +181,7 @@ func (s *Service) adjustTransferOutputType(parameter *state.Parameter, types *xr
 			return nil
 		}
 		adjustedTypeName := output.Args[1]
-		adjustedType, err := s.adjustTransferType(parameter, types, dest)
+		adjustedType, err := s.adjustTransferCodecType(resource, parameter, types, dest)
 		if err != nil {
 			return err
 		}
@@ -95,7 +195,7 @@ func (s *Service) adjustTransferOutputType(parameter *state.Parameter, types *xr
 	return nil
 }
 
-func (s *Service) adjustTransferType(parameter *state.Parameter, types *xreflect.Types, dest reflect.Type) (reflect.Type, error) {
+func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.Parameter, types *xreflect.Types, dest reflect.Type) (reflect.Type, error) {
 	destType := structology.NewStateType(dest)
 	selectors := destType.MatchByTag(transfer.TagName)
 	var adjustedDest inference.State
@@ -128,11 +228,11 @@ func (s *Service) adjustTransferType(parameter *state.Parameter, types *xreflect
 			}})
 	}
 	var err error
-	if adjustedDest, err = adjustedDest.Compact("autogen"); err != nil {
+	if adjustedDest, err = adjustedDest.Compact(resource.rule.Module); err != nil {
 		return nil, fmt.Errorf("failed to rewrite transfer type: %v %w", parameter.Name, err)
 	}
-	adjustedType, err := adjustedDest.ViewParameters().ReflectType("autogen", types.Lookup, false)
-	if adjustedDest, err = adjustedDest.Compact("autogen"); err != nil {
+	adjustedType, err := adjustedDest.ViewParameters().ReflectType(resource.rule.Module, types.Lookup, false)
+	if adjustedDest, err = adjustedDest.Compact(resource.rule.Module); err != nil {
 		return nil, fmt.Errorf("failed to adjust transfer type: %v %w", parameter.Name, err)
 	}
 	return adjustedType, nil
@@ -152,7 +252,7 @@ func (s *Service) ensureOutputParameters(resource *Resource, outputState inferen
 	return outputParameters
 }
 
-func (s *Service) updateOutputParameterType(dataParameter *state.Parameter, rootViewlet *Viewlet) {
+func (s *Service) updateParameterWithComponentOutputType(dataParameter *state.Parameter, rootViewlet *Viewlet) {
 	dataParameter.Schema.Name = TypeDefinitionName(rootViewlet)
 	dataParameter.Schema.DataType = "*" + TypeDefinitionName(rootViewlet)
 	cardinality := string(state.Many)

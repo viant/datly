@@ -65,13 +65,13 @@ func (p *Parameter) matchByLocation(kind Kind, location string) *Parameter {
 	case KindRepeated:
 		for _, parameter := range p.Repeated {
 			if parameter.In.Name == location {
-				return p
+				return parameter
 			}
 		}
 	case KindGroup:
 		for _, parameter := range p.Group {
 			if parameter.In.Name == location {
-				return p
+				return parameter
 			}
 		}
 	}
@@ -173,25 +173,39 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 		if schema.DataType == "" && param.DataType != "" {
 			schema.DataType = param.DataType
 		}
+
 		rType := schema.Type()
+		dt := schema.DataType
+		if dt == "" {
+			dt = schema.Name
+		}
 		if rType == nil {
-			if rType, err = types.LookupType(lookupType, schema.DataType); err != nil {
+			rType, err = types.LookupType(lookupType, schema.DataType)
+			if err != nil {
 				return nil, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", param.Name, schema.DataType, err)
 			}
 		}
+
+		fmt.Printf("p: %s %v %s\n", param.Name, dt, rType.String())
+
+		fieldName := param.Name
 		param.Schema.Cardinality = schema.Cardinality
 		if rType != nil {
-			structField := reflect.StructField{Name: param.Name,
+
+			if index := strings.LastIndex(fieldName, "."); index != -1 {
+				fieldName = fieldName[index+1:]
+			}
+			structField := reflect.StructField{Name: fieldName,
 				Type:    rType,
-				PkgPath: PkgPath(param.Name, pkgPath),
+				PkgPath: PkgPath(fieldName, pkgPath),
 				Tag:     reflect.StructTag(param.Tag),
 			}
 
-			if param.Name == rType.Name() || strings.Contains(param.Tag, "anonymous") {
+			if fieldName == rType.Name() || strings.Contains(param.Tag, "anonymous") {
 				structField.Anonymous = true
 			}
 			fields = append(fields, structField)
-			setMarkerFields = append(setMarkerFields, reflect.StructField{Name: param.Name, Type: boolType, PkgPath: PkgPath(param.Name, pkgPath), Tag: reflect.StructTag(param.Tag)})
+			setMarkerFields = append(setMarkerFields, reflect.StructField{Name: fieldName, Type: boolType, PkgPath: PkgPath(fieldName, pkgPath), Tag: reflect.StructTag(param.Tag)})
 		}
 	}
 

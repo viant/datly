@@ -49,6 +49,7 @@ type (
 		TypeDefinition *view.TypeDefinition
 		OutputSettings
 		sourceViewlet *Viewlet
+		Columns       view.Columns
 	}
 
 	Function struct {

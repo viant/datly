@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/structology"
 	"github.com/viant/structql"
 	"github.com/viant/toolbox/data"
 	"github.com/viant/xreflect"
@@ -49,6 +50,18 @@ func (s State) ViewParameters() state.Parameters {
 	var result = make([]*state.Parameter, 0, len(s))
 	for i, _ := range s {
 		parameter := &s[i].Parameter
+		if len(s[i].Group) > 0 {
+			parameter.Group = nil
+			for j := range s[i].Group {
+				parameter.Group = append(parameter.Group, &s[i].Group[j].Parameter)
+			}
+		}
+		if len(s[i].Repeated) > 0 {
+			parameter.Repeated = nil
+			for j := range s[i].Repeated {
+				parameter.Repeated = append(parameter.Repeated, &s[i].Repeated[j].Parameter)
+			}
+		}
 		result = append(result, parameter)
 	}
 	return result
@@ -439,6 +452,85 @@ func (s State) Repeated() (State, error) {
 		parent.Parameter.In.Name = strings.Join(repeatedName, ",")
 	}
 	return result, nil
+}
+
+func (s *State) AdjustOutput() error {
+	outputParameter := s.GetOutputParameter()
+	if outputParameter == nil {
+		return nil
+	}
+	byName := s.IndexByName()
+	outputType := outputParameter.Schema.Type()
+	if outputType == nil {
+		return fmt.Errorf("invalid output type - missing schema type")
+	}
+	sType := structology.NewStateType(outputType)
+	outputParameters := sType.MatchByTag(state.TagName)
+
+	var adjusted State
+	var err error
+	for _, parameterField := range outputParameters {
+		var parent *Parameter
+		name := parameterField.Path()
+		if byName[name] != nil || byName[parameterField.Name()] != nil {
+			continue
+		}
+
+		if index := strings.LastIndex(name, "."); index != -1 {
+			parentName := name[:index]
+			parent = byName[parentName]
+			if parent == nil {
+				parentField := sType.Lookup(parentName)
+				if parent, err = s.selectorParameter(parentField); err != nil {
+					return fmt.Errorf("failed to expand output type: %w", err)
+				}
+				parent.In = state.NewGroupLocation("")
+				byName[parentName] = parent
+				if parentField.IsAnonymous() {
+					parent.Tag += ` anonymous:"true"`
+				}
+				parent.Schema = state.NewSchema(xreflect.InterfaceType)
+				adjusted = append(adjusted, parent)
+			}
+
+			itemParameter, err := s.selectorParameter(parameterField)
+			if err != nil {
+				return fmt.Errorf("failed to expand output group type: %w", err)
+			}
+			parent.Group = append(parent.Group, itemParameter)
+			var items []string
+			for _, item := range parent.Group {
+				items = append(items, item.Name)
+			}
+			parent.In.Name = strings.Join(items, ",`")
+			continue
+		}
+
+		stateParameter, err := s.selectorParameter(parameterField)
+		if err != nil {
+			return fmt.Errorf("failed to expand output group type: %w", err)
+		}
+		byName[name] = stateParameter
+		adjusted = append(adjusted, stateParameter)
+	}
+	*s = adjusted
+	return nil
+}
+
+func (s *State) selectorParameter(parameterField *structology.Selector) (*Parameter, error) {
+	tag := string(parameterField.Tag())
+	structField := &reflect.StructField{Name: parameterField.Name(), Tag: reflect.StructTag(tag), Type: parameterField.Type()}
+	stateParameter, err := state.BuildParameter(structField, nil)
+	return &Parameter{Parameter: *stateParameter}, err
+}
+
+func (s *State) GetOutputParameter() *Parameter {
+	for _, candidate := range *s {
+		if candidate.In.Kind == state.KindOutput && candidate.In.Name == "" {
+			return candidate
+		}
+	}
+	return nil
 }
 
 // NewState creates a state from state go struct

@@ -82,6 +82,11 @@ func NewOutputLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindOutput}
 }
 
+// NewGroupLocation creates an output location
+func NewGroupLocation(name string) *Location {
+	return &Location{Name: name, Kind: KindGroup}
+}
+
 // NewDataViewLocation creates a dataview location
 func NewDataViewLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindDataView}

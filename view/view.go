@@ -723,7 +723,6 @@ func (v *View) ensureSchema(ctx context.Context, resource *Resource) error {
 		if componentType != nil {
 			v.Schema.SetType(componentType)
 		}
-
 	}
 
 	if v.Schema.Type() != nil {

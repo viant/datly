@@ -120,6 +120,10 @@ func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Templat
 }
 
 func (v *View) generateSchemaTypeFromColumn(caser format.Case, columns []*Column, relations []*Relation) func() (reflect.Type, error) {
+	return ColumnsSchema(caser, columns, relations, v)
+}
+
+func ColumnsSchema(caser format.Case, columns []*Column, relations []*Relation, v *View) func() (reflect.Type, error) {
 	return func() (reflect.Type, error) {
 		excluded := make(map[string]bool)
 		for _, rel := range relations {

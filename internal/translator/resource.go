@@ -45,6 +45,16 @@ type (
 	}
 )
 
+// LookupTypeDef returns matched type definition
+func (r *Resource) LookupTypeDef(typeName string) *view.TypeDefinition {
+	for _, typeDef := range r.Resource.Types {
+		if typeDef.Name == typeName {
+			return typeDef
+		}
+	}
+	return nil
+}
+
 func (r *Resource) AddCustomTypeURL(URL string) {
 	for _, candidate := range r.CustomTypeURLs {
 		if candidate == URL {
@@ -168,6 +178,10 @@ func (r *Resource) ExtractDeclared(dSQL *string) (err error) {
 
 	r.State.Append(r.Declarations.State...)
 	r.OutputState.Append(r.Declarations.OutputState...)
+	r.Rule.OutputParameter = r.OutputState.GetOutputParameter()
+	if err = r.OutputState.AdjustOutput(); err != nil {
+		return err
+	}
 	if len(r.State.FilterByKind(state.KindGroup)) > 0 {
 		r.State = r.State.Group()
 	}

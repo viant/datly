@@ -1,14 +1,15 @@
 package inference
 
 import (
+	"github.com/viant/datly/view/state"
 	"reflect"
 	"strings"
 )
 
 type parameterStruct struct {
-	name   string
-	fields map[string]*parameterStruct
-	*Parameter
+	name      string
+	fields    map[string]*parameterStruct
+	Parameter *Parameter
 }
 
 func (p *parameterStruct) Add(name string, parameter *Parameter) {
@@ -19,6 +20,7 @@ func (p *parameterStruct) Add(name string, parameter *Parameter) {
 		holder = name[:index]
 		child = name[index+1:]
 	}
+
 	if _, ok := p.fields[holder]; !ok {
 		p.fields[holder] = newParameterStruct(holder)
 	}
@@ -36,8 +38,8 @@ func (p *parameterStruct) reflectType() reflect.Type {
 
 }
 func (p *parameterStruct) structField() reflect.StructField {
-	if p.Parameter != nil {
-		return reflect.StructField{Name: p.name, Type: p.Parameter.Schema.Type(), Tag: reflect.StructTag(p.Parameter.Tag), PkgPath: PkgPath(p.Name, defaultPackageName)}
+	if p.Parameter != nil && p.Parameter.In.Kind != state.KindGroup {
+		return reflect.StructField{Name: p.name, Type: p.Parameter.Schema.Type(), Tag: reflect.StructTag(p.Parameter.Tag), PkgPath: PkgPath(p.Parameter.Name, defaultPackageName)}
 	}
 	var fields []reflect.StructField
 	for _, f := range p.fields {

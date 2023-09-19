@@ -26,6 +26,7 @@ type (
 		Source    string        `json:",omitempty" yaml:"source,omitempty"`
 		SourceURL string        `json:",omitempty" yaml:"sourceURL,omitempty"`
 		Schema    *state.Schema `json:",omitempty" yaml:"schema,omitempty"`
+
 		stateType *structology.StateType
 
 		Parameters state.Parameters `json:",omitempty" yaml:"parameters,omitempty"`

@@ -3,7 +3,7 @@
     "jobType": "Reader",
     "mainView": "vendor",
     "method": "GET",
-    "ref": "jobid=123",
+    "ref": "vendor:jobid=123",
     "uRI": "/v1/api/dev/async/vendor/2",
     "userEmail": "dev@viantint.com",
     "userID": "2"

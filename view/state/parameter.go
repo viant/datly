@@ -16,7 +16,6 @@ import (
 type (
 	Parameter struct {
 		shared.Reference
-		Fields     Parameters
 		Group      Parameters                `json:",omitempty"`
 		Repeated   Parameters                `json:",omitempty" yaml:"Repeated"`
 		Predicates []*config.PredicateConfig `json:",omitempty" yaml:"Predicates"`
@@ -38,6 +37,7 @@ type (
 		Tag               string      `json:",omitempty" yaml:"Tag"`
 		Lazy              bool        `json:",omitempty" yaml:"Lazy"`
 		When              string      `json:",omitempty" yaml:"When"`
+		isOutputType      bool
 		_selector         *structology.Selector
 		_initialized      bool
 		_dependsOn        *Parameter
@@ -45,6 +45,12 @@ type (
 	}
 	ParameterOption func(p *Parameter)
 )
+
+func (p Parameters) FlagOutput() {
+	for _, param := range p {
+		param.isOutputType = true
+	}
+}
 
 func (p *Parameter) Clone() *Parameter {
 	ret := *p
@@ -209,7 +215,7 @@ func (p *Parameter) IsRequired() bool {
 
 func (p *Parameter) initSchema(resource Resource) error {
 	if p.In.Kind == KindGroup {
-		rType, err := p.Group.ReflectType(pkgPath, resource.LookupType(), true)
+		rType, err := p.Group.ReflectType(pkgPath, resource.LookupType(), !p.isOutputType)
 		if err != nil {
 			return err
 		}

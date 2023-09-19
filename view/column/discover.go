@@ -183,6 +183,7 @@ func updateQueryColumn(queryColumn *sqlparser.Column, fromColumn sink.Column) {
 	queryColumn.IsAutoincrement = fromColumn.Autoincrement()
 	queryColumn.IsUnique = fromColumn.IsUnique()
 	queryColumn.Default = fromColumn.Default
+	queryColumn.RawType, _ = io.ParseType(fromColumn.Type)
 }
 
 func readSinkColumns(ctx context.Context, db *sql.DB, table string) ([]sink.Column, error) {

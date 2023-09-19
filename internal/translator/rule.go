@@ -6,6 +6,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router"
+	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/repository/async"
@@ -51,7 +52,8 @@ type (
 		With         []string                   `json:",omitempty"`
 		Include      []string                   `json:",omitempty"`
 		indexNamespaces
-		IsGeneratation bool
+		IsGeneratation  bool
+		OutputParameter *inference.Parameter
 	}
 
 	indexNamespaces []*indexNamespace

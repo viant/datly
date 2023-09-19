@@ -180,14 +180,18 @@ func (s *Session) populateParameter(ctx context.Context, parameter *state.Parame
 		}
 		return nil
 	}
-	if value, err = s.ensureValidValue(value, parameter); err != nil {
+
+	parameterSelector := parameter.Selector()
+	if options.indirectState || parameterSelector == nil { //p
+		parameterSelector, err = aState.Selector(parameter.Name)
+		if err != nil {
+			return err
+		}
+	}
+	if value, err = s.ensureValidValue(value, parameter, parameterSelector); err != nil {
 		return err
 	}
-	if options.indirectState { //p
-		err = aState.SetValue(parameter.Name, value)
-		return err
-	}
-	err = parameter.Selector().SetValue(aState.Pointer(), value)
+	err = parameterSelector.SetValue(aState.Pointer(), value)
 	return err
 }
 
@@ -221,8 +225,9 @@ func (s *Session) canRead(ctx context.Context, parameter *state.Parameter) (bool
 	return shallPopulate, err
 }
 
-func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter) (interface{}, error) {
+func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter, selector *structology.Selector) (interface{}, error) {
 	valueType := reflect.TypeOf(value)
+
 	switch valueType.Kind() {
 	case reflect.Ptr:
 		if parameter.IsRequired() && isNil(value) {
@@ -243,12 +248,23 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 			switch sliceLen {
 			case 0:
 				value = reflect.New(parameter.OutputType().Elem()).Elem().Interface()
+				valueType = reflect.TypeOf(value)
 			case 1:
 				value = slice.ValuePointerAt(ptr, 0)
+				valueType = reflect.TypeOf(value)
 			default:
 				return nil, fmt.Errorf("parameter %v return more than one value, len: %v rows ", parameter.Name, sliceLen)
 			}
 		}
+	}
+
+	if !(valueType == selector.Type() || valueType.ConvertibleTo(selector.Type()) || valueType.AssignableTo(selector.Type())) {
+		//data, _ := json.Marshal(value)
+		//ptr := reflect.New(selector.Type())
+		//dest := ptr.Interface()
+		//json.Unmarshal(data, dest)
+		//value = ptr.Elem().Interface()
+		fmt.Printf("not assianble \nsrc:%s \ndst:%s", valueType.String(), selector.Type().String())
 	}
 	return value, nil
 }

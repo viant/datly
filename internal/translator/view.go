@@ -28,6 +28,7 @@ type (
 		AsyncTableName   string                 `json:",omitempty"`
 		ParameterDerived bool
 		CriteriaParam    string `json:",omitempty"`
+		Cardinality      string
 	}
 )
 
@@ -50,6 +51,12 @@ func (v *View) applyShorthands(viewlet *Viewlet) {
 
 	if v.Self != nil {
 		v.SelfReference = v.Self
+	}
+	if v.Cardinality != "" {
+		if v.Schema == nil {
+			v.Schema = &state.Schema{}
+		}
+		v.Schema.Cardinality = state.Cardinality(v.Cardinality)
 	}
 
 	if v.ExecKind != "" {

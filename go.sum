@@ -326,8 +326,8 @@ github.com/viant/sqlparser v0.5.1-0.20230823164935-b85fb599530a h1:/m8WWD+q0BnXY
 github.com/viant/sqlparser v0.5.1-0.20230823164935-b85fb599530a/go.mod h1:/ABOSxNPYt/el6LtIe+Ikl8fzkIywbfOfmEB3dxc7Lw=
 github.com/viant/sqlx v0.9.1-0.20230913002732-0b3c53e41c0e h1:EvPI7mV4UwuIHJBy62NYiWHssHD0KwwEMXTkM9XsAfg=
 github.com/viant/sqlx v0.9.1-0.20230913002732-0b3c53e41c0e/go.mod h1:q96jEKSL4oHIZ41M5yhBweEZxTBHNyAHmi0GvtP2MgE=
-github.com/viant/structology v0.4.3-0.20230904164854-eb76e2958186 h1:5Ch3Rblfe8JRU7A8XKq15pl8GCUw10maCfbrEGbKJxE=
-github.com/viant/structology v0.4.3-0.20230904164854-eb76e2958186/go.mod h1:XFqJE56ynkF+tLqWIlVjGrvYHTZjiqEIaV6Pu0Gid3c=
+github.com/viant/structology v0.4.3-0.20230919020640-f54367614a79 h1:jHUbuCN+3zEGMA7q6QJ0xPliVCTqRo3YZXqHQ20DKWM=
+github.com/viant/structology v0.4.3-0.20230919020640-f54367614a79/go.mod h1:XFqJE56ynkF+tLqWIlVjGrvYHTZjiqEIaV6Pu0Gid3c=
 github.com/viant/structql v0.4.1 h1:eQab1M5eTGFTSLSLIwRMpz/C5IKzixRskon2V8qhtRM=
 github.com/viant/structql v0.4.1/go.mod h1:gHebhXqfhtTpehk9VyeDq6D1rO87hv62AgG4p/e91UY=
 github.com/viant/toolbox v0.24.0/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
@@ -350,8 +350,8 @@ github.com/viant/xlsy v0.0.0-20230826014723-a2947db28c76 h1:3OdkirSx74HyFIW3WPXB
 github.com/viant/xlsy v0.0.0-20230826014723-a2947db28c76/go.mod h1:nasGZnDzlQ0dlvuBk0zCsOZ2GMGu3v0p270xoA1mBUk=
 github.com/viant/xmlify v0.0.0-20230912204736-8d2658525ad3 h1:hptrH8fzUVOrWg3Cj6SnYIVoWen8KZ7HLN+i3UsXeUo=
 github.com/viant/xmlify v0.0.0-20230912204736-8d2658525ad3/go.mod h1:/JKJnEoJyyYNiV6cIY7qDjX2rws5bMh2JFbtLIZZ7Es=
-github.com/viant/xreflect v0.3.2-0.20230904042706-22204b314c96 h1:5uu7cTkk638vZcY4CdNR221FPNby3AkKnqRTqKjC+3I=
-github.com/viant/xreflect v0.3.2-0.20230904042706-22204b314c96/go.mod h1:uflXFHcw4TQXgYJvTQ7Akf4SAzXYPCVi8NGZgsVlwmA=
+github.com/viant/xreflect v0.3.2-0.20230918173836-036517232ccc h1:GP8nUt58fUjqh+F4y9NIoZR+s6QFtk2N6msB+4v27G4=
+github.com/viant/xreflect v0.3.2-0.20230918173836-036517232ccc/go.mod h1:uflXFHcw4TQXgYJvTQ7Akf4SAzXYPCVi8NGZgsVlwmA=
 github.com/viant/xunsafe v0.9.0 h1:pyvHiGjYqwVNwbIfUTvO8W960S6zvM/gxP4iRyAl6BE=
 github.com/viant/xunsafe v0.9.0/go.mod h1:V3RCwtqpbNPznhmHysyAOpsyuSVkIYWo1Ewip7qb9/s=
 github.com/xlab/treeprint v1.1.0/go.mod h1:gj5Gd3gPdKtR1ikdDK6fnFLdmIS0X30kTTuNd/WEJu0=

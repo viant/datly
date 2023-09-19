@@ -89,12 +89,16 @@ func NewEvaluator(template string, options ...EvaluatorOption) (*Evaluator, erro
 	}))
 
 	if evaluator.stateType != nil {
-		if err = evaluator.planner.DefineVariable(aConfig.stateName, evaluator.stateType.Type()); err != nil {
+
+		stateType := evaluator.stateType.Type()
+		if err = evaluator.planner.DefineVariable(aConfig.stateName, stateType); err != nil {
 			return nil, err
 		}
 		if evaluator.stateType.HasMarker() {
 			marker := evaluator.stateType.Marker()
-			if err = evaluator.planner.DefineVariable(keywords.SetMarkerKey, marker.Type()); err != nil {
+
+			markerType := marker.Type()
+			if err = evaluator.planner.DefineVariable(keywords.SetMarkerKey, markerType); err != nil {
 				return nil, err
 			}
 		}
@@ -129,12 +133,15 @@ func NewEvaluator(template string, options ...EvaluatorOption) (*Evaluator, erro
 	}
 
 	for _, valueType := range aConfig.embededTypes {
+		fmt.Printf("embedde: %s\n", valueType.Type.String())
 		if err = evaluator.planner.EmbedVariable(valueType.Type); err != nil {
 			return nil, err
 		}
 	}
 
 	for _, variable := range aConfig.namedVariables {
+		fmt.Printf("var %s: %s\n", variable.Name, variable.Type.String())
+
 		if err = evaluator.planner.DefineVariable(variable.Name, variable.Type); err != nil {
 			return nil, err
 		}

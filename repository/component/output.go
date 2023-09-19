@@ -68,6 +68,17 @@ func (o *Output) Init(ctx context.Context, aView *view.View, inputParameters sta
 			o.Field = "ResponseBody"
 		}
 	}
+	if o.Type.Schema != nil && o.Type.Name != "" {
+		lookupType := aView.Resource().LookupType()
+		rType, err := lookupType(o.Type.Name)
+		if err != nil {
+			return fmt.Errorf("unknwout output: %w", err)
+		}
+		o.Type.SetType(rType)
+
+	}
+
+	o.Type.Parameters.FlagOutput()
 	if err = o.Type.Init(state.WithResource(aView.Resource()), state.WithPackage(pkgPath)); err != nil {
 		return fmt.Errorf("failed to initialise output: %w", err)
 	}
@@ -216,17 +227,25 @@ func (o *Output) defaultParameters(aView *view.View, inputParameters state.Param
 func EnsureOutputKindParameterTypes(parameters []*state.Parameter, aView *view.View) {
 	for _, parameter := range parameters {
 		ensureOutputParameterType(parameter, aView)
+		if len(parameter.Group) > 0 {
+			EnsureOutputKindParameterTypes(parameter.Group.FilterByKind(state.KindOutput), aView)
+		}
+		if len(parameter.Repeated) > 0 {
+			EnsureOutputKindParameterTypes(parameter.Repeated.FilterByKind(state.KindOutput), aView)
+		}
 	}
 }
 
 func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 	rType := parameter.Schema.Type()
-	if rType != nil && rType.Kind() != reflect.String {
+	if rType != nil && rType.Kind() != reflect.String && rType.Kind() != reflect.Interface {
 		return
 	}
 	switch parameter.In.Kind {
 	case state.KindOutput:
 		switch parameter.In.Name {
+		case "":
+			return
 		case "data":
 			if aView != nil {
 				parameter.Schema = state.NewSchema(aView.OutputType())
@@ -235,8 +254,11 @@ func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 			parameter.Schema = state.NewSchema(reflect.TypeOf(""))
 		case "job":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(&async.Job{}))
+			parameter.Schema.Name = "*async.Job"
+
 		case "jobstatus":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(response.JobStatus{}))
+			parameter.Schema.Name = "response.JobStatus"
 			if parameter.Name == "JobStatus" && parameter.Tag == "" {
 				parameter.Tag = ` anonymous:"true"`
 			}
@@ -244,6 +266,7 @@ func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 			parameter.Schema = state.NewSchema(reflect.TypeOf(0))
 		case "status":
 			parameter.Schema = state.NewSchema(reflect.TypeOf(response.Status{}))
+			parameter.Schema.Name = "response.Status"
 			parameter.Name = "Status"
 			if parameter.Tag == "" {
 				parameter.Tag = ` anonymous:"true"`

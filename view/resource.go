@@ -295,6 +295,8 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	if types == nil {
 		types = r.TypeRegistry()
 	}
+	r._types = types
+
 	for _, definition := range r.Types {
 		if err := definition.Init(ctx, types.Lookup); err != nil {
 			return err

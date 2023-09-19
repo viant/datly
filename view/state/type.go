@@ -58,16 +58,24 @@ func (t *Type) Init(options ...Option) error {
 	if !hasParameters && t.Schema == nil {
 		t.Schema = EmptySchema()
 	}
+
 	if rType := t.Schema.Type(); rType != nil && !hasParameters {
 		if err := t.buildParameters(); err != nil {
 			return err
 		}
-	} else if hasParameters {
+	} else if hasParameters && t.Schema.Type() == nil {
 		if err := t.buildSchema(context.Background(), t.withMarker); err != nil {
 			return err
 		}
 	} else if t.Schema == nil {
 		t.Schema = EmptySchema()
+	} else {
+
+		for _, parameter := range t.Parameters {
+			if err := parameter.Init(context.Background(), t.resource); err != nil {
+				return err
+			}
+		}
 	}
 	rType := t.Schema.Type()
 	t.stateType = structology.NewStateType(rType)
@@ -104,12 +112,20 @@ func (t *Type) buildSchema(ctx context.Context, withMarker bool) (err error) {
 }
 
 func (t *Type) buildParameter(field reflect.StructField) (*Parameter, error) {
+	return BuildParameter(&field, t.fs)
+}
+
+func BuildParameter(field *reflect.StructField, fs *embed.FS) (*Parameter, error) {
 	result := &Parameter{}
-	paramTag, err := ParseTag(TagName, t.fs)
+	paramTag, err := ParseTag(field.Tag.Get(TagName), fs)
 	if err != nil {
 		return nil, err
 	}
 	result.Name = field.Name
+	if paramTag.Name != "" {
+		result.Name = paramTag.Name
+	}
+	result.Tag = string(field.Tag)
 	result.In = &Location{Kind: Kind(paramTag.Kind), Name: paramTag.In}
 	result.Schema = NewSchema(field.Type)
 	BuildPredicate(field.Tag, result)

@@ -133,6 +133,12 @@ func (n Viewlets) updateTopQuery(column *sqlparser.Column, viewlet *Viewlet) err
 		if namespaceForColumn.OutputSettings.Field != "" {
 			viewlet.Resource.Rule.Route.Output.Field = namespaceForColumn.OutputSettings.Field
 		}
+		if namespaceForColumn.OutputSettings.Cardinality != "" {
+			if viewlet.View.Schema == nil {
+				viewlet.View.Schema = &state.Schema{}
+			}
+			viewlet.View.Schema.Cardinality = namespaceForColumn.OutputSettings.Cardinality
+		}
 	}
 
 	if column.Tag != "" {

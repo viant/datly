@@ -76,8 +76,12 @@ func (s *Schema) SetType(rType reflect.Type) {
 		s.Cardinality = One
 	}
 
+	if rType.Kind() == reflect.Struct && (strings.HasPrefix(s.DataType, "*") || strings.HasPrefix(s.Name, "*")) {
+		rType = reflect.PtrTo(rType)
+	}
 	if s.Cardinality == Many {
 		if rType.Kind() != reflect.Slice {
+
 			rType = reflect.SliceOf(rType)
 		}
 	} else if rType.Kind() == reflect.Slice {
@@ -230,7 +234,14 @@ func NewSchema(compType reflect.Type, opts ...SchemaOption) *Schema {
 	if compType != nil {
 		result.SetType(compType)
 		if result.Name == "" {
-			result.Name = compType.Name()
+			compTypeName := compType.Name()
+			if pkg := compType.PkgPath(); pkg != "" {
+				if index := strings.LastIndex(pkg, "/"); index != -1 {
+					pkg = pkg[index+1:]
+				}
+				compTypeName = pkg + "." + compTypeName
+			}
+			result.Name = compTypeName
 		}
 		result.initialized = true
 	}

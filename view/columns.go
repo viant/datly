@@ -2,7 +2,9 @@ package view
 
 import (
 	"fmt"
+	"github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
 	"github.com/viant/toolbox/format"
@@ -145,6 +147,9 @@ func NewColumns(columns sqlparser.Columns) Columns {
 
 		if item.Default != nil {
 			column.Default = *item.Default
+		}
+		if column.rType == nil {
+			column.rType, _ = types.LookupType(config.Config.Types.Lookup, column.DataType)
 		}
 		result = append(result, column)
 	}

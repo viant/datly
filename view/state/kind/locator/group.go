@@ -2,6 +2,7 @@ package locator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
@@ -10,7 +11,9 @@ import (
 
 type Group struct {
 	ParameterLookup
-	Parameters state.NamedParameters
+
+	InputParameters  state.NamedParameters
+	OutputParameters state.NamedParameters
 }
 
 func (p *Group) Names() []string {
@@ -39,17 +42,29 @@ func (p *Group) Value(ctx context.Context, names string) (interface{}, bool, err
 			return nil, false, err
 		}
 	}
-	return aState.State(), isAnyItemSet, nil
+	ret := aState.State()
+	dd, _ := json.Marshal(ret)
+	fmt.Printf("%T %s\n", ret, dd)
+
+	return ret, isAnyItemSet, nil
 }
 
+//func (p *Group) matchByLocation(names string) *state.Parameter {
+//	var parameter *state.Parameter
+//	for _, candidate := range p.Parameters {
+//		if candidate.In.Kind == state.KindGroup && candidate.In.Name == names {
+//			parameter = candidate
+//		}
+//	}
+//	return parameter
+//}
+
 func (p *Group) matchByLocation(names string) *state.Parameter {
-	var parameter *state.Parameter
-	for _, candidate := range p.Parameters {
-		if candidate.In.Kind == state.KindGroup && candidate.In.Name == names {
-			parameter = candidate
-		}
+	matched := p.OutputParameters.LookupByLocation(state.KindGroup, names)
+	if matched == nil {
+		matched = p.InputParameters.LookupByLocation(state.KindGroup, names)
 	}
-	return parameter
+	return matched
 }
 
 // NewGroup returns parameter locator
@@ -62,7 +77,8 @@ func NewGroup(opts ...Option) (kind.Locator, error) {
 		return nil, fmt.Errorf("parameters was empty")
 	}
 	return &Group{
-		ParameterLookup: options.ParameterLookup,
-		Parameters:      options.InputParameters,
+		ParameterLookup:  options.ParameterLookup,
+		InputParameters:  options.InputParameters,
+		OutputParameters: options.OutputParameters,
 	}, nil
 }

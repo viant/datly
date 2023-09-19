@@ -84,7 +84,6 @@ func (p *Parameter) DsqlParameterDeclaration() string {
 		builder.WriteString("\n*/\n")
 	}
 	builder.WriteByte(')')
-
 	return builder.String()
 }
 
@@ -157,6 +156,8 @@ func (p *Parameter) localVariableDefinition() (string, string) {
 func (p *Parameter) IndexVariable() string {
 	return p.Name + "By" + p.PathParam.IndexField.Name
 }
+
+// TODO unify with state.BuildParameter (by converting field *ast.Field to reflect.StructField)
 func buildParameter(field *ast.Field, types *xreflect.Types) (*Parameter, error) {
 	SQL := extractSQL(field)
 	if field.Tag == nil {
@@ -176,8 +177,10 @@ func buildParameter(field *ast.Field, types *xreflect.Types) (*Parameter, error)
 	}
 	//	updateSQLTag(field, SQL)
 	param.Name = field.Names[0].Name
+	if tag.Name != "" {
+		param.Name = tag.Name
+	}
 	param.In = &state.Location{Name: tag.In, Kind: state.Kind(tag.Kind)}
-
 	cardinality := state.One
 	if sliceExpr, ok := field.Type.(*ast.ArrayType); ok {
 		field.Type = sliceExpr.Elt

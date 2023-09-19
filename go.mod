@@ -35,7 +35,7 @@ require (
 	github.com/viant/toolbox v0.34.6-0.20230901020907-6da0397b78dc
 	github.com/viant/velty v0.2.1-0.20230803200403-bd59a7c855b3
 	github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7
-	github.com/viant/xreflect v0.3.2-0.20230904042706-22204b314c96
+	github.com/viant/xreflect v0.3.2-0.20230918173836-036517232ccc
 	github.com/viant/xunsafe v0.9.0
 	golang.org/x/mod v0.12.0
 	golang.org/x/oauth2 v0.7.0 // indirect
@@ -53,7 +53,7 @@ require (
 	github.com/aws/aws-sdk-go v1.44.12
 	github.com/aws/aws-sdk-go-v2/config v1.18.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.33.1
-	github.com/viant/structology v0.4.3-0.20230904164854-eb76e2958186
+	github.com/viant/structology v0.4.3-0.20230919020640-f54367614a79
 	github.com/viant/xdatly v0.3.1-0.20230913005711-53a179f2e6e2
 	github.com/viant/xdatly/extension v0.0.0-20230323215422-3e5c3147f0e6
 	github.com/viant/xdatly/handler v0.0.0-20230913005711-53a179f2e6e2

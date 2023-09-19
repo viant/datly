@@ -58,8 +58,9 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 		return err
 	}
 
-	parameters := resource.Declarations.OutputState
-	componentParameters := parameters.FilterByKind(state.KindComponent)
+	outputState := resource.Declarations.OutputState
+
+	componentParameters := outputState.FilterByKind(state.KindComponent)
 	if err = s.updateComponentType(ctx, resource, componentParameters); err != nil {
 		return err
 	}
@@ -171,9 +172,10 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 
 	cache := discover.Columns{Items: make(map[string]view.Columns)}
 
-	if err = s.generateViewColumns(err, resource, cache); err != nil {
+	if err = s.detectColumns(resource, cache); err != nil {
 		return err
 	}
+	s.detectComponentViewType(cache, resource)
 
 	rootViewlet := resource.Rule.RootViewlet()
 	if err = s.updateOutputParameters(resource, rootViewlet); err != nil {
@@ -186,34 +188,14 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 		return err
 	}
 
+	if err := s.updateExplicitOutputType(resource, resource.Rule.RootViewlet(), resource.OutputState.ViewParameters(), resource.typeRegistry); err != nil {
+		return err
+	}
+
 	if err = s.persistRouterRule(ctx, resource, service.TypeReader); err != nil {
 		return err
 	}
 	return nil
-}
-
-func (s *Service) generateViewColumns(err error, resource *Resource, columnDiscovery discover.Columns) error {
-	var hasSummary bool
-	if err = resource.Rule.Viewlets.Each(func(viewlet *Viewlet) error {
-		if viewlet.View.Template != nil && viewlet.View.Template.Summary != nil {
-			hasSummary = true
-		}
-		if columns := viewlet.Spec.Columns; len(columns) > 0 {
-			columnDiscovery.Items[viewlet.Name] = view.NewColumns(columns)
-			//TODO add meta column generation for SUMMARY/Meta tempalte
-		}
-		s.updateViewOutputType(viewlet, true)
-		return nil
-	}); err != nil {
-		return err
-	}
-	if !hasSummary && !resource.Rule.IsGeneratation { //TODO add support
-		err = s.persistViewMetaColumn(columnDiscovery, resource)
-		if err != nil {
-			return err
-		}
-	}
-	return err
 }
 
 func (s *Service) updateViewOutputType(viewlet *Viewlet, withTypeDef bool) {
@@ -242,17 +224,22 @@ func (s *Service) updateViewOutputType(viewlet *Viewlet, withTypeDef bool) {
 
 	fields := viewlet.Spec.Type.Fields()
 	if len(fields) > 0 {
-		viewlet.View.Schema = &state.Schema{}
+		if viewlet.View.Schema == nil {
+			viewlet.View.Schema = &state.Schema{}
+		}
 		paramSchema := reflect.StructOf(fields)
+		if viewlet.View.Schema.Cardinality == "" {
+			viewlet.View.Schema.Cardinality = state.Many
+		}
 		viewlet.View.Schema.SetType(paramSchema)
 	}
 	if !withTypeDef {
 		return
 	}
+
 	viewlet.TypeDefinition = viewlet.Spec.TypeDefinition("", false)
 	viewlet.TypeDefinition.Cardinality = ""
 	viewlet.TypeDefinition.Name = TypeDefinitionName(viewlet)
-
 }
 
 func TypeDefinitionName(viewlet *Viewlet) string {
@@ -330,6 +317,7 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	if err != nil {
 		return fmt.Errorf("failed to build component : %s, %w", rootViewName, err)
 	}
+
 	data, err := asset.EncodeYAML(routerResource)
 	if err != nil {
 		return fmt.Errorf("failed to encode: %+v, %w", routerResource, err)
@@ -404,12 +392,15 @@ func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mo
 	//	s.GitRepository.AppendCache(aView.Columns)
 	//}
 
-	resource.Resource.Views = append(resource.Resource.Views, &viewlet.View.View)
+	aView := &viewlet.View.View
+	resource.Resource.Views = append(resource.Resource.Views, aView)
 	viewlet.View.GenerateFiles(baseRuleURL, ruleName, &s.Repository.Files)
 	if viewlet.TypeDefinition != nil {
-		viewType := reflect.StructOf(viewlet.Spec.Type.Fields())
-		viewlet.TypeDefinition.DataType = viewType.String()
-		viewlet.TypeDefinition.Fields = nil
+		if len(viewlet.TypeDefinition.Fields) > 0 {
+			viewType := reflect.StructOf(viewlet.Spec.Type.Fields())
+			viewlet.TypeDefinition.DataType = viewType.String()
+			viewlet.TypeDefinition.Fields = nil
+		}
 		resource.AppendTypeDefinition(viewlet.TypeDefinition)
 	}
 	return nil

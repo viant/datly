@@ -29,43 +29,9 @@ func (l *outputLocator) Names() []string {
 func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bool, error) {
 	switch aName := strings.ToLower(name); aName {
 	case "job":
-		if value := ctx.Value(async.JobKey); value != nil {
-			ret, ok := value.(*async.Job)
-			if ok {
-				return ret, true, nil
-			}
-		}
-		return nil, false, nil
-	case "jobstatus":
-		if value := ctx.Value(async.JobKey); value != nil {
-			aJob, ok := value.(*async.Job)
-			if !ok {
-				return nil, true, nil
-			}
-			expiryInSec := 0
-			if expiryTime := aJob.ExpiryTime; expiryTime != nil {
-				expiry := expiryTime.Sub(time.Now())
-				expiryInSec = int(expiry.Seconds())
-			}
-
-			cacheKey := ""
-			cacheHit := false
-			if aJob.CacheKey != nil {
-				cacheKey = *aJob.CacheKey
-				cacheHit = true
-			}
-
-			jobStats := response.JobStatus{
-				RequestTime: time.Now(),
-				JobStatus:   aJob.Status,
-				CreateTime:  aJob.CreationTime,
-				WaitTimeMcs: aJob.WaitTimeMcs,
-				RunTimeMcs:  aJob.RunTimeMcs,
-				ExpiryInSec: expiryInSec,
-				CacheKey:    cacheKey,
-				CacheHit:    cacheHit,
-			}
-			return jobStats, true, nil
+		job := getJob(ctx)
+		if job != nil {
+			return job, true, nil
 		}
 		return nil, false, nil
 	case "async.status":
@@ -75,52 +41,43 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 		}
 		info := infoValue.(*exec.Info)
 		return info.AsyncStatus(), true, nil
-	case "jobstatus.execstatus", "jobstatus.cachekey",
-		"jobstatus.waittimemcs", "jobstatus.runtimemcs", "jobstatus.expiryinsec":
-		//TODO refactor this as a function
-		//return l.View.Name, true, nil
-		if value := ctx.Value(async.JobKey); value != nil {
-			aJob, ok := value.(*async.Job)
-			if !ok {
-				return nil, true, nil
-			}
-			expiryInSec := 0
-			if expiryTime := aJob.ExpiryTime; expiryTime != nil {
-				expiry := expiryTime.Sub(time.Now())
-				expiryInSec = int(expiry.Seconds())
-			}
-
-			cacheKey := ""
-			cacheHit := false
-			if aJob.CacheKey != nil {
-				cacheKey = *aJob.CacheKey
-				cacheHit = true
-			}
-
-			jobStats := response.JobStatus{
-				RequestTime: time.Now(),
-				JobStatus:   aJob.Status,
-				CreateTime:  aJob.CreationTime,
-				WaitTimeMcs: aJob.WaitTimeMcs,
-				RunTimeMcs:  aJob.RunTimeMcs,
-				ExpiryInSec: expiryInSec,
-				CacheKey:    cacheKey,
-				CacheHit:    cacheHit,
-			}
-			switch aName {
-			case "jobstatus.execstatus":
-				return jobStats.JobStatus, true, nil
-			case "jobstatus.cachekey":
-				return jobStats.CacheKey, true, nil
-			case "jobstatus.waittimemcs":
-				return jobStats.WaitTimeMcs, true, nil
-			case "jobstatus.runtimemcs":
-				return jobStats.RunTimeMcs, true, nil
-			case "jobstatus.expiryinsec":
-				return jobStats.ExpiryInSec, true, nil
-			}
+	case "async.done":
+		infoValue := ctx.Value(exec.InfoKey)
+		if infoValue == nil {
+			return false, true, nil
+		}
+		info := infoValue.(*exec.Info)
+		return info.AsyncStatus() == string(async.StatusDone), true, nil
+	case "jobstatus":
+		if job := getJob(ctx); job != nil {
+			return buildJobStatus(job), true, nil
 		}
 		return nil, false, nil
+	case "jobstatus.execstatus", "jobstatus.cachekey",
+		"jobstatus.waittimemcs", "jobstatus.runtimemcs", "jobstatus.expiryinsec":
+		job := getJob(ctx)
+		if job == nil {
+			return nil, false, nil
+		}
+		jobStats := buildJobStatus(job)
+		switch aName {
+		case "jobstatus.execstatus":
+			return jobStats.JobStatus, true, nil
+		case "jobstatus.cachekey":
+			return jobStats.CacheKey, true, nil
+		case "jobstatus.waittimemcs":
+			return jobStats.WaitTimeMcs, true, nil
+		case "jobstatus.runtimemcs":
+			return jobStats.RunTimeMcs, true, nil
+		case "jobstatus.expiryinsec":
+			return jobStats.ExpiryInSec, true, nil
+		}
+	case "elapsedInSec":
+		//TODO add implementation
+		return 1, true, nil
+	case "responseTime":
+		//TODO add implementation
+		return time.Now(), true, nil
 	case "data":
 		if l.Output == nil {
 			return nil, false, nil
@@ -158,6 +115,43 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 		return filterState.State(), true, nil
 	}
 	return nil, false, nil
+}
+
+func buildJobStatus(aJob *async.Job) response.JobStatus {
+	expiryInSec := 0
+	if expiryTime := aJob.ExpiryTime; expiryTime != nil {
+		expiry := expiryTime.Sub(time.Now())
+		expiryInSec = int(expiry.Seconds())
+	}
+
+	cacheKey := ""
+	cacheHit := false
+	if aJob.CacheKey != nil {
+		cacheKey = *aJob.CacheKey
+		cacheHit = true
+	}
+
+	jobStats := response.JobStatus{
+		RequestTime: time.Now(),
+		JobStatus:   aJob.Status,
+		CreateTime:  aJob.CreationTime,
+		WaitTimeMcs: aJob.WaitTimeMcs,
+		RunTimeMcs:  aJob.RunTimeMcs,
+		ExpiryInSec: expiryInSec,
+		CacheKey:    cacheKey,
+		CacheHit:    cacheHit,
+	}
+	return jobStats
+}
+
+func getJob(ctx context.Context) *async.Job {
+	if value := ctx.Value(async.JobKey); value != nil {
+		ret, ok := value.(*async.Job)
+		if ok {
+			return ret
+		}
+	}
+	return nil
 }
 
 // newOutputLocator returns output locator
