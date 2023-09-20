@@ -51,6 +51,8 @@ func (l *outputLocator) getJobValue(ctx context.Context, name string) (interface
 		return jobInfo.RunTimeInMs / 1000, true, nil
 	case keys.JobInfoExpiryInSec:
 		return jobInfo.ExpiryInSec, true, nil
+	case keys.JobInfoPriority:
+		return 0, true, nil
 	}
 	return nil, false, nil
 }

@@ -78,7 +78,7 @@ func (t *Template) BuildState(spec *inference.Spec, bodyHolder string, opts ...O
 		}
 		var structTag reflect.StructTag
 		if parameter.Schema.DataType != "" {
-			structTag = reflect.StructTag(fmt.Sprintf(`%v:"%v"`, xreflect.TagTypeName, parameter.Schema.DataType))
+			structTag = reflect.StructTag(fmt.Sprintf(`%v:"%v"`, xreflect.TagTypeName, parameter.Schema.TypeName()))
 		}
 
 		structFields = append(structFields, reflect.StructField{
@@ -121,7 +121,7 @@ func (t *Template) allocateSequence(options *Options, spec *inference.Spec, bloc
 	if len(spec.Type.PkFields) != 1 {
 		return
 	}
-	if field := spec.Type.PkFields[0]; strings.Contains(field.Schema.DataType, "int") {
+	if field := spec.Type.PkFields[0]; strings.Contains(field.Schema.TypeName(), "int") {
 		selector := spec.Selector()
 
 		var args = []ast.Expression{ast.NewQuotedLiteral(spec.Table), ast.NewIdent(selector[0]),
@@ -324,7 +324,7 @@ func (t *Template) EnsureImports(aType *inference.Type) {
 	}
 
 	for _, field := range aType.RelationFields {
-		t.Imports.AddType(aType.ExpandType(field.Schema.DataType))
+		t.Imports.AddType(aType.ExpandType(field.Schema.TypeName()))
 	}
 }
 

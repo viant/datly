@@ -45,6 +45,14 @@ func (s *Schema) EnsurePointer() {
 	s.Name = "*" + s.Name
 }
 
+func (s *Schema) SimpleTypeName() string {
+	ret := s.TypeName()
+	if index := strings.LastIndex(ret, "."); index != -1 {
+		return ret[index+1:]
+	}
+	return ret
+}
+
 func (s *Schema) TypeName() string {
 	name := shared.FirstNotEmpty(s.Name, s.DataType)
 	if s.Package == "" {

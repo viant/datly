@@ -63,10 +63,10 @@ func (t *Template) generateRegisterType() string {
 		if param.In.Kind != state.KindDataView {
 			continue
 		}
-		registry.register(param.Schema.DataType)
+		registry.register(param.Schema.TypeName())
 	}
 	for _, param := range t.State.FilterByKind(state.KindRequestBody) {
-		registry.register(param.Schema.DataType)
+		registry.register(param.Schema.TypeName())
 	}
 	return registry.stringify()
 }
@@ -77,7 +77,7 @@ func (t *Template) generateMapTypeBody() string {
 		if param.In.Kind != state.KindDataView {
 			continue
 		}
-		initElements = append(initElements, fmt.Sprintf(registerMapEntryTemplate, param.Schema.DataType, param.Schema.DataType))
+		initElements = append(initElements, fmt.Sprintf(registerMapEntryTemplate, param.Schema.TypeName(), param.Schema.TypeName()))
 	}
 
 	initCode := strings.Join(initElements, "\n")
