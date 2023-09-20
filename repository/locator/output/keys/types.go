@@ -25,7 +25,9 @@ const ( //Components keys
 	Summary = "summary"
 
 	//SummaryMeta legacy, alternative SummaryKey
-	SummaryMeta     = "meta"
+	SummaryMeta = "meta"
+	ViewID      = "view.id"
+
 	ViewName        = "view.name"
 	ViewDescription = "view.description"
 )

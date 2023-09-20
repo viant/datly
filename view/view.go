@@ -277,6 +277,10 @@ func (v *View) init(ctx context.Context) error {
 	nameTaken := map[string]bool{
 		v.Name: true,
 	}
+
+	if v.Description == "" {
+		v.Description = v.Name
+	}
 	if schema := v.Schema; schema != nil && len(v.With) == 0 {
 		if err := v.inheritRelationsFromTag(schema); err != nil {
 			return err
