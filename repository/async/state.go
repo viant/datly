@@ -13,8 +13,8 @@ func (s *State) Init(ctx context.Context, res *view.Resource, mainView *view.Vie
 			return err
 		}
 	}
-	if s.JobRef != nil {
-		if err := s.JobRef.Init(ctx, resource); err != nil {
+	if s.JobMatchKey != nil {
+		if err := s.JobMatchKey.Init(ctx, resource); err != nil {
 			return err
 		}
 	}

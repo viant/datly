@@ -24,9 +24,9 @@ type (
 
 	//State defines location for the followings
 	State struct {
-		UserID    *state.Parameter
-		UserEmail *state.Parameter
-		JobRef    *state.Parameter
+		UserID      *state.Parameter
+		UserEmail   *state.Parameter
+		JobMatchKey *state.Parameter
 	}
 
 	Config struct {
@@ -208,13 +208,13 @@ func NewAsyncRecord(ctx context.Context, route *Route, request *RequestParams) (
 }
 
 func InitRecord(ctx context.Context, record *async.Job, route *Route, request *RequestParams) error {
-	if record.JobRef == "" {
+	if record.JobMatchKey == "" {
 		recordID, err := uuid.NewUUID()
 		if err != nil {
 			return err
 		}
 
-		record.JobRef = recordID.String()
+		record.JobMatchKey = recordID.String()
 	}
 
 	record.TemplateState = async.StateRunning

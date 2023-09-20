@@ -341,8 +341,8 @@ func (s *Service) applyAsyncOption(resource *Resource, route *router.Route) erro
 				asyncModule.State.UserID = &resource.AsyncState[i].Parameter
 			case "useremail":
 				asyncModule.State.UserEmail = &resource.AsyncState[i].Parameter
-			case "jobref":
-				asyncModule.State.JobRef = &resource.AsyncState[i].Parameter
+			case "jobmatchkey":
+				asyncModule.State.JobMatchKey = &resource.AsyncState[i].Parameter
 			}
 		}
 	}
@@ -360,8 +360,8 @@ func (s *Service) applyAsyncOption(resource *Resource, route *router.Route) erro
 	if asyncModule.Jobs.Connector == nil {
 		asyncModule.Jobs.Connector = view.NewRefConnector(s.DefaultConnector())
 	}
-	if asyncModule.State.JobRef == nil {
-		return fmt.Errorf("rasync jobRef parameter is not defined")
+	if asyncModule.State.JobMatchKey == nil {
+		return fmt.Errorf("async matchKey parameter is not defined")
 	}
 	return nil
 }

@@ -74,7 +74,7 @@ func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Comp
 		return nil, err
 	}
 
-	matchKey, err := aState.String(asyncModule.JobRef.Name)
+	matchKey, err := aState.String(asyncModule.JobMatchKey.Name)
 	if err != nil {
 		return nil, err
 	}
