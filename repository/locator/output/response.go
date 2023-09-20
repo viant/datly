@@ -15,6 +15,8 @@ func (l *outputLocator) getResponseValue(ctx context.Context, name string) (inte
 	switch name {
 	case "response.elapsedInSec":
 		return int(info.Elapsed().Seconds()), true, nil
+	case "response.elapsedInMs":
+		return int(info.Elapsed().Milliseconds()), true, nil
 	case "response.time":
 		return info.EndTime(), true, nil
 	}
