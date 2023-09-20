@@ -74,17 +74,17 @@ func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Comp
 		return nil, err
 	}
 
-	jobRef, err := aState.String(asyncModule.JobRef.Name)
+	matchKey, err := aState.String(asyncModule.JobRef.Name)
 	if err != nil {
 		return nil, err
 	}
-	jobRef = aComponent.View.Name + ":" + jobRef
-	job, err := aComponent.Async.JobByRef(ctx, jobRef)
+	matchKey = aComponent.View.Name + "/" + matchKey
+	job, err := aComponent.Async.JobByMatchKey(ctx, matchKey)
 	if err != nil {
 		return nil, err
 	}
 	if job == nil {
-		if job, err = s.buildJob(ctx, aSession, aState, aComponent, jobRef, options); err != nil {
+		if job, err = s.buildJob(ctx, aSession, aState, aComponent, matchKey, options); err != nil {
 			return nil, err
 		}
 		destURL := asyncModule.DestinationURL(job)

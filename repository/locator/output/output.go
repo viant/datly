@@ -2,6 +2,8 @@ package output
 
 import (
 	"context"
+	"encoding/json"
+	"github.com/viant/datly/repository/locator/output/keys"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -26,22 +28,40 @@ func (l *outputLocator) Names() []string {
 func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bool, error) {
 	aName := strings.ToLower(name)
 	switch aName {
-	case "data":
+	case keys.Data:
 		if l.Output == nil {
 			return nil, false, nil
 		}
 		return l.Output.Data, true, nil
-	case "summary", "meta":
+	case keys.Summary, keys.SummaryMeta:
 		if l.Output == nil {
 			return nil, false, nil
 		}
 		return l.Output.ViewMeta, true, nil
-	case "status":
+	case keys.Status:
 		if l.Status == nil {
 			return nil, false, nil
 		}
 		return l.Status, true, nil
-	case "sql":
+
+	case keys.Error:
+		if l.Status == nil || l.Status.Status == "ok" {
+			return "", true, nil
+		}
+		if l.Status.Message != "" {
+			return l.Status.Message, true, nil
+		}
+		if l.Status.Errors != nil {
+			message, _ := json.Marshal(l.Status.Errors)
+			return string(message), true, nil
+		}
+		return "", false, nil
+	case keys.StatusCode:
+		if l.Status == nil {
+			return "unknown", true, nil
+		}
+		return l.Status.Status, true, nil
+	case keys.SQL:
 		if l.Output == nil {
 			return nil, false, nil
 		}
@@ -49,7 +69,7 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 		return SQL, true, nil
 	default:
 		switch {
-		case strings.HasPrefix(aName, "job"):
+		case strings.HasPrefix(aName, keys.Job):
 			return l.getJobValue(ctx, aName)
 		case strings.HasPrefix(aName, "async"):
 			return l.getAsyncValue(ctx, aName)

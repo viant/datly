@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"github.com/viant/datly/repository/locator/output/keys"
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/response"
 	"strings"
@@ -13,31 +14,48 @@ func (l *outputLocator) getJobValue(ctx context.Context, name string) (interface
 	if job == nil {
 		return nil, true, nil
 	}
-
-	var jobStatus response.JobStatus
-	if strings.HasPrefix(name, "jobstatus") {
-		jobStatus = buildJobStatus(job)
+	var jobInfo response.JobInfo
+	if strings.HasPrefix(name, keys.JobInfo) {
+		jobInfo = buildJobInfo(job)
 	}
 	switch name {
-	case "job":
+	case keys.Job:
 		return job, true, nil
-	case "jobstatus":
-		return jobStatus, true, nil
-	case "jobstatus.execstatus":
-		return jobStatus.JobStatus, true, nil
-	case "jobstatus.cachekey":
-		return jobStatus.CacheKey, true, nil
-	case "jobstatus.waittimemcs":
-		return jobStatus.WaitTimeMcs, true, nil
-	case "jobstatus.runtimemcs":
-		return jobStatus.RunTimeMcs, true, nil
-	case "jobstatus.expiryinsec":
-		return jobStatus.ExpiryInSec, true, nil
+	case keys.JobInfo:
+		return jobInfo, true, nil
+	case keys.JobInfoStatus:
+		return jobInfo.JobStatus, true, nil
+	case keys.JobInfoStatusCode: //alternative names of job status
+		if job.Error != nil && *job.Error != "" {
+			return "ERROR", true, nil
+		}
+		switch async.Status(jobInfo.JobStatus) {
+		case async.StatusDone:
+			return "COMPLETED", true, nil
+		case async.StatusPending:
+			return "WAITING", true, nil
+		default:
+			return jobInfo.JobStatus, true, nil
+		}
+	case keys.JobInfoCacheKey:
+		return jobInfo.CacheKey, true, nil
+	case keys.JobInfoMatchKey:
+		return jobInfo.MatchKey, true, nil
+	case keys.JobInfoWaitTimeInMs:
+		return jobInfo.WaitTimeInMs, true, nil
+	case keys.JobInfoWaitTimeInSec:
+		return jobInfo.WaitTimeInMs / 1000, true, nil
+	case keys.JobInfoRunTimeInMs:
+		return jobInfo.RunTimeInMs, true, nil
+	case keys.JobInfoRunTimeInSec:
+		return jobInfo.RunTimeInMs / 1000, true, nil
+	case keys.JobInfoExpiryInSec:
+		return jobInfo.ExpiryInSec, true, nil
 	}
 	return nil, false, nil
 }
 
-func buildJobStatus(aJob *async.Job) response.JobStatus {
+func buildJobInfo(aJob *async.Job) response.JobInfo {
 	expiryInSec := 0
 	if expiryTime := aJob.ExpiryTime; expiryTime != nil {
 		expiry := expiryTime.Sub(time.Now())
@@ -51,15 +69,15 @@ func buildJobStatus(aJob *async.Job) response.JobStatus {
 		cacheHit = true
 	}
 
-	jobStats := response.JobStatus{
-		RequestTime: time.Now(),
-		JobStatus:   aJob.Status,
-		CreateTime:  aJob.CreationTime,
-		WaitTimeMcs: aJob.WaitTimeMcs,
-		RunTimeMcs:  aJob.RunTimeMcs,
-		ExpiryInSec: expiryInSec,
-		CacheKey:    cacheKey,
-		CacheHit:    cacheHit,
+	jobStats := response.JobInfo{
+		RequestTime:  time.Now(),
+		JobStatus:    aJob.Status,
+		CreateTime:   aJob.CreationTime,
+		WaitTimeInMs: aJob.WaitTimeInMcs / 1000,
+		RunTimeInMs:  aJob.RunTimeInMcs / 1000,
+		ExpiryInSec:  expiryInSec,
+		CacheKey:     cacheKey,
+		CacheHit:     cacheHit,
 	}
 	return jobStats
 }

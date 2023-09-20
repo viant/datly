@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/repository/content"
+	"github.com/viant/datly/repository/locator/output/keys"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox/format"
-	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/response"
 	"net/url"
 	"reflect"
+	"strings"
 )
 
 const (
@@ -241,36 +242,16 @@ func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 	if rType != nil && rType.Kind() != reflect.String && rType.Kind() != reflect.Interface {
 		return
 	}
-	switch parameter.In.Kind {
-	case state.KindOutput:
-		switch parameter.In.Name {
+	if parameter.In.Kind == state.KindOutput {
+		key := strings.ToLower(parameter.In.Name)
+		switch key {
 		case "":
 			return
 		case "data":
 			if aView != nil {
 				parameter.Schema = state.NewSchema(aView.OutputType())
 			}
-		case "sql", "jobstatus.execstatus", "jobstatus.cachekey", "async.status":
-			parameter.Schema = state.NewSchema(reflect.TypeOf(""))
-		case "job":
-			parameter.Schema = state.NewSchema(reflect.TypeOf(&async.Job{}))
-			parameter.Schema.Name = "*async.Job"
 
-		case "jobstatus":
-			parameter.Schema = state.NewSchema(reflect.TypeOf(response.JobStatus{}))
-			parameter.Schema.Name = "response.JobStatus"
-			if parameter.Name == "JobStatus" && parameter.Tag == "" {
-				parameter.Tag = ` anonymous:"true"`
-			}
-		case "jobstatus.waittimemcs", "jobstatus.runtimemcs", "jobstatus.expiryinsec":
-			parameter.Schema = state.NewSchema(reflect.TypeOf(0))
-		case "status":
-			parameter.Schema = state.NewSchema(reflect.TypeOf(response.Status{}))
-			parameter.Schema.Name = "response.Status"
-			parameter.Name = "Status"
-			if parameter.Tag == "" {
-				parameter.Tag = ` anonymous:"true"`
-			}
 		case "summary":
 			if aView != nil {
 				parameter.Schema = aView.Template.Summary.Schema
@@ -282,6 +263,26 @@ func ensureOutputParameterType(parameter *state.Parameter, aView *view.View) {
 			} else {
 				parameter.Schema.Name = "Filter"
 				parameter.Schema.DataType = "Filter"
+			}
+		default:
+			//static types
+			if rType, ok := keys.Types[key]; ok {
+				parameter.Schema = state.NewSchema(rType)
+				if rType.Kind() == reflect.Ptr {
+					rType = rType.Elem()
+				}
+				if rType.Kind() == reflect.Struct {
+
+					if parameter.Name == "" {
+						parameter.Name = rType.Name()
+					}
+					if parameter.Tag == "" {
+						parameter.Tag = `json:",omitempty"`
+						if parameter.Name == rType.Name() {
+							parameter.Tag += ` anonymous:"true"`
+						}
+					}
+				}
 			}
 		}
 	}

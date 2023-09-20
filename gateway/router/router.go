@@ -295,8 +295,11 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 	}
 
 	aResponse := route.Output.Type.Type().NewState()
-	aResponse.SetValue(statusParameter.Name, responseStatus)
 
+	if err = aResponse.SetValue(statusParameter.Name, responseStatus); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	asBytes, marErr := route.JsonMarshaller.Marshal(aResponse.State())
 	if marErr != nil {
 		w.Write(asBytes)

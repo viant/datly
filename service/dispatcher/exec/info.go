@@ -47,6 +47,39 @@ func (i *Info) AsyncElapsed() time.Duration {
 	return ended.Sub(started)
 }
 
+func (i *Info) AsyncEndTime() *time.Time {
+	if len(i.jobs) == 0 {
+		return nil
+	}
+	var ret *time.Time
+	for _, job := range i.jobs {
+		if job.EndTime != nil {
+			if ret == nil {
+				ret = job.EndTime
+			} else if job.EndTime.After(*ret) {
+				ret = job.EndTime
+			}
+		}
+	}
+	return ret
+}
+
+func (i *Info) AsyncCreationTime() *time.Time {
+	if len(i.jobs) == 0 {
+		return nil
+	}
+	var ret *time.Time
+	for _, job := range i.jobs {
+		if ret == nil {
+			ret = &job.CreationTime
+		} else if job.CreationTime.Before(*ret) {
+			ret = &job.CreationTime
+		}
+
+	}
+	return ret
+}
+
 func (i *Info) AppendJob(job *async.Job) {
 	i.mux.Lock()
 	defer i.mux.Unlock()
@@ -70,16 +103,26 @@ func (i *Info) AsyncStatus() string {
 	i.mux.RLock()
 	defer i.mux.RUnlock()
 	if len(i.jobs) == 0 {
-		return "unknown"
+		return "N/A"
 	}
+
+	pendingCount := 0
+	runningCount := 0
 	doneCount := 0
 	for _, candidate := range i.jobs {
 		if candidate.Status == string(async.StatusDone) {
 			doneCount++
+		} else if candidate.Status == string(async.StatusRunning) {
+			runningCount++
+		} else if candidate.Status == string(async.StatusPending) {
+			pendingCount++
 		}
 	}
 	if doneCount == len(i.jobs) {
 		return i.jobs[0].Status
+	}
+	if pendingCount == len(i.jobs) {
+		return string(async.StatusPending)
 	}
 	return string(async.StatusRunning)
 }

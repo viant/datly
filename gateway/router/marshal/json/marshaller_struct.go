@@ -118,10 +118,21 @@ func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 		objPtr := ptr
 		if stringifier.indirectXField != nil {
 			objPtr = stringifier.indirectXField.ValuePointer(objPtr)
+			if !stringifier.omitEmpty && strings.Contains(stringifier.indirectXField.Tag.Get("json"), "omitempty") {
+				stringifier.omitEmpty = true
+			}
 		}
 
-		value := stringifier.xField.Value(objPtr)
+		var value interface{}
+		if objPtr != nil {
+			value = stringifier.xField.Value(objPtr)
+		}
+		if (objPtr == nil || value == nil) && stringifier.xField.Kind() == reflect.Slice {
+			value = reflect.New(stringifier.xField.Type).Interface()
+			objPtr = xunsafe.AsPointer(value)
+		}
 		isZeroVal := isZeroValue(objPtr, stringifier, value)
+
 		if stringifier.omitEmpty && isZeroVal {
 			continue
 		}
@@ -136,6 +147,10 @@ func (s *structMarshaller) MarshallObject(ptr unsafe.Pointer, sb *MarshallSessio
 			sb.WriteString(`":`)
 		}
 
+		if objPtr == nil {
+			sb.WriteString(null)
+			continue
+		}
 		prevLen = sb.Len()
 		if err := stringifier.marshaller.MarshallObject(stringifier.xField.Pointer(objPtr), sb); err != nil {
 			return err
@@ -343,6 +358,9 @@ func (f *marshallerWithField) init(field reflect.StructField, config config.IOCo
 
 func isZeroValue(ptr unsafe.Pointer, stringifier *marshallerWithField, value interface{}) bool {
 	if stringifier.comparable {
+		if value == nil {
+			return true
+		}
 		return stringifier.zeroValue == value
 	}
 

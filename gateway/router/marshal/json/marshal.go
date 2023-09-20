@@ -53,7 +53,6 @@ func (j *Marshaller) Marshal(value interface{}, options ...interface{}) ([]byte,
 	if err = marshaller.MarshallObject(pointer, session); err != nil {
 		return nil, err
 	}
-
 	output := make([]byte, len(session.Buffer.Bytes()))
 	copy(output, session.Bytes())
 

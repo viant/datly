@@ -28,7 +28,7 @@ func (s *Service) updateJobStatusRunning(ctx context.Context, component *reposit
 	job.Status = string(async.StatusRunning)
 	startedAt := time.Now()
 	job.StartTime = &startedAt
-	job.WaitTimeMcs = int(startedAt.Sub(job.CreationTime).Microseconds())
+	job.WaitTimeInMcs = int(startedAt.Sub(job.CreationTime).Microseconds())
 	return component.Async.UpdateJob(ctx, job)
 }
 
@@ -41,7 +41,7 @@ func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repositor
 	endedAt := time.Now()
 	job.EndTime = &endedAt
 	elapsed := endedAt.Sub(*job.StartTime)
-	job.RunTimeMcs = int(elapsed.Microseconds())
+	job.RunTimeInMcs = int(elapsed.Microseconds())
 	expiryTime := endedAt.Add(aComponent.Async.TTL())
 	job.ExpiryTime = &expiryTime
 	metrics, _ := json.Marshal(response.Metrics)
@@ -61,7 +61,7 @@ func (s *Service) updateJobStatusDone(ctx context.Context, aComponent *repositor
 	return aComponent.Async.UpdateJob(ctx, job)
 }
 
-func (s *Service) buildJob(ctx context.Context, aSession *session.Session, aState *structology.State, aComponent *repository.Component, jobRef string, options *session.Options) (*async.Job, error) {
+func (s *Service) buildJob(ctx context.Context, aSession *session.Session, aState *structology.State, aComponent *repository.Component, matchKey string, options *session.Options) (*async.Job, error) {
 	asyncModule := aComponent.Async
 	encodedState, err := aSession.MarshalJSON()
 	if err != nil {
@@ -73,7 +73,7 @@ func (s *Service) buildJob(ctx context.Context, aSession *session.Session, aStat
 	}
 	job := &async.Job{
 		ID:           UUID.String(),
-		Ref:          jobRef,
+		MatchKey:     matchKey,
 		Status:       string(async.StatusPending),
 		Request:      async.Request{State: string(encodedState)},
 		MainView:     aComponent.View.Name,

@@ -187,7 +187,7 @@ CREATE TABLE BAR (
 DROP TABLE IF EXISTS DATLY_JOBS;
 
 CREATE TABLE `DATLY_JOBS` (
-                              `Ref` varchar(1024) NOT NULL,
+                              `MatchKey` varchar(1024) NOT NULL,
                               `Status` varchar(40) NOT NULL,
                               `Metrics` text NOT NULL,
                               `Connector` varchar(256),
@@ -215,12 +215,12 @@ CREATE TABLE `DATLY_JOBS` (
                               `StartTime` datetime DEFAULT NULL,
                               `ExpiryTime` datetime DEFAULT NULL,
                               `EndTime` datetime DEFAULT NULL,
-                              `WaitTimeMcs` int(11) NOT NULL,
-                              `RuntimeMcs` int(11) NOT NULL,
+                              `WaitTimeInMcs` int(11) NOT NULL,
+                              `RuntimeInMcs` int(11) NOT NULL,
                               `SQLQuery` text NOT NULL,
-                              `Invalidated` tinyint(1),
+                              `Deactivated` tinyint(1),
                               `ID` varchar(40) NOT NULL,
                               PRIMARY KEY (`ID`)
 );
 
-CREATE INDEX DATLY_JOBS_REF ON DATLY_JOBS(Ref, CreationTime, Invalidated);
+CREATE INDEX DATLY_JOBS_REF ON DATLY_JOBS(MatchKey, CreationTime, Deactivated);

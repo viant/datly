@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"github.com/viant/datly/repository/locator/output/keys"
 	"github.com/viant/datly/service/dispatcher/exec"
 )
 
@@ -13,11 +14,11 @@ func (l *outputLocator) getResponseValue(ctx context.Context, name string) (inte
 	info := infoValue.(*exec.Info)
 
 	switch name {
-	case "response.elapsedInSec":
+	case keys.ResponseElapsedInSec:
 		return int(info.Elapsed().Seconds()), true, nil
-	case "response.elapsedInMs":
+	case keys.ResponseElapsedInMs:
 		return int(info.Elapsed().Milliseconds()), true, nil
-	case "response.time":
+	case keys.ResponseTime:
 		return info.EndTime(), true, nil
 	}
 	return nil, false, nil
