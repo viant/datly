@@ -89,6 +89,7 @@ const ( //Response keys
 
 var Types = map[string]reflect.Type{
 	//Component/View related keys
+	Error:           xreflect.StringType,
 	Status:          reflect.TypeOf(response.Status{}),
 	SQL:             xreflect.StringType,
 	ViewName:        xreflect.StringType,
@@ -124,6 +125,7 @@ var Types = map[string]reflect.Type{
 	//Response keys
 	ResponseTime: xreflect.TimeType,
 
-	ResponseElapsedInSec: xreflect.IntType,
-	ResponseElapsedInMs:  xreflect.IntType,
+	ResponseElapsedInSec:  xreflect.IntType,
+	ResponseElapsedInMs:   xreflect.IntType,
+	ResponseUnixTimeInSec: xreflect.IntType,
 }

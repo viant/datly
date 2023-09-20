@@ -18,6 +18,8 @@ func (l *outputLocator) getResponseValue(ctx context.Context, name string) (inte
 		return int(info.Elapsed().Seconds()), true, nil
 	case keys.ResponseElapsedInMs:
 		return int(info.Elapsed().Milliseconds()), true, nil
+	case keys.ResponseUnixTimeInSec:
+		return info.EndTime().Unix(), true, nil
 	case keys.ResponseTime:
 		return info.EndTime(), true, nil
 	}
