@@ -49,9 +49,9 @@ func (s *Service) Init(ctx context.Context) error {
 	}
 	aView := view.NewView(viewID, s.config.TableName,
 		view.WithConnector(s.connector),
-		view.WithCriteria("ID", "JobMatchKey", "CreationTime"),
+		view.WithCriteria("ID", "MatchKey", "CreationTime"),
 		view.WithColumns(view.Columns{
-			view.NewColumn("JobMatchKey", "varchar", xreflect.StringType, false),
+			view.NewColumn("MatchKey", "varchar", xreflect.StringType, false),
 			view.NewColumn("Status", "varchar", xreflect.StringType, false),
 			view.NewColumn("Metrics", "text", xreflect.StringType, false),
 			view.NewColumn("Connector", "varchar", xreflect.StringPtrType, true),

@@ -63,7 +63,7 @@ func BuildSelectSQL(ctx context.Context, db *sql.DB, qualifiers ...*JobQualifier
 		}
 
 		if jobQualifier.JobID != nil {
-			sb.WriteString(" AND JobMatchKey = ?")
+			sb.WriteString(" AND MatchKey = ?")
 			args = append(args, *jobQualifier.JobID)
 		}
 
@@ -75,7 +75,7 @@ func BuildSelectSQL(ctx context.Context, db *sql.DB, qualifiers ...*JobQualifier
 
 func BuildSelectByID(ctx context.Context, db *sql.DB, id string) (string, []interface{}, error) {
 	builder := prepareQueryBuilder()
-	builder.WriteString(" WHERE JobMatchKey = ? ")
+	builder.WriteString(" WHERE MatchKey = ? ")
 	return builder.String(), []interface{}{id}, nil
 }
 

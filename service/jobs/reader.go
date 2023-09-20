@@ -36,7 +36,7 @@ func (s *Service) JobByMatchKey(ctx context.Context, matchKey string, ttl time.D
 	}
 	state := session.State.Lookup(s.readerView)
 	createdAt := time.Now().Add(-ttl).UTC()
-	state.SetCriteria("  JobMatchKey = ? AND CreationTime >= ? ", []interface{}{matchKey, createdAt})
+	state.SetCriteria("  MatchKey = ? AND CreationTime >= ? ", []interface{}{matchKey, createdAt})
 	if err = s.reader.Read(ctx, session); err != nil {
 		return nil, err
 	}
