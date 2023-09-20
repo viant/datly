@@ -20,7 +20,7 @@
 #set($_ = $JobRef<string>(query/).Async())
 
 
-#set($_ = $Job<?>(output/job))
+#set($_ = $Job<?>(output/job).WithTag('json:",omitempty"'))
 #set($_ = $Result<?>(output/data))
 #set($_ = $Status<?>(output/status))
 
