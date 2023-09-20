@@ -49,6 +49,13 @@ func (l *outputLocator) getJobValue(ctx context.Context, name string) (interface
 		default:
 			return jobInfo.JobStatus, true, nil
 		}
+	case keys.JobInfoCacheHit:
+		return jobInfo.CacheHit, true, nil
+	case keys.JobInfoCacheHits:
+		if jobInfo.CacheHit {
+			return 1, true, nil
+		}
+		return 0, true, nil
 	case keys.JobInfoCacheKey:
 		return jobInfo.CacheKey, true, nil
 	case keys.JobInfoMatchKey:
