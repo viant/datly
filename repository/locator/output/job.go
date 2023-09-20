@@ -41,6 +41,9 @@ func (l *outputLocator) getJobValue(ctx context.Context, name string) (interface
 		if job.Error != nil && *job.Error != "" {
 			return "ERROR", true, nil
 		}
+		if l.Status != nil && (l.Status.Errors != nil || l.Status.Status == "error") {
+			return "ERROR", true, nil
+		}
 		switch async.Status(jobInfo.JobStatus) {
 		case async.StatusDone:
 			return "COMPLETED", true, nil
