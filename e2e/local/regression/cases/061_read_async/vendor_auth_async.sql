@@ -17,7 +17,7 @@
 
 #set($_ = $UserID<string>(state/Jwt/UserID).Async())
 #set($_ = $UserEmail<string>(state/Jwt/Email).Async())
-#set($_ = $MatchKey<string>(query/).Async())
+#set($_ = $JobMatchKey<string>(query/).Async())
 
 
 #set($_ = $Job<?>(output/job).WithTag('json:",omitempty"'))
