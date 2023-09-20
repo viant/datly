@@ -259,20 +259,7 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 	}
 
 	if !(valueType == selector.Type() || valueType.ConvertibleTo(selector.Type()) || valueType.AssignableTo(selector.Type())) {
-		fmt.Printf("not assianble \nsrc:%s \ndst:%s", valueType.String(), selector.Type().String())
-		srcType := valueType.String()
-		destType := selector.Type().String()
-		count := len(srcType)
-		if count > len(destType) {
-			count = len(destType)
-		}
-		for i := 0; i < count; i++ {
-			if srcType[i] != destType[i] {
-				fmt.Printf("found differnece at: %v, \ns:%s\nd:%s\n", i, srcType[i:], destType[i:])
-				break
-			}
-		}
-
+		fmt.Printf("%v: not assianble \nsrc:%s \ndst:%s", parameter.Name, valueType.String(), selector.Type().String())
 	}
 	return value, nil
 }
