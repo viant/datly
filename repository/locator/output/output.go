@@ -43,7 +43,10 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 			return nil, false, nil
 		}
 		return l.Status, true, nil
-
+	case "empty":
+		return "", true, nil
+	case "zero":
+		return 0, true, nil
 	case keys.Error:
 		if l.Status == nil || l.Status.Status == "ok" {
 			return "", true, nil
