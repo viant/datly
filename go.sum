@@ -354,6 +354,8 @@ github.com/viant/xreflect v0.3.2-0.20230918173836-036517232ccc h1:GP8nUt58fUjqh+
 github.com/viant/xreflect v0.3.2-0.20230918173836-036517232ccc/go.mod h1:uflXFHcw4TQXgYJvTQ7Akf4SAzXYPCVi8NGZgsVlwmA=
 github.com/viant/xreflect v0.3.2-0.20230920014554-9c0474111106 h1:3pweyX+tEA2EgIgma7JevTx/yPb0Ier4dv7+6IKjr5k=
 github.com/viant/xreflect v0.3.2-0.20230920014554-9c0474111106/go.mod h1:uflXFHcw4TQXgYJvTQ7Akf4SAzXYPCVi8NGZgsVlwmA=
+github.com/viant/xreflect v0.3.2-0.20230920021028-04a256415cac h1:+6d8KGT/zkUSbaTZD9OIYj10UAK2YLJo4WQiKETjDPw=
+github.com/viant/xreflect v0.3.2-0.20230920021028-04a256415cac/go.mod h1:uflXFHcw4TQXgYJvTQ7Akf4SAzXYPCVi8NGZgsVlwmA=
 github.com/viant/xunsafe v0.9.0 h1:pyvHiGjYqwVNwbIfUTvO8W960S6zvM/gxP4iRyAl6BE=
 github.com/viant/xunsafe v0.9.0/go.mod h1:V3RCwtqpbNPznhmHysyAOpsyuSVkIYWo1Ewip7qb9/s=
 github.com/xlab/treeprint v1.1.0/go.mod h1:gj5Gd3gPdKtR1ikdDK6fnFLdmIS0X30kTTuNd/WEJu0=
