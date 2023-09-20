@@ -21,10 +21,22 @@ func (l *outputLocator) getJobValue(ctx context.Context, name string) (interface
 	switch name {
 	case keys.Job:
 		return job, true, nil
+	case keys.JobCreationTime:
+		return job.CreationTime, true, nil
+	case keys.JobEndTime:
+		val := job.EndTime
+		return val, val != nil, nil
+	case keys.JobEndUnixTimeInSec:
+		val := job.EndTime
+		if val == nil {
+			return 0, false, nil
+		}
+		return int(val.Unix()), true, nil
 	case keys.JobInfo:
 		return jobInfo, true, nil
 	case keys.JobInfoStatus:
 		return jobInfo.JobStatus, true, nil
+
 	case keys.JobInfoStatusCode: //alternative names of job status
 		if job.Error != nil && *job.Error != "" {
 			return "ERROR", true, nil

@@ -41,6 +41,12 @@ const ( //Job/Async keys
 
 	JobInfoStatusCode = "jobinfo.code"
 
+	JobCreationTime = "job.creationtime"
+
+	JobEndTime = "job.endtime"
+
+	JobEndUnixTimeInSec = "job.endunixtimeinsec"
+
 	JobInfoCacheKey = "jobinfo.cachekey"
 	JobInfoPriority = "jobinfo.priority"
 
@@ -87,6 +93,9 @@ var Types = map[string]reflect.Type{
 
 	//Job types
 	Job:                  reflect.TypeOf(&async.Job{}),
+	JobCreationTime:      xreflect.TimeType,
+	JobEndTime:           xreflect.TimePtrType,
+	JobEndUnixTimeInSec:  xreflect.IntType,
 	JobInfoStatus:        xreflect.StringType,
 	JobInfoStatusCode:    xreflect.StringType,
 	JobInfoMatchKey:      xreflect.StringType,

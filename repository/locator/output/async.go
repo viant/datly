@@ -31,7 +31,7 @@ func (l *outputLocator) getAsyncValue(ctx context.Context, name string) (interfa
 		if v == nil {
 			return nil, false, nil
 		}
-		return int(v.UnixMilli() / 1000), true, nil
+		return int(v.Unix()), true, nil
 	case keys.AsyncEndTime:
 		v := info.AsyncEndTime()
 		return v, v != nil, nil
