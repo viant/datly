@@ -2,7 +2,6 @@ package locator
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
@@ -43,9 +42,6 @@ func (p *Group) Value(ctx context.Context, names string) (interface{}, bool, err
 		}
 	}
 	ret := aState.State()
-	dd, _ := json.Marshal(ret)
-	fmt.Printf("%T %s\n", ret, dd)
-
 	return ret, isAnyItemSet, nil
 }
 
