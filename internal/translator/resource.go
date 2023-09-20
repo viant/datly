@@ -78,7 +78,9 @@ func (r *Resource) GetSchema(dataType string, opts ...xreflect.Option) (*state.S
 	}
 	if pkgSymbol, err := r.typeRegistry.Symbol("PackageName"); err == nil {
 		if text, ok := pkgSymbol.(string); ok {
-			schema.Package = text
+			if !strings.Contains(dataType, ".") {
+				schema.Package = text
+			}
 		}
 	}
 	if strings.HasPrefix(dataType, "*") {
