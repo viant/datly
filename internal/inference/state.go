@@ -369,10 +369,7 @@ func (s State) EnsureReflectTypes(modulePath string) error {
 		if err != nil {
 			return err
 		}
-		orig := param.Schema
-		param.Schema = state.NewSchema(rType)
-		param.Schema.Cardinality = orig.Cardinality
-		param.Schema.DataType = orig.DataType
+		param.Schema.SetType(rType)
 	}
 	return nil
 }

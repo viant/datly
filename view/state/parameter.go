@@ -266,16 +266,16 @@ func (p *Parameter) initSchema(resource Resource) error {
 		return fmt.Errorf("parameter %v either schema Type or Name has to be specified", p.Name)
 	}
 
-	schemaType := shared.FirstNotEmpty(p.Schema.Name, p.Schema.DataType)
 	if p.MaxAllowedRecords != nil && *p.MaxAllowedRecords > 1 {
 		p.Schema.Cardinality = Many
 	}
 
-	if schemaType != "" {
-		lookup, err := types.LookupType(resource.LookupType(), schemaType)
+	if typeName := p.Schema.TypeName(); typeName != "" {
+		lookup, err := types.LookupType(resource.LookupType(), typeName)
 		if err != nil {
 			return err
 		}
+
 		p.Schema.SetType(lookup)
 		return nil
 

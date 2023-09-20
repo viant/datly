@@ -81,7 +81,6 @@ func (s *Schema) SetType(rType reflect.Type) {
 	}
 	if s.Cardinality == Many {
 		if rType.Kind() != reflect.Slice {
-
 			rType = reflect.SliceOf(rType)
 		}
 	} else if rType.Kind() == reflect.Slice {
@@ -107,8 +106,8 @@ func (s *Schema) Init(resource Resource) error {
 		s.Cardinality = One
 	}
 
-	if s.DataType != "" {
-		rType, err := types.LookupType(resource.LookupType(), s.TypeName())
+	if typeName := s.TypeName(); typeName != "" {
+		rType, err := types.LookupType(resource.LookupType(), typeName)
 		if err != nil {
 			return err
 		}

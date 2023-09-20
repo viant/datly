@@ -9,6 +9,18 @@ import (
 	"strconv"
 )
 
+func (l *outputLocator) getFilterValue() (interface{}, bool, error) {
+	parameter := l.OutputParameters.LookupByLocation(state.KindOutput, "filter")
+	if parameter == nil || l.Output == nil {
+		return nil, false, nil
+	}
+	filterState, err := l.buildFilter(parameter)
+	if err != nil {
+		return nil, false, err
+	}
+	return filterState.State(), true, nil
+}
+
 func (l *outputLocator) buildFilter(parameter *state.Parameter) (*structology.State, error) {
 	filterType := structology.NewStateType(parameter.Schema.Type())
 	filterState := filterType.NewState()

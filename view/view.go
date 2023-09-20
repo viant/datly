@@ -44,17 +44,16 @@ type (
 	//View represents a View
 	View struct {
 		shared.Reference
-		Mode      Mode       `json:",omitempty"`
-		Connector *Connector `json:",omitempty"`
-		Async     *Async     `json:",omitempty"`
-
-		Standalone bool   `json:",omitempty"`
-		Name       string `json:",omitempty"`
-		Alias      string `json:",omitempty"`
-		Table      string `json:",omitempty"`
-		From       string `json:",omitempty"`
-		FromURL    string `json:",omitempty"`
-
+		Mode                 Mode                 `json:",omitempty"`
+		Connector            *Connector           `json:",omitempty"`
+		Async                *Async               `json:",omitempty"`
+		Standalone           bool                 `json:",omitempty"`
+		Name                 string               `json:",omitempty"`
+		Description          string               `json:",omitempty"`
+		Alias                string               `json:",omitempty"`
+		Table                string               `json:",omitempty"`
+		From                 string               `json:",omitempty"`
+		FromURL              string               `json:",omitempty"`
 		Exclude              []string             `json:",omitempty"`
 		Columns              []*Column            `json:",omitempty"`
 		InheritSchemaColumns bool                 `json:",omitempty"`

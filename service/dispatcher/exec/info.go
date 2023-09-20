@@ -3,6 +3,7 @@ package exec
 import (
 	"github.com/viant/xdatly/handler/async"
 	"sync"
+	"time"
 )
 
 type infoKey string
@@ -10,8 +11,40 @@ type infoKey string
 var InfoKey = infoKey("info")
 
 type Info struct {
-	mux  sync.RWMutex
-	jobs []*async.Job
+	mux       sync.RWMutex
+	jobs      []*async.Job
+	StartTime time.Time
+}
+
+func (i *Info) Elapsed() time.Duration {
+	now := time.Now()
+	return now.Sub(i.StartTime)
+}
+
+func (i *Info) EndTime() time.Time {
+	now := time.Now()
+	return now
+}
+
+func (i *Info) AsyncElapsed() time.Duration {
+	if len(i.jobs) == 0 {
+		return 0
+	}
+	started := i.jobs[0].CreationTime
+	ended := started
+
+	for _, job := range i.jobs {
+		if job.CreationTime.Before(started) {
+			started = job.CreationTime
+		}
+		if job.EndTime != nil && job.EndTime.After(ended) {
+			ended = *job.EndTime
+		}
+	}
+	if ended == started {
+		ended = time.Now()
+	}
+	return ended.Sub(started)
 }
 
 func (i *Info) AppendJob(job *async.Job) {
@@ -49,4 +82,8 @@ func (i *Info) AsyncStatus() string {
 		return i.jobs[0].Status
 	}
 	return string(async.StatusRunning)
+}
+
+func NewInfo() *Info {
+	return &Info{StartTime: time.Now()}
 }

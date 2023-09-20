@@ -2,16 +2,13 @@ package output
 
 import (
 	"context"
-	"github.com/viant/datly/service/dispatcher/exec"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/datly/view/state/kind/locator"
-	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/response"
 	"strings"
-	"time"
 )
 
 type outputLocator struct {
@@ -27,57 +24,8 @@ func (l *outputLocator) Names() []string {
 }
 
 func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bool, error) {
-	switch aName := strings.ToLower(name); aName {
-	case "job":
-		job := getJob(ctx)
-		if job != nil {
-			return job, true, nil
-		}
-		return nil, false, nil
-	case "async.status":
-		infoValue := ctx.Value(exec.InfoKey)
-		if infoValue == nil {
-			return nil, false, nil
-		}
-		info := infoValue.(*exec.Info)
-		return info.AsyncStatus(), true, nil
-	case "async.done":
-		infoValue := ctx.Value(exec.InfoKey)
-		if infoValue == nil {
-			return false, true, nil
-		}
-		info := infoValue.(*exec.Info)
-		return info.AsyncStatus() == string(async.StatusDone), true, nil
-	case "jobstatus":
-		if job := getJob(ctx); job != nil {
-			return buildJobStatus(job), true, nil
-		}
-		return nil, false, nil
-	case "jobstatus.execstatus", "jobstatus.cachekey",
-		"jobstatus.waittimemcs", "jobstatus.runtimemcs", "jobstatus.expiryinsec":
-		job := getJob(ctx)
-		if job == nil {
-			return nil, false, nil
-		}
-		jobStats := buildJobStatus(job)
-		switch aName {
-		case "jobstatus.execstatus":
-			return jobStats.JobStatus, true, nil
-		case "jobstatus.cachekey":
-			return jobStats.CacheKey, true, nil
-		case "jobstatus.waittimemcs":
-			return jobStats.WaitTimeMcs, true, nil
-		case "jobstatus.runtimemcs":
-			return jobStats.RunTimeMcs, true, nil
-		case "jobstatus.expiryinsec":
-			return jobStats.ExpiryInSec, true, nil
-		}
-	case "elapsedInSec":
-		//TODO add implementation
-		return 1, true, nil
-	case "responseTime":
-		//TODO add implementation
-		return time.Now(), true, nil
+	aName := strings.ToLower(name)
+	switch aName {
 	case "data":
 		if l.Output == nil {
 			return nil, false, nil
@@ -99,59 +47,21 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 		}
 		SQL := l.Output.Metrics.SQL()
 		return SQL, true, nil
-	case "view.name":
-		return l.View.Name, true, nil
-	case "view.id":
-		return l.View.Name, true, nil
-	case "filter":
-		parameter := l.OutputParameters.LookupByLocation(state.KindOutput, "filter")
-		if parameter == nil || l.Output == nil {
-			return nil, false, nil
+	default:
+		switch {
+		case strings.HasPrefix(aName, "job"):
+			return l.getJobValue(ctx, aName)
+		case strings.HasPrefix(aName, "async"):
+			return l.getAsyncValue(ctx, aName)
+		case strings.HasPrefix(aName, "response"):
+			return l.getResponseValue(ctx, aName)
+		case strings.HasPrefix(aName, "filter"):
+			return l.getFilterValue()
+		case strings.HasPrefix(aName, "view"):
+			return l.getViewValue(ctx, aName)
 		}
-		filterState, err := l.buildFilter(parameter)
-		if err != nil {
-			return nil, false, err
-		}
-		return filterState.State(), true, nil
 	}
 	return nil, false, nil
-}
-
-func buildJobStatus(aJob *async.Job) response.JobStatus {
-	expiryInSec := 0
-	if expiryTime := aJob.ExpiryTime; expiryTime != nil {
-		expiry := expiryTime.Sub(time.Now())
-		expiryInSec = int(expiry.Seconds())
-	}
-
-	cacheKey := ""
-	cacheHit := false
-	if aJob.CacheKey != nil {
-		cacheKey = *aJob.CacheKey
-		cacheHit = true
-	}
-
-	jobStats := response.JobStatus{
-		RequestTime: time.Now(),
-		JobStatus:   aJob.Status,
-		CreateTime:  aJob.CreationTime,
-		WaitTimeMcs: aJob.WaitTimeMcs,
-		RunTimeMcs:  aJob.RunTimeMcs,
-		ExpiryInSec: expiryInSec,
-		CacheKey:    cacheKey,
-		CacheHit:    cacheHit,
-	}
-	return jobStats
-}
-
-func getJob(ctx context.Context) *async.Job {
-	if value := ctx.Value(async.JobKey); value != nil {
-		ret, ok := value.(*async.Job)
-		if ok {
-			return ret
-		}
-	}
-	return nil
 }
 
 // newOutputLocator returns output locator
