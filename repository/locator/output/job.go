@@ -78,6 +78,7 @@ func buildJobInfo(aJob *async.Job) response.JobInfo {
 		WaitTimeInMs: aJob.WaitTimeInMcs / 1000,
 		RunTimeInMs:  aJob.RunTimeInMcs / 1000,
 		ExpiryInSec:  expiryInSec,
+		MatchKey:     aJob.MatchKey,
 		CacheKey:     cacheKey,
 		CacheHit:     cacheHit,
 	}
