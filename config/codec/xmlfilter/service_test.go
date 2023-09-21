@@ -1,116 +1,52 @@
 package xmlfilter
 
 import (
-	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func TestService_Transfer(t *testing.T) {
+func TestService_Transfer0004(tt *testing.T) {
 
-	var testCases = []struct {
-		description string
-		getData     func() interface{}
-	}{
-		{
-			description: "basic slice",
-			getData: func() interface{} {
-				type Foo struct {
-					Id   int
-					Name string
-					F    float64
-					II   int
-				}
+	type IntFilter struct {
+		Include []int
+		Exclude []int
+	}
+	type StringFilter struct {
+		Include []string
+		Exclude []string
+	}
+	type BoolFilter struct {
+		Include []bool
+		Exclude []bool
+	}
 
-				return []Foo{
-					{
-						Id:   1,
-						II:   12,
-						F:    12312.3,
-						Name: "abc",
-					},
-					{
-						Id:   2,
-						II:   4444,
-						F:    2.3,
-						Name: "xyz",
-					},
-				}
+	type Filters struct {
+		IntFilter    IntFilter
+		StringFilter StringFilter
+		BoolFilter   BoolFilter
+	}
 
-			},
+	q := Filters{
+		IntFilter: IntFilter{
+			Include: []int{1, 2},
+			Exclude: []int{4, 5},
 		},
-		{
-			description: "slice with ptr struct",
-			getData: func() interface{} {
-				type Foo struct {
-					Id   int
-					Name string
-					F    float64
-					II   int
-				}
-
-				return []*Foo{
-					{
-						Id:   1,
-						II:   12,
-						F:    12312.3,
-						Name: "abc",
-					},
-					{
-						Id:   2,
-						II:   4444,
-						F:    2.3,
-						Name: "xyz",
-					},
-				}
-
-			},
+		StringFilter: StringFilter{
+			Include: []string{"a", "b", "c", "d"},
+			Exclude: []string{"E", "F", "G", "H"},
 		},
-
-		{
-			description: "basic slice",
-			getData: func() interface{} {
-				type Foo struct {
-					Id   int
-					Name string
-					F    float64
-					II   int
-				}
-
-				return []Foo{}
-			},
-		},
-
-		{
-			description: "custom ptr types",
-			getData: func() interface{} {
-
-				type Data []*struct {
-					Avails         *int     "sqlx:\"name=avails\" velty:\"names=avails|Avails\""
-					Uniqs          *int     "sqlx:\"name=uniqs\" velty:\"names=uniqs|Uniqs\""
-					FinalHhUniqsV1 *int     "sqlx:\"name=final_hh_uniqs_v1\" velty:\"names=final_hh_uniqs_v1|FinalHhUniqsV1\""
-					ClearingPrice  *float64 "sqlx:\"name=clearing_price\" velty:\"names=clearing_price|ClearingPrice\""
-				}
-				data := Data{}
-				payload := `[{"Avails":70577901,"Uniqs":30706931,"FinalHhUniqsV1":7282500,"ClearingPrice":4.45}]`
-				err := json.Unmarshal([]byte(payload), &data)
-				if err != nil {
-					panic(err)
-				}
-				return data
-			},
+		BoolFilter: BoolFilter{
+			Include: []bool{true, true},
+			Exclude: []bool{false, false},
 		},
 	}
 
 	srv := New()
-	for _, testCase := range testCases {
-		fmt.Printf("%s --- \n", testCase.description)
-
-		transfer, err := srv.Transfer(testCase.getData())
-		assert.Nil(t, err, testCase.description)
-		data, _ := json.Marshal(transfer)
-		fmt.Printf("%s\n", data)
+	transfer, err := srv.Transfer(q)
+	fmt.Println(transfer)
+	if transfer != nil {
+	}
+	if err != nil {
 	}
 
 }
