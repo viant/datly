@@ -42,7 +42,15 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-
+	//os.Chdir("/Users/awitas/go/src/github.com/viant/datly/service/jobs/internal/")
+	//os.Args = []string{
+	//	"",
+	//	"dsql",
+	//	"-s=rules/jobs.sql",
+	//	"-c=dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
+	//	"-m=jobs",
+	//	"-u=jobs",
+	//}
 	err := cmd.New(Version, os.Args[1:], &ConsoleWriter{})
 	if err != nil {
 		fmt.Printf("ERROR: %v\n", err)

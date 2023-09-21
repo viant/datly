@@ -25,7 +25,12 @@ type State []*Parameter
 func (s *State) Append(params ...*Parameter) bool {
 	appended := false
 	for i := range params {
-		if s.Has(params[i].Name) {
+		candidate := params[i]
+		if s.Has(candidate.Name) {
+			prev := s.Lookup(candidate.Name)
+			if prev.Required == nil {
+				prev.Required = candidate.Required
+			}
 			continue
 		}
 		params[i].adjustMetaViewIfNeeded()

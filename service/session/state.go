@@ -258,7 +258,15 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		}
 	}
 
+	if valueType.Kind() != selector.Type().Kind() {
+		if valueType.Kind() == reflect.Ptr && value != nil {
+			valueType = valueType.Elem()
+			value = reflect.ValueOf(value).Elem().Interface()
+		}
+	}
+
 	if !(valueType == selector.Type() || valueType.ConvertibleTo(selector.Type()) || valueType.AssignableTo(selector.Type())) {
+
 		fmt.Printf("%v: not assianble \nsrc:%s \ndst:%s", parameter.Name, valueType.String(), selector.Type().String())
 	}
 	return value, nil

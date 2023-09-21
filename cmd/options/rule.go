@@ -99,7 +99,30 @@ func (r *Rule) Init() error {
 		r.Module = url.Join(r.Project, r.Module)
 	}
 	expandRelativeIfNeeded(&r.Source[r.Index], r.Project)
+
+	if r.Index == 0 && len(r.Source) == 1 {
+		src := r.Source[r.Index]
+		if object, _ := fs.Object(context.Background(), src); object.IsDir() {
+			r.expandFolderSource(src)
+		}
+	}
+
 	return nil
+}
+
+func (r *Rule) expandFolderSource(src string) {
+	var sourceURLs []string
+	if objects, _ := fs.List(context.Background(), src); len(objects) > 0 {
+		for _, candidate := range objects {
+			if candidate.IsDir() {
+				continue
+			}
+			if path.Ext(candidate.Name()) == ".sql" {
+				sourceURLs = append(sourceURLs, candidate.URL())
+			}
+		}
+	}
+	r.Source = sourceURLs
 }
 
 func (r *Rule) SourceURL() string {

@@ -1,6 +1,6 @@
 Predicates:
 
-  - Name: source
+  - Name: kind
     Source: |
       #if($Unsafe.Source=="active") 
         Deactivated = 0  AND STATUS = 'DONE' AND ExpiryTime > CURRENT_TIMESTAMP
@@ -8,5 +8,5 @@ Predicates:
         Deactivated = 0  AND STATUS IN('RUNNING','PENDING') 
         AND CreationTime > DATE_ADD(CURRENT_TIMESTAMP, INTERVAL  -24 HOUR)
       #else
-        ID = $FilterValue
+        ID = $Source
       #end

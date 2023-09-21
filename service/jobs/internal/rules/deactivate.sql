@@ -1,9 +1,9 @@
-/* {"URI":"jobs/deactivate", "Method":"GET"} */
+/* {"URI":"/deactivate", "Method":"GET"} */
 
 #set($_ = $Module<string>(query/module))
 #set($_ = $Views<[]string>(query/view))
 
-#if($Unsafe.$Module=="" && $Unsafe.Views.Length() == 0)
+#if(($Unsafe.Module=="") && ($Unsafe.Views.Length() == 0))
     $logger.Fatal("both module and view were empty")
 #end
 

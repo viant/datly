@@ -1,5 +1,5 @@
 /* {
-   "URI":"/jobs/{Source}"
+   "URI":"/{Source}/",
    "Include":[
         "jobs/predicates.yaml",
         "jobs/input.sqlx",
