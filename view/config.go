@@ -17,7 +17,7 @@ const (
 	CriteriaQuery = "_criteria"
 	OrderByQuery  = "_orderby"
 	PageQuery     = "_page"
-	SyncFlag      = "_SyncFlag"
+	SyncFlag      = "viewSyncFlag"
 )
 
 var intType = reflect.TypeOf(0)
