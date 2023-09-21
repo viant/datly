@@ -30,6 +30,7 @@ type (
 		Criteria     string        `json:",omitempty"`
 		Placeholders []interface{} `json:",omitempty"`
 		Page         int
+		SyncFlag     bool
 		Ignore       bool
 		predicate.Filters
 		initialized  bool

@@ -2,23 +2,22 @@ package dispatcher
 
 import (
 	"context"
-	"fmt"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/service/reader"
 	"github.com/viant/datly/service/reader/handler"
 	"github.com/viant/datly/service/session"
+	"github.com/viant/datly/view"
 	"github.com/viant/xdatly/handler/async"
 )
 
 func (s *Service) runQuery(ctx context.Context, component *repository.Component, aSession *session.Session) (interface{}, error) {
 	//TODO handler async
-	fmt.Printf("run query\n")
 	readerHandler := handler.New(component.Output.Type.Type(), &component.Output.Type)
 	var options = []reader.Option{
 		reader.WithIncludeSQL(true),
 		reader.WithCacheDisabled(false),
 	}
-	s.adjustAsyncOptions(ctx, &options)
+	s.adjustAsyncOptions(ctx, aSession, component.View, &options)
 	response := readerHandler.Handle(ctx, component.View, aSession, options...)
 	if err := s.updateJobStatusDone(ctx, component, response); err != nil {
 		return nil, err
@@ -27,14 +26,17 @@ func (s *Service) runQuery(ctx context.Context, component *repository.Component,
 }
 
 // adjustAsyncOptions function adjust reading option to dryRun when asyb job is scheduled but not yet completed
-func (s *Service) adjustAsyncOptions(ctx context.Context, options *[]reader.Option) {
+func (s *Service) adjustAsyncOptions(ctx context.Context, aSession *session.Session, aView *view.View, options *[]reader.Option) {
 	if job := s.Job(ctx); job != nil {
 		if s.IsEventInvocation(ctx) {
 			//Makes sure cache is always refreshed
 			*options = append(*options, reader.WithCacheRefresh())
 		} else if async.Status(job.Status) != async.StatusDone {
 			//Make sure not actual database is used
-			*options = append(*options, reader.WithDryRun())
+			selector := aSession.State().Lookup(aView)
+			if !selector.SyncFlag { //sync flag would perform regular read
+				*options = append(*options, reader.WithDryRun())
+			}
 		}
 	}
 

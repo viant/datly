@@ -11,13 +11,13 @@ import (
 )
 
 const (
-	FieldsQuery    = "_fields"
-	OffsetQuery    = "_offset"
-	LimitQuery     = "_limit"
-	CriteriaQuery  = "_criteria"
-	OrderByQuery   = "_orderby"
-	PageQuery      = "_page"
-	QualifierParam = "qualifier"
+	FieldsQuery   = "_fields"
+	OffsetQuery   = "_offset"
+	LimitQuery    = "_limit"
+	CriteriaQuery = "_criteria"
+	OrderByQuery  = "_orderby"
+	PageQuery     = "_page"
+	SyncFlag      = "_SyncFlag"
 )
 
 var intType = reflect.TypeOf(0)
@@ -32,6 +32,7 @@ var RootSelectors = &Config{
 	FieldsParameter:   &state.Parameter{Name: "Fields", In: state.NewQueryLocation(FieldsQuery), Schema: state.NewSchema(stringsType)},
 	OrderByParameter:  &state.Parameter{Name: "OrderBy", In: state.NewQueryLocation(OrderByQuery), Schema: state.NewSchema(stringsType)},
 	CriteriaParameter: &state.Parameter{Name: "Criteria", In: state.NewQueryLocation(OrderByQuery), Schema: state.NewSchema(stringType)},
+	SyncFlagParameter: &state.Parameter{Name: "SyncFlag", In: state.NewState(SyncFlag), Schema: state.NewSchema(boolType)},
 }
 
 // Config represent a View config selector
@@ -49,6 +50,7 @@ type (
 		FieldsParameter   *state.Parameter   `json:",omitempty"`
 		OrderByParameter  *state.Parameter   `json:",omitempty"`
 		CriteriaParameter *state.Parameter   `json:",omitempty"`
+		SyncFlagParameter *state.Parameter   `json:",omitempty"`
 
 		limitDefault    *bool
 		offsetDefault   *bool
@@ -65,6 +67,7 @@ type (
 		Fields   string `json:",omitempty"`
 		OrderBy  string `json:",omitempty"`
 		Criteria string `json:",omitempty"`
+		SyncFalg string `json:",omitempty"`
 	}
 )
 
@@ -106,6 +109,11 @@ func (c *Config) Init(ctx context.Context, resource *Resource, parent *View) err
 	if name := parameters.OrderBy; (name != "" || c.Constraints.OrderBy) && derefBool(c.orderByDefault, c.OrderByParameter == nil) {
 		c.orderByDefault = boolPtr(name == "")
 		c.OrderByParameter = c.newSelectorParam(name, OrderByQuery, parent)
+	}
+
+	if name := parameters.SyncFalg; (name != "") && derefBool(c.fieldsDefault, c.SyncFlagParameter == nil) {
+		c.fieldsDefault = boolPtr(name == "")
+		c.SyncFlagParameter = c.newSelectorParam(name, SyncFlag, parent)
 	}
 
 	if err := c.initCustomParams(ctx, resource, parent); err != nil {

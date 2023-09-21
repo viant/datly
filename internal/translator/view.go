@@ -236,10 +236,10 @@ func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 		//TODO double check rel name uniqness
 		viewRelation := &view.Relation{Name: relation.Name}
 		if relation.ParentField == nil {
-			return fmt.Errorf("faild to add relation: %v, unknown holder", relation.Name)
+			return fmt.Errorf("failed to add relation: %v, unknown holder", relation.Name)
 		}
 		if relation.KeyField == nil {
-			return fmt.Errorf("faild to add relation: %v, unknown reference", relation.Name)
+			return fmt.Errorf("failed to add relation: %v, unknown reference", relation.Name)
 		}
 		viewRelation.Column = relation.ParentField.Column.Name
 		viewRelation.ColumnNamespace = relation.ParentField.Column.Namespace

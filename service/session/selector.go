@@ -36,7 +36,9 @@ func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, 
 	if err = s.populatePageQuerySelector(ctx, ns, opts); err != nil {
 		return httputils.NewParamError(ns.View.Name, selectorParameters.PageParameter.Name, err)
 	}
-
+	if err = s.populateSyncFlagSelector(ctx, ns, opts); err != nil {
+		return httputils.NewParamError(ns.View.Name, selectorParameters.SyncFlagParameter.Name, err)
+	}
 	selector := s.state.Lookup(ns.View)
 	if selector.Limit == 0 && selector.Offset != 0 {
 		return fmt.Errorf("can't use offset without limit - view: %v", ns.View.Name)
@@ -54,6 +56,16 @@ func (s *Session) populatePageQuerySelector(ctx context.Context, ns *view.Namesp
 	return err
 }
 
+func (s *Session) populateSyncFlagSelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
+	selectorParameters := ns.View.Selector
+	syncFlagParameter := ns.SelectorParameters(selectorParameters.SyncFlagParameter, view.RootSelectors.SyncFlagParameter)
+	value, has, err := s.lookupFirstValue(ctx, syncFlagParameter, opts)
+	if has && err == nil {
+		err = s.setSyncFlag(value, ns)
+	}
+	return err
+}
+
 func (s *Session) setPageQuerySelector(value interface{}, ns *view.NamespaceView) error {
 	page := value.(int)
 	selector := s.state.Lookup(ns.View)
@@ -64,6 +76,13 @@ func (s *Session) setPageQuerySelector(value interface{}, ns *view.NamespaceView
 	selector.Offset = actualLimit * (page - 1)
 	selector.Limit = actualLimit
 	selector.Page = page
+	return nil
+}
+
+func (s *Session) setSyncFlag(value interface{}, ns *view.NamespaceView) error {
+	flag := value.(bool)
+	selector := s.state.Lookup(ns.View)
+	selector.SyncFlag = flag
 	return nil
 }
 

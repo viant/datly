@@ -62,6 +62,11 @@ func (p ParamName) Validate(kind Kind) error {
 	return fmt.Errorf("unsupported param name %v for location kind %v", p, kind)
 }
 
+// NewHeaderLocation creates a query location
+func NewHeaderLocation(name string) *Location {
+	return &Location{Name: name, Kind: KindHeader}
+}
+
 // NewQueryLocation creates a query location
 func NewQueryLocation(name string) *Location {
 	return &Location{Name: name, Kind: KindQuery}
