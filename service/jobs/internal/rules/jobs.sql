@@ -1,9 +1,9 @@
 /* {
    "URI":"/{Source}/",
    "Include":[
-        "jobs/predicates.yaml",
-        "jobs/input.sqlx",
-        "jobs/output.sqlx"
+        "shared/predicates.yaml",
+        "shared/input.sqlx",
+        "shared/output.sqlx"
    ]
 } */
 

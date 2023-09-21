@@ -349,6 +349,7 @@ func (r *Resource) ensurePathParametersSchema(ctx context.Context) error {
 }
 
 func (r *Resource) IncludeSnippets(ctx context.Context, fs afs.Service, dSQL *string) error {
+	sqlXContent := ""
 	for _, URL := range r.Rule.Include {
 		assetURL, err := r.IncludeURL(ctx, URL, fs)
 		if err != nil {
@@ -364,8 +365,10 @@ func (r *Resource) IncludeSnippets(ctx context.Context, fs afs.Service, dSQL *st
 		switch ext {
 		case ".sql", ".sqlx":
 			contentStr := string(content)
-			*dSQL = contentStr + "\n" + *dSQL
-
+			if sqlXContent != "" {
+				sqlXContent += "\n"
+			}
+			sqlXContent += contentStr
 		case ".yaml", ".yml":
 			resource := &view.Resource{}
 			if err := shared.UnmarshalWithExt(content, resource, ext); err != nil {
@@ -375,6 +378,9 @@ func (r *Resource) IncludeSnippets(ctx context.Context, fs afs.Service, dSQL *st
 			(&r.Resource).MergeFrom(resource, nil)
 		}
 
+	}
+	if sqlXContent != "" {
+		*dSQL = sqlXContent + "\n" + *dSQL
 	}
 
 	return nil
