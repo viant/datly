@@ -18,6 +18,7 @@ type (
 	JobQualifier struct {
 		PrincipalSubject *string
 		ViewName         string
+		Module           string
 		JobID            *string
 	}
 )

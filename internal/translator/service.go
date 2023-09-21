@@ -178,6 +178,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	s.detectComponentViewType(cache, resource)
 
 	rootViewlet := resource.Rule.RootViewlet()
+	rootViewlet.View.Module = resource.rule.Module
 	if err = s.updateOutputParameters(resource, rootViewlet); err != nil {
 		return err
 	}

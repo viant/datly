@@ -77,6 +77,7 @@ func (s *Service) buildJob(ctx context.Context, aSession *session.Session, aStat
 		Status:       string(async.StatusPending),
 		Request:      async.Request{State: string(encodedState)},
 		MainView:     aComponent.View.Name,
+		Module:       aComponent.View.Module,
 		CreationTime: time.Now(),
 		JobType:      string(aComponent.Service),
 	}

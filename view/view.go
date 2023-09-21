@@ -50,6 +50,7 @@ type (
 		Standalone           bool                 `json:",omitempty"`
 		Name                 string               `json:",omitempty"`
 		Description          string               `json:",omitempty"`
+		Module               string               `json:",omitempty"`
 		Alias                string               `json:",omitempty"`
 		Table                string               `json:",omitempty"`
 		From                 string               `json:",omitempty"`

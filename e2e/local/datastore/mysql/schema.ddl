@@ -207,6 +207,7 @@ CREATE TABLE `DATLY_JOBS` (
                               `UserEmail` varchar(256),
                               `UserID` varchar(256),
                               `MainView` varchar(256) NOT NULL,
+                              `Module` varchar(256) NOT NULL,
                               `Labels` varchar(256) NOT NULL,
                               `JobType` varchar(256) NOT NULL,
                               `EventURL` varchar(256) NOT NULL,

@@ -71,6 +71,7 @@ func (s *Service) Init(ctx context.Context) error {
 			view.NewColumn("UserEmail", "varchar", xreflect.StringPtrType, true),
 			view.NewColumn("UserID", "varchar", xreflect.StringPtrType, true),
 			view.NewColumn("MainView", "varchar", xreflect.StringType, false),
+			view.NewColumn("Module", "varchar", xreflect.StringType, false),
 			view.NewColumn("Labels", "varchar", xreflect.StringType, false),
 			view.NewColumn("JobType", "varchar", xreflect.StringType, false),
 			view.NewColumn("EventURL", "varchar", xreflect.StringType, false),
