@@ -1,0 +1,5 @@
+
+#set( $_ = $Source<[]string>(uri/source).WithPredicate(0,'source'))
+#set( $_ = $Module<string>(query/module).WithPredicate(0,'in','t','Module'))
+#set( $_ = $View<[]string>(query/view).WithPredicate(0,'in','t','MainView'))
+#set( $_ = $User<[]string>(query/user).WithPredicate(0,'contains','t','UserEmail'))
