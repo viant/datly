@@ -36,12 +36,20 @@ func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, 
 	if err = s.populatePageQuerySelector(ctx, ns, opts); err != nil {
 		return httputils.NewParamError(ns.View.Name, selectorParameters.PageParameter.Name, err)
 	}
-	if err = s.populateSyncFlagSelector(ctx, ns, opts); err != nil {
-		return httputils.NewParamError(ns.View.Name, selectorParameters.SyncFlagParameter.Name, err)
-	}
 	selector := s.state.Lookup(ns.View)
 	if selector.Limit == 0 && selector.Offset != 0 {
 		return fmt.Errorf("can't use offset without limit - view: %v", ns.View.Name)
+	}
+	return nil
+}
+
+func (s *Session) setQuerySelectorFlags(ctx context.Context, ns *view.NamespaceView, opts *Options) (err error) {
+	selectorParameters := ns.View.Selector
+	if selectorParameters == nil {
+		return nil
+	}
+	if err = s.populateSyncFlagSelector(ctx, ns, opts); err != nil {
+		return httputils.NewParamError(ns.View.Name, selectorParameters.SyncFlagParameter.Name, err)
 	}
 	return nil
 }

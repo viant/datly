@@ -69,10 +69,7 @@ func (s *Session) ResetViewState(ctx context.Context, aView *view.View) error {
 func (s *Session) setViewState(ctx context.Context, aView *view.View) (err error) {
 	opts := s.ViewOptions(aView)
 	if aView.Mode == view.ModeQuery {
-		ns := s.namespacedView.ByName(aView.Name)
-		if ns == nil {
-			ns = &view.NamespaceView{View: aView, Path: "", Namespaces: []string{aView.Selector.Namespace}}
-		}
+		ns := s.viewNaespace(aView)
 		if err = s.setQuerySelector(ctx, ns, opts); err != nil {
 			return err
 		}
@@ -80,7 +77,22 @@ func (s *Session) setViewState(ctx context.Context, aView *view.View) (err error
 	if err = s.setTemplateState(ctx, aView, opts); err != nil {
 		s.adjustErrorSource(err, aView)
 	}
+	if aView.Mode == view.ModeQuery {
+		ns := s.viewNaespace(aView)
+		if err = s.setQuerySelectorFlags(ctx, ns, opts); err != nil {
+			return err
+		}
+	}
+
 	return err
+}
+
+func (s *Session) viewNaespace(aView *view.View) *view.NamespaceView {
+	ns := s.namespacedView.ByName(aView.Name)
+	if ns == nil {
+		ns = &view.NamespaceView{View: aView, Path: "", Namespaces: []string{aView.Selector.Namespace}}
+	}
+	return ns
 }
 
 func (s *Session) adjustErrorSource(err error, aView *view.View) {
@@ -266,7 +278,6 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 	}
 
 	if !(valueType == selector.Type() || valueType.ConvertibleTo(selector.Type()) || valueType.AssignableTo(selector.Type())) {
-
 		fmt.Printf("%v: not assianble \nsrc:%s \ndst:%s", parameter.Name, valueType.String(), selector.Type().String())
 	}
 	return value, nil
