@@ -94,6 +94,9 @@ func (s *Service) buildJob(ctx context.Context, aSession *session.Session, aStat
 		if err != nil {
 			return nil, err
 		}
+		if value == nil {
+			value = ""
+		}
 		userEmail := value.(string)
 		job.UserEmail = &userEmail
 	}
