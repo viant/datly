@@ -141,6 +141,7 @@ func (v *View) buildView(rule *Rule, mode view.Mode) error {
 		v.Mode = mode
 	}
 	v.View.Connector = view.NewRefConnector(namespace.Connector)
+
 	v.buildTemplate(namespace, rule)
 	if v.Mode == view.ModeQuery {
 		v.buildSelector(namespace, rule)

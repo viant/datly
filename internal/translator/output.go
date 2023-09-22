@@ -34,7 +34,7 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 
 	var err error
 
-	if err := resource.OutputState.EnsureReflectTypes(resource.rule.Module); err != nil {
+	if err := resource.OutputState.EnsureReflectTypes(resource.rule.ModuleLocation); err != nil {
 		return err
 	}
 
@@ -85,7 +85,7 @@ func (s *Service) updateExplicitOutputType(resource *Resource, rootViewlet *View
 		resource.AppendTypeDefinition(&view.TypeDefinition{Name: parameter.Schema.Name, DataType: parameter.Schema.Type().String()})
 	}
 
-	outputType, err := compactedParameters.ReflectType(resource.rule.Module, typesRegistry.Lookup, false)
+	outputType, err := compactedParameters.ReflectType(resource.rule.ModuleLocation, typesRegistry.Lookup, false)
 	if err != nil {
 		return fmt.Errorf("failed to build outputType: %w", err)
 	}
@@ -148,7 +148,7 @@ func (s *Service) adjustOutputParameter(resource *Resource, parameter *state.Par
 				return err
 			}
 		}
-		rType, _ := parameter.Group.ReflectType(resource.rule.Module, types.Lookup, false)
+		rType, _ := parameter.Group.ReflectType(resource.rule.ModuleLocation, types.Lookup, false)
 		parameter.Schema = state.NewSchema(rType)
 		return nil
 	}
@@ -248,11 +248,11 @@ func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.P
 			}})
 	}
 	var err error
-	if adjustedDest, err = adjustedDest.Compact(resource.rule.Module); err != nil {
+	if adjustedDest, err = adjustedDest.Compact(resource.rule.ModuleLocation); err != nil {
 		return nil, fmt.Errorf("failed to rewrite transfer type: %v %w", parameter.Name, err)
 	}
-	adjustedType, err := adjustedDest.ViewParameters().ReflectType(resource.rule.Module, types.Lookup, false)
-	if adjustedDest, err = adjustedDest.Compact(resource.rule.Module); err != nil {
+	adjustedType, err := adjustedDest.ViewParameters().ReflectType(resource.rule.ModuleLocation, types.Lookup, false)
+	if adjustedDest, err = adjustedDest.Compact(resource.rule.ModuleLocation); err != nil {
 		return nil, fmt.Errorf("failed to adjust transfer type: %v %w", parameter.Name, err)
 	}
 	return adjustedType, nil

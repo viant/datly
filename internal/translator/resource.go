@@ -266,7 +266,7 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	_ = resourceState.EnsureReflectTypes(r.rule.GoModuleLocation())
 	sqlState := viewlet.Resource.State.StateForSQL(viewlet.SQL, r.Rule.Root == viewlet.Name)
 	metaViewSQL := sqlState.MetaViewSQL()
-	compacted, err := sqlState.Compact(r.rule.Module)
+	compacted, err := sqlState.Compact(r.rule.ModuleLocation)
 	if err == nil && len(compacted) > 0 {
 		sqlState = compacted
 	}
@@ -395,7 +395,7 @@ func NewResource(rule *options.Rule, repository *options.Repository, messages *m
 	ret.Rule.Output = &ret.Rule.Route.Output
 	ret.Resource.SetTypes(xreflect.NewTypes(
 		xreflect.WithRegistry(config.Config.Types),
-		xreflect.WithPackagePath(rule.Module)))
+		xreflect.WithPackagePath(rule.ModuleLocation)))
 	return ret
 }
 
