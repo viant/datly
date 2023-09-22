@@ -510,7 +510,7 @@ func (o *Options) MergeFromDSql(dsql *options.Translate) {
 		o.Port = *dsql.Port
 		o.hasPort = true
 	}
-	o.RoutePrefix = dsql.Namespace
+	o.RoutePrefix = dsql.ModulePrefix
 	if dsql.ModuleLocation != "" {
 		o.RelativePath = dsql.ModuleLocation
 	}
@@ -594,7 +594,7 @@ func (o *Options) BuildOption() *options.Options {
 			rule.ModuleLocation = "pkg"
 		}
 		rule.Source = []string{o.Location}
-		rule.Namespace = o.RoutePrefix
+		rule.ModulePrefix = o.RoutePrefix
 		if o.GoModulePkg != "" {
 			rule.Packages = []string{o.GoModulePkg}
 		}

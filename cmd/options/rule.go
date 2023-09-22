@@ -14,7 +14,7 @@ import (
 type Rule struct {
 	Project        string   `short:"p" long:"proj" description:"project location"`
 	Name           string   `short:"n" long:"name" description:"rule name"`
-	Namespace      string   `short:"u" long:"namespace" description:"rule uri/namespace"  default:"dev" `
+	ModulePrefix   string   `short:"u" long:"namespace" description:"rule uri/namespace"  default:"dev" `
 	Source         []string `short:"s" long:"src" description:"source"`
 	Packages       []string `short:"g" long:"pkg" description:"entity package"`
 	Output         []string
@@ -93,7 +93,7 @@ func (r *Rule) Init() error {
 	if r.Project == "" {
 		r.Project, _ = os.Getwd()
 	}
-	setter.SetStringIfEmpty(&r.Namespace, "dev")
+	setter.SetStringIfEmpty(&r.ModulePrefix, "dev")
 	r.Project = ensureAbsPath(r.Project)
 	if url.IsRelative(r.ModuleLocation) {
 		r.ModuleLocation = url.Join(r.Project, r.ModuleLocation)
