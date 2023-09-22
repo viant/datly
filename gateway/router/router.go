@@ -398,11 +398,11 @@ func (r *Router) redirectIfNeeded(ctx context.Context, request *http.Request, re
 	return true, nil
 }
 
-func (r *Router) compressIfNeeded(marshalled []byte, route *Route) (*RequestDataReader, error) {
+func (r *Router) compressIfNeeded(marshalled []byte, route *Route, option ...RequestDataReaderOption) (*RequestDataReader, error) {
 	compression := route.Compression
 
 	if compression == nil || (compression.MinSizeKb > 0 && len(marshalled) <= compression.MinSizeKb*1024) {
-		return NewBytesReader(marshalled, ""), nil
+		return NewBytesReader(marshalled, "", option...), nil
 	}
 
 	buffer, err := httputils.Compress(bytes.NewReader(marshalled))
@@ -490,12 +490,15 @@ func (r *Router) payloadReader(ctx context.Context, request *http.Request, write
 
 	if route.Service == service.TypeReader {
 		format := route.Output.Format(request.URL.Query())
+		contentType := route.Output.ContentType(format)
 		filters := route.Exclusion(aSession.State())
 		data, err := route.Content.Marshal(format, route.Output.Field, aResponse, filters)
 		if err != nil {
 			return nil, httputils.NewHttpMessageError(500, fmt.Errorf("failed to marshal response: %w", err))
 		}
-		return r.compressIfNeeded(data, route)
+
+		//WithHeader
+		return r.compressIfNeeded(data, route, WithHeader("Content-Type", contentType))
 	}
 	return r.marshalCustomOutput(aResponse, route)
 }

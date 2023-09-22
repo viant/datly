@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/datly/internal/converter"
@@ -76,14 +77,15 @@ func (s *Session) setViewState(ctx context.Context, aView *view.View) (err error
 	}
 	if err = s.setTemplateState(ctx, aView, opts); err != nil {
 		s.adjustErrorSource(err, aView)
+		return err
 	}
+
 	if aView.Mode == view.ModeQuery {
 		ns := s.viewNaespace(aView)
-		if err = s.setQuerySelectorFlags(ctx, ns, opts); err != nil {
+		if err = s.setQuerySettings(ctx, ns, opts); err != nil {
 			return err
 		}
 	}
-
 	return err
 }
 
@@ -277,8 +279,15 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 		}
 	}
 
-	if !(valueType == selector.Type() || valueType.ConvertibleTo(selector.Type()) || valueType.AssignableTo(selector.Type())) {
-		fmt.Printf("%v: not assianble \nsrc:%s \ndst:%s", parameter.Name, valueType.String(), selector.Type().String())
+	if parameter.Schema.IsStruct() && !(valueType == selector.Type() || valueType.ConvertibleTo(selector.Type()) || valueType.AssignableTo(selector.Type())) {
+		fmt.Printf("parameter %v is not assignable from %s:%s\nsrc:%s \ndst:%s\n", parameter.Name, parameter.In.Kind, parameter.In.Name, valueType.String(), selector.Type().String())
+		reflectValue := reflect.New(valueType)
+		valuePtr := reflectValue.Interface()
+		if data, err := json.Marshal(value); err == nil {
+			if err = json.Unmarshal(data, valuePtr); err == nil {
+				value = reflectValue.Elem().Interface()
+			}
+		}
 	}
 	return value, nil
 }
