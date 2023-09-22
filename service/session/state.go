@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/viant/datly/internal/converter"
@@ -279,7 +280,14 @@ func (s *Session) ensureValidValue(value interface{}, parameter *state.Parameter
 	}
 
 	if !(valueType == selector.Type() || valueType.ConvertibleTo(selector.Type()) || valueType.AssignableTo(selector.Type())) {
-		fmt.Printf("%v: not assianble \nsrc:%s \ndst:%s", parameter.Name, valueType.String(), selector.Type().String())
+		fmt.Printf("parameter %v is assignable \nsrc:%s \ndst:%s\n", parameter.Name, valueType.String(), selector.Type().String())
+		reflectValue := reflect.New(valueType)
+		valuePtr := reflectValue.Interface()
+		if data, err := json.Marshal(value); err == nil {
+			if err = json.Unmarshal(data, valuePtr); err == nil {
+				value = reflectValue.Elem().Interface()
+			}
+		}
 	}
 	return value, nil
 }
