@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
 )
@@ -17,22 +18,21 @@ const (
 	CriteriaQuery = "_criteria"
 	OrderByQuery  = "_orderby"
 	PageQuery     = "_page"
+	ContentFormat = "_format"
 	SyncFlag      = "viewSyncFlag"
 )
 
-var intType = reflect.TypeOf(0)
-var stringType = reflect.TypeOf("")
-
 var stringsType = reflect.TypeOf([]string{})
 
-var RootSelectors = &Config{
-	LimitParameter:    &state.Parameter{Name: "Limit", In: state.NewQueryLocation(LimitQuery), Schema: state.NewSchema(intType)},
-	OffsetParameter:   &state.Parameter{Name: "Offset", In: state.NewQueryLocation(OffsetQuery), Schema: state.NewSchema(intType)},
-	PageParameter:     &state.Parameter{Name: "Page", In: state.NewQueryLocation(PageQuery), Schema: state.NewSchema(intType)},
-	FieldsParameter:   &state.Parameter{Name: "Fields", In: state.NewQueryLocation(FieldsQuery), Schema: state.NewSchema(stringsType)},
-	OrderByParameter:  &state.Parameter{Name: "OrderBy", In: state.NewQueryLocation(OrderByQuery), Schema: state.NewSchema(stringsType)},
-	CriteriaParameter: &state.Parameter{Name: "Criteria", In: state.NewQueryLocation(OrderByQuery), Schema: state.NewSchema(stringType)},
-	SyncFlagParameter: &state.Parameter{Name: "SyncFlag", In: state.NewState(SyncFlag), Schema: state.NewSchema(boolType)},
+var QueryParameters = &Config{
+	LimitParameter:         &state.Parameter{Name: "Limit", In: state.NewQueryLocation(LimitQuery), Schema: state.NewSchema(xreflect.IntType)},
+	OffsetParameter:        &state.Parameter{Name: "Offset", In: state.NewQueryLocation(OffsetQuery), Schema: state.NewSchema(xreflect.IntType)},
+	PageParameter:          &state.Parameter{Name: "Page", In: state.NewQueryLocation(PageQuery), Schema: state.NewSchema(xreflect.IntType)},
+	FieldsParameter:        &state.Parameter{Name: "Fields", In: state.NewQueryLocation(FieldsQuery), Schema: state.NewSchema(stringsType)},
+	OrderByParameter:       &state.Parameter{Name: "OrderBy", In: state.NewQueryLocation(OrderByQuery), Schema: state.NewSchema(stringsType)},
+	CriteriaParameter:      &state.Parameter{Name: "Criteria", In: state.NewQueryLocation(OrderByQuery), Schema: state.NewSchema(xreflect.StringType)},
+	SyncFlagParameter:      &state.Parameter{Name: "SyncFlag", In: state.NewState(SyncFlag), Schema: state.NewSchema(boolType)},
+	ContentFormatParameter: &state.Parameter{Name: "ContentFormat", In: state.NewQueryLocation(ContentFormat), Schema: state.NewSchema(xreflect.StringType)},
 }
 
 // Config represent a View config selector
@@ -50,7 +50,10 @@ type (
 		FieldsParameter   *state.Parameter   `json:",omitempty"`
 		OrderByParameter  *state.Parameter   `json:",omitempty"`
 		CriteriaParameter *state.Parameter   `json:",omitempty"`
-		SyncFlagParameter *state.Parameter   `json:",omitempty"`
+
+		//Settings parameters
+		SyncFlagParameter      *state.Parameter `json:",omitempty"`
+		ContentFormatParameter *state.Parameter `json:",omitempty"`
 
 		limitDefault    *bool
 		offsetDefault   *bool
@@ -150,10 +153,10 @@ func (c *Config) ensureConstraints(resource *Resource) error {
 }
 
 func (c *Config) initCustomParams(ctx context.Context, resource *Resource, parent *View) error {
-	if err := c.initParamIfNeeded(ctx, c.CriteriaParameter, resource, parent, stringType, reflect.TypeOf(&codec.Criteria{}), reflect.TypeOf(codec.Criteria{})); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.CriteriaParameter, resource, parent, xreflect.StringType, reflect.TypeOf(&codec.Criteria{}), reflect.TypeOf(codec.Criteria{})); err != nil {
 		return err
 	}
-	if err := c.initParamIfNeeded(ctx, c.LimitParameter, resource, parent, intType); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.LimitParameter, resource, parent, xreflect.IntType); err != nil {
 		return err
 	}
 
@@ -161,14 +164,14 @@ func (c *Config) initCustomParams(ctx context.Context, resource *Resource, paren
 		return err
 	}
 
-	if err := c.initParamIfNeeded(ctx, c.OffsetParameter, resource, parent, intType); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.OffsetParameter, resource, parent, xreflect.IntType); err != nil {
 		return err
 	}
 
 	if err := c.initParamIfNeeded(ctx, c.FieldsParameter, resource, parent, stringsType); err != nil {
 		return err
 	}
-	if err := c.initParamIfNeeded(ctx, c.PageParameter, resource, parent, intType); err != nil {
+	if err := c.initParamIfNeeded(ctx, c.PageParameter, resource, parent, xreflect.IntType); err != nil {
 		return err
 	}
 
@@ -220,11 +223,11 @@ func (c *Config) CloneWithNs(ctx context.Context, resource *Resource, owner *Vie
 func ParamType(name string) reflect.Type {
 	switch name {
 	case LimitQuery, OffsetQuery, PageQuery:
-		return intType
+		return xreflect.IntType
 	case OrderByQuery, FieldsQuery:
 		return stringsType
 	default:
-		return stringType
+		return xreflect.StringType
 	}
 }
 

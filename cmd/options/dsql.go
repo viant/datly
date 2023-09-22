@@ -5,7 +5,6 @@ import "context"
 type Translate struct {
 	Rule
 	Repository
-	RoutePrefix string `short:"f" long:"routePrefix" description:"routePrefix default: dev/"`
 }
 
 func (d *Translate) Init(ctx context.Context) error {

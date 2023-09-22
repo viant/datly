@@ -481,9 +481,9 @@ func (o *Options) MergeFromGenerate(generate *options.Generate) {
 	o.ExecKind = generate.Kind
 	o.Name = generate.Name
 	o.Generate.Location = generate.SourceURL()
-	if generate.Module != "" {
-		o.GoFileOutput = generate.Module
-		o.RelativePath = generate.Module
+	if generate.ModuleLocation != "" {
+		o.GoFileOutput = generate.ModuleLocation
+		o.RelativePath = generate.ModuleLocation
 	}
 	o.GoModulePkg = generate.Package()
 	o.DSQLOutput = generate.Dest
@@ -510,9 +510,9 @@ func (o *Options) MergeFromDSql(dsql *options.Translate) {
 		o.Port = *dsql.Port
 		o.hasPort = true
 	}
-	o.RoutePrefix = dsql.RoutePrefix
-	if dsql.Module != "" {
-		o.RelativePath = dsql.Module
+	o.RoutePrefix = dsql.ModulePrefix
+	if dsql.ModuleLocation != "" {
+		o.RelativePath = dsql.ModuleLocation
 	}
 	if dsql.Port == nil {
 		o.PartialConfigURL = dsql.Configs.URL()
@@ -589,12 +589,12 @@ func (o *Options) BuildOption() *options.Options {
 	}
 
 	if rule := result.Rule(); rule != nil {
-		rule.Module = o.RelativePath
-		if rule.Module == "" {
-			rule.Module = "pkg"
+		rule.ModuleLocation = o.RelativePath
+		if rule.ModuleLocation == "" {
+			rule.ModuleLocation = "pkg"
 		}
 		rule.Source = []string{o.Location}
-		rule.Prefix = o.RoutePrefix
+		rule.ModulePrefix = o.RoutePrefix
 		if o.GoModulePkg != "" {
 			rule.Packages = []string{o.GoModulePkg}
 		}

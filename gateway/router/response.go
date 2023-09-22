@@ -18,6 +18,7 @@ type (
 		Headers() http.Header
 	}
 
+	//TODO find better name - this does not reflect what it does
 	RequestDataReader struct {
 		buffer      *bytes.Buffer
 		compression string

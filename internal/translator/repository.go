@@ -41,7 +41,7 @@ func (r *Repository) RuleName(rule *options.Rule) string {
 }
 
 func (r *Repository) RuleBaseURL(rule *options.Rule) string {
-	return url.Join(r.Config.Config.RouteURL, rule.Prefix)
+	return url.Join(r.Config.Config.RouteURL, rule.ModulePrefix)
 }
 
 func (r *Repository) LookupDb(name string) (*sql.DB, error) {

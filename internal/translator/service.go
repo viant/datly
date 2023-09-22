@@ -82,7 +82,7 @@ func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string
 func (s *Service) discoverComponentContract(ctx context.Context, resource *Resource, location *state.Location) (*contract.Signature, error) {
 	var err error
 	if s.signature == nil {
-		prefix := path.Join(s.Repository.Config.APIPrefix, resource.rule.Prefix)
+		prefix := path.Join(s.Repository.Config.APIPrefix, resource.rule.ModulePrefix)
 		if s.signature, err = contract.New(ctx, prefix, s.Repository.Config.RouteURL); err != nil {
 			return nil, err
 		}
@@ -164,6 +164,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 		return err
 	}
 	root := resource.Rule.RootView()
+	root.Module = resource.rule.ModulePrefix
 	if err := root.buildView(resource.Rule, view.ModeQuery); err != nil {
 		return err
 	}
@@ -176,9 +177,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 		return err
 	}
 	s.detectComponentViewType(cache, resource)
-
 	rootViewlet := resource.Rule.RootViewlet()
-	rootViewlet.View.Module = resource.rule.Module
 	if err = s.updateOutputParameters(resource, rootViewlet); err != nil {
 		return err
 	}
@@ -297,10 +296,10 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	if resource.rule.Generated { //translation from generator
 		resource.Rule.applyGeneratorOutputSetting()
 	} else {
-		resource.Rule.Route.URI = path.Join(resource.repository.APIPrefix, resource.rule.Prefix, resource.Rule.Route.URI)
+		resource.Rule.Route.URI = path.Join(resource.repository.APIPrefix, resource.rule.ModulePrefix, resource.Rule.Route.URI)
 	}
 
-	aState, err := resource.State.Compact(resource.rule.Module)
+	aState, err := resource.State.Compact(resource.rule.ModuleLocation)
 	if err != nil {
 		return fmt.Errorf("failed to compact aState: %w", err)
 	}

@@ -16,9 +16,17 @@ type (
 	Statelet struct {
 		Template *structology.State
 		QuerySelector
+		QuerySettings
+	}
+
+	QuerySettings struct {
+		//SETTINGS
+		SyncFlag      bool
+		ContentFormat string
 	}
 
 	QuerySelector struct {
+		//SELECTORS
 		DatabaseFormat format.Case
 		OutputFormat   format.Case
 		Columns        []string `json:",omitempty"`
@@ -30,9 +38,9 @@ type (
 		Criteria     string        `json:",omitempty"`
 		Placeholders []interface{} `json:",omitempty"`
 		Page         int
-		SyncFlag     bool
 		Ignore       bool
 		predicate.Filters
+
 		initialized  bool
 		_columnNames map[string]bool
 		result       *cache.ParmetrizedQuery

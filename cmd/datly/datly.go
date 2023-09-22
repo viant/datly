@@ -47,6 +47,7 @@ func main() {
 	//os.Args = []string{
 	//	"",
 	//	"dsql",
+	//	"-u=forecasting",
 	//	"-s=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting/dsql/forecasting/total.sql",
 	//	"-p=/Users/awitas/go/src/github.vianttech.com/adelphic/datly-forecasting",
 	//	"-c=ci_event|bigquery|bigquery://viant-e2e/ci_event",

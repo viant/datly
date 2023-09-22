@@ -12,21 +12,21 @@ import (
 )
 
 type Rule struct {
-	Project      string   `short:"p" long:"proj" description:"project location"`
-	Name         string   `short:"n" long:"name" description:"rule name"`
-	Prefix       string   `short:"u" long:"uri" description:"rule uri"  default:"dev" `
-	Source       []string `short:"s" long:"src" description:"source"`
-	Packages     []string `short:"g" long:"pkg" description:"entity package"`
-	Output       []string
-	Index        int
-	CustomRouter string `short:"R" long:"router" description:"custom router location"`
-	Module       string `short:"m" long:"module" description:"go module package root" default:"pkg"`
-	Generated    bool
+	Project        string   `short:"p" long:"proj" description:"project location"`
+	Name           string   `short:"n" long:"name" description:"rule name"`
+	ModulePrefix   string   `short:"u" long:"namespace" description:"rule uri/namespace"  default:"dev" `
+	Source         []string `short:"s" long:"src" description:"source"`
+	Packages       []string `short:"g" long:"pkg" description:"entity package"`
+	Output         []string
+	Index          int
+	CustomRouter   string `short:"R" long:"router" description:"custom router location"`
+	ModuleLocation string `short:"m" long:"module" description:"go module package root" default:"pkg"`
+	Generated      bool
 }
 
 func (r *Rule) GoModuleLocation() string {
-	if r.Module != "" {
-		return r.Module
+	if r.ModuleLocation != "" {
+		return r.ModuleLocation
 	}
 	return "pkg"
 }
@@ -93,10 +93,10 @@ func (r *Rule) Init() error {
 	if r.Project == "" {
 		r.Project, _ = os.Getwd()
 	}
-	setter.SetStringIfEmpty(&r.Prefix, "dev")
+	setter.SetStringIfEmpty(&r.ModulePrefix, "dev")
 	r.Project = ensureAbsPath(r.Project)
-	if url.IsRelative(r.Module) {
-		r.Module = url.Join(r.Project, r.Module)
+	if url.IsRelative(r.ModuleLocation) {
+		r.ModuleLocation = url.Join(r.Project, r.ModuleLocation)
 	}
 	expandRelativeIfNeeded(&r.Source[r.Index], r.Project)
 

@@ -87,6 +87,19 @@ func (o *Output) Init(ctx context.Context, aView *view.View, inputParameters sta
 	return nil
 }
 
+func (o *Output) ContentType(format string) string {
+	switch format {
+	case content.CSVFormat:
+		return content.CSVContentType
+	case content.XLSFormat:
+		return content.XLSContentType
+	case content.XMLFormat:
+		return content.XMLContentType
+	default:
+		return content.JSONContentType
+	}
+}
+
 func (o *Output) Format(query url.Values) string {
 	outputFormat := query.Get(FormatQuery)
 	if outputFormat == "" {

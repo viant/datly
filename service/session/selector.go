@@ -43,20 +43,23 @@ func (s *Session) setQuerySelector(ctx context.Context, ns *view.NamespaceView, 
 	return nil
 }
 
-func (s *Session) setQuerySelectorFlags(ctx context.Context, ns *view.NamespaceView, opts *Options) (err error) {
+func (s *Session) setQuerySettings(ctx context.Context, ns *view.NamespaceView, opts *Options) (err error) {
 	selectorParameters := ns.View.Selector
 	if selectorParameters == nil {
 		return nil
 	}
-	if err = s.populateSyncFlagSelector(ctx, ns, opts); err != nil {
+	if err = s.populateSyncFlag(ctx, ns, opts); err != nil {
 		return httputils.NewParamError(ns.View.Name, selectorParameters.SyncFlagParameter.Name, err)
+	}
+	if err = s.populateContentFormat(ctx, ns, opts); err != nil {
+		return httputils.NewParamError(ns.View.Name, selectorParameters.ContentFormatParameter.Name, err)
 	}
 	return nil
 }
 
 func (s *Session) populatePageQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
-	pageParameters := ns.SelectorParameters(selectorParameters.PageParameter, view.RootSelectors.PageParameter)
+	pageParameters := ns.SelectorParameters(selectorParameters.PageParameter, view.QueryParameters.PageParameter)
 	value, has, err := s.lookupFirstValue(ctx, pageParameters, opts)
 	if has && err == nil {
 		err = s.setPageQuerySelector(value, ns)
@@ -64,12 +67,22 @@ func (s *Session) populatePageQuerySelector(ctx context.Context, ns *view.Namesp
 	return err
 }
 
-func (s *Session) populateSyncFlagSelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
+func (s *Session) populateSyncFlag(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
-	syncFlagParameter := ns.SelectorParameters(selectorParameters.SyncFlagParameter, view.RootSelectors.SyncFlagParameter)
+	syncFlagParameter := ns.SelectorParameters(selectorParameters.SyncFlagParameter, view.QueryParameters.SyncFlagParameter)
 	value, has, err := s.lookupFirstValue(ctx, syncFlagParameter, opts)
 	if has && err == nil {
 		err = s.setSyncFlag(value, ns)
+	}
+	return err
+}
+
+func (s *Session) populateContentFormat(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
+	selectorParameters := ns.View.Selector
+	syncFlagParameter := ns.SelectorParameters(selectorParameters.ContentFormatParameter, view.QueryParameters.ContentFormatParameter)
+	value, has, err := s.lookupFirstValue(ctx, syncFlagParameter, opts)
+	if has && err == nil {
+		err = s.setContentFormat(value, ns)
 	}
 	return err
 }
@@ -88,15 +101,22 @@ func (s *Session) setPageQuerySelector(value interface{}, ns *view.NamespaceView
 }
 
 func (s *Session) setSyncFlag(value interface{}, ns *view.NamespaceView) error {
-	flag := value.(bool)
+	flag, _ := value.(bool)
 	selector := s.state.Lookup(ns.View)
 	selector.SyncFlag = flag
 	return nil
 }
 
+func (s *Session) setContentFormat(value interface{}, ns *view.NamespaceView) error {
+	contentFormat, _ := value.(string)
+	selector := s.state.Lookup(ns.View)
+	selector.ContentFormat = contentFormat
+	return nil
+}
+
 func (s *Session) populateCriteriaQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
-	criteriaParameters := ns.SelectorParameters(selectorParameters.CriteriaParameter, view.RootSelectors.CriteriaParameter)
+	criteriaParameters := ns.SelectorParameters(selectorParameters.CriteriaParameter, view.QueryParameters.CriteriaParameter)
 	value, has, err := s.lookupFirstValue(ctx, criteriaParameters, opts)
 	if has && err == nil {
 		err = s.setCriteriaQuerySelector(value, ns)
@@ -106,7 +126,7 @@ func (s *Session) populateCriteriaQuerySelector(ctx context.Context, ns *view.Na
 
 func (s *Session) populateOrderByQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
-	orderByParameters := ns.SelectorParameters(selectorParameters.OrderByParameter, view.RootSelectors.OrderByParameter)
+	orderByParameters := ns.SelectorParameters(selectorParameters.OrderByParameter, view.QueryParameters.OrderByParameter)
 	value, has, err := s.lookupFirstValue(ctx, orderByParameters, opts)
 	if has && err == nil {
 		err = s.setOrderByQuerySelector(value, ns)
@@ -135,7 +155,7 @@ func (s *Session) setOrderByQuerySelector(value interface{}, ns *view.NamespaceV
 
 func (s *Session) populateOffsetQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
-	offsetParameters := ns.SelectorParameters(selectorParameters.OffsetParameter, view.RootSelectors.OffsetParameter)
+	offsetParameters := ns.SelectorParameters(selectorParameters.OffsetParameter, view.QueryParameters.OffsetParameter)
 	value, has, err := s.lookupFirstValue(ctx, offsetParameters, opts)
 	if has && err == nil {
 		err = s.setOffsetQuerySelector(value, ns)
@@ -157,7 +177,7 @@ func (s *Session) setOffsetQuerySelector(value interface{}, ns *view.NamespaceVi
 
 func (s *Session) populateLimitQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
-	limitParameters := ns.SelectorParameters(selectorParameters.LimitParameter, view.RootSelectors.LimitParameter)
+	limitParameters := ns.SelectorParameters(selectorParameters.LimitParameter, view.QueryParameters.LimitParameter)
 	value, has, err := s.lookupFirstValue(ctx, limitParameters, opts)
 	if has && err == nil {
 		err = s.setLimitQuerySelector(value, ns)
@@ -179,7 +199,7 @@ func (s *Session) setLimitQuerySelector(value interface{}, ns *view.NamespaceVie
 
 func (s *Session) populateFieldQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
-	fieldParameters := ns.SelectorParameters(selectorParameters.FieldsParameter, view.RootSelectors.FieldsParameter)
+	fieldParameters := ns.SelectorParameters(selectorParameters.FieldsParameter, view.QueryParameters.FieldsParameter)
 	value, has, err := s.lookupFirstValue(ctx, fieldParameters, opts)
 	if has && err == nil {
 		err = s.setFieldsQuerySelector(value, ns)
