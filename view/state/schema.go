@@ -24,6 +24,7 @@ type (
 		autoGen     bool
 		autoGenFn   func() (reflect.Type, error)
 		initialized bool
+		isStruct    bool
 		generator   func()
 	}
 
@@ -74,6 +75,10 @@ func (s *Schema) CompType() reflect.Type {
 	return s.sliceType.Elem()
 }
 
+func (s *Schema) IsStruct() bool {
+	return s.isStruct
+}
+
 // SetType sets Types
 func (s *Schema) SetType(rType reflect.Type) {
 	if rType.Kind() == reflect.Slice { //i.e []int
@@ -98,6 +103,14 @@ func (s *Schema) SetType(rType reflect.Type) {
 	s.rType = rType
 	s.slice = xunsafe.NewSlice(rType)
 	s.sliceType = s.slice.Type
+
+	if rType.Kind() == reflect.Struct {
+		s.isStruct = true
+	}
+	if rType.Kind() == reflect.Ptr && rType.Elem().Kind() == reflect.Struct {
+		s.isStruct = true
+	}
+
 }
 
 // Init build struct type
