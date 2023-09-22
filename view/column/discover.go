@@ -15,6 +15,8 @@ import (
 )
 
 func Discover(ctx context.Context, db *sql.DB, table, SQL string, SQLArgs ...interface{}) (sqlparser.Columns, error) {
+	SQL = strings.ReplaceAll(SQL, "$AND_CRITERIA", "")
+	SQL = strings.ReplaceAll(SQL, "$WHERE_CRITERIA", "")
 	var columns sqlparser.Columns
 	var err error
 	if table == SQL && !strings.Contains(strings.ToLower(SQL), "select") {

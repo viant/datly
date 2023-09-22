@@ -461,3 +461,9 @@ func fieldByTemplateName(structType reflect.Type, name string) (*xunsafe.Field, 
 
 	return xunsafe.NewField(field), nil
 }
+
+func WithParameterSchema(schema *Schema) ParameterOption {
+	return func(p *Parameter) {
+		p.Schema = schema
+	}
+}

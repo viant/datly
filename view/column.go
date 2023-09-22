@@ -52,6 +52,9 @@ func (c *Column) Init(resourcelet state.Resource, caser format.Case, allowNulls 
 	c._initialized = true
 	if config != nil {
 		c.inherit(config)
+		if config.Default != nil {
+			c.Default = *config.Default
+		}
 	}
 
 	if c.DatabaseColumn == "" {
@@ -120,7 +123,6 @@ func (c *Column) defaultValue(rType reflect.Type) string {
 	if !c.Nullable {
 		return ""
 	}
-
 	switch rType.Kind() {
 	case reflect.Int, reflect.Int64, reflect.Int32, reflect.Int16, reflect.Int8,
 		reflect.Uint, reflect.Uint64, reflect.Uint32, reflect.Uint16, reflect.Uint8:
@@ -132,7 +134,7 @@ func (c *Column) defaultValue(rType reflect.Type) string {
 	case reflect.Bool:
 		return `false`
 	default:
-		return ""
+		return c.Default
 	}
 }
 
@@ -197,4 +199,5 @@ type ColumnConfig struct {
 	DataType            *string      `json:",omitempty"`
 	Format              *string      `json:",omitempty"`
 	Tag                 *string      `json:",omitempty"`
+	Default             *string      `json:",omitempty"`
 }
