@@ -76,14 +76,15 @@ func (s *Session) setViewState(ctx context.Context, aView *view.View) (err error
 	}
 	if err = s.setTemplateState(ctx, aView, opts); err != nil {
 		s.adjustErrorSource(err, aView)
+		return err
 	}
+
 	if aView.Mode == view.ModeQuery {
 		ns := s.viewNaespace(aView)
-		if err = s.setQuerySelectorFlags(ctx, ns, opts); err != nil {
+		if err = s.setQuerySettings(ctx, ns, opts); err != nil {
 			return err
 		}
 	}
-
 	return err
 }
 

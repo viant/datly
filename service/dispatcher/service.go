@@ -55,12 +55,26 @@ func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Comp
 	if infoValue := ctx.Value(exec.InfoKey); infoValue != nil {
 		info = infoValue.(*exec.Info)
 	}
-
+	s.ensureContentSetting(aSession, aComponent)
 	asyncModule := aComponent.Async
 	if asyncModule == nil {
 		return ctx, nil
 	}
+	return s.ensureAsyncContext(ctx, aComponent, aSession, asyncModule, info)
+}
 
+func (s *Service) ensureContentSetting(aSession *session.Session, aComponent *repository.Component) {
+	state := aSession.State().Lookup(aComponent.View)
+	if state.ContentFormat == "" {
+		state.ContentFormat = aComponent.DateFormat
+	}
+	switch state.ContentFormat { //fore sync response for the following content types
+	case "xls":
+		state.SyncFlag = true
+	}
+}
+
+func (s *Service) ensureAsyncContext(ctx context.Context, aComponent *repository.Component, aSession *session.Session, asyncModule *rasync.Config, info *exec.Info) (context.Context, error) {
 	if job := ctx.Value(async.JobKey); job != nil {
 		return ctx, nil
 	}
