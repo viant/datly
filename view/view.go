@@ -464,6 +464,7 @@ func (v *View) initView(ctx context.Context) error {
 		if err = v.ensureColumns(ctx, v._resource); err != nil {
 			return err
 		}
+		v.ensureRType()
 	}
 
 	if err = v.ensureCaseFormat(); err != nil {
@@ -523,6 +524,30 @@ func (v *View) initView(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (v *View) ensureRType() {
+	if rType := v.Schema.Type(); rType != nil {
+		aStruct := types.EnsureStruct(rType)
+		index := map[string]*reflect.StructField{}
+		for i := 0; i < aStruct.NumField(); i++ {
+			field := aStruct.Field(i)
+			index[field.Name] = &field
+			if tag := io.ParseTag(field.Tag.Get("sqlx")); tag != nil {
+				index[tag.Column] = &field
+			}
+		}
+
+		for i := range v.Columns {
+			col := v.Columns[i]
+			if field, ok := index[col.Name]; ok {
+				if col.rType != field.Type {
+					col.rType = field.Type
+					col.DataType = col.rType.Name()
+				}
+			}
+		}
+	}
 }
 
 func (v *View) GetSchema(ctx context.Context) (*state.Schema, error) {

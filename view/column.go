@@ -5,6 +5,7 @@ import (
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
 )
@@ -64,22 +65,23 @@ func (c *Column) Init(resourcelet state.Resource, caser format.Case, allowNulls 
 		return fmt.Errorf("column name was empty")
 	}
 
-	nonPtrType := c.rType
-	for nonPtrType != nil && nonPtrType.Kind() == reflect.Ptr {
-		nonPtrType = nonPtrType.Elem()
-	}
-
-	if nonPtrType == nil || c.DataType != "" {
-		rType, err := types.LookupType(resourcelet.LookupType(), c.DataType)
-		if err != nil && c.rType == nil {
-			return err
+	if c.rType == nil || c.rType == xreflect.InterfaceType {
+		nonPtrType := c.rType
+		for nonPtrType != nil && nonPtrType.Kind() == reflect.Ptr {
+			nonPtrType = nonPtrType.Elem()
 		}
 
-		if rType != nil {
-			c.rType = rType
+		if nonPtrType == nil || c.DataType != "" {
+			rType, err := types.LookupType(resourcelet.LookupType(), c.DataType)
+			if err != nil && c.rType == nil {
+				return err
+			}
+
+			if rType != nil {
+				c.rType = rType
+			}
 		}
 	}
-
 	if err := c.buildSQLExpression(allowNulls); err != nil {
 		return err
 	}
