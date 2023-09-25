@@ -134,6 +134,9 @@ func (r *Router) HandleRequest(ctx context.Context, response http.ResponseWriter
 	}
 
 	r.viewHandler(route)(ctx, response, request)
+	if route.Cors != nil {
+		corsHandler(request, route.Cors)(response)
+	}
 	return nil
 }
 
