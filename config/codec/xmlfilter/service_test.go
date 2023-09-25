@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestService_Transfer(tt *testing.T) {
+func TestService_Transfer(t *testing.T) {
 
 	type IntFilter struct {
 		Include []int
@@ -51,7 +51,7 @@ func TestService_Transfer(tt *testing.T) {
 
 }
 
-func TestService_Transfer02(tt *testing.T) {
+func TestService_Transfer02(t *testing.T) {
 
 	type IntFilter struct {
 		Include []int
@@ -81,6 +81,51 @@ func TestService_Transfer02(tt *testing.T) {
 			Include: []string{"a", "b", "c", "d"},
 			Exclude: []string{"E", "F", "G", "H"},
 		},
+
+		BoolFilter: &BoolFilter{
+			Include: []bool{true, true},
+			Exclude: []bool{false, false},
+		},
+	}
+
+	srv := New()
+	transfer, err := srv.Transfer(q)
+	fmt.Println(transfer)
+	if transfer != nil {
+	}
+	if err != nil {
+	}
+
+}
+
+func TestService_Transfer03(t *testing.T) {
+
+	type IntFilter struct {
+		Include []int
+		Exclude []int
+	}
+	type StringFilter struct {
+		Include []string
+		Exclude []string
+	}
+	type BoolFilter struct {
+		Include []bool
+		Exclude []bool
+	}
+
+	type Filters struct {
+		IntFilter    *IntFilter
+		StringFilter *StringFilter
+		BoolFilter   *BoolFilter
+	}
+
+	q := Filters{
+		IntFilter: &IntFilter{
+			Include: []int{1, 2},
+			Exclude: nil,
+		},
+		StringFilter: nil,
+
 		BoolFilter: &BoolFilter{
 			Include: []bool{true, true},
 			Exclude: []bool{false, false},

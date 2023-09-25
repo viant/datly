@@ -151,9 +151,13 @@ func (t *Service) Transfer(aStruct interface{}) (*Result, error) {
 			return nil, fmt.Errorf("xmlfilter: expected struct but had: %T", aStruct)
 		}
 
+		if xFilterPtr == nil {
+			continue
+		}
+
 		xFilter := xunsafe.NewStruct(fieldType)
 
-		filter, err := t.transferFilterObject(xFilter, xFilterPtr)
+		filter, err := t.transferFilterObject(xFilter, xFilterPtr, field.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -167,10 +171,10 @@ func (t *Service) Transfer(aStruct interface{}) (*Result, error) {
 
 }
 
-func (t *Service) transferFilterObject(xFieldStruct *xunsafe.Struct, ptr unsafe.Pointer) (*Filter, error) {
+func (t *Service) transferFilterObject(xFieldStruct *xunsafe.Struct, ptr unsafe.Pointer, name string) (*Filter, error) {
 	const include = "Include"
 	const exclude = "Exclude"
-	filterObj := &Filter{}
+	filterObj := &Filter{Name: name}
 
 	for _, subField := range xFieldStruct.Fields {
 		fmt.Printf("###### name: %s kind: %s type: %s\n", subField.Name, subField.Kind(), subField.Type.String())
