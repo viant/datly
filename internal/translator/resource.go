@@ -206,6 +206,10 @@ func (r *Resource) appendPathVariableParams() {
 	params := extractURIParams(r.Rule.Route.URI)
 	required := true
 	for paramName := range params {
+		if param := r.State.ViewParameters().LookupByLocation(state.KindPath, paramName); param != nil {
+			param.Required = &required
+			continue
+		}
 		parameter := inference.NewPathParameter(paramName)
 		parameter.Required = &required
 		r.State.Append(parameter)
