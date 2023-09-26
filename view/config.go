@@ -24,7 +24,7 @@ const (
 
 var stringsType = reflect.TypeOf([]string{})
 
-var QueryParameters = &Config{
+var QueryStateParameters = &Config{
 	LimitParameter:         &state.Parameter{Name: "Limit", In: state.NewQueryLocation(LimitQuery), Schema: state.NewSchema(xreflect.IntType)},
 	OffsetParameter:        &state.Parameter{Name: "Offset", In: state.NewQueryLocation(OffsetQuery), Schema: state.NewSchema(xreflect.IntType)},
 	PageParameter:          &state.Parameter{Name: "Page", In: state.NewQueryLocation(PageQuery), Schema: state.NewSchema(xreflect.IntType)},

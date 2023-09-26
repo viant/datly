@@ -87,6 +87,11 @@ const ( //Response keys
 	ResponseUnixTimeInSec = "response.unixtimeinsec"
 )
 
+const (
+	Filter  = "filter"
+	Filters = "filters"
+)
+
 var Types = map[string]reflect.Type{
 	//Component/View related keys
 	Error:           xreflect.StringType,

@@ -21,6 +21,31 @@ func (l *outputLocator) getFilterValue() (interface{}, bool, error) {
 	return filterState.State(), true, nil
 }
 
+func (l *outputLocator) getFiltersValue() (interface{}, bool, error) {
+	var filters predicate.NamedFilters
+	for i, filter := range l.Output.Filters {
+		output := l.Output.Filters[i]
+		aFilter := &predicate.NamedFilter{Name: output.Name}
+		filters = append(filters, aFilter)
+		l.transferValues(filter.Include, &aFilter.Include)
+		l.transferValues(filter.Exclude, &aFilter.Exclude)
+	}
+	return filters, true, nil
+}
+
+func (l *outputLocator) transferValues(source []interface{}, dest *[]string) {
+	for _, value := range source {
+		switch actual := value.(type) {
+		case string:
+			*dest = append(*dest, actual)
+		case bool:
+			*dest = append(*dest, strconv.FormatBool(actual))
+		case int:
+			*dest = append(*dest, strconv.Itoa(actual))
+		}
+	}
+}
+
 func (l *outputLocator) buildFilter(parameter *state.Parameter) (*structology.State, error) {
 	filterType := structology.NewStateType(parameter.Schema.Type())
 	filterState := filterType.NewState()

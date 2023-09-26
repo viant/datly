@@ -59,7 +59,7 @@ func (s *Session) setQuerySettings(ctx context.Context, ns *view.NamespaceView, 
 
 func (s *Session) populatePageQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
-	pageParameters := ns.SelectorParameters(selectorParameters.PageParameter, view.QueryParameters.PageParameter)
+	pageParameters := ns.SelectorParameters(selectorParameters.PageParameter, view.QueryStateParameters.PageParameter)
 	value, has, err := s.lookupFirstValue(ctx, pageParameters, opts)
 	if has && err == nil {
 		err = s.setPageQuerySelector(value, ns)
@@ -69,7 +69,7 @@ func (s *Session) populatePageQuerySelector(ctx context.Context, ns *view.Namesp
 
 func (s *Session) populateSyncFlag(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
-	syncFlagParameter := ns.SelectorParameters(selectorParameters.SyncFlagParameter, view.QueryParameters.SyncFlagParameter)
+	syncFlagParameter := ns.SelectorParameters(selectorParameters.SyncFlagParameter, view.QueryStateParameters.SyncFlagParameter)
 	value, has, err := s.lookupFirstValue(ctx, syncFlagParameter, opts)
 	if has && err == nil {
 		err = s.setSyncFlag(value, ns)
@@ -79,7 +79,7 @@ func (s *Session) populateSyncFlag(ctx context.Context, ns *view.NamespaceView, 
 
 func (s *Session) populateContentFormat(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
-	syncFlagParameter := ns.SelectorParameters(selectorParameters.ContentFormatParameter, view.QueryParameters.ContentFormatParameter)
+	syncFlagParameter := ns.SelectorParameters(selectorParameters.ContentFormatParameter, view.QueryStateParameters.ContentFormatParameter)
 	value, has, err := s.lookupFirstValue(ctx, syncFlagParameter, opts)
 	if has && err == nil {
 		err = s.setContentFormat(value, ns)
@@ -116,7 +116,7 @@ func (s *Session) setContentFormat(value interface{}, ns *view.NamespaceView) er
 
 func (s *Session) populateCriteriaQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
-	criteriaParameters := ns.SelectorParameters(selectorParameters.CriteriaParameter, view.QueryParameters.CriteriaParameter)
+	criteriaParameters := ns.SelectorParameters(selectorParameters.CriteriaParameter, view.QueryStateParameters.CriteriaParameter)
 	value, has, err := s.lookupFirstValue(ctx, criteriaParameters, opts)
 	if has && err == nil {
 		err = s.setCriteriaQuerySelector(value, ns)
@@ -126,7 +126,7 @@ func (s *Session) populateCriteriaQuerySelector(ctx context.Context, ns *view.Na
 
 func (s *Session) populateOrderByQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
-	orderByParameters := ns.SelectorParameters(selectorParameters.OrderByParameter, view.QueryParameters.OrderByParameter)
+	orderByParameters := ns.SelectorParameters(selectorParameters.OrderByParameter, view.QueryStateParameters.OrderByParameter)
 	value, has, err := s.lookupFirstValue(ctx, orderByParameters, opts)
 	if has && err == nil {
 		err = s.setOrderByQuerySelector(value, ns)
@@ -155,7 +155,7 @@ func (s *Session) setOrderByQuerySelector(value interface{}, ns *view.NamespaceV
 
 func (s *Session) populateOffsetQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
-	offsetParameters := ns.SelectorParameters(selectorParameters.OffsetParameter, view.QueryParameters.OffsetParameter)
+	offsetParameters := ns.SelectorParameters(selectorParameters.OffsetParameter, view.QueryStateParameters.OffsetParameter)
 	value, has, err := s.lookupFirstValue(ctx, offsetParameters, opts)
 	if has && err == nil {
 		err = s.setOffsetQuerySelector(value, ns)
@@ -177,7 +177,7 @@ func (s *Session) setOffsetQuerySelector(value interface{}, ns *view.NamespaceVi
 
 func (s *Session) populateLimitQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
-	limitParameters := ns.SelectorParameters(selectorParameters.LimitParameter, view.QueryParameters.LimitParameter)
+	limitParameters := ns.SelectorParameters(selectorParameters.LimitParameter, view.QueryStateParameters.LimitParameter)
 	value, has, err := s.lookupFirstValue(ctx, limitParameters, opts)
 	if has && err == nil {
 		err = s.setLimitQuerySelector(value, ns)
@@ -199,7 +199,7 @@ func (s *Session) setLimitQuerySelector(value interface{}, ns *view.NamespaceVie
 
 func (s *Session) populateFieldQuerySelector(ctx context.Context, ns *view.NamespaceView, opts *Options) error {
 	selectorParameters := ns.View.Selector
-	fieldParameters := ns.SelectorParameters(selectorParameters.FieldsParameter, view.QueryParameters.FieldsParameter)
+	fieldParameters := ns.SelectorParameters(selectorParameters.FieldsParameter, view.QueryStateParameters.FieldsParameter)
 	value, has, err := s.lookupFirstValue(ctx, fieldParameters, opts)
 	if has && err == nil {
 		err = s.setFieldsQuerySelector(value, ns)

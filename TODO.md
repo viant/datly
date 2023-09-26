@@ -1,7 +1,19 @@
 
+- Lazy route loading
+
+
+- Unify output marshaling (XLS/DOCx/XML/JSON) <-> exclusion,query selector, caseing
+  - -> format: format case, date format, precission point, rounding 
+    
+- Component -> OpenAPI 
+
+- Performance (refacatring)
+
+- UI
+- Generative AI
+- 
 - Pre generate columns meta for template summary case
 - optimize 'WITH ' SQL type
-- Unify default-datly tag
 - Executor triggers/notification
 - Self documenting / Improve documentation
 - Batch spreadsheet ingestion
