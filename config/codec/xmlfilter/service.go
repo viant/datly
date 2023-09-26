@@ -3,6 +3,7 @@ package xmlfilter
 import (
 	"fmt"
 	"github.com/viant/toolbox"
+	"github.com/viant/xmlify"
 	"github.com/viant/xunsafe"
 	"reflect"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 type (
 	Filter struct {
 		Name          string
+		Tag           *xmlify.Tag
 		IncludeString []string `json:",omitempty" xmlify:"omitempty"`
 		ExcludeString []string `json:",omitempty" xmlify:"omitempty"`
 		IncludeInt    []int    `json:",omitempty" xmlify:"omitempty"`
@@ -38,7 +40,12 @@ func (f *Result) MarshalXML() ([]byte, error) {
 		//TODO check if filter is empty
 		sb.WriteString("\n")
 		sb.WriteString("<")
-		sb.WriteString(filter.Name)
+		if filter.Tag.Name != "" {
+			sb.WriteString(filter.Tag.Name)
+		} else {
+			sb.WriteString(filter.Name)
+		}
+
 		sb.WriteString(" ")
 
 		switch {
@@ -113,7 +120,7 @@ func (f *Result) MarshalXML() ([]byte, error) {
 
 	sb.WriteString("\n")
 	sb.WriteString("</filter>")
-	fmt.Println(sb.String())
+	//fmt.Println(sb.String())
 	return []byte(sb.String()), nil
 }
 
@@ -162,6 +169,8 @@ func (t *Service) Transfer(aStruct interface{}) (*Result, error) {
 			return nil, err
 		}
 
+		filter.Tag = xmlify.ParseTag(field.Tag.Get("xmlify"))
+
 		result.Filters = append(result.Filters, filter)
 	}
 
@@ -190,7 +199,7 @@ func (t *Service) transferFilterObject(xFieldStruct *xunsafe.Struct, ptr unsafe.
 		switch elemTypeName := subFieldType.Elem().Name(); elemTypeName {
 		case "int":
 			s := (*[]int)(slicePtr)
-			fmt.Println(*s)
+			//fmt.Println(*s)
 			if subField.Name == include {
 				filterObj.IncludeInt = *s
 			}
@@ -199,7 +208,7 @@ func (t *Service) transferFilterObject(xFieldStruct *xunsafe.Struct, ptr unsafe.
 			}
 		case "string":
 			s := (*[]string)(slicePtr)
-			fmt.Println(*s)
+			//fmt.Println(*s)
 			if subField.Name == include {
 				filterObj.IncludeString = *s
 			}
@@ -208,7 +217,7 @@ func (t *Service) transferFilterObject(xFieldStruct *xunsafe.Struct, ptr unsafe.
 			}
 		case "bool":
 			s := (*[]bool)(slicePtr)
-			fmt.Println(*s)
+			//fmt.Println(*s)
 			if subField.Name == include {
 				filterObj.IncludeBool = *s
 			}
