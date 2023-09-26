@@ -3,6 +3,7 @@ package xmlfilter
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestService_Transfer(t *testing.T) {
@@ -21,7 +22,7 @@ func TestService_Transfer(t *testing.T) {
 	}
 
 	type Filters struct {
-		IntFilter    IntFilter
+		IntFilter    IntFilter `xmlify:"name=integer_filter"`
 		StringFilter StringFilter
 		BoolFilter   BoolFilter
 	}
@@ -140,4 +141,19 @@ func TestService_Transfer03(t *testing.T) {
 	if err != nil {
 	}
 
+}
+
+func TestService_BLA1_test(t *testing.T) {
+	f := 654.923
+	i := int(f)
+	fmt.Printf("%d\n ", i)
+
+	var start time.Time
+	//start := time.Now()
+	time.Sleep(3 * time.Second)
+
+	end := time.Now()
+	elapsed := end.Sub(start)
+	elapsedSec := int(elapsed.Seconds())
+	fmt.Printf("elapsedSec == %d\n", elapsedSec)
 }
