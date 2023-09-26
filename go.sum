@@ -322,8 +322,8 @@ github.com/viant/pgo v0.10.4-0.20230801151735-5700d39f8114 h1:URXSO84hoE5A3UHl1o
 github.com/viant/pgo v0.10.4-0.20230801151735-5700d39f8114/go.mod h1:MFzHmkRFZlciugEgUvpl/3grK789PBSH4dUVSLOSo+Q=
 github.com/viant/scy v0.6.0 h1:QQgq2jKaarDKfJgt9Q2bJlg0Jon/jjL1FfIRyDFzb7E=
 github.com/viant/scy v0.6.0/go.mod h1:8DdAWhNVjY6OGOT9+2O7FEAPGDRqy2e+fG6cwIY6jNo=
-github.com/viant/sqlparser v0.5.1-0.20230823164935-b85fb599530a h1:/m8WWD+q0BnXYy+uWq+Kam8BkJgFV/W9VE94i5utyk4=
-github.com/viant/sqlparser v0.5.1-0.20230823164935-b85fb599530a/go.mod h1:/ABOSxNPYt/el6LtIe+Ikl8fzkIywbfOfmEB3dxc7Lw=
+github.com/viant/sqlparser v0.5.1-0.20230922175231-bed6153c0f7e h1:cVxlDJFZETm9AZ4Hvdf+dtLEEHNvfcoe+SrNUv9UdBo=
+github.com/viant/sqlparser v0.5.1-0.20230922175231-bed6153c0f7e/go.mod h1:/ABOSxNPYt/el6LtIe+Ikl8fzkIywbfOfmEB3dxc7Lw=
 github.com/viant/sqlx v0.9.1-0.20230913002732-0b3c53e41c0e h1:EvPI7mV4UwuIHJBy62NYiWHssHD0KwwEMXTkM9XsAfg=
 github.com/viant/sqlx v0.9.1-0.20230913002732-0b3c53e41c0e/go.mod h1:q96jEKSL4oHIZ41M5yhBweEZxTBHNyAHmi0GvtP2MgE=
 github.com/viant/structology v0.4.3-0.20230919204458-398614016824 h1:OFNohwq7ZrVjT9r8sJaBeUffaB9tPAOMiZWmE93VJ/Q=
@@ -348,8 +348,8 @@ github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7 h1:lQZR7
 github.com/viant/xdatly/types/custom v0.0.0-20230309034540-231985618fc7/go.mod h1:NVeS+s/uf2dj/M2QlLdY5KXoci0KPMbD9n02Y0m5hBw=
 github.com/viant/xlsy v0.0.0-20230826014723-a2947db28c76 h1:3OdkirSx74HyFIW3WPXBhK90LeJr9RtmsnPcvQbH8t4=
 github.com/viant/xlsy v0.0.0-20230826014723-a2947db28c76/go.mod h1:nasGZnDzlQ0dlvuBk0zCsOZ2GMGu3v0p270xoA1mBUk=
-github.com/viant/xmlify v0.0.0-20230921182208-c394d740e8a7 h1:K+WGA5W1c+bAcNDvmOKQeKDHC0IZfr5lpaU9spVL2Ow=
-github.com/viant/xmlify v0.0.0-20230921182208-c394d740e8a7/go.mod h1:/JKJnEoJyyYNiV6cIY7qDjX2rws5bMh2JFbtLIZZ7Es=
+github.com/viant/xmlify v0.0.0-20230926153903-4564fcd3df62 h1:S/01wOoRfloU3Iq6fHt6eSV+EwhPB7fNmZpKN5tosTE=
+github.com/viant/xmlify v0.0.0-20230926153903-4564fcd3df62/go.mod h1:/JKJnEoJyyYNiV6cIY7qDjX2rws5bMh2JFbtLIZZ7Es=
 github.com/viant/xreflect v0.3.2-0.20230920021028-04a256415cac h1:+6d8KGT/zkUSbaTZD9OIYj10UAK2YLJo4WQiKETjDPw=
 github.com/viant/xreflect v0.3.2-0.20230920021028-04a256415cac/go.mod h1:uflXFHcw4TQXgYJvTQ7Akf4SAzXYPCVi8NGZgsVlwmA=
 github.com/viant/xunsafe v0.9.0 h1:pyvHiGjYqwVNwbIfUTvO8W960S6zvM/gxP4iRyAl6BE=
