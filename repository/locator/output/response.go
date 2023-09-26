@@ -15,13 +15,15 @@ func (l *outputLocator) getResponseValue(ctx context.Context, name string) (inte
 
 	switch name {
 	case keys.ResponseElapsedInSec:
-		return int(info.Elapsed().Seconds()), true, nil
+		return int(info.AsyncElapsed().Seconds()), true, nil
 	case keys.ResponseElapsedInMs:
 		return int(info.Elapsed().Milliseconds()), true, nil
 	case keys.ResponseUnixTimeInSec:
 		return info.EndTime().Unix(), true, nil
 	case keys.ResponseTime:
+		//return info.AsyncEndTime(), true, nil
 		return info.EndTime(), true, nil
+
 	}
 	return nil, false, nil
 }
