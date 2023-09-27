@@ -17,6 +17,7 @@ import (
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
+	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
@@ -238,6 +239,11 @@ func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.P
 		if tag.AsJsonTab {
 			outputType = reflect.TypeOf(&jsontab.Result{})
 		}
+		switch tag.Codec {
+		case codec.KeyFilters:
+			outputType = reflect.TypeOf(predicate.NamedFilters{})
+		}
+
 		adjustedDest.Append(&inference.Parameter{
 			Parameter: state.Parameter{
 				Reference: shared.Reference{},
@@ -247,6 +253,7 @@ func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.P
 				In:        state.NewQueryLocation(selector.Name()),
 			}})
 	}
+
 	var err error
 	if adjustedDest, err = adjustedDest.Compact(resource.rule.ModuleLocation); err != nil {
 		return nil, fmt.Errorf("failed to rewrite transfer type: %v %w", parameter.Name, err)
