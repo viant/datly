@@ -64,13 +64,13 @@ func (s *Service) EnsureContext(ctx context.Context, aComponent *repository.Comp
 }
 
 func (s *Service) ensureContentSetting(aSession *session.Session, aComponent *repository.Component) {
-	state := aSession.State().Lookup(aComponent.View)
-	if state.ContentFormat == "" {
-		state.ContentFormat = aComponent.DateFormat
+	settings := aSession.State().QuerySettings(aComponent.View)
+	if settings != nil && settings.ContentFormat == "" {
+		settings.ContentFormat = aComponent.DateFormat
 	}
-	switch state.ContentFormat { //fore sync response for the following content types
+	switch settings.ContentFormat { //fore sync response for the following content types
 	case "xls":
-		state.SyncFlag = true
+		settings.SyncFlag = true
 	}
 }
 

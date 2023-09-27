@@ -109,8 +109,10 @@ func (s *Session) setSyncFlag(value interface{}, ns *view.NamespaceView) error {
 
 func (s *Session) setContentFormat(value interface{}, ns *view.NamespaceView) error {
 	contentFormat, _ := value.(string)
-	selector := s.state.Lookup(ns.View)
-	selector.ContentFormat = contentFormat
+	settings := s.state.QuerySettings(ns.View)
+	if contentFormat != "" {
+		settings.ContentFormat = contentFormat
+	}
 	return nil
 }
 

@@ -479,9 +479,6 @@ func (r *Router) payloadReader(ctx context.Context, request *http.Request, write
 	if err != nil {
 		return nil, err
 	}
-	if settings := aSession.State().QuerySettings(route.View); settings != nil {
-		settings.ContentFormat = route.Component.Output.DataFormat
-	}
 	if err := aSession.Populate(ctx); err != nil {
 		return nil, err
 	}
