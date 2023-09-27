@@ -66,6 +66,9 @@ func (e *Filters) Value(ctx context.Context, raw interface{}, options ...codec.O
 	var result predicate.NamedFilters
 	for _, selector := range aStateType.RootSelectors() {
 		value := selector.Value(aState.Pointer())
+		if value == nil {
+			continue
+		}
 		switch actual := value.(type) {
 		case *predicate.IntFilter:
 			aFilter := &predicate.NamedFilter{Name: selector.Name()}
