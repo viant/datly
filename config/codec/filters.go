@@ -71,6 +71,9 @@ func (e *Filters) Value(ctx context.Context, raw interface{}, options ...codec.O
 		}
 		switch actual := value.(type) {
 		case *predicate.IntFilter:
+			if actual == nil {
+				continue
+			}
 			aFilter := &predicate.NamedFilter{Name: selector.Name()}
 			for _, item := range actual.Include {
 				aFilter.Include = append(aFilter.Include, strconv.Itoa(item))
@@ -80,8 +83,14 @@ func (e *Filters) Value(ctx context.Context, raw interface{}, options ...codec.O
 			}
 			result = append(result, aFilter)
 		case *predicate.StringsFilter:
+			if actual == nil {
+				continue
+			}
 			result = append(result, &predicate.NamedFilter{Name: selector.Name(), Include: actual.Include, Exclude: actual.Exclude})
 		case *predicate.BoolFilter:
+			if actual == nil {
+				continue
+			}
 			aFilter := &predicate.NamedFilter{Name: selector.Name()}
 			for _, item := range actual.Include {
 				aFilter.Include = append(aFilter.Include, strconv.FormatBool(item))
