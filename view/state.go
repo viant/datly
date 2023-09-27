@@ -115,6 +115,24 @@ type State struct {
 	sync.RWMutex
 }
 
+// QuerySelector returns query selector
+func (s *State) QuerySelector(view *View) *QuerySelector {
+	statelet := s.Lookup(view)
+	if statelet == nil {
+		return nil
+	}
+	return &statelet.QuerySelector
+}
+
+// QuerySettings returns query settings
+func (s *State) QuerySettings(view *View) *QuerySettings {
+	statelet := s.Lookup(view)
+	if statelet == nil {
+		return nil
+	}
+	return &statelet.QuerySettings
+}
+
 // Lookup returns and initializes Statelet attached to View. Creates new one if doesn't exist.
 func (s *State) Lookup(view *View) *Statelet {
 	s.RWMutex.Lock()
