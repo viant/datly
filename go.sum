@@ -358,6 +358,8 @@ github.com/viant/xlsy v0.2.1-0.20230927133950-c654a7de06ad h1:8enFiD2mbVAeZQMcEV
 github.com/viant/xlsy v0.2.1-0.20230927133950-c654a7de06ad/go.mod h1:7b+YtDAFGRQ3rpXUUO3hunOfKhtyzYpq9Tnem+lF1Vg=
 github.com/viant/xlsy v0.2.1-0.20230927170001-51867863b6aa h1:n88n8H713Jqm2LB07tWykVb34gVOmFUNDt5XwttNMxs=
 github.com/viant/xlsy v0.2.1-0.20230927170001-51867863b6aa/go.mod h1:7b+YtDAFGRQ3rpXUUO3hunOfKhtyzYpq9Tnem+lF1Vg=
+github.com/viant/xlsy v0.2.1-0.20230927182426-8a14af9bcafc h1:b3ZDVfxU1L1JKao57QNgSBEg30L5LBhCz9OUuk9XUHU=
+github.com/viant/xlsy v0.2.1-0.20230927182426-8a14af9bcafc/go.mod h1:7b+YtDAFGRQ3rpXUUO3hunOfKhtyzYpq9Tnem+lF1Vg=
 github.com/viant/xmlify v0.0.0-20230926153903-4564fcd3df62 h1:S/01wOoRfloU3Iq6fHt6eSV+EwhPB7fNmZpKN5tosTE=
 github.com/viant/xmlify v0.0.0-20230926153903-4564fcd3df62/go.mod h1:/JKJnEoJyyYNiV6cIY7qDjX2rws5bMh2JFbtLIZZ7Es=
 github.com/viant/xreflect v0.3.2-0.20230920021028-04a256415cac h1:+6d8KGT/zkUSbaTZD9OIYj10UAK2YLJo4WQiKETjDPw=
