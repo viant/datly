@@ -31,6 +31,7 @@ type (
 		srvXmlTab    *xmltab.Service
 		srvXmlFilter *xmlfilter.Service
 		srvJsonTab   *jsontab.Service
+		filters      FiltersRegistry
 	}
 )
 
@@ -85,6 +86,7 @@ func (e *Transfer) Value(ctx context.Context, raw interface{}, options ...codec.
 		if err != nil {
 			return nil, err
 		}
+
 		if aTransfer.tag.AsXmlTab {
 			value, err = e.srvXmlTab.Transfer(value)
 			if err != nil {
@@ -99,6 +101,13 @@ func (e *Transfer) Value(ctx context.Context, raw interface{}, options ...codec.
 		}
 		if aTransfer.tag.AsXmlFilter {
 			value, err = e.srvXmlFilter.Transfer(value)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if aTransfer.tag.AsFilters {
+			filterCodec, _ := e.filters.New(&codec.Config{})
+			value, err = filterCodec.Value(ctx, value)
 			if err != nil {
 				return nil, err
 			}

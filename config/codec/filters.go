@@ -28,6 +28,9 @@ type (
 func (e *FiltersRegistry) get(key reflect.Type) *structology.StateType {
 	e.Mutex.Lock()
 	defer e.Mutex.Unlock()
+	if len(e.registry) == 0 {
+		e.registry = map[reflect.Type]*structology.StateType{}
+	}
 	ret, ok := e.registry[key]
 	if !ok {
 		ret = structology.NewStateType(key)
@@ -37,10 +40,6 @@ func (e *FiltersRegistry) get(key reflect.Type) *structology.StateType {
 }
 
 func (e *FiltersRegistry) New(codecConfig *codec.Config, options ...codec.Option) (codec.Instance, error) {
-	if len(e.registry) == 0 {
-		e.registry = map[reflect.Type]*structology.StateType{}
-	}
-
 	if err := ValidateMinArgs(codecConfig, KeyFilters, 0); err != nil {
 		return nil, err
 	}

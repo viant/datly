@@ -13,6 +13,7 @@ type Tag struct {
 	AsXmlTab    bool
 	AsXmlFilter bool
 	AsJsonTab   bool
+	AsFilters   bool
 }
 
 // ParseTag parses datly tag
@@ -34,6 +35,8 @@ func ParseTag(tagString string) *Tag {
 				ret.AsXmlTab = strings.TrimSpace(nv[1]) == "true"
 			case "xmlfilter":
 				ret.AsXmlFilter = strings.TrimSpace(nv[1]) == "true"
+			case "filters":
+				ret.AsFilters = strings.TrimSpace(nv[1]) == "true"
 			}
 		}
 	}

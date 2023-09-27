@@ -47,6 +47,7 @@ var Config = &Registry{
 		xreflect.NewType("xmlfilter.Result", xreflect.WithReflectType(reflect.TypeOf(xmlfilter.Result{}))),
 		xreflect.NewType("jsontab.Result", xreflect.WithReflectType(reflect.TypeOf(jsontab.Result{}))),
 		xreflect.NewType("async.Job", xreflect.WithReflectType(reflect.TypeOf(async.Job{}))),
+		xreflect.NewType("predicate.NamedFilters", xreflect.WithReflectType(reflect.TypeOf(predicate.NamedFilters{}))),
 	)),
 	Codecs: codec.NewRegistry(
 		codec.WithCodec(xcodec.KeyJwtClaim, &xcodec.GCPJwtClaim{}, time.Time{}),
