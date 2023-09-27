@@ -70,7 +70,6 @@ func (c *Column) Init(resourcelet state.Resource, caser format.Case, allowNulls 
 		for nonPtrType != nil && nonPtrType.Kind() == reflect.Ptr {
 			nonPtrType = nonPtrType.Elem()
 		}
-
 		if nonPtrType == nil || c.DataType != "" {
 			if c.DataType == "" {
 				return fmt.Errorf("invalid column %s, data type: %s", c.Name, c.DataType)
@@ -160,7 +159,7 @@ func (c *Column) ApplyConfig(config *ColumnConfig) {
 		c.Codec = config.Codec
 	}
 
-	if config.DataType != nil {
+	if config.DataType != nil && *config.DataType != "" {
 		c.DataType = *config.DataType
 	}
 

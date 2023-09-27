@@ -543,7 +543,9 @@ func (v *View) reconsileColumnTypes() {
 			if field, ok := index[col.Name]; ok {
 				if col.rType != field.Type {
 					col.rType = field.Type
-					col.DataType = col.rType.Name()
+					if name := col.rType.Name(); name != "" {
+						col.DataType = name
+					}
 				}
 			}
 		}

@@ -114,6 +114,8 @@ func (s *Service) detectColumns(resource *Resource, columnDiscovery discover.Col
 			}
 			if isValid {
 				columnDiscovery.Items[viewlet.Name] = viewlet.Columns
+			} else {
+				fmt.Printf("faild to run column detectrion for %s\n", viewlet.Name)
 			}
 			//TODO add meta column generation for SUMMARY/Meta tempalte
 		}
