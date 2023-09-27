@@ -33,8 +33,8 @@ func (s *Service) adjustAsyncOptions(ctx context.Context, aSession *session.Sess
 			*options = append(*options, reader.WithCacheRefresh())
 		} else if async.Status(job.Status) != async.StatusDone {
 			//Make sure not actual database is used
-			selector := aSession.State().Lookup(aView)
-			if !selector.SyncFlag { //sync flag would perform regular read
+			setting := aSession.State().QuerySettings(aView)
+			if !setting.SyncFlag { //sync flag would perform regular read
 				*options = append(*options, reader.WithDryRun())
 			}
 		}
