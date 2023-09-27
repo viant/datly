@@ -214,7 +214,7 @@ func (p Parameters) ReflectType(pkgPath string, lookupType xreflect.LookupType, 
 
 	if withSetMarker && len(fields) > 0 {
 		setMarkerType := reflect.StructOf(setMarkerFields)
-		fields = append(fields, reflect.StructField{Name: "Has", Type: reflect.PtrTo(setMarkerType), PkgPath: PkgPath("Has", pkgPath), Tag: `setMarker:"true" sqlx:"-" diff:"-"  `})
+		fields = append(fields, reflect.StructField{Name: "Has", Type: reflect.PtrTo(setMarkerType), PkgPath: PkgPath("Has", pkgPath), Tag: `setMarker:"true" xls:"-" sqlx:"-" diff:"-"  `})
 	}
 	if len(fields) == 0 {
 		return emptyStruct, nil
@@ -275,7 +275,7 @@ func (p Parameters) buildStateType(pkgPath string, lookupType xreflect.LookupTyp
 	}
 	if withSetMarker && len(fields) > 0 {
 		setMarkerType := reflect.StructOf(setMarkerFields)
-		fields = append(fields, reflect.StructField{Name: "Has", Type: reflect.PtrTo(setMarkerType), PkgPath: PkgPath("Has", pkgPath), Tag: `setMarker:"true" sqlx:"-" diff:"-"  `})
+		fields = append(fields, reflect.StructField{Name: "Has", Type: reflect.PtrTo(setMarkerType), PkgPath: PkgPath("Has", pkgPath), Tag: `setMarker:"true"  xls:"-" sqlx:"-" diff:"-"  `})
 	}
 	if len(fields) == 0 {
 		return emptyStruct, nil
