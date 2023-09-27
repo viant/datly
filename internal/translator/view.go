@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox/format"
 	"path"
+	"strings"
 )
 
 type (
@@ -203,7 +204,14 @@ func (v *View) buildColumnConfig(namespace *Viewlet) {
 			config = &view.ColumnConfig{Name: k}
 			v.ColumnsConfig[k] = config
 		}
+		tag = strings.TrimSpace(tag)
+		if len(tag) > 0 {
+			if (tag[0] == '\'' && tag[len(tag)-1] == '\'') || (tag[0] == '"' && tag[len(tag)-1] == '"') {
+				tag = tag[1 : len(tag)-1]
+			}
+		}
 		config.Tag = &tag
+
 	}
 }
 

@@ -81,7 +81,8 @@ func (f *Result) MarshalXML() ([]byte, error) {
 			wasInclusion = true
 		}
 
-		if wasInclusion {
+		isExclusion := filter.ExcludeInt != nil || filter.ExcludeString != nil || filter.ExcludeBool != nil
+		if wasInclusion && isExclusion {
 			sb.WriteString(` `)
 		}
 
@@ -142,7 +143,7 @@ func (t *Service) Transfer(aStruct interface{}) (*Result, error) {
 	result := &Result{}
 
 	for _, field := range xFilters.Fields {
-		fmt.Printf("### %s %s %s\n", field.Name, field.Kind(), field.Type.String())
+		//fmt.Printf("### %s %s %s\n", field.Name, field.Kind(), field.Type.String())
 		fieldType := field.Type
 
 		var xFilterPtr unsafe.Pointer
@@ -186,7 +187,7 @@ func (t *Service) transferFilterObject(xFieldStruct *xunsafe.Struct, ptr unsafe.
 	filterObj := &Filter{Name: name}
 
 	for _, subField := range xFieldStruct.Fields {
-		fmt.Printf("###### name: %s kind: %s type: %s\n", subField.Name, subField.Kind(), subField.Type.String())
+		//fmt.Printf("###### name: %s kind: %s type: %s\n", subField.Name, subField.Kind(), subField.Type.String())
 		subFieldType := subField.Type
 		if subField.Kind() == reflect.Ptr {
 			subFieldType = subFieldType.Elem()
@@ -225,6 +226,7 @@ func (t *Service) transferFilterObject(xFieldStruct *xunsafe.Struct, ptr unsafe.
 				filterObj.ExcludeBool = *s
 			}
 		default:
+			//TODO
 			fmt.Printf("xmlfilter: unsupported type %s\n", elemTypeName)
 		}
 	}
