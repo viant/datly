@@ -45,9 +45,9 @@ func (r *Response) SetError(err error, statusCode int) {
 	r.Status.Status = "error"
 
 }
-func (h *Handler) Handle(ctx context.Context, aView *view.View, session *session.Session, opts ...reader.Option) *Response {
+func (h *Handler) Handle(ctx context.Context, aView *view.View, aSession *session.Session, opts ...reader.Option) *Response {
 	ret := &Response{Header: http.Header{}, Status: &response.Status{Status: "ok"}}
-	err := h.readData(ctx, aView, session, ret, opts)
+	err := h.readData(ctx, aView, aSession, ret, opts)
 	if err != nil {
 		ret.SetError(err, h.errorStatusCode())
 		return ret
@@ -60,16 +60,18 @@ func (h *Handler) Handle(ctx context.Context, aView *view.View, session *session
 	}
 
 	resultState := h.output.NewState()
+	statelet := aSession.State().Lookup(aView)
 	var locatorOptions []locator.Option
 	locatorOptions = append(locatorOptions, locator.WithParameterLookup(func(ctx context.Context, parameter *state.Parameter) (interface{}, bool, error) {
-		return session.LookupValue(ctx, parameter, session.Indirect(true, locatorOptions...))
+		return aSession.LookupValue(ctx, parameter, aSession.Indirect(true, locatorOptions...))
 	}),
 		locator.WithMetrics(ret.Metrics),
 		locator.WithView(aView),
+		locator.WithState(statelet.Template),
 		locator.WithCustomOption(ret.Reader, ret.Status))
 
-	var options = session.Indirect(true, locatorOptions...)
-	if err = session.SetState(ctx, h.outputType.Parameters, resultState, options); err != nil {
+	var options = aSession.Indirect(true, locatorOptions...)
+	if err = aSession.SetState(ctx, h.outputType.Parameters, resultState, options); err != nil {
 		ret.StatusCode = http.StatusInternalServerError
 		ret.Error = err
 		return ret

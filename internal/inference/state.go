@@ -351,14 +351,16 @@ func (s State) EnsureReflectTypes(modulePath string) error {
 		if param.In.Kind == state.KindParam {
 			sourceParam := s.Lookup(param.In.Name)
 			if sourceParam == nil {
-				return fmt.Errorf("failed to lookup queryql parameter: %v", param.In.Name)
+				return fmt.Errorf("failed to lookup param parameter: %v", param.In.Name)
 			}
-			query, err := structql.NewQuery(param.SQL, sourceParam.Schema.Type(), nil)
-			if err != nil {
-				return fmt.Errorf("failed to queryql param %v from %s(%s) due to: %w", param.Name, param.In.Name, sourceParam.Schema.Type().String(), err)
+			if param.SQL != "" {
+				query, err := structql.NewQuery(param.SQL, sourceParam.Schema.Type(), nil)
+				if err != nil {
+					return fmt.Errorf("failed to queryql param %v from %s(%s) due to: %w", param.Name, param.In.Name, sourceParam.Schema.Type().String(), err)
+				}
+				param.Schema = state.NewSchema(query.StructType())
+				param.Schema.DataType = param.Name
 			}
-			param.Schema = state.NewSchema(query.StructType())
-			param.Schema.DataType = param.Name
 			continue
 		}
 		dataType := param.Schema.Name
