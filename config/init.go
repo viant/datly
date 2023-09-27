@@ -62,6 +62,7 @@ var Config = &Registry{
 		codec.WithFactory(xcodec.KeyXmlTab, &xcodec.XmlTabFactory{}, time.Time{}),
 		codec.WithFactory(xcodec.KeyXmlFilter, &xcodec.XmlFilterFactory{}, time.Time{}),
 		codec.WithFactory(xcodec.KeyJsonTab, &xcodec.JsonTabFactory{}, time.Time{}),
+		codec.WithFactory(xcodec.KeyFilters, &xcodec.FiltersRegistry{}, time.Time{}),
 	),
 	Predicates: &PredicateRegistry{
 		registry: map[string]*Predicate{
