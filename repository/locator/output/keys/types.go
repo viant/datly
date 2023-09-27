@@ -3,6 +3,7 @@ package keys
 import (
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/response"
+	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"reflect"
 )
@@ -99,6 +100,7 @@ var Types = map[string]reflect.Type{
 	SQL:             xreflect.StringType,
 	ViewName:        xreflect.StringType,
 	ViewDescription: xreflect.StringType,
+	Filters:         reflect.TypeOf(predicate.NamedFilters{}),
 
 	//Job types
 	Job:                  reflect.TypeOf(&async.Job{}),
