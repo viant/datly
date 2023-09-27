@@ -76,7 +76,7 @@ func (d *TypeDefinition) Init(ctx context.Context, lookupType xreflect.LookupTyp
 		if d.Schema.Package == "" {
 			d.Schema.Package = d.Package
 		}
-		if d.Schema.DataType != d.Name {
+		if d.Schema.DataType != d.Name && d.Name != "" {
 			d.Schema.Name = d.Name
 		}
 		if err := d.Schema.InitType(lookupType, d.Ptr); err != nil {

@@ -1,6 +1,7 @@
 package state
 
 import (
+	"fmt"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/toolbox/format"
@@ -201,6 +202,9 @@ func (s *Schema) Clone() *Schema {
 }
 
 func (s *Schema) InitType(lookupType xreflect.LookupType, ptr bool) error {
+	if s.rType != nil {
+		return nil
+	}
 	name := s.Name
 	var options []xreflect.Option
 	if name == "" {
@@ -211,6 +215,14 @@ func (s *Schema) InitType(lookupType xreflect.LookupType, ptr bool) error {
 	}
 	if s.Package != "" {
 		options = append(options, xreflect.WithPackage(s.Package))
+	}
+
+	if s.rType != nil {
+		return nil
+	}
+
+	if name == "" {
+		return fmt.Errorf("schema was empty")
 	}
 	rType, err := types.LookupType(lookupType, name, options...)
 	if err != nil {
