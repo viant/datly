@@ -104,7 +104,17 @@ func (s *Service) detectColumns(resource *Resource, columnDiscovery discover.Col
 		}
 		if columns := viewlet.Spec.Columns; len(columns) > 0 {
 			viewlet.Columns = view.NewColumns(columns)
-			columnDiscovery.Items[viewlet.Name] = viewlet.Columns
+
+			isValid := true
+			for _, candidate := range viewlet.Columns {
+				if candidate.DataType == "" {
+					s.Repository.Messages.AddWarning("detection", "view", fmt.Sprintf("view: %v column: %v, unable to detect column type", viewlet.Name, candidate.Name))
+					isValid = false
+				}
+			}
+			if isValid {
+				columnDiscovery.Items[viewlet.Name] = viewlet.Columns
+			}
 			//TODO add meta column generation for SUMMARY/Meta tempalte
 		}
 		s.updateViewOutputType(viewlet, true)

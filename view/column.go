@@ -72,6 +72,9 @@ func (c *Column) Init(resourcelet state.Resource, caser format.Case, allowNulls 
 		}
 
 		if nonPtrType == nil || c.DataType != "" {
+			if c.DataType == "" {
+				return fmt.Errorf("invalid column %s, data type: %s", c.Name, c.DataType)
+			}
 			rType, err := types.LookupType(resourcelet.LookupType(), c.DataType)
 			if err != nil && c.rType == nil {
 				return err
