@@ -494,7 +494,7 @@ func (r *Router) payloadReader(ctx context.Context, request *http.Request, write
 		format := route.Output.Format(request.URL.Query())
 		contentType := route.Output.ContentType(format)
 		filters := route.Exclusion(aSession.State())
-		data, err := route.Content.Marshal(format, route.Output.Field, aResponse, filters)
+		data, err := route.Marshal(format, route.Output.Field, aResponse, filters)
 		if err != nil {
 			return nil, httputils.NewHttpMessageError(500, fmt.Errorf("failed to marshal response: %w", err))
 		}

@@ -200,6 +200,7 @@ func (p *JSONParser) ParseType(typeName string) (reflect.Type, error) {
 }
 
 func asString(raw interface{}) (string, bool) {
+
 	rawString, ok := raw.(string)
 	if ok {
 		return rawString, true
@@ -211,6 +212,10 @@ func asString(raw interface{}) (string, bool) {
 			return *strPtr, true
 		}
 		return "", true
+	}
+	bs, ok := raw.([]byte)
+	if ok {
+		return string(bs), true
 	}
 
 	return "", false
