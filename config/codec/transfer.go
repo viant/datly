@@ -105,13 +105,15 @@ func (e *Transfer) Value(ctx context.Context, raw interface{}, options ...codec.
 				return nil, err
 			}
 		}
-		if aTransfer.tag.AsFilters {
-			filterCodec, _ := e.filters.New(&codec.Config{})
-			value, err = filterCodec.Value(ctx, value)
+		switch aTransfer.tag.Codec { //TODO pass in ctx codec registry and generalize it
+		case KeyFilters:
+			aCodec, _ := e.filters.New(&codec.Config{})
+			value, err = aCodec.Value(ctx, value)
 			if err != nil {
 				return nil, err
 			}
 		}
+
 		if value != nil {
 			if err = aTransfer.selector.SetValue(dest.Pointer(), value); err != nil {
 				return nil, err
