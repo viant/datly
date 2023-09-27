@@ -464,7 +464,7 @@ func (v *View) initView(ctx context.Context) error {
 		if err = v.ensureColumns(ctx, v._resource); err != nil {
 			return err
 		}
-		v.ensureRType()
+		v.reconsileColumnTypes()
 	}
 
 	if err = v.ensureCaseFormat(); err != nil {
@@ -526,7 +526,7 @@ func (v *View) initView(ctx context.Context) error {
 	return nil
 }
 
-func (v *View) ensureRType() {
+func (v *View) reconsileColumnTypes() {
 	if rType := v.Schema.Type(); rType != nil {
 		aStruct := types.EnsureStruct(rType)
 		index := map[string]*reflect.StructField{}

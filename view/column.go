@@ -52,7 +52,7 @@ func (c *Column) Init(resourcelet state.Resource, caser format.Case, allowNulls 
 	}
 	c._initialized = true
 	if config != nil {
-		c.inherit(config)
+		c.ApplyConfig(config)
 		if config.Default != nil {
 			c.Default = *config.Default
 		}
@@ -152,7 +152,7 @@ func (c *Column) SetColumnType(rType reflect.Type) {
 	c.rType = rType
 }
 
-func (c *Column) inherit(config *ColumnConfig) {
+func (c *Column) ApplyConfig(config *ColumnConfig) {
 	if config.Codec != nil {
 		c.Codec = config.Codec
 	}

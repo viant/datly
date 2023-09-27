@@ -176,6 +176,7 @@ func (s *Service) translateReaderDSQL(ctx context.Context, resource *Resource, d
 	if err = s.detectColumns(resource, cache); err != nil {
 		return err
 	}
+
 	s.detectComponentViewType(cache, resource)
 	rootViewlet := resource.Rule.RootViewlet()
 	if err = s.updateOutputParameters(resource, rootViewlet); err != nil {

@@ -79,9 +79,9 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 		case strings.HasPrefix(aName, "response"):
 			return l.getResponseValue(ctx, aName)
 		case strings.HasPrefix(aName, keys.Filter):
-			return l.getFilterValue()
+			return l.getFilterValue(ctx)
 		case strings.HasPrefix(aName, keys.Filters):
-			return l.getFiltersValue()
+			return l.getFiltersValue(ctx)
 		case strings.HasPrefix(aName, "view"):
 			return l.getViewValue(ctx, aName)
 		}

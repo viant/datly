@@ -1,6 +1,7 @@
 package output
 
 import (
+	"context"
 	"fmt"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
@@ -9,9 +10,12 @@ import (
 	"strconv"
 )
 
-func (l *outputLocator) getFilterValue() (interface{}, bool, error) {
+func (l *outputLocator) getFilterValue(ctx context.Context) (interface{}, bool, error) {
 	parameter := l.OutputParameters.LookupByLocation(state.KindOutput, "filter")
-	if parameter == nil || l.Output == nil {
+	if parameter == nil {
+		return nil, false, nil
+	}
+	if l.Output.Filters == nil {
 		return nil, false, nil
 	}
 	filterState, err := l.buildFilter(parameter)
@@ -21,8 +25,9 @@ func (l *outputLocator) getFilterValue() (interface{}, bool, error) {
 	return filterState.State(), true, nil
 }
 
-func (l *outputLocator) getFiltersValue() (interface{}, bool, error) {
+func (l *outputLocator) getFiltersValue(ctx context.Context) (interface{}, bool, error) {
 	var filters predicate.NamedFilters
+
 	for i, filter := range l.Output.Filters {
 		output := l.Output.Filters[i]
 		aFilter := &predicate.NamedFilter{Name: output.Name}

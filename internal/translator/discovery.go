@@ -77,6 +77,15 @@ func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache d
 	if err != nil {
 		return nil, fmt.Errorf("invalud view %scaser: %w", aView.Name, err)
 	}
+
+	if len(aView.ColumnsConfig) > 0 {
+		for _, column := range columns {
+			if cfg, ok := aView.ColumnsConfig[column.Name]; ok {
+				column.ApplyConfig(cfg)
+			}
+		}
+	}
+
 	fn := view.ColumnsSchema(caser, columns, relations, aView)
 	schema, err := fn()
 	if err != nil {
