@@ -4,13 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	dconfig "github.com/viant/datly/config"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
+
 	"github.com/viant/sqlx/metadata/sink"
+	"github.com/viant/xreflect"
 	"strings"
 )
 
@@ -72,8 +76,9 @@ func detectColumns(ctx context.Context, db *sql.DB, SQL, table string, SQLArgs .
 		return asColumns(sqlColumns), nil
 	}
 	updatedMatchedColumn(&queryColumns, sqlColumns)
+	types := dconfig.Config.Types
 	for _, column := range queryColumns {
-		if err := ExtractColumnConfig(column); err != nil {
+		if err := ExtractColumnConfig(column, types); err != nil {
 			return nil, err
 		}
 	}
@@ -88,7 +93,7 @@ type typeInfo struct {
 	DataType *string
 }
 
-func ExtractColumnConfig(column *sqlparser.Column) error {
+func ExtractColumnConfig(column *sqlparser.Column, typesRegistry *xreflect.Types) error {
 	if column.Comments == "" {
 		return nil
 	}
@@ -97,7 +102,15 @@ func ExtractColumnConfig(column *sqlparser.Column) error {
 		return fmt.Errorf("invalid column %v settings: %w, %s", column.Name, err, column.Comments)
 	}
 	if dataType.DataType != nil {
+		original := column.Type
 		column.Type = *dataType.DataType
+		if original != column.Type {
+			rType, err := types.LookupType(typesRegistry.Lookup, column.Type)
+			if err != nil {
+				return fmt.Errorf("invalud column %v data type: %s, %w", column.Name, column.Type, err)
+			}
+			column.RawType = rType
+		}
 	}
 	return nil
 }

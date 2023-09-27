@@ -11,6 +11,7 @@ import (
 	"github.com/viant/sqlx/io/read/cache/ast"
 	"github.com/viant/structology"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
 )
@@ -145,10 +146,13 @@ func ColumnsSchema(caser format.Case, columns []*Column, relations []*Relation, 
 			if columns[i].Nullable && rType.Kind() != reflect.Ptr {
 				rType = reflect.PtrTo(rType)
 			}
-
 			if columns[i].Codec != nil {
 				rType = columns[i].Codec.Schema.Type()
+				if rType == nil {
+					rType = xreflect.InterfaceType
+				}
 			}
+
 			aTag := generateFieldTag(columns[i], caser)
 			aField := newCasedField(aTag, columnName, caser, rType)
 			if unique[aField.Name] {
@@ -159,53 +163,59 @@ func ColumnsSchema(caser format.Case, columns []*Column, relations []*Relation, 
 		}
 
 		holders := make(map[string]bool)
-		for _, rel := range relations {
-			if _, ok := holders[rel.Holder]; ok {
-				continue
-			}
-
-			rType := rel.Of.DataType()
-			if rType.Kind() == reflect.Struct {
-				rType = reflect.PtrTo(rType)
-				rel.Of.Schema.SetType(rType)
-			}
-
-			if rel.Cardinality == state.Many && rType.Kind() != reflect.Slice {
-				rType = reflect.SliceOf(rType)
-			}
-
-			var fieldTag string
-			if v.Async != nil {
-				if v.Async.MarshalRelations {
-					fieldTag = AsyncTagName + `:"enc=JSON" jsonx:"rawJSON"`
-				} else {
-					fieldTag = AsyncTagName + `:"table=` + v.Async.Table + `"`
-				}
-			}
-
-			holders[rel.Holder] = true
-			structFields = append(structFields, reflect.StructField{
-				Name: rel.Holder,
-				Type: rType,
-				Tag:  reflect.StructTag(fieldTag),
-			})
-
-			if meta := rel.Of.View.Template.Summary; meta != nil {
-				metaType := meta.Schema.Type()
-				if metaType.Kind() != reflect.Ptr {
-					metaType = reflect.PtrTo(metaType)
-				}
-
-				tag := `json:",omitempty" yaml:",omitempty" sqlx:"-"`
-				structFields = append(structFields, newCasedField(tag, meta.Name, format.CaseUpperCamel, metaType))
-			}
-		}
+		v.buildRelationField(relations, holders, &structFields)
 
 		if v.SelfReference != nil {
 			structFields = append(structFields, newCasedField("", v.SelfReference.Holder, format.CaseUpperCamel, reflect.SliceOf(ast.InterfaceType)))
 		}
-
 		return reflect.PtrTo(reflect.StructOf(structFields)), nil
+	}
+}
+
+func (v *View) buildRelationField(relations []*Relation, holders map[string]bool, structFields *[]reflect.StructField) {
+	if len(relations) == 0 {
+		return
+	}
+	for _, rel := range relations {
+		if _, ok := holders[rel.Holder]; ok {
+			continue
+		}
+
+		rType := rel.Of.DataType()
+		if rType.Kind() == reflect.Struct {
+			rType = reflect.PtrTo(rType)
+			rel.Of.Schema.SetType(rType)
+		}
+
+		if rel.Cardinality == state.Many && rType.Kind() != reflect.Slice {
+			rType = reflect.SliceOf(rType)
+		}
+
+		var fieldTag string
+		if v.Async != nil {
+			if v.Async.MarshalRelations {
+				fieldTag = AsyncTagName + `:"enc=JSON" jsonx:"rawJSON"`
+			} else {
+				fieldTag = AsyncTagName + `:"table=` + v.Async.Table + `"`
+			}
+		}
+
+		holders[rel.Holder] = true
+		*structFields = append(*structFields, reflect.StructField{
+			Name: rel.Holder,
+			Type: rType,
+			Tag:  reflect.StructTag(fieldTag),
+		})
+
+		if meta := rel.Of.View.Template.Summary; meta != nil {
+			metaType := meta.Schema.Type()
+			if metaType.Kind() != reflect.Ptr {
+				metaType = reflect.PtrTo(metaType)
+			}
+
+			tag := `json:",omitempty" yaml:",omitempty" sqlx:"-"`
+			*structFields = append(*structFields, newCasedField(tag, meta.Name, format.CaseUpperCamel, metaType))
+		}
 	}
 }
 

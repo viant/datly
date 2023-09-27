@@ -37,6 +37,18 @@ func (c *ConsoleWriter) Write(data []byte) (n int, err error) {
 func main() {
 	fmt.Printf("[INFO] Build time: %v\n", env.BuildTime.String())
 
+	//os.Chdir("/Users/awitas/go/src/github.com/viant/datly/e2e/local")
+	//os.Args = []string{"",
+	//	"-N=run_tests_json_codec",
+	//	"-X=/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/cases/046_raw_json_expr/raw_json_tag.sql",
+	//	"-w=autogen",
+	//	"-C=dev|mysql|root:dev@tcp(127.0.0.1:3306)/dev?parseTime=true",
+	//	"-C=dyndb|dynamodb|dynamodb://localhost:8000/us-west-1?key=dummy&secret=dummy",
+	//	"-j=/Users/awitas/go/src/github.com/viant/datly/e2e/local/jwt/public.enc|blowfish://default",
+	//	"-m=/Users/awitas/go/src/github.com/viant/datly/e2e/local/jwt/hmac.enc|blowfish://default",
+	//	"--partialConfig=/Users/awitas/go/src/github.com/viant/datly/e2e/local/regression/partial_config.json",
+	//}
+
 	go func() {
 		if err := agent.Listen(agent.Options{}); err != nil {
 			log.Fatal(err)

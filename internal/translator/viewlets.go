@@ -6,7 +6,9 @@ import (
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/sqlparser"
+	qexpr "github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/query"
+
 	"strings"
 )
 
@@ -32,20 +34,26 @@ func (n *Viewlets) Append(viewlet *Viewlet) {
 	n.registry[viewlet.Name] = viewlet
 	n.keys = append(n.keys, viewlet.Name)
 }
-func (n *Viewlets) Init(ctx context.Context, query *query.Select, resource *Resource, initFn, setType func(ctx context.Context, n *Viewlet) error) error {
-	root := NewViewlet(query.From.Alias, sqlparser.Stringify(query.From.X), nil, resource)
-	root.ViewJSONHint = query.From.Comments
-
+func (n *Viewlets) Init(ctx context.Context, aQuery *query.Select, resource *Resource, initFn, setType func(ctx context.Context, n *Viewlet) error) error {
+	root := NewViewlet(aQuery.From.Alias, sqlparser.Stringify(aQuery.From.X), nil, resource)
+	root.ViewJSONHint = aQuery.From.Comments
+	if root.ViewJSONHint == "" && aQuery.From.X != nil {
+		if rawExpr, ok := aQuery.From.X.(*qexpr.Raw); ok {
+			if querySelect, ok := rawExpr.X.(*query.Select); ok {
+				root.ViewJSONHint = querySelect.From.Comments
+			}
+		}
+	}
 	n.Append(root)
-	for i := range query.Joins {
-		join := query.Joins[i]
+	for i := range aQuery.Joins {
+		join := aQuery.Joins[i]
 		relViewlet := NewViewlet(join.Alias, sqlparser.Stringify(join.With), join, resource)
 		relViewlet.ViewJSONHint = join.Comments
 		n.Append(relViewlet)
 	}
 	resource.buildParameterViews()
 
-	if err := n.applyTopLevelDSQLSetting(query, root); err != nil {
+	if err := n.applyTopLevelDSQLSetting(aQuery, root); err != nil {
 		return err
 	}
 	if err := n.applyViewHintSettings(); err != nil {
@@ -75,7 +83,7 @@ func (n *Viewlets) Init(ctx context.Context, query *query.Select, resource *Reso
 		return err
 	}
 
-	n.addRelations(query)
+	n.addRelations(aQuery)
 	return nil
 }
 

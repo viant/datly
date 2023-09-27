@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/utils/formatter"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox/format"
+	"github.com/viant/xreflect"
 )
 
 func (s *Service) detectComponentViewType(cache discover.Columns, resource *Resource) {
@@ -16,7 +18,8 @@ func (s *Service) detectComponentViewType(cache discover.Columns, resource *Reso
 	}
 	root := resource.Rule.RootViewlet()
 	//TODO remove with, OutputState check and fix it
-	if len(cache.Items) == 0 || len(root.View.With) > 0 || root.View.Self != nil || len(resource.OutputState) == 0 {
+	template := root.View.Template
+	if len(cache.Items) == 0 || len(root.View.With) > 0 || root.View.Self != nil || (template != nil && template.Summary != nil) {
 		return
 	}
 
@@ -26,7 +29,8 @@ func (s *Service) detectComponentViewType(cache discover.Columns, resource *Reso
 		if data, err := json.Marshal(root.View.View); err == nil {
 			_ = json.Unmarshal(data, &rootView)
 		}
-		_, err := s.updateViewSchema(&rootView, resource, cache)
+		rootViewlet := resource.Rule.RootViewlet()
+		_, err := s.updateViewSchema(&rootView, resource, cache, rootViewlet.typeRegistry)
 		if err != nil {
 			fmt.Printf("ERROR: %v\n", err)
 		}
@@ -56,9 +60,12 @@ func (s *Service) detectViewCaser(columns view.Columns) (format.Case, error) {
 	return caser, err
 }
 
-func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache discover.Columns) ([]*view.Relation, error) {
+func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache discover.Columns, registry *xreflect.Types) ([]*view.Relation, error) {
 	var relations []*view.Relation
 	var err error
+
+	fmt.Printf("SCHEMA: %s\n", aView.Schema.TypeName())
+
 	for i := range aView.With {
 		rel := aView.With[i]
 		of := *rel.Of
@@ -67,7 +74,7 @@ func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache d
 		relView := &relViewlet.View.View
 		rel.Of.View = *relView
 		relations = append(relations, rel)
-		if _, err = s.updateViewSchema(relView, resource, cache); err != nil {
+		if _, err = s.updateViewSchema(relView, resource, cache, registry); err != nil {
 			return nil, err
 		}
 	}
@@ -79,9 +86,18 @@ func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache d
 	}
 
 	if len(aView.ColumnsConfig) > 0 {
+
 		for _, column := range columns {
 			if cfg, ok := aView.ColumnsConfig[column.Name]; ok {
+				columnType := column.DataType
 				column.ApplyConfig(cfg)
+				if column.DataType != columnType {
+					rType, err := types.LookupType(registry.Lookup, column.DataType)
+					if err != nil {
+						return nil, fmt.Errorf("failed to update column: %v %w", column.Name, err)
+					}
+					column.SetColumnType(rType)
+				}
 			}
 		}
 	}

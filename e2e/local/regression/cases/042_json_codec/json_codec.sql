@@ -7,7 +7,8 @@ import (
 	"regression/cases/042_json_codec.Record"
 )
 
-SELECT main.*
+SELECT main.*,
+       cast(main AS Record)
 FROM (
          SELECT
              ID as Id,
