@@ -144,12 +144,13 @@ func (s *Session) ViewOptions(aView *view.View) *Options {
 }
 
 func (s *Session) setTemplateState(ctx context.Context, aView *view.View, opts *Options) error {
-	state := s.state.Lookup(aView)
+	aState := s.state.Lookup(aView)
 	if template := aView.Template; template != nil {
 		stateType := template.StateType()
 		if stateType.IsDefined() {
-			aState := state.Template
-			err := s.SetState(ctx, template.Parameters, aState, opts)
+			templateState := aState.Template
+			templateState.EnsureMarker()
+			err := s.SetState(ctx, template.Parameters, templateState, opts)
 			if err != nil {
 				return err
 			}
