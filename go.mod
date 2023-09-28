@@ -59,7 +59,7 @@ require (
 	github.com/viant/xdatly/handler v0.0.0-20230921001159-c3fcf1e963d0
 	github.com/viant/xdatly/types/core v0.0.0-20230619231115-e622dd6aff79
 	github.com/viant/xlsy v0.2.1-0.20230927184006-41af53377053
-	github.com/viant/xmlify v0.0.0-20230926153903-4564fcd3df62
+	github.com/viant/xmlify v0.0.0-20230928150431-7c1d895ce5d2
 	golang.org/x/tools v0.12.0
 )
 
@@ -133,5 +133,3 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-
-replace github.com/viant/structology => /Users/awitas/go/src/github.com/viant/structology

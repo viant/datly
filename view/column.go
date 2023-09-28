@@ -164,7 +164,7 @@ func (c *Column) ApplyConfig(config *ColumnConfig) {
 	}
 
 	if config.Tag != nil {
-		c.Tag = *config.Tag
+		c.Tag += " " + strings.Trim(*config.Tag, ` '`)
 	}
 
 	if config.Format != nil {
