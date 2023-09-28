@@ -56,9 +56,8 @@ type (
 		NonWindowSQL string
 		ParentValues []interface{}
 
-		lastTablExecutables map[string]*Executable `velty:"-"`
-		expander            Expander               `velty:"-"`
-		DataUnit            *DataUnit              `velty:"-"`
+		expander Expander  `velty:"-"`
+		DataUnit *DataUnit `velty:"-"`
 	}
 
 	Executable struct {

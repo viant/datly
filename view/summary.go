@@ -230,11 +230,6 @@ func (m *TemplateSummary) getColumns(ctx context.Context, resource *Resource, ow
 		if ok {
 			return columns, nil
 		}
-
-		columns, ok = resource._columnsCache[m.oldMetaColumnsCacheKey()]
-		if ok {
-			return columns, nil
-		}
 	}
 
 	SQL, args, err := m.prepareSQL(owner)
@@ -261,12 +256,7 @@ func (m *TemplateSummary) getColumns(ctx context.Context, resource *Resource, ow
 }
 
 func (m *TemplateSummary) newMetaColumnsCacheKey() string {
-	return "View: " + m._owner._view.Name + "template_meta:" + m.Name
-}
-
-// Deprecated: oldMetaColumnsCacheKey is deprecated.
-func (m *TemplateSummary) oldMetaColumnsCacheKey() string {
-	return "template_meta:" + m.Name
+	return "View: " + m._owner._view.Name + "sumary:" + m.Name
 }
 
 func (m *TemplateSummary) prepareSQL(owner *Template) (string, []interface{}, error) {
@@ -298,7 +288,6 @@ func (m *TemplateSummary) initTemplateEvaluator(_ context.Context, owner *Templa
 	if err != nil {
 		return err
 	}
-
 	m.sqlEvaluator = evaluator
 	return nil
 }

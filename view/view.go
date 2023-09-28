@@ -107,20 +107,6 @@ type (
 	newCollectorFn    func(dest interface{}, viewMetaHandler viewMetaHandlerFn, supportParallel bool) *Collector
 	viewMetaHandlerFn func(viewMeta interface{}) error
 
-	//Constraints configure what can be selected by Statelet
-	//For each _field, default value is `false`
-	Constraints struct {
-		Criteria    bool
-		OrderBy     bool
-		Limit       bool
-		Offset      bool
-		Projection  bool //enables columns projection from client (default ${NS}_fields= query param)
-		Filterable  []string
-		SQLMethods  []*Method `json:",omitempty"`
-		_sqlMethods map[string]*Method
-		Page        *bool
-	}
-
 	Batch struct {
 		Parent int `json:",omitempty"`
 	}
@@ -136,6 +122,20 @@ type (
 		_initialized     bool
 	}
 )
+
+// Constraints configure what can be selected by Statelet
+// For each _field, default value is `false`
+type Constraints struct {
+	Criteria    bool
+	OrderBy     bool
+	Limit       bool
+	Offset      bool
+	Projection  bool //enables columns projection from client (default ${NS}_fields= query param)
+	Filterable  []string
+	SQLMethods  []*Method `json:",omitempty"`
+	_sqlMethods map[string]*Method
+	Page        *bool
+}
 
 func (v *View) Resource() state.Resource {
 	return NewResourcelet(v._resource, v)
@@ -1334,7 +1334,9 @@ func (v *View) BuildParametrizedSQL(state state.Parameters, types *xreflect.Type
 	if err = state.SetLiterals(inputState); err != nil {
 		return nil, err
 	}
-	state.InitRepeated(inputState)
+	if err := state.InitRepeated(inputState); err != nil {
+		return nil, err
+	}
 	options = append(options, expand2.WithParameterState(inputState))
 
 	evaluator, err := NewEvaluator(state, stateType, SQL, types.Lookup, nil)
