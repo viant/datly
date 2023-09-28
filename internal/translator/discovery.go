@@ -19,7 +19,7 @@ func (s *Service) detectComponentViewType(cache discover.Columns, resource *Reso
 	root := resource.Rule.RootViewlet()
 	//TODO remove with, OutputState check and fix it
 	template := root.View.Template
-	if len(cache.Items) == 0 || len(root.View.With) > 0 || root.View.Self != nil || (template != nil && template.Summary != nil) {
+	if len(cache.Items) == 0 || (template != nil && template.Summary != nil) {
 		return
 	}
 
