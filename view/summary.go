@@ -3,8 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
-	expand2 "github.com/viant/datly/service/executor/expand"
-	"github.com/viant/datly/shared"
+	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
@@ -22,21 +21,27 @@ const (
 )
 
 type (
-	MetaKind string
-	//TODO renamte TemplateSummary to better name like ResultSet Summary, Navigation,
+	MetaKind        string
 	TemplateSummary struct {
-		SourceURL   string
-		Source      string
-		Name        string
-		Kind        MetaKind
-		Cardinality state.Cardinality
-
-		sqlEvaluator *expand2.Evaluator
+		SourceURL    string
+		Source       string
+		Name         string
+		Kind         MetaKind
+		Cardinality  state.Cardinality
+		Columns      Columns
+		sqlEvaluator *expand.Evaluator
 		Schema       *state.Schema
 		_owner       *Template
 		initialized  bool
 	}
 )
+
+func (m *TemplateSummary) EnsureSchema() {
+	if m.Schema != nil {
+		return
+	}
+	m.Schema = &state.Schema{}
+}
 
 func (m *TemplateSummary) Init(ctx context.Context, owner *Template, resource *Resource) error {
 	if m.initialized == true {
@@ -79,30 +84,22 @@ func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Templat
 	if m.Schema == nil {
 		m.Schema = &state.Schema{}
 	}
-
-	schemaDataType := shared.FirstNotEmpty(m.Schema.DataType, m.Schema.Name)
-	if schemaDataType != "" {
-		dataType, err := types.LookupType(resource.LookupType(), schemaDataType)
+	if typeName := m.Schema.TypeName(); typeName != "" {
+		dataType, err := types.LookupType(resource.LookupType(), typeName)
 		if err != nil {
 			return err
 		}
-
 		m.Schema.SetType(dataType)
 		return nil
 	}
-
 	columns, err := m.getColumns(ctx, resource, owner)
 	if err != nil {
 		return err
 	}
-
-	aResourcelet := NewResourcelet(resource, owner._view)
-	for _, column := range columns {
-		if err = column.Init(aResourcelet, owner._view.Caser, owner._view.AreNullValuesAllowed(), nil); err != nil {
-			return err
-		}
+	resourcelet := NewResourcelet(resource, owner._view)
+	if err = columns.Init(resourcelet, owner._view.Caser, owner._view.AreNullValuesAllowed()); err != nil {
+		return err
 	}
-
 	if err != nil {
 		return fmt.Errorf("couldn't resolve template meta SQL due to the: %w", err)
 	}
@@ -115,8 +112,7 @@ func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Templat
 		return err
 	}
 	m.Schema = state.NewSchema(nil, state.WithAutoGenFunc(m._owner._view.generateSchemaTypeFromColumn(newCase, columns, nil)))
-	aResource := &Resourcelet{Resource: resource, View: owner._view}
-	err = m.Schema.Init(aResource)
+	err = m.Schema.Init(resourcelet)
 	return err
 }
 
@@ -212,7 +208,6 @@ func (v *View) buildRelationField(relations []*Relation, holders map[string]bool
 			if metaType.Kind() != reflect.Ptr {
 				metaType = reflect.PtrTo(metaType)
 			}
-
 			tag := `json:",omitempty" yaml:",omitempty" sqlx:"-"`
 			*structFields = append(*structFields, newCasedField(tag, meta.Name, format.CaseUpperCamel, metaType))
 		}
@@ -224,7 +219,7 @@ func newCasedField(aTag string, columnName string, sourceCaseFormat format.Case,
 	return state.NewField(aTag, structFieldName, rType)
 }
 
-func (m *TemplateSummary) getColumns(ctx context.Context, resource *Resource, owner *Template) ([]*Column, error) {
+func (m *TemplateSummary) getColumns(ctx context.Context, resource *Resource, owner *Template) (Columns, error) {
 	if resource._columnsCache != nil {
 		columns, ok := resource._columnsCache[m.newMetaColumnsCacheKey()]
 		if ok {
@@ -256,7 +251,12 @@ func (m *TemplateSummary) getColumns(ctx context.Context, resource *Resource, ow
 }
 
 func (m *TemplateSummary) newMetaColumnsCacheKey() string {
-	return "View: " + m._owner._view.Name + "sumary:" + m.Name
+	return SummaryViewKey(m._owner._view.Name, m.Name)
+}
+
+// SummaryViewKey returns template summary key
+func SummaryViewKey(ownerName, name string) string {
+	return ownerName + "/Summary/" + name
 }
 
 func (m *TemplateSummary) prepareSQL(owner *Template) (string, []interface{}, error) {
@@ -264,7 +264,7 @@ func (m *TemplateSummary) prepareSQL(owner *Template) (string, []interface{}, er
 
 	viewParam := AsViewParam(owner._view, nil, nil)
 
-	state, err := Evaluate(owner.sqlEvaluator, expand2.WithParameterState(stateValue), expand2.WithViewParam(viewParam))
+	state, err := Evaluate(owner.sqlEvaluator, expand.WithParameterState(stateValue), expand.WithViewParam(viewParam))
 	if err != nil {
 		return "", nil, err
 	}
@@ -274,8 +274,8 @@ func (m *TemplateSummary) prepareSQL(owner *Template) (string, []interface{}, er
 	return m.Evaluate(stateValue, viewParam)
 }
 
-func (m *TemplateSummary) Evaluate(parameterState *structology.State, viewParam *expand2.MetaParam) (string, []interface{}, error) {
-	state, err := Evaluate(m.sqlEvaluator, expand2.WithParameterState(parameterState), expand2.WithViewParam(viewParam))
+func (m *TemplateSummary) Evaluate(parameterState *structology.State, viewParam *expand.MetaParam) (string, []interface{}, error) {
+	state, err := Evaluate(m.sqlEvaluator, expand.WithParameterState(parameterState), expand.WithViewParam(viewParam))
 	if err != nil {
 		return "", nil, err
 	}

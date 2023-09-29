@@ -46,56 +46,51 @@ func (c *Column) ColumnName() string {
 }
 
 // Init initializes Column
-func (c *Column) Init(resourcelet state.Resource, caser format.Case, allowNulls bool, config *ColumnConfig) error {
+func (c *Column) Init(resource state.Resource, caser format.Case, allowNulls bool) error {
 	if c._initialized {
 		return nil
 	}
 	c._initialized = true
-	if config != nil {
-		c.ApplyConfig(config)
-		if config.Default != nil {
-			c.Default = *config.Default
-		}
-	}
-
 	if c.DatabaseColumn == "" {
 		c.DatabaseColumn = c.Name
 	}
 	if c.Name == "" {
 		return fmt.Errorf("column name was empty")
 	}
-
-	if c.rType == nil || c.rType == xreflect.InterfaceType {
-		nonPtrType := c.rType
-		for nonPtrType != nil && nonPtrType.Kind() == reflect.Ptr {
-			nonPtrType = nonPtrType.Elem()
-		}
-		if nonPtrType == nil || c.DataType != "" {
-			if c.DataType == "" {
-				return fmt.Errorf("invalid column %s, data type: %s", c.Name, c.DataType)
-			}
-			rType, err := types.LookupType(resourcelet.LookupType(), c.DataType)
-			if err != nil && c.rType == nil {
-				return err
-			}
-
-			if rType != nil {
-				c.rType = rType
-			}
-		}
+	err := c.EnsureType(resource.LookupType())
+	if err != nil {
+		return err
 	}
 	if err := c.buildSQLExpression(allowNulls); err != nil {
 		return err
 	}
 
 	c._fieldName = caser.Format(c.Name, format.CaseUpperCamel)
-
 	if c.Codec != nil {
-		if err := c.Codec.Init(resourcelet, c.rType); err != nil {
+		if err := c.Codec.Init(resource, c.rType); err != nil {
 			return err
 		}
 	}
+	return nil
+}
 
+func (c *Column) EnsureType(lookupType xreflect.LookupType) error {
+	if c.rType != nil && c.rType != xreflect.InterfaceType {
+		return nil
+	}
+	if c.DataType == "" {
+		if c.DataType == "" && c.rType == nil {
+			return fmt.Errorf("invalid column %s, data type: %s", c.Name, c.DataType)
+		}
+		return nil
+	}
+	rType, err := types.LookupType(lookupType, c.DataType)
+	if err != nil && c.rType == nil {
+		return err
+	}
+	if rType != nil {
+		c.rType = rType
+	}
 	return nil
 }
 
@@ -172,6 +167,9 @@ func (c *Column) ApplyConfig(config *ColumnConfig) {
 	}
 	if config.IgnoreCaseFormatter != nil {
 		c.IgnoreCaseFormatter = *config.IgnoreCaseFormatter
+	}
+	if config.Default != nil {
+		c.Default = *config.Default
 	}
 }
 

@@ -278,30 +278,32 @@ func (r *Resource) expandSQL(viewlet *Viewlet) (*sqlx.SQL, error) {
 	sqlState = sqlState.RemoveReserved()
 	var bindingArgs []interface{}
 	var options []expand.StateOption
-	epxandingSQL := viewlet.SanitizedSQL
+	sourceSQL := viewlet.SanitizedSQL
 
 	if metaViewSQL != nil {
 		sourceViewName := metaViewSQL.Name[5 : len(metaViewSQL.Name)-4]
-		epxandingSQL = strings.Replace(epxandingSQL, "$"+metaViewSQL.Name, "$View.NonWindowSQL", 1)
+		sourceSQL = strings.Replace(sourceSQL, "$"+metaViewSQL.Name, "$View.NonWindowSQL", 1)
 		sourceView := r.Rule.Viewlets.Lookup(sourceViewName)
 		options = append(options, expand.WithViewParam(&expand.MetaParam{NonWindowSQL: sourceView.Expanded.Query, Args: sourceView.Expanded.Args, Limit: 1}))
 		bindingArgs = sourceView.Expanded.Args
 		viewlet.sourceViewlet = sourceView
 		sourceView.View.EnsureTemplate()
 		sourceView.View.Template.Summary = &view.TemplateSummary{ //TODO go for detail existing impl
-			Source: epxandingSQL,
+			Source: sourceSQL,
 			Name:   viewlet.Name,
 			Kind:   "record",
 		}
+		viewlet.IsSummary = true
+		sourceView.Summary = viewlet
 	}
 
-	epxandingSQL = viewlet.Resource.State.Expand(epxandingSQL)
+	sourceSQL = viewlet.Resource.State.Expand(sourceSQL)
 	templateParameters := sqlState.ViewParameters()
-	if strings.Contains(epxandingSQL, "$View.ParentJoinOn") {
+	if strings.Contains(sourceSQL, "$View.ParentJoinOn") {
 		//TODO adjust parameter value type
 		options = append(options, expand.WithViewParam(&expand.MetaParam{ParentValues: []interface{}{0}, DataUnit: &expand.DataUnit{}}))
 	}
-	return viewlet.View.BuildParametrizedSQL(templateParameters, types, epxandingSQL, bindingArgs, options...)
+	return viewlet.View.BuildParametrizedSQL(templateParameters, types, sourceSQL, bindingArgs, options...)
 }
 
 func (r *Resource) ensureViewParametersSchema(ctx context.Context, setType func(ctx context.Context, setType *Viewlet) error) error {

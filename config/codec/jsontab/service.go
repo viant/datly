@@ -12,18 +12,13 @@ import (
 
 type (
 	Column struct {
-		ID   string `json:",omitempty"`
+		Name string `json:",omitempty"`
 		Type string `json:",omitempty"`
 	}
 
-	Value struct {
-		LongType   string `json:",omitempty"`
-		DoubleType string `json:",omitempty"`
-		DateType   string `json:",omitempty"`
-		Value      string `json:",omitempty"`
-	}
+	Value string
 
-	Record []*Value
+	Record []Value
 
 	Records []Record
 
@@ -76,33 +71,34 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 	var record Record
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
-		value := &Value{}
+		value := ""
 		switch field.Type.Kind() {
 		case reflect.String:
-			value.Value = field.String(sourcePtr)
+			value = field.String(sourcePtr)
 		case reflect.Int:
-			value.LongType = strconv.Itoa(field.Int(sourcePtr))
+			value = strconv.Itoa(field.Int(sourcePtr))
+
 		case reflect.Float64:
-			value.DoubleType = strconv.FormatFloat(field.Float64(sourcePtr), 'f', 10, 64)
+			value = strconv.FormatFloat(field.Float64(sourcePtr), 'f', 10, 64)
 		case reflect.Float32:
-			value.DoubleType = strconv.FormatFloat(float64(field.Float32(sourcePtr)), 'f', 10, 64)
+			value = strconv.FormatFloat(float64(field.Float32(sourcePtr)), 'f', 10, 64)
 		case reflect.Ptr:
 			switch field.Type.Elem().Kind() {
 			case reflect.String:
 				if v := field.StringPtr(sourcePtr); v != nil {
-					value.Value = *v
+					value = *v
 				}
 			case reflect.Int:
 				if v := field.IntPtr(sourcePtr); v != nil {
-					value.LongType = strconv.Itoa(*v)
+					value = strconv.Itoa(*v)
 				}
 			case reflect.Float64:
 				if v := field.Float64Ptr(sourcePtr); v != nil {
-					value.DoubleType = strconv.FormatFloat(*v, 'f', -1, 64)
+					value = strconv.FormatFloat(*v, 'f', -1, 64)
 				}
 			case reflect.Float32:
 				if v := field.Float32Ptr(sourcePtr); v != nil {
-					value.DoubleType = strconv.FormatFloat(float64(*v), 'f', -1, 32)
+					value = strconv.FormatFloat(float64(*v), 'f', -1, 32)
 				}
 			}
 		default:
@@ -110,17 +106,17 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 			switch field.Type {
 			case xreflect.TimePtrType:
 				if ts, ok := v.(*time.Time); ok && ts != nil {
-					value.DateType = ts.Format(time.RFC3339)
+					value = ts.Format(time.RFC3339)
 				}
 			case xreflect.TimeType:
 				if ts, ok := v.(time.Time); ok {
-					value.DateType = ts.Format(time.RFC3339)
+					value = ts.Format(time.RFC3339)
 				}
 			default:
 				return nil, fmt.Errorf("jsontab: usnupported type: %T", v)
 			}
 		}
-		record = append(record, value)
+		record = append(record, Value(value))
 	}
 	return record, nil
 }
@@ -128,7 +124,7 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
-		column := &Column{ID: field.Name}
+		column := &Column{Name: field.Name}
 		fieldKind := field.Kind()
 		if fieldKind == reflect.Ptr {
 			fieldKind = field.Type.Elem().Kind()

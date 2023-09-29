@@ -416,16 +416,12 @@ func (v *View) initView(ctx context.Context) error {
 	if v.ColumnsConfig == nil {
 		v.ColumnsConfig = map[string]*ColumnConfig{}
 	}
-
 	v.ensureIndexExcluded()
 	v.ensureBatch()
-
 	if err = v.ensureLogger(); err != nil {
 		return err
 	}
-
 	v.ensureCounter()
-
 	setter.SetStringIfEmpty(&v.Alias, "t")
 	if v.From == "" {
 		setter.SetStringIfEmpty(&v.Table, v.Name)
@@ -435,23 +431,18 @@ func (v *View) initView(ctx context.Context) error {
 			v.DiscoverCriteria = &flag
 		}
 	}
-
 	if v.MatchStrategy == "" {
 		v.MatchStrategy = ReadMatched
 	}
-
 	if err = v.MatchStrategy.Validate(); err != nil {
 		return err
 	}
-
 	if v.Selector == nil {
 		v.Selector = &Config{}
 	}
-
 	if v.Name == v.Ref && !v.Standalone {
 		return fmt.Errorf("view name and ref cannot be the same")
 	}
-
 	if v.Name == "" {
 		return fmt.Errorf("view name was empty")
 	}
@@ -476,24 +467,22 @@ func (v *View) initView(ctx context.Context) error {
 	}
 
 	resourcelet := NewResourcelet(v._resource, v)
-	if err = Columns(v.Columns).Init(resourcelet, v.ColumnsConfig, v.Caser, v.AreNullValuesAllowed()); err != nil {
+	if err = Columns(v.Columns).ApplyConfig(v.ColumnsConfig, resourcelet.LookupType()); err != nil {
 		return err
 	}
-
+	if err = Columns(v.Columns).Init(resourcelet, v.Caser, v.AreNullValuesAllowed()); err != nil {
+		return err
+	}
 	v._columns = Columns(v.Columns).Index(v.Caser)
-
 	if err = v.validateSelfRef(); err != nil {
 		return err
 	}
-
 	if err = v.ensureSchema(ctx, v._resource); err != nil {
 		return err
 	}
-
 	if err = v.Selector.Init(ctx, v._resource, v); err != nil {
 		return err
 	}
-
 	if err = v.markColumnsAsFilterable(); err != nil {
 		return err
 	}
@@ -1148,7 +1137,6 @@ func (v *View) ensureBatch() {
 	if v.Batch != nil {
 		return
 	}
-
 	v.Batch = &Batch{
 		Parent: 10000,
 	}

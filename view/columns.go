@@ -9,6 +9,7 @@ import (
 	"github.com/viant/sqlparser"
 	"github.com/viant/toolbox/format"
 	"github.com/viant/xdatly/codec"
+	"github.com/viant/xreflect"
 	"reflect"
 	"strings"
 )
@@ -112,16 +113,36 @@ func (c NamedColumns) RegisterWithName(name string, column *Column) {
 	}
 }
 
-// Init initializes each Column in the slice.
-func (c Columns) Init(resourcelet state.Resource, config map[string]*ColumnConfig, caser format.Case, allowNulls bool) error {
-	for i := range c {
-		columnConfig := config[c[i].Name]
+// ApplyConfig applies column config
+func (c Columns) ApplyConfig(configs map[string]*ColumnConfig, lookupType xreflect.LookupType) error {
+	if len(configs) == 0 {
+		return nil
+	}
+	for _, column := range c {
+		cfg, ok := configs[column.Name]
+		if !ok {
+			continue
+		}
+		columnType := column.DataType
+		column.ApplyConfig(cfg)
+		if column.DataType != columnType {
+			rType, err := types.LookupType(lookupType, column.DataType)
+			if err != nil {
+				return fmt.Errorf("failed to update column: %v %w", column.Name, err)
+			}
+			column.SetColumnType(rType)
+		}
+	}
+	return nil
+}
 
-		if err := c[i].Init(resourcelet, caser, allowNulls, columnConfig); err != nil {
+// Init initializes each Column in the slice.
+func (c Columns) Init(resourcelet state.Resource, caser format.Case, allowNulls bool) error {
+	for i := range c {
+		if err := c[i].Init(resourcelet, caser, allowNulls); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
