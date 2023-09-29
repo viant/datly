@@ -37,7 +37,7 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 		if stateParameter := resource.State.Lookup(parameter.In.Name); stateParameter != nil {
 			res := view.NewResourcelet(&resource.Resource, &rootViewlet.View.View)
 			stateParameter.Init(context.Background(), res)
-			parameter.Schema = stateParameter.Schema
+			parameter.Schema = stateParameter.OutputSchema()
 		}
 	}
 
