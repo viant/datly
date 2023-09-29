@@ -23,7 +23,7 @@ import (
 	"strings"
 )
 
-func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewlet) error {
+func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewlet) (err error) {
 	if tmpl := rootViewlet.View.Template; tmpl != nil && tmpl.Summary != nil {
 		return nil //NOT YEY supported for summary
 	}
@@ -33,9 +33,13 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 
 	typesRegistry := s.newTypeRegistry(resource, rootViewlet)
 
-	var err error
+	for _, parameter := range resource.OutputState.FilterByKind(state.KindState) {
+		if stateParameter := resource.State.Lookup(parameter.Name); stateParameter != nil {
+			parameter.Schema = stateParameter.Schema
+		}
+	}
 
-	if err := resource.OutputState.EnsureReflectTypes(resource.rule.ModuleLocation); err != nil {
+	if err = resource.OutputState.EnsureReflectTypes(resource.rule.ModuleLocation); err != nil {
 		return err
 	}
 
