@@ -34,7 +34,10 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 	typesRegistry := s.newTypeRegistry(resource, rootViewlet)
 
 	for _, parameter := range resource.OutputState.FilterByKind(state.KindState) {
-		if stateParameter := resource.State.Lookup(parameter.Name); stateParameter != nil {
+		if stateParameter := resource.State.Lookup(parameter.In.Name); stateParameter != nil {
+			res := view.NewResourcelet(&resource.Resource, &rootViewlet.View.View)
+			stateParameter.Init(context.Background(), res)
+			rType := stateParameter.Schema.Type()
 			parameter.Schema = stateParameter.Schema
 		}
 	}

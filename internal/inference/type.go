@@ -122,7 +122,7 @@ func (s *Spec) Fields(includeHas bool) []*view.Field {
 	hasFieldName := "Has"
 	hasField := &view.Field{
 		Name: hasFieldName,
-		Tag:  fmt.Sprintf(`setMarker:"true" typeName:"%v" json:"-"  xls:"-" sqlx:"-" `, specType.Name+"Has"),
+		Tag:  fmt.Sprintf(state.SetMarkerTag, specType.Name+"Has"),
 		Ptr:  true,
 	}
 
