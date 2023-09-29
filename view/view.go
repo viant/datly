@@ -533,7 +533,6 @@ func (v *View) reconsileColumnTypes() {
 				if col.rType != field.Type {
 					col.rType = field.Type
 					if name := col.rType.Name(); name != "" {
-						fmt.Printf("overrided: %v %v %v\n", col.Name, col.rType.String(), name)
 						col.DataType = name
 					}
 				}
