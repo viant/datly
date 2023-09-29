@@ -149,22 +149,3 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 func New() *Service {
 	return &Service{}
 }
-
-/*
-<result>
-        <columns>
-            <column id="Id" type="long"/>
-            <column id="Name" type="string"/>
-        </columns>
-        <rows>
-            <r>
-                <c lg="1"/>
-                <c>name 1</c>
-            </r>
-            <r>
-                <c lg="2"/>
-                <c>name 2</c>
-            </r>
-        </rows>
-    </result>
-*/
