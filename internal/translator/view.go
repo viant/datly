@@ -198,7 +198,8 @@ func (v *View) buildColumnConfig(namespace *Viewlet) {
 	for i, config := range namespace.ColumnConfig {
 		v.ColumnsConfig[config.Name] = namespace.ColumnConfig[i]
 	}
-	for k, tag := range namespace.Tags {
+	for k := range namespace.Tags {
+		tag := namespace.Tags[k]
 		config, ok := v.ColumnsConfig[k]
 		if !ok {
 			config = &view.ColumnConfig{Name: k}
