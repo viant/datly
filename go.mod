@@ -6,7 +6,7 @@ require (
 	github.com/aerospike/aerospike-client-go v4.5.2+incompatible
 	github.com/aws/aws-lambda-go v1.31.0
 	github.com/francoispqt/gojay v1.2.13
-	github.com/go-sql-driver/mysql v1.7.0
+	github.com/go-sql-driver/mysql v1.6.0
 	github.com/goccy/go-json v0.9.11 // indirect
 	github.com/golang-jwt/jwt/v4 v4.4.1 // indirect
 	github.com/google/gops v0.3.23
@@ -30,7 +30,7 @@ require (
 	github.com/viant/parsly v0.3.0
 	github.com/viant/pgo v0.10.4-0.20230801151735-5700d39f8114
 	github.com/viant/scy v0.6.0
-	github.com/viant/sqlx v0.9.1-0.20230913002732-0b3c53e41c0e
+	github.com/viant/sqlx v0.9.1-0.20230929213554-060bd365887b
 	github.com/viant/structql v0.4.1
 	github.com/viant/toolbox v0.34.6-0.20230901020907-6da0397b78dc
 	github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85

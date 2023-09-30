@@ -3,6 +3,7 @@ package translator
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/viant/datly/service"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
@@ -18,7 +19,7 @@ func (s *Service) detectComponentViewType(cache discover.Columns, resource *Reso
 	}
 	root := resource.Rule.RootViewlet()
 	//TODO remove with, OutputState check and fix it
-	if len(cache.Items) == 0 || root.TypeDefinition == nil || (root.View.Template != nil && root.View.Template.Summary != nil) {
+	if len(cache.Items) == 0 || root.TypeDefinition == nil {
 		return
 	}
 
@@ -91,7 +92,6 @@ func (s *Service) updateViewSchema(aView *view.View, resource *Resource, cache d
 	if err = columns.ApplyConfig(aView.ColumnsConfig, registry.Lookup); err != nil {
 		return nil, err
 	}
-
 	caser, err := s.detectViewCaser(columns)
 	if err != nil {
 		return nil, fmt.Errorf("invalud view %scaser: %w", aView.Name, err)
@@ -137,11 +137,11 @@ func (s *Service) detectColumns(resource *Resource, columnDiscovery discover.Col
 			}
 			summary := viewlet.Summary
 			if summary != nil && len(summary.Spec.Columns) > 0 {
-				if len(viewlet.Columns) == 0 {
-					viewlet.Columns = view.NewColumns(summary.Spec.Columns)
+				if len(summary.Columns) == 0 {
+					summary.Columns = view.NewColumns(summary.Spec.Columns)
 				}
 				key := view.SummaryViewKey(viewlet.View.Name, summary.View.Name)
-				columnDiscovery.Items[key] = viewlet.Columns
+				columnDiscovery.Items[key] = summary.Columns
 			}
 		}
 		s.updateViewOutputType(viewlet, true)
@@ -150,7 +150,7 @@ func (s *Service) detectColumns(resource *Resource, columnDiscovery discover.Col
 		return err
 	}
 
-	if !resource.Rule.IsGeneratation { //skip view column generation if generator use translator
+	if !resource.Rule.IsGeneratation && resource.Rule.Service == service.TypeReader { //skip view column generation if generator use translator
 		err = s.persistViewMetaColumn(columnDiscovery, resource)
 		if err != nil {
 			return err

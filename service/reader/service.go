@@ -34,6 +34,11 @@ func (s *Service) ReadInto(ctx context.Context, dest interface{}, aView *view.Vi
 
 // Read select view from database based on View and assign it to dest. ParentDest has to be pointer.
 func (s *Service) Read(ctx context.Context, session *Session) error {
+	err := s.read(ctx, session)
+	return err
+}
+
+func (s *Service) read(ctx context.Context, session *Session) error {
 	var err error
 	if err = session.Init(); err != nil {
 		return err

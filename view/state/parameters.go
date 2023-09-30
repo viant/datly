@@ -14,7 +14,10 @@ import (
 	"strings"
 )
 
-const SetMarkerTag = `setMarker:"true" xls:"-" sqlx:"-" diff:"-" xmlify:"-" `
+const (
+	SetMarkerTag      = `setMarker:"true" xls:"-" sqlx:"-" diff:"-" xmlify:"-"`
+	TypedSetMarkerTag = SetMarkerTag + ` typeName:"%s"`
+)
 
 type (
 

@@ -2,7 +2,6 @@ package options
 
 import (
 	"context"
-	"fmt"
 )
 
 type Options struct {
@@ -33,7 +32,6 @@ func (o *Options) UpdateTranslate() {
 	o.Translate.Source = source
 	o.Translate.Generated = false
 	o.Generate = nil
-	fmt.Printf("%+v\n", o.Translate)
 }
 
 func (o *Options) Connectors() []string {

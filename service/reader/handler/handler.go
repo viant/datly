@@ -120,13 +120,13 @@ func (h *Handler) readData(ctx context.Context, aView *view.View, aState *sessio
 
 func (h *Handler) publishViewSummaryIfNeeded(aView *view.View, ret *Response) {
 	templateMeta := aView.Template.Summary
-	if ret.Reader.ViewMeta == nil || templateMeta == nil {
+	if ret.Reader.DataSummary == nil || templateMeta == nil {
 		return
 	}
-	if templateMeta.Kind != view.MetaTypeHeader {
+	if templateMeta.Kind != view.MetaKindHeader {
 		return
 	}
-	data, err := goJson.Marshal(ret.Reader.ViewMeta)
+	data, err := goJson.Marshal(ret.Reader.DataSummary)
 	if err != nil {
 		ret.StatusCode = http.StatusInternalServerError
 		ret.Status.Status = "error"

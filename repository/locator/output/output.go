@@ -37,7 +37,7 @@ func (l *outputLocator) Value(ctx context.Context, name string) (interface{}, bo
 		if l.Output == nil {
 			return nil, false, nil
 		}
-		return l.Output.ViewMeta, true, nil
+		return l.Output.DataSummary, true, nil
 	case keys.Status:
 		if l.Status == nil {
 			return nil, false, nil

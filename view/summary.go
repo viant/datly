@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	MetaTypeRecord MetaKind = "record"
-	MetaTypeHeader MetaKind = "header"
+	MetaKindRecord MetaKind = "record"
+	MetaKindHeader MetaKind = "header"
 )
 
 type (
@@ -74,9 +74,11 @@ func (m *TemplateSummary) Init(ctx context.Context, owner *Template, resource *R
 	if err := m.initTemplateEvaluator(ctx, owner, resource); err != nil {
 		return err
 	}
+
 	if err := m.initSchemaIfNeeded(ctx, owner, resource); err != nil {
 		return err
 	}
+	fmt.Printf("SUMMARY SCHEMA: %s  %s\n", m.Name, m.Schema.Type().String())
 	return nil
 }
 
@@ -84,14 +86,23 @@ func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Templat
 	if m.Schema == nil {
 		m.Schema = &state.Schema{}
 	}
-	if typeName := m.Schema.TypeName(); typeName != "" {
-		dataType, err := types.LookupType(resource.LookupType(), typeName)
-		if err != nil {
-			return err
-		}
-		m.Schema.SetType(dataType)
-		return nil
+	if err := m.Schema.LoadTypeIfNeeded(resource.LookupType()); err != nil && m.Schema.Type() != nil {
+		return err
 	}
+	source := m._owner._view
+	if parent := source._parent; parent != nil && m.Kind == MetaKindRecord {
+		if compType := parent.Schema.CompType(); compType != nil {
+			compType = types.EnsureStruct(compType)
+			field, ok := compType.FieldByName(m.Name)
+			if !ok {
+				return fmt.Errorf("invalid view summary:'%s', field %s is missing in the view '%s' schema ", m.Name, m.Name, compType.String())
+			}
+			m.Schema.SetType(field.Type)
+			fmt.Printf("SET SuMMARY: %s\n", field.Type.String())
+			return nil
+		}
+	}
+
 	columns, err := m.getColumns(ctx, resource, owner)
 	if err != nil {
 		return err
@@ -113,6 +124,7 @@ func (m *TemplateSummary) initSchemaIfNeeded(ctx context.Context, owner *Templat
 	}
 	m.Schema = state.NewSchema(nil, state.WithAutoGenFunc(m._owner._view.generateSchemaTypeFromColumn(newCase, columns, nil)))
 	err = m.Schema.Init(resourcelet)
+
 	return err
 }
 
@@ -256,7 +268,7 @@ func (m *TemplateSummary) newMetaColumnsCacheKey() string {
 
 // SummaryViewKey returns template summary key
 func SummaryViewKey(ownerName, name string) string {
-	return ownerName + "/Summary/" + name
+	return ownerName + "/DataSummary/" + name
 }
 
 func (m *TemplateSummary) prepareSQL(owner *Template) (string, []interface{}, error) {

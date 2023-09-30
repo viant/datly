@@ -178,8 +178,8 @@ func (o *Output) initDebugStyleIfNeeded() {
 	if o.RevealMetric == nil || !*o.RevealMetric {
 		return
 	}
-	if o.DebugKind != view.MetaTypeRecord {
-		o.DebugKind = view.MetaTypeHeader
+	if o.DebugKind != view.MetaKindRecord {
+		o.DebugKind = view.MetaKindHeader
 	}
 }
 
@@ -208,9 +208,9 @@ func (o *Output) defaultParameters(aView *view.View, inputParameters state.Param
 			DataOutputParameter(o.Field),
 			DefaultStatusOutputParameter(),
 		}
-		if aView != nil && aView.MetaTemplateEnabled() && aView.Template.Summary.Kind == view.MetaTypeRecord {
+		if aView != nil && aView.MetaTemplateEnabled() && aView.Template.Summary.Kind == view.MetaKindRecord {
 			parameters = append(parameters, state.NewParameter(aView.Template.Summary.Name,
-				state.NewOutputLocation("Summary"),
+				state.NewOutputLocation("summary"),
 				state.WithParameterType(aView.Template.Summary.Schema.Type())))
 		}
 		return parameters, nil

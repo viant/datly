@@ -32,8 +32,25 @@ type (
 	SchemaOption func(s *Schema)
 )
 
-func (s *Schema) EnsurePointer() {
+func (s *Schema) LoadTypeIfNeeded(lookupType xreflect.LookupType) error {
+	if s == nil {
+		return nil
+	}
+	if s.rType != nil && s.rType != xreflect.InterfaceType {
+		return nil
+	}
+	if s.TypeName() == "" {
+		return nil
+	}
+	rType, err := lookupType(s.TypeName())
+	if err != nil {
+		return err
+	}
+	s.SetType(rType)
+	return nil
+}
 
+func (s *Schema) EnsurePointer() {
 	hasDataType := s.DataType != ""
 	if hasDataType {
 		if s.DataType == "" || s.DataType[0] == '*' {
@@ -73,6 +90,9 @@ func (s *Schema) Type() reflect.Type {
 
 // CompType returns component type
 func (s *Schema) CompType() reflect.Type {
+	if s.sliceType == nil {
+		return nil
+	}
 	return s.sliceType.Elem()
 }
 
@@ -128,16 +148,9 @@ func (s *Schema) Init(resource Resource) error {
 		s.Cardinality = One
 	}
 
-	if typeName := s.TypeName(); typeName != "" {
-		rType, err := types.LookupType(resource.LookupType(), typeName)
-		if err != nil {
-			return err
-		}
-
-		s.SetType(rType)
-		return nil
+	if err := s.LoadTypeIfNeeded(resource.LookupType()); err != nil || s.rType != nil {
+		return err
 	}
-
 	if s.autoGenFn != nil {
 		rType, err := s.autoGenFn()
 		if err != nil {

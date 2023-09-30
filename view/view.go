@@ -92,6 +92,7 @@ type (
 		_columns         NamedColumns
 		_excluded        map[string]bool
 		_inputParameters state.Parameters
+		_parent          *View
 	}
 
 	ViewOption func(v *View)
@@ -278,7 +279,10 @@ func (v *View) init(ctx context.Context) error {
 	nameTaken := map[string]bool{
 		v.Name: true,
 	}
-
+	lookupType := v._resource.LookupType()
+	if err := v.Schema.LoadTypeIfNeeded(lookupType); err != nil {
+		return err
+	}
 	if v.Description == "" {
 		v.Description = v.Name
 	}
@@ -361,10 +365,16 @@ func (v *View) loadFromWithURL(ctx context.Context) error {
 	return err
 }
 
-func (v *View) initViewRelations(ctx context.Context, relations []*Relation, notUnique map[string]bool) error {
+func (v *View) initViewRelations(ctx context.Context, relations []*Relation, notUnique map[string]bool) (err error) {
+	compType := v.ComponentType()
 	for _, rel := range relations {
 		refView := &rel.Of.View
+		refView._parent = v
 		v.generateNameIfNeeded(refView, rel)
+		if err = v.updateRelationSchemaIfDefined(compType, rel); err != nil {
+			return err
+		}
+
 		isNotUnique := notUnique[rel.Of.View.Name]
 		if isNotUnique {
 			return fmt.Errorf("not unique View name: %v", rel.Of.View.Name)
@@ -395,6 +405,44 @@ func (v *View) initViewRelations(ctx context.Context, relations []*Relation, not
 			return err
 		}
 
+	}
+	return nil
+}
+
+func (v *View) ComponentType() reflect.Type {
+	var compType reflect.Type
+	if v.Schema != nil {
+		compType = v.Schema.CompType()
+	}
+	if compType != nil {
+		compType = types.EnsureStruct(compType)
+	}
+	return compType
+}
+
+func (v *View) updateRelationSchemaIfDefined(compType reflect.Type, rel *Relation) (err error) {
+	if compType == nil {
+		return
+	}
+	aView := &rel.Of.View
+	if aView.Schema.Type() != nil {
+		return nil
+	}
+	field, ok := compType.FieldByName(rel.Holder)
+	if !ok {
+		return fmt.Errorf("invalid view '%v' relation '%v' ,failed to locate rel holder: %s, in onwer type: %s", v.Name, rel.Name, rel.Holder, compType.String())
+	}
+	if ref := aView.Ref; ref != "" {
+		if aView, err = v._resource._views.Lookup(ref); err != nil {
+			return err
+		}
+	}
+	if aView.Schema == nil {
+		aView.Schema = &state.Schema{}
+	}
+	aView.Schema.SetType(field.Type)
+	if relView := &rel.Of.View; relView._parent != nil {
+		aView._parent = relView._parent
 	}
 	return nil
 }
@@ -531,7 +579,11 @@ func (v *View) reconsileColumnTypes() {
 			col := v.Columns[i]
 			if field, ok := index[col.Name]; ok {
 				if col.rType != field.Type {
-					col.rType = field.Type
+					fieldType := field.Type
+					if fieldType.Kind() == reflect.Ptr {
+						fieldType = fieldType.Elem()
+					}
+					col.rType = fieldType
 					if name := col.rType.Name(); name != "" {
 						col.DataType = name
 					}
@@ -733,27 +785,16 @@ func (v *View) Source() string {
 	return v.Name
 }
 
-func (v *View) ensureSchema(ctx context.Context, resource *Resource) error {
+func (v *View) ensureSchema(ctx context.Context, resource *Resource) (err error) {
 	v.initSchemaIfNeeded()
-	if v.Schema.Name != "" || v.Schema.DataType != "" {
-		componentType, err := resource.TypeRegistry().Lookup(v.Schema.TypeName())
-		if err != nil {
-			return err
-		}
-		if componentType != nil {
-			v.Schema.SetType(componentType)
-		}
-	}
-
-	if v.Schema.Type() != nil {
-		return nil
+	if err = v.Schema.LoadTypeIfNeeded(resource.TypeRegistry().Lookup); err != nil || v.Schema.Type() != nil {
+		return err
 	}
 	v.Schema = state.NewSchema(nil,
 		state.WithMany(),
 		state.WithAutoGenFunc(v.generateSchemaTypeFromColumn(v.Caser, v.Columns, v.With)))
 	aResource := &Resourcelet{Resource: resource}
-	err := v.Schema.Init(aResource)
-	return err
+	return v.Schema.Init(aResource)
 }
 
 // Db returns database connection that View was assigned to.

@@ -31,12 +31,12 @@ type (
 	}
 
 	Output struct {
-		Data     interface{}
-		DataType reflect.Type
-		DataPtr  interface{} //slice pointer
-		ViewMeta interface{}
-		Metrics  Metrics
-		Filters  predicate.Filters //filter used by request
+		Data        interface{}
+		DataType    reflect.Type
+		DataPtr     interface{} //slice pointer
+		DataSummary interface{}
+		Metrics     Metrics
+		Filters     predicate.Filters //filter used by request
 	}
 
 	ParentData struct {
@@ -224,7 +224,7 @@ func NewSession(dest interface{}, aView *view.View, opts ...Option) (*Session, e
 }
 
 func (s *Session) HandleViewMeta(meta interface{}) error {
-	s.ViewMeta = meta
+	s.DataSummary = meta
 	return nil
 }
 
