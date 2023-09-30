@@ -10,7 +10,7 @@ func (r *Router) NewMetricRoute() *Route {
 	return &Route{
 		RouteMeta: RouteMeta{
 			Method: http.MethodGet,
-			URL:    r.config.Meta.MetricURI,
+			URL:    r.Config.Meta.MetricURI,
 		},
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			r.handleMetrics(response, req)
@@ -19,5 +19,5 @@ func (r *Router) NewMetricRoute() *Route {
 }
 
 func (r *Router) handleMetrics(writer http.ResponseWriter, req *http.Request) {
-	gmetric.NewHandler(r.config.Meta.MetricURI, r.metrics).ServeHTTP(writer, req)
+	gmetric.NewHandler(r.Config.Meta.MetricURI, r.Metrics).ServeHTTP(writer, req)
 }

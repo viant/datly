@@ -10,7 +10,7 @@ func (r *Router) NewConfigRoute() *Route {
 	return &Route{
 		RouteMeta: RouteMeta{
 			Method: http.MethodGet,
-			URL:    r.config.Meta.ConfigURI,
+			URL:    r.Config.Meta.ConfigURI,
 		},
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			r.handleConfig(response)
@@ -25,7 +25,7 @@ func (r *Router) handleConfig(writer http.ResponseWriter) {
 }
 
 func (r *Router) handleConfigResponseBody() (int, []byte) {
-	JSON, err := json.Marshal(r.config.ExposableConfig)
+	JSON, err := json.Marshal(r.Config.ExposableConfig)
 	if err != nil {
 		return http.StatusInternalServerError, []byte(err.Error())
 	}

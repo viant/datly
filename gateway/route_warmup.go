@@ -9,19 +9,16 @@ import (
 	"net/http"
 )
 
-func (r *Router) NewWarmupRoute(URL string, routes ...*router.Route) *Route {
+func (r *Router) NewWarmupRoute(routeMeta RouteMeta, routes ...*router.Route) *Route {
 	return &Route{
-		RouteMeta: RouteMeta{
-			Method: http.MethodPost,
-			URL:    URL,
-		},
-		Routes: routes,
+		RouteMeta: routeMeta,
+		Routes:    routes,
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			r.handleCacheWarmup(response, routes)
 		},
 		Kind: RouteWarmupKind,
 		NewMultiRoute: func(routes []*router.Route) *Route {
-			return r.NewWarmupRoute("", routes...)
+			return r.NewWarmupRoute(RouteMeta{}, routes...)
 		},
 	}
 }

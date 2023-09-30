@@ -111,6 +111,8 @@ func (r *Service) Close() error {
 }
 
 // New creates gateway Service. It is important to call Service.Close before Service got Garbage collected.
+// TODO: add lazy routes. I think it should go through the Service.Session.RouterChanges
+// TODO: simplify reloading with sync.Once
 func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, authorizer Authorizer, registry *config.Registry, metrics *gmetric.Service) (*Service, error) {
 	start := time.Now()
 	if err := aConfig.Init(); err != nil {
@@ -127,10 +129,6 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 		return nil, err
 	}
 	syncTime := time.Duration(aConfig.SyncFrequencyMs) * time.Millisecond
-	mainRouter, err := NewRouter(map[string]*router.Router{}, aConfig, metrics, statusHandler, authorizer, nil)
-	if err != nil {
-		return nil, err
-	}
 
 	srv := &Service{
 		metrics:            metrics,
@@ -161,8 +159,7 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 			syncTime,
 		),
 		routersIndex:  map[string]*router.Router{},
-		mainRouter:    mainRouter,
-		changeSession: NewSession(aConfig.ChangeDetection),
+		changeSession: NewSession(aConfig.ChangeDetection, map[string]*router.Router{}),
 		statusHandler: statusHandler,
 		authorizer:    authorizer,
 		interceptors:  router.RouterInterceptors{},
@@ -275,7 +272,7 @@ func (r *Service) syncChangesIfNeeded(ctx context.Context, metrics *gmetric.Serv
 
 	r.mux.Lock()
 	if r.changeSession == nil {
-		r.changeSession = NewSession(r.Config.ChangeDetection)
+		r.changeSession = NewSession(r.Config.ChangeDetection, r.routersIndex)
 	}
 	r.mux.Unlock()
 
@@ -293,7 +290,17 @@ func (r *Service) syncChangesIfNeeded(ctx context.Context, metrics *gmetric.Serv
 		fmt.Printf("[INFO] routers rebuild completed after: %s\n", time.Since(started))
 	}
 
-	mainRouter, err := NewRouter(routers, r.Config, metrics, statusHandler, authorizer, aRouterConfig.interceptors.AsSlice())
+	mainRouter, err := NewRouter(RouterOptions{
+		Routers:       routers,
+		LazyRoutes:    r.changeSession.LazyRoutes,
+		Config:        r.Config,
+		Metrics:       metrics,
+		StatusHandler: r.statusHandler,
+		Authorizer:    authorizer,
+		Interceptors:  aRouterConfig.interceptors.AsSlice(),
+		NewRouterFn:   r.routerProvider(),
+	})
+
 	if err != nil {
 		return err
 	}
@@ -310,12 +317,11 @@ func (r *Service) syncChangesIfNeeded(ctx context.Context, metrics *gmetric.Serv
 }
 
 func (r *Service) getRouters(ctx context.Context, fs afs.Service, resources map[string]*view.Resource, viewResourcesChanged bool, isFirst bool) (routers map[string]*router.Router, changed bool, err error) {
-	updatedMap, removedMap, err := r.detectRoutersChanges(ctx, fs)
-	if err != nil {
+	if err = r.detectRoutersChanges(ctx, fs); err != nil {
 		return nil, false, err
 	}
 
-	if !viewResourcesChanged && len(updatedMap) == 0 && len(removedMap) == 0 {
+	if !viewResourcesChanged && !r.changeSession.routerChanges.Changed() {
 		return r.routersIndex, false, nil
 	}
 
@@ -323,21 +329,12 @@ func (r *Service) getRouters(ctx context.Context, fs afs.Service, resources map[
 		fmt.Printf("[INFO] detected resources changes, rebuilding routers\n")
 	}
 
-	return r.rebuildRouters(ctx, fs, resources, routers, updatedMap, removedMap, changed)
+	return r.rebuildRouters(ctx, resources, routers, changed)
 }
 
-func (r *Service) rebuildRouters(ctx context.Context, fs afs.Service, resources map[string]*view.Resource, routers map[string]*router.Router, updatedMap map[string]bool, removedMap map[string]bool, changed bool) (map[string]*router.Router, bool, error) {
-	routers = map[string]*router.Router{}
-	for routerURL := range r.routersIndex {
-		if (updatedMap[routerURL] || removedMap[routerURL]) && !changed {
-			continue
-		}
-
-		routers[routerURL] = r.routersIndex[routerURL]
-	}
-
+func (r *Service) rebuildRouters(ctx context.Context, resources map[string]*view.Resource, routers map[string]*router.Router, changed bool) (map[string]*router.Router, bool, error) {
 	routersChan := make(chan func() (*router.Resource, string, error))
-	channelSize := r.populateRoutersChan(ctx, routersChan, updatedMap, fs, resources)
+	channelSize := r.populateRoutersChan(ctx, routersChan, r.changeSession.routerChanges.routersIndex.updated.data, resources)
 	counter := 0
 	var errors []error
 	if channelSize > 0 {
@@ -346,9 +343,11 @@ func (r *Service) rebuildRouters(ctx context.Context, fs afs.Service, resources 
 			if err != nil {
 				errors = append(errors, fmt.Errorf("invalid %v,%w ", URL, err))
 			} else {
-				routers[URL], err = router.New(routerResource, router.ApiPrefix(r.Config.APIPrefix))
+				aRouter, err := r.NewRouter(routerResource)
 				if err != nil {
 					errors = append(errors, fmt.Errorf("invalid %v,%w ", URL, err))
+				} else {
+					r.changeSession.routerChanges.AddRouter(URL, aRouter)
 				}
 			}
 
@@ -363,6 +362,10 @@ func (r *Service) rebuildRouters(ctx context.Context, fs afs.Service, resources 
 	}
 
 	return routers, true, nil
+}
+
+func (r *Service) NewRouter(routerResource *router.Resource) (*router.Router, error) {
+	return router.New(routerResource, router.ApiPrefix(r.Config.APIPrefix))
 }
 
 func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (*routerConfig, error) {
@@ -413,7 +416,7 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (*router
 	}, err
 }
 
-func (r *Service) reloadResources(ctx context.Context, fs afs.Service, changes *ResourcesChange) (map[string]*view.Resource, error) {
+func (r *Service) reloadResources(ctx context.Context, fs afs.Service, changes *RouterChanges) (map[string]*view.Resource, error) {
 	result := map[string]*view.Resource{}
 	for resourceURL, dataResource := range r.dataResourcesIndex {
 		if changes.resourcesIndex.Changed(dataResource.SourceURL) {
@@ -423,12 +426,12 @@ func (r *Service) reloadResources(ctx context.Context, fs afs.Service, changes *
 		result[resourceURL] = r.dataResourcesIndex[resourceURL]
 	}
 
-	if len(changes.resourcesIndex.updatedIndex) == 0 { //add to avoid deadlock
+	if len(changes.resourcesIndex.updated.data) == 0 { //add to avoid deadlock
 		return result, nil
 	}
 
-	resourceChan := make(chan func() (*view.Resource, string, error), len(changes.resourcesIndex.updatedIndex))
-	channelSize := r.populateResourceChan(ctx, resourceChan, fs, changes.resourcesIndex.updatedIndex)
+	resourceChan := make(chan func() (*view.Resource, string, error), len(changes.resourcesIndex.updated.data))
+	channelSize := r.populateResourceChan(ctx, resourceChan, fs, changes.resourcesIndex.updated.data)
 	counter := 0
 	var errors []error
 	for fn := range resourceChan {
@@ -486,8 +489,8 @@ func deepCopyResources(index map[string]*view.Resource) (map[string]*view.Resour
 	return result, err
 }
 
-func (r *Service) populateResourceChan(ctx context.Context, resourceChan chan func() (*view.Resource, string, error), fs afs.Service, updatedResources map[string]bool) int {
-	for resourceURL := range updatedResources {
+func (r *Service) populateResourceChan(ctx context.Context, resourceChan chan func() (*view.Resource, string, error), fs afs.Service, updatedResources []string) int {
+	for _, resourceURL := range updatedResources {
 		go func(URL string) {
 			newResource, err := r.loadDependencyResource(URL, ctx, fs)
 			resourceChan <- func() (*view.Resource, string, error) {
@@ -510,8 +513,8 @@ func (r *Service) loadDependencyResource(URL string, ctx context.Context, fs afs
 	return dependency, err
 }
 
-func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*ResourcesChange, error) {
-	changes := NewResourcesChange()
+func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*RouterChanges, error) {
+	changes := NewResourcesChange(r.routersIndex)
 	errors := shared.NewErrors(0)
 
 	err := r.dependencyTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
@@ -540,8 +543,8 @@ func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*R
 		errors.Append(fmt.Errorf("failed to load interceptors: %v", err))
 	}
 
-	r.changeSession.OnDependencyUpdated(changes.resourcesIndex.updated...)
-	r.changeSession.OnFileChange(changes.resourcesIndex.deleted...)
+	r.changeSession.OnDependencyUpdated(changes.resourcesIndex.updated.data...)
+	r.changeSession.OnFileChange(changes.resourcesIndex.deleted.data...)
 	if plugErr != nil {
 		errors.Append(fmt.Errorf("failed to load plugin:  %v", plugErr))
 	}
@@ -549,69 +552,16 @@ func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*R
 	return changes, errors.Error()
 }
 
-func (r *Service) detectRoutersChanges(ctx context.Context, fs afs.Service) (map[string]bool, map[string]bool, error) {
-	var updated []string
-	var deleted []string
-	var metaUpdated []string
-	var updatedSQLs []string
-	err := r.routeTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
-		if strings.Contains(URL, ".meta/") {
-			metaUpdated = append(metaUpdated, URL[strings.LastIndexByte(URL, '/')+1:])
-			return
-		}
-		if strings.HasSuffix(URL, ".sql") {
-			updatedSQLs = append(updatedSQLs, URL)
-			return
-		}
-		if !strings.HasSuffix(URL, ".yaml") {
-			return
-		}
-		switch operation {
-		case resource.Added, resource.Modified:
-			updated = append(updated, URL)
-		case resource.Deleted:
-			deleted = append(deleted, URL)
-		}
-	})
-
-	if err != nil {
-		return nil, nil, err
+func (r *Service) detectRoutersChanges(ctx context.Context, fs afs.Service) error {
+	if err := r.routeTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
+		r.changeSession.routerChanges.OnChange(operation, URL)
+	}); err != nil {
+		return err
 	}
 
-	for routerURL, aRouter := range r.routersIndex {
-		if r.routerSQLChanged(aRouter, updatedSQLs) {
-			updated = append(updated, routerURL)
-		}
-	}
+	r.changeSession.routerChanges.AfterResourceChanges()
 
-	r.changeSession.OnRouterUpdated(updated...)
-	r.changeSession.OnRouterDeleted(deleted...)
-
-	routerMetaUpdated := r.handleMetaUpdated(metaUpdated)
-	r.changeSession.OnRouterUpdated(routerMetaUpdated...)
-
-	return r.changeSession.UpdatedRouters, r.changeSession.DeletedRouters, err
-}
-
-func (r *Service) handleMetaUpdated(metaUpdated []string) []string {
-	if len(metaUpdated) == 0 {
-		return nil
-	}
-
-	routeURLs := make([]string, 0, len(r.routersIndex))
-	for URL := range r.routersIndex {
-		routeURLs = append(routeURLs, URL)
-	}
-
-	var actualUpdated []string
-	for _, viewSeg := range metaUpdated {
-		if URL, ok := r.shouldUpdateRouter(viewSeg, routeURLs); ok {
-			fmt.Printf("[INFO] Detected meta file missing. In order to optimize startup, please provide the %v cache file \n", path.Join(".meta", viewSeg))
-			actualUpdated = append(actualUpdated, URL)
-		}
-	}
-
-	return actualUpdated
+	return nil
 }
 
 func (r *Service) PreCachables(method string, uri string) ([]*view.View, error) {
@@ -640,20 +590,20 @@ func (r *Service) updateRouterAPIKeys(routes router.Routes) {
 	}
 }
 
-func (r *Service) populateRoutersChan(ctx context.Context, routersChan chan func() (*router.Resource, string, error), updatedMap map[string]bool, fs afs.Service, resources map[string]*view.Resource) int {
-	for resourceURL := range updatedMap {
+func (r *Service) populateRoutersChan(ctx context.Context, routersChan chan func() (*router.Resource, string, error), routersUpdated []string, resources map[string]*view.Resource) int {
+	for _, resourceURL := range routersUpdated {
 		go func(URL string) {
-			routerResource, err := r.loadRouterResource(URL, resources, ctx, fs)
+			routerResource, err := r.loadRouterResource(ctx, URL, resources)
 			routersChan <- func() (*router.Resource, string, error) {
 				return routerResource, URL, err
 			}
 		}(resourceURL)
 	}
 
-	return len(updatedMap)
+	return len(routersUpdated)
 }
 
-func (r *Service) loadRouterResource(URL string, resources map[string]*view.Resource, ctx context.Context, fs afs.Service) (*router.Resource, error) {
+func (r *Service) loadRouterResource(ctx context.Context, URL string, resources map[string]*view.Resource) (*router.Resource, error) {
 	routerResource, ok := r.changeSession.Routers[URL]
 	if ok {
 		return routerResource, nil
@@ -664,11 +614,12 @@ func (r *Service) loadRouterResource(URL string, resources map[string]*view.Reso
 		return nil, err
 	}
 
-	routerResource, err = router.LoadResource(ctx, fs, URL, r.Config.Discovery(), r.configRegistry, r.metrics, copyResources)
+	routerResource, err = router.LoadResource(ctx, r.fs, URL, r.Config.Discovery(), r.configRegistry, r.metrics, copyResources)
 	if err != nil {
 		return nil, err
 	}
-	routerResource.Resource.SetFs(fs)
+
+	routerResource.Resource.SetFs(r.fs)
 	r.changeSession.AddRouter(URL, routerResource)
 	if err = r.updateCacheConnectorRefIfNeeded(routerResource); err != nil {
 		return nil, err
@@ -682,22 +633,6 @@ func (r *Service) loadRouterResource(URL string, resources map[string]*view.Reso
 		routerResource.RevealMetric = r.Config.RevealMetric
 	}
 	return routerResource, routerResource.Init(ctx)
-}
-
-func (r *Service) shouldUpdateRouter(viewSeg string, routeURLs []string) (string, bool) {
-	for _, routeURL := range routeURLs {
-		if !strings.Contains(routeURL, r.Config.RouteURL) && strings.HasSuffix(routeURL, viewSeg) {
-			continue
-		}
-
-		if r.changeSession.DeletedRouters[routeURL] || r.changeSession.UpdatedRouters[routeURL] {
-			continue
-		}
-
-		return routeURL, true
-	}
-
-	return "", false
 }
 
 func (r *Service) updateCacheConnectorRefIfNeeded(routerResource *router.Resource) error {
@@ -769,43 +704,6 @@ func (r *Service) viewConnector(routerResource *router.Resource, aView *view.Vie
 	return nil, false
 }
 
-func (r *Service) routerSQLChanged(aRouter *router.Router, sqls []string) bool {
-	if len(sqls) == 0 {
-		return false
-	}
-
-	routes := aRouter.Routes("")
-	for _, route := range routes {
-		if r.viewSQLChanged(route.View, sqls) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (r *Service) viewSQLChanged(aView *view.View, sqlFiles []string) bool {
-	if len(sqlFiles) == 0 {
-		return false
-	}
-
-	if aView.Template.SourceURL != "" {
-		for _, sqlFile := range sqlFiles {
-			if strings.HasSuffix(sqlFile, aView.Template.SourceURL) {
-				return true
-			}
-		}
-	}
-
-	for _, relation := range aView.With {
-		if r.viewSQLChanged(&relation.Of.View, sqlFiles) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func initSecrets(ctx context.Context, config *Config) error {
 	if len(config.Secrets) == 0 {
 		return nil
@@ -842,17 +740,17 @@ func (r *Service) LogInitTimeIfNeeded(start time.Time, writer http.ResponseWrite
 
 func (r *Service) buildInterceptors(ctx context.Context, index *ExtIndex) (router.RouterInterceptors, error) {
 	interceptors := r.interceptors.Copy()
-	for key, _ := range index.deletedIndex {
+	for _, key := range index.deleted.data {
 		delete(interceptors, key)
 	}
 
-	expectedSize := len(index.updated)
+	expectedSize := len(index.updated.data)
 	if expectedSize == 0 {
 		return interceptors, nil
 	}
 
 	resultChan := make(chan func() (*router.RouteInterceptor, error), expectedSize)
-	for _, URL := range index.updated {
+	for _, URL := range index.updated.data {
 		go func(ctx context.Context, URL string, collector chan func() (*router.RouteInterceptor, error)) {
 			resultChan <- func() (*router.RouteInterceptor, error) {
 				return router.NewInterceptorFromURL(ctx, r.fs, URL, r.configRegistry.Types.Lookup)
@@ -888,4 +786,15 @@ func (r *Service) ServeHTTPAsync(writer http.ResponseWriter, request *http.Reque
 	//}
 
 	//	aRouter.HandleAsync(writer, request, record)
+}
+
+func (r *Service) routerProvider() NewRouterFn {
+	return func(ctx context.Context, URI string) (*router.Router, error) {
+		routerResource, err := r.loadRouterResource(ctx, URI, r.dataResourcesIndex)
+		if err != nil {
+			return nil, err
+		}
+
+		return r.NewRouter(routerResource)
+	}
 }

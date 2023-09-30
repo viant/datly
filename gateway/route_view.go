@@ -8,13 +8,10 @@ import (
 	"net/http"
 )
 
-func (r *Router) NewViewMetaHandler(URL string, route *router.Route) *Route {
+func (r *Router) NewViewMetaHandler(routeMeta RouteMeta, route *router.Route) *Route {
 	return &Route{
-		RouteMeta: RouteMeta{
-			Method: http.MethodGet,
-			URL:    URL,
-		},
-		Routes: []*router.Route{route},
+		RouteMeta: routeMeta,
+		Routes:    []*router.Route{route},
 		Handler: func(ctx context.Context, r http.ResponseWriter, req *http.Request) {
 			handleViewMeta(r, route)
 		},

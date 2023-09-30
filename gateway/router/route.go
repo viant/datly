@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	"fmt"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/afs"
 	"github.com/viant/datly/gateway/router/async"
@@ -16,10 +15,10 @@ import (
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
-	http2 "github.com/viant/xdatly/handler/http"
 	"net/http"
 	"reflect"
 	"strings"
+	"sync"
 )
 
 const pkgPath = "github.com/viant/datly/gateway/router"
@@ -41,16 +40,22 @@ type (
 		Cors        *Cors `json:",omitempty"`
 		EnableAudit bool  `json:",omitempty"`
 		EnableDebug *bool `json:",omitempty"`
+		LoadLazy    bool
 
 		Compression *Compression `json:",omitempty"`
 
 		_unmarshallerInterceptors marshal.Transforms
 
-		_resource     *view.Resource
-		_apiKeys      []*APIKey
-		_routeMatcher func(route *http2.Route) (*Route, error)
-		_async        *async.Async
-		_router       *Router
+		_resource   *view.Resource
+		_apiKeys    []*APIKey
+		_async      *async.Async
+		_router     *Router
+		_lazyLoader *LazyLoader
+	}
+
+	LazyLoader struct {
+		sync.Once
+		err error
 	}
 )
 
@@ -86,6 +91,15 @@ func (r *Route) CorsEnabled() bool {
 }
 
 func (r *Route) Init(ctx context.Context, resource *Resource) error {
+	if r.LoadLazy {
+		r._lazyLoader = &LazyLoader{}
+		return nil
+	}
+
+	return r.EnsureInit(ctx, resource)
+}
+
+func (r *Route) EnsureInit(ctx context.Context, resource *Resource) error {
 	if r.Output.Style == component.BasicStyle {
 		r.Output.Field = ""
 	}
@@ -195,16 +209,4 @@ func (r *Route) initTransforms(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func (r *Route) match(ctx context.Context, route *http2.Route) (*Route, error) {
-	if r._routeMatcher == nil {
-		return nil, fmt.Errorf("route matcher was empty")
-	}
-
-	return r._routeMatcher(route)
-}
-
-func (r *Route) SetRouteLookup(lookup func(route *http2.Route) (*Route, error)) {
-	r._routeMatcher = lookup
 }

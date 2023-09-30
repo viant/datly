@@ -28,15 +28,12 @@ import (
 
 type (
 	Router struct {
+		RouterOptions
+
 		routeMatcher            *matcher.Matcher
 		localInterceptorMatcher *matcher.Matcher
 		apiKeyMatcher           *matcher.Matcher
-		config                  *Config
 		OpenAPIInfo             openapi3.Info
-		metrics                 *gmetric.Service
-		statusHandler           http.Handler
-		authorizer              Authorizer
-		interceptors            []*router.RouteInterceptor
 		routes                  []*RouteMeta
 		namedRoutes             map[string]*router.Route
 		registry                *repository.Registry
@@ -53,9 +50,15 @@ type (
 		apiKey *router.APIKey
 	}
 
-	apiKeyMapKey struct {
-		header string
-		value  string
+	RouterOptions struct {
+		Routers       map[string]*router.Router
+		LazyRoutes    map[string]*LazyRouterContract
+		Config        *Config
+		Metrics       *gmetric.Service
+		StatusHandler http.Handler
+		Authorizer    Authorizer
+		Interceptors  []*router.RouteInterceptor
+		NewRouterFn   NewRouterFn
 	}
 )
 
@@ -73,18 +76,14 @@ func (a *AvailableRoutesError) Error() string {
 }
 
 // NewRouter creates new router
-func NewRouter(routersIndex map[string]*router.Router, config *Config, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer, interceptors []*router.RouteInterceptor) (*Router, error) {
+func NewRouter(options RouterOptions) (*Router, error) {
 	r := &Router{
-		config:                  config,
-		metrics:                 metrics,
-		statusHandler:           statusHandler,
-		authorizer:              authorizer,
-		apiKeyMatcher:           newApiKeyMatcher(config.APIKeys),
-		localInterceptorMatcher: newLocalInterceptorMatcher(routersIndex),
-		interceptors:            interceptors,
+		RouterOptions:           options,
+		apiKeyMatcher:           newApiKeyMatcher(options.Config.APIKeys),
+		localInterceptorMatcher: newLocalInterceptorMatcher(options.Routers),
 	}
 
-	return r, r.init(routersIndex)
+	return r, r.init()
 }
 
 func newApiKeyMatcher(keys router.APIKeys) *matcher.Matcher {
@@ -124,7 +123,7 @@ func (r *Router) handle(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (r *Router) handleWithError(writer http.ResponseWriter, request *http.Request, matcher *matcher.Matcher) (int, error) {
-	if !meta.IsAuthorized(request, r.config.Meta.AllowedSubnet) {
+	if !meta.IsAuthorized(request, r.Config.Meta.AllowedSubnet) {
 		return http.StatusForbidden, nil
 	}
 
@@ -179,20 +178,15 @@ func (r *Router) match(matcher *matcher.Matcher, method string, URL string, req 
 	case 0:
 		return nil, r.availableRoutesErr(http.StatusNotFound, fmt.Errorf("not found route with Method: %v and URL: %v", method, URL))
 	case 1:
-		asRoute, ok := matched[0].(*Route)
-		if !ok {
-			return nil, r.unexpectedType(asRoute, matched[0])
-		}
-
-		return asRoute, nil
+		return r.asRoute(matched[0])
 
 	default:
 		var routes []*router.Route
 		var lastMatched *Route
 		for _, matchable := range matched {
-			asRoute, ok := matchable.(*Route)
-			if !ok {
-				return nil, r.unexpectedType(asRoute, matched[0])
+			asRoute, err := r.asRoute(matchable)
+			if err != nil {
+				return nil, err
 			}
 
 			if req != nil && !asRoute.CanHandle(req) {
@@ -272,11 +266,11 @@ func (r *Router) ensureRequestURL(request *http.Request) error {
 }
 
 func (r *Router) authorizeRequestIfNeeded(writer http.ResponseWriter, request *http.Request) bool {
-	if r.authorizer == nil {
+	if r.Authorizer == nil {
 		return true
 	}
 
-	return r.authorizer.Authorize(writer, request)
+	return r.Authorizer.Authorize(writer, request)
 }
 
 func (r *Router) PreCacheables(method string, uri string) ([]*view.View, error) {
@@ -304,9 +298,9 @@ func (r *Router) extractCacheableViews(routes ...*router.Route) warmup.PreCachab
 	}
 }
 
-func (r *Router) init(routersIndex map[string]*router.Router) error {
-	routers := asRouterSlice(routersIndex)
-	r.registry = repository.NewRegistry(r.config.APIPrefix)
+func (r *Router) init() error {
+	routers := asRouterSlice(r.Routers)
+	r.registry = repository.NewRegistry(r.Config.APIPrefix)
 	r.dispatcherService = sdispatcher.New()
 	r.dispatcher = dispatcher.New(r.registry)
 	r.routeMatcher, r.routes = r.newMatcher(routers)
@@ -348,9 +342,6 @@ func (r *Router) newMatcher(routers []*router.Router) (*matcher.Matcher, []*Rout
 
 	routes := make([]*Route, 0, routesSize)
 
-	//var jobKeys []*router.APIKey
-	//	jobKeysMap := map[apiKeyMapKey]bool{}
-
 	var components = make([]*repository.Component, 0, 3*len(routers))
 	for _, aRouter := range routers {
 		routerRoutes := aRouter.Routes("")
@@ -360,33 +351,19 @@ func (r *Router) newMatcher(routers []*router.Router) (*matcher.Matcher, []*Rout
 
 			routesLen := len(routes)
 			var apiKeys []*router.APIKey
-			if matched := r.config.APIKeys.Match(route.URI); matched != nil {
+			if matched := r.Config.APIKeys.Match(route.URI); matched != nil {
 				apiKeys = append(apiKeys, matched)
 			}
-
-			//if route.Async != nil {
-			//	for _, key := range apiKeys {
-			//		mapKey := apiKeyMapKey{
-			//			header: key.Header,
-			//			value:  key.Value,
-			//		}
-			//		ok := jobKeysMap[mapKey]
-			//		if !ok {
-			//			jobKeysMap[mapKey] = true
-			//			jobKeys = append(jobKeys, key)
-			//		}
-			//	}
-			//}
 
 			routes = append(routes, r.NewRouteHandler(aRouter, route))
 
 			if views := router.ExtractCacheableViews(route); len(views) > 0 {
-				routes = append(routes, r.NewWarmupRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.CacheWarmURI, route.URI), route))
+				routes = append(routes, r.newWarmupRoute(route))
 			}
 
-			routes = append(routes, r.NewViewMetaHandler(r.routeURL(r.config.APIPrefix, r.config.Meta.ViewURI, route.URI), route))
-			routes = append(routes, r.NewOpenAPIRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.OpenApiURI, route.URI), route))
-			routes = append(routes, r.NewStructRoute(r.routeURL(r.config.APIPrefix, r.config.Meta.StructURI, route.URI), route))
+			routes = append(routes, r.newViewMetaRoute(route))
+			routes = append(routes, r.newOpenAPIRoute(route))
+			routes = append(routes, r.newStructRoute(route))
 
 			if len(apiKeys) > 0 {
 				for i := routesLen; i < len(routes); i++ {
@@ -408,13 +385,6 @@ func (r *Router) newMatcher(routers []*router.Router) (*matcher.Matcher, []*Rout
 		r.NewConfigRoute(),
 	)
 
-	//marshaller := cusJson.New(config.IOConfig{})
-	routes = append(
-		routes,
-		//NewJobsRoute("/datly-jobs", routers, jobKeys, marshaller),
-		//NewJobByIDRoute("/datly-jobs/{jobID}", "jobID", routers, jobKeys, marshaller),
-	)
-
 	matchables := make([]matcher.Matchable, 0, len(routes))
 	routesMetas := make([]*RouteMeta, 0, len(routes))
 
@@ -424,29 +394,107 @@ func (r *Router) newMatcher(routers []*router.Router) (*matcher.Matcher, []*Rout
 	}
 
 	for _, route := range routes {
-		matched, err := r.apiKeyMatcher.MatchPrefix("", route.URI())
-		if err != nil {
-			continue
-		}
-
-		for _, matchable := range matched {
-			apiKeyWrapper, ok := matchable.(*ApiKeyWrapper)
-			if !ok {
-				continue
-			}
-
-			route.ApiKeys = append(route.ApiKeys, apiKeyWrapper.apiKey)
+		keys := r.apiKeys(route.URI())
+		for _, key := range keys {
+			route.ApiKeys = append(route.ApiKeys, key.apiKey)
 		}
 	}
 
-	for _, aRouter := range routers {
-		routes := aRouter.Routes("")
-		for _, route := range routes {
-			route.SetRouteLookup(r.routeLookup)
+	for _, contract := range r.RouterOptions.LazyRoutes {
+		loader := NewRouterLoader(contract.RouterURI, r.RouterOptions.NewRouterFn)
+		for _, route := range contract.Routes {
+			routeLoader := NewRouteLoader(*route, loader)
+			routeHandler := NewLazyRoute(RouteMeta{
+				Method: route.Method,
+				URL:    route.URI,
+			}, routeLoader, func(ctx context.Context, router *router.Router, route *router.Route) (*Route, error) {
+				return r.NewRouteHandler(router, route), nil
+			}, r.apiKeys)
+
+			viewMetaHandler := NewLazyRoute(r.viewMetaURI(route.URI), routeLoader, func(ctx context.Context, router *router.Router, route *router.Route) (*Route, error) {
+				return r.newViewMetaRoute(route), nil
+			}, r.apiKeys)
+
+			openAPIHandler := NewLazyRoute(r.openAPIRouteMeta(route.URI), routeLoader, func(ctx context.Context, router *router.Router, route *router.Route) (*Route, error) {
+				return r.newOpenAPIRoute(route), nil
+			}, r.apiKeys)
+
+			structHandler := NewLazyRoute(r.structRouteMeta(route.URI), routeLoader, func(ctx context.Context, router *router.Router, route *router.Route) (*Route, error) {
+				return r.newStructRoute(route), nil
+			}, r.apiKeys)
+
+			lazyRoutes := []*LazyRoute{
+				routeHandler,
+				viewMetaHandler,
+				openAPIHandler,
+				structHandler,
+			}
+
+			if route.Warmup {
+				warmupHandler := NewLazyRoute(r.warmupRouteMeta(route.URI), routeLoader, func(ctx context.Context, router *router.Router, route *router.Route) (*Route, error) {
+					return r.newWarmupRoute(route), nil
+				}, r.apiKeys)
+
+				lazyRoutes = append(lazyRoutes, warmupHandler)
+			}
+
+			for _, lazyRoute := range lazyRoutes {
+				routesMetas = append(routesMetas, &lazyRoute.RouteMeta)
+			}
+
+			for _, lazyRoute := range lazyRoutes {
+				matchables = append(matchables, lazyRoute)
+			}
 		}
+
+		routesMetas = append(routesMetas)
 	}
 
 	return matcher.NewMatcher(matchables), routesMetas
+}
+
+func (r *Router) newStructRoute(route *router.Route) *Route {
+	return r.NewStructRoute(r.structRouteMeta(route.URI), route)
+}
+
+func (r *Router) structRouteMeta(URI string) RouteMeta {
+	return RouteMeta{
+		Method: http.MethodGet,
+		URL:    URI,
+	}
+}
+
+func (r *Router) newOpenAPIRoute(route *router.Route) *Route {
+	return r.NewOpenAPIRoute(r.openAPIRouteMeta(route.URI), route)
+}
+
+func (r *Router) openAPIRouteMeta(URI string) RouteMeta {
+	return RouteMeta{
+		Method: http.MethodGet,
+		URL:    r.routeURL(r.Config.APIPrefix, r.Config.Meta.OpenApiURI, URI),
+	}
+}
+
+func (r *Router) newViewMetaRoute(route *router.Route) *Route {
+	return r.NewViewMetaHandler(r.viewMetaURI(route.URI), route)
+}
+
+func (r *Router) viewMetaURI(URI string) RouteMeta {
+	return RouteMeta{
+		Method: http.MethodGet,
+		URL:    r.routeURL(r.Config.APIPrefix, r.Config.Meta.ViewURI, URI),
+	}
+}
+
+func (r *Router) newWarmupRoute(route *router.Route) *Route {
+	return r.NewWarmupRoute(r.warmupRouteMeta(route.URI), route)
+}
+
+func (r *Router) warmupRouteMeta(URI string) RouteMeta {
+	return RouteMeta{
+		Method: http.MethodPost,
+		URL:    r.routeURL(r.Config.APIPrefix, r.Config.Meta.CacheWarmURI, URI),
+	}
 }
 
 func (r *Router) MatchAllByPrefix(URL string) []*router.Route {
@@ -466,7 +514,7 @@ func (r *Router) MatchAllByPrefix(URL string) []*router.Route {
 }
 
 func (r *Router) interceptIfNeeded(writer http.ResponseWriter, request *http.Request) bool {
-	for _, interceptor := range r.interceptors {
+	for _, interceptor := range r.Interceptors {
 		redirected, err := interceptor.Intercept(request)
 		if err != nil {
 			code, message := httputils2.BuildErrorResponse(err)
@@ -534,4 +582,31 @@ func (r *Router) routeLookup(route *http2.Route) (*router.Route, error) {
 	}
 
 	return asRoute.Routes[0], nil
+}
+
+func (r *Router) asRoute(matchable matcher.Matchable) (*Route, error) {
+	switch actual := matchable.(type) {
+	case *Route:
+		return actual, nil
+	case *LazyRoute:
+		return actual.Route(context.Background())
+	default:
+		return nil, r.unexpectedType(&Route{}, matchable)
+	}
+}
+
+func (r *Router) apiKeys(URI string) (result []*ApiKeyWrapper) {
+	apiKeys, err := r.apiKeyMatcher.MatchPrefix("", URI)
+	if err != nil {
+		return result
+	}
+
+	for _, matched := range apiKeys {
+		switch actual := matched.(type) {
+		case *ApiKeyWrapper:
+			result = append(result, actual)
+		}
+	}
+
+	return result
 }

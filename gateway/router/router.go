@@ -110,11 +110,31 @@ func (r *Router) HandleAsync(ctx context.Context, response http.ResponseWriter, 
 			return nil
 		}
 	}
-	route, err := r.Matcher.MatchOne(request.Method, request.URL.Path)
+	route, err := r.MatchRoute(request.Method, request.URL.Path)
 	if err != nil {
 		return err
 	}
-	return r.HandleRequest(ctx, response, request, route.(*MatchableRoute).Route)
+
+	return r.HandleRequest(ctx, response, request, route)
+}
+
+func (r *Router) MatchRoute(method, path string) (*Route, error) {
+	route, err := r.Matcher.MatchOne(method, path)
+	if err != nil {
+		return nil, err
+	}
+
+	return route.(*MatchableRoute).Route, nil
+}
+
+func (r *Router) MatchByName(name string) (*Route, error) {
+	for _, route := range r._routes {
+		if route.Name != "" && route.Name == name {
+			return route, nil
+		}
+	}
+
+	return nil, fmt.Errorf("not found route with name %v", name)
 }
 
 func (r *Router) HandleRoute(ctx context.Context, response http.ResponseWriter, request *http.Request, route *Route) error {
@@ -133,7 +153,13 @@ func (r *Router) HandleRequest(ctx context.Context, response http.ResponseWriter
 		return nil
 	}
 
-	r.viewHandler(route)(ctx, response, request)
+	handler, err := r.viewHandler(ctx, route)
+	if err != nil {
+		r.writeErrorResponse(response, []byte(err.Error()), 500)
+		return nil
+	}
+
+	handler(ctx, response, request)
 	if route.Cors != nil {
 		corsHandler(request, route.Cors)(response)
 	}
@@ -253,8 +279,19 @@ func (r *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 }
 
-func (r *Router) viewHandler(route *Route) viewHandler {
+func (r *Router) viewHandler(ctx context.Context, route *Route) (viewHandler, error) {
+	if route._lazyLoader != nil {
+		route._lazyLoader.Do(func() {
+			route._lazyLoader.err = route.EnsureInit(ctx, r._resource)
+			if route._lazyLoader.err != nil {
+				fmt.Printf("[ERROR] error while initializing lazy route: %v\n", route._lazyLoader.err.Error())
+			}
+		})
 
+		if route._lazyLoader.err != nil {
+			return nil, route._lazyLoader.err
+		}
+	}
 	return func(ctx context.Context, response http.ResponseWriter, request *http.Request) {
 
 		payloadReader, err := r.payloadReader(ctx, request, response, route)
@@ -267,7 +304,7 @@ func (r *Router) viewHandler(route *Route) viewHandler {
 		if payloadReader != nil {
 			r.writeResponse(ctx, request, response, route, payloadReader)
 		}
-	}
+	}, nil
 }
 
 func (r *Router) inAWS() bool {
@@ -305,13 +342,16 @@ func (r *Router) writeErr(w http.ResponseWriter, route *Route, err error, status
 	}
 	asBytes, marErr := route.JsonMarshaller.Marshal(aResponse.State())
 	if marErr != nil {
-		w.Write(asBytes)
-		w.WriteHeader(statusCode)
+		r.writeErrorResponse(w, asBytes, statusCode)
 		return
 	}
 
-	w.WriteHeader(statusCode)
+	r.writeErrorResponse(w, asBytes, statusCode)
+}
+
+func (r *Router) writeErrorResponse(w http.ResponseWriter, asBytes []byte, statusCode int) {
 	w.Write(asBytes)
+	w.WriteHeader(statusCode)
 }
 
 func (r *Router) responseStatusError(message string, anObject interface{}) response.Status {

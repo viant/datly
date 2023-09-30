@@ -7,19 +7,16 @@ import (
 	"net/http"
 )
 
-func (r *Router) NewOpenAPIRoute(URL string, routes ...*router.Route) *Route {
+func (r *Router) NewOpenAPIRoute(routeMeta RouteMeta, routes ...*router.Route) *Route {
 	return &Route{
-		RouteMeta: RouteMeta{
-			Method: http.MethodGet,
-			URL:    URL,
-		},
-		Routes: routes,
+		RouteMeta: routeMeta,
+		Routes:    routes,
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			r.handleOpenAPI(response, req, routes)
 		},
 		Kind: RouteOpenAPIKind,
 		NewMultiRoute: func(routes []*router.Route) *Route {
-			return r.NewOpenAPIRoute("", routes...)
+			return r.NewOpenAPIRoute(RouteMeta{Method: routeMeta.Method, URL: ""}, routes...)
 		},
 	}
 }

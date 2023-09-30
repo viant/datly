@@ -10,24 +10,22 @@ import (
 type Session struct {
 	mux                 sync.Mutex
 	FailureCounter      map[string]int
-	DeletedDependencies map[string]bool
-	UpdatedDependencies map[string]bool
-	DeletedRouters      map[string]bool
-	UpdatedRouters      map[string]bool
+	dependenciesChanges *ExtIndex
+	routerChanges       *RouterChanges
 	Routers             map[string]*router.Resource
 	Dependencies        map[string]*view.Resource
 	config              *ChangeDetection
+	LazyRoutes          map[string]*LazyRouterContract
 }
 
-func NewSession(config *ChangeDetection) *Session {
+func NewSession(config *ChangeDetection, routers map[string]*router.Router) *Session {
 	return &Session{
 		FailureCounter:      map[string]int{},
-		DeletedDependencies: map[string]bool{},
-		UpdatedDependencies: map[string]bool{},
-		DeletedRouters:      map[string]bool{},
-		UpdatedRouters:      map[string]bool{},
+		routerChanges:       NewResourcesChange(routers),
+		dependenciesChanges: NewExtIndex(),
 		Routers:             map[string]*router.Resource{},
 		config:              config,
+		LazyRoutes:          map[string]*LazyRouterContract{},
 	}
 }
 
@@ -36,8 +34,7 @@ func (s *Session) OnDependencyUpdated(URLs ...string) {
 	defer s.mux.Unlock()
 
 	for _, URL := range URLs {
-		s.removeEach(URL)
-		s.UpdatedDependencies[URL] = true
+		s.dependenciesChanges.Changed(URL)
 	}
 }
 
@@ -45,8 +42,7 @@ func (s *Session) OnDependencyDeleted(URLs ...string) {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	for _, URL := range URLs {
-		s.removeEach(URL)
-		s.DeletedDependencies[URL] = true
+		s.dependenciesChanges.deleted.RemoveEntry(URL)
 	}
 }
 
@@ -59,10 +55,6 @@ func (s *Session) OnFileChange(URLs ...string) {
 }
 
 func (s *Session) removeEach(URL string) {
-	delete(s.DeletedDependencies, URL)
-	delete(s.UpdatedDependencies, URL)
-	delete(s.DeletedRouters, URL)
-	delete(s.UpdatedRouters, URL)
 	delete(s.FailureCounter, URL)
 	delete(s.Routers, URL)
 	delete(s.Dependencies, URL)
@@ -74,17 +66,7 @@ func (s *Session) OnRouterUpdated(URLs ...string) {
 
 	for _, URL := range URLs {
 		s.removeEach(URL)
-		s.UpdatedRouters[URL] = true
-	}
-}
-
-func (s *Session) OnRouterDeleted(URLs ...string) {
-	s.mux.Lock()
-	defer s.mux.Unlock()
-
-	for _, URL := range URLs {
-		s.removeEach(URL)
-		s.DeletedRouters[URL] = true
+		s.routerChanges.routersIndex.updated.MarkResolved(URL)
 	}
 }
 

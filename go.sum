@@ -90,9 +90,6 @@ github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24
 github.com/bradfitz/go-smtpd v0.0.0-20170404230938-deb6d6237625/go.mod h1:HYsPBTaaSFSlLx/70C2HPIMNZpVV8+vt/A+FMnYP11g=
 github.com/buger/jsonparser v0.0.0-20181115193947-bf1c66bbce23/go.mod h1:bbYlZJ7hK1yFx9hf58LP0zeX7UjIGs20ufpu3evjr+s=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
-github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=
-github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e/go.mod h1:nSuG5e5PlCu98SY8svDHJxuZscDgtXS6KTTbou5AhLI=
-github.com/chzyer/test v0.0.0-20180213035817-a1ea475d72b1/go.mod h1:Q3SI9o4m/ZMnBNeIyt5eFwwo7qiLfzFZmjNmxjkiQlU=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
 github.com/coreos/go-systemd v0.0.0-20181012123002-c6f51f82210d/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
@@ -177,11 +174,9 @@ github.com/googleapis/gax-go v2.0.0+incompatible/go.mod h1:SFVmujtThgffbyetf+mdk
 github.com/googleapis/gax-go/v2 v2.0.3/go.mod h1:LLvjysVCY1JZeum8Z6l8qUty8fiNwE08qbEPm1M08qg=
 github.com/googleapis/gax-go/v2 v2.8.0 h1:UBtEZqx1bjXtOQ5BVTkuYghXrr3N4V123VKJK67vJZc=
 github.com/googleapis/gax-go/v2 v2.8.0/go.mod h1:4orTrqY6hXxxaUL4LHIPl6lGo8vAE38/qKbhSAKP6QI=
-github.com/googleapis/go-type-adapters v1.0.0/go.mod h1:zHW75FOG2aur7gAO2B+MLby+cLsWGBF62rFAi7WjWO4=
 github.com/gopherjs/gopherjs v0.0.0-20181017120253-0766667cb4d1/go.mod h1:wJfORRmW1u3UXTncJ5qlYoELFm8eSnnEO6hX4iZ3EWY=
 github.com/gregjones/httpcache v0.0.0-20180305231024-9cad4c3443a7/go.mod h1:FecbI9+v66THATjSRHfNgh1IVFe/9kFxbXtjV0ctIMA=
 github.com/grpc-ecosystem/grpc-gateway v1.5.0/go.mod h1:RSKVYQBd5MCa4OVpNdGskqpgL2+G+NZTnrVHpWWfpdw=
-github.com/hashicorp/golang-lru v0.5.1/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/jellevandenhooff/dkim v0.0.0-20150330215556-f50fe3d243e1/go.mod h1:E0B/fFc00Y+Rasa88328GlI/XbtyysCtTHZS8h7IrBU=
 github.com/jessevdk/go-flags v1.5.0 h1:1jKYvbxEjfUl0fmqTCOfonvskHHXMjBySTLW4y9LFvc=
 github.com/jessevdk/go-flags v1.5.0/go.mod h1:Fw0T6WPc1dYxT4mKEZRfG5kJhaTDP9pj1c2EWnYs/m4=
@@ -339,8 +334,6 @@ github.com/viant/toolbox v0.24.0/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMI
 github.com/viant/toolbox v0.34.6-0.20221112031702-3e7cdde7f888/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/toolbox v0.34.6-0.20230901020907-6da0397b78dc h1:Aaa9dchYJ6/YTLqR2p4p556Ob69DNPR65Pm3gJdqIiU=
 github.com/viant/toolbox v0.34.6-0.20230901020907-6da0397b78dc/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
-github.com/viant/velty v0.2.1-0.20230803200403-bd59a7c855b3 h1:2+z5X2mn3VCmEdKAs9dcWcQyV4Ny1etl8zeuHvcLyZQ=
-github.com/viant/velty v0.2.1-0.20230803200403-bd59a7c855b3/go.mod h1:C9LNTFXg7DR8B9+tcY2STVqiRQasDr8AZxMhy/lIpOU=
 github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85 h1:zKk+6hqUipkJXCPCHyFXzGtil1sfh80r6UZmloBNEDo=
 github.com/viant/velty v0.2.1-0.20230927172116-ba56497b5c85/go.mod h1:Q/UXviI2Nli8WROEpYd/BELMCSvnulQeyNrbPmMiS/Y=
 github.com/viant/xdatly v0.3.1-0.20230926222707-334d3e2572d7 h1:6GfnGePSVzQvHa+4P2HsJ0m3ND1UnLPH0w+A3l2BHMY=
@@ -359,8 +352,6 @@ github.com/viant/xmlify v0.0.0-20230926153903-4564fcd3df62 h1:S/01wOoRfloU3Iq6fH
 github.com/viant/xmlify v0.0.0-20230926153903-4564fcd3df62/go.mod h1:/JKJnEoJyyYNiV6cIY7qDjX2rws5bMh2JFbtLIZZ7Es=
 github.com/viant/xreflect v0.3.2-0.20230920021028-04a256415cac h1:+6d8KGT/zkUSbaTZD9OIYj10UAK2YLJo4WQiKETjDPw=
 github.com/viant/xreflect v0.3.2-0.20230920021028-04a256415cac/go.mod h1:uflXFHcw4TQXgYJvTQ7Akf4SAzXYPCVi8NGZgsVlwmA=
-github.com/viant/xunsafe v0.9.0 h1:pyvHiGjYqwVNwbIfUTvO8W960S6zvM/gxP4iRyAl6BE=
-github.com/viant/xunsafe v0.9.0/go.mod h1:V3RCwtqpbNPznhmHysyAOpsyuSVkIYWo1Ewip7qb9/s=
 github.com/viant/xunsafe v0.9.1-0.20230927172001-c46ad2c48d68 h1:rrdh+8vc88A9+RvjNZ/yFzso4KQliaNY1rgYjVqTD7c=
 github.com/viant/xunsafe v0.9.1-0.20230927172001-c46ad2c48d68/go.mod h1:V3RCwtqpbNPznhmHysyAOpsyuSVkIYWo1Ewip7qb9/s=
 github.com/xlab/treeprint v1.1.0/go.mod h1:gj5Gd3gPdKtR1ikdDK6fnFLdmIS0X30kTTuNd/WEJu0=

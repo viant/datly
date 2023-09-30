@@ -8,13 +8,10 @@ import (
 	"reflect"
 )
 
-func (r *Router) NewStructRoute(URL string, route *router.Route) *Route {
+func (r *Router) NewStructRoute(routeMeta RouteMeta, route *router.Route) *Route {
 	return &Route{
-		RouteMeta: RouteMeta{
-			Method: http.MethodGet,
-			URL:    URL,
-		},
-		Routes: []*router.Route{route},
+		RouteMeta: routeMeta,
+		Routes:    []*router.Route{route},
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			r.handleGolangStruct(response, route)
 		},

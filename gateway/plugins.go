@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/config"
-	pgoBuild "github.com/viant/pgo/build"
 	"github.com/viant/pgo/manager"
 	"github.com/viant/xdatly/types/core"
 	"github.com/viant/xreflect"
@@ -23,12 +22,6 @@ type (
 		packageName  string
 		changes      []interface{}
 	}
-
-	pluginMetadata struct {
-		URL          string
-		CreationTime time.Time
-		pgoBuild.Info
-	}
 )
 
 func (p pluginDataSlice) Len() int {
@@ -43,8 +36,8 @@ func (p pluginDataSlice) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 
-func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesChange) (*config.Registry, error) {
-	updateSize := len(changes.pluginsIndex.updated)
+func (r *Service) handlePluginsChanges(ctx context.Context, changes *RouterChanges) (*config.Registry, error) {
+	updateSize := len(changes.pluginsIndex.updated.data)
 	if updateSize == 0 {
 		return nil, nil
 	}
@@ -64,7 +57,7 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	aChan := make(chan func() (*pluginData, error), updateSize)
 	for i := 0; i < updateSize; i++ {
 		go func(i int) {
-			r.loadPlugin(ctx, changes.pluginsIndex.updated[i], aChan)
+			r.loadPlugin(ctx, changes.pluginsIndex.updated.data[i], aChan)
 			fmt.Printf("loading finished")
 		}(i)
 	}
@@ -95,16 +88,8 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	for _, pluginChanges := range pluginsData {
 		for _, change := range pluginChanges.changes {
 			switch actual := change.(type) {
-
-			//case *map[string]reflect.Type:
-			//	registry.OverridePackageTypes(pluginChanges.packageName, *actual)
 			case *[]reflect.Type:
 				registry.AddTypes(pluginChanges.packageName, *actual)
-			//case *map[string][]reflect.Type:
-			//	registry.OverridePackageTypes(*actual)
-			//case *map[string]map[string]reflect.Type:
-			//	registry.OverridePackageNamedTypes(*actual)
-			//
 			case **config.Registry:
 				registry.MergeFrom(*actual)
 			default:
