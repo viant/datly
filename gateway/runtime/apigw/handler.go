@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway"
+	"github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/service/auth/jwt"
 	"net/http"
 	"time"
@@ -54,7 +54,7 @@ func HandleHttpRequest(writer http.ResponseWriter, apiRequest *adapter.Request) 
 		return err
 	}
 
-	service, err := gateway.SingletonWithConfig(gwayConfig, nil, authService, config.Config, nil)
+	service, err := gateway.SingletonWithConfig(gwayConfig, nil, authService, extension.Config, nil)
 	if err != nil {
 		return err
 	}

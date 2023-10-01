@@ -2,9 +2,9 @@ package parser
 
 import (
 	"fmt"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/internal/inference"
+	"github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/parsly"
@@ -273,7 +273,7 @@ func (s *Declarations) appendPredicate(declaration *Declaration, args []string, 
 	if err != nil {
 		return err
 	}
-	declaration.Predicates = append(declaration.Predicates, &config.PredicateConfig{
+	declaration.Predicates = append(declaration.Predicates, &extension.PredicateConfig{
 		Name:   args[1],
 		Group:  ctx,
 		Args:   args[2:],

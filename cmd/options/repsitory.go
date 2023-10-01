@@ -18,6 +18,7 @@ type (
 		ProjectURL           string
 		RepositoryURL        string     `short:"r" long:"repo" description:"datly rule repository location"  default:"repo/dev" `
 		ConstURL             string     `short:"O" long:"const" description:"const location" `
+		SubstitutesURL       string     `short:"S" long:"subs" description:"substitutes location" `
 		Port                 *int       `short:"P" long:"port" description:"endpoint port" `
 		APIPrefix            string     `short:"a" long:"api" description:"api prefix"  default:"/v1/api" `
 		Configs              ConfigURLs `short:"C" long:"config" description:"config url" `
@@ -80,6 +81,7 @@ func (r *Repository) Init(ctx context.Context, project string) error {
 	r.JwtVerifier.Init()
 	expandRelativeIfNeeded(&r.RepositoryURL, project)
 	expandRelativeIfNeeded(&r.ConstURL, project)
+	expandRelativeIfNeeded(&r.SubstitutesURL, project)
 	if configRepo == "" {
 		r.Configs.Append(url.Join(r.RepositoryURL, "Datly/config.json"))
 	}

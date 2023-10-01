@@ -56,12 +56,12 @@ type (
 		Plugins
 		Package
 		Module
-		AssetsURL string `short:"a" long:"assetsURL" description:"assets destination"`
-		ConstURL  string `long:"constURL" description:"path where const files are stored"`
-		Legacy    bool   `short:"l"`
-		cache     *view.Cache
-		EmbedURL  string `long:"embedURL" description:"embed url, expands template before processing"`
-		JobURL    string `short:"z" long:"joburl" description:"job url"`
+		AssetsURL     string `short:"a" long:"assetsURL" description:"assets destination"`
+		ConstURL      string `long:"constURL" description:"path where const files are stored"`
+		Legacy        bool   `short:"l"`
+		cache         *view.Cache
+		SubstituesURL string `long:"substituesURL" description:"substitues URL, expands template before processing"`
+		JobURL        string `short:"z" long:"joburl" description:"job url"`
 	}
 
 	Package struct {
@@ -529,6 +529,7 @@ func (o *Options) MergeFromInit(init *options.Init) {
 		o.Port = *init.Port
 	}
 	o.ConstURL = init.ConstURL
+	o.SubstituesURL = init.SubstitutesURL
 	o.WriteLocation = init.RepositoryURL
 	o.PartialConfigURL = init.Configs.URL()
 	if init.CacheProvider.ProviderURL != "" {
@@ -573,6 +574,7 @@ func (o *Options) BuildOption() *options.Options {
 		repo.Port = &o.Port
 		repo.RepositoryURL = o.WriteLocation
 		repo.ConstURL = o.ConstURL
+		repo.SubstitutesURL = o.SubstituesURL
 		repo.Connector.Connectors = o.Connects
 		if o.ApiURIPrefix == "" {
 			o.ApiURIPrefix = "/v1/api"

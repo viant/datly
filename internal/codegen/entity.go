@@ -4,8 +4,8 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/plugin"
+	"github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/xreflect"
 	"go/format"
@@ -23,7 +23,7 @@ var entityTemplate string
 // GenerateEntity generate golang entity
 func (t *Template) GenerateEntity(ctx context.Context, pkg string, info *plugin.Info) (string, error) {
 	pkg = info.Package(pkg)
-	if err := t.TypeDef.Init(context.Background(), config.Config.Types.Lookup); err != nil {
+	if err := t.TypeDef.Init(context.Background(), extension.Config.Types.Lookup); err != nil {
 		return "", err
 	}
 	rType := t.TypeDef.Schema.Type()

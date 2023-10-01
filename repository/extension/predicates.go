@@ -1,8 +1,8 @@
-package config
+package extension
 
 import (
 	"fmt"
-	codec2 "github.com/viant/datly/config/codec"
+	codec2 "github.com/viant/datly/repository/extension/codec"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/predicate"

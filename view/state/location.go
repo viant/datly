@@ -45,7 +45,7 @@ func (p ParamName) Validate(kind Kind) error {
 
 		return nil
 
-	case KindRequest, KindLiteral, KindRequestBody, KindQuery:
+	case KindRequest, KindConst, KindRequestBody, KindQuery:
 		return nil
 	case KindDataView, KindPath, KindHeader, KindRepeated, KindCookie, KindParam, KindState, KindOutput, KindComponent:
 		if p == "" {
@@ -98,7 +98,7 @@ func NewDataViewLocation(name string) *Location {
 }
 
 func NewConstLocation(name string) *Location {
-	return &Location{Kind: KindLiteral, Name: name}
+	return &Location{Kind: KindConst, Name: name}
 }
 
 // NewPathLocation creates a path location

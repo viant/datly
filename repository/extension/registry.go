@@ -1,4 +1,4 @@
-package config
+package extension
 
 import (
 	"github.com/viant/xdatly/codec"

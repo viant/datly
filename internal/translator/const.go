@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/viant/datly/view"
+	"github.com/viant/toolbox"
 )
 
 func (r *Repository) ensureConstants(ctx context.Context) error {
@@ -14,16 +16,33 @@ func (r *Repository) ensureConstants(ctx context.Context) error {
 		r.State.AppendViewParameters(constantResource.Parameters...)
 	}
 	if URL := r.Config.repository.ConstURL; URL != "" {
-		constants, err := r.loadConstantMap(ctx, URL)
+		constants, err := r.loadMap(ctx, URL)
 		if err != nil {
 			return err
 		}
-		r.State.AppendConstants(constants)
+		r.State.AppendConst(constants)
 	}
 	return nil
 }
 
-func (r *Repository) loadConstantMap(ctx context.Context, URL string) (map[string]interface{}, error) {
+func (r *Repository) ensureSubstitutes(ctx context.Context) error {
+	if substitutesResource, _ := r.loadDependency(ctx, "substitutes.yaml"); substitutesResource != nil {
+		r.Substitutes = substitutesResource.Substitutes
+	}
+	if URL := r.Config.repository.SubstitutesURL; URL != "" {
+		aMap, err := r.loadMap(ctx, URL)
+		if err != nil {
+			return err
+		}
+		for k, v := range aMap {
+			fragment := toolbox.AsString(v)
+			r.Substitutes = append(r.Substitutes, &view.Substitute{Key: k, Fragment: fragment})
+		}
+	}
+	return nil
+}
+
+func (r *Repository) loadMap(ctx context.Context, URL string) (map[string]interface{}, error) {
 	data, err := r.fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load const %v %w", URL, err)

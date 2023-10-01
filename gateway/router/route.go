@@ -31,18 +31,15 @@ const (
 type (
 	Routes []*Route
 	Route  struct {
-		dispatcher component.Dispatcher
-		APIKey     *APIKey `json:",omitempty"`
-
-		repository.Component
+		APIKey      *APIKey      `json:",omitempty"`
+		Cors        *Cors        `json:",omitempty"`
+		EnableAudit bool         `json:",omitempty"`
+		EnableDebug *bool        `json:",omitempty"`
+		Compression *Compression `json:",omitempty"`
 
 		Transforms marshal.Transforms `json:",omitempty"`
 
-		Cors        *Cors `json:",omitempty"`
-		EnableAudit bool  `json:",omitempty"`
-		EnableDebug *bool `json:",omitempty"`
-
-		Compression *Compression `json:",omitempty"`
+		repository.Component
 
 		_unmarshallerInterceptors marshal.Transforms
 
@@ -54,9 +51,6 @@ type (
 	}
 )
 
-func (r *Route) SetDispatcher(dispatcher component.Dispatcher) {
-	r.dispatcher = dispatcher
-}
 func (r *Route) HttpURI() string {
 	return r.URI
 }

@@ -5,7 +5,7 @@ import (
 	"github.com/francoispqt/gojay"
 	"github.com/viant/afs"
 	"github.com/viant/datly/gateway/router/marshal/json"
-	expand2 "github.com/viant/datly/service/executor/expand"
+	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/xreflect"
@@ -26,7 +26,7 @@ type (
 		Source       string `json:",omitempty" yaml:",omitempty"`
 		SourceURL    string `json:",omitempty" yaml:",omitempty"`
 		Transformer  string `json:",omitempty" yaml:",omitempty"`
-		_evaluator   *expand2.Evaluator
+		_evaluator   *expand.Evaluator
 		_unmarshaler json.UnmarshalerInto
 	}
 )
@@ -56,7 +56,7 @@ func (t *Transform) Init(ctx context.Context, fs afs.Service, lookupType xreflec
 
 	if t.Source != "" {
 		var err error
-		t._evaluator, err = expand2.NewEvaluator(t.Source, expand2.WithTypeLookup(lookupType), expand2.WithCustomContexts(t.newCtx(CustomContext{})))
+		t._evaluator, err = expand.NewEvaluator(t.Source, expand.WithTypeLookup(lookupType), expand.WithCustomContexts(t.newCtx(CustomContext{})))
 		if err != nil {
 			return err
 		}
@@ -90,15 +90,15 @@ func (t *Transform) Evaluate(request *http.Request, decoder *gojay.Decoder, fn x
 		Request: &httputils.Request{QueryParams: request.URL.Query(), Headers: request.Header},
 	}
 
-	evaluate, err := t._evaluator.Evaluate(nil, expand2.WithCustomContext(t.newCtx(ctx)))
+	evaluate, err := t._evaluator.Evaluate(nil, expand.WithCustomContext(t.newCtx(ctx)))
 	return &State{
 		Ctx:         ctx,
 		ExpandState: evaluate,
 	}, err
 }
 
-func (t *Transform) newCtx(ctx CustomContext) *expand2.Variable {
-	result := &expand2.Variable{
+func (t *Transform) newCtx(ctx CustomContext) *expand.Variable {
+	result := &expand.Variable{
 		Type:  ctxType,
 		Value: ctx,
 	}

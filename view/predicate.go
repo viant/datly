@@ -3,7 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/config"
+	"github.com/viant/datly/repository/extension"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
@@ -72,7 +72,7 @@ func (e *predicateEvaluator) Evaluate(ctx *expand.Context, state *structology.St
 	)
 }
 
-func (c *predicateCache) get(resource *Resource, predicateConfig *config.PredicateConfig, param *state.Parameter, registry *config.PredicateRegistry, stateType *structology.StateType) (codec.PredicateHandler, error) {
+func (c *predicateCache) get(resource *Resource, predicateConfig *extension.PredicateConfig, param *state.Parameter, registry *extension.PredicateRegistry, stateType *structology.StateType) (codec.PredicateHandler, error) {
 	keyName := predicateConfig.Name
 	if isCustomPredicate(keyName) {
 		keyName += strings.Join(predicateConfig.Args, ",")
@@ -90,7 +90,7 @@ func isCustomPredicate(keyName string) bool {
 	return keyName == "handler"
 }
 
-func (c *predicateCache) getEvaluatorProvider(resource *Resource, predicateConfig *config.PredicateConfig, param reflect.Type, registry *config.PredicateRegistry, aKey predicateKey, stateType *structology.StateType) (*predicateEvaluatorProvider, error) {
+func (c *predicateCache) getEvaluatorProvider(resource *Resource, predicateConfig *extension.PredicateConfig, param reflect.Type, registry *extension.PredicateRegistry, aKey predicateKey, stateType *structology.StateType) (*predicateEvaluatorProvider, error) {
 	value, ok := c.Map.Load(aKey)
 	if ok {
 		return value.(*predicateEvaluatorProvider), nil
@@ -106,7 +106,7 @@ func (c *predicateCache) getEvaluatorProvider(resource *Resource, predicateConfi
 	return p, nil
 }
 
-func (p *predicateEvaluatorProvider) new(predicateConfig *config.PredicateConfig) (codec.PredicateHandler, error) {
+func (p *predicateEvaluatorProvider) new(predicateConfig *extension.PredicateConfig) (codec.PredicateHandler, error) {
 	if p.handler != nil {
 		return p.handler, nil
 	}
@@ -134,7 +134,7 @@ func (p *predicateEvaluatorProvider) new(predicateConfig *config.PredicateConfig
 	}, nil
 }
 
-func (p *predicateEvaluatorProvider) init(resource *Resource, predicateConfig *config.PredicateConfig, paramType reflect.Type, registry *config.PredicateRegistry, stateType *structology.StateType) error {
+func (p *predicateEvaluatorProvider) init(resource *Resource, predicateConfig *extension.PredicateConfig, paramType reflect.Type, registry *extension.PredicateRegistry, stateType *structology.StateType) error {
 	lookup, err := registry.Lookup(predicateConfig.Name)
 	if err != nil {
 		return err

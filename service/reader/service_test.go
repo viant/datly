@@ -90,7 +90,7 @@ func (s *StringsCodec) ResultType(paramType reflect.Type) (reflect.Type, error) 
 	return reflect.TypeOf([]string{}), nil
 }
 
-func (s *StringsCodec) Value(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
+func (s *StringsCodec) Fragment(ctx context.Context, raw interface{}, options ...interface{}) (interface{}, error) {
 	rawString, ok := raw.(string)
 	if !ok {
 		return nil, fmt.Errorf("expected to got string but got %T", raw)

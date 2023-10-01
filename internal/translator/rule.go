@@ -16,7 +16,6 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/toolbox/data"
 	"os"
 	"path"
 	"path/filepath"
@@ -37,8 +36,6 @@ type (
 		CSV          *content.CSVConfig         `json:",omitempty"`
 		Const        map[string]interface{}     `json:",omitempty"`
 		ConstURL     string                     `json:",omitempty"`
-		EmbedURL     string                     `json:",omitempty"`
-		Embeds       data.Map                   `json:",omitempty"`
 		RequestBody  *BodyConfig                `json:",omitempty"`
 		TypeSrc      *parser.TypeImport         `json:",omitempty"`
 		ResponseBody *ResponseBodyConfig        `json:",omitempty"`
@@ -168,16 +165,10 @@ func (r *Rule) GetField() string {
 func (r *Resource) initRule(ctx context.Context, fs afs.Service, dSQL *string) error {
 	rule := r.Rule
 	rule.applyDefaults()
-	if err := r.loadData(ctx, fs, rule.EmbedURL, &rule.Embeds); err != nil {
-		r.messages.AddWarning(r.rule.RuleName(), "embeds", fmt.Sprintf("failed to load embeds : %v %w", rule.EmbedURL, err))
-	}
-	if len(rule.Embeds) > 0 {
-		*dSQL = rule.Embeds.ExpandAsText(*dSQL)
-	}
 	if err := r.loadData(ctx, fs, rule.ConstURL, &rule.Const); err != nil {
 		r.messages.AddWarning(r.rule.RuleName(), "const", fmt.Sprintf("failed to load constant : %v %w", rule.ConstURL, err))
 	}
-	r.State.AppendConstants(rule.Const)
+	r.State.AppendConst(rule.Const)
 	return nil
 }
 

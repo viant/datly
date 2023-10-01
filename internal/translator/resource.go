@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/datly/cmd/options"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/msg"
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
+	"github.com/viant/datly/repository/extension"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
@@ -96,7 +96,7 @@ func (r *Resource) ensureRegistry() *xreflect.Types {
 	if r.typeRegistry != nil {
 		return r.typeRegistry
 	}
-	r.typeRegistry = xreflect.NewTypes(xreflect.WithRegistry(config.Config.Types))
+	r.typeRegistry = xreflect.NewTypes(xreflect.WithRegistry(extension.Config.Types))
 	return r.typeRegistry
 }
 
@@ -408,7 +408,7 @@ func NewResource(rule *options.Rule, repository *options.Repository, messages *m
 	ret := &Resource{Rule: NewRule(), rule: rule, repository: repository, messages: messages}
 	ret.Rule.Output = &ret.Rule.Route.Output
 	ret.Resource.SetTypes(xreflect.NewTypes(
-		xreflect.WithRegistry(config.Config.Types),
+		xreflect.WithRegistry(extension.Config.Types),
 		xreflect.WithPackagePath(rule.ModuleLocation)))
 	return ret
 }

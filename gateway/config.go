@@ -71,7 +71,6 @@ func (c *Config) Validate() error {
 	if c.RouteURL == "" {
 		return fmt.Errorf("RouteURL was empty")
 	}
-
 	return nil
 }
 

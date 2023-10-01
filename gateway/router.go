@@ -368,7 +368,7 @@ func (r *Router) newMatcher(routers []*router.Router) (*matcher.Matcher, []*Rout
 			//	for _, key := range apiKeys {
 			//		mapKey := apiKeyMapKey{
 			//			header: key.Header,
-			//			value:  key.Value,
+			//			value:  key.Fragment,
 			//		}
 			//		ok := jobKeysMap[mapKey]
 			//		if !ok {

@@ -427,7 +427,7 @@ func (g *generator) appendBuiltInParam(params *[]*openapi3.Parameter, route *Rou
 }
 
 func (g *generator) convertParam(route *Route, param *state.Parameter, description string) (*openapi3.Parameter, bool, error) {
-	if param.In.Kind == state.KindDataView || param.In.Kind == state.KindRequestBody || param.In.Kind == state.KindEnvironment || param.In.Kind == state.KindLiteral {
+	if param.In.Kind == state.KindDataView || param.In.Kind == state.KindRequestBody || param.In.Kind == state.KindEnvironment || param.In.Kind == state.KindConst {
 		return nil, false, nil
 	}
 

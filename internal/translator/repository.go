@@ -29,6 +29,7 @@ type (
 		MessageBuses    []*mbus.Resource
 		Messages        msg.Messages
 		Files           asset.Files
+		Substitutes     view.Substitutes
 	}
 )
 
@@ -77,6 +78,9 @@ func (r *Repository) PersistConfig() error {
 	if err = r.persistConstants(); err != nil {
 		return err
 	}
+	if err = r.persistSubstitutes(); err != nil {
+		return err
+	}
 	if err = r.persistCache(); err != nil {
 		return err
 	}
@@ -84,9 +88,23 @@ func (r *Repository) PersistConfig() error {
 	return nil
 }
 
+func (r *Repository) persistSubstitutes() error {
+	if len(r.Substitutes) == 0 {
+		return nil
+	}
+	cfg := r.Config
+	resource := view.Resource{Substitutes: r.Substitutes}
+	content, err := asset.EncodeYAML(resource)
+	if err != nil {
+		return err
+	}
+	r.Files.Append(asset.NewFile(url.Join(cfg.DependencyURL, "substitutes.yaml"), string(content)))
+	return nil
+}
+
 func (r *Repository) persistConstants() error {
 	cfg := r.Config.Config
-	literals := r.State.FilterByKind(state.KindLiteral)
+	literals := r.State.FilterByKind(state.KindConst)
 	if len(literals) == 0 {
 		return nil
 	}
@@ -119,10 +137,12 @@ func (r *Repository) ensureDependencies(ctx context.Context) error {
 	if err := r.ensureConstants(ctx); err != nil {
 		return err
 	}
+	if err := r.ensureSubstitutes(ctx); err != nil {
+		return err
+	}
 	if err := r.ensureCache(ctx); err != nil {
 		return err
 	}
-
 	return nil
 }
 

@@ -10,8 +10,8 @@ import (
 	_ "github.com/viant/afsc/s3"
 	_ "github.com/viant/bigquery"
 	_ "github.com/viant/cloudless/async/mbus/aws"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway"
+	"github.com/viant/datly/repository/extension"
 	_ "github.com/viant/dyndb"
 	_ "github.com/viant/scy/kms/blowfish"
 	_ "github.com/viant/sqlx/metadata/product/bigquery"
@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-//Handle handles datly request
+// Handle handles datly request
 func Handle(w http.ResponseWriter, r *http.Request) {
 	err := handleRequest(w, r)
 	if err != nil {
@@ -31,7 +31,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//GCF doesn't include the function name in the URL segments
+// GCF doesn't include the function name in the URL segments
 func handleRequest(w http.ResponseWriter, r *http.Request) error {
 	now := time.Now()
 	configURL := os.Getenv("CONFIG_URL")
@@ -39,7 +39,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("config was emrty")
 	}
 
-	service, err := gateway.Singleton(configURL, nil, nil, config.Config, nil)
+	service, err := gateway.Singleton(configURL, nil, nil, extension.Config, nil)
 	if err != nil {
 		return err
 	}

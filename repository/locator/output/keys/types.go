@@ -94,7 +94,7 @@ const (
 )
 
 var Types = map[string]reflect.Type{
-	//Component/View related keys
+	//component/View related keys
 	Error:           xreflect.StringType,
 	Status:          reflect.TypeOf(response.Status{}),
 	SQL:             xreflect.StringType,

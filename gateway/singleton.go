@@ -5,7 +5,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/config"
+	"github.com/viant/datly/repository/extension"
 	"github.com/viant/gmetric"
 	"net/http"
 	"os"
@@ -15,7 +15,7 @@ import (
 var service *Service
 var once sync.Once
 
-func Singleton(configURL string, statusHandler http.Handler, authorizer Authorizer, registry *config.Registry, metric *gmetric.Service) (*Service, error) {
+func Singleton(configURL string, statusHandler http.Handler, authorizer Authorizer, registry *extension.Registry, metric *gmetric.Service) (*Service, error) {
 	var err error
 	fs := NewFs(configURL)
 	once.Do(func() {
@@ -41,7 +41,7 @@ func NewFs(configURL string) afs.Service {
 	return afs.New()
 }
 
-func SingletonWithConfig(config *Config, statusHandler http.Handler, authorizer Authorizer, registry *config.Registry, metric *gmetric.Service) (*Service, error) {
+func SingletonWithConfig(config *Config, statusHandler http.Handler, authorizer Authorizer, registry *extension.Registry, metric *gmetric.Service) (*Service, error) {
 	var err error
 
 	once.Do(func() {

@@ -18,7 +18,6 @@ import (
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
-	"github.com/viant/datly/view/state/kind/locator"
 	haHttp "github.com/viant/xdatly/handler/http"
 	"github.com/viant/xdatly/handler/response"
 	"io"
@@ -473,7 +472,7 @@ func (r *Router) Resource() *Resource {
 func (r *Router) payloadReader(ctx context.Context, request *http.Request, writer http.ResponseWriter, route *Route) (PayloadReader, error) {
 	unmarshal := route.UnmarshalFunc(request)
 
-	locatorOptions := append(route.LocatorOptions(request, unmarshal), locator.WithDispatcher(route.dispatcher))
+	locatorOptions := append(route.Component.LocatorOptions(request, unmarshal))
 	aSession := session.New(route.View, session.WithLocatorOptions(locatorOptions...))
 	err := aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindQuery, state.KindRequestBody)
 	if err != nil {
@@ -502,6 +501,7 @@ func (r *Router) payloadReader(ctx context.Context, request *http.Request, write
 		//WithHeader
 		return r.compressIfNeeded(data, route, WithHeader("Content-Type", contentType))
 	}
+
 	return r.marshalCustomOutput(aResponse, route)
 }
 

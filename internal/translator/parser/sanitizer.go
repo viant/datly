@@ -100,7 +100,7 @@ func sanitizeParameter(expression *Expression, raw string, iterator *iterables, 
 	}
 
 	if param := iterator.State.Lookup(paramName); param != nil {
-		if param.In != nil && param.In.Kind == state.KindLiteral {
+		if param.In != nil && param.In.Kind == state.KindConst {
 			return strings.Replace(raw, "$", fmt.Sprintf("$%v.", keywords.ParamsKey), 1)
 		}
 	}

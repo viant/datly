@@ -9,10 +9,10 @@ import (
 	"github.com/viant/afs/option"
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/gateway/router/openapi3"
 	"github.com/viant/datly/logger"
+	extension2 "github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
@@ -134,7 +134,7 @@ func (r *Resource) Init(ctx context.Context) error {
 		columnsCache = r.ColumnsCache.Items
 	}
 
-	if err := r.Resource.Init(ctx, r.Resource.TypeRegistry(), r._codecs, columnsCache, transforms, config.Config.Predicates); err != nil {
+	if err := r.Resource.Init(ctx, r.Resource.TypeRegistry(), r._codecs, columnsCache, transforms, extension2.Config.Predicates); err != nil {
 		return err
 	}
 
@@ -212,7 +212,7 @@ func NewResourceFromURL(ctx context.Context, fs afs.Service, URL string, useColu
 }
 
 func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCache bool, options ...interface{}) (*Resource, error) {
-	visitors, types, resources, metrics := readOptions(options)
+	codecs, types, resources, metrics := readOptions(options)
 	resourceData, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, err
@@ -238,7 +238,7 @@ func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCach
 		return nil, err
 	}
 	resource.SourceURL = URL
-	resource._codecs = visitors
+	resource._codecs = codecs
 	resource.Resource.Metrics = metrics
 	resource.Resource.SourceURL = URL
 	resource.Resource.SetTypes(types)
@@ -263,7 +263,7 @@ func readOptions(options []interface{}) (*codec.Registry, *xreflect.Types, map[s
 			resources = actual
 		case *view.Metrics:
 			metrics = actual
-		case *config.Registry:
+		case *extension2.Registry:
 			types = actual.Types
 			codecRegistry = actual.Codecs
 		}
@@ -276,7 +276,7 @@ func readOptions(options []interface{}) (*codec.Registry, *xreflect.Types, map[s
 		codecRegistry = codec.NewRegistry()
 	}
 	if types == nil {
-		types = xreflect.NewTypes(xreflect.WithRegistry(config.Config.Types))
+		types = xreflect.NewTypes(xreflect.WithRegistry(extension2.Config.Types))
 	}
 	return codecRegistry, types, resources, metrics
 }

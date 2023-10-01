@@ -2,7 +2,7 @@ package router
 
 import (
 	"context"
-	"github.com/viant/datly/config"
+	"github.com/viant/datly/repository/extension"
 	"github.com/viant/scy/auth/jwt"
 	"net/http"
 	"strconv"
@@ -25,7 +25,7 @@ func Sanitize(request *http.Request, route *Route, headers http.Header, response
 
 func obfuscateAuthorization(request *http.Request, response http.ResponseWriter, authorization string, headers http.Header, route *Route) {
 	if response != nil {
-		if jwtCodec, _ := config.Config.LookupCodec(config.CodecKeyJwtClaim); jwtCodec != nil {
+		if jwtCodec, _ := extension.Config.LookupCodec(extension.CodecKeyJwtClaim); jwtCodec != nil {
 			if claim, _ := jwtCodec.Instance.Value(context.TODO(), authorization); claim != nil {
 				if jwtClaim, ok := claim.(*jwt.Claims); ok && jwtClaim != nil {
 					headers.Set("User-ID", strconv.Itoa(jwtClaim.UserID))

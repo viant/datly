@@ -3,7 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
-	codec2 "github.com/viant/datly/config/codec"
+	codec2 "github.com/viant/datly/repository/extension/codec"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/option"
 	"github.com/viant/structology"

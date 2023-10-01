@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/repository/async"
 	"github.com/viant/datly/repository/component"
 	"github.com/viant/datly/repository/content"
+	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -17,6 +18,7 @@ import (
 // Component represents abstract API view/handler based component
 type (
 	Component struct {
+		version.Version
 		component.Path
 		component.Contract
 		content.Content
@@ -26,8 +28,14 @@ type (
 		Handler        *handler.Handler `json:",omitempty"`
 		indexedView    view.NamedViews
 		SourceURL      string
+		dispatcher     component.Dispatcher
 	}
 )
+
+// SetDispatcher sets components dispatcher
+func (c *Component) SetDispatcher(dispatcher component.Dispatcher) {
+	c.dispatcher = dispatcher
+}
 
 func (c *Component) Init(ctx context.Context, resource *view.Resource) (err error) {
 	if c.Handler != nil {
@@ -114,6 +122,9 @@ func (c *Component) Exclusion(state *view.State) []*json.FilterEntry {
 func (c *Component) LocatorOptions(request *http.Request, unmarshal shared.Unmarshal) []locator.Option {
 	var result []locator.Option
 	result = append(result, locator.WithUnmarshal(unmarshal))
+	if c.dispatcher != nil {
+		result = append(result, locator.WithDispatcher(c.dispatcher))
+	}
 	result = append(result, locator.WithRequest(request))
 	result = append(result, locator.WithURIPattern(c.URI))
 	result = append(result, locator.WithIOConfig(c.IOConfig()))

@@ -5,7 +5,7 @@ import (
 )
 
 // Kind represents parameter location
-// Parameter value can be retrieved from the i.e. HTTP Header, Path Variable or using other View
+// Parameter value can be retrieved from the i.e. HTTP Header, path Variable or using other View
 type Kind string
 
 const (
@@ -16,7 +16,7 @@ const (
 	KindCookie      Kind = "cookie"
 	KindRequestBody Kind = "body"
 	KindEnvironment Kind = "env"
-	KindLiteral     Kind = "literal"
+	KindConst       Kind = "const"
 	KindParam       Kind = "param"
 	KindRequest     Kind = "http_request"
 	KindGroup       Kind = "group"
@@ -31,7 +31,7 @@ const (
 // Validate checks if Kind is valid.
 func (k Kind) Validate() error {
 	switch k {
-	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindLiteral, KindParam, KindRequest, KindRepeated, KindGroup, KindOutput, KindState, KindComponent:
+	case KindDataView, KindPath, KindQuery, KindHeader, KindCookie, KindRequestBody, KindEnvironment, KindConst, KindParam, KindRequest, KindRepeated, KindGroup, KindOutput, KindState, KindComponent:
 		return nil
 	}
 
@@ -54,7 +54,7 @@ func (k Kind) Ordinal() int {
 		return 5
 	case KindEnvironment:
 		return 6
-	case KindLiteral:
+	case KindConst:
 		return 7
 	case KindParam:
 		return 8

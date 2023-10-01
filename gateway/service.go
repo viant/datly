@@ -12,13 +12,13 @@ import (
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/cmd/env"
+	"github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/service/auth/secret"
 	"github.com/viant/datly/utils/httputils"
 	pbuild "github.com/viant/pgo/build"
 	async2 "github.com/viant/xdatly/handler/async"
 	"sync/atomic"
 
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -56,7 +56,7 @@ type (
 		changeSession      *Session
 		JWTSigner          *signer.Service
 		mux                sync.RWMutex
-		configRegistry     *config.Registry
+		configRegistry     *extension.Registry
 		pluginManager      *manager.Service
 		statusHandler      http.Handler
 		authorizer         Authorizer
@@ -111,7 +111,7 @@ func (r *Service) Close() error {
 }
 
 // New creates gateway Service. It is important to call Service.Close before Service got Garbage collected.
-func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, authorizer Authorizer, registry *config.Registry, metrics *gmetric.Service) (*Service, error) {
+func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, authorizer Authorizer, registry *extension.Registry, metrics *gmetric.Service) (*Service, error) {
 	start := time.Now()
 	if err := aConfig.Init(); err != nil {
 		return nil, err
@@ -126,7 +126,7 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 	if err != nil {
 		return nil, err
 	}
-	syncTime := time.Duration(aConfig.SyncFrequencyMs) * time.Millisecond
+	syncFrequency := time.Duration(aConfig.SyncFrequencyMs) * time.Millisecond
 	mainRouter, err := NewRouter(map[string]*router.Router{}, aConfig, metrics, statusHandler, authorizer, nil)
 	if err != nil {
 		return nil, err
@@ -143,22 +143,22 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 		routeTracker: NewNotifier(
 			aConfig.RouteURL,
 			fs,
-			syncTime,
+			syncFrequency,
 		),
 		dependencyTracker: NewNotifier(
 			aConfig.DependencyURL,
 			fs,
-			syncTime,
+			syncFrequency,
 		),
 		pluginTracker: NewNotifier(
 			aConfig.PluginsURL,
 			fs,
-			syncTime,
+			syncFrequency,
 		),
 		assetsTracker: NewNotifier(
 			aConfig.AssetsURL,
 			fs,
-			syncTime,
+			syncFrequency,
 		),
 		routersIndex:  map[string]*router.Router{},
 		mainRouter:    mainRouter,
@@ -415,11 +415,11 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (*router
 
 func (r *Service) reloadResources(ctx context.Context, fs afs.Service, changes *ResourcesChange) (map[string]*view.Resource, error) {
 	result := map[string]*view.Resource{}
+
 	for resourceURL, dataResource := range r.dataResourcesIndex {
 		if changes.resourcesIndex.Changed(dataResource.SourceURL) {
 			continue
 		}
-
 		result[resourceURL] = r.dataResourcesIndex[resourceURL]
 	}
 
@@ -428,7 +428,20 @@ func (r *Service) reloadResources(ctx context.Context, fs afs.Service, changes *
 	}
 
 	resourceChan := make(chan func() (*view.Resource, string, error), len(changes.resourcesIndex.updatedIndex))
-	channelSize := r.populateResourceChan(ctx, resourceChan, fs, changes.resourcesIndex.updatedIndex)
+
+	for resourceURL := range changes.resourcesIndex.updatedIndex {
+		go func(URL string) {
+			newResource, err := r.loadDependencyResource(URL, ctx, fs)
+
+			resourceChan <- func() (*view.Resource, string, error) {
+				return newResource, r.updateResourceKey(URL), err
+			}
+		}(resourceURL)
+	}
+
+	channelSize := len(changes.resourcesIndex.updatedIndex)
+
+	///r.populateResourceChan(ctx, resourceChan, fs, changes.resourcesIndex.updatedIndex)
 	counter := 0
 	var errors []error
 	for fn := range resourceChan {

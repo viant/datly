@@ -272,9 +272,10 @@ func (v *View) buildRelations(parentNamespace *Viewlet, rule *Rule) error {
 	return nil
 }
 
-func (v *View) GenerateFiles(baseURL string, ruleName string, files *asset.Files) {
+func (v *View) GenerateFiles(baseURL string, ruleName string, files *asset.Files, substitutes view.Substitutes) {
 	if v.View.Template.Source != "" {
-		file := asset.NewFile(path.Join(baseURL, ruleName, v.Namespace+".sql"), v.View.Template.Source)
+		source := substitutes.ReverseReplace(v.View.Template.Source)
+		file := asset.NewFile(path.Join(baseURL, ruleName, v.Namespace+".sql"), source)
 		files.Append(file)
 		v.View.Template.SourceURL = path.Join(ruleName, v.Namespace+".sql")
 		v.View.Template.Source = ""

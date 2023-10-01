@@ -3,7 +3,7 @@ package state
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/config"
+	"github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/structology"
@@ -16,10 +16,10 @@ import (
 type (
 	Parameter struct {
 		shared.Reference
-		Group      Parameters                `json:",omitempty"`
-		Repeated   Parameters                `json:",omitempty" yaml:"Repeated"`
-		Predicates []*config.PredicateConfig `json:",omitempty" yaml:"Predicates"`
-		Name       string                    `json:",omitempty" yaml:"Name"`
+		Group      Parameters                   `json:",omitempty"`
+		Repeated   Parameters                   `json:",omitempty" yaml:"Repeated"`
+		Predicates []*extension.PredicateConfig `json:",omitempty" yaml:"Predicates"`
+		Name       string                       `json:",omitempty" yaml:"Name"`
 
 		In                *Location   `json:",omitempty" yaml:"In" `
 		Required          *bool       `json:",omitempty"`
@@ -88,7 +88,7 @@ func (p *Parameter) Init(ctx context.Context, resource Resource) error {
 
 	p.In.Kind = Kind(strings.ToLower(string(p.In.Kind)))
 
-	if p.In.Kind == KindLiteral && p.Const == nil {
+	if p.In.Kind == KindConst && p.Const == nil {
 		return fmt.Errorf("param %v value was not set", p.Name)
 	}
 
@@ -236,7 +236,7 @@ func (p *Parameter) initSchema(resource Resource) error {
 	}
 
 	if p.Schema == nil {
-		if p.In.Kind == KindLiteral {
+		if p.In.Kind == KindConst {
 			p.Schema = NewSchema(reflect.TypeOf(p.Const))
 		} else if p.In.Kind == KindRequest {
 			p.Schema = NewSchema(reflect.TypeOf(&http.Request{}))
@@ -249,7 +249,7 @@ func (p *Parameter) initSchema(resource Resource) error {
 		return nil
 	}
 
-	if p.In.Kind == KindLiteral {
+	if p.In.Kind == KindConst {
 		p.Schema = NewSchema(reflect.TypeOf(p.Const))
 		return nil
 	}

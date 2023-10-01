@@ -3,10 +3,10 @@ package standalone
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/gateway/runtime/standalone/handler"
+	"github.com/viant/datly/repository/extension"
 	"github.com/viant/gmetric"
 	"log"
 	"net/http"
@@ -58,7 +58,7 @@ func NewWithAuth(gwayConfig *Config, auth gateway.Authorizer) (*Server, error) {
 		gwayConfig.Config,
 		handler.NewStatus(gwayConfig.Version, &gwayConfig.Meta),
 		auth,
-		config.Config,
+		extension.Config,
 		metric,
 	)
 

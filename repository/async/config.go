@@ -314,7 +314,7 @@ func PrincipalSubject(ctx context.Context, route *Route, request *RequestParams)
 
 	value, err := request.ExtractHttpParam(ctx, principal.parameter)
 	if err == nil && principal.accessor != nil {
-		value, _ = principal.accessor.Value(value)
+		value, _ = principal.accessor.Fragment(value)
 	} else {
 		return nil, nil
 	}

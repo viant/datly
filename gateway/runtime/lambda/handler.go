@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/router/proxy"
 	"github.com/viant/datly/gateway/runtime/lambda/adapter"
+	"github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/service/auth/jwt"
 	async2 "github.com/viant/xdatly/handler/async"
 	"net/http"
@@ -74,7 +74,7 @@ func prepareHandler(writer http.ResponseWriter) (*gateway.Service, error) {
 		return nil, err
 	}
 
-	service, err := gateway.SingletonWithConfig(gwayConfig, nil, authorizer, config.Config, nil)
+	service, err := gateway.SingletonWithConfig(gwayConfig, nil, authorizer, extension.Config, nil)
 	if err != nil {
 		return nil, err
 	}

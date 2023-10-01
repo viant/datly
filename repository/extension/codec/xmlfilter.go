@@ -2,7 +2,7 @@ package codec
 
 import (
 	"context"
-	"github.com/viant/datly/config/codec/xmlfilter"
+	"github.com/viant/datly/repository/extension/codec/xmlfilter"
 	"github.com/viant/xdatly/codec"
 	"reflect"
 )

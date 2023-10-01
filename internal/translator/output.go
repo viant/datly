@@ -3,15 +3,15 @@ package translator
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/config"
-	"github.com/viant/datly/config/codec"
-	"github.com/viant/datly/config/codec/jsontab"
-	"github.com/viant/datly/config/codec/transfer"
-	"github.com/viant/datly/config/codec/xmlfilter"
-	"github.com/viant/datly/config/codec/xmltab"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/extension"
+	codec2 "github.com/viant/datly/repository/extension/codec"
+	"github.com/viant/datly/repository/extension/codec/jsontab"
+	"github.com/viant/datly/repository/extension/codec/transfer"
+	"github.com/viant/datly/repository/extension/codec/xmlfilter"
+	"github.com/viant/datly/repository/extension/codec/xmltab"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
@@ -182,7 +182,7 @@ func (s *Service) newTypeRegistry(resource *Resource, rootViewlet *Viewlet) *xre
 		return rootViewlet.typeRegistry
 	}
 
-	types := xreflect.NewTypes(xreflect.WithRegistry(config.Config.Types))
+	types := xreflect.NewTypes(xreflect.WithRegistry(extension.Config.Types))
 	for _, aType := range resource.Resource.Types {
 		_ = types.Register(aType.Name, xreflect.WithTypeDefinition(aType.DataType))
 	}
@@ -196,7 +196,7 @@ func (s *Service) newTypeRegistry(resource *Resource, rootViewlet *Viewlet) *xre
 
 func (s *Service) adjustTransferOutputType(parameter *state.Parameter, types *xreflect.Types, resource *Resource) error {
 
-	if output := parameter.Output; output != nil && output.Name == codec.KeyTransfer {
+	if output := parameter.Output; output != nil && output.Name == codec2.KeyTransfer {
 		destTypeName := output.Args[0]
 		dest, err := types.Lookup(destTypeName)
 		if err != nil {
@@ -246,7 +246,7 @@ func (s *Service) adjustTransferCodecType(resource *Resource, parameter *state.P
 			outputType = reflect.TypeOf(&jsontab.Result{})
 		}
 		switch tag.Codec {
-		case codec.KeyFilters:
+		case codec2.KeyFilters:
 			outputType = reflect.TypeOf(predicate.NamedFilters{})
 		}
 

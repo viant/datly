@@ -6,13 +6,13 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/codegen"
 	"github.com/viant/datly/internal/codegen/ast"
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/plugin"
 	"github.com/viant/datly/internal/translator"
+	"github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/toolbox/format"
@@ -124,7 +124,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 		*dSQL = origin
 		return nil
 	}
-	state, err := inference.NewState(ruleOptions.GoModuleLocation(), rule.StateType, config.Config.Types)
+	state, err := inference.NewState(ruleOptions.GoModuleLocation(), rule.StateType, extension.Config.Types)
 	if err != nil {
 		return err
 	}

@@ -7,8 +7,8 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/router"
+	extension2 "github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/service/auth/jwt"
 	"github.com/viant/datly/service/auth/mock"
 	executor "github.com/viant/datly/service/executor"
@@ -42,7 +42,7 @@ type (
 		config         *Config
 		connector      *view.Connector
 		types          *xreflect.Types
-		registry       *config.Registry
+		registry       *extension2.Registry
 		fs             afs.Service
 	}
 
@@ -226,9 +226,9 @@ func (s *Service) LoadRoute(ctx context.Context, URL string, types ...*view.Pack
 	return nil
 }
 
-func (s *Service) initTypes(types []*view.PackagedType) (*xreflect.Types, *config.Registry) {
-	viewTypes := xreflect.NewTypes(xreflect.WithRegistry(config.Config.Types))
-	aConfig := config.Config
+func (s *Service) initTypes(types []*view.PackagedType) (*xreflect.Types, *extension2.Registry) {
+	viewTypes := xreflect.NewTypes(xreflect.WithRegistry(extension2.Config.Types))
+	aConfig := extension2.Config
 	for _, pType := range types {
 		_ = viewTypes.Register(pType.Name, xreflect.WithPackage(pType.Package), xreflect.WithReflectType(pType.Type))
 	}
@@ -284,8 +284,8 @@ func New(cfg *Config) *Service {
 		ret.jwtVerifier = verifier.New(cfg.JWTValidator)
 		if ret.jwtVerifier != nil {
 			if err := ret.jwtVerifier.Init(context.Background()); err == nil {
-				config.Config.RegisterCodec(
-					config.CodecKeyJwtClaim, jwt.New(ret.jwtVerifier.VerifyClaims), time.Time{})
+				extension2.Config.RegisterCodec(
+					extension2.CodecKeyJwtClaim, jwt.New(ret.jwtVerifier.VerifyClaims), time.Time{})
 			}
 		}
 	}

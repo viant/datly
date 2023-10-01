@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	dconfig "github.com/viant/datly/config"
+	dconfig "github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/sqlparser"

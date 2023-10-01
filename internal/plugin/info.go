@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/config"
+	"github.com/viant/datly/repository/extension"
 	"github.com/viant/xreflect"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/packages"
@@ -178,7 +178,7 @@ func (i *Info) detectLocalMethods(ctx context.Context) {
 	if !i.IsStandalone() {
 		return
 	}
-	dirTypes, err := xreflect.ParseTypes(i.URL, xreflect.WithTypeLookup(config.Config.Types.Lookup))
+	dirTypes, err := xreflect.ParseTypes(i.URL, xreflect.WithTypeLookup(extension.Config.Types.Lookup))
 	if err != nil {
 		return
 	}

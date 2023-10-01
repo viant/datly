@@ -2,7 +2,7 @@ package inference
 
 import (
 	"fmt"
-	"github.com/viant/datly/config"
+	"github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/keywords"
@@ -111,7 +111,7 @@ func (s *State) AppendViewParameters(params ...*state.Parameter) {
 		*s = append(*s, &Parameter{Parameter: *params[i], Explicit: true})
 	}
 }
-func (s *State) AppendConstants(constants map[string]interface{}) {
+func (s *State) AppendConst(constants map[string]interface{}) {
 	for paramName, paramValue := range constants {
 		s.Append(NewConstParameter(paramName, paramValue))
 	}
@@ -234,7 +234,7 @@ func (s State) Explicit() State {
 
 func (s State) Expand(text string) string {
 	expander := data.Map{}
-	if parameters := s.FilterByKind(state.KindLiteral); len(parameters) > 0 {
+	if parameters := s.FilterByKind(state.KindConst); len(parameters) > 0 {
 		for _, literal := range parameters {
 			expander[literal.Name] = literal.Const
 		}
@@ -340,7 +340,7 @@ func (s State) ReflectType(pkgPath string, lookupType xreflect.LookupType) (refl
 }
 
 func (s State) EnsureReflectTypes(modulePath string) error {
-	typeRegistry := xreflect.NewTypes(xreflect.WithPackagePath(modulePath), xreflect.WithRegistry(config.Config.Types))
+	typeRegistry := xreflect.NewTypes(xreflect.WithPackagePath(modulePath), xreflect.WithRegistry(extension.Config.Types))
 	for _, param := range s {
 		if param.Schema == nil {
 			continue

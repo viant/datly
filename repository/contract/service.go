@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/afs/url"
 	"github.com/viant/cloudless/gateway/matcher"
-	"github.com/viant/datly/config"
+	"github.com/viant/datly/repository/extension"
 	"github.com/viant/xreflect"
 	"path"
 )
@@ -65,7 +65,7 @@ func (s *Service) Signature(method, URI string) (*Signature, error) {
 	}
 	contract := aMatch.header.Contracts[aMatch.index]
 
-	typeRegistry := xreflect.NewTypes(xreflect.WithRegistry(config.Config.Types))
+	typeRegistry := xreflect.NewTypes(xreflect.WithRegistry(extension.Config.Types))
 	for _, typeDef := range aMatch.header.Resource.Types {
 		typeRegistry.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType))
 	}

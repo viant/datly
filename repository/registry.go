@@ -1,9 +1,11 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 	"github.com/viant/cloudless/gateway/matcher"
 	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/version"
 	"sync"
 )
 
@@ -11,17 +13,19 @@ type (
 	Registry struct {
 		apiPrefix string
 		mux       sync.RWMutex
-		index     map[string]*entry
+		index     map[string]*Provider
 		entries
 		matcher *matcher.Matcher
 	}
 
-	entry struct {
-		component.Path
-		Component *Component
+	Provider struct {
+		path          component.Path
+		control       version.Control
+		loadComponent func(ctx context.Context) (*Component, error)
+		component     *Component
 	}
 
-	entries []*entry
+	entries []*Provider
 )
 
 func (e entries) matchables() []matcher.Matchable {
@@ -36,12 +40,12 @@ func indexKey(path *component.Path) string {
 	return path.Method + ":" + path.URI
 }
 
-func (r *entry) URI() string {
-	return r.Path.URI
+func (r *Provider) URI() string {
+	return r.path.URI
 }
 
-func (r *entry) Namespaces() []string {
-	return []string{r.Path.Method}
+func (r *Provider) Namespaces() []string {
+	return []string{r.path.Method}
 }
 
 func (r *Registry) Lookup(path *component.Path) (*Component, error) {
@@ -51,17 +55,17 @@ func (r *Registry) Lookup(path *component.Path) (*Component, error) {
 	key := indexKey(path)
 	ret, ok := r.index[key]
 	if ok {
-		return ret.Component, nil
+		return ret.component, nil
 	}
 	matchable, err := r.matcher.MatchOne(path.Method, path.URI)
 	if err != nil {
 		return nil, err
 	}
-	result, ok := matchable.(*entry)
+	result, ok := matchable.(*Provider)
 	if !ok {
 		return nil, fmt.Errorf("expected: %T, but had: %T", result, matchable)
 	}
-	return result.Component, nil
+	return result.component, nil
 }
 
 func (r *Registry) Register(components ...*Component) {
@@ -72,12 +76,12 @@ func (r *Registry) Register(components ...*Component) {
 		aComponent := components[i]
 		key := indexKey(&aComponent.Path)
 		if prev, ok := r.index[key]; ok {
-			prev.Component = aComponent
+			prev.component = aComponent
 			continue
 		}
-		anEntry := &entry{
-			Path:      component.Path{Method: aComponent.Method, URI: aComponent.URI},
-			Component: aComponent,
+		anEntry := &Provider{
+			path:      component.Path{Method: aComponent.Method, URI: aComponent.URI},
+			component: aComponent,
 		}
 		r.index[key] = anEntry
 		r.entries = append(r.entries, anEntry)
@@ -89,5 +93,5 @@ func (r *Registry) Register(components ...*Component) {
 }
 
 func NewRegistry(apiPrefix string) *Registry {
-	return &Registry{index: map[string]*entry{}, apiPrefix: apiPrefix}
+	return &Registry{index: map[string]*Provider{}, apiPrefix: apiPrefix}
 }

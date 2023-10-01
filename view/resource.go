@@ -8,9 +8,9 @@ import (
 	"github.com/viant/afs/storage"
 	"github.com/viant/afs/url"
 	"github.com/viant/cloudless/async/mbus"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/logger"
+	extension "github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state"
@@ -57,9 +57,11 @@ type Resource struct {
 	ModTime time.Time `json:",omitempty"`
 
 	Predicates  []*predicate.Template
-	_predicates *config.PredicateRegistry
+	_predicates *extension.PredicateRegistry
 
 	_columnsCache map[string]Columns
+
+	Substitutes Substitutes
 
 	ExpandSourceURL string
 	_expandMap      rdata.Map
@@ -86,7 +88,12 @@ func (r *Resource) SetFs(fs afs.Service) {
 	r.fs = fs
 }
 func (r *Resource) LoadText(ctx context.Context, URL string) (string, error) {
-	return r.loadText(ctx, URL, true)
+	data, err := r.loadText(ctx, URL, true)
+	if err != nil {
+		return "", err
+	}
+	data = r.Substitutes.Replace(data)
+	return data, nil
 }
 
 func (r *Resource) loadText(ctx context.Context, URL string, expand bool) (string, error) {
@@ -140,6 +147,7 @@ func (r *Resource) LoadObject(ctx context.Context, URL string) (storage.Object, 
 }
 
 func (r *Resource) MergeFrom(resource *Resource, types *xreflect.Types) {
+	r.mergeSubstitutes(resource)
 	r.mergeViews(resource)
 	r.mergeParameters(resource)
 	r.mergeTypes(resource, types)
@@ -147,6 +155,13 @@ func (r *Resource) MergeFrom(resource *Resource, types *xreflect.Types) {
 	r.mergeMessageBuses(resource)
 	r.mergeProviders(resource)
 	r.mergeTemplates(resource)
+}
+
+func (r *Resource) mergeSubstitutes(resource *Resource) {
+	if len(resource.Substitutes) == 0 {
+		return
+	}
+	r.Substitutes = resource.Substitutes
 }
 
 func (r *Resource) mergeViews(resource *Resource) {
@@ -291,7 +306,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	types, codecs, cache, transforms, predicates := r.readOptions(options)
 	r.indexProviders()
 	if codecs == nil {
-		codecs = config.Config.Codecs
+		codecs = extension.Config.Codecs
 	}
 	r.codecs = codecs
 	r._columnsCache = cache
@@ -343,12 +358,12 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	return nil
 }
 
-func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, *codec.Registry, map[string]Columns, marshal.TransformIndex, *config.PredicateRegistry) {
+func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, *codec.Registry, map[string]Columns, marshal.TransformIndex, *extension.PredicateRegistry) {
 	var types *xreflect.Types
 	var visitors = codec.NewRegistry()
 	var cache map[string]Columns
 	var transformsIndex marshal.TransformIndex
-	var predicatesRegistry *config.PredicateRegistry
+	var predicatesRegistry *extension.PredicateRegistry
 
 	for _, option := range options {
 		if option == nil {
@@ -363,9 +378,9 @@ func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, *codec.R
 			types = actual
 		case marshal.TransformIndex:
 			transformsIndex = actual
-		case *config.PredicateRegistry:
+		case *extension.PredicateRegistry:
 			predicatesRegistry = actual
-		case config.PredicateRegistry:
+		case extension.PredicateRegistry:
 			predicatesRegistry = &actual
 		}
 	}
@@ -387,12 +402,12 @@ func (r *Resource) ViewSchema(ctx context.Context, name string) (*state.Schema, 
 }
 
 // NewResourceFromURL loads and initializes Resource from file .yaml
-func NewResourceFromURL(ctx context.Context, url string, types *xreflect.Types, visitors *codec.Registry) (*Resource, error) {
+func NewResourceFromURL(ctx context.Context, url string, types *xreflect.Types, codecs *codec.Registry) (*Resource, error) {
 	resource, err := LoadResourceFromURL(ctx, url, afs.New())
 	if err != nil {
 		return nil, err
 	}
-	err = resource.Init(ctx, types, visitors, map[string]Columns{})
+	err = resource.Init(ctx, types, codecs, map[string]Columns{})
 	return resource, err
 }
 
@@ -671,7 +686,7 @@ func (r *Resource) mergeMessageBuses(resource *Resource) {
 	}
 }
 
-func (r *Resource) initTemplates(registry *config.PredicateRegistry) error {
+func (r *Resource) initTemplates(registry *extension.PredicateRegistry) error {
 	if registry != nil {
 		r._predicates = registry.Scope()
 	}
@@ -687,7 +702,7 @@ func (r *Resource) initTemplates(registry *config.PredicateRegistry) error {
 
 func (r *Resource) ensureTemplatesIndex() {
 	if r._predicates == nil {
-		r._predicates = config.NewPredicates()
+		r._predicates = extension.NewPredicates()
 	}
 }
 

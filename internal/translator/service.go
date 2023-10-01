@@ -7,7 +7,6 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
-	"github.com/viant/datly/config"
 	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/inference"
@@ -16,6 +15,7 @@ import (
 	"github.com/viant/datly/internal/translator/parser"
 	rasync "github.com/viant/datly/repository/async"
 	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/service"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -323,7 +323,9 @@ func (s *Service) persistRouterRule(ctx context.Context, resource *Resource, ser
 	if err != nil {
 		return fmt.Errorf("failed to encode: %+v, %w", routerResource, err)
 	}
-	s.Repository.Files.Append(asset.NewFile(url.Join(baseRuleURL, ruleName+".yaml"), string(data)))
+	ruleSource := string(data)
+	ruleSource = s.Repository.Substitutes.ReverseReplace(ruleSource)
+	s.Repository.Files.Append(asset.NewFile(url.Join(baseRuleURL, ruleName+".yaml"), ruleSource))
 	return nil
 }
 
@@ -395,7 +397,7 @@ func (s *Service) persistView(viewlet *Viewlet, resource *Resource, mode view.Mo
 
 	aView := &viewlet.View.View
 	resource.Resource.Views = append(resource.Resource.Views, aView)
-	viewlet.View.GenerateFiles(baseRuleURL, ruleName, &s.Repository.Files)
+	viewlet.View.GenerateFiles(baseRuleURL, ruleName, &s.Repository.Files, s.Repository.Substitutes)
 	if viewlet.TypeDefinition != nil {
 		if len(viewlet.TypeDefinition.Fields) > 0 {
 			viewType := reflect.StructOf(viewlet.Spec.Type.Fields())
@@ -484,6 +486,9 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 	if len(s.Repository.Caches) > 0 {
 		resource.Rule.With = append(resource.Rule.With, "cache")
 	}
+	if len(s.Repository.Substitutes) > 0 {
+		resource.Rule.With = append(resource.Rule.With, "substitutes")
+	}
 
 	result.With = resource.Rule.With
 	//
@@ -556,7 +561,7 @@ func (s *Service) updateComponentType(ctx context.Context, resource *Resource, p
 		parameter.Schema = signature.Output.Clone()
 		parameter.Schema.EnsurePointer()
 		for _, typeDef := range signature.Types {
-			if err = config.Config.Types.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType)); err != nil {
+			if err = extension.Config.Types.Register(typeDef.Name, xreflect.WithTypeDefinition(typeDef.DataType)); err != nil {
 				return err
 			}
 		}

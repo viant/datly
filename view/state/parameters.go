@@ -138,7 +138,7 @@ func (p Parameters) GroupByStatusCode() []Parameters {
 }
 
 func (p Parameters) SetLiterals(state *structology.State) (err error) {
-	for _, parameter := range p.FilterByKind(KindLiteral) {
+	for _, parameter := range p.FilterByKind(KindConst) {
 		if parameter._selector == nil {
 			parameter._selector = state.Type().Lookup(parameter.Name)
 		}
