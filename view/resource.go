@@ -28,45 +28,49 @@ import (
 
 // Resource represents grouped View needed to build the View
 // can be loaded from i.e. yaml file
-type Resource struct {
-	Metrics   *Metrics
-	SourceURL string `json:",omitempty"`
+type (
+	Resource struct {
+		Metrics   *Metrics
+		SourceURL string `json:",omitempty"`
 
-	CacheProviders []*Cache
-	_cacheIndex    map[string]int
+		CacheProviders []*Cache
+		_cacheIndex    map[string]int
 
-	Connectors  []*Connector
-	_connectors Connectors
+		Connectors  []*Connector
+		_connectors Connectors
 
-	MessageBuses  []*mbus.Resource
-	_messageBuses MessageBuses
+		MessageBuses  []*mbus.Resource
+		_messageBuses MessageBuses
 
-	Views  Views `json:",omitempty"`
-	_views NamedViews
+		Views  Views `json:",omitempty"`
+		_views NamedViews
 
-	Parameters  state.Parameters `json:",omitempty"`
-	_parameters state.NamedParameters
+		Parameters  state.Parameters `json:",omitempty"`
+		_parameters state.NamedParameters
 
-	Types  []*TypeDefinition
-	_types *xreflect.Types
+		Types  []*TypeDefinition
+		_types *xreflect.Types
 
-	Loggers  logger.Adapters `json:",omitempty"`
-	_loggers logger.AdapterIndex
+		Loggers  logger.Adapters `json:",omitempty"`
+		_loggers logger.AdapterIndex
 
-	codecs  *codec.Registry
-	ModTime time.Time `json:",omitempty"`
+		codecs  *codec.Registry
+		ModTime time.Time `json:",omitempty"`
 
-	Predicates  []*predicate.Template
-	_predicates *extension.PredicateRegistry
+		Predicates  []*predicate.Template
+		_predicates *extension.PredicateRegistry
 
-	_columnsCache map[string]Columns
+		_columnsCache map[string]Columns
 
-	Substitutes Substitutes
+		Substitutes Substitutes
 
-	ExpandSourceURL string
-	_expandMap      rdata.Map
-	fs              afs.Service
-}
+		ExpandSourceURL string
+		_expandMap      rdata.Map
+		fs              afs.Service
+	}
+
+	NamedResources map[string]*Resource
+)
 
 func (r *Resource) NamedParameters() state.NamedParameters {
 	return r._parameters

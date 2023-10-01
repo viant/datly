@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/view"
 	"github.com/viant/toolbox"
+	"strings"
 )
 
 func (r *Repository) ensureConstants(ctx context.Context) error {
@@ -36,6 +37,9 @@ func (r *Repository) ensureSubstitutes(ctx context.Context) error {
 		}
 		for k, v := range aMap {
 			fragment := toolbox.AsString(v)
+			if !strings.HasPrefix(k, "$") {
+				k = "$" + k
+			}
 			r.Substitutes = append(r.Substitutes, &view.Substitute{Key: k, Fragment: fragment})
 		}
 	}

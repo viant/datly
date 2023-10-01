@@ -10,7 +10,6 @@ import (
 	"github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router/marshal"
-	"github.com/viant/datly/gateway/router/openapi3"
 	"github.com/viant/datly/logger"
 	extension2 "github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/utils/httputils"
@@ -26,20 +25,17 @@ import (
 
 type (
 	Resource struct {
-		URL          string   `json:",omitempty" yaml:",omitempty"`
-		MetaCacheURI string   `json:",omitempty"`
-		SourceURL    string   `json:",omitempty"`
-		With         []string //list of resource to inherit from  `json:",omitempty"`
-		Routes       Routes
-		Compression  *Compression `json:",omitempty"`
-		Redirect     *Redirect    `json:",omitempty"`
-		Logger       *Logger      `json:",omitempty"` //connect, dataview, time, SQL with params if exceeded time  `json:",omitempty"`
-		Cors         *Cors        `json:",omitempty"`
+		URL         string   `json:",omitempty" yaml:",omitempty"`
+		SourceURL   string   `json:",omitempty"`
+		With        []string //list of resource to inherit from  `json:",omitempty"`
+		Routes      Routes
+		Compression *Compression `json:",omitempty"`
+		Redirect    *Redirect    `json:",omitempty"`
+		Logger      *Logger      `json:",omitempty"` //connect, dataview, time, SQL with params if exceeded time  `json:",omitempty"`
+		Cors        *Cors        `json:",omitempty"`
 
 		ColumnsCache *discover.Columns `json:",omitempty"`
 		RevealMetric *bool             `json:",omitempty"`
-
-		Info openapi3.Info `json:",omitempty"`
 
 		ColumnsDiscovery bool              `json:",omitempty"`
 		EnableDebug      *bool             `json:",omitempty"`

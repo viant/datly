@@ -320,7 +320,7 @@ func (r *Service) getRouters(ctx context.Context, fs afs.Service, resources map[
 	}
 
 	if !isFirst {
-		fmt.Printf("[INFO] detected resources changes, rebuilding routers\n")
+		fmt.Printf("[INFO] detected resourceLoader changes, rebuilding routers\n")
 	}
 
 	return r.rebuildRouters(ctx, fs, resources, routers, updatedMap, removedMap, changed)
@@ -413,56 +413,26 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (*router
 	}, err
 }
 
-func (r *Service) reloadResources(ctx context.Context, fs afs.Service, changes *ResourcesChange) (map[string]*view.Resource, error) {
-	result := map[string]*view.Resource{}
-
+func (r *Service) reloadResources(ctx context.Context, fs afs.Service, changes *ResourcesChange) (view.NamedResources, error) {
+	resources := resourceLoader{}
 	for resourceURL, dataResource := range r.dataResourcesIndex {
-		if changes.resourcesIndex.Changed(dataResource.SourceURL) {
+		if !changes.resourcesIndex.Changed(dataResource.SourceURL) {
 			continue
 		}
-		result[resourceURL] = r.dataResourcesIndex[resourceURL]
+		resources.WaitGroup.Add(1)
+		go resources.load(ctx, fs, resourceURL)
 	}
-
-	if len(changes.resourcesIndex.updatedIndex) == 0 { //add to avoid deadlock
-		return result, nil
-	}
-
-	resourceChan := make(chan func() (*view.Resource, string, error), len(changes.resourcesIndex.updatedIndex))
 
 	for resourceURL := range changes.resourcesIndex.updatedIndex {
-		go func(URL string) {
-			newResource, err := r.loadDependencyResource(URL, ctx, fs)
-
-			resourceChan <- func() (*view.Resource, string, error) {
-				return newResource, r.updateResourceKey(URL), err
-			}
-		}(resourceURL)
+		resources.WaitGroup.Add(1)
+		go resources.load(ctx, fs, resourceURL)
 	}
 
-	channelSize := len(changes.resourcesIndex.updatedIndex)
-
-	///r.populateResourceChan(ctx, resourceChan, fs, changes.resourcesIndex.updatedIndex)
-	counter := 0
-	var errors []error
-	for fn := range resourceChan {
-		dependency, URL, err := fn()
-		if err != nil {
-			errors = append(errors, err)
-		} else {
-			result[URL] = dependency
-		}
-
-		counter++
-		if counter >= channelSize {
-			close(resourceChan)
-		}
-	}
-
-	if err := r.combineErrors("dependencies", errors); err != nil {
+	resources.WaitGroup.Wait()
+	if err := r.combineErrors("dependencies", resources.errors); err != nil {
 		return nil, err
 	}
-
-	return result, nil
+	return resources.byName, nil
 }
 
 func (r *Service) combineErrors(resourceType string, errors []error) error {
@@ -641,7 +611,6 @@ func (r *Service) updateResourceKey(URL string) string {
 	if index := strings.Index(key, "."); index != -1 {
 		key = key[:index]
 	}
-
 	return key
 }
 

@@ -33,7 +33,6 @@ type (
 		PluginsURL           string
 		DependencyURL        string
 		AssetsURL            string
-		EnvURL               string `json:",omitempty" yaml:",omitempty"`
 		UseCacheFS           bool
 		SyncFrequencyMs      int
 		Secrets              []*secret.Resource
