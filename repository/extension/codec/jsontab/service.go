@@ -2,6 +2,7 @@ package jsontab
 
 import (
 	"fmt"
+	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -124,7 +125,16 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
-		column := &Column{Name: field.Name}
+
+		tag := json.Parse(field.Tag.Get("json"))
+
+		column := &Column{}
+		if tag.FieldName != "" {
+			column.Name = tag.FieldName
+		} else {
+			column.Name = field.Name
+		}
+
 		fieldKind := field.Kind()
 		if fieldKind == reflect.Ptr {
 			fieldKind = field.Type.Elem().Kind()

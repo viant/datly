@@ -2,6 +2,7 @@ package xmltab
 
 import (
 	"fmt"
+	"github.com/viant/xmlify"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 	"reflect"
@@ -146,7 +147,16 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
-		column := &ColumnHeader{ID: field.Name}
+
+		tag := xmlify.ParseTag(field.Tag.Get("xmlify"))
+
+		column := &ColumnHeader{}
+		if tag.Name != "" {
+			column.ID = tag.Name
+		} else {
+			column.ID = field.Name
+		}
+
 		fieldKind := field.Kind()
 		if fieldKind == reflect.Ptr {
 			fieldKind = field.Type.Elem().Kind()
@@ -165,7 +175,6 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 			}
 		}
 
-		// TODO columns Wrapper?
 		result.ColumnsWrapper.Columns = append(result.ColumnsWrapper.Columns, column)
 	}
 }
