@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/repository/extension"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/xreflect"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/packages"

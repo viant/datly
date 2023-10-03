@@ -2,8 +2,8 @@ package extension
 
 import (
 	"fmt"
-	codec2 "github.com/viant/datly/repository/extension/codec"
 	"github.com/viant/datly/utils/types"
+	codec2 "github.com/viant/datly/view/extension/codec"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"

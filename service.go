@@ -8,12 +8,12 @@ import (
 	"github.com/viant/afs/file"
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router"
-	extension2 "github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/service/auth/jwt"
 	"github.com/viant/datly/service/auth/mock"
 	executor "github.com/viant/datly/service/executor"
 	reader "github.com/viant/datly/service/reader"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	sjwt "github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/signer"
@@ -42,7 +42,7 @@ type (
 		config         *Config
 		connector      *view.Connector
 		types          *xreflect.Types
-		registry       *extension2.Registry
+		registry       *extension.Registry
 		fs             afs.Service
 	}
 
@@ -226,9 +226,9 @@ func (s *Service) LoadRoute(ctx context.Context, URL string, types ...*view.Pack
 	return nil
 }
 
-func (s *Service) initTypes(types []*view.PackagedType) (*xreflect.Types, *extension2.Registry) {
-	viewTypes := xreflect.NewTypes(xreflect.WithRegistry(extension2.Config.Types))
-	aConfig := extension2.Config
+func (s *Service) initTypes(types []*view.PackagedType) (*xreflect.Types, *extension.Registry) {
+	viewTypes := xreflect.NewTypes(xreflect.WithRegistry(extension.Config.Types))
+	aConfig := extension.Config
 	for _, pType := range types {
 		_ = viewTypes.Register(pType.Name, xreflect.WithPackage(pType.Package), xreflect.WithReflectType(pType.Type))
 	}
@@ -284,8 +284,8 @@ func New(cfg *Config) *Service {
 		ret.jwtVerifier = verifier.New(cfg.JWTValidator)
 		if ret.jwtVerifier != nil {
 			if err := ret.jwtVerifier.Init(context.Background()); err == nil {
-				extension2.Config.RegisterCodec(
-					extension2.CodecKeyJwtClaim, jwt.New(ret.jwtVerifier.VerifyClaims), time.Time{})
+				extension.Config.RegisterCodec(
+					extension.CodecKeyJwtClaim, jwt.New(ret.jwtVerifier.VerifyClaims), time.Time{})
 			}
 		}
 	}

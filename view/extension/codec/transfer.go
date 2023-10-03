@@ -2,11 +2,11 @@ package codec
 
 import (
 	"context"
-	"github.com/viant/datly/repository/extension/codec/jsontab"
-	"github.com/viant/datly/repository/extension/codec/transfer"
-	"github.com/viant/datly/repository/extension/codec/xmlfilter"
-	"github.com/viant/datly/repository/extension/codec/xmltab"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/datly/view/extension/codec/jsontab"
+	"github.com/viant/datly/view/extension/codec/transfer"
+	"github.com/viant/datly/view/extension/codec/xmlfilter"
+	"github.com/viant/datly/view/extension/codec/xmltab"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"
 	"reflect"

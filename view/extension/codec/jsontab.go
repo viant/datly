@@ -2,7 +2,7 @@ package codec
 
 import (
 	"context"
-	"github.com/viant/datly/repository/extension/codec/jsontab"
+	"github.com/viant/datly/view/extension/codec/jsontab"
 	"github.com/viant/xdatly/codec"
 	"reflect"
 )

@@ -2,7 +2,7 @@ package router
 
 import (
 	"context"
-	"github.com/viant/datly/repository/extension"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/scy/auth/jwt"
 	"net/http"
 	"strconv"

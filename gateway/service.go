@@ -12,9 +12,9 @@ import (
 	furl "github.com/viant/afs/url"
 	"github.com/viant/cloudless/resource"
 	"github.com/viant/datly/cmd/env"
-	"github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/service/auth/secret"
 	"github.com/viant/datly/utils/httputils"
+	"github.com/viant/datly/view/extension"
 	pbuild "github.com/viant/pgo/build"
 	"sync/atomic"
 

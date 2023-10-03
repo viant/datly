@@ -10,9 +10,9 @@ import (
 	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/logger"
-	extension "github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
+	extension2 "github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox"
 	rdata "github.com/viant/toolbox/data"
@@ -58,7 +58,7 @@ type (
 		ModTime time.Time `json:",omitempty"`
 
 		Predicates  []*predicate.Template
-		_predicates *extension.PredicateRegistry
+		_predicates *extension2.PredicateRegistry
 
 		_columnsCache map[string]Columns
 
@@ -310,7 +310,7 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	types, codecs, cache, transforms, predicates := r.readOptions(options)
 	r.indexProviders()
 	if codecs == nil {
-		codecs = extension.Config.Codecs
+		codecs = extension2.Config.Codecs
 	}
 	r.codecs = codecs
 	r._columnsCache = cache
@@ -362,12 +362,12 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	return nil
 }
 
-func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, *codec.Registry, map[string]Columns, marshal.TransformIndex, *extension.PredicateRegistry) {
+func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, *codec.Registry, map[string]Columns, marshal.TransformIndex, *extension2.PredicateRegistry) {
 	var types *xreflect.Types
 	var visitors = codec.NewRegistry()
 	var cache map[string]Columns
 	var transformsIndex marshal.TransformIndex
-	var predicatesRegistry *extension.PredicateRegistry
+	var predicatesRegistry *extension2.PredicateRegistry
 
 	for _, option := range options {
 		if option == nil {
@@ -382,9 +382,9 @@ func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, *codec.R
 			types = actual
 		case marshal.TransformIndex:
 			transformsIndex = actual
-		case *extension.PredicateRegistry:
+		case *extension2.PredicateRegistry:
 			predicatesRegistry = actual
-		case extension.PredicateRegistry:
+		case extension2.PredicateRegistry:
 			predicatesRegistry = &actual
 		}
 	}
@@ -690,7 +690,7 @@ func (r *Resource) mergeMessageBuses(resource *Resource) {
 	}
 }
 
-func (r *Resource) initTemplates(registry *extension.PredicateRegistry) error {
+func (r *Resource) initTemplates(registry *extension2.PredicateRegistry) error {
 	if registry != nil {
 		r._predicates = registry.Scope()
 	}
@@ -706,7 +706,7 @@ func (r *Resource) initTemplates(registry *extension.PredicateRegistry) error {
 
 func (r *Resource) ensureTemplatesIndex() {
 	if r._predicates == nil {
-		r._predicates = extension.NewPredicates()
+		r._predicates = extension2.NewPredicates()
 	}
 }
 

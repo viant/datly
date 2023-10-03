@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/afs/url"
 	"github.com/viant/cloudless/gateway/matcher"
-	"github.com/viant/datly/repository/extension"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/xreflect"
 	"path"
 )

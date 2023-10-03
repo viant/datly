@@ -6,7 +6,7 @@ import (
 	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/gateway/runtime/standalone/handler"
-	"github.com/viant/datly/repository/extension"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/gmetric"
 	"log"
 	"net/http"

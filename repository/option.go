@@ -3,9 +3,9 @@ package repository
 import (
 	"github.com/viant/afs"
 	"github.com/viant/datly/gateway/router/marshal"
-	extension2 "github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
 )
@@ -13,7 +13,7 @@ import (
 type Options struct {
 	fs         afs.Service
 	useColumns bool
-	registry   *extension2.Registry
+	registry   *extension.Registry
 	metrics    *view.Metrics
 	resources  version.Resources
 	transform  marshal.TransformIndex
@@ -21,7 +21,7 @@ type Options struct {
 
 func (o *Options) ensureRegistry() {
 	if o.registry == nil {
-		o.registry = &extension2.Registry{}
+		o.registry = &extension.Registry{}
 	}
 }
 
@@ -38,13 +38,13 @@ func (o *Options) init() {
 	}
 	o.ensureRegistry()
 	if o.registry.Types == nil {
-		o.registry.Types = extension2.Config.Types
+		o.registry.Types = extension.Config.Types
 	}
 	if o.registry.Codecs == nil {
-		o.registry.Codecs = extension2.Config.Codecs
+		o.registry.Codecs = extension.Config.Codecs
 	}
 	if o.registry.Predicates == nil {
-		o.registry.Predicates = extension2.Config.Predicates
+		o.registry.Predicates = extension.Config.Predicates
 	}
 }
 
@@ -77,7 +77,7 @@ func WithCodecs(codecs *codec.Registry) Option {
 	}
 }
 
-func WithPredicates(predicates *extension2.PredicateRegistry) Option {
+func WithPredicates(predicates *extension.PredicateRegistry) Option {
 	return func(o *Options) {
 		o.ensureRegistry()
 		o.registry.Predicates = predicates

@@ -3,9 +3,9 @@ package view
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/repository/extension"
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/utils/types"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/codec"

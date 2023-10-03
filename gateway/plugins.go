@@ -3,7 +3,7 @@ package gateway
 import (
 	"context"
 	"fmt"
-	extension2 "github.com/viant/datly/repository/extension"
+	"github.com/viant/datly/view/extension"
 	pgoBuild "github.com/viant/pgo/build"
 	"github.com/viant/pgo/manager"
 	"github.com/viant/xdatly/types/core"
@@ -43,7 +43,7 @@ func (p pluginDataSlice) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 
-func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesChange) (*extension2.Registry, error) {
+func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesChange) (*extension.Registry, error) {
 	updateSize := len(changes.pluginsIndex.updated)
 	if updateSize == 0 {
 		return nil, nil
@@ -53,7 +53,7 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 		fmt.Printf("[INFO] loaded plugin after: %s\n", time.Since(started))
 	}()
 
-	registry := extension2.NewRegistry()
+	registry := extension.NewRegistry()
 	var types []string
 	_, cancelFn := core.Types(func(packageName, typeName string, rType reflect.Type, _ time.Time) {
 		_ = registry.Types.Register(typeName, xreflect.WithReflectType(rType), xreflect.WithPackage(packageName))
@@ -105,7 +105,7 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 			//case *map[string]map[string]reflect.Type:
 			//	registry.OverridePackageNamedTypes(*actual)
 			//
-			case **extension2.Registry:
+			case **extension.Registry:
 				registry.MergeFrom(*actual)
 			default:
 				panic(fmt.Sprintf("unnupported sync type registry type: %T", change))
@@ -116,7 +116,7 @@ func (r *Service) handlePluginsChanges(ctx context.Context, changes *ResourcesCh
 	if len(types) > 0 {
 		fmt.Printf("[INFO] detected plugin changes, overriding types %s\n", types)
 	}
-	extension2.Config.MergeFrom(registry)
+	extension.Config.MergeFrom(registry)
 	return registry, nil
 }
 
@@ -124,7 +124,7 @@ func (r *Service) handlePluginConfig(pluginProvider *plugin.Plugin, data *plugin
 	if pluginProvider == nil {
 		return
 	}
-	configPlugin, err := pluginProvider.Lookup(extension2.PluginConfig)
+	configPlugin, err := pluginProvider.Lookup(extension.PluginConfig)
 	if err != nil {
 		return
 	}
@@ -133,11 +133,11 @@ func (r *Service) handlePluginConfig(pluginProvider *plugin.Plugin, data *plugin
 }
 
 func (r *Service) handlePluginTypes(provider *plugin.Plugin, data *pluginData) {
-	types, err := provider.Lookup(extension2.TypesName)
+	types, err := provider.Lookup(extension.TypesName)
 	if err != nil {
 		return
 	}
-	packageSymbol, err := provider.Lookup(extension2.PackageName)
+	packageSymbol, err := provider.Lookup(extension.PackageName)
 	var packageName string
 	if err == nil {
 		name, ok := packageSymbol.(*string)

@@ -1,7 +1,7 @@
 package state
 
 import (
-	"github.com/viant/datly/repository/extension"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state/predicate"
 	"reflect"
 )

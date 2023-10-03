@@ -12,10 +12,10 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/logger"
-	extension2 "github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/toolbox"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
@@ -130,7 +130,7 @@ func (r *Resource) Init(ctx context.Context) error {
 		columnsCache = r.ColumnsCache.Items
 	}
 
-	if err := r.Resource.Init(ctx, r.Resource.TypeRegistry(), r._codecs, columnsCache, transforms, extension2.Config.Predicates); err != nil {
+	if err := r.Resource.Init(ctx, r.Resource.TypeRegistry(), r._codecs, columnsCache, transforms, extension.Config.Predicates); err != nil {
 		return err
 	}
 
@@ -266,7 +266,7 @@ func readOptions(options []interface{}) (*codec.Registry, *xreflect.Types, map[s
 			resources = actual
 		case *view.Metrics:
 			metrics = actual
-		case *extension2.Registry:
+		case *extension.Registry:
 			types = actual.Types
 			codecRegistry = actual.Codecs
 		}
@@ -279,7 +279,7 @@ func readOptions(options []interface{}) (*codec.Registry, *xreflect.Types, map[s
 		codecRegistry = codec.NewRegistry()
 	}
 	if types == nil {
-		types = xreflect.NewTypes(xreflect.WithRegistry(extension2.Config.Types))
+		types = xreflect.NewTypes(xreflect.WithRegistry(extension.Config.Types))
 	}
 	return codecRegistry, types, resources, metrics
 }

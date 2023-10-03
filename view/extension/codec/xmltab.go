@@ -2,7 +2,7 @@ package codec
 
 import (
 	"context"
-	"github.com/viant/datly/repository/extension/codec/xmltab"
+	"github.com/viant/datly/view/extension/codec/xmltab"
 	"github.com/viant/xdatly/codec"
 	"reflect"
 )
