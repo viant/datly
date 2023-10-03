@@ -70,8 +70,14 @@ func (p *Parameter) Init(ctx context.Context, resource Resource) error {
 		return nil
 	}
 	p._initialized = true
+
 	if err := p.inheritParamIfNeeded(ctx, resource); err != nil {
 		return err
+	}
+	if p.In.Kind == KindConst {
+		if text, ok := p.Const.(string); ok {
+			p.Const = resource.ExpandSubstitutes(text)
+		}
 	}
 
 	if err := p.initGroupParams(ctx, resource); err != nil {

@@ -16,6 +16,10 @@ func (r *Resourcelet) LookupParameter(name string) (*state.Parameter, error) {
 	return parameter, err
 }
 
+func (r *Resourcelet) ExpandSubstitutes(text string) string {
+	return r.Substitutes.Replace(text)
+}
+
 func (r *Resourcelet) lookupParameter(name string) (*state.Parameter, error) {
 	var viewParameter *state.Parameter
 	if r.View != nil && r.View.Template != nil && len(r.View.Template.Parameters) > 0 {

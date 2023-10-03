@@ -486,12 +486,11 @@ func (s *Service) buildRouterResource(ctx context.Context, resource *Resource) (
 	if len(s.Repository.Caches) > 0 {
 		resource.Rule.With = append(resource.Rule.With, "cache")
 	}
-	if len(s.Repository.Substitutes) > 0 {
-		resource.Rule.With = append(resource.Rule.With, "substitutes")
-	}
 
+	if len(s.Repository.Substitutes) > 0 {
+		resource.Rule.With = append([]string{"substitutes"}, resource.Rule.With...)
+	}
 	result.With = resource.Rule.With
-	//
 	if err := s.handleCustomTypes(ctx, resource); err != nil {
 		return nil, err
 	}

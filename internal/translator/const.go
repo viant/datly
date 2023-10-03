@@ -52,6 +52,8 @@ func (r *Repository) loadMap(ctx context.Context, URL string) (map[string]interf
 		return nil, fmt.Errorf("failed to load const %v %w", URL, err)
 	}
 	//TODO based on ext allow various format, currently only JSON
+	replaced := r.Substitutes.Replace(string(data))
+	data = []byte(replaced)
 	var constMap map[string]interface{}
 	if err = json.Unmarshal(data, &constMap); err != nil {
 		return nil, fmt.Errorf("failed to parse const: %v %w", URL, err)

@@ -113,7 +113,9 @@ func (r *Repository) persistConstants() error {
 	if err != nil {
 		return err
 	}
-	r.Files.Append(asset.NewFile(url.Join(cfg.DependencyURL, "constants.yaml"), string(content)))
+	data := string(content)
+	data = r.Substitutes.ReverseReplace(data)
+	r.Files.Append(asset.NewFile(url.Join(cfg.DependencyURL, "constants.yaml"), data))
 	return nil
 }
 
@@ -131,13 +133,13 @@ func (r *Repository) persistConnections(cfg *Config) error {
 }
 
 func (r *Repository) ensureDependencies(ctx context.Context) error {
+	if err := r.ensureSubstitutes(ctx); err != nil {
+		return err
+	}
 	if err := r.ensureConnectors(ctx); err != nil {
 		return err
 	}
 	if err := r.ensureConstants(ctx); err != nil {
-		return err
-	}
-	if err := r.ensureSubstitutes(ctx); err != nil {
 		return err
 	}
 	if err := r.ensureCache(ctx); err != nil {

@@ -15,5 +15,7 @@ type (
 		Codecs() *codec.Registry
 		//CodecOptions returns base codec options
 		CodecOptions() *codec.Options
+
+		ExpandSubstitutes(text string) string
 	}
 )
