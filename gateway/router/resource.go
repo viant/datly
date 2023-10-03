@@ -1,6 +1,7 @@
 package router
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/google/uuid"
@@ -212,6 +213,13 @@ func LoadResource(ctx context.Context, fs afs.Service, URL string, useColumnCach
 	resourceData, err := fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, err
+	}
+
+	if substitutes, ok := resources["substitutes"]; ok {
+		if bytes.Contains(resourceData, []byte("substitutes")) {
+			expanded := substitutes.Substitutes.Replace(string(resourceData))
+			resourceData = []byte(expanded)
+		}
 	}
 
 	aMap := map[string]interface{}{}

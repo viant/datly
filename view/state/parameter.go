@@ -77,6 +77,7 @@ func (p *Parameter) Init(ctx context.Context, resource Resource) error {
 	if p.In.Kind == KindLiteral {
 		p.In.Kind = KindConst
 	}
+
 	if p.In.Kind == KindConst {
 		if text, ok := p.Const.(string); ok {
 			p.Const = resource.ExpandSubstitutes(text)
