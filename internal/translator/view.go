@@ -49,7 +49,6 @@ func (v *View) applyHintSettings(namespace *Viewlet) error {
 }
 
 func (v *View) applyShorthands(viewlet *Viewlet) {
-
 	if v.Self != nil {
 		v.SelfReference = v.Self
 	}

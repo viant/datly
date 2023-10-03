@@ -43,6 +43,7 @@ type Service struct {
 
 func (s *Service) Translate(ctx context.Context, rule *options.Rule, dSQL string, opts *options.Options) (err error) {
 	resource := NewResource(rule, s.Repository.Config.repository, &s.Repository.Messages)
+	resource.Resource.Substitutes = s.Repository.Substitutes
 	resource.State.Append(s.Repository.State...)
 	if err = resource.InitRule(&dSQL, ctx, s.Repository.fs, opts); err != nil {
 		return err

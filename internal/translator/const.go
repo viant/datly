@@ -2,11 +2,11 @@ package translator
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"github.com/viant/datly/view"
+	"github.com/viant/afs/url"
+	"github.com/viant/datly/shared"
 	"github.com/viant/toolbox"
-	"strings"
+	"path"
 )
 
 func (r *Repository) ensureConstants(ctx context.Context) error {
@@ -35,12 +35,12 @@ func (r *Repository) ensureSubstitutes(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		if len(r.Substitutes) == 0 {
+			r.Substitutes = map[string]string{}
+		}
 		for k, v := range aMap {
 			fragment := toolbox.AsString(v)
-			if !strings.HasPrefix(k, "$") {
-				k = "$" + k
-			}
-			r.Substitutes = append(r.Substitutes, &view.Substitute{Key: k, Fragment: fragment})
+			r.Substitutes[k] = fragment
 		}
 	}
 	return nil
@@ -54,8 +54,10 @@ func (r *Repository) loadMap(ctx context.Context, URL string) (map[string]interf
 	//TODO based on ext allow various format, currently only JSON
 	replaced := r.Substitutes.Replace(string(data))
 	data = []byte(replaced)
+
+	ext := path.Ext(url.Path(URL))
 	var constMap map[string]interface{}
-	if err = json.Unmarshal(data, &constMap); err != nil {
+	if err = shared.UnmarshalWithExt(data, &constMap, ext); err != nil {
 		return nil, fmt.Errorf("failed to parse const: %v %w", URL, err)
 	}
 	return constMap, nil
