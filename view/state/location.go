@@ -45,7 +45,7 @@ func (p ParamName) Validate(kind Kind) error {
 
 		return nil
 
-	case KindRequest, KindConst, KindRequestBody, KindQuery:
+	case KindRequest, KindLiteral, KindConst, KindRequestBody, KindQuery:
 		return nil
 	case KindDataView, KindPath, KindHeader, KindRepeated, KindCookie, KindParam, KindState, KindOutput, KindComponent:
 		if p == "" {
