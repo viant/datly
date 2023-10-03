@@ -1,0 +1,210 @@
+items:
+    Authorization:
+        - name: Authorized
+          datatype: bool
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: false
+          nullable: true
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: Authorized
+          indexedby: ""
+    products:
+        - name: ID
+          datatype: int
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: false
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: ID
+          indexedby: ""
+        - name: NAME
+          datatype: string
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: true
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: NAME
+          indexedby: ""
+        - name: VENDOR_ID
+          datatype: int
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: true
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: VENDOR_ID
+          indexedby: ""
+        - name: STATUS
+          datatype: int
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: true
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: STATUS
+          indexedby: ""
+        - name: CREATED
+          datatype: Time
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: true
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: CREATED
+          indexedby: ""
+        - name: USER_CREATED
+          datatype: int
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: true
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: USER_CREATED
+          indexedby: ""
+        - name: UPDATED
+          datatype: Time
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: true
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: UPDATED
+          indexedby: ""
+        - name: USER_UPDATED
+          datatype: int
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: true
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: USER_UPDATED
+          indexedby: ""
+    vendor:
+        - name: FIRST_NAME
+          datatype: string
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: true
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: FIRST_NAME
+          indexedby: ""
+        - name: ID
+          datatype: int
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: false
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: ID
+          indexedby: ""
+        - name: NAME
+          datatype: string
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: true
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: NAME
+          indexedby: ""
+        - name: ACCOUNT_ID
+          datatype: int
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: true
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: ACCOUNT_ID
+          indexedby: ""
+        - name: CREATED
+          datatype: Time
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: true
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: CREATED
+          indexedby: ""
+        - name: USER_CREATED
+          datatype: int
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: true
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: USER_CREATED
+          indexedby: ""
+        - name: UPDATED
+          datatype: Time
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: true
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: UPDATED
+          indexedby: ""
+        - name: USER_UPDATED
+          datatype: int
+          tag: ""
+          ignorecaseformatter: false
+          expression: ""
+          filterable: true
+          nullable: true
+          default: ""
+          format: ""
+          codec: null
+          databasecolumn: USER_UPDATED
+          indexedby: ""
+modtime: 2023-10-02T13:05:30.381076553-07:00
+sourceurl: ""

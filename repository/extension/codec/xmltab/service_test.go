@@ -41,29 +41,6 @@ func TestService_Transfer(t *testing.T) {
 			},
 		},
 		{
-			description: "basic slice with transient fields",
-			getData: func() interface{} {
-				type Foo struct {
-					Id   int
-					Name string  `xmlify:"-"`
-					F    float64 `xmlify:"-"`
-				}
-
-				return []Foo{
-					{
-						Id:   1,
-						F:    12312.3,
-						Name: "abc",
-					},
-					{
-						Id:   2,
-						F:    2.3,
-						Name: "xyz",
-					},
-				}
-			},
-		},
-		{
 			description: "slice with ptr struct",
 			getData: func() interface{} {
 				type Foo struct {
@@ -87,10 +64,12 @@ func TestService_Transfer(t *testing.T) {
 						Name: "xyz",
 					},
 				}
+
 			},
 		},
+
 		{
-			description: "basic slice 2",
+			description: "basic slice",
 			getData: func() interface{} {
 				type Foo struct {
 					Id   int
@@ -102,6 +81,7 @@ func TestService_Transfer(t *testing.T) {
 				return []Foo{}
 			},
 		},
+
 		{
 			description: "custom ptr types",
 			getData: func() interface{} {

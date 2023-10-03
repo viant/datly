@@ -1,8 +1,26 @@
 package component
 
 type Path struct {
-	URI    string `json:",omitempty"`
-	Method string `json:",omitempty"`
+	URI    string `json:",omitempty" yaml:"URI"`
+	Method string `json:",omitempty" yaml:"Method"`
+	key    string
+}
+
+func (r *Path) Equals(candidate *Path) bool {
+	if r.URI != candidate.URI {
+		return false
+	}
+	if r.Method != candidate.Method {
+		return false
+	}
+	return true
+}
+func (r *Path) Key() string {
+	if r.key != "" {
+		return r.key
+	}
+	r.key = r.Method + ":" + r.URI
+	return r.key
 }
 
 func (r *Path) HttpMethod() string {

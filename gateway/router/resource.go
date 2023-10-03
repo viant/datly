@@ -38,9 +38,8 @@ type (
 		ColumnsCache *discover.Columns `json:",omitempty"`
 		RevealMetric *bool             `json:",omitempty"`
 
-		ColumnsDiscovery bool              `json:",omitempty"`
-		EnableDebug      *bool             `json:",omitempty"`
-		Interceptor      *RouteInterceptor `json:",omitempty"`
+		ColumnsDiscovery bool  `json:",omitempty"`
+		EnableDebug      *bool `json:",omitempty"`
 
 		_codecs      *codec.Registry
 		_initialised bool

@@ -1,5 +1,10 @@
 package version
 
+import (
+	"sync/atomic"
+	"time"
+)
+
 const (
 	ChangeKindModified = "modified"
 	ChangeKindDeleted  = "deleted"
@@ -7,13 +12,18 @@ const (
 
 type (
 	Version struct {
-		SequenceChangeNumber int32 //sequence change number
+		SCN int64 `yaml:"SCN,omitempty"` //sequence change number
 	}
 
 	//ChangeKind defines change types
 	ChangeKind string
 	Control    struct {
-		Version
-		ChangeKind ChangeKind
+		Version    `yaml:",inline"`
+		ChangeKind ChangeKind `yaml:"-"`
+		ModTime    time.Time  `yaml:"ModTime,inline"`
 	}
 )
+
+func (c *Version) Increase() {
+	atomic.AddInt64(&c.SCN, 1)
+}

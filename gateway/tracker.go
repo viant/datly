@@ -3,8 +3,10 @@ package gateway
 import (
 	"context"
 	"github.com/viant/afs"
+	"github.com/viant/afs/storage"
 	"github.com/viant/cloudless/resource"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -39,7 +41,11 @@ func (t *Tracker) Notify(ctx context.Context, fs afs.Service, callback func(URL 
 		return nil
 	}
 
-	err = t.notifier.Notify(ctx, fs, func(URL string, operation resource.Operation) {
+	mux := sync.Mutex{}
+	err = t.notifier.Notify(ctx, fs, func(ctx context.Context, object storage.Object, operation resource.Operation) error {
+		mux.Lock()
+		defer mux.Unlock()
+		URL := object.URL()
 		switch operation {
 		case resource.Deleted:
 			delete(t.assets, URL)
@@ -49,11 +55,12 @@ func (t *Tracker) Notify(ctx context.Context, fs afs.Service, callback func(URL 
 
 		for _, folderName := range unindexedFolders {
 			if strings.Contains(URL, folderName) {
-				return
+				return nil
 			}
 		}
 
 		callback(URL, operation)
+		return nil
 	})
 
 	return err

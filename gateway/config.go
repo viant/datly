@@ -32,7 +32,6 @@ type (
 		RouteURL             string
 		PluginsURL           string
 		DependencyURL        string
-		AssetsURL            string
 		UseCacheFS           bool
 		SyncFrequencyMs      int
 		Secrets              []*secret.Resource

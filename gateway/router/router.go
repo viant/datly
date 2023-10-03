@@ -100,15 +100,6 @@ func (r *Router) Handle(response http.ResponseWriter, request *http.Request) err
 }
 
 func (r *Router) HandleAsync(ctx context.Context, response http.ResponseWriter, request *http.Request) error {
-	if r._resource.Interceptor != nil {
-		_, err := r._resource.Interceptor.Intercept(request)
-		if err != nil {
-			code, message := httputils.BuildErrorResponse(err)
-			response.WriteHeader(code)
-			response.Write([]byte(message))
-			return nil
-		}
-	}
 	route, err := r.Matcher.MatchOne(request.Method, request.URL.Path)
 	if err != nil {
 		return err
@@ -184,12 +175,6 @@ func (r *Router) Init(routes Routes, apiPrefix string) error {
 
 	if r._resource.URL != "" {
 		r._resource.URL = r.normalizeURI(apiPrefix, r._resource.URL)
-	}
-
-	if r._resource.Interceptor != nil {
-		if err := r._resource.Interceptor.init(r._resource.URL); err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -459,10 +444,6 @@ func (r *Router) normalizeURI(prefix string, URI string) string {
 	}
 
 	return url.Join(prefix, URI)
-}
-
-func (r *Router) Interceptor() (*RouteInterceptor, bool) {
-	return r._resource.Interceptor, r._resource.Interceptor != nil
 }
 
 func (r *Router) Resource() *Resource {

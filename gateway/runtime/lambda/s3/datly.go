@@ -1,9 +1,7 @@
 package main
 
 import (
-	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/viant/datly/cmd/env"
-	"github.com/viant/datly/gateway/runtime/lambda/s3/handler"
 	"strconv"
 	"time"
 )
@@ -24,8 +22,4 @@ func init() {
 	}
 
 	env.BuildType = env.BuildTypeKindLambdaS3
-}
-
-func main() {
-	lambda.Start(handler.HandleRequest)
 }

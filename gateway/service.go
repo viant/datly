@@ -16,7 +16,6 @@ import (
 	"github.com/viant/datly/service/auth/secret"
 	"github.com/viant/datly/utils/httputils"
 	pbuild "github.com/viant/pgo/build"
-	async2 "github.com/viant/xdatly/handler/async"
 	"sync/atomic"
 
 	"github.com/viant/datly/gateway/router"
@@ -47,7 +46,6 @@ type (
 		routeTracker      *Tracker
 		dependencyTracker *Tracker
 		pluginTracker     *Tracker
-		assetsTracker     *Tracker
 
 		dataResourcesIndex map[string]*view.Resource
 		metrics            *gmetric.Service
@@ -61,15 +59,13 @@ type (
 		statusHandler      http.Handler
 		authorizer         Authorizer
 
-		interceptors router.RouterInterceptors
-		nextCheck    time.Time
-		isBuilding   int64
+		nextCheck  time.Time
+		isBuilding int64
 	}
 
 	routerConfig struct {
-		changed      bool
-		resources    map[string]*view.Resource
-		interceptors router.RouterInterceptors
+		changed   bool
+		resources map[string]*view.Resource
 	}
 )
 
@@ -127,7 +123,7 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 		return nil, err
 	}
 	syncFrequency := time.Duration(aConfig.SyncFrequencyMs) * time.Millisecond
-	mainRouter, err := NewRouter(map[string]*router.Router{}, aConfig, metrics, statusHandler, authorizer, nil)
+	mainRouter, err := NewRouter(map[string]*router.Router{}, aConfig, metrics, statusHandler, authorizer)
 	if err != nil {
 		return nil, err
 	}
@@ -155,17 +151,11 @@ func New(ctx context.Context, aConfig *Config, statusHandler http.Handler, autho
 			fs,
 			syncFrequency,
 		),
-		assetsTracker: NewNotifier(
-			aConfig.AssetsURL,
-			fs,
-			syncFrequency,
-		),
 		routersIndex:  map[string]*router.Router{},
 		mainRouter:    mainRouter,
 		changeSession: NewSession(aConfig.ChangeDetection),
 		statusHandler: statusHandler,
 		authorizer:    authorizer,
-		interceptors:  router.RouterInterceptors{},
 	}
 
 	if aConfig.JwtSigner != nil {
@@ -293,7 +283,7 @@ func (r *Service) syncChangesIfNeeded(ctx context.Context, metrics *gmetric.Serv
 		fmt.Printf("[INFO] routers rebuild completed after: %s\n", time.Since(started))
 	}
 
-	mainRouter, err := NewRouter(routers, r.Config, metrics, statusHandler, authorizer, aRouterConfig.interceptors.AsSlice())
+	mainRouter, err := NewRouter(routers, r.Config, metrics, statusHandler, authorizer)
 	if err != nil {
 		return err
 	}
@@ -302,7 +292,6 @@ func (r *Service) syncChangesIfNeeded(ctx context.Context, metrics *gmetric.Serv
 	r.mainRouter = mainRouter
 	r.routersIndex = routers
 	r.dataResourcesIndex = aRouterConfig.resources
-	r.interceptors = aRouterConfig.interceptors
 	r.changeSession = nil
 	r.mux.Unlock()
 
@@ -403,13 +392,9 @@ func (r *Service) getDataResources(ctx context.Context, fs afs.Service) (*router
 	if err != nil {
 		return nil, err
 	}
-
-	interceptors, err := r.buildInterceptors(ctx, changes.routersIndex)
-
 	return &routerConfig{
-		changed:      true,
-		resources:    resources,
-		interceptors: interceptors,
+		changed:   true,
+		resources: resources,
 	}, err
 }
 
@@ -507,13 +492,6 @@ func (r *Service) detectResourceChanges(ctx context.Context, fs afs.Service) (*R
 
 	plugErr := r.pluginTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
 		if path.Ext(URL) != ".pinf" {
-			return
-		}
-		changes.OnChange(operation, URL)
-	})
-
-	err = r.assetsTracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
-		if path.Ext(URL) != ".rt" {
 			return
 		}
 		changes.OnChange(operation, URL)
@@ -820,54 +798,4 @@ func (r *Service) LogInitTimeIfNeeded(start time.Time, writer http.ResponseWrite
 	}
 
 	writer.Header().Set(httputils.DatlyServiceInitHeader, time.Since(start).String())
-}
-
-func (r *Service) buildInterceptors(ctx context.Context, index *ExtIndex) (router.RouterInterceptors, error) {
-	interceptors := r.interceptors.Copy()
-	for key, _ := range index.deletedIndex {
-		delete(interceptors, key)
-	}
-
-	expectedSize := len(index.updated)
-	if expectedSize == 0 {
-		return interceptors, nil
-	}
-
-	resultChan := make(chan func() (*router.RouteInterceptor, error), expectedSize)
-	for _, URL := range index.updated {
-		go func(ctx context.Context, URL string, collector chan func() (*router.RouteInterceptor, error)) {
-			resultChan <- func() (*router.RouteInterceptor, error) {
-				return router.NewInterceptorFromURL(ctx, r.fs, URL, r.configRegistry.Types.Lookup)
-			}
-		}(ctx, URL, resultChan)
-	}
-
-	var i = 0
-	var resultErr error
-
-	for fn := range resultChan {
-		i++
-		if i == expectedSize {
-			close(resultChan)
-		}
-
-		interceptor, err := fn()
-		if err != nil {
-			resultErr = err
-			continue
-		}
-
-		interceptors[interceptor.SourceURL] = interceptor
-	}
-
-	return interceptors, resultErr
-}
-
-func (r *Service) ServeHTTPAsync(writer http.ResponseWriter, request *http.Request, record *async2.Job) {
-	//aRouter, writer, ok := r.router(writer)
-	//if !ok {
-	//	return
-	//}
-
-	//	aRouter.HandleAsync(writer, request, record)
 }

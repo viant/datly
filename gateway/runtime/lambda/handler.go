@@ -9,7 +9,6 @@ import (
 	"github.com/viant/datly/gateway/runtime/lambda/adapter"
 	"github.com/viant/datly/repository/extension"
 	"github.com/viant/datly/service/auth/jwt"
-	async2 "github.com/viant/xdatly/handler/async"
 	"net/http"
 	"os"
 	"sync"
@@ -34,17 +33,6 @@ func HandleHttpRequest(writer http.ResponseWriter, httpRequest *http.Request) er
 		return err
 	}
 	service.ServeHTTP(writer, httpRequest)
-	return nil
-}
-
-func HandleHTTPAsyncRequest(writer http.ResponseWriter, httpRequest *http.Request, record *async2.Job) error {
-	handler, err := prepareHandler(writer)
-	if err != nil {
-		return err
-	}
-
-	handler.ServeHTTPAsync(writer, httpRequest, record)
-
 	return nil
 }
 

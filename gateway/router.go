@@ -15,7 +15,6 @@ import (
 	"github.com/viant/datly/repository/locator/component/dispatcher"
 	sdispatcher "github.com/viant/datly/service/dispatcher"
 	"github.com/viant/datly/service/session"
-	httputils2 "github.com/viant/datly/utils/httputils"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
 	"github.com/viant/xdatly/handler/async"
@@ -28,20 +27,18 @@ import (
 
 type (
 	Router struct {
-		routeMatcher            *matcher.Matcher
-		localInterceptorMatcher *matcher.Matcher
-		apiKeyMatcher           *matcher.Matcher
-		config                  *Config
-		OpenAPIInfo             openapi3.Info
-		metrics                 *gmetric.Service
-		statusHandler           http.Handler
-		authorizer              Authorizer
-		interceptors            []*router.RouteInterceptor
-		routes                  []*RouteMeta
-		namedRoutes             map[string]*router.Route
-		registry                *repository.Registry
-		dispatcher              component.Dispatcher
-		dispatcherService       *sdispatcher.Service
+		routeMatcher      *matcher.Matcher
+		apiKeyMatcher     *matcher.Matcher
+		config            *Config
+		OpenAPIInfo       openapi3.Info
+		metrics           *gmetric.Service
+		statusHandler     http.Handler
+		authorizer        Authorizer
+		routes            []*RouteMeta
+		namedRoutes       map[string]*router.Route
+		registry          *repository.Registry
+		dispatcher        component.Dispatcher
+		dispatcherService *sdispatcher.Service
 	}
 
 	AvailableRoutesError struct {
@@ -51,11 +48,6 @@ type (
 
 	ApiKeyWrapper struct {
 		apiKey *router.APIKey
-	}
-
-	apiKeyMapKey struct {
-		header string
-		value  string
 	}
 )
 
@@ -73,17 +65,14 @@ func (a *AvailableRoutesError) Error() string {
 }
 
 // NewRouter creates new router
-func NewRouter(routersIndex map[string]*router.Router, config *Config, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer, interceptors []*router.RouteInterceptor) (*Router, error) {
+func NewRouter(routersIndex map[string]*router.Router, config *Config, metrics *gmetric.Service, statusHandler http.Handler, authorizer Authorizer) (*Router, error) {
 	r := &Router{
-		config:                  config,
-		metrics:                 metrics,
-		statusHandler:           statusHandler,
-		authorizer:              authorizer,
-		apiKeyMatcher:           newApiKeyMatcher(config.APIKeys),
-		localInterceptorMatcher: newLocalInterceptorMatcher(routersIndex),
-		interceptors:            interceptors,
+		config:        config,
+		metrics:       metrics,
+		statusHandler: statusHandler,
+		authorizer:    authorizer,
+		apiKeyMatcher: newApiKeyMatcher(config.APIKeys),
 	}
-
 	return r, r.init(routersIndex)
 }
 
@@ -110,10 +99,6 @@ func (r *Router) handle(writer http.ResponseWriter, request *http.Request) {
 		r.handleErrIfNeeded(writer, http.StatusInternalServerError, err)
 		return
 	}
-	if !r.interceptIfNeeded(writer, request) {
-		return
-	}
-
 	if !r.authorizeRequestIfNeeded(writer, request) {
 		return
 	}
@@ -463,54 +448,6 @@ func (r *Router) MatchAllByPrefix(URL string) []*router.Route {
 	}
 
 	return routes
-}
-
-func (r *Router) interceptIfNeeded(writer http.ResponseWriter, request *http.Request) bool {
-	for _, interceptor := range r.interceptors {
-		redirected, err := interceptor.Intercept(request)
-		if err != nil {
-			code, message := httputils2.BuildErrorResponse(err)
-			write(writer, code, []byte(message))
-			return false
-		}
-
-		if redirected {
-			break
-		}
-	}
-
-	if r.localInterceptorMatcher != nil {
-		matched, err := r.localInterceptorMatcher.MatchPrefix("", request.URL.Path)
-		if err == nil {
-			response := httputils2.NewClosableResponse(writer)
-			for _, matchable := range matched {
-				matchable.(*Route).Handle(response, request)
-				if response.Closed {
-					return false
-				}
-			}
-		}
-	}
-
-	return true
-}
-
-func newLocalInterceptorMatcher(index map[string]*router.Router) *matcher.Matcher {
-	matchable := make([]matcher.Matchable, 0)
-	for _, aRouter := range index {
-		routerInterceptor, ok := aRouter.Interceptor()
-		if !ok {
-			continue
-		}
-
-		matchable = append(matchable, NewInterceptorRoute(aRouter, routerInterceptor))
-	}
-
-	if len(matchable) > 0 {
-		return matcher.NewMatcher(matchable)
-	}
-
-	return nil
 }
 
 func (r *Router) routeLookup(route *http2.Route) (*router.Route, error) {

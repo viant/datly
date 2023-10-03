@@ -1,0 +1,130 @@
+ColumnsDiscovery: true
+Resource:
+    ModTime: "0001-01-01T00:00:00Z"
+    Parameters:
+        - Const: DUAL
+          In:
+            Kind: const
+            Name: DummyTable
+          Name: DummyTable
+          Schema:
+            Cardinality: One
+            DataType: string
+            Name: string
+        - Const: VENDOR
+          In:
+            Kind: const
+            Name: Vendor
+          Name: Vendor
+          Schema:
+            Cardinality: One
+            DataType: string
+            Name: string
+        - Const: PRODUCT
+          In:
+            Kind: const
+            Name: Product
+          Name: Product
+          Schema:
+            Cardinality: One
+            DataType: string
+            Name: string
+        - Const: setting1
+          In:
+            Kind: const
+            Name: Var1
+          Name: Var1
+          Schema:
+            Cardinality: One
+            DataType: string
+            Name: string
+        - Const: setting2
+          In:
+            Kind: const
+            Name: Var2
+          Name: Var2
+          Schema:
+            Cardinality: One
+            DataType: string
+            Name: string
+        - Const: true
+          In:
+            Kind: const
+            Name: Var3
+          Name: Var3
+          Schema:
+            Cardinality: One
+            DataType: bool
+            Name: bool
+    Types:
+        - DataType: '*struct { Key1 string "sqlx:\"name=Key1\" velty:\"names=Key1\""; Key2 string "sqlx:\"name=Key2\" velty:\"names=Key2\""; Key3 bool "sqlx:\"name=Key3\" velty:\"names=Key3\"" }'
+          Name: MainOutput
+    Views:
+        - ColumnsConfig:
+            Key3:
+                DataType: bool
+                Name: Key3
+          Connector:
+            Ref: dev
+          Mode: SQLQuery
+          Module: ws
+          Name: main
+          Schema:
+            Cardinality: Many
+            Name: '*MainOutput'
+          Selector:
+            Constraints:
+                Criteria: true
+                Filterable:
+                    - '*'
+                Limit: true
+                Offset: true
+                OrderBy: false
+                Projection: true
+            Limit: 25
+            Namespace: ma
+          Table: DUAL
+          Template:
+            Parameters:
+                - Ref: DummyTable
+                - Ref: Vendor
+                - Ref: Product
+                - Ref: Var1
+                - Ref: Var2
+                - Ref: Var3
+            SourceURL: vars/main.sql
+Routes:
+    - Cors:
+        AllowCredentials: true
+        AllowHeaders:
+            - '*'
+        AllowMethods:
+            - '*'
+        AllowOrigins:
+            - '*'
+        ExposeHeaders:
+            - '*'
+      EnableAudit: true
+      Method: GET
+      Output:
+        Cardinality: Many
+        CaseFormat: lc
+        Type:
+            Parameters:
+                - In:
+                    Kind: output
+                    Name: data
+                  Name: Output
+                  Schema:
+                    Cardinality: Many
+                    DataType: '*MainOutput'
+                    Name: MainOutput
+                  Tag: anonymous:"true"
+      SequenceChangeNumber: 0
+      Service: Reader
+      URI: /v1/api/ws/vars
+      View:
+        Ref: main
+With:
+    - connections
+    - cache
