@@ -825,6 +825,9 @@ func (v *View) inherit(view *View) error {
 
 	setter.SetStringIfEmpty(&v.Alias, view.Alias)
 	setter.SetStringIfEmpty(&v.Table, view.Table)
+	setter.SetStringIfEmpty(&v.Module, view.Module)
+	setter.SetStringIfEmpty(&v.Description, view.Description)
+
 	setter.SetStringIfEmpty(&v.From, view.From)
 	setter.SetStringIfEmpty(&v.FromURL, view.FromURL)
 	v.Mode = Mode(shared.FirstNotEmpty(string(v.Mode), string(view.Mode)))
