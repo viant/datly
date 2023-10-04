@@ -86,10 +86,15 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 	var row Row
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
+		tag := xmlify.ParseTag(field.Tag.Get("xmlify"))
+		if tag.Transient {
+			continue
+		}
+
 		value := &ColumnValue{}
 		switch field.Type.Kind() {
 		case reflect.String:
-			s := field.String(sourcePtr) //TODO check
+			s := field.String(sourcePtr)
 			value.Value = &s
 		case reflect.Int:
 			s := strconv.Itoa(field.Int(sourcePtr))
@@ -149,6 +154,9 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 		field := &xStruct.Fields[i]
 
 		tag := xmlify.ParseTag(field.Tag.Get("xmlify"))
+		if tag.Transient {
+			continue
+		}
 
 		column := &ColumnHeader{}
 		if tag.Name != "" {
@@ -171,7 +179,7 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 		default:
 			switch field.Type {
 			case xreflect.TimeType, xreflect.TimePtrType:
-				column.Type = "date"
+				column.Type = "timestamp"
 			}
 		}
 

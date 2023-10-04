@@ -72,6 +72,11 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 	var record Record
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
+		tag := json.Parse(field.Tag.Get("json"))
+		if tag.Transient {
+			continue
+		}
+
 		value := ""
 		switch field.Type.Kind() {
 		case reflect.String:
@@ -127,6 +132,9 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 		field := &xStruct.Fields[i]
 
 		tag := json.Parse(field.Tag.Get("json"))
+		if tag.Transient {
+			continue
+		}
 
 		column := &Column{}
 		if tag.FieldName != "" {
