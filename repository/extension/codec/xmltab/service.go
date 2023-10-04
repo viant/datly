@@ -11,8 +11,9 @@ import (
 	"unsafe"
 )
 
-type ( // 03
+const RFC3339NanoCustomized = "2006-01-02T15:04:05.000Z07:00"
 
+type (
 	ColumnHeader struct {
 		ID   string `json:",omitempty" xmlify:"path=@id"`
 		Type string `json:",omitempty" xmlify:"path=@type"`
@@ -22,13 +23,12 @@ type ( // 03
 		Columns []*ColumnHeader `xmlify:"name=column"`
 	}
 
-	// TODO add ptr *
 	ColumnValue struct {
 		LongType   *string `json:",omitempty" xmlify:"omitempty,path=@lg"`
-		IntType    *string `json:",omitempty" xmlify:"omitempty,path=@long"` //TODO is it required?
-		DoubleType *string `json:",omitempty" xmlify:"omitempty,path=@double"`
-		DateType   *string `json:",omitempty" xmlify:"omitempty"`
-		Value      *string `json:",omitempty" xmlify:"omitempty,omittagname"` //TODO change to *string
+		IntType    *string `json:",omitempty" xmlify:"omitempty,path=@long"`
+		DoubleType *string `json:",omitempty" xmlify:"omitempty,path=@db"`
+		DateType   *string `json:",omitempty" xmlify:"omitempty,path=@ts"`
+		Value      *string `json:",omitempty" xmlify:"omitempty,omittagname"`
 	}
 
 	Row struct {
@@ -123,18 +123,34 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 					s := strconv.FormatFloat(float64(*v), 'f', -1, 32)
 					value.DoubleType = &s
 				}
+			default:
+				v := field.Value(sourcePtr)
+				switch field.Type {
+				case xreflect.TimePtrType:
+					if ts, ok := v.(*time.Time); ok && ts != nil {
+						s := ts.Format(RFC3339NanoCustomized)
+						value.DateType = &s
+					}
+				case xreflect.TimeType:
+					if ts, ok := v.(time.Time); ok {
+						s := ts.Format(RFC3339NanoCustomized)
+						value.DateType = &s
+					}
+				default:
+					return nil, fmt.Errorf("xmltab: usnupported type: %T", v)
+				}
 			}
 		default:
 			v := field.Value(sourcePtr)
 			switch field.Type {
 			case xreflect.TimePtrType:
 				if ts, ok := v.(*time.Time); ok && ts != nil {
-					s := ts.Format(time.RFC3339)
+					s := ts.Format(RFC3339NanoCustomized)
 					value.DateType = &s
 				}
 			case xreflect.TimeType:
 				if ts, ok := v.(time.Time); ok {
-					s := ts.Format(time.RFC3339)
+					s := ts.Format(RFC3339NanoCustomized)
 					value.DateType = &s
 				}
 			default:
