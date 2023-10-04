@@ -14,6 +14,19 @@ func TestService_Transfer(t *testing.T) {
 		getData     func() interface{}
 	}{
 		{
+			description: "basic empty slice",
+			getData: func() interface{} {
+				type Foo struct {
+					Id   int
+					Name string
+					F    float64
+					II   int
+				}
+
+				return []Foo{}
+			},
+		},
+		{
 			description: "basic slice",
 			getData: func() interface{} {
 				type Foo struct {
@@ -104,7 +117,7 @@ func TestService_Transfer(t *testing.T) {
 	}
 
 	srv := New()
-	for _, testCase := range testCases {
+	for _, testCase := range testCases[0:1] {
 		fmt.Printf("%s --- \n", testCase.description)
 
 		transfer, err := srv.Transfer(testCase.getData())

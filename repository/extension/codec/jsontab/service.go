@@ -45,9 +45,6 @@ func (t *Service) Transfer(aSlice interface{}) (*Result, error) {
 	}
 	ptr := xunsafe.AsPointer(aSlice)
 	sliceLen := xSlice.Len(ptr)
-	if sliceLen == 0 {
-		return nil, nil
-	}
 	xStruct := xunsafe.NewStruct(componentType)
 	var result = &Result{}
 	t.transferColumns(xStruct, result)
