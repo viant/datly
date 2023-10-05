@@ -11,6 +11,8 @@ import (
 	"unsafe"
 )
 
+const RFC3339NanoCustomized = "2006-01-02T15:04:05.000Z07:00"
+
 type (
 	Column struct {
 		Name string `json:",omitempty"`
@@ -45,9 +47,6 @@ func (t *Service) Transfer(aSlice interface{}) (*Result, error) {
 	}
 	ptr := xunsafe.AsPointer(aSlice)
 	sliceLen := xSlice.Len(ptr)
-	if sliceLen == 0 {
-		return nil, nil
-	}
 	xStruct := xunsafe.NewStruct(componentType)
 	var result = &Result{}
 	t.transferColumns(xStruct, result)
@@ -72,6 +71,11 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 	var record Record
 	for i := range xStruct.Fields {
 		field := &xStruct.Fields[i]
+		tag := json.Parse(field.Tag.Get("json"))
+		if tag.Transient {
+			continue
+		}
+
 		value := ""
 		switch field.Type.Kind() {
 		case reflect.String:
@@ -101,17 +105,31 @@ func (t *Service) transferRecord(xStruct *xunsafe.Struct, sourcePtr unsafe.Point
 				if v := field.Float32Ptr(sourcePtr); v != nil {
 					value = strconv.FormatFloat(float64(*v), 'f', -1, 32)
 				}
+			default:
+				v := field.Value(sourcePtr)
+				switch field.Type {
+				case xreflect.TimePtrType:
+					if ts, ok := v.(*time.Time); ok && ts != nil {
+						value = ts.Format(RFC3339NanoCustomized)
+					}
+				case xreflect.TimeType:
+					if ts, ok := v.(time.Time); ok {
+						value = ts.Format(RFC3339NanoCustomized)
+					}
+				default:
+					return nil, fmt.Errorf("jsontab: usnupported type: %T", v)
+				}
 			}
 		default:
 			v := field.Value(sourcePtr)
 			switch field.Type {
 			case xreflect.TimePtrType:
 				if ts, ok := v.(*time.Time); ok && ts != nil {
-					value = ts.Format(time.RFC3339)
+					value = ts.Format(RFC3339NanoCustomized)
 				}
 			case xreflect.TimeType:
 				if ts, ok := v.(time.Time); ok {
-					value = ts.Format(time.RFC3339)
+					value = ts.Format(RFC3339NanoCustomized)
 				}
 			default:
 				return nil, fmt.Errorf("jsontab: usnupported type: %T", v)
@@ -127,6 +145,9 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 		field := &xStruct.Fields[i]
 
 		tag := json.Parse(field.Tag.Get("json"))
+		if tag.Transient {
+			continue
+		}
 
 		column := &Column{}
 		if tag.FieldName != "" {
@@ -149,7 +170,7 @@ func (t *Service) transferColumns(xStruct *xunsafe.Struct, result *Result) {
 		default:
 			switch field.Type {
 			case xreflect.TimeType, xreflect.TimePtrType:
-				column.Type = "date"
+				column.Type = "timestamp"
 			}
 		}
 		result.Columns = append(result.Columns, column)
