@@ -29,11 +29,11 @@ func TestUrlRewriter_Value(t *testing.T) {
 			},
 			sourceURL:    "view=total&from=2023-10-02&to=2023-10-02&format=xls ",
 			destURL:      "from=2023-10-02&to=2023-10-02",
-			destTypeName: "UrlRewriter",
+			destTypeName: "URIRewriter",
 		},
 	}
 
-	factory := &UrlRewriterFactory{}
+	factory := &URIRewriterFactory{}
 	for _, testCase := range testCases {
 		types := xreflect.NewTypes()
 		_ = types.Register(testCase.destTypeName)

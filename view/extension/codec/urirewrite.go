@@ -12,33 +12,33 @@ import (
 )
 
 const (
-	KeyUrlRewrite = "UrlRewriter"
+	KeyURIRewrite = "URIRewrite"
 )
 
 type (
-	UrlRewriterFactory struct{}
+	URIRewriterFactory struct{}
 
-	UrlRewriter struct {
+	URIRewriter struct {
 		Exclusion []string
 	}
 )
 
-func (e *UrlRewriterFactory) New(codecConfig *codec.Config, options ...codec.Option) (codec.Instance, error) {
+func (e *URIRewriterFactory) New(codecConfig *codec.Config, options ...codec.Option) (codec.Instance, error) {
 	var exclusion []string
 	if len(codecConfig.Args) > 0 {
 		exclusion = strings.Split(codecConfig.Args[0], ",")
 	}
-	ret := &UrlRewriter{
+	ret := &URIRewriter{
 		Exclusion: exclusion,
 	}
 	return ret, nil
 }
 
-func (u *UrlRewriter) ResultType(paramType reflect.Type) (reflect.Type, error) {
+func (u *URIRewriter) ResultType(paramType reflect.Type) (reflect.Type, error) {
 	return xreflect.StringType, nil
 }
 
-func (u *UrlRewriter) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
+func (u *URIRewriter) Value(ctx context.Context, raw interface{}, options ...codec.Option) (interface{}, error) {
 	opts := codec.Options{}
 	opts.Apply(options)
 
