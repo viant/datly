@@ -150,6 +150,13 @@ func (v *View) OutputType() reflect.Type {
 	return v.Schema.Type()
 }
 
+func (v *View) Warmup() *Warmup {
+	if v.Cache == nil {
+		return nil
+	}
+	return v.Cache.Warmup
+}
+
 func (v *View) ViewName() string {
 	return v.Name
 }
@@ -737,7 +744,7 @@ func (v *View) detectColumns(ctx context.Context, resource *Resource) error {
 	if err != nil {
 		return fmt.Errorf("failed to build parameterized query: %v due to %w", SQL, err)
 	}
-	db, err := v.Db()
+	db, err := v.Connector.DB()
 	if err != nil {
 		return err
 	}

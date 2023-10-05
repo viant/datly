@@ -10,17 +10,13 @@ import (
 	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/logger"
-	"github.com/viant/datly/shared"
-	"github.com/viant/datly/utils/types"
-	extension2 "github.com/viant/datly/view/extension"
+	"github.com/viant/datly/view/extension"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/toolbox"
-	rdata "github.com/viant/toolbox/data"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"gopkg.in/yaml.v3"
-	"path"
 	"reflect"
 	"strings"
 	"time"
@@ -58,15 +54,13 @@ type (
 		ModTime time.Time `json:",omitempty"`
 
 		Predicates  []*predicate.Template
-		_predicates *extension2.PredicateRegistry
+		_predicates *extension.PredicateRegistry
 
 		_columnsCache map[string]Columns
 
 		Substitutes Substitutes
 
-		ExpandSourceURL string
-		_expandMap      rdata.Map
-		fs              afs.Service
+		fs afs.Service
 	}
 
 	NamedResources map[string]*Resource
@@ -113,10 +107,6 @@ func (r *Resource) loadText(ctx context.Context, URL string, expand bool) (strin
 
 	if err = r.updateTime(ctx, URL, err); err != nil {
 		return "", err
-	}
-
-	if expand && len(r._expandMap) > 0 {
-		return r._expandMap.ExpandWithoutUDF(string(data)), nil
 	}
 
 	return string(data), err
@@ -188,7 +178,7 @@ func (r *Resource) mergeConnectors(resource *Resource) {
 	connectors := r.ConnectorByName()
 	for i, candidate := range resource.Connectors {
 		if _, ok := connectors[candidate.Name]; !ok {
-			connector := *resource.Connectors[i]
+			connector := *resource.Connectors[i] //TODO why clone ?
 			r.Connectors = append(r.Connectors, &connector)
 		}
 	}
@@ -291,26 +281,10 @@ func (r *Resource) GetConnectors() Connectors {
 
 // Init initializes Resource
 func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
-	if r.ExpandSourceURL != "" {
-		text, err := r.loadText(ctx, r.ExpandSourceURL, false)
-		if err != nil {
-			return err
-		}
-
-		r._expandMap = rdata.NewMap()
-		if err = shared.UnmarshalWithExt([]byte(strings.TrimSpace(text)), r._expandMap, path.Ext(r.ExpandSourceURL)); err != nil {
-			return err
-		}
-
-		if err = types.Traverse(r, r.expandStringField); err != nil {
-			return err
-		}
-	}
-
 	types, codecs, cache, transforms, predicates := r.readOptions(options)
 	r.indexProviders()
 	if codecs == nil {
-		codecs = extension2.Config.Codecs
+		codecs = extension.Config.Codecs
 	}
 	r.codecs = codecs
 	r._columnsCache = cache
@@ -318,7 +292,6 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 		types = r.TypeRegistry()
 	}
 	r._types = types
-
 	for _, definition := range r.Types {
 		if err := definition.Init(ctx, types.Lookup); err != nil {
 			return err
@@ -362,12 +335,12 @@ func (r *Resource) Init(ctx context.Context, options ...interface{}) error {
 	return nil
 }
 
-func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, *codec.Registry, map[string]Columns, marshal.TransformIndex, *extension2.PredicateRegistry) {
+func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, *codec.Registry, map[string]Columns, marshal.TransformIndex, *extension.PredicateRegistry) {
 	var types *xreflect.Types
-	var visitors = codec.NewRegistry()
+	var codecs *codec.Registry
 	var cache map[string]Columns
 	var transformsIndex marshal.TransformIndex
-	var predicatesRegistry *extension2.PredicateRegistry
+	var predicatesRegistry *extension.PredicateRegistry
 
 	for _, option := range options {
 		if option == nil {
@@ -375,21 +348,33 @@ func (r *Resource) readOptions(options []interface{}) (*xreflect.Types, *codec.R
 		}
 		switch actual := option.(type) {
 		case *codec.Registry:
-			visitors = actual
+			codecs = actual
 		case map[string]Columns:
 			cache = actual
 		case *xreflect.Types:
 			types = actual
 		case marshal.TransformIndex:
 			transformsIndex = actual
-		case *extension2.PredicateRegistry:
+		case *extension.PredicateRegistry:
 			predicatesRegistry = actual
-		case extension2.PredicateRegistry:
+		case extension.PredicateRegistry:
 			predicatesRegistry = &actual
+		case *extension.Registry:
+			if predicatesRegistry == nil {
+				predicatesRegistry = actual.Predicates
+			}
+			if codecs == nil {
+				codecs = actual.Codecs
+			}
+			if types == nil {
+				types = actual.Types
+			}
 		}
 	}
-
-	return types, visitors, cache, transformsIndex, predicatesRegistry
+	if r._types != nil {
+		types = r._types
+	}
+	return types, codecs, cache, transformsIndex, predicatesRegistry
 }
 
 // View returns View with given name
@@ -690,7 +675,7 @@ func (r *Resource) mergeMessageBuses(resource *Resource) {
 	}
 }
 
-func (r *Resource) initTemplates(registry *extension2.PredicateRegistry) error {
+func (r *Resource) initTemplates(registry *extension.PredicateRegistry) error {
 	if registry != nil {
 		r._predicates = registry.Scope()
 	}
@@ -706,7 +691,7 @@ func (r *Resource) initTemplates(registry *extension2.PredicateRegistry) error {
 
 func (r *Resource) ensureTemplatesIndex() {
 	if r._predicates == nil {
-		r._predicates = extension2.NewPredicates()
+		r._predicates = extension.NewPredicates()
 	}
 }
 
@@ -720,21 +705,4 @@ func (r *Resource) mergeTemplates(resource *Resource) {
 func (r *Resource) addTemplate(template *predicate.Template) {
 	r.Predicates = append(r.Predicates, template)
 	r._predicates.Add(template)
-}
-
-func (r *Resource) expandStringField(value reflect.Value) error {
-	if value.Kind() != reflect.String {
-		return nil
-	}
-
-	strValue := value.String()
-	expanded := r._expandMap.ExpandWithoutUDF(strValue)
-	expandedValue := reflect.ValueOf(expanded)
-	if value.Type() == xreflect.StringType {
-		value.Set(expandedValue)
-	} else {
-		value.Set(expandedValue.Convert(value.Type()))
-	}
-
-	return nil
 }

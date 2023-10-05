@@ -26,3 +26,7 @@ func (r *Path) Key() string {
 func (r *Path) HttpMethod() string {
 	return r.Method
 }
+
+func NewPath(method, uri string) *Path {
+	return &Path{Method: method, URI: uri}
+}

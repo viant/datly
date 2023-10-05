@@ -16,7 +16,7 @@ type Dispatcher struct {
 
 func (d *Dispatcher) Dispatch(ctx context.Context, path *component.Path, request *http.Request) (interface{}, error) {
 	//TODO maybe extract and pass session cache value
-	aComponent, err := d.registry.Lookup(path)
+	aComponent, err := d.registry.Lookup(ctx, path)
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +30,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, path *component.Path, request
 }
 
 // New creates a dispatcher
-func New(registry *repository.Registry) *Dispatcher {
+func New(registry *repository.Registry) component.Dispatcher {
 	return &Dispatcher{
 		registry: registry,
 		service:  dispatcher.New(),

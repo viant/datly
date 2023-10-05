@@ -8,11 +8,11 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/cmd/options"
 	"github.com/viant/datly/gateway"
-	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/gateway/runtime/standalone/endpoint"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/internal/translator/parser"
+	dpath "github.com/viant/datly/repository/path"
 	"os"
 	"path"
 	"strings"
@@ -130,7 +130,7 @@ func (c *Config) inMemoryConfig() *standalone.Config {
 				RevealMetric: &revealMetrics,
 			},
 			SensitiveConfig: gateway.SensitiveConfig{
-				APIKeys: router.APIKeys{
+				APIKeys: dpath.APIKeys{
 					{
 						URI:    path.Join(c.repository.APIPrefix, "dev", "secured"),
 						Header: "App-Secret-Id",

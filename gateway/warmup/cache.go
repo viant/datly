@@ -1,6 +1,7 @@
 package warmup
 
 import (
+	"context"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/warmup"
 	"net/http"
@@ -8,7 +9,7 @@ import (
 	"time"
 )
 
-type PreCachables func(method, matchingURI string) ([]*view.View, error)
+type PreCachables func(ctx context.Context, method, matchingURI string) ([]*view.View, error)
 type PreCached struct {
 	View      string
 	Elapsed   string
@@ -22,7 +23,7 @@ type Response struct {
 	PreCached []*PreCached `json:"preCached"`
 }
 
-func PreCache(lookup PreCachables, warmupURIs ...string) *Response {
+func PreCache(ctx context.Context, lookup PreCachables, warmupURIs ...string) *Response {
 	group := sync.WaitGroup{}
 	var err error
 	var mux = sync.Mutex{}
@@ -33,7 +34,7 @@ func PreCache(lookup PreCachables, warmupURIs ...string) *Response {
 		go func(URI string) {
 			defer group.Done()
 			startTime := time.Now()
-			views, e := lookup(http.MethodGet, URI)
+			views, e := lookup(ctx, http.MethodGet, URI)
 			if e != nil {
 				err = e
 			}

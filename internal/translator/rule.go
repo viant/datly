@@ -12,6 +12,8 @@ import (
 	"github.com/viant/datly/repository/async"
 	"github.com/viant/datly/repository/component"
 	"github.com/viant/datly/repository/content"
+	dpath "github.com/viant/datly/repository/path"
+	"github.com/viant/datly/service"
 	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view"
@@ -266,7 +268,7 @@ func (r *Rule) applyDefaults() {
 	setter.SetBoolIfFalse(&r.EnableAudit, true)
 	setter.SetBoolIfFalse(&r.Input.CustomValidation, r.CustomValidation || r.HandlerType != "")
 	if r.Route.Cors == nil {
-		r.Route.Cors = &router.Cors{
+		r.Route.Cors = &dpath.Cors{
 			AllowCredentials: setter.BoolPtr(true),
 			AllowHeaders:     setter.StringsPtr("*"),
 			AllowMethods:     setter.StringsPtr("*"),
@@ -341,6 +343,10 @@ func (r *Rule) applyShortHands() {
 	if r.Route.XML != nil && r.Route.Output.DataFormat == "" {
 		r.Route.Output.DataFormat = content.XMLFormat
 	}
+}
+
+func (r *Rule) IsReader() bool {
+	return r.Service == "" || r.Service == service.TypeReader
 }
 
 func NewRule() *Rule {

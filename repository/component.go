@@ -2,17 +2,25 @@ package repository
 
 import (
 	"context"
+	"github.com/francoispqt/gojay"
+	"github.com/viant/afs"
+	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/datly/gateway/router/marshal/json"
+	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository/async"
 	"github.com/viant/datly/repository/component"
 	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state/kind/locator"
+	"github.com/viant/xreflect"
 	"net/http"
+	"reflect"
+	"strings"
 )
 
 // Component represents abstract API view/handler based component
@@ -28,9 +36,25 @@ type (
 		Handler        *handler.Handler `json:",omitempty"`
 		indexedView    view.NamedViews
 		SourceURL      string
-		dispatcher     component.Dispatcher
+
+		dispatcher component.Dispatcher
+		types      *xreflect.Types
 	}
 )
+
+func (r *Component) normalizePaths() error {
+	if !r.Output.ShouldNormalizeExclude() {
+		return nil
+	}
+	for i, transform := range r.Transforms {
+		r.Transforms[i].Path = formatter.NormalizePath(transform.Path)
+	}
+	return nil
+}
+
+func (c *Component) TypeRegistry() *xreflect.Types {
+	return c.types
+}
 
 // SetDispatcher sets components dispatcher
 func (c *Component) SetDispatcher(dispatcher component.Dispatcher) {
@@ -38,6 +62,11 @@ func (c *Component) SetDispatcher(dispatcher component.Dispatcher) {
 }
 
 func (c *Component) Init(ctx context.Context, resource *view.Resource) (err error) {
+	c.types = resource.TypeRegistry()
+	if c.Output.Style == component.BasicStyle {
+		c.Output.Field = ""
+	}
+
 	if c.Handler != nil {
 		if err = c.Handler.Init(ctx, resource); err != nil {
 			return err
@@ -53,10 +82,28 @@ func (c *Component) Init(ctx context.Context, resource *view.Resource) (err erro
 	if err = c.Contract.Init(ctx, &c.Path, c.View); err != nil {
 		return err
 	}
-
+	if err := c.normalizePaths(); err != nil {
+		return err
+	}
+	if err := c.initTransforms(ctx); err != nil {
+		return nil
+	}
+	if err := c.Content.InitMarshaller(c.IOConfig(), c.Output.Exclude, c.BodyType(), c.OutputType()); err != nil {
+		return err
+	}
 	if err = c.Async.Init(ctx, resource, c.View); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (r *Component) initTransforms(ctx context.Context) error {
+	for _, transform := range r.Transforms {
+		if err := transform.Init(ctx, afs.New(), r.types.Lookup); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -145,5 +192,40 @@ func (c *Component) IOConfig() config.IOConfig {
 		CaseFormat: *c.Output.FormatCase(),
 		Exclude:    config.Exclude(c.Output.Exclude).Index(),
 		DateLayout: c.DateFormat,
+	}
+}
+
+func (r *Component) UnmarshalFunc(request *http.Request) shared.Unmarshal {
+	contentType := request.Header.Get(content.HeaderContentType)
+	setter.SetStringIfEmpty(&contentType, request.Header.Get(strings.ToLower(content.HeaderContentType)))
+	switch contentType {
+	case content.CSVContentType:
+		return r.Content.CSV.Unmarshal
+	}
+	jsonPathInterceptor := json.UnmarshalerInterceptors{}
+	unmarshallerInterceptors := r.UnmarshallerInterceptors()
+	for i := range unmarshallerInterceptors {
+		transform := unmarshallerInterceptors[i]
+		jsonPathInterceptor[transform.Path] = r.transformFn(request, transform)
+	}
+	return func(bytes []byte, i interface{}) error {
+		return r.Content.JsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
+	}
+}
+
+func (r *Component) transformFn(request *http.Request, transform *marshal.Transform) func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
+	unmarshaller := transform.UnmarshalerInto()
+	if unmarshaller != nil {
+		return unmarshaller.UnmarshalJSONWithOptions
+	}
+	return func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {
+		evaluate, err := transform.Evaluate(request, decoder, r.types.Lookup)
+		if err != nil {
+			return err
+		}
+		if evaluate.Ctx.Decoder.Decoded != nil {
+			reflect.ValueOf(dst).Elem().Set(reflect.ValueOf(evaluate.Ctx.Decoder.Decoded))
+		}
+		return nil
 	}
 }

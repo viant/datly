@@ -25,6 +25,7 @@ type (
 	db struct {
 		mutex       sync.Mutex
 		actual      *sql.DB
+		err         error
 		ctx         context.Context
 		cancelFunc  context.CancelFunc
 		initialized bool
@@ -150,9 +151,8 @@ func (d *db) initDatabase(driver string, dsn string, config *DBConfig) error {
 	}
 
 	d.initialized = true
-	var err error
 	started := time.Now()
-	d.actual, err = sql.Open(driver, dsn)
+	d.actual, d.err = sql.Open(driver, dsn)
 	if elapsed := time.Since(started); elapsed > 100*time.Millisecond {
 		fmt.Printf("[WARN] %v connection took %s\n", dsn, elapsed)
 	}
@@ -160,7 +160,7 @@ func (d *db) initDatabase(driver string, dsn string, config *DBConfig) error {
 		d.configureDB(config, d.actual)
 	}
 
-	return err
+	return d.err
 }
 
 func (d *db) connect() (*sql.DB, error) {
@@ -169,7 +169,7 @@ func (d *db) connect() (*sql.DB, error) {
 	d.mutex.Unlock()
 
 	if aDb == nil {
-		return nil, fmt.Errorf("no connection with database is available")
+		return nil, fmt.Errorf("no connection with database is available %w", d.err)
 	}
 
 	return aDb, nil

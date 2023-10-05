@@ -38,6 +38,5 @@ func obfuscateAuthorization(request *http.Request, response http.ResponseWriter,
 			}
 		}
 	}
-
 	headers.Set("Authorization", "***")
 }

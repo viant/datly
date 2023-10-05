@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/gateway"
-	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/gateway/runtime/standalone/handler"
 	"github.com/viant/datly/view/extension"
 	"github.com/viant/gmetric"
@@ -37,17 +36,8 @@ func (r *Server) shutdownOnInterrupt() {
 	}()
 }
 
-func (r *Server) Routes() []*router.Route {
-	aRouter, ok := r.Service.Router()
-	if !ok {
-		return []*router.Route{}
-	}
-
-	return aRouter.MatchAllByPrefix("")
-}
-
-func NewWithAuth(gwayConfig *Config, auth gateway.Authorizer) (*Server, error) {
-	gwayConfig.Init()
+func NewWithAuth(ctx context.Context, gwayConfig *Config, auth gateway.Authorizer) (*Server, error) {
+	gwayConfig.Init(ctx)
 	//mux := http.NewServeMux()
 	metric := gmetric.New()
 	if gwayConfig.Config == nil {
@@ -85,6 +75,6 @@ func NewWithAuth(gwayConfig *Config, auth gateway.Authorizer) (*Server, error) {
 	return server, nil
 }
 
-func New(config *Config) (*Server, error) {
-	return NewWithAuth(config, nil)
+func New(ctx context.Context, config *Config) (*Server, error) {
+	return NewWithAuth(ctx, config, nil)
 }

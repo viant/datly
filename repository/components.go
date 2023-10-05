@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/viant/afs/file"
@@ -20,7 +21,7 @@ type Components struct {
 	Components  []*Component
 	Resource    *view.Resource
 	columns     *discover.Columns
-	resources   *resource.Resources
+	resources   *resource.Service
 	options     *Options
 	initialized bool
 }
@@ -33,7 +34,11 @@ func (c *Components) Init(ctx context.Context) error {
 	if err := c.ensureColumns(ctx); err != nil {
 		return err
 	}
-	if err := c.Resource.Init(ctx, c.options.registry, c.columns.Items); err != nil {
+	var columns = map[string]view.Columns{}
+	if c.columns != nil {
+		columns = c.columns.Items
+	}
+	if err := c.Resource.Init(ctx, c.options.extensions, columns); err != nil {
 		return err
 	}
 	for _, component := range c.Components {
@@ -49,25 +54,29 @@ func (c *Components) columnsFile() string {
 	return url.Join(parent, ".meta", leaf)
 }
 
-func (c *Components) mergeResources() error {
+func (c *Components) mergeResources(ctx context.Context) error {
 	if len(c.With) == 0 {
 		return nil
 	}
 	for _, ref := range c.With {
-		refResource, err := c.options.resources.Lookup(ref)
+		refResource, err := c.options.resources.Lookup(ctx, ref)
 		if err != nil {
 			return err
 		}
-		c.Resource.MergeFrom(refResource.Resource, c.options.registry.Types)
+		c.Resource.MergeFrom(refResource.Resource, c.options.extensions.Types)
 	}
 	return nil
 }
 
 func (c *Components) ensureColumns(ctx context.Context) error {
-	if c.columns == nil {
-		c.columns = discover.New(c.columnsFile(), c.options.fs)
+	columnFile := c.columnsFile()
+	if ok, _ := c.options.fs.Exists(ctx, columnFile); !ok {
+		return nil
 	}
-	if !c.options.useColumns {
+	if c.columns == nil {
+		c.columns = discover.New(columnFile, c.options.fs)
+	}
+	if !c.options.UseColumn() {
 		return nil
 	}
 	if len(c.columns.Items) > 0 {
@@ -77,27 +86,34 @@ func (c *Components) ensureColumns(ctx context.Context) error {
 }
 
 func LoadComponents(ctx context.Context, URL string, opts ...Option) (*Components, error) {
-	options := NewOptions(opts...)
+	options := NewOptions("", opts...)
 	data, err := options.fs.DownloadWithURL(ctx, URL)
 	if err != nil {
 		return nil, err
+	}
+	if substitutes, _ := options.resources.Lookup(ctx, "substitutes"); substitutes != nil {
+		if bytes.Contains(data, []byte("substitutes")) {
+			data = []byte(substitutes.Substitutes.Replace(string(data)))
+		}
 	}
 	components, err := unmarshalComponent(data)
 	if err != nil {
 		return nil, err
 	}
 	components.URL = URL
-
 	components.options = options
 	if components.Resource == nil {
-		return nil, fmt.Errorf("components was empty: %v", URL)
+		return nil, fmt.Errorf("resources were empty: %v", URL)
 	}
-	if err = components.mergeResources(); err != nil {
+	if err = components.mergeResources(ctx); err != nil {
 		return nil, err
 	}
-	components.Resource.Metrics = options.metrics
+
+	//TODO make it working
+	//components.Resource.Metrics = options.metrics
+
 	components.Resource.SourceURL = URL
-	components.Resource.SetTypes(options.registry.Types)
+	components.Resource.SetTypes(options.extensions.Types)
 	object, _ := options.fs.Object(ctx, URL)
 	components.Resource.ModTime = object.ModTime()
 	return components, nil
@@ -118,7 +134,7 @@ func unmarshalComponent(data []byte) (*Components, error) {
 }
 
 func ensureComponents(aMap map[string]interface{}) {
-	if _, ok := aMap["Components"]; !ok { //forward compatibiltiy
+	if _, ok := aMap["Components"]; !ok { //backward compatibility
 		aMap["Components"] = aMap["Routes"]
 	}
 }

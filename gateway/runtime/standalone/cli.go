@@ -26,7 +26,7 @@ func RunApp(version string, args []string) error {
 	return srv.ListenAndServe()
 }
 
-//NewWithURL create service with config URL
+// NewWithURL create service with config URL
 func NewWithURL(configURL, version string) (*Server, error) {
 	ctx := context.Background()
 	config, err := NewConfigFromURL(ctx, configURL)
@@ -34,7 +34,7 @@ func NewWithURL(configURL, version string) (*Server, error) {
 		return nil, err
 	}
 	config.Version = version
-	srv, err := New(config)
+	srv, err := New(ctx, config)
 	if err != nil {
 		return nil, err
 	}

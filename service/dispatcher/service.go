@@ -21,6 +21,7 @@ type Service struct {
 	fs afs.Service
 }
 
+// TODO better package and func name, to avoid cross component dispatch
 func (s *Service) Dispatch(ctx context.Context, aComponent *repository.Component, aSession *session.Session) (interface{}, error) {
 	if err := s.updateJobStatusRunning(ctx, aComponent); err != nil {
 		return nil, err

@@ -23,9 +23,9 @@ type (
 	}
 )
 
-//Init initialises config
-func (c *Config) Init() {
-	c.Config.Init()
+// init initialises config
+func (c *Config) Init(ctx context.Context) {
+	c.Config.Init(ctx)
 	c.Endpoint.Init()
 	if c.Cognito != nil {
 		c.Cognito.Init()
@@ -37,7 +37,7 @@ func (c *Config) Init() {
 	//}
 }
 
-//Validate validates config
+// Validate validates config
 func (c *Config) Validate() error {
 	return nil
 }
@@ -70,6 +70,6 @@ func NewConfigFromURL(ctx context.Context, URL string) (*Config, error) {
 		return nil, err
 	}
 	cfg.URL = URL
-	cfg.Init()
+	cfg.Init(ctx)
 	return cfg, cfg.Validate()
 }

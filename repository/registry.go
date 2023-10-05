@@ -14,21 +14,15 @@ type (
 		apiPrefix string
 		mux       sync.RWMutex
 		index     map[string]*Provider
-		entries
-		matcher *matcher.Matcher
+		providers
+		matcher    *matcher.Matcher
+		dispatcher component.Dispatcher
 	}
 
-	Provider struct {
-		path          component.Path
-		control       version.Control
-		loadComponent func(ctx context.Context) (*Component, error)
-		component     *Component
-	}
-
-	entries []*Provider
+	providers []*Provider
 )
 
-func (e entries) matchables() []matcher.Matchable {
+func (e providers) matchables() []matcher.Matchable {
 	var result = make([]matcher.Matchable, 0, len(e))
 	for _, item := range e {
 		result = append(result, item)
@@ -48,14 +42,13 @@ func (r *Provider) Namespaces() []string {
 	return []string{r.path.Method}
 }
 
-func (r *Registry) Lookup(path *component.Path) (*Component, error) {
+func (r *Registry) LookupProvider(ctx context.Context, path *component.Path) (*Provider, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
-
 	key := indexKey(path)
 	ret, ok := r.index[key]
 	if ok {
-		return ret.component, nil
+		return ret, nil
 	}
 	matchable, err := r.matcher.MatchOne(path.Method, path.URI)
 	if err != nil {
@@ -65,13 +58,21 @@ func (r *Registry) Lookup(path *component.Path) (*Component, error) {
 	if !ok {
 		return nil, fmt.Errorf("expected: %T, but had: %T", result, matchable)
 	}
-	return result.component, nil
+	return result, nil
+}
+
+func (r *Registry) Lookup(ctx context.Context, path *component.Path) (*Component, error) {
+	provider, err := r.LookupProvider(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	return provider.Component(ctx)
 }
 
 func (r *Registry) Register(components ...*Component) {
 	r.mux.Lock()
 	defer r.mux.Unlock()
-	count := len(r.entries)
+	count := len(r.providers)
 	for i := range components {
 		aComponent := components[i]
 		key := indexKey(&aComponent.Path)
@@ -79,19 +80,47 @@ func (r *Registry) Register(components ...*Component) {
 			prev.component = aComponent
 			continue
 		}
-		anEntry := &Provider{
+		if aComponent.dispatcher == nil {
+			aComponent.dispatcher = r.dispatcher
+		}
+		aProvider := &Provider{
 			path:      component.Path{Method: aComponent.Method, URI: aComponent.URI},
 			component: aComponent,
+			control:   &version.Control{},
 		}
-		r.index[key] = anEntry
-		r.entries = append(r.entries, anEntry)
+		r.index[key] = aProvider
+		r.providers = append(r.providers, aProvider)
 	}
 
-	if count != len(r.entries) {
-		r.matcher = matcher.NewMatcher(r.entries.matchables())
+	if count != len(r.providers) {
+		r.matcher = matcher.NewMatcher(r.providers.matchables())
 	}
 }
 
-func NewRegistry(apiPrefix string) *Registry {
-	return &Registry{index: map[string]*Provider{}, apiPrefix: apiPrefix}
+func (r *Registry) SetProviders(providers []*Provider) {
+	r.providers = providers
+	r.index = map[string]*Provider{}
+	for _, provider := range r.providers {
+		r.index[provider.path.Key()] = provider
+	}
+	r.matcher = matcher.NewMatcher(r.providers.matchables())
+}
+
+func (r *Registry) SetComponents(components []*Component) {
+	r.index = map[string]*Provider{}
+	r.providers = nil
+	r.Register(components...)
+}
+
+func (r *Registry) Dispatcher() component.Dispatcher {
+	return r.dispatcher
+}
+
+func NewRegistry(apiPrefix string, newDispatcher func(registry *Registry) component.Dispatcher) *Registry {
+	ret := &Registry{index: map[string]*Provider{}, apiPrefix: apiPrefix}
+
+	if newDispatcher != nil {
+		ret.dispatcher = newDispatcher(ret)
+	}
+	return ret
 }

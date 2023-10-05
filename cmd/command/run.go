@@ -82,9 +82,9 @@ func (s *Service) run(ctx context.Context, run *options.Run) (*standalone.Server
 	authenticator, err := jwt.Init(s.config.Config, nil)
 	var srv *standalone.Server
 	if authenticator == nil {
-		srv, err = standalone.New(s.config)
+		srv, err = standalone.New(ctx, s.config)
 	} else {
-		srv, err = standalone.NewWithAuth(s.config, authenticator)
+		srv, err = standalone.NewWithAuth(ctx, s.config, authenticator)
 	}
 	return srv, err
 }

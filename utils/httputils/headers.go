@@ -15,7 +15,7 @@ const (
 	DatlyResponseHeaderMetrics     = "Datly-Metrics"
 
 	DatlyServiceTimeHeader = "Datly-Service-Time"
-	DatlyServiceInitHeader = "Datly-Service-Init"
+	DatlyServiceInitHeader = "Datly-Service-init"
 
 	//ContentTypeJSON json content type
 	ContentTypeJSON = "application/json"

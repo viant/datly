@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/afs"
-	"github.com/viant/datly/gateway/router/async"
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/component"
 	"github.com/viant/datly/repository/content"
+	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/utils/httputils"
@@ -29,13 +29,16 @@ const (
 )
 
 type (
+
+	//deprecated
 	Routes []*Route
-	Route  struct {
-		APIKey      *APIKey      `json:",omitempty"`
-		Cors        *Cors        `json:",omitempty"`
-		EnableAudit bool         `json:",omitempty"`
-		EnableDebug *bool        `json:",omitempty"`
-		Compression *Compression `json:",omitempty"`
+	//deprecated
+	Route struct {
+		APIKey      *path.APIKey      `json:",omitempty"`
+		Cors        *path.Cors        `json:",omitempty"`
+		EnableAudit bool              `json:",omitempty"`
+		EnableDebug *bool             `json:",omitempty"`
+		Compression *path.Compression `json:",omitempty"`
 
 		Transforms marshal.Transforms `json:",omitempty"`
 
@@ -44,12 +47,26 @@ type (
 		_unmarshallerInterceptors marshal.Transforms
 
 		_resource     *view.Resource
-		_apiKeys      []*APIKey
+		_apiKeys      []*path.APIKey
 		_routeMatcher func(route *http2.Route) (*Route, error)
-		_async        *async.Async
-		_router       *Router
+		_router       *Handler
 	}
 )
+
+func (r *Route) IsMetricsEnabled(req *http.Request) bool {
+	return r.IsMetricInfo(req) || r.IsMetricDebug(req)
+}
+
+func (r *Route) IsMetricInfo(req *http.Request) bool {
+	if !r.Output.IsRevealMetric() {
+		return false
+	}
+	value := req.Header.Get(httputils.DatlyRequestMetricsHeader)
+	if value == "" {
+		value = req.Header.Get(strings.ToLower(httputils.DatlyRequestMetricsHeader))
+	}
+	return strings.ToLower(value) == httputils.DatlyInfoHeaderValue
+}
 
 func (r *Route) HttpURI() string {
 	return r.URI
@@ -86,7 +103,6 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 	if err := r.Component.Init(ctx, resource.Resource); err != nil {
 		return err
 	}
-	r.initCors(resource)
 	r.initCompression(resource)
 
 	if err := r.normalizePaths(); err != nil {
@@ -96,7 +112,7 @@ func (r *Route) Init(ctx context.Context, resource *Resource) error {
 		return nil
 	}
 	r._unmarshallerInterceptors = r.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
-	if err := r.InitMarshaller(r.Component.IOConfig(), r.Output.Exclude, r.BodyType(), r.OutputType()); err != nil {
+	if err := r.Component.Content.InitMarshaller(r.Component.IOConfig(), r.Output.Exclude, r.BodyType(), r.OutputType()); err != nil {
 		return err
 	}
 	if r.APIKey != nil {
@@ -123,15 +139,6 @@ func (r *Route) IsMetricDebug(req *http.Request) bool {
 	return strings.ToLower(value) == httputils.DatlyDebugHeaderValue
 }
 
-func (r *Route) initCors(resource *Resource) {
-	if r.Cors == nil {
-		r.Cors = resource.Cors
-		return
-	}
-
-	r.Cors.inherit(resource.Cors)
-}
-
 func (r *Route) PgkPath(fieldName string) string {
 	var responseFieldPgkPath string
 	if fieldName[0] < 'A' || fieldName[0] > 'Z' {
@@ -155,11 +162,10 @@ func (r *Route) normalizePaths() error {
 	for i, transform := range r.Transforms {
 		r.Transforms[i].Path = formatter.NormalizePath(transform.Path)
 	}
-
 	return nil
 }
 
-func (r *Route) AddApiKeys(keys ...*APIKey) {
+func (r *Route) AddApiKeys(keys ...*path.APIKey) {
 	r._apiKeys = append(r._apiKeys, keys...)
 }
 

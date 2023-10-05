@@ -3,7 +3,6 @@ package translator
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/viant/datly/service"
 	"github.com/viant/datly/utils/formatter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/discover"
@@ -150,7 +149,7 @@ func (s *Service) detectColumns(resource *Resource, columnDiscovery discover.Col
 		return err
 	}
 
-	if !resource.Rule.IsGeneratation && resource.Rule.Service == service.TypeReader { //skip view column generation if generator use translator
+	if !resource.Rule.IsGeneratation && resource.Rule.IsReader() { //skip view column generation if generator use translator
 		err = s.persistViewMetaColumn(columnDiscovery, resource)
 		if err != nil {
 			return err
