@@ -2,14 +2,14 @@ package repository
 
 import (
 	"context"
-	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/version"
 	"sync"
 )
 
 type Provider struct {
 	mux          sync.RWMutex
-	path         component.Path
+	path         contract.Path
 	control      *version.Control
 	newComponent func(ctx context.Context, opts ...Option) (*Component, error)
 	component    *Component
@@ -38,6 +38,6 @@ func (p *Provider) Component(ctx context.Context, opts ...Option) (*Component, e
 	return aComponent, nil
 }
 
-func NewProvider(path component.Path, control *version.Control, newComponent func(ctx context.Context, opts ...Option) (*Component, error)) *Provider {
+func NewProvider(path contract.Path, control *version.Control, newComponent func(ctx context.Context, opts ...Option) (*Component, error)) *Provider {
 	return &Provider{path: path, control: control, newComponent: newComponent}
 }

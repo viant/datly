@@ -1,10 +1,10 @@
-package dispatcher
+package processor
 
 import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/repository"
-	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view/state/kind/locator"
@@ -41,7 +41,7 @@ func (s *Service) execute(ctx context.Context, aComponent *repository.Component,
 		responseState := aComponent.Output.Type.Type().NewState()
 		statelet := executorSession.Session.State().Lookup(executorSession.View)
 
-		status := component.StatusSuccess(executorSession.TemplateState)
+		status := contract.StatusSuccess(executorSession.TemplateState)
 		if err := aSession.SetState(ctx, aComponent.Output.Type.Parameters, responseState, aSession.Indirect(true,
 			locator.WithCustomOption(&status),
 			locator.WithState(statelet.Template))); err != nil {

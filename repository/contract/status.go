@@ -1,4 +1,4 @@
-package component
+package contract
 
 import (
 	expand "github.com/viant/datly/service/executor/expand"

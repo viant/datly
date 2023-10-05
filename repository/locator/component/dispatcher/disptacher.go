@@ -3,18 +3,18 @@ package dispatcher
 import (
 	"context"
 	"github.com/viant/datly/repository"
-	"github.com/viant/datly/repository/component"
-	"github.com/viant/datly/service/dispatcher"
+	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/service/processor"
 	"github.com/viant/datly/service/session"
 	"net/http"
 )
 
 type Dispatcher struct {
 	registry *repository.Registry
-	service  *dispatcher.Service
+	service  *processor.Service
 }
 
-func (d *Dispatcher) Dispatch(ctx context.Context, path *component.Path, request *http.Request) (interface{}, error) {
+func (d *Dispatcher) Dispatch(ctx context.Context, path *contract.Path, request *http.Request) (interface{}, error) {
 	//TODO maybe extract and pass session cache value
 	aComponent, err := d.registry.Lookup(ctx, path)
 	if err != nil {
@@ -25,14 +25,14 @@ func (d *Dispatcher) Dispatch(ctx context.Context, path *component.Path, request
 	if err = aSession.Populate(ctx); err != nil {
 		return nil, err
 	}
-	value, err := d.service.Dispatch(ctx, aComponent, aSession)
+	value, err := d.service.Process(ctx, aComponent, aSession)
 	return value, err
 }
 
 // New creates a dispatcher
-func New(registry *repository.Registry) component.Dispatcher {
+func New(registry *repository.Registry) contract.Dispatcher {
 	return &Dispatcher{
 		registry: registry,
-		service:  dispatcher.New(),
+		service:  processor.New(),
 	}
 }

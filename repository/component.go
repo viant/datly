@@ -9,8 +9,8 @@ import (
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository/async"
-	"github.com/viant/datly/repository/component"
 	"github.com/viant/datly/repository/content"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/service/executor/handler"
 	"github.com/viant/datly/shared"
@@ -27,8 +27,8 @@ import (
 type (
 	Component struct {
 		version.Version
-		component.Path
-		component.Contract
+		contract.Path
+		contract.Contract
 		content.Content
 		Async          *async.Config `json:",omitempty"`
 		View           *view.View    `json:",omitempty"`
@@ -37,33 +37,18 @@ type (
 		indexedView    view.NamedViews
 		SourceURL      string
 
-		dispatcher component.Dispatcher
+		dispatcher contract.Dispatcher
 		types      *xreflect.Types
 	}
 )
-
-func (r *Component) normalizePaths() error {
-	if !r.Output.ShouldNormalizeExclude() {
-		return nil
-	}
-	for i, transform := range r.Transforms {
-		r.Transforms[i].Path = formatter.NormalizePath(transform.Path)
-	}
-	return nil
-}
 
 func (c *Component) TypeRegistry() *xreflect.Types {
 	return c.types
 }
 
-// SetDispatcher sets components dispatcher
-func (c *Component) SetDispatcher(dispatcher component.Dispatcher) {
-	c.dispatcher = dispatcher
-}
-
 func (c *Component) Init(ctx context.Context, resource *view.Resource) (err error) {
 	c.types = resource.TypeRegistry()
-	if c.Output.Style == component.BasicStyle {
+	if c.Output.Style == contract.BasicStyle {
 		c.Output.Field = ""
 	}
 
@@ -211,6 +196,16 @@ func (r *Component) UnmarshalFunc(request *http.Request) shared.Unmarshal {
 	return func(bytes []byte, i interface{}) error {
 		return r.Content.JsonMarshaller.Unmarshal(bytes, i, jsonPathInterceptor, request)
 	}
+}
+
+func (r *Component) normalizePaths() error {
+	if !r.Output.ShouldNormalizeExclude() {
+		return nil
+	}
+	for i, transform := range r.Transforms {
+		r.Transforms[i].Path = formatter.NormalizePath(transform.Path)
+	}
+	return nil
 }
 
 func (r *Component) transformFn(request *http.Request, transform *marshal.Transform) func(dst interface{}, decoder *gojay.Decoder, options ...interface{}) error {

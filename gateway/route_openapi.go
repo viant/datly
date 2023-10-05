@@ -4,20 +4,20 @@ import (
 	"context"
 	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/repository"
-	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"gopkg.in/yaml.v3"
 	"net/http"
 )
 
 func (r *Router) NewOpenAPIRoute(URL string, providers ...*repository.Provider) *Route {
 	return &Route{
-		Path:      component.NewPath(http.MethodGet, URL),
+		Path:      contract.NewPath(http.MethodGet, URL),
 		Providers: providers,
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			r.handleOpenAPI(ctx, response, req, providers)
 		},
 		Kind: RouteOpenAPIKind,
-		NewMultiRoute: func(routes []*component.Path) *Route {
+		NewMultiRoute: func(routes []*contract.Path) *Route {
 			return r.NewOpenAPIRoute("", providers...)
 		},
 	}

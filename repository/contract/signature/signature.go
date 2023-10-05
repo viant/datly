@@ -1,4 +1,4 @@
-package contract
+package signature
 
 import (
 	"github.com/viant/datly/view"

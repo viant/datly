@@ -9,7 +9,7 @@ import (
 	"github.com/viant/afs/storage"
 	"github.com/viant/afs/url"
 	"github.com/viant/cloudless/resource"
-	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/version"
 	"gopkg.in/yaml.v3"
 	"path"
@@ -100,7 +100,7 @@ func (s *Service) lookupRouteBySourceURL(URL string) *Item {
 	return s.Container.Items[index]
 }
 
-func (s *Service) Lookup(aPath *component.Path) *Path {
+func (s *Service) Lookup(aPath *contract.Path) *Path {
 	s.mux.RLock()
 	defer s.mux.RLock()
 	index, ok := s.byPath[aPath.Key()]

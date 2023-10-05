@@ -11,9 +11,9 @@ import (
 	"github.com/viant/datly/gateway/runtime/meta"
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/repository"
-	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
-	"github.com/viant/datly/service/dispatcher"
+	"github.com/viant/datly/service/processor"
 	"github.com/viant/datly/service/session"
 	"github.com/viant/datly/view"
 	"github.com/viant/gmetric"
@@ -29,18 +29,18 @@ type (
 		routeMatcher  *matcher.Matcher
 		apiKeyMatcher *matcher.Matcher
 		repository    *repository.Service
-		dispatcher    *dispatcher.Service
+		processor     *processor.Service
 		config        *Config
 		OpenAPIInfo   openapi3.Info
 		metrics       *gmetric.Service
 		statusHandler http.Handler
 		authorizer    Authorizer
-		paths         []*component.Path
+		paths         []*contract.Path
 	}
 
 	AvailableRoutesError struct {
 		Message string
-		Paths   []*component.Path
+		Paths   []*contract.Path
 	}
 
 	ApiKeyWrapper struct {
@@ -69,7 +69,7 @@ func NewRouter(ctx context.Context, components *repository.Service, config *Conf
 		statusHandler: statusHandler,
 		authorizer:    authorizer,
 		repository:    components,
-		dispatcher:    dispatcher.New(),
+		processor:     processor.New(),
 		apiKeyMatcher: newApiKeyMatcher(config.APIKeys),
 	}
 	return r, r.init(ctx)
@@ -117,7 +117,7 @@ func (r *Router) handleWithError(writer http.ResponseWriter, request *http.Reque
 }
 
 func (r *Router) HandleJob(ctx context.Context, job *async.Job) error {
-	aPath := &component.Path{
+	aPath := &contract.Path{
 		URI:    job.URI,
 		Method: job.Method,
 	}
@@ -142,7 +142,7 @@ func (r *Router) HandleJob(ctx context.Context, job *async.Job) error {
 	if err = aSession.Unmarshal(aComponent.Input.Type.Parameters, []byte(job.State)); err != nil {
 		return err
 	}
-	if _, err = r.dispatcher.Dispatch(ctx, aComponent, aSession); err != nil {
+	if _, err = r.processor.Process(ctx, aComponent, aSession); err != nil {
 		return err
 	}
 	return nil
@@ -165,7 +165,7 @@ func (r *Router) match(method string, URL string, req *http.Request) (*Route, er
 		return asRoute, nil
 	default:
 		//TODO how would we get here ?
-		var routes []*component.Path
+		var routes []*contract.Path
 		var lastMatched *Route
 		for _, matchable := range matched {
 			asRoute, ok := matchable.(*Route)
@@ -297,9 +297,9 @@ func (r *Router) init(ctx context.Context) (err error) {
 	return err
 }
 
-func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*component.Path, error) {
+func (r *Router) newMatcher(ctx context.Context) (*matcher.Matcher, []*contract.Path, error) {
 	routes := make([]*Route, 0)
-	paths := make([]*component.Path, 0, len(routes))
+	paths := make([]*contract.Path, 0, len(routes))
 	container := r.repository.Container()
 	for _, anItem := range container.Items {
 

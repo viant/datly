@@ -1,10 +1,10 @@
-package contract
+package signature
 
 import (
 	"context"
 	"fmt"
 	"github.com/viant/afs"
-	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/xreflect"
@@ -60,11 +60,11 @@ func (h *Header) buildFilterType(contract *ContractPath, registry *xreflect.Type
 	}
 }
 
-func (h *Header) buildOutputType(contract *ContractPath, signature *Signature, registry *xreflect.Types) error {
-	if contract.Output == nil || contract.Output.Type == nil || len(contract.Output.Type.Parameters) == 0 {
+func (h *Header) buildOutputType(aContract *ContractPath, signature *Signature, registry *xreflect.Types) error {
+	if aContract.Output == nil || aContract.Output.Type == nil || len(aContract.Output.Type.Parameters) == 0 {
 		return nil
 	}
-	parameters := state.Parameters(contract.Output.Type.Parameters)
+	parameters := state.Parameters(aContract.Output.Type.Parameters)
 	isAnonymous := len(parameters) == 1 && strings.Contains(parameters[0].Tag, "anonymous")
 
 	outputParameter := parameters.LookupByLocation(state.KindOutput, "data")
@@ -78,9 +78,9 @@ func (h *Header) buildOutputType(contract *ContractPath, signature *Signature, r
 		}
 	}
 	if viewType == nil {
-		return fmt.Errorf("failed to match data component output type for path: %v:%v", contract.Method, contract.URI)
+		return fmt.Errorf("failed to match data component output type for path: %v:%v", aContract.Method, aContract.URI)
 	}
-	component.EnsureOutputKindParameterTypes(parameters, nil)
+	contract.EnsureOutputKindParameterTypes(parameters, nil)
 	if !isAnonymous {
 		rType, _ := registry.Lookup(viewType.Name)
 		cardinality := outputParameter.Schema.Cardinality

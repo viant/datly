@@ -15,8 +15,8 @@ import (
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service"
-	"github.com/viant/datly/service/dispatcher"
 	expand2 "github.com/viant/datly/service/executor/expand"
+	"github.com/viant/datly/service/processor"
 	reader "github.com/viant/datly/service/reader"
 	session "github.com/viant/datly/service/session"
 	"github.com/viant/datly/utils/httputils"
@@ -41,7 +41,7 @@ type (
 	Handler struct {
 		Path       *path.Path
 		Provider   *repository.Provider
-		dispatcher *dispatcher.Service
+		dispatcher *processor.Service
 	}
 )
 
@@ -78,7 +78,7 @@ func New(aPath *path.Path, provider *repository.Provider) *Handler {
 	ret := &Handler{
 		Path:       aPath,
 		Provider:   provider,
-		dispatcher: dispatcher.New(),
+		dispatcher: processor.New(),
 	}
 	return ret
 }
@@ -310,7 +310,7 @@ func (r *Handler) payloadReader(ctx context.Context, request *http.Request, writ
 	if err := aSession.Populate(ctx); err != nil {
 		return nil, err
 	}
-	aResponse, err := r.dispatcher.Dispatch(ctx, aComponent, aSession)
+	aResponse, err := r.dispatcher.Process(ctx, aComponent, aSession)
 	if err != nil {
 		return nil, err
 	}

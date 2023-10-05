@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/cloudless/gateway/matcher"
-	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/version"
 	"sync"
 )
@@ -16,7 +16,7 @@ type (
 		index     map[string]*Provider
 		providers
 		matcher    *matcher.Matcher
-		dispatcher component.Dispatcher
+		dispatcher contract.Dispatcher
 	}
 
 	providers []*Provider
@@ -30,7 +30,7 @@ func (e providers) matchables() []matcher.Matchable {
 	return result
 }
 
-func indexKey(path *component.Path) string {
+func indexKey(path *contract.Path) string {
 	return path.Method + ":" + path.URI
 }
 
@@ -42,7 +42,7 @@ func (r *Provider) Namespaces() []string {
 	return []string{r.path.Method}
 }
 
-func (r *Registry) LookupProvider(ctx context.Context, path *component.Path) (*Provider, error) {
+func (r *Registry) LookupProvider(ctx context.Context, path *contract.Path) (*Provider, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
 	key := indexKey(path)
@@ -61,7 +61,7 @@ func (r *Registry) LookupProvider(ctx context.Context, path *component.Path) (*P
 	return result, nil
 }
 
-func (r *Registry) Lookup(ctx context.Context, path *component.Path) (*Component, error) {
+func (r *Registry) Lookup(ctx context.Context, path *contract.Path) (*Component, error) {
 	provider, err := r.LookupProvider(ctx, path)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func (r *Registry) Register(components ...*Component) {
 			aComponent.dispatcher = r.dispatcher
 		}
 		aProvider := &Provider{
-			path:      component.Path{Method: aComponent.Method, URI: aComponent.URI},
+			path:      contract.Path{Method: aComponent.Method, URI: aComponent.URI},
 			component: aComponent,
 			control:   &version.Control{},
 		}
@@ -112,11 +112,11 @@ func (r *Registry) SetComponents(components []*Component) {
 	r.Register(components...)
 }
 
-func (r *Registry) Dispatcher() component.Dispatcher {
+func (r *Registry) Dispatcher() contract.Dispatcher {
 	return r.dispatcher
 }
 
-func NewRegistry(apiPrefix string, newDispatcher func(registry *Registry) component.Dispatcher) *Registry {
+func NewRegistry(apiPrefix string, newDispatcher func(registry *Registry) contract.Dispatcher) *Registry {
 	ret := &Registry{index: map[string]*Provider{}, apiPrefix: apiPrefix}
 
 	if newDispatcher != nil {

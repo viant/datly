@@ -3,7 +3,7 @@ package gateway
 import (
 	"context"
 	"github.com/viant/datly/repository"
-	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/xreflect"
 	"net/http"
 	"reflect"
@@ -11,7 +11,7 @@ import (
 
 func (r *Router) NewStructRoute(URL string, provider *repository.Provider) *Route {
 	return &Route{
-		Path:      component.NewPath(http.MethodGet, URL),
+		Path:      contract.NewPath(http.MethodGet, URL),
 		Providers: []*repository.Provider{provider},
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			r.handleGolangStruct(ctx, response, provider)

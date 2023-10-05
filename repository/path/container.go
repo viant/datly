@@ -1,7 +1,7 @@
 package path
 
 import (
-	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/version"
 	"time"
 )
@@ -25,12 +25,12 @@ type (
 	}
 
 	Path struct {
-		component.Path `yaml:",inline"`
-		Settings       `yaml:",inline"`
-		Internal       bool             `json:"Internal,omitempty" yaml:"Internal,omitempty" `
-		Kind           string           `json:"Kind,omitempty" yaml:"Kind,omitempty" `
-		SourceURL      string           `yaml:"-" json:"-"`
-		Version        *version.Control `yaml:"-" json:"-"`
+		contract.Path `yaml:",inline"`
+		Settings      `yaml:",inline"`
+		Internal      bool             `json:"Internal,omitempty" yaml:"Internal,omitempty" `
+		Kind          string           `json:"Kind,omitempty" yaml:"Kind,omitempty" `
+		SourceURL     string           `yaml:"-" json:"-"`
+		Version       *version.Control `yaml:"-" json:"-"`
 	}
 
 	Item struct {

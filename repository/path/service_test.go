@@ -7,7 +7,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/asset"
 	"github.com/viant/afs/file"
-	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"log"
 	"testing"
 	"time"
@@ -54,7 +54,7 @@ func TestNew(t *testing.T) {
 		if !assert.Nil(t, err, useCase.description) {
 			continue
 		}
-		aPath := &component.Path{URI: "/v1/api/ws/vars", Method: "GET"}
+		aPath := &contract.Path{URI: "/v1/api/ws/vars", Method: "GET"}
 		element := multiPaths.Lookup(aPath)
 		if !assert.NotNil(t, element, useCase.description) {
 			continue

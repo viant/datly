@@ -6,20 +6,20 @@ import (
 	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/gateway/warmup"
 	"github.com/viant/datly/repository"
-	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/view"
 	"net/http"
 )
 
 func (r *Router) NewWarmupRoute(URL string, providers ...*repository.Provider) *Route {
 	return &Route{
-		Path:      component.NewPath(http.MethodPost, URL),
+		Path:      contract.NewPath(http.MethodPost, URL),
 		Providers: providers,
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			r.handleCacheWarmup(ctx, response, providers)
 		},
 		Kind: RouteWarmupKind,
-		NewMultiRoute: func(routes []*component.Path) *Route {
+		NewMultiRoute: func(routes []*contract.Path) *Route {
 			return r.NewWarmupRoute("", providers...)
 		},
 	}

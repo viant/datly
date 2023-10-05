@@ -6,7 +6,7 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router"
 	"github.com/viant/datly/repository"
-	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/utils/httputils"
 	"net/http"
@@ -21,11 +21,11 @@ const (
 
 type (
 	Route struct {
-		Path          *component.Path
+		Path          *contract.Path
 		Kind          int
 		ApiKeys       []*path.APIKey
 		Providers     []*repository.Provider
-		NewMultiRoute func(routes []*component.Path) *Route
+		NewMultiRoute func(routes []*contract.Path) *Route
 		Handler       func(ctx context.Context, response http.ResponseWriter, req *http.Request)
 	}
 )

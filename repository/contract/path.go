@@ -1,4 +1,4 @@
-package component
+package contract
 
 type Path struct {
 	URI    string `json:",omitempty" yaml:"URI"`

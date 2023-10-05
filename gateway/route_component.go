@@ -4,14 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/viant/datly/repository"
-	"github.com/viant/datly/repository/component"
+	"github.com/viant/datly/repository/contract"
 	"gopkg.in/yaml.v3"
 	"net/http"
 )
 
 func (r *Router) NewViewMetaHandler(URL string, provider *repository.Provider) *Route {
 	return &Route{
-		Path:      component.NewPath(http.MethodGet, URL),
+		Path:      contract.NewPath(http.MethodGet, URL),
 		Providers: []*repository.Provider{provider},
 		Handler: func(ctx context.Context, response http.ResponseWriter, req *http.Request) {
 			handleViewMeta(ctx, response, provider)
