@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	KeyUrlRewriterRewriter = "UrlRewriter"
+	KeyUrlRewrite = "UrlRewriter"
 )
 
 type (

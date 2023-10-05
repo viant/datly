@@ -3,7 +3,7 @@ package extension
 import (
 	"encoding/json"
 	"fmt"
-	codec3 "github.com/viant/datly/view/extension/codec"
+	dcodec "github.com/viant/datly/view/extension/codec"
 	"github.com/viant/datly/view/extension/codec/jsontab"
 	"github.com/viant/datly/view/extension/codec/xmlfilter"
 	"github.com/viant/datly/view/extension/codec/xmltab"
@@ -50,20 +50,21 @@ var Config = &Registry{
 		xreflect.NewType("predicate.NamedFilters", xreflect.WithReflectType(reflect.TypeOf(predicate.NamedFilters{}))),
 	)),
 	Codecs: codec.NewRegistry(
-		codec.WithCodec(codec3.KeyJwtClaim, &codec3.GCPJwtClaim{}, time.Time{}),
-		codec.WithCodec(codec3.CognitoKeyJwtClaim, &codec3.GCPJwtClaim{}, time.Time{}),
-		codec.WithCodec(codec3.KeyAsStrings, &codec3.AsStrings{}, time.Time{}),
-		codec.WithFactory(codec3.KeyCSV, codec3.CsvFactory(""), time.Time{}),
-		codec.WithFactory(codec3.Structql, codec3.StructQLFactory(""), time.Time{}),
-		codec.WithFactory(codec3.JSON, &codec3.JSONFactory{}, time.Time{}),
-		codec.WithFactory(codec3.VeltyCriteria, &codec3.VeltyCriteriaFactory{}, time.Time{}),
-		codec.WithFactory(codec3.KeyCriteriaBuilder, &codec3.CriteriaBuilderFactory{}, time.Time{}),
-		codec.WithFactory(codec3.Encode, &codec3.EncodeFactory{}, time.Time{}),
-		codec.WithFactory(codec3.KeyTransfer, &codec3.TransferFactory{}, time.Time{}),
-		codec.WithFactory(codec3.KeyXmlTab, &codec3.XmlTabFactory{}, time.Time{}),
-		codec.WithFactory(codec3.KeyXmlFilter, &codec3.XmlFilterFactory{}, time.Time{}),
-		codec.WithFactory(codec3.KeyJsonTab, &codec3.JsonTabFactory{}, time.Time{}),
-		codec.WithFactory(codec3.KeyFilters, &codec3.FiltersRegistry{}, time.Time{}),
+		codec.WithCodec(dcodec.KeyJwtClaim, &dcodec.GCPJwtClaim{}, time.Time{}),
+		codec.WithCodec(dcodec.CognitoKeyJwtClaim, &dcodec.GCPJwtClaim{}, time.Time{}),
+		codec.WithCodec(dcodec.KeyAsStrings, &dcodec.AsStrings{}, time.Time{}),
+		codec.WithFactory(dcodec.KeyCSV, dcodec.CsvFactory(""), time.Time{}),
+		codec.WithFactory(dcodec.Structql, dcodec.StructQLFactory(""), time.Time{}),
+		codec.WithFactory(dcodec.JSON, &dcodec.JSONFactory{}, time.Time{}),
+		codec.WithFactory(dcodec.VeltyCriteria, &dcodec.VeltyCriteriaFactory{}, time.Time{}),
+		codec.WithFactory(dcodec.KeyCriteriaBuilder, &dcodec.CriteriaBuilderFactory{}, time.Time{}),
+		codec.WithFactory(dcodec.Encode, &dcodec.EncodeFactory{}, time.Time{}),
+		codec.WithFactory(dcodec.KeyTransfer, &dcodec.TransferFactory{}, time.Time{}),
+		codec.WithFactory(dcodec.KeyXmlTab, &dcodec.XmlTabFactory{}, time.Time{}),
+		codec.WithFactory(dcodec.KeyXmlFilter, &dcodec.XmlFilterFactory{}, time.Time{}),
+		codec.WithFactory(dcodec.KeyJsonTab, &dcodec.JsonTabFactory{}, time.Time{}),
+		codec.WithFactory(dcodec.KeyFilters, &dcodec.FiltersRegistry{}, time.Time{}),
+		codec.WithFactory(dcodec.KeyUrlRewrite, &dcodec.UrlRewriterFactory{}, time.Time{}),
 	),
 	Predicates: &PredicateRegistry{
 		registry: map[string]*Predicate{
